@@ -8,4 +8,5 @@ engine-data = { path = "../engine-data" }
 
 [dev-dependencies]
 engine-core = { path = "../engine-core" }
+engine-data = { path = "../engine-data" }
 proptest = "1"
