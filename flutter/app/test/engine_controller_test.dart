@@ -25,6 +25,12 @@ void main() {
     ctrl.backspace();
     expect(ctrl.buffer, '');
 
+    // 空格键：拼音模式提交首候选，缓冲清空（engine_flow_test 已验证）。
+    ctrl.input('n');
+    ctrl.input('i');
+    ctrl.inputSpace();
+    expect(ctrl.buffer, '');
+
     ctrl.switchMode(ApiMode.english);
     expect(ctrl.mode, ApiMode.english);
 
