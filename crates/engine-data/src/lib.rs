@@ -4,3 +4,5 @@ pub mod checksum;
 pub mod dictionary;
 pub mod format;
 pub mod loader;
+
+pub use format::{FormatError, OpDict, RawEntry, parse, serialize};
