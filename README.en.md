@@ -113,3 +113,13 @@ V1 milestone progress:
 ### 💬 A Final Word
 
 > *"I couldn't take it anymore, so I built one myself."*
+
+---
+
+### 🤝 Support Us
+
+> If OPI helps you, scan the QR code below to support us (WeChat / Alipay — any amount is welcome, the thought is what counts).
+
+| WeChat rewards | Alipay rewards |
+|---|---|
+| <img src="docs/weixinpay.png" width="130" height="130" alt="WeChat rewards QR code"> | <img src="docs/alipay.png" width="130" height="130" alt="Alipay rewards QR code"> |
