@@ -69,8 +69,8 @@
 ### 🏗 构建与测试
 
 ```bash
-cargo test -p engine-core          # 单元 + 集成 + 属性测试（62 个）
-cargo clippy -p engine-core --all-targets -- -D warnings   # 门禁：零警告
+cargo test --workspace                   # 单元 + 集成 + 属性测试
+cargo clippy --workspace --all-targets -- -D warnings   # 门禁：零警告
 ```
 
 仓库结构：
@@ -80,10 +80,11 @@ crates/
   engine-core/    # 纯逻辑内核，无 IO 无平台依赖
     src/          # composer / pinyin / trie / dictionary / learner / symbols / candidates / engine
     tests/        # engine_integration（11）+ proptests（5）
-  engine-data/    # 词库二进制格式 + 加载校验（M2）
-  opi-tools/      # 词库编译工具（M2）
+  engine-data/    # .opid 二进制词库：格式、FNV-1a 校验、mmap 加载、损坏回退（M2）
+  opi-tools/      # 词库编译工具：dict.yaml → .opid + verify 校验（M2）
   opi-ffi/        # flutter_rust_bridge 绑定（M3）
 docs/superpowers/ # 设计规格与实施计划
+data/             # 词库源数据（raw）与编译产物（generated，fallback.opid 入库）
 ```
 
 ### 📅 项目状态
@@ -93,7 +94,7 @@ docs/superpowers/ # 设计规格与实施计划
 V1 里程碑进度：
 
 - [x] **M1 引擎内核**：cargo workspace + Composer 按键状态机 + 拼音音节表/切分 + Trie 码表 + 候选排序合并 + 本地学习 + Unicode 符号引擎 + Engine 门面（62 测试全绿，clippy 零警告）
-- [ ] **M2 数据管线**：opi-tools 编译词库 → `.opid` 二进制（mmap 加载、校验、损坏回退）
+- [x] **M2 数据管线**：opi-tools 编译词库 → `.opid` 二进制（mmap 加载、校验、损坏回退）
 - [ ] **M3 FFI**：flutter_rust_bridge 绑定 + EngineController
 - [ ] **M4 Android 接入**：InputMethodService + Flutter 键盘进 IME 窗口
 - [ ] **M5 UI 完善**：符号/Emoji/数字面板 + 设置页
@@ -114,7 +115,7 @@ V1 里程碑进度：
 ### 📄 许可证
 
 - **代码**：MIT
-- **词库数据**：按上游许可证单独声明（rime 社区数据 BSD/GPL 混合），`data/raw` 逐条记录来源与许可证
+- **词库数据**：按上游许可证单独声明（rime-luna-pinyin 为 LGPL-3.0），`data/raw` 逐条记录来源与许可证
 
 ---
 
