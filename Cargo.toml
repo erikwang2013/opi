@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/engine-core", "crates/engine-data", "crates/opi-tools"]
+members = ["crates/engine-core", "crates/engine-data", "crates/opi-tools", "crates/opi-ffi"]
 
 [profile.release]
 lto = true

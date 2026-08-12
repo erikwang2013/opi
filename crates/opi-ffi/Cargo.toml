@@ -1,0 +1,9 @@
+[package]
+name = "opi-ffi"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+engine-core = { path = "../engine-core" }
+engine-data = { path = "../engine-data" }
+flutter_rust_bridge = "2"
