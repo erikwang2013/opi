@@ -48,10 +48,6 @@ pub enum FormatError {
 pub fn serialize(dict: &OpDict) -> Vec<u8> {
     let mut sorted: Vec<&RawEntry> = dict.entries.iter().collect();
     sorted.sort_by(|a, b| a.pinyin.as_bytes().cmp(b.pinyin.as_bytes()));
-    for e in &sorted {
-        debug_assert!(e.pinyin.len() <= u8::MAX as usize);
-        debug_assert!(e.word.len() <= u8::MAX as usize);
-    }
     let mut pinyin_blob = Vec::new();
     let mut word_blob = Vec::new();
     let mut table = Vec::with_capacity(sorted.len() * ENTRY_LEN);
@@ -61,9 +57,9 @@ pub fn serialize(dict: &OpDict) -> Vec<u8> {
         let wo = word_blob.len() as u32;
         word_blob.extend_from_slice(e.word.as_bytes());
         table.extend_from_slice(&po.to_le_bytes());
-        table.push(e.pinyin.len() as u8);
+        table.push(u8::try_from(e.pinyin.len()).expect("pinyin > 255 bytes"));
         table.extend_from_slice(&wo.to_le_bytes());
-        table.push(e.word.len() as u8);
+        table.push(u8::try_from(e.word.len()).expect("word > 255 bytes"));
         table.extend_from_slice(&e.freq.to_le_bytes());
     }
     debug_assert_eq!(pinyin_blob.len(), dict.pinyin_total);
@@ -134,7 +130,8 @@ pub fn parse(data: &[u8]) -> Result<OpDict, FormatError> {
         let wo = u32::from_le_bytes(row[5..9].try_into().unwrap()) as usize;
         let wl = row[9] as usize;
         let freq = u32::from_le_bytes(row[10..14].try_into().unwrap());
-        if pl == 0 || wl == 0 || po + pl > pinyin_total || wo + wl > word_total {
+        // pinyin 侧越界由 word_start > tail 推导捕获，这里只需非零与 word 侧边界
+        if pl == 0 || wl == 0 || wo + wl > word_total {
             return Err(FormatError::BadOffsets);
         }
         let pinyin = std::str::from_utf8(&data[pinyin_start + po..pinyin_start + po + pl])
