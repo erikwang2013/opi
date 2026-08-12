@@ -2,6 +2,7 @@ import 'package:app/candidates/candidate_bar.dart';
 import 'package:app/engine/engine_controller.dart';
 import 'package:app/ime/ime_main.dart';
 import 'package:app/src/rust/frb_generated.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'fake_ime_channel.dart';
@@ -50,6 +51,18 @@ void main() {
     await tester.pump();
     expect(channel.commits, ['a']);
     expect(ctrl.buffer, '');
+    await tester.runAsync(() async => ctrl.dispose());
+  });
+
+  testWidgets('窄屏（360dp）键盘不溢出', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+    final ctrl = (await tester.runAsync(() async {
+      return await EngineController.load();
+    }))!;
+    final channel = FakeImeChannel();
+    await tester.pumpWidget(ImeApp(controller: ctrl, channel: channel));
     await tester.runAsync(() async => ctrl.dispose());
   });
 }

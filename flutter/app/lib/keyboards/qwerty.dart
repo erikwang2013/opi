@@ -28,19 +28,23 @@ class QwertyKeyboard extends StatelessWidget {
     return Column(
       children: [
         for (final row in _rows)
-          Row(
+          Expanded(
+            child: Row(
+              children: [
+                for (final ch in row) _Key(ch, onTap: () => onKey(ch)),
+              ],
+            ),
+          ),
+        Expanded(
+          child: Row(
             children: [
-              for (final ch in row) _Key(ch, onTap: () => onKey(ch)),
+              _Key('🌐', onTap: onModeSwitch),
+              _Key('123'), // M5 生效，M4 占位
+              _Key('空格', flex: 5, onTap: onSpace),
+              _Key('⌫', onTap: onBackspace),
+              _Key('↵', onTap: onEnter),
             ],
           ),
-        Row(
-          children: [
-            _Key('🌐', onTap: onModeSwitch),
-            _Key('123'), // M5 生效，M4 占位
-            _Key('空格', flex: 5, onTap: onSpace),
-            _Key('⌫', onTap: onBackspace),
-            _Key('↵', onTap: onEnter),
-          ],
         ),
       ],
     );
@@ -59,7 +63,7 @@ class _Key extends StatelessWidget {
     return Expanded(
       flex: flex,
       child: Padding(
-        padding: const EdgeInsets.all(2),
+        padding: const EdgeInsets.all(1),
         child: Material(
           color: Colors.grey.shade300,
           borderRadius: BorderRadius.circular(6),
@@ -67,7 +71,7 @@ class _Key extends StatelessWidget {
             borderRadius: BorderRadius.circular(6),
             onTap: onTap,
             child: Center(
-              child: Text(label, style: const TextStyle(fontSize: 20)),
+              child: Text(label, style: const TextStyle(fontSize: 18)),
             ),
           ),
         ),

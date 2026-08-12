@@ -9,6 +9,7 @@ import 'package:app/src/rust/api.dart';
 import 'package:app/src/rust/frb_generated.dart';
 
 /// IME 独立 entrypoint（M4：Flutter 键盘进 IME 窗口）。
+@pragma('vm:entry-point')
 Future<void> imeMain() async {
   await RustLib.init();
   final controller = await EngineController.load();
