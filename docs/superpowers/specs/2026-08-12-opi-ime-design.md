@@ -151,3 +151,10 @@ opi/
 
 - 代码：MIT
 - 词库数据：按上游许可证单独声明（rime 社区数据 BSD/GPL 混合），`data/raw` 逐条记录来源与许可证，代码与数据解耦避免传染
+
+## M2 实现偏差（2026-08-12）
+
+1. **存储结构**：spec 原定 DAWG trie。实现为排序平面表（entries 表 + pinyin/word blob）+ 前缀二分。理由：~71K 条 rime-luna-pinyin 全量编译约 4MB，远低于 30MB 预算；DAWG 后缀共享最多省 ~5MB，却显著增加编译与加载复杂度。格式已版本化（magic OPID + version=1），后续可演进。
+2. **许可证**：spec 原记 rime 词库 BSD/GPL 混合。实际 rime-luna-pinyin 为 **LGPL-3.0**（data/raw/LICENSES.md 已记录）。
+3. **频率合成**：rime-luna-pinyin 无词频列 → 3 列行 `word\tpinyin\tNN.NN%` → freq = round(percent×1000)；2 列行 → freq = 1000；重复 (pinyin,word) 取 max。
+4. **损坏回退**：spec 原定回退"内置精简词典"。实现为编译提交的内置 fallback.opid（35 条高频词，opi-tools 从 data/raw/fallback.tsv 生成，提交进仓库），与 M1 内置词等价且可再编译。

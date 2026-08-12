@@ -1,3 +1,4 @@
+use engine_data::{load_bytes, Dictionary};
 use opi_tools::compiler::{compile_file, parse_dict};
 use std::path::Path;
 
@@ -25,6 +26,38 @@ fn main() {
             }
             let size = std::fs::metadata(output).map(|m| m.len()).unwrap_or(0);
             println!("wrote {} ({} bytes)", output, size);
+        }
+        Some("verify") => {
+            let Some(path) = args.get(2) else {
+                eprintln!("usage: opi-tools verify <file.opid>");
+                std::process::exit(2);
+            };
+            let bytes = match std::fs::read(path) {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!("read {}: {e}", path);
+                    std::process::exit(1);
+                }
+            };
+            let t0 = std::time::Instant::now();
+            match load_bytes(bytes) {
+                Ok(d) => {
+                    let elapsed = t0.elapsed();
+                    println!("file: {}", path);
+                    println!("checksum: ok");
+                    println!("entries: {}", d.len());
+                    println!("load: {:.1}ms", elapsed.as_secs_f64() * 1000.0);
+                    for sample in ["hao", "wo", "n"] {
+                        let top: Vec<String> =
+                            d.query(sample, 3).iter().map(|e| e.word.clone()).collect();
+                        println!("query \"{sample}\": {}", top.join(" "));
+                    }
+                }
+                Err(e) => {
+                    eprintln!("verify failed: {e:?}");
+                    std::process::exit(1);
+                }
+            }
         }
         _ => {
             eprintln!("usage: opi-tools <compile|verify> ...");
