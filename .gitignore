@@ -1,0 +1,17 @@
+/.idea/
+/.vscode/
+.phpunit.result.cache
+.DS_Store
+Thumbs.db
+.phpunit.cache
+.claude
+.claude-flow
+.swarm
+.mcp.json
+ruvector.db
+.superpowers
+target
+.env
+*.log
+
+.agents
