@@ -1,4 +1,4 @@
-package com.example.app
+package io.opi.input
 
 import io.flutter.embedding.android.FlutterActivity
 
