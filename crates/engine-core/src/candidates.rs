@@ -194,4 +194,14 @@ mod tests {
         assert_eq!(got[0].text, "♥");
         assert_eq!(got[0].kind, CandidateKind::Symbol);
     }
+
+    #[test]
+    fn symbol_prefix_search_merges_into_candidates() {
+        let d = test_dict();
+        let s = SymbolEngine::builtin();
+        let l = Learner::new(false);
+        // "x" 前缀命中 😄（keyword xiao），同时拼音 xiao 词也出现
+        let got = rank_and_pick(&d, &s, &l, "x", Mode::Pinyin, DEFAULT_TOP_N);
+        assert!(got.iter().any(|c| c.kind == CandidateKind::Emoji && c.text == "😄"));
+    }
 }

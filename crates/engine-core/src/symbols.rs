@@ -25,7 +25,7 @@ pub struct SymbolEntry {
 pub struct SymbolEngine {
     blocks: Vec<Block>,
     entries: Vec<SymbolEntry>,
-    keyword_index: std::collections::HashMap<String, Vec<usize>>,
+    keywords: Vec<(String, usize)>, // 排序后的 (小写 keyword, entry 下标)
     block_index: std::collections::HashMap<BlockId, Vec<usize>>,
 }
 
@@ -33,17 +33,22 @@ impl SymbolEngine {
     /// blocks 与 entries 由调用方提供（M2 起来自数据文件），此处构建索引。
     pub fn new(mut blocks: Vec<Block>, entries: Vec<SymbolEntry>) -> Self {
         blocks.sort_by_key(|b| b.start);
-        let mut keyword_index: std::collections::HashMap<String, Vec<usize>> =
-            std::collections::HashMap::new();
+        debug_assert!(
+            blocks.windows(2).all(|w| w[1].start > w[0].end),
+            "Unicode 区块不可重叠"
+        );
         let mut block_index: std::collections::HashMap<BlockId, Vec<usize>> =
             std::collections::HashMap::new();
+        let mut keywords: Vec<(String, usize)> = Vec::new();
         for (i, e) in entries.iter().enumerate() {
             block_index.entry(e.block).or_default().push(i);
             for kw in &e.keywords {
-                keyword_index.entry(kw.to_lowercase()).or_default().push(i);
+                keywords.push((kw.to_lowercase(), i));
             }
         }
-        SymbolEngine { blocks, entries, keyword_index, block_index }
+        keywords.sort();
+        keywords.dedup();
+        SymbolEngine { blocks, entries, keywords, block_index }
     }
 
     /// 内置精简符号集（覆盖主要用例，M2 由编译产物替代）。
@@ -61,7 +66,7 @@ impl SymbolEngine {
             SymbolEntry { text: "。".into(), name: "句号".into(), keywords: vec!["ju".into(), "period".into()], block: BlockId(1), emoji: false },
             SymbolEntry { text: "〈".into(), name: "左书名号".into(), keywords: vec!["shu".into()], block: BlockId(1), emoji: false },
             SymbolEntry { text: "▲".into(), name: "上三角".into(), keywords: vec!["sjx".into(), "triangle".into()], block: BlockId(2), emoji: false },
-            SymbolEntry { text: "♥".into(), name: "黑桃心".into(), keywords: vec!["heart".into(), "ai".into(), "xin".into()], block: BlockId(3), emoji: false },
+            SymbolEntry { text: "♥".into(), name: "心形".into(), keywords: vec!["heart".into(), "ai".into(), "xin".into()], block: BlockId(3), emoji: false },
             SymbolEntry { text: "★".into(), name: "实心星".into(), keywords: vec!["star".into(), "xing".into()], block: BlockId(3), emoji: false },
             SymbolEntry { text: "😄".into(), name: "微笑".into(), keywords: vec!["xiao".into(), "smile".into(), "laugh".into()], block: BlockId(4), emoji: true },
             SymbolEntry { text: "あ".into(), name: "平假名a".into(), keywords: vec!["a".into()], block: BlockId(6), emoji: false },
@@ -91,13 +96,38 @@ impl SymbolEngine {
             .unwrap_or_default()
     }
 
-    /// 关键字精确搜索（拼音或英文小写）。
+    /// 关键字前缀搜索（拼音或英文小写；输入为完整/部分拼音）。
     pub fn search(&self, keyword: &str) -> Vec<SymbolEntry> {
-        self.keyword_index
-            .get(&keyword.to_lowercase())
-            .map(|idx| idx.iter().map(|&i| self.entries[i].clone()).collect())
-            .unwrap_or_default()
+        let kw = keyword.to_lowercase();
+        let keys: Vec<&str> = self.keywords.iter().map(|(k, _)| k.as_str()).collect();
+        let lo = keys.partition_point(|k| k.as_bytes() < kw.as_bytes());
+        let hi = match byte_successor(kw.as_bytes()) {
+            Some(succ) => keys.partition_point(|k| k.as_bytes() < succ.as_slice()),
+            None => keys.len(),
+        };
+        let mut out: Vec<SymbolEntry> = self.keywords[lo..hi]
+            .iter()
+            .map(|(_, i)| self.entries[*i].clone())
+            .collect();
+        out.sort_by(|a, b| a.text.cmp(&b.text));
+        out.dedup_by(|a, b| a.text == b.text);
+        out
     }
+}
+
+/// 字节后继：末字节 +1（带进位）；全 0xFF 返回 None。
+fn byte_successor(p: &[u8]) -> Option<Vec<u8>> {
+    let mut b = p.to_vec();
+    let mut i = b.len();
+    while i > 0 {
+        i -= 1;
+        let (nb, overflow) = b[i].overflowing_add(1);
+        b[i] = nb;
+        if !overflow {
+            return Some(b);
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -147,5 +177,32 @@ mod tests {
     fn search_no_match_empty() {
         let e = SymbolEngine::builtin();
         assert!(e.search("zzz").is_empty());
+    }
+
+    #[test]
+    fn heart_suit_name_fixed() {
+        let e = SymbolEngine::builtin();
+        let hearts = e.search("heart");
+        assert!(hearts.iter().any(|s| s.name == "心形"));
+    }
+
+    #[test]
+    fn search_matches_keyword_prefix() {
+        let e = SymbolEngine::builtin();
+        assert!(e.search("x").iter().any(|s| s.text == "😄")); // xiao
+        assert!(e.search("sm").iter().any(|s| s.text == "😄")); // smile
+        assert!(e.search("he").iter().any(|s| s.text == "♥")); // heart
+        assert!(e.search("a").iter().any(|s| s.text == "あ")); // 平假名 a
+    }
+
+    #[test]
+    fn search_returns_deterministic_unique() {
+        let e = SymbolEngine::builtin();
+        let got = e.search("x");
+        let mut texts: Vec<String> = got.iter().map(|s| s.text.clone()).collect();
+        texts.sort();
+        let mut uniq = texts.clone();
+        uniq.dedup();
+        assert_eq!(texts, uniq);
     }
 }
