@@ -57,9 +57,10 @@ class EngineController extends ChangeNotifier {
     refresh();
   }
 
-  void inputSpace() {
-    _api.inputSpace();
+  String inputSpace() {
+    final text = _api.inputSpace();
     refresh();
+    return text;
   }
 
   List<ApiSymbolEntry> searchSymbols(String keyword) =>

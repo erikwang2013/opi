@@ -37,6 +37,15 @@ void main() {
     ctrl.dispose();
   });
 
+  test('inputSpace returns committed text', () async {
+    final ctrl = await EngineController.load();
+    ctrl.input('w');
+    ctrl.input('o');
+    expect(ctrl.inputSpace(), '我'); // 当前返回 void，编译失败
+    expect(ctrl.buffer, '');
+    ctrl.dispose();
+  });
+
   test('controller notifies listeners', () async {
     final ctrl = await EngineController.load();
     var notified = 0;
