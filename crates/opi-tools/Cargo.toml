@@ -1,0 +1,11 @@
+[package]
+name = "opi-tools"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+engine-data = { path = "../engine-data" }
+
+[dev-dependencies]
+engine-core = { path = "../engine-core" }
+proptest = "1"

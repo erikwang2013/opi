@@ -1,0 +1,8 @@
+[package]
+name = "engine-data"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+engine-core = { path = "../engine-core" }
+memmap2 = "0.9"
