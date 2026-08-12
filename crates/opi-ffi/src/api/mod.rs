@@ -1,1 +1,325 @@
-pub mod simple;
+//! frb API 薄壳：类型转换与边界校验，内部持 engine_core::Engine。
+
+use engine_core::candidates::{Candidate, CandidateKind};
+use engine_core::composer::Mode;
+use engine_core::symbols::{Block, BlockId, SymbolEntry};
+use engine_core::Engine;
+use flutter_rust_bridge::frb;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ApiMode {
+    Pinyin,
+    English,
+    Number,
+    Symbol,
+}
+
+impl From<Mode> for ApiMode {
+    fn from(m: Mode) -> Self {
+        match m {
+            Mode::Pinyin => ApiMode::Pinyin,
+            Mode::English => ApiMode::English,
+            Mode::Number => ApiMode::Number,
+            Mode::Symbol => ApiMode::Symbol,
+        }
+    }
+}
+
+impl From<ApiMode> for Mode {
+    fn from(m: ApiMode) -> Self {
+        match m {
+            ApiMode::Pinyin => Mode::Pinyin,
+            ApiMode::English => Mode::English,
+            ApiMode::Number => Mode::Number,
+            ApiMode::Symbol => Mode::Symbol,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ApiCandidateKind {
+    Hanzi,
+    English,
+    Emoji,
+    Symbol,
+}
+
+impl From<CandidateKind> for ApiCandidateKind {
+    fn from(k: CandidateKind) -> Self {
+        match k {
+            CandidateKind::Hanzi => ApiCandidateKind::Hanzi,
+            CandidateKind::English => ApiCandidateKind::English,
+            CandidateKind::Emoji => ApiCandidateKind::Emoji,
+            CandidateKind::Symbol => ApiCandidateKind::Symbol,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApiCandidate {
+    pub text: String,
+    pub kind: ApiCandidateKind,
+    pub score: u64,
+}
+
+impl From<Candidate> for ApiCandidate {
+    fn from(c: Candidate) -> Self {
+        ApiCandidate { text: c.text, kind: c.kind.into(), score: c.score }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApiBlock {
+    pub id: u16,
+    pub start: u32,
+    pub end: u32,
+    pub name: String,
+    pub common: bool,
+}
+
+impl From<Block> for ApiBlock {
+    fn from(b: Block) -> Self {
+        ApiBlock { id: b.id.0, start: b.start, end: b.end, name: b.name, common: b.common }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApiSymbolEntry {
+    pub text: String,
+    pub name: String,
+    pub keywords: Vec<String>,
+    pub block: u16,
+    pub emoji: bool,
+}
+
+impl From<SymbolEntry> for ApiSymbolEntry {
+    fn from(s: SymbolEntry) -> Self {
+        ApiSymbolEntry { text: s.text, name: s.name, keywords: s.keywords, block: s.block.0, emoji: s.emoji }
+    }
+}
+
+/// 引擎句柄（frb opaque）。同步核心 + async 外壳：Rust 测试测同步核心，Dart 侧 async 加载。
+pub struct Api {
+    engine: Engine,
+}
+
+impl Api {
+    pub fn load_fallback_sync() -> Result<Api, String> {
+        let dict = engine_data::fallback_dict();
+        let symbols = engine_core::symbols::SymbolEngine::builtin();
+        Ok(Api { engine: Engine::new(Box::new(dict), symbols, true) })
+    }
+
+    pub async fn load_fallback() -> Result<Api, String> {
+        Self::load_fallback_sync()
+    }
+
+    pub fn load_sync(path: String) -> Result<Api, String> {
+        let dict = engine_data::load_or_fallback(Some(std::path::Path::new(&path)))?;
+        let symbols = engine_core::symbols::SymbolEngine::builtin();
+        Ok(Api { engine: Engine::new(dict, symbols, true) })
+    }
+
+    pub async fn load(path: String) -> Result<Api, String> {
+        Self::load_sync(path)
+    }
+
+    #[frb(sync)]
+    pub fn input_key(&mut self, ch: String) -> String {
+        let mut chars = ch.chars();
+        let (Some(c), None) = (chars.next(), chars.next()) else {
+            return String::new(); // 边界：拒绝空串/多字符
+        };
+        self.engine.input_key(c)
+    }
+
+    #[frb(sync)]
+    pub fn input_space(&mut self) -> String {
+        self.engine.input_space()
+    }
+
+    #[frb(sync)]
+    pub fn backspace(&mut self) {
+        self.engine.backspace();
+    }
+
+    #[frb(sync)]
+    pub fn clear(&mut self) {
+        self.engine.clear();
+    }
+
+    #[frb(sync)]
+    pub fn switch_mode(&mut self, mode: ApiMode) {
+        self.engine.switch_mode(mode.into());
+    }
+
+    #[frb(sync)]
+    pub fn set_shift(&mut self, on: bool) {
+        self.engine.set_shift(on);
+    }
+
+    #[frb(sync)]
+    pub fn buffer(&self) -> String {
+        self.engine.buffer().to_string()
+    }
+
+    #[frb(sync)]
+    pub fn mode(&self) -> ApiMode {
+        self.engine.mode().into()
+    }
+
+    #[frb(sync)]
+    pub fn candidates(&self, limit: usize) -> Vec<ApiCandidate> {
+        self.engine.candidates(limit).into_iter().map(Into::into).collect()
+    }
+
+    #[frb(sync)]
+    pub fn select(&mut self, index: usize) -> String {
+        self.engine.select(index)
+    }
+
+    #[frb(sync)]
+    pub fn set_learner(&mut self, enabled: bool) {
+        self.engine.set_learner(enabled);
+    }
+
+    #[frb(sync)]
+    pub fn learner_enabled(&self) -> bool {
+        self.engine.learner_enabled()
+    }
+
+    #[frb(sync)]
+    pub fn remove_user_word(&mut self, text: String) {
+        self.engine.remove_user_word(&text);
+    }
+
+    #[frb(sync)]
+    pub fn clear_user_words(&mut self) {
+        self.engine.clear_user_words();
+    }
+
+    #[frb(sync)]
+    pub fn export_user_words(&self) -> String {
+        self.engine.export_user_words()
+    }
+
+    #[frb(sync)]
+    pub fn symbol_blocks(&self) -> Vec<ApiBlock> {
+        self.engine.symbol_blocks().into_iter().map(Into::into).collect()
+    }
+
+    #[frb(sync)]
+    pub fn symbols_in_block(&self, id: u16) -> Vec<ApiSymbolEntry> {
+        self.engine.symbols_in_block(BlockId(id)).into_iter().map(Into::into).collect()
+    }
+
+    #[frb(sync)]
+    pub fn search_symbols(&self, keyword: String) -> Vec<ApiSymbolEntry> {
+        self.engine.search_symbols(&keyword).into_iter().map(Into::into).collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn api() -> Api {
+        Api::load_fallback_sync().expect("fallback load")
+    }
+
+    #[test]
+    fn load_fallback_sync_ok() {
+        let a = api();
+        assert_eq!(a.buffer(), "");
+        assert_eq!(a.mode(), ApiMode::Pinyin);
+        assert!(a.learner_enabled()); // M1 默认开
+    }
+
+    #[test]
+    fn pinyin_input_produces_candidates() {
+        let mut a = api();
+        a.input_key("w".into());
+        a.input_key("o".into());
+        assert_eq!(a.buffer(), "wo");
+        let cands = a.candidates(3);
+        assert_eq!(cands[0].text, "我");
+        assert_eq!(cands[0].kind, ApiCandidateKind::Hanzi);
+        assert!(cands[0].score > 0);
+    }
+
+    #[test]
+    fn select_commits_and_records_learner() {
+        let mut a = api();
+        for c in ["w", "o"] { a.input_key(c.into()); }
+        let text = a.select(0);
+        assert_eq!(text, "我");
+        assert_eq!(a.buffer(), "");
+        assert!(a.export_user_words().contains("我"));
+        a.remove_user_word("我".into());
+        assert!(!a.export_user_words().contains("我"));
+        a.clear_user_words();
+        assert_eq!(a.export_user_words(), r#"{"version":1,"words":[]}"#);
+    }
+
+    #[test]
+    fn input_key_boundary_rejects_non_single_char() {
+        let mut a = api();
+        assert_eq!(a.input_key("".into()), "");
+        assert_eq!(a.input_key("ab".into()), "");
+        assert_eq!(a.input_key("你".into()), ""); // 非 ASCII 也拒绝
+        assert_eq!(a.buffer(), "");
+    }
+
+    #[test]
+    fn select_out_of_range_returns_empty() {
+        let mut a = api();
+        for c in ["w", "o"] { a.input_key(c.into()); }
+        assert_eq!(a.select(999), "");
+    }
+
+    #[test]
+    fn mode_and_shift_and_space() {
+        let mut a = api();
+        a.switch_mode(ApiMode::English);
+        for c in ["a", "b", "c"] { a.input_key(c.into()); }
+        assert_eq!(a.buffer(), "abc");
+        assert_eq!(a.input_space(), "abc");
+        assert_eq!(a.buffer(), "");
+        a.set_shift(true);
+        a.input_key("a".into());
+        assert_eq!(a.buffer(), "A");
+        a.set_shift(false);
+        a.switch_mode(ApiMode::Pinyin);
+    }
+
+    #[test]
+    fn backspace_and_clear() {
+        let mut a = api();
+        a.input_key("w".into());
+        a.backspace();
+        assert_eq!(a.buffer(), "");
+        a.input_key("w".into());
+        a.clear();
+        assert_eq!(a.buffer(), "");
+    }
+
+    #[test]
+    fn symbol_search_and_blocks() {
+        let a = api();
+        let blocks = a.symbol_blocks();
+        assert!(!blocks.is_empty());
+        let hits = a.search_symbols("he".into());
+        assert!(hits.iter().any(|s| s.text == "♥"));
+        let b0 = blocks[0].clone();
+        assert!(!a.symbols_in_block(b0.id).is_empty());
+    }
+
+    #[test]
+    fn set_learner_toggles() {
+        let mut a = api();
+        a.set_learner(false);
+        assert!(!a.learner_enabled());
+        a.set_learner(true);
+        assert!(a.learner_enabled());
+    }
+}

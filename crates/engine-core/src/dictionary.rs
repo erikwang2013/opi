@@ -1,7 +1,8 @@
 use crate::trie::{Entry, Trie};
 
 /// 词典抽象。engine 只依赖此 trait，M2 换成 mmap 二进制实现。
-pub trait Dictionary {
+/// Send + Sync：FFI 层 frb auto-opaque 句柄要求 Api: Send + Sync。
+pub trait Dictionary: Send + Sync {
     /// 按拼音查候选，返回按词频降序、长度不超过 limit 的条目。
     fn query(&self, pinyin: &str, limit: usize) -> Vec<Entry>;
     fn len(&self) -> usize;
