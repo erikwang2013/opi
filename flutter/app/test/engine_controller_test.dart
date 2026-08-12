@@ -41,7 +41,7 @@ void main() {
     final ctrl = await EngineController.load();
     ctrl.input('w');
     ctrl.input('o');
-    expect(ctrl.inputSpace(), '我'); // 当前返回 void，编译失败
+    expect(ctrl.inputSpace(), '我'); // 提交首候选并返回
     expect(ctrl.buffer, '');
     ctrl.dispose();
   });
