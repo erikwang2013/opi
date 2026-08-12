@@ -1,0 +1,55 @@
+import 'package:app/candidates/candidate_bar.dart';
+import 'package:app/engine/engine_controller.dart';
+import 'package:app/ime/ime_main.dart';
+import 'package:app/src/rust/frb_generated.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'fake_ime_channel.dart';
+
+void main() {
+  setUpAll(() async {
+    await RustLib.init();
+  });
+
+  testWidgets('全流程：输入 → 候选 → 点击提交经通道', (tester) async {
+    final ctrl = (await tester.runAsync(() async {
+      return await EngineController.load();
+    }))!;
+    final channel = FakeImeChannel();
+    await tester.pumpWidget(ImeApp(controller: ctrl, channel: channel));
+
+    await tester.tap(find.text('w'));
+    await tester.pump();
+    await tester.tap(find.text('o'));
+    await tester.pump();
+    expect(ctrl.buffer, 'wo');
+
+    await tester.tap(find.text('我'));
+    await tester.pump();
+    expect(channel.commits, ['我']);
+    expect(ctrl.buffer, '');
+
+    // 空 buffer 空格直传
+    await tester.tap(find.text('空格'));
+    await tester.pump();
+    expect(channel.commits, ['我', ' ']);
+    await tester.runAsync(() async => ctrl.dispose());
+  });
+
+  testWidgets('英文模式隐藏候选栏，字母直传', (tester) async {
+    final ctrl = (await tester.runAsync(() async {
+      return await EngineController.load();
+    }))!;
+    final channel = FakeImeChannel();
+    await tester.pumpWidget(ImeApp(controller: ctrl, channel: channel));
+
+    await tester.tap(find.text('🌐'));
+    await tester.pump();
+    expect(find.byType(CandidateBar), findsNothing);
+    await tester.tap(find.text('a'));
+    await tester.pump();
+    expect(channel.commits, ['a']);
+    expect(ctrl.buffer, '');
+    await tester.runAsync(() async => ctrl.dispose());
+  });
+}
