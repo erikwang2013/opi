@@ -128,3 +128,16 @@ Dart 按键 → EngineController.input(ch)（同步 FFI）
 - M6（SQLite 学习闭环、性能门槛、TalkBack）不涉及通道协议变更
 - `setComposing` 为未来协议扩展点（M5/M6 需要时再加通道方法，M4 不做）
 - **实现偏差**：M4 执行中如偏离本设计（如 frb 签名、cargokit 行为），按 M3 惯例追加「实现偏差」小节至此文档
+
+## 8. 实现偏差（2026-08-12）
+
+- **真机验收未执行**：当前无设备/模拟器可用，APK 安装 + IME 启用 + 实测键入提交路径列为后续待办（与设计「验收清单 5」一致）
+- **Task 5/6 测试代码偏差**：`testWidgets` FakeAsync zone 下直接 `await EngineController.load()` 会挂死（isolate 回复不派发）→ 用 `tester.runAsync()` 包装；`RustLib.init()` 非幂等（二次调用抛 Bad state）→ 提升到 `setUpAll`
+- **Task 6 代码质量审查发现**：英文模式切换回 pinyin 前若 buffer 非空，候选栏隐藏期间 buffer 滞留引擎中（无 UI 提示）——M4 接受，M5 处理
+- **Task 8 代码质量审查 3 项 M5 加固候选**：onCreateInputView 重入时销毁旧引擎；onWindowHidden 时暂停引擎；onDestroy 前先 detachFromFlutterEngine
+- **APK 构建失败（本机环境缺陷，非代码问题）**：`flutter build apk --debug` 两次尝试均失败——AGP 报 `NDK not configured. Download it with SDK manager. Preferred NDK version is '28.2.13676358'`；Google 仓库 manifest 经代理下载返回 400（`HTTP/1.1 400 Bad Request`），无法自动安装 NDK
+  - 已做修复：`rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android`（成功，rust-lang.org 网络可用）
+  - 已做修复：`app/build.gradle.kts` 将 `ndkVersion = flutter.ndkVersion`（28.2.13676358）固定为本机已装的 `27.0.12077973`（NDK r27 位于 `/home/component/Android/sdk/ndk`）
+  - 仍失败原因：flutter 工具将 `local.properties` 的 `sdk.dir` 重写回 `/usr/lib/android-sdk`（仅含 platform-tools，无 NDK）；`flutter config` 的 `android-sdk` 指向不存在的 `/usr/local/Android/Sdk`；直接 `gradlew` 绕行也因依赖解析网络阻塞挂起。环境需安装 NDK 28.2.13676358 或统一 sdk.dir 后重试
+- **包名验证（源码级）**：无 APK 可跑 aapt，改为源码验证——`namespace`/`applicationId = io.opi.input`，manifest 含 IME service + BIND_INPUT_METHOD + `@xml/method`，无任何 `com.example` 残留
+- **门禁**：cargo test 114 通过 / clippy 0 警告；flutter analyze 0 问题；flutter test 17/17 通过——全绿

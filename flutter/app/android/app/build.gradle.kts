@@ -7,7 +7,8 @@ plugins {
 android {
     namespace = "io.opi.input"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    // NDK r27 installed at the SDK root; Flutter default (28.2) not available offline.
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
