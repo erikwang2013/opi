@@ -137,7 +137,7 @@ Dart 按键 → EngineController.input(ch)（同步 FFI）
 - **Task 8 代码质量审查 3 项 M5 加固候选**：onCreateInputView 重入时销毁旧引擎；onWindowHidden 时暂停引擎；onDestroy 前先 detachFromFlutterEngine
 - **APK 构建失败（本机环境缺陷，非代码问题）**：`flutter build apk --debug` 两次尝试均失败——AGP 报 `NDK not configured. Download it with SDK manager. Preferred NDK version is '28.2.13676358'`；Google 仓库 manifest 经代理下载返回 400（`HTTP/1.1 400 Bad Request`），无法自动安装 NDK
   - 已做修复：`rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android`（成功，rust-lang.org 网络可用）
-  - 已做修复：`app/build.gradle.kts` 将 `ndkVersion = flutter.ndkVersion`（28.2.13676358）固定为本机已装的 `27.0.12077973`（NDK r27 位于 `/home/component/Android/sdk/ndk`）
+  - 尝试修复（已回退）：`app/build.gradle.kts` 曾将 `ndkVersion` 固定为本机 `27.0.12077973`，但 AGP 只在 `<sdk.dir>/ndk/<version>` 下解析 NDK（`sdk.dir=/usr/lib/android-sdk` 下无 ndk 目录），固定无效，已回退为 `flutter.ndkVersion`
   - 仍失败原因：flutter 工具将 `local.properties` 的 `sdk.dir` 重写回 `/usr/lib/android-sdk`（仅含 platform-tools，无 NDK）；`flutter config` 的 `android-sdk` 指向不存在的 `/usr/local/Android/Sdk`；直接 `gradlew` 绕行也因依赖解析网络阻塞挂起。环境需安装 NDK 28.2.13676358 或统一 sdk.dir 后重试
 - **包名验证（源码级）**：无 APK 可跑 aapt，改为源码验证——`namespace`/`applicationId = io.opi.input`，manifest 含 IME service + BIND_INPUT_METHOD + `@xml/method`，无任何 `com.example` 残留
 - **门禁**：cargo test 114 通过 / clippy 0 警告；flutter analyze 0 问题；flutter test 17/17 通过——全绿
