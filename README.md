@@ -61,21 +61,45 @@
 
 | 层级 | 方案 |
 |---|---|
-| **核心引擎** | 纯 Rust 实现，轻量高效 |
-| **跨端框架** | 移动端/桌面端使用 Kuikly (Kotlin Multiplatform) 或 Flutter，一套代码多端运行 |
+| **核心引擎** | 纯 Rust 实现（`engine-core` / `engine-data` / `opi-tools` / `opi-ffi` 多 crate workspace），轻量高效 |
+| **跨端框架** | Flutter（键盘视图、候选栏、符号/表情面板、设置页） |
 | **平台接入** | Android (InputMethodService)、iOS/macOS (IMK)、Windows (TSF)、Linux (fcitx/IBus)、鸿蒙 (IME Kit) |
-| **数据同步** | 端到端加密 + 自托管服务支持，用户可选择使用官方服务或自建同步服务器 |
+| **数据同步** | V2 预留：端到端加密 + 自托管服务支持，用户可选择使用官方服务或自建同步服务器 |
+
+### 🏗 构建与测试
+
+```bash
+cargo test -p engine-core          # 单元 + 集成 + 属性测试（62 个）
+cargo clippy -p engine-core --all-targets -- -D warnings   # 门禁：零警告
+```
+
+仓库结构：
+
+```
+crates/
+  engine-core/    # 纯逻辑内核，无 IO 无平台依赖
+    src/          # composer / pinyin / trie / dictionary / learner / symbols / candidates / engine
+    tests/        # engine_integration（11）+ proptests（5）
+  engine-data/    # 词库二进制格式 + 加载校验（M2）
+  opi-tools/      # 词库编译工具（M2）
+  opi-ffi/        # flutter_rust_bridge 绑定（M3）
+docs/superpowers/ # 设计规格与实施计划
+```
 
 ### 📅 项目状态
 
-> **当前阶段：项目启动 / 架构设计**
+> **当前阶段：M1 引擎内核 ✅ 完成（2026-08）**
 
-- [ ] 核心引擎选型与封装
-- [ ] Android 端原型开发
-- [ ] 基础词库构建
-- [ ] 多端同步方案设计
+V1 里程碑进度：
 
-我们诚邀所有对输入法现状不满、愿意共同打造一款“理想输入法”的开发者、设计师、产品经理和普通用户加入我们。
+- [x] **M1 引擎内核**：cargo workspace + Composer 按键状态机 + 拼音音节表/切分 + Trie 码表 + 候选排序合并 + 本地学习 + Unicode 符号引擎 + Engine 门面（62 测试全绿，clippy 零警告）
+- [ ] **M2 数据管线**：opi-tools 编译词库 → `.opid` 二进制（mmap 加载、校验、损坏回退）
+- [ ] **M3 FFI**：flutter_rust_bridge 绑定 + EngineController
+- [ ] **M4 Android 接入**：InputMethodService + Flutter 键盘进 IME 窗口
+- [ ] **M5 UI 完善**：符号/Emoji/数字面板 + 设置页
+- [ ] **M6 学习打磨**：SQLite 学习闭环、性能门槛（<30ms/键）、TalkBack 无障碍
+
+我们诚邀所有对输入法现状不满、愿意共同打造一款”理想输入法”的开发者、设计师、产品经理和普通用户加入我们。
 
 ### 🤝 参与贡献
 
@@ -89,7 +113,8 @@
 
 ### 📄 许可证
 
-[待定，GPL v3 / MIT]
+- **代码**：MIT
+- **词库数据**：按上游许可证单独声明（rime 社区数据 BSD/GPL 混合），`data/raw` 逐条记录来源与许可证
 
 ---
 
