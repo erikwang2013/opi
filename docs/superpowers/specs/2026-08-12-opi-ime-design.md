@@ -158,3 +158,13 @@ opi/
 2. **许可证**：spec 原记 rime 词库 BSD/GPL 混合。实际 rime-luna-pinyin 为 **LGPL-3.0**（data/raw/LICENSES.md 已记录）。
 3. **频率合成**：rime-luna-pinyin 无词频列 → 3 列行 `word\tpinyin\tNN.NN%` → freq = round(percent×1000)；2 列行 → freq = 1000；重复 (pinyin,word) 取 max。
 4. **损坏回退**：spec 原定回退"内置精简词典"。实现为编译提交的内置 fallback.opid（35 条高频词，opi-tools 从 data/raw/fallback.tsv 生成，提交进仓库），与 M1 内置词等价且可再编译。
+
+## M3 实现偏差（2026-08-12）
+
+1. **集成后端**：spec 原定 native-assets 后端。flutter_rust_bridge 2.12 的 `flutter_rust_bridge_codegen create` 仅支持 **cargokit** backend（无 `--integration-backend native-assets` 选项，无 hook/build.dart）。cargokit 在 `flutter test` 时自动构建主机 Rust 库。
+2. **crate 命名**：cargokit 按 package name 逐字推导库文件名（`lib${name}.so`），而 cargo 将连字符转下划线 → package name 用 `opi_ffi`（下划线），目录保持 `crates/opi-ffi`；Android 侧 build.gradle 显式 `libname = "opi_ffi"`。
+3. **API 签名偏差**（以生成绑定为准）：frb 命名必填参数（`inputKey(ch:)`、`setShift(on_:)`——Rust `on` 为保留字）；usize/u64 → Dart **BigInt**（候选 score 为 BigInt）；`Api.loadFallback()` 为 static；无 instance dispose（RustOpaque 由 GC 管理）；测试需 `setUpAll(() => RustLib.init())`（init 幂等）。
+4. **Dictionary trait**：frb auto-opaque 要求 `Api: Send + Sync` → `Dictionary` trait 增加 `Send + Sync` supertraits（两个实现者均为纯数据容器，已验证安全）。
+5. **同步核心 + async 外壳**：`load_fallback_sync()` 纯同步可测，`pub async fn load_fallback()` 薄包给 Dart（不引入 tokio），符合击键路径同步调用原则。
+6. **损坏路径语义**：`load_or_fallback` 对缺失/损坏路径**静默回退**内置 fallback 词典（不抛错）；bad-path 测试断言回退成功而非异常。
+7. **手工 loader 配置**：`frb_generated.dart` 的 `kDefaultExternalLibraryLoaderConfig` 需手工设置 `stem: 'opi_ffi'` + `ioDirectory: '../../target/debug/'`（workspace member 需要）；codegen 重生成会清除 ioDirectory，须重新应用。

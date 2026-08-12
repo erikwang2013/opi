@@ -2064,11 +2064,11 @@ git commit -m "test: property tests for composer, trie, ranking, learner"
 
 ## M1 验收清单
 
-- [ ] `cargo test -p engine-core` 全绿（单元 + 集成 + proptest）
-- [ ] `cargo clippy -p engine-core -- -D warnings` 零警告
-- [ ] 10 个 commit，每个任务一个，测试先行（红 → 绿 → commit）
-- [ ] 引擎无 IO 无平台依赖：`crates/engine-core` 不出现 `std::fs` / `std::net` / 平台条件编译
-- [ ] Session 快照语义（规格 §3.3）：M1 返回完整快照（`Session::clone`），增量 diff（`SessionUpdate`）在 M3 FFI 层计算 —— 已确认
+- [x] `cargo test -p engine-core` 全绿（单元 + 集成 + proptest）—— 2026-08-12 完成
+- [x] `cargo clippy -p engine-core -- -D warnings` 零警告 —— 2026-08-12 完成
+- [x] 10 个 commit，每个任务一个，测试先行（红 → 绿 → commit）—— 2026-08-12 完成
+- [x] 引擎无 IO 无平台依赖：`crates/engine-core` 不出现 `std::fs` / `std::net` / 平台条件编译 —— 2026-08-12 完成
+- [x] Session 快照语义（规格 §3.3）：M1 返回完整快照（`Session::clone`），增量 diff（`SessionUpdate`）在 M3 FFI 层计算 —— 已确认
 
 ## 后续里程碑（另行计划）
 

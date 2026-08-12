@@ -1629,7 +1629,7 @@ git commit -m "feat(opi-tools): verify subcommand + real rime data compile + spe
 **Files:**
 - Modify: `README.md`
 
-- [ ] **Step 1: 更新 README 里程碑与结构**
+- [x] **Step 1: 更新 README 里程碑与结构** —— 2026-08-12 完成
 
 README.md 修改四处：
 
@@ -1667,17 +1667,17 @@ data/             # 词库源数据（raw）与编译产物（generated，fallba
 - **词库数据**：按上游许可证单独声明（rime-luna-pinyin 为 LGPL-3.0），`data/raw` 逐条记录来源与许可证
 ```
 
-- [ ] **Step 2: 全量门禁**
+- [x] **Step 2: 全量门禁** —— 2026-08-12 完成
 
 Run: `cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings`
 Expected: 全部 PASS，零警告。
 
-- [ ] **Step 3: 确认生成物未被误提交**
+- [x] **Step 3: 确认生成物未被误提交** —— 2026-08-12 完成
 
 Run: `git status`
 Expected: 仅 README.md 与待提交内容；`data/generated/luna.opid` 不出现。
 
-- [ ] **Step 4: Commit 并推送**
+- [x] **Step 4: Commit 并推送** —— 2026-08-12 完成
 
 ```bash
 git add README.md

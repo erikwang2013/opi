@@ -1,4 +1,4 @@
- ---
+**[English](README.en.md) · [中文](README.md)**
 
 # Open People Input (OPI)
 
@@ -71,6 +71,8 @@
 ```bash
 cargo test --workspace                   # 单元 + 集成 + 属性测试
 cargo clippy --workspace --all-targets -- -D warnings   # 门禁：零警告
+cd flutter/app && flutter test           # Dart 集成测试（FFI 往返 + 引擎流程 + 控制器）
+cd flutter/app && flutter analyze        # 静态分析
 ```
 
 仓库结构：
@@ -100,18 +102,6 @@ V1 里程碑进度：
 - [ ] **M4 Android 接入**：InputMethodService + Flutter 键盘进 IME 窗口
 - [ ] **M5 UI 完善**：符号/Emoji/数字面板 + 设置页
 - [ ] **M6 学习打磨**：SQLite 学习闭环、性能门槛（<30ms/键）、TalkBack 无障碍
-
-我们诚邀所有对输入法现状不满、愿意共同打造一款”理想输入法”的开发者、设计师、产品经理和普通用户加入我们。
-
-### 🤝 参与贡献
-
-| 角色 | 你可以做什么 |
-|---|---|
-| **开发者** | 参与引擎开发、各端适配、性能优化、代码审查 |
-| **设计师** | 设计简洁优雅的UI界面、交互原型、品牌视觉 |
-| **产品/用户体验** | 整理用户需求、设计交互流程、反馈使用体验 |
-| **普通用户** | 使用测试版本、提交Bug报告、参与词库共建 |
-| **语言/文化贡献者** | 维护各语言词库、方言输入方案、少数民族语言支持 |
 
 ### 📄 许可证
 
