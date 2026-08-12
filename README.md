@@ -84,18 +84,19 @@ crates/
   opi-tools/      # 词库编译工具：dict.yaml → .opid + verify 校验（M2）
   opi-ffi/        # flutter_rust_bridge 绑定（M3）
 docs/superpowers/ # 设计规格与实施计划
+flutter/app/      # Flutter 应用：EngineController（Riverpod）+ 集成测试（M3）
 data/             # 词库源数据（raw）与编译产物（generated，fallback.opid 入库）
 ```
 
 ### 📅 项目状态
 
-> **当前阶段：M1 引擎内核 ✅ 完成（2026-08）**
+> **当前阶段：M3 FFI 绑定 ✅ 完成（2026-08）**
 
 V1 里程碑进度：
 
 - [x] **M1 引擎内核**：cargo workspace + Composer 按键状态机 + 拼音音节表/切分 + Trie 码表 + 候选排序合并 + 本地学习 + Unicode 符号引擎 + Engine 门面（62 测试全绿，clippy 零警告）
 - [x] **M2 数据管线**：opi-tools 编译词库 → `.opid` 二进制（mmap 加载、校验、损坏回退）
-- [ ] **M3 FFI**：flutter_rust_bridge 绑定 + EngineController
+- [x] **M3 FFI**：flutter_rust_bridge 绑定 + EngineController
 - [ ] **M4 Android 接入**：InputMethodService + Flutter 键盘进 IME 窗口
 - [ ] **M5 UI 完善**：符号/Emoji/数字面板 + 设置页
 - [ ] **M6 学习打磨**：SQLite 学习闭环、性能门槛（<30ms/键）、TalkBack 无障碍
