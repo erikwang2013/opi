@@ -122,4 +122,4 @@ V1 里程碑进度：
 
 | 微信赞赏 | 支付宝赞赏 |
 |---|---|
-| <img src=”docs/weixinpay.png” width=”130” height=”130” alt=”微信赞赏码”> | <img src=”docs/alipay.png” width=”130” height=”130” alt=”支付宝赞赏码”> |
+| <img src="docs/weixinpay.png" width="130" height="130" alt="微信赞赏码"> | <img src="docs/alipay.png" width="130" height="130" alt="支付宝赞赏码"> |
