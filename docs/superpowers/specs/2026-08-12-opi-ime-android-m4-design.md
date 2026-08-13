@@ -157,3 +157,20 @@ Dart 按键 → EngineController.input(ch)（同步 FFI）
 9. **compileSdk 33→34**（`rust_builder/android/build.gradle`）：本机 SDK 无 android-33 平台包（33 平台下载走被封锁的 dl.google.com）
 
 **保持待办**：真机验收（APK 安装 + IME 启用 + 实测键入）；重生成 frb 代码会重置 `rust_builder/android/build.gradle` 的 compileSdk 34 为模板值 33，需重打该补丁
+
+### 2026-08-14 追加：真机闪退修复（relinker 传递依赖缺失）
+
+真机首验（Redmi aurorapro / arm64-v8a / Android 16）发现**打开 app 即闪退**，logcat 定位根因：
+
+```
+NoClassDefFoundError: Failed resolution of: Lcom/getkeepsafe/relinker/ReLinker$Logger;
+  at io.flutter.embedding.engine.FlutterJNI$Factory.provideFlutterJNI
+```
+
+- **根因**：Flutter 引擎（engine commit 7a06558 起）改用 ReLinker 加载 `libflutter.so`（规避 Play feature delivery / 低 minSdk 的 dlopen 问题）。本地 m2 的 embedding POM 为手工补全（上一节第 6 项），反推常量池时遗漏 `com.getkeepsafe.relinker:relinker` —— 编译期不暴露（embedding jar 已编译），运行时才解析类 → 真机闪退。验证：embedding jar 字节码引用 `ReLinker`/`ReLinker$Logger`/`ReLinkerInstance`；APK 首个 dex 无该类。
+- **修复**（双保险）：
+  1. 本地 m2 POM（`/home/erik/opi_local_m2/.../flutter_embedding_debug-*.pom`，不在 git）补 `com.getkeepsafe.relinker:relinker:1.4.5`（官方版本，StackOverflow 报错与 Maven Central 佐证）
+  2. `flutter/app/android/app/build.gradle.kts` 显式 `implementation("com.getkeepsafe.relinker:relinker:1.4.5")` —— m2 重建会丢 POM 补丁，项目内持久化
+- **坐标注意**：groupId 是 `com.getkeepsafe.relinker`（含 `.relinker`），误写 `com.getkeepsafe` 会导致 Gradle 解析失败（首构建即暴露）
+- **验证**：重建 + 真机安装 → 打开 app 正常渲染（Impeller Vulkan + Dart VM service），IME 启用/设为默认成功，进程稳定，无崩溃。键盘弹出路径待用户手动确认
+- **扫描结论**：embedding jar 其余外部引用（play-core 仅 `FlutterPlayStoreSplitApplication`/deferred-components 用，本 app 不触发；`org.json` Android 内置）均无需补

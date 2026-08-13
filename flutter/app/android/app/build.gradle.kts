@@ -40,6 +40,13 @@ kotlin {
     }
 }
 
+dependencies {
+    // Flutter embedding 经 ReLinker 加载 libflutter.so；本地 m2 POM 手工补全时
+    // 遗漏该传递依赖，运行时 NoClassDefFoundError 闪退（真机打开即崩）。
+    // 显式声明以持久化修复（m2 重建会丢 POM 补丁）。
+    implementation("com.getkeepsafe.relinker:relinker:1.4.5")
+}
+
 flutter {
     source = "../.."
 }
