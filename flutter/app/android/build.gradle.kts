@@ -1,4 +1,12 @@
 allprojects {
+    buildscript {
+        repositories {
+            // 阿里云镜像优先：本机 dl.google.com 被 DNS 劫持至 ~2KB/s 慢速镜像，
+            // google maven 完整镜像在 maven.aliyun.com/repository/google（~4MB/s）。
+            maven { url = uri("https://maven.aliyun.com/repository/google") }
+            maven { url = uri("https://maven.aliyun.com/repository/public") }
+        }
+    }
     repositories {
         google()
         mavenCentral()

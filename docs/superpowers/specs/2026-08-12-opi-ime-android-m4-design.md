@@ -141,3 +141,19 @@ Dart 按键 → EngineController.input(ch)（同步 FFI）
   - 仍失败原因：flutter 工具将 `local.properties` 的 `sdk.dir` 重写回 `/usr/lib/android-sdk`（仅含 platform-tools，无 NDK）；`flutter config` 的 `android-sdk` 指向不存在的 `/usr/local/Android/Sdk`；直接 `gradlew` 绕行也因依赖解析网络阻塞挂起。环境需安装 NDK 28.2.13676358 或统一 sdk.dir 后重试
 - **包名验证（源码级）**：无 APK 可跑 aapt，改为源码验证——`namespace`/`applicationId = io.opi.input`，manifest 含 IME service + BIND_INPUT_METHOD + `@xml/method`，无任何 `com.example` 残留
 - **门禁**：cargo test 114 通过 / clippy 0 警告；flutter analyze 0 问题；flutter test 17/17 通过——全绿
+
+### 2026-08-13 追加：APK 构建成功（环境修复完整记录）
+
+`flutter build apk --debug` 最终成功（`✓ Built build/app/outputs/flutter-apk/app-debug.apk`，138MB debug，含三 ABI libflutter.so + opi_ffi.so）。本节为上一节「APK 构建失败」的收尾，8 次构建尝试累计的修复链：
+
+1. **sdk.dir 统一**：`flutter/config` 的 `android-sdk` 与 `local.properties` 统一到 `/home/component/Android/sdk`（flutter 不再重写）
+2. **NDK 固定**：`app/build.gradle.kts` 固定 `ndkVersion = "27.0.12077973"`（本机 SDK 实装版本；AGP 9 不再要求 28.2.x）
+3. **阿里云镜像**（本机 dl.google.com 被 DNS 劫持至 ~2KB/s，且 Google IP 段被网络封锁、直接连接全部超时）：`settings.gradle.kts` pluginManagement 与 dependencyResolutionManagement、根 `build.gradle.kts` allprojects buildscript 均加 aliyun google/gradle-plugin/public 镜像优先
+4. **本地引擎 m2**（`io.flutter` 引擎产物只发 dl.google.com，镜像均 404）：从 SDK 缓存 `/home/component/flutter/bin/cache/artifacts/engine/{android-arm64,arm,x64}/flutter.jar` 构造 `/home/erik/opi_local_m2`，含 flutter_embedding_debug + 三 ABI libflutter.so jar；`dependencyResolutionManagement` 首条仓库指向它
+5. **移除 `google()`**（dependencyResolutionManagement）：Gradle 动态版本（`androidx.test:runner:1.2+`）会查询所有声明仓库的 maven-metadata.xml，dl.google.com 连接超时直接失败；aliyun google 镜像为完整镜像，移除后全部走镜像
+6. **embedding POM 补全传递依赖**：本地 m2 的 flutter_embedding_debug POM 原为极简版（无 dependencies 块），导致 integration_test 编译缺 `androidx.fragment.app.FragmentActivity` 等类；从 embedding 类文件的常量池反推引用集，补全 9 个 androidx 依赖（activity 1.8.2 / annotation 1.0.0 / core 1.13.1 / exifinterface 1.0.0 / fragment 1.1.0 / lifecycle-common 2.0.0 / lifecycle-runtime 2.0.0 / window 1.0.0 / window-java 1.0.0）
+7. **cargokit Gradle 9 兼容**：`rust_builder/cargokit/gradle/plugin.gradle` 的 `project.exec(Closure)` 在 Gradle 9 全部重载被移除（报 `Could not find method exec()`），改为注入 `ExecOperations` 服务 + 显式 `Action<ExecSpec>`
+8. **代码 bug 修复**（M4 实现时的 API 误用，编译期暴露）：`OpiImeService.kt` 的 `import io.flutter.injector.FlutterInjector` → `io.flutter.FlutterInjector`（jar 内实际包名）；不存在的 `FlutterView.LayoutParams` → `FlutterView(this)`
+9. **compileSdk 33→34**（`rust_builder/android/build.gradle`）：本机 SDK 无 android-33 平台包（33 平台下载走被封锁的 dl.google.com）
+
+**保持待办**：真机验收（APK 安装 + IME 启用 + 实测键入）；重生成 frb 代码会重置 `rust_builder/android/build.gradle` 的 compileSdk 34 为模板值 33，需重打该补丁

@@ -2,12 +2,11 @@ package io.opi.input
 
 import android.inputmethodservice.InputMethodService
 import android.view.View
-import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import io.flutter.embedding.android.FlutterView
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.dart.DartExecutor
-import io.flutter.injector.FlutterInjector
+import io.flutter.FlutterInjector
 import io.flutter.plugin.common.MethodChannel
 
 /** OPI IME 宿主：FlutterView 作为输入视图，Dart imeMain entrypoint。 */
@@ -23,13 +22,7 @@ class OpiImeService : InputMethodService() {
         )
         engine.dartExecutor.executeDartEntrypoint(entrypoint)
 
-        val view = FlutterView(
-            this,
-            FlutterView.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-        )
+        val view = FlutterView(this)
         view.attachToFlutterEngine(engine)
 
         channel = MethodChannel(engine.dartExecutor.binaryMessenger, "opi/ime")

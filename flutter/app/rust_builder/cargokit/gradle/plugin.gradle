@@ -3,6 +3,8 @@
 
 import java.nio.file.Paths
 import org.apache.tools.ant.taskdefs.condition.Os
+import org.gradle.api.Action
+import org.gradle.process.ExecSpec
 
 CargoKitPlugin.file = buildscript.sourceFile
 
@@ -14,6 +16,10 @@ class CargoKitExtension {
 }
 
 abstract class CargoKitBuildTask extends DefaultTask {
+
+    // Gradle 9 移除了 Project.exec 全部重载，注入 ExecOperations 替代。
+    @javax.inject.Inject
+    abstract org.gradle.process.ExecOperations getExecOperations()
 
     @Input
     String buildMode
@@ -60,27 +66,31 @@ abstract class CargoKitBuildTask extends DefaultTask {
         def rootProjectDir = project.rootProject.projectDir
 
         if (!Os.isFamily(Os.FAMILY_WINDOWS)) {
-            project.exec {
-                commandLine 'chmod', '+x', path
-            }
+            execOperations.exec(new Action<ExecSpec>() {
+                void execute(ExecSpec spec) {
+                    spec.commandLine 'chmod', '+x', path
+                }
+            })
         }
 
-        project.exec {
-            executable path
-            args "build-gradle"
-            environment "CARGOKIT_ROOT_PROJECT_DIR", rootProjectDir
-            environment "CARGOKIT_TOOL_TEMP_DIR", "${buildDir}/build_tool"
-            environment "CARGOKIT_MANIFEST_DIR", manifestDir
-            environment "CARGOKIT_CONFIGURATION", buildMode
-            environment "CARGOKIT_TARGET_TEMP_DIR", buildDir
-            environment "CARGOKIT_OUTPUT_DIR", outputDir
-            environment "CARGOKIT_NDK_VERSION", ndkVersion
-            environment "CARGOKIT_SDK_DIR", sdkDirectory
-            environment "CARGOKIT_COMPILE_SDK_VERSION", compileSdkVersion
-            environment "CARGOKIT_MIN_SDK_VERSION", minSdkVersion
-            environment "CARGOKIT_TARGET_PLATFORMS", targetPlatforms.join(",")
-            environment "CARGOKIT_JAVA_HOME", System.properties['java.home']
-        }
+        execOperations.exec(new Action<ExecSpec>() {
+            void execute(ExecSpec spec) {
+                spec.executable path
+                spec.args "build-gradle"
+                spec.environment "CARGOKIT_ROOT_PROJECT_DIR", rootProjectDir
+                spec.environment "CARGOKIT_TOOL_TEMP_DIR", "${buildDir}/build_tool"
+                spec.environment "CARGOKIT_MANIFEST_DIR", manifestDir
+                spec.environment "CARGOKIT_CONFIGURATION", buildMode
+                spec.environment "CARGOKIT_TARGET_TEMP_DIR", buildDir
+                spec.environment "CARGOKIT_OUTPUT_DIR", outputDir
+                spec.environment "CARGOKIT_NDK_VERSION", ndkVersion
+                spec.environment "CARGOKIT_SDK_DIR", sdkDirectory
+                spec.environment "CARGOKIT_COMPILE_SDK_VERSION", compileSdkVersion
+                spec.environment "CARGOKIT_MIN_SDK_VERSION", minSdkVersion
+                spec.environment "CARGOKIT_TARGET_PLATFORMS", targetPlatforms.join(",")
+                spec.environment "CARGOKIT_JAVA_HOME", System.properties['java.home']
+            }
+        })
     }
 }
 
