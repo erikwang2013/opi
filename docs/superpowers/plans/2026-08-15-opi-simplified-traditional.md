@@ -575,7 +575,10 @@ impl Engine {
     }
 
     /// 换装繁体词典（FFI install_trad 用）。None = 清除（回退简体）。
+    /// 重算 user_boost：trad.opid 静态最大词频 4e9，保持"一次选词压过全部静态词"。
     pub fn set_trad_dict(&mut self, dict: Option<Box<dyn Dictionary>>) {
+        let max_freq = self.dict.max_freq().max(dict.as_ref().map_or(0, |d| d.max_freq()));
+        self.user_boost = USER_BOOST.max(max_freq.saturating_mul(2));
         self.trad_dict = dict;
     }
 
@@ -745,6 +748,11 @@ pub fn set_trad_dict(&mut self, dict: Option<Box<dyn Dictionary>>) {
 }
 ```
 
+> 修正注记：Task 2 已提交的 `Engine::set_trad_dict` 是平换版本（不重算 user_boost）。
+> trad.opid 静态最大词频 4e9，若 user_boost 仍为旧值（≤1e5），learner 一次选词压不过
+> 静态词，繁体模式学习失效。Task 2 Step 5 已按重算版更新；本任务新增测试验证：
+> `install_trad` 后选词仍能压过 4e9 静态词（见 Step 3 测试补充）。
+
 - [ ] **Step 3: api/mod.rs — 更新/新增测试**
 
 `mode_int_roundtrip` 更新（4 现在是 Traditional）：
@@ -796,6 +804,41 @@ fn install_trad_hooks_trad_dict() {
     .expect("engine loaded");
     assert_eq!(top, "發");
     std::fs::remove_file(&tmp).ok();
+    with_engine(|a| a.switch_mode(ApiMode::Pinyin));
+}
+```
+
+新增（user_boost 重算验证，见上方修正注记）：
+
+```rust
+#[test]
+fn install_trad_recomputes_user_boost() {
+    // 高静态词频（4e9，trad.opid 同量级）安装后，learner 选词仍压过静态词。
+    *SINGLETON.lock().unwrap() = None;
+    install(None).unwrap();
+    let dict = engine_data::format::OpDict {
+        entries: vec![
+            engine_data::format::RawEntry { pinyin: "fa".into(), word: "發".into(), freq: 4_000_000_000 },
+            engine_data::format::RawEntry { pinyin: "fa".into(), word: "髮".into(), freq: 3_999_000_000 },
+        ],
+        pinyin_total: 2,
+    };
+    let tmp = std::env::temp_dir().join("opi_trad_boost.opid");
+    std::fs::write(&tmp, engine_data::serialize(&dict)).unwrap();
+    install_trad(tmp.to_str().unwrap()).unwrap();
+    std::fs::remove_file(&tmp).ok();
+    with_engine(|a| {
+        a.set_learner(true);
+        a.switch_mode(ApiMode::Traditional);
+        a.input_key("f".into());
+        a.input_key("a".into());
+        assert_eq!(a.candidates(8)[0].text, "發");
+        a.select(1); // 选 髮
+        a.input_key("f".into());
+        a.input_key("a".into());
+        assert_eq!(a.candidates(8)[0].text, "髮", "learner 选词应压过 4e9 静态词");
+        a.set_learner(false);
+    });
     with_engine(|a| a.switch_mode(ApiMode::Pinyin));
 }
 ```
