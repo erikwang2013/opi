@@ -21,6 +21,12 @@ object EngineLoader {
 
     /** 文件操作抽象（JVM 测试注入假实现）。 */
     interface FileOps {
+        /**
+         * 资产大小（字节）；无法获取（如资产在 APK 中为 gzip 压缩、openFd 不可用）
+         * 返回 null → 视为需要重拷，走 readAsset 完整读取。缺失/损坏不在此抛错。
+         */
+        fun assetLength(): Long?
+
         /** 读资产字节。资产缺失/损坏抛 IOException。 */
         @Throws(IOException::class)
         fun readAsset(): ByteArray
@@ -43,13 +49,23 @@ object EngineLoader {
         existingSize == null || existingSize != assetSize
 
     /**
-     * 编排（纯 JVM，无 android.*）：读资产 → size 校验重拷 → load(path)。
-     * load 失败（坏路径/损坏）→ load(null) 回退内置 35 词词库，返回 false。
+     * 编排（纯 JVM，无 android.*）：先查资产 size（命中已缓存副本则跳过 1.7MB 字节读取）→
+     * 需重拷时 readAsset+write → load(path)。
+     * 任一步 I/O 失败（资产缺失/损坏/写盘失败）→ load(null) 回退内置 35 词词库，返回 false
+     * （不抛异常，避免 IME 进程在 onCreateInputView 崩溃）；load 失败同样回退。
      */
     fun loadAsset(fileOps: FileOps, api: LoadApi, targetPath: String): Boolean {
-        val bytes = fileOps.readAsset()
-        if (needsCopy(bytes.size.toLong(), fileOps.existingSize())) {
-            fileOps.write(bytes)
+        try {
+            val assetSize = fileOps.assetLength()
+            if (assetSize == null || needsCopy(assetSize, fileOps.existingSize())) {
+                fileOps.write(fileOps.readAsset())
+            }
+        } catch (e: IOException) {
+            api.load(null) // I/O 失败 → 回退内置词库（与 flutter catch → loadFallback 一致）
+            return false
+        } catch (e: Exception) {
+            api.load(null) // 兜底：任何异常都不得让 IME 崩溃
+            return false
         }
         val ok = api.load(targetPath)
         if (!ok) api.load(null) // 回退内置词库（与 flutter catch → loadFallback 一致）
@@ -61,6 +77,12 @@ object EngineLoader {
         val target = File(context.filesDir, FILE_NAME)
         val result = loadAsset(
             fileOps = object : FileOps {
+                override fun assetLength(): Long? = try {
+                    context.assets.openFd(ASSET_NAME).use { it.length }
+                } catch (e: IOException) {
+                    null // gzip 压缩资产 openFd 不可用 → 视为需要重拷，走完整读取
+                }
+
                 override fun readAsset(): ByteArray =
                     context.assets.open(ASSET_NAME).use { it.readBytes() }
 

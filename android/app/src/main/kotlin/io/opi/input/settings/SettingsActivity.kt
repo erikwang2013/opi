@@ -6,7 +6,7 @@ import androidx.activity.compose.setContent
 import io.opi.input.jni.EngineLoader
 
 /**
- * 设置页宿主（A5）：launcher 入口（manifest 声明 .MainActivity 继承本类）。
+ * 设置页宿主（A5）：launcher 入口（manifest 直接声明本类为 launcher，无 MainActivity）。
  * 启动即编排 luna 资产加载（幂等：size 校验重拷；失败回退内置词库）——
  * 与 IME 侧共享 Rust 静态单例，先到先载，后到跳过。
  */

@@ -2,14 +2,13 @@ package io.opi.input.jni
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
 
 /**
  * EngineLoader 纯 JVM 测试（A3/A4 模式：注入 FileOps/LoadApi 假实现，无 android.*）。
- * 对齐 flutter _loadLuna 规则：不存在或 size 不一致即重拷；load 失败回退内置词库。
+ * 对齐 flutter _loadLuna 规则：不存在或 size 不一致即重拷；I/O 失败或 load 失败均回退内置词库。
  */
 class EngineLoaderTest {
 
@@ -21,6 +20,8 @@ class EngineLoaderTest {
         private var size = existingSize
         var writeCalls = 0
         var written: ByteArray? = null
+
+        override fun assetLength(): Long? = asset.size.toLong()
 
         override fun readAsset(): ByteArray = asset
 
@@ -96,19 +97,20 @@ class EngineLoaderTest {
         assertFalse(EngineLoader.needsCopy(100, 100))      // 一致 → 跳过
     }
 
-    @Test(expected = IOException::class)
-    fun assetReadFailurePropagatesAndNeverLoads() {
+    @Test
+    fun assetReadFailureFallsBackToBuiltinDict() {
+        // 资产读取抛 IOException → 不得崩溃；回退 load(null) 内置 35 词词库并返回 false
         val fileOps = object : EngineLoader.FileOps {
+            override fun assetLength(): Long? = 100L
             override fun readAsset(): ByteArray = throw IOException("asset missing")
             override fun existingSize(): Long? = null
             override fun write(bytes: ByteArray) {}
         }
         val api = FakeLoadApi()
 
-        try {
-            EngineLoader.loadAsset(fileOps, api, "/data/luna.opid")
-        } finally {
-            assertNull(api.calls.firstOrNull())
-        }
+        val ok = EngineLoader.loadAsset(fileOps, api, "/data/luna.opid")
+
+        assertFalse(ok)
+        assertEquals(listOf(null), api.calls)
     }
 }
