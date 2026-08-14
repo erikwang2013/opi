@@ -28,13 +28,18 @@ fun ImeScreen(
     router: KeyRouter,
     catalog: SymbolCatalog,
 ) {
-    // 切中/英：切英文前清残留拼音，防止残留拼音被空格/回车意外提交
+    // 切模式：中→繁→英→中 三态循环；离开拼音类模式清残留拼音，防止被空格/回车意外提交
     fun toggleMode() {
-        if (controller.mode == EngineMode.PINYIN) {
-            controller.clear()
-            controller.switchMode(EngineMode.ENGLISH)
-        } else {
-            controller.switchMode(EngineMode.PINYIN)
+        when (controller.mode) {
+            EngineMode.PINYIN -> {
+                controller.clear()
+                controller.switchMode(EngineMode.TRADITIONAL)
+            }
+            EngineMode.TRADITIONAL -> {
+                controller.clear()
+                controller.switchMode(EngineMode.ENGLISH)
+            }
+            else -> controller.switchMode(EngineMode.PINYIN)
         }
     }
     val shiftVisible = controller.mode == EngineMode.ENGLISH
@@ -101,7 +106,11 @@ fun ImeScreen(
                 onShift = if (shiftVisible) controller::shiftTap else null,
                 onShiftLongPress = if (shiftVisible) controller::shiftLongPress else null,
                 shiftState = if (shiftVisible) controller.shiftState else ShiftState.OFF,
-                modeLabel = if (controller.mode == EngineMode.PINYIN) "中" else "英",
+                modeLabel = when (controller.mode) {
+                    EngineMode.PINYIN -> "中"
+                    EngineMode.TRADITIONAL -> "繁"
+                    else -> "英"
+                },
             )
         }
     }

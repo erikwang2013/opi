@@ -54,6 +54,9 @@ object OpiEngine : OpiEngineApi, SymbolApi {
     /** symbolsInBlock(id: Short) -> String[]。JNI 可能返回 null。 */
     override external fun symbolsInBlock(id: Short): Array<String>?
 
+    /** loadTrad(path: String) -> Boolean。坏路径/引擎未加载 → false（繁体模式回退简体库）。 */
+    external fun loadTrad(path: String): Boolean
+
     external fun learnerEnabled(): Boolean
 
     external fun setLearner(enabled: Boolean)

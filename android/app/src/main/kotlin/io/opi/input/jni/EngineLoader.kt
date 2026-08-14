@@ -17,6 +17,8 @@ object EngineLoader {
 
     const val ASSET_NAME = "luna.opid"
     const val FILE_NAME = "luna.opid"
+    const val ASSET_NAME_TRAD = "trad.opid"
+    const val FILE_NAME_TRAD = "trad.opid"
     private const val TAG = "EngineLoader"
 
     /** 文件操作抽象（JVM 测试注入假实现）。 */
@@ -42,6 +44,11 @@ object EngineLoader {
     fun interface LoadApi {
         /** 加载 path；null/空串 → 内置回退词库；坏路径 → false。 */
         fun load(path: String?): Boolean
+    }
+
+    /** 繁体词典加载抽象（trad 是可选增强：失败不回退内置，不触碰已装的 luna）。 */
+    fun interface LoadTradApi {
+        fun loadTrad(path: String): Boolean
     }
 
     /** size 校验重拷规则（对齐 flutter：不存在或 size 不一致即重拷）。 */
@@ -72,6 +79,22 @@ object EngineLoader {
         return ok
     }
 
+    /**
+     * 繁体资产编排：与 loadAsset 相同的 size 校验重拷；失败只返回 false 并保留主词典
+     * （spec 2026-08-15 错误处理：trad.opid 加载失败 → 繁体模式回退查简体库，logcat 告警）。
+     */
+    fun loadTradAsset(fileOps: FileOps, api: LoadTradApi, targetPath: String): Boolean {
+        try {
+            val assetSize = fileOps.assetLength()
+            if (assetSize == null || needsCopy(assetSize, fileOps.existingSize())) {
+                fileOps.write(fileOps.readAsset())
+            }
+        } catch (e: Exception) {
+            return false
+        }
+        return api.loadTrad(targetPath)
+    }
+
     /** 生产入口：assets/luna.opid → filesDir/luna.opid → OpiEngine。 */
     fun load(context: Context): Boolean {
         val target = File(context.filesDir, FILE_NAME)
@@ -98,6 +121,32 @@ object EngineLoader {
         )
         if (result) Log.i(TAG, "luna loaded (${target.length()} bytes)")
         else Log.w(TAG, "luna load failed, engine on builtin fallback dict")
+
+        // trad 可选增强：失败仅告警，不影响 luna 主词典（OpiEngine.loadTrad 严格加载）
+        val tradTarget = File(context.filesDir, FILE_NAME_TRAD)
+        val tradOk = loadTradAsset(
+            fileOps = object : FileOps {
+                override fun assetLength(): Long? = try {
+                    context.assets.openFd(ASSET_NAME_TRAD).use { it.length }
+                } catch (e: IOException) {
+                    null
+                }
+
+                override fun readAsset(): ByteArray =
+                    context.assets.open(ASSET_NAME_TRAD).use { it.readBytes() }
+
+                override fun existingSize(): Long? =
+                    if (tradTarget.exists()) tradTarget.length() else null
+
+                override fun write(bytes: ByteArray) {
+                    tradTarget.writeBytes(bytes)
+                }
+            },
+            api = LoadTradApi { OpiEngine.loadTrad(it) },
+            targetPath = tradTarget.absolutePath,
+        )
+        if (tradOk) Log.i(TAG, "trad loaded (${tradTarget.length()} bytes)")
+        else Log.w(TAG, "trad load failed, Traditional mode falls back to simplified dict")
         return result
     }
 }

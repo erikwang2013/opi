@@ -113,4 +113,54 @@ class EngineLoaderTest {
         assertFalse(ok)
         assertEquals(listOf(null), api.calls)
     }
+
+    /** 假 trad 加载器：记录调用与结果。 */
+    private class FakeTradApi(var ok: Boolean = true) : EngineLoader.LoadTradApi {
+        val calls = mutableListOf<String>()
+
+        override fun loadTrad(path: String): Boolean {
+            calls += path
+            return ok
+        }
+    }
+
+    @Test
+    fun tradLoadsWhenAssetReady() {
+        val fileOps = FakeFileOps(byteArrayOf(1, 2, 3), existingSize = null)
+        val api = FakeTradApi()
+
+        val ok = EngineLoader.loadTradAsset(fileOps, api, "/data/trad.opid")
+
+        assertTrue(ok)
+        assertEquals(1, fileOps.writeCalls)
+        assertEquals(listOf("/data/trad.opid"), api.calls)
+    }
+
+    @Test
+    fun tradFailureKeepsEngineUntouched() {
+        // 坏路径 → false，且不得调用 load(null)（不回退内置，luna 主词典保持）
+        val fileOps = FakeFileOps(byteArrayOf(1, 2, 3), existingSize = null)
+        val api = FakeTradApi(ok = false)
+
+        val ok = EngineLoader.loadTradAsset(fileOps, api, "/bad/trad.opid")
+
+        assertFalse(ok)
+        assertEquals(listOf("/bad/trad.opid"), api.calls)
+    }
+
+    @Test
+    fun tradAssetReadFailureSkipsLoadTrad() {
+        val fileOps = object : EngineLoader.FileOps {
+            override fun assetLength(): Long? = 100L
+            override fun readAsset(): ByteArray = throw IOException("asset missing")
+            override fun existingSize(): Long? = null
+            override fun write(bytes: ByteArray) {}
+        }
+        val api = FakeTradApi()
+
+        val ok = EngineLoader.loadTradAsset(fileOps, api, "/data/trad.opid")
+
+        assertFalse(ok)
+        assertTrue(api.calls.isEmpty())
+    }
 }

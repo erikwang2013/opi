@@ -5,9 +5,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import io.opi.input.jni.OpiEngine
 
-/** 引擎模式（JNI mode() 返回值：0=Pinyin 1=English 2=Number 3=Symbol）。 */
+/** 引擎模式（JNI mode() 返回值：0=Pinyin 1=English 2=Number 3=Symbol 4=Traditional）。 */
 enum class EngineMode(val value: Int) {
-    PINYIN(0), ENGLISH(1), NUMBER(2), SYMBOL(3);
+    PINYIN(0), ENGLISH(1), NUMBER(2), SYMBOL(3), TRADITIONAL(4);
 
     companion object {
         fun fromInt(v: Int) = entries.firstOrNull { it.value == v } ?: PINYIN

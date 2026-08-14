@@ -180,6 +180,12 @@ class EngineControllerTest {
     }
 
     @Test
+    fun fromIntMapsTraditional() {
+        assertEquals(EngineMode.TRADITIONAL, EngineMode.fromInt(4))
+        assertEquals(EngineMode.PINYIN, EngineMode.fromInt(99))
+    }
+
+    @Test
     fun selectFromPageUsesAbsoluteIndex() {
         val fake = FakeEngine().apply {
             cands = cands(20)
