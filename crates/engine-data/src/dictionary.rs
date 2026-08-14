@@ -15,14 +15,16 @@ pub fn fallback_dict() -> MmapDictionary {
     load_fallback().expect("内置 fallback 词库损坏（提交时已校验）")
 }
 
-/// 加载指定词库；文件缺失/损坏一律回退内置词库。仅当内置词库本身损坏才返回 Err。
+/// 加载指定词库；文件缺失/损坏返回 Err（调用方决定回退策略，如 Flutter 侧
+/// Api.loadFallback）。此前静默回退内置词库：UI 层误以为完整词库已加载，
+/// 候选顺序/词条差异无从排查。
 pub fn load_or_fallback(path: Option<&Path>) -> Result<Box<dyn Dictionary>, String> {
-    if let Some(p) = path
-        && let Ok(d) = load_mmap(p)
-    {
-        return Ok(Box::new(d));
-    }
-    load_fallback().map(|d| Box::new(d) as Box<dyn Dictionary>)
+    let Some(p) = path else {
+        return Err("未提供词库路径".into());
+    };
+    load_mmap(p)
+        .map(|d| Box::new(d) as Box<dyn Dictionary>)
+        .map_err(|e| format!("词库加载失败（{p:?}）: {e:?}"))
 }
 
 #[cfg(test)]
@@ -54,26 +56,23 @@ mod tests {
     }
 
     #[test]
-    fn load_or_fallback_none_returns_fallback() {
-        let d = load_or_fallback(None).unwrap();
-        assert_eq!(d.len(), 35);
+    fn load_or_fallback_none_returns_err() {
+        assert!(load_or_fallback(None).is_err());
     }
 
     #[test]
-    fn load_or_fallback_missing_file_returns_fallback() {
-        let d = load_or_fallback(Some(Path::new("/nonexistent/opi.opid"))).unwrap();
-        assert_eq!(d.len(), 35);
+    fn load_or_fallback_missing_file_returns_err() {
+        assert!(load_or_fallback(Some(Path::new("/nonexistent/opi.opid"))).is_err());
     }
 
     #[test]
-    fn load_or_fallback_corrupt_file_returns_fallback() {
+    fn load_or_fallback_corrupt_file_returns_err() {
         let dir = std::env::temp_dir();
         let path = dir.join(format!("opi-fb-{}", std::process::id()));
         std::fs::write(&path, b"OPID\x01\x00\x00garbage").unwrap();
-        let d = load_or_fallback(Some(&path)).unwrap();
+        let r = load_or_fallback(Some(&path));
         let _ = std::fs::remove_file(&path);
-        let wo = d.query("wo", 8);
-        assert_eq!(wo[0].word, "我");
+        assert!(r.is_err());
     }
 
     #[test]

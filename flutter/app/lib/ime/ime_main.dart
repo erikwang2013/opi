@@ -62,14 +62,28 @@ class _ImeScreenState extends State<ImeScreen> {
   void initState() {
     super.initState();
     _symbolSearchFocus.addListener(_onSearchFocus);
+    // Kotlin 侧 onStartInput/onFinishInputView：输入目标切换时重置面板状态
+    widget.channel.setEditorChangedHandler(_onEditorChanged);
   }
 
   @override
   void dispose() {
+    widget.channel.setEditorChangedHandler(null);
     _symbolSearchFocus.removeListener(_onSearchFocus);
     _symbolSearchCtrl.dispose();
     _symbolSearchFocus.dispose();
     super.dispose();
+  }
+
+  /// 输入目标切换：取消组合串（不提交，避免半截拼音泄入新编辑器）、
+  /// 面板回 qwerty。此前无此通知——跨输入框切换残留上一编辑器状态，
+  /// 表现即"面板切不动/状态错乱"。
+  void _onEditorChanged() {
+    if (kDebugMode) debugPrint('OPI editorChanged: reset panel state');
+    _symbolSearchFocus.unfocus();
+    _symbolSearchCtrl.clear();
+    widget.controller.clear();
+    if (_view != ImeView.qwerty) setState(() => _view = ImeView.qwerty);
   }
 
   void _onSearchFocus() {
@@ -174,8 +188,10 @@ class _ImeScreenState extends State<ImeScreen> {
               ),
             ),
             if (_searchActive)
-              Expanded(
-                flex: 2,
+              // 固定 4 行 × 44dp：Expanded 均分在 IME 短窗下每行仅 ~22dp，
+              // 低于 18dp 触控 slop；面板侧网格可滚动、能吸收挤压。
+              SizedBox(
+                height: 176,
                 child: QwertyKeyboard(
                   onKey: _searchKey,
                   onSpace: _searchSpace,

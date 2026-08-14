@@ -114,8 +114,9 @@ class _Candidate extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
+      // 16×2 垂直 padding + 28 行高 ≈ 60dp，溢出 44dp 栏高且点按区超可视区
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Text(text, style: const TextStyle(fontSize: 20)),
       ),
     );

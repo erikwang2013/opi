@@ -1,4 +1,4 @@
-use engine_core::candidates::rank_score;
+use engine_core::candidates::{rank_score, USER_BOOST};
 use engine_core::composer::{Composer, MAX_BUFFER};
 use engine_core::learner::Learner;
 use engine_core::pinyin::segment;
@@ -39,8 +39,9 @@ proptest! {
 
     #[test]
     fn rank_score_monotonic(static_f: u32, user_f: u32) {
-        prop_assert!(rank_score(static_f, user_f) >= static_f as u64);
-        prop_assert!(rank_score(0, user_f) >= rank_score(0, 0));
+        let boost = USER_BOOST.max(static_f as u64 * 2);
+        prop_assert!(rank_score(static_f, user_f, boost) >= static_f as u64);
+        prop_assert!(rank_score(0, user_f, boost) >= rank_score(0, 0, boost));
     }
 
     #[test]

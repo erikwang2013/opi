@@ -50,9 +50,11 @@ class EngineController extends ChangeNotifier {
   static Future<Api> _loadLuna() async {
     // systemTemp 不引入插件依赖（path_provider 会带 jni 包，构建要求 NDK 28 且离线不可装）
     final path = '${Directory.systemTemp.path}/luna.opid';
-    if (!await File(path).exists()) {
-      final bytes = await rootBundle.load('assets/luna.opid');
-      await File(path).writeAsBytes(bytes.buffer.asUint8List());
+    final bytes = await rootBundle.load('assets/luna.opid');
+    final file = File(path);
+    // app 升级后 asset 更新而 temp 词库仍是旧版：size 不一致即重拷
+    if (!await file.exists() || file.lengthSync() != bytes.lengthInBytes) {
+      await file.writeAsBytes(bytes.buffer.asUint8List());
       if (kDebugMode) debugPrint('OPI copied luna.opid (${bytes.lengthInBytes} bytes)');
     }
     return Api.load(path: path);

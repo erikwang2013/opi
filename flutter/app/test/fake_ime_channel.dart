@@ -13,4 +13,11 @@ class FakeImeChannel implements ImeChannel {
 
   @override
   Future<void> performEnter() async => enterCount++;
+
+  void Function()? editorChangedHandler;
+
+  @override
+  void setEditorChangedHandler(void Function()? handler) {
+    editorChangedHandler = handler;
+  }
 }

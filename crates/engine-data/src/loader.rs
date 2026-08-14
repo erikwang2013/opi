@@ -23,14 +23,27 @@ pub struct MmapDictionary {
     backing: Backing,
     count: usize,
     pinyin_total: usize,
+    max_freq: u32,
 }
 
 impl MmapDictionary {
     fn from_parsed(backing: Backing, parsed: OpDict) -> Self {
+        // 一次性扫描 freq 列（加载期 ~120k 条，毫秒级），供学习权重动态缩放。
+        let data = match &backing {
+            Backing::Map(m) => m.as_ref(),
+            Backing::Bytes(v) => v.as_slice(),
+        };
+        let mut max_freq: u32 = 0;
+        for i in 0..parsed.entries.len() {
+            let off = HEADER_LEN + i * ENTRY_LEN;
+            let freq = u32::from_le_bytes(data[off + 10..off + 14].try_into().unwrap());
+            max_freq = max_freq.max(freq);
+        }
         MmapDictionary {
             backing,
             count: parsed.entries.len(),
             pinyin_total: parsed.pinyin_total,
+            max_freq,
         }
     }
 
@@ -93,6 +106,10 @@ impl Dictionary for MmapDictionary {
 
     fn len(&self) -> usize {
         self.count
+    }
+
+    fn max_freq(&self) -> u64 {
+        self.max_freq as u64
     }
 }
 

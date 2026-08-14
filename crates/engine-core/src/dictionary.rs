@@ -9,19 +9,25 @@ pub trait Dictionary: Send + Sync {
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
+    /// 全库最大静态词频（学习权重缩放依据，未知返回 0）。
+    fn max_freq(&self) -> u64 {
+        0
+    }
 }
 
 #[derive(Default)]
 pub struct InMemoryDictionary {
     trie: Trie,
+    max_freq: u32,
 }
 
 impl InMemoryDictionary {
     pub fn new() -> Self {
-        InMemoryDictionary { trie: Trie::new() }
+        InMemoryDictionary { trie: Trie::new(), max_freq: 0 }
     }
 
     pub fn insert(&mut self, pinyin: &str, word: &str, freq: u32) {
+        self.max_freq = self.max_freq.max(freq);
         self.trie.insert(pinyin, word, freq);
     }
 }
@@ -33,6 +39,10 @@ impl Dictionary for InMemoryDictionary {
 
     fn len(&self) -> usize {
         self.trie.len()
+    }
+
+    fn max_freq(&self) -> u64 {
+        self.max_freq as u64
     }
 }
 

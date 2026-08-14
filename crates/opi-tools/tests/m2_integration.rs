@@ -41,17 +41,14 @@ fn corrupt_file_engine_falls_back() {
         load_bytes(bytes),
         Err(LoadError::Format(FormatError::ChecksumMismatch { .. }))
     ));
-    let d = load_or_fallback(Some(std::path::Path::new("/nonexistent/opi.opid"))).unwrap();
-    assert_eq!(d.len(), 35);
-    let wo = d.query("wo", 8);
-    assert_eq!(wo[0].word, "我");
+    assert!(load_or_fallback(Some(std::path::Path::new("/nonexistent/opi.opid"))).is_err());
 }
 
 #[test]
 fn corrupted_opid_engine_still_boots() {
     // 引擎在词库损坏时仍可用（回退内置），全链路冒烟
     let mut eng = Engine::new(
-        load_or_fallback(None).unwrap(),
+        Box::new(fallback_dict()),
         SymbolEngine::builtin(),
         false,
     );

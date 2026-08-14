@@ -4,7 +4,9 @@ use crate::learner::Learner;
 use crate::pinyin::segment;
 use crate::symbols::SymbolEngine;
 
-/// 用户词频权重：一次选词 ≈ 10 万次静态词频，保证学习迅速生效。
+/// 用户词频权重下限：一次选词 ≈ 10 万次静态词频，保证学习迅速生效。
+/// 实际权重在 Engine::new 按词典最大词频动态缩放（max_freq × 2），
+/// 固定值在 luna 百万级词频下失配：选一次"我"(10万) 仍输给"倭"(50万)。
 pub const USER_BOOST: u64 = 100_000;
 /// 默认候选栏容量。
 pub const DEFAULT_TOP_N: usize = 8;
@@ -24,9 +26,9 @@ pub struct Candidate {
     pub score: u64,
 }
 
-/// 排序分：静态词频 + 用户词频 × USER_BOOST。
-pub fn rank_score(static_freq: u32, user_freq: u32) -> u64 {
-    static_freq as u64 + user_freq as u64 * USER_BOOST
+/// 排序分：静态词频 + 用户词频 × boost。
+pub fn rank_score(static_freq: u32, user_freq: u32, boost: u64) -> u64 {
+    (static_freq as u64).saturating_add((user_freq as u64).saturating_mul(boost))
 }
 
 /// 合并词典候选与符号候选，排序、去重、截断。
@@ -37,6 +39,7 @@ pub fn rank_and_pick<D: Dictionary + ?Sized>(
     input: &str,
     mode: Mode,
     limit: usize,
+    boost: u64,
 ) -> Vec<Candidate> {
     if input.is_empty() || mode != Mode::Pinyin {
         return Vec::new();
@@ -47,21 +50,22 @@ pub fn rank_and_pick<D: Dictionary + ?Sized>(
         .map(|e| Candidate {
             text: e.word.clone(),
             kind: CandidateKind::Hanzi,
-            score: rank_score(e.freq, learner.freq_of(&e.word)),
+            score: rank_score(e.freq, learner.freq_of(&e.word), boost),
         })
         .collect();
     // 多音节整串无命中时按音节逐段补候选（segment 此前是死代码）：
     // nihao → [你][好] 逐字可选；单字母音节跳过避免噪音。
+    // 每音节仅取 top 3：luna 繁体词库下全量并入会把生僻字顶进 top-8。
     if merged.is_empty() && input.chars().count() > 1 {
         for syl in segment(input) {
             if syl.chars().count() < 2 {
                 continue;
             }
-            for e in dict.query(&syl, usize::MAX) {
+            for e in dict.query(&syl, 3) {
                 merged.push(Candidate {
                     text: e.word.clone(),
                     kind: CandidateKind::Hanzi,
-                    score: rank_score(e.freq, learner.freq_of(&e.word)),
+                    score: rank_score(e.freq, learner.freq_of(&e.word), boost),
                 });
             }
         }
@@ -75,11 +79,11 @@ pub fn rank_and_pick<D: Dictionary + ?Sized>(
         merged.push(Candidate {
             text: s.text.clone(),
             kind: if s.emoji { CandidateKind::Emoji } else { CandidateKind::Symbol },
-            score: rank_score(0, learner.freq_of(&s.text)),
+            score: rank_score(0, learner.freq_of(&s.text), boost),
         });
     }
-    // 不能下推 limit 到 dict.query：USER_BOOST 可让低静态词反超截断线外的词，
-    // 全量收集 + 排序是唯一正确方案。
+    // 不能下推 limit 到 dict.query：学过的低静态词可反超截断线外的词，
+    // 全量收集 + 排序是唯一正确方案（select 用有限 limit 只限 FFI 载荷）。
     merged.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
     let mut seen = std::collections::HashSet::new();
     merged.retain(|c| seen.insert(c.text.clone()));
@@ -105,7 +109,7 @@ mod tests {
 
     #[test]
     fn rank_score_boost_dominates() {
-        assert!(rank_score(0, 1) > rank_score(5000, 0));
+        assert!(rank_score(0, 1, USER_BOOST) > rank_score(5000, 0, USER_BOOST));
     }
 
     #[test]
@@ -113,7 +117,7 @@ mod tests {
         let d = test_dict();
         let s = SymbolEngine::builtin();
         let l = Learner::new(false);
-        let got = rank_and_pick(&d, &s, &l, "hao", Mode::Pinyin, DEFAULT_TOP_N);
+        let got = rank_and_pick(&d, &s, &l, "hao", Mode::Pinyin, DEFAULT_TOP_N, USER_BOOST);
         assert_eq!(got.len(), 3);
         assert_eq!(got[0].text, "好");
         assert_eq!(got[1].text, "号");
@@ -126,7 +130,7 @@ mod tests {
         let d = test_dict();
         let s = SymbolEngine::builtin();
         let l = Learner::new(false);
-        assert!(rank_and_pick(&d, &s, &l, "", Mode::Pinyin, DEFAULT_TOP_N).is_empty());
+        assert!(rank_and_pick(&d, &s, &l, "", Mode::Pinyin, DEFAULT_TOP_N, USER_BOOST).is_empty());
     }
 
     #[test]
@@ -134,7 +138,7 @@ mod tests {
         let d = test_dict();
         let s = SymbolEngine::builtin();
         let l = Learner::new(false);
-        assert!(rank_and_pick(&d, &s, &l, "hao", Mode::English, DEFAULT_TOP_N).is_empty());
+        assert!(rank_and_pick(&d, &s, &l, "hao", Mode::English, DEFAULT_TOP_N, USER_BOOST).is_empty());
     }
 
     #[test]
@@ -143,7 +147,7 @@ mod tests {
         let s = SymbolEngine::builtin();
         let mut l = Learner::new(true);
         l.record_selection("豪");
-        let got = rank_and_pick(&d, &s, &l, "hao", Mode::Pinyin, DEFAULT_TOP_N);
+        let got = rank_and_pick(&d, &s, &l, "hao", Mode::Pinyin, DEFAULT_TOP_N, USER_BOOST);
         assert_eq!(got[0].text, "豪");
     }
 
@@ -152,7 +156,7 @@ mod tests {
         let d = test_dict();
         let s = SymbolEngine::builtin();
         let l = Learner::new(false);
-        let got = rank_and_pick(&d, &s, &l, "xiao", Mode::Pinyin, DEFAULT_TOP_N);
+        let got = rank_and_pick(&d, &s, &l, "xiao", Mode::Pinyin, DEFAULT_TOP_N, USER_BOOST);
         assert!(got.iter().any(|c| c.kind == CandidateKind::Emoji && c.text == "😄"));
         assert!(got[0].text == "笑" || got[0].text == "小" || got[0].text == "校");
     }
@@ -162,7 +166,7 @@ mod tests {
         let d = test_dict();
         let s = SymbolEngine::builtin();
         let l = Learner::new(false);
-        let got = rank_and_pick(&d, &s, &l, "hao", Mode::Pinyin, 1);
+        let got = rank_and_pick(&d, &s, &l, "hao", Mode::Pinyin, 1, USER_BOOST);
         assert_eq!(got.len(), 1);
         assert_eq!(got[0].text, "好");
     }
@@ -173,7 +177,7 @@ mod tests {
         let s = SymbolEngine::builtin();
         let mut l = Learner::new(true);
         l.record_selection("好");
-        let got = rank_and_pick(&d, &s, &l, "hao", Mode::Pinyin, DEFAULT_TOP_N);
+        let got = rank_and_pick(&d, &s, &l, "hao", Mode::Pinyin, DEFAULT_TOP_N, USER_BOOST);
         assert_eq!(got.iter().filter(|c| c.text == "好").count(), 1);
     }
 
@@ -201,7 +205,7 @@ mod tests {
         let d = test_dict();
         let s = colliding_symbols();
         let l = Learner::new(false);
-        let got = rank_and_pick(&d, &s, &l, "hao", Mode::Pinyin, DEFAULT_TOP_N);
+        let got = rank_and_pick(&d, &s, &l, "hao", Mode::Pinyin, DEFAULT_TOP_N, USER_BOOST);
         assert_eq!(got.iter().filter(|c| c.text == "好").count(), 1);
         assert_eq!(got.len(), 3);
     }
@@ -212,7 +216,7 @@ mod tests {
         let s = SymbolEngine::builtin();
         let l = Learner::new(false);
         // 整串 "haoxiao" 无词条 → 按音节 [hao][xiao] 补出逐字候选
-        let got = rank_and_pick(&d, &s, &l, "haoxiao", Mode::Pinyin, DEFAULT_TOP_N);
+        let got = rank_and_pick(&d, &s, &l, "haoxiao", Mode::Pinyin, DEFAULT_TOP_N, USER_BOOST);
         assert!(got.iter().any(|c| c.text == "好"));
         assert!(got.iter().any(|c| c.text == "笑"));
     }
@@ -222,7 +226,7 @@ mod tests {
         let d = test_dict();
         let s = SymbolEngine::builtin();
         let l = Learner::new(false);
-        let got = rank_and_pick(&d, &s, &l, "heart", Mode::Pinyin, DEFAULT_TOP_N);
+        let got = rank_and_pick(&d, &s, &l, "heart", Mode::Pinyin, DEFAULT_TOP_N, USER_BOOST);
         assert_eq!(got.len(), 1);
         assert_eq!(got[0].text, "♥");
         assert_eq!(got[0].kind, CandidateKind::Symbol);
@@ -234,7 +238,7 @@ mod tests {
         let s = SymbolEngine::builtin();
         let l = Learner::new(false);
         // "x" 前缀命中 😄（keyword xiao），同时拼音 xiao 词也出现
-        let got = rank_and_pick(&d, &s, &l, "x", Mode::Pinyin, DEFAULT_TOP_N);
+        let got = rank_and_pick(&d, &s, &l, "x", Mode::Pinyin, DEFAULT_TOP_N, USER_BOOST);
         assert!(got.iter().any(|c| c.kind == CandidateKind::Emoji && c.text == "😄"));
     }
 }

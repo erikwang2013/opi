@@ -78,6 +78,38 @@ void main() {
     await tester.runAsync(() async => ctrl.dispose());
   });
 
+  testWidgets('editorChanged（输入目标切换）取消组合串、面板回 qwerty', (tester) async {
+    final ctrl = (await tester.runAsync(() async => await EngineController.load()))!;
+    final channel = FakeImeChannel();
+    await tester.pumpWidget(ImeApp(controller: ctrl, channel: channel));
+
+    // 挂载即注册 handler
+    expect(channel.editorChangedHandler, isNotNull);
+
+    await tester.tap(find.text('w'));
+    await tester.pump();
+    expect(ctrl.buffer, 'w');
+
+    // 面板开着时收到通知 → 回 qwerty
+    await tester.tap(find.text('123'));
+    await tester.pump();
+    expect(find.byType(NumberPad), findsOneWidget);
+    channel.editorChangedHandler?.call();
+    await tester.pump();
+    expect(find.byType(QwertyKeyboard), findsOneWidget);
+    expect(ctrl.buffer, '');
+
+    // 组合串未提交时收到通知 → 取消而非泄入编辑器
+    await tester.tap(find.text('w'));
+    await tester.pump();
+    expect(ctrl.buffer, 'w');
+    channel.editorChangedHandler?.call();
+    await tester.pump();
+    expect(ctrl.buffer, '');
+    expect(channel.commits.length, 1); // 仅面板打开那次提交，无新泄入
+    await tester.runAsync(() async => ctrl.dispose());
+  });
+
   testWidgets('number/symbol 视图不显示候选栏，回 qwerty 无残留', (tester) async {
     final ctrl = (await tester.runAsync(() async => await EngineController.load()))!;
     final channel = FakeImeChannel();

@@ -1,4 +1,4 @@
-use crate::candidates::{rank_and_pick, Candidate, DEFAULT_TOP_N};
+use crate::candidates::{rank_and_pick, Candidate, USER_BOOST, DEFAULT_TOP_N};
 use crate::composer::{Composer, KeyEffect, Mode};
 use crate::dictionary::Dictionary;
 use crate::learner::Learner;
@@ -10,15 +10,19 @@ pub struct Engine {
     composer: Composer,
     symbols: SymbolEngine,
     learner: Learner,
+    /// 用户词频权重，按词典最大静态词频动态缩放（一次选词即压过所有静态词）。
+    user_boost: u64,
 }
 
 impl Engine {
     pub fn new(dict: Box<dyn Dictionary>, symbols: SymbolEngine, learner_enabled: bool) -> Self {
+        let user_boost = USER_BOOST.max(dict.max_freq().saturating_mul(2));
         Engine {
             dict,
             composer: Composer::new(),
             symbols,
             learner: Learner::new(learner_enabled),
+            user_boost,
         }
     }
 
@@ -91,12 +95,14 @@ impl Engine {
             &s.buffer,
             s.mode,
             limit,
+            self.user_boost,
         )
     }
 
     /// 选中候选项。越界返回空串。记录学习（若开启）。
+    /// limit 512：rank_and_pick 仍全量排序（正确性），这里只限 FFI 载荷。
     pub fn select(&mut self, index: usize) -> String {
-        let cands = self.candidates(usize::MAX);
+        let cands = self.candidates(512);
         match cands.get(index) {
             Some(c) => {
                 let text = c.text.clone();

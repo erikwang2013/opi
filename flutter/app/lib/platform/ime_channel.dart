@@ -5,6 +5,10 @@ abstract class ImeChannel {
   Future<void> commitText(String text);
   Future<void> deleteBackward();
   Future<void> performEnter();
+
+  /// 输入目标切换通知（Kotlin 侧 onStartInput/onFinishInputView 触发）：
+  /// Dart 应取消组合串、面板回 qwerty。传 null 注销。
+  void setEditorChangedHandler(void Function()? handler);
 }
 
 class MethodChannelIme implements ImeChannel {
@@ -18,4 +22,12 @@ class MethodChannelIme implements ImeChannel {
 
   @override
   Future<void> performEnter() => _channel.invokeMethod('performEnter');
+
+  @override
+  void setEditorChangedHandler(void Function()? handler) {
+    _channel.setMethodCallHandler((call) async {
+      if (call.method == 'editorChanged') handler?.call();
+      return null;
+    });
+  }
 }
