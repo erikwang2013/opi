@@ -1,6 +1,7 @@
 package io.opi.input.jni
 
 import io.opi.input.engine.OpiEngineApi
+import io.opi.input.keyboard.SymbolApi
 
 /**
  * Rust 引擎 JNI 入口（A1：crates/opi-ffi/src/jni.rs 注册表）。
@@ -9,9 +10,9 @@ import io.opi.input.engine.OpiEngineApi
  * 方法名与签名必须与 Rust 侧注册表逐一吻合（签名断裂 → UnsatisfiedLinkError）。
  * so 文件名 libopi_ffi.so（cargokit libname=opi_ffi）。
  *
- * 实现 OpiEngineApi 以便 EngineController 在 JVM 测试中注入假引擎。
+ * 实现 OpiEngineApi/SymbolApi 以便 EngineController/SymbolCatalog 在 JVM 测试中注入假实现。
  */
-object OpiEngine : OpiEngineApi {
+object OpiEngine : OpiEngineApi, SymbolApi {
     init {
         System.loadLibrary("opi_ffi")
     }
@@ -45,13 +46,13 @@ object OpiEngine : OpiEngineApi {
     override external fun mode(): Int
 
     /** searchSymbols(keyword: String) -> String[]。JNI 可能返回 null。 */
-    external fun searchSymbols(keyword: String): Array<String>?
+    override external fun searchSymbols(keyword: String): Array<String>?
 
     /** symbolBlocks() -> String。JSON：`[{id,start,end,name,common}]`。 */
-    external fun symbolBlocks(): String
+    override external fun symbolBlocks(): String
 
     /** symbolsInBlock(id: Short) -> String[]。JNI 可能返回 null。 */
-    external fun symbolsInBlock(id: Short): Array<String>?
+    override external fun symbolsInBlock(id: Short): Array<String>?
 
     external fun learnerEnabled(): Boolean
 

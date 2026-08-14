@@ -16,14 +16,16 @@ import io.opi.input.engine.EngineController
 import io.opi.input.ime.ImeScreen
 import io.opi.input.ime.ImeState
 import io.opi.input.ime.KeyRouter
+import io.opi.input.keyboard.SymbolCatalog
 import kotlin.math.min
 
 /** OPI IME 宿主：ComposeView 作为输入视图，面板状态在 ImeState（A3/A4 填 UI）。 */
 class OpiImeService : InputMethodService() {
     private var inputViewCache: View? = null
     private var retryRunnable: Runnable? = null
-    private val imeState = ImeState()
     private val engineController = EngineController()
+    private val imeState = ImeState(engineController)
+    private val symbolCatalog = SymbolCatalog()
     private lateinit var keyRouter: KeyRouter
 
     // Compose 需要 ViewTreeLifecycleOwner/SavedStateRegistryOwner（IME Service 无 Activity 生命周期）。
@@ -74,7 +76,9 @@ class OpiImeService : InputMethodService() {
             deleteBackward = ::deleteBackward,
             performEnter = ::performEnter,
         )
-        view.setContent { ImeScreen(imeState, engineController, keyRouter) }
+        // IME 提交通道在视图创建时注入（构造期无 this 引用；面板打开提交 pending buffer 用）
+        imeState.commit = ::commitWithRetry
+        view.setContent { ImeScreen(imeState, engineController, keyRouter, symbolCatalog) }
         Log.i(TAG, "onCreateInputView: screenW=${resources.displayMetrics.widthPixels} keyboardHeight=${keyboardHeight()}")
         inputViewCache = view
         return view
