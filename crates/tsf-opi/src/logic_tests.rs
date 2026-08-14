@@ -328,6 +328,30 @@ fn page_keys_navigate() {
     assert_eq!(s.input_key(KEY_PAGE_UP, 0), KeyOutcome::CompositionChanged);
     assert_eq!(s.page(), 1);
 }
+#[test]
+fn page_key_release_consumed() {
+    let mut s = pinyin_state();
+    for c in ['h', 'a', 'o'] {
+        s.input_key(c as u32, 0);
+    }
+    // 释放事件：不翻页、不触发候选窗刷新
+    assert_eq!(
+        s.input_key(KEY_PAGE_DOWN, KEY_STATE_RELEASED),
+        KeyOutcome::Consumed
+    );
+    assert_eq!(s.page(), 0);
+    assert_eq!(
+        s.input_key(KEY_PAGE_UP, KEY_STATE_RELEASED),
+        KeyOutcome::Consumed
+    );
+    assert_eq!(s.page(), 0);
+    // 释放后再按下仍正常翻页
+    assert_eq!(
+        s.input_key(KEY_PAGE_DOWN, 0),
+        KeyOutcome::CompositionChanged
+    );
+    assert_eq!(s.page(), 1);
+}
 // ---- 修饰键与模式 ----
 #[test]
 fn ctrl_and_alt_combos_unhandled() {

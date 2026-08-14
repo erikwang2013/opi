@@ -290,17 +290,22 @@ impl TsfLogic {
             }
             KEY_SHIFT => self.handle_shift(key_state),
             KEY_PAGE_UP => {
-                if !released {
+                if released {
+                    // 释放事件：翻页已在按下时完成，无状态变化 → 不刷新候选窗
+                    KeyOutcome::Consumed
+                } else {
                     self.prev_page();
+                    // 页码变化 → 候选窗需刷新
+                    KeyOutcome::CompositionChanged
                 }
-                // 页码变化 → 候选窗需刷新
-                KeyOutcome::CompositionChanged
             }
             KEY_PAGE_DOWN => {
-                if !released {
+                if released {
+                    KeyOutcome::Consumed
+                } else {
                     self.next_page();
+                    KeyOutcome::CompositionChanged
                 }
-                KeyOutcome::CompositionChanged
             }
             KEY_TAB | KEY_ESCAPE => KeyOutcome::Unhandled,
             _ => match char::from_u32(keyval) {
