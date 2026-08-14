@@ -132,7 +132,7 @@ fn texts_to_json(texts: Vec<String>) -> OpString {
     OpString::from_utf8(&json)
 }
 
-// ---------- C 入口面（B0 约定，共 11 个函数） ----------
+// ---------- C 入口面（B0 约定 11 个 + B2 新增 key_event） ----------
 
 /// load(path: const uint8_t*, len) -> bool。null/空串 → 内置回退词库；坏路径 → false。
 /// # Safety
@@ -162,9 +162,11 @@ pub unsafe extern "C" fn opi_fcitx5_input_key(ptr: *const u8, len: usize) -> OpS
         let (Some(c), None) = (chars.next(), chars.next()) else {
             return String::new(); // 边界：拒绝空串/多字符
         };
-        with_state(|s| match input_method::handle_key(s, c) {
+        with_state(|s| match input_method::handle_key(s, c as u32, 0) {
             input_method::KeyAction::Input(out) => out,
-            input_method::KeyAction::Ignored => String::new(),
+            input_method::KeyAction::EngineHandled | input_method::KeyAction::PassThrough => {
+                String::new()
+            }
         })
         .unwrap_or_default()
     }))
@@ -242,7 +244,7 @@ pub unsafe extern "C" fn opi_fcitx5_input_space() -> OpString {
 }
 
 /// candidates(limit) -> JSON 文本数组：当前页候选（上限 min(limit, 8)）。
-/// 翻页入口（page/next/prev）随 B2 路由表补充。
+/// 翻页经 B2 路由表（PageUp/PageDown → prev/next_page），无独立 C 出口。
 /// # Safety
 ///
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
@@ -280,6 +282,46 @@ pub unsafe extern "C" fn opi_fcitx5_mode() -> i32 {
         with_state(|s| mode_to_int(s.mode())).unwrap_or(0)
     }))
     .unwrap_or(0)
+}
+
+/// 按键事件结果（B2 路由：`opi_fcitx5_key_event` 的返回值）。
+#[repr(C)]
+pub struct KeyEventResult {
+    /// 0=PassThrough（转交客户端） 1=EngineHandled（已消费） 2=Commit（提交 text）。
+    pub action: i32,
+    /// action==2 时携带提交文本（Rust 侧分配，调用方 free）。
+    pub text: OpString,
+}
+
+/// keyEvent 路由入口（B2）：`keyval` + fcitx5 `KeyState` 修饰位 → 动作 + 提交文本。
+/// 语义与 Android `KeyRouter` 一致（详见 input_method 模块文档）。
+/// # Safety
+///
+/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_key_event(keyval: u32, states: u32) -> KeyEventResult {
+    ensure_panic_hook();
+    catch_unwind(AssertUnwindSafe(|| {
+        with_state(|s| match input_method::handle_key(s, keyval, states) {
+            input_method::KeyAction::Input(t) => KeyEventResult {
+                action: 2,
+                text: OpString::from_utf8(&t),
+            },
+            input_method::KeyAction::EngineHandled => KeyEventResult {
+                action: 1,
+                text: OpString::empty(),
+            },
+            input_method::KeyAction::PassThrough => KeyEventResult {
+                action: 0,
+                text: OpString::empty(),
+            },
+        })
+    }))
+    .unwrap_or(None)
+    .unwrap_or_else(|| KeyEventResult {
+        action: 0,
+        text: OpString::empty(),
+    })
 }
 
 #[cfg(test)]
@@ -367,5 +409,54 @@ mod tests {
         assert!(install(None).is_ok());
         let out = unsafe { opi_fcitx5_candidates(8) };
         assert_eq!(read_and_free(out), "[]");
+    }
+
+    #[test]
+    fn key_event_english_pass_through_commits_lowercase() {
+        assert!(install(None).is_ok());
+        // 切英文：直传 'a'（action=2 提交）
+        unsafe { opi_fcitx5_switch_mode(1) };
+        let r = unsafe { opi_fcitx5_key_event(97, 0) };
+        assert_eq!(r.action, 2);
+        assert_eq!(read_and_free(r.text), "a");
+        // 切回拼音，英文直传不污染缓冲
+        unsafe { opi_fcitx5_switch_mode(0) };
+        assert_eq!(with_state(|s| s.buffer()), Some(String::new()));
+    }
+
+    #[test]
+    fn key_event_pinyin_letter_handled_and_space_commits() {
+        assert!(install(None).is_ok());
+        unsafe { opi_fcitx5_switch_mode(0) };
+        let r = unsafe { opi_fcitx5_key_event(104, 0) }; // 'h'
+        assert_eq!(r.action, 1); // EngineHandled
+        assert_eq!(with_state(|s| s.buffer()), Some("h".to_string()));
+        // 缓冲非空空格 → 提交并清空（提交文本取决于词库，只断言非空）
+        let r = unsafe { opi_fcitx5_key_event(32, 0) };
+        assert_eq!(r.action, 2);
+        assert!(!read_and_free(r.text).is_empty());
+        let r = unsafe { opi_fcitx5_key_event(97, 0) }; // 'a'
+        assert_eq!(r.action, 1);
+        let r = unsafe { opi_fcitx5_key_event(32, 0) }; // buffer 非空 → 空格提交
+        assert_eq!(r.action, 2);
+        assert!(!read_and_free(r.text).is_empty());
+    }
+
+    #[test]
+    fn key_event_ctrl_passes_through_and_shift_consumed() {
+        assert!(install(None).is_ok());
+        // Ctrl+C → 直通
+        let r = unsafe { opi_fcitx5_key_event(99, 1 << 2) };
+        assert_eq!(r.action, 0);
+        // shift 按下（无修饰）→ EngineHandled
+        let r = unsafe { opi_fcitx5_key_event(0xffe1, 0) };
+        assert_eq!(r.action, 1);
+        // 英文空缓冲 + single shift → 大写提交且消费
+        unsafe { opi_fcitx5_switch_mode(1) };
+        let r = unsafe { opi_fcitx5_key_event(97, 0) };
+        assert_eq!(r.action, 2);
+        assert_eq!(read_and_free(r.text), "A");
+        let r = unsafe { opi_fcitx5_key_event(97, 0) };
+        assert_eq!(read_and_free(r.text), "a");
     }
 }

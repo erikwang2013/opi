@@ -14,13 +14,25 @@ pub const PAGE_SIZE: usize = 8;
 /// 一次抓取的候选批量上限（对应 Android 侧 fetchLimit=64）。
 pub const FETCH_LIMIT: usize = 64;
 
+/// ⇧ 状态机：off / single（下个字母大写后自动复位）/ lock（持续大写）。
+/// 镜像 Android `EngineController.ShiftState` 的三态语义。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ShiftState {
+    #[default]
+    Off,
+    Single,
+    Lock,
+}
+
 /// 引擎 + 候选分页状态。
 pub struct CandidateState {
-    engine: Engine,
+    pub(crate) engine: Engine,
     /// 当前页（0 起）。
-    page: usize,
+    pub(crate) page: usize,
     /// 上次操作后的 buffer 快照；变化时页码归零。
-    buffer_snapshot: String,
+    pub(crate) buffer_snapshot: String,
+    /// ⇧ 状态机（镜像 Android EngineController.shiftState）。
+    pub(crate) shift_state: ShiftState,
 }
 
 impl CandidateState {
@@ -39,6 +51,7 @@ impl CandidateState {
             engine: Engine::new(dict, symbols, true),
             page: 0,
             buffer_snapshot: String::new(),
+            shift_state: ShiftState::Off,
         };
         s.refresh_snapshot();
         Ok(s)
@@ -98,6 +111,36 @@ impl CandidateState {
         // shift 不改变 buffer（reset_page_if_buffer_changed 不会触发），但
         // 可能改变候选集；将页码钳制到当前 page_count 边界，防 page 越界。
         self.set_page(self.page);
+    }
+
+    // ---- ⇧ 状态机（镜像 Android EngineController.shiftTap/ShiftLongPress/consumeSingleShift）----
+
+    pub fn shift_state(&self) -> ShiftState {
+        self.shift_state
+    }
+
+    /// 单击：Off→Single（引擎 shift 开）；Single/Lock→Off（引擎 shift 关）。
+    pub fn shift_tap(&mut self) {
+        self.shift_state = if self.shift_state == ShiftState::Off {
+            ShiftState::Single
+        } else {
+            ShiftState::Off
+        };
+        self.set_shift(self.shift_state != ShiftState::Off);
+    }
+
+    /// 长按：Lock（持续大写）。
+    pub fn shift_long_press(&mut self) {
+        self.shift_state = ShiftState::Lock;
+        self.set_shift(true);
+    }
+
+    /// single 态消费后复位（lock 不受影响）。
+    pub fn consume_single_shift(&mut self) {
+        if self.shift_state == ShiftState::Single {
+            self.shift_state = ShiftState::Off;
+            self.set_shift(false);
+        }
     }
 
     /// 提交当前页第 `index` 个候选（页内索引，0 起）。越界返回空串。
@@ -167,6 +210,7 @@ mod tests {
             engine: Engine::new(Box::new(d), symbols, true),
             page: 0,
             buffer_snapshot: String::new(),
+            shift_state: ShiftState::Off,
         };
         s.refresh_snapshot();
         s
@@ -284,6 +328,31 @@ mod tests {
         s.clear(); // buffer 清空 → 归零
         assert_eq!(s.page(), 0);
         assert_eq!(s.buffer(), "");
+    }
+
+    #[test]
+    fn shift_machine_off_single_lock_cycle() {
+        let mut s = state();
+        assert_eq!(s.shift_state(), ShiftState::Off);
+        // 单击：Off→Single
+        s.shift_tap();
+        assert_eq!(s.shift_state(), ShiftState::Single);
+        // 再单击：Single→Off
+        s.shift_tap();
+        assert_eq!(s.shift_state(), ShiftState::Off);
+        // 长按：Lock；单击：Lock→Off（镜像 EngineController.shiftTap else 分支）
+        s.shift_long_press();
+        assert_eq!(s.shift_state(), ShiftState::Lock);
+        s.shift_tap();
+        assert_eq!(s.shift_state(), ShiftState::Off);
+        // single 消费后复位；lock 不受消费影响
+        s.shift_tap();
+        assert_eq!(s.shift_state(), ShiftState::Single);
+        s.consume_single_shift();
+        assert_eq!(s.shift_state(), ShiftState::Off);
+        s.shift_long_press();
+        s.consume_single_shift();
+        assert_eq!(s.shift_state(), ShiftState::Lock);
     }
 
     #[test]
