@@ -420,7 +420,11 @@ fn commit_or_changed(out: String) -> KeyOutcome {
     }
 }
 
-// 单测独立成文件（logic_tests.rs，`#[path]` 引入）以保持本文件 <500 行。
+// 单测独立成文件（`#[path]` 引入）以保持各文件 <500 行：logic_tests.rs
+// 为键路由测试，logic_candidate_tests.rs 为候选分页状态机测试。
+#[cfg(test)]
+#[path = "logic_candidate_tests.rs"]
+mod candidate_tests;
 #[cfg(test)]
 #[path = "logic_tests.rs"]
 mod tests;
