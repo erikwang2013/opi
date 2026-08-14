@@ -19,14 +19,17 @@ pub fn install(path: Option<&str>) -> Result<(), String> {
         _ => Box::new(engine_data::fallback_dict()),
     };
     let symbols = engine_core::symbols::SymbolEngine::builtin();
-    let mut guard = SINGLETON.lock().map_err(|_| "引擎单例锁中毒".to_string())?;
+    // 毒化恢复：18 个 FFI 入口的 catch_unwind 吞 panic 时锁已毒化，
+    // into_inner 取回数据，install 整体替换引擎，提供恢复路径。
+    let mut guard = SINGLETON.lock().unwrap_or_else(|p| p.into_inner());
     *guard = Some(Api { engine: Engine::new(dict, symbols, true) });
     Ok(())
 }
 
 /// 在引擎单例上执行操作；未 load 时返回 None（调用方按哨兵处理）。
 pub fn with_engine<R>(f: impl FnOnce(&mut Api) -> R) -> Option<R> {
-    SINGLETON.lock().ok().and_then(|mut g| g.as_mut().map(f))
+    let mut g = SINGLETON.lock().unwrap_or_else(|p| p.into_inner());
+    g.as_mut().map(f)
 }
 
 /// JNI/C 共用的 0..=3 模式整数 ↔ Mode 转换（0=Pinyin 1=English 2=Number 3=Symbol）。
@@ -200,7 +203,7 @@ impl Api {
     pub fn input_key(&mut self, ch: String) -> String {
         let mut chars = ch.chars();
         let (Some(c), None) = (chars.next(), chars.next()) else {
-            return String::new(); // 边界：拒绝空串/多字符
+            return String::new(); // 边界：拒绝空串/多字符；非 ASCII 拒绝在引擎层（引擎只收 ASCII 键）
         };
         self.engine.input_key(c)
     }

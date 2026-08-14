@@ -16,11 +16,13 @@ pub struct OpiString {
 
 impl OpiString {
     /// 从 &str 分配 UTF-16 缓冲。空串返回空句柄（ptr 为 null）。
+    /// 用 into_boxed_slice 使分配布局精确等于 len，free 端
+    /// `Vec::from_raw_parts(ptr, len, len)` 的释放布局与之匹配，无 UB。
     pub fn from_utf16(s: &str) -> Self {
         if s.is_empty() {
             return Self::empty();
         }
-        let units: Vec<u16> = s.encode_utf16().collect();
+        let units: Box<[u16]> = s.encode_utf16().collect::<Vec<u16>>().into_boxed_slice();
         let ptr = units.as_ptr();
         let len = units.len();
         std::mem::forget(units);
@@ -225,7 +227,7 @@ pub unsafe extern "C" fn opi_symbol_blocks() -> OpiString {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_symbols_in_block(id: i16) -> OpiString {
     let texts = catch_unwind(AssertUnwindSafe(|| {
-        api::with_engine(|e| api::symbol_texts(e, id as u16)).unwrap_or_default()
+        api::with_engine(|e| api::symbol_texts(e, id.max(0) as u16)).unwrap_or_default()
     }))
     .unwrap_or_default();
     texts_to_json(texts)

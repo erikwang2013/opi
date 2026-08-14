@@ -41,13 +41,13 @@ fn load_any() {
 
 #[test]
 fn cabi_load_null_fallback_ok() {
-    let _g = SERIAL.lock().unwrap();
+    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
     assert!(unsafe { opi_load(std::ptr::null(), 0) });
 }
 
 #[test]
 fn cabi_pinyin_candidates_and_select() {
-    let _g = SERIAL.lock().unwrap();
+    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
     load_any();
     assert_eq!(unsafe { opi_mode() }, 0, "初始应为 Pinyin");
     let w = to_units("w");
@@ -70,7 +70,7 @@ fn cabi_pinyin_candidates_and_select() {
 
 #[test]
 fn cabi_input_key_boundary() {
-    let _g = SERIAL.lock().unwrap();
+    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
     load_any();
     let empty = to_units("");
     let multi = to_units("ab");
@@ -86,7 +86,7 @@ fn cabi_input_key_boundary() {
 
 #[test]
 fn cabi_mode_shift_space_backspace() {
-    let _g = SERIAL.lock().unwrap();
+    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
     load_any();
     unsafe { opi_switch_mode(1) };
     assert_eq!(unsafe { opi_mode() }, 1);
@@ -116,7 +116,7 @@ fn cabi_mode_shift_space_backspace() {
 
 #[test]
 fn cabi_learner_and_user_words() {
-    let _g = SERIAL.lock().unwrap();
+    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
     load_any();
     // 默认开（M1 语义）
     assert!(unsafe { opi_learner_enabled() });
@@ -133,7 +133,7 @@ fn cabi_learner_and_user_words() {
 
 #[test]
 fn cabi_symbols_blocks_and_search() {
-    let _g = SERIAL.lock().unwrap();
+    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
     load_any();
     let blocks = read(unsafe { opi_symbol_blocks() });
     let v: Vec<serde_json::Value> = serde_json::from_str(&blocks).unwrap_or_default();

@@ -2,6 +2,11 @@
 //! 宿主类：`io/opi/input/jni/OpiEngine`。每个函数 `catch_unwind` 包裹，
 //! panic / 错误返回哨兵（boolean false、int 0、String/数组 null）。
 //! 语义与 C ABI（cabi.rs）完全一致，共享 api::SINGLETON 与内部实现。
+//!
+//! # Safety（本模块所有 `opijni_*` 与 `JNI_OnLoad` 的统一契约）
+//! `env` 必须为当前线程有效且非空的 JNIEnv（JVM 调用约定保证）；jstring 参数须为
+//! 有效本地引用（可 null）。每个函数内部均以 catch_unwind 包裹，panic 不跨 FFI 边界。
+#![allow(clippy::missing_safety_doc)]
 
 use std::ffi::c_void;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -18,9 +23,6 @@ type JEnv = *mut sys::JNIEnv;
 // ---------- 18 个 native 方法 ----------
 
 /// load(path: String?) -> bool。null/空串 → 内置回退词库；坏路径 → false。
-/// # Safety
-///
-/// `env` 必须为当前线程有效且非空的 JNIEnv；jstring 参数须为有效本地引用（可 null）。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_load(env: JEnv, _class: sys::jclass, path: jstring) -> jboolean {
     catch_unwind(AssertUnwindSafe(|| {
@@ -31,9 +33,6 @@ pub unsafe extern "system" fn opijni_load(env: JEnv, _class: sys::jclass, path: 
 }
 
 /// inputKey(ch: String) -> String。永不 panic。单字符外（空/多字符/非 ASCII）返回空串。
-/// # Safety
-///
-/// `env` 必须为当前线程有效且非空的 JNIEnv；jstring 参数须为有效本地引用（可 null）。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_input_key(env: JEnv, _class: sys::jclass, key: jstring) -> jstring {
     let out = catch_unwind(AssertUnwindSafe(|| {
@@ -44,26 +43,17 @@ pub unsafe extern "system" fn opijni_input_key(env: JEnv, _class: sys::jclass, k
     unsafe { jni_util::rust_to_jstring(env, &out) }
 }
 
-/// # Safety
-///
-/// `env` 必须为当前线程有效且非空的 JNIEnv；jstring 参数须为有效本地引用（可 null）。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_backspace(_env: JEnv, _class: sys::jclass) {
     let _ = catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.backspace())));
 }
 
-/// # Safety
-///
-/// `env` 必须为当前线程有效且非空的 JNIEnv；jstring 参数须为有效本地引用（可 null）。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_clear(_env: JEnv, _class: sys::jclass) {
     let _ = catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.clear())));
 }
 
 /// select(index: Int) -> String。越界返回空串（旧语义）。
-/// # Safety
-///
-/// `env` 必须为当前线程有效且非空的 JNIEnv；jstring 参数须为有效本地引用（可 null）。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_select(env: JEnv, _class: sys::jclass, index: jint) -> jstring {
     let out = catch_unwind(AssertUnwindSafe(|| {
@@ -74,9 +64,6 @@ pub unsafe extern "system" fn opijni_select(env: JEnv, _class: sys::jclass, inde
 }
 
 /// switchMode(mode: Int)。0=Pinyin 1=English 2=Number 3=Symbol，越界忽略。
-/// # Safety
-///
-/// `env` 必须为当前线程有效且非空的 JNIEnv；jstring 参数须为有效本地引用（可 null）。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_switch_mode(_env: JEnv, _class: sys::jclass, mode: jint) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
@@ -86,17 +73,11 @@ pub unsafe extern "system" fn opijni_switch_mode(_env: JEnv, _class: sys::jclass
     }));
 }
 
-/// # Safety
-///
-/// `env` 必须为当前线程有效且非空的 JNIEnv；jstring 参数须为有效本地引用（可 null）。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_set_shift(_env: JEnv, _class: sys::jclass, on: jboolean) {
     let _ = catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.set_shift(on))));
 }
 
-/// # Safety
-///
-/// `env` 必须为当前线程有效且非空的 JNIEnv；jstring 参数须为有效本地引用（可 null）。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_input_space(env: JEnv, _class: sys::jclass) -> jstring {
     let out = catch_unwind(AssertUnwindSafe(|| {
@@ -107,9 +88,6 @@ pub unsafe extern "system" fn opijni_input_space(env: JEnv, _class: sys::jclass)
 }
 
 /// candidates(limit: Int) -> String[]。仅文本数组（kind/score UI 不用）。
-/// # Safety
-///
-/// `env` 必须为当前线程有效且非空的 JNIEnv；jstring 参数须为有效本地引用（可 null）。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_candidates(env: JEnv, _class: sys::jclass, limit: jint) -> sys::jobjectArray {
     let texts = catch_unwind(AssertUnwindSafe(|| {
@@ -119,9 +97,6 @@ pub unsafe extern "system" fn opijni_candidates(env: JEnv, _class: sys::jclass, 
     unsafe { jni_util::string_array(env, texts) }
 }
 
-/// # Safety
-///
-/// `env` 必须为当前线程有效且非空的 JNIEnv；jstring 参数须为有效本地引用（可 null）。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_buffer(env: JEnv, _class: sys::jclass) -> jstring {
     let out = catch_unwind(AssertUnwindSafe(|| {
@@ -131,9 +106,6 @@ pub unsafe extern "system" fn opijni_buffer(env: JEnv, _class: sys::jclass) -> j
     unsafe { jni_util::rust_to_jstring(env, &out) }
 }
 
-/// # Safety
-///
-/// `env` 必须为当前线程有效且非空的 JNIEnv；jstring 参数须为有效本地引用（可 null）。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_mode(_env: JEnv, _class: sys::jclass) -> jint {
     catch_unwind(AssertUnwindSafe(|| {
@@ -143,9 +115,6 @@ pub unsafe extern "system" fn opijni_mode(_env: JEnv, _class: sys::jclass) -> ji
 }
 
 /// searchSymbols(keyword: String) -> String[]。仅文本数组。
-/// # Safety
-///
-/// `env` 必须为当前线程有效且非空的 JNIEnv；jstring 参数须为有效本地引用（可 null）。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_search_symbols(env: JEnv, _class: sys::jclass, keyword: jstring) -> sys::jobjectArray {
     let texts = catch_unwind(AssertUnwindSafe(|| {
@@ -157,9 +126,6 @@ pub unsafe extern "system" fn opijni_search_symbols(env: JEnv, _class: sys::jcla
 }
 
 /// symbolBlocks() -> String。JSON：`[{id,start,end,name,common}]`。
-/// # Safety
-///
-/// `env` 必须为当前线程有效且非空的 JNIEnv；jstring 参数须为有效本地引用（可 null）。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_symbol_blocks(env: JEnv, _class: sys::jclass) -> jstring {
     let json = catch_unwind(AssertUnwindSafe(|| {
@@ -170,45 +136,30 @@ pub unsafe extern "system" fn opijni_symbol_blocks(env: JEnv, _class: sys::jclas
 }
 
 /// symbolsInBlock(id: Short) -> String[]。仅文本数组。
-/// # Safety
-///
-/// `env` 必须为当前线程有效且非空的 JNIEnv；jstring 参数须为有效本地引用（可 null）。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_symbols_in_block(env: JEnv, _class: sys::jclass, id: jshort) -> sys::jobjectArray {
     let texts = catch_unwind(AssertUnwindSafe(|| {
-        api::with_engine(|e| api::symbol_texts(e, id as u16)).unwrap_or_default()
+        api::with_engine(|e| api::symbol_texts(e, id.max(0) as u16)).unwrap_or_default()
     }))
     .unwrap_or_default();
     unsafe { jni_util::string_array(env, texts) }
 }
 
-/// # Safety
-///
-/// `env` 必须为当前线程有效且非空的 JNIEnv；jstring 参数须为有效本地引用（可 null）。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_learner_enabled(_env: JEnv, _class: sys::jclass) -> jboolean {
     catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.learner_enabled()).unwrap_or(false))).unwrap_or(false)
 }
 
-/// # Safety
-///
-/// `env` 必须为当前线程有效且非空的 JNIEnv；jstring 参数须为有效本地引用（可 null）。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_set_learner(_env: JEnv, _class: sys::jclass, enabled: jboolean) {
     let _ = catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.set_learner(enabled))));
 }
 
-/// # Safety
-///
-/// `env` 必须为当前线程有效且非空的 JNIEnv；jstring 参数须为有效本地引用（可 null）。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_clear_user_words(_env: JEnv, _class: sys::jclass) {
     let _ = catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.clear_user_words())));
 }
 
-/// # Safety
-///
-/// `env` 必须为当前线程有效且非空的 JNIEnv；jstring 参数须为有效本地引用（可 null）。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_export_user_words(env: JEnv, _class: sys::jclass) -> jstring {
     let out = catch_unwind(AssertUnwindSafe(|| {
@@ -220,9 +171,6 @@ pub unsafe extern "system" fn opijni_export_user_words(env: JEnv, _class: sys::j
 
 // ---------- JNI_OnLoad ----------
 
-/// # Safety
-///
-/// `env` 必须为当前线程有效且非空的 JNIEnv；jstring 参数须为有效本地引用（可 null）。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _reserved: *mut c_void) -> jint {
     let result = catch_unwind(AssertUnwindSafe(|| -> Result<jint, String> {

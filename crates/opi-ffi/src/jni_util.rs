@@ -58,7 +58,12 @@ pub unsafe fn rust_to_jstring(env: *mut sys::JNIEnv, s: &str) -> jstring {
     }
     let units = string_to_utf16_units(s);
     let iface = unsafe { &**env };
-    unsafe { (iface.v1_1.NewString)(env, units.as_ptr(), units.len() as jsize) }
+    if units.is_empty() {
+        // 空 Vec 的 as_ptr 悬垂，NewString(env, null, 0) 为合法空串
+        unsafe { (iface.v1_1.NewString)(env, std::ptr::null(), 0) }
+    } else {
+        unsafe { (iface.v1_1.NewString)(env, units.as_ptr(), units.len() as jsize) }
+    }
 }
 
 /// 构造 `[Ljava/lang/String;` 数组。失败返回 null。
