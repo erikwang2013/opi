@@ -28,8 +28,10 @@ g++ -std=c++17 -shared -fPIC -o libfcitx5_opi_glue.so opi_fcitx5.cpp \
 - `libfcitx5_opi_glue.so` 与 addon 元数据（`opi_fcitx5.conf.in` 等，B3
   接线）放入 fcitx5 addon 目录，例如
   `/usr/lib/fcitx5/`（发行版常见路径，以 `fcitx5-diagnose` 输出为准）。
-- 词库路径：初始化时经 `fcitx::StandardPath` 在 XDG 数据目录探测
-  `opi/opi.dict`；未找到则 Rust 侧使用内置回退词库（B3 接线真实文件）。
+- 词库路径：B3 的 `opi_fcitx5_init_dict` 把插件分发的 `luna.opid` 经 size
+  校验拷贝到 XDG 数据目录（`$XDG_DATA_HOME/opi/luna.opid`，文件名镜像
+  Android EngineLoader.FILE_NAME）；初始化时经 `fcitx::StandardPath` 探测
+  同一路径；未找到则 Rust 侧使用内置回退词库（打包接线在验收阶段完成）。
 
 ## 状态
 

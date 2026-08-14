@@ -10,11 +10,13 @@
 //! `opi_ffi_free_string_utf8` 释放。语义与 opi-ffi 的 cabi.rs 一致。
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::path::Path;
 use std::sync::{Mutex, Once};
 
 use engine_core::composer::Mode;
 
 pub mod candidate;
+pub mod data_dir;
 pub mod input_method;
 
 use candidate::CandidateState;
@@ -132,7 +134,7 @@ fn texts_to_json(texts: Vec<String>) -> OpString {
     OpString::from_utf8(&json)
 }
 
-// ---------- C 入口面（B0 约定 11 个 + B2 新增 key_event） ----------
+// ---------- C 入口面（B0 约定 11 个 + B2 新增 key_event + B3 新增 init_dict） ----------
 
 /// load(path: const uint8_t*, len) -> bool。null/空串 → 内置回退词库；坏路径 → false。
 /// # Safety
@@ -144,6 +146,40 @@ pub unsafe extern "C" fn opi_fcitx5_load(ptr: *const u8, len: usize) -> bool {
     catch_unwind(AssertUnwindSafe(|| {
         let path = unsafe { read_utf8(ptr, len) };
         install(path.as_deref()).is_ok()
+    }))
+    .unwrap_or(false)
+}
+
+/// 初始化词库（B3）：源路径 + XDG 数据目录 → 建目录 + size 校验拷贝 + 装载引擎；任一步失败 → 内置回退词库并返回 false（对照 EngineLoader：load(null)）。
+/// # Safety
+///
+/// `source_ptr`/`data_dir_ptr` 必须分别指向至少 `source_len`/`data_dir_len`
+/// 字节的有效内存（或为 null，视为空串）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_init_dict(
+    source_ptr: *const u8,
+    source_len: usize,
+    data_dir_ptr: *const u8,
+    data_dir_len: usize,
+) -> bool {
+    ensure_panic_hook();
+    catch_unwind(AssertUnwindSafe(|| {
+        let source = unsafe { read_utf8(source_ptr, source_len) };
+        let dir = unsafe { read_utf8(data_dir_ptr, data_dir_len) };
+        let (source, dir) = match (source, dir) {
+            (Some(s), Some(d)) if !s.is_empty() && !d.is_empty() => (s, d),
+            _ => {
+                let _ = install(None); // 参数缺失/空串 → 内置回退词库
+                return false;
+            }
+        };
+        match data_dir::init_dict(Path::new(&source), Path::new(&dir)) {
+            Ok(()) => true,
+            Err(_) => {
+                let _ = install(None);
+                false
+            }
+        }
     }))
     .unwrap_or(false)
 }

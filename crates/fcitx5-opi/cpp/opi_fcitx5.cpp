@@ -77,11 +77,13 @@ public:
     }
 
 private:
-    // XDG 数据目录下找 OPI 词库；B3 将接线真实文件，现只做简单探测。
+    // XDG 数据目录下找 OPI 词库（B3：Rust 侧 opi_fcitx5_init_dict 把插件分发
+    // 的 luna.opid 拷到 $XDG_DATA_HOME/opi/luna.opid——文件名镜像 Android
+    // EngineLoader.FILE_NAME；此处探测同一路径）。B3 接线在验收阶段完成。
     // 找不到时 load(nullptr, 0) → Rust 侧使用内置回退词库。
     void loadDictionary() {
         auto path = fcitx::StandardPath::global().locate(
-            fcitx::StandardPath::Type::Data, "opi/opi.dict");
+            fcitx::StandardPath::Type::Data, "opi/luna.opid");
         if (path.empty()) {
             opi_fcitx5_load(nullptr, 0);
         } else {
