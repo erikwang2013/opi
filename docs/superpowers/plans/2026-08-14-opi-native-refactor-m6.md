@@ -432,10 +432,10 @@ crates/opi-ffi/src/cabi.rs                # C ABI 出口 + free_string
 - Create: `desktop/settings.gradle.kts`、`desktop/build.gradle.kts`、`desktop/src/main/kotlin/io/opi/candidate/Main.kt`（Compose Desktop 窗口，候选列表 + 翻页）
 - Modify: `crates/tsf-opi`（候选数据经 JNI/共享内存或本地 socket 传给候选窗——**先定接口再实现**）
 
-- [ ] **Step 1: 定义候选窗通信接口**（方案：TSF 进程内共享内存 + event；或本地 named pipe。选择 named pipe，Rust 侧 windows-rs 现成）。
-- [ ] **Step 2: 实现 CMP 候选窗**：Compose Desktop 窗口 + 候选列表 + 页码 + 位置跟随（无法跟随降级固定位置）。
-- [ ] **Step 3: 构建验证**：`./gradlew :desktop:package`（Compose Desktop 打包）→ 成功。
-- [ ] **Step 4: 提交**：`git commit -m "feat(desktop): CMP 候选窗 + TSF 通信"`
+- [x] **Step 1: 定义候选窗通信接口**（方案：TSF 进程内共享内存 + event；或本地 named pipe。选择 named pipe，Rust 侧 windows-rs 现成）。
+- [x] **Step 2: 实现 CMP 候选窗**：Compose Desktop 窗口 + 候选列表 + 页码 + 位置跟随（无法跟随降级固定位置）。
+- [x] **Step 3: 构建验证**：`./gradlew :desktop:package`（Compose Desktop 打包）→ 成功。
+- [x] **Step 4: 提交**：`git commit -m "feat(desktop): CMP 候选窗 + TSF 通信"`
 
 ---
 

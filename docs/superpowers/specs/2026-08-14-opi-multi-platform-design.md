@@ -115,3 +115,11 @@ opi/
 ## 10. 偏差记录
 
 （重构过程中偏离本设计之处，记录于此，与 M4 偏差记录同例）
+
+| # | 偏差 | 说明 |
+|---|------|------|
+| 1 | CMP 打包任务名 | 计划 Step 写 `./gradlew :desktop:package`；desktop/ 为独立 Gradle 工程（自带 settings.gradle.kts），实际在 desktop/ 目录执行 `./gradlew package`（CMP 1.11 umbrella 任务，packageDeb/packageDistributionForCurrentOS 亦可用） |
+| 2 | Linux 分发格式为 Deb | CMP 1.11 已移除 Zip 格式枚举（仅 AppImage/Deb/Rpm/Dmg/Pkg/Exe/Msi）；Linux 主机用 dpkg-deb 验证 → targetFormats(Deb)，产物 opi-candidates_0.1.0_amd64.deb；Windows .msi 留验收阶段 |
+| 3 | 候选窗 UI material3 → foundation 自绘 | CMP 1.11 的 material3 弃用；候选窗 UI 改用 foundation 自绘（desktop/src/main/kotlin/io/opi/candidate/Main.kt） |
+| 4 | gradle 需 --refresh-dependencies | aliyun 镜像 probe 404 被 gradle 缓存，首次解析 JNA 5.6.0 前须 `--refresh-dependencies` 清缓存 |
+| 5 | JNA/CMP 真实 API 修正 | JVM 侧 named pipe server 用 JNA 5.6.0 raw Function（CreateNamedPipe/ConnectNamedPipe/ReadFile）+ WinBase.INVALID_HANDLE_VALUE 等真实 API 核对（与初稿虚拟 API 不同） |
