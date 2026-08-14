@@ -61,6 +61,22 @@ class KeyRouterTest {
     }
 
     @Test
+    fun englishBufferShiftStillRoutesToEngine() {
+        val fake = FakeEngine().apply {
+            mode = EngineMode.ENGLISH.value
+            buf = "w"
+        }
+        val ch = Channel()
+        val (ctrl, r) = router(fake, ch)
+        ctrl.shiftTap()
+        r.handleKey("a")
+        // 直传大写仅限空缓冲；buffer 非空时字母仍走引擎路由，shift 不消费
+        assertEquals(listOf("a"), fake.inputCalls)
+        assertTrue(ch.commits.isEmpty())
+        assertEquals(io.opi.input.engine.ShiftState.SINGLE, ctrl.shiftState)
+    }
+
+    @Test
     fun pinyinLetterRoutesToEngine() {
         val fake = FakeEngine().apply { buf = "w" }
         val ch = Channel()

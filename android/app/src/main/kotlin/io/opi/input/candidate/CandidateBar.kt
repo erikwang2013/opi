@@ -82,11 +82,11 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit) {
         }
         if (pageCount > 1) {
             IconButton(onClick = controller::prevPage) {
-                Icon(Icons.Filled.KeyboardArrowLeft, contentDescription = null)
+                Icon(Icons.Filled.KeyboardArrowLeft, contentDescription = "上一页")
             }
             Text("${controller.candidatePage + 1}/$pageCount", fontSize = 13.sp)
             IconButton(onClick = controller::nextPage) {
-                Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null)
+                Icon(Icons.Filled.KeyboardArrowRight, contentDescription = "下一页")
             }
         }
     }
