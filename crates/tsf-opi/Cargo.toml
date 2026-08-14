@@ -3,8 +3,25 @@ name = "tsf_opi"
 version = "0.1.0"
 edition = "2024"
 
-# C1：纯逻辑层，保持默认 lib crate-type。
-# C2 引入 windows crate 与 COM/TSF 胶水时决定是否转 cdylib。
+# C2：TSF COM 服务器经 DLL 注册（regsvr32 / DllGetClassObject），
+# 镜像 fcitx5 轨的 cdylib+lib 双 crate-type；Linux 主机仍可 lib/测试。
+[lib]
+crate-type = ["cdylib", "lib"]
+
 [dependencies]
 engine-core = { path = "../engine-core" }
 engine-data = { path = "../engine-data" }
+
+# C2：windows crate（0.62）仅 Windows 目标需要。E0 已验证 0.62.2 可解析；
+# 但 windows-future（windows 0.62 的无条件依赖）无法在 Linux 主机编译，
+# 故用 target 作用域依赖 + lib.rs 的 cfg(target_os="windows") 模块双重隔离，
+# 保证 Linux 主机 `cargo test --workspace` 不触碰 windows 依赖。
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.62", default-features = false, features = [
+    "Win32_Foundation",
+    "Win32_System_Com",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_TextServices",
+] }
+# implement! 宏展开引用 `::windows_core::imp::…`，须为本 crate 直接依赖。
+windows-core = { version = "0.62", default-features = false }
