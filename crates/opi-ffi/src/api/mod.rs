@@ -1,10 +1,91 @@
-//! frb API 薄壳：类型转换与边界校验，内部持 engine_core::Engine。
+//! 引擎薄壳：类型转换与边界校验，内部持 engine_core::Engine。
+//! 双 ABI（JNI + C）共享同一引擎单例（SINGLETON）与内部实现，避免双份逻辑。
+
+use std::sync::Mutex;
 
 use engine_core::candidates::{Candidate, CandidateKind};
 use engine_core::composer::Mode;
 use engine_core::symbols::{Block, BlockId, SymbolEntry};
 use engine_core::Engine;
-use flutter_rust_bridge::frb;
+
+/// 引擎单例：load 后可供 JNI / C 出口共享。
+pub static SINGLETON: Mutex<Option<Api>> = Mutex::new(None);
+
+/// 装载引擎。`None`/空串 → 内置回退词库（35 词）；非空路径 → load_or_fallback
+/// 原样语义（坏路径返回 Err，仅内置损坏时方为不可恢复）。成功即替换单例。
+pub fn install(path: Option<&str>) -> Result<(), String> {
+    let dict: Box<dyn engine_core::dictionary::Dictionary> = match path {
+        Some(p) if !p.is_empty() => engine_data::load_or_fallback(Some(std::path::Path::new(p)))?,
+        _ => Box::new(engine_data::fallback_dict()),
+    };
+    let symbols = engine_core::symbols::SymbolEngine::builtin();
+    let mut guard = SINGLETON.lock().map_err(|_| "引擎单例锁中毒".to_string())?;
+    *guard = Some(Api { engine: Engine::new(dict, symbols, true) });
+    Ok(())
+}
+
+/// 在引擎单例上执行操作；未 load 时返回 None（调用方按哨兵处理）。
+pub fn with_engine<R>(f: impl FnOnce(&mut Api) -> R) -> Option<R> {
+    SINGLETON.lock().ok().and_then(|mut g| g.as_mut().map(f))
+}
+
+/// JNI/C 共用的 0..=3 模式整数 ↔ Mode 转换（0=Pinyin 1=English 2=Number 3=Symbol）。
+pub fn mode_from_int(m: i32) -> Option<Mode> {
+    match m {
+        0 => Some(Mode::Pinyin),
+        1 => Some(Mode::English),
+        2 => Some(Mode::Number),
+        3 => Some(Mode::Symbol),
+        _ => None,
+    }
+}
+
+pub fn mode_to_int(m: Mode) -> i32 {
+    match m {
+        Mode::Pinyin => 0,
+        Mode::English => 1,
+        Mode::Number => 2,
+        Mode::Symbol => 3,
+    }
+}
+
+/// 候选文本列表（JNI/C 出口共用；kind/score UI 不用，仅文本）。
+pub fn candidate_texts(api: &Api, limit: usize) -> Vec<String> {
+    api.candidates(limit).into_iter().map(|c| c.text).collect()
+}
+
+/// 符号块内符号文本列表。
+pub fn symbol_texts(api: &Api, id: u16) -> Vec<String> {
+    api.symbols_in_block(id).into_iter().map(|s| s.text).collect()
+}
+
+/// 符号搜索命中文本列表。
+pub fn search_symbol_texts(api: &Api, keyword: &str) -> Vec<String> {
+    api.search_symbols(keyword.to_string()).into_iter().map(|s| s.text).collect()
+}
+
+/// 文本列表 → JSON 数组字符串。
+pub fn texts_json(texts: &[String]) -> String {
+    serde_json::to_string(texts).unwrap_or_default()
+}
+
+/// symbolBlocks JSON：`[{id,start,end,name,common}]`。
+pub fn symbol_blocks_json(api: &Api) -> String {
+    let blocks = api.symbol_blocks();
+    let arr: Vec<serde_json::Value> = blocks
+        .iter()
+        .map(|b| {
+            serde_json::json!({
+                "id": b.id,
+                "start": b.start,
+                "end": b.end,
+                "name": b.name,
+                "common": b.common,
+            })
+        })
+        .collect();
+    serde_json::to_string(&arr).unwrap_or_default()
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ApiMode {
@@ -98,7 +179,7 @@ impl From<SymbolEntry> for ApiSymbolEntry {
     }
 }
 
-/// 引擎句柄（frb opaque）。同步核心 + async 外壳：Rust 测试测同步核心，Dart 侧 async 加载。
+/// 引擎句柄。同步核心；Rust 测试测同步核心。
 pub struct Api {
     engine: Engine,
 }
@@ -110,21 +191,12 @@ impl Api {
         Ok(Api { engine: Engine::new(Box::new(dict), symbols, true) })
     }
 
-    pub async fn load_fallback() -> Result<Api, String> {
-        Self::load_fallback_sync()
-    }
-
     pub fn load_sync(path: String) -> Result<Api, String> {
         let dict = engine_data::load_or_fallback(Some(std::path::Path::new(&path)))?;
         let symbols = engine_core::symbols::SymbolEngine::builtin();
         Ok(Api { engine: Engine::new(dict, symbols, true) })
     }
 
-    pub async fn load(path: String) -> Result<Api, String> {
-        Self::load_sync(path)
-    }
-
-    #[frb(sync)]
     pub fn input_key(&mut self, ch: String) -> String {
         let mut chars = ch.chars();
         let (Some(c), None) = (chars.next(), chars.next()) else {
@@ -133,87 +205,70 @@ impl Api {
         self.engine.input_key(c)
     }
 
-    #[frb(sync)]
     pub fn input_space(&mut self) -> String {
         self.engine.input_space()
     }
 
-    #[frb(sync)]
     pub fn backspace(&mut self) {
         self.engine.backspace();
     }
 
-    #[frb(sync)]
     pub fn clear(&mut self) {
         self.engine.clear();
     }
 
-    #[frb(sync)]
     pub fn switch_mode(&mut self, mode: ApiMode) {
         self.engine.switch_mode(mode.into());
     }
 
-    #[frb(sync)]
     pub fn set_shift(&mut self, on: bool) {
         self.engine.set_shift(on);
     }
 
-    #[frb(sync)]
     pub fn buffer(&self) -> String {
         self.engine.buffer().to_string()
     }
 
-    #[frb(sync)]
     pub fn mode(&self) -> ApiMode {
         self.engine.mode().into()
     }
 
-    #[frb(sync)]
     pub fn candidates(&self, limit: usize) -> Vec<ApiCandidate> {
         self.engine.candidates(limit).into_iter().map(Into::into).collect()
     }
 
-    #[frb(sync)]
     pub fn select(&mut self, index: usize) -> String {
         self.engine.select(index)
     }
 
-    #[frb(sync)]
     pub fn set_learner(&mut self, enabled: bool) {
         self.engine.set_learner(enabled);
     }
 
-    #[frb(sync)]
     pub fn learner_enabled(&self) -> bool {
         self.engine.learner_enabled()
     }
 
-    #[frb(sync)]
     pub fn remove_user_word(&mut self, text: String) {
         self.engine.remove_user_word(&text);
     }
 
-    #[frb(sync)]
     pub fn clear_user_words(&mut self) {
         self.engine.clear_user_words();
     }
 
-    #[frb(sync)]
     pub fn export_user_words(&self) -> String {
         self.engine.export_user_words()
     }
 
-    #[frb(sync)]
     pub fn symbol_blocks(&self) -> Vec<ApiBlock> {
         self.engine.symbol_blocks().into_iter().map(Into::into).collect()
     }
 
-    #[frb(sync)]
     pub fn symbols_in_block(&self, id: u16) -> Vec<ApiSymbolEntry> {
         self.engine.symbols_in_block(BlockId(id)).into_iter().map(Into::into).collect()
     }
 
-    #[frb(sync)]
     pub fn search_symbols(&self, keyword: String) -> Vec<ApiSymbolEntry> {
         self.engine.search_symbols(&keyword).into_iter().map(Into::into).collect()
     }
@@ -321,5 +376,26 @@ mod tests {
         assert!(!a.learner_enabled());
         a.set_learner(true);
         assert!(a.learner_enabled());
+    }
+
+    #[test]
+    fn install_singleton_fallback_and_path() {
+        // 空串/None → 内置回退
+        assert!(install(None).is_ok());
+        assert!(with_engine(|a| a.buffer()).is_some());
+        // 坏路径 → Err（load_or_fallback 原样语义，不回退）
+        assert!(install(Some("/nonexistent/opi.dict")).is_err());
+        // 单例保持上一次成功装载可用
+        assert!(with_engine(|a| a.buffer()).is_some());
+    }
+
+    #[test]
+    fn mode_int_roundtrip() {
+        assert_eq!(mode_from_int(0), Some(Mode::Pinyin));
+        assert_eq!(mode_from_int(3), Some(Mode::Symbol));
+        assert_eq!(mode_from_int(4), None);
+        assert_eq!(mode_from_int(-1), None);
+        assert_eq!(mode_to_int(Mode::English), 1);
+        assert_eq!(mode_to_int(Mode::Number), 2);
     }
 }

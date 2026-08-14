@@ -4,12 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [lib]
-crate-type = ["cdylib", "staticlib"]
+crate-type = ["cdylib", "lib"]
 
 [dependencies]
 engine-core = { path = "../engine-core" }
 engine-data = { path = "../engine-data" }
-flutter_rust_bridge = "=2.12.0"
-
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
+jni = "0.22"
+serde_json = "1"
