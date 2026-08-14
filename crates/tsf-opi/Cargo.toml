@@ -1,0 +1,10 @@
+[package]
+name = "tsf_opi"
+version = "0.1.0"
+edition = "2024"
+
+# C1：纯逻辑层，保持默认 lib crate-type。
+# C2 引入 windows crate 与 COM/TSF 胶水时决定是否转 cdylib。
+[dependencies]
+engine-core = { path = "../engine-core" }
+engine-data = { path = "../engine-data" }
