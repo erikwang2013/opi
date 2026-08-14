@@ -12,26 +12,30 @@
 
 ---
 
-## 词频规则偏差注记（相对 spec 公式的修正）
+## 词频规则偏差注记（相对 spec 公式的两次修正）
 
-spec「词频策略」一节的字面公式（一级 9000-序号、二级 6000-序号、繁体 5000-序号、词组 8000-序号）在两个实际数据条件下不可行：
+spec「词频策略」一节的字面公式（一级 9000-序号、二级 6000-序号、繁体 5000-序号、词组 8000-序号）经数据验证有三次不可行，已两轮修正：
 
-1. **负数 freq**：繁体单字 ~13000 个，`5000 - 序号` 在序号 > 5000 后为负。parse_dict 只接受 u32，负数字面量会导致该行被跳过。
-2. **排序倒置**：spec 验收要求「繁模式下 fa → 發 靠前」。若繁体单字 freq 带低于 GB2312 字（9000/6000 带），`fa` 的简体 发/法（~8650）会排在 發 前面，验收不通过。
+**修正 #1（负数 freq + 排序倒置）：**
+1. 繁体单字 ~13000 个，`5000 - 序号` 在序号 > 5000 后为负。parse_dict 只接受 u32，负数字面量导致该行被跳过。
+2. 繁体 freq 带低于 GB 字（9000/6000 带）时，`fa` 的简体 发/法（~8650）会排在 發 前面，验收不通过。
 
-**修正方案（Task 1 实现，数据带全部为正数且保持带内有序）：**
+**修正 #2（码位序/文件序非常用度 + GB 越段，Task 1 执行中实测发现）：**
 
-| 数据 | freq 公式 | 值域 |
-|---|---|---|
-| 繁体单字 + terra 单字词组 | `9900 - idx * 899 // N_single` | [9900, 9001] |
-| GB2312 一级（3755，GB 码序） | `9000 - 序号` | [9000, 5246] |
-| GB2312 二级（3008，GB 码序） | `6000 - 二级序号` | [6000, 2993] |
-| terra 多字词组 | `8800 - idx * 799 // N_phrase` | [8800, 8001] |
+实际数据验证（trad.opid 查询）：
+- 单字带按码位排序 → 生僻字排到常用字前：`fa` 前 8 为 乏/佱/伐/傠/发/垡/姂/彂，**發 不在前 8**；`hao` 前 8 为 傐/儫/哠/号/嘷/噑/嗥/嚆，**好 不在前 8**。spec 验收「fa → 發 靠前」失败。
+- 编译层 (pinyin, word) 取 max freq 会把 GB 字按 terra 单字带提升（发 9836 > GB 带 8650），破坏 GB 段位。
+- terra master（2026.07.17）**不含** 臺灣/中華民國/中國（双字词缺失，只有 臺灣共和國 等长词）——spec 抽查词需人工补表。
 
-`idx * (top-bottom) // total` 为整数压缩映射：带内首尾有序（序号小 → freq 大），全部为正。
-设计取舍：词组带 [8800, 8001] 与一级带 [9000, 5246] 有交叠（如 我們 8800 会排在 我 ~5800 之前）——繁体模式高频词组优先是合理 UX，非正确性问题，接受。
+**最终方案（Task 1 实现）：统一常用度排序 + 人工常用表，替代频带公式。**
 
-跨库去重：luna 与 trad 是**互斥查询**（Traditional 模式只查 trad 库），无需与 luna 交叉去重；trad 库内部（GB 单字 ∩ terra 单字，如 好）由 compile 层 (pinyin, word) 取 max freq 处理。
+- 全部行（单字 + 词组）按优先级段排列，`freq = FMAX - idx * (FMAX // N)`，`FMAX = 4_000_000_000`（< u32::MAX，parse_freq 接受；引擎 user_boost 按 max_freq×2 缩放，learner 一次选词仍压过全部静态词，不回归）。N ≈ 十万行 → 段内完全可区分，无同频回退码位序问题。
+- 段序：`[人工常用繁体单字 COMMON_TRAD] → [GB 一级（GB 码序）] → [GB 二级] → [terra 单字（文件序）] → [其余 Unihan 单字（码位序）] → [人工常用词组 SUPPLEMENT_PHRASES] → [terra 词组（文件序）]`。
+- GB 字只出现在 GB 段（不因 terra 收录提升）；COMMON_TRAD 断言全为非 GB 字。
+- 验证结论：`fa` → 發/髮（COMMON_TRAD 前二）→ 发/法/乏/伐（GB 段）；`hao` → 好/号/豪/毫（GB 段）→ 傐/儫/哠（terra/码位段）；臺灣/中華民國 由 SUPPLEMENT_PHRASES 提供。
+- 数据事实注记：当前 UCD kMandarin 用调号（ā/fā/nǚ）非数字调；`normalize()` 须 NFD 剥离组合音调符 + `ü→v`。
+
+跨库去重：luna 与 trad 是**互斥查询**（Traditional 模式只查 trad 库），无需与 luna 交叉去重；trad 库内部（GB 单字 ∩ terra 单字，如 好）由 compile 层 (pinyin, word) 取 max freq 处理（好 只在 GB 段出现，max 不变）。
 
 ---
 
@@ -48,38 +52,103 @@ spec「词频策略」一节的字面公式（一级 9000-序号、二级 6000-�
 
 - [ ] **Step 1: 写数据生成脚本**
 
+Create `scripts/gen_trad_dict.py` with EXACTLY this content:
+
 ```python
 #!/usr/bin/env python3
 """生成简繁字库 TSV 数据（产物提交入库；离线构建不重跑本脚本）。
 
-产物（UTF-8，word\tpinyin\tfreq 三列）：
-  data/raw/trad_hanzi.tsv     GB2312 一二级全量 6763 字（GB 码序）+ 常用繁体单字（Unihan 码序）
-  data/raw/trad_phrases.tsv   rime terra-pinyin 繁体词组（单字词组并入 hanzi 带）
+产物（UTF-8，word\\tpinyin\\tfreq 三列）：
+  data/raw/trad_hanzi.tsv     GB2312 一二级全量 6763 字（GB 码序）+ 常用繁体单字
+  data/raw/trad_phrases.tsv   rime terra-pinyin 繁体词组 + 人工常用词组
 
-词频带见 plan Task 1 偏差注记：繁体单字 [9900,9001]、GB 一级 [9000,5246]、
-GB 二级 [6000,2993]、多字词组 [8800,8001]。拼音规范：kMandarin 去调号、ü(冒号)→v。
+词频（统一常用度排序，见 plan Task 1 偏差注记 #2）：
+  freq = FMAX - idx * (FMAX // N)，idx 为全部行按优先段排列的序号：
+  [COMMON_TRAD 常用繁体单字] → [GB 一级（GB 码序）] → [GB 二级]
+  → [terra 单字（文件序，去重）] → [其余 Unihan 单字（码位序）]
+  → [SUPPLEMENT_PHRASES 人工词组] → [terra 词组（文件序，去重）]。
+  GB 字只出现在 GB 段；常用字必然排在同音生僻字前（fa→發、hao→好）。
+拼音规范：kMandarin 去调号（NFD 剥离组合音调符）→ ü(冒号)→v → 小写。
 
 用法（需要网络）：cd <repo 根> && python3 scripts/gen_trad_dict.py
 """
 import codecs
+import io
 import re
 import sys
+import unicodedata
 import urllib.request
+import zipfile
 
-UNIHAN_URL = "https://www.unicode.org/Public/UCD/latest/ucd/Unihan_Readings.txt"
+# Unihan 自 2025 起以 Unihan.zip 发布（单文件 URL 404）
+UNIHAN_ZIP_URL = "https://www.unicode.org/Public/UCD/latest/ucd/Unihan.zip"
 TERRA_URL = "https://raw.githubusercontent.com/rime/rime-terra-pinyin/master/terra_pinyin.dict.yaml"
+
+# 4e9 < u32::MAX；parse_dict 接受 u32 freq，引擎按 u64 比较
+FMAX = 4_000_000_000
+
+# 人工常用繁体单字（必须全部不在 GB2312 内，脚本断言；按常用度降序）。
+COMMON_TRAD: list[str] = [
+    "發", "髮", "臺", "灣", "國", "學", "個", "們", "時", "間",
+    "現", "在", "這", "那", "點", "鐘", "機", "話", "電", "腦",
+    "網", "軟", "體", "資", "料", "郵", "銀", "錢", "愛", "情",
+    "說", "問", "題", "聽", "覺", "錯", "誤", "對", "謝", "請",
+    "幫", "需", "應", "該", "經", "濟", "歷", "實", "際", "場",
+    "邊", "處", "樓", "橋", "車", "輪", "數", "據", "檢", "測",
+    "試", "驗", "認", "識", "讓", "讀", "寫", "講", "館", "報",
+    "紙", "雜", "誌", "書", "習", "醫", "藥", "樂", "圖", "視",
+    "劇", "幣", "鈔", "島", "縣", "鎮", "鄉", "區", "號", "碼",
+    "頁", "項", "條", "費", "價", "減", "漲", "虧", "賺", "還",
+    "買", "賣", "貴", "賤", "舊", "壞", "髒", "亂", "悶", "熱",
+    "溫", "濕", "乾", "淨", "藍", "綠", "黃", "紅", "遠", "淺",
+    "細", "長", "寬", "圓", "狀", "樣", "類",
+]
+
+# 人工常用繁体词组（terra 缺失的常见词；拼音为全拼无空格连写、无撇号）。
+SUPPLEMENT_PHRASES: dict[str, str] = {
+    "臺灣": "taiwan", "中華民國": "zhonghuaminguo", "中國": "zhongguo",
+    "香港": "xianggang", "澳門": "aomen", "中文": "zhongwen",
+    "電腦": "diannao", "網路": "wanglu", "軟體": "ruanti", "資料": "ziliao",
+    "電話": "dianhua", "手機": "shouji", "銀行": "yinhang", "問題": "wenti",
+    "什麼": "shenme", "為什麼": "weishenme", "謝謝": "xiexie",
+    "對不起": "duibuqi", "沒關係": "meiguanxi", "歡迎": "huanying",
+    "再見": "zaijian", "早安": "zaoan", "學校": "xuexiao", "老師": "laoshi",
+    "學生": "xuesheng", "工作": "gongzuo", "朋友": "pengyou", "家人": "jiaren",
+    "結婚": "jiehun", "離婚": "lihun", "經濟": "jingji", "政治": "zhengzhi",
+    "歷史": "lishi", "文化": "wenhua", "藝術": "yishu", "音樂": "yinyue",
+    "電影": "dianying", "照片": "zhaopian", "風景": "fengjing", "天氣": "tianqi",
+    "身體": "shenti", "健康": "jiankang", "醫院": "yiyuan", "醫生": "yisheng",
+    "護士": "hushi", "購物": "gouwu", "商店": "shangdian", "市場": "shichang",
+    "價格": "jiage", "便宜": "pianyi", "免費": "mianfei", "我們": "women",
+    "你們": "nimen", "他們": "tamen", "已經": "yijing", "應該": "yinggai",
+    "還有": "haiyou", "所有": "suoyou", "重要": "zhongyao", "知道": "zhidao",
+    "喜歡": "xihuan", "愛情": "aiqing", "關係": "guanxi", "發展": "fazhan",
+    "發現": "faxian", "發生": "fasheng", "出發": "chufa", "頭髮": "toufa",
+    "汽車": "qiche", "火車": "huoche", "飛機": "feiji", "廁所": "cesuo",
+}
 
 # 缺 kMandarin 的码位人工补音（脚本报缺后在此补齐再重跑）
 SUPPLEMENT: dict[str, list[str]] = {}
 
 
-def fetch(url: str) -> str:
-    with urllib.request.urlopen(url, timeout=120) as r:
-        return r.read().decode("utf-8")
+def fetch(url: str) -> bytes:
+    with urllib.request.urlopen(url, timeout=180) as r:
+        return r.read()
+
+
+def fetch_unihan_readings() -> str:
+    """Unihan.zip → 内存解压 Unihan_Readings.txt（zip 根目录内该单文件）。"""
+    data = fetch(UNIHAN_ZIP_URL)
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        return zf.read("Unihan_Readings.txt").decode("utf-8")
 
 
 def normalize(py: str) -> str:
-    """kMandarin/terra 拼音 → 无调、ü→v、小写。"""
+    """kMandarin/terra 拼音 → 无调、ü→v、小写。
+    当前 UCD kMandarin 用调号（ā/fā/nǚ），NFD 剥离组合音调符；
+    旧式数字调号（fa1）与 ü 冒号（lu:4→lv）一并处理。"""
+    py = unicodedata.normalize("NFD", py)
+    py = "".join(c for c in py if not unicodedata.combining(c))
     return re.sub(r"[0-9]", "", py).replace(":", "v").lower()
 
 
@@ -121,47 +190,10 @@ def gb2312_rows() -> list[tuple[int, str]]:
     return out
 
 
-def band_freq(total: int, idx: int, top: int, bottom: int) -> int:
-    """序号 → 带内 freq：idx∈[0,total) 线性压缩到 [bottom, top]，正数且带内有序。"""
-    return top - idx * (top - bottom) // total
-
-
-def main() -> None:
-    km = load_kmandarin(fetch(UNIHAN_URL))
-    rows = gb2312_rows()
-    if len(rows) != 6763:
-        print(f"FATAL: GB2312 单字 {len(rows)} ≠ 6763（Python gb2312 codec 覆盖与预期不符）", file=sys.stderr)
-        sys.exit(1)
-
-    missing = [ch for _, ch in rows if ch not in km and ch not in SUPPLEMENT]
-    if missing:
-        print(f"FATAL: {len(missing)} 个 GB2312 码位缺 kMandarin：{' '.join(missing)}", file=sys.stderr)
-        print("补进脚本 SUPPLEMENT 表后重跑。", file=sys.stderr)
-        sys.exit(1)
-
-    level1_count = sum(1 for r, _ in rows if r <= 0xD7)
-    hanzi: list[str] = []
-    for i, (row, ch) in enumerate(rows):
-        readings = SUPPLEMENT.get(ch) or km.get(ch)
-        assert readings
-        seq = i if row <= 0xD7 else i - level1_count
-        freq = 9000 - seq if row <= 0xD7 else 6000 - seq
-        for py in readings:
-            hanzi.append(f"{ch}\t{py}\t{freq}")
-
-    gb_set = {ch for _, ch in rows}
-    trad = []
-    singles = sorted((ch, r) for ch, r in km.items() if ch not in gb_set)
-    for i, (ch, readings) in enumerate(singles):
-        freq = band_freq(len(singles), i, 9900, 9001)
-        for py in readings:
-            trad.append(f"{ch}\t{py}\t{freq}")
-
-    with open("data/raw/trad_hanzi.tsv", "w", encoding="utf-8") as f:
-        f.write("\n".join(hanzi + trad) + "\n")
-
-    phrases = []
-    for i, line in enumerate(fetch(TERRA_URL).splitlines()):
+def parse_terra(text: str) -> list[tuple[str, str]]:
+    """terra_pinyin.dict.yaml → [(word, 无调全拼连写)]，保持文件序。"""
+    out = []
+    for line in text.splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "\t" not in line:
             continue
@@ -174,58 +206,122 @@ def main() -> None:
         py = "".join(normalize(s) for s in pinyin.split())
         if not py.isascii() or len(py) > 255:
             continue
-        if len(cols) == 3 and cols[2].strip().isdigit():
-            freq = int(cols[2].strip())  # 沿用 rime 词序
-        else:
-            freq = band_freq(1, 0, 8800, 8001)  # 占位，多字词组下方重算
-        phrases.append((word, py, freq))
+        out.append((word, py))
+    return out
 
-    # 单字词组（len==1）并入繁体单字带；多字词组用 8800 带，按文件序压缩
-    single_phrase = [p for p in phrases if len(p[0]) == 1]
-    multi_phrase = [p for p in phrases if len(p[0]) > 1]
-    for idx, (word, py, _) in enumerate(single_phrase):
-        trad.append(f"{word}\t{py}\t{band_freq(max(len(single_phrase), 1), idx, 9900, 9001)}")
-    phrases_out = []
-    for idx, (word, py, freq) in enumerate(multi_phrase):
-        phrases_out.append(f"{word}\t{py}\t{band_freq(len(multi_phrase), idx, 8800, 8001)}")
 
+def main() -> None:
+    km = load_kmandarin(fetch_unihan_readings())
+    rows = gb2312_rows()
+    if len(rows) != 6763:
+        print(f"FATAL: GB2312 单字 {len(rows)} ≠ 6763（Python gb2312 codec 覆盖与预期不符）", file=sys.stderr)
+        sys.exit(1)
+
+    missing = [ch for _, ch in rows if ch not in km and ch not in SUPPLEMENT]
+    if missing:
+        print(f"FATAL: {len(missing)} 个 GB2312 码位缺 kMandarin：{' '.join(missing)}", file=sys.stderr)
+        print("补进脚本 SUPPLEMENT 表后重跑。", file=sys.stderr)
+        sys.exit(1)
+
+    gb_set = {ch for _, ch in rows}
+    bad = [ch for ch in COMMON_TRAD if ch in gb_set]
+    if bad:
+        print(f"FATAL: COMMON_TRAD 含 GB2312 字（应移除）：{' '.join(bad)}", file=sys.stderr)
+        sys.exit(1)
+    no_km = [ch for ch in COMMON_TRAD if ch not in km and ch not in SUPPLEMENT]
+    if no_km:
+        print(f"FATAL: COMMON_TRAD 缺 kMandarin（补进 SUPPLEMENT）：{' '.join(no_km)}", file=sys.stderr)
+        sys.exit(1)
+
+    terra = parse_terra(fetch(TERRA_URL).decode("utf-8"))
+    terra_single = [(w, py) for w, py in terra if len(w) == 1]
+    terra_phrase = [(w, py) for w, py in terra if len(w) > 1]
+
+    # 段 1–5 单字：常用繁体 → GB 一二级（GB 码序）→ terra 单字（文件序）→ 其余 Unihan（码位序）
+    ordered: list[tuple[str, list[str]]] = []
+    seen: set[str] = set()
+    for ch in COMMON_TRAD:
+        readings = SUPPLEMENT.get(ch) or km[ch]
+        ordered.append((ch, readings))
+        seen.add(ch)
+    for _, ch in rows:
+        if ch in seen:
+            continue
+        readings = SUPPLEMENT.get(ch) or km[ch]
+        ordered.append((ch, readings))
+        seen.add(ch)
+    for w, py in terra_single:
+        if w in seen:
+            continue
+        seen.add(w)
+        readings = [py] + [p for p in (km.get(w) or []) if p != py]
+        ordered.append((w, readings))
+    for ch in sorted(km):
+        if ch in seen:
+            continue
+        seen.add(ch)
+        ordered.append((ch, km[ch]))
+
+    # 段 6–7 词组：人工常用 → terra（文件序）
+    phrase_ordered: list[tuple[str, str]] = []
+    phrase_seen: set[str] = set()
+    for w, py in SUPPLEMENT_PHRASES.items():
+        phrase_ordered.append((w, py))
+        phrase_seen.add(w)
+    for w, py in terra_phrase:
+        if w in phrase_seen:
+            continue
+        phrase_ordered.append((w, py))
+        phrase_seen.add(w)
+
+    n = len(ordered) + len(phrase_ordered)
+    spacing = FMAX // n
+    hanzi: list[str] = []
+    for idx, (word, readings) in enumerate(ordered):
+        freq = FMAX - idx * spacing
+        for py in readings:
+            hanzi.append(f"{word}\t{py}\t{freq}")
+    phrases_out: list[str] = []
+    for idx, (word, py) in enumerate(phrase_ordered):
+        freq = FMAX - (len(ordered) + idx) * spacing
+        phrases_out.append(f"{word}\t{py}\t{freq}")
+
+    with open("data/raw/trad_hanzi.tsv", "w", encoding="utf-8") as f:
+        f.write("\n".join(hanzi) + "\n")
     with open("data/raw/trad_phrases.tsv", "w", encoding="utf-8") as f:
         f.write("\n".join(phrases_out) + "\n")
-    with open("data/raw/trad_hanzi.tsv", "w", encoding="utf-8") as f:
-        f.write("\n".join(hanzi + trad) + "\n")
 
-    print(f"GB2312 单字: {len(rows)} (一级 {level1_count}, 二级 {len(rows) - level1_count})")
-    print(f"繁体单字(含单字词组): {len(trad)}")
-    print(f"多字词组: {len(phrases_out)}")
-    print(f"trad_hanzi.tsv 行数: {len(hanzi) + len(trad)}")
+    print(f"GB2312 单字: {len(rows)} (一级 {sum(1 for r, _ in rows if r <= 0xD7)}, 二级 {len(rows) - sum(1 for r, _ in rows if r <= 0xD7)})")
+    print(f"繁体单字(含 terra 单字): {len(ordered) - len(rows)}")
+    print(f"词组(人工+terra): {len(phrase_ordered)}")
+    print(f"trad_hanzi.tsv 行数: {len(hanzi)}")
     print(f"trad_phrases.tsv 行数: {len(phrases_out)}")
+    print(f"freq 范围: [{FMAX - (n - 1) * spacing}, {FMAX}] spacing={spacing}")
 
 
 if __name__ == "__main__":
     main()
 ```
 
-> 注：脚本两次写 trad_hanzi.tsv（第二次覆盖，追加单字词组）——实现时合并为单次写更干净，此处为最小可跑版本。
-
 - [ ] **Step 2: 运行脚本生成数据（需要网络）**
 
 Run: `cd /home/wwwroot/bag/opi && python3 scripts/gen_trad_dict.py`
-Expected: 打印五行统计，其中 `GB2312 单字: 6763 (一级 3755, 二级 3008)`；繁体单字在 10000–15000 区间；多字词组 > 3000。
+Expected: 打印五行统计，其中 `GB2312 单字: 6763 (一级 3755, 二级 3008)`；繁体单字数万级（≈ km 非 GB 单字 + terra 单字去重）；词组数万级（≈ terra 文件条目数）；freq 范围为 `[约 1.2e9, 4000000000]` 且 spacing 数万级。
 若报 `FATAL: ... 缺 kMandarin`：把列出的字补进脚本 `SUPPLEMENT` 表（人工填拼音）后重跑。
-若报 `FATAL: GB2312 单字 N ≠ 6763`：停，检查 Python gb2312 codec 覆盖（见 Step 1 注释），必要时换用内置 GB2312 字表。
+若报 `FATAL: COMMON_TRAD 含 GB2312 字`：把列出的字从 COMMON_TRAD 移除后重跑（该字在 GB 段已有）。
 
 - [ ] **Step 3: 抽查产物**
 
-Run: `head -3 /home/wwwroot/bag/opi/data/raw/trad_hanzi.tsv && head -3 /home/wwwroot/bag/opi/data/raw/trad_phrases.tsv && grep -P "^發\t" /home/wwwroot/bag/opi/data/raw/trad_hanzi.tsv | head -2 && grep -P "^臺灣\t" /home/wwwroot/bag/opi/data/raw/trad_phrases.tsv | head -2`
-Expected: hanzi 前三行是 GB2312 一级最前字（啊/阿/埃…）带 9000 带 freq；發 行 freq 在 [9001, 9900]；臺灣 行 freq 在 [8001, 8800]（或沿用 rime 3 列词频）。行内 `word\tpinyin\tfreq` 三列、拼音无空格无调号。
+Run: `head -3 /home/wwwroot/bag/opi/data/raw/trad_hanzi.tsv && head -3 /home/wwwroot/bag/opi/data/raw/trad_phrases.tsv && grep -P "^發\t" /home/wwwroot/bag/opi/data/raw/trad_hanzi.tsv | head -2 && grep -P "^臺灣\t" /home/wwwroot/bag/opi/data/raw/trad_phrases.tsv | head -1`
+Expected: hanzi 前三行是 COMMON_TRAD 首三字（發/髮/臺）且 freq 递减（约 4e9 起）；發 行 freq 在 [3.9e9, 4e9] 区间；臺灣 行 pinyin=taiwan、freq 在词组段首（> 3.5e9）。行内 `word\tpinyin\tfreq` 三列、拼音无空格无调号。
 
 - [ ] **Step 4: 更新 LICENSES.md**
 
-在 `data/raw/LICENSES.md` 表格追加两行（保持 markdown 表格格式）：
+Read `data/raw/LICENSES.md` first. In its markdown table append two rows (keep table format):
 
 ```markdown
-| trad_hanzi.tsv（单字） | Unicode Unihan（kMandarin 字段） | Unicode License（宽松，可再分发，保留版权声明） | GB2312 全量 6763 + 常用繁体单字 ~13000，由 scripts/gen_trad_dict.py 生成 |
-| trad_phrases.tsv（词组） | https://github.com/rime/rime-terra-pinyin（terra_pinyin.dict.yaml） | **LGPL-3.0** | 常用繁体词组，由 scripts/gen_trad_dict.py 生成 |
+| trad_hanzi.tsv（单字） | Unicode Unihan（kMandarin 字段） | Unicode License（宽松，可再分发，保留版权声明） | GB2312 全量 6763 + 常用繁体单字，由 scripts/gen_trad_dict.py 生成（含人工常用表） |
+| trad_phrases.tsv（词组） | https://github.com/rime/rime-terra-pinyin（terra_pinyin.dict.yaml） | **LGPL-3.0** | 常用繁体词组，由 scripts/gen_trad_dict.py 生成（含人工常用表） |
 ```
 
 - [ ] **Step 5: 白名单 trad.opid 并编译合并**
@@ -241,14 +337,14 @@ cargo run -p opi-tools -- verify data/generated/trad.opid
 cp data/generated/trad.opid android/app/src/main/assets/trad.opid
 ```
 
-Expected: compile 打印 `kept entries`（≈ hanzi 行数 + 词组行数，去重后只减少量）；verify 打印 `checksum: ok`、`entries: <N>`、`load: 几十 ms`，`query "hao"` 前三含 好。
+Expected: compile 打印 `kept entries`（≈ 输入行数，重复仅少量）；verify 打印 `checksum: ok`、`entries: <N>`，`query "hao"` 前三含 好（GB 段常用字排 terra/码位段生僻字前）。
 
 - [ ] **Step 6: 提交**
 
 ```bash
 cd /home/wwwroot/bag/opi
 git add scripts/gen_trad_dict.py data/raw/trad_hanzi.tsv data/raw/trad_phrases.tsv data/raw/LICENSES.md data/generated/.gitignore data/generated/trad.opid android/app/src/main/assets/trad.opid
-git commit -m "feat(data): 简繁字库生成脚本 + trad_hanzi/phrases TSV + trad.opid（词频带修正）"
+git commit -m "feat(data): 简繁字库生成脚本 + trad_hanzi/phrases TSV + trad.opid（统一常用度排序）"
 ```
 
 ---
@@ -1144,7 +1240,7 @@ Expected: 中模式 fa → 发 靠前；nihao 候选非空且首候选与既有�
 | spec 要求 | 落点 |
 |---|---|
 | 数据层：gen_trad_dict.py + trad_hanzi.tsv/trad_phrases.tsv + trad.opid + LICENSES.md 增补 | Task 1 |
-| 词频策略（同音排序、去重取 max） | Task 1 偏差注记（修正公式）+ compile 层 max freq |
+| 词频策略（同音排序、去重取 max） | Task 1 偏差注记（统一常用度排序）+ compile 层 max freq |
 | 引擎层：Mode::Traditional、双词典 Option、with_dictionaries、candidates 路由、switch_mode 清残留、shift 禁用、空格/回车同 Pinyin | Task 2 |
 | 错误处理：trad 缺失回退简体 + logcat 告警；数据源失败阻断编译（产物入库） | Task 1（产物入库）/ Task 2（回退）/ Task 4（告警） |
 | 单字全覆盖门禁（6763 字） | Task 5 |
