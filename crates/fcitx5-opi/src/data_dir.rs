@@ -42,13 +42,20 @@ pub fn ensure_dirs(data_dir: &Path) -> io::Result<()> {
 
 /// size 校验后把 luna.opid 拷贝进数据目录，返回目标路径。
 /// 目标缺失或 size 不一致 → 拷贝；一致 → 跳过（幂等）。
-/// 失败原样返回 Err（对照 EngineLoader：write 抛 IOException → 调用方回退）。
+/// 拷贝为原子写盘（同目录 .tmp + rename，POSIX 下 rename 原子），
+/// 避免中途崩溃留下截断的 luna.opid。失败原样返回 Err
+/// （对照 EngineLoader：write 抛 IOException → 调用方回退）。
 pub fn ensure_dict(source: &Path, data_dir: &Path) -> io::Result<PathBuf> {
     let target = data_dir.join(DICT_FILE_NAME);
     let asset_size = source.metadata()?.len();
     let existing = fs::metadata(&target).ok().map(|m| m.len());
     if needs_copy(existing, asset_size) {
-        fs::copy(source, &target)?;
+        let tmp = data_dir.join(format!("{DICT_FILE_NAME}.tmp"));
+        fs::copy(source, &tmp)?;
+        if let Err(e) = fs::rename(&tmp, &target) {
+            let _ = fs::remove_file(&tmp); // 清理残留 tmp（不掩盖原始错误）
+            return Err(e);
+        }
     }
     Ok(target)
 }
