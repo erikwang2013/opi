@@ -12,8 +12,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.savedstate.SavedStateRegistryOwner
+import io.opi.input.engine.EngineController
 import io.opi.input.ime.ImeScreen
 import io.opi.input.ime.ImeState
+import io.opi.input.ime.KeyRouter
 import kotlin.math.min
 
 /** OPI IME 宿主：ComposeView 作为输入视图，面板状态在 ImeState（A3/A4 填 UI）。 */
@@ -21,6 +23,8 @@ class OpiImeService : InputMethodService() {
     private var inputViewCache: View? = null
     private var retryRunnable: Runnable? = null
     private val imeState = ImeState()
+    private val engineController = EngineController()
+    private lateinit var keyRouter: KeyRouter
 
     // Compose 需要 ViewTreeLifecycleOwner/SavedStateRegistryOwner（IME Service 无 Activity 生命周期）。
     // 最小实现：lifecycleRegistry 手动推进（CREATED→RESUMED→STARTED→DESTROYED）。
@@ -64,7 +68,13 @@ class OpiImeService : InputMethodService() {
         ViewTreeBridge.setLifecycleOwner(view, lifecycleOwner)
         ViewTreeBridge.setSavedStateRegistryOwner(view, savedStateRegistryOwner)
         lifecycleOwner.registry.currentState = Lifecycle.State.CREATED
-        view.setContent { ImeScreen(imeState) }
+        keyRouter = KeyRouter(
+            controller = engineController,
+            commit = ::commitWithRetry,
+            deleteBackward = ::deleteBackward,
+            performEnter = ::performEnter,
+        )
+        view.setContent { ImeScreen(imeState, engineController, keyRouter) }
         Log.i(TAG, "onCreateInputView: screenW=${resources.displayMetrics.widthPixels} keyboardHeight=${keyboardHeight()}")
         inputViewCache = view
         return view
@@ -130,6 +140,8 @@ class OpiImeService : InputMethodService() {
         if (!restarting) {
             Log.i(TAG, "onStartInput: editor changed")
             imeState.onEditorChanged()
+            // 取消组合串（不提交，避免半截拼音泄入新编辑器）
+            engineController.clear()
         }
     }
 
@@ -140,6 +152,7 @@ class OpiImeService : InputMethodService() {
         // 只在真正结束输入（销毁/停用）时重置，避免收起键盘误清 SYMBOL 面板状态。
         if (finishingInput) {
             imeState.onEditorChanged()
+            engineController.clear()
         }
     }
 
