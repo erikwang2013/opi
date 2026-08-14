@@ -19,9 +19,14 @@ engine-data = { path = "../engine-data" }
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.62", default-features = false, features = [
     "Win32_Foundation",
+    "Win32_Security", # C3：CreateFileW 在 0.62 中经 Win32_Security 门控
+    "Win32_Storage_FileSystem",
     "Win32_System_Com",
+    "Win32_System_IO", # C3：ReadFile/WriteFile 在 0.62 中经 Win32_System_IO 门控
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_TextServices",
 ] }
 # implement! 宏展开引用 `::windows_core::imp::…`，须为本 crate 直接依赖。
 windows-core = { version = "0.62", default-features = false }
+# C3：候选窗 NDJSON 消息序列化/解析（candidate_io.rs，Windows 目标专属）。
+serde_json = "1"

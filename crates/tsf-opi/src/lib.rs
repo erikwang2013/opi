@@ -15,4 +15,10 @@ pub mod logic;
 #[cfg(target_os = "windows")]
 pub mod tsf;
 
+/// Windows 目标专属：候选窗通信（C3，named pipe 客户端 + TsfSink 生产实现）。
+/// 与 tsf.rs 同样的双重隔离（cfg 门 + windows 依赖 target 作用域），
+/// 主机（Linux）构建/测试不受影响。
+#[cfg(target_os = "windows")]
+pub mod candidate_io;
+
 pub use logic::{KeyOutcome, ShiftState, TsfLogic};
