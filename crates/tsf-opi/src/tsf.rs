@@ -119,7 +119,12 @@ impl TsfTextService {
 
 impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
     fn Activate(&self, ptim: Ref<ITfThreadMgr>, tid: u32) -> Result<()> {
-        *self.thread_mgr.lock().unwrap() = ptim.cloned();
+        // 中毒锁：跳过状态保存，避免经 COM vtable 泄漏 panic
+        let mut tm = match self.thread_mgr.lock() {
+            Ok(g) => g,
+            Err(_) => return Err(HRESULT(0x80004005_u32 as i32).into()),
+        };
+        *tm = ptim.cloned();
         // 注册按键监听：0.62 API 为 AdviseKeyEventSink（旧式 SetKeypressSink 已移除）。
         // fforeground=true：前台键盘事件也交本服务（输入法语义）。
         // 本对象同时实现 ITfKeyEventSink，as_interface_ref 取其 IUnknown 指针，
@@ -133,7 +138,11 @@ impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
 
     fn Deactivate(&self) -> Result<()> {
         // 骨架：仅清状态；验收补全点：UnadviseKeyEventSink + 释放 composition/候选窗。
-        *self.thread_mgr.lock().unwrap() = None;
+        let mut tm = match self.thread_mgr.lock() {
+            Ok(g) => g,
+            Err(_) => return Ok(()), // 中毒锁：吞掉，避免经 COM vtable 泄漏 panic
+        };
+        *tm = None;
         Ok(())
     }
 }
