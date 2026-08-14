@@ -78,13 +78,19 @@ class OpiImeService : InputMethodService() {
             return
         }
         Log.w(TAG, "IC null, retry commit in 50ms: \"$text\"")
+        // 先撤掉上一次未执行的 retryRunnable，避免两次重试叠加（onDestroy 也靠它回收）。
+        retryRunnable?.let { window.window?.decorView?.removeCallbacks(it) }
         val r = Runnable {
             val ic2 = currentInputConnection
             if (ic2 != null) ic2.commitText(text, 1)
             else Log.w(TAG, "IC still null, commit dropped: \"$text\"")
         }
         retryRunnable = r
-        window.window?.decorView?.postDelayed(r, 50)
+        if (window.window == null) {
+            Log.w(TAG, "window.window null, commit retry dropped: \"$text\"")
+        } else {
+            window.window?.decorView?.postDelayed(r, 50)
+        }
     }
 
     /** 删除：有选区先删选区；无选区按码点删（emoji 等代理对不拆半）。 */
@@ -106,10 +112,10 @@ class OpiImeService : InputMethodService() {
     /** 回车：读目标应用声明的 action；action 位为 0 时回退提交换行。 */
     private fun performEnter() {
         // P6：硬编码 SEND 会把"搜索"键发成发送；读目标应用声明的 action。
-        // action 位为 0（应用未声明 action / 仅设 NO_ENTER_ACTION）时
-        // performEditorAction(0) 是 no-op → 回车键死亡，回退提交换行。
+        // action 位为 0（应用未声明 action / 仅设 NO_ENTER_ACTION / 编辑器信息缺失）时
+        // performEditorAction(0) 是 no-op → 回车键死亡，回退提交换行（不硬编码 SEND）。
         val action = currentInputEditorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
-            ?: EditorInfo.IME_ACTION_SEND
+            ?: 0
         Log.i(TAG, "performEnter action=$action")
         val ic = currentInputConnection
         if (ic != null) {
@@ -130,7 +136,11 @@ class OpiImeService : InputMethodService() {
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
         Log.i(TAG, "onFinishInputView")
-        imeState.onEditorChanged()
+        // 普通 hide（返回键/同一编辑器重开）也会走到本方法，此时 finishingInput=false；
+        // 只在真正结束输入（销毁/停用）时重置，避免收起键盘误清 SYMBOL 面板状态。
+        if (finishingInput) {
+            imeState.onEditorChanged()
+        }
     }
 
     override fun onConfigureWindow(win: Window, isFullscreen: Boolean, isCandidatesOnly: Boolean) {

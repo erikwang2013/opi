@@ -28,6 +28,6 @@ plugins {
 include(":app")
 
 // cargokit 独立版（flutter_rust_bridge）：编译 crates/opi-ffi 为三 ABI so。
-// android/rust_builder/android/build.gradle 内配置 manifestDir=../../../../crates/opi-ffi、
-// libname=opi_ffi；app 通过 implementation(project(":android")) 引用。
+// includeBuild 子项目按坐标（group:version 见 rust_builder/android/build.gradle）被依赖替换；
+// app/build.gradle.kts 通过 implementation("com.flutter_rust_bridge.rust_lib_app:android:1.0") 引用。
 includeBuild("rust_builder")

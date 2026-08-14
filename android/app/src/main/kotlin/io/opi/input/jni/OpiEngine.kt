@@ -33,21 +33,21 @@ object OpiEngine {
     /** inputSpace() -> String。英文模式提交 buffer。 */
     external fun inputSpace(): String
 
-    /** candidates(limit: Int) -> String[]。仅文本数组。 */
-    external fun candidates(limit: Int): Array<String>
+    /** candidates(limit: Int) -> String[]。仅文本数组；JNI 可能返回 null。 */
+    external fun candidates(limit: Int): Array<String>?
 
     external fun buffer(): String
 
     external fun mode(): Int
 
-    /** searchSymbols(keyword: String) -> String[]。 */
-    external fun searchSymbols(keyword: String): Array<String>
+    /** searchSymbols(keyword: String) -> String[]。JNI 可能返回 null。 */
+    external fun searchSymbols(keyword: String): Array<String>?
 
     /** symbolBlocks() -> String。JSON：`[{id,start,end,name,common}]`。 */
     external fun symbolBlocks(): String
 
-    /** symbolsInBlock(id: Short) -> String[]。 */
-    external fun symbolsInBlock(id: Short): Array<String>
+    /** symbolsInBlock(id: Short) -> String[]。JNI 可能返回 null。 */
+    external fun symbolsInBlock(id: Short): Array<String>?
 
     external fun learnerEnabled(): Boolean
 
