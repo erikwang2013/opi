@@ -90,7 +90,7 @@ Android fcitx5   TSF+CMP
 - 函数清单与 A2.3 一一对应，测试：Rust 侧单测 + host 直调。
 
 ### A2.5 cdylib 构建（复用 rust_builder，不新写 gradle cargo task）
-- `crates/opi-ffi` Cargo.toml：移除 `flutter_rust_bridge`，新增 `jni = "0.21"`；`crate-type = ["cdylib", "lib"]`；cdylib 名 `libopi_ffi.so`。
+- `crates/opi-ffi` Cargo.toml：移除 `flutter_rust_bridge`，新增 `jni = "0.22"`（E0 实测 crates.io 解析 0.22.4）；`crate-type = ["cdylib", "lib"]`；cdylib 名 `libopi_ffi.so`。
 - Gradle 复用 **rust_builder（cargokit 独立版）**：从 `flutter/app/android/rust_builder` 整体迁至 `android/rust_builder`（M4 已打 Gradle 9 ExecOperations + compileSdk 34 补丁）。
 - NDK 27.0.12077973 固定；目标 triples 已装（aarch64-linux-android/armv7-linux-androideabi/x86_64-linux-android）。
 
@@ -358,10 +358,11 @@ crates/opi-ffi/src/cabi.rs                # C ABI 出口 + free_string
 
 ## B2. 任务清单
 
-### Task B0: 绑定验证（与 A0 并行）
+### Task B0: 绑定验证（E0 已执行，2026-08-14）
 
-- [ ] **Step 1: 验证 fcitx5 crate 可获取**：`cargo add fcitx5 --dry-run` → 成功则继续；失败（离线）则降级：写 C++ 胶水（cdylib + 头文件，插件本体 C++ 调 Rust 引擎），记录偏差。
-- [ ] **Step 2: 提交**：`git commit -m "chore(m6): fcitx5 绑定验证结论"`
+- [x] **Step 1: 验证 fcitx5 crate 可获取** — **结论：不可用**。`cargo search fcitx5` 无同名 crate；`cargo add fcitx5 --dry-run` 报 not found；github.com 不可达（git ls-remote 失败，与 dl.google.com 同源劫持）→ fcitx5-rs git 依赖死路；fcitx5-dbus 0.1.4 仅是前端 DBus 桥，非 IME 插件 API，弃用。
+- [x] **Step 2: 降级定案（记录偏差）**：fcitx5 插件本体用 **C++**（fcitx5 原生插件 API 即 C++），内嵌 Rust cdylib（`crates/fcitx5-opi` 提供 `#[no_mangle] extern "C"` 导出：load/inputKey/backspace/clear/select/switchMode/setShift/inputSpace/candidates/buffer/mode，字符串 UTF-8 + length 约定），C++ 侧做 fcitx5 AddonInstance/InputMethod 胶水。逻辑与胶水分离原则不变（candidate.rs 仍为纯 Rust 可测）。
+- [x] **Step 3: 提交** — E0 无文件变更，未提交；本降级结论随 B 路实现提交。
 
 ### Task B1: 插件骨架
 
@@ -461,7 +462,7 @@ crates/opi-ffi/src/cabi.rs                # C ABI 出口 + free_string
 |---|---|
 | 离线 Compose 依赖解析 | 坐标已在 Step 0 验证：compose-bom、activity-compose、material3、ui-test-junit4；aliyun 镜像优先 + 不写 `google()` |
 | NDK 27 固定 | ndkVersion 27.0.12077973 原样保留；rustup targets 已装 |
-| fcitx5 Rust 绑定离线不可获取 | B0 先行验证；降级 C++ 胶水 + Rust cdylib，记录偏差 |
+| fcitx5 Rust 绑定不可获取 | **已确认（E0）**：crates.io 无、github 不可达 → C++ 插件 + Rust cdylib（B0 偏差已记录） |
 | windows-rs / TSF 复杂度 | C0 验证；逻辑与 COM 胶水分离（C1 先行）；Windows 构建无法本机验证 → 验收待办 |
 | CMP 候选窗与 TSF 位置联动 | 降级固定位置提示（C2 记录） |
 | JNI 字符串编码（emoji） | UTF-16 helper + 😄 往返单测（A1） |
