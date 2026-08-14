@@ -5,9 +5,9 @@
 //! 归零。纯逻辑结构体（无全局状态、无 FFI），可独立单测；
 //! C 出口（lib.rs）经 Mutex 单例访问本状态。
 
+use engine_core::Engine;
 use engine_core::candidates::Candidate;
 use engine_core::composer::Mode;
-use engine_core::Engine;
 
 /// 每页候选数（与 Android 候选栏一致）。
 pub const PAGE_SIZE: usize = 8;
@@ -29,7 +29,9 @@ impl CandidateState {
     /// api::install 一致（学习默认开）。
     pub fn load(path: Option<&str>) -> Result<Self, String> {
         let dict: Box<dyn engine_core::dictionary::Dictionary> = match path {
-            Some(p) if !p.is_empty() => engine_data::load_or_fallback(Some(std::path::Path::new(p)))?,
+            Some(p) if !p.is_empty() => {
+                engine_data::load_or_fallback(Some(std::path::Path::new(p)))?
+            }
             _ => Box::new(engine_data::fallback_dict()),
         };
         let symbols = engine_core::symbols::SymbolEngine::builtin();
@@ -93,6 +95,9 @@ impl CandidateState {
 
     pub fn set_shift(&mut self, on: bool) {
         self.engine.set_shift(on);
+        // shift 不改变 buffer（reset_page_if_buffer_changed 不会触发），但
+        // 可能改变候选集；将页码钳制到当前 page_count 边界，防 page 越界。
+        self.set_page(self.page);
     }
 
     /// 提交当前页第 `index` 个候选（页内索引，0 起）。越界返回空串。
@@ -233,6 +238,22 @@ mod tests {
         }
         s.set_page(2); // 第 3 页仅 4 个候选（16..19）
         assert_eq!(s.select(7), "");
+    }
+
+    #[test]
+    fn set_shift_clamps_page() {
+        let mut s = state();
+        for c in ['h', 'a', 'o'] {
+            s.input_key(c);
+        }
+        s.set_page(2); // 末页（3 页候选）
+        assert_eq!(s.page(), 2);
+        s.set_shift(true); // buffer 不变，页码须钳制在 page_count 内
+        assert!(s.page() <= s.page_count().saturating_sub(1));
+        assert!(!s.candidates().is_empty());
+        s.set_shift(false);
+        assert!(s.page() <= s.page_count().saturating_sub(1));
+        assert!(!s.candidates().is_empty());
     }
 
     #[test]

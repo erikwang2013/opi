@@ -9,8 +9,8 @@
 //! len: usize），非 NUL 结尾；返回值由 Rust 侧分配，调用方用
 //! `opi_ffi_free_string_utf8` 释放。语义与 opi-ffi 的 cabi.rs 一致。
 
-use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::sync::Mutex;
+use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::sync::{Mutex, Once};
 
 use engine_core::composer::Mode;
 
@@ -27,6 +27,18 @@ static SINGLETON: Mutex<Option<CandidateState>> = Mutex::new(None);
 fn with_state<R>(f: impl FnOnce(&mut CandidateState) -> R) -> Option<R> {
     let mut g = SINGLETON.lock().unwrap_or_else(|p| p.into_inner());
     g.as_mut().map(f)
+}
+
+/// 一次性 panic hook：被 catch_unwind 捕获的 panic 只打印一行简洁日志到
+/// stderr，避免向 fcitx5 宿主进程输出整段 backtrace 噪音。Once 保证多线程
+/// 下只安装一次（set_hook 在已安装后再次调用会 panic）。
+fn ensure_panic_hook() {
+    static PANIC_HOOK: Once = Once::new();
+    PANIC_HOOK.call_once(|| {
+        std::panic::set_hook(Box::new(|info| {
+            eprintln!("fcitx5-opi: engine panic caught: {info}");
+        }));
+    });
 }
 
 /// 装载引擎（替换单例）。`None`/空串 → 内置回退词库；坏路径 → false。
@@ -81,7 +93,10 @@ impl OpString {
 
     /// 空句柄（ptr: null, len: 0）——错误/空串哨兵。
     pub fn empty() -> Self {
-        OpString { ptr: std::ptr::null(), len: 0 }
+        OpString {
+            ptr: std::ptr::null(),
+            len: 0,
+        }
     }
 }
 
@@ -125,6 +140,7 @@ fn texts_to_json(texts: Vec<String>) -> OpString {
 /// `ptr` 必须指向至少 `len` 字节的有效内存（或为 null，视为空串）。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_fcitx5_load(ptr: *const u8, len: usize) -> bool {
+    ensure_panic_hook();
     catch_unwind(AssertUnwindSafe(|| {
         let path = unsafe { read_utf8(ptr, len) };
         install(path.as_deref()).is_ok()
@@ -139,6 +155,7 @@ pub unsafe extern "C" fn opi_fcitx5_load(ptr: *const u8, len: usize) -> bool {
 /// `ptr` 必须指向至少 `len` 字节的有效内存（或为 null，视为空串）。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_fcitx5_input_key(ptr: *const u8, len: usize) -> OpString {
+    ensure_panic_hook();
     let out = catch_unwind(AssertUnwindSafe(|| {
         let ch = unsafe { read_utf8(ptr, len) }.unwrap_or_default();
         let mut chars = ch.chars();
@@ -160,6 +177,7 @@ pub unsafe extern "C" fn opi_fcitx5_input_key(ptr: *const u8, len: usize) -> OpS
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_fcitx5_backspace() {
+    ensure_panic_hook();
     let _ = catch_unwind(AssertUnwindSafe(|| with_state(|s| s.backspace())));
 }
 
@@ -168,6 +186,7 @@ pub unsafe extern "C" fn opi_fcitx5_backspace() {
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_fcitx5_clear() {
+    ensure_panic_hook();
     let _ = catch_unwind(AssertUnwindSafe(|| with_state(|s| s.clear())));
 }
 
@@ -178,6 +197,7 @@ pub unsafe extern "C" fn opi_fcitx5_clear() {
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_fcitx5_select(index: usize) -> OpString {
+    ensure_panic_hook();
     let out = catch_unwind(AssertUnwindSafe(|| {
         with_state(|s| s.select(index)).unwrap_or_default()
     }))
@@ -191,6 +211,7 @@ pub unsafe extern "C" fn opi_fcitx5_select(index: usize) -> OpString {
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_fcitx5_switch_mode(mode: i32) {
+    ensure_panic_hook();
     let _ = catch_unwind(AssertUnwindSafe(|| {
         if let Some(m) = mode_from_int(mode) {
             with_state(|s| s.switch_mode(m));
@@ -203,6 +224,7 @@ pub unsafe extern "C" fn opi_fcitx5_switch_mode(mode: i32) {
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_fcitx5_set_shift(on: bool) {
+    ensure_panic_hook();
     let _ = catch_unwind(AssertUnwindSafe(|| with_state(|s| s.set_shift(on))));
 }
 
@@ -211,6 +233,7 @@ pub unsafe extern "C" fn opi_fcitx5_set_shift(on: bool) {
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_fcitx5_input_space() -> OpString {
+    ensure_panic_hook();
     let out = catch_unwind(AssertUnwindSafe(|| {
         with_state(|s| s.input_space()).unwrap_or_default()
     }))
@@ -225,6 +248,7 @@ pub unsafe extern "C" fn opi_fcitx5_input_space() -> OpString {
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_fcitx5_candidates(limit: usize) -> OpString {
+    ensure_panic_hook();
     let texts = catch_unwind(AssertUnwindSafe(|| {
         with_state(|s| s.candidates().into_iter().take(limit).collect::<Vec<_>>())
             .unwrap_or_default()
@@ -238,6 +262,7 @@ pub unsafe extern "C" fn opi_fcitx5_candidates(limit: usize) -> OpString {
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_fcitx5_buffer() -> OpString {
+    ensure_panic_hook();
     let out = catch_unwind(AssertUnwindSafe(|| {
         with_state(|s| s.buffer()).unwrap_or_default()
     }))
@@ -250,12 +275,28 @@ pub unsafe extern "C" fn opi_fcitx5_buffer() -> OpString {
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_fcitx5_mode() -> i32 {
-    catch_unwind(AssertUnwindSafe(|| with_state(|s| mode_to_int(s.mode())).unwrap_or(0))).unwrap_or(0)
+    ensure_panic_hook();
+    catch_unwind(AssertUnwindSafe(|| {
+        with_state(|s| mode_to_int(s.mode())).unwrap_or(0)
+    }))
+    .unwrap_or(0)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 读取 OpString 内容（null ptr → 空串）并释放。
+    fn read_and_free(s: OpString) -> String {
+        let out = if s.ptr.is_null() {
+            String::new()
+        } else {
+            let bytes = unsafe { std::slice::from_raw_parts(s.ptr, s.len) };
+            String::from_utf8_lossy(bytes).into_owned()
+        };
+        unsafe { opi_ffi_free_string_utf8(s) };
+        out
+    }
 
     #[test]
     fn mode_int_roundtrip() {
@@ -286,5 +327,45 @@ mod tests {
         assert!(install(Some("/nonexistent/opi.dict")).is_err());
         // 单例保持上一次成功装载可用
         assert_eq!(with_state(|s| s.buffer()), Some(String::new()));
+    }
+
+    #[test]
+    fn input_key_invalid_utf8_is_lossy_and_safe() {
+        assert!(install(None).is_ok());
+        // 单字节无效 UTF-8 → lossy 替换为 U+FFFD，非 ASCII → 引擎忽略 → 空串
+        let raw = [0xffu8];
+        let out = unsafe { opi_fcitx5_input_key(raw.as_ptr(), raw.len()) };
+        assert_eq!(read_and_free(out), "");
+        // 多字节无效序列 → lossy 后为多字符 → 边界拒绝 → 空串
+        let raw = [0xc3u8, 0x28u8];
+        let out = unsafe { opi_fcitx5_input_key(raw.as_ptr(), raw.len()) };
+        assert_eq!(read_and_free(out), "");
+        // 不 panic、不返回垃圾
+        assert_eq!(with_state(|s| s.buffer()), Some(String::new()));
+    }
+
+    #[test]
+    fn input_key_null_ptr_with_len_returns_empty() {
+        assert!(install(None).is_ok());
+        // read_utf8 先判 null（lib.rs read_utf8 首行），len>0 也不触碰内存
+        let out = unsafe { opi_fcitx5_input_key(std::ptr::null(), 5) };
+        assert_eq!(read_and_free(out), "");
+    }
+
+    #[test]
+    fn opstring_empty_roundtrip() {
+        let e = OpString::from_utf8("");
+        assert!(e.ptr.is_null());
+        assert_eq!(e.len, 0);
+        // 空句柄 free 为无操作且安全；再读也为空
+        unsafe { opi_ffi_free_string_utf8(e) };
+        assert_eq!(read_and_free(OpString::empty()), "");
+    }
+
+    #[test]
+    fn candidates_without_buffer_is_empty_json() {
+        assert!(install(None).is_ok());
+        let out = unsafe { opi_fcitx5_candidates(8) };
+        assert_eq!(read_and_free(out), "[]");
     }
 }
