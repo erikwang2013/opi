@@ -62,8 +62,9 @@ Build once, deploy everywhere. Covering **Android, iOS, HarmonyOS, Windows, macO
 | Layer | Approach |
 |---|---|
 | **Core engine** | Pure Rust (`engine-core` / `engine-data` / `opi-tools` / `opi-ffi` multi-crate workspace), lightweight and efficient |
-| **Cross-platform framework** | Flutter (keyboard views, candidate bar, symbol/emoji panels, settings) |
-| **Platform integration** | Android (InputMethodService), iOS/macOS (IMK), Windows (TSF), Linux (fcitx/IBus), HarmonyOS (IME Kit) |
+| **FFI layer** | opi-ffi dual ABI exports: JNI (Android) + C (iOS reserve), replacing flutter_rust_bridge |
+| **Client UI** | Native per platform: Jetpack Compose on Android (keyboard, candidate bar, panels, settings) — no cross-platform framework |
+| **Platform integration** | Android (InputMethodService), Linux (fcitx5), Windows (TSF), iOS (M7), HarmonyOS (IME Kit) |
 | **Data sync** | Reserved for V2: end-to-end encryption + self-hosted support — use the official service or run your own sync server |
 
 ### 🏗 Build & Test
@@ -71,8 +72,8 @@ Build once, deploy everywhere. Covering **Android, iOS, HarmonyOS, Windows, macO
 ```bash
 cargo test --workspace                   # unit + integration + property tests
 cargo clippy --workspace --all-targets -- -D warnings   # gate: zero warnings
-cd flutter/app && flutter test           # Dart integration tests (FFI round-trip + engine flow + controller)
-cd flutter/app && flutter analyze        # static analysis
+cd android && ./gradlew testDebugUnitTest   # Android unit tests (engine FFI + IME state machine + key routing)
+cd android && ./gradlew assembleDebug       # build debug APK (cargokit compiles opi-ffi three-ABI .so)
 ```
 
 Repository structure:
@@ -81,27 +82,29 @@ Repository structure:
 crates/
   engine-core/    # pure logic core, no IO, no platform dependencies
     src/          # composer / pinyin / trie / dictionary / learner / symbols / candidates / engine
-    tests/        # engine_integration (11) + proptests (5)
+    tests/        # engine_integration + proptests
   engine-data/    # .opid binary dictionary: format, FNV-1a checksum, mmap loading, corruption fallback (M2)
   opi-tools/      # dictionary compiler: dict.yaml → .opid + verify (M2)
-  opi-ffi/        # flutter_rust_bridge bindings (M3)
-docs/superpowers/ # design specs and implementation plans
-flutter/app/      # Flutter app: EngineController (Riverpod) + integration tests (M3)
+  opi-ffi/        # dual ABI exports: JNI (Android) + C (iOS reserve) (M6)
+android/          # Android IME (Kotlin + Jetpack Compose)
+  app/            # IME service + keyboard/candidate bar/panels + settings
+  rust_builder/   # standalone cargokit: compiles crates/opi-ffi → three-ABI .so (JNI)
+docs/superpowers/ # design specs and implementation plans (multi-platform: specs/2026-08-14-opi-multi-platform-design.md)
 data/             # dictionary source data (raw) and build artifacts (generated; fallback.opid checked in)
 ```
 
 ### 📅 Project Status
 
-> **Current stage: M3 FFI bindings ✅ complete (2026-08)**
+> **Current stage: M6 native rewrite ✅ complete (2026-08): Flutter deleted, fully native Android**
 
 V1 milestone progress:
 
 - [x] **M1 Engine core**: cargo workspace + Composer key state machine + pinyin syllable table/segmentation + Trie dictionary + candidate ranking & merge + local learning + Unicode symbol engine + Engine facade (62 tests green, clippy zero warnings)
 - [x] **M2 Data pipeline**: opi-tools compiles dictionaries → `.opid` binary (mmap loading, verification, corruption fallback)
-- [x] **M3 FFI**: flutter_rust_bridge bindings + EngineController
-- [ ] **M4 Android integration**: InputMethodService + Flutter keyboard in the IME window
-- [ ] **M5 UI polish**: symbol/emoji/number panels + settings page
-- [ ] **M6 Learning polish**: SQLite learning loop, performance gate (<30ms/key), TalkBack accessibility
+- [x] **M3 FFI**: flutter_rust_bridge bindings + EngineController (superseded by M6 opi-ffi dual ABI)
+- [x] **M4/M5 Android integration & UI**: InputMethodService + keyboard/panels/settings (Flutter version, natively rewritten in M6)
+- [x] **M6 Native rewrite**: opi-ffi dual ABI (JNI + C) replaces frb; Compose native IME + keyboard/candidate bar/panels/settings; flutter/ deleted
+- [ ] **M7 Multi-platform**: Linux fcitx5 plugin / Windows TSF / iOS (C ABI)
 
 ### 📄 License
 

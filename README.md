@@ -62,8 +62,9 @@
 | 层级 | 方案 |
 |---|---|
 | **核心引擎** | 纯 Rust 实现（`engine-core` / `engine-data` / `opi-tools` / `opi-ffi` 多 crate workspace），轻量高效 |
-| **跨端框架** | Flutter（键盘视图、候选栏、符号/表情面板、设置页） |
-| **平台接入** | Android (InputMethodService)、iOS/macOS (IMK)、Windows (TSF)、Linux (fcitx/IBus)、鸿蒙 (IME Kit) |
+| **FFI 层** | opi-ffi 双 ABI 出口：JNI（Android）+ C（iOS 预留），替代 flutter_rust_bridge |
+| **客户端 UI** | 各端原生：Android 为 Jetpack Compose（键盘/候选栏/面板/设置页），不引入跨端框架 |
+| **平台接入** | Android (InputMethodService)、Linux (fcitx5)、Windows (TSF)、iOS (M7)、鸿蒙 (IME Kit) |
 | **数据同步** | V2 预留：端到端加密 + 自托管服务支持，用户可选择使用官方服务或自建同步服务器 |
 
 ### 🏗 构建与测试
@@ -71,8 +72,8 @@
 ```bash
 cargo test --workspace                   # 单元 + 集成 + 属性测试
 cargo clippy --workspace --all-targets -- -D warnings   # 门禁：零警告
-cd flutter/app && flutter test           # Dart 集成测试（FFI 往返 + 引擎流程 + 控制器）
-cd flutter/app && flutter analyze        # 静态分析
+cd android && ./gradlew testDebugUnitTest   # Android 单测（引擎 FFI + IME 状态机 + 键盘路由）
+cd android && ./gradlew assembleDebug       # 构建 debug APK（cargokit 编译 opi-ffi 三 ABI .so）
 ```
 
 仓库结构：
@@ -81,27 +82,29 @@ cd flutter/app && flutter analyze        # 静态分析
 crates/
   engine-core/    # 纯逻辑内核，无 IO 无平台依赖
     src/          # composer / pinyin / trie / dictionary / learner / symbols / candidates / engine
-    tests/        # engine_integration（11）+ proptests（5）
+    tests/        # engine_integration + proptests
   engine-data/    # .opid 二进制词库：格式、FNV-1a 校验、mmap 加载、损坏回退（M2）
   opi-tools/      # 词库编译工具：dict.yaml → .opid + verify 校验（M2）
-  opi-ffi/        # flutter_rust_bridge 绑定（M3）
-docs/superpowers/ # 设计规格与实施计划
-flutter/app/      # Flutter 应用：EngineController（Riverpod）+ 集成测试（M3）
+  opi-ffi/        # 双 ABI 出口：JNI（Android）+ C（iOS 预留）（M6）
+android/          # Android IME（Kotlin + Jetpack Compose）
+  app/            # IME service + 键盘/候选栏/面板 + 设置页
+  rust_builder/   # cargokit 独立版：编译 crates/opi-ffi → 三 ABI .so（JNI）
+docs/superpowers/ # 设计规格与实施计划（多端架构见 specs/2026-08-14-opi-multi-platform-design.md）
 data/             # 词库源数据（raw）与编译产物（generated，fallback.opid 入库）
 ```
 
 ### 📅 项目状态
 
-> **当前阶段：M3 FFI 绑定 ✅ 完成（2026-08）**
+> **当前阶段：M6 原生重构 ✅ 完成（2026-08）：Flutter 已删除，Android 全原生**
 
 V1 里程碑进度：
 
 - [x] **M1 引擎内核**：cargo workspace + Composer 按键状态机 + 拼音音节表/切分 + Trie 码表 + 候选排序合并 + 本地学习 + Unicode 符号引擎 + Engine 门面（62 测试全绿，clippy 零警告）
 - [x] **M2 数据管线**：opi-tools 编译词库 → `.opid` 二进制（mmap 加载、校验、损坏回退）
-- [x] **M3 FFI**：flutter_rust_bridge 绑定 + EngineController
-- [ ] **M4 Android 接入**：InputMethodService + Flutter 键盘进 IME 窗口
-- [ ] **M5 UI 完善**：符号/Emoji/数字面板 + 设置页
-- [ ] **M6 学习打磨**：SQLite 学习闭环、性能门槛（<30ms/键）、TalkBack 无障碍
+- [x] **M3 FFI**：flutter_rust_bridge 绑定 + EngineController（已被 M6 opi-ffi 双 ABI 取代）
+- [x] **M4/M5 Android 接入与 UI**：InputMethodService + 键盘/面板/设置页（Flutter 版，M6 原生重写）
+- [x] **M6 原生重构**：opi-ffi 双 ABI（JNI + C）替换 frb；Compose 原生 IME + 键盘/候选栏/面板/设置页；删除 flutter/
+- [ ] **M7 多端展开**：Linux fcitx5 插件 / Windows TSF / iOS（C ABI）
 
 ### 📄 许可证
 
