@@ -85,6 +85,8 @@ private val BtnColor = Color(0xFF3A3A3A)
 /** 管道名（与 Rust 侧 candidate_io.rs 的 PIPE_NAME 一致）。 */
 private const val PIPE_NAME = "\\\\.\\pipe\\opi-candidates"
 private const val PIPE_ACCESS_DUPLEX = 0x3
+/** CreateNamedPipe 的 dwOpenMode 标志：首个实例独占管道名，防恶意本地进程抢注。 */
+private const val FILE_FLAG_FIRST_PIPE_INSTANCE = 0x80000
 private const val PIPE_TYPE_BYTE = 0x0 // 字节流模式 + PIPE_WAIT（阻塞）
 private const val PIPE_READMODE_BYTE = 0x0
 private const val PIPE_WAIT = 0x0
@@ -200,7 +202,10 @@ private class JParse(private val s: String) {
                         'r' -> sb.append('\r')
                         'u' -> {
                             if (i + 4 > s.length) return null
-                            sb.append(s.substring(i, i + 4).toInt(16).toChar())
+                            // 非法十六进制（如 \uZZZZ）→ 解析失败返回 null，而非抛
+                            // NumberFormatException 杀死管道服务器线程。
+                            val hex = s.substring(i, i + 4).toIntOrNull(16) ?: return null
+                            sb.append(hex.toChar())
                             i += 4
                         }
                         else -> return null
@@ -216,7 +221,8 @@ private class JParse(private val s: String) {
         val start = i
         while (i < s.length && (s[i].isDigit() || s[i] == '-')) i++
         if (i == start) return null
-        return JVal.JNum(s.substring(start, i).toLong())
+        // 非法/超范围数字 → 返回 null（该行丢弃），而非抛 NumberFormatException。
+        return JVal.JNum(s.substring(start, i).toLongOrNull() ?: return null)
     }
 
     private fun expect(c: Char): Boolean = if (i < s.length && s[i] == c) { i++; true } else false
@@ -262,7 +268,7 @@ class PipeServer(private val model: CandidateModel) {
         val h = fn.invoke(
             WinNT.HANDLE::class.java,
             arrayOf(
-                WString(PIPE_NAME), PIPE_ACCESS_DUPLEX,
+                WString(PIPE_NAME), PIPE_ACCESS_DUPLEX or FILE_FLAG_FIRST_PIPE_INSTANCE,
                 PIPE_TYPE_BYTE or PIPE_READMODE_BYTE or PIPE_WAIT,
                 MAX_INSTANCES, PIPE_BUF, PIPE_BUF, 0, null,
             ),
@@ -293,22 +299,26 @@ class PipeServer(private val model: CandidateModel) {
     }
 
     private fun handleLine(line: String) {
-        val obj = parseLine(line) ?: return
-        when ((obj["type"] as? JVal.JStr)?.v) {
-            "show" -> {
-                model.buffer = (obj["buffer"] as? JVal.JStr)?.v ?: ""
-                model.candidates = ((obj["candidates"] as? JVal.JArr)?.v
-                    ?: emptyList()).mapNotNull { (it as? JVal.JStr)?.v }
-                model.page = ((obj["page"] as? JVal.JNum)?.v ?: 1L).toInt().coerceAtLeast(1)
-                model.pageCount = ((obj["page_count"] as? JVal.JNum)?.v ?: 1L).toInt().coerceAtLeast(1)
-                model.mode = (obj["mode"] as? JVal.JStr)?.v ?: "pinyin"
-                model.visible = true
+        try {
+            val obj = parseLine(line) ?: return
+            when ((obj["type"] as? JVal.JStr)?.v) {
+                "show" -> {
+                    model.buffer = (obj["buffer"] as? JVal.JStr)?.v ?: ""
+                    model.candidates = ((obj["candidates"] as? JVal.JArr)?.v
+                        ?: emptyList()).mapNotNull { (it as? JVal.JStr)?.v }
+                    model.page = ((obj["page"] as? JVal.JNum)?.v ?: 1L).toInt().coerceAtLeast(1)
+                    model.pageCount = ((obj["page_count"] as? JVal.JNum)?.v ?: 1L).toInt().coerceAtLeast(1)
+                    model.mode = (obj["mode"] as? JVal.JStr)?.v ?: "pinyin"
+                    model.visible = true
+                }
+                "hide" -> model.visible = false
+                "position" -> {
+                    (obj["x"] as? JVal.JNum)?.let { model.x = it.v.toInt() }
+                    (obj["y"] as? JVal.JNum)?.let { model.y = it.v.toInt() }
+                }
             }
-            "hide" -> model.visible = false
-            "position" -> {
-                (obj["x"] as? JVal.JNum)?.let { model.x = it.v.toInt() }
-                (obj["y"] as? JVal.JNum)?.let { model.y = it.v.toInt() }
-            }
+        } catch (e: Exception) {
+            // 防御性兜底：单行解析/处理异常只丢弃该行，绝不杀死管道服务器线程。
         }
     }
 
@@ -317,11 +327,22 @@ class PipeServer(private val model: CandidateModel) {
     fun sendNextPage() = send("""{"type":"next_page"}""")
     fun sendPrevPage() = send("""{"type":"prev_page"}""")
 
-    private fun send(json: String) {
-        val pipe = lastClientPipe ?: return
+    /** partial-write 循环（镜像 Rust 侧 candidate_io.rs）：写满或失败为止；失败返回 false。 */
+    private fun send(json: String): Boolean {
+        val pipe = lastClientPipe ?: return false
         val bytes = (json + "\n").toByteArray(Charsets.UTF_8)
-        val written = IntByReference()
-        Kernel32.INSTANCE.WriteFile(pipe, bytes, bytes.size, written, null)
+        var off = 0
+        while (off < bytes.size) {
+            val written = IntByReference()
+            // JNA byte[] 无偏移参数 → 切片传入剩余部分；实际写入字节数由 out 参数返回。
+            val ok = Kernel32.INSTANCE.WriteFile(
+                pipe, bytes.copyOfRange(off, bytes.size), bytes.size - off, written, null,
+            )
+            if (!ok) return false
+            if (written.value <= 0) return false // 0 字节写入：对端异常，防死循环
+            off += written.value
+        }
+        return true
     }
 }
 
