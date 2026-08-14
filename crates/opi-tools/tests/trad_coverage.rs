@@ -3,6 +3,7 @@
 //! 本测试只读不联网；trad.opid 缺失时报错并引导执行 Task 1 数据构建。
 
 use engine_data::{load_mmap, Dictionary};
+use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 
 const RAW_TSV: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/raw/trad_hanzi.tsv");
@@ -12,11 +13,18 @@ fn rows() -> Vec<(String, String)> {
     let text = std::fs::read_to_string(RAW_TSV)
         .unwrap_or_else(|e| panic!("读取 {RAW_TSV} 失败（先执行 Task 1 数据构建并提交）：{e}"));
     text.lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(|l| {
+        .enumerate()
+        .filter(|(_, l)| !l.trim().is_empty())
+        .map(|(i, l)| {
             let mut it = l.split('\t');
-            let word = it.next().unwrap_or("").to_string();
-            let pinyin = it.next().unwrap_or("").to_string();
+            let word = it
+                .next()
+                .unwrap_or_else(|| panic!("{RAW_TSV} 第 {} 行缺 word 列", i + 1))
+                .to_string();
+            let pinyin = it
+                .next()
+                .unwrap_or_else(|| panic!("{RAW_TSV} 第 {} 行缺 pinyin 列", i + 1))
+                .to_string();
             (word, pinyin)
         })
         .collect()
@@ -28,12 +36,24 @@ fn every_tsv_char_queryable() {
         .unwrap_or_else(|e| panic!("加载 {GENERATED_OPID} 失败（先执行 Task 1 数据构建并提交）：{e:?}"));
     let rows = rows();
     assert!(rows.len() >= 6763, "期待表应覆盖 GB2312 全量 6763 字，实际 {} 行", rows.len());
-    let missing: Vec<(&str, &str)> = rows
-        .iter()
-        .filter(|(w, py)| !dict.query(py, usize::MAX).iter().any(|e| &e.word == w))
-        .map(|(w, py)| (w.as_str(), py.as_str()))
-        .take(10)
-        .collect();
+    // 按 pinyin 分组（保留 TSV 行序），每唯一 pinyin 只 query 一次，避免重复二分+排序物化。
+    let mut groups: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    for (w, py) in &rows {
+        groups.entry(py).or_default().push(w);
+    }
+    let mut missing: Vec<(&str, &str)> = Vec::new();
+    'outer: for (py, words) in &groups {
+        let result = dict.query(py, usize::MAX);
+        let hits: HashSet<&str> = result.iter().map(|e| e.word.as_str()).collect();
+        for w in words {
+            if !hits.contains(w) {
+                missing.push((*w, *py));
+                if missing.len() >= 10 {
+                    break 'outer;
+                }
+            }
+        }
+    }
     assert!(missing.is_empty(), "以下 (字, 拼音) 查询无候选（最多展示 10）：{missing:?}");
 }
 
