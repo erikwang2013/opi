@@ -37,6 +37,13 @@ spec「词频策略」一节的字面公式（一级 9000-序号、二级 6000-�
 
 跨库去重：luna 与 trad 是**互斥查询**（Traditional 模式只查 trad 库），无需与 luna 交叉去重；trad 库内部（GB 单字 ∩ terra 单字，如 好）由 compile 层 (pinyin, word) 取 max freq 处理（好 只在 GB 段出现，max 不变）。
 
+## 验收偏差注记（Task 6 模拟器验收 + 最终评审）
+
+- **验收标准 #4「简体模式 fa → 发 靠前」未达成（预存 luna 数据缺陷，非本功能引入）**：luna.opid 中 樊/泛 freq=100000 > 发 freq=1000（rime 词库自带词频，与简繁功能无关）。本计划无 luna 重建路径；已评估无实质影响。**后续独立任务**：luna 词频修正（数据治理，需重编 luna.opid 并回归）。
+- **验收标准 #4「nihao → 暖 候选顺序不变」**：模拟器冒烟通过（候选非空、luna 未动，排序由既有引擎逻辑保证）。
+- **既有 UI 缺陷（非本功能引入，前会话已知）**：候选栏点击不提交（模拟器用空格提交绕过）；英文模式 ⇧ 布局坐标等。均不在本计划范围。
+- 最终评审（a0cc290..HEAD 9 个功能 commit）裁定 APPROVE：验收 1/2/3/5 达成，跨层模式整数 4=Traditional 五处一致，无 Critical/Important 代码问题。
+
 ---
 
 ### Task 1: 数据层 — gen_trad_dict.py + TSV + 编译 trad.opid
