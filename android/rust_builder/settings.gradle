@@ -1,0 +1,4 @@
+// cargokit 独立构建根（flutter_rust_bridge 插件结构适配 includeBuild）：
+// android/ 子项目为 com.android.library，cargokit 编译 crates/opi-ffi → jniLibs。
+rootProject.name = 'rust_builder'
+include(":android")

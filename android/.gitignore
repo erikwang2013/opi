@@ -1,0 +1,12 @@
+# Gradle / Android build outputs (match at any depth)
+.gradle/
+build/
+.cxx/
+target/
+
+# Machine-specific config
+local.properties
+
+# IDE
+.idea/
+*.iml
