@@ -361,7 +361,8 @@ impl TsfLogic {
     /// 可见 ASCII 字符按模式分流。
     fn handle_printable(&mut self, c: char) -> KeyOutcome {
         match self.mode() {
-            Mode::Pinyin => {
+            // 繁体模式与拼音同构：字母/撇号入缓冲、数字选词、走引擎。
+            Mode::Pinyin | Mode::Traditional => {
                 if c.is_ascii_digit() {
                     return self.digit_select(c);
                 }
@@ -395,7 +396,9 @@ impl TsfLogic {
     /// 拼音模式有候选时按数字选词（页内索引：'1'→第 0 个候选）；否则交应用。
     /// 无对应候选（如 '9' 超出、'0'）不消费，交应用输入该数字。
     fn digit_select(&mut self, c: char) -> KeyOutcome {
-        if self.mode() == Mode::Pinyin && !self.buffer().is_empty() && !self.candidates().is_empty()
+        if matches!(self.mode(), Mode::Pinyin | Mode::Traditional)
+            && !self.buffer().is_empty()
+            && !self.candidates().is_empty()
         {
             let Some(d) = c.to_digit(10) else {
                 return KeyOutcome::Unhandled;

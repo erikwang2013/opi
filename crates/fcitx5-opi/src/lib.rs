@@ -53,13 +53,15 @@ pub fn install(path: Option<&str>) -> Result<(), String> {
     Ok(())
 }
 
-/// 0..=3 模式整数 ↔ Mode 转换（0=Pinyin 1=English 2=Number 3=Symbol）。
+/// 0..=4 模式整数 ↔ Mode 转换（0=Pinyin 1=English 2=Number 3=Symbol 4=Traditional，
+/// 与 opi-ffi 的 JNI/C 模式整数约定一致）。
 fn mode_from_int(m: i32) -> Option<Mode> {
     match m {
         0 => Some(Mode::Pinyin),
         1 => Some(Mode::English),
         2 => Some(Mode::Number),
         3 => Some(Mode::Symbol),
+        4 => Some(Mode::Traditional),
         _ => None,
     }
 }
@@ -70,6 +72,7 @@ fn mode_to_int(m: Mode) -> i32 {
         Mode::English => 1,
         Mode::Number => 2,
         Mode::Symbol => 3,
+        Mode::Traditional => 4,
     }
 }
 
@@ -211,7 +214,7 @@ pub unsafe extern "C" fn opi_fcitx5_select(index: usize) -> OpString {
     OpString::from_utf8(&out)
 }
 
-/// switchMode(mode: i32)。0=Pinyin 1=English 2=Number 3=Symbol，越界忽略。
+/// switchMode(mode: i32)。0=Pinyin 1=English 2=Number 3=Symbol 4=Traditional，越界忽略。
 /// # Safety
 ///
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
@@ -349,10 +352,11 @@ mod tests {
     fn mode_int_roundtrip() {
         assert_eq!(mode_from_int(0), Some(Mode::Pinyin));
         assert_eq!(mode_from_int(3), Some(Mode::Symbol));
-        assert_eq!(mode_from_int(4), None);
+        assert_eq!(mode_from_int(4), Some(Mode::Traditional));
         assert_eq!(mode_from_int(-1), None);
         assert_eq!(mode_to_int(Mode::English), 1);
         assert_eq!(mode_to_int(Mode::Number), 2);
+        assert_eq!(mode_to_int(Mode::Traditional), 4);
     }
 
     #[test]

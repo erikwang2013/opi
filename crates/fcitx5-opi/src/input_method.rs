@@ -171,7 +171,8 @@ fn handle_shift(state: &mut CandidateState, states: u32) -> KeyAction {
 /// 可见 ASCII 字符按模式分流。
 fn handle_printable(state: &mut CandidateState, c: char) -> KeyAction {
     match state.mode() {
-        Mode::Pinyin => {
+        // 繁体模式与拼音同构：字母/撇号入缓冲、数字选词、走引擎。
+        Mode::Pinyin | Mode::Traditional => {
             if c.is_ascii_digit() {
                 return digit_select(state, c);
             }
@@ -205,7 +206,9 @@ fn handle_printable(state: &mut CandidateState, c: char) -> KeyAction {
 /// 拼音模式有候选时按数字选词（页内索引：'1'→第 0 个候选）；否则直通。
 /// 无对应候选（如 '9' 超出、'0'）不消费，交客户端处理。
 fn digit_select(state: &mut CandidateState, c: char) -> KeyAction {
-    if state.mode() == Mode::Pinyin && !state.buffer().is_empty() && !state.candidates().is_empty()
+    if matches!(state.mode(), Mode::Pinyin | Mode::Traditional)
+        && !state.buffer().is_empty()
+        && !state.candidates().is_empty()
     {
         let Some(d) = c.to_digit(10) else {
             return KeyAction::PassThrough;

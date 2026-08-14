@@ -312,9 +312,11 @@ impl TsfSink for CandidateSink {
 }
 
 /// Mode → 协议字符串（与 desktop/ 解析端一致）。
+/// Traditional 复用 "pinyin"：候选窗（desktop/Main.kt modeLabel）无简繁概念，
+/// 未知字符串一律回落 "拼音" 标签，新增 "traditional" 只会造成协议漂移。
 fn mode_str(mode: Mode) -> &'static str {
     match mode {
-        Mode::Pinyin => "pinyin",
+        Mode::Pinyin | Mode::Traditional => "pinyin",
         Mode::English => "english",
         Mode::Number => "number",
         Mode::Symbol => "symbol",
