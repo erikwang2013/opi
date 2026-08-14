@@ -8,6 +8,9 @@ pub enum Mode {
     Symbol,
 }
 
+/// 拼音缓冲上限：乱码拼音（非合法音节序列）无候选时不再无限累积。
+pub const MAX_BUFFER: usize = 16;
+
 /// 一次击键的效果。提交由 Engine 层统一处理（空格键），Composer 只区分更新/忽略。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KeyEffect {
@@ -39,7 +42,9 @@ impl Composer {
         use KeyEffect::*;
         let effect = match self.session.mode {
             Mode::Pinyin => {
-                if ch.is_ascii_lowercase() || ch == '\'' {
+                if self.session.buffer.chars().count() >= MAX_BUFFER {
+                    Ignored
+                } else if ch.is_ascii_lowercase() || ch == '\'' {
                     self.session.buffer.push(ch);
                     Updated
                 } else if ch.is_ascii_uppercase() {

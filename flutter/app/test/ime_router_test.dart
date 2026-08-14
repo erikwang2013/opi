@@ -33,8 +33,9 @@ void main() {
     router.handleKey('w');
     router.handleKey('o');
     expect(ctrl.buffer, 'wo');
+    final first = ctrl.candidates.first.text;
     router.handleSpace();
-    expect(channel.commits, ['我']);
+    expect(channel.commits, [first]); // 首候选随词库排序，不硬编码
     expect(ctrl.buffer, '');
     ctrl.dispose();
   });
@@ -46,8 +47,9 @@ void main() {
     router.handleBackspace();
     expect(ctrl.buffer, 'w');
     router.handleKey('o');
+    final first = ctrl.candidates.first.text;
     router.handleEnter();
-    expect(channel.commits, ['我']);
+    expect(channel.commits, [first]);
     expect(ctrl.buffer, '');
     ctrl.dispose();
   });
@@ -65,8 +67,9 @@ void main() {
     final (ctrl, router, channel) = await setup();
     router.handleKey('w');
     router.handleKey('o');
+    final first = ctrl.candidates.first.text;
     router.handleCandidate(0);
-    expect(channel.commits, ['我']);
+    expect(channel.commits, [first]);
     expect(ctrl.buffer, '');
     ctrl.dispose();
   });

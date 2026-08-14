@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import 'package:app/engine/engine_controller.dart';
+import 'package:app/src/rust/api.dart';
 
-/// 候选栏：拼音缓冲 + 候选 top-8，点击选择（无 composing，候选栏即组合区）。
+/// 候选栏：拼音缓冲 + 候选每屏 8 个，点击选择；页数>1 时显示 ‹ n/m › 翻页。
+/// 无状态：数据与翻页状态均在 EngineController（单一状态源）。
 class CandidateBar extends StatelessWidget {
   const CandidateBar({super.key, required this.controller, required this.onTap});
 
@@ -11,34 +13,93 @@ class CandidateBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 56,
-      color: Colors.grey.shade200,
-      child: Row(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Text(
-              controller.buffer,
-              style: const TextStyle(fontSize: 18, color: Colors.black54),
-            ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (var i = 0; i < controller.candidates.length; i++)
-                    _Candidate(
-                      controller.candidates[i].text,
-                      onTap: () => onTap(i),
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        final pageCount = controller.candidatePageCount;
+        final candidates = controller.pageCandidates;
+        // english 模式：候选栏退化为模式条，切换中/英有明确区域反馈
+        if (controller.mode == ApiMode.english) {
+          return Container(
+            height: 44,
+            color: Colors.grey.shade200,
+            child: Row(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    'EN',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blueGrey.shade700,
                     ),
-                ],
-              ),
+                  ),
+                ),
+                Text(
+                  '字母直接上屏',
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                ),
+              ],
             ),
+          );
+        }
+        return Container(
+          height: 44,
+          color: Colors.grey.shade200,
+          child: Row(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text(
+                  controller.buffer,
+                  style: const TextStyle(fontSize: 18, color: Colors.black54),
+                ),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      for (var i = 0; i < candidates.length; i++)
+                        _Candidate(
+                          candidates[i].text,
+                          onTap: () => onTap(i),
+                        ),
+                      // 拼音无候选：给出可见反馈，避免"打字无反应"错觉
+                      if (candidates.isEmpty && controller.buffer.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Text(
+                            '无匹配',
+                            style: TextStyle(
+                                fontSize: 13, color: Colors.grey.shade500),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              if (pageCount > 1) ...[
+                IconButton(
+                  icon: const Icon(Icons.chevron_left),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: controller.prevPage,
+                ),
+                Text(
+                  '${controller.candidatePage + 1}/$pageCount',
+                  style: const TextStyle(fontSize: 13),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: controller.nextPage,
+                ),
+              ],
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

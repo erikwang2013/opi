@@ -1,5 +1,5 @@
 use engine_core::candidates::rank_score;
-use engine_core::composer::Composer;
+use engine_core::composer::{Composer, MAX_BUFFER};
 use engine_core::learner::Learner;
 use engine_core::pinyin::segment;
 use engine_core::trie::Trie;
@@ -12,7 +12,9 @@ proptest! {
         for ch in s.chars() {
             c.input_key(ch);
         }
-        prop_assert_eq!(&c.session().buffer, &s);
+        // MAX_BUFFER 上限：超限按键被忽略，buffer 等于输入截断
+        let expected: String = s.chars().take(MAX_BUFFER).collect();
+        prop_assert_eq!(&c.session().buffer, &expected);
     }
 
     #[test]

@@ -1,6 +1,7 @@
 use crate::composer::Mode;
 use crate::dictionary::Dictionary;
 use crate::learner::Learner;
+use crate::pinyin::segment;
 use crate::symbols::SymbolEngine;
 
 /// 用户词频权重：一次选词 ≈ 10 万次静态词频，保证学习迅速生效。
@@ -49,7 +50,28 @@ pub fn rank_and_pick<D: Dictionary + ?Sized>(
             score: rank_score(e.freq, learner.freq_of(&e.word)),
         })
         .collect();
+    // 多音节整串无命中时按音节逐段补候选（segment 此前是死代码）：
+    // nihao → [你][好] 逐字可选；单字母音节跳过避免噪音。
+    if merged.is_empty() && input.chars().count() > 1 {
+        for syl in segment(input) {
+            if syl.chars().count() < 2 {
+                continue;
+            }
+            for e in dict.query(&syl, usize::MAX) {
+                merged.push(Candidate {
+                    text: e.word.clone(),
+                    kind: CandidateKind::Hanzi,
+                    score: rank_score(e.freq, learner.freq_of(&e.word)),
+                });
+            }
+        }
+    }
     for s in symbols.search(input) {
+        // 单字符时仅并入 emoji：符号英文关键字前缀（如 comma→顿号）泄漏进
+        // 拼音候选是噪音——真机 "c" 键唯一候选曾是顿号。emoji 保留作趣味反馈。
+        if input.chars().count() == 1 && !s.emoji {
+            continue;
+        }
         merged.push(Candidate {
             text: s.text.clone(),
             kind: if s.emoji { CandidateKind::Emoji } else { CandidateKind::Symbol },
@@ -182,6 +204,17 @@ mod tests {
         let got = rank_and_pick(&d, &s, &l, "hao", Mode::Pinyin, DEFAULT_TOP_N);
         assert_eq!(got.iter().filter(|c| c.text == "好").count(), 1);
         assert_eq!(got.len(), 3);
+    }
+
+    #[test]
+    fn multi_syllable_falls_back_to_per_syllable() {
+        let d = test_dict();
+        let s = SymbolEngine::builtin();
+        let l = Learner::new(false);
+        // 整串 "haoxiao" 无词条 → 按音节 [hao][xiao] 补出逐字候选
+        let got = rank_and_pick(&d, &s, &l, "haoxiao", Mode::Pinyin, DEFAULT_TOP_N);
+        assert!(got.iter().any(|c| c.text == "好"));
+        assert!(got.iter().any(|c| c.text == "笑"));
     }
 
     #[test]

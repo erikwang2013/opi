@@ -1,6 +1,7 @@
 import 'package:app/candidates/candidate_bar.dart';
 import 'package:app/engine/engine_controller.dart';
 import 'package:app/ime/ime_main.dart';
+import 'package:app/src/rust/api.dart';
 import 'package:app/src/rust/frb_generated.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -37,20 +38,29 @@ void main() {
     await tester.runAsync(() async => ctrl.dispose());
   });
 
-  testWidgets('英文模式隐藏候选栏，字母直传', (tester) async {
+  testWidgets('英文模式候选栏退化为 EN 模式条，字母直传', (tester) async {
     final ctrl = (await tester.runAsync(() async {
       return await EngineController.load();
     }))!;
     final channel = FakeImeChannel();
     await tester.pumpWidget(ImeApp(controller: ctrl, channel: channel));
 
-    await tester.tap(find.text('🌐'));
+    // modeLabel 动态显示：拼音模式 '中'（M5 起不再用 🌐）
+    await tester.tap(find.text('中'));
     await tester.pump();
-    expect(find.byType(CandidateBar), findsNothing);
+    // EN 模式条反馈（切换有明确区域变化），无候选词
+    expect(find.text('EN'), findsOneWidget);
+    expect(find.text('字母直接上屏'), findsOneWidget);
     await tester.tap(find.text('a'));
     await tester.pump();
     expect(channel.commits, ['a']);
     expect(ctrl.buffer, '');
+
+    // 切回拼音显示 '英'
+    await tester.tap(find.text('英'));
+    await tester.pump();
+    expect(ctrl.mode, ApiMode.pinyin);
+    expect(find.text('EN'), findsNothing);
     await tester.runAsync(() async => ctrl.dispose());
   });
 

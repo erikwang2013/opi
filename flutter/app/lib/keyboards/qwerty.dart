@@ -1,6 +1,8 @@
+import 'package:app/engine/engine_controller.dart';
+import 'package:app/keyboards/key_button.dart';
 import 'package:flutter/material.dart';
 
-/// 最小 QWERTY 键盘：3 行字母 + 底部功能行（🌐 / 123 / 空格 / ⌫ / ↵）。
+/// QWERTY 键盘：3 行字母（第 3 行含 ⇧）+ 底部功能行（中/英 / 123 / 空格 / ⌫ / ↵）。
 class QwertyKeyboard extends StatelessWidget {
   const QwertyKeyboard({
     super.key,
@@ -9,6 +11,12 @@ class QwertyKeyboard extends StatelessWidget {
     required this.onBackspace,
     required this.onEnter,
     required this.onModeSwitch,
+    this.onShift,
+    this.onShiftLongPress,
+    this.onNumber,
+    this.onSymbolLongPress,
+    this.shiftState,
+    this.modeLabel = '中',
   });
 
   final ValueChanged<String> onKey;
@@ -16,66 +24,56 @@ class QwertyKeyboard extends StatelessWidget {
   final VoidCallback onBackspace;
   final VoidCallback onEnter;
   final VoidCallback onModeSwitch;
+  final VoidCallback? onShift;
+  final VoidCallback? onShiftLongPress;
+  final VoidCallback? onNumber;
+  final VoidCallback? onSymbolLongPress;
+
+  /// ⇧ 高亮状态（由调用方在 English 模式传入，Pinyin 模式传 off）。
+  final ShiftState? shiftState;
+  final String modeLabel;
 
   static const List<List<String>> _rows = [
     ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
     ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
-    ['z', 'x', 'c', 'v', 'b', 'n', 'm'],
+    ['⇧', 'z', 'x', 'c', 'v', 'b', 'n', 'm'],
   ];
 
   @override
   Widget build(BuildContext context) {
+    final shiftActive = shiftState != null && shiftState != ShiftState.off;
     return Column(
       children: [
         for (final row in _rows)
           Expanded(
             child: Row(
               children: [
-                for (final ch in row) _Key(ch, onTap: () => onKey(ch)),
+                for (final ch in row)
+                  if (ch == '⇧')
+                    KeyButton(
+                      '⇧',
+                      onTap: onShift,
+                      onLongPress: onShiftLongPress,
+                      highlighted: shiftActive,
+                    )
+                  else
+                    KeyButton(ch, onTap: () => onKey(ch)),
               ],
             ),
           ),
         Expanded(
           child: Row(
             children: [
-              _Key('🌐', onTap: onModeSwitch),
-              _Key('123'), // M5 生效，M4 占位
-              _Key('空格', flex: 5, onTap: onSpace),
-              _Key('⌫', onTap: onBackspace),
-              _Key('↵', onTap: onEnter),
+              KeyButton(modeLabel, onTap: onModeSwitch),
+              // 123 不挂长按：长按 500ms 吞 tap，导致面板打不开（符号经数字面板进入）
+              KeyButton('123', onTap: onNumber),
+              KeyButton('空格', flex: 3, onTap: onSpace),
+              KeyButton('⌫', onTap: onBackspace),
+              KeyButton('↵', onTap: onEnter),
             ],
           ),
         ),
       ],
-    );
-  }
-}
-
-class _Key extends StatelessWidget {
-  const _Key(this.label, {this.onTap, this.flex = 1});
-
-  final String label;
-  final VoidCallback? onTap;
-  final int flex;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      flex: flex,
-      child: Padding(
-        padding: const EdgeInsets.all(1),
-        child: Material(
-          color: Colors.grey.shade300,
-          borderRadius: BorderRadius.circular(6),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(6),
-            onTap: onTap,
-            child: Center(
-              child: Text(label, style: const TextStyle(fontSize: 18)),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

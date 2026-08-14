@@ -16,10 +16,12 @@ void main() {
     ctrl.input('o');
     expect(ctrl.buffer, 'wo');
     expect(ctrl.candidates.length, greaterThan(0));
-    expect(ctrl.candidates.first.text, '我');
+    // luna 词库排序：不硬编码首位，断言 'wo' 能打出中文候选
+    expect(ctrl.candidates.any((c) => c.text == '我'), isTrue);
 
+    final first = ctrl.candidates.first.text;
     final committed = ctrl.select(0);
-    expect(committed, '我');
+    expect(committed, first);
     expect(ctrl.buffer, '');
 
     ctrl.backspace();
@@ -41,7 +43,8 @@ void main() {
     final ctrl = await EngineController.load();
     ctrl.input('w');
     ctrl.input('o');
-    expect(ctrl.inputSpace(), '我'); // 提交首候选并返回
+    final first = ctrl.candidates.first.text;
+    expect(ctrl.inputSpace(), first); // 提交首候选并返回（不硬编码词序）
     expect(ctrl.buffer, '');
     ctrl.dispose();
   });

@@ -22,8 +22,9 @@ void main() {
     ));
 
     expect(find.text('wo'), findsOneWidget); // 缓冲显示在候选栏（无 composing）
-    expect(find.text('我'), findsOneWidget); // 候选 top-8 首项
-    await tester.tap(find.text('我'));
+    final first = ctrl.candidates.first.text; // luna 排序首位（不硬编码）
+    expect(find.text(first), findsOneWidget);
+    await tester.tap(find.text(first));
     expect(tapped, [0]);
     await tester.runAsync(() async => ctrl.dispose());
   });
