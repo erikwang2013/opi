@@ -100,14 +100,15 @@ fun SymbolPanel(
         // 内容区：搜索激活且有关键字 → 结果网格（表情 Tab 过滤）；否则按 Tab 出内容
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             if (searchActive && searchQuery.isNotEmpty()) {
-                val results = catalog.search(searchQuery)
+                // FFI（JNI）按查询缓存：只在 query 变化时重新搜索，避免每次重组都打引擎
+                val results = remember(searchQuery) { catalog.search(searchQuery) }
                 val shown = if (tab == SymbolTab.Emoji) results.filter(SymbolCatalog::isEmoji) else results
                 SymbolGrid(shown, ::commit)
             } else {
                 when (tab) {
                     SymbolTab.Common -> SymbolGrid(catalog.common, ::commit)
                     SymbolTab.Emoji -> Column(modifier = Modifier.fillMaxSize()) {
-                        if (catalog.recents.isNotEmpty()) RecentsRow(catalog.recents, onCommit)
+                        if (catalog.recents.isNotEmpty()) RecentsRow(catalog.recents, ::commit)
                         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                             SymbolGrid(catalog.emoji, ::commit)
                         }

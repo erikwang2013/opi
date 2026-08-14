@@ -92,6 +92,7 @@ class ImeStateTest {
         val state = newState(fake)
         state.openNumber()
         assertTrue(commits.isEmpty())
+        assertEquals("", fake.buf) // 引擎未清 buffer 时 state 也要清掉，不留残留
     }
 
     // ---- 250ms 搜索防抖 ----

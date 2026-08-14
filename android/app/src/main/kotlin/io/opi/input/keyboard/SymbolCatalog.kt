@@ -40,8 +40,8 @@ class SymbolCatalog(private val api: SymbolApi = OpiEngine) {
         return _all!!
     }
 
-    /** 表情 = 全量按 emoji 过滤。 */
-    val emoji: List<String> get() = all.filter(::isEmoji)
+    /** 表情 = 全量按 emoji 过滤（惰性一次）。 */
+    val emoji: List<String> by lazy { all.filter(::isEmoji) }
 
     fun search(q: String): List<String> {
         if (q.trim().isEmpty()) return all

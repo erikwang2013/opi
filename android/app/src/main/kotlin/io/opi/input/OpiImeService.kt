@@ -189,6 +189,8 @@ class OpiImeService : InputMethodService() {
         // 销毁前撤掉未执行的提交重试，避免向新输入框误提交
         retryRunnable?.let { window.window?.decorView?.removeCallbacks(it) }
         retryRunnable = null
+        // 取消 pending 搜索防抖（销毁后回调不应再触发）
+        imeState.onEditorChanged()
         lifecycleOwner.registry.currentState = Lifecycle.State.DESTROYED
         inputViewCache = null
         super.onDestroy()

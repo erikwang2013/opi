@@ -13,10 +13,11 @@ fun interface Debouncer {
     fun schedule(delayMs: Long, action: () -> Unit): () -> Unit
 }
 
-/** 生产实现：主线程 Handler.postDelayed。 */
+/** 生产实现：主线程 Handler.postDelayed（复用单个 Handler，不在每次调度时新建）。 */
 class HandlerDebouncer : Debouncer {
+    private val handler = Handler(Looper.getMainLooper())
+
     override fun schedule(delayMs: Long, action: () -> Unit): () -> Unit {
-        val handler = Handler(Looper.getMainLooper())
         val r = Runnable { action() }
         handler.postDelayed(r, delayMs)
         return { handler.removeCallbacks(r) }
@@ -59,10 +60,6 @@ class ImeState(
         private set
 
     private var pendingDebounce: (() -> Unit)? = null
-
-    fun switchView(v: View) {
-        view = v
-    }
 
     // ---- 面板切换（开面板前提交 pending buffer） ----
 
@@ -141,5 +138,6 @@ class ImeState(
         }
         val text = controller.select(0)
         if (text.isNotEmpty()) commit(text)
+        else controller.clear() // select 返回空（引擎异常）：清掉 buffer 不留残留
     }
 }
