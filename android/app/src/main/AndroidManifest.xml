@@ -2,9 +2,9 @@
     <application
         android:label="OPI IME"
         android:icon="@mipmap/ic_launcher">
-        <!-- 设置入口（A5 填设置 UI），当前空壳 Activity。 -->
+        <!-- 设置入口（A5）：launcher 即设置页，与 IME 共享 Rust 静态单例引擎。 -->
         <activity
-            android:name=".MainActivity"
+            android:name=".settings.SettingsActivity"
             android:exported="true"
             android:label="OPI IME 设置"
             android:theme="@style/LaunchTheme">

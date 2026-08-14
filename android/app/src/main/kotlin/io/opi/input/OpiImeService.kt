@@ -13,6 +13,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.savedstate.SavedStateRegistryOwner
 import io.opi.input.engine.EngineController
+import io.opi.input.jni.EngineLoader
 import io.opi.input.ime.ImeScreen
 import io.opi.input.ime.ImeState
 import io.opi.input.ime.KeyRouter
@@ -63,6 +64,8 @@ class OpiImeService : InputMethodService() {
             return cached
         }
         Log.i(TAG, "onCreateInputView: start")
+        // luna 词库编排（幂等：size 校验重拷；失败回退内置词库；与设置页共享 Rust 单例）
+        EngineLoader.load(this)
         val view = ComposeView(this)
         // 生命周期接线：置 CREATED（onWindowShown→RESUMED、onWindowHidden→STARTED、
         // onDestroy→DESTROYED），Compose 侧 remember/LaunchedEffect 依赖它。
