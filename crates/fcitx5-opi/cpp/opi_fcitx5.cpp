@@ -52,7 +52,12 @@ void opi_ffi_free_string_utf8(OpiString s);
 
 // 取走并释放 Rust 侧字符串。
 static std::string take(OpiString s) {
-    std::string out(reinterpret_cast<const char *>(s.ptr), s.len);
+    // ptr==nullptr 视为空串（Rust 侧 OpString::empty 的表示）；仅守卫构造，
+    // free 契约不变：每个返回的 OpString 恰好 free 一次。
+    std::string out;
+    if (s.ptr != nullptr) {
+        out.assign(reinterpret_cast<const char *>(s.ptr), s.len);
+    }
     opi_ffi_free_string_utf8(s);
     return out;
 }

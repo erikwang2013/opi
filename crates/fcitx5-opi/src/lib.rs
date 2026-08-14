@@ -317,7 +317,8 @@ pub unsafe extern "C" fn opi_fcitx5_key_event(keyval: u32, states: u32) -> KeyEv
             },
         })
     }))
-    .unwrap_or(None)
+    .ok()
+    .flatten()
     .unwrap_or_else(|| KeyEventResult {
         action: 0,
         text: OpString::empty(),

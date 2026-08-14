@@ -124,6 +124,39 @@ fn backspace_release_event_consumed() {
     );
     assert_eq!(s.buffer(), "a");
 }
+// ---- Delete（与退格同一路由分支） ----
+#[test]
+fn delete_mirrors_backspace() {
+    let mut s = pinyin_state();
+    for c in ['a', 'b'] {
+        handle_key(&mut s, c as u32, 0);
+    }
+    // 缓冲非空 → 引擎按码点删
+    assert_eq!(handle_key(&mut s, KEY_DELETE, 0), KeyAction::EngineHandled);
+    assert_eq!(s.buffer(), "a");
+    handle_key(&mut s, KEY_DELETE, 0);
+    assert_eq!(s.buffer(), "");
+    // 空缓冲 → 直通客户端
+    assert_eq!(handle_key(&mut s, KEY_DELETE, 0), KeyAction::PassThrough);
+    // 释放事件被消费，不删字符
+    handle_key(&mut s, 'a' as u32, 0);
+    assert_eq!(
+        handle_key(&mut s, KEY_DELETE, KEY_STATE_RELEASED),
+        KeyAction::EngineHandled
+    );
+    assert_eq!(s.buffer(), "a");
+}
+// ---- Tab / Esc：一律直通（不拦截，不消费） ----
+#[test]
+fn tab_and_esc_pass_through() {
+    let mut s = pinyin_state();
+    for c in ['h', 'a', 'o'] {
+        handle_key(&mut s, c as u32, 0);
+    }
+    assert_eq!(handle_key(&mut s, KEY_TAB, 0), KeyAction::PassThrough);
+    assert_eq!(handle_key(&mut s, KEY_ESCAPE, 0), KeyAction::PassThrough);
+    assert_eq!(s.buffer(), "hao"); // 缓冲未被吞
+}
 // ---- 英文模式直传（镜像 handleKey） ----
 fn english_state() -> CandidateState {
     let mut s = state();
@@ -267,6 +300,19 @@ fn digit_selects_candidate_page_relative() {
     assert_eq!(
         handle_key(&mut s, '2' as u32, 0),
         KeyAction::Input("词01".into())
+    );
+    assert_eq!(s.buffer(), "");
+}
+#[test]
+fn digit_one_selects_first_candidate() {
+    let mut s = pinyin_state();
+    for c in ['h', 'a', 'o'] {
+        handle_key(&mut s, c as u32, 0);
+    }
+    // '1' → 页内索引 0，选中首候选
+    assert_eq!(
+        handle_key(&mut s, '1' as u32, 0),
+        KeyAction::Input("词00".into())
     );
     assert_eq!(s.buffer(), "");
 }
