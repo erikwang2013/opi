@@ -95,10 +95,14 @@ def fetch_unihan_readings() -> str:
 def normalize(py: str) -> str:
     """kMandarin/terra 拼音 → 无调、ü→v、小写。
     当前 UCD kMandarin 用调号（ā/fā/nǚ），NFD 剥离组合音调符；
-    旧式数字调号（fa1）与 ü 冒号（lu:4→lv）一并处理。"""
+    旧式数字调号（fa1）与 ü 冒号（lu:4→lv）一并处理。
+    关键顺序：ü 家族（ü/ǖ/ǘ/ǚ/ǜ）与冒号式 "u:" 必须在 NFD 之前映射 v——
+    NFD 后组合音调符已被剥离，无法再区分 u/ü（nǚ→nu 而非 nv）。"""
+    py = py.replace("u:", "v")
+    py = re.sub(r"[üǖǘǚǜ]", "v", py)
     py = unicodedata.normalize("NFD", py)
     py = "".join(c for c in py if not unicodedata.combining(c))
-    return re.sub(r"[0-9]", "", py).replace(":", "v").lower()
+    return re.sub(r"[0-9]", "", py).lower()
 
 
 def load_kmandarin(text: str) -> dict[str, list[str]]:
@@ -225,6 +229,7 @@ def main() -> None:
         phrase_seen.add(w)
 
     n = len(ordered) + len(phrase_ordered)
+    assert n < FMAX, "行数超过 FMAX，spacing 归零，freq 全等"
     spacing = FMAX // n
     hanzi: list[str] = []
     for idx, (word, readings) in enumerate(ordered):
