@@ -123,3 +123,4 @@ opi/
 | 3 | 候选窗 UI material3 → foundation 自绘 | CMP 1.11 的 material3 弃用；候选窗 UI 改用 foundation 自绘（desktop/src/main/kotlin/io/opi/candidate/Main.kt） |
 | 4 | gradle 需 --refresh-dependencies | aliyun 镜像 probe 404 被 gradle 缓存，首次解析 JNA 5.6.0 前须 `--refresh-dependencies` 清缓存 |
 | 5 | JNA/CMP 真实 API 修正 | JVM 侧 named pipe server 用 JNA 5.6.0 raw Function（CreateNamedPipe/ConnectNamedPipe/ReadFile）+ WinBase.INVALID_HANDLE_VALUE 等真实 API 核对（与初稿虚拟 API 不同） |
+| 6 | tsf-opi Deactivate 为骨架（正式范围降级） | §4 设计为完整 TSF 生命周期；实际 Deactivate（tsf.rs:142）缺 UnadviseKeyEventSink + composition/候选窗释放，明示标注"验收补全点"。正式降级：Windows 运行验收阶段补全，不在 M6 范围内 |

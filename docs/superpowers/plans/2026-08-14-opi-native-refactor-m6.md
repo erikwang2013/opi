@@ -443,16 +443,18 @@ crates/opi-ffi/src/cabi.rs                # C ABI 出口 + free_string
 
 ### Task T: 全量测试门禁
 
-- [ ] **Step 1: cargo 全 workspace 门禁**：`cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings` 全绿。
-- [ ] **Step 2: JNI host JVM smoke 重跑**（Task A1 Step 7 命令）→ SMOKE-OK。
-- [ ] **Step 3: Android JVM/Robolectric**：`./gradlew testDebugUnitTest` 全绿（Robolectric 下载失败则降级纯 JVM + 记录偏差）。
-- [ ] **Step 4: 提交**：`git commit -m "test(m6): 多端门禁全绿"`
+- [x] **Step 1: cargo 全 workspace 门禁**：`cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings` 全绿。
+- [x] **Step 2: JNI host JVM smoke 重跑**（Task A1 Step 7 命令）→ SMOKE-OK。
+- [x] **Step 3: Android JVM/Robolectric**：`./gradlew testDebugUnitTest` 全绿（Robolectric 下载失败则降级纯 JVM + 记录偏差）。
+- [x] **Step 4: 提交**：`git commit -m "test(m6): 多端门禁全绿"`
+
+结果：cargo 229 tests 全绿 + clippy 零警告（无 pre-existing 例外）；JNI smoke 带/不带词库均 SMOKE-OK；Android 51 JVM tests 全绿（无 Robolectric 偏差）。
 
 ### Task R: 审查 + 验收
 
-- [ ] **Step 1: 代码审查**：JNI 注册表签名与 Kotlin 声明一致性、UTF-16 无 NewStringUTF 泄漏、panic 防线覆盖、行为迁移逐条对照（A4 表）。
+- [x] **Step 1: 代码审查**：JNI 注册表签名与 Kotlin 声明一致性、UTF-16 无 NewStringUTF 泄漏、panic 防线覆盖、行为迁移逐条对照（A4 表）。审查发现 2 项 Important 已修复（df7f12e）：CandidateBar 翻页箭头 contentDescription；KeyRouterTest 补 English+非空 buffer+shift 组合用例。tsf-opi Deactivate 骨架为正式范围注记（见设计 §10 偏差 #6）。
 - [ ] **Step 2: 真机验收（Android）**：IME 启用、输入中文、面板切换、设置页——待办（设备可用时）。
-- [ ] **Step 3: 桌面验收（Linux fcitx5 / Windows TSF）**：插件加载冒烟——待办（桌面环境）。
+- [ ] **Step 3: 桌面验收（Linux fcitx5 / Windows TSF）**：插件加载冒烟 + CMP 候选窗验收清单——待办（桌面环境）。
 
 ---
 
