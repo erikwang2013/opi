@@ -81,7 +81,9 @@ class SymbolCatalog(private val api: SymbolApi = OpiEngine) {
 }
 
 // 固定 schema 专用解析（仅消费引擎 serde 输出，不引 org.json：JVM 测试无 android.jar 运行时）
-private val blockRe = Regex("""\{[^{}]*}""")
+// 注意：Android 用 ICU 正则（PatternNative），`\{[^{}]*}` 的末尾 `}` 被当量化符解析抛
+// PatternSyntaxException（OpenJDK 接受、JVM 测试抓不到）→ 必须转义为 `\}`。
+private val blockRe = Regex("""\{[^{}]*\}""")
 private val idRe = Regex(""""id":(\d+)""")
 private val startRe = Regex(""""start":(\d+)""")
 private val endRe = Regex(""""end":(\d+)""")

@@ -11,6 +11,7 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
+import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryOwner
 import io.opi.input.engine.EngineController
 import io.opi.input.jni.EngineLoader
@@ -29,13 +30,17 @@ class OpiImeService : InputMethodService() {
     private val symbolCatalog = SymbolCatalog()
     private lateinit var keyRouter: KeyRouter
 
-    // Compose 需要 ViewTreeLifecycleOwner/SavedStateRegistryOwner（IME Service 无 Activity 生命周期）。
+    // Compose 需要 ViewTreeLifecycleOwner（IME Service 无 Activity 生命周期）。
     // 最小实现：lifecycleRegistry 手动推进（CREATED→RESUMED→STARTED→DESTROYED）。
+    // SavedStateRegistryOwner 必须挂：Compose 1.7+ 的 AndroidComposeView.onAttachedToWindow
+    // 要求 propagateViewTreeSavedStateRegistryOwner，否则抛 IllegalStateException；
+    // registry 需已 restore（consumeRestoredStateForKey 检查），而 1.2.1 的 performRestore
+    // 为 mangled internal 无法源码调用 → SavedStateRegistryFactory 反射置 isRestored=true
+    // （IME 无持久状态，等效空 restore）。
     private val lifecycleOwner = ImeLifecycleOwner()
-    // savedstate 1.2.1 的 SavedStateRegistry() 为 Kotlin internal（Java 桥实例化）；
-    // SavedStateRegistryOwner 继承 LifecycleOwner，lifecycle 委托给同一个 lifecycleOwner。
     private val savedStateRegistryOwner = object : SavedStateRegistryOwner {
-        override val savedStateRegistry = SavedStateRegistryFactory.create()
+        override val savedStateRegistry: SavedStateRegistry =
+            SavedStateRegistryFactory.createRestored()
         override val lifecycle: Lifecycle get() = lifecycleOwner.lifecycle
     }
 
@@ -53,6 +58,22 @@ class OpiImeService : InputMethodService() {
         val side = min(dm.widthPixels, dm.heightPixels)
         val computed = (side * 0.42).toInt() + BOTTOM_SAFE_PX
         return computed.coerceAtMost(dm.heightPixels - BOTTOM_SAFE_PX)
+    }
+
+    /** Compose 1.7+ 的 getWindowRecomposer 在 IME 窗口根（decorView/parentPanel 链）上查找
+     *  ViewTreeLifecycleOwner——只设在 ComposeView 自身会崩
+     *  （"ViewTreeLifecycleOwner not found from parentPanel"）。addView 进窗口前挂到
+     *  decorView（窗口根），子视图查找即可命中；ComposeView 自身设置保留（低版本路径）。 */
+    override fun setInputView(view: View) {
+        // InputMethodService.getWindow() 返回 Dialog（IME 窗口用 Dialog 实现）。
+        // LifecycleOwner 与（已 restore 的）SavedStateRegistryOwner 都要挂到窗口根，
+        // Compose 1.7+ 的 AndroidComposeView 在父链上查找两者，缺任一即抛异常。
+        val root: View? = getWindow()?.window?.decorView
+        if (root != null) {
+            ViewTreeBridge.setLifecycleOwner(root, lifecycleOwner)
+            ViewTreeBridge.setSavedStateRegistryOwner(root, savedStateRegistryOwner)
+        }
+        super.setInputView(view)
     }
 
     override fun onCreateInputView(): View {
@@ -174,6 +195,10 @@ class OpiImeService : InputMethodService() {
         super.onComputeInsets(outInsets)
         Log.i(TAG, "onComputeInsets visibleTop=${outInsets.visibleTopInsets} contentTop=${outInsets.contentTopInsets}")
     }
+
+    /** 触屏输入法无条件显示输入视图。模拟器报告存在硬件键盘（qwerty）时，
+     *  默认实现返回 false → onCreateInputView 永不调用，键盘显示为空壳。 */
+    override fun onEvaluateInputViewShown(): Boolean = true
 
     override fun onWindowShown() {
         super.onWindowShown()
