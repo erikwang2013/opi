@@ -32,7 +32,7 @@ fn read_texts(s: OpiString) -> Vec<String> {
 
 /// 装载：优先 luna 词库（存在则真实加载），缺失走内置回退（也必须成功）。
 fn load_any() {
-    let p = to_units("../../flutter/app/assets/luna.opid");
+    let p = to_units("../../android/app/src/main/assets/luna.opid");
     let ok = unsafe { opi_load(p.as_ptr(), p.len()) };
     if !ok {
         assert!(unsafe { opi_load(std::ptr::null(), 0) }, "内置回退路径必须可用");

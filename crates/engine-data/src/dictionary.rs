@@ -15,8 +15,8 @@ pub fn fallback_dict() -> MmapDictionary {
     load_fallback().expect("内置 fallback 词库损坏（提交时已校验）")
 }
 
-/// 加载指定词库；文件缺失/损坏返回 Err（调用方决定回退策略，如 Flutter 侧
-/// Api.loadFallback）。此前静默回退内置词库：UI 层误以为完整词库已加载，
+/// 加载指定词库；文件缺失/损坏返回 Err（调用方决定回退策略，如 Android 侧
+/// EngineLoader 的 loadFallback 回退）。此前静默回退内置词库：UI 层误以为完整词库已加载，
 /// 候选顺序/词条差异无从排查。
 pub fn load_or_fallback(path: Option<&Path>) -> Result<Box<dyn Dictionary>, String> {
     let Some(p) = path else {
