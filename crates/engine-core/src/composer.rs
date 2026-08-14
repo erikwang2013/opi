@@ -1,8 +1,10 @@
-/// 输入模式。V1 固定四模式，双拼/五笔经 InputScheme 扩展（V2）。
+/// 输入模式。V1 固定四模式（简繁共五种），双拼/五笔经 InputScheme 扩展（V2）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Mode {
     #[default]
     Pinyin,
+    /// 繁体模式：行为同 Pinyin（小写入缓冲、shift 无效），引擎层路由到 trad 词典。
+    Traditional,
     English,
     Number,
     Symbol,
@@ -41,7 +43,7 @@ impl Composer {
     pub fn input_key(&mut self, ch: char) -> (KeyEffect, Session) {
         use KeyEffect::*;
         let effect = match self.session.mode {
-            Mode::Pinyin => {
+            Mode::Pinyin | Mode::Traditional => {
                 if self.session.buffer.chars().count() >= MAX_BUFFER {
                     Ignored
                 } else if ch.is_ascii_lowercase() || ch == '\'' {
@@ -141,6 +143,18 @@ mod tests {
         let (eff, s) = c.input_key('1');
         assert_eq!(eff, KeyEffect::Ignored);
         assert_eq!(s.buffer, "x");
+    }
+
+    #[test]
+    fn traditional_accepts_letters_like_pinyin() {
+        let mut c = Composer::new();
+        c.switch_mode(Mode::Traditional);
+        let (eff, s) = c.input_key('N');
+        assert_eq!(eff, KeyEffect::Updated);
+        assert_eq!(s.buffer, "n");
+        let (eff, s) = c.input_key('\'');
+        assert_eq!(eff, KeyEffect::Updated);
+        assert_eq!(s.buffer, "n'");
     }
 
     #[test]

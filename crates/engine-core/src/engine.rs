@@ -7,6 +7,8 @@ use crate::symbols::{Block, BlockId, SymbolEngine, SymbolEntry};
 /// 引擎门面：输入法 UI 层（经 FFI）交互的唯一入口。
 pub struct Engine {
     dict: Box<dyn Dictionary>,
+    /// 繁体词典（trad.opid）；None 时 Traditional 模式回退 dict（spec 错误处理）。
+    trad_dict: Option<Box<dyn Dictionary>>,
     composer: Composer,
     symbols: SymbolEngine,
     learner: Learner,
@@ -15,14 +17,40 @@ pub struct Engine {
 }
 
 impl Engine {
+    /// 单词典构造（trad=None），JVM/现有调用向后兼容。
     pub fn new(dict: Box<dyn Dictionary>, symbols: SymbolEngine, learner_enabled: bool) -> Self {
-        let user_boost = USER_BOOST.max(dict.max_freq().saturating_mul(2));
+        Self::with_dictionaries(dict, None, symbols, learner_enabled)
+    }
+
+    /// 双词典构造：Traditional 模式查 trad（None 时回退 dict），其余模式查 dict。
+    pub fn with_dictionaries(
+        dict: Box<dyn Dictionary>,
+        trad: Option<Box<dyn Dictionary>>,
+        symbols: SymbolEngine,
+        learner_enabled: bool,
+    ) -> Self {
+        let max_freq = dict.max_freq().max(trad.as_ref().map_or(0, |d| d.max_freq()));
+        let user_boost = USER_BOOST.max(max_freq.saturating_mul(2));
         Engine {
             dict,
+            trad_dict: trad,
             composer: Composer::new(),
             symbols,
             learner: Learner::new(learner_enabled),
             user_boost,
+        }
+    }
+
+    /// 换装繁体词典（FFI install_trad 用）。None = 清除（回退简体）。
+    pub fn set_trad_dict(&mut self, dict: Option<Box<dyn Dictionary>>) {
+        self.trad_dict = dict;
+    }
+
+    /// 当前模式生效的词典。
+    fn active_dict(&self) -> &dyn Dictionary {
+        match self.composer.session().mode {
+            Mode::Traditional => self.trad_dict.as_deref().unwrap_or(&*self.dict),
+            _ => &*self.dict,
         }
     }
 
@@ -38,10 +66,10 @@ impl Engine {
         }
     }
 
-    /// 空格键：拼音模式选中首候选（无候选则提交原始缓冲）；英文/数字模式提交缓冲。
+    /// 空格键：拼音/繁体模式选中首候选（无候选则提交原始缓冲）；英文/数字模式提交缓冲。
     pub fn input_space(&mut self) -> String {
         match self.composer.session().mode {
-            Mode::Pinyin => {
+            Mode::Pinyin | Mode::Traditional => {
                 let buffer = self.composer.session().buffer.clone();
                 let cands = self.candidates(DEFAULT_TOP_N);
                 if cands.is_empty() {
@@ -89,7 +117,7 @@ impl Engine {
     pub fn candidates(&self, limit: usize) -> Vec<Candidate> {
         let s = self.composer.session();
         rank_and_pick(
-            &*self.dict,
+            self.active_dict(),
             &self.symbols,
             &self.learner,
             &s.buffer,

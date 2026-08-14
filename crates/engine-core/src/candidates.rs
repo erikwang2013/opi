@@ -41,7 +41,7 @@ pub fn rank_and_pick<D: Dictionary + ?Sized>(
     limit: usize,
     boost: u64,
 ) -> Vec<Candidate> {
-    if input.is_empty() || mode != Mode::Pinyin {
+    if input.is_empty() || !matches!(mode, Mode::Pinyin | Mode::Traditional) {
         return Vec::new();
     }
     let mut merged: Vec<Candidate> = dict
@@ -139,6 +139,23 @@ mod tests {
         let s = SymbolEngine::builtin();
         let l = Learner::new(false);
         assert!(rank_and_pick(&d, &s, &l, "hao", Mode::English, DEFAULT_TOP_N, USER_BOOST).is_empty());
+    }
+
+    #[test]
+    fn traditional_mode_queries_dict() {
+        let d = test_dict();
+        let s = SymbolEngine::builtin();
+        let l = Learner::new(false);
+        let got = rank_and_pick(&d, &s, &l, "hao", Mode::Traditional, DEFAULT_TOP_N, USER_BOOST);
+        assert_eq!(got[0].text, "好");
+    }
+
+    #[test]
+    fn traditional_empty_input_gives_empty() {
+        let d = test_dict();
+        let s = SymbolEngine::builtin();
+        let l = Learner::new(false);
+        assert!(rank_and_pick(&d, &s, &l, "", Mode::Traditional, DEFAULT_TOP_N, USER_BOOST).is_empty());
     }
 
     #[test]
