@@ -66,7 +66,7 @@ fn texts_to_json(texts: Vec<String>) -> OpiString {
     OpiString::from_utf16(&api::texts_json(&texts))
 }
 
-// ---------- 18 个 C 函数 ----------
+// ---------- 19 个 C 函数 ----------
 
 /// load(path: const uint16_t*, len) -> bool。null/空串 → 内置回退词库；坏路径 → false。
 /// # Safety
@@ -77,6 +77,20 @@ pub unsafe extern "C" fn opi_load(path: *const u16, len: usize) -> bool {
     catch_unwind(AssertUnwindSafe(|| {
         let path = unsafe { read_utf16(path, len) };
         api::install(path.as_deref()).is_ok()
+    }))
+    .unwrap_or(false)
+}
+
+/// loadTrad(path: const uint16_t*, len) -> bool。空/坏路径/引擎未加载 → false
+/// （繁体模式回退简体库，见 spec 错误处理）。
+/// # Safety
+///
+/// `ptr` 必须指向至少 `len` 个有效 `u16`（或为 null，视为空串）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_load_trad(path: *const u16, len: usize) -> bool {
+    catch_unwind(AssertUnwindSafe(|| {
+        let path = unsafe { read_utf16(path, len) }.unwrap_or_default();
+        api::install_trad(&path).is_ok()
     }))
     .unwrap_or(false)
 }

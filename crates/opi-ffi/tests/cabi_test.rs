@@ -5,9 +5,9 @@ use std::sync::Mutex;
 
 use opi_ffi::cabi::{
     opi_backspace, opi_buffer, opi_candidates, opi_clear, opi_clear_user_words, opi_export_user_words,
-    opi_ffi_free_string, opi_input_key, opi_input_space, opi_learner_enabled, opi_load, opi_mode, opi_select,
-    opi_search_symbols, opi_set_learner, opi_set_shift, opi_switch_mode, opi_symbol_blocks, opi_symbols_in_block,
-    OpiString,
+    opi_ffi_free_string, opi_input_key, opi_input_space, opi_learner_enabled, opi_load, opi_load_trad, opi_mode,
+    opi_select, opi_search_symbols, opi_set_learner, opi_set_shift, opi_switch_mode, opi_symbol_blocks,
+    opi_symbols_in_block, OpiString,
 };
 
 static SERIAL: Mutex<()> = Mutex::new(());
@@ -145,4 +145,30 @@ fn cabi_symbols_blocks_and_search() {
     let he = to_units("he");
     let hits = read_texts(unsafe { opi_search_symbols(he.as_ptr(), he.len()) });
     assert!(hits.iter().any(|s| s == "♥"), "搜索 he 应命中 ♥");
+}
+
+#[test]
+fn cabi_load_trad_routes_traditional_mode() {
+    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    load_any();
+    // 坏路径 → false（不影响已装主词典）
+    let bad = to_units("/nonexistent/trad.opid");
+    assert!(!unsafe { opi_load_trad(bad.as_ptr(), bad.len()) });
+    // 真路径：仓库内 trad.opid（Task 1 已提交）
+    let p = to_units("../../data/generated/trad.opid");
+    assert!(unsafe { opi_load_trad(p.as_ptr(), p.len()) });
+    unsafe { opi_switch_mode(4) };
+    assert_eq!(unsafe { opi_mode() }, 4);
+    let f = to_units("f");
+    let a = to_units("a");
+    unsafe {
+        opi_input_key(f.as_ptr(), f.len());
+        opi_input_key(a.as_ptr(), a.len());
+    }
+    let texts = read_texts(unsafe { opi_candidates(8) });
+    assert!(texts.contains(&"發".to_string()), "繁模式 fa 候选应含 發，实际: {texts:?}");
+    unsafe {
+        opi_switch_mode(0);
+        opi_clear();
+    }
 }

@@ -5,6 +5,7 @@ use std::sync::Mutex;
 
 use engine_core::candidates::{Candidate, CandidateKind};
 use engine_core::composer::Mode;
+use engine_core::dictionary::Dictionary;
 use engine_core::symbols::{Block, BlockId, SymbolEntry};
 use engine_core::Engine;
 
@@ -14,7 +15,7 @@ pub static SINGLETON: Mutex<Option<Api>> = Mutex::new(None);
 /// 装载引擎。`None`/空串 → 内置回退词库（35 词）；非空路径 → load_or_fallback
 /// 原样语义（坏路径返回 Err，仅内置损坏时方为不可恢复）。成功即替换单例。
 pub fn install(path: Option<&str>) -> Result<(), String> {
-    let dict: Box<dyn engine_core::dictionary::Dictionary> = match path {
+    let dict: Box<dyn Dictionary> = match path {
         Some(p) if !p.is_empty() => engine_data::load_or_fallback(Some(std::path::Path::new(p)))?,
         _ => Box::new(engine_data::fallback_dict()),
     };
@@ -26,19 +27,36 @@ pub fn install(path: Option<&str>) -> Result<(), String> {
     Ok(())
 }
 
+/// 装载繁体词典并挂到已安装引擎上（不替换主词典，简体模式不受影响）。
+/// 严格加载（load_mmap，坏路径不回落内置——内置是简体 35 词，装成繁体语义错误）；
+/// 引擎未 load 时返回 Err（调用方按 false 处理，繁体模式回退简体库）。
+pub fn install_trad(path: &str) -> Result<(), String> {
+    let dict = engine_data::load_mmap(std::path::Path::new(path))
+        .map_err(|e| format!("load trad {}: {e:?}", path))?;
+    let mut guard = SINGLETON.lock().unwrap_or_else(|p| p.into_inner());
+    match guard.as_mut() {
+        Some(api) => {
+            api.set_trad_dict(Some(Box::new(dict)));
+            Ok(())
+        }
+        None => Err("engine not loaded".into()),
+    }
+}
+
 /// 在引擎单例上执行操作；未 load 时返回 None（调用方按哨兵处理）。
 pub fn with_engine<R>(f: impl FnOnce(&mut Api) -> R) -> Option<R> {
     let mut g = SINGLETON.lock().unwrap_or_else(|p| p.into_inner());
     g.as_mut().map(f)
 }
 
-/// JNI/C 共用的 0..=3 模式整数 ↔ Mode 转换（0=Pinyin 1=English 2=Number 3=Symbol）。
+/// JNI/C 共用的 0..=4 模式整数 ↔ Mode 转换（0=Pinyin 1=English 2=Number 3=Symbol 4=Traditional）。
 pub fn mode_from_int(m: i32) -> Option<Mode> {
     match m {
         0 => Some(Mode::Pinyin),
         1 => Some(Mode::English),
         2 => Some(Mode::Number),
         3 => Some(Mode::Symbol),
+        4 => Some(Mode::Traditional),
         _ => None,
     }
 }
@@ -49,6 +67,7 @@ pub fn mode_to_int(m: Mode) -> i32 {
         Mode::English => 1,
         Mode::Number => 2,
         Mode::Symbol => 3,
+        Mode::Traditional => 4,
     }
 }
 
@@ -93,6 +112,7 @@ pub fn symbol_blocks_json(api: &Api) -> String {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ApiMode {
     Pinyin,
+    Traditional,
     English,
     Number,
     Symbol,
@@ -102,6 +122,7 @@ impl From<Mode> for ApiMode {
     fn from(m: Mode) -> Self {
         match m {
             Mode::Pinyin => ApiMode::Pinyin,
+            Mode::Traditional => ApiMode::Traditional,
             Mode::English => ApiMode::English,
             Mode::Number => ApiMode::Number,
             Mode::Symbol => ApiMode::Symbol,
@@ -113,6 +134,7 @@ impl From<ApiMode> for Mode {
     fn from(m: ApiMode) -> Self {
         match m {
             ApiMode::Pinyin => Mode::Pinyin,
+            ApiMode::Traditional => Mode::Traditional,
             ApiMode::English => Mode::English,
             ApiMode::Number => Mode::Number,
             ApiMode::Symbol => Mode::Symbol,
@@ -224,6 +246,11 @@ impl Api {
         self.engine.switch_mode(mode.into());
     }
 
+    /// 换装繁体词典（trad.opid）。None = 清除（繁体模式回退简体库）。
+    pub fn set_trad_dict(&mut self, dict: Option<Box<dyn Dictionary>>) {
+        self.engine.set_trad_dict(dict);
+    }
+
     pub fn set_shift(&mut self, on: bool) {
         self.engine.set_shift(on);
     }
@@ -280,6 +307,10 @@ impl Api {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 单例串行化：install/install_trad 与 install_singleton_fallback_and_path
+    /// 共享 SINGLETON，并行执行时相互复位会制造竞态，加锁串行。
+    static SINGLETON_GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     fn api() -> Api {
         Api::load_fallback_sync().expect("fallback load")
@@ -383,6 +414,7 @@ mod tests {
 
     #[test]
     fn install_singleton_fallback_and_path() {
+        let _g = SINGLETON_GUARD.lock().unwrap_or_else(|p| p.into_inner());
         // 空串/None → 内置回退
         assert!(install(None).is_ok());
         assert!(with_engine(|a| a.buffer()).is_some());
@@ -396,9 +428,77 @@ mod tests {
     fn mode_int_roundtrip() {
         assert_eq!(mode_from_int(0), Some(Mode::Pinyin));
         assert_eq!(mode_from_int(3), Some(Mode::Symbol));
-        assert_eq!(mode_from_int(4), None);
+        assert_eq!(mode_from_int(4), Some(Mode::Traditional));
+        assert_eq!(mode_from_int(5), None);
         assert_eq!(mode_from_int(-1), None);
         assert_eq!(mode_to_int(Mode::English), 1);
         assert_eq!(mode_to_int(Mode::Number), 2);
+        assert_eq!(mode_to_int(Mode::Traditional), 4);
+    }
+
+    #[test]
+    fn install_trad_hooks_trad_dict() {
+        let _g = SINGLETON_GUARD.lock().unwrap_or_else(|p| p.into_inner());
+        // 引擎未加载 → Err
+        *SINGLETON.lock().unwrap() = None;
+        assert!(install_trad("/nonexistent/trad.opid").is_err());
+        // 先装主库：坏路径 → Err 且简体模式不受影响
+        install(None).unwrap();
+        assert!(install_trad("/nonexistent/trad.opid").is_err());
+        // 真路径：临时编译一个小词典（engine_data 序列化，opi-ffi 不依赖 opi-tools）
+        let dict = engine_data::format::OpDict {
+            entries: vec![engine_data::format::RawEntry {
+                pinyin: "fa".into(),
+                word: "發".into(),
+                freq: 4000,
+            }],
+            pinyin_total: 2,
+        };
+        let tmp = std::env::temp_dir().join("opi_trad_test.opid");
+        std::fs::write(&tmp, engine_data::serialize(&dict)).unwrap();
+        install_trad(tmp.to_str().unwrap()).unwrap();
+        // 繁体模式候选走 trad 词典
+        let top = with_engine(|a| {
+            a.switch_mode(ApiMode::Traditional);
+            a.input_key("f".into());
+            a.input_key("a".into());
+            a.candidates(8)[0].text.clone()
+        })
+        .expect("engine loaded");
+        assert_eq!(top, "發");
+        std::fs::remove_file(&tmp).ok();
+        with_engine(|a| a.switch_mode(ApiMode::Pinyin));
+    }
+
+    #[test]
+    fn install_trad_recomputes_user_boost() {
+        let _g = SINGLETON_GUARD.lock().unwrap_or_else(|p| p.into_inner());
+        // 高静态词频（4e9，trad.opid 同量级）安装后，learner 选词仍压过静态词。
+        *SINGLETON.lock().unwrap() = None;
+        install(None).unwrap();
+        let dict = engine_data::format::OpDict {
+            entries: vec![
+                engine_data::format::RawEntry { pinyin: "fa".into(), word: "發".into(), freq: 4_000_000_000 },
+                engine_data::format::RawEntry { pinyin: "fa".into(), word: "髮".into(), freq: 3_999_000_000 },
+            ],
+            pinyin_total: 4, // 两条 "fa" 拼音 blob 共 4 字节（serialize debug_assert 校验）
+        };
+        let tmp = std::env::temp_dir().join("opi_trad_boost.opid");
+        std::fs::write(&tmp, engine_data::serialize(&dict)).unwrap();
+        install_trad(tmp.to_str().unwrap()).unwrap();
+        std::fs::remove_file(&tmp).ok();
+        with_engine(|a| {
+            a.set_learner(true);
+            a.switch_mode(ApiMode::Traditional);
+            a.input_key("f".into());
+            a.input_key("a".into());
+            assert_eq!(a.candidates(8)[0].text, "發");
+            a.select(1); // 选 髮
+            a.input_key("f".into());
+            a.input_key("a".into());
+            assert_eq!(a.candidates(8)[0].text, "髮", "learner 选词应压过 4e9 静态词");
+            a.set_learner(false);
+        });
+        with_engine(|a| a.switch_mode(ApiMode::Pinyin));
     }
 }

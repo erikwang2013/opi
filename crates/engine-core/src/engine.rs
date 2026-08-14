@@ -42,7 +42,10 @@ impl Engine {
     }
 
     /// 换装繁体词典（FFI install_trad 用）。None = 清除（回退简体）。
+    /// 重算 user_boost：trad.opid 静态最大词频 4e9，保持"一次选词压过全部静态词"。
     pub fn set_trad_dict(&mut self, dict: Option<Box<dyn Dictionary>>) {
+        let max_freq = self.dict.max_freq().max(dict.as_ref().map_or(0, |d| d.max_freq()));
+        self.user_boost = USER_BOOST.max(max_freq.saturating_mul(2));
         self.trad_dict = dict;
     }
 

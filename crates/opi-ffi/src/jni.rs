@@ -20,7 +20,7 @@ use crate::jni_util;
 
 type JEnv = *mut sys::JNIEnv;
 
-// ---------- 18 个 native 方法 ----------
+// ---------- 19 个 native 方法 ----------
 
 /// load(path: String?) -> bool。null/空串 → 内置回退词库；坏路径 → false。
 #[unsafe(no_mangle)]
@@ -28,6 +28,16 @@ pub unsafe extern "system" fn opijni_load(env: JEnv, _class: sys::jclass, path: 
     catch_unwind(AssertUnwindSafe(|| {
         let path = unsafe { jni_util::jstring_to_rust(env, path) };
         api::install(path.as_deref()).is_ok()
+    }))
+    .unwrap_or(false)
+}
+
+/// loadTrad(path: String) -> bool。空/坏路径/引擎未加载 → false（繁体模式回退简体库）。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_load_trad(env: JEnv, _class: sys::jclass, path: jstring) -> jboolean {
+    catch_unwind(AssertUnwindSafe(|| {
+        let path = unsafe { jni_util::jstring_to_rust(env, path) }.unwrap_or_default();
+        api::install_trad(&path).is_ok()
     }))
     .unwrap_or(false)
 }
@@ -185,6 +195,7 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _reserved: *mut c
         let methods = unsafe {
             [
                 NativeMethod::from_raw_parts(jni_str!("load"), jni_str!("(Ljava/lang/String;)Z"), opijni_load as *mut c_void),
+                NativeMethod::from_raw_parts(jni_str!("loadTrad"), jni_str!("(Ljava/lang/String;)Z"), opijni_load_trad as *mut c_void),
                 NativeMethod::from_raw_parts(jni_str!("inputKey"), jni_str!("(Ljava/lang/String;)Ljava/lang/String;"), opijni_input_key as *mut c_void),
                 NativeMethod::from_raw_parts(jni_str!("backspace"), jni_str!("()V"), opijni_backspace as *mut c_void),
                 NativeMethod::from_raw_parts(jni_str!("clear"), jni_str!("()V"), opijni_clear as *mut c_void),
