@@ -91,12 +91,22 @@ class OpiImeService : InputMethodService() {
             ViewTreeBridge.setLifecycleOwner(root, lifecycleOwner)
             ViewTreeBridge.setSavedStateRegistryOwner(root, savedStateRegistryOwner)
         }
+        // 旋转必崩的根因，在 AOSP 那侧：resetStateForNewConfiguration 会换一棵全新 root、
+        // 把 mInputFrame 指向一个新的空 FrameLayout、并置 mInputView = null，但**从不**
+        // 摘掉挂在被丢弃的旧 root 上的旧 view。随后 updateInputViewShown 见 mInputView
+        // 为 null 又调 onCreateInputView()，P1 缓存把同一实例交回来，而 super.setInputView
+        // 里的 mInputFrame.removeAllViews() 清的是那个新空 frame（空操作）→ addView 抛
+        // "The specified child already has a parent"。
+        // 所以进 frame 前先把自己从旧 parent 上摘干净。修在这里而不是 onCreateInputView：
+        // setInputView 是"视图进入 frame"的唯一收口，AOSP 自调用与将来任何调用方都覆盖到。
+        (view.parent as? ViewGroup)?.removeView(view)
         super.setInputView(view)
     }
 
     override fun onCreateInputView(): View {
-        // P1 防重入：窗口每次重建（模式切换/重新显示）都会再调本方法，
-        // 每次新建视图会丢状态并泄漏旧视图。缓存复用。
+        // P1 防重入：窗口每次重建（模式切换/重新显示）都会再调本方法，每次新建视图会丢状态
+        // （面板/候选/生命周期接线全部重来）。复用本身是安全的 —— 安全性由 setInputView
+        // 负责：它会把视图先摘离旧 parent。这条路径真正的坑是"复用却没摘"，不是"新建"。
         val cached = inputViewCache
         if (cached != null) {
             Log.i(TAG, "onCreateInputView: reuse cached view")
