@@ -35,7 +35,10 @@ fn cabi_key_event_pinyin_buffer_and_commit() {
     // 非提交不得分配文本（调用方可以无条件 opi_ffi_free_string）
     let r = unsafe { opi_key_event('w' as u32, 0) };
     assert_eq!(r.action, 1);
-    assert!(r.text.ptr.is_null() && r.text.len == 0, "action≠2 时 text 必须是空句柄");
+    assert!(
+        r.text.ptr.is_null() && r.text.len == 0,
+        "action≠2 时 text 必须是空句柄"
+    );
     unsafe { opi_clear() };
 }
 
@@ -50,7 +53,11 @@ fn cabi_key_event_digit_selects_page_relative() {
     key_event('o' as u32, 0);
     let texts = read_texts(unsafe { opi_candidates(64) });
     assert!(!texts.is_empty(), "前置：wo 应有候选");
-    let want = if texts.len() > 8 { texts[8].clone() } else { texts[0].clone() };
+    let want = if texts.len() > 8 {
+        texts[8].clone()
+    } else {
+        texts[0].clone()
+    };
     assert_eq!(key_event(KEY_PAGE_DOWN, 0).0, 1, "翻页被路由消费");
     let (a, t) = key_event('1' as u32, 0);
     assert_eq!((a, t.as_str()), (2, want.as_str()), "翻页后 '1' = 页内首位");
@@ -93,7 +100,11 @@ fn cabi_key_event_switch_mode_clears_frontend_shift_lock() {
     unsafe { opi_switch_mode(0) }; // 离开 English → 清前端 ⇧
     unsafe { opi_switch_mode(1) }; // 回到 English
     let (a, t) = key_event('a' as u32, 0);
-    assert_eq!((a, t.as_str()), (2, "a"), "Lock 不得跨模式残留（否则全大写）");
+    assert_eq!(
+        (a, t.as_str()),
+        (2, "a"),
+        "Lock 不得跨模式残留（否则全大写）"
+    );
     unsafe { opi_switch_mode(0) };
 }
 
@@ -110,14 +121,22 @@ fn cabi_key_event_printables_not_stolen_by_special_key_codes() {
     }
     assert_eq!(read(unsafe { opi_buffer() }), "hao", "前置：缓冲已有拼音");
     for c in ['.', '!', '"'] {
-        assert_eq!(key_event(c as u32, 0), (0, String::new()), "可打印 {c:?} 必须交系统");
+        assert_eq!(
+            key_event(c as u32, 0),
+            (0, String::new()),
+            "可打印 {c:?} 必须交系统"
+        );
         assert_eq!(
             key_event(c as u32, KEY_STATE_RELEASED),
             (0, String::new()),
             "抬起与按下同判（{c:?}）"
         );
     }
-    assert_eq!(read(unsafe { opi_buffer() }), "hao", "缓冲不得被这些字符吃掉");
+    assert_eq!(
+        read(unsafe { opi_buffer() }),
+        "hao",
+        "缓冲不得被这些字符吃掉"
+    );
     unsafe { opi_clear() };
 }
 
@@ -147,7 +166,11 @@ fn cabi_key_event_page_aligns_across_raw_abi_exports() {
     key_event('w' as u32, 0);
     key_event('o' as u32, 0);
     let texts = read_texts(unsafe { opi_candidates(64) });
-    assert!(texts.len() > 8, "前置：需要 >8 个候选（luna 词库），实际 {}", texts.len());
+    assert!(
+        texts.len() > 8,
+        "前置：需要 >8 个候选（luna 词库），实际 {}",
+        texts.len()
+    );
     assert_eq!(key_event(KEY_PAGE_DOWN, 0).0, 1, "翻页被路由消费");
 
     // raw 出口重填缓冲（缓冲区内容与翻页前相同 —— 路由内部判据看不出来）
@@ -156,7 +179,11 @@ fn cabi_key_event_page_aligns_across_raw_abi_exports() {
         let u = to_units(c);
         unsafe { opi_input_key(u.as_ptr(), u.len()) };
     }
-    assert_eq!(read(unsafe { opi_buffer() }), "wo", "前置：缓冲已由 raw 出口重建");
+    assert_eq!(
+        read(unsafe { opi_buffer() }),
+        "wo",
+        "前置：缓冲已由 raw 出口重建"
+    );
     let (a, t) = key_event('1' as u32, 0);
     assert_eq!(
         (a, t.as_str()),
@@ -186,7 +213,11 @@ fn cabi_shift_state_reflects_frontend_three_states() {
     key_event('a' as u32, 0);
     assert_eq!(unsafe { opi_shift_state() }, 2, "LOCK 不因一次输入复位");
     unsafe { opi_switch_mode(0) }; // 离开 English → 清前端 ⇧
-    assert_eq!(unsafe { opi_shift_state() }, 0, "切走必须清（否则回到英文全大写）");
+    assert_eq!(
+        unsafe { opi_shift_state() },
+        0,
+        "切走必须清（否则回到英文全大写）"
+    );
 }
 
 /// `opi_page` 出口：候选栏本地页码必须与引擎一致（自己维护的话，末页被钳制时
@@ -201,13 +232,25 @@ fn cabi_page_matches_page_relative_selection() {
     key_event('w' as u32, 0);
     key_event('o' as u32, 0);
     let texts = read_texts(unsafe { opi_candidates(64) });
-    assert!(texts.len() > 8, "前置：需要 >8 个候选（luna 词库），实际 {}", texts.len());
+    assert!(
+        texts.len() > 8,
+        "前置：需要 >8 个候选（luna 词库），实际 {}",
+        texts.len()
+    );
     assert_eq!(unsafe { opi_page() }, 0, "起始页 0");
     key_event(KEY_PAGE_DOWN, 0);
     assert_eq!(unsafe { opi_page() }, 1, "PageDown 后页码 1");
     let (a, t) = key_event('1' as u32, 0);
-    assert_eq!((a, t.as_str()), (2, texts[8].as_str()), "第 1 页首位 = 全局第 9 个");
-    assert_eq!(unsafe { opi_page() }, 0, "提交清空缓冲 → 页码归零（与选词路径同源）");
+    assert_eq!(
+        (a, t.as_str()),
+        (2, texts[8].as_str()),
+        "第 1 页首位 = 全局第 9 个"
+    );
+    assert_eq!(
+        unsafe { opi_page() },
+        0,
+        "提交清空缓冲 → 页码归零（与选词路径同源）"
+    );
     unsafe { opi_clear() };
 }
 
@@ -222,7 +265,10 @@ fn cabi_candidates_page_and_page_count_match_global_slice() {
     unsafe { opi_switch_mode(0) };
     // 空缓冲 → 无候选 → 0 页（分页状态与候选集同源；实测空缓冲 candidates=0）
     assert_eq!(unsafe { opi_page_count() }, 0, "空缓冲 → 0 页");
-    assert!(read_texts(unsafe { opi_candidates_page() }).is_empty(), "空缓冲 → 空页");
+    assert!(
+        read_texts(unsafe { opi_candidates_page() }).is_empty(),
+        "空缓冲 → 空页"
+    );
 
     key_event('w' as u32, 0);
     key_event('o' as u32, 0);
@@ -230,7 +276,11 @@ fn cabi_candidates_page_and_page_count_match_global_slice() {
     let p0 = read_texts(unsafe { opi_candidates_page() });
     assert!(!p0.is_empty(), "首页非空");
     let n = p0.len(); // 页大小 = 出口给出的首页长度，测试不硬编码 8
-    assert!(global.len() > n, "前置：需要多于一页（luna 词库），全局 {} / 首页 {n}", global.len());
+    assert!(
+        global.len() > n,
+        "前置：需要多于一页（luna 词库），全局 {} / 首页 {n}",
+        global.len()
+    );
     assert_eq!(p0[..], global[..n], "首页 = 全局列表前缀");
     assert_eq!(
         unsafe { opi_page_count() },
@@ -242,13 +292,24 @@ fn cabi_candidates_page_and_page_count_match_global_slice() {
     assert_eq!(unsafe { opi_page() }, 1, "翻到第 1 页");
     let p1 = read_texts(unsafe { opi_candidates_page() });
     assert!(!p1.is_empty(), "第 1 页非空（前置保证全局多于一页）");
-    assert_eq!(p1[..], global[n..n + p1.len()], "第 1 页 = 全局列表从 n 开始的一段");
+    assert_eq!(
+        p1[..],
+        global[n..n + p1.len()],
+        "第 1 页 = 全局列表从 n 开始的一段"
+    );
 
     // 交叉验证：该页首位就是按 '1' 会提交的词（页码唯一可观测的下游效果）
     let (a, t) = key_event('1' as u32, 0);
-    assert_eq!((a, t.as_str()), (2, p1[0].as_str()), "第 1 页首位 = '1' 提交的词");
+    assert_eq!(
+        (a, t.as_str()),
+        (2, p1[0].as_str()),
+        "第 1 页首位 = '1' 提交的词"
+    );
     assert_eq!(unsafe { opi_page() }, 0, "提交后页码归零");
-    assert!(read_texts(unsafe { opi_candidates_page() }).is_empty(), "提交后无候选");
+    assert!(
+        read_texts(unsafe { opi_candidates_page() }).is_empty(),
+        "提交后无候选"
+    );
     assert_eq!(unsafe { opi_page_count() }, 0, "提交后 0 页");
     unsafe { opi_clear() };
 }
@@ -272,24 +333,49 @@ fn cabi_page_resets_after_raw_exports_that_change_buffer() {
     // ① opi_select（全局索引；第 1 页首位 = 全局第 n 个）
     type_wo();
     let n = page_size();
-    assert!(read_texts(unsafe { opi_candidates(64) }).len() > n, "前置：需要多于一页（luna 词库）");
+    assert!(
+        read_texts(unsafe { opi_candidates(64) }).len() > n,
+        "前置：需要多于一页（luna 词库）"
+    );
     key_event(KEY_PAGE_DOWN, 0);
     assert_eq!(unsafe { opi_page() }, 1, "前置：已翻到第 1 页");
-    assert!(!read(unsafe { opi_select(n) }).is_empty(), "前置：选择成功并清空缓冲");
-    assert_eq!(unsafe { opi_page() }, 0, "opi_select 改了缓冲 → 页码必须归零");
-    assert_eq!(unsafe { opi_page_count() }, 0, "无候选 → 0 页（与上一行必须自洽）");
+    assert!(
+        !read(unsafe { opi_select(n) }).is_empty(),
+        "前置：选择成功并清空缓冲"
+    );
+    assert_eq!(
+        unsafe { opi_page() },
+        0,
+        "opi_select 改了缓冲 → 页码必须归零"
+    );
+    assert_eq!(
+        unsafe { opi_page_count() },
+        0,
+        "无候选 → 0 页（与上一行必须自洽）"
+    );
 
     // ② opi_input_space（拼音态有缓冲 → 走引擎提交）
     type_wo();
     key_event(KEY_PAGE_DOWN, 0);
-    assert!(!read(unsafe { opi_input_space() }).is_empty(), "前置：空格提交并清空缓冲");
-    assert_eq!(unsafe { opi_page() }, 0, "opi_input_space 改了缓冲 → 页码必须归零");
+    assert!(
+        !read(unsafe { opi_input_space() }).is_empty(),
+        "前置：空格提交并清空缓冲"
+    );
+    assert_eq!(
+        unsafe { opi_page() },
+        0,
+        "opi_input_space 改了缓冲 → 页码必须归零"
+    );
 
     // ③ opi_clear
     type_wo();
     key_event(KEY_PAGE_DOWN, 0);
     unsafe { opi_clear() };
-    assert_eq!(unsafe { opi_page() }, 0, "opi_clear 改了缓冲 → 页码必须归零");
+    assert_eq!(
+        unsafe { opi_page() },
+        0,
+        "opi_clear 改了缓冲 → 页码必须归零"
+    );
 
     unsafe { opi_clear() };
 }
@@ -316,8 +402,16 @@ fn cabi_select_page_is_page_relative_and_reuses_one_conversion() {
     type_wo();
     let global = read_texts(unsafe { opi_candidates(64) });
     let n = read_texts(unsafe { opi_candidates_page() }).len();
-    assert!(global.len() > n, "前置：需要多于一页（luna 词库），全局 {} / 页大小 {n}", global.len());
-    assert_eq!(read(unsafe { opi_select_page(1) }), global[1], "第 0 页 k=1 = 全局第 1 个");
+    assert!(
+        global.len() > n,
+        "前置：需要多于一页（luna 词库），全局 {} / 页大小 {n}",
+        global.len()
+    );
+    assert_eq!(
+        read(unsafe { opi_select_page(1) }),
+        global[1],
+        "第 0 页 k=1 = 全局第 1 个"
+    );
     assert_eq!(read(unsafe { opi_buffer() }), "", "提交后缓冲清空");
     assert_eq!(unsafe { opi_page() }, 0, "提交后页码归零");
 

@@ -12,7 +12,7 @@
 #![allow(clippy::missing_safety_doc)]
 
 use std::ffi::c_void;
-use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use jni::jni_str;
 use jni::sys::{self, jboolean, jint, jshort, jstring};
@@ -27,7 +27,11 @@ type JEnv = *mut sys::JNIEnv;
 
 /// load(path: String?) -> bool。null/空串 → 内置回退词库；坏路径 → false。
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_load(env: JEnv, _class: sys::jclass, path: jstring) -> jboolean {
+pub unsafe extern "system" fn opijni_load(
+    env: JEnv,
+    _class: sys::jclass,
+    path: jstring,
+) -> jboolean {
     catch_unwind(AssertUnwindSafe(|| {
         let path = unsafe { jni_util::jstring_to_rust(env, path) };
         api::install(path.as_deref()).is_ok()
@@ -37,7 +41,11 @@ pub unsafe extern "system" fn opijni_load(env: JEnv, _class: sys::jclass, path: 
 
 /// loadTrad(path: String) -> bool。空/坏路径/引擎未加载 → false（繁体模式回退简体库）。
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_load_trad(env: JEnv, _class: sys::jclass, path: jstring) -> jboolean {
+pub unsafe extern "system" fn opijni_load_trad(
+    env: JEnv,
+    _class: sys::jclass,
+    path: jstring,
+) -> jboolean {
     catch_unwind(AssertUnwindSafe(|| {
         let path = unsafe { jni_util::jstring_to_rust(env, path) }.unwrap_or_default();
         api::install_trad(&path).is_ok()
@@ -47,7 +55,11 @@ pub unsafe extern "system" fn opijni_load_trad(env: JEnv, _class: sys::jclass, p
 
 /// inputKey(ch: String) -> String。永不 panic。单字符外（空/多字符/非 ASCII）返回空串。
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_input_key(env: JEnv, _class: sys::jclass, key: jstring) -> jstring {
+pub unsafe extern "system" fn opijni_input_key(
+    env: JEnv,
+    _class: sys::jclass,
+    key: jstring,
+) -> jstring {
     let out = catch_unwind(AssertUnwindSafe(|| {
         let ch = unsafe { jni_util::jstring_to_rust(env, key) }.unwrap_or_default();
         api::with_engine(|e| e.input_key(ch)).unwrap_or_default()
@@ -68,12 +80,20 @@ pub unsafe extern "system" fn opijni_clear(_env: JEnv, _class: sys::jclass) {
 
 /// select(index: Int) -> String。越界返回空串（旧语义）。
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_select(env: JEnv, _class: sys::jclass, index: jint) -> jstring {
+pub unsafe extern "system" fn opijni_select(
+    env: JEnv,
+    _class: sys::jclass,
+    index: jint,
+) -> jstring {
     let out = catch_unwind(AssertUnwindSafe(|| {
         api::with_engine(|e| {
             // 负索引按越界处理（空串）。不能 `index.max(0)` 钳成 0 —— 那会把负数
             // 变成合法下标并提交第 0 个候选，与本函数的文档约定相反。
-            if index < 0 { String::new() } else { e.select(index as usize) }
+            if index < 0 {
+                String::new()
+            } else {
+                e.select(index as usize)
+            }
         })
         .unwrap_or_default()
     }))
@@ -111,7 +131,11 @@ pub unsafe extern "system" fn opijni_input_space(env: JEnv, _class: sys::jclass)
 
 /// candidates(limit: Int) -> String[]。仅文本数组（kind/score UI 不用）。
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_candidates(env: JEnv, _class: sys::jclass, limit: jint) -> sys::jobjectArray {
+pub unsafe extern "system" fn opijni_candidates(
+    env: JEnv,
+    _class: sys::jclass,
+    limit: jint,
+) -> sys::jobjectArray {
     let texts = catch_unwind(AssertUnwindSafe(|| {
         api::with_engine(|e| api::candidate_texts(e, limit.max(0) as usize)).unwrap_or_default()
     }))
@@ -138,7 +162,11 @@ pub unsafe extern "system" fn opijni_mode(_env: JEnv, _class: sys::jclass) -> ji
 
 /// searchSymbols(keyword: String) -> String[]。仅文本数组。
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_search_symbols(env: JEnv, _class: sys::jclass, keyword: jstring) -> sys::jobjectArray {
+pub unsafe extern "system" fn opijni_search_symbols(
+    env: JEnv,
+    _class: sys::jclass,
+    keyword: jstring,
+) -> sys::jobjectArray {
     let texts = catch_unwind(AssertUnwindSafe(|| {
         let kw = unsafe { jni_util::jstring_to_rust(env, keyword) }.unwrap_or_default();
         api::with_engine(|e| api::search_symbol_texts(e, &kw)).unwrap_or_default()
@@ -159,12 +187,20 @@ pub unsafe extern "system" fn opijni_symbol_blocks(env: JEnv, _class: sys::jclas
 
 /// symbolsInBlock(id: Short) -> String[]。仅文本数组。
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_symbols_in_block(env: JEnv, _class: sys::jclass, id: jshort) -> sys::jobjectArray {
+pub unsafe extern "system" fn opijni_symbols_in_block(
+    env: JEnv,
+    _class: sys::jclass,
+    id: jshort,
+) -> sys::jobjectArray {
     let texts = catch_unwind(AssertUnwindSafe(|| {
         // 负 id 同理按越界处理（空数组），不钳成块 0。jshort 转 u16 前必须先判负，
         // 否则 -1 会变成 65535（一个合法但错误的块号）。
         api::with_engine(|e| {
-            if id < 0 { Vec::new() } else { api::symbol_texts(e, id as u16) }
+            if id < 0 {
+                Vec::new()
+            } else {
+                api::symbol_texts(e, id as u16)
+            }
         })
         .unwrap_or_default()
     }))
@@ -174,22 +210,37 @@ pub unsafe extern "system" fn opijni_symbols_in_block(env: JEnv, _class: sys::jc
 
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_learner_enabled(_env: JEnv, _class: sys::jclass) -> jboolean {
-    catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.learner_enabled()).unwrap_or(false))).unwrap_or(false)
+    catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.learner_enabled()).unwrap_or(false)
+    }))
+    .unwrap_or(false)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_set_learner(_env: JEnv, _class: sys::jclass, enabled: jboolean) {
-    let _ = catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.set_learner(enabled))));
+pub unsafe extern "system" fn opijni_set_learner(
+    _env: JEnv,
+    _class: sys::jclass,
+    enabled: jboolean,
+) {
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.set_learner(enabled))
+    }));
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_clear_user_words(_env: JEnv, _class: sys::jclass) {
-    let _ = catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.clear_user_words())));
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.clear_user_words())
+    }));
 }
 
 /// removeUserWord(text: String)。长按删词（B4）。词不存在 / null / 空串 → 无操作。
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_remove_user_word(env: JEnv, _class: sys::jclass, text: jstring) {
+pub unsafe extern "system" fn opijni_remove_user_word(
+    env: JEnv,
+    _class: sys::jclass,
+    text: jstring,
+) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
         let text = unsafe { jni_util::jstring_to_rust(env, text) }.unwrap_or_default();
         api::with_engine(|e| e.remove_user_word(text));
@@ -199,7 +250,11 @@ pub unsafe extern "system" fn opijni_remove_user_word(env: JEnv, _class: sys::jc
 /// importUserWords(json: String) -> Int。返回导入条数；
 /// 负数表示失败（非法 JSON / 版本不符 / 引擎未装载 / null）且不改动既有用户词。
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_import_user_words(env: JEnv, _class: sys::jclass, json: jstring) -> jint {
+pub unsafe extern "system" fn opijni_import_user_words(
+    env: JEnv,
+    _class: sys::jclass,
+    json: jstring,
+) -> jint {
     catch_unwind(AssertUnwindSafe(|| -> jint {
         let Some(json) = (unsafe { jni_util::jstring_to_rust(env, json) }) else {
             return -1;
@@ -229,34 +284,122 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _reserved: *mut c
         // JNI_OnLoad 必然运行在已 attach 的 JVM 线程上（System.loadLibrary 的调用线程），
         // get_env_attachment 即 GetEnv，不会触发 attach。
         let mut scope = ScopeToken::default();
-        let mut guard = unsafe { JavaVM::from_raw(vm).get_env_attachment(&mut scope).map_err(|e| format!("get_env_attachment 失败: {e}"))? };
+        let mut guard = unsafe {
+            JavaVM::from_raw(vm)
+                .get_env_attachment(&mut scope)
+                .map_err(|e| format!("get_env_attachment 失败: {e}"))?
+        };
         let env = guard.borrow_env_mut();
         let class = env
             .find_class(jni_str!("io/opi/input/jni/OpiEngine"))
             .map_err(|e| format!("find_class 失败: {e}"))?;
         let methods = unsafe {
             [
-                NativeMethod::from_raw_parts(jni_str!("load"), jni_str!("(Ljava/lang/String;)Z"), opijni_load as *mut c_void),
-                NativeMethod::from_raw_parts(jni_str!("loadTrad"), jni_str!("(Ljava/lang/String;)Z"), opijni_load_trad as *mut c_void),
-                NativeMethod::from_raw_parts(jni_str!("inputKey"), jni_str!("(Ljava/lang/String;)Ljava/lang/String;"), opijni_input_key as *mut c_void),
-                NativeMethod::from_raw_parts(jni_str!("backspace"), jni_str!("()V"), opijni_backspace as *mut c_void),
-                NativeMethod::from_raw_parts(jni_str!("clear"), jni_str!("()V"), opijni_clear as *mut c_void),
-                NativeMethod::from_raw_parts(jni_str!("select"), jni_str!("(I)Ljava/lang/String;"), opijni_select as *mut c_void),
-                NativeMethod::from_raw_parts(jni_str!("switchMode"), jni_str!("(I)V"), opijni_switch_mode as *mut c_void),
-                NativeMethod::from_raw_parts(jni_str!("setShift"), jni_str!("(Z)V"), opijni_set_shift as *mut c_void),
-                NativeMethod::from_raw_parts(jni_str!("inputSpace"), jni_str!("()Ljava/lang/String;"), opijni_input_space as *mut c_void),
-                NativeMethod::from_raw_parts(jni_str!("candidates"), jni_str!("(I)[Ljava/lang/String;"), opijni_candidates as *mut c_void),
-                NativeMethod::from_raw_parts(jni_str!("buffer"), jni_str!("()Ljava/lang/String;"), opijni_buffer as *mut c_void),
-                NativeMethod::from_raw_parts(jni_str!("mode"), jni_str!("()I"), opijni_mode as *mut c_void),
-                NativeMethod::from_raw_parts(jni_str!("searchSymbols"), jni_str!("(Ljava/lang/String;)[Ljava/lang/String;"), opijni_search_symbols as *mut c_void),
-                NativeMethod::from_raw_parts(jni_str!("symbolBlocks"), jni_str!("()Ljava/lang/String;"), opijni_symbol_blocks as *mut c_void),
-                NativeMethod::from_raw_parts(jni_str!("symbolsInBlock"), jni_str!("(S)[Ljava/lang/String;"), opijni_symbols_in_block as *mut c_void),
-                NativeMethod::from_raw_parts(jni_str!("learnerEnabled"), jni_str!("()Z"), opijni_learner_enabled as *mut c_void),
-                NativeMethod::from_raw_parts(jni_str!("setLearner"), jni_str!("(Z)V"), opijni_set_learner as *mut c_void),
-                NativeMethod::from_raw_parts(jni_str!("clearUserWords"), jni_str!("()V"), opijni_clear_user_words as *mut c_void),
-                NativeMethod::from_raw_parts(jni_str!("removeUserWord"), jni_str!("(Ljava/lang/String;)V"), opijni_remove_user_word as *mut c_void),
-                NativeMethod::from_raw_parts(jni_str!("importUserWords"), jni_str!("(Ljava/lang/String;)I"), opijni_import_user_words as *mut c_void),
-                NativeMethod::from_raw_parts(jni_str!("exportUserWords"), jni_str!("()Ljava/lang/String;"), opijni_export_user_words as *mut c_void),
+                NativeMethod::from_raw_parts(
+                    jni_str!("load"),
+                    jni_str!("(Ljava/lang/String;)Z"),
+                    opijni_load as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("loadTrad"),
+                    jni_str!("(Ljava/lang/String;)Z"),
+                    opijni_load_trad as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("inputKey"),
+                    jni_str!("(Ljava/lang/String;)Ljava/lang/String;"),
+                    opijni_input_key as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("backspace"),
+                    jni_str!("()V"),
+                    opijni_backspace as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("clear"),
+                    jni_str!("()V"),
+                    opijni_clear as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("select"),
+                    jni_str!("(I)Ljava/lang/String;"),
+                    opijni_select as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("switchMode"),
+                    jni_str!("(I)V"),
+                    opijni_switch_mode as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("setShift"),
+                    jni_str!("(Z)V"),
+                    opijni_set_shift as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("inputSpace"),
+                    jni_str!("()Ljava/lang/String;"),
+                    opijni_input_space as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("candidates"),
+                    jni_str!("(I)[Ljava/lang/String;"),
+                    opijni_candidates as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("buffer"),
+                    jni_str!("()Ljava/lang/String;"),
+                    opijni_buffer as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("mode"),
+                    jni_str!("()I"),
+                    opijni_mode as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("searchSymbols"),
+                    jni_str!("(Ljava/lang/String;)[Ljava/lang/String;"),
+                    opijni_search_symbols as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("symbolBlocks"),
+                    jni_str!("()Ljava/lang/String;"),
+                    opijni_symbol_blocks as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("symbolsInBlock"),
+                    jni_str!("(S)[Ljava/lang/String;"),
+                    opijni_symbols_in_block as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("learnerEnabled"),
+                    jni_str!("()Z"),
+                    opijni_learner_enabled as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("setLearner"),
+                    jni_str!("(Z)V"),
+                    opijni_set_learner as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("clearUserWords"),
+                    jni_str!("()V"),
+                    opijni_clear_user_words as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("removeUserWord"),
+                    jni_str!("(Ljava/lang/String;)V"),
+                    opijni_remove_user_word as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("importUserWords"),
+                    jni_str!("(Ljava/lang/String;)I"),
+                    opijni_import_user_words as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("exportUserWords"),
+                    jni_str!("()Ljava/lang/String;"),
+                    opijni_export_user_words as *mut c_void,
+                ),
             ]
         };
         unsafe {
@@ -270,4 +413,3 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _reserved: *mut c
         _ => 0, // 注册失败：System.load 将抛出 UnsatisfiedLinkError
     }
 }
-

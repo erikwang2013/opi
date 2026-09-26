@@ -125,7 +125,9 @@ pub fn parse(data: &[u8]) -> Result<OpDict, FormatError> {
         let pl = row[4] as usize;
         pinyin_total = pinyin_total.max(po.checked_add(pl).ok_or(FormatError::BadOffsets)?);
     }
-    let word_start = pinyin_start.checked_add(pinyin_total).ok_or(FormatError::BadOffsets)?;
+    let word_start = pinyin_start
+        .checked_add(pinyin_total)
+        .ok_or(FormatError::BadOffsets)?;
     if word_start > tail {
         return Err(FormatError::BadOffsets);
     }
@@ -154,9 +156,16 @@ pub fn parse(data: &[u8]) -> Result<OpDict, FormatError> {
             return Err(FormatError::Unsorted);
         }
         prev = Some(pinyin.to_string());
-        entries.push(RawEntry { pinyin: pinyin.to_string(), word: word.to_string(), freq });
+        entries.push(RawEntry {
+            pinyin: pinyin.to_string(),
+            word: word.to_string(),
+            freq,
+        });
     }
-    Ok(OpDict { entries, pinyin_total })
+    Ok(OpDict {
+        entries,
+        pinyin_total,
+    })
 }
 
 #[cfg(test)]
@@ -166,9 +175,21 @@ mod tests {
     fn sample() -> OpDict {
         OpDict {
             entries: vec![
-                RawEntry { pinyin: "hao".into(), word: "好".into(), freq: 5000 },
-                RawEntry { pinyin: "hao".into(), word: "号".into(), freq: 1200 },
-                RawEntry { pinyin: "xiao".into(), word: "笑".into(), freq: 3000 },
+                RawEntry {
+                    pinyin: "hao".into(),
+                    word: "好".into(),
+                    freq: 5000,
+                },
+                RawEntry {
+                    pinyin: "hao".into(),
+                    word: "号".into(),
+                    freq: 1200,
+                },
+                RawEntry {
+                    pinyin: "xiao".into(),
+                    word: "笑".into(),
+                    freq: 3000,
+                },
             ],
             // pinyin blob = "hao"(3) + "hao"(3) + "xiao"(4) = 10 字节
             pinyin_total: 10,
@@ -194,7 +215,10 @@ mod tests {
         assert_eq!(&bytes[59..63], b"xiao");
         // trailer 校验和覆盖 [11, len-8)
         let expected = crate::checksum::fnv1a64(&bytes[11..bytes.len() - 8]);
-        assert_eq!(u64::from_le_bytes(bytes[bytes.len() - 8..].try_into().unwrap()), expected);
+        assert_eq!(
+            u64::from_le_bytes(bytes[bytes.len() - 8..].try_into().unwrap()),
+            expected
+        );
     }
 
     #[test]
@@ -210,7 +234,10 @@ mod tests {
 
     #[test]
     fn empty_dict_roundtrips() {
-        let d = OpDict { entries: vec![], pinyin_total: 0 };
+        let d = OpDict {
+            entries: vec![],
+            pinyin_total: 0,
+        };
         let parsed = parse(&serialize(&d)).unwrap();
         assert!(parsed.entries.is_empty());
         assert_eq!(parsed.pinyin_total, 0);
@@ -240,7 +267,10 @@ mod tests {
     fn payload_corruption_detected() {
         let mut bytes = serialize(&sample());
         bytes[20] ^= 0xFF;
-        assert!(matches!(parse(&bytes), Err(FormatError::ChecksumMismatch { .. })));
+        assert!(matches!(
+            parse(&bytes),
+            Err(FormatError::ChecksumMismatch { .. })
+        ));
     }
 
     #[test]

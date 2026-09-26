@@ -22,23 +22,23 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::{Mutex, Once};
 
 use engine_core::composer::Mode;
-use windows::core::{
-    implement, ComObjectInterface, Interface, InterfaceRef, Ref, Result, BOOL, GUID, HRESULT,
-    IUnknown,
-};
 use windows::Win32::Foundation::{LPARAM, S_OK, WPARAM};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    GetKeyState, GetKeyboardLayout, GetKeyboardState, ToUnicodeEx, VK_CAPITAL, VK_CONTROL,
-    VK_MENU, VK_SHIFT,
+    GetKeyState, GetKeyboardLayout, GetKeyboardState, ToUnicodeEx, VK_CAPITAL, VK_CONTROL, VK_MENU,
+    VK_SHIFT,
 };
 use windows::Win32::UI::TextServices::{
     ITfContext, ITfKeyEventSink, ITfKeyEventSink_Impl, ITfKeystrokeMgr, ITfTextInputProcessor,
     ITfTextInputProcessor_Impl, ITfThreadMgr,
 };
+use windows::core::{
+    BOOL, ComObjectInterface, GUID, HRESULT, IUnknown, Interface, InterfaceRef, Ref, Result,
+    implement,
+};
 
 use crate::logic::{
-    KeyOutcome, TsfLogic, KEY_STATE_ALT, KEY_STATE_CAPS_LOCK, KEY_STATE_CTRL, KEY_STATE_RELEASED,
-    KEY_STATE_REPEAT, KEY_STATE_SHIFT,
+    KEY_STATE_ALT, KEY_STATE_CAPS_LOCK, KEY_STATE_CTRL, KEY_STATE_RELEASED, KEY_STATE_REPEAT,
+    KEY_STATE_SHIFT, KeyOutcome, TsfLogic,
 };
 use crate::vk::vk_to_engine_keycode;
 
@@ -74,7 +74,8 @@ pub trait TsfSink: Send + Sync {
         _page: usize,
         _page_count: usize,
         _mode: Mode,
-    ) {}
+    ) {
+    }
 }
 
 /// TSF 服务对象：单对象实现两个 COM 接口，避免跨接口共享状态。
@@ -162,7 +163,10 @@ impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
             // fforeground=true：前台键盘事件也交本服务（输入法语义）。
             // 本对象同时实现 ITfKeyEventSink，as_interface_ref 取其 IUnknown 指针，
             // TSF 侧会 QueryInterface 到 ITfKeyEventSink。
-            let km: ITfKeystrokeMgr = (*ptim).as_ref().ok_or_else(|| windows::core::Error::from_hresult(HRESULT(0x80070057_u32 as i32)))?.cast()?; // E_INVALIDARG：ptim 为空
+            let km: ITfKeystrokeMgr = (*ptim)
+                .as_ref()
+                .ok_or_else(|| windows::core::Error::from_hresult(HRESULT(0x80070057_u32 as i32)))?
+                .cast()?; // E_INVALIDARG：ptim 为空
             let sink: InterfaceRef<'_, IUnknown> = self.as_interface_ref();
             // cast = QueryInterface：对象支持 ITfKeyEventSink，取具体接口指针。
             let key_sink: ITfKeyEventSink = sink.cast()?;
@@ -193,7 +197,12 @@ impl ITfKeyEventSink_Impl for TsfTextService_Impl {
         Ok(())
     }
 
-    fn OnTestKeyDown(&self, _pic: Ref<ITfContext>, _wparam: WPARAM, _lparam: LPARAM) -> Result<BOOL> {
+    fn OnTestKeyDown(
+        &self,
+        _pic: Ref<ITfContext>,
+        _wparam: WPARAM,
+        _lparam: LPARAM,
+    ) -> Result<BOOL> {
         // 测试阶段不认领：让系统走正常 OnKeyDown 路径。
         Ok(BOOL(0))
     }

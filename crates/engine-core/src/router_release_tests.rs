@@ -88,7 +88,10 @@ fn missed_special_key_degrades_to_pass_through() {
         s.key_event(c as u32, 0);
     }
     assert_eq!(s.key_event(SPECIAL_BASE | 0x90, 0), KeyAction::PassThrough);
-    assert_eq!(s.key_event(SPECIAL_BASE | 0x90, KEY_STATE_RELEASED), KeyAction::PassThrough);
+    assert_eq!(
+        s.key_event(SPECIAL_BASE | 0x90, KEY_STATE_RELEASED),
+        KeyAction::PassThrough
+    );
     assert_eq!(s.buffer(), "hao");
 }
 

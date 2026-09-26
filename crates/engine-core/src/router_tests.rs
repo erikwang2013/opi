@@ -116,7 +116,10 @@ fn backspace_with_buffer_deletes_codepoint() {
 fn backspace_release_event_consumed() {
     let mut s = pinyin_state();
     s.key_event('a' as u32, 0);
-    assert_eq!(s.key_event(KEY_BACK_SPACE, KEY_STATE_RELEASED), KeyAction::EngineHandled);
+    assert_eq!(
+        s.key_event(KEY_BACK_SPACE, KEY_STATE_RELEASED),
+        KeyAction::EngineHandled
+    );
     assert_eq!(s.buffer(), "a");
 }
 
@@ -134,7 +137,10 @@ fn delete_mirrors_backspace() {
     assert_eq!(s.key_event(KEY_DELETE, 0), KeyAction::PassThrough);
     // 释放事件被消费，不删字符
     s.key_event('a' as u32, 0);
-    assert_eq!(s.key_event(KEY_DELETE, KEY_STATE_RELEASED), KeyAction::EngineHandled);
+    assert_eq!(
+        s.key_event(KEY_DELETE, KEY_STATE_RELEASED),
+        KeyAction::EngineHandled
+    );
     assert_eq!(s.buffer(), "a");
 }
 
@@ -159,7 +165,11 @@ fn arrow_keys_pass_through_press_and_release() {
         s.key_event(c as u32, 0);
     }
     for key in [KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT] {
-        assert_eq!(s.key_event(key, 0), KeyAction::PassThrough, "按下直通（{key}）");
+        assert_eq!(
+            s.key_event(key, 0),
+            KeyAction::PassThrough,
+            "按下直通（{key}）"
+        );
         assert_eq!(
             s.key_event(key, KEY_STATE_RELEASED),
             KeyAction::PassThrough,
@@ -210,7 +220,10 @@ fn english_empty_buffer_physical_shift_codepoint_passes_upper() {
     // 平台已应用物理 shift：键值为 'A' + SHIFT 位，仍直传且消费 single
     let mut s = english_state();
     s.shift_tap();
-    assert_eq!(s.key_event('A' as u32, KEY_STATE_SHIFT), KeyAction::Input("A".into()));
+    assert_eq!(
+        s.key_event('A' as u32, KEY_STATE_SHIFT),
+        KeyAction::Input("A".into())
+    );
     assert_eq!(s.shift_state(), ShiftState::Off);
 }
 
@@ -268,7 +281,10 @@ fn shift_release_and_repeat_do_not_toggle() {
     );
     assert_eq!(s.shift_state(), ShiftState::Off);
     s.shift_tap();
-    assert_eq!(s.key_event(KEY_SHIFT, KEY_STATE_REPEAT), KeyAction::EngineHandled);
+    assert_eq!(
+        s.key_event(KEY_SHIFT, KEY_STATE_REPEAT),
+        KeyAction::EngineHandled
+    );
     assert_eq!(s.shift_state(), ShiftState::Single);
 }
 
@@ -369,12 +385,18 @@ fn page_keys_navigate() {
 fn ctrl_and_alt_combos_pass_through() {
     let mut s = pinyin_state();
     s.key_event('a' as u32, 0);
-    assert_eq!(s.key_event('c' as u32, KEY_STATE_CTRL), KeyAction::PassThrough);
+    assert_eq!(
+        s.key_event('c' as u32, KEY_STATE_CTRL),
+        KeyAction::PassThrough
+    );
     assert_eq!(
         s.key_event('x' as u32, KEY_STATE_CTRL | KEY_STATE_SHIFT),
         KeyAction::PassThrough
     );
-    assert_eq!(s.key_event('a' as u32, KEY_STATE_ALT), KeyAction::PassThrough);
+    assert_eq!(
+        s.key_event('a' as u32, KEY_STATE_ALT),
+        KeyAction::PassThrough
+    );
     assert_eq!(s.buffer(), "a"); // 未被吞
 }
 
@@ -384,9 +406,18 @@ fn command_combo_passes_through() {
     // 不拦下的话 ⌘A 会把 'a' 吃进拼音缓冲、⌘C 会吞掉复制。
     let mut s = pinyin_state();
     s.key_event('a' as u32, 0);
-    assert_eq!(s.key_event('a' as u32, KEY_STATE_META), KeyAction::PassThrough);
-    assert_eq!(s.key_event('c' as u32, KEY_STATE_META), KeyAction::PassThrough);
-    assert_eq!(s.key_event(KEY_BACK_SPACE, KEY_STATE_META), KeyAction::PassThrough);
+    assert_eq!(
+        s.key_event('a' as u32, KEY_STATE_META),
+        KeyAction::PassThrough
+    );
+    assert_eq!(
+        s.key_event('c' as u32, KEY_STATE_META),
+        KeyAction::PassThrough
+    );
+    assert_eq!(
+        s.key_event(KEY_BACK_SPACE, KEY_STATE_META),
+        KeyAction::PassThrough
+    );
     assert_eq!(s.buffer(), "a");
 }
 

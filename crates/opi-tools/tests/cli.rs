@@ -12,11 +12,18 @@ fn cli_compile_roundtrip() {
         .args(["compile", tsv.to_str().unwrap(), opid.to_str().unwrap()])
         .output()
         .unwrap();
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     // 编译成功后打印项目宠物「小欧」——整只键帽必须在 stdout 里完整出现。
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("OPI"), "小欧的刻字缺失：{stdout}");
-    assert!(stdout.contains("╭────┴────╮"), "小欧的键帽正面缺失：{stdout}");
+    assert!(
+        stdout.contains("╭────┴────╮"),
+        "小欧的键帽正面缺失：{stdout}"
+    );
     let bytes = std::fs::read(&opid).unwrap();
     let parsed = engine_data::parse(&bytes).unwrap();
     assert_eq!(parsed.entries.len(), 2);
@@ -36,5 +43,8 @@ fn cli_version_prints_crate_version_and_pet() {
         stdout.starts_with(&format!("opi-tools {}\n", env!("CARGO_PKG_VERSION"))),
         "版本行不符：{stdout}"
     );
-    assert!(stdout.contains("│      OPI      │"), "版本输出应带上小欧：{stdout}");
+    assert!(
+        stdout.contains("│      OPI      │"),
+        "版本输出应带上小欧：{stdout}"
+    );
 }

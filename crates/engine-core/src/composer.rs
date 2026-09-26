@@ -39,7 +39,9 @@ pub struct Composer {
 
 impl Composer {
     pub fn new() -> Self {
-        Composer { session: Session::default() }
+        Composer {
+            session: Session::default(),
+        }
     }
 
     /// 处理一次击键，返回效果与新的会话快照。
@@ -218,7 +220,10 @@ mod tests {
         c.set_shift(true);
         c.switch_mode(Mode::Number);
         c.switch_mode(Mode::English);
-        assert!(!c.session().shift, "切模式须清 shift，否则 ⇧ 锁定态跨模式残留");
+        assert!(
+            !c.session().shift,
+            "切模式须清 shift，否则 ⇧ 锁定态跨模式残留"
+        );
         // 行为面：切回英文后打出的必须是小写
         let (_, s) = c.input_key('a');
         assert_eq!(s.buffer, "a");

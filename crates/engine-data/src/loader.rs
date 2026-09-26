@@ -4,10 +4,10 @@
 //! mmap 加载器：将 .opid v1 映射到只读内存，实现 engine_core 的 Dictionary。
 //! 布局恢复只依赖 parse 校验过的 count 与 pinyin_total（三个区段边界）。
 
-use std::path::Path;
-use engine_core::dictionary::Dictionary;
+use crate::format::{ENTRY_LEN, HEADER_LEN, OpDict, parse};
 use engine_core::Entry;
-use crate::format::{parse, ENTRY_LEN, HEADER_LEN, OpDict};
+use engine_core::dictionary::Dictionary;
+use std::path::Path;
 
 /// 内存后盾：mmap 文件或堆上字节，避免自引用结构。
 pub enum Backing {
@@ -88,9 +88,21 @@ impl Dictionary for MmapDictionary {
         }
         let data = self.data();
         let needle = pinyin.as_bytes();
-        let lo = lower_bound(data, self.table_start(), self.pinyin_start(), self.count, needle);
+        let lo = lower_bound(
+            data,
+            self.table_start(),
+            self.pinyin_start(),
+            self.count,
+            needle,
+        );
         let hi = match byte_successor(needle) {
-            Some(succ) => lower_bound(data, self.table_start(), self.pinyin_start(), self.count, &succ),
+            Some(succ) => lower_bound(
+                data,
+                self.table_start(),
+                self.pinyin_start(),
+                self.count,
+                &succ,
+            ),
             None => self.count,
         };
         let mut out: Vec<Entry> = Vec::new();
@@ -100,9 +112,17 @@ impl Dictionary for MmapDictionary {
             let word = std::str::from_utf8(&data[word_start + wo..word_start + wo + wl])
                 .expect("parse 已校验 UTF-8")
                 .to_string();
-            out.push(Entry { word, freq, pinyin_len: pl });
+            out.push(Entry {
+                word,
+                freq,
+                pinyin_len: pl,
+            });
         }
-        out.sort_by(|a, b| b.freq.cmp(&a.freq).then(a.word.as_bytes().cmp(b.word.as_bytes())));
+        out.sort_by(|a, b| {
+            b.freq
+                .cmp(&a.freq)
+                .then(a.word.as_bytes().cmp(b.word.as_bytes()))
+        });
         out.truncate(limit);
         out
     }
@@ -125,7 +145,13 @@ fn entry_pinyin(data: &[u8], table_start: usize, pinyin_start: usize, i: usize) 
 }
 
 /// 前缀区间下界：第一个 pinyin >= needle 的下标。
-fn lower_bound(data: &[u8], table_start: usize, pinyin_start: usize, count: usize, needle: &[u8]) -> usize {
+fn lower_bound(
+    data: &[u8],
+    table_start: usize,
+    pinyin_start: usize,
+    count: usize,
+    needle: &[u8],
+) -> usize {
     let mut lo = 0usize;
     let mut hi = count;
     while lo < hi {
@@ -172,14 +198,26 @@ pub fn load_bytes(bytes: Vec<u8>) -> Result<MmapDictionary, LoadError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::format::{serialize, FormatError, OpDict, RawEntry};
+    use crate::format::{FormatError, OpDict, RawEntry, serialize};
 
     fn sample() -> Vec<u8> {
         serialize(&OpDict {
             entries: vec![
-                RawEntry { pinyin: "hao".into(), word: "好".into(), freq: 5000 },
-                RawEntry { pinyin: "hao".into(), word: "号".into(), freq: 1200 },
-                RawEntry { pinyin: "xiao".into(), word: "笑".into(), freq: 3000 },
+                RawEntry {
+                    pinyin: "hao".into(),
+                    word: "好".into(),
+                    freq: 5000,
+                },
+                RawEntry {
+                    pinyin: "hao".into(),
+                    word: "号".into(),
+                    freq: 1200,
+                },
+                RawEntry {
+                    pinyin: "xiao".into(),
+                    word: "笑".into(),
+                    freq: 3000,
+                },
             ],
             // pinyin blob = "hao"(3) + "hao"(3) + "xiao"(4) = 10 字节
             pinyin_total: 10,

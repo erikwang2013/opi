@@ -8,7 +8,8 @@ const PRIME: u64 = 0x100000001b3;
 
 /// FNV-1a 64 位哈希（自实现，不引入依赖）。.opid 校验和专用。
 pub fn fnv1a64(data: &[u8]) -> u64 {
-    data.iter().fold(OFFSET, |h, &b| (h ^ b as u64).wrapping_mul(PRIME))
+    data.iter()
+        .fold(OFFSET, |h, &b| (h ^ b as u64).wrapping_mul(PRIME))
 }
 
 #[cfg(test)]

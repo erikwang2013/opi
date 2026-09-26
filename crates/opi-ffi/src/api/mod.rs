@@ -6,12 +6,12 @@
 
 use std::sync::Mutex;
 
+use engine_core::Engine;
 use engine_core::candidates::{Candidate, CandidateKind};
 use engine_core::composer::Mode;
 use engine_core::dictionary::Dictionary;
 use engine_core::router::{KeyAction, KeyRouter, ShiftState};
 use engine_core::symbols::{Block, BlockId, SymbolEntry};
-use engine_core::Engine;
 
 /// 引擎单例：load 后可供 JNI / C 出口共享。
 pub static SINGLETON: Mutex<Option<Api>> = Mutex::new(None);
@@ -27,7 +27,9 @@ pub fn install(path: Option<&str>) -> Result<(), String> {
     // 毒化恢复：18 个 FFI 入口的 catch_unwind 吞 panic 时锁已毒化，
     // into_inner 取回数据，install 整体替换引擎，提供恢复路径。
     let mut guard = SINGLETON.lock().unwrap_or_else(|p| p.into_inner());
-    *guard = Some(Api { router: KeyRouter::new(Engine::new(dict, symbols, true)) });
+    *guard = Some(Api {
+        router: KeyRouter::new(Engine::new(dict, symbols, true)),
+    });
     Ok(())
 }
 
@@ -82,12 +84,18 @@ pub fn candidate_texts(api: &Api, limit: usize) -> Vec<String> {
 
 /// 符号块内符号文本列表。
 pub fn symbol_texts(api: &Api, id: u16) -> Vec<String> {
-    api.symbols_in_block(id).into_iter().map(|s| s.text).collect()
+    api.symbols_in_block(id)
+        .into_iter()
+        .map(|s| s.text)
+        .collect()
 }
 
 /// 符号搜索命中文本列表。
 pub fn search_symbol_texts(api: &Api, keyword: &str) -> Vec<String> {
-    api.search_symbols(keyword.to_string()).into_iter().map(|s| s.text).collect()
+    api.search_symbols(keyword.to_string())
+        .into_iter()
+        .map(|s| s.text)
+        .collect()
 }
 
 /// 文本列表 → JSON 数组字符串。
@@ -174,7 +182,11 @@ pub struct ApiCandidate {
 
 impl From<Candidate> for ApiCandidate {
     fn from(c: Candidate) -> Self {
-        ApiCandidate { text: c.text, kind: c.kind.into(), score: c.score }
+        ApiCandidate {
+            text: c.text,
+            kind: c.kind.into(),
+            score: c.score,
+        }
     }
 }
 
@@ -189,7 +201,13 @@ pub struct ApiBlock {
 
 impl From<Block> for ApiBlock {
     fn from(b: Block) -> Self {
-        ApiBlock { id: b.id.0, start: b.start, end: b.end, name: b.name, common: b.common }
+        ApiBlock {
+            id: b.id.0,
+            start: b.start,
+            end: b.end,
+            name: b.name,
+            common: b.common,
+        }
     }
 }
 
@@ -204,7 +222,13 @@ pub struct ApiSymbolEntry {
 
 impl From<SymbolEntry> for ApiSymbolEntry {
     fn from(s: SymbolEntry) -> Self {
-        ApiSymbolEntry { text: s.text, name: s.name, keywords: s.keywords, block: s.block.0, emoji: s.emoji }
+        ApiSymbolEntry {
+            text: s.text,
+            name: s.name,
+            keywords: s.keywords,
+            block: s.block.0,
+            emoji: s.emoji,
+        }
     }
 }
 
@@ -223,13 +247,17 @@ impl Api {
     pub fn load_fallback_sync() -> Result<Api, String> {
         let dict = engine_data::fallback_dict();
         let symbols = engine_core::symbols::SymbolEngine::builtin();
-        Ok(Api { router: KeyRouter::new(Engine::new(Box::new(dict), symbols, true)) })
+        Ok(Api {
+            router: KeyRouter::new(Engine::new(Box::new(dict), symbols, true)),
+        })
     }
 
     pub fn load_sync(path: String) -> Result<Api, String> {
         let dict = engine_data::load_or_fallback(Some(std::path::Path::new(&path)))?;
         let symbols = engine_core::symbols::SymbolEngine::builtin();
-        Ok(Api { router: KeyRouter::new(Engine::new(dict, symbols, true)) })
+        Ok(Api {
+            router: KeyRouter::new(Engine::new(dict, symbols, true)),
+        })
     }
 
     /// raw 出口（绕过键路由）。改完 buffer 必须对齐页码 —— 否则「翻页 → 清空 →
@@ -322,7 +350,12 @@ impl Api {
     }
 
     pub fn candidates(&self, limit: usize) -> Vec<ApiCandidate> {
-        self.router.engine().candidates(limit).into_iter().map(Into::into).collect()
+        self.router
+            .engine()
+            .candidates(limit)
+            .into_iter()
+            .map(Into::into)
+            .collect()
     }
 
     /// raw 出口（**全局**索引，JNI 与既有 `opi_select` 用）。选中即清空 buffer →
@@ -368,15 +401,30 @@ impl Api {
     }
 
     pub fn symbol_blocks(&self) -> Vec<ApiBlock> {
-        self.router.engine().symbol_blocks().into_iter().map(Into::into).collect()
+        self.router
+            .engine()
+            .symbol_blocks()
+            .into_iter()
+            .map(Into::into)
+            .collect()
     }
 
     pub fn symbols_in_block(&self, id: u16) -> Vec<ApiSymbolEntry> {
-        self.router.engine().symbols_in_block(BlockId(id)).into_iter().map(Into::into).collect()
+        self.router
+            .engine()
+            .symbols_in_block(BlockId(id))
+            .into_iter()
+            .map(Into::into)
+            .collect()
     }
 
     pub fn search_symbols(&self, keyword: String) -> Vec<ApiSymbolEntry> {
-        self.router.engine().search_symbols(&keyword).into_iter().map(Into::into).collect()
+        self.router
+            .engine()
+            .search_symbols(&keyword)
+            .into_iter()
+            .map(Into::into)
+            .collect()
     }
 }
 
@@ -415,7 +463,9 @@ mod tests {
     #[test]
     fn select_commits_and_records_learner() {
         let mut a = api();
-        for c in ["w", "o"] { a.input_key(c.into()); }
+        for c in ["w", "o"] {
+            a.input_key(c.into());
+        }
         let text = a.select(0);
         assert_eq!(text, "我");
         assert_eq!(a.buffer(), "");
@@ -438,7 +488,9 @@ mod tests {
     #[test]
     fn select_out_of_range_returns_empty() {
         let mut a = api();
-        for c in ["w", "o"] { a.input_key(c.into()); }
+        for c in ["w", "o"] {
+            a.input_key(c.into());
+        }
         assert_eq!(a.select(999), "");
     }
 
@@ -446,7 +498,9 @@ mod tests {
     fn mode_and_shift_and_space() {
         let mut a = api();
         a.switch_mode(ApiMode::English);
-        for c in ["a", "b", "c"] { a.input_key(c.into()); }
+        for c in ["a", "b", "c"] {
+            a.input_key(c.into());
+        }
         assert_eq!(a.buffer(), "abc");
         assert_eq!(a.input_space(), "abc");
         assert_eq!(a.buffer(), "");
@@ -554,8 +608,16 @@ mod tests {
         install(None).unwrap();
         let dict = engine_data::format::OpDict {
             entries: vec![
-                engine_data::format::RawEntry { pinyin: "fa".into(), word: "發".into(), freq: 4_000_000_000 },
-                engine_data::format::RawEntry { pinyin: "fa".into(), word: "髮".into(), freq: 3_999_000_000 },
+                engine_data::format::RawEntry {
+                    pinyin: "fa".into(),
+                    word: "發".into(),
+                    freq: 4_000_000_000,
+                },
+                engine_data::format::RawEntry {
+                    pinyin: "fa".into(),
+                    word: "髮".into(),
+                    freq: 3_999_000_000,
+                },
             ],
             pinyin_total: 4, // 两条 "fa" 拼音 blob 共 4 字节（serialize debug_assert 校验）
         };
@@ -572,7 +634,11 @@ mod tests {
             a.select(1); // 选 髮
             a.input_key("f".into());
             a.input_key("a".into());
-            assert_eq!(a.candidates(8)[0].text, "髮", "learner 选词应压过 4e9 静态词");
+            assert_eq!(
+                a.candidates(8)[0].text,
+                "髮",
+                "learner 选词应压过 4e9 静态词"
+            );
             a.set_learner(false);
         });
         with_engine(|a| a.switch_mode(ApiMode::Pinyin));

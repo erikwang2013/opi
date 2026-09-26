@@ -5,12 +5,15 @@
 //! 逐一 query 断言该字出现在候选（GB2312 6763 字 ⊂ 期待表）；数据产物提交入库（Task 1）。
 //! 本测试只读不联网；trad.opid 缺失时报错并引导执行 Task 1 数据构建。
 
-use engine_data::{load_mmap, Dictionary};
+use engine_data::{Dictionary, load_mmap};
 use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 
 const RAW_TSV: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/raw/trad_hanzi.tsv");
-const GENERATED_OPID: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/generated/trad.opid");
+const GENERATED_OPID: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../data/generated/trad.opid"
+);
 
 fn rows() -> Vec<(String, String)> {
     let text = std::fs::read_to_string(RAW_TSV)
@@ -35,10 +38,15 @@ fn rows() -> Vec<(String, String)> {
 
 #[test]
 fn every_tsv_char_queryable() {
-    let dict = load_mmap(Path::new(GENERATED_OPID))
-        .unwrap_or_else(|e| panic!("加载 {GENERATED_OPID} 失败（先执行 Task 1 数据构建并提交）：{e:?}"));
+    let dict = load_mmap(Path::new(GENERATED_OPID)).unwrap_or_else(|e| {
+        panic!("加载 {GENERATED_OPID} 失败（先执行 Task 1 数据构建并提交）：{e:?}")
+    });
     let rows = rows();
-    assert!(rows.len() >= 6763, "期待表应覆盖 GB2312 全量 6763 字，实际 {} 行", rows.len());
+    assert!(
+        rows.len() >= 6763,
+        "期待表应覆盖 GB2312 全量 6763 字，实际 {} 行",
+        rows.len()
+    );
     // 按 pinyin 分组（保留 TSV 行序），每唯一 pinyin 只 query 一次，避免重复二分+排序物化。
     let mut groups: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
     for (w, py) in &rows {
@@ -57,13 +65,20 @@ fn every_tsv_char_queryable() {
             }
         }
     }
-    assert!(missing.is_empty(), "以下 (字, 拼音) 查询无候选（最多展示 10）：{missing:?}");
+    assert!(
+        missing.is_empty(),
+        "以下 (字, 拼音) 查询无候选（最多展示 10）：{missing:?}"
+    );
 }
 
 #[test]
 fn trad_spot_checks() {
     let dict = load_mmap(Path::new(GENERATED_OPID)).expect("trad.opid 已由 Task 1 提交");
-    let has = |pinyin: &str, word: &str| dict.query(pinyin, usize::MAX).iter().any(|e| e.word == word);
+    let has = |pinyin: &str, word: &str| {
+        dict.query(pinyin, usize::MAX)
+            .iter()
+            .any(|e| e.word == word)
+    };
     assert!(has("fa", "發"));
     assert!(has("fa", "髮"));
     assert!(has("taiwan", "臺灣"));

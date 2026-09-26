@@ -57,8 +57,11 @@ pub fn rank_and_pick<D: Dictionary + ?Sized>(
     let hanzi = |e: Entry, exact: bool| Candidate {
         text: e.word.clone(),
         kind: CandidateKind::Hanzi,
-        score: rank_score(e.freq, learner.freq_of(&e.word), boost)
-            .saturating_add(if exact { exact_bonus } else { 0 }),
+        score: rank_score(e.freq, learner.freq_of(&e.word), boost).saturating_add(if exact {
+            exact_bonus
+        } else {
+            0
+        }),
     };
     let mut merged: Vec<Candidate> = dict
         .query(input, usize::MAX)
@@ -103,7 +106,11 @@ pub fn rank_and_pick<D: Dictionary + ?Sized>(
         // 符号不带拼音，故不参与「精确/扩展」分层（其分数本就只有学习权重）。
         merged.push(Candidate {
             text: s.text.clone(),
-            kind: if s.emoji { CandidateKind::Emoji } else { CandidateKind::Symbol },
+            kind: if s.emoji {
+                CandidateKind::Emoji
+            } else {
+                CandidateKind::Symbol
+            },
             score: rank_score(0, learner.freq_of(&s.text), boost),
         });
     }
@@ -143,12 +150,36 @@ mod tests {
         use crate::symbols::{Block, BlockId, SymbolEntry};
         SymbolEngine::new(
             vec![
-                Block { id: BlockId(1), start: 0x2600, end: 0x26FF, name: "杂项符号".into(), common: true },
-                Block { id: BlockId(2), start: 0x1F600, end: 0x1F64F, name: "表情符号".into(), common: true },
+                Block {
+                    id: BlockId(1),
+                    start: 0x2600,
+                    end: 0x26FF,
+                    name: "杂项符号".into(),
+                    common: true,
+                },
+                Block {
+                    id: BlockId(2),
+                    start: 0x1F600,
+                    end: 0x1F64F,
+                    name: "表情符号".into(),
+                    common: true,
+                },
             ],
             vec![
-                SymbolEntry { text: "♥".into(), name: "心形".into(), keywords: vec!["heart".into()], block: BlockId(1), emoji: false },
-                SymbolEntry { text: "😄".into(), name: "微笑".into(), keywords: vec!["xiao".into(), "smile".into()], block: BlockId(2), emoji: true },
+                SymbolEntry {
+                    text: "♥".into(),
+                    name: "心形".into(),
+                    keywords: vec!["heart".into()],
+                    block: BlockId(1),
+                    emoji: false,
+                },
+                SymbolEntry {
+                    text: "😄".into(),
+                    name: "微笑".into(),
+                    keywords: vec!["xiao".into(), "smile".into()],
+                    block: BlockId(2),
+                    emoji: true,
+                },
             ],
         )
     }
@@ -184,7 +215,9 @@ mod tests {
         let d = test_dict();
         let s = no_symbols();
         let l = Learner::new(false);
-        assert!(rank_and_pick(&d, &s, &l, "hao", Mode::English, DEFAULT_TOP_N, USER_BOOST).is_empty());
+        assert!(
+            rank_and_pick(&d, &s, &l, "hao", Mode::English, DEFAULT_TOP_N, USER_BOOST).is_empty()
+        );
     }
 
     #[test]
@@ -192,7 +225,15 @@ mod tests {
         let d = test_dict();
         let s = no_symbols();
         let l = Learner::new(false);
-        let got = rank_and_pick(&d, &s, &l, "hao", Mode::Traditional, DEFAULT_TOP_N, USER_BOOST);
+        let got = rank_and_pick(
+            &d,
+            &s,
+            &l,
+            "hao",
+            Mode::Traditional,
+            DEFAULT_TOP_N,
+            USER_BOOST,
+        );
         assert_eq!(got[0].text, "好");
     }
 
@@ -201,7 +242,9 @@ mod tests {
         let d = test_dict();
         let s = no_symbols();
         let l = Learner::new(false);
-        assert!(rank_and_pick(&d, &s, &l, "", Mode::Traditional, DEFAULT_TOP_N, USER_BOOST).is_empty());
+        assert!(
+            rank_and_pick(&d, &s, &l, "", Mode::Traditional, DEFAULT_TOP_N, USER_BOOST).is_empty()
+        );
     }
 
     #[test]
@@ -220,7 +263,10 @@ mod tests {
         let s = emoji_symbols();
         let l = Learner::new(false);
         let got = rank_and_pick(&d, &s, &l, "xiao", Mode::Pinyin, DEFAULT_TOP_N, USER_BOOST);
-        assert!(got.iter().any(|c| c.kind == CandidateKind::Emoji && c.text == "😄"));
+        assert!(
+            got.iter()
+                .any(|c| c.kind == CandidateKind::Emoji && c.text == "😄")
+        );
         assert!(got[0].text == "笑" || got[0].text == "小" || got[0].text == "校");
     }
 
@@ -289,7 +335,15 @@ mod tests {
         l.record_selection("好");
 
         // 整串 "haoxiao" 无词条 → 走逐音节回退
-        let got = rank_and_pick(&d, &s, &l, "haoxiao", Mode::Pinyin, DEFAULT_TOP_N, USER_BOOST);
+        let got = rank_and_pick(
+            &d,
+            &s,
+            &l,
+            "haoxiao",
+            Mode::Pinyin,
+            DEFAULT_TOP_N,
+            USER_BOOST,
+        );
         assert!(
             got.iter().any(|c| c.text == "好"),
             "学过的「好」不得在加 boost 前被静态词频前 3 截掉：{:?}",
@@ -304,7 +358,15 @@ mod tests {
         let s = no_symbols();
         let l = Learner::new(false);
         // 整串 "haoxiao" 无词条 → 按音节 [hao][xiao] 补出逐字候选
-        let got = rank_and_pick(&d, &s, &l, "haoxiao", Mode::Pinyin, DEFAULT_TOP_N, USER_BOOST);
+        let got = rank_and_pick(
+            &d,
+            &s,
+            &l,
+            "haoxiao",
+            Mode::Pinyin,
+            DEFAULT_TOP_N,
+            USER_BOOST,
+        );
         assert!(got.iter().any(|c| c.text == "好"));
         assert!(got.iter().any(|c| c.text == "笑"));
     }
@@ -323,8 +385,14 @@ mod tests {
         let got = rank_and_pick(&d, &s, &l, "xian", Mode::Pinyin, DEFAULT_TOP_N, USER_BOOST);
         let pos = |w: &str| got.iter().position(|c| c.text == w).unwrap();
         let texts: Vec<&str> = got.iter().map(|c| c.text.as_str()).collect();
-        assert!(pos("现") < pos("想"), "精确的「现」应压过前缀扩展的「想」：{texts:?}");
-        assert!(pos("先") < pos("想"), "精确的「先」应压过前缀扩展的「想」：{texts:?}");
+        assert!(
+            pos("现") < pos("想"),
+            "精确的「现」应压过前缀扩展的「想」：{texts:?}"
+        );
+        assert!(
+            pos("先") < pos("想"),
+            "精确的「先」应压过前缀扩展的「想」：{texts:?}"
+        );
         assert_eq!(got[0].text, "现", "精确匹配内部仍按词频排：{texts:?}");
     }
 
@@ -360,6 +428,9 @@ mod tests {
         let l = Learner::new(false);
         // "x" 前缀命中 😄（keyword xiao），同时拼音 xiao 词也出现
         let got = rank_and_pick(&d, &s, &l, "x", Mode::Pinyin, DEFAULT_TOP_N, USER_BOOST);
-        assert!(got.iter().any(|c| c.kind == CandidateKind::Emoji && c.text == "😄"));
+        assert!(
+            got.iter()
+                .any(|c| c.kind == CandidateKind::Emoji && c.text == "😄")
+        );
     }
 }

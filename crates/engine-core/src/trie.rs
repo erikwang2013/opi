@@ -22,7 +22,10 @@ struct Node {
 
 impl Node {
     fn new() -> Self {
-        Node { entries: BTreeMap::new(), children: BTreeMap::new() }
+        Node {
+            entries: BTreeMap::new(),
+            children: BTreeMap::new(),
+        }
     }
 }
 
@@ -34,7 +37,10 @@ pub struct Trie {
 
 impl Trie {
     pub fn new() -> Self {
-        Trie { root: Node::new(), len: 0 }
+        Trie {
+            root: Node::new(),
+            len: 0,
+        }
     }
 
     /// 插入或更新 (pinyin, word) 条目。同词重复插入取更高频。
@@ -88,7 +94,11 @@ impl Trie {
 /// 深度（= 已走拼音的字节数）随递归下传，作为条目的 `pinyin_len`。
 fn collect(node: &Node, depth: usize, acc: &mut Vec<Entry>) {
     for (word, freq) in &node.entries {
-        acc.push(Entry { word: word.clone(), freq: *freq, pinyin_len: depth });
+        acc.push(Entry {
+            word: word.clone(),
+            freq: *freq,
+            pinyin_len: depth,
+        });
     }
     for (c, child) in &node.children {
         collect(child, depth + c.len_utf8(), acc);

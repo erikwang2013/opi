@@ -6,7 +6,7 @@
 
 use engine_core::engine::Engine;
 use engine_core::symbols::SymbolEngine;
-use engine_data::{fallback_dict, load_bytes, load_or_fallback, serialize, FormatError, LoadError};
+use engine_data::{FormatError, LoadError, fallback_dict, load_bytes, load_or_fallback, serialize};
 use opi_tools::compiler::{compile, parse_dict};
 
 #[test]
@@ -50,11 +50,7 @@ fn corrupt_file_engine_falls_back() {
 #[test]
 fn corrupted_opid_engine_still_boots() {
     // 引擎在词库损坏时仍可用（回退内置），全链路冒烟
-    let mut eng = Engine::new(
-        Box::new(fallback_dict()),
-        SymbolEngine::builtin(),
-        false,
-    );
+    let mut eng = Engine::new(Box::new(fallback_dict()), SymbolEngine::builtin(), false);
     for ch in "n".chars() {
         eng.input_key(ch);
     }

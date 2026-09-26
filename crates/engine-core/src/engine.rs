@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-use crate::candidates::{rank_and_pick, Candidate, USER_BOOST, DEFAULT_TOP_N};
+use crate::candidates::{Candidate, DEFAULT_TOP_N, USER_BOOST, rank_and_pick};
 use crate::composer::{Composer, KeyEffect, Mode};
 use crate::dictionary::Dictionary;
 use crate::learner::Learner;
@@ -32,7 +32,9 @@ impl Engine {
         symbols: SymbolEngine,
         learner_enabled: bool,
     ) -> Self {
-        let max_freq = dict.max_freq().max(trad.as_ref().map_or(0, |d| d.max_freq()));
+        let max_freq = dict
+            .max_freq()
+            .max(trad.as_ref().map_or(0, |d| d.max_freq()));
         let user_boost = USER_BOOST.max(max_freq.saturating_mul(2));
         Engine {
             dict,
@@ -47,7 +49,10 @@ impl Engine {
     /// 换装繁体词典（FFI install_trad 用）。None = 清除（回退简体）。
     /// 重算 user_boost：trad.opid 静态最大词频 4e9，保持"一次选词压过全部静态词"。
     pub fn set_trad_dict(&mut self, dict: Option<Box<dyn Dictionary>>) {
-        let max_freq = self.dict.max_freq().max(dict.as_ref().map_or(0, |d| d.max_freq()));
+        let max_freq = self
+            .dict
+            .max_freq()
+            .max(dict.as_ref().map_or(0, |d| d.max_freq()));
         self.user_boost = USER_BOOST.max(max_freq.saturating_mul(2));
         self.trad_dict = dict;
     }

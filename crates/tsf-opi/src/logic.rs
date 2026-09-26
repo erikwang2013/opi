@@ -303,7 +303,11 @@ impl TsfLogic {
                     // 应用收到 keydown 收不到 keyup，依赖键状态的游戏/编辑器会卡键。
                     // 只在需要时取缓冲 —— buffer() 会分配 String，提到 match 之前等于给
                     // 每个按键都加一次分配。可打印分支的反向不对称是既有的有意取舍。
-                    if self.buffer().is_empty() { KeyOutcome::Unhandled } else { KeyOutcome::Consumed }
+                    if self.buffer().is_empty() {
+                        KeyOutcome::Unhandled
+                    } else {
+                        KeyOutcome::Consumed
+                    }
                 } else {
                     self.handle_backspace()
                 }
@@ -318,7 +322,11 @@ impl TsfLogic {
             KEY_RETURN => {
                 if released {
                     // 同退格：抬起与按下同判（见 handle_enter）
-                    if self.buffer().is_empty() { KeyOutcome::Unhandled } else { KeyOutcome::Consumed }
+                    if self.buffer().is_empty() {
+                        KeyOutcome::Unhandled
+                    } else {
+                        KeyOutcome::Consumed
+                    }
                 } else {
                     self.handle_enter()
                 }
@@ -361,7 +369,8 @@ impl TsfLogic {
                         }
                     } else {
                         let outcome = self.handle_printable(c);
-                        self.last_printable = Some((keyval, matches!(outcome, KeyOutcome::Unhandled)));
+                        self.last_printable =
+                            Some((keyval, matches!(outcome, KeyOutcome::Unhandled)));
                         outcome
                     }
                 }
@@ -489,8 +498,8 @@ fn commit_or_changed(out: String) -> KeyOutcome {
 #[path = "logic_candidate_tests.rs"]
 mod candidate_tests;
 #[cfg(test)]
-#[path = "logic_tests.rs"]
-mod tests;
-#[cfg(test)]
 #[path = "logic_release_tests.rs"]
 mod release_tests;
+#[cfg(test)]
+#[path = "logic_tests.rs"]
+mod tests;

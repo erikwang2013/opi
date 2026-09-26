@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// 用户词条（学习记录）。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -30,7 +30,11 @@ pub struct Learner {
 
 impl Learner {
     pub fn new(enabled: bool) -> Self {
-        Learner { enabled, user_freq: BTreeMap::new(), user_words: BTreeSet::new() }
+        Learner {
+            enabled,
+            user_freq: BTreeMap::new(),
+            user_words: BTreeSet::new(),
+        }
     }
 
     /// 记录一次选词。disabled 时为 no-op。
@@ -188,7 +192,8 @@ mod tests {
         for _ in 0..9 {
             l.record_selection("好");
         }
-        l.import_json(r#"{"version":1,"words":[{"text":"好","freq":2}]}"#).unwrap();
+        l.import_json(r#"{"version":1,"words":[{"text":"好","freq":2}]}"#)
+            .unwrap();
         assert_eq!(l.freq_of("好"), 9);
     }
 
@@ -198,7 +203,11 @@ mod tests {
     #[test]
     fn import_json_applies_even_when_disabled() {
         let mut l = Learner::new(false);
-        assert_eq!(l.import_json(r#"{"version":1,"words":[{"text":"好","freq":2}]}"#).unwrap(), 1);
+        assert_eq!(
+            l.import_json(r#"{"version":1,"words":[{"text":"好","freq":2}]}"#)
+                .unwrap(),
+            1
+        );
         assert_eq!(l.freq_of("好"), 2);
         l.record_selection("好"); // 仍不记录
         assert_eq!(l.freq_of("好"), 2);
@@ -210,16 +219,20 @@ mod tests {
         for bad in [
             "",
             "not json",
-            "{}",                                      // 缺 version/words
-            r#"{"version":1}"#,                        // 缺 words
-            r#"{"version":2,"words":[]}"#,             // 版本不符
-            r#"{"version":1,"words":[{"text":"好"}]}"#, // 词条缺 freq
-            r#"{"version":1,"words":[{"freq":3}]}"#,   // 词条缺 text
+            "{}",                                              // 缺 version/words
+            r#"{"version":1}"#,                                // 缺 words
+            r#"{"version":2,"words":[]}"#,                     // 版本不符
+            r#"{"version":1,"words":[{"text":"好"}]}"#,        // 词条缺 freq
+            r#"{"version":1,"words":[{"freq":3}]}"#,           // 词条缺 text
             r#"{"version":1,"words":[{"text":"","freq":3}]}"#, // 空词
         ] {
             assert!(l.import_json(bad).is_err(), "应拒绝：{bad}");
         }
-        assert_eq!(l.export_json(), r#"{"version":1,"words":[]}"#, "失败不得部分导入");
+        assert_eq!(
+            l.export_json(),
+            r#"{"version":1,"words":[]}"#,
+            "失败不得部分导入"
+        );
     }
 
     /// 超大词表直接拒绝：导入是信任边界（文件来自设备存储/恢复备份），
@@ -228,11 +241,15 @@ mod tests {
     fn import_json_rejects_oversized_word_list() {
         let mut l = Learner::new(true);
         let one = r#"{"text":"好","freq":1}"#;
-        let body = std::iter::repeat_n(one, MAX_IMPORT_WORDS + 1).collect::<Vec<_>>().join(",");
+        let body = std::iter::repeat_n(one, MAX_IMPORT_WORDS + 1)
+            .collect::<Vec<_>>()
+            .join(",");
         let json = format!(r#"{{"version":1,"words":[{body}]}}"#);
         assert!(l.import_json(&json).is_err());
         // 恰好等于上限则接受
-        let body = std::iter::repeat_n(one, MAX_IMPORT_WORDS).collect::<Vec<_>>().join(",");
+        let body = std::iter::repeat_n(one, MAX_IMPORT_WORDS)
+            .collect::<Vec<_>>()
+            .join(",");
         let json = format!(r#"{{"version":1,"words":[{body}]}}"#);
         assert_eq!(l.import_json(&json).unwrap(), MAX_IMPORT_WORDS);
         assert_eq!(l.freq_of("好"), 1);
@@ -242,7 +259,8 @@ mod tests {
     #[test]
     fn record_after_max_freq_import_saturates() {
         let mut l = Learner::new(true);
-        l.import_json(r#"{"version":1,"words":[{"text":"好","freq":4294967295}]}"#).unwrap();
+        l.import_json(r#"{"version":1,"words":[{"text":"好","freq":4294967295}]}"#)
+            .unwrap();
         l.record_selection("好");
         assert_eq!(l.freq_of("好"), u32::MAX);
     }

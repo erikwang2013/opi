@@ -7,14 +7,12 @@
 use std::sync::Mutex;
 
 use opi_ffi::cabi::{
-    opi_backspace, opi_buffer, opi_candidates, opi_candidates_page, opi_clear, opi_clear_user_words,
-    opi_export_user_words,
-    opi_ffi_free_string, opi_import_user_words, opi_input_key, opi_input_space, opi_key_event,
-    opi_learner_enabled, opi_load, opi_load_trad, opi_mode, opi_page, opi_page_count,
-    opi_remove_user_word,
-    opi_select, opi_select_page, opi_search_symbols, opi_set_learner, opi_set_shift, opi_shift_state,
-    opi_switch_mode,
-    opi_symbol_blocks, opi_symbols_in_block, OpiString,
+    OpiString, opi_backspace, opi_buffer, opi_candidates, opi_candidates_page, opi_clear,
+    opi_clear_user_words, opi_export_user_words, opi_ffi_free_string, opi_import_user_words,
+    opi_input_key, opi_input_space, opi_key_event, opi_learner_enabled, opi_load, opi_load_trad,
+    opi_mode, opi_page, opi_page_count, opi_remove_user_word, opi_search_symbols, opi_select,
+    opi_select_page, opi_set_learner, opi_set_shift, opi_shift_state, opi_switch_mode,
+    opi_symbol_blocks, opi_symbols_in_block,
 };
 
 use engine_core::keys::{
@@ -45,15 +43,24 @@ fn read_texts(s: OpiString) -> Vec<String> {
 /// 仓库内资产路径：以 `CARGO_MANIFEST_DIR` 为锚，不得用相对路径 —— 相对路径
 /// 依赖进程 cwd，直接跑测试二进制（或换目录跑）时会读到别处，断言全红。
 /// 与 crates/opi-tools/tests/trad_coverage.rs 的写法一致。
-const LUNA_OPID: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../android/app/src/main/assets/luna.opid");
-const TRAD_OPID: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/generated/trad.opid");
+const LUNA_OPID: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../android/app/src/main/assets/luna.opid"
+);
+const TRAD_OPID: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../data/generated/trad.opid"
+);
 
 /// 装载：优先 luna 词库（存在则真实加载），缺失走内置回退（也必须成功）。
 fn load_any() {
     let p = to_units(LUNA_OPID);
     let ok = unsafe { opi_load(p.as_ptr(), p.len()) };
     if !ok {
-        assert!(unsafe { opi_load(std::ptr::null(), 0) }, "内置回退路径必须可用");
+        assert!(
+            unsafe { opi_load(std::ptr::null(), 0) },
+            "内置回退路径必须可用"
+        );
     }
 }
 
@@ -77,8 +84,15 @@ fn cabi_pinyin_candidates_and_select() {
     assert_eq!(read(unsafe { opi_buffer() }), "wo");
     let texts = read_texts(unsafe { opi_candidates(8) });
     assert!(!texts.is_empty(), "候选非空");
-    assert!(texts.contains(&"我".to_string()), "候选应含 我（luna 排名以实际词库为准）");
-    assert_eq!(read(unsafe { opi_select(0) }), texts[0], "select(0) 应返回首个候选");
+    assert!(
+        texts.contains(&"我".to_string()),
+        "候选应含 我（luna 排名以实际词库为准）"
+    );
+    assert_eq!(
+        read(unsafe { opi_select(0) }),
+        texts[0],
+        "select(0) 应返回首个候选"
+    );
     assert_eq!(read(unsafe { opi_buffer() }), "");
     // select 越界 → 空串
     assert_eq!(read(unsafe { opi_select(999) }), "");
@@ -146,7 +160,10 @@ fn cabi_learner_and_user_words() {
     assert!(!words.is_empty());
     assert!(words.contains("\"version\""));
     unsafe { opi_clear_user_words() };
-    assert_eq!(read(unsafe { opi_export_user_words() }), r#"{"version":1,"words":[]}"#);
+    assert_eq!(
+        read(unsafe { opi_export_user_words() }),
+        r#"{"version":1,"words":[]}"#
+    );
 }
 
 #[test]
@@ -192,7 +209,10 @@ fn cabi_remove_user_word_deletes_and_is_noop_on_miss() {
         opi_set_learner(true);
         opi_switch_mode(0);
     }
-    assert!(!read(unsafe { opi_export_user_words() }).contains("我"), "前置：清空后不含 我");
+    assert!(
+        !read(unsafe { opi_export_user_words() }).contains("我"),
+        "前置：清空后不含 我"
+    );
 
     // 走真实路径造学习词：输入 wo 并选首候选
     let w = to_units("w");
@@ -214,11 +234,19 @@ fn cabi_remove_user_word_deletes_and_is_noop_on_miss() {
     // 负例：删不存在的词 → 无操作（不 panic，状态逐字节不变）
     let miss = to_units("鸝");
     unsafe { opi_remove_user_word(miss.as_ptr(), miss.len()) };
-    assert_eq!(read(unsafe { opi_export_user_words() }), after, "删不存在的词不得改动状态");
+    assert_eq!(
+        read(unsafe { opi_export_user_words() }),
+        after,
+        "删不存在的词不得改动状态"
+    );
 
     // null 指针同空串；空串删除不 panic 且不改状态
     unsafe { opi_remove_user_word(std::ptr::null(), 0) };
-    assert_eq!(read(unsafe { opi_export_user_words() }), after, "null 入参不得改动状态");
+    assert_eq!(
+        read(unsafe { opi_export_user_words() }),
+        after,
+        "null 入参不得改动状态"
+    );
 
     unsafe {
         opi_clear_user_words();
@@ -245,7 +273,10 @@ fn cabi_import_user_words_valid_json_affects_ranking() {
         opi_input_key(o.as_ptr(), o.len());
     }
     let before = read_texts(unsafe { opi_candidates(8) });
-    assert!(before.len() >= 2, "需要 ≥2 个候选才能证明排序变化，实际: {before:?}");
+    assert!(
+        before.len() >= 2,
+        "需要 ≥2 个候选才能证明排序变化，实际: {before:?}"
+    );
     let target = before[1].clone();
     unsafe { opi_clear() };
 
@@ -268,7 +299,10 @@ fn cabi_import_user_words_valid_json_affects_ranking() {
         opi_input_key(o.as_ptr(), o.len());
     }
     let after = read_texts(unsafe { opi_candidates(8) });
-    assert_eq!(after[0], target, "导入的词应升到首位：before={before:?} after={after:?}");
+    assert_eq!(
+        after[0], target,
+        "导入的词应升到首位：before={before:?} after={after:?}"
+    );
 
     unsafe {
         opi_clear();
@@ -288,14 +322,17 @@ fn cabi_import_user_words_invalid_json_is_negative_and_atomic() {
     let gu = to_units(good);
     assert_eq!(unsafe { opi_import_user_words(gu.as_ptr(), gu.len()) }, 1);
     let baseline = read(unsafe { opi_export_user_words() });
-    assert!(baseline.contains("鸝"), "前置：既有状态含 鸝，实际: {baseline}");
+    assert!(
+        baseline.contains("鸝"),
+        "前置：既有状态含 鸝，实际: {baseline}"
+    );
 
     for bad in [
-        "",                                        // 空串
-        "not json",                                // 非 JSON
-        r#"{"version":2,"words":[]}"#,             // 版本不符
+        "",                                                // 空串
+        "not json",                                        // 非 JSON
+        r#"{"version":2,"words":[]}"#,                     // 版本不符
         r#"{"version":1,"words":[{"text":"","freq":1}]}"#, // 空词条
-        r#"{"version":1}"#,                        // 缺 words
+        r#"{"version":1}"#,                                // 缺 words
     ] {
         let bu = to_units(bad);
         let n = unsafe { opi_import_user_words(bu.as_ptr(), bu.len()) };
@@ -308,8 +345,15 @@ fn cabi_import_user_words_invalid_json_is_negative_and_atomic() {
     }
 
     // null 指针同样按失败处理且不改状态
-    assert!(unsafe { opi_import_user_words(std::ptr::null(), 0) } < 0, "null 应返回负值");
-    assert_eq!(read(unsafe { opi_export_user_words() }), baseline, "null 不得改动状态");
+    assert!(
+        unsafe { opi_import_user_words(std::ptr::null(), 0) } < 0,
+        "null 应返回负值"
+    );
+    assert_eq!(
+        read(unsafe { opi_export_user_words() }),
+        baseline,
+        "null 不得改动状态"
+    );
 
     // 幂等：再导入同一份合法 JSON，频次取 max 而非累加
     let gu2 = to_units(good);
@@ -331,8 +375,6 @@ fn cabi_import_user_words_invalid_json_is_negative_and_atomic() {
 #[path = "cabi/key_event.rs"]
 mod key_event_tests;
 
-
-
 #[test]
 fn cabi_load_trad_routes_traditional_mode() {
     let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
@@ -352,7 +394,10 @@ fn cabi_load_trad_routes_traditional_mode() {
         opi_input_key(a.as_ptr(), a.len());
     }
     let texts = read_texts(unsafe { opi_candidates(8) });
-    assert!(texts.contains(&"發".to_string()), "繁模式 fa 候选应含 發，实际: {texts:?}");
+    assert!(
+        texts.contains(&"發".to_string()),
+        "繁模式 fa 候选应含 發，实际: {texts:?}"
+    );
     unsafe {
         opi_switch_mode(0);
         opi_clear();

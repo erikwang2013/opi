@@ -53,7 +53,12 @@ impl SymbolEngine {
         }
         keywords.sort();
         keywords.dedup();
-        SymbolEngine { blocks, entries, keywords, block_index }
+        SymbolEngine {
+            blocks,
+            entries,
+            keywords,
+            block_index,
+        }
     }
 
     /// 从 scripts 生成的两个 TSV 构造（数据在编译期以 `include_str!` 嵌入，运行期无 IO）。
@@ -77,7 +82,8 @@ impl SymbolEngine {
             let cols: [&str; 5] = tsv_cols(line, no, "区块")?;
             let [id, start, end, name, common] = cols;
             let id = BlockId(
-                id.parse::<u16>().map_err(|e| format!("第 {no} 行区块 id 不是 u16 {id:?}: {e}"))?,
+                id.parse::<u16>()
+                    .map_err(|e| format!("第 {no} 行区块 id 不是 u16 {id:?}: {e}"))?,
             );
             if !ids.insert(id) {
                 return Err(format!("第 {no} 行区块 id {id:?} 重复"));
@@ -241,13 +247,43 @@ mod tests {
     fn sample() -> SymbolEngine {
         SymbolEngine::new(
             vec![
-                Block { id: BlockId(1), start: 0x3000, end: 0x303F, name: "CJK 符号".into(), common: true },
-                Block { id: BlockId(3), start: 0x2600, end: 0x26FF, name: "杂项符号".into(), common: true },
-                Block { id: BlockId(4), start: 0x1F600, end: 0x1F64F, name: "表情符号".into(), common: false },
+                Block {
+                    id: BlockId(1),
+                    start: 0x3000,
+                    end: 0x303F,
+                    name: "CJK 符号".into(),
+                    common: true,
+                },
+                Block {
+                    id: BlockId(3),
+                    start: 0x2600,
+                    end: 0x26FF,
+                    name: "杂项符号".into(),
+                    common: true,
+                },
+                Block {
+                    id: BlockId(4),
+                    start: 0x1F600,
+                    end: 0x1F64F,
+                    name: "表情符号".into(),
+                    common: false,
+                },
             ],
             vec![
-                SymbolEntry { text: "♥".into(), name: "心形".into(), keywords: vec!["heart".into(), "xin".into()], block: BlockId(3), emoji: false },
-                SymbolEntry { text: "😄".into(), name: "微笑".into(), keywords: vec!["xiao".into(), "smile".into()], block: BlockId(4), emoji: true },
+                SymbolEntry {
+                    text: "♥".into(),
+                    name: "心形".into(),
+                    keywords: vec!["heart".into(), "xin".into()],
+                    block: BlockId(3),
+                    emoji: false,
+                },
+                SymbolEntry {
+                    text: "😄".into(),
+                    name: "微笑".into(),
+                    keywords: vec!["xiao".into(), "smile".into()],
+                    block: BlockId(4),
+                    emoji: true,
+                },
             ],
         )
     }
@@ -257,8 +293,14 @@ mod tests {
     #[test]
     fn builtin_panel_is_not_empty() {
         let e = SymbolEngine::builtin();
-        assert!(!e.common_blocks().is_empty(), "常用区块为空：data/raw/symbol_blocks.tsv 内容可疑");
-        assert!(e.block_of('。').is_some() || e.block_of('♥').is_some(), "区块区间与常见符号对不上");
+        assert!(
+            !e.common_blocks().is_empty(),
+            "常用区块为空：data/raw/symbol_blocks.tsv 内容可疑"
+        );
+        assert!(
+            e.block_of('。').is_some() || e.block_of('♥').is_some(),
+            "区块区间与常见符号对不上"
+        );
     }
 
     #[test]
@@ -280,8 +322,11 @@ mod tests {
     #[test]
     fn entries_in_block_returns_members() {
         let e = sample();
-        let texts: Vec<String> =
-            e.entries_in_block(BlockId(3)).iter().map(|s| s.text.clone()).collect();
+        let texts: Vec<String> = e
+            .entries_in_block(BlockId(3))
+            .iter()
+            .map(|s| s.text.clone())
+            .collect();
         assert_eq!(texts, vec!["♥".to_string()]);
         assert!(e.entries_in_block(BlockId(99)).is_empty());
     }
@@ -337,10 +382,19 @@ mod tests {
         assert_eq!(emoji.len(), 1);
         assert_eq!(emoji[0].text, "😄");
         assert!(emoji[0].emoji);
-        assert_eq!(emoji[0].keywords, vec!["xiao".to_string(), "smile".to_string()]);
+        assert_eq!(
+            emoji[0].keywords,
+            vec!["xiao".to_string(), "smile".to_string()]
+        );
         let geom = e.entries_in_block(BlockId(3));
         assert_eq!(geom.len(), 2);
-        assert!(geom.iter().find(|s| s.text == "∅").unwrap().keywords.is_empty());
+        assert!(
+            geom.iter()
+                .find(|s| s.text == "∅")
+                .unwrap()
+                .keywords
+                .is_empty()
+        );
         // 全角逗号也当分隔符（▲ 的 keywords 用的是 "sjx，triangle"）
         assert_eq!(
             geom.iter().find(|s| s.text == "▲").unwrap().keywords,
@@ -364,17 +418,17 @@ mod tests {
     #[test]
     fn from_tsv_rejects_bad_input() {
         let cases: &[(&str, &str)] = &[
-            ("1\t3000\tZ\tCJK\t1\n", ""),                    // end 非十六进制
-            ("1\t3000\t303F\tCJK\t2\n", ""),                 // common 非 0/1
-            ("1\t3040\t303F\tCJK\t1\n", ""),                 // start > end
-            ("1\t3000\t303F\tCJK\n", ""),                    // 缺列
-            ("1\t3000\t303F\tCJK\t1\textra\n", ""),          // 多列
-            ("1\t3000\t303F\tCJK\t1\n1\t3030\t3040\tX\t1\n", ""), // 区块重叠
+            ("1\t3000\tZ\tCJK\t1\n", ""),                           // end 非十六进制
+            ("1\t3000\t303F\tCJK\t2\n", ""),                        // common 非 0/1
+            ("1\t3040\t303F\tCJK\t1\n", ""),                        // start > end
+            ("1\t3000\t303F\tCJK\n", ""),                           // 缺列
+            ("1\t3000\t303F\tCJK\t1\textra\n", ""),                 // 多列
+            ("1\t3000\t303F\tCJK\t1\n1\t3030\t3040\tX\t1\n", ""),   // 区块重叠
             ("1\t3000\t303F\tCJK\t1\n1\t3000\t303F\tCJK\t1\n", ""), // 区块 ID 重复
-            ("65536\t3000\t303F\tCJK\t1\n", ""),             // id 超 u16
-            (BLOCKS_TSV, "。\t句号\tju\t9\t0\n"),             // 引用不存在的区块
-            (BLOCKS_TSV, "\t句号\tju\t1\t0\n"),               // 空 text
-            (BLOCKS_TSV, "。\t句号\tju\t1\n"),                // 缺列
+            ("65536\t3000\t303F\tCJK\t1\n", ""),                    // id 超 u16
+            (BLOCKS_TSV, "。\t句号\tju\t9\t0\n"),                   // 引用不存在的区块
+            (BLOCKS_TSV, "\t句号\tju\t1\t0\n"),                     // 空 text
+            (BLOCKS_TSV, "。\t句号\tju\t1\n"),                      // 缺列
         ];
         for (blocks, entries) in cases {
             assert!(
@@ -397,10 +451,28 @@ mod tests {
     fn search_returns_deterministic_unique() {
         // 同一关键字挂在多个条目上（两个条目都带 x 前缀关键字）也不得重复输出。
         let e = SymbolEngine::new(
-            vec![Block { id: BlockId(1), start: 0x1F600, end: 0x1F64F, name: "表情".into(), common: true }],
+            vec![Block {
+                id: BlockId(1),
+                start: 0x1F600,
+                end: 0x1F64F,
+                name: "表情".into(),
+                common: true,
+            }],
             vec![
-                SymbolEntry { text: "😄".into(), name: "微笑".into(), keywords: vec!["xiao".into(), "x".into()], block: BlockId(1), emoji: true },
-                SymbolEntry { text: "😆".into(), name: "大笑".into(), keywords: vec!["xiao".into()], block: BlockId(1), emoji: true },
+                SymbolEntry {
+                    text: "😄".into(),
+                    name: "微笑".into(),
+                    keywords: vec!["xiao".into(), "x".into()],
+                    block: BlockId(1),
+                    emoji: true,
+                },
+                SymbolEntry {
+                    text: "😆".into(),
+                    name: "大笑".into(),
+                    keywords: vec!["xiao".into()],
+                    block: BlockId(1),
+                    emoji: true,
+                },
             ],
         );
         let got = e.search("xiao");

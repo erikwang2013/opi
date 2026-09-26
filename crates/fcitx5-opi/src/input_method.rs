@@ -92,7 +92,11 @@ pub fn handle_key(state: &mut CandidateState, keyval: u32, states: u32) -> KeyAc
                 // 收到 keydown 收不到 keyup，依赖键状态的游戏/编辑器会卡键。
                 // 只在需要时取缓冲 —— buffer() 会分配 String，提到 match 之前等于给每个
                 // 按键都加一次分配。可打印分支的反向不对称是既有的有意取舍（见下方注释）。
-                if state.buffer().is_empty() { KeyAction::PassThrough } else { KeyAction::EngineHandled }
+                if state.buffer().is_empty() {
+                    KeyAction::PassThrough
+                } else {
+                    KeyAction::EngineHandled
+                }
             } else {
                 handle_backspace(state)
             }
@@ -107,7 +111,11 @@ pub fn handle_key(state: &mut CandidateState, keyval: u32, states: u32) -> KeyAc
         KEY_RETURN => {
             if released {
                 // 同退格：抬起与按下同判（见 handle_enter）
-                if state.buffer().is_empty() { KeyAction::PassThrough } else { KeyAction::EngineHandled }
+                if state.buffer().is_empty() {
+                    KeyAction::PassThrough
+                } else {
+                    KeyAction::EngineHandled
+                }
             } else {
                 handle_enter(state)
             }
@@ -268,8 +276,8 @@ fn commit_or_handled(out: String) -> KeyAction {
 
 // 单测独立成文件（input_method_tests.rs，`#[path]` 引入）以保持本文件 <500 行。
 #[cfg(test)]
-#[path = "input_method_tests.rs"]
-mod tests;
-#[cfg(test)]
 #[path = "input_method_release_tests.rs"]
 mod release_tests;
+#[cfg(test)]
+#[path = "input_method_tests.rs"]
+mod tests;

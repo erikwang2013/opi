@@ -41,19 +41,34 @@ mod tests {
     /// 天线的缩进必须原样保留（`"\` 续行会吃掉首行前导空白，导致整只键帽左移）。
     #[test]
     fn pet_antenna_indent() {
-        assert!(OPI_PET.contains("\n        -\n"), "天线行缩进被吃掉：{OPI_PET:?}");
-        assert!(OPI_PET.starts_with('\n') && OPI_PET.ends_with('\n'), "首尾须各留一个空行");
+        assert!(
+            OPI_PET.contains("\n        -\n"),
+            "天线行缩进被吃掉：{OPI_PET:?}"
+        );
+        assert!(
+            OPI_PET.starts_with('\n') && OPI_PET.ends_with('\n'),
+            "首尾须各留一个空行"
+        );
     }
 
     #[test]
     fn pet_walls_align() {
-        let walls: Vec<Vec<usize>> =
-            OPI_PET.lines().map(wall_columns).filter(|w| !w.is_empty()).collect();
+        let walls: Vec<Vec<usize>> = OPI_PET
+            .lines()
+            .map(wall_columns)
+            .filter(|w| !w.is_empty())
+            .collect();
         // 正面两行（眼睛 / 嘴巴）共用同一对墙壁。
         let face: Vec<&Vec<usize>> = walls.iter().filter(|w| w.first() == Some(&3)).collect();
         assert_eq!(face.len(), 2, "键帽正面应为两行：眼睛一行 + 嘴巴一行");
-        assert!(face.iter().all(|w| w.as_slice() == [3, 13]), "正面左右壁必须对齐在 3 / 13");
+        assert!(
+            face.iter().all(|w| w.as_slice() == [3, 13]),
+            "正面左右壁必须对齐在 3 / 13"
+        );
         // 刻字行自成一对更宽的墙壁。
-        assert!(walls.iter().any(|w| w.as_slice() == [0, 16]), "OPI 刻字行左右壁须对齐在 0 / 16");
+        assert!(
+            walls.iter().any(|w| w.as_slice() == [0, 16]),
+            "OPI 刻字行左右壁须对齐在 0 / 16"
+        );
     }
 }

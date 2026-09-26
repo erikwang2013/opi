@@ -20,8 +20,10 @@ use engine_core::dictionary::Dictionary;
 use engine_data::load_mmap;
 use std::path::Path;
 
-const TRAD_OPID: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/generated/trad.opid");
+const TRAD_OPID: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../data/generated/trad.opid"
+);
 const LUNA_OPID: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../android/app/src/main/assets/luna.opid"
@@ -30,8 +32,10 @@ const LUNA_OPID: &str = concat!(
 // ---- 符号面板数据（scripts/gen_symbols.py 产出，提交入库）----
 // 路径与 engine-core/src/symbols.rs::builtin() 的 include_str! 一致（data/raw/，非任务书
 // 写的 data/generated/）：消费侧是**编译期**读取，路径不一致直接编不过 —— 见该处注释。
-const SYMBOL_BLOCKS_TSV: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/raw/symbol_blocks.tsv");
+const SYMBOL_BLOCKS_TSV: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../data/raw/symbol_blocks.tsv"
+);
 const SYMBOLS_TSV: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/raw/symbols.tsv");
 
 /// common=1 区块的条目下限。板面是 8 列网格，32 条 = 4 行。
@@ -76,7 +80,9 @@ fn gate(label: &str, path: &str) {
     for (ch, py, cp) in RARE {
         let rank = rank_of(&dict, py, ch);
         if rank == 0 {
-            fails.push(format!("U+{cp:05X} {ch}（{py}）→ 无候选：该扩展区字未进词库"));
+            fails.push(format!(
+                "U+{cp:05X} {ch}（{py}）→ 无候选：该扩展区字未进词库"
+            ));
         } else {
             println!("[{label}] U+{cp:05X} {ch} ← {py} 第 {rank} 位");
         }
@@ -104,15 +110,22 @@ fn luna_rare_chars_reachable() {
 
 /// TSV → 行×列，列数不符即报错（生成器少写一列会当场炸，而不是静默错位）。
 fn read_tsv(path: &str, cols: usize) -> Vec<Vec<String>> {
-    let text = std::fs::read_to_string(path)
-        .unwrap_or_else(|e| panic!("读 {path} 失败：{e}\n（由 scripts/gen_symbols.py 生成，应提交入库）"));
+    let text = std::fs::read_to_string(path).unwrap_or_else(|e| {
+        panic!("读 {path} 失败：{e}\n（由 scripts/gen_symbols.py 生成，应提交入库）")
+    });
     let mut rows = Vec::new();
     for (i, line) in text.lines().enumerate() {
         if line.is_empty() {
             continue;
         }
         let f: Vec<String> = line.split('\t').map(str::to_string).collect();
-        assert_eq!(f.len(), cols, "{path}:{} 列数 {} ≠ {cols}：{line:?}", i + 1, f.len());
+        assert_eq!(
+            f.len(),
+            cols,
+            "{path}:{} 列数 {} ≠ {cols}：{line:?}",
+            i + 1,
+            f.len()
+        );
         rows.push(f);
     }
     assert!(!rows.is_empty(), "{path} 无数据行");
@@ -124,9 +137,12 @@ fn symbol_data_wellformed() {
     // 区块：id / start / end / name / common
     let mut blocks: Vec<(u32, u32, u32, String, bool)> = Vec::new();
     for b in read_tsv(SYMBOL_BLOCKS_TSV, 5) {
-        let id: u32 = b[0].parse().unwrap_or_else(|_| panic!("区块 id {:?} 非十进制", b[0]));
+        let id: u32 = b[0]
+            .parse()
+            .unwrap_or_else(|_| panic!("区块 id {:?} 非十进制", b[0]));
         let (start, end) = (
-            u32::from_str_radix(&b[1], 16).unwrap_or_else(|_| panic!("start {:?} 非十六进制", b[1])),
+            u32::from_str_radix(&b[1], 16)
+                .unwrap_or_else(|_| panic!("start {:?} 非十六进制", b[1])),
             u32::from_str_radix(&b[2], 16).unwrap_or_else(|_| panic!("end {:?} 非十六进制", b[2])),
         );
         assert!(start <= end, "区块 {id} 范围倒置 U+{start:04X}-{end:04X}");
@@ -160,7 +176,9 @@ fn symbol_data_wellformed() {
         );
         assert!(!name.is_empty(), "第 {line} 行 {text} 名字为空");
         let cp = text.chars().next().unwrap() as u32;
-        let bid: u32 = bid.parse().unwrap_or_else(|_| panic!("第 {line} 行 block_id {bid:?} 非十进制"));
+        let bid: u32 = bid
+            .parse()
+            .unwrap_or_else(|_| panic!("第 {line} 行 block_id {bid:?} 非十进制"));
         let idx = blocks
             .iter()
             .position(|(id, ..)| *id == bid)
@@ -172,13 +190,17 @@ fn symbol_data_wellformed() {
         );
         // emoji ⟺ 非 BMP：Android SymbolCatalog.isEmoji() 就是「含代理项」，口径必须一致
         let want_emoji = if cp > 0xFFFF { "1" } else { "0" };
-        assert_eq!(emoji, want_emoji, "第 {line} 行 {text} U+{cp:04X} emoji={emoji}，应为 {want_emoji}");
+        assert_eq!(
+            emoji, want_emoji,
+            "第 {line} 行 {text} U+{cp:04X} emoji={emoji}，应为 {want_emoji}"
+        );
         // 关键字：引擎按字节前缀匹配，非小写 ASCII 永远搜不到
         let keys: Vec<&str> = keys.split(',').filter(|k| !k.is_empty()).collect();
         assert!(!keys.is_empty(), "第 {line} 行 {text} 无关键字（搜不到）");
         for k in &keys {
             assert!(
-                k.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()),
+                k.chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()),
                 "第 {line} 行 {text} 关键字 {k:?} 非小写 ASCII 字母数字"
             );
         }
@@ -191,7 +213,10 @@ fn symbol_data_wellformed() {
 
     // 每个声明区块必须有内容（旧 builtin() 的「CJK 扩展 A」声明 6592 码位、0 条 —— 正是这条要拦的）
     for (i, (id, start, end, name, common)) in blocks.iter().enumerate() {
-        assert!(counts[i] > 0, "区块 {id}「{name}」U+{start:04X}-{end:04X} 声明了却一条数据都没有");
+        assert!(
+            counts[i] > 0,
+            "区块 {id}「{name}」U+{start:04X}-{end:04X} 声明了却一条数据都没有"
+        );
         if *common {
             assert!(
                 counts[i] >= MIN_COMMON_BLOCK,
@@ -205,5 +230,9 @@ fn symbol_data_wellformed() {
             if *common { 1 } else { 0 }
         );
     }
-    println!("[symbols] 合计 {} 条 / {} 区块", counts.iter().sum::<usize>(), blocks.len());
+    println!(
+        "[symbols] 合计 {} 条 / {} 区块",
+        counts.iter().sum::<usize>(),
+        blocks.len()
+    );
 }

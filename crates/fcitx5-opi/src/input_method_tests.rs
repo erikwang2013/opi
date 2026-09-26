@@ -134,7 +134,11 @@ fn empty_buffer_backspace_and_enter_release_pass_through() {
     // 却收不到 keyup，依赖键状态的游戏/编辑器会卡键。
     let mut s = pinyin_state();
     for key in [KEY_BACK_SPACE, KEY_RETURN] {
-        assert_eq!(handle_key(&mut s, key, 0), KeyAction::PassThrough, "按下放行");
+        assert_eq!(
+            handle_key(&mut s, key, 0),
+            KeyAction::PassThrough,
+            "按下放行"
+        );
         assert_eq!(
             handle_key(&mut s, key, KEY_STATE_RELEASED),
             KeyAction::PassThrough,
@@ -467,7 +471,10 @@ fn printable_release_does_not_refeed_pinyin_buffer() {
 fn printable_release_does_not_double_commit_english() {
     let mut s = english_state();
     // 英文空缓冲直传：按下提交一次
-    assert_eq!(handle_key(&mut s, 'a' as u32, 0), KeyAction::Input("a".into()));
+    assert_eq!(
+        handle_key(&mut s, 'a' as u32, 0),
+        KeyAction::Input("a".into())
+    );
     // 抬起不得再提交一次（否则 "a" → "aa"）
     assert_eq!(
         handle_key(&mut s, 'a' as u32, KEY_STATE_RELEASED),

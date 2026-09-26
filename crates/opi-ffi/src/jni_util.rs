@@ -83,7 +83,9 @@ pub unsafe fn string_array(env: *mut sys::JNIEnv, items: Vec<String>) -> sys::jo
     if class.is_null() {
         return std::ptr::null_mut();
     }
-    let arr = unsafe { (iface.v1_1.NewObjectArray)(env, items.len() as jsize, class, std::ptr::null_mut()) };
+    let arr = unsafe {
+        (iface.v1_1.NewObjectArray)(env, items.len() as jsize, class, std::ptr::null_mut())
+    };
     if arr.is_null() {
         return std::ptr::null_mut();
     }
@@ -120,6 +122,9 @@ mod tests {
 
     #[test]
     fn utf16_ascii_roundtrip() {
-        assert_eq!(utf16_units_to_string(&[b'a' as u16, b'b' as u16]).unwrap(), "ab");
+        assert_eq!(
+            utf16_units_to_string(&[b'a' as u16, b'b' as u16]).unwrap(),
+            "ab"
+        );
     }
 }

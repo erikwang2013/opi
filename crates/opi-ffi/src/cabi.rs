@@ -6,7 +6,7 @@
 //! 完全一致，共享 api::SINGLETON 与内部实现，无重复逻辑。
 //! 多字符串返回值（candidates/searchSymbols/symbolsInBlock）编码为 JSON 文本数组。
 
-use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use engine_core::router::KeyAction;
 
@@ -36,7 +36,10 @@ impl OpiString {
 
     /// 空句柄（ptr: null, len: 0）——错误/空串哨兵。
     pub fn empty() -> Self {
-        OpiString { ptr: std::ptr::null(), len: 0 }
+        OpiString {
+            ptr: std::ptr::null(),
+            len: 0,
+        }
     }
 }
 
@@ -231,11 +234,18 @@ pub unsafe extern "C" fn opi_key_event(keyval: u32, states: u32) -> OpiKeyEventR
     }))
     .unwrap_or(KeyAction::PassThrough);
     match action {
-        KeyAction::Input(text) => {
-            OpiKeyEventResult { action: 2, text: OpiString::from_utf16(&text) }
-        }
-        KeyAction::EngineHandled => OpiKeyEventResult { action: 1, text: OpiString::empty() },
-        KeyAction::PassThrough => OpiKeyEventResult { action: 0, text: OpiString::empty() },
+        KeyAction::Input(text) => OpiKeyEventResult {
+            action: 2,
+            text: OpiString::from_utf16(&text),
+        },
+        KeyAction::EngineHandled => OpiKeyEventResult {
+            action: 1,
+            text: OpiString::empty(),
+        },
+        KeyAction::PassThrough => OpiKeyEventResult {
+            action: 0,
+            text: OpiString::empty(),
+        },
     }
 }
 
@@ -284,8 +294,10 @@ pub unsafe extern "C" fn opi_candidates_page() -> OpiString {
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_page_count() -> u32 {
-    catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.page_count()).unwrap_or(0)))
-        .unwrap_or(0)
+    catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.page_count()).unwrap_or(0)
+    }))
+    .unwrap_or(0)
 }
 
 /// page() -> uint32：当前候选页（0 起，末页由路由钳制）。**引擎未装载 → 0**。
@@ -297,7 +309,10 @@ pub unsafe extern "C" fn opi_page_count() -> u32 {
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_page() -> u32 {
-    catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.page()).unwrap_or(0))).unwrap_or(0)
+    catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.page()).unwrap_or(0)
+    }))
+    .unwrap_or(0)
 }
 
 /// shiftState() -> int32：**前端** ⇧ 三态 0=OFF 1=SINGLE（下个字母大写后自动复位）
@@ -311,8 +326,10 @@ pub unsafe extern "C" fn opi_page() -> u32 {
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_shift_state() -> i32 {
-    catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.shift_state_int()).unwrap_or(0)))
-        .unwrap_or(0)
+    catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.shift_state_int()).unwrap_or(0)
+    }))
+    .unwrap_or(0)
 }
 
 /// candidates(limit) -> JSON 文本数组。
@@ -388,7 +405,11 @@ pub unsafe extern "C" fn opi_symbols_in_block(id: i16) -> OpiString {
         // 负 id 按越界处理（空数组），不钳成块 0 —— 与 jni.rs 的
         // opijni_symbols_in_block 同语义，两个 ABI 面必须一致。
         api::with_engine(|e| {
-            if id < 0 { Vec::new() } else { api::symbol_texts(e, id as u16) }
+            if id < 0 {
+                Vec::new()
+            } else {
+                api::symbol_texts(e, id as u16)
+            }
         })
         .unwrap_or_default()
     }))
@@ -401,7 +422,10 @@ pub unsafe extern "C" fn opi_symbols_in_block(id: i16) -> OpiString {
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_learner_enabled() -> bool {
-    catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.learner_enabled()).unwrap_or(false))).unwrap_or(false)
+    catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.learner_enabled()).unwrap_or(false)
+    }))
+    .unwrap_or(false)
 }
 
 /// # Safety
@@ -409,7 +433,9 @@ pub unsafe extern "C" fn opi_learner_enabled() -> bool {
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_set_learner(enabled: bool) {
-    let _ = catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.set_learner(enabled))));
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.set_learner(enabled))
+    }));
 }
 
 /// # Safety
@@ -417,7 +443,9 @@ pub unsafe extern "C" fn opi_set_learner(enabled: bool) {
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_clear_user_words() {
-    let _ = catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.clear_user_words())));
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.clear_user_words())
+    }));
 }
 
 /// remove_user_word(text: const uint16_t*, len)。长按删词的 C ABI 出口
@@ -468,4 +496,3 @@ pub unsafe extern "C" fn opi_export_user_words() -> OpiString {
     .unwrap_or_default();
     OpiString::from_utf16(&out)
 }
-

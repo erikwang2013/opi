@@ -46,12 +46,12 @@ use std::thread;
 use std::time::Duration;
 
 use engine_core::composer::Mode;
-use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::{CloseHandle, ERROR_FILE_NOT_FOUND, ERROR_PIPE_BUSY, HANDLE};
 use windows::Win32::Storage::FileSystem::{
-    CreateFileW, ReadFile, WriteFile, FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_SHARE_MODE,
-    FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+    CreateFileW, FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_SHARE_MODE, FILE_SHARE_READ,
+    FILE_SHARE_WRITE, OPEN_EXISTING, ReadFile, WriteFile,
 };
+use windows::core::{PCWSTR, w};
 
 use crate::tsf::TsfSink;
 
@@ -209,14 +209,7 @@ impl CandidateClient {
         while done < bytes.len() {
             let mut written = 0u32;
             // 0.62 的 WriteFile 为切片签名，返回 Result；部分写需循环。
-            let ok = unsafe {
-                WriteFile(
-                    handle.0,
-                    Some(&bytes[done..]),
-                    Some(&mut written),
-                    None,
-                )
-            };
+            let ok = unsafe { WriteFile(handle.0, Some(&bytes[done..]), Some(&mut written), None) };
             if ok.is_err() || written == 0 {
                 // 写失败（管道另一端关闭等）：断开，下次发送重连。
                 unsafe { CloseHandle(handle.0) }.ok();
@@ -261,9 +254,7 @@ impl CandidateClient {
                 };
                 // 字节流模式阻塞读：0 字节或错误 → 另一端关闭/断开。
                 let mut got = 0u32;
-                let ok = unsafe {
-                    ReadFile(handle.0, Some(&mut buf), Some(&mut got), None)
-                };
+                let ok = unsafe { ReadFile(handle.0, Some(&mut buf), Some(&mut got), None) };
                 if ok.is_err() || got == 0 {
                     if !disconnect(&conn, handle) {
                         return;
@@ -286,7 +277,8 @@ impl CandidateClient {
                     pending.drain(..1); // 去掉 '\n'
                     // 回调（select/翻页 → 文档操作）是外部代码，panic 必须兜住：
                     // 线程一死，reader_started 已置位不会重启 → 回复永久失效。
-                    let _ = catch_unwind(AssertUnwindSafe(|| dispatch_line(&line, action.as_ref())));
+                    let _ =
+                        catch_unwind(AssertUnwindSafe(|| dispatch_line(&line, action.as_ref())));
                 }
             }
         });
@@ -360,7 +352,8 @@ impl TsfSink for CandidateSink {
         if buffer.is_empty() {
             self.client.hide();
         } else {
-            self.client.show(buffer, candidates, page + 1, page_count, mode);
+            self.client
+                .show(buffer, candidates, page + 1, page_count, mode);
         }
     }
 }

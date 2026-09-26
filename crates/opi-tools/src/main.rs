@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-use engine_data::{load_bytes, Dictionary};
+use engine_data::{Dictionary, load_bytes};
 use opi_tools::compiler::{compile_file, parse_dict};
 use std::path::Path;
 

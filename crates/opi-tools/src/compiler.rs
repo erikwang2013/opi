@@ -25,7 +25,11 @@ pub fn parse_dict(text: &str) -> Vec<RawEntry> {
         }
         let word = cols[0].trim();
         let pinyin = cols[1].trim().to_lowercase();
-        if word.is_empty() || pinyin.is_empty() || !pinyin.is_ascii() || pinyin.len() > u8::MAX as usize {
+        if word.is_empty()
+            || pinyin.is_empty()
+            || !pinyin.is_ascii()
+            || pinyin.len() > u8::MAX as usize
+        {
             continue;
         }
         let freq = match cols.get(2).map(|s| s.trim()).filter(|s| !s.is_empty()) {
@@ -67,11 +71,15 @@ pub fn compile(entries: Vec<RawEntry>) -> OpDict {
     });
     entries.dedup_by(|a, b| a.pinyin == b.pinyin && a.word == b.word);
     let pinyin_total = entries.iter().map(|e| e.pinyin.len()).sum();
-    OpDict { entries, pinyin_total }
+    OpDict {
+        entries,
+        pinyin_total,
+    }
 }
 
 pub fn compile_file(input: &Path, output: &Path) -> Result<(), String> {
-    let text = std::fs::read_to_string(input).map_err(|e| format!("read {}: {e}", input.display()))?;
+    let text =
+        std::fs::read_to_string(input).map_err(|e| format!("read {}: {e}", input.display()))?;
     let dict = compile(parse_dict(&text));
     let bytes = serialize(&dict);
     std::fs::write(output, &bytes).map_err(|e| format!("write {}: {e}", output.display()))?;

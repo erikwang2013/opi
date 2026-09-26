@@ -48,8 +48,8 @@
 //! 产物：本测试只读不联网。luna 取 android 部署副本（data/generated/luna.opid 是
 //! gitignore 的构建中间物），trad 取入库产物 data/generated/trad.opid。
 
-use engine_core::symbols::SymbolEngine;
 use engine_core::Engine;
+use engine_core::symbols::SymbolEngine;
 use engine_data::load_mmap;
 use std::path::Path;
 
@@ -57,8 +57,10 @@ const LUNA_OPID: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../android/app/src/main/assets/luna.opid"
 );
-const TRAD_OPID: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/generated/trad.opid");
+const TRAD_OPID: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../data/generated/trad.opid"
+);
 const TRAD_ASSET: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../android/app/src/main/assets/trad.opid"
@@ -198,7 +200,11 @@ fn candidates_of(engine: &mut Engine, pinyin: &str) -> Vec<String> {
     for ch in pinyin.chars() {
         engine.input_key(ch);
     }
-    engine.candidates(usize::MAX).into_iter().map(|c| c.text).collect()
+    engine
+        .candidates(usize::MAX)
+        .into_iter()
+        .map(|c| c.text)
+        .collect()
 }
 
 /// 期望字在**引擎候选**中的名次（1 起，按引擎顺序去重）；0 = 无候选。
@@ -223,7 +229,10 @@ fn rank_of(engine: &mut Engine, pinyin: &str, expected: &str) -> usize {
 }
 
 fn top_word(engine: &mut Engine, pinyin: &str) -> String {
-    candidates_of(engine, pinyin).into_iter().next().unwrap_or_else(|| "—".into())
+    candidates_of(engine, pinyin)
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| "—".into())
 }
 
 /// 跑两档表；trad=true 取繁期待字。首位命中率一并打印（报告用）。
@@ -243,7 +252,11 @@ fn gate(label: &str, path: &str, trad: bool) {
             if rank == 0 || rank > max_rank {
                 fails.push(format!(
                     "{py}: 期望 {exp} → 第 {} 位（当前首位 {}，要求前 {max_rank}）",
-                    if rank == 0 { "缺".into() } else { rank.to_string() },
+                    if rank == 0 {
+                        "缺".into()
+                    } else {
+                        rank.to_string()
+                    },
                     top_word(&mut engine, py)
                 ));
             }
@@ -296,5 +309,8 @@ fn trad_assets_in_sync() {
         committed.len(),
         asset.len()
     );
-    assert_eq!(committed, asset, "两份 trad.opid 内容不同（重新生成并同步部署副本）");
+    assert_eq!(
+        committed, asset,
+        "两份 trad.opid 内容不同（重新生成并同步部署副本）"
+    );
 }

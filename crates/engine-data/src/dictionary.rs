@@ -3,9 +3,9 @@
 
 //! 内置 fallback 词库与 load_or_fallback 回退逻辑（M2 Task 8）。
 
-use std::path::Path;
+use crate::loader::{MmapDictionary, load_bytes, load_mmap};
 use engine_core::dictionary::Dictionary;
-use crate::loader::{load_bytes, load_mmap, MmapDictionary};
+use std::path::Path;
 
 /// 编译提交的内置回退词库（data/raw/fallback.tsv → opi-tools → data/generated/fallback.opid）。
 /// 提交时经 opi-tools 校验，运行期解析失败即仓库损坏，直接 panic。

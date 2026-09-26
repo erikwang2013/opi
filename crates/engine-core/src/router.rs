@@ -255,7 +255,11 @@ impl KeyRouter {
                     // 收到 keydown 收不到 keyup，依赖键状态的控件会卡键。
                     // 只在需要时取缓冲 —— buffer() 会分配 String，提到 match 之前等于给每个
                     // 按键都加一次分配。可打印分支的反向不对称是既有的有意取舍（见下方注释）。
-                    if self.buffer().is_empty() { KeyAction::PassThrough } else { KeyAction::EngineHandled }
+                    if self.buffer().is_empty() {
+                        KeyAction::PassThrough
+                    } else {
+                        KeyAction::EngineHandled
+                    }
                 } else {
                     self.handle_backspace()
                 }
@@ -273,7 +277,11 @@ impl KeyRouter {
             KEY_RETURN => {
                 if released {
                     // 同退格：抬起与按下同判（见 handle_enter）
-                    if self.buffer().is_empty() { KeyAction::PassThrough } else { KeyAction::EngineHandled }
+                    if self.buffer().is_empty() {
+                        KeyAction::PassThrough
+                    } else {
+                        KeyAction::EngineHandled
+                    }
                 } else {
                     self.handle_enter()
                 }
@@ -291,7 +299,9 @@ impl KeyRouter {
                 }
                 KeyAction::EngineHandled
             }
-            KEY_TAB | KEY_ESCAPE | KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT => KeyAction::PassThrough,
+            KEY_TAB | KEY_ESCAPE | KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT => {
+                KeyAction::PassThrough
+            }
             _ => match char::from_u32(keyval) {
                 // 抬起必须判：本函数上面每个特殊键分支都判了 `released`，可打印
                 // 分支此前漏判，导致同一个字符被第二次送进引擎 —— 拼音缓冲翻倍
@@ -311,7 +321,8 @@ impl KeyRouter {
                         }
                     } else {
                         let action = self.handle_printable(c);
-                        self.last_printable = Some((keyval, matches!(action, KeyAction::PassThrough)));
+                        self.last_printable =
+                            Some((keyval, matches!(action, KeyAction::PassThrough)));
                         action
                     }
                 }
@@ -445,8 +456,8 @@ fn commit_or_handled(out: String) -> KeyAction {
 // 单测独立成文件（`#[path]` 引入）以保持本文件 <500 行，与两轨的
 // input_method_tests.rs / logic_tests.rs 同惯例。
 #[cfg(test)]
-#[path = "router_tests.rs"]
-mod tests;
-#[cfg(test)]
 #[path = "router_release_tests.rs"]
 mod release_tests;
+#[cfg(test)]
+#[path = "router_tests.rs"]
+mod tests;

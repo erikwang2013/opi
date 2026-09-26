@@ -26,7 +26,10 @@ pub struct InMemoryDictionary {
 
 impl InMemoryDictionary {
     pub fn new() -> Self {
-        InMemoryDictionary { trie: Trie::new(), max_freq: 0 }
+        InMemoryDictionary {
+            trie: Trie::new(),
+            max_freq: 0,
+        }
     }
 
     pub fn insert(&mut self, pinyin: &str, word: &str, freq: u32) {

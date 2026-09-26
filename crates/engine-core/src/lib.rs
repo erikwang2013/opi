@@ -15,9 +15,9 @@ pub mod router;
 pub mod symbols;
 pub mod trie;
 
-pub use trie::Entry;
-pub use engine::Engine;
-pub use dictionary::{Dictionary, InMemoryDictionary};
 pub use composer::{Composer, KeyEffect, Mode, Session};
-pub use router::{KeyAction, KeyRouter, ShiftState};
+pub use dictionary::{Dictionary, InMemoryDictionary};
+pub use engine::Engine;
 pub use learner::{Learner, UserWord, UserWordExport};
+pub use router::{KeyAction, KeyRouter, ShiftState};
+pub use trie::Entry;

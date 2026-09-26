@@ -16,8 +16,20 @@ fn no_symbols() -> SymbolEngine {
 fn panel_symbols() -> SymbolEngine {
     SymbolEngine::new(
         vec![
-            Block { id: BlockId(1), start: 0x2600, end: 0x26FF, name: "杂项符号".into(), common: true },
-            Block { id: BlockId(2), start: 0x1F600, end: 0x1F64F, name: "表情符号".into(), common: true },
+            Block {
+                id: BlockId(1),
+                start: 0x2600,
+                end: 0x26FF,
+                name: "杂项符号".into(),
+                common: true,
+            },
+            Block {
+                id: BlockId(2),
+                start: 0x1F600,
+                end: 0x1F64F,
+                name: "表情符号".into(),
+                common: true,
+            },
         ],
         vec![
             SymbolEntry {
@@ -102,7 +114,11 @@ fn learner_boost_reorders_after_repeats() {
     e.input_key('o');
     for _ in 0..3 {
         // 每次循环重算：选中后排序已变，冻结的 idx 会选到别的词。
-        let idx = e.candidates(DEFAULT_TOP_N).iter().position(|c| c.text == "豪").unwrap();
+        let idx = e
+            .candidates(DEFAULT_TOP_N)
+            .iter()
+            .position(|c| c.text == "豪")
+            .unwrap();
         e.select(idx);
         e.input_key('h');
         e.input_key('a');
@@ -124,7 +140,9 @@ fn emoji_mixed_into_candidates() {
         e.input_key(ch);
     }
     let got = e.candidates(DEFAULT_TOP_N);
-    let emoji = got.iter().find(|c| c.kind == CandidateKind::Emoji && c.text == "😄");
+    let emoji = got
+        .iter()
+        .find(|c| c.kind == CandidateKind::Emoji && c.text == "😄");
     assert!(emoji.is_some());
     assert_eq!(got[0].text, "笑", "emoji 不得顶掉精确匹配的拼音候选");
 }
@@ -172,7 +190,11 @@ fn export_then_import_round_trips_user_words() {
     for ch in "hao".chars() {
         e.input_key(ch);
     }
-    let idx = e.candidates(DEFAULT_TOP_N).iter().position(|c| c.text == "豪").unwrap();
+    let idx = e
+        .candidates(DEFAULT_TOP_N)
+        .iter()
+        .position(|c| c.text == "豪")
+        .unwrap();
     assert_eq!(e.select(idx), "豪");
 
     let json = e.export_user_words();
@@ -193,12 +215,20 @@ fn import_user_words_rejects_garbage_atomically() {
     let mut e = test_engine(true);
     assert!(e.import_user_words("{").is_err());
     assert!(e.import_user_words(r#"{"version":2,"words":[]}"#).is_err());
-    assert_eq!(e.export_user_words(), r#"{"version":1,"words":[]}"#, "失败的导入不得留痕");
     assert_eq!(
-        e.import_user_words(r#"{"version":1,"words":[{"text":"好","freq":9}]}"#).unwrap(),
+        e.export_user_words(),
+        r#"{"version":1,"words":[]}"#,
+        "失败的导入不得留痕"
+    );
+    assert_eq!(
+        e.import_user_words(r#"{"version":1,"words":[{"text":"好","freq":9}]}"#)
+            .unwrap(),
         1
     );
-    assert_eq!(e.export_user_words(), r#"{"version":1,"words":[{"text":"好","freq":9}]}"#);
+    assert_eq!(
+        e.export_user_words(),
+        r#"{"version":1,"words":[{"text":"好","freq":9}]}"#
+    );
 }
 
 #[test]
