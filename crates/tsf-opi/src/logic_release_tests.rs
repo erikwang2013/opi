@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! 可打印键「按下/抬起同判」的回归测试（`#[path]` 引入 logic.rs，保持各文件 <500 行）。
+//! 可打印键「按下/抬起同判」的回归测试（`#[path]` 引入 logic_input_method.rs，保持各文件 <500 行）。
 //!
 //! 缺陷形态：本函数上面每个特殊键分支都判了 `released`，可打印分支此前漏判 ——
 //! 一个字符被送进引擎两次（拼音缓冲翻倍 "ni"→"nnii"、英文重复提交 "a"→"aa"）；

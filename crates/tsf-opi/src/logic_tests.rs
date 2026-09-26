@@ -12,7 +12,7 @@ fn state() -> TsfLogic {
     }
     let symbols = engine_core::symbols::SymbolEngine::builtin();
     let mut s = TsfLogic {
-        engine: Engine::new(Box::new(d), symbols, true),
+        engine: engine_core::Engine::new(Box::new(d), symbols, true),
         page: 0,
         buffer_snapshot: String::new(),
         shift_state: ShiftState::Off,
