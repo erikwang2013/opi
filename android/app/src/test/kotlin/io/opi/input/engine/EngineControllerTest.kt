@@ -17,6 +17,8 @@ class FakeEngine : OpiEngineApi {
     var backspaceCalls = 0
     var clearCalls = 0
     val switchCalls = mutableListOf<Int>()
+    val removed = mutableListOf<String>()
+    var throwOnRemove: Throwable? = null
 
     override fun inputKey(ch: String): String {
         inputCalls += ch
@@ -62,6 +64,13 @@ class FakeEngine : OpiEngineApi {
     override fun buffer(): String = buf
 
     override fun mode(): Int = mode
+
+    /** 删用户词：记录文本；真引擎删完候选表里就没有它了（这里同样摘掉）。 */
+    override fun removeUserWord(text: String) {
+        throwOnRemove?.let { throw it }
+        removed += text
+        cands = cands?.filter { it != text }?.toTypedArray()
+    }
 }
 
 class EngineControllerTest {
@@ -223,5 +232,124 @@ class EngineControllerTest {
         ctrl.nextPage()
         assertEquals("中", ctrl.selectFromPage(0))
         assertEquals("", ctrl.buffer) // 选中即提交，buffer 清空
+    }
+
+    // ---- 长按删用户词 ----
+
+    @Test
+    fun removeUserWordDeletesCandidateAndRefreshes() {
+        val fake = FakeEngine().apply { cands = cands(3) }
+        val ctrl = EngineController(fake)
+
+        ctrl.removeUserWord(1)
+
+        assertEquals(listOf("c1"), fake.removed)
+        assertEquals(listOf("c0", "c2"), ctrl.candidates) // 候选栏刷新（词已不在）
+    }
+
+    @Test
+    fun removeUserWordUsesPageIndexNotAbsoluteIndex() {
+        // 下标语义与 selectFromPage 一致：第 2 页第 1 项是 c8，不是 c0
+        val fake = FakeEngine().apply { cands = cands(20) }
+        val ctrl = EngineController(fake)
+        ctrl.nextPage()
+
+        ctrl.removeUserWord(0)
+
+        assertEquals(listOf("c8"), fake.removed)
+    }
+
+    @Test
+    fun removeUserWordOutOfRangeIsNoOp() {
+        val fake = FakeEngine().apply { cands = cands(2) }
+        val ctrl = EngineController(fake)
+
+        ctrl.removeUserWord(7) // 页内越界
+        ctrl.removeUserWord(-1)
+        assertEquals(emptyList<String>(), fake.removed)
+
+        fake.cands = null // 无候选时也不许崩（下标取自控制器自己的候选表，故先 refresh 同步）
+        ctrl.refresh()
+        ctrl.removeUserWord(0)
+        assertEquals(emptyList<String>(), fake.removed)
+
+        fake.cands = cands(2)
+        ctrl.refresh()
+        ctrl.removeUserWord(0)
+        assertEquals(listOf("c0"), fake.removed)
+    }
+
+    @Test
+    fun removeUserWordSwallowsDeadLibraryError() {
+        // 新增的 JNI 出口若未被 so 注册（RegisterNatives 缺失）会在调用点抛
+        // UnsatisfiedLinkError —— 误触长按不该崩 IME，也不该谎报删除（候选保持原样）
+        val fake = FakeEngine().apply {
+            cands = cands(2)
+            throwOnRemove = UnsatisfiedLinkError("so missing")
+        }
+        val ctrl = EngineController(fake)
+
+        ctrl.removeUserWord(0) // 不抛
+
+        assertEquals(listOf("c0", "c1"), ctrl.candidates)
+    }
+
+    // ---- 学习状态变更通知（落盘时机） ----
+
+    @Test
+    fun selectNotifiesLearnedOnlyWhenTextCommitted() {
+        val fake = FakeEngine().apply {
+            cands = cands(2)
+            selectResults[0] = "中"
+        }
+        var learned = 0
+        val ctrl = EngineController(fake) { learned++ }
+
+        ctrl.select(0)
+        assertEquals(1, learned)
+
+        ctrl.select(9) // 越界 → 空串：引擎没改学习状态，别排一次无意义的落盘
+        assertEquals(1, learned)
+    }
+
+    @Test
+    fun inputSpaceNotifiesLearnedOnlyWhenTextCommitted() {
+        // 拼音模式空格 = 选中首候选，同样改学习状态
+        val fake = FakeEngine().apply { spaceResult = "你" }
+        var learned = 0
+        val ctrl = EngineController(fake) { learned++ }
+
+        ctrl.inputSpace()
+        assertEquals(1, learned)
+
+        fake.spaceResult = "" // 英文模式空格只是提交 buffer，不学习
+        ctrl.inputSpace()
+        assertEquals(1, learned)
+    }
+
+    @Test
+    fun typingDoesNotNotifyLearned() {
+        // 敲键/退格/清空都不改学习状态：每次按键排一次落盘是纯浪费
+        val fake = FakeEngine()
+        var learned = 0
+        val ctrl = EngineController(fake) { learned++ }
+
+        ctrl.input("w")
+        ctrl.backspace()
+        ctrl.clear()
+
+        assertEquals(0, learned)
+    }
+
+    @Test
+    fun removeUserWordNotifiesLearned() {
+        // 删词也改学习状态：不落盘的话下次启动它又被 import 回来
+        val fake = FakeEngine().apply { cands = cands(2) }
+        var learned = 0
+        val ctrl = EngineController(fake) { learned++ }
+
+        ctrl.removeUserWord(0)
+
+        assertEquals(1, learned)
     }
 }

@@ -64,4 +64,10 @@ object OpiEngine : OpiEngineApi, SymbolApi {
     external fun clearUserWords()
 
     external fun exportUserWords(): String
+
+    /** 导入用户词 JSON。返回导入条数；负数表示格式非法（既有状态不变）。 */
+    external fun importUserWords(json: String): Int
+
+    /** 删除一个用户词（连同其频次）。 */
+    override external fun removeUserWord(text: String)
 }

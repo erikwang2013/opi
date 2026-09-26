@@ -32,13 +32,20 @@ interface OpiEngineApi {
     fun candidates(limit: Int): Array<String>?
     fun buffer(): String
     fun mode(): Int
+
+    /** 删除一个用户词（连同频次）；非用户词/不存在无副作用。 */
+    fun removeUserWord(text: String)
 }
 
 /**
  * 单一状态源：封装 OpiEngine，UI 经 mutableStateOf 订阅
  * （对齐 flutter engine_controller.dart：翻页 fetchLimit=64、8/页、buffer 变化重置页码）。
  */
-class EngineController(private val api: OpiEngineApi = OpiEngine) {
+class EngineController(
+    private val api: OpiEngineApi = OpiEngine,
+    /** 学习状态变更（选词/删用户词）后的落盘通知；默认空实现（JVM 测试/无持久化场景不感知）。 */
+    private val onLearned: () -> Unit = {},
+) {
     var buffer by mutableStateOf("")
         private set
     var mode by mutableStateOf(EngineMode.PINYIN)
@@ -93,6 +100,8 @@ class EngineController(private val api: OpiEngineApi = OpiEngine) {
     fun select(index: Int): String {
         val text = api.select(index)
         refresh()
+        // 选中即学到频次 → 通知落盘；空串 = 越界/引擎异常，学习状态没变，不必排一次写盘
+        if (text.isNotEmpty()) onLearned()
         return text
     }
 
@@ -106,7 +115,27 @@ class EngineController(private val api: OpiEngineApi = OpiEngine) {
     fun inputSpace(): String {
         val text = api.inputSpace()
         refresh()
+        // 拼音模式空格 = 选中首候选，同样改学习状态（英文模式只提交 buffer，空串则不动）
+        if (text.isNotEmpty()) onLearned()
         return text
+    }
+
+    /**
+     * 长按候选删用户词。下标语义与 [selectFromPage] 一致：**页内下标**（翻页后由
+     * 页号换算绝对下标），不是全列表下标。越界/非用户词无副作用（引擎只删用户词表里
+     * 的条目），删除后刷新候选栏。
+     */
+    fun removeUserWord(indexInPage: Int) {
+        val text = pageCandidates.getOrNull(indexInPage) ?: return
+        try {
+            api.removeUserWord(text)
+        } catch (e: Throwable) {
+            // 新增的 JNI 出口若未被 so 注册（RegisterNatives 缺失）会在调用点抛
+            // UnsatisfiedLinkError —— 误触长按不该崩 IME，也不谎报删除（不刷新）
+            return
+        }
+        refresh()
+        onLearned() // 删词也改学习状态：不落盘的话下次启动它又被 import 回来
     }
 
     // ---- 候选翻页 ----

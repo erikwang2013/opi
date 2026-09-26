@@ -29,10 +29,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.opi.input.engine.UserWordStore
 import io.opi.input.jni.OpiEngine
 import io.opi.input.pet.OpiPet
 import io.opi.input.pet.petMood
 import kotlinx.coroutines.launch
+import java.io.File
 
 /**
  * 设置页（对齐 flutter settings_page.dart）：学习开关 / 清除用户词库（确认对话框）/
@@ -134,6 +136,9 @@ fun SettingsScreen() {
                 TextButton(onClick = {
                     confirmClear = false
                     OpiEngine.clearUserWords()
+                    // 落盘文件同步删掉：IME 下次启动会 import 它，不删就等于「清除」在
+                    // 重启后被撤销（设置页与输入法同进程，共享同一引擎与同一 filesDir）
+                    File(context.filesDir, UserWordStore.FILE_NAME).delete()
                     toast("已清除用户词库")
                 }) { Text("清除") }
             },

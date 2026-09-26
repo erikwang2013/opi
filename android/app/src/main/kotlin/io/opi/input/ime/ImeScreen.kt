@@ -50,7 +50,12 @@ fun ImeScreen(
                 controller.buffer.isNotEmpty() ||
                 controller.candidates.isNotEmpty())
         ) {
-            CandidateBar(controller = controller, onTap = router::handleCandidate)
+            // 长按候选 = 删除该自造词（下标语义同点击：页内下标）
+            CandidateBar(
+                controller = controller,
+                onTap = router::handleCandidate,
+                onLongPress = controller::removeUserWord,
+            )
         }
         when (state.view) {
             ImeState.View.NUMBER -> NumberPad(
@@ -93,17 +98,22 @@ fun ImeScreen(
                     // 「符号面板 + 搜索态」下变高（改 OpiImeService.keyboardHeight），
                     // 那会影响所有面板，须真机核对。**本机无设备，此改动未实测**：
                     // 复核请 `adb shell wm density` 确认 ≥2.4，再看搜索结果区是否可见。
+                    // 叠盘底部功能行与字母盘同义（原先 中/123/↵ 三个键都接 closeSearch：
+                    // 「中」键面写着一个模式字、读屏念「中英切换」，行为却是关搜索；⇧ 传空
+                    // lambda，既不动也不被标成已停用）。这里每个键给语义正确的行为，
+                    // ⇧ 在搜索串上没有意义 → 传 null，由 KeyButton 标成「已停用」。
                     QwertyKeyboard(
                         modifier = Modifier.height(96.dp),
                         onKey = state::searchKey,
                         onSpace = state::searchSpace,
                         onBackspace = state::searchBackspace,
-                        onEnter = state::closeSearch,
-                        onModeSwitch = state::closeSearch,
-                        onNumber = state::closeSearch,
-                        onShift = {},
-                        onShiftLongPress = {},
+                        onEnter = state::closeSearch, // ↵ 收起叠盘（搜索串与结果保留）
+                        onModeSwitch = ::toggleMode,   // 同字母盘：中→繁→英
+                        onNumber = state::openNumber,  // 同字母盘：进数字面板
+                        onShift = null,
+                        onShiftLongPress = null,
                         shiftState = ShiftState.OFF,
+                        modeLabel = modeLabelOf(controller.mode),
                     )
                 }
             }
@@ -119,12 +129,19 @@ fun ImeScreen(
                 onShift = if (shiftVisible) controller::shiftTap else null,
                 onShiftLongPress = if (shiftVisible) controller::shiftLongPress else null,
                 shiftState = if (shiftVisible) controller.shiftState else ShiftState.OFF,
-                modeLabel = when (controller.mode) {
-                    EngineMode.PINYIN -> "中"
-                    EngineMode.TRADITIONAL -> "繁"
-                    else -> "英"
-                },
+                modeLabel = modeLabelOf(controller.mode),
             )
         }
     }
+}
+
+/**
+ * 模式键键面字（字母盘与符号搜索叠盘共用一张表）。
+ * 键面只有一个字，读屏靠 [io.opi.input.keyboard.spokenKeyName] 念成「中英切换」，
+ * 所以这个字必须说实话 —— 叠盘里曾经硬编码「中」。
+ */
+internal fun modeLabelOf(mode: EngineMode): String = when (mode) {
+    EngineMode.PINYIN -> "中"
+    EngineMode.TRADITIONAL -> "繁"
+    else -> "英"
 }

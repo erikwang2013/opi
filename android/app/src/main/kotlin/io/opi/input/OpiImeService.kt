@@ -14,18 +14,36 @@ import androidx.lifecycle.LifecycleRegistry
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryOwner
 import io.opi.input.engine.EngineController
+import io.opi.input.engine.UserWordStore
+import io.opi.input.ime.HandlerDebouncer
 import io.opi.input.jni.EngineLoader
+import io.opi.input.jni.OpiEngine
 import io.opi.input.ime.ImeScreen
 import io.opi.input.ime.ImeState
 import io.opi.input.ime.KeyRouter
 import io.opi.input.keyboard.SymbolCatalog
+import java.io.File
 import kotlin.math.min
 
 /** OPI IME 宿主：ComposeView 作为输入视图，面板状态在 ImeState（A3/A4 填 UI）。 */
 class OpiImeService : InputMethodService() {
     private var inputViewCache: View? = null
     private var retryRunnable: Runnable? = null
-    private val engineController = EngineController()
+
+    /**
+     * 用户词落盘。`by lazy` 是必需的：Service 的字段初始化早于 `attachBaseContext`，
+     * 那时 `filesDir` 还不可用（mBase 为 null）—— 首次访问发生在 onCreateInputView
+     * 之后（显式 load() 或第一次选词），两条路径都在主线程。
+     */
+    private val userWords: UserWordStore by lazy {
+        UserWordStore(
+            file = File(filesDir, UserWordStore.FILE_NAME),
+            importJson = { OpiEngine.importUserWords(it) },
+            exportJson = { OpiEngine.exportUserWords() },
+            debouncer = HandlerDebouncer(),
+        )
+    }
+    private val engineController = EngineController(onLearned = { userWords.scheduleSave() })
     private val imeState = ImeState(engineController)
     private val symbolCatalog = SymbolCatalog()
     private lateinit var keyRouter: KeyRouter
@@ -87,6 +105,9 @@ class OpiImeService : InputMethodService() {
         Log.i(TAG, "onCreateInputView: start")
         // luna 词库编排（幂等：size 校验重拷；失败回退内置词库；与设置页共享 Rust 单例）
         EngineLoader.load(this)
+        // 用户词导入必须在词库装载之后、建视图之前：文件缺失/损坏静默降级（不崩 IME），
+        // 且要赶在第一次刷新候选之前生效
+        userWords.load()
         val view = ComposeView(this)
         // 生命周期接线：置 CREATED（onWindowShown→RESUMED、onWindowHidden→STARTED、
         // onDestroy→DESTROYED），Compose 侧 remember/LaunchedEffect 依赖它。

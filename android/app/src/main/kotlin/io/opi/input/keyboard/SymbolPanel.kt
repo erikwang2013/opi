@@ -14,6 +14,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -28,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -82,15 +85,16 @@ fun SymbolPanel(
                 )
             }
         }
-        // Tab 栏
-        Row(modifier = Modifier.fillMaxWidth()) {
+        // Tab 栏。选中态原本只靠背景色 —— 读屏读不出当前 Tab，色觉障碍也分不清；
+        // selectable + Role.Tab 让读屏播报「已选择/未选择」（子 Text 会被合并成节点名）。
+        Row(modifier = Modifier.fillMaxWidth().selectableGroup()) {
             for (t in SymbolTab.entries) {
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .height(36.dp)
                         .background(if (t == tab) Color(0xFFE0E0E0) else Color.Transparent)
-                        .clickable { tab = t },
+                        .selectable(selected = t == tab, role = Role.Tab, onClick = { tab = t }),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(tabLabel(t), fontSize = 14.sp)
