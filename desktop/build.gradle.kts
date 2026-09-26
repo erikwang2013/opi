@@ -24,6 +24,10 @@ kotlin {
     }
 }
 
+// 共享源码：小欧的 Compose 绘制只有一份（shared/pet），与 android/app 同一份几何
+// （candidate_io.rs 的线协议注释也是同样的「改协议须同步两处」约定）。
+sourceSets["main"].kotlin.srcDir("../shared/pet")
+
 java {
     // 与 Kotlin 的 JVM_11 对齐（本机 JDK 18 运行 Gradle，java 默认 target 18 会冲突）。
     sourceCompatibility = JavaVersion.VERSION_11

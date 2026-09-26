@@ -9,6 +9,10 @@ android {
     compileSdk = 34
     ndkVersion = "27.0.12077973"
 
+    // 共享源码：小欧的 Compose 绘制只有一份（shared/pet），同时供本模块与
+    // desktop/ 的 Windows 候选窗使用 —— 两处重复一份几何必然漂移。
+    sourceSets.getByName("main").kotlin.srcDir("../../shared/pet")
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

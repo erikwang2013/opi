@@ -62,6 +62,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.WindowState
+import io.opi.input.pet.OpiPet
+import io.opi.input.pet.PetMood
+import io.opi.input.pet.PetPalette
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.sun.jna.Function
@@ -406,13 +409,26 @@ private fun CandidatePanel(
                 Text(modeLabel(model.mode), fontSize = 12.sp, color = DimColor)
             }
             Spacer(Modifier.height(6.dp))
-            // 候选列表（最多 8 个/页；点击 → TSF 提交）
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                model.candidates.take(MAX_CANDIDATES).forEachIndexed { index, text ->
-                    CandidateItem(index + 1, text) { onSelect(index) }
+            if (model.candidates.isEmpty()) {
+                // 无候选：小欧出来摊手，替掉一片空白（与 Android 候选栏同一处理）。
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OpiPet(
+                        mood = PetMood.PUZZLED,
+                        palette = PetPalette.Dark,
+                        size = 34.dp,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("无匹配", fontSize = 13.sp, color = DimColor)
+                }
+            } else {
+                // 候选列表（最多 8 个/页；点击 → TSF 提交）
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    model.candidates.take(MAX_CANDIDATES).forEachIndexed { index, text ->
+                        CandidateItem(index + 1, text) { onSelect(index) }
+                    }
                 }
             }
             Spacer(Modifier.height(4.dp))

@@ -30,6 +30,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.opi.input.jni.OpiEngine
+import io.opi.input.pet.OpiPet
+import io.opi.input.pet.petMood
 import kotlinx.coroutines.launch
 
 /**
@@ -59,6 +61,24 @@ fun SettingsScreen() {
                 .fillMaxSize()
                 .padding(padding),
         ) {
+            // 小欧报到：表情跟着「学习」开关走 —— 一眼看出引擎在不在记事，
+            // 比读一行说明文字快。
+            ListItem(
+                leadingContent = {
+                    OpiPet(
+                        mood = petMood(buffer = "", candidateCount = 0, learnerEnabled = learner),
+                        size = 72.dp,
+                    )
+                },
+                headlineContent = { Text("Open People Input") },
+                supportingContent = {
+                    Text(
+                        if (learner) "小欧醒着 —— 你选的词它都记着"
+                        else "小欧睡着了 —— 不记词，也不联网",
+                    )
+                },
+            )
+            HorizontalDivider()
             ListItem(
                 headlineContent = { Text("学习") },
                 supportingContent = { Text("根据选词学习用户词频") },

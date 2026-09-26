@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  OPI 项目宠物 · 键帽精灵「小欧」
+
+  设计释义：
+    · 身体 = 一枚键盘键帽 —— 输入法的本体，呼应「回归输入本质，不喧宾夺主」
+    · 键帽正面 = 笑脸，嘴是一个圆环 —— 字母 O，取自 Open
+    · 头顶天线 = 拼音声调符号 ˉ（一声），朱砂色 —— 唯一暖色，点出「拼音」
+    · 侧壁刻字 = OPI —— 键帽字符位，取自项目名
+    · 底部涟漪 = 按下按键的余波 —— 本地运算，不外传
+
+  配色（改主题只需替换这 4 个色值）：
+    ground  #FBFAF6  宣纸白（背景）
+    primary #2E8B80  青（结构描边，可随主题变色）
+    shade   #1E6B63  深青（眼睛 / 刻字）
+    accent  #D9553F  朱砂（声调天线，仅此一处）
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 250" width="240" height="250"
+     role="img" aria-labelledby="petTitle petDesc">
+  <title id="petTitle">OPI 项目宠物：键帽精灵「小欧」</title>
+  <desc id="petDesc">一枚白色键帽形状的小精灵，正面有笑脸，嘴是字母 O；头顶是拼音声调符号天线；侧壁刻着 OPI；底部有按键涟漪。</desc>
+
+  <style>
+    /* 眨眼 + 天线轻晃：渐进增强，不支持时静态呈现。 */
+    @keyframes opi-blink { 0%, 92%, 100% { transform: scaleY(1) } 96% { transform: scaleY(0.08) } }
+    @keyframes opi-bob   { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-2px) } }
+    #opi-eyes { animation: opi-blink 4.6s ease-in-out infinite; transform-origin: 120px 96px }
+    #opi-antenna { animation: opi-bob 3.2s ease-in-out infinite }
+    @media (prefers-reduced-motion: reduce) {
+      #opi-eyes, #opi-antenna { animation: none }
+    }
+  </style>
+
+  <defs>
+    <!-- 键帽立体感的极淡渐变（上亮下暗），不用滤镜以保证各渲染器一致 -->
+    <linearGradient id="opi-plate" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F4F7F6"/>
+    </linearGradient>
+    <linearGradient id="opi-skirt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E9F3F1"/>
+      <stop offset="1" stop-color="#D8E9E6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 落地投影 -->
+  <ellipse cx="120" cy="206" rx="72" ry="8" fill="#22272E" opacity="0.08"/>
+
+  <!-- 按键涟漪：键已被按下，余波只在本机扩散 -->
+  <g stroke="#2E8B80" fill="none" stroke-linecap="round">
+    <path d="M74 214 Q120 228 166 214" stroke-width="4" opacity="0.5"/>
+    <path d="M92 226 Q120 236 148 226" stroke-width="4" opacity="0.28"/>
+  </g>
+
+  <!-- 天线：拼音声调 ˉ，朱砂色 -->
+  <g id="opi-antenna">
+    <path d="M120 50 L120 28" stroke="#2E8B80" stroke-width="5" stroke-linecap="round"/>
+    <path d="M103 20 L137 20" stroke="#D9553F" stroke-width="7" stroke-linecap="round"/>
+  </g>
+
+  <!-- 手臂：左右各一条，先画以便被键帽主体压住接缝 -->
+  <g stroke-linecap="round" fill="none">
+    <path d="M62 118 L36 128" stroke="#2E8B80" stroke-width="17"/>
+    <path d="M62 118 L36 128" stroke="url(#opi-plate)" stroke-width="7"/>
+    <path d="M178 118 L204 128" stroke="#2E8B80" stroke-width="17"/>
+    <path d="M178 118 L204 128" stroke="url(#opi-plate)" stroke-width="7"/>
+  </g>
+
+  <!-- 键帽侧壁（上沿被正面压住，露出部分刻 OPI） -->
+  <path d="M54 140 L44 184 Q42 202 62 202 L178 202 Q198 202 196 184 L186 140 Z"
+        fill="url(#opi-skirt)" stroke="#2E8B80" stroke-width="5" stroke-linejoin="round"/>
+  <text x="120" y="187" text-anchor="middle" fill="#1E6B63"
+        font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace"
+        font-size="21" font-weight="700" letter-spacing="4.5">OPI</text>
+
+  <!-- 键帽正面（顶面）：脸在这里 -->
+  <rect x="52" y="46" width="136" height="104" rx="20"
+        fill="url(#opi-plate)" stroke="#2E8B80" stroke-width="5"/>
+
+  <!-- 眼睛 -->
+  <g id="opi-eyes">
+    <circle cx="93" cy="95" r="11" fill="#1E6B63"/>
+    <circle cx="147" cy="95" r="11" fill="#1E6B63"/>
+    <circle cx="89.2" cy="91.2" r="3.6" fill="#FFFFFF"/>
+    <circle cx="143.2" cy="91.2" r="3.6" fill="#FFFFFF"/>
+  </g>
+
+  <!-- 嘴：圆环 = 字母 O（Open） -->
+  <ellipse cx="120" cy="128" rx="12" ry="10" fill="none" stroke="#1E6B63" stroke-width="5"/>
+</svg>

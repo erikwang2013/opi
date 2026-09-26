@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 小欧的青底：与 docs/opi-pet.svg 的 primary (#2E8B80) 同色。 -->
+    <color name="ic_launcher_background">#2E8B80</color>
+</resources>

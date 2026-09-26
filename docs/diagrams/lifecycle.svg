@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  OPI 生命周期图，两条独立的生命线：
+    上：词库生命周期 —— 从构建产物到进程内只读映射，含损坏回退分支
+    下：击键生命周期 —— 一次按键从进入到上屏的完整闭环
+  两条线的唯一交点是「装进进程单例」：引擎启动时装一次，此后每次击键都在已装载
+  的 mmap 上做零拷贝查询。
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 780" width="1180" height="780"
+     role="img" aria-labelledby="lcTitle lcDesc">
+  <title id="lcTitle">OPI 生命周期</title>
+  <desc id="lcDesc">上排为词库生命周期：词库产物 → 定位与重拷 → mmap 装载 → 格式校验 → 装入单例 → 繁体热替换，任一环节失败回退内置 35 词。下排为击键生命周期：按键事件 → KeyRouter 分流 → Composer 状态机 → 缓冲更新 → rank_and_pick 排序 → 候选栏渲染 → 用户选择 → Learner 记录 → 提交上屏 → 缓冲清空，随后循环回步骤 1。</desc>
+
+  <defs>
+    <marker id="lcArw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2E8B80"/>
+    </marker>
+    <marker id="lcArwR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#D9553F"/>
+    </marker>
+    <marker id="lcArwB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5B8C85"/>
+    </marker>
+  </defs>
+
+  <rect width="1180" height="780" fill="#FBFAF6"/>
+
+  <g font-family="'Noto Sans CJK SC','Source Han Sans SC','PingFang SC','Microsoft YaHei',-apple-system,'Segoe UI',sans-serif">
+
+    <text x="590" y="40" text-anchor="middle" font-size="25" font-weight="700" fill="#22272E">OPI 生命周期</text>
+    <text x="590" y="63" text-anchor="middle" font-size="12.5" fill="#6B7671">词库装一次，按键转一圈 —— 装进单例之后，每次击键都是只读内存上的零拷贝查询</text>
+
+    <!-- ═══════════════ 上：词库生命周期 ═══════════════ -->
+    <rect x="30" y="86" width="1120" height="244" rx="14" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
+    <rect x="46" y="74" width="128" height="24" rx="12" fill="#2E8B80"/>
+    <text x="110" y="91" text-anchor="middle" font-size="12.5" font-weight="700" fill="#FFFFFF">词库生命周期</text>
+    <text x="186" y="91" font-size="11.5" fill="#8A948F">进程启动时执行一次 —— Android 走 assets→filesDir，fcitx5 走 XDG 数据目录</text>
+
+    <!-- 六个阶段 -->
+    <g>
+      <rect x="36" y="134" width="168" height="90" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
+      <text x="120" y="159" text-anchor="middle" font-size="12.5" font-weight="700" fill="#22272E">词库产物</text>
+      <text x="120" y="181" text-anchor="middle" font-size="9.5" fill="#6B7671">.opid v1 二进制</text>
+      <text x="120" y="197" text-anchor="middle" font-size="9.5" fill="#6B7671">data/generated/</text>
+      <text x="120" y="213" text-anchor="middle" font-size="9.5" fill="#6B7671">APK 资产 · XDG 目录</text>
+    </g>
+    <g>
+      <rect x="224" y="134" width="168" height="90" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
+      <text x="308" y="159" text-anchor="middle" font-size="12.5" font-weight="700" fill="#22272E">定位与重拷</text>
+      <text x="308" y="181" text-anchor="middle" font-size="9.5" fill="#6B7671">size 与资产比对</text>
+      <text x="308" y="197" text-anchor="middle" font-size="9.5" fill="#6B7671">不一致 → 原子重拷</text>
+      <text x="308" y="213" text-anchor="middle" font-size="9.5" fill="#6B7671">一致 → 跳过（幂等）</text>
+    </g>
+    <g>
+      <rect x="412" y="134" width="168" height="90" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
+      <text x="496" y="159" text-anchor="middle" font-size="12.5" font-weight="700" fill="#22272E">mmap 装载</text>
+      <text x="496" y="181" text-anchor="middle" font-size="9.5" fill="#6B7671">memmap2 只读映射</text>
+      <text x="496" y="197" text-anchor="middle" font-size="9.5" fill="#6B7671">堆内字节同样支持</text>
+      <text x="496" y="213" text-anchor="middle" font-size="9.5" fill="#6B7671">查询零拷贝</text>
+    </g>
+    <g>
+      <rect x="600" y="134" width="168" height="90" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
+      <text x="684" y="159" text-anchor="middle" font-size="12.5" font-weight="700" fill="#22272E">格式校验</text>
+      <text x="684" y="181" text-anchor="middle" font-size="9.5" fill="#6B7671">magic → version</text>
+      <text x="684" y="197" text-anchor="middle" font-size="9.5" fill="#6B7671">偏移合法 · 条目有序</text>
+      <text x="684" y="213" text-anchor="middle" font-size="9.5" fill="#6B7671">FNV-1a64 全量比对</text>
+    </g>
+    <g>
+      <rect x="788" y="134" width="168" height="90" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
+      <text x="872" y="159" text-anchor="middle" font-size="12.5" font-weight="700" fill="#22272E">装入单例</text>
+      <text x="872" y="181" text-anchor="middle" font-size="9.5" fill="#6B7671">MmapDictionary</text>
+      <text x="872" y="197" text-anchor="middle" font-size="9.5" fill="#6B7671">Engine::with_</text>
+      <text x="872" y="213" text-anchor="middle" font-size="9.5" fill="#6B7671">dictionaries</text>
+    </g>
+    <g>
+      <rect x="976" y="134" width="168" height="90" rx="10" fill="#FAF6F5" stroke="#EBD8D4" stroke-width="1.5"/>
+      <text x="1060" y="159" text-anchor="middle" font-size="12.5" font-weight="700" fill="#22272E">繁体热替换</text>
+      <text x="1060" y="181" text-anchor="middle" font-size="9.5" fill="#6B7671">install_trad 按需挂载</text>
+      <text x="1060" y="197" text-anchor="middle" font-size="9.5" fill="#6B7671">set_trad_dict</text>
+      <text x="1060" y="213" text-anchor="middle" font-size="9.5" fill="#6B7671">重算 user_boost</text>
+    </g>
+
+    <!-- 阶段间箭头 -->
+    <g stroke="#2E8B80" stroke-width="2" marker-end="url(#lcArw)" fill="none">
+      <path d="M206 179 L222 179"/>
+      <path d="M394 179 L410 179"/>
+      <path d="M582 179 L598 179"/>
+      <path d="M770 179 L786 179"/>
+      <path d="M958 179 L974 179"/>
+    </g>
+
+    <!-- 回退分支 -->
+    <path d="M684 226 L684 256" stroke="#D9553F" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#lcArwR)"/>
+    <rect x="519" y="258" width="330" height="56" rx="10" fill="#FDF2F0" stroke="#D9553F" stroke-width="1.8" stroke-dasharray="6 4"/>
+    <text x="684" y="280" text-anchor="middle" font-size="12" font-weight="700" fill="#D9553F">任一环节失败 → 回退内置 35 词词库</text>
+    <text x="684" y="300" text-anchor="middle" font-size="9.5" fill="#A8563F">词库坏了也绝不崩 IME；只有内置词库自身损坏才是不可恢复</text>
+
+    <!-- ═══════════════ 下：击键生命周期 ═══════════════ -->
+    <rect x="30" y="358" width="1120" height="388" rx="14" fill="#EDF6F4" stroke="#B9D9D4" stroke-width="2"/>
+    <rect x="46" y="346" width="128" height="24" rx="12" fill="#2E8B80"/>
+    <text x="110" y="363" text-anchor="middle" font-size="12.5" font-weight="700" fill="#FFFFFF">击键生命周期</text>
+    <text x="186" y="363" font-size="11.5" fill="#5B8C85">一次按键从进入到上屏 —— 上排输入侧，下排输出侧，清空缓冲后回到步骤 1</text>
+
+    <!-- 输入侧 -->
+    <g>
+      <rect x="30" y="404" width="196" height="96" rx="10" fill="#FFFFFF" stroke="#B9D9D4" stroke-width="1.5"/>
+      <text x="128" y="432" text-anchor="middle" font-size="12.5" font-weight="700" fill="#22272E">① 按键事件</text>
+      <text x="128" y="455" text-anchor="middle" font-size="9.5" fill="#6B7671">软键盘 / 物理键盘</text>
+      <text x="128" y="471" text-anchor="middle" font-size="9.5" fill="#6B7671">进入 IME 服务</text>
+    </g>
+    <g>
+      <rect x="240" y="404" width="196" height="96" rx="10" fill="#FFFFFF" stroke="#B9D9D4" stroke-width="1.5"/>
+      <text x="338" y="432" text-anchor="middle" font-size="12.5" font-weight="700" fill="#22272E">② KeyRouter 分流</text>
+      <text x="338" y="455" text-anchor="middle" font-size="9.5" fill="#6B7671">缓冲空 → 直传上屏</text>
+      <text x="338" y="471" text-anchor="middle" font-size="9.5" fill="#6B7671">缓冲非空 → 进引擎</text>
+    </g>
+    <g>
+      <rect x="450" y="404" width="196" height="96" rx="10" fill="#FFFFFF" stroke="#B9D9D4" stroke-width="1.5"/>
+      <text x="548" y="432" text-anchor="middle" font-size="12.5" font-weight="700" fill="#22272E">③ Composer 状态机</text>
+      <text x="548" y="455" text-anchor="middle" font-size="9.5" fill="#6B7671">模式门禁 · 小写化</text>
+      <text x="548" y="471" text-anchor="middle" font-size="9.5" fill="#6B7671">分隔符 ' · 上限 16</text>
+    </g>
+    <g>
+      <rect x="660" y="404" width="196" height="96" rx="10" fill="#FFFFFF" stroke="#B9D9D4" stroke-width="1.5"/>
+      <text x="758" y="432" text-anchor="middle" font-size="12.5" font-weight="700" fill="#22272E">④ 缓冲更新</text>
+      <text x="758" y="455" text-anchor="middle" font-size="9.5" fill="#6B7671">buffer 即候选查询串</text>
+      <text x="758" y="471" text-anchor="middle" font-size="9.5" fill="#6B7671">空格键在 Engine 层拦截</text>
+    </g>
+    <g>
+      <rect x="870" y="404" width="196" height="96" rx="10" fill="#FFFFFF" stroke="#B9D9D4" stroke-width="1.5"/>
+      <text x="968" y="432" text-anchor="middle" font-size="12.5" font-weight="700" fill="#22272E">⑤ rank_and_pick</text>
+      <text x="968" y="455" text-anchor="middle" font-size="9.5" fill="#6B7671">词典 → 逐音节回退</text>
+      <text x="968" y="471" text-anchor="middle" font-size="9.5" fill="#6B7671">→ 符号 / emoji 合并排序</text>
+    </g>
+
+    <g stroke="#2E8B80" stroke-width="2" marker-end="url(#lcArw)" fill="none">
+      <path d="M228 452 L238 452"/>
+      <path d="M438 452 L448 452"/>
+      <path d="M648 452 L658 452"/>
+      <path d="M858 452 L868 452"/>
+    </g>
+
+    <!-- 输入侧 → 输出侧 -->
+    <path d="M968 502 L968 534 L128 534 L128 566" stroke="#5B8C85" stroke-width="2" fill="none" marker-end="url(#lcArwB)"/>
+    <text x="548" y="528" text-anchor="middle" font-size="10.5" font-weight="700" fill="#5B8C85">输入侧完成 · 候选就绪</text>
+
+    <!-- 输出侧 -->
+    <g>
+      <rect x="30" y="570" width="196" height="96" rx="10" fill="#FFFFFF" stroke="#B9D9D4" stroke-width="1.5"/>
+      <text x="128" y="598" text-anchor="middle" font-size="12.5" font-weight="700" fill="#22272E">⑥ 候选栏渲染</text>
+      <text x="128" y="621" text-anchor="middle" font-size="9.5" fill="#6B7671">每屏 8 项 + 翻页</text>
+      <text x="128" y="637" text-anchor="middle" font-size="9.5" fill="#6B7671">空候选 → 小欧出来提示</text>
+    </g>
+    <g>
+      <rect x="240" y="570" width="196" height="96" rx="10" fill="#FFFFFF" stroke="#B9D9D4" stroke-width="1.5"/>
+      <text x="338" y="598" text-anchor="middle" font-size="12.5" font-weight="700" fill="#22272E">⑦ 用户选择</text>
+      <text x="338" y="621" text-anchor="middle" font-size="9.5" fill="#6B7671">点候选 / 空格选首</text>
+      <text x="338" y="637" text-anchor="middle" font-size="9.5" fill="#6B7671">回车选首 · 越界返回空</text>
+    </g>
+    <g>
+      <rect x="450" y="570" width="196" height="96" rx="10" fill="#FFFFFF" stroke="#B9D9D4" stroke-width="1.5"/>
+      <text x="548" y="598" text-anchor="middle" font-size="12.5" font-weight="700" fill="#22272E">⑧ Learner 记录</text>
+      <text x="548" y="621" text-anchor="middle" font-size="9.5" fill="#6B7671">选词记频（可关闭）</text>
+      <text x="548" y="637" text-anchor="middle" font-size="9.5" fill="#6B7671">一次选词压过静态词</text>
+    </g>
+    <g>
+      <rect x="660" y="570" width="196" height="96" rx="10" fill="#FFFFFF" stroke="#B9D9D4" stroke-width="1.5"/>
+      <text x="758" y="598" text-anchor="middle" font-size="12.5" font-weight="700" fill="#22272E">⑨ 提交上屏</text>
+      <text x="758" y="621" text-anchor="middle" font-size="9.5" fill="#6B7671">返回文本交 IME 服务</text>
+      <text x="758" y="637" text-anchor="middle" font-size="9.5" fill="#6B7671">commit 到目标输入框</text>
+    </g>
+    <g>
+      <rect x="870" y="570" width="196" height="96" rx="10" fill="#FFFFFF" stroke="#B9D9D4" stroke-width="1.5"/>
+      <text x="968" y="598" text-anchor="middle" font-size="12.5" font-weight="700" fill="#22272E">⑩ 缓冲清空</text>
+      <text x="968" y="621" text-anchor="middle" font-size="9.5" fill="#6B7671">commit_buffer</text>
+      <text x="968" y="637" text-anchor="middle" font-size="9.5" fill="#6B7671">等待下一次击键</text>
+    </g>
+
+    <g stroke="#2E8B80" stroke-width="2" marker-end="url(#lcArw)" fill="none">
+      <path d="M228 618 L238 618"/>
+      <path d="M438 618 L448 618"/>
+      <path d="M648 618 L658 618"/>
+      <path d="M858 618 L868 618"/>
+    </g>
+
+    <!-- 闭环回到步骤 1 -->
+    <path d="M1066 618 L1105 618 L1105 386 L128 386 L128 402"
+          stroke="#2E8B80" stroke-width="2" fill="none" marker-end="url(#lcArw)"/>
+    <text x="590" y="378" text-anchor="middle" font-size="10.5" font-weight="700" fill="#2E8B80">↻ 缓冲已空 —— 循环回到 ①，等待下一次击键</text>
+    <text x="1105" y="560" text-anchor="middle" font-size="9.5" fill="#6B7671" transform="rotate(-90 1105 560)">回到起点</text>
+
+  </g>
+</svg>

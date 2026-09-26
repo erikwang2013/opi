@@ -5,6 +5,11 @@ use std::path::Path;
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     match args.get(1).map(String::as_str) {
+        // 版本来自 workspace.package.version（单一版本源），与发布 tag 对齐。
+        Some("-V" | "--version") => {
+            println!("opi-tools {}", env!("CARGO_PKG_VERSION"));
+            print!("{}", opi_tools::OPI_PET);
+        }
         Some("compile") => {
             let (Some(input), Some(output)) = (args.get(2), args.get(3)) else {
                 eprintln!("usage: opi-tools compile <input.tsv|dict.yaml> <output.opid>");
@@ -26,6 +31,7 @@ fn main() {
             }
             let size = std::fs::metadata(output).map(|m| m.len()).unwrap_or(0);
             println!("wrote {} ({} bytes)", output, size);
+            print!("{}", opi_tools::OPI_PET);
         }
         Some("verify") => {
             let Some(path) = args.get(2) else {
@@ -52,6 +58,7 @@ fn main() {
                             d.query(sample, 3).iter().map(|e| e.word.clone()).collect();
                         println!("query \"{sample}\": {}", top.join(" "));
                     }
+                    print!("{}", opi_tools::OPI_PET);
                 }
                 Err(e) => {
                     eprintln!("verify failed: {e:?}");
@@ -61,6 +68,7 @@ fn main() {
         }
         _ => {
             eprintln!("usage: opi-tools <compile|verify> ...");
+            eprintln!("       opi-tools -V | --version");
             std::process::exit(2);
         }
     }

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  项目宠物「小欧」自适应启动图标（API 26+）。
+  旧设备继续用 mipmap-*/ic_launcher.png 回退，两者同为键帽精灵形象。
+  前景是纯 VectorDrawable：不引入任何 PNG 密度桶，任意尺寸都清晰。
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background"/>
+    <foreground android:drawable="@drawable/ic_launcher_foreground"/>
+</adaptive-icon>

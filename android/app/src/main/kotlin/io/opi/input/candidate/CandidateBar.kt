@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.opi.input.engine.EngineController
 import io.opi.input.engine.EngineMode
+import io.opi.input.pet.OpiPet
+import io.opi.input.pet.PetMood
 
 /**
  * 候选栏：拼音缓冲 + 每屏 8 候选，点击选择；页数>1 时显示 ‹ n/m › 翻页。
@@ -70,14 +72,21 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit) {
                     fontSize = 20.sp,
                 )
             }
-            // 拼音无候选：给出可见反馈，避免"打字无反应"错觉
+            // 拼音无候选：小欧出来摊手，比一行灰字更不像"卡住了"
             if (candidates.isEmpty() && controller.buffer.isNotEmpty()) {
-                Text(
-                    "无匹配",
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                    fontSize = 13.sp,
-                    color = Color(0xFF9E9E9E),
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OpiPet(
+                        mood = PetMood.PUZZLED,
+                        size = 30.dp,
+                        modifier = Modifier.padding(start = 12.dp),
+                    )
+                    Text(
+                        "无匹配",
+                        modifier = Modifier.padding(start = 8.dp, end = 12.dp),
+                        fontSize = 13.sp,
+                        color = Color(0xFF9E9E9E),
+                    )
+                }
             }
         }
         if (pageCount > 1) {

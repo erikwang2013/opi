@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  OPI 架构设计图。分层自下而上：构建管线 → 数据层 → 引擎层 → 出口层 → 客户端层。
+  依赖方向：上层依赖下层，下层不感知上层（engine-core 无 IO、无平台依赖）。
+  改主题：替换 primary #2E8B80 / accent #D9553F 两色即可。
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 852" width="1180" height="852"
+     role="img" aria-labelledby="archTitle archDesc">
+  <title id="archTitle">OPI 架构设计</title>
+  <desc id="archDesc">五层架构：客户端层（Android/Linux/Windows/iOS）、出口层（opi-ffi 双 ABI、fcitx5-opi、tsf-opi）、引擎层（engine-core 六模块 + Engine 门面）、数据层（engine-data 的 .opid 格式/校验/mmap/回退）、构建管线（opi-tools 编译与校验）。依赖自下而上。</desc>
+
+  <defs>
+    <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2E8B80"/>
+    </marker>
+    <marker id="arwA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#D9553F"/>
+    </marker>
+  </defs>
+
+  <rect width="1180" height="852" fill="#FBFAF6"/>
+
+  <g font-family="'Noto Sans CJK SC','Source Han Sans SC','PingFang SC','Microsoft YaHei',-apple-system,'Segoe UI',sans-serif">
+
+    <!-- ══════════════ 标题 ══════════════ -->
+    <text x="590" y="40" text-anchor="middle" font-size="25" font-weight="700" fill="#22272E">OPI 架构设计</text>
+    <text x="590" y="63" text-anchor="middle" font-size="12.5" fill="#6B7671">一套 Rust 引擎 · 五个平台出口 · 零跨端框架</text>
+
+    <!-- ══════════════ 1. 客户端层 68..200 ══════════════ -->
+    <rect x="30" y="86" width="1120" height="114" rx="14" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
+    <rect x="46" y="74" width="112" height="24" rx="12" fill="#2E8B80"/>
+    <text x="102" y="91" text-anchor="middle" font-size="12.5" font-weight="700" fill="#FFFFFF">客户端层</text>
+    <text x="170" y="91" font-size="11.5" fill="#8A948F">各端原生 UI，不共享界面代码</text>
+
+    <g>
+      <rect x="30" y="108" width="256" height="74" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
+      <text x="46" y="132" font-size="15" font-weight="700" fill="#22272E">Android IME</text>
+      <text x="46" y="151" font-size="11" fill="#6B7671">Kotlin + Jetpack Compose</text>
+      <text x="46" y="171" font-size="11" font-weight="700" fill="#2E8B80">↓ JNI</text>
+    </g>
+    <g>
+      <rect x="318" y="108" width="256" height="74" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
+      <text x="334" y="132" font-size="15" font-weight="700" fill="#22272E">Linux fcitx5</text>
+      <text x="334" y="151" font-size="11" fill="#6B7671">C++ AddonInstance + Rust 逻辑</text>
+      <text x="334" y="171" font-size="11" font-weight="700" fill="#2E8B80">↓ C ABI</text>
+    </g>
+    <g>
+      <rect x="606" y="108" width="256" height="74" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
+      <text x="622" y="132" font-size="15" font-weight="700" fill="#22272E">Windows TSF</text>
+      <text x="622" y="151" font-size="11" fill="#6B7671">COM 服务器 + NDJSON 候选窗</text>
+      <text x="622" y="171" font-size="11" font-weight="700" fill="#2E8B80">↓ COM</text>
+    </g>
+    <g>
+      <rect x="894" y="108" width="256" height="74" rx="10" fill="#FAF6F5" stroke="#EBD8D4" stroke-width="1.5" stroke-dasharray="6 4"/>
+      <text x="910" y="132" font-size="15" font-weight="700" fill="#22272E">iOS</text>
+      <text x="910" y="151" font-size="11" fill="#6B7671">键盘扩展 · M7 预留</text>
+      <text x="910" y="171" font-size="11" font-weight="700" fill="#D9553F">↓ C ABI（opi-ffi 已就绪）</text>
+    </g>
+
+    <!-- 层间箭头：客户端 → 出口（iOS 复用 opi-ffi 的 C 出口，不另起一条下行线） -->
+    <g stroke="#2E8B80" stroke-width="2" marker-end="url(#arw)">
+      <path d="M158 182 L158 226"/>
+      <path d="M446 182 L446 226"/>
+      <path d="M734 182 L734 226"/>
+    </g>
+
+    <!-- ══════════════ 2. 出口层 226..352 ══════════════ -->
+    <rect x="30" y="240" width="1120" height="112" rx="14" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
+    <rect x="46" y="228" width="112" height="24" rx="12" fill="#2E8B80"/>
+    <text x="102" y="245" text-anchor="middle" font-size="12.5" font-weight="700" fill="#FFFFFF">出口层</text>
+    <text x="170" y="245" font-size="11.5" fill="#8A948F">ABI 薄壳：类型转换、边界校验、进程内单例，不含业务逻辑</text>
+
+    <g>
+      <rect x="30" y="262" width="352" height="74" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
+      <text x="46" y="286" font-size="14.5" font-weight="700" fill="#22272E">opi-ffi</text>
+      <text x="46" y="306" font-size="11" fill="#6B7671">JNI + C 双 ABI，共享同一引擎单例</text>
+      <text x="46" y="325" font-size="11" fill="#6B7671">UTF-16 转换（禁用 modified UTF-8）· panic 边界</text>
+    </g>
+    <g>
+      <rect x="414" y="262" width="352" height="74" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
+      <text x="430" y="286" font-size="14.5" font-weight="700" fill="#22272E">fcitx5-opi</text>
+      <text x="430" y="306" font-size="11" fill="#6B7671">cdylib，opi_fcitx5_* 入口面</text>
+      <text x="430" y="325" font-size="11" fill="#6B7671">XDG 数据目录 · 原子写盘 · 幂等重拷</text>
+    </g>
+    <g>
+      <rect x="798" y="262" width="352" height="74" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
+      <text x="814" y="286" font-size="14.5" font-weight="700" fill="#22272E">tsf-opi</text>
+      <text x="814" y="306" font-size="11" fill="#6B7671">cdylib COM 服务器 · windows crate 目标隔离</text>
+      <text x="814" y="325" font-size="11" fill="#6B7671">候选窗消息序列化（candidate_io）</text>
+    </g>
+
+    <!-- 层间箭头：出口 → 引擎 -->
+    <g stroke="#2E8B80" stroke-width="2" marker-end="url(#arw)">
+      <path d="M206 334 L206 388"/>
+      <path d="M590 334 L590 388"/>
+      <path d="M974 334 L974 388"/>
+    </g>
+    <text x="230" y="365" font-size="10.5" fill="#6B7671">依赖</text>
+    <text x="614" y="365" font-size="10.5" fill="#6B7671">依赖</text>
+    <text x="998" y="365" font-size="10.5" fill="#6B7671">依赖</text>
+
+    <!-- ══════════════ 3. 引擎层 388..572 ══════════════ -->
+    <rect x="30" y="402" width="1120" height="176" rx="14" fill="#EDF6F4" stroke="#B9D9D4" stroke-width="2"/>
+    <rect x="46" y="390" width="112" height="24" rx="12" fill="#2E8B80"/>
+    <text x="102" y="407" text-anchor="middle" font-size="12.5" font-weight="700" fill="#FFFFFF">引擎层</text>
+    <text x="170" y="407" font-size="11.5" fill="#5B8C85">engine-core —— 纯逻辑内核，无 IO、无平台依赖，可在任意目标上单测</text>
+
+    <g fill="#FFFFFF" stroke="#B9D9D4" stroke-width="1.5">
+      <rect x="30" y="424" width="170" height="72" rx="10"/>
+      <rect x="220" y="424" width="170" height="72" rx="10"/>
+      <rect x="410" y="424" width="170" height="72" rx="10"/>
+      <rect x="600" y="424" width="170" height="72" rx="10"/>
+      <rect x="790" y="424" width="170" height="72" rx="10"/>
+      <rect x="980" y="424" width="170" height="72" rx="10"/>
+    </g>
+    <g text-anchor="middle" fill="#22272E">
+      <text x="115" y="452" font-size="13" font-weight="700">Composer</text>
+      <text x="305" y="452" font-size="13" font-weight="700">Pinyin</text>
+      <text x="495" y="452" font-size="13" font-weight="700">Trie</text>
+      <text x="685" y="452" font-size="13" font-weight="700">Candidates</text>
+      <text x="875" y="452" font-size="13" font-weight="700">Learner</text>
+      <text x="1065" y="452" font-size="13" font-weight="700">Symbols</text>
+    </g>
+    <g text-anchor="middle" fill="#6B7671" font-size="10">
+      <text x="115" y="470">按键状态机</text>
+      <text x="305" y="470">音节表 · 切分</text>
+      <text x="495" y="470">码表前缀查询</text>
+      <text x="685" y="470">排序 · 去重 · 合并</text>
+      <text x="875" y="470">用户词频学习</text>
+      <text x="1065" y="470">Unicode 符号块</text>
+    </g>
+    <g text-anchor="middle" fill="#2E8B80" font-size="9.5">
+      <text x="115" y="487">五模式 · 上限 16</text>
+      <text x="305" y="487">整串失败退逐音节</text>
+      <text x="495" y="487">命中即出候选</text>
+      <text x="685" y="487">词频 + 用户 ×boost</text>
+      <text x="875" y="487">BTreeMap + 导出</text>
+      <text x="1065" y="487">emoji 并入候选</text>
+    </g>
+
+    <rect x="30" y="508" width="1120" height="52" rx="10" fill="#2E8B80"/>
+    <text x="590" y="530" text-anchor="middle" font-size="14" font-weight="700" fill="#FFFFFF">Engine 门面</text>
+    <text x="590" y="550" text-anchor="middle" font-size="10.5" fill="#C9E4E0">UI 层经 FFI 交互的唯一入口：input_key / candidates / select / switch_mode / learner / symbols</text>
+
+    <!-- 层间箭头：引擎 → 数据 -->
+    <path d="M590 578 L590 622" stroke="#2E8B80" stroke-width="2" marker-end="url(#arw)"/>
+    <text x="604" y="605" font-size="10.5" fill="#6B7671">Dictionary trait</text>
+
+    <!-- ══════════════ 4. 数据层 622..736 ══════════════ -->
+    <rect x="30" y="636" width="1120" height="100" rx="14" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
+    <rect x="46" y="624" width="112" height="24" rx="12" fill="#2E8B80"/>
+    <text x="102" y="641" text-anchor="middle" font-size="12.5" font-weight="700" fill="#FFFFFF">数据层</text>
+    <text x="170" y="641" font-size="11.5" fill="#8A948F">engine-data —— .opid 二进制词库的格式、校验与 mmap 装载</text>
+
+    <g>
+      <rect x="30" y="658" width="262" height="62" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
+      <text x="46" y="681" font-size="13" font-weight="700" fill="#22272E">format</text>
+      <text x="46" y="701" font-size="10.5" fill="#6B7671">OPID v1：11B 头 + 14B 条目表 + 双 blob</text>
+    </g>
+    <g>
+      <rect x="316" y="658" width="262" height="62" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
+      <text x="332" y="681" font-size="13" font-weight="700" fill="#22272E">checksum</text>
+      <text x="332" y="701" font-size="10.5" fill="#6B7671">FNV-1a64 覆盖尾部 8 字节，逐字节校验</text>
+    </g>
+    <g>
+      <rect x="602" y="658" width="262" height="62" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
+      <text x="618" y="681" font-size="13" font-weight="700" fill="#22272E">loader</text>
+      <text x="618" y="701" font-size="10.5" fill="#6B7671">memmap2 只读映射，零拷贝查询</text>
+    </g>
+    <g>
+      <rect x="888" y="658" width="262" height="62" rx="10" fill="#FAF6F5" stroke="#EBD8D4" stroke-width="1.5"/>
+      <text x="904" y="681" font-size="13" font-weight="700" fill="#22272E">dictionary</text>
+      <text x="904" y="701" font-size="10.5" fill="#D9553F">损坏 / 缺失 → 回退内置 35 词，绝不崩溃</text>
+    </g>
+
+    <!-- 层间箭头：数据 ← 构建管线 -->
+    <path d="M590 742 L590 786" stroke="#2E8B80" stroke-width="2" marker-end="url(#arw)"/>
+    <text x="604" y="769" font-size="10.5" fill="#6B7671">产出 .opid</text>
+
+    <!-- ══════════════ 5. 构建管线 786..838 ══════════════ -->
+    <rect x="30" y="800" width="1120" height="38" rx="12" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
+    <rect x="46" y="788" width="112" height="24" rx="12" fill="#2E8B80"/>
+    <text x="102" y="805" text-anchor="middle" font-size="12.5" font-weight="700" fill="#FFFFFF">构建管线</text>
+
+    <g font-size="11" fill="#22272E">
+      <rect x="176" y="807" width="150" height="24" rx="6" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.2"/>
+      <text x="251" y="823" text-anchor="middle">data/raw/*.tsv</text>
+      <rect x="356" y="807" width="118" height="24" rx="6" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.2"/>
+      <text x="415" y="823" text-anchor="middle">opi-tools</text>
+      <rect x="504" y="807" width="176" height="24" rx="6" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.2"/>
+      <text x="592" y="823" text-anchor="middle">data/generated/*.opid</text>
+      <rect x="710" y="807" width="118" height="24" rx="6" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.2"/>
+      <text x="769" y="823" text-anchor="middle">verify</text>
+    </g>
+    <g stroke="#2E8B80" stroke-width="1.8" marker-end="url(#arw)" fill="none">
+      <path d="M326 819 L354 819"/>
+      <path d="M474 819 L502 819"/>
+      <path d="M680 819 L708 819"/>
+    </g>
+    <text x="742" y="799" text-anchor="middle" font-size="9.5" fill="#6B7671">校验和 / 顺序 / 覆盖率</text>
+    <text x="1000" y="823" text-anchor="middle" font-size="10.5" fill="#6B7671">scripts/gen_luna_dict.py · gen_trad_dict.py</text>
+
+  </g>
+</svg>

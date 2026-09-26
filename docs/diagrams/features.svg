@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  OPI 功能设计图：上排五种输入模式（按键如何被路由），
+  下排六大功能域（引擎对外提供的全部能力）。
+  内容与 crates/engine-core 及 android/app 的实现一一对应。
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 676" width="1180" height="676"
+     role="img" aria-labelledby="featTitle featDesc">
+  <title id="featTitle">OPI 功能设计</title>
+  <desc id="featDesc">上排为五种输入模式（拼音、繁体、英文、数字、符号）的按键路由规则；下排为六大功能域：候选生成、用户学习、词库与数据、符号与表情、隐私与本地、多端与包容。</desc>
+
+  <rect width="1180" height="676" fill="#FBFAF6"/>
+
+  <g font-family="'Noto Sans CJK SC','Source Han Sans SC','PingFang SC','Microsoft YaHei',-apple-system,'Segoe UI',sans-serif">
+
+    <text x="590" y="40" text-anchor="middle" font-size="25" font-weight="700" fill="#22272E">OPI 功能设计</text>
+    <text x="590" y="63" text-anchor="middle" font-size="12.5" fill="#6B7671">五种输入模式 · 六大功能域 —— 只做输入这一件事，并把它做透</text>
+
+    <!-- ══════════════ 输入模式 ══════════════ -->
+    <rect x="30" y="86" width="1120" height="148" rx="14" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
+    <rect x="46" y="74" width="112" height="24" rx="12" fill="#2E8B80"/>
+    <text x="102" y="91" text-anchor="middle" font-size="12.5" font-weight="700" fill="#FFFFFF">输入模式</text>
+    <text x="170" y="91" font-size="11.5" fill="#8A948F">Composer 状态机判定每个按键的去留 —— 模式整数 0..4 五端一致</text>
+
+    <g>
+      <rect x="30" y="112" width="208" height="106" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
+      <text x="134" y="138" text-anchor="middle" font-size="15" font-weight="700" fill="#22272E">拼音</text>
+      <text x="134" y="156" text-anchor="middle" font-size="10" fill="#2E8B80" font-weight="700">mode 0 · 默认</text>
+      <text x="134" y="180" text-anchor="middle" font-size="10.5" fill="#6B7671">小写字母 + 分隔符 '</text>
+      <text x="134" y="196" text-anchor="middle" font-size="10.5" fill="#6B7671">缓冲上限 16 字符</text>
+      <text x="134" y="212" text-anchor="middle" font-size="10.5" fill="#6B7671">查主词典出候选</text>
+    </g>
+    <g>
+      <rect x="258" y="112" width="208" height="106" rx="10" fill="#FAF6F5" stroke="#EBD8D4" stroke-width="1.5"/>
+      <text x="362" y="138" text-anchor="middle" font-size="15" font-weight="700" fill="#22272E">繁体</text>
+      <text x="362" y="156" text-anchor="middle" font-size="10" font-weight="700" fill="#D9553F">mode 4 · 简繁同源</text>
+      <text x="362" y="180" text-anchor="middle" font-size="10.5" fill="#6B7671">行为与拼音完全一致</text>
+      <text x="362" y="196" text-anchor="middle" font-size="10.5" fill="#6B7671">路由到 trad 词典</text>
+      <text x="362" y="212" text-anchor="middle" font-size="10.5" fill="#6B7671">trad 缺失 → 回退简体库</text>
+    </g>
+    <g>
+      <rect x="486" y="112" width="208" height="106" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
+      <text x="590" y="138" text-anchor="middle" font-size="15" font-weight="700" fill="#22272E">英文</text>
+      <text x="590" y="156" text-anchor="middle" font-size="10" font-weight="700" fill="#2E8B80">mode 1</text>
+      <text x="590" y="180" text-anchor="middle" font-size="10.5" fill="#6B7671">⇧ 决定单次大写</text>
+      <text x="590" y="196" text-anchor="middle" font-size="10.5" fill="#6B7671">缓冲为空时不过引擎</text>
+      <text x="590" y="212" text-anchor="middle" font-size="10.5" fill="#6B7671">直传上屏，零延迟</text>
+    </g>
+    <g>
+      <rect x="714" y="112" width="208" height="106" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
+      <text x="818" y="138" text-anchor="middle" font-size="15" font-weight="700" fill="#22272E">数字</text>
+      <text x="818" y="156" text-anchor="middle" font-size="10" font-weight="700" fill="#2E8B80">mode 2</text>
+      <text x="818" y="180" text-anchor="middle" font-size="10.5" fill="#6B7671">仅数字进缓冲</text>
+      <text x="818" y="196" text-anchor="middle" font-size="10.5" fill="#6B7671">空格 / 回车提交</text>
+      <text x="818" y="212" text-anchor="middle" font-size="10.5" fill="#6B7671">数字键盘面板</text>
+    </g>
+    <g>
+      <rect x="942" y="112" width="208" height="106" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
+      <text x="1046" y="138" text-anchor="middle" font-size="15" font-weight="700" fill="#22272E">符号</text>
+      <text x="1046" y="156" text-anchor="middle" font-size="10" font-weight="700" fill="#2E8B80">mode 3</text>
+      <text x="1046" y="180" text-anchor="middle" font-size="10.5" fill="#6B7671">缓冲不接受任何按键</text>
+      <text x="1046" y="196" text-anchor="middle" font-size="10.5" fill="#6B7671">由符号面板直传</text>
+      <text x="1046" y="212" text-anchor="middle" font-size="10.5" fill="#6B7671">开面板前先提交缓冲</text>
+    </g>
+
+    <!-- ══════════════ 功能域 ══════════════ -->
+    <text x="30" y="272" font-size="14" font-weight="700" fill="#22272E">六大功能域</text>
+    <text x="128" y="272" font-size="11.5" fill="#8A948F">全部能力由 engine-core 提供，各端 UI 只负责呈现</text>
+
+    <!-- 行 A -->
+    <!-- 1 候选生成 -->
+    <rect x="30" y="288" width="357" height="164" rx="12" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
+    <rect x="30" y="288" width="357" height="4" rx="2" fill="#2E8B80"/>
+    <text x="52" y="320" font-size="15" font-weight="700" fill="#22272E">候选生成</text>
+    <g fill="#2E8B80"><circle cx="57" cy="343" r="2.6"/><circle cx="57" cy="365" r="2.6"/><circle cx="57" cy="387" r="2.6"/><circle cx="57" cy="409" r="2.6"/><circle cx="57" cy="431" r="2.6"/></g>
+    <g font-size="10.5" fill="#4A5551">
+      <text x="68" y="347">静态词频 + 用户词频 ×boost 统一排序</text>
+      <text x="68" y="369">跨源按文本去重（词典 / 符号 / emoji）</text>
+      <text x="68" y="391">整串无命中 → 退逐音节补候选（每节 top 3）</text>
+      <text x="68" y="413">单字母仅并入 emoji，挡掉符号关键字噪音</text>
+      <text x="68" y="435">每屏 8 项候选，支持翻页</text>
+    </g>
+
+    <!-- 2 用户学习 -->
+    <rect x="411" y="288" width="357" height="164" rx="12" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
+    <rect x="411" y="288" width="357" height="4" rx="2" fill="#2E8B80"/>
+    <text x="433" y="320" font-size="15" font-weight="700" fill="#22272E">用户学习</text>
+    <g fill="#2E8B80"><circle cx="438" cy="343" r="2.6"/><circle cx="438" cy="365" r="2.6"/><circle cx="438" cy="387" r="2.6"/><circle cx="438" cy="409" r="2.6"/></g>
+    <g font-size="10.5" fill="#4A5551">
+      <text x="449" y="347">选词即记频，一次选词压过全部静态词</text>
+      <text x="449" y="369">boost 按词典最大词频动态缩放，不写死</text>
+      <text x="449" y="391">开关即时生效，关闭后不再记录</text>
+      <text x="449" y="413">单条删除 / 全量清空 / 导出 JSON</text>
+    </g>
+
+    <!-- 3 词库与数据 -->
+    <rect x="792" y="288" width="357" height="164" rx="12" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
+    <rect x="792" y="288" width="357" height="4" rx="2" fill="#2E8B80"/>
+    <text x="814" y="320" font-size="15" font-weight="700" fill="#22272E">词库与数据</text>
+    <g fill="#2E8B80"><circle cx="819" cy="343" r="2.6"/><circle cx="819" cy="365" r="2.6"/><circle cx="819" cy="387" r="2.6"/><circle cx="819" cy="409" r="2.6"/><circle cx="819" cy="431" r="2.6"/></g>
+    <g font-size="10.5" fill="#4A5551">
+      <text x="830" y="347">.opid v1 二进制：头 + 条目表 + 双 blob + 校验尾</text>
+      <text x="830" y="369">FNV-1a64 逐字节校验，顺序/偏移不合法即拒载</text>
+      <text x="830" y="391">mmap 只读映射，零拷贝前缀查询</text>
+      <text x="830" y="413">装载失败 → 内置 35 词回退，绝不因词库崩溃</text>
+      <text x="830" y="435">简体 luna / 繁体 trad / 回退 fallback 三库</text>
+    </g>
+
+    <!-- 行 B -->
+    <!-- 4 符号与表情 -->
+    <rect x="30" y="470" width="357" height="152" rx="12" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
+    <rect x="30" y="470" width="357" height="4" rx="2" fill="#2E8B80"/>
+    <text x="52" y="502" font-size="15" font-weight="700" fill="#22272E">符号与表情</text>
+    <g fill="#2E8B80"><circle cx="57" cy="525" r="2.6"/><circle cx="57" cy="547" r="2.6"/><circle cx="57" cy="569" r="2.6"/><circle cx="57" cy="591" r="2.6"/></g>
+    <g font-size="10.5" fill="#4A5551">
+      <text x="68" y="529">Unicode 符号块目录，常用块置顶</text>
+      <text x="68" y="551">块内浏览 + 关键字搜索双通道</text>
+      <text x="68" y="573">emoji 与拼音候选同栏合并排序</text>
+      <text x="68" y="595">搜索 250ms 防抖，开面板先提交 pending 拼音</text>
+    </g>
+
+    <!-- 5 隐私与本地 -->
+    <rect x="411" y="470" width="357" height="152" rx="12" fill="#FAF6F5" stroke="#EBD8D4" stroke-width="1.5"/>
+    <rect x="411" y="470" width="357" height="4" rx="2" fill="#D9553F"/>
+    <text x="433" y="502" font-size="15" font-weight="700" fill="#22272E">隐私与本地</text>
+    <g fill="#D9553F"><circle cx="438" cy="525" r="2.6"/><circle cx="438" cy="547" r="2.6"/><circle cx="438" cy="569" r="2.6"/><circle cx="438" cy="591" r="2.6"/></g>
+    <g font-size="10.5" fill="#4A5551">
+      <text x="449" y="529">输入数据默认只在本机，无任何网络请求</text>
+      <text x="449" y="551">核心输入完全离线可用，断网不影响打字</text>
+      <text x="449" y="573">学习词库落在应用私有目录</text>
+      <text x="449" y="595">云同步 V2 预留：端到端加密 + 可自托管</text>
+    </g>
+
+    <!-- 6 多端与包容 -->
+    <rect x="792" y="470" width="357" height="152" rx="12" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
+    <rect x="792" y="470" width="357" height="4" rx="2" fill="#2E8B80"/>
+    <text x="814" y="502" font-size="15" font-weight="700" fill="#22272E">多端与包容</text>
+    <g fill="#2E8B80"><circle cx="819" cy="525" r="2.6"/><circle cx="819" cy="547" r="2.6"/><circle cx="819" cy="569" r="2.6"/><circle cx="819" cy="591" r="2.6"/></g>
+    <g font-size="10.5" fill="#4A5551">
+      <text x="830" y="529">同一 Rust 引擎，五端共享同一套输入语义</text>
+      <text x="830" y="551">各端原生 UI：Compose / fcitx5 / TSF / SwiftUI</text>
+      <text x="830" y="573">核心零平台依赖，可在任意目标上单测</text>
+      <text x="830" y="595">模式整数与 ABI 约定跨端一致（0..4）</text>
+    </g>
+
+    <!-- 页脚 -->
+    <line x1="30" y1="646" x2="1150" y2="646" stroke="#E3E8E6" stroke-width="1.5"/>
+    <text x="590" y="666" text-anchor="middle" font-size="11" fill="#8A948F">一切「花活」均为可选插件，默认只提供最干净的输入界面 —— 你需要的自己装上，你不需要的绝不强塞</text>
+
+  </g>
+</svg>

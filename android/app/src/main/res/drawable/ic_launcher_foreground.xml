@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  启动图标前景：键帽精灵「小欧」（docs/opi-pet.svg 的图标简化版）。
+
+  相对主图的取舍（图标有硬约束，不是随意删减）：
+    · 去掉 OPI 刻字 —— 48dp 下只有约 6dp 高，必然糊成一团
+    · 去掉手臂与按键涟漪 —— 细过 2dp 的笔画在图标栅格上会消失
+    · 键帽正面下两角改直角 —— 用一条直边当键帽棱线，比圆角更抗缩放
+  几何落在 66dp 安全区内（108dp 画布同心圆半径 33），圆形遮罩不裁到任何笔画。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 键帽侧壁（略暗的青白，与正面区分出棱线） -->
+    <path
+        android:fillColor="#E9F3F1"
+        android:pathData="M33,62 L30.5,72 Q30,77 35,77 L73,77 Q78,77 77.5,72 L75,62 Z" />
+
+    <!-- 键帽正面 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40,32 L68,32 A7,7 0 0 1 75,39 L75,58 A6,6 0 0 1 69,64 L39,64 A6,6 0 0 1 33,58 L33,39 A7,7 0 0 1 40,32 Z" />
+
+    <!-- 拼音声调天线 ˉ：白杆 + 朱砂横（全图唯一暖色） -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.6"
+        android:strokeLineCap="round"
+        android:pathData="M54,33 L54,24" />
+    <path
+        android:strokeColor="#D9553F"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:pathData="M46.5,22 L61.5,22" />
+
+    <!-- 眼睛 -->
+    <path
+        android:fillColor="#1E6B63"
+        android:pathData="M40.9,45 a3.6,3.6 0 1 0 7.2,0 a3.6,3.6 0 1 0 -7.2,0 Z" />
+    <path
+        android:fillColor="#1E6B63"
+        android:pathData="M59.9,45 a3.6,3.6 0 1 0 7.2,0 a3.6,3.6 0 1 0 -7.2,0 Z" />
+
+    <!-- 嘴：圆环 = 字母 O（Open） -->
+    <path
+        android:strokeColor="#1E6B63"
+        android:strokeWidth="2.6"
+        android:pathData="M49.8,56 a4.2,3.6 0 1 0 8.4,0 a4.2,3.6 0 1 0 -8.4,0 Z" />
+
+</vector>
