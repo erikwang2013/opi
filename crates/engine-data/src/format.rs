@@ -97,7 +97,13 @@ pub fn parse(data: &[u8]) -> Result<OpDict, FormatError> {
         return Err(FormatError::ChecksumMismatch { expected, actual });
     }
     let count = u32::from_le_bytes(data[7..11].try_into().unwrap()) as usize;
-    let table_end = HEADER_LEN + count * ENTRY_LEN;
+    // count 来自文件，而 32 位 target（armeabi-v7a 在出货）上 usize 与 u32 同宽，
+    // `count * ENTRY_LEN` 会回绕并绕过下面的 table_end 检查，随后在
+    // Vec::with_capacity / 切片处 panic —— 契约是「坏文件 → Err」。全部改 checked。
+    let table_end = count
+        .checked_mul(ENTRY_LEN)
+        .and_then(|n| n.checked_add(HEADER_LEN))
+        .ok_or(FormatError::Truncated)?;
     if table_end > tail {
         return Err(FormatError::Truncated);
     }
@@ -107,17 +113,16 @@ pub fn parse(data: &[u8]) -> Result<OpDict, FormatError> {
         let rec = HEADER_LEN + i * ENTRY_LEN;
         rows.push(data[rec..rec + ENTRY_LEN].try_into().unwrap());
     }
-    // pinyin_total = 各条 pinyin 终点最大值；word blob 紧随其后
-    let pinyin_total = rows
-        .iter()
-        .map(|row| {
-            let po = u32::from_le_bytes(row[0..4].try_into().unwrap()) as usize;
-            let pl = row[4] as usize;
-            po + pl
-        })
-        .max()
-        .unwrap_or(0);
-    let word_start = pinyin_start + pinyin_total;
+    // pinyin_total = 各条 pinyin 终点最大值；word blob 紧随其后。
+    // po + pl 同样可回绕（po=0xFFFFFFFF、pl=255 → 254），会让越界的 pinyin
+    // 切片落回合法范围，从而「接受」一个数据错位的文件、击败 BadOffsets 校验。
+    let mut pinyin_total = 0usize;
+    for row in &rows {
+        let po = u32::from_le_bytes(row[0..4].try_into().unwrap()) as usize;
+        let pl = row[4] as usize;
+        pinyin_total = pinyin_total.max(po.checked_add(pl).ok_or(FormatError::BadOffsets)?);
+    }
+    let word_start = pinyin_start.checked_add(pinyin_total).ok_or(FormatError::BadOffsets)?;
     if word_start > tail {
         return Err(FormatError::BadOffsets);
     }
@@ -130,8 +135,10 @@ pub fn parse(data: &[u8]) -> Result<OpDict, FormatError> {
         let wo = u32::from_le_bytes(row[5..9].try_into().unwrap()) as usize;
         let wl = row[9] as usize;
         let freq = u32::from_le_bytes(row[10..14].try_into().unwrap());
-        // pinyin 侧越界由 word_start > tail 推导捕获，这里只需非零与 word 侧边界
-        if pl == 0 || wl == 0 || wo + wl > word_total {
+        // pinyin 侧越界由 word_start > tail 推导捕获，这里只需非零与 word 侧边界。
+        // wo + wl 同样 checked：回绕会让越界切片落回合法范围（同 pinyin 侧）。
+        let w_end = wo.checked_add(wl).ok_or(FormatError::BadOffsets)?;
+        if pl == 0 || wl == 0 || w_end > word_total {
             return Err(FormatError::BadOffsets);
         }
         let pinyin = std::str::from_utf8(&data[pinyin_start + po..pinyin_start + po + pl])

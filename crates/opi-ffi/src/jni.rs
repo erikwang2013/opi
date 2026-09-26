@@ -67,7 +67,12 @@ pub unsafe extern "system" fn opijni_clear(_env: JEnv, _class: sys::jclass) {
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_select(env: JEnv, _class: sys::jclass, index: jint) -> jstring {
     let out = catch_unwind(AssertUnwindSafe(|| {
-        api::with_engine(|e| e.select(index.max(0) as usize)).unwrap_or_default()
+        api::with_engine(|e| {
+            // 负索引按越界处理（空串）。不能 `index.max(0)` 钳成 0 —— 那会把负数
+            // 变成合法下标并提交第 0 个候选，与本函数的文档约定相反。
+            if index < 0 { String::new() } else { e.select(index as usize) }
+        })
+        .unwrap_or_default()
     }))
     .unwrap_or_default();
     unsafe { jni_util::rust_to_jstring(env, &out) }
@@ -149,7 +154,12 @@ pub unsafe extern "system" fn opijni_symbol_blocks(env: JEnv, _class: sys::jclas
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_symbols_in_block(env: JEnv, _class: sys::jclass, id: jshort) -> sys::jobjectArray {
     let texts = catch_unwind(AssertUnwindSafe(|| {
-        api::with_engine(|e| api::symbol_texts(e, id.max(0) as u16)).unwrap_or_default()
+        // 负 id 同理按越界处理（空数组），不钳成块 0。jshort 转 u16 前必须先判负，
+        // 否则 -1 会变成 65535（一个合法但错误的块号）。
+        api::with_engine(|e| {
+            if id < 0 { Vec::new() } else { api::symbol_texts(e, id as u16) }
+        })
+        .unwrap_or_default()
     }))
     .unwrap_or_default();
     unsafe { jni_util::string_array(env, texts) }

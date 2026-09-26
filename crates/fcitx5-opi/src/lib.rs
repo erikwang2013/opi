@@ -348,6 +348,22 @@ mod tests {
         out
     }
 
+    /// 全局 `SINGLETON` 是进程级共享状态，而 `cargo test` 默认多线程并行跑用例 ——
+    /// 下面 6 个用例都要 `install(None)` 重置它，因此会互相踩状态。
+    /// 实测（12 次连跑）：`key_event_pinyin_letter_handled_and_space_commits` 挂 4 次、
+    /// `key_event_ctrl_passes_through_and_shift_consumed` 挂 3 次 —— 约 40% 的运行会
+    /// 随机红一条，使「全绿」门禁失去意义（真回归与假失败无法区分）。
+    /// 用一把测试专用锁把它们串行化；锁与 install 绑成一次调用，避免新增用例漏加。
+    static SERIAL: Mutex<()> = Mutex::new(());
+
+    /// 取串行锁并重置单例。返回值必须绑定到变量活到用例结束（`let _g = ...`），
+    /// 写成 `let _ = ...` 会立即释放锁，等于没加。
+    fn serial_install() -> std::sync::MutexGuard<'static, ()> {
+        let guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        assert!(install(None).is_ok());
+        guard
+    }
+
     #[test]
     fn mode_int_roundtrip() {
         assert_eq!(mode_from_int(0), Some(Mode::Pinyin));
@@ -372,7 +388,7 @@ mod tests {
 
     #[test]
     fn install_singleton_fallback_and_path() {
-        assert!(install(None).is_ok());
+        let _g = serial_install();
         assert_eq!(with_state(|s| s.buffer()), Some(String::new()));
         // 坏路径 → Err（load_or_fallback 原样语义，不回退）
         assert!(install(Some("/nonexistent/opi.dict")).is_err());
@@ -382,7 +398,7 @@ mod tests {
 
     #[test]
     fn input_key_invalid_utf8_is_lossy_and_safe() {
-        assert!(install(None).is_ok());
+        let _g = serial_install();
         // 单字节无效 UTF-8 → lossy 替换为 U+FFFD，非 ASCII → 引擎忽略 → 空串
         let raw = [0xffu8];
         let out = unsafe { opi_fcitx5_input_key(raw.as_ptr(), raw.len()) };
@@ -397,7 +413,7 @@ mod tests {
 
     #[test]
     fn input_key_null_ptr_with_len_returns_empty() {
-        assert!(install(None).is_ok());
+        let _g = serial_install();
         // read_utf8 先判 null（lib.rs read_utf8 首行），len>0 也不触碰内存
         let out = unsafe { opi_fcitx5_input_key(std::ptr::null(), 5) };
         assert_eq!(read_and_free(out), "");
@@ -415,14 +431,14 @@ mod tests {
 
     #[test]
     fn candidates_without_buffer_is_empty_json() {
-        assert!(install(None).is_ok());
+        let _g = serial_install();
         let out = unsafe { opi_fcitx5_candidates(8) };
         assert_eq!(read_and_free(out), "[]");
     }
 
     #[test]
     fn key_event_english_pass_through_commits_lowercase() {
-        assert!(install(None).is_ok());
+        let _g = serial_install();
         // 切英文：直传 'a'（action=2 提交）
         unsafe { opi_fcitx5_switch_mode(1) };
         let r = unsafe { opi_fcitx5_key_event(97, 0) };
@@ -435,7 +451,7 @@ mod tests {
 
     #[test]
     fn key_event_pinyin_letter_handled_and_space_commits() {
-        assert!(install(None).is_ok());
+        let _g = serial_install();
         unsafe { opi_fcitx5_switch_mode(0) };
         let r = unsafe { opi_fcitx5_key_event(104, 0) }; // 'h'
         assert_eq!(r.action, 1); // EngineHandled
@@ -453,7 +469,7 @@ mod tests {
 
     #[test]
     fn key_event_ctrl_passes_through_and_shift_consumed() {
-        assert!(install(None).is_ok());
+        let _g = serial_install();
         // Ctrl+C → 直通
         let r = unsafe { opi_fcitx5_key_event(99, 1 << 2) };
         assert_eq!(r.action, 0);
