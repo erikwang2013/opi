@@ -434,6 +434,8 @@ crates/opi-ffi/src/cabi.rs                # C ABI 出口 + free_string
 - Create: `desktop/settings.gradle.kts`、`desktop/build.gradle.kts`、`desktop/src/main/kotlin/io/opi/candidate/Main.kt`（Compose Desktop 窗口，候选列表 + 翻页）
 - Modify: `crates/tsf-opi`（候选数据经 JNI/共享内存或本地 socket 传给候选窗——**先定接口再实现**）
 
+> 订正（2026-09-27）：上面 Create 的那个 `Main.kt` 已拆成 4 个同包文件 —— `Main.kt`（只留 `main()` + 候选模型）、`CandidateWindow.kt`（UI 自绘）、`Protocol.kt`（NDJSON 解析）、`PipeServer.kt`（命名管道）。原因是「单文件 <500 行」这条硬规矩（拆前 511 行）。`mainClass = "io.opi.candidate.MainKt"` 契约未变（已用 `javap` 在字节码层核对）。原文保留不动。
+
 - [x] **Step 1: 定义候选窗通信接口**（方案：TSF 进程内共享内存 + event；或本地 named pipe。选择 named pipe，Rust 侧 windows-rs 现成）。
 - [x] **Step 2: 实现 CMP 候选窗**：Compose Desktop 窗口 + 候选列表 + 页码 + 位置跟随（无法跟随降级固定位置）。
 - [x] **Step 3: 构建验证**：`./gradlew :desktop:package`（Compose Desktop 打包）→ 成功。

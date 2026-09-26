@@ -3,10 +3,11 @@
 日期：2026-08-14
 状态：已确认（用户批准 2026-08-14）
 
-> 订正（2026-09-27 复核）：本文件是 2026-08-14 的**设计意图**，其中 iOS/macOS/鸿蒙三端**当时一行代码也没有**。此后按本文件写下了三个草案目录（`ios/` · `macos/` · `harmony/`），**但至今没有任何一行被编译过**（本仓库的验证环境是 Linux，缺 macOS + Xcode 与 DevEco + HarmonyOS SDK，连语法检查都做不到）。两处需要按实际订正，原表保留不动（设计留痕）：
+> 订正（2026-09-27 复核）：本文件是 2026-08-14 的**设计意图**，其中 iOS/macOS/鸿蒙三端**当时一行代码也没有**。此后按本文件写下了三个草案目录（`ios/` · `macos/` · `harmony/`），**但至今没有任何一行被编译过**（本仓库的验证环境是 Linux，缺 macOS + Xcode 与 DevEco + HarmonyOS SDK，连语法检查都做不到）。三处需要按实际订正，原表保留不动（设计留痕）：
 >
 > 1. **§2 平台矩阵 / §1：「iOS 键盘扩展必须原生 SwiftUI」——「SwiftUI」是过细的写法，且草案没走这条路。** iOS 强制的是**键盘扩展必须原生**（根视图恒为 `UIInputViewController`，SwiftUI 也要经 `UIHostingController` 挂上去），原生可选 UIKit 或 SwiftUI。草案实际用的是 **UIKit**（`ios/*.swift` 只有 `import UIKit`，全库零 `SwiftUI`）；macOS 端是 `AppKit`/`Cocoa` + `InputMethodKit`。**这不是「谁错了」**：SwiftUI 仍是有效选项，草案的 UIKit 是**未经编译验证**的选择（键盘扩展内存预算紧），两者都还没被编译器看过。
 > 2. **范围已扩**：除 iOS（M7）外另写下了 macOS 与**鸿蒙 HarmonyOS**（ArkTS `InputMethodExtensionAbility`，`@kit.IMEKit`）草案 —— 本文件成文时没有这两端。三者的硬约束与现状核对见根 `README.md`「未来规划」表。
+> 3. **一处路径已过时**：下面偏差表里写「候选窗 UI 改用 foundation 自绘（…`candidate/Main.kt`）」—— 那是拆分前的写法。为满足「单文件 <500 行」，该文件于 2026-09-27 拆成 4 个同包文件：`Main.kt`（只留 `main()` 与候选模型）、`CandidateWindow.kt`（UI 自绘）、`Protocol.kt`（NDJSON 解析）、`PipeServer.kt`（命名管道）。原表保留不动。
 >
 > **已实测为真的部分**：平台中立的 C ABI（`crates/opi-ffi`，28 个导出）确实就绪 —— `cargo check` 对 4 个 Apple 目标与 3 个 OHOS 目标全过（已进 CI），并能产出 arm64 静态库 `libopi_ffi.a`。
 
