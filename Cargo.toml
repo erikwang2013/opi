@@ -6,7 +6,7 @@ members = ["crates/engine-core", "crates/engine-data", "crates/opi-tools", "crat
 # 与发布 tag（v1.0.9）及 android versionName / desktop packageVersion 对齐 ——
 # 此前 tag 已到 v1.0.8 而 crate 仍写死 0.1.0，`opi-tools --version` 无从报告真实版本。
 [workspace.package]
-version = "1.0.9"
+version = "1.0.10"
 edition = "2024"
 
 [profile.release]

@@ -33,8 +33,8 @@ android {
         targetSdk = 34
         // 与发布 tag 对齐（此前 9 个 tag 期间 versionCode 一直是 1、versionName 一直是
         // "1.0.0"：APK 既无法被识别，也无法覆盖安装升级）。
-        versionCode = 2
-        versionName = "1.0.9"
+        versionCode = 3
+        versionName = "1.0.10"
         ndk {
             // 与 rust_builder cargokit targets 对齐（plugin.gradle 固定三 ABI）。
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
