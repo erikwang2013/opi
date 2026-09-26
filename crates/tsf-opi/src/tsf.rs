@@ -12,45 +12,46 @@
 //!
 //! 【骨架 vs 功能】本文件按"最小可编译骨架"编写（对照 windows-rs 0.62 TSF 示例）：
 //!   [功能] ITfTextInputProcessor 生命周期、ITfKeyEventSink 按键转发与键码映射、
-//!          KeyOutcome 分派、AdviseKeyEventSink 注册。
-//!   [骨架] 文档操作（Commit 插入 / composition 刷新、候选窗 UI）经 `TsfSink`
-//!          接缝暴露，真机验收时补全（ITfInsertAtSelection / ITfContextComposition）；
-//!          DllGetClassObject 为占位导出（CLASS_E_CLASSNOTAVAILABLE），正式注册
-//!          需在 Windows 上生成 CLSID + .rgs 注册脚本（本仓库尚无注册资料）。
+//!          KeyOutcome 分派、AdviseKeyEventSink 注册、**提交文本真正插入文档**
+//!          （`insert_text`：RequestEditSession + ITfEditSession::DoEditSession）。
+//!   [骨架] composition（拼音缓冲）不做进文档 —— 缓冲显示在独立候选窗里
+//!          （见 candidate_io.rs），故文档侧只有"插入"没有 composition 生命周期。
+//!          候选窗 UI 与 `CandidateAction`（点击选词/翻页）仍未接线。
+//!   [已补] COM 服务器导出与注册在 `com_server.rs`（类工厂 / DllRegisterServer）。
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Mutex, Once};
 
 use engine_core::composer::Mode;
-use windows::Win32::Foundation::{LPARAM, S_OK, WPARAM};
+use windows::Win32::Foundation::{LPARAM, WPARAM};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     GetKeyState, GetKeyboardLayout, GetKeyboardState, ToUnicodeEx, VK_CAPITAL, VK_CONTROL, VK_MENU,
     VK_SHIFT,
 };
 use windows::Win32::UI::TextServices::{
-    ITfContext, ITfKeyEventSink, ITfKeyEventSink_Impl, ITfKeystrokeMgr, ITfTextInputProcessor,
-    ITfTextInputProcessor_Impl, ITfThreadMgr,
+    ITfContext, ITfEditSession, ITfEditSession_Impl, ITfInsertAtSelection, ITfKeyEventSink,
+    ITfKeyEventSink_Impl, ITfKeystrokeMgr, ITfTextInputProcessor, ITfTextInputProcessor_Impl,
+    ITfThreadMgr, TF_ES_READWRITE, TF_ES_SYNC, TF_IAS_NOQUERY,
 };
 use windows::core::{
     BOOL, ComObjectInterface, GUID, HRESULT, IUnknown, Interface, InterfaceRef, Ref, Result,
     implement,
 };
 
+use crate::dll::DllLock;
 use crate::logic::{
     KEY_STATE_ALT, KEY_STATE_CAPS_LOCK, KEY_STATE_CTRL, KEY_STATE_RELEASED, KEY_STATE_REPEAT,
     KEY_STATE_SHIFT, KeyOutcome, TsfLogic,
 };
 use crate::vk::vk_to_engine_keycode;
 
-/// CLASS_E_CLASSNOTAVAILABLE（0x80040111）：骨架阶段不提供类工厂。
-const CLASS_E_CLASSNOTAVAILABLE: HRESULT = HRESULT(0x80040111_u32 as i32);
-
 /// E_FAIL：引擎内部错误的统一返回码（panic 被兜住 / 锁中毒）。
 const E_FAIL: HRESULT = HRESULT(0x80004005_u32 as i32);
 
 /// 一次性 panic hook（对照 fcitx5-opi/src/lib.rs 的 `ensure_panic_hook`）。
 /// 每个 COM 出口都要调：换掉默认 hook 后，宿主进程的事件日志里能看到是引擎炸了。
-fn ensure_panic_hook() {
+pub(crate) fn ensure_panic_hook() {
     static PANIC_HOOK: Once = Once::new();
     PANIC_HOOK.call_once(|| {
         std::panic::set_hook(Box::new(|info| {
@@ -59,10 +60,11 @@ fn ensure_panic_hook() {
     });
 }
 
-/// 文档/候选窗接缝：C2 骨架不实现 TSF 文档操作，真机验收在此补全。
-/// 语义（对照 C1 契约）：Commit → ITfInsertAtSelection 插入或 composition 提交；
-/// CompositionChanged → ITfContextComposition 刷新 composition + 候选窗 UI。
-/// 候选窗（C3 的 CMP 窗口）从候选数据刷新，无状态变化时不回调。
+/// 观察接缝：**不负责文档写入** —— 提交文本的插入由 `insert_text` 在本文件内
+/// 用 COM 接口完成（那里才有 `ITfContext` 与 client id），本接缝只把"发生了什么"
+/// 通知出去，供候选窗（C3 的 CMP 窗口）刷新。语义（对照 C1 契约）：
+/// Commit → 隐藏候选窗；CompositionChanged → 用候选数据刷新候选窗。
+/// 无状态变化时不回调。
 pub trait TsfSink: Send + Sync {
     /// 立即提交文本（英文直传、空缓冲空格、缓冲/候选提交等）。
     fn on_commit(&self, _text: &str) {}
@@ -87,8 +89,18 @@ pub struct TsfTextService {
     pub logic: Mutex<TsfLogic>,
     /// Activate 时保存的线程管理器（骨架：仅持有引用，候选窗/文档操作需要）。
     pub thread_mgr: Mutex<Option<ITfThreadMgr>>,
-    /// 文档/候选窗接缝（见 `TsfSink`）。
+    /// Activate 收到的 TfClientId。`RequestEditSession` 的第一个参数就是它 ——
+    /// 此前被丢弃，于是"想插入也没有合法的 tid 可用"。0 = TF_CLIENTID_NULL =
+    /// 尚未 Activate（TSF 分配的是非零 id），故 0 同时充当"未激活"哨兵。
+    client_id: AtomicU32,
+    /// 候选窗接缝（见 `TsfSink`）。
     pub sink: Box<dyn TsfSink>,
+    /// 模块级对象计数（见 `dll.rs`）：本对象活着 → `DllCanUnloadNow` 必须答
+    /// S_FALSE。字段本身从不读写，作用全在 `Drop`（故下划线前缀）。
+    _module_lock: DllLock,
+    /// 未能**同步**完成的编辑会话的保活引用（唯一写入点是 `insert_text` 的
+    /// `TF_E_SYNCHRONOUS` 分支，理由见那里）。只保最后一个 —— 见该分支注释。
+    keepalive: Mutex<Option<ITfEditSession>>,
 }
 
 impl TsfTextService {
@@ -99,24 +111,32 @@ impl TsfTextService {
         Ok(Self {
             logic: Mutex::new(logic),
             thread_mgr: Mutex::new(None),
+            client_id: AtomicU32::new(0),
             sink,
+            _module_lock: DllLock::new(),
+            keepalive: Mutex::new(None),
         })
     }
 
     /// 键事件统一入口（OnKeyDown/OnKeyUp 共用）。
     /// wParam = VK 或 Unicode 码点（见 logic.rs 头注释的键码约定）；
     /// lParam 位映射 KEY_STATE_*；KeyOutcome 分派见模块头注释。
+    /// `pic` = TSF 交来的当前文档 context（无焦点文档时为 None），
+    /// 一路传到 `insert_text` —— 提交文本要插进它，别处拿不到。
     ///
     /// 这是个 `extern "system"` 的 COM 出口（经 vtable 被宿主输入法进程调用）：
     /// panic 逃出去 = 宿主进程 abort（in-proc，用户的 Word/浏览器）。
     /// 故与另三端（jni.rs / cabi.rs / fcitx5-opi）一致，出口一律兜住；
     /// 兜住后返回 BOOL(1)（吞键）——与中毒锁同策略：宁可丢一次键，不炸宿主。
-    fn handle_key(&self, wparam: WPARAM, lparam: LPARAM) -> BOOL {
+    fn handle_key(&self, pic: Option<&ITfContext>, wparam: WPARAM, lparam: LPARAM) -> BOOL {
         ensure_panic_hook();
-        catch_unwind(AssertUnwindSafe(|| self.handle_key_inner(wparam, lparam))).unwrap_or(BOOL(1))
+        catch_unwind(AssertUnwindSafe(|| {
+            self.handle_key_inner(pic, wparam, lparam)
+        }))
+        .unwrap_or(BOOL(1))
     }
 
-    fn handle_key_inner(&self, wparam: WPARAM, lparam: LPARAM) -> BOOL {
+    fn handle_key_inner(&self, pic: Option<&ITfContext>, wparam: WPARAM, lparam: LPARAM) -> BOOL {
         let mut logic = match self.logic.lock() {
             Ok(g) => g,
             Err(_) => return BOOL(1), // 中毒锁：吞键，避免键流入应用造成死循环
@@ -124,6 +144,9 @@ impl TsfTextService {
         let outcome = logic.input_key(to_engine_keycode(wparam.0 as u32), map_key_state(lparam));
         match outcome {
             KeyOutcome::Commit(text) => {
+                // 顺序有意：先插入（此时 logic 锁还握着，但 insert_text 不碰 logic，
+                // 见其重入警告），再通知接缝。反过来则"接缝炸了 → 字没插进去"。
+                self.insert_text(pic, &text);
                 self.sink.on_commit(&text);
                 BOOL(1)
             }
@@ -142,6 +165,115 @@ impl TsfTextService {
             KeyOutcome::Unhandled => BOOL(0), // 不拦截，键自然流入应用
         }
     }
+
+    /// 把提交文本真正写进文档 —— `KeyOutcome::Commit` 的落地处。
+    ///
+    /// 三种"静默放弃"都是**正常情况**，不是错误路径：
+    /// - `pic` 为 None：TSF 没给 context（无焦点文档），没有可插入的目标；
+    /// - `client_id` 为 0：尚未 `Activate`，`RequestEditSession` 必失败；
+    /// - `pic` 转不出 `ITfInsertAtSelection`：该 context 不支持插入。
+    /// 放弃后按键仍被吞（`BOOL(1)`）：用户看到"这一下没出字"，而不是崩溃。
+    /// 这三种不发声（它们是"本就没有目标"）；`RequestEditSession` 的失败则**要**
+    /// 记一行 —— 那一类才是"本该出字却没出"，成因全在宿主进程里，没日志就查不动。
+    ///
+    /// **重入警告**：`TF_ES_SYNC` 会让 `DoEditSession` 在**本线程、本栈**上被回调，
+    /// 且此刻我们正持有 `self.logic` 的锁（`handle_key_inner` 的 guard 还活着）。
+    /// `InsertTextSession` 因此绝不能回头碰 `self.logic` / `self.sink`：
+    /// `std::sync::Mutex` 不可重入，一碰就死锁在用户的 Word 里。
+    /// 它只持有文本与插入接口，故安全 —— 改动它时务必守住这条。
+    fn insert_text(&self, pic: Option<&ITfContext>, text: &str) {
+        let Some(pic) = pic else { return };
+        let tid = self.client_id.load(Ordering::Relaxed);
+        if tid == 0 {
+            return; // 未 Activate：没有合法 tid，RequestEditSession 必失败
+        }
+        let Ok(session) = InsertTextSession::new(pic, text) else {
+            return;
+        };
+        let session: ITfEditSession = session.into();
+        // SAFETY: pic 是 TSF 交来的活动 context；session 在本次调用期间存活。
+        // 返回 `Result<HRESULT>` 是两层：外层 = 调用本身成不成，
+        // 内层 = `phrSession`，也就是 **DoEditSession 的返回值**（0.62 把它当出参映射）。
+        // 失败不改行为（"这次按键不出字"总好过"崩掉宿主进程"），但**必须留下痕迹**：
+        // "字插不进去"的成因全在宿主进程里，没有这一行，用户与我们都只剩
+        // "输入法就是不工作"。TF_E_SYNCHRONOUS（另有编辑会话在跑）就落在这里。
+        match unsafe { pic.RequestEditSession(tid, &session, TF_ES_SYNC | TF_ES_READWRITE) } {
+            Ok(hr) if hr.is_ok() => {}
+            Ok(hr) => {
+                eprintln!("tsf-opi: 编辑会话未同步完成 hr={hr:?}，保留引用待异步回调");
+                // 这一支就是 TF_E_SYNCHRONOUS：按 TSF 文档是"转为异步排队"，也就是
+                // DoEditSession 在**本次调用返回之后**才被回调 —— 那时 `session`
+                // 已出作用域。TSF 理应自己 AddRef，但这条本机（无 Windows）无法验证，
+                // 赌错的代价是"回调打到已释放对象"→ 崩在用户 Word 里，而留下的代价
+                // 只是一个引用（下一次插入或本对象销毁时释放）。故留。
+                // 锁在这里即取即放：本分支按定义不是同步回调，不会重入（见 insert_text
+                // 的重入警告）；`keepalive` 也从不被 DoEditSession 碰到。
+                if let Ok(mut keep) = self.keepalive.lock() {
+                    *keep = Some(session);
+                }
+            }
+            Err(e) => eprintln!("tsf-opi: RequestEditSession 失败: {e}"),
+        }
+    }
+}
+
+// ---------- 文档写入：编辑会话 ----------
+
+/// 「把一段文本插到当前选区」的编辑会话。
+///
+/// 为什么必须绕这一道：TSF 不允许文本服务直接改文档。服务得先用
+/// `ITfContext::RequestEditSession` 请求一个编辑会话，TSF 回调
+/// `ITfEditSession::DoEditSession` 并把 edit cookie（`ec`）交给它 ——
+/// 只有拿着 `ec` 才允许调用插入 API。`TF_ES_SYNC` 让这次回调同步发生
+/// （否则 `RequestEditSession` 返回而我们还没插入，文本就丢了）。
+///
+/// 生命周期：本对象在 `insert_text` 里临时构造，调用返回后即释放（无人长期
+/// 持有），故不占模块锁 —— 回调期间宿主一定还在我们的调用栈上，且服务对象
+/// 自己持有模块锁，DLL 不会被抽掉。
+///
+/// 用 `ITfInsertAtSelection` 而不是 `GetSelection` + `ITfRange::SetText`：
+/// 前者是 TSF 为此场景提供的 API（换行、选区替换、插入点后移都由它处理），
+/// 而 `TF_SELECTION.range` 是 `ManuallyDrop<Option<ITfRange>>` —— 手工取用
+/// 时漏一次 `into_inner` 就是一次引用计数泄漏，正是本项目备忘里那条
+/// "COM 生命周期漏了会崩在用户 Word 里"。
+#[implement(ITfEditSession)]
+struct InsertTextSession {
+    /// 目标 context 的插入接口（构造时 QueryInterface 得到，随本对象一起释放）。
+    insert: ITfInsertAtSelection,
+    /// UTF-16 文本（TSF 全线 UTF-16）。**不带结尾 NUL** —— 长度由切片传。
+    text: Vec<u16>,
+}
+
+impl InsertTextSession {
+    /// `pic` 不支持 `ITfInsertAtSelection`（非文档 context）→ Err，调用方放弃。
+    fn new(pic: &ITfContext, text: &str) -> Result<Self> {
+        Ok(Self {
+            insert: pic.cast()?,
+            text: text.encode_utf16().collect(),
+        })
+    }
+}
+
+impl ITfEditSession_Impl for InsertTextSession_Impl {
+    fn DoEditSession(&self, ec: u32) -> Result<()> {
+        ensure_panic_hook();
+        // COM 出口（TSF 经 vtable 回调）：panic 逃出去 = abort 宿主进程。
+        catch_unwind(AssertUnwindSafe(|| {
+            // TF_IAS_NOQUERY = "插入，但不要返回范围"。**成功时 ppRange 被置 NULL**，
+            // 而 windows-rs 把 NULL 出参转成 `Err(Error::empty())`（空 HRESULT）——
+            // 直接 `?` 会把**成功**判成失败。故按 HRESULT 定成败：非零才是真错误。
+            // 这是 0.62 生成代码的实际行为（windows-core/src/type.rs 的 from_abi）。
+            match unsafe {
+                self.insert
+                    .InsertTextAtSelection(ec, TF_IAS_NOQUERY, &self.text)
+            } {
+                Ok(_) => Ok(()),
+                Err(e) if e.code().is_ok() => Ok(()),
+                Err(e) => Err(e),
+            }
+        }))
+        .unwrap_or_else(|_| Err(E_FAIL.into()))
+    }
 }
 
 // ---------- ITfTextInputProcessor：TSF 生命周期 ----------
@@ -159,6 +291,9 @@ impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
                 Err(_) => return Err(E_FAIL.into()),
             };
             *tm = ptim.cloned();
+            // client id 是 RequestEditSession 的必需参数：不存下来，插入就没有
+            // 合法的 tid 可用（这就是"两处 on_commit 丢弃文本"之外的第二道墙）。
+            self.client_id.store(tid, Ordering::Relaxed);
             // 注册按键监听：0.62 API 为 AdviseKeyEventSink（旧式 SetKeypressSink 已移除）。
             // fforeground=true：前台键盘事件也交本服务（输入法语义）。
             // 本对象同时实现 ITfKeyEventSink，as_interface_ref 取其 IUnknown 指针，
@@ -184,6 +319,8 @@ impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
                 Err(_) => return Ok(()), // 中毒锁：吞掉，避免经 COM vtable 泄漏 panic
             };
             *tm = None;
+            // 失活后旧 tid 不再有效：清零，insert_text 会据此静默放弃。
+            self.client_id.store(0, Ordering::Relaxed);
             Ok(())
         }))
         .unwrap_or_else(|_| Err(E_FAIL.into()))
@@ -211,14 +348,15 @@ impl ITfKeyEventSink_Impl for TsfTextService_Impl {
         Ok(BOOL(0))
     }
 
-    fn OnKeyDown(&self, _pic: Ref<ITfContext>, wparam: WPARAM, lparam: LPARAM) -> Result<BOOL> {
-        Ok(self.handle_key(wparam, lparam))
+    fn OnKeyDown(&self, pic: Ref<ITfContext>, wparam: WPARAM, lparam: LPARAM) -> Result<BOOL> {
+        // pic 不再丢弃：提交文本要插进的正是这个 context（见 insert_text）。
+        Ok(self.handle_key(pic.as_ref(), wparam, lparam))
     }
 
-    fn OnKeyUp(&self, _pic: Ref<ITfContext>, wparam: WPARAM, lparam: LPARAM) -> Result<BOOL> {
+    fn OnKeyUp(&self, pic: Ref<ITfContext>, wparam: WPARAM, lparam: LPARAM) -> Result<BOOL> {
         // 释放状态由 lParam bit31（转换状态）映射，与按下同路由
         // （logic 对释放事件返回 Consumed/Unhandled，见 input_key）。
-        Ok(self.handle_key(wparam, lparam))
+        Ok(self.handle_key(pic.as_ref(), wparam, lparam))
     }
 
     fn OnPreservedKey(&self, _pic: Ref<ITfContext>, _rguid: *const GUID) -> Result<BOOL> {
@@ -290,23 +428,6 @@ fn map_key_state(lparam: LPARAM) -> u32 {
     s
 }
 
-// ---------- COM 服务器导出（regsvr32 注册用；骨架占位） ----------
-
-/// DllGetClassObject：TSF 经注册表 CLSID 定位本服务 DLL。
-/// 骨架：返回 CLASS_E_CLASSNOTAVAILABLE。验收补全点：实现 IClassFactory
-/// 返回 `TsfTextService`，并生成 CLSID + .rgs 注册脚本（本仓库尚无注册资料；
-/// 与 fcitx5 轨的 C 导出 `#[unsafe(no_mangle)]` 同构，调用约定为 system）。
-#[unsafe(no_mangle)]
-pub extern "system" fn DllGetClassObject(
-    _rclsid: *const GUID,
-    _riid: *const GUID,
-    _ppv: *mut *mut core::ffi::c_void,
-) -> HRESULT {
-    CLASS_E_CLASSNOTAVAILABLE
-}
-
-/// DllCanUnloadNow：骨架实现 —— 无锁驻留，恒可卸载。
-#[unsafe(no_mangle)]
-pub extern "system" fn DllCanUnloadNow() -> HRESULT {
-    S_OK
-}
+// COM 服务器导出（DllGetClassObject / DllCanUnloadNow / DllRegisterServer …）
+// 在 `com_server.rs`：那里是"COM 如何加载与注册本 DLL"的整个面，本文件只管
+// 服务对象自身的行为。

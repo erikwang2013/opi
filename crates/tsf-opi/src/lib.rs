@@ -12,11 +12,22 @@
 
 pub mod logic;
 
+/// DLL 服务器资料（CLSID/GUID · 注册表键路径 · 模块级对象计数）。
+/// 与 `vk.rs` 同样是**平台中立**的：`windows_core::GUID` 是无条件依赖，
+/// 主机可构造、可格式化、可单测 —— 而这些值错了的后果全是静默的（见 `dll.rs`）。
+pub mod dll;
+
 /// Windows 目标专属：TSF COM 胶水（ITfTextInputProcessor / ITfKeyEventSink）。
 /// Linux/其他主机不编译本模块（`windows` crate 依赖不进入主机构建路径），
 /// 保证 `cargo test --workspace` 在 Linux 上全绿。
 #[cfg(target_os = "windows")]
 pub mod tsf;
+
+/// Windows 目标专属：COM 服务器面（类工厂 + `Dll*` 导出 + regsvr32 注册）。
+/// 与 `tsf.rs` 同样的 cfg 门：`windows` 依赖不进 Linux 主机构建路径。
+/// **注册效果与"能否在 Word 里打字"本机（Linux）无法验证**，见模块头注释。
+#[cfg(target_os = "windows")]
+pub mod com_server;
 
 /// Win32 VK → 引擎键码的映射判定（纯函数，无 windows 类型 → 主机可编译可单测）。
 /// `tsf.rs` 是 `#[cfg(target_os = "windows")]`：判定若留在那边，Linux 门禁就永远

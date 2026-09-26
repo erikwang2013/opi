@@ -23,6 +23,8 @@ windows = { version = "0.62", default-features = false, features = [
     "Win32_Storage_FileSystem",
     "Win32_System_Com",
     "Win32_System_IO", # C3：ReadFile/WriteFile 在 0.62 中经 Win32_System_IO 门控
+    "Win32_System_LibraryLoader", # DllRegisterServer：GetModuleHandleExW/GetModuleFileNameW
+    "Win32_System_Registry",      # DllRegisterServer：RegCreateKeyExW/RegSetValueExW
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_TextServices",
 ] }
