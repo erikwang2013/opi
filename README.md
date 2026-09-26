@@ -64,10 +64,12 @@
 
 > 本节只写**代码里已经跑得起来的东西**；尚未实现的愿景统一收到下方「🚧 未来规划」，逐条标注状态。此前的版本把两者混在一起、用陈述句写成现状，这里改了。
 
-#### 1. 引擎一份，四端各自原生
-**引擎只写一遍。** `engine-core` 是纯逻辑内核，无 IO、无平台依赖 —— 六个模块（`Composer` 状态机 / `Pinyin` 音节切分 / `Trie` 码表 / `Candidates` 排序合并 / `Learner` 用户学习 / `Symbols` 符号表）之上是唯一的 `Engine` 门面，UI 层只跟这个门面打交道。出口层是三个薄壳（`opi-ffi` 双 ABI · `fcitx5-opi` · `tsf-opi`），每个进程持一个引擎单例。
+#### 1. 引擎一份，各端原生
+**引擎只写一遍。** `engine-core` 是纯逻辑内核，无 IO、无平台依赖 —— 六个模块（`Composer` 状态机 / `Pinyin` 音节切分 / `Trie` 码表 / `Candidates` 排序合并 / `Learner` 用户学习 / `Symbols` 符号表）之上是唯一的 `Engine` 门面，UI 层只跟这个门面打交道。另有**平台中立的键路由层**（`router.rs` 的 `KeyRouter` + `keys.rs` 的键码表），供 Apple 与鸿蒙两端经 C ABI 使用 —— 放这里是因为它是纯逻辑；它**不是**引擎的第七个模块，语义以既有的 fcitx5 / TSF 两轨为准，不自创。出口层是三个薄壳（`opi-ffi` 双 ABI · `fcitx5-opi` · `tsf-opi`），每个进程持一个引擎单例。
 
-**已经有代码的端是 4 个**：Android（Compose 原生 IME）、Linux（fcitx5 插件）、Windows（TSF 插件 + Compose Desktop 候选窗）、iOS（C ABI 出口就绪，键盘扩展未接）。各端 UI 不共享代码，只共享输入语义。
+**有端代码的是 3 个**：Android（Compose 原生 IME）、Linux（fcitx5 插件）、Windows（TSF 插件 + Compose Desktop 候选窗 —— 后者是**独立的 UI 代码库**，经命名管道与 TSF 通信）。各端 UI 不共享代码，只共享输入语义。
+
+**Apple 两平台与鸿蒙目前只有草案，没有可用的端**——三个目录（[`ios/`](ios/)、[`macos/`](macos/)、[`harmony/`](harmony/)）里有 Swift 与 ArkTS 骨架，但**一行都没有被编译过**（本机既无 macOS/Xcode/Apple SDK，也无 DevEco/HarmonyOS SDK，连语法检查都做不到）。**已就绪的只有平台中立的 C ABI**（`crates/opi-ffi`，见 `tests/cabi_test.rs`）——它不属于任何一端，且**已实测能为 Apple 与鸿蒙的多个目标编译**。三者的硬约束与现状见「未来规划」。
 
 #### 2. 隐私优先，而且可以自己核对
 - **默认本地化**：输入数据只留在本机。引擎层与出口层的依赖表里**没有 HTTP 客户端**，没有遥测，没有广告 SDK
@@ -92,7 +94,9 @@
 
 | 方向 | 状态 | 现状核对 |
 |---|---|---|
-| **更多平台**：鸿蒙 · macOS · Web（含小程序） | 未开始 | 代码与构建脚本里 grep 这些平台名零命中（`docs/` 也没有，只有本 README 提到） |
+| **更多平台**：Web（含小程序） | 未开始 | 代码与构建脚本里 grep 这些平台名零命中（`docs/` 也没有，只有本 README 提到） |
+| **鸿蒙 HarmonyOS** | **仅有草案**（`harmony/`）| 与 Apple 两平台同一硬约束：**需要 DevEco Studio + HarmonyOS SDK 才能编译，本仓库的验证环境（Linux）无法编译 ArkTS，连语法检查都做不到**。`harmony/` 下的 ArkTS（`InputMethodExtensionAbility` 等）**一行都没有被编译过**，是「起点 + 契约」。已就绪并可实测的是 **Rust 侧**：C ABI 能为鸿蒙目标编译（`cargo check --target aarch64-unknown-linux-ohos` 等，见目录内 README）|
+| **Apple 两平台**：iOS · macOS | **仅有草案**（`ios/` · `macos/`）| **硬约束：两端都需要 macOS + Xcode 才能编译，本仓库的验证环境（Linux）无法编译、链接或运行它们，连 Swift 语法检查都做不到**（UIKit / InputMethodKit 是 Apple 独有框架）。两个目录里的 Swift **一行都没有被编译过**，是「起点 + 契约」而不是可用实现。已就绪的只有平台中立的 **C ABI**（`crates/opi-ffi`），且它**已实测能为 Apple 三个目标编译**（`cargo check --target aarch64-apple-ios / aarch64-apple-ios-sim / aarch64-apple-darwin` 均通过，已进 CI；还能产出 arm64 静态库 `libopi_ffi.a` 且导出符号无缺失）。**任何 Apple 端代码在被 Mac 上的编译器看过之前，都不应被当作已实现** —— 本项目已有两次教训：fcitx5 的 C++ 与 Windows 的 TSF 都是「写完了、读起来像完成」，实测却发现从未被编译过（前者 7 处 API 误写，后者文本插入根本没写） |
 | **多端云同步 / 端到端加密** | V2 预留 | 跨 `crates/` `android/` `desktop/` grep 加密与同步零命中（唯一命中是 `m2_integration.rs:1` 里「端到端集成测试」这个无关措辞） |
 | **更多输入方案**：双拼 · 五笔 · 仓颉 · 注音 · 自定义输入规则 | V2 预留 | `Mode` 只有 5 个成员（拼音 / 繁体 / 英文 / 数字 / 符号）。`composer.rs:1` 的注释提到由 `InputScheme` 扩展 —— **该类型尚不存在** |
 | **无障碍**：读屏软件 | 部分（仅 Android） | Android 键盘已接基础读屏语义：候选变化自动播报（`liveRegion`）、每个按键有可读名称（不再读字形「⇧」「⌫」）、⇧ 的锁定 / 单次大写状态可读。**其余平台（Windows / Linux / iOS）未接入** |
@@ -106,8 +110,8 @@
 |---|---|
 | **核心引擎** | 纯 Rust 实现，多 crate workspace（`engine-core` / `engine-data` / `opi-tools`）；其中 **`engine-core` 无 IO、无平台依赖**，`engine-data` 负责文件映射与字节解析，`opi-tools` 是编译 CLI |
 | **出口层** | `opi-ffi` 双 ABI（JNI + C）· `fcitx5-opi`（cdylib）· `tsf-opi`（cdylib COM 服务器），均以进程内单例持引擎 |
-| **客户端 UI** | 各端原生，不引入跨端框架：Android 为 Jetpack Compose；Linux 为 C++ AddonInstance 调 Rust 逻辑；Windows 为 TSF COM + Compose Desktop 候选窗（命名管道 NDJSON 通信） |
-| **平台接入** | Android (InputMethodService)、Linux (fcitx5)、Windows (TSF)、iOS (M7，C ABI 已就绪) |
+| **客户端 UI** | 各端原生，不引入跨端框架：Android 为 Jetpack Compose；Linux 为 C++ AddonInstance 调 Rust 逻辑；Windows 为 TSF COM + Compose Desktop 候选窗（命名管道 NDJSON 通信）|
+| **平台接入** | Android (InputMethodService)、Linux (fcitx5)、Windows (TSF)、**iOS / macOS / 鸿蒙（仅有草案，分别需 macOS + Xcode 与 DevEco + HarmonyOS SDK 才能编译验证）** |
 | **数据同步** | V2 预留：端到端加密 + 自托管服务支持，用户可选择使用官方服务或自建同步服务器 |
 | **版本** | 单一版本源：根 `Cargo.toml` 的 `[workspace.package] version`，6 个 crate 共用；Android `versionName` 与 desktop `packageVersion` 向它对齐，发布 tag 取同一号 |
 
@@ -117,9 +121,9 @@
 
 **五层，依赖只向下走。** 越往下越稳定，越往上越接近用户：
 
-- **客户端层** —— 各端原生 UI。四端之间不共享界面代码，只共享输入语义。
+- **客户端层** —— 各端原生 UI。各端之间不共享界面代码，只共享输入语义。
 - **出口层** —— ABI 薄壳，只做类型转换、边界校验、panic 隔离。每个进程持一个引擎单例，例如 Android 的设置页与输入法共享同一个 Rust 单例，所以设置页里改动学习开关，输入法里立刻生效。
-- **引擎层** —— `engine-core`，**纯逻辑，无 IO、无平台依赖**。这是整个项目的心脏，也是最容易测的一层：六个模块（`Composer` 状态机 / `Pinyin` 音节切分 / `Trie` 码表 / `Candidates` 排序合并 / `Learner` 用户学习 / `Symbols` 符号表）之上是唯一的 `Engine` 门面，UI 层只跟这个门面打交道。
+- **引擎层** —— `engine-core`，**纯逻辑，无 IO、无平台依赖**。这是整个项目的心脏，也是最容易测的一层：六个模块（`Composer` 状态机 / `Pinyin` 音节切分 / `Trie` 码表 / `Candidates` 排序合并 / `Learner` 用户学习 / `Symbols` 符号表）之上是唯一的 `Engine` 门面，UI 层只跟这个门面打交道。同层还有**平台中立的键路由**（`router.rs` / `keys.rs`），供 Apple 与鸿蒙经 C ABI 使用 —— 它是路由层而非引擎模块，语义以既有两轨为准。
 - **数据层** —— `.opid` 二进制词库：11 字节头 + 14 字节定长条目表 + 双 blob + FNV-1a64 校验尾。装载走 `mmap` 只读映射，**整库不读进堆**；查询时每条命中的词都要转出一次 `String`（见 `loader.rs` 的 `MmapDictionary::query`），不是零拷贝。
 - **构建管线** —— `data/raw` 的 TSV 源数据经 `opi-tools` 编译成 `.opid`，再经 `verify` 做校验和 / 顺序两道校验，并由 `trad_coverage` 测试守住 GB2312 单字全覆盖，才入库。
 
@@ -195,6 +199,9 @@ android/                       # Android IME（Kotlin + Jetpack Compose）
   rust_builder/                #   cargokit 独立版：编译 crates/opi-ffi → 三 ABI .so
   jni_smoke/                   #   JNI 连通性冒烟测试
 desktop/                       # Windows 候选窗（Compose Desktop / JVM，命名管道 NDJSON）
+ios/                           # iOS 键盘扩展 —— ⚠️ 草案，一行 Swift 都没编译过（见目录内 README）
+macos/                         # macOS 输入法（InputMethodKit）—— ⚠️ 同上
+harmony/                       # 鸿蒙输入法（ArkTS + N-API 原生模块）—— ⚠️ 同上，一行 ArkTS 都没编译过
 shared/                        # 跨端共享的 Kotlin 源码
   pet/OpiPet.kt                #   项目宠物「小欧」的 Compose 绘制（Android 与 desktop 共用一份）
 data/                          # 词库数据
@@ -225,15 +232,15 @@ V1 里程碑进度：
 - [x] **简繁双词库**（spec §8 未给它 M6 编号，独立成项）：`Mode::Traditional` + 双词典路由 + `trad.opid` + GB2312 单字全覆盖门禁
 - [~] **M6b Linux fcitx5 插件**：Rust 逻辑与单测完成，C++ AddonInstance 胶水已写 —— 需 `fcitx5-dev` 头文件方可编译验收
 - [~] **M6c Windows TSF 插件 + CMP 候选窗**：Rust 逻辑、候选窗线协议与 Compose Desktop 候选窗完成 —— COM 服务端按目标平台门控，待在 Windows 上验收
-- [ ] **M7 iOS**：C ABI 出口已就绪，待 SwiftUI 键盘扩展接入
+- [ ] **M7 iOS / macOS**：C ABI 已就绪，且**已实测能为 Apple 目标编译**（`cargo check` 四个目标全过 + 能产出 arm64 静态库 `libopi_ffi.a`、23 个导出符号无缺失）；`ios/` 与 `macos/` 下的 Swift 草案**从未被编译器看过** —— 需在 Mac 上先让编译通过，再谈功能
 
 > 里程碑编号以 `docs/superpowers/specs/2026-08-14-opi-multi-platform-design.md` §8 与 M6 实施计划为准
 > （M6a=Android / M6b=fcitx5 / M6c=TSF+候选窗）。
 
 ### 📄 许可证
 
-- **代码**：MIT，全文见 [`LICENSE`](LICENSE)
-- **词库数据**：按上游许可证单独声明（rime-luna-pinyin 为 LGPL-3.0），`data/raw` 逐条记录来源与许可证；提交词表改动前请读 [`CONTRIBUTING.md`](CONTRIBUTING.md) 的许可证一节
+- **代码**：MIT，全文见 [`LICENSE`](LICENSE)。源码文件头带机器可读的 **SPDX 标识**（`SPDX-FileCopyrightText: 2026 erik.xyz` + `SPDX-License-Identifier: MIT`），Rust 侧另有 `Cargo.toml` 的 `[workspace.package] license = "MIT"` 规范声明
+- **词库数据**：**与代码分开授权** —— `data/raw/*.tsv` 及由其编译出的 `.opid` **不适用 MIT**，各自按上游许可证（rime-luna-pinyin 为 LGPL-3.0），逐条来源与许可证见 [`data/raw/LICENSES.md`](data/raw/LICENSES.md)；提交词表改动前请读 [`CONTRIBUTING.md`](CONTRIBUTING.md) 的许可证一节
 
 ---
 

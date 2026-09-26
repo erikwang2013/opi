@@ -481,6 +481,7 @@ crates/opi-ffi/src/cabi.rs                # C ABI 出口 + free_string
 - M6b（路 B）：B0-B3 完成 → fcitx5 插件冒烟（桌面验收待办）。
 - M6c（路 C）：C0-C3 完成 → TSF 插件 + CMP 候选窗构建通过（Windows 运行验收待办）。
 - M7（iOS）：opi-ffi C ABI 已就绪，SwiftUI 键盘扩展接入。
+  > 订正（2026-09-27）：C ABI「已就绪」经复核**成立**（28 个导出；`cargo check` 对 4 个 Apple + 3 个 OHOS 目标全过）。**「SwiftUI」不成立**：草案 `ios/*.swift` 用的是 **UIKit**（全库零 `SwiftUI`）。另范围已扩到 macOS 与鸿蒙，三者草案**均从未编译过** —— 详见 `specs/2026-08-14-opi-multi-platform-design.md` 头部订正。
 
 # 偏差记录预留
 

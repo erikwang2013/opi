@@ -64,10 +64,12 @@ The name says it all:
 
 > This section lists only what **actually runs in the code today**. Everything still on the wish list has been moved down into "🚧 Roadmap", each item labelled with its status. Earlier versions of this README mixed the two together and wrote both as if they were current fact; that is fixed here.
 
-#### 1. One Engine, Four Native Clients
-**The engine is written once.** `engine-core` is a pure-logic core with no IO and no platform dependencies — six modules (`Composer` state machine / `Pinyin` segmentation / `Trie` dictionary / `Candidates` ranking and merge / `Learner` / `Symbols`) under a single `Engine` facade that the UI layer talks to. Above it sit three thin export shells (`opi-ffi` dual ABI · `fcitx5-opi` · `tsf-opi`), each holding one engine singleton per process.
+#### 1. One Engine, Native Clients per Platform
+**The engine is written once.** `engine-core` is a pure-logic core with no IO and no platform dependencies — six modules (`Composer` state machine / `Pinyin` segmentation / `Trie` dictionary / `Candidates` ranking and merge / `Learner` / `Symbols`) under a single `Engine` facade that the UI layer talks to. There is also a **platform-neutral key-routing layer** (`router.rs`'s `KeyRouter` + `keys.rs`'s keycode table), used by the Apple and HarmonyOS drafts through the C ABI — it lives here because it is pure logic; it is **not** a seventh engine module, and its semantics follow the two existing tracks rather than inventing new ones. Above it sit three thin export shells (`opi-ffi` dual ABI · `fcitx5-opi` · `tsf-opi`), each holding one engine singleton per process.
 
-**Four clients have real code**: Android (native Compose IME), Linux (fcitx5 plugin), Windows (TSF plugin + Compose Desktop candidate window), and iOS (C ABI export ready, keyboard extension not yet written). They share no UI code — only input semantics.
+**Three platforms have real client code**: Android (native Compose IME), Linux (fcitx5 plugin), and Windows (TSF plugin + Compose Desktop candidate window — the latter is a **separate UI codebase** talking to TSF over a named pipe). They share no UI code — only input semantics.
+
+**The two Apple platforms and HarmonyOS currently have drafts only, no usable client** — three directories ([`ios/`](ios/), [`macos/`](macos/), [`harmony/`](harmony/)) hold Swift and ArkTS skeletons, but **not a line of them has ever been compiled** (this machine has neither macOS/Xcode/Apple SDK nor DevEco/HarmonyOS SDK — not even a syntax check is possible). **The only thing that is ready is the platform-neutral C ABI** (`crates/opi-ffi`, see `tests/cabi_test.rs`) — it belongs to no single client, and **has been measured to compile for several Apple and HarmonyOS targets**. See the Roadmap for each one's hard constraint.
 
 #### 2. Privacy First — and You Can Check It Yourself
 - **Local by default**: your input data stays on your machine. Neither the engine nor the export layer has a **HTTP client** in its dependency table — no telemetry, no ad SDK
@@ -92,7 +94,9 @@ Everything below is part of the vision. Most items have **no corresponding code 
 
 | Direction | Status | How we checked |
 |---|---|---|
-| **More platforms**: HarmonyOS · macOS · Web (incl. mini-apps) | Not started | grep for these platform names across the code and build scripts: zero hits (none in `docs/` either — only this README mentions them) |
+| **More platforms**: Web (incl. mini-apps) | Not started | grep for these platform names across the code and build scripts: zero hits (none in `docs/` either — only this README mentions them) |
+| **HarmonyOS** | **Drafts only** (`harmony/`) | Same hard constraint as the two Apple platforms: **compiling it needs DevEco Studio + the HarmonyOS SDK, which this repo's verification environment (Linux) does not have — it cannot compile ArkTS, not even a syntax check**. The ArkTS under `harmony/` (`InputMethodExtensionAbility` and friends) **has never been through a compiler** — it is a starting point plus a contract. What *is* ready and measurable is the **Rust side**: the C ABI compiles for HarmonyOS targets (`cargo check --target aarch64-unknown-linux-ohos`, see the README in that directory) |
+| **The two Apple platforms**: iOS · macOS | **Drafts only** (`ios/` · `macos/`) | **Hard constraint: both need macOS + Xcode to compile, and this repo's verification environment (Linux) cannot compile, link or run them — not even a Swift syntax check** (UIKit / InputMethodKit are Apple-only frameworks). The Swift in both directories **has never been through a compiler**; it is a starting point plus a contract, not a usable implementation. The only thing ready is the platform-neutral **C ABI** (`crates/opi-ffi`), and it **has been measured to compile for three Apple targets** (`cargo check --target aarch64-apple-ios / aarch64-apple-ios-sim / aarch64-apple-darwin` all pass, now in CI; it also produces an arm64 static library `libopi_ffi.a` with no missing exported symbols). **No Apple-side code should be treated as implemented until a compiler on a Mac has seen it** — this project has been burned twice already: the fcitx5 C++ and the Windows TSF both *read* as finished, yet testing showed neither had ever been compiled (the former had 7 wrong API calls, the latter never inserted text at all) |
 | **Multi-device sync / end-to-end encryption** | Reserved for V2 | grep for encryption and sync across `crates/` `android/` `desktop/`: zero hits (the only match is the unrelated phrase "end-to-end integration test" at `m2_integration.rs:1`) |
 | **More input schemes**: shuangpin · wubi · Cangjie · Bopomofo · custom rules | Reserved for V2 | `Mode` has only 5 variants (Pinyin / Traditional / English / Number / Symbol). The comment at `composer.rs:1` mentions extending via `InputScheme` — **that type does not exist yet** |
 | **Accessibility**: screen readers | Partial (Android only) | The Android keyboard exposes basic screen-reader semantics: candidate changes are announced automatically (`liveRegion`), every key has a spoken name (no more reading out the glyph "⇧" / "⌫"), and the shift lock / one-shot state is readable. **Other platforms (Windows / Linux / iOS) are not covered** |
@@ -107,7 +111,7 @@ Everything below is part of the vision. Most items have **no corresponding code 
 | **Core engine** | Pure Rust multi-crate workspace (`engine-core` / `engine-data` / `opi-tools`); **`engine-core` alone has no IO and no platform dependencies**, `engine-data` does the file mapping and byte parsing, and `opi-tools` is the compile CLI |
 | **Export layer** | `opi-ffi` dual ABI (JNI + C) · `fcitx5-opi` (cdylib) · `tsf-opi` (cdylib COM server) — each holds one in-process engine singleton |
 | **Client UI** | Native per platform, no cross-platform framework: Jetpack Compose on Android; a C++ AddonInstance calling Rust on Linux; TSF COM plus a Compose Desktop candidate window on Windows (NDJSON over a named pipe) |
-| **Platform integration** | Android (InputMethodService), Linux (fcitx5), Windows (TSF), iOS (M7, C ABI ready) |
+| **Platform integration** | Android (InputMethodService), Linux (fcitx5), Windows (TSF), **iOS / macOS / HarmonyOS (drafts only — compiling them needs macOS + Xcode and DevEco + the HarmonyOS SDK respectively)** |
 | **Data sync** | Reserved for V2: end-to-end encryption + self-hosted support — use the official service or run your own sync server |
 | **Versioning** | Single source of truth: `[workspace.package] version` in the root `Cargo.toml`, shared by all six crates; Android `versionName` and desktop `packageVersion` align to it, and releases are tagged with the same number |
 
@@ -117,7 +121,7 @@ Everything below is part of the vision. Most items have **no corresponding code 
 
 **Five layers, dependencies pointing only downwards.** The lower the layer, the more stable; the higher, the closer to the user:
 
-- **Client layer** — native UI per platform. The four clients share no UI code, only input semantics.
+- **Client layer** — native UI per platform. The clients share no UI code, only input semantics.
 - **Export layer** — thin ABI shells doing type conversion, boundary validation and panic isolation. Each process holds one engine singleton: on Android the settings page and the IME share the same Rust singleton, so toggling learning in settings takes effect in the IME immediately.
 - **Engine layer** — `engine-core`, **pure logic, no IO, no platform dependencies**. This is the heart of the project and the easiest layer to test: six modules (`Composer` state machine / `Pinyin` segmentation / `Trie` dictionary / `Candidates` ranking and merge / `Learner` / `Symbols`) under a single `Engine` facade that the UI layer talks to.
 - **Data layer** — the `.opid` binary dictionary: 11-byte header + 14-byte fixed-size entry table + two blobs + an FNV-1a64 trailer. Loaded via read-only `mmap` with the **whole dictionary kept out of the heap**; each matching entry is materialised into a `String` at query time (see `loader.rs`'s `MmapDictionary::query`), so it is not zero-copy.
@@ -193,6 +197,9 @@ android/                       # Android IME (Kotlin + Jetpack Compose)
   rust_builder/                #   standalone cargokit: compiles crates/opi-ffi → three-ABI .so
   jni_smoke/                   #   JNI connectivity smoke test
 desktop/                       # Windows candidate window (Compose Desktop / JVM, NDJSON over named pipe)
+ios/                           # iOS keyboard extension — ⚠️ draft, not a line of Swift ever compiled (see README inside)
+macos/                         # macOS input method (InputMethodKit) — ⚠️ same as above
+harmony/                       # HarmonyOS input method (ArkTS + N-API native module) — ⚠️ same, not a line of ArkTS ever compiled
 shared/                        # Kotlin sources shared across clients
   pet/OpiPet.kt                #   the Compose drawing of Opi (one copy, used by Android and desktop)
 data/                          # dictionary data
@@ -223,15 +230,15 @@ V1 milestone progress:
 - [x] **Simplified/Traditional dual dictionary** (no M6 number assigned in spec §8, listed separately): `Mode::Traditional` + dual-dictionary routing + `trad.opid` + a GB2312 single-character coverage gate
 - [~] **M6b Linux fcitx5 plugin**: Rust logic and unit tests done; C++ AddonInstance glue written — needs `fcitx5-dev` headers to compile and be accepted
 - [~] **M6c Windows TSF plugin + CMP candidate window**: Rust logic, candidate-window wire protocol and the Compose Desktop window done — the COM server is target-gated, awaiting acceptance on Windows
-- [ ] **M7 iOS**: C ABI export ready; the SwiftUI keyboard extension is still to come
+- [ ] **M7 iOS / macOS**: the C ABI is ready, and **has been measured to compile for Apple targets** (`cargo check` passes on four targets + it produces an arm64 static library `libopi_ffi.a` with no missing exported symbols); the Swift drafts under `ios/` and `macos/` **have never been seen by a compiler** — get them compiling on a Mac first, then talk about features
 
 > Milestone numbering follows `docs/superpowers/specs/2026-08-14-opi-multi-platform-design.md` §8 and the M6 plan
 > (M6a=Android / M6b=fcitx5 / M6c=TSF+candidate window).
 
 ### 📄 License
 
-- **Code**: MIT, full text in [`LICENSE`](LICENSE)
-- **Dictionary data**: declared per upstream license (rime-luna-pinyin is LGPL-3.0), with per-item source and license records in `data/raw`. Read the licensing section of [`CONTRIBUTING.md`](CONTRIBUTING.md) before submitting dictionary changes
+- **Code**: MIT, full text in [`LICENSE`](LICENSE). Source file headers carry machine-readable **SPDX tags** (`SPDX-FileCopyrightText: 2026 erik.xyz` + `SPDX-License-Identifier: MIT`), and the Rust side additionally declares `[workspace.package] license = "MIT"` in `Cargo.toml`
+- **Dictionary data**: **licensed separately from the code** — `data/raw/*.tsv` and the `.opid` files compiled from them are **not** covered by MIT and follow their upstream licenses (rime-luna-pinyin is LGPL-3.0), with per-item source and license records in [`data/raw/LICENSES.md`](data/raw/LICENSES.md). Read the licensing section of [`CONTRIBUTING.md`](CONTRIBUTING.md) before submitting dictionary changes
 
 ---
 
