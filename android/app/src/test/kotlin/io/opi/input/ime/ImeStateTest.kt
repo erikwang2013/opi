@@ -175,6 +175,42 @@ class ImeStateTest {
         assertEquals("", state.searchQuery)
     }
 
+    // ---- 离开符号面板必须重置搜索态 ----
+    // 面板的 TextField 随 view 变化被移出组合，onFocusChanged(false) 不会回调；不主动清，
+    // searchActive 会卡在 true：切回来时搜索框带旧文本、结果网格直接进搜索态、叠盘自动
+    // 展开，但那个框其实没有焦点，且期间挂起的防抖仍会写入 searchQuery。
+
+    @Test
+    fun openNumberResetsSearchStateAndPendingDebounce() {
+        val debounce = FakeDebouncer()
+        val s = newState(debounce = debounce)
+        s.openSymbol()
+        s.onSearchFocus(true)
+        s.updateSearchText("heart")
+        assertTrue("前置条件：防抖应处于挂起", debounce.isPending())
+
+        s.openNumber()
+
+        assertFalse("离开面板后 searchActive 必须复位", s.searchActive)
+        assertEquals("", s.searchText)
+        assertEquals("", s.searchQuery)
+        assertFalse("挂起的防抖必须撤销", debounce.isPending())
+        assertEquals(ImeState.View.NUMBER, s.view)
+    }
+
+    @Test
+    fun openSymbolResetsSearchStateAfterRoundTrip() {
+        val s = newState()
+        s.openSymbol()
+        s.onSearchFocus(true)
+        s.updateSearchText("star")
+        s.openNumber()
+        s.openSymbol()
+        assertFalse("绕一圈回到符号面板不应残留搜索态", s.searchActive)
+        assertEquals("", s.searchText)
+        assertEquals("", s.searchQuery)
+    }
+
     @Test
     fun closeSearchHidesOverlayButKeepsText() {
         val state = newState()

@@ -65,26 +65,38 @@ class ImeState(
 
     fun openNumber() {
         commitPendingBuffer()
+        resetSearch()
         view = View.NUMBER
     }
 
     fun openSymbol() {
         commitPendingBuffer()
+        resetSearch()
         view = View.SYMBOL
     }
 
     /** 回 qwerty：失焦搜索并清空（对齐 flutter _backToLetters）。 */
     fun backToLetters() {
-        searchActive = false
-        cancelDebounce()
-        searchText = ""
-        searchQuery = ""
+        resetSearch()
         view = View.QWERTY
     }
 
     /** 仅关闭搜索叠盘（对齐 flutter _closeSearch：失焦但保留输入）。 */
     fun closeSearch() {
         searchActive = false
+    }
+
+    /**
+     * 全量重置搜索态。**面板切换时必须调用**：符号面板的 TextField 随 view 变化被
+     * 移出组合，`onFocusChanged(false)` 不会回调，`searchActive` 会卡在 true ——
+     * 再切回符号面板时搜索框带旧文本、结果网格直接进搜索态、叠盘自动展开，但那个
+     * 框其实没有焦点；离开期间挂起的 250ms 防抖也仍会触发写入 `searchQuery`。
+     */
+    private fun resetSearch() {
+        cancelDebounce()
+        searchActive = false
+        searchText = ""
+        searchQuery = ""
     }
 
     // ---- 搜索态 qwerty 路由（叠盘键位） ----
@@ -117,10 +129,7 @@ class ImeState(
 
     /** 输入目标切换/输入视图结束：清搜索、回 qwerty。 */
     fun onEditorChanged() {
-        cancelDebounce()
-        searchActive = false
-        searchText = ""
-        searchQuery = ""
+        resetSearch()
         view = View.QWERTY
     }
 

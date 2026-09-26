@@ -116,8 +116,8 @@ class OpiImeService : InputMethodService() {
             return
         }
         Log.w(TAG, "IC null, retry commit in 50ms: \"$text\"")
-        // 先撤掉上一次未执行的 retryRunnable，避免两次重试叠加（onDestroy 也靠它回收）。
-        retryRunnable?.let { window.window?.decorView?.removeCallbacks(it) }
+        // 先撤掉上一次未执行的 retryRunnable，避免两次重试叠加。
+        cancelPendingCommit()
         val r = Runnable {
             val ic2 = currentInputConnection
             if (ic2 != null) ic2.commitText(text, 1)
@@ -129,6 +129,18 @@ class OpiImeService : InputMethodService() {
         } else {
             window.window?.decorView?.postDelayed(r, 50)
         }
+    }
+
+    /**
+     * 撤掉排队中的 50ms 提交重试。
+     *
+     * 输入目标切换（`onStartInput`）、输入视图结束（`onFinishInputView`）与销毁时都必须调：
+     * 排队中的提交在 50ms 后才执行，期间编辑器可能已经换掉 —— 不撤就会把上一次的候选
+     * 文字写进**新的**编辑框。原先只有「再次重试」与 `onDestroy` 两处撤过。
+     */
+    private fun cancelPendingCommit() {
+        retryRunnable?.let { window.window?.decorView?.removeCallbacks(it) }
+        retryRunnable = null
     }
 
     /** 删除：有选区先删选区；无选区按码点删（emoji 等代理对不拆半）。 */
@@ -167,6 +179,8 @@ class OpiImeService : InputMethodService() {
         super.onStartInput(info, restarting)
         if (!restarting) {
             Log.i(TAG, "onStartInput: editor changed")
+            // 排队中的重试提交必须在这里撤掉：它与组合串同属「上一个编辑器的东西」
+            cancelPendingCommit()
             imeState.onEditorChanged()
             // 取消组合串（不提交，避免半截拼音泄入新编辑器）
             engineController.clear()
@@ -179,6 +193,8 @@ class OpiImeService : InputMethodService() {
         // 普通 hide（返回键/同一编辑器重开）也会走到本方法，此时 finishingInput=false；
         // 只在真正结束输入（销毁/停用）时重置，避免收起键盘误清 SYMBOL 面板状态。
         if (finishingInput) {
+            // 同 onStartInput：结束输入时排队中的重试同样不能再落到下一个编辑器
+            cancelPendingCommit()
             imeState.onEditorChanged()
             engineController.clear()
         }
@@ -215,8 +231,7 @@ class OpiImeService : InputMethodService() {
 
     override fun onDestroy() {
         // 销毁前撤掉未执行的提交重试，避免向新输入框误提交
-        retryRunnable?.let { window.window?.decorView?.removeCallbacks(it) }
-        retryRunnable = null
+        cancelPendingCommit()
         // 取消 pending 搜索防抖（销毁后回调不应再触发）
         imeState.onEditorChanged()
         lifecycleOwner.registry.currentState = Lifecycle.State.DESTROYED

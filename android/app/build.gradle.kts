@@ -13,6 +13,15 @@ android {
     // desktop/ 的 Windows 候选窗使用 —— 两处重复一份几何必然漂移。
     sourceSets.getByName("main").kotlin.srcDir("../../shared/pet")
 
+    // .opid 词库不压缩存储。压缩后 Assets.openFd() 会抛 IOException，
+    // EngineLoader.assetLength() 只能返回 null → needsCopy 恒为 true，
+    // 于是每次建 IME 视图、每次开设置页都在主线程重拷 3.3MB
+    // （luna 1.24MB + trad 2.08MB），尺寸校验的幂等优化被完全废掉。
+    // 代价：APK 增大约 1.5MB（实测 3.3MB 压缩到 1.76MB）—— 换输入法启动延迟，值。
+    androidResources {
+        noCompress += setOf("opid")
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

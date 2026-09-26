@@ -68,7 +68,9 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit) {
             for ((i, c) in candidates.withIndex()) {
                 Text(
                     c,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp).clickable { onTap(i) },
+                    // clickable 必须在 padding 之前：反过来的话热区只覆盖文字本身
+                    // （20sp 高 ≈ 24dp），远小于候选栏 44dp，边距区域点了没反应。
+                    modifier = Modifier.clickable { onTap(i) }.padding(horizontal = 12.dp, vertical = 8.dp),
                     fontSize = 20.sp,
                 )
             }

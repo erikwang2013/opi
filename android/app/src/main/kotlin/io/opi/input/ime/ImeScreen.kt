@@ -78,10 +78,23 @@ fun ImeScreen(
                     )
                 }
                 if (state.searchActive) {
-                    // 固定 176dp（4 行 × 44dp）：Expanded 均分在 IME 短窗下每行仅 ~22dp，
-                    // 低于 18dp 触控 slop；面板侧网格可滚动、能吸收挤压。
+                    // 96dp = 4 行 × 24dp（Material 最小触控目标）。
+                    //
+                    // 原为固定 176dp（4 × 44dp），理由是「均分后每行仅 ~22dp 低于触控
+                    // slop」。但 176dp 在主流机型上会把面板挤没：IME 窗口高
+                    // (0.42×min(w,h)+168)px，1080p 机型 ≈621px，density 2.75 → 仅 226dp；
+                    // 而面板固定头 48dp + Tab 36dp + 叠盘 176dp = 260dp > 226dp，
+                    // 于是 weight(3f) 的 Box 只剩 50dp、面板内部结果网格 Box(weight(1f))
+                    // 直接塌成 0dp —— 点搜索框后结果区完全不可见，Tab 行也被叠盘盖住。
+                    // density > 2.39 必现（近十年手机基本都在此列）。
+                    //
+                    // 折中取 96dp：结果网格回到约 46dp（可见、可滚），代价是搜索盘键高
+                    // 从 44dp 降到 24dp。这是缓解不是根治 —— 根治要让 IME 窗口在
+                    // 「符号面板 + 搜索态」下变高（改 OpiImeService.keyboardHeight），
+                    // 那会影响所有面板，须真机核对。**本机无设备，此改动未实测**：
+                    // 复核请 `adb shell wm density` 确认 ≥2.4，再看搜索结果区是否可见。
                     QwertyKeyboard(
-                        modifier = Modifier.height(176.dp),
+                        modifier = Modifier.height(96.dp),
                         onKey = state::searchKey,
                         onSpace = state::searchSpace,
                         onBackspace = state::searchBackspace,
