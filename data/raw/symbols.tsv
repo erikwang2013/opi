@@ -1,0 +1,583 @@
+　	全角空格	quanjiao,kongge,space,ideographic	1	0
+、	顿号	dun,comma,ideographic	1	0
+。	句号	ju,period,fullstop,ideographic,full,stop	1	0
+〃	同上号	tongshang,ditto,mark	1	0
+〄	工业标准记号	jis,industry,japanese,industrial,standard,symbol	1	0
+々	叠字记号	diezi,iteration,ideographic,mark	1	0
+〆	缔结记号	dijie,closing,ideographic,mark	1	0
+〇	〇	ling,zero,ideographic,number	1	0
+〈	左尖括号	jiankuohao,jian,shu,angle,left,bracket	1	0
+〉	右尖括号	jiankuohao,jian,angle,right,bracket	1	0
+《	左书名号	shuminghao,book,left,double,angle,bracket	1	0
+》	右书名号	shuminghao,book,right,double,angle,bracket	1	0
+「	左直角引号	zhijiao,yinhao,corner,left,bracket	1	0
+」	右直角引号	zhijiao,yinhao,corner,right,bracket	1	0
+『	左双直角引号	shuangzhijiao,white,corner,left,bracket	1	0
+』	右双直角引号	shuangzhijiao,white,corner,right,bracket	1	0
+【	左方头括号	fangtou,lenticular,left,black,bracket	1	0
+】	右方头括号	fangtou,lenticular,right,black,bracket	1	0
+〒	邮便记号	youbian,postal,mark	1	0
+〓	下驮记号	geta,mark	1	0
+〔	左六角括号	liujiao,tortoise,left,shell,bracket	1	0
+〕	右六角括号	liujiao,tortoise,right,shell,bracket	1	0
+〖	左白方头括号	baifangtou,white,lenticular,left,bracket	1	0
+〗	右白方头括号	baifangtou,white,lenticular,right,bracket	1	0
+〘	左白六角括号	bailiujiao,white,tortoise,left,shell,bracket	1	0
+〙	右白六角括号	bailiujiao,white,tortoise,right,shell,bracket	1	0
+〚	左双方括号	shuangfang,white,square,left,bracket	1	0
+〛	右双方括号	shuangfang,white,square,right,bracket	1	0
+〜	波浪线	bolang,wave,dash	1	0
+〝	反向双撇号	fanxiang,prime,quote,reversed,double,quotation,mark	1	0
+〞	双撇号	shuangpie,prime,quote,double,quotation,mark	1	0
+〟	低双撇号	dishuangpie,low,prime,double,quotation,mark	1	0
+〠	邮便记号笑脸	youbianlian,postal,face,mark	1	0
+〡	苏州码一	suzhouma,yi,hangzhou,one,numeral	1	0
+〢	苏州码二	suzhouma,er,hangzhou,two,numeral	1	0
+〣	苏州码三	suzhouma,san,hangzhou,three,numeral	1	0
+〤	苏州码四	suzhouma,si,hangzhou,four,numeral	1	0
+〥	苏州码五	suzhouma,wu,hangzhou,five,numeral	1	0
+〦	苏州码六	suzhouma,liu,hangzhou,six,numeral	1	0
+〧	苏州码七	suzhouma,qi,hangzhou,seven,numeral	1	0
+〨	苏州码八	suzhouma,ba,hangzhou,eight,numeral	1	0
+〩	苏州码九	suzhouma,jiu,hangzhou,nine,numeral	1	0
+〮	韩文单点声调	hanwen,dian,hangul,tone,single,dot,mark	1	0
+〯	韩文双点声调	hanwen,shuangdian,hangul,tone,double,dot,mark	1	0
+〰	波浪破折号	bolang,wavy,dash	1	0
+〱	竖排重复记号	shupai,chongfu,vertical,repeat,kana,mark	1	0
+〲	竖排浊音重复	shupai,zhuoyin,vertical,voiced,kana,repeat,sound,mark	1	0
+〳	竖排重复上半	shupai,shangban,upper,repeat,vertical,kana,mark,half	1	0
+〴	竖排浊音上半	shupai,zhuoyin,upper,voiced,vertical,kana,repeat,sound,mark,half	1	0
+〵	竖排重复下半	shupai,xiaban,lower,repeat,vertical,kana,mark,half	1	0
+〶	带圈邮便记号	quanyoubian,circled,postal,mark	1	0
+〷	电报换行号	dianbao,huanhang,telegraph,ideographic,line,feed,separator,symbol	1	0
+〸	苏州码十	suzhouma,shi,hangzhou,ten,numeral	1	0
+〹	苏州码廿	suzhouma,nian,hangzhou,twenty,numeral	1	0
+〺	苏州码卅	suzhouma,sa,hangzhou,thirty,numeral	1	0
+〻	竖排叠字记号	shupai,diezi,vertical,iteration,ideographic,mark	1	0
+〼	升记号	sheng,masu,mark	1	0
+〽	歌记号	ge,part,alternation,mark	1	0
+〾	异体字指示符	yiti,variation,indicator,ideographic	1	0
+〿	半填空格	bantian,half,fill,space,ideographic	1	0
+■	实心方块	fangkuai,square,black	2	0
+□	空心方块	fangkuai,square,white	2	0
+▢	圆角方块	yuanjiao,rounded,square,white,corners	2	0
+▣	WHITE SQUARE CONTAINING BLACK SMALL SQUARE	white,square,containing,black,small	2	0
+▤	SQUARE WITH HORIZONTAL FILL	square,horizontal,fill	2	0
+▥	SQUARE WITH VERTICAL FILL	square,vertical,fill	2	0
+▦	SQUARE WITH ORTHOGONAL CROSSHATCH FILL	square,orthogonal,crosshatch,fill	2	0
+▧	SQUARE WITH UPPER LEFT TO LOWER RIGHT FILL	square,upper,left,to,lower,right,fill	2	0
+▨	SQUARE WITH UPPER RIGHT TO LOWER LEFT FILL	square,upper,right,to,lower,left,fill	2	0
+▩	SQUARE WITH DIAGONAL CROSSHATCH FILL	square,diagonal,crosshatch,fill	2	0
+▪	小实心方块	xiaofangkuai,small,square,black	2	0
+▫	小空心方块	xiaofangkuai,small,square,white	2	0
+▬	实心横长方形	changfangxing,rectangle,black	2	0
+▭	空心横长方形	changfangxing,rectangle,white	2	0
+▮	实心竖长方形	shuchangfangxing,vertical,rectangle,black	2	0
+▯	空心竖长方形	shuchangfangxing,vertical,rectangle,white	2	0
+▰	BLACK PARALLELOGRAM	black,parallelogram	2	0
+▱	WHITE PARALLELOGRAM	white,parallelogram	2	0
+▲	实心上三角	sanjiao,sjx,shangsanjiao,triangle,up,black,pointing	2	0
+△	空心上三角	sanjiao,sjx,shangsanjiao,triangle,up,white,pointing	2	0
+▴	小实心上三角	xiaosanjiao,up,small,triangle,black,pointing	2	0
+▵	小空心上三角	xiaosanjiao,up,small,triangle,white,pointing	2	0
+▶	实心右三角	sanjiao,you,triangle,right,play,black,pointing	2	0
+▷	空心右三角	sanjiao,you,triangle,right,white,pointing	2	0
+▸	小实心右三角	xiaosanjiao,right,small,black,pointing,triangle	2	0
+▹	小空心右三角	xiaosanjiao,right,small,white,pointing,triangle	2	0
+►	实心右指针	youzhizhen,pointer,right,black,pointing	2	0
+▻	空心右指针	youzhizhen,pointer,right,white,pointing	2	0
+▼	实心下三角	sanjiao,xia,xiasanjiao,triangle,down,black,pointing	2	0
+▽	空心下三角	sanjiao,xia,xiasanjiao,triangle,down,white,pointing	2	0
+▾	小实心下三角	xiaosanjiao,down,small,black,pointing,triangle	2	0
+▿	小空心下三角	xiaosanjiao,down,small,white,pointing,triangle	2	0
+◀	实心左三角	sanjiao,zuo,zuosanjiao,triangle,left,black,pointing	2	0
+◁	空心左三角	sanjiao,zuo,zuosanjiao,triangle,left,white,pointing	2	0
+◂	小实心左三角	xiaosanjiao,left,small,black,pointing,triangle	2	0
+◃	小空心左三角	xiaosanjiao,left,small,white,pointing,triangle	2	0
+◄	实心左指针	zuozhizhen,pointer,left,black,pointing	2	0
+◅	空心左指针	zuozhizhen,pointer,left,white,pointing	2	0
+◆	实心菱形	lingxing,diamond,black	2	0
+◇	空心菱形	lingxing,diamond,white	2	0
+◈	套小菱形	lingxing,diamond,containing,white,black,small	2	0
+◉	鱼眼	yuyan,fisheye	2	0
+◊	斜方形	xiefangxing,lozenge	2	0
+○	空心圆	yuan,circle,white	2	0
+◌	DOTTED CIRCLE	dotted,circle	2	0
+◍	CIRCLE WITH VERTICAL FILL	circle,vertical,fill	2	0
+◎	靶心	baxin,bullseye,target	2	0
+●	实心圆	yuan,circle,black	2	0
+◐	左半黑圆	banheiyuan,left,half,circle,black	2	0
+◑	右半黑圆	banheiyuan,right,half,circle,black	2	0
+◒	CIRCLE WITH LOWER HALF BLACK	circle,lower,half,black	2	0
+◓	CIRCLE WITH UPPER HALF BLACK	circle,upper,half,black	2	0
+◔	CIRCLE WITH UPPER RIGHT QUADRANT BLACK	circle,upper,right,quadrant,black	2	0
+◕	CIRCLE WITH ALL BUT UPPER LEFT QUADRANT BLACK	circle,all,but,upper,left,quadrant,black	2	0
+◖	LEFT HALF BLACK CIRCLE	left,half,black,circle	2	0
+◗	RIGHT HALF BLACK CIRCLE	right,half,black,circle	2	0
+◘	INVERSE BULLET	inverse,bullet	2	0
+◙	INVERSE WHITE CIRCLE	inverse,white,circle	2	0
+◚	UPPER HALF INVERSE WHITE CIRCLE	upper,half,inverse,white,circle	2	0
+◛	LOWER HALF INVERSE WHITE CIRCLE	lower,half,inverse,white,circle	2	0
+◜	UPPER LEFT QUADRANT CIRCULAR ARC	upper,left,quadrant,circular,arc	2	0
+◝	UPPER RIGHT QUADRANT CIRCULAR ARC	upper,right,quadrant,circular,arc	2	0
+◞	LOWER RIGHT QUADRANT CIRCULAR ARC	lower,right,quadrant,circular,arc	2	0
+◟	LOWER LEFT QUADRANT CIRCULAR ARC	lower,left,quadrant,circular,arc	2	0
+◠	上半圆	banyuan,upper,half,circle	2	0
+◡	下半圆	banyuan,lower,half,circle	2	0
+◢	实心右下三角	sanjiao,lower,right,triangle,black	2	0
+◣	实心左下三角	sanjiao,lower,left,triangle,black	2	0
+◤	实心左上三角	sanjiao,upper,left,triangle,black	2	0
+◥	实心右上三角	sanjiao,upper,right,triangle,black	2	0
+◦	WHITE BULLET	white,bullet	2	0
+◧	SQUARE WITH LEFT HALF BLACK	square,left,half,black	2	0
+◨	SQUARE WITH RIGHT HALF BLACK	square,right,half,black	2	0
+◩	SQUARE WITH UPPER LEFT DIAGONAL HALF BLACK	square,upper,left,diagonal,half,black	2	0
+◪	SQUARE WITH LOWER RIGHT DIAGONAL HALF BLACK	square,lower,right,diagonal,half,black	2	0
+◫	WHITE SQUARE WITH VERTICAL BISECTING LINE	white,square,vertical,bisecting,line	2	0
+◬	WHITE UP-POINTING TRIANGLE WITH DOT	white,up,pointing,triangle,dot	2	0
+◭	UP-POINTING TRIANGLE WITH LEFT HALF BLACK	up,pointing,triangle,left,half,black	2	0
+◮	UP-POINTING TRIANGLE WITH RIGHT HALF BLACK	up,pointing,triangle,right,half,black	2	0
+◯	大空心圆	dayuan,large,circle	2	0
+◰	WHITE SQUARE WITH UPPER LEFT QUADRANT	white,square,upper,left,quadrant	2	0
+◱	WHITE SQUARE WITH LOWER LEFT QUADRANT	white,square,lower,left,quadrant	2	0
+◲	WHITE SQUARE WITH LOWER RIGHT QUADRANT	white,square,lower,right,quadrant	2	0
+◳	WHITE SQUARE WITH UPPER RIGHT QUADRANT	white,square,upper,right,quadrant	2	0
+◴	WHITE CIRCLE WITH UPPER LEFT QUADRANT	white,circle,upper,left,quadrant	2	0
+◵	WHITE CIRCLE WITH LOWER LEFT QUADRANT	white,circle,lower,left,quadrant	2	0
+◶	WHITE CIRCLE WITH LOWER RIGHT QUADRANT	white,circle,lower,right,quadrant	2	0
+◷	WHITE CIRCLE WITH UPPER RIGHT QUADRANT	white,circle,upper,right,quadrant	2	0
+◸	UPPER LEFT TRIANGLE	upper,left,triangle	2	0
+◹	UPPER RIGHT TRIANGLE	upper,right,triangle	2	0
+◺	LOWER LEFT TRIANGLE	lower,left,triangle	2	0
+◻	中空心方块	fangkuai,medium,square,white	2	0
+◼	中实心方块	fangkuai,medium,square,black	2	0
+◽	中小空心方块	fangkuai,small,medium,white,square	2	0
+◾	中小实心方块	fangkuai,small,medium,black,square	2	0
+◿	LOWER RIGHT TRIANGLE	lower,right,triangle	2	0
+☀	太阳	taiyang,sun,sunny,black,rays	3	0
+☁	云	yun,cloud	3	0
+☂	雨伞	yusan,umbrella	3	0
+☃	雪人	xueren,snowman	3	0
+☄	彗星	huixing,comet	3	0
+★	实心星	xingxing,xing,star,black	3	0
+☆	空心星	xingxing,xing,star,white	3	0
+☇	闪电	shandian,lightning	3	0
+☈	雷雨	leiyu,thunderstorm	3	0
+☉	日	ri,sun	3	0
+☊	ASCENDING NODE	ascending,node	3	0
+☋	DESCENDING NODE	descending,node	3	0
+☌	CONJUNCTION	conjunction	3	0
+☍	OPPOSITION	opposition	3	0
+☎	黑电话	dianhua,telephone,phone,black	3	0
+☏	白电话	dianhua,telephone,phone,white	3	0
+☐	空方框	fangkuang,ballot,box	3	0
+☑	打勾方框	dagou,check,ballot,tick,box	3	0
+☒	打叉方框	dacha,cross,ballot,x,box	3	0
+☓	SALTIRE	saltire	3	0
+☔	带雨雨伞	yusan,daiyu,rain,umbrella,drops	3	0
+☕	热饮	reyin,coffee,hot,beverage	3	0
+☖	WHITE SHOGI PIECE	white,shogi,piece	3	0
+☗	BLACK SHOGI PIECE	black,shogi,piece	3	0
+☘	三叶草	sanyecao,shamrock,clover	3	0
+☙	REVERSED ROTATED FLORAL HEART BULLET	reversed,rotated,floral,heart,bullet	3	0
+☚	黑左指手	zhishou,index,left,pointing,black	3	0
+☛	黑右指手	zhishou,index,right,pointing,black	3	0
+☜	白左指手	zhishou,white,left,pointing,index	3	0
+☝	白上指手	zhishou,up,pointing,index,white	3	0
+☞	白右指手	zhishou,white,right,pointing,index	3	0
+☟	白下指手	zhishou,down,pointing,index,white	3	0
+☠	骷髅	kulou,skull,crossbones	3	0
+☡	警告	jinggao,caution,warning,sign	3	0
+☢	辐射	fushe,radioactive,sign	3	0
+☣	生物危害	shengwu,weihai,biohazard,sign	3	0
+☤	双蛇杖	shuangshezhang,caduceus	3	0
+☥	安卡	anka,ankh	3	0
+☦	东正教十字	dongzhengjiao,cross,orthodox	3	0
+☧	凯乐符号	kaile,chi,rho	3	0
+☨	洛林十字	luolin,cross,lorraine	3	0
+☩	耶路撒冷十字	yelusaleng,cross,jerusalem	3	0
+☪	星月	xingyue,star,crescent,islam	3	0
+☫	波斯符号	bosi,farsi,symbol	3	0
+☬	阿迪沙克提	adishakti,khanda,adi,shakti	3	0
+☭	镰刀锤子	liandao,chuizi,hammer,sickle	3	0
+☮	和平	heping,peace,symbol	3	0
+☯	阴阳	yinyang,tao,taichi,yin,yang	3	0
+☰	乾卦	qiangua,trigram,heaven	3	0
+☱	兑卦	duigua,trigram,lake	3	0
+☲	离卦	ligua,trigram,fire	3	0
+☳	震卦	zhengua,trigram,thunder	3	0
+☴	巽卦	xungua,trigram,wind	3	0
+☵	坎卦	kangua,trigram,water	3	0
+☶	艮卦	gengua,trigram,mountain	3	0
+☷	坤卦	kungua,trigram,earth	3	0
+☸	法轮	falun,dharma,wheel	3	0
+☹	哭脸	kulian,frowning,frown,white,face	3	0
+☺	笑脸	xiaolian,smiling,smile,white,face	3	0
+☻	黑笑脸	heixiaolian,smiling,black,face	3	0
+☼	带光芒太阳	taiyang,sun,rays,white	3	0
+☽	上弦月	shangxianyue,moon,quarter,first	3	0
+☾	下弦月	xiaxianyue,moon,quarter,last	3	0
+☿	MERCURY	mercury	3	0
+♀	女性	nvxing,female,woman,sign	3	0
+♁	地球	diqiu,earth	3	0
+♂	男性	nanxing,male,man,sign	3	0
+♃	木星	muxing,jupiter	3	0
+♄	土星	tuxing,saturn	3	0
+♅	天王星	tianwangxing,uranus	3	0
+♆	海王星	haiwangxing,neptune	3	0
+♇	冥王星	mingwangxing,pluto	3	0
+♈	白羊座	baiyang,aries,zodiac	3	0
+♉	金牛座	jinniu,taurus,zodiac	3	0
+♊	双子座	shuangzi,gemini,zodiac	3	0
+♋	巨蟹座	juxie,cancer,zodiac	3	0
+♌	狮子座	shizi,leo,zodiac	3	0
+♍	处女座	chunv,virgo,zodiac	3	0
+♎	天秤座	tiancheng,libra,zodiac	3	0
+♏	天蝎座	tianxie,scorpius,zodiac	3	0
+♐	射手座	sheshou,sagittarius,zodiac	3	0
+♑	摩羯座	mojie,capricorn,zodiac	3	0
+♒	水瓶座	shuiping,aquarius,zodiac	3	0
+♓	双鱼座	shuangyu,pisces,zodiac	3	0
+♔	白王	baiwang,chess,king,white	3	0
+♕	白后	baihou,chess,queen,white	3	0
+♖	白车	baiju,chess,rook,white	3	0
+♗	白象	baixiang,chess,bishop,white	3	0
+♘	白马	baima,chess,knight,white	3	0
+♙	白兵	baibing,chess,pawn,white	3	0
+♚	黑王	heiwang,chess,king,black	3	0
+♛	黑后	heihou,chess,queen,black	3	0
+♜	黑车	heiju,chess,rook,black	3	0
+♝	黑象	heixiang,chess,bishop,black	3	0
+♞	黑马	heima,chess,knight,black	3	0
+♟	黑兵	heibing,chess,pawn,black	3	0
+♠	黑桃	heitao,spade,suit,black	3	0
+♡	红桃	hongtao,heart,suit,white	3	0
+♢	方块	fangkuai,diamond,suit,white	3	0
+♣	梅花	meihua,club,suit,black	3	0
+♤	白桃	baitao,spade,suit,white	3	0
+♥	红心	hongxin,heart,he,ai,xin,suit,love,black	3	0
+♦	实心方块	fangkuai,diamond,suit,black	3	0
+♧	白梅花	baimeihua,club,suit,white	3	0
+♨	温泉	wenquan,hot,springs,onsen	3	0
+♩	四分音符	yinfu,note,quarter,music	3	0
+♪	八分音符	yinfu,note,eighth,music	3	0
+♫	双八分音符	yinfu,note,beamed,music,eighth,notes	3	0
+♬	双十六分音符	yinfu,note,sixteenth,music,beamed,notes	3	0
+♭	降号	jianghao,flat,music,sign	3	0
+♮	还原号	huanyuanhao,natural,music,sign	3	0
+♯	升号	shenghao,sharp,music,sign	3	0
+♰	WEST SYRIAC CROSS	west,syriac,cross	3	0
+♱	EAST SYRIAC CROSS	east,syriac,cross	3	0
+♲	循环回收	xunhuan,huishou,recycle,universal,recycling,symbol	3	0
+♳	RECYCLING SYMBOL FOR TYPE-1 PLASTICS	recycling,symbol,type,1,plastics	3	0
+♴	RECYCLING SYMBOL FOR TYPE-2 PLASTICS	recycling,symbol,type,2,plastics	3	0
+♵	RECYCLING SYMBOL FOR TYPE-3 PLASTICS	recycling,symbol,type,3,plastics	3	0
+♶	RECYCLING SYMBOL FOR TYPE-4 PLASTICS	recycling,symbol,type,4,plastics	3	0
+♷	RECYCLING SYMBOL FOR TYPE-5 PLASTICS	recycling,symbol,type,5,plastics	3	0
+♸	RECYCLING SYMBOL FOR TYPE-6 PLASTICS	recycling,symbol,type,6,plastics	3	0
+♹	RECYCLING SYMBOL FOR TYPE-7 PLASTICS	recycling,symbol,type,7,plastics	3	0
+♺	RECYCLING SYMBOL FOR GENERIC MATERIALS	recycling,symbol,generic,materials	3	0
+♻	黑循环回收	huishou,recycle,black,universal,recycling,symbol	3	0
+♼	RECYCLED PAPER SYMBOL	recycled,paper,symbol	3	0
+♽	PARTIALLY-RECYCLED PAPER SYMBOL	partially,recycled,paper,symbol	3	0
+♾	永久纸	yongjiu,permanent,paper,sign	3	0
+♿	轮椅	lunyi,wheelchair,accessible,symbol	3	0
+⚀	骰子一	touzi,dice,one,die,face,1	3	0
+⚁	骰子二	touzi,dice,two,die,face,2	3	0
+⚂	骰子三	touzi,dice,three,die,face,3	3	0
+⚃	骰子四	touzi,dice,four,die,face,4	3	0
+⚄	骰子五	touzi,dice,five,die,face,5	3	0
+⚅	骰子六	touzi,dice,six,die,face,6	3	0
+⚆	WHITE CIRCLE WITH DOT RIGHT	white,circle,dot,right	3	0
+⚇	WHITE CIRCLE WITH TWO DOTS	white,circle,two,dots	3	0
+⚈	BLACK CIRCLE WITH WHITE DOT RIGHT	black,circle,white,dot,right	3	0
+⚉	BLACK CIRCLE WITH TWO WHITE DOTS	black,circle,two,white,dots	3	0
+⚊	MONOGRAM FOR YANG	monogram,yang	3	0
+⚋	MONOGRAM FOR YIN	monogram,yin	3	0
+⚌	DIGRAM FOR GREATER YANG	digram,greater,yang	3	0
+⚍	DIGRAM FOR LESSER YIN	digram,lesser,yin	3	0
+⚎	DIGRAM FOR LESSER YANG	digram,lesser,yang	3	0
+⚏	DIGRAM FOR GREATER YIN	digram,greater,yin	3	0
+⚐	白旗	baiqi,flag,white	3	0
+⚑	黑旗	heiqi,flag,black	3	0
+⚒	锤镐	chuigao,hammer,pick	3	0
+⚓	锚	mao,anchor	3	0
+⚔	交叉剑	jiaochajian,swords,crossed	3	0
+⚕	医神杖	yishenzhang,aesculapius,staff	3	0
+⚖	天平	tianping,scales,justice	3	0
+⚗	蒸馏器	zhengliuqi,alembic	3	0
+⚘	花	hua,flower	3	0
+⚙	齿轮	chilun,gear,settings	3	0
+⚚	商神杖	shangshenzhang,hermes,staff	3	0
+⚛	原子	yuanzi,atom,symbol	3	0
+⚜	鸢尾花	yuanweihua,fleur,lis,de	3	0
+⚝	描边白星	xingxing,outlined,star,white	3	0
+⚞	THREE LINES CONVERGING RIGHT	three,lines,converging,right	3	0
+⚟	THREE LINES CONVERGING LEFT	three,lines,converging,left	3	0
+⚠	警告	jinggao,warning,sign	3	0
+⚡	高压	gaoya,high,voltage,lightning,sign	3	0
+⚢	DOUBLED FEMALE SIGN	doubled,female,sign	3	0
+⚣	DOUBLED MALE SIGN	doubled,male,sign	3	0
+⚤	INTERLOCKED FEMALE AND MALE SIGN	interlocked,female,male,sign	3	0
+⚥	MALE AND FEMALE SIGN	male,female,sign	3	0
+⚦	MALE WITH STROKE SIGN	male,stroke,sign	3	0
+⚧	MALE WITH STROKE AND MALE AND FEMALE SIGN	male,stroke,female,sign	3	0
+⚨	VERTICAL MALE WITH STROKE SIGN	vertical,male,stroke,sign	3	0
+⚩	HORIZONTAL MALE WITH STROKE SIGN	horizontal,male,stroke,sign	3	0
+⚪	中空心圆	yuan,medium,circle,white	3	0
+⚫	中实心圆	yuan,medium,circle,black	3	0
+⚬	MEDIUM SMALL WHITE CIRCLE	medium,small,white,circle	3	0
+⚭	婚姻	hunyin,marriage,symbol	3	0
+⚮	离婚	lihun,divorce,symbol	3	0
+⚯	UNMARRIED PARTNERSHIP SYMBOL	unmarried,partnership,symbol	3	0
+⚰	棺材	guancai,coffin	3	0
+⚱	骨灰瓮	guhuiweng,funeral,urn	3	0
+⚲	NEUTER	neuter	3	0
+⚳	CERES	ceres	3	0
+⚴	PALLAS	pallas	3	0
+⚵	JUNO	juno	3	0
+⚶	VESTA	vesta	3	0
+⚷	CHIRON	chiron	3	0
+⚸	BLACK MOON LILITH	black,moon,lilith	3	0
+⚹	SEXTILE	sextile	3	0
+⚺	SEMISEXTILE	semisextile	3	0
+⚻	QUINCUNX	quincunx	3	0
+⚼	SESQUIQUADRATE	sesquiquadrate	3	0
+⚽	足球	zuqiu,soccer,football,ball	3	0
+⚾	棒球	bangqiu,baseball	3	0
+⚿	SQUARED KEY	squared,key	3	0
+⛀	WHITE DRAUGHTS MAN	white,draughts,man	3	0
+⛁	WHITE DRAUGHTS KING	white,draughts,king	3	0
+⛂	BLACK DRAUGHTS MAN	black,draughts,man	3	0
+⛃	BLACK DRAUGHTS KING	black,draughts,king	3	0
+⛄	无雪雪人	xueren,snowman,without,snow	3	0
+⛅	多云	duoyun,sun,cloud,behind	3	0
+⛆	下雨	xiayu,rain	3	0
+⛇	BLACK SNOWMAN	black,snowman	3	0
+⛈	雷阵雨	leizhenyu,thunder,cloud,rain	3	0
+⛉	TURNED WHITE SHOGI PIECE	turned,white,shogi,piece	3	0
+⛊	TURNED BLACK SHOGI PIECE	turned,black,shogi,piece	3	0
+⛋	WHITE DIAMOND IN SQUARE	white,diamond,in,square	3	0
+⛌	CROSSING LANES	crossing,lanes	3	0
+⛍	DISABLED CAR	disabled,car	3	0
+⛎	蛇夫座	shefuzuo,ophiuchus,zodiac	3	0
+⛏	镐	gao,pick,mining	3	0
+⛐	CAR SLIDING	car,sliding	3	0
+⛑	安全帽	anquanmao,helmet,cross,white	3	0
+⛒	CIRCLED CROSSING LANES	circled,crossing,lanes	3	0
+⛓	锁链	suolian,chains	3	0
+⛔	禁止通行	jinzhi,no,entry,stop	3	0
+⛕	ALTERNATE ONE-WAY LEFT WAY TRAFFIC	alternate,one,way,left,traffic	3	0
+⛖	BLACK TWO-WAY LEFT WAY TRAFFIC	black,two,way,left,traffic	3	0
+⛗	WHITE TWO-WAY LEFT WAY TRAFFIC	white,two,way,left,traffic	3	0
+⛘	BLACK LEFT LANE MERGE	black,left,lane,merge	3	0
+⛙	WHITE LEFT LANE MERGE	white,left,lane,merge	3	0
+⛚	DRIVE SLOW SIGN	drive,slow,sign	3	0
+⛛	HEAVY WHITE DOWN-POINTING TRIANGLE	heavy,white,down,pointing,triangle	3	0
+⛜	LEFT CLOSED ENTRY	left,closed,entry	3	0
+⛝	SQUARED SALTIRE	squared,saltire	3	0
+⛞	FALLING DIAGONAL IN WHITE CIRCLE IN BLACK SQUARE	falling,diagonal,in,white,circle,black,square	3	0
+⛟	BLACK TRUCK	black,truck	3	0
+⛠	RESTRICTED LEFT ENTRY-1	restricted,left,entry,1	3	0
+⛡	RESTRICTED LEFT ENTRY-2	restricted,left,entry,2	3	0
+⛢	ASTRONOMICAL SYMBOL FOR URANUS	astronomical,symbol,uranus	3	0
+⛣	HEAVY CIRCLE WITH STROKE AND TWO DOTS ABOVE	heavy,circle,stroke,two,dots,above	3	0
+⛤	五角星	wujiaoxing,pentagram	3	0
+⛥	RIGHT-HANDED INTERLACED PENTAGRAM	right,handed,interlaced,pentagram	3	0
+⛦	LEFT-HANDED INTERLACED PENTAGRAM	left,handed,interlaced,pentagram	3	0
+⛧	INVERTED PENTAGRAM	inverted,pentagram	3	0
+⛨	BLACK CROSS ON SHIELD	black,cross,on,shield	3	0
+⛩	神社	shenshe,shinto,shrine	3	0
+⛪	教堂	jiaotang,church	3	0
+⛫	城堡	chengbao,castle	3	0
+⛬	古迹	guji,historic,site	3	0
+⛭	GEAR WITHOUT HUB	gear,without,hub	3	0
+⛮	GEAR WITH HANDLES	gear,handles	3	0
+⛯	MAP SYMBOL FOR LIGHTHOUSE	map,symbol,lighthouse	3	0
+⛰	山	shan,mountain	3	0
+⛱	沙滩伞	shatan,san,umbrella,beach,on,ground	3	0
+⛲	喷泉	penquan,fountain	3	0
+⛳	高尔夫	gaoerfu,flag,hole,golf,in	3	0
+⛴	渡轮	dulun,ferry	3	0
+⛵	帆船	fanchuan,sailboat	3	0
+⛶	SQUARE FOUR CORNERS	square,four,corners	3	0
+⛷	滑雪	huaxue,skier,ski	3	0
+⛸	溜冰鞋	liubingxie,ice,skate	3	0
+⛹	打球的人	daqiu,person,ball	3	0
+⛺	帐篷	zhangpeng,tent,camp	3	0
+⛻	JAPANESE BANK SYMBOL	japanese,bank,symbol	3	0
+⛼	HEADSTONE GRAVEYARD SYMBOL	headstone,graveyard,symbol	3	0
+⛽	加油站	jiayouzhan,fuel,pump,gas	3	0
+⛾	CUP ON BLACK SQUARE	cup,on,black,square	3	0
+⛿	WHITE FLAG WITH HORIZONTAL MIDDLE BLACK STRIPE	white,flag,horizontal,middle,black,stripe	3	0
+😀	咧嘴笑	liezuixiao,daxiao,grin,grinning,smile,face	4	1
+😁	露齿笑	luchixiao,grin,smile,teeth,grinning,face,smiling,eyes	4	1
+😂	笑哭	xiaoku,joy,tears,laugh,face	4	1
+😃	开口笑	kaikouxiao,smile,open,mouth,smiling,face	4	1
+😄	眯眼笑	miyanxiao,xiao,smile,laugh,happy,smiling,face,open,mouth,eyes	4	1
+😅	冷汗笑	lenghanxiao,sweat,smile,smiling,face,open,mouth,cold	4	1
+😆	露齿眯眼笑	luchixiao,grin,closed,eyes,smiling,face,open,mouth,tightly	4	1
+😇	天使笑	tianshixiao,halo,angel,innocent,smiling,face	4	1
+😈	恶魔笑	emoxiaoxiao,devil,horns,smiling,face	4	1
+😉	眨眼	zhayan,wink,flirt,winking,face	4	1
+😊	微笑	weixiao,smile,blush,happy,smiling,face,eyes	4	1
+😋	好吃	haochi,yummy,delicious,tongue,face,savouring,food	4	1
+😌	放松	fangsong,relieved,relax,face	4	1
+😍	花痴	huachi,love,heart,eyes,smiling,face,shaped	4	1
+😎	墨镜	mojing,cool,sunglasses,smiling,face	4	1
+😏	得意	deyi,smirk,smug,smirking,face	4	1
+😐	无表情	wubiaoqing,neutral,face	4	1
+😑	面无表情	wubiaoqing,expressionless,blank,face	4	1
+😒	不爽	bushuang,unamused,meh,face	4	1
+😓	冷汗	lenghan,sweat,cold,face	4	1
+😔	沉思	chensi,pensive,sad,face	4	1
+😕	困惑	kunhuo,confused,puzzled,face	4	1
+😖	难受	nanshou,confounded,face	4	1
+😗	亲吻	qinwen,kissing,kiss,face	4	1
+😘	飞吻	feiwen,kiss,blow,face,throwing	4	1
+😙	笑着亲	xiaozheqin,kissing,smiling,face,eyes	4	1
+😚	闭眼亲	biyanqin,kissing,closed,face,eyes	4	1
+😛	吐舌	tushe,tongue,stuck,face,out	4	1
+😜	眨眼吐舌	tushe,zhayan,tongue,wink,squint,face,stuck,out,winking,eye	4	1
+😝	眯眼吐舌	tushe,tongue,closed,eyes,face,stuck,out,tightly	4	1
+😞	失望	shiwang,disappointed,sad,face	4	1
+😟	担忧	danyou,worried,concerned,face	4	1
+😠	生气	shengqi,angry,mad,face	4	1
+😡	愤怒	fennu,pouting,rage,face	4	1
+😢	流泪	liulei,crying,cry,sad,tears,face	4	1
+😣	忍耐	rennai,persevering,struggle,face	4	1
+😤	得意洋洋	deyiyangyang,triumph,huff,face,look	4	1
+😥	苦笑	kuxiao,disappointed,relieved,sad,but,face	4	1
+😦	皱眉张嘴	zhoumei,frowning,frown,face,open,mouth	4	1
+😧	痛苦	tongku,anguished,face	4	1
+😨	害怕	haipa,fearful,scared,face	4	1
+😩	疲倦	pijuan,weary,tired,face	4	1
+😪	困	kun,sleepy,sleep,face	4	1
+😫	累	lei,tired,exhausted,face	4	1
+😬	龇牙	ziya,grimacing,awkward,face	4	1
+😭	大哭	daku,loudly,crying,sob,face	4	1
+😮	惊讶	jingya,surprised,open,mouth,face	4	1
+😯	静默	jingmo,hushed,silence,face	4	1
+😰	冷汗张口	lenghan,sweat,open,mouth,anxious,face,cold	4	1
+😱	惊恐	jingkong,scream,fear,shock,face,screaming,in	4	1
+😲	震惊	zhenjing,astonished,surprised,face	4	1
+😳	脸红	lianhong,flushed,blush,shy,face	4	1
+😴	睡觉	shuijiao,sleeping,sleep,zzz,face	4	1
+😵	晕	yun,dizzy,dead,face	4	1
+😶	无嘴	wuzui,no,mouth,silent,face,without	4	1
+😷	口罩	kouzhao,medical,mask,sick,face	4	1
+😸	猫咧嘴笑	mao,grinning,cat,smile,face,smiling,eyes	4	1
+😹	猫笑哭	mao,cat,tears,joy,face	4	1
+😺	猫开口笑	mao,cat,smiling,open,face,mouth	4	1
+😻	猫花痴	mao,cat,heart,love,smiling,face,shaped,eyes	4	1
+😼	猫坏笑	mao,cat,wry,smile,face	4	1
+😽	猫亲吻	mao,cat,kissing,face,closed,eyes	4	1
+😾	猫愤怒	mao,cat,pouting,angry,face	4	1
+😿	猫流泪	mao,cat,crying,face	4	1
+🙀	猫疲倦	mao,cat,weary,face	4	1
+🙁	轻皱眉	qingzhoumei,slightly,frowning,sad,face	4	1
+🙂	轻微笑	qingweixiao,slightly,smiling,happy,face	4	1
+🙃	倒脸	daolian,upside,down,face	4	1
+🙄	翻白眼	fanbaiyan,rolling,eyes,face	4	1
+🙅	不行手势	buxing,no,good,gesture,face	4	1
+🙆	好的手势	haode,ok,gesture,face	4	1
+🙇	鞠躬	jugong,bowing,person,sorry,deeply	4	1
+🙈	非礼勿视	feiliwushi,see,no,evil,monkey	4	1
+🙉	非礼勿听	feiliwuting,hear,no,evil,monkey	4	1
+🙊	非礼勿言	feiliwuyan,speak,no,evil,monkey	4	1
+🙋	举手	jushou,raising,hand,happy,person,one	4	1
+🙌	欢呼	huanhu,raising,both,hands,celebration,person,in	4	1
+🙍	皱眉的人	zhoumei,person,frowning	4	1
+🙎	撅嘴的人	juezui,person,pouting,face	4	1
+🙏	祈祷	qidao,folded,hands,please,thanks,person	4	1
+ぁ	平假名小a	a,hiragana,pingjia,riyu,letter,small,xa,la	6	0
+あ	平假名a	a,hiragana,pingjia,riyu,letter	6	0
+ぃ	平假名小i	i,hiragana,pingjia,riyu,letter,small,xi,li	6	0
+い	平假名i	i,hiragana,pingjia,riyu,letter	6	0
+ぅ	平假名小u	u,hiragana,pingjia,riyu,letter,small,xu,lu	6	0
+う	平假名u	u,hiragana,pingjia,riyu,letter	6	0
+ぇ	平假名小e	e,hiragana,pingjia,riyu,letter,small,xe,le	6	0
+え	平假名e	e,hiragana,pingjia,riyu,letter	6	0
+ぉ	平假名小o	o,hiragana,pingjia,riyu,letter,small,xo,lo	6	0
+お	平假名o	o,hiragana,pingjia,riyu,letter	6	0
+か	平假名ka	ka,hiragana,pingjia,riyu,letter	6	0
+が	平假名ga	ga,hiragana,pingjia,riyu,letter	6	0
+き	平假名ki	ki,hiragana,pingjia,riyu,letter	6	0
+ぎ	平假名gi	gi,hiragana,pingjia,riyu,letter	6	0
+く	平假名ku	ku,hiragana,pingjia,riyu,letter	6	0
+ぐ	平假名gu	gu,hiragana,pingjia,riyu,letter	6	0
+け	平假名ke	ke,hiragana,pingjia,riyu,letter	6	0
+げ	平假名ge	ge,hiragana,pingjia,riyu,letter	6	0
+こ	平假名ko	ko,hiragana,pingjia,riyu,letter	6	0
+ご	平假名go	go,hiragana,pingjia,riyu,letter	6	0
+さ	平假名sa	sa,hiragana,pingjia,riyu,letter	6	0
+ざ	平假名za	za,hiragana,pingjia,riyu,letter	6	0
+し	平假名shi	shi,hiragana,pingjia,riyu,letter,si	6	0
+じ	平假名ji	ji,hiragana,pingjia,riyu,letter,zi	6	0
+す	平假名su	su,hiragana,pingjia,riyu,letter	6	0
+ず	平假名zu	zu,hiragana,pingjia,riyu,letter	6	0
+せ	平假名se	se,hiragana,pingjia,riyu,letter	6	0
+ぜ	平假名ze	ze,hiragana,pingjia,riyu,letter	6	0
+そ	平假名so	so,hiragana,pingjia,riyu,letter	6	0
+ぞ	平假名zo	zo,hiragana,pingjia,riyu,letter	6	0
+た	平假名ta	ta,hiragana,pingjia,riyu,letter	6	0
+だ	平假名da	da,hiragana,pingjia,riyu,letter	6	0
+ち	平假名chi	chi,hiragana,pingjia,riyu,letter,ti	6	0
+ぢ	平假名ji	ji,hiragana,pingjia,riyu,letter,di	6	0
+っ	平假名小tsu	tsu,hiragana,pingjia,riyu,letter,small,tu,xtsu,ltsu,xtu,ltu	6	0
+つ	平假名tsu	tsu,hiragana,pingjia,riyu,letter,tu	6	0
+づ	平假名zu	zu,hiragana,pingjia,riyu,letter,du	6	0
+て	平假名te	te,hiragana,pingjia,riyu,letter	6	0
+で	平假名de	de,hiragana,pingjia,riyu,letter	6	0
+と	平假名to	to,hiragana,pingjia,riyu,letter	6	0
+ど	平假名do	do,hiragana,pingjia,riyu,letter	6	0
+な	平假名na	na,hiragana,pingjia,riyu,letter	6	0
+に	平假名ni	ni,hiragana,pingjia,riyu,letter	6	0
+ぬ	平假名nu	nu,hiragana,pingjia,riyu,letter	6	0
+ね	平假名ne	ne,hiragana,pingjia,riyu,letter	6	0
+の	平假名no	no,hiragana,pingjia,riyu,letter	6	0
+は	平假名ha	ha,hiragana,pingjia,riyu,letter	6	0
+ば	平假名ba	ba,hiragana,pingjia,riyu,letter	6	0
+ぱ	平假名pa	pa,hiragana,pingjia,riyu,letter	6	0
+ひ	平假名hi	hi,hiragana,pingjia,riyu,letter	6	0
+び	平假名bi	bi,hiragana,pingjia,riyu,letter	6	0
+ぴ	平假名pi	pi,hiragana,pingjia,riyu,letter	6	0
+ふ	平假名fu	fu,hiragana,pingjia,riyu,letter,hu	6	0
+ぶ	平假名bu	bu,hiragana,pingjia,riyu,letter	6	0
+ぷ	平假名pu	pu,hiragana,pingjia,riyu,letter	6	0
+へ	平假名he	he,hiragana,pingjia,riyu,letter	6	0
+べ	平假名be	be,hiragana,pingjia,riyu,letter	6	0
+ぺ	平假名pe	pe,hiragana,pingjia,riyu,letter	6	0
+ほ	平假名ho	ho,hiragana,pingjia,riyu,letter	6	0
+ぼ	平假名bo	bo,hiragana,pingjia,riyu,letter	6	0
+ぽ	平假名po	po,hiragana,pingjia,riyu,letter	6	0
+ま	平假名ma	ma,hiragana,pingjia,riyu,letter	6	0
+み	平假名mi	mi,hiragana,pingjia,riyu,letter	6	0
+む	平假名mu	mu,hiragana,pingjia,riyu,letter	6	0
+め	平假名me	me,hiragana,pingjia,riyu,letter	6	0
+も	平假名mo	mo,hiragana,pingjia,riyu,letter	6	0
+ゃ	平假名小ya	ya,hiragana,pingjia,riyu,letter,small,xya,lya	6	0
+や	平假名ya	ya,hiragana,pingjia,riyu,letter	6	0
+ゅ	平假名小yu	yu,hiragana,pingjia,riyu,letter,small,xyu,lyu	6	0
+ゆ	平假名yu	yu,hiragana,pingjia,riyu,letter	6	0
+ょ	平假名小yo	yo,hiragana,pingjia,riyu,letter,small,xyo,lyo	6	0
+よ	平假名yo	yo,hiragana,pingjia,riyu,letter	6	0
+ら	平假名ra	ra,hiragana,pingjia,riyu,letter	6	0
+り	平假名ri	ri,hiragana,pingjia,riyu,letter	6	0
+る	平假名ru	ru,hiragana,pingjia,riyu,letter	6	0
+れ	平假名re	re,hiragana,pingjia,riyu,letter	6	0
+ろ	平假名ro	ro,hiragana,pingjia,riyu,letter	6	0
+ゎ	平假名小wa	wa,hiragana,pingjia,riyu,letter,small,xwa,lwa	6	0
+わ	平假名wa	wa,hiragana,pingjia,riyu,letter	6	0
+ゐ	平假名wi	wi,hiragana,pingjia,riyu,letter	6	0
+ゑ	平假名we	we,hiragana,pingjia,riyu,letter	6	0
+を	平假名wo	wo,hiragana,pingjia,riyu,letter	6	0
+ん	平假名n	n,hiragana,pingjia,riyu,letter	6	0
+ゔ	平假名vu	vu,hiragana,pingjia,riyu,letter	6	0
+ゕ	平假名小ka	ka,hiragana,pingjia,riyu,letter,small,xka,lka	6	0
+ゖ	平假名小ke	ke,hiragana,pingjia,riyu,letter,small,xke,lke	6	0
+゛	浊音符	zhuoyinfu,zhuoyin,voiced,sound,mark,katakana,hiragana	6	0
+゜	半浊音符	banzhuoyinfu,handakuten,semi,voiced,mark,katakana,hiragana,sound	6	0
+ゝ	平假名叠字符	pingjiadie,diezi,iteration,hiragana,mark	6	0
+ゞ	平假名浊音叠字符	zhuoyindie,voiced,iteration,hiragana,mark	6	0
+ゟ	平假名合字yori	yori,hezi,digraph,hiragana	6	0
