@@ -13,5 +13,6 @@ ruvector.db
 target
 .env
 *.log
+__pycache__/
 
 .agents

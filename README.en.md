@@ -62,27 +62,43 @@ The name says it all:
 
 ### ✨ Core Features
 
-#### 1. True Cross-Platform Coverage
-Build once, deploy everywhere. Covering **Android, iOS, HarmonyOS, Windows, macOS, Linux, and Web (including mini-apps)**, with a consistent input experience across devices, and end-to-end encrypted cloud sync for dictionaries and personalization.
+> This section lists only what **actually runs in the code today**. Everything still on the wish list has been moved down into "🚧 Roadmap", each item labelled with its status. Earlier versions of this README mixed the two together and wrote both as if they were current fact; that is fixed here.
 
-#### 2. An Open and Transparent Ecosystem
-- **Open source**: the core engine and primary client code are fully open, audited and contributed to by the community
-- **Community dictionaries**: submit, review, and merge new words — keeping the dictionary truly "alive"
-- **Custom input schemes**: pinyin, shuangpin, wubi, Cangjie, Bopomofo and more — you can even define your own input rules
+#### 1. One Engine, Four Native Clients
+**The engine is written once.** `engine-core` is a pure-logic core with no IO and no platform dependencies — six modules (`Composer` state machine / `Pinyin` segmentation / `Trie` dictionary / `Candidates` ranking and merge / `Learner` / `Symbols`) under a single `Engine` facade that the UI layer talks to. Above it sit three thin export shells (`opi-ffi` dual ABI · `fcitx5-opi` · `tsf-opi`), each holding one engine singleton per process.
 
-#### 3. Privacy First
-- **Local by default**: all input data stays on your device by default; nothing is uploaded
-- **Works offline**: the core input features run fully offline with no network dependency
-- **Optional cloud sync**: if you want multi-device sync, it's end-to-end encrypted — the server can never read your content
+**Four clients have real code**: Android (native Compose IME), Linux (fcitx5 plugin), Windows (TSF plugin + Compose Desktop candidate window), and iOS (C ABI export ready, keyboard extension not yet written). They share no UI code — only input semantics.
 
-#### 4. Accessibility & Inclusivity
-- Full screen-reader support (TalkBack, VoiceOver, NVDA, etc.)
-- Voice input, scanning input, and other assistive input methods
-- Built-in schemes for major minority languages and dialects (Tibetan, Uyghur, Mongolian, Cantonese, Wu, etc.)
+#### 2. Privacy First — and You Can Check It Yourself
+- **Local by default**: your input data stays on your machine. Neither the engine nor the export layer has a **HTTP client** in its dependency table — no telemetry, no ad SDK
+- **Zero permissions**: the Android `AndroidManifest.xml` declares **not a single `uses-permission`**
+- **Works offline**: core input runs fully offline; `.opid` dictionaries are read-only `mmap` maps, so the whole dictionary is never read into the heap (matching entries are materialised on demand at query time — `loader.rs`'s `MmapDictionary::query` calls `.to_string()` per hit and `candidates.rs`'s `rank_and_pick` clones again, so it is **not** zero-copy)
 
-#### 5. No Feature Bloat
-- **Minimalist core mode**: every "extra" is an optional plugin; by default you get the cleanest input surface
-- Install what you need, and nothing is forced on you
+(Multi-device cloud sync is reserved for V2 — see the Roadmap. **There is no sync or encryption code in the repository today.**)
+
+#### 3. A Living Dictionary, With Gates Around It
+- **Simplified + Traditional dictionaries**: `luna.opid` and `trad.opid`, switched by the mode key in a three-state cycle; a missing traditional dictionary falls back to the simplified one
+- **Full single-character coverage gate**: all 6763 GB2312 characters are asserted to produce candidates (`trad_coverage` integration test). Break the coverage with a dictionary change and CI goes red
+- **A broken dictionary never crashes the input method**: the loading policy is the same on every client — **a bad path always returns `Err` and never falls back silently** (the comment on `dictionary.rs`'s `load_or_fallback` records that the earlier silent fallback was deliberately removed: the UI would believe a full dictionary had loaded), and the built-in 35-word dictionary is used only when **no path is configured at all** (an empty string counts as none). Whether to recover from that `Err` is the caller's decision: Android's `EngineLoader` catches it and retries with the built-in dictionary (`EngineLoader.kt`'s `fallback()`), while fcitx5 and TSF propagate it (the load call sites in `fcitx5-opi/src/lib.rs` and `tsf-opi/src/tsf.rs`)
+- **Community dictionaries**: the source data is plain text in `data/raw/*.tsv`; submit, review and merge via PR. Process and **licensing requirements** are in [`CONTRIBUTING.md`](CONTRIBUTING.md)
+
+#### 4. No Feature Bloat
+- The engine does one thing: a key state machine for five modes (Pinyin / Traditional / English / Number / Symbol), candidate ranking, and local learning. No skin shop, no pop-ups, no AI assistant
+- Ranking has one counter-intuitive rule — **`limit` must not be pushed down into the dictionary query** (a learned low-frequency word can overtake one outside the cut-off). Details like this are where this project is fussy — see "Feature Design" below
+
+### 🚧 Roadmap
+
+Everything below is part of the vision. Most items have **no corresponding code today**; a few are partially done (see the status column). It is listed to draw the boundary clearly, not as a schedule:
+
+| Direction | Status | How we checked |
+|---|---|---|
+| **More platforms**: HarmonyOS · macOS · Web (incl. mini-apps) | Not started | grep for these platform names across the code and build scripts: zero hits (none in `docs/` either — only this README mentions them) |
+| **Multi-device sync / end-to-end encryption** | Reserved for V2 | grep for encryption and sync across `crates/` `android/` `desktop/`: zero hits (the only match is the unrelated phrase "end-to-end integration test" at `m2_integration.rs:1`) |
+| **More input schemes**: shuangpin · wubi · Cangjie · Bopomofo · custom rules | Reserved for V2 | `Mode` has only 5 variants (Pinyin / Traditional / English / Number / Symbol). The comment at `composer.rs:1` mentions extending via `InputScheme` — **that type does not exist yet** |
+| **Accessibility**: screen readers | Partial (Android only) | The Android keyboard exposes basic screen-reader semantics: candidate changes are announced automatically (`liveRegion`), every key has a spoken name (no more reading out the glyph "⇧" / "⌫"), and the shift lock / one-shot state is readable. **Other platforms (Windows / Linux / iOS) are not covered** |
+| **Voice input · scanning input** | Not started | Zero hits |
+| **Minority languages and dialects**: Tibetan · Uyghur · Mongolian · Cantonese · Wu | Not started | Zero hits |
+| **Plugin system**: every "extra" as an optional plugin | Not started | No plugin registry, no plugin interface, no dynamic loading — and there is nothing that needs a plugin yet |
 
 ### 🛠 Tech Stack
 
@@ -104,16 +120,16 @@ Build once, deploy everywhere. Covering **Android, iOS, HarmonyOS, Windows, macO
 - **Client layer** — native UI per platform. The four clients share no UI code, only input semantics.
 - **Export layer** — thin ABI shells doing type conversion, boundary validation and panic isolation. Each process holds one engine singleton: on Android the settings page and the IME share the same Rust singleton, so toggling learning in settings takes effect in the IME immediately.
 - **Engine layer** — `engine-core`, **pure logic, no IO, no platform dependencies**. This is the heart of the project and the easiest layer to test: six modules (`Composer` state machine / `Pinyin` segmentation / `Trie` dictionary / `Candidates` ranking and merge / `Learner` / `Symbols`) under a single `Engine` facade that the UI layer talks to.
-- **Data layer** — the `.opid` binary dictionary: 11-byte header + 14-byte fixed-size entry table + two blobs + an FNV-1a64 trailer. Loaded via read-only `mmap`, queried with zero copies.
+- **Data layer** — the `.opid` binary dictionary: 11-byte header + 14-byte fixed-size entry table + two blobs + an FNV-1a64 trailer. Loaded via read-only `mmap` with the **whole dictionary kept out of the heap**; each matching entry is materialised into a `String` at query time (see `loader.rs`'s `MmapDictionary::query`), so it is not zero-copy.
 - **Build pipeline** — TSV sources in `data/raw` are compiled by `opi-tools` into `.opid`, then pass checksum and ordering checks in `verify`, with full GB2312 single-character coverage guarded by the `trad_coverage` test, before being committed.
 
-> **Key invariant: a broken dictionary must never crash the input method.** Any failure falls back to the 35-word built-in dictionary — only corruption of the built-in itself is unrecoverable.
+> **Key invariant: a broken dictionary must never crash the input method.** A bad path does **not** fall back silently (deliberate — see `dictionary.rs`'s `load_or_fallback` comment); the caller catches it instead: Android retries with the 35-word built-in dictionary, fcitx5 and TSF propagate the `Err` — only corruption of the built-in itself is unrecoverable.
 
 ### 🧩 Feature Design
 
 <img src="docs/diagrams/features.svg" alt="OPI feature design: five input modes and six feature domains" width="100%">
 
-**Five input modes** are decided by the `Composer` state machine using a mode integer (0..4, identical across all five platforms):
+**Five input modes** are decided by the `Composer` state machine using a mode integer (0..4, matching the `Mode` enum, and identical across the three language-crossing exports JNI / C ABI / fcitx5):
 
 | Mode | Behaviour |
 |---|---|
@@ -141,12 +157,12 @@ The **dictionary lifecycle** runs once at process start: locate (assets→filesD
 
 The **keystroke lifecycle** runs one lap per keypress in ten steps: ① key event → ② KeyRouter dispatch → ③ `Composer` state machine → ④ buffer update → ⑤ `rank_and_pick` ranking → ⑥ candidate bar renders → ⑦ user selects → ⑧ learning is recorded → ⑨ text is committed → ⑩ buffer is cleared. The crucial branch is ②: **with an empty buffer the key never enters the engine** (English and number modes commit directly). That is what keeps the keyboard responsive — the engine is only woken when there is genuinely something to compose.
 
-After loading, every keystroke is just a zero-copy lookup over read-only memory.
+After loading, every keystroke walks the read-only mapping and materialises only the entries it hits — the whole dictionary stays out of the heap, but it is **not** zero-copy.
 
 ### 🏗 Build & Test
 
 ```bash
-cargo test --workspace                   # unit + integration + property tests (251, incl. fcitx5 63 / TSF 44)
+cargo test --workspace                   # unit + integration + property tests (278, incl. fcitx5 69 / TSF 60)
 cargo clippy --workspace --all-targets -- -D warnings   # gate: zero warnings
 cd android && ./gradlew testDebugUnitTest   # Android unit tests (engine FFI + IME state machine + key routing + pet)
 cd android && ./gradlew assembleDebug       # build debug APK (cargokit compiles opi-ffi three-ABI .so)
@@ -189,6 +205,8 @@ docs/                          # pet, diagrams and design docs
   superpowers/                 #   specs (design) + plans (implementation)
   weixinpay.png · alipay.png   #   donation QR codes (referenced in the footer)
 scripts/                       # dictionary generation: gen_luna_dict.py · gen_trad_dict.py
+.github/workflows/ci.yml       # CI: cargo test / clippy zero-warnings / TSF Windows target / Android unit tests
+LICENSE · CONTRIBUTING.md      # MIT full text · contribution guide (incl. dictionary licensing)
 ```
 
 ### 📅 Project Status
@@ -212,8 +230,8 @@ V1 milestone progress:
 
 ### 📄 License
 
-- **Code**: MIT
-- **Dictionary data**: declared per upstream license (rime-luna-pinyin is LGPL-3.0), with per-item source and license records in `data/raw`
+- **Code**: MIT, full text in [`LICENSE`](LICENSE)
+- **Dictionary data**: declared per upstream license (rime-luna-pinyin is LGPL-3.0), with per-item source and license records in `data/raw`. Read the licensing section of [`CONTRIBUTING.md`](CONTRIBUTING.md) before submitting dictionary changes
 
 ---
 

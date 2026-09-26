@@ -2,6 +2,7 @@
 
 > 日期：2026-08-12
 > 状态：已批准（2026-08-12，两节设计均获用户 OK）
+> 订正（2026-09-26）：本文件描述的是 **M4 的 Flutter 方案**，该方案已于 M6a 整树删除 —— §3 起（击键路径、通道协议、测试与排障附录）均为该方案的历史记录，不再代表当前实现。组件现状核对见 §2 末「订正注记」。
 > 关联：主规格 [2026-08-12-opi-ime-design.md](./2026-08-12-opi-ime-design.md) 的 M4 里程碑行；前置 [M3 计划](../plans/2026-08-12-opi-ffi-m3.md)（FFI 绑定已完成）
 
 ## 1. 目标与范围
@@ -53,6 +54,17 @@
 | `android/app/src/main/kotlin/io/opi/input/MainActivity.kt` | 设置入口 activity（从 `com/example/app/` 迁移） |
 | `android/app/src/main/res/xml/method.xml` | IME 元数据（settingsActivity → MainActivity） |
 | `android/app/src/main/AndroidManifest.xml` | IME service 声明 + BIND_INPUT_METHOD 权限 |
+
+### 订正注记（2026-09-26 复核）：本文件描述的 Flutter 方案已整树删除
+
+上表与 §1 范围中列出的 Flutter 组件，随 M6a Android 原生重构（`c8fd2f4` 删除 `flutter/`）**已全部不存在**。原表保留不动（设计留痕），订正结果记于此：
+
+| 原文 | 复核结论 | 依据 |
+|---|---|---|
+| `lib/ime/ime_main.dart` · `lib/keyboards/qwerty.dart` · `lib/candidates/candidate_bar.dart` · `lib/platform/ime_channel.dart` | **文件与整个 `flutter/` 树已删除**。对应职责现由 Kotlin 原生实现：`ime/ImeScreen.kt`、`keyboard/QwertyKeyboard.kt`、`candidate/CandidateBar.kt`、`engine/EngineController.kt`（不再经 MethodChannel，直接调 JNI） | `git log --diff-filter=D --name-only` 中的 `c8fd2f4`；`find android/app/src/main/kotlin -name '*.kt'` |
+| `android/app/src/main/kotlin/io/opi/input/MainActivity.kt`「设置入口 activity」 | **该文件不存在**。设置入口现为 `settings/SettingsActivity.kt`，其类注释明写「manifest 直接声明本类为 launcher，无 MainActivity」 | `AndroidManifest.xml:7` 声明 `.settings.SettingsActivity`；`res/xml/method.xml:3` 的 `settingsActivity` 同指 `io.opi.input.settings.SettingsActivity` |
+| §1 范围「包名迁移：… MainActivity 路径 …」 | 包名迁移本身**已完成**（`com.example.app` → `io.opi.input`），但路径是 `settings/SettingsActivity.kt` 而非 `MainActivity.kt` | `android/app/build.gradle.kts` 的 `namespace` / `applicationId` 均为 `io.opi.input` |
+| §1 范围「`MethodChannel("opi/ime")` 协议，3 个方法」 | **协议已不存在**。原生版直接 JNI 调用（`jni/OpiEngine.kt`），无通道层 | 全仓库 grep `MethodChannel` 零命中 |
 
 ## 3. 击键路径与通道协议
 

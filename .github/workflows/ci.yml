@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: Rust — test + clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # targets 里带上 Windows 目标：TSF 代码在 #[cfg(target_os = "windows")] 下，
+      # 在 Linux 上根本不参与类型检查 —— 这是本 CI 存在的主要理由。
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+          targets: x86_64-pc-windows-msvc
+
+      - name: cargo test --workspace
+        run: cargo test --workspace
+
+      - name: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      # cargo check 不链接，所以 Linux 上无需 msvc 链接器即可跑通。
+      - name: cargo check -p tsf_opi (x86_64-pc-windows-msvc)
+        run: cargo check -p tsf_opi --target x86_64-pc-windows-msvc
+
+  android:
+    name: Android — JVM unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # 只跑单测：走纯 JVM 假实现，不需要 dart，也不需要 .so。
+      # assembleDebug 不在 CI 里 —— 它需要 dart（cargokit 的构建工具是 Dart 写的）。
+      - name: ./gradlew testDebugUnitTest
+        run: ./gradlew testDebugUnitTest --no-daemon
+        working-directory: android
