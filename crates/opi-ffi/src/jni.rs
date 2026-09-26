@@ -20,7 +20,7 @@ use crate::jni_util;
 
 type JEnv = *mut sys::JNIEnv;
 
-// ---------- 19 个 native 方法 ----------
+// ---------- 21 个 native 方法 ----------
 
 /// load(path: String?) -> bool。null/空串 → 内置回退词库；坏路径 → false。
 #[unsafe(no_mangle)]
@@ -180,6 +180,31 @@ pub unsafe extern "system" fn opijni_clear_user_words(_env: JEnv, _class: sys::j
     let _ = catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.clear_user_words())));
 }
 
+/// removeUserWord(text: String)。长按删词（B4）。词不存在 / null / 空串 → 无操作。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_remove_user_word(env: JEnv, _class: sys::jclass, text: jstring) {
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        let text = unsafe { jni_util::jstring_to_rust(env, text) }.unwrap_or_default();
+        api::with_engine(|e| e.remove_user_word(text));
+    }));
+}
+
+/// importUserWords(json: String) -> Int。返回导入条数；
+/// 负数表示失败（非法 JSON / 版本不符 / 引擎未装载 / null）且不改动既有用户词。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_import_user_words(env: JEnv, _class: sys::jclass, json: jstring) -> jint {
+    catch_unwind(AssertUnwindSafe(|| -> jint {
+        let Some(json) = (unsafe { jni_util::jstring_to_rust(env, json) }) else {
+            return -1;
+        };
+        match api::with_engine(|e| e.import_user_words(json)) {
+            Some(Ok(n)) => i32::try_from(n).unwrap_or(-1),
+            Some(Err(_)) | None => -1,
+        }
+    }))
+    .unwrap_or(-1)
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_export_user_words(env: JEnv, _class: sys::jclass) -> jstring {
     let out = catch_unwind(AssertUnwindSafe(|| {
@@ -222,6 +247,8 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _reserved: *mut c
                 NativeMethod::from_raw_parts(jni_str!("learnerEnabled"), jni_str!("()Z"), opijni_learner_enabled as *mut c_void),
                 NativeMethod::from_raw_parts(jni_str!("setLearner"), jni_str!("(Z)V"), opijni_set_learner as *mut c_void),
                 NativeMethod::from_raw_parts(jni_str!("clearUserWords"), jni_str!("()V"), opijni_clear_user_words as *mut c_void),
+                NativeMethod::from_raw_parts(jni_str!("removeUserWord"), jni_str!("(Ljava/lang/String;)V"), opijni_remove_user_word as *mut c_void),
+                NativeMethod::from_raw_parts(jni_str!("importUserWords"), jni_str!("(Ljava/lang/String;)I"), opijni_import_user_words as *mut c_void),
                 NativeMethod::from_raw_parts(jni_str!("exportUserWords"), jni_str!("()Ljava/lang/String;"), opijni_export_user_words as *mut c_void),
             ]
         };

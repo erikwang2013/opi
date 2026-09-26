@@ -15,6 +15,11 @@ pub mod logic;
 #[cfg(target_os = "windows")]
 pub mod tsf;
 
+/// Win32 VK → 引擎键码的映射判定（纯函数，无 windows 类型 → 主机可编译可单测）。
+/// `tsf.rs` 是 `#[cfg(target_os = "windows")]`：判定若留在那边，Linux 门禁就永远
+/// 覆盖不到（本项目的开发/验收主机是 Linux）。
+pub mod vk;
+
 /// Windows 目标专属：候选窗通信（C3，named pipe 客户端 + TsfSink 生产实现）。
 /// 与 tsf.rs 同样的双重隔离（cfg 门 + windows 依赖 target 作用域），
 /// 主机（Linux）构建/测试不受影响。

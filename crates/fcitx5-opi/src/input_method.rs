@@ -124,17 +124,26 @@ pub fn handle_key(state: &mut CandidateState, keyval: u32, states: u32) -> KeyAc
         }
         KEY_TAB | KEY_ESCAPE => KeyAction::PassThrough,
         _ => match char::from_u32(keyval) {
-            // 抬起必须拦下：本函数上面每个特殊键分支都判了 `released`，可打印
+            // 抬起必须判：本函数上面每个特殊键分支都判了 `released`，可打印
             // 分支此前漏判，导致同一个字符被第二次送进引擎 —— 拼音缓冲翻倍
             // （"ni"→"nnii"）、英文模式重复提交（"a"→"aa"）。
-            // ponytail: 抬起一律按「引擎接管」拦。代价是拼音模式下 `.` 这类直通
-            // 符号的抬起也被拦（按下放行、抬起拦下 → 客户端见到有 down 无 up）。
-            // 理由与升级路径同 tsf-opi/src/logic.rs 的对应分支。
+            // 抬起时的结论用按下时记下的（state.last_printable），与按下同判：
+            // 可打印键里有直通字符（拼音/繁体的非字母符号、无候选或越界的数字、
+            // Number/Symbol 模式下的全部可见 ASCII → handle_printable 返回
+            // PassThrough），按下放行、抬起拦下会让客户端收到 keydown 收不到
+            // keyup（依赖键状态的游戏/编辑器卡键）。
+            // 记结论而非复刻 handle_printable 的分流判定：判定只有一处，不会漂移。
             Some(c) if c.is_ascii() => {
                 if released {
-                    KeyAction::EngineHandled
+                    match state.last_printable {
+                        Some((k, true)) if k == keyval => KeyAction::PassThrough,
+                        // 键值不匹配（记录被另一个键顶掉）或从未按下 → 按引擎接管拦下
+                        _ => KeyAction::EngineHandled,
+                    }
                 } else {
-                    handle_printable(state, c)
+                    let action = handle_printable(state, c);
+                    state.last_printable = Some((keyval, matches!(action, KeyAction::PassThrough)));
+                    action
                 }
             }
             _ => KeyAction::PassThrough,
@@ -258,3 +267,6 @@ fn commit_or_handled(out: String) -> KeyAction {
 #[cfg(test)]
 #[path = "input_method_tests.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "input_method_release_tests.rs"]
+mod release_tests;

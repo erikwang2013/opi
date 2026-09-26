@@ -13,6 +13,7 @@ fn state() -> CandidateState {
         page: 0,
         buffer_snapshot: String::new(),
         shift_state: ShiftState::Off,
+        last_printable: None,
     };
     s.buffer_snapshot = s.engine.buffer().to_string();
     s

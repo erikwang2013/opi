@@ -3,7 +3,8 @@
 //!
 //! 纯 Rust、无 windows/COM 类型，可独立单测；C2 的 TSF 胶水做键码映射。
 //! 键码约定：可打印字符 = Unicode 码点（与 fcitx5 轨一致，如 'a'=97）；
-//! 特殊键 = Windows VK 码（TSF 键事件的 wParam 同源），见下方常量。
+//! 特殊键 = `SPECIAL_BASE | Windows VK`（TSF 键事件 wParam 同源），见下方常量。
+//! **两段空间不相交**——这是硬约束，成因见 `SPECIAL_BASE`。
 //! 键状态位沿用 fcitx5 轨的位约定（内部契约，C2 自 TSF 侧换算）。
 //!
 //! TSF 现实的适配：TSF 下按键总是先经服务处理，无 fcitx5 式"直通客户端"
@@ -19,26 +20,41 @@ pub const PAGE_SIZE: usize = 8;
 /// 一次抓取的候选批量上限（对应 Android 侧 fetchLimit=64）。
 pub const FETCH_LIMIT: usize = 64;
 
-// ---------- 特殊键：Windows VK 码（wParam，与 TSF 键事件同源） ----------
+// ---------- 特殊键：键码 = SPECIAL_BASE | Windows VK（wParam，与 TSF 键事件同源） ----------
+
+/// 特殊键键码的基址。**特殊键空间与「可打印字符 = Unicode 码点」必须不相交。**
+///
+/// 裸用 VK 会撞 ASCII：VK_PRIOR=0x21=`!`、VK_NEXT=0x22=`"`、VK_DELETE=0x2E=`.`、
+/// VK_SPACE=0x20=' '（恰好同义）。后果不是"多认了一个键"而是**普通字符被吃掉**：
+/// 拼音缓冲非空时敲 `.` 会走退格分支删掉拼音字母，敲 `!`/`"` 会翻候选页。
+///
+/// 取 0x1_0000（补充平面）：编码后的键码即便将来漏了 match 臂、掉进可打印分支，
+/// `char::from_u32` 得到的也是非 ASCII 的补充平面字符，会被 `Some(c) if c.is_ascii()`
+/// 挡回 `_ => Unhandled` 放行给应用，**不会静默变成垃圾字符**（`vk.rs` 的
+/// `special_key_space_stays_out_of_ascii` 用不变式钉住这一点）。
+/// **`is_ascii()` 不等于「可打印」**：0x08/0x09/0x0D/0x1B 等控制符也为真 —— 旧约定下
+/// 这些键漏了 match 臂时，英文模式空缓冲会 `Commit` 一个控制符进文档（不止是吞掉一个键）。
+/// 低 16 位留 VK 原值，解码见 `vk::special_vk`。
+pub const SPECIAL_BASE: u32 = 0x1_0000;
 
 /// VK_BACK（退格）。
-pub const KEY_BACK_SPACE: u32 = 0x08;
+pub const KEY_BACK_SPACE: u32 = SPECIAL_BASE | 0x08;
 /// VK_TAB。
-pub const KEY_TAB: u32 = 0x09;
+pub const KEY_TAB: u32 = SPECIAL_BASE | 0x09;
 /// VK_RETURN（回车）。
-pub const KEY_RETURN: u32 = 0x0d;
+pub const KEY_RETURN: u32 = SPECIAL_BASE | 0x0d;
 /// VK_ESCAPE。
-pub const KEY_ESCAPE: u32 = 0x1b;
+pub const KEY_ESCAPE: u32 = SPECIAL_BASE | 0x1b;
 /// VK_PRIOR（PageUp → 上一页候选）。
-pub const KEY_PAGE_UP: u32 = 0x21;
+pub const KEY_PAGE_UP: u32 = SPECIAL_BASE | 0x21;
 /// VK_NEXT（PageDown → 下一页候选）。
-pub const KEY_PAGE_DOWN: u32 = 0x22;
+pub const KEY_PAGE_DOWN: u32 = SPECIAL_BASE | 0x22;
 /// VK_DELETE。
-pub const KEY_DELETE: u32 = 0x2e;
+pub const KEY_DELETE: u32 = SPECIAL_BASE | 0x2e;
 /// VK_SHIFT（左右 ⇧ 同为 0x10，与 fcitx5 轨的 SHIFT_L/SHIFT_R 二码不同）。
-pub const KEY_SHIFT: u32 = 0x10;
-/// 空格。ASCII 码点 0x20，与 Unicode 一致。
-pub const KEY_SPACE: u32 = 0x20;
+pub const KEY_SHIFT: u32 = SPECIAL_BASE | 0x10;
+/// 空格（VK_SPACE=0x20，与 ASCII 空格同值）。
+pub const KEY_SPACE: u32 = SPECIAL_BASE | 0x20;
 
 /// 物理 Shift 被按住。
 pub const KEY_STATE_SHIFT: u32 = 1 << 0;
@@ -88,6 +104,9 @@ pub struct TsfLogic {
     pub(crate) buffer_snapshot: String,
     /// ⇧ 状态机（镜像 Android EngineController.shiftState）。
     pub(crate) shift_state: ShiftState,
+    /// 上一次可打印键按下的分流结论：(键值, 是否放行)。抬起按同一结论回复，
+    /// 使「按下放行 → 抬起也放行」成立（见 input_key 的可打印分支）。
+    pub(crate) last_printable: Option<(u32, bool)>,
 }
 
 impl TsfLogic {
@@ -107,6 +126,7 @@ impl TsfLogic {
             page: 0,
             buffer_snapshot: String::new(),
             shift_state: ShiftState::Off,
+            last_printable: None,
         };
         s.refresh_snapshot();
         Ok(s)
@@ -321,19 +341,25 @@ impl TsfLogic {
             }
             KEY_TAB | KEY_ESCAPE => KeyOutcome::Unhandled,
             _ => match char::from_u32(keyval) {
-                // 抬起必须拦下：本函数上面每个特殊键分支都判了 `released`，可打印
+                // 抬起必须判：本函数上面每个特殊键分支都判了 `released`，可打印
                 // 分支此前漏判，导致同一个字符被第二次送进引擎 —— 拼音缓冲翻倍
                 // （"ni"→"nnii"）、英文模式重复提交（"a"→"aa"）。
-                // ponytail: 抬起一律按「引擎接管」拦。代价是拼音模式下 `.` 这类
-                // 直通符号的抬起也被拦（按下放行、抬起拦下 → 应用见到有 down 无 up）。
-                // 要精确镜像得复刻 handle_printable 的分流判定并与其同步维护，那份
-                // 重复逻辑的漂移风险大于孤键抬起的影响；若真有客户端因此出问题，
-                // 再抽一个无副作用的谓词供两侧共用。
+                // 抬起时的结论用按下时记下的（self.last_printable），与按下同判：
+                // 可打印键里有放行字符（拼音/繁体的非字母符号、无候选或越界的数字、
+                // Number/Symbol 模式下的全部可见 ASCII → handle_printable 返回
+                // Unhandled），按下放行、抬起拦下会让应用收到 keydown 收不到 keyup。
+                // 记结论而非复刻 handle_printable 的分流判定：判定只有一处，不会漂移。
                 Some(c) if c.is_ascii() => {
                     if released {
-                        KeyOutcome::Consumed
+                        match self.last_printable {
+                            Some((k, true)) if k == keyval => KeyOutcome::Unhandled,
+                            // 键值不匹配（记录被另一个键顶掉）或从未按下 → 按消费拦下
+                            _ => KeyOutcome::Consumed,
+                        }
                     } else {
-                        self.handle_printable(c)
+                        let outcome = self.handle_printable(c);
+                        self.last_printable = Some((keyval, matches!(outcome, KeyOutcome::Unhandled)));
+                        outcome
                     }
                 }
                 _ => KeyOutcome::Unhandled,
@@ -462,3 +488,6 @@ mod candidate_tests;
 #[cfg(test)]
 #[path = "logic_tests.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "logic_release_tests.rs"]
+mod release_tests;

@@ -15,7 +15,8 @@
 //!          DllGetClassObject 为占位导出（CLASS_E_CLASSNOTAVAILABLE），正式注册
 //!          需在 Windows 上生成 CLSID + .rgs 注册脚本（本仓库尚无注册资料）。
 
-use std::sync::Mutex;
+use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::sync::{Mutex, Once};
 
 use engine_core::composer::Mode;
 use windows::core::{
@@ -33,12 +34,27 @@ use windows::Win32::UI::TextServices::{
 };
 
 use crate::logic::{
-    KeyOutcome, TsfLogic, KEY_STATE_ALT, KEY_STATE_CAPS_LOCK, KEY_STATE_CTRL,
-    KEY_STATE_RELEASED, KEY_STATE_REPEAT, KEY_STATE_SHIFT,
+    KeyOutcome, TsfLogic, KEY_STATE_ALT, KEY_STATE_CAPS_LOCK, KEY_STATE_CTRL, KEY_STATE_RELEASED,
+    KEY_STATE_REPEAT, KEY_STATE_SHIFT,
 };
+use crate::vk::vk_to_engine_keycode;
 
 /// CLASS_E_CLASSNOTAVAILABLE（0x80040111）：骨架阶段不提供类工厂。
 const CLASS_E_CLASSNOTAVAILABLE: HRESULT = HRESULT(0x80040111_u32 as i32);
+
+/// E_FAIL：引擎内部错误的统一返回码（panic 被兜住 / 锁中毒）。
+const E_FAIL: HRESULT = HRESULT(0x80004005_u32 as i32);
+
+/// 一次性 panic hook（对照 fcitx5-opi/src/lib.rs 的 `ensure_panic_hook`）。
+/// 每个 COM 出口都要调：换掉默认 hook 后，宿主进程的事件日志里能看到是引擎炸了。
+fn ensure_panic_hook() {
+    static PANIC_HOOK: Once = Once::new();
+    PANIC_HOOK.call_once(|| {
+        std::panic::set_hook(Box::new(|info| {
+            eprintln!("tsf-opi: engine panic caught: {info}");
+        }));
+    });
+}
 
 /// 文档/候选窗接缝：C2 骨架不实现 TSF 文档操作，真机验收在此补全。
 /// 语义（对照 C1 契约）：Commit → ITfInsertAtSelection 插入或 composition 提交；
@@ -86,7 +102,17 @@ impl TsfTextService {
     /// 键事件统一入口（OnKeyDown/OnKeyUp 共用）。
     /// wParam = VK 或 Unicode 码点（见 logic.rs 头注释的键码约定）；
     /// lParam 位映射 KEY_STATE_*；KeyOutcome 分派见模块头注释。
+    ///
+    /// 这是个 `extern "system"` 的 COM 出口（经 vtable 被宿主输入法进程调用）：
+    /// panic 逃出去 = 宿主进程 abort（in-proc，用户的 Word/浏览器）。
+    /// 故与另三端（jni.rs / cabi.rs / fcitx5-opi）一致，出口一律兜住；
+    /// 兜住后返回 BOOL(1)（吞键）——与中毒锁同策略：宁可丢一次键，不炸宿主。
     fn handle_key(&self, wparam: WPARAM, lparam: LPARAM) -> BOOL {
+        ensure_panic_hook();
+        catch_unwind(AssertUnwindSafe(|| self.handle_key_inner(wparam, lparam))).unwrap_or(BOOL(1))
+    }
+
+    fn handle_key_inner(&self, wparam: WPARAM, lparam: LPARAM) -> BOOL {
         let mut logic = match self.logic.lock() {
             Ok(g) => g,
             Err(_) => return BOOL(1), // 中毒锁：吞键，避免键流入应用造成死循环
@@ -120,31 +146,40 @@ impl TsfTextService {
 
 impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
     fn Activate(&self, ptim: Ref<ITfThreadMgr>, tid: u32) -> Result<()> {
-        // 中毒锁：跳过状态保存，避免经 COM vtable 泄漏 panic
-        let mut tm = match self.thread_mgr.lock() {
-            Ok(g) => g,
-            Err(_) => return Err(HRESULT(0x80004005_u32 as i32).into()),
-        };
-        *tm = ptim.cloned();
-        // 注册按键监听：0.62 API 为 AdviseKeyEventSink（旧式 SetKeypressSink 已移除）。
-        // fforeground=true：前台键盘事件也交本服务（输入法语义）。
-        // 本对象同时实现 ITfKeyEventSink，as_interface_ref 取其 IUnknown 指针，
-        // TSF 侧会 QueryInterface 到 ITfKeyEventSink。
-        let km: ITfKeystrokeMgr = (*ptim).as_ref().ok_or_else(|| windows::core::Error::from_hresult(HRESULT(0x80070057_u32 as i32)))?.cast()?; // E_INVALIDARG：ptim 为空
-        let sink: InterfaceRef<'_, IUnknown> = self.as_interface_ref();
-        // cast = QueryInterface：对象支持 ITfKeyEventSink，取具体接口指针。
-        let key_sink: ITfKeyEventSink = sink.cast()?;
-        unsafe { km.AdviseKeyEventSink(tid, &key_sink, true) }
+        ensure_panic_hook();
+        // COM 出口：panic 逃出去 = abort 宿主进程（见 handle_key）。兜住 → E_FAIL。
+        catch_unwind(AssertUnwindSafe(|| {
+            // 中毒锁：跳过状态保存，避免经 COM vtable 泄漏 panic
+            let mut tm = match self.thread_mgr.lock() {
+                Ok(g) => g,
+                Err(_) => return Err(E_FAIL.into()),
+            };
+            *tm = ptim.cloned();
+            // 注册按键监听：0.62 API 为 AdviseKeyEventSink（旧式 SetKeypressSink 已移除）。
+            // fforeground=true：前台键盘事件也交本服务（输入法语义）。
+            // 本对象同时实现 ITfKeyEventSink，as_interface_ref 取其 IUnknown 指针，
+            // TSF 侧会 QueryInterface 到 ITfKeyEventSink。
+            let km: ITfKeystrokeMgr = (*ptim).as_ref().ok_or_else(|| windows::core::Error::from_hresult(HRESULT(0x80070057_u32 as i32)))?.cast()?; // E_INVALIDARG：ptim 为空
+            let sink: InterfaceRef<'_, IUnknown> = self.as_interface_ref();
+            // cast = QueryInterface：对象支持 ITfKeyEventSink，取具体接口指针。
+            let key_sink: ITfKeyEventSink = sink.cast()?;
+            unsafe { km.AdviseKeyEventSink(tid, &key_sink, true) }
+        }))
+        .unwrap_or_else(|_| Err(E_FAIL.into()))
     }
 
     fn Deactivate(&self) -> Result<()> {
-        // 骨架：仅清状态；验收补全点：UnadviseKeyEventSink + 释放 composition/候选窗。
-        let mut tm = match self.thread_mgr.lock() {
-            Ok(g) => g,
-            Err(_) => return Ok(()), // 中毒锁：吞掉，避免经 COM vtable 泄漏 panic
-        };
-        *tm = None;
-        Ok(())
+        ensure_panic_hook();
+        catch_unwind(AssertUnwindSafe(|| {
+            // 骨架：仅清状态；验收补全点：UnadviseKeyEventSink + 释放 composition/候选窗。
+            let mut tm = match self.thread_mgr.lock() {
+                Ok(g) => g,
+                Err(_) => return Ok(()), // 中毒锁：吞掉，避免经 COM vtable 泄漏 panic
+            };
+            *tm = None;
+            Ok(())
+        }))
+        .unwrap_or_else(|_| Err(E_FAIL.into()))
     }
 }
 
@@ -187,61 +222,40 @@ impl ITfKeyEventSink_Impl for TsfTextService_Impl {
 /// 而那些键我们多半要放行给应用 —— 应用侧的组合键输入就会被吃掉。
 const TO_UNICODE_NO_STATE_CHANGE: u32 = 0x4;
 
-/// 该 VK 是否属于 logic.rs 的 `KEY_*` 特殊键表（那些常量本身就是 VK 码）。
-/// 必须原样透传、不可映射：例如 VK_BACK=0x08 经 `ToUnicodeEx` 得到的退格控制符
-/// 仍然 `is_ascii()`，会被送到 `handle_printable` 并按普通符号放行 —— 退格就废了。
-fn is_special_key(vk: u32) -> bool {
-    use crate::logic::{
-        KEY_BACK_SPACE, KEY_DELETE, KEY_ESCAPE, KEY_PAGE_DOWN, KEY_PAGE_UP, KEY_RETURN,
-        KEY_SHIFT, KEY_SPACE, KEY_TAB,
-    };
-    matches!(
-        vk,
-        KEY_BACK_SPACE
-            | KEY_DELETE
-            | KEY_ESCAPE
-            | KEY_PAGE_DOWN
-            | KEY_PAGE_UP
-            | KEY_RETURN
-            | KEY_SHIFT
-            | KEY_SPACE
-            | KEY_TAB
-    )
-}
-
 /// TSF 的 `wParam` 是**虚拟键码**，而 `TsfLogic::input_key` 的约定是
 /// 「可打印字符 = Unicode 码点，特殊键 = VK 码」（见 logic.rs 头注释）。
 /// 此前直接把 `wparam` 当码点透传，导致：
 ///   - 英文模式敲 'a' 得到 VK_A=0x41，被当成大写 'A' 提交 → "hello" 变 "HELLO"；
 ///   - 撇号 `'`（拼音分隔符）的 VK_OEM_7=0xDE 非 ASCII，永远 Unhandled，打不出来。
+///
 /// 拼音模式只是被 `Composer` 的「字母转小写」兜住才看起来正常，故一直未被发现。
 ///
 /// 用 `ToUnicodeEx` 而非 `MapVirtualKeyW`：前者按**当前键盘布局**与修饰键状态
 /// 换算，非 US 布局（AZERTY/Dvorak）下依然正确；后者只给未加修饰的字符，
 /// 自行补 Shift/CapsLock 逻辑等于重造键盘布局。
 fn to_engine_keycode(vk: u32) -> u32 {
-    if is_special_key(vk) {
-        return vk;
-    }
     let mut key_state = [0u8; 256];
     let mut buf = [0u16; 8];
     // SAFETY: key_state 为 256 字节（Win32 要求的键盘状态数组大小）；
     // buf 长度经 cchbuff 如实传入，ToUnicodeEx 不会写出界。
     let n = unsafe {
         if GetKeyboardState(&mut key_state).is_err() {
-            return vk; // 取不到键盘状态：退回 VK（特殊键仍可用，可打印字符将不被接管）
+            -1 // 取不到键盘状态：当"无映射"处理（判定与回退策略全在 vk_to_engine_keycode）
+        } else {
+            ToUnicodeEx(
+                vk,
+                0,
+                &key_state,
+                &mut buf,
+                TO_UNICODE_NO_STATE_CHANGE,
+                Some(GetKeyboardLayout(0)),
+            )
         }
-        ToUnicodeEx(
-            vk,
-            0,
-            &key_state,
-            &mut buf,
-            TO_UNICODE_NO_STATE_CHANGE,
-            Some(GetKeyboardLayout(0)),
-        )
     };
-    // n <= 0：死键（返回 -1）、无映射（0）、或多字符展开（>1 我们只取首字符）。
-    if n >= 1 { buf[0] as u32 } else { vk }
+    // 映射判定全在 crate::vk::vk_to_engine_keycode（主机可单测）：特殊键换成
+    // 编码键码（SPECIAL_BASE|VK，查一次表即检测+转发）、有映射取码点、
+    // 无映射/死键（n <= 0）返回放行哨兵而非 VK。
+    vk_to_engine_keycode(vk, n, buf[0])
 }
 
 fn map_key_state(lparam: LPARAM) -> u32 {

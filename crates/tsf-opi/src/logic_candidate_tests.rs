@@ -14,6 +14,7 @@ fn state() -> TsfLogic {
         page: 0,
         buffer_snapshot: String::new(),
         shift_state: ShiftState::Off,
+        last_printable: None,
     };
     s.refresh_snapshot();
     s

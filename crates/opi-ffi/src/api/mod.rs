@@ -287,6 +287,12 @@ impl Api {
         self.engine.clear_user_words();
     }
 
+    /// 导入 [`Api::export_user_words`] 的产物（Android 启动时读文件后传入）。
+    /// 返回导入条数；非法 JSON / 版本不符 → Err 且不改动既有状态。
+    pub fn import_user_words(&mut self, json: String) -> Result<usize, String> {
+        self.engine.import_user_words(&json)
+    }
+
     pub fn export_user_words(&self) -> String {
         self.engine.export_user_words()
     }

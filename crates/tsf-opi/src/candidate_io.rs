@@ -30,9 +30,13 @@
 //!
 //! 连接语义（骨架）：惰性连接 + 静默退避重试（不阻塞 TSF 按键线程太久）；
 //! 写失败即断开、下次发送时重连；读线程阻塞读回复并分帧解析。
+//! 生命周期：`CandidateClient` 的 Drop 关句柄 + 停读线程（否则句柄/线程/回调
+//! 陪宿主进程跑到结束）；分帧残留有 1 MiB 上限（见 `MAX_PENDING`）。
 //! 已知简化（验收可加固）：句柄替换与读线程的竞态以“仅清除仍指向自身句柄”
-//! 的方式容忍；重连场景罕见（候选窗重启），骨架期不做 DuplicateHandle。
+//! 的方式容忍（Drop 关闭句柄与读线程的 ReadFile 亦是同一容忍级别）；
+//! 重连场景罕见（候选窗重启），骨架期不做 DuplicateHandle。
 
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -64,6 +68,10 @@ const CONNECT_RETRIES: u32 = 4;
 const RETRY_SLEEP_MS: u64 = 50;
 /// 读线程缓冲区（单条消息远小于此；字节流模式按 '\n' 分帧）。
 const READ_BUF: usize = 4096;
+/// 分帧残留（pending）上限。对端只要发一条不含 '\n' 的超长消息，残留就会一直涨 ——
+/// 而本模块跑在宿主输入法进程里，涨的是宿主的内存。1 MiB 远超单条消息（一页候选
+/// JSON 至多几 KB）；超限即协议错乱/恶意对端 → 丢弃残留并断开（下次发送重连）。
+const MAX_PENDING: usize = 1 << 20;
 
 /// 候选窗回复回调接缝：select/翻页 → 真机验收接入 TSF 文档操作。
 /// 默认全部 no-op（骨架期窗口可点击，但提交/翻页待验收接线）。
@@ -77,11 +85,29 @@ pub trait CandidateAction: Send + Sync {
 struct NoopAction;
 impl CandidateAction for NoopAction {}
 
+/// 断开连接：仅当 `handle` 仍是当前持有的那个才关句柄并清空 conn
+/// （写线程可能已换过句柄，关错就断了别人的连接）。返回 false = 锁中毒，
+/// 调用方（读线程）应退出。
+fn disconnect(conn: &Mutex<Option<PipeHandle>>, handle: PipeHandle) -> bool {
+    match conn.lock() {
+        Ok(mut guard) => {
+            if *guard == Some(handle) {
+                unsafe { CloseHandle(handle.0) }.ok();
+                *guard = None;
+            }
+            true
+        }
+        Err(_) => false,
+    }
+}
+
 /// named pipe 客户端：惰性连接 + 写消息 + 读线程解析候选窗回复。
 pub struct CandidateClient {
     /// 当前连接句柄（None = 未连接）。Arc 共享给读线程。
     conn: Arc<Mutex<Option<PipeHandle>>>,
     reader_started: AtomicBool,
+    /// 客户端已 Drop → 读线程退出（见 `Drop` 实现）。
+    reader_stop: Arc<AtomicBool>,
     action: Arc<dyn CandidateAction>,
 }
 
@@ -91,6 +117,7 @@ impl CandidateClient {
         let client = Self {
             conn: Arc::new(Mutex::new(None)),
             reader_started: AtomicBool::new(false),
+            reader_stop: Arc::new(AtomicBool::new(false)),
             action,
         };
         client.spawn_reader();
@@ -205,11 +232,15 @@ impl CandidateClient {
             return;
         }
         let conn = Arc::clone(&self.conn);
+        let stop = Arc::clone(&self.reader_stop);
         let action = Arc::clone(&self.action);
         thread::spawn(move || {
             let mut buf = vec![0u8; READ_BUF];
             let mut pending: Vec<u8> = Vec::new(); // '\n' 分帧残留（跨读合并）
             loop {
+                if stop.load(Ordering::SeqCst) {
+                    return; // 客户端已 Drop（Drop 会关句柄让下面的 ReadFile 返回）
+                }
                 // 取句柄（仅复制值，不持锁阻塞读）。
                 let handle = {
                     let guard = match conn.lock() {
@@ -231,25 +262,45 @@ impl CandidateClient {
                     ReadFile(handle.0, Some(&mut buf), Some(&mut got), None)
                 };
                 if ok.is_err() || got == 0 {
-                    let mut guard = match conn.lock() {
-                        Ok(g) => g,
-                        Err(_) => return,
-                    };
-                    if *guard == Some(handle) {
-                        unsafe { CloseHandle(handle.0) }.ok();
-                        *guard = None;
+                    if !disconnect(&conn, handle) {
+                        return;
                     }
                     pending.clear();
                     continue;
                 }
                 pending.extend_from_slice(&buf[..got as usize]);
+                if pending.len() > MAX_PENDING {
+                    // 攒够 1 MiB 还没有 '\n'：丢弃残留 + 断开。只清残留不关连接的话，
+                    // 对端接着发就接着涨 —— 等于把宿主内存交给对端。
+                    pending.clear();
+                    if !disconnect(&conn, handle) {
+                        return;
+                    }
+                    continue;
+                }
                 while let Some(pos) = pending.iter().position(|&b| b == b'\n') {
                     let line: Vec<u8> = pending.drain(..pos).collect();
                     pending.drain(..1); // 去掉 '\n'
-                    dispatch_line(&line, action.as_ref());
+                    // 回调（select/翻页 → 文档操作）是外部代码，panic 必须兜住：
+                    // 线程一死，reader_started 已置位不会重启 → 回复永久失效。
+                    let _ = catch_unwind(AssertUnwindSafe(|| dispatch_line(&line, action.as_ref())));
                 }
             }
         });
+    }
+}
+
+impl Drop for CandidateClient {
+    /// 停读线程 + 关句柄。此前两者都不回收：正常路径永不 `CloseHandle`，读线程
+    /// 阻塞在 `ReadFile` 上永不退出 → 句柄 + 线程 + `Arc<CandidateAction>` 一起
+    /// 泄漏到宿主进程结束（插件重载时累积）。
+    fn drop(&mut self) {
+        self.reader_stop.store(true, Ordering::SeqCst);
+        // 取走句柄（PipeHandle 是 Copy，take() 留 None）：关掉它同时让阻塞中的
+        // ReadFile 返回，读线程下一轮看到 stop 退出。
+        if let Some(h) = self.conn.lock().ok().and_then(|mut g| g.take()) {
+            unsafe { CloseHandle(h.0) }.ok();
+        }
     }
 }
 

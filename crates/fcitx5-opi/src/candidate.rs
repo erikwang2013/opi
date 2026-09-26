@@ -33,6 +33,9 @@ pub struct CandidateState {
     pub(crate) buffer_snapshot: String,
     /// ⇧ 状态机（镜像 Android EngineController.shiftState）。
     pub(crate) shift_state: ShiftState,
+    /// 上一次可打印键按下的分流结论：(键值, 是否直通)。抬起按同一结论回复，
+    /// 使「按下放行 → 抬起也放行」成立（见 input_method::handle_key 可打印分支）。
+    pub(crate) last_printable: Option<(u32, bool)>,
 }
 
 impl CandidateState {
@@ -52,6 +55,7 @@ impl CandidateState {
             page: 0,
             buffer_snapshot: String::new(),
             shift_state: ShiftState::Off,
+            last_printable: None,
         };
         s.refresh_snapshot();
         Ok(s)
@@ -218,6 +222,7 @@ mod tests {
             page: 0,
             buffer_snapshot: String::new(),
             shift_state: ShiftState::Off,
+            last_printable: None,
         };
         s.refresh_snapshot();
         s
