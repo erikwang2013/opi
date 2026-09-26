@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 //! JNI 出口：`JNI_OnLoad` + `RegisterNatives` 注册（不用 Java_ 命名导出，防签名脆断）。
 //! 宿主类：`io/opi/input/jni/OpiEngine`。每个函数 `catch_unwind` 包裹，
 //! panic / 错误返回哨兵（boolean false、int 0、String/数组 null）。
@@ -78,7 +81,11 @@ pub unsafe extern "system" fn opijni_select(env: JEnv, _class: sys::jclass, inde
     unsafe { jni_util::rust_to_jstring(env, &out) }
 }
 
-/// switchMode(mode: Int)。0=Pinyin 1=English 2=Number 3=Symbol，越界忽略。
+/// switchMode(mode: Int)。**0=Pinyin 1=English 2=Number 3=Symbol 4=Traditional**，越界忽略。
+///
+/// 注意：这个编码**不等于 `Mode` 枚举的声明序**（声明序是 Pinyin, Traditional, English,
+/// Number, Symbol —— 照声明序推会得到 Traditional=1）。跨语言侧一律照 `mode_to_int` 的
+/// 编码写，别照枚举声明序写：错了不会编译失败，只会静默显示成拼音。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_switch_mode(_env: JEnv, _class: sys::jclass, mode: jint) {
     let _ = catch_unwind(AssertUnwindSafe(|| {

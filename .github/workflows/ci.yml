@@ -15,12 +15,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # targets 里带上 Windows 目标：TSF 代码在 #[cfg(target_os = "windows")] 下，
-      # 在 Linux 上根本不参与类型检查 —— 这是本 CI 存在的主要理由。
+      # targets 里带上 Windows 与 Apple 目标：TSF 代码在 #[cfg(target_os = "windows")] 下，
+      # 而 ios/ 与 macos/ 的 Swift 草案**本仓库无法编译**（需 macOS + Xcode）——
+      # 于是在 Linux 上唯一能守住「C ABI 仍为 Apple 目标编译得过」的手段就是这几条 check。
+      # 缺了它们，Apple 侧的下场就是 fcitx5 C++ 与 TSF 那两次：写完了、读起来像完成、
+      # 实测却发现从未被编译器看过。
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-          targets: x86_64-pc-windows-msvc
+          targets: x86_64-pc-windows-msvc, aarch64-apple-ios, aarch64-apple-ios-sim, aarch64-apple-darwin, x86_64-apple-darwin
 
       - name: cargo test --workspace
         run: cargo test --workspace
@@ -31,6 +34,16 @@ jobs:
       # cargo check 不链接，所以 Linux 上无需 msvc 链接器即可跑通。
       - name: cargo check -p tsf_opi (x86_64-pc-windows-msvc)
         run: cargo check -p tsf_opi --target x86_64-pc-windows-msvc
+
+      # 同理：check 不链接，Linux runner 上无需 Apple SDK。
+      # 这守的是「C ABI 还能为 Apple 目标编译」—— 它**不**证明能链接成 .a/.framework，
+      # 更**不**证明 ios/ 与 macos/ 的 Swift 能编译（那需要 macOS + Xcode）。
+      - name: cargo check -p opi_ffi (Apple 目标)
+        run: |
+          for t in aarch64-apple-ios aarch64-apple-ios-sim aarch64-apple-darwin x86_64-apple-darwin; do
+            echo "== $t =="
+            cargo check -p opi_ffi --target "$t"
+          done
 
   android:
     name: Android — JVM unit tests

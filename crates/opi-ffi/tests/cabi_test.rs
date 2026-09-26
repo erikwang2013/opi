@@ -1,13 +1,25 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 //! C ABI 集成测试：host 上直接调 opi_* 函数，验证装载/候选/选择/模式/符号主链路。
 //! 与 JNI 出口共享同一单例与实现；测试间用 SERIAL 互斥避免单例串扰。
 
 use std::sync::Mutex;
 
 use opi_ffi::cabi::{
-    opi_backspace, opi_buffer, opi_candidates, opi_clear, opi_clear_user_words, opi_export_user_words,
-    opi_ffi_free_string, opi_import_user_words, opi_input_key, opi_input_space, opi_learner_enabled, opi_load,
-    opi_load_trad, opi_mode, opi_remove_user_word, opi_select, opi_search_symbols, opi_set_learner,
-    opi_set_shift, opi_switch_mode, opi_symbol_blocks, opi_symbols_in_block, OpiString,
+    opi_backspace, opi_buffer, opi_candidates, opi_candidates_page, opi_clear, opi_clear_user_words,
+    opi_export_user_words,
+    opi_ffi_free_string, opi_import_user_words, opi_input_key, opi_input_space, opi_key_event,
+    opi_learner_enabled, opi_load, opi_load_trad, opi_mode, opi_page, opi_page_count,
+    opi_remove_user_word,
+    opi_select, opi_select_page, opi_search_symbols, opi_set_learner, opi_set_shift, opi_shift_state,
+    opi_switch_mode,
+    opi_symbol_blocks, opi_symbols_in_block, OpiString,
+};
+
+use engine_core::keys::{
+    KEY_BACK_SPACE, KEY_PAGE_DOWN, KEY_RETURN, KEY_SHIFT, KEY_SPACE, KEY_STATE_LONG_PRESSED,
+    KEY_STATE_RELEASED,
 };
 
 static SERIAL: Mutex<()> = Mutex::new(());
@@ -310,6 +322,16 @@ fn cabi_import_user_words_invalid_json_is_negative_and_atomic() {
 
     unsafe { opi_clear_user_words() };
 }
+
+// ---------- opi_key_event：平台中立键路由（iOS / macOS 出口） ----------
+// 语义单测在 crates/engine-core/src/router_tests.rs（对标 fcitx5/tsf 两轨）；
+// 这里验的是**经 C ABI 的那一段**：action 编码、文本所有权、跨调用状态、
+// 以及与既有 22 个导出共用同一引擎单例。用例拆到 cabi/key_event.rs
+// （`#[path]` 引入，同一测试二进制，共用 SERIAL）以守住 <500 行。
+#[path = "cabi/key_event.rs"]
+mod key_event_tests;
+
+
 
 #[test]
 fn cabi_load_trad_routes_traditional_mode() {

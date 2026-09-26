@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 //! 引擎薄壳：类型转换与边界校验，内部持 engine_core::Engine。
 //! 双 ABI（JNI + C）共享同一引擎单例（SINGLETON）与内部实现，避免双份逻辑。
 
@@ -6,6 +9,7 @@ use std::sync::Mutex;
 use engine_core::candidates::{Candidate, CandidateKind};
 use engine_core::composer::Mode;
 use engine_core::dictionary::Dictionary;
+use engine_core::router::{KeyAction, KeyRouter, ShiftState};
 use engine_core::symbols::{Block, BlockId, SymbolEntry};
 use engine_core::Engine;
 
@@ -23,7 +27,7 @@ pub fn install(path: Option<&str>) -> Result<(), String> {
     // 毒化恢复：18 个 FFI 入口的 catch_unwind 吞 panic 时锁已毒化，
     // into_inner 取回数据，install 整体替换引擎，提供恢复路径。
     let mut guard = SINGLETON.lock().unwrap_or_else(|p| p.into_inner());
-    *guard = Some(Api { engine: Engine::new(dict, symbols, true) });
+    *guard = Some(Api { router: KeyRouter::new(Engine::new(dict, symbols, true)) });
     Ok(())
 }
 
@@ -205,108 +209,174 @@ impl From<SymbolEntry> for ApiSymbolEntry {
 }
 
 /// 引擎句柄。同步核心；Rust 测试测同步核心。
+///
+/// 持 [`KeyRouter`] 而非裸 `Engine`：键路由的**状态**（页码、⇧ 三态、可打印键
+/// 抬起结论）是引擎会话状态，与 composer 的 buffer 同类 —— 放在这里才能
+/// ①与引擎同生命周期（`install` 换库时一并重置）、②不必再开第二把锁、
+/// ③`switch_mode` 能顺手清前端 ⇧（否则 Apple 侧 ⇧ Lock 会跨模式残留）。
+/// 引擎本体经 `router.engine()/engine_mut()` 取用，对两个 ABI 面透明。
 pub struct Api {
-    engine: Engine,
+    router: KeyRouter,
 }
 
 impl Api {
     pub fn load_fallback_sync() -> Result<Api, String> {
         let dict = engine_data::fallback_dict();
         let symbols = engine_core::symbols::SymbolEngine::builtin();
-        Ok(Api { engine: Engine::new(Box::new(dict), symbols, true) })
+        Ok(Api { router: KeyRouter::new(Engine::new(Box::new(dict), symbols, true)) })
     }
 
     pub fn load_sync(path: String) -> Result<Api, String> {
         let dict = engine_data::load_or_fallback(Some(std::path::Path::new(&path)))?;
         let symbols = engine_core::symbols::SymbolEngine::builtin();
-        Ok(Api { engine: Engine::new(dict, symbols, true) })
+        Ok(Api { router: KeyRouter::new(Engine::new(dict, symbols, true)) })
     }
 
+    /// raw 出口（绕过键路由）。改完 buffer 必须对齐页码 —— 否则「翻页 → 清空 →
+    /// 重打 → 按 1」会用过期页码选错候选（见 `KeyRouter::engine_mut`）。
     pub fn input_key(&mut self, ch: String) -> String {
         let mut chars = ch.chars();
         let (Some(c), None) = (chars.next(), chars.next()) else {
             return String::new(); // 边界：拒绝空串/多字符；非 ASCII 拒绝在引擎层（引擎只收 ASCII 键）
         };
-        self.engine.input_key(c)
+        let out = self.router.engine_mut().input_key(c);
+        self.router.reset_page_if_buffer_changed();
+        out
     }
 
+    /// raw 出口。空格在有缓冲时提交并清空 buffer → 必须对齐页码（同 `input_key`）。
     pub fn input_space(&mut self) -> String {
-        self.engine.input_space()
+        let out = self.router.engine_mut().input_space();
+        self.router.reset_page_if_buffer_changed();
+        out
     }
 
     pub fn backspace(&mut self) {
-        self.engine.backspace();
+        self.router.engine_mut().backspace();
+        self.router.reset_page_if_buffer_changed();
     }
 
+    /// raw 出口。清空 buffer → 必须对齐页码：否则 `opi_page()` 停在旧值而
+    /// `opi_page_count()` 已是 0，UI 显示「第 2 页 / 共 0 页」。
     pub fn clear(&mut self) {
-        self.engine.clear();
+        self.router.engine_mut().clear();
+        self.router.reset_page_if_buffer_changed();
     }
 
+    /// 切模式走**路由**而非直接打引擎：切换须清前端 ⇧ 三态
+    /// （见 `KeyRouter::switch_mode` 与两轨的 switch_mode_clears_frontend_shift_lock）。
     pub fn switch_mode(&mut self, mode: ApiMode) {
-        self.engine.switch_mode(mode.into());
+        self.router.switch_mode(mode.into());
+    }
+
+    /// 键路由（C ABI `opi_key_event` 的实现体）：平台中立键码 + 修饰位 → 动作。
+    pub fn key_event(&mut self, keyval: u32, states: u32) -> KeyAction {
+        self.router.key_event(keyval, states)
     }
 
     /// 换装繁体词典（trad.opid）。None = 清除（繁体模式回退简体库）。
     pub fn set_trad_dict(&mut self, dict: Option<Box<dyn Dictionary>>) {
-        self.engine.set_trad_dict(dict);
+        self.router.engine_mut().set_trad_dict(dict);
     }
 
+    /// 引擎侧 ⇧（`opi_set_shift`，Android UI 用）。走路由：换 shift 会改候选集，
+    /// 路由顺带把页码钳回边界（两轨的 `set_shift` 同样钳）。
     pub fn set_shift(&mut self, on: bool) {
-        self.engine.set_shift(on);
+        self.router.set_shift(on);
     }
 
     pub fn buffer(&self) -> String {
-        self.engine.buffer().to_string()
+        self.router.engine().buffer().to_string()
     }
 
     pub fn mode(&self) -> ApiMode {
-        self.engine.mode().into()
+        self.router.engine().mode().into()
+    }
+
+    /// 当前候选页（0 起）。候选栏用它画页码 —— 自己维护会在末页（PageDown 被钳制）
+    /// 与引擎漂移：高亮的页 ≠ 实际选词所在的页。
+    pub fn page(&self) -> u32 {
+        self.router.page() as u32
+    }
+
+    /// 候选总页数（UI 的「共 N 页」；无候选 → 0）。
+    pub fn page_count(&self) -> u32 {
+        self.router.page_count() as u32
+    }
+
+    /// **当前页**候选文本（已分页）。前端不要拿 `candidates(limit)` 自己按 8 切 ——
+    /// 页大小是引擎侧常量，抄一份到 UI 就会在改动时静默错位。
+    pub fn candidate_texts_page(&self) -> Vec<String> {
+        self.router.candidates()
+    }
+
+    /// 前端 ⇧ 三态 → C ABI 整数 0=OFF 1=SINGLE 2=LOCK（薄壳的转换职责，同 `mode_to_int`）。
+    /// 与 `set_shift` 不是一回事：这是 `ShiftState`（决定英文直传的大小写与 UI 高亮），
+    /// 那个打的是引擎侧 shift 位。
+    pub fn shift_state_int(&self) -> i32 {
+        match self.router.shift_state() {
+            ShiftState::Off => 0,
+            ShiftState::Single => 1,
+            ShiftState::Lock => 2,
+        }
     }
 
     pub fn candidates(&self, limit: usize) -> Vec<ApiCandidate> {
-        self.engine.candidates(limit).into_iter().map(Into::into).collect()
+        self.router.engine().candidates(limit).into_iter().map(Into::into).collect()
     }
 
+    /// raw 出口（**全局**索引，JNI 与既有 `opi_select` 用）。选中即清空 buffer →
+    /// 必须对齐页码；越界返回空串、buffer 不变，此时对齐也是 no-op。
+    /// 页内索引请用 [`Api::select_page`]（`opi_select_page`），UI 不需要知道 PAGE_SIZE。
     pub fn select(&mut self, index: usize) -> String {
-        self.engine.select(index)
+        let out = self.router.engine_mut().select(index);
+        self.router.reset_page_if_buffer_changed();
+        out
+    }
+
+    /// **页内**索引选词：与数字选词（`KeyRouter::digit_select`）、回车提交同源
+    /// （都走 `KeyRouter::select` 那一份 `page * PAGE_SIZE + index` 换算），
+    /// 所以这是最后一份 PAGE_SIZE 的载体 —— UI 不必自己算全局下标。
+    pub fn select_page(&mut self, index: usize) -> String {
+        self.router.select(index)
     }
 
     pub fn set_learner(&mut self, enabled: bool) {
-        self.engine.set_learner(enabled);
+        self.router.engine_mut().set_learner(enabled);
     }
 
     pub fn learner_enabled(&self) -> bool {
-        self.engine.learner_enabled()
+        self.router.engine().learner_enabled()
     }
 
     pub fn remove_user_word(&mut self, text: String) {
-        self.engine.remove_user_word(&text);
+        self.router.engine_mut().remove_user_word(&text);
     }
 
     pub fn clear_user_words(&mut self) {
-        self.engine.clear_user_words();
+        self.router.engine_mut().clear_user_words();
     }
 
     /// 导入 [`Api::export_user_words`] 的产物（Android 启动时读文件后传入）。
     /// 返回导入条数；非法 JSON / 版本不符 → Err 且不改动既有状态。
     pub fn import_user_words(&mut self, json: String) -> Result<usize, String> {
-        self.engine.import_user_words(&json)
+        self.router.engine_mut().import_user_words(&json)
     }
 
     pub fn export_user_words(&self) -> String {
-        self.engine.export_user_words()
+        self.router.engine().export_user_words()
     }
 
     pub fn symbol_blocks(&self) -> Vec<ApiBlock> {
-        self.engine.symbol_blocks().into_iter().map(Into::into).collect()
+        self.router.engine().symbol_blocks().into_iter().map(Into::into).collect()
     }
 
     pub fn symbols_in_block(&self, id: u16) -> Vec<ApiSymbolEntry> {
-        self.engine.symbols_in_block(BlockId(id)).into_iter().map(Into::into).collect()
+        self.router.engine().symbols_in_block(BlockId(id)).into_iter().map(Into::into).collect()
     }
 
     pub fn search_symbols(&self, keyword: String) -> Vec<ApiSymbolEntry> {
-        self.engine.search_symbols(&keyword).into_iter().map(Into::into).collect()
+        self.router.engine().search_symbols(&keyword).into_iter().map(Into::into).collect()
     }
 }
 
