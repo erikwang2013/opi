@@ -309,7 +309,21 @@ impl TsfLogic {
             }
             KEY_TAB | KEY_ESCAPE => KeyOutcome::Unhandled,
             _ => match char::from_u32(keyval) {
-                Some(c) if c.is_ascii() => self.handle_printable(c),
+                // 抬起必须拦下：本函数上面每个特殊键分支都判了 `released`，可打印
+                // 分支此前漏判，导致同一个字符被第二次送进引擎 —— 拼音缓冲翻倍
+                // （"ni"→"nnii"）、英文模式重复提交（"a"→"aa"）。
+                // ponytail: 抬起一律按「引擎接管」拦。代价是拼音模式下 `.` 这类
+                // 直通符号的抬起也被拦（按下放行、抬起拦下 → 应用见到有 down 无 up）。
+                // 要精确镜像得复刻 handle_printable 的分流判定并与其同步维护，那份
+                // 重复逻辑的漂移风险大于孤键抬起的影响；若真有客户端因此出问题，
+                // 再抽一个无副作用的谓词供两侧共用。
+                Some(c) if c.is_ascii() => {
+                    if released {
+                        KeyOutcome::Consumed
+                    } else {
+                        self.handle_printable(c)
+                    }
+                }
                 _ => KeyOutcome::Unhandled,
             },
         }

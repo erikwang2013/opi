@@ -410,3 +410,32 @@ fn mode_switch_clears_buffer_then_english_direct() {
         KeyAction::Input("a".into())
     );
 }
+
+// ---- 可打印字符的抬起不得二次入引擎（回归：拼音缓冲翻倍 / 英文重复提交） ----
+// 缺陷形态：`_ =>` 可打印分支漏判 `released`，而同一函数里每个特殊键分支都判了。
+// fcitx5 侧 C++ 显式按 keyEvent.isRelease() 置位（opi_fcitx5.cpp），故抬起必然到达这里。
+#[test]
+fn printable_release_does_not_refeed_pinyin_buffer() {
+    let mut s = pinyin_state();
+    assert_eq!(handle_key(&mut s, 'n' as u32, 0), KeyAction::EngineHandled);
+    assert_eq!(
+        handle_key(&mut s, 'n' as u32, KEY_STATE_RELEASED),
+        KeyAction::EngineHandled
+    );
+    assert_eq!(s.buffer(), "n", "抬起事件不得再次送入引擎（否则缓冲翻倍）");
+    handle_key(&mut s, 'i' as u32, 0);
+    handle_key(&mut s, 'i' as u32, KEY_STATE_RELEASED);
+    assert_eq!(s.buffer(), "ni", "两键按下+抬起后应为 ni，而非 nnii");
+}
+
+#[test]
+fn printable_release_does_not_double_commit_english() {
+    let mut s = english_state();
+    // 英文空缓冲直传：按下提交一次
+    assert_eq!(handle_key(&mut s, 'a' as u32, 0), KeyAction::Input("a".into()));
+    // 抬起不得再提交一次（否则 "a" → "aa"）
+    assert_eq!(
+        handle_key(&mut s, 'a' as u32, KEY_STATE_RELEASED),
+        KeyAction::EngineHandled
+    );
+}

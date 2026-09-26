@@ -119,7 +119,19 @@ pub fn handle_key(state: &mut CandidateState, keyval: u32, states: u32) -> KeyAc
         }
         KEY_TAB | KEY_ESCAPE => KeyAction::PassThrough,
         _ => match char::from_u32(keyval) {
-            Some(c) if c.is_ascii() => handle_printable(state, c),
+            // 抬起必须拦下：本函数上面每个特殊键分支都判了 `released`，可打印
+            // 分支此前漏判，导致同一个字符被第二次送进引擎 —— 拼音缓冲翻倍
+            // （"ni"→"nnii"）、英文模式重复提交（"a"→"aa"）。
+            // ponytail: 抬起一律按「引擎接管」拦。代价是拼音模式下 `.` 这类直通
+            // 符号的抬起也被拦（按下放行、抬起拦下 → 客户端见到有 down 无 up）。
+            // 理由与升级路径同 tsf-opi/src/logic.rs 的对应分支。
+            Some(c) if c.is_ascii() => {
+                if released {
+                    KeyAction::EngineHandled
+                } else {
+                    handle_printable(state, c)
+                }
+            }
             _ => KeyAction::PassThrough,
         },
     }
