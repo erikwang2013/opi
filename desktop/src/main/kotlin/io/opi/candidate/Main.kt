@@ -74,6 +74,7 @@ import com.sun.jna.platform.win32.WinBase
 import com.sun.jna.platform.win32.WinNT
 import com.sun.jna.ptr.IntByReference
 import kotlin.concurrent.thread
+import java.io.ByteArrayOutputStream
 
 // ---------- 自绘配色（无 material3 依赖，见 build.gradle.kts 注释） ----------
 
@@ -286,19 +287,37 @@ class PipeServer(private val model: CandidateModel) {
 
     private fun readLoop(pipe: WinNT.HANDLE) {
         val buf = ByteArray(PIPE_BUF)
-        val pending = StringBuilder() // '\n' 分帧的残留
+        // 残留必须是**字节**，不能是已解码的字符串：管道是字节流，ReadFile 不保证
+        // 落在 UTF-8 字符边界上。先解码再分帧的话，被切开的多字节字符会在这一侧
+        // 永久变成 U+FFFD（Java 对非法序列静默替换），后半个字符补上来也救不回 ——
+        // 候选窗显示乱码。Rust 侧 candidate_io.rs 的 pending 就是 Vec<u8>，
+        // 两处「互为镜像」的约定在这里必须同构。
+        val pending = ByteArrayOutputStream()
         while (true) {
             val n = IntByReference()
             // 字节流阻塞读：失败或 0 字节 = 客户端断开。
             if (!Kernel32.INSTANCE.ReadFile(pipe, buf, buf.size, n, null) || n.value <= 0) return
-            pending.append(String(buf, 0, n.value, Charsets.UTF_8))
-            while (true) {
-                val nl = pending.indexOf("\n")
-                if (nl < 0) break
-                handleLine(pending.substring(0, nl))
-                pending.delete(0, nl + 1)
+            pending.write(buf, 0, n.value)
+            drainLines(pending)
+        }
+    }
+
+    /**
+     * 按 '\n' 切出完整行并解码，残字节留在 [pending] 等下一次 ReadFile 补齐。
+     * 每次全量 `toByteArray()` 是 O(已有字节)：候选窗消息很短且读取不频繁，
+     * 不值得为此引入环形缓冲。
+     */
+    private fun drainLines(pending: ByteArrayOutputStream) {
+        val bytes = pending.toByteArray()
+        var start = 0
+        for (i in bytes.indices) {
+            if (bytes[i] == '\n'.code.toByte()) {
+                handleLine(String(bytes, start, i - start, Charsets.UTF_8))
+                start = i + 1
             }
         }
+        pending.reset()
+        if (start < bytes.size) pending.write(bytes, start, bytes.size - start)
     }
 
     private fun handleLine(line: String) {

@@ -131,6 +131,33 @@ private fun DrawScope.drawPet(
     val puzzled = mood == PetMood.PUZZLED
     val waiting = mood == PetMood.WAITING
 
+    // 落地投影 + 底部按键涟漪（与 docs/opi-pet.svg 同几何）。
+    // 小尺寸下几乎看不见，但文件头承诺「共享同一套几何」，缺了它这句话就不成立。
+    drawOval(
+        color = Color(0xFF22272E),
+        topLeft = Offset(48f * u, 198f * u),
+        size = Size(144f * u, 16f * u),
+        alpha = 0.08f,
+    )
+    drawPath(
+        Path().apply {
+            moveTo(74f * u, 214f * u)
+            quadraticTo(120f * u, 228f * u, 166f * u, 214f * u)
+        },
+        primary,
+        alpha = 0.5f,
+        style = Stroke(4f * u, cap = StrokeCap.Round),
+    )
+    drawPath(
+        Path().apply {
+            moveTo(92f * u, 226f * u)
+            quadraticTo(120f * u, 236f * u, 148f * u, 226f * u)
+        },
+        primary,
+        alpha = 0.28f,
+        style = Stroke(4f * u, cap = StrokeCap.Round),
+    )
+
     // 天线：声调符号 ˉ（一声）。睡着时垂下来。
     rotate(degrees = if (sleepy) 24f else 0f, pivot = Offset(120f * u, 48f * u)) {
         drawLine(
@@ -182,9 +209,12 @@ private fun DrawScope.drawPet(
                 letterSpacing = (4.5f * u).toSp(),
             ),
         )
+        // SVG 的 y="187" 是**基线**，而 drawText 的 topLeft 是**文字框左上角**。
+        // 早先按「框心落在 172」摆放，实际基线约在 176 —— 比设计稿高 11 个设计单位
+        // （72dp 宠物上约 3dp），刻字几乎贴住键帽正面下沿。用 firstBaseline 严格对齐。
         val top = Offset(
             (120f * u - layout.size.width / 2f),
-            (172f * u - layout.size.height / 2f),
+            187f * u - layout.firstBaseline,
         )
         drawText(layout, topLeft = top)
     }
