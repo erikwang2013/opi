@@ -260,6 +260,10 @@ class PipeServer(private val model: CandidateModel) {
             connect(pipe) // 阻塞至 TSF 进程连接
             lastClientPipe = pipe
             readLoop(pipe)
+            // 读循环退出 = 客户端消失（TSF 宿主崩溃/被任务管理器结束/用户注销），
+            // 此时收不到 hide 消息。必须自行隐藏：窗口是置顶+无边框+不可聚焦且无
+            // 关闭入口，漏掉这一步就是一扇关不掉的窗，只能杀进程。
+            model.visible = false
             lastClientPipe = null
             Kernel32.INSTANCE.DisconnectNamedPipe(pipe)
             Kernel32.INSTANCE.CloseHandle(pipe)
