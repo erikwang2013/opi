@@ -157,6 +157,13 @@ impl TsfLogic {
 
     pub fn switch_mode(&mut self, mode: Mode) {
         self.engine.switch_mode(mode);
+        // ⇧ 只在 English 有意义，判据与 Android `EngineController.switchMode` 的
+        // `if (m != ENGLISH) resetShift()` 逐字一致：**离开** English 才清。
+        // 前端 ⇧ 三态与引擎侧是两份状态，引擎清了不够 —— 英文空缓冲直传的大小写由
+        // ShiftState 决定，Lock 残留会让再次进入 English 后打出的全是大写。
+        if mode != Mode::English {
+            self.shift_state = ShiftState::Off;
+        }
         self.reset_page_if_buffer_changed();
     }
 
@@ -269,7 +276,11 @@ impl TsfLogic {
         match keyval {
             KEY_BACK_SPACE | KEY_DELETE => {
                 if released {
-                    KeyOutcome::Consumed
+                    // 抬起须与按下同判（见 handle_backspace）：按下放行、抬起拦下会让
+                    // 应用收到 keydown 收不到 keyup，依赖键状态的游戏/编辑器会卡键。
+                    // 只在需要时取缓冲 —— buffer() 会分配 String，提到 match 之前等于给
+                    // 每个按键都加一次分配。可打印分支的反向不对称是既有的有意取舍。
+                    if self.buffer().is_empty() { KeyOutcome::Unhandled } else { KeyOutcome::Consumed }
                 } else {
                     self.handle_backspace()
                 }
@@ -283,7 +294,8 @@ impl TsfLogic {
             }
             KEY_RETURN => {
                 if released {
-                    KeyOutcome::Consumed
+                    // 同退格：抬起与按下同判（见 handle_enter）
+                    if self.buffer().is_empty() { KeyOutcome::Unhandled } else { KeyOutcome::Consumed }
                 } else {
                     self.handle_enter()
                 }

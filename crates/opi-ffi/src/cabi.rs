@@ -241,7 +241,12 @@ pub unsafe extern "C" fn opi_symbol_blocks() -> OpiString {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_symbols_in_block(id: i16) -> OpiString {
     let texts = catch_unwind(AssertUnwindSafe(|| {
-        api::with_engine(|e| api::symbol_texts(e, id.max(0) as u16)).unwrap_or_default()
+        // 负 id 按越界处理（空数组），不钳成块 0 —— 与 jni.rs 的
+        // opijni_symbols_in_block 同语义，两个 ABI 面必须一致。
+        api::with_engine(|e| {
+            if id < 0 { Vec::new() } else { api::symbol_texts(e, id as u16) }
+        })
+        .unwrap_or_default()
     }))
     .unwrap_or_default();
     texts_to_json(texts)

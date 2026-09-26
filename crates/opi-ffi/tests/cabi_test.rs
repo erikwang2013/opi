@@ -148,6 +148,22 @@ fn cabi_symbols_blocks_and_search() {
 }
 
 #[test]
+fn cabi_symbols_in_block_negative_id_is_empty() {
+    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    load_any();
+    let blocks = read(unsafe { opi_symbol_blocks() });
+    let v: Vec<serde_json::Value> = serde_json::from_str(&blocks).unwrap_or_default();
+    let id0 = v[0]["id"].as_u64().expect("id 为数字") as i16;
+    // 前置：首块非空 —— 若钳位把 -1 变成某个真实块，这条就会红
+    assert!(!read_texts(unsafe { opi_symbols_in_block(id0) }).is_empty());
+    // 负 id 与 JNI 侧 opijni_symbols_in_block 同语义：越界 → 空数组，不钳成块 0
+    assert!(
+        read_texts(unsafe { opi_symbols_in_block(-1) }).is_empty(),
+        "负 id 必须返回空数组（iOS 侧与 Android 语义需一致）"
+    );
+}
+
+#[test]
 fn cabi_load_trad_routes_traditional_mode() {
     let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
     load_any();

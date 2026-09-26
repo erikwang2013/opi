@@ -120,6 +120,20 @@ fn backspace_release_event_consumed() {
     );
     assert_eq!(s.buffer(), "a");
 }
+#[test]
+fn empty_buffer_backspace_and_enter_release_unhandled() {
+    // 空缓冲时按下交应用（Unhandled），抬起也必须交应用：否则应用收到
+    // keydown 却收不到 keyup，依赖键状态的游戏/编辑器会卡键。
+    let mut s = pinyin_state();
+    for key in [KEY_BACK_SPACE, KEY_RETURN] {
+        assert_eq!(s.input_key(key, 0), KeyOutcome::Unhandled, "按下交应用");
+        assert_eq!(
+            s.input_key(key, KEY_STATE_RELEASED),
+            KeyOutcome::Unhandled,
+            "抬起须与按下同判（keyval {key}）"
+        );
+    }
+}
 // ---- Delete（与退格同一路由分支） ----
 #[test]
 fn delete_mirrors_backspace() {
@@ -255,6 +269,23 @@ fn shift_long_press_locks() {
         KeyOutcome::Consumed
     );
     assert_eq!(s.shift_state(), ShiftState::Lock);
+}
+#[test]
+fn switch_mode_clears_frontend_shift_lock() {
+    // 与 Android EngineController.resetShift 同源：切模式须清**前端** ⇧ 状态。
+    // 英文模式空缓冲直传的大小写由 ShiftState 决定（不查 composer 的 shift），
+    // 故 Lock 残留时切回英文仍全大写 —— 引擎侧清了不足以覆盖这条。
+    let mut s = english_state();
+    s.input_key(KEY_SHIFT, KEY_STATE_LONG_PRESSED);
+    assert_eq!(s.shift_state(), ShiftState::Lock, "前置：长按已锁定");
+
+    s.switch_mode(Mode::Pinyin);
+
+    assert_eq!(
+        s.shift_state(),
+        ShiftState::Off,
+        "切模式须清前端 ⇧（Lock 不得跨模式残留）"
+    );
 }
 // ---- 候选选择与翻页 ----
 #[test]

@@ -103,10 +103,12 @@ impl Composer {
         self.session.clone()
     }
 
-    /// 切换模式会清空缓冲。
+    /// 切换模式会清空缓冲与 shift（⇧ 是「下一个键」的粘滞态，跨模式残留会让
+    /// 切回英文后打出的全是大写）。
     pub fn switch_mode(&mut self, mode: Mode) -> Session {
         self.session.mode = mode;
         self.session.buffer.clear();
+        self.session.shift = false;
         self.session.clone()
     }
 
@@ -204,6 +206,19 @@ mod tests {
         c.switch_mode(Mode::English);
         assert_eq!(c.session().buffer, "");
         assert_eq!(c.session().mode, Mode::English);
+    }
+
+    #[test]
+    fn switch_mode_clears_shift() {
+        let mut c = Composer::new();
+        c.switch_mode(Mode::English);
+        c.set_shift(true);
+        c.switch_mode(Mode::Number);
+        c.switch_mode(Mode::English);
+        assert!(!c.session().shift, "切模式须清 shift，否则 ⇧ 锁定态跨模式残留");
+        // 行为面：切回英文后打出的必须是小写
+        let (_, s) = c.input_key('a');
+        assert_eq!(s.buffer, "a");
     }
 
     #[test]

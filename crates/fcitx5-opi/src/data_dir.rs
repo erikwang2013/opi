@@ -82,8 +82,8 @@ mod tests {
     /// 环境变量互斥：set_var/remove_var 是全局副作用，串行防并行测试竞争
     /// （对照 opi-ffi cabi_test.rs 的 SERIAL 模式）。
     static ENV_LOCK: Mutex<()> = Mutex::new(());
-    /// 引擎单例互斥：本模块内触碰 SINGLETON 的测试串行执行。
-    static SINGLETON_LOCK: Mutex<()> = Mutex::new(());
+    // 触碰 SINGLETON 的用例一律用 `crate::serial_install()`（crate 级唯一测试锁）：
+    // 本模块与 lib.rs 的 tests 在同一个测试二进制里并行跑，各拿一把锁等于没锁。
 
     /// 唯一临时目录（并行测试互不冲突），测试结束清理。
     fn temp_dir(tag: &str) -> PathBuf {
@@ -208,7 +208,7 @@ mod tests {
 
     #[test]
     fn init_dict_copies_and_loads() {
-        let _g = SINGLETON_LOCK.lock().unwrap();
+        let _g = crate::serial_install();
         let src_dir = temp_dir("isrc");
         let data_dir = temp_dir("idata");
         let src = src_dir.join(DICT_FILE_NAME);
@@ -227,7 +227,7 @@ mod tests {
 
     #[test]
     fn init_dict_bad_source_errors() {
-        let _g = SINGLETON_LOCK.lock().unwrap();
+        let _g = crate::serial_install();
         let data_dir = temp_dir("ierr");
         assert!(init_dict(Path::new("/nonexistent/luna.opid"), &data_dir).is_err());
         let _ = fs::remove_dir_all(&data_dir);
@@ -235,7 +235,7 @@ mod tests {
 
     #[test]
     fn c_entry_init_dict_ok_and_fallback() {
-        let _g = SINGLETON_LOCK.lock().unwrap();
+        let _g = crate::serial_install();
         // 好源 → 成功且词库装载（wo → 我）
         let src_dir = temp_dir("csrc");
         let data_dir = temp_dir("cdata");
@@ -271,7 +271,7 @@ mod tests {
 
     #[test]
     fn c_entry_null_params_fallback() {
-        let _g = SINGLETON_LOCK.lock().unwrap();
+        let _g = crate::serial_install();
         // 参数缺失（null）→ false + 内置回退装载，不崩溃
         let ok = unsafe { crate::opi_fcitx5_init_dict(std::ptr::null(), 0, std::ptr::null(), 0) };
         assert!(!ok);

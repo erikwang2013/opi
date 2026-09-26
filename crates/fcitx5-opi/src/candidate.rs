@@ -103,6 +103,13 @@ impl CandidateState {
 
     pub fn switch_mode(&mut self, mode: Mode) {
         self.engine.switch_mode(mode);
+        // ⇧ 只在 English 有意义，判据与 Android `EngineController.switchMode` 的
+        // `if (m != ENGLISH) resetShift()` 逐字一致：**离开** English 才清。
+        // 前端 ⇧ 三态与引擎侧是两份状态，引擎清了不够 —— 英文空缓冲直传的大小写由
+        // ShiftState 决定，Lock 残留会让再次进入 English 后打出的全是大写。
+        if mode != Mode::English {
+            self.shift_state = ShiftState::Off;
+        }
         self.reset_page_if_buffer_changed();
     }
 

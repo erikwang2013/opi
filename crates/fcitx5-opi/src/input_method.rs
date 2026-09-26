@@ -85,7 +85,11 @@ pub fn handle_key(state: &mut CandidateState, keyval: u32, states: u32) -> KeyAc
     match keyval {
         KEY_BACK_SPACE | KEY_DELETE => {
             if released {
-                KeyAction::EngineHandled
+                // 抬起须与按下同判（见 handle_backspace）：按下放行、抬起拦下会让客户端
+                // 收到 keydown 收不到 keyup，依赖键状态的游戏/编辑器会卡键。
+                // 只在需要时取缓冲 —— buffer() 会分配 String，提到 match 之前等于给每个
+                // 按键都加一次分配。可打印分支的反向不对称是既有的有意取舍（见下方注释）。
+                if state.buffer().is_empty() { KeyAction::PassThrough } else { KeyAction::EngineHandled }
             } else {
                 handle_backspace(state)
             }
@@ -99,7 +103,8 @@ pub fn handle_key(state: &mut CandidateState, keyval: u32, states: u32) -> KeyAc
         }
         KEY_RETURN => {
             if released {
-                KeyAction::EngineHandled
+                // 同退格：抬起与按下同判（见 handle_enter）
+                if state.buffer().is_empty() { KeyAction::PassThrough } else { KeyAction::EngineHandled }
             } else {
                 handle_enter(state)
             }

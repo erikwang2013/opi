@@ -53,6 +53,24 @@ pub fn install(path: Option<&str>) -> Result<(), String> {
     Ok(())
 }
 
+/// 全局 `SINGLETON` 是进程级共享状态，而 `cargo test` 默认多线程并行跑用例 ——
+/// 触碰它的用例（本文件 tests 与 data_dir 的 tests 在**同一个测试二进制**里）
+/// 都会 `install()` 重置它，因此会互相踩状态。实测（12 次连跑）：约 40% 的运行
+/// 会随机红一条，使「全绿」门禁失去意义（真回归与假失败无法区分）。
+/// 故本 crate 只留这一把测试锁，跨模块共用；锁与 install 绑成一次调用，
+/// 避免新增用例漏加。
+#[cfg(test)]
+pub(crate) static SERIAL: Mutex<()> = Mutex::new(());
+
+/// 取串行锁并重置单例。返回值必须绑定到变量活到用例结束（`let _g = ...`），
+/// 写成 `let _ = ...` 会立即释放锁，等于没加。
+#[cfg(test)]
+pub(crate) fn serial_install() -> std::sync::MutexGuard<'static, ()> {
+    let guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    assert!(install(None).is_ok());
+    guard
+}
+
 /// 0..=4 模式整数 ↔ Mode 转换（0=Pinyin 1=English 2=Number 3=Symbol 4=Traditional，
 /// 与 opi-ffi 的 JNI/C 模式整数约定一致）。
 fn mode_from_int(m: i32) -> Option<Mode> {
@@ -346,22 +364,6 @@ mod tests {
         };
         unsafe { opi_ffi_free_string_utf8(s) };
         out
-    }
-
-    /// 全局 `SINGLETON` 是进程级共享状态，而 `cargo test` 默认多线程并行跑用例 ——
-    /// 下面 6 个用例都要 `install(None)` 重置它，因此会互相踩状态。
-    /// 实测（12 次连跑）：`key_event_pinyin_letter_handled_and_space_commits` 挂 4 次、
-    /// `key_event_ctrl_passes_through_and_shift_consumed` 挂 3 次 —— 约 40% 的运行会
-    /// 随机红一条，使「全绿」门禁失去意义（真回归与假失败无法区分）。
-    /// 用一把测试专用锁把它们串行化；锁与 install 绑成一次调用，避免新增用例漏加。
-    static SERIAL: Mutex<()> = Mutex::new(());
-
-    /// 取串行锁并重置单例。返回值必须绑定到变量活到用例结束（`let _g = ...`），
-    /// 写成 `let _ = ...` 会立即释放锁，等于没加。
-    fn serial_install() -> std::sync::MutexGuard<'static, ()> {
-        let guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
-        assert!(install(None).is_ok());
-        guard
     }
 
     #[test]
