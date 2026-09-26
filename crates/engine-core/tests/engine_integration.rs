@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 use engine_core::candidates::{CandidateKind, DEFAULT_TOP_N};
 use engine_core::composer::Mode;
 use engine_core::symbols::{Block, BlockId, SymbolEngine, SymbolEntry};

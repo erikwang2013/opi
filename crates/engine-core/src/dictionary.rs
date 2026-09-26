@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 use crate::trie::{Entry, Trie};
 
 /// 词典抽象。engine 只依赖此 trait，M2 换成 mmap 二进制实现。

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 /// 全拼音节表。为保确定性排序，音节按字典序排列，查询用二分。
 pub const SYLLABLES: &[&str] = &[
     "a", "ai", "an", "ang", "ao", "ba", "bai", "ban", "bang", "bao", "bei",

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 //! M2 端到端集成测试：Engine + mmap 词典（编译 → 序列化 → 加载 → 输入 → 选词）。
 //! 验证词典注入后引擎全链路可用，以及词库损坏时的回退路径。
 

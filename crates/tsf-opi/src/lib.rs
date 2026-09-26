@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 //! tsf-opi：Windows TSF（Text Services Framework）输入法插件（C1 逻辑层 + C2 TSF 胶水）。
 //!
 //! 结构镜像 Linux 轨（crates/fcitx5-opi）：纯 Rust 逻辑层 + 平台胶水分离。

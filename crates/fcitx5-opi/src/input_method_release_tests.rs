@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 //! 可打印键「按下/抬起同判」的回归测试（`#[path]` 引入 input_method.rs，保持各文件 <500 行）。
 //!
 //! 缺陷形态：handle_key 里每个特殊键分支都判了 `released`，可打印分支此前漏判 ——

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 erik.xyz
+# SPDX-License-Identifier: MIT
+
 """生成简繁字库 TSV 数据（产物提交入库；离线构建不重跑本脚本）。
 
 产物（UTF-8，word\tpinyin\tfreq 三列）：

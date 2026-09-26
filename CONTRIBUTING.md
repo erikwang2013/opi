@@ -27,6 +27,11 @@ cd desktop && ./gradlew package             # Windows 候选窗（Compose Deskto
 - 引擎层（`crates/engine-core`）**禁止引入 IO 与平台依赖**：它是纯逻辑内核，也是唯一能在任何主机上跑测试的一层。
 - Windows TSF 代码在 `#[cfg(target_os = "windows")]` 下，在 Linux 上**不参与类型检查** —— 改动 `crates/tsf-opi` 时请确认 CI 的 Windows 目标检查通过。
 - 各端（Android / Linux / Windows / iOS）共享同一套模式整数与输入语义，改语义请各端一起改。
+- **新增源码文件请照既有文件加 SPDX 头**（版权与许可机器可读）：C 系语言用
+  `// SPDX-FileCopyrightText: 2026 erik.xyz` + `// SPDX-License-Identifier: MIT`（Rust / Kotlin / Swift / ArkTS / C），
+  Python 把同样两行的 `//` 换成 `#`，且必须**放在 shebang 之后、模块 docstring 之前**
+  （`#!` 行必须仍是第 1 行，否则 `./scripts/xxx.py` 会被当 shell 脚本执行；也不要插进 docstring 里面，那会污染 `__doc__`）。
+  **数据文件（`data/raw/*.tsv`）与 `.opid` 不要加 MIT 头** —— 它们不是 MIT 许可，见第 2 节。
 - 保持文件在 500 行以内；提交信息用 `type(scope): 描述` 格式。
 
 ## 2. 词库数据贡献

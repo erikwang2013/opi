@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 //! fcitx5-opi：Linux fcitx5 输入法插件的 Rust 逻辑出口。
 //!
 //! # 偏差说明（B0 记录，约束性决策）

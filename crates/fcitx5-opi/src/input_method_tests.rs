@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 use super::*;
 use crate::candidate::{CandidateState, ShiftState};
 use engine_core::dictionary::InMemoryDictionary;

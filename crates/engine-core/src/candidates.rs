@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 use crate::composer::Mode;
 use crate::dictionary::Dictionary;
 use crate::learner::Learner;

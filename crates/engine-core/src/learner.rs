@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 

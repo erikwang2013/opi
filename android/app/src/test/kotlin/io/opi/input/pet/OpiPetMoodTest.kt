@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 package io.opi.input.pet
 
 import org.junit.Assert.assertEquals

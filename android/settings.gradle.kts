@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 pluginManagement {
     repositories {
         // 阿里云镜像优先：本机 dl.google.com 被 DNS 劫持至 ~2KB/s 慢速镜像，

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 //! 生僻字（CJK 扩展 A/B）覆盖门禁 —— 项目缘起第一条的正面回答。
 //!
 //! 缺陷：`scripts/hanzi_freq.py:86,106`、`scripts/gen_trad_dict.py:107`、

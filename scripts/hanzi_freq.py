@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 erik.xyz
+# SPDX-License-Identifier: MIT
+
 """单字读音词频（Unihan kHanyuPinlu）+ 变体关系 + GB2312 段位，供两个生成器共用。
 
 背景（spec 2026-08-15 验收偏差 #4）：候选首位此前由 GB2312 码序（布局序）决定

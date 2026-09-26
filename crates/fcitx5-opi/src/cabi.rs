@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 //! C ABI 入口面（B3）：data_dir 词库初始化出口。自 lib.rs 迁出，避免 lib.rs
 //! 超 500 行；字符串约定与 lib.rs 其余入口一致（UTF-8 + 长度，非 NUL 结尾）。
 

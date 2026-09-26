@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 //! .opid 校验和（FNV-1a 64 位）。
 
 const OFFSET: u64 = 0xcbf29ce484222325;

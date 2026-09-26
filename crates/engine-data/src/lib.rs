@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 //! engine-data：.opid 二进制词库的格式、校验与 mmap 加载（M2）。
 
 pub mod checksum;

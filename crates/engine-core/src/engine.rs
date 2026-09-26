@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 use crate::candidates::{rank_and_pick, Candidate, USER_BOOST, DEFAULT_TOP_N};
 use crate::composer::{Composer, KeyEffect, Mode};
 use crate::dictionary::Dictionary;

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 //! XDG 数据目录 + luna.opid 词库装载层（B3）。
 //!
 //! 语义对照 Android EngineLoader.kt（权威参考）：

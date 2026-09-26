@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 #[test]
 fn cli_compile_roundtrip() {
     let dir = std::env::temp_dir().join(format!("opi-cli-{}", std::process::id()));

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 //! 候选分页状态机测试（与 fcitx5-opi candidate.rs 测试同源）。
 use super::*;
 use engine_core::dictionary::InMemoryDictionary;

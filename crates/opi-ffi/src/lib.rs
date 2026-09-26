@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 //! opi-ffi：引擎双 ABI 出口。
 //! - api：引擎薄壳 + 共享单例（JNI / C 共用）
 //! - jni_util：UTF-16 字符串转换（禁用 modified UTF-8）

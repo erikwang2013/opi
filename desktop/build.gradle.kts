@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 // C3：候选窗（Compose Desktop）构建配置。
 // 仓库镜像在 settings.gradle.kts（与 android/ 同约定，仅 aliyun，无 google()）。
 plugins {

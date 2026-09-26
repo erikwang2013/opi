@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 //! 排序质量门禁（spec 2026-08-15 验收偏差 #4）：拼音候选的首位必须是真实高频字，
 //! 而不是 GB2312 码序（布局序）首字——旧数据下 wo→蜗、ni→呢、hao→镐、shi→匙。
 //!

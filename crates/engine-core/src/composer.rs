@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 /// 输入模式。V1 固定四模式（简繁共五种），双拼/五笔经 InputScheme 扩展（V2）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Mode {

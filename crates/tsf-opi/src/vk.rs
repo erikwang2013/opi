@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 //! Win32 虚拟键码（VK）→ 引擎键码的映射判定。
 //!
 //! 特殊键在这里换成 `logic` 的编码键码（`special_keycode`），可打印键换成

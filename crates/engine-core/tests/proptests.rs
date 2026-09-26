@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 use engine_core::candidates::{rank_score, USER_BOOST};
 use engine_core::composer::{Composer, MAX_BUFFER};
 use engine_core::learner::Learner;

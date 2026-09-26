@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 erik.xyz
+# SPDX-License-Identifier: MIT
+
 """luna 拼音词库排序（真实字频，修复 rime 权重缺陷 + 布局序缺陷）。
 
 背景（spec 2026-08-15 验收偏差 #4）：

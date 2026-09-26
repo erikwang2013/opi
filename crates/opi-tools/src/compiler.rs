@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 //! rime 文本解析器（dict.yaml / 项目 tsv → .opid 条目）。
 //!
 //! 解析规则见 M2 plan Task 5：跳过空行、`#` 注释、front-matter；

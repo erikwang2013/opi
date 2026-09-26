@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 //! TSF 逻辑层：候选翻页状态机 + 键路由（语义对照 A4 行为表，即 Android
 //! `KeyRouter`/`EngineController`，与 Linux 轨 fcitx5-opi 同源）。
 //!

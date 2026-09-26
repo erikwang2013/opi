@@ -8,6 +8,8 @@ members = ["crates/engine-core", "crates/engine-data", "crates/opi-tools", "crat
 [workspace.package]
 version = "1.0.13"
 edition = "2024"
+license = "MIT"
+authors = ["erik.xyz"]
 
 [profile.release]
 lto = true

@@ -1,5 +1,8 @@
 # 词库数据来源与许可证
 
+> 本文件只记录**数据**的许可证：仓库源码（`crates/`、`android/`、`desktop/`、`scripts/` 等）为 **MIT**，见 [`../../LICENSE`](../../LICENSE)；
+> `data/raw/*.tsv` 及由其编译出的 `.opid` **不适用 MIT**，各自按下表（`fallback.tsv` 例外：本项目自建，故为 MIT）。
+
 | 文件 | 来源 | 许可证 | 说明 |
 |---|---|---|---|
 | fallback.tsv | OPI 项目自建 | MIT | 内置回退词库，由 opi-tools 编译为 data/generated/fallback.opid |

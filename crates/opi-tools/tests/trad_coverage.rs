@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 //! 单字全覆盖门禁（spec 2026-08-15 测试节）：trad_hanzi.tsv 每行 (word, pinyin)
 //! 逐一 query 断言该字出现在候选（GB2312 6763 字 ⊂ 期待表）；数据产物提交入库（Task 1）。
 //! 本测试只读不联网；trad.opid 缺失时报错并引导执行 Task 1 数据构建。

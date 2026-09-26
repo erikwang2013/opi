@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 /// 词典条目：词语 + 静态词频 + 拼音字节长度。
 /// `pinyin_len` 供候选排序区分「精确等长匹配」与「前缀扩展」（见 candidates.rs）。
 #[derive(Debug, Clone, PartialEq, Eq)]

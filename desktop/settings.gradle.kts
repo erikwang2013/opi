@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 // C3：候选窗（Compose Desktop）—— 仓库镜像约定与 android/ 完全一致：
 // 阿里云优先（本机 dl.google.com 被 DNS 劫持至 ~2KB/s），绝不写 google()。
 pluginManagement {

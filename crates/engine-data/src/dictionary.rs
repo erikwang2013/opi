@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 //! 内置 fallback 词库与 load_or_fallback 回退逻辑（M2 Task 8）。
 
 use std::path::Path;

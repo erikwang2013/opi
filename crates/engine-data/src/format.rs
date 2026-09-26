@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 //! .opid v1 二进制词库格式的 serialize/parse。
 //!
 //! 布局（全部 little-endian）：

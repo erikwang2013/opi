@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 //! mmap 加载器：将 .opid v1 映射到只读内存，实现 engine_core 的 Dictionary。
 //! 布局恢复只依赖 parse 校验过的 count 与 pinyin_total（三个区段边界）。
 

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 //! 候选翻页状态：包装 engine_core::Engine，持有候选分页状态。
 //!
 //! 语义与 Android 侧一致：每页 8 个候选，一次最多抓取 FETCH_LIMIT 条

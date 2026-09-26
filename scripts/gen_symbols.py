@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 erik.xyz
+# SPDX-License-Identifier: MIT
+
 """生成符号面板数据（产物提交入库；离线构建不重跑本脚本）。
 
 产物（UTF-8，无表头，制表符分隔）：

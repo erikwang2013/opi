@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 //! 按键路由（B2）：镜像 Android `KeyRouter`/`EngineController` 的行为表。
 //!
 //! 路由表（对照 KeyRouter.kt 逐条）：

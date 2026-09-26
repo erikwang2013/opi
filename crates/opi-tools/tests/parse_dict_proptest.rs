@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 use opi_tools::compiler::parse_dict;
 use proptest::prelude::*;
 

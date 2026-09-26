@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
 //! JNI UTF-16 字符串转换（红线：禁止 GetStringUTFChars / NewStringUTF——
 //! modified UTF-8 会把 emoji 编码成 CESU-8，被 Rust 的 UTF-8 校验拒绝）。
 //!
