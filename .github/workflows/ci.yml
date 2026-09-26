@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   rust:
-    name: Rust — test + clippy
+    name: Rust — fmt + test + clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,8 +22,15 @@ jobs:
       # 实测却发现从未被编译器看过。
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: clippy, rustfmt
           targets: x86_64-pc-windows-msvc, aarch64-apple-ios, aarch64-apple-ios-sim, aarch64-apple-darwin, x86_64-apple-darwin
+
+      # 放最前面：最便宜，错了也最容易看懂。
+      # 这条是补上的 —— 此前仓库**从来没有** fmt 门禁，于是漂移只增不减，
+      # 到 2026-09-27 已累积 212 处（HEAD 上就有 173 处，早于当时的任何改动）。
+      # 一次性格式化（commit fbdb9e7）之后加门禁，防止它再长回来。
+      - name: cargo fmt --all --check
+        run: cargo fmt --all --check
 
       - name: cargo test --workspace
         run: cargo test --workspace
