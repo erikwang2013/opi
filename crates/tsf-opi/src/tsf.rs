@@ -24,7 +24,8 @@ use windows::core::{
 };
 use windows::Win32::Foundation::{LPARAM, S_OK, WPARAM};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    GetKeyState, VK_CAPITAL, VK_CONTROL, VK_MENU, VK_SHIFT,
+    GetKeyState, GetKeyboardLayout, GetKeyboardState, ToUnicodeEx, VK_CAPITAL, VK_CONTROL,
+    VK_MENU, VK_SHIFT,
 };
 use windows::Win32::UI::TextServices::{
     ITfContext, ITfKeyEventSink, ITfKeyEventSink_Impl, ITfKeystrokeMgr, ITfTextInputProcessor,
@@ -90,7 +91,7 @@ impl TsfTextService {
             Ok(g) => g,
             Err(_) => return BOOL(1), // 中毒锁：吞键，避免键流入应用造成死循环
         };
-        let outcome = logic.input_key(wparam.0 as u32, map_key_state(lparam));
+        let outcome = logic.input_key(to_engine_keycode(wparam.0 as u32), map_key_state(lparam));
         match outcome {
             KeyOutcome::Commit(text) => {
                 self.sink.on_commit(&text);
@@ -181,6 +182,68 @@ impl ITfKeyEventSink_Impl for TsfTextService_Impl {
 /// lParam 键状态位 → logic 的 KEY_STATE_*（位约定见 logic.rs 头注释）。
 /// TSF lParam：bit30 = 按下前状态（1 = 重复），bit31 = 转换状态（1 = 释放）；
 /// 修饰键（⇧/Ctrl/Alt/CapsLock）TSF 键事件不携带，用 GetKeyState 移位查询。
+/// `ToUnicodeEx` 的 wFlags bit 2：本次调用不改变键盘状态。
+/// 不加这个标志时，连续调用会在按下死键（重音等）时吞掉/推进死键状态，
+/// 而那些键我们多半要放行给应用 —— 应用侧的组合键输入就会被吃掉。
+const TO_UNICODE_NO_STATE_CHANGE: u32 = 0x4;
+
+/// 该 VK 是否属于 logic.rs 的 `KEY_*` 特殊键表（那些常量本身就是 VK 码）。
+/// 必须原样透传、不可映射：例如 VK_BACK=0x08 经 `ToUnicodeEx` 得到的退格控制符
+/// 仍然 `is_ascii()`，会被送到 `handle_printable` 并按普通符号放行 —— 退格就废了。
+fn is_special_key(vk: u32) -> bool {
+    use crate::logic::{
+        KEY_BACK_SPACE, KEY_DELETE, KEY_ESCAPE, KEY_PAGE_DOWN, KEY_PAGE_UP, KEY_RETURN,
+        KEY_SHIFT, KEY_SPACE, KEY_TAB,
+    };
+    matches!(
+        vk,
+        KEY_BACK_SPACE
+            | KEY_DELETE
+            | KEY_ESCAPE
+            | KEY_PAGE_DOWN
+            | KEY_PAGE_UP
+            | KEY_RETURN
+            | KEY_SHIFT
+            | KEY_SPACE
+            | KEY_TAB
+    )
+}
+
+/// TSF 的 `wParam` 是**虚拟键码**，而 `TsfLogic::input_key` 的约定是
+/// 「可打印字符 = Unicode 码点，特殊键 = VK 码」（见 logic.rs 头注释）。
+/// 此前直接把 `wparam` 当码点透传，导致：
+///   - 英文模式敲 'a' 得到 VK_A=0x41，被当成大写 'A' 提交 → "hello" 变 "HELLO"；
+///   - 撇号 `'`（拼音分隔符）的 VK_OEM_7=0xDE 非 ASCII，永远 Unhandled，打不出来。
+/// 拼音模式只是被 `Composer` 的「字母转小写」兜住才看起来正常，故一直未被发现。
+///
+/// 用 `ToUnicodeEx` 而非 `MapVirtualKeyW`：前者按**当前键盘布局**与修饰键状态
+/// 换算，非 US 布局（AZERTY/Dvorak）下依然正确；后者只给未加修饰的字符，
+/// 自行补 Shift/CapsLock 逻辑等于重造键盘布局。
+fn to_engine_keycode(vk: u32) -> u32 {
+    if is_special_key(vk) {
+        return vk;
+    }
+    let mut key_state = [0u8; 256];
+    let mut buf = [0u16; 8];
+    // SAFETY: key_state 为 256 字节（Win32 要求的键盘状态数组大小）；
+    // buf 长度经 cchbuff 如实传入，ToUnicodeEx 不会写出界。
+    let n = unsafe {
+        if GetKeyboardState(&mut key_state).is_err() {
+            return vk; // 取不到键盘状态：退回 VK（特殊键仍可用，可打印字符将不被接管）
+        }
+        ToUnicodeEx(
+            vk,
+            0,
+            &key_state,
+            &mut buf,
+            TO_UNICODE_NO_STATE_CHANGE,
+            Some(GetKeyboardLayout(0)),
+        )
+    };
+    // n <= 0：死键（返回 -1）、无映射（0）、或多字符展开（>1 我们只取首字符）。
+    if n >= 1 { buf[0] as u32 } else { vk }
+}
+
 fn map_key_state(lparam: LPARAM) -> u32 {
     let lp = lparam.0 as u32;
     let mut s = (lp >> 3) & KEY_STATE_REPEAT; // bit30 → 1<<27
