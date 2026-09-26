@@ -57,7 +57,12 @@ impl Composer {
                 }
             }
             Mode::English => {
-                if ch.is_ascii_alphabetic() {
+                // 与 Pinyin 同一上限：缓冲是 UI 的 preedit 来源，无上限则可无限增长。
+                // Android 侧英文模式空缓冲直传、不进引擎，故当前不可达；但这是引擎
+                // 的公开契约，其它前端（fcitx5/tsf）不该依赖调用方自觉。
+                if self.session.buffer.chars().count() >= MAX_BUFFER {
+                    Ignored
+                } else if ch.is_ascii_alphabetic() {
                     if self.session.shift {
                         self.session.buffer.push(ch.to_ascii_uppercase());
                     } else {
@@ -69,7 +74,9 @@ impl Composer {
                 }
             }
             Mode::Number => {
-                if ch.is_ascii_digit() {
+                if self.session.buffer.chars().count() >= MAX_BUFFER {
+                    Ignored
+                } else if ch.is_ascii_digit() {
                     self.session.buffer.push(ch);
                     Updated
                 } else {

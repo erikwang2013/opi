@@ -56,18 +56,27 @@ pub fn rank_and_pick<D: Dictionary + ?Sized>(
     // 多音节整串无命中时按音节逐段补候选（segment 此前是死代码）：
     // nihao → [你][好] 逐字可选；单字母音节跳过避免噪音。
     // 每音节仅取 top 3：luna 繁体词库下全量并入会把生僻字顶进 top-8。
+    //
+    // 这个 top 3 必须按**含 learner boost 的最终分**排，不能下推给
+    // `dict.query(&syl, 3)` —— 后者截的是静态词频前 3，学过的常用字会在加 boost
+    // 之前就被丢掉（"haoxiao" 里「好」在 hao 组排第 6，输入再多次也进不来）。
+    // 与下方 85-86 行主路径是同一条不变式，此处曾违反。
     if merged.is_empty() && input.chars().count() > 1 {
         for syl in segment(input) {
             if syl.chars().count() < 2 {
                 continue;
             }
-            for e in dict.query(&syl, 3) {
-                merged.push(Candidate {
+            let mut syl_cands: Vec<Candidate> = dict
+                .query(&syl, usize::MAX)
+                .into_iter()
+                .map(|e| Candidate {
                     text: e.word.clone(),
                     kind: CandidateKind::Hanzi,
                     score: rank_score(e.freq, learner.freq_of(&e.word), boost),
-                });
-            }
+                })
+                .collect();
+            syl_cands.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
+            merged.extend(syl_cands.into_iter().take(3));
         }
     }
     for s in symbols.search(input) {
@@ -225,6 +234,31 @@ mod tests {
         let got = rank_and_pick(&d, &s, &l, "hao", Mode::Pinyin, DEFAULT_TOP_N, USER_BOOST);
         assert_eq!(got.iter().filter(|c| c.text == "好").count(), 1);
         assert_eq!(got.len(), 3);
+    }
+
+    /// 逐音节回退分支必须与主路径遵守同一条不变式：**不能**按静态词频先截断再算分。
+    /// 回归形态：`dict.query(&syl, 3)` 截的是静态前 3，学过的词在加 boost 之前就被丢弃，
+    /// 于是「学了几十次也不出现」。
+    #[test]
+    fn fallback_keeps_learned_word_beyond_static_top3() {
+        let mut d = InMemoryDictionary::new();
+        d.insert("hao", "好", 10); // 静态词频最低，静态前 3 之外
+        d.insert("hao", "号", 5000);
+        d.insert("hao", "豪", 4000);
+        d.insert("hao", "耗", 3000);
+        d.insert("xiao", "笑", 5000);
+        let s = SymbolEngine::builtin();
+        let mut l = Learner::new(true);
+        l.record_selection("好");
+
+        // 整串 "haoxiao" 无词条 → 走逐音节回退
+        let got = rank_and_pick(&d, &s, &l, "haoxiao", Mode::Pinyin, DEFAULT_TOP_N, USER_BOOST);
+        assert!(
+            got.iter().any(|c| c.text == "好"),
+            "学过的「好」不得在加 boost 前被静态词频前 3 截掉：{:?}",
+            got.iter().map(|c| &c.text).collect::<Vec<_>>()
+        );
+        assert_eq!(got[0].text, "好", "带 boost 的「好」应排首位");
     }
 
     #[test]

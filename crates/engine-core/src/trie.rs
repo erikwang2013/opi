@@ -38,11 +38,16 @@ impl Trie {
         for c in pinyin.chars() {
             node = node.children.entry(c).or_default();
         }
+        // 用「键原本是否已存在」判断新增，而不是拿 `*entry == 0` 当新建的代理：
+        // freq=0 是合法词频（TSV 的 f 列可为 0，`parse_freq("0")` 返回 Some(0)），
+        // 首次以 0 插入时 `0 > 0` 为假 → 不计数，但条目已进 map、query_prefix 查得到，
+        // 于是 len()/is_empty() 与查询结果自相矛盾。
+        let is_new = !node.entries.contains_key(word);
         let entry = node.entries.entry(word.to_owned()).or_insert(0);
+        if is_new {
+            self.len += 1;
+        }
         if freq > *entry {
-            if *entry == 0 {
-                self.len += 1;
-            }
             *entry = freq;
         }
     }
@@ -144,5 +149,21 @@ mod tests {
         t.insert("hao", "号", 1);
         t.insert("xiao", "笑", 1);
         assert_eq!(t.len(), 3);
+    }
+
+    /// freq=0 是合法词频，首次以 0 插入也必须计数 —— 否则 len() 与 query 结果矛盾。
+    #[test]
+    fn zero_freq_entry_is_counted() {
+        let mut t = Trie::new();
+        t.insert("hao", "好", 0);
+        assert_eq!(t.query_prefix("hao", 10).len(), 1, "freq=0 的词条应查得到");
+        assert_eq!(t.len(), 1, "len() 必须与 query 结果一致");
+        assert!(!t.is_empty());
+        // 重复插入不重复计数，且更高频才覆盖
+        t.insert("hao", "好", 0);
+        assert_eq!(t.len(), 1);
+        t.insert("hao", "好", 5);
+        assert_eq!(t.len(), 1);
+        assert_eq!(t.query_prefix("hao", 1)[0].freq, 5);
     }
 }
