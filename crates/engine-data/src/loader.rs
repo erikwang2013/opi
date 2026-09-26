@@ -93,11 +93,11 @@ impl Dictionary for MmapDictionary {
         let mut out: Vec<Entry> = Vec::new();
         let word_start = self.word_start();
         for i in lo..hi {
-            let (_, _, wo, wl, freq) = self.record(data, i);
+            let (_, pl, wo, wl, freq) = self.record(data, i);
             let word = std::str::from_utf8(&data[word_start + wo..word_start + wo + wl])
                 .expect("parse 已校验 UTF-8")
                 .to_string();
-            out.push(Entry { word, freq });
+            out.push(Entry { word, freq, pinyin_len: pl });
         }
         out.sort_by(|a, b| b.freq.cmp(&a.freq).then(a.word.as_bytes().cmp(b.word.as_bytes())));
         out.truncate(limit);

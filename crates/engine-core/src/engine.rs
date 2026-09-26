@@ -165,6 +165,13 @@ impl Engine {
         self.learner.export_json()
     }
 
+    /// 导入 [`Engine::export_user_words`] 的产物（Android 侧启动时读文件后传入，
+    /// engine 不做 IO）。合并语义、幂等性与失败原子性见 [`Learner::import_json`]。
+    /// 返回导入条数；非法输入返回 Err 且不改动内存状态。
+    pub fn import_user_words(&mut self, json: &str) -> Result<usize, String> {
+        self.learner.import_json(json)
+    }
+
     pub fn symbol_blocks(&self) -> Vec<Block> {
         self.symbols.common_blocks()
     }

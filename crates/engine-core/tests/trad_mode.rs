@@ -1,5 +1,6 @@
 //! 简繁双词库路由（spec 2026-08-15）：Traditional 模式查 trad 词典，Pinyin 模式不受影响。
 use engine_core::composer::Mode;
+use engine_core::symbols::SymbolEngine;
 use engine_core::{Engine, InMemoryDictionary};
 
 fn dict(entries: &[(&str, &str, u32)]) -> InMemoryDictionary {
@@ -10,15 +11,15 @@ fn dict(entries: &[(&str, &str, u32)]) -> InMemoryDictionary {
     d
 }
 
+/// 符号表用空表：本文件测的是词典路由，符号数据来自生成的文件，不该参与这里的断言。
+fn no_symbols() -> SymbolEngine {
+    SymbolEngine::new(Vec::new(), Vec::new())
+}
+
 fn two_dict_engine() -> Engine {
     let simp = dict(&[("hao", "好", 5000), ("hao", "号", 1200)]);
     let trad = dict(&[("hao", "發", 4000), ("hao", "髮", 3500)]);
-    Engine::with_dictionaries(
-        Box::new(simp),
-        Some(Box::new(trad)),
-        engine_core::symbols::SymbolEngine::builtin(),
-        false,
-    )
+    Engine::with_dictionaries(Box::new(simp), Some(Box::new(trad)), no_symbols(), false)
 }
 
 #[test]
@@ -47,12 +48,7 @@ fn pinyin_mode_ignores_trad_dict() {
 #[test]
 fn traditional_without_trad_dict_falls_back_to_simplified() {
     let simp = dict(&[("hao", "好", 5000)]);
-    let mut e = Engine::with_dictionaries(
-        Box::new(simp),
-        None,
-        engine_core::symbols::SymbolEngine::builtin(),
-        false,
-    );
+    let mut e = Engine::with_dictionaries(Box::new(simp), None, no_symbols(), false);
     e.switch_mode(Mode::Traditional);
     e.input_key('h');
     e.input_key('a');

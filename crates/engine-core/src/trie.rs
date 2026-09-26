@@ -1,8 +1,10 @@
-/// 词典条目：词语 + 静态词频。
+/// 词典条目：词语 + 静态词频 + 拼音字节长度。
+/// `pinyin_len` 供候选排序区分「精确等长匹配」与「前缀扩展」（见 candidates.rs）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
     pub word: String,
     pub freq: u32,
+    pub pinyin_len: usize,
 }
 
 use std::collections::BTreeMap;
@@ -65,7 +67,7 @@ impl Trie {
             }
         }
         let mut acc = Vec::new();
-        collect(node, &mut acc);
+        collect(node, pinyin.len(), &mut acc);
         acc.sort_by_key(|e| std::cmp::Reverse(e.freq));
         acc.truncate(limit);
         acc
@@ -80,12 +82,13 @@ impl Trie {
     }
 }
 
-fn collect(node: &Node, acc: &mut Vec<Entry>) {
+/// 深度（= 已走拼音的字节数）随递归下传，作为条目的 `pinyin_len`。
+fn collect(node: &Node, depth: usize, acc: &mut Vec<Entry>) {
     for (word, freq) in &node.entries {
-        acc.push(Entry { word: word.clone(), freq: *freq });
+        acc.push(Entry { word: word.clone(), freq: *freq, pinyin_len: depth });
     }
-    for child in node.children.values() {
-        collect(child, acc);
+    for (c, child) in &node.children {
+        collect(child, depth + c.len_utf8(), acc);
     }
 }
 
