@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 erik.xyz -->
+<!-- SPDX-License-Identifier: MIT -->
+<!--
+  ⚠️ 草案 · 从未编译 · 未验证
+  本文件在 Linux 上编写，未经过任何 macOS 构建系统、未装进过系统输入法列表。
+  键名与取值来自 InputMethodKit 的公开约定（README「最不确定的 API」#6 有标注），
+  但每一条都请在 Mac 上按 README「在 Mac 上第一件要做的事」核对。
+
+  构建后本文件在 OpiInputMethod.app/Contents/Info.plist。
+  占位符 $(PRODUCT_MODULE_NAME) / $(PRODUCT_NAME) / $(PRODUCT_BUNDLE_IDENTIFIER)
+  由 Xcode 构建设置展开；用 SwiftPM 或手写打包脚本时要自己替换成字面值。
+-->
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>zh_CN</string>
+    <key>CFBundleExecutable</key>
+    <string>$(PRODUCT_NAME)</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>OPI 拼音</string>
+    <key>CFBundleDisplayName</key>
+    <string>OPI 拼音</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.13</string>
+    <key>CFBundleVersion</key>
+    <string>1.0.13</string>
+
+    <!-- 输入法进程常驻后台、无 Dock 图标 -->
+    <key>LSBackgroundOnly</key>
+    <true/>
+    <key>LSUIElement</key>
+    <true/>
+
+    <!--
+      IMK 连接名：必须与 main.swift 里 IMKServer(name:) 的实参逐字一致。
+      不一致的症状是「进程在跑、系统输入法列表里也点得到，但按键永远进不来」。
+    -->
+    <key>InputMethodConnectionName</key>
+    <string>OpiInputMethod_Connection</string>
+
+    <!--
+      控制器类名。现代 Swift 构建必须带模块名前缀（$(PRODUCT_MODULE_NAME).），
+      否则 IMK 实例化不出控制器，症状是「输入法能选、但完全无响应」。
+    -->
+    <key>InputMethodServerControllerClass</key>
+    <string>$(PRODUCT_MODULE_NAME).OpiInputController</string>
+
+    <!--
+      输入法类别（决定在「输入源」面板里归到哪一类）。
+      用 ISO 15924 文字代码（不是语言代码）。zh-Hans/zh-Hant 让它落在中文项下，
+      Latn 保留英文直传的用法。
+    -->
+    <key>tsInputMethodCharacterRepertoireKey</key>
+    <array>
+        <string>Latn</string>
+        <string>zh-Hans</string>
+        <string>zh-Hant</string>
+    </array>
+
+    <!-- 菜单栏图标（可选；仓库里暂无资源文件，缺文件时系统用默认图标） -->
+    <key>tsInputMethodIconFileKey</key>
+    <string>opi.tiff</string>
+
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+</dict>
+</plist>

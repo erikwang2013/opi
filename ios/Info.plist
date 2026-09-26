@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 erik.xyz -->
+<!-- SPDX-License-Identifier: MIT -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  ⚠️ 草案 · 从未验证 · 本文件在 Linux 上编写。
+
+  没有 plutil、没有 Xcode、没有 Apple SDK —— 这个 plist 连**格式是否正确**
+  都没在本机校验过，更别说键名对不对。Mac 上请先 `plutil -lint ios/Info.plist`，
+  然后在 Xcode 里新建一个 Keyboard Extension target 做**逐键比对**：
+  Xcode 生成的模板 plist 就是权威，本文件是按记忆写的。
+
+  用法：本文件是**键盘扩展 target** 的 Info.plist（不是宿主 App 的）。
+  宿主 App 必须存在并内嵌这个扩展 —— 键盘扩展不能独立安装。
+-->
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>zh_CN</string>
+    <key>CFBundleDisplayName</key>
+    <string>OPI 拼音</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>$(PRODUCT_NAME)</string>
+    <!-- 扩展的包类型是 XPC!（不是 APPL）。⚠️ 凭记忆写的，Mac 上核对。 -->
+    <key>CFBundlePackageType</key>
+    <string>XPC!</string>
+    <key>CFBundleShortVersionString</key>
+    <!-- 与 workspace 版本对齐（Cargo.toml [workspace.package] version）。 -->
+    <string>1.0.13</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>NSExtension</key>
+    <dict>
+        <!--
+          NSExtensionAttributes：键盘扩展专有。
+          ⚠️ 四个键名全部凭记忆写，Mac 上以 Xcode 模板为准。
+        -->
+        <key>NSExtensionAttributes</key>
+        <dict>
+            <!-- 能输入 ASCII（决定宿主是否允许用它输英文/密码类字段）。 -->
+            <key>IsASCIICapable</key>
+            <true/>
+            <key>PrefersRightToLeft</key>
+            <false/>
+            <!-- 主语言，决定候选栏文案与系统语言匹配。 -->
+            <key>PrimaryLanguage</key>
+            <string>zh-Hans</string>
+            <!--
+              RequestsOpenAccess = false：**这是有意选的**，不是漏了。
+
+              true 才会得到：网络访问、与宿主 App 共享 App Group 容器。
+              OPI 是离线优先输入法 —— 不需要网络；用户词也只需要写在
+              扩展自己的容器里（UserDefaults 即可，无需共享）。
+
+              代价（见 ios/README.md「Apple 平台限制」）：关掉它之后
+              **用户词无法与宿主 App 同步**（App 里做的词库管理看不到键盘攒的词）。
+              若将来要共享用户词，必须改成 true，并且用户会在设置里看到
+              「完全访问权限」的警告页 —— 这是个产品决策，不是技术细节。
+            -->
+            <key>RequestsOpenAccess</key>
+            <false/>
+        </dict>
+        <key>NSExtensionPointIdentifier</key>
+        <string>com.apple.keyboard-service</string>
+        <!-- 代码构建的入口类（无 storyboard）。模块名 + 类名，务必与
+             KeyboardViewController.swift 的 @objc(KeyboardViewController) 一致。 -->
+        <key>NSExtensionPrincipalClass</key>
+        <string>$(PRODUCT_MODULE_NAME).KeyboardViewController</string>
+    </dict>
+</dict>
+</plist>

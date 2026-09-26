@@ -1,0 +1,15 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
+// ⚠️ 草案 · 从未编译 · 未验证
+// 本文件在 Linux 上编写，未经过 DevEco / ohpm 校验。
+//
+// 作用：把 libopiime.so 这个「本地包」映射到 index.d.ts，
+// 好让 ArkTS 能 `import opiime from 'libopiime.so'` 并拿到类型。
+// name 必须与 import 串**逐字符一致**（含 .so 后缀、全小写）。
+{
+  "name": "libopiime.so",
+  "types": "./index.d.ts",
+  "version": "1.0.0",
+  "description": "OPI 输入法引擎的 N-API 桥（Rust C ABI 的薄壳）"
+}

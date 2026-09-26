@@ -1,15 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 erik.xyz | SPDX-License-Identifier: MIT -->
 <!--
   OPI 生命周期图，两条独立的生命线：
     上：词库生命周期 —— 从构建产物到进程内只读映射，含损坏回退分支
     下：击键生命周期 —— 一次按键从进入到上屏的完整闭环
   两条线的唯一交点是「装进进程单例」：引擎启动时装一次，此后每次击键都在已装载
-  的 mmap 上做零拷贝查询。
+  的 mmap 上做查询（mmap 只让整库不入堆；每条命中的词仍要转出一次 String，非零拷贝）。
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 780" width="1180" height="780"
      role="img" aria-labelledby="lcTitle lcDesc">
   <title id="lcTitle">OPI 生命周期</title>
-  <desc id="lcDesc">上排为词库生命周期：词库产物 → 定位与重拷 → mmap 装载 → 格式校验 → 装入单例 → 繁体热替换，任一环节失败回退内置 35 词。下排为击键生命周期：按键事件 → KeyRouter 分流 → Composer 状态机 → 缓冲更新 → rank_and_pick 排序 → 候选栏渲染 → 用户选择 → Learner 记录 → 提交上屏 → 缓冲清空，随后循环回步骤 1。</desc>
+  <desc id="lcDesc">上排为词库生命周期：词库产物 → 定位与重拷（Android 走 assets→filesDir，fcitx5 走 XDG 数据目录；草案端鸿蒙的完整词库装载尚未实现）→ mmap 装载 → 格式校验 → 装入单例 → 繁体热替换，任一环节失败回退内置 35 词。下排为击键生命周期：按键事件 → KeyRouter 分流 → Composer 状态机 → 缓冲更新 → rank_and_pick 排序 → 候选栏渲染 → 用户选择 → Learner 记录 → 提交上屏 → 缓冲清空，随后循环回步骤 1。</desc>
 
   <defs>
     <marker id="lcArw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -28,13 +29,13 @@
   <g font-family="'Noto Sans CJK SC','Source Han Sans SC','PingFang SC','Microsoft YaHei',-apple-system,'Segoe UI',sans-serif">
 
     <text x="590" y="40" text-anchor="middle" font-size="25" font-weight="700" fill="#22272E">OPI 生命周期</text>
-    <text x="590" y="63" text-anchor="middle" font-size="12.5" fill="#6B7671">词库装一次，按键转一圈 —— 装进单例之后，每次击键都是只读内存上的零拷贝查询</text>
+    <text x="590" y="63" text-anchor="middle" font-size="12.5" fill="#6B7671">词库装一次，按键转一圈 —— 装进单例之后，每次击键都在只读映射上按需转出（非零拷贝）</text>
 
     <!-- ═══════════════ 上：词库生命周期 ═══════════════ -->
     <rect x="30" y="86" width="1120" height="244" rx="14" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
     <rect x="46" y="74" width="128" height="24" rx="12" fill="#2E8B80"/>
     <text x="110" y="91" text-anchor="middle" font-size="12.5" font-weight="700" fill="#FFFFFF">词库生命周期</text>
-    <text x="186" y="91" font-size="11.5" fill="#8A948F">进程启动时执行一次 —— Android 走 assets→filesDir，fcitx5 走 XDG 数据目录</text>
+    <text x="186" y="91" font-size="11.5" fill="#8A948F">进程启动时执行一次 —— Android 走 assets→filesDir，fcitx5 走 XDG 数据目录；鸿蒙（草案）完整词库装载未实现</text>
 
     <!-- 六个阶段 -->
     <g>
@@ -56,7 +57,7 @@
       <text x="496" y="159" text-anchor="middle" font-size="12.5" font-weight="700" fill="#22272E">mmap 装载</text>
       <text x="496" y="181" text-anchor="middle" font-size="9.5" fill="#6B7671">memmap2 只读映射</text>
       <text x="496" y="197" text-anchor="middle" font-size="9.5" fill="#6B7671">堆内字节同样支持</text>
-      <text x="496" y="213" text-anchor="middle" font-size="9.5" fill="#6B7671">查询零拷贝</text>
+      <text x="496" y="213" text-anchor="middle" font-size="9.5" fill="#6B7671">查询按需转出</text>
     </g>
     <g>
       <rect x="600" y="134" width="168" height="90" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>

@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 erik.xyz | SPDX-License-Identifier: MIT -->
 <!--
   OPI 功能设计图：上排五种输入模式（按键如何被路由），
   下排六大功能域（引擎对外提供的全部能力）。
@@ -20,7 +21,7 @@
     <rect x="30" y="86" width="1120" height="148" rx="14" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
     <rect x="46" y="74" width="112" height="24" rx="12" fill="#2E8B80"/>
     <text x="102" y="91" text-anchor="middle" font-size="12.5" font-weight="700" fill="#FFFFFF">输入模式</text>
-    <text x="170" y="91" font-size="11.5" fill="#8A948F">Composer 状态机判定每个按键的去留 —— 模式整数 0..4 五端一致</text>
+    <text x="170" y="91" font-size="11.5" fill="#8A948F">Composer 状态机判定每个按键的去留 —— 模式整数 0..4 在各端一致</text>
 
     <g>
       <rect x="30" y="112" width="208" height="106" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
@@ -101,7 +102,7 @@
     <g font-size="10.5" fill="#4A5551">
       <text x="830" y="347">.opid v1 二进制：头 + 条目表 + 双 blob + 校验尾</text>
       <text x="830" y="369">FNV-1a64 逐字节校验，顺序/偏移不合法即拒载</text>
-      <text x="830" y="391">mmap 只读映射，零拷贝前缀查询</text>
+      <text x="830" y="391">mmap 只读映射，整库不入堆 · 按需转出</text>
       <text x="830" y="413">装载失败 → 内置 35 词回退，绝不因词库崩溃</text>
       <text x="830" y="435">简体 luna / 繁体 trad / 回退 fallback 三库</text>
     </g>
@@ -137,8 +138,8 @@
     <text x="814" y="502" font-size="15" font-weight="700" fill="#22272E">多端与包容</text>
     <g fill="#2E8B80"><circle cx="819" cy="525" r="2.6"/><circle cx="819" cy="547" r="2.6"/><circle cx="819" cy="569" r="2.6"/><circle cx="819" cy="591" r="2.6"/></g>
     <g font-size="10.5" fill="#4A5551">
-      <text x="830" y="529">同一 Rust 引擎，四端共享同一套输入语义</text>
-      <text x="830" y="551">各端原生 UI：Compose / fcitx5 / TSF / SwiftUI</text>
+      <text x="830" y="529">同一 Rust 引擎，各端共享同一套输入语义</text>
+      <text x="830" y="551">各端原生 UI：Compose / fcitx5 / TSF / UIKit / IMK / ArkTS</text>
       <text x="830" y="573">核心零平台依赖，可在任意目标上单测</text>
       <text x="830" y="595">模式整数与 ABI 约定跨端一致（0..4）</text>
     </g>

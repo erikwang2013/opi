@@ -1,0 +1,39 @@
+{
+  "_comment": [
+    "⚠️ 草案 · 从未编译 · 未校验 · 未验证 —— 本文件在 Linux 上编写，未经过 DevEco schema 校验。",
+    "输入法子类型配置。位置：entry/src/main/resources/base/profile/input_method_config.json。",
+    "由 module.json5 的 metadata(resource: $profile:input_method_config) 引用 —— 两处名字必须对上。",
+    "⚠️ label 用的是 $string: 资源引用，必须在 resources/base/element/string.json 里存在，",
+    "   否则整个 profile 解析失败（表现可能是输入法直接不出现在列表里）。",
+    "   需要补的 key：subtype_pinyin_label / subtype_english_label / subtype_number_label。",
+    "   （本仓库故意不生成 string.json —— 那是 DevEco 生成的文件，覆盖它会毁掉你的其它字符串。）",
+    "⚠️ 本机的 HarmonyOS 文档检索只确认了字段名 icon/id/label/locale/mode 存在，",
+    "   **没有确认 mode 的合法取值**。下面用的 'lower' 是凭记忆写的，见 README「最不确定的 API」。",
+    "⚠️ 所有子类型共用同一个 InputMethodExtensionAbility，靠 inputMethodAbility.on('setSubtype') 区分。",
+    "   本目录的 InputMethodService.ets **尚未**监听 setSubtype —— 所以切换子类型目前不会换键盘。",
+    "   这是已知缺口，不是 bug。"
+  ],
+  "subtypes": [
+    {
+      "icon": "$media:icon",
+      "id": "opi_pinyin",
+      "label": "$string:subtype_pinyin_label",
+      "locale": "zh-CN",
+      "mode": "lower"
+    },
+    {
+      "icon": "$media:icon",
+      "id": "opi_english",
+      "label": "$string:subtype_english_label",
+      "locale": "en-US",
+      "mode": "lower"
+    },
+    {
+      "icon": "$media:icon",
+      "id": "opi_number",
+      "label": "$string:subtype_number_label",
+      "locale": "zh-CN",
+      "mode": "lower"
+    }
+  ]
+}

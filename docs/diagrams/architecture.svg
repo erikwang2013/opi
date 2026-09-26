@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 erik.xyz | SPDX-License-Identifier: MIT -->
 <!--
   OPI 架构设计图。分层自下而上：构建管线 → 数据层 → 引擎层 → 出口层 → 客户端层。
   依赖方向：上层依赖下层，下层不感知上层（engine-core 无 IO、无平台依赖）。
@@ -7,7 +8,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 852" width="1180" height="852"
      role="img" aria-labelledby="archTitle archDesc">
   <title id="archTitle">OPI 架构设计</title>
-  <desc id="archDesc">五层架构：客户端层（Android/Linux/Windows/iOS）、出口层（opi-ffi 双 ABI、fcitx5-opi、tsf-opi）、引擎层（engine-core 六模块 + Engine 门面）、数据层（engine-data 的 .opid 格式/校验/mmap/回退）、构建管线（opi-tools 编译与校验）。依赖自下而上。</desc>
+  <desc id="archDesc">五层架构：客户端层（已验证三端 Android/Linux/Windows；草案两端 Apple 两平台 iOS·macOS 与鸿蒙 HarmonyOS，三处代码均未经编译）、出口层（三个薄壳 opi-ffi 双 ABI、fcitx5-opi、tsf-opi；C 出口由 Apple 与鸿蒙草案复用）、引擎层（engine-core 六模块 + Engine 门面，另有平台中立键路由 router.rs/keys.rs）、数据层（engine-data 的 .opid 格式/校验/mmap/回退）、构建管线（opi-tools 编译与校验）。依赖自下而上。</desc>
 
   <defs>
     <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -24,51 +25,57 @@
 
     <!-- ══════════════ 标题 ══════════════ -->
     <text x="590" y="40" text-anchor="middle" font-size="25" font-weight="700" fill="#22272E">OPI 架构设计</text>
-    <text x="590" y="63" text-anchor="middle" font-size="12.5" fill="#6B7671">一套 Rust 引擎 · 四个平台出口 · 零跨端框架</text>
+    <text x="590" y="63" text-anchor="middle" font-size="12.5" fill="#6B7671">一套 Rust 引擎 · 三个出口薄壳 · 零跨端框架</text>
 
     <!-- ══════════════ 1. 客户端层 68..200 ══════════════ -->
     <rect x="30" y="86" width="1120" height="114" rx="14" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
     <rect x="46" y="74" width="112" height="24" rx="12" fill="#2E8B80"/>
     <text x="102" y="91" text-anchor="middle" font-size="12.5" font-weight="700" fill="#FFFFFF">客户端层</text>
-    <text x="170" y="91" font-size="11.5" fill="#8A948F">各端原生 UI，不共享界面代码</text>
+    <text x="170" y="91" font-size="11.5" fill="#8A948F">各端原生 UI，不共享界面代码 —— 虚线框 = 草案端（未经编译）</text>
 
     <g>
-      <rect x="30" y="108" width="256" height="74" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
+      <rect x="30" y="108" width="200" height="74" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
       <text x="46" y="132" font-size="15" font-weight="700" fill="#22272E">Android IME</text>
       <text x="46" y="151" font-size="11" fill="#6B7671">Kotlin + Jetpack Compose</text>
       <text x="46" y="171" font-size="11" font-weight="700" fill="#2E8B80">↓ JNI</text>
     </g>
     <g>
-      <rect x="318" y="108" width="256" height="74" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
-      <text x="334" y="132" font-size="15" font-weight="700" fill="#22272E">Linux fcitx5</text>
-      <text x="334" y="151" font-size="11" fill="#6B7671">C++ AddonInstance + Rust 逻辑</text>
-      <text x="334" y="171" font-size="11" font-weight="700" fill="#2E8B80">↓ C ABI</text>
+      <rect x="260" y="108" width="200" height="74" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
+      <text x="276" y="132" font-size="15" font-weight="700" fill="#22272E">Linux fcitx5</text>
+      <text x="276" y="151" font-size="11" fill="#6B7671">C++ AddonInstance + Rust 逻辑</text>
+      <text x="276" y="171" font-size="11" font-weight="700" fill="#2E8B80">↓ C ABI</text>
     </g>
     <g>
-      <rect x="606" y="108" width="256" height="74" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
-      <text x="622" y="132" font-size="15" font-weight="700" fill="#22272E">Windows TSF</text>
-      <text x="622" y="151" font-size="11" fill="#6B7671">COM 服务器 + NDJSON 候选窗</text>
-      <text x="622" y="171" font-size="11" font-weight="700" fill="#2E8B80">↓ COM</text>
+      <rect x="490" y="108" width="200" height="74" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
+      <text x="506" y="132" font-size="15" font-weight="700" fill="#22272E">Windows TSF</text>
+      <text x="506" y="151" font-size="11" fill="#6B7671">COM 服务器 + NDJSON 候选窗</text>
+      <text x="506" y="171" font-size="11" font-weight="700" fill="#2E8B80">↓ COM</text>
     </g>
     <g>
-      <rect x="894" y="108" width="256" height="74" rx="10" fill="#FAF6F5" stroke="#EBD8D4" stroke-width="1.5" stroke-dasharray="6 4"/>
-      <text x="910" y="132" font-size="15" font-weight="700" fill="#22272E">iOS</text>
-      <text x="910" y="151" font-size="11" fill="#6B7671">键盘扩展 · M7 预留</text>
-      <text x="910" y="171" font-size="11" font-weight="700" fill="#D9553F">↓ C ABI（opi-ffi 已就绪）</text>
+      <rect x="720" y="108" width="200" height="74" rx="10" fill="#FAF6F5" stroke="#EBD8D4" stroke-width="1.5" stroke-dasharray="6 4"/>
+      <text x="736" y="132" font-size="15" font-weight="700" fill="#22272E">Apple 两平台 · 草案</text>
+      <text x="736" y="151" font-size="11" fill="#6B7671">iOS 键盘扩展 · macOS IMK</text>
+      <text x="736" y="171" font-size="11" font-weight="700" fill="#D9553F">↓ C ABI（opi-ffi 已就绪）</text>
+    </g>
+    <g>
+      <rect x="950" y="108" width="200" height="74" rx="10" fill="#FAF6F5" stroke="#EBD8D4" stroke-width="1.5" stroke-dasharray="6 4"/>
+      <text x="966" y="132" font-size="15" font-weight="700" fill="#22272E">鸿蒙 HarmonyOS</text>
+      <text x="966" y="151" font-size="11" fill="#6B7671">输入法扩展 · 草案未编译</text>
+      <text x="966" y="171" font-size="11" font-weight="700" fill="#D9553F">↓ C ABI（opi-ffi 已就绪）</text>
     </g>
 
-    <!-- 层间箭头：客户端 → 出口（iOS 复用 opi-ffi 的 C 出口，不另起一条下行线） -->
+    <!-- 层间箭头：客户端 → 出口（Apple 两平台与鸿蒙均复用 opi-ffi 的 C 出口，不另起下行线） -->
     <g stroke="#2E8B80" stroke-width="2" marker-end="url(#arw)">
-      <path d="M158 182 L158 226"/>
-      <path d="M446 182 L446 226"/>
-      <path d="M734 182 L734 226"/>
+      <path d="M130 182 L130 226"/>
+      <path d="M360 182 L360 226"/>
+      <path d="M590 182 L590 226"/>
     </g>
 
     <!-- ══════════════ 2. 出口层 226..352 ══════════════ -->
     <rect x="30" y="240" width="1120" height="112" rx="14" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
     <rect x="46" y="228" width="112" height="24" rx="12" fill="#2E8B80"/>
     <text x="102" y="245" text-anchor="middle" font-size="12.5" font-weight="700" fill="#FFFFFF">出口层</text>
-    <text x="170" y="245" font-size="11.5" fill="#8A948F">ABI 薄壳：类型转换、边界校验、进程内单例，不含业务逻辑</text>
+    <text x="170" y="245" font-size="11.5" fill="#8A948F">ABI 薄壳：类型转换、边界校验、进程内单例，不含业务逻辑 · C 出口供 Apple / 鸿蒙草案</text>
 
     <g>
       <rect x="30" y="262" width="352" height="74" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
@@ -142,6 +149,8 @@
     <text x="590" y="530" text-anchor="middle" font-size="14" font-weight="700" fill="#FFFFFF">Engine 门面</text>
     <text x="590" y="550" text-anchor="middle" font-size="10.5" fill="#C9E4E0">UI 层经 FFI 交互的唯一入口：input_key / candidates / select / switch_mode / learner / symbols</text>
 
+    <text x="590" y="571" text-anchor="middle" font-size="9.5" fill="#5B8C85">另有平台中立的键路由层 router.rs / keys.rs —— 供 Apple / 鸿蒙经 C ABI 使用；非第七模块，语义以 fcitx5 / TSF 两轨为准</text>
+
     <!-- 层间箭头：引擎 → 数据 -->
     <path d="M590 578 L590 622" stroke="#2E8B80" stroke-width="2" marker-end="url(#arw)"/>
     <text x="604" y="605" font-size="10.5" fill="#6B7671">Dictionary trait</text>
@@ -165,7 +174,7 @@
     <g>
       <rect x="602" y="658" width="262" height="62" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
       <text x="618" y="681" font-size="13" font-weight="700" fill="#22272E">loader</text>
-      <text x="618" y="701" font-size="10.5" fill="#6B7671">memmap2 只读映射，零拷贝查询</text>
+      <text x="618" y="701" font-size="10.5" fill="#6B7671">memmap2 只读映射，整库不入堆 · 按需转出</text>
     </g>
     <g>
       <rect x="888" y="658" width="262" height="62" rx="10" fill="#FAF6F5" stroke="#EBD8D4" stroke-width="1.5"/>

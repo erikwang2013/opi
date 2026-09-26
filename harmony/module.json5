@@ -1,0 +1,51 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
+// ⚠️ 草案 · 从未编译 · 未校验 · 未验证
+//
+// 本文件在 Linux 上编写，**从未被 DevEco / hvigor 校验过**（本机没有鸿蒙工具链）。
+//
+// ---- 这是「片段」，不是能直接用的 module.json5 ----
+// 请**不要**整个覆盖你的 module.json5。用 DevEco 的
+// `New > Extension Ability > InputMethod` 生成一份，
+// 然后与下面这段**逐键比对** —— 生成的模板才是权威，这份是给你对答案用的。
+//
+// ---- 已知的两处文档自相矛盾（务必以你 SDK 版本的模板为准）----
+//   1. metadata 的 name：部分文档写 "ohos.extension.input_method"，
+//      V14 文档写 "ohos_extension.input_method"（点 vs 下划线）。
+//   2. srcEntry（新）vs srcEntrance（旧）。
+//   两者都写进 README「最不确定的 API」。
+//
+// ---- type 写在哪 ----
+// 是 extensionAbilities[].type = "inputMethod"，**不是** module.type。
+// 网上有文章说 module.type 要写 "inputmethod" 并要 BIND_INPUT_METHOD 权限 ——
+// 搜索结果里多篇资料指出那是错的（混淆了别的平台），这里不采纳。
+
+{
+  "module": {
+    // ... 你的 name / versionCode / mainElement 等保持 DevEco 生成的不要动 ...
+
+    "extensionAbilities": [
+      {
+        // ⚠️ 路径相对 src/main/。带不带 .ets 后缀、写 ets 还是 ts，
+        //    以 DevEco 生成的模板为准（官方示例里两种都出现过）。
+        "srcEntry": "./ets/InputMethodExtensionAbility/InputMethodService.ets",
+        "name": "InputMethodService",
+        "label": "$string:MainAbility_label",
+        "description": "$string:extension_ability_descriptor",
+        // ⚠️ 必须是 "inputMethod"。写错的表现：装上了但系统输入法列表里没有它。
+        "type": "inputMethod",
+        // exported 必须 true，否则输入法列表里看不到。
+        "exported": true,
+        "metadata": [
+          {
+            // ⚠️ 点 vs 下划线两种写法都见过，以模板为准。写错的表现：
+            //    输入法能选，但子类型（中/英键盘）不出现。
+            "name": "ohos.extension.input_method",
+            "resource": "$profile:input_method_config"
+          }
+        ]
+      }
+    ]
+  }
+}
