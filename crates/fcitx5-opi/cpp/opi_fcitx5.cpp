@@ -14,15 +14,22 @@
 #include <fcitx/addonfactory.h>
 #include <fcitx/addoninstance.h>
 #include <fcitx/addonmanager.h>
+#include <fcitx/candidatelist.h> // CommonCandidateList / CandidateWord
 #include <fcitx/event.h> // KeyEvent / KeyEventBase。fcitx5 5.1.x 无 fcitx/keyevent.h
 #include <fcitx/inputcontext.h>
 #include <fcitx/inputmethodengine.h>
+#include <fcitx/inputpanel.h> // setPreedit / setCandidateList
 #include <fcitx/instance.h>
+#include <fcitx/text.h>
+#include <fcitx/userinterface.h> // UserInterfaceComponent
 #include <fcitx-utils/standardpath.h>
 
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 // ---------- Rust C 出口声明（与 src/lib.rs 的 #[repr(C)]/no_mangle 对应） ----------
 
@@ -66,6 +73,217 @@ static std::string take(OpiString s) {
     return out;
 }
 
+// ---------- 输入面板：预编辑 + 候选栏 ----------
+//
+// ⚠️ UI 通路**不在** AddonInstance 的虚表里。setPreedit / setCandidateList 是
+// InputPanel 的方法（fcitx/inputpanel.h:55 / :68），updateUserInterface 是
+// InputContext 的方法（fcitx/inputcontext.h:210）。引擎要**主动调用**它们，
+// 没有「少 override 了哪个虚函数」这回事 —— 原码的问题是这些函数一次都没被
+// 调用过（`InputMethodEngine` 里确实没有对应的虚函数可 override）。
+//
+// 本文件只推**当前页**给前端：Rust 侧 opi_fcitx5_candidates 返回的已经是
+// 切片后的当前页（candidate.rs 的 candidates() 按 page*PAGE_SIZE 切片），
+// 翻页由 Rust 路由驱动（input_method.rs 的 PageUp/PageDown → prev/next_page）。
+// 若把整份候选交给 CommonCandidateList 自己去翻，C++ 与 Rust 就各存一份页码，
+// 前端点翻页箭头时两边立刻漂移。
+//
+// 取页大小镜像 Rust 侧 candidate.rs 的 PAGE_SIZE；Rust 若改这个数，这里跟着改
+// （取回条数少于它也无副作用，只是不再满页）。
+static constexpr size_t kOpiPageSize = 8;
+
+// 解析 opi_fcitx5_candidates 的返回值：serde_json 对 Vec<String> 的输出
+// （`["好","你"]` —— 非 ASCII 直出 UTF-8，不转义成 \uXXXX，除非原字符是控制
+// 字符）。**只认这一个形状**，不做通用 JSON：这里只有一处调用，通用解析器的
+// 复杂度在这个文件里换不回任何东西。
+static bool parseHex4(const std::string &s, size_t pos, uint32_t &out) {
+    if (pos + 4 > s.size()) {
+        return false;
+    }
+    uint32_t v = 0;
+    for (size_t i = 0; i < 4; ++i) {
+        const char c = s[pos + i];
+        v <<= 4;
+        if (c >= '0' && c <= '9') {
+            v |= static_cast<uint32_t>(c - '0');
+        } else if (c >= 'a' && c <= 'f') {
+            v |= static_cast<uint32_t>(c - 'a' + 10);
+        } else if (c >= 'A' && c <= 'F') {
+            v |= static_cast<uint32_t>(c - 'A' + 10);
+        } else {
+            return false;
+        }
+    }
+    out = v;
+    return true;
+}
+
+static void appendUtf8(std::string &out, uint32_t cp) {
+    if (cp < 0x80) {
+        out.push_back(static_cast<char>(cp));
+    } else if (cp < 0x800) {
+        out.push_back(static_cast<char>(0xC0 | (cp >> 6)));
+        out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    } else if (cp < 0x10000) {
+        out.push_back(static_cast<char>(0xE0 | (cp >> 12)));
+        out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    } else {
+        out.push_back(static_cast<char>(0xF0 | (cp >> 18)));
+        out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    }
+}
+
+static std::vector<std::string> parseJsonStringArray(const std::string &json) {
+    std::vector<std::string> out;
+    size_t i = 0;
+    auto skipWs = [&json, &i] {
+        while (i < json.size() && (json[i] == ' ' || json[i] == '\t' ||
+                                   json[i] == '\n' || json[i] == '\r')) {
+            ++i;
+        }
+    };
+    skipWs();
+    if (i >= json.size() || json[i] != '[') {
+        return out; // 空串（Rust 侧未装载/出错时返回值）也走这里
+    }
+    ++i;
+    while (true) {
+        skipWs();
+        if (i >= json.size() || json[i] != '"') {
+            break;
+        }
+        ++i;
+        std::string s;
+        bool closed = false;
+        while (i < json.size()) {
+            const char c = json[i++];
+            if (c == '"') {
+                closed = true;
+                break;
+            }
+            if (c != '\\') {
+                s.push_back(c);
+                continue;
+            }
+            if (i >= json.size()) {
+                break;
+            }
+            const char esc = json[i++];
+            if (esc == 'u') {
+                uint32_t cp = 0;
+                if (!parseHex4(json, i, cp)) {
+                    i = json.size(); // 坏转义：收摊，已解析的部分照常返回
+                    break;
+                }
+                i += 4;
+                // 代理对（😀）：低半区必须紧跟，否则按单码点编码。
+                if (cp >= 0xD800 && cp <= 0xDBFF && i + 6 <= json.size() &&
+                    json[i] == '\\' && json[i + 1] == 'u') {
+                    uint32_t lo = 0;
+                    if (parseHex4(json, i + 2, lo) && lo >= 0xDC00 &&
+                        lo <= 0xDFFF) {
+                        cp = 0x10000 + ((cp - 0xD800) << 10) + (lo - 0xDC00);
+                        i += 6;
+                    }
+                }
+                appendUtf8(s, cp);
+                continue;
+            }
+            switch (esc) {
+            case 'b':
+                s.push_back('\b');
+                break;
+            case 'f':
+                s.push_back('\f');
+                break;
+            case 'n':
+                s.push_back('\n');
+                break;
+            case 'r':
+                s.push_back('\r');
+                break;
+            case 't':
+                s.push_back('\t');
+                break;
+            default:
+                s.push_back(esc); // \" \\ \/ 及未知转义：取字面字符
+                break;
+            }
+        }
+        if (!closed) {
+            break;
+        }
+        out.push_back(std::move(s));
+        skipWs();
+        if (i < json.size() && json[i] == ',') {
+            ++i;
+            continue;
+        }
+        break;
+    }
+    return out;
+}
+
+// 候选词：点选后走 Rust 侧 select(**页内**索引) 并提交。
+// CandidateWord::select 是纯虚（fcitx/candidatelist.h:44），必须实现。
+class OpiCandidateWord : public fcitx::CandidateWord {
+public:
+    OpiCandidateWord(std::string text, size_t index)
+        : fcitx::CandidateWord(fcitx::Text(std::move(text))), index_(index) {}
+    void select(fcitx::InputContext *ic) const override;
+
+private:
+    // 页内索引（与 Rust 侧 CandidateState::select 同语义，见 candidate.rs
+    // `page * PAGE_SIZE + index`）。
+    size_t index_;
+};
+
+// 把 Rust 侧当前状态（缓冲 = 预编辑串，当前页候选）推到 fcitx5 面板。
+static void refreshingPanelFor(fcitx::InputContext *ic);
+
+void OpiCandidateWord::select(fcitx::InputContext *ic) const {
+    const std::string out = take(opi_fcitx5_select(index_));
+    if (ic != nullptr && !out.empty()) {
+        ic->commitString(out);
+    }
+    // 选完 Rust 侧缓冲/候选都变了，面板必须同步 —— 否则候选栏会留在屏幕上。
+    refreshingPanelFor(ic);
+}
+
+static void refreshingPanelFor(fcitx::InputContext *ic) {
+    if (ic == nullptr) {
+        return;
+    }
+    auto &panel = ic->inputPanel();
+    const std::string buffer = take(opi_fcitx5_buffer());
+    if (buffer.empty()) {
+        // 缓冲空 = 本引擎当前无 composing。用 reset() 而不是 setPreedit("")：
+        // 它把预编辑、候选表、辅助串一起清干净，正是「无 composing」的完整表达。
+        panel.reset();
+    } else {
+        fcitx::Text preedit(buffer);
+        // 光标在预编辑串末尾（按字节；拼音缓冲是 ASCII，字节序即字符序）。
+        preedit.setCursor(static_cast<int>(buffer.size()));
+        panel.setPreedit(preedit);
+
+        auto list = std::make_unique<fcitx::CommonCandidateList>();
+        // 页大小 = 推过去的条数上限，故 C++ 侧候选表恒为单页：翻页只由 Rust
+        // 驱动，前端不会画出与 Rust 页码不一致的翻页箭头（见上方说明）。
+        list->setPageSize(static_cast<int>(kOpiPageSize));
+        const auto texts =
+            parseJsonStringArray(take(opi_fcitx5_candidates(kOpiPageSize)));
+        for (size_t i = 0; i < texts.size(); ++i) {
+            list->append<OpiCandidateWord>(texts[i], i);
+        }
+        panel.setCandidateList(std::move(list));
+    }
+    // 通知前端刷新。immediate=false（默认）：fcitx5 会把同一轮事件里的多次
+    // 更新合并成一次 UI 刷新，这是引擎该走的路。
+    ic->updateUserInterface(fcitx::UserInterfaceComponent::InputPanel);
+}
+
 // ---------- fcitx5 插件本体（结构对齐 fcitx5 example/ime.cpp） ----------
 
 // fcitx::AddonInstance + fcitx::InputMethod 的组合基类在 fcitx5 5.1.x 里叫
@@ -82,8 +300,11 @@ public:
                   fcitx::KeyEvent &keyEvent) override;
 
     void reset(const fcitx::InputMethodEntry & /*entry*/,
-               fcitx::InputContextEvent & /*event*/) override {
+               fcitx::InputContextEvent &event) override {
         opi_fcitx5_clear();
+        // Rust 侧清了缓冲，但面板是 fcitx5 侧的状态：不一并清，失焦/切换输入法
+        // 后预编辑串与候选栏会继续挂在屏幕上（原码只清了引擎，没碰面板）。
+        refreshingPanelFor(event.inputContext());
     }
 
 private:
@@ -199,6 +420,9 @@ void OpiEngine::keyEvent(const fcitx::InputMethodEntry & /*entry*/,
     if (result.action != 2) {
         opi_ffi_free_string_utf8(result.text);
     }
+    // 把引擎新状态推给前端：预编辑串（缓冲）+ 当前页候选。直通（action==0）的
+    // 按键不改缓冲，这里重推的是同一份内容，幂等。
+    refreshingPanelFor(keyEvent.inputContext());
 }
 
 // 工厂类：FCITX_ADDON_FACTORY 宏（fcitx/addoninstance.h:193）只做

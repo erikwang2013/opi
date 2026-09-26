@@ -87,6 +87,22 @@ fcitx5 5.1.x 的真实 API 与常见误写（本文档上一版全是误写，�
 | `keyEvent.isLongPressed()` | **无对应源**（见下） | 5.1.x 的 `KeyEvent` 无长按概念 |
 | `commitString(ic, s)` | `ic->commitString(s)` | `InputContext` 的成员，`inputcontext.h:177` |
 | `FCITX_ADDON_FACTORY(X)` 自己定义 X | 必须先声明 `class X : public AddonFactory` | 宏只做 `static X factory;`，`addoninstance.h:193` |
+| `updateUserInterface` / `setPreedit` / `setCandidateList` 当作 addon 虚函数 | 都不是虚函数，是引擎**主动调用**的成员 | `InputPanel::setPreedit` / `setCandidateList`（`inputpanel.h:55/68`）、`InputContext::updateUserInterface`（`inputcontext.h:210`）；`InputMethodEngine` 虚表里没有 UI 通路 |
+| `updateCandidateList` | **5.1.x 无此符号**（整套头文件 grep 无命中） | 候选表靠 `setCandidateList` + `updateUserInterface` 推送 |
+
+## 输入面板（预编辑 + 候选栏）
+
+`keyEvent` 每次处理完都调 `refreshingPanelFor(ic)`（本文件同名静态函数）：把
+Rust 侧的 buffer 当预编辑串（光标置末尾）、当前页候选当候选表推给
+`ic->inputPanel()`，再 `ic->updateUserInterface(UserInterfaceComponent::InputPanel)`
+通知前端。`reset()` 同样清面板 —— 只清引擎不清面板的话，失焦/切输入法后
+预编辑与候选栏会挂在屏幕上。
+
+设计要点：**页码只有 Rust 一份**。`opi_fcitx5_candidates` 返回的已经是切片后的
+当前页（`candidate.rs` 的 `PAGE_SIZE`），胶水只把它画出来，翻页由 Rust 路由
+（`input_method.rs` 的 PageUp/PageDown → `prev_page`/`next_page`）驱动。若把整份
+候选交给 `CommonCandidateList` 自己翻，前端点翻页箭头会与 Rust 页码漂移。
+代价是候选表恒为单页（`hasNext()` 恒 false，前端不画翻页箭头）。
 
 ## 已知边界
 
@@ -97,6 +113,10 @@ fcitx5 5.1.x 的真实 API 与常见误写（本文档上一版全是误写，�
   物理键事件拿不到。胶水因此不合成该位，`handle_shift` 的长按分支
   （→ `shift_long_press`）在 fcitx5 桌面端不会被触发。
   需要 B3 定入口（CapsLock 映射，或按住超时），不要靠猜补一个信号。
+- **UI 的 `NextPage`/`PrevPage` 是空操作**（实测：调了没有任何面板更新信号）。
+  面板候选表恒单页，前端因此不画翻页箭头，不存在「点了没反应的控件」。
+  翻页只走 PageUp/PageDown 键。要让箭头可点，得把整份候选交给 C++ 列表翻页
+  并让 `prev()/next()` 回调进 Rust —— 那会把页码变成两份状态，需要先定谁是真源。
 
 ## 安装
 
@@ -169,6 +189,45 @@ cp luna.opid "${XDG_DATA_HOME:-$HOME/.local/share}/opi/luna.opid"
 **装完重启 fcitx5**，然后 `fcitx5-diagnose | grep -i opi` 应能看到 addon 与
 输入法条目。
 
+## 验证 harness（**手工跑，不进 CI**）
+
+CI 上既没有 fcitx5 的头/库，也没有 dbus 会话，所以下面这些**都不在 CI 里**，
+要人手动跑 —— 但胶水是本仓库唯一「没有单测、又是纯 C++」的部分，跑一次很值：
+
+| 文件 | 验什么 | 要 dbus |
+|---|---|---|
+| `run-harness.sh` | 一键跑完下面全部 | — |
+| `opi_panel_driver.cpp` | 直接构造 `OpiEngine` + 真 `fcitx::InputContext`，逐项断言面板推进（预编辑/候选/翻页/点选/提交/reset/直通键） | 否 |
+| `opi_json_check.cpp` + `opi_json_vec.txt` | 狭 JSON 解析器 vs **真 serde_json 输出**，逐字节比对 | 否 |
+| `opi_e2e.py` | 真 fcitx5 守护进程里**用户实际收到**的信号（`basic` / `page` / `caps` 三种模式） | **要** |
+
+> `opi_json_vec.txt` 是**数据文件不是代码**：它必须逐字节等于 serde_json 的真实
+> 输出（第 1 行）与候选串的 hex（第 2 行），加任何注释行都会让解析器读错，
+> 所以它**没有**（也不能有）SPDX 头 —— 不是漏了。它的「说明书」写在
+> `opi_json_check.cpp` 的头部注释里（含重新生成用的 Rust 片段）。
+
+一条命令：
+
+```bash
+FCITX5_HEADERS=/tmp/fcitx5-hdr/root/usr/include/Fcitx5 \
+  crates/fcitx5-opi/cpp/run-harness.sh
+```
+
+`FCITX5_HEADERS` **必填**，填「**含 `Core/ Utils/ Config/` 三个子目录**」的那一层
+（deb 解包是 `…/root/usr/include/Fcitx5`，装了 `fcitx5-dev` 的机器是
+`/usr/include/Fcitx5`）。获取办法见本文件开头「取得头文件与库」。
+其余环境变量见脚本头部注释（`FCITX5_LIBS` / `FCITX5_SYSTEM_ADDONS` /
+`OPI_HARNESS_WORK`，都选填）。
+
+脚本自己会：构建 Rust cdylib → 编译链接胶水并查 `ldd -r` 与导出符号 → 布置独立的
+`XDG_CONFIG_HOME`/`XDG_DATA_HOME`（含**把 opi 放进输入法组**的 profile）与 addons
+目录 → 在 `dbus-run-session` 私有会话里起 fcitx5 跑完四种 e2e 模式 → 最后打印
+`Loaded addon opi_fcitx5` 那一行。**不碰用户真实的 fcitx5 配置，也不会连到用户
+正在跑的实例上。** 产物与日志留在 `$OPI_HARNESS_WORK`（缺省 `mktemp -d`）。
+
+`opi_panel_driver.cpp` 第 3 节有一步会打 `[SKIP]` 而不是 `[PASS]`：缓冲 `nihao`
+在词库下常常不足 8 条候选，翻页无从观察 —— 这是词库规模决定的，不是失败。
+
 ## 状态
 
 **编译/链接**：在 fcitx5 5.1.12（deepin 仓库解包头 + 库）下通过
@@ -184,13 +243,52 @@ cp luna.opid "${XDG_DATA_HOME:-$HOME/.local/share}/opi/luna.opid"
   （输入法条目注册成功）
 - 把词库换成 6 字节垃圾时，日志出现上面那行装载失败告警
 
-**未经端到端验证的部分**：在 fcitx5 守护进程内**按下真实按键并看到
-`CommitString`** 这一段没跑通 —— 经 dbus `ProcessKeyEvent` 送键时输入法
-上下文拿不到焦点，按键未进入引擎（`handled=0`，与词库好坏无关；且
-`FocusIn()` 会把当前输入法切回 `keyboard-us`）。故键事件路由与候选提交是在
-**直接构造 `OpiEngine`** 的驱动里验证的（同一份胶水源码 + 同一个 Rust
-`libfcitx5_opi.so`，走真实 `loadDictionary()` 与 `fcitx::InputMethodEngine`
-虚接口）：
+**输入面板（本轮新增，端到端已跑通）**：在私有 dbus 会话里起真 fcitx5，
+经 xdg-desktop-portal 输入法接口（`org.fcitx.Fcitx.InputMethod1`
+的 `CreateInputContext`）建输入上下文，声明
+`Preedit | FormattedPreedit | ClientSideInputPanel`（`1<<1 | 1<<4 | 1<<39`），
+`FocusIn` → 送按键。收到的信号：
+
+```
+Loaded addon opi_fcitx5
+UpdateClientSideUI: preedit="n" cursor=1 候选=8 ['你','那','能','年','呐','呢','吶','您']
+UpdateClientSideUI: preedit="ni" cursor=2 候选=8 ['你','泥','拟','擬','呢','腻','祢','铌']
+UpdateClientSideUI: preedit="nihao" cursor=5 候选=6 ['你','好','号','號','泥','拟']
+键 PageDown -> preedit="n" 候选=8 ['内','內','哪','农','農','难','難','女']
+键 PageUp   -> preedit="n" 候选=8 ['你','那','能','年','呐','呢','吶','您']
+SPACE -> CommitString: 你   （紧接着一条全空的面板更新）
+```
+
+即：预编辑串、候选列表、翻页、提交后清屏**都在真守护进程里被真正的 fcitx5
+推给了客户端**，不只是构造 `OpiEngine` 的自测。
+
+上面这段是**浓缩**（真跑出来每条信号还带 `CurrentIM` 与逐键分节）。要复跑出
+原始输出，跑 `crates/fcitx5-opi/cpp/run-harness.sh`（见上「验证 harness」），
+它会原样打印 `basic` / `page` / `caps 0x12` / `caps 0x8000000012` 四次会话的全部
+信号。
+
+> ⚠️ 之前「按键进不了引擎（`handled=0`）」的**根因不是焦点**：`FocusIn()`
+> 只是把输入法设成当前**输入法组里的当前项**（用户 profile 里是
+> keyboard-us），而 **`SetCurrentIM("opi")` 在 opi 不属于该组时静默无效** ——
+> 不报错、不切换、CurrentIM 信号也不发，看上去就像「插件坏了」。
+> profile 的组里加上 opi（本轮用独立的 `XDG_CONFIG_HOME`，**没有碰用户真实
+> 配置**）后，`CurrentIM` 变成 `['OPI 拼音','opi','zh_CN']`，按键立刻进引擎。
+> 另一条同类陷阱：**面板去哪儿由能力位决定**。`SetCapability` 含
+> `ClientSideInputPanel`（`1<<39`）时面板推给客户端，否则推给 UI addon。
+> 实测对照（同一串按键，只改这一位）：
+>
+> | capability | 客户端收到 |
+> |---|---|
+> | `0x12`（Preedit\|FormattedPreedit） | 只有 `CommitString: 你`，逐键面板信号 **0 条** |
+> | `0x8000000012`（多一位 ClientSideInputPanel） | 逐键 `UpdateClientSideUI`：预编辑 + 光标 + 候选 |
+>
+> `0x1FF` 里**没有**这一位 —— 早先「按了键什么都没显示」很可能是把面板送去了
+> UI 侧而只盯着客户端看（或反过来）。另注：`--ui=testui` 不打印面板内容，
+> 所以**UI addon 那条投递路径本轮没有可观测记录**，可观测的是客户端那条。
+
+键事件路由与候选提交另有**直接构造 `OpiEngine`** 的驱动验证（同一份胶水源码
++ 同一个 Rust `libfcitx5_opi.so`，走真实 `loadDictionary()` 与
+`fcitx::InputMethodEngine` 虚接口）：
 
 | `$XDG_DATA_HOME/opi/luna.opid` | `h`/`a`/`o`/`SPACE` 的 action |
 |---|---|
