@@ -60,6 +60,12 @@ object EngineLoader {
      * 需重拷时 readAsset+write → load(path)。
      * 任一步 I/O 失败（资产缺失/损坏/写盘失败）→ load(null) 回退内置 35 词词库，返回 false
      * （不抛异常，避免 IME 进程在 onCreateInputView 崩溃）；load 失败同样回退。
+     *
+     * **边界（别把这里当作「so 坏了也不崩」的保证）**：本函数只覆盖**词库**层面的失败。
+     * so 缺失/ABI 不匹配是另一个失败域，且发生得更早 —— `OpiEngine` 是 object，
+     * `OpiImeService.kt:28` 的 `EngineController()` 默认参数在 Service 构造时就触碰它
+     * （`System.loadLibrary` 在类初始化里），`SettingsScreen` 首次组合也读 `OpiEngine`，
+     * 两者都在 EngineLoader 之前。要让那种情形也降级，得在 `OpiEngine` 的类初始化处加守卫。
      */
     fun loadAsset(fileOps: FileOps, api: LoadApi, targetPath: String): Boolean {
         try {
@@ -68,15 +74,36 @@ object EngineLoader {
                 fileOps.write(fileOps.readAsset())
             }
         } catch (e: IOException) {
-            api.load(null) // I/O 失败 → 回退内置词库（与 flutter catch → loadFallback 一致）
+            fallback(api) // I/O 失败 → 回退内置词库（与 flutter catch → loadFallback 一致）
             return false
         } catch (e: Exception) {
-            api.load(null) // 兜底：任何异常都不得让 IME 崩溃
+            fallback(api) // 兜底：任何异常都不得让 IME 崩溃
             return false
         }
-        val ok = api.load(targetPath)
-        if (!ok) api.load(null) // 回退内置词库（与 flutter catch → loadFallback 一致）
+        // 捕 Throwable 是有意的：OpiEngine 是 object，init 里 System.loadLibrary("opi_ffi")
+        // 失败抛的是 UnsatisfiedLinkError（Error 而非 Exception）——so 缺失/ABI 不匹配时
+        // catch(Exception) 拦不住，设置页会在启动时直接崩。
+        val ok = try {
+            api.load(targetPath)
+        } catch (e: Throwable) {
+            false
+        }
+        if (!ok) fallback(api)
         return ok
+    }
+
+    /**
+     * 回退装载内置 35 词词库。**必须自己护 throwable**：死 .so 时 `OpiEngine` 的类初始化
+     * 已失败，每次访问都抛 `NoClassDefFoundError`/`UnsatisfiedLinkError`（都是 `Error`），
+     * 在调用点外面套 `catch (Exception)` 拦不住 —— 崩溃只会从「装载失败」推后到「回退失败」。
+     * 集中在这一处，三个调用点（两个 I/O catch + load 失败）都不会漏。
+     */
+    private fun fallback(api: LoadApi) {
+        try {
+            api.load(null)
+        } catch (e: Throwable) {
+            // so 自身不可用：无路可退，交由调用方按 result=false 处理
+        }
     }
 
     /**
@@ -92,7 +119,13 @@ object EngineLoader {
         } catch (e: Exception) {
             return false
         }
-        return api.loadTrad(targetPath)
+        // 同 loadAsset 的 Throwable 理由：生产入口 load(context) 紧接 luna 之后调本函数，
+        // 这里漏掉 Error 会在同一进程里照样崩（trad 是可选增强，失败只降级不崩）。
+        return try {
+            api.loadTrad(targetPath)
+        } catch (e: Throwable) {
+            false
+        }
     }
 
     /** 生产入口：assets/luna.opid → filesDir/luna.opid → OpiEngine。 */

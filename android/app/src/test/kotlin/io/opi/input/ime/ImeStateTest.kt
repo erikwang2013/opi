@@ -1,7 +1,9 @@
 package io.opi.input.ime
 
 import io.opi.input.engine.EngineController
+import io.opi.input.engine.EngineMode
 import io.opi.input.engine.FakeEngine
+import io.opi.input.engine.ShiftState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -144,6 +146,20 @@ class ImeStateTest {
         assertEquals("", state.searchText)
         assertEquals("", state.searchQuery)
         assertFalse(debounce.isPending())
+    }
+
+    @Test
+    fun editorChangedClearsLockedShift() {
+        // 锁定的 ⇧ 不得跨输入目标残留：换输入框/换 app 后再开键盘仍全大写
+        val fake = FakeEngine().apply { mode = EngineMode.ENGLISH.value }
+        val state = newState(fake)
+        state.controller.shiftLongPress()
+        assertEquals(ShiftState.LOCK, state.controller.shiftState)
+
+        state.onEditorChanged()
+
+        assertEquals(ShiftState.OFF, state.controller.shiftState)
+        assertEquals(listOf(true, false), fake.shiftCalls)
     }
 
     @Test

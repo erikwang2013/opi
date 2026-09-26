@@ -1,5 +1,6 @@
 package io.opi.input.keyboard
 
+import androidx.compose.runtime.mutableStateListOf
 import io.opi.input.jni.OpiEngine
 
 /** 符号查询接口（OpiEngine 的面板专用 JNI；JVM 测试注入假实现）。 */
@@ -20,7 +21,9 @@ class SymbolCatalog(private val api: SymbolApi = OpiEngine) {
 
     private var _common: List<String>? = null
     private var _all: List<String>? = null
-    private val _recent = mutableListOf<String>()
+    // 必须是快照可观察状态：SymbolPanel 在组合中读 recents，普通 MutableList 写入
+    // 不产生通知 → recordRecent 后「最近使用」那一行不出现（首次点 emoji 时可见）。
+    private val _recent = mutableStateListOf<String>()
 
     /** 常用 = 全块 symbolsInBlock 并集（按块序），按 text 去重。 */
     val common: List<String> get() {

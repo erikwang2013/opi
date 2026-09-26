@@ -127,9 +127,10 @@ class ImeState(
         searchActive = focused
     }
 
-    /** 输入目标切换/输入视图结束：清搜索、回 qwerty。 */
+    /** 输入目标切换/输入视图结束：清搜索、清 ⇧、回 qwerty。 */
     fun onEditorChanged() {
         resetSearch()
+        controller.resetShift() // 锁定态不得跨输入目标残留（换 app 后开键盘仍全大写）
         view = View.QWERTY
     }
 

@@ -114,6 +114,47 @@ class EngineLoaderTest {
         assertEquals(listOf(null), api.calls)
     }
 
+    @Test
+    fun ioFailureFallbackIsAlsoGuardedAgainstDeadLibrary() {
+        // I/O 失败分支里的 api.load(null) 是回退调用，死 .so 时同样抛 Error：
+        // 不护住会从 loadAsset 逃逸出去（崩在回退那一行，等于没修）。
+        val fileOps = object : EngineLoader.FileOps {
+            override fun assetLength(): Long? = 100L
+            override fun readAsset(): ByteArray = throw IOException("asset missing")
+            override fun existingSize(): Long? = null
+            override fun write(bytes: ByteArray) {}
+        }
+        val api = DeadLibraryApi()
+
+        val ok = EngineLoader.loadAsset(fileOps, api, "/data/luna.opid")
+
+        assertFalse(ok)
+        assertEquals(listOf(null), api.calls)
+    }
+
+    /** 死 .so：OpiEngine 是 object，init 里 System.loadLibrary 失败后每次调用都抛 Error。 */
+    private class DeadLibraryApi : EngineLoader.LoadApi {
+        val calls = mutableListOf<String?>()
+
+        override fun load(path: String?): Boolean {
+            calls += path
+            throw UnsatisfiedLinkError("libopi_ffi.so: ABI mismatch / missing")
+        }
+    }
+
+    @Test
+    fun nativeLibraryErrorFallsBackInsteadOfCrashing() {
+        // so 缺失/ABI 不匹配 → UnsatisfiedLinkError 是 Error 而非 Exception：只 catch
+        // Exception 兜不住，设置页 onCreate 直接崩。load 与随后的回退调用都要护住。
+        val fileOps = FakeFileOps(byteArrayOf(1, 2, 3), existingSize = null)
+        val api = DeadLibraryApi()
+
+        val ok = EngineLoader.loadAsset(fileOps, api, "/data/luna.opid")
+
+        assertFalse(ok)
+        assertEquals(listOf("/data/luna.opid", null), api.calls) // 仍尝试回退内置词库
+    }
+
     /** 假 trad 加载器：记录调用与结果。 */
     private class FakeTradApi(var ok: Boolean = true) : EngineLoader.LoadTradApi {
         val calls = mutableListOf<String>()
@@ -146,6 +187,28 @@ class EngineLoaderTest {
 
         assertFalse(ok)
         assertEquals(listOf("/bad/trad.opid"), api.calls)
+    }
+
+    /** 死 .so 的 trad 路径：loadTrad 同样只能抛 Error。 */
+    private class DeadTradApi : EngineLoader.LoadTradApi {
+        val calls = mutableListOf<String>()
+
+        override fun loadTrad(path: String): Boolean {
+            calls += path
+            throw UnsatisfiedLinkError("libopi_ffi.so: ABI mismatch / missing")
+        }
+    }
+
+    @Test
+    fun tradNativeLibraryErrorReturnsFalseWithoutCrash() {
+        // 生产入口 load(context) 紧接 luna 之后就调 trad：这里不护住，同一进程仍会崩。
+        val fileOps = FakeFileOps(byteArrayOf(1, 2, 3), existingSize = null)
+        val api = DeadTradApi()
+
+        val ok = EngineLoader.loadTradAsset(fileOps, api, "/data/trad.opid")
+
+        assertFalse(ok)
+        assertEquals(listOf("/data/trad.opid"), api.calls)
     }
 
     @Test

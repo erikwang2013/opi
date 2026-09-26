@@ -180,6 +180,34 @@ class EngineControllerTest {
     }
 
     @Test
+    fun switchModeClearsLockedShiftSoItCannotLeakAcrossModes() {
+        // 中→繁→英 后长按 ⇧ 锁定，点「中」/「繁」离开：状态必须复位，否则再切回 English
+        // 时 ⇧ 仍高亮锁定、字母全大写（shiftVisible 只是隐藏按钮，清不掉状态）。
+        val fake = FakeEngine().apply { mode = EngineMode.ENGLISH.value }
+        val ctrl = EngineController(fake)
+        ctrl.shiftLongPress()
+        assertEquals(ShiftState.LOCK, ctrl.shiftState)
+
+        ctrl.switchMode(EngineMode.PINYIN)
+
+        assertEquals(ShiftState.OFF, ctrl.shiftState)
+        assertEquals(listOf(true, false), fake.shiftCalls) // 引擎侧同步关 ⇧
+    }
+
+    @Test
+    fun switchModeClearsSingleShiftToo() {
+        val fake = FakeEngine().apply { mode = EngineMode.ENGLISH.value }
+        val ctrl = EngineController(fake)
+        ctrl.shiftTap()
+        assertEquals(ShiftState.SINGLE, ctrl.shiftState)
+
+        ctrl.switchMode(EngineMode.TRADITIONAL)
+
+        assertEquals(ShiftState.OFF, ctrl.shiftState)
+        assertEquals(listOf(true, false), fake.shiftCalls)
+    }
+
+    @Test
     fun fromIntMapsTraditional() {
         assertEquals(EngineMode.TRADITIONAL, EngineMode.fromInt(4))
         assertEquals(EngineMode.PINYIN, EngineMode.fromInt(99))

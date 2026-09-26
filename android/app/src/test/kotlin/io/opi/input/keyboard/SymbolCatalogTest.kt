@@ -1,5 +1,7 @@
 package io.opi.input.keyboard
 
+import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -87,6 +89,22 @@ class SymbolCatalogTest {
         catalog.recordRecent("s59") // 去重置顶
         assertEquals(50, catalog.recents.size)
         assertEquals("s59", catalog.recents.first())
+    }
+
+    @Test
+    fun recentsAreSnapshotObservable() {
+        // SymbolPanel 在组合中读 catalog.recents：recents 必须是 Compose 可观察状态，
+        // 否则 recordRecent 写入不产生快照通知 → 「最近使用」那一行永远不出现。
+        val catalog = SymbolCatalog(FakeSymbolApi())
+        catalog.recordRecent("😄")
+
+        val reads = mutableListOf<Any>()
+        Snapshot.observe(readObserver = { reads += it }, writeObserver = null) { catalog.recents }
+
+        assertTrue(
+            "读 recents 必须在快照中登记读取（可观察状态），实际 reads=$reads",
+            reads.any { it is SnapshotStateList<*> },
+        )
     }
 
     @Test

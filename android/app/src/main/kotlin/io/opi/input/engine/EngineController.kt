@@ -98,6 +98,8 @@ class EngineController(private val api: OpiEngineApi = OpiEngine) {
 
     fun switchMode(m: EngineMode) {
         api.switchMode(m.value)
+        // ⇧ 只在 English 有意义：离开必须清，否则 LOCK/SINGLE 残留，切回 English 时字母全大写
+        if (m != EngineMode.ENGLISH) resetShift()
         refresh()
     }
 
@@ -155,5 +157,16 @@ class EngineController(private val api: OpiEngineApi = OpiEngine) {
             shiftState = ShiftState.OFF
             api.setShift(false)
         }
+    }
+
+    /**
+     * 无论 single/lock 一律复位（UI 与引擎同步）。模式切换/输入目标变更时调用：
+     * shiftVisible 只能隐藏 ⇧ 按钮，清不掉状态——中→繁→英 长按锁定后离开再切回 English，
+     * ⇧ 仍高亮锁定、字母全大写。
+     */
+    fun resetShift() {
+        if (shiftState == ShiftState.OFF) return
+        shiftState = ShiftState.OFF
+        api.setShift(false)
     }
 }
