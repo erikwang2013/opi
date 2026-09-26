@@ -28,9 +28,9 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.14</string>
+    <string>1.0.15</string>
     <key>CFBundleVersion</key>
-    <string>1.0.14</string>
+    <string>1.0.15</string>
 
     <!-- 输入法进程常驻后台、无 Dock 图标 -->
     <key>LSBackgroundOnly</key>
