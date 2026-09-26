@@ -1,41 +1,63 @@
 #!/usr/bin/env python3
-"""luna 拼音词库统一常用度排序（修复 rime 权重缺陷）。
+"""luna 拼音词库排序（真实字频，修复 rime 权重缺陷 + 布局序缺陷）。
 
-背景（spec 2026-08-15 验收偏差 #4）：luna_pinyin.dict.yaml 第 3 列是读音概率
-份额（多读音字按 P(读音|字) 分派，单读音字 100%），非词频。引擎前缀匹配 +
-纯 freq 排序下，100% 字（蒿/樊/泛/倭/妳）压过无权重常用字（好/发/我/你），
-fa → 樊 非 发。本脚本以 GB2312 一二级（一级拼音序、二级部首序，即常用度序）
-为单字段主体，词组按权重降序排在全部单字之后——单音节输入出常用字，
-多音节输入才出词组。
+背景（spec 2026-08-15 验收偏差 #4）：
+1. luna_pinyin.dict.yaml 第 3 列是读音概率份额（多读音字按 P(读音|字) 分派），非词频；
+2. 旧脚本因此拿 GB2312 一二级码序当常用度替身——但码序是汉字**编码顺序**，同音字
+   谁在前纯属历史巧合：wo→蜗、ni→呢、hao→镐、de→澄、shi→匙、fa→樊（26/30 首位错）。
+现改用 Unihan kHanyuPinlu（逐读音语料词次，见 scripts/hanzi_freq.py）排序。
 
-段序：GB2312 一级 → GB2312 二级 → 其余单字（码位序）→ 词组（权重降序，文件序 tiebreak）。
-freq = FMAX - idx × (FMAX // N)，FMAX = 4e9（同 trad：u32 上限内、段内可区分；
-引擎 user_boost 按 max_freq×2 缩放，learner 一次选词仍压过全部静态词）。
+排序键（同拼音前缀组内，依次比较）：
+  有词次 > 无词次 → 词次降序 → 简体专形优先 → GB 段位（一级/二级/其余）→ 段内序 → 字码位。
+GB 段位**保留**（同频/缺频字的兜底序：常用字仍在生僻字前），只是不再当主键；
+freq = FMAX - idx × (FMAX // N) 的间距编码不变，词组仍排在全部单字之后。
 
-用法：python3 scripts/gen_luna_dict.py <luna_pinyin.dict.yaml> > /tmp/luna_merged.tsv
+kHanyuPinlu 只覆盖 3799 字，其余字按「无词次」落入段位序（旧行为），不会被丢掉。
+「有繁体专形优先」的由来：Unihan 变体镜像字（如 戠 经 kSimplifiedVariant 继承 只 的
+词次）在同音同频时会把真简形 只 顶下去，简体库取有繁体专形的字形可消解。
+读音保留规则（2026-09-26 修）：**有 kHanyuPinlu 词次证据的读音一律保留**，0% 过滤器
+只对无证据读音生效——上游第三列的 0% 是「该读音份额为 0」，**不等于该读音不存在**：
+开 kai 0%（jian 95%）、备 bei 0%（yuan 100%）等 38 字的常用读音被标 0%，旧规则整条
+丢弃后这些字只能由罕用读音打出（开→jian，见 ranking_quality.rs REACH 档）。
+反过来「上游标 0% 且无证据」仍旧丢弃，如 冰 bing 100%/ning 0%（kHanyuPinlu 冰 只有
+bing 167）——留着会把 冰 泄漏进 ni 查询（ni 是 ning 的前缀）。
+旧脚本的「次读音搬组尾 + 锚点表 + 读音概率表」整段退役——真实词次本身
+就表达了「都 dou 常用、du 少用」，不再需要按段位猜。
+
+收录范围（2026-09-26 放开扩展区）：
+  原 `0x4E00..=0x9FFF` 过滤把 luna 表里的扩展 A/B 字整段丢弃（上游表里其实有：
+  2 万多条词条含 BMP 外字符）。现按 hanzi_freq.CJK_RANGES 收录到扩展 B 为止。
+  代价（本次实测）：单字 20902 → 41289（+20387）、词组 21719 → 21759、
+  总行数 47422 → 70014，luna.opid 1.19MB → 1.71MB（+38%）；
+  `opi-tools verify` 装载 10.9ms → 15.6ms（新旧交错各 9 次取最小；耗时与条目数成正比）。
+  扩展区字无 kHanyuPinlu 词次 → 落「无词次」段
+  （段位 2、码位序），仍排在常用字之后，既有候选顺序不变。
+  注音符号 ㄓㄔㄕ（U+3113+）与 〇（U+3007）**不在 CJK_RANGES 内，仍旧不收** ——
+  本次只放开 CJK 扩展区，不顺带改收录范围；它们此前也被同一条过滤丢掉，行为不变。
+  **局限：收录 ≠ 可见。** 扩展 B 依赖设备字体，各厂商覆盖差异很大（常见 tofu 空白框）。
+
+注意 luna_pinyin.dict.yaml **没有 pin**（gen_trad_dict.py 的 terra 有）：上游取
+rime/rime-luna-pinyin master。本次用的版本 sha256 =
+75bcf6eb3ff62b129882ed89cc22b2d80a5347aa72bcfa2ccc839bac298e7314（889896 字节，
+70771 行，与 LICENSES.md 记录的「889KB ~70771 行」一致），用它跑本脚本产出的
+luna.opid 与入库副本 sha256 逐字节相同 —— 即当前产物确实来自这个版本。
+**升级应照 terra 的做法补 pin**（未做：不在本次任务范围，且当前 master 恰好可复现）。
+
+用法（需要网络，下载 Unihan.zip）：
+  python3 scripts/gen_luna_dict.py <luna_pinyin.dict.yaml> > /tmp/luna_merged.tsv
 产物不入库（luna.opid 本身 gitignore）；部署副本 android/app/src/main/assets/luna.opid。
 """
-import codecs
 import sys
 
-FMAX = 4_000_000_000
-
-
-def gb2312_rows() -> tuple[list[str], list[str]]:
-    """GB2312 汉字区 B0–F7 行 × A1–FE 列（GB 码序）；row ≤ 0xD7 为一级（拼音序），
-    其余二级（部首序）。D7FA–D7FE 未定义，显式跳过。"""
-    first: list[str] = []
-    second: list[str] = []
-    for row in range(0xB0, 0xF8):
-        for col in range(0xA1, 0xFF):
-            if row == 0xD7 and col >= 0xFA:
-                continue
-            try:
-                ch = codecs.decode(bytes([row, col]), "gb2312")
-            except UnicodeDecodeError:
-                continue
-            (first if row <= 0xD7 else second).append(ch)
-    return first, second
+from hanzi_freq import (
+    FMAX,
+    gb2312_levels,
+    is_cjk,
+    load_khanyupinlu,
+    load_variants,
+    segpos,
+    unihan_member,
+)
 
 
 def parse_rime(path: str) -> tuple[dict[str, list[tuple[str, int | None]]], list[tuple[str, str, int]]]:
@@ -60,7 +82,7 @@ def parse_rime(path: str) -> tuple[dict[str, list[tuple[str, int | None]]], list
             # "激活词组"去空格：luna_pinyin 词组段是繁体文言成语（中國內地、
             # 一不拗衆），激活后简体候选栏被繁体占满，比逐字更糟。词组治理
             # 需换简体常用词源（terrapinyin/cc-cedict），另立任务。
-            if not word or not pinyin or not all(0x4E00 <= ord(c) <= 0x9FFF for c in word):
+            if not word or not pinyin or not all(is_cjk(c) for c in word):
                 continue
             weight = parse_weight(cols[2]) if len(cols) == 3 else None
             if len(word) == 1:
@@ -88,51 +110,46 @@ def main() -> None:
     if len(sys.argv) != 2:
         print("usage: gen_luna_dict.py <luna_pinyin.dict.yaml> > luna_merged.tsv", file=sys.stderr)
         sys.exit(1)
-    first, second = gb2312_rows()
+    first, second = gb2312_levels()
     if len(first) != 3755 or len(second) != 3008:
         print(f"FATAL: GB2312 一级 {len(first)}/3755、二级 {len(second)}/3008 不符", file=sys.stderr)
         sys.exit(1)
     singles, phrases = parse_rime(sys.argv[1])
 
-    # 读音过滤（显式 0% = 从不使用）+ 概率表（非表音读音组内排序用）
-    readings = {ch: [p for p, w in ps if w is None or w > 0] for ch, ps in singles.items()}
-    probs = {ch: {p: (w or 0) for p, w in ps} for ch, ps in singles.items()}
+    kph = load_khanyupinlu(unihan_member("Unihan_Readings.txt"))
+    trad_of, _simp_of = load_variants(unihan_member("Unihan_Variants.txt"))
 
-    # GB 一级表段归属：连续同读音运行，段读音 = 该字在表中的主读音。
-    # 次读音（rime 权重低于表音，如 镐 gao/hao、都 dou/du）排目标读音组尾，
-    # 避免"hao"查询被 镐(gao 段位置) 压过 好——字频仅由其主读音位置决定。
-    # 健壮性：段内孤字（rime 缺该段读音，如 茧 chong 100%/jian 0%）按前
-    # 后字前瞻归段；新段起始取权重最高读音（夯 ben 2.88%/hang 97.12% → hang）。
-    biaoyin: dict[str, str] = {}
-    cur: str | None = None
-    for i, ch in enumerate(first):
-        rs = readings.get(ch)
-        nxt = readings.get(first[i + 1]) if i + 1 < len(first) else None
-        if rs and (cur in rs or (nxt and cur in nxt)):
-            biaoyin[ch] = cur
-        else:
-            cur = max(rs, key=lambda p: probs[ch].get(p, 0)) if rs else None
-            biaoyin[ch] = cur
-    pos = {ch: i for i, ch in enumerate(first)}
-    anchor: dict[str, int] = {}
-    for ch, by in biaoyin.items():
-        if by:
-            anchor[by] = max(anchor.get(by, 0), pos[ch])
-    LARGE = len(first)
+    # 读音保留规则（2026-09-26 修，原为「显式 0% 即丢弃」）：
+    #   有 kHanyuPinlu 词次证据的读音 **一律保留**；0% 过滤器只对无证据读音生效。
+    # 依据：上游第三列是「该读音的份额」，**0% 的含义是份额为 0，不等于该读音不存在** ——
+    # luna 单字表里 开 kai 0%（jian 95%）、备 bei 0%（yuan 100%）、广 guang 0%（yan 100%）
+    # 等 38 字，常用读音被标 0%，旧规则整条丢弃 → 这些字只能由罕用读音打出来（开→jian）。
+    # kHanyuPinlu 是逐读音语料词次（开 kai 3483），是「读音存在」的直接证据，优先级高于
+    # 上游的份额标注。无证据且 0% = 上游自己声明不用，仍旧丢弃。
+    readings = {
+        ch: [
+            p
+            for p, w in ps
+            if w is None or w > 0 or (kph.get(ch) or {}).get(p, 0) > 0
+        ]
+        for ch, ps in singles.items()
+    }
 
-    def key_of(ch: str, py: str) -> tuple[int, int, int, str]:
-        if biaoyin.get(ch) == py:
-            return (pos[ch], 0, 0, ch)
-        # 非表音读音排组尾：组内按 rime 读音概率降序（重 chong 41.55% 靠前，
-        # rime 乱挂的蛊 chong/涌 chong 无权重 0 靠后；无权重生僻字 0 最后）
-        return (anchor.get(py, LARGE), 1, -probs[ch].get(py, 0), ch)
+    def key_of(ch: str, py: str) -> tuple[int, int, int, int, int, str, str]:
+        cov = (kph.get(ch) or {}).get(py, 0)
+        s, p = segpos(ch)
+        # 同频时简体专形优先（0 排在 1 前）：发（有繁体 發/髮）先于 髮，
+        # 也压住靠 kSimplifiedVariant 继承词次的变形字。
+        only_simp = 0 if any(v != ch for v in trad_of.get(ch, [])) else 1
+        return (0 if cov else 1, -cov, only_simp, s, p, ch, py)
 
     ordered: list[tuple[str, str]] = sorted(
         ((ch, py) for ch, pys in readings.items() for py in pys),
         key=lambda cp: key_of(*cp),
     )
 
-    # 段 4 词组：权重降序，文件序 tiebreak
+    # 段 4 词组：权重降序，文件序 tiebreak（luna 词组第三列是读音概率，几乎全 0，
+    # 故此序≈文件序；词组整体排在单字之后，见 LICENSES.md）
     phrases.sort(key=lambda p: (-p[2], p[0]))
 
     n = len(ordered) + len(phrases)
@@ -147,9 +164,10 @@ def main() -> None:
     sys.stdout.write("\n".join(out) + "\n")
     chs = {ch for ch, _ in ordered}
     print(f"单字: {len(chs)} (一级 {sum(1 for c in chs if c in first)}, "
-          f"二级 {sum(1 for c in chs if c in second)}, 其余 {len(chs) - sum(1 for c in chs if c in first + second)})")
-    print(f"词组: {len(phrases)}")
-    print(f"总行数(含多读音展开): {len(out)}")
+          f"二级 {sum(1 for c in chs if c in second)}, 其余 {len(chs) - sum(1 for c in chs if c in first + second)})", file=sys.stderr)
+    print(f"有词次单字: {sum(1 for c in chs if c in kph)}", file=sys.stderr)
+    print(f"词组: {len(phrases)}", file=sys.stderr)
+    print(f"总行数(含多读音展开): {len(out)}", file=sys.stderr)
     print(f"freq 范围: [{FMAX - (n - 1) * spacing}, {FMAX}] spacing={spacing}", file=sys.stderr)
 
 
