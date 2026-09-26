@@ -48,7 +48,7 @@
       <rect x="224" y="134" width="168" height="90" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
       <text x="308" y="159" text-anchor="middle" font-size="12.5" font-weight="700" fill="#22272E">定位与重拷</text>
       <text x="308" y="181" text-anchor="middle" font-size="9.5" fill="#6B7671">size 与资产比对</text>
-      <text x="308" y="197" text-anchor="middle" font-size="9.5" fill="#6B7671">不一致 → 原子重拷</text>
+      <text x="308" y="197" text-anchor="middle" font-size="9.5" fill="#6B7671">不一致 → 重拷（fcitx5 原子，Android 就地覆盖）</text>
       <text x="308" y="213" text-anchor="middle" font-size="9.5" fill="#6B7671">一致 → 跳过（幂等）</text>
     </g>
     <g>

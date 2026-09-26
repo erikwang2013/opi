@@ -62,7 +62,9 @@ Android fcitx5   TSF+CMP
 - **禁止** `GetStringUTFChars`/`NewStringUTF`（modified UTF-8 把 emoji 代理对编码成 CESU-8，Rust `from_utf8` 拒绝）。
 - 两个 helper（`jstring_to_rust` / `rust_to_jstring`）配单测（含 😄 往返断言）。
 
-### A2.3 JNI 函数清单（17 个，对照 frb Api）
+### A2.3 JNI 函数清单（18 个，对照 frb Api）
+
+> 标题原写「17 个」，但下表实有 18 行 —— 当时的真实数量是 18。（`loadTrad` 是其后简繁功能追加的，现为 19，详见 `specs/2026-08-14-opi-multi-platform-design.md` §10 偏差 #7）
 
 | JNI 函数 | JNI 签名（Kotlin 侧） | 说明 |
 |---|---|---|

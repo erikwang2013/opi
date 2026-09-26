@@ -44,6 +44,16 @@ spec「词频策略」一节的字面公式（一级 9000-序号、二级 6000-�
 - **既有 UI 缺陷（非本功能引入，前会话已知）**：候选栏点击不提交（模拟器用空格提交绕过）；英文模式 ⇧ 布局坐标等。均不在本计划范围。
 - 最终评审（a0cc290..HEAD 9 个功能 commit）裁定 APPROVE：验收 1/2/3/5 达成，跨层模式整数 4=Traditional 五处一致，无 Critical/Important 代码问题。
 
+### 注记后续订正（2026-09-26 复核）
+
+上面两条「未达成/既有 UI 缺陷」在写下时属实，但**均已被其后的 commit 修掉，注记没有回头更新**；另有一条经复核无法执行。原注记保留不动（偏差记录的价值在于留痕），订正结果记于此。
+
+| 原注记 | 复核结论 | 依据 |
+|---|---|---|
+| 「验收标准 #4 简体模式 fa → 发 靠前」未达成，luna.opid 中 樊/泛 freq=100000 > 发 freq=1000 | **已修复**。实测 `data/generated/luna.opid` 的 `fa` 排序为 `发(3649673600)/罚/筏/伐/乏/阀/法/珐`，发已是第 1，樊/泛已不在候选中 | 本注记由 `9e3236d` 加入，**晚于它的** `1d2b85a` 新增 `scripts/gen_luna_dict.py` 并以统一常用度重排重编了 luna.opid。同段「本计划无 luna 重建路径」一并过期 |
+| 「既有 UI 缺陷：候选栏点击不提交」 | **当前代码不成立**。链路完整：`CandidateBar.kt` `.clickable{onTap(i)}` → `ImeScreen.kt` `onTap = router::handleCandidate` → `KeyRouter.kt` `selectFromPage` 非空即 commit → `EngineController.kt` `select(page*pageSize+i)`，且 `KeyRouterTest.candidateSelectCommitsFromPage` 正断言这次提交。注记所指的 Flutter 版已于 `c8fd2f4` 整树删除 | 读链路四层 + 既有单测。保留项：真机触摸未实测，无法排除窗口级触摸问题 |
+| 「既有 UI 缺陷：英文模式 ⇧ 布局坐标」 | **无法证实也无法证伪，按现状不可执行**。所指 Flutter 代码已删除；当前 `QwertyKeyboard.kt` 的键位表逐字移植自已删除的 `qwerty.dart`，全仓库无任何注释/TODO 描述该现象 | `git show c8fd2f4^:flutter/app/lib/keyboards/qwerty.dart` + 全仓库 grep。若要保留，须补上具体现象（哪个键 / 期望位置 / 实际位置） |
+
 ---
 
 ### Task 1: 数据层 — gen_trad_dict.py + TSV + 编译 trad.opid

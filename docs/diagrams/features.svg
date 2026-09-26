@@ -137,7 +137,7 @@
     <text x="814" y="502" font-size="15" font-weight="700" fill="#22272E">多端与包容</text>
     <g fill="#2E8B80"><circle cx="819" cy="525" r="2.6"/><circle cx="819" cy="547" r="2.6"/><circle cx="819" cy="569" r="2.6"/><circle cx="819" cy="591" r="2.6"/></g>
     <g font-size="10.5" fill="#4A5551">
-      <text x="830" y="529">同一 Rust 引擎，五端共享同一套输入语义</text>
+      <text x="830" y="529">同一 Rust 引擎，四端共享同一套输入语义</text>
       <text x="830" y="551">各端原生 UI：Compose / fcitx5 / TSF / SwiftUI</text>
       <text x="830" y="573">核心零平台依赖，可在任意目标上单测</text>
       <text x="830" y="595">模式整数与 ABI 约定跨端一致（0..4）</text>

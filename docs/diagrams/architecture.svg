@@ -24,7 +24,7 @@
 
     <!-- ══════════════ 标题 ══════════════ -->
     <text x="590" y="40" text-anchor="middle" font-size="25" font-weight="700" fill="#22272E">OPI 架构设计</text>
-    <text x="590" y="63" text-anchor="middle" font-size="12.5" fill="#6B7671">一套 Rust 引擎 · 五个平台出口 · 零跨端框架</text>
+    <text x="590" y="63" text-anchor="middle" font-size="12.5" fill="#6B7671">一套 Rust 引擎 · 四个平台出口 · 零跨端框架</text>
 
     <!-- ══════════════ 1. 客户端层 68..200 ══════════════ -->
     <rect x="30" y="86" width="1120" height="114" rx="14" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
@@ -160,7 +160,7 @@
     <g>
       <rect x="316" y="658" width="262" height="62" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
       <text x="332" y="681" font-size="13" font-weight="700" fill="#22272E">checksum</text>
-      <text x="332" y="701" font-size="10.5" fill="#6B7671">FNV-1a64 覆盖尾部 8 字节，逐字节校验</text>
+      <text x="332" y="701" font-size="10.5" fill="#6B7671">FNV-1a64 覆盖 [11, len-8)，值存尾部</text>
     </g>
     <g>
       <rect x="602" y="658" width="262" height="62" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>

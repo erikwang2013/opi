@@ -49,7 +49,8 @@ opi/
 ## 4. Rust 层设计
 
 ### opi-ffi 双 ABI 出口（替换 flutter_rust_bridge）
-- JNI 出口：`JNI_OnLoad` RegisterNatives，17 函数表（load/inputKey/backspace/clear/select/switchMode/setShift/inputSpace/candidates/buffer/mode/searchSymbols/symbolBlocks/symbolsInBlock/learnerEnabled/setLearner/clearUserWords/exportUserWords）
+- JNI 出口：`JNI_OnLoad` RegisterNatives，19 函数表（load/inputKey/backspace/clear/select/switchMode/setShift/inputSpace/candidates/buffer/mode/searchSymbols/symbolBlocks/symbolsInBlock/learnerEnabled/setLearner/clearUserWords/exportUserWords/loadTrad）
+  （原文写「17」但括号内列了 18 个 —— M6 当时的真实数量是 18；简繁功能又加了 `loadTrad`，现为 19。见 §10 偏差 #7）
 - C ABI 出口：`#[no_mangle] extern "C"` 同名函数（utf16 + length 约定），iOS M7 接入
 - 静态单例 `static SINGLETON: Mutex<Option<Engine>>`；设置页与 IME 共享 Learner（语义变更，与蓝图一致）
 - UTF-16 字符串约定（JNI 侧 GetStringChars/NewString）
@@ -86,7 +87,7 @@ opi/
 
 ## 7. 测试策略
 
-- cargo 门禁：全 workspace（当前 115 测试）+ 新插件单测（候选逻辑与 COM/fcitx 胶水分离，纯逻辑可测）
+- cargo 门禁：全 workspace（**115 为 2026-08-14 落笔时的快照；截至 2026-09-26 为 251**）+ 新插件单测（候选逻辑与 COM/fcitx 胶水分离，纯逻辑可测）
 - JNI host JVM smoke：cargo build host cdylib + javac Main.java + java（完全离线）
 - Compose 单测：Android UI + 候选窗 UI（compose-runtime 纯 Kotlin 可 JVM 测）；Robolectric 视下载情况降级
 - fcitx5/TSF 集成测试需桌面环境，推迟到验收阶段
@@ -119,8 +120,9 @@ opi/
 | # | 偏差 | 说明 |
 |---|------|------|
 | 1 | CMP 打包任务名 | 计划 Step 写 `./gradlew :desktop:package`；desktop/ 为独立 Gradle 工程（自带 settings.gradle.kts），实际在 desktop/ 目录执行 `./gradlew package`（CMP 1.11 umbrella 任务，packageDeb/packageDistributionForCurrentOS 亦可用） |
-| 2 | Linux 分发格式为 Deb | CMP 1.11 已移除 Zip 格式枚举（仅 AppImage/Deb/Rpm/Dmg/Pkg/Exe/Msi）；Linux 主机用 dpkg-deb 验证 → targetFormats(Deb)，产物 opi-candidates_0.1.0_amd64.deb；Windows .msi 留验收阶段 |
+| 2 | Linux 分发格式为 Deb | CMP 1.11 已移除 Zip 格式枚举（仅 AppImage/Deb/Rpm/Dmg/Pkg/Exe/Msi）；Linux 主机用 dpkg-deb 验证 → targetFormats(Deb)，产物 `opi-candidates_<packageVersion>_amd64.deb`（当前 1.0.9，随 `desktop/build.gradle.kts` 的 packageVersion 变化）；Windows .msi 留验收阶段 |
 | 3 | 候选窗 UI material3 → foundation 自绘 | CMP 1.11 的 material3 弃用；候选窗 UI 改用 foundation 自绘（desktop/src/main/kotlin/io/opi/candidate/Main.kt） |
 | 4 | gradle 需 --refresh-dependencies | aliyun 镜像 probe 404 被 gradle 缓存，首次解析 JNA 5.6.0 前须 `--refresh-dependencies` 清缓存 |
 | 5 | JNA/CMP 真实 API 修正 | JVM 侧 named pipe server 用 JNA 5.6.0 raw Function（CreateNamedPipe/ConnectNamedPipe/ReadFile）+ WinBase.INVALID_HANDLE_VALUE 等真实 API 核对（与初稿虚拟 API 不同） |
-| 6 | tsf-opi Deactivate 为骨架（正式范围降级） | §4 设计为完整 TSF 生命周期；实际 Deactivate（tsf.rs:142）缺 UnadviseKeyEventSink + composition/候选窗释放，明示标注"验收补全点"。正式降级：Windows 运行验收阶段补全，不在 M6 范围内 |
+| 6 | tsf-opi Deactivate 为骨架（正式范围降级） | §4 设计为完整 TSF 生命周期；实际 Deactivate（tsf.rs:139）缺 UnadviseKeyEventSink + composition/候选窗释放，明示标注"验收补全点"。正式降级：Windows 运行验收阶段补全，不在 M6 范围内 |
+| 7 | JNI 函数数量记录不一致（2026-09-26 复核补记） | §4 原文写「17 函数表」但括号内实列 18 个；M6 计划 A2.3 标题同样写「17 个」而表格实有 18 行 —— **当时的真实数量是 18**，两处标题的 17 均系笔误。简繁功能加入 `loadTrad` 后**现为 19**：`crates/opi-ffi/src/jni.rs` 注册 19 条 `NativeMethod::from_raw_parts`，Kotlin 侧 `OpiEngine.kt` 亦为 19 条 `external fun`，两侧一一对应。（C ABI 侧 `cabi.rs` 为 19 镜像 + `opi_ffi_free_string` = 20） |

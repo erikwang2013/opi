@@ -88,7 +88,7 @@
 
 | 层级 | 方案 |
 |---|---|
-| **核心引擎** | 纯 Rust 实现，多 crate workspace（`engine-core` / `engine-data` / `opi-tools`），无 IO、无平台依赖 |
+| **核心引擎** | 纯 Rust 实现，多 crate workspace（`engine-core` / `engine-data` / `opi-tools`）；其中 **`engine-core` 无 IO、无平台依赖**，`engine-data` 负责文件映射与字节解析，`opi-tools` 是编译 CLI |
 | **出口层** | `opi-ffi` 双 ABI（JNI + C）· `fcitx5-opi`（cdylib）· `tsf-opi`（cdylib COM 服务器），均以进程内单例持引擎 |
 | **客户端 UI** | 各端原生，不引入跨端框架：Android 为 Jetpack Compose；Linux 为 C++ AddonInstance 调 Rust 逻辑；Windows 为 TSF COM + Compose Desktop 候选窗（命名管道 NDJSON 通信） |
 | **平台接入** | Android (InputMethodService)、Linux (fcitx5)、Windows (TSF)、iOS (M7，C ABI 已就绪) |
@@ -105,7 +105,7 @@
 - **出口层** —— ABI 薄壳，只做类型转换、边界校验、panic 隔离。每个进程持一个引擎单例，例如 Android 的设置页与输入法共享同一个 Rust 单例，所以设置页里改动学习开关，输入法里立刻生效。
 - **引擎层** —— `engine-core`，**纯逻辑，无 IO、无平台依赖**。这是整个项目的心脏，也是最容易测的一层：六个模块（`Composer` 状态机 / `Pinyin` 音节切分 / `Trie` 码表 / `Candidates` 排序合并 / `Learner` 用户学习 / `Symbols` 符号表）之上是唯一的 `Engine` 门面，UI 层只跟这个门面打交道。
 - **数据层** —— `.opid` 二进制词库：11 字节头 + 14 字节定长条目表 + 双 blob + FNV-1a64 校验尾。装载走 `mmap` 只读映射，查询零拷贝。
-- **构建管线** —— `data/raw` 的 TSV 源数据经 `opi-tools` 编译成 `.opid`，再经 `verify` 校验和 / 顺序 / 覆盖率三重门禁后才入库。
+- **构建管线** —— `data/raw` 的 TSV 源数据经 `opi-tools` 编译成 `.opid`，再经 `verify` 做校验和 / 顺序两道校验，并由 `trad_coverage` 测试守住 GB2312 单字全覆盖，才入库。
 
 > **关键不变式：词库坏了绝不崩输入法。** 任一环节失败都回退到内置 35 词词库 —— 只有内置词库自身损坏才是不可恢复的。
 
@@ -139,14 +139,14 @@ score = 静态词频 + 用户词频 × boost
 
 **词库生命周期**在进程启动时跑一次：定位（Android 走 assets→filesDir，fcitx5 走 XDG 数据目录）→ 比对 size 决定是否重拷（幂等，防陈旧词库）→ `mmap` 映射 → 校验 → 装入单例。之后 `install_trad` 可以随时热替换繁体词典，且不影响简体模式。
 
-**击键生命周期**每次按键跑一圈，十个步骤：按键分流 → `Composer` 更新缓冲 → `rank_and_pick` 排序 → 候选栏渲染 → 用户选择 → 学习记录 → 提交上屏 → 清空缓冲。关键分支在第二步：**缓冲为空时按键根本不进引擎**（英文/数字模式直传），这是输入法「不卡」的关键 —— 引擎只在真正需要组合的时候才被唤醒。
+**击键生命周期**每次按键跑一圈，十个步骤：① 按键事件 → ② KeyRouter 分流 → ③ `Composer` 状态机 → ④ 缓冲更新 → ⑤ `rank_and_pick` 排序 → ⑥ 候选栏渲染 → ⑦ 用户选择 → ⑧ 学习记录 → ⑨ 提交上屏 → ⑩ 缓冲清空。关键分支在第 ② 步：**缓冲为空时按键根本不进引擎**（英文/数字模式直传），这是输入法「不卡」的关键 —— 引擎只在真正需要组合的时候才被唤醒。
 
 装载之后，每次击键都只是在只读内存上做零拷贝查询。
 
 ### 🏗 构建与测试
 
 ```bash
-cargo test --workspace                   # 单元 + 集成 + 属性测试（245 项，含 fcitx5 61 / TSF 42）
+cargo test --workspace                   # 单元 + 集成 + 属性测试（251 项，含 fcitx5 63 / TSF 44）
 cargo clippy --workspace --all-targets -- -D warnings   # 门禁：零警告
 cd android && ./gradlew testDebugUnitTest   # Android 单测（引擎 FFI + IME 状态机 + 键盘路由 + 宠物）
 cd android && ./gradlew assembleDebug       # 构建 debug APK（cargokit 编译 opi-ffi 三 ABI .so）
@@ -183,17 +183,19 @@ shared/                        # 跨端共享的 Kotlin 源码
   pet/OpiPet.kt                #   项目宠物「小欧」的 Compose 绘制（Android 与 desktop 共用一份）
 data/                          # 词库数据
   raw/                         #   源数据 TSV + LICENSES.md（逐条记录来源与许可证）
-  generated/                   #   编译产物：fallback.opid · luna.opid · trad.opid
+  generated/                   #   编译产物：fallback.opid · trad.opid 入库；
+                               #   luna.opid 未入库（本地重编产物，入库副本在 android assets）
 docs/                          # 宠物、图与设计文档
   opi-pet.svg                  #   项目宠物「小欧」
   diagrams/                    #   架构设计 · 功能设计 · 生命周期
   superpowers/                 #   specs（设计规格）+ plans（实施计划）
+  weixinpay.png · alipay.png   #   赞赏码（页脚引用）
 scripts/                       # 词库生成脚本：gen_luna_dict.py · gen_trad_dict.py
 ```
 
 ### 📅 项目状态
 
-> **当前阶段：M6 多端原生 ✅（2026-08）：Flutter 已删除，Android 全原生**
+> **当前阶段：M6 多端原生（2026-08）：Android 路已完成、Flutter 已删除；Linux / Windows 两路待目标平台验收**
 
 V1 里程碑进度：
 
@@ -202,10 +204,13 @@ V1 里程碑进度：
 - [x] **M3 FFI**：flutter_rust_bridge 绑定 + EngineController（已被 M6 opi-ffi 双 ABI 取代）
 - [x] **M4/M5 Android 接入与 UI**：InputMethodService + 键盘/面板/设置页（Flutter 版，M6 原生重写）
 - [x] **M6a Android 原生重构**：opi-ffi 双 ABI（JNI + C）替换 frb；Compose 原生 IME + 键盘/候选栏/面板/设置页；删除 flutter/
-- [x] **M6b 简繁双词库**：`Mode::Traditional` + 双词典路由 + `trad.opid` + GB2312 单字全覆盖门禁
-- [~] **M6c Linux fcitx5 插件**：Rust 逻辑与单测完成，C++ AddonInstance 胶水已写 —— 需 `fcitx5-dev` 头文件方可编译验收
-- [~] **M6d Windows TSF 插件**：Rust 逻辑、候选窗线协议与 Compose Desktop 候选窗完成 —— COM 服务端按目标平台门控，待在 Windows 上验收
+- [x] **简繁双词库**（spec §8 未给它 M6 编号，独立成项）：`Mode::Traditional` + 双词典路由 + `trad.opid` + GB2312 单字全覆盖门禁
+- [~] **M6b Linux fcitx5 插件**：Rust 逻辑与单测完成，C++ AddonInstance 胶水已写 —— 需 `fcitx5-dev` 头文件方可编译验收
+- [~] **M6c Windows TSF 插件 + CMP 候选窗**：Rust 逻辑、候选窗线协议与 Compose Desktop 候选窗完成 —— COM 服务端按目标平台门控，待在 Windows 上验收
 - [ ] **M7 iOS**：C ABI 出口已就绪，待 SwiftUI 键盘扩展接入
+
+> 里程碑编号以 `docs/superpowers/specs/2026-08-14-opi-multi-platform-design.md` §8 与 M6 实施计划为准
+> （M6a=Android / M6b=fcitx5 / M6c=TSF+候选窗）。
 
 ### 📄 许可证
 
