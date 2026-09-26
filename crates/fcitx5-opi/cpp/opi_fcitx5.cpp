@@ -6,8 +6,7 @@
 // 按动作码（0=直通 1=已处理 2=提交）行事。字符串约定 UTF-8+长度，
 // 返回值由 Rust 侧分配，用 opi_ffi_free_string_utf8 释放。
 //
-// 编译期检查：本机可编译（头文件经 apt-get download 解包，见 README.md），
-// 但无法运行（需要真实 fcitx5 实例）。
+// 构建与验证方式见 README.md（头文件经 apt-get download 解包，无需 root）。
 
 #include <fcitx/addonfactory.h>
 #include <fcitx/addoninstance.h>
@@ -19,6 +18,7 @@
 #include <fcitx-utils/standardpath.h>
 
 #include <cstdint>
+#include <cstdio>
 #include <string>
 
 // ---------- Rust C 出口声明（与 src/lib.rs 的 #[repr(C)]/no_mangle 对应） ----------
@@ -88,13 +88,34 @@ private:
     // 的 luna.opid 拷到 $XDG_DATA_HOME/opi/luna.opid——文件名镜像 Android
     // EngineLoader.FILE_NAME；此处探测同一路径）。B3 接线在验收阶段完成。
     // 找不到时 load(nullptr, 0) → Rust 侧使用内置回退词库。
+    //
+    // **必须接返回值**：`opi_fcitx5_load` 返回装没装上。Rust 侧 `install()` 是
+    // `CandidateState::load(path)?` —— 坏词库在 `?` 处提前返回，单例保持 None，
+    // 于是 `with_state` 恒为 None，所有导出函数退化成空操作。
+    // 而 `install(坏路径) -> Err` 是 Rust 侧**有意**的语义（lib.rs 的
+    // install_singleton_fallback_and_path 测试就断言了「坏路径 → Err，不回退」），
+    // 所以「回退」这件事必须由本层来做 —— 这正是原码丢返回值造成的洞：
+    // 词库**存在但损坏**（下载不全/拷贝中断）时，插件进入「已加载、已注册、
+    // 按键被接受、但一个字都不出，且任何地方都没有错误信息」的状态。
+    // 实测（XDG_DATA_HOME 指向 6 字节垃圾 luna.opid）：四个键全 action=0；
+    // 接上返回值后同样场景回退内置词库，四键 action=1/1/1/2 并提交 '好'。
+    //
+    // 注意 `opi_fcitx5_load` 收的是**路径**不是词库内容（Rust 侧 read_utf8 →
+    // install），故传 `path.data()` 是对的，不要改成传内容。
     void loadDictionary() {
         auto path = fcitx::StandardPath::global().locate(
             fcitx::StandardPath::Type::Data, "opi/luna.opid");
-        if (path.empty()) {
-            opi_fcitx5_load(nullptr, 0);
-        } else {
+        const bool ok =
+            !path.empty() &&
             opi_fcitx5_load(reinterpret_cast<const uint8_t *>(path.data()), path.size());
+        if (!ok) {
+            if (!path.empty()) {
+                // 能走到这里就是「文件在、装不上」（下载不全/拷贝中断）。这行日志
+                // 是必要的：否则词库损坏与「本来就没装词库」在用户侧完全无法区分，
+                // 只会表现为候选质量骤降。
+                fprintf(stderr, "fcitx5-opi: 词库 %s 装载失败，回退内置词库\n", path.c_str());
+            }
+            opi_fcitx5_load(nullptr, 0); // 不存在或装载失败 → 内置回退词库
         }
     }
 
