@@ -166,7 +166,7 @@ After loading, every keystroke walks the read-only mapping and materialises only
 ### 🏗 Build & Test
 
 ```bash
-cargo test --workspace                   # unit + integration + property tests (278, incl. fcitx5 69 / TSF 60)
+cargo test --workspace                   # unit + integration + property tests (both the fcitx5 and TSF tracks)
 cargo clippy --workspace --all-targets -- -D warnings   # gate: zero warnings
 cd android && ./gradlew testDebugUnitTest   # Android unit tests (engine FFI + IME state machine + key routing + pet)
 cd android && ./gradlew assembleDebug       # build debug APK (cargokit compiles opi-ffi three-ABI .so)

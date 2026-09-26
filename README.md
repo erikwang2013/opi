@@ -166,7 +166,7 @@ score = 静态词频 + 用户词频 × boost
 ### 🏗 构建与测试
 
 ```bash
-cargo test --workspace                   # 单元 + 集成 + 属性测试（278 项，含 fcitx5 69 / TSF 60）
+cargo test --workspace                   # 单元 + 集成 + 属性测试（含 fcitx5 / TSF 两轨）
 cargo clippy --workspace --all-targets -- -D warnings   # 门禁：零警告
 cd android && ./gradlew testDebugUnitTest   # Android 单测（引擎 FFI + IME 状态机 + 键盘路由 + 宠物）
 cd android && ./gradlew assembleDebug       # 构建 debug APK（cargokit 编译 opi-ffi 三 ABI .so）
