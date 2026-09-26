@@ -44,7 +44,8 @@ compose.desktop {
             // Windows .msi 为验收阶段（Windows 主机上构建）。
             targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb)
             packageName = "opi-candidates"
-            packageVersion = "0.1.0"
+            // 与发布 tag 对齐（同 android/app/build.gradle.kts 的 versionName）。
+            packageVersion = "1.0.9"
             description = "OPI 拼音输入法候选窗（TSF 插件经 named pipe 通信）"
             vendor = "OPI"
         }

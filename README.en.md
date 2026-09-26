@@ -93,6 +93,7 @@ Build once, deploy everywhere. Covering **Android, iOS, HarmonyOS, Windows, macO
 | **Client UI** | Native per platform, no cross-platform framework: Jetpack Compose on Android; a C++ AddonInstance calling Rust on Linux; TSF COM plus a Compose Desktop candidate window on Windows (NDJSON over a named pipe) |
 | **Platform integration** | Android (InputMethodService), Linux (fcitx5), Windows (TSF), iOS (M7, C ABI ready) |
 | **Data sync** | Reserved for V2: end-to-end encryption + self-hosted support — use the official service or run your own sync server |
+| **Versioning** | Single source of truth: `[workspace.package] version` in the root `Cargo.toml`, shared by all six crates; Android `versionName` and desktop `packageVersion` align to it, and releases are tagged with the same number |
 
 ### 🧭 Architecture
 

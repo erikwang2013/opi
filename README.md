@@ -93,6 +93,7 @@
 | **客户端 UI** | 各端原生，不引入跨端框架：Android 为 Jetpack Compose；Linux 为 C++ AddonInstance 调 Rust 逻辑；Windows 为 TSF COM + Compose Desktop 候选窗（命名管道 NDJSON 通信） |
 | **平台接入** | Android (InputMethodService)、Linux (fcitx5)、Windows (TSF)、iOS (M7，C ABI 已就绪) |
 | **数据同步** | V2 预留：端到端加密 + 自托管服务支持，用户可选择使用官方服务或自建同步服务器 |
+| **版本** | 单一版本源：根 `Cargo.toml` 的 `[workspace.package] version`，6 个 crate 共用；Android `versionName` 与 desktop `packageVersion` 向它对齐，发布 tag 取同一号 |
 
 ### 🧭 架构设计
 
