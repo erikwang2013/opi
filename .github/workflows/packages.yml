@@ -1,0 +1,91 @@
+# SPDX-FileCopyrightText: 2026 erik.xyz
+# SPDX-License-Identifier: MIT
+name: Packages
+
+# 打包 .deb / .rpm 并在发版时附到 release 上。
+#
+# 为什么单独一个 workflow（而不是塞进 ci.yml 的 fcitx5 job）：
+#   ci.yml 只**验**落点（装到暂存树，再问真 fcitx5 库「你去哪找」）。打包是另一件事 ——
+#   它要 nfpm、要两个格式各自的库目录布局、要在 publish 之后把产物挂到 release 上，
+#   而且**只在发版时才有意义**。两条通路的失败含义不同，不该互相拖累。
+#
+# ⚠️ release 事件 checkout 的是**那个 tag 的提交**，不是 main 的头部。
+#    所以 scripts/build-packages.sh 与 scripts/nfpm.yaml 必须在那次 tag **之前**
+#    就已经入库 —— 否则本 job 会在「找不到脚本」上红，而那是发布之后才发现的。
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+# gh release upload 要写 release 上的资产。缺了它 gh 会以 403 失败，
+# 报错文本指向 token 而不是权限块，容易看错地方。
+permissions:
+  contents: write
+
+jobs:
+  packages:
+    name: 打包 .deb / .rpm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 与 ci.yml 的 fcitx5 job 同一组包名（在 ubuntu:24.04 容器里实测可装，
+      # 版本 5.1.7-1build3）。CMake 侧靠 Fcitx5Utils 导出的 FCITX_INSTALL_ADDONDIR
+      # 定 addon 落点，所以**装不到 dev 包就会退化成解包头模式、落点随之不同**。
+      - name: 装 fcitx5 头/库
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfcitx5core-dev libfcitx5utils-dev libfcitx5config-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # nfpm 是 Go 写的单二进制。装它的方式就是 scripts/build-packages.sh 里
+      # 那段「找不到 nfpm」提示写的那种（go install），保持一致。
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      # ⚠️ 版本**钉住**，不用 @latest。原因不是洁癖：打包的正确性押在 nfpm 的
+      # contents 语义上（脚本里记着 nfpm 2.47 不展开 contents.src 里的 ${...}，
+      # 于是脚本自己 sed 出字面值）。@latest 会让「某天 nfpm 改了语义」变成
+      # **静默打出一个错包**，而不是一次能看见的红。
+      # v2.47.0 = 本机这套脚本实测过的那个版本（Go 模块缓存里的版本号即为它）。
+      # 注意它的 go.mod 要求 go >= 1.26.4；上面 setup-go 取 stable，
+      # 若 runner 的 stable 更低，Go 会按 GOTOOLCHAIN=auto 自己拉工具链，不会红。
+      - name: 装 nfpm（钉 v2.47.0）
+        run: |
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      # 脚本自己会：读 Cargo.toml 的 workspace version（不写死版本）、
+      # 为 deb/rpm 各建一棵 CMake 暂存树、跑空转护栏、打印包内清单。
+      # 这里**不重复任何一处落点或版本** —— 重复就是造第二个会漂的真源。
+      - name: 打包
+        run: scripts/build-packages.sh
+
+      # workflow_dispatch 那条通路没有 release 可挂，产物得从这里取，
+      # 否则手动跑一次只能证明「它绿了」，拿不到包。
+      # if-no-files-found: error —— 默认只 warn，而「绿了但没产物」正是本仓
+      # 反复栽过的那种假绿。
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opi-packages
+          if-no-files-found: error
+          path: |
+            dist/*.deb
+            dist/*.rpm
+
+      # 只在 release 事件下挂资产；手动触发时这步整体跳过。
+      # 用 $GITHUB_REF_NAME（release 事件下即 tag 名）而不用 ${{ }} 插值 ——
+      # 少一处把 tag 名拼进 shell 的地方。用 --repo 显式给出仓库：release 事件
+      # checkout 的是 tag，处于 detached HEAD，别让 gh 去猜 remote。
+      # --clobber：重跑这个 job 时覆盖同名资产（否则 gh 报「资产已存在」而红）。
+      #   ⚠️ 它也意味着**同名的手工上传物会被静默替换** —— 这是要的，
+      #   但别在该版本已经手工传过包的情况下当成「只是补一个文件」。
+      - name: 附到 release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$GITHUB_REF_NAME" dist/*.deb dist/*.rpm \
+            --repo "$GITHUB_REPOSITORY" --clobber

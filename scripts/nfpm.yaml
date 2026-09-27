@@ -1,0 +1,46 @@
+# SPDX-FileCopyrightText: 2026 erik.xyz
+# SPDX-License-Identifier: MIT
+#
+# nFPM 配置：把 CMake 的**暂存安装树**原样搬进 .deb / .rpm。
+# 由 scripts/build-packages.sh 驱动，四个 ${...} 由该脚本以环境变量注入。
+#
+# ⚠️ 这里**不重复声明任何安装落点**。落点由 crates/fcitx5-opi/cpp/CMakeLists.txt 的
+# install() 决定，而它被 opi_locate_check 对着**真 fcitx5 库**验过（问真库
+# 「loadDictionary() 会去哪找」，再与 cmake --install 的落点比）。打包侧再抄一份
+# 路径 = 造一个会漂的第二真源 —— 那正是本项目反复栽过的那类问题。
+# 所以本文件只有一条 contents：把暂存树的 usr/ 整棵搬成包里的 /usr/。
+
+name: opi
+arch: ${PKG_ARCH}
+platform: linux
+version: ${PKG_VERSION}
+section: utils
+priority: optional
+maintainer: erik.xyz
+vendor: OPI
+homepage: https://github.com/erikwang2013/opi
+
+# 代码是 MIT，但本包**同时分发词库数据**，而数据与代码分开授权（见随包安装的
+# LICENSES.md）。这里的 license 字段只够表达代码那一半，别把它读成整包的授权声明。
+license: MIT
+
+description: |
+  OPI 拼音输入法 —— fcitx5 插件（含简体词库）
+  模糊拼音 · 简拼 · 中文标点 · 全角半角 · 符号面板。
+  安装后重启 fcitx5 并在「输入法」里添加 OPI 即可使用。
+
+depends:
+  - fcitx5
+
+contents:
+  # 暂存树整棵 —— 落点见上面那段说明
+  - src: ${PKG_STAGE}/usr
+    dst: /usr
+  # ⚠️ 许可证文本**必须随包分发**：luna.opid 由 LGPL-3.0（rime-luna-pinyin）与
+  # Apache-2.0（rime-pinyin-simp）的数据编译而来，两者都要求在分发物中保留
+  # 许可与署名。少了这两个文件，包在授权上就是不完整的（而代码照样能跑，
+  # 所以它不会自己暴露 —— 只能在打包时守住）。
+  - src: LICENSE
+    dst: /usr/share/doc/opi/LICENSE
+  - src: data/raw/LICENSES.md
+    dst: /usr/share/doc/opi/LICENSES.md
