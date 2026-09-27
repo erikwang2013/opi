@@ -121,7 +121,8 @@ const PRINTABLE_BY_DESIGN: &[&str] = &["engine_core::KEY_SPACE", "fcitx5::KEY_SP
 ///
 /// 收两条，都是**结构**（与写法无关 —— 带不带属性、`pub` 不 `pub`、一行几条、在不在
 /// `mod` 或函数体里，全都不影响）：
-/// 1. **声明**：任何 `ItemConst` / `ImplItemConst`，名字 `KEY_*` 且不是 `KEY_STATE_*`。
+/// 1. **声明**：任何 `ItemConst` / `ImplItemConst` / `TraitItemConst`，名字 `KEY_*` 且不是
+///    `KEY_STATE_*`。
 /// 2. **宏 token 流里的裸名字**：参数化宏
 ///    （`macro_rules! { ($n:ident, $v:expr) => { pub const $n: u32 = $v; }; }` 加一次调用）
 ///    就是这样引入常量名的，AST 里没有它的声明可看，只能在调用处认这个名字。
@@ -143,7 +144,25 @@ fn key_names_in_code(src: &str) -> Vec<String> {
     v.names
 }
 
-/// 走 `syn` 的完整遍历：顶层、`mod` 内容、函数体、`impl` 里的常量都会走到。
+/// **覆盖声明** —— 本判据的射程按**位置**写，不按部件写（问「看哪些位置」，不问「哪个组件还在」）：
+///
+/// **收**：任何位置的 `const` 声明本身（顶层 / `mod` 内 / 函数体内 / 块表达式内）**及其初始式
+/// 子树**；`impl` 关联常量（声明及子树）；`trait` 关联常量（`trait` 声明处与 `impl` 提供处都收）；
+/// 宏 token 流里的裸 `KEY_*` 名（含 `Group` 递归；`::` 尾段除外）。
+///
+/// **不收**（点名）：`static`（`error[E0530]`——`static` 不能当 `match` 模式，而键码在两轨里各
+/// 有 7 条当模式臂用 ⇒ `static KEY_*` 不是键码；它有另一道执行点：`two_track_keycodes.rs`
+/// 的非空转护栏）、`enum` 变体、`use` 路径、`VK_*` / `SPECIAL_KEYS` / `KEY_STATE_*`（按名排除）。
+///
+/// ⚠️ **覆写必须续默认递归**：不续 ⇒ 该节点的**子树整棵不看**，不报错也不红，是纯静默漏放
+/// （修前 `visit_item_const` / `visit_impl_item_const` 就是这样）。判别器是同形状的一红一绿：
+/// `static S: u32 = { const KEY_ZZZ: u32 = 1; KEY_ZZZ }` RED（该节点没被覆写，默认递归进去了）
+/// vs `const MASK_A: u32 = { … }` 同形状 GREEN —— 差别只在**覆写了哪个方法**；修后两者必须都红。
+///
+/// **已知边界**（今天三源 0 命中，按裁决不修）：表达式位置宏里的**裸跨轨名**（`use
+/// engine_core::keys::KEY_LEFT;` + 函数体里 `matches!(0u32, KEY_LEFT)`）会被记到本轨头上，
+/// 要求登记 `tsf::KEY_LEFT`。不修的理由：修它要把归属放宽成「任一轨登记即可」，那会动
+/// 「各轨自证」这条不变式；而命中的失败是**响亮的红**，把路径写全即可解决。
 #[derive(Default)]
 struct KeyNames {
     names: Vec<String>,
@@ -159,10 +178,17 @@ fn keep_if_key_code(ident: &syn::Ident, out: &mut Vec<String>) {
 impl<'ast> syn::visit::Visit<'ast> for KeyNames {
     fn visit_item_const(&mut self, c: &'ast syn::ItemConst) {
         keep_if_key_code(&c.ident, &mut self.names);
+        syn::visit::visit_item_const(self, c);
     }
 
     fn visit_impl_item_const(&mut self, c: &'ast syn::ImplItemConst) {
         keep_if_key_code(&c.ident, &mut self.names);
+        syn::visit::visit_impl_item_const(self, c);
+    }
+
+    fn visit_trait_item_const(&mut self, c: &'ast syn::TraitItemConst) {
+        keep_if_key_code(&c.ident, &mut self.names);
+        syn::visit::visit_trait_item_const(self, c);
     }
 
     fn visit_macro(&mut self, m: &'ast syn::Macro) {
