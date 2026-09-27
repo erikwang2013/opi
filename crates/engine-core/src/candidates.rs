@@ -4,6 +4,7 @@
 use crate::composer::Mode;
 use crate::dictionary::Dictionary;
 use crate::fuzzy;
+use crate::jianpin;
 use crate::learner::Learner;
 use crate::pinyin::segment;
 use crate::symbols::SymbolEngine;
@@ -47,7 +48,7 @@ pub fn rank_and_pick<D: Dictionary + ?Sized>(
     boost: u64,
 ) -> Vec<Candidate> {
     // 空输入守卫必须**先于**模式分派：`ranking_invariants.rs` 与 `adversarial_input.rs`
-    // 都对「含 Symbol 的 5 模式 + 空输入」断言无候选（`search("")` 会返回全部 583 条）。
+    // 都对「含 Symbol 的 5 模式 + 空输入」断言无候选（`search("")` 会返回全部条目）。
     if input.is_empty() {
         return Vec::new();
     }
@@ -175,6 +176,17 @@ pub fn rank_and_pick<D: Dictionary + ?Sized>(
     }
     fuzzy.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
 
+    // ── 简拼：缩写展开（常开；展开选择与上限见 jianpin.rs）────────────────────
+    // 与模糊同一分档规则、同一「非精确」约定（`exact = false`）：纯缩写输入下这个 flag
+    // 本无机会成立 —— 每个音节 ≥ 2 字母 ⇒ 展开串比缩写长，`pinyin_len` 不可能等于输入
+    // 长度。显式写死是因为这条判定对**替身词库**（键任意）同样成立，别让它去赌数据。
+    let mut jianpin: Vec<Candidate> = jianpin::expansions(dict, learner, boost, input)
+        .iter()
+        .flat_map(|v| dict.query_all(v))
+        .map(|e| hanzi(e, false))
+        .collect();
+    jianpin.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
+
     // 单字符时仅并入 emoji：符号英文关键字前缀（如 comma→顿号）泄漏进拼音候选是噪音
     // ——真机 "c" 键唯一候选曾是顿号。emoji 保留作趣味反馈。过滤由 search 内部完成：
     // 单键 183 条命中只克隆 16 条 emoji，其余不再被造出来再丢掉。
@@ -210,6 +222,16 @@ pub fn rank_and_pick<D: Dictionary + ?Sized>(
         merged = fuzzy;
     } else {
         merged.extend(fuzzy);
+    }
+    // 简拼档比模糊档更靠外（模糊是同音/近音的整串替换，简拼是缩写），故接在模糊之后。
+    // 分档规则与上面逐字相同：**精确档为空时它就是这个输入的主结果** —— 打 `nh` 的人想要
+    // 的就是「你好」，退到列表末尾等于没做（`nh` 这类纯缩写在词库里本就查不出东西，
+    // 这是产品上最常见的那条路径，不是边角）。非空时只追加，截断先砍它。
+    jianpin.retain(|c| seen.insert(c.text.clone()));
+    if merged.is_empty() {
+        merged = jianpin;
+    } else {
+        merged.extend(jianpin);
     }
     merged.truncate(limit);
     merged

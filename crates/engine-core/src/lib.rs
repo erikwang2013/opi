@@ -10,6 +10,7 @@ pub mod composer;
 pub mod dictionary;
 pub mod engine;
 pub mod fuzzy;
+pub mod jianpin;
 pub mod keys;
 pub mod learner;
 pub mod pinyin;
