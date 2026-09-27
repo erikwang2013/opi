@@ -28,26 +28,33 @@ class SymbolCatalog(private val api: SymbolApi = OpiEngine) {
     // 不产生通知 → recordRecent 后「最近使用」那一行不出现（首次点 emoji 时可见）。
     private val _recent = mutableStateListOf<String>()
 
-    /** 常用 = 全块 symbolsInBlock 并集（按块序），按 text 去重。 */
+    /**
+     * 常用 = 各 **common 块** 的 `symbolsInBlock` 并集（按块序），按 text 去重。
+     *
+     * ⚠️ **空结果不写进缓存**：`_common` 一旦被写成空列表就再也不会重算，而「第一次访问
+     * 时引擎还没就绪 / FFI 抖一下」都会返回空 —— 症状是**三个标签从此永远全空**，
+     * 且要重启进程才恢复。空 = 没拿到，不是「真的没有」，所以留着重试。
+     */
     val common: List<String> get() {
-        if (_common == null) {
-            val seen = LinkedHashSet<String>()
-            for (b in parseBlocks(api.symbolBlocks())) {
-                for (text in api.symbolsInBlock(b.id) ?: emptyArray()) seen.add(text)
-            }
-            _common = seen.toList()
+        _common?.takeIf { it.isNotEmpty() }?.let { return it }
+        val seen = LinkedHashSet<String>()
+        // 只取 common 块：引擎的 symbol_blocks() 已经按 common 过滤过，这里再过一次标志位，
+        // 免得将来有人把过滤挪走时「常用」又变回「全部」。
+        for (b in parseBlocks(api.symbolBlocks()).filter { it.common }) {
+            for (text in api.symbolsInBlock(b.id) ?: emptyArray()) seen.add(text)
         }
-        return _common!!
+        return seen.toList().also { if (it.isNotEmpty()) _common = it }
     }
 
-    /** 全部 = searchSymbols('')：空关键字时引擎返回全部条目。 */
+    /** 全部 = searchSymbols('')：空关键字时引擎返回全部条目。空结果同样不缓存。 */
     val all: List<String> get() {
-        if (_all == null) _all = api.searchSymbols("")?.toList() ?: emptyList()
-        return _all!!
+        _all?.takeIf { it.isNotEmpty() }?.let { return it }
+        val list = api.searchSymbols("")?.toList() ?: emptyList()
+        return list.also { if (it.isNotEmpty()) _all = it }
     }
 
-    /** 表情 = 全量按 emoji 过滤（惰性一次）。 */
-    val emoji: List<String> by lazy { all.filter(::isEmoji) }
+    /** 表情 = 全量按 emoji 过滤。**不能用 `by lazy`** —— 它只算一次，首次若 all 为空就永久空。 */
+    val emoji: List<String> get() = all.filter(::isEmoji)
 
     fun search(q: String): List<String> {
         if (q.trim().isEmpty()) return all

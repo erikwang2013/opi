@@ -131,4 +131,52 @@ class SymbolCatalogTest {
         assertTrue(SymbolCatalog.parseBlocks("").isEmpty())
         assertTrue(SymbolCatalog.parseBlocks("not json").isEmpty())
     }
+
+    /** 只有 `common:true` 的块进「常用」—— 否则「常用」会变成全部 583 条、且以几何图形打头。 */
+    @Test
+    fun commonExcludesBlocksNotMarkedCommon() {
+        val api = FakeSymbolApi().apply {
+            blocksJson =
+                """[{"id":1,"start":12288,"end":12351,"name":"CJK 符号","common":true},""" +
+                    """{"id":2,"start":9632,"end":9727,"name":"几何图形","common":false}]"""
+            blockContents[1] = listOf("、", "。")
+            blockContents[2] = listOf("■", "□")
+        }
+        val catalog = SymbolCatalog(api)
+        assertEquals(listOf("、", "。"), catalog.common)
+    }
+
+    /**
+     * **空结果不得写进缓存。** `_common` 一旦被写成空列表就再也不会重算 ——
+     * 「第一次访问时引擎没就绪 / FFI 抖一下」会让三个标签从此永远全空，
+     * 且要重启进程才恢复。空 = 没拿到，不是「真的没有」。
+     */
+    @Test
+    fun emptyResultIsNotCachedSoItRecovers() {
+        val api = FakeSymbolApi().apply {
+            blocksJson =
+                """[{"id":1,"start":12288,"end":12351,"name":"CJK 符号","common":true}]"""
+            blockContents[1] = emptyList() // 首次：引擎未就绪 → 空
+        }
+        val catalog = SymbolCatalog(api)
+        assertTrue("首次本来就该是空", catalog.common.isEmpty())
+
+        val firstBlocksCalls = api.blocksCalls
+        api.blockContents[1] = listOf("、", "。") // 引擎就绪
+        assertEquals("空结果被缓存了 → 永远恢复不了", listOf("、", "。"), catalog.common)
+        assertTrue("应当重新查了一次", api.blocksCalls > firstBlocksCalls)
+    }
+
+    /** 同上，`all` 也不能缓存空；`emoji` 跟着恢复（它曾是 `by lazy`，只算一次）。 */
+    @Test
+    fun emptyAllIsNotCachedAndEmojiFollows() {
+        val api = FakeSymbolApi().apply { searchResults = emptyList() }
+        val catalog = SymbolCatalog(api)
+        assertTrue(catalog.all.isEmpty())
+        assertTrue(catalog.emoji.isEmpty())
+
+        api.searchResults = listOf("。", "😄")
+        assertEquals(listOf("。", "😄"), catalog.all)
+        assertEquals(listOf("😄"), catalog.emoji)
+    }
 }
