@@ -176,6 +176,38 @@ endif()
 #
 # 编译选项与 run-harness.sh 的 g++ 行逐字对齐（-Wall -Wextra -Werror：警告即
 # 失败）。两者是同一份源码的两条通路，别让它们漂。
+#
+# ---- C++ 标准：20（两个 target 都写，清单在下面两处 set_target_properties）----
+#
+# fcitx5 从 5.1.21 起头里用了 std::span / std::ranges / string::starts_with（要
+# C++20）。实测：5.1.21、5.1.22、5.1.23 有，5.1.12 与 5.0.21 没有 —— **分界在
+# 5.1.12 与 5.1.21 之间**（没逐版二分到具体那一个版本）。钉 17 的后果是 Arch
+# （fcitx5 5.1.23 + GCC 16）上两个 target 都编不过，报的是
+# 「'std::span' is only available from C++20 onwards」这类**硬错误**：与 -Werror
+# 无关，剥掉 -Werror 照样红。改 20 对老版本安全：5.0.21 与 5.1.12 的头在
+# -std=gnu++20 -Wall -Wextra -Werror 下实测**零错误零警告**。
+#
+# ⚠️ 别改成「删掉 CXX_STANDARD 让它继承」：fcitx5 的 Fcitx5CompilerSettings.cmake
+# （那里写着 CMAKE_CXX_STANDARD 20）**没有被任何已安装的 Fcitx5*Config.cmake
+# include**（实测 grep 零命中），继承不到。Arch 上删了也编得过，只是因为 GCC 16
+# 的默认标准恰好是 C++20（实测 __cplusplus=202002L）；默认标准随编译器版本变
+# （本机 GCC 12 实测 201703L）⇒ 换个默认 17 的编译器 + 5.1.21 以上的头，红的就是
+# 上面那个硬错误（这条等价于把 CXX_STANDARD 钉回 17 —— Arch 上已实测红）。
+#
+# ---- 为什么两个 .cpp 里有 #pragma … "-Wdeprecated-declarations" ----
+#
+# fcitx5 自 5.1.21 起把 StandardPath 标为弃用（替代品是 StandardPaths）。**不能迁移**：
+# standardpaths.h 在 5.1.12 与 5.0.21 里根本不存在（实测零命中），而这两个版本仍在支持
+# 范围内；分界在 5.1.12 与 5.1.21 之间（未逐版二分）。于是每一处 StandardPath 用法各包
+# 一层 push / ignored / pop，**只包住那几条语句**（opi_fcitx5.cpp 的 loadDictionary()、
+# opi_locate_check.cpp 的 check() 与 main()）。
+#
+# ⚠️ 别把它挪成这里的全局 -Wno-error=deprecated-declarations —— 那等于对**将来任何**
+# 弃用一起关掉这道门禁，而它现在是有效的一票（5.1.23 上剥掉抑制即红）。
+# 何时删：不再支持 <5.1.21 时改用 StandardPaths，并连同两个 .cpp 里的 pragma 一起删。
+#
+# 这段散文**只写这一处**：三个 pragma 点各留一行指针。复制成多份必漂（本仓老毛病），
+# 而且 opi_fcitx5.cpp 的行数余量本来就小（500 行门禁）。
 add_library(opi_fcitx5_glue SHARED opi_fcitx5.cpp)
 
 # addon 的 Library= 写的是 libfcitx5_opi_glue，而 fcitx5 按 `X` -> `X.so` 找
@@ -186,7 +218,7 @@ add_library(opi_fcitx5_glue SHARED opi_fcitx5.cpp)
 set_target_properties(opi_fcitx5_glue PROPERTIES
     PREFIX ""
     OUTPUT_NAME "libfcitx5_opi_glue"
-    CXX_STANDARD 17
+    CXX_STANDARD 20 # 理由见上面「C++ 标准：20」那段 —— 别改回 17、也别删
     CXX_STANDARD_REQUIRED ON
     # 胶水靠 dlopen 找同目录的 libfcitx5_opi.so（Rust cdylib），$ORIGIN 是
     # 唯一不写死绝对路径的办法 —— 与 run-harness.sh 的 -Wl,-rpath,'$ORIGIN' 同义。
@@ -224,7 +256,7 @@ target_link_libraries(opi_fcitx5_glue PRIVATE "${_opi_rust_linkname}")
 # 「没被编译器看过」才不会再发生一次。
 add_executable(opi_locate_check opi_locate_check.cpp)
 set_target_properties(opi_locate_check PROPERTIES
-    CXX_STANDARD 17
+    CXX_STANDARD 20 # 与胶水同一档，理由见上面「C++ 标准：20」那段 —— 别改回 17
     CXX_STANDARD_REQUIRED ON)
 # 与胶水用同一档告警（run-harness.sh 的 g++ 行也是这一档）：警告即失败。
 target_compile_options(opi_locate_check PRIVATE -Wall -Wextra -Werror)
@@ -234,6 +266,15 @@ target_link_libraries(opi_locate_check PRIVATE opi_fcitx5_deps)
 #
 # 两个 .so 必须**同一目录**：胶水的 $ORIGIN rpath 找的就是旁边那个 cdylib。
 # 探针不装（不在下面的 install(TARGETS) 里）—— 它是构建期门禁，不是交付物。
+#
+# 权限**用缺省（0644），刻意不加 PERMISSIONS**：曾按「与同目录发行版 addon 一致」的
+# 理由想改成 0755，实测该目标本身没有唯一解 —— 邻居的 mode **按发行版族分裂**（同一
+# 目录实测：Arch 5.1.23 / Fedora / openSUSE 是 0755；Debian 12 / Ubuntu 22.04 /
+# Deepin 25 是 0644），而本构建面向 Debian 系 ⇒ **缺省即与邻居一致**。改变它也无功能
+# 影响（非 root，uid 1000 下 dlopen 已实测不受影响）。
+# ⚠️ 要验 mode 只能在**包**里验（`dpkg-deb -c` / `rpm -qlp --dump`，mode 是**第 5 个
+# 字段**，第一个是路径）：构建树的 mode 由链接器加 umask 决定（同一份源码实测本机账号
+# 0775、root 容器 0755）⇒ 拿构建树当判据必假绿。
 install(TARGETS opi_fcitx5_glue LIBRARY DESTINATION "${OPI_ADDON_DIR}")
 install(FILES "${OPI_RUST_LIB}" DESTINATION "${OPI_ADDON_DIR}")
 

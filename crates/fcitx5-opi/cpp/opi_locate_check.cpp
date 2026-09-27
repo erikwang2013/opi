@@ -26,10 +26,17 @@ namespace {
 
 int failures = 0;
 
+// StandardPath 自 5.1.21 起弃用，但**不能迁移**（老版本没有 StandardPaths）。
+// 为什么 / 边界在哪 / 何时删这三件事只写在一处：cpp/CMakeLists.txt 的
+// 「为什么两个 .cpp 里有 -Wdeprecated-declarations」段 —— 别在这里复制。
+// 本文件通篇就是在问 StandardPath，故抑制恰好包住下面两处（本函数与 main 里那三行）。
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 void check(const char *what, fcitx::StandardPath::Type type,
            const char *relative, const char *expected) {
     const std::string got =
         fcitx::StandardPath::global().locate(type, relative);
+#pragma GCC diagnostic pop
     // 空串 = 库在 XDG 数据目录里没找到这个文件。这与「找到了但路径不同」
     // 是两种不同的坏法，都要报出来（前者多半是没装，后者是装错地方）。
     const bool ok = !got.empty() && got == expected;
@@ -54,6 +61,9 @@ int main(int argc, char **argv) {
     // ⚠️ 下面两个相对路径字面量必须与 opi_fcitx5.cpp 的 loadDictionary() 一致。
     // 不一致时本程序会**照样通过**（它没读那份源码），所以 CI 里另有一条 grep
     // 把 opi_fcitx5.cpp 的那一行钉住 —— 改常量的人会同时看到这条红。
+    // 抑制范围同上（StandardPath 的弃用）：这三行是 main 里全部的 StandardPath 用法。
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     check("词库", fcitx::StandardPath::Type::Data, "opi/luna.opid", argv[1]);
     if (argc > 2) {
         check("addon", fcitx::StandardPath::Type::PkgData,
@@ -63,6 +73,7 @@ int main(int argc, char **argv) {
         check("输入法", fcitx::StandardPath::Type::PkgData,
               "inputmethod/opi.conf", argv[3]);
     }
+#pragma GCC diagnostic pop
 
     if (failures != 0) {
         printf("\n%d 项不符\n", failures);

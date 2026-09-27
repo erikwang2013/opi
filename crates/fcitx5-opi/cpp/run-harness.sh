@@ -75,7 +75,10 @@ echo "== 1/6 构建 Rust cdylib"
 cargo build --release -p fcitx5_opi --manifest-path "$repo/Cargo.toml"
 
 echo "== 2/6 编译并链接胶水 .so（-Wall -Wextra -Werror：警告即失败）"
-g++ -std=c++17 -Wall -Wextra -Werror -shared -fPIC \
+# -std=c++20 与 cpp/CMakeLists.txt 的 CXX_STANDARD 20 同档（别让两条通路漂）：
+# fcitx5 从 5.1.21 起头里要 C++20，钉 17 在那种机器上直接硬报错。理由与实测版本
+# 边界见 CMakeLists.txt 的「C++ 标准：20」段。
+g++ -std=c++20 -Wall -Wextra -Werror -shared -fPIC \
     -o "$addons/libfcitx5_opi_glue.so" "$here/opi_fcitx5.cpp" \
     "${INC[@]}" "${LNK[@]}" -Wl,-rpath,'$ORIGIN'
 cp "$rustlib/libfcitx5_opi.so" "$addons/"
@@ -89,9 +92,9 @@ nm -D --defined-only "$addons/libfcitx5_opi_glue.so" | grep fcitx_addon_factory 
     || { echo "   !! 导出符号里没有 fcitx_addon_factory_instance，addon 加载不进来"; exit 1; }
 
 echo "== 3/6 编译两支 C++ 检查程序"
-g++ -std=c++17 -Wall -Wextra -Werror -o "$work/opi_panel_driver" \
+g++ -std=c++20 -Wall -Wextra -Werror -o "$work/opi_panel_driver" \
     "$here/opi_panel_driver.cpp" "${INC[@]}" "${LNK[@]}"
-g++ -std=c++17 -Wall -Wextra -Werror -o "$work/opi_json_check" \
+g++ -std=c++20 -Wall -Wextra -Werror -o "$work/opi_json_check" \
     "$here/opi_json_check.cpp" "${INC[@]}" "${LNK[@]}"
 
 echo "== 4/6 布置 XDG 数据（addon/inputmethod conf + 词库）"

@@ -335,8 +335,14 @@ private:
     // 注意 `opi_fcitx5_load` 收的是**路径**不是词库内容（Rust 侧 read_utf8 →
     // install），故传 `path.data()` 是对的，不要改成传内容。
     void loadDictionary() {
+        // StandardPath 自 5.1.21 起弃用，但**不能迁移**（老版本没有 StandardPaths）。
+        // 为什么 / 边界在哪 / 何时删这三件事只写在一处：cpp/CMakeLists.txt 的
+        // 「为什么两个 .cpp 里有 -Wdeprecated-declarations」段 —— 别在这里复制。
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         auto path = fcitx::StandardPath::global().locate(
             fcitx::StandardPath::Type::Data, "opi/luna.opid");
+#pragma GCC diagnostic pop
         const bool ok =
             !path.empty() &&
             opi_fcitx5_load(reinterpret_cast<const uint8_t *>(path.data()), path.size());
