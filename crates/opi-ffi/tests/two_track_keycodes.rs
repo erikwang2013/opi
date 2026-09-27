@@ -113,7 +113,7 @@ fn state_bits_are_anchored_to_the_true_source_not_to_each_other() {
     }
     // 非空转护栏：条数钉成**实测**的 7。少了 = 上面表里少一行（编译不过，够不着这里）；
     // 多了 = 轨里新加了一个位而这份清单没跟 —— 那才是这条护栏真正要拦的。
-    // ponytail: 数行文本，不做语法分析；有人在这些文件里写注释提到 `pub const KEY_STATE_` 会假红，届时按实测值改。
+    // ponytail: 数文本子串，不做语法分析；有人在这些文件里写注释提到 `const KEY_STATE_` 会假红，届时按实测值改。
     for (src, side) in [
         (
             include_str!("../../tsf-opi/src/logic_input_method.rs"),
@@ -124,10 +124,11 @@ fn state_bits_are_anchored_to_the_true_source_not_to_each_other() {
             "fcitx5",
         ),
     ] {
-        let n = src
-            .lines()
-            .filter(|l| l.trim_start().starts_with("pub const KEY_STATE_"))
-            .count();
+        // 判据用**子串**而不是行首匹配：`pub(crate) const` / 裸 `const` / 同行带属性前缀
+        // 都是合法写法，行首匹配对它们全盲。2026-09-28 与 `key_space_boundary.rs` 的键码
+        // 扫描面一起收紧 —— 那边按名排除 `KEY_STATE_*`，**兜底责任实际落在这里**，
+        // 两边都行首匹配的话同一个盲区会被两道门禁同时漏过（实测 `KEY_STATE_ZZZ` 走查）。
+        let n = src.matches("const KEY_STATE_").count();
         assert_eq!(
             n, 7,
             "{side} 轨的状态位声明条数变了（实测 7）：增删必须显式改这份清单"
