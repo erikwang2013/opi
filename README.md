@@ -76,7 +76,7 @@
 - **零权限**：Android 的 `AndroidManifest.xml` 里**一条 `uses-permission` 都没有**
 - **离线可用**：核心输入完全离线运行；`.opid` 词库走 `mmap` 只读映射，整库不读进堆（命中条目在查询时按需转出 —— `loader.rs` 的 `MmapDictionary::query` 每条命中 `.to_string()`、`candidates.rs` 的 `rank_and_pick` 再 `clone()` 一次，**不是零拷贝**）
 
-（多端云同步是 V2 预留项，见「未来规划」——**当前仓库里没有任何同步或加密代码**。）
+（多端云同步**已裁决不做**（用户裁决 2026-09-28），见「未来规划」——**当前仓库里没有任何同步或加密代码**。）
 
 #### 3. 词库是「活」的，也有门禁守着
 - **简繁双库**：`luna.opid`（简体）+ `trad.opid`（繁体），模式键三态切换；繁体库缺失自动回退简体库
@@ -90,15 +90,15 @@
 
 ### 🚧 未来规划
 
-以下都在项目的愿景里；**多数目前没有对应代码**，个别只做了一部分（见状态列）。写在这里是为了把边界说清楚，不是承诺时间表：
+以下是项目的愿景与**已裁决不做**的方向；**多数目前没有对应代码**，个别只做了一部分（见状态列）。写在这里是为了把边界说清楚，不是承诺时间表：
 
 | 方向 | 状态 | 现状核对 |
 |---|---|---|
 | **更多平台**：Web（含小程序） | 未开始 | 代码与构建脚本里 grep 这些平台名零命中（`docs/` 也没有，只有本 README 提到） |
 | **鸿蒙 HarmonyOS** | **仅有草案**（`harmony/`）| 与 Apple 两平台同一硬约束：**需要 DevEco Studio + HarmonyOS SDK 才能编译，本仓库的验证环境（Linux）无法编译 ArkTS，连语法检查都做不到**。`harmony/` 下的 ArkTS（`InputMethodExtensionAbility` 等）**一行都没有被编译过**，是「起点 + 契约」。已就绪并可实测的是 **Rust 侧**：C ABI 能为鸿蒙目标编译（`cargo check --target aarch64-unknown-linux-ohos` 等，见目录内 README）|
 | **Apple 两平台**：iOS · macOS | **仅有草案**（`ios/` · `macos/`）| **硬约束：两端都需要 macOS + Xcode 才能编译，本仓库的验证环境（Linux）无法编译、链接或运行它们，连 Swift 语法检查都做不到**（UIKit / InputMethodKit 是 Apple 独有框架）。两个目录里的 Swift **一行都没有被编译过**，是「起点 + 契约」而不是可用实现。已就绪的只有平台中立的 **C ABI**（`crates/opi-ffi`），且它**已实测能为 Apple 三个目标编译**（`cargo check --target aarch64-apple-ios / aarch64-apple-ios-sim / aarch64-apple-darwin` 均通过，已进 CI；还能产出 arm64 静态库 `libopi_ffi.a` 且导出符号无缺失）。**任何 Apple 端代码在被 Mac 上的编译器看过之前，都不应被当作已实现** —— 本项目已有两次教训：fcitx5 的 C++ 与 Windows 的 TSF 都是「写完了、读起来像完成」，实测却发现从未被编译过（前者 7 处 API 误写，后者文本插入根本没写） |
-| **多端云同步 / 端到端加密** | V2 预留 | 跨 `crates/` `android/` `desktop/` grep 加密与同步零命中（唯一命中是 `m2_integration.rs:1` 里「端到端集成测试」这个无关措辞） |
-| **更多输入方案**：双拼 · 五笔 · 仓颉 · 注音 · 自定义输入规则 | V2 预留 | `Mode` 只有 5 个成员（拼音 / 繁体 / 英文 / 数字 / 符号）。`composer.rs:1` 的注释提到由 `InputScheme` 扩展 —— **该类型尚不存在** |
+| **多端云同步 / 端到端加密** | **不做**（用户裁决 2026-09-28） | 无加密库、无 HTTP 客户端：跨 `crates/` `android/` `desktop/` 的 `*.rs` / `*.toml` / `*.kt` 里，`reqwest` / `ureq` / `hyper` / `openssl` / `rustls` / `chacha` / `argon2` / `aes-gcm` / `https://` 逐个零命中。带 `sync` 的命中全是 Rust 同步原语与 TSF 标志（`std::sync`、`TF_ES_SYNC`、`trad_assets_in_sync`），与云同步无关。**注**：学习词库导出 JSON 里确有 `version` 字段，但那是**导出格式**的版本协商（`learner.rs` 的 `import_json` 拒收 `version != 1`），与云同步无关 |
+| **更多输入方案**：双拼 · 五笔 · 仓颉 · 注音 · 自定义输入规则 | V2 预留 | `Mode` 只有 5 个成员（拼音 / 繁体 / 英文 / 数字 / 符号）。`composer.rs` 里 `Mode` 的注释提到由 `InputScheme` 扩展 —— **该类型尚不存在** |
 | **无障碍**：读屏软件 | 部分（仅 Android） | Android 键盘已接基础读屏语义：候选变化自动播报（`liveRegion`）、每个按键有可读名称（不再读字形「⇧」「⌫」）、⇧ 的锁定 / 单次大写状态可读。**其余平台（Windows / Linux / iOS）未接入** |
 | **语音输入 · 扫描输入** | 未开始 | 零命中 |
 | **少数民族语言与方言**：藏文 · 维文 · 蒙文 · 粤语 · 吴语 | 未开始 | 零命中 |
@@ -112,7 +112,7 @@
 | **出口层** | `opi-ffi` 双 ABI（JNI + C）· `fcitx5-opi`（cdylib）· `tsf-opi`（cdylib COM 服务器），均以进程内单例持引擎 |
 | **客户端 UI** | 各端原生，不引入跨端框架：Android 为 Jetpack Compose；Linux 为 C++ AddonInstance 调 Rust 逻辑；Windows 为 TSF COM + Compose Desktop 候选窗（命名管道 NDJSON 通信）|
 | **平台接入** | Android (InputMethodService)、Linux (fcitx5)、Windows (TSF)、**iOS / macOS / 鸿蒙（仅有草案，分别需 macOS + Xcode 与 DevEco + HarmonyOS SDK 才能编译验证）** |
-| **数据同步** | V2 预留：端到端加密 + 自托管服务支持，用户可选择使用官方服务或自建同步服务器 |
+| **数据同步** | **不做**（用户裁决 2026-09-28）：原计划为端到端加密 + 自托管服务支持；现决定**不提供云同步、不设账号体系**，用户数据只在本机 |
 | **版本** | 单一版本源：根 `Cargo.toml` 的 `[workspace.package] version`，6 个 crate 共用；Android `versionName` 与 desktop `packageVersion` 向它对齐，发布 tag 取同一号 |
 
 ### 🧭 架构设计

@@ -76,7 +76,7 @@ The name says it all:
 - **Zero permissions**: the Android `AndroidManifest.xml` declares **not a single `uses-permission`**
 - **Works offline**: core input runs fully offline; `.opid` dictionaries are read-only `mmap` maps, so the whole dictionary is never read into the heap (matching entries are materialised on demand at query time — `loader.rs`'s `MmapDictionary::query` calls `.to_string()` per hit and `candidates.rs`'s `rank_and_pick` clones again, so it is **not** zero-copy)
 
-(Multi-device cloud sync is reserved for V2 — see the Roadmap. **There is no sync or encryption code in the repository today.**)
+(Multi-device cloud sync has been **decided against** (user decision 2026-09-28) — see the Roadmap. **There is no sync or encryption code in the repository today.**)
 
 #### 3. A Living Dictionary, With Gates Around It
 - **Simplified + Traditional dictionaries**: `luna.opid` and `trad.opid`, switched by the mode key in a three-state cycle; a missing traditional dictionary falls back to the simplified one
@@ -90,15 +90,15 @@ The name says it all:
 
 ### 🚧 Roadmap
 
-Everything below is part of the vision. Most items have **no corresponding code today**; a few are partially done (see the status column). It is listed to draw the boundary clearly, not as a schedule:
+Everything below is either part of the vision or a direction that has been **decided against**. Most items have **no corresponding code today**; a few are partially done (see the status column). It is listed to draw the boundary clearly, not as a schedule:
 
 | Direction | Status | How we checked |
 |---|---|---|
 | **More platforms**: Web (incl. mini-apps) | Not started | grep for these platform names across the code and build scripts: zero hits (none in `docs/` either — only this README mentions them) |
 | **HarmonyOS** | **Drafts only** (`harmony/`) | Same hard constraint as the two Apple platforms: **compiling it needs DevEco Studio + the HarmonyOS SDK, which this repo's verification environment (Linux) does not have — it cannot compile ArkTS, not even a syntax check**. The ArkTS under `harmony/` (`InputMethodExtensionAbility` and friends) **has never been through a compiler** — it is a starting point plus a contract. What *is* ready and measurable is the **Rust side**: the C ABI compiles for HarmonyOS targets (`cargo check --target aarch64-unknown-linux-ohos`, see the README in that directory) |
 | **The two Apple platforms**: iOS · macOS | **Drafts only** (`ios/` · `macos/`) | **Hard constraint: both need macOS + Xcode to compile, and this repo's verification environment (Linux) cannot compile, link or run them — not even a Swift syntax check** (UIKit / InputMethodKit are Apple-only frameworks). The Swift in both directories **has never been through a compiler**; it is a starting point plus a contract, not a usable implementation. The only thing ready is the platform-neutral **C ABI** (`crates/opi-ffi`), and it **has been measured to compile for three Apple targets** (`cargo check --target aarch64-apple-ios / aarch64-apple-ios-sim / aarch64-apple-darwin` all pass, now in CI; it also produces an arm64 static library `libopi_ffi.a` with no missing exported symbols). **No Apple-side code should be treated as implemented until a compiler on a Mac has seen it** — this project has been burned twice already: the fcitx5 C++ and the Windows TSF both *read* as finished, yet testing showed neither had ever been compiled (the former had 7 wrong API calls, the latter never inserted text at all) |
-| **Multi-device sync / end-to-end encryption** | Reserved for V2 | grep for encryption and sync across `crates/` `android/` `desktop/`: zero hits (the only match is the unrelated phrase "end-to-end integration test" at `m2_integration.rs:1`) |
-| **More input schemes**: shuangpin · wubi · Cangjie · Bopomofo · custom rules | Reserved for V2 | `Mode` has only 5 variants (Pinyin / Traditional / English / Number / Symbol). The comment at `composer.rs:1` mentions extending via `InputScheme` — **that type does not exist yet** |
+| **Multi-device sync / end-to-end encryption** | **Not doing** (user decision 2026-09-28) | No encryption library, no HTTP client: across `crates/` `android/` `desktop/` (`*.rs` / `*.toml` / `*.kt`), `reqwest` / `ureq` / `hyper` / `openssl` / `rustls` / `chacha` / `argon2` / `aes-gcm` / `https://` each return zero hits. Every `sync` hit is a Rust synchronisation primitive or a TSF flag (`std::sync`, `TF_ES_SYNC`, `trad_assets_in_sync`) — unrelated to cloud sync. **Note**: the exported learning-dictionary JSON does carry a `version` field, but that is version negotiation for the **export format** (`learner.rs`'s `import_json` rejects `version != 1`) and has nothing to do with cloud sync |
+| **More input schemes**: shuangpin · wubi · Cangjie · Bopomofo · custom rules | Reserved for V2 | `Mode` has only 5 variants (Pinyin / Traditional / English / Number / Symbol). The comment on `Mode` in `composer.rs` mentions extending via `InputScheme` — **that type does not exist yet** |
 | **Accessibility**: screen readers | Partial (Android only) | The Android keyboard exposes basic screen-reader semantics: candidate changes are announced automatically (`liveRegion`), every key has a spoken name (no more reading out the glyph "⇧" / "⌫"), and the shift lock / one-shot state is readable. **Other platforms (Windows / Linux / iOS) are not covered** |
 | **Voice input · scanning input** | Not started | Zero hits |
 | **Minority languages and dialects**: Tibetan · Uyghur · Mongolian · Cantonese · Wu | Not started | Zero hits |
@@ -112,7 +112,7 @@ Everything below is part of the vision. Most items have **no corresponding code 
 | **Export layer** | `opi-ffi` dual ABI (JNI + C) · `fcitx5-opi` (cdylib) · `tsf-opi` (cdylib COM server) — each holds one in-process engine singleton |
 | **Client UI** | Native per platform, no cross-platform framework: Jetpack Compose on Android; a C++ AddonInstance calling Rust on Linux; TSF COM plus a Compose Desktop candidate window on Windows (NDJSON over a named pipe) |
 | **Platform integration** | Android (InputMethodService), Linux (fcitx5), Windows (TSF), **iOS / macOS / HarmonyOS (drafts only — compiling them needs macOS + Xcode and DevEco + the HarmonyOS SDK respectively)** |
-| **Data sync** | Reserved for V2: end-to-end encryption + self-hosted support — use the official service or run your own sync server |
+| **Data sync** | **Not doing** (user decision 2026-09-28): originally planned as end-to-end encryption + self-hosted support; we have decided **not to offer cloud sync and not to have accounts** — your data stays on your machine |
 | **Versioning** | Single source of truth: `[workspace.package] version` in the root `Cargo.toml`, shared by all six crates; Android `versionName` and desktop `packageVersion` align to it, and releases are tagged with the same number |
 
 ### 🧭 Architecture

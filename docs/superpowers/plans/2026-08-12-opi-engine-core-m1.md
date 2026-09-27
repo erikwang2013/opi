@@ -8,6 +8,10 @@
 
 **Tech Stack:** Rust edition 2024 (rustc 1.97.1)、serde/serde_json、proptest（dev-dep）。
 
+> 订正（2026-09-28）：用户裁决**云同步不做**。本计划下面 `learner.rs` 代码块里那行注释 —— `/// 导出 JSON 的顶层结构，version 为将来云同步的格式协商预留。` —— 的**理由已不成立**：`version` 字段保留，但它是**导出格式的版本协商**（`import_json` 拒收 `version != 1`，见 `crates/engine-core/tests/learner_persistence.rs`），不是为云同步预留。原文保留不动（设计留痕）。
+>
+> ⚠️ 同一行注释**也存在于实际源码** `crates/engine-core/src/learner.rs`（`UserWordExport` 上方）。**该处已于 2026-09-28 订正**，源码现为：「导出 JSON 的顶层结构。`version` **不是预留、是在用**：`import_json` 里 `version != 1` 直接拒绝（Android 经 `exportUserWords` / `importUserWords` 在用）。云同步 2026-09-28 已裁决**不做**（原注释「为将来云同步预留」已过期）。」⇒ 上面那条订正**已在源码侧落地，无遗留**。
+
 ---
 
 ## 文件结构
