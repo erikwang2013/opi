@@ -5,6 +5,7 @@ package io.opi.input.engine
 
 import io.opi.input.ime.Debouncer
 import java.io.File
+import java.io.FileOutputStream
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 
@@ -28,6 +29,12 @@ class UserWordStore(
     private val debouncer: Debouncer,
     /** 落盘线程。生产：单线程后台执行器（顺带保证两次落盘不会交叉写同一个 tmp）。 */
     private val io: Executor = newIoExecutor(),
+    /**
+     * 落盘失败上报（写 tmp / fsync / rename 任一失败）。本类必须保持纯 JVM
+     * （测试里不能碰 android.util.Log），日志由宿主注入 —— 静默的落盘失败
+     * 等于学习结果凭空消失，排障时无从下手。
+     */
+    private val onWriteFailure: (String) -> Unit = {},
 ) {
     companion object {
         /** filesDir 下的用户词文件名（与 luna.opid / trad.opid 同目录）。 */
@@ -99,17 +106,27 @@ class UserWordStore(
             return
         }
         io.execute {
-            // 原子写：先写同目录 tmp 再 rename（POSIX 同目录 rename 是原子替换）。
-            // 进程在任何时刻被杀，目标文件要么是旧内容要么是新内容，不会是写了一半的
-            // JSON；崩在写 tmp 时旧的用户词仍完好（下次保存覆盖 tmp）。
+            // 原子写：先写同目录 tmp、**fsync**、再 rename（POSIX 同目录 rename 是原子替换）。
+            // 崩在写 tmp 时旧的用户词仍完好（下次保存覆盖 tmp）。
+            //
+            // fsync 不是可选项：只 writeText 的话数据停在页缓存里，而 rename 是元数据
+            // 操作，可能先于数据落盘 —— 掉电后目标文件存在却是 0 字节。注释原先声称的
+            // 「进程在任何时刻被杀都安全」对 kill -9 成立，对掉电不成立；补上 sync 才
+            // 两头都成立。
             try {
                 val tmp = File(file.parentFile, file.name + TMP_SUFFIX)
-                tmp.writeText(json)
-                // rename 失败（目录只读/被换成目录）只丢这一次学习结果，保留旧文件
-                tmp.renameTo(file)
+                FileOutputStream(tmp).use { out ->
+                    out.write(json.toByteArray(Charsets.UTF_8))
+                    out.fd.sync()
+                }
+                // rename 失败（目录只读/目标被换成目录）只丢这一次学习结果，保留旧文件；
+                // 但返回值必须看一眼 —— 丢掉它等于失败无声无息
+                if (!tmp.renameTo(file)) {
+                    onWriteFailure("rename ${tmp.name} -> ${file.name} failed")
+                }
             } catch (e: Throwable) {
-                // 磁盘满/目录不可写：静默。下一次变更会再触发一次保存。
-                // ponytail: 不报错也没有日志，要排查落盘失败就在这里挂一个回调
+                // 磁盘满/目录不可写：不冒泡（会崩 IME），但要留痕
+                onWriteFailure("write ${file.name} failed: ${e.message}")
             }
         }
     }

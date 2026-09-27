@@ -81,7 +81,8 @@ class UserWordStoreTest {
         engine: FakeEngine = FakeEngine(),
         debouncer: FakeDebouncer = FakeDebouncer(),
         io: Executor = directIo,
-    ) = UserWordStore(file, engine::importJson, engine::exportJson, debouncer, io)
+        onWriteFailure: (String) -> Unit = {},
+    ) = UserWordStore(file, engine::importJson, engine::exportJson, debouncer, io, onWriteFailure)
 
     private fun target(): File = File(tmp.root, UserWordStore.FILE_NAME)
 
@@ -264,5 +265,49 @@ class UserWordStoreTest {
 
         assertFalse(f.exists())
         assertEquals(1, engine.exportCalls)
+    }
+
+    // ---- 失败必须被上报：落盘失败此前是完全静默的（无日志、无返回值） ----
+
+    @Test
+    fun writeFailureIsReported() {
+        // 目标目录不可用（父路径是普通文件）→ 写 tmp 必失败
+        val blocker = File(tmp.root, "blocker").apply { writeText("x") }
+        val reports = mutableListOf<String>()
+        val deb = FakeDebouncer()
+
+        store(File(blocker, UserWordStore.FILE_NAME), debouncer = deb) { reports += it }
+            .scheduleSave()
+        deb.fire() // 不抛
+
+        assertEquals(1, reports.size)
+        assertTrue(reports[0], reports[0].isNotEmpty())
+    }
+
+    @Test
+    fun renameFailureIsReported() {
+        // 目标是**目录**：写 tmp 成功、rename 必失败（rename(2) 对目录目标返回 EISDIR）。
+        // 原实现把 renameTo 的 Boolean 丢掉 —— 这一次学习结果凭空消失且毫无痕迹。
+        val dir = File(tmp.root, UserWordStore.FILE_NAME).apply { mkdirs() }
+        val reports = mutableListOf<String>()
+        val deb = FakeDebouncer()
+
+        store(dir, debouncer = deb) { reports += it }.scheduleSave()
+        deb.fire() // 不抛
+
+        assertTrue("目录目标应被保留", dir.isDirectory)
+        assertEquals(1, reports.size) // rename 失败不再被吞掉
+        assertTrue(reports[0].contains(UserWordStore.FILE_NAME))
+    }
+
+    @Test
+    fun saveSuccessReportsNothing() {
+        val reports = mutableListOf<String>()
+        val deb = FakeDebouncer()
+
+        store(target(), debouncer = deb) { reports += it }.scheduleSave()
+        deb.fire()
+
+        assertEquals(emptyList<String>(), reports) // 成功路径不产生噪音
     }
 }

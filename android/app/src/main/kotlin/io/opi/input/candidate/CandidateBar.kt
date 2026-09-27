@@ -4,6 +4,7 @@
 package io.opi.input.candidate
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
@@ -11,7 +12,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
@@ -19,6 +19,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -37,6 +38,12 @@ import io.opi.input.pet.OpiPet
 import io.opi.input.pet.PetMood
 
 /**
+ * 候选栏高度（dp）。OpiImeService 把它算进 IME 窗口高度、ImeScreen 用它预留位置：
+ * 三处必须一致，所以只在这里定义一次。
+ */
+const val CANDIDATE_BAR_HEIGHT_DP = 44
+
+/**
  * 候选栏：拼音缓冲 + 每屏 8 候选，点击选择、长按删自造词；页数>1 时显示 ‹ n/m › 翻页。
  * 无状态：数据与翻页状态均在 EngineController（单一状态源）。
  * 两个回调都是**页内下标**（同 EngineController.selectFromPage）。
@@ -47,7 +54,8 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
     // english 模式：候选栏退化为模式条，切换中/英有明确区域反馈
     if (controller.mode == EngineMode.ENGLISH) {
         Row(
-            modifier = Modifier.fillMaxWidth().height(44.dp).background(Color(0xFFEEEEEE)),
+            modifier = Modifier.fillMaxWidth().height(CANDIDATE_BAR_HEIGHT_DP.dp)
+                .background(Color(0xFFEEEEEE)),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -64,7 +72,8 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
     val pageCount = controller.candidatePageCount
     val candidates = controller.pageCandidates
     Row(
-        modifier = Modifier.fillMaxWidth().height(44.dp).background(Color(0xFFEEEEEE)),
+        modifier = Modifier.fillMaxWidth().height(CANDIDATE_BAR_HEIGHT_DP.dp)
+            .background(Color(0xFFEEEEEE)),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -83,7 +92,12 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
             color = Color(0x8A000000),
         )
         Row(
-            modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+            // 候选整屏换新时滚动位置必须回起点，否则新一批的头几个候选留在视口外
+            // （看着像"这页只有 3 个词"）。两个触发点：翻页（页号变）、继续打字
+            // （缓冲变 → 整批候选换掉）。
+            modifier = Modifier.weight(1f).horizontalScroll(
+                remember(controller.buffer, controller.candidatePage) { ScrollState(0) },
+            ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // 序号用全列表下标（翻页后仍唯一），读屏才能区分同音候选

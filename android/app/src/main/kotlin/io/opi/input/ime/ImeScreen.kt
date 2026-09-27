@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import io.opi.input.candidate.CANDIDATE_BAR_HEIGHT_DP
 import io.opi.input.candidate.CandidateBar
 import io.opi.input.engine.EngineController
 import io.opi.input.engine.EngineMode
@@ -47,18 +48,27 @@ fun ImeScreen(
     }
     val shiftVisible = controller.mode == EngineMode.ENGLISH
     Column(modifier = Modifier.fillMaxSize()) {
-        // 候选栏：pinyin 有 buffer/候选才显；english 恒显模式条；面板视图不显
-        if (state.view == ImeState.View.QWERTY &&
-            (controller.mode == EngineMode.ENGLISH ||
-                controller.buffer.isNotEmpty() ||
-                controller.candidates.isNotEmpty())
-        ) {
-            // 长按候选 = 删除该自造词（下标语义同点击：页内下标）
-            CandidateBar(
-                controller = controller,
-                onTap = router::handleCandidate,
-                onLongPress = controller::removeUserWord,
-            )
+        // 候选栏位置**固定预留** CANDIDATE_BAR_HEIGHT_DP：它出现/消失极其频繁
+        // （打第一个字母出现、选词后消失），而窗口高度是常量，条件挂载就等于让 4 行键
+        // 在"有没有栏"之间伸缩 —— 本机实测键高 117px ↔ 89px、整块键盘下沉 116px，
+        // 每个词都跳两次。槽位常驻后键区高度只由 OpiImeService.keyboardHeight 决定。
+        // 代价：pinyin 空缓冲时键盘上方多占 44dp 空白（english 模式那 44dp 是模式条，
+        // 今天本来也占着）。
+        if (state.view == ImeState.View.QWERTY) {
+            Box(modifier = Modifier.fillMaxWidth().height(CANDIDATE_BAR_HEIGHT_DP.dp)) {
+                // 面板视图不显；pinyin 有 buffer/候选才显；english 恒显模式条
+                if (controller.mode == EngineMode.ENGLISH ||
+                    controller.buffer.isNotEmpty() ||
+                    controller.candidates.isNotEmpty()
+                ) {
+                    // 长按候选 = 删除该自造词（下标语义同点击：页内下标）
+                    CandidateBar(
+                        controller = controller,
+                        onTap = router::handleCandidate,
+                        onLongPress = controller::removeUserWord,
+                    )
+                }
+            }
         }
         when (state.view) {
             ImeState.View.NUMBER -> NumberPad(

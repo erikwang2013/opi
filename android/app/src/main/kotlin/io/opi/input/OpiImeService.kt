@@ -9,6 +9,7 @@ import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
+import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
@@ -16,6 +17,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryOwner
+import io.opi.input.candidate.CANDIDATE_BAR_HEIGHT_DP
 import io.opi.input.engine.EngineController
 import io.opi.input.engine.UserWordStore
 import io.opi.input.ime.HandlerDebouncer
@@ -24,6 +26,7 @@ import io.opi.input.jni.OpiEngine
 import io.opi.input.ime.ImeScreen
 import io.opi.input.ime.ImeState
 import io.opi.input.ime.KeyRouter
+import io.opi.input.ime.PendingCommit
 import io.opi.input.keyboard.SymbolCatalog
 import java.io.File
 import kotlin.math.min
@@ -31,7 +34,9 @@ import kotlin.math.min
 /** OPI IME 宿主：ComposeView 作为输入视图，面板状态在 ImeState（A3/A4 填 UI）。 */
 class OpiImeService : InputMethodService() {
     private var inputViewCache: View? = null
-    private var retryRunnable: Runnable? = null
+
+    /** 提交重试的排程与撤销（字段持有的主线程 Handler，不随 IME 窗口重建而改变）。 */
+    private val pendingCommit = PendingCommit()
 
     /**
      * 用户词落盘。`by lazy` 是必需的：Service 的字段初始化早于 `attachBaseContext`，
@@ -44,6 +49,8 @@ class OpiImeService : InputMethodService() {
             importJson = { OpiEngine.importUserWords(it) },
             exportJson = { OpiEngine.exportUserWords() },
             debouncer = HandlerDebouncer(),
+            // 落盘失败此前完全静默：学过的词没存下来，用户和开发者都看不到
+            onWriteFailure = { Log.w(TAG, "user words save failed: $it") },
         )
     }
     private val engineController = EngineController(onLearned = { userWords.scheduleSave() })
@@ -67,18 +74,56 @@ class OpiImeService : InputMethodService() {
 
     companion object {
         private const val TAG = "OpiImeService"
-        // 曲面屏底部圆角 r≈147px（dumpsys RoundedCorners），底行键落弧区外触发不到；
-        // 参考系统输入法留底部安全区（Gboard 同款做法：按键上移、背景延伸到底）。
-        private const val BOTTOM_SAFE_PX = 168
+        /** 键区高度占可用窗口短边的比例（对齐 flutter ime_main.dart 的 0.42）。 */
+        private const val KEY_AREA_RATIO = 0.42
+        /**
+         * 键区在比例基数之外额外加的高度（dp）。
+         *
+         * 原为裸像素 168，注释称它是「底部安全区（按键上移、背景延伸到底）」—— 实测不成立：
+         * 窗口高度是常量，多出来的 168px 被 ImeScreen 里 4 行 weight(1f) 均分掉了，底行键
+         * 照样画到窗口最底（本机实测键底 y=2270，窗口底 y=2400）。真正把键区抬到手势条之上
+         * 的是**系统导航栏 inset**（本机实测 129px，decorFitsSystemWindows 自动下的 padding），
+         * 与这个常量无关，所以这里不需要再留"安全区"。
+         * 它现在的身份就是「键区加高」，按 dp 取实测等效值 64dp（density 2.625 → 168px，
+         * 与改造前逐像素一致）；裸像素在 density 1.0 上是 168dp、3.5 上是 48dp，差 3.5 倍。
+         */
+        private const val KEY_AREA_EXTRA_DP = 64
     }
 
+    /**
+     * IME 窗口高度 = 键区 + 候选栏预留高度（px）。
+     *
+     * 候选栏必须计入：它在 ImeScreen 里是**固定挂载**的（见那里的注释），不吃窗口高度就会
+     * 从 4 行键里抢走 44dp —— 本机实测候选栏一出现键高 117px → 89px、整块键盘下沉 116px、
+     * 每个词跳两次。
+     *
+     * 代价（刻意的取舍，别为了数字好看改回去）：窗口多出候选栏那 44dp ——
+     * 竖屏实测 621→736px、占屏 25.9%→30.7%（Gboard 约 40%，同量级）；
+     * **横屏键区占屏高由 57% 升到 68%，未在真横屏机上验**。
+     * 换成"从键区里扣 44dp"会让键高锁死在 34dp，低于 44dp 触控目标，所以不换。
+     */
     private fun keyboardHeight(): Int {
+        val density = resources.displayMetrics.density
+        val (w, h) = windowSizePx()
+        // 横屏 0.42×宽 会超屏高（2400×0.42 > 1080），底行面板切换键被裁出屏外；
+        // 基数取短边，再钳制在可用窗口高度内。
+        val side = min(w, h)
+        val keyArea = (side * KEY_AREA_RATIO).toInt() + (KEY_AREA_EXTRA_DP * density).toInt()
+        val bar = (CANDIDATE_BAR_HEIGHT_DP * density).toInt()
+        return (keyArea + bar).coerceAtMost(h)
+    }
+
+    /**
+     * 可用窗口尺寸（px）。API 30+ 用 `currentWindowMetrics.bounds`：`resources.displayMetrics`
+     * 报的是**整屏**，分屏/折叠屏/自由窗口下会高估，键盘按整屏算就会盖住应用。
+     */
+    private fun windowSizePx(): Pair<Int, Int> {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val b = getSystemService(WindowManager::class.java).currentWindowMetrics.bounds
+            return b.width() to b.height()
+        }
         val dm = resources.displayMetrics
-        // 横屏 0.42×宽 会超屏高（2400×0.42+168 > 1080），底行面板切换键被裁出屏外；
-        // 基数取 min(宽,高)，再钳制在屏高内（留底部安全区）。
-        val side = min(dm.widthPixels, dm.heightPixels)
-        val computed = (side * 0.42).toInt() + BOTTOM_SAFE_PX
-        return computed.coerceAtMost(dm.heightPixels - BOTTOM_SAFE_PX)
+        return dm.widthPixels to dm.heightPixels
     }
 
     /** Compose 1.7+ 的 getWindowRecomposer 在 IME 窗口根（decorView/parentPanel 链）上查找
@@ -137,7 +182,7 @@ class OpiImeService : InputMethodService() {
         // IME 提交通道在视图创建时注入（构造期无 this 引用；面板打开提交 pending buffer 用）
         imeState.commit = ::commitWithRetry
         view.setContent { ImeScreen(imeState, engineController, keyRouter, symbolCatalog) }
-        Log.i(TAG, "onCreateInputView: screenW=${resources.displayMetrics.widthPixels} keyboardHeight=${keyboardHeight()}")
+        Log.i(TAG, "onCreateInputView: window=${windowSizePx()} keyboardHeight=${keyboardHeight()}")
         inputViewCache = view
         return view
     }
@@ -149,33 +194,23 @@ class OpiImeService : InputMethodService() {
             ic.commitText(text, 1)
             return
         }
-        Log.w(TAG, "IC null, retry commit in 50ms: \"$text\"")
-        // 先撤掉上一次未执行的 retryRunnable，避免两次重试叠加。
-        cancelPendingCommit()
-        val r = Runnable {
+        Log.w(TAG, "IC null, retry commit in ${PendingCommit.RETRY_MS}ms: \"$text\"")
+        // 排程与撤销都在 pendingCommit 内部，共用同一个 Handler —— 不再经 decorView
+        pendingCommit.schedule {
             val ic2 = currentInputConnection
             if (ic2 != null) ic2.commitText(text, 1)
             else Log.w(TAG, "IC still null, commit dropped: \"$text\"")
         }
-        retryRunnable = r
-        if (window.window == null) {
-            Log.w(TAG, "window.window null, commit retry dropped: \"$text\"")
-        } else {
-            window.window?.decorView?.postDelayed(r, 50)
-        }
     }
 
     /**
-     * 撤掉排队中的 50ms 提交重试。
+     * 撤掉排队中的提交重试。
      *
      * 输入目标切换（`onStartInput`）、输入视图结束（`onFinishInputView`）与销毁时都必须调：
-     * 排队中的提交在 50ms 后才执行，期间编辑器可能已经换掉 —— 不撤就会把上一次的候选
-     * 文字写进**新的**编辑框。原先只有「再次重试」与 `onDestroy` 两处撤过。
+     * 排队中的提交在延迟后才执行，期间编辑器可能已经换掉 —— 不撤就会把上一次的候选
+     * 文字写进**新的**编辑框。
      */
-    private fun cancelPendingCommit() {
-        retryRunnable?.let { window.window?.decorView?.removeCallbacks(it) }
-        retryRunnable = null
-    }
+    private fun cancelPendingCommit() = pendingCommit.cancel()
 
     /** 删除：有选区先删选区；无选区按码点删（emoji 等代理对不拆半）。 */
     private fun deleteBackward() {
@@ -239,11 +274,6 @@ class OpiImeService : InputMethodService() {
         // 默认实现非全屏时设 WRAP_CONTENT，ComposeView 在 AT_MOST 下量出全屏
         // 导致窗口盖住被输入应用；窗口首次显示及每次模式变化都会走到这里，强制键盘高度。
         win.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, keyboardHeight())
-    }
-
-    override fun onComputeInsets(outInsets: Insets) {
-        super.onComputeInsets(outInsets)
-        Log.i(TAG, "onComputeInsets visibleTop=${outInsets.visibleTopInsets} contentTop=${outInsets.contentTopInsets}")
     }
 
     /** 触屏输入法无条件显示输入视图。模拟器报告存在硬件键盘（qwerty）时，
