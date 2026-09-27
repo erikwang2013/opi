@@ -336,6 +336,9 @@ mod punct_tests;
 #[path = "logic_release_tests.rs"]
 mod release_tests;
 #[cfg(test)]
+#[path = "logic_switches_tests.rs"]
+mod switches_tests;
+#[cfg(test)]
 #[path = "logic_symbol_tests.rs"]
 mod symbol_tests;
 #[cfg(test)]

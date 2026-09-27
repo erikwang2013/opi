@@ -10,14 +10,23 @@
 //! 2. 命中时缓冲**先 flush 上屏**（标点排在待提交的拼音后面），页码跟着归零
 //!    —— 与空格同一条收尾，故必须走 `input_punct` 而不是直接问映射。
 //!
-//! 两轨逐条同构：本文件 ↔ `crates/fcitx5-opi/src/input_method_punct_tests.rs`（14 条同名同序，逐行对照过）。
-//! `crates/engine-core/tests/punctuation.rs` 共享其中 12 条；它另有 4 条只属于那一层：
+//! 两轨逐条同构：本文件 ↔ `crates/fcitx5-opi/src/input_method_punct_tests.rs`（同名同序，逐行对照过）。
+//! `crates/engine-core/tests/punctuation*.rs` 共享表/开关/引号/撇号那几组；engine 层另有
+//! 只属于那一层的：
 //! 数据门 `every_symbol_keyword_is_alnum`（不经路由）、直接调 `Engine` 的
 //! `number_mode_returns_raw_punctuation_to_the_caller`（本轨没有「无客户端可交」的处境，
 //! 路由是 Unhandled）、以及路由层的 `router_commits_chinese_punctuation` 与
 //! `router_symbol_mode_inserts_punctuation`。本轨这 2 条不跨到 engine：
 //! `pinyin_ascii_punctuation_maps_to_chinese` 与 `pinyin_apostrophe_is_separator_only_while_composing`
 //! —— engine 层没有「VK 已给全角键值」这个处境（非 ASCII 键值不归表管那半段）。
+//!
+//! **2026-09-28 拆开关**（`chinese_punct` / `fullwidth` 两个独立开关）：本文件随引擎新增
+//! `chinese_punct_and_fullwidth_are_independent` 与 `chinese_punct_survives_mode_switch`，
+//! 并把 `chinese_halfwidth_passes_everything_through` 改到真值表第 4 行（两闸都关才是全放行）。
+//! engine-core 把开关那一批拆去了 `tests/punctuation_switches.rs`（撞 500 行门禁）；
+//! **本轨也拆了** —— 开关那 6 条（含符号模式不生效）现在在 `logic_switches_tests.rs`
+//! （2026-09-28 两轨对称拆：fcitx5 轨被 `cargo fmt --all` 从 498 推出 502，只拆一侧会
+//! 让「两轨用例文件一一配对」在文件层面断掉）。
 
 use super::*;
 use engine_core::dictionary::InMemoryDictionary;
@@ -248,84 +257,6 @@ fn punctuation_flush_resets_page_to_first() {
         KeyOutcome::Commit("词00，".into())
     );
     assert_eq!(s.page(), 0, "缓冲被 flush 上屏 → 页码归零");
-}
-
-// ---------- 全角开关 ----------
-
-/// 默认值**跟着模式走**，且切模式重置 —— 与「切模式清 shift」同一条理由：
-/// 跨模式残留的粘滞态会让用户「切回来发现打字是另一个样子」。
-#[test]
-fn fullwidth_default_follows_mode_and_resets_on_switch() {
-    let mut s = punct_state();
-    assert_eq!(s.input_key(',' as u32, 0), KeyOutcome::Commit("，".into()));
-    s.switch_mode(Mode::English);
-    assert_eq!(
-        s.input_key(',' as u32, 0),
-        KeyOutcome::Commit(",".into()),
-        "英文：半角直传"
-    );
-    assert!(s.toggle_fullwidth(), "开关返回新状态，供状态栏显示");
-    assert_eq!(s.input_key(',' as u32, 0), KeyOutcome::Commit("，".into()));
-    s.switch_mode(Mode::Number);
-    assert_eq!(
-        s.input_key(',' as u32, 0),
-        KeyOutcome::Unhandled,
-        "切模式重置为模式默认，不记住手动值"
-    );
-    s.switch_mode(Mode::Traditional);
-    assert_eq!(s.input_key(',' as u32, 0), KeyOutcome::Commit("，".into()));
-}
-
-/// 中文模式关掉全角 → 标点全部放行（交应用自己插半角字符），
-/// 但字母照旧进缓冲：全角开关只管标点。
-/// 撇号不在这一列：它在拼音里是音节分隔符，半角态照样进缓冲（见上一条）——
-/// 「半角」关掉的是标点**映射**，不是分隔符语义。
-#[test]
-fn chinese_halfwidth_passes_everything_through() {
-    let mut s = punct_state();
-    s.toggle_fullwidth();
-    for c in [',', '.', '\\', '[', '"'] {
-        assert_eq!(s.input_key(c as u32, 0), KeyOutcome::Unhandled, "{c:?}");
-    }
-    typed(&mut s, "ni");
-    assert_eq!(s.buffer(), "ni", "半角开关不影响字母入缓冲");
-}
-
-/// 英文/数字模式的全角是**机械全角**：`.` 得 `．`(U+FF0E)，不是中文句号 `。`
-/// —— 西文文本里冒出一个中文句号是错的。
-#[test]
-fn non_chinese_fullwidth_is_mechanical_not_cjk() {
-    let mut s = punct_state();
-    s.switch_mode(Mode::English);
-    assert_eq!(s.input_key('.' as u32, 0), KeyOutcome::Commit(".".into()));
-    s.toggle_fullwidth();
-    assert_eq!(s.input_key('.' as u32, 0), KeyOutcome::Commit("．".into()));
-    assert_eq!(s.input_key('"' as u32, 0), KeyOutcome::Commit("＂".into()));
-    assert_eq!(
-        s.input_key('"' as u32, 0),
-        KeyOutcome::Commit("＂".into()),
-        "西文引号不交替"
-    );
-    // 字母/数字不进全角：全角字母表是另一件事，本表只管标点
-    assert_eq!(s.input_key('a' as u32, 0), KeyOutcome::Commit("a".into()));
-}
-
-/// 符号模式：不映射 —— 标点在关键字表里根本不存在（生产表 583 条全是 `[a-z0-9]`，
-/// 见 engine-core 的 every_symbol_keyword_is_alnum）。落到路由上就是**原样插入**：
-/// `,` 出 `,` 不是 `，`，也不进关键字缓冲（进去就是搜不出候选的死缓冲 ——
-/// 符号模式的可见 ASCII 臂同样收字符，所以表那一臂必须在模式分派**之前**）。
-#[test]
-fn symbol_mode_has_no_punctuation_mapping() {
-    let mut s = punct_state();
-    s.switch_mode(Mode::Symbol);
-    assert_eq!(s.input_key(',' as u32, 0), KeyOutcome::Commit(",".into()));
-    assert_eq!(s.buffer(), "", "标点不是关键字，不进缓冲");
-    s.toggle_fullwidth();
-    assert_eq!(
-        s.input_key(',' as u32, 0),
-        KeyOutcome::Commit(",".into()),
-        "全角开关在符号模式不生效"
-    );
 }
 
 // ---------- 标点永不无声消失 ----------

@@ -310,6 +310,9 @@ mod punct_tests;
 #[path = "input_method_release_tests.rs"]
 mod release_tests;
 #[cfg(test)]
+#[path = "input_method_switches_tests.rs"]
+mod switches_tests;
+#[cfg(test)]
 #[path = "input_method_symbol_tests.rs"]
 mod symbol_tests;
 #[cfg(test)]

@@ -43,6 +43,13 @@ fn state_with_candidates() -> TsfLogic {
     s
 }
 
+/// **真的直通**的标点背景：两个标点开关**都关**（真值表第 4 行）——
+/// 只关全角不够：中文标点表在 `chinese_punct` 那一档，`.` 仍会出 `。`。
+fn halfwidth(s: &mut TsfLogic) {
+    s.engine.set_chinese_punct(false);
+    s.toggle_fullwidth();
+}
+
 // ---- 可打印字符抬起须与按下同判（直通字符的反向不对称） ----
 // 缺陷形态与 fcitx5 轨同源（见 input_method.rs 对应分支的注释）：抬起一律
 // Consumed，而按下走 handle_printable —— 拼音/繁体的非字母符号（'.'、'-'）、
@@ -55,9 +62,10 @@ fn pinyin_symbol_release_matches_press() {
     // '.' 曾是本轨最典型的受害者：0x2E 与 KEY_DELETE 同值，缓冲非空时被当退格。
     // 特殊键改编码（SPECIAL_BASE|VK，见 logic.rs）后它才是普通的直通符号；
     // vk.rs 另有 printable_ascii_is_not_hijacked_by_special_keys 钉住码位不相交。
-    // 半角态（用户按了全角切换键）才有直通的标点：全角态下 `.` 出 `。`、已不是直通。
-    // 记结论的 `last_printable` 只在**按下直通**时才是 true，故这条必须以半角为背景。
-    s.toggle_fullwidth();
+    // 直通的标点只在**两个标点开关都关**时才有：中文标点表那一档会让 `.` 出 `。`、
+    // 全角那一档会让它出 `．`（2026-09-28 拆开关后这是两档，只关一档都不直通）。
+    // 记结论的 `last_printable` 只在**按下直通**时才是 true，故这条必须以真直通为背景。
+    halfwidth(&mut s);
     assert_eq!(s.input_key('.' as u32, 0), KeyOutcome::Unhandled);
     assert_eq!(
         s.input_key('.' as u32, KEY_STATE_RELEASED),
@@ -94,7 +102,7 @@ fn release_of_another_key_falls_back_to_consumed() {
     // 单槽记录的天花板：另一键按下会顶掉记录（键盘 rollover 时才遇到），
     // 键值不匹配时回落到旧行为（吞掉），绝不误放行。
     let mut s = pinyin_state();
-    s.toggle_fullwidth(); // 半角态：`.` 直通（全角态下它出 `。`）
+    halfwidth(&mut s); // 真直通背景：`.` 直通（两档任一开着它都会被映射）
     assert_eq!(s.input_key('.' as u32, 0), KeyOutcome::Unhandled);
     assert_eq!(
         s.input_key('n' as u32, KEY_STATE_RELEASED),

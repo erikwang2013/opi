@@ -44,6 +44,13 @@ fn state_with_candidates() -> CandidateState {
     s
 }
 
+/// **真的直通**的标点背景：两个标点开关**都关**（真值表第 4 行）——
+/// 只关全角不够：中文标点表在 `chinese_punct` 那一档，`.` 仍会出 `。`。
+fn halfwidth(s: &mut CandidateState) {
+    s.engine.set_chinese_punct(false);
+    s.toggle_fullwidth();
+}
+
 // ---- 可打印字符抬起须与按下同判（直通字符的反向不对称） ----
 // 缺陷形态：抬起一律 EngineHandled，而按下走 handle_printable —— 拼音/繁体的
 // 非字母符号（'.'、'-'）、无候选或越界的数字、Number/Symbol 模式下的全部可见
@@ -53,9 +60,10 @@ fn state_with_candidates() -> CandidateState {
 fn pinyin_symbol_release_matches_press() {
     let mut s = pinyin_state();
     // 本轨没有 tsf 轨那类码位冲突：特殊键用 keysym 0xffxx，'.'=0x2E 不与任何特殊键同值。
-    // 半角态（用户按了全角切换键）才有直通的标点：全角态下 `.` 出 `。`、已不是直通。
-    // 记结论的 `last_printable` 只在**按下直通**时才是 true，故这条必须以半角为背景。
-    s.toggle_fullwidth();
+    // 直通的标点只在**两个标点开关都关**时才有：中文标点表那一档会让 `.` 出 `。`、
+    // 全角那一档会让它出 `．`（2026-09-28 拆开关后这是两档，只关一档都不直通）。
+    // 记结论的 `last_printable` 只在**按下直通**时才是 true，故这条必须以真直通为背景。
+    halfwidth(&mut s);
     assert_eq!(handle_key(&mut s, '.' as u32, 0), KeyAction::PassThrough);
     assert_eq!(
         handle_key(&mut s, '.' as u32, KEY_STATE_RELEASED),
@@ -92,7 +100,7 @@ fn release_of_another_key_falls_back_to_handled() {
     // 单槽记录的天花板：另一键按下会顶掉记录（键盘 rollover 时才会遇到），
     // 键值不匹配时回落到旧行为（拦下），绝不误放行。
     let mut s = pinyin_state();
-    s.toggle_fullwidth(); // 半角态：`.` 直通（全角态下它出 `。`）
+    halfwidth(&mut s); // 真直通背景：`.` 直通（两档任一开着它都会被映射）
     assert_eq!(handle_key(&mut s, '.' as u32, 0), KeyAction::PassThrough);
     assert_eq!(
         handle_key(&mut s, 'n' as u32, KEY_STATE_RELEASED),

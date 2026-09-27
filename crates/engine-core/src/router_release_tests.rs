@@ -27,6 +27,14 @@ fn pinyin_state() -> KeyRouter {
     s
 }
 
+/// **真的直通**的标点背景：两个标点开关**都关**（真值表第 4 行，见
+/// tests/punctuation.rs 的 `chinese_punct_and_fullwidth_are_independent`）。
+/// 只关全角不够 —— 中文标点表由 `chinese_punct` 单独管，`.` 照出 `。`。
+fn halfwidth(s: &mut KeyRouter) {
+    s.engine_mut().set_chinese_punct(false);
+    s.engine_mut().toggle_fullwidth();
+}
+
 /// 20 条 "hao" 词条（与 router_invariants.rs 同惯例）：**提交真的会发生**，
 /// 回车按下会把缓冲清空 —— 特殊键用例需要「按下改动了缓冲」这个前提。
 fn state_with_candidates() -> KeyRouter {
@@ -43,9 +51,9 @@ fn state_with_candidates() -> KeyRouter {
 #[test]
 fn pinyin_symbol_release_matches_press() {
     let mut s = pinyin_state();
-    // 半角态（用户按了全角切换键）才有直通的标点：全角态下 `.` 出 `。`、已不是直通。
-    // 记结论的 `last_printable` 只在**按下直通**时才是 true，故这条必须以半角为背景。
-    s.engine_mut().toggle_fullwidth();
+    // 两个标点开关都关才有直通的标点：任一个开着 `.` 都有映射、已不是直通。
+    // 记结论的 `last_printable` 只在**按下直通**时才是 true，故这条必须以全关为背景。
+    halfwidth(&mut s);
     assert_eq!(s.key_event('.' as u32, 0), KeyAction::PassThrough);
     assert_eq!(
         s.key_event('.' as u32, KEY_STATE_RELEASED),
@@ -82,7 +90,7 @@ fn release_of_another_key_falls_back_to_handled() {
     // 单槽记录的天花板：另一键按下会顶掉记录（键盘 rollover 时才会遇到），
     // 键值不匹配时回落到旧行为（拦下），绝不误放行。
     let mut s = pinyin_state();
-    s.engine_mut().toggle_fullwidth(); // 半角态：`.` 直通（全角态下它出 `。`）
+    halfwidth(&mut s); // 全关态：`.` 直通（任一开关开着它都有映射）
     assert_eq!(s.key_event('.' as u32, 0), KeyAction::PassThrough);
     assert_eq!(
         s.key_event('n' as u32, KEY_STATE_RELEASED),

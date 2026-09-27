@@ -5,19 +5,30 @@
 //!
 //! 契约：
 //! - 中文模式（拼音/繁体）里 ASCII 标点出**中文标点**（`,` → `，`、`.` → `。`、`\` → `、`），
-//!   表里没有的 ASCII 标点机械全角兜底（`/` → `／`）；
+//!   表里没有的 ASCII 标点在全角开关开着时机械全角兜底（`/` → `／`）；
+//! - **两个开关相互独立**（用户裁决 2026-09-28）：`chinese_punct` 管中文标点表那一档
+//!   （含引号交替）、`fullwidth` 管机械全角那一档；只关全角**不再**把表一起关掉，
+//!   真值表逐格见 `chinese_punct_and_fullwidth_are_independent`；
 //! - 英文/数字模式默认**半角直通**（`input_punct` 返回 `None`）；全角开关打开后出
-//!   **机械全角**（`.` → `．` U+FF0E，不是中文句号 `。`）；
+//!   **机械全角**（`.` → `．` U+FF0E，不是中文句号 `。`）；`chinese_punct` 在那两个
+//!   模式不参与判定（没有中文标点表这一档）；
 //! - 同键成对的引号交替出左右引号，**切模式**时复位；
 //! - 撇号在拼音/繁体里是**音节分隔符**（`xi'an`），只有缓冲为空时才当引号；
 //! - 标点落在待提交的拼音**后面**（先走与空格同一条收尾）；
 //! - `input_key` **不吞可见字符**：没进缓冲也没映射的，原样交回调用方
 //!   —— Android 数字面板（旧路径是 UI 直接 commit，绕开引擎）靠这条活在引擎里。
 //!
-//! 本文件走**公开 API**（`Engine` + `KeyRouter`）；两轨的镜像（14 条同名同序，彼此逐行同构）
+//! 本文件走**公开 API**（`Engine` + `KeyRouter`）；两轨的镜像（同名同序，彼此逐行同构）
 //! 在 crates/fcitx5-opi/src/input_method_punct_tests.rs 与
-//! crates/tsf-opi/src/logic_punct_tests.rs；与本文件共享 12 条，另有 4 条只属于这一层
-//! （两条路由用例，加两条不经路由的：数据门与「无客户端可交」的直调用例）。
+//! crates/tsf-opi/src/logic_punct_tests.rs；多数用例共享，少数只属于这一层
+//! （路由用例，以及不经路由的：数据门与「无客户端可交」的直调用例）。
+//!
+//! 拆开关（2026-09-28）新增的 4 条与两个开关的行为锁在 `punctuation_switches.rs`
+//! —— 本文件撞了 500 行门禁，按仓里惯例拆出去的。
+//!
+//! **镜像同步状态**：那两轨尚未跟上拆开关 —— 它们按「只关全角 ⇒ 直通」写的 3+3 条
+//! 用例会红（`chinese_halfwidth_passes_everything_through` 与 `*_release_tests.rs`
+//! 里以 `.` 直通为背景的两条），等下一波接线时一并改。别把那份红当成引擎回归。
 
 use engine_core::dictionary::InMemoryDictionary;
 use engine_core::keys::{KEY_PAGE_DOWN, KEY_STATE_RELEASED};
@@ -143,6 +154,13 @@ fn apostrophe_is_separator_while_composing() {
     assert_eq!(e.buffer(), "xi'");
     e.clear();
     assert_eq!(e.input_punct('\'').as_deref(), Some("‘"), "缓冲空：当引号");
+    // 分隔符语义与两个标点开关**无关**（它排在两道闸之前）：表关掉、全角开着也一样
+    let mut e = engine();
+    e.set_chinese_punct(false);
+    typed(&mut e, "xi");
+    assert_eq!(e.input_punct('\''), None, "表关掉：撇号仍是音节分隔符");
+    assert_eq!(e.input_key('\''), "", "入缓冲，无提交文本");
+    assert_eq!(e.buffer(), "xi'", "照样进缓冲");
 }
 
 /// 标点必须落在待提交的拼音**后面**：先走与空格同一条收尾（有候选提首候选、
@@ -185,54 +203,8 @@ fn punctuation_flush_resets_page_to_first() {
     assert_eq!(r.page(), 0, "缓冲被 flush 上屏 → 页码归零");
 }
 
-// ---------- 全角开关 ----------
-
-/// 默认值**跟着模式走**，且切模式重置 —— 与「切模式清 shift」同一条理由：
-/// 跨模式残留的粘滞态会让用户「切回来发现打字是另一个样子」。
-#[test]
-fn fullwidth_default_follows_mode_and_resets_on_switch() {
-    let mut e = engine();
-    assert!(e.fullwidth(), "拼音：自动全角");
-    e.switch_mode(Mode::English);
-    assert!(!e.fullwidth(), "英文：半角");
-    assert!(e.toggle_fullwidth(), "开关返回新状态，供状态栏显示");
-    assert!(e.fullwidth());
-    e.switch_mode(Mode::Number);
-    assert!(!e.fullwidth(), "切模式重置为模式默认，不记住手动值");
-    e.switch_mode(Mode::Symbol);
-    assert!(!e.fullwidth());
-    e.switch_mode(Mode::Traditional);
-    assert!(e.fullwidth(), "繁体与拼音同档");
-}
-
-/// 中文模式关掉全角 → 一个都不映射（交调用方直通，由客户端插入半角字符）。
-#[test]
-fn chinese_halfwidth_passes_everything_through() {
-    let mut e = engine();
-    e.toggle_fullwidth();
-    assert!(!e.fullwidth());
-    for c in [',', '.', '\\', '[', '"', '\''] {
-        assert_eq!(e.input_punct(c), None, "半角态 {c:?} 不该映射");
-    }
-}
-
-/// 英文/数字模式的全角是**机械全角**：`.` 得 `．`(U+FF0E)，不是中文句号 `。`
-/// —— 西文文本里冒出一个中文句号是错的。
-#[test]
-fn non_chinese_fullwidth_is_mechanical_not_cjk() {
-    let mut e = engine();
-    e.switch_mode(Mode::English);
-    assert_eq!(e.input_punct('.'), None, "英文默认半角：不映射");
-    e.toggle_fullwidth();
-    assert_eq!(e.input_punct('.').as_deref(), Some("．"));
-    assert_eq!(e.input_punct('"').as_deref(), Some("＂"), "西文引号不交替");
-    assert_eq!(e.input_punct('"').as_deref(), Some("＂"), "第二次还是它");
-    // 字母/数字不进全角：全角字母表是另一件事，本表只管标点
-    assert_eq!(e.input_punct('a'), None);
-    assert_eq!(e.input_punct('1'), None);
-}
-
-/// 符号模式：不映射（`,` `.` 在关键字里根本不存在，见下一条），全角开关也不生效。
+/// 符号模式：不映射（`,` `.` 在关键字里根本不存在，见下一条）——**两个开关都不生效**
+/// （模式分派在两道闸之前，见 `Engine::punct_text` 的 `Mode::Symbol` 那一支）。
 #[test]
 fn symbol_mode_has_no_punctuation_mapping() {
     let mut e = engine();
@@ -240,9 +212,14 @@ fn symbol_mode_has_no_punctuation_mapping() {
     assert_eq!(e.input_punct(','), None);
     e.toggle_fullwidth();
     assert_eq!(e.input_punct(','), None, "全角开关在符号模式不生效");
+    e.set_chinese_punct(false);
+    assert_eq!(e.input_punct(','), None, "中文标点开关在符号模式不生效");
+    e.set_chinese_punct(true);
+    e.toggle_fullwidth();
+    assert_eq!(e.input_punct(','), None, "两档都开也一样");
 }
 
-/// 符号关键字**全是** `^[a-z0-9]+$`（生产表 583 条实测）—— 标点永远搜不出候选，
+/// 符号关键字**全是** `^[a-z0-9]+$`（本测试自己遍历全表实测；条数随表增长，故不写死）—— 标点永远搜不出候选，
 /// 所以它在符号模式里既不是搜索输入、也不是关键字：只能原样交回去。
 /// 这是「符号模式标点直通」这条裁决的数据依据；表一旦出现别的字符，这条先红。
 #[test]
@@ -340,8 +317,11 @@ fn router_commits_chinese_punctuation() {
         "按下出文本、抬起不重复提交"
     );
     assert_eq!(r.key_event('.' as u32, 0), KeyAction::Input("。".into()));
-    // 半角（用户按了切换键）：直通，交客户端自己插
+    // 关掉全角：中文标点表还在 → `.` 仍是 `。`（两个开关独立）
     r.engine_mut().toggle_fullwidth();
+    assert_eq!(r.key_event('.' as u32, 0), KeyAction::Input("。".into()));
+    // 再关掉中文标点：两道闸都关 → 直通，交客户端自己插
+    r.engine_mut().set_chinese_punct(false);
     assert_eq!(r.key_event('.' as u32, 0), KeyAction::PassThrough);
     // 英文模式不受影响：直传
     r.switch_mode(Mode::English);
