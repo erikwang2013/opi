@@ -48,9 +48,14 @@
 // 候选交给 CommonCandidateList 自己翻，C++ 与 Rust 就各存一份页码，前端点翻页
 // 箭头时两边立刻漂移。
 //
-// 页大小镜像 Rust 侧 candidate.rs 的 PAGE_SIZE；Rust 改了这里跟着改（取回条数
-// 少于它也无副作用，只是不再满页）。
-static constexpr size_t kOpiPageSize = 8;
+// 取回候选的条数上限：**不要**再往这里写一个「Rust PAGE_SIZE 的镜像」。
+// Rust 的 `opi_fcitx5_candidates(limit)` 返回的已经是**切好的整页**
+// （`candidate.rs` 的 `candidates()` 按它自己的 PAGE_SIZE `.skip().take()`，
+// 这里的 limit 是在那之后再切一刀），所以本文件根本不需要知道页大小；
+// 页大小由**取回的条数**决定（见 refreshingPanelFor）。
+// 给 SIZE_MAX = 「不切」：整页照单全收，页大小自然跟随 Rust，Rust 改 8→9
+// 这边不用动，也不会少画。
+static constexpr size_t kOpiCandidateFetchLimit = SIZE_MAX;
 
 // 上一次推给前端的面板预编辑串。唯一用途：直通键（action==0）不消费按键、
 // Rust 侧状态不变，原样重推要白付一次跨 FFI + 候选 JSON + 客户端重绘，而
@@ -123,10 +128,14 @@ static void refreshingPanelFor(fcitx::InputContext *ic) {
         }
 
         auto list = std::make_unique<fcitx::CommonCandidateList>();
-        // 页大小 = 推过去的条数上限 → 候选表恒为单页（见文件头说明）。
-        list->setPageSize(static_cast<int>(kOpiPageSize));
-        const auto texts =
-            parseJsonStringArray(take(opi_fcitx5_candidates(kOpiPageSize)));
+        const auto texts = parseJsonStringArray(
+            take(opi_fcitx5_candidates(kOpiCandidateFetchLimit)));
+        // 页大小 = **实际推过去的条数** → 候选表恒为单页（见文件头说明），
+        // 且不需要任何「和 Rust 对齐」的常量：Rust 页变大，这里跟着变大。
+        // 空表不设：页大小 0 不是合法值，而空表本来也没东西可翻。
+        if (!texts.empty()) {
+            list->setPageSize(static_cast<int>(texts.size()));
+        }
         for (size_t i = 0; i < texts.size(); ++i) {
             list->append<OpiCandidateWord>(texts[i], i);
         }

@@ -213,6 +213,10 @@ sudo cmake --install build-fcitx5        # 发行版打包：DESTDIR=<暂存树>
 中间层，装错了**不报错**，只表现为候选永远是内置那几十个词 —— 与「根本没装
 词库」在用户侧无法区分。这条对应关系有门禁守：`opi_locate_check.cpp` 拿真
 fcitx5 库问一遍落点，CI 的 `fcitx5` job 每次跑（改了 `DESTINATION` 会红）。
+同一条 step 还会把**装入的词库**与入库副本（`android/app/src/main/assets/luna.opid`，
+也是 `OPI_LUNA_OPID` 的缺省值）比 size / md5 / 条目数 —— 只比落点看不出「落点
+没错但装的是别的词库」：拿 `data/generated/fallback.opid` 冒充 `luna.opid` 时
+落点三项全绿，而用户侧候选只剩内置回退库那几十个词。
 
 ⚠️ **前缀**：取 `/usr`（发行版打包的形态）时 addon 目录才是 fcitx5 真会搜的
 那个；取缺省的 `/usr/local` 得到 `/usr/local/lib/fcitx5`，而发行版 fcitx5 编译
@@ -298,15 +302,21 @@ cp luna.opid "${XDG_DATA_HOME:-$HOME/.local/share}/opi/luna.opid"
 
 ## 验证 harness（**手工跑，不进 CI**）
 
-CI 上既没有 fcitx5 的头/库，也没有 dbus 会话，所以下面这些**都不在 CI 里**，
-要人手动跑 —— 但胶水是本仓库唯一「没有单测、又是纯 C++」的部分，跑一次很值：
+> ⚠️ **2026-09-28 订正**：本节原写「CI 上既没有 fcitx5 的头/库，也没有 dbus 会话」——
+> **前半句已不成立**。`.github/workflows/ci.yml` 现在有一个 `fcitx5` job：装
+> `libfcitx5{core,utils,config}-dev`、`cargo build --release -p fcitx5_opi`、
+> `cmake --build` **真编胶水**，并跑 `opi_locate_check` 断言安装落点、比对装入词库的
+> size/md5/条目数（用 `DESTDIR` 装到暂存树，不需要 root）。
+> **仍然没有的是 dbus 会话与真守护进程** —— 下面这几样要构造 `InputContext`、
+> 要起真 fcitx5、要发真 X11 键事件，**依然不在 CI 里**，要人手动跑 ——
+> 但胶水是本仓库唯一「没有单测、又是纯 C++」的部分，跑一次很值：
 
 | 文件 | 验什么 | 要 dbus |
 |---|---|---|
 | `run-harness.sh` | 一键跑完下面全部 | — |
 | `opi_panel_driver.cpp` | 直接构造 `OpiEngine` + 真 `fcitx::InputContext`，逐项断言面板推进（预编辑/clientPreedit/候选/候选光标/翻页/点选/提交/reset/直通键） | 否 |
 | `opi_json_check.cpp` + `opi_json_vec.txt` | 狭 JSON 解析器 vs **真 serde_json 输出**，逐字节比对 | 否 |
-| `opi_e2e.py` | 真 fcitx5 守护进程里**用户实际收到**的信号（`basic` / `page` / `passthrough` / `caps` 四种模式），每步都是**断言**不是打印 | **要** |
+| `opi_e2e.py`（+ 同目录 `opi_e2e_modes.py`，`modes` 变体经 `sys.path[0]` 导入） | 真 fcitx5 守护进程里**用户实际收到**的信号。**变体清单以 `run-harness.sh` 的 `variants=(…)` 为准**（那串已长到含 `punct` / `punctopi` / `modes` / `fullwidth`，别照抄本表），每步都是**断言**不是打印 | **要** |
 
 > `opi_json_vec.txt` 是**数据文件不是代码**：它必须逐字节等于 serde_json 的真实
 > 输出（第 1 行）与候选串的 hex（第 2 行），加任何注释行都会让解析器读错，
@@ -329,9 +339,9 @@ FCITX5_HEADERS=/tmp/fcitx5-hdr/root/usr/include/Fcitx5 \
 脚本自己会：构建 Rust cdylib → 用 `-Wall -Wextra -Werror` 编译链接胶水（**警告即
 失败**，不再靠人看输出）并查 `ldd -r` 与导出符号 → 布置独立的
 `XDG_CONFIG_HOME`/`XDG_DATA_HOME`（含**把 opi 放进输入法组**的 profile）与 addons
-目录 → 跑完五种 e2e 模式，每个模式**各自一个 `dbus-run-session` + 一个独立守护
-进程**（日志分开成 `fcitx5-<n>.log`）→ 最后打印加载记录。**不碰用户真实的 fcitx5
-配置，也不会连到用户正在跑的实例上。** 产物与日志留在 `$OPI_HARNESS_WORK`
+目录 → 跑完 `variants=(…)` 里那一串 e2e 变体，每个变体**各自一个 `dbus-run-session`
++ 一个独立守护进程**（日志分开成 `fcitx5-<n>.log`）→ 最后打印加载记录。**不碰用户真实
+的 fcitx5 配置，也不会连到用户正在跑的实例上。** 产物与日志留在 `$OPI_HARNESS_WORK`
 （缺省 `mktemp -d`）。e2e 断言失败时脚本以非零退出，但退出前仍会打印加载记录。
 
 守护进程是**前台**起的（**不要加 `-d`**）：`-d` 会 daemonize，`$!` 是那个立刻
@@ -350,7 +360,9 @@ FCITX5_HEADERS=/tmp/fcitx5-hdr/root/usr/include/Fcitx5 \
 能看到配对的 `Unloading addon opi_fcitx5` —— 只有被真 pid 收到 SIGTERM 才会打这行。
 
 `opi_panel_driver.cpp` 第 3 节有一步会打 `[SKIP]` 而不是 `[PASS]`：缓冲 `nihao`
-在词库下常常不足 8 条候选，翻页无从观察 —— 这是词库规模决定的，不是失败。
+在词库下常常不足一页候选，翻页无从观察 —— 这是词库规模决定的，不是失败。
+（写「不足一页」而不是「不足 8 条」：页大小归 Rust 的 `candidate.rs` 管，
+写死数字的文档会在页大小改动时变成假话。）
 
 ## 状态
 
@@ -390,9 +402,8 @@ SPACE -> CommitString: 你
 
 上面这段是**浓缩**（真跑出来每条信号还带 `CurrentIM` 与逐键分节）。要复跑出
 原始输出，跑 `crates/fcitx5-opi/cpp/run-harness.sh`（见上「验证 harness」），
-它会原样打印 `basic` / `page` / `passthrough` / `caps 0x12` /
-`caps 0x8000000012` 五次会话的全部
-信号。
+它会原样打印 `variants=(…)` 里每个变体一次会话的全部信号（`basic` / `page` /
+`passthrough` / `caps …`，以及后加的 `punct` / `punctopi` / `modes` / `fullwidth`）。
 
 > ⚠️ 之前「按键进不了引擎（`handled=0`）」的**根因不是焦点**：`FocusIn()`
 > 只是把输入法设成当前**输入法组里的当前项**（用户 profile 里是

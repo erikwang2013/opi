@@ -30,6 +30,10 @@
 #
 # OPI_HARNESS_WORK 选填：工作目录。缺省 mktemp 一个（要复查产物就指个固定路径）。
 #
+# OPI_LUNA_OPID 选填：词库源。缺省 android/app/src/main/assets/luna.opid（入库
+# 副本，与 CMakeLists 的缺省源同一份）—— 本地重编的那份 data/generated/luna.opid
+# **没入库**，指向它会让本脚本在全新 clone 上直接断在 cp。
+#
 # 环境是隔离开的：独立的 XDG_CONFIG_HOME / XDG_DATA_HOME / dbus 会话，
 # **不会碰用户真正的 fcitx5 配置，也不会连到用户正在跑的实例上**。
 
@@ -93,7 +97,14 @@ g++ -std=c++17 -Wall -Wextra -Werror -o "$work/opi_json_check" \
 echo "== 4/6 布置 XDG 数据（addon/inputmethod conf + 词库）"
 cp "$repo/crates/fcitx5-opi/data/addon/opi_fcitx5.conf" "$work/data/fcitx5/addon/"
 cp "$repo/crates/fcitx5-opi/data/inputmethod/opi.conf" "$work/data/fcitx5/inputmethod/"
-cp "$repo/data/generated/luna.opid" "$work/data/opi/luna.opid"
+# 词库源取**入库副本**（android 部署那份），与 cpp/CMakeLists.txt 的缺省源同一份。
+# 原来这里指的是 data/generated/luna.opid —— 那是 gitignore 的本地重编产物，
+# 全新 clone 上**不存在**，而它正是这条 cp 要的那份：于是这条「唯一端到端通路」
+# 在干净树上第一步就断在这里（cp 退出码 1）。要用刚重编的那份就显式覆盖：
+#   OPI_LUNA_OPID=data/generated/luna.opid crates/fcitx5-opi/cpp/run-harness.sh
+: "${OPI_LUNA_OPID:=$repo/android/app/src/main/assets/luna.opid}"
+[ -f "$OPI_LUNA_OPID" ] || { echo "!! 找不到词库源：$OPI_LUNA_OPID" >&2; exit 1; }
+cp "$OPI_LUNA_OPID" "$work/data/opi/luna.opid"
 # 输入法组里必须**同时**有 keyboard-us 和 opi：opi 不在组里时 SetCurrentIM("opi")
 # 静默无效（不报错、不切换、不发 CurrentIM），看着就像插件坏了。
 cat > "$work/cfg/fcitx5/profile" <<'PROFILE'

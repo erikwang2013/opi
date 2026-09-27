@@ -126,10 +126,37 @@ int main() {
     }
     check(preeditOf(ic) == "nihao", "预编辑串 == 缓冲 \"nihao\"");
     check(candidateCount(ic) > 0, "候选表非空");
-    check(candidateCount(ic) <= 8, "候选表 <= 一页 8 条");
+    // 页大小**不写数字**（这里原本是 `<= 8`，第 5 份页大小拷贝）：面板收到的条数
+    // 应当 == Rust 侧此刻返回的当前页条数 —— 同一个状态、经 FFI 独立取一次。
+    // 写死 8 的两种坏法：Rust 把 PAGE_SIZE 改成 9 ⇒ 断言自己过期、红得**不像**
+    // 断言坏了；胶水若把整页截断成 8 条（旧写法正是 take(8)），它**一声不响**。
+    // 换成等式后两个方向都抓得住，且不必再跟任何常量走。
+    // ⚠️ 这里必须用 SIZE_MAX（不切），**不能**用胶水那个 `kOpiCandidateFetchLimit`：
+    // 两边共用同一个上限的话，谁把这个上限改小，面板条数与这里的读数会**一起变小**、
+    // 等式照样成立 —— 断言对自己要防的那个改动瞎掉。用「不切」读，截断才看得见。
+    const auto pageNow =
+        parseJsonStringArray(take(opi_fcitx5_candidates(SIZE_MAX)));
+    check(candidateCount(ic) == static_cast<int>(pageNow.size()),
+          "候选表条数 == Rust 当前页条数（页大小由 Rust 定，此处不写死）");
     check(ic.inputPanel().preedit().cursor() == 5, "预编辑光标在末尾（字节 5）");
     check(clientPreeditOf(ic) == "nihao", "clientPreedit == 缓冲（内联预编辑通道）");
     check(candidateCursor(ic) == 0, "候选光标 = 0（候选栏有高亮）");
+
+    // 上面那条等式在**短页**上照样成立，却测不出「胶水把整页截断」（实测：把胶水的
+    // 上限改回 8、Rust 页 9 时，`nihao` 只有 4 条候选 ⇒ 等式 4==4 照绿）。判别力要靠
+    // **满页**的输入，故另起一例：`ni` 在 luna 词库下满页（页多大就画多少条）。
+    // 词库缺失/退化时这一条会变弱（打印里能看出 Rust 页只有几条），但不改判据。
+    {
+        fcitx::ResetEvent clearEvent(&ic);
+        engine.reset(entry, clearEvent);
+        type("ni");
+        const auto full =
+            parseJsonStringArray(take(opi_fcitx5_candidates(SIZE_MAX)));
+        std::printf("  'ni' -> candidates=%d（Rust 当前页=%zu）\n",
+                    candidateCount(ic), full.size());
+        check(candidateCount(ic) == static_cast<int>(full.size()),
+              "满页时面板条数 == Rust 当前页条数（胶水截断会在这里现形）");
+    }
 
     std::printf("== 2b. 缓冲非空 + 候选 0 条（候选光标守卫）==\n");
     // 这一节是**变异测试**（实测过两个变异体）：去掉胶水里 `if (!texts.empty())`

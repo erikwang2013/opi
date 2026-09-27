@@ -6,7 +6,9 @@
 # 链接 `cargo build -p opi_ffi --release` 产出的 libopi_ffi.so，真调几个导出。
 #
 # 复跑：bash crates/opi-ffi/tests/c_abi/run.sh
-# 传词库路径可换用完整词库：bash crates/opi-ffi/tests/c_abi/run.sh data/generated/luna.opid
+# 传词库路径可换用完整词库：bash crates/opi-ffi/tests/c_abi/run.sh android/app/src/main/assets/luna.opid
+# （`data/generated/luna.opid` 是本地重编产物、**没入库**：在全新 clone 上这条
+#   命令会以「词库不存在」退出 2。CI 传的是上面那份入库副本。）
 #
 # 为什么值得跑：`cargo test` 里的 ABI 测试是 **Rust 调 extern "C" fn** —— 那验的是
 # 「Rust 以为的 ABI」，头文件写成什么样都照样绿。只有本脚本会**编译头文件**。
@@ -52,15 +54,40 @@ nm -D --defined-only "$LIB" | awk '{print $3}' | grep '^opi_' | sort | tr '\n' '
 echo
 # 覆盖核对：库里导出的每个 opi_* 是否都在 consumer.c 里被**真的调用**过。
 # 声明有了、C 侧也编得过，但没人调 = 链接期问题要等 Swift 那边才暴露。
+#
+# 这里**会判失败**。此前是打印一句「不判失败 —— 可能是新加的出口」就过去，
+# 等于这条门禁永远不会红：新出口加完不补调用，CI 一路绿到用户那头。
 nm -D --defined-only "$LIB" | awk '{print $3}' | grep '^opi_' | sort -u > "$OUT/exported.txt"
-grep -o 'opi_[a-z_]*' "$SRC" | sort -u > "$OUT/called.txt"
-UNCALLED=$(comm -23 "$OUT/exported.txt" "$OUT/called.txt")
-if [ -n "$UNCALLED" ]; then
-  echo "[注意] 以下导出未被 C 消费者调用（不判失败 —— 可能是新加的出口）："
-  echo "$UNCALLED" | sed 's/^/    /'
-else
-  echo "[覆盖] 库里 $(wc -l < "$OUT/exported.txt") 个导出全部被 C 消费者调用过"
+# 按**编译器眼里的引用**取（AST 里的 DeclRefExpr），不按文本匹配。
+# 来历（别改回文本正则）：原先用 `grep -oE 'opi_[a-z_]+[[:space:]]*\('`，它能被
+# 两种「最像改坏的改法」骗过去 —— ① 把调用**注释掉**（`// opi_foo();` 文本上照样
+# 命中）；② printf 的说明串里出现 `opi_foo(`（本文件真有几处，见 `[6]` 那行）。
+# 实测：把 [11c] 整段注释掉后文本法仍数出 34 条 ⇒ 门禁照绿。AST 里注释不产生
+# 结点、字符串不产生 DeclRefExpr，且跨行调用也不再漏。
+clang -Xclang -ast-dump -fsyntax-only -I "$HDR_DIR" "$SRC" 2> "$OUT/ast.err" \
+  | grep -oE "DeclRefExpr.*Function 0x[0-9a-f]+ 'opi_[a-z_]+'" \
+  | grep -oE "'opi_[a-z_]+'" | tr -d "'" | sort -u > "$OUT/called.txt"
+# 抽不到就是命令坏了（clang 改了 dump 格式 / 解析失败），不是「没有调用」——
+# 空名单会让下面把 34 条全报成未调用。这里先把它自己变成一条明确的红。
+if [ ! -s "$OUT/called.txt" ]; then
+  echo "!! 从 AST 里一条 opi_* 引用都没抽到 —— 抽取命令或 clang 的 ast-dump 格式变了："
+  head -5 "$OUT/ast.err"
+  exit 1
 fi
+UNCALLED=$(comm -23 "$OUT/exported.txt" "$OUT/called.txt")
+# **零豁免**：库里的每一条导出都必须在 consumer.c 里有真调用点。
+#
+# 来历（别改回去）：这里原本是「打印一句『不判失败 —— 可能是新加的出口』就过去」，
+# 等于这条门禁**永远不会红**；随后收成「显式豁免名单」，2026-09-28 三条标点导出
+# 在 C 侧补上真调用后名单清空。以后若确需长期豁免，**不要**恢复成「不判失败」——
+# 写明名单与理由，并让名单以外的一切照样红。
+if [ -n "$UNCALLED" ]; then
+  echo "[覆盖] 库里 $(wc -l < "$OUT/exported.txt") 条导出，以下未被 C 消费者调用："
+  echo "$UNCALLED" | sed 's/^/    /'
+  echo "  补法：在 crates/opi-ffi/tests/c_abi/consumer.c 里真调一次（只声明不算调用）。"
+  exit 1
+fi
+echo "[覆盖] 库里 $(wc -l < "$OUT/exported.txt") 条导出全部被 C 消费者调用过"
 
 echo
 echo "=== [4/4] 运行 ==="

@@ -32,11 +32,51 @@ jobs:
       - name: cargo fmt --all --check
         run: cargo fmt --all --check
 
-      - name: cargo test --workspace
-        run: cargo test --workspace
+      # --no-fail-fast：缺了它，cargo 在**第一个失败的 test target** 上就停，
+      # 其余 target 根本不跑。于是 CI 只告诉你「第一个失败的 binary」，
+      # 而 CI 存在的意义是让人**一次看全**。（实测：一个变异下带 flag 报
+      # 「error: 4 targets failed」，不带则只报 engine-core --lib 就停。）
+      # 退出码两边都是非零（实测 101）—— 这不是「假通过」，是「报不全」。
+      - name: cargo test --workspace --no-fail-fast
+        run: cargo test --workspace --no-fail-fast
 
       - name: cargo clippy --workspace --all-targets -- -D warnings
         run: cargo clippy --workspace --all-targets -- -D warnings
+
+      # ---- 两条**消费者/宿主侧**门禁，此前都不在 CI 里 ----
+      #
+      # 1) crates/opi-ffi/tests/c_abi/run.sh —— 全仓唯一**真编译 macos/OpiFFI.h**
+      #    的地方。`cargo test` 里的 ABI 测试是 Rust 调 extern "C" fn：那验的是
+      #    「Rust 以为的 ABI」，头文件写成什么样都照样绿。
+      # 2) android/jni_smoke —— JNI 侧**唯一的函数体取证点**。RegisterNatives
+      #    成功只证明「名字+描述符」对得上，不证明函数体对（把 unwrap_or(false)
+      #    写成 unwrap_or(true) 照样注册成功）。它不需要 Android：主 JVM 上
+      #    System.load 即可。
+      #
+      # 两条都用下面这份 release cdylib，所以先显式建出来（run.sh 自己也会建，
+      # 这里是让它和 JNI 那步共用同一份产物，而不是谁搭谁的便车）。
+      - name: cargo build -p opi_ffi --release（供下面两条消费者门禁）
+        run: cargo build -p opi_ffi --release
+
+      - name: C 消费者：真编译 macos/OpiFFI.h + 真调导出
+        run: |
+          set -euo pipefail
+          # run.sh 用 clang。缺了它报错会埋在编译输出里，先说清楚。
+          command -v clang >/dev/null || {
+            echo "!! runner 上没有 clang（本步依赖 ubuntu-latest 预装）"; exit 1; }
+          bash crates/opi-ffi/tests/c_abi/run.sh android/app/src/main/assets/luna.opid
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: JNI smoke（android/jni_smoke，主 JVM 上 System.load）
+        run: |
+          set -euo pipefail
+          javac -d /tmp/jni-smoke android/jni_smoke/Main.java
+          java -Dopi.so="$PWD/target/release/libopi_ffi.so" -cp /tmp/jni-smoke \
+            io.opi.input.jni.Main android/app/src/main/assets/luna.opid
 
       # cargo check 不链接，所以 Linux 上无需 msvc 链接器即可跑通。
       - name: cargo check -p tsf_opi (x86_64-pc-windows-msvc)
@@ -110,7 +150,17 @@ jobs:
       # 期望值**不写死**，从 --install 自己打印的落点里取。于是断言是
       # 「安装器说它装到了哪」==「fcitx5 说它去哪找」—— 两个独立来源。
       # 写死期望值的话，把 DESTINATION 改坏了只要顺手改期望值就永远绿。
-      - name: 断言落点 == 查找位置（问真 fcitx5 库）
+      #
+      # 探针是 cpp/CMakeLists.txt 的 ALL 目标（build-fcitx5/opi_locate_check），
+      # include 目录继承 opi_fcitx5_deps。此前这里手写一行 g++ 且**漏了 -I**，
+      # 于是这个探针从写完到 v1.3.0 发布**一次都没被编译器看过** —— 发布 CI
+      # 就红在它身上，而它下面的 grep 常量门禁被 skip、从未跑过。
+      #
+      # ⚠️ 下面这套 locate() 映射是在 fcitx5 **5.1.12** 上实测的，runner
+      # （ubuntu-latest，apt 装的发行版版本）是 **5.1.7** —— 该映射**未在 5.1.7
+      # 上验过**。这条若是首次在 runner 上红，先分清是版本差异还是真装错了，
+      # 别顺手改 DESTINATION 去迎合。
+      - name: 断言落点 == 查找位置，且装入的就是入库那份词库
         run: |
           set -euo pipefail
           stage="$PWD/stage"
@@ -128,12 +178,45 @@ jobs:
             [ -n "$v" ] || { echo "!! 安装日志里没有对应落点，别在空值上比"; exit 1; }
           done
           echo "安装器落点: $dict"
-          g++ -std=c++17 -Wall -Wextra -Werror -o locate_check \
-            crates/fcitx5-opi/cpp/opi_locate_check.cpp -lFcitx5Utils
+          locate_check=build-fcitx5/opi_locate_check
+          [ -x "$locate_check" ] || {
+            echo "!! $locate_check 不存在 —— 它是 CMakeLists 的 ALL 目标，"
+            echo "   cmake --build 就该产出它。缺了说明构建那步被改过。"
+            exit 1
+          }
           # 丢掉 XDG_DATA_HOME：只让 XDG_DATA_DIRS（暂存树）起作用。否则 runner
           # 上若恰好有真的词库，测的就不是我们刚装的那份了。
           env -u XDG_DATA_HOME XDG_DATA_DIRS="$stage/usr/share" \
-            ./locate_check "$dict" "$addon" "$im"
+            "$locate_check" "$dict" "$addon" "$im"
+
+          # ---- 身份：落点对只证明「装到对的地方」，不证明「装的是对的东西」----
+          # 拿 -DOPI_LUNA_OPID=data/generated/fallback.opid（715B / 35 词）装成
+          # luna.opid 时，上面那条探针**照样全绿**（它比的是路径），而用户侧的
+          # 表现是「装了、能用、候选只剩内置那几十个词」—— 与「压根没装」在
+          # 用户侧不可区分。故这里比的是**入库源**（android 部署副本，也是
+          # CMakeLists 的缺省源），不是本次配置用的 -DOPI_LUNA_OPID：后者被改坏
+          # 时正是要抓的那一种。
+          ref=android/app/src/main/assets/luna.opid
+          # 条目数取头部 count 字段，头部布局见 crates/engine-data/src/format.rs：
+          #   MAGIC "OPID"(4) + version u16(2) + flags u8(1) + count u32(4, LE)
+          # 先验 MAGIC：不然读出来的是文件开头任意 4 字节，会被当成条目数打印出去。
+          entries() {
+            [ "$(head -c4 "$1")" = OPID ] || { echo "!! $1 头部不是 OPID" >&2; exit 1; }
+            od -An -tu4 -j7 -N4 "$1" | tr -d ' '
+          }
+          echo "装入:   $dict"
+          echo "        size=$(stat -c %s "$dict") md5=$(md5sum "$dict" | cut -d' ' -f1) 条目=$(entries "$dict")"
+          echo "入库源: $ref"
+          echo "        size=$(stat -c %s "$ref") md5=$(md5sum "$ref" | cut -d' ' -f1) 条目=$(entries "$ref")"
+          # 三条分开断言，是为了坏的时候能看出坏在哪：size 不符 = 拷了一半、
+          # 条目数不符 = 换了个词库、size 与条目数都对而 md5 不符 = 同规模但内容不同。
+          [ "$(stat -c %s "$dict")" = "$(stat -c %s "$ref")" ] || {
+            echo "!! 装入的词库 size 与入库源不符"; exit 1; }
+          [ "$(entries "$dict")" = "$(entries "$ref")" ] || {
+            echo "!! 装入的词库条目数与入库源不符"; exit 1; }
+          [ "$(md5sum "$dict" | cut -d' ' -f1)" = "$(md5sum "$ref" | cut -d' ' -f1)" ] || {
+            echo "!! 装入的词库与入库源不是同一份内容（size 和条目数相同也不行）"; exit 1; }
+          echo "身份相符：装进去的就是入库那份 luna.opid"
 
       # opi_locate_check.cpp 里的相对路径是手抄的 —— 它自己不读 opi_fcitx5.cpp，
       # 所以改了查找常量它**照样绿**。这条把那份手抄钉住：改了 loadDictionary()

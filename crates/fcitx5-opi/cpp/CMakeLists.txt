@@ -211,9 +211,29 @@ string(REGEX REPLACE "^lib" "" _opi_rust_linkname "${_opi_rust_name}")
 target_link_directories(opi_fcitx5_glue PRIVATE "${_opi_rust_dir}")
 target_link_libraries(opi_fcitx5_glue PRIVATE "${_opi_rust_linkname}")
 
+# ---- 落点探针 ----
+#
+# 问真 fcitx5 库「loadDictionary() 会去哪找词库」，与 cmake --install 的落点比。
+#
+# 编译成 target（而不是在 CI 里手写一行 g++）是有来历的：CI 原来那行 g++
+# **漏了 -I**，于是这个探针从写完到 v1.3.0 发布**一次都没被编译器看过** ——
+# 发布 CI 就红在它身上，而它后面的「查找常量没漂」grep 被 skip、从未跑过。
+# 挂在 opi_fcitx5_deps 上就自动继承它算好的 include 目录（find_package 与
+# 解包头/库两种模式都对，胶水走的就是这两条路），不会再漂。
+# 放进 ALL（默认）而不是 EXCLUDE_FROM_ALL：只有每次 cmake --build 都编它，
+# 「没被编译器看过」才不会再发生一次。
+add_executable(opi_locate_check opi_locate_check.cpp)
+set_target_properties(opi_locate_check PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON)
+# 与胶水用同一档告警（run-harness.sh 的 g++ 行也是这一档）：警告即失败。
+target_compile_options(opi_locate_check PRIVATE -Wall -Wextra -Werror)
+target_link_libraries(opi_locate_check PRIVATE opi_fcitx5_deps)
+
 # ---- 安装 ----
 #
 # 两个 .so 必须**同一目录**：胶水的 $ORIGIN rpath 找的就是旁边那个 cdylib。
+# 探针不装（不在下面的 install(TARGETS) 里）—— 它是构建期门禁，不是交付物。
 install(TARGETS opi_fcitx5_glue LIBRARY DESTINATION "${OPI_ADDON_DIR}")
 install(FILES "${OPI_RUST_LIB}" DESTINATION "${OPI_ADDON_DIR}")
 

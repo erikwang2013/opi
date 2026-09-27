@@ -328,6 +328,65 @@ int main(int argc, char **argv) {
           "回到 Pinyin ⇒ 全角随该模式默认值回到 true，实为 %d（这是约定 4 的反方向）",
           (int)opi_fullwidth_state());
 
+    /* ---------- 中文标点开关（B3/B5 的另三个出口） ----------
+     * 断言全部照头文件那三段写，不照「跑出来是什么」写：
+     *   1. 默认开；set 之后**读侧**必须如实反映（本档必须有读侧）；
+     *   2. toggle 返回的是**切换后**的新状态，且与读侧一致（不能两边各记一份）；
+     *   3. ⚠️ 与全角那一档的**关键差别**：本档是用户偏好，
+     *      `opi_switch_mode` / `opi_toggle_symbol` **都不重置它** —— 而全角是
+     *      模式默认值、任何模式切换都会被重置（[11b] 刚实测过）。两者重读规则
+     *      不通用；谁把这份「不重置」当 bug「修」掉，本段先红，而不是等平台侧
+     *      的状态栏/勾选框亮错。
+     *   4. 「只翻一个 bool」：不改 buffer / 候选集 / 页码。 */
+    printf("[11c] 中文标点开关\n");
+
+    bool cp0 = opi_chinese_punct();
+    printf("  opi_chinese_punct() 默认 = %d\n", (int)cp0);
+    CHECK(cp0 == true, "中文标点默认应为开，实为 %d", (int)cp0);
+
+    opi_set_chinese_punct(false);
+    CHECK(opi_chinese_punct() == false, "set_chinese_punct(false) 后读侧应为 false"
+          "（读侧仍为 true ⇒ 写入口没落到同一份状态上）");
+    opi_set_chinese_punct(true);
+    CHECK(opi_chinese_punct() == true, "set_chinese_punct(true) 后读侧应为 true");
+
+    /* 触发键入口：返回值就是**切换后**的新状态（状态栏/勾选框直接拿去刷新） */
+    bool cp1 = opi_toggle_chinese_punct();
+    printf("  opi_toggle_chinese_punct() = %d，紧接着读 = %d\n", (int)cp1,
+           (int)opi_chinese_punct());
+    CHECK(cp1 == false, "开→关应返回切换后的新状态 false，实为 %d", (int)cp1);
+    CHECK(opi_chinese_punct() == cp1,
+          "读侧应与 toggle 的返回值一致 —— 不一致说明两侧各自记了一份状态");
+    CHECK(opi_toggle_chinese_punct() == true, "再切一次应回到 true（翻两次回原值）");
+
+    /* 「只翻一个 bool」：全程不得动 buffer / 页码（头文件写明的语义） */
+    OpiString cp_buf = opi_buffer();
+    CHECK(eq_cp(cp_buf, NULL, 0), "标点开关不得动 buffer，实为 len=%zu", cp_buf.len);
+    opi_ffi_free_string(cp_buf);
+    CHECK(opi_page() == 0 && opi_page_count() == 0,
+          "标点开关不得动页码，实为 %u/%u", opi_page(), opi_page_count());
+
+    /* 用户偏好：switch_mode 不得重置（同一个出口，[11b] 里全角是被重置的那一个） */
+    opi_set_chinese_punct(false);
+    opi_switch_mode(1); /* English */
+    CHECK(opi_chinese_punct() == false,
+          "opi_switch_mode 不得重置中文标点（用户偏好 ≠ 模式默认值）");
+    opi_switch_mode(0);
+    CHECK(opi_chinese_punct() == false, "切回 Pinyin 也不得重置");
+
+    /* toggle_symbol 内部调 switch_mode ⇒ 它重置全角，但**不重置**本档 */
+    OpiString ts3 = opi_toggle_symbol(); /* Pinyin → Symbol */
+    dump("  opi_toggle_symbol()（标点段）", ts3);
+    CHECK(ts3.len == 0, "缓冲为空 ⇒ 本应返回空串，实为 len=%zu", ts3.len);
+    opi_ffi_free_string(ts3);
+    CHECK(opi_chinese_punct() == false,
+          "opi_toggle_symbol 不得重置中文标点（它只重置全角那一档）");
+    OpiString ts4 = opi_toggle_symbol(); /* Symbol → Pinyin */
+    CHECK(eq_cp(ts4, NULL, 0), "再切回应返回空串（无提交）");
+    opi_ffi_free_string(ts4);
+    CHECK(opi_mode() == 0, "两次 toggle_symbol 后应回 Pinyin，实为 %d", opi_mode());
+    opi_set_chinese_punct(true); /* 复位：别把状态漏给后面的段落 */
+
     /* ---------- 释放语义：空句柄可无条件释放 ---------- */
     printf("[12] 释放语义\n");
     opi_ffi_free_string((OpiString){NULL, 0});
