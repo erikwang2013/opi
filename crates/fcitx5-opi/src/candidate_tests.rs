@@ -1,18 +1,18 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! 候选分页状态机测试（与 fcitx5-opi candidate.rs 测试同源）。
+//! 候选分页状态机测试（与 tsf-opi logic.rs 测试同源）。
 use super::*;
 use engine_core::dictionary::InMemoryDictionary;
 
-/// 20 个 "hao" 词条 + 引擎：确定性的 3 页候选。
-fn state() -> TsfLogic {
+/// 20 个 "hao" 词条 → 确定性的 3 页候选（20 / 8 = 2.5 → 3 页）。
+fn state() -> CandidateState {
     let mut d = InMemoryDictionary::new();
     for i in 0..20 {
         d.insert("hao", &format!("词{i:02}"), (5000 - i) as u32);
     }
     let symbols = engine_core::symbols::SymbolEngine::builtin();
-    let mut s = TsfLogic {
+    let mut s = CandidateState {
         engine: Engine::new(Box::new(d), symbols, true),
         page: 0,
         buffer_snapshot: String::new(),
@@ -25,23 +25,23 @@ fn state() -> TsfLogic {
 
 #[test]
 fn load_fallback_and_bad_path() {
-    let mut s = TsfLogic::load(None).expect("fallback load");
+    let mut s = CandidateState::load(None).expect("fallback load");
     assert_eq!(s.buffer(), "");
     assert_eq!(s.mode(), Mode::Pinyin);
     // 空串等同 None（内置回退）
-    assert!(TsfLogic::load(Some("")).is_ok());
+    assert!(CandidateState::load(Some("")).is_ok());
     // 坏路径 → Err（load_or_fallback 原样语义）
-    assert!(TsfLogic::load(Some("/nonexistent/opi.dict")).is_err());
-    s.input_key('w' as u32, 0);
+    assert!(CandidateState::load(Some("/nonexistent/opi.dict")).is_err());
+    s.input_key('w');
     assert_eq!(s.buffer(), "w");
 }
 
 #[test]
 fn eight_candidates_per_page_and_page_count() {
     let mut s = state();
-    s.input_key('h' as u32, 0);
-    s.input_key('a' as u32, 0);
-    s.input_key('o' as u32, 0);
+    s.input_key('h');
+    s.input_key('a');
+    s.input_key('o');
     assert_eq!(s.buffer(), "hao");
     assert_eq!(s.candidates().len(), PAGE_SIZE);
     assert_eq!(s.page_count(), 3);
@@ -53,7 +53,7 @@ fn eight_candidates_per_page_and_page_count() {
 fn paging_clamps_both_ends() {
     let mut s = state();
     for c in ['h', 'a', 'o'] {
-        s.input_key(c as u32, 0);
+        s.input_key(c);
     }
     // 首页 prev 钳制
     assert_eq!(s.prev_page(), 0);
@@ -72,7 +72,7 @@ fn paging_clamps_both_ends() {
 fn select_is_page_relative_and_commits() {
     let mut s = state();
     for c in ['h', 'a', 'o'] {
-        s.input_key(c as u32, 0);
+        s.input_key(c);
     }
     s.next_page(); // 第 2 页（global 8..16）
     assert_eq!(s.select(0), "词08");
@@ -85,7 +85,7 @@ fn select_is_page_relative_and_commits() {
 fn select_out_of_range_returns_empty() {
     let mut s = state();
     for c in ['h', 'a', 'o'] {
-        s.input_key(c as u32, 0);
+        s.input_key(c);
     }
     s.set_page(2); // 第 3 页仅 4 个候选（16..19）
     assert_eq!(s.select(7), "");
@@ -95,13 +95,13 @@ fn select_out_of_range_returns_empty() {
 /// （同 `engine-core/tests/select_index_bounds.rs` 的 `router_with(20)` + `type_hao`）。
 /// 符号表取**空表**：候选恰为 20 条（20 = 8+8+4，「末页 4 项」这类前提才确定）——
 /// 上面 `state()` 用的是内建符号表，`hao` 会多出 2 条符号候选（实测 22 条）。
-fn hao_state() -> TsfLogic {
+fn hao_state() -> CandidateState {
     let mut d = InMemoryDictionary::new();
     for i in 0..20 {
         d.insert("hao", &format!("词{i:02}"), (5000 - i) as u32);
     }
     let symbols = engine_core::symbols::SymbolEngine::new(Vec::new(), Vec::new());
-    let mut s = TsfLogic {
+    let mut s = CandidateState {
         engine: Engine::new(Box::new(d), symbols, true),
         page: 0,
         buffer_snapshot: String::new(),
@@ -180,14 +180,14 @@ fn select_beyond_page_returns_empty() {
 fn set_shift_clamps_page() {
     let mut s = state();
     for c in ['h', 'a', 'o'] {
-        s.input_key(c as u32, 0);
+        s.input_key(c);
     }
     s.set_page(2); // 末页（3 页候选）
     assert_eq!(s.page(), 2);
-    s.shift_tap(); // buffer 不变，页码须钳制在 page_count 内
+    s.set_shift(true); // buffer 不变，页码须钳制在 page_count 内
     assert!(s.page() <= s.page_count().saturating_sub(1));
     assert!(!s.candidates().is_empty());
-    s.shift_tap();
+    s.set_shift(false);
     assert!(s.page() <= s.page_count().saturating_sub(1));
     assert!(!s.candidates().is_empty());
 }
@@ -196,12 +196,12 @@ fn set_shift_clamps_page() {
 fn buffer_change_resets_page() {
     let mut s = state();
     for c in ['h', 'a', 'o'] {
-        s.input_key(c as u32, 0);
+        s.input_key(c);
     }
     s.next_page();
     assert_eq!(s.page(), 1);
     // 继续输入（buffer 变化）→ 页码归零
-    s.input_key('x' as u32, 0);
+    s.input_key('x');
     assert_eq!(s.buffer(), "haox");
     assert_eq!(s.page(), 0);
 }
@@ -210,12 +210,12 @@ fn buffer_change_resets_page() {
 fn backspace_and_clear_reset_page() {
     let mut s = state();
     for c in ['h', 'a', 'o'] {
-        s.input_key(c as u32, 0);
+        s.input_key(c);
     }
     s.next_page();
-    s.input_key(KEY_BACK_SPACE, 0); // buffer 变化 → 归零
+    s.backspace(); // buffer 变化 → 归零
     assert_eq!(s.page(), 0);
-    s.input_key('o' as u32, 0);
+    s.input_key('o');
     s.next_page();
     s.clear(); // buffer 清空 → 归零
     assert_eq!(s.page(), 0);
@@ -281,13 +281,14 @@ impl engine_core::dictionary::Dictionary for Counting {
 /// （同一台机器上还有别的编译在跑）。改回两次即红。
 #[test]
 fn digit_select_fetches_candidate_table_once() {
+    use crate::input_method::{KeyAction, handle_key};
     use std::sync::atomic::Ordering;
     let n = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let mut d = InMemoryDictionary::new();
     for i in 0..20 {
         d.insert("hao", &format!("词{i:02}"), (5000 - i) as u32);
     }
-    let mut s = TsfLogic {
+    let mut s = CandidateState {
         engine: Engine::new(
             Box::new(Counting {
                 inner: d,
@@ -304,7 +305,7 @@ fn digit_select_fetches_candidate_table_once() {
     s.refresh_snapshot();
     s.switch_mode(Mode::Pinyin);
     for c in ['h', 'a', 'o'] {
-        s.input_key(c as u32, 0);
+        handle_key(&mut s, c as u32, 0);
     }
     // 基准：读一次当前页候选表要查几次词库（= 一次全量抓取）
     n.store(0, Ordering::Relaxed);
@@ -313,8 +314,8 @@ fn digit_select_fetches_candidate_table_once() {
     assert!(one_fetch > 0, "基准抓取没查到词库，用例失效");
     n.store(0, Ordering::Relaxed);
     assert_eq!(
-        s.input_key('1' as u32, 0),
-        KeyOutcome::Commit("词00".to_string())
+        handle_key(&mut s, '1' as u32, 0),
+        KeyAction::Input("词00".to_string())
     );
     assert_eq!(
         n.load(Ordering::Relaxed),

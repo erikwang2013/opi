@@ -3,9 +3,9 @@
 
 //! 候选翻页状态：包装 engine_core::Engine，持有候选分页状态。
 //!
-//! 语义与 Android 侧一致：每页 8 个候选，一次最多抓取 FETCH_LIMIT 条
-//! （Android fetchLimit=64 的对应物），页码越界钳制，buffer 变化时页码
-//! 归零。纯逻辑结构体（无全局状态、无 FFI），可独立单测；
+//! 语义与 Android 侧一致：每页 8 个候选，一次抓取 FETCH_LIMIT 条（**不设上限**，见该
+//! 常量注释；Android 的 fetchLimit 是 JNI 另一条通路，够不到这里的分页出口），页码越界
+//! 钳制，buffer 变化时页码归零。纯逻辑结构体（无全局状态、无 FFI），可独立单测；
 //! C 出口（lib.rs）经 Mutex 单例访问本状态。
 
 use engine_core::Engine;
@@ -14,8 +14,22 @@ use engine_core::composer::Mode;
 
 /// 每页候选数（与 Android 候选栏一致）。
 pub const PAGE_SIZE: usize = 8;
-/// 一次抓取的候选批量上限（对应 Android 侧 fetchLimit=64）。
-pub const FETCH_LIMIT: usize = 64;
+/// 一次抓取的候选批量上限：**不设上限**。曾是 64（对齐 Android fetchLimit），后果见
+/// `engine-core/src/router.rs` 同名常量：真词库下 `y` 前缀一次命中**八千余条**，用户只能
+/// 翻到前 64 条（≈0.8%）—— 而第 64 与第 65 名的静态词频只差 0.01%，没有断崖可供察觉。
+/// ⚠️ 「八千余」**别换成精确数字**（它会漂，实测差异见 `candidate_limits_tests.rs` 头注释）。
+/// 上限也不省成本：`rank_and_pick` 无论 limit 多大都全量收集 + 排序，截断只是扔掉算好的尾巴。
+pub const FETCH_LIMIT: usize = usize::MAX;
+
+// 与 `engine-core/src/router.rs` 的**同名常量**绑死 —— 期望值来自**另一份源码**，不是
+// 本文件的字面量。三处各存一份、彼此零绑定的年代，v1.3.0 只抬了那一份，本轨留在 64 上，
+// **没有任何门禁红**（2026-09-28 修，见 `candidate_limits_tests.rs`）。
+// 编译期求值：漂移是 E0080，不是「某条测试恰好没跑到」。放在常量正下方是刻意的 ——
+// 改常量的人没法不看见它（同 `vk.rs` 那条 const 断言的取舍）。
+const _: () = {
+    assert!(PAGE_SIZE == engine_core::router::PAGE_SIZE);
+    assert!(FETCH_LIMIT == engine_core::router::FETCH_LIMIT);
+};
 
 /// ⇧ 状态机：off / single（下个字母大写后自动复位）/ lock（持续大写）。
 /// 镜像 Android `EngineController.ShiftState` 的三态语义。
@@ -184,14 +198,27 @@ impl CandidateState {
 
     /// 页内索引 → 全局下标（**换算只此一份**），在调用方已抓好的候选表上提交。
     /// 数字选词（`digit_select`）复用自己那次抓取，不重排整表。
+    ///
+    /// **越界判据是页内的**（本页候选数）：全量判据会把页内越界（本页 8 项时点第 9 项）
+    /// 换算成**次页**下标 ⇒ 提交用户看不见的候选（门禁：`candidate_tests.rs` /
+    /// `logic_candidate_tests.rs` 的 `select_beyond_page_returns_empty`）。页内/全量越界一律空串。
     pub(crate) fn select_from(&mut self, fetched: &[Candidate], index: usize) -> String {
-        let global = self.page * PAGE_SIZE + index;
-        let out = self.engine.select_from(fetched, global);
+        // 本页候选数（口径与 `candidates()` 的 skip/take 逐字等价：饱和减法 + min）
+        let page_len = fetched
+            .len()
+            .saturating_sub(self.page * PAGE_SIZE)
+            .min(PAGE_SIZE);
+        let out = if index < page_len {
+            let global = self.page * PAGE_SIZE + index;
+            self.engine.select_from(fetched, global)
+        } else {
+            String::new()
+        };
         self.reset_page_if_buffer_changed();
         out
     }
 
-    /// 批量抓取（FETCH_LIMIT 内，engine 全量排序后截断）。
+    /// 批量抓取（FETCH_LIMIT 内；不设上限时 `truncate` 是空操作，排序仍全量）。
     pub(crate) fn fetched(&self) -> Vec<Candidate> {
         self.engine.candidates(FETCH_LIMIT)
     }
@@ -234,242 +261,15 @@ impl CandidateState {
     }
 }
 
+// 单测独立成文件（`#[path]` 引入）以保持本文件 <500 行：候选分页状态机测试（键路由测试
+// 见 `input_method` 模块）。配对：`candidate_tests.rs`（本轨）↔ `logic_candidate_tests.rs`
+// （tsf 轨）；两轨**分层不同**（本轨的 buffer 编辑方法在本文件，tsf 在 `logic_input_method.rs`），
+// 两份测试的调用面因此不同构 —— 别按「逐行同构」去"修"。
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use engine_core::dictionary::InMemoryDictionary;
-
-    /// 20 个 "hao" 词条 → 确定性的 3 页候选（20 / 8 = 2.5 → 3 页）。
-    fn state() -> CandidateState {
-        let mut d = InMemoryDictionary::new();
-        for i in 0..20 {
-            d.insert("hao", &format!("词{i:02}"), (5000 - i) as u32);
-        }
-        let symbols = engine_core::symbols::SymbolEngine::builtin();
-        let mut s = CandidateState {
-            engine: Engine::new(Box::new(d), symbols, true),
-            page: 0,
-            buffer_snapshot: String::new(),
-            shift_state: ShiftState::Off,
-            last_printable: None,
-        };
-        s.refresh_snapshot();
-        s
-    }
-
-    #[test]
-    fn load_fallback_and_bad_path() {
-        let mut s = CandidateState::load(None).expect("fallback load");
-        assert_eq!(s.buffer(), "");
-        assert_eq!(s.mode(), Mode::Pinyin);
-        // 空串等同 None（内置回退）
-        assert!(CandidateState::load(Some("")).is_ok());
-        // 坏路径 → Err（load_or_fallback 原样语义）
-        assert!(CandidateState::load(Some("/nonexistent/opi.dict")).is_err());
-        s.input_key('w');
-        assert_eq!(s.buffer(), "w");
-    }
-
-    #[test]
-    fn eight_candidates_per_page_and_page_count() {
-        let mut s = state();
-        s.input_key('h');
-        s.input_key('a');
-        s.input_key('o');
-        assert_eq!(s.buffer(), "hao");
-        assert_eq!(s.candidates().len(), PAGE_SIZE);
-        assert_eq!(s.page_count(), 3);
-        assert_eq!(s.candidates()[0], "词00");
-        assert_eq!(s.candidates()[7], "词07");
-    }
-
-    #[test]
-    fn paging_clamps_both_ends() {
-        let mut s = state();
-        for c in ['h', 'a', 'o'] {
-            s.input_key(c);
-        }
-        // 首页 prev 钳制
-        assert_eq!(s.prev_page(), 0);
-        // next → 1 → 2（末页）
-        assert_eq!(s.next_page(), 1);
-        assert_eq!(s.next_page(), 2);
-        assert_eq!(s.candidates()[0], "词16");
-        // 末页 next 钳制
-        assert_eq!(s.next_page(), 2);
-        // set_page 双向钳制
-        assert_eq!(s.set_page(99), 2);
-        assert_eq!(s.set_page(0), 0);
-    }
-
-    #[test]
-    fn select_is_page_relative_and_commits() {
-        let mut s = state();
-        for c in ['h', 'a', 'o'] {
-            s.input_key(c);
-        }
-        s.next_page(); // 第 2 页（global 8..16）
-        assert_eq!(s.select(0), "词08");
-        // 提交后 buffer 清空、页码归零
-        assert_eq!(s.buffer(), "");
-        assert_eq!(s.page(), 0);
-    }
-
-    #[test]
-    fn select_out_of_range_returns_empty() {
-        let mut s = state();
-        for c in ['h', 'a', 'o'] {
-            s.input_key(c);
-        }
-        s.set_page(2); // 第 3 页仅 4 个候选（16..19）
-        assert_eq!(s.select(7), "");
-    }
-
-    #[test]
-    fn set_shift_clamps_page() {
-        let mut s = state();
-        for c in ['h', 'a', 'o'] {
-            s.input_key(c);
-        }
-        s.set_page(2); // 末页（3 页候选）
-        assert_eq!(s.page(), 2);
-        s.set_shift(true); // buffer 不变，页码须钳制在 page_count 内
-        assert!(s.page() <= s.page_count().saturating_sub(1));
-        assert!(!s.candidates().is_empty());
-        s.set_shift(false);
-        assert!(s.page() <= s.page_count().saturating_sub(1));
-        assert!(!s.candidates().is_empty());
-    }
-
-    #[test]
-    fn buffer_change_resets_page() {
-        let mut s = state();
-        for c in ['h', 'a', 'o'] {
-            s.input_key(c);
-        }
-        s.next_page();
-        assert_eq!(s.page(), 1);
-        // 继续输入（buffer 变化）→ 页码归零
-        s.input_key('x');
-        assert_eq!(s.buffer(), "haox");
-        assert_eq!(s.page(), 0);
-    }
-
-    #[test]
-    fn backspace_and_clear_reset_page() {
-        let mut s = state();
-        for c in ['h', 'a', 'o'] {
-            s.input_key(c);
-        }
-        s.next_page();
-        s.backspace(); // buffer 变化 → 归零
-        assert_eq!(s.page(), 0);
-        s.input_key('o');
-        s.next_page();
-        s.clear(); // buffer 清空 → 归零
-        assert_eq!(s.page(), 0);
-        assert_eq!(s.buffer(), "");
-    }
-
-    #[test]
-    fn shift_machine_off_single_lock_cycle() {
-        let mut s = state();
-        assert_eq!(s.shift_state(), ShiftState::Off);
-        // 单击：Off→Single
-        s.shift_tap();
-        assert_eq!(s.shift_state(), ShiftState::Single);
-        // 再单击：Single→Off
-        s.shift_tap();
-        assert_eq!(s.shift_state(), ShiftState::Off);
-        // 长按：Lock；单击：Lock→Off（镜像 EngineController.shiftTap else 分支）
-        s.shift_long_press();
-        assert_eq!(s.shift_state(), ShiftState::Lock);
-        s.shift_tap();
-        assert_eq!(s.shift_state(), ShiftState::Off);
-        // single 消费后复位；lock 不受消费影响
-        s.shift_tap();
-        assert_eq!(s.shift_state(), ShiftState::Single);
-        s.consume_single_shift();
-        assert_eq!(s.shift_state(), ShiftState::Off);
-        s.shift_long_press();
-        s.consume_single_shift();
-        assert_eq!(s.shift_state(), ShiftState::Lock);
-    }
-
-    #[test]
-    fn empty_buffer_has_no_pages() {
-        let mut s = state();
-        assert_eq!(s.candidates(), Vec::<String>::new());
-        assert_eq!(s.page_count(), 0);
-        assert_eq!(s.next_page(), 0);
-        assert_eq!(s.set_page(5), 0);
-    }
-
-    /// 只数 `query` 的字典包装（`query_all` 走 trait 默认实现 → `query`）；与
-    /// engine-core 侧 `tests/router_invariants.rs` 同形，两轨各一枚。
-    struct Counting {
-        inner: InMemoryDictionary,
-        n: std::sync::Arc<std::sync::atomic::AtomicUsize>,
-    }
-
-    impl engine_core::dictionary::Dictionary for Counting {
-        fn query(&self, pinyin: &str, limit: usize) -> Vec<engine_core::trie::Entry> {
-            self.n.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            self.inner.query(pinyin, limit)
-        }
-        fn len(&self) -> usize {
-            self.inner.len()
-        }
-        fn max_freq(&self) -> u64 {
-            self.inner.max_freq()
-        }
-    }
-
-    /// 数字选词旧路径抓两次候选表：`candidates()` 一次，`select()` 内 `engine.select`
-    /// 又一次 —— 每次选词白付一次全量排序。抓取次数是计数式指标，比时间稳
-    /// （同一台机器上还有别的编译在跑）。改回两次即红。
-    #[test]
-    fn digit_select_fetches_candidate_table_once() {
-        use crate::input_method::{KeyAction, handle_key};
-        use std::sync::atomic::Ordering;
-        let n = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-        let mut d = InMemoryDictionary::new();
-        for i in 0..20 {
-            d.insert("hao", &format!("词{i:02}"), (5000 - i) as u32);
-        }
-        let mut s = CandidateState {
-            engine: Engine::new(
-                Box::new(Counting {
-                    inner: d,
-                    n: n.clone(),
-                }),
-                engine_core::symbols::SymbolEngine::builtin(),
-                true,
-            ),
-            page: 0,
-            buffer_snapshot: String::new(),
-            shift_state: ShiftState::Off,
-            last_printable: None,
-        };
-        s.refresh_snapshot();
-        s.switch_mode(Mode::Pinyin);
-        for c in ['h', 'a', 'o'] {
-            handle_key(&mut s, c as u32, 0);
-        }
-        // 基准：读一次当前页候选表要查几次词库（= 一次全量抓取）
-        n.store(0, Ordering::Relaxed);
-        let _ = s.candidates();
-        let one_fetch = n.load(Ordering::Relaxed);
-        assert!(one_fetch > 0, "基准抓取没查到词库，用例失效");
-        n.store(0, Ordering::Relaxed);
-        assert_eq!(
-            handle_key(&mut s, '1' as u32, 0),
-            KeyAction::Input("词00".to_string())
-        );
-        assert_eq!(
-            n.load(Ordering::Relaxed),
-            one_fetch,
-            "数字选词应只抓一次候选表（两次 = 整表排两遍）"
-        );
-    }
-}
+#[path = "candidate_tests.rs"]
+mod candidate_tests;
+// 候选上限门禁独立成文件（`#[path]` 引入）以保持本文件 <500 行；两轨同源不合并，
+// 配对：`candidate_limits_tests.rs`（Linux 轨）↔ `logic_limits_tests.rs`（Windows 轨）。
+#[cfg(test)]
+#[path = "candidate_limits_tests.rs"]
+mod limits_tests;

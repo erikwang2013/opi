@@ -16,7 +16,7 @@
 
 use engine_core::composer::Mode;
 
-use crate::logic::{PAGE_SIZE, ShiftState, TsfLogic};
+use crate::logic::{ShiftState, TsfLogic};
 
 // ---------- 特殊键：键码 = SPECIAL_BASE | Windows VK（wParam，与 TSF 键事件同源） ----------
 
@@ -278,35 +278,22 @@ impl TsfLogic {
         }
     }
 
-    /// 拼音/繁体/符号模式有候选时按数字选词（页内索引：'1'→第 0 个候选）；否则交应用。
-    /// 无对应候选（本页没有第 9 项、'0'）不消费，交应用输入该数字。
+    /// 拼音/繁体/符号模式有候选时按数字选词（页内索引：'1'→第 0 个候选）；否则直通。
+    /// 无对应候选（本页没有第 9 项、'0'）不消费，交客户端处理 —— 本函数**不自己数**页内
+    /// 条数：页内越界由 `select_from` 的页内判据兜住（→ 空串 → 直通）。两处各数一遍正是
+    /// 缺陷的来源（旧 `select` 只判**全量**越界：数字键走对了、点击候选走错了；用例见
+    /// `candidate_tests.rs` / `logic_candidate_tests.rs` 的 `select_beyond_page_returns_empty`）。
+    /// 同一份抓取供选中用：
+    /// 旧路径 `candidates()` + `select()` 抓两次 ⇒ 每次数字选词排两遍。
     fn digit_select(&mut self, c: char) -> KeyOutcome {
-        // 本页候选数。**越界判据必须在页内**：`select` 的「越界返回空串」是全量列表的
-        // 越界，页内越界（本页只有 8 项时按 '9'）会被它换算成次页下标 —— 提交应用
-        // 屏幕上看不见的候选。三轨同形，见 engine-core 侧的钉
-        // tests/router_invariants.rs 的 digit_beyond_page_must_not_commit_hidden_candidate。
-        // 同一份抓取供两处用（页内计数 + 选中）：旧路径 `candidates()` 抓一次、
-        // `select()` → `engine.select` 又抓一次 —— **每次数字选词把整表排两遍**。
-        // 计数口径与 `candidates()` 的 skip/take 逐字等价（饱和减法 + min）。
         let fetched = self.fetched();
-        let page_len = fetched
-            .len()
-            .saturating_sub(self.page * PAGE_SIZE)
-            .min(PAGE_SIZE);
-        if self.mode().digit_selects_candidates() && !self.buffer().is_empty() && page_len > 0 {
-            let Some(d) = c.to_digit(10) else {
+        if self.mode().digit_selects_candidates() && !self.buffer().is_empty() {
+            let Some(idx) = c.to_digit(10).and_then(|d| d.checked_sub(1)) else {
                 return KeyOutcome::Unhandled;
             };
-            let Some(idx) = d.checked_sub(1) else {
-                return KeyOutcome::Unhandled;
-            };
-            let idx = idx as usize;
-            if idx >= page_len {
-                return KeyOutcome::Unhandled;
-            }
             // 与 `select` 同一套换算与收尾，只是复用上面那次抓取
-            let text = self.select_from(&fetched, idx);
-            // 引擎没给出该候选（页内判据下不可达，保留为最后一道防线）同样不消费
+            let text = self.select_from(&fetched, idx as usize);
+            // 空串 = 页内没这一项（或无候选）→ 不消费，交客户端处理
             if text.is_empty() {
                 KeyOutcome::Unhandled
             } else {

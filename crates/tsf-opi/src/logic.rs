@@ -23,8 +23,22 @@ use engine_core::composer::Mode;
 
 /// 每页候选数（与 Android 候选栏一致）。
 pub const PAGE_SIZE: usize = 8;
-/// 一次抓取的候选批量上限（对应 Android 侧 fetchLimit=64）。
-pub const FETCH_LIMIT: usize = 64;
+/// 一次抓取的候选批量上限：**不设上限**。曾是 64（对齐 Android fetchLimit），后果见
+/// `engine-core/src/router.rs` 同名常量：真词库下 `y` 前缀一次命中**八千余条**，用户只能
+/// 翻到前 64 条（≈0.8%）—— 而第 64 与第 65 名的静态词频只差 0.01%，没有断崖可供察觉。
+/// ⚠️ 「八千余」**别换成精确数字**（它会漂，实测差异见 `logic_limits_tests.rs` 头注释）。
+/// 上限也不省成本：`rank_and_pick` 无论 limit 多大都全量收集 + 排序，截断只是扔掉算好的尾巴。
+pub const FETCH_LIMIT: usize = usize::MAX;
+
+// 与 `engine-core/src/router.rs` 的**同名常量**绑死 —— 期望值来自**另一份源码**，不是
+// 本文件的字面量。三处各存一份、彼此零绑定的年代，v1.3.0 只抬了那一份，本轨留在 64 上，
+// **没有任何门禁红**（2026-09-28 修，见 `logic_limits_tests.rs`）。
+// 编译期求值：漂移是 E0080，不是「某条测试恰好没跑到」。放在常量正下方是刻意的 ——
+// 改常量的人没法不看见它（同 `vk.rs` 那条 const 断言的取舍）。
+const _: () = {
+    assert!(PAGE_SIZE == engine_core::router::PAGE_SIZE);
+    assert!(FETCH_LIMIT == engine_core::router::FETCH_LIMIT);
+};
 
 /// ⇧ 状态机：off / single（下个字母大写后自动复位）/ lock（持续大写）。
 /// 镜像 Android `EngineController.ShiftState` 的三态语义。
@@ -201,14 +215,27 @@ impl TsfLogic {
 
     /// 页内索引 → 全局下标（**换算只此一份**），在调用方已抓好的候选表上提交。
     /// 数字选词（`digit_select`）复用自己那次抓取，不重排整表。
+    ///
+    /// **越界判据是页内的**（本页候选数）：全量判据会把页内越界（本页 8 项时点第 9 项）
+    /// 换算成**次页**下标 ⇒ 提交用户看不见的候选（门禁：`candidate_tests.rs` /
+    /// `logic_candidate_tests.rs` 的 `select_beyond_page_returns_empty`）。页内/全量越界一律空串。
     pub(crate) fn select_from(&mut self, fetched: &[Candidate], index: usize) -> String {
-        let global = self.page * PAGE_SIZE + index;
-        let out = self.engine.select_from(fetched, global);
+        // 本页候选数（口径与 `candidates()` 的 skip/take 逐字等价：饱和减法 + min）
+        let page_len = fetched
+            .len()
+            .saturating_sub(self.page * PAGE_SIZE)
+            .min(PAGE_SIZE);
+        let out = if index < page_len {
+            let global = self.page * PAGE_SIZE + index;
+            self.engine.select_from(fetched, global)
+        } else {
+            String::new()
+        };
         self.reset_page_if_buffer_changed();
         out
     }
 
-    /// 批量抓取（FETCH_LIMIT 内，engine 全量排序后截断）。
+    /// 批量抓取（FETCH_LIMIT 内；不设上限时 `truncate` 是空操作，排序仍全量）。
     pub(crate) fn fetched(&self) -> Vec<Candidate> {
         self.engine.candidates(FETCH_LIMIT)
     }
@@ -263,3 +290,9 @@ pub use input_method::*;
 #[cfg(test)]
 #[path = "logic_candidate_tests.rs"]
 mod candidate_tests;
+
+// 候选上限门禁独立成文件（`#[path]` 引入）以保持本文件 <500 行；两轨同源不合并，
+// 配对：`candidate_limits_tests.rs`（Linux 轨）↔ `logic_limits_tests.rs`（Windows 轨）。
+#[cfg(test)]
+#[path = "logic_limits_tests.rs"]
+mod limits_tests;
