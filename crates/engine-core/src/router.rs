@@ -18,8 +18,12 @@ use crate::keys::*;
 
 /// 每页候选数（与 Android 候选栏、两轨 `PAGE_SIZE` 一致）。
 pub const PAGE_SIZE: usize = 8;
-/// 一次抓取的候选批量上限（对应 Android 侧 fetchLimit=64，与两轨一致）。
-pub const FETCH_LIMIT: usize = 64;
+/// 一次抓取的候选批量上限：**不设上限**。曾是 64（对齐 Android fetchLimit），后果是
+/// [`KeyRouter::page_count`] 封顶 8 页：实测 luna 下 y=8006 / yi=2884 条命中，用户只能
+/// 翻到前 64 条（0.8%–23%），而第 64 与第 65 名的静态词频只差 0.01%（无断崖）。
+/// 上限也不省成本：`rank_and_pick` 无论 limit 多大都全量收集 + 排序（见该模块
+/// 「不能下推 limit 到词库」），截断只是扔掉已经算好的尾巴。
+pub const FETCH_LIMIT: usize = usize::MAX;
 
 /// 按键处理结果。对应 C ABI 的 `action`：`PassThrough=0`、`EngineHandled=1`、
 /// `Input=2`（此时 text 有效）。
@@ -173,7 +177,7 @@ impl KeyRouter {
 
     // ---- 候选分页（与两轨同构） ----
 
-    /// 批量抓取（FETCH_LIMIT 内，engine 全量排序后截断）。
+    /// 批量抓取（分页的唯一数据源：`page_count`/`candidates`/`select` 都从这一份算）。
     pub(crate) fn fetched(&self) -> Vec<Candidate> {
         self.engine.candidates(FETCH_LIMIT)
     }

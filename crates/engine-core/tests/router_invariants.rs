@@ -69,15 +69,13 @@ fn all_pages(r: &mut KeyRouter) -> Vec<Vec<String>> {
 
 #[test]
 fn page_count_is_ceiling_and_last_page_matches_remainder() {
-    for n in [0usize, 1, 7, 8, 9, 15, 16, 17, 23, 24, 63, 64, 65, 100] {
+    for n in [0usize, 1, 7, 8, 9, 15, 16, 17, 23, 24, 63, 64, 65, 100, 200] {
         let mut r = router_with(n);
         type_hao(&mut r);
         let want = reachable(&r);
-        assert_eq!(
-            want.len(),
-            n.min(FETCH_LIMIT),
-            "n={n}: 可达候选数受 FETCH_LIMIT 限制"
-        );
+        // 曾经写作 `n.min(FETCH_LIMIT)` —— FETCH_LIMIT 不再截断后 clippy 判定该 min
+        // 是 no-op（`-D warnings` 下必须去掉），去掉正好把断言**收紧**成「一条不漏」。
+        assert_eq!(want.len(), n, "n={n}: 可达候选数必须是全部 n 条");
         assert_eq!(
             r.page_count(),
             want.len().div_ceil(PAGE_SIZE),
@@ -115,6 +113,31 @@ fn pages_partition_reachable_candidates_in_order() {
         let got: Vec<String> = all_pages(&mut r).into_iter().flatten().collect();
         assert_eq!(got, want, "n={n}: 分页与全量列表不一致");
     }
+}
+
+/// 天花板回归（2026-09-28）：**可达集合 = 引擎排出的全部候选**，不是某个固定条数。
+///
+/// ⚠️ 期望值**故意不引用 `FETCH_LIMIT`**。上面用例的 `want` 取自同一个常量 ——
+/// 常量被调小时 `want` 与 `page_count` 一起缩，截断对它们完全不可见
+/// （`FETCH_LIMIT = 64` 时全部用例仍绿，包括 n=100）。这里的 300 是**独立**期望值：
+/// 越过任何「64 时代」的上限，截断一回来即红。
+#[test]
+fn paging_reaches_every_candidate_the_engine_ranks() {
+    const N: usize = 300; // 独立期望值，不随 FETCH_LIMIT 缩放
+    let mut r = router_with(N);
+    type_hao(&mut r);
+    assert_eq!(
+        r.page_count(),
+        N.div_ceil(PAGE_SIZE),
+        "总页数必须覆盖全部候选"
+    );
+    let got: Vec<String> = all_pages(&mut r).into_iter().flatten().collect();
+    assert_eq!(got.len(), N, "翻到底必须能取到全部 {N} 条");
+    assert_eq!(
+        got,
+        reachable(&r),
+        "分页结果 = 引擎的候选列表（不重不漏不乱序）"
+    );
 }
 
 #[test]
