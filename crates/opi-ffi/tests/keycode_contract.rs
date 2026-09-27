@@ -474,10 +474,9 @@ fn coverage_boundaries_are_honest() {
     //    * 真正共享的是**状态位**（`1<<0..4` / `1<<26..28`，两处都有手抄），由已有的
     //      `two_track_keycodes.rs` 管；26/27/28 另有 fcitx5 C++ 侧的 `static_assert`
     //      （`crates/fcitx5-opi/cpp/opi_fcitx5.cpp:417-419`）守线格式。
-    //    ⚠️ **残留缺口（本门禁不覆盖，如实记）**：那两轨的 `1<<0..4` 目前只被
-    //      「两轨互比」钉住 —— 若两边**一起**漂移，`two_track_keycodes.rs` 会照绿，
-    //      而真源没参与比对。真要补，应当让它们**对着 `keys.rs`** 比（不是多数表决）；
-    //      本文件没做，是因为它们的键码空间不同，需要按 `KEY_STATE_*` 前缀单独开口子。
+    //    ✅ **该缺口已闭合**（2026-09-28 订正：此处原写「本文件没做」，与现状相反）——
+    //      `two_track_keycodes.rs::state_bits_are_anchored_to_the_true_source_not_to_each_other`
+    //      把两轨这 7 个位**逐个对着真源** `engine_core::keys` 比（非两轨互比；`META` 两轨都没有，是子集）。
 
     // 4. ⚠️ **本门禁是文本层扫描（读文件 + 求值），所以 `cfg` 挡不住它** ——
     //    而 `cargo check` / clippy / 测试**会**被 `cfg` 挡住：主机（Linux）上

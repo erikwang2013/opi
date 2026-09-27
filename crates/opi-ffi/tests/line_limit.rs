@@ -24,7 +24,8 @@
 //! | `.` 开头的目录 | 版本控制/工具目录（`.git` `.github` `.agents` `.claude-flow` `.gradle`） |
 //! | `target/` `build/` `__pycache__/` `node_modules/` | 构建与缓存产物 |
 //! | `data/generated/` `data/raw/` | 生成物与原始数据（`.tsv` 等） |
-//! | `Cargo.lock`（按文件名） | cargo 生成并重写的锁文件（本仓 730 行），不是源码 —— 这是**唯一**按名字放行的 |
+//! | `Cargo.lock`（按文件名） | cargo 生成并重写的锁文件（本仓 730 行），不是源码 —— 属于**按名字放行的两类**之一（另一类是下面的中间态） |
+//! | `*.tmp` / `*.tmp.*`（按文件名） | **原子写的中间态**：写完即 rename，正常只活毫秒级。本仓三处原子写用裸 `.tmp`（`engine-data/src/user_words.rs` 的 `TMP_SUFFIX`、`crates/fcitx5-opi/src/data_dir.rs:56`、`scripts/gen_*.py`），实测撞红的还有 `macos/README.md.tmp.<pid>.<rand>` 这一种。它**不是源码，是源码的中间态** —— 瞬时文件不该让门禁在并发树里周期性假红（那种红重跑就没有、不可复现，最容易被当成真回归查半天）。代价如实记：谁把一个超线的 `*.tmp` **永久**留在这儿，本门禁看不见 |
 //! | 非 UTF-8 文件 | 二进制（`.opid` `.so` `.a` `.class` `.deb` `ruvector.db` …）—— 按**内容**判，不列扩展名 |
 //!
 //! ## 覆盖边界（本门禁**不**保证的）
@@ -55,9 +56,24 @@ fn path_is_excluded(rel: &str) -> bool {
 
 /// 生成物（按**文件名**，任何目录下都算）。`Cargo.lock` 是 cargo 生成并**重写**的锁文件
 /// （本仓 730 行，行数由依赖图决定，手改无意义）—— 它不是源码，归「生成物」那一类。
-/// ⚠️ 这是本门禁**唯一**按名字放行的文件；再有超线的**源码**不许往这里加，得拆文件。
+/// ⚠️ 按名字放行的只有**两类**：这个（生成物）与 [`is_transient`]（原子写的中间态）。
+/// 再有超线的**源码**不许往这两类里塞 —— 那是拆文件的事。
 fn is_generated(name: &str) -> bool {
     name == "Cargo.lock"
+}
+
+/// **原子写的中间态**（写完即 rename，正常生命周期毫秒级）。
+///
+/// 两种形状都有真源，不是猜的：本仓三处原子写用**裸 `.tmp` 后缀**
+/// （`crates/engine-data/src/user_words.rs` 的 `TMP_SUFFIX`、
+/// `crates/fcitx5-opi/src/data_dir.rs:56`、`scripts/gen_*.py`）；而实测把本门禁撞红的
+/// 那一次是 `macos/README.md.tmp.3092002.f8814231013a`（`tmp` + pid + 随机）。
+///
+/// 为什么必须排除：这类文件是**瞬时**的 —— 并发树里别的分身在原子写时，本门禁会周期性
+/// 假红，而那种红**重跑就没了、不可复现**，最容易被当成真回归去查半天（2026-09-28 实测；
+/// 两个形状都实测过：修前各自报 `501 行`）。
+fn is_transient(name: &str) -> bool {
+    name.ends_with(".tmp") || name.contains(".tmp.")
 }
 
 fn walk(dir: &Path, root: &Path, out: &mut Vec<PathBuf>) {
@@ -78,7 +94,11 @@ fn walk(dir: &Path, root: &Path, out: &mut Vec<PathBuf>) {
             }
         } else if let Ok(rel) = p.strip_prefix(root) {
             let rel = rel.to_string_lossy().replace('\\', "/");
-            if !name.ends_with(".md") && !is_generated(&name) && !path_is_excluded(&rel) {
+            if !name.ends_with(".md")
+                && !is_generated(&name)
+                && !is_transient(&name)
+                && !path_is_excluded(&rel)
+            {
                 out.push(p);
             }
         }
@@ -158,6 +178,9 @@ fn no_source_file_exceeds_500_lines() {
     }
     // 兜底下限：只用来抓「遍历整个坏掉」。实测 268 个（2026-09-28，与独立 find 口径
     // 259 文本 + 12 二进制交叉核对过，本遍历还多出 9 个点文件）；正常增删文件不该碰它。
+    // ⚠️ 上面那个 268 是**当时值**，别当当前条数读（加排除项、增删文件都会让它漂）。
+    // 当前数字以本门禁每次 `--nocapture` 打印的「扫到文本源码 N 个」为准（真正的护栏是
+    // 下面的 `text >= 200`，这个数不承重）。
     assert!(
         text >= 200,
         "只扫到 {text} 个文本源码 —— 遍历坏了（正常是两百多个）"

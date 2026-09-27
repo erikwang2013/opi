@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! C ABI **边界**测试：28 个 `opi_*` 导出在非法/极端入参下的行为。
+//! C ABI **边界**测试：`opi_*` 导出（全集见 `c_abi_contract.rs` 的解析清单）在
+//! 非法/极端入参下的行为。
 //!
 //! 与 `cabi_test.rs` 的分工：那边测**正常链路**（装载→输入→候选→选择），
 //! 这边只测**边界**——null 指针、`len` 与实际不符、非法 UTF-16（孤立代理对、

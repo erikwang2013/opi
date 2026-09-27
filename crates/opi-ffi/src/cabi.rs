@@ -7,11 +7,17 @@
 //! 多字符串返回值（candidates/searchSymbols/symbolsInBlock）编码为 JSON 文本数组。
 //!
 //! # Safety（本模块**无外部内存参数**那一档导出的统一契约）
-//! 共享单例由内部 `Mutex` 保护，跨线程调用安全；每个函数都以 `catch_unwind` 包裹，
-//! panic 不跨 FFI 边界。这一档的 `# Safety` 段落**统一在此处**，函数上不再逐条重复
-//! （照 `jni.rs` 的做法，原先 26 条逐字相同的句子占了 52 行）。
+//! 共享单例由内部 `Mutex` 保护，跨线程调用安全；除 `opi_ffi_free_string` 外每个函数
+//! 都以 `catch_unwind` 包裹，panic 不跨 FFI 边界。这一档的 `# Safety` 段落**统一在此处**，
+//! 函数上不再逐条重复（照 `jni.rs` 的做法，原先 26 条逐字相同的句子占了 52 行）。
 //! ⚠️ **带 `ptr` / `len` 入参的导出不在此列** —— 它们各自写明前置条件（指针必须
 //! 有效或为 null 等），别从本段推断。
+//! ⚠️ `opi_ffi_free_string` 是上面那句 `catch_unwind` 的**唯一例外**，且是有意的：它只
+//! `drop` 调用方给的句柄、不碰共享单例，而包装本身要再分配/加锁 —— 释放路径上再加一层
+//! 反而更危险。「唯一」由 `tests/cabi_safety_doc.rs` 钉住（别只改这句话）。
+//!
+//! 下面这条 `allow` 关掉的是 clippy 的 `missing_safety_doc`（作用范围：本模块**全部**
+//! 导出，含将来新增的），替代执行点见 `tests/cabi_safety_doc.rs`（**动导出面后跑它**）。
 #![allow(clippy::missing_safety_doc)]
 
 use std::panic::{AssertUnwindSafe, catch_unwind};

@@ -35,42 +35,111 @@ const LUNA: &str = concat!(
     "/../../android/app/src/main/assets/luna.opid"
 );
 
-/// 三个模块各自的特殊键常量（不含空格 —— 空格在三套里的编码本就不同）。
+/// 三个模块各自的特殊键常量。标签是 `轨道::常量名` —— 名字是给
+/// [`every_key_code_const_in_the_three_tracks_is_registered_here`] 对着**源文件**
+/// 核完整性用的（值仍由编译器从常量引用取出，文本只管名字，两边互补）。
+///
+/// **不含空格**：空格在 `engine_core` / `fcitx5` 里就是字符键 `0x20`，单独登记在
+/// 白名单 `PRINTABLE_BY_DESIGN` 里 —— 别把「值恰好在可打印段」当通行证。
 fn all_special_codes() -> Vec<(&'static str, u32)> {
     let mut v: Vec<(&'static str, u32)> = vec![
-        ("engine_core", ek::KEY_BACK_SPACE),
-        ("engine_core", ek::KEY_TAB),
-        ("engine_core", ek::KEY_RETURN),
-        ("engine_core", ek::KEY_ESCAPE),
-        ("engine_core", ek::KEY_PAGE_UP),
-        ("engine_core", ek::KEY_PAGE_DOWN),
-        ("engine_core", ek::KEY_DELETE),
-        ("engine_core", ek::KEY_SHIFT),
-        ("engine_core", ek::KEY_UP),
-        ("engine_core", ek::KEY_DOWN),
-        ("engine_core", ek::KEY_LEFT),
-        ("engine_core", ek::KEY_RIGHT),
-        ("tsf", tlg::KEY_BACK_SPACE),
-        ("tsf", tlg::KEY_TAB),
-        ("tsf", tlg::KEY_RETURN),
-        ("tsf", tlg::KEY_ESCAPE),
-        ("tsf", tlg::KEY_PAGE_UP),
-        ("tsf", tlg::KEY_PAGE_DOWN),
-        ("tsf", tlg::KEY_DELETE),
-        ("tsf", tlg::KEY_SHIFT),
-        ("tsf", tlg::KEY_SPACE),
-        ("fcitx5", fim::KEY_BACK_SPACE),
-        ("fcitx5", fim::KEY_TAB),
-        ("fcitx5", fim::KEY_RETURN),
-        ("fcitx5", fim::KEY_ESCAPE),
-        ("fcitx5", fim::KEY_PAGE_UP),
-        ("fcitx5", fim::KEY_PAGE_DOWN),
-        ("fcitx5", fim::KEY_SHIFT_L),
-        ("fcitx5", fim::KEY_SHIFT_R),
-        ("fcitx5", fim::KEY_DELETE),
+        ("engine_core::KEY_BACK_SPACE", ek::KEY_BACK_SPACE),
+        ("engine_core::KEY_TAB", ek::KEY_TAB),
+        ("engine_core::KEY_RETURN", ek::KEY_RETURN),
+        ("engine_core::KEY_ESCAPE", ek::KEY_ESCAPE),
+        ("engine_core::KEY_PAGE_UP", ek::KEY_PAGE_UP),
+        ("engine_core::KEY_PAGE_DOWN", ek::KEY_PAGE_DOWN),
+        ("engine_core::KEY_DELETE", ek::KEY_DELETE),
+        ("engine_core::KEY_SHIFT", ek::KEY_SHIFT),
+        ("engine_core::KEY_UP", ek::KEY_UP),
+        ("engine_core::KEY_DOWN", ek::KEY_DOWN),
+        ("engine_core::KEY_LEFT", ek::KEY_LEFT),
+        ("engine_core::KEY_RIGHT", ek::KEY_RIGHT),
+        ("tsf::KEY_BACK_SPACE", tlg::KEY_BACK_SPACE),
+        ("tsf::KEY_TAB", tlg::KEY_TAB),
+        ("tsf::KEY_RETURN", tlg::KEY_RETURN),
+        ("tsf::KEY_ESCAPE", tlg::KEY_ESCAPE),
+        ("tsf::KEY_PAGE_UP", tlg::KEY_PAGE_UP),
+        ("tsf::KEY_PAGE_DOWN", tlg::KEY_PAGE_DOWN),
+        ("tsf::KEY_DELETE", tlg::KEY_DELETE),
+        ("tsf::KEY_SHIFT", tlg::KEY_SHIFT),
+        ("tsf::KEY_SPACE", tlg::KEY_SPACE),
+        ("fcitx5::KEY_BACK_SPACE", fim::KEY_BACK_SPACE),
+        ("fcitx5::KEY_TAB", fim::KEY_TAB),
+        ("fcitx5::KEY_RETURN", fim::KEY_RETURN),
+        ("fcitx5::KEY_ESCAPE", fim::KEY_ESCAPE),
+        ("fcitx5::KEY_PAGE_UP", fim::KEY_PAGE_UP),
+        ("fcitx5::KEY_PAGE_DOWN", fim::KEY_PAGE_DOWN),
+        ("fcitx5::KEY_SHIFT_L", fim::KEY_SHIFT_L),
+        ("fcitx5::KEY_SHIFT_R", fim::KEY_SHIFT_R),
+        ("fcitx5::KEY_DELETE", fim::KEY_DELETE),
     ];
     v.sort_by_key(|(_, c)| *c);
     v
+}
+
+/// 标签 `轨道::常量名` → 轨道（没有 `::` 时原样返回）。
+fn track_of(label: &str) -> &str {
+    label.split_once("::").map_or(label, |(t, _)| t)
+}
+
+/// 三套键码空间的**源文件**（编译期读入：路径写错 = 编译不过，不会静默失明）。
+///
+/// 两轨的键码是**手抄**的另一套空间（理由见 `keycode_contract.rs` 的
+/// `coverage_boundaries_are_honest` 第 3 条），所以各自那份文件就是它们的真源。
+/// 本门禁问的**不是**「抄得对不对」（那归 `two_track_keycodes.rs` 与
+/// `keycode_contract.rs`），而是**上面那份清单全不全**。
+const SOURCES: &[(&str, &str)] = &[
+    ("engine_core", include_str!("../../engine-core/src/keys.rs")),
+    (
+        "tsf",
+        include_str!("../../tsf-opi/src/logic_input_method.rs"),
+    ),
+    (
+        "fcitx5",
+        include_str!("../../fcitx5-opi/src/input_method.rs"),
+    ),
+];
+
+/// 允许落在可打印 ASCII 段的键码：**只有空格**，而且是刻意的 —— 它是字符键，值就是 `0x20`。
+///
+/// 这是一张**点名**的白名单，不是「值恰好可打印就放行」：后者会让历史上那类撞号
+/// （TSF 的 `VK_DELETE = 0x2E` 撞 `.`）自动豁免，门禁当场失效。
+const PRINTABLE_BY_DESIGN: &[&str] = &["engine_core::KEY_SPACE", "fcitx5::KEY_SPACE"];
+
+/// 源文本里的**键码**常量名：每处 `const KEY_*` 声明，**排除 `KEY_STATE_*`**。
+///
+/// ⚠️ **不要退回行首匹配**。2026-09-28 的对抗复核 + 我复跑实测：原先那版
+/// `trim_start().strip_prefix("pub const ")` 对这四种写法**全盲**（四种都实测 GREEN，
+/// 且每次都真重编过，`recompiled=True`）：
+/// `pub(crate) const KEY_X` / 裸 `const KEY_X` / `#[allow(...)] pub const KEY_X`（同行）/
+/// 一行两条中的第二条。前三种都是合法且会出现的写法。
+/// 所以这里按**每行的每个 `const ` 出现处**取紧跟其后的标识符 —— 可见性、属性、
+/// 同行第几条都不影响判据。
+///
+/// 仍是**文本扫描**，两条边界**按名划定**（不是「看起来像才收」）：
+/// - 名字必须以 `KEY_` 开头。`VK_*`（Win32 虚拟键码，`tsf-opi/src/vk.rs` 自己注明与引擎
+///   键码「同值不同空间」）与 `const SPECIAL_KEYS: [u32; 12]`（聚合数组）都不收。
+/// - `KEY_STATE_*` 不收：位掩码不是键码。**它们的条数有另一道执行点** ——
+///   `two_track_keycodes.rs` 的非空转护栏（实测把 `KEY_STATE_ZZZ` 加进 tsf 真源，
+///   那道门禁 EXIT=101；本门禁此时 GREEN 是设计内）。
+fn key_const_names(src: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    for line in src.lines() {
+        // 切掉行注释：`///` 文档里提到 `const KEY_X` 是散文不是声明（本仓文档爱这么写）。
+        let mut rest = line.split("//").next().unwrap_or("");
+        while let Some(i) = rest.find("const ") {
+            rest = &rest[i + "const ".len()..];
+            let name: String = rest
+                .chars()
+                .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                .collect();
+            if name.starts_with("KEY_") && !name.starts_with("KEY_STATE_") {
+                names.push(name);
+            }
+        }
+    }
+    names
 }
 
 /// 不变量 1：每个特殊键码都 > 0x7f，且能解码成非 ASCII 字符。
@@ -80,7 +149,10 @@ fn all_special_codes() -> Vec<(&'static str, u32)> {
 #[test]
 fn special_codes_stay_out_of_the_printable_ascii_range() {
     let codes = all_special_codes();
-    assert_eq!(codes.len(), 30, "三套空间的特殊键常量数");
+    // 条数**不在这里钉**（原来钉的是 `assert_eq!(codes.len(), 30)` —— 那正是让这份
+    // 清单看起来「已经守住了」的东西）。清单全不全由
+    // [`every_key_code_const_in_the_three_tracks_is_registered_here`] 对着三份源文件
+    // 双向核 —— 引门禁，不引数字。
     for (who, code) in &codes {
         assert!(
             *code > 0x7f,
@@ -104,13 +176,15 @@ fn special_codes_stay_out_of_the_printable_ascii_range() {
         }
     }
     // 同一套空间内部也不许重复（两个键码相同 → 一个键被另一个顶掉）。
+    // ⚠️ 判「同一套」必须用 `track_of` 剥掉 `::常量名`：标签带上常量名之后，
+    // **同轨两条的标签也不再相等** —— 直接比标签等于把这段静默弄失效。
     for i in 0..codes.len() {
         for j in i + 1..codes.len() {
-            if codes[i].0 == codes[j].0 {
+            if track_of(codes[i].0) == track_of(codes[j].0) {
                 assert_ne!(
                     codes[i].1, codes[j].1,
-                    "{} 内特殊键码重复：{:#x}",
-                    codes[i].0, codes[i].1
+                    "{} 与 {} 的键码撞成同一个数字：{:#x}",
+                    codes[i].0, codes[j].0, codes[i].1
                 );
             }
         }
@@ -263,4 +337,70 @@ fn fcitx5_char_entry_must_not_treat_fullwidth_text_as_control_keys() {
         assert_eq!(feed(c), "", "{c:?}（{why}）是非 ASCII，文档说返回空串");
         assert_eq!(buffer(), before, "{c:?}（{why}）不得改动缓冲");
     }
+}
+
+/// **这份清单全不全** —— 逐条对着三套空间的源文件核，而不是靠上面那 30 行手抄。
+///
+/// 为什么需要它（2026-09-28 审计实测）：`special_codes_stay_out_of_the_printable_ascii_range`
+/// **看起来**在守「三套空间的特殊键码都不落进 ASCII 段」（名字与断言都是全称口气），
+/// 实际守的是 `all_special_codes()` 里手抄的那几条。往
+/// `crates/tsf-opi/src/logic_input_method.rs` 加一行
+/// `pub const KEY_ZZZ_AUDIT: u32 = 0x1f;`（正落在 ASCII 段、正违反那条断言），
+/// `cargo test --workspace --no-fail-fast` 是 **EXIT=0 全绿** —— 新常量不进表、也就不查。
+/// 而那正是这条门禁声称在防的事（TSF 那次 `0x2E = '.'` 的病根）。
+///
+/// 本用例把清单与源文件**双向**钉住：源里新增键码 ⇒ 红并点名；清单里有源里没有的名字
+/// （改名 / 删除 / 拼错）⇒ 也红。修法是**登记**，不是把断言口径放宽。
+#[test]
+fn every_key_code_const_in_the_three_tracks_is_registered_here() {
+    // 白名单里的「值」也钉住：它们是可打印段的**唯一**合法住户。
+    assert_eq!(ek::KEY_SPACE, 0x20, "engine_core 的空格是字符键");
+    assert_eq!(fim::KEY_SPACE, 0x20, "fcitx5 的空格是字符键");
+
+    let registered: Vec<&str> = all_special_codes().iter().map(|(n, _)| *n).collect();
+
+    // 方向 1：源里每个键码常量都必须登记（或进白名单）。
+    let mut unregistered = Vec::new();
+    for (track, src) in SOURCES {
+        let names = key_const_names(src);
+        assert!(
+            !names.is_empty(),
+            "{track} 一个键码常量都没解析出来 —— 扫描失明，下面的「全覆盖」不可信"
+        );
+        for n in names {
+            let full = format!("{track}::{n}");
+            if !registered.contains(&full.as_str()) && !PRINTABLE_BY_DESIGN.contains(&full.as_str())
+            {
+                unregistered.push(full);
+            }
+        }
+    }
+    assert!(
+        unregistered.is_empty(),
+        "这些键码常量没在 `all_special_codes()` 里登记：{unregistered:?}\n\
+         （登记后它才会被上面那条的 `>0x7f` 断言查到；确属字符键的进 `PRINTABLE_BY_DESIGN`）"
+    );
+
+    // 方向 2：登记了但源里找不到（改名 / 删除 / 拼错）。
+    let mut stale: Vec<&str> = Vec::new();
+    for name in &registered {
+        let (track, cnst) = name.split_once("::").expect("登记名形如 轨道::常量");
+        let (_, src) = SOURCES
+            .iter()
+            .find(|(t, _)| *t == track)
+            .unwrap_or_else(|| panic!("`{name}` 的轨道 `{track}` 不在 SOURCES 里"));
+        if !key_const_names(src).iter().any(|n| n == cnst) {
+            stale.push(*name);
+        }
+    }
+    assert!(
+        stale.is_empty(),
+        "这些登记项在源文件里找不到同名常量：{stale:?}（改名了？还是拼错了？）"
+    );
+
+    println!(
+        "[键码空间] 三套源文件共 {} 个键码常量，全部对得上这份清单（另有 {} 条白名单）",
+        registered.len() + PRINTABLE_BY_DESIGN.len(),
+        PRINTABLE_BY_DESIGN.len()
+    );
 }
