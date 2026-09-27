@@ -104,6 +104,9 @@ object OpiEngine : OpiEngineApi, SymbolApi {
     /** searchSymbols(keyword: String) -> String[]。JNI 可能返回 null。 */
     override external fun searchSymbols(keyword: String): Array<String>?
 
+    /** emojiSymbols() -> String[]。引擎按 emoji 属性判定的条目；JNI 可能返回 null。 */
+    override external fun emojiSymbols(): Array<String>?
+
     /** symbolBlocks() -> String。JSON：`[{id,start,end,name,common}]`。 */
     override external fun symbolBlocks(): String
 

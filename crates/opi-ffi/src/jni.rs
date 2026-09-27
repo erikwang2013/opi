@@ -228,6 +228,16 @@ pub unsafe extern "system" fn opijni_search_symbols(
     unsafe { jni_util::string_array(env, texts) }
 }
 
+/// emojiSymbols() -> String[]。引擎 `emoji` 标志为真的全部条目文本（理由见 `api::emoji_symbol_texts`）。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_emoji_symbols(
+    env: JEnv,
+    _class: sys::jclass,
+) -> sys::jobjectArray {
+    let texts = guard(|| api::with_engine(|e| api::emoji_symbol_texts(e)).unwrap_or_default());
+    unsafe { jni_util::string_array(env, texts) }
+}
+
 /// symbolBlocks() -> String。JSON：`[{id,start,end,name,common}]`。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_symbol_blocks(env: JEnv, _class: sys::jclass) -> jstring {
@@ -428,6 +438,11 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _reserved: *mut c
                     jni_str!("searchSymbols"),
                     jni_str!("(Ljava/lang/String;)[Ljava/lang/String;"),
                     opijni_search_symbols as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("emojiSymbols"),
+                    jni_str!("()[Ljava/lang/String;"),
+                    opijni_emoji_symbols as *mut c_void,
                 ),
                 NativeMethod::from_raw_parts(
                     jni_str!("symbolBlocks"),

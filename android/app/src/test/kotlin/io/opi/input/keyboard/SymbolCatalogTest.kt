@@ -10,17 +10,27 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** 假符号引擎：块内容 + 搜索结果均由测试注入（JNI 回文本数组，无 emoji 标记）。 */
+/** 假符号引擎：块内容 + 搜索结果均由测试注入；emoji 与否走独立的 `emojiSymbols()`。 */
 class FakeSymbolApi : SymbolApi {
     var blocksJson = ""
     var blocksCalls = 0
     val blockContents = mutableMapOf<Short, List<String>>()
-    val searchCalls = mutableListOf<String>()
+
     var searchResults: List<String>? = null
+    val searchCalls = mutableListOf<String>()
+
+    /** `emojiSymbols()` 的返回。null 模拟 JNI 回 null（引擎未就绪 / FFI 抖一下）。 */
+    var emojiResults: List<String>? = null
+    var emojiCalls = 0
 
     override fun searchSymbols(keyword: String): Array<String>? {
         searchCalls += keyword
         return searchResults?.toTypedArray()
+    }
+
+    override fun emojiSymbols(): Array<String>? {
+        emojiCalls++
+        return emojiResults?.toTypedArray()
     }
 
     override fun symbolBlocks(): String {
@@ -67,11 +77,51 @@ class SymbolCatalogTest {
         assertEquals(listOf(""), api.searchCalls)
     }
 
+    /**
+     * **判据只能来自引擎的 emoji 标志。**
+     *
+     * 本用例的原版叫 `emojiFiltersByNonBmpCodePoint`，断言 `♥` 不是 emoji —— 它把
+     * 「含代理对（非 BMP）」这个**复制品判据**钉成了正确行为，于是在引擎换成 UTS#51
+     * `Emoji` 属性后仍然全绿（绿的原因是 SymbolCatalog 当时也在用那份复制品）。
+     * 现在两条都落在真实差集的两端：
+     *   - `♥` U+2665 是 **BMP** 字符，却是真 emoji（旧启发式漏掉 164 条这一类）；
+     *   - `◰` U+1F780 在**补充平面**，却是几何图形不是 emoji（旧启发式放行 265 条）。
+     * 宿主侧任何重算（代理对 / 区间表 / 名字匹配）都会在这两条上同时判反。
+     */
     @Test
-    fun emojiFiltersByNonBmpCodePoint() {
-        val api = FakeSymbolApi().apply { searchResults = listOf("。", "😄", "♥") }
+    fun emojiFollowsEngineFlagNotCodePointShape() {
+        val api = FakeSymbolApi().apply {
+            searchResults = listOf("。", "😄", "♥", "◰")
+            emojiResults = listOf("😄", "♥")
+        }
         val catalog = SymbolCatalog(api)
-        assertEquals(listOf("😄"), catalog.emoji)
+        assertEquals(listOf("😄", "♥"), catalog.emoji)
+        assertTrue("BMP 真 emoji 被漏判", catalog.isEmoji("♥"))
+        assertFalse("非 BMP 的非 emoji 被放行", catalog.isEmoji("◰"))
+        assertFalse("普通符号不得算 emoji", catalog.isEmoji("。"))
+    }
+
+    /** emoji 集是**一次取回、按集合查**；每条符号各打一次 FFI 会让面板滚动时卡顿。 */
+    @Test
+    fun emojiSetIsQueriedOnceForManyChecks() {
+        val api = FakeSymbolApi().apply {
+            searchResults = listOf("😄", "♥")
+            emojiResults = listOf("😄", "♥")
+        }
+        val catalog = SymbolCatalog(api)
+        catalog.emoji
+        catalog.emoji
+        catalog.isEmoji("♥")
+        assertEquals(1, api.emojiCalls)
+    }
+
+    /** `emojiSymbols()` 回 null（JNI 常态）不得抛，只当「没拿到」。 */
+    @Test
+    fun nullEmojiArrayIsTreatedAsNotReady() {
+        val api = FakeSymbolApi().apply { searchResults = listOf("😄"); emojiResults = null }
+        val catalog = SymbolCatalog(api)
+        assertTrue(catalog.emoji.isEmpty())
+        assertFalse(catalog.isEmoji("😄"))
     }
 
     @Test
@@ -170,7 +220,10 @@ class SymbolCatalogTest {
     /** 同上，`all` 也不能缓存空；`emoji` 跟着恢复（它曾是 `by lazy`，只算一次）。 */
     @Test
     fun emptyAllIsNotCachedAndEmojiFollows() {
-        val api = FakeSymbolApi().apply { searchResults = emptyList() }
+        val api = FakeSymbolApi().apply {
+            searchResults = emptyList()
+            emojiResults = listOf("😄")
+        }
         val catalog = SymbolCatalog(api)
         assertTrue(catalog.all.isEmpty())
         assertTrue(catalog.emoji.isEmpty())
@@ -178,5 +231,25 @@ class SymbolCatalogTest {
         api.searchResults = listOf("。", "😄")
         assertEquals(listOf("。", "😄"), catalog.all)
         assertEquals(listOf("😄"), catalog.emoji)
+    }
+
+    /**
+     * 同上，**emoji 集自己也不能缓存空**。它与 `all` 是两条独立出口（引擎里也是），
+     * `all` 拿到而 emoji 没拿到的窗口真实存在 —— 若把空集写进 `_emoji`，
+     * 「表情」页会一直空到重启进程，而「全部」页看着一切正常。
+     */
+    @Test
+    fun emptyEmojiSetIsNotCachedSoItRecovers() {
+        val api = FakeSymbolApi().apply {
+            searchResults = listOf("。", "😄")
+            emojiResults = emptyList() // 首次：引擎未就绪 → 空
+        }
+        val catalog = SymbolCatalog(api)
+        assertTrue("首次本来就该是空", catalog.emoji.isEmpty())
+
+        val firstEmojiCalls = api.emojiCalls
+        api.emojiResults = listOf("😄") // 引擎就绪
+        assertEquals("空结果被缓存了 → 表情页永远空到重启", listOf("😄"), catalog.emoji)
+        assertTrue("应当重新查了一次", api.emojiCalls > firstEmojiCalls)
     }
 }

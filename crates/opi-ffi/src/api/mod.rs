@@ -17,7 +17,8 @@ mod tests;
 
 pub use convert::{
     ApiBlock, ApiCandidate, ApiCandidateKind, ApiMode, ApiSymbolEntry, candidate_texts,
-    mode_from_int, mode_to_int, search_symbol_texts, symbol_blocks_json, symbol_texts, texts_json,
+    emoji_symbol_texts, mode_from_int, mode_to_int, search_symbol_texts, symbol_blocks_json,
+    symbol_texts, texts_json,
 };
 
 /// 引擎单例：load 后可供 JNI / C 出口共享。
@@ -35,8 +36,8 @@ pub fn install(path: Option<&str>) -> Result<(), String> {
         _ => Box::new(engine_data::fallback_dict()),
     };
     let symbols = engine_core::symbols::SymbolEngine::builtin();
-    // 毒化恢复：18 个 FFI 入口的 catch_unwind 吞 panic 时锁已毒化，
-    // into_inner 取回数据，install 整体替换引擎，提供恢复路径。
+    // 毒化恢复：某个 FFI 出口（`jni.rs` / `cabi.rs` 两面各自的 catch_unwind 包装）
+    // 吞掉 panic 时锁已毒化，into_inner 取回数据；install 整体替换引擎，提供恢复路径。
     let mut guard = SINGLETON.lock().unwrap_or_else(|p| p.into_inner());
     let saved = guard.as_ref().map(|api| api.export_user_words());
     *guard = Some(Api {

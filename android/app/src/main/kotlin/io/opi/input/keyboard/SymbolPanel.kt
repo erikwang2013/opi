@@ -62,7 +62,7 @@ fun SymbolPanel(
     var tab by remember { mutableStateOf(SymbolTab.Common) }
 
     fun commit(text: String) {
-        if (SymbolCatalog.isEmoji(text)) catalog.recordRecent(text)
+        if (catalog.isEmoji(text)) catalog.recordRecent(text)
         onCommit(text)
     }
 
@@ -109,7 +109,7 @@ fun SymbolPanel(
             if (searchActive && searchQuery.isNotEmpty()) {
                 // FFI（JNI）按查询缓存：只在 query 变化时重新搜索，避免每次重组都打引擎
                 val results = remember(searchQuery) { catalog.search(searchQuery) }
-                val shown = if (tab == SymbolTab.Emoji) results.filter(SymbolCatalog::isEmoji) else results
+                val shown = if (tab == SymbolTab.Emoji) results.filter(catalog::isEmoji) else results
                 SymbolGrid(shown, ::commit)
             } else {
                 when (tab) {

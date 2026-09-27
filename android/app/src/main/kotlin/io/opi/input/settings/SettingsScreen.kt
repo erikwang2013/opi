@@ -98,8 +98,14 @@ fun SettingsScreen() {
             // 只收 application/json 会让文件在选择器里直接灰掉（那样就是静默的「干不了」）
             reportImport(
                 store.importFrom {
-                    context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                    // 有界读：回调在主线程上，`readText()` 会把整份文件变成 String 之后
+                    // 引擎的条数上限才生效 —— 巨大文件就是主线程 OOM/ANR（见 readImportText）
+                    val stream = context.contentResolver.openInputStream(uri)
                         ?: throw IOException("打不开所选文件")
+                    stream.bufferedReader().use { r ->
+                        UserWordStore.readImportText(r)
+                            ?: throw IOException("文件过大，超过导入上限")
+                    }
                 }
             )
         }
@@ -112,9 +118,12 @@ fun SettingsScreen() {
         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         reportImport(
             store.importFrom("剪贴板") {
-                cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)
+                val text = cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)
                     ?.coerceToText(context)?.toString()
                     ?: throw IOException("剪贴板里没有文本")
+                // 与文件路径同一个上限（见 readImportText）：超限要给可见的 Rejected，
+                // 而不是主线程上漫长的解析 —— 剪贴板是别的应用能写的内容。
+                UserWordStore.readImportText(text) ?: throw IOException("剪贴板内容过大，超过导入上限")
             }
         )
     }

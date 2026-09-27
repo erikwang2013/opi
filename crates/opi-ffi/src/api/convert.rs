@@ -52,6 +52,25 @@ pub fn search_symbol_texts(api: &Api, keyword: &str) -> Vec<String> {
         .collect()
 }
 
+/// 引擎口径下的**全部 emoji 条目**文本（`SymbolEntry.emoji`，即 `symbols.tsv` 的 emoji 列，
+/// 由 UTS#51 `Emoji` 属性判定并排除 `Emoji_Modifier ∪ Emoji_Component`）。
+///
+/// 存在的理由：Android 符号面板的「表情」页此前让 `SymbolCatalog.isEmoji()` 自己判
+/// 「含代理对」——那是本函数的**复制品**。2026-09-28 引擎换判据后两份判据静默漂开
+/// **429 条**（实测 `data/raw/symbols.tsv`：265 条假 emoji —— 补充平面里 `emoji=false` 的
+/// 图形符号，如 🞀/🞁/🞂 U+1F780–1F782；164 条漏 emoji —— BMP 区 `emoji=true` 的
+/// ☺ U+263A、♥ U+2665 等）。把标志透出去，宿主侧就不再持有任何判据。
+///
+/// 空关键字即全量（`search_filtered` 里 `byte_successor(b"")` 返回 `None` ⇒ `hi = len`），
+/// 结果按 text 升序去重 —— 与宿主侧 `searchSymbols("")` 的「全部」同序。
+pub fn emoji_symbol_texts(api: &Api) -> Vec<String> {
+    api.search_symbols(String::new())
+        .into_iter()
+        .filter(|s| s.emoji)
+        .map(|s| s.text)
+        .collect()
+}
+
 /// 文本列表 → JSON 数组字符串。
 pub fn texts_json(texts: &[String]) -> String {
     serde_json::to_string(texts).unwrap_or_default()

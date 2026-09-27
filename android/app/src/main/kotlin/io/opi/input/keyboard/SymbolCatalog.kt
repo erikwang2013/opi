@@ -9,13 +9,16 @@ import io.opi.input.jni.OpiEngine
 /** 符号查询接口（OpiEngine 的面板专用 JNI；JVM 测试注入假实现）。 */
 interface SymbolApi {
     fun searchSymbols(keyword: String): Array<String>?
+    fun emojiSymbols(): Array<String>?
     fun symbolBlocks(): String
     fun symbolsInBlock(id: Short): Array<String>?
 }
 
 /**
  * 符号数据层（对齐 flutter symbol_catalog.dart）：缓存 FFI 查询（每查询一次），
- * 内存级最近使用（M5 不落盘）。JNI 只回文本数组，emoji 标记由码点推断。
+ * 内存级最近使用（M5 不落盘）。
+ *
+ * emoji 与否**由引擎判定**（`emojiSymbols()`），本类不持有任何码位启发式 —— 见 [isEmoji]。
  */
 class SymbolCatalog(private val api: SymbolApi = OpiEngine) {
 
@@ -53,8 +56,32 @@ class SymbolCatalog(private val api: SymbolApi = OpiEngine) {
         return list.also { if (it.isNotEmpty()) _all = it }
     }
 
-    /** 表情 = 全量按 emoji 过滤。**不能用 `by lazy`** —— 它只算一次，首次若 all 为空就永久空。 */
+    /** 表情 = 全量里**引擎判定为 emoji** 的那些。**不能用 `by lazy`** —— 它只算一次，首次若全空就永久空。 */
     val emoji: List<String> get() = all.filter(::isEmoji)
+
+    /**
+     * emoji 判定：**查引擎给的表**。
+     *
+     * 这里曾是一个「含代理对（非 BMP）」的启发式 —— 它当时与引擎的判据逐条同构，
+     * 于是看起来对；2026-09-28 引擎换成 UTS#51 `Emoji` 属性后，它静默漏掉 164 条
+     * BMP 真 emoji（☺ U+263A、♥ U+2665…）并放行 265 条非 emoji（补充平面里的图形符号，
+     * 如 🞀 U+1F780）。**任何在宿主侧重算引擎判据的写法都会重演这一幕**，
+     * 所以判据只留一份：引擎的 `emoji` 标志，经 [SymbolApi.emojiSymbols] 透出来。
+     */
+    fun isEmoji(text: String): Boolean = emojiSet.contains(text)
+
+    private var _emoji: Set<String>? = null
+
+    /**
+     * 引擎口径的表情集。**空结果不写进缓存**，理由同 [common]：空 = 没拿到（引擎未就绪 /
+     * FFI 抖一下），不是「真的没有」，否则「表情」页会一直空到重启进程。
+     */
+    private val emojiSet: Set<String>
+        get() {
+            _emoji?.takeIf { it.isNotEmpty() }?.let { return it }
+            val s = api.emojiSymbols()?.toSet() ?: emptySet()
+            return s.also { if (it.isNotEmpty()) _emoji = it }
+        }
 
     fun search(q: String): List<String> {
         if (q.trim().isEmpty()) return all
@@ -71,9 +98,6 @@ class SymbolCatalog(private val api: SymbolApi = OpiEngine) {
 
     companion object {
         const val maxRecents = 50
-
-        /** emoji 判定：含代理对（非 BMP 字符）。JNI 只回文本，取不到引擎 emoji 标记。 */
-        fun isEmoji(text: String): Boolean = text.any { it.isSurrogate() }
 
         /** 解析 symbolBlocks() JSON（serde 固定输出 `[{"id","start","end","name","common"}]`）。 */
         fun parseBlocks(json: String): List<Block> {

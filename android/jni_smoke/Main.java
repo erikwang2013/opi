@@ -26,6 +26,7 @@ final class OpiEngine {
     static native String buffer();
     static native int mode();
     static native String[] searchSymbols(String keyword);
+    static native String[] emojiSymbols();
     static native String symbolBlocks();
     static native String[] symbolsInBlock(short id);
     static native boolean loadTrad(String path);
@@ -135,6 +136,26 @@ public final class Main {
             }
         }
         check(hasHeart, "searchSymbols(he) 命中 ♥");
+
+        // emojiSymbols：**判据必须是引擎的 emoji 属性，不是码位形状** ——
+        // ♥ U+2665 在 BMP 却是真 emoji，🞀 U+1F780 在补充平面却不是。
+        // 宿主侧旧启发式「含代理对」在这两条上同时判反（2026-09-28 实测差 429 条：
+        // 265 条假 emoji + 164 条漏判，正是本出口存在的理由）。
+        String[] emojis = OpiEngine.emojiSymbols();
+        java.util.Set<String> emojiSet = new java.util.HashSet<>();
+        if (emojis != null) {
+            java.util.Collections.addAll(emojiSet, emojis);
+        }
+        check(emojiSet.contains("♥"), "emojiSymbols 必须含 BMP 真 emoji ♥(U+2665)");
+        check(!emojiSet.contains("🞀"), "emojiSymbols 不得含非 emoji 的 🞀(U+1F780)");
+
+        // emoji ⊆ 全部：宿主侧 `emoji = all.filter(isEmoji)` 依赖这一条
+        String[] allSyms = OpiEngine.searchSymbols("");
+        java.util.Set<String> allSet = new java.util.HashSet<>();
+        if (allSyms != null) {
+            java.util.Collections.addAll(allSet, allSyms);
+        }
+        check(allSet.containsAll(emojiSet), "emojiSymbols 必须是 searchSymbols(\"\") 的子集");
 
         // loadTrad：空路径必须 false（引擎已装载，但坏路径不得动既有词库）
         check(!OpiEngine.loadTrad(""), "loadTrad(空) 应为 false");
