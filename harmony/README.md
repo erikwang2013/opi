@@ -382,16 +382,32 @@ declared but NOT in archive       : （空）
 not bridged                       : 12
 ```
 
-19 已桥、其余未桥，两者相加 = `cabi.rs` 的**全部**导出（数量以门禁为准，别把上面那个数当常量），
-**没有一条声明指向不存在的符号**。
-未桥的 12 个（`opi_backspace` `opi_candidates` `opi_clear_user_words`
-`opi_export_user_words` `opi_import_user_words` `opi_input_space` `opi_load_trad`
-`opi_remove_user_word` `opi_search_symbols` `opi_select` `opi_symbol_blocks`
-`opi_symbols_in_block`）对应符号面板、用户词导入导出、繁体词库这些**还没做的功能**。
-要做哪个，就去 `cabi.rs` 抄那条声明、加进 `opi_ffi.h`、在 bridge 里挂上。
+19 条**被桥调用的 `opi_*` C 函数**已桥、其余未桥，两者相加 = `cabi.rs` 的**全部**导出
+（数量以门禁为准，别把上面那个数当常量），**没有一条声明指向不存在的符号**。
 
-> 本次接线**没有从这个名单里拿走任何一条** —— 新桥的三条（全角/符号开关）本来就不在里面，
-> 它们是同日新加的导出。所以「未桥 12」这个数**这次是巧合相等**，不是不变量。
+⚠️ **未桥清单不在这里手抄** —— 手抄的清单会被当**工作项**读，而上面那句免责只盖住了数字：
+本行原写死的「12」是 v1.2.0 的 31 − 19，**本轮新增三条中文标点导出后就已经不对**
+（缺的正是 `opi_chinese_punct` / `opi_set_chinese_punct` / `opi_toggle_chinese_punct`）。
+要今天的清单，跑这条（左边是 `cabi.rs` 的导出，右边是桥真调用的 `opi_*`，第二个集合的
+求法与 §5b 那两条 `comm` 同一口径）：
+
+```
+$ comm -23 \
+    <(grep -o 'pub unsafe extern "C" fn opi_[a-z_0-9]*' crates/opi-ffi/src/cabi.rs \
+        | sed 's/.*fn //' | sort -u) \
+    <(grep -oE '\bopi_[a-z_0-9]+\s*\(' harmony/cpp/napi_bridge.c \
+        | sed 's/[[:space:]]*($//' | sort -u)
+```
+
+清单里是符号面板、用户词导入导出、繁体词库、中文标点开关这些**能力已在 `cabi.rs`、
+桥还没挂**的出口。要做哪个，就去 `cabi.rs` 抄那条声明、加进 `opi_ffi.h`、在 bridge 里挂上 ——
+⚠️ **但加声明必须同时在桥里加一个真调用**：`c_abi_contract` 的
+`harmony_header_is_consistent_use_site_subset` 断言 `opi_ffi.h` 是**双向** use-site 子集
+（每条声明都同型 **且** 每条声明都真的被桥调用），只加声明不加调用会红那一条。
+
+> 本次接线**没有从这份清单里拿走任何一条** —— 新桥的三条（全角/符号开关）本来就不在里面，
+> 它们是同日新加的导出。所以「未桥数」**那次是巧合相等**，不是不变量 ——
+> 这正是上面把清单换成 `comm` 命令的原因（写死的清单会把「巧合」固化成「事实」）。
 
 **2026-09-27 补：签名也核过了（不只是名字）。** 上一条保留写的是「签名没有核对」——
 现在每一条都逐条对过 `cabi.rs`：参数类型、返回值、`#[repr(C)]` 结构体字段顺序全部一致
@@ -428,6 +444,14 @@ OHOS 链接器，本机没有）。
 `cpp/types/libopiime/index.d.ts` 是 ArkTS 侧的类型声明面，**必须**与
 `napi_bridge.c` 里 `napi_property_descriptor desc[]` 那张注册表逐条对齐
 （少一个 = 运行期 `xxx is not a function`；多一个 = 到真机上打到那条路径才炸）。
+
+> ⚠️ **两个「鸿蒙桥 N 条」不是一回事，引用时必须说清是哪个 N**：
+> 本节的 **N** 数的是 `desc[]` 里的 **JS 描述符**（`JsXxx`，ArkTS 能调到的名字）；
+> 上面 §5 那个 **N** 数的是桥**调用的 `opi_*` C 函数**（来自 `libopi_ffi.a`）。
+> 两者数量不相等是正常的，不是漂移 —— C 侧含 `opi_ffi_free_string` 这种没有 JS 描述符的
+> 辅助出口，且一个 `JsXxx` 也可能调多个 `opi_*`。同一句提醒也写在
+> `napi_bridge.c` 顶部（那段还给了 `diff` 的跑法，且**两边都不写条数**）。
+
 机械核对（无输出 = 一致）：
 
 ```
@@ -521,7 +545,7 @@ test result: FAILED. 13 passed; 1 failed        # 只红这一条，其余 13 �
 
 > ⚠️ 本轮**没有**做的事：**符号面板**（能提交字面符号的 UI）仍然没有 ——
 > 见「已知缺口」第 3 条。`toggleSymbol()` 现在**可以从 ArkTS 调到**了，
-> 但**没有键绑它**，所以用户仍然按不出来。这与 §3 的「未桥 12 条」是同一类：
+> 但**没有键绑它**，所以用户仍然按不出来。这与 §5 那条 `comm` 打出来的未桥清单是同一类：
 > 能力已到桥，UI 未接。
 
 **仍未验证**：这三条与 §6 的其余条目**同档** —— ETS 侧那三个包装函数
@@ -863,6 +887,17 @@ grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|op
     这两条合起来是**同一件事**：全角/符号这套 UI 还没做（与缺口 3 的符号面板是同一轮）。
     做的时候回到 §5d 的四条契约 —— 特别是**第 1 条**：在 `publish()` 里读
     `fullwidthState()` 的位置不能只挂在「切模式之后」，否则**按符号键那一下**会显示错的指示。
+
+13. **无中文标点开关**（`opi_chinese_punct` / `opi_set_chinese_punct` /
+    `opi_toggle_chinese_punct` 三条同日新加的导出**本目录没实现** —— 不是「桥了没人调」：
+    `harmony/cpp/opi_ffi.h` 里根本没有这三条声明）。
+    **后果与 3/4/5 不同，别混**：中文标点表**默认开**（`engine.rs` 的 `chinese_punct: true`），
+    而本目录桥的两个入口都会问到标点表（`opi_input_key` 走 `Engine::input_key`，
+    `opi_key_event` 走 `router.rs` 的可打印分支）
+    ⇒ **中文标点照常出得来**。缺的是**关掉它 / 读它**：用户没有任何入口把 `，` `。`
+    切回半角 ASCII —— 与第 11 条末尾那句「`。` 在鸿蒙端出不来」**不是同一件事**
+    （那是拼音键盘上没有标点键，引擎侧无关）。要接就按 §5 那条 `comm` 取今天的清单，
+    别照本行抄。
 
 > 另有一处**不是缺口、是刻意取舍**，写在这里免得有人当 bug 修：
 > `OpiEngine.ets` 与 `opi_ffi.h` 都**没有** `KEY_UP/DOWN/LEFT/RIGHT`

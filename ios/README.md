@@ -994,6 +994,18 @@ OpiString opi_select_page(uint32_t k);  /* 当前页第 k 个；越界/未装载
    所以 JSON 里的 `common` 字段在该出口上**恒为 true**，别拿它当「全部块」用。
    当前数据表 `data/raw/symbol_blocks.tsv` 只有 id=1（CJK 符号）是 common，
    于是「常用」= **60 个**符号；`docs`/Android 若给出别的数字，那是另一套口径。
+
+   ⚠️ **由此产生的实际后果，本目录如实记下（2026-09-28 复核）**：iOS 的符号面板
+   **只有这一个块的条目** —— `KeyboardViewController.swift` 调的是
+   `layout.setSymbols(engine.commonSymbols())`，而 `commonSymbols()` 只遍历
+   `symbolBlocks()`（= common 块）。也就是说**非 common 块里的 emoji 等条目在 iOS 上
+   够不到**，而这个缺口在 UI 上**没有症状**（面板照样有内容，只是少）。
+   `searchSymbols(keyword:)`（包装 `opi_search_symbols`）**存在但零调用者** ——
+   判据：`grep -rn 'searchSymbols' ios/ --include=*.swift` 只命中定义那**一行**
+   （`OpiEngine.swift` 的 `func searchSymbols`）。⚠️ 别省掉 `--include`：本 README 里
+   这几行也含该词，不带过滤会把「文档提到」当成「代码调用」。
+   要接的话 Android 的 `SymbolCatalog` 是现成参考：它用 `opi_search_symbols("")`
+   拿全部条目（契约 ③）。**别把「包装已写」读成「面板能拿到全部符号」。**
 2. **块 id 的类型在两端不一样。** Rust 侧是 `BlockId(pub u16)`（0..=65535），
    C ABI 的 `opi_symbols_in_block(int16_t)` 收**有符号** 16 位 —— 只能对齐到
    0..=32767。所以 Swift 侧按 `Int` 解码、**显式收窄并 NSLog 越界**，
@@ -1170,7 +1182,7 @@ OpiString opi_toggle_symbol(void);     /* 返回**待上屏的文本**，空句�
 > `ime-platform` 在拆），**几分钟后我复核时已是 222 行**（拆分落地），而三个符号
 > **都还在 `vk.rs` 里、行号也没变**（`hotkey_should_act` :127、`mode_hotkey` :161、
 > `fullwidth_hotkey` :209）。走掉的那 298 行是**测试模块** —— 搬到了
-> `crates/tsf-opi/src/vk_tests.rs`（306 行，由 `vk.rs:221` 的 `#[path = …]` 引入，
+> `crates/tsf-opi/src/vk_tests.rs`（由 `vk.rs:221` 的 `#[path = …]` 引入，
 > 与本目录已有的 7 个 `*_tests.rs` 同惯例），**不是**语义拆分。
 > ⇒ **别照抄这里的路径或行号**（上面那三个行号也只是**那一次**的观察值），找符号用
 > `grep -rn 'fn hotkey_should_act' crates/tsf-opi/`。这正是本节**只写「文件 + 符号」、

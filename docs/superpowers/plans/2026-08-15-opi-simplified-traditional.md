@@ -54,6 +54,18 @@ spec「词频策略」一节的字面公式（一级 9000-序号、二级 6000-�
 | 「既有 UI 缺陷：候选栏点击不提交」 | **当前代码不成立**。链路完整：`CandidateBar.kt` `.clickable{onTap(i)}` → `ImeScreen.kt` `onTap = router::handleCandidate` → `KeyRouter.kt` `selectFromPage` 非空即 commit → `EngineController.kt` `select(page*pageSize+i)`，且 `KeyRouterTest.candidateSelectCommitsFromPage` 正断言这次提交。注记所指的 Flutter 版已于 `c8fd2f4` 整树删除 | 读链路四层 + 既有单测。保留项：真机触摸未实测，无法排除窗口级触摸问题 |
 | 「既有 UI 缺陷：英文模式 ⇧ 布局坐标」 | **无法证实也无法证伪，按现状不可执行**。所指 Flutter 代码已删除；当前 `QwertyKeyboard.kt` 的键位表逐字移植自已删除的 `qwerty.dart`，全仓库无任何注释/TODO 描述该现象 | `git show c8fd2f4^:flutter/app/lib/keyboards/qwerty.dart` + 全仓库 grep。若要保留，须补上具体现象（哪个键 / 期望位置 / 实际位置） |
 
+### 订正（2026-09-28 复核）：常用度来源又换了一版 —— 人工白名单 COMMON_TRAD 已退役
+
+上面「最终方案（Task 1 实现）：统一常用度排序 + 人工常用表」在写下时属实，此后**又换一版**：单字排序键改为 Unihan `kHanyuPinlu` 的**逐读音语料词次**（《现代汉语频率词典》，3799 字），原有 GB 段位降为**同频 / 缺频时的 tiebreak**。原注记保留不动（偏差记录的价值在于留痕），订正结果记于此：
+
+| 原注记里的机制 | 现状 | 依据 |
+|---|---|---|
+| `COMMON_TRAD`（约 120 个繁体常用字白名单）及其末尾 8 个 GB 补丁字 | **已退役**。理由：词次数据直接给出了白名单要编码的信息（好 hao 6317 本就是该组最高、發 fa 1511 亦然），而白名单只覆盖 120 字、其余 9000+ 字仍按码序错排（`wo→蜗`、`shi→匙`、`jian→見` 第 243 位） | `scripts/gen_trad_dict.py` 模块头「人工表退役记录（保留此节，勿静默删除）」 |
+| `SUPPLEMENT_PHRASES`（人工常用词组） | **保留**：词组段没有词次数据可依，仍按「人工在前、terra 文件序在后」排列 | 同上 |
+| 段位公式与共享实现 | `scripts/hanzi_freq.py`（kHanyuPinlu + 变体关系 + GB 段位），`gen_luna_dict.py` 与 `gen_trad_dict.py` **共用** —— 即 luna 与 trad **两个库都改用词次** | 该文件模块头；门禁 `crates/opi-tools/tests/ranking_quality.rs`（文件头注释亦记着白名单退役） |
+
+本计划下面的代码块（`COMMON_TRAD: list[str] = [...]`、段序注释、`FATAL: COMMON_TRAD 含 GB2312 字` 排障、Task 1 的 Expected 输出）是**当时脚本的快照**，保留不动。
+
 ---
 
 ### Task 1: 数据层 — gen_trad_dict.py + TSV + 编译 trad.opid

@@ -10,6 +10,8 @@
 
 **Spec:** [2026-08-12-opi-ime-android-m4-design.md](../specs/2026-08-12-opi-ime-android-m4-design.md)
 
+> 订正（2026-09-28 复核）：本计划描述的是 **M4 的 Flutter 方案**（`OpiImeService` + `FlutterView` + `MethodChannel("opi/ime")` + Dart `ImeRouter`），该方案随 M6a 原生重构（`c8fd2f4` 删除 `flutter/`）**整体作废** —— 现为 Kotlin + Compose 原生键盘，直接 JNI 调用，无通道层。逐组件核对见其设计文档 [specs/2026-08-12-opi-ime-android-m4-design.md](../specs/2026-08-12-opi-ime-android-m4-design.md) 头部订正与 §2 末「订正注记」；重构计划见 [plans/2026-08-14-opi-native-refactor-m6.md](./2026-08-14-opi-native-refactor-m6.md)。本文件全部任务（Dart 侧 Task、`lib/...` 路径、Expected 输出、`flutter test` 命令）保留不动 —— 它是 M4 当时的施工记录。判据（命令可复跑）：`grep -rn MethodChannel --include=*.kt --include=*.dart .` **零命中**（不加扩展名过滤会命中本文件与设计文档的历史叙述，别据此判「还在」）；`android/app/src/main/kotlin/io/opi/input/` 下无 `MainActivity.kt`（设置入口是 `settings/SettingsActivity.kt`）；`grep -rn "com\.example" --include=*.kt --include=*.kts --include=*.xml .` 零命中（仅本文件与设计文档的叙述里留有该串）。
+
 **环境事实（已验证）：**
 - `sdk.dir=/usr/lib/android-sdk`，Android SDK 存在 → `flutter build apk --debug` 可作验收
 - 宿主 `flutter test` 能加载真实 Rust lib（M3 已证明：`RustLib.init()` + `Api.loadFallback()`）

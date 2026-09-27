@@ -1,5 +1,10 @@
 # 简繁全量支持（简繁模式切换）设计
 
+> 订正（2026-09-28 复核）：本文件是 2026-08-15 的设计。**「词频策略」一节未按字面实现**，原文保留不动（设计留痕）：
+>
+> 1. 字面公式（一级 9000−序号 / 二级 6000−序号 / 繁体 5000−序号 / 词组 8000−序号）先在实施计划里被两轮修正（负数 freq、码序 ≠ 常用度、跨段取 max 破坏段位），见 [plans/2026-08-15-opi-simplified-traditional.md](../plans/2026-08-15-opi-simplified-traditional.md) 的「词频规则偏差注记」；此后**又换一版**：单字排序键改为 Unihan `kHanyuPinlu` **逐读音语料词次**，段位降为同频 / 缺频时的 tiebreak，人工白名单 `COMMON_TRAD` **已退役**（`scripts/gen_trad_dict.py` 模块头「人工表退役记录」；共享实现 `scripts/hanzi_freq.py`；门禁 `crates/opi-tools/tests/ranking_quality.rs`）。
+> 2. **已抽样复核、仍成立的部分**（非穷举）：`Mode` 加 `Traditional` 变体与双词典路由 / trad 缺失回退简体（`crates/engine-core/src/engine.rs` 的 `with_dictionaries`、`Mode::Traditional => self.trad_dict.as_deref().unwrap_or(&*self.dict)`）；单字全覆盖门禁 `crates/opi-tools/tests/trad_coverage.rs` 存在；Android 模式键三态循环与标签 中/繁/英（`android/app/src/main/kotlin/io/opi/input/ime/ImeScreen.kt` 的 `toggleMode` / `modeLabelOf`）；`EngineLoader` 双资产加载、失败仅告警（`android/app/src/main/kotlin/io/opi/input/jni/EngineLoader.kt` 的 `loadTradAsset`）。原文里 `composer.rs:3` 这类**行号会漂**，按符号 grep。
+
 **目标**：字库覆盖 GB2312 一二级全量 6763 简体单字 + 常用繁体单字约 13000 + 常用繁体词组；键盘模式条增加 简/繁 切换，繁体模式下输入拼音出繁体候选。
 
 **非目标（YAGNI）**：

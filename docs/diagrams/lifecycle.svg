@@ -35,7 +35,7 @@
     <rect x="30" y="86" width="1120" height="244" rx="14" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
     <rect x="46" y="74" width="128" height="24" rx="12" fill="#2E8B80"/>
     <text x="110" y="91" text-anchor="middle" font-size="12.5" font-weight="700" fill="#FFFFFF">词库生命周期</text>
-    <text x="186" y="91" font-size="11.5" fill="#8A948F">进程启动时执行一次 —— Android 走 assets→filesDir，fcitx5 走 XDG 数据目录；鸿蒙（草案）完整词库装载未实现</text>
+    <text x="186" y="91" font-size="11.5" fill="#8A948F">进程启动时执行一次 —— Android 走 assets→filesDir，fcitx5 走 XDG 数据目录，TSF 走三候选（env / DLL 同目录 / LOCALAPPDATA，无打包步骤）；鸿蒙（草案）完整词库装载未实现</text>
 
     <!-- 六个阶段 -->
     <g>
@@ -49,7 +49,7 @@
       <rect x="224" y="134" width="168" height="90" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
       <text x="308" y="159" text-anchor="middle" font-size="12.5" font-weight="700" fill="#22272E">定位与重拷</text>
       <text x="308" y="181" text-anchor="middle" font-size="9.5" fill="#6B7671">size 与资产比对</text>
-      <text x="308" y="197" text-anchor="middle" font-size="9.5" fill="#6B7671">不一致 → 重拷（fcitx5 原子，Android 就地覆盖）</text>
+      <text x="308" y="197" text-anchor="middle" font-size="9.5" fill="#6B7671">不一致 → 重拷（原子写 / 就地覆盖）</text>
       <text x="308" y="213" text-anchor="middle" font-size="9.5" fill="#6B7671">一致 → 跳过（幂等）</text>
     </g>
     <g>
@@ -100,7 +100,7 @@
     <rect x="30" y="358" width="1120" height="388" rx="14" fill="#EDF6F4" stroke="#B9D9D4" stroke-width="2"/>
     <rect x="46" y="346" width="128" height="24" rx="12" fill="#2E8B80"/>
     <text x="110" y="363" text-anchor="middle" font-size="12.5" font-weight="700" fill="#FFFFFF">击键生命周期</text>
-    <text x="186" y="363" font-size="11.5" fill="#5B8C85">一次按键从进入到上屏 —— 上排输入侧，下排输出侧，清空缓冲后回到步骤 1</text>
+    <text x="186" y="363" font-size="11.5" fill="#5B8C85">一次按键从进入到上屏 —— 上排输入侧，下排输出侧，清空缓冲后回到步骤 1；标点映射分两档，各由一个独立开关管</text>
 
     <!-- 输入侧 -->
     <g>
@@ -130,8 +130,8 @@
     <g>
       <rect x="870" y="404" width="196" height="96" rx="10" fill="#FFFFFF" stroke="#B9D9D4" stroke-width="1.5"/>
       <text x="968" y="432" text-anchor="middle" font-size="12.5" font-weight="700" fill="#22272E">⑤ rank_and_pick</text>
-      <text x="968" y="455" text-anchor="middle" font-size="9.5" fill="#6B7671">词典 → 逐音节回退</text>
-      <text x="968" y="471" text-anchor="middle" font-size="9.5" fill="#6B7671">→ 符号 / emoji 合并排序</text>
+      <text x="968" y="455" text-anchor="middle" font-size="9.5" fill="#6B7671">词典 → 逐音节 → 符号 / emoji</text>
+      <text x="968" y="471" text-anchor="middle" font-size="9.5" fill="#6B7671">模糊 / 简拼两档接在精确档后</text>
     </g>
 
     <g stroke="#2E8B80" stroke-width="2" marker-end="url(#lcArw)" fill="none">
@@ -156,7 +156,7 @@
       <rect x="240" y="570" width="196" height="96" rx="10" fill="#FFFFFF" stroke="#B9D9D4" stroke-width="1.5"/>
       <text x="338" y="598" text-anchor="middle" font-size="12.5" font-weight="700" fill="#22272E">⑦ 用户选择</text>
       <text x="338" y="621" text-anchor="middle" font-size="9.5" fill="#6B7671">点候选 / 空格选首</text>
-      <text x="338" y="637" text-anchor="middle" font-size="9.5" fill="#6B7671">回车选首 · 越界返回空</text>
+      <text x="338" y="637" text-anchor="middle" font-size="9.5" fill="#6B7671">回车选首 · 页内→全局，越界返回空</text>
     </g>
     <g>
       <rect x="450" y="570" width="196" height="96" rx="10" fill="#FFFFFF" stroke="#B9D9D4" stroke-width="1.5"/>

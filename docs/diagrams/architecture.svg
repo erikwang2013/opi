@@ -8,7 +8,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 852" width="1180" height="852"
      role="img" aria-labelledby="archTitle archDesc">
   <title id="archTitle">OPI 架构设计</title>
-  <desc id="archDesc">五层架构：客户端层（已验证三端 Android/Linux/Windows；草案两端 Apple 两平台 iOS·macOS 与鸿蒙 HarmonyOS，三处代码均未经编译）、出口层（三个薄壳 opi-ffi 双 ABI、fcitx5-opi、tsf-opi；C 出口由 Apple 与鸿蒙草案复用）、引擎层（engine-core 六模块 + Engine 门面，另有平台中立键路由 router.rs/keys.rs）、数据层（engine-data 的 .opid 格式/校验/mmap/回退）、构建管线（opi-tools 编译与校验）。依赖自下而上。</desc>
+  <desc id="archDesc">五层架构：客户端层（已验证三端 Android/Linux/Windows；草案两端 Apple 两平台 iOS·macOS 与鸿蒙 HarmonyOS，三处代码均未经编译）、出口层（三个薄壳 opi-ffi 双 ABI、fcitx5-opi、tsf-opi；C 出口由 Apple 与鸿蒙草案复用）、引擎层（engine-core 核心模块 + Engine 门面，另有候选扩展档 jianpin.rs/fuzzy.rs 与平台中立键路由 router.rs/keys.rs）、数据层（engine-data 的 .opid 格式/校验/mmap/回退 + 用户词落盘）、构建管线（opi-tools 编译与校验）。依赖自下而上。</desc>
 
   <defs>
     <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -87,13 +87,13 @@
       <rect x="414" y="262" width="352" height="74" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
       <text x="430" y="286" font-size="14.5" font-weight="700" fill="#22272E">fcitx5-opi</text>
       <text x="430" y="306" font-size="11" fill="#6B7671">cdylib，opi_fcitx5_* 入口面</text>
-      <text x="430" y="325" font-size="11" fill="#6B7671">XDG 数据目录 · 原子写盘 · 幂等重拷</text>
+      <text x="430" y="325" font-size="11" fill="#6B7671">XDG 数据目录 · 幂等重拷 · CMake 安装通路</text>
     </g>
     <g>
       <rect x="798" y="262" width="352" height="74" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
       <text x="814" y="286" font-size="14.5" font-weight="700" fill="#22272E">tsf-opi</text>
       <text x="814" y="306" font-size="11" fill="#6B7671">cdylib COM 服务器 · windows crate 目标隔离</text>
-      <text x="814" y="325" font-size="11" fill="#6B7671">候选窗消息序列化（candidate_io）</text>
+      <text x="814" y="325" font-size="11" fill="#6B7671">候选窗序列化 candidate_io · 词库三候选查找（无打包步骤）</text>
     </g>
 
     <!-- 层间箭头：出口 → 引擎 -->
@@ -149,7 +149,7 @@
     <text x="590" y="530" text-anchor="middle" font-size="14" font-weight="700" fill="#FFFFFF">Engine 门面</text>
     <text x="590" y="550" text-anchor="middle" font-size="10.5" fill="#C9E4E0">UI 层经 FFI 交互的唯一入口：input_key / candidates / select / switch_mode / learner / symbols</text>
 
-    <text x="590" y="571" text-anchor="middle" font-size="9.5" fill="#5B8C85">另有平台中立的键路由层 router.rs / keys.rs —— 供 Apple / 鸿蒙经 C ABI 使用；非第七模块，语义以 fcitx5 / TSF 两轨为准</text>
+    <text x="590" y="571" text-anchor="middle" font-size="9.5" fill="#5B8C85">另有简拼 jianpin.rs 与模糊 fuzzy.rs 两个候选扩展档（由 rank_and_pick 分档接入）；键路由层 router.rs / keys.rs 平台中立，供 Apple / 鸿蒙经 C ABI 使用</text>
 
     <!-- 层间箭头：引擎 → 数据 -->
     <path d="M590 578 L590 622" stroke="#2E8B80" stroke-width="2" marker-end="url(#arw)"/>
@@ -159,7 +159,7 @@
     <rect x="30" y="636" width="1120" height="100" rx="14" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
     <rect x="46" y="624" width="112" height="24" rx="12" fill="#2E8B80"/>
     <text x="102" y="641" text-anchor="middle" font-size="12.5" font-weight="700" fill="#FFFFFF">数据层</text>
-    <text x="170" y="641" font-size="11.5" fill="#8A948F">engine-data —— .opid 二进制词库的格式、校验与 mmap 装载</text>
+    <text x="170" y="641" font-size="11.5" fill="#8A948F">engine-data —— 词库的 .opid 格式、校验与 mmap 装载；文件 IO（用户词落盘）在这一层，engine-core 保持零 IO</text>
 
     <g>
       <rect x="30" y="658" width="262" height="62" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>

@@ -10,6 +10,12 @@
 > 3. **§8「V2 展望（不做，仅预留）」**里的**云同步（用户词库 JSON 格式已定）** —— 不再列入展望。同节其余各项（双拼/五笔、Windows/Linux 接入、皮肤系统、语音输入、英文自动纠错）不受影响。
 >
 > 现口径见根 `README.md`「未来规划」表 —— 该行状态列已由「V2 预留」改为「**不做（用户裁决 2026-09-28）**」。
+>
+> 同轮另订正三处与云同步无关的漂移（2026-09-28 复核）：本文件是 2026-08-12 的设计意图，**UI 层与两处数据/覆盖承诺已被其后的实现取代**，原文保留不动（设计留痕）：
+>
+> 1. **Flutter 前端整层已不存在。** 涉及 §2.1「Flutter 前端」行、§2.2「Flutter ↔ Rust 通信：flutter_rust_bridge」、§4 全节（`lib/` 目录树）、§5.2 表里的「opi-ffi / Flutter UI」两行（Dart 集成测试、widget 测试）、§6 项目结构的 `flutter/app`、§7 的 M3/M4/M5 行 —— 该树随 M6a `c8fd2f4`（提交标题「删除 flutter/，原生化完成」）**整树删除**，`crates/opi-ffi` 现为**手写 JNI + C ABI**，不是 frb 生成。现状见根 `README.md`「架构设计」/「项目结构」；重构计划见 [plans/2026-08-14-opi-native-refactor-m6.md](../plans/2026-08-14-opi-native-refactor-m6.md)；M4 侧的逐组件订正见 [specs/2026-08-12-opi-ime-android-m4-design.md](./2026-08-12-opi-ime-android-m4-design.md) 头部。判据：`ls flutter` 无此目录；`grep -ri flutter crates/opi-ffi/` 零命中。
+> 2. **用户词库不是 SQLite。** 涉及 §2.1「+ SQLite 用户库」、§2.2「用户数据：SQLite（`user_words` / `word_freq` / `meta`）」、§3.4「SQLite 异步批量落盘」、§5.1「SQLite 损坏 → 自动重建（旧文件改名备份）」、§7 的 M6 行「SQLite 学习闭环」—— 实现是 **JSON 文档 + 原子写**（同目录唯一名 tmp → fsync → rename），落盘在 `engine-data`：`crates/engine-data/src/user_words.rs`（`FILE_NAME = "opi_user_words.json"`），引擎只收发 JSON 字符串（`crates/engine-core/src/learner.rs` 的 `export_json` / `import_json`）。另外两条语义也变了：**没有批量落盘器**（防抖在调用方，Android 侧 `UserWordStore.SAVE_DEBOUNCE_MS`）；**坏文件既不删除也不改名** —— `read_document` 的文档注释给了理由（损坏即无可恢复信息，改名只多一次写盘、多一个失败点），并明写 0 字节是**错误**而非空表。
+> 3. **符号 / emoji 的覆盖承诺与实况不符。** §1「Unicode 15.1 全量 emoji（~3700）」里的 3700 是 `emoji-test.txt` 的完全限定**序列**数（15.1 实测 3776），而条目 text 必须是单字符 —— 实际给的是**覆盖区块内全部已分配、非组合类码位**，emoji 与否改为逐码位按 UTS#51 `Emoji` 属性 ∧ ¬(`Emoji_Modifier` ∪ `Emoji_Component`) 判定（旧口径「码位 > 0xFFFF」已废弃）。§4「Tab 分类（常用/数字/数学/货币/希腊/拉丁/注音/CJK 扩展/全部…）… 浏览 150+ 区块」：实际 Tab 是**常用 / 表情 / 全部**三个，区块表是 `data/raw/symbol_blocks.tsv`（本轮由 5 个增至 17 个，既非「150+」也非「全量」）。§3.2 与 §4 的「**CLDR 名称**搜索」**未实现**：关键字是人工表（`scripts/symbol_keywords.py`）+ Unicode 名分词，后果是打 `xiao` 出 😄 成立、打 `huojian` 出 🚀 不成立（得打 `rocket`）。判据：`scripts/gen_symbols.py` 模块头（emoji 判据、关键字局限、并点名「spec 第 60/86 行」即本文件这两处 —— 行号按加注记前的旧编号）、`data/raw/symbol_blocks.tsv`、`crates/engine-core/src/symbols.rs` 的 `builtin()`（`include_str!` 直接吃这张表）。
 
 ## 1. 项目定位与范围
 

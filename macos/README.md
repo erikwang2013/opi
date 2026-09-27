@@ -505,10 +505,28 @@ Mac 上很可能要改」的地方标出来了，接手人从这里开始最省�
   **接的时候必须走 `opi_switch_mode`**，
   不要直接打引擎：`router.rs` 的 `switch_mode` 会顺手清前端 ⇧ 三态，绕过它会让
   ⇧ Lock 跨模式残留（英文模式下打出全大写）。
+
+  ⚠️ **可达性如实说清（2026-09-28 复核代码，不是转述）**：macOS 上那三个热键能到的模式
+  只有 pinyin / english / symbol —— **`Mode::Traditional`（4）在本端不可达**。判据两条：
+  ①`grep -n 'traditional' macos/InputController.swift` **零命中**；
+  ②`performHotkey` 里那处 `switchMode` 是 `engine.mode() == .english ? .pinyin : .english`
+  （只在两态间来回），而 `Ctrl+\` 走的是 `opi_toggle_symbol`（**Pinyin ⇄ Symbol 来回切**，
+  不是模式循环 —— 见下方「本草案因此怎么做」）。**引擎与导出都支持繁体，缺的只是入口**，
+  且与 iOS 的 `cycleMode()`（中→繁→英）**不对称** —— 别以为两端一样。
 - **G3 候选窗显示的是全局列表，不是 Rust 的当前页**：`InputController.swift` 现在把
   `opi_candidates(limit)`（引擎级全局序，从第 0 条起、**不分页**）整份塞给候选窗；
   而 `router.rs` 内部维护 `page` 与 `PAGE_SIZE = 8`，PageUp/PageDown 改的是它。
   后果：翻页后数字键选中的候选与候选窗高亮的位置**可能不是同一个**。
+  ⚠️ **比上面那句更具体的一点（2026-09-28 复核）**：`InputController.swift` 的 `refresh()`
+  传的是**写死的 `limit: 64`**，行尾注释写着「与 Rust 侧 FETCH_LIMIT 一致」——
+  **那句注释已经不成立**：`FETCH_LIMIT` 现在**不设上限**（`engine_core::router` 的同名常量；
+  `candidate.rs` / `logic.rs` 各有编译期断言绑着它）。所以这个 64 既不是前端页大小、
+  也不是 Rust 的抓取上限，是个**无来源的第三份常量**。而 `cabi.rs` 的
+  `opi_candidates_page` 文档注释点名禁止的正是这条路径（原话：「前端显示当前页请用本出口、
+  **不要**拿 `opi_candidates()` 自己按 8 切」）。
+  **本轮只记不改**（Swift 一行都没编译过，现在改只会得到更厚的未编译代码）——
+  写在这里是为了让下次通读的人**别把它读成「已按契约接了」**。
+
   这个洞有**两半**：显示侧拿的是全局列表，而 `opi_select(index)` 收的也是**全局**
   索引 —— 面板点击于是要自己算 `page * PAGE_SIZE + k`，`PAGE_SIZE` 的第二份拷贝
   正是从这半边冒出来的。**两半现在都堵上了**：
@@ -586,8 +604,16 @@ Mac 上很可能要改」的地方标出来了，接手人从这里开始最省�
 3=Symbol **4=Traditional**。少一个 case 的后果不是「不认识」而是「显示与行为不一致」
 （UI 按拼音显示、引擎在跑繁体），见 `OpiEngine.swift` 的 `OpiMode` 注释。
 
-⚠️ **两个 Engine 能力的 C ABI 出口：Rust 已落地，声明头还差 3 个**（2026-09-27 核
+⚠️ **两个 Engine 能力的 C ABI 出口：Rust 已落地，声明头也已补齐**（2026-09-27 核
 `cabi.rs` / `api/mod.rs` / `jni.rs` / `OpiFFI.h`）：
+
+> ⚠️ **2026-09-28 订正**：本行原写「**声明头还差 3 个**」—— 那是 2026-09-27 上半天的状态，
+> **同日更晚 `OpiFFI.h` 就已补齐**（见本文件「已验证 / 未验证」一节里那条
+> 「同日更晚的订正（2026-09-27）」），下表 `OpiFFI.h 声明` 一列
+> 三行也一直写着 ✓，**标题却停在了补齐之前**。
+> **此处不再写条数**：判据是 `cabi.rs` 与 `OpiFFI.h` 的逐条比对（名字 + 签名 + 结构体字段序），
+> 由 `crates/opi-ffi/tests/c_abi_contract.rs` 的 `macos_header_matches_cabi` 守着 ——
+> 它会打印当前条数，别抄到这里。
 
 | Engine 方法 | `cabi.rs` 导出 | `OpiFFI.h` 声明 | Apple 两平台 | Android(JNI) | fcitx5 轨 | TSF 轨 |
 |---|---|---|---|---|---|---|

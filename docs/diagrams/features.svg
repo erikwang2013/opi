@@ -21,7 +21,7 @@
     <rect x="30" y="86" width="1120" height="148" rx="14" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
     <rect x="46" y="74" width="112" height="24" rx="12" fill="#2E8B80"/>
     <text x="102" y="91" text-anchor="middle" font-size="12.5" font-weight="700" fill="#FFFFFF">输入模式</text>
-    <text x="170" y="91" font-size="11.5" fill="#8A948F">Composer 状态机判定每个按键的去留 —— 模式整数 0..4 在各端一致</text>
+    <text x="170" y="91" font-size="11.5" fill="#8A948F">Composer 状态机判定每个按键的去留 —— 模式整数 0..4 在各端一致；标点映射分两档（中文标点表 / 机械全角），各由一个独立开关管（各端暂无 UI 入口）</text>
 
     <g>
       <rect x="30" y="112" width="208" height="106" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
@@ -73,38 +73,40 @@
     <rect x="30" y="288" width="357" height="164" rx="12" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
     <rect x="30" y="288" width="357" height="4" rx="2" fill="#2E8B80"/>
     <text x="52" y="320" font-size="15" font-weight="700" fill="#22272E">候选生成</text>
-    <g fill="#2E8B80"><circle cx="57" cy="343" r="2.6"/><circle cx="57" cy="365" r="2.6"/><circle cx="57" cy="387" r="2.6"/><circle cx="57" cy="409" r="2.6"/><circle cx="57" cy="431" r="2.6"/></g>
+    <g fill="#2E8B80"><circle cx="57" cy="342" r="2.6"/><circle cx="57" cy="362" r="2.6"/><circle cx="57" cy="382" r="2.6"/><circle cx="57" cy="402" r="2.6"/><circle cx="57" cy="422" r="2.6"/><circle cx="57" cy="442" r="2.6"/></g>
     <g font-size="10.5" fill="#4A5551">
-      <text x="68" y="347">静态词频 + 用户词频 ×boost 统一排序</text>
-      <text x="68" y="369">跨源按文本去重（词典 / 符号 / emoji）</text>
-      <text x="68" y="391">整串无命中 → 退逐音节补候选（每节 top 3）</text>
-      <text x="68" y="413">单字母仅并入 emoji，挡掉符号关键字噪音</text>
-      <text x="68" y="435">每屏 8 项候选，支持翻页</text>
+      <text x="68" y="346">静态词频 + 用户词频 ×boost 统一排序</text>
+      <text x="68" y="366">跨源按文本去重（词典 / 符号 / emoji）</text>
+      <text x="68" y="386">整串无命中 → 退逐音节补候选（每节 top 3）</text>
+      <text x="68" y="406">单字母仅并入 emoji，挡掉符号关键字噪音</text>
+      <text x="68" y="426">模糊 / 简拼两档接在精确档之后，档空即主结果</text>
+      <text x="68" y="446">每屏 8 项候选 + 翻页；引擎侧不设上限，抓取量由调用方传入 limit</text>
     </g>
 
     <!-- 2 用户学习 -->
     <rect x="411" y="288" width="357" height="164" rx="12" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
     <rect x="411" y="288" width="357" height="4" rx="2" fill="#2E8B80"/>
     <text x="433" y="320" font-size="15" font-weight="700" fill="#22272E">用户学习</text>
-    <g fill="#2E8B80"><circle cx="438" cy="343" r="2.6"/><circle cx="438" cy="365" r="2.6"/><circle cx="438" cy="387" r="2.6"/><circle cx="438" cy="409" r="2.6"/></g>
+    <g fill="#2E8B80"><circle cx="438" cy="342" r="2.6"/><circle cx="438" cy="362" r="2.6"/><circle cx="438" cy="382" r="2.6"/><circle cx="438" cy="402" r="2.6"/></g>
     <g font-size="10.5" fill="#4A5551">
-      <text x="449" y="347">选词即记频，一次选词压过全部静态词</text>
-      <text x="449" y="369">boost 按词典最大词频动态缩放，不写死</text>
-      <text x="449" y="391">开关即时生效，关闭后不再记录</text>
-      <text x="449" y="413">单条删除 / 全量清空 / 导出 JSON</text>
+      <text x="449" y="346">选词即记频，一次选词压过全部静态词</text>
+      <text x="449" y="366">boost 按词典最大词频动态缩放，不写死</text>
+      <text x="449" y="386">开关即时生效，关闭后不再记录</text>
+      <text x="449" y="406">单条删除 / 全量清空 / 导出·导入 JSON</text>
     </g>
 
     <!-- 3 词库与数据 -->
     <rect x="792" y="288" width="357" height="164" rx="12" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
     <rect x="792" y="288" width="357" height="4" rx="2" fill="#2E8B80"/>
     <text x="814" y="320" font-size="15" font-weight="700" fill="#22272E">词库与数据</text>
-    <g fill="#2E8B80"><circle cx="819" cy="343" r="2.6"/><circle cx="819" cy="365" r="2.6"/><circle cx="819" cy="387" r="2.6"/><circle cx="819" cy="409" r="2.6"/><circle cx="819" cy="431" r="2.6"/></g>
+    <g fill="#2E8B80"><circle cx="819" cy="342" r="2.6"/><circle cx="819" cy="362" r="2.6"/><circle cx="819" cy="382" r="2.6"/><circle cx="819" cy="402" r="2.6"/><circle cx="819" cy="422" r="2.6"/><circle cx="819" cy="442" r="2.6"/></g>
     <g font-size="10.5" fill="#4A5551">
-      <text x="830" y="347">.opid v1 二进制：头 + 条目表 + 双 blob + 校验尾</text>
-      <text x="830" y="369">FNV-1a64 逐字节校验，顺序/偏移不合法即拒载</text>
-      <text x="830" y="391">mmap 只读映射，整库不入堆 · 按需转出</text>
-      <text x="830" y="413">装载失败 → 内置 35 词回退，绝不因词库崩溃</text>
-      <text x="830" y="435">简体 luna / 繁体 trad / 回退 fallback 三库</text>
+      <text x="830" y="346">.opid v1 二进制：头 + 条目表 + 双 blob + 校验尾</text>
+      <text x="830" y="366">FNV-1a64 逐字节校验，顺序/偏移不合法即拒载</text>
+      <text x="830" y="386">mmap 只读映射，整库不入堆 · 按需转出</text>
+      <text x="830" y="406">装载失败 → 内置 35 词回退，绝不因词库崩溃</text>
+      <text x="830" y="426">简体 luna / 繁体 trad / 回退 fallback 三库</text>
+      <text x="830" y="446">英文词源 en_words.tsv 仅入库为数据，未接候选</text>
     </g>
 
     <!-- 行 B -->
@@ -112,36 +114,38 @@
     <rect x="30" y="470" width="357" height="152" rx="12" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
     <rect x="30" y="470" width="357" height="4" rx="2" fill="#2E8B80"/>
     <text x="52" y="502" font-size="15" font-weight="700" fill="#22272E">符号与表情</text>
-    <g fill="#2E8B80"><circle cx="57" cy="525" r="2.6"/><circle cx="57" cy="547" r="2.6"/><circle cx="57" cy="569" r="2.6"/><circle cx="57" cy="591" r="2.6"/></g>
+    <g fill="#2E8B80"><circle cx="57" cy="523" r="2.6"/><circle cx="57" cy="543" r="2.6"/><circle cx="57" cy="563" r="2.6"/><circle cx="57" cy="583" r="2.6"/><circle cx="57" cy="603" r="2.6"/></g>
     <g font-size="10.5" fill="#4A5551">
-      <text x="68" y="529">Unicode 符号块目录，常用块置顶</text>
-      <text x="68" y="551">块内浏览 + 关键字搜索双通道</text>
-      <text x="68" y="573">emoji 与拼音候选同栏合并排序</text>
-      <text x="68" y="595">搜索 250ms 防抖，开面板先提交 pending 拼音</text>
+      <text x="68" y="527">Unicode 符号块目录，常用块置顶</text>
+      <text x="68" y="547">块内浏览 + 关键字搜索双通道</text>
+      <text x="68" y="567">emoji 与拼音候选同栏合并排序</text>
+      <text x="68" y="587">emoji 覆盖面随 symbols.tsv 重生成（gen_symbols.py）</text>
+      <text x="68" y="607">搜索 250ms 防抖，开面板先提交 pending 拼音</text>
     </g>
 
     <!-- 5 隐私与本地 -->
     <rect x="411" y="470" width="357" height="152" rx="12" fill="#FAF6F5" stroke="#EBD8D4" stroke-width="1.5"/>
     <rect x="411" y="470" width="357" height="4" rx="2" fill="#D9553F"/>
     <text x="433" y="502" font-size="15" font-weight="700" fill="#22272E">隐私与本地</text>
-    <g fill="#D9553F"><circle cx="438" cy="525" r="2.6"/><circle cx="438" cy="547" r="2.6"/><circle cx="438" cy="569" r="2.6"/><circle cx="438" cy="591" r="2.6"/></g>
+    <g fill="#D9553F"><circle cx="438" cy="523" r="2.6"/><circle cx="438" cy="543" r="2.6"/><circle cx="438" cy="563" r="2.6"/><circle cx="438" cy="583" r="2.6"/></g>
     <g font-size="10.5" fill="#4A5551">
-      <text x="449" y="529">输入数据默认只在本机，无任何网络请求</text>
-      <text x="449" y="551">核心输入完全离线可用，断网不影响打字</text>
-      <text x="449" y="573">学习词库落在应用私有目录</text>
-      <text x="449" y="595">云同步已裁决不做：不设账号，无云端服务</text>
+      <text x="449" y="527">输入数据默认只在本机，无任何网络请求</text>
+      <text x="449" y="547">核心输入完全离线可用，断网不影响打字</text>
+      <text x="449" y="567">学习落盘只在本机（当前仅 Android 接）</text>
+      <text x="449" y="587">云同步已裁决不做：不设账号，无云端服务</text>
     </g>
 
     <!-- 6 多端与包容 -->
     <rect x="792" y="470" width="357" height="152" rx="12" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
     <rect x="792" y="470" width="357" height="4" rx="2" fill="#2E8B80"/>
     <text x="814" y="502" font-size="15" font-weight="700" fill="#22272E">多端与包容</text>
-    <g fill="#2E8B80"><circle cx="819" cy="525" r="2.6"/><circle cx="819" cy="547" r="2.6"/><circle cx="819" cy="569" r="2.6"/><circle cx="819" cy="591" r="2.6"/></g>
+    <g fill="#2E8B80"><circle cx="819" cy="523" r="2.6"/><circle cx="819" cy="543" r="2.6"/><circle cx="819" cy="563" r="2.6"/><circle cx="819" cy="583" r="2.6"/><circle cx="819" cy="603" r="2.6"/></g>
     <g font-size="10.5" fill="#4A5551">
-      <text x="830" y="529">同一 Rust 引擎，各端共享同一套输入语义</text>
-      <text x="830" y="551">各端原生 UI：Compose / fcitx5 / TSF / UIKit / IMK / ArkTS</text>
-      <text x="830" y="573">核心零平台依赖，可在任意目标上单测</text>
-      <text x="830" y="595">模式整数与 ABI 约定跨端一致（0..4）</text>
+      <text x="830" y="527">同一 Rust 引擎，各端共享同一套输入语义</text>
+      <text x="830" y="547">各端原生 UI：Compose / fcitx5 / TSF / UIKit / IMK / ArkTS</text>
+      <text x="830" y="567">其中 Apple / 鸿蒙仍未编译（草案）</text>
+      <text x="830" y="587">核心零平台依赖，可在任意目标上单测</text>
+      <text x="830" y="607">模式整数与 ABI 约定跨端一致（0..4）</text>
     </g>
 
     <!-- 页脚 -->

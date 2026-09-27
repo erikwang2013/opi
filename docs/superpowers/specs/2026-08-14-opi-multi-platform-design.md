@@ -10,6 +10,12 @@
 > 3. **一处路径已过时**：下面偏差表里写「候选窗 UI 改用 foundation 自绘（…`candidate/Main.kt`）」—— 那是拆分前的写法。为满足「单文件 <500 行」，该文件于 2026-09-27 拆成 4 个同包文件：`Main.kt`（只留 `main()` 与候选模型）、`CandidateWindow.kt`（UI 自绘）、`Protocol.kt`（NDJSON 解析）、`PipeServer.kt`（命名管道）。原表保留不动。
 >
 > **已实测为真的部分**：平台中立的 C ABI（`crates/opi-ffi`，28 个导出）确实就绪 —— `cargo check` 对 4 个 Apple 目标与 3 个 OHOS 目标全过（已进 CI），并能产出 arm64 静态库 `libopi_ffi.a`。
+>
+> 订正（2026-09-28 复核，第二轮）：三处按实际订正，原文保留不动（设计留痕）：
+>
+> 1. **§4「fcitx5-opi（Linux）：Rust crate，fcitx5 Rust 绑定，直接依赖 engine_core（无 FFI）」——「fcitx5 Rust 绑定」与「无 FFI」两条不成立。** `fcitx5` crate 不可获取（M6 E0 结论，见 [plans/2026-08-14-opi-native-refactor-m6.md](../plans/2026-08-14-opi-native-refactor-m6.md) 路 B 的 B0「降级定案」），实际形态是 **Rust cdylib（`crates/fcitx5-opi`，导出 `opi_fcitx5_*` C 符号）+ C++ 胶水**（`crates/fcitx5-opi/cpp/opi_fcitx5.cpp`，走 fcitx5 原生 C++ 插件 API）—— Rust crate 本身仍直接依赖 `engine_core`，但**插件进程里这一跳是 C ABI**。另：**本轮（2026-09-28）才从零建起构建 / 安装通路**（`cpp/CMakeLists.txt` + CI 的 `fcitx5` job：装 fcitx5 头与库 → 编 C++ → 核对安装落点），此前它**没有任何构建系统**。
+> 2. **本文件里的出口计数全部已漂。** §4「JNI 出口…19 函数表」、§10 #7 的「现为 19」「C ABI 侧…= 20」，以及本文件 2026-09-27 注记里的「28 个导出」，都是**当次快照**；两侧此后又多次扩容（含本轮的中文标点开关出口 `b3f6318`）。**此处不再写死新数字**（写一次漂一次，同 `df576cf` 的裁决：删数字、改指针）—— 现值以门禁为唯一判据：`cargo test -p opi_ffi --test jni_contract`（JNI 注册表与 Kotlin 声明面逐条比对）与 `crates/opi-ffi/tests/cabi/` 的 C ABI 契约测试。
+> 3. **§7「fcitx5/TSF 集成测试需桌面环境，推迟到验收阶段」—— fcitx5 一侧已不再推迟。** 端到端 harness 已存在且可手工跑：`crates/fcitx5-opi/cpp/run-harness.sh`（脚本头写明**手工跑、不进 CI**）里的 `opi_e2e.py` 起真 fcitx5 守护进程 + **私有 dbus 会话**（隔离的 XDG 目录，不碰用户实例），验的是「用户实际收到的信号」；C++ 胶水另在 CI 里真编译 + 真装（见上）。**TSF 一侧仍然推迟**（本机无 Windows，只有 host 侧测试 + 目标 clippy）。其余测试策略（cargo 门禁、JNI host JVM smoke、Compose 单测）不受影响。
 
 ## 1. 目标与非目标
 
