@@ -95,8 +95,13 @@ fn symbol_mode_digit_does_not_enter_keyword_buffer() {
 }
 
 // ---- 数字选词的另一半（有候选时）：页内 '1'..='9' 提交对应候选 ----
-// `data/raw/symbols.tsv` 的 ballot 组恰好 3 条（☐ ☑ ☒）；关键字索引按
-// (小写关键字, 条目序) 排序，故同关键字下的页内序稳定 = 文件序。
+// `data/raw/symbols.tsv` 的 ballot 组 12 条（☐ ☑ ☒ ✗ ✘ ⮽ 🗳 🗴 …），本页取前 8 条；
+// 关键字索引按 (小写关键字, 条目序) 排序，故同关键字下的页内序稳定 = 文件序。
+//
+// 越界探针取 `'9'` 而不是 `'4'`：探针的**前提**是「本页没这么多项」，而这个数会随
+// 表长漂（2026-09-28 扩充符号表时 ballot 从 3 条涨到 12 条，`'4'` 就落进范围内了 ——
+// 断言当场变红，红的不是不变式而是前提）。`PAGE_SIZE = 8` 是 `router.rs` 的常量，
+// 故 `'9'` 对任何页宽 ≤ 8 的表都**恒**越界，探针不会因数据变动而失去意义。
 #[test]
 fn symbol_mode_digit_selects_candidate() {
     let mut r = symbol_state();
@@ -104,8 +109,8 @@ fn symbol_mode_digit_selects_candidate() {
         r.key_event(c as u32, 0);
     }
     assert_eq!(r.engine().candidates(DEFAULT_TOP_N)[1].text, "☑");
-    // 越界（本页 3 项，按 '4'）：交应用，且**不进**关键字缓冲 —— 数字不是关键字
-    assert_eq!(r.key_event('4' as u32, 0), KeyAction::PassThrough);
+    // 越界（本页 8 项，按 '9'）：交应用，且**不进**关键字缓冲 —— 数字不是关键字
+    assert_eq!(r.key_event('9' as u32, 0), KeyAction::PassThrough);
     assert_eq!(r.buffer(), "ballot", "越界数字不得落进关键字缓冲");
     // 页内 '2' → 第二个候选
     assert_eq!(r.key_event('2' as u32, 0), KeyAction::Input("☑".into()));

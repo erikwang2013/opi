@@ -36,19 +36,29 @@ id 原样保留（1/2/3/4/6，见 BLOCKS 注释为什么不重编号）。**id 5
 （约 +6592 条），但请先解决上面第 1、2 条，否则只是把空声明换成噪声。
 
 ## 关键字（搜索靠它）
-* `MANUAL` 表**人工写**（拼音 + 英文），覆盖常用符号：CJK 符号与表情**全量**、
-  几何图形与杂项符号的常用形、平假名全量（训令式与黑本式罗马字都给：
-  si/shi、ti/chi、tu/tsu、hu/fu、zi/ji）。共约 280 条。
+* `MANUAL` 表**人工写**（拼音 + 英文），覆盖常用符号：CJK 符号全量、
+  1F600–1F64F 那 80 个表情全量、几何图形与杂项符号的常用形、平假名全量
+  （训令式与黑本式罗马字都给：si/shi、ti/chi、tu/tsu、hu/fu、zi/ji）。共约 280 条。
 * 未人工写的条目按 Unicode 名兜底分词：`BLACK UP-POINTING TRIANGLE` →
   black,up,pointing,triangle（按非字母数字切分，去 WITH/AND/OF 等虚词）。
   **局限：兜底只保证英文可搜，拼音搜不到** —— 生僻条目（几何图形的象限填充、
   杂项符号里的交通标志/占星符号）体验取决于用户是否碰巧输英文词。
   这是兜底不是等价替代；要提升就得继续往 MANUAL 里补。
+  ⚠️ 2026-09-28 扩块后**这条局限成了主路径**：新增的约 2750 条里绝大多数只有
+  英文名分词关键字 —— 打 `xiao` 出 😄 仍成立（那 80 条在 MANUAL 里），
+  但打 `huojian` 出 🚀 **不成立**，得打 `rocket`。中文/拼音侧是 **CLDR 名称
+  搜索**那个任务（spec 第 60/86 行），本轮有意不做：它要么新引一份上游
+  （`cldr-json` 的 annotations/zh，~1MB，另有 LICENSE 与版本 pin 要接），
+  要么手写三千条中文名（不可复核）。两者都超出「扩覆盖」这一半。
 * 旧内置样例的首字母缩写约定（上三角 sjx）**不再机械生成**：机械生成要配一张
   几千字的拼音首字母表，而引擎是前缀匹配 —— 输 "s" 已经能命中 "sanjiao"，
   缩写只在用户恰好输全缩写时有用。需要的那几条（▲ sjx）手写进 MANUAL 即可。
-* emoji 列与 Android 侧判定必须一致：`SymbolCatalog.isEmoji()` 用"含代理对"
-  （非 BMP）判表情，故只给 U+1F600–1F64F 标 emoji=1，并断言「emoji=1 ⟺ 非 BMP」。
+* emoji 列与 Android 侧判定必须一致：`SymbolCatalog.isEmoji()` 用"含代理对"（非 BMP）
+  判表情，故 emoji=1 ⟺ 非 BMP，生成期断言，`rare_coverage.rs` 再锁一遍。
+  **代价（如实记）**：这条口径是「非 BMP」而非 UTS#51 的 Emoji 属性，那批 **BMP 里的
+  真 emoji**（⌚ U+231A、⏰ U+23F0、⭐ U+2B50、✂ U+2702）数据里 emoji=0，**不进
+  Android「表情」页**，只能从「全部」页/关键字搜到。要修得先改 Android 的判定口径
+  （`isEmoji` 改查表或改走 JNI 的 emoji 标记），是跨端改动，不在本脚本范围内。
 
 用法（需要网络下载 UnicodeData.txt）：
   python3 scripts/gen_symbols.py
@@ -67,12 +77,45 @@ UNICODE_DATA_SHA256 = "0736451de439ae7baf1425136617da495e09ee5afbe6e394374db7009
 # (id, start, end, name, common)。id 与 engine-core `builtin()` 逐一对应，
 # **id 5 空出不重编号**：平假名若改成 5，任何仍认为「5 = 扩展 A」的旧代码会
 # **静默**取到平假名（错得看不出来）；留空则它拿到空列表，错得响。
+#
+# 1–6 是原有块，**顺序与内容不许动**（决定 symbols.tsv 行序 = 面板内条目序，
+# 且被 symbol_mode.rs 等用例钉着）；7 起为 2026-09-28 补的 emoji 覆盖块，
+# 一律追加在尾部，既有条目的行号因此逐字节不变（这条在生成器里是结构保证：
+# 新区块只 append，不改写前缀）。
+#
+# 新增块取自 UTS#51 §2.1 的 emoji 区块表（Unicode 15.1），与既有块 2/3 同一口径：
+# 一个 Unicode 区块进表就是整块，不按「这块里有多少个是 emoji」筛。
+#
+# ⚠️ 规范里的「~3700」是 emoji-test.txt 的完全限定**序列**数（15.1 实测 3776），
+# **不是码位数**，本表到不了：条目 text 必须单字符（rare_coverage.rs
+# `symbol_data_wellformed`），且 emoji ⟺ 非 BMP。本表给的是 emoji 区块内全部已分配码位。
+#
+# ⚠️ 非 BMP 的「非图形」块（麻将 1F000 / 多米诺 1F030 / 扑克 1F0A0 / 带圈字母数字
+# 补充 1F100 / 带圈表意文字补充 1F200）有意不收：emoji 口径是「非 BMP」，而
+# `candidates.rs` 单键走 `search_emoji` 且命中按码位升序平局排序，这五块**必然**
+# 占满每个字母键的前 8 槽（实测打 s 出麻将牌而非 😀）。代价：那 58 条带 Emoji 属性的
+# 字符（🀄🃏🅰🅱🈚🈯…，含区域指示符）不在表内；要恢复先解决上面那条平局排序。
+# BMP 的 emoji 块不受此影响（emoji=0，不进 emoji 通道），故 7–13 整块收。
 BLOCKS = [
     (1, 0x3000, 0x303F, "CJK 符号", 1),
     (2, 0x25A0, 0x25FF, "几何图形", 0),
     (3, 0x2600, 0x26FF, "杂项符号", 0),
     (4, 0x1F600, 0x1F64F, "表情符号", 0),
     (6, 0x3040, 0x309F, "平假名", 0),
+    # ---- 2026-09-28 追加：UTS#51 emoji 区块（BMP 段，emoji=0）----
+    (7, 0x2190, 0x21FF, "箭头", 0),
+    (8, 0x2300, 0x23FF, "杂项技术符号", 0),
+    (9, 0x2460, 0x24FF, "带圈字母数字", 0),
+    (10, 0x2700, 0x27BF, "装饰符号", 0),
+    (11, 0x2900, 0x297F, "补充箭头-B", 0),
+    (12, 0x2B00, 0x2BFF, "杂项符号与箭头", 0),
+    (13, 0x3200, 0x32FF, "带圈中日韩字母", 0),
+    # ---- 2026-09-28 追加：UTS#51 emoji 区块（非 BMP 图形段，emoji=1）----
+    (14, 0x1F300, 0x1F5FF, "杂项符号与图形", 0),
+    (15, 0x1F680, 0x1F6FF, "交通与地图符号", 0),
+    (16, 0x1F780, 0x1F7FF, "几何图形扩展", 0),
+    (17, 0x1F900, 0x1F9FF, "补充符号与图形", 0),
+    (18, 0x1FA70, 0x1FAFF, "符号与图形扩展-A", 0),
 ]
 
 # 旧硬编码符号表的 8 条 —— 生成器是「在现有基础上扩充」，不是整表替换：
@@ -369,7 +412,10 @@ def rows_for_block(block: tuple[int, int, int, str, int], chars: dict[int, tuple
             name, keys = kana_row(cp, uname)
         else:
             name, keys = uname, name_keywords(uname)
-        yield chr(cp), name, list(dict.fromkeys(keys)), bid, 1 if bid == 4 else 0
+        # emoji 标记 = **非 BMP**，不是「区块 4」：扩块后 1F000 以上有 10 个区块，
+        # 逐个列 id 只会漏。判定口径与 Android `SymbolCatalog.isEmoji()`（含代理对）
+        # 同源，生成期下面的断言与 rare_coverage.rs 各锁一遍。
+        yield chr(cp), name, list(dict.fromkeys(keys)), bid, 1 if cp > 0xFFFF else 0
 
 
 def write_atomic(path: str, lines: list[str]) -> None:

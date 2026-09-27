@@ -132,7 +132,7 @@ class SymbolCatalogTest {
         assertTrue(SymbolCatalog.parseBlocks("not json").isEmpty())
     }
 
-    /** 只有 `common:true` 的块进「常用」—— 否则「常用」会变成全部 583 条、且以几何图形打头。 */
+    /** 只有 `common:true` 的块进「常用」—— 否则「常用」会变成全部符号、且以几何图形打头。 */
     @Test
     fun commonExcludesBlocksNotMarkedCommon() {
         val api = FakeSymbolApi().apply {

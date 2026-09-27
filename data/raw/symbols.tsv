@@ -581,3 +581,2752 @@
 ゝ	平假名叠字符	pingjiadie,diezi,iteration,hiragana,mark	6	0
 ゞ	平假名浊音叠字符	zhuoyindie,voiced,iteration,hiragana,mark	6	0
 ゟ	平假名合字yori	yori,hezi,digraph,hiragana	6	0
+←	LEFTWARDS ARROW	leftwards,arrow	7	0
+↑	UPWARDS ARROW	upwards,arrow	7	0
+→	RIGHTWARDS ARROW	rightwards,arrow	7	0
+↓	DOWNWARDS ARROW	downwards,arrow	7	0
+↔	LEFT RIGHT ARROW	left,right,arrow	7	0
+↕	UP DOWN ARROW	up,down,arrow	7	0
+↖	NORTH WEST ARROW	north,west,arrow	7	0
+↗	NORTH EAST ARROW	north,east,arrow	7	0
+↘	SOUTH EAST ARROW	south,east,arrow	7	0
+↙	SOUTH WEST ARROW	south,west,arrow	7	0
+↚	LEFTWARDS ARROW WITH STROKE	leftwards,arrow,stroke	7	0
+↛	RIGHTWARDS ARROW WITH STROKE	rightwards,arrow,stroke	7	0
+↜	LEFTWARDS WAVE ARROW	leftwards,wave,arrow	7	0
+↝	RIGHTWARDS WAVE ARROW	rightwards,wave,arrow	7	0
+↞	LEFTWARDS TWO HEADED ARROW	leftwards,two,headed,arrow	7	0
+↟	UPWARDS TWO HEADED ARROW	upwards,two,headed,arrow	7	0
+↠	RIGHTWARDS TWO HEADED ARROW	rightwards,two,headed,arrow	7	0
+↡	DOWNWARDS TWO HEADED ARROW	downwards,two,headed,arrow	7	0
+↢	LEFTWARDS ARROW WITH TAIL	leftwards,arrow,tail	7	0
+↣	RIGHTWARDS ARROW WITH TAIL	rightwards,arrow,tail	7	0
+↤	LEFTWARDS ARROW FROM BAR	leftwards,arrow,from,bar	7	0
+↥	UPWARDS ARROW FROM BAR	upwards,arrow,from,bar	7	0
+↦	RIGHTWARDS ARROW FROM BAR	rightwards,arrow,from,bar	7	0
+↧	DOWNWARDS ARROW FROM BAR	downwards,arrow,from,bar	7	0
+↨	UP DOWN ARROW WITH BASE	up,down,arrow,base	7	0
+↩	LEFTWARDS ARROW WITH HOOK	leftwards,arrow,hook	7	0
+↪	RIGHTWARDS ARROW WITH HOOK	rightwards,arrow,hook	7	0
+↫	LEFTWARDS ARROW WITH LOOP	leftwards,arrow,loop	7	0
+↬	RIGHTWARDS ARROW WITH LOOP	rightwards,arrow,loop	7	0
+↭	LEFT RIGHT WAVE ARROW	left,right,wave,arrow	7	0
+↮	LEFT RIGHT ARROW WITH STROKE	left,right,arrow,stroke	7	0
+↯	DOWNWARDS ZIGZAG ARROW	downwards,zigzag,arrow	7	0
+↰	UPWARDS ARROW WITH TIP LEFTWARDS	upwards,arrow,tip,leftwards	7	0
+↱	UPWARDS ARROW WITH TIP RIGHTWARDS	upwards,arrow,tip,rightwards	7	0
+↲	DOWNWARDS ARROW WITH TIP LEFTWARDS	downwards,arrow,tip,leftwards	7	0
+↳	DOWNWARDS ARROW WITH TIP RIGHTWARDS	downwards,arrow,tip,rightwards	7	0
+↴	RIGHTWARDS ARROW WITH CORNER DOWNWARDS	rightwards,arrow,corner,downwards	7	0
+↵	DOWNWARDS ARROW WITH CORNER LEFTWARDS	downwards,arrow,corner,leftwards	7	0
+↶	ANTICLOCKWISE TOP SEMICIRCLE ARROW	anticlockwise,top,semicircle,arrow	7	0
+↷	CLOCKWISE TOP SEMICIRCLE ARROW	clockwise,top,semicircle,arrow	7	0
+↸	NORTH WEST ARROW TO LONG BAR	north,west,arrow,to,long,bar	7	0
+↹	LEFTWARDS ARROW TO BAR OVER RIGHTWARDS ARROW TO BAR	leftwards,arrow,to,bar,over,rightwards	7	0
+↺	ANTICLOCKWISE OPEN CIRCLE ARROW	anticlockwise,open,circle,arrow	7	0
+↻	CLOCKWISE OPEN CIRCLE ARROW	clockwise,open,circle,arrow	7	0
+↼	LEFTWARDS HARPOON WITH BARB UPWARDS	leftwards,harpoon,barb,upwards	7	0
+↽	LEFTWARDS HARPOON WITH BARB DOWNWARDS	leftwards,harpoon,barb,downwards	7	0
+↾	UPWARDS HARPOON WITH BARB RIGHTWARDS	upwards,harpoon,barb,rightwards	7	0
+↿	UPWARDS HARPOON WITH BARB LEFTWARDS	upwards,harpoon,barb,leftwards	7	0
+⇀	RIGHTWARDS HARPOON WITH BARB UPWARDS	rightwards,harpoon,barb,upwards	7	0
+⇁	RIGHTWARDS HARPOON WITH BARB DOWNWARDS	rightwards,harpoon,barb,downwards	7	0
+⇂	DOWNWARDS HARPOON WITH BARB RIGHTWARDS	downwards,harpoon,barb,rightwards	7	0
+⇃	DOWNWARDS HARPOON WITH BARB LEFTWARDS	downwards,harpoon,barb,leftwards	7	0
+⇄	RIGHTWARDS ARROW OVER LEFTWARDS ARROW	rightwards,arrow,over,leftwards	7	0
+⇅	UPWARDS ARROW LEFTWARDS OF DOWNWARDS ARROW	upwards,arrow,leftwards,downwards	7	0
+⇆	LEFTWARDS ARROW OVER RIGHTWARDS ARROW	leftwards,arrow,over,rightwards	7	0
+⇇	LEFTWARDS PAIRED ARROWS	leftwards,paired,arrows	7	0
+⇈	UPWARDS PAIRED ARROWS	upwards,paired,arrows	7	0
+⇉	RIGHTWARDS PAIRED ARROWS	rightwards,paired,arrows	7	0
+⇊	DOWNWARDS PAIRED ARROWS	downwards,paired,arrows	7	0
+⇋	LEFTWARDS HARPOON OVER RIGHTWARDS HARPOON	leftwards,harpoon,over,rightwards	7	0
+⇌	RIGHTWARDS HARPOON OVER LEFTWARDS HARPOON	rightwards,harpoon,over,leftwards	7	0
+⇍	LEFTWARDS DOUBLE ARROW WITH STROKE	leftwards,double,arrow,stroke	7	0
+⇎	LEFT RIGHT DOUBLE ARROW WITH STROKE	left,right,double,arrow,stroke	7	0
+⇏	RIGHTWARDS DOUBLE ARROW WITH STROKE	rightwards,double,arrow,stroke	7	0
+⇐	LEFTWARDS DOUBLE ARROW	leftwards,double,arrow	7	0
+⇑	UPWARDS DOUBLE ARROW	upwards,double,arrow	7	0
+⇒	RIGHTWARDS DOUBLE ARROW	rightwards,double,arrow	7	0
+⇓	DOWNWARDS DOUBLE ARROW	downwards,double,arrow	7	0
+⇔	LEFT RIGHT DOUBLE ARROW	left,right,double,arrow	7	0
+⇕	UP DOWN DOUBLE ARROW	up,down,double,arrow	7	0
+⇖	NORTH WEST DOUBLE ARROW	north,west,double,arrow	7	0
+⇗	NORTH EAST DOUBLE ARROW	north,east,double,arrow	7	0
+⇘	SOUTH EAST DOUBLE ARROW	south,east,double,arrow	7	0
+⇙	SOUTH WEST DOUBLE ARROW	south,west,double,arrow	7	0
+⇚	LEFTWARDS TRIPLE ARROW	leftwards,triple,arrow	7	0
+⇛	RIGHTWARDS TRIPLE ARROW	rightwards,triple,arrow	7	0
+⇜	LEFTWARDS SQUIGGLE ARROW	leftwards,squiggle,arrow	7	0
+⇝	RIGHTWARDS SQUIGGLE ARROW	rightwards,squiggle,arrow	7	0
+⇞	UPWARDS ARROW WITH DOUBLE STROKE	upwards,arrow,double,stroke	7	0
+⇟	DOWNWARDS ARROW WITH DOUBLE STROKE	downwards,arrow,double,stroke	7	0
+⇠	LEFTWARDS DASHED ARROW	leftwards,dashed,arrow	7	0
+⇡	UPWARDS DASHED ARROW	upwards,dashed,arrow	7	0
+⇢	RIGHTWARDS DASHED ARROW	rightwards,dashed,arrow	7	0
+⇣	DOWNWARDS DASHED ARROW	downwards,dashed,arrow	7	0
+⇤	LEFTWARDS ARROW TO BAR	leftwards,arrow,to,bar	7	0
+⇥	RIGHTWARDS ARROW TO BAR	rightwards,arrow,to,bar	7	0
+⇦	LEFTWARDS WHITE ARROW	leftwards,white,arrow	7	0
+⇧	UPWARDS WHITE ARROW	upwards,white,arrow	7	0
+⇨	RIGHTWARDS WHITE ARROW	rightwards,white,arrow	7	0
+⇩	DOWNWARDS WHITE ARROW	downwards,white,arrow	7	0
+⇪	UPWARDS WHITE ARROW FROM BAR	upwards,white,arrow,from,bar	7	0
+⇫	UPWARDS WHITE ARROW ON PEDESTAL	upwards,white,arrow,on,pedestal	7	0
+⇬	UPWARDS WHITE ARROW ON PEDESTAL WITH HORIZONTAL BAR	upwards,white,arrow,on,pedestal,horizontal,bar	7	0
+⇭	UPWARDS WHITE ARROW ON PEDESTAL WITH VERTICAL BAR	upwards,white,arrow,on,pedestal,vertical,bar	7	0
+⇮	UPWARDS WHITE DOUBLE ARROW	upwards,white,double,arrow	7	0
+⇯	UPWARDS WHITE DOUBLE ARROW ON PEDESTAL	upwards,white,double,arrow,on,pedestal	7	0
+⇰	RIGHTWARDS WHITE ARROW FROM WALL	rightwards,white,arrow,from,wall	7	0
+⇱	NORTH WEST ARROW TO CORNER	north,west,arrow,to,corner	7	0
+⇲	SOUTH EAST ARROW TO CORNER	south,east,arrow,to,corner	7	0
+⇳	UP DOWN WHITE ARROW	up,down,white,arrow	7	0
+⇴	RIGHT ARROW WITH SMALL CIRCLE	right,arrow,small,circle	7	0
+⇵	DOWNWARDS ARROW LEFTWARDS OF UPWARDS ARROW	downwards,arrow,leftwards,upwards	7	0
+⇶	THREE RIGHTWARDS ARROWS	three,rightwards,arrows	7	0
+⇷	LEFTWARDS ARROW WITH VERTICAL STROKE	leftwards,arrow,vertical,stroke	7	0
+⇸	RIGHTWARDS ARROW WITH VERTICAL STROKE	rightwards,arrow,vertical,stroke	7	0
+⇹	LEFT RIGHT ARROW WITH VERTICAL STROKE	left,right,arrow,vertical,stroke	7	0
+⇺	LEFTWARDS ARROW WITH DOUBLE VERTICAL STROKE	leftwards,arrow,double,vertical,stroke	7	0
+⇻	RIGHTWARDS ARROW WITH DOUBLE VERTICAL STROKE	rightwards,arrow,double,vertical,stroke	7	0
+⇼	LEFT RIGHT ARROW WITH DOUBLE VERTICAL STROKE	left,right,arrow,double,vertical,stroke	7	0
+⇽	LEFTWARDS OPEN-HEADED ARROW	leftwards,open,headed,arrow	7	0
+⇾	RIGHTWARDS OPEN-HEADED ARROW	rightwards,open,headed,arrow	7	0
+⇿	LEFT RIGHT OPEN-HEADED ARROW	left,right,open,headed,arrow	7	0
+⌀	DIAMETER SIGN	diameter,sign	8	0
+⌁	ELECTRIC ARROW	electric,arrow	8	0
+⌂	HOUSE	house	8	0
+⌃	UP ARROWHEAD	up,arrowhead	8	0
+⌄	DOWN ARROWHEAD	down,arrowhead	8	0
+⌅	PROJECTIVE	projective	8	0
+⌆	PERSPECTIVE	perspective	8	0
+⌇	WAVY LINE	wavy,line	8	0
+⌈	LEFT CEILING	left,ceiling	8	0
+⌉	RIGHT CEILING	right,ceiling	8	0
+⌊	LEFT FLOOR	left,floor	8	0
+⌋	RIGHT FLOOR	right,floor	8	0
+⌌	BOTTOM RIGHT CROP	bottom,right,crop	8	0
+⌍	BOTTOM LEFT CROP	bottom,left,crop	8	0
+⌎	TOP RIGHT CROP	top,right,crop	8	0
+⌏	TOP LEFT CROP	top,left,crop	8	0
+⌐	REVERSED NOT SIGN	reversed,not,sign	8	0
+⌑	SQUARE LOZENGE	square,lozenge	8	0
+⌒	ARC	arc	8	0
+⌓	SEGMENT	segment	8	0
+⌔	SECTOR	sector	8	0
+⌕	TELEPHONE RECORDER	telephone,recorder	8	0
+⌖	POSITION INDICATOR	position,indicator	8	0
+⌗	VIEWDATA SQUARE	viewdata,square	8	0
+⌘	PLACE OF INTEREST SIGN	place,interest,sign	8	0
+⌙	TURNED NOT SIGN	turned,not,sign	8	0
+⌚	WATCH	watch	8	0
+⌛	HOURGLASS	hourglass	8	0
+⌜	TOP LEFT CORNER	top,left,corner	8	0
+⌝	TOP RIGHT CORNER	top,right,corner	8	0
+⌞	BOTTOM LEFT CORNER	bottom,left,corner	8	0
+⌟	BOTTOM RIGHT CORNER	bottom,right,corner	8	0
+⌠	TOP HALF INTEGRAL	top,half,integral	8	0
+⌡	BOTTOM HALF INTEGRAL	bottom,half,integral	8	0
+⌢	FROWN	frown	8	0
+⌣	SMILE	smile	8	0
+⌤	UP ARROWHEAD BETWEEN TWO HORIZONTAL BARS	up,arrowhead,between,two,horizontal,bars	8	0
+⌥	OPTION KEY	option,key	8	0
+⌦	ERASE TO THE RIGHT	erase,to,right	8	0
+⌧	X IN A RECTANGLE BOX	x,in,rectangle,box	8	0
+⌨	KEYBOARD	keyboard	8	0
+〈	LEFT-POINTING ANGLE BRACKET	left,pointing,angle,bracket	8	0
+〉	RIGHT-POINTING ANGLE BRACKET	right,pointing,angle,bracket	8	0
+⌫	ERASE TO THE LEFT	erase,to,left	8	0
+⌬	BENZENE RING	benzene,ring	8	0
+⌭	CYLINDRICITY	cylindricity	8	0
+⌮	ALL AROUND-PROFILE	all,around,profile	8	0
+⌯	SYMMETRY	symmetry	8	0
+⌰	TOTAL RUNOUT	total,runout	8	0
+⌱	DIMENSION ORIGIN	dimension,origin	8	0
+⌲	CONICAL TAPER	conical,taper	8	0
+⌳	SLOPE	slope	8	0
+⌴	COUNTERBORE	counterbore	8	0
+⌵	COUNTERSINK	countersink	8	0
+⌶	APL FUNCTIONAL SYMBOL I-BEAM	apl,functional,symbol,i,beam	8	0
+⌷	APL FUNCTIONAL SYMBOL SQUISH QUAD	apl,functional,symbol,squish,quad	8	0
+⌸	APL FUNCTIONAL SYMBOL QUAD EQUAL	apl,functional,symbol,quad,equal	8	0
+⌹	APL FUNCTIONAL SYMBOL QUAD DIVIDE	apl,functional,symbol,quad,divide	8	0
+⌺	APL FUNCTIONAL SYMBOL QUAD DIAMOND	apl,functional,symbol,quad,diamond	8	0
+⌻	APL FUNCTIONAL SYMBOL QUAD JOT	apl,functional,symbol,quad,jot	8	0
+⌼	APL FUNCTIONAL SYMBOL QUAD CIRCLE	apl,functional,symbol,quad,circle	8	0
+⌽	APL FUNCTIONAL SYMBOL CIRCLE STILE	apl,functional,symbol,circle,stile	8	0
+⌾	APL FUNCTIONAL SYMBOL CIRCLE JOT	apl,functional,symbol,circle,jot	8	0
+⌿	APL FUNCTIONAL SYMBOL SLASH BAR	apl,functional,symbol,slash,bar	8	0
+⍀	APL FUNCTIONAL SYMBOL BACKSLASH BAR	apl,functional,symbol,backslash,bar	8	0
+⍁	APL FUNCTIONAL SYMBOL QUAD SLASH	apl,functional,symbol,quad,slash	8	0
+⍂	APL FUNCTIONAL SYMBOL QUAD BACKSLASH	apl,functional,symbol,quad,backslash	8	0
+⍃	APL FUNCTIONAL SYMBOL QUAD LESS-THAN	apl,functional,symbol,quad,less,than	8	0
+⍄	APL FUNCTIONAL SYMBOL QUAD GREATER-THAN	apl,functional,symbol,quad,greater,than	8	0
+⍅	APL FUNCTIONAL SYMBOL LEFTWARDS VANE	apl,functional,symbol,leftwards,vane	8	0
+⍆	APL FUNCTIONAL SYMBOL RIGHTWARDS VANE	apl,functional,symbol,rightwards,vane	8	0
+⍇	APL FUNCTIONAL SYMBOL QUAD LEFTWARDS ARROW	apl,functional,symbol,quad,leftwards,arrow	8	0
+⍈	APL FUNCTIONAL SYMBOL QUAD RIGHTWARDS ARROW	apl,functional,symbol,quad,rightwards,arrow	8	0
+⍉	APL FUNCTIONAL SYMBOL CIRCLE BACKSLASH	apl,functional,symbol,circle,backslash	8	0
+⍊	APL FUNCTIONAL SYMBOL DOWN TACK UNDERBAR	apl,functional,symbol,down,tack,underbar	8	0
+⍋	APL FUNCTIONAL SYMBOL DELTA STILE	apl,functional,symbol,delta,stile	8	0
+⍌	APL FUNCTIONAL SYMBOL QUAD DOWN CARET	apl,functional,symbol,quad,down,caret	8	0
+⍍	APL FUNCTIONAL SYMBOL QUAD DELTA	apl,functional,symbol,quad,delta	8	0
+⍎	APL FUNCTIONAL SYMBOL DOWN TACK JOT	apl,functional,symbol,down,tack,jot	8	0
+⍏	APL FUNCTIONAL SYMBOL UPWARDS VANE	apl,functional,symbol,upwards,vane	8	0
+⍐	APL FUNCTIONAL SYMBOL QUAD UPWARDS ARROW	apl,functional,symbol,quad,upwards,arrow	8	0
+⍑	APL FUNCTIONAL SYMBOL UP TACK OVERBAR	apl,functional,symbol,up,tack,overbar	8	0
+⍒	APL FUNCTIONAL SYMBOL DEL STILE	apl,functional,symbol,del,stile	8	0
+⍓	APL FUNCTIONAL SYMBOL QUAD UP CARET	apl,functional,symbol,quad,up,caret	8	0
+⍔	APL FUNCTIONAL SYMBOL QUAD DEL	apl,functional,symbol,quad,del	8	0
+⍕	APL FUNCTIONAL SYMBOL UP TACK JOT	apl,functional,symbol,up,tack,jot	8	0
+⍖	APL FUNCTIONAL SYMBOL DOWNWARDS VANE	apl,functional,symbol,downwards,vane	8	0
+⍗	APL FUNCTIONAL SYMBOL QUAD DOWNWARDS ARROW	apl,functional,symbol,quad,downwards,arrow	8	0
+⍘	APL FUNCTIONAL SYMBOL QUOTE UNDERBAR	apl,functional,symbol,quote,underbar	8	0
+⍙	APL FUNCTIONAL SYMBOL DELTA UNDERBAR	apl,functional,symbol,delta,underbar	8	0
+⍚	APL FUNCTIONAL SYMBOL DIAMOND UNDERBAR	apl,functional,symbol,diamond,underbar	8	0
+⍛	APL FUNCTIONAL SYMBOL JOT UNDERBAR	apl,functional,symbol,jot,underbar	8	0
+⍜	APL FUNCTIONAL SYMBOL CIRCLE UNDERBAR	apl,functional,symbol,circle,underbar	8	0
+⍝	APL FUNCTIONAL SYMBOL UP SHOE JOT	apl,functional,symbol,up,shoe,jot	8	0
+⍞	APL FUNCTIONAL SYMBOL QUOTE QUAD	apl,functional,symbol,quote,quad	8	0
+⍟	APL FUNCTIONAL SYMBOL CIRCLE STAR	apl,functional,symbol,circle,star	8	0
+⍠	APL FUNCTIONAL SYMBOL QUAD COLON	apl,functional,symbol,quad,colon	8	0
+⍡	APL FUNCTIONAL SYMBOL UP TACK DIAERESIS	apl,functional,symbol,up,tack,diaeresis	8	0
+⍢	APL FUNCTIONAL SYMBOL DEL DIAERESIS	apl,functional,symbol,del,diaeresis	8	0
+⍣	APL FUNCTIONAL SYMBOL STAR DIAERESIS	apl,functional,symbol,star,diaeresis	8	0
+⍤	APL FUNCTIONAL SYMBOL JOT DIAERESIS	apl,functional,symbol,jot,diaeresis	8	0
+⍥	APL FUNCTIONAL SYMBOL CIRCLE DIAERESIS	apl,functional,symbol,circle,diaeresis	8	0
+⍦	APL FUNCTIONAL SYMBOL DOWN SHOE STILE	apl,functional,symbol,down,shoe,stile	8	0
+⍧	APL FUNCTIONAL SYMBOL LEFT SHOE STILE	apl,functional,symbol,left,shoe,stile	8	0
+⍨	APL FUNCTIONAL SYMBOL TILDE DIAERESIS	apl,functional,symbol,tilde,diaeresis	8	0
+⍩	APL FUNCTIONAL SYMBOL GREATER-THAN DIAERESIS	apl,functional,symbol,greater,than,diaeresis	8	0
+⍪	APL FUNCTIONAL SYMBOL COMMA BAR	apl,functional,symbol,comma,bar	8	0
+⍫	APL FUNCTIONAL SYMBOL DEL TILDE	apl,functional,symbol,del,tilde	8	0
+⍬	APL FUNCTIONAL SYMBOL ZILDE	apl,functional,symbol,zilde	8	0
+⍭	APL FUNCTIONAL SYMBOL STILE TILDE	apl,functional,symbol,stile,tilde	8	0
+⍮	APL FUNCTIONAL SYMBOL SEMICOLON UNDERBAR	apl,functional,symbol,semicolon,underbar	8	0
+⍯	APL FUNCTIONAL SYMBOL QUAD NOT EQUAL	apl,functional,symbol,quad,not,equal	8	0
+⍰	APL FUNCTIONAL SYMBOL QUAD QUESTION	apl,functional,symbol,quad,question	8	0
+⍱	APL FUNCTIONAL SYMBOL DOWN CARET TILDE	apl,functional,symbol,down,caret,tilde	8	0
+⍲	APL FUNCTIONAL SYMBOL UP CARET TILDE	apl,functional,symbol,up,caret,tilde	8	0
+⍳	APL FUNCTIONAL SYMBOL IOTA	apl,functional,symbol,iota	8	0
+⍴	APL FUNCTIONAL SYMBOL RHO	apl,functional,symbol,rho	8	0
+⍵	APL FUNCTIONAL SYMBOL OMEGA	apl,functional,symbol,omega	8	0
+⍶	APL FUNCTIONAL SYMBOL ALPHA UNDERBAR	apl,functional,symbol,alpha,underbar	8	0
+⍷	APL FUNCTIONAL SYMBOL EPSILON UNDERBAR	apl,functional,symbol,epsilon,underbar	8	0
+⍸	APL FUNCTIONAL SYMBOL IOTA UNDERBAR	apl,functional,symbol,iota,underbar	8	0
+⍹	APL FUNCTIONAL SYMBOL OMEGA UNDERBAR	apl,functional,symbol,omega,underbar	8	0
+⍺	APL FUNCTIONAL SYMBOL ALPHA	apl,functional,symbol,alpha	8	0
+⍻	NOT CHECK MARK	not,check,mark	8	0
+⍼	RIGHT ANGLE WITH DOWNWARDS ZIGZAG ARROW	right,angle,downwards,zigzag,arrow	8	0
+⍽	SHOULDERED OPEN BOX	shouldered,open,box	8	0
+⍾	BELL SYMBOL	bell,symbol	8	0
+⍿	VERTICAL LINE WITH MIDDLE DOT	vertical,line,middle,dot	8	0
+⎀	INSERTION SYMBOL	insertion,symbol	8	0
+⎁	CONTINUOUS UNDERLINE SYMBOL	continuous,underline,symbol	8	0
+⎂	DISCONTINUOUS UNDERLINE SYMBOL	discontinuous,underline,symbol	8	0
+⎃	EMPHASIS SYMBOL	emphasis,symbol	8	0
+⎄	COMPOSITION SYMBOL	composition,symbol	8	0
+⎅	WHITE SQUARE WITH CENTRE VERTICAL LINE	white,square,centre,vertical,line	8	0
+⎆	ENTER SYMBOL	enter,symbol	8	0
+⎇	ALTERNATIVE KEY SYMBOL	alternative,key,symbol	8	0
+⎈	HELM SYMBOL	helm,symbol	8	0
+⎉	CIRCLED HORIZONTAL BAR WITH NOTCH	circled,horizontal,bar,notch	8	0
+⎊	CIRCLED TRIANGLE DOWN	circled,triangle,down	8	0
+⎋	BROKEN CIRCLE WITH NORTHWEST ARROW	broken,circle,northwest,arrow	8	0
+⎌	UNDO SYMBOL	undo,symbol	8	0
+⎍	MONOSTABLE SYMBOL	monostable,symbol	8	0
+⎎	HYSTERESIS SYMBOL	hysteresis,symbol	8	0
+⎏	OPEN-CIRCUIT-OUTPUT H-TYPE SYMBOL	open,circuit,output,h,type,symbol	8	0
+⎐	OPEN-CIRCUIT-OUTPUT L-TYPE SYMBOL	open,circuit,output,l,type,symbol	8	0
+⎑	PASSIVE-PULL-DOWN-OUTPUT SYMBOL	passive,pull,down,output,symbol	8	0
+⎒	PASSIVE-PULL-UP-OUTPUT SYMBOL	passive,pull,up,output,symbol	8	0
+⎓	DIRECT CURRENT SYMBOL FORM TWO	direct,current,symbol,form,two	8	0
+⎔	SOFTWARE-FUNCTION SYMBOL	software,function,symbol	8	0
+⎕	APL FUNCTIONAL SYMBOL QUAD	apl,functional,symbol,quad	8	0
+⎖	DECIMAL SEPARATOR KEY SYMBOL	decimal,separator,key,symbol	8	0
+⎗	PREVIOUS PAGE	previous,page	8	0
+⎘	NEXT PAGE	next,page	8	0
+⎙	PRINT SCREEN SYMBOL	print,screen,symbol	8	0
+⎚	CLEAR SCREEN SYMBOL	clear,screen,symbol	8	0
+⎛	LEFT PARENTHESIS UPPER HOOK	left,parenthesis,upper,hook	8	0
+⎜	LEFT PARENTHESIS EXTENSION	left,parenthesis,extension	8	0
+⎝	LEFT PARENTHESIS LOWER HOOK	left,parenthesis,lower,hook	8	0
+⎞	RIGHT PARENTHESIS UPPER HOOK	right,parenthesis,upper,hook	8	0
+⎟	RIGHT PARENTHESIS EXTENSION	right,parenthesis,extension	8	0
+⎠	RIGHT PARENTHESIS LOWER HOOK	right,parenthesis,lower,hook	8	0
+⎡	LEFT SQUARE BRACKET UPPER CORNER	left,square,bracket,upper,corner	8	0
+⎢	LEFT SQUARE BRACKET EXTENSION	left,square,bracket,extension	8	0
+⎣	LEFT SQUARE BRACKET LOWER CORNER	left,square,bracket,lower,corner	8	0
+⎤	RIGHT SQUARE BRACKET UPPER CORNER	right,square,bracket,upper,corner	8	0
+⎥	RIGHT SQUARE BRACKET EXTENSION	right,square,bracket,extension	8	0
+⎦	RIGHT SQUARE BRACKET LOWER CORNER	right,square,bracket,lower,corner	8	0
+⎧	LEFT CURLY BRACKET UPPER HOOK	left,curly,bracket,upper,hook	8	0
+⎨	LEFT CURLY BRACKET MIDDLE PIECE	left,curly,bracket,middle,piece	8	0
+⎩	LEFT CURLY BRACKET LOWER HOOK	left,curly,bracket,lower,hook	8	0
+⎪	CURLY BRACKET EXTENSION	curly,bracket,extension	8	0
+⎫	RIGHT CURLY BRACKET UPPER HOOK	right,curly,bracket,upper,hook	8	0
+⎬	RIGHT CURLY BRACKET MIDDLE PIECE	right,curly,bracket,middle,piece	8	0
+⎭	RIGHT CURLY BRACKET LOWER HOOK	right,curly,bracket,lower,hook	8	0
+⎮	INTEGRAL EXTENSION	integral,extension	8	0
+⎯	HORIZONTAL LINE EXTENSION	horizontal,line,extension	8	0
+⎰	UPPER LEFT OR LOWER RIGHT CURLY BRACKET SECTION	upper,left,lower,right,curly,bracket,section	8	0
+⎱	UPPER RIGHT OR LOWER LEFT CURLY BRACKET SECTION	upper,right,lower,left,curly,bracket,section	8	0
+⎲	SUMMATION TOP	summation,top	8	0
+⎳	SUMMATION BOTTOM	summation,bottom	8	0
+⎴	TOP SQUARE BRACKET	top,square,bracket	8	0
+⎵	BOTTOM SQUARE BRACKET	bottom,square,bracket	8	0
+⎶	BOTTOM SQUARE BRACKET OVER TOP SQUARE BRACKET	bottom,square,bracket,over,top	8	0
+⎷	RADICAL SYMBOL BOTTOM	radical,symbol,bottom	8	0
+⎸	LEFT VERTICAL BOX LINE	left,vertical,box,line	8	0
+⎹	RIGHT VERTICAL BOX LINE	right,vertical,box,line	8	0
+⎺	HORIZONTAL SCAN LINE-1	horizontal,scan,line,1	8	0
+⎻	HORIZONTAL SCAN LINE-3	horizontal,scan,line,3	8	0
+⎼	HORIZONTAL SCAN LINE-7	horizontal,scan,line,7	8	0
+⎽	HORIZONTAL SCAN LINE-9	horizontal,scan,line,9	8	0
+⎾	DENTISTRY SYMBOL LIGHT VERTICAL AND TOP RIGHT	dentistry,symbol,light,vertical,top,right	8	0
+⎿	DENTISTRY SYMBOL LIGHT VERTICAL AND BOTTOM RIGHT	dentistry,symbol,light,vertical,bottom,right	8	0
+⏀	DENTISTRY SYMBOL LIGHT VERTICAL WITH CIRCLE	dentistry,symbol,light,vertical,circle	8	0
+⏁	DENTISTRY SYMBOL LIGHT DOWN AND HORIZONTAL WITH CIRCLE	dentistry,symbol,light,down,horizontal,circle	8	0
+⏂	DENTISTRY SYMBOL LIGHT UP AND HORIZONTAL WITH CIRCLE	dentistry,symbol,light,up,horizontal,circle	8	0
+⏃	DENTISTRY SYMBOL LIGHT VERTICAL WITH TRIANGLE	dentistry,symbol,light,vertical,triangle	8	0
+⏄	DENTISTRY SYMBOL LIGHT DOWN AND HORIZONTAL WITH TRIANGLE	dentistry,symbol,light,down,horizontal,triangle	8	0
+⏅	DENTISTRY SYMBOL LIGHT UP AND HORIZONTAL WITH TRIANGLE	dentistry,symbol,light,up,horizontal,triangle	8	0
+⏆	DENTISTRY SYMBOL LIGHT VERTICAL AND WAVE	dentistry,symbol,light,vertical,wave	8	0
+⏇	DENTISTRY SYMBOL LIGHT DOWN AND HORIZONTAL WITH WAVE	dentistry,symbol,light,down,horizontal,wave	8	0
+⏈	DENTISTRY SYMBOL LIGHT UP AND HORIZONTAL WITH WAVE	dentistry,symbol,light,up,horizontal,wave	8	0
+⏉	DENTISTRY SYMBOL LIGHT DOWN AND HORIZONTAL	dentistry,symbol,light,down,horizontal	8	0
+⏊	DENTISTRY SYMBOL LIGHT UP AND HORIZONTAL	dentistry,symbol,light,up,horizontal	8	0
+⏋	DENTISTRY SYMBOL LIGHT VERTICAL AND TOP LEFT	dentistry,symbol,light,vertical,top,left	8	0
+⏌	DENTISTRY SYMBOL LIGHT VERTICAL AND BOTTOM LEFT	dentistry,symbol,light,vertical,bottom,left	8	0
+⏍	SQUARE FOOT	square,foot	8	0
+⏎	RETURN SYMBOL	return,symbol	8	0
+⏏	EJECT SYMBOL	eject,symbol	8	0
+⏐	VERTICAL LINE EXTENSION	vertical,line,extension	8	0
+⏑	METRICAL BREVE	metrical,breve	8	0
+⏒	METRICAL LONG OVER SHORT	metrical,long,over,short	8	0
+⏓	METRICAL SHORT OVER LONG	metrical,short,over,long	8	0
+⏔	METRICAL LONG OVER TWO SHORTS	metrical,long,over,two,shorts	8	0
+⏕	METRICAL TWO SHORTS OVER LONG	metrical,two,shorts,over,long	8	0
+⏖	METRICAL TWO SHORTS JOINED	metrical,two,shorts,joined	8	0
+⏗	METRICAL TRISEME	metrical,triseme	8	0
+⏘	METRICAL TETRASEME	metrical,tetraseme	8	0
+⏙	METRICAL PENTASEME	metrical,pentaseme	8	0
+⏚	EARTH GROUND	earth,ground	8	0
+⏛	FUSE	fuse	8	0
+⏜	TOP PARENTHESIS	top,parenthesis	8	0
+⏝	BOTTOM PARENTHESIS	bottom,parenthesis	8	0
+⏞	TOP CURLY BRACKET	top,curly,bracket	8	0
+⏟	BOTTOM CURLY BRACKET	bottom,curly,bracket	8	0
+⏠	TOP TORTOISE SHELL BRACKET	top,tortoise,shell,bracket	8	0
+⏡	BOTTOM TORTOISE SHELL BRACKET	bottom,tortoise,shell,bracket	8	0
+⏢	WHITE TRAPEZIUM	white,trapezium	8	0
+⏣	BENZENE RING WITH CIRCLE	benzene,ring,circle	8	0
+⏤	STRAIGHTNESS	straightness	8	0
+⏥	FLATNESS	flatness	8	0
+⏦	AC CURRENT	ac,current	8	0
+⏧	ELECTRICAL INTERSECTION	electrical,intersection	8	0
+⏨	DECIMAL EXPONENT SYMBOL	decimal,exponent,symbol	8	0
+⏩	BLACK RIGHT-POINTING DOUBLE TRIANGLE	black,right,pointing,double,triangle	8	0
+⏪	BLACK LEFT-POINTING DOUBLE TRIANGLE	black,left,pointing,double,triangle	8	0
+⏫	BLACK UP-POINTING DOUBLE TRIANGLE	black,up,pointing,double,triangle	8	0
+⏬	BLACK DOWN-POINTING DOUBLE TRIANGLE	black,down,pointing,double,triangle	8	0
+⏭	BLACK RIGHT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR	black,right,pointing,double,triangle,vertical,bar	8	0
+⏮	BLACK LEFT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR	black,left,pointing,double,triangle,vertical,bar	8	0
+⏯	BLACK RIGHT-POINTING TRIANGLE WITH DOUBLE VERTICAL BAR	black,right,pointing,triangle,double,vertical,bar	8	0
+⏰	ALARM CLOCK	alarm,clock	8	0
+⏱	STOPWATCH	stopwatch	8	0
+⏲	TIMER CLOCK	timer,clock	8	0
+⏳	HOURGLASS WITH FLOWING SAND	hourglass,flowing,sand	8	0
+⏴	BLACK MEDIUM LEFT-POINTING TRIANGLE	black,medium,left,pointing,triangle	8	0
+⏵	BLACK MEDIUM RIGHT-POINTING TRIANGLE	black,medium,right,pointing,triangle	8	0
+⏶	BLACK MEDIUM UP-POINTING TRIANGLE	black,medium,up,pointing,triangle	8	0
+⏷	BLACK MEDIUM DOWN-POINTING TRIANGLE	black,medium,down,pointing,triangle	8	0
+⏸	DOUBLE VERTICAL BAR	double,vertical,bar	8	0
+⏹	BLACK SQUARE FOR STOP	black,square,stop	8	0
+⏺	BLACK CIRCLE FOR RECORD	black,circle,record	8	0
+⏻	POWER SYMBOL	power,symbol	8	0
+⏼	POWER ON-OFF SYMBOL	power,on,off,symbol	8	0
+⏽	POWER ON SYMBOL	power,on,symbol	8	0
+⏾	POWER SLEEP SYMBOL	power,sleep,symbol	8	0
+⏿	OBSERVER EYE SYMBOL	observer,eye,symbol	8	0
+①	CIRCLED DIGIT ONE	circled,digit,one	9	0
+②	CIRCLED DIGIT TWO	circled,digit,two	9	0
+③	CIRCLED DIGIT THREE	circled,digit,three	9	0
+④	CIRCLED DIGIT FOUR	circled,digit,four	9	0
+⑤	CIRCLED DIGIT FIVE	circled,digit,five	9	0
+⑥	CIRCLED DIGIT SIX	circled,digit,six	9	0
+⑦	CIRCLED DIGIT SEVEN	circled,digit,seven	9	0
+⑧	CIRCLED DIGIT EIGHT	circled,digit,eight	9	0
+⑨	CIRCLED DIGIT NINE	circled,digit,nine	9	0
+⑩	CIRCLED NUMBER TEN	circled,number,ten	9	0
+⑪	CIRCLED NUMBER ELEVEN	circled,number,eleven	9	0
+⑫	CIRCLED NUMBER TWELVE	circled,number,twelve	9	0
+⑬	CIRCLED NUMBER THIRTEEN	circled,number,thirteen	9	0
+⑭	CIRCLED NUMBER FOURTEEN	circled,number,fourteen	9	0
+⑮	CIRCLED NUMBER FIFTEEN	circled,number,fifteen	9	0
+⑯	CIRCLED NUMBER SIXTEEN	circled,number,sixteen	9	0
+⑰	CIRCLED NUMBER SEVENTEEN	circled,number,seventeen	9	0
+⑱	CIRCLED NUMBER EIGHTEEN	circled,number,eighteen	9	0
+⑲	CIRCLED NUMBER NINETEEN	circled,number,nineteen	9	0
+⑳	CIRCLED NUMBER TWENTY	circled,number,twenty	9	0
+⑴	PARENTHESIZED DIGIT ONE	parenthesized,digit,one	9	0
+⑵	PARENTHESIZED DIGIT TWO	parenthesized,digit,two	9	0
+⑶	PARENTHESIZED DIGIT THREE	parenthesized,digit,three	9	0
+⑷	PARENTHESIZED DIGIT FOUR	parenthesized,digit,four	9	0
+⑸	PARENTHESIZED DIGIT FIVE	parenthesized,digit,five	9	0
+⑹	PARENTHESIZED DIGIT SIX	parenthesized,digit,six	9	0
+⑺	PARENTHESIZED DIGIT SEVEN	parenthesized,digit,seven	9	0
+⑻	PARENTHESIZED DIGIT EIGHT	parenthesized,digit,eight	9	0
+⑼	PARENTHESIZED DIGIT NINE	parenthesized,digit,nine	9	0
+⑽	PARENTHESIZED NUMBER TEN	parenthesized,number,ten	9	0
+⑾	PARENTHESIZED NUMBER ELEVEN	parenthesized,number,eleven	9	0
+⑿	PARENTHESIZED NUMBER TWELVE	parenthesized,number,twelve	9	0
+⒀	PARENTHESIZED NUMBER THIRTEEN	parenthesized,number,thirteen	9	0
+⒁	PARENTHESIZED NUMBER FOURTEEN	parenthesized,number,fourteen	9	0
+⒂	PARENTHESIZED NUMBER FIFTEEN	parenthesized,number,fifteen	9	0
+⒃	PARENTHESIZED NUMBER SIXTEEN	parenthesized,number,sixteen	9	0
+⒄	PARENTHESIZED NUMBER SEVENTEEN	parenthesized,number,seventeen	9	0
+⒅	PARENTHESIZED NUMBER EIGHTEEN	parenthesized,number,eighteen	9	0
+⒆	PARENTHESIZED NUMBER NINETEEN	parenthesized,number,nineteen	9	0
+⒇	PARENTHESIZED NUMBER TWENTY	parenthesized,number,twenty	9	0
+⒈	DIGIT ONE FULL STOP	digit,one,full,stop	9	0
+⒉	DIGIT TWO FULL STOP	digit,two,full,stop	9	0
+⒊	DIGIT THREE FULL STOP	digit,three,full,stop	9	0
+⒋	DIGIT FOUR FULL STOP	digit,four,full,stop	9	0
+⒌	DIGIT FIVE FULL STOP	digit,five,full,stop	9	0
+⒍	DIGIT SIX FULL STOP	digit,six,full,stop	9	0
+⒎	DIGIT SEVEN FULL STOP	digit,seven,full,stop	9	0
+⒏	DIGIT EIGHT FULL STOP	digit,eight,full,stop	9	0
+⒐	DIGIT NINE FULL STOP	digit,nine,full,stop	9	0
+⒑	NUMBER TEN FULL STOP	number,ten,full,stop	9	0
+⒒	NUMBER ELEVEN FULL STOP	number,eleven,full,stop	9	0
+⒓	NUMBER TWELVE FULL STOP	number,twelve,full,stop	9	0
+⒔	NUMBER THIRTEEN FULL STOP	number,thirteen,full,stop	9	0
+⒕	NUMBER FOURTEEN FULL STOP	number,fourteen,full,stop	9	0
+⒖	NUMBER FIFTEEN FULL STOP	number,fifteen,full,stop	9	0
+⒗	NUMBER SIXTEEN FULL STOP	number,sixteen,full,stop	9	0
+⒘	NUMBER SEVENTEEN FULL STOP	number,seventeen,full,stop	9	0
+⒙	NUMBER EIGHTEEN FULL STOP	number,eighteen,full,stop	9	0
+⒚	NUMBER NINETEEN FULL STOP	number,nineteen,full,stop	9	0
+⒛	NUMBER TWENTY FULL STOP	number,twenty,full,stop	9	0
+⒜	PARENTHESIZED LATIN SMALL LETTER A	parenthesized,latin,small,letter	9	0
+⒝	PARENTHESIZED LATIN SMALL LETTER B	parenthesized,latin,small,letter,b	9	0
+⒞	PARENTHESIZED LATIN SMALL LETTER C	parenthesized,latin,small,letter,c	9	0
+⒟	PARENTHESIZED LATIN SMALL LETTER D	parenthesized,latin,small,letter,d	9	0
+⒠	PARENTHESIZED LATIN SMALL LETTER E	parenthesized,latin,small,letter,e	9	0
+⒡	PARENTHESIZED LATIN SMALL LETTER F	parenthesized,latin,small,letter,f	9	0
+⒢	PARENTHESIZED LATIN SMALL LETTER G	parenthesized,latin,small,letter,g	9	0
+⒣	PARENTHESIZED LATIN SMALL LETTER H	parenthesized,latin,small,letter,h	9	0
+⒤	PARENTHESIZED LATIN SMALL LETTER I	parenthesized,latin,small,letter,i	9	0
+⒥	PARENTHESIZED LATIN SMALL LETTER J	parenthesized,latin,small,letter,j	9	0
+⒦	PARENTHESIZED LATIN SMALL LETTER K	parenthesized,latin,small,letter,k	9	0
+⒧	PARENTHESIZED LATIN SMALL LETTER L	parenthesized,latin,small,letter,l	9	0
+⒨	PARENTHESIZED LATIN SMALL LETTER M	parenthesized,latin,small,letter,m	9	0
+⒩	PARENTHESIZED LATIN SMALL LETTER N	parenthesized,latin,small,letter,n	9	0
+⒪	PARENTHESIZED LATIN SMALL LETTER O	parenthesized,latin,small,letter,o	9	0
+⒫	PARENTHESIZED LATIN SMALL LETTER P	parenthesized,latin,small,letter,p	9	0
+⒬	PARENTHESIZED LATIN SMALL LETTER Q	parenthesized,latin,small,letter,q	9	0
+⒭	PARENTHESIZED LATIN SMALL LETTER R	parenthesized,latin,small,letter,r	9	0
+⒮	PARENTHESIZED LATIN SMALL LETTER S	parenthesized,latin,small,letter,s	9	0
+⒯	PARENTHESIZED LATIN SMALL LETTER T	parenthesized,latin,small,letter,t	9	0
+⒰	PARENTHESIZED LATIN SMALL LETTER U	parenthesized,latin,small,letter,u	9	0
+⒱	PARENTHESIZED LATIN SMALL LETTER V	parenthesized,latin,small,letter,v	9	0
+⒲	PARENTHESIZED LATIN SMALL LETTER W	parenthesized,latin,small,letter,w	9	0
+⒳	PARENTHESIZED LATIN SMALL LETTER X	parenthesized,latin,small,letter,x	9	0
+⒴	PARENTHESIZED LATIN SMALL LETTER Y	parenthesized,latin,small,letter,y	9	0
+⒵	PARENTHESIZED LATIN SMALL LETTER Z	parenthesized,latin,small,letter,z	9	0
+Ⓐ	CIRCLED LATIN CAPITAL LETTER A	circled,latin,capital,letter	9	0
+Ⓑ	CIRCLED LATIN CAPITAL LETTER B	circled,latin,capital,letter,b	9	0
+Ⓒ	CIRCLED LATIN CAPITAL LETTER C	circled,latin,capital,letter,c	9	0
+Ⓓ	CIRCLED LATIN CAPITAL LETTER D	circled,latin,capital,letter,d	9	0
+Ⓔ	CIRCLED LATIN CAPITAL LETTER E	circled,latin,capital,letter,e	9	0
+Ⓕ	CIRCLED LATIN CAPITAL LETTER F	circled,latin,capital,letter,f	9	0
+Ⓖ	CIRCLED LATIN CAPITAL LETTER G	circled,latin,capital,letter,g	9	0
+Ⓗ	CIRCLED LATIN CAPITAL LETTER H	circled,latin,capital,letter,h	9	0
+Ⓘ	CIRCLED LATIN CAPITAL LETTER I	circled,latin,capital,letter,i	9	0
+Ⓙ	CIRCLED LATIN CAPITAL LETTER J	circled,latin,capital,letter,j	9	0
+Ⓚ	CIRCLED LATIN CAPITAL LETTER K	circled,latin,capital,letter,k	9	0
+Ⓛ	CIRCLED LATIN CAPITAL LETTER L	circled,latin,capital,letter,l	9	0
+Ⓜ	CIRCLED LATIN CAPITAL LETTER M	circled,latin,capital,letter,m	9	0
+Ⓝ	CIRCLED LATIN CAPITAL LETTER N	circled,latin,capital,letter,n	9	0
+Ⓞ	CIRCLED LATIN CAPITAL LETTER O	circled,latin,capital,letter,o	9	0
+Ⓟ	CIRCLED LATIN CAPITAL LETTER P	circled,latin,capital,letter,p	9	0
+Ⓠ	CIRCLED LATIN CAPITAL LETTER Q	circled,latin,capital,letter,q	9	0
+Ⓡ	CIRCLED LATIN CAPITAL LETTER R	circled,latin,capital,letter,r	9	0
+Ⓢ	CIRCLED LATIN CAPITAL LETTER S	circled,latin,capital,letter,s	9	0
+Ⓣ	CIRCLED LATIN CAPITAL LETTER T	circled,latin,capital,letter,t	9	0
+Ⓤ	CIRCLED LATIN CAPITAL LETTER U	circled,latin,capital,letter,u	9	0
+Ⓥ	CIRCLED LATIN CAPITAL LETTER V	circled,latin,capital,letter,v	9	0
+Ⓦ	CIRCLED LATIN CAPITAL LETTER W	circled,latin,capital,letter,w	9	0
+Ⓧ	CIRCLED LATIN CAPITAL LETTER X	circled,latin,capital,letter,x	9	0
+Ⓨ	CIRCLED LATIN CAPITAL LETTER Y	circled,latin,capital,letter,y	9	0
+Ⓩ	CIRCLED LATIN CAPITAL LETTER Z	circled,latin,capital,letter,z	9	0
+ⓐ	CIRCLED LATIN SMALL LETTER A	circled,latin,small,letter	9	0
+ⓑ	CIRCLED LATIN SMALL LETTER B	circled,latin,small,letter,b	9	0
+ⓒ	CIRCLED LATIN SMALL LETTER C	circled,latin,small,letter,c	9	0
+ⓓ	CIRCLED LATIN SMALL LETTER D	circled,latin,small,letter,d	9	0
+ⓔ	CIRCLED LATIN SMALL LETTER E	circled,latin,small,letter,e	9	0
+ⓕ	CIRCLED LATIN SMALL LETTER F	circled,latin,small,letter,f	9	0
+ⓖ	CIRCLED LATIN SMALL LETTER G	circled,latin,small,letter,g	9	0
+ⓗ	CIRCLED LATIN SMALL LETTER H	circled,latin,small,letter,h	9	0
+ⓘ	CIRCLED LATIN SMALL LETTER I	circled,latin,small,letter,i	9	0
+ⓙ	CIRCLED LATIN SMALL LETTER J	circled,latin,small,letter,j	9	0
+ⓚ	CIRCLED LATIN SMALL LETTER K	circled,latin,small,letter,k	9	0
+ⓛ	CIRCLED LATIN SMALL LETTER L	circled,latin,small,letter,l	9	0
+ⓜ	CIRCLED LATIN SMALL LETTER M	circled,latin,small,letter,m	9	0
+ⓝ	CIRCLED LATIN SMALL LETTER N	circled,latin,small,letter,n	9	0
+ⓞ	CIRCLED LATIN SMALL LETTER O	circled,latin,small,letter,o	9	0
+ⓟ	CIRCLED LATIN SMALL LETTER P	circled,latin,small,letter,p	9	0
+ⓠ	CIRCLED LATIN SMALL LETTER Q	circled,latin,small,letter,q	9	0
+ⓡ	CIRCLED LATIN SMALL LETTER R	circled,latin,small,letter,r	9	0
+ⓢ	CIRCLED LATIN SMALL LETTER S	circled,latin,small,letter,s	9	0
+ⓣ	CIRCLED LATIN SMALL LETTER T	circled,latin,small,letter,t	9	0
+ⓤ	CIRCLED LATIN SMALL LETTER U	circled,latin,small,letter,u	9	0
+ⓥ	CIRCLED LATIN SMALL LETTER V	circled,latin,small,letter,v	9	0
+ⓦ	CIRCLED LATIN SMALL LETTER W	circled,latin,small,letter,w	9	0
+ⓧ	CIRCLED LATIN SMALL LETTER X	circled,latin,small,letter,x	9	0
+ⓨ	CIRCLED LATIN SMALL LETTER Y	circled,latin,small,letter,y	9	0
+ⓩ	CIRCLED LATIN SMALL LETTER Z	circled,latin,small,letter,z	9	0
+⓪	CIRCLED DIGIT ZERO	circled,digit,zero	9	0
+⓫	NEGATIVE CIRCLED NUMBER ELEVEN	negative,circled,number,eleven	9	0
+⓬	NEGATIVE CIRCLED NUMBER TWELVE	negative,circled,number,twelve	9	0
+⓭	NEGATIVE CIRCLED NUMBER THIRTEEN	negative,circled,number,thirteen	9	0
+⓮	NEGATIVE CIRCLED NUMBER FOURTEEN	negative,circled,number,fourteen	9	0
+⓯	NEGATIVE CIRCLED NUMBER FIFTEEN	negative,circled,number,fifteen	9	0
+⓰	NEGATIVE CIRCLED NUMBER SIXTEEN	negative,circled,number,sixteen	9	0
+⓱	NEGATIVE CIRCLED NUMBER SEVENTEEN	negative,circled,number,seventeen	9	0
+⓲	NEGATIVE CIRCLED NUMBER EIGHTEEN	negative,circled,number,eighteen	9	0
+⓳	NEGATIVE CIRCLED NUMBER NINETEEN	negative,circled,number,nineteen	9	0
+⓴	NEGATIVE CIRCLED NUMBER TWENTY	negative,circled,number,twenty	9	0
+⓵	DOUBLE CIRCLED DIGIT ONE	double,circled,digit,one	9	0
+⓶	DOUBLE CIRCLED DIGIT TWO	double,circled,digit,two	9	0
+⓷	DOUBLE CIRCLED DIGIT THREE	double,circled,digit,three	9	0
+⓸	DOUBLE CIRCLED DIGIT FOUR	double,circled,digit,four	9	0
+⓹	DOUBLE CIRCLED DIGIT FIVE	double,circled,digit,five	9	0
+⓺	DOUBLE CIRCLED DIGIT SIX	double,circled,digit,six	9	0
+⓻	DOUBLE CIRCLED DIGIT SEVEN	double,circled,digit,seven	9	0
+⓼	DOUBLE CIRCLED DIGIT EIGHT	double,circled,digit,eight	9	0
+⓽	DOUBLE CIRCLED DIGIT NINE	double,circled,digit,nine	9	0
+⓾	DOUBLE CIRCLED NUMBER TEN	double,circled,number,ten	9	0
+⓿	NEGATIVE CIRCLED DIGIT ZERO	negative,circled,digit,zero	9	0
+✀	BLACK SAFETY SCISSORS	black,safety,scissors	10	0
+✁	UPPER BLADE SCISSORS	upper,blade,scissors	10	0
+✂	BLACK SCISSORS	black,scissors	10	0
+✃	LOWER BLADE SCISSORS	lower,blade,scissors	10	0
+✄	WHITE SCISSORS	white,scissors	10	0
+✅	WHITE HEAVY CHECK MARK	white,heavy,check,mark	10	0
+✆	TELEPHONE LOCATION SIGN	telephone,location,sign	10	0
+✇	TAPE DRIVE	tape,drive	10	0
+✈	AIRPLANE	airplane	10	0
+✉	ENVELOPE	envelope	10	0
+✊	RAISED FIST	raised,fist	10	0
+✋	RAISED HAND	raised,hand	10	0
+✌	VICTORY HAND	victory,hand	10	0
+✍	WRITING HAND	writing,hand	10	0
+✎	LOWER RIGHT PENCIL	lower,right,pencil	10	0
+✏	PENCIL	pencil	10	0
+✐	UPPER RIGHT PENCIL	upper,right,pencil	10	0
+✑	WHITE NIB	white,nib	10	0
+✒	BLACK NIB	black,nib	10	0
+✓	CHECK MARK	check,mark	10	0
+✔	HEAVY CHECK MARK	heavy,check,mark	10	0
+✕	MULTIPLICATION X	multiplication,x	10	0
+✖	HEAVY MULTIPLICATION X	heavy,multiplication,x	10	0
+✗	BALLOT X	ballot,x	10	0
+✘	HEAVY BALLOT X	heavy,ballot,x	10	0
+✙	OUTLINED GREEK CROSS	outlined,greek,cross	10	0
+✚	HEAVY GREEK CROSS	heavy,greek,cross	10	0
+✛	OPEN CENTRE CROSS	open,centre,cross	10	0
+✜	HEAVY OPEN CENTRE CROSS	heavy,open,centre,cross	10	0
+✝	LATIN CROSS	latin,cross	10	0
+✞	SHADOWED WHITE LATIN CROSS	shadowed,white,latin,cross	10	0
+✟	OUTLINED LATIN CROSS	outlined,latin,cross	10	0
+✠	MALTESE CROSS	maltese,cross	10	0
+✡	STAR OF DAVID	star,david	10	0
+✢	FOUR TEARDROP-SPOKED ASTERISK	four,teardrop,spoked,asterisk	10	0
+✣	FOUR BALLOON-SPOKED ASTERISK	four,balloon,spoked,asterisk	10	0
+✤	HEAVY FOUR BALLOON-SPOKED ASTERISK	heavy,four,balloon,spoked,asterisk	10	0
+✥	FOUR CLUB-SPOKED ASTERISK	four,club,spoked,asterisk	10	0
+✦	BLACK FOUR POINTED STAR	black,four,pointed,star	10	0
+✧	WHITE FOUR POINTED STAR	white,four,pointed,star	10	0
+✨	SPARKLES	sparkles	10	0
+✩	STRESS OUTLINED WHITE STAR	stress,outlined,white,star	10	0
+✪	CIRCLED WHITE STAR	circled,white,star	10	0
+✫	OPEN CENTRE BLACK STAR	open,centre,black,star	10	0
+✬	BLACK CENTRE WHITE STAR	black,centre,white,star	10	0
+✭	OUTLINED BLACK STAR	outlined,black,star	10	0
+✮	HEAVY OUTLINED BLACK STAR	heavy,outlined,black,star	10	0
+✯	PINWHEEL STAR	pinwheel,star	10	0
+✰	SHADOWED WHITE STAR	shadowed,white,star	10	0
+✱	HEAVY ASTERISK	heavy,asterisk	10	0
+✲	OPEN CENTRE ASTERISK	open,centre,asterisk	10	0
+✳	EIGHT SPOKED ASTERISK	eight,spoked,asterisk	10	0
+✴	EIGHT POINTED BLACK STAR	eight,pointed,black,star	10	0
+✵	EIGHT POINTED PINWHEEL STAR	eight,pointed,pinwheel,star	10	0
+✶	SIX POINTED BLACK STAR	six,pointed,black,star	10	0
+✷	EIGHT POINTED RECTILINEAR BLACK STAR	eight,pointed,rectilinear,black,star	10	0
+✸	HEAVY EIGHT POINTED RECTILINEAR BLACK STAR	heavy,eight,pointed,rectilinear,black,star	10	0
+✹	TWELVE POINTED BLACK STAR	twelve,pointed,black,star	10	0
+✺	SIXTEEN POINTED ASTERISK	sixteen,pointed,asterisk	10	0
+✻	TEARDROP-SPOKED ASTERISK	teardrop,spoked,asterisk	10	0
+✼	OPEN CENTRE TEARDROP-SPOKED ASTERISK	open,centre,teardrop,spoked,asterisk	10	0
+✽	HEAVY TEARDROP-SPOKED ASTERISK	heavy,teardrop,spoked,asterisk	10	0
+✾	SIX PETALLED BLACK AND WHITE FLORETTE	six,petalled,black,white,florette	10	0
+✿	BLACK FLORETTE	black,florette	10	0
+❀	WHITE FLORETTE	white,florette	10	0
+❁	EIGHT PETALLED OUTLINED BLACK FLORETTE	eight,petalled,outlined,black,florette	10	0
+❂	CIRCLED OPEN CENTRE EIGHT POINTED STAR	circled,open,centre,eight,pointed,star	10	0
+❃	HEAVY TEARDROP-SPOKED PINWHEEL ASTERISK	heavy,teardrop,spoked,pinwheel,asterisk	10	0
+❄	SNOWFLAKE	snowflake	10	0
+❅	TIGHT TRIFOLIATE SNOWFLAKE	tight,trifoliate,snowflake	10	0
+❆	HEAVY CHEVRON SNOWFLAKE	heavy,chevron,snowflake	10	0
+❇	SPARKLE	sparkle	10	0
+❈	HEAVY SPARKLE	heavy,sparkle	10	0
+❉	BALLOON-SPOKED ASTERISK	balloon,spoked,asterisk	10	0
+❊	EIGHT TEARDROP-SPOKED PROPELLER ASTERISK	eight,teardrop,spoked,propeller,asterisk	10	0
+❋	HEAVY EIGHT TEARDROP-SPOKED PROPELLER ASTERISK	heavy,eight,teardrop,spoked,propeller,asterisk	10	0
+❌	CROSS MARK	cross,mark	10	0
+❍	SHADOWED WHITE CIRCLE	shadowed,white,circle	10	0
+❎	NEGATIVE SQUARED CROSS MARK	negative,squared,cross,mark	10	0
+❏	LOWER RIGHT DROP-SHADOWED WHITE SQUARE	lower,right,drop,shadowed,white,square	10	0
+❐	UPPER RIGHT DROP-SHADOWED WHITE SQUARE	upper,right,drop,shadowed,white,square	10	0
+❑	LOWER RIGHT SHADOWED WHITE SQUARE	lower,right,shadowed,white,square	10	0
+❒	UPPER RIGHT SHADOWED WHITE SQUARE	upper,right,shadowed,white,square	10	0
+❓	BLACK QUESTION MARK ORNAMENT	black,question,mark,ornament	10	0
+❔	WHITE QUESTION MARK ORNAMENT	white,question,mark,ornament	10	0
+❕	WHITE EXCLAMATION MARK ORNAMENT	white,exclamation,mark,ornament	10	0
+❖	BLACK DIAMOND MINUS WHITE X	black,diamond,minus,white,x	10	0
+❗	HEAVY EXCLAMATION MARK SYMBOL	heavy,exclamation,mark,symbol	10	0
+❘	LIGHT VERTICAL BAR	light,vertical,bar	10	0
+❙	MEDIUM VERTICAL BAR	medium,vertical,bar	10	0
+❚	HEAVY VERTICAL BAR	heavy,vertical,bar	10	0
+❛	HEAVY SINGLE TURNED COMMA QUOTATION MARK ORNAMENT	heavy,single,turned,comma,quotation,mark,ornament	10	0
+❜	HEAVY SINGLE COMMA QUOTATION MARK ORNAMENT	heavy,single,comma,quotation,mark,ornament	10	0
+❝	HEAVY DOUBLE TURNED COMMA QUOTATION MARK ORNAMENT	heavy,double,turned,comma,quotation,mark,ornament	10	0
+❞	HEAVY DOUBLE COMMA QUOTATION MARK ORNAMENT	heavy,double,comma,quotation,mark,ornament	10	0
+❟	HEAVY LOW SINGLE COMMA QUOTATION MARK ORNAMENT	heavy,low,single,comma,quotation,mark,ornament	10	0
+❠	HEAVY LOW DOUBLE COMMA QUOTATION MARK ORNAMENT	heavy,low,double,comma,quotation,mark,ornament	10	0
+❡	CURVED STEM PARAGRAPH SIGN ORNAMENT	curved,stem,paragraph,sign,ornament	10	0
+❢	HEAVY EXCLAMATION MARK ORNAMENT	heavy,exclamation,mark,ornament	10	0
+❣	HEAVY HEART EXCLAMATION MARK ORNAMENT	heavy,heart,exclamation,mark,ornament	10	0
+❤	HEAVY BLACK HEART	heavy,black,heart	10	0
+❥	ROTATED HEAVY BLACK HEART BULLET	rotated,heavy,black,heart,bullet	10	0
+❦	FLORAL HEART	floral,heart	10	0
+❧	ROTATED FLORAL HEART BULLET	rotated,floral,heart,bullet	10	0
+❨	MEDIUM LEFT PARENTHESIS ORNAMENT	medium,left,parenthesis,ornament	10	0
+❩	MEDIUM RIGHT PARENTHESIS ORNAMENT	medium,right,parenthesis,ornament	10	0
+❪	MEDIUM FLATTENED LEFT PARENTHESIS ORNAMENT	medium,flattened,left,parenthesis,ornament	10	0
+❫	MEDIUM FLATTENED RIGHT PARENTHESIS ORNAMENT	medium,flattened,right,parenthesis,ornament	10	0
+❬	MEDIUM LEFT-POINTING ANGLE BRACKET ORNAMENT	medium,left,pointing,angle,bracket,ornament	10	0
+❭	MEDIUM RIGHT-POINTING ANGLE BRACKET ORNAMENT	medium,right,pointing,angle,bracket,ornament	10	0
+❮	HEAVY LEFT-POINTING ANGLE QUOTATION MARK ORNAMENT	heavy,left,pointing,angle,quotation,mark,ornament	10	0
+❯	HEAVY RIGHT-POINTING ANGLE QUOTATION MARK ORNAMENT	heavy,right,pointing,angle,quotation,mark,ornament	10	0
+❰	HEAVY LEFT-POINTING ANGLE BRACKET ORNAMENT	heavy,left,pointing,angle,bracket,ornament	10	0
+❱	HEAVY RIGHT-POINTING ANGLE BRACKET ORNAMENT	heavy,right,pointing,angle,bracket,ornament	10	0
+❲	LIGHT LEFT TORTOISE SHELL BRACKET ORNAMENT	light,left,tortoise,shell,bracket,ornament	10	0
+❳	LIGHT RIGHT TORTOISE SHELL BRACKET ORNAMENT	light,right,tortoise,shell,bracket,ornament	10	0
+❴	MEDIUM LEFT CURLY BRACKET ORNAMENT	medium,left,curly,bracket,ornament	10	0
+❵	MEDIUM RIGHT CURLY BRACKET ORNAMENT	medium,right,curly,bracket,ornament	10	0
+❶	DINGBAT NEGATIVE CIRCLED DIGIT ONE	dingbat,negative,circled,digit,one	10	0
+❷	DINGBAT NEGATIVE CIRCLED DIGIT TWO	dingbat,negative,circled,digit,two	10	0
+❸	DINGBAT NEGATIVE CIRCLED DIGIT THREE	dingbat,negative,circled,digit,three	10	0
+❹	DINGBAT NEGATIVE CIRCLED DIGIT FOUR	dingbat,negative,circled,digit,four	10	0
+❺	DINGBAT NEGATIVE CIRCLED DIGIT FIVE	dingbat,negative,circled,digit,five	10	0
+❻	DINGBAT NEGATIVE CIRCLED DIGIT SIX	dingbat,negative,circled,digit,six	10	0
+❼	DINGBAT NEGATIVE CIRCLED DIGIT SEVEN	dingbat,negative,circled,digit,seven	10	0
+❽	DINGBAT NEGATIVE CIRCLED DIGIT EIGHT	dingbat,negative,circled,digit,eight	10	0
+❾	DINGBAT NEGATIVE CIRCLED DIGIT NINE	dingbat,negative,circled,digit,nine	10	0
+❿	DINGBAT NEGATIVE CIRCLED NUMBER TEN	dingbat,negative,circled,number,ten	10	0
+➀	DINGBAT CIRCLED SANS-SERIF DIGIT ONE	dingbat,circled,sans,serif,digit,one	10	0
+➁	DINGBAT CIRCLED SANS-SERIF DIGIT TWO	dingbat,circled,sans,serif,digit,two	10	0
+➂	DINGBAT CIRCLED SANS-SERIF DIGIT THREE	dingbat,circled,sans,serif,digit,three	10	0
+➃	DINGBAT CIRCLED SANS-SERIF DIGIT FOUR	dingbat,circled,sans,serif,digit,four	10	0
+➄	DINGBAT CIRCLED SANS-SERIF DIGIT FIVE	dingbat,circled,sans,serif,digit,five	10	0
+➅	DINGBAT CIRCLED SANS-SERIF DIGIT SIX	dingbat,circled,sans,serif,digit,six	10	0
+➆	DINGBAT CIRCLED SANS-SERIF DIGIT SEVEN	dingbat,circled,sans,serif,digit,seven	10	0
+➇	DINGBAT CIRCLED SANS-SERIF DIGIT EIGHT	dingbat,circled,sans,serif,digit,eight	10	0
+➈	DINGBAT CIRCLED SANS-SERIF DIGIT NINE	dingbat,circled,sans,serif,digit,nine	10	0
+➉	DINGBAT CIRCLED SANS-SERIF NUMBER TEN	dingbat,circled,sans,serif,number,ten	10	0
+➊	DINGBAT NEGATIVE CIRCLED SANS-SERIF DIGIT ONE	dingbat,negative,circled,sans,serif,digit,one	10	0
+➋	DINGBAT NEGATIVE CIRCLED SANS-SERIF DIGIT TWO	dingbat,negative,circled,sans,serif,digit,two	10	0
+➌	DINGBAT NEGATIVE CIRCLED SANS-SERIF DIGIT THREE	dingbat,negative,circled,sans,serif,digit,three	10	0
+➍	DINGBAT NEGATIVE CIRCLED SANS-SERIF DIGIT FOUR	dingbat,negative,circled,sans,serif,digit,four	10	0
+➎	DINGBAT NEGATIVE CIRCLED SANS-SERIF DIGIT FIVE	dingbat,negative,circled,sans,serif,digit,five	10	0
+➏	DINGBAT NEGATIVE CIRCLED SANS-SERIF DIGIT SIX	dingbat,negative,circled,sans,serif,digit,six	10	0
+➐	DINGBAT NEGATIVE CIRCLED SANS-SERIF DIGIT SEVEN	dingbat,negative,circled,sans,serif,digit,seven	10	0
+➑	DINGBAT NEGATIVE CIRCLED SANS-SERIF DIGIT EIGHT	dingbat,negative,circled,sans,serif,digit,eight	10	0
+➒	DINGBAT NEGATIVE CIRCLED SANS-SERIF DIGIT NINE	dingbat,negative,circled,sans,serif,digit,nine	10	0
+➓	DINGBAT NEGATIVE CIRCLED SANS-SERIF NUMBER TEN	dingbat,negative,circled,sans,serif,number,ten	10	0
+➔	HEAVY WIDE-HEADED RIGHTWARDS ARROW	heavy,wide,headed,rightwards,arrow	10	0
+➕	HEAVY PLUS SIGN	heavy,plus,sign	10	0
+➖	HEAVY MINUS SIGN	heavy,minus,sign	10	0
+➗	HEAVY DIVISION SIGN	heavy,division,sign	10	0
+➘	HEAVY SOUTH EAST ARROW	heavy,south,east,arrow	10	0
+➙	HEAVY RIGHTWARDS ARROW	heavy,rightwards,arrow	10	0
+➚	HEAVY NORTH EAST ARROW	heavy,north,east,arrow	10	0
+➛	DRAFTING POINT RIGHTWARDS ARROW	drafting,point,rightwards,arrow	10	0
+➜	HEAVY ROUND-TIPPED RIGHTWARDS ARROW	heavy,round,tipped,rightwards,arrow	10	0
+➝	TRIANGLE-HEADED RIGHTWARDS ARROW	triangle,headed,rightwards,arrow	10	0
+➞	HEAVY TRIANGLE-HEADED RIGHTWARDS ARROW	heavy,triangle,headed,rightwards,arrow	10	0
+➟	DASHED TRIANGLE-HEADED RIGHTWARDS ARROW	dashed,triangle,headed,rightwards,arrow	10	0
+➠	HEAVY DASHED TRIANGLE-HEADED RIGHTWARDS ARROW	heavy,dashed,triangle,headed,rightwards,arrow	10	0
+➡	BLACK RIGHTWARDS ARROW	black,rightwards,arrow	10	0
+➢	THREE-D TOP-LIGHTED RIGHTWARDS ARROWHEAD	three,d,top,lighted,rightwards,arrowhead	10	0
+➣	THREE-D BOTTOM-LIGHTED RIGHTWARDS ARROWHEAD	three,d,bottom,lighted,rightwards,arrowhead	10	0
+➤	BLACK RIGHTWARDS ARROWHEAD	black,rightwards,arrowhead	10	0
+➥	HEAVY BLACK CURVED DOWNWARDS AND RIGHTWARDS ARROW	heavy,black,curved,downwards,rightwards,arrow	10	0
+➦	HEAVY BLACK CURVED UPWARDS AND RIGHTWARDS ARROW	heavy,black,curved,upwards,rightwards,arrow	10	0
+➧	SQUAT BLACK RIGHTWARDS ARROW	squat,black,rightwards,arrow	10	0
+➨	HEAVY CONCAVE-POINTED BLACK RIGHTWARDS ARROW	heavy,concave,pointed,black,rightwards,arrow	10	0
+➩	RIGHT-SHADED WHITE RIGHTWARDS ARROW	right,shaded,white,rightwards,arrow	10	0
+➪	LEFT-SHADED WHITE RIGHTWARDS ARROW	left,shaded,white,rightwards,arrow	10	0
+➫	BACK-TILTED SHADOWED WHITE RIGHTWARDS ARROW	back,tilted,shadowed,white,rightwards,arrow	10	0
+➬	FRONT-TILTED SHADOWED WHITE RIGHTWARDS ARROW	front,tilted,shadowed,white,rightwards,arrow	10	0
+➭	HEAVY LOWER RIGHT-SHADOWED WHITE RIGHTWARDS ARROW	heavy,lower,right,shadowed,white,rightwards,arrow	10	0
+➮	HEAVY UPPER RIGHT-SHADOWED WHITE RIGHTWARDS ARROW	heavy,upper,right,shadowed,white,rightwards,arrow	10	0
+➯	NOTCHED LOWER RIGHT-SHADOWED WHITE RIGHTWARDS ARROW	notched,lower,right,shadowed,white,rightwards,arrow	10	0
+➰	CURLY LOOP	curly,loop	10	0
+➱	NOTCHED UPPER RIGHT-SHADOWED WHITE RIGHTWARDS ARROW	notched,upper,right,shadowed,white,rightwards,arrow	10	0
+➲	CIRCLED HEAVY WHITE RIGHTWARDS ARROW	circled,heavy,white,rightwards,arrow	10	0
+➳	WHITE-FEATHERED RIGHTWARDS ARROW	white,feathered,rightwards,arrow	10	0
+➴	BLACK-FEATHERED SOUTH EAST ARROW	black,feathered,south,east,arrow	10	0
+➵	BLACK-FEATHERED RIGHTWARDS ARROW	black,feathered,rightwards,arrow	10	0
+➶	BLACK-FEATHERED NORTH EAST ARROW	black,feathered,north,east,arrow	10	0
+➷	HEAVY BLACK-FEATHERED SOUTH EAST ARROW	heavy,black,feathered,south,east,arrow	10	0
+➸	HEAVY BLACK-FEATHERED RIGHTWARDS ARROW	heavy,black,feathered,rightwards,arrow	10	0
+➹	HEAVY BLACK-FEATHERED NORTH EAST ARROW	heavy,black,feathered,north,east,arrow	10	0
+➺	TEARDROP-BARBED RIGHTWARDS ARROW	teardrop,barbed,rightwards,arrow	10	0
+➻	HEAVY TEARDROP-SHANKED RIGHTWARDS ARROW	heavy,teardrop,shanked,rightwards,arrow	10	0
+➼	WEDGE-TAILED RIGHTWARDS ARROW	wedge,tailed,rightwards,arrow	10	0
+➽	HEAVY WEDGE-TAILED RIGHTWARDS ARROW	heavy,wedge,tailed,rightwards,arrow	10	0
+➾	OPEN-OUTLINED RIGHTWARDS ARROW	open,outlined,rightwards,arrow	10	0
+➿	DOUBLE CURLY LOOP	double,curly,loop	10	0
+⤀	RIGHTWARDS TWO-HEADED ARROW WITH VERTICAL STROKE	rightwards,two,headed,arrow,vertical,stroke	11	0
+⤁	RIGHTWARDS TWO-HEADED ARROW WITH DOUBLE VERTICAL STROKE	rightwards,two,headed,arrow,double,vertical,stroke	11	0
+⤂	LEFTWARDS DOUBLE ARROW WITH VERTICAL STROKE	leftwards,double,arrow,vertical,stroke	11	0
+⤃	RIGHTWARDS DOUBLE ARROW WITH VERTICAL STROKE	rightwards,double,arrow,vertical,stroke	11	0
+⤄	LEFT RIGHT DOUBLE ARROW WITH VERTICAL STROKE	left,right,double,arrow,vertical,stroke	11	0
+⤅	RIGHTWARDS TWO-HEADED ARROW FROM BAR	rightwards,two,headed,arrow,from,bar	11	0
+⤆	LEFTWARDS DOUBLE ARROW FROM BAR	leftwards,double,arrow,from,bar	11	0
+⤇	RIGHTWARDS DOUBLE ARROW FROM BAR	rightwards,double,arrow,from,bar	11	0
+⤈	DOWNWARDS ARROW WITH HORIZONTAL STROKE	downwards,arrow,horizontal,stroke	11	0
+⤉	UPWARDS ARROW WITH HORIZONTAL STROKE	upwards,arrow,horizontal,stroke	11	0
+⤊	UPWARDS TRIPLE ARROW	upwards,triple,arrow	11	0
+⤋	DOWNWARDS TRIPLE ARROW	downwards,triple,arrow	11	0
+⤌	LEFTWARDS DOUBLE DASH ARROW	leftwards,double,dash,arrow	11	0
+⤍	RIGHTWARDS DOUBLE DASH ARROW	rightwards,double,dash,arrow	11	0
+⤎	LEFTWARDS TRIPLE DASH ARROW	leftwards,triple,dash,arrow	11	0
+⤏	RIGHTWARDS TRIPLE DASH ARROW	rightwards,triple,dash,arrow	11	0
+⤐	RIGHTWARDS TWO-HEADED TRIPLE DASH ARROW	rightwards,two,headed,triple,dash,arrow	11	0
+⤑	RIGHTWARDS ARROW WITH DOTTED STEM	rightwards,arrow,dotted,stem	11	0
+⤒	UPWARDS ARROW TO BAR	upwards,arrow,to,bar	11	0
+⤓	DOWNWARDS ARROW TO BAR	downwards,arrow,to,bar	11	0
+⤔	RIGHTWARDS ARROW WITH TAIL WITH VERTICAL STROKE	rightwards,arrow,tail,vertical,stroke	11	0
+⤕	RIGHTWARDS ARROW WITH TAIL WITH DOUBLE VERTICAL STROKE	rightwards,arrow,tail,double,vertical,stroke	11	0
+⤖	RIGHTWARDS TWO-HEADED ARROW WITH TAIL	rightwards,two,headed,arrow,tail	11	0
+⤗	RIGHTWARDS TWO-HEADED ARROW WITH TAIL WITH VERTICAL STROKE	rightwards,two,headed,arrow,tail,vertical,stroke	11	0
+⤘	RIGHTWARDS TWO-HEADED ARROW WITH TAIL WITH DOUBLE VERTICAL STROKE	rightwards,two,headed,arrow,tail,double,vertical,stroke	11	0
+⤙	LEFTWARDS ARROW-TAIL	leftwards,arrow,tail	11	0
+⤚	RIGHTWARDS ARROW-TAIL	rightwards,arrow,tail	11	0
+⤛	LEFTWARDS DOUBLE ARROW-TAIL	leftwards,double,arrow,tail	11	0
+⤜	RIGHTWARDS DOUBLE ARROW-TAIL	rightwards,double,arrow,tail	11	0
+⤝	LEFTWARDS ARROW TO BLACK DIAMOND	leftwards,arrow,to,black,diamond	11	0
+⤞	RIGHTWARDS ARROW TO BLACK DIAMOND	rightwards,arrow,to,black,diamond	11	0
+⤟	LEFTWARDS ARROW FROM BAR TO BLACK DIAMOND	leftwards,arrow,from,bar,to,black,diamond	11	0
+⤠	RIGHTWARDS ARROW FROM BAR TO BLACK DIAMOND	rightwards,arrow,from,bar,to,black,diamond	11	0
+⤡	NORTH WEST AND SOUTH EAST ARROW	north,west,south,east,arrow	11	0
+⤢	NORTH EAST AND SOUTH WEST ARROW	north,east,south,west,arrow	11	0
+⤣	NORTH WEST ARROW WITH HOOK	north,west,arrow,hook	11	0
+⤤	NORTH EAST ARROW WITH HOOK	north,east,arrow,hook	11	0
+⤥	SOUTH EAST ARROW WITH HOOK	south,east,arrow,hook	11	0
+⤦	SOUTH WEST ARROW WITH HOOK	south,west,arrow,hook	11	0
+⤧	NORTH WEST ARROW AND NORTH EAST ARROW	north,west,arrow,east	11	0
+⤨	NORTH EAST ARROW AND SOUTH EAST ARROW	north,east,arrow,south	11	0
+⤩	SOUTH EAST ARROW AND SOUTH WEST ARROW	south,east,arrow,west	11	0
+⤪	SOUTH WEST ARROW AND NORTH WEST ARROW	south,west,arrow,north	11	0
+⤫	RISING DIAGONAL CROSSING FALLING DIAGONAL	rising,diagonal,crossing,falling	11	0
+⤬	FALLING DIAGONAL CROSSING RISING DIAGONAL	falling,diagonal,crossing,rising	11	0
+⤭	SOUTH EAST ARROW CROSSING NORTH EAST ARROW	south,east,arrow,crossing,north	11	0
+⤮	NORTH EAST ARROW CROSSING SOUTH EAST ARROW	north,east,arrow,crossing,south	11	0
+⤯	FALLING DIAGONAL CROSSING NORTH EAST ARROW	falling,diagonal,crossing,north,east,arrow	11	0
+⤰	RISING DIAGONAL CROSSING SOUTH EAST ARROW	rising,diagonal,crossing,south,east,arrow	11	0
+⤱	NORTH EAST ARROW CROSSING NORTH WEST ARROW	north,east,arrow,crossing,west	11	0
+⤲	NORTH WEST ARROW CROSSING NORTH EAST ARROW	north,west,arrow,crossing,east	11	0
+⤳	WAVE ARROW POINTING DIRECTLY RIGHT	wave,arrow,pointing,directly,right	11	0
+⤴	ARROW POINTING RIGHTWARDS THEN CURVING UPWARDS	arrow,pointing,rightwards,then,curving,upwards	11	0
+⤵	ARROW POINTING RIGHTWARDS THEN CURVING DOWNWARDS	arrow,pointing,rightwards,then,curving,downwards	11	0
+⤶	ARROW POINTING DOWNWARDS THEN CURVING LEFTWARDS	arrow,pointing,downwards,then,curving,leftwards	11	0
+⤷	ARROW POINTING DOWNWARDS THEN CURVING RIGHTWARDS	arrow,pointing,downwards,then,curving,rightwards	11	0
+⤸	RIGHT-SIDE ARC CLOCKWISE ARROW	right,side,arc,clockwise,arrow	11	0
+⤹	LEFT-SIDE ARC ANTICLOCKWISE ARROW	left,side,arc,anticlockwise,arrow	11	0
+⤺	TOP ARC ANTICLOCKWISE ARROW	top,arc,anticlockwise,arrow	11	0
+⤻	BOTTOM ARC ANTICLOCKWISE ARROW	bottom,arc,anticlockwise,arrow	11	0
+⤼	TOP ARC CLOCKWISE ARROW WITH MINUS	top,arc,clockwise,arrow,minus	11	0
+⤽	TOP ARC ANTICLOCKWISE ARROW WITH PLUS	top,arc,anticlockwise,arrow,plus	11	0
+⤾	LOWER RIGHT SEMICIRCULAR CLOCKWISE ARROW	lower,right,semicircular,clockwise,arrow	11	0
+⤿	LOWER LEFT SEMICIRCULAR ANTICLOCKWISE ARROW	lower,left,semicircular,anticlockwise,arrow	11	0
+⥀	ANTICLOCKWISE CLOSED CIRCLE ARROW	anticlockwise,closed,circle,arrow	11	0
+⥁	CLOCKWISE CLOSED CIRCLE ARROW	clockwise,closed,circle,arrow	11	0
+⥂	RIGHTWARDS ARROW ABOVE SHORT LEFTWARDS ARROW	rightwards,arrow,above,short,leftwards	11	0
+⥃	LEFTWARDS ARROW ABOVE SHORT RIGHTWARDS ARROW	leftwards,arrow,above,short,rightwards	11	0
+⥄	SHORT RIGHTWARDS ARROW ABOVE LEFTWARDS ARROW	short,rightwards,arrow,above,leftwards	11	0
+⥅	RIGHTWARDS ARROW WITH PLUS BELOW	rightwards,arrow,plus,below	11	0
+⥆	LEFTWARDS ARROW WITH PLUS BELOW	leftwards,arrow,plus,below	11	0
+⥇	RIGHTWARDS ARROW THROUGH X	rightwards,arrow,through,x	11	0
+⥈	LEFT RIGHT ARROW THROUGH SMALL CIRCLE	left,right,arrow,through,small,circle	11	0
+⥉	UPWARDS TWO-HEADED ARROW FROM SMALL CIRCLE	upwards,two,headed,arrow,from,small,circle	11	0
+⥊	LEFT BARB UP RIGHT BARB DOWN HARPOON	left,barb,up,right,down,harpoon	11	0
+⥋	LEFT BARB DOWN RIGHT BARB UP HARPOON	left,barb,down,right,up,harpoon	11	0
+⥌	UP BARB RIGHT DOWN BARB LEFT HARPOON	up,barb,right,down,left,harpoon	11	0
+⥍	UP BARB LEFT DOWN BARB RIGHT HARPOON	up,barb,left,down,right,harpoon	11	0
+⥎	LEFT BARB UP RIGHT BARB UP HARPOON	left,barb,up,right,harpoon	11	0
+⥏	UP BARB RIGHT DOWN BARB RIGHT HARPOON	up,barb,right,down,harpoon	11	0
+⥐	LEFT BARB DOWN RIGHT BARB DOWN HARPOON	left,barb,down,right,harpoon	11	0
+⥑	UP BARB LEFT DOWN BARB LEFT HARPOON	up,barb,left,down,harpoon	11	0
+⥒	LEFTWARDS HARPOON WITH BARB UP TO BAR	leftwards,harpoon,barb,up,to,bar	11	0
+⥓	RIGHTWARDS HARPOON WITH BARB UP TO BAR	rightwards,harpoon,barb,up,to,bar	11	0
+⥔	UPWARDS HARPOON WITH BARB RIGHT TO BAR	upwards,harpoon,barb,right,to,bar	11	0
+⥕	DOWNWARDS HARPOON WITH BARB RIGHT TO BAR	downwards,harpoon,barb,right,to,bar	11	0
+⥖	LEFTWARDS HARPOON WITH BARB DOWN TO BAR	leftwards,harpoon,barb,down,to,bar	11	0
+⥗	RIGHTWARDS HARPOON WITH BARB DOWN TO BAR	rightwards,harpoon,barb,down,to,bar	11	0
+⥘	UPWARDS HARPOON WITH BARB LEFT TO BAR	upwards,harpoon,barb,left,to,bar	11	0
+⥙	DOWNWARDS HARPOON WITH BARB LEFT TO BAR	downwards,harpoon,barb,left,to,bar	11	0
+⥚	LEFTWARDS HARPOON WITH BARB UP FROM BAR	leftwards,harpoon,barb,up,from,bar	11	0
+⥛	RIGHTWARDS HARPOON WITH BARB UP FROM BAR	rightwards,harpoon,barb,up,from,bar	11	0
+⥜	UPWARDS HARPOON WITH BARB RIGHT FROM BAR	upwards,harpoon,barb,right,from,bar	11	0
+⥝	DOWNWARDS HARPOON WITH BARB RIGHT FROM BAR	downwards,harpoon,barb,right,from,bar	11	0
+⥞	LEFTWARDS HARPOON WITH BARB DOWN FROM BAR	leftwards,harpoon,barb,down,from,bar	11	0
+⥟	RIGHTWARDS HARPOON WITH BARB DOWN FROM BAR	rightwards,harpoon,barb,down,from,bar	11	0
+⥠	UPWARDS HARPOON WITH BARB LEFT FROM BAR	upwards,harpoon,barb,left,from,bar	11	0
+⥡	DOWNWARDS HARPOON WITH BARB LEFT FROM BAR	downwards,harpoon,barb,left,from,bar	11	0
+⥢	LEFTWARDS HARPOON WITH BARB UP ABOVE LEFTWARDS HARPOON WITH BARB DOWN	leftwards,harpoon,barb,up,above,down	11	0
+⥣	UPWARDS HARPOON WITH BARB LEFT BESIDE UPWARDS HARPOON WITH BARB RIGHT	upwards,harpoon,barb,left,beside,right	11	0
+⥤	RIGHTWARDS HARPOON WITH BARB UP ABOVE RIGHTWARDS HARPOON WITH BARB DOWN	rightwards,harpoon,barb,up,above,down	11	0
+⥥	DOWNWARDS HARPOON WITH BARB LEFT BESIDE DOWNWARDS HARPOON WITH BARB RIGHT	downwards,harpoon,barb,left,beside,right	11	0
+⥦	LEFTWARDS HARPOON WITH BARB UP ABOVE RIGHTWARDS HARPOON WITH BARB UP	leftwards,harpoon,barb,up,above,rightwards	11	0
+⥧	LEFTWARDS HARPOON WITH BARB DOWN ABOVE RIGHTWARDS HARPOON WITH BARB DOWN	leftwards,harpoon,barb,down,above,rightwards	11	0
+⥨	RIGHTWARDS HARPOON WITH BARB UP ABOVE LEFTWARDS HARPOON WITH BARB UP	rightwards,harpoon,barb,up,above,leftwards	11	0
+⥩	RIGHTWARDS HARPOON WITH BARB DOWN ABOVE LEFTWARDS HARPOON WITH BARB DOWN	rightwards,harpoon,barb,down,above,leftwards	11	0
+⥪	LEFTWARDS HARPOON WITH BARB UP ABOVE LONG DASH	leftwards,harpoon,barb,up,above,long,dash	11	0
+⥫	LEFTWARDS HARPOON WITH BARB DOWN BELOW LONG DASH	leftwards,harpoon,barb,down,below,long,dash	11	0
+⥬	RIGHTWARDS HARPOON WITH BARB UP ABOVE LONG DASH	rightwards,harpoon,barb,up,above,long,dash	11	0
+⥭	RIGHTWARDS HARPOON WITH BARB DOWN BELOW LONG DASH	rightwards,harpoon,barb,down,below,long,dash	11	0
+⥮	UPWARDS HARPOON WITH BARB LEFT BESIDE DOWNWARDS HARPOON WITH BARB RIGHT	upwards,harpoon,barb,left,beside,downwards,right	11	0
+⥯	DOWNWARDS HARPOON WITH BARB LEFT BESIDE UPWARDS HARPOON WITH BARB RIGHT	downwards,harpoon,barb,left,beside,upwards,right	11	0
+⥰	RIGHT DOUBLE ARROW WITH ROUNDED HEAD	right,double,arrow,rounded,head	11	0
+⥱	EQUALS SIGN ABOVE RIGHTWARDS ARROW	equals,sign,above,rightwards,arrow	11	0
+⥲	TILDE OPERATOR ABOVE RIGHTWARDS ARROW	tilde,operator,above,rightwards,arrow	11	0
+⥳	LEFTWARDS ARROW ABOVE TILDE OPERATOR	leftwards,arrow,above,tilde,operator	11	0
+⥴	RIGHTWARDS ARROW ABOVE TILDE OPERATOR	rightwards,arrow,above,tilde,operator	11	0
+⥵	RIGHTWARDS ARROW ABOVE ALMOST EQUAL TO	rightwards,arrow,above,almost,equal,to	11	0
+⥶	LESS-THAN ABOVE LEFTWARDS ARROW	less,than,above,leftwards,arrow	11	0
+⥷	LEFTWARDS ARROW THROUGH LESS-THAN	leftwards,arrow,through,less,than	11	0
+⥸	GREATER-THAN ABOVE RIGHTWARDS ARROW	greater,than,above,rightwards,arrow	11	0
+⥹	SUBSET ABOVE RIGHTWARDS ARROW	subset,above,rightwards,arrow	11	0
+⥺	LEFTWARDS ARROW THROUGH SUBSET	leftwards,arrow,through,subset	11	0
+⥻	SUPERSET ABOVE LEFTWARDS ARROW	superset,above,leftwards,arrow	11	0
+⥼	LEFT FISH TAIL	left,fish,tail	11	0
+⥽	RIGHT FISH TAIL	right,fish,tail	11	0
+⥾	UP FISH TAIL	up,fish,tail	11	0
+⥿	DOWN FISH TAIL	down,fish,tail	11	0
+⬀	NORTH EAST WHITE ARROW	north,east,white,arrow	12	0
+⬁	NORTH WEST WHITE ARROW	north,west,white,arrow	12	0
+⬂	SOUTH EAST WHITE ARROW	south,east,white,arrow	12	0
+⬃	SOUTH WEST WHITE ARROW	south,west,white,arrow	12	0
+⬄	LEFT RIGHT WHITE ARROW	left,right,white,arrow	12	0
+⬅	LEFTWARDS BLACK ARROW	leftwards,black,arrow	12	0
+⬆	UPWARDS BLACK ARROW	upwards,black,arrow	12	0
+⬇	DOWNWARDS BLACK ARROW	downwards,black,arrow	12	0
+⬈	NORTH EAST BLACK ARROW	north,east,black,arrow	12	0
+⬉	NORTH WEST BLACK ARROW	north,west,black,arrow	12	0
+⬊	SOUTH EAST BLACK ARROW	south,east,black,arrow	12	0
+⬋	SOUTH WEST BLACK ARROW	south,west,black,arrow	12	0
+⬌	LEFT RIGHT BLACK ARROW	left,right,black,arrow	12	0
+⬍	UP DOWN BLACK ARROW	up,down,black,arrow	12	0
+⬎	RIGHTWARDS ARROW WITH TIP DOWNWARDS	rightwards,arrow,tip,downwards	12	0
+⬏	RIGHTWARDS ARROW WITH TIP UPWARDS	rightwards,arrow,tip,upwards	12	0
+⬐	LEFTWARDS ARROW WITH TIP DOWNWARDS	leftwards,arrow,tip,downwards	12	0
+⬑	LEFTWARDS ARROW WITH TIP UPWARDS	leftwards,arrow,tip,upwards	12	0
+⬒	SQUARE WITH TOP HALF BLACK	square,top,half,black	12	0
+⬓	SQUARE WITH BOTTOM HALF BLACK	square,bottom,half,black	12	0
+⬔	SQUARE WITH UPPER RIGHT DIAGONAL HALF BLACK	square,upper,right,diagonal,half,black	12	0
+⬕	SQUARE WITH LOWER LEFT DIAGONAL HALF BLACK	square,lower,left,diagonal,half,black	12	0
+⬖	DIAMOND WITH LEFT HALF BLACK	diamond,left,half,black	12	0
+⬗	DIAMOND WITH RIGHT HALF BLACK	diamond,right,half,black	12	0
+⬘	DIAMOND WITH TOP HALF BLACK	diamond,top,half,black	12	0
+⬙	DIAMOND WITH BOTTOM HALF BLACK	diamond,bottom,half,black	12	0
+⬚	DOTTED SQUARE	dotted,square	12	0
+⬛	BLACK LARGE SQUARE	black,large,square	12	0
+⬜	WHITE LARGE SQUARE	white,large,square	12	0
+⬝	BLACK VERY SMALL SQUARE	black,very,small,square	12	0
+⬞	WHITE VERY SMALL SQUARE	white,very,small,square	12	0
+⬟	BLACK PENTAGON	black,pentagon	12	0
+⬠	WHITE PENTAGON	white,pentagon	12	0
+⬡	WHITE HEXAGON	white,hexagon	12	0
+⬢	BLACK HEXAGON	black,hexagon	12	0
+⬣	HORIZONTAL BLACK HEXAGON	horizontal,black,hexagon	12	0
+⬤	BLACK LARGE CIRCLE	black,large,circle	12	0
+⬥	BLACK MEDIUM DIAMOND	black,medium,diamond	12	0
+⬦	WHITE MEDIUM DIAMOND	white,medium,diamond	12	0
+⬧	BLACK MEDIUM LOZENGE	black,medium,lozenge	12	0
+⬨	WHITE MEDIUM LOZENGE	white,medium,lozenge	12	0
+⬩	BLACK SMALL DIAMOND	black,small,diamond	12	0
+⬪	BLACK SMALL LOZENGE	black,small,lozenge	12	0
+⬫	WHITE SMALL LOZENGE	white,small,lozenge	12	0
+⬬	BLACK HORIZONTAL ELLIPSE	black,horizontal,ellipse	12	0
+⬭	WHITE HORIZONTAL ELLIPSE	white,horizontal,ellipse	12	0
+⬮	BLACK VERTICAL ELLIPSE	black,vertical,ellipse	12	0
+⬯	WHITE VERTICAL ELLIPSE	white,vertical,ellipse	12	0
+⬰	LEFT ARROW WITH SMALL CIRCLE	left,arrow,small,circle	12	0
+⬱	THREE LEFTWARDS ARROWS	three,leftwards,arrows	12	0
+⬲	LEFT ARROW WITH CIRCLED PLUS	left,arrow,circled,plus	12	0
+⬳	LONG LEFTWARDS SQUIGGLE ARROW	long,leftwards,squiggle,arrow	12	0
+⬴	LEFTWARDS TWO-HEADED ARROW WITH VERTICAL STROKE	leftwards,two,headed,arrow,vertical,stroke	12	0
+⬵	LEFTWARDS TWO-HEADED ARROW WITH DOUBLE VERTICAL STROKE	leftwards,two,headed,arrow,double,vertical,stroke	12	0
+⬶	LEFTWARDS TWO-HEADED ARROW FROM BAR	leftwards,two,headed,arrow,from,bar	12	0
+⬷	LEFTWARDS TWO-HEADED TRIPLE DASH ARROW	leftwards,two,headed,triple,dash,arrow	12	0
+⬸	LEFTWARDS ARROW WITH DOTTED STEM	leftwards,arrow,dotted,stem	12	0
+⬹	LEFTWARDS ARROW WITH TAIL WITH VERTICAL STROKE	leftwards,arrow,tail,vertical,stroke	12	0
+⬺	LEFTWARDS ARROW WITH TAIL WITH DOUBLE VERTICAL STROKE	leftwards,arrow,tail,double,vertical,stroke	12	0
+⬻	LEFTWARDS TWO-HEADED ARROW WITH TAIL	leftwards,two,headed,arrow,tail	12	0
+⬼	LEFTWARDS TWO-HEADED ARROW WITH TAIL WITH VERTICAL STROKE	leftwards,two,headed,arrow,tail,vertical,stroke	12	0
+⬽	LEFTWARDS TWO-HEADED ARROW WITH TAIL WITH DOUBLE VERTICAL STROKE	leftwards,two,headed,arrow,tail,double,vertical,stroke	12	0
+⬾	LEFTWARDS ARROW THROUGH X	leftwards,arrow,through,x	12	0
+⬿	WAVE ARROW POINTING DIRECTLY LEFT	wave,arrow,pointing,directly,left	12	0
+⭀	EQUALS SIGN ABOVE LEFTWARDS ARROW	equals,sign,above,leftwards,arrow	12	0
+⭁	REVERSE TILDE OPERATOR ABOVE LEFTWARDS ARROW	reverse,tilde,operator,above,leftwards,arrow	12	0
+⭂	LEFTWARDS ARROW ABOVE REVERSE ALMOST EQUAL TO	leftwards,arrow,above,reverse,almost,equal,to	12	0
+⭃	RIGHTWARDS ARROW THROUGH GREATER-THAN	rightwards,arrow,through,greater,than	12	0
+⭄	RIGHTWARDS ARROW THROUGH SUPERSET	rightwards,arrow,through,superset	12	0
+⭅	LEFTWARDS QUADRUPLE ARROW	leftwards,quadruple,arrow	12	0
+⭆	RIGHTWARDS QUADRUPLE ARROW	rightwards,quadruple,arrow	12	0
+⭇	REVERSE TILDE OPERATOR ABOVE RIGHTWARDS ARROW	reverse,tilde,operator,above,rightwards,arrow	12	0
+⭈	RIGHTWARDS ARROW ABOVE REVERSE ALMOST EQUAL TO	rightwards,arrow,above,reverse,almost,equal,to	12	0
+⭉	TILDE OPERATOR ABOVE LEFTWARDS ARROW	tilde,operator,above,leftwards,arrow	12	0
+⭊	LEFTWARDS ARROW ABOVE ALMOST EQUAL TO	leftwards,arrow,above,almost,equal,to	12	0
+⭋	LEFTWARDS ARROW ABOVE REVERSE TILDE OPERATOR	leftwards,arrow,above,reverse,tilde,operator	12	0
+⭌	RIGHTWARDS ARROW ABOVE REVERSE TILDE OPERATOR	rightwards,arrow,above,reverse,tilde,operator	12	0
+⭍	DOWNWARDS TRIANGLE-HEADED ZIGZAG ARROW	downwards,triangle,headed,zigzag,arrow	12	0
+⭎	SHORT SLANTED NORTH ARROW	short,slanted,north,arrow	12	0
+⭏	SHORT BACKSLANTED SOUTH ARROW	short,backslanted,south,arrow	12	0
+⭐	WHITE MEDIUM STAR	white,medium,star	12	0
+⭑	BLACK SMALL STAR	black,small,star	12	0
+⭒	WHITE SMALL STAR	white,small,star	12	0
+⭓	BLACK RIGHT-POINTING PENTAGON	black,right,pointing,pentagon	12	0
+⭔	WHITE RIGHT-POINTING PENTAGON	white,right,pointing,pentagon	12	0
+⭕	HEAVY LARGE CIRCLE	heavy,large,circle	12	0
+⭖	HEAVY OVAL WITH OVAL INSIDE	heavy,oval,inside	12	0
+⭗	HEAVY CIRCLE WITH CIRCLE INSIDE	heavy,circle,inside	12	0
+⭘	HEAVY CIRCLE	heavy,circle	12	0
+⭙	HEAVY CIRCLED SALTIRE	heavy,circled,saltire	12	0
+⭚	SLANTED NORTH ARROW WITH HOOKED HEAD	slanted,north,arrow,hooked,head	12	0
+⭛	BACKSLANTED SOUTH ARROW WITH HOOKED TAIL	backslanted,south,arrow,hooked,tail	12	0
+⭜	SLANTED NORTH ARROW WITH HORIZONTAL TAIL	slanted,north,arrow,horizontal,tail	12	0
+⭝	BACKSLANTED SOUTH ARROW WITH HORIZONTAL TAIL	backslanted,south,arrow,horizontal,tail	12	0
+⭞	BENT ARROW POINTING DOWNWARDS THEN NORTH EAST	bent,arrow,pointing,downwards,then,north,east	12	0
+⭟	SHORT BENT ARROW POINTING DOWNWARDS THEN NORTH EAST	short,bent,arrow,pointing,downwards,then,north,east	12	0
+⭠	LEFTWARDS TRIANGLE-HEADED ARROW	leftwards,triangle,headed,arrow	12	0
+⭡	UPWARDS TRIANGLE-HEADED ARROW	upwards,triangle,headed,arrow	12	0
+⭢	RIGHTWARDS TRIANGLE-HEADED ARROW	rightwards,triangle,headed,arrow	12	0
+⭣	DOWNWARDS TRIANGLE-HEADED ARROW	downwards,triangle,headed,arrow	12	0
+⭤	LEFT RIGHT TRIANGLE-HEADED ARROW	left,right,triangle,headed,arrow	12	0
+⭥	UP DOWN TRIANGLE-HEADED ARROW	up,down,triangle,headed,arrow	12	0
+⭦	NORTH WEST TRIANGLE-HEADED ARROW	north,west,triangle,headed,arrow	12	0
+⭧	NORTH EAST TRIANGLE-HEADED ARROW	north,east,triangle,headed,arrow	12	0
+⭨	SOUTH EAST TRIANGLE-HEADED ARROW	south,east,triangle,headed,arrow	12	0
+⭩	SOUTH WEST TRIANGLE-HEADED ARROW	south,west,triangle,headed,arrow	12	0
+⭪	LEFTWARDS TRIANGLE-HEADED DASHED ARROW	leftwards,triangle,headed,dashed,arrow	12	0
+⭫	UPWARDS TRIANGLE-HEADED DASHED ARROW	upwards,triangle,headed,dashed,arrow	12	0
+⭬	RIGHTWARDS TRIANGLE-HEADED DASHED ARROW	rightwards,triangle,headed,dashed,arrow	12	0
+⭭	DOWNWARDS TRIANGLE-HEADED DASHED ARROW	downwards,triangle,headed,dashed,arrow	12	0
+⭮	CLOCKWISE TRIANGLE-HEADED OPEN CIRCLE ARROW	clockwise,triangle,headed,open,circle,arrow	12	0
+⭯	ANTICLOCKWISE TRIANGLE-HEADED OPEN CIRCLE ARROW	anticlockwise,triangle,headed,open,circle,arrow	12	0
+⭰	LEFTWARDS TRIANGLE-HEADED ARROW TO BAR	leftwards,triangle,headed,arrow,to,bar	12	0
+⭱	UPWARDS TRIANGLE-HEADED ARROW TO BAR	upwards,triangle,headed,arrow,to,bar	12	0
+⭲	RIGHTWARDS TRIANGLE-HEADED ARROW TO BAR	rightwards,triangle,headed,arrow,to,bar	12	0
+⭳	DOWNWARDS TRIANGLE-HEADED ARROW TO BAR	downwards,triangle,headed,arrow,to,bar	12	0
+⭶	NORTH WEST TRIANGLE-HEADED ARROW TO BAR	north,west,triangle,headed,arrow,to,bar	12	0
+⭷	NORTH EAST TRIANGLE-HEADED ARROW TO BAR	north,east,triangle,headed,arrow,to,bar	12	0
+⭸	SOUTH EAST TRIANGLE-HEADED ARROW TO BAR	south,east,triangle,headed,arrow,to,bar	12	0
+⭹	SOUTH WEST TRIANGLE-HEADED ARROW TO BAR	south,west,triangle,headed,arrow,to,bar	12	0
+⭺	LEFTWARDS TRIANGLE-HEADED ARROW WITH DOUBLE HORIZONTAL STROKE	leftwards,triangle,headed,arrow,double,horizontal,stroke	12	0
+⭻	UPWARDS TRIANGLE-HEADED ARROW WITH DOUBLE HORIZONTAL STROKE	upwards,triangle,headed,arrow,double,horizontal,stroke	12	0
+⭼	RIGHTWARDS TRIANGLE-HEADED ARROW WITH DOUBLE HORIZONTAL STROKE	rightwards,triangle,headed,arrow,double,horizontal,stroke	12	0
+⭽	DOWNWARDS TRIANGLE-HEADED ARROW WITH DOUBLE HORIZONTAL STROKE	downwards,triangle,headed,arrow,double,horizontal,stroke	12	0
+⭾	HORIZONTAL TAB KEY	horizontal,tab,key	12	0
+⭿	VERTICAL TAB KEY	vertical,tab,key	12	0
+⮀	LEFTWARDS TRIANGLE-HEADED ARROW OVER RIGHTWARDS TRIANGLE-HEADED ARROW	leftwards,triangle,headed,arrow,over,rightwards	12	0
+⮁	UPWARDS TRIANGLE-HEADED ARROW LEFTWARDS OF DOWNWARDS TRIANGLE-HEADED ARROW	upwards,triangle,headed,arrow,leftwards,downwards	12	0
+⮂	RIGHTWARDS TRIANGLE-HEADED ARROW OVER LEFTWARDS TRIANGLE-HEADED ARROW	rightwards,triangle,headed,arrow,over,leftwards	12	0
+⮃	DOWNWARDS TRIANGLE-HEADED ARROW LEFTWARDS OF UPWARDS TRIANGLE-HEADED ARROW	downwards,triangle,headed,arrow,leftwards,upwards	12	0
+⮄	LEFTWARDS TRIANGLE-HEADED PAIRED ARROWS	leftwards,triangle,headed,paired,arrows	12	0
+⮅	UPWARDS TRIANGLE-HEADED PAIRED ARROWS	upwards,triangle,headed,paired,arrows	12	0
+⮆	RIGHTWARDS TRIANGLE-HEADED PAIRED ARROWS	rightwards,triangle,headed,paired,arrows	12	0
+⮇	DOWNWARDS TRIANGLE-HEADED PAIRED ARROWS	downwards,triangle,headed,paired,arrows	12	0
+⮈	LEFTWARDS BLACK CIRCLED WHITE ARROW	leftwards,black,circled,white,arrow	12	0
+⮉	UPWARDS BLACK CIRCLED WHITE ARROW	upwards,black,circled,white,arrow	12	0
+⮊	RIGHTWARDS BLACK CIRCLED WHITE ARROW	rightwards,black,circled,white,arrow	12	0
+⮋	DOWNWARDS BLACK CIRCLED WHITE ARROW	downwards,black,circled,white,arrow	12	0
+⮌	ANTICLOCKWISE TRIANGLE-HEADED RIGHT U-SHAPED ARROW	anticlockwise,triangle,headed,right,u,shaped,arrow	12	0
+⮍	ANTICLOCKWISE TRIANGLE-HEADED BOTTOM U-SHAPED ARROW	anticlockwise,triangle,headed,bottom,u,shaped,arrow	12	0
+⮎	ANTICLOCKWISE TRIANGLE-HEADED LEFT U-SHAPED ARROW	anticlockwise,triangle,headed,left,u,shaped,arrow	12	0
+⮏	ANTICLOCKWISE TRIANGLE-HEADED TOP U-SHAPED ARROW	anticlockwise,triangle,headed,top,u,shaped,arrow	12	0
+⮐	RETURN LEFT	return,left	12	0
+⮑	RETURN RIGHT	return,right	12	0
+⮒	NEWLINE LEFT	newline,left	12	0
+⮓	NEWLINE RIGHT	newline,right	12	0
+⮔	FOUR CORNER ARROWS CIRCLING ANTICLOCKWISE	four,corner,arrows,circling,anticlockwise	12	0
+⮕	RIGHTWARDS BLACK ARROW	rightwards,black,arrow	12	0
+⮖	EQUALS SIGN WITH INFINITY ABOVE	equals,sign,infinity,above	12	0
+⮗	SYMBOL FOR TYPE A ELECTRONICS	symbol,type,electronics	12	0
+⮘	THREE-D TOP-LIGHTED LEFTWARDS EQUILATERAL ARROWHEAD	three,d,top,lighted,leftwards,equilateral,arrowhead	12	0
+⮙	THREE-D RIGHT-LIGHTED UPWARDS EQUILATERAL ARROWHEAD	three,d,right,lighted,upwards,equilateral,arrowhead	12	0
+⮚	THREE-D TOP-LIGHTED RIGHTWARDS EQUILATERAL ARROWHEAD	three,d,top,lighted,rightwards,equilateral,arrowhead	12	0
+⮛	THREE-D LEFT-LIGHTED DOWNWARDS EQUILATERAL ARROWHEAD	three,d,left,lighted,downwards,equilateral,arrowhead	12	0
+⮜	BLACK LEFTWARDS EQUILATERAL ARROWHEAD	black,leftwards,equilateral,arrowhead	12	0
+⮝	BLACK UPWARDS EQUILATERAL ARROWHEAD	black,upwards,equilateral,arrowhead	12	0
+⮞	BLACK RIGHTWARDS EQUILATERAL ARROWHEAD	black,rightwards,equilateral,arrowhead	12	0
+⮟	BLACK DOWNWARDS EQUILATERAL ARROWHEAD	black,downwards,equilateral,arrowhead	12	0
+⮠	DOWNWARDS TRIANGLE-HEADED ARROW WITH LONG TIP LEFTWARDS	downwards,triangle,headed,arrow,long,tip,leftwards	12	0
+⮡	DOWNWARDS TRIANGLE-HEADED ARROW WITH LONG TIP RIGHTWARDS	downwards,triangle,headed,arrow,long,tip,rightwards	12	0
+⮢	UPWARDS TRIANGLE-HEADED ARROW WITH LONG TIP LEFTWARDS	upwards,triangle,headed,arrow,long,tip,leftwards	12	0
+⮣	UPWARDS TRIANGLE-HEADED ARROW WITH LONG TIP RIGHTWARDS	upwards,triangle,headed,arrow,long,tip,rightwards	12	0
+⮤	LEFTWARDS TRIANGLE-HEADED ARROW WITH LONG TIP UPWARDS	leftwards,triangle,headed,arrow,long,tip,upwards	12	0
+⮥	RIGHTWARDS TRIANGLE-HEADED ARROW WITH LONG TIP UPWARDS	rightwards,triangle,headed,arrow,long,tip,upwards	12	0
+⮦	LEFTWARDS TRIANGLE-HEADED ARROW WITH LONG TIP DOWNWARDS	leftwards,triangle,headed,arrow,long,tip,downwards	12	0
+⮧	RIGHTWARDS TRIANGLE-HEADED ARROW WITH LONG TIP DOWNWARDS	rightwards,triangle,headed,arrow,long,tip,downwards	12	0
+⮨	BLACK CURVED DOWNWARDS AND LEFTWARDS ARROW	black,curved,downwards,leftwards,arrow	12	0
+⮩	BLACK CURVED DOWNWARDS AND RIGHTWARDS ARROW	black,curved,downwards,rightwards,arrow	12	0
+⮪	BLACK CURVED UPWARDS AND LEFTWARDS ARROW	black,curved,upwards,leftwards,arrow	12	0
+⮫	BLACK CURVED UPWARDS AND RIGHTWARDS ARROW	black,curved,upwards,rightwards,arrow	12	0
+⮬	BLACK CURVED LEFTWARDS AND UPWARDS ARROW	black,curved,leftwards,upwards,arrow	12	0
+⮭	BLACK CURVED RIGHTWARDS AND UPWARDS ARROW	black,curved,rightwards,upwards,arrow	12	0
+⮮	BLACK CURVED LEFTWARDS AND DOWNWARDS ARROW	black,curved,leftwards,downwards,arrow	12	0
+⮯	BLACK CURVED RIGHTWARDS AND DOWNWARDS ARROW	black,curved,rightwards,downwards,arrow	12	0
+⮰	RIBBON ARROW DOWN LEFT	ribbon,arrow,down,left	12	0
+⮱	RIBBON ARROW DOWN RIGHT	ribbon,arrow,down,right	12	0
+⮲	RIBBON ARROW UP LEFT	ribbon,arrow,up,left	12	0
+⮳	RIBBON ARROW UP RIGHT	ribbon,arrow,up,right	12	0
+⮴	RIBBON ARROW LEFT UP	ribbon,arrow,left,up	12	0
+⮵	RIBBON ARROW RIGHT UP	ribbon,arrow,right,up	12	0
+⮶	RIBBON ARROW LEFT DOWN	ribbon,arrow,left,down	12	0
+⮷	RIBBON ARROW RIGHT DOWN	ribbon,arrow,right,down	12	0
+⮸	UPWARDS WHITE ARROW FROM BAR WITH HORIZONTAL BAR	upwards,white,arrow,from,bar,horizontal	12	0
+⮹	UP ARROWHEAD IN A RECTANGLE BOX	up,arrowhead,in,rectangle,box	12	0
+⮺	OVERLAPPING WHITE SQUARES	overlapping,white,squares	12	0
+⮻	OVERLAPPING WHITE AND BLACK SQUARES	overlapping,white,black,squares	12	0
+⮼	OVERLAPPING BLACK SQUARES	overlapping,black,squares	12	0
+⮽	BALLOT BOX WITH LIGHT X	ballot,box,light,x	12	0
+⮾	CIRCLED X	circled,x	12	0
+⮿	CIRCLED BOLD X	circled,bold,x	12	0
+⯀	BLACK SQUARE CENTRED	black,square,centred	12	0
+⯁	BLACK DIAMOND CENTRED	black,diamond,centred	12	0
+⯂	TURNED BLACK PENTAGON	turned,black,pentagon	12	0
+⯃	HORIZONTAL BLACK OCTAGON	horizontal,black,octagon	12	0
+⯄	BLACK OCTAGON	black,octagon	12	0
+⯅	BLACK MEDIUM UP-POINTING TRIANGLE CENTRED	black,medium,up,pointing,triangle,centred	12	0
+⯆	BLACK MEDIUM DOWN-POINTING TRIANGLE CENTRED	black,medium,down,pointing,triangle,centred	12	0
+⯇	BLACK MEDIUM LEFT-POINTING TRIANGLE CENTRED	black,medium,left,pointing,triangle,centred	12	0
+⯈	BLACK MEDIUM RIGHT-POINTING TRIANGLE CENTRED	black,medium,right,pointing,triangle,centred	12	0
+⯉	NEPTUNE FORM TWO	neptune,form,two	12	0
+⯊	TOP HALF BLACK CIRCLE	top,half,black,circle	12	0
+⯋	BOTTOM HALF BLACK CIRCLE	bottom,half,black,circle	12	0
+⯌	LIGHT FOUR POINTED BLACK CUSP	light,four,pointed,black,cusp	12	0
+⯍	ROTATED LIGHT FOUR POINTED BLACK CUSP	rotated,light,four,pointed,black,cusp	12	0
+⯎	WHITE FOUR POINTED CUSP	white,four,pointed,cusp	12	0
+⯏	ROTATED WHITE FOUR POINTED CUSP	rotated,white,four,pointed,cusp	12	0
+⯐	SQUARE POSITION INDICATOR	square,position,indicator	12	0
+⯑	UNCERTAINTY SIGN	uncertainty,sign	12	0
+⯒	GROUP MARK	group,mark	12	0
+⯓	PLUTO FORM TWO	pluto,form,two	12	0
+⯔	PLUTO FORM THREE	pluto,form,three	12	0
+⯕	PLUTO FORM FOUR	pluto,form,four	12	0
+⯖	PLUTO FORM FIVE	pluto,form,five	12	0
+⯗	TRANSPLUTO	transpluto	12	0
+⯘	PROSERPINA	proserpina	12	0
+⯙	ASTRAEA	astraea	12	0
+⯚	HYGIEA	hygiea	12	0
+⯛	PHOLUS	pholus	12	0
+⯜	NESSUS	nessus	12	0
+⯝	WHITE MOON SELENA	white,moon,selena	12	0
+⯞	BLACK DIAMOND ON CROSS	black,diamond,on,cross	12	0
+⯟	TRUE LIGHT MOON ARTA	true,light,moon,arta	12	0
+⯠	CUPIDO	cupido	12	0
+⯡	HADES	hades	12	0
+⯢	ZEUS	zeus	12	0
+⯣	KRONOS	kronos	12	0
+⯤	APOLLON	apollon	12	0
+⯥	ADMETOS	admetos	12	0
+⯦	VULCANUS	vulcanus	12	0
+⯧	POSEIDON	poseidon	12	0
+⯨	LEFT HALF BLACK STAR	left,half,black,star	12	0
+⯩	RIGHT HALF BLACK STAR	right,half,black,star	12	0
+⯪	STAR WITH LEFT HALF BLACK	star,left,half,black	12	0
+⯫	STAR WITH RIGHT HALF BLACK	star,right,half,black	12	0
+⯬	LEFTWARDS TWO-HEADED ARROW WITH TRIANGLE ARROWHEADS	leftwards,two,headed,arrow,triangle,arrowheads	12	0
+⯭	UPWARDS TWO-HEADED ARROW WITH TRIANGLE ARROWHEADS	upwards,two,headed,arrow,triangle,arrowheads	12	0
+⯮	RIGHTWARDS TWO-HEADED ARROW WITH TRIANGLE ARROWHEADS	rightwards,two,headed,arrow,triangle,arrowheads	12	0
+⯯	DOWNWARDS TWO-HEADED ARROW WITH TRIANGLE ARROWHEADS	downwards,two,headed,arrow,triangle,arrowheads	12	0
+⯰	ERIS FORM ONE	eris,form,one	12	0
+⯱	ERIS FORM TWO	eris,form,two	12	0
+⯲	SEDNA	sedna	12	0
+⯳	RUSSIAN ASTROLOGICAL SYMBOL VIGINTILE	russian,astrological,symbol,vigintile	12	0
+⯴	RUSSIAN ASTROLOGICAL SYMBOL NOVILE	russian,astrological,symbol,novile	12	0
+⯵	RUSSIAN ASTROLOGICAL SYMBOL QUINTILE	russian,astrological,symbol,quintile	12	0
+⯶	RUSSIAN ASTROLOGICAL SYMBOL BINOVILE	russian,astrological,symbol,binovile	12	0
+⯷	RUSSIAN ASTROLOGICAL SYMBOL SENTAGON	russian,astrological,symbol,sentagon	12	0
+⯸	RUSSIAN ASTROLOGICAL SYMBOL TREDECILE	russian,astrological,symbol,tredecile	12	0
+⯹	EQUALS SIGN WITH INFINITY BELOW	equals,sign,infinity,below	12	0
+⯺	UNITED SYMBOL	united,symbol	12	0
+⯻	SEPARATED SYMBOL	separated,symbol	12	0
+⯼	DOUBLED SYMBOL	doubled,symbol	12	0
+⯽	PASSED SYMBOL	passed,symbol	12	0
+⯾	REVERSED RIGHT ANGLE	reversed,right,angle	12	0
+⯿	HELLSCHREIBER PAUSE SYMBOL	hellschreiber,pause,symbol	12	0
+㈀	PARENTHESIZED HANGUL KIYEOK	parenthesized,hangul,kiyeok	13	0
+㈁	PARENTHESIZED HANGUL NIEUN	parenthesized,hangul,nieun	13	0
+㈂	PARENTHESIZED HANGUL TIKEUT	parenthesized,hangul,tikeut	13	0
+㈃	PARENTHESIZED HANGUL RIEUL	parenthesized,hangul,rieul	13	0
+㈄	PARENTHESIZED HANGUL MIEUM	parenthesized,hangul,mieum	13	0
+㈅	PARENTHESIZED HANGUL PIEUP	parenthesized,hangul,pieup	13	0
+㈆	PARENTHESIZED HANGUL SIOS	parenthesized,hangul,sios	13	0
+㈇	PARENTHESIZED HANGUL IEUNG	parenthesized,hangul,ieung	13	0
+㈈	PARENTHESIZED HANGUL CIEUC	parenthesized,hangul,cieuc	13	0
+㈉	PARENTHESIZED HANGUL CHIEUCH	parenthesized,hangul,chieuch	13	0
+㈊	PARENTHESIZED HANGUL KHIEUKH	parenthesized,hangul,khieukh	13	0
+㈋	PARENTHESIZED HANGUL THIEUTH	parenthesized,hangul,thieuth	13	0
+㈌	PARENTHESIZED HANGUL PHIEUPH	parenthesized,hangul,phieuph	13	0
+㈍	PARENTHESIZED HANGUL HIEUH	parenthesized,hangul,hieuh	13	0
+㈎	PARENTHESIZED HANGUL KIYEOK A	parenthesized,hangul,kiyeok	13	0
+㈏	PARENTHESIZED HANGUL NIEUN A	parenthesized,hangul,nieun	13	0
+㈐	PARENTHESIZED HANGUL TIKEUT A	parenthesized,hangul,tikeut	13	0
+㈑	PARENTHESIZED HANGUL RIEUL A	parenthesized,hangul,rieul	13	0
+㈒	PARENTHESIZED HANGUL MIEUM A	parenthesized,hangul,mieum	13	0
+㈓	PARENTHESIZED HANGUL PIEUP A	parenthesized,hangul,pieup	13	0
+㈔	PARENTHESIZED HANGUL SIOS A	parenthesized,hangul,sios	13	0
+㈕	PARENTHESIZED HANGUL IEUNG A	parenthesized,hangul,ieung	13	0
+㈖	PARENTHESIZED HANGUL CIEUC A	parenthesized,hangul,cieuc	13	0
+㈗	PARENTHESIZED HANGUL CHIEUCH A	parenthesized,hangul,chieuch	13	0
+㈘	PARENTHESIZED HANGUL KHIEUKH A	parenthesized,hangul,khieukh	13	0
+㈙	PARENTHESIZED HANGUL THIEUTH A	parenthesized,hangul,thieuth	13	0
+㈚	PARENTHESIZED HANGUL PHIEUPH A	parenthesized,hangul,phieuph	13	0
+㈛	PARENTHESIZED HANGUL HIEUH A	parenthesized,hangul,hieuh	13	0
+㈜	PARENTHESIZED HANGUL CIEUC U	parenthesized,hangul,cieuc,u	13	0
+㈝	PARENTHESIZED KOREAN CHARACTER OJEON	parenthesized,korean,character,ojeon	13	0
+㈞	PARENTHESIZED KOREAN CHARACTER O HU	parenthesized,korean,character,o,hu	13	0
+㈠	PARENTHESIZED IDEOGRAPH ONE	parenthesized,ideograph,one	13	0
+㈡	PARENTHESIZED IDEOGRAPH TWO	parenthesized,ideograph,two	13	0
+㈢	PARENTHESIZED IDEOGRAPH THREE	parenthesized,ideograph,three	13	0
+㈣	PARENTHESIZED IDEOGRAPH FOUR	parenthesized,ideograph,four	13	0
+㈤	PARENTHESIZED IDEOGRAPH FIVE	parenthesized,ideograph,five	13	0
+㈥	PARENTHESIZED IDEOGRAPH SIX	parenthesized,ideograph,six	13	0
+㈦	PARENTHESIZED IDEOGRAPH SEVEN	parenthesized,ideograph,seven	13	0
+㈧	PARENTHESIZED IDEOGRAPH EIGHT	parenthesized,ideograph,eight	13	0
+㈨	PARENTHESIZED IDEOGRAPH NINE	parenthesized,ideograph,nine	13	0
+㈩	PARENTHESIZED IDEOGRAPH TEN	parenthesized,ideograph,ten	13	0
+㈪	PARENTHESIZED IDEOGRAPH MOON	parenthesized,ideograph,moon	13	0
+㈫	PARENTHESIZED IDEOGRAPH FIRE	parenthesized,ideograph,fire	13	0
+㈬	PARENTHESIZED IDEOGRAPH WATER	parenthesized,ideograph,water	13	0
+㈭	PARENTHESIZED IDEOGRAPH WOOD	parenthesized,ideograph,wood	13	0
+㈮	PARENTHESIZED IDEOGRAPH METAL	parenthesized,ideograph,metal	13	0
+㈯	PARENTHESIZED IDEOGRAPH EARTH	parenthesized,ideograph,earth	13	0
+㈰	PARENTHESIZED IDEOGRAPH SUN	parenthesized,ideograph,sun	13	0
+㈱	PARENTHESIZED IDEOGRAPH STOCK	parenthesized,ideograph,stock	13	0
+㈲	PARENTHESIZED IDEOGRAPH HAVE	parenthesized,ideograph,have	13	0
+㈳	PARENTHESIZED IDEOGRAPH SOCIETY	parenthesized,ideograph,society	13	0
+㈴	PARENTHESIZED IDEOGRAPH NAME	parenthesized,ideograph,name	13	0
+㈵	PARENTHESIZED IDEOGRAPH SPECIAL	parenthesized,ideograph,special	13	0
+㈶	PARENTHESIZED IDEOGRAPH FINANCIAL	parenthesized,ideograph,financial	13	0
+㈷	PARENTHESIZED IDEOGRAPH CONGRATULATION	parenthesized,ideograph,congratulation	13	0
+㈸	PARENTHESIZED IDEOGRAPH LABOR	parenthesized,ideograph,labor	13	0
+㈹	PARENTHESIZED IDEOGRAPH REPRESENT	parenthesized,ideograph,represent	13	0
+㈺	PARENTHESIZED IDEOGRAPH CALL	parenthesized,ideograph,call	13	0
+㈻	PARENTHESIZED IDEOGRAPH STUDY	parenthesized,ideograph,study	13	0
+㈼	PARENTHESIZED IDEOGRAPH SUPERVISE	parenthesized,ideograph,supervise	13	0
+㈽	PARENTHESIZED IDEOGRAPH ENTERPRISE	parenthesized,ideograph,enterprise	13	0
+㈾	PARENTHESIZED IDEOGRAPH RESOURCE	parenthesized,ideograph,resource	13	0
+㈿	PARENTHESIZED IDEOGRAPH ALLIANCE	parenthesized,ideograph,alliance	13	0
+㉀	PARENTHESIZED IDEOGRAPH FESTIVAL	parenthesized,ideograph,festival	13	0
+㉁	PARENTHESIZED IDEOGRAPH REST	parenthesized,ideograph,rest	13	0
+㉂	PARENTHESIZED IDEOGRAPH SELF	parenthesized,ideograph,self	13	0
+㉃	PARENTHESIZED IDEOGRAPH REACH	parenthesized,ideograph,reach	13	0
+㉄	CIRCLED IDEOGRAPH QUESTION	circled,ideograph,question	13	0
+㉅	CIRCLED IDEOGRAPH KINDERGARTEN	circled,ideograph,kindergarten	13	0
+㉆	CIRCLED IDEOGRAPH SCHOOL	circled,ideograph,school	13	0
+㉇	CIRCLED IDEOGRAPH KOTO	circled,ideograph,koto	13	0
+㉈	CIRCLED NUMBER TEN ON BLACK SQUARE	circled,number,ten,on,black,square	13	0
+㉉	CIRCLED NUMBER TWENTY ON BLACK SQUARE	circled,number,twenty,on,black,square	13	0
+㉊	CIRCLED NUMBER THIRTY ON BLACK SQUARE	circled,number,thirty,on,black,square	13	0
+㉋	CIRCLED NUMBER FORTY ON BLACK SQUARE	circled,number,forty,on,black,square	13	0
+㉌	CIRCLED NUMBER FIFTY ON BLACK SQUARE	circled,number,fifty,on,black,square	13	0
+㉍	CIRCLED NUMBER SIXTY ON BLACK SQUARE	circled,number,sixty,on,black,square	13	0
+㉎	CIRCLED NUMBER SEVENTY ON BLACK SQUARE	circled,number,seventy,on,black,square	13	0
+㉏	CIRCLED NUMBER EIGHTY ON BLACK SQUARE	circled,number,eighty,on,black,square	13	0
+㉐	PARTNERSHIP SIGN	partnership,sign	13	0
+㉑	CIRCLED NUMBER TWENTY ONE	circled,number,twenty,one	13	0
+㉒	CIRCLED NUMBER TWENTY TWO	circled,number,twenty,two	13	0
+㉓	CIRCLED NUMBER TWENTY THREE	circled,number,twenty,three	13	0
+㉔	CIRCLED NUMBER TWENTY FOUR	circled,number,twenty,four	13	0
+㉕	CIRCLED NUMBER TWENTY FIVE	circled,number,twenty,five	13	0
+㉖	CIRCLED NUMBER TWENTY SIX	circled,number,twenty,six	13	0
+㉗	CIRCLED NUMBER TWENTY SEVEN	circled,number,twenty,seven	13	0
+㉘	CIRCLED NUMBER TWENTY EIGHT	circled,number,twenty,eight	13	0
+㉙	CIRCLED NUMBER TWENTY NINE	circled,number,twenty,nine	13	0
+㉚	CIRCLED NUMBER THIRTY	circled,number,thirty	13	0
+㉛	CIRCLED NUMBER THIRTY ONE	circled,number,thirty,one	13	0
+㉜	CIRCLED NUMBER THIRTY TWO	circled,number,thirty,two	13	0
+㉝	CIRCLED NUMBER THIRTY THREE	circled,number,thirty,three	13	0
+㉞	CIRCLED NUMBER THIRTY FOUR	circled,number,thirty,four	13	0
+㉟	CIRCLED NUMBER THIRTY FIVE	circled,number,thirty,five	13	0
+㉠	CIRCLED HANGUL KIYEOK	circled,hangul,kiyeok	13	0
+㉡	CIRCLED HANGUL NIEUN	circled,hangul,nieun	13	0
+㉢	CIRCLED HANGUL TIKEUT	circled,hangul,tikeut	13	0
+㉣	CIRCLED HANGUL RIEUL	circled,hangul,rieul	13	0
+㉤	CIRCLED HANGUL MIEUM	circled,hangul,mieum	13	0
+㉥	CIRCLED HANGUL PIEUP	circled,hangul,pieup	13	0
+㉦	CIRCLED HANGUL SIOS	circled,hangul,sios	13	0
+㉧	CIRCLED HANGUL IEUNG	circled,hangul,ieung	13	0
+㉨	CIRCLED HANGUL CIEUC	circled,hangul,cieuc	13	0
+㉩	CIRCLED HANGUL CHIEUCH	circled,hangul,chieuch	13	0
+㉪	CIRCLED HANGUL KHIEUKH	circled,hangul,khieukh	13	0
+㉫	CIRCLED HANGUL THIEUTH	circled,hangul,thieuth	13	0
+㉬	CIRCLED HANGUL PHIEUPH	circled,hangul,phieuph	13	0
+㉭	CIRCLED HANGUL HIEUH	circled,hangul,hieuh	13	0
+㉮	CIRCLED HANGUL KIYEOK A	circled,hangul,kiyeok	13	0
+㉯	CIRCLED HANGUL NIEUN A	circled,hangul,nieun	13	0
+㉰	CIRCLED HANGUL TIKEUT A	circled,hangul,tikeut	13	0
+㉱	CIRCLED HANGUL RIEUL A	circled,hangul,rieul	13	0
+㉲	CIRCLED HANGUL MIEUM A	circled,hangul,mieum	13	0
+㉳	CIRCLED HANGUL PIEUP A	circled,hangul,pieup	13	0
+㉴	CIRCLED HANGUL SIOS A	circled,hangul,sios	13	0
+㉵	CIRCLED HANGUL IEUNG A	circled,hangul,ieung	13	0
+㉶	CIRCLED HANGUL CIEUC A	circled,hangul,cieuc	13	0
+㉷	CIRCLED HANGUL CHIEUCH A	circled,hangul,chieuch	13	0
+㉸	CIRCLED HANGUL KHIEUKH A	circled,hangul,khieukh	13	0
+㉹	CIRCLED HANGUL THIEUTH A	circled,hangul,thieuth	13	0
+㉺	CIRCLED HANGUL PHIEUPH A	circled,hangul,phieuph	13	0
+㉻	CIRCLED HANGUL HIEUH A	circled,hangul,hieuh	13	0
+㉼	CIRCLED KOREAN CHARACTER CHAMKO	circled,korean,character,chamko	13	0
+㉽	CIRCLED KOREAN CHARACTER JUEUI	circled,korean,character,jueui	13	0
+㉾	CIRCLED HANGUL IEUNG U	circled,hangul,ieung,u	13	0
+㉿	KOREAN STANDARD SYMBOL	korean,standard,symbol	13	0
+㊀	CIRCLED IDEOGRAPH ONE	circled,ideograph,one	13	0
+㊁	CIRCLED IDEOGRAPH TWO	circled,ideograph,two	13	0
+㊂	CIRCLED IDEOGRAPH THREE	circled,ideograph,three	13	0
+㊃	CIRCLED IDEOGRAPH FOUR	circled,ideograph,four	13	0
+㊄	CIRCLED IDEOGRAPH FIVE	circled,ideograph,five	13	0
+㊅	CIRCLED IDEOGRAPH SIX	circled,ideograph,six	13	0
+㊆	CIRCLED IDEOGRAPH SEVEN	circled,ideograph,seven	13	0
+㊇	CIRCLED IDEOGRAPH EIGHT	circled,ideograph,eight	13	0
+㊈	CIRCLED IDEOGRAPH NINE	circled,ideograph,nine	13	0
+㊉	CIRCLED IDEOGRAPH TEN	circled,ideograph,ten	13	0
+㊊	CIRCLED IDEOGRAPH MOON	circled,ideograph,moon	13	0
+㊋	CIRCLED IDEOGRAPH FIRE	circled,ideograph,fire	13	0
+㊌	CIRCLED IDEOGRAPH WATER	circled,ideograph,water	13	0
+㊍	CIRCLED IDEOGRAPH WOOD	circled,ideograph,wood	13	0
+㊎	CIRCLED IDEOGRAPH METAL	circled,ideograph,metal	13	0
+㊏	CIRCLED IDEOGRAPH EARTH	circled,ideograph,earth	13	0
+㊐	CIRCLED IDEOGRAPH SUN	circled,ideograph,sun	13	0
+㊑	CIRCLED IDEOGRAPH STOCK	circled,ideograph,stock	13	0
+㊒	CIRCLED IDEOGRAPH HAVE	circled,ideograph,have	13	0
+㊓	CIRCLED IDEOGRAPH SOCIETY	circled,ideograph,society	13	0
+㊔	CIRCLED IDEOGRAPH NAME	circled,ideograph,name	13	0
+㊕	CIRCLED IDEOGRAPH SPECIAL	circled,ideograph,special	13	0
+㊖	CIRCLED IDEOGRAPH FINANCIAL	circled,ideograph,financial	13	0
+㊗	CIRCLED IDEOGRAPH CONGRATULATION	circled,ideograph,congratulation	13	0
+㊘	CIRCLED IDEOGRAPH LABOR	circled,ideograph,labor	13	0
+㊙	CIRCLED IDEOGRAPH SECRET	circled,ideograph,secret	13	0
+㊚	CIRCLED IDEOGRAPH MALE	circled,ideograph,male	13	0
+㊛	CIRCLED IDEOGRAPH FEMALE	circled,ideograph,female	13	0
+㊜	CIRCLED IDEOGRAPH SUITABLE	circled,ideograph,suitable	13	0
+㊝	CIRCLED IDEOGRAPH EXCELLENT	circled,ideograph,excellent	13	0
+㊞	CIRCLED IDEOGRAPH PRINT	circled,ideograph,print	13	0
+㊟	CIRCLED IDEOGRAPH ATTENTION	circled,ideograph,attention	13	0
+㊠	CIRCLED IDEOGRAPH ITEM	circled,ideograph,item	13	0
+㊡	CIRCLED IDEOGRAPH REST	circled,ideograph,rest	13	0
+㊢	CIRCLED IDEOGRAPH COPY	circled,ideograph,copy	13	0
+㊣	CIRCLED IDEOGRAPH CORRECT	circled,ideograph,correct	13	0
+㊤	CIRCLED IDEOGRAPH HIGH	circled,ideograph,high	13	0
+㊥	CIRCLED IDEOGRAPH CENTRE	circled,ideograph,centre	13	0
+㊦	CIRCLED IDEOGRAPH LOW	circled,ideograph,low	13	0
+㊧	CIRCLED IDEOGRAPH LEFT	circled,ideograph,left	13	0
+㊨	CIRCLED IDEOGRAPH RIGHT	circled,ideograph,right	13	0
+㊩	CIRCLED IDEOGRAPH MEDICINE	circled,ideograph,medicine	13	0
+㊪	CIRCLED IDEOGRAPH RELIGION	circled,ideograph,religion	13	0
+㊫	CIRCLED IDEOGRAPH STUDY	circled,ideograph,study	13	0
+㊬	CIRCLED IDEOGRAPH SUPERVISE	circled,ideograph,supervise	13	0
+㊭	CIRCLED IDEOGRAPH ENTERPRISE	circled,ideograph,enterprise	13	0
+㊮	CIRCLED IDEOGRAPH RESOURCE	circled,ideograph,resource	13	0
+㊯	CIRCLED IDEOGRAPH ALLIANCE	circled,ideograph,alliance	13	0
+㊰	CIRCLED IDEOGRAPH NIGHT	circled,ideograph,night	13	0
+㊱	CIRCLED NUMBER THIRTY SIX	circled,number,thirty,six	13	0
+㊲	CIRCLED NUMBER THIRTY SEVEN	circled,number,thirty,seven	13	0
+㊳	CIRCLED NUMBER THIRTY EIGHT	circled,number,thirty,eight	13	0
+㊴	CIRCLED NUMBER THIRTY NINE	circled,number,thirty,nine	13	0
+㊵	CIRCLED NUMBER FORTY	circled,number,forty	13	0
+㊶	CIRCLED NUMBER FORTY ONE	circled,number,forty,one	13	0
+㊷	CIRCLED NUMBER FORTY TWO	circled,number,forty,two	13	0
+㊸	CIRCLED NUMBER FORTY THREE	circled,number,forty,three	13	0
+㊹	CIRCLED NUMBER FORTY FOUR	circled,number,forty,four	13	0
+㊺	CIRCLED NUMBER FORTY FIVE	circled,number,forty,five	13	0
+㊻	CIRCLED NUMBER FORTY SIX	circled,number,forty,six	13	0
+㊼	CIRCLED NUMBER FORTY SEVEN	circled,number,forty,seven	13	0
+㊽	CIRCLED NUMBER FORTY EIGHT	circled,number,forty,eight	13	0
+㊾	CIRCLED NUMBER FORTY NINE	circled,number,forty,nine	13	0
+㊿	CIRCLED NUMBER FIFTY	circled,number,fifty	13	0
+㋀	IDEOGRAPHIC TELEGRAPH SYMBOL FOR JANUARY	ideographic,telegraph,symbol,january	13	0
+㋁	IDEOGRAPHIC TELEGRAPH SYMBOL FOR FEBRUARY	ideographic,telegraph,symbol,february	13	0
+㋂	IDEOGRAPHIC TELEGRAPH SYMBOL FOR MARCH	ideographic,telegraph,symbol,march	13	0
+㋃	IDEOGRAPHIC TELEGRAPH SYMBOL FOR APRIL	ideographic,telegraph,symbol,april	13	0
+㋄	IDEOGRAPHIC TELEGRAPH SYMBOL FOR MAY	ideographic,telegraph,symbol,may	13	0
+㋅	IDEOGRAPHIC TELEGRAPH SYMBOL FOR JUNE	ideographic,telegraph,symbol,june	13	0
+㋆	IDEOGRAPHIC TELEGRAPH SYMBOL FOR JULY	ideographic,telegraph,symbol,july	13	0
+㋇	IDEOGRAPHIC TELEGRAPH SYMBOL FOR AUGUST	ideographic,telegraph,symbol,august	13	0
+㋈	IDEOGRAPHIC TELEGRAPH SYMBOL FOR SEPTEMBER	ideographic,telegraph,symbol,september	13	0
+㋉	IDEOGRAPHIC TELEGRAPH SYMBOL FOR OCTOBER	ideographic,telegraph,symbol,october	13	0
+㋊	IDEOGRAPHIC TELEGRAPH SYMBOL FOR NOVEMBER	ideographic,telegraph,symbol,november	13	0
+㋋	IDEOGRAPHIC TELEGRAPH SYMBOL FOR DECEMBER	ideographic,telegraph,symbol,december	13	0
+㋌	SQUARE HG	square,hg	13	0
+㋍	SQUARE ERG	square,erg	13	0
+㋎	SQUARE EV	square,ev	13	0
+㋏	LIMITED LIABILITY SIGN	limited,liability,sign	13	0
+㋐	CIRCLED KATAKANA A	circled,katakana	13	0
+㋑	CIRCLED KATAKANA I	circled,katakana,i	13	0
+㋒	CIRCLED KATAKANA U	circled,katakana,u	13	0
+㋓	CIRCLED KATAKANA E	circled,katakana,e	13	0
+㋔	CIRCLED KATAKANA O	circled,katakana,o	13	0
+㋕	CIRCLED KATAKANA KA	circled,katakana,ka	13	0
+㋖	CIRCLED KATAKANA KI	circled,katakana,ki	13	0
+㋗	CIRCLED KATAKANA KU	circled,katakana,ku	13	0
+㋘	CIRCLED KATAKANA KE	circled,katakana,ke	13	0
+㋙	CIRCLED KATAKANA KO	circled,katakana,ko	13	0
+㋚	CIRCLED KATAKANA SA	circled,katakana,sa	13	0
+㋛	CIRCLED KATAKANA SI	circled,katakana,si	13	0
+㋜	CIRCLED KATAKANA SU	circled,katakana,su	13	0
+㋝	CIRCLED KATAKANA SE	circled,katakana,se	13	0
+㋞	CIRCLED KATAKANA SO	circled,katakana,so	13	0
+㋟	CIRCLED KATAKANA TA	circled,katakana,ta	13	0
+㋠	CIRCLED KATAKANA TI	circled,katakana,ti	13	0
+㋡	CIRCLED KATAKANA TU	circled,katakana,tu	13	0
+㋢	CIRCLED KATAKANA TE	circled,katakana,te	13	0
+㋣	CIRCLED KATAKANA TO	circled,katakana,to	13	0
+㋤	CIRCLED KATAKANA NA	circled,katakana,na	13	0
+㋥	CIRCLED KATAKANA NI	circled,katakana,ni	13	0
+㋦	CIRCLED KATAKANA NU	circled,katakana,nu	13	0
+㋧	CIRCLED KATAKANA NE	circled,katakana,ne	13	0
+㋨	CIRCLED KATAKANA NO	circled,katakana,no	13	0
+㋩	CIRCLED KATAKANA HA	circled,katakana,ha	13	0
+㋪	CIRCLED KATAKANA HI	circled,katakana,hi	13	0
+㋫	CIRCLED KATAKANA HU	circled,katakana,hu	13	0
+㋬	CIRCLED KATAKANA HE	circled,katakana,he	13	0
+㋭	CIRCLED KATAKANA HO	circled,katakana,ho	13	0
+㋮	CIRCLED KATAKANA MA	circled,katakana,ma	13	0
+㋯	CIRCLED KATAKANA MI	circled,katakana,mi	13	0
+㋰	CIRCLED KATAKANA MU	circled,katakana,mu	13	0
+㋱	CIRCLED KATAKANA ME	circled,katakana,me	13	0
+㋲	CIRCLED KATAKANA MO	circled,katakana,mo	13	0
+㋳	CIRCLED KATAKANA YA	circled,katakana,ya	13	0
+㋴	CIRCLED KATAKANA YU	circled,katakana,yu	13	0
+㋵	CIRCLED KATAKANA YO	circled,katakana,yo	13	0
+㋶	CIRCLED KATAKANA RA	circled,katakana,ra	13	0
+㋷	CIRCLED KATAKANA RI	circled,katakana,ri	13	0
+㋸	CIRCLED KATAKANA RU	circled,katakana,ru	13	0
+㋹	CIRCLED KATAKANA RE	circled,katakana,re	13	0
+㋺	CIRCLED KATAKANA RO	circled,katakana,ro	13	0
+㋻	CIRCLED KATAKANA WA	circled,katakana,wa	13	0
+㋼	CIRCLED KATAKANA WI	circled,katakana,wi	13	0
+㋽	CIRCLED KATAKANA WE	circled,katakana,we	13	0
+㋾	CIRCLED KATAKANA WO	circled,katakana,wo	13	0
+㋿	SQUARE ERA NAME REIWA	square,era,name,reiwa	13	0
+🌀	CYCLONE	cyclone	14	1
+🌁	FOGGY	foggy	14	1
+🌂	CLOSED UMBRELLA	closed,umbrella	14	1
+🌃	NIGHT WITH STARS	night,stars	14	1
+🌄	SUNRISE OVER MOUNTAINS	sunrise,over,mountains	14	1
+🌅	SUNRISE	sunrise	14	1
+🌆	CITYSCAPE AT DUSK	cityscape,at,dusk	14	1
+🌇	SUNSET OVER BUILDINGS	sunset,over,buildings	14	1
+🌈	RAINBOW	rainbow	14	1
+🌉	BRIDGE AT NIGHT	bridge,at,night	14	1
+🌊	WATER WAVE	water,wave	14	1
+🌋	VOLCANO	volcano	14	1
+🌌	MILKY WAY	milky,way	14	1
+🌍	EARTH GLOBE EUROPE-AFRICA	earth,globe,europe,africa	14	1
+🌎	EARTH GLOBE AMERICAS	earth,globe,americas	14	1
+🌏	EARTH GLOBE ASIA-AUSTRALIA	earth,globe,asia,australia	14	1
+🌐	GLOBE WITH MERIDIANS	globe,meridians	14	1
+🌑	NEW MOON SYMBOL	new,moon,symbol	14	1
+🌒	WAXING CRESCENT MOON SYMBOL	waxing,crescent,moon,symbol	14	1
+🌓	FIRST QUARTER MOON SYMBOL	first,quarter,moon,symbol	14	1
+🌔	WAXING GIBBOUS MOON SYMBOL	waxing,gibbous,moon,symbol	14	1
+🌕	FULL MOON SYMBOL	full,moon,symbol	14	1
+🌖	WANING GIBBOUS MOON SYMBOL	waning,gibbous,moon,symbol	14	1
+🌗	LAST QUARTER MOON SYMBOL	last,quarter,moon,symbol	14	1
+🌘	WANING CRESCENT MOON SYMBOL	waning,crescent,moon,symbol	14	1
+🌙	CRESCENT MOON	crescent,moon	14	1
+🌚	NEW MOON WITH FACE	new,moon,face	14	1
+🌛	FIRST QUARTER MOON WITH FACE	first,quarter,moon,face	14	1
+🌜	LAST QUARTER MOON WITH FACE	last,quarter,moon,face	14	1
+🌝	FULL MOON WITH FACE	full,moon,face	14	1
+🌞	SUN WITH FACE	sun,face	14	1
+🌟	GLOWING STAR	glowing,star	14	1
+🌠	SHOOTING STAR	shooting,star	14	1
+🌡	THERMOMETER	thermometer	14	1
+🌢	BLACK DROPLET	black,droplet	14	1
+🌣	WHITE SUN	white,sun	14	1
+🌤	WHITE SUN WITH SMALL CLOUD	white,sun,small,cloud	14	1
+🌥	WHITE SUN BEHIND CLOUD	white,sun,behind,cloud	14	1
+🌦	WHITE SUN BEHIND CLOUD WITH RAIN	white,sun,behind,cloud,rain	14	1
+🌧	CLOUD WITH RAIN	cloud,rain	14	1
+🌨	CLOUD WITH SNOW	cloud,snow	14	1
+🌩	CLOUD WITH LIGHTNING	cloud,lightning	14	1
+🌪	CLOUD WITH TORNADO	cloud,tornado	14	1
+🌫	FOG	fog	14	1
+🌬	WIND BLOWING FACE	wind,blowing,face	14	1
+🌭	HOT DOG	hot,dog	14	1
+🌮	TACO	taco	14	1
+🌯	BURRITO	burrito	14	1
+🌰	CHESTNUT	chestnut	14	1
+🌱	SEEDLING	seedling	14	1
+🌲	EVERGREEN TREE	evergreen,tree	14	1
+🌳	DECIDUOUS TREE	deciduous,tree	14	1
+🌴	PALM TREE	palm,tree	14	1
+🌵	CACTUS	cactus	14	1
+🌶	HOT PEPPER	hot,pepper	14	1
+🌷	TULIP	tulip	14	1
+🌸	CHERRY BLOSSOM	cherry,blossom	14	1
+🌹	ROSE	rose	14	1
+🌺	HIBISCUS	hibiscus	14	1
+🌻	SUNFLOWER	sunflower	14	1
+🌼	BLOSSOM	blossom	14	1
+🌽	EAR OF MAIZE	ear,maize	14	1
+🌾	EAR OF RICE	ear,rice	14	1
+🌿	HERB	herb	14	1
+🍀	FOUR LEAF CLOVER	four,leaf,clover	14	1
+🍁	MAPLE LEAF	maple,leaf	14	1
+🍂	FALLEN LEAF	fallen,leaf	14	1
+🍃	LEAF FLUTTERING IN WIND	leaf,fluttering,in,wind	14	1
+🍄	MUSHROOM	mushroom	14	1
+🍅	TOMATO	tomato	14	1
+🍆	AUBERGINE	aubergine	14	1
+🍇	GRAPES	grapes	14	1
+🍈	MELON	melon	14	1
+🍉	WATERMELON	watermelon	14	1
+🍊	TANGERINE	tangerine	14	1
+🍋	LEMON	lemon	14	1
+🍌	BANANA	banana	14	1
+🍍	PINEAPPLE	pineapple	14	1
+🍎	RED APPLE	red,apple	14	1
+🍏	GREEN APPLE	green,apple	14	1
+🍐	PEAR	pear	14	1
+🍑	PEACH	peach	14	1
+🍒	CHERRIES	cherries	14	1
+🍓	STRAWBERRY	strawberry	14	1
+🍔	HAMBURGER	hamburger	14	1
+🍕	SLICE OF PIZZA	slice,pizza	14	1
+🍖	MEAT ON BONE	meat,on,bone	14	1
+🍗	POULTRY LEG	poultry,leg	14	1
+🍘	RICE CRACKER	rice,cracker	14	1
+🍙	RICE BALL	rice,ball	14	1
+🍚	COOKED RICE	cooked,rice	14	1
+🍛	CURRY AND RICE	curry,rice	14	1
+🍜	STEAMING BOWL	steaming,bowl	14	1
+🍝	SPAGHETTI	spaghetti	14	1
+🍞	BREAD	bread	14	1
+🍟	FRENCH FRIES	french,fries	14	1
+🍠	ROASTED SWEET POTATO	roasted,sweet,potato	14	1
+🍡	DANGO	dango	14	1
+🍢	ODEN	oden	14	1
+🍣	SUSHI	sushi	14	1
+🍤	FRIED SHRIMP	fried,shrimp	14	1
+🍥	FISH CAKE WITH SWIRL DESIGN	fish,cake,swirl,design	14	1
+🍦	SOFT ICE CREAM	soft,ice,cream	14	1
+🍧	SHAVED ICE	shaved,ice	14	1
+🍨	ICE CREAM	ice,cream	14	1
+🍩	DOUGHNUT	doughnut	14	1
+🍪	COOKIE	cookie	14	1
+🍫	CHOCOLATE BAR	chocolate,bar	14	1
+🍬	CANDY	candy	14	1
+🍭	LOLLIPOP	lollipop	14	1
+🍮	CUSTARD	custard	14	1
+🍯	HONEY POT	honey,pot	14	1
+🍰	SHORTCAKE	shortcake	14	1
+🍱	BENTO BOX	bento,box	14	1
+🍲	POT OF FOOD	pot,food	14	1
+🍳	COOKING	cooking	14	1
+🍴	FORK AND KNIFE	fork,knife	14	1
+🍵	TEACUP WITHOUT HANDLE	teacup,without,handle	14	1
+🍶	SAKE BOTTLE AND CUP	sake,bottle,cup	14	1
+🍷	WINE GLASS	wine,glass	14	1
+🍸	COCKTAIL GLASS	cocktail,glass	14	1
+🍹	TROPICAL DRINK	tropical,drink	14	1
+🍺	BEER MUG	beer,mug	14	1
+🍻	CLINKING BEER MUGS	clinking,beer,mugs	14	1
+🍼	BABY BOTTLE	baby,bottle	14	1
+🍽	FORK AND KNIFE WITH PLATE	fork,knife,plate	14	1
+🍾	BOTTLE WITH POPPING CORK	bottle,popping,cork	14	1
+🍿	POPCORN	popcorn	14	1
+🎀	RIBBON	ribbon	14	1
+🎁	WRAPPED PRESENT	wrapped,present	14	1
+🎂	BIRTHDAY CAKE	birthday,cake	14	1
+🎃	JACK-O-LANTERN	jack,o,lantern	14	1
+🎄	CHRISTMAS TREE	christmas,tree	14	1
+🎅	FATHER CHRISTMAS	father,christmas	14	1
+🎆	FIREWORKS	fireworks	14	1
+🎇	FIREWORK SPARKLER	firework,sparkler	14	1
+🎈	BALLOON	balloon	14	1
+🎉	PARTY POPPER	party,popper	14	1
+🎊	CONFETTI BALL	confetti,ball	14	1
+🎋	TANABATA TREE	tanabata,tree	14	1
+🎌	CROSSED FLAGS	crossed,flags	14	1
+🎍	PINE DECORATION	pine,decoration	14	1
+🎎	JAPANESE DOLLS	japanese,dolls	14	1
+🎏	CARP STREAMER	carp,streamer	14	1
+🎐	WIND CHIME	wind,chime	14	1
+🎑	MOON VIEWING CEREMONY	moon,viewing,ceremony	14	1
+🎒	SCHOOL SATCHEL	school,satchel	14	1
+🎓	GRADUATION CAP	graduation,cap	14	1
+🎔	HEART WITH TIP ON THE LEFT	heart,tip,on,left	14	1
+🎕	BOUQUET OF FLOWERS	bouquet,flowers	14	1
+🎖	MILITARY MEDAL	military,medal	14	1
+🎗	REMINDER RIBBON	reminder,ribbon	14	1
+🎘	MUSICAL KEYBOARD WITH JACKS	musical,keyboard,jacks	14	1
+🎙	STUDIO MICROPHONE	studio,microphone	14	1
+🎚	LEVEL SLIDER	level,slider	14	1
+🎛	CONTROL KNOBS	control,knobs	14	1
+🎜	BEAMED ASCENDING MUSICAL NOTES	beamed,ascending,musical,notes	14	1
+🎝	BEAMED DESCENDING MUSICAL NOTES	beamed,descending,musical,notes	14	1
+🎞	FILM FRAMES	film,frames	14	1
+🎟	ADMISSION TICKETS	admission,tickets	14	1
+🎠	CAROUSEL HORSE	carousel,horse	14	1
+🎡	FERRIS WHEEL	ferris,wheel	14	1
+🎢	ROLLER COASTER	roller,coaster	14	1
+🎣	FISHING POLE AND FISH	fishing,pole,fish	14	1
+🎤	MICROPHONE	microphone	14	1
+🎥	MOVIE CAMERA	movie,camera	14	1
+🎦	CINEMA	cinema	14	1
+🎧	HEADPHONE	headphone	14	1
+🎨	ARTIST PALETTE	artist,palette	14	1
+🎩	TOP HAT	top,hat	14	1
+🎪	CIRCUS TENT	circus,tent	14	1
+🎫	TICKET	ticket	14	1
+🎬	CLAPPER BOARD	clapper,board	14	1
+🎭	PERFORMING ARTS	performing,arts	14	1
+🎮	VIDEO GAME	video,game	14	1
+🎯	DIRECT HIT	direct,hit	14	1
+🎰	SLOT MACHINE	slot,machine	14	1
+🎱	BILLIARDS	billiards	14	1
+🎲	GAME DIE	game,die	14	1
+🎳	BOWLING	bowling	14	1
+🎴	FLOWER PLAYING CARDS	flower,playing,cards	14	1
+🎵	MUSICAL NOTE	musical,note	14	1
+🎶	MULTIPLE MUSICAL NOTES	multiple,musical,notes	14	1
+🎷	SAXOPHONE	saxophone	14	1
+🎸	GUITAR	guitar	14	1
+🎹	MUSICAL KEYBOARD	musical,keyboard	14	1
+🎺	TRUMPET	trumpet	14	1
+🎻	VIOLIN	violin	14	1
+🎼	MUSICAL SCORE	musical,score	14	1
+🎽	RUNNING SHIRT WITH SASH	running,shirt,sash	14	1
+🎾	TENNIS RACQUET AND BALL	tennis,racquet,ball	14	1
+🎿	SKI AND SKI BOOT	ski,boot	14	1
+🏀	BASKETBALL AND HOOP	basketball,hoop	14	1
+🏁	CHEQUERED FLAG	chequered,flag	14	1
+🏂	SNOWBOARDER	snowboarder	14	1
+🏃	RUNNER	runner	14	1
+🏄	SURFER	surfer	14	1
+🏅	SPORTS MEDAL	sports,medal	14	1
+🏆	TROPHY	trophy	14	1
+🏇	HORSE RACING	horse,racing	14	1
+🏈	AMERICAN FOOTBALL	american,football	14	1
+🏉	RUGBY FOOTBALL	rugby,football	14	1
+🏊	SWIMMER	swimmer	14	1
+🏋	WEIGHT LIFTER	weight,lifter	14	1
+🏌	GOLFER	golfer	14	1
+🏍	RACING MOTORCYCLE	racing,motorcycle	14	1
+🏎	RACING CAR	racing,car	14	1
+🏏	CRICKET BAT AND BALL	cricket,bat,ball	14	1
+🏐	VOLLEYBALL	volleyball	14	1
+🏑	FIELD HOCKEY STICK AND BALL	field,hockey,stick,ball	14	1
+🏒	ICE HOCKEY STICK AND PUCK	ice,hockey,stick,puck	14	1
+🏓	TABLE TENNIS PADDLE AND BALL	table,tennis,paddle,ball	14	1
+🏔	SNOW CAPPED MOUNTAIN	snow,capped,mountain	14	1
+🏕	CAMPING	camping	14	1
+🏖	BEACH WITH UMBRELLA	beach,umbrella	14	1
+🏗	BUILDING CONSTRUCTION	building,construction	14	1
+🏘	HOUSE BUILDINGS	house,buildings	14	1
+🏙	CITYSCAPE	cityscape	14	1
+🏚	DERELICT HOUSE BUILDING	derelict,house,building	14	1
+🏛	CLASSICAL BUILDING	classical,building	14	1
+🏜	DESERT	desert	14	1
+🏝	DESERT ISLAND	desert,island	14	1
+🏞	NATIONAL PARK	national,park	14	1
+🏟	STADIUM	stadium	14	1
+🏠	HOUSE BUILDING	house,building	14	1
+🏡	HOUSE WITH GARDEN	house,garden	14	1
+🏢	OFFICE BUILDING	office,building	14	1
+🏣	JAPANESE POST OFFICE	japanese,post,office	14	1
+🏤	EUROPEAN POST OFFICE	european,post,office	14	1
+🏥	HOSPITAL	hospital	14	1
+🏦	BANK	bank	14	1
+🏧	AUTOMATED TELLER MACHINE	automated,teller,machine	14	1
+🏨	HOTEL	hotel	14	1
+🏩	LOVE HOTEL	love,hotel	14	1
+🏪	CONVENIENCE STORE	convenience,store	14	1
+🏫	SCHOOL	school	14	1
+🏬	DEPARTMENT STORE	department,store	14	1
+🏭	FACTORY	factory	14	1
+🏮	IZAKAYA LANTERN	izakaya,lantern	14	1
+🏯	JAPANESE CASTLE	japanese,castle	14	1
+🏰	EUROPEAN CASTLE	european,castle	14	1
+🏱	WHITE PENNANT	white,pennant	14	1
+🏲	BLACK PENNANT	black,pennant	14	1
+🏳	WAVING WHITE FLAG	waving,white,flag	14	1
+🏴	WAVING BLACK FLAG	waving,black,flag	14	1
+🏵	ROSETTE	rosette	14	1
+🏶	BLACK ROSETTE	black,rosette	14	1
+🏷	LABEL	label	14	1
+🏸	BADMINTON RACQUET AND SHUTTLECOCK	badminton,racquet,shuttlecock	14	1
+🏹	BOW AND ARROW	bow,arrow	14	1
+🏺	AMPHORA	amphora	14	1
+🏻	EMOJI MODIFIER FITZPATRICK TYPE-1-2	emoji,modifier,fitzpatrick,type,1,2	14	1
+🏼	EMOJI MODIFIER FITZPATRICK TYPE-3	emoji,modifier,fitzpatrick,type,3	14	1
+🏽	EMOJI MODIFIER FITZPATRICK TYPE-4	emoji,modifier,fitzpatrick,type,4	14	1
+🏾	EMOJI MODIFIER FITZPATRICK TYPE-5	emoji,modifier,fitzpatrick,type,5	14	1
+🏿	EMOJI MODIFIER FITZPATRICK TYPE-6	emoji,modifier,fitzpatrick,type,6	14	1
+🐀	RAT	rat	14	1
+🐁	MOUSE	mouse	14	1
+🐂	OX	ox	14	1
+🐃	WATER BUFFALO	water,buffalo	14	1
+🐄	COW	cow	14	1
+🐅	TIGER	tiger	14	1
+🐆	LEOPARD	leopard	14	1
+🐇	RABBIT	rabbit	14	1
+🐈	CAT	cat	14	1
+🐉	DRAGON	dragon	14	1
+🐊	CROCODILE	crocodile	14	1
+🐋	WHALE	whale	14	1
+🐌	SNAIL	snail	14	1
+🐍	SNAKE	snake	14	1
+🐎	HORSE	horse	14	1
+🐏	RAM	ram	14	1
+🐐	GOAT	goat	14	1
+🐑	SHEEP	sheep	14	1
+🐒	MONKEY	monkey	14	1
+🐓	ROOSTER	rooster	14	1
+🐔	CHICKEN	chicken	14	1
+🐕	DOG	dog	14	1
+🐖	PIG	pig	14	1
+🐗	BOAR	boar	14	1
+🐘	ELEPHANT	elephant	14	1
+🐙	OCTOPUS	octopus	14	1
+🐚	SPIRAL SHELL	spiral,shell	14	1
+🐛	BUG	bug	14	1
+🐜	ANT	ant	14	1
+🐝	HONEYBEE	honeybee	14	1
+🐞	LADY BEETLE	lady,beetle	14	1
+🐟	FISH	fish	14	1
+🐠	TROPICAL FISH	tropical,fish	14	1
+🐡	BLOWFISH	blowfish	14	1
+🐢	TURTLE	turtle	14	1
+🐣	HATCHING CHICK	hatching,chick	14	1
+🐤	BABY CHICK	baby,chick	14	1
+🐥	FRONT-FACING BABY CHICK	front,facing,baby,chick	14	1
+🐦	BIRD	bird	14	1
+🐧	PENGUIN	penguin	14	1
+🐨	KOALA	koala	14	1
+🐩	POODLE	poodle	14	1
+🐪	DROMEDARY CAMEL	dromedary,camel	14	1
+🐫	BACTRIAN CAMEL	bactrian,camel	14	1
+🐬	DOLPHIN	dolphin	14	1
+🐭	MOUSE FACE	mouse,face	14	1
+🐮	COW FACE	cow,face	14	1
+🐯	TIGER FACE	tiger,face	14	1
+🐰	RABBIT FACE	rabbit,face	14	1
+🐱	CAT FACE	cat,face	14	1
+🐲	DRAGON FACE	dragon,face	14	1
+🐳	SPOUTING WHALE	spouting,whale	14	1
+🐴	HORSE FACE	horse,face	14	1
+🐵	MONKEY FACE	monkey,face	14	1
+🐶	DOG FACE	dog,face	14	1
+🐷	PIG FACE	pig,face	14	1
+🐸	FROG FACE	frog,face	14	1
+🐹	HAMSTER FACE	hamster,face	14	1
+🐺	WOLF FACE	wolf,face	14	1
+🐻	BEAR FACE	bear,face	14	1
+🐼	PANDA FACE	panda,face	14	1
+🐽	PIG NOSE	pig,nose	14	1
+🐾	PAW PRINTS	paw,prints	14	1
+🐿	CHIPMUNK	chipmunk	14	1
+👀	EYES	eyes	14	1
+👁	EYE	eye	14	1
+👂	EAR	ear	14	1
+👃	NOSE	nose	14	1
+👄	MOUTH	mouth	14	1
+👅	TONGUE	tongue	14	1
+👆	WHITE UP POINTING BACKHAND INDEX	white,up,pointing,backhand,index	14	1
+👇	WHITE DOWN POINTING BACKHAND INDEX	white,down,pointing,backhand,index	14	1
+👈	WHITE LEFT POINTING BACKHAND INDEX	white,left,pointing,backhand,index	14	1
+👉	WHITE RIGHT POINTING BACKHAND INDEX	white,right,pointing,backhand,index	14	1
+👊	FISTED HAND SIGN	fisted,hand,sign	14	1
+👋	WAVING HAND SIGN	waving,hand,sign	14	1
+👌	OK HAND SIGN	ok,hand,sign	14	1
+👍	THUMBS UP SIGN	thumbs,up,sign	14	1
+👎	THUMBS DOWN SIGN	thumbs,down,sign	14	1
+👏	CLAPPING HANDS SIGN	clapping,hands,sign	14	1
+👐	OPEN HANDS SIGN	open,hands,sign	14	1
+👑	CROWN	crown	14	1
+👒	WOMANS HAT	womans,hat	14	1
+👓	EYEGLASSES	eyeglasses	14	1
+👔	NECKTIE	necktie	14	1
+👕	T-SHIRT	t,shirt	14	1
+👖	JEANS	jeans	14	1
+👗	DRESS	dress	14	1
+👘	KIMONO	kimono	14	1
+👙	BIKINI	bikini	14	1
+👚	WOMANS CLOTHES	womans,clothes	14	1
+👛	PURSE	purse	14	1
+👜	HANDBAG	handbag	14	1
+👝	POUCH	pouch	14	1
+👞	MANS SHOE	mans,shoe	14	1
+👟	ATHLETIC SHOE	athletic,shoe	14	1
+👠	HIGH-HEELED SHOE	high,heeled,shoe	14	1
+👡	WOMANS SANDAL	womans,sandal	14	1
+👢	WOMANS BOOTS	womans,boots	14	1
+👣	FOOTPRINTS	footprints	14	1
+👤	BUST IN SILHOUETTE	bust,in,silhouette	14	1
+👥	BUSTS IN SILHOUETTE	busts,in,silhouette	14	1
+👦	BOY	boy	14	1
+👧	GIRL	girl	14	1
+👨	MAN	man	14	1
+👩	WOMAN	woman	14	1
+👪	FAMILY	family	14	1
+👫	MAN AND WOMAN HOLDING HANDS	man,woman,holding,hands	14	1
+👬	TWO MEN HOLDING HANDS	two,men,holding,hands	14	1
+👭	TWO WOMEN HOLDING HANDS	two,women,holding,hands	14	1
+👮	POLICE OFFICER	police,officer	14	1
+👯	WOMAN WITH BUNNY EARS	woman,bunny,ears	14	1
+👰	BRIDE WITH VEIL	bride,veil	14	1
+👱	PERSON WITH BLOND HAIR	person,blond,hair	14	1
+👲	MAN WITH GUA PI MAO	man,gua,pi,mao	14	1
+👳	MAN WITH TURBAN	man,turban	14	1
+👴	OLDER MAN	older,man	14	1
+👵	OLDER WOMAN	older,woman	14	1
+👶	BABY	baby	14	1
+👷	CONSTRUCTION WORKER	construction,worker	14	1
+👸	PRINCESS	princess	14	1
+👹	JAPANESE OGRE	japanese,ogre	14	1
+👺	JAPANESE GOBLIN	japanese,goblin	14	1
+👻	GHOST	ghost	14	1
+👼	BABY ANGEL	baby,angel	14	1
+👽	EXTRATERRESTRIAL ALIEN	extraterrestrial,alien	14	1
+👾	ALIEN MONSTER	alien,monster	14	1
+👿	IMP	imp	14	1
+💀	SKULL	skull	14	1
+💁	INFORMATION DESK PERSON	information,desk,person	14	1
+💂	GUARDSMAN	guardsman	14	1
+💃	DANCER	dancer	14	1
+💄	LIPSTICK	lipstick	14	1
+💅	NAIL POLISH	nail,polish	14	1
+💆	FACE MASSAGE	face,massage	14	1
+💇	HAIRCUT	haircut	14	1
+💈	BARBER POLE	barber,pole	14	1
+💉	SYRINGE	syringe	14	1
+💊	PILL	pill	14	1
+💋	KISS MARK	kiss,mark	14	1
+💌	LOVE LETTER	love,letter	14	1
+💍	RING	ring	14	1
+💎	GEM STONE	gem,stone	14	1
+💏	KISS	kiss	14	1
+💐	BOUQUET	bouquet	14	1
+💑	COUPLE WITH HEART	couple,heart	14	1
+💒	WEDDING	wedding	14	1
+💓	BEATING HEART	beating,heart	14	1
+💔	BROKEN HEART	broken,heart	14	1
+💕	TWO HEARTS	two,hearts	14	1
+💖	SPARKLING HEART	sparkling,heart	14	1
+💗	GROWING HEART	growing,heart	14	1
+💘	HEART WITH ARROW	heart,arrow	14	1
+💙	BLUE HEART	blue,heart	14	1
+💚	GREEN HEART	green,heart	14	1
+💛	YELLOW HEART	yellow,heart	14	1
+💜	PURPLE HEART	purple,heart	14	1
+💝	HEART WITH RIBBON	heart,ribbon	14	1
+💞	REVOLVING HEARTS	revolving,hearts	14	1
+💟	HEART DECORATION	heart,decoration	14	1
+💠	DIAMOND SHAPE WITH A DOT INSIDE	diamond,shape,dot,inside	14	1
+💡	ELECTRIC LIGHT BULB	electric,light,bulb	14	1
+💢	ANGER SYMBOL	anger,symbol	14	1
+💣	BOMB	bomb	14	1
+💤	SLEEPING SYMBOL	sleeping,symbol	14	1
+💥	COLLISION SYMBOL	collision,symbol	14	1
+💦	SPLASHING SWEAT SYMBOL	splashing,sweat,symbol	14	1
+💧	DROPLET	droplet	14	1
+💨	DASH SYMBOL	dash,symbol	14	1
+💩	PILE OF POO	pile,poo	14	1
+💪	FLEXED BICEPS	flexed,biceps	14	1
+💫	DIZZY SYMBOL	dizzy,symbol	14	1
+💬	SPEECH BALLOON	speech,balloon	14	1
+💭	THOUGHT BALLOON	thought,balloon	14	1
+💮	WHITE FLOWER	white,flower	14	1
+💯	HUNDRED POINTS SYMBOL	hundred,points,symbol	14	1
+💰	MONEY BAG	money,bag	14	1
+💱	CURRENCY EXCHANGE	currency,exchange	14	1
+💲	HEAVY DOLLAR SIGN	heavy,dollar,sign	14	1
+💳	CREDIT CARD	credit,card	14	1
+💴	BANKNOTE WITH YEN SIGN	banknote,yen,sign	14	1
+💵	BANKNOTE WITH DOLLAR SIGN	banknote,dollar,sign	14	1
+💶	BANKNOTE WITH EURO SIGN	banknote,euro,sign	14	1
+💷	BANKNOTE WITH POUND SIGN	banknote,pound,sign	14	1
+💸	MONEY WITH WINGS	money,wings	14	1
+💹	CHART WITH UPWARDS TREND AND YEN SIGN	chart,upwards,trend,yen,sign	14	1
+💺	SEAT	seat	14	1
+💻	PERSONAL COMPUTER	personal,computer	14	1
+💼	BRIEFCASE	briefcase	14	1
+💽	MINIDISC	minidisc	14	1
+💾	FLOPPY DISK	floppy,disk	14	1
+💿	OPTICAL DISC	optical,disc	14	1
+📀	DVD	dvd	14	1
+📁	FILE FOLDER	file,folder	14	1
+📂	OPEN FILE FOLDER	open,file,folder	14	1
+📃	PAGE WITH CURL	page,curl	14	1
+📄	PAGE FACING UP	page,facing,up	14	1
+📅	CALENDAR	calendar	14	1
+📆	TEAR-OFF CALENDAR	tear,off,calendar	14	1
+📇	CARD INDEX	card,index	14	1
+📈	CHART WITH UPWARDS TREND	chart,upwards,trend	14	1
+📉	CHART WITH DOWNWARDS TREND	chart,downwards,trend	14	1
+📊	BAR CHART	bar,chart	14	1
+📋	CLIPBOARD	clipboard	14	1
+📌	PUSHPIN	pushpin	14	1
+📍	ROUND PUSHPIN	round,pushpin	14	1
+📎	PAPERCLIP	paperclip	14	1
+📏	STRAIGHT RULER	straight,ruler	14	1
+📐	TRIANGULAR RULER	triangular,ruler	14	1
+📑	BOOKMARK TABS	bookmark,tabs	14	1
+📒	LEDGER	ledger	14	1
+📓	NOTEBOOK	notebook	14	1
+📔	NOTEBOOK WITH DECORATIVE COVER	notebook,decorative,cover	14	1
+📕	CLOSED BOOK	closed,book	14	1
+📖	OPEN BOOK	open,book	14	1
+📗	GREEN BOOK	green,book	14	1
+📘	BLUE BOOK	blue,book	14	1
+📙	ORANGE BOOK	orange,book	14	1
+📚	BOOKS	books	14	1
+📛	NAME BADGE	name,badge	14	1
+📜	SCROLL	scroll	14	1
+📝	MEMO	memo	14	1
+📞	TELEPHONE RECEIVER	telephone,receiver	14	1
+📟	PAGER	pager	14	1
+📠	FAX MACHINE	fax,machine	14	1
+📡	SATELLITE ANTENNA	satellite,antenna	14	1
+📢	PUBLIC ADDRESS LOUDSPEAKER	public,address,loudspeaker	14	1
+📣	CHEERING MEGAPHONE	cheering,megaphone	14	1
+📤	OUTBOX TRAY	outbox,tray	14	1
+📥	INBOX TRAY	inbox,tray	14	1
+📦	PACKAGE	package	14	1
+📧	E-MAIL SYMBOL	e,mail,symbol	14	1
+📨	INCOMING ENVELOPE	incoming,envelope	14	1
+📩	ENVELOPE WITH DOWNWARDS ARROW ABOVE	envelope,downwards,arrow,above	14	1
+📪	CLOSED MAILBOX WITH LOWERED FLAG	closed,mailbox,lowered,flag	14	1
+📫	CLOSED MAILBOX WITH RAISED FLAG	closed,mailbox,raised,flag	14	1
+📬	OPEN MAILBOX WITH RAISED FLAG	open,mailbox,raised,flag	14	1
+📭	OPEN MAILBOX WITH LOWERED FLAG	open,mailbox,lowered,flag	14	1
+📮	POSTBOX	postbox	14	1
+📯	POSTAL HORN	postal,horn	14	1
+📰	NEWSPAPER	newspaper	14	1
+📱	MOBILE PHONE	mobile,phone	14	1
+📲	MOBILE PHONE WITH RIGHTWARDS ARROW AT LEFT	mobile,phone,rightwards,arrow,at,left	14	1
+📳	VIBRATION MODE	vibration,mode	14	1
+📴	MOBILE PHONE OFF	mobile,phone,off	14	1
+📵	NO MOBILE PHONES	no,mobile,phones	14	1
+📶	ANTENNA WITH BARS	antenna,bars	14	1
+📷	CAMERA	camera	14	1
+📸	CAMERA WITH FLASH	camera,flash	14	1
+📹	VIDEO CAMERA	video,camera	14	1
+📺	TELEVISION	television	14	1
+📻	RADIO	radio	14	1
+📼	VIDEOCASSETTE	videocassette	14	1
+📽	FILM PROJECTOR	film,projector	14	1
+📾	PORTABLE STEREO	portable,stereo	14	1
+📿	PRAYER BEADS	prayer,beads	14	1
+🔀	TWISTED RIGHTWARDS ARROWS	twisted,rightwards,arrows	14	1
+🔁	CLOCKWISE RIGHTWARDS AND LEFTWARDS OPEN CIRCLE ARROWS	clockwise,rightwards,leftwards,open,circle,arrows	14	1
+🔂	CLOCKWISE RIGHTWARDS AND LEFTWARDS OPEN CIRCLE ARROWS WITH CIRCLED ONE OVERLAY	clockwise,rightwards,leftwards,open,circle,arrows,circled,one,overlay	14	1
+🔃	CLOCKWISE DOWNWARDS AND UPWARDS OPEN CIRCLE ARROWS	clockwise,downwards,upwards,open,circle,arrows	14	1
+🔄	ANTICLOCKWISE DOWNWARDS AND UPWARDS OPEN CIRCLE ARROWS	anticlockwise,downwards,upwards,open,circle,arrows	14	1
+🔅	LOW BRIGHTNESS SYMBOL	low,brightness,symbol	14	1
+🔆	HIGH BRIGHTNESS SYMBOL	high,brightness,symbol	14	1
+🔇	SPEAKER WITH CANCELLATION STROKE	speaker,cancellation,stroke	14	1
+🔈	SPEAKER	speaker	14	1
+🔉	SPEAKER WITH ONE SOUND WAVE	speaker,one,sound,wave	14	1
+🔊	SPEAKER WITH THREE SOUND WAVES	speaker,three,sound,waves	14	1
+🔋	BATTERY	battery	14	1
+🔌	ELECTRIC PLUG	electric,plug	14	1
+🔍	LEFT-POINTING MAGNIFYING GLASS	left,pointing,magnifying,glass	14	1
+🔎	RIGHT-POINTING MAGNIFYING GLASS	right,pointing,magnifying,glass	14	1
+🔏	LOCK WITH INK PEN	lock,ink,pen	14	1
+🔐	CLOSED LOCK WITH KEY	closed,lock,key	14	1
+🔑	KEY	key	14	1
+🔒	LOCK	lock	14	1
+🔓	OPEN LOCK	open,lock	14	1
+🔔	BELL	bell	14	1
+🔕	BELL WITH CANCELLATION STROKE	bell,cancellation,stroke	14	1
+🔖	BOOKMARK	bookmark	14	1
+🔗	LINK SYMBOL	link,symbol	14	1
+🔘	RADIO BUTTON	radio,button	14	1
+🔙	BACK WITH LEFTWARDS ARROW ABOVE	back,leftwards,arrow,above	14	1
+🔚	END WITH LEFTWARDS ARROW ABOVE	end,leftwards,arrow,above	14	1
+🔛	ON WITH EXCLAMATION MARK WITH LEFT RIGHT ARROW ABOVE	on,exclamation,mark,left,right,arrow,above	14	1
+🔜	SOON WITH RIGHTWARDS ARROW ABOVE	soon,rightwards,arrow,above	14	1
+🔝	TOP WITH UPWARDS ARROW ABOVE	top,upwards,arrow,above	14	1
+🔞	NO ONE UNDER EIGHTEEN SYMBOL	no,one,under,eighteen,symbol	14	1
+🔟	KEYCAP TEN	keycap,ten	14	1
+🔠	INPUT SYMBOL FOR LATIN CAPITAL LETTERS	input,symbol,latin,capital,letters	14	1
+🔡	INPUT SYMBOL FOR LATIN SMALL LETTERS	input,symbol,latin,small,letters	14	1
+🔢	INPUT SYMBOL FOR NUMBERS	input,symbol,numbers	14	1
+🔣	INPUT SYMBOL FOR SYMBOLS	input,symbol,symbols	14	1
+🔤	INPUT SYMBOL FOR LATIN LETTERS	input,symbol,latin,letters	14	1
+🔥	FIRE	fire	14	1
+🔦	ELECTRIC TORCH	electric,torch	14	1
+🔧	WRENCH	wrench	14	1
+🔨	HAMMER	hammer	14	1
+🔩	NUT AND BOLT	nut,bolt	14	1
+🔪	HOCHO	hocho	14	1
+🔫	PISTOL	pistol	14	1
+🔬	MICROSCOPE	microscope	14	1
+🔭	TELESCOPE	telescope	14	1
+🔮	CRYSTAL BALL	crystal,ball	14	1
+🔯	SIX POINTED STAR WITH MIDDLE DOT	six,pointed,star,middle,dot	14	1
+🔰	JAPANESE SYMBOL FOR BEGINNER	japanese,symbol,beginner	14	1
+🔱	TRIDENT EMBLEM	trident,emblem	14	1
+🔲	BLACK SQUARE BUTTON	black,square,button	14	1
+🔳	WHITE SQUARE BUTTON	white,square,button	14	1
+🔴	LARGE RED CIRCLE	large,red,circle	14	1
+🔵	LARGE BLUE CIRCLE	large,blue,circle	14	1
+🔶	LARGE ORANGE DIAMOND	large,orange,diamond	14	1
+🔷	LARGE BLUE DIAMOND	large,blue,diamond	14	1
+🔸	SMALL ORANGE DIAMOND	small,orange,diamond	14	1
+🔹	SMALL BLUE DIAMOND	small,blue,diamond	14	1
+🔺	UP-POINTING RED TRIANGLE	up,pointing,red,triangle	14	1
+🔻	DOWN-POINTING RED TRIANGLE	down,pointing,red,triangle	14	1
+🔼	UP-POINTING SMALL RED TRIANGLE	up,pointing,small,red,triangle	14	1
+🔽	DOWN-POINTING SMALL RED TRIANGLE	down,pointing,small,red,triangle	14	1
+🔾	LOWER RIGHT SHADOWED WHITE CIRCLE	lower,right,shadowed,white,circle	14	1
+🔿	UPPER RIGHT SHADOWED WHITE CIRCLE	upper,right,shadowed,white,circle	14	1
+🕀	CIRCLED CROSS POMMEE	circled,cross,pommee	14	1
+🕁	CROSS POMMEE WITH HALF-CIRCLE BELOW	cross,pommee,half,circle,below	14	1
+🕂	CROSS POMMEE	cross,pommee	14	1
+🕃	NOTCHED LEFT SEMICIRCLE WITH THREE DOTS	notched,left,semicircle,three,dots	14	1
+🕄	NOTCHED RIGHT SEMICIRCLE WITH THREE DOTS	notched,right,semicircle,three,dots	14	1
+🕅	SYMBOL FOR MARKS CHAPTER	symbol,marks,chapter	14	1
+🕆	WHITE LATIN CROSS	white,latin,cross	14	1
+🕇	HEAVY LATIN CROSS	heavy,latin,cross	14	1
+🕈	CELTIC CROSS	celtic,cross	14	1
+🕉	OM SYMBOL	om,symbol	14	1
+🕊	DOVE OF PEACE	dove,peace	14	1
+🕋	KAABA	kaaba	14	1
+🕌	MOSQUE	mosque	14	1
+🕍	SYNAGOGUE	synagogue	14	1
+🕎	MENORAH WITH NINE BRANCHES	menorah,nine,branches	14	1
+🕏	BOWL OF HYGIEIA	bowl,hygieia	14	1
+🕐	CLOCK FACE ONE OCLOCK	clock,face,one,oclock	14	1
+🕑	CLOCK FACE TWO OCLOCK	clock,face,two,oclock	14	1
+🕒	CLOCK FACE THREE OCLOCK	clock,face,three,oclock	14	1
+🕓	CLOCK FACE FOUR OCLOCK	clock,face,four,oclock	14	1
+🕔	CLOCK FACE FIVE OCLOCK	clock,face,five,oclock	14	1
+🕕	CLOCK FACE SIX OCLOCK	clock,face,six,oclock	14	1
+🕖	CLOCK FACE SEVEN OCLOCK	clock,face,seven,oclock	14	1
+🕗	CLOCK FACE EIGHT OCLOCK	clock,face,eight,oclock	14	1
+🕘	CLOCK FACE NINE OCLOCK	clock,face,nine,oclock	14	1
+🕙	CLOCK FACE TEN OCLOCK	clock,face,ten,oclock	14	1
+🕚	CLOCK FACE ELEVEN OCLOCK	clock,face,eleven,oclock	14	1
+🕛	CLOCK FACE TWELVE OCLOCK	clock,face,twelve,oclock	14	1
+🕜	CLOCK FACE ONE-THIRTY	clock,face,one,thirty	14	1
+🕝	CLOCK FACE TWO-THIRTY	clock,face,two,thirty	14	1
+🕞	CLOCK FACE THREE-THIRTY	clock,face,three,thirty	14	1
+🕟	CLOCK FACE FOUR-THIRTY	clock,face,four,thirty	14	1
+🕠	CLOCK FACE FIVE-THIRTY	clock,face,five,thirty	14	1
+🕡	CLOCK FACE SIX-THIRTY	clock,face,six,thirty	14	1
+🕢	CLOCK FACE SEVEN-THIRTY	clock,face,seven,thirty	14	1
+🕣	CLOCK FACE EIGHT-THIRTY	clock,face,eight,thirty	14	1
+🕤	CLOCK FACE NINE-THIRTY	clock,face,nine,thirty	14	1
+🕥	CLOCK FACE TEN-THIRTY	clock,face,ten,thirty	14	1
+🕦	CLOCK FACE ELEVEN-THIRTY	clock,face,eleven,thirty	14	1
+🕧	CLOCK FACE TWELVE-THIRTY	clock,face,twelve,thirty	14	1
+🕨	RIGHT SPEAKER	right,speaker	14	1
+🕩	RIGHT SPEAKER WITH ONE SOUND WAVE	right,speaker,one,sound,wave	14	1
+🕪	RIGHT SPEAKER WITH THREE SOUND WAVES	right,speaker,three,sound,waves	14	1
+🕫	BULLHORN	bullhorn	14	1
+🕬	BULLHORN WITH SOUND WAVES	bullhorn,sound,waves	14	1
+🕭	RINGING BELL	ringing,bell	14	1
+🕮	BOOK	book	14	1
+🕯	CANDLE	candle	14	1
+🕰	MANTELPIECE CLOCK	mantelpiece,clock	14	1
+🕱	BLACK SKULL AND CROSSBONES	black,skull,crossbones	14	1
+🕲	NO PIRACY	no,piracy	14	1
+🕳	HOLE	hole	14	1
+🕴	MAN IN BUSINESS SUIT LEVITATING	man,in,business,suit,levitating	14	1
+🕵	SLEUTH OR SPY	sleuth,spy	14	1
+🕶	DARK SUNGLASSES	dark,sunglasses	14	1
+🕷	SPIDER	spider	14	1
+🕸	SPIDER WEB	spider,web	14	1
+🕹	JOYSTICK	joystick	14	1
+🕺	MAN DANCING	man,dancing	14	1
+🕻	LEFT HAND TELEPHONE RECEIVER	left,hand,telephone,receiver	14	1
+🕼	TELEPHONE RECEIVER WITH PAGE	telephone,receiver,page	14	1
+🕽	RIGHT HAND TELEPHONE RECEIVER	right,hand,telephone,receiver	14	1
+🕾	WHITE TOUCHTONE TELEPHONE	white,touchtone,telephone	14	1
+🕿	BLACK TOUCHTONE TELEPHONE	black,touchtone,telephone	14	1
+🖀	TELEPHONE ON TOP OF MODEM	telephone,on,top,modem	14	1
+🖁	CLAMSHELL MOBILE PHONE	clamshell,mobile,phone	14	1
+🖂	BACK OF ENVELOPE	back,envelope	14	1
+🖃	STAMPED ENVELOPE	stamped,envelope	14	1
+🖄	ENVELOPE WITH LIGHTNING	envelope,lightning	14	1
+🖅	FLYING ENVELOPE	flying,envelope	14	1
+🖆	PEN OVER STAMPED ENVELOPE	pen,over,stamped,envelope	14	1
+🖇	LINKED PAPERCLIPS	linked,paperclips	14	1
+🖈	BLACK PUSHPIN	black,pushpin	14	1
+🖉	LOWER LEFT PENCIL	lower,left,pencil	14	1
+🖊	LOWER LEFT BALLPOINT PEN	lower,left,ballpoint,pen	14	1
+🖋	LOWER LEFT FOUNTAIN PEN	lower,left,fountain,pen	14	1
+🖌	LOWER LEFT PAINTBRUSH	lower,left,paintbrush	14	1
+🖍	LOWER LEFT CRAYON	lower,left,crayon	14	1
+🖎	LEFT WRITING HAND	left,writing,hand	14	1
+🖏	TURNED OK HAND SIGN	turned,ok,hand,sign	14	1
+🖐	RAISED HAND WITH FINGERS SPLAYED	raised,hand,fingers,splayed	14	1
+🖑	REVERSED RAISED HAND WITH FINGERS SPLAYED	reversed,raised,hand,fingers,splayed	14	1
+🖒	REVERSED THUMBS UP SIGN	reversed,thumbs,up,sign	14	1
+🖓	REVERSED THUMBS DOWN SIGN	reversed,thumbs,down,sign	14	1
+🖔	REVERSED VICTORY HAND	reversed,victory,hand	14	1
+🖕	REVERSED HAND WITH MIDDLE FINGER EXTENDED	reversed,hand,middle,finger,extended	14	1
+🖖	RAISED HAND WITH PART BETWEEN MIDDLE AND RING FINGERS	raised,hand,part,between,middle,ring,fingers	14	1
+🖗	WHITE DOWN POINTING LEFT HAND INDEX	white,down,pointing,left,hand,index	14	1
+🖘	SIDEWAYS WHITE LEFT POINTING INDEX	sideways,white,left,pointing,index	14	1
+🖙	SIDEWAYS WHITE RIGHT POINTING INDEX	sideways,white,right,pointing,index	14	1
+🖚	SIDEWAYS BLACK LEFT POINTING INDEX	sideways,black,left,pointing,index	14	1
+🖛	SIDEWAYS BLACK RIGHT POINTING INDEX	sideways,black,right,pointing,index	14	1
+🖜	BLACK LEFT POINTING BACKHAND INDEX	black,left,pointing,backhand,index	14	1
+🖝	BLACK RIGHT POINTING BACKHAND INDEX	black,right,pointing,backhand,index	14	1
+🖞	SIDEWAYS WHITE UP POINTING INDEX	sideways,white,up,pointing,index	14	1
+🖟	SIDEWAYS WHITE DOWN POINTING INDEX	sideways,white,down,pointing,index	14	1
+🖠	SIDEWAYS BLACK UP POINTING INDEX	sideways,black,up,pointing,index	14	1
+🖡	SIDEWAYS BLACK DOWN POINTING INDEX	sideways,black,down,pointing,index	14	1
+🖢	BLACK UP POINTING BACKHAND INDEX	black,up,pointing,backhand,index	14	1
+🖣	BLACK DOWN POINTING BACKHAND INDEX	black,down,pointing,backhand,index	14	1
+🖤	BLACK HEART	black,heart	14	1
+🖥	DESKTOP COMPUTER	desktop,computer	14	1
+🖦	KEYBOARD AND MOUSE	keyboard,mouse	14	1
+🖧	THREE NETWORKED COMPUTERS	three,networked,computers	14	1
+🖨	PRINTER	printer	14	1
+🖩	POCKET CALCULATOR	pocket,calculator	14	1
+🖪	BLACK HARD SHELL FLOPPY DISK	black,hard,shell,floppy,disk	14	1
+🖫	WHITE HARD SHELL FLOPPY DISK	white,hard,shell,floppy,disk	14	1
+🖬	SOFT SHELL FLOPPY DISK	soft,shell,floppy,disk	14	1
+🖭	TAPE CARTRIDGE	tape,cartridge	14	1
+🖮	WIRED KEYBOARD	wired,keyboard	14	1
+🖯	ONE BUTTON MOUSE	one,button,mouse	14	1
+🖰	TWO BUTTON MOUSE	two,button,mouse	14	1
+🖱	THREE BUTTON MOUSE	three,button,mouse	14	1
+🖲	TRACKBALL	trackball	14	1
+🖳	OLD PERSONAL COMPUTER	old,personal,computer	14	1
+🖴	HARD DISK	hard,disk	14	1
+🖵	SCREEN	screen	14	1
+🖶	PRINTER ICON	printer,icon	14	1
+🖷	FAX ICON	fax,icon	14	1
+🖸	OPTICAL DISC ICON	optical,disc,icon	14	1
+🖹	DOCUMENT WITH TEXT	document,text	14	1
+🖺	DOCUMENT WITH TEXT AND PICTURE	document,text,picture	14	1
+🖻	DOCUMENT WITH PICTURE	document,picture	14	1
+🖼	FRAME WITH PICTURE	frame,picture	14	1
+🖽	FRAME WITH TILES	frame,tiles	14	1
+🖾	FRAME WITH AN X	frame,x	14	1
+🖿	BLACK FOLDER	black,folder	14	1
+🗀	FOLDER	folder	14	1
+🗁	OPEN FOLDER	open,folder	14	1
+🗂	CARD INDEX DIVIDERS	card,index,dividers	14	1
+🗃	CARD FILE BOX	card,file,box	14	1
+🗄	FILE CABINET	file,cabinet	14	1
+🗅	EMPTY NOTE	empty,note	14	1
+🗆	EMPTY NOTE PAGE	empty,note,page	14	1
+🗇	EMPTY NOTE PAD	empty,note,pad	14	1
+🗈	NOTE	note	14	1
+🗉	NOTE PAGE	note,page	14	1
+🗊	NOTE PAD	note,pad	14	1
+🗋	EMPTY DOCUMENT	empty,document	14	1
+🗌	EMPTY PAGE	empty,page	14	1
+🗍	EMPTY PAGES	empty,pages	14	1
+🗎	DOCUMENT	document	14	1
+🗏	PAGE	page	14	1
+🗐	PAGES	pages	14	1
+🗑	WASTEBASKET	wastebasket	14	1
+🗒	SPIRAL NOTE PAD	spiral,note,pad	14	1
+🗓	SPIRAL CALENDAR PAD	spiral,calendar,pad	14	1
+🗔	DESKTOP WINDOW	desktop,window	14	1
+🗕	MINIMIZE	minimize	14	1
+🗖	MAXIMIZE	maximize	14	1
+🗗	OVERLAP	overlap	14	1
+🗘	CLOCKWISE RIGHT AND LEFT SEMICIRCLE ARROWS	clockwise,right,left,semicircle,arrows	14	1
+🗙	CANCELLATION X	cancellation,x	14	1
+🗚	INCREASE FONT SIZE SYMBOL	increase,font,size,symbol	14	1
+🗛	DECREASE FONT SIZE SYMBOL	decrease,font,size,symbol	14	1
+🗜	COMPRESSION	compression	14	1
+🗝	OLD KEY	old,key	14	1
+🗞	ROLLED-UP NEWSPAPER	rolled,up,newspaper	14	1
+🗟	PAGE WITH CIRCLED TEXT	page,circled,text	14	1
+🗠	STOCK CHART	stock,chart	14	1
+🗡	DAGGER KNIFE	dagger,knife	14	1
+🗢	LIPS	lips	14	1
+🗣	SPEAKING HEAD IN SILHOUETTE	speaking,head,in,silhouette	14	1
+🗤	THREE RAYS ABOVE	three,rays,above	14	1
+🗥	THREE RAYS BELOW	three,rays,below	14	1
+🗦	THREE RAYS LEFT	three,rays,left	14	1
+🗧	THREE RAYS RIGHT	three,rays,right	14	1
+🗨	LEFT SPEECH BUBBLE	left,speech,bubble	14	1
+🗩	RIGHT SPEECH BUBBLE	right,speech,bubble	14	1
+🗪	TWO SPEECH BUBBLES	two,speech,bubbles	14	1
+🗫	THREE SPEECH BUBBLES	three,speech,bubbles	14	1
+🗬	LEFT THOUGHT BUBBLE	left,thought,bubble	14	1
+🗭	RIGHT THOUGHT BUBBLE	right,thought,bubble	14	1
+🗮	LEFT ANGER BUBBLE	left,anger,bubble	14	1
+🗯	RIGHT ANGER BUBBLE	right,anger,bubble	14	1
+🗰	MOOD BUBBLE	mood,bubble	14	1
+🗱	LIGHTNING MOOD BUBBLE	lightning,mood,bubble	14	1
+🗲	LIGHTNING MOOD	lightning,mood	14	1
+🗳	BALLOT BOX WITH BALLOT	ballot,box	14	1
+🗴	BALLOT SCRIPT X	ballot,script,x	14	1
+🗵	BALLOT BOX WITH SCRIPT X	ballot,box,script,x	14	1
+🗶	BALLOT BOLD SCRIPT X	ballot,bold,script,x	14	1
+🗷	BALLOT BOX WITH BOLD SCRIPT X	ballot,box,bold,script,x	14	1
+🗸	LIGHT CHECK MARK	light,check,mark	14	1
+🗹	BALLOT BOX WITH BOLD CHECK	ballot,box,bold,check	14	1
+🗺	WORLD MAP	world,map	14	1
+🗻	MOUNT FUJI	mount,fuji	14	1
+🗼	TOKYO TOWER	tokyo,tower	14	1
+🗽	STATUE OF LIBERTY	statue,liberty	14	1
+🗾	SILHOUETTE OF JAPAN	silhouette,japan	14	1
+🗿	MOYAI	moyai	14	1
+🚀	ROCKET	rocket	15	1
+🚁	HELICOPTER	helicopter	15	1
+🚂	STEAM LOCOMOTIVE	steam,locomotive	15	1
+🚃	RAILWAY CAR	railway,car	15	1
+🚄	HIGH-SPEED TRAIN	high,speed,train	15	1
+🚅	HIGH-SPEED TRAIN WITH BULLET NOSE	high,speed,train,bullet,nose	15	1
+🚆	TRAIN	train	15	1
+🚇	METRO	metro	15	1
+🚈	LIGHT RAIL	light,rail	15	1
+🚉	STATION	station	15	1
+🚊	TRAM	tram	15	1
+🚋	TRAM CAR	tram,car	15	1
+🚌	BUS	bus	15	1
+🚍	ONCOMING BUS	oncoming,bus	15	1
+🚎	TROLLEYBUS	trolleybus	15	1
+🚏	BUS STOP	bus,stop	15	1
+🚐	MINIBUS	minibus	15	1
+🚑	AMBULANCE	ambulance	15	1
+🚒	FIRE ENGINE	fire,engine	15	1
+🚓	POLICE CAR	police,car	15	1
+🚔	ONCOMING POLICE CAR	oncoming,police,car	15	1
+🚕	TAXI	taxi	15	1
+🚖	ONCOMING TAXI	oncoming,taxi	15	1
+🚗	AUTOMOBILE	automobile	15	1
+🚘	ONCOMING AUTOMOBILE	oncoming,automobile	15	1
+🚙	RECREATIONAL VEHICLE	recreational,vehicle	15	1
+🚚	DELIVERY TRUCK	delivery,truck	15	1
+🚛	ARTICULATED LORRY	articulated,lorry	15	1
+🚜	TRACTOR	tractor	15	1
+🚝	MONORAIL	monorail	15	1
+🚞	MOUNTAIN RAILWAY	mountain,railway	15	1
+🚟	SUSPENSION RAILWAY	suspension,railway	15	1
+🚠	MOUNTAIN CABLEWAY	mountain,cableway	15	1
+🚡	AERIAL TRAMWAY	aerial,tramway	15	1
+🚢	SHIP	ship	15	1
+🚣	ROWBOAT	rowboat	15	1
+🚤	SPEEDBOAT	speedboat	15	1
+🚥	HORIZONTAL TRAFFIC LIGHT	horizontal,traffic,light	15	1
+🚦	VERTICAL TRAFFIC LIGHT	vertical,traffic,light	15	1
+🚧	CONSTRUCTION SIGN	construction,sign	15	1
+🚨	POLICE CARS REVOLVING LIGHT	police,cars,revolving,light	15	1
+🚩	TRIANGULAR FLAG ON POST	triangular,flag,on,post	15	1
+🚪	DOOR	door	15	1
+🚫	NO ENTRY SIGN	no,entry,sign	15	1
+🚬	SMOKING SYMBOL	smoking,symbol	15	1
+🚭	NO SMOKING SYMBOL	no,smoking,symbol	15	1
+🚮	PUT LITTER IN ITS PLACE SYMBOL	put,litter,in,its,place,symbol	15	1
+🚯	DO NOT LITTER SYMBOL	do,not,litter,symbol	15	1
+🚰	POTABLE WATER SYMBOL	potable,water,symbol	15	1
+🚱	NON-POTABLE WATER SYMBOL	non,potable,water,symbol	15	1
+🚲	BICYCLE	bicycle	15	1
+🚳	NO BICYCLES	no,bicycles	15	1
+🚴	BICYCLIST	bicyclist	15	1
+🚵	MOUNTAIN BICYCLIST	mountain,bicyclist	15	1
+🚶	PEDESTRIAN	pedestrian	15	1
+🚷	NO PEDESTRIANS	no,pedestrians	15	1
+🚸	CHILDREN CROSSING	children,crossing	15	1
+🚹	MENS SYMBOL	mens,symbol	15	1
+🚺	WOMENS SYMBOL	womens,symbol	15	1
+🚻	RESTROOM	restroom	15	1
+🚼	BABY SYMBOL	baby,symbol	15	1
+🚽	TOILET	toilet	15	1
+🚾	WATER CLOSET	water,closet	15	1
+🚿	SHOWER	shower	15	1
+🛀	BATH	bath	15	1
+🛁	BATHTUB	bathtub	15	1
+🛂	PASSPORT CONTROL	passport,control	15	1
+🛃	CUSTOMS	customs	15	1
+🛄	BAGGAGE CLAIM	baggage,claim	15	1
+🛅	LEFT LUGGAGE	left,luggage	15	1
+🛆	TRIANGLE WITH ROUNDED CORNERS	triangle,rounded,corners	15	1
+🛇	PROHIBITED SIGN	prohibited,sign	15	1
+🛈	CIRCLED INFORMATION SOURCE	circled,information,source	15	1
+🛉	BOYS SYMBOL	boys,symbol	15	1
+🛊	GIRLS SYMBOL	girls,symbol	15	1
+🛋	COUCH AND LAMP	couch,lamp	15	1
+🛌	SLEEPING ACCOMMODATION	sleeping,accommodation	15	1
+🛍	SHOPPING BAGS	shopping,bags	15	1
+🛎	BELLHOP BELL	bellhop,bell	15	1
+🛏	BED	bed	15	1
+🛐	PLACE OF WORSHIP	place,worship	15	1
+🛑	OCTAGONAL SIGN	octagonal,sign	15	1
+🛒	SHOPPING TROLLEY	shopping,trolley	15	1
+🛓	STUPA	stupa	15	1
+🛔	PAGODA	pagoda	15	1
+🛕	HINDU TEMPLE	hindu,temple	15	1
+🛖	HUT	hut	15	1
+🛗	ELEVATOR	elevator	15	1
+🛘	LANDSLIDE	landslide	15	1
+🛙	LIGHTHOUSE	lighthouse	15	1
+🛜	WIRELESS	wireless	15	1
+🛝	PLAYGROUND SLIDE	playground,slide	15	1
+🛞	WHEEL	wheel	15	1
+🛟	RING BUOY	ring,buoy	15	1
+🛠	HAMMER AND WRENCH	hammer,wrench	15	1
+🛡	SHIELD	shield	15	1
+🛢	OIL DRUM	oil,drum	15	1
+🛣	MOTORWAY	motorway	15	1
+🛤	RAILWAY TRACK	railway,track	15	1
+🛥	MOTOR BOAT	motor,boat	15	1
+🛦	UP-POINTING MILITARY AIRPLANE	up,pointing,military,airplane	15	1
+🛧	UP-POINTING AIRPLANE	up,pointing,airplane	15	1
+🛨	UP-POINTING SMALL AIRPLANE	up,pointing,small,airplane	15	1
+🛩	SMALL AIRPLANE	small,airplane	15	1
+🛪	NORTHEAST-POINTING AIRPLANE	northeast,pointing,airplane	15	1
+🛫	AIRPLANE DEPARTURE	airplane,departure	15	1
+🛬	AIRPLANE ARRIVING	airplane,arriving	15	1
+🛰	SATELLITE	satellite	15	1
+🛱	ONCOMING FIRE ENGINE	oncoming,fire,engine	15	1
+🛲	DIESEL LOCOMOTIVE	diesel,locomotive	15	1
+🛳	PASSENGER SHIP	passenger,ship	15	1
+🛴	SCOOTER	scooter	15	1
+🛵	MOTOR SCOOTER	motor,scooter	15	1
+🛶	CANOE	canoe	15	1
+🛷	SLED	sled	15	1
+🛸	FLYING SAUCER	flying,saucer	15	1
+🛹	SKATEBOARD	skateboard	15	1
+🛺	AUTO RICKSHAW	auto,rickshaw	15	1
+🛻	PICKUP TRUCK	pickup,truck	15	1
+🛼	ROLLER SKATE	roller,skate	15	1
+🞀	BLACK LEFT-POINTING ISOSCELES RIGHT TRIANGLE	black,left,pointing,isosceles,right,triangle	16	1
+🞁	BLACK UP-POINTING ISOSCELES RIGHT TRIANGLE	black,up,pointing,isosceles,right,triangle	16	1
+🞂	BLACK RIGHT-POINTING ISOSCELES RIGHT TRIANGLE	black,right,pointing,isosceles,triangle	16	1
+🞃	BLACK DOWN-POINTING ISOSCELES RIGHT TRIANGLE	black,down,pointing,isosceles,right,triangle	16	1
+🞄	BLACK SLIGHTLY SMALL CIRCLE	black,slightly,small,circle	16	1
+🞅	MEDIUM BOLD WHITE CIRCLE	medium,bold,white,circle	16	1
+🞆	BOLD WHITE CIRCLE	bold,white,circle	16	1
+🞇	HEAVY WHITE CIRCLE	heavy,white,circle	16	1
+🞈	VERY HEAVY WHITE CIRCLE	very,heavy,white,circle	16	1
+🞉	EXTREMELY HEAVY WHITE CIRCLE	extremely,heavy,white,circle	16	1
+🞊	WHITE CIRCLE CONTAINING BLACK SMALL CIRCLE	white,circle,containing,black,small	16	1
+🞋	ROUND TARGET	round,target	16	1
+🞌	BLACK TINY SQUARE	black,tiny,square	16	1
+🞍	BLACK SLIGHTLY SMALL SQUARE	black,slightly,small,square	16	1
+🞎	LIGHT WHITE SQUARE	light,white,square	16	1
+🞏	MEDIUM WHITE SQUARE	medium,white,square	16	1
+🞐	BOLD WHITE SQUARE	bold,white,square	16	1
+🞑	HEAVY WHITE SQUARE	heavy,white,square	16	1
+🞒	VERY HEAVY WHITE SQUARE	very,heavy,white,square	16	1
+🞓	EXTREMELY HEAVY WHITE SQUARE	extremely,heavy,white,square	16	1
+🞔	WHITE SQUARE CONTAINING BLACK VERY SMALL SQUARE	white,square,containing,black,very,small	16	1
+🞕	WHITE SQUARE CONTAINING BLACK MEDIUM SQUARE	white,square,containing,black,medium	16	1
+🞖	SQUARE TARGET	square,target	16	1
+🞗	BLACK TINY DIAMOND	black,tiny,diamond	16	1
+🞘	BLACK VERY SMALL DIAMOND	black,very,small,diamond	16	1
+🞙	BLACK MEDIUM SMALL DIAMOND	black,medium,small,diamond	16	1
+🞚	WHITE DIAMOND CONTAINING BLACK VERY SMALL DIAMOND	white,diamond,containing,black,very,small	16	1
+🞛	WHITE DIAMOND CONTAINING BLACK MEDIUM DIAMOND	white,diamond,containing,black,medium	16	1
+🞜	DIAMOND TARGET	diamond,target	16	1
+🞝	BLACK TINY LOZENGE	black,tiny,lozenge	16	1
+🞞	BLACK VERY SMALL LOZENGE	black,very,small,lozenge	16	1
+🞟	BLACK MEDIUM SMALL LOZENGE	black,medium,small,lozenge	16	1
+🞠	WHITE LOZENGE CONTAINING BLACK SMALL LOZENGE	white,lozenge,containing,black,small	16	1
+🞡	THIN GREEK CROSS	thin,greek,cross	16	1
+🞢	LIGHT GREEK CROSS	light,greek,cross	16	1
+🞣	MEDIUM GREEK CROSS	medium,greek,cross	16	1
+🞤	BOLD GREEK CROSS	bold,greek,cross	16	1
+🞥	VERY BOLD GREEK CROSS	very,bold,greek,cross	16	1
+🞦	VERY HEAVY GREEK CROSS	very,heavy,greek,cross	16	1
+🞧	EXTREMELY HEAVY GREEK CROSS	extremely,heavy,greek,cross	16	1
+🞨	THIN SALTIRE	thin,saltire	16	1
+🞩	LIGHT SALTIRE	light,saltire	16	1
+🞪	MEDIUM SALTIRE	medium,saltire	16	1
+🞫	BOLD SALTIRE	bold,saltire	16	1
+🞬	HEAVY SALTIRE	heavy,saltire	16	1
+🞭	VERY HEAVY SALTIRE	very,heavy,saltire	16	1
+🞮	EXTREMELY HEAVY SALTIRE	extremely,heavy,saltire	16	1
+🞯	LIGHT FIVE SPOKED ASTERISK	light,five,spoked,asterisk	16	1
+🞰	MEDIUM FIVE SPOKED ASTERISK	medium,five,spoked,asterisk	16	1
+🞱	BOLD FIVE SPOKED ASTERISK	bold,five,spoked,asterisk	16	1
+🞲	HEAVY FIVE SPOKED ASTERISK	heavy,five,spoked,asterisk	16	1
+🞳	VERY HEAVY FIVE SPOKED ASTERISK	very,heavy,five,spoked,asterisk	16	1
+🞴	EXTREMELY HEAVY FIVE SPOKED ASTERISK	extremely,heavy,five,spoked,asterisk	16	1
+🞵	LIGHT SIX SPOKED ASTERISK	light,six,spoked,asterisk	16	1
+🞶	MEDIUM SIX SPOKED ASTERISK	medium,six,spoked,asterisk	16	1
+🞷	BOLD SIX SPOKED ASTERISK	bold,six,spoked,asterisk	16	1
+🞸	HEAVY SIX SPOKED ASTERISK	heavy,six,spoked,asterisk	16	1
+🞹	VERY HEAVY SIX SPOKED ASTERISK	very,heavy,six,spoked,asterisk	16	1
+🞺	EXTREMELY HEAVY SIX SPOKED ASTERISK	extremely,heavy,six,spoked,asterisk	16	1
+🞻	LIGHT EIGHT SPOKED ASTERISK	light,eight,spoked,asterisk	16	1
+🞼	MEDIUM EIGHT SPOKED ASTERISK	medium,eight,spoked,asterisk	16	1
+🞽	BOLD EIGHT SPOKED ASTERISK	bold,eight,spoked,asterisk	16	1
+🞾	HEAVY EIGHT SPOKED ASTERISK	heavy,eight,spoked,asterisk	16	1
+🞿	VERY HEAVY EIGHT SPOKED ASTERISK	very,heavy,eight,spoked,asterisk	16	1
+🟀	LIGHT THREE POINTED BLACK STAR	light,three,pointed,black,star	16	1
+🟁	MEDIUM THREE POINTED BLACK STAR	medium,three,pointed,black,star	16	1
+🟂	THREE POINTED BLACK STAR	three,pointed,black,star	16	1
+🟃	MEDIUM THREE POINTED PINWHEEL STAR	medium,three,pointed,pinwheel,star	16	1
+🟄	LIGHT FOUR POINTED BLACK STAR	light,four,pointed,black,star	16	1
+🟅	MEDIUM FOUR POINTED BLACK STAR	medium,four,pointed,black,star	16	1
+🟆	FOUR POINTED BLACK STAR	four,pointed,black,star	16	1
+🟇	MEDIUM FOUR POINTED PINWHEEL STAR	medium,four,pointed,pinwheel,star	16	1
+🟈	REVERSE LIGHT FOUR POINTED PINWHEEL STAR	reverse,light,four,pointed,pinwheel,star	16	1
+🟉	LIGHT FIVE POINTED BLACK STAR	light,five,pointed,black,star	16	1
+🟊	HEAVY FIVE POINTED BLACK STAR	heavy,five,pointed,black,star	16	1
+🟋	MEDIUM SIX POINTED BLACK STAR	medium,six,pointed,black,star	16	1
+🟌	HEAVY SIX POINTED BLACK STAR	heavy,six,pointed,black,star	16	1
+🟍	SIX POINTED PINWHEEL STAR	six,pointed,pinwheel,star	16	1
+🟎	MEDIUM EIGHT POINTED BLACK STAR	medium,eight,pointed,black,star	16	1
+🟏	HEAVY EIGHT POINTED BLACK STAR	heavy,eight,pointed,black,star	16	1
+🟐	VERY HEAVY EIGHT POINTED BLACK STAR	very,heavy,eight,pointed,black,star	16	1
+🟑	HEAVY EIGHT POINTED PINWHEEL STAR	heavy,eight,pointed,pinwheel,star	16	1
+🟒	LIGHT TWELVE POINTED BLACK STAR	light,twelve,pointed,black,star	16	1
+🟓	HEAVY TWELVE POINTED BLACK STAR	heavy,twelve,pointed,black,star	16	1
+🟔	HEAVY TWELVE POINTED PINWHEEL STAR	heavy,twelve,pointed,pinwheel,star	16	1
+🟕	CIRCLED TRIANGLE	circled,triangle	16	1
+🟖	NEGATIVE CIRCLED TRIANGLE	negative,circled,triangle	16	1
+🟗	CIRCLED SQUARE	circled,square	16	1
+🟘	NEGATIVE CIRCLED SQUARE	negative,circled,square	16	1
+🟙	NINE POINTED WHITE STAR	nine,pointed,white,star	16	1
+🟚	BLACK CIRCLE WITH WHITE VERTICAL BAR	black,circle,white,vertical,bar	16	1
+🟛	BULLET IN DOUBLE CIRCLE	bullet,in,double,circle	16	1
+🟠	LARGE ORANGE CIRCLE	large,orange,circle	16	1
+🟡	LARGE YELLOW CIRCLE	large,yellow,circle	16	1
+🟢	LARGE GREEN CIRCLE	large,green,circle	16	1
+🟣	LARGE PURPLE CIRCLE	large,purple,circle	16	1
+🟤	LARGE BROWN CIRCLE	large,brown,circle	16	1
+🟥	LARGE RED SQUARE	large,red,square	16	1
+🟦	LARGE BLUE SQUARE	large,blue,square	16	1
+🟧	LARGE ORANGE SQUARE	large,orange,square	16	1
+🟨	LARGE YELLOW SQUARE	large,yellow,square	16	1
+🟩	LARGE GREEN SQUARE	large,green,square	16	1
+🟪	LARGE PURPLE SQUARE	large,purple,square	16	1
+🟫	LARGE BROWN SQUARE	large,brown,square	16	1
+🟰	HEAVY EQUALS SIGN	heavy,equals,sign	16	1
+🟱	CIRCLE WITH DOUBLE VERTICAL AND HORIZONTAL LINE	circle,double,vertical,horizontal,line	16	1
+🟲	DOUBLE CIRCLE WITH DOUBLE HORIZONTAL LINE	double,circle,horizontal,line	16	1
+🟳	CIRCLED BOTTOM RIGHT OBLIQUE HALF BLACK CIRCLE	circled,bottom,right,oblique,half,black,circle	16	1
+🟴	LEFT HALF WHITE CIRCLE	left,half,white,circle	16	1
+🟵	RIGHT HALF WHITE CIRCLE	right,half,white,circle	16	1
+🟶	TRANSPARENT CUBE	transparent,cube	16	1
+🟷	WHITE CUBE	white,cube	16	1
+🟸	HORIZONTAL DOUBLE WHITE SMALL SQUARE	horizontal,double,white,small,square	16	1
+🟹	VERTICAL DOUBLE WHITE SMALL SQUARE	vertical,double,white,small,square	16	1
+🟺	WHITE SQUARE WITH BOTTOM HALF BISECTED	white,square,bottom,half,bisected	16	1
+🟻	WHITE SQUARE WITH TOP HALF BISECTED	white,square,top,half,bisected	16	1
+🟼	WHITE SQUARE WITH HORIZONTAL AND VERTICAL BISECTING LINES	white,square,horizontal,vertical,bisecting,lines	16	1
+🟽	LOWER LEFT FLATTENED RIGHT TRIANGLE	lower,left,flattened,right,triangle	16	1
+🟾	LOWER RIGHT FLATTENED RIGHT TRIANGLE	lower,right,flattened,triangle	16	1
+🟿	RHOMBUS	rhombus	16	1
+🤀	CIRCLED CROSS FORMEE WITH FOUR DOTS	circled,cross,formee,four,dots	17	1
+🤁	CIRCLED CROSS FORMEE WITH TWO DOTS	circled,cross,formee,two,dots	17	1
+🤂	CIRCLED CROSS FORMEE	circled,cross,formee	17	1
+🤃	LEFT HALF CIRCLE WITH FOUR DOTS	left,half,circle,four,dots	17	1
+🤄	LEFT HALF CIRCLE WITH THREE DOTS	left,half,circle,three,dots	17	1
+🤅	LEFT HALF CIRCLE WITH TWO DOTS	left,half,circle,two,dots	17	1
+🤆	LEFT HALF CIRCLE WITH DOT	left,half,circle,dot	17	1
+🤇	LEFT HALF CIRCLE	left,half,circle	17	1
+🤈	DOWNWARD FACING HOOK	downward,facing,hook	17	1
+🤉	DOWNWARD FACING NOTCHED HOOK	downward,facing,notched,hook	17	1
+🤊	DOWNWARD FACING HOOK WITH DOT	downward,facing,hook,dot	17	1
+🤋	DOWNWARD FACING NOTCHED HOOK WITH DOT	downward,facing,notched,hook,dot	17	1
+🤌	PINCHED FINGERS	pinched,fingers	17	1
+🤍	WHITE HEART	white,heart	17	1
+🤎	BROWN HEART	brown,heart	17	1
+🤏	PINCHING HAND	pinching,hand	17	1
+🤐	ZIPPER-MOUTH FACE	zipper,mouth,face	17	1
+🤑	MONEY-MOUTH FACE	money,mouth,face	17	1
+🤒	FACE WITH THERMOMETER	face,thermometer	17	1
+🤓	NERD FACE	nerd,face	17	1
+🤔	THINKING FACE	thinking,face	17	1
+🤕	FACE WITH HEAD-BANDAGE	face,head,bandage	17	1
+🤖	ROBOT FACE	robot,face	17	1
+🤗	HUGGING FACE	hugging,face	17	1
+🤘	SIGN OF THE HORNS	sign,horns	17	1
+🤙	CALL ME HAND	call,me,hand	17	1
+🤚	RAISED BACK OF HAND	raised,back,hand	17	1
+🤛	LEFT-FACING FIST	left,facing,fist	17	1
+🤜	RIGHT-FACING FIST	right,facing,fist	17	1
+🤝	HANDSHAKE	handshake	17	1
+🤞	HAND WITH INDEX AND MIDDLE FINGERS CROSSED	hand,index,middle,fingers,crossed	17	1
+🤟	I LOVE YOU HAND SIGN	i,love,you,hand,sign	17	1
+🤠	FACE WITH COWBOY HAT	face,cowboy,hat	17	1
+🤡	CLOWN FACE	clown,face	17	1
+🤢	NAUSEATED FACE	nauseated,face	17	1
+🤣	ROLLING ON THE FLOOR LAUGHING	rolling,on,floor,laughing	17	1
+🤤	DROOLING FACE	drooling,face	17	1
+🤥	LYING FACE	lying,face	17	1
+🤦	FACE PALM	face,palm	17	1
+🤧	SNEEZING FACE	sneezing,face	17	1
+🤨	FACE WITH ONE EYEBROW RAISED	face,one,eyebrow,raised	17	1
+🤩	GRINNING FACE WITH STAR EYES	grinning,face,star,eyes	17	1
+🤪	GRINNING FACE WITH ONE LARGE AND ONE SMALL EYE	grinning,face,one,large,small,eye	17	1
+🤫	FACE WITH FINGER COVERING CLOSED LIPS	face,finger,covering,closed,lips	17	1
+🤬	SERIOUS FACE WITH SYMBOLS COVERING MOUTH	serious,face,symbols,covering,mouth	17	1
+🤭	SMILING FACE WITH SMILING EYES AND HAND COVERING MOUTH	smiling,face,eyes,hand,covering,mouth	17	1
+🤮	FACE WITH OPEN MOUTH VOMITING	face,open,mouth,vomiting	17	1
+🤯	SHOCKED FACE WITH EXPLODING HEAD	shocked,face,exploding,head	17	1
+🤰	PREGNANT WOMAN	pregnant,woman	17	1
+🤱	BREAST-FEEDING	breast,feeding	17	1
+🤲	PALMS UP TOGETHER	palms,up,together	17	1
+🤳	SELFIE	selfie	17	1
+🤴	PRINCE	prince	17	1
+🤵	MAN IN TUXEDO	man,in,tuxedo	17	1
+🤶	MOTHER CHRISTMAS	mother,christmas	17	1
+🤷	SHRUG	shrug	17	1
+🤸	PERSON DOING CARTWHEEL	person,doing,cartwheel	17	1
+🤹	JUGGLING	juggling	17	1
+🤺	FENCER	fencer	17	1
+🤻	MODERN PENTATHLON	modern,pentathlon	17	1
+🤼	WRESTLERS	wrestlers	17	1
+🤽	WATER POLO	water,polo	17	1
+🤾	HANDBALL	handball	17	1
+🤿	DIVING MASK	diving,mask	17	1
+🥀	WILTED FLOWER	wilted,flower	17	1
+🥁	DRUM WITH DRUMSTICKS	drum,drumsticks	17	1
+🥂	CLINKING GLASSES	clinking,glasses	17	1
+🥃	TUMBLER GLASS	tumbler,glass	17	1
+🥄	SPOON	spoon	17	1
+🥅	GOAL NET	goal,net	17	1
+🥆	RIFLE	rifle	17	1
+🥇	FIRST PLACE MEDAL	first,place,medal	17	1
+🥈	SECOND PLACE MEDAL	second,place,medal	17	1
+🥉	THIRD PLACE MEDAL	third,place,medal	17	1
+🥊	BOXING GLOVE	boxing,glove	17	1
+🥋	MARTIAL ARTS UNIFORM	martial,arts,uniform	17	1
+🥌	CURLING STONE	curling,stone	17	1
+🥍	LACROSSE STICK AND BALL	lacrosse,stick,ball	17	1
+🥎	SOFTBALL	softball	17	1
+🥏	FLYING DISC	flying,disc	17	1
+🥐	CROISSANT	croissant	17	1
+🥑	AVOCADO	avocado	17	1
+🥒	CUCUMBER	cucumber	17	1
+🥓	BACON	bacon	17	1
+🥔	POTATO	potato	17	1
+🥕	CARROT	carrot	17	1
+🥖	BAGUETTE BREAD	baguette,bread	17	1
+🥗	GREEN SALAD	green,salad	17	1
+🥘	SHALLOW PAN OF FOOD	shallow,pan,food	17	1
+🥙	STUFFED FLATBREAD	stuffed,flatbread	17	1
+🥚	EGG	egg	17	1
+🥛	GLASS OF MILK	glass,milk	17	1
+🥜	PEANUTS	peanuts	17	1
+🥝	KIWIFRUIT	kiwifruit	17	1
+🥞	PANCAKES	pancakes	17	1
+🥟	DUMPLING	dumpling	17	1
+🥠	FORTUNE COOKIE	fortune,cookie	17	1
+🥡	TAKEOUT BOX	takeout,box	17	1
+🥢	CHOPSTICKS	chopsticks	17	1
+🥣	BOWL WITH SPOON	bowl,spoon	17	1
+🥤	CUP WITH STRAW	cup,straw	17	1
+🥥	COCONUT	coconut	17	1
+🥦	BROCCOLI	broccoli	17	1
+🥧	PIE	pie	17	1
+🥨	PRETZEL	pretzel	17	1
+🥩	CUT OF MEAT	cut,meat	17	1
+🥪	SANDWICH	sandwich	17	1
+🥫	CANNED FOOD	canned,food	17	1
+🥬	LEAFY GREEN	leafy,green	17	1
+🥭	MANGO	mango	17	1
+🥮	MOON CAKE	moon,cake	17	1
+🥯	BAGEL	bagel	17	1
+🥰	SMILING FACE WITH SMILING EYES AND THREE HEARTS	smiling,face,eyes,three,hearts	17	1
+🥱	YAWNING FACE	yawning,face	17	1
+🥲	SMILING FACE WITH TEAR	smiling,face,tear	17	1
+🥳	FACE WITH PARTY HORN AND PARTY HAT	face,party,horn,hat	17	1
+🥴	FACE WITH UNEVEN EYES AND WAVY MOUTH	face,uneven,eyes,wavy,mouth	17	1
+🥵	OVERHEATED FACE	overheated,face	17	1
+🥶	FREEZING FACE	freezing,face	17	1
+🥷	NINJA	ninja	17	1
+🥸	DISGUISED FACE	disguised,face	17	1
+🥹	FACE HOLDING BACK TEARS	face,holding,back,tears	17	1
+🥺	FACE WITH PLEADING EYES	face,pleading,eyes	17	1
+🥻	SARI	sari	17	1
+🥼	LAB COAT	lab,coat	17	1
+🥽	GOGGLES	goggles	17	1
+🥾	HIKING BOOT	hiking,boot	17	1
+🥿	FLAT SHOE	flat,shoe	17	1
+🦀	CRAB	crab	17	1
+🦁	LION FACE	lion,face	17	1
+🦂	SCORPION	scorpion	17	1
+🦃	TURKEY	turkey	17	1
+🦄	UNICORN FACE	unicorn,face	17	1
+🦅	EAGLE	eagle	17	1
+🦆	DUCK	duck	17	1
+🦇	BAT	bat	17	1
+🦈	SHARK	shark	17	1
+🦉	OWL	owl	17	1
+🦊	FOX FACE	fox,face	17	1
+🦋	BUTTERFLY	butterfly	17	1
+🦌	DEER	deer	17	1
+🦍	GORILLA	gorilla	17	1
+🦎	LIZARD	lizard	17	1
+🦏	RHINOCEROS	rhinoceros	17	1
+🦐	SHRIMP	shrimp	17	1
+🦑	SQUID	squid	17	1
+🦒	GIRAFFE FACE	giraffe,face	17	1
+🦓	ZEBRA FACE	zebra,face	17	1
+🦔	HEDGEHOG	hedgehog	17	1
+🦕	SAUROPOD	sauropod	17	1
+🦖	T-REX	t,rex	17	1
+🦗	CRICKET	cricket	17	1
+🦘	KANGAROO	kangaroo	17	1
+🦙	LLAMA	llama	17	1
+🦚	PEACOCK	peacock	17	1
+🦛	HIPPOPOTAMUS	hippopotamus	17	1
+🦜	PARROT	parrot	17	1
+🦝	RACCOON	raccoon	17	1
+🦞	LOBSTER	lobster	17	1
+🦟	MOSQUITO	mosquito	17	1
+🦠	MICROBE	microbe	17	1
+🦡	BADGER	badger	17	1
+🦢	SWAN	swan	17	1
+🦣	MAMMOTH	mammoth	17	1
+🦤	DODO	dodo	17	1
+🦥	SLOTH	sloth	17	1
+🦦	OTTER	otter	17	1
+🦧	ORANGUTAN	orangutan	17	1
+🦨	SKUNK	skunk	17	1
+🦩	FLAMINGO	flamingo	17	1
+🦪	OYSTER	oyster	17	1
+🦫	BEAVER	beaver	17	1
+🦬	BISON	bison	17	1
+🦭	SEAL	seal	17	1
+🦮	GUIDE DOG	guide,dog	17	1
+🦯	PROBING CANE	probing,cane	17	1
+🦰	EMOJI COMPONENT RED HAIR	emoji,component,red,hair	17	1
+🦱	EMOJI COMPONENT CURLY HAIR	emoji,component,curly,hair	17	1
+🦲	EMOJI COMPONENT BALD	emoji,component,bald	17	1
+🦳	EMOJI COMPONENT WHITE HAIR	emoji,component,white,hair	17	1
+🦴	BONE	bone	17	1
+🦵	LEG	leg	17	1
+🦶	FOOT	foot	17	1
+🦷	TOOTH	tooth	17	1
+🦸	SUPERHERO	superhero	17	1
+🦹	SUPERVILLAIN	supervillain	17	1
+🦺	SAFETY VEST	safety,vest	17	1
+🦻	EAR WITH HEARING AID	ear,hearing,aid	17	1
+🦼	MOTORIZED WHEELCHAIR	motorized,wheelchair	17	1
+🦽	MANUAL WHEELCHAIR	manual,wheelchair	17	1
+🦾	MECHANICAL ARM	mechanical,arm	17	1
+🦿	MECHANICAL LEG	mechanical,leg	17	1
+🧀	CHEESE WEDGE	cheese,wedge	17	1
+🧁	CUPCAKE	cupcake	17	1
+🧂	SALT SHAKER	salt,shaker	17	1
+🧃	BEVERAGE BOX	beverage,box	17	1
+🧄	GARLIC	garlic	17	1
+🧅	ONION	onion	17	1
+🧆	FALAFEL	falafel	17	1
+🧇	WAFFLE	waffle	17	1
+🧈	BUTTER	butter	17	1
+🧉	MATE DRINK	mate,drink	17	1
+🧊	ICE CUBE	ice,cube	17	1
+🧋	BUBBLE TEA	bubble,tea	17	1
+🧌	TROLL	troll	17	1
+🧍	STANDING PERSON	standing,person	17	1
+🧎	KNEELING PERSON	kneeling,person	17	1
+🧏	DEAF PERSON	deaf,person	17	1
+🧐	FACE WITH MONOCLE	face,monocle	17	1
+🧑	ADULT	adult	17	1
+🧒	CHILD	child	17	1
+🧓	OLDER ADULT	older,adult	17	1
+🧔	BEARDED PERSON	bearded,person	17	1
+🧕	PERSON WITH HEADSCARF	person,headscarf	17	1
+🧖	PERSON IN STEAMY ROOM	person,in,steamy,room	17	1
+🧗	PERSON CLIMBING	person,climbing	17	1
+🧘	PERSON IN LOTUS POSITION	person,in,lotus,position	17	1
+🧙	MAGE	mage	17	1
+🧚	FAIRY	fairy	17	1
+🧛	VAMPIRE	vampire	17	1
+🧜	MERPERSON	merperson	17	1
+🧝	ELF	elf	17	1
+🧞	GENIE	genie	17	1
+🧟	ZOMBIE	zombie	17	1
+🧠	BRAIN	brain	17	1
+🧡	ORANGE HEART	orange,heart	17	1
+🧢	BILLED CAP	billed,cap	17	1
+🧣	SCARF	scarf	17	1
+🧤	GLOVES	gloves	17	1
+🧥	COAT	coat	17	1
+🧦	SOCKS	socks	17	1
+🧧	RED GIFT ENVELOPE	red,gift,envelope	17	1
+🧨	FIRECRACKER	firecracker	17	1
+🧩	JIGSAW PUZZLE PIECE	jigsaw,puzzle,piece	17	1
+🧪	TEST TUBE	test,tube	17	1
+🧫	PETRI DISH	petri,dish	17	1
+🧬	DNA DOUBLE HELIX	dna,double,helix	17	1
+🧭	COMPASS	compass	17	1
+🧮	ABACUS	abacus	17	1
+🧯	FIRE EXTINGUISHER	fire,extinguisher	17	1
+🧰	TOOLBOX	toolbox	17	1
+🧱	BRICK	brick	17	1
+🧲	MAGNET	magnet	17	1
+🧳	LUGGAGE	luggage	17	1
+🧴	LOTION BOTTLE	lotion,bottle	17	1
+🧵	SPOOL OF THREAD	spool,thread	17	1
+🧶	BALL OF YARN	ball,yarn	17	1
+🧷	SAFETY PIN	safety,pin	17	1
+🧸	TEDDY BEAR	teddy,bear	17	1
+🧹	BROOM	broom	17	1
+🧺	BASKET	basket	17	1
+🧻	ROLL OF PAPER	roll,paper	17	1
+🧼	BAR OF SOAP	bar,soap	17	1
+🧽	SPONGE	sponge	17	1
+🧾	RECEIPT	receipt	17	1
+🧿	NAZAR AMULET	nazar,amulet	17	1
+🩰	BALLET SHOES	ballet,shoes	18	1
+🩱	ONE-PIECE SWIMSUIT	one,piece,swimsuit	18	1
+🩲	BRIEFS	briefs	18	1
+🩳	SHORTS	shorts	18	1
+🩴	THONG SANDAL	thong,sandal	18	1
+🩵	LIGHT BLUE HEART	light,blue,heart	18	1
+🩶	GREY HEART	grey,heart	18	1
+🩷	PINK HEART	pink,heart	18	1
+🩸	DROP OF BLOOD	drop,blood	18	1
+🩹	ADHESIVE BANDAGE	adhesive,bandage	18	1
+🩺	STETHOSCOPE	stethoscope	18	1
+🩻	X-RAY	x,ray	18	1
+🩼	CRUTCH	crutch	18	1
+🪀	YO-YO	yo	18	1
+🪁	KITE	kite	18	1
+🪂	PARACHUTE	parachute	18	1
+🪃	BOOMERANG	boomerang	18	1
+🪄	MAGIC WAND	magic,wand	18	1
+🪅	PINATA	pinata	18	1
+🪆	NESTING DOLLS	nesting,dolls	18	1
+🪇	MARACAS	maracas	18	1
+🪈	FLUTE	flute	18	1
+🪉	HARP	harp	18	1
+🪊	TROMBONE	trombone	18	1
+🪋	METEOR	meteor	18	1
+🪌	ERASER	eraser	18	1
+🪍	NET WITH HANDLE	net,handle	18	1
+🪎	TREASURE CHEST	treasure,chest	18	1
+🪏	SHOVEL	shovel	18	1
+🪐	RINGED PLANET	ringed,planet	18	1
+🪑	CHAIR	chair	18	1
+🪒	RAZOR	razor	18	1
+🪓	AXE	axe	18	1
+🪔	DIYA LAMP	diya,lamp	18	1
+🪕	BANJO	banjo	18	1
+🪖	MILITARY HELMET	military,helmet	18	1
+🪗	ACCORDION	accordion	18	1
+🪘	LONG DRUM	long,drum	18	1
+🪙	COIN	coin	18	1
+🪚	CARPENTRY SAW	carpentry,saw	18	1
+🪛	SCREWDRIVER	screwdriver	18	1
+🪜	LADDER	ladder	18	1
+🪝	HOOK	hook	18	1
+🪞	MIRROR	mirror	18	1
+🪟	WINDOW	window	18	1
+🪠	PLUNGER	plunger	18	1
+🪡	SEWING NEEDLE	sewing,needle	18	1
+🪢	KNOT	knot	18	1
+🪣	BUCKET	bucket	18	1
+🪤	MOUSE TRAP	mouse,trap	18	1
+🪥	TOOTHBRUSH	toothbrush	18	1
+🪦	HEADSTONE	headstone	18	1
+🪧	PLACARD	placard	18	1
+🪨	ROCK	rock	18	1
+🪩	MIRROR BALL	mirror,ball	18	1
+🪪	IDENTIFICATION CARD	identification,card	18	1
+🪫	LOW BATTERY	low,battery	18	1
+🪬	HAMSA	hamsa	18	1
+🪭	FOLDING HAND FAN	folding,hand,fan	18	1
+🪮	HAIR PICK	hair,pick	18	1
+🪯	KHANDA	khanda	18	1
+🪰	FLY	fly	18	1
+🪱	WORM	worm	18	1
+🪲	BEETLE	beetle	18	1
+🪳	COCKROACH	cockroach	18	1
+🪴	POTTED PLANT	potted,plant	18	1
+🪵	WOOD	wood	18	1
+🪶	FEATHER	feather	18	1
+🪷	LOTUS	lotus	18	1
+🪸	CORAL	coral	18	1
+🪹	EMPTY NEST	empty,nest	18	1
+🪺	NEST WITH EGGS	nest,eggs	18	1
+🪻	HYACINTH	hyacinth	18	1
+🪼	JELLYFISH	jellyfish	18	1
+🪽	WING	wing	18	1
+🪾	LEAFLESS TREE	leafless,tree	18	1
+🪿	GOOSE	goose	18	1
+🫀	ANATOMICAL HEART	anatomical,heart	18	1
+🫁	LUNGS	lungs	18	1
+🫂	PEOPLE HUGGING	people,hugging	18	1
+🫃	PREGNANT MAN	pregnant,man	18	1
+🫄	PREGNANT PERSON	pregnant,person	18	1
+🫅	PERSON WITH CROWN	person,crown	18	1
+🫆	FINGERPRINT	fingerprint	18	1
+🫈	HAIRY CREATURE	hairy,creature	18	1
+🫌	MONARCH BUTTERFLY	monarch,butterfly	18	1
+🫍	ORCA	orca	18	1
+🫎	MOOSE	moose	18	1
+🫏	DONKEY	donkey	18	1
+🫐	BLUEBERRIES	blueberries	18	1
+🫑	BELL PEPPER	bell,pepper	18	1
+🫒	OLIVE	olive	18	1
+🫓	FLATBREAD	flatbread	18	1
+🫔	TAMALE	tamale	18	1
+🫕	FONDUE	fondue	18	1
+🫖	TEAPOT	teapot	18	1
+🫗	POURING LIQUID	pouring,liquid	18	1
+🫘	BEANS	beans	18	1
+🫙	JAR	jar	18	1
+🫚	GINGER ROOT	ginger,root	18	1
+🫛	PEA POD	pea,pod	18	1
+🫜	ROOT VEGETABLE	root,vegetable	18	1
+🫝	PICKLE	pickle	18	1
+🫟	SPLATTER	splatter	18	1
+🫠	MELTING FACE	melting,face	18	1
+🫡	SALUTING FACE	saluting,face	18	1
+🫢	FACE WITH OPEN EYES AND HAND OVER MOUTH	face,open,eyes,hand,over,mouth	18	1
+🫣	FACE WITH PEEKING EYE	face,peeking,eye	18	1
+🫤	FACE WITH DIAGONAL MOUTH	face,diagonal,mouth	18	1
+🫥	DOTTED LINE FACE	dotted,line,face	18	1
+🫦	BITING LIP	biting,lip	18	1
+🫧	BUBBLES	bubbles	18	1
+🫨	SHAKING FACE	shaking,face	18	1
+🫩	FACE WITH BAGS UNDER EYES	face,bags,under,eyes	18	1
+🫪	DISTORTED FACE	distorted,face	18	1
+🫫	CRACKING FACE	cracking,face	18	1
+🫯	FIGHT CLOUD	fight,cloud	18	1
+🫰	HAND WITH INDEX FINGER AND THUMB CROSSED	hand,index,finger,thumb,crossed	18	1
+🫱	RIGHTWARDS HAND	rightwards,hand	18	1
+🫲	LEFTWARDS HAND	leftwards,hand	18	1
+🫳	PALM DOWN HAND	palm,down,hand	18	1
+🫴	PALM UP HAND	palm,up,hand	18	1
+🫵	INDEX POINTING AT THE VIEWER	index,pointing,at,viewer	18	1
+🫶	HEART HANDS	heart,hands	18	1
+🫷	LEFTWARDS PUSHING HAND	leftwards,pushing,hand	18	1
+🫸	RIGHTWARDS PUSHING HAND	rightwards,pushing,hand	18	1
+🫹	LEFTWARDS THUMB SIGN	leftwards,thumb,sign	18	1
+🫺	RIGHTWARDS THUMB SIGN	rightwards,thumb,sign	18	1
