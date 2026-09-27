@@ -10,8 +10,32 @@
 | pinyin_simp.dict.yaml（简体词组段，2026-09-27 加） | https://github.com/rime/rime-pinyin-simp | **Apache-2.0** | 简体常用词组词源（用户反馈「常用词组无法拼音或模糊拼音显示」的修复）。48078 条 2–4 字词组，**原生简体**（无需繁→简，无字形歧义）、拼音连写、带真实词频（我们 322329 / 什么 295403）；来源是 AOSP PinyinIME（同为 Apache-2.0）。由 scripts/gen_luna_dict.py 并入 luna.opid，是产物的**唯一**词组来源 —— 理由与实测代价见下节「简体词组段」 |
 | trad_hanzi.tsv（单字） | Unicode Unihan（kMandarin 读音 + kHanyuPinlu 词次 + kTraditionalVariant/kSimplifiedVariant 变体） | Unicode License（宽松，可再分发，保留版权声明） | GB2312 全量 6763 + terra 单字 + 其余 Unihan 单字，由 scripts/gen_trad_dict.py 生成（人工白名单 COMMON_TRAD 已退役，见脚本头注释） |
 | trad_phrases.tsv（词组） | https://github.com/rime/rime-terra-pinyin（terra_pinyin.dict.yaml） | **LGPL-3.0** | 常用繁体词组 + 人工常用词组（SUPPLEMENT_PHRASES，terra 缺 臺灣/電話/謝謝 等），由 scripts/gen_trad_dict.py 生成 |
-| symbol_blocks.tsv（符号区块） | Unicode UCD（UnicodeData.txt 的区块范围与字符名） | Unicode License（同 Unihan 行） | 面板 5 个区块的 id/范围/名，由 scripts/gen_symbols.py 生成；**符号面板的搜索关键字不来自上游**，约 280 条为 OPI 项目人工撰写（MIT），其余按 Unicode 名分词兜底 |
-| symbols.tsv（符号条目，583 条） | 同上（UnicodeData.txt，逐码位字符名） | Unicode License（同上，不新增来源、不新增许可证） | 同生成器产出。**消费侧是编译期读取**：engine-core/src/symbols.rs `builtin()` 用 `include_str!("../../../data/raw/symbols.tsv")` 嵌入，故路径固定在 data/raw/ 而非 data/generated/（后者只放 .opid 二进制）；改目录必须两处同改，否则编不过 |
+| symbol_blocks.tsv（符号区块） | Unicode UCD（UnicodeData.txt 的区块范围与字符名；2026-09-28 起新增的 emoji 区块范围取自 UTS#51 §2.1 区块表，仍是同一份 UCD 字符名） | Unicode License（同 Unihan 行） | 面板 18 个区块的 id/范围/名，由 scripts/gen_symbols.py 生成；**符号面板的搜索关键字不来自上游**，357 条为 OPI 项目人工撰写（MIT），86 条由区块名罗马字推导，其余 2889 条按 Unicode 名分词兜底 |
+| symbols.tsv（符号条目，3332 条，其中 emoji 1472 条） | 同上（UnicodeData.txt，逐码位字符名） | Unicode License（同上，不新增来源、不新增许可证） | 同生成器产出。**消费侧是编译期读取**：engine-core/src/symbols.rs `builtin()` 用 `include_str!("../../../data/raw/symbols.tsv")` 嵌入，故路径固定在 data/raw/ 而非 data/generated/（后者只放 .opid 二进制）；改目录必须两处同改，否则编不过 |
+| en_words.tsv（英文联想，10000 条，2026-09-28 加） | https://github.com/orgtre/google-books-ngram-frequency（Google Books Ngrams v3 英文 1-gram 的清洗产物） | **CC-BY 3.0** | 英文模式单词联想的数据源 —— spec §1「V1 仅做单词联想」承诺过、仓库此前没兑现（`candidates.rs` 对非拼音模式 `return Vec::new()`）。由 scripts/gen_en_dict.py 生成，`word\tpinyin\tfreq` 三列与 trad_hanzi.tsv 同形（第二列是 ASCII 小写查询键，多数与词形相同）。**本轮只落数据，候选逻辑未接线**；走 `.opid` 还是 include_str! 见下节。CC-BY 要求署名 + 保留许可声明：**本表就是署名载体**，分发含本数据的产品时须一并保留 |
+
+## 英文联想词源（2026-09-28）
+
+排序键是**该词在 Google Books 2010–2019 英文图书语料里的原始出现次数**（the 13616383631
+→ 缩放后 4000000000；最低 1398875 → 410939）。上游 README **逐字声明 content 为
+CC-BY 3.0**，且上游自身就是 Google Books Ngrams（同一 CC-BY 3.0）的清洗产物 ——
+**许可链一致**，不存在「第三方替原作者发许可证」的问题。
+
+**缩放不是可选项**：原始 counts 超过 `u32::MAX`，而 `compiler.rs` 的 `parse_freq` 对
+`parse::<u32>()` 失败的行按 unusable **整条丢弃**（compile 只打一行 warning 就继续），
+照抄数字会把 the/of/and 这些最高频词全丢掉。缩放到 `FMAX = 4_000_000_000`（中文库同一
+天花板）**是刻意的**：`Engine::with_dictionaries` 的 `user_boost = max(USER_BOOST,
+max_freq × 2)` 跨词典取全局值，英文库抬高 max_freq 会连带改中文侧的学习标度。
+
+**曾评估并否掉的替代源**（均实测，详细取证见 scripts/gen_en_dict.py 头注释，勿重复调研）：
+
+| 替代源 | 许可实况 | 否掉的原因 |
+|---|---|---|
+| first20hours/google-10000-english | **无 LICENSE 文件**（raw 404、API=NOASSERTION） | 上游是 Norvig count_1w.txt 去掉词频列，再上是 LDC 受限分发的 Google Trillion Word Corpus。既无授权又无词频 |
+| AOSP LatinIME `en_wordlist.combined.gz` | Apache-2.0 仓库，**但 NOTICE 末行** `Includes Dictionaries © Lexiteria LLC.  Used by permission.` | 「used by permission」是给 AOSP 的许可，不是可向下再分发的授权；dictionaries/ 下只有这些词表。另：其 f= 已量化（the=222），排序分辨率差 |
+| hermitdave/FrequencyWords `en_50k.txt` | LICENSE 文件写 MIT，**README 写「MIT for code. CC-by-sa-4.0 for content.」** | 数据是**共享演绎**许可（要进 APK 分发的产物冲突），且两处自相矛盾 |
+| rspeer/wordfreq | Apache-2.0 是代码，数据 CC-BY-SA-4.0 | 作者 README 明确拒绝「转成 CSV 分发」（理由正是 CSV 没地方放署名），并声明数据不可与其代码分离 |
+| words/subtlex-word-frequencies | 仓库自称 ISC | SUBTLEX 原始数据是 Ghent 大学研究用途数据，第三方替原作者发许可证 = 许可洗白 |
 
 ## 字频来源（spec 2026-08-15 验收偏差 #4：候选排序）
 
@@ -42,6 +66,7 @@ zemegaode→zenmegaode）。现钉死到本次实际取到的版本，脚本内�
 | terra_pinyin.dict.yaml | commit `723e51bc266cf9464530c1ddedb856aa18e3da34`（rime/rime-terra-pinyin） | `2f881a239e09a61e5993e79257655f98f81c3789dc8aeea5f33477f710345b27` | scripts/gen_trad_dict.py |
 | pinyin_simp.dict.yaml | commit `0c6861ef7420ee780270ca6d993d18d4101049d0`（rime/rime-pinyin-simp） | `e341598343a0f0f2035bb1aafc34a7f3bb7887deeecb3f60796262aaa2983e6b`（1266216 字节） | scripts/gen_luna_dict.py |
 | UnicodeData.txt | Unicode **18.0.0**（与 Unihan.zip 同版本目录）`https://www.unicode.org/Public/18.0.0/ucd/UnicodeData.txt` | `0736451de439ae7baf1425136617da495e09ee5afbe6e394374db7009ea08950`（2243593 字节） | scripts/gen_symbols.py |
+| 1grams_english.csv（2026-09-28 加） | commit `e20471c15a758be3362b16d07870b34df4f7ccc3`（orgtre/google-books-ngram-frequency） | `f7f63aa08f0bb2f7f654cddff3a7ced4968b27887b2c0e7cd4b4d108221e197d`（225089 字节） | scripts/gen_en_dict.py |
 
 另：luna_pinyin.dict.yaml **仍未 pin**（上游取 rime-luna-pinyin master）。本次实测所用版本
 sha256 `75bcf6eb3ff62b129882ed89cc22b2d1b80a5347aa72bcfa2ccc839bac298e7314`
