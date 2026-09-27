@@ -107,38 +107,110 @@ const SOURCES: &[(&str, &str)] = &[
 /// （TSF 的 `VK_DELETE = 0x2E` 撞 `.`）自动豁免，门禁当场失效。
 const PRINTABLE_BY_DESIGN: &[&str] = &["engine_core::KEY_SPACE", "fcitx5::KEY_SPACE"];
 
-/// 源文本里的**键码**常量名：每处 `const KEY_*` 声明，**排除 `KEY_STATE_*`**。
+/// 把**字符串字面量与注释**抹成空白（等长），其余原样保留。逐字符走，因为两者都能跨行。
 ///
-/// ⚠️ **不要退回行首匹配**。2026-09-28 的对抗复核 + 我复跑实测：原先那版
-/// `trim_start().strip_prefix("pub const ")` 对这四种写法**全盲**（四种都实测 GREEN，
-/// 且每次都真重编过，`recompiled=True`）：
-/// `pub(crate) const KEY_X` / 裸 `const KEY_X` / `#[allow(...)] pub const KEY_X`（同行）/
-/// 一行两条中的第二条。前三种都是合法且会出现的写法。
-/// 所以这里按**每行的每个 `const ` 出现处**取紧跟其后的标识符 —— 可见性、属性、
-/// 同行第几条都不影响判据。
-///
-/// 仍是**文本扫描**，两条边界**按名划定**（不是「看起来像才收」）：
-/// - 名字必须以 `KEY_` 开头。`VK_*`（Win32 虚拟键码，`tsf-opi/src/vk.rs` 自己注明与引擎
-///   键码「同值不同空间」）与 `const SPECIAL_KEYS: [u32; 12]`（聚合数组）都不收。
-/// - `KEY_STATE_*` 不收：位掩码不是键码。**它们的条数有另一道执行点** ——
-///   `two_track_keycodes.rs` 的非空转护栏（实测把 `KEY_STATE_ZZZ` 加进 tsf 真源，
-///   那道门禁 EXIT=101；本门禁此时 GREEN 是设计内）。
-fn key_const_names(src: &str) -> Vec<String> {
-    let mut names = Vec::new();
-    for line in src.lines() {
-        // 切掉行注释：`///` 文档里提到 `const KEY_X` 是散文不是声明（本仓文档爱这么写）。
-        let mut rest = line.split("//").next().unwrap_or("");
-        while let Some(i) = rest.find("const ") {
-            rest = &rest[i + "const ".len()..];
-            let name: String = rest
-                .chars()
-                .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
-                .collect();
-            if name.starts_with("KEY_") && !name.starts_with("KEY_STATE_") {
-                names.push(name);
+/// 三种写法都实测过，缺了它两边都错：
+/// - `/* pub const KEY_X: u32 = 1; */`（注释掉的旧代码）与
+///   `let _ = "请把 const KEY_X 登记";`（断言消息里的散文）会**假红** ——
+///   而假红比漏放更逼人犯错：「改到不红为止」的下一步是把**不存在的常量**登记进
+///   `all_special_codes()`，那张表本身是手写的、没有任何东西回头看它。
+/// - `const URL: &str = "https://…"; pub const KEY_X: u32 = 1;`（同行更早处的字符串里
+///   有 `//`）会把真声明**切掉** —— 那是漏网。
+fn strip_strings_and_comments(src: &str) -> String {
+    #[derive(Clone, Copy)]
+    enum St {
+        Code,
+        Line,
+        Block,
+        Str,
+    }
+    let mut out = String::with_capacity(src.len());
+    let mut it = src.chars().peekable();
+    let mut st = St::Code;
+    while let Some(c) = it.next() {
+        match st {
+            St::Code if c == '/' && it.peek() == Some(&'/') => {
+                it.next();
+                out.push_str("  ");
+                st = St::Line;
+            }
+            St::Code if c == '/' && it.peek() == Some(&'*') => {
+                it.next();
+                out.push_str("  ");
+                st = St::Block;
+            }
+            St::Code => {
+                if c == '"' {
+                    st = St::Str;
+                }
+                out.push(c);
+            }
+            St::Line => {
+                if c == '\n' {
+                    st = St::Code;
+                }
+                out.push(' ');
+            }
+            St::Block if c == '*' && it.peek() == Some(&'/') => {
+                it.next();
+                out.push_str("  ");
+                st = St::Code;
+            }
+            St::Block => out.push(' '),
+            St::Str if c == '\\' => {
+                it.next();
+                out.push_str("  ");
+            }
+            St::Str => {
+                if c == '"' {
+                    st = St::Code;
+                }
+                out.push(' ');
             }
         }
     }
+    out
+}
+
+/// 轨道源码里出现的**键码名**：代码里的 `KEY_*` 标识符（字符串与注释已抹掉），
+/// **排除 `KEY_STATE_*`**。
+///
+/// 判据取「**名字出现**」而不是「`const` 声明的行」，是三轮实测换来的：
+/// 行首匹配漏 `pub(crate)` / 裸 `const` / 同行属性 / 一行两条；改成逐 `const ` 出现处之后，
+/// 仍漏**参数化宏**（`macro_rules! { ($n:ident, $v:expr) => { pub const $n: u32 = $v; }; }`
+/// 加一次调用 —— 宏体里根本没有字面量 `KEY_`，`const` 后面跟的是 `$n`）。
+/// 按标识符取名字一并盖住：**宏调用里的 `KEY_X` 也是代码里的名字**。
+///
+/// 代价如实记：**用到的名字**（不只是声明的）也算，所以本函数的输出比「常量声明表」宽。
+/// 这是有意的 —— 一个出现在轨道代码里、却不在 `all_special_codes()` 里的 `KEY_*` 名字，
+/// 无论它是声明还是引用，都该被过问。
+///
+/// 边界**按名划定**：`VK_*`（Win32 虚拟键码，`tsf-opi/src/vk.rs` 注明与引擎键码
+/// 「同值不同空间」）与 `SPECIAL_KEYS` 这类聚合数组名都不收；`KEY_STATE_*` 不收 ——
+/// 那类有另一道执行点：`two_track_keycodes.rs` 的非空转护栏（实测把 `KEY_STATE_ZZZ`
+/// 加进 tsf 真源，那道门禁 EXIT=101，本门禁此时 GREEN 是设计内）。
+/// 未覆盖：裸字符串 `r#"…"#` 按普通字符串处理就结束在第一个 `"`（三个文件今天都没有）。
+fn key_names_in_code(src: &str) -> Vec<String> {
+    let code = strip_strings_and_comments(src);
+    let b = code.as_bytes();
+    let mut names = Vec::new();
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'_' || b[i].is_ascii_alphanumeric() {
+            let start = i;
+            while i < b.len() && (b[i] == b'_' || b[i].is_ascii_alphanumeric()) {
+                i += 1;
+            }
+            let tok = &code[start..i];
+            if tok.starts_with("KEY_") && !tok.starts_with("KEY_STATE_") {
+                names.push(tok.to_string());
+            }
+        } else {
+            i += 1;
+        }
+    }
+    names.sort();
+    names.dedup();
     names
 }
 
@@ -362,10 +434,10 @@ fn every_key_code_const_in_the_three_tracks_is_registered_here() {
     // 方向 1：源里每个键码常量都必须登记（或进白名单）。
     let mut unregistered = Vec::new();
     for (track, src) in SOURCES {
-        let names = key_const_names(src);
+        let names = key_names_in_code(src);
         assert!(
             !names.is_empty(),
-            "{track} 一个键码常量都没解析出来 —— 扫描失明，下面的「全覆盖」不可信"
+            "{track} 一个键码名都没扫到 —— 扫描失明，下面的「全覆盖」不可信"
         );
         for n in names {
             let full = format!("{track}::{n}");
@@ -377,7 +449,7 @@ fn every_key_code_const_in_the_three_tracks_is_registered_here() {
     }
     assert!(
         unregistered.is_empty(),
-        "这些键码常量没在 `all_special_codes()` 里登记：{unregistered:?}\n\
+        "这些键码名在轨道源码（已剔除字符串与注释）里出现、但没登记进 `all_special_codes()`：{unregistered:?}\n\
          （登记后它才会被上面那条的 `>0x7f` 断言查到；确属字符键的进 `PRINTABLE_BY_DESIGN`）"
     );
 
@@ -389,7 +461,7 @@ fn every_key_code_const_in_the_three_tracks_is_registered_here() {
             .iter()
             .find(|(t, _)| *t == track)
             .unwrap_or_else(|| panic!("`{name}` 的轨道 `{track}` 不在 SOURCES 里"));
-        if !key_const_names(src).iter().any(|n| n == cnst) {
+        if !key_names_in_code(src).iter().any(|n| n == cnst) {
             stale.push(*name);
         }
     }
