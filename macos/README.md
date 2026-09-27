@@ -518,9 +518,10 @@ Mac 上很可能要改」的地方标出来了，接手人从这里开始最省�
   而 `router.rs` 内部维护 `page` 与 `PAGE_SIZE = 8`，PageUp/PageDown 改的是它。
   后果：翻页后数字键选中的候选与候选窗高亮的位置**可能不是同一个**。
   ⚠️ **比上面那句更具体的一点（2026-09-28 复核）**：`InputController.swift` 的 `refresh()`
-  传的是**写死的 `limit: 64`**，行尾注释写着「与 Rust 侧 FETCH_LIMIT 一致」——
-  **那句注释已经不成立**：`FETCH_LIMIT` 现在**不设上限**（`engine_core::router` 的同名常量；
-  `candidate.rs` / `logic.rs` 各有编译期断言绑着它）。所以这个 64 既不是前端页大小、
+  传的是**写死的 `limit: 64`**。它原有一句行尾注释「与 Rust 侧 FETCH_LIMIT 一致」，
+  **早已不成立**（`FETCH_LIMIT` 现在**不设上限**：`engine_core::router` 的同名常量，
+  `candidate.rs` / `logic.rs` 各有编译期断言绑着它），该注释**已于同日改写**为「这个 64
+  是本端独有，且走的正是被点名禁止的出口」。所以这个 64 既不是前端页大小、
   也不是 Rust 的抓取上限，是个**无来源的第三份常量**。而 `cabi.rs` 的
   `opi_candidates_page` 文档注释点名禁止的正是这条路径（原话：「前端显示当前页请用本出口、
   **不要**拿 `opi_candidates()` 自己按 8 切」）。
