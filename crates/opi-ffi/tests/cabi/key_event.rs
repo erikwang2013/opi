@@ -110,7 +110,12 @@ fn cabi_key_event_switch_mode_clears_frontend_shift_lock() {
 
 /// 可打印字符不得被特殊键抢走码位：'.'=0x2E / '!'=0x21 / '"'=0x22 与
 /// TSF 轨的 VK_DELETE / VK_PRIOR / VK_NEXT 同值（那里真出过 bug：拼音缓冲非空时
-/// 敲 '.' 走退格分支删掉拼音字母）。Apple 侧走 Unicode 码点，必须全部交系统。
+/// 敲 '.' 走退格分支删掉拼音字母）。Apple 侧走 Unicode 码点。
+///
+/// 2026-09-27 标点表落地后它们**出中文标点、并先把待提交的拼音上屏**：旧版钉的
+/// 「一律交系统且缓冲原样」已不成立，这里改钉真正要保的三件：文本交得出去、
+/// 缓冲是被 flush 上屏而不是被退格吃掉、抬起不重复提交。半角态（用户按了全角
+/// 切换键）下才回到直通 —— 那条在 engine-core 的路由层测试里。
 #[test]
 fn cabi_key_event_printables_not_stolen_by_special_key_codes() {
     let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
@@ -120,23 +125,24 @@ fn cabi_key_event_printables_not_stolen_by_special_key_codes() {
         key_event(c as u32, 0);
     }
     assert_eq!(read(unsafe { opi_buffer() }), "hao", "前置：缓冲已有拼音");
-    for c in ['.', '!', '"'] {
-        assert_eq!(
-            key_event(c as u32, 0),
-            (0, String::new()),
-            "可打印 {c:?} 必须交系统"
-        );
-        assert_eq!(
-            key_event(c as u32, KEY_STATE_RELEASED),
-            (0, String::new()),
-            "抬起与按下同判（{c:?}）"
-        );
-    }
-    assert_eq!(
-        read(unsafe { opi_buffer() }),
-        "hao",
-        "缓冲不得被这些字符吃掉"
+    let (a, t) = key_event('.' as u32, 0);
+    assert_eq!(a, 2, "'.' 必须是标点上屏，不是退格：{t:?}");
+    assert!(t.ends_with('。'), "'.' 出中文句号：{t:?}");
+    assert!(
+        t.chars().count() > 1,
+        "待提交的拼音必须先上屏（标点排在其后）：{t:?}"
     );
+    assert_eq!(
+        key_event('.' as u32, KEY_STATE_RELEASED),
+        (1, String::new()),
+        "抬起不重复提交"
+    );
+    for c in ['!', '"'] {
+        let (a, t) = key_event(c as u32, 0);
+        assert_eq!(a, 2, "{c:?} 被特殊键抢走了码位：{t:?}");
+        assert!(!t.is_empty(), "{c:?} 上屏文本不得为空");
+    }
+    assert_eq!(read(unsafe { opi_buffer() }), "", "缓冲已上屏，不是被吃掉");
     unsafe { opi_clear() };
 }
 

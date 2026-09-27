@@ -139,7 +139,9 @@ fn routing_matches_event_by_event_on_a_shared_script() {
     push(&mut ev, K::Back, rel);
     push(&mut ev, K::Return, rel);
 
-    // —— 数字 / 符号模式：可见 ASCII 全直通 ——
+    // —— 数字模式：可见 ASCII 全直通；符号模式：可见 ASCII 进关键字缓冲（B3）——
+    // 两者的结论不同但仍在同一条脚本里对照：本用例比的是**两轨逐步一致**，
+    // 不是与某个期望表对齐 —— 期望表在各自的用例里（`number_mode_*` / `symbol_*`）。
     for m in [Mode::Number, Mode::Symbol] {
         ev.push(Step::Mode(m));
         for c in ['a', '1', '-', '\'', '.'] {
@@ -165,14 +167,22 @@ fn routing_matches_event_by_event_on_a_shared_script() {
     run_script(&ev);
 }
 
-/// 穷举**全部 ASCII 键值**（0x00..=0x7F）× 四种模式：两轨必须逐步一致。
+/// 穷举**全部 ASCII 键值**（0x00..=0x7F）× 五种模式：两轨必须逐步一致。
 ///
 /// 单个字符的用例靠人想；这一条靠机器把整个可打印段加控制段扫一遍。
 /// ASCII 段是两轨唯一**共用键码**的区间（fcitx5 的 keysym 在 0xff00+、
 /// TSF 在 0x10000+），因而是「同一数字在两轨里含义是否相同」最该扫的区间。
 #[test]
 fn every_ascii_keyval_behaves_identically_in_every_mode() {
-    for mode in [Mode::Pinyin, Mode::Traditional, Mode::English, Mode::Number] {
+    // Symbol 自 B3 起也消费可见 ASCII（进关键字缓冲）—— 两轨的新分支正是靠这一条
+    // 全扫锁住；漏掉它的话，「两轨同构」在符号模式上就只剩人工抽查。
+    for mode in [
+        Mode::Pinyin,
+        Mode::Traditional,
+        Mode::English,
+        Mode::Number,
+        Mode::Symbol,
+    ] {
         let mut f = CandidateState::load(Some(LUNA)).expect("装载");
         let mut t = TsfLogic::load(Some(LUNA)).expect("装载");
         f.switch_mode(mode);
