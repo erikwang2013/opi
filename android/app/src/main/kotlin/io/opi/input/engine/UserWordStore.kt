@@ -45,6 +45,17 @@ class UserWordStore(
 
         private const val TMP_SUFFIX = ".tmp"
 
+        @Volatile
+        private var saveEpoch = 0
+
+        /**
+         * 作废所有在途落盘。设置页清词与 IME 是两个 UserWordStore 实例，
+         * 只能靠进程级世代号拦住「导出已完成、io 线程尚未 rename」的旧 JSON。
+         */
+        fun invalidate() {
+            saveEpoch++
+        }
+
         /** 守护线程：不拖住测试 JVM 退出（Android 进程内无影响）。 */
         private fun newIoExecutor(): Executor =
             Executors.newSingleThreadExecutor { r ->
@@ -100,12 +111,14 @@ class UserWordStore(
 
     private fun saveSoon() {
         // 导出失败不得从防抖回调里逃逸：那跑在主线程 Handler 上，抛出去就是崩 IME。
+        val token = saveEpoch
         val json = try {
             exportJson()
         } catch (e: Throwable) {
             return
         }
         io.execute {
+            if (token != saveEpoch) return@execute
             // 原子写：先写同目录 tmp、**fsync**、再 rename（POSIX 同目录 rename 是原子替换）。
             // 崩在写 tmp 时旧的用户词仍完好（下次保存覆盖 tmp）。
             //

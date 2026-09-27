@@ -127,6 +127,33 @@ fn install_singleton_fallback_and_path() {
     assert!(with_engine(|a| a.buffer()).is_some());
 }
 
+/// Settings 与 IME 同进程，都会再调 install。第二次成功装载不得换掉
+/// 已有引擎，否则 Learner 被清空，随后一次 scheduleSave 会把空词表写盘。
+#[test]
+fn install_second_success_preserves_learner() {
+    let _g = SINGLETON_GUARD.lock().unwrap_or_else(|p| p.into_inner());
+    *SINGLETON.lock().unwrap() = None;
+    install(None).unwrap();
+    with_engine(|a| {
+        a.input_key("w".into());
+        a.input_key("o".into());
+        assert_eq!(a.select(0), "我");
+    });
+    assert!(
+        with_engine(|a| a.export_user_words())
+            .unwrap()
+            .contains("我"),
+        "前置：第一次装载后已学会「我」"
+    );
+    install(None).unwrap();
+    assert!(
+        with_engine(|a| a.export_user_words())
+            .unwrap()
+            .contains("我"),
+        "设置页再次 load 不得冲掉用户词"
+    );
+}
+
 #[test]
 fn mode_int_roundtrip() {
     assert_eq!(mode_from_int(0), Some(Mode::Pinyin));

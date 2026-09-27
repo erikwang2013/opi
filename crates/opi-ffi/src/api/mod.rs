@@ -24,7 +24,11 @@ pub use convert::{
 pub static SINGLETON: Mutex<Option<Api>> = Mutex::new(None);
 
 /// 装载引擎。`None`/空串 → 内置回退词库（35 词）；非空路径 → load_or_fallback
-/// 原样语义（坏路径返回 Err，仅内置损坏时方为不可恢复）。成功即替换单例。
+/// 原样语义（坏路径返回 Err，仅内置损坏时方为不可恢复）。
+///
+/// 成功即替换单例（缓冲 / 页码 / ⇧ 一并重置）。已有引擎会先导出用户词再导回，
+/// 避免 Settings 与 IME 同进程再次 load 时把 Learner 冲掉。坏路径返回 Err，
+/// 已装引擎保持不动。
 pub fn install(path: Option<&str>) -> Result<(), String> {
     let dict: Box<dyn Dictionary> = match path {
         Some(p) if !p.is_empty() => engine_data::load_or_fallback(Some(std::path::Path::new(p)))?,
@@ -34,9 +38,15 @@ pub fn install(path: Option<&str>) -> Result<(), String> {
     // 毒化恢复：18 个 FFI 入口的 catch_unwind 吞 panic 时锁已毒化，
     // into_inner 取回数据，install 整体替换引擎，提供恢复路径。
     let mut guard = SINGLETON.lock().unwrap_or_else(|p| p.into_inner());
+    let saved = guard.as_ref().map(|api| api.export_user_words());
     *guard = Some(Api {
         router: KeyRouter::new(Engine::new(dict, symbols, true)),
     });
+    if let Some(json) = saved
+        && let Some(api) = guard.as_mut()
+    {
+        let _ = api.import_user_words(json);
+    }
     Ok(())
 }
 

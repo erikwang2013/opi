@@ -138,6 +138,7 @@ fun SettingsScreen() {
             confirmButton = {
                 TextButton(onClick = {
                     confirmClear = false
+                    UserWordStore.invalidate()
                     OpiEngine.clearUserWords()
                     // 落盘文件同步删掉：IME 下次启动会 import 它，不删就等于「清除」在
                     // 重启后被撤销（设置页与输入法同进程，共享同一引擎与同一 filesDir）

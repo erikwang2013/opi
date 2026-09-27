@@ -205,6 +205,24 @@ class UserWordStoreTest {
     }
 
     @Test
+    fun invalidateDropsInFlightWrite() {
+        val f = target()
+        val engine = FakeEngine().apply { export = """{"keep":1}""" }
+        val deb = FakeDebouncer()
+        val queued = mutableListOf<Runnable>()
+
+        store(f, engine, deb, io = Executor { queued += it }).scheduleSave()
+        deb.fire()
+        assertEquals(1, queued.size)
+        assertFalse(f.exists())
+
+        UserWordStore.invalidate()
+        queued.removeAt(0).run()
+
+        assertFalse("设置页清除后，在途写盘不得把旧词写回", f.exists())
+    }
+
+    @Test
     fun writeGoesThroughIoExecutorNotCallerThread() {
         val f = target()
         val engine = FakeEngine().apply { export = "j" }
