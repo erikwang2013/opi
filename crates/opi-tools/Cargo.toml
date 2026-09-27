@@ -2,6 +2,7 @@
 name = "opi-tools"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 engine-data = { path = "../engine-data" }

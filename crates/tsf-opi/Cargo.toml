@@ -2,6 +2,7 @@
 name = "tsf_opi"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 
 # C2：TSF COM 服务器经 DLL 注册（regsvr32 / DllGetClassObject），
 # 镜像 fcitx5 轨的 cdylib+lib 双 crate-type；Linux 主机仍可 lib/测试。

@@ -2,6 +2,7 @@
 name = "engine-data"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 engine-core = { path = "../engine-core" }

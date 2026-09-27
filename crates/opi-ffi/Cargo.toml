@@ -2,6 +2,7 @@
 name = "opi_ffi"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 
 [lib]
 # cdylib：Android（JNI）与桌面侧按动态库链接。

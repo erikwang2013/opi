@@ -8,6 +8,14 @@ members = ["crates/engine-core", "crates/engine-data", "crates/opi-tools", "crat
 [workspace.package]
 version = "1.3.1"
 edition = "2024"
+# MSRV：edition 2024 只要求 1.85，真正卡住下界的是 let-chain（1.88 才稳定）。
+# ⚠️ 别信「全仓只有一处」—— 编译在第一个失败处就停，下游客到不了，
+# 所以按报错数出来的钟点**永远是下界**。实测（把上游改掉后重编）**三处**，两处是产品码：
+# `crates/engine-data/src/format.rs` 的 `validate`、
+# `crates/opi-ffi/src/api/mod.rs` 的 `install`（一处 `if let … && let …`）、
+# `crates/engine-core/tests/router_invariants.rs` 的分页不变式。
+# 1.85/1.86/1.87 实测均报 E0658；1.88 起才会给出「requires rustc 1.88」而不是一屏解析错。
+rust-version = "1.88"
 license = "MIT"
 authors = ["erik.xyz"]
 
