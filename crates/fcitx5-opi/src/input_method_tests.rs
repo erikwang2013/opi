@@ -42,19 +42,8 @@ fn pinyin_uppercase_keysym_lowercased_into_buffer() {
     assert_eq!(handle_key(&mut s, 'A' as u32, 0), KeyAction::EngineHandled);
     assert_eq!(s.buffer(), "a");
 }
-#[test]
-fn pinyin_symbol_passes_through() {
-    let mut s = pinyin_state();
-    assert_eq!(handle_key(&mut s, '，' as u32, 0), KeyAction::PassThrough);
-    assert_eq!(handle_key(&mut s, ',' as u32, 0), KeyAction::PassThrough);
-    assert_eq!(s.buffer(), "");
-}
-#[test]
-fn pinyin_apostrophe_goes_to_buffer() {
-    let mut s = pinyin_state();
-    assert_eq!(handle_key(&mut s, '\'' as u32, 0), KeyAction::EngineHandled);
-    assert_eq!(s.buffer(), "'");
-}
+// 标点两条（含被改写的那对旧名）在 input_method_punct_tests.rs：本文件已顶到 500 行
+// 上限，标点用例归标点文件也更顺。
 // ---- 空格 ----
 #[test]
 fn space_with_buffer_commits_top_candidate() {
@@ -435,13 +424,13 @@ fn ctrl_and_alt_combos_pass_through() {
     );
     assert_eq!(s.buffer(), "a"); // 未被吞
 }
+/// Symbol 模式曾与 Number 同臂直通；B3 把它补成真模式后不再直通，
+/// 符号模式的键路由见 input_method_symbol_tests.rs（本文件只留 Number 这一半）。
 #[test]
-fn number_and_symbol_modes_pass_through() {
+fn number_mode_passes_through() {
     let mut s = pinyin_state();
     s.switch_mode(Mode::Number);
     assert_eq!(handle_key(&mut s, '2' as u32, 0), KeyAction::PassThrough);
-    assert_eq!(handle_key(&mut s, 'a' as u32, 0), KeyAction::PassThrough);
-    s.switch_mode(Mode::Symbol);
     assert_eq!(handle_key(&mut s, 'a' as u32, 0), KeyAction::PassThrough);
     assert_eq!(s.buffer(), "");
 }

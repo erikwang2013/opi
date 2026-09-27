@@ -96,6 +96,7 @@ impl TsfLogic {
     /// - 退格：缓冲非空 → 引擎按码点删；空缓冲 → Unhandled（交应用）。
     /// - ⇧ 键：状态机 Off→Single→Off（长按 → Lock）。
     /// - 拼音模式有候选时数字 1..=9 按页内索引选词。
+    /// - 符号模式：可见 ASCII 入引擎缓冲当**关键字**（符号候选由此搜出），其余放行。
     /// - Ctrl/Alt 组合键一律 Unhandled（系统快捷键，不拦截）。
     pub fn input_key(&mut self, keyval: u32, key_state: u32) -> KeyOutcome {
         // Ctrl/Alt 组合键（系统快捷键）不拦截，交应用处理。
@@ -167,7 +168,7 @@ impl TsfLogic {
                 // （"ni"→"nnii"）、英文模式重复提交（"a"→"aa"）。
                 // 抬起时的结论用按下时记下的（self.last_printable），与按下同判：
                 // 可打印键里有放行字符（拼音/繁体的非字母符号、无候选或越界的数字、
-                // Number/Symbol 模式下的全部可见 ASCII → handle_printable 返回
+                // Number 模式下的全部可见 ASCII、Symbol 模式下的控制符/非 ASCII → handle_printable 返回
                 // Unhandled），按下放行、抬起拦下会让应用收到 keydown 收不到 keyup。
                 // 记结论而非复刻 handle_printable 的分流判定：判定只有一处，不会漂移。
                 Some(c) if c.is_ascii() => {
@@ -234,6 +235,11 @@ impl TsfLogic {
 
     /// 可见 ASCII 字符按模式分流。
     fn handle_printable(&mut self, c: char) -> KeyOutcome {
+        // 标点表（引擎层，四端同一条路）：中文模式出中文标点/全角，其余模式下不映射。
+        // 放在模式分派**之前**：标点不属于任何模式的关键字/缓冲语义。
+        if let Some(text) = self.input_punct(c) {
+            return commit_or_changed(text);
+        }
         match self.mode() {
             // 繁体模式与拼音同构：字母/撇号入缓冲、数字选词、走引擎。
             Mode::Pinyin | Mode::Traditional => {
@@ -263,11 +269,16 @@ impl TsfLogic {
                     KeyOutcome::Unhandled
                 }
             }
-            Mode::Number | Mode::Symbol => KeyOutcome::Unhandled,
+            Mode::Number => KeyOutcome::Unhandled,
+            // 符号模式（B3）：可见 ASCII 当关键字入缓冲（dun → 、）；数字**先**当选词键
+            // （裁决 2026-09-27，与拼音一致）；空格/控制符/非 ASCII 放行。
+            Mode::Symbol if c.is_ascii_digit() => self.digit_select(c),
+            Mode::Symbol if c.is_ascii_graphic() => commit_or_changed(self.input_char(c)),
+            Mode::Symbol => KeyOutcome::Unhandled,
         }
     }
 
-    /// 拼音模式有候选时按数字选词（页内索引：'1'→第 0 个候选）；否则交应用。
+    /// 拼音/繁体/符号模式有候选时按数字选词（页内索引：'1'→第 0 个候选）；否则交应用。
     /// 无对应候选（本页没有第 9 项、'0'）不消费，交应用输入该数字。
     fn digit_select(&mut self, c: char) -> KeyOutcome {
         // 本页候选数。**越界判据必须在页内**：`select` 的「越界返回空串」是全量列表的
@@ -282,10 +293,7 @@ impl TsfLogic {
             .len()
             .saturating_sub(self.page * PAGE_SIZE)
             .min(PAGE_SIZE);
-        if matches!(self.mode(), Mode::Pinyin | Mode::Traditional)
-            && !self.buffer().is_empty()
-            && page_len > 0
-        {
+        if self.mode().digit_selects_candidates() && !self.buffer().is_empty() && page_len > 0 {
             let Some(d) = c.to_digit(10) else {
                 return KeyOutcome::Unhandled;
             };
@@ -322,8 +330,14 @@ fn commit_or_changed(out: String) -> KeyOutcome {
 // 单测独立成文件（`#[path]` 引入）以保持各文件 <500 行：logic_tests.rs 为键
 // 路由测试，logic_release_tests.rs 为可打印键「按下/抬起同判」回归测试。
 #[cfg(test)]
+#[path = "logic_punct_tests.rs"]
+mod punct_tests;
+#[cfg(test)]
 #[path = "logic_release_tests.rs"]
 mod release_tests;
+#[cfg(test)]
+#[path = "logic_symbol_tests.rs"]
+mod symbol_tests;
 #[cfg(test)]
 #[path = "logic_tests.rs"]
 mod tests;

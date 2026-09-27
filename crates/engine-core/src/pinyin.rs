@@ -56,6 +56,12 @@ pub fn is_syllable_prefix(s: &str) -> bool {
         .is_ok()
 }
 
+/// 判断 s 是否为**完整**合法音节。与 [`is_syllable_prefix`] 相对：`zh` 是前缀、不是音节。
+/// 表已按字典序排序，二分即可。模糊音用它把 `shong` 这类非法产物挡在词库之外（fuzzy.rs）。
+pub fn is_syllable(s: &str) -> bool {
+    SYLLABLES.binary_search(&s).is_ok()
+}
+
 /// 对输入的拼音串做最长匹配切分（贪婪，最大音节长 6）。
 /// `'` 为硬分隔符，单字母未匹配时按单字母切。
 pub fn segment(input: &str) -> Vec<String> {
@@ -135,5 +141,22 @@ mod tests {
     fn prefix_checked() {
         assert!(is_syllable_prefix("zh"));
         assert!(!is_syllable_prefix("zx"));
+    }
+
+    /// 完整音节判定与前缀判定相对：前缀命中 ≠ 音节命中（`zh`、`zhongg` 都是前缀）。
+    /// 表里每条都必须自反 —— 二分对 &str 的序必须与 `assert_sorted` 的 `<` 同源。
+    #[test]
+    fn is_syllable_is_exact() {
+        assert!(SYLLABLES.iter().all(|s| is_syllable(s)));
+        assert!(!is_syllable("zh"));
+        assert!(!is_syllable("shong"));
+        assert!(!is_syllable("zhongg"));
+        assert!(!is_syllable(""));
+        // 前缀命中 ≠ 音节命中：`zh`/`zhon` 都是前缀，都不是音节
+        assert!(is_syllable_prefix("zh") && !is_syllable("zh"));
+        assert!(is_syllable_prefix("zhon") && !is_syllable("zhon"));
+        // 而 `shong` 连前缀都不是（表里没有以 shong 开头的音节）
+        assert!(!is_syllable_prefix("shong"));
+        assert!(is_syllable("zhong") && is_syllable_prefix("zhong"));
     }
 }

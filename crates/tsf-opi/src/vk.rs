@@ -12,9 +12,12 @@
 //! （无 windows 类型，主机可编译可单测），Win32 调用留在 `tsf.rs` 的
 //! `to_engine_keycode`。键码约定见 `logic` 模块头注释。
 
+use engine_core::composer::Mode;
+
 use crate::logic::{
     KEY_BACK_SPACE, KEY_DELETE, KEY_ESCAPE, KEY_PAGE_DOWN, KEY_PAGE_UP, KEY_RETURN, KEY_SHIFT,
-    KEY_SPACE, KEY_TAB, SPECIAL_BASE,
+    KEY_SPACE, KEY_STATE_ALT, KEY_STATE_CTRL, KEY_STATE_RELEASED, KEY_STATE_REPEAT,
+    KEY_STATE_SHIFT, KEY_TAB, SPECIAL_BASE,
 };
 
 /// 特殊键表（唯一真源，放在本模块）：raw VK → 键码的查表与「键码与 ASCII 不相交」
@@ -72,173 +75,148 @@ pub fn vk_to_engine_keycode(vk: u32, n: i32, first: u16) -> u32 {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+// ---------- 模式热键（B0/B5） ----------
 
-    // 缺陷形态：`ToUnicodeEx` 对导航键/小键盘返回 0（无映射），旧代码在此回退成
-    // VK 本身 —— 等于把「wParam 当码点」在错误路径上复活，方向键被吃进拼音缓冲、
-    // 小键盘凭空敲出字母。回退必须是放行哨兵。
-    #[test]
-    fn unmapped_vk_never_becomes_printable() {
-        // VK_RIGHT = 0x27 = '\''：按下会被当撇号进缓冲，且方向键被吞
-        assert_eq!(vk_to_engine_keycode(0x27, 0, 0), NO_KEYVAL);
-        // VK_LEFT = 0x25 = '%'、VK_UP = 0x26 = '&'、VK_DOWN = 0x28 = '('
-        for vk in [0x25, 0x26, 0x28] {
-            assert_eq!(vk_to_engine_keycode(vk, 0, 0), NO_KEYVAL);
-        }
+/// US 布局的反斜杠键（`VK_OEM_5`）。值是 Win32 ABI 事实（winuser.h），冻结的。
+const VK_OEM_5: u32 = 0xdc;
+/// US 布局的撇号键（`VK_OEM_7`）。同上。
+/// **曾错写成 `0xe2`（那是 `VK_OEM_102`）**：后果是 `Ctrl+'` 在 Windows 上按了
+/// 没反应 —— 真键盘发的是 `0xde`，`mode_hotkey` 匹配不上就直落引擎，没有任何报错。
+/// 那条错值能一直活着，是因为原来「与 crate 对齐」的单测两边都是本文件的字面量
+/// （断言与被断言同源）—— 现在改由下面的 const 断言对着 crate 走，见那里。
+const VK_OEM_7: u32 = 0xde;
+
+// 与 windows crate 的**同名常量**对齐 —— 由**编译器**把关（`cargo check
+// --target x86_64-pc-windows-msvc`），不是单测：那个 crate 是 target 作用域依赖
+// （见 Cargo.toml），Linux 主机上根本不存在，写进 `#[cfg(test)]` 只能自己跟自己比
+// —— 本模块原来就有一条这样的假闸（`assert_eq!(VK_OEM_5 as u32, 0xdc)`，两边同源），
+// 已删。放这里而不是 `tsf.rs`：常量就在上面几行，改动时没法不看见它。
+//
+// 只在 Windows 目标存在，故整个块 cfg 掉，本模块在主机侧仍是纯 Rust（模块头那条）。
+#[cfg(target_os = "windows")]
+const _: () = {
+    assert!(VK_OEM_5 == windows::Win32::UI::Input::KeyboardAndMouse::VK_OEM_5.0 as u32);
+    assert!(VK_OEM_7 == windows::Win32::UI::Input::KeyboardAndMouse::VK_OEM_7.0 as u32);
+};
+
+/// 模式热键的语义。**不是目标模式**：切到哪儿取决于当前模式（见 `hotkey_target`），
+/// 因为两个键都是「来回切」——只能进不能出等于换个地方卡住。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModeHotkey {
+    /// Ctrl+' → 英文 ⇄ 拼音（B0）。
+    ToggleEnglish,
+    /// Ctrl+\ → 符号 ⇄ 拼音（B5）。
+    ToggleSymbol,
+}
+
+/// 热键此刻是否应当**动作**。`false` = 仍是热键（**要认领**），但这一次按键不改任何状态。
+///
+/// **按住不放的重复事件必须排除**：系统对按住的键持续补发重复（TSF 是 `lParam`
+/// bit30 → `map_key_state` 的 `KEY_STATE_REPEAT`）。热键是**切换**语义，重复再切一次
+/// 就是「按住 Ctrl+' 模式疯狂来回切」「按住 Shift+Space 全角位疯狂翻」。
+///
+/// **为什么是「认领但不动作」，不是「不是热键、放行」**：放行的重复事件会接着走到
+/// 引擎 —— `logic_input_method.rs` 的 `KEY_SPACE` 分支**只看 `RELEASED`、不看 Shift 位**
+/// （⇒ 被当成「提交缓冲 / 选首候选」，见 `tsf.rs` 里 `fullwidth_hotkey` 调用点上方那条
+/// 注释：按下与重复同罪），`KEY_STATE_REPEAT` 整个引擎只有 `handle_shift` 认。
+/// 与 `tsf.rs` 对**抬起**的处置同构（抬起也走引擎，靠 `handle_*` 里的 `released` 分支
+/// 变成 Consumed；重复没有这一层保护，只能在热键这一层拦）。
+///
+/// 与 fcitx5 轨 `handleFullwidthHotkey` / `handleModeHotkey` 的 `isRepeatEvent` 同判，
+/// 两轨必须一致。
+pub fn hotkey_should_act(states: u32) -> bool {
+    states & (KEY_STATE_REPEAT | KEY_STATE_RELEASED) == 0
+}
+
+/// VK + 修饰位 → 模式热键。`None` = 不是热键，照常走引擎路由。
+/// **注意**：重复事件也返回 `Some`（键位已确认是我们的，要认领）——改状态前先过
+/// `hotkey_should_act`，否则按住不放就会来回切。
+///
+/// 【本机（Linux）无法验证的部分，别当成已验】Windows 生态里这两个键位有没有
+/// 被别的软件占用，本机核实不了 —— 没有 Windows，也没有那些软件。这里唯一的依据
+/// 是「不与 Windows 自身的系统快捷键相撞」这一条常识判断，**没有实测**。
+///
+/// Linux 轨的 Ctrl+' / Ctrl+\ 是 `strings` + harness **实测**选出来的（见
+/// `crates/fcitx5-opi/cpp/opi_fcitx5.cpp` 的 handleModeHotkey：计划原本建议的
+/// Ctrl+; 被 libclipboard 抢走，是实测推翻的）。两条轨键位相同是**约定**，
+/// 不是同一份证据 —— 别把 Linux 侧那份实测当成这条的背书。
+///
+/// **为什么不改成可打印键**（2026-09-27 评估过，别再提）：裸键在中文模式下**已被
+/// 标点层认领** —— `engine-core/src/punctuation.rs` 的 `CHINESE_PUNCT` 明写
+/// `\`→`、`（注释：「主流 IME 都挂在反斜杠上」），`` ` ``→`｀` 走 `ascii_fullwidth`
+/// 的 `is_ascii_punctuation()` 兜底，而**中文模式默认全角**（`Mode::default_fullwidth`）。
+/// 裸 `'` 同样不行：`Engine::punct_text` 在缓冲为空时把它当引号。
+/// ⇒ 拿这些键当模式触发＝与用户裁决的标点功能正面相撞（一个键不能既出 `、` 又切模式）。
+/// Ctrl 组合键反而空着，且**两轨都在引擎之前截获**（本模块的 `mode_hotkey` 判在
+/// `tsf.rs` 调 `to_engine_keycode` **之前**，用的是裸 VK + `GetKeyState`）——
+/// 「Ctrl 到不了路由器」是对的，但热键本来就不走路由器。
+///
+/// VK_OEM_5 = 0xDC（US 布局反斜杠）、VK_OEM_7 = 0xDE（US 布局撇号）。此处用裸
+/// 字面量是因为本模块**平台中立**（无 windows 类型 → 主机可编译可单测）；
+/// 与 windows crate 同名常量的对齐由上面的 const 断言在 Windows 目标上把关
+/// （**不是单测**：那个 crate 是 target 作用域依赖，主机侧根本没有它）。
+///
+/// 抬起（`KEY_STATE_RELEASED`）不返回热键：按下已经切过一次，抬起再切会切回去，
+/// 用户看到的是模式纹丝不动。与 fcitx5 轨同判。
+pub fn mode_hotkey(vk: u32, states: u32) -> Option<ModeHotkey> {
+    if states & KEY_STATE_CTRL == 0 || states & KEY_STATE_RELEASED != 0 {
+        return None;
     }
-
-    #[test]
-    fn numpad_with_numlock_off_never_becomes_letters() {
-        // NumLock 关时小键盘 1..9 = VK_NUMPAD1..9 = 0x61..0x69 = 'a'..'i'
-        for vk in 0x61..=0x69 {
-            let kc = vk_to_engine_keycode(vk, 0, 0);
-            assert_eq!(kc, NO_KEYVAL, "VK {vk:#x} 不得变成字母");
-            assert!(char::from_u32(kc).is_none());
-        }
-        // VK_NUMPAD0 = 0x60 = '`'，numpad Del（NumLock 关）= VK_DECIMAL=0x6E='n'
-        assert_eq!(vk_to_engine_keycode(0x60, 0, 0), NO_KEYVAL);
-        assert_eq!(vk_to_engine_keycode(0x6e, 0, 0), NO_KEYVAL);
-    }
-
-    #[test]
-    fn no_keyval_passes_through_engine() {
-        // 哨兵在逻辑层的语义：不接管（TSF 侧 BOOL FALSE，键流入应用）
-        use crate::logic::{KeyOutcome, TsfLogic};
-        let mut s = TsfLogic::load(None).expect("内置回退词库");
-        assert_eq!(s.input_key(NO_KEYVAL, 0), KeyOutcome::Unhandled);
-        assert_eq!(s.buffer(), "");
-    }
-
-    #[test]
-    fn mapped_key_uses_unicode_codepoint() {
-        // 正常可打印键：ToUnicodeEx 返回 1 → 取码点（'a' 而非 VK_A=0x41）
-        assert_eq!(vk_to_engine_keycode(0x41, 1, b'a' as u16), b'a' as u32);
-        // 死键（-1）同样放行，不退化成 VK
-        assert_eq!(vk_to_engine_keycode(0x41, -1, 0), NO_KEYVAL);
-    }
-
-    #[test]
-    fn special_vks_pass_through_as_their_keycode() {
-        // 特殊键走编码键码、不取 ToUnicodeEx 的字符：VK_BACK 的映射结果是退格
-        // 控制符 0x08，它仍然 is_ascii()，会被 handle_printable 当普通符号放行，退格就废了
-        assert_eq!(vk_to_engine_keycode(0x08, 8, 0x08), KEY_BACK_SPACE); // VK_BACK
-        assert_eq!(vk_to_engine_keycode(0x0d, 1, 0x0d), KEY_RETURN); // VK_RETURN
-        assert_eq!(vk_to_engine_keycode(0x20, 1, 0x20), KEY_SPACE); // VK_SPACE
-        // 取不到键盘状态（n = -1）时特殊键仍可用
-        assert_eq!(vk_to_engine_keycode(0x2e, -1, 0), KEY_DELETE); // VK_DELETE
-    }
-
-    // ---- 特殊键空间与「可打印字符 = Unicode 码点」不相交（第 6 条） ----
-
-    /// 拼音模式、缓冲非空（"ni"）。
-    fn pinyin_with_buffer() -> crate::logic::TsfLogic {
-        use crate::logic::TsfLogic;
-        use engine_core::composer::Mode;
-        let mut s = TsfLogic::load(None).expect("内置回退词库");
-        s.switch_mode(Mode::Pinyin);
-        for k in ['n', 'i'] {
-            s.input_key(k as u32, 0);
-        }
-        assert_eq!(s.buffer(), "ni");
-        s
-    }
-
-    // 缺陷形态：可打印 ASCII 被特殊键常量占了码位 —— '.'=0x2E=VK_DELETE、
-    // '!'=0x21=VK_PRIOR、'"'=0x22=VK_NEXT。敲 '.' 在拼音缓冲非空时走退格分支
-    // 删掉拼音字母（'.' 还是最常用的符号之一），'!'/'"' 则翻候选页。
-    #[test]
-    fn printable_ascii_is_not_hijacked_by_special_keys() {
-        use crate::logic::{KeyOutcome, TsfLogic};
-        let mut hijacked = Vec::new();
-        for c in ['.', '!', '"'] {
-            let mut s = TsfLogic::load(None).expect("内置回退词库");
-            s.switch_mode(engine_core::composer::Mode::Pinyin);
-            for k in ['n', 'i'] {
-                s.input_key(k as u32, 0);
-            }
-            if s.input_key(c as u32, 0) != KeyOutcome::Unhandled || s.buffer() != "ni" {
-                hijacked.push(c);
-            }
-        }
-        assert!(
-            hijacked.is_empty(),
-            "可打印字符 {hijacked:?} 被特殊键抢走码位：交不了应用 / 还会改缓冲"
-        );
-    }
-
-    // 分离的另一半：Delete 的删除功能没被"让出 '.'"弄丢，且物理 Delete 键仍是删除。
-    #[test]
-    fn vk_delete_deletes_but_period_key_does_not() {
-        use crate::logic::KeyOutcome;
-        // 物理 Delete 键：VK_DELETE=0x2E → 编码键码 → 真退格
-        let mut s = pinyin_with_buffer();
-        assert_eq!(
-            s.input_key(vk_to_engine_keycode(0x2e, 0, 0), 0),
-            KeyOutcome::CompositionChanged
-        );
-        assert_eq!(s.buffer(), "n");
-        // 句点键：VK_OEM_PERIOD=0xBE，ToUnicodeEx 给 '.' → 可打印字符，不删
-        assert_eq!(
-            s.input_key(vk_to_engine_keycode(0xbe, 1, '.' as u16), 0),
-            KeyOutcome::Unhandled
-        );
-        assert_eq!(s.buffer(), "n");
-        // 直接给 KEY_DELETE 也一样能删（本轨内部键码的自洽）
-        assert_eq!(s.input_key(KEY_DELETE, 0), KeyOutcome::CompositionChanged);
-        assert_eq!(s.buffer(), "");
-    }
-
-    // 不变式：编码后的特殊键码永远落不进 ASCII 区 —— 将来新增特殊键忘了加
-    // match 臂时，最多掉进 `_ => Unhandled` 放行给应用，不会静默变成垃圾字符。
-    // 控制符也算 ASCII 区：0x08/0x09/0x0D/0x1B 在旧约定下漏匹配会让英文模式空缓冲
-    // `Commit` 一个控制符进文档（不止是吞掉一个键），见 logic.rs 的 SPECIAL_BASE 注释。
-    #[test]
-    fn special_key_space_stays_out_of_ascii() {
-        assert!(
-            SPECIAL_BASE.is_power_of_two(),
-            "SPECIAL_BASE 必须是 2 的幂，special_vk 靠掩码取 VK"
-        );
-        let leaked: Vec<char> = SPECIAL_KEYS
-            .into_iter()
-            .filter_map(|k| char::from_u32(k).filter(char::is_ascii))
-            .collect();
-        assert!(
-            leaked.is_empty(),
-            "特殊键码落在 ASCII 区 {leaked:?}：将来漏了 match 臂会静默变成字符"
-        );
-        for k in SPECIAL_KEYS {
-            assert!(special_vk(k) <= 0xFF, "特殊键 {k:#x} 的 VK 段越界");
-        }
-    }
-
-    // 设计推理的直接验证：将来新增特殊键但漏了 match 臂时，键码会掉进可打印分支 ——
-    // 基址必须让这条路退化成"放行"，而不是凭空提交一个字符。
-    #[test]
-    fn unmatched_special_keycode_degrades_to_passthrough_not_garbage() {
-        use crate::logic::{KeyOutcome, TsfLogic};
-        use engine_core::composer::Mode;
-        let mut s = TsfLogic::load(None).expect("内置回退词库");
-        s.switch_mode(Mode::English); // 英文空缓冲的可打印分支会 Commit(c)：最能暴露"变成字符"
-        // 对照：裸 VK 0x5B（'[' 键）走可打印分支被提交 —— 旧约定的危险就在这
-        assert_eq!(s.input_key(0x5b, 0), KeyOutcome::Commit("[".into()));
-        // 编码后同一个键（模拟"新增特殊键漏了 match 臂"）：char::from_u32 得到
-        // 非 ASCII 补充平面字符 → 被 c.is_ascii() 挡回 _ => Unhandled，不提交不改缓冲
-        assert_eq!(s.input_key(SPECIAL_BASE | 0x5b, 0), KeyOutcome::Unhandled);
-        assert_eq!(s.buffer(), "");
-    }
-
-    // raw VK → 键码的查表是检测与转发的唯一入口（不再有第二份 VK 表）。
-    #[test]
-    fn glue_maps_raw_vk_to_special_keycode() {
-        assert_eq!(special_keycode(0x2e), Some(KEY_DELETE)); // VK_DELETE
-        assert_eq!(special_keycode(0x21), Some(KEY_PAGE_UP)); // VK_PRIOR
-        assert_eq!(special_keycode(0x22), Some(KEY_PAGE_DOWN)); // VK_NEXT
-        assert_eq!(special_keycode(0x20), Some(KEY_SPACE)); // VK_SPACE
-        assert_eq!(special_keycode(0x10), Some(KEY_SHIFT)); // VK_SHIFT
-        // 可打印键不是特殊键：VK_OEM_PERIOD=0xBE → '.'，VK_1=0x31 → '!'/'1'
-        assert_eq!(special_keycode(0xbe), None);
-        assert_eq!(special_keycode(0x31), None);
+    match vk {
+        VK_OEM_7 => Some(ModeHotkey::ToggleEnglish),
+        VK_OEM_5 => Some(ModeHotkey::ToggleSymbol),
+        _ => None,
     }
 }
+
+/// 当前模式 + 热键 → 目标模式。**来回切**：已在目标模式就回拼音。
+///
+/// 与 `opi_fcitx5.cpp` 的 `handleModeHotkey` 是同一个判定，两轨必须一致
+/// （改一处就得改另一处）；这里是纯函数，主机可单测。
+pub fn hotkey_target(hot: ModeHotkey, cur: Mode) -> Mode {
+    match hot {
+        ModeHotkey::ToggleEnglish if cur == Mode::English => Mode::Pinyin,
+        ModeHotkey::ToggleSymbol if cur == Mode::Symbol => Mode::Pinyin,
+        ModeHotkey::ToggleEnglish => Mode::English,
+        ModeHotkey::ToggleSymbol => Mode::Symbol,
+    }
+}
+
+// ---------- 全角 ⇄ 半角切换键（用户裁决 2026-09-27「除自动全角外，再加一个切换键」） ----------
+
+/// `VK_SPACE`。与 `logic::KEY_SPACE`（0x20）**同值但不同空间**：那个是引擎键码，
+/// 这个是 Win32 虚拟键码，别互相替换（同 `VK_OEM_5` 与 `FcitxKey_backslash` 的关系）。
+const VK_SPACE: u32 = 0x20;
+
+/// Shift+Space = 全角 ⇄ 半角开关。
+///
+/// **与 `mode_hotkey` 分开而不是并进那个枚举**：那两个键选的是**目标模式**，
+/// 这个选的是**同一个模式内的一个布尔开关**；并进去会让 `hotkey_target` 多出一个
+/// 没有目标模式的假分支（`ModeHotkey::ToggleFullwidth => ?`）。
+///
+/// **为什么是 Shift+Space**：CJK 生态里 Shift+Space 就是「全角空格」的通用约定，
+/// 这里借它当**开关**（不是打全角空格）。fcitx5 轨实测无占用 —— 全部 fcitx5 库的
+/// `^(Shift|Control|Super|Alt)\+` 默认组合里没有它，addon conf 里也搜不到，见
+/// `opi_fcitx5.cpp` 的 `handleFullwidthHotkey` 占用表。
+///
+/// **带 Ctrl/Alt 的不算**：Ctrl+Space 是 fcitx5 的输入法切换键、也是 Windows 的
+/// 输入法切换键，收窄条件避免与它撞；Alt+Space 是 Windows 的系统菜单键。
+///
+/// 【本机（Linux）无法验证】Windows 侧同键（`VK_SPACE` + Shift）会不会被别的软件
+/// 先占、TSF 会不会先交给应用 —— **未验证**，与 `mode_hotkey` 那条是同一个未知。
+///
+/// 重复事件也返回 `true`（要认领）—— 改状态前先过 `hotkey_should_act`。
+pub fn fullwidth_hotkey(vk: u32, states: u32) -> bool {
+    if states & KEY_STATE_SHIFT == 0
+        || states & (KEY_STATE_CTRL | KEY_STATE_ALT) != 0
+        || states & KEY_STATE_RELEASED != 0
+    {
+        return false;
+    }
+    vk == VK_SPACE
+}
+
+// 单测独立成文件（`#[path]` 引入）以保持本文件 <500 行，与 input_method_tests.rs 同惯例。
+#[cfg(test)]
+#[path = "vk_tests.rs"]
+mod tests;

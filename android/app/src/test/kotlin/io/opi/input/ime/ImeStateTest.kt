@@ -177,6 +177,70 @@ class ImeStateTest {
         assertEquals("", state.searchQuery)
     }
 
+    // ---- 数字面板：引擎切到 Number，离开恢复 ----
+    // 面板的键是引擎键码（数字进缓冲、`,` `.` 由引擎标点表出文本），引擎不在 Number
+    // 模式就没有键有归宿：拼音模式收不了数字，`1` 会变成死键、`,` 还会被映射成 `，`。
+
+    @Test
+    fun openNumberSwitchesEngineToNumberAndBackRestoresLetterMode() {
+        val fake = FakeEngine().apply { mode = EngineMode.TRADITIONAL.value }
+        val state = newState(fake)
+        state.openNumber()
+        assertEquals(EngineMode.NUMBER.value, fake.mode)
+        state.backToLetters()
+        assertEquals(EngineMode.TRADITIONAL.value, fake.mode)
+    }
+
+    @Test
+    fun symbolPanelRoundTripThroughNumberKeepsLetterMode() {
+        // 数字 → 符号 → 数字 → 字母：记录不能被 NUMBER 自己覆盖掉
+        val fake = FakeEngine().apply { mode = EngineMode.ENGLISH.value }
+        val state = newState(fake)
+        state.openNumber()
+        state.openSymbol()
+        state.openNumber()
+        state.backToLetters()
+        assertEquals(EngineMode.ENGLISH.value, fake.mode)
+    }
+
+    @Test
+    fun leavingNumberPadCommitsPendingDigitsInsteadOfDroppingThem() {
+        // 数字缓冲就是要上屏的文本：它没有候选，落进「无候选就清掉」那支等于吃掉用户输入
+        val fake = FakeEngine().apply {
+            mode = EngineMode.NUMBER.value
+            buf = "12"
+            cands = emptyArray()
+            spaceResult = "12"
+        }
+        val state = newState(fake)
+        state.backToLetters()
+        assertEquals(listOf("12"), commits)
+        assertEquals(0, fake.clearCalls)
+    }
+
+    @Test
+    fun switchingFromNumberPadToSymbolPanelFlushesDigits() {
+        val fake = FakeEngine().apply {
+            mode = EngineMode.NUMBER.value
+            buf = "12"
+            cands = emptyArray()
+            spaceResult = "12"
+        }
+        val state = newState(fake)
+        state.openSymbol()
+        assertEquals(listOf("12"), commits)
+        assertEquals(0, fake.clearCalls)
+    }
+
+    @Test
+    fun leavingPadInLetterModeDoesNotSwitchModes() {
+        val fake = FakeEngine()
+        val state = newState(fake)
+        state.backToLetters()
+        state.onEditorChanged()
+        assertTrue("字母流程不得被面板的模式恢复碰到", fake.switchCalls.isEmpty())
+    }
+
     // ---- 面板往返 ----
 
     @Test

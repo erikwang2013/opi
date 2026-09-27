@@ -15,7 +15,7 @@
 
 use core::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use windows::Win32::Foundation::{
     CLASS_E_CLASSNOTAVAILABLE, CLASS_E_NOAGGREGATION, E_FAIL, E_POINTER, ERROR_SUCCESS, HMODULE,
@@ -39,12 +39,13 @@ use windows::Win32::UI::TextServices::{
 };
 use windows::core::{BOOL, GUID, HRESULT, IUnknown, Interface, PCWSTR, Ref, Result, implement};
 
-use crate::candidate_io::CandidateSink;
+use crate::candidate_io::{CandidateAction, CandidateSink, SharedAction};
 use crate::dll::{
     CLSID_TEXT_SERVICE, DISPLAY_NAME, DllLock, GUID_PROFILE, LANGID_ZH_CN, clsid_key,
     dll_can_unload, inproc_server_key,
 };
-use crate::tsf::{TsfTextService, ensure_panic_hook};
+use crate::state::{EngineShared, TsfSharedState};
+use crate::tsf::{TsfSink, TsfTextService, ensure_panic_hook};
 
 /// 每个 COM 出口（vtable 方法 + `Dll*` 导出）都要经过这里。
 ///
@@ -196,9 +197,25 @@ impl IClassFactory_Impl for ClassFactory_Impl {
             // `TsfLogic::load` 对坏路径返回 Err（既定策略：坏路径不静默回退），
             // 服务就创建不出来 —— 用户看到"输入法整个不在"，比词库小更糟。
             // Windows 词库分发方案定了之后在这里给路径。
-            // sink 用 CandidateSink::new_default()（C3 的生产实现）：惰性连
-            // named pipe，候选窗进程不在时降级为 no-op，不会让 CreateInstance 失败。
-            let service = TsfTextService::new(None, Box::new(CandidateSink::new_default()))?;
+            //
+            // B1 接线，三步，**顺序不能换**（互相引用的死结见 state.rs 模块头）：
+            // 1) `engine` 先建（回调与服务对象共用**同一份**，前者只有这一半能用
+            //    —— 读线程拿不到 `ITfContext`，理由见 state.rs 的线程模型）；
+            // 2) 回调只依赖 engine；3) sink 依赖回调 —— 建好后回填进回调的一次性槽位。
+            // sink 是 CandidateSink（C3 生产实现）：惰性连 named pipe，候选窗
+            // 进程不在时降级为 no-op，不会让 CreateInstance 失败。
+            let engine = Arc::new(EngineShared::load(None).map_err(|_| E_FAIL)?);
+            let action = Arc::new(SharedAction::new(Arc::clone(&engine)));
+            let sink: Arc<dyn TsfSink> = Arc::new(CandidateSink::new(
+                Arc::clone(&action) as Arc<dyn CandidateAction>
+            ));
+            // 回填失败只可能是重复初始化（本处是唯一调用点）→ 记一行，不中断：
+            // 服务照常可用，只是点选后窗口不会自动刷新。比起让输入法整个不存在，
+            // 这个降级明显更轻。
+            if action.attach_sink(Arc::clone(&sink)).is_err() {
+                eprintln!("tsf-opi: 候选窗回调的 sink 槽位已有值，点选后窗口不会自动刷新");
+            }
+            let service = TsfTextService::new(TsfSharedState::new(engine), sink);
             let unknown: IUnknown = service.into();
             // SAFETY: riid 指向 COM 给的合法 GUID（非空已判），ppvobject 是可写
             // 位置；unknown 在本次调用期间存活，query 会为调用方 AddRef 一份。

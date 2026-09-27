@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 6759199265b55a25776d2385322a77509031b6c488841fa88821a29bb1a572a5 # shrinks to ops = [Key('a')], mode_idx = 4, shift = false, switch_at = None, switch_to = 0
+cc f6fa1845ceca4f8443facabef31cfd4812312979a46e8c42209cb5c603dd4f42 # shrinks to ops = [Key('\'')], mode_idx = 4, shift = false, switch_at = None, switch_to = 0

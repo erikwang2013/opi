@@ -24,6 +24,9 @@
 #include <fcitx/userinterface.h> // UserInterfaceComponent
 #include <fcitx-utils/standardpath.h>
 
+#include "opi_json.h"     // parseJsonStringArray（拆出去是为了本文件守住 500 行硬规矩）
+#include "opi_rust_ffi.h" // Rust 出口声明 + take()，同一次拆分
+
 #include <cstdint>
 #include <cstdio>
 #include <exception>
@@ -31,47 +34,6 @@
 #include <string>
 #include <utility>
 #include <vector>
-
-// ---------- Rust C 出口声明（与 src/lib.rs 的 #[repr(C)]/no_mangle 对应） ----------
-
-// Rust 侧 OpString { ptr, len }（UTF-8，非 NUL 结尾；ptr==nullptr 视为空串）。
-struct OpiString {
-    const uint8_t *ptr;
-    size_t len;
-};
-
-// Rust 侧 KeyEventResult { action, text }：action 0=直通 1=已处理 2=提交。
-struct OpiKeyEventResult {
-    int32_t action;
-    OpiString text;
-};
-
-extern "C" {
-bool opi_fcitx5_load(const uint8_t *ptr, size_t len);
-OpiString opi_fcitx5_input_key(const uint8_t *ptr, size_t len);
-void opi_fcitx5_backspace();
-void opi_fcitx5_clear();
-OpiString opi_fcitx5_select(size_t index);
-void opi_fcitx5_switch_mode(int32_t mode); // 0=Pinyin 1=English 2=Number 3=Symbol
-void opi_fcitx5_set_shift(bool on);
-OpiString opi_fcitx5_input_space();
-OpiString opi_fcitx5_candidates(size_t limit); // JSON 数组（UTF-8）
-OpiString opi_fcitx5_buffer();
-int32_t opi_fcitx5_mode();
-OpiKeyEventResult opi_fcitx5_key_event(uint32_t keyval, uint32_t states);
-void opi_ffi_free_string_utf8(OpiString s);
-}
-
-// 取走并释放 Rust 侧字符串。ptr==nullptr 视为空串（Rust 侧 OpString::empty 的
-// 表示）；仅守卫构造，free 契约不变：每个返回的 OpString 恰好 free 一次。
-static std::string take(OpiString s) {
-    std::string out;
-    if (s.ptr != nullptr) {
-        out.assign(reinterpret_cast<const char *>(s.ptr), s.len);
-    }
-    opi_ffi_free_string_utf8(s);
-    return out;
-}
 
 // ---------- 输入面板：预编辑 + 候选栏 ----------
 //
@@ -96,141 +58,6 @@ static constexpr size_t kOpiPageSize = 8;
 // 进程内一个静态量够用：Rust 侧状态本就是进程单例，面板只是它的镜子；切
 // 输入上下文时 fcitx5 会调 reset()，那里两边一起清空并刷新这个缓存。
 static std::string g_pushedBuffer;
-
-// 解析 opi_fcitx5_candidates 的返回值：serde_json 对 Vec<String> 的输出
-// （`["好","你"]` —— 非 ASCII 直出 UTF-8，不转义成 \uXXXX，除非原字符是控制
-// 字符）。**只认这一个形状**，不做通用 JSON：这里只有一处调用，通用解析器的
-// 复杂度在这个文件里换不回任何东西。
-static bool parseHex4(const std::string &s, size_t pos, uint32_t &out) {
-    if (pos + 4 > s.size()) {
-        return false;
-    }
-    uint32_t v = 0;
-    for (size_t i = 0; i < 4; ++i) {
-        const char c = s[pos + i];
-        v <<= 4;
-        if (c >= '0' && c <= '9') {
-            v |= static_cast<uint32_t>(c - '0');
-        } else if (c >= 'a' && c <= 'f') {
-            v |= static_cast<uint32_t>(c - 'a' + 10);
-        } else if (c >= 'A' && c <= 'F') {
-            v |= static_cast<uint32_t>(c - 'A' + 10);
-        } else {
-            return false;
-        }
-    }
-    out = v;
-    return true;
-}
-
-static void appendUtf8(std::string &out, uint32_t cp) {
-    if (cp < 0x80) {
-        out.push_back(static_cast<char>(cp));
-    } else if (cp < 0x800) {
-        out.push_back(static_cast<char>(0xC0 | (cp >> 6)));
-        out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
-    } else if (cp < 0x10000) {
-        out.push_back(static_cast<char>(0xE0 | (cp >> 12)));
-        out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
-        out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
-    } else {
-        out.push_back(static_cast<char>(0xF0 | (cp >> 18)));
-        out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
-        out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
-        out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
-    }
-}
-
-static std::vector<std::string> parseJsonStringArray(const std::string &json) {
-    std::vector<std::string> out;
-    size_t i = 0;
-    auto skipWs = [&json, &i] {
-        while (i < json.size() && (json[i] == ' ' || json[i] == '\t' ||
-                                   json[i] == '\n' || json[i] == '\r')) {
-            ++i;
-        }
-    };
-    skipWs();
-    if (i >= json.size() || json[i] != '[') {
-        return out; // 空串（Rust 侧未装载/出错时返回值）也走这里
-    }
-    ++i;
-    while (true) {
-        skipWs();
-        if (i >= json.size() || json[i] != '"') {
-            break;
-        }
-        ++i;
-        std::string s;
-        bool closed = false;
-        while (i < json.size()) {
-            const char c = json[i++];
-            if (c == '"') {
-                closed = true;
-                break;
-            }
-            if (c != '\\') {
-                s.push_back(c);
-                continue;
-            }
-            if (i >= json.size()) {
-                break;
-            }
-            const char esc = json[i++];
-            if (esc == 'u') {
-                uint32_t cp = 0;
-                if (!parseHex4(json, i, cp)) {
-                    i = json.size(); // 坏转义：收摊，已解析的部分照常返回
-                    break;
-                }
-                i += 4;
-                // 代理对（😀）：低半区必须紧跟，否则按单码点编码。
-                if (cp >= 0xD800 && cp <= 0xDBFF && i + 6 <= json.size() &&
-                    json[i] == '\\' && json[i + 1] == 'u') {
-                    uint32_t lo = 0;
-                    if (parseHex4(json, i + 2, lo) && lo >= 0xDC00 &&
-                        lo <= 0xDFFF) {
-                        cp = 0x10000 + ((cp - 0xD800) << 10) + (lo - 0xDC00);
-                        i += 6;
-                    }
-                }
-                appendUtf8(s, cp);
-                continue;
-            }
-            switch (esc) {
-            case 'b':
-                s.push_back('\b');
-                break;
-            case 'f':
-                s.push_back('\f');
-                break;
-            case 'n':
-                s.push_back('\n');
-                break;
-            case 'r':
-                s.push_back('\r');
-                break;
-            case 't':
-                s.push_back('\t');
-                break;
-            default:
-                s.push_back(esc); // \" \\ \/ 及未知转义：取字面字符
-                break;
-            }
-        }
-        if (!closed) {
-            break;
-        }
-        out.push_back(std::move(s));
-        skipWs();
-        if (i < json.size() && json[i] == ',') {
-            ++i;
-            continue;
-        }
-        break;
-    }
-    return out;
-}
 
 // 候选词：点选后走 Rust 侧 select(**页内**索引) 并提交。
 // CandidateWord::select 是纯虚（fcitx/candidatelist.h:44），必须实现。
@@ -322,6 +149,129 @@ static void refreshingPanelFor(fcitx::InputContext *ic) {
     ic->updateUserInterface(fcitx::UserInterfaceComponent::InputPanel);
     // 推完了才记 —— 半路抛异常时这里保持旧值，下次直通键会照常重推一遍。
     g_pushedBuffer = buffer;
+}
+
+// ---------- 模式热键（B0/B5） ----------
+// 两个热键共用：这是按住不放补发的**重复**事件吗。**只能从 rawKey() 取** ——
+// key() 已过 Key::normalize()，Repeat 在那一步被滤掉（下面送 Rust 的 states 处有实测），
+// 拿 key().states() 判重复恒为 false。要排：热键是**切换**语义，按住时系统持续补发
+// 重复 ⇒ 不排就是模式疯狂来回切 / 全角位疯狂翻。要**认领但不动作**而不能放行：放行的
+// Shift+Space 会撞上 handleFullwidthHotkey 注释里那个 `KEY_SPACE` 坑（**不看 Shift 位**
+// ⇒ 被当成「选首候选」），Ctrl+' 的重复则会直通到应用（抬手已被我们吃掉）。同判见
+// tsf-opi/src/vk.rs 的 `hotkey_should_act`（两轨同构，改一处改两处）。
+static bool isRepeatEvent(const fcitx::KeyEvent &keyEvent) {
+    return keyEvent.rawKey().states().test(fcitx::KeyState::Repeat);
+}
+
+// 模式编码与 Rust 侧 mode_from_int / mode_to_int **逐值对应**（../src/lib.rs）。
+// 抄错一个值就是切到另一个模式，且两边都不报错。
+enum OpiMode : int32_t {
+    kModePinyin = 0,
+    kModeEnglish = 1,
+    kModeSymbol = 3,
+};
+
+// ⚠️ 这段路由**故意落在 C++ 侧**，与本文件开头「行为路由全部在 Rust 侧」相悖。
+// 原因很具体：Rust 侧拦 Ctrl 的是 handle_key 的首行
+// （src/input_method.rs：`states & (CTRL|ALT) → PassThrough`），Ctrl 组合键根本
+// 到不了 `opi_fcitx5_key_event` 的动作分发，只能在**送进去之前**拦。那个文件当前
+// 有别的改动在飞（B 系列符号模式本体），不动它。长期归属是 input_method.rs ——
+// 那里还能顺手覆盖 TSF 一侧，届时本段整体删除，改由 Rust 侧自己报模式变化。
+//
+// 两个键都**来回切**，不是单向进入：只能进不能出等于换个地方卡住。
+//   Ctrl+' (FcitxKey_apostrophe) → 英文 ⇄ 拼音（B0。英文模式今天也进不去，
+//                                   是「通路是否打通」的现成靶子）
+//   Ctrl+\ (FcitxKey_backslash)  → 符号 ⇄ 拼音（B5）
+// 不用 Ctrl+. ：那是 punctuation 模块的系统级占用（addon/punctuation.conf，
+// Category=Module）；不用 ` ：拼音生态里那是 quickphrase。
+// **不用 Ctrl+;（实测被剪贴板模块抢走）**：libclipboard.so 里就一行
+// `Control+semicolon`，而该模块 Category=Module + OnDemand=False → 恒加载、
+// 不分输入法。且它是 PreInputMethod 阶段的 watcher，排在输入法之前 ——
+// 我们这边 filterAndAccept() 也拦不住它已经弹出来的面板（07-xx 的 harness 里
+// e2e 阴性对照步实测到候选栏冒出剪贴板历史条目）。Ctrl+\ 是**逐个枚举**过
+// 所有 fcitx5 库的 Control+/Super+/Alt+/Shift+ 组合后确认无占用的键。
+//
+// **为什么不改用可打印键**（2026-09-27 评估过，别再提，与 tsf-opi/src/vk.rs 同一条）：
+// 裸键在中文模式下已被引擎的标点层认领 —— `\`→`、` 明写在 engine-core 的
+// CHINESE_PUNCT，`` ` ``→`｀` 走 ascii_fullwidth 兜底，而中文模式**默认全角**；
+// 裸 `'` 在缓冲为空时是引号。拿裸键当模式触发＝与用户裁决的标点功能抢同一个键。
+//
+// 不做键位可配置：一张两个条目的表，配置项等真有第二个人要改再说。
+// 返回 true = 本键已被本插件消费。
+static bool handleModeHotkey(fcitx::KeyEvent &keyEvent) {
+    const fcitx::Key key = keyEvent.key();
+    if (!key.states().test(fcitx::KeyState::Ctrl)) {
+        return false;
+    }
+    const int32_t cur = opi_fcitx5_mode();
+    int32_t target = cur;
+    switch (static_cast<uint32_t>(key.sym())) {
+    case FcitxKey_apostrophe:
+        target = (cur == kModeEnglish) ? kModePinyin : kModeEnglish;
+        break;
+    case FcitxKey_backslash:
+        target = (cur == kModeSymbol) ? kModePinyin : kModeSymbol;
+        break;
+    default:
+        return false;
+    }
+    // 抬起一并消费、但不再切。只拦按下的话，客户端会收到**无 keydown 的 keyup**
+    // （依赖键状态的游戏/编辑器卡键）—— 与 input_method.rs 里 last_printable
+    // 「抬起按按下时记下的结论回复」是同一个理由。不返回来切也是同一个道理：
+    // 按下切过去、抬起再切回来，用户看到的是模式纹丝不动。**重复**同理（见上）。
+    if (!keyEvent.isRelease() && !isRepeatEvent(keyEvent)) {
+        opi_fcitx5_switch_mode(target);
+        // 切模式会动缓冲/候选（Rust 侧 switch_mode → engine.switch_mode），面板
+        // 必须跟着走：漏了这步，切到英文后候选栏会继续挂着上一次的拼音候选。
+        refreshingPanelFor(keyEvent.inputContext());
+    }
+    keyEvent.filterAndAccept();
+    return true;
+}
+
+// ---------- 全角 ⇄ 半角切换键（用户裁决 2026-09-27） ----------
+
+// Shift+Space。与模式热键**同一条理由**判在 Rust 路由之前：Shift+Space 送进去
+// 就是普通空格（input_method.rs 的 KEY_SPACE 分支不看 Shift 位），会被当成
+// 「选首候选 / 提交缓冲」—— 进来就出不来了。
+//
+// 键位证据（2026-09-27 实测，方法同 handleModeHotkey 的占用表）：
+// `strings` 扫全部 fcitx5 库的 `^(Shift|Control|Super|Alt)\+` 默认组合，占用为
+// Control+7 / Control+8 / Control+period / Control+semicolon / Control+Return
+// （±Shift、±KP_Enter）/ Control+Shift+U / Control+Alt+E / Control+Alt+Shift+U /
+// Shift+Tab / Super+grave / Super+semicolon —— **Shift+Space 不在其中**；
+// /usr/share/fcitx5/addon/*.conf 与 ~/.config/fcitx5/conf/*.conf 里也搜不到
+// `shift+space`（pinyin/table 只把它作为 addon 依赖名 `fullwidth` 提到，不是键位）。
+// 生态约定：Shift+Space 本就是 CJK 输入法的「全角空格」，这里借它当**开关**。
+// ⚠️ 本机没有 Windows ⇒ TSF 轨同键（VK_SPACE + Shift）**未验证**，见 vk.rs。
+//
+// 带 Ctrl/Alt 的不算：Ctrl+Space 是 fcitx5 的输入法切换键、Ctrl+Shift+Space 是
+// 它的反向键 —— 实测在 ~/.config/fcitx5/config 的 `[Hotkey/TriggerKeys]` 与
+// `[Hotkey/AltTriggerKeys]`（**全局热键，先于输入法**，故 strings 表里搜不到它们：
+// 那是配置值不是库内字符串）；Alt+Space 在多数桌面环境是窗口菜单。
+// 收窄条件避免与它们撞。
+// 返回 true = 本键已被本插件消费。
+static bool handleFullwidthHotkey(fcitx::KeyEvent &keyEvent) {
+    const fcitx::Key key = keyEvent.key();
+    const auto st = key.states(); // KeyStates(Flags<KeyState>)；不写类型名以免与别名漂
+    if (!st.test(fcitx::KeyState::Shift) || st.test(fcitx::KeyState::Ctrl)
+        || st.test(fcitx::KeyState::Alt)) {
+        return false;
+    }
+    if (key.sym() != FcitxKey_space) {
+        return false;
+    }
+    if (!keyEvent.isRelease() && !isRepeatEvent(keyEvent)) {
+        opi_fcitx5_toggle_fullwidth();
+        // **不刷面板**：这个开关只改后续的标点映射，不动缓冲也不动候选
+        // （Rust 侧 Engine::toggle_fullwidth 只翻一个 bool），推一帧是白推。
+        // 与 handleModeHotkey 的 refreshingPanelFor 差别就在这里 —— 那边切模式
+        // 会清缓冲换候选，不刷会留着上一次的候选。
+    }
+    // 抬起**与重复**一并消费、但不再切（同 handleModeHotkey：只拦按下会给客户端
+    // 一个无 keydown 的 keyup；重复放行更糟 —— 会被引擎当普通空格去选首候选）。
+    keyEvent.filterAndAccept();
+    return true;
 }
 
 // ---------- fcitx5 插件本体（结构对齐 fcitx5 example/ime.cpp） ----------
@@ -438,6 +388,15 @@ void OpiEngine::keyEvent(const fcitx::InputMethodEntry &entry,
 
 void OpiEngine::keyEventImpl(const fcitx::InputMethodEntry & /*entry*/,
                              fcitx::KeyEvent &keyEvent) {
+    // 模式热键**先于** Rust 路由：Ctrl 组合键在 input_method.rs 首行就被直通，
+    // 送进去也是白送（见 handleModeHotkey 上方说明）。
+    if (handleModeHotkey(keyEvent)) {
+        return;
+    }
+    // 全角键同样先于 Rust 路由，理由见 handleFullwidthHotkey 上方。
+    if (handleFullwidthHotkey(keyEvent)) {
+        return;
+    }
     // keyval 取 xkb keysym（ASCII 段与 Unicode 码点一致）；states 用
     // KeyEventBase::key() 的 KeyStates，再补全 Rust 侧线格式的三位。
     //

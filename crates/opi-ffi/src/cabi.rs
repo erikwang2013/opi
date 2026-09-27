@@ -12,40 +12,20 @@ use engine_core::router::KeyAction;
 
 use crate::api;
 
+mod utf16;
+use utf16::{read_utf16, texts_to_json};
+
 /// UTF-16 字符串句柄（Rust 侧分配，调用方负责 opi_ffi_free_string）。
+/// `impl` 在 [`utf16`]（**非导出**辅助，拆出去给本文件腾行数；结构与导出留在这里，
+/// 因为 `c_abi_contract.rs` 只解析本文件）。
 #[repr(C)]
 pub struct OpiString {
     pub ptr: *const u16,
     pub len: usize,
 }
 
-impl OpiString {
-    /// 从 &str 分配 UTF-16 缓冲。空串返回空句柄（ptr 为 null）。
-    /// 用 into_boxed_slice 使分配布局精确等于 len，free 端
-    /// `Vec::from_raw_parts(ptr, len, len)` 的释放布局与之匹配，无 UB。
-    pub fn from_utf16(s: &str) -> Self {
-        if s.is_empty() {
-            return Self::empty();
-        }
-        let units: Box<[u16]> = s.encode_utf16().collect::<Vec<u16>>().into_boxed_slice();
-        let ptr = units.as_ptr();
-        let len = units.len();
-        std::mem::forget(units);
-        OpiString { ptr, len }
-    }
-
-    /// 空句柄（ptr: null, len: 0）——错误/空串哨兵。
-    pub fn empty() -> Self {
-        OpiString {
-            ptr: std::ptr::null(),
-            len: 0,
-        }
-    }
-}
-
 /// 释放 `opi_*` 返回的 OpiString。
 /// # Safety
-///
 /// `s` 必须是 `opi_*` 返回且尚未释放过的句柄（Rust 侧分配）。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_ffi_free_string(s: OpiString) {
@@ -55,32 +35,12 @@ pub unsafe extern "C" fn opi_ffi_free_string(s: OpiString) {
     }
 }
 
-/// 读取 UTF-16 输入串。`None` **只**表示「非法 UTF-16」；null/零长 → `Some("")`。
-///
-/// # Safety
-///
-/// `ptr` 必须指向至少 `len` 个 u16 的有效内存（或为 null）。
-unsafe fn read_utf16(ptr: *const u16, len: usize) -> Option<String> {
-    if ptr.is_null() || len == 0 {
-        return Some(String::new());
-    }
-    // Safety: 调用方保证 ptr 指向至少 len 个 u16 的有效内存
-    let units = unsafe { std::slice::from_raw_parts(ptr, len) };
-    String::from_utf16(units).ok()
-}
-
-/// 共享文本数组 → JSON 字符串（OpiString）。
-fn texts_to_json(texts: Vec<String>) -> OpiString {
-    OpiString::from_utf16(&api::texts_json(&texts))
-}
-
-// ---------- 27 个 C 函数（另有 opi_ffi_free_string 释放句柄） ----------
+// ---------- 30 个 C 函数（另有 opi_ffi_free_string 释放句柄） ----------
 
 /// load(path: const uint16_t*, len) -> bool。① null / 空串 → 内置回退词库并返回
 /// **true**（既有契约，有意为之）；② 非法 UTF-16 → **false 且不替换**已有词库
 /// （折成一个 `None` 就会把乱码路径静默装成内置 35 词库）；③ 合法但加载失败 → false。
 /// # Safety
-///
 /// `ptr` 必须指向至少 `len` 个有效 `u16`（或为 null，视为空串）。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_load(path: *const u16, len: usize) -> bool {
@@ -93,7 +53,6 @@ pub unsafe extern "C" fn opi_load(path: *const u16, len: usize) -> bool {
 /// loadTrad(path: const uint16_t*, len) -> bool。空/坏路径/引擎未加载 → false
 /// （繁体模式回退简体库，见 spec 错误处理）。
 /// # Safety
-///
 /// `ptr` 必须指向至少 `len` 个有效 `u16`（或为 null，视为空串）。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_load_trad(path: *const u16, len: usize) -> bool {
@@ -106,7 +65,6 @@ pub unsafe extern "C" fn opi_load_trad(path: *const u16, len: usize) -> bool {
 
 /// inputKey(ch) -> OpiString。永不 panic。单字符外返回空串。
 /// # Safety
-///
 /// `ptr` 必须指向至少 `len` 个有效 `u16`（或为 null，视为空串）。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_input_key(ptr: *const u16, len: usize) -> OpiString {
@@ -119,7 +77,6 @@ pub unsafe extern "C" fn opi_input_key(ptr: *const u16, len: usize) -> OpiString
 }
 
 /// # Safety
-///
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_backspace() {
@@ -127,7 +84,6 @@ pub unsafe extern "C" fn opi_backspace() {
 }
 
 /// # Safety
-///
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_clear() {
@@ -139,7 +95,6 @@ pub unsafe extern "C" fn opi_clear() {
 /// index 是**全局**索引（JNI 与既有调用方用）。点击候选请用 `opi_select_page(k)`
 /// （页内索引）—— 自己算 `opi_page() * 8 + k` 会把 PAGE_SIZE 抄进 UI，见该导出的注释。
 /// # Safety
-///
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_select(index: usize) -> OpiString {
@@ -156,7 +111,6 @@ pub unsafe extern "C" fn opi_select(index: usize) -> OpiString {
 /// Number, Symbol —— 照声明序推会得到 Traditional=1）。跨语言侧一律照 `mode_to_int` 的
 /// 编码写，别照枚举声明序写：错了不会编译失败，只会静默显示成拼音。
 /// # Safety
-///
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_switch_mode(mode: i32) {
@@ -168,15 +122,61 @@ pub unsafe extern "C" fn opi_switch_mode(mode: i32) {
 }
 
 /// # Safety
-///
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_set_shift(on: bool) {
     let _ = catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.set_shift(on))));
 }
 
+// ---------- 全角/符号开关（B3 / B5 的语义出口；键位仍不在引擎层） ----------
+// 三个出口的完整契约（含未装载哨兵与「切模式后必须重读」的硬规则）在
+// `tests/cabi_fullwidth.rs` 的模块注释里 —— 那里同时是这些条款的门禁。
+
+/// toggleFullwidth() -> bool：全角 ↔ 半角，返回**切换后的新状态**（状态栏直接拿去
+/// 刷新）。只影响标点（中文模式出中文标点，其余机械全角），字母/数字不动；
+/// 未装载 → false（那时按键全走 action=0，宿主拿到的就是半角，不是错误码）。
 /// # Safety
-///
+/// 无外部内存参数，跨线程调用安全（共享单例由内部 Mutex 保护）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_toggle_fullwidth() -> bool {
+    catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.toggle_fullwidth()).unwrap_or(false)
+    }))
+    .unwrap_or(false)
+}
+
+/// fullwidthState() -> bool：全角开关读侧。**每一次 `opi_switch_mode` 之后都必须重读**
+/// —— 切模式把它重置为该模式的默认值（拼音/繁体全角，英文/数字/符号半角）；平台侧
+/// 自记一份五模式默认值表就是第五份拷贝，必漂。未装载 → false。
+/// # Safety
+/// 无外部内存参数，跨线程调用安全（共享单例由内部 Mutex 保护）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fullwidth_state() -> bool {
+    catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.fullwidth()).unwrap_or(false)
+    }))
+    .unwrap_or(false)
+}
+
+/// toggleSymbol() -> OpiString：符号面板开关，**返回需要上屏的文本（空串 = 无提交）**。
+/// ⚠️ 返回的**不是**「刚切出来的那个符号」，而是切进面板前那截缓冲的待上屏文本
+/// （有候选提首候选、无候选的乱码缓冲清掉而不上屏）。为何不是 void：这段文本必须
+/// 交出来，拿不到插入通道的端不要调它。调用方负责 `opi_ffi_free_string`
+/// （空句柄可无条件释放）。未装载 → 空句柄。
+/// ⚠️ 调用后须重读 mode / buffer / candidates / fullwidth 四样 —— 内部走了一次
+/// `switch_mode`，而它会按模式默认值重置全角（Symbol 默认半角）。
+/// # Safety
+/// 无外部内存参数，跨线程调用安全（共享单例由内部 Mutex 保护）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_toggle_symbol() -> OpiString {
+    let out = catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.toggle_symbol()).unwrap_or_default()
+    }))
+    .unwrap_or_default();
+    OpiString::from_utf16(&out)
+}
+
+/// # Safety
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_input_space() -> OpiString {
@@ -226,7 +226,6 @@ pub struct OpiKeyEventResult {
 ///
 /// 引擎未装载或内部 panic → `action=0`（交系统），**绝不静默吞键**。
 /// # Safety
-///
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_key_event(keyval: u32, states: u32) -> OpiKeyEventResult {
@@ -258,7 +257,6 @@ pub unsafe extern "C" fn opi_key_event(keyval: u32, states: u32) -> OpiKeyEventR
 /// 本出口与按数字键（`opi_key_event` 的数字选词）、回车提交**同源** ——
 /// 三者都走 `KeyRouter::select` 那一份页内换算。
 /// # Safety
-///
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_select_page(index: u32) -> OpiString {
@@ -277,7 +275,6 @@ pub unsafe extern "C" fn opi_select_page(index: u32) -> OpiString {
 /// （高亮的页 ≠ 实际选词所在的页）。本出口与 `opi_page()`/`opi_page_count()`
 /// 同源，三者永远一致。
 /// # Safety
-///
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_candidates_page() -> OpiString {
@@ -291,7 +288,6 @@ pub unsafe extern "C" fn opi_candidates_page() -> OpiString {
 /// pageCount() -> uint32：候选总页数（UI 的「共 N 页」；**无候选 → 0**，
 /// 引擎未装载 → 0）。
 /// # Safety
-///
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_page_count() -> u32 {
@@ -306,7 +302,6 @@ pub unsafe extern "C" fn opi_page_count() -> u32 {
 /// 候选栏的页码必须读这里、不要自己数：PageDown 到末页时路由会把页码钳到最后一页，
 /// 本地计数超过末页就会与引擎漂移（高亮的页 ≠ 实际选词所在的页）。
 /// # Safety
-///
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_page() -> u32 {
@@ -323,7 +318,6 @@ pub unsafe extern "C" fn opi_page() -> u32 {
 /// 英文直传路径的大小写由它决定（见 `KeyRouter::key_event`），引擎位看不出来 ——
 /// 所以 ⇧ 键的高亮（尤其 Lock）只能读本出口。
 /// # Safety
-///
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_shift_state() -> i32 {
@@ -335,7 +329,6 @@ pub unsafe extern "C" fn opi_shift_state() -> i32 {
 
 /// candidates(limit) -> JSON 文本数组。
 /// # Safety
-///
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_candidates(limit: usize) -> OpiString {
@@ -347,7 +340,6 @@ pub unsafe extern "C" fn opi_candidates(limit: usize) -> OpiString {
 }
 
 /// # Safety
-///
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_buffer() -> OpiString {
@@ -359,7 +351,6 @@ pub unsafe extern "C" fn opi_buffer() -> OpiString {
 }
 
 /// # Safety
-///
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_mode() -> i32 {
@@ -371,7 +362,6 @@ pub unsafe extern "C" fn opi_mode() -> i32 {
 
 /// searchSymbols(keyword) -> JSON 文本数组。
 /// # Safety
-///
 /// `ptr` 必须指向至少 `len` 个有效 `u16`（或为 null，视为空串）。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_search_symbols(ptr: *const u16, len: usize) -> OpiString {
@@ -385,7 +375,6 @@ pub unsafe extern "C" fn opi_search_symbols(ptr: *const u16, len: usize) -> OpiS
 
 /// symbolBlocks() -> JSON：`[{id,start,end,name,common}]`。
 /// # Safety
-///
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_symbol_blocks() -> OpiString {
@@ -398,7 +387,6 @@ pub unsafe extern "C" fn opi_symbol_blocks() -> OpiString {
 
 /// symbolsInBlock(id: i16) -> JSON 文本数组。
 /// # Safety
-///
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_symbols_in_block(id: i16) -> OpiString {
@@ -419,7 +407,6 @@ pub unsafe extern "C" fn opi_symbols_in_block(id: i16) -> OpiString {
 }
 
 /// # Safety
-///
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_learner_enabled() -> bool {
@@ -430,7 +417,6 @@ pub unsafe extern "C" fn opi_learner_enabled() -> bool {
 }
 
 /// # Safety
-///
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_set_learner(enabled: bool) {
@@ -440,7 +426,6 @@ pub unsafe extern "C" fn opi_set_learner(enabled: bool) {
 }
 
 /// # Safety
-///
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_clear_user_words() {
@@ -453,7 +438,6 @@ pub unsafe extern "C" fn opi_clear_user_words() {
 /// （镜像 jni.rs 的 opijni_remove_user_word，两个 ABI 面语义必须一致）。
 /// 词不存在 / 空串 / null → 无操作；导出 JSON 逐字节不变。
 /// # Safety
-///
 /// `ptr` 必须指向至少 `len` 个有效 `u16`（或为 null，视为空串）。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_remove_user_word(ptr: *const u16, len: usize) {
@@ -467,7 +451,6 @@ pub unsafe extern "C" fn opi_remove_user_word(ptr: *const u16, len: usize) {
 /// 返回导入条数；失败返回负值（-1）——非法 JSON / 版本不符 / 词表过大 /
 /// 引擎未装载 / null 入参。失败不改动既有用户词（引擎侧「全有或全无」）。
 /// # Safety
-///
 /// `ptr` 必须指向至少 `len` 个有效 `u16`（或为 null，视为失败）。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_import_user_words(ptr: *const u16, len: usize) -> i32 {
@@ -487,7 +470,6 @@ pub unsafe extern "C" fn opi_import_user_words(ptr: *const u16, len: usize) -> i
 }
 
 /// # Safety
-///
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_export_user_words() -> OpiString {

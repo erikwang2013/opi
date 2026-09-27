@@ -13,15 +13,15 @@
 //! 【骨架 vs 功能】本文件按"最小可编译骨架"编写（对照 windows-rs 0.62 TSF 示例）：
 //!   [功能] ITfTextInputProcessor 生命周期、ITfKeyEventSink 按键转发与键码映射、
 //!          KeyOutcome 分派、AdviseKeyEventSink 注册、**提交文本真正插入文档**
-//!          （`insert_text`：RequestEditSession + ITfEditSession::DoEditSession）。
+//!          （`state.rs` 的 `insert_into`：RequestEditSession + ITfEditSession::DoEditSession）。
 //!   [骨架] composition（拼音缓冲）不做进文档 —— 缓冲显示在独立候选窗里
 //!          （见 candidate_io.rs），故文档侧只有"插入"没有 composition 生命周期。
-//!          候选窗 UI 与 `CandidateAction`（点击选词/翻页）仍未接线。
+//!   [已接线] 候选窗点击选词/翻页 → `candidate_io.rs` 的 `CandidateAction`，
+//!          插入目标由本文件每个键事件存进 `TsfSharedState`（B1）。
 //!   [已补] COM 服务器导出与注册在 `com_server.rs`（类工厂 / DllRegisterServer）。
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Mutex, Once};
+use std::sync::{Arc, Mutex, Once};
 
 use engine_core::composer::Mode;
 use windows::Win32::Foundation::{LPARAM, WPARAM};
@@ -30,9 +30,8 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     VK_SHIFT,
 };
 use windows::Win32::UI::TextServices::{
-    ITfContext, ITfEditSession, ITfEditSession_Impl, ITfInsertAtSelection, ITfKeyEventSink,
-    ITfKeyEventSink_Impl, ITfKeystrokeMgr, ITfTextInputProcessor, ITfTextInputProcessor_Impl,
-    ITfThreadMgr, TF_ES_READWRITE, TF_ES_SYNC, TF_IAS_NOQUERY,
+    ITfContext, ITfKeyEventSink, ITfKeyEventSink_Impl, ITfKeystrokeMgr, ITfTextInputProcessor,
+    ITfTextInputProcessor_Impl, ITfThreadMgr,
 };
 use windows::core::{
     BOOL, ComObjectInterface, GUID, HRESULT, IUnknown, Interface, InterfaceRef, Ref, Result,
@@ -44,10 +43,15 @@ use crate::logic::{
     KEY_STATE_ALT, KEY_STATE_CAPS_LOCK, KEY_STATE_CTRL, KEY_STATE_RELEASED, KEY_STATE_REPEAT,
     KEY_STATE_SHIFT, KeyOutcome, TsfLogic,
 };
-use crate::vk::vk_to_engine_keycode;
+use crate::state::TsfSharedState;
+use crate::vk::{
+    ModeHotkey, fullwidth_hotkey, hotkey_should_act, hotkey_target, mode_hotkey,
+    vk_to_engine_keycode,
+};
 
 /// E_FAIL：引擎内部错误的统一返回码（panic 被兜住 / 锁中毒）。
-const E_FAIL: HRESULT = HRESULT(0x80004005_u32 as i32);
+/// `pub(crate)`：`state.rs` 的编辑会话出口要用同一个码。
+pub(crate) const E_FAIL: HRESULT = HRESULT(0x80004005_u32 as i32);
 
 /// 一次性 panic hook（对照 fcitx5-opi/src/lib.rs 的 `ensure_panic_hook`）。
 /// 每个 COM 出口都要调：换掉默认 hook 后，宿主进程的事件日志里能看到是引擎炸了。
@@ -60,7 +64,7 @@ pub(crate) fn ensure_panic_hook() {
     });
 }
 
-/// 观察接缝：**不负责文档写入** —— 提交文本的插入由 `insert_text` 在本文件内
+/// 观察接缝：**不负责文档写入** —— 提交文本的插入由 `state.rs` 的 `insert_into`
 /// 用 COM 接口完成（那里才有 `ITfContext` 与 client id），本接缝只把"发生了什么"
 /// 通知出去，供候选窗（C3 的 CMP 窗口）刷新。语义（对照 C1 契约）：
 /// Commit → 隐藏候选窗；CompositionChanged → 用候选数据刷新候选窗。
@@ -80,49 +84,92 @@ pub trait TsfSink: Send + Sync {
     }
 }
 
+/// 把当前引擎状态推给候选窗。服务对象（按键/切模式）与候选窗回调（点选后刷新，
+/// 见 candidate_io.rs 的 `SharedAction::refresh`）共用 —— 两处各写一遍必然漂移，
+/// 症状是"切了模式/点了候选，窗口还显示旧内容"。
+pub(crate) fn push_state(sink: &dyn TsfSink, logic: &TsfLogic) {
+    sink.on_composition_changed(
+        &logic.buffer(),
+        &logic.candidates(),
+        logic.page(),
+        logic.page_count(),
+        logic.mode(),
+    );
+}
 /// TSF 服务对象：单对象实现两个 COM 接口，避免跨接口共享状态。
 /// - `ITfTextInputProcessor`：TSF 核心入口（Activate/Deactivate 生命周期）。
 /// - `ITfKeyEventSink`：按键转发（Activate 中经 ITfKeystrokeMgr::AdviseKeyEventSink 注册）。
 #[implement(ITfTextInputProcessor, ITfKeyEventSink)]
 pub struct TsfTextService {
-    /// 引擎 + 候选分页 + ⇧ 状态机（C1 逻辑层）。
-    pub logic: Mutex<TsfLogic>,
+    /// 引擎（与候选窗回调共用同一份 `EngineShared`）+ 插入目标 + 编辑会话保活。
+    /// **本对象是它唯一的持有者**：后两样不 Send，只该待在按键线程上，
+    /// 读线程那份引用走 `EngineShared`（见 `state.rs` 的线程模型）。
+    pub state: TsfSharedState,
     /// Activate 时保存的线程管理器（骨架：仅持有引用，候选窗/文档操作需要）。
     pub thread_mgr: Mutex<Option<ITfThreadMgr>>,
-    /// Activate 收到的 TfClientId。`RequestEditSession` 的第一个参数就是它 ——
-    /// 此前被丢弃，于是"想插入也没有合法的 tid 可用"。0 = TF_CLIENTID_NULL =
-    /// 尚未 Activate（TSF 分配的是非零 id），故 0 同时充当"未激活"哨兵。
-    client_id: AtomicU32,
-    /// 候选窗接缝（见 `TsfSink`）。
-    pub sink: Box<dyn TsfSink>,
+    /// 候选窗接缝（见 `TsfSink`）。`Arc` 而非 `Box`：同一份还要交给候选窗回调
+    /// （点选后得让窗口刷新/隐藏），两处各持一个引用，谁也不用等谁。
+    pub sink: Arc<dyn TsfSink>,
     /// 模块级对象计数（见 `dll.rs`）：本对象活着 → `DllCanUnloadNow` 必须答
     /// S_FALSE。字段本身从不读写，作用全在 `Drop`（故下划线前缀）。
     _module_lock: DllLock,
-    /// 未能**同步**完成的编辑会话的保活引用（唯一写入点是 `insert_text` 的
-    /// `TF_E_SYNCHRONOUS` 分支，理由见那里）。只保最后一个 —— 见该分支注释。
-    keepalive: Mutex<Option<ITfEditSession>>,
 }
 
 impl TsfTextService {
-    /// 装载逻辑层（`TsfLogic::load`，失败用内置回退词库语义由逻辑层处理）。
-    pub fn new(path: Option<&str>, sink: Box<dyn TsfSink>) -> Result<Self> {
-        // E_FAIL：词库装载失败（坏路径）→ 服务不可用。
-        let logic = TsfLogic::load(path).map_err(|_| HRESULT(0x80004005_u32 as i32))?;
-        Ok(Self {
-            logic: Mutex::new(logic),
+    /// `state` 与 `sink` 都由 `com_server.rs` **先建好再传进来** —— 顺序理由见
+    /// `state.rs` 模块头（B1：回调要 state，服务对象要回调，谁先建都不成立，
+    /// 故两者都不再依赖对方先存在）。
+    ///
+    /// 词库装载失败（坏路径）由 `EngineShared::load` 报错，调用方决定回退。
+    pub fn new(state: TsfSharedState, sink: Arc<dyn TsfSink>) -> Self {
+        Self {
+            state,
             thread_mgr: Mutex::new(None),
-            client_id: AtomicU32::new(0),
             sink,
             _module_lock: DllLock::new(),
-            keepalive: Mutex::new(None),
-        })
+        }
+    }
+
+    /// B0：模式热键。切完**立刻**刷一次候选窗 —— 不刷的话窗口还挂着上个模式的
+    /// 候选（切到英文，窗口里还留着拼音的汉字），用户会以为键没生效。
+    fn toggle_mode(&self, hot: ModeHotkey) -> BOOL {
+        let Some(mut logic) = self.state.lock_logic() else {
+            return BOOL(1); // 中毒锁：吞键，与 handle_key_inner 同策略
+        };
+        let target = hotkey_target(hot, logic.mode());
+        logic.switch_mode(target);
+        push_state(&*self.sink, &logic);
+        BOOL(1)
+    }
+
+    /// 候选窗点选的**唯一执行点**：读线程只把 index 排进队列（它拿不到
+    /// `ITfContext` —— 那是本线程的 COM 接口指针，见 state.rs 模块头），
+    /// 真正走 COM 的插入在这里、在按键线程上跑。
+    ///
+    /// **已知代价：点到下一次按键之间才插入**。即时插入的两条升级路径（都要真机）
+    /// 写在 state.rs 模块头。一次按键最多清空队列（上限 16 条）。
+    ///
+    /// 已接受的一个边缘：点了候选后**没敲键就换文档**，插入会落到上一个文档
+    /// （目标取自上一次键事件）。这是"排回按键线程"的固有代价 —— 队列里只有一个
+    /// index，没有可判定的新旧依据；换文档时的正确行为需要真机才能定。
+    fn drain_pending(&self) {
+        while let Some(index) = self.state.take_pending_selection() {
+            if self.state.select_and_insert(index).is_none() {
+                continue; // 越界/空缓冲：引擎没变，窗口无需刷新
+            }
+            // 提交后缓冲已空 → sink 内部走 hide 分支，窗口自己收起来。
+            // 锁在这里即取即放：insert_into 早已返回（见它的重入警告）。
+            if let Some(logic) = self.state.lock_logic() {
+                push_state(&*self.sink, &logic);
+            }
+        }
     }
 
     /// 键事件统一入口（OnKeyDown/OnKeyUp 共用）。
     /// wParam = VK 或 Unicode 码点（见 logic.rs 头注释的键码约定）；
     /// lParam 位映射 KEY_STATE_*；KeyOutcome 分派见模块头注释。
     /// `pic` = TSF 交来的当前文档 context（无焦点文档时为 None），
-    /// 一路传到 `insert_text` —— 提交文本要插进它，别处拿不到。
+    /// 一路传到 `insert_into` —— 提交文本要插进它，别处拿不到。
     ///
     /// 这是个 `extern "system"` 的 COM 出口（经 vtable 被宿主输入法进程调用）：
     /// panic 逃出去 = 宿主进程 abort（in-proc，用户的 Word/浏览器）。
@@ -137,148 +184,78 @@ impl TsfTextService {
     }
 
     fn handle_key_inner(&self, pic: Option<&ITfContext>, wparam: WPARAM, lparam: LPARAM) -> BOOL {
-        let mut logic = match self.logic.lock() {
-            Ok(g) => g,
-            Err(_) => return BOOL(1), // 中毒锁：吞键，避免键流入应用造成死循环
+        // 候选窗点选排回本线程执行。位置是**两个约束夹出来的**，别挪：
+        // - 必须在 `input_key` 之前：用户"点一下候选、再打字"的意图顺序才是这样，
+        //   反过来新键先改了缓冲，排着的 index 就选到别的词上了；
+        // - 必须在 `remember_target` 之前：那一句在 `pic` 为 None（焦点已不在文档，
+        //   比如刚点过候选窗）时会**清空**目标，排在它后面就成了"点了没反应"。
+        self.drain_pending();
+        let states = map_key_state(lparam);
+        // 记下插入目标：候选窗点选走的是 named pipe 读线程，那条路上没有任何
+        // ITfContext，只有这里存下的一份可用。抬起事件不记（它带来的 context
+        // 已不是当前焦点文档，记了会把文本插到上一个窗口里）。
+        if states & KEY_STATE_RELEASED == 0 {
+            self.state.remember_target(pic);
+        }
+        // B0 模式热键要判在引擎**之前**：引擎的按键路径里 Ctrl+符号多半被判
+        // 放行给应用（对照 fcitx5 轨 input_method.rs 的 Ctrl/Alt 直通），
+        // 进去就出不来了。
+        if let Some(hot) = mode_hotkey(wparam.0 as u32, states) {
+            // 按住不放的重复事件：**认领但不动作**（重复再切一次 = 按住期间模式
+            // 疯狂来回切）。认领这一步不能省成"放行"：放回引擎后 Ctrl+' 会撞上
+            // Ctrl 直通落到应用，而它的抬手已被本函数吃掉（应用收到无 keydown
+            // 的 keydown）。同 fcitx5 轨 handleModeHotkey，判据见 hotkey_should_act。
+            if !hotkey_should_act(states) {
+                return BOOL(1);
+            }
+            return self.toggle_mode(hot);
+        }
+        // 全角 ⇄ 半角，同一条理由也判在引擎之前：Shift+Space 送进引擎就是普通空格
+        // （逻辑层的 KEY_SPACE 分支不看 Shift 位），会被当成"选首候选"。
+        if fullwidth_hotkey(wparam.0 as u32, states) {
+            // 重复同理（见上）：Shift+Space 的重复放行会被引擎的 KEY_SPACE 分支
+            // 当成"选首候选"（那个分支不看 Shift 位），所以只认领不翻转。
+            if !hotkey_should_act(states) {
+                return BOOL(1);
+            }
+            let mut logic = match self.state.lock_logic() {
+                Some(g) => g,
+                None => return BOOL(1), // 中毒锁：同下，吞键
+            };
+            logic.toggle_fullwidth();
+            // 不刷候选面板：这个开关只改**后续**的标点映射，不动缓冲也不动候选
+            // （`Engine::toggle_fullwidth` 只翻一个 bool）。刷了是白推一帧。
+            return BOOL(1);
+        }
+        let mut logic = match self.state.lock_logic() {
+            Some(g) => g,
+            None => return BOOL(1), // 中毒锁：吞键，避免键流入应用造成死循环
         };
-        let outcome = logic.input_key(to_engine_keycode(wparam.0 as u32), map_key_state(lparam));
+        let outcome = logic.input_key(to_engine_keycode(wparam.0 as u32), states);
         match outcome {
             KeyOutcome::Commit(text) => {
-                // 顺序有意：先插入（此时 logic 锁还握着，但 insert_text 不碰 logic，
+                // 顺序有意：先插入（此时 logic 锁还握着，但 insert_into 不碰 logic，
                 // 见其重入警告），再通知接缝。反过来则"接缝炸了 → 字没插进去"。
-                self.insert_text(pic, &text);
+                // pic 为 None = 无焦点文档，没有可插入的目标：静默跳过，照常吞键。
+                if let Some(pic) = pic {
+                    self.state.insert_into(pic, &text);
+                }
                 self.sink.on_commit(&text);
                 BOOL(1)
             }
             KeyOutcome::CompositionChanged => {
-                let candidates = logic.candidates();
-                self.sink.on_composition_changed(
-                    &logic.buffer(),
-                    &candidates,
-                    logic.page(),
-                    logic.page_count(),
-                    logic.mode(),
-                );
+                push_state(&*self.sink, &logic);
                 BOOL(1)
             }
             KeyOutcome::Consumed => BOOL(1),
             KeyOutcome::Unhandled => BOOL(0), // 不拦截，键自然流入应用
         }
     }
-
-    /// 把提交文本真正写进文档 —— `KeyOutcome::Commit` 的落地处。
-    ///
-    /// 三种"静默放弃"都是**正常情况**，不是错误路径：
-    /// - `pic` 为 None：TSF 没给 context（无焦点文档），没有可插入的目标；
-    /// - `client_id` 为 0：尚未 `Activate`，`RequestEditSession` 必失败；
-    /// - `pic` 转不出 `ITfInsertAtSelection`：该 context 不支持插入。
-    /// 放弃后按键仍被吞（`BOOL(1)`）：用户看到"这一下没出字"，而不是崩溃。
-    /// 这三种不发声（它们是"本就没有目标"）；`RequestEditSession` 的失败则**要**
-    /// 记一行 —— 那一类才是"本该出字却没出"，成因全在宿主进程里，没日志就查不动。
-    ///
-    /// **重入警告**：`TF_ES_SYNC` 会让 `DoEditSession` 在**本线程、本栈**上被回调，
-    /// 且此刻我们正持有 `self.logic` 的锁（`handle_key_inner` 的 guard 还活着）。
-    /// `InsertTextSession` 因此绝不能回头碰 `self.logic` / `self.sink`：
-    /// `std::sync::Mutex` 不可重入，一碰就死锁在用户的 Word 里。
-    /// 它只持有文本与插入接口，故安全 —— 改动它时务必守住这条。
-    fn insert_text(&self, pic: Option<&ITfContext>, text: &str) {
-        let Some(pic) = pic else { return };
-        let tid = self.client_id.load(Ordering::Relaxed);
-        if tid == 0 {
-            return; // 未 Activate：没有合法 tid，RequestEditSession 必失败
-        }
-        let Ok(session) = InsertTextSession::new(pic, text) else {
-            return;
-        };
-        let session: ITfEditSession = session.into();
-        // SAFETY: pic 是 TSF 交来的活动 context；session 在本次调用期间存活。
-        // 返回 `Result<HRESULT>` 是两层：外层 = 调用本身成不成，
-        // 内层 = `phrSession`，也就是 **DoEditSession 的返回值**（0.62 把它当出参映射）。
-        // 失败不改行为（"这次按键不出字"总好过"崩掉宿主进程"），但**必须留下痕迹**：
-        // "字插不进去"的成因全在宿主进程里，没有这一行，用户与我们都只剩
-        // "输入法就是不工作"。TF_E_SYNCHRONOUS（另有编辑会话在跑）就落在这里。
-        match unsafe { pic.RequestEditSession(tid, &session, TF_ES_SYNC | TF_ES_READWRITE) } {
-            Ok(hr) if hr.is_ok() => {}
-            Ok(hr) => {
-                eprintln!("tsf-opi: 编辑会话未同步完成 hr={hr:?}，保留引用待异步回调");
-                // 这一支就是 TF_E_SYNCHRONOUS：按 TSF 文档是"转为异步排队"，也就是
-                // DoEditSession 在**本次调用返回之后**才被回调 —— 那时 `session`
-                // 已出作用域。TSF 理应自己 AddRef，但这条本机（无 Windows）无法验证，
-                // 赌错的代价是"回调打到已释放对象"→ 崩在用户 Word 里，而留下的代价
-                // 只是一个引用（下一次插入或本对象销毁时释放）。故留。
-                // 锁在这里即取即放：本分支按定义不是同步回调，不会重入（见 insert_text
-                // 的重入警告）；`keepalive` 也从不被 DoEditSession 碰到。
-                if let Ok(mut keep) = self.keepalive.lock() {
-                    *keep = Some(session);
-                }
-            }
-            Err(e) => eprintln!("tsf-opi: RequestEditSession 失败: {e}"),
-        }
-    }
-}
-
-// ---------- 文档写入：编辑会话 ----------
-
-/// 「把一段文本插到当前选区」的编辑会话。
-///
-/// 为什么必须绕这一道：TSF 不允许文本服务直接改文档。服务得先用
-/// `ITfContext::RequestEditSession` 请求一个编辑会话，TSF 回调
-/// `ITfEditSession::DoEditSession` 并把 edit cookie（`ec`）交给它 ——
-/// 只有拿着 `ec` 才允许调用插入 API。`TF_ES_SYNC` 让这次回调同步发生
-/// （否则 `RequestEditSession` 返回而我们还没插入，文本就丢了）。
-///
-/// 生命周期：本对象在 `insert_text` 里临时构造，调用返回后即释放（无人长期
-/// 持有），故不占模块锁 —— 回调期间宿主一定还在我们的调用栈上，且服务对象
-/// 自己持有模块锁，DLL 不会被抽掉。
-///
-/// 用 `ITfInsertAtSelection` 而不是 `GetSelection` + `ITfRange::SetText`：
-/// 前者是 TSF 为此场景提供的 API（换行、选区替换、插入点后移都由它处理），
-/// 而 `TF_SELECTION.range` 是 `ManuallyDrop<Option<ITfRange>>` —— 手工取用
-/// 时漏一次 `into_inner` 就是一次引用计数泄漏，正是本项目备忘里那条
-/// "COM 生命周期漏了会崩在用户 Word 里"。
-#[implement(ITfEditSession)]
-struct InsertTextSession {
-    /// 目标 context 的插入接口（构造时 QueryInterface 得到，随本对象一起释放）。
-    insert: ITfInsertAtSelection,
-    /// UTF-16 文本（TSF 全线 UTF-16）。**不带结尾 NUL** —— 长度由切片传。
-    text: Vec<u16>,
-}
-
-impl InsertTextSession {
-    /// `pic` 不支持 `ITfInsertAtSelection`（非文档 context）→ Err，调用方放弃。
-    fn new(pic: &ITfContext, text: &str) -> Result<Self> {
-        Ok(Self {
-            insert: pic.cast()?,
-            text: text.encode_utf16().collect(),
-        })
-    }
-}
-
-impl ITfEditSession_Impl for InsertTextSession_Impl {
-    fn DoEditSession(&self, ec: u32) -> Result<()> {
-        ensure_panic_hook();
-        // COM 出口（TSF 经 vtable 回调）：panic 逃出去 = abort 宿主进程。
-        catch_unwind(AssertUnwindSafe(|| {
-            // TF_IAS_NOQUERY = "插入，但不要返回范围"。**成功时 ppRange 被置 NULL**，
-            // 而 windows-rs 把 NULL 出参转成 `Err(Error::empty())`（空 HRESULT）——
-            // 直接 `?` 会把**成功**判成失败。故按 HRESULT 定成败：非零才是真错误。
-            // 这是 0.62 生成代码的实际行为（windows-core/src/type.rs 的 from_abi）。
-            match unsafe {
-                self.insert
-                    .InsertTextAtSelection(ec, TF_IAS_NOQUERY, &self.text)
-            } {
-                Ok(_) => Ok(()),
-                Err(e) if e.code().is_ok() => Ok(()),
-                Err(e) => Err(e),
-            }
-        }))
-        .unwrap_or_else(|_| Err(E_FAIL.into()))
-    }
 }
 
 // ---------- ITfTextInputProcessor：TSF 生命周期 ----------
 // 注：0.62 的 #[implement] 生成 `TsfTextService_Impl` 包装（Deref 到原结构），
-// `_Impl` trait 实现在包装类型上；字段经 Deref 访问（self.logic 等）。
+// `_Impl` trait 实现在包装类型上；字段经 Deref 访问（self.state 等）。
 
 impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
     fn Activate(&self, ptim: Ref<ITfThreadMgr>, tid: u32) -> Result<()> {
@@ -293,7 +270,7 @@ impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
             *tm = ptim.cloned();
             // client id 是 RequestEditSession 的必需参数：不存下来，插入就没有
             // 合法的 tid 可用（这就是"两处 on_commit 丢弃文本"之外的第二道墙）。
-            self.client_id.store(tid, Ordering::Relaxed);
+            self.state.set_client_id(tid);
             // 注册按键监听：0.62 API 为 AdviseKeyEventSink（旧式 SetKeypressSink 已移除）。
             // fforeground=true：前台键盘事件也交本服务（输入法语义）。
             // 本对象同时实现 ITfKeyEventSink，as_interface_ref 取其 IUnknown 指针，
@@ -319,8 +296,8 @@ impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
                 Err(_) => return Ok(()), // 中毒锁：吞掉，避免经 COM vtable 泄漏 panic
             };
             *tm = None;
-            // 失活后旧 tid 不再有效：清零，insert_text 会据此静默放弃。
-            self.client_id.store(0, Ordering::Relaxed);
+            // 失活后旧 tid 不再有效：清零，insert_into 会据此静默放弃。
+            self.state.set_client_id(0);
             Ok(())
         }))
         .unwrap_or_else(|_| Err(E_FAIL.into()))
@@ -334,14 +311,14 @@ impl ITfKeyEventSink_Impl for TsfTextService_Impl {
         Ok(())
     }
 
-    fn OnTestKeyDown(
-        &self,
-        _pic: Ref<ITfContext>,
-        _wparam: WPARAM,
-        _lparam: LPARAM,
-    ) -> Result<BOOL> {
-        // 测试阶段不认领：让系统走正常 OnKeyDown 路径。
-        Ok(BOOL(0))
+    fn OnTestKeyDown(&self, _pic: Ref<ITfContext>, wparam: WPARAM, lparam: LPARAM) -> Result<BOOL> {
+        // 模式热键必须在这里就认领。OnTestKeyDown 是 TSF 问"这键你要不要"的第一
+        // 道关：答 FALSE，键会先流进应用（宿主里 Ctrl+' 是别的功能），随后我们在
+        // OnKeyDown 里再吞已经晚了 —— 应用那一下已经发生。其余键仍不认领。
+        Ok(BOOL(
+            (mode_hotkey(wparam.0 as u32, map_key_state(lparam)).is_some()
+                || fullwidth_hotkey(wparam.0 as u32, map_key_state(lparam))) as i32,
+        ))
     }
 
     fn OnTestKeyUp(&self, _pic: Ref<ITfContext>, _wparam: WPARAM, _lparam: LPARAM) -> Result<BOOL> {
@@ -349,7 +326,7 @@ impl ITfKeyEventSink_Impl for TsfTextService_Impl {
     }
 
     fn OnKeyDown(&self, pic: Ref<ITfContext>, wparam: WPARAM, lparam: LPARAM) -> Result<BOOL> {
-        // pic 不再丢弃：提交文本要插进的正是这个 context（见 insert_text）。
+        // pic 不再丢弃：提交文本要插进的正是这个 context（见 insert_into）。
         Ok(self.handle_key(pic.as_ref(), wparam, lparam))
     }
 

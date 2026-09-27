@@ -13,6 +13,28 @@ pub enum Mode {
     Symbol,
 }
 
+impl Mode {
+    /// 数字键在这几个模式下是**选词键**（页内索引）：缓冲里是待检索的关键字/音节，
+    /// 候选栏正是用户想要的。英文/数字模式不选词（缓冲里是原文，数字该进文档）。
+    ///
+    /// 定义在 `Mode` 上而不是三轨各写一份 `matches!`：那三份列表逐字重复、必漂；
+    /// 且 `state.mode()` 比 `self.mode()` 长一字符就顶破 rustfmt 的宏参数宽度上限，
+    /// 会逼其中一轨单独折行 —— 同构的源码形状跟着破掉。
+    pub fn digit_selects_candidates(self) -> bool {
+        matches!(self, Mode::Pinyin | Mode::Traditional | Mode::Symbol)
+    }
+
+    /// 进入该模式时**全角开关**的默认值：中文模式自动全角（用户裁决 2026-09-27
+    /// 「除自动全角外，再加一个全角↔半角切换键」），其余模式半角。
+    /// 切模式按模式默认值重置 —— 与 `switch_mode` 清 shift 同一条理由：跨模式残留的
+    /// 粘滞态会让用户「切回来发现打字变成另一个样子」。
+    ///
+    /// 与上一条同样定义在 `Mode` 上：三轨 + 引擎各写一份 `matches!` 必漂。
+    pub fn default_fullwidth(self) -> bool {
+        matches!(self, Mode::Pinyin | Mode::Traditional)
+    }
+}
+
 /// 拼音缓冲上限：乱码拼音（非合法音节序列）无候选时不再无限累积。
 pub const MAX_BUFFER: usize = 16;
 
@@ -88,7 +110,24 @@ impl Composer {
                     Ignored
                 }
             }
-            Mode::Symbol => Ignored,
+            // 符号模式：缓冲是**关键字**（dun → 、、comma → ，），由 SymbolEngine 的
+            // 关键字索引搜候选 —— 与拼音缓冲同构，故同一条 MAX_BUFFER 上限。
+            // 只收**字母数字**：生产表 583 条的关键字一律 `^[a-z0-9]+$`（实测），
+            // 标点/空格/控制符/非 ASCII 都不是关键字 —— 收进来只会得到一个搜不出候选的
+            // 死缓冲，而标点另有出路（标点表 → 原样交回调用方）。这条边界由
+            // tests/punctuation.rs 的 every_symbol_keyword_is_alnum 与
+            // tests/adversarial_input.rs 的期望表一起钉住。
+            // 大小写不折叠：搜索侧 `to_lowercase` 已归一。
+            Mode::Symbol => {
+                if self.session.buffer.chars().count() >= MAX_BUFFER {
+                    Ignored
+                } else if ch.is_ascii_alphanumeric() {
+                    self.session.buffer.push(ch);
+                    Updated
+                } else {
+                    Ignored
+                }
+            }
         };
         (effect, self.session.clone())
     }
@@ -195,13 +234,36 @@ mod tests {
         assert_eq!(s.buffer, "20");
     }
 
+    /// 前身是 `symbol_mode_ignores_all`（断言 Symbol 模式一律 `Ignored`）。**断言与理由
+    /// 一起改了**：当时 `Mode::Symbol` 是空壳 —— 没有任何候选通路（`candidates.rs` 只放行
+    /// 拼音/繁体），缓冲里放什么都不会产生候选，`Ignored` 是对「这个模式没有输入语义」的
+    /// 诚实表达。符号模式补成真模式后，缓冲承载**关键字**（`dun` → 、、`comma` → ，），
+    /// 由 `SymbolEngine` 的关键字索引搜候选，与拼音的缓冲同构。
+    ///
+    /// 被忽略的那一半一条没少，只是多放行了一类：空格（提交键，`Engine::input_key` 先拦）、
+    /// 控制符、非 ASCII 仍全部 `Ignored`。
     #[test]
-    fn symbol_mode_ignores_all() {
+    fn symbol_mode_takes_printable_keywords() {
         let mut c = Composer::new();
         c.switch_mode(Mode::Symbol);
-        let (eff, _) = c.input_key('a');
-        assert_eq!(eff, KeyEffect::Ignored);
-        assert_eq!(c.session().buffer, "");
+        for ch in ['d', 'u', 'n'] {
+            assert_eq!(
+                c.input_key(ch).0,
+                KeyEffect::Updated,
+                "{ch:?} 应进关键字缓冲"
+            );
+        }
+        assert_eq!(c.session().buffer, "dun");
+        // 标点不再进关键字缓冲（2026-09-27 标点表）：生产表关键字全是 ^[a-z0-9]+$，
+        // 标点搜不出候选；它现在走「标点表 / 原样交回调用方」那条路，不再变死缓冲。
+        for ch in [' ', '\t', '\u{7f}', '中', '，', '😄', ',', '.', '-'] {
+            assert_eq!(
+                c.input_key(ch).0,
+                KeyEffect::Ignored,
+                "{ch:?} 不是关键字，不得进缓冲"
+            );
+        }
+        assert_eq!(c.session().buffer, "dun");
     }
 
     #[test]

@@ -13,6 +13,7 @@
 //! - ⇧ 键：状态机 Off→Single→Off（长按 → Lock），镜像
 //!   `EngineController.shiftTap/shiftLongPress/consumeSingleShift`。
 //! - 拼音模式有候选时数字 1..=9 按页内索引选词（候选栏点击的键盘等价物）。
+//! - 符号模式：可见 ASCII 入引擎缓冲当**关键字**（符号候选由此搜出），其余直通。
 //! - Ctrl/Alt 组合键一律直通（系统快捷键，不拦截）。
 //!
 //! 本模块为纯 Rust、无 fcitx5 类型依赖：`handle_key` 接收裸 `u32` 键值 +
@@ -143,7 +144,7 @@ pub fn handle_key(state: &mut CandidateState, keyval: u32, states: u32) -> KeyAc
             // （"ni"→"nnii"）、英文模式重复提交（"a"→"aa"）。
             // 抬起时的结论用按下时记下的（state.last_printable），与按下同判：
             // 可打印键里有直通字符（拼音/繁体的非字母符号、无候选或越界的数字、
-            // Number/Symbol 模式下的全部可见 ASCII → handle_printable 返回
+            // Number 模式下的全部可见 ASCII、Symbol 模式下的控制符/非 ASCII → handle_printable 返回
             // PassThrough），按下放行、抬起拦下会让客户端收到 keydown 收不到
             // keyup（依赖键状态的游戏/编辑器卡键）。
             // 记结论而非复刻 handle_printable 的分流判定：判定只有一处，不会漂移。
@@ -210,6 +211,11 @@ fn handle_shift(state: &mut CandidateState, states: u32) -> KeyAction {
 
 /// 可见 ASCII 字符按模式分流。
 fn handle_printable(state: &mut CandidateState, c: char) -> KeyAction {
+    // 标点表（引擎层，四端同一条路）：中文模式出中文标点/全角，其余模式下不映射。
+    // 放在模式分派**之前**：标点不属于任何模式的关键字/缓冲语义。
+    if let Some(text) = state.input_punct(c) {
+        return commit_or_handled(text);
+    }
     match state.mode() {
         // 繁体模式与拼音同构：字母/撇号入缓冲、数字选词、走引擎。
         Mode::Pinyin | Mode::Traditional => {
@@ -239,11 +245,16 @@ fn handle_printable(state: &mut CandidateState, c: char) -> KeyAction {
                 KeyAction::PassThrough
             }
         }
-        Mode::Number | Mode::Symbol => KeyAction::PassThrough,
+        Mode::Number => KeyAction::PassThrough,
+        // 符号模式（B3）：可见 ASCII 当关键字入缓冲（dun → 、）；数字**先**当选词键
+        // （裁决 2026-09-27，与拼音一致）；空格/控制符/非 ASCII 直通。
+        Mode::Symbol if c.is_ascii_digit() => digit_select(state, c),
+        Mode::Symbol if c.is_ascii_graphic() => commit_or_handled(state.input_key(c)),
+        Mode::Symbol => KeyAction::PassThrough,
     }
 }
 
-/// 拼音模式有候选时按数字选词（页内索引：'1'→第 0 个候选）；否则直通。
+/// 拼音/繁体/符号模式有候选时按数字选词（页内索引：'1'→第 0 个候选）；否则直通。
 /// 无对应候选（本页没有第 9 项、'0'）不消费，交客户端处理。
 fn digit_select(state: &mut CandidateState, c: char) -> KeyAction {
     // 本页候选数。**越界判据必须在页内**：`select` 的「越界返回空串」是全量列表的
@@ -258,10 +269,7 @@ fn digit_select(state: &mut CandidateState, c: char) -> KeyAction {
         .len()
         .saturating_sub(state.page * PAGE_SIZE)
         .min(PAGE_SIZE);
-    if matches!(state.mode(), Mode::Pinyin | Mode::Traditional)
-        && !state.buffer().is_empty()
-        && page_len > 0
-    {
+    if state.mode().digit_selects_candidates() && !state.buffer().is_empty() && page_len > 0 {
         let Some(d) = c.to_digit(10) else {
             return KeyAction::PassThrough;
         };
@@ -296,8 +304,14 @@ fn commit_or_handled(out: String) -> KeyAction {
 
 // 单测独立成文件（input_method_tests.rs，`#[path]` 引入）以保持本文件 <500 行。
 #[cfg(test)]
+#[path = "input_method_punct_tests.rs"]
+mod punct_tests;
+#[cfg(test)]
 #[path = "input_method_release_tests.rs"]
 mod release_tests;
+#[cfg(test)]
+#[path = "input_method_symbol_tests.rs"]
+mod symbol_tests;
 #[cfg(test)]
 #[path = "input_method_tests.rs"]
 mod tests;

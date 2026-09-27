@@ -47,19 +47,29 @@ fn pinyin_uppercase_codepoint_lowercased_into_buffer() {
     assert_eq!(s.buffer(), "a");
 }
 
+/// 标点表（2026-09-27）：ASCII 标点在中文模式出中文标点 —— 旧版这条叫
+/// `pinyin_symbol_passes_through`，断言 `,` 直通；用户裁决加了引擎层标点表后，
+/// 直通只剩**非标点**字符（这里用非 ASCII 的 `，`：它不是一个键，是已经成形的文本）。
 #[test]
-fn pinyin_symbol_passes_through() {
+fn pinyin_ascii_punctuation_maps_to_chinese() {
     let mut s = pinyin_state();
     assert_eq!(s.key_event('，' as u32, 0), KeyAction::PassThrough);
-    assert_eq!(s.key_event(',' as u32, 0), KeyAction::PassThrough);
+    assert_eq!(s.key_event(',' as u32, 0), KeyAction::Input("，".into()));
     assert_eq!(s.buffer(), "");
 }
 
+/// 撇号：缓冲空时是引号（标点表），缓冲非空时是**音节分隔符**（`xi'an`）。
+/// 旧版这条叫 `pinyin_apostrophe_goes_to_buffer`，只钉了后半段。
 #[test]
-fn pinyin_apostrophe_goes_to_buffer() {
+fn pinyin_apostrophe_is_separator_only_while_composing() {
     let mut s = pinyin_state();
+    assert_eq!(s.key_event('\'' as u32, 0), KeyAction::Input("‘".into()));
+    assert_eq!(s.buffer(), "", "缓冲空：撇号没有分隔语义，当引号");
+    for c in ['x', 'i'] {
+        s.key_event(c as u32, 0);
+    }
     assert_eq!(s.key_event('\'' as u32, 0), KeyAction::EngineHandled);
-    assert_eq!(s.buffer(), "'");
+    assert_eq!(s.buffer(), "xi'", "缓冲非空：音节分隔符，入缓冲");
 }
 
 // ---- 空格 ----
@@ -421,13 +431,13 @@ fn command_combo_passes_through() {
     assert_eq!(s.buffer(), "a");
 }
 
+/// Symbol 模式曾与 Number 同臂直通；B3 把它补成真模式后不再直通，
+/// 符号模式的键路由见 router_symbol_tests.rs（本文件只留 Number 这一半）。
 #[test]
-fn number_and_symbol_modes_pass_through() {
+fn number_mode_passes_through() {
     let mut s = pinyin_state();
     s.switch_mode(Mode::Number);
     assert_eq!(s.key_event('2' as u32, 0), KeyAction::PassThrough);
-    assert_eq!(s.key_event('a' as u32, 0), KeyAction::PassThrough);
-    s.switch_mode(Mode::Symbol);
     assert_eq!(s.key_event('a' as u32, 0), KeyAction::PassThrough);
     assert_eq!(s.buffer(), "");
 }

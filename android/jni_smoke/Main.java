@@ -22,10 +22,13 @@ final class OpiEngine {
     static native String[] searchSymbols(String keyword);
     static native String symbolBlocks();
     static native String[] symbolsInBlock(short id);
+    static native boolean loadTrad(String path);
     static native boolean learnerEnabled();
     static native void setLearner(boolean enabled);
     static native void clearUserWords();
     static native String exportUserWords();
+    static native int importUserWords(String json);
+    static native void removeUserWord(String text);
 }
 
 public final class Main {
@@ -126,6 +129,18 @@ public final class Main {
             }
         }
         check(hasHeart, "searchSymbols(he) 命中 ♥");
+
+        // loadTrad：空路径必须 false（引擎已装载，但坏路径不得动既有词库）
+        check(!OpiEngine.loadTrad(""), "loadTrad(空) 应为 false");
+        check(OpiEngine.mode() == 0, "loadTrad 失败不得改模式（此时应为 0/Pinyin）");
+
+        // 用户词导入/删除：坏 JSON → 负数且不改动既有用户词
+        check(OpiEngine.importUserWords("not json") < 0, "importUserWords(坏 JSON) 应为负数");
+        check("{\"version\":1,\"words\":[]}".equals(OpiEngine.exportUserWords()),
+                "导入失败后用户词不变");
+        OpiEngine.removeUserWord("我"); // 词不存在 → 无操作，不得抛异常
+        check("{\"version\":1,\"words\":[]}".equals(OpiEngine.exportUserWords()),
+                "删除不存在的词后用户词不变");
 
         if (failures == 0) {
             System.out.println("SMOKE-OK");

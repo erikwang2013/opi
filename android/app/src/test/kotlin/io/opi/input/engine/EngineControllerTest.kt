@@ -23,10 +23,14 @@ class FakeEngine : OpiEngineApi {
     val removed = mutableListOf<String>()
     var throwOnRemove: Throwable? = null
 
+    /** 键 → 引擎要上屏的文本（真引擎：标点键有文本、字母/数字键没有）。 */
+    var inputResults = mutableMapOf<String, String>()
+
     override fun inputKey(ch: String): String {
         inputCalls += ch
-        buf += ch
-        return ""
+        val out = inputResults[ch] ?: ""
+        if (out.isEmpty()) buf += ch else buf = ""
+        return out
     }
 
     override fun backspace() {
@@ -105,6 +109,16 @@ class EngineControllerTest {
         ctrl.nextPage()
         ctrl.input("w")
         assertEquals(0, ctrl.candidatePage)
+    }
+
+    @Test
+    fun inputReturnsEngineText() {
+        // 引擎的返回值是标点上屏文本，此前被丢弃；调用方（KeyRouter）据此提交
+        val fake = FakeEngine().apply { inputResults[","] = "，" }
+        val ctrl = EngineController(fake)
+        assertEquals("，", ctrl.input(","))
+        // 字母键无提交文本（JUnit4 的消息参数在最前，别写成 Kotlin 版顺序）
+        assertEquals("", ctrl.input("a"))
     }
 
     @Test

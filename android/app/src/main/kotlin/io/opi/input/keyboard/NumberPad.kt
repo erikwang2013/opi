@@ -11,7 +11,11 @@ import androidx.compose.ui.Modifier
 
 /**
  * 数字面板：Gboard 风格 5 行（对齐 flutter number_pad.dart）。
- * 数字/标点直接提交，不经过引擎（引擎 Number 模式无可用提交路径）。
+ *
+ * 键**走引擎**（`onKey` = KeyRouter.handleKey）：数字进引擎缓冲（引擎 Number 模式），
+ * `,` `.` 经引擎层标点表出文本（默认半角原样交回，全角开关打开后出 `，` `．`）；
+ * 面板打开期间引擎被切到 Number 模式，离开时恢复字母模式（见 ImeState.openNumber）。
+ * 这里只出键码 —— 提交/上屏在路由与引擎，四端同一条路。
  */
 @Composable
 fun NumberPad(

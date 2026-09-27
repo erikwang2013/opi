@@ -189,6 +189,29 @@ impl Api {
         }
     }
 
+    /// 全角开关读侧（`opi_fullwidth_state`）。**每次 `switch_mode` 之后必须重读**：
+    /// 切模式把它重置为该模式的默认值（`Mode::default_fullwidth`：拼音/繁体全角、
+    /// 英文/数字/符号半角），平台侧自己记一份必漂。
+    pub fn fullwidth(&self) -> bool {
+        self.router.engine().fullwidth()
+    }
+
+    /// 全角 ↔ 半角，返回**切换后的状态**（调用方直接拿去刷状态栏）。
+    /// 键位不在本层（与 `toggle_symbol` 同一条：四端键位未定，引擎只出语义）。
+    /// 不改 buffer、不改候选集 ⇒ 不需要对齐页码。
+    pub fn toggle_fullwidth(&mut self) -> bool {
+        self.router.engine_mut().toggle_fullwidth()
+    }
+
+    /// 符号面板开关，返回**待插入文档的文本**（非空 = 调用方必须插入；拿不到插入
+    /// 通道的端不要调它）。语义在引擎层（含「先收尾未提交缓冲」），键位不在本层。
+    /// raw 出口：收尾会改 buffer ⇒ 必须对齐页码（同 `input_space`）。
+    pub fn toggle_symbol(&mut self) -> String {
+        let out = self.router.engine_mut().toggle_symbol();
+        self.router.reset_page_if_buffer_changed();
+        out
+    }
+
     pub fn candidates(&self, limit: usize) -> Vec<ApiCandidate> {
         self.router
             .engine()

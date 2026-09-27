@@ -73,7 +73,9 @@ fun ImeScreen(
         when (state.view) {
             ImeState.View.NUMBER -> NumberPad(
                 modifier = Modifier.weight(1f),
-                onKey = router::commitText,
+                // 数字/标点走引擎（键码 = 字符）：引擎层标点表与全角开关在面板上同样生效
+                // —— 旧路径 onKey = router::commitText 是 UI 直提，绕开引擎。
+                onKey = router::handleKey,
                 onSymbol = state::openSymbol,
                 onLetters = state::backToLetters,
                 onSpace = router::handleSpace,

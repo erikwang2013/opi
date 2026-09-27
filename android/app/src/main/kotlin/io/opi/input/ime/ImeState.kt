@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import io.opi.input.engine.EngineController
+import io.opi.input.engine.EngineMode
 
 /** 防抖调度抽象：生产用主线程 Handler，JVM 测试注入假时钟（确定性，无 Thread.sleep）。 */
 fun interface Debouncer {
@@ -98,11 +99,21 @@ class ImeState(
 
     private var pendingDebounce: (() -> Unit)? = null
 
+    /**
+     * 进数字面板前的字母模式（拼音/繁体/英文）。面板期间引擎切到 NUMBER，离开时恢复：
+     * 面板的键现在是**引擎键码**（数字进缓冲、`,` `.` 由标点表出文本），引擎不在
+     * Number 模式它们就没有归宿（拼音模式收不了数字 → 整块面板变死键）。
+     */
+    private var letterMode = EngineMode.PINYIN
+
     // ---- 面板切换（开面板前提交 pending buffer） ----
 
     fun openNumber() {
         commitPendingBuffer()
         resetSearch()
+        // 符号面板回数字面板（已是 NUMBER）时不覆盖记录，否则记下的会是 NUMBER 自己
+        if (controller.mode != EngineMode.NUMBER) letterMode = controller.mode
+        controller.switchMode(EngineMode.NUMBER)
         view = View.NUMBER
     }
 
@@ -114,8 +125,12 @@ class ImeState(
 
     /** 回 qwerty：失焦搜索并清空（对齐 flutter _backToLetters）。 */
     fun backToLetters() {
+        // 数字面板里打了一半的数字要先上屏（引擎 Number 模式缓冲就是待上屏文本），
+        // 否则下面的模式切换会连缓冲一起清掉 —— 用户看得见的输入被静默吞掉
+        commitPendingBuffer()
         resetSearch()
         view = View.QWERTY
+        restoreLetterMode()
     }
 
     /** 仅关闭搜索叠盘（对齐 flutter _closeSearch：失焦但保留输入）。 */
@@ -169,6 +184,13 @@ class ImeState(
         resetSearch()
         controller.resetShift() // 锁定态不得跨输入目标残留（换 app 后开键盘仍全大写）
         view = View.QWERTY
+        // 数字面板期间换编辑框：模式必须回字母，否则整个字母盘没有键有归宿
+        restoreLetterMode()
+    }
+
+    /** 离开数字面板：引擎模式回到进入前的字母模式（只在面板里才切，别动字母流程）。 */
+    private fun restoreLetterMode() {
+        if (controller.mode == EngineMode.NUMBER) controller.switchMode(letterMode)
     }
 
     private fun cancelDebounce() {
@@ -179,6 +201,14 @@ class ImeState(
     /** 打开面板前提交 pending 拼音：有候选选第一个提交；无候选的乱码缓冲（如 abc）清掉。 */
     private fun commitPendingBuffer() {
         if (controller.buffer.isEmpty()) return
+        // 数字模式的缓冲**就是要上屏的文本本身**（引擎 Number 模式：数字进缓冲、收尾时
+        // 原样提交）。走下面的「有候选选第一个」会落进「无候选就清掉」那支 —— 数字串
+        // 没有候选，等于把用户刚打的 123 吃掉。inputSpace 是引擎里 Number 的那条收尾。
+        if (controller.mode == EngineMode.NUMBER) {
+            val text = controller.inputSpace()
+            if (text.isNotEmpty()) commit(text)
+            return
+        }
         if (controller.candidates.isEmpty()) {
             controller.clear()
             return

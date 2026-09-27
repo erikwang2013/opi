@@ -110,6 +110,10 @@ Layout=
 Name=opi
 Layout=
 
+[Groups/0/Items/2]
+Name=pinyin
+Layout=
+
 [GroupOrder]
 0=opi-harness
 PROFILE
@@ -140,10 +144,13 @@ echo "== 6/6 端到端（私有 dbus 会话 + 真 fcitx5 守护进程）"
 # 误杀同一台机器上别人正在跑的 harness。
 e2e_rc=0
 vi=0
-for variant in basic page passthrough "caps 0x12" "caps 0x8000000012"; do
+# punct = 标点模块探针；`punct keyboard-us` 是它的**对照组**（同一个脚本换 IM，
+# 见 opi_e2e.py 的 punct 模式说明）。两组必须成对跑，否则「测不出来」没有参照。
+variants=(basic page passthrough "caps 0x12" "caps 0x8000000012" punct "punct keyboard-us" punctopi modes fullwidth)
+for variant in "${variants[@]}"; do
     vi=$((vi + 1))
     echo
-    echo "--- e2e 变体 $vi/5: opi_e2e.py $variant"
+    echo "--- e2e 变体 $vi/${#variants[@]}: opi_e2e.py $variant"
     dbus-run-session -- env HARNESS_WORK="$work" E2E_PY="$here/opi_e2e.py" \
         VARIANT="$variant" LOG="$work/fcitx5-$vi.log" \
         LD_LIBRARY_PATH="$rustlib:$FCITX5_LIBS" bash -s <<'EOS' || e2e_rc=1
@@ -154,7 +161,21 @@ export XDG_DATA_HOME="$HARNESS_WORK/data"
 export XDG_CONFIG_HOME="$HARNESS_WORK/cfg"
 # testui 会把其它 addon 全禁掉（Override Enabled Addons: {testui}），
 # 所以要额外 --enable 本 addon，否则它根本不加载、测出来全是空信号。
-fcitx5 --ui=testui --enable opi_fcitx5 > "$LOG" 2>&1 &
+#
+# punctuation 也要一并 --enable：它是**用户真实配置里开着**的全局模块
+# （/usr/share/fcitx5/addon/punctuation.conf Category=Module + 用户 conf 里
+# Enabled=True），而 testui 的 Override 把它一起禁掉了。少这一个 --enable，
+# harness 里的标点行为就与用户桌面不一致 —— 实测该 addon 是否加载，取决于
+# 这一行（不加则日志里没有 `Loaded addon punctuation`）。
+#
+# ⚠️ `--enable` 收的是**逗号分隔的一个列表**，不是可重复的开关（fcitx5 --help
+# 原文）。写成两个 `--enable` 后者会**覆盖**前者：`--enable opi_fcitx5
+# --enable punctuation` 的 Override 实际是 {testui, punctuation}，opi 被挤掉。
+# 而 opi **照样能按键出字**（它是 profile 的 DefaultIM，IM addon 会被强制加载），
+# 于是这个错误在日志里只表现为 Override 那一行少一项 —— 极易漏过去。
+# pinyin 也要在列表里：punctopi 变体靠它把 libpunctuation 拉起来（见 opi_e2e.py
+# 的 punctopi 说明）；不在 --enable 列表里的 addon 会被 Override 挡下。
+fcitx5 --ui=testui --enable opi_fcitx5,punctuation,pinyin > "$LOG" 2>&1 &
 pid=$!
 # 等 addon 真的加载起来再送按键。固定 sleep 是假故障源：慢机器上 5s 不够，
 # e2e 会连上守护进程但连不到输入法，报出来一堆「无面板更新信号」。

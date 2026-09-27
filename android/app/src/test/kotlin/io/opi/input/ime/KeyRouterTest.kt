@@ -162,6 +162,33 @@ class KeyRouterTest {
         assertEquals(0, ch2.backspaceCount)
     }
 
+    // ---- 数字面板走引擎（旧路径是 UI 直提 commitText，绕开引擎） ----
+
+    @Test
+    fun numberPadKeyCommitsEngineText() {
+        // 面板的 `,` 是键盘键码：引擎给文本（半角原样 / 全角 `，`）就得上屏 ——
+        // 丢弃返回值等于吞键，标点表在面板上就白加了
+        val fake = FakeEngine().apply {
+            mode = EngineMode.NUMBER.value
+            inputResults[","] = ","
+        }
+        val ch = Channel()
+        val (_, r) = router(fake, ch)
+        r.handleKey(",")
+        assertEquals(listOf(","), fake.inputCalls)
+        assertEquals(listOf(","), ch.commits)
+    }
+
+    @Test
+    fun numberPadDigitEntersBufferAndCommitsNothing() {
+        val fake = FakeEngine().apply { mode = EngineMode.NUMBER.value }
+        val ch = Channel()
+        val (_, r) = router(fake, ch)
+        r.handleKey("1")
+        assertEquals("1", fake.buf)
+        assertTrue(ch.commits.isEmpty())
+    }
+
     @Test
     fun candidateSelectCommitsFromPage() {
         val fake = FakeEngine().apply {

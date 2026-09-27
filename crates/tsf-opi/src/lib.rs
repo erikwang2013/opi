@@ -40,4 +40,9 @@ pub mod vk;
 #[cfg(target_os = "windows")]
 pub mod candidate_io;
 
+/// Windows 目标专属：引擎状态 + 文档写入（`tsf.rs` 与 `candidate_io.rs` 共用）。
+/// 单独成文件的两个理由（B1 的顺序问题 + 500 行硬规矩）见模块头注释。
+#[cfg(target_os = "windows")]
+pub mod state;
+
 pub use logic::{KeyOutcome, ShiftState, TsfLogic};

@@ -17,9 +17,16 @@ class KeyRouter(
     private val deleteBackward: () -> Unit,
     private val performEnter: () -> Unit,
 ) {
-    /** 面板提交统一入口（数字/符号/表情直传，不经引擎）。 */
+    /**
+     * 目录项直提（符号/表情面板：目录项不是键盘键码，引擎没有对应入口）。
+     * **数字面板不走这里** —— 它的 `,` `.` 是键盘键码，走 [handleKey] 由引擎出文本。
+     */
     fun commitText(text: String) = commit(text)
 
+    /**
+     * 键盘键（字母盘与数字面板共用）。引擎的返回值必须提交：标点键由引擎层标点表
+     * 出文本（中文模式 `,` → `，`、半角 → 原样交回），丢弃返回值就等于吞键。
+     */
     fun handleKey(ch: String) {
         if (controller.mode == EngineMode.ENGLISH && controller.buffer.isEmpty()) {
             // ⇧ 直传大写：直传路径绕过引擎，需本侧转大写。
@@ -31,7 +38,8 @@ class KeyRouter(
             }
             return
         }
-        controller.input(ch)
+        val text = controller.input(ch)
+        if (text.isNotEmpty()) commit(text)
     }
 
     fun handleSpace() {

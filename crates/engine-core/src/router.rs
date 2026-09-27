@@ -199,17 +199,6 @@ impl KeyRouter {
         self.fetched().len().div_ceil(PAGE_SIZE)
     }
 
-    /// 下一页，越界钳制到最后一页；返回新页码。
-    fn next_page(&mut self) -> usize {
-        self.set_page(self.page + 1)
-    }
-
-    /// 上一页，越界钳制到首页；返回新页码。
-    fn prev_page(&mut self) -> usize {
-        self.page = self.page.saturating_sub(1);
-        self.page
-    }
-
     /// 直接跳到第 `p` 页（0 起），钳制到 [0, page_count-1]；返回实际页码。
     fn set_page(&mut self, p: usize) -> usize {
         let count = self.page_count();
@@ -245,9 +234,11 @@ impl KeyRouter {
     /// - 空格：缓冲非空 → 引擎提交；空缓冲 → 直传 " "。
     /// - 回车：缓冲非空 → 提交首候选；空缓冲 → 直通。
     /// - 退格/Delete：缓冲非空 → 引擎按码点删；空缓冲 → 直通。
-    /// - ⇧：Off→Single→Off（长按 → Lock）。
-    /// - PageUp/PageDown：翻页（钳制）；Tab/Esc/方向键：直通。
-    /// - 数字：拼音/繁体且有候选时按**页内**索引选词，页内越界/无候选 → 直通。
+    /// - ⇧：Off→Single→Off（长按 → Lock）；PageUp/PageDown：翻页（钳制）；Tab/Esc/方向键：直通。
+    /// - 标点：查引擎层标点表（`Engine::input_punct`）—— 中文模式出中文标点/全角，
+    ///   其余模式按各自分支走（英文直传、数字直通、符号模式原样插入）。
+    /// - 数字：拼音/繁体/符号且有候选时按**页内**索引选词，页内越界/无候选 → 直通。
+    /// - 符号模式：字母数字入引擎缓冲当**关键字**（符号候选由此搜出），其余直通。
     /// - 退格/回车/可打印键的**抬起按按下的结论回复**（`last_printable` 单槽）。
     pub fn key_event(&mut self, keyval: u32, states: u32) -> KeyAction {
         // Ctrl/Alt/⌘ 组合键（系统快捷键）一律直通，不拦截。
@@ -297,15 +288,17 @@ impl KeyRouter {
                 }
             }
             KEY_SHIFT => self.handle_shift(states),
+            // 翻页直接走 `set_page`（钳制到 [0, 页数-1]）：原先的 prev/next 包装
+            // 与它逐字相同却又少一道钳制，返回值两个调用点都没接。
             KEY_PAGE_UP => {
                 if !released {
-                    self.prev_page();
+                    self.set_page(self.page.saturating_sub(1));
                 }
                 KeyAction::EngineHandled
             }
             KEY_PAGE_DOWN => {
                 if !released {
-                    self.next_page();
+                    self.set_page(self.page + 1);
                 }
                 KeyAction::EngineHandled
             }
@@ -318,9 +311,9 @@ impl KeyRouter {
                 // （"ni"→"nnii"）、英文模式重复提交（"a"→"aa"）。
                 // 抬起时的结论用按下时记下的（self.last_printable），与按下同判：
                 // 可打印键里有直通字符（拼音/繁体的非字母符号、无候选或越界的数字、
-                // Number/Symbol 模式下的全部可见 ASCII → handle_printable 返回
-                // PassThrough），按下放行、抬起拦下会让客户端收到 keydown 收不到
-                // keyup（依赖键状态的控件卡键）。
+                // Number 模式下的全部可见 ASCII、Symbol 模式下的控制符/非 ASCII →
+                // handle_printable 返回 PassThrough），按下放行、抬起拦下会让客户端
+                // 收到 keydown 收不到 keyup（依赖键状态的控件卡键）。
                 // 记结论而非复刻 handle_printable 的分流判定：判定只有一处，不会漂移。
                 Some(c) if c.is_ascii() => {
                     if released {
@@ -391,6 +384,12 @@ impl KeyRouter {
 
     /// 可见 ASCII 字符按模式分流。
     fn handle_printable(&mut self, c: char) -> KeyAction {
+        // 标点表（引擎层，四端同一条路）：中文模式出中文标点/全角，其余模式下不映射。
+        // 放在模式分派**之前**：标点不属于任何模式的关键字/缓冲语义。
+        if let Some(text) = self.engine.input_punct(c) {
+            self.reset_page_if_buffer_changed();
+            return commit_or_handled(text);
+        }
         match self.mode() {
             // 繁体模式与拼音同构：字母/撇号入缓冲、数字选词、走引擎。
             Mode::Pinyin | Mode::Traditional => {
@@ -424,11 +423,19 @@ impl KeyRouter {
                     KeyAction::PassThrough
                 }
             }
-            Mode::Number | Mode::Symbol => KeyAction::PassThrough,
+            Mode::Number => KeyAction::PassThrough,
+            // 符号模式（B3）：可见 ASCII 当关键字入缓冲（dun → 、）；数字先当选词键（与拼音一致）；空格/控制符/非 ASCII 直通。
+            Mode::Symbol if c.is_ascii_digit() => self.digit_select(c),
+            Mode::Symbol if c.is_ascii_graphic() => {
+                let out = self.engine.input_key(c);
+                self.reset_page_if_buffer_changed();
+                commit_or_handled(out)
+            }
+            Mode::Symbol => KeyAction::PassThrough,
         }
     }
 
-    /// 拼音/繁体模式有候选时按数字选词（页内索引：'1'→第 0 个候选）；否则直通。
+    /// 拼音/繁体/符号模式有候选时按数字选词（页内索引：'1'→第 0 个候选）；否则直通。
     /// 无对应候选（本页没有第 9 项、'0'）不消费，交客户端处理。
     fn digit_select(&mut self, c: char) -> KeyAction {
         // 本页候选数。**越界判据必须在页内**：`select` 的「越界返回空串」是全量列表的
@@ -443,10 +450,7 @@ impl KeyRouter {
             .len()
             .saturating_sub(self.page * PAGE_SIZE)
             .min(PAGE_SIZE);
-        if matches!(self.mode(), Mode::Pinyin | Mode::Traditional)
-            && !self.buffer().is_empty()
-            && page_len > 0
-        {
+        if self.mode().digit_selects_candidates() && !self.buffer().is_empty() && page_len > 0 {
             let Some(d) = c.to_digit(10) else {
                 return KeyAction::PassThrough;
             };
@@ -481,7 +485,8 @@ fn commit_or_handled(out: String) -> KeyAction {
 }
 
 // 单测独立成文件（`#[path]` 引入）以保持本文件 <500 行，与两轨的
-// input_method_tests.rs / logic_tests.rs 同惯例。
+// input_method_tests.rs / logic_tests.rs 同惯例。符号模式（B3）的用例在
+// tests/symbol_mode.rs（只用公开 API，故不必在此挂 `#[path]` 模块）。
 #[cfg(test)]
 #[path = "router_release_tests.rs"]
 mod release_tests;

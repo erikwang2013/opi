@@ -53,6 +53,9 @@ fn state_with_candidates() -> CandidateState {
 fn pinyin_symbol_release_matches_press() {
     let mut s = pinyin_state();
     // 本轨没有 tsf 轨那类码位冲突：特殊键用 keysym 0xffxx，'.'=0x2E 不与任何特殊键同值。
+    // 半角态（用户按了全角切换键）才有直通的标点：全角态下 `.` 出 `。`、已不是直通。
+    // 记结论的 `last_printable` 只在**按下直通**时才是 true，故这条必须以半角为背景。
+    s.toggle_fullwidth();
     assert_eq!(handle_key(&mut s, '.' as u32, 0), KeyAction::PassThrough);
     assert_eq!(
         handle_key(&mut s, '.' as u32, KEY_STATE_RELEASED),
@@ -89,6 +92,7 @@ fn release_of_another_key_falls_back_to_handled() {
     // 单槽记录的天花板：另一键按下会顶掉记录（键盘 rollover 时才会遇到），
     // 键值不匹配时回落到旧行为（拦下），绝不误放行。
     let mut s = pinyin_state();
+    s.toggle_fullwidth(); // 半角态：`.` 直通（全角态下它出 `。`）
     assert_eq!(handle_key(&mut s, '.' as u32, 0), KeyAction::PassThrough);
     assert_eq!(
         handle_key(&mut s, 'n' as u32, KEY_STATE_RELEASED),

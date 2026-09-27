@@ -85,9 +85,15 @@ class EngineController(
         if (_candidatePage > maxPage) _candidatePage = maxPage
     }
 
-    fun input(ch: String) {
-        api.inputKey(ch)
+    /**
+     * 输入单键，返回**引擎要上屏的文本**（空串 = 无提交）；调用方负责提交。
+     * 此前返回值被丢弃：字母/数字键确实无提交，但标点键有（引擎层标点表）。
+     * 数字面板的 `,` `.` 与全角开关都靠这条回到引擎，见 [KeyRouter.handleKey]。
+     */
+    fun input(ch: String): String {
+        val text = api.inputKey(ch)
         refresh()
+        return text
     }
 
     fun backspace() {

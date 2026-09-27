@@ -31,9 +31,9 @@
 //!
 //! 本模块是纯胶水（镜像 tsf.rs 结构）：经 `TsfSink` 接缝（on_commit /
 //! on_composition_changed）把候选数据序列化为 show/hide/position 发给候选窗；
-//! 逻辑层（`TsfLogic`）零改动。`CandidateAction` 是候选窗回复（select/翻页）
-//! 的回调接缝，默认 no-op —— 真机验收时接入 TSF 文档操作（logic.select /
-//! next_page / prev_page，见 logic.rs 对应方法）。
+//! 逻辑层（`TsfLogic`）零改动。`CandidateAction` 是候选窗回复（select/翻页）的
+//! 回调接缝，生产实现是 `SharedAction`（B1 接线：select → `TsfLogic::select` →
+//! 插进文档；翻页 → `next_page`/`prev_page`）。
 //!
 //! 连接语义（骨架）：惰性连接 + 静默退避重试（不阻塞 TSF 按键线程太久）；
 //! 写失败即断开、下次发送时重连；读线程阻塞读回复并分帧解析。
@@ -45,7 +45,7 @@
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 
@@ -57,7 +57,8 @@ use windows::Win32::Storage::FileSystem::{
 };
 use windows::core::{PCWSTR, w};
 
-use crate::tsf::TsfSink;
+use crate::state::EngineShared;
+use crate::tsf::{TsfSink, push_state};
 
 /// 管道句柄的 Send+Sync 包装：windows-rs 的 HANDLE 是裸指针（非 Sync），
 /// 而读写跨线程使用（按键线程写 + 读线程阻塞读），此处显式承诺线程安全。
@@ -80,17 +81,12 @@ const READ_BUF: usize = 4096;
 /// JSON 至多几 KB）；超限即协议错乱/恶意对端 → 丢弃残留并断开（下次发送重连）。
 const MAX_PENDING: usize = 1 << 20;
 
-/// 候选窗回复回调接缝：select/翻页 → 真机验收接入 TSF 文档操作。
-/// 默认全部 no-op（骨架期窗口可点击，但提交/翻页待验收接线）。
+/// 候选窗回复回调接缝：select/翻页 → TSF 文档操作（生产实现见 `SharedAction`）。
 pub trait CandidateAction: Send + Sync {
     fn on_select(&self, _index: usize) {}
     fn on_next_page(&self) {}
     fn on_prev_page(&self) {}
 }
-
-/// 候选窗回复回调的默认 no-op 实现（骨架）。
-struct NoopAction;
-impl CandidateAction for NoopAction {}
 
 /// 断开连接：仅当 `handle` 仍是当前持有的那个才关句柄并清空 conn
 /// （写线程可能已换过句柄，关错就断了别人的连接）。返回 false = 锁中毒，
@@ -320,7 +316,71 @@ fn dispatch_line(line: &[u8], action: &dyn CandidateAction) {
     }
 }
 
-/// 候选窗接缝的生产默认实现：把 composition 变化映射为 show/hide。
+/// 候选窗回复的**生产实现**（B1 接线）：点选 → 交给按键线程执行（选词 → 插文档）；
+/// 翻页 → 引擎翻页（真源在引擎，窗口自己不存页码）。
+///
+/// 两个引用为什么都得在这：
+/// - `engine`：本对象跑在 named pipe 的**读线程**上，只能持有 `Send` 的那一半
+///   （`EngineShared`）；`ITfContext` 在 `TsfSharedState` 里，读线程碰不到
+///   —— 跨线程用未 marshal 的 STA 接口指针是未定义的，故点选只入队；
+/// - `sink`：动作做完得让窗口**跟着变**（翻页后换页）。可
+///   `CandidateSink::new` 又要本回调当参数 —— 互相等待的死结，用一次性槽位
+///   （`OnceLock`）打破：先建本对象（槽位空着），再建 sink，最后回填。
+///   接线三步在 `com_server.rs`。
+///
+/// 【本机（Linux）无法验证】点选的真正执行点在按键线程（`tsf.rs` 的
+/// `drain_pending`），本机跑不了；代价是插入延迟到下一次按键。见 state.rs 模块头。
+pub struct SharedAction {
+    engine: Arc<EngineShared>,
+    sink: OnceLock<Arc<dyn TsfSink>>,
+}
+
+impl SharedAction {
+    pub fn new(engine: Arc<EngineShared>) -> Self {
+        Self {
+            engine,
+            sink: OnceLock::new(),
+        }
+    }
+
+    /// 回填 sink（`com_server.rs` 建好 `CandidateSink` 后立刻调，此后只读）。
+    /// 已填过 → Err：那只可能是重复初始化，覆盖会把正在用的一份换掉
+    /// （读线程可能正读着它）。返回 Err 让调用方看得见，不静默。
+    pub fn attach_sink(&self, sink: Arc<dyn TsfSink>) -> Result<(), ()> {
+        self.sink.set(sink).map_err(|_| ())
+    }
+
+    /// 动作改变了引擎状态 → 让候选窗跟上（翻页后换页）。sink 未回填 → 跳过：
+    /// 只有启动那一瞬，那时也还没窗口。
+    fn refresh(&self) {
+        let Some(sink) = self.sink.get() else { return };
+        let Some(logic) = self.engine.lock_logic() else {
+            return;
+        };
+        push_state(sink.as_ref(), &logic);
+    }
+}
+
+impl CandidateAction for SharedAction {
+    /// **读线程**上跑：只入队，不碰引擎也不走 COM（理由见类型头）。
+    /// 执行与随之而来的窗口刷新都在按键线程（`tsf.rs` 的 `drain_pending`）——
+    /// 这里刷是白刷：此刻引擎还没选词，缓冲一个字节都没变。
+    fn on_select(&self, index: usize) {
+        self.engine.enqueue_select(index);
+    }
+
+    fn on_next_page(&self) {
+        self.engine.next_page();
+        self.refresh();
+    }
+
+    fn on_prev_page(&self) {
+        self.engine.prev_page();
+        self.refresh();
+    }
+}
+
+/// 候选窗接缝的生产实现：把 composition 变化映射为 show/hide。
 pub struct CandidateSink {
     client: CandidateClient,
 }
@@ -330,11 +390,6 @@ impl CandidateSink {
         Self {
             client: CandidateClient::new(action),
         }
-    }
-
-    /// 默认 no-op 回复处理（骨架）。
-    pub fn new_default() -> Self {
-        Self::new(Arc::new(NoopAction))
     }
 }
 
@@ -363,7 +418,7 @@ impl TsfSink for CandidateSink {
 }
 
 /// Mode → 协议字符串（与 desktop/ 解析端一致）。
-/// Traditional 复用 "pinyin"：候选窗（desktop/Main.kt modeLabel）无简繁概念，
+/// Traditional 复用 "pinyin"：候选窗（desktop 的 `CandidateWindow.kt modeLabel`）无简繁概念，
 /// 未知字符串一律回落 "拼音" 标签，新增 "traditional" 只会造成协议漂移。
 fn mode_str(mode: Mode) -> &'static str {
     match mode {

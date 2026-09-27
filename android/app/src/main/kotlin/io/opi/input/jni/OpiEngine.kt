@@ -9,8 +9,12 @@ import io.opi.input.keyboard.SymbolApi
 /**
  * Rust 引擎 JNI 入口（A1：crates/opi-ffi/src/jni.rs 注册表）。
  *
- * JNI_OnLoad RegisterNatives 注册 18 个方法，类名 io/opi/input/jni/OpiEngine，
- * 方法名与签名必须与 Rust 侧注册表逐一吻合（签名断裂 → UnsatisfiedLinkError）。
+ * JNI_OnLoad RegisterNatives 注册 21 个方法，类名 io/opi/input/jni/OpiEngine，
+ * 方法名与签名必须与 Rust 侧注册表逐一吻合。
+ * ⚠️ 少一条**不是**「新方法调不到」，而是**整个 so 装不上**（`RegisterNatives` 整表
+ * 失败 → `JNI_OnLoad` 返 0），报错文本却是误导性的 `unsupported JNI version 0x00000000`。
+ * 所以这里是**三份声明面**之一：改 `jni.rs` 注册表必须同改本文件、`android/jni_smoke/Main.java`
+ * （门禁：`crates/opi-ffi/tests/jni_contract.rs`）。
  * so 文件名 libopi_ffi.so（cargokit libname=opi_ffi）。
  *
  * 实现 OpiEngineApi/SymbolApi 以便 EngineController/SymbolCatalog 在 JVM 测试中注入假实现。

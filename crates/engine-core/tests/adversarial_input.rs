@@ -167,7 +167,12 @@ const CHARS: [char; 14] = [
 /// - Pinyin/Traditional：小写字母与 `'` 原样，大写降小写，其余忽略
 /// - English：字母按 ⇧ 决定大小写（无 ⇧ 时保留原码点），其余忽略
 /// - Number：数字，其余忽略
-/// - Symbol：一律忽略
+/// - Symbol：**字母数字**原样入缓冲（是符号搜索的**关键字**，如 dun/ballot），
+///   其余忽略。空格不在其中：它是提交键（`Engine::input_key` 先拦）。
+///   2026-09-27 标点表把这里从 `is_ascii_graphic` 收窄到 `is_ascii_alphanumeric`：
+///   生产符号表的关键字一律 `^[a-z0-9]+$`，标点收进缓冲只会得到搜不出候选的死缓冲；
+///   标点另有出路（标点表 → 原样交回调用方），边界由 tests/punctuation.rs 的
+///   every_symbol_keyword_is_alnum 钉住。
 fn expected_push(mode: Mode, shift: bool, ch: char) -> Option<char> {
     match mode {
         Mode::Pinyin | Mode::Traditional => {
@@ -187,7 +192,7 @@ fn expected_push(mode: Mode, shift: bool, ch: char) -> Option<char> {
             }
         }
         Mode::Number => ch.is_ascii_digit().then_some(ch),
-        Mode::Symbol => None,
+        Mode::Symbol => ch.is_ascii_alphanumeric().then_some(ch),
     }
 }
 
@@ -226,9 +231,8 @@ fn composer_matrix_matches_spec_table() {
 #[test]
 fn composer_accepts_exactly_max_buffer_chars() {
     for mode in MODES {
-        if mode == Mode::Symbol {
-            continue; // Symbol 不接受任何键，填不出前置缓冲
-        }
+        // Symbol 与拼音同一条上限（关键字缓冲同样不得无限增长）。种子按键：
+        // 数字模式的唯一合法输入是数字，其余模式用字母；Symbol 用字母（关键字是词）。
         for shift in [false, true] {
             let seed = if mode == Mode::Number { '1' } else { 'a' };
             for pre in [0, 1, MAX_BUFFER - 1, MAX_BUFFER] {
@@ -346,8 +350,9 @@ fn engine_never_exceeds_limits_and_clears_buffer_on_commit() {
             if e.buffer().is_empty() {
                 prop_assert!(e.candidates(8).is_empty(), "空缓冲仍有候选");
             }
-            // 非空格键永不提交
-            if *k != ' ' {
+            // 非空格键永不提交。`'` 除外：缓冲空时它是标点表的引号（`‘’`），
+            // 缓冲非空时才是音节分隔符（进缓冲、不提交）—— 见 tests/punctuation.rs。
+            if *k != ' ' && *k != '\'' {
                 prop_assert!(out.is_empty(), "键 {:?} 不应提交 {:?}", k, out);
             }
             // 提交过就必须清空缓冲（下一次输入不得拼接到旧串上）

@@ -93,6 +93,14 @@ impl CandidateState {
         out
     }
 
+    /// 引擎层标点表：`Some` = 该键归标点表管（文本要上屏），`None` = 交回路由直通。
+    /// 与 `input_key` 同一套收尾 —— 命中时引擎可能先 flush 缓冲，页码得跟着归零。
+    pub fn input_punct(&mut self, ch: char) -> Option<String> {
+        let out = self.engine.input_punct(ch);
+        self.reset_page_if_buffer_changed();
+        out
+    }
+
     pub fn input_space(&mut self) -> String {
         let out = self.engine.input_space();
         self.reset_page_if_buffer_changed();
@@ -119,6 +127,16 @@ impl CandidateState {
             self.shift_state = ShiftState::Off;
         }
         self.reset_page_if_buffer_changed();
+    }
+
+    /// 全角 ↔ 半角，返回切换后的状态（状态栏显示用）。语义全在引擎层
+    /// （[`Engine::toggle_fullwidth`]），本层只做转发 —— **键位不在本层**：
+    /// 与 `toggle_symbol` 同一条（键位不在本层）：两轨一律 `Shift+Space`，且必须
+    /// 在**调引擎之前**判掉 —— `router.rs` 对 Ctrl/Alt/Meta 在最前面就直通，而
+    /// `Shift+Space` 会走到 `KEY_SPACE` 分支且**该分支不看 Shift 位**（表现为「选首
+    /// 候选」）。键位占用表见 `vk.rs` 的 `fullwidth_hotkey` 与 C++ 侧同名函数。
+    pub fn toggle_fullwidth(&mut self) -> bool {
+        self.engine.toggle_fullwidth()
     }
 
     pub fn set_shift(&mut self, on: bool) {

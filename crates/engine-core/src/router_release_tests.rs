@@ -43,6 +43,9 @@ fn state_with_candidates() -> KeyRouter {
 #[test]
 fn pinyin_symbol_release_matches_press() {
     let mut s = pinyin_state();
+    // 半角态（用户按了全角切换键）才有直通的标点：全角态下 `.` 出 `。`、已不是直通。
+    // 记结论的 `last_printable` 只在**按下直通**时才是 true，故这条必须以半角为背景。
+    s.engine_mut().toggle_fullwidth();
     assert_eq!(s.key_event('.' as u32, 0), KeyAction::PassThrough);
     assert_eq!(
         s.key_event('.' as u32, KEY_STATE_RELEASED),
@@ -79,6 +82,7 @@ fn release_of_another_key_falls_back_to_handled() {
     // 单槽记录的天花板：另一键按下会顶掉记录（键盘 rollover 时才会遇到），
     // 键值不匹配时回落到旧行为（拦下），绝不误放行。
     let mut s = pinyin_state();
+    s.engine_mut().toggle_fullwidth(); // 半角态：`.` 直通（全角态下它出 `。`）
     assert_eq!(s.key_event('.' as u32, 0), KeyAction::PassThrough);
     assert_eq!(
         s.key_event('n' as u32, KEY_STATE_RELEASED),
@@ -146,19 +150,26 @@ fn missed_special_key_degrades_to_pass_through() {
 #[test]
 fn ascii_collision_printables_not_stolen_by_special_keys() {
     // '.'=0x2E / '!'=0x21 / '"'=0x22 是 TSF 轨真出过 bug 的三个码位（与 VK_DELETE /
-    // VK_PRIOR / VK_NEXT 同值）：拼音缓冲非空时必须直通且缓冲原样，绝不能被
-    // 退格/翻页分支吃掉。Apple 侧走的是 Unicode 码点，这层保护必须成立。
+    // VK_PRIOR / VK_NEXT 同值）：**绝不能**被退格/翻页分支吃掉（`.` 变退格）。
+    // 2026-09-27 起它们会出中文标点、并先把待提交的缓冲上屏 —— 旧版断言的是
+    // 「直通且缓冲原样」，标点表落地后那条已不成立；这里改钉真正要保的东西：
+    // 出的是标点文本、缓冲是**被 flush 上屏**而不是被退格吃掉、页码没被翻。
     let mut s = pinyin_state();
     for c in ['h', 'a', 'o'] {
         s.key_event(c as u32, 0);
     }
-    for c in ['.', '!', '"'] {
-        assert_eq!(
-            s.key_event(c as u32, 0),
-            KeyAction::PassThrough,
-            "可打印字符 {c:?} 被特殊键抢走了码位"
+    let out = s.key_event('.' as u32, 0);
+    assert!(
+        matches!(out, KeyAction::Input(_)),
+        "'.' 必须是标点上屏，不是特殊键：{out:?}"
+    );
+    assert!(s.buffer().is_empty(), "缓冲上屏了，不是被退格吃掉");
+    assert_eq!(s.page(), 0, "页码不得被这些字符改动");
+    for c in ['!', '"'] {
+        let out = s.key_event(c as u32, 0);
+        assert!(
+            matches!(out, KeyAction::Input(_)),
+            "{c:?} 被特殊键抢走了码位：{out:?}"
         );
     }
-    assert_eq!(s.buffer(), "hao", "缓冲不得被吃掉");
-    assert_eq!(s.page(), 0, "页码不得被这些字符改动");
 }
