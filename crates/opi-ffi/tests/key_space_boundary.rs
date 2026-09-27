@@ -133,6 +133,11 @@ const PRINTABLE_BY_DESIGN: &[&str] = &["engine_core::KEY_SPACE", "fcitx5::KEY_SP
 /// 引擎键码「同值不同空间」）与 `SPECIAL_KEYS` 这类聚合数组名都不收；`KEY_STATE_*` 不收 ——
 /// 那类有另一道执行点：`two_track_keycodes.rs` 的非空转护栏（实测把 `KEY_STATE_ZZZ`
 /// 加进 tsf 真源，那道门禁 EXIT=101，本门禁此时 GREEN 是设计内）。
+///
+/// ⚠️ **别只说「有另一道执行点」—— 要引那道门禁的判据本身**（判据与全账在
+/// `two_track_keycodes.rs` 那段注释里，含 `static` 形曾是**两道共有盲区**的实测）。
+/// ⚠️ 另：`error[E0530]` 只证明**键码**必然 `const`（键码要当 `match` 模式用），
+/// **管不到状态位** —— 状态位在表达式位置用，写成 `static` 合法。别把那条结论套过来。
 fn key_names_in_code(src: &str) -> Vec<String> {
     let file = syn::parse_file(src).unwrap_or_else(|e| {
         panic!("轨道源码 syn 解析失败：{e} —— 是判据坏了，别改成「解析不过就跳过」")

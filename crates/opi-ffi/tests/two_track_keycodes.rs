@@ -128,7 +128,14 @@ fn state_bits_are_anchored_to_the_true_source_not_to_each_other() {
         // 都是合法写法，行首匹配对它们全盲。2026-09-28 与 `key_space_boundary.rs` 的键码
         // 扫描面一起收紧 —— 那边按名排除 `KEY_STATE_*`，**兜底责任实际落在这里**，
         // 两边都行首匹配的话同一个盲区会被两道门禁同时漏过（实测 `KEY_STATE_ZZZ` 走查）。
-        let n = src.matches("const KEY_STATE_").count();
+        //
+        // ⚠️ **两式相加，缺一即共享盲区**：`static` 形不含 `const KEY_STATE_` 子串。
+        // 只数 `const` 时，把新增状态位写成 `static` 会让**两道门禁同时静默** ——
+        // 本护栏按文本只认 `const`，而 `key_space_boundary.rs` 按**名**排除 `KEY_STATE_*`
+        // （2026-09-28 实测：`const` 形本护栏 RED / 键码门禁 GREEN；**`static` 形两道全 GREEN**）。
+        // `static` 在这里是**合法**写法：状态位在**表达式**位置用（`state & KEY_STATE_*`），
+        // 而 `error[E0530]` 只约束「要当 `match` 模式用」的东西 —— 键码是，状态位不是。
+        let n = src.matches("const KEY_STATE_").count() + src.matches("static KEY_STATE_").count();
         assert_eq!(
             n, 7,
             "{side} 轨的状态位声明条数变了（实测 7）：增删必须显式改这份清单"
