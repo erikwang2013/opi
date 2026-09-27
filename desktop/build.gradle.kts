@@ -57,7 +57,7 @@ compose.desktop {
             targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb)
             packageName = "opi-candidates"
             // 与发布 tag 对齐（同 android/app/build.gradle.kts 的 versionName）。
-            packageVersion = "1.0.15"
+            packageVersion = "1.0.16"
             description = "OPI 拼音输入法候选窗（TSF 插件经 named pipe 通信）"
             vendor = "OPI"
         }

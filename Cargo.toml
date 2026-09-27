@@ -3,10 +3,10 @@ resolver = "2"
 members = ["crates/engine-core", "crates/engine-data", "crates/opi-tools", "crates/opi-ffi", "crates/fcitx5-opi", "crates/tsf-opi"]
 
 # 单一版本源：6 个 crate 全用 version.workspace = true。
-# 与发布 tag（v1.0.15）及 android versionName / desktop packageVersion 对齐 ——
+# 与发布 tag（v1.0.16）及 android versionName / desktop packageVersion 对齐 ——
 # 此前 tag 已到 v1.0.8 而 crate 仍写死 0.1.0，`opi-tools --version` 无从报告真实版本。
 [workspace.package]
-version = "1.0.15"
+version = "1.0.16"
 edition = "2024"
 license = "MIT"
 authors = ["erik.xyz"]
