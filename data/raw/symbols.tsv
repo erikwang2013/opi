@@ -42,7 +42,7 @@
 〩	苏州码九	suzhouma,jiu,hangzhou,nine,numeral	1	0
 〮	韩文单点声调	hanwen,dian,hangul,tone,single,dot,mark	1	0
 〯	韩文双点声调	hanwen,shuangdian,hangul,tone,double,dot,mark	1	0
-〰	波浪破折号	bolang,wavy,dash	1	0
+〰	波浪破折号	bolang,wavy,dash	1	1
 〱	竖排重复记号	shupai,chongfu,vertical,repeat,kana,mark	1	0
 〲	竖排浊音重复	shupai,zhuoyin,vertical,voiced,kana,repeat,sound,mark	1	0
 〳	竖排重复上半	shupai,shangban,upper,repeat,vertical,kana,mark,half	1	0
@@ -55,7 +55,7 @@
 〺	苏州码卅	suzhouma,sa,hangzhou,thirty,numeral	1	0
 〻	竖排叠字记号	shupai,diezi,vertical,iteration,ideographic,mark	1	0
 〼	升记号	sheng,masu,mark	1	0
-〽	歌记号	ge,part,alternation,mark	1	0
+〽	歌记号	ge,part,alternation,mark	1	1
 〾	异体字指示符	yiti,variation,indicator,ideographic	1	0
 〿	半填空格	bantian,half,fill,space,ideographic	1	0
 ■	实心方块	fangkuai,square,black	2	0
@@ -68,8 +68,8 @@
 ▧	SQUARE WITH UPPER LEFT TO LOWER RIGHT FILL	square,upper,left,to,lower,right,fill	2	0
 ▨	SQUARE WITH UPPER RIGHT TO LOWER LEFT FILL	square,upper,right,to,lower,left,fill	2	0
 ▩	SQUARE WITH DIAGONAL CROSSHATCH FILL	square,diagonal,crosshatch,fill	2	0
-▪	小实心方块	xiaofangkuai,small,square,black	2	0
-▫	小空心方块	xiaofangkuai,small,square,white	2	0
+▪	小实心方块	xiaofangkuai,small,square,black	2	1
+▫	小空心方块	xiaofangkuai,small,square,white	2	1
 ▬	实心横长方形	changfangxing,rectangle,black	2	0
 ▭	空心横长方形	changfangxing,rectangle,white	2	0
 ▮	实心竖长方形	shuchangfangxing,vertical,rectangle,black	2	0
@@ -80,7 +80,7 @@
 △	空心上三角	sanjiao,sjx,shangsanjiao,triangle,up,white,pointing	2	0
 ▴	小实心上三角	xiaosanjiao,up,small,triangle,black,pointing	2	0
 ▵	小空心上三角	xiaosanjiao,up,small,triangle,white,pointing	2	0
-▶	实心右三角	sanjiao,you,triangle,right,play,black,pointing	2	0
+▶	实心右三角	sanjiao,you,triangle,right,play,black,pointing	2	1
 ▷	空心右三角	sanjiao,you,triangle,right,white,pointing	2	0
 ▸	小实心右三角	xiaosanjiao,right,small,black,pointing,triangle	2	0
 ▹	小空心右三角	xiaosanjiao,right,small,white,pointing,triangle	2	0
@@ -90,7 +90,7 @@
 ▽	空心下三角	sanjiao,xia,xiasanjiao,triangle,down,white,pointing	2	0
 ▾	小实心下三角	xiaosanjiao,down,small,black,pointing,triangle	2	0
 ▿	小空心下三角	xiaosanjiao,down,small,white,pointing,triangle	2	0
-◀	实心左三角	sanjiao,zuo,zuosanjiao,triangle,left,black,pointing	2	0
+◀	实心左三角	sanjiao,zuo,zuosanjiao,triangle,left,black,pointing	2	1
 ◁	空心左三角	sanjiao,zuo,zuosanjiao,triangle,left,white,pointing	2	0
 ◂	小实心左三角	xiaosanjiao,left,small,black,pointing,triangle	2	0
 ◃	小空心左三角	xiaosanjiao,left,small,white,pointing,triangle	2	0
@@ -149,16 +149,16 @@
 ◸	UPPER LEFT TRIANGLE	upper,left,triangle	2	0
 ◹	UPPER RIGHT TRIANGLE	upper,right,triangle	2	0
 ◺	LOWER LEFT TRIANGLE	lower,left,triangle	2	0
-◻	中空心方块	fangkuai,medium,square,white	2	0
-◼	中实心方块	fangkuai,medium,square,black	2	0
-◽	中小空心方块	fangkuai,small,medium,white,square	2	0
-◾	中小实心方块	fangkuai,small,medium,black,square	2	0
+◻	中空心方块	fangkuai,medium,square,white	2	1
+◼	中实心方块	fangkuai,medium,square,black	2	1
+◽	中小空心方块	fangkuai,small,medium,white,square	2	1
+◾	中小实心方块	fangkuai,small,medium,black,square	2	1
 ◿	LOWER RIGHT TRIANGLE	lower,right,triangle	2	0
-☀	太阳	taiyang,sun,sunny,black,rays	3	0
-☁	云	yun,cloud	3	0
-☂	雨伞	yusan,umbrella	3	0
-☃	雪人	xueren,snowman	3	0
-☄	彗星	huixing,comet	3	0
+☀	太阳	taiyang,sun,sunny,black,rays	3	1
+☁	云	yun,cloud	3	1
+☂	雨伞	yusan,umbrella	3	1
+☃	雪人	xueren,snowman	3	1
+☄	彗星	huixing,comet	3	1
 ★	实心星	xingxing,xing,star,black	3	0
 ☆	空心星	xingxing,xing,star,white	3	0
 ☇	闪电	shandian,lightning	3	0
@@ -168,40 +168,40 @@
 ☋	DESCENDING NODE	descending,node	3	0
 ☌	CONJUNCTION	conjunction	3	0
 ☍	OPPOSITION	opposition	3	0
-☎	黑电话	dianhua,telephone,phone,black	3	0
+☎	黑电话	dianhua,telephone,phone,black	3	1
 ☏	白电话	dianhua,telephone,phone,white	3	0
 ☐	空方框	fangkuang,ballot,box	3	0
-☑	打勾方框	dagou,check,ballot,tick,box	3	0
+☑	打勾方框	dagou,check,ballot,tick,box	3	1
 ☒	打叉方框	dacha,cross,ballot,x,box	3	0
 ☓	SALTIRE	saltire	3	0
-☔	带雨雨伞	yusan,daiyu,rain,umbrella,drops	3	0
-☕	热饮	reyin,coffee,hot,beverage	3	0
+☔	带雨雨伞	yusan,daiyu,rain,umbrella,drops	3	1
+☕	热饮	reyin,coffee,hot,beverage	3	1
 ☖	WHITE SHOGI PIECE	white,shogi,piece	3	0
 ☗	BLACK SHOGI PIECE	black,shogi,piece	3	0
-☘	三叶草	sanyecao,shamrock,clover	3	0
+☘	三叶草	sanyecao,shamrock,clover	3	1
 ☙	REVERSED ROTATED FLORAL HEART BULLET	reversed,rotated,floral,heart,bullet	3	0
 ☚	黑左指手	zhishou,index,left,pointing,black	3	0
 ☛	黑右指手	zhishou,index,right,pointing,black	3	0
 ☜	白左指手	zhishou,white,left,pointing,index	3	0
-☝	白上指手	zhishou,up,pointing,index,white	3	0
+☝	白上指手	zhishou,up,pointing,index,white	3	1
 ☞	白右指手	zhishou,white,right,pointing,index	3	0
 ☟	白下指手	zhishou,down,pointing,index,white	3	0
-☠	骷髅	kulou,skull,crossbones	3	0
+☠	骷髅	kulou,skull,crossbones	3	1
 ☡	警告	jinggao,caution,warning,sign	3	0
-☢	辐射	fushe,radioactive,sign	3	0
-☣	生物危害	shengwu,weihai,biohazard,sign	3	0
+☢	辐射	fushe,radioactive,sign	3	1
+☣	生物危害	shengwu,weihai,biohazard,sign	3	1
 ☤	双蛇杖	shuangshezhang,caduceus	3	0
 ☥	安卡	anka,ankh	3	0
-☦	东正教十字	dongzhengjiao,cross,orthodox	3	0
+☦	东正教十字	dongzhengjiao,cross,orthodox	3	1
 ☧	凯乐符号	kaile,chi,rho	3	0
 ☨	洛林十字	luolin,cross,lorraine	3	0
 ☩	耶路撒冷十字	yelusaleng,cross,jerusalem	3	0
-☪	星月	xingyue,star,crescent,islam	3	0
+☪	星月	xingyue,star,crescent,islam	3	1
 ☫	波斯符号	bosi,farsi,symbol	3	0
 ☬	阿迪沙克提	adishakti,khanda,adi,shakti	3	0
 ☭	镰刀锤子	liandao,chuizi,hammer,sickle	3	0
-☮	和平	heping,peace,symbol	3	0
-☯	阴阳	yinyang,tao,taichi,yin,yang	3	0
+☮	和平	heping,peace,symbol	3	1
+☯	阴阳	yinyang,tao,taichi,yin,yang	3	1
 ☰	乾卦	qiangua,trigram,heaven	3	0
 ☱	兑卦	duigua,trigram,lake	3	0
 ☲	离卦	ligua,trigram,fire	3	0
@@ -210,34 +210,34 @@
 ☵	坎卦	kangua,trigram,water	3	0
 ☶	艮卦	gengua,trigram,mountain	3	0
 ☷	坤卦	kungua,trigram,earth	3	0
-☸	法轮	falun,dharma,wheel	3	0
-☹	哭脸	kulian,frowning,frown,white,face	3	0
-☺	笑脸	xiaolian,smiling,smile,white,face	3	0
+☸	法轮	falun,dharma,wheel	3	1
+☹	哭脸	kulian,frowning,frown,white,face	3	1
+☺	笑脸	xiaolian,smiling,smile,white,face	3	1
 ☻	黑笑脸	heixiaolian,smiling,black,face	3	0
 ☼	带光芒太阳	taiyang,sun,rays,white	3	0
 ☽	上弦月	shangxianyue,moon,quarter,first	3	0
 ☾	下弦月	xiaxianyue,moon,quarter,last	3	0
 ☿	MERCURY	mercury	3	0
-♀	女性	nvxing,female,woman,sign	3	0
+♀	女性	nvxing,female,woman,sign	3	1
 ♁	地球	diqiu,earth	3	0
-♂	男性	nanxing,male,man,sign	3	0
+♂	男性	nanxing,male,man,sign	3	1
 ♃	木星	muxing,jupiter	3	0
 ♄	土星	tuxing,saturn	3	0
 ♅	天王星	tianwangxing,uranus	3	0
 ♆	海王星	haiwangxing,neptune	3	0
 ♇	冥王星	mingwangxing,pluto	3	0
-♈	白羊座	baiyang,aries,zodiac	3	0
-♉	金牛座	jinniu,taurus,zodiac	3	0
-♊	双子座	shuangzi,gemini,zodiac	3	0
-♋	巨蟹座	juxie,cancer,zodiac	3	0
-♌	狮子座	shizi,leo,zodiac	3	0
-♍	处女座	chunv,virgo,zodiac	3	0
-♎	天秤座	tiancheng,libra,zodiac	3	0
-♏	天蝎座	tianxie,scorpius,zodiac	3	0
-♐	射手座	sheshou,sagittarius,zodiac	3	0
-♑	摩羯座	mojie,capricorn,zodiac	3	0
-♒	水瓶座	shuiping,aquarius,zodiac	3	0
-♓	双鱼座	shuangyu,pisces,zodiac	3	0
+♈	白羊座	baiyang,aries,zodiac	3	1
+♉	金牛座	jinniu,taurus,zodiac	3	1
+♊	双子座	shuangzi,gemini,zodiac	3	1
+♋	巨蟹座	juxie,cancer,zodiac	3	1
+♌	狮子座	shizi,leo,zodiac	3	1
+♍	处女座	chunv,virgo,zodiac	3	1
+♎	天秤座	tiancheng,libra,zodiac	3	1
+♏	天蝎座	tianxie,scorpius,zodiac	3	1
+♐	射手座	sheshou,sagittarius,zodiac	3	1
+♑	摩羯座	mojie,capricorn,zodiac	3	1
+♒	水瓶座	shuiping,aquarius,zodiac	3	1
+♓	双鱼座	shuangyu,pisces,zodiac	3	1
 ♔	白王	baiwang,chess,king,white	3	0
 ♕	白后	baihou,chess,queen,white	3	0
 ♖	白车	baiju,chess,rook,white	3	0
@@ -249,16 +249,16 @@
 ♜	黑车	heiju,chess,rook,black	3	0
 ♝	黑象	heixiang,chess,bishop,black	3	0
 ♞	黑马	heima,chess,knight,black	3	0
-♟	黑兵	heibing,chess,pawn,black	3	0
-♠	黑桃	heitao,spade,suit,black	3	0
+♟	黑兵	heibing,chess,pawn,black	3	1
+♠	黑桃	heitao,spade,suit,black	3	1
 ♡	红桃	hongtao,heart,suit,white	3	0
 ♢	方块	fangkuai,diamond,suit,white	3	0
-♣	梅花	meihua,club,suit,black	3	0
+♣	梅花	meihua,club,suit,black	3	1
 ♤	白桃	baitao,spade,suit,white	3	0
-♥	红心	hongxin,heart,he,ai,xin,suit,love,black	3	0
-♦	实心方块	fangkuai,diamond,suit,black	3	0
+♥	红心	hongxin,heart,he,ai,xin,suit,love,black	3	1
+♦	实心方块	fangkuai,diamond,suit,black	3	1
 ♧	白梅花	baimeihua,club,suit,white	3	0
-♨	温泉	wenquan,hot,springs,onsen	3	0
+♨	温泉	wenquan,hot,springs,onsen	3	1
 ♩	四分音符	yinfu,note,quarter,music	3	0
 ♪	八分音符	yinfu,note,eighth,music	3	0
 ♫	双八分音符	yinfu,note,beamed,music,eighth,notes	3	0
@@ -277,11 +277,11 @@
 ♸	RECYCLING SYMBOL FOR TYPE-6 PLASTICS	recycling,symbol,type,6,plastics	3	0
 ♹	RECYCLING SYMBOL FOR TYPE-7 PLASTICS	recycling,symbol,type,7,plastics	3	0
 ♺	RECYCLING SYMBOL FOR GENERIC MATERIALS	recycling,symbol,generic,materials	3	0
-♻	黑循环回收	huishou,recycle,black,universal,recycling,symbol	3	0
+♻	黑循环回收	huishou,recycle,black,universal,recycling,symbol	3	1
 ♼	RECYCLED PAPER SYMBOL	recycled,paper,symbol	3	0
 ♽	PARTIALLY-RECYCLED PAPER SYMBOL	partially,recycled,paper,symbol	3	0
-♾	永久纸	yongjiu,permanent,paper,sign	3	0
-♿	轮椅	lunyi,wheelchair,accessible,symbol	3	0
+♾	永久纸	yongjiu,permanent,paper,sign	3	1
+♿	轮椅	lunyi,wheelchair,accessible,symbol	3	1
 ⚀	骰子一	touzi,dice,one,die,face,1	3	0
 ⚁	骰子二	touzi,dice,two,die,face,2	3	0
 ⚂	骰子三	touzi,dice,three,die,face,3	3	0
@@ -300,38 +300,38 @@
 ⚏	DIGRAM FOR GREATER YIN	digram,greater,yin	3	0
 ⚐	白旗	baiqi,flag,white	3	0
 ⚑	黑旗	heiqi,flag,black	3	0
-⚒	锤镐	chuigao,hammer,pick	3	0
-⚓	锚	mao,anchor	3	0
-⚔	交叉剑	jiaochajian,swords,crossed	3	0
-⚕	医神杖	yishenzhang,aesculapius,staff	3	0
-⚖	天平	tianping,scales,justice	3	0
-⚗	蒸馏器	zhengliuqi,alembic	3	0
+⚒	锤镐	chuigao,hammer,pick	3	1
+⚓	锚	mao,anchor	3	1
+⚔	交叉剑	jiaochajian,swords,crossed	3	1
+⚕	医神杖	yishenzhang,aesculapius,staff	3	1
+⚖	天平	tianping,scales,justice	3	1
+⚗	蒸馏器	zhengliuqi,alembic	3	1
 ⚘	花	hua,flower	3	0
-⚙	齿轮	chilun,gear,settings	3	0
+⚙	齿轮	chilun,gear,settings	3	1
 ⚚	商神杖	shangshenzhang,hermes,staff	3	0
-⚛	原子	yuanzi,atom,symbol	3	0
-⚜	鸢尾花	yuanweihua,fleur,lis,de	3	0
+⚛	原子	yuanzi,atom,symbol	3	1
+⚜	鸢尾花	yuanweihua,fleur,lis,de	3	1
 ⚝	描边白星	xingxing,outlined,star,white	3	0
 ⚞	THREE LINES CONVERGING RIGHT	three,lines,converging,right	3	0
 ⚟	THREE LINES CONVERGING LEFT	three,lines,converging,left	3	0
-⚠	警告	jinggao,warning,sign	3	0
-⚡	高压	gaoya,high,voltage,lightning,sign	3	0
+⚠	警告	jinggao,warning,sign	3	1
+⚡	高压	gaoya,high,voltage,lightning,sign	3	1
 ⚢	DOUBLED FEMALE SIGN	doubled,female,sign	3	0
 ⚣	DOUBLED MALE SIGN	doubled,male,sign	3	0
 ⚤	INTERLOCKED FEMALE AND MALE SIGN	interlocked,female,male,sign	3	0
 ⚥	MALE AND FEMALE SIGN	male,female,sign	3	0
 ⚦	MALE WITH STROKE SIGN	male,stroke,sign	3	0
-⚧	MALE WITH STROKE AND MALE AND FEMALE SIGN	male,stroke,female,sign	3	0
+⚧	MALE WITH STROKE AND MALE AND FEMALE SIGN	male,stroke,female,sign	3	1
 ⚨	VERTICAL MALE WITH STROKE SIGN	vertical,male,stroke,sign	3	0
 ⚩	HORIZONTAL MALE WITH STROKE SIGN	horizontal,male,stroke,sign	3	0
-⚪	中空心圆	yuan,medium,circle,white	3	0
-⚫	中实心圆	yuan,medium,circle,black	3	0
+⚪	中空心圆	yuan,medium,circle,white	3	1
+⚫	中实心圆	yuan,medium,circle,black	3	1
 ⚬	MEDIUM SMALL WHITE CIRCLE	medium,small,white,circle	3	0
 ⚭	婚姻	hunyin,marriage,symbol	3	0
 ⚮	离婚	lihun,divorce,symbol	3	0
 ⚯	UNMARRIED PARTNERSHIP SYMBOL	unmarried,partnership,symbol	3	0
-⚰	棺材	guancai,coffin	3	0
-⚱	骨灰瓮	guhuiweng,funeral,urn	3	0
+⚰	棺材	guancai,coffin	3	1
+⚱	骨灰瓮	guhuiweng,funeral,urn	3	1
 ⚲	NEUTER	neuter	3	0
 ⚳	CERES	ceres	3	0
 ⚴	PALLAS	pallas	3	0
@@ -343,30 +343,30 @@
 ⚺	SEMISEXTILE	semisextile	3	0
 ⚻	QUINCUNX	quincunx	3	0
 ⚼	SESQUIQUADRATE	sesquiquadrate	3	0
-⚽	足球	zuqiu,soccer,football,ball	3	0
-⚾	棒球	bangqiu,baseball	3	0
+⚽	足球	zuqiu,soccer,football,ball	3	1
+⚾	棒球	bangqiu,baseball	3	1
 ⚿	SQUARED KEY	squared,key	3	0
 ⛀	WHITE DRAUGHTS MAN	white,draughts,man	3	0
 ⛁	WHITE DRAUGHTS KING	white,draughts,king	3	0
 ⛂	BLACK DRAUGHTS MAN	black,draughts,man	3	0
 ⛃	BLACK DRAUGHTS KING	black,draughts,king	3	0
-⛄	无雪雪人	xueren,snowman,without,snow	3	0
-⛅	多云	duoyun,sun,cloud,behind	3	0
+⛄	无雪雪人	xueren,snowman,without,snow	3	1
+⛅	多云	duoyun,sun,cloud,behind	3	1
 ⛆	下雨	xiayu,rain	3	0
 ⛇	BLACK SNOWMAN	black,snowman	3	0
-⛈	雷阵雨	leizhenyu,thunder,cloud,rain	3	0
+⛈	雷阵雨	leizhenyu,thunder,cloud,rain	3	1
 ⛉	TURNED WHITE SHOGI PIECE	turned,white,shogi,piece	3	0
 ⛊	TURNED BLACK SHOGI PIECE	turned,black,shogi,piece	3	0
 ⛋	WHITE DIAMOND IN SQUARE	white,diamond,in,square	3	0
 ⛌	CROSSING LANES	crossing,lanes	3	0
 ⛍	DISABLED CAR	disabled,car	3	0
-⛎	蛇夫座	shefuzuo,ophiuchus,zodiac	3	0
-⛏	镐	gao,pick,mining	3	0
+⛎	蛇夫座	shefuzuo,ophiuchus,zodiac	3	1
+⛏	镐	gao,pick,mining	3	1
 ⛐	CAR SLIDING	car,sliding	3	0
-⛑	安全帽	anquanmao,helmet,cross,white	3	0
+⛑	安全帽	anquanmao,helmet,cross,white	3	1
 ⛒	CIRCLED CROSSING LANES	circled,crossing,lanes	3	0
-⛓	锁链	suolian,chains	3	0
-⛔	禁止通行	jinzhi,no,entry,stop	3	0
+⛓	锁链	suolian,chains	3	1
+⛔	禁止通行	jinzhi,no,entry,stop	3	1
 ⛕	ALTERNATE ONE-WAY LEFT WAY TRAFFIC	alternate,one,way,left,traffic	3	0
 ⛖	BLACK TWO-WAY LEFT WAY TRAFFIC	black,two,way,left,traffic	3	0
 ⛗	WHITE TWO-WAY LEFT WAY TRAFFIC	white,two,way,left,traffic	3	0
@@ -387,27 +387,27 @@
 ⛦	LEFT-HANDED INTERLACED PENTAGRAM	left,handed,interlaced,pentagram	3	0
 ⛧	INVERTED PENTAGRAM	inverted,pentagram	3	0
 ⛨	BLACK CROSS ON SHIELD	black,cross,on,shield	3	0
-⛩	神社	shenshe,shinto,shrine	3	0
-⛪	教堂	jiaotang,church	3	0
+⛩	神社	shenshe,shinto,shrine	3	1
+⛪	教堂	jiaotang,church	3	1
 ⛫	城堡	chengbao,castle	3	0
 ⛬	古迹	guji,historic,site	3	0
 ⛭	GEAR WITHOUT HUB	gear,without,hub	3	0
 ⛮	GEAR WITH HANDLES	gear,handles	3	0
 ⛯	MAP SYMBOL FOR LIGHTHOUSE	map,symbol,lighthouse	3	0
-⛰	山	shan,mountain	3	0
-⛱	沙滩伞	shatan,san,umbrella,beach,on,ground	3	0
-⛲	喷泉	penquan,fountain	3	0
-⛳	高尔夫	gaoerfu,flag,hole,golf,in	3	0
-⛴	渡轮	dulun,ferry	3	0
-⛵	帆船	fanchuan,sailboat	3	0
+⛰	山	shan,mountain	3	1
+⛱	沙滩伞	shatan,san,umbrella,beach,on,ground	3	1
+⛲	喷泉	penquan,fountain	3	1
+⛳	高尔夫	gaoerfu,flag,hole,golf,in	3	1
+⛴	渡轮	dulun,ferry	3	1
+⛵	帆船	fanchuan,sailboat	3	1
 ⛶	SQUARE FOUR CORNERS	square,four,corners	3	0
-⛷	滑雪	huaxue,skier,ski	3	0
-⛸	溜冰鞋	liubingxie,ice,skate	3	0
-⛹	打球的人	daqiu,person,ball	3	0
-⛺	帐篷	zhangpeng,tent,camp	3	0
+⛷	滑雪	huaxue,skier,ski	3	1
+⛸	溜冰鞋	liubingxie,ice,skate	3	1
+⛹	打球的人	daqiu,person,ball	3	1
+⛺	帐篷	zhangpeng,tent,camp	3	1
 ⛻	JAPANESE BANK SYMBOL	japanese,bank,symbol	3	0
 ⛼	HEADSTONE GRAVEYARD SYMBOL	headstone,graveyard,symbol	3	0
-⛽	加油站	jiayouzhan,fuel,pump,gas	3	0
+⛽	加油站	jiayouzhan,fuel,pump,gas	3	1
 ⛾	CUP ON BLACK SQUARE	cup,on,black,square	3	0
 ⛿	WHITE FLAG WITH HORIZONTAL MIDDLE BLACK STRIPE	white,flag,horizontal,middle,black,stripe	3	0
 😀	咧嘴笑	liezuixiao,daxiao,grin,grinning,smile,face	4	1
@@ -585,12 +585,12 @@
 ↑	UPWARDS ARROW	upwards,arrow	7	0
 →	RIGHTWARDS ARROW	rightwards,arrow	7	0
 ↓	DOWNWARDS ARROW	downwards,arrow	7	0
-↔	LEFT RIGHT ARROW	left,right,arrow	7	0
-↕	UP DOWN ARROW	up,down,arrow	7	0
-↖	NORTH WEST ARROW	north,west,arrow	7	0
-↗	NORTH EAST ARROW	north,east,arrow	7	0
-↘	SOUTH EAST ARROW	south,east,arrow	7	0
-↙	SOUTH WEST ARROW	south,west,arrow	7	0
+↔	LEFT RIGHT ARROW	left,right,arrow	7	1
+↕	UP DOWN ARROW	up,down,arrow	7	1
+↖	NORTH WEST ARROW	north,west,arrow	7	1
+↗	NORTH EAST ARROW	north,east,arrow	7	1
+↘	SOUTH EAST ARROW	south,east,arrow	7	1
+↙	SOUTH WEST ARROW	south,west,arrow	7	1
 ↚	LEFTWARDS ARROW WITH STROKE	leftwards,arrow,stroke	7	0
 ↛	RIGHTWARDS ARROW WITH STROKE	rightwards,arrow,stroke	7	0
 ↜	LEFTWARDS WAVE ARROW	leftwards,wave,arrow	7	0
@@ -606,8 +606,8 @@
 ↦	RIGHTWARDS ARROW FROM BAR	rightwards,arrow,from,bar	7	0
 ↧	DOWNWARDS ARROW FROM BAR	downwards,arrow,from,bar	7	0
 ↨	UP DOWN ARROW WITH BASE	up,down,arrow,base	7	0
-↩	LEFTWARDS ARROW WITH HOOK	leftwards,arrow,hook	7	0
-↪	RIGHTWARDS ARROW WITH HOOK	rightwards,arrow,hook	7	0
+↩	LEFTWARDS ARROW WITH HOOK	leftwards,arrow,hook	7	1
+↪	RIGHTWARDS ARROW WITH HOOK	rightwards,arrow,hook	7	1
 ↫	LEFTWARDS ARROW WITH LOOP	leftwards,arrow,loop	7	0
 ↬	RIGHTWARDS ARROW WITH LOOP	rightwards,arrow,loop	7	0
 ↭	LEFT RIGHT WAVE ARROW	left,right,wave,arrow	7	0
@@ -719,8 +719,8 @@
 ⌗	VIEWDATA SQUARE	viewdata,square	8	0
 ⌘	PLACE OF INTEREST SIGN	place,interest,sign	8	0
 ⌙	TURNED NOT SIGN	turned,not,sign	8	0
-⌚	WATCH	watch	8	0
-⌛	HOURGLASS	hourglass	8	0
+⌚	WATCH	watch	8	1
+⌛	HOURGLASS	hourglass	8	1
 ⌜	TOP LEFT CORNER	top,left,corner	8	0
 ⌝	TOP RIGHT CORNER	top,right,corner	8	0
 ⌞	BOTTOM LEFT CORNER	bottom,left,corner	8	0
@@ -733,7 +733,7 @@
 ⌥	OPTION KEY	option,key	8	0
 ⌦	ERASE TO THE RIGHT	erase,to,right	8	0
 ⌧	X IN A RECTANGLE BOX	x,in,rectangle,box	8	0
-⌨	KEYBOARD	keyboard	8	0
+⌨	KEYBOARD	keyboard	8	1
 〈	LEFT-POINTING ANGLE BRACKET	left,pointing,angle,bracket	8	0
 〉	RIGHT-POINTING ANGLE BRACKET	right,pointing,angle,bracket	8	0
 ⌫	ERASE TO THE LEFT	erase,to,left	8	0
@@ -900,7 +900,7 @@
 ⏌	DENTISTRY SYMBOL LIGHT VERTICAL AND BOTTOM LEFT	dentistry,symbol,light,vertical,bottom,left	8	0
 ⏍	SQUARE FOOT	square,foot	8	0
 ⏎	RETURN SYMBOL	return,symbol	8	0
-⏏	EJECT SYMBOL	eject,symbol	8	0
+⏏	EJECT SYMBOL	eject,symbol	8	1
 ⏐	VERTICAL LINE EXTENSION	vertical,line,extension	8	0
 ⏑	METRICAL BREVE	metrical,breve	8	0
 ⏒	METRICAL LONG OVER SHORT	metrical,long,over,short	8	0
@@ -926,24 +926,24 @@
 ⏦	AC CURRENT	ac,current	8	0
 ⏧	ELECTRICAL INTERSECTION	electrical,intersection	8	0
 ⏨	DECIMAL EXPONENT SYMBOL	decimal,exponent,symbol	8	0
-⏩	BLACK RIGHT-POINTING DOUBLE TRIANGLE	black,right,pointing,double,triangle	8	0
-⏪	BLACK LEFT-POINTING DOUBLE TRIANGLE	black,left,pointing,double,triangle	8	0
-⏫	BLACK UP-POINTING DOUBLE TRIANGLE	black,up,pointing,double,triangle	8	0
-⏬	BLACK DOWN-POINTING DOUBLE TRIANGLE	black,down,pointing,double,triangle	8	0
-⏭	BLACK RIGHT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR	black,right,pointing,double,triangle,vertical,bar	8	0
-⏮	BLACK LEFT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR	black,left,pointing,double,triangle,vertical,bar	8	0
-⏯	BLACK RIGHT-POINTING TRIANGLE WITH DOUBLE VERTICAL BAR	black,right,pointing,triangle,double,vertical,bar	8	0
-⏰	ALARM CLOCK	alarm,clock	8	0
-⏱	STOPWATCH	stopwatch	8	0
-⏲	TIMER CLOCK	timer,clock	8	0
-⏳	HOURGLASS WITH FLOWING SAND	hourglass,flowing,sand	8	0
+⏩	BLACK RIGHT-POINTING DOUBLE TRIANGLE	black,right,pointing,double,triangle	8	1
+⏪	BLACK LEFT-POINTING DOUBLE TRIANGLE	black,left,pointing,double,triangle	8	1
+⏫	BLACK UP-POINTING DOUBLE TRIANGLE	black,up,pointing,double,triangle	8	1
+⏬	BLACK DOWN-POINTING DOUBLE TRIANGLE	black,down,pointing,double,triangle	8	1
+⏭	BLACK RIGHT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR	black,right,pointing,double,triangle,vertical,bar	8	1
+⏮	BLACK LEFT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR	black,left,pointing,double,triangle,vertical,bar	8	1
+⏯	BLACK RIGHT-POINTING TRIANGLE WITH DOUBLE VERTICAL BAR	black,right,pointing,triangle,double,vertical,bar	8	1
+⏰	ALARM CLOCK	alarm,clock	8	1
+⏱	STOPWATCH	stopwatch	8	1
+⏲	TIMER CLOCK	timer,clock	8	1
+⏳	HOURGLASS WITH FLOWING SAND	hourglass,flowing,sand	8	1
 ⏴	BLACK MEDIUM LEFT-POINTING TRIANGLE	black,medium,left,pointing,triangle	8	0
 ⏵	BLACK MEDIUM RIGHT-POINTING TRIANGLE	black,medium,right,pointing,triangle	8	0
 ⏶	BLACK MEDIUM UP-POINTING TRIANGLE	black,medium,up,pointing,triangle	8	0
 ⏷	BLACK MEDIUM DOWN-POINTING TRIANGLE	black,medium,down,pointing,triangle	8	0
-⏸	DOUBLE VERTICAL BAR	double,vertical,bar	8	0
-⏹	BLACK SQUARE FOR STOP	black,square,stop	8	0
-⏺	BLACK CIRCLE FOR RECORD	black,circle,record	8	0
+⏸	DOUBLE VERTICAL BAR	double,vertical,bar	8	1
+⏹	BLACK SQUARE FOR STOP	black,square,stop	8	1
+⏺	BLACK CIRCLE FOR RECORD	black,circle,record	8	1
 ⏻	POWER SYMBOL	power,symbol	8	0
 ⏼	POWER ON-OFF SYMBOL	power,on,off,symbol	8	0
 ⏽	POWER ON SYMBOL	power,on,symbol	8	0
@@ -1047,7 +1047,7 @@
 Ⓙ	CIRCLED LATIN CAPITAL LETTER J	circled,latin,capital,letter,j	9	0
 Ⓚ	CIRCLED LATIN CAPITAL LETTER K	circled,latin,capital,letter,k	9	0
 Ⓛ	CIRCLED LATIN CAPITAL LETTER L	circled,latin,capital,letter,l	9	0
-Ⓜ	CIRCLED LATIN CAPITAL LETTER M	circled,latin,capital,letter,m	9	0
+Ⓜ	CIRCLED LATIN CAPITAL LETTER M	circled,latin,capital,letter,m	9	1
 Ⓝ	CIRCLED LATIN CAPITAL LETTER N	circled,latin,capital,letter,n	9	0
 Ⓞ	CIRCLED LATIN CAPITAL LETTER O	circled,latin,capital,letter,o	9	0
 Ⓟ	CIRCLED LATIN CAPITAL LETTER P	circled,latin,capital,letter,p	9	0
@@ -1111,45 +1111,45 @@
 ⓿	NEGATIVE CIRCLED DIGIT ZERO	negative,circled,digit,zero	9	0
 ✀	BLACK SAFETY SCISSORS	black,safety,scissors	10	0
 ✁	UPPER BLADE SCISSORS	upper,blade,scissors	10	0
-✂	BLACK SCISSORS	black,scissors	10	0
+✂	BLACK SCISSORS	black,scissors	10	1
 ✃	LOWER BLADE SCISSORS	lower,blade,scissors	10	0
 ✄	WHITE SCISSORS	white,scissors	10	0
-✅	WHITE HEAVY CHECK MARK	white,heavy,check,mark	10	0
+✅	WHITE HEAVY CHECK MARK	white,heavy,check,mark	10	1
 ✆	TELEPHONE LOCATION SIGN	telephone,location,sign	10	0
 ✇	TAPE DRIVE	tape,drive	10	0
-✈	AIRPLANE	airplane	10	0
-✉	ENVELOPE	envelope	10	0
-✊	RAISED FIST	raised,fist	10	0
-✋	RAISED HAND	raised,hand	10	0
-✌	VICTORY HAND	victory,hand	10	0
-✍	WRITING HAND	writing,hand	10	0
+✈	AIRPLANE	airplane	10	1
+✉	ENVELOPE	envelope	10	1
+✊	RAISED FIST	raised,fist	10	1
+✋	RAISED HAND	raised,hand	10	1
+✌	VICTORY HAND	victory,hand	10	1
+✍	WRITING HAND	writing,hand	10	1
 ✎	LOWER RIGHT PENCIL	lower,right,pencil	10	0
-✏	PENCIL	pencil	10	0
+✏	PENCIL	pencil	10	1
 ✐	UPPER RIGHT PENCIL	upper,right,pencil	10	0
 ✑	WHITE NIB	white,nib	10	0
-✒	BLACK NIB	black,nib	10	0
+✒	BLACK NIB	black,nib	10	1
 ✓	CHECK MARK	check,mark	10	0
-✔	HEAVY CHECK MARK	heavy,check,mark	10	0
+✔	HEAVY CHECK MARK	heavy,check,mark	10	1
 ✕	MULTIPLICATION X	multiplication,x	10	0
-✖	HEAVY MULTIPLICATION X	heavy,multiplication,x	10	0
+✖	HEAVY MULTIPLICATION X	heavy,multiplication,x	10	1
 ✗	BALLOT X	ballot,x	10	0
 ✘	HEAVY BALLOT X	heavy,ballot,x	10	0
 ✙	OUTLINED GREEK CROSS	outlined,greek,cross	10	0
 ✚	HEAVY GREEK CROSS	heavy,greek,cross	10	0
 ✛	OPEN CENTRE CROSS	open,centre,cross	10	0
 ✜	HEAVY OPEN CENTRE CROSS	heavy,open,centre,cross	10	0
-✝	LATIN CROSS	latin,cross	10	0
+✝	LATIN CROSS	latin,cross	10	1
 ✞	SHADOWED WHITE LATIN CROSS	shadowed,white,latin,cross	10	0
 ✟	OUTLINED LATIN CROSS	outlined,latin,cross	10	0
 ✠	MALTESE CROSS	maltese,cross	10	0
-✡	STAR OF DAVID	star,david	10	0
+✡	STAR OF DAVID	star,david	10	1
 ✢	FOUR TEARDROP-SPOKED ASTERISK	four,teardrop,spoked,asterisk	10	0
 ✣	FOUR BALLOON-SPOKED ASTERISK	four,balloon,spoked,asterisk	10	0
 ✤	HEAVY FOUR BALLOON-SPOKED ASTERISK	heavy,four,balloon,spoked,asterisk	10	0
 ✥	FOUR CLUB-SPOKED ASTERISK	four,club,spoked,asterisk	10	0
 ✦	BLACK FOUR POINTED STAR	black,four,pointed,star	10	0
 ✧	WHITE FOUR POINTED STAR	white,four,pointed,star	10	0
-✨	SPARKLES	sparkles	10	0
+✨	SPARKLES	sparkles	10	1
 ✩	STRESS OUTLINED WHITE STAR	stress,outlined,white,star	10	0
 ✪	CIRCLED WHITE STAR	circled,white,star	10	0
 ✫	OPEN CENTRE BLACK STAR	open,centre,black,star	10	0
@@ -1160,8 +1160,8 @@
 ✰	SHADOWED WHITE STAR	shadowed,white,star	10	0
 ✱	HEAVY ASTERISK	heavy,asterisk	10	0
 ✲	OPEN CENTRE ASTERISK	open,centre,asterisk	10	0
-✳	EIGHT SPOKED ASTERISK	eight,spoked,asterisk	10	0
-✴	EIGHT POINTED BLACK STAR	eight,pointed,black,star	10	0
+✳	EIGHT SPOKED ASTERISK	eight,spoked,asterisk	10	1
+✴	EIGHT POINTED BLACK STAR	eight,pointed,black,star	10	1
 ✵	EIGHT POINTED PINWHEEL STAR	eight,pointed,pinwheel,star	10	0
 ✶	SIX POINTED BLACK STAR	six,pointed,black,star	10	0
 ✷	EIGHT POINTED RECTILINEAR BLACK STAR	eight,pointed,rectilinear,black,star	10	0
@@ -1177,26 +1177,26 @@
 ❁	EIGHT PETALLED OUTLINED BLACK FLORETTE	eight,petalled,outlined,black,florette	10	0
 ❂	CIRCLED OPEN CENTRE EIGHT POINTED STAR	circled,open,centre,eight,pointed,star	10	0
 ❃	HEAVY TEARDROP-SPOKED PINWHEEL ASTERISK	heavy,teardrop,spoked,pinwheel,asterisk	10	0
-❄	SNOWFLAKE	snowflake	10	0
+❄	SNOWFLAKE	snowflake	10	1
 ❅	TIGHT TRIFOLIATE SNOWFLAKE	tight,trifoliate,snowflake	10	0
 ❆	HEAVY CHEVRON SNOWFLAKE	heavy,chevron,snowflake	10	0
-❇	SPARKLE	sparkle	10	0
+❇	SPARKLE	sparkle	10	1
 ❈	HEAVY SPARKLE	heavy,sparkle	10	0
 ❉	BALLOON-SPOKED ASTERISK	balloon,spoked,asterisk	10	0
 ❊	EIGHT TEARDROP-SPOKED PROPELLER ASTERISK	eight,teardrop,spoked,propeller,asterisk	10	0
 ❋	HEAVY EIGHT TEARDROP-SPOKED PROPELLER ASTERISK	heavy,eight,teardrop,spoked,propeller,asterisk	10	0
-❌	CROSS MARK	cross,mark	10	0
+❌	CROSS MARK	cross,mark	10	1
 ❍	SHADOWED WHITE CIRCLE	shadowed,white,circle	10	0
-❎	NEGATIVE SQUARED CROSS MARK	negative,squared,cross,mark	10	0
+❎	NEGATIVE SQUARED CROSS MARK	negative,squared,cross,mark	10	1
 ❏	LOWER RIGHT DROP-SHADOWED WHITE SQUARE	lower,right,drop,shadowed,white,square	10	0
 ❐	UPPER RIGHT DROP-SHADOWED WHITE SQUARE	upper,right,drop,shadowed,white,square	10	0
 ❑	LOWER RIGHT SHADOWED WHITE SQUARE	lower,right,shadowed,white,square	10	0
 ❒	UPPER RIGHT SHADOWED WHITE SQUARE	upper,right,shadowed,white,square	10	0
-❓	BLACK QUESTION MARK ORNAMENT	black,question,mark,ornament	10	0
-❔	WHITE QUESTION MARK ORNAMENT	white,question,mark,ornament	10	0
-❕	WHITE EXCLAMATION MARK ORNAMENT	white,exclamation,mark,ornament	10	0
+❓	BLACK QUESTION MARK ORNAMENT	black,question,mark,ornament	10	1
+❔	WHITE QUESTION MARK ORNAMENT	white,question,mark,ornament	10	1
+❕	WHITE EXCLAMATION MARK ORNAMENT	white,exclamation,mark,ornament	10	1
 ❖	BLACK DIAMOND MINUS WHITE X	black,diamond,minus,white,x	10	0
-❗	HEAVY EXCLAMATION MARK SYMBOL	heavy,exclamation,mark,symbol	10	0
+❗	HEAVY EXCLAMATION MARK SYMBOL	heavy,exclamation,mark,symbol	10	1
 ❘	LIGHT VERTICAL BAR	light,vertical,bar	10	0
 ❙	MEDIUM VERTICAL BAR	medium,vertical,bar	10	0
 ❚	HEAVY VERTICAL BAR	heavy,vertical,bar	10	0
@@ -1208,8 +1208,8 @@
 ❠	HEAVY LOW DOUBLE COMMA QUOTATION MARK ORNAMENT	heavy,low,double,comma,quotation,mark,ornament	10	0
 ❡	CURVED STEM PARAGRAPH SIGN ORNAMENT	curved,stem,paragraph,sign,ornament	10	0
 ❢	HEAVY EXCLAMATION MARK ORNAMENT	heavy,exclamation,mark,ornament	10	0
-❣	HEAVY HEART EXCLAMATION MARK ORNAMENT	heavy,heart,exclamation,mark,ornament	10	0
-❤	HEAVY BLACK HEART	heavy,black,heart	10	0
+❣	HEAVY HEART EXCLAMATION MARK ORNAMENT	heavy,heart,exclamation,mark,ornament	10	1
+❤	HEAVY BLACK HEART	heavy,black,heart	10	1
 ❥	ROTATED HEAVY BLACK HEART BULLET	rotated,heavy,black,heart,bullet	10	0
 ❦	FLORAL HEART	floral,heart	10	0
 ❧	ROTATED FLORAL HEART BULLET	rotated,floral,heart,bullet	10	0
@@ -1258,9 +1258,9 @@
 ➒	DINGBAT NEGATIVE CIRCLED SANS-SERIF DIGIT NINE	dingbat,negative,circled,sans,serif,digit,nine	10	0
 ➓	DINGBAT NEGATIVE CIRCLED SANS-SERIF NUMBER TEN	dingbat,negative,circled,sans,serif,number,ten	10	0
 ➔	HEAVY WIDE-HEADED RIGHTWARDS ARROW	heavy,wide,headed,rightwards,arrow	10	0
-➕	HEAVY PLUS SIGN	heavy,plus,sign	10	0
-➖	HEAVY MINUS SIGN	heavy,minus,sign	10	0
-➗	HEAVY DIVISION SIGN	heavy,division,sign	10	0
+➕	HEAVY PLUS SIGN	heavy,plus,sign	10	1
+➖	HEAVY MINUS SIGN	heavy,minus,sign	10	1
+➗	HEAVY DIVISION SIGN	heavy,division,sign	10	1
 ➘	HEAVY SOUTH EAST ARROW	heavy,south,east,arrow	10	0
 ➙	HEAVY RIGHTWARDS ARROW	heavy,rightwards,arrow	10	0
 ➚	HEAVY NORTH EAST ARROW	heavy,north,east,arrow	10	0
@@ -1270,7 +1270,7 @@
 ➞	HEAVY TRIANGLE-HEADED RIGHTWARDS ARROW	heavy,triangle,headed,rightwards,arrow	10	0
 ➟	DASHED TRIANGLE-HEADED RIGHTWARDS ARROW	dashed,triangle,headed,rightwards,arrow	10	0
 ➠	HEAVY DASHED TRIANGLE-HEADED RIGHTWARDS ARROW	heavy,dashed,triangle,headed,rightwards,arrow	10	0
-➡	BLACK RIGHTWARDS ARROW	black,rightwards,arrow	10	0
+➡	BLACK RIGHTWARDS ARROW	black,rightwards,arrow	10	1
 ➢	THREE-D TOP-LIGHTED RIGHTWARDS ARROWHEAD	three,d,top,lighted,rightwards,arrowhead	10	0
 ➣	THREE-D BOTTOM-LIGHTED RIGHTWARDS ARROWHEAD	three,d,bottom,lighted,rightwards,arrowhead	10	0
 ➤	BLACK RIGHTWARDS ARROWHEAD	black,rightwards,arrowhead	10	0
@@ -1285,7 +1285,7 @@
 ➭	HEAVY LOWER RIGHT-SHADOWED WHITE RIGHTWARDS ARROW	heavy,lower,right,shadowed,white,rightwards,arrow	10	0
 ➮	HEAVY UPPER RIGHT-SHADOWED WHITE RIGHTWARDS ARROW	heavy,upper,right,shadowed,white,rightwards,arrow	10	0
 ➯	NOTCHED LOWER RIGHT-SHADOWED WHITE RIGHTWARDS ARROW	notched,lower,right,shadowed,white,rightwards,arrow	10	0
-➰	CURLY LOOP	curly,loop	10	0
+➰	CURLY LOOP	curly,loop	10	1
 ➱	NOTCHED UPPER RIGHT-SHADOWED WHITE RIGHTWARDS ARROW	notched,upper,right,shadowed,white,rightwards,arrow	10	0
 ➲	CIRCLED HEAVY WHITE RIGHTWARDS ARROW	circled,heavy,white,rightwards,arrow	10	0
 ➳	WHITE-FEATHERED RIGHTWARDS ARROW	white,feathered,rightwards,arrow	10	0
@@ -1300,7 +1300,7 @@
 ➼	WEDGE-TAILED RIGHTWARDS ARROW	wedge,tailed,rightwards,arrow	10	0
 ➽	HEAVY WEDGE-TAILED RIGHTWARDS ARROW	heavy,wedge,tailed,rightwards,arrow	10	0
 ➾	OPEN-OUTLINED RIGHTWARDS ARROW	open,outlined,rightwards,arrow	10	0
-➿	DOUBLE CURLY LOOP	double,curly,loop	10	0
+➿	DOUBLE CURLY LOOP	double,curly,loop	10	1
 ⤀	RIGHTWARDS TWO-HEADED ARROW WITH VERTICAL STROKE	rightwards,two,headed,arrow,vertical,stroke	11	0
 ⤁	RIGHTWARDS TWO-HEADED ARROW WITH DOUBLE VERTICAL STROKE	rightwards,two,headed,arrow,double,vertical,stroke	11	0
 ⤂	LEFTWARDS DOUBLE ARROW WITH VERTICAL STROKE	leftwards,double,arrow,vertical,stroke	11	0
@@ -1353,8 +1353,8 @@
 ⤱	NORTH EAST ARROW CROSSING NORTH WEST ARROW	north,east,arrow,crossing,west	11	0
 ⤲	NORTH WEST ARROW CROSSING NORTH EAST ARROW	north,west,arrow,crossing,east	11	0
 ⤳	WAVE ARROW POINTING DIRECTLY RIGHT	wave,arrow,pointing,directly,right	11	0
-⤴	ARROW POINTING RIGHTWARDS THEN CURVING UPWARDS	arrow,pointing,rightwards,then,curving,upwards	11	0
-⤵	ARROW POINTING RIGHTWARDS THEN CURVING DOWNWARDS	arrow,pointing,rightwards,then,curving,downwards	11	0
+⤴	ARROW POINTING RIGHTWARDS THEN CURVING UPWARDS	arrow,pointing,rightwards,then,curving,upwards	11	1
+⤵	ARROW POINTING RIGHTWARDS THEN CURVING DOWNWARDS	arrow,pointing,rightwards,then,curving,downwards	11	1
 ⤶	ARROW POINTING DOWNWARDS THEN CURVING LEFTWARDS	arrow,pointing,downwards,then,curving,leftwards	11	0
 ⤷	ARROW POINTING DOWNWARDS THEN CURVING RIGHTWARDS	arrow,pointing,downwards,then,curving,rightwards	11	0
 ⤸	RIGHT-SIDE ARC CLOCKWISE ARROW	right,side,arc,clockwise,arrow	11	0
@@ -1434,9 +1434,9 @@
 ⬂	SOUTH EAST WHITE ARROW	south,east,white,arrow	12	0
 ⬃	SOUTH WEST WHITE ARROW	south,west,white,arrow	12	0
 ⬄	LEFT RIGHT WHITE ARROW	left,right,white,arrow	12	0
-⬅	LEFTWARDS BLACK ARROW	leftwards,black,arrow	12	0
-⬆	UPWARDS BLACK ARROW	upwards,black,arrow	12	0
-⬇	DOWNWARDS BLACK ARROW	downwards,black,arrow	12	0
+⬅	LEFTWARDS BLACK ARROW	leftwards,black,arrow	12	1
+⬆	UPWARDS BLACK ARROW	upwards,black,arrow	12	1
+⬇	DOWNWARDS BLACK ARROW	downwards,black,arrow	12	1
 ⬈	NORTH EAST BLACK ARROW	north,east,black,arrow	12	0
 ⬉	NORTH WEST BLACK ARROW	north,west,black,arrow	12	0
 ⬊	SOUTH EAST BLACK ARROW	south,east,black,arrow	12	0
@@ -1456,8 +1456,8 @@
 ⬘	DIAMOND WITH TOP HALF BLACK	diamond,top,half,black	12	0
 ⬙	DIAMOND WITH BOTTOM HALF BLACK	diamond,bottom,half,black	12	0
 ⬚	DOTTED SQUARE	dotted,square	12	0
-⬛	BLACK LARGE SQUARE	black,large,square	12	0
-⬜	WHITE LARGE SQUARE	white,large,square	12	0
+⬛	BLACK LARGE SQUARE	black,large,square	12	1
+⬜	WHITE LARGE SQUARE	white,large,square	12	1
 ⬝	BLACK VERY SMALL SQUARE	black,very,small,square	12	0
 ⬞	WHITE VERY SMALL SQUARE	white,very,small,square	12	0
 ⬟	BLACK PENTAGON	black,pentagon	12	0
@@ -1509,12 +1509,12 @@
 ⭍	DOWNWARDS TRIANGLE-HEADED ZIGZAG ARROW	downwards,triangle,headed,zigzag,arrow	12	0
 ⭎	SHORT SLANTED NORTH ARROW	short,slanted,north,arrow	12	0
 ⭏	SHORT BACKSLANTED SOUTH ARROW	short,backslanted,south,arrow	12	0
-⭐	WHITE MEDIUM STAR	white,medium,star	12	0
+⭐	WHITE MEDIUM STAR	white,medium,star	12	1
 ⭑	BLACK SMALL STAR	black,small,star	12	0
 ⭒	WHITE SMALL STAR	white,small,star	12	0
 ⭓	BLACK RIGHT-POINTING PENTAGON	black,right,pointing,pentagon	12	0
 ⭔	WHITE RIGHT-POINTING PENTAGON	white,right,pointing,pentagon	12	0
-⭕	HEAVY LARGE CIRCLE	heavy,large,circle	12	0
+⭕	HEAVY LARGE CIRCLE	heavy,large,circle	12	1
 ⭖	HEAVY OVAL WITH OVAL INSIDE	heavy,oval,inside	12	0
 ⭗	HEAVY CIRCLE WITH CIRCLE INSIDE	heavy,circle,inside	12	0
 ⭘	HEAVY CIRCLE	heavy,circle	12	0
@@ -1833,9 +1833,9 @@
 ㊔	CIRCLED IDEOGRAPH NAME	circled,ideograph,name	13	0
 ㊕	CIRCLED IDEOGRAPH SPECIAL	circled,ideograph,special	13	0
 ㊖	CIRCLED IDEOGRAPH FINANCIAL	circled,ideograph,financial	13	0
-㊗	CIRCLED IDEOGRAPH CONGRATULATION	circled,ideograph,congratulation	13	0
+㊗	CIRCLED IDEOGRAPH CONGRATULATION	circled,ideograph,congratulation	13	1
 ㊘	CIRCLED IDEOGRAPH LABOR	circled,ideograph,labor	13	0
-㊙	CIRCLED IDEOGRAPH SECRET	circled,ideograph,secret	13	0
+㊙	CIRCLED IDEOGRAPH SECRET	circled,ideograph,secret	13	1
 ㊚	CIRCLED IDEOGRAPH MALE	circled,ideograph,male	13	0
 ㊛	CIRCLED IDEOGRAPH FEMALE	circled,ideograph,female	13	0
 ㊜	CIRCLED IDEOGRAPH SUITABLE	circled,ideograph,suitable	13	0
@@ -1972,8 +1972,8 @@
 🌟	GLOWING STAR	glowing,star	14	1
 🌠	SHOOTING STAR	shooting,star	14	1
 🌡	THERMOMETER	thermometer	14	1
-🌢	BLACK DROPLET	black,droplet	14	1
-🌣	WHITE SUN	white,sun	14	1
+🌢	BLACK DROPLET	black,droplet	14	0
+🌣	WHITE SUN	white,sun	14	0
 🌤	WHITE SUN WITH SMALL CLOUD	white,sun,small,cloud	14	1
 🌥	WHITE SUN BEHIND CLOUD	white,sun,behind,cloud	14	1
 🌦	WHITE SUN BEHIND CLOUD WITH RAIN	white,sun,behind,cloud,rain	14	1
@@ -2086,16 +2086,16 @@
 🎑	MOON VIEWING CEREMONY	moon,viewing,ceremony	14	1
 🎒	SCHOOL SATCHEL	school,satchel	14	1
 🎓	GRADUATION CAP	graduation,cap	14	1
-🎔	HEART WITH TIP ON THE LEFT	heart,tip,on,left	14	1
-🎕	BOUQUET OF FLOWERS	bouquet,flowers	14	1
+🎔	HEART WITH TIP ON THE LEFT	heart,tip,on,left	14	0
+🎕	BOUQUET OF FLOWERS	bouquet,flowers	14	0
 🎖	MILITARY MEDAL	military,medal	14	1
 🎗	REMINDER RIBBON	reminder,ribbon	14	1
-🎘	MUSICAL KEYBOARD WITH JACKS	musical,keyboard,jacks	14	1
+🎘	MUSICAL KEYBOARD WITH JACKS	musical,keyboard,jacks	14	0
 🎙	STUDIO MICROPHONE	studio,microphone	14	1
 🎚	LEVEL SLIDER	level,slider	14	1
 🎛	CONTROL KNOBS	control,knobs	14	1
-🎜	BEAMED ASCENDING MUSICAL NOTES	beamed,ascending,musical,notes	14	1
-🎝	BEAMED DESCENDING MUSICAL NOTES	beamed,descending,musical,notes	14	1
+🎜	BEAMED ASCENDING MUSICAL NOTES	beamed,ascending,musical,notes	14	0
+🎝	BEAMED DESCENDING MUSICAL NOTES	beamed,descending,musical,notes	14	0
 🎞	FILM FRAMES	film,frames	14	1
 🎟	ADMISSION TICKETS	admission,tickets	14	1
 🎠	CAROUSEL HORSE	carousel,horse	14	1
@@ -2179,21 +2179,16 @@
 🏮	IZAKAYA LANTERN	izakaya,lantern	14	1
 🏯	JAPANESE CASTLE	japanese,castle	14	1
 🏰	EUROPEAN CASTLE	european,castle	14	1
-🏱	WHITE PENNANT	white,pennant	14	1
-🏲	BLACK PENNANT	black,pennant	14	1
+🏱	WHITE PENNANT	white,pennant	14	0
+🏲	BLACK PENNANT	black,pennant	14	0
 🏳	WAVING WHITE FLAG	waving,white,flag	14	1
 🏴	WAVING BLACK FLAG	waving,black,flag	14	1
 🏵	ROSETTE	rosette	14	1
-🏶	BLACK ROSETTE	black,rosette	14	1
+🏶	BLACK ROSETTE	black,rosette	14	0
 🏷	LABEL	label	14	1
 🏸	BADMINTON RACQUET AND SHUTTLECOCK	badminton,racquet,shuttlecock	14	1
 🏹	BOW AND ARROW	bow,arrow	14	1
 🏺	AMPHORA	amphora	14	1
-🏻	EMOJI MODIFIER FITZPATRICK TYPE-1-2	emoji,modifier,fitzpatrick,type,1,2	14	1
-🏼	EMOJI MODIFIER FITZPATRICK TYPE-3	emoji,modifier,fitzpatrick,type,3	14	1
-🏽	EMOJI MODIFIER FITZPATRICK TYPE-4	emoji,modifier,fitzpatrick,type,4	14	1
-🏾	EMOJI MODIFIER FITZPATRICK TYPE-5	emoji,modifier,fitzpatrick,type,5	14	1
-🏿	EMOJI MODIFIER FITZPATRICK TYPE-6	emoji,modifier,fitzpatrick,type,6	14	1
 🐀	RAT	rat	14	1
 🐁	MOUSE	mouse	14	1
 🐂	OX	ox	14	1
@@ -2448,7 +2443,7 @@
 📻	RADIO	radio	14	1
 📼	VIDEOCASSETTE	videocassette	14	1
 📽	FILM PROJECTOR	film,projector	14	1
-📾	PORTABLE STEREO	portable,stereo	14	1
+📾	PORTABLE STEREO	portable,stereo	14	0
 📿	PRAYER BEADS	prayer,beads	14	1
 🔀	TWISTED RIGHTWARDS ARROWS	twisted,rightwards,arrows	14	1
 🔁	CLOCKWISE RIGHTWARDS AND LEFTWARDS OPEN CIRCLE ARROWS	clockwise,rightwards,leftwards,open,circle,arrows	14	1
@@ -2512,24 +2507,24 @@
 🔻	DOWN-POINTING RED TRIANGLE	down,pointing,red,triangle	14	1
 🔼	UP-POINTING SMALL RED TRIANGLE	up,pointing,small,red,triangle	14	1
 🔽	DOWN-POINTING SMALL RED TRIANGLE	down,pointing,small,red,triangle	14	1
-🔾	LOWER RIGHT SHADOWED WHITE CIRCLE	lower,right,shadowed,white,circle	14	1
-🔿	UPPER RIGHT SHADOWED WHITE CIRCLE	upper,right,shadowed,white,circle	14	1
-🕀	CIRCLED CROSS POMMEE	circled,cross,pommee	14	1
-🕁	CROSS POMMEE WITH HALF-CIRCLE BELOW	cross,pommee,half,circle,below	14	1
-🕂	CROSS POMMEE	cross,pommee	14	1
-🕃	NOTCHED LEFT SEMICIRCLE WITH THREE DOTS	notched,left,semicircle,three,dots	14	1
-🕄	NOTCHED RIGHT SEMICIRCLE WITH THREE DOTS	notched,right,semicircle,three,dots	14	1
-🕅	SYMBOL FOR MARKS CHAPTER	symbol,marks,chapter	14	1
-🕆	WHITE LATIN CROSS	white,latin,cross	14	1
-🕇	HEAVY LATIN CROSS	heavy,latin,cross	14	1
-🕈	CELTIC CROSS	celtic,cross	14	1
+🔾	LOWER RIGHT SHADOWED WHITE CIRCLE	lower,right,shadowed,white,circle	14	0
+🔿	UPPER RIGHT SHADOWED WHITE CIRCLE	upper,right,shadowed,white,circle	14	0
+🕀	CIRCLED CROSS POMMEE	circled,cross,pommee	14	0
+🕁	CROSS POMMEE WITH HALF-CIRCLE BELOW	cross,pommee,half,circle,below	14	0
+🕂	CROSS POMMEE	cross,pommee	14	0
+🕃	NOTCHED LEFT SEMICIRCLE WITH THREE DOTS	notched,left,semicircle,three,dots	14	0
+🕄	NOTCHED RIGHT SEMICIRCLE WITH THREE DOTS	notched,right,semicircle,three,dots	14	0
+🕅	SYMBOL FOR MARKS CHAPTER	symbol,marks,chapter	14	0
+🕆	WHITE LATIN CROSS	white,latin,cross	14	0
+🕇	HEAVY LATIN CROSS	heavy,latin,cross	14	0
+🕈	CELTIC CROSS	celtic,cross	14	0
 🕉	OM SYMBOL	om,symbol	14	1
 🕊	DOVE OF PEACE	dove,peace	14	1
 🕋	KAABA	kaaba	14	1
 🕌	MOSQUE	mosque	14	1
 🕍	SYNAGOGUE	synagogue	14	1
 🕎	MENORAH WITH NINE BRANCHES	menorah,nine,branches	14	1
-🕏	BOWL OF HYGIEIA	bowl,hygieia	14	1
+🕏	BOWL OF HYGIEIA	bowl,hygieia	14	0
 🕐	CLOCK FACE ONE OCLOCK	clock,face,one,oclock	14	1
 🕑	CLOCK FACE TWO OCLOCK	clock,face,two,oclock	14	1
 🕒	CLOCK FACE THREE OCLOCK	clock,face,three,oclock	14	1
@@ -2554,17 +2549,17 @@
 🕥	CLOCK FACE TEN-THIRTY	clock,face,ten,thirty	14	1
 🕦	CLOCK FACE ELEVEN-THIRTY	clock,face,eleven,thirty	14	1
 🕧	CLOCK FACE TWELVE-THIRTY	clock,face,twelve,thirty	14	1
-🕨	RIGHT SPEAKER	right,speaker	14	1
-🕩	RIGHT SPEAKER WITH ONE SOUND WAVE	right,speaker,one,sound,wave	14	1
-🕪	RIGHT SPEAKER WITH THREE SOUND WAVES	right,speaker,three,sound,waves	14	1
-🕫	BULLHORN	bullhorn	14	1
-🕬	BULLHORN WITH SOUND WAVES	bullhorn,sound,waves	14	1
-🕭	RINGING BELL	ringing,bell	14	1
-🕮	BOOK	book	14	1
+🕨	RIGHT SPEAKER	right,speaker	14	0
+🕩	RIGHT SPEAKER WITH ONE SOUND WAVE	right,speaker,one,sound,wave	14	0
+🕪	RIGHT SPEAKER WITH THREE SOUND WAVES	right,speaker,three,sound,waves	14	0
+🕫	BULLHORN	bullhorn	14	0
+🕬	BULLHORN WITH SOUND WAVES	bullhorn,sound,waves	14	0
+🕭	RINGING BELL	ringing,bell	14	0
+🕮	BOOK	book	14	0
 🕯	CANDLE	candle	14	1
 🕰	MANTELPIECE CLOCK	mantelpiece,clock	14	1
-🕱	BLACK SKULL AND CROSSBONES	black,skull,crossbones	14	1
-🕲	NO PIRACY	no,piracy	14	1
+🕱	BLACK SKULL AND CROSSBONES	black,skull,crossbones	14	0
+🕲	NO PIRACY	no,piracy	14	0
 🕳	HOLE	hole	14	1
 🕴	MAN IN BUSINESS SUIT LEVITATING	man,in,business,suit,levitating	14	1
 🕵	SLEUTH OR SPY	sleuth,spy	14	1
@@ -2573,133 +2568,133 @@
 🕸	SPIDER WEB	spider,web	14	1
 🕹	JOYSTICK	joystick	14	1
 🕺	MAN DANCING	man,dancing	14	1
-🕻	LEFT HAND TELEPHONE RECEIVER	left,hand,telephone,receiver	14	1
-🕼	TELEPHONE RECEIVER WITH PAGE	telephone,receiver,page	14	1
-🕽	RIGHT HAND TELEPHONE RECEIVER	right,hand,telephone,receiver	14	1
-🕾	WHITE TOUCHTONE TELEPHONE	white,touchtone,telephone	14	1
-🕿	BLACK TOUCHTONE TELEPHONE	black,touchtone,telephone	14	1
-🖀	TELEPHONE ON TOP OF MODEM	telephone,on,top,modem	14	1
-🖁	CLAMSHELL MOBILE PHONE	clamshell,mobile,phone	14	1
-🖂	BACK OF ENVELOPE	back,envelope	14	1
-🖃	STAMPED ENVELOPE	stamped,envelope	14	1
-🖄	ENVELOPE WITH LIGHTNING	envelope,lightning	14	1
-🖅	FLYING ENVELOPE	flying,envelope	14	1
-🖆	PEN OVER STAMPED ENVELOPE	pen,over,stamped,envelope	14	1
+🕻	LEFT HAND TELEPHONE RECEIVER	left,hand,telephone,receiver	14	0
+🕼	TELEPHONE RECEIVER WITH PAGE	telephone,receiver,page	14	0
+🕽	RIGHT HAND TELEPHONE RECEIVER	right,hand,telephone,receiver	14	0
+🕾	WHITE TOUCHTONE TELEPHONE	white,touchtone,telephone	14	0
+🕿	BLACK TOUCHTONE TELEPHONE	black,touchtone,telephone	14	0
+🖀	TELEPHONE ON TOP OF MODEM	telephone,on,top,modem	14	0
+🖁	CLAMSHELL MOBILE PHONE	clamshell,mobile,phone	14	0
+🖂	BACK OF ENVELOPE	back,envelope	14	0
+🖃	STAMPED ENVELOPE	stamped,envelope	14	0
+🖄	ENVELOPE WITH LIGHTNING	envelope,lightning	14	0
+🖅	FLYING ENVELOPE	flying,envelope	14	0
+🖆	PEN OVER STAMPED ENVELOPE	pen,over,stamped,envelope	14	0
 🖇	LINKED PAPERCLIPS	linked,paperclips	14	1
-🖈	BLACK PUSHPIN	black,pushpin	14	1
-🖉	LOWER LEFT PENCIL	lower,left,pencil	14	1
+🖈	BLACK PUSHPIN	black,pushpin	14	0
+🖉	LOWER LEFT PENCIL	lower,left,pencil	14	0
 🖊	LOWER LEFT BALLPOINT PEN	lower,left,ballpoint,pen	14	1
 🖋	LOWER LEFT FOUNTAIN PEN	lower,left,fountain,pen	14	1
 🖌	LOWER LEFT PAINTBRUSH	lower,left,paintbrush	14	1
 🖍	LOWER LEFT CRAYON	lower,left,crayon	14	1
-🖎	LEFT WRITING HAND	left,writing,hand	14	1
-🖏	TURNED OK HAND SIGN	turned,ok,hand,sign	14	1
+🖎	LEFT WRITING HAND	left,writing,hand	14	0
+🖏	TURNED OK HAND SIGN	turned,ok,hand,sign	14	0
 🖐	RAISED HAND WITH FINGERS SPLAYED	raised,hand,fingers,splayed	14	1
-🖑	REVERSED RAISED HAND WITH FINGERS SPLAYED	reversed,raised,hand,fingers,splayed	14	1
-🖒	REVERSED THUMBS UP SIGN	reversed,thumbs,up,sign	14	1
-🖓	REVERSED THUMBS DOWN SIGN	reversed,thumbs,down,sign	14	1
-🖔	REVERSED VICTORY HAND	reversed,victory,hand	14	1
+🖑	REVERSED RAISED HAND WITH FINGERS SPLAYED	reversed,raised,hand,fingers,splayed	14	0
+🖒	REVERSED THUMBS UP SIGN	reversed,thumbs,up,sign	14	0
+🖓	REVERSED THUMBS DOWN SIGN	reversed,thumbs,down,sign	14	0
+🖔	REVERSED VICTORY HAND	reversed,victory,hand	14	0
 🖕	REVERSED HAND WITH MIDDLE FINGER EXTENDED	reversed,hand,middle,finger,extended	14	1
 🖖	RAISED HAND WITH PART BETWEEN MIDDLE AND RING FINGERS	raised,hand,part,between,middle,ring,fingers	14	1
-🖗	WHITE DOWN POINTING LEFT HAND INDEX	white,down,pointing,left,hand,index	14	1
-🖘	SIDEWAYS WHITE LEFT POINTING INDEX	sideways,white,left,pointing,index	14	1
-🖙	SIDEWAYS WHITE RIGHT POINTING INDEX	sideways,white,right,pointing,index	14	1
-🖚	SIDEWAYS BLACK LEFT POINTING INDEX	sideways,black,left,pointing,index	14	1
-🖛	SIDEWAYS BLACK RIGHT POINTING INDEX	sideways,black,right,pointing,index	14	1
-🖜	BLACK LEFT POINTING BACKHAND INDEX	black,left,pointing,backhand,index	14	1
-🖝	BLACK RIGHT POINTING BACKHAND INDEX	black,right,pointing,backhand,index	14	1
-🖞	SIDEWAYS WHITE UP POINTING INDEX	sideways,white,up,pointing,index	14	1
-🖟	SIDEWAYS WHITE DOWN POINTING INDEX	sideways,white,down,pointing,index	14	1
-🖠	SIDEWAYS BLACK UP POINTING INDEX	sideways,black,up,pointing,index	14	1
-🖡	SIDEWAYS BLACK DOWN POINTING INDEX	sideways,black,down,pointing,index	14	1
-🖢	BLACK UP POINTING BACKHAND INDEX	black,up,pointing,backhand,index	14	1
-🖣	BLACK DOWN POINTING BACKHAND INDEX	black,down,pointing,backhand,index	14	1
+🖗	WHITE DOWN POINTING LEFT HAND INDEX	white,down,pointing,left,hand,index	14	0
+🖘	SIDEWAYS WHITE LEFT POINTING INDEX	sideways,white,left,pointing,index	14	0
+🖙	SIDEWAYS WHITE RIGHT POINTING INDEX	sideways,white,right,pointing,index	14	0
+🖚	SIDEWAYS BLACK LEFT POINTING INDEX	sideways,black,left,pointing,index	14	0
+🖛	SIDEWAYS BLACK RIGHT POINTING INDEX	sideways,black,right,pointing,index	14	0
+🖜	BLACK LEFT POINTING BACKHAND INDEX	black,left,pointing,backhand,index	14	0
+🖝	BLACK RIGHT POINTING BACKHAND INDEX	black,right,pointing,backhand,index	14	0
+🖞	SIDEWAYS WHITE UP POINTING INDEX	sideways,white,up,pointing,index	14	0
+🖟	SIDEWAYS WHITE DOWN POINTING INDEX	sideways,white,down,pointing,index	14	0
+🖠	SIDEWAYS BLACK UP POINTING INDEX	sideways,black,up,pointing,index	14	0
+🖡	SIDEWAYS BLACK DOWN POINTING INDEX	sideways,black,down,pointing,index	14	0
+🖢	BLACK UP POINTING BACKHAND INDEX	black,up,pointing,backhand,index	14	0
+🖣	BLACK DOWN POINTING BACKHAND INDEX	black,down,pointing,backhand,index	14	0
 🖤	BLACK HEART	black,heart	14	1
 🖥	DESKTOP COMPUTER	desktop,computer	14	1
-🖦	KEYBOARD AND MOUSE	keyboard,mouse	14	1
-🖧	THREE NETWORKED COMPUTERS	three,networked,computers	14	1
+🖦	KEYBOARD AND MOUSE	keyboard,mouse	14	0
+🖧	THREE NETWORKED COMPUTERS	three,networked,computers	14	0
 🖨	PRINTER	printer	14	1
-🖩	POCKET CALCULATOR	pocket,calculator	14	1
-🖪	BLACK HARD SHELL FLOPPY DISK	black,hard,shell,floppy,disk	14	1
-🖫	WHITE HARD SHELL FLOPPY DISK	white,hard,shell,floppy,disk	14	1
-🖬	SOFT SHELL FLOPPY DISK	soft,shell,floppy,disk	14	1
-🖭	TAPE CARTRIDGE	tape,cartridge	14	1
-🖮	WIRED KEYBOARD	wired,keyboard	14	1
-🖯	ONE BUTTON MOUSE	one,button,mouse	14	1
-🖰	TWO BUTTON MOUSE	two,button,mouse	14	1
+🖩	POCKET CALCULATOR	pocket,calculator	14	0
+🖪	BLACK HARD SHELL FLOPPY DISK	black,hard,shell,floppy,disk	14	0
+🖫	WHITE HARD SHELL FLOPPY DISK	white,hard,shell,floppy,disk	14	0
+🖬	SOFT SHELL FLOPPY DISK	soft,shell,floppy,disk	14	0
+🖭	TAPE CARTRIDGE	tape,cartridge	14	0
+🖮	WIRED KEYBOARD	wired,keyboard	14	0
+🖯	ONE BUTTON MOUSE	one,button,mouse	14	0
+🖰	TWO BUTTON MOUSE	two,button,mouse	14	0
 🖱	THREE BUTTON MOUSE	three,button,mouse	14	1
 🖲	TRACKBALL	trackball	14	1
-🖳	OLD PERSONAL COMPUTER	old,personal,computer	14	1
-🖴	HARD DISK	hard,disk	14	1
-🖵	SCREEN	screen	14	1
-🖶	PRINTER ICON	printer,icon	14	1
-🖷	FAX ICON	fax,icon	14	1
-🖸	OPTICAL DISC ICON	optical,disc,icon	14	1
-🖹	DOCUMENT WITH TEXT	document,text	14	1
-🖺	DOCUMENT WITH TEXT AND PICTURE	document,text,picture	14	1
-🖻	DOCUMENT WITH PICTURE	document,picture	14	1
+🖳	OLD PERSONAL COMPUTER	old,personal,computer	14	0
+🖴	HARD DISK	hard,disk	14	0
+🖵	SCREEN	screen	14	0
+🖶	PRINTER ICON	printer,icon	14	0
+🖷	FAX ICON	fax,icon	14	0
+🖸	OPTICAL DISC ICON	optical,disc,icon	14	0
+🖹	DOCUMENT WITH TEXT	document,text	14	0
+🖺	DOCUMENT WITH TEXT AND PICTURE	document,text,picture	14	0
+🖻	DOCUMENT WITH PICTURE	document,picture	14	0
 🖼	FRAME WITH PICTURE	frame,picture	14	1
-🖽	FRAME WITH TILES	frame,tiles	14	1
-🖾	FRAME WITH AN X	frame,x	14	1
-🖿	BLACK FOLDER	black,folder	14	1
-🗀	FOLDER	folder	14	1
-🗁	OPEN FOLDER	open,folder	14	1
+🖽	FRAME WITH TILES	frame,tiles	14	0
+🖾	FRAME WITH AN X	frame,x	14	0
+🖿	BLACK FOLDER	black,folder	14	0
+🗀	FOLDER	folder	14	0
+🗁	OPEN FOLDER	open,folder	14	0
 🗂	CARD INDEX DIVIDERS	card,index,dividers	14	1
 🗃	CARD FILE BOX	card,file,box	14	1
 🗄	FILE CABINET	file,cabinet	14	1
-🗅	EMPTY NOTE	empty,note	14	1
-🗆	EMPTY NOTE PAGE	empty,note,page	14	1
-🗇	EMPTY NOTE PAD	empty,note,pad	14	1
-🗈	NOTE	note	14	1
-🗉	NOTE PAGE	note,page	14	1
-🗊	NOTE PAD	note,pad	14	1
-🗋	EMPTY DOCUMENT	empty,document	14	1
-🗌	EMPTY PAGE	empty,page	14	1
-🗍	EMPTY PAGES	empty,pages	14	1
-🗎	DOCUMENT	document	14	1
-🗏	PAGE	page	14	1
-🗐	PAGES	pages	14	1
+🗅	EMPTY NOTE	empty,note	14	0
+🗆	EMPTY NOTE PAGE	empty,note,page	14	0
+🗇	EMPTY NOTE PAD	empty,note,pad	14	0
+🗈	NOTE	note	14	0
+🗉	NOTE PAGE	note,page	14	0
+🗊	NOTE PAD	note,pad	14	0
+🗋	EMPTY DOCUMENT	empty,document	14	0
+🗌	EMPTY PAGE	empty,page	14	0
+🗍	EMPTY PAGES	empty,pages	14	0
+🗎	DOCUMENT	document	14	0
+🗏	PAGE	page	14	0
+🗐	PAGES	pages	14	0
 🗑	WASTEBASKET	wastebasket	14	1
 🗒	SPIRAL NOTE PAD	spiral,note,pad	14	1
 🗓	SPIRAL CALENDAR PAD	spiral,calendar,pad	14	1
-🗔	DESKTOP WINDOW	desktop,window	14	1
-🗕	MINIMIZE	minimize	14	1
-🗖	MAXIMIZE	maximize	14	1
-🗗	OVERLAP	overlap	14	1
-🗘	CLOCKWISE RIGHT AND LEFT SEMICIRCLE ARROWS	clockwise,right,left,semicircle,arrows	14	1
-🗙	CANCELLATION X	cancellation,x	14	1
-🗚	INCREASE FONT SIZE SYMBOL	increase,font,size,symbol	14	1
-🗛	DECREASE FONT SIZE SYMBOL	decrease,font,size,symbol	14	1
+🗔	DESKTOP WINDOW	desktop,window	14	0
+🗕	MINIMIZE	minimize	14	0
+🗖	MAXIMIZE	maximize	14	0
+🗗	OVERLAP	overlap	14	0
+🗘	CLOCKWISE RIGHT AND LEFT SEMICIRCLE ARROWS	clockwise,right,left,semicircle,arrows	14	0
+🗙	CANCELLATION X	cancellation,x	14	0
+🗚	INCREASE FONT SIZE SYMBOL	increase,font,size,symbol	14	0
+🗛	DECREASE FONT SIZE SYMBOL	decrease,font,size,symbol	14	0
 🗜	COMPRESSION	compression	14	1
 🗝	OLD KEY	old,key	14	1
 🗞	ROLLED-UP NEWSPAPER	rolled,up,newspaper	14	1
-🗟	PAGE WITH CIRCLED TEXT	page,circled,text	14	1
-🗠	STOCK CHART	stock,chart	14	1
+🗟	PAGE WITH CIRCLED TEXT	page,circled,text	14	0
+🗠	STOCK CHART	stock,chart	14	0
 🗡	DAGGER KNIFE	dagger,knife	14	1
-🗢	LIPS	lips	14	1
+🗢	LIPS	lips	14	0
 🗣	SPEAKING HEAD IN SILHOUETTE	speaking,head,in,silhouette	14	1
-🗤	THREE RAYS ABOVE	three,rays,above	14	1
-🗥	THREE RAYS BELOW	three,rays,below	14	1
-🗦	THREE RAYS LEFT	three,rays,left	14	1
-🗧	THREE RAYS RIGHT	three,rays,right	14	1
+🗤	THREE RAYS ABOVE	three,rays,above	14	0
+🗥	THREE RAYS BELOW	three,rays,below	14	0
+🗦	THREE RAYS LEFT	three,rays,left	14	0
+🗧	THREE RAYS RIGHT	three,rays,right	14	0
 🗨	LEFT SPEECH BUBBLE	left,speech,bubble	14	1
-🗩	RIGHT SPEECH BUBBLE	right,speech,bubble	14	1
-🗪	TWO SPEECH BUBBLES	two,speech,bubbles	14	1
-🗫	THREE SPEECH BUBBLES	three,speech,bubbles	14	1
-🗬	LEFT THOUGHT BUBBLE	left,thought,bubble	14	1
-🗭	RIGHT THOUGHT BUBBLE	right,thought,bubble	14	1
-🗮	LEFT ANGER BUBBLE	left,anger,bubble	14	1
+🗩	RIGHT SPEECH BUBBLE	right,speech,bubble	14	0
+🗪	TWO SPEECH BUBBLES	two,speech,bubbles	14	0
+🗫	THREE SPEECH BUBBLES	three,speech,bubbles	14	0
+🗬	LEFT THOUGHT BUBBLE	left,thought,bubble	14	0
+🗭	RIGHT THOUGHT BUBBLE	right,thought,bubble	14	0
+🗮	LEFT ANGER BUBBLE	left,anger,bubble	14	0
 🗯	RIGHT ANGER BUBBLE	right,anger,bubble	14	1
-🗰	MOOD BUBBLE	mood,bubble	14	1
-🗱	LIGHTNING MOOD BUBBLE	lightning,mood,bubble	14	1
-🗲	LIGHTNING MOOD	lightning,mood	14	1
+🗰	MOOD BUBBLE	mood,bubble	14	0
+🗱	LIGHTNING MOOD BUBBLE	lightning,mood,bubble	14	0
+🗲	LIGHTNING MOOD	lightning,mood	14	0
 🗳	BALLOT BOX WITH BALLOT	ballot,box	14	1
-🗴	BALLOT SCRIPT X	ballot,script,x	14	1
-🗵	BALLOT BOX WITH SCRIPT X	ballot,box,script,x	14	1
-🗶	BALLOT BOLD SCRIPT X	ballot,bold,script,x	14	1
-🗷	BALLOT BOX WITH BOLD SCRIPT X	ballot,box,bold,script,x	14	1
-🗸	LIGHT CHECK MARK	light,check,mark	14	1
-🗹	BALLOT BOX WITH BOLD CHECK	ballot,box,bold,check	14	1
+🗴	BALLOT SCRIPT X	ballot,script,x	14	0
+🗵	BALLOT BOX WITH SCRIPT X	ballot,box,script,x	14	0
+🗶	BALLOT BOLD SCRIPT X	ballot,bold,script,x	14	0
+🗷	BALLOT BOX WITH BOLD SCRIPT X	ballot,box,bold,script,x	14	0
+🗸	LIGHT CHECK MARK	light,check,mark	14	0
+🗹	BALLOT BOX WITH BOLD CHECK	ballot,box,bold,check	14	0
 🗺	WORLD MAP	world,map	14	1
 🗻	MOUNT FUJI	mount,fuji	14	1
 🗼	TOKYO TOWER	tokyo,tower	14	1
@@ -2776,11 +2771,11 @@
 🛃	CUSTOMS	customs	15	1
 🛄	BAGGAGE CLAIM	baggage,claim	15	1
 🛅	LEFT LUGGAGE	left,luggage	15	1
-🛆	TRIANGLE WITH ROUNDED CORNERS	triangle,rounded,corners	15	1
-🛇	PROHIBITED SIGN	prohibited,sign	15	1
-🛈	CIRCLED INFORMATION SOURCE	circled,information,source	15	1
-🛉	BOYS SYMBOL	boys,symbol	15	1
-🛊	GIRLS SYMBOL	girls,symbol	15	1
+🛆	TRIANGLE WITH ROUNDED CORNERS	triangle,rounded,corners	15	0
+🛇	PROHIBITED SIGN	prohibited,sign	15	0
+🛈	CIRCLED INFORMATION SOURCE	circled,information,source	15	0
+🛉	BOYS SYMBOL	boys,symbol	15	0
+🛊	GIRLS SYMBOL	girls,symbol	15	0
 🛋	COUCH AND LAMP	couch,lamp	15	1
 🛌	SLEEPING ACCOMMODATION	sleeping,accommodation	15	1
 🛍	SHOPPING BAGS	shopping,bags	15	1
@@ -2789,8 +2784,8 @@
 🛐	PLACE OF WORSHIP	place,worship	15	1
 🛑	OCTAGONAL SIGN	octagonal,sign	15	1
 🛒	SHOPPING TROLLEY	shopping,trolley	15	1
-🛓	STUPA	stupa	15	1
-🛔	PAGODA	pagoda	15	1
+🛓	STUPA	stupa	15	0
+🛔	PAGODA	pagoda	15	0
 🛕	HINDU TEMPLE	hindu,temple	15	1
 🛖	HUT	hut	15	1
 🛗	ELEVATOR	elevator	15	1
@@ -2806,16 +2801,16 @@
 🛣	MOTORWAY	motorway	15	1
 🛤	RAILWAY TRACK	railway,track	15	1
 🛥	MOTOR BOAT	motor,boat	15	1
-🛦	UP-POINTING MILITARY AIRPLANE	up,pointing,military,airplane	15	1
-🛧	UP-POINTING AIRPLANE	up,pointing,airplane	15	1
-🛨	UP-POINTING SMALL AIRPLANE	up,pointing,small,airplane	15	1
+🛦	UP-POINTING MILITARY AIRPLANE	up,pointing,military,airplane	15	0
+🛧	UP-POINTING AIRPLANE	up,pointing,airplane	15	0
+🛨	UP-POINTING SMALL AIRPLANE	up,pointing,small,airplane	15	0
 🛩	SMALL AIRPLANE	small,airplane	15	1
-🛪	NORTHEAST-POINTING AIRPLANE	northeast,pointing,airplane	15	1
+🛪	NORTHEAST-POINTING AIRPLANE	northeast,pointing,airplane	15	0
 🛫	AIRPLANE DEPARTURE	airplane,departure	15	1
 🛬	AIRPLANE ARRIVING	airplane,arriving	15	1
 🛰	SATELLITE	satellite	15	1
-🛱	ONCOMING FIRE ENGINE	oncoming,fire,engine	15	1
-🛲	DIESEL LOCOMOTIVE	diesel,locomotive	15	1
+🛱	ONCOMING FIRE ENGINE	oncoming,fire,engine	15	0
+🛲	DIESEL LOCOMOTIVE	diesel,locomotive	15	0
 🛳	PASSENGER SHIP	passenger,ship	15	1
 🛴	SCOOTER	scooter	15	1
 🛵	MOTOR SCOOTER	motor,scooter	15	1
@@ -2826,98 +2821,98 @@
 🛺	AUTO RICKSHAW	auto,rickshaw	15	1
 🛻	PICKUP TRUCK	pickup,truck	15	1
 🛼	ROLLER SKATE	roller,skate	15	1
-🞀	BLACK LEFT-POINTING ISOSCELES RIGHT TRIANGLE	black,left,pointing,isosceles,right,triangle	16	1
-🞁	BLACK UP-POINTING ISOSCELES RIGHT TRIANGLE	black,up,pointing,isosceles,right,triangle	16	1
-🞂	BLACK RIGHT-POINTING ISOSCELES RIGHT TRIANGLE	black,right,pointing,isosceles,triangle	16	1
-🞃	BLACK DOWN-POINTING ISOSCELES RIGHT TRIANGLE	black,down,pointing,isosceles,right,triangle	16	1
-🞄	BLACK SLIGHTLY SMALL CIRCLE	black,slightly,small,circle	16	1
-🞅	MEDIUM BOLD WHITE CIRCLE	medium,bold,white,circle	16	1
-🞆	BOLD WHITE CIRCLE	bold,white,circle	16	1
-🞇	HEAVY WHITE CIRCLE	heavy,white,circle	16	1
-🞈	VERY HEAVY WHITE CIRCLE	very,heavy,white,circle	16	1
-🞉	EXTREMELY HEAVY WHITE CIRCLE	extremely,heavy,white,circle	16	1
-🞊	WHITE CIRCLE CONTAINING BLACK SMALL CIRCLE	white,circle,containing,black,small	16	1
-🞋	ROUND TARGET	round,target	16	1
-🞌	BLACK TINY SQUARE	black,tiny,square	16	1
-🞍	BLACK SLIGHTLY SMALL SQUARE	black,slightly,small,square	16	1
-🞎	LIGHT WHITE SQUARE	light,white,square	16	1
-🞏	MEDIUM WHITE SQUARE	medium,white,square	16	1
-🞐	BOLD WHITE SQUARE	bold,white,square	16	1
-🞑	HEAVY WHITE SQUARE	heavy,white,square	16	1
-🞒	VERY HEAVY WHITE SQUARE	very,heavy,white,square	16	1
-🞓	EXTREMELY HEAVY WHITE SQUARE	extremely,heavy,white,square	16	1
-🞔	WHITE SQUARE CONTAINING BLACK VERY SMALL SQUARE	white,square,containing,black,very,small	16	1
-🞕	WHITE SQUARE CONTAINING BLACK MEDIUM SQUARE	white,square,containing,black,medium	16	1
-🞖	SQUARE TARGET	square,target	16	1
-🞗	BLACK TINY DIAMOND	black,tiny,diamond	16	1
-🞘	BLACK VERY SMALL DIAMOND	black,very,small,diamond	16	1
-🞙	BLACK MEDIUM SMALL DIAMOND	black,medium,small,diamond	16	1
-🞚	WHITE DIAMOND CONTAINING BLACK VERY SMALL DIAMOND	white,diamond,containing,black,very,small	16	1
-🞛	WHITE DIAMOND CONTAINING BLACK MEDIUM DIAMOND	white,diamond,containing,black,medium	16	1
-🞜	DIAMOND TARGET	diamond,target	16	1
-🞝	BLACK TINY LOZENGE	black,tiny,lozenge	16	1
-🞞	BLACK VERY SMALL LOZENGE	black,very,small,lozenge	16	1
-🞟	BLACK MEDIUM SMALL LOZENGE	black,medium,small,lozenge	16	1
-🞠	WHITE LOZENGE CONTAINING BLACK SMALL LOZENGE	white,lozenge,containing,black,small	16	1
-🞡	THIN GREEK CROSS	thin,greek,cross	16	1
-🞢	LIGHT GREEK CROSS	light,greek,cross	16	1
-🞣	MEDIUM GREEK CROSS	medium,greek,cross	16	1
-🞤	BOLD GREEK CROSS	bold,greek,cross	16	1
-🞥	VERY BOLD GREEK CROSS	very,bold,greek,cross	16	1
-🞦	VERY HEAVY GREEK CROSS	very,heavy,greek,cross	16	1
-🞧	EXTREMELY HEAVY GREEK CROSS	extremely,heavy,greek,cross	16	1
-🞨	THIN SALTIRE	thin,saltire	16	1
-🞩	LIGHT SALTIRE	light,saltire	16	1
-🞪	MEDIUM SALTIRE	medium,saltire	16	1
-🞫	BOLD SALTIRE	bold,saltire	16	1
-🞬	HEAVY SALTIRE	heavy,saltire	16	1
-🞭	VERY HEAVY SALTIRE	very,heavy,saltire	16	1
-🞮	EXTREMELY HEAVY SALTIRE	extremely,heavy,saltire	16	1
-🞯	LIGHT FIVE SPOKED ASTERISK	light,five,spoked,asterisk	16	1
-🞰	MEDIUM FIVE SPOKED ASTERISK	medium,five,spoked,asterisk	16	1
-🞱	BOLD FIVE SPOKED ASTERISK	bold,five,spoked,asterisk	16	1
-🞲	HEAVY FIVE SPOKED ASTERISK	heavy,five,spoked,asterisk	16	1
-🞳	VERY HEAVY FIVE SPOKED ASTERISK	very,heavy,five,spoked,asterisk	16	1
-🞴	EXTREMELY HEAVY FIVE SPOKED ASTERISK	extremely,heavy,five,spoked,asterisk	16	1
-🞵	LIGHT SIX SPOKED ASTERISK	light,six,spoked,asterisk	16	1
-🞶	MEDIUM SIX SPOKED ASTERISK	medium,six,spoked,asterisk	16	1
-🞷	BOLD SIX SPOKED ASTERISK	bold,six,spoked,asterisk	16	1
-🞸	HEAVY SIX SPOKED ASTERISK	heavy,six,spoked,asterisk	16	1
-🞹	VERY HEAVY SIX SPOKED ASTERISK	very,heavy,six,spoked,asterisk	16	1
-🞺	EXTREMELY HEAVY SIX SPOKED ASTERISK	extremely,heavy,six,spoked,asterisk	16	1
-🞻	LIGHT EIGHT SPOKED ASTERISK	light,eight,spoked,asterisk	16	1
-🞼	MEDIUM EIGHT SPOKED ASTERISK	medium,eight,spoked,asterisk	16	1
-🞽	BOLD EIGHT SPOKED ASTERISK	bold,eight,spoked,asterisk	16	1
-🞾	HEAVY EIGHT SPOKED ASTERISK	heavy,eight,spoked,asterisk	16	1
-🞿	VERY HEAVY EIGHT SPOKED ASTERISK	very,heavy,eight,spoked,asterisk	16	1
-🟀	LIGHT THREE POINTED BLACK STAR	light,three,pointed,black,star	16	1
-🟁	MEDIUM THREE POINTED BLACK STAR	medium,three,pointed,black,star	16	1
-🟂	THREE POINTED BLACK STAR	three,pointed,black,star	16	1
-🟃	MEDIUM THREE POINTED PINWHEEL STAR	medium,three,pointed,pinwheel,star	16	1
-🟄	LIGHT FOUR POINTED BLACK STAR	light,four,pointed,black,star	16	1
-🟅	MEDIUM FOUR POINTED BLACK STAR	medium,four,pointed,black,star	16	1
-🟆	FOUR POINTED BLACK STAR	four,pointed,black,star	16	1
-🟇	MEDIUM FOUR POINTED PINWHEEL STAR	medium,four,pointed,pinwheel,star	16	1
-🟈	REVERSE LIGHT FOUR POINTED PINWHEEL STAR	reverse,light,four,pointed,pinwheel,star	16	1
-🟉	LIGHT FIVE POINTED BLACK STAR	light,five,pointed,black,star	16	1
-🟊	HEAVY FIVE POINTED BLACK STAR	heavy,five,pointed,black,star	16	1
-🟋	MEDIUM SIX POINTED BLACK STAR	medium,six,pointed,black,star	16	1
-🟌	HEAVY SIX POINTED BLACK STAR	heavy,six,pointed,black,star	16	1
-🟍	SIX POINTED PINWHEEL STAR	six,pointed,pinwheel,star	16	1
-🟎	MEDIUM EIGHT POINTED BLACK STAR	medium,eight,pointed,black,star	16	1
-🟏	HEAVY EIGHT POINTED BLACK STAR	heavy,eight,pointed,black,star	16	1
-🟐	VERY HEAVY EIGHT POINTED BLACK STAR	very,heavy,eight,pointed,black,star	16	1
-🟑	HEAVY EIGHT POINTED PINWHEEL STAR	heavy,eight,pointed,pinwheel,star	16	1
-🟒	LIGHT TWELVE POINTED BLACK STAR	light,twelve,pointed,black,star	16	1
-🟓	HEAVY TWELVE POINTED BLACK STAR	heavy,twelve,pointed,black,star	16	1
-🟔	HEAVY TWELVE POINTED PINWHEEL STAR	heavy,twelve,pointed,pinwheel,star	16	1
-🟕	CIRCLED TRIANGLE	circled,triangle	16	1
-🟖	NEGATIVE CIRCLED TRIANGLE	negative,circled,triangle	16	1
-🟗	CIRCLED SQUARE	circled,square	16	1
-🟘	NEGATIVE CIRCLED SQUARE	negative,circled,square	16	1
-🟙	NINE POINTED WHITE STAR	nine,pointed,white,star	16	1
-🟚	BLACK CIRCLE WITH WHITE VERTICAL BAR	black,circle,white,vertical,bar	16	1
-🟛	BULLET IN DOUBLE CIRCLE	bullet,in,double,circle	16	1
+🞀	BLACK LEFT-POINTING ISOSCELES RIGHT TRIANGLE	black,left,pointing,isosceles,right,triangle	16	0
+🞁	BLACK UP-POINTING ISOSCELES RIGHT TRIANGLE	black,up,pointing,isosceles,right,triangle	16	0
+🞂	BLACK RIGHT-POINTING ISOSCELES RIGHT TRIANGLE	black,right,pointing,isosceles,triangle	16	0
+🞃	BLACK DOWN-POINTING ISOSCELES RIGHT TRIANGLE	black,down,pointing,isosceles,right,triangle	16	0
+🞄	BLACK SLIGHTLY SMALL CIRCLE	black,slightly,small,circle	16	0
+🞅	MEDIUM BOLD WHITE CIRCLE	medium,bold,white,circle	16	0
+🞆	BOLD WHITE CIRCLE	bold,white,circle	16	0
+🞇	HEAVY WHITE CIRCLE	heavy,white,circle	16	0
+🞈	VERY HEAVY WHITE CIRCLE	very,heavy,white,circle	16	0
+🞉	EXTREMELY HEAVY WHITE CIRCLE	extremely,heavy,white,circle	16	0
+🞊	WHITE CIRCLE CONTAINING BLACK SMALL CIRCLE	white,circle,containing,black,small	16	0
+🞋	ROUND TARGET	round,target	16	0
+🞌	BLACK TINY SQUARE	black,tiny,square	16	0
+🞍	BLACK SLIGHTLY SMALL SQUARE	black,slightly,small,square	16	0
+🞎	LIGHT WHITE SQUARE	light,white,square	16	0
+🞏	MEDIUM WHITE SQUARE	medium,white,square	16	0
+🞐	BOLD WHITE SQUARE	bold,white,square	16	0
+🞑	HEAVY WHITE SQUARE	heavy,white,square	16	0
+🞒	VERY HEAVY WHITE SQUARE	very,heavy,white,square	16	0
+🞓	EXTREMELY HEAVY WHITE SQUARE	extremely,heavy,white,square	16	0
+🞔	WHITE SQUARE CONTAINING BLACK VERY SMALL SQUARE	white,square,containing,black,very,small	16	0
+🞕	WHITE SQUARE CONTAINING BLACK MEDIUM SQUARE	white,square,containing,black,medium	16	0
+🞖	SQUARE TARGET	square,target	16	0
+🞗	BLACK TINY DIAMOND	black,tiny,diamond	16	0
+🞘	BLACK VERY SMALL DIAMOND	black,very,small,diamond	16	0
+🞙	BLACK MEDIUM SMALL DIAMOND	black,medium,small,diamond	16	0
+🞚	WHITE DIAMOND CONTAINING BLACK VERY SMALL DIAMOND	white,diamond,containing,black,very,small	16	0
+🞛	WHITE DIAMOND CONTAINING BLACK MEDIUM DIAMOND	white,diamond,containing,black,medium	16	0
+🞜	DIAMOND TARGET	diamond,target	16	0
+🞝	BLACK TINY LOZENGE	black,tiny,lozenge	16	0
+🞞	BLACK VERY SMALL LOZENGE	black,very,small,lozenge	16	0
+🞟	BLACK MEDIUM SMALL LOZENGE	black,medium,small,lozenge	16	0
+🞠	WHITE LOZENGE CONTAINING BLACK SMALL LOZENGE	white,lozenge,containing,black,small	16	0
+🞡	THIN GREEK CROSS	thin,greek,cross	16	0
+🞢	LIGHT GREEK CROSS	light,greek,cross	16	0
+🞣	MEDIUM GREEK CROSS	medium,greek,cross	16	0
+🞤	BOLD GREEK CROSS	bold,greek,cross	16	0
+🞥	VERY BOLD GREEK CROSS	very,bold,greek,cross	16	0
+🞦	VERY HEAVY GREEK CROSS	very,heavy,greek,cross	16	0
+🞧	EXTREMELY HEAVY GREEK CROSS	extremely,heavy,greek,cross	16	0
+🞨	THIN SALTIRE	thin,saltire	16	0
+🞩	LIGHT SALTIRE	light,saltire	16	0
+🞪	MEDIUM SALTIRE	medium,saltire	16	0
+🞫	BOLD SALTIRE	bold,saltire	16	0
+🞬	HEAVY SALTIRE	heavy,saltire	16	0
+🞭	VERY HEAVY SALTIRE	very,heavy,saltire	16	0
+🞮	EXTREMELY HEAVY SALTIRE	extremely,heavy,saltire	16	0
+🞯	LIGHT FIVE SPOKED ASTERISK	light,five,spoked,asterisk	16	0
+🞰	MEDIUM FIVE SPOKED ASTERISK	medium,five,spoked,asterisk	16	0
+🞱	BOLD FIVE SPOKED ASTERISK	bold,five,spoked,asterisk	16	0
+🞲	HEAVY FIVE SPOKED ASTERISK	heavy,five,spoked,asterisk	16	0
+🞳	VERY HEAVY FIVE SPOKED ASTERISK	very,heavy,five,spoked,asterisk	16	0
+🞴	EXTREMELY HEAVY FIVE SPOKED ASTERISK	extremely,heavy,five,spoked,asterisk	16	0
+🞵	LIGHT SIX SPOKED ASTERISK	light,six,spoked,asterisk	16	0
+🞶	MEDIUM SIX SPOKED ASTERISK	medium,six,spoked,asterisk	16	0
+🞷	BOLD SIX SPOKED ASTERISK	bold,six,spoked,asterisk	16	0
+🞸	HEAVY SIX SPOKED ASTERISK	heavy,six,spoked,asterisk	16	0
+🞹	VERY HEAVY SIX SPOKED ASTERISK	very,heavy,six,spoked,asterisk	16	0
+🞺	EXTREMELY HEAVY SIX SPOKED ASTERISK	extremely,heavy,six,spoked,asterisk	16	0
+🞻	LIGHT EIGHT SPOKED ASTERISK	light,eight,spoked,asterisk	16	0
+🞼	MEDIUM EIGHT SPOKED ASTERISK	medium,eight,spoked,asterisk	16	0
+🞽	BOLD EIGHT SPOKED ASTERISK	bold,eight,spoked,asterisk	16	0
+🞾	HEAVY EIGHT SPOKED ASTERISK	heavy,eight,spoked,asterisk	16	0
+🞿	VERY HEAVY EIGHT SPOKED ASTERISK	very,heavy,eight,spoked,asterisk	16	0
+🟀	LIGHT THREE POINTED BLACK STAR	light,three,pointed,black,star	16	0
+🟁	MEDIUM THREE POINTED BLACK STAR	medium,three,pointed,black,star	16	0
+🟂	THREE POINTED BLACK STAR	three,pointed,black,star	16	0
+🟃	MEDIUM THREE POINTED PINWHEEL STAR	medium,three,pointed,pinwheel,star	16	0
+🟄	LIGHT FOUR POINTED BLACK STAR	light,four,pointed,black,star	16	0
+🟅	MEDIUM FOUR POINTED BLACK STAR	medium,four,pointed,black,star	16	0
+🟆	FOUR POINTED BLACK STAR	four,pointed,black,star	16	0
+🟇	MEDIUM FOUR POINTED PINWHEEL STAR	medium,four,pointed,pinwheel,star	16	0
+🟈	REVERSE LIGHT FOUR POINTED PINWHEEL STAR	reverse,light,four,pointed,pinwheel,star	16	0
+🟉	LIGHT FIVE POINTED BLACK STAR	light,five,pointed,black,star	16	0
+🟊	HEAVY FIVE POINTED BLACK STAR	heavy,five,pointed,black,star	16	0
+🟋	MEDIUM SIX POINTED BLACK STAR	medium,six,pointed,black,star	16	0
+🟌	HEAVY SIX POINTED BLACK STAR	heavy,six,pointed,black,star	16	0
+🟍	SIX POINTED PINWHEEL STAR	six,pointed,pinwheel,star	16	0
+🟎	MEDIUM EIGHT POINTED BLACK STAR	medium,eight,pointed,black,star	16	0
+🟏	HEAVY EIGHT POINTED BLACK STAR	heavy,eight,pointed,black,star	16	0
+🟐	VERY HEAVY EIGHT POINTED BLACK STAR	very,heavy,eight,pointed,black,star	16	0
+🟑	HEAVY EIGHT POINTED PINWHEEL STAR	heavy,eight,pointed,pinwheel,star	16	0
+🟒	LIGHT TWELVE POINTED BLACK STAR	light,twelve,pointed,black,star	16	0
+🟓	HEAVY TWELVE POINTED BLACK STAR	heavy,twelve,pointed,black,star	16	0
+🟔	HEAVY TWELVE POINTED PINWHEEL STAR	heavy,twelve,pointed,pinwheel,star	16	0
+🟕	CIRCLED TRIANGLE	circled,triangle	16	0
+🟖	NEGATIVE CIRCLED TRIANGLE	negative,circled,triangle	16	0
+🟗	CIRCLED SQUARE	circled,square	16	0
+🟘	NEGATIVE CIRCLED SQUARE	negative,circled,square	16	0
+🟙	NINE POINTED WHITE STAR	nine,pointed,white,star	16	0
+🟚	BLACK CIRCLE WITH WHITE VERTICAL BAR	black,circle,white,vertical,bar	16	0
+🟛	BULLET IN DOUBLE CIRCLE	bullet,in,double,circle	16	0
 🟠	LARGE ORANGE CIRCLE	large,orange,circle	16	1
 🟡	LARGE YELLOW CIRCLE	large,yellow,circle	16	1
 🟢	LARGE GREEN CIRCLE	large,green,circle	16	1
@@ -2931,33 +2926,33 @@
 🟪	LARGE PURPLE SQUARE	large,purple,square	16	1
 🟫	LARGE BROWN SQUARE	large,brown,square	16	1
 🟰	HEAVY EQUALS SIGN	heavy,equals,sign	16	1
-🟱	CIRCLE WITH DOUBLE VERTICAL AND HORIZONTAL LINE	circle,double,vertical,horizontal,line	16	1
-🟲	DOUBLE CIRCLE WITH DOUBLE HORIZONTAL LINE	double,circle,horizontal,line	16	1
-🟳	CIRCLED BOTTOM RIGHT OBLIQUE HALF BLACK CIRCLE	circled,bottom,right,oblique,half,black,circle	16	1
-🟴	LEFT HALF WHITE CIRCLE	left,half,white,circle	16	1
-🟵	RIGHT HALF WHITE CIRCLE	right,half,white,circle	16	1
-🟶	TRANSPARENT CUBE	transparent,cube	16	1
-🟷	WHITE CUBE	white,cube	16	1
-🟸	HORIZONTAL DOUBLE WHITE SMALL SQUARE	horizontal,double,white,small,square	16	1
-🟹	VERTICAL DOUBLE WHITE SMALL SQUARE	vertical,double,white,small,square	16	1
-🟺	WHITE SQUARE WITH BOTTOM HALF BISECTED	white,square,bottom,half,bisected	16	1
-🟻	WHITE SQUARE WITH TOP HALF BISECTED	white,square,top,half,bisected	16	1
-🟼	WHITE SQUARE WITH HORIZONTAL AND VERTICAL BISECTING LINES	white,square,horizontal,vertical,bisecting,lines	16	1
-🟽	LOWER LEFT FLATTENED RIGHT TRIANGLE	lower,left,flattened,right,triangle	16	1
-🟾	LOWER RIGHT FLATTENED RIGHT TRIANGLE	lower,right,flattened,triangle	16	1
-🟿	RHOMBUS	rhombus	16	1
-🤀	CIRCLED CROSS FORMEE WITH FOUR DOTS	circled,cross,formee,four,dots	17	1
-🤁	CIRCLED CROSS FORMEE WITH TWO DOTS	circled,cross,formee,two,dots	17	1
-🤂	CIRCLED CROSS FORMEE	circled,cross,formee	17	1
-🤃	LEFT HALF CIRCLE WITH FOUR DOTS	left,half,circle,four,dots	17	1
-🤄	LEFT HALF CIRCLE WITH THREE DOTS	left,half,circle,three,dots	17	1
-🤅	LEFT HALF CIRCLE WITH TWO DOTS	left,half,circle,two,dots	17	1
-🤆	LEFT HALF CIRCLE WITH DOT	left,half,circle,dot	17	1
-🤇	LEFT HALF CIRCLE	left,half,circle	17	1
-🤈	DOWNWARD FACING HOOK	downward,facing,hook	17	1
-🤉	DOWNWARD FACING NOTCHED HOOK	downward,facing,notched,hook	17	1
-🤊	DOWNWARD FACING HOOK WITH DOT	downward,facing,hook,dot	17	1
-🤋	DOWNWARD FACING NOTCHED HOOK WITH DOT	downward,facing,notched,hook,dot	17	1
+🟱	CIRCLE WITH DOUBLE VERTICAL AND HORIZONTAL LINE	circle,double,vertical,horizontal,line	16	0
+🟲	DOUBLE CIRCLE WITH DOUBLE HORIZONTAL LINE	double,circle,horizontal,line	16	0
+🟳	CIRCLED BOTTOM RIGHT OBLIQUE HALF BLACK CIRCLE	circled,bottom,right,oblique,half,black,circle	16	0
+🟴	LEFT HALF WHITE CIRCLE	left,half,white,circle	16	0
+🟵	RIGHT HALF WHITE CIRCLE	right,half,white,circle	16	0
+🟶	TRANSPARENT CUBE	transparent,cube	16	0
+🟷	WHITE CUBE	white,cube	16	0
+🟸	HORIZONTAL DOUBLE WHITE SMALL SQUARE	horizontal,double,white,small,square	16	0
+🟹	VERTICAL DOUBLE WHITE SMALL SQUARE	vertical,double,white,small,square	16	0
+🟺	WHITE SQUARE WITH BOTTOM HALF BISECTED	white,square,bottom,half,bisected	16	0
+🟻	WHITE SQUARE WITH TOP HALF BISECTED	white,square,top,half,bisected	16	0
+🟼	WHITE SQUARE WITH HORIZONTAL AND VERTICAL BISECTING LINES	white,square,horizontal,vertical,bisecting,lines	16	0
+🟽	LOWER LEFT FLATTENED RIGHT TRIANGLE	lower,left,flattened,right,triangle	16	0
+🟾	LOWER RIGHT FLATTENED RIGHT TRIANGLE	lower,right,flattened,triangle	16	0
+🟿	RHOMBUS	rhombus	16	0
+🤀	CIRCLED CROSS FORMEE WITH FOUR DOTS	circled,cross,formee,four,dots	17	0
+🤁	CIRCLED CROSS FORMEE WITH TWO DOTS	circled,cross,formee,two,dots	17	0
+🤂	CIRCLED CROSS FORMEE	circled,cross,formee	17	0
+🤃	LEFT HALF CIRCLE WITH FOUR DOTS	left,half,circle,four,dots	17	0
+🤄	LEFT HALF CIRCLE WITH THREE DOTS	left,half,circle,three,dots	17	0
+🤅	LEFT HALF CIRCLE WITH TWO DOTS	left,half,circle,two,dots	17	0
+🤆	LEFT HALF CIRCLE WITH DOT	left,half,circle,dot	17	0
+🤇	LEFT HALF CIRCLE	left,half,circle	17	0
+🤈	DOWNWARD FACING HOOK	downward,facing,hook	17	0
+🤉	DOWNWARD FACING NOTCHED HOOK	downward,facing,notched,hook	17	0
+🤊	DOWNWARD FACING HOOK WITH DOT	downward,facing,hook,dot	17	0
+🤋	DOWNWARD FACING NOTCHED HOOK WITH DOT	downward,facing,notched,hook,dot	17	0
 🤌	PINCHED FINGERS	pinched,fingers	17	1
 🤍	WHITE HEART	white,heart	17	1
 🤎	BROWN HEART	brown,heart	17	1
@@ -3005,7 +3000,7 @@
 🤸	PERSON DOING CARTWHEEL	person,doing,cartwheel	17	1
 🤹	JUGGLING	juggling	17	1
 🤺	FENCER	fencer	17	1
-🤻	MODERN PENTATHLON	modern,pentathlon	17	1
+🤻	MODERN PENTATHLON	modern,pentathlon	17	0
 🤼	WRESTLERS	wrestlers	17	1
 🤽	WATER POLO	water,polo	17	1
 🤾	HANDBALL	handball	17	1
@@ -3016,7 +3011,7 @@
 🥃	TUMBLER GLASS	tumbler,glass	17	1
 🥄	SPOON	spoon	17	1
 🥅	GOAL NET	goal,net	17	1
-🥆	RIFLE	rifle	17	1
+🥆	RIFLE	rifle	17	0
 🥇	FIRST PLACE MEDAL	first,place,medal	17	1
 🥈	SECOND PLACE MEDAL	second,place,medal	17	1
 🥉	THIRD PLACE MEDAL	third,place,medal	17	1
@@ -3122,10 +3117,6 @@
 🦭	SEAL	seal	17	1
 🦮	GUIDE DOG	guide,dog	17	1
 🦯	PROBING CANE	probing,cane	17	1
-🦰	EMOJI COMPONENT RED HAIR	emoji,component,red,hair	17	1
-🦱	EMOJI COMPONENT CURLY HAIR	emoji,component,curly,hair	17	1
-🦲	EMOJI COMPONENT BALD	emoji,component,bald	17	1
-🦳	EMOJI COMPONENT WHITE HAIR	emoji,component,white,hair	17	1
 🦴	BONE	bone	17	1
 🦵	LEG	leg	17	1
 🦶	FOOT	foot	17	1
