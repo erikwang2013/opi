@@ -6,6 +6,7 @@ package io.opi.input.engine
 import io.opi.input.ime.Debouncer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assume
 import org.junit.Rule
@@ -86,6 +87,20 @@ class UserWordStoreTest {
 
     private fun target(): File = File(tmp.root, UserWordStore.FILE_NAME)
 
+    /**
+     * 落盘残骸（名字里带 `.tmp` 的东西）。**扫的是 `tmp.root`**，因为 tmp 建在
+     * `file.parentFile`（目标**旁边**），不是目标本身。
+     *
+     * ⚠️ 这里踩过：rename 失败场景里目标的身份是个**目录**（`tmp.root/opi_user_words.json`），
+     * 一度写成扫那个目标目录 —— tmp 根本不在里面，断言静默变成空断言（把它挪对之前，
+     * 删除收尸逻辑的变异**照样全绿**）。
+     *
+     * tmp 名唯一之后，「不存在恰好叫 `FILE_NAME.tmp` 的东西」不再是不变式 —— 真正要守的是
+     * 「不留残骸」。这个判据**更强**：改名后的残留它照样抓得到，而旧判据对它失明。
+     */
+    private fun residue(): List<String> =
+        (tmp.root.listFiles() ?: emptyArray()).map { it.name }.filter { it.contains(".tmp") }
+
     // ---- 启动导入 ----
 
     @Test
@@ -139,6 +154,86 @@ class UserWordStoreTest {
         assertEquals(1, engine.imported.size)
     }
 
+    // ---- 设置页主动导入：与 load 相反，失败必须交回调用方（不许静默） ----
+
+    @Test
+    fun importFromAppliesFileAndPersistsImmediately() {
+        val f = target()
+        val engine = FakeEngine().apply { importResult = 2; export = """{"merged":1}""" }
+
+        val r = store(f, engine).importFrom { """{"version":1,"words":[]}""" }
+
+        assertEquals(UserWordStore.ImportResult.Imported(2), r)
+        assertEquals(listOf("""{"version":1,"words":[]}"""), engine.imported) // 原文交给引擎，Kotlin 不解析
+        // 立即落盘，且**不经过防抖**：FakeDebouncer 从没被 fire 过，走 scheduleSave 的实现
+        // 在这里根本不会产生文件（导入是一次性动作，点完就被杀进程也不该丢）
+        assertEquals("""{"merged":1}""", f.readText())
+    }
+
+    @Test
+    fun rejectedImportReportsReasonAndChangesNothing() {
+        val f = target().apply { writeText("""{"keep":1}""") }
+        val engine = FakeEngine().apply { importResult = -1 } // 引擎拒收：负数
+
+        val r = store(f, engine).importFrom { "{ not json" }
+
+        assertTrue("拒收必须带原因给用户看：$r", r is UserWordStore.ImportResult.Rejected)
+        assertTrue((r as UserWordStore.ImportResult.Rejected).reason.isNotEmpty())
+        assertEquals(0, engine.exportCalls) // 拒收不得落盘
+        assertEquals("""{"keep":1}""", f.readText()) // 既有用户词一字未动
+    }
+
+    @Test
+    fun emptyFileIsRejectedByEngine() {
+        val engine = FakeEngine().apply { importResult = -1 } // 空串 serde 必失败
+
+        val r = store(target(), engine).importFrom { "" }
+
+        assertTrue(r is UserWordStore.ImportResult.Rejected)
+        assertEquals(listOf(""), engine.imported) // 空文件算不算有效也由引擎判，Kotlin 不猜
+    }
+
+    @Test
+    fun emptyWordListIsSuccessWithZero() {
+        val engine = FakeEngine().apply { importResult = 0 } // 合法空表：不是失败
+
+        assertEquals(
+            UserWordStore.ImportResult.Imported(0),
+            store(target(), engine).importFrom { """{"version":1,"words":[]}""" },
+        )
+    }
+
+    @Test
+    fun unreadableFileIsRejectedWithoutTouchingEngine() {
+        val engine = FakeEngine()
+
+        val r = store(target(), engine).importFrom { throw IOException("Permission denied") }
+
+        val reason = (r as UserWordStore.ImportResult.Rejected).reason
+        assertTrue(reason, reason.contains("Permission denied")) // 读失败的原因要带到用户面前
+        assertTrue(reason, reason.startsWith("无法读取所选文件")) // 默认来源：文件选择器
+        assertTrue("读不出来就不该去碰引擎", engine.imported.isEmpty())
+    }
+
+    @Test
+    fun readFailureNamesTheActualSource() {
+        // 设置页有两条导入路径（文件 / 剪贴板）：剪贴板读不出来时说「无法读取所选文件」是骗人的
+        val r = store(target(), FakeEngine()).importFrom("剪贴板") { throw IOException("没有文本") }
+
+        val reason = (r as UserWordStore.ImportResult.Rejected).reason
+        assertTrue(reason, reason.contains("剪贴板"))
+    }
+
+    @Test
+    fun deadLibraryOnImportIsRejectedNotThrown() {
+        // 死 .so 时抛的是 Error（UnsatisfiedLinkError），设置页不接住就是直接崩
+        val engine = FakeEngine().apply { throwOnImport = UnsatisfiedLinkError("so missing") }
+
+        val r = store(target(), engine).importFrom { "{}" } // 不抛
+
+        assertTrue(r is UserWordStore.ImportResult.Rejected)
+    }
+
     // ---- 防抖保存 ----
 
     @Test
@@ -180,8 +275,30 @@ class UserWordStoreTest {
         deb.fire()
 
         assertEquals("new", f.readText())
-        // tmp + rename：写完 tmp 即改名，目录里不该留下半截文件
-        assertFalse(File(tmp.root, UserWordStore.FILE_NAME + ".tmp").exists())
+        // tmp + rename：写完 tmp 即改名，目录里不该留下半截文件（任何名字的都不留）
+        assertEquals(emptyList<String>(), residue())
+    }
+
+    @Test
+    fun twoInstancesNeverShareOneTmpName() {
+        // 本类有**两个实例**（IME 与设置页），各带自己的单线程执行器 —— 「单线程保证两次
+        // 落盘不会交叉写同一个 tmp」只对同一实例成立，固定 tmp 名会让两个实例的
+        // FileOutputStream 交错写同一路径，把备好的用户词写坏。
+        // 用 rename 必失败的目标（目录）逼出失败上报，上报文案里带着 tmp 名。
+        val dir = File(tmp.root, UserWordStore.FILE_NAME).apply { mkdirs() }
+        val reports = mutableListOf<String>()
+        val debA = FakeDebouncer()
+        val debB = FakeDebouncer()
+
+        store(dir, debouncer = debA) { reports += it }.scheduleSave()
+        debA.fire()
+        store(dir, debouncer = debB) { reports += it }.scheduleSave()
+        debB.fire()
+
+        assertEquals(2, reports.size)
+        // 两条文案只可能差 tmp 名（file.name 相同）⇒ 相同即两个实例撞了同一个 tmp
+        assertNotEquals(reports[0], reports[1])
+        assertEquals(emptyList<String>(), residue()) // 收尸也在：唯一名不再被下次保存覆盖
     }
 
     @Test
@@ -267,7 +384,7 @@ class UserWordStoreTest {
         deb.fire() // 不抛
 
         assertEquals("old", f.readText()) // 无关文件不受影响
-        assertFalse(File(blocker, UserWordStore.FILE_NAME + ".tmp").exists())
+        assertEquals(emptyList<String>(), residue()) // 连 tmp 都建不出来，更不该有残骸
     }
 
     @Test
@@ -316,6 +433,9 @@ class UserWordStoreTest {
         assertTrue("目录目标应被保留", dir.isDirectory)
         assertEquals(1, reports.size) // rename 失败不再被吞掉
         assertTrue(reports[0].contains(UserWordStore.FILE_NAME))
+        // 这条路径上 tmp **确实建出来了**（目录可写、只有 rename 失败）—— 唯一名不再被
+        // 下一次保存覆盖，不显式删就是一个长期残骸。判据在目标**旁边**（`residue` 的注释）
+        assertEquals(emptyList<String>(), residue())
     }
 
     @Test

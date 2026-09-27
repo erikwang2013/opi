@@ -6,6 +6,8 @@ package io.opi.input.settings
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,16 +35,18 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.opi.input.engine.UserWordStore
+import io.opi.input.ime.HandlerDebouncer
 import io.opi.input.jni.OpiEngine
 import io.opi.input.pet.OpiPet
 import io.opi.input.pet.petMood
 import kotlinx.coroutines.launch
 import java.io.File
+import java.io.IOException
 
 /**
  * 设置页（对齐 flutter settings_page.dart）：学习开关 / 清除用户词库（确认对话框）/
- * 导出词库 JSON 到剪贴板。JNI 直接调 Rust 静态单例——设置页与 IME 共享引擎与
- * Learner（spec §5），开关即时生效。
+ * 导出词库 JSON 到剪贴板 / 从剪贴板或文件导入词库 JSON。JNI 直接调 Rust 静态单例——
+ * 设置页与 IME 共享引擎与 Learner（spec §5），开关即时生效。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,6 +59,64 @@ fun SettingsScreen() {
 
     fun toast(msg: String) {
         scope.launch { snackbar.showSnackbar(msg) }
+    }
+
+    /**
+     * 设置页侧的落盘实例（第二个 UserWordStore，与 IME 那个同文件同进程 —— 世代号
+     * [UserWordStore.invalidate] 就是为这种双实例场景准备的）。
+     *
+     * 导入必须自己落盘：引擎内存里的词只有 IME 下次选词时才会被写进文件，用户导入完
+     * 不敲字就重启，IME 启动时又拿**旧文件**盖回去 —— 这不是「导入没生效」而是
+     * 「导入生效过又消失」，比直接失败更难查。
+     */
+    val store = remember {
+        UserWordStore(
+            file = File(context.filesDir, UserWordStore.FILE_NAME),
+            importJson = { OpiEngine.importUserWords(it) },
+            exportJson = { OpiEngine.exportUserWords() },
+            debouncer = HandlerDebouncer(),
+            // 写盘跑在 io 线程：这里经 scope.launch 回到主线程再弹（Compose 状态只能在主线程改）
+            onWriteFailure = { toast("导入已生效，但保存失败（重启后会丢）：$it") },
+        )
+    }
+
+    /** 导入结果 → 提示。两条导入路径共用这一份，别让文案各写各的漂移。 */
+    fun reportImport(result: UserWordStore.ImportResult) {
+        toast(
+            when (result) {
+                is UserWordStore.ImportResult.Imported ->
+                    if (result.count == 0) "词表里没有词条" else "已导入 ${result.count} 条"
+                is UserWordStore.ImportResult.Rejected -> "导入失败：${result.reason}"
+            }
+        )
+    }
+
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        // uri == null 是用户按返回取消，不是失败，别弹「导入失败」吓人
+        if (uri != null) {
+            // MIME 放宽到 octet-stream/text：云盘与 IM 转存的 .json 常被判成这两者，
+            // 只收 application/json 会让文件在选择器里直接灰掉（那样就是静默的「干不了」）
+            reportImport(
+                store.importFrom {
+                    context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                        ?: throw IOException("打不开所选文件")
+                }
+            )
+        }
+    }
+
+    /** 从剪贴板导入：与「导出到剪贴板」闭环（复制→粘回来），不必经文件管理器中转。 */
+    fun importFromClipboard() {
+        // 读剪贴板放在 readText 里（而不是先读好再传值）：读失败要变成那条可见的 Rejected，
+        // 而不是在组合里抛出去崩设置页。API 29+ 只有前台应用能读剪贴板 —— 设置页在前台。
+        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        reportImport(
+            store.importFrom("剪贴板") {
+                cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)
+                    ?.coerceToText(context)?.toString()
+                    ?: throw IOException("剪贴板里没有文本")
+            }
+        )
     }
 
     Scaffold(
@@ -116,6 +178,27 @@ fun SettingsScreen() {
                         cm.setPrimaryClip(ClipData.newPlainText("opi-words", json))
                         toast("已复制到剪贴板")
                     }) { Text("复制") }
+                },
+            )
+            HorizontalDivider()
+            ListItem(
+                headlineContent = { Text("从剪贴板导入") },
+                supportingContent = { Text("粘贴导出的 JSON（与上面的复制闭环，不经文件）") },
+                trailingContent = {
+                    TextButton(onClick = { importFromClipboard() }) { Text("粘贴") }
+                },
+            )
+            HorizontalDivider()
+            ListItem(
+                headlineContent = { Text("导入词库 JSON 文件") },
+                supportingContent = { Text("选择设备上的用户词表文件") },
+                trailingContent = {
+                    TextButton(onClick = {
+                        // 多类型一起给：见 picker 里的 MIME 注释
+                        picker.launch(
+                            arrayOf("application/json", "text/plain", "application/octet-stream"),
+                        )
+                    }) { Text("选择文件") }
                 },
             )
             HorizontalDivider()
