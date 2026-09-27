@@ -271,7 +271,10 @@ extension KeyboardViewController {
     /// 特殊键一律认 HID usage；只有可打印字符才取 `characters` 的码点。
     private func keyval(for key: UIKey) -> UInt32? {
         switch key.keyCode {
-        case .keyboardBackspace: return OpiKey.backspace
+        // ⚠️ 是 `.keyboardDeleteOrBackspace`（HID 0x2A），**没有** `.keyboardBackspace`
+        // 这个成员。写错是**编译错误**而不是静默失效 —— 也就是说这类错在 Mac 上
+        // 第一轮编译就会全部暴露，不会带到运行时。
+        case .keyboardDeleteOrBackspace: return OpiKey.backspace
         // 注意：router.rs 把 KEY_DELETE 与 KEY_BACK_SPACE 归到同一分支（都按退格处理）,
         // 这是既有的两轨语义，不是这里写错。
         case .keyboardDeleteForward: return OpiKey.delete

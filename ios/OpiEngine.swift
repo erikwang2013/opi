@@ -13,9 +13,15 @@
 //   1. **薄**。这里只做「Swift 类型 ←→ C ABI 类型」的转换，不实现任何输入法逻辑。
 //      键路由在 Rust（crates/engine-core/src/router.rs，经 opi_key_event 暴露）。
 //      本项目已被「同一张路由表抄三份」坑过 —— 不要在这里重抄一份分流逻辑。
-//   2. **键事件优先走 opi_key_event**。本文件里那些 opi_input_key / opi_select /
-//      opi_backspace 的包装是**备用出口**（调试、以及 key_event 覆盖不到的场景），
-//      KeyboardViewController 正常路径不该用它们。
+//   2. **键事件优先走 opi_key_event**。本文件另有 load / select / selectPage /
+//      switchMode / 用户词导入导出等**直通包装**，它们是备用出口（调试、以及用户词
+//      管理这类 key_event 覆盖不到的场景）—— KeyboardViewController 的**按键**
+//      正常路径不该用它们。
+//      ⚠️ 别把不存在的东西写进来（本文件曾经写错）：`opi_input_key` / `opi_backspace`
+//      （单字符入口，已被 key_event 取代）、`opi_candidates(limit)`（全局不分页，
+//      本文件用的是 `candidatesPage()`）、`opi_shift_state()`（见
+//      KeyboardLayout.swift 的注释）在这里**都没有包装**。要加的话先读
+//      ios/README.md 的「缺的出口」一节。
 //   3. **所有权写死在注释里**：OpiString 由 Rust 分配，必须由
 //      opi_ffi_free_string 释放恰好一次。本文件所有取值路径都收口到
 //      takeString(_:)，只有那里允许调用 free —— 新增出口请复用它，不要自己写

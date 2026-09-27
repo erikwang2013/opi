@@ -68,7 +68,21 @@ export const STATE_CAPS_LOCK: number = 1 << 1;
 export const STATE_CTRL: number = 1 << 2;
 export const STATE_ALT: number = 1 << 3;
 export const STATE_META: number = 1 << 4;
-/** 抬手事件。**按下与抬起都要送进来** —— 只送按下会让 ⇧ 三态卡住。 */
+/**
+ * 抬手事件。
+ *
+ * ⚠️ 这里原先写的是「只送按下会让 ⇧ 三态卡住」—— **因果是错的**（本轮订正）。
+ * `router.rs` 的 `handle_shift`（`if !released && !repeat`）**明确忽略** released
+ * 与 repeat：⇧ 只认按下，所以软键盘只送按下**不会**卡住三态。
+ * 抬手真正影响的是别的键 —— `router.rs` 对退格/回车/空格/可打印键**都判 released**，
+ * 目的是「按下放行、抬起也放行」保持对称：只放行按下会让宿主收到 keydown 收不到
+ * keyup（依赖键状态的控件卡键）；可打印键更早还漏判过一次，同一个字符被送进引擎
+ * 两次（"ni" → "nnii"）。
+ *
+ * 结论：**软键盘一次点击只送按下是对的**（见 `KeyboardController.pressKey`）。
+ * 接物理键盘时才需要补抬手 —— 那时也**不要**顺手给 ⇧ 补抬手去「修三态」，
+ * 那不是病根，只会多一条被忽略的事件。
+ */
 export const STATE_RELEASED: number = 1 << 26;
 
 // ---------------------------------------------------------------- 返回值

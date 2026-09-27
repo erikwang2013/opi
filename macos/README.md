@@ -19,14 +19,14 @@
 
 ## 交付物
 
-| 文件 | 行数 | 内容 |
-|---|---|---|
-| `OpiFFI.h` | 159 | C ABI 声明面（**28 个导出** = 27 个 `opi_*` 函数 + `opi_ffi_free_string`），逐条对照 `crates/opi-ffi/src/cabi.rs` 抄写；`ios/OpiFFI.h` 是指向本文件的转发头 |
-| `OpiEngine.swift` | 205 | C ABI 桥：`OpiString` 的持有/释放、键码/状态位常量、词库装载与回退 |
-| `InputController.swift` | 259 | `IMKInputController` 子类：NSEvent → `opi_key_event` 入参、提交文本、preedit、候选窗 |
-| `main.swift` | 43 | `IMKServer` 启动（无 nib） |
-| `Info.plist` | 72 | 输入法组件声明 |
-| `README.md` | 本文件 | 草案声明 + 第一件要做的事 + 构建/安装 + 最不确定的 API 清单 |
+| 文件 | 内容 |
+|---|---|
+| `OpiFFI.h` | C ABI 声明面（**28 个导出** = 27 个 `opi_*` 函数 + `opi_ffi_free_string`），逐条对照 `crates/opi-ffi/src/cabi.rs` 抄写；`ios/OpiFFI.h` 是指向本文件的转发头 |
+| `OpiEngine.swift` | C ABI 桥：`OpiString` 的持有/释放、键码/状态位常量、词库装载与回退 |
+| `InputController.swift` | `IMKInputController` 子类：NSEvent → `opi_key_event` 入参、提交文本、preedit、候选窗 |
+| `main.swift` | `IMKServer` 启动（无 nib） |
+| `Info.plist` | 输入法组件声明 |
+| `README.md` | 本文件 |
 
 **没有 Xcode 工程文件（`.xcodeproj`）是有意的**：手写一个从未被 Xcode 打开过的
 `project.pbxproj` 会是第三件「没被工具看过的产物」，而且它比 Swift 更难人工核对。
@@ -71,6 +71,10 @@ $ grep -A1 'unsafe(no_mangle)' crates/opi-ffi/src/cabi.rs | grep -o 'fn opi_[a-z
 $ clang -std=c11 -Wall -Wextra -Imacos -fsyntax-only -x c /tmp/check_opi.c
     # exit 0 → 28 个导出名在头文件里全部有声明（这个检查抓到过真问题，见下）
 ```
+
+> ⚠️ 上面输出里的 `v1.0.13` 是**跑这些命令时**的工作区版本，不是当前版本
+> （仓库已到 v1.0.15）。**记录照原样保留** —— 改成本轮的版本号就是把一份实测
+> 记录改成没跑过的样子。要今天的新数字就重跑一遍。
 
 **符号数是怎么数出来的（方法本身也要交代）**：本机的 GNU `nm` / `objdump` **不认
 Mach-O**（`nm: __.SYMDEF: file format not recognized`），所以上面用的是 `grep -a`
@@ -263,6 +267,10 @@ Mac 上很可能要改」的地方标出来了，接手人从这里开始最省�
   `IMKInputController` 的 `candidates(_:)` 委托方法才成功。本目录两条路都写了
   （`update()` 里 `setCandidateData` + 控制器 `candidates(_:)` 覆写），任一条生效即可；
   若出现「窗口闪一下就消失」或异常，删掉 `setCandidateData` 那条。
+  ⚠️ 覆写 `candidates(_:)` 的**形参类型必须是 `Any!`**（IMK 的声明是
+  `- (NSArray *)candidates:(id)sender`）。写成 `IMKCandidates!` 是**另一个选择器**，
+  `override` 不成立 —— 本目录曾这么写，本轮已按公开签名订正。症状是候选窗永远空
+  且**不报错**（委托根本没被调）。
 - `candidateSelected(_:)` 是 **IMKInputController** 的方法（不是 IMKCandidates 的），
   候选窗关闭**之后**才回调 —— 这是本目录 `candidateSelected` 里要自己 `hide()` 的原因
   （可能多余，也可能是必须）。
@@ -297,11 +305,19 @@ Mac 上很可能要改」的地方标出来了，接手人从这里开始最省�
   非 Xcode 构件系统不展开这个变量，要写字面值。本目录同时在 Swift 侧加了
   `@objc(OpiInputController)` 作为裸名的兜底。
 - `tsInputMethodCharacterRepertoireKey`：资料来源说是 ISO 15924 **文字代码**（不是语言
-  代码），array 决定它落在「输入源」面板的哪一类。本目录写 `Latn` + `zh-Hans` + `zh-Hant`。
+  代码），array 决定它落在「输入源」面板的哪一类。本目录写 `Latn` + `zh-Hans` + `zh-Hant`
+  —— 但后两个是 BCP-47 **语言**标签，与「ISO 15924 文字代码」的说法**对不上**
+  （真正的文字代码是 `Hans` / `Hant`，不带 `zh-`）。**查不到权威取值表，故保留现状**：
+  按猜测去改一个可能本来就正确的字面值，风险大于收益。
+  ⚠️ **待 Mac 上核实**：打开 `/System/Library/Input Methods/` 下某个系统中文输入法的
+  `Info.plist`，看这个键实际写的是什么，再决定这里的三个值是留是改。
 - `tsInputMethodIconFileKey` 指向 `opi.tiff`，**仓库里没有这个文件**。缺文件时系统一般
   用默认图标；要正式发布就得补一个（或在 plist 里去掉这个键）。
-- `CFBundleShortVersionString` 硬编码 `1.0.13`：与仓库 tag 对齐，但**不是**由
-  `Cargo.toml` 的工作区版本自动生成的，发版时容易忘记改。
+- `CFBundleShortVersionString` / `CFBundleVersion` 是**手写的字面值**，**不**由
+  `Cargo.toml` 的工作区版本自动生成 —— 发版时容易忘记改，本文件就曾经落后过仓库版本。
+  维护方式二选一：发版清单里加一条「同步 `macos/Info.plist`」，或让构建脚本从
+  `Cargo.toml` 注入。**本文件不写具体版本号** —— 写死的数字必然会漂（本仓库
+  `bb3276c` 立的规矩）。
 
 ### 7. `NSEvent.keyCode` 的具体数值
 
@@ -328,9 +344,21 @@ Mac 上很可能要改」的地方标出来了，接手人从这里开始最省�
 - **⌘（Command）必须如实置 `META` 位**，由 Rust 侧 `router.rs` 的直通掩码
   （`CTRL | ALT | META`）放行 —— 本层**故意没有**再拦一道（那会把规则抄成第二份）。
   ⚠️ 这条依赖要跟着 Rust 侧复核：掩码一旦去掉 META，⌘A 会被当成普通 `'a'` 吃进缓冲。
-- `keyUp` 是否会被投递到 `handle(_:client:)` 未核对（可能需要覆写 `recognizedEvents(_:)`）。
+- `keyUp` **大概率根本收不到**（`InputController.swift:79` 那个 `.keyUp` 分支很可能是死代码）。
+  查证（公开资料，**未在 Mac 上实测**）：`recognizedEvents:` 属于 `IMKStateSetting`
+  协议，其**默认实现只返回 `NSKeyDownMask`**；而更麻烦的是，公开报告说**即使**
+  在 `recognizedEvents:` 里加上 `NSKeyUpMask`，`NSKeyUp` **仍然**不会被投递给
+  `handleEvent:client:` —— 被指为 IMKit 的已知问题（Radar 21376535），
+  绕法是全局 `CGEventTap`（需要辅助功能授权），代价明显大于收益。
+  **所以本轮不动 `recognizedEvents`**：改了也无法在本机验证，还可能引入新故障面。
   影响：`RELEASED` 位收不到时，退格/回车的「按下放行、抬起也放行」对称性不成立
   （`router.rs` 的注释解释了为什么两端必须同判）—— 在依赖键状态的控件里会表现为卡键。
+  ⚠️ 但请注意这个影响的**前提也没被验证**（宿主应用是否真的因缺 keyup 而卡键，
+  取决于 IMK 是否替我们转发了抬起）。**先按下面的顺序做**：
+  1. Mac 上冒烟（`h a o 空格`），确认按键能进来；
+  2. 在 `recognizedEvents:` 里**临时**加日志确认默认掩码与 keyUp 是否真被投递；
+  3. 只有在第 2 步证明「keyUp 确实收不到」且「缺它确实导致卡键」之后，
+     才谈绕法 —— 而且优先考虑删除死代码，而不是加 `CGEventTap`。
 
 ### 10. 词库路径
 

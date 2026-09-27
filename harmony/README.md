@@ -78,24 +78,33 @@
 
 ## 文件清单
 
-| 文件 | 行数 | 作用 |
-|------|-----:|------|
-| `cpp/opi_ffi.h` | 147 | C ABI 的 **use-site 声明面**（只声明桥用到的 16 个，**故意不抄全 28 个**）+ 键码常量 + 字符串所有权约定 |
-| `cpp/napi_bridge.c` | 323 | **N-API 薄壳**：JS 字符串 ⇄ UTF-16 搬运、模块注册、释放 `OpiString`。15 个模块导出 |
-| `cpp/CMakeLists.txt` | 60 | 把 Rust 静态库 + N-API 桥编成 `libopiime.so` |
-| `cpp/types/libopiime/index.d.ts` | 72 | `libopiime.so` 的 ArkTS 类型声明（15 条，与 bridge 的 15 条**机械核对一致**） |
-| `cpp/types/libopiime/oh-package.json5` | 12 | 把 `libopiime.so` 映射到上面的 `.d.ts` |
-| `ets/InputMethodExtensionAbility/InputMethodService.ets` | 34 | `InputMethodExtensionAbility` 入口。**故意只做转发**，零逻辑 |
-| `ets/InputMethodExtensionAbility/KeyboardController.ets` | 273 | 输入法会话唯一持有者：开面板、拿 `InputClient`、按键按 `action` 分派、状态推给 UI |
-| `ets/InputMethodExtensionAbility/OpiEngine.ets` | 235 | C ABI 薄桥：枚举、**键码常量唯一定义处**、JSON 候选解码 |
-| `ets/InputMethodExtensionAbility/OpiPet.ets` | 337 | 项目宠物「小欧」的 ArkTS 复刻（键帽精灵，表情跟引擎状态走） |
-| `ets/InputMethodExtensionAbility/pages/Index.ets` | 284 | 键盘 UI 最小骨架：候选栏 + preedit + 三行 QWERTY + 功能行 |
-| `module.json5` | 48 | `extensionAbilities` 配置**片段**（不是能直接用的完整 manifest） |
-| `resources/base/profile/input_method_config.json` | 39 | 输入法子类型配置 |
+| 文件 | 作用 |
+|------|------|
+| `cpp/opi_ffi.h` | C ABI 的 **use-site 声明面**（只声明桥用到的 16 个，**故意不抄全 28 个**）+ 键码常量 + 字符串所有权约定 |
+| `cpp/napi_bridge.c` | **N-API 薄壳**：JS 字符串 ⇄ UTF-16 搬运、模块注册、释放 `OpiString`。**15 个模块导出**（调 16 个 C 函数，含 `opi_ffi_free_string` —— 两个数不一样是正常的） |
+| `cpp/CMakeLists.txt` | 把 Rust 静态库 + N-API 桥编成 `libopiime.so` |
+| `cpp/types/libopiime/index.d.ts` | `libopiime.so` 的 ArkTS 类型声明（15 条，与 bridge 的 15 条**机械核对一致**） |
+| `cpp/types/libopiime/oh-package.json5` | 把 `libopiime.so` 映射到上面的 `.d.ts` |
+| `ets/InputMethodExtensionAbility/InputMethodService.ets` | `InputMethodExtensionAbility` 入口。**故意只做转发**，零逻辑 |
+| `ets/InputMethodExtensionAbility/KeyboardController.ets` | 输入法会话唯一持有者：开面板、拿 `InputClient`、按键按 `action` 分派、状态推给 UI |
+| `ets/InputMethodExtensionAbility/OpiEngine.ets` | C ABI 薄桥：枚举、**键码常量唯一定义处**、JSON 候选解码 |
+| `ets/InputMethodExtensionAbility/OpiPet.ets` | 项目宠物「小欧」的 ArkTS 复刻（键帽精灵，表情跟引擎状态走） |
+| `ets/InputMethodExtensionAbility/pages/Index.ets` | 键盘 UI 最小骨架：候选栏 + preedit + 三行 QWERTY + 功能行 |
+| `module.json5` | `extensionAbilities` 配置**片段**（不是能直接用的完整 manifest） |
+| `resources/base/profile/input_method_config.json` | 输入法子类型配置 |
 
-**上表 12 个文件合计 1864 行**；加上本 README（421 行），`harmony/` 共
-13 个文件 / 2285 行。除下方「实测记录」里列出的 Rust 侧编译检查外，
-**本目录无任何验证**。
+**不写行数**：行数随 SPDX 头、注释增删而漂（本表曾普遍少 3 行），
+与本仓库「不写会漂的数字」的规矩一致。上表 12 个文件 + 本 README = `harmony/`
+共 13 个文件；除下方「实测记录」里列出的 Rust 侧编译检查外，**本目录无任何验证**。
+
+⚠️ **缺一个文件（有意不建）：`resources/base/profile/main_pages.json`。**
+它必须存在，否则面板起来是一片白（见第 1 步）；但**不由本目录提供** ——
+DevEco 工程自己生成的那份才是权威，补一份进来可能与已有配置冲突。
+内容（`src` 里那条路径必须与 `KeyboardController.setUiContent('pages/Index')` 逐字一致）：
+
+```json
+{ "src": ["pages/Index"] }
+```
 
 ### 宠物小欧的真源不是本目录
 
@@ -384,6 +393,31 @@ ABI 目录名对应关系（`CMakeLists.txt` 靠 `libs/${OHOS_ARCH}/` 找）：
 | U19 | `display.getDefaultDisplaySync()` 返回的 `width`/`height` **单位是 px**，直接喂给 `panel.resize()` | 单位是否为 px、要不要 `vp2px` 换算。**键盘高度明显不对时先查这里。** |
 | U20 | `JSON.parse(raw) as string[]` 在 ArkTS 严格模式下可用 | ArkTS 对 `JSON.parse` 返回值（`Object`）的断言限制 |
 
+### 待 DevEco 确认：`@StorageLink` 的入参必须是字符串字面量
+
+| 我写的 | 不确定什么 | 错了的表现 |
+|---|-----------|-----------|
+| `@StorageLink('opiBuffer') buffer: string = ''` 等 7 条**内联字面量** | **规则是否真的只收字面量**。华为规格与一则同症状求助帖都说装饰器入参是编译期静态处理的、传常量（`@StorageLink(KEY_BUFFER)`）编译不过；但这两条都是**二手资料，本机无法验证**。 | 若规则其实更宽松：现在的写法**仍然合法**（字面量两种规则下都成立），只是把键名写了两份。 |
+
+**为什么还是按这个改**：`KeyboardController.ets` 原本把 `KEY_*` 集中在一处、注释写着
+「集中在这里，避免两边写不一致的字符串」—— 而 `@StorageLink(KEY_BUFFER)` 恰恰是
+ArkTS **不许做**的事。内联字面量在「规则严」与「规则松」两种情况下都能编译，
+是唯一稳妥的写法；代价是**键名在两个文件里各有一份**：
+
+- 写入侧 `KeyboardController.publish()`：`AppStorage.setOrCreate(KEY_X, …)` —— 运行时调用，
+  **不受限**，继续用常量（那才是真源）。
+- 读取侧 `pages/Index.ets` 的 7 个装饰器：只能字面量，**漏改不报错**。
+
+漏改的症状是「面板起来了、按键也有反应，但候选栏 / preedit 永远不刷新」——
+**静默失败**，最难查的一类。所以核对只能靠人：
+
+```bash
+grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|opiLearner" harmony/
+```
+
+两边的字面量必须一一对应。**DevEco 上第一件要试的事**：把某一处改回常量看是否真
+编译不过 —— 若编译得过，说明规则比资料说的宽松，那时可以考虑收敛回常量。
+
 ### 明确「没查到、也没猜」的
 
 - 鸿蒙是否要求输入法声明某个权限（如 `ohos.permission.INPUT_METHOD`）。
@@ -404,8 +438,14 @@ ABI 目录名对应关系（`CMakeLists.txt` 靠 `libs/${OHOS_ARCH}/` 找）：
    `opi_clear_user_words` / `opi_remove_user_word` 未桥接）。
 5. **无繁体切换入口**（`opi_load_trad` 未桥接；`OpiMode.Traditional` 有枚举
    但 UI 的轮转里进不去）。
-6. **未处理「抬手」事件**（`STATE_RELEASED`）。软键盘一次点击送一次按下事件，
-   对路由够用；但要接**物理键盘**就必须补抬手，否则 ⇧ 三态会卡住。
+6. **未处理「抬手」事件**（`STATE_RELEASED`）。软键盘一次点击只送一次按下，
+   对路由够用 —— 注意**⇧ 三态不会因此卡住**：`router.rs` 的 `handle_shift`
+   明确忽略 released/repeat，⇧ 只认按下。（本节原先写的「要接物理键盘就得补抬手，
+   否则 ⇧ 三态会卡住」**因果是错的**，本轮订正；`OpiEngine.ets` 的
+   `STATE_RELEASED` 注释同步改了。）
+   接**物理键盘**时确实要补抬手，但理由是另一条：`router.rs` 对退格/回车/空格/
+   可打印键**都判 released**（按下放行则抬起也必须放行），否则宿主收到 keydown
+   收不到 keyup，依赖键状态的控件会卡键。
 7. **深色主题未接**（`OpiPet` 支持 `dark: true`，但 `Index.ets` 恒传 `false`，
    没读系统主题）。
 8. **Android JNI 出口在鸿蒙目标下是死重量**（约 9 MB 里的一部分），

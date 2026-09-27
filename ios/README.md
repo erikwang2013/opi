@@ -163,6 +163,10 @@ CPU_TYPE 集合: {'0x100000c'}        ← CPU_TYPE_ARM64 | CPU_ARCH_ABI64
 
 #### 复验时间戳（Rust 侧在并行改动，数字要对得上）
 
+> ⚠️ 上面几段输出里的 `v1.0.13` 是**跑那些命令时**的工作区版本，不是当前版本
+> （仓库已到 v1.0.15）。**记录照原样保留** —— 改成本轮的版本号就是把一份实测
+> 记录改成没跑过的样子。要今天的新数字就重跑一遍。
+
 Rust 侧由别的分身在同时改。本轮记录的数字全部来自 **01:00** 的重跑
 （两个 `cargo check` 于 `01:00:12`–`01:00:13` 各 exit 0；`.a` 于 `01:00` 无缓存重建，
 29.93s）。此前 00:51 的一次 `cargo rustc` 曾以 `E0624` 失败，原因是 `cabi.rs` 恰好在
@@ -419,11 +423,17 @@ xcodebuild -create-xcframework \
 `KeyboardViewController.swift` 的硬件键盘一节全靠记忆：
 
 - `UIPress.key` 属性名、`UIKey.keyCode` 类型为 `UIKeyboardHIDUsage`
-- 枚举成员名：`.keyboardBackspace` `.keyboardDeleteForward` `.keyboardReturnOrEnter`
-  `.keyboardTab` `.keyboardEscape` `.keyboardPageUp` `.keyboardPageDown`
-  `.keyboardLeftShift` `.keyboardRightShift` `.keyboardUpArrow` `.keyboardDownArrow`
-  `.keyboardLeftArrow` `.keyboardRightArrow` `.keyboardSpacebar`
-- `UIKey.characters` / `UIKey.modifierFlags` 属性名
+- 枚举成员名 —— ✅ **已按 Apple 公开文档逐个核对（本轮），只错了一个，已改**：
+  `UIKeyboardHIDUsage` **没有** `.keyboardBackspace`，真名是
+  **`.keyboardDeleteOrBackspace`**（HID 0x2A）。其余全部正确：
+  `.keyboardDeleteForward` `.keyboardReturnOrEnter` `.keyboardTab` `.keyboardEscape`
+  `.keyboardPageUp` `.keyboardPageDown` `.keyboardLeftShift` `.keyboardRightShift`
+  `.keyboardUpArrow` `.keyboardDownArrow` `.keyboardLeftArrow` `.keyboardRightArrow`
+  `.keyboardSpacebar`。
+  ⚠️ 这一条**只是文档核对，不是编译验证** —— 仍然没有编译器看过这个文件。
+  顺带：成员名写错属**编译错误**（不是静默失效），所以这类错在 Mac 上第一轮编译
+  就会全部暴露，改起来不费时。
+- `UIKey.characters` / `UIKey.modifierFlags` 属性名（**仍未核对**）
 - `override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?)`
   的签名（`UIPressesEvent?` 的 Optional 性）
 - **HID usage 的语义**：USB HID Usage Tables 里 0x28=Return、0x29=Esc、0x2A=Backspace、

@@ -139,9 +139,12 @@ final class KeyboardLayout: UIView {
     // 宁可不做，也不做一份会撒谎的高亮。
     //
     // 出口**已落地**：`opi_shift_state() -> int32_t`（0=OFF 1=SINGLE 2=LOCK，
-    // 未装载 → 0）。现在**故意没接** —— `macos/OpiFFI.h` 补上声明之前，
-    // `ios/OpiFFI.h`（转发头）里没有它，调用即编译不过。
-    // 接法：先过编译，再让 UI 读这个出口，别自己镜像状态。
+    // 未装载 → 0），且 `macos/OpiFFI.h` 里**已有声明** —— 但 `ios/OpiEngine.swift`
+    // 里**还没有对应的 Swift 包装**（本文件也没有别的 shiftState 入口），
+    // 所以现在不是「有出口没接」，而是「连出口都还没包出来」。
+    // 补的时候两步：①在 `OpiEngine.swift` 加一个 3 行的
+    // `func shiftState() -> Int32 { opi_shift_state() }`；②让 UI 读它，别自己镜像状态。
+    // 顺序照旧：**先过编译，再接**（现在接只会多一份未编译代码）。
     // 详见 ios/README.md 的「缺的出口：已落地」一节。
 
     private let candidateScroll = UIScrollView()

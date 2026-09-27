@@ -23,7 +23,15 @@ import { KeyResult, OpiAction, OpiMode, OpiShift } from './OpiEngine';
 /** 键盘占屏高的比例。凭感觉定的，真机上要按候选栏行数调。 */
 const PANEL_HEIGHT_RATIO: number = 0.42;
 
-/** AppStorage 键名（UI 用 @StorageLink 读）。集中在这里，避免两边写不一致的字符串。 */
+/**
+ * AppStorage 键名 —— **写入侧**（下面的 `publish()`）用的唯一真源。
+ *
+ * ⚠️ 读取侧 `pages/Index.ets` **用不了这些常量**：@StorageLink 的入参必须是
+ * 字符串字面量（ArkTS 编译期静态处理），写 `@StorageLink(KEY_BUFFER)` 编译不过。
+ * 所以那边内联了字面量，两边**各有一份**，改这里必须同步改那边 —— 核对命令与
+ * 症状写在 Index.ets 装饰器旁的注释里。**不要再试图「统一成常量」**：那正是
+ * ArkTS 禁止的写法。
+ */
 export const KEY_BUFFER: string = 'opiBuffer';
 export const KEY_CANDIDATES: string = 'opiCandidates';
 export const KEY_PAGE: string = 'opiPage';

@@ -54,8 +54,11 @@
 
     <!--
       输入法类别（决定在「输入源」面板里归到哪一类）。
-      用 ISO 15924 文字代码（不是语言代码）。zh-Hans/zh-Hant 让它落在中文项下，
-      Latn 保留英文直传的用法。
+      资料说该键收 ISO 15924 文字代码（不是语言代码）；但下面三个值里，
+      zh-Hans/zh-Hant 是 BCP-47 语言标签，与那个说法对不上（文字代码是 Hans/Hant）。
+      ⚠️ 取值未核实，**故保留现状**：待 Mac 上对照 /System/Library/Input Methods/
+      下系统中文输入法的 Info.plist 里该键的实际取值再决定改不改。
+      详见 macos/README.md「最不确定的 API」#6。
     -->
     <key>tsInputMethodCharacterRepertoireKey</key>
     <array>

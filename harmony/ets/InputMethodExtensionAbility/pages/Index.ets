@@ -14,8 +14,7 @@
 //    且与 KeyboardController 的 panel.setUiContent('pages/Index') 字符串一致。
 //    任一处对不上 → 面板起来了但是一片白。
 
-import { KeyboardController, KEY_BUFFER, KEY_CANDIDATES, KEY_PAGE, KEY_PAGE_COUNT, KEY_MODE,
-  KEY_SHIFT, KEY_LEARNER } from '../KeyboardController';
+import { KeyboardController } from '../KeyboardController';
 import { OpiMode, OpiShift } from '../OpiEngine';
 import { OpiPet, PetMood, petMood } from '../OpiPet';
 
@@ -41,13 +40,30 @@ const PET_SIZE_IN_BAR: number = 34;
 @Component
 struct Index {
   // ---- 引擎状态：全部从 AppStorage 读，本页不自己缓存、不自己算 ----
-  @StorageLink(KEY_BUFFER) buffer: string = '';
-  @StorageLink(KEY_CANDIDATES) candidates: string[] = [];
-  @StorageLink(KEY_PAGE) page: number = 0;
-  @StorageLink(KEY_PAGE_COUNT) pageCount: number = 0;
-  @StorageLink(KEY_MODE) mode: number = OpiMode.Pinyin as number;
-  @StorageLink(KEY_SHIFT) shift: number = OpiShift.Off as number;
-  @StorageLink(KEY_LEARNER) learner: number = 1;
+  //
+  // ⚠️ 这里的键名**只能内联字符串字面量**，不能写 `@StorageLink(KEY_BUFFER)`：
+  // ArkTS 的装饰器入参是**编译期静态处理**的，只收字面量，传常量编译不过。
+  // 这和 KeyboardController.ets 顶部那条「键名集中在这里，避免两边写不一致的字符串」
+  // 是**直接冲突**的 —— 那边的做法在写入侧成立（`AppStorage.setOrCreate(KEY_X, …)`
+  // 是运行时调用，不受限制），在**装饰器入参这个位置不成立**。
+  // 所以键名在两个文件里各存一份，**改一边必须改另一边**。当前值与本文件逐字对应：
+  //   buffer=opiBuffer  candidates=opiCandidates  page=opiPage  pageCount=opiPageCount
+  //   mode=opiMode  shift=opiShift  learner=opiLearner
+  // 核对命令（两边的字面量必须一一对应）：
+  //   grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|opiLearner" harmony/
+  // 漏改的表现是「面板起来了、按键也有反应，但候选栏/preedit 永远不刷新」——
+  // **不报错、不崩溃**，属最难查的一类。
+  // ⚠️ 这条 ArkTS 限制出自华为规格与一则同症状的求助帖，**二手资料，待 DevEco 确认**
+  //   （见 harmony/README.md「最不确定的 API」→「待 DevEco 确认：@StorageLink 的
+  //   入参必须是字符串字面量」）。字面量在「规则严」与「规则松」下都成立，
+  //   所以按最稳妥的写法写。
+  @StorageLink('opiBuffer') buffer: string = '';
+  @StorageLink('opiCandidates') candidates: string[] = [];
+  @StorageLink('opiPage') page: number = 0;
+  @StorageLink('opiPageCount') pageCount: number = 0;
+  @StorageLink('opiMode') mode: number = OpiMode.Pinyin as number;
+  @StorageLink('opiShift') shift: number = OpiShift.Off as number;
+  @StorageLink('opiLearner') learner: number = 1;
 
   private ctrl: KeyboardController = KeyboardController.getInstance();
 

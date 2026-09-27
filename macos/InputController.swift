@@ -178,7 +178,10 @@ final class OpiInputController: IMKInputController {
 
     /// IMKCandidates 向控制器要数据。README #3 记了一条「setCandidateData 不生效」
     /// 的报告，故两条路都留着：委托方法 + setCandidateData，任一条生效都能出候选。
-    override func candidates(_ sender: IMKCandidates!) -> [Any]! {
+    /// ⚠️ 形参**必须是 `Any!`**（IMK 的声明是 `- (NSArray *)candidates:(id)sender`）：
+    /// 写成 `IMKCandidates!` 是**另一个选择器**，`override` 不会成功 ——
+    /// 表现是候选窗永远空（委托没被调），且**不报错**。
+    override func candidates(_ sender: Any!) -> [Any]! {
         return lastCandidates
     }
 
