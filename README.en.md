@@ -83,6 +83,7 @@ The name says it all:
 - **Full single-character coverage gate**: every GB2312 character is asserted to produce candidates (`trad_coverage` integration test; the character-count criterion lives inside the test). Break the coverage with a dictionary change and CI goes red
 - **A broken dictionary never crashes the input method**: the loading policy is the same on every client — **a bad path always returns `Err` and never falls back silently** (the comment on `engine-data/src/dictionary.rs`'s `load_or_fallback` records that the earlier silent fallback was deliberately removed: the UI would believe a full dictionary had loaded), and the built-in fallback dictionary (`data/raw/fallback.tsv`; take its size from that file's line count) is used only when **no path is configured at all** (an empty string counts as none). Whether to recover from that `Err` is the caller's decision: Android's `EngineLoader` catches it and retries with the built-in dictionary (`EngineLoader.kt`'s `fallback()`), while fcitx5 and TSF propagate it (the load call sites in `fcitx5-opi/src/lib.rs` and `tsf-opi/src/tsf.rs`)
 - **Dictionary distribution paths**: Android goes assets → filesDir (`EngineLoader.kt`), fcitx5 uses the XDG data directory and is installed by CMake (`fcitx5-opi/cpp/CMakeLists.txt`), and Windows tries `OPI_DICT_PATH` → the DLL's own directory → `%LOCALAPPDATA%\opi` → built-in fallback (`tsf-opi/src/dict_path.rs`). ⚠️ **Windows still has no packaging step**, so out of the box it still runs on the built-in fallback dictionary — the path exists, the copy does not
+- **Linux now produces distribution packages**: `scripts/build-packages.sh` plus `scripts/nfpm.yaml` move the `cmake --install` staging tree verbatim into `.deb` / `.rpm` (two `.so` files, two conf files, `luna.opid` and two licence texts — **check the package contents with `dpkg-deb -c` / `rpm -qlp` rather than copying this line**), and `.github/workflows/packages.yml` builds them on release and attaches them to the release. **The runtime floor is fcitx5 5.0**: it is declared in `crates/fcitx5-opi/data/addon/opi_fcitx5.conf`'s `[Addon/Dependencies]` (declare it too high and the addon does not load at all — the user gets an input method that can be selected and types nothing, with no opi-related error in the log), and CI guards it in a debian:12 container with positive / current / negative arms. ⚠️ This packaging path goes **only as far as "the artifact builds and the package contents match the staging tree"** — no gate has ever `dpkg -i` / `rpm -i`'d it; CI verifies the **same staging tree** (`cmake --install` + `cp`), not the package itself
 - **Community dictionaries**: the source data is plain text in `data/raw/*.tsv`; submit, review and merge via PR. Process and **licensing requirements** are in [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 #### 4. No Feature Bloat
@@ -119,6 +120,7 @@ Everything below is either part of the vision or a direction that has been **dec
 | **Platform integration** | Android (InputMethodService), Linux (fcitx5), Windows (TSF), **iOS / macOS / HarmonyOS (drafts only — compiling them needs macOS + Xcode and DevEco + the HarmonyOS SDK respectively)** |
 | **Data sync** | **Not doing** (user decision 2026-09-28): originally planned as end-to-end encryption + self-hosted support; we have decided **not to offer cloud sync and not to have accounts** — your data stays on your machine |
 | **Versioning** | Single source of truth: `[workspace.package] version` in the root `Cargo.toml`, shared by every workspace member (the list is that file's `members`); Android `versionName` and desktop `packageVersion` align to it, and releases are tagged with the same number |
+| **MSRV** | **1.88**, written as `[workspace.package] rust-version` in the root `Cargo.toml` (where the floor came from and how it was measured is in that file's comment). ⚠️ That is a **declaration**, and on its own it leaks in both directions (code using newer syntax while the declaration lags / the declaration being lowered) — the enforcement point is CI's `msrv` job, which **derives** the toolchain from that key and runs `cargo check --workspace --all-targets --locked` |
 
 ### 🧭 Architecture
 
@@ -178,11 +180,20 @@ cd android && ./gradlew assembleDebug       # build debug APK (cargokit compiles
 cargo build --release -p fcitx5_opi         # Linux plugin: the Rust cdylib on its own
 cmake -S crates/fcitx5-opi/cpp -B build-fcitx5 -DCMAKE_BUILD_TYPE=Release   # full path (incl. the C++ glue; needs fcitx5-dev)
 cmake --build build-fcitx5 && sudo cmake --install build-fcitx5             # the install location is guarded by the opi_locate_check probe and CI
+scripts/build-packages.sh                   # build .deb / .rpm (needs nfpm; locations come from the cmake --install above, artifacts land in dist/)
+cargo check --workspace --all-targets --locked   # the MSRV pass — run it on the toolchain declared in Cargo.toml (CI's msrv job runs this same line)
 cd desktop && ./gradlew package             # Windows candidate window (Compose Desktop)
 ./target/debug/opi-tools --version          # version + Opi
 ```
 
 > **`assembleDebug` needs `dart` on the machine**: cargokit's build tool is written in Dart. Without it the `cargokitCargoBuildOpi_ffiDebug` task fails with `dart: command not found` (exit code 127). The unit tests don't need it — `testDebugUnitTest` runs on pure JVM fakes and never touches the `.so`.
+
+> **The fcitx5 plugin requires C++20**: `crates/fcitx5-opi/cpp/CMakeLists.txt` pins `CXX_STANDARD` to 20 —
+> newer fcitx5 headers use the C++20 `std::span` / `std::ranges`, and pinning it back to 17 is a
+> **hard error** on newer distributions (nothing to do with `-Werror`), while the headers of the two
+> older versions compile warning-free and error-free under C++20. Where exactly the boundary sits and
+> which versions were measured on each side are in that file's header comment; **do not change that
+> value based on what this line says**.
 
 ### 📁 Repository Structure
 
@@ -193,8 +204,10 @@ crates/                        # Rust workspace (the crate list is the root Carg
                                #   composer · pinyin · trie · dictionary · candidates ·
                                #   learner · symbols · engine, plus jianpin ·
                                #   fuzzy · punctuation · keys · router · bytes
-    tests/                     #   engine_integration · proptests · trad_mode · jianpin_ranking ·
-                               #   punctuation_switches · select_index_bounds (see the tests/ dir)
+    tests/                     #   three kinds: integration / property / invariant — e.g. engine_integration ·
+                               #   proptests · ranking_invariants · router_invariants · trad_mode ·
+                               #   symbol_coverage · jianpin_ranking · punctuation_switches ·
+                               #   select_index_bounds (**a reading guide, not a census** — see the tests/ dir)
   engine-data/                 # .opid binary dictionary: format, FNV-1a64 checksum, mmap load, fallback
     src/user_words.rs          #   persisting user words (atomic write) — file IO lives in this crate, so engine-core stays IO-free
   opi-tools/                   # dictionary compiler CLI: tsv / dict.yaml → .opid, with verify
@@ -225,11 +238,18 @@ docs/                          # pet, diagrams and design docs
   opi-pet.svg                  #   the project pet, Opi
   diagrams/                    #   architecture · features · lifecycle
   superpowers/                 #   specs (design) + plans (implementation)
+  release-claim-corrections.md #   release-claim corrections (tag annotations cannot be edited, so the measured wording lands here)
   weixinpay.png · alipay.png   #   donation QR codes (referenced in the footer)
 scripts/                       # dictionary generation: gen_luna_dict.py · gen_trad_dict.py · gen_symbols.py
                                #   (+ symbol_keywords.py, the hand-written keyword table) · gen_en_dict.py · hanzi_freq.py
-.github/workflows/ci.yml       # CI: fmt / cargo test / clippy zero-warnings / C consumer + JNI smoke /
-                               #   TSF Windows target / Apple targets / Android unit tests / fcitx5 build + package locations
+                               # distribution packaging: build-packages.sh (.deb / .rpm) + nfpm.yaml
+                               #   (nfpm.yaml only moves the staging tree into a package — it **does not declare locations**)
+.github/workflows/ci.yml       # CI: rust (fmt / cargo test / clippy / C consumer + JNI smoke /
+                               #   TSF Windows target / Apple targets) · msrv (derives the toolchain from rust-version and really compiles) ·
+                               #   android · fcitx5 (C++ build + install location + real load in a debian:12 container with three-arm controls)
+                               #   ⚠️ the full list of jobs and steps is that file — don't copy this line
+.github/workflows/packages.yml # builds .deb / .rpm and attaches them to the release — separate from ci.yml
+                               #   because the two paths fail for different reasons (and it only matters on release)
 LICENSE · CONTRIBUTING.md      # MIT full text · contribution guide (incl. dictionary licensing)
 ```
 
@@ -245,8 +265,8 @@ V1 milestone progress:
 - [x] **M4/M5 Android integration & UI**: InputMethodService + keyboard/panels/settings (Flutter version, natively rewritten in M6)
 - [x] **M6a Android native rewrite**: opi-ffi dual ABI (JNI + C) replaces frb; Compose native IME + keyboard/candidate bar/panels/settings; flutter/ deleted
 - [x] **Simplified/Traditional dual dictionary** (no M6 number assigned in spec §8, listed separately): `Mode::Traditional` + dual-dictionary routing + `trad.opid` + a GB2312 single-character coverage gate
-- [~] **M6b Linux fcitx5 plugin**: Rust logic and unit tests done; **the C++ glue had never been seen by a compiler**, and now has a CMake build + install path (`crates/fcitx5-opi/cpp/CMakeLists.txt`) and a CI `fcitx5` job (compile + install-location assertions) — awaiting acceptance on a real desktop
-- [~] **M6c Windows TSF plugin + CMP candidate window**: Rust logic, candidate-window wire protocol, dictionary distribution path and the Compose Desktop window done — the COM server is target-gated, **and the repository has no packaging step** (out of the box the dictionary is still the built-in fallback of a few dozen words), awaiting acceptance on Windows
+- [~] **M6b Linux fcitx5 plugin**: Rust logic and unit tests done; **the C++ glue had never been seen by a compiler**, and now has a CMake build + install path (`crates/fcitx5-opi/cpp/CMakeLists.txt`), a CI `fcitx5` job (compile + install-location assertions + a real load in a debian:12 container with three-arm controls) and `.deb` / `.rpm` packaging (`scripts/build-packages.sh`) — **awaiting acceptance on a real desktop; and no package has ever been `dpkg -i` / `rpm -i`'d**
+- [~] **M6c Windows TSF plugin + CMP candidate window**: Rust logic, candidate-window wire protocol, dictionary distribution path and the Compose Desktop window done — the COM server is target-gated, **and the Windows side of the repository has no packaging step** (out of the box the dictionary is still the built-in fallback of a few dozen words), awaiting acceptance on Windows
 - [ ] **M7 iOS / macOS**: the C ABI is ready, and **has been measured to compile for Apple targets** (`cargo check` passes for the Apple targets listed in `.github/workflows/ci.yml`; it produces an arm64 static library `libopi_ffi.a` with no missing exported symbols — for the count, take the exports in `crates/opi-ffi/src/cabi.rs`); the Swift drafts under `ios/` and `macos/` **have never been seen by a compiler** — get them compiling on a Mac first, then talk about features
 
 > Milestone numbering follows `docs/superpowers/specs/2026-08-14-opi-multi-platform-design.md` §8 and the M6 plan
