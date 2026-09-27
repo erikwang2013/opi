@@ -142,6 +142,14 @@ impl Engine {
     /// limit 512：rank_and_pick 仍全量排序（正确性），这里只限 FFI 载荷。
     pub fn select(&mut self, index: usize) -> String {
         let cands = self.candidates(512);
+        self.select_from(&cands, index)
+    }
+
+    /// 在**调用方已算好的**候选表上选中第 `index` 项（全局下标）。
+    /// 语义与 [`Self::select`] 逐字相同（越界 → 空串，命中 → 记学习 + 清缓冲），
+    /// 唯一区别是不重算候选表 —— 数字选词在 `digit_select` 里已经抓过一次，
+    /// 再排一遍整表是纯浪费。`Engine::select` 保留原签名（C 出口的全局索引用它）。
+    pub fn select_from(&mut self, cands: &[Candidate], index: usize) -> String {
         match cands.get(index) {
             Some(c) => {
                 let text = c.text.clone();

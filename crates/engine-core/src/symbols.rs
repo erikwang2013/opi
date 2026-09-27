@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
+use crate::bytes::byte_successor;
+
 /// Unicode 区块 ID（V1 用 u16 编号，M2 数据管线扩展）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BlockId(pub u16);
@@ -182,20 +184,41 @@ impl SymbolEngine {
 
     /// 关键字前缀搜索（拼音或英文小写；输入为完整/部分拼音）。
     pub fn search(&self, keyword: &str) -> Vec<SymbolEntry> {
+        self.search_filtered(keyword, false)
+    }
+
+    /// 同 [`Self::search`]，但只保留 emoji 条目。单字符输入只并入 emoji
+    /// （见 `candidates.rs`），过滤必须发生在这里：否则非 emoji 条目先被克隆再丢弃。
+    pub fn search_emoji(&self, keyword: &str) -> Vec<SymbolEntry> {
+        self.search_filtered(keyword, true)
+    }
+
+    /// 去重/排序在**引用**上做，最后才克隆幸存者：语义与「先全量克隆再筛」逐条相同，
+    /// 但 183 条命中里只有 16 条 emoji 需要分配。
+    fn search_filtered(&self, keyword: &str, only_emoji: bool) -> Vec<SymbolEntry> {
         let kw = keyword.to_lowercase();
-        let keys: Vec<&str> = self.keywords.iter().map(|(k, _)| k.as_str()).collect();
-        let lo = keys.partition_point(|k| k.as_bytes() < kw.as_bytes());
+        // 直接对 self.keywords 二分：此前先把全部关键字拷成 &str 数组只为调
+        // partition_point，纯属白分配（(String, usize) 的序以 k 优先，谓词仍单调）。
+        let lo = self
+            .keywords
+            .partition_point(|(k, _)| k.as_bytes() < kw.as_bytes());
         let hi = match byte_successor(kw.as_bytes()) {
-            Some(succ) => keys.partition_point(|k| k.as_bytes() < succ.as_slice()),
-            None => keys.len(),
+            Some(succ) => self
+                .keywords
+                .partition_point(|(k, _)| k.as_bytes() < succ.as_slice()),
+            None => self.keywords.len(),
         };
-        let mut out: Vec<SymbolEntry> = self.keywords[lo..hi]
+        let mut hits: Vec<&SymbolEntry> = self.keywords[lo..hi]
             .iter()
-            .map(|(_, i)| self.entries[*i].clone())
+            .map(|(_, i)| &self.entries[*i])
             .collect();
-        out.sort_by(|a, b| a.text.cmp(&b.text));
-        out.dedup_by(|a, b| a.text == b.text);
-        out
+        // 稳定排序 + 按 text 去重：等价于旧实现对克隆体做的事（保序 → 保首条）。
+        hits.sort_by(|a, b| a.text.cmp(&b.text));
+        hits.dedup_by(|a, b| a.text == b.text);
+        hits.into_iter()
+            .filter(|e| !only_emoji || e.emoji)
+            .cloned()
+            .collect()
     }
 }
 
@@ -220,21 +243,6 @@ fn parse_flag(s: &str, what: &str, no: usize) -> Result<bool, String> {
 fn parse_hex(s: &str, what: &str, no: usize) -> Result<u32, String> {
     u32::from_str_radix(s.trim_start_matches("0x"), 16)
         .map_err(|e| format!("第 {no} 行 {what} 不是十六进制码位 {s:?}: {e}"))
-}
-
-/// 字节后继：末字节 +1（带进位）；全 0xFF 返回 None。
-fn byte_successor(p: &[u8]) -> Option<Vec<u8>> {
-    let mut b = p.to_vec();
-    let mut i = b.len();
-    while i > 0 {
-        i -= 1;
-        let (nb, overflow) = b[i].overflowing_add(1);
-        b[i] = nb;
-        if !overflow {
-            return Some(b);
-        }
-    }
-    None
 }
 
 #[cfg(test)]

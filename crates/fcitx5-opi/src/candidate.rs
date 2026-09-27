@@ -36,8 +36,9 @@ pub struct CandidateState {
     pub(crate) buffer_snapshot: String,
     /// ⇧ 状态机（镜像 Android EngineController.shiftState）。
     pub(crate) shift_state: ShiftState,
-    /// 上一次可打印键按下的分流结论：(键值, 是否直通)。抬起按同一结论回复，
-    /// 使「按下放行 → 抬起也放行」成立（见 input_method::handle_key 可打印分支）。
+    /// 上一次按下的分流结论：(键值, 是否直通)。抬起按同一结论回复，使「按下放行 →
+    /// 抬起也放行」成立（见 input_method::handle_key 的可打印分支与退格/回车分支：
+    /// 那两个按下分支会把缓冲改空，抬起再判「当前」缓冲就不对称了）。
     pub(crate) last_printable: Option<(u32, bool)>,
 }
 
@@ -159,14 +160,21 @@ impl CandidateState {
 
     /// 提交当前页第 `index` 个候选（页内索引，0 起）。越界返回空串。
     pub fn select(&mut self, index: usize) -> String {
+        let fetched = self.fetched();
+        self.select_from(&fetched, index)
+    }
+
+    /// 页内索引 → 全局下标（**换算只此一份**），在调用方已抓好的候选表上提交。
+    /// 数字选词（`digit_select`）复用自己那次抓取，不重排整表。
+    pub(crate) fn select_from(&mut self, fetched: &[Candidate], index: usize) -> String {
         let global = self.page * PAGE_SIZE + index;
-        let out = self.engine.select(global);
+        let out = self.engine.select_from(fetched, global);
         self.reset_page_if_buffer_changed();
         out
     }
 
     /// 批量抓取（FETCH_LIMIT 内，engine 全量排序后截断）。
-    fn fetched(&self) -> Vec<Candidate> {
+    pub(crate) fn fetched(&self) -> Vec<Candidate> {
         self.engine.candidates(FETCH_LIMIT)
     }
 
@@ -377,5 +385,73 @@ mod tests {
         assert_eq!(s.page_count(), 0);
         assert_eq!(s.next_page(), 0);
         assert_eq!(s.set_page(5), 0);
+    }
+
+    /// 只数 `query` 的字典包装（`query_all` 走 trait 默认实现 → `query`）；与
+    /// engine-core 侧 `tests/router_invariants.rs` 同形，两轨各一枚。
+    struct Counting {
+        inner: InMemoryDictionary,
+        n: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    impl engine_core::dictionary::Dictionary for Counting {
+        fn query(&self, pinyin: &str, limit: usize) -> Vec<engine_core::trie::Entry> {
+            self.n.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            self.inner.query(pinyin, limit)
+        }
+        fn len(&self) -> usize {
+            self.inner.len()
+        }
+        fn max_freq(&self) -> u64 {
+            self.inner.max_freq()
+        }
+    }
+
+    /// 数字选词旧路径抓两次候选表：`candidates()` 一次，`select()` 内 `engine.select`
+    /// 又一次 —— 每次选词白付一次全量排序。抓取次数是计数式指标，比时间稳
+    /// （同一台机器上还有别的编译在跑）。改回两次即红。
+    #[test]
+    fn digit_select_fetches_candidate_table_once() {
+        use crate::input_method::{KeyAction, handle_key};
+        use std::sync::atomic::Ordering;
+        let n = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mut d = InMemoryDictionary::new();
+        for i in 0..20 {
+            d.insert("hao", &format!("词{i:02}"), (5000 - i) as u32);
+        }
+        let mut s = CandidateState {
+            engine: Engine::new(
+                Box::new(Counting {
+                    inner: d,
+                    n: n.clone(),
+                }),
+                engine_core::symbols::SymbolEngine::builtin(),
+                true,
+            ),
+            page: 0,
+            buffer_snapshot: String::new(),
+            shift_state: ShiftState::Off,
+            last_printable: None,
+        };
+        s.refresh_snapshot();
+        s.switch_mode(Mode::Pinyin);
+        for c in ['h', 'a', 'o'] {
+            handle_key(&mut s, c as u32, 0);
+        }
+        // 基准：读一次当前页候选表要查几次词库（= 一次全量抓取）
+        n.store(0, Ordering::Relaxed);
+        let _ = s.candidates();
+        let one_fetch = n.load(Ordering::Relaxed);
+        assert!(one_fetch > 0, "基准抓取没查到词库，用例失效");
+        n.store(0, Ordering::Relaxed);
+        assert_eq!(
+            handle_key(&mut s, '1' as u32, 0),
+            KeyAction::Input("词00".to_string())
+        );
+        assert_eq!(
+            n.load(Ordering::Relaxed),
+            one_fetch,
+            "数字选词应只抓一次候选表（两次 = 整表排两遍）"
+        );
     }
 }

@@ -190,6 +190,12 @@ pub unsafe extern "C" fn opi_fcitx5_input_key(ptr: *const u8, len: usize) -> OpS
         let (Some(c), None) = (chars.next(), chars.next()) else {
             return String::new(); // 边界：拒绝空串/多字符
         };
+        // 键值空间只在 ASCII 段等于码点：真实 fcitx5 的非 ASCII keysym 是
+        // `0x0100_0000 | 码点`。而 U+FF00–U+FFFF 里 9 个字符的码点**恰好等于**
+        // 某个 keysym（`－`=KEY_RETURN、`（`=KEY_BACK_SPACE…），此前被误当控制键。
+        if !c.is_ascii() {
+            return String::new();
+        }
         with_state(|s| match input_method::handle_key(s, c as u32, 0) {
             input_method::KeyAction::Input(out) => out,
             input_method::KeyAction::EngineHandled | input_method::KeyAction::PassThrough => {

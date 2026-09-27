@@ -368,6 +368,22 @@ fn digit_out_of_range_passes_through() {
     // '0' → 无索引 → 直通
     assert_eq!(handle_key(&mut s, '0' as u32, 0), KeyAction::PassThrough);
 }
+// 页内越界（**非末页**）：首页只有 8 项，按 '9' 必须直通 —— 曾按**全量**列表判越界
+// （global=page*8+8 落到次页），提交了用户屏幕上看不见的候选。engine-core 侧的钉见
+// tests/router_invariants.rs 的 digit_beyond_page_must_not_commit_hidden_candidate。
+#[test]
+fn digit_beyond_page_passes_through() {
+    let mut s = pinyin_state();
+    for c in ['h', 'a', 'o'] {
+        handle_key(&mut s, c as u32, 0);
+    }
+    assert_eq!(s.candidates().len(), 8, "前置：首页满页");
+    assert_eq!(s.page_count(), 3);
+    // '9' → 页内索引 8 越界 → 直通（不得提交 词08 = 次页首选）
+    assert_eq!(handle_key(&mut s, '9' as u32, 0), KeyAction::PassThrough);
+    assert_eq!(s.buffer(), "hao", "直通时不得动缓冲");
+    assert_eq!(s.page(), 0, "直通时不得改页码");
+}
 #[test]
 fn digit_without_candidates_passes_through() {
     let mut s = pinyin_state();

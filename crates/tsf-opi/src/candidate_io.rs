@@ -19,6 +19,10 @@
 //!   hide      {"type":"hide"}
 //!   position  {"type":"position","x":120,"y":340}
 //!             （可选项：caret 提示，窗口跟随光标；骨架无 caret 数据 → 固定位置）
+//!             x/y 单位 = **AWT 逻辑像素**（= Compose 的 `.dp` 数值）：收端直接
+//!             `WindowPosition(x.dp, y.dp)`，而 CMP 1.11.1 的窗口定位**不乘 density**
+//!             （反编译 `setPositionImpl` 确认），故发 200 就落在离屏幕左缘 200
+//!             逻辑像素处。**发端不得预乘 density/缩放，收端不得按设备像素解读。**
 //!
 //! 候选窗(SERVER) → TSF(CLIENT)：
 //!   select    {"type":"select","index":0}    // 用户点击第 index（页内 0 起）候选

@@ -64,7 +64,7 @@ pub fn rank_and_pick<D: Dictionary + ?Sized>(
         }),
     };
     let mut merged: Vec<Candidate> = dict
-        .query(input, usize::MAX)
+        .query_all(input)
         .into_iter()
         .map(|e| {
             let exact = e.pinyin_len == input_len;
@@ -85,7 +85,7 @@ pub fn rank_and_pick<D: Dictionary + ?Sized>(
                 continue;
             }
             let mut syl_cands: Vec<Candidate> = dict
-                .query(&syl, usize::MAX)
+                .query_all(&syl)
                 .into_iter()
                 .map(|e| {
                     // 精确性按**音节**判（该路径下"输入"就是音节），与主路径同一条规则。
@@ -97,12 +97,15 @@ pub fn rank_and_pick<D: Dictionary + ?Sized>(
             merged.extend(syl_cands.into_iter().take(3));
         }
     }
-    for s in symbols.search(input) {
-        // 单字符时仅并入 emoji：符号英文关键字前缀（如 comma→顿号）泄漏进
-        // 拼音候选是噪音——真机 "c" 键唯一候选曾是顿号。emoji 保留作趣味反馈。
-        if input.chars().count() == 1 && !s.emoji {
-            continue;
-        }
+    // 单字符时仅并入 emoji：符号英文关键字前缀（如 comma→顿号）泄漏进拼音候选是噪音
+    // ——真机 "c" 键唯一候选曾是顿号。emoji 保留作趣味反馈。过滤由 search 内部完成：
+    // 单键 183 条命中只克隆 16 条 emoji，其余不再被造出来再丢掉。
+    let sym_hits = if input.chars().count() == 1 {
+        symbols.search_emoji(input)
+    } else {
+        symbols.search(input)
+    };
+    for s in sym_hits {
         // 符号不带拼音，故不参与「精确/扩展」分层（其分数本就只有学习权重）。
         merged.push(Candidate {
             text: s.text.clone(),
@@ -114,8 +117,9 @@ pub fn rank_and_pick<D: Dictionary + ?Sized>(
             score: rank_score(0, learner.freq_of(&s.text), boost),
         });
     }
-    // 不能下推 limit 到 dict.query：学过的低静态词可反超截断线外的词，
+    // 不能下推 limit 到词库：学过的低静态词可反超截断线外的词，
     // 全量收集 + 排序是唯一正确方案（select 用有限 limit 只限 FFI 载荷）。
+    // 故走 query_all：词库不必先按词频排一遍（下面这一排就是权威序）。
     merged.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
     let mut seen = std::collections::HashSet::new();
     merged.retain(|c| seen.insert(c.text.clone()));

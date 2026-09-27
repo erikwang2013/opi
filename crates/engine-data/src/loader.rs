@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 //! mmap 加载器：将 .opid v1 映射到只读内存，实现 engine_core 的 Dictionary。
-//! 布局恢复只依赖 parse 校验过的 count 与 pinyin_total（三个区段边界）。
+//! 布局恢复只依赖 `validate` 校验过的 count / pinyin_total / max_freq（三个区段边界），
+//! **不物化任何条目** —— 冷启动只读文件与三条列。
 
-use crate::format::{ENTRY_LEN, HEADER_LEN, OpDict, parse};
+use crate::format::{ENTRY_LEN, HEADER_LEN, Validated, validate};
 use engine_core::Entry;
+use engine_core::bytes::byte_successor;
 use engine_core::dictionary::Dictionary;
 use std::path::Path;
 
@@ -21,7 +23,7 @@ pub enum LoadError {
     Format(crate::format::FormatError),
 }
 
-/// 布局完全由 parse 校验过的参数恢复：count/pinyin_total 决定三个区段边界。
+/// 布局完全由 validate 校验过的参数恢复：count/pinyin_total 决定三个区段边界。
 pub struct MmapDictionary {
     backing: Backing,
     count: usize,
@@ -30,23 +32,13 @@ pub struct MmapDictionary {
 }
 
 impl MmapDictionary {
-    fn from_parsed(backing: Backing, parsed: OpDict) -> Self {
-        // 一次性扫描 freq 列（加载期 ~120k 条，毫秒级），供学习权重动态缩放。
-        let data = match &backing {
-            Backing::Map(m) => m.as_ref(),
-            Backing::Bytes(v) => v.as_slice(),
-        };
-        let mut max_freq: u32 = 0;
-        for i in 0..parsed.entries.len() {
-            let off = HEADER_LEN + i * ENTRY_LEN;
-            let freq = u32::from_le_bytes(data[off + 10..off + 14].try_into().unwrap());
-            max_freq = max_freq.max(freq);
-        }
+    /// max_freq 由 `validate` 顺带测出（它本来就要逐条读 freq 列）。
+    fn from_validated(backing: Backing, v: Validated) -> Self {
         MmapDictionary {
             backing,
-            count: parsed.entries.len(),
-            pinyin_total: parsed.pinyin_total,
-            max_freq,
+            count: v.count,
+            pinyin_total: v.pinyin_total,
+            max_freq: v.max_freq,
         }
     }
 
@@ -69,7 +61,7 @@ impl MmapDictionary {
         self.pinyin_start() + self.pinyin_total
     }
 
-    /// 读第 i 条记录（parse 已校验，可安全 unwrap）。
+    /// 读第 i 条记录（validate 已校验，可安全 unwrap）。
     fn record(&self, data: &[u8], i: usize) -> (usize, usize, usize, usize, u32) {
         let off = self.table_start() + i * ENTRY_LEN;
         let po = u32::from_le_bytes(data[off..off + 4].try_into().unwrap()) as usize;
@@ -83,6 +75,34 @@ impl MmapDictionary {
 
 impl Dictionary for MmapDictionary {
     fn query(&self, pinyin: &str, limit: usize) -> Vec<Entry> {
+        let mut out = self.scan(pinyin);
+        out.sort_by(|a, b| {
+            b.freq
+                .cmp(&a.freq)
+                .then(a.word.as_bytes().cmp(b.word.as_bytes()))
+        });
+        out.truncate(limit);
+        out
+    }
+
+    /// 生产路径（`rank_and_pick` 全量收集后按权威「分数」整个重排）专用：
+    /// 省掉一次没人要的词频排序 —— 3625 条命中实测 `query` 1.35ms → 本方法 0.48ms。
+    fn query_all(&self, pinyin: &str) -> Vec<Entry> {
+        self.scan(pinyin)
+    }
+
+    fn len(&self) -> usize {
+        self.count
+    }
+
+    fn max_freq(&self) -> u64 {
+        self.max_freq as u64
+    }
+}
+
+impl MmapDictionary {
+    /// 前缀命中的全部条目，**未排序**（blob 序 = pinyin 字节序）。
+    fn scan(&self, pinyin: &str) -> Vec<Entry> {
         if pinyin.is_empty() || self.count == 0 {
             return Vec::new();
         }
@@ -110,7 +130,7 @@ impl Dictionary for MmapDictionary {
         for i in lo..hi {
             let (_, pl, wo, wl, freq) = self.record(data, i);
             let word = std::str::from_utf8(&data[word_start + wo..word_start + wo + wl])
-                .expect("parse 已校验 UTF-8")
+                .expect("validate 已校验 UTF-8")
                 .to_string();
             out.push(Entry {
                 word,
@@ -118,21 +138,7 @@ impl Dictionary for MmapDictionary {
                 pinyin_len: pl,
             });
         }
-        out.sort_by(|a, b| {
-            b.freq
-                .cmp(&a.freq)
-                .then(a.word.as_bytes().cmp(b.word.as_bytes()))
-        });
-        out.truncate(limit);
         out
-    }
-
-    fn len(&self) -> usize {
-        self.count
-    }
-
-    fn max_freq(&self) -> u64 {
-        self.max_freq as u64
     }
 }
 
@@ -165,34 +171,19 @@ fn lower_bound(
     lo
 }
 
-/// 字节后继：末字节 +1（带进位）。全 0xFF 返回 None（上界 = 表尾）。
-fn byte_successor(p: &[u8]) -> Option<Vec<u8>> {
-    let mut b = p.to_vec();
-    let mut i = b.len();
-    while i > 0 {
-        i -= 1;
-        let (nb, overflow) = b[i].overflowing_add(1);
-        b[i] = nb;
-        if !overflow {
-            return Some(b);
-        }
-    }
-    None
-}
-
 /// 打开文件并以只读 mmap 加载 + 校验。
 pub fn load_mmap(path: &Path) -> Result<MmapDictionary, LoadError> {
     let file = std::fs::File::open(path).map_err(LoadError::Io)?;
-    // safety: 只读共享映射，解析先于任何读取（parse 全量校验），映射生命周期随 self。
+    // safety: 只读共享映射，全量校验先于任何读取（validate），映射生命周期随 self。
     let mmap = unsafe { memmap2::Mmap::map(&file) }.map_err(LoadError::Io)?;
-    let parsed = parse(&mmap).map_err(LoadError::Format)?;
-    Ok(MmapDictionary::from_parsed(Backing::Map(mmap), parsed))
+    let v = validate(&mmap).map_err(LoadError::Format)?;
+    Ok(MmapDictionary::from_validated(Backing::Map(mmap), v))
 }
 
 /// 从堆上字节加载（测试与内嵌 fallback 用）。
 pub fn load_bytes(bytes: Vec<u8>) -> Result<MmapDictionary, LoadError> {
-    let parsed = parse(&bytes).map_err(LoadError::Format)?;
-    Ok(MmapDictionary::from_parsed(Backing::Bytes(bytes), parsed))
+    let v = validate(&bytes).map_err(LoadError::Format)?;
+    Ok(MmapDictionary::from_validated(Backing::Bytes(bytes), v))
 }
 
 #[cfg(test)]
@@ -253,6 +244,24 @@ mod tests {
         assert_eq!(d.query("hao", 8).len(), 2);
         assert_eq!(d.query("ha", 8).len(), 2);
         assert_eq!(d.query("h", 8).len(), 2);
+    }
+
+    /// `query_all` 只少了排序，**不许**少条目（截断/丢词会让候选表静默变窄）。
+    #[test]
+    fn query_all_returns_same_set_as_unlimited_query() {
+        let d = load_bytes(sample()).unwrap();
+        let sorted: Vec<String> = d
+            .query("h", usize::MAX)
+            .into_iter()
+            .map(|e| e.word)
+            .collect();
+        let mut all: Vec<String> = d.query_all("h").into_iter().map(|e| e.word).collect();
+        let mut sorted_sorted = sorted;
+        sorted_sorted.sort();
+        all.sort();
+        assert_eq!(all, sorted_sorted);
+        assert!(d.query_all("").is_empty());
+        assert!(d.query_all("zz").is_empty());
     }
 
     #[test]

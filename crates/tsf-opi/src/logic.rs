@@ -45,8 +45,9 @@ pub struct TsfLogic {
     pub(crate) buffer_snapshot: String,
     /// ⇧ 状态机（镜像 Android EngineController.shiftState）。
     pub(crate) shift_state: ShiftState,
-    /// 上一次可打印键按下的分流结论：(键值, 是否放行)。抬起按同一结论回复，
-    /// 使「按下放行 → 抬起也放行」成立（见 input_key 的可打印分支）。
+    /// 上一次按下的分流结论：(键值, 是否放行)。抬起按同一结论回复，使「按下放行 →
+    /// 抬起也放行」成立（见 input_key 的可打印分支与退格/回车分支：那两个按下分支
+    /// 会把缓冲改空，抬起再判「当前」缓冲就不对称了）。
     pub(crate) last_printable: Option<(u32, bool)>,
 }
 
@@ -167,14 +168,21 @@ impl TsfLogic {
 
     /// 提交当前页第 `index` 个候选（页内索引，0 起）。越界返回空串。
     pub fn select(&mut self, index: usize) -> String {
+        let fetched = self.fetched();
+        self.select_from(&fetched, index)
+    }
+
+    /// 页内索引 → 全局下标（**换算只此一份**），在调用方已抓好的候选表上提交。
+    /// 数字选词（`digit_select`）复用自己那次抓取，不重排整表。
+    pub(crate) fn select_from(&mut self, fetched: &[Candidate], index: usize) -> String {
         let global = self.page * PAGE_SIZE + index;
-        let out = self.engine.select(global);
+        let out = self.engine.select_from(fetched, global);
         self.reset_page_if_buffer_changed();
         out
     }
 
     /// 批量抓取（FETCH_LIMIT 内，engine 全量排序后截断）。
-    fn fetched(&self) -> Vec<Candidate> {
+    pub(crate) fn fetched(&self) -> Vec<Candidate> {
         self.engine.candidates(FETCH_LIMIT)
     }
 

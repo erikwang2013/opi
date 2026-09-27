@@ -45,7 +45,7 @@ pub enum ShiftState {
     Lock,
 }
 
-/// 引擎 + 候选分页 + ⇧ 状态机 + 可打印键抬起结论（平台中立路由的唯一状态对象）。
+/// 引擎 + 候选分页 + ⇧ 状态机 + 按键抬起结论（平台中立路由的唯一状态对象）。
 ///
 /// 结构对应两轨的 `CandidateState` / `TsfLogic`：**持有引擎**，路由语义逐条同构。
 /// 状态随引擎生命周期走（调用方按需重建），不持有任何平台类型。
@@ -57,8 +57,9 @@ pub struct KeyRouter {
     buffer_snapshot: String,
     /// ⇧ 状态机（镜像 Android `EngineController.shiftState`）。
     shift_state: ShiftState,
-    /// 上一次可打印键按下的分流结论：(键值, 是否直通)。抬起按同一结论回复，
-    /// 使「按下放行 → 抬起也放行」成立（见 `key_event` 的可打印分支）。
+    /// 上一次按下的分流结论：(键值, 是否直通)。抬起按同一结论回复，
+    /// 使「按下放行 → 抬起也放行」成立（见 `key_event` 的可打印分支与退格/回车分支：
+    /// 那两个按下分支会把缓冲改空，抬起再判「当前」缓冲就不对称了）。
     last_printable: Option<(u32, bool)>,
 }
 
@@ -173,7 +174,7 @@ impl KeyRouter {
     // ---- 候选分页（与两轨同构） ----
 
     /// 批量抓取（FETCH_LIMIT 内，engine 全量排序后截断）。
-    fn fetched(&self) -> Vec<Candidate> {
+    pub(crate) fn fetched(&self) -> Vec<Candidate> {
         self.engine.candidates(FETCH_LIMIT)
     }
 
@@ -217,12 +218,18 @@ impl KeyRouter {
     }
 
     /// 提交当前页第 `index` 个候选（**页内**索引，0 起）。越界返回空串、buffer 不变。
-    ///
-    /// **页内换算只此一份**：数字选词（`digit_select`）、回车提交（`handle_enter`）与
-    /// C 出口 `opi_select_page` 都走这里 —— 前端因此不需要知道 PAGE_SIZE。
+    /// 回车提交（`handle_enter`）与 C 出口 `opi_select_page` 都走这里 ——
+    /// 前端因此不需要知道 PAGE_SIZE。
     pub fn select(&mut self, index: usize) -> String {
+        let fetched = self.fetched();
+        self.select_from(&fetched, index)
+    }
+
+    /// 页内索引 → 全局下标（**换算只此一份**），在调用方已抓好的候选表上提交。
+    /// 数字选词（`digit_select`）复用自己那次抓取，不重排整表。
+    pub(crate) fn select_from(&mut self, fetched: &[Candidate], index: usize) -> String {
         let global = self.page * PAGE_SIZE + index;
-        let out = self.engine.select(global);
+        let out = self.engine.select_from(fetched, global);
         self.reset_page_if_buffer_changed();
         out
     }
@@ -240,8 +247,8 @@ impl KeyRouter {
     /// - 退格/Delete：缓冲非空 → 引擎按码点删；空缓冲 → 直通。
     /// - ⇧：Off→Single→Off（长按 → Lock）。
     /// - PageUp/PageDown：翻页（钳制）；Tab/Esc/方向键：直通。
-    /// - 数字：拼音/繁体且有候选时按页内索引选词，越界/无候选 → 直通。
-    /// - 可打印键的**抬起按按下的结论回复**（`last_printable` 单槽）。
+    /// - 数字：拼音/繁体且有候选时按**页内**索引选词，页内越界/无候选 → 直通。
+    /// - 退格/回车/可打印键的**抬起按按下的结论回复**（`last_printable` 单槽）。
     pub fn key_event(&mut self, keyval: u32, states: u32) -> KeyAction {
         // Ctrl/Alt/⌘ 组合键（系统快捷键）一律直通，不拦截。
         if states & (KEY_STATE_CTRL | KEY_STATE_ALT | KEY_STATE_META) != 0 {
@@ -251,17 +258,19 @@ impl KeyRouter {
         match keyval {
             KEY_BACK_SPACE | KEY_DELETE => {
                 if released {
-                    // 抬起须与按下同判（见 handle_backspace）：按下放行、抬起拦下会让客户端
-                    // 收到 keydown 收不到 keyup，依赖键状态的控件会卡键。
-                    // 只在需要时取缓冲 —— buffer() 会分配 String，提到 match 之前等于给每个
-                    // 按键都加一次分配。可打印分支的反向不对称是既有的有意取舍（见下方注释）。
-                    if self.buffer().is_empty() {
-                        KeyAction::PassThrough
-                    } else {
-                        KeyAction::EngineHandled
+                    // 抬起按**按下时记下的**结论回复（`last_printable`）——不能判「当前」
+                    // 缓冲：按下分支 handle_backspace 会把它改空（删掉最后一个字符），
+                    // 届时再判 buffer().is_empty() 就会放行一个按下时拦下的键 →
+                    // 客户端收到无 keydown 的 keyup（依赖键状态的控件卡键）。
+                    match self.last_printable {
+                        Some((k, true)) if k == keyval => KeyAction::PassThrough,
+                        // 键值不匹配（记录被另一个键顶掉）或从未按下 → 按引擎接管拦下
+                        _ => KeyAction::EngineHandled,
                     }
                 } else {
-                    self.handle_backspace()
+                    let action = self.handle_backspace();
+                    self.last_printable = Some((keyval, matches!(action, KeyAction::PassThrough)));
+                    action
                 }
             }
             // 空格在**可打印段**（0x20，见 keys.rs）——不是 TSF 轨的 `SPECIAL_BASE|0x20`。
@@ -276,14 +285,15 @@ impl KeyRouter {
             }
             KEY_RETURN => {
                 if released {
-                    // 同退格：抬起与按下同判（见 handle_enter）
-                    if self.buffer().is_empty() {
-                        KeyAction::PassThrough
-                    } else {
-                        KeyAction::EngineHandled
+                    // 同退格：抬起按按下记下的结论回复（handle_enter 提交后会清空缓冲）
+                    match self.last_printable {
+                        Some((k, true)) if k == keyval => KeyAction::PassThrough,
+                        _ => KeyAction::EngineHandled,
                     }
                 } else {
-                    self.handle_enter()
+                    let action = self.handle_enter();
+                    self.last_printable = Some((keyval, matches!(action, KeyAction::PassThrough)));
+                    action
                 }
             }
             KEY_SHIFT => self.handle_shift(states),
@@ -419,11 +429,23 @@ impl KeyRouter {
     }
 
     /// 拼音/繁体模式有候选时按数字选词（页内索引：'1'→第 0 个候选）；否则直通。
-    /// 无对应候选（如 '9' 超出、'0'）不消费，交客户端处理。
+    /// 无对应候选（本页没有第 9 项、'0'）不消费，交客户端处理。
     fn digit_select(&mut self, c: char) -> KeyAction {
+        // 本页候选数。**越界判据必须在页内**：`select` 的「越界返回空串」是全量列表的
+        // 越界，页内越界（本页只有 8 项时按 '9'）会被它换算成次页下标 —— 提交用户
+        // 屏幕上看不见的候选。见 tests/router_invariants.rs 的
+        // digit_beyond_page_must_not_commit_hidden_candidate。
+        // 同一份抓取供两处用（页内计数 + 选中）：旧路径 `candidates()` 抓一次、
+        // `select()` → `engine.select` 又抓一次 —— **每次数字选词把整表排两遍**。
+        // 计数口径与 `candidates()` 的 skip/take 逐字等价（饱和减法 + min）。
+        let fetched = self.fetched();
+        let page_len = fetched
+            .len()
+            .saturating_sub(self.page * PAGE_SIZE)
+            .min(PAGE_SIZE);
         if matches!(self.mode(), Mode::Pinyin | Mode::Traditional)
             && !self.buffer().is_empty()
-            && !self.candidates().is_empty()
+            && page_len > 0
         {
             let Some(d) = c.to_digit(10) else {
                 return KeyAction::PassThrough;
@@ -431,8 +453,13 @@ impl KeyRouter {
             let Some(idx) = d.checked_sub(1) else {
                 return KeyAction::PassThrough;
             };
-            let text = self.select(idx as usize);
-            // 越界（如 '9' 超出候选数）不消费，交客户端输入该数字
+            let idx = idx as usize;
+            if idx >= page_len {
+                return KeyAction::PassThrough;
+            }
+            // 与 `select` 同一套换算与收尾，只是复用上面那次抓取
+            let text = self.select_from(&fetched, idx);
+            // 引擎没给出该候选（页内判据下不可达，保留为最后一道防线）同样不消费
             if text.is_empty() {
                 KeyAction::PassThrough
             } else {

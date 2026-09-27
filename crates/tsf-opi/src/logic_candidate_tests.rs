@@ -170,3 +170,70 @@ fn empty_buffer_has_no_pages() {
     assert_eq!(s.next_page(), 0);
     assert_eq!(s.set_page(5), 0);
 }
+
+/// 只数 `query` 的字典包装（`query_all` 走 trait 默认实现 → `query`）；与
+/// engine-core 侧 `tests/router_invariants.rs` 同形，两轨各一枚。
+struct Counting {
+    inner: InMemoryDictionary,
+    n: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+}
+
+impl engine_core::dictionary::Dictionary for Counting {
+    fn query(&self, pinyin: &str, limit: usize) -> Vec<engine_core::trie::Entry> {
+        self.n.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.inner.query(pinyin, limit)
+    }
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+    fn max_freq(&self) -> u64 {
+        self.inner.max_freq()
+    }
+}
+
+/// 数字选词旧路径抓两次候选表：`candidates()` 一次，`select()` 内 `engine.select`
+/// 又一次 —— 每次选词白付一次全量排序。抓取次数是计数式指标，比时间稳
+/// （同一台机器上还有别的编译在跑）。改回两次即红。
+#[test]
+fn digit_select_fetches_candidate_table_once() {
+    use std::sync::atomic::Ordering;
+    let n = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let mut d = InMemoryDictionary::new();
+    for i in 0..20 {
+        d.insert("hao", &format!("词{i:02}"), (5000 - i) as u32);
+    }
+    let mut s = TsfLogic {
+        engine: Engine::new(
+            Box::new(Counting {
+                inner: d,
+                n: n.clone(),
+            }),
+            engine_core::symbols::SymbolEngine::builtin(),
+            true,
+        ),
+        page: 0,
+        buffer_snapshot: String::new(),
+        shift_state: ShiftState::Off,
+        last_printable: None,
+    };
+    s.refresh_snapshot();
+    s.switch_mode(Mode::Pinyin);
+    for c in ['h', 'a', 'o'] {
+        s.input_key(c as u32, 0);
+    }
+    // 基准：读一次当前页候选表要查几次词库（= 一次全量抓取）
+    n.store(0, Ordering::Relaxed);
+    let _ = s.candidates();
+    let one_fetch = n.load(Ordering::Relaxed);
+    assert!(one_fetch > 0, "基准抓取没查到词库，用例失效");
+    n.store(0, Ordering::Relaxed);
+    assert_eq!(
+        s.input_key('1' as u32, 0),
+        KeyOutcome::Commit("词00".to_string())
+    );
+    assert_eq!(
+        n.load(Ordering::Relaxed),
+        one_fetch,
+        "数字选词应只抓一次候选表（两次 = 整表排两遍）"
+    );
+}

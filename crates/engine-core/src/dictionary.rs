@@ -8,6 +8,11 @@ use crate::trie::{Entry, Trie};
 pub trait Dictionary: Send + Sync {
     /// 按拼音查候选，返回按词频降序、长度不超过 limit 的条目。
     fn query(&self, pinyin: &str, limit: usize) -> Vec<Entry>;
+    /// 同 [`Self::query`]，但**不保证顺序**，且不截断 —— 给「全量收集后按自己的权威键
+    /// 重排」的调用方（`rank_and_pick`）。默认实现退化为 `query(pinyin, usize::MAX)`。
+    fn query_all(&self, pinyin: &str) -> Vec<Entry> {
+        self.query(pinyin, usize::MAX)
+    }
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool {
         self.len() == 0

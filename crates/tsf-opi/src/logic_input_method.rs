@@ -16,7 +16,7 @@
 
 use engine_core::composer::Mode;
 
-use crate::logic::{ShiftState, TsfLogic};
+use crate::logic::{PAGE_SIZE, ShiftState, TsfLogic};
 
 // ---------- 特殊键：键码 = SPECIAL_BASE | Windows VK（wParam，与 TSF 键事件同源） ----------
 
@@ -106,17 +106,19 @@ impl TsfLogic {
         match keyval {
             KEY_BACK_SPACE | KEY_DELETE => {
                 if released {
-                    // 抬起须与按下同判（见 handle_backspace）：按下放行、抬起拦下会让
-                    // 应用收到 keydown 收不到 keyup，依赖键状态的游戏/编辑器会卡键。
-                    // 只在需要时取缓冲 —— buffer() 会分配 String，提到 match 之前等于给
-                    // 每个按键都加一次分配。可打印分支的反向不对称是既有的有意取舍。
-                    if self.buffer().is_empty() {
-                        KeyOutcome::Unhandled
-                    } else {
-                        KeyOutcome::Consumed
+                    // 抬起按**按下时记下的**结论回复（`last_printable`）——不能判「当前」
+                    // 缓冲：按下分支 handle_backspace 会把它改空（删掉最后一个字符），
+                    // 届时再判 buffer().is_empty() 就会放行一个按下时吞下的键 →
+                    // 应用收到无 keydown 的 keyup（依赖键状态的游戏/编辑器卡键）。
+                    match self.last_printable {
+                        Some((k, true)) if k == keyval => KeyOutcome::Unhandled,
+                        // 键值不匹配（记录被另一个键顶掉）或从未按下 → 按消费拦下
+                        _ => KeyOutcome::Consumed,
                     }
                 } else {
-                    self.handle_backspace()
+                    let outcome = self.handle_backspace();
+                    self.last_printable = Some((keyval, matches!(outcome, KeyOutcome::Unhandled)));
+                    outcome
                 }
             }
             KEY_SPACE => {
@@ -128,14 +130,15 @@ impl TsfLogic {
             }
             KEY_RETURN => {
                 if released {
-                    // 同退格：抬起与按下同判（见 handle_enter）
-                    if self.buffer().is_empty() {
-                        KeyOutcome::Unhandled
-                    } else {
-                        KeyOutcome::Consumed
+                    // 同退格：抬起按按下记下的结论回复（handle_enter 提交后会清空缓冲）
+                    match self.last_printable {
+                        Some((k, true)) if k == keyval => KeyOutcome::Unhandled,
+                        _ => KeyOutcome::Consumed,
                     }
                 } else {
-                    self.handle_enter()
+                    let outcome = self.handle_enter();
+                    self.last_printable = Some((keyval, matches!(outcome, KeyOutcome::Unhandled)));
+                    outcome
                 }
             }
             KEY_SHIFT => self.handle_shift(key_state),
@@ -265,11 +268,23 @@ impl TsfLogic {
     }
 
     /// 拼音模式有候选时按数字选词（页内索引：'1'→第 0 个候选）；否则交应用。
-    /// 无对应候选（如 '9' 超出、'0'）不消费，交应用输入该数字。
+    /// 无对应候选（本页没有第 9 项、'0'）不消费，交应用输入该数字。
     fn digit_select(&mut self, c: char) -> KeyOutcome {
+        // 本页候选数。**越界判据必须在页内**：`select` 的「越界返回空串」是全量列表的
+        // 越界，页内越界（本页只有 8 项时按 '9'）会被它换算成次页下标 —— 提交应用
+        // 屏幕上看不见的候选。三轨同形，见 engine-core 侧的钉
+        // tests/router_invariants.rs 的 digit_beyond_page_must_not_commit_hidden_candidate。
+        // 同一份抓取供两处用（页内计数 + 选中）：旧路径 `candidates()` 抓一次、
+        // `select()` → `engine.select` 又抓一次 —— **每次数字选词把整表排两遍**。
+        // 计数口径与 `candidates()` 的 skip/take 逐字等价（饱和减法 + min）。
+        let fetched = self.fetched();
+        let page_len = fetched
+            .len()
+            .saturating_sub(self.page * PAGE_SIZE)
+            .min(PAGE_SIZE);
         if matches!(self.mode(), Mode::Pinyin | Mode::Traditional)
             && !self.buffer().is_empty()
-            && !self.candidates().is_empty()
+            && page_len > 0
         {
             let Some(d) = c.to_digit(10) else {
                 return KeyOutcome::Unhandled;
@@ -277,8 +292,13 @@ impl TsfLogic {
             let Some(idx) = d.checked_sub(1) else {
                 return KeyOutcome::Unhandled;
             };
-            let text = self.select(idx as usize);
-            // 越界（如 '9' 超出候选数）不消费，交应用输入该数字
+            let idx = idx as usize;
+            if idx >= page_len {
+                return KeyOutcome::Unhandled;
+            }
+            // 与 `select` 同一套换算与收尾，只是复用上面那次抓取
+            let text = self.select_from(&fetched, idx);
+            // 引擎没给出该候选（页内判据下不可达，保留为最后一道防线）同样不消费
             if text.is_empty() {
                 KeyOutcome::Unhandled
             } else {

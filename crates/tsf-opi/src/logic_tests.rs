@@ -331,6 +331,22 @@ fn digit_out_of_range_unhandled() {
     // '0' → 无索引 → 交应用
     assert_eq!(s.input_key('0' as u32, 0), KeyOutcome::Unhandled);
 }
+// 页内越界（**非末页**）：首页只有 8 项，按 '9' 必须交应用 —— 曾按**全量**列表判越界
+// （global=page*8+8 落到次页），提交了应用屏幕上看不见的候选。engine-core 侧的钉见
+// tests/router_invariants.rs 的 digit_beyond_page_must_not_commit_hidden_candidate。
+#[test]
+fn digit_beyond_page_unhandled() {
+    let mut s = pinyin_state();
+    for c in ['h', 'a', 'o'] {
+        s.input_key(c as u32, 0);
+    }
+    assert_eq!(s.candidates().len(), 8, "前置：首页满页");
+    assert_eq!(s.page_count(), 3);
+    // '9' → 页内索引 8 越界 → 交应用（不得提交 词08 = 次页首选）
+    assert_eq!(s.input_key('9' as u32, 0), KeyOutcome::Unhandled);
+    assert_eq!(s.buffer(), "hao", "不消费时不得动缓冲");
+    assert_eq!(s.page(), 0, "不消费时不得改页码");
+}
 #[test]
 fn digit_without_candidates_unhandled() {
     let mut s = pinyin_state();

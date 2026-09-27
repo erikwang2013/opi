@@ -20,7 +20,7 @@
 
 use engine_core::composer::Mode;
 
-use crate::candidate::{CandidateState, ShiftState};
+use crate::candidate::{CandidateState, PAGE_SIZE, ShiftState};
 
 // ---------- fcitx5 键值（xkbcommon keysym，fcitx5 Key 同源） ----------
 
@@ -88,17 +88,19 @@ pub fn handle_key(state: &mut CandidateState, keyval: u32, states: u32) -> KeyAc
     match keyval {
         KEY_BACK_SPACE | KEY_DELETE => {
             if released {
-                // 抬起须与按下同判（见 handle_backspace）：按下放行、抬起拦下会让客户端
-                // 收到 keydown 收不到 keyup，依赖键状态的游戏/编辑器会卡键。
-                // 只在需要时取缓冲 —— buffer() 会分配 String，提到 match 之前等于给每个
-                // 按键都加一次分配。可打印分支的反向不对称是既有的有意取舍（见下方注释）。
-                if state.buffer().is_empty() {
-                    KeyAction::PassThrough
-                } else {
-                    KeyAction::EngineHandled
+                // 抬起按**按下时记下的**结论回复（`last_printable`）——不能判「当前」
+                // 缓冲：按下分支 handle_backspace 会把它改空（删掉最后一个字符），
+                // 届时再判 buffer().is_empty() 就会放行一个按下时拦下的键 →
+                // 客户端收到无 keydown 的 keyup（依赖键状态的游戏/编辑器卡键）。
+                match state.last_printable {
+                    Some((k, true)) if k == keyval => KeyAction::PassThrough,
+                    // 键值不匹配（记录被另一个键顶掉）或从未按下 → 按引擎接管拦下
+                    _ => KeyAction::EngineHandled,
                 }
             } else {
-                handle_backspace(state)
+                let action = handle_backspace(state);
+                state.last_printable = Some((keyval, matches!(action, KeyAction::PassThrough)));
+                action
             }
         }
         KEY_SPACE => {
@@ -110,14 +112,15 @@ pub fn handle_key(state: &mut CandidateState, keyval: u32, states: u32) -> KeyAc
         }
         KEY_RETURN => {
             if released {
-                // 同退格：抬起与按下同判（见 handle_enter）
-                if state.buffer().is_empty() {
-                    KeyAction::PassThrough
-                } else {
-                    KeyAction::EngineHandled
+                // 同退格：抬起按按下记下的结论回复（handle_enter 提交后会清空缓冲）
+                match state.last_printable {
+                    Some((k, true)) if k == keyval => KeyAction::PassThrough,
+                    _ => KeyAction::EngineHandled,
                 }
             } else {
-                handle_enter(state)
+                let action = handle_enter(state);
+                state.last_printable = Some((keyval, matches!(action, KeyAction::PassThrough)));
+                action
             }
         }
         KEY_SHIFT_L | KEY_SHIFT_R => handle_shift(state, states),
@@ -241,11 +244,23 @@ fn handle_printable(state: &mut CandidateState, c: char) -> KeyAction {
 }
 
 /// 拼音模式有候选时按数字选词（页内索引：'1'→第 0 个候选）；否则直通。
-/// 无对应候选（如 '9' 超出、'0'）不消费，交客户端处理。
+/// 无对应候选（本页没有第 9 项、'0'）不消费，交客户端处理。
 fn digit_select(state: &mut CandidateState, c: char) -> KeyAction {
+    // 本页候选数。**越界判据必须在页内**：`select` 的「越界返回空串」是全量列表的
+    // 越界，页内越界（本页只有 8 项时按 '9'）会被它换算成次页下标 —— 提交用户
+    // 屏幕上看不见的候选。三轨同形，见 engine-core 侧的钉
+    // tests/router_invariants.rs 的 digit_beyond_page_must_not_commit_hidden_candidate。
+    // 同一份抓取供两处用（页内计数 + 选中）：旧路径 `candidates()` 抓一次、
+    // `select()` → `engine.select` 又抓一次 —— **每次数字选词把整表排两遍**。
+    // 计数口径与 `candidates()` 的 skip/take 逐字等价（饱和减法 + min）。
+    let fetched = state.fetched();
+    let page_len = fetched
+        .len()
+        .saturating_sub(state.page * PAGE_SIZE)
+        .min(PAGE_SIZE);
     if matches!(state.mode(), Mode::Pinyin | Mode::Traditional)
         && !state.buffer().is_empty()
-        && !state.candidates().is_empty()
+        && page_len > 0
     {
         let Some(d) = c.to_digit(10) else {
             return KeyAction::PassThrough;
@@ -253,8 +268,13 @@ fn digit_select(state: &mut CandidateState, c: char) -> KeyAction {
         let Some(idx) = d.checked_sub(1) else {
             return KeyAction::PassThrough;
         };
-        let text = state.select(idx as usize);
-        // 越界（如 '9' 超出候选数）不消费，交客户端输入该数字
+        let idx = idx as usize;
+        if idx >= page_len {
+            return KeyAction::PassThrough;
+        }
+        // 与 `select` 同一套换算与收尾，只是复用上面那次抓取
+        let text = state.select_from(&fetched, idx);
+        // 引擎没给出该候选（页内判据下不可达，保留为最后一道防线）同样不消费
         if text.is_empty() {
             KeyAction::PassThrough
         } else {

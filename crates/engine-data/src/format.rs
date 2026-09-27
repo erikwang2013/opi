@@ -47,7 +47,8 @@ pub enum FormatError {
 }
 
 /// 序列化为 .opid v1。条目先按 pinyin 字节序排序（不改动入参）。
-/// 不变式：pinyin/word 均 ≤255 字节且为 ASCII pinyin（编译管线保证）。
+/// 不变式：pinyin/word 非空且 ≤255 字节（编译管线保证）。违反即 panic —— `parse`
+/// 会以 `BadOffsets` 拒收空 pinyin/空 word，放过就等于产出一个自己解不开的文件。
 pub fn serialize(dict: &OpDict) -> Vec<u8> {
     let mut sorted: Vec<&RawEntry> = dict.entries.iter().collect();
     sorted.sort_by(|a, b| a.pinyin.as_bytes().cmp(b.pinyin.as_bytes()));
@@ -55,6 +56,11 @@ pub fn serialize(dict: &OpDict) -> Vec<u8> {
     let mut word_blob = Vec::new();
     let mut table = Vec::with_capacity(sorted.len() * ENTRY_LEN);
     for e in &sorted {
+        assert!(
+            !e.pinyin.is_empty(),
+            "serialize: pinyin 为空（parse 会拒收）"
+        );
+        assert!(!e.word.is_empty(), "serialize: word 为空（parse 会拒收）");
         let po = pinyin_blob.len() as u32;
         pinyin_blob.extend_from_slice(e.pinyin.as_bytes());
         let wo = word_blob.len() as u32;
@@ -81,8 +87,21 @@ pub fn serialize(dict: &OpDict) -> Vec<u8> {
     out
 }
 
+/// 校验通过、但**不物化条目**的布局信息。`parse` 与 `load_mmap` 都需要它：
+/// 前者据此建 `OpDict`，后者只需要这三个数字（mmap 路径不再付物化 7 万条 `String` 的钱）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Validated {
+    pub count: usize,
+    pub pinyin_total: usize,
+    pub max_freq: u32,
+}
+
 /// 解析并完整校验 .opid v1。
-pub fn parse(data: &[u8]) -> Result<OpDict, FormatError> {
+///
+/// 校验逻辑**只有这一份**（`validate`）：`parse` = 校验 + 物化，`load_mmap` = 只校验。
+/// 两份校验必然漂移，故行循环在 `validate` 里跑两遍（第一遍定 pinyin_total，第二遍逐条检查），
+/// 不物化任何 `String`。
+pub fn validate(data: &[u8]) -> Result<Validated, FormatError> {
     if data.len() < HEADER_LEN + TRAILER_LEN {
         return Err(FormatError::Truncated);
     }
@@ -111,19 +130,18 @@ pub fn parse(data: &[u8]) -> Result<OpDict, FormatError> {
         return Err(FormatError::Truncated);
     }
     let pinyin_start = table_end;
-    let mut rows: Vec<[u8; ENTRY_LEN]> = Vec::with_capacity(count);
-    for i in 0..count {
-        let rec = HEADER_LEN + i * ENTRY_LEN;
-        rows.push(data[rec..rec + ENTRY_LEN].try_into().unwrap());
-    }
-    // pinyin_total = 各条 pinyin 终点最大值；word blob 紧随其后。
+    // 第一遍：pinyin_total = 各条 pinyin 终点最大值（word blob 紧随其后），顺带取 max_freq。
     // po + pl 同样可回绕（po=0xFFFFFFFF、pl=255 → 254），会让越界的 pinyin
     // 切片落回合法范围，从而「接受」一个数据错位的文件、击败 BadOffsets 校验。
     let mut pinyin_total = 0usize;
-    for row in &rows {
+    let mut max_freq = 0u32;
+    for i in 0..count {
+        let rec = HEADER_LEN + i * ENTRY_LEN;
+        let row = &data[rec..rec + ENTRY_LEN];
         let po = u32::from_le_bytes(row[0..4].try_into().unwrap()) as usize;
         let pl = row[4] as usize;
         pinyin_total = pinyin_total.max(po.checked_add(pl).ok_or(FormatError::BadOffsets)?);
+        max_freq = max_freq.max(u32::from_le_bytes(row[10..14].try_into().unwrap()));
     }
     let word_start = pinyin_start
         .checked_add(pinyin_total)
@@ -132,14 +150,16 @@ pub fn parse(data: &[u8]) -> Result<OpDict, FormatError> {
         return Err(FormatError::BadOffsets);
     }
     let word_total = tail - word_start;
-    let mut entries = Vec::with_capacity(count);
-    let mut prev: Option<String> = None;
-    for row in rows {
+    // 第二遍：逐条边界 / UTF-8 / 有序性。检查顺序与旧版单遍实现逐字一致
+    // （错得早的变体仍然先被报出），`prev` 借切片而非 String，避免校验期分配。
+    let mut prev: Option<&str> = None;
+    for i in 0..count {
+        let rec = HEADER_LEN + i * ENTRY_LEN;
+        let row = &data[rec..rec + ENTRY_LEN];
         let po = u32::from_le_bytes(row[0..4].try_into().unwrap()) as usize;
         let pl = row[4] as usize;
         let wo = u32::from_le_bytes(row[5..9].try_into().unwrap()) as usize;
         let wl = row[9] as usize;
-        let freq = u32::from_le_bytes(row[10..14].try_into().unwrap());
         // pinyin 侧越界由 word_start > tail 推导捕获，这里只需非零与 word 侧边界。
         // wo + wl 同样 checked：回绕会让越界切片落回合法范围（同 pinyin 侧）。
         let w_end = wo.checked_add(wl).ok_or(FormatError::BadOffsets)?;
@@ -148,23 +168,49 @@ pub fn parse(data: &[u8]) -> Result<OpDict, FormatError> {
         }
         let pinyin = std::str::from_utf8(&data[pinyin_start + po..pinyin_start + po + pl])
             .map_err(|_| FormatError::BadOffsets)?;
-        let word = std::str::from_utf8(&data[word_start + wo..word_start + wo + wl])
+        std::str::from_utf8(&data[word_start + wo..word_start + wo + wl])
             .map_err(|_| FormatError::BadOffsets)?;
-        if let Some(p) = &prev
+        if let Some(p) = prev
             && p.as_bytes() > pinyin.as_bytes()
         {
             return Err(FormatError::Unsorted);
         }
-        prev = Some(pinyin.to_string());
+        prev = Some(pinyin);
+    }
+    Ok(Validated {
+        count,
+        pinyin_total,
+        max_freq,
+    })
+}
+
+/// 校验 + 物化全部条目（opi-tools 与测试用；加载路径走 `validate`）。
+pub fn parse(data: &[u8]) -> Result<OpDict, FormatError> {
+    let v = validate(data)?;
+    let pinyin_start = HEADER_LEN + v.count * ENTRY_LEN;
+    let word_start = pinyin_start + v.pinyin_total;
+    let mut entries = Vec::with_capacity(v.count);
+    for i in 0..v.count {
+        let rec = HEADER_LEN + i * ENTRY_LEN;
+        let row = &data[rec..rec + ENTRY_LEN];
+        let po = u32::from_le_bytes(row[0..4].try_into().unwrap()) as usize;
+        let pl = row[4] as usize;
+        let wo = u32::from_le_bytes(row[5..9].try_into().unwrap()) as usize;
+        let wl = row[9] as usize;
+        let freq = u32::from_le_bytes(row[10..14].try_into().unwrap());
         entries.push(RawEntry {
-            pinyin: pinyin.to_string(),
-            word: word.to_string(),
+            pinyin: std::str::from_utf8(&data[pinyin_start + po..pinyin_start + po + pl])
+                .expect("validate 已校验 UTF-8")
+                .to_string(),
+            word: std::str::from_utf8(&data[word_start + wo..word_start + wo + wl])
+                .expect("validate 已校验 UTF-8")
+                .to_string(),
             freq,
         });
     }
     Ok(OpDict {
         entries,
-        pinyin_total,
+        pinyin_total: v.pinyin_total,
     })
 }
 
@@ -241,6 +287,35 @@ mod tests {
         let parsed = parse(&serialize(&d)).unwrap();
         assert!(parsed.entries.is_empty());
         assert_eq!(parsed.pinyin_total, 0);
+    }
+
+    /// `serialize` 是 pub：空 pinyin / 空 word 会造出 `parse` 自己拒收（`BadOffsets`）的文件。
+    /// 编译管线已在边界挡掉空列（`compiler.rs`），故这是不变式的**显式**拒绝 ——
+    /// 宁可炸在写文件之前，也不要产出一个解不开的词库。
+    #[test]
+    #[should_panic(expected = "pinyin 为空")]
+    fn serialize_rejects_empty_pinyin() {
+        serialize(&OpDict {
+            entries: vec![RawEntry {
+                pinyin: String::new(),
+                word: "好".into(),
+                freq: 1,
+            }],
+            pinyin_total: 0,
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "word 为空")]
+    fn serialize_rejects_empty_word() {
+        serialize(&OpDict {
+            entries: vec![RawEntry {
+                pinyin: "hao".into(),
+                word: String::new(),
+                freq: 1,
+            }],
+            pinyin_total: 3,
+        });
     }
 
     #[test]
