@@ -30,7 +30,11 @@ int g_fail = 0;
 
 struct TestIC : fcitx::InputContext {
     explicit TestIC(fcitx::InputContextManager &m)
-        : fcitx::InputContext(m, "opi-test") {}
+        : fcitx::InputContext(m, "opi-test") {
+        // 声明 Preedit 能力 —— 胶水的 clientPreedit 通道就挂在这一位上。
+        // 不声明的话下面第 2 节的断言测不到东西（守卫会把通道整个关掉）。
+        setCapabilityFlags(fcitx::CapabilityFlag::Preedit);
+    }
     const char *frontend() const override { return "test"; }
     void commitStringImpl(const std::string &text) override {
         committed_ += text;
@@ -45,6 +49,18 @@ std::string q(const std::string &s) { return "\"" + s + "\""; }
 
 std::string preeditOf(fcitx::InputContext &ic) {
     return ic.inputPanel().preedit().toString();
+}
+
+// 内联预编辑（clientPreedit）——与面板 preedit 是**两条**通道，见胶水里的说明。
+std::string clientPreeditOf(fcitx::InputContext &ic) {
+    return ic.inputPanel().clientPreedit().toString();
+}
+
+// 候选栏高亮位：-1 = 无高亮。对**空**候选表调 setGlobalCursorIndex 会抛
+// std::invalid_argument，所以这个值必须只在有候选时被设置。
+int candidateCursor(fcitx::InputContext &ic) {
+    auto list = ic.inputPanel().candidateList();
+    return list ? list->cursorIndex() : -1;
 }
 
 // 无候选表 = 0 条（panel.reset() 会把候选表置空，candidateList() 返回 nullptr）。
@@ -112,6 +128,29 @@ int main() {
     check(candidateCount(ic) > 0, "候选表非空");
     check(candidateCount(ic) <= 8, "候选表 <= 一页 8 条");
     check(ic.inputPanel().preedit().cursor() == 5, "预编辑光标在末尾（字节 5）");
+    check(clientPreeditOf(ic) == "nihao", "clientPreedit == 缓冲（内联预编辑通道）");
+    check(candidateCursor(ic) == 0, "候选光标 = 0（候选栏有高亮）");
+
+    std::printf("== 2b. 缓冲非空 + 候选 0 条（候选光标守卫）==\n");
+    // 这一节是**变异测试**（实测过两个变异体）：去掉胶水里 `if (!texts.empty())`
+    // 那个守卫，下面这步就会抛 std::invalid_argument（`CommonCandidateList: invalid
+    // global index`）。**只**去守卫 —— 异常被 keyEvent 的 catch 吞掉，这个键作废、
+    // 面板停在**上一次**的候选表上，于是下面两条断言失败（candidates=1 而非 0）。
+    // 守卫和 catch **都**去掉 —— 异常就地 terminate，驱动 abort（exit 134），真
+    // fcitx5 里的表现就是守护进程消失。而「缓冲非空 + 候选 0 条」是常态，
+    // `v` / `zzzz` 这类拼音本来就查不到候选。
+    {
+        fcitx::ResetEvent clearEvent(&ic);
+        engine.reset(entry, clearEvent);
+    }
+    type("zzzz");
+    std::printf("  'zzzz' -> preedit=%s clientPreedit=%s candidates=%d\n",
+                q(preeditOf(ic)).c_str(), q(clientPreeditOf(ic)).c_str(),
+                candidateCount(ic));
+    check(preeditOf(ic) == "zzzz", "无候选时缓冲照样进预编辑");
+    check(candidateCount(ic) == 0, "确实 0 条候选（走了守卫，没抛异常）");
+    check(candidateCursor(ic) == -1, "无候选时不给候选光标（-1）");
+    check(clientPreeditOf(ic) == "zzzz", "无候选时 clientPreedit 照常");
 
     std::printf("== 3. 翻页（PageDown/PageUp 走 Rust 页码）==\n");
     // "nihao" 只有一页；换单字母缓冲 "n"（满 8 条，说明还有下一页）。
@@ -180,6 +219,7 @@ int main() {
                 candidateCount(ic));
     check(!ic.committed_.empty(), "空格提交了文本");
     check(preeditOf(ic).empty() && candidateCount(ic) == 0, "提交后面板清空");
+    check(clientPreeditOf(ic).empty(), "提交后 clientPreedit 也清空");
 
     std::printf("== 6. reset（失焦/切输入法）==\n");
     type("ni");
@@ -192,6 +232,7 @@ int main() {
                 q(preeditOf(ic)).c_str(), candidateCount(ic),
                 ic.inputPanel().empty() ? 1 : 0);
     check(preeditOf(ic).empty() && candidateCount(ic) == 0, "reset 后面板清空");
+    check(clientPreeditOf(ic).empty(), "reset 后 clientPreedit 也清空");
     check(ic.inputPanel().empty(), "reset 后 InputPanel::empty() 为真");
 
     std::printf("== 7. 直通键不污染面板 ==\n");

@@ -95,7 +95,10 @@ internal fun CandidatePanel(
                 }
             }
             Spacer(Modifier.height(4.dp))
-            // 底行：页码 + 翻页
+            // 底行：页码 + 翻页。
+            // ⚠ 两个箭头**当前是死键**：只发 next_page/prev_page 消息，不改本地页码，
+            // 而 TSF 侧对应回调是骨架态 no-op → 点了什么都不会发生（页码的唯一真源是
+            // TSF 回发的 show，见 Main.kt 头注释「翻页」段）。待接线，别按已实现读。
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,

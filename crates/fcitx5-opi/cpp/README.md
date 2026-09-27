@@ -98,6 +98,76 @@ Rust 侧的 buffer 当预编辑串（光标置末尾）、当前页候选当候�
 通知前端。`reset()` 同样清面板 —— 只清引擎不清面板的话，失焦/切输入法后
 预编辑与候选栏会挂在屏幕上。
 
+**客户端这条路上有两条独立通道，缺一条都是半条链路**（按能力位分，互不替代）：
+
+| 通道 | 能力位 | 信号 | 由谁触发 |
+|---|---|---|---|
+| 整个面板 | `ClientSideInputPanel`(1<<39) | `UpdateClientSideUI` | `updateUserInterface(InputPanel)` |
+| 内联预编辑 | `Preedit`(1<<1) | `UpdateFormattedPreedit` | `panel.setClientPreedit(...)` + `ic->updatePreedit()` |
+| 提交 | — | `CommitString` | `ic->commitString(...)` |
+
+只推前者（本轮之前就是这样）的后果不只是「少一个信号」：声明了 `Preedit` 的
+客户端 composing 状态是空的，**切窗口时已输入的拼音会静默丢失** —— core 对
+「有 clientPreedit 的客户端失焦」有默认提交行为（实测：只加 `setClientPreedit`
+的变异体在 `FocusOut()` 时收到 `CommitString: 'ni'`，原码 0 条）。
+
+> **已知且已接受的行为，别当 bug 报**：修好之后，「输入拼音 → 切窗口」会把这段
+> 拼音**提交进文档**（`CommitString: 'ni'`），而不是丢掉。这是 fcitx5 core 对
+> **任何**使用 clientPreedit 的输入法的默认行为，**不是本插件选的** —— 本插件
+> 因此与 Linux 上其它输入法行为一致。之所以接受：「看得见、可撤销的提交」换掉
+> 「看不见的丢失」，后者更坏。
+> 想改这个行为的话先做功课：`CapabilityFlag::ClientUnfocusCommit`(1<<5) 看着像
+> 开关，但本次实测客户端**没置这一位也照样提交**，所以置位与否并不就是开关，
+> 别照名字猜。
+
+两条通道各由**一个**能力位决定，实测（真守护进程，6 键 `nihao`+space）。
+
+下表数字是 **e2e 日志的行数，不是信号条数** —— `opi_e2e.py` 把每条信号打印两遍（逐键一遍 +
+末尾汇总再列一遍），所以 `13` = 逐键 6 + 汇总 7、`12` = 逐键 6 + 汇总 6。
+**跨行比较有效（同一把尺），但别把它读成「core 发了 13 条信号」。**
+
+| caps | `UpdateClientSideUI` | `UpdateFormattedPreedit` |
+|---|---|---|
+| `0x8000000000`（仅 panel） | 13 | 0 |
+| `0x8000000010`（panel+FmtPreedit，无 `Preedit`） | 13 | **0** |
+| `0x8000000002`（panel+`Preedit`） | 13 | 12 |
+| `0x8000000012`（harness 现行） | 13 | 12 |
+| `0x0000000012`（无 panel 位） | 0 | 12 |
+
+即：面板只看 bit 39，内联预编辑只看 bit 1（连 `FormattedPreedit`(bit 4) 都不是开关）。
+**`Preedit` 位缺了就是没有内联预编辑**，这正是这条链路此前一直半通的原因。
+
+⚠️ 代码里那两处 `if (wantsClientPreedit)` 守卫**不改变上表任何一格**：core 的
+`InputContext::updatePreedit()` 自己就查这一位（去掉守卫后 `updatePreeditImpl`
+仍被调 0 次，DBus 信号条数逐格不变）。留着只是不让面板里存一个客户端渲染不了的
+`clientPreedit`；真正决定客户端收到什么的是 core，别把守卫当成防线。
+
+**候选光标**：`list->setGlobalCursorIndex(0)` 让候选栏有高亮态，否则客户端收到的
+候选光标恒为 -1（不画选中态）。⚠️ 必须用 `if (!texts.empty())` 守卫 —— 对**空**候选表
+调它会**抛** `std::invalid_argument`（`what()` = `CommonCandidateList: invalid global
+index`），而「缓冲非空 + 候选 0 条」是常态（`v` / `zzzz` 这类拼音就没有候选）。实测
+三种组合（同一份按键序列 `z z z z`，caps `0x8000000012`）：
+
+| 空候选表上的 `setGlobalCursorIndex(0)` | 结果 |
+|---|---|
+| **有守卫**（现行） | 4 键正常，该缓冲候选光标 -1，守护进程不受影响 |
+| 无守卫 + 有 `catch` | 该键**作废**（异常被吞），面板停在**上一次**的候选表上 |
+| 无守卫 + 无 `catch` | 异常越过 FFI 边界 → `abort`，守护进程 pid 消失 |
+
+也就是说这条守卫与下一条「异常不越过 FFI 边界」是**同一件事的两面**：fcitx5 core
+不接异常，任何从引擎回调漏出去的异常都是整个输入法挂掉。守卫消掉这个具体的抛点，
+`catch` 兜住其余的。
+
+**直通键不做无谓重推**：`action == 0`（ESC/方向键/F5/PageDown 这类）不消费按键、
+Rust 侧状态不变，缓冲与上次推出去的一样就直接跳过 —— 否则每次直通按键都要白付
+一次跨 FFI + 候选 JSON 序列化/解析 + 客户端重绘。
+
+**异常不越过 FFI 边界**：`keyEvent` / `reset` / `select` 三个入口都套了
+`catch (const std::exception &)`。fcitx5 core **不捕获**引擎回调抛出的异常
+（实测：裸抛 → `std::terminate` → `abort`，日志里是 `libc.so.6(abort+0xd3)` 回溯，
+守护进程 pid 直接消失）。Rust 侧每个导出入口都套了 `catch_unwind`，两侧对齐后
+异常降级成「这一次按键无效」。
+
 设计要点：**页码只有 Rust 一份**。`opi_fcitx5_candidates` 返回的已经是切片后的
 当前页（`candidate.rs` 的 `PAGE_SIZE`），胶水只把它画出来，翻页由 Rust 路由
 （`input_method.rs` 的 PageUp/PageDown → `prev_page`/`next_page`）驱动。若把整份
@@ -197,9 +267,9 @@ CI 上既没有 fcitx5 的头/库，也没有 dbus 会话，所以下面这些**
 | 文件 | 验什么 | 要 dbus |
 |---|---|---|
 | `run-harness.sh` | 一键跑完下面全部 | — |
-| `opi_panel_driver.cpp` | 直接构造 `OpiEngine` + 真 `fcitx::InputContext`，逐项断言面板推进（预编辑/候选/翻页/点选/提交/reset/直通键） | 否 |
+| `opi_panel_driver.cpp` | 直接构造 `OpiEngine` + 真 `fcitx::InputContext`，逐项断言面板推进（预编辑/clientPreedit/候选/候选光标/翻页/点选/提交/reset/直通键） | 否 |
 | `opi_json_check.cpp` + `opi_json_vec.txt` | 狭 JSON 解析器 vs **真 serde_json 输出**，逐字节比对 | 否 |
-| `opi_e2e.py` | 真 fcitx5 守护进程里**用户实际收到**的信号（`basic` / `page` / `caps` 三种模式） | **要** |
+| `opi_e2e.py` | 真 fcitx5 守护进程里**用户实际收到**的信号（`basic` / `page` / `passthrough` / `caps` 四种模式），每步都是**断言**不是打印 | **要** |
 
 > `opi_json_vec.txt` 是**数据文件不是代码**：它必须逐字节等于 serde_json 的真实
 > 输出（第 1 行）与候选串的 hex（第 2 行），加任何注释行都会让解析器读错，
@@ -219,11 +289,28 @@ FCITX5_HEADERS=/tmp/fcitx5-hdr/root/usr/include/Fcitx5 \
 其余环境变量见脚本头部注释（`FCITX5_LIBS` / `FCITX5_SYSTEM_ADDONS` /
 `OPI_HARNESS_WORK`，都选填）。
 
-脚本自己会：构建 Rust cdylib → 编译链接胶水并查 `ldd -r` 与导出符号 → 布置独立的
+脚本自己会：构建 Rust cdylib → 用 `-Wall -Wextra -Werror` 编译链接胶水（**警告即
+失败**，不再靠人看输出）并查 `ldd -r` 与导出符号 → 布置独立的
 `XDG_CONFIG_HOME`/`XDG_DATA_HOME`（含**把 opi 放进输入法组**的 profile）与 addons
-目录 → 在 `dbus-run-session` 私有会话里起 fcitx5 跑完四种 e2e 模式 → 最后打印
-`Loaded addon opi_fcitx5` 那一行。**不碰用户真实的 fcitx5 配置，也不会连到用户
-正在跑的实例上。** 产物与日志留在 `$OPI_HARNESS_WORK`（缺省 `mktemp -d`）。
+目录 → 跑完五种 e2e 模式，每个模式**各自一个 `dbus-run-session` + 一个独立守护
+进程**（日志分开成 `fcitx5-<n>.log`）→ 最后打印加载记录。**不碰用户真实的 fcitx5
+配置，也不会连到用户正在跑的实例上。** 产物与日志留在 `$OPI_HARNESS_WORK`
+（缺省 `mktemp -d`）。e2e 断言失败时脚本以非零退出，但退出前仍会打印加载记录。
+
+守护进程是**前台**起的（**不要加 `-d`**）：`-d` 会 daemonize，`$!` 是那个立刻
+退出的父进程，`kill $!` 打空（实测返回 1）而真正的守护进程留下来 —— 「起来 →
+跑 e2e → 收掉」的后半段全是假的，下一次运行可能落在**旧守护进程**上出结果。
+同类的坑还有两个，都会让 e2e **照样出结果**却测的不是你以为的东西：
+
+- 同一 dbus 会话里起第二个 fcitx5，它拿不到 dbus 名、把加载好的 addon 全部卸掉、
+  一个字都不服务（日志 `Unable to request dbus name. Is there another fcitx
+  already running?`），而 e2e 连上的是**第一个**实例。
+- `opi_e2e.py` 里订阅一个**不存在**的信号（曾写作 `UpdatePreedit`，真名是
+  `UpdateFormattedPreedit`）不报错、只是永远静默。现在启动时会对着 introspection
+  核对信号名，写错直接红。
+
+因此脚本收尾时会确认守护进程**真的没了**（`kill -0` 复查一次），加载记录里也应
+能看到配对的 `Unloading addon opi_fcitx5` —— 只有被真 pid 收到 SIGTERM 才会打这行。
 
 `opi_panel_driver.cpp` 第 3 节有一步会打 `[SKIP]` 而不是 `[PASS]`：缓冲 `nihao`
 在词库下常常不足 8 条候选，翻页无从观察 —— 这是词库规模决定的，不是失败。
@@ -243,48 +330,58 @@ FCITX5_HEADERS=/tmp/fcitx5-hdr/root/usr/include/Fcitx5 \
   （输入法条目注册成功）
 - 把词库换成 6 字节垃圾时，日志出现上面那行装载失败告警
 
-**输入面板（本轮新增，端到端已跑通）**：在私有 dbus 会话里起真 fcitx5，
-经 xdg-desktop-portal 输入法接口（`org.fcitx.Fcitx.InputMethod1`
-的 `CreateInputContext`）建输入上下文，声明
-`Preedit | FormattedPreedit | ClientSideInputPanel`（`1<<1 | 1<<4 | 1<<39`），
+**输入面板（端到端已跑通）**：在私有 dbus 会话里起真 fcitx5，经 xdg-desktop-portal
+输入法接口（`org.fcitx.Fcitx.InputMethod1` 的 `CreateInputContext`）建输入上下文，
+声明 `Preedit | FormattedPreedit | ClientSideInputPanel`（`1<<1 | 1<<4 | 1<<39`），
 `FocusIn` → 送按键。收到的信号：
 
 ```
 Loaded addon opi_fcitx5
-UpdateClientSideUI: preedit="n" cursor=1 候选=8 ['你','那','能','年','呐','呢','吶','您']
-UpdateClientSideUI: preedit="ni" cursor=2 候选=8 ['你','泥','拟','擬','呢','腻','祢','铌']
-UpdateClientSideUI: preedit="nihao" cursor=5 候选=6 ['你','好','号','號','泥','拟']
-键 PageDown -> preedit="n" 候选=8 ['内','內','哪','农','農','难','難','女']
-键 PageUp   -> preedit="n" 候选=8 ['你','那','能','年','呐','呢','吶','您']
-SPACE -> CommitString: 你   （紧接着一条全空的面板更新）
+UpdateFormattedPreedit: preedit="n"     预编辑光标=1
+UpdateClientSideUI: preedit="n" 预编辑光标=1 候选光标=0 候选=8 ['你','那','能','年','呐','呢','吶','您']
+UpdateFormattedPreedit: preedit="ni"    预编辑光标=2
+UpdateClientSideUI: preedit="ni" 预编辑光标=2 候选光标=0 候选=8 ['你','泥','拟','擬','呢','腻','祢','铌']
+UpdateClientSideUI: preedit="nihao" 预编辑光标=5 候选光标=0 候选=6 ['你','好','号','號','泥','拟']
+键 PageDown -> 候选光标=0 候选=8 ['内','內','哪','农','農','难','難','女']
+键 PageUp   -> 候选光标=0 候选=8 ['你','那','能','年','呐','呢','吶','您']
+SPACE -> CommitString: 你
+      -> UpdateFormattedPreedit: preedit=""   （紧接着一条全空的面板更新）
 ```
 
-即：预编辑串、候选列表、翻页、提交后清屏**都在真守护进程里被真正的 fcitx5
-推给了客户端**，不只是构造 `OpiEngine` 的自测。
+即：预编辑串、**内联预编辑**、候选列表、**候选光标**、翻页、提交后清屏**都在真
+守护进程里被真正的 fcitx5 推给了客户端**，不只是构造 `OpiEngine` 的自测。
 
 上面这段是**浓缩**（真跑出来每条信号还带 `CurrentIM` 与逐键分节）。要复跑出
 原始输出，跑 `crates/fcitx5-opi/cpp/run-harness.sh`（见上「验证 harness」），
-它会原样打印 `basic` / `page` / `caps 0x12` / `caps 0x8000000012` 四次会话的全部
+它会原样打印 `basic` / `page` / `passthrough` / `caps 0x12` /
+`caps 0x8000000012` 五次会话的全部
 信号。
 
 > ⚠️ 之前「按键进不了引擎（`handled=0`）」的**根因不是焦点**：`FocusIn()`
 > 只是把输入法设成当前**输入法组里的当前项**（用户 profile 里是
 > keyboard-us），而 **`SetCurrentIM("opi")` 在 opi 不属于该组时静默无效** ——
 > 不报错、不切换、CurrentIM 信号也不发，看上去就像「插件坏了」。
-> profile 的组里加上 opi（本轮用独立的 `XDG_CONFIG_HOME`，**没有碰用户真实
+> profile 的组里加上 opi（用独立的 `XDG_CONFIG_HOME`，**没有碰用户真实
 > 配置**）后，`CurrentIM` 变成 `['OPI 拼音','opi','zh_CN']`，按键立刻进引擎。
-> 另一条同类陷阱：**面板去哪儿由能力位决定**。`SetCapability` 含
-> `ClientSideInputPanel`（`1<<39`）时面板推给客户端，否则推给 UI addon。
-> 实测对照（同一串按键，只改这一位）：
+>
+> 另一条同类陷阱：**面板去哪儿由能力位决定，而且是两条独立通道**（整个面板看
+> `ClientSideInputPanel`(1<<39)，内联预编辑看 `Preedit`(1<<1)）。实测对照（同一串
+> 按键，只改能力位）：
 >
 > | capability | 客户端收到 |
 > |---|---|
-> | `0x12`（Preedit\|FormattedPreedit） | 只有 `CommitString: 你`，逐键面板信号 **0 条** |
-> | `0x8000000012`（多一位 ClientSideInputPanel） | 逐键 `UpdateClientSideUI`：预编辑 + 光标 + 候选 |
+> | `0x12`（Preedit\|FormattedPreedit） | 逐键 `UpdateFormattedPreedit`（内联预编辑）；**没有** `UpdateClientSideUI` |
+> | `0x8000000012`（多一位 ClientSideInputPanel） | 上面那条**加上**逐键 `UpdateClientSideUI`：预编辑 + 光标 + 候选 + 候选光标 |
 >
-> `0x1FF` 里**没有**这一位 —— 早先「按了键什么都没显示」很可能是把面板送去了
-> UI 侧而只盯着客户端看（或反过来）。另注：`--ui=testui` 不打印面板内容，
-> 所以**UI addon 那条投递路径本轮没有可观测记录**，可观测的是客户端那条。
+> `0x1FF` 里**没有** `ClientSideInputPanel` 那一位 —— 早先「按了键什么都没显示」
+> 很可能是把面板送去了 UI 侧而只盯着客户端看（或反过来）。另注：`--ui=testui`
+> 不打印面板内容，所以**UI addon 那条投递路径没有可观测记录**，可观测的是客户端
+> 那两条。
+>
+> 这两条通道曾经只推了第一条，而当时的 `opi_e2e.py` **订阅的信号名是错的**
+> （写 `UpdatePreedit`，真名 `UpdateFormattedPreedit`）—— 订阅不存在的信号不报错、
+> 只是永远静默，于是「内联预编辑没通」既没被 harness 抓到，还被读成了「预编辑已
+> 验证」。现在信号名启动时对着 introspection 核对，且每步都是断言。
 
 键事件路由与候选提交另有**直接构造 `OpiEngine`** 的驱动验证（同一份胶水源码
 + 同一个 Rust `libfcitx5_opi.so`，走真实 `loadDictionary()` 与

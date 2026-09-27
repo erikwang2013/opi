@@ -14,9 +14,18 @@ internal sealed interface JVal {
     data class JObj(val v: Map<String, JVal>) : JVal
 }
 
+/**
+ * 容器嵌套上限，镜像 serde_json 的 `remaining_depth: 128`（判定在 JParse.nestedContainer）。
+ * 递归下降的每一层栈都来自容器嵌套：不设上限则上万层 `[[[[…` 直接吃光线程栈。
+ */
+private const val MAX_DEPTH = 128
+
 /** 递归下降解析器：支持对象/字符串数组/数字/转义（\" \\uXXXX 等）。 */
 private class JParse(private val s: String) {
     private var i = 0
+
+    /** 剩余可嵌套层数（镜像 serde_json 的 `remaining_depth`）。 */
+    private var remaining = MAX_DEPTH
 
     fun parse(): JVal? {
         skipWs()
@@ -34,10 +43,23 @@ private class JParse(private val s: String) {
         if (i >= s.length) return null
         return when (s[i]) {
             '"' -> JVal.JStr(parseString() ?: return null)
-            '{' -> parseObject()
-            '[' -> parseArray()
+            '{' -> nestedContainer { parseObject() }
+            '[' -> nestedContainer { parseArray() }
             else -> parseNumber()
         }
+    }
+
+    /**
+     * 递归下降的**唯一**入口收口处：进出容器时维护 [remaining]。
+     * 镜像 serde_json 的 `check_recursion!`（先减再判 0）—— 最多 127 层容器；
+     * 第 128 层返回 null（该行丢弃），而不是让递归继续吃栈。
+     * 退出时必须归还，否则同一层的兄弟节点会从上一分支的深度起算并被误判。
+     */
+    private fun nestedContainer(parse: () -> JVal?): JVal? {
+        if (--remaining == 0) return null
+        val v = parse()
+        remaining++
+        return v
     }
 
     private fun parseObject(): JVal.JObj? {

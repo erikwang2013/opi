@@ -70,8 +70,8 @@ mkdir -p "$addons" "$work/data/fcitx5/addon" "$work/data/fcitx5/inputmethod" \
 echo "== 1/6 构建 Rust cdylib"
 cargo build --release -p fcitx5_opi --manifest-path "$repo/Cargo.toml"
 
-echo "== 2/6 编译并链接胶水 .so（-Wall -Wextra 零警告才算过）"
-g++ -std=c++17 -Wall -Wextra -shared -fPIC \
+echo "== 2/6 编译并链接胶水 .so（-Wall -Wextra -Werror：警告即失败）"
+g++ -std=c++17 -Wall -Wextra -Werror -shared -fPIC \
     -o "$addons/libfcitx5_opi_glue.so" "$here/opi_fcitx5.cpp" \
     "${INC[@]}" "${LNK[@]}" -Wl,-rpath,'$ORIGIN'
 cp "$rustlib/libfcitx5_opi.so" "$addons/"
@@ -85,9 +85,9 @@ nm -D --defined-only "$addons/libfcitx5_opi_glue.so" | grep fcitx_addon_factory 
     || { echo "   !! 导出符号里没有 fcitx_addon_factory_instance，addon 加载不进来"; exit 1; }
 
 echo "== 3/6 编译两支 C++ 检查程序"
-g++ -std=c++17 -Wall -Wextra -o "$work/opi_panel_driver" \
+g++ -std=c++17 -Wall -Wextra -Werror -o "$work/opi_panel_driver" \
     "$here/opi_panel_driver.cpp" "${INC[@]}" "${LNK[@]}"
-g++ -std=c++17 -Wall -Wextra -o "$work/opi_json_check" \
+g++ -std=c++17 -Wall -Wextra -Werror -o "$work/opi_json_check" \
     "$here/opi_json_check.cpp" "${INC[@]}" "${LNK[@]}"
 
 echo "== 4/6 布置 XDG 数据（addon/inputmethod conf + 词库）"
@@ -122,8 +122,31 @@ echo
 
 echo
 echo "== 6/6 端到端（私有 dbus 会话 + 真 fcitx5 守护进程）"
-dbus-run-session -- env HARNESS_WORK="$work" E2E_PY="$here/opi_e2e.py" \
-    LD_LIBRARY_PATH="$rustlib:$FCITX5_LIBS" bash -s <<'EOS'
+# 每个变体一个**独立**的 dbus-run-session + 独立守护进程。两个理由：
+#
+# 1) **不加 `-d`**。`-d` 会 daemonize：`$!` 是那个立刻退出的父进程，`kill $!`
+#    打空（实测返回 1），真正在跑的守护进程是另一个 pid 且**留下来**。于是
+#    「起来 → 跑 e2e → 收掉」这条链的后半段是假的，下一次运行可能落在**旧
+#    守护进程**上出结果 —— 改完代码却测出「和上一版毫无区别」的假绿，就是
+#    这么来的。前台起，`$!` 才是真 pid；收完再确认一次它真的没了。
+# 2) 每个变体独立会话。同一 dbus 会话里起第二个 fcitx5，它会拿不到 dbus 名、
+#    把已加载的 addon 全部卸掉、一个字都不服务（日志：`Unable to request dbus
+#    name. Is there another fcitx already running?`），而 e2e **照样连上并出
+#    结果** —— 出结果是**第一个**实例。共用会话时四个变体还会互相污染状态
+#    （当前 IM、残留缓冲），日志也混在一个文件里分不清归属。
+#
+# 这里**不做** `pkill -f 'fcitx5 --ui=testui'`：每个会话的 bus 地址都不同，
+# 别的会话里的残留守护进程根本收不到我们的调用，清它没有收益；而这条命令会
+# 误杀同一台机器上别人正在跑的 harness。
+e2e_rc=0
+vi=0
+for variant in basic page passthrough "caps 0x12" "caps 0x8000000012"; do
+    vi=$((vi + 1))
+    echo
+    echo "--- e2e 变体 $vi/5: opi_e2e.py $variant"
+    dbus-run-session -- env HARNESS_WORK="$work" E2E_PY="$here/opi_e2e.py" \
+        VARIANT="$variant" LOG="$work/fcitx5-$vi.log" \
+        LD_LIBRARY_PATH="$rustlib:$FCITX5_LIBS" bash -s <<'EOS' || e2e_rc=1
 set -u
 # FCITX_ADDON_DIRS 是**替换**语义：系统目录必须手抄在后面，否则拼音等一起失效。
 export FCITX_ADDON_DIRS="$HARNESS_WORK/addons:${FCITX5_SYSTEM_ADDONS:-/usr/lib/x86_64-linux-gnu/fcitx5}"
@@ -131,20 +154,35 @@ export XDG_DATA_HOME="$HARNESS_WORK/data"
 export XDG_CONFIG_HOME="$HARNESS_WORK/cfg"
 # testui 会把其它 addon 全禁掉（Override Enabled Addons: {testui}），
 # 所以要额外 --enable 本 addon，否则它根本不加载、测出来全是空信号。
-fcitx5 --ui=testui --enable opi_fcitx5 -d > "$HARNESS_WORK/fcitx5.log" 2>&1 &
+fcitx5 --ui=testui --enable opi_fcitx5 > "$LOG" 2>&1 &
 pid=$!
-sleep 5
-for mode in basic page; do python3 "$E2E_PY" "$mode"; echo; done
-# 能力位对照：0x12 无 ClientSideInputPanel → 面板推给 UI addon（客户端看不到）
-python3 "$E2E_PY" caps 0x12; echo
-python3 "$E2E_PY" caps 0x8000000012
-kill $pid 2>/dev/null || true
-wait $pid 2>/dev/null || true
+# 等 addon 真的加载起来再送按键。固定 sleep 是假故障源：慢机器上 5s 不够，
+# e2e 会连上守护进程但连不到输入法，报出来一堆「无面板更新信号」。
+for _ in $(seq 1 80); do
+    grep -q 'Loaded addon opi_fcitx5' "$LOG" && break
+    kill -0 "$pid" 2>/dev/null || { echo "!! fcitx5 加载完成前就退了，日志见 $LOG"; exit 1; }
+    sleep 0.25
+done
+if ! grep -q 'Loaded addon opi_fcitx5' "$LOG"; then
+    echo "!! 20s 内没等到 'Loaded addon opi_fcitx5'，日志见 $LOG"; exit 1
+fi
+python3 "$E2E_PY" $VARIANT
+rc=$?
+kill "$pid" 2>/dev/null || true
+wait "$pid" 2>/dev/null || true
+# 前台的守护进程没被收掉就是清理失败 —— 这正是 `-d` 那版掩盖掉的东西，
+# 不能让它再静默一次。
+if kill -0 "$pid" 2>/dev/null; then
+    echo "!! 守护进程 $pid 仍在跑（$LOG），会污染下一次运行"; rc=1
+fi
+exit $rc
 EOS
+done
 
 echo
-echo "== 守护进程加载记录（$work/fcitx5.log）"
-grep -E 'Loaded addon opi_fcitx5|Unloading addon opi_fcitx5|Override Enabled Addons' \
-    "$work/fcitx5.log" || echo "  （没找到 opi_fcitx5 的加载记录 —— 上面 e2e 的信号全是假的，别采信）"
+echo "== 守护进程加载记录（$work/fcitx5-*.log）"
+grep -H -E 'Loaded addon opi_fcitx5|Unloading addon opi_fcitx5|Override Enabled Addons' \
+    "$work"/fcitx5-*.log || echo "  （没找到 opi_fcitx5 的加载记录 —— 上面 e2e 的信号全是假的，别采信）"
 echo
-echo "== 完成。产物与日志留在 $work"
+echo "== 完成（e2e 退出码 $e2e_rc）。产物与日志留在 $work"
+exit "$e2e_rc"

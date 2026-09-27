@@ -15,23 +15,37 @@
 //!              "page":1,"page_count":3,"mode":"pinyin"}
 //!             （page/page_count 为 1 起；candidates 为当前页文本）
 //!   hide      {"type":"hide"}
-//!   position  {"type":"position","x":120,"y":340}  // caret 提示（骨架降级固定位置）
+//!   position  {"type":"position","x":120,"y":340}
+//!             // caret 提示（骨架降级固定位置）。x/y 单位 = **AWT 逻辑像素**
+//!             // （= Compose 的 .dp 数值）：收端直接 WindowPosition(x.dp, y.dp)，
+//!             // 而 CMP 1.11.1 的窗口定位不乘 density（反编译 setPositionImpl
+//!             // 确认），故发 200 就落在离屏幕左缘 200 逻辑像素处。发端不得
+//!             // 预乘 density/缩放，收端不得按设备像素解读。
+//!             // 两侧协议头现已同步（crates/tsf-opi/src/candidate_io.rs 的
+//!             // position 条目有同样一段）；改动单位语义时**必须两处同改**。
 //!
 //! 本窗(SERVER) → TSF(CLIENT)：
 //!   select    {"type":"select","index":0}   // 用户点击第 index（页内 0 起）候选
 //!   next_page {"type":"next_page"} / {"type":"prev_page"}
 //! ```
 //!
-//! 传输实现：JNA（net.java.dev.jna 5.6.0，本机缓存）直调 kernel32 ——
-//! CreateNamedPipeW/ConnectNamedPipe 为 raw Function（jna-platform 的 Kernel32
-//! 接口不含二者），ReadFile/WriteFile/DisconnectNamedPipe/CloseHandle 用
-//! Kernel32.INSTANCE。jna-platform 是跨平台 jar，Linux 上可编译（kernel32
-//! 仅 Windows 存在 —— 验收阶段在 Windows 上运行）。
+//! 传输实现：JNA（net.java.dev.jna 5.6.0，本机缓存）直调 kernel32，全部经
+//! `Kernel32.INSTANCE`：CreateNamedPipe/ConnectNamedPipe/ReadFile/WriteFile/
+//! DisconnectNamedPipe/CloseHandle。**不用 raw `Function.getFunction`** ——
+//! Kernel32 接口两者都声明（javap 核对 5.6.0），且 `Kernel32.INSTANCE` 以
+//! W32APIOptions 装载：函数名 Unicode 消歧义与 `Native.getLastError()`
+//! （ConnectNamedPipe 判 ERROR_PIPE_CONNECTED 必需）都只有这条路径成立。
+//! jna-platform 是跨平台 jar，Linux 上可编译（kernel32 仅 Windows 存在 ——
+//! 验收阶段在 Windows 上运行）。
 //!
 //! 窗口行为：无边框 + 置顶 + 不抢焦点（输入法候选窗语义）；初始隐藏，
 //! show 消息到达才显示；position 消息 → 跟随 caret（缺省固定默认位置）。
-//! 翻页：本地即时翻转（响应性）+ 同时发消息给 TSF（权威页码以 TSF 回发的
-//! show 为准）。
+//!
+//! 翻页：**本窗只发消息，不改本地页码** —— 页码的唯一真源是 TSF 回发的 show。
+//! 于是 CandidateWindow 的两个翻页箭头**当前是死键**：TSF 侧 next_page/prev_page
+//! 仍是骨架态 no-op（见 candidate_io.rs 的 CandidateAction / NoopAction），点了
+//! 只有一条消息出海、没有任何 show 回来。待接线（真机验收时接 logic.next_page /
+//! logic.prev_page），接线前这行注释不得再写成「本地即时翻转」。
 //!
 //! 【拆分】协议全貌在此；NDJSON 行解析见 Protocol.kt，named pipe 服务器见
 //! PipeServer.kt，Compose 自绘 UI 见 CandidateWindow.kt。

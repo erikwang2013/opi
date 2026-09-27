@@ -18,6 +18,15 @@ dependencies {
     // ReadFile/WriteFile）。5.6.0 为本机 ~/.gradle 缓存版本（离线可解析）。
     implementation("net.java.dev.jna:jna:5.6.0")
     implementation("net.java.dev.jna:jna-platform:5.6.0")
+    // 本模块此前无 test 源集（`./gradlew test` → NO-SOURCE）。JUnit 4 是唯一
+    // 本机 ~/.gradle 缓存里齐备（junit+hamcrest）的测试框架，离线可解析；
+    // kotlin-test 未缓存。测试只覆盖纯 JVM 的 Protocol.kt 解析器（无 JNA/无 Windows）。
+    testImplementation("junit:junit:4.13.2")
+}
+
+tasks.test {
+    // Gradle 9 默认测试框架未定，显式选 JUnit 4（避免运行期告警/静默零执行）。
+    useJUnit()
 }
 
 kotlin {
