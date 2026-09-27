@@ -5,11 +5,12 @@
 //
 // 本文件在 Linux 上编写。**Swift 侧一行都没编译过**；本头文件自身过了
 // `clang -fsyntax-only`（C 与 C++ 两种模式），但**从未被链接、从未进入任何真实构建**。
-// 声明是**逐条对照** crates/opi-ffi/src/cabi.rs 抄的
-// （30 个 C 函数 + opi_ffi_free_string，#[no_mangle] 共 31 个），
+// 声明是**逐条对照** crates/opi-ffi/src/cabi.rs 抄的（**条数以
+// crates/opi-ffi/tests/c_abi_contract.rs 的那道门禁为准，这里不写数字** ——
+// 写死的数会随下次扩容再假一遍，与 ios/OpiFFI.h 同一条规矩），
 // 但「抄对了」与「能链接上」是两件事 —— 见 macos/README.md。
 //
-// OPI C ABI 声明面（macOS 端唯一一份，共 31 个导出）。
+// OPI C ABI 声明面（macOS 端唯一一份；条数以 c_abi_contract 门禁为准）。
 // ⚠️ ios/OpiFFI.h 是本文件的**转发头** —— 改这里两边都变，别在那边另抄一份。
 // Swift 侧经 bridging header（Xcode）或 module map（SwiftPM）看到这些符号：
 //   Xcode  : SWIFT_OBJC_BRIDGING_HEADER = macos/OpiFFI.h
@@ -25,6 +26,8 @@
 // aarch64-apple-darwin 归档（当时 28）；2026-09-27 扩容到 31 后**重建同一个 target
 // 复跑**：31 个符号，与 cabi.rs 的导出名 diff 为空（`grep -a -o` 与 `strings`
 // 两种数法都是 31）。**另建**的 aarch64-apple-ios 归档同样是 31 —— 两条独立路径同一结论。
+// ⚠️ 这一段是 **2026-09-27 的当时值**，其后 cabi.rs 又扩容过 —— 别把它当当前条数读；
+// 当前条数以 c_abi_contract 门禁为准（本文件头已写明「这里不写数字」）。
 // ⚠️ 顺带一条会让人挑错平台的坑：`rustup target list --installed` **不列出**
 // aarch64-apple-darwin（`rustup target add` 会以 `detected conflict: libaddr2line-*.rlib`
 // 失败），**但 `cargo rustc --target aarch64-apple-darwin` 照样能产出归档** ——
@@ -92,10 +95,11 @@ OpiString opi_select_page(uint32_t index);
 void opi_switch_mode(int32_t mode);
 void opi_set_shift(bool on);
 
-// ---------- 全角 / 符号开关（B3 / B5 的语义出口；键位仍不在引擎层） ----------
+// ---------- 标点 / 全角 / 符号开关（B3 / B5 的语义出口；键位仍不在引擎层） ----------
 //
 // **四条硬约定**，全部经消费者对着 crates/engine-core/src/{engine,composer,router}.rs
-// 逐行核过：
+// 逐行核过。⚠️ **四条全部只讲「全角」那一档**；中文标点表是**另一档独立开关**
+// （`opi_chinese_punct` / `opi_set_chinese_punct`，见其声明下的对照说明）。
 //
 // 1. `opi_switch_mode` 与 `opi_toggle_symbol` 是**仅有的两个**「调用后必须重读
 //    `opi_fullwidth_state()`」的出口。后者最容易漏：`opi_toggle_symbol` 内部调
@@ -126,6 +130,33 @@ bool opi_toggle_fullwidth(void);
 /// 装载后、以及上面第 1 条点名的两个出口之后，**必须重读**。
 /// 引擎未装载 → false（同上，不是错误）。
 bool opi_fullwidth_state(void);
+
+/// 中文标点表开关的**读侧**（`.。`、引号交替那一档）。引擎未装载 → false。
+///
+/// ⚠️ **与 `opi_fullwidth_state` 不是一档，重读规则也不通用**：
+/// 本档是**用户偏好**，`opi_switch_mode` / `opi_toggle_symbol` **都不重置它** ——
+/// 上面的硬约定 1/4 **只对全角成立，别照抄到本出口**（以为「切模式会重置它」
+/// 是错的前提；真重置了才是 bug）。仍然必须有读侧：设置页与下次启动的持久化
+/// 都会改动它，客户端自记一份必然漂。
+/// 关掉本档**不等于半角**：表里没有的字符仍由全角那一档管（两闸各管一段，
+/// 真值表见 `engine_core::Engine::punct_text` 与 `crates/engine-core/tests/punctuation.rs`）。
+bool opi_chinese_punct(void);
+
+/// 设置中文标点表是否生效。**无返回值**：它是设置项（勾选框知道要设成什么值）；
+/// 要拿结果请读 `opi_chinese_punct()`（引擎未装载时设置是空操作，读侧会如实返回 false）。
+/// **写入口有两个**：设置项走本出口，触发键走 `opi_toggle_chinese_punct()`。
+/// 只翻一个 bool：不改 buffer / 候选集 / 页码，调用后无需重读任何东西。
+void opi_set_chinese_punct(bool on);
+
+/// 中文标点表开关的**触发键入口**：翻转并返回**切换后的新状态**（状态栏 / 勾选框直接
+/// 拿去刷新，不必再查一次）。与 `opi_set_chinese_punct` 是同一档的两个写入口 ——
+/// 键位不在引擎层：客户端自己截获键，再调本出口（同 `opi_toggle_fullwidth`）。
+///
+/// ⚠️ 与 `opi_toggle_fullwidth` 的**重读规则不通用**：本档是用户偏好，
+/// `opi_switch_mode` / `opi_toggle_symbol` **都不重置它**（见上面 `opi_chinese_punct`
+/// 那一段）。只翻一个 bool：不改 buffer / 候选集 / 页码。
+/// 引擎未装载 → false —— 与「已装载且表关」共用同一个 false，**不是**在报错。
+bool opi_toggle_chinese_punct(void);
 
 /// 符号面板开关：返回**需要上屏的文本（空串 = 无提交）**。
 ///

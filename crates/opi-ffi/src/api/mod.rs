@@ -203,6 +203,34 @@ impl Api {
         self.router.engine_mut().toggle_fullwidth()
     }
 
+    /// 中文标点表读侧（`opi_chinese_punct` / JNI `chinesePunct`）。
+    ///
+    /// **与全角是两档开关，互不牵连**：本档管中文标点表（`.。`、引号交替），
+    /// `fullwidth` 管机械全角兜底。**切模式不重置本档** ——
+    /// 它是用户偏好而非模式默认值，所以「每次 `switch_mode` 后必须重读」那条
+    /// 硬规则**只对 `fullwidth` 成立**，别照抄过来。
+    /// 仍然必须有读侧：设置项会被设置页/下次启动的持久化改动，平台侧自记一份必漂。
+    /// 不改 buffer、不改候选集 ⇒ 不需要对齐页码。
+    pub fn chinese_punct(&self) -> bool {
+        self.router.engine().chinese_punct()
+    }
+
+    /// 设置中文标点表是否生效。**写入口之一**（设置项；UI 是勾选框，知道要设成什么值）——
+    /// 另一个是 [`Self::toggle_chinese_punct`]（触发键）。与引擎层同一条，
+    /// 见 `Engine::set_chinese_punct`。调用后不必重读 buffer/candidates（只翻一个 bool）。
+    pub fn set_chinese_punct(&mut self, on: bool) {
+        self.router.engine_mut().set_chinese_punct(on);
+    }
+
+    /// 中文标点表开关的**触发键入口**：翻转并返回**切换后的新状态**（调用方直接拿去
+    /// 刷状态栏/勾选框）。键位不在本层（与 `toggle_fullwidth` / `toggle_symbol` 同一条：
+    /// 键位在客户端侧、由客户端在引擎之前截获）。
+    /// ⚠️ 与 `toggle_fullwidth` 的**重读规则不通用**：本档是用户偏好，`switch_mode`
+    /// 不重置它。不改 buffer、不改候选集 ⇒ 不需要对齐页码。
+    pub fn toggle_chinese_punct(&mut self) -> bool {
+        self.router.engine_mut().toggle_chinese_punct()
+    }
+
     /// 符号面板开关，返回**待插入文档的文本**（非空 = 调用方必须插入；拿不到插入
     /// 通道的端不要调它）。语义在引擎层（含「先收尾未提交缓冲」），键位不在本层。
     /// raw 出口：收尾会改 buffer ⇒ 必须对齐页码（同 `input_space`）。

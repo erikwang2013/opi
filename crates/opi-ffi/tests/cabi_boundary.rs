@@ -336,7 +336,8 @@ fn select_extreme_index_returns_empty_and_never_commits() {
 /// `usize::MAX`（C 侧的 `-1`）**不得 panic、不得按 limit 预分配** ——
 /// 实现里一句 `Vec::with_capacity(limit)` 就是一次必然失败的 16EB 分配（abort，
 /// `catch_unwind` 拦不住）。这条不假设上限（该出口确实按调用方给的 limit 截断，
-/// 实测 `usize::MAX` 拿到全量 139 条），只钉住「不崩、且是前 N 条的同一序列」。
+/// 实测 `usize::MAX` 拿到的是引擎全量 —— **条数随词库变，本文件不写数字**：
+/// 这里原写「全量 139 条」，luna 换源后即过期），只钉住「不崩、且是前 N 条的同一序列」。
 #[test]
 fn candidates_limit_extremes_never_abort_and_stay_prefix_consistent() {
     let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());

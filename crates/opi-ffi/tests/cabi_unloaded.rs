@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! **引擎未装载**时调全部 31 个 C 导出的行为。
+//! **引擎未装载**时调全部 C 导出的行为（**条数以 `c_abi_contract` 门禁为准，
+//! 这里不写数字** —— 清单本身由本文件与 `cabi.rs` 同改，写死的数会随下次扩容漂）。
 //!
 //! 为什么单独一个文件：`SINGLETON` 是进程级的，同一个测试二进制里只要有**一个**
 //! 用例调过 `opi_load`，其余用例就再也观察不到「未装载」这个状态了
@@ -15,12 +16,13 @@
 //! `catch_unwind` 兜底，但兜底本身也是「有 bug」的信号，不该被当作正常路径）。
 
 use opi_ffi::cabi::{
-    OpiString, opi_backspace, opi_buffer, opi_candidates, opi_candidates_page, opi_clear,
-    opi_clear_user_words, opi_export_user_words, opi_ffi_free_string, opi_fullwidth_state,
-    opi_import_user_words, opi_input_key, opi_input_space, opi_key_event, opi_learner_enabled,
-    opi_load_trad, opi_mode, opi_page, opi_page_count, opi_remove_user_word, opi_search_symbols,
-    opi_select, opi_select_page, opi_set_learner, opi_set_shift, opi_shift_state,
-    opi_symbol_blocks, opi_symbols_in_block, opi_toggle_fullwidth, opi_toggle_symbol,
+    OpiString, opi_backspace, opi_buffer, opi_candidates, opi_candidates_page, opi_chinese_punct,
+    opi_clear, opi_clear_user_words, opi_export_user_words, opi_ffi_free_string,
+    opi_fullwidth_state, opi_import_user_words, opi_input_key, opi_input_space, opi_key_event,
+    opi_learner_enabled, opi_load_trad, opi_mode, opi_page, opi_page_count, opi_remove_user_word,
+    opi_search_symbols, opi_select, opi_select_page, opi_set_chinese_punct, opi_set_learner,
+    opi_set_shift, opi_shift_state, opi_symbol_blocks, opi_symbols_in_block,
+    opi_toggle_chinese_punct, opi_toggle_fullwidth, opi_toggle_symbol,
 };
 
 use engine_core::keys::{KEY_PAGE_DOWN, KEY_RETURN, KEY_SHIFT, KEY_SPACE, KEY_STATE_LONG_PRESSED};
@@ -59,7 +61,7 @@ fn key_event(keyval: u32, states: u32) -> (i32, String) {
 /// panic 或垃圾：字符串 → 空串、计数 → 0、数组 → `[]`、导入 → 负数、
 /// 路由 → `action=0`（键交系统，绝不静默吞键）。
 ///
-/// 逐条列出全部 31 个导出（含 `opi_load` 之外的 30 个）是本用例的主要价值：
+/// 逐条列出全部导出（`opi_load` 自己那一条除外）是本用例的主要价值：
 /// 这份清单就是 ABI 面，将来新增导出忘了处理未装载态时，这里少一条就会红。
 #[test]
 fn every_export_returns_a_sentinel_when_engine_is_not_loaded() {
@@ -90,6 +92,9 @@ fn every_export_returns_a_sentinel_when_engine_is_not_loaded() {
         // 未装载 → 半角。这不是「报错码」：那时按键全走 action=0 交系统，
         // 宿主拿到的就是半角字符，读侧与可观测行为一致（见该导出注释）。
         assert!(!opi_fullwidth_state());
+        // 同理：未装载 → false（引擎侧默认值是 true，但那时没有任何按键会被映射，
+        // 宿主拿到的是原样字符 ⇒ 读侧与可观测行为一致）。
+        assert!(!opi_chinese_punct());
 
         // —— 键路由：未装载 → action=0（交系统），绝不静默吞键 ——
         for (k, s) in [
@@ -108,6 +113,11 @@ fn every_export_returns_a_sentinel_when_engine_is_not_loaded() {
         opi_set_shift(true);
         opi_set_learner(true);
         assert!(!opi_toggle_fullwidth(), "未装载：无引擎可切，返回半角");
+        assert!(
+            !opi_toggle_chinese_punct(),
+            "未装载：无引擎可切，返回 false（与「已装载且表关」同值，不是错误码）"
+        );
+        opi_set_chinese_punct(false);
         opi_clear_user_words();
         assert_eq!(opi_import_user_words(std::ptr::null(), 0), -1);
         let word = to_units("我");

@@ -278,7 +278,13 @@ fn cabi_candidates_page_and_page_count_match_global_slice() {
 
     key_event('w' as u32, 0);
     key_event('o' as u32, 0);
-    let global = read_texts(unsafe { opi_candidates(64) });
+    // 抓取**不设上限**：本用例要的是「全局列表」本身去反推总页数，写死一个抓取
+    // 上限就是同一个错的上一层 —— 它防住了硬编码 `PAGE_SIZE`，却曾把抓取上限
+    // 写成 64，于是只对「前 64 条」负责（引擎侧 `FETCH_LIMIT` 一放开，这条断言
+    // 反过来假红）。`usize::MAX` = `.take()` 不设上限，判据因此变成
+    // 「`FETCH_LIMIT` 不得小于引擎排名总数」：上限一旦低于全量两侧立刻不等
+    // （实测把上限调回 64 时本用例红），而不是像旧版那样跟着上限一起缩。
+    let global = read_texts(unsafe { opi_candidates(usize::MAX) });
     let p0 = read_texts(unsafe { opi_candidates_page() });
     assert!(!p0.is_empty(), "首页非空");
     let n = p0.len(); // 页大小 = 出口给出的首页长度，测试不硬编码 8

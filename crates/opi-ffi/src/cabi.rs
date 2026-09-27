@@ -5,6 +5,14 @@
 //! Rust 侧分配，调用方用 `opi_ffi_free_string` 释放。语义与 JNI 出口（jni.rs）
 //! 完全一致，共享 api::SINGLETON 与内部实现，无重复逻辑。
 //! 多字符串返回值（candidates/searchSymbols/symbolsInBlock）编码为 JSON 文本数组。
+//!
+//! # Safety（本模块**无外部内存参数**那一档导出的统一契约）
+//! 共享单例由内部 `Mutex` 保护，跨线程调用安全；每个函数都以 `catch_unwind` 包裹，
+//! panic 不跨 FFI 边界。这一档的 `# Safety` 段落**统一在此处**，函数上不再逐条重复
+//! （照 `jni.rs` 的做法，原先 26 条逐字相同的句子占了 52 行）。
+//! ⚠️ **带 `ptr` / `len` 入参的导出不在此列** —— 它们各自写明前置条件（指针必须
+//! 有效或为 null 等），别从本段推断。
+#![allow(clippy::missing_safety_doc)]
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
@@ -35,7 +43,7 @@ pub unsafe extern "C" fn opi_ffi_free_string(s: OpiString) {
     }
 }
 
-// ---------- 30 个 C 函数（另有 opi_ffi_free_string 释放句柄） ----------
+// ---------- C 函数导出（另有 opi_ffi_free_string；条数以 c_abi_contract 门禁为准） ----------
 
 /// load(path: const uint16_t*, len) -> bool。① null / 空串 → 内置回退词库并返回
 /// **true**（既有契约，有意为之）；② 非法 UTF-16 → **false 且不替换**已有词库
@@ -76,15 +84,11 @@ pub unsafe extern "C" fn opi_input_key(ptr: *const u16, len: usize) -> OpiString
     OpiString::from_utf16(&out)
 }
 
-/// # Safety
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_backspace() {
     let _ = catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.backspace())));
 }
 
-/// # Safety
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_clear() {
     let _ = catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.clear())));
@@ -94,8 +98,6 @@ pub unsafe extern "C" fn opi_clear() {
 ///
 /// index 是**全局**索引（JNI 与既有调用方用）。点击候选请用 `opi_select_page(k)`
 /// （页内索引）—— 自己算 `opi_page() * 8 + k` 会把 PAGE_SIZE 抄进 UI，见该导出的注释。
-/// # Safety
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_select(index: usize) -> OpiString {
     let out = catch_unwind(AssertUnwindSafe(|| {
@@ -110,8 +112,6 @@ pub unsafe extern "C" fn opi_select(index: usize) -> OpiString {
 /// 注意：这个编码**不等于 `Mode` 枚举的声明序**（声明序是 Pinyin, Traditional, English,
 /// Number, Symbol —— 照声明序推会得到 Traditional=1）。跨语言侧一律照 `mode_to_int` 的
 /// 编码写，别照枚举声明序写：错了不会编译失败，只会静默显示成拼音。
-/// # Safety
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_switch_mode(mode: i32) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
@@ -121,22 +121,19 @@ pub unsafe extern "C" fn opi_switch_mode(mode: i32) {
     }));
 }
 
-/// # Safety
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_set_shift(on: bool) {
     let _ = catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.set_shift(on))));
 }
 
-// ---------- 全角/符号开关（B3 / B5 的语义出口；键位仍不在引擎层） ----------
-// 三个出口的完整契约（含未装载哨兵与「切模式后必须重读」的硬规则）在
-// `tests/cabi_fullwidth.rs` 的模块注释里 —— 那里同时是这些条款的门禁。
+// ---------- 标点/全角/符号开关（B3 / B5 的语义出口；键位仍不在引擎层） ----------
+// 五个出口的完整契约（含未装载哨兵、「切模式后必须重读全角」的硬规则、
+// 以及「中文标点这一档**不**随模式重置」的对照）在 `tests/cabi_fullwidth.rs`
+// 的模块注释里 —— 那里同时是这些条款的门禁。
 
 /// toggleFullwidth() -> bool：全角 ↔ 半角，返回**切换后的新状态**（状态栏直接拿去
 /// 刷新）。只影响标点（中文模式出中文标点，其余机械全角），字母/数字不动；
 /// 未装载 → false（那时按键全走 action=0，宿主拿到的就是半角，不是错误码）。
-/// # Safety
-/// 无外部内存参数，跨线程调用安全（共享单例由内部 Mutex 保护）。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_toggle_fullwidth() -> bool {
     catch_unwind(AssertUnwindSafe(|| {
@@ -148,12 +145,51 @@ pub unsafe extern "C" fn opi_toggle_fullwidth() -> bool {
 /// fullwidthState() -> bool：全角开关读侧。**每一次 `opi_switch_mode` 之后都必须重读**
 /// —— 切模式把它重置为该模式的默认值（拼音/繁体全角，英文/数字/符号半角）；平台侧
 /// 自记一份五模式默认值表就是第五份拷贝，必漂。未装载 → false。
-/// # Safety
-/// 无外部内存参数，跨线程调用安全（共享单例由内部 Mutex 保护）。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_fullwidth_state() -> bool {
     catch_unwind(AssertUnwindSafe(|| {
         api::with_engine(|e| e.fullwidth()).unwrap_or(false)
+    }))
+    .unwrap_or(false)
+}
+
+/// chinesePunct() -> bool：中文标点表开关读侧（`.。`、引号交替那一档）。未装载 → false。
+///
+/// ⚠️ **与 `opi_fullwidth_state` 不是一档**：本档是**用户偏好**，`opi_switch_mode`
+/// **不重置它** —— 硬规则「切模式后必须重读全角」**不适用于本出口**。仍必须有读侧：
+/// 设置页与下次启动的持久化都会改动它。关掉本档**不等于半角** —— 表未命中的字符
+/// 仍走全角那一档（两闸各管一段，真值表见 `tests/cabi_fullwidth.rs`）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_chinese_punct() -> bool {
+    catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.chinese_punct()).unwrap_or(false)
+    }))
+    .unwrap_or(false)
+}
+
+/// setChinesePunct(on: bool)：设置中文标点表是否生效。**无返回值** —— 它是设置项
+/// （勾选框知道要设成什么值），要拿结果请读 `opi_chinese_punct()`（未装载时是空操作）。
+/// **写入口有两个**：设置项走本出口，触发键走 `opi_toggle_chinese_punct()`（那个有返回值，
+/// 且客户端本来就不知道该设成什么值）。只翻一个 bool，不改 buffer/候选/页码。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_set_chinese_punct(on: bool) {
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.set_chinese_punct(on))
+    }));
+}
+
+/// toggleChinesePunct() -> bool：中文标点表开关的**触发键入口**，返回**切换后的新状态**
+/// （状态栏/勾选框直接拿去刷新，不必再查一次）。与 `setChinesePunct` 是同一档的两个写入口，
+/// 语义在引擎层（键位不在本层，客户端在引擎之前截获）。
+///
+/// ⚠️ 与 `opi_toggle_fullwidth` 的**重读规则不通用**：本档是用户偏好，`opi_switch_mode`
+/// / `opi_toggle_symbol` **都不重置它**。只翻一个 bool，不改 buffer/候选/页码。
+/// 未装载 → false：与「已装载且表关」共用同一个 false，**不是**在报错
+/// （那时按键全走 action=0 交系统，返回值与可观测行为一致）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_toggle_chinese_punct() -> bool {
+    catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.toggle_chinese_punct()).unwrap_or(false)
     }))
     .unwrap_or(false)
 }
@@ -165,8 +201,6 @@ pub unsafe extern "C" fn opi_fullwidth_state() -> bool {
 /// （空句柄可无条件释放）。未装载 → 空句柄。
 /// ⚠️ 调用后须重读 mode / buffer / candidates / fullwidth 四样 —— 内部走了一次
 /// `switch_mode`，而它会按模式默认值重置全角（Symbol 默认半角）。
-/// # Safety
-/// 无外部内存参数，跨线程调用安全（共享单例由内部 Mutex 保护）。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_toggle_symbol() -> OpiString {
     let out = catch_unwind(AssertUnwindSafe(|| {
@@ -176,8 +210,6 @@ pub unsafe extern "C" fn opi_toggle_symbol() -> OpiString {
     OpiString::from_utf16(&out)
 }
 
-/// # Safety
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_input_space() -> OpiString {
     let out = catch_unwind(AssertUnwindSafe(|| {
@@ -225,8 +257,6 @@ pub struct OpiKeyEventResult {
 /// `SPECIAL_BASE|0x20` 在本层会退化成直通）。
 ///
 /// 引擎未装载或内部 panic → `action=0`（交系统），**绝不静默吞键**。
-/// # Safety
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_key_event(keyval: u32, states: u32) -> OpiKeyEventResult {
     let action = catch_unwind(AssertUnwindSafe(|| {
@@ -256,8 +286,6 @@ pub unsafe extern "C" fn opi_key_event(keyval: u32, states: u32) -> OpiKeyEventR
 /// 那个 8 就是 PAGE_SIZE 的第三份拷贝，引擎改一次 UI 便**静默选错候选**。
 /// 本出口与按数字键（`opi_key_event` 的数字选词）、回车提交**同源** ——
 /// 三者都走 `KeyRouter::select` 那一份页内换算。
-/// # Safety
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_select_page(index: u32) -> OpiString {
     let out = catch_unwind(AssertUnwindSafe(|| {
@@ -274,8 +302,6 @@ pub unsafe extern "C" fn opi_select_page(index: u32) -> OpiString {
 /// 引擎侧常量（`KeyRouter`/候选栏共用），抄一份到 UI，改一次就会静默错位
 /// （高亮的页 ≠ 实际选词所在的页）。本出口与 `opi_page()`/`opi_page_count()`
 /// 同源，三者永远一致。
-/// # Safety
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_candidates_page() -> OpiString {
     let texts = catch_unwind(AssertUnwindSafe(|| {
@@ -287,8 +313,6 @@ pub unsafe extern "C" fn opi_candidates_page() -> OpiString {
 
 /// pageCount() -> uint32：候选总页数（UI 的「共 N 页」；**无候选 → 0**，
 /// 引擎未装载 → 0）。
-/// # Safety
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_page_count() -> u32 {
     catch_unwind(AssertUnwindSafe(|| {
@@ -301,8 +325,6 @@ pub unsafe extern "C" fn opi_page_count() -> u32 {
 ///
 /// 候选栏的页码必须读这里、不要自己数：PageDown 到末页时路由会把页码钳到最后一页，
 /// 本地计数超过末页就会与引擎漂移（高亮的页 ≠ 实际选词所在的页）。
-/// # Safety
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_page() -> u32 {
     catch_unwind(AssertUnwindSafe(|| {
@@ -317,8 +339,6 @@ pub unsafe extern "C" fn opi_page() -> u32 {
 /// 与 `opi_set_shift` 不是一回事：那个打的是**引擎侧** shift 位；三态是前端状态，
 /// 英文直传路径的大小写由它决定（见 `KeyRouter::key_event`），引擎位看不出来 ——
 /// 所以 ⇧ 键的高亮（尤其 Lock）只能读本出口。
-/// # Safety
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_shift_state() -> i32 {
     catch_unwind(AssertUnwindSafe(|| {
@@ -328,8 +348,6 @@ pub unsafe extern "C" fn opi_shift_state() -> i32 {
 }
 
 /// candidates(limit) -> JSON 文本数组。
-/// # Safety
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_candidates(limit: usize) -> OpiString {
     let texts = catch_unwind(AssertUnwindSafe(|| {
@@ -339,8 +357,6 @@ pub unsafe extern "C" fn opi_candidates(limit: usize) -> OpiString {
     texts_to_json(texts)
 }
 
-/// # Safety
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_buffer() -> OpiString {
     let out = catch_unwind(AssertUnwindSafe(|| {
@@ -350,8 +366,6 @@ pub unsafe extern "C" fn opi_buffer() -> OpiString {
     OpiString::from_utf16(&out)
 }
 
-/// # Safety
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_mode() -> i32 {
     catch_unwind(AssertUnwindSafe(|| {
@@ -374,8 +388,6 @@ pub unsafe extern "C" fn opi_search_symbols(ptr: *const u16, len: usize) -> OpiS
 }
 
 /// symbolBlocks() -> JSON：`[{id,start,end,name,common}]`。
-/// # Safety
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_symbol_blocks() -> OpiString {
     let json = catch_unwind(AssertUnwindSafe(|| {
@@ -386,8 +398,6 @@ pub unsafe extern "C" fn opi_symbol_blocks() -> OpiString {
 }
 
 /// symbolsInBlock(id: i16) -> JSON 文本数组。
-/// # Safety
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_symbols_in_block(id: i16) -> OpiString {
     let texts = catch_unwind(AssertUnwindSafe(|| {
@@ -406,8 +416,6 @@ pub unsafe extern "C" fn opi_symbols_in_block(id: i16) -> OpiString {
     texts_to_json(texts)
 }
 
-/// # Safety
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_learner_enabled() -> bool {
     catch_unwind(AssertUnwindSafe(|| {
@@ -416,8 +424,6 @@ pub unsafe extern "C" fn opi_learner_enabled() -> bool {
     .unwrap_or(false)
 }
 
-/// # Safety
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_set_learner(enabled: bool) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
@@ -425,8 +431,6 @@ pub unsafe extern "C" fn opi_set_learner(enabled: bool) {
     }));
 }
 
-/// # Safety
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_clear_user_words() {
     let _ = catch_unwind(AssertUnwindSafe(|| {
@@ -469,8 +473,6 @@ pub unsafe extern "C" fn opi_import_user_words(ptr: *const u16, len: usize) -> i
     .unwrap_or(-1)
 }
 
-/// # Safety
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_export_user_words() -> OpiString {
     let out = catch_unwind(AssertUnwindSafe(|| {

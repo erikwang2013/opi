@@ -15,6 +15,12 @@ final class OpiEngine {
     static native String select(int index);
     static native void switchMode(int mode);
     static native void setShift(boolean on);
+    static native boolean toggleFullwidth();
+    static native boolean fullwidthState();
+    static native String toggleSymbol();
+    static native boolean chinesePunct();
+    static native void setChinesePunct(boolean on);
+    static native boolean toggleChinesePunct();
     static native String inputSpace();
     static native String[] candidates(int limit);
     static native String buffer();
@@ -141,6 +147,37 @@ public final class Main {
         OpiEngine.removeUserWord("我"); // 词不存在 → 无操作，不得抛异常
         check("{\"version\":1,\"words\":[]}".equals(OpiEngine.exportUserWords()),
                 "删除不存在的词后用户词不变");
+
+        // 标点/全角/符号出口。**这几行是 JNI 侧唯一的函数体取证点**：
+        // RegisterNatives 成功只证明「名字+描述符」对得上，不证明函数体对（把
+        // `unwrap_or(false)` 写成 `unwrap_or(true)` 照样注册成功）。声明了却不调
+        // = 那几条 native 永不被执行过。状态自理，别打乱上面的既有断言。
+        check(OpiEngine.chinesePunct(), "chinesePunct 默认开");
+        OpiEngine.setChinesePunct(false);
+        check(!OpiEngine.chinesePunct(), "setChinesePunct(false) 生效");
+        OpiEngine.setChinesePunct(true);
+        check(OpiEngine.chinesePunct(), "setChinesePunct(true) 生效");
+        // 触发键入口：返回值必须就是新状态，且与读侧一致（翻两次回到原值，
+        // 供下面那条「switchMode 不重置本档」的断言用）
+        boolean cp = OpiEngine.chinesePunct();
+        check(OpiEngine.toggleChinesePunct() == !cp, "toggleChinesePunct 返回切换后的新状态");
+        check(OpiEngine.chinesePunct() == !cp, "标点读侧与切换返回值一致");
+        check(OpiEngine.toggleChinesePunct() == cp, "再翻一次回到原值");
+
+        boolean fw = OpiEngine.fullwidthState();
+        check(OpiEngine.toggleFullwidth() == !fw, "toggleFullwidth 返回切换后的新状态");
+        check(OpiEngine.fullwidthState() == !fw, "全角读侧与切换返回值一致");
+        OpiEngine.switchMode(1); // English 默认半角
+        check(!OpiEngine.fullwidthState(), "switchMode(1) 把全角重置为半角");
+        check(OpiEngine.chinesePunct(), "chinesePunct 不随 switchMode 重置（用户偏好）");
+        OpiEngine.switchMode(0); // 回 Pinyin（全角默认值）
+        check(OpiEngine.fullwidthState(), "switchMode(0) 回拼音的全角默认值");
+
+        // toggleSymbol：空缓冲 → 空串，且切进 Symbol(3)；再切一次回 Pinyin
+        check("".equals(OpiEngine.toggleSymbol()), "toggleSymbol 空缓冲返回空串");
+        check(OpiEngine.mode() == 3, "toggleSymbol 后 mode==3(Symbol)");
+        check("".equals(OpiEngine.toggleSymbol()), "再切一次仍返回空串");
+        check(OpiEngine.mode() == 0, "再切一次回 Pinyin");
 
         if (failures == 0) {
             System.out.println("SMOKE-OK");

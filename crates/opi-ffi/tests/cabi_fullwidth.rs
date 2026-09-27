@@ -1,8 +1,13 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! **全角开关与符号开关的三个 C 出口**（`opi_toggle_fullwidth` /
-//! `opi_fullwidth_state` / `opi_toggle_symbol`）的集成测试。
+//! **标点两档开关与符号开关的这组 C 出口**（`opi_toggle_fullwidth` /
+//! `opi_fullwidth_state` / `opi_chinese_punct` / `opi_set_chinese_punct` /
+//! `opi_toggle_chinese_punct` / `opi_toggle_symbol`）的集成测试。
+//!
+//! 本文件同时是两条**相反**的重读规则的对照门禁：全角随模式默认（切模式必须重读），
+//! 中文标点是用户偏好（切模式**不**重置）—— 把后者当成前者的同构照抄，就会造出
+//! 一条「切模式顺手把用户的中文标点偏好重置掉」的真 bug。
 //!
 //! 单独一个文件而不是塞进 `cabi_test.rs`：那个文件 405 行，逼近 500 行上限
 //! （同 `cabi/key_event.rs` 拆出去的理由），且本文件自带 `SERIAL`（见下）。
@@ -16,8 +21,9 @@
 use std::sync::Mutex;
 
 use opi_ffi::cabi::{
-    OpiString, opi_buffer, opi_candidates, opi_ffi_free_string, opi_fullwidth_state, opi_input_key,
-    opi_key_event, opi_load, opi_mode, opi_page, opi_page_count, opi_switch_mode,
+    OpiString, opi_buffer, opi_candidates, opi_chinese_punct, opi_ffi_free_string,
+    opi_fullwidth_state, opi_input_key, opi_key_event, opi_load, opi_mode, opi_page,
+    opi_page_count, opi_set_chinese_punct, opi_switch_mode, opi_toggle_chinese_punct,
     opi_toggle_fullwidth, opi_toggle_symbol,
 };
 
@@ -154,6 +160,114 @@ fn english_punctuation_is_halfwidth_until_the_toggle_is_on() {
     assert_eq!((action, text.as_str()), (2, "1"), "全角开着也不动数字");
     let (action, text) = route('a');
     assert_eq!((action, text.as_str()), (2, "a"), "全角开着也不动字母");
+}
+
+// ---------- 中文标点那一档 ----------
+
+/// **两档开关互不牵连**的真值表（用户裁决 2026-09-28）：拿 `.` 这一个键就能把两档
+/// 分开量 —— 它在三档下出三个不同的字符（`。` U+3002 / `．` U+FF0E / `.`）。
+/// 这条是「把 `chinese_punct` 与 `fullwidth` 焊成一个开关」那个旧 bug 的定点门禁：
+/// 焊回去任意一半，这里至少一条断言会红。
+#[test]
+fn chinese_punct_and_fullwidth_are_two_independent_gates() {
+    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    load_any();
+    unsafe { opi_switch_mode(MODE_PINYIN) };
+    assert!(unsafe { opi_chinese_punct() }, "前置：拼音下中文标点默认开");
+    assert!(unsafe { opi_fullwidth_state() }, "前置：拼音默认全角");
+
+    assert_eq!(key('.'), "。", "两档都开：表命中 → 中文句号 U+3002");
+
+    unsafe { opi_set_chinese_punct(false) };
+    assert_eq!(
+        key('.'),
+        "．",
+        "只关中文标点档：落到机械全角 U+FF0E —— **不是**半角，也不是 U+3002"
+    );
+
+    unsafe { opi_toggle_fullwidth() }; // → 半角
+    assert!(!unsafe { opi_fullwidth_state() }, "前置：全角已关");
+    assert_eq!(key('.'), ".", "两档都关：直通半角");
+
+    // 复原。本档是**用户偏好**（进程级单例），泄漏给同二进制其它用例 = 假前提。
+    unsafe { opi_set_chinese_punct(true) };
+    unsafe { opi_toggle_fullwidth() }; // → 回全角
+    assert!(unsafe { opi_fullwidth_state() }, "复原：全角回到默认");
+}
+
+/// 读侧如实反映写侧（`opi_chinese_punct` ↔ `opi_set_chinese_punct`），
+/// **且不随模式重置** —— 与全角**相反**的那条规则。
+///
+/// 对照是刻意的：同一个用例里先证明「切模式确实重置了全角」（硬规则 1/4 为真），
+/// 再证明本档没被重置。只断言后者的话，一个「切模式所有开关都不动」的退化实现
+/// 也会绿 —— 那样全角那条硬规则本身就是坏的。
+#[test]
+fn chinese_punct_survives_switch_mode_and_toggle_symbol() {
+    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    load_any();
+    unsafe { opi_switch_mode(MODE_PINYIN) };
+
+    unsafe { opi_set_chinese_punct(false) };
+    assert!(!unsafe { opi_chinese_punct() }, "读侧必须反映写侧");
+
+    // 正对照：全角确实被切模式重置。
+    unsafe { opi_switch_mode(MODE_ENGLISH) };
+    assert!(
+        !unsafe { opi_fullwidth_state() },
+        "正对照失败：英文默认半角（切模式重置全角）"
+    );
+    unsafe { opi_switch_mode(MODE_PINYIN) };
+    assert!(
+        unsafe { opi_fullwidth_state() },
+        "正对照失败：切回拼音 = 回到拼音的全角默认值"
+    );
+
+    // 反对照：本档是用户偏好，**不随模式重置**。
+    assert!(
+        !unsafe { opi_chinese_punct() },
+        "中文标点档被 switch_mode 重置了 —— 它是用户偏好，不是模式默认值"
+    );
+
+    // 第二条路径：`toggle_symbol` 内部走了一次 `switch_mode`，同样不许重置本档。
+    let _ = read(unsafe { opi_toggle_symbol() });
+    assert_eq!(unsafe { opi_mode() }, MODE_SYMBOL, "前置：已切进符号模式");
+    assert!(
+        !unsafe { opi_chinese_punct() },
+        "toggle_symbol 内部那次 switch_mode 把中文标点档重置了"
+    );
+
+    unsafe { opi_set_chinese_punct(true) };
+    unsafe { opi_switch_mode(MODE_PINYIN) };
+}
+
+/// **触发键入口**：返回值是**切换后**的新状态，且与读侧逐次一致；并与设置项入口
+/// **共用同一个 bit** —— 只证明「toggle 与自己的读侧一致」是不够的，一个翻转私有
+/// 标志位的实现也能满足（那时设置页勾选框与触发键会各说各话）。
+///
+/// 「本档不随 `switch_mode` 重置」由上面那条用 `set` 入口钉住 + 本条钉住两个入口同源，
+/// 两者合起来覆盖 toggle 路径 —— 故不重复断言。
+#[test]
+fn toggle_chinese_punct_returns_the_state_it_just_switched_to() {
+    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    load_any();
+    unsafe { opi_switch_mode(MODE_PINYIN) };
+
+    // 与设置项同源：`set(false)` 写进去的，`toggle` 必须翻得动
+    unsafe { opi_set_chinese_punct(false) };
+    let mut expected = !unsafe { opi_chinese_punct() };
+    assert!(expected, "前置：set(false) 之后首次切换应得 true");
+    for i in 0..3 {
+        let got = unsafe { opi_toggle_chinese_punct() };
+        assert_eq!(got, expected, "第 {i} 次切换返回值 ≠ 新状态");
+        assert_eq!(
+            unsafe { opi_chinese_punct() },
+            got,
+            "第 {i} 次：切换返回值与读侧不一致"
+        );
+        expected = !got;
+    }
+
+    unsafe { opi_set_chinese_punct(true) };
 }
 
 // ---------- 符号开关 ----------
