@@ -261,7 +261,11 @@ final class OpiInputController: IMKInputController {
             lastMarked = buffer
         }
 
-        let list = engine.candidates(limit: 64) // 与 Rust 侧 FETCH_LIMIT 一致
+        // ⚠️ 这个 64 是**本端独有**的上限，Rust 侧已无对应常量（`FETCH_LIMIT` 现为 `usize::MAX`，
+        // 两轨还各有编译期断言绑着它）。且 `opi_candidates()` 是**全局不分页**出口，`cabi.rs`
+        // 明写「前端显示当前页请用 `opi_candidates_page`，**不要**拿本出口自己按 8 切」——
+        // 本端走的正是被点名禁止的那条。现状与待办见 macos/README.md 的 G3。
+        let list = engine.candidates(limit: 64)
         if list != lastCandidates {
             lastCandidates = list
             OpiCandidateWindow.shared.update(list, visible: !buffer.isEmpty)
