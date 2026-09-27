@@ -17,6 +17,12 @@ pub mod logic;
 /// 主机可构造、可格式化、可单测 —— 而这些值错了的后果全是静默的（见 `dll.rs`）。
 pub mod dll;
 
+/// 词库解析（环境变量 → DLL 同目录 → `%LOCALAPPDATA%\opi\` → 内置回退）。
+/// 与 `vk.rs`/`dll.rs` 同样是**平台中立**的：真正要守的判定是"走哪个候选、
+/// 失败怎么退"，把它留在 `#[cfg(target_os = "windows")]` 里，本机（Linux）门禁
+/// 就一条都覆盖不到 —— 而它错了的表现是"输入法装着却只有 35 个词"。
+pub mod dict_path;
+
 /// Windows 目标专属：TSF COM 胶水（ITfTextInputProcessor / ITfKeyEventSink）。
 /// Linux/其他主机不编译本模块（`windows` crate 依赖不进入主机构建路径），
 /// 保证 `cargo test --workspace` 在 Linux 上全绿。

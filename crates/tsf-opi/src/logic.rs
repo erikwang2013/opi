@@ -62,6 +62,15 @@ impl TsfLogic {
             }
             _ => Box::new(engine_data::fallback_dict()),
         };
+        Ok(Self::with_dict(dict))
+    }
+
+    /// 用**已装好的**词库构建（`load` 的落点，也是 `dict_path::load_dict` 的落点）。
+    /// Windows 侧走这条：词库解析（含逐候选回退）在 `dict_path` 里一次做完，
+    /// 不必经历「先给路径 → 失败再回退」的两段式 —— 那条路的中间态是
+    /// 「服务创建不出来」，用户看到的是输入法整个不在（见 `com_server.rs`）。
+    /// 失败路径归零：能到这里的词库一定是装上了的（最差是内置 35 词）。
+    pub fn with_dict(dict: Box<dyn engine_core::dictionary::Dictionary>) -> Self {
         let symbols = engine_core::symbols::SymbolEngine::builtin();
         let mut s = TsfLogic {
             engine: Engine::new(dict, symbols, true),
@@ -71,7 +80,7 @@ impl TsfLogic {
             last_printable: None,
         };
         s.refresh_snapshot();
-        Ok(s)
+        s
     }
 
     fn refresh_snapshot(&mut self) {

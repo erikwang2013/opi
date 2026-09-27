@@ -120,7 +120,10 @@ impl TsfTextService {
     /// `state.rs` 模块头（B1：回调要 state，服务对象要回调，谁先建都不成立，
     /// 故两者都不再依赖对方先存在）。
     ///
-    /// 词库装载失败（坏路径）由 `EngineShared::load` 报错，调用方决定回退。
+    /// 词库在这一步**之前**就解析完了（`dict_path::load_dict` 逐候选回退，最差是
+    /// 内置 35 词）—— 故本构造没有失败路径：进到这里的一定是能用的引擎。
+    /// （从前这里写的是"坏路径由 `EngineShared::load` 报错，调用方决定回退"，
+    /// 那条路已随词库解析落地取消。）
     pub fn new(state: TsfSharedState, sink: Arc<dyn TsfSink>) -> Self {
         Self {
             state,

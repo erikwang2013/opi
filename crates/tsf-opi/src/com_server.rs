@@ -15,6 +15,7 @@
 
 use core::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use windows::Win32::Foundation::{
@@ -40,6 +41,7 @@ use windows::Win32::UI::TextServices::{
 use windows::core::{BOOL, GUID, HRESULT, IUnknown, Interface, PCWSTR, Ref, Result, implement};
 
 use crate::candidate_io::{CandidateAction, CandidateSink, SharedAction};
+use crate::dict_path;
 use crate::dll::{
     CLSID_TEXT_SERVICE, DISPLAY_NAME, DllLock, GUID_PROFILE, LANGID_ZH_CN, clsid_key,
     dll_can_unload, inproc_server_key,
@@ -193,18 +195,30 @@ impl IClassFactory_Impl for ClassFactory_Impl {
             // SAFETY: ppvobject 非空（上面判过）。
             unsafe { *ppvobject = core::ptr::null_mut() };
 
-            // 词库路径传 None → 内置回退词库。**不能**先传一个可能不存在的路径：
-            // `TsfLogic::load` 对坏路径返回 Err（既定策略：坏路径不静默回退），
-            // 服务就创建不出来 —— 用户看到"输入法整个不在"，比词库小更糟。
-            // Windows 词库分发方案定了之后在这里给路径。
+            // 词库解析：环境变量 → DLL 同目录 → %LOCALAPPDATA%\opi → 内置回退
+            // （顺序与理由见 `dict_path` 模块头）。这里**只传候选原料**，判定逻辑
+            // 全在 `dict_path`（平台中立、有主机单测）—— 本函数在 Linux 上跑不到。
             //
+            // 为什么不再是「先给一个可能不存在的路径」：那条路（`TsfLogic::load`
+            // 对坏路径返回 Err）会让**服务创建不出来**，用户看到"输入法整个不在"，
+            // 比词库小更糟。现在解析层自己就带逐候选回退，`with_dict` 没有失败路径。
+            let loaded = dict_path::load_dict(
+                dict_path::env_dict_path().as_deref(),
+                dll_dir().as_deref(),
+                std::env::var_os("LOCALAPPDATA").as_deref(),
+            );
+            // 这一行在 GUI 宿主里通常看不到（无 stderr）；要真看得见得上
+            // `OutputDebugStringW`（未实现）。日志的**格式**在
+            // `DictLoad::log_line` 里，那部分有主机单测。
+            eprintln!("tsf-opi: {}", loaded.log_line());
+
             // B1 接线，三步，**顺序不能换**（互相引用的死结见 state.rs 模块头）：
             // 1) `engine` 先建（回调与服务对象共用**同一份**，前者只有这一半能用
             //    —— 读线程拿不到 `ITfContext`，理由见 state.rs 的线程模型）；
             // 2) 回调只依赖 engine；3) sink 依赖回调 —— 建好后回填进回调的一次性槽位。
             // sink 是 CandidateSink（C3 生产实现）：惰性连 named pipe，候选窗
             // 进程不在时降级为 no-op，不会让 CreateInstance 失败。
-            let engine = Arc::new(EngineShared::load(None).map_err(|_| E_FAIL)?);
+            let engine = Arc::new(EngineShared::with_dict(loaded.dict));
             let action = Arc::new(SharedAction::new(Arc::clone(&engine)));
             let sink: Arc<dyn TsfSink> = Arc::new(CandidateSink::new(
                 Arc::clone(&action) as Arc<dyn CandidateAction>
@@ -353,6 +367,19 @@ fn own_module_path() -> Result<String> {
         return Err(E_FAIL.into());
     }
     Ok(String::from_utf16_lossy(&buf[..n as usize]))
+}
+
+/// 本 DLL 所在目录 —— 词库探测的第二候选（见 `dict_path::candidates`）。
+///
+/// 复用自己的模块路径：`own_module_path` 本来就要求"按地址反查"（不能拿宿主 EXE
+/// 的路径），而**不能**用当前工作目录 —— 宿主进程的 CWD 是用户当时在哪儿，
+/// 与我们的安装目录无关。
+///
+/// 拿不到路径 → `None`：跳过该候选继续下一个，**不是**错误（词库少一个候选
+/// 不该让输入法整个不见；反正还有 %LOCALAPPDATA% 与内置回退）。
+fn dll_dir() -> Option<PathBuf> {
+    let p = own_module_path().ok()?;
+    Path::new(&p).parent().map(Path::to_path_buf)
 }
 
 /// Rust `&str` → NUL 结尾的 UTF-16（Win32 的 W 系 API 要的形态）。

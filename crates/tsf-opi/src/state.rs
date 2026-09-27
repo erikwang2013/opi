@@ -63,13 +63,23 @@ pub struct EngineShared {
 }
 
 impl EngineShared {
-    /// 装载逻辑层（`TsfLogic::load`）。坏路径 → Err（**不回退**，回退由调用方决定：
-    /// `com_server` 传 None 走内置回退词库，理由见那里）。
+    /// 装载逻辑层（`TsfLogic::load`）。坏路径 → Err（**不回退**，回退由调用方决定）。
     pub fn load(path: Option<&str>) -> std::result::Result<Self, String> {
-        Ok(Self {
-            logic: Mutex::new(TsfLogic::load(path)?),
+        Ok(Self::with_dict_inner(TsfLogic::load(path)?))
+    }
+
+    /// 用**已装好的**词库构建（`dict_path::load_dict` 的落点，调用点见 `com_server`）。
+    /// 与 `load` 的差别是没有失败路径：词库解析与回退已在 `dict_path` 里做完，
+    /// 这里拿到的词典一定可用（最差是内置 35 词）。
+    pub fn with_dict(dict: Box<dyn engine_core::dictionary::Dictionary>) -> Self {
+        Self::with_dict_inner(TsfLogic::with_dict(dict))
+    }
+
+    fn with_dict_inner(logic: TsfLogic) -> Self {
+        Self {
+            logic: Mutex::new(logic),
             pending: Mutex::new(VecDeque::new()),
-        })
+        }
     }
 
     /// 取引擎锁。中毒 → None（调用方吞掉这次操作，别经 COM vtable 泄漏 panic）。
