@@ -190,6 +190,43 @@ Rust 侧状态不变，缓冲与上次推出去的一样就直接跳过 —— �
 
 ## 安装
 
+### 0. 一条命令装完（推荐）
+
+```bash
+cmake -S crates/fcitx5-opi/cpp -B build-fcitx5 -DCMAKE_BUILD_TYPE=Release
+cmake --build build-fcitx5
+sudo cmake --install build-fcitx5        # 发行版打包：DESTDIR=<暂存树> cmake --install ...
+```
+
+`cpp/CMakeLists.txt` 会按 fcitx5 **自己的查找规则**把四样东西放到四个地方：
+
+| 装什么 | 落到 |
+|---|---|
+| `libfcitx5_opi_glue.so` + `libfcitx5_opi.so` | fcitx5 的 addon 目录（与 `fcitx5-diagnose` 一致） |
+| `../data/addon/opi_fcitx5.conf` | `<prefix>/share/fcitx5/addon/` |
+| `../data/inputmethod/opi.conf` | `<prefix>/share/fcitx5/inputmethod/` |
+| `luna.opid` | `<prefix>/share/opi/` |
+
+⚠️ **词库为什么不在 `share/fcitx5/` 下面**：`loadDictionary()` 问的是
+`StandardPath::Type::Data`（纯 XDG 数据目录），而两个 conf 是 fcitx5 的 addon
+加载器用 `Type::PkgData`（XDG 数据目录 **+ `fcitx5/`**）找的。两者只差一个
+中间层，装错了**不报错**，只表现为候选永远是内置那几十个词 —— 与「根本没装
+词库」在用户侧无法区分。这条对应关系有门禁守：`opi_locate_check.cpp` 拿真
+fcitx5 库问一遍落点，CI 的 `fcitx5` job 每次跑（改了 `DESTINATION` 会红）。
+
+⚠️ **前缀**：取 `/usr`（发行版打包的形态）时 addon 目录才是 fcitx5 真会搜的
+那个；取缺省的 `/usr/local` 得到 `/usr/local/lib/fcitx5`，而发行版 fcitx5 编译
+进去的搜索路径里没有这一条（实测本机是 `/usr/lib/x86_64-linux-gnu/fcitx5`）。
+这种情况配置期会发一条 warning。发行版打包请 `-DCMAKE_INSTALL_PREFIX=/usr`。
+
+没有 `fcitx5-dev` 的机器（本机就是，头在 `/usr/include/fcitx5` 之外）：
+deb 解包后加 `-DFCITX5_HEADERS=<...>/usr/include/Fcitx5 -DFCITX5_LIBS=<...>/usr/lib/x86_64-linux-gnu`，
+变量名与 `run-harness.sh` 相同。注意 `.so` 符号链接在 `-dev` 包里、它指向的
+`.so.N` 在运行库包里，**两个都要解包到同一个 root/ 下**，否则链接期报找不到
+`-lFcitx5Core`。
+
+下面 1/2/3 是手工通路（免 root、或只想改一处时用），与上面等价。
+
 ### 1. addon 元数据（两个 conf，**缺一不可**）
 
 文件已在仓库里（`../data/`，与安装目标同构）：

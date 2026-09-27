@@ -89,36 +89,59 @@ def plan_modes(ic):
 # xkb 的 Shift 位（ProcessKeyEvent 第三个参数 state）：Shift=1 Lock=2 Control=4。
 SHIFT_MASK = 1
 
-# 中文模式默认全角下 `.` 该出的字。判据用它而不是拿半角 `.` 当对照 ——
-# 半角态下 `.` 是**直通**（`handle_printable` 的 Pinyin 分支对非字母非撇号
-# 返回 PassThrough），客户端收到的是一条 `PassThrough` 信号，不是 CommitString。
-FULLWIDTH_PERIOD = "。"
+# 探针键的**选取本身就是判据的一部分**（2026-09-28 拆开关后重挑）：
+#
+# 全角/半角与中文标点拆成两档之后（`Engine::chinese_punct` / `Engine::fullwidth`，
+# 真值表见 crates/engine-core/tests/punctuation_switches.rs），`. ` `,` `\` 这些
+# **表内键**由 `chinese_punct` 管，Shift+Space 再也改不动它们 —— 拿 `.` 当探针的话
+# 无论全角开还是关都出 `。`，本变体会**恒红**，而且红得看不出原因。
+#
+# 全角档唯一还能观察到的地方是**表外键**：不在 CHINESE_PUNCT 里、落到
+# `ascii_fullwidth` 机械全角（+0xFEE0）的那些。取 `^` → `＾`(U+FF3E)。
+# 关掉全角后 `^` 是**直通**（`input_punct` 返回 None → 客户端收到 PassThrough），
+# 不是 CommitString —— 判据因此落在「同键在不同全角态下结果不同」上。
+#
+# ⚠️ 「`^` 保持表外」是这条判据的**前提**。前提若破，**本变体**会变成恒绿 ——
+# 往 CHINESE_PUNCT 里加任何 `^` 映射，`^` 就变成表内键、归 `chinese_punct` 管，
+# Shift+Space 再也改不动它 ⇒ 四条断言无条件成立、不再测量任何东西。
+#
+# 但前提破**不是无人区**：引擎侧有**两道**网会在同一次改动上当场红（变异实测过：
+# 加 ('^','＾') → 两条都红），所以静默的只是本变体，整个套件会先响：
+#   1. crates/engine-core/tests/punctuation_switches.rs 的
+#      `chinese_punct_and_fullwidth_are_independent` —— 真值表 (表开, 全角关)
+#      那格对 `^` 期望 `None`；表命中会让 `or_else` 短路、得到 `＾`
+#   2. crates/engine-core/src/punctuation.rs 的
+#      `chinese_lookup_does_not_fall_back_to_mechanical_fullwidth` ——
+#      直接断言 `chinese('^')` 是 `None`
+# 这里写明前提是为了**指出它归谁守**，不是警告一片没有守卫的地方。改表前先看那两条。
+FULLWIDTH_PROBE = "＾"
 
 
 def plan_fullwidth(ic):
     """全角 ⇄ 半角切换键（Shift+Space）的步骤。
 
     判据与 `plan_modes` 同一条：**同一个键在不同全角态下的结果差异**。
-    中文模式默认全角，所以基线 `.` 必然出 `。`；按一次 Shift+Space 后同一个 `.`
-    必须**不再**出 `。`；再按一次必须回到 `。` —— 能进能出。
+    探针取表外键 `^`（理由见 `FULLWIDTH_PROBE`）：拼音模式默认全角，基线 `^`
+    必然出 `＾`；按一次 Shift+Space 后同一个 `^` 必须**不再**出 `＾`；再按一次
+    必须回到 `＾` —— 能进能出。
     """
     return [
-        ("f:基线 period（默认全角）",
-         lambda: ic.ProcessKeyEvent(0x2E, 0, 0, False, 0), None),
+        ("f:基线 ^（默认全角）",
+         lambda: ic.ProcessKeyEvent(0x5E, 0, 0, False, 0), None),
         ("f:Shift+Space 关全角",
          lambda: ic.ProcessKeyEvent(0x20, 0, SHIFT_MASK, False, 0), None),
-        ("f:半角下的 period",
-         lambda: ic.ProcessKeyEvent(0x2E, 0, 0, False, 0), None),
+        ("f:半角下的 ^",
+         lambda: ic.ProcessKeyEvent(0x5E, 0, 0, False, 0), None),
         # 按住不放的对照：带 REPEAT 位的 Shift+Space **不许**再翻一次全角位
-        # （否则按住期间全角位疯狂翻）。下一步用同一个 '.' 读结果。
+        # （否则按住期间全角位疯狂翻）。下一步用同一个 '^' 读结果。
         ("f:Shift+Space 带 REPEAT 位（按住不放）",
          lambda: ic.ProcessKeyEvent(0x20, 0, SHIFT_MASK | REPEAT_MASK, False, 0), None),
-        ("f:REPEAT 后的 period（必须仍是半角）",
-         lambda: ic.ProcessKeyEvent(0x2E, 0, 0, False, 0), None),
+        ("f:REPEAT 后的 ^（必须仍是半角）",
+         lambda: ic.ProcessKeyEvent(0x5E, 0, 0, False, 0), None),
         ("f:Shift+Space 开全角",
          lambda: ic.ProcessKeyEvent(0x20, 0, SHIFT_MASK, False, 0), None),
-        ("f:回全角后的 period",
-         lambda: ic.ProcessKeyEvent(0x2E, 0, 0, False, 0), None),
+        ("f:回全角后的 ^",
+         lambda: ic.ProcessKeyEvent(0x5E, 0, 0, False, 0), None),
         # 回归守：**裸空格必须仍是选词键**。全角键的条件若写宽（把裸空格也吃掉），
         # 这两步会红 —— 那是「打不了字」级别的缺陷，比全角键本身重要，故与它同组。
         ("f:裸空格回归 n",
@@ -153,30 +176,30 @@ def check_fullwidth(windows, failures):
         return "".join(p for n, p in _win(w, label, failures) if n == "CommitString")
 
     # 1) 基线不成立就直接返回 —— 拿一个本来就错的基线做对照，比不做还糟。
-    if FULLWIDTH_PERIOD not in commits("f:基线 period（默认全角）"):
+    if FULLWIDTH_PROBE not in commits("f:基线 ^（默认全角）"):
         failures.append(
-            f"基线不成立：中文模式默认全角，'.' 应提交 '。'，实际 "
-            f"{w.get('f:基线 period（默认全角）')!r}"
+            f"基线不成立：拼音模式默认全角，表外键 '^' 应提交 '＾'，实际 "
+            f"{w.get('f:基线 ^（默认全角）')!r}"
         )
         return
-    # 2) 关：切到半角后同一个 '.' 必须**不再**出 '。'（直通给客户端）。
-    if FULLWIDTH_PERIOD in commits("f:半角下的 period"):
+    # 2) 关：切到半角后同一个 '^' 必须**不再**出 '＾'（直通给客户端）。
+    if FULLWIDTH_PROBE in commits("f:半角下的 ^"):
         failures.append(
-            f"全角键没生效：半角态下 '.' 仍提交了 '。'，"
-            f"实际 {w.get('f:半角下的 period')!r}"
+            f"全角键没生效：半角态下 '^' 仍提交了 '＾'，"
+            f"实际 {w.get('f:半角下的 ^')!r}"
         )
     # 2b) REPEAT 对照：按住不放补发的重复事件**不许**再翻一次全角位。
-    #     判据与第 2 条同一条（同一个 '.' 的结果差异），故不依赖任何新观察点。
-    if FULLWIDTH_PERIOD in commits("f:REPEAT 后的 period（必须仍是半角）"):
+    #     判据与第 2 条同一条（同一个 '^' 的结果差异），故不依赖任何新观察点。
+    if FULLWIDTH_PROBE in commits("f:REPEAT 后的 ^（必须仍是半角）"):
         failures.append(
             f"REPEAT 没排除：带重复位的 Shift+Space 又翻了一次全角位 —— "
-            f"按住不放会疯狂翻。实际 {w.get('f:REPEAT 后的 period（必须仍是半角）')!r}"
+            f"按住不放会疯狂翻。实际 {w.get('f:REPEAT 后的 ^（必须仍是半角）')!r}"
         )
     # 3) 开：再按一次必须回到全角 —— 「能进能出」，只进不出等于换个地方卡住。
-    if FULLWIDTH_PERIOD not in commits("f:回全角后的 period"):
+    if FULLWIDTH_PROBE not in commits("f:回全角后的 ^"):
         failures.append(
-            f"全角键出不来：再按一次 Shift+Space 后 '.' 仍不出 '。'，"
-            f"实际 {w.get('f:回全角后的 period')!r}"
+            f"全角键出不来：再按一次 Shift+Space 后 '^' 仍不出 '＾'，"
+            f"实际 {w.get('f:回全角后的 ^')!r}"
         )
     # 4) 裸空格没被偷：拼音下 'n' + 空格应提交一个汉字（选首候选）。
     #    这条守的是本改动唯一会造成「打不了字」的方向。

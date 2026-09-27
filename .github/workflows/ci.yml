@@ -68,3 +68,83 @@ jobs:
       - name: ./gradlew testDebugUnitTest
         run: ./gradlew testDebugUnitTest --no-daemon
         working-directory: android
+
+  fcitx5:
+    name: fcitx5 — C++ 编译 + 打包落点
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 这个 job 补上两件此前无人守的事：
+      #
+      # 1) fcitx5 的 C++ 胶水**从未被编译器看过**。它只由手工 harness 编译，
+      #    而 harness 进不了 CI（要 dbus + 私有会话）。这里只编译 + 链接，
+      #    不需要 dbus —— 与 rust job 里那几条 Apple 目标 check 同一个用意。
+      #
+      # 2) 「装完了但用不了」：cmake --install 的落点必须等于 loadDictionary()
+      #    的查找结果。用户侧的表现是候选永远只剩内置那几十个词，且**没有任何
+      #    报错**，所以只能在 CI 里拿真 fcitx5 库问出来（见下）。
+      - name: 装 fcitx5 头/库
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfcitx5core-dev libfcitx5utils-dev libfcitx5config-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: 构建 Rust cdylib（安装规则要一并装它）
+        run: cargo build --release -p fcitx5_opi
+
+      # 前缀取 /usr 是**发行版打包的真实形态**：此时 fcitx5 的 CMake 包给出的是
+      # 它自己的 addon 目录（/usr/lib/<arch>/fcitx5）。取缺省的 /usr/local 则得到
+      # /usr/local/lib/fcitx5，而发行版 fcitx5 不搜那里 —— cpp/CMakeLists.txt 会为
+      # 此发 warning（已在本机实测该 warning 会触发）。
+      # 用 DESTDIR 而不是 --prefix：addon 目录是绝对路径，只有 DESTDIR 挪得动它。
+      - name: cmake 配置 / 构建 / 装到暂存树
+        run: |
+          set -euo pipefail
+          cmake -S crates/fcitx5-opi/cpp -B build-fcitx5 \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+          cmake --build build-fcitx5
+          DESTDIR="$PWD/stage" cmake --install build-fcitx5 | tee install.log
+
+      # 期望值**不写死**，从 --install 自己打印的落点里取。于是断言是
+      # 「安装器说它装到了哪」==「fcitx5 说它去哪找」—— 两个独立来源。
+      # 写死期望值的话，把 DESTINATION 改坏了只要顺手改期望值就永远绿。
+      - name: 断言落点 == 查找位置（问真 fcitx5 库）
+        run: |
+          set -euo pipefail
+          stage="$PWD/stage"
+          pick() {
+            sed -n 's/^-- \(Installing\|Up-to-date\): //p' install.log \
+              | grep -- "$1" | head -1
+          }
+          # 只按**文件名**取，不把期望目录写进 pattern：写进去的话，把 DESTINATION
+          # 改坏只会得到一句「日志里没找到」，看不出真正的原因。按文件名取，坏掉的
+          # 落点会一路传到下面探针里，报出来的是「fcitx5 说它在别处找」。
+          dict=$(pick 'luna\.opid$')
+          addon=$(pick 'opi_fcitx5\.conf$')
+          im=$(pick 'inputmethod/opi\.conf$')
+          for v in "$dict" "$addon" "$im"; do
+            [ -n "$v" ] || { echo "!! 安装日志里没有对应落点，别在空值上比"; exit 1; }
+          done
+          echo "安装器落点: $dict"
+          g++ -std=c++17 -Wall -Wextra -Werror -o locate_check \
+            crates/fcitx5-opi/cpp/opi_locate_check.cpp -lFcitx5Utils
+          # 丢掉 XDG_DATA_HOME：只让 XDG_DATA_DIRS（暂存树）起作用。否则 runner
+          # 上若恰好有真的词库，测的就不是我们刚装的那份了。
+          env -u XDG_DATA_HOME XDG_DATA_DIRS="$stage/usr/share" \
+            ./locate_check "$dict" "$addon" "$im"
+
+      # opi_locate_check.cpp 里的相对路径是手抄的 —— 它自己不读 opi_fcitx5.cpp，
+      # 所以改了查找常量它**照样绿**。这条把那份手抄钉住：改了 loadDictionary()
+      # 的类型或路径，这里先红，而不是等用户装完发现候选只剩几十个词。
+      - name: loadDictionary() 的查找常量没漂
+        run: |
+          set -euo pipefail
+          f=crates/fcitx5-opi/cpp/opi_fcitx5.cpp
+          grep -q 'Type::Data, "opi/luna.opid"' "$f" || {
+            echo "!! $f 里 loadDictionary() 的查找类型/路径变了。"
+            echo "   要同步三处：cpp/CMakeLists.txt 的安装落点、opi_locate_check.cpp、"
+            echo "   以及 cpp/README.md「安装」一节。"
+            exit 1
+          }
