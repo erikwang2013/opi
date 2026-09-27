@@ -220,9 +220,22 @@ impl KeyRouter {
 
     /// 页内索引 → 全局下标（**换算只此一份**），在调用方已抓好的候选表上提交。
     /// 数字选词（`digit_select`）复用自己那次抓取，不重排整表。
+    ///
+    /// **越界判据是页内的**（本页候选数）：全量判据会把页内越界（本页 8 项时点第 9 项）
+    /// 换算成**次页**下标 ⇒ 提交用户看不见的候选（门禁：tests/select_index_bounds.rs 的
+    /// select_beyond_page_must_not_commit_hidden_candidate）。页内/全量越界一律空串。
     pub(crate) fn select_from(&mut self, fetched: &[Candidate], index: usize) -> String {
-        let global = self.page * PAGE_SIZE + index;
-        let out = self.engine.select_from(fetched, global);
+        // 本页候选数（口径与 `candidates()` 的 skip/take 逐字等价：饱和减法 + min）
+        let page_len = fetched
+            .len()
+            .saturating_sub(self.page * PAGE_SIZE)
+            .min(PAGE_SIZE);
+        let out = if index < page_len {
+            let global = self.page * PAGE_SIZE + index;
+            self.engine.select_from(fetched, global)
+        } else {
+            String::new()
+        };
         self.reset_page_if_buffer_changed();
         out
     }
@@ -440,34 +453,20 @@ impl KeyRouter {
     }
 
     /// 拼音/繁体/符号模式有候选时按数字选词（页内索引：'1'→第 0 个候选）；否则直通。
-    /// 无对应候选（本页没有第 9 项、'0'）不消费，交客户端处理。
+    /// 无对应候选（本页没有第 9 项、'0'）不消费，交客户端处理 —— 本函数**不自己数**页内
+    /// 条数：页内越界由 `select_from` 的页内判据兜住（→ 空串 → 直通）。两处各数一遍正是
+    /// 缺陷的来源（旧 `select` 只判**全量**越界：数字键走对了、点击候选走错了；用例见
+    /// router_invariants.rs::digit_beyond_page_... 与 select_index_bounds.rs::select_beyond_...）。
+    /// 同一份抓取供选中用：旧路径 `candidates()` + `select()` 抓两次 ⇒ 每次数字选词排两遍。
     fn digit_select(&mut self, c: char) -> KeyAction {
-        // 本页候选数。**越界判据必须在页内**：`select` 的「越界返回空串」是全量列表的
-        // 越界，页内越界（本页只有 8 项时按 '9'）会被它换算成次页下标 —— 提交用户
-        // 屏幕上看不见的候选。见 tests/router_invariants.rs 的
-        // digit_beyond_page_must_not_commit_hidden_candidate。
-        // 同一份抓取供两处用（页内计数 + 选中）：旧路径 `candidates()` 抓一次、
-        // `select()` → `engine.select` 又抓一次 —— **每次数字选词把整表排两遍**。
-        // 计数口径与 `candidates()` 的 skip/take 逐字等价（饱和减法 + min）。
         let fetched = self.fetched();
-        let page_len = fetched
-            .len()
-            .saturating_sub(self.page * PAGE_SIZE)
-            .min(PAGE_SIZE);
-        if self.mode().digit_selects_candidates() && !self.buffer().is_empty() && page_len > 0 {
-            let Some(d) = c.to_digit(10) else {
+        if self.mode().digit_selects_candidates() && !self.buffer().is_empty() {
+            let Some(idx) = c.to_digit(10).and_then(|d| d.checked_sub(1)) else {
                 return KeyAction::PassThrough;
             };
-            let Some(idx) = d.checked_sub(1) else {
-                return KeyAction::PassThrough;
-            };
-            let idx = idx as usize;
-            if idx >= page_len {
-                return KeyAction::PassThrough;
-            }
             // 与 `select` 同一套换算与收尾，只是复用上面那次抓取
-            let text = self.select_from(&fetched, idx);
-            // 引擎没给出该候选（页内判据下不可达，保留为最后一道防线）同样不消费
+            let text = self.select_from(&fetched, idx as usize);
+            // 空串 = 页内没这一项（或无候选）→ 不消费，交客户端处理
             if text.is_empty() {
                 KeyAction::PassThrough
             } else {

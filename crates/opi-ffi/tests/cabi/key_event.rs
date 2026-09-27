@@ -445,3 +445,52 @@ fn cabi_select_page_is_page_relative_and_reuses_one_conversion() {
         opi_clear();
     }
 }
+
+/// `opi_select_page(k)` 的**页内**越界：满页时 `k = 页大小` 必须空串、状态原样。
+///
+/// 用户真能点到的越界正是这一档（屏幕 8 项、UI 传了第 9 项）；缺陷版把它换算成**次页**下标、
+/// 提交一条看不见的候选（真库 `nh` 第 0 页 `k=8` → 「年后」）。⚠️ 上面用例里的
+/// `opi_select_page(999)` **抓不到它**（999 对满页是**全量**越界，缺陷版也返回空串）——
+/// 页内那半必须用「全量列表里存在、但不在本页」的下标打。契约写在本出口的 doc 里、宿主调的
+/// 是本出口，故除 engine-core 侧同形用例（行为层）外还要这一条（出口层）。
+#[test]
+fn cabi_select_page_beyond_page_must_not_commit_hidden_candidate() {
+    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    load_any();
+    unsafe {
+        opi_switch_mode(0);
+        opi_set_learner(false); // 学习会改排序；本用例验的是分页语义
+    }
+    key_event('w' as u32, 0);
+    key_event('o' as u32, 0);
+    let n = read_texts(unsafe { opi_candidates_page() }).len();
+    let global = read_texts(unsafe { opi_candidates(64) });
+    assert!(n > 0, "前置：第 0 页非空");
+    assert!(
+        global.len() > n,
+        "前置：需要多于一页（luna 词库），全局 {} / 页大小 {n}",
+        global.len()
+    );
+    assert_eq!(unsafe { opi_page() }, 0, "前置：在第 0 页");
+
+    // 页内越界：全局第 n 项**存在**（旧实现提交的就是它），但它不在本页
+    assert_eq!(
+        read(unsafe { opi_select_page(n as u32) }),
+        "",
+        "页内越界 → 空串；若为 {:?} 就是提交了次页首条（用户看不见）",
+        global[n]
+    );
+    assert_eq!(read(unsafe { opi_buffer() }), "wo", "越界不得改状态");
+    assert_eq!(unsafe { opi_page() }, 0, "越界不得改页码");
+
+    // 页内合法项照旧（不得把整页都误判成越界）
+    assert_eq!(
+        read(unsafe { opi_select_page((n - 1) as u32) }),
+        global[n - 1],
+        "页内末项必须仍可提交"
+    );
+    unsafe {
+        opi_set_learner(true);
+        opi_clear();
+    }
+}

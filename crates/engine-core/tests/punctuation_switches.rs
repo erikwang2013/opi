@@ -11,9 +11,14 @@
 //!   `chinese_punct_and_fullwidth_are_independent`；
 //! - 符号模式两个开关都不生效（它是搜索模式，不是文本模式）。
 //!
-//! 两轨镜像（同名同序）在 crates/fcitx5-opi/src/input_method_punct_tests.rs 与
-//! crates/tsf-opi/src/logic_punct_tests.rs：**这两条镜像本轮未同步**，它们按
-//! 「只关全角 ⇒ 直通」写的用例会红，等下一波接线时一并改。
+//! 两轨镜像（同名同序）：标点在 crates/fcitx5-opi/src/input_method_punct_tests.rs 与
+//! crates/tsf-opi/src/logic_punct_tests.rs，**开关**这一批两轨各多拆了一层
+//! （crates/{fcitx5-opi,tsf-opi}/src/{input_method,logic}_switches_tests.rs）。
+//!
+//! **已同步**（2026-09-28 订正）：原文写「这两条镜像本轮未同步，按『只关全角 ⇒ 直通』写的
+//! 用例会红，等下一波接线时一并改」—— 实测不成立：`cargo test -p fcitx5_opi -p tsf_opi`
+//! 全绿（0 failed），两侧的旧用例都已改完。**别把「未同步」写回来**：读到那句话的人会去找
+//! 两个**根本不存在**的红灯（本波已有一个分身据此以为套件是红的）。
 
 use engine_core::dictionary::InMemoryDictionary;
 use engine_core::symbols::SymbolEngine;

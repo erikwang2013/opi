@@ -265,6 +265,10 @@ fn digit_beyond_page_must_not_commit_hidden_candidate() {
     assert_eq!(r.buffer(), "hao", "'9' 直通时不得动缓冲");
 }
 
+// 第二个选词入口（`KeyRouter::select`，C ABI `opi_select_page`）与 `Engine::select` 的
+// 下标边界用例在这一批拆分中移到了 tests/select_index_bounds.rs（本文件撞 500 行门禁）——
+// 与上面的 `digit_beyond_page_must_not_commit_hidden_candidate` 是同一条不变式。
+
 // ---------- 页码与缓冲的强一致 ----------
 
 /// 任何**改变缓冲**的按键路径都必须把页码归零。判据取自「缓冲是否变了」这个外部

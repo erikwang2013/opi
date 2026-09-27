@@ -385,9 +385,17 @@ impl Engine {
     }
 
     /// 选中候选项。越界返回空串。记录学习（若开启）。
-    /// limit 512：rank_and_pick 仍全量排序（正确性），这里只限 FFI 载荷。
+    ///
+    /// **不设上限**（曾是 512，与 [`crate::router::FETCH_LIMIT`] 统一）：512 不省任何成本
+    /// —— `rank_and_pick` 无论 limit 多大都全量收集 + 排序（正确性，见该模块「不能下推
+    /// limit 到词库」），截断只是扔掉**已经算好**的尾巴 —— 却造出一条**静默失败的下标带**：
+    /// `candidates(usize::MAX)` 里有第 513 项（真库 'y' 实测 8017 项），而这里返回空串，
+    /// 不提交、不学习，调用方也无从分辨「没有这一项」与「我内部只取了 512 项」（返回值
+    /// 只有一个字符串，没有地方承载这个区别）。下标空间与 [`crate::router::KeyRouter`]
+    /// 的 `fetched()` 对齐后，同一份候选表算出的下标两条路必给同一个答案。
+    /// 门禁：tests/select_index_bounds.rs 的 engine_select_index_space_agrees_with_unlimited_list。
     pub fn select(&mut self, index: usize) -> String {
-        let cands = self.candidates(512);
+        let cands = self.candidates(usize::MAX);
         self.select_from(&cands, index)
     }
 
