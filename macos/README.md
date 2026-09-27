@@ -21,8 +21,8 @@
 
 | 文件 | 内容 |
 |---|---|
-| `OpiFFI.h` | C ABI 声明面（**28 个导出** = 27 个 `opi_*` 函数 + `opi_ffi_free_string`），逐条对照 `crates/opi-ffi/src/cabi.rs` 抄写；`ios/OpiFFI.h` 是指向本文件的转发头 |
-| `OpiEngine.swift` | C ABI 桥：`OpiString` 的持有/释放、键码/状态位常量、词库装载与回退 |
+| `OpiFFI.h` | C ABI 声明面（**数量以 `crates/opi-ffi/tests/c_abi_contract.rs` 的门禁为准，别抄数字**），逐条对照 `crates/opi-ffi/src/cabi.rs` 抄写；`ios/OpiFFI.h` 是指向本文件的转发头。曾经落后 3 个（`opi_toggle_fullwidth` / `opi_fullwidth_state` / `opi_toggle_symbol`），**2026-09-27 已补齐**，见「全角 / 符号开关的出口」一节；本文件归 `ffi-contract`，别的分身不改 |
+| `OpiEngine.swift` | C ABI 桥：`OpiString` 的持有/释放、键码/状态位常量、词库装载与回退、符号库三个出口（`symbolBlocks` / `symbolsInBlock` / `searchSymbols`） |
 | `InputController.swift` | `IMKInputController` 子类：NSEvent → `opi_key_event` 入参、提交文本、preedit、候选窗 |
 | `main.swift` | `IMKServer` 启动（无 nib） |
 | `Info.plist` | 输入法组件声明 |
@@ -72,6 +72,16 @@ $ clang -std=c11 -Wall -Wextra -Imacos -fsyntax-only -x c /tmp/check_opi.c
     # exit 0 → 28 个导出名在头文件里全部有声明（这个检查抓到过真问题，见下）
 ```
 
+> ⚠️ 上面输出里的 `28` 是**跑这些命令时**的数字。2026-09-27 复查：`cabi.rs` 到 31 个导出，
+> `OpiFFI.h` 仍 28 个 —— 那条 `check_opi.c` 现在**编不过**（3 个名字没有声明），
+> 而正是这样它才有用。记录照原样保留。
+>
+> ⚠️ **同日更晚的订正（2026-09-27）**：`OpiFFI.h` 已补齐到 **31/31**，
+> `cargo test -p opi_ffi --test c_abi_contract` = **14 passed / 0 failed**。
+> ⇒ 上面那条「编不过」**已不再成立**。**数字从此以那道门禁为准，本文件不再抄具体值**
+> —— 理由见 `harmony/README.md` 同日的订正：`cabi.rs` 的导出数走过 19 → 20 → 22 → 28 → 31，
+> **改数字只是把下一次留给下一个人**。
+
 > ⚠️ 上面输出里的 `v1.0.13` 是**跑这些命令时**的工作区版本，不是当前版本
 > （仓库已到 v1.0.15）。**记录照原样保留** —— 改成本轮的版本号就是把一份实测
 > 记录改成没跑过的样子。要今天的新数字就重跑一遍。
@@ -89,8 +99,113 @@ Mach-O**（`nm: __.SYMDEF: file format not recognized`），所以上面用的�
 'opi_select_page'`）—— 也就是本目录最容易犯的「头文件落后 Rust 侧」。修完 28/28 通过。
 但它只证「名字都在、声明自洽」，**不**比对类型是否与 Rust 一致（那要等 Mac 上链一次）。
 
-这两条证明的是 **C ABI 能为 macOS 目标编译，并真能 codegen + 归档出一个含全部 28 个
-`opi_*` 符号的 `.a`；且本头文件自身能被 clang 解析**。
+#### 复验（2026-09-27，v1.0.16）
+
+上面那批输出还是 v1.0.13 的。本轮用**全新 target-dir**（零缓存）重跑了三个目标：
+
+```bash
+$ cargo check -p opi_ffi --target aarch64-apple-darwin  --target-dir /tmp/opi_darwin_recheck
+    Checking engine-core v1.0.16 ... engine-data v1.0.16 ... opi_ffi v1.0.16 ...
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 12.12s      # exit 0
+$ cargo check -p opi_ffi --target x86_64-apple-darwin   --target-dir /tmp/opi_darwin_recheck
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.08s       # exit 0
+$ cargo check -p opi_ffi --target aarch64-apple-ios     --target-dir /tmp/opi_darwin_recheck
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.46s       # exit 0
+```
+
+⚠️ 一个**方法上的坑**（本次踩到）：`rustup target add aarch64-apple-darwin` 会以
+`detected conflict: '.../libaddr2line-*.rlib'` 失败，且 `rustup target list --installed`
+**不列出**这两个 darwin 目标 —— 但 `cargo check` 照样能过（两个目标的 `.lib` 其实
+各 59 个文件都在）。**别拿 `rustup target list` 的空输出当成「目标没装」**。
+
+#### 类型级一致性：`cabi.rs` ↔ `OpiFFI.h`（2026-09-27）—— 当时 28/28 一致，其后一度 31 vs 28，**现已补回一致**
+
+补上了上面那句「不比对类型」的一步。用一个临时脚本比 **名称 + 元数 + 参数类型序列 +
+返回类型**（归一化 `bool`/`_Bool`、`usize`/`size_t`、指针空格差异）：
+
+```
+$ python3 /tmp/abi_parity.py
+Rust 导出 = 28   头文件声明 = 28
+名字差集 Rust−头: []
+名字差集 头−Rust: []
+签名不一致: 0
+（exit=0）
+```
+
+被验的头文件指纹 `md5sum OpiFFI.h` = `e3b3708547b0192b88281aec23fa4399`，
+mtime `2026-09-27 23:26:15`。**该文件的时效只到这个 mtime**。
+
+> ⚠️ **同一天晚些时候复跑，结果变了**（`cabi.rs` 一侧新增了三个导出）：
+> ```
+> $ python3 /tmp/abi_parity.py
+> Rust 导出 = 31   头文件声明 = 28
+> 名字差集 Rust−头: ['opi_fullwidth_state', 'opi_toggle_fullwidth', 'opi_toggle_symbol']
+> 名字差集 头−Rust: []
+> 签名不一致: 0
+> exit=1
+> ```
+> 头文件指纹与 mtime **一个字都没动** —— 所以这不是「头文件被改坏了」，
+> 是**新加的导出没有被声明**。**签名不一致仍为 0** 也有意义：它说明新增的那三个
+> 不是「写错了类型」，而是**根本没进声明面**（差集里出现，就不会进签名比对）。
+>
+> **项目自己的门禁也是红的**（`ffi-contract` 的 `crates/opi-ffi/tests/c_abi_contract.rs`，
+> 对 `macos/OpiFFI.h` 要求**集合相等**；我跑它是只读的）：
+> ```
+> $ cargo test -p opi_ffi --test c_abi_contract
+> test macos_header_matches_cabi ... FAILED
+> crates/opi-ffi/src/cabi.rs 与 macos/OpiFFI.h 漂移（共 3 条）：
+>   头文件缺少 Rust 导出 `opi_fullwidth_state`
+>   头文件缺少 Rust 导出 `opi_toggle_fullwidth`
+>   头文件缺少 Rust 导出 `opi_toggle_symbol`
+> test result: FAILED. 13 passed; 1 failed
+> ```
+> **两个独立脚本给出同一组 3 个名字** —— 这比「我的脚本说 0」强得多。
+> 注意同一跑里 `header_compiles_and_consumer_builds ... ok`：那是 `c_abi/consumer.c`
+> 只调了**已声明的那些**，所以能过；**别把它读成「头文件没事」**。
+> 补声明归 `ffi-contract`；本节只做记录。
+
+#### 补齐后重跑：取地址 TU 现在能过，且这次是**编译器**说的（2026-09-27 同日更晚）
+
+脚本对脚本仍是「互证」，所以补完之后我把**真正的那条**重跑了一遍 ——
+「把 `cabi.rs` 的每个导出**取地址**」写成一个 TU，`-Werror` 下编它，**少一个声明就断**：
+
+```
+$ python3 … > /tmp/check_opi.c      # 从 cabi.rs 抽 #[unsafe(no_mangle)] 的 opi_* 名字
+$ head -3 /tmp/check_opi.c
+#include "OpiFFI.h"
+const void *refs[] = {
+    (const void *)&opi_ffi_free_string,
+$ tail -2 /tmp/check_opi.c
+    (const void *)&opi_export_user_words,
+};
+/* 取地址的导出数 = 31 */
+
+$ clang -std=c11   -Wall -Wextra -Werror -Imacos -fsyntax-only -x c   /tmp/check_opi.c ; echo $?
+0
+$ clang -std=c++17 -Wall -Wextra -Werror -Imacos -fsyntax-only -x c++ /tmp/check_opi.c ; echo $?
+0
+```
+
+**这条比我那两个 Python 脚本强**：`c11_exit=0` / `cxx_exit=0` 是 **clang 给的**，
+不是「我写的脚本说 0」。它证的是「**31 个导出名在头文件里个个有声明，且头文件在
+C 与 C++ 两种模式下都吃得下**」。
+
+⚠️ 它**仍不**证：类型/签名逐个对得上（`&f` → `const void *` 对**任何**函数类型都成立，
+所以这条检查对签名是瞎的 —— 签名那一层只有上面那个脚本可比，而它弱在自证）；
+也不证能链接、不证 Swift 侧任何一行。
+
+**两条互补，缺一不可**：clang 证「名字齐、头文件能解析」（强证据但盲于类型），
+`abi_parity.py` 证「类型序列逐条一致」（弱在自证但覆盖类型）。
+
+⚠️ **这个脚本本身出过错**：同一轮里它先后报出 16 / 5 / 6 / 19 个「不一致」，
+**全部是脚本自己的 bug**（参数名没剥干净、`bool`/`_Bool` 映射不对称、
+`const uint16_t *path` 里指针与名字粘连、`[a-z0-9_]` 在 UTF-8 相邻处的怪异行为）。
+所以这条证据的强度是「**我写的一个脚本说 0**」，不是「编译器说 0」——
+在 Mac 上链一次仍然是唯一能钉死这件事的办法。
+
+这两条证明的是 **C ABI 能为 macOS 目标编译，并真能 codegen + 归档出一个含当时全部
+`opi_*` 导出的 `.a`；且本头文件自身能被 clang 解析**（**具体条数不写在这里** ——
+它随 `cabi.rs` 变，以 `cabi.rs` 的 `#[unsafe(no_mangle)]` 计数与 `c_abi_contract` 门禁为准）。
 它们**不**证明：这个 `.a` 能在 macOS 上被 ld 链接、能被 IMK 加载、Swift 侧任何一行是对的。
 
 **已知的失败（环境，不是代码）**：整体 `cargo build -p opi_ffi --target aarch64-apple-darwin`
@@ -378,7 +493,15 @@ Mac 上很可能要改」的地方标出来了，接手人从这里开始最省�
 - **G2 模式切换没有入口**：`opi_switch_mode`（0=Pinyin 1=English 2=Number 3=Symbol
   **4=Traditional**）
   在 `OpiEngine.swift` 里有包装，但 macOS 端没有任何触发 UI（菜单项/热键都没有）。
-  Android 有模式按钮、fcitx5 轨没接。**接的时候必须走 `opi_switch_mode`**，
+  Android 有模式按钮、fcitx5 轨没接。**iOS 侧本轮接了**（`ios/KeyboardViewController.swift`
+  的 `cycleMode()`：中→繁→英→中，前两跳先 `clear()`，逐字对齐 Android `toggleMode()`）；
+  macOS 侧**没有三态循环**（那需要 IMK 菜单项，是工程层的事），
+  但**有一个热键**：`Ctrl+'` 切英文/回拼音（`hotkey(_:)` 判在 `handle(_:client:)` 里，
+  与 `vk.rs` 的 `hotkey_target` 同判「来回切」）。**这两个入口不等价** ——
+  热键那条不走 `clear()`（它调的是 `opi_switch_mode`，`router.rs:166` 的 `switch_mode`
+  会顺手清前端 ⇧ 三态，**但仅在目标不是 English 时**：切到英文保留 ⇧ 是有意的，
+  英文模式下还得靠它打大写）。
+  **接的时候必须走 `opi_switch_mode`**，
   不要直接打引擎：`router.rs` 的 `switch_mode` 会顺手清前端 ⇧ 三态，绕过它会让
   ⇧ Lock 跨模式残留（英文模式下打出全大写）。
 - **G3 候选窗显示的是全局列表，不是 Rust 的当前页**：`InputController.swift` 现在把
@@ -409,7 +532,9 @@ Mac 上很可能要改」的地方标出来了，接手人从这里开始最省�
   （`api/mod.rs:247/260/330`，已有断言钉住）。所以接的时候可以信任
   `opi_page()` / `opi_page_count()` 是自洽的。
 - **G4 无测试、无 CI、无工程文件**：`macos/` 里**跑过的只有头文件** ——
-  `OpiFFI.h` 的 clang 语法检查与「28 个导出名取地址」那个 TU（见「已验证」）。
+  `OpiFFI.h` 的 clang 语法检查与「导出名取地址」那个 TU（**它现在能过**：
+  2026-09-27 头文件补齐后，`cabi.rs` 的每个导出都在声明面里；
+  它一度编不过，正是这条检查的价值所在，见「已验证」的订正注记）。
   **Swift 三个文件的验证数是 0**：没有编译、没有 lint、没有单测。
   第一条针对 Swift 的可执行验证就是「在 Mac 上编译通过」（见「第一件要做的事」#3）。
 - **G5 宠物「小欧」未接（有意）**：几何真源是 `docs/opi-pet.svg`；Android 与 Windows
@@ -419,6 +544,20 @@ Mac 上很可能要改」的地方标出来了，接手人从这里开始最省�
   **画不进去** —— 要摆小欧得先换成自绘 `NSPanel`，那是对未编译代码做结构改动。
   真要接时**别**新写一份 CoreGraphics 几何：同一张图的第三份拷贝必然漂移。
   顺序照旧 —— 先让 Swift 过编译器，再谈接。
+- **G6 符号库：包装有了，UI 没有**（本轮新增）。`OpiEngine.swift` 现在有
+  `symbolBlocks()` / `symbolsInBlock(id:)` / `searchSymbols(keyword:)`
+  （对应 `opi_symbol_blocks` / `opi_symbols_in_block` / `opi_search_symbols`），
+  但 **macOS 侧没有任何调用点** —— 没有符号面板。要接的话得先决定
+  「符号面板在 IMK 里长什么样」（候选窗是 `IMKCandidates`，摆不下网格，
+  见 G5 同一条理由）。iOS 侧的写法（`ios/SymbolPanel.swift`）可作参考，
+  但**别**把 UIKit 代码搬过来。
+  三条契约（与 iOS 侧同一份，写在这里免得各抄一遍）：
+  ①`opi_symbol_blocks()` **只回 common 块**，JSON 里的 `common` 字段在该出口上恒为
+  true（当前数据表只有 CJK 符号块是 common → 「常用」= 60 个）；
+  ②块 id 在 Rust 侧是 `u16`、在 C ABI 是 **`int16_t`**，只能对齐到 0..=32767 ——
+  按 `Int` 解码后**显式收窄**，直接解成 `Int16` 会在 id > 32767 时抛异常，
+  而本层对解析失败的处理是「返回空数组」，后果是面板整块空掉且**无日志**；
+  ③`opi_search_symbols("")` 返回**全部**条目，不是「没搜到」。
 
 ## 与 Rust 侧的契约（键码 / 状态位）
 
@@ -445,6 +584,100 @@ Mac 上很可能要改」的地方标出来了，接手人从这里开始最省�
 模式整数（`opi_mode` / `opi_switch_mode`）有 **五个**：0=Pinyin 1=English 2=Number
 3=Symbol **4=Traditional**。少一个 case 的后果不是「不认识」而是「显示与行为不一致」
 （UI 按拼音显示、引擎在跑繁体），见 `OpiEngine.swift` 的 `OpiMode` 注释。
+
+⚠️ **两个 Engine 能力的 C ABI 出口：Rust 已落地，声明头还差 3 个**（2026-09-27 核
+`cabi.rs` / `api/mod.rs` / `jni.rs` / `OpiFFI.h`）：
+
+| Engine 方法 | `cabi.rs` 导出 | `OpiFFI.h` 声明 | Apple 两平台 | Android(JNI) | fcitx5 轨 | TSF 轨 |
+|---|---|---|---|---|---|---|
+| `Engine::toggle_symbol()` | ✓ `opi_toggle_symbol` | ✓ | ✓ 已接键 | ✗ | ✗ | ✗ |
+| `Engine::toggle_fullwidth()` | ✓ `opi_toggle_fullwidth` | ✓ | ✓ 已接键 | ✗ | ✓ | ✓ 已接键 |
+| （读侧）`fullwidth_state()` | ✓ `opi_fullwidth_state` | ✓ | 包装已写、**无 UI 读** | ✗ | — | — |
+
+⚠️ 最后一行的「无 UI 读」与 `shiftState()` 是**同一种状态**：出口有了、Swift 包装有了、
+UI 没读 —— 所以也仍然**没有会漂移的镜像**（本仓反复被坑的那个形状）。
+**故意不引「声明面」这一列的数字**：它随每次扩容变，以 `c_abi_contract` 门禁为准。
+
+> ⚠️ **2026-09-27 更晚订正**：`OpiFFI.h` 已补齐到 **31/31**（同日，`ffi-contract` 补的），
+> 所以下面这句里的「`OpiFFI.h` 是 28 个声明」**当时成立、现已不成立**。
+> **「声明头滞后」这三次的历史仍然有效**（它记的是发生过什么），但**具体数字不要再抄**。
+
+`cabi.rs` 那时是 **31** 个导出，`OpiFFI.h` 是 **28** 个声明 —— 差的正是这三个。
+**这是「声明头滞后于 `cabi.rs`」第三次出现，而它比前两次更硬**：Swift 桥接头里没有的函数
+Swift 编译器就当它不存在，`opi_toggle_symbol()` 这种调用**不是「运行时失败」，是编译不过**。
+所以本目录**没接**这两件事，也**没有**在 Swift 侧自建一份（自建就是第五份实现）。
+**头文件归 `ffi-contract`，不在本目录范围内；已报给 lead。**
+（机器可查：`python3 /tmp/abi_parity.py`，按名字逐条比 `cabi.rs` ↔ `OpiFFI.h`，现在
+应当报这 3 个名字的差集、退出码 1。）
+
+三条约定（lead 已给，接线前必须照办，别按直觉推）：
+1. **`opi_switch_mode` 与 `opi_toggle_symbol` 是仅有的两个「调完必须重读状态」的出口。**
+   `toggle_symbol` 之后要重读 **mode / buffer / candidates / fullwidth 四样**。
+   依据：`composer.rs` 的 `switch_mode` 无条件做 `fullwidth = mode.default_fullwidth()`，
+   而 `default_fullwidth` 是 `matches!(self, Mode::Pinyin | Mode::Traditional)`
+   —— 切模式会**顺手改全角**。
+2. **客户端不许自己推导全角映射**，`opi_fullwidth_state()` 是给状态栏读的。
+   理由：`engine.rs` 里 `'` 在 Pinyin/Traditional 且**缓冲非空**时是**音节分隔符**，
+   只有缓冲为空时才是引号 —— 所以映射**不是** `(mode, fullwidth)` 的纯函数。
+3. **全角不跨模式粘**：Pinyin/Traditional → 全角，English/Number/Symbol → 半角。
+   全局粘会让英文模式下的 `,` 变成 `，`，违反「英文/数字半角直通」。
+   键位：`Ctrl+'` 切英文、`Ctrl+\` 切 Symbol、`Shift+Space` 切全角（与桌面两轨一致）。
+
+签名（头文件补齐后照抄，别改）：
+```c
+bool      opi_toggle_fullwidth(void);  /* 返回**切换后**的新状态 */
+bool      opi_fullwidth_state(void);   /* 读侧；未装载 → false */
+OpiString opi_toggle_symbol(void);     /* 返回**待上屏的文本**（切换前缓冲的挂起结果），
+                                          空句柄 = 无提交；不是「新选中的那个符号」 */
+```
+
+⚠️ **顺带订正一句 Rust 侧注释**：`Engine::toggle_symbol` 与 `candidate.rs` / `logic.rs`
+都写着「键位未定 / B0 未裁决」，但**隔壁代码已经裁决了、而且两轨一致** ——
+`tsf-opi/src/vk.rs` 的 `mode_hotkey` 与 `opi_fcitx5.cpp` 的 `handleModeHotkey` 是
+同一张表（**Ctrl+`'`** 切英文、**Ctrl+`\`** 切 Symbol）；全角是 **Shift+Space**
+（`fcitx5-opi.cpp` 的 `handleFullwidthHotkey` 附了键位占用调查，`vk.rs` 的
+`fullwidth_hotkey` 同判）。接手 macOS 热键的人照那两张表接，别照「未定」自创。
+
+> ⚠️ **上面那两个符号名是承重的，路径和行号不是。** 2026-09-28 当场量到的实况：
+> `crates/tsf-opi/src/vk.rs` 先是 **520 行**（超 500，`ime-platform` 在拆），几分钟后
+> 复核已是 **222 行**（拆分落地）—— 而 `mode_hotkey` / `fullwidth_hotkey` /
+> `hotkey_should_act` **都还在 `vk.rs` 里，行号也没变** —— 走掉的那 298 行是**测试模块**
+> （搬到了 `crates/tsf-opi/src/vk_tests.rs`，由 `#[path = …]` 引入），不是语义拆分。
+> 所以这一刻路径是对的，**但那是观察值不是承诺**。找它们用
+> `grep -rn 'fn mode_hotkey' crates/tsf-opi/`，别照抄路径。
+
+⚠️ **接的时候还有一条必须知道的（否则静默失效）**：这三个热键**不能送进
+`opi_key_event`**，必须在 `InputController.swift` 里、**调引擎之前**判掉 ——
+`router.rs` 的 `key_event` 直通分支（`router.rs:245`）对 `CTRL|ALT|META` **在 `key_event` 最前面就 `PassThrough`**
+（有意的：⌘A/⌘C 不能被吃进拼音缓冲），所以 `Ctrl+'`/`Ctrl+\` 送进去等于交回宿主 App，
+**模式不动、无日志**；而 `Shift+Space` 的 SHIFT **不在**直通掩码里，会走到 `KEY_SPACE`
+分支，又因「空格分支不看 Shift 位」变成**选首候选**。桌面两轨正是这么做的
+（`tsf.rs` 把 `mode_hotkey`/`fullwidth_hotkey` 判在引擎之前）。
+**已按这条接线**：`hotkey(_:)` 判在 `handle(_:client:)` 里、`engine.keyEvent` 之前，
+`performHotkey(_:sender:)` 执行。⚠️ 抬起也**认出来但只消费不执行**
+（同 iOS 侧，以及桌面两轨的理由：只拦按下会给应用一个**没有 keydown 的 keyup**）。
+
+⚠️ **autorepeat 同判「认出来、但不执行」**（2026-09-27 裁决）。按住 `Shift+Space` 稍久一点，
+`NSEvent` 会发重复 keyDown（`isARepeat == true`）；让它们执行就会**反复切全角**，
+而用户的语义是「一次切换」。**但不能简单地在 `hotkey(_:)` 里返回 `nil`** ——
+那一颗键会漏给下面的 `keyEvent`，而 `Shift+Space` 的 SHIFT 不在直通掩码里
+⇒ 会被当成**普通空格 = 选首候选**，比反复切更坏。
+所以判定函数**故意不过滤** repeat / 抬起，由**调用处**决定「消费但不动作」：
+
+```swift
+if event.type == .keyDown, !event.isARepeat { performHotkey(hot, sender: sender) }
+```
+
+⚠️ **另两轨不在本分身的域内**（`crates/**` 各有其主）。**接之前先 grep 这两个名字确认**：
+TSF 是 `vk.rs` 的 `hotkey_should_act`，fcitx5 是 `opi_fcitx5.cpp` 的 `isRepeatEvent`。
+（`ios/README.md` 里有一张四轨对照表。）
+> **2026-09-27 观察**：那时四轨都已经有这条，**同一个设计** ——
+> 判定函数照常返回「是热键」（好让调用处**认领**这颗键），由调用处决定要不要动作。
+> ⚠️ 另两轨那两处当时在**别人的工作区里、未提交**，所以这是**观察不是承诺**，以 `grep` 为准。
+
+（iOS 侧的同一句是**预防性**的：`UIKeyModifierFlags` 里没有 repeat 位 —— 见 `ios/README.md`。）
+注意 `Mode::Symbol` 本身**到得了**（`opi_switch_mode(3)` 是通的），缺的只是那个
+「提交挂起缓冲再切」的干净入口。
 
 ## 状态
 

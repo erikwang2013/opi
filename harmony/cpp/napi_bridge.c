@@ -3,15 +3,33 @@
 
 // ⚠️ 草案 · 从未编译 · 未验证
 //
-// 本文件在 Linux 上编写，**未经过任何 ArkTS 编译器**，也**没有经过鸿蒙 NDK 的
-// clang** —— 本机没有 OHOS SDK，连 `napi/native_api.h` 都拿不到，
-// 所以 `clang -fsyntax-only` 都跑不起来。这里每一个 N-API 调用都是**凭记忆写的**，
-// 「最不确定的 API」清单见 harmony/README.md —— **在 DevEco 上第一件事就是让
-// 这个文件编译过**，编译错误即待办清单。
+// 「从未编译」指的是**鸿蒙侧**：本机没有 OHOS SDK、没有 DevEco，所以本文件
+// **没被鸿蒙 NDK 的 clang 看过、也没被 ArkTS 编译器看过**。
 //
-// 唯一被验证过的部分是它调用的 opi_* 出口：那 16 个函数在
+// ---- 本机跑过的语法/类型检查（原始输出见 harmony/README.md「实测记录」第 4 条）----
+// `clang -std=c11 -Wall -Wextra -Wpedantic -fsyntax-only` **零诊断通过**。
+// 关键：N-API 的声明**不是**手写 stub —— 本机装了 node v22，
+// 它的 `include/node/{node_api.h,js_native_api.h}` 就是 N-API 规范的真头
+// （N-API 是**稳定 ABI 规范**，OHOS 实现同一份规范）。做法是在 /tmp 造一个
+// 只有一行 `#include <node_api.h>` 的 `napi/native_api.h` 垫片把包含路径接上，
+// **垫片故意不放进仓库**（放进 harmony/cpp/ 会 shadow 掉真 NDK 头，比没有更危险）。
+//
+// **这次全绿是验过「有牙齿」的**：另写一份负向对照，故意写错
+// `napi_module` 字段名（`nm_module_name`）、少传一个参数给
+// `napi_get_value_string_utf16`、把 `bufsize` 传成指针 —— clang 三条全报错。
+// 所以「零诊断」不是空跑。三个目标的 `cargo check -p opi_ffi` 也复跑通过。
+//
+// ---- 仍然未验证的（别把上面读成「能用」）----
+//   * 鸿蒙 NDK 的 `napi/native_api.h` 本身是否提供这些符号 —— 本机拿不到它。
+//   * **链接**：本文件从未与 libopi_ffi.a 一起链成过 .so，符号能否解析未验。
+//   * 运行期语义（U8/U9）：`napi_create_string_utf16` 是否真拷贝、
+//     `bufsize` 是否含 NUL —— 规范如此，鸿蒙实现未验。
+//   * 模块能否注册成功（U7）：`__attribute__((constructor))` + `napi_module_register`
+//     —— 这是**鸿蒙认不认的问题，语法检查看不出来**。
+//
+// 它调用的那些 opi_* 出口（本文底部 desc[] 之外，另含 opi_ffi_free_string）在
 // `cargo rustc -p opi_ffi --target aarch64-unknown-linux-ohos --release
-//  --crate-type staticlib` 的产物里 nm 得到（实测记录见 README）。
+//  --crate-type staticlib` 的产物里 nm 得到，且与 cabi.rs **逐条签名**核过。
 //
 // ---- 为什么要这一层 ----
 // 鸿蒙原生模块走 **Node-API（N-API）**，不是 JNI 也不是裸 C ABI。
@@ -115,10 +133,17 @@ static napi_value ret_undefined(napi_env env) {
 }
 
 // ============================================================================
-// 15 个模块导出（下面 desc[] 表里的 15 条；cpp/types/libopiime/index.d.ts
-// 必须与它逐条对齐）。
-// ⚠️ 别和「桥调用 16 个 opi_* C 函数」混了 —— 那是 C 侧的被调方，
-// 含 opi_ffi_free_string，不是 JS 侧的方法数。两个数不相等是正常的。
+// 模块导出（下面 desc[] 表里的每一条）。
+// ⚠️ 每一条都必须在 cpp/types/libopiime/index.d.ts 里有**同名**声明 ——
+// 少一条 = 运行期 `xxx is not a function`，多一条 = 真机打到那条路径才炸。
+// 核对用下面这条（两边名字集合相等才输出空）：
+//   diff <(grep -o '{"[a-zA-Z]*"' cpp/napi_bridge.c | tr -d '{"' | sort) \
+//        <(grep -o '^export const [a-zA-Z]*' cpp/types/libopiime/index.d.ts \
+//          | awk '{print $3}' | sort)
+// 两边**都不写条数**：它随出口增删而漂（同源教训见 opi_ffi.h 顶部）。
+//
+// ⚠️ 别把它和「桥调用多少个 opi_* C 函数」混了 —— 那是 C 侧的被调方，
+// 含 opi_ffi_free_string，且一个 JsXxx 可能调多个 opi_*。两个数不相等是正常的。
 // ============================================================================
 
 /// load(path?: string): boolean
@@ -286,6 +311,46 @@ static napi_value JsSetLearner(napi_env env, napi_callback_info info) {
     return ret_undefined(env);
 }
 
+// ---- 全角 / 符号开关（三条一套：读侧 + 两个写侧）----
+
+/// toggleFullwidth(): boolean —— 切换全角，返回**切换后的新状态**（UI 直接拿去刷高亮）。
+static napi_value JsToggleFullwidth(napi_env env, napi_callback_info info) {
+    (void)info;
+    napi_value out = NULL;
+    napi_get_boolean(env, opi_toggle_fullwidth(), &out);
+    return out;
+}
+
+/// fullwidthState(): boolean —— 全角开关的**读侧**，只喂状态栏。
+///
+/// ⚠️ 调完 `toggleSymbol` 或 `switchMode` 之后**必须重读本出口**：两者都会让引擎
+/// 按模式默认值重置全角，而 `toggleSymbol` 最易漏 —— 它内部走了一次 `switch_mode`，
+/// Symbol 的默认是**半角** ⇒ 按符号键时全角指示**悄悄灭掉**（不报错、指示就是错的）。
+///
+/// ⚠️ **不要拿它预测按键结果**：全角映射不是 `(mode, fullwidth)` 的纯函数
+/// （`'` 在缓冲非空时是音节分隔符 `xi'an`）。键一律整颗交给 `keyEvent`。
+static napi_value JsFullwidthState(napi_env env, napi_callback_info info) {
+    (void)info;
+    napi_value out = NULL;
+    napi_get_boolean(env, opi_fullwidth_state(), &out);
+    return out;
+}
+
+/// toggleSymbol(): string —— 拼音 ⇄ 符号模式切换。
+///
+/// ⚠️ 返回值**不是**「刚切出来的那个符号」，而是**切模式前那截缓冲的待提交文本**
+/// （有候选 → 首候选；乱码缓冲如 `zzz` → 清掉且**不上屏**）。空串 = 无提交。
+/// 与 `inputKey` 那条收尾是同一份逻辑（`commitPendingBuffer`）。
+///
+/// ⚠️ 副作用不止一个：切模式 + 清缓冲 + 换候选 + 重置全角
+/// ⇒ 调用方要重读 **mode / buffer / candidates / fullwidth 四样**。
+/// 拿不到「插入文本」通道的端不要调它（否则用户看到「按了没反应还丢了字」）。
+static napi_value JsToggleSymbol(napi_env env, napi_callback_info info) {
+    (void)info;
+    // take_string 内部已负责释放 opi_toggle_symbol 返回的句柄
+    return take_string(env, opi_toggle_symbol());
+}
+
 // ============================================================================
 // 模块注册
 // ============================================================================
@@ -307,6 +372,9 @@ static napi_value OpiImeInit(napi_env env, napi_value exports) {
         {"setShift", NULL, JsSetShift, NULL, NULL, NULL, napi_default, NULL},
         {"learnerEnabled", NULL, JsLearnerEnabled, NULL, NULL, NULL, napi_default, NULL},
         {"setLearner", NULL, JsSetLearner, NULL, NULL, NULL, napi_default, NULL},
+        {"toggleFullwidth", NULL, JsToggleFullwidth, NULL, NULL, NULL, napi_default, NULL},
+        {"fullwidthState", NULL, JsFullwidthState, NULL, NULL, NULL, napi_default, NULL},
+        {"toggleSymbol", NULL, JsToggleSymbol, NULL, NULL, NULL, napi_default, NULL},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
     return exports;

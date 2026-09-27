@@ -38,7 +38,9 @@
 第 2 步：plutil -lint ios/Info.plist，并与 Xcode 模板逐键比对。
 
 第 3 步：按下方「构建集成」把 libopi_ffi.a 弄出来，链接进去，
-  确认 28 个符号都能解析（全称见 crates/opi-ffi/src/cabi.rs）。
+  确认符号全部能解析 —— **不要照抄任何写死的个数**（本仓到过 19 → 20 → 22 → 28 → 31；
+  从没有过 25，别再把它当历史抄进去），全称与当前数量以 `crates/opi-ffi/src/cabi.rs`
+  与 `crates/opi-ffi/tests/c_abi_contract.rs` 那道门禁为准。
   → 目标：链接通过 + 真机装上后能在设置里看到这个键盘。
 
 第 4 步：在真机上打开、打一个 "ni" 看有没有候选。
@@ -59,11 +61,37 @@
 | 文件 | 作用 |
 |------|------|
 | `OpiFFI.h` | **转发头**，`#include "../macos/OpiFFI.h"`。C ABI 的声明只有那一份，这里故意不重抄（本项目已被「同一语义抄三份」坑过） |
-| `OpiEngine.swift` | C ABI 薄桥：`OpiString` 所有权、`opi_key_event` → Swift 枚举、JSON 候选解码 |
-| `KeyboardLayout.swift` | 键盘 UI 最小骨架：候选栏（含翻页）+ QWERTY/数字层 + 按下抬起接线 |
-| `KeyboardViewController.swift` | `UIInputViewController` 入口：生命周期、词库装载、按键路由、`textDocumentProxy`、外接键盘 |
+| `OpiEngine.swift` | C ABI 薄桥：`OpiString` 所有权、`opi_key_event` → Swift 枚举、JSON 候选解码、符号库三个出口 |
+| `KeyboardKeys.swift` | 「一个键是什么」：`KeySpec` / `KeyFallback` / `KeyboardFunctionKey` / `KeyButton`。不含布局 |
+| `KeyboardLayout.swift` | 键盘 UI 骨架的视图装配：候选栏（含翻页）+ 字母/数字层 + 触摸接线 + 外部刷新入口 |
+| `SymbolPanel.swift` | 符号层的网格（竖向滚动）。数据来自 `OpiEngine.commonSymbols()`，点击直提 |
+| `KeyboardViewController.swift` | `UIInputViewController` 入口：生命周期、词库装载、**软键盘**路由、`textDocumentProxy`，外加外接键盘的两个入口 `pressesBegan/pressesEnded`（逻辑在下一行那个文件） |
+| `KeyboardHardware.swift` | **外接键盘那一路**：`UIKey`/`UIPress` → 引擎键码、修饰位，以及**引擎之前**判掉的三个热键（`Ctrl+'` / `Ctrl+\` / `Shift+Space`）。不含触摸与布局 |
 | `Info.plist` | 键盘扩展的 `NSExtension` 配置（**键名未核对**） |
 | `README.md` | 本文件 |
+
+⚠️ 为什么 `KeyboardLayout.swift` 拆成了三个文件：它到了 **543 行**，撞上本仓
+「源码文件 500 行」的规矩。拆法按**概念**而不是按行数切齐：键的定义是编译期常量、
+布局是视图树装配、符号面板是运行时数据 —— 本来就是三件事。
+（`CLAUDE.md:12` 写的是「Keep files under 500 lines」，**没写适用范围**；
+「只管源码、文档不受限」是 team-lead 的裁决 —— 本仓 `docs/superpowers/plans/` 下
+三个 plan 文件是 2079 / 1698 / 1315 行。所以别拿这条去拆 README。）
+搬移本身做了**声明集合比对**（没搬丢、没搬重、旧名零残留），见「实测记录」5d ——
+**但那只证搬移，不证能编译。**
+
+⚠️ **第二次拆分（2026-09-27，`KeyboardViewController.swift` → 加一个 `KeyboardHardware.swift`）：**
+它到了 **478 行**。478 **是合规的**（<500），拆的理由不是违规而是**余量**：只剩 22 行，
+而本仓被「一次全库格式化就把贴线文件顶破」咬过。
+拆法是**软键盘 / 硬件键盘**这一刀（触摸与层 vs HID 键码与修饰位），行数 **478 → 318 + 214**。
+两条**必须记住的副作用**：
+
+1. **`pressesBegan`/`pressesEnded` 两个 `override` 故意留在主文件**，没跟着搬。
+   覆写 ObjC 方法能否写在**跨文件**的扩展里，本机没有编译器可问 ——
+   这是**未验证的取舍**（不是「已验证不能写」），故取最保守的写法。
+2. 搬过去的扩展要用 `engine` / `layout` / `insert` / `refresh` / `modeLabel`，
+   Swift 的 `private` **只跨「同文件的扩展」可见** ⇒ 这 5 个成员被放开成 internal。
+   **不要为了整洁改回 `private`** —— 那会让 `KeyboardHardware.swift` 编译不过。
+   该风险有一条能红的检查看着，见「实测记录」5e。
 
 ---
 
@@ -127,6 +155,18 @@ C 符号带 Mach-O 的下划线前缀、28 个导出一个不少**。这不只�
 **另核过一项：`cabi.rs` 的导出、`macos/OpiFFI.h` 的声明、`.a` 里的真实符号
 三者各 28 个、两两差集为空**（本轮 Rust 侧仍在改，`opi_select_page` 就是这一轮加的
 —— 头文件一度落后于 `cabi.rs`，现已对齐）。
+
+> ⚠️ **上面这段已被 2026-09-27 推翻，原样留着当记录。** `cabi.rs` 现在是 **31** 个导出
+> （新增 `opi_toggle_fullwidth` / `opi_fullwidth_state` / `opi_toggle_symbol`），
+> 而 `macos/OpiFFI.h` **仍是 28 个声明**（指纹 `e3b37085…`、mtime `23:26:15` 未动）。
+> 所以三者**不再相等**，差集就是那三个名字 —— 这是「声明头落后于 `cabi.rs`」**第三次**
+> 出现。头文件归 `ffi-contract`，本节不动它；详见下面「全角 / 符号开关的出口」一节。
+>
+> ⚠️ **同日更晚再订正（2026-09-27）**：`ffi-contract` 已把 `macos/OpiFFI.h` 补齐，
+> `cargo test -p opi_ffi --test c_abi_contract` = **14 passed / 0 failed**。
+> ⇒ 上面那句「`macos/OpiFFI.h` **仍是 28 个声明**」**当时成立、现已不成立**。
+> **「三次滞后」的历史仍然有效**（它记的是发生过什么），但**具体数字不要再抄** ——
+> 判据是那道门禁。
 
 #### ⚠️ 查符号时踩到的坑：Linux 上的 `nm` 读不了 Mach-O
 
@@ -213,7 +253,22 @@ $ python3 -c "import plistlib; plistlib.load(open('ios/Info.plist','rb'))"
 → 解析 OK
 ```
 这只证明 XML 和 plist 语法没问题。**键名对不对、值对不对，完全没验证** ——
-本机没有 `plutil` 也没有 Apple SDK。Mac 上第一件事是 `plutil -lint` + 比对 Xcode 模板。
+本机没有 Apple SDK。Mac 上第一件事是 `plutil -lint` + 比对 Xcode 模板。
+
+⚠️ **订正一条早先的说法**：本机**有** `/usr/bin/plutil`，但它是 **GNUstep** 的
+（`dpkg -S` → `gnustep-base-runtime`），**不是 Apple 的**。它不但不能替代
+`plutil -lint`，还会给出**假红**：
+
+```
+$ plutil -lint ios/Info.plist
+Loading 'ios/Info.plist' - non-NSData data argument passed to method
+（exit=1）
+$ plutil                       # 不带参数
+plutil: no files given.
+```
+
+「exit=1」在这里**不代表 plist 有问题** —— 是 GNUstep 的 plutil 读不了这个文件。
+别把这条红当成 Info.plist 的缺陷（红色的另一种错法：红也可能红错）。
 
 ### 4. Swift 里的键码常量与 `keys.rs` 逐项比对 —— **通过**
 
@@ -275,14 +330,266 @@ Swift 特殊键 12 个，与 ASCII 段重叠: 无
 `cabi.rs` 里 `opi_switch_mode` 的注释写「0=Pinyin 1=English 2=Number 3=Symbol」，
 **漏了 4=Traditional**；实际收 4。以 `mode_from_int` 为准，别照那句注释写。
 
-⚠️ 已知缺口：键盘 UI **没有进入繁体模式的入口**（`toggleLanguage` 只在
-拼音 ⇄ 英文之间切）。引擎支持、UI 未接 —— 接法参照 Android 的繁简开关，
-不要在 Swift 侧自创判定。
+#### 繁体模式的入口 —— **已写，未编译**
 
-### 5. Swift 代码 —— **零验证**
+（**订正**：本节早先写的是「键盘 UI **没有**进入繁体模式的入口」。现在有了。）
 
-一行都没编译过。别问「有没有 bug」，问就是「不知道」。
+`KeyboardViewController.cycleMode()` 做三态循环 **中 → 繁 → 英 → 中**，
+**逐字对齐 Android `ImeScreen.kt` 的 `toggleMode()`**（含前两跳先 `clear()`：
+
+```kotlin
+EngineMode.PINYIN      -> { controller.clear(); controller.switchMode(EngineMode.TRADITIONAL) }
+EngineMode.TRADITIONAL -> { controller.clear(); controller.switchMode(EngineMode.ENGLISH) }
+else                   -> controller.switchMode(EngineMode.PINYIN)
+```
+
+前两跳清缓冲是**必须的**：拼音打一半切走，残留缓冲会被下一个空格/回车意外提交。
+模式键的键面字跟着模式走（`modeLabel(of:)` → 中/繁/英，对齐 Android `modeLabelOf`）。
+
+引擎侧**没有**为此加什么东西：`opi_switch_mode(4)` 本来就走得通，缺的只是 UI 入口。
+
+### 5. Swift 代码 —— **仍然零编译，只多了三项文本级检查**
+
+**一行都没编译过。别问「有没有 bug」，问就是「不知道」。**
 上面第 4 条只是「常量的**数值**抄对了」，与「代码能编译」是两件事。
+
+本机**确实没有**编译器（`which swiftc xcodebuild` → exit 1，两个都找不到）。
+所以本节列的都是**文本级**检查，看的是「名字对不对得上」，不是「能不能编」。
+
+#### 5a. `cabi.rs` ↔ `macos/OpiFFI.h` 签名一致性 —— 当时 28/28，其后一度 31 vs 28，**现已补回一致**
+
+比的是 **名称 + 元数 + 参数类型序列 + 返回类型**（不是只比名字）：
+
+```
+$ python3 /tmp/abi_parity.py
+Rust 导出 = 28   头文件声明 = 28
+名字差集 Rust−头: []
+名字差集 头−Rust: []
+签名不一致: 0
+（exit=0）
+```
+
+被验的头文件指纹：`md5sum macos/OpiFFI.h` = `e3b3708547b0192b88281aec23fa4399`，
+mtime `2026-09-27 23:26:15`。**该文件归另一个分身所有、正在被它改动** ——
+上表的时效**只到上面那个 mtime**。它一改，本节就过期，请重跑。
+
+> ⚠️ **已经过期了，就在同一天晚些时候**：`cabi.rs` 新增了三个导出，而这**三条原始输出
+> 一个字都没改**（原文照留）。现在跑同一脚本得到的是 3 个名字的差集、`exit=1`
+> —— 完整输出与**第二条独立证据**（`ffi-contract` 自己的门禁 `c_abi_contract.rs` 也是红的、
+> 报同样 3 个名字）见下面「全角 / 符号开关的出口」一节。**别只读到本节就打住。**
+
+⚠️ **这个检查器是我自己写的，本次任务里它先后报出 16 个、5 个、6 个、19 个
+「不一致」，全部是它自己的 bug**（参数名没剥、`bool`/`_Bool` 映射不对称、
+`const uint16_t *path` 里指针与名字粘连、`[a-z0-9_]` 与 UTF-8 相邻时的怪异行为）。
+**「我的脚本说 0」比「编译器说 0」弱得多** —— 这条要连着上一段的哈希一起读。
+
+#### 5b. Swift 侧没有调用未声明的出口 —— **通过**（本轮重验）
+
+对 `ios/*.swift` + `macos/*.swift` 里出现的全部 `opi_*` 标识符逐个查表：
+
+- **非注释行**里出现、却不在头文件声明的：**0 个**。
+- 查不到的标识符**全部只出现在注释散文里**：
+  `opi_fcitx5`（是 C++ **文件名** `crates/fcitx5-opi/cpp/opi_fcitx5.cpp`）。
+
+**这条检查的经历值得记一笔，因为它变过一次含义**：
+
+| 时间 | 非注释调用点 | 这条检查在证什么 |
+|---|---|---|
+| 头文件补齐**之前** | **0** | 「纯注释、零调用」—— 三个声明缺口今天不会造成编译错误；**谁先写调用点谁先把树弄红** |
+| 头文件补齐**之后**（现在） | **3**（全在 `OpiEngine.swift`，就是那三个薄包装） | 调用点**有且仅有**这三个包装 → 路由层没有散落的直接 C 调用 |
+
+```
+$ python3 - <<'PY'   # 去 // 与 /* */ 后匹配 \bopi_toggle_symbol\s*\( 等
+OpiEngine.swift:363  opi_toggle_fullwidth(
+OpiEngine.swift:375  opi_fullwidth_state(
+OpiEngine.swift:386  opi_toggle_symbol(
+```
+
+⚠️ **同一条命令，前后含义相反**：补齐前「0」是**好事**（不能调），补齐后「0」会是**坏事**
+（说明包装白写了）。所以这条检查**不能只看数字，要看它当时该是什么** ——
+和门禁里「一条红一条绿」那次是同一类陷阱（绿的那条只是覆盖范围不同）。
+
+#### 5c. 括号/引号配平 —— **通过，但这条几乎不算证据**
+
+用一个剥掉注释与字符串的临时脚本数 `()` `{}` `[]` 的净值，8 个 Swift 文件全为 `+0`。
+**它只能发现「少了一个大括号」，发现不了任何语义错误**（少一个 `import`、
+写错枚举成员名、类型不匹配，它一律看不见）。列在这里只是为了说明
+「连这种检查都只有这一种」，**不要**把它当成绿灯。
+
+#### 5d. `KeyboardLayout.swift` 拆分的**定义集合 ↔ 引用集合比对** —— **通过**（本轮补的）
+
+5c 那条弱在「只数括号」。`KeyboardKeys.swift` 是从 `KeyboardLayout.swift`
+里**机械搬出去的**（124 行），搬移最典型的失效是**搬丢一条**或**搬重一条** ——
+两者都不一定破坏括号配平，所以 5c 看不见。补一条集合比对：
+
+```
+$ git show HEAD:ios/KeyboardLayout.swift > /tmp/kl_before.swift     # 拆分前 416 行
+$ python3 /tmp/swift_decls.py                                       # 抽 类型/方法/枚举 case 名
+类型/方法/枚举 case 条目： HEAD 单文件 = 32   拆分后 = 42
+丢失 (HEAD计数, 现计数): {'case toggleLayer': (1,0), 'case toggleLanguage': (1,0),
+                          'func setLetterLayer': (1,0)}
+重复（拆分后同名 >1）  : {'func keyboardLayout': 5}
+HEAD 里就重复的        : {'func keyboardLayout': 5}
+```
+
+三条「丢失」**全部是同一轮的改名**，不是搬丢（逐个核过）：
+
+| HEAD | 现在 |
+|---|---|
+| `case toggleLayer` | `case setLayer(_ new: Layer)` + 新增 `enum Layer`（`.letters`/`.numbers`/`.symbols`） |
+| `case toggleLanguage` | `case cycleMode` |
+| `func setLetterLayer(_ letter: Bool)` | `func setLayer(_ new: Layer)` |
+
+```
+$ grep -rn "toggleLayer\|toggleLanguage\|setLetterLayer" ios/ macos/     # 旧名残留
+残留计数 = 0
+```
+
+`func keyboardLayout` 出现 5 次**不是拆分引入的**：HEAD 里同样是 5 次
+（不同层参数的重载），脚本把这一列一并打出来就是为了让这个区分**看得见**。
+
+**引用侧**（上面比的是「定义」，这一半比「谁在引用」）。逐枚举抽 case 名，
+再在剥掉注释与字符串的全树里数 `.name`：
+
+```
+$ python3 /tmp/swift_enumrefs.py
+声明 case 名 = 15   全树 .xxx 引用去重 = 221 处名字
+① 声明了但**全树零引用**（改名漏删 / 路由断掉）: 无
+② 被引用但无枚举声明的名字 = 206 个（绝大多数是 UIKit/Foundation 成员）
+```
+
+② 那 206 个**不是发现，是噪声**（脚本只认 enum，所以我们的 `setLayer`/
+`onPick`/`modeLabel` 这类 struct/class 成员也会落进去）。**但它恰好能证明脚本没瞎**：
+
+```
+$ .setLayer        = 3 次      ← 新名字：被引用了，且出现在 ② 的名单里（脚本对自家成员可见）
+$ .setLetterLayer  = 0 次      ← 旧名字：零引用
+$ .toggleLayer     = 0 次
+$ .toggleLanguage  = 0 次
+```
+
+**「脚本看得见我们的成员」+「旧名为 0」两条一起读，才排得掉「脚本根本没看见」这个解释**
+—— 同 `c_abi_contract.rs` 里那条 `parser_is_not_blind` 的思路。
+
+**顺带补一条真能咬人的**：`KeyboardFunctionKey` 现在是 **6 个 case**
+（`showLetters`/`showNumbers`/`showSymbols`/`cycleMode`/`nextInputMode`/`commitText`），
+而 `KeyboardViewController.swift:205` 那个 `switch` 有 **6 个 arm、没有 `default`**
+—— 少一个 arm 就是编译错误（Swift 的枚举穷尽性）。这条**是**靠人眼数的，
+但它是有限且确定的：**加 case 时必须同时加 arm**。
+
+##### 证据强度：能抓什么、抓不到什么
+
+| | |
+|---|---|
+| ✅ **能抓** | 搬移**搬丢**一条定义；**搬重**一条（同名 >1）；改名后**旧名残留**在调用点；声明了却**全树无人引用**的 case（路由断掉/改名漏删）；加 case 没加 switch arm（靠人眼数，6 vs 6） |
+| ❌ **抓不到** | **类型是否匹配**（`setLayer(.letters)` 传错枚举、`Int` 当 `Int32`）；**语义是否走样**（搬过去的方法体改了逻辑）；`UIKit` 用法对不对；`import` 少没少；**任何**只有编译器能判的东西 |
+| ❌ **完全没碰** | 运行时行为、布局与约束、内存与 `OpiString` 释放次数 |
+
+**所以这三条合起来是一个"搬移完整性"证明，不是"能编译"证明。**
+它值钱的地方在于：`KeyboardKeys.swift` 是**本轮唯一一段我改了却没给它任何检查的代码**，
+现在它有了 —— 而「搬移看起来不需要检查」正是它危险的原因（它会搬丢，且不弄坏括号配平）。
+
+#### 5e. `KeyboardHardware.swift` 拆分的同类比对 + **一条能红的跨文件 `private` 检查**
+
+第二次拆分（478 → 318 + 214）跑了同一套，另补一条 5d **没有**的检查 ——
+因为这次搬移有一个 5d 没有的失效模式：**Swift 的 `private` 只跨「同文件的扩展」可见**，
+搬到别的文件后，主文件里那些 `private` 成员会**看不见**。见②。
+
+**① 声明集合 ↔ 引用集合（`swift_decls.py`，本轮改了判定口径）**
+
+```
+HEAD 单文件声明条目 = 27 (21 个名字)
+拆分后多文件条目   = 35 (29 个名字)
+
+丢失（HEAD 有、拆分后不够）: 无
+跨文件重复（= 搬成了复制）  : 无
+新增（拆分后才有）          : ['case toggleEnglish', 'case toggleFullwidth', 'case toggleSymbol',
+                             'enum OpiHotkey', 'func cycleMode', 'func hotkey',
+                             'func modeLabel', 'func performHotkey']
+exit=0
+```
+
+「新增」那 8 条**不是这次搬移引入的**，是**本会话早先**加的热键代码（`git HEAD` 是本次会话之前的提交）。
+
+⚠️ **口径改了，理由值得记**：原来的判定是「同一名字出现 >1 次就报重复」，
+于是干净跑也永远红 —— `func keyboardLayout` 出现 5 次是**协议重载**（签名各不相同），
+`var states` 出现 2 次是**两个局部变量**。**一个永远红的检查等于没有检查**（人人学会无视它）。
+改判为**跨文件同名**才抓到真信号：「搬移」的典型事故是**搬成了复制**（两个文件各留一份 ⇒ 重复定义）。
+配套两条：`extension X` 天然会出现在多个文件，排除；`var|let` 只认缩进 ≤4 的类体成员，避免再收局部变量。
+**变异证明它仍会红**（把 `routeHardware` 复制一份留在主文件）：
+
+```
+跨文件重复（= 搬成了复制）  : {'func routeHardware': ['/tmp/mut_kvc.swift', 'ios/KeyboardHardware.swift']}
+exit=1
+```
+
+**② 跨文件 `private` 泄漏检查（本轮新补 —— 这次拆分最要命的一条）**
+
+搬过去的扩展要用 `engine` / `layout` / `insert` / `refresh` / `modeLabel`。
+若我**漏放宽任何一条**，它仍是 `private`、跨文件不可见 ⇒ **编译不过**。
+这条检查把「主文件里仍然 `private` 的名字」与「新文件里出现过的名字」求交：
+
+```
+$ python3 /tmp/leak_check.py ios/KeyboardViewController.swift ios/KeyboardHardware.swift
+  主文件 private: ['applyFallback', 'cycleMode', 'dictionaryLoaded',
+                   'heightConstraint', 'loadDictionaries', 'route']
+  ❌ 被新文件引用（会编译不过）: 无
+  exit=0
+```
+
+**变异证明**（把 `refresh` 改回 `private`，模拟「漏放宽一个成员」）：
+
+```
+  主文件 private: [..., 'loadDictionaries', 'refresh', 'route']
+  ❌ 被新文件引用（会编译不过）: ['refresh']
+  exit=1
+```
+
+**③ `OpiHotkey` 的定义集 ↔ 引用集（两个方向，搬移后重跑）**
+
+枚举有 3 个 case，两个文件都是「生产 1 次、消费 1 次」，反查无未定义名：
+
+```
+toggleEnglish    return处=1  switch分支=1
+toggleFullwidth  return处=1  switch分支=1
+toggleSymbol     return处=1  switch分支=1
+反向（.toggleX 未定义）: （空）
+```
+
+**变异证明**（把 macos 的 `case .toggleSymbol:` 改名，行数不变）：正向报「switch 分支 =0」、
+反向报「`.toggleSymboX` 未定义」—— **两个方向都会红**：漏分支 = 生产了没人消费，写错名 = 消费了没人生产。
+
+**④ 括号配平（同 5c，弱）**：`KeyboardHardware.swift` 25/25 · 29/29；
+`KeyboardViewController.swift` 38/38 · 89/89；`macos/InputController.swift` 45/45 · 75/75。
+
+##### 证据强度：能抓什么、抓不到什么
+
+| | |
+|---|---|
+| ✅ **能抓**（且每条都有变异证明） | 搬移**搬丢**；搬成**复制**（跨文件同名）；**漏放宽 `private`**（跨文件引用不可见成员）；热键枚举**漏 switch 分支**或**名字打错** |
+| ❌ **抓不到** | **类型**对不对（`UInt32` 写成 `UInt`、`Set<UIPress>` 参数写错）；**访问级别放过头**（我把 `refresh` 放成 internal，脚本不会说「其实可以更窄」）；`import UIKit` 少没少；**任何**只有编译器能判的东西 |
+| ❌ **完全没碰** | 运行时行为、热键在真键盘上是否命中、autorepeat 的真实表现 |
+
+⚠️ ②③ 的价值**恰恰在于它们是缺陷驱动、且能红的** —— 5c 那种「形状检查」永远是绿的，
+而这三条都是「不这么写就一定红」。但它们**全部是文本级**：**没有一条碰得到 Swift 的语义。**
+
+---
+
+#### 本机**做不到**的（Mac 上必须逐条做）
+
+| 做不了的事 | 为什么 |
+|---|---|
+| `swiftc` 编译任何一个 `.swift` | 本机没装 Swift 工具链 |
+| `xcodebuild` / 建 target | 没有 Xcode |
+| `import UIKit` / `import InputMethodKit` | 没有 Apple SDK，import 就断 |
+| 链接 `libopi_ffi.a`（ld64） | 没有 Apple 链接器；.a 是 GNU `ar` 打的 |
+| `plutil -lint Info.plist` | 本机只有 GNUstep 的 plutil（且会给假红，见第 3 条） |
+| 真机 / 模拟器上装这个键盘 | 同上，全链路都没有 |
+| 无障碍（VoiceOver）实际读数 | 需要真机 |
+| 符号面板在真实键盘高度下是否放得下 | 需要真机；行高 40pt、键盘高 264 都还是拍的值 |
+
+**所以：本目录里的 Swift 代码，从「能不能编译」到「行为对不对」，
+没有一项在本机被验证过。** 它们是**更精确的起点 + 契约**，不是「做好的端」。
 
 ---
 
@@ -580,10 +887,23 @@ int32_t   opi_shift_state(void);       /* 0=OFF 1=SINGLE 2=LOCK；未装载 → 
 —— 所以**负数要在 Swift 侧先判掉**（见下）。
 `opi_candidates_page` 与 `opi_candidates(limit)` 一样返回 `OpiString` 的 JSON 文本数组。
 
-⚠️ **声明头落后过 `cabi.rs` 两次**（`opi_candidates_page`/`opi_page_count` 落地时
-`macos/OpiFFI.h` 还停在 25 个声明）。`ios/OpiFFI.h` 是**转发头**，会自动跟上 ——
-这正是当初不在这里重抄一份 C 声明的理由。**但转发也意味着：声明头补上之前，
-这里调用新函数一律编译不过。**（本轮已对齐：各 28 个、差集为空。）
+⚠️ **声明头落后过 `cabi.rs`**（**落后过几次本机核不出来**：`git log -- macos/OpiFFI.h`
+只有**一个**提交态，中间那些滞后全发生在未提交的工作区里 —— 见下面那条订正）。
+`ios/OpiFFI.h` 是**转发头**，
+会自动跟上 —— 这正是当初不在这里重抄一份 C 声明的理由。**但转发也意味着：声明头补上之前，
+这里调用新函数一律编译不过。**
+
+> **订正（2026-09-28）**：本段原先写着「落后过两次（`opi_candidates_page`/`opi_page_count`
+> 落地时 `macos/OpiFFI.h` **还停在 25 个声明**）… **现在第三次，还没补**：`cabi.rs` 到 31、
+> 声明头仍 28」。**两句都作废，而且是两种不同的错**：
+> 1. **「25」是错的，且错在「哪个文件」** —— `git log -- macos/OpiFFI.h` 显示它**只有一个
+>    提交态**（`2dc1fa2`，**28 条**），从未到过 25。**25 是 `cabi.rs` 当时的导出数**
+>    （`opi_candidates_page`/`opi_page_count` 是第 26、27 个），我把 **Rust 侧的计数
+>    安到了头文件头上**。⚠️ 本仓已经栽过同一个坑（「18 个方法」实为 21，18 是**另一份文件**的数）。
+> 2. **「第三次，还没补」已不成立** —— `ffi-contract` 已补齐，现测 `cabi.rs` 31 ↔
+>    `OpiFFI.h` 31、名字差集双向为空、签名不一致 0（`abi_parity.py` exit 0）。
+>
+> ⇒ **判据：本节的数字一律以那道门禁与 `git log -- <文件>` 为准，不要抄这里的任何计数。**
 
 **怎么用（四条，前三条**本草案已接线**，第四条仍留白）：**
 
@@ -598,11 +918,16 @@ int32_t   opi_shift_state(void);       /* 0=OFF 1=SINGLE 2=LOCK；未装载 → 
    本地累加正是漂移的来源。「共 N 页」用 `opi_page_count()`（**无候选是 0，不是 1**）。
 3. ✅ **选词走 `opi_select_page(k)`（页内索引），不算全局下标。**
    这是最后消灭掉 `PAGE_SIZE` 副本的那一刀 —— 详见下一节。
-4. ⬜ **⇧ 高亮读 `opi_shift_state()`** —— **仍故意没接**。
+4. ⬜ **⇧ 高亮读 `opi_shift_state()`** —— **半步已做，UI 仍未接**。
+   两步里的 ① **已写**：`OpiEngine.shiftState() -> OpiShiftState`
+   （`.off` / `.single` / `.lock`，与 C 的 0/1/2 一一对应，未装载 → `.off`）。
+   ② **没做**：`KeyboardLayout` 里**仍然没有** ⇧ 高亮（那段注释已同步订正）。
+   所以现状是「出口有了、包装有了、UI 没读」—— 也就仍然**没有会漂移的镜像**。
    ⇧ 的真源是 `KeyRouter::ShiftState` 三态（Off/Single/Lock），且引擎会在提交后
    **自动复位 Single**。注意它和 `opi_set_shift` **不是一回事**：后者打的是引擎侧
    shift 位，三态是前端状态、决定英文直传路径的大小写 —— 引擎位看不出来。
-   见 `KeyboardLayout.swift` 里那段注释；接线时读出口即可，不必自己镜像状态。
+   接线时读 `shiftState()` 即可，**别**拿 `KeyButton.longPressFired` 推状态
+   （那只是防「长按后又补一次 tap」的去抖标志，不是状态机）。
 
 ### `PAGE_SIZE` 副本是怎么被清掉的（记一笔，别再抄回来）
 
@@ -648,6 +973,249 @@ OpiString opi_select_page(uint32_t k);  /* 当前页第 k 个；越界/未装载
 草案的实现去替 ABI 契约开脱**，站不住：契约说页码必须对齐，与某个前端碰巧不画无关。
 现在三处已补（`api/mod.rs` 的 `select`/`input_space`/`clear` 各自对齐页码），
 本层 `select(index:)` 注释里那句「选完词别立刻信任 `page()`」**已随之撤掉**。
+
+---
+
+## 本轮补的功能面：符号面板（**已写，未编译**）
+
+### 加了什么
+
+| 层 | 新增 | Android 侧的对应物（证据） |
+|---|---|---|
+| 桥 | `OpiEngine.symbolBlocks()` / `symbolsInBlock(id:)` / `searchSymbols(keyword:)` / `commonSymbols()` | `SymbolCatalog`（`android/.../keyboard/SymbolCatalog.kt`） |
+| UI | `SymbolPanel.swift`（竖向滚动网格）+ 键盘第三层 `Layer.symbols` | `SymbolPanel.kt`（`@Composable fun SymbolPanel`）的网格 |
+| 直提 | `KeyboardFunctionKey.commitText(String)` | `router::commitText`（Android 符号键绕过引擎） |
+| 模式 | `cycleMode()`：中→繁→英→中 | `ImeScreen.kt` 的 `toggleMode()` |
+
+### 三个必须记住的契约
+
+1. **`opi_symbol_blocks()` 只回 common 块。** `Engine::symbol_blocks()` 走的是
+   `symbols.common_blocks()`，非 common 块**根本不在这个列表里**——
+   所以 JSON 里的 `common` 字段在该出口上**恒为 true**，别拿它当「全部块」用。
+   当前数据表 `data/raw/symbol_blocks.tsv` 只有 id=1（CJK 符号）是 common，
+   于是「常用」= **60 个**符号；`docs`/Android 若给出别的数字，那是另一套口径。
+2. **块 id 的类型在两端不一样。** Rust 侧是 `BlockId(pub u16)`（0..=65535），
+   C ABI 的 `opi_symbols_in_block(int16_t)` 收**有符号** 16 位 —— 只能对齐到
+   0..=32767。所以 Swift 侧按 `Int` 解码、**显式收窄并 NSLog 越界**，
+   **不要**直接把 JSON 解成 `Int16`：那会在 id > 32767 时抛异常，
+   而本层对解析失败的处理是「返回空数组」—— 后果是**符号面板整块空掉、没有任何日志**。
+3. **`opi_search_symbols("")` 返回全部条目**，不是「什么都没搜到」。
+   Android 的 `SymbolCatalog.all` 正是靠这个语义拿「全部」。
+
+### 两条纪律
+
+- **符号键直提，不过引擎**：引擎的标点表会把 `,` 改写成中文标点/全角
+  （那是**文本**模式该做的事），而用户在符号面板上点的 `,` 就是要 `,`。
+- **空结果不缓存**：`commonSymbols()` 每次开面板现取。空结果是「没拿到」
+  而不是「真的没有」，缓存它会让面板从此永远空白 ——
+  Android `SymbolCatalog` **真的踩过这个坑**（见 commit `00cfea4`
+  「「常用」符号不是常用标点 + 空结果被永久缓存」）。本草案在 `SymbolPanel`
+  里把空列表画成一行可见的「（符号库未就绪）」，不留白。
+
+---
+
+## 全角 / 符号开关的出口：**已落地（Rust 31 / 头文件 31）**
+
+### 状态（2026-09-27 尾，实测；**本节当天经历了「差 3 个 → 补齐」**）
+
+| | 数量 | 证据 |
+|---|---|---|
+| `crates/opi-ffi/src/cabi.rs` 的 `#[unsafe(no_mangle)]` | **31** | `opi_toggle_fullwidth` / `opi_fullwidth_state` / `opi_toggle_symbol` 已在 |
+| `macos/OpiFFI.h` 的声明 | **31** | 指纹 `98aa35de7343647fda15967fc42e1c23`、mtime `23:42:53`（**已补齐**） |
+
+**曾经差 3 个**（头文件停在指纹 `e3b37085…` / mtime `23:26:15`，**第三次**出现本 README
+记过的那个滞后模式：`opi_candidates_page`/`opi_page_count` 一次、`opi_select_page` 一次）。
+当时的后果是硬性的：`ios/OpiFFI.h` 是转发头，**Swift 侧看不见这三个函数，调了就是编译不过**
+—— 所以那段时间本目录是「纯注释、零调用」。**`ffi-contract` 补齐后此约束消失。**
+
+现在跑：
+```
+$ python3 /tmp/abi_parity.py
+Rust 导出 = 31   头文件声明 = 31
+名字差集 Rust−头: []
+名字差集 头−Rust: []
+签名不一致: 0
+exit=0
+```
+⚠️ **上面这段是"声明面对齐"的证明，不是"Swift 能调"的证明** ——
+Swift 那边仍然一行都没编译过（见第 5 节），本机永远证明不了。
+
+⚠️ 头文件归 `ffi-contract`，**我全程没改它**。
+
+**两条独立证据给出同一组名字**（我写 `abi_parity.py` 之前它出过好几次假阳性，
+所以这次特意找了第二条）：
+
+```
+$ python3 /tmp/abi_parity.py
+Rust 导出 = 31   头文件声明 = 28
+名字差集 Rust−头: ['opi_fullwidth_state', 'opi_toggle_fullwidth', 'opi_toggle_symbol']
+签名不一致: 0                                     （exit=1）
+
+$ cargo test -p opi_ffi --test c_abi_contract     # ffi-contract 自己的门禁，我只跑不改
+test macos_header_matches_cabi ... FAILED
+crates/opi-ffi/src/cabi.rs 与 macos/OpiFFI.h 漂移（共 3 条）：
+  头文件缺少 Rust 导出 `opi_fullwidth_state`
+  头文件缺少 Rust 导出 `opi_toggle_fullwidth`
+  头文件缺少 Rust 导出 `opi_toggle_symbol`
+test result: FAILED. 13 passed; 1 failed
+```
+
+⚠️ 同一跑里 `header_compiles_and_consumer_builds ... ok` **不是反证** ——
+那个 `c_abi/consumer.c` 只调**已声明的那些**，所以它过得去；
+它证的是「旧 28 个仍自洽」，不是「头文件没事」。**别只读这一行。**
+
+### 三条契约（**违反了都是静默失效**，接线前必读）
+
+⚠️ **先说证据强度：这三条契约的强度只有「注释」，没有任何机器检查。**
+`crates/opi-ffi/tests/c_abi_contract.rs` 管的是**名字与签名**（集合相等 + 类型），
+`tests/jni/mode.rs` 管的是**值编码**（`mode_to_int` ↔ Kotlin `EngineMode`）。
+「调完必须重读」「不许自己推导映射」属于**调用方的时序/值契约**，
+两处门禁都**看不见** —— 现有门禁全绿也不代表这三条被遵守了。
+能钉住它的模板是 `tests/c_abi/consumer.c`（真链接真调用），
+但**那要人先写进去**；在那之前，读到这里的人**只能靠自己遵守**。
+
+1. **重读时机**：`opi_switch_mode` **与** `opi_toggle_symbol` 是仅有的两个
+   「调用后必须重读 `opi_fullwidth_state()`」的出口。后者**内部调了 `switch_mode`**，
+   而 `switch_mode` 无条件执行 `fullwidth = mode.default_fullwidth()`
+   （`composer.rs:33`：`matches!(self, Mode::Pinyin | Mode::Traditional)`）
+   —— Symbol 的默认是**半角**，所以**按一下符号键会把全角指示灯悄悄弄灭**。
+   调完 `opi_toggle_symbol` 要重读的不止全角，是 **mode / buffer / candidates / fullwidth 四个**。
+2. **客户端不许自己推导映射**：全角是否映射**不是 `(mode, fullwidth)` 的纯函数** ——
+   `engine.rs:129` 写着撇号在拼音/繁体是**音节分隔符**（`xi'an`），**只有缓冲空时**
+   才当引号。同一个键、同一个模式，结果随缓冲状态不同。所以**别写**
+   「拼音 + 全角 + `'` ⇒ `‘`」这类推导，**一律把键交给引擎**。
+   （`opi_fullwidth_state()` 是给**状态栏**用的，不是给你算映射的。）
+3. **全角跨模式不粘**（已裁定的产品语义）：Pinyin/Traditional → 全角，
+   English/Number/Symbol → 半角；**任何模式切换都重置**（含 `opi_toggle_symbol` 内部的）。
+   硬理由：做成全局 sticky 会让拼音下开的全角带到英文模式 ⇒ `,` 变 `，` ⇒
+   直接违背「英文/数字半角直通」。**这是引擎语义，不是实现层能补的。**
+
+签名（`cabi.rs` 实际值，与 lead 给的形状一致）：
+
+```c
+bool      opi_toggle_fullwidth(void);  /* 返回切换后的新状态 */
+bool      opi_fullwidth_state(void);   /* 读侧；未装载 → false */
+OpiString opi_toggle_symbol(void);     /* 返回**待上屏的文本**，空句柄 = 无提交 */
+```
+
+⚠️ `opi_toggle_symbol` 返回的**不是「刚切出来的那个符号」**，是**切模式前那截缓冲的
+待提交文本**（有候选→首候选；乱码如 `zzz`→清掉不上屏）。**空句柄可无条件 free。**
+
+### 这两件事的键位其实**已经裁决了**（Rust 侧注释是旧的）
+
+`Engine::toggle_symbol` 的文档注释说「**键位不在本层**（计划 B5 仍未定，TSF 侧还要动
+`vk.rs` 的映射表）」，`fcitx5-opi/src/candidate.rs` 与 `tsf-opi/src/logic.rs` 也各有一句
+「各端键位未定，B0 未裁决」。**但这三句注释与隔壁的代码不一致**：
+
+- `crates/tsf-opi/src/vk.rs` 的 `mode_hotkey`：**Ctrl + `'`** → 切英文、
+  **Ctrl + `\`** → 切 Symbol；`crates/fcitx5-opi/cpp/opi_fcitx5.cpp` 的
+  `handleModeHotkey` 是**同一张表**（`FcitxKey_apostrophe` / `FcitxKey_backslash`）。
+- `crates/fcitx5-opi/cpp/opi_fcitx5.cpp` 的 `handleFullwidthHotkey`：**Shift+Space**
+  （那份注释还附了键位占用调查：`strings` 扫过 fcitx5 全部库，Shift+Space 没被占）。
+  TSF 的 `fullwidth_hotkey` 同判。
+
+**这不是我该改的**（`crates/**` 各有其主），只报告：**注释说「未裁决」，代码已经裁决了，
+而且是两轨一致**。接手 iOS/macOS 硬件键盘的人照 `vk.rs` 那两张表接即可，
+别照注释里的「未定」去自创键位。
+
+⚠️ **接的时候还有一条必须知道的（否则静默失效）**：这三个热键**不能送进
+`opi_key_event`**，必须在**客户端侧、调引擎之前**判掉 ——
+`router.rs` 的 `key_event` 直通分支（`router.rs:245`）对 `CTRL|ALT|META` **在 `key_event` 最前面就 `PassThrough`**
+（这是有意的：⌘A/⌘C 不能被吃进拼音缓冲），所以 `Ctrl+'`/`Ctrl+\` 送进去等于交回宿主 App，
+**模式不动、也没有任何日志**；而 `Shift+Space` 的 SHIFT **不在**直通掩码里，会一路走到
+`KEY_SPACE` 分支，又因为「空格分支不看 Shift 位」而变成**选首候选**。
+桌面两轨正是这么做的（`tsf-opi/src/tsf.rs` 把 `mode_hotkey`/`fullwidth_hotkey`
+判在引擎之前，注释写明「送进引擎就是普通空格，会被当成选首候选」）。
+（`ios/KeyboardHardware.swift` 的硬件键盘一节已把这条写成注释；
+**已按这条接线**：`hotkey(for:states:)` 判在 `routeHardware` 里、`engine.keyEvent` 之前，
+`performHotkey(_:)` 执行。⚠️ 抬起也**认出来但只消费不执行** —— 只拦按下会给宿主一个
+**没有 keydown 的 keyup**（桌面两轨都注了这条）。）
+
+⚠️ **autorepeat 同判「认出来、但不执行」**（2026-09-27 裁决）。按住 `Shift+Space` 稍久一点，
+系统会发重复 keyDown；让它们执行就会**反复切全角**，而用户的语义是「一次切换」。
+**但不能简单地在判定函数里返回「不是热键」** —— 那一颗键会漏给 `keyEvent`，
+而 `Shift+Space` 的 SHIFT 不在直通掩码里 ⇒ 会被当成**普通空格＝选首候选**，比反复切更坏。
+所以 `hotkey(...)` **故意不过滤** repeat / 抬起，由**调用处**决定「消费但不动作」。
+
+- macOS 侧这半句是**活代码**（`NSEvent.isARepeat`）。
+- **iOS 侧这半句是预防性的**：`UIKeyModifierFlags` 里没有 repeat 位，
+  `UIKey`/`UIPress` 上也没有别的来源（凭记忆，本机无从核对）。
+  **不要为了「四轨对称」去编一个位出来** —— 全引擎只有一个消费者
+  （`router.rs` 的 `handle_shift` 里那句 `let repeat = states & KEY_STATE_REPEAT != 0;`：按住 ⇧ 时不要反复切 shift 状态机），
+  而 iOS 的 ⇧ 走的是**另一种**机制（软键盘长按 → `stateLongPressed` = Lock）。
+
+> ### 🔲 **待 Mac 侧核实**：iOS 到底有没有 autorepeat 信号（2026-09-28）
+>
+> 上面那句「`UIKeyModifierFlags` 里没有 repeat 位」是**记忆级**证据，**不是核对级** ——
+> 核它需要 Apple SDK，本机没有（team-lead 同样没有，所以这条**谁也替谁背不了书**）。
+> 按它**写下的翻案条件**来：
+>
+> **翻案条件**：若 UIKit 其实**提供了** autorepeat 信号（`UIKey`/`UIPress` 上的任何成员、
+> 或 `UIKeyModifierFlags` 的某个位），则
+> 1. 「**不置 REPEAT**」这个结论**作废**；
+> 2. `KeyboardHardware.swift` 里那句 `states & OpiKey.stateRepeat == 0` **从「预防性」变成活代码**；
+> 3. 该信号的接入点是**唯一一处**：`modifierStates(_:)`（那里已写明「哪天真找到就加在这里，
+>    别在调用处手搓一个位」）。
+>
+> 怎么核：在 Mac 上写三行探针 —— 按住 `Shift+Space` 不放，把每个 `UIPress` 的
+> `type` / `key.modifierFlags.rawValue` / `key.keyCode` 打出来，看**第二次及以后**的
+> 那几颗与第一次**有没有任何可区分的字段**。全等 ⇒ 没有信号，结论维持。
+> **查到就回来改这一段**，别让「记忆级」在文档里冒充「已验证」。
+
+⚠️ **另两轨不在本分身的域内**（`crates/**` 各有其主）。**接之前先 grep 这两个名字确认**，
+别信任何一侧的转述 —— 下面是**判据与位置**，不是状态断言：
+
+> ⚠️ **表里的 `crates/...` 路径是「写这一节时」的位置，不是承诺 —— 以符号名为准。**
+> 2026-09-28 当场量到这件事的实况：`crates/tsf-opi/src/vk.rs` 先是 **520 行**（超 500，
+> `ime-platform` 在拆），**几分钟后我复核时已是 222 行**（拆分落地），而三个符号
+> **都还在 `vk.rs` 里、行号也没变**（`hotkey_should_act` :127、`mode_hotkey` :161、
+> `fullwidth_hotkey` :209）。走掉的那 298 行是**测试模块** —— 搬到了
+> `crates/tsf-opi/src/vk_tests.rs`（306 行，由 `vk.rs:221` 的 `#[path = …]` 引入，
+> 与本目录已有的 7 个 `*_tests.rs` 同惯例），**不是**语义拆分。
+> ⇒ **别照抄这里的路径或行号**（上面那三个行号也只是**那一次**的观察值），找符号用
+> `grep -rn 'fn hotkey_should_act' crates/tsf-opi/`。这正是本节**只写「文件 + 符号」、
+> 不写行号**的同一个理由，只不过「文件」这半边同样会漂。
+
+| 轨 | 判定函数 | 「认领但不动作」写在哪 |
+|---|---|---|
+| TSF | `crates/tsf-opi/src/vk.rs` 的 `hotkey_should_act` | `states & (KEY_STATE_REPEAT \| KEY_STATE_RELEASED) == 0`；`tsf.rs` 的两个调用点各自先过它再动作 |
+| fcitx5 | `crates/fcitx5-opi/cpp/opi_fcitx5.cpp` 的 `isRepeatEvent` | `!keyEvent.isRelease() && !isRepeatEvent(keyEvent)`（⚠️ 重复位取自 `keyEvent.rawKey()`，见那份文件里 `KeyState::Repeat` 的掩码说明） |
+| iOS / macOS | `hotkey(...)` + 调用处 | 见本节上一段 |
+
+> **2026-09-27 观察**：那时**四轨都已有这条**，而且是**同一个设计** ——
+> 判定函数照常返回「是热键」（好让调用处**认领**这颗键），由调用处决定要不要动作。
+> ⚠️ 但另两轨那两处当时在**别人的工作区里、未提交**（`git status` 里是 `M`，且
+> `cargo fmt --check` 正报 `vk.rs` 的 import 折行未格式化 = 编辑途中），
+> **所以上面这段是观察，不是承诺** —— 以 `grep` 结果为准。
+
+⚠️ 上面这张表**故意不写行号**，改用「文件 + 符号」—— 这是团队约定（多分身并发下裸行号十分钟就漂），
+**不是** `CLAUDE.md` 的成文规矩。
+写这一节时当场量到漂移：`vk.rs` 的 `mode_hotkey` 从 `:139` 漂到 `:161`、
+`fullwidth_hotkey` 从 `:185` 漂到 `:209`，`opi_fcitx5.cpp` 的 `handleModeHotkey`
+从 `:232` 漂到 `:244`、`handleFullwidthHotkey` 从 `:285` 漂到 `:302`，
+`tsf.rs` 那条「刷了是白推」的注释从 `:213` 漂到 `:227`。
+**它们是并行分身在改的文件，行号十分钟就漂；函数名不会。**
+（仍然准确的那几个 —— `router.rs:245`、`router.rs` 的 `handle_shift`、`engine.rs:228` ——
+保留行号是因为那句就在原处，且旁边都写了符号名。）
+
+### 本草案因此怎么做
+
+- **`opi_toggle_symbol` 不是 `cycleMode()` 的替代品 —— 它俩是两件事。**
+  `cycleMode()`（键面上的中/繁/英）走的是「离开拼音族先 `clear()`」，与 Android
+  `ImeScreen.kt` 的 `toggleMode()` 对齐；而 `Engine::toggle_symbol`
+  （`engine.rs:228`）第一句就是
+  `let target = if mode == Mode::Symbol { Mode::Pinyin } else { Mode::Symbol };`
+  —— 它是 **Pinyin ⇄ Symbol 的来回切**，对应的是热键 `Ctrl+\`，不是模式循环。
+  ⚠️ 我一度在本 README 里把它写成 `cycleMode()` 的升级版，**那是错的**（读到 `engine.rs` 才发现）。
+  两者唯一重叠的地方是**收尾缓冲**：`toggle_symbol` 有候选就提交首候选、乱码缓冲才丢弃，
+  而 `clear()` 那条会**丢掉打了一半的拼音**（Android 也这样）。所以 `cycleMode()` 保持原样，
+  `Ctrl+\` 走 `opi_toggle_symbol`。
+- 全角开关现在**可以做了**（声明面已齐）。键位 `Shift+Space` 见上。
+  注意读侧 `opi_fullwidth_state()` 的语义：**「未装载」与「已装载且半角」共用 `false`**，
+  所以它**不是**在报错 —— 那时按键全部交系统，宿主拿到的本来就是半角。
+  另外全角只影响标点，且**非中文模式是机械全角**：`.` → `．`(U+FF0E)，**不是** `。`(U+3002)。
+- （`Mode::Symbol` 本身**到得了**：`opi_switch_mode(3)` 是通的。iOS 的符号面板是
+  **数据驱动**的，压根不经模式，与 Android 同一条路。）
 
 ---
 

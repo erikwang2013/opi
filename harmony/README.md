@@ -2,10 +2,16 @@
 
 > ## ⚠️ 先读这段
 >
-> 本目录的 **ArkTS（`.ets`）与 N-API 桥（`.c`）一个字符都没有编译过**。
-> 它们是在 Linux 上写的：本机没有 DevEco Studio、没有 HarmonyOS SDK、
-> 没有鸿蒙设备或模拟器，`import { InputMethodExtensionAbility } from '@kit.IMEKit'`
-> 在普通 tsc 下就断，连语法检查都做不到。**不要把这里当成「鸿蒙端已完成」。**
+> **ArkTS（`ets/**` 那 5 个文件）一个字符都没有编译过** —— 本机没有 DevEco Studio、
+> 没有 HarmonyOS SDK、没有鸿蒙设备或模拟器，`import { InputMethodExtensionAbility }
+> from '@kit.IMEKit'` 在普通 tsc 下就断，**连语法检查都做不到**。
+>
+> **N-API 桥（`cpp/napi_bridge.c`）本机跑过语法/类型检查，也真编出过 `.o`**
+> （见下方 §4、§4b）—— 但那用的是**宿主** clang + node 的真 N-API 头，
+> **不是鸿蒙 NDK**；**从未链接成 `.so`、从未加载运行过**。
+> 「过得了本机这两关」离「鸿蒙端能用」还差着 OHOS 工具链那一整段。
+>
+> **不要把这里当成「鸿蒙端已完成」。**
 >
 > 这份东西的定位是：**给鸿蒙开发者的起点 + 精确契约**。
 > 它替你省掉「从零读 C ABI、从零搭输入法骨架、从零搞清 N-API 怎么注册」的时间，
@@ -18,9 +24,16 @@
 >   `DllGetClassObject` 恒返 `CLASS_E_CLASSNOTAVAILABLE`、无 CLSID、
 >   文本插入从未实现 → 整个端不可用
 >
-> **本目录里唯一经过验证的东西是「Rust 侧能为鸿蒙目标编译，并能产出真归档」**
-> （见下方「实测记录」）。其余 12 个文件全部是待编译验证的草案。
-> **全目录没有一处可以称为「完成」或「已实现」。**
+> **本目录里经过验证的东西，全部列在下方「实测记录」里**（2026-09-27 重跑并扩充）：
+> Rust 侧三个鸿蒙目标 `cargo check` 通过、aarch64 真归档产出；`cpp/` 两个 C 文件
+> 过了 clang 语法/类型检查**且是对着真 N-API 头**；`CMakeLists.txt` 首次被 CMake
+> 配置通过、`napi_bridge.c` 首次被真编译成目标文件；`opi_ffi.h` 的**每一条**声明都与
+> `cabi.rs` 的**签名**逐条核过；`index.d.ts` 与 N-API 注册表**机械核对一致**（名字一一对应）；
+> 模式整数编码对着 `convert.rs` 核过。
+>
+> **但 `.ets` 那 5 个文件仍然是 0 行编译过，N-API 的注册与运行期语义仍全未验证。**
+> **全目录没有一处可以称为「完成」或「已实现」—— 上面那些是「C 面对得上」，
+> 不是「鸿蒙端能用」。**
 
 ---
 
@@ -55,8 +68,14 @@
    生成的文件，覆盖会毁掉你已有的其它配置。）
 
 第 3 步：按下方「构建集成」把 libopi_ffi.a 弄出来，让链接通过
-  → 目标：链接通过 + 28 个符号能解析（全称见 crates/opi-ffi/src/cabi.rs）；
+  → 目标：链接通过 + `cabi.rs` 的**全部**符号都能解析（数量以
+    `crates/opi-ffi/tests/c_abi_contract.rs` 门禁为准，别抄数字）；
     少一个的表现是「undefined reference to opi_xxx」。
+  → **链接期要外部提供的符号，本机已经用 `nm -u` 列全了**（见 §4b）：
+    桥引用的全部 `opi_*`（来自 libopi_ffi.a）+ **14 个 napi_***（来自 libace_napi.z.so）
+    + malloc/free/memcpy。报 `undefined reference to napi_xxx` 时对着那 **14** 个名字查
+    （这 14 个是稳定集，不会随导出扩容而变），就知道是鸿蒙那边的库没链上，
+    不是 C 面写错了。
   → 至此，`import opiime from 'libopiime.so'` 应该不再是 undefined。
     **如果仍是 undefined，先查四个名字是否一致**（见 cpp/napi_bridge.c 顶部）。
 
@@ -80,10 +99,10 @@
 
 | 文件 | 作用 |
 |------|------|
-| `cpp/opi_ffi.h` | C ABI 的 **use-site 声明面**（只声明桥用到的 16 个，**故意不抄全 28 个**）+ 键码常量 + 字符串所有权约定 |
-| `cpp/napi_bridge.c` | **N-API 薄壳**：JS 字符串 ⇄ UTF-16 搬运、模块注册、释放 `OpiString`。**15 个模块导出**（调 16 个 C 函数，含 `opi_ffi_free_string` —— 两个数不一样是正常的） |
+| `cpp/opi_ffi.h` | C ABI 的 **use-site 声明面**（**只声明桥真正调用的那些**，**故意不抄全** —— 全量以 `cabi.rs` 为准）+ 键码常量 + 字符串所有权约定 |
+| `cpp/napi_bridge.c` | **N-API 薄壳**：JS 字符串 ⇄ UTF-16 搬运、模块注册、释放 `OpiString`。模块导出与 C 函数**不是一样多**（一个 `Js*` 可能调多个 `opi_*`，且含 `opi_ffi_free_string`）—— 两个数不一样是正常的 |
 | `cpp/CMakeLists.txt` | 把 Rust 静态库 + N-API 桥编成 `libopiime.so` |
-| `cpp/types/libopiime/index.d.ts` | `libopiime.so` 的 ArkTS 类型声明（15 条，与 bridge 的 15 条**机械核对一致**） |
+| `cpp/types/libopiime/index.d.ts` | `libopiime.so` 的 ArkTS 类型声明，与 bridge 的 `desc[]` **机械核对一致**（名字一一对应；两边都不写条数） |
 | `cpp/types/libopiime/oh-package.json5` | 把 `libopiime.so` 映射到上面的 `.d.ts` |
 | `ets/InputMethodExtensionAbility/InputMethodService.ets` | `InputMethodExtensionAbility` 入口。**故意只做转发**，零逻辑 |
 | `ets/InputMethodExtensionAbility/KeyboardController.ets` | 输入法会话唯一持有者：开面板、拿 `InputClient`、按键按 `action` 分派、状态推给 UI |
@@ -95,7 +114,8 @@
 
 **不写行数**：行数随 SPDX 头、注释增删而漂（本表曾普遍少 3 行），
 与本仓库「不写会漂的数字」的规矩一致。上表 12 个文件 + 本 README = `harmony/`
-共 13 个文件；除下方「实测记录」里列出的 Rust 侧编译检查外，**本目录无任何验证**。
+共 13 个文件；**本目录能验的都列在下方「实测记录」里**（Rust 侧目标编译 / C 侧
+clang 与符号核对 / CMake 配置与真编译），**没列进去的一律是未验证**。
 
 ⚠️ **缺一个文件（有意不建）：`resources/base/profile/main_pages.json`。**
 它必须存在，否则面板起来是一片白（见第 1 步）；但**不由本目录提供** ——
@@ -147,8 +167,23 @@ exit=0
 > 途中一次「失败」值得记一笔：首次跑 `x86_64-unknown-linux-ohos` 时报
 > `error[E0463]: can't find crate for 'std'`，看着像代码问题，
 > 实际是后台的 `rustup target add` 还没下完 —— 重跑即过。
-> **判断「环境问题还是代码问题」时，先确认目标真的装上了**
-> （`rustup target list --installed`）。
+> **判断「环境问题还是代码问题」时，要确认目标真的装上了** —— 但
+> ⚠️ **别拿 `rustup target list --installed` 当判据**：它对**已装**的目标也会漏报。
+> 2026-09-27 实测（`ffi-contract`）：`aarch64-apple-darwin` **不在**该列表里，
+> `rustup target add` 也以 `detected conflict: libaddr2line-*.rlib` 失败，
+> 但 `cargo rustc --target aarch64-apple-darwin --crate-type staticlib` **exit=0**、
+> 归档正常产出 ⇒ **目标实际可用**。
+>
+> ⚠️ **但漏报不是全称的 —— 别把这条读成「本节的 ohos 目标也可能不在列表里」**：
+> 2026-09-27 本机复测，本节那三个 ohos 目标 `rustup target list --installed` **三条全列**
+> （`grep -c ohos` = 3），且与 `~/.rustup/toolchains/*/lib/rustlib/` 下的目录一一对应。
+> 反方向（列表里有、目录却没有）实测**假阳性 0 条** ⇒ 这条命令是「**只漏报、不虚报**」。
+> 两种读法都要留：**非空输出可以信，空输出不能当判据**。
+>
+> **可靠做法是拿它真跑一次**：`cargo check -p opi_ffi --target <目标>`。
+>
+> ⚠️ `macos/README.md` 里**本就写着**「别拿 `rustup target list` 的空输出当成『目标没装』」
+> —— 而读了它的人（包括写它的人）仍然踩了。**写在文档里的警告不构成防线，重跑一条命令才是。**
 
 ### 2. 真产物：aarch64 静态库 —— **产出成功**
 
@@ -177,66 +212,360 @@ $ readelf -h opi_ffi-*.rcgu.o | grep -E '类别|系统架构'
 系统架构: AArch64
 ```
 
-### 3. 导出符号 —— **实测 28 个，与 cabi.rs / macos/OpiFFI.h 一致**
+### 3. 导出符号 —— **三处数量一致（数量以门禁为准，别抄数字）**
+
+> ⚠️ **2026-09-27 订正**：本节实测时 `libopi_ffi.a` / `cabi.rs` / `macos/OpiFFI.h` **三处都是 28**。
+> 当日 `cabi.rs` 扩容到 **31**（新增 `opi_toggle_fullwidth` / `opi_fullwidth_state` /
+> `opi_toggle_symbol`），**三处仍一致，但下面那个 `28` 已指向不存在的状态**。
+> ⇒ 本节从此**不再把数字当常量**：**判据是
+> `crates/opi-ffi/tests/c_abi_contract.rs` 的门禁**（它逐条比名字与签名），
+> 数字只留在下面这个**带日期的实测块**里。
+> 立此订正的由来：`cabi.rs` 的导出数已走过 19 → 20 → 22 → 28 → 31，**改数字只是把下一次留给了下一个人**。
 
 ```
 $ nm -g --defined-only libopi_ffi.a | awk '$2 ~ /^[TtDdBbRr]$/ {print $3}' \
     | grep '^opi_' | grep -vx 'opi_ffi' | sort -u | wc -l
-28
+28          ← 2026-09-27 当时的值（现以门禁为准）
 ```
 
-`opi_backspace` 到 `opi_symbols_in_block` 共 28 个，与 `crates/opi-ffi/src/cabi.rs`、
+`opi_backspace` 到 `opi_symbols_in_block`，与 `crates/opi-ffi/src/cabi.rs`、
 `macos/OpiFFI.h` 的数量**逐个数一致**。
 
-### 4. 本目录的 C 代码 —— 过了 `clang -fsyntax-only`（**有重要保留**）
+### 4. 本目录的 C 代码 —— 过了 `clang -fsyntax-only`，**且这次是对着真 N-API 头**
 
-`cpp/opi_ffi.h` 与 `cpp/napi_bridge.c` 都用 `clang -std=c11 -Wall -Wextra
--fsyntax-only` 过了，**零警告**；`opi_ffi.h` 另以 C++17 模式过了一遍
-（验 `extern "C"` 卫哨可用）。
+**本节在 2026-09-27 被重跑并大幅升级。** 上一版这里是「手写 stub 头跑通的，
+证明不了 N-API 签名」—— 那个保留**已经可以撤掉大半**：本机装了 node v22，
+它的 `include/node/{node_api.h,js_native_api.h}` 就是 **N-API 规范的真头**
+（N-API 是**稳定 ABI 规范**，OHOS 实现的是同一份规范）。
 
-> **这条证据的效力必须说清楚，别高估：**
-> 本机没有 `napi/native_api.h`，所以我是**手写了一个 stub 头**放在 `/tmp`
-> （**故意不放进仓库** —— 放进 `harmony/cpp/` 会 shadow 掉真 NDK 头，
-> 那比没有更危险）才跑起来的。stub 里的 N-API 函数签名**来自和我写桥时
-> 同一个记忆**，所以它**证明不了 N-API 签名是对的**。
-> 它真正证明的是三件小事：
-> 1. 我的 C 语法合法；
-> 2. `opi_ffi.h` 与 `napi_bridge.c` 互相对得上（类型、调用形式）；
-> 3. `extern "C"` 卫哨在 C++ 下也成立。
->
-> **N-API 那一层的正确性，仍然完全未经验证。**
-
-### 5. 声明与真符号的机械核对 —— **16/16 命中，0 落空**
-
-我数着 `nm` 的输出，把 `cpp/opi_ffi.h` 的每条声明都对了一遍：
+做法：在 `/tmp/opi-napi-shim/napi/native_api.h` 放一个**只有一行**
+`#include <node_api.h>` 的垫片，把桥里的 `#include "napi/native_api.h"`
+接到 node 的真头上去。垫片 **故意不放进仓库** —— 放进 `harmony/cpp/`
+会 shadow 掉真 NDK 头，那比没有更危险。
 
 ```
-declared in harmony/cpp/opi_ffi.h : 16
-real exports in libopi_ffi.a      : 28
+$ clang -std=c11 -Wall -Wextra -Wpedantic -fsyntax-only \
+    -I/tmp/opi-napi-shim -I/usr/local/node/include/node -I. \
+    napi_bridge.c
+exit=0                      # 零诊断
+
+$ clang -std=c11 -Wall -Wextra -Wpedantic -fsyntax-only ... -x c opi_ffi.h
+exit=0                      # 唯一输出是 -Wpragma-once-outside-header
+                            # （把 .h 当主文件编的副产物，不是头的问题）
+
+$ clang -std=c++17 -Wall -Wextra -fsyntax-only ... -x c++ opi_ffi.h
+exit=0                      # extern "C" 卫哨可用
+```
+
+头文件确实被读到了（`clang -H` 的包含树，缩进即层级）：
+
+```
+. ./opi_ffi.h
+. /tmp/opi-napi-shim/napi/native_api.h
+... /usr/local/node/include/node/js_native_api.h
+.... /usr/local/node/include/node/js_native_api_types.h
+.. /usr/local/node/include/node/node_api.h
+```
+
+> **「零诊断」这次是验过有没有牙齿的。** 全绿本身不算证据 —— 得能红过。
+> 另写一份负向对照 `/tmp/negctl.c`，把「最不确定的 API」里几条**故意写错**：
+>
+> ```
+> $ clang -std=c11 -Wall -Wextra -fsyntax-only ... /tmp/negctl.c
+> exit=1   （3 个 error）
+> error: field designator 'nm_module_name' does not refer to any field in type
+>        'napi_module'; did you mean 'nm_modname'?
+> error: too few arguments to function call, expected 5, have 4
+>        （napi_get_value_string_utf16）
+> error: incompatible pointer to integer conversion passing 'size_t *' to
+>        parameter of type 'size_t'   （bufsize 传成指针）
+> ```
+>
+> 三条全报错 ⇒ 上面那个 exit=0 **不是空跑**：字段名写错、参数个数写错、
+> 参数类型写错，这一关都拦得住。
+
+**这次升级把这几条从「未验证」移走了：**
+
+| 原先的不确定项 | 现在的状态 |
+|---|---|
+| U5 `napi/native_api.h` 的**函数声明位置** | 签名已对着真头核对通过（头**文件名**仍以 NDK 为准） |
+| U6 `napi_module` 的**字段名与顺序** | 已核：`nm_version/nm_flags/nm_filename/nm_register_func/nm_modname/nm_priv/reserved[4]` 全对 |
+| U8 的**参数个数与类型**（`napi_get_value_string_utf16` 五参、`bufsize` 是 `size_t` 不是指针） | 已核 |
+
+**仍然未验证的（别把上面读成「能用」）：**
+`napi_module_register` 那套注册方式鸿蒙认不认（U7，**运行时问题，语法检查看不出来**）；
+`napi_create_string_utf16` 是否真拷贝（U9）；`bufsize` 是否含 NUL（U8 的**语义**部分，
+规范说含，实现未验）；鸿蒙 NDK 自己的 `napi/native_api.h` 是否提供同名同签名符号
+（本机拿不到它）。
+
+### 4b. `CMakeLists.txt` + 真编译 —— **首次被 CMake 配置、首次编出目标文件**
+
+上一版写的「**从未被 CMake 配置过**，连语法都没验」**已经不成立**：本机有 cmake 3.31.4。
+在 `/tmp` 里照着 DevEco 的目录形状摆了一份（`cpp/` + 空占位 `libs/arm64-v8a/libopi_ffi.a`），
+**仓库里没动一个文件**：
+
+```
+$ cmake -S cpp -B build-arch64 -DOHOS_ARCH=arm64-v8a \
+      -DCMAKE_C_FLAGS="-I/tmp/opi-napi-shim -I/usr/local/node/include/node"
+-- Configuring done (0.6s)
+-- Generating done (0.0s)
+exit=0                       # 配置期**全绿**
+
+$ cmake --build build-arch64
+[ 50%] Building C object CMakeFiles/opiime.dir/napi_bridge.c.o     # ← 编译成功
+[100%] Linking C shared library libopiime.so
+/usr/bin/ld: 找不到 -lace_napi.z: 没有那个文件或目录
+/usr/bin/ld: 找不到 -lhilog_ndk.z: 没有那个文件或目录
+exit=2
+```
+
+**这个失败正是预期的、也是好消息**：卡的是 `libace_napi.z.so` 与 `libhilog_ndk.z.so`
+—— **鸿蒙专有的库**，本机当然没有。也就是说 CMake 这条链本身是通的：
+`cmake_minimum_required` / `add_library` / `target_link_libraries` /
+三条 `target_link_options`（`--gc-sections` `--allow-multiple-definition` `-s`）
+全被接受，**编译步骤真的跑过**（宿主 gcc，非 OHOS 编译器），
+只剩 OHOS 运行时库与 OHOS 链接器没接上。
+
+配置期还报了一条**值得上报的**：
+
+```
+CMake Deprecation Warning at CMakeLists.txt:23 (cmake_minimum_required):
+  Compatibility with CMake < 3.10 will be removed from a future version of CMake.
+```
+
+`cmake_minimum_required(VERSION 3.4.1)` 在 cmake ≥3.31 是**弃用警告**，
+在 **CMake 4.0+ 是硬错误**。DevEco 自带的多半是老版本 cmake（碰不到），
+但**换了新工具链的人会直接配置失败** —— 起来第一件事可以先把它抬到 3.10+。
+
+**顺带拿到一份「桥到底要外部给什么」的完整清单**（`nm -u` 那个 `.o`，
+这是**编译器产出的**，不是手抄的）：
+
+```
+$ nm -u napi_bridge.c.o | awk '{print $2}' | sort
+共 36 个未定义符号 = 19 个 opi_* + 14 个 napi_* + malloc/free/memcpy
+
+opi_*（19）：opi_buffer opi_candidates_page opi_clear opi_ffi_free_string
+  opi_fullwidth_state opi_input_key opi_key_event opi_learner_enabled opi_load
+  opi_mode opi_page opi_page_count opi_select_page opi_set_learner opi_set_shift
+  opi_shift_state opi_switch_mode opi_toggle_fullwidth opi_toggle_symbol
+
+napi_*（14）：napi_create_int32 napi_create_object napi_create_string_utf16
+  napi_create_uint32 napi_define_properties napi_get_boolean napi_get_cb_info
+  napi_get_undefined napi_get_value_bool napi_get_value_int32
+  napi_get_value_string_utf16 napi_get_value_uint32 napi_module_register
+  napi_set_named_property
+```
+
+（`memcpy` 是 2026-09-27 接 `opi_toggle_symbol` 之后**新出现的**，编译器为「按值返回
+`OpiString` 结构体」生成的拷贝 —— 不是我们写的调用，但照样要 OHOS 的 libc 提供。
+`free`/`malloc` 来自 `js_to_utf16` 的缓冲分配。）
+
+两个**双向**断言（都过了，脚本在 `nm` 输出上跑 `comm`）：
+
+| 断言 | 结果 |
+|---|---|
+| 桥引用的 `opi_*` ⊆ `opi_ffi.h` 的 19 条声明 | ✅ 无遗漏（少一条就是 `undefined reference`） |
+| `opi_ffi.h` 的 19 条声明 ⊆ 桥引用的 `opi_*` | ✅ 无多余（没有死声明） |
+
+> **这 14 个 `napi_*` 就是 DevEco 上的验收清单**：`libace_napi.z.so` 必须提供这 14 个
+> 符号，少一个就是 `undefined reference to napi_xxx`。名字是编译器给的、不会再漂。
+
+### 5. 声明与真符号的机械核对 —— **19/19 命中，0 落空**
+
+我数着 `nm` 的输出，把 `cpp/opi_ffi.h` 的每条声明都对了一遍
+（2026-09-27 D4 接线后重测，`libopi_ffi.a` 无缓存重建）：
+
+```
+declared in harmony/cpp/opi_ffi.h : 19
+real exports in libopi_ffi.a      : 31
 declared but NOT in archive       : （空）
 not bridged                       : 12
 ```
 
-16 已桥 + 12 未桥 = 28，**没有一条声明指向不存在的符号**。
+19 已桥、其余未桥，两者相加 = `cabi.rs` 的**全部**导出（数量以门禁为准，别把上面那个数当常量），
+**没有一条声明指向不存在的符号**。
 未桥的 12 个（`opi_backspace` `opi_candidates` `opi_clear_user_words`
 `opi_export_user_words` `opi_import_user_words` `opi_input_space` `opi_load_trad`
 `opi_remove_user_word` `opi_search_symbols` `opi_select` `opi_symbol_blocks`
 `opi_symbols_in_block`）对应符号面板、用户词导入导出、繁体词库这些**还没做的功能**。
 要做哪个，就去 `cabi.rs` 抄那条声明、加进 `opi_ffi.h`、在 bridge 里挂上。
 
-> ⚠️ 这里**只核对了名字**。**签名（参数类型、返回值）没有核对** ——
-> 那正是第 1 步编译要抓的东西。
+> 本次接线**没有从这个名单里拿走任何一条** —— 新桥的三条（全角/符号开关）本来就不在里面，
+> 它们是同日新加的导出。所以「未桥 12」这个数**这次是巧合相等**，不是不变量。
 
-### 6. 没验证的（比上面长得多）
+**2026-09-27 补：签名也核过了（不只是名字）。** 上一条保留写的是「签名没有核对」——
+现在每一条都逐条对过 `cabi.rs`：参数类型、返回值、`#[repr(C)]` 结构体字段顺序全部一致
+（下表含同日新加的三条）：
 
-- ArkTS：**0 行**编译过。装饰器、`@kit.IMEKit`、`@StorageLink`、Canvas 全部未验证。
-- N-API：**0 行**编译过（见上面第 4 条的保留）。模块能否注册成功未知。
+| opi_ffi.h | cabi.rs | |
+|---|---|---|
+| `void opi_ffi_free_string(OpiString s)` | `fn opi_ffi_free_string(s: OpiString)` | ✓ |
+| `bool opi_load(const uint16_t*, size_t)` | `fn opi_load(*const u16, usize) -> bool` | ✓ |
+| `OpiString opi_input_key(const uint16_t*, size_t)` | `fn opi_input_key(*const u16, usize) -> OpiString` | ✓ |
+| `void opi_clear(void)` | `fn opi_clear()` | ✓ |
+| `OpiString opi_select_page(uint32_t)` | `fn opi_select_page(u32) -> OpiString` | ✓ |
+| `OpiString opi_candidates_page(void)` | `fn opi_candidates_page() -> OpiString` | ✓ |
+| `OpiString opi_buffer(void)` | `fn opi_buffer() -> OpiString` | ✓ |
+| `uint32_t opi_page_count(void)` | `fn opi_page_count() -> u32` | ✓ |
+| `uint32_t opi_page(void)` | `fn opi_page() -> u32` | ✓ |
+| `int32_t opi_mode(void)` | `fn opi_mode() -> i32` | ✓ |
+| `void opi_switch_mode(int32_t)` | `fn opi_switch_mode(i32)` | ✓ |
+| `int32_t opi_shift_state(void)` | `fn opi_shift_state() -> i32` | ✓ |
+| `void opi_set_shift(bool)` | `fn opi_set_shift(bool)` | ✓ |
+| `bool opi_learner_enabled(void)` | `fn opi_learner_enabled() -> bool` | ✓ |
+| `void opi_set_learner(bool)` | `fn opi_set_learner(bool)` | ✓ |
+| `OpiKeyEventResult opi_key_event(uint32_t, uint32_t)` | `fn opi_key_event(u32, u32) -> OpiKeyEventResult` | ✓ |
+| `bool opi_toggle_fullwidth(void)` | `fn opi_toggle_fullwidth() -> bool` | ✓ |
+| `bool opi_fullwidth_state(void)` | `fn opi_fullwidth_state() -> bool` | ✓ |
+| `OpiString opi_toggle_symbol(void)` | `fn opi_toggle_symbol() -> OpiString` | ✓ |
+
+`OpiString{ptr,len}` 与 `OpiKeyEventResult{action,text}` 两个 `#[repr(C)]` 结构体的
+字段顺序也逐字一致。**这一条仍然不等于「能链接上」**（那要 `libopi_ffi.a` +
+OHOS 链接器，本机没有）。
+
+### 5b. `index.d.ts` 与 N-API 注册表 —— **18/18 逐条一致**
+
+`cpp/types/libopiime/index.d.ts` 是 ArkTS 侧的类型声明面，**必须**与
+`napi_bridge.c` 里 `napi_property_descriptor desc[]` 那张注册表逐条对齐
+（少一个 = 运行期 `xxx is not a function`；多一个 = 到真机上打到那条路径才炸）。
+机械核对（无输出 = 一致）：
+
+```
+$ diff <(bridge desc[] 里的 18 个名字) <(index.d.ts 的 18 个 export const 名)
+IDENTICAL           # 两边各 18 条，名字一一对应
+
+$ comm -23 <(桥实际调用的 opi_* 函数) <(opi_ffi.h 声明的 opi_*)
+（空）              # 桥调用的 19 个全都有声明
+$ comm -13 <(桥实际调用的 opi_* 函数) <(opi_ffi.h 声明的 opi_*)
+（空）              # 声明的 19 个全部被调用 —— 没有多余声明
+```
+
+> 上面两条 `comm` **不是**我自己写的脚本说了算 —— 项目自己的门禁
+> `crates/opi-ffi/tests/c_abi_contract.rs` 的 `harmony_header_is_consistent_use_site_subset`
+> 就断言这两件事（每条声明都同型 + 每条声明都真的被桥调用），
+> **它是别人写的机械**。2026-09-27 跑：`14 passed; 0 failed`，exit 0。
+
+> ⚠️ 但 `.d.ts` 这一条核的是**名字**。`.d.ts` 是手写的，**没有 tsc 编译过**
+> （ArkTS 的 `.d.ts` 解析与 TypeScript 并不完全等同），**返回类型对不对仍属于
+> 「第 1 步编译要抓的东西」**。注册表那一侧则已被 §4 的 clang 检查覆盖。
+
+### 5c. 模式整数编码 —— **已对着 `convert.rs` 核过**
+
+`opi_switch_mode` / `opi_mode` 的编码是**本仓的静默失败陷阱**：
+它**不等于** `Mode` 枚举的声明序（声明序是 `Pinyin, Traditional, English, Number, Symbol`
+—— 照声明序推会得到 `Traditional = 1`）。真源在 `crates/opi-ffi/src/api/convert.rs`：
+
+```
+$ grep -A8 'fn mode_to_int' crates/opi-ffi/src/api/convert.rs
+Pinyin => 0, English => 1, Number => 2, Symbol => 3, Traditional => 4
+```
+
+`harmony/ets/.../OpiEngine.ets` 的 `OpiMode` 枚举与 `toMode()` 的映射**逐条一致**，
+`pages/Index.ets` 的 `modeLabel()/nextMode()/letterRows()` 也按同一套数字走。✓
+（`OpiEngine.switchMode` 还会先把值夹紧到 0..4 —— 因为 `opi_switch_mode`
+对越界值是**静默不动作**，没有返回值可判。）
+
+### 5d. 全角 / 符号开关接线（2026-09-27）—— **三条新出口 + 四条契约**
+
+引擎里 `Engine::toggle_fullwidth` / `fullwidth` / `toggle_symbol` **一直都在**，
+但直到 2026-09-27 才进 C ABI —— 在此之前 `grep -rn 'fullwidth\|toggle_symbol'
+crates/opi-ffi/src/` 是**空的**，也就是说**任何客户端（含安卓）都调不到**。
+本轮把这三条接进桥：
+
+| 层 | 本轮改动 |
+|---|---|
+| `cpp/opi_ffi.h` | +3 条声明（use-site 子集 16 → 19） |
+| `cpp/napi_bridge.c` | +3 个 `Js*` 函数、`desc[]` +3 条（15 → 18） |
+| `cpp/types/libopiime/index.d.ts` | +3 条声明（15 → 18） |
+| `ets/.../OpiEngine.ets` | +3 个类型化包装（`toggleFullwidth` / `fullwidthState` / `toggleSymbol`） |
+
+**四条契约**（写进了上面四处的注释，改之前先读）：
+
+1. **只有两个出口会在调用后改变全角：`opi_switch_mode` 与 `opi_toggle_symbol`。**
+   后者最易漏：它内部走了一次 `switch_mode`，而 Symbol 的默认是**半角**
+   ⇒ 按符号键时全角指示**悄悄灭掉**。
+2. **调完 `toggle_symbol` 要重读四样**：mode / buffer / candidates / fullwidth。
+3. **不许自己推导映射**：`'` 在缓冲非空时是**音节分隔符**（`xi'an`）
+   ⇒ 全角映射**不是 `(mode, fullwidth)` 的纯函数**。`fullwidthState()` 只喂状态栏。
+4. **`toggle_symbol` 返回的不是「刚切出来的那个符号」**，是**切模式前那截缓冲的待提交文本**
+   （有候选 → 首候选；乱码缓冲如 `zzz` → 清掉且**不上屏**）。空串 = 无提交；
+   **非空必须上屏**。拿不到「插入文本」通道的端不要调它。
+
+**为什么单独记一段**：第 1、2 条是**静默失效**型（不报错、不崩溃，指示/状态就是错的），
+而第 1 条曾经以「只在 `opi_switch_mode` 之后重读」的形式**写进过契约草案**——
+是在核对时发现漏了 `toggle_symbol` 这条路径才补上的。写成「只在 switch_mode 之后」
+的客户端**不会重读符号键那一下**。
+
+**负向对照（这次验了两层，都不只是「跑绿了」）**：
+
+```
+# 第一层：clang 层面 —— 新加的三条真的进了类型检查
+$ clang -std=c11 -Wall -Wextra -fsyntax-only -I/tmp/opi-napi-shim \
+      -I/usr/local/node/include/node -I. /tmp/negctl3.c
+exit=1（3 errors）
+  error: too many arguments to function call, expected 0, have 1
+         ./opi_ffi.h:136:6: note: 'opi_toggle_fullwidth' declared here
+  error: initializing 'bool' with an expression of incompatible type 'OpiString'
+  error: initializing 'OpiString' with an expression of incompatible type 'bool'
+
+# 第二层：项目门禁层面 —— 它抓得到「声明了但没调用」
+#   临时去掉 opi_toggle_symbol 的调用（声明保留），跑门禁：
+$ cargo test -p opi_ffi --test c_abi_contract
+test harmony_header_is_consistent_use_site_subset ... FAILED
+  `opi_toggle_symbol` 在 harmony/cpp/opi_ffi.h 里声明了，但 napi_bridge.c 从未调用
+test result: FAILED. 13 passed; 1 failed        # 只红这一条，其余 13 条不受影响
+#   恢复后重跑 → 14 passed; 0 failed，exit 0
+```
+
+⇒ 两层一起说明**上面那些 `exit=0` 不是空跑**：类型写错会被拦，少调用也会被拦。
+
+> ⚠️ 本轮**没有**做的事：**符号面板**（能提交字面符号的 UI）仍然没有 ——
+> 见「已知缺口」第 3 条。`toggleSymbol()` 现在**可以从 ArkTS 调到**了，
+> 但**没有键绑它**，所以用户仍然按不出来。这与 §3 的「未桥 12 条」是同一类：
+> 能力已到桥，UI 未接。
+
+**仍未验证**：这三条与 §6 的其余条目**同档** —— ETS 侧那三个包装函数
+**一行都没编译过**，`toggleSymbol` 返回的字符串**没有真的上屏过**，
+全角指示**没有真的显示过**。
+
+### 6. 没验证的（**比上面长得多 —— 本节才是主体**）
+
+**ArkTS（`ets/**` 全部 5 个文件）：0 行编译过。**
+不只是「没测过」——**连语法都没过过编译器**。装饰器（`@Entry` `@Component` `@Prop`
+`@Watch` `@StorageLink` `@Builder`）、`@kit.IMEKit`、`@kit.ArkUI` 的 `display`、
+Canvas / `CanvasRenderingContext2D`、`JSON.parse(...) as string[]` 的断言，
+**全部凭记忆写的**。上面「最不确定的 API」那张表 U1–U20 一条都没消。
+
+> 本轮新接的三条（`toggleFullwidth` / `fullwidthState` / `toggleSymbol`）**同样落在这一段**：
+> `OpiEngine.ets` 里那三个包装函数**一行都没编译过**，`toggleSymbol` 返回的字符串
+> **没有真的上屏过**，全角指示**没有真的显示过**。§5d 那两层门禁证的是
+> 「声明与调用对得上、类型写得对」，**不证「行为对」**。
+
+**N-API 的实现侧：**
+- 模块能否**注册成功**（U7）：`__attribute__((constructor))` + `napi_module_register`
+  鸿蒙认不认 —— **语法检查看不出来**，注册失败的表现是 `import` 得到 `undefined`
+  且不报错。这是最难查的一条，**仍未验证**。
+- 运行期语义：`napi_create_string_utf16` 是否真拷贝（U9，规范说拷贝）；
+  `napi_get_value_string_utf16` 的 `bufsize` 是否含 NUL（U8 的**语义**部分，规范说含）。
+  **实现未验。**
+- 鸿蒙 NDK 自己的 `napi/native_api.h` 是否提供 §4b 那 14 个 `napi_*` 符号。
+  （**签名**已对着 node 的真头核过；**这个头在鸿蒙侧存不存在、内容是否一致**没验。）
+
+**配置与清单：**
 - `module.json5` / `input_method_config.json` / `oh-package.json5`：
-  **未过任何 schema 校验**。
-- `CMakeLists.txt`：**从未被 CMake 配置过**，连语法都没验。
-- 链接：**从未把 `libopi_ffi.a` 链进任何东西**。Rust 静态库带 std 与
-  compiler_builtins，与 OHOS 运行时是否会符号冲突**未知**。
-- 真机行为：**完全没有**。没有设备、没有模拟器、没有 SDK。
+  **未过任何 schema 校验**（没有 DevEco，没有 hvigor）。
+- `input_method_config.json` 的 `mode: "lower"`：**合法取值至今没查到**（U12）。
+
+**链接与产物：**
+- **从未把 `libopi_ffi.a` 链进任何东西**。§4b 那次「链接」是在宿主 gcc 上、
+  且根本没走到符号解析（先卡在 OHOS 专有库上）。Rust 静态库带 std 与
+  compiler_builtins，**与 OHOS 运行时是否符号冲突未知**。
+- 那三条 `target_link_options`（`--gc-sections` `--allow-multiple-definition` `-s`）
+  被 GNU ld 接受，**但 OHOS 的 ld（lld）认不认没验** —— CMakeLists 里原本就标了
+  「凭记忆的兜底」。
+
+**真机行为：完全没有。** 没有设备、没有模拟器、没有 SDK、没有 DevEco。
+**「打 `ni` 出不出字」这件事，本机无法回答。**
 
 ---
 
@@ -254,7 +583,7 @@ not bridged                       : 12
   libopiime.so  ←─ cpp/napi_bridge.c（约 300 行，只做搬运 + 释放）
       │  extern "C" 直接调
       ▼
-  libopi_ffi.a  ←─ crates/opi-ffi（**同一个 crate，28 个 C 导出，一个字符没改**）
+  libopi_ffi.a  ←─ crates/opi-ffi（**同一个 crate，C 导出以 `cabi.rs` 为准，一个字符没改**）
       │
       ▼
   crates/engine-core（与 Android / iOS / macOS / 桌面 / fcitx5 / TSF **同一份引擎**）
@@ -266,7 +595,10 @@ not bridged                       : 12
 **为什么不引 `napi-rs`**：它要在 `crates/opi-ffi/Cargo.toml` 加依赖、加 `#[napi]` 宏，
 那会改到 `crates/**`，并把「一份引擎 + 各端薄壳」变成「Rust 侧长出平台分支」。
 手写 N-API 声明约 300 行、**零新依赖、Rust 侧一个字符不用动**。
-代价就是那 300 行没有编译器的保护 —— 所以它被明确标成草案。
+代价就是那 300 行**没有鸿蒙侧的编译器保护** —— 所以它被明确标成草案。
+（2026-09-27 补：本机现在至少把它过了 clang 语法/类型检查、对着真 N-API 头、
+并真编出过 `.o`，见 §4 与 §4b。**那仍然不是 OHOS 编译器**，
+注册与链接依然未验 —— 「草案」这个定性不变。）
 
 ### 产出 Rust 静态库
 
@@ -358,6 +690,14 @@ ABI 目录名对应关系（`CMakeLists.txt` 靠 `libs/${OHOS_ARCH}/` 找）：
 **这是给接手人最省时间的一节。** 以下按「错了会怎样」的代价从高到低排。
 每一条我都**无法验证**（没有 SDK），只能是「凭记忆 + 部分检索」。
 
+> **订正注记（2026-09-27）**：下表是**写下时的**不确定清单，**不改原文**（留痕）。
+> 本轮在本机重跑后，**U5 / U6 / U8 的「签名」部分已经不再是未知**：
+> `cpp/napi_bridge.c` 对着 node v22 的**真 N-API 头**过了 `clang -fsyntax-only`
+> 且做了负向对照，`napi_module` 字段名、`napi_get_value_string_utf16` 的
+> 参数个数与类型都核过（详见上面 §4）。**U5 的头文件名、U7 的注册方式、
+> U8 的 NUL 语义、U9 的拷贝语义仍然未验证** —— 那几条是**运行时/鸿蒙实现**问题，
+> 语法检查看不出来。**U1–U4、U10–U20 一条都没消。**
+
 ### 极高：错了整个端起不来
 
 | # | 我写的 | 不确定什么 | 错了的表现 |
@@ -423,6 +763,12 @@ grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|op
 - 鸿蒙是否要求输入法声明某个权限（如 `ohos.permission.INPUT_METHOD`）。
   检索**没有**找到可靠说法；P2 里那个 `BIND_INPUT_METHOD` 疑似错误信息，未采纳。
 - `deleteForward(n)` 的 `n` 对代理对（emoji）如何计数。
+- **把回车「交还给应用」的接口在鸿蒙叫什么。** 引擎在缓冲为空时按设计放行回车
+  （`KeyAction::PassThrough`，语义是「这个键归应用」），客户端必须有个通道把它送出去 ——
+  Android 侧是 `InputConnection.performEditorAction`（`KeyRouter.kt` 的 `performEnter`），
+  **鸿蒙 IME Kit 的对应物本轮没查到、也没猜**。所以 `tapEnter` 的注释里只写了缺口
+  与做法，**没有**凭记忆写一个 API 名进来。这条不补上，空缓冲下的 ↵ 就是死键
+  （见「已知缺口」第 10 条）。
 
 ---
 
@@ -450,6 +796,86 @@ grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|op
    没读系统主题）。
 8. **Android JNI 出口在鸿蒙目标下是死重量**（约 9 MB 里的一部分），
    要拆得改 `crates/**`，不在本轮边界内。
+
+**以下三条是 2026-09-27 读契约时发现的，加进来（前两条是本目录能修的，第三条不能）：**
+
+9. **⇧ 的 LOCK 态到不了**（本目录缺陷）。`OpiShift.Lock` 有枚举、`Index.ets`
+   有 `⇪` 的显示分支，但**没有任何路径能把状态推到 Lock**：单击走
+   `router.rs` 的 `shift_tap`，它只在 `Off ↔ Single` 之间来回；进 Lock 的唯一入口是
+   `shift_long_press()`，判据是 states 里的 `KEY_STATE_LONG_PRESSED` —— 而这个位
+   **原先在 `OpiEngine.ets` 里漏抄了**（只抄到 `STATE_RELEASED`），且 UI 也没给 ⇧
+   绑长按手势。**本轮补了常量与 `KeyboardController.tapShiftLongPress()`，
+   但没绑手势**（理由写在 `Index.ets` 那个分支的注释里：ArkUI 的长按 API 本机
+   无法查证，而 `KeyCap` 是字母键与整个功能行共用的 `@Builder`（5 个调用点），见 U18）。
+   DevEco 上要做的是**一行**：⇧ 键绑长按 → `tapShiftLongPress()`。
+
+10. **回车在「缓冲为空」时是死键**（本目录缺陷）。引擎在空缓冲时按设计返回
+    **PassThrough**（「这个回车归应用」），而 `handlePassThrough` 只接退格/Delete
+    与可打印段 —— `KEY_RETURN` = `0x1_000D` 大于 `0xFFFF`，两个分支都不进，
+    **于是什么都不发生**。修它需要 IME Kit 的「把按键交给应用」接口
+    （Android 侧对应 `InputConnection.performEditorAction`），
+    **那个接口在鸿蒙叫什么本机查不到**，所以本轮只把缺口写在 `tapEnter` 的注释里，
+    **没有凭记忆补一个 API 调用**。
+
+11. **全角↔半角开关、以及符号模式的 `toggle_symbol`，在 C ABI 里根本不存在**
+    （**不是本目录的问题，改不了**）。
+
+    > ✅ **2026-09-27 已解决 —— 这是本轮唯一一条「报出去并落地」的缺口。**
+    > `cabi.rs` 加了 `opi_toggle_fullwidth` / `opi_fullwidth_state` / `opi_toggle_symbol`，
+    > `macos/OpiFFI.h` 补齐，**本目录也已接进桥**（见 §5d）。
+    > 下面这段原文**保留不改**，作为「发现当时」的记录。
+    > ⚠️ **但缺口没有完全消失** —— 能力到了桥，**UI 还没接**，见下面的 **12**。
+
+    引擎本轮长出了 `Engine::toggle_fullwidth()` /
+    `Engine::fullwidth()` / `Engine::toggle_symbol()`，但：
+    ```
+    $ grep -rn 'fullwidth\|toggle_symbol' crates/opi-ffi/src/
+    （空）        # cabi.rs 与 jni.rs 都没有出口
+    ```
+    ⇒ **所有客户端（含鸿蒙、含 Android）都调不到**，`fullwidth` 只能由
+    `switch_mode` 按 `Mode::default_fullwidth()` 重置（拼音/繁体 = 开，其余 = 关）。
+    补出口要改 `crates/opi-ffi/**`，不在本轮边界内 —— 报给 lead 裁定。
+
+    **后果说具体**（本轮顺着读出来的，两条都是「能力在、路不通」）：
+    - Android 的 `keyboard/NumberPad.kt` 注释写着「`,` `.` 经引擎层标点表出文本
+      （默认半角原样交回，**全角开关打开后**出 `，` `．`）」—— 那句括号里的状态
+      **没有任何客户端能到达**。默认路径（Number 模式、全角关）出的是 ASCII `,` `.`，
+      这**与鸿蒙端逐字同构**（`Index.ets` 的 `NUM_ROW_3` 有 `,` `.`，
+      引擎 PassThrough，`handlePassThrough` 原样插入）—— 所以**两边都不是 bug，
+      是同一个出口缺失**，别只在鸿蒙端「修」。
+    - 中文标点（`。`）在鸿蒙端**出不来**：拼音模式键盘只有字母（与 Android
+      `QwertyKeyboard.kt` 的三行字母 + 功能行同构），没有标点键；而能提交字面符号的
+      只有符号面板 —— 那是**缺口 3**（未桥接 `opi_search_symbols` 一族）。
+      也就是说引擎的标点表本身没问题，鸿蒙端缺的是**能提交它的 UI**。
+
+12. **全角 / 符号开关：能力已经到桥，但 UI 没接**（本目录缺陷，本轮随 §5d 一起记）。
+    §5d 那三条现在**从 ArkTS 可以调到**（`OpiEngine.toggleFullwidth()` /
+    `fullwidthState()` / `toggleSymbol()`），但本目录里：
+
+    - **没有任何键绑 `toggleSymbol()`** —— 模式键轮转走的是
+      `KeyboardController.switchMode()`（先 `clear()` 再切），
+      所以「按符号键时先把待提交的缓冲提交掉」这条路**用户按不出来**；
+    - **全角指示没有接** —— `KeyboardController.publish()` 推的是
+      buffer / candidates / page / pageCount / mode / shift / learner **七样**，
+      **没有 fullwidth**；`pages/Index.ets` 里也没有任何显示全角状态的控件。
+      所以 `toggleFullwidth()` 就算被调了，**用户也看不出状态变了**。
+
+    这两条合起来是**同一件事**：全角/符号这套 UI 还没做（与缺口 3 的符号面板是同一轮）。
+    做的时候回到 §5d 的四条契约 —— 特别是**第 1 条**：在 `publish()` 里读
+    `fullwidthState()` 的位置不能只挂在「切模式之后」，否则**按符号键那一下**会显示错的指示。
+
+> 另有一处**不是缺口、是刻意取舍**，写在这里免得有人当 bug 修：
+> `OpiEngine.ets` 与 `opi_ffi.h` 都**没有** `KEY_UP/DOWN/LEFT/RIGHT`
+> （`keys.rs` 里有）。软键盘没有方向键，路由对这四个键一律 PassThrough，
+> 客户端抄了也没有分支可写。接物理键盘时再补。
+>
+> **同理，本轮没有做那「三个热键」（`Ctrl+'` / `Ctrl+\` / `Shift+Space`）。**
+> 它们的判据是「必须在客户端侧、**调引擎之前**判掉」，机制已核过：
+> `router.rs` 里对 `KEY_STATE_CTRL | KEY_STATE_ALT | KEY_STATE_META` 有一条
+> **前置直通**，而 `KEY_SPACE` 分支只看 `released`、**不看 Shift 位**
+> ⇒ 原生 `Shift+Space` 会一路走到 `handle_space()`（提交首候选），
+> 不会变成全角开关。**但本端是软键盘，没有物理键入口**，产生不了这种组合键；
+> 硬造一个软键出来反而会与既有语义打架。接物理键盘时再补，判据照上面两条走。
 
 ---
 

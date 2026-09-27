@@ -206,7 +206,10 @@ export class KeyboardController {
     if (keyval >= 0x20 && keyval <= 0xFFFF) {
       this.insertText(String.fromCharCode(keyval));
     }
-    // Tab / Esc / 方向键 / 翻页越界：软键盘上没有这些键，不处理
+    // Tab / Esc / 方向键 / 翻页越界：软键盘上没有这些键，不处理。
+    // ⚠️ **回车也落到这里**（缓冲为空时引擎放行它），而上面两个分支都不接
+    //    `KEY_RETURN`（`0x1_000D` > 0xFFFF）—— 所以空缓冲下的 ↵ 是死键。
+    //    原因与替代做法写在 `tapEnter` 的注释里；查证到接口后在这里加分支。
   }
 
   /** 面板上的字符键。 */
@@ -223,13 +226,57 @@ export class KeyboardController {
     this.pressKey(OpiEngine.KEY_BACK_SPACE, 0);
   }
 
+  /**
+   * 回车。
+   *
+   * ✅ 缓冲非空时**是好的**：引擎返回 action=2 + 首候选，走 `insertText` 上屏。
+   *
+   * ⚠️ **缓冲为空时这个键是死的**（已知缺口，不是 bug —— 但也没人接）：
+   * 引擎在缓冲为空时返回 **PassThrough**（`router.rs` 的 `handle_enter`：
+   * 「空缓冲 → 直通」，意思是「这个回车归应用」），而 `handlePassThrough`
+   * 只认退格/Delete 与可打印段 —— `KEY_RETURN` = `0x1_000D` 大于 `0xFFFF`，
+   * 两个分支都不进，于是**什么都不发生**。用户按 ↵ 没反应。
+   *
+   * 为什么本文件没顺手补上：把回车交还给应用需要 IME Kit 的「送按键给应用」接口
+   * （Android 侧对应 `InputConnection.performEditorAction`，见
+   * `android/.../ime/KeyRouter.kt` 的 `performEnter`），而**那个接口在鸿蒙叫什么、
+   * 本机无法查证**（没有 SDK）。凭记忆写一个 API 名进来，正是本目录要被避免的
+   * 「没被编译器看过的代码」。
+   *
+   * 在 DevEco 上的做法：查到正确的接口后，在 `handlePassThrough` 里给
+   * `KEY_RETURN` 加一条分支，**不要**退化成 `insertText('\n')` 了事 ——
+   * 单行输入框里插换行符不等于提交（也可能被应用直接忽略），
+   * 表现是「按了 ↵ 什么都不发生」换个形式再来一次。
+   */
   tapEnter(): void {
     this.pressKey(OpiEngine.KEY_RETURN, 0);
   }
 
-  /** ⇧ 的三态（OFF→SINGLE→LOCK）由**引擎**的状态机走，UI 不自己数。 */
+  /**
+   * ⇧ 单击。三态由**引擎**的状态机走，UI 不自己数。
+   *
+   * ⚠️ 单击只在 **OFF ↔ SINGLE** 之间来回（`router.rs` 的 `shift_tap`：
+   * `Off → Single`，其余一律回 `Off`）。**进不了 LOCK** —— 见 tapShiftLongPress。
+   * 本注释原先写的是「OFF→SINGLE→LOCK 由引擎的状态机走」，那句话是错的：
+   * 引擎能走三态，但第三态得靠**长按**那个入口，光按这个方法是到不了的。
+   */
   tapShift(): void {
     this.pressKey(OpiEngine.KEY_SHIFT, 0);
+  }
+
+  /**
+   * ⇧ 长按 → **LOCK**（持续大写）。⇧ 进 Lock 的唯一途径。
+   *
+   * 引擎侧对应 `router.rs` 的 `shift_long_press()`，判据是 states 里的
+   * `KEY_STATE_LONG_PRESSED` 位 —— 缺了这个位，`OpiShift.Lock` 就是永远到不了的
+   * 枚举值（UI 里有 `⇪` 分支、用户怎么按都出不来）。`OpiEngine.ets` 原先漏抄了
+   * 这个位，本轮补上。
+   *
+   * 传 states 时**不要**再带 STATE_REPEAT：`handle_shift` 把 released 与 repeat
+   * 一起忽略，带了这一下就白按了。
+   */
+  tapShiftLongPress(): void {
+    this.pressKey(OpiEngine.KEY_SHIFT, OpiEngine.STATE_LONG_PRESSED);
   }
 
   tapPageUp(): void {
@@ -247,7 +294,18 @@ export class KeyboardController {
     this.publish();
   }
 
-  /** 切模式（中/英/数字/符号）。切之前会清空缓冲，避免带着半截拼音换键盘。 */
+  /**
+   * 切模式（中/英/数字/符号）。切之前会清空缓冲，避免带着半截拼音换键盘。
+   *
+   * ⚠️ `setShift(false)` 打的是**引擎侧** shift 位，**不动前端的 ⇧ 三态**
+   * （`cabi.rs` 的 `opi_set_shift` → `router.set_shift` 只写引擎位）。
+   * 所以这一行**不是**「切模式清 ⇧」—— 真正清三态的是引擎自己：
+   * `KeyRouter::switch_mode` 在**离开 English** 时把三态置 `Off`
+   * （判据与 Android `EngineController.switchMode` 的 `if (m != ENGLISH)` 逐字一致）。
+   * 留在这一行的作用只是保证「切进 English 时引擎位不与前端三态打架」。
+   * **别把它当成三态重置去依赖**：从拼音（⇧ 已点亮）切进英文时，
+   * 三态**按设计保留**，于是第一个字母大写 —— 那是 ⇧ Single 的正常行为，不是 bug。
+   */
   switchMode(m: OpiMode): void {
     OpiEngine.clear();
     OpiEngine.switchMode(m);

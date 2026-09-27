@@ -9,7 +9,8 @@
 // **声明少一个方法**的表现是运行期 `xxx is not a function`，
 // 而**声明多一个**不存在的，要在真机上打到那条路径才炸。
 // 所以这里的每一条都必须与 cpp/napi_bridge.c 的 napi_property_descriptor 表
-// **逐条对齐**（现在两边各 15 条，名字一一对应）。
+// **逐条对齐**（名字一一对应，**两边都不写条数** —— 它随出口增删而漂：
+// 核对命令见 napi_bridge.c「模块导出」那段）。
 
 /// keyEvent 的返回。action 的取值同 C ABI 的 OpiKeyEventResult.action。
 export interface OpiKeyEventResult {
@@ -73,3 +74,26 @@ export const setShift: (on: boolean) => void;
 /** 学习开关。关掉 = 不记词，小欧睡着。 */
 export const learnerEnabled: () => boolean;
 export const setLearner: (on: boolean) => void;
+
+/**
+ * 切换全角，返回**切换后的新状态**（UI 直接拿去刷高亮）。
+ * ⚠️ 全角**随模式默认、跨模式不粘**：用户手动开的全角会被任何一次模式切换抹掉
+ * （Pinyin|Traditional 全角，English|Number|Symbol 半角）—— 这是设计，别加 sticky 标志去「修」。
+ */
+export const toggleFullwidth: () => boolean;
+
+/**
+ * 全角开关的**读侧**，只喂状态栏。
+ * ⚠️ 调完 `toggleSymbol` / `switchMode` 之后**必须重读** —— 两者都会重置全角，
+ * 而 `toggleSymbol` 内部走 `switch_mode`（Symbol 默认半角）⇒ 按符号键时指示会悄悄灭掉。
+ * ⚠️ **不要拿它预测按键结果**：映射不是 `(mode, fullwidth)` 的纯函数。
+ */
+export const fullwidthState: () => boolean;
+
+/**
+ * 拼音 ⇄ 符号模式切换，返回**切模式前那截缓冲的待提交文本**（空串 = 无提交）。
+ * ⚠️ **不是**「刚切出来的那个符号」；乱码缓冲（`zzz`）会被清掉且不上屏。
+ * ⚠️ 副作用不止一个 ⇒ 调用后要重读 **mode / buffer / candidates / fullwidth 四样**。
+ * 拿不到「插入文本」通道的端不要调它。
+ */
+export const toggleSymbol: () => string;

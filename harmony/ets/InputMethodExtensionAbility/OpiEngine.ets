@@ -61,6 +61,11 @@ export const KEY_PAGE_UP: number = SPECIAL_BASE | 0x80;
 export const KEY_PAGE_DOWN: number = SPECIAL_BASE | 0x81;
 export const KEY_DELETE: number = SPECIAL_BASE | 0x82;
 export const KEY_SHIFT: number = SPECIAL_BASE | 0x83;
+// ⚠️ `keys.rs` 还有 KEY_UP/DOWN/LEFT/RIGHT（`| 0x84`..`| 0x87`），**这里故意不抄**：
+// 软键盘上没有方向键，而路由对这四个键一律 PassThrough（`router.rs` 的
+// `KEY_TAB | KEY_ESCAPE | KEY_UP | ... => KeyAction::PassThrough`），
+// 客户端抄了也没有分支可写。接物理键盘时再补，别现在抄。
+// `cpp/opi_ffi.h` 同样只抄桥要用的那几条，是同一处取舍。
 
 /** 修饰位（states 参数）。 */
 export const STATE_SHIFT: number = 1 << 0;
@@ -84,6 +89,28 @@ export const STATE_META: number = 1 << 4;
  * 那不是病根，只会多一条被忽略的事件。
  */
 export const STATE_RELEASED: number = 1 << 26;
+
+/**
+ * 按键重复事件（长按自动连发）。
+ *
+ * ⚠️ 与 ⇧ **无关**：`router.rs` 的 `handle_shift` 把 released 与 repeat **一起忽略**
+ * （`if !released && !repeat`）—— 长按连发不会把 ⇧ 推成 Lock。见下方 STATE_LONG_PRESSED。
+ * 保留本常量是为了让键码表与 `keys.rs` 对齐、且**软键盘之外**的输入源（未来的
+ * 物理键盘）能表达「这是连发而非新按下」。
+ */
+export const STATE_REPEAT: number = 1 << 27;
+
+/**
+ * 长按事件 —— **⇧ 进 Lock 的唯一途径**。
+ *
+ * ⚠️ 本常量与 STATE_REPEAT **原先一起漏抄**（只抄到 STATE_RELEASED），后果是 `OpiShift.Lock`
+ * 成了**永远到不了的枚举值**：`router.rs` 的 `shift_long_press()` 是唯一把前端
+ * 三态置成 Lock 的地方，而它只在 states 带本位时被调用；`shift_tap()` 只在
+ * Off↔Single 之间来回。表现是 UI 里有 `⇪` 的分支、枚举里有 `Lock`，
+ * 但用户**怎么按都出不来**（属于「静默失效」：不报错、不崩溃、功能就是没有）。
+ * 键是 `KEY_SHIFT`，见 `KeyboardController.tapShiftLongPress`。
+ */
+export const STATE_LONG_PRESSED: number = 1 << 28;
 
 // ---------------------------------------------------------------- 返回值
 
@@ -223,6 +250,59 @@ export function learnerEnabled(): boolean {
 
 export function setLearner(on: boolean): void {
   opiime.setLearner(on);
+}
+
+// ---------------------------------------------------------------- 全角 / 符号开关
+//
+// ⚠️ 这三条在引擎里一直有，但**直到 2026-09-27 才进 C ABI** —— 在此之前任何客户端
+// 都调不到（`grep -rn 'fullwidth\|toggle_symbol' crates/opi-ffi/src/` 当时为空）。
+// 所以本端若有人自己抄过一份「按模式给全角默认值」的表，那是**对着一份到不了的语义**
+// 抄的：删掉，改读 `fullwidthState()`。
+
+/**
+ * 切换全角，返回**切换后的新状态**（直接拿去刷高亮，不用再读一次）。
+ *
+ * ⚠️ 全角**随模式默认、跨模式不粘**（`Mode::default_fullwidth`：Pinyin|Traditional → 全角，
+ * 其余 → 半角），而引擎的 `switch_mode` 是**无条件**按默认值重置
+ * ⇒ 用户手动开的全角会被**任何一次模式切换**抹掉。
+ * 这是**设计**（英文/数字必须半角直通），**别在 ArkTS 侧加一个 sticky 标志去「修」它** ——
+ * 那会让英文模式出全角标点。
+ */
+export function toggleFullwidth(): boolean {
+  return opiime.toggleFullwidth();
+}
+
+/**
+ * 全角开关的**读侧** —— 只给状态栏用。
+ *
+ * ⚠️ **调完 `switchMode()` 或 `toggleSymbol()` 之后必须重读本出口。**
+ * 后者最容易漏：它内部走了一次 `switch_mode`，而 Symbol 的默认是**半角**
+ * ⇒ 按符号键时全角指示**悄悄灭掉**（不报错、不崩溃，指示就是错的）。
+ *
+ * ⚠️ **不许拿它去预测按键结果**：全角映射**不是 `(mode, fullwidth)` 的纯函数** ——
+ * `'` 在缓冲非空时是**音节分隔符**（`xi'an`），同一个键在同一个模式下结果不同。
+ * 键一律整颗交给 `keyEvent()`。
+ */
+export function fullwidthState(): boolean {
+  return opiime.fullwidthState();
+}
+
+/**
+ * 拼音 ⇄ 符号模式切换。
+ *
+ * ⚠️ 返回值**不是**「刚切出来的那个符号」，而是**切模式前那截缓冲的待提交文本**
+ * （有候选 → 首候选；乱码缓冲如 `zzz` → 清掉且**不上屏** —— 把拼音原文塞进文档更糟）。
+ * 空串 = 无提交；**非空串必须上屏**，否则用户丢字。
+ *
+ * ⚠️ 副作用不止一个：切模式 + 清缓冲 + 换候选 + 重置全角
+ * ⇒ 调用后必须重读 **mode / buffer / candidates / fullwidth 四样**。
+ *
+ * 本端已有 `switchMode(OpiMode.Symbol)` 那条入口（模式键轮转），两者的差别**正是**上面这条
+ * 「先把待提交的缓冲提交掉」—— `switchMode` 的路径是直接清掉缓冲
+ * （见 `KeyboardController.switchMode` 先调 `clear()`，引擎侧 `Composer::switch_mode` 也清）。
+ */
+export function toggleSymbol(): string {
+  return opiime.toggleSymbol();
 }
 
 /**

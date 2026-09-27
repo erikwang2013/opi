@@ -96,9 +96,9 @@ internal fun CandidatePanel(
             }
             Spacer(Modifier.height(4.dp))
             // 底行：页码 + 翻页。
-            // ⚠ 两个箭头**当前是死键**：只发 next_page/prev_page 消息，不改本地页码，
-            // 而 TSF 侧对应回调是骨架态 no-op → 点了什么都不会发生（页码的唯一真源是
-            // TSF 回发的 show，见 Main.kt 头注释「翻页」段）。待接线，别按已实现读。
+            // 两个箭头只发 next_page/prev_page 消息、**不改本地页码**：页码的唯一真源是
+            // TSF 回发的 show（TSF 侧已接线，见 Main.kt 头注释「翻页」段）。enabled 只是
+            // 禁用态提示，不参与置页 —— 点了箭头要等下一帧 show 回来才算翻页。
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -142,8 +142,17 @@ private fun PageButton(text: String, enabled: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** 模式 → 中文标签（协议字符串见 Rust 侧 mode_str）。 */
-private fun modeLabel(mode: String): String = when (mode) {
+/**
+ * 模式 → 中文标签（协议字符串见 `candidate_io.rs` 的 `mode_str`）。
+ *
+ * `else -> "拼音"` 是**载荷分支**，不是兜底美化：Rust 侧有意把 `Mode::Traditional`
+ * 也编码成 `"pinyin"`（`mode_str` 的注释：候选窗无简繁概念，新增 `"traditional"`
+ * 只会造成协议漂移），所以繁体态落到这里显示「拼音」是两端约定好的行为。
+ * 改这个 else 之前先读 `mode_str` 的注释 —— 改坏了两端都不报错，只会静默显示错标签。
+ *
+ * `internal` 而非 `private`：让 WireContractTest 钉住上面这条跨轨约定。
+ */
+internal fun modeLabel(mode: String): String = when (mode) {
     "english" -> "英文"
     "number" -> "数字"
     "symbol" -> "符号"

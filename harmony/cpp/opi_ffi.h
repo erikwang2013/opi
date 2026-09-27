@@ -3,22 +3,36 @@
 
 // ⚠️ 草案 · 从未编译 · 未验证
 //
-// 本文件在 Linux 上编写，**未经过任何 ArkTS 编译器**，也未经过鸿蒙 NDK 的
-// clang。它是 C 声明面，本机没有 OHOS SDK，因此连 `clang -fsyntax-only`
-// 都没有跑过（对比：macos/OpiFFI.h 至少过了 clang 的语法检查）。
+// 「从未编译」指的是**鸿蒙侧**：本机没有 OHOS SDK、没有 DevEco，本文件既没被
+// 鸿蒙 NDK 的 clang 看过，更没被 ArkTS 编译器看过 —— 这是本目录的定位（见 README）。
 //
-// 声明的名字已**机械核对**过：本文件的 16 个 opi_* 声明与
-// `cargo rustc -p opi_ffi --target aarch64-unknown-linux-ohos --release
-//  --crate-type staticlib` 产出的 libopi_ffi.a 里 nm 出的 28 个符号做过子集比对，
-// 16/16 全部命中、0 个落空（16 已桥 + 12 未桥 = 28，实测命令见 harmony/README.md）。
-// 但「名字对得上」不等于「签名对得上、能链接上」—— 参数类型与返回值仍需在
-// DevEco 上过一遍编译器。
+// ---- 本机已经做过的两件事（原始输出见 harmony/README.md「实测记录」）----
+// 1. `clang -std=c11 -Wall -Wextra -Wpedantic -fsyntax-only` **零诊断通过**，
+//    并且是**对着 node 自带的真 N-API 头**（`node_api.h` + `js_native_api.h`，
+//    node v22）跑的，不是手写 stub。做法：在 /tmp 造一个只有一行
+//    `#include <node_api.h>` 的 `napi/native_api.h` 垫片（**故意不放进仓库** ——
+//    放进 harmony/cpp/ 会 shadow 掉真 NDK 头，那比没有更危险）。
+//    另以 C++17 过了一遍，验 `extern "C"` 卫哨可用。
+//    **牙齿是验过的**：故意写错 `napi_module` 字段名 / `napi_get_value_string_utf16`
+//    的参数个数 / `bufsize` 传指针，clang 三条全报错 —— 说明这次全绿不是空跑。
+// 2. 本文件的**每一条声明**都与 `crates/opi-ffi/src/cabi.rs` 的**逐条签名**（不只是名字）
+//    核过：参数类型、返回值、`#[repr(C)]` 结构体字段顺序全部一致，见 README 实测记录第 5 条。
+//    **这里不写条数** —— 它随本文件增删而漂，与下面「use-site 声明面」那段是同一条教训。
+//
+// ---- 仍然未验证的（别把上面两条读成「能用」）----
+//   * 鸿蒙 NDK 自己的 `napi/native_api.h` 是否提供同名同签名的符号 —— 本机只能
+//     拿 node 的头当**规范权威**（N-API 是稳定 ABI 规范），拿不到 OHOS 的实现。
+//   * 链接：**从未把 libopi_ffi.a 链进任何东西**，符号能否解析未验。
+//   * 运行期语义：`napi_create_string_utf16` 是否真拷贝、`bufsize` 是否含 NUL
+//     —— 这两条是**规范说拷贝 / 说含 NUL**，鸿蒙实现未验（README 的 U8/U9）。
 //
 // ---- 这是什么 ----
 // 这是 **use-site 声明面**：只声明 N-API 桥（cpp/napi_bridge.c）真正调用到的出口。
 // **不是**完整 ABI 的又一份拷贝。
-//   * 完整 28 个导出的真源：crates/opi-ffi/src/cabi.rs
-//   * 完整 28 个声明的另一份（Apple 侧）：macos/OpiFFI.h
+//   * 完整导出的真源：crates/opi-ffi/src/cabi.rs（**数量以
+//     crates/opi-ffi/tests/c_abi_contract.rs 的门禁为准，这里不写数字**
+//     —— 写死的数字随每次扩容再假一遍，cabi.rs 已走过 19→20→22→28→31）
+//   * 完整声明的另一份（Apple 侧）：macos/OpiFFI.h
 // 本项目被「同一语义抄三份必漂移」坑过（fcitx5 轨），所以这里**故意不抄全**。
 // 要加一个新调用：在本文件加声明 + 在 bridge 里调用 + 跑下面这条命令核对符号真存在：
 //
@@ -106,6 +120,46 @@ void opi_set_shift(bool on);
 
 bool opi_learner_enabled(void);
 void opi_set_learner(bool enabled);
+
+// ---- 全角 / 符号开关（三条一套，读侧 + 两个写侧）----
+//
+// ⚠️ 这三条在引擎里早就有（`Engine::toggle_fullwidth` / `fullwidth` / `toggle_symbol`），
+// 但直到 2026-09-27 才进 C ABI —— 在此之前**任何客户端都调不到**（`grep -rn
+// 'fullwidth\|toggle_symbol' crates/opi-ffi/src/` 当时为空）。所以老客户端里若有人
+// 自己抄了一份「按模式给全角默认值」的表，那是**对着一份到不了的语义**抄的，删掉。
+
+/// 全角 ↔ 半角：**切换并返回切换后的新状态**（无参，UI 直接拿去刷新高亮）。
+/// ⚠️ 全角**随模式默认、跨模式不粘**：`switch_mode` 会**无条件**按模式默认值重置它
+/// （真源 `Mode::default_fullwidth`：Pinyin|Traditional → 全角，其余 → 半角）。
+/// 用户手动开的全角会被任何一次模式切换抹掉 —— 这是**设计**（英文/数字必须半角直通），
+/// 不是缺陷；别在客户端加一个全局 sticky 标志去「修」它，那会让英文模式出全角标点。
+bool opi_toggle_fullwidth(void);
+
+/// 全角开关的**读侧** —— 给状态栏显示用。
+///
+/// ⚠️ **只有两个出口会在调用后改变它：`opi_switch_mode` 与 `opi_toggle_symbol`。**
+/// 后者最容易漏：它内部走了一次 `switch_mode`，而 Symbol 的默认是**半角**
+/// ⇒ 按符号键时全角指示会**悄悄灭掉**（不报错、不崩溃，指示就是错的）。
+/// **这两处之后必须重读本出口。**
+///
+/// ⚠️ **不许拿它去预测按键结果。** 全角映射**不是 `(mode, fullwidth)` 的纯函数**：
+/// `'` 在缓冲非空时是**音节分隔符**（`xi'an`）而不是引号，同一个键在同一个模式下
+/// 结果不同。本出口只喂状态栏，键一律整颗交给 `opi_key_event`。
+bool opi_fullwidth_state(void);
+
+/// 拼音 ⇄ 符号模式切换。
+///
+/// ⚠️ 返回值**不是**「刚切出来的那个符号」，而是**切模式前那截缓冲的待提交文本**：
+/// 有候选 → 首候选；无候选的乱码缓冲（如 `zzz`）→ 清掉且**不上屏**
+/// （把拼音原文塞进文档比丢掉更糟）。空串 = 无提交。
+/// 与 `opi_input_space` 的收尾是**同一份逻辑**（对应 Android `ImeState.commitPendingBuffer`）。
+///
+/// ⚠️ 它**有副作用，且不止一个**：切了模式、清了缓冲、换了候选、并重置了全角
+/// ⇒ 调用后要重读 **mode / buffer / candidates / fullwidth 四样**。
+///
+/// 拿不到「把文本插入文档」通道的端**不要调它** —— 否则用户按了符号键、模式切了、
+/// 待提交的那截也没了，表现成「按了没反应且丢了字」。
+OpiString opi_toggle_symbol(void);
 
 /// 键事件路由。**这是唯一的「这个键归谁」的判据** —— 返回值 action 决定
 /// 调用方是消费还是把键交还给应用。

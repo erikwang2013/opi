@@ -1,6 +1,10 @@
 # Gradle / Compose build outputs（与 android/ 同约定）
 .gradle/
 build/
+# bin/ 是 Eclipse 约定的输出目录名，本工程从不写它 —— 但 fbc501d 曾把一份 src/ 的
+# 逐字节副本误入库（含 shared/pet/OpiPet.kt），2026-09-27 git rm 清掉。构建输出真目录
+# 是 build/。这里显式忽略，防止 IDE 或手滑再生成一份会被 reviewer 读到、会漂移的副本。
+bin/
 
 # IDE
 .idea/

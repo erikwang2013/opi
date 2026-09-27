@@ -6,10 +6,10 @@
 // 本文件在 Linux 上编写。**Swift 侧一行都没编译过**；本头文件自身过了
 // `clang -fsyntax-only`（C 与 C++ 两种模式），但**从未被链接、从未进入任何真实构建**。
 // 声明是**逐条对照** crates/opi-ffi/src/cabi.rs 抄的
-// （27 个 C 函数 + opi_ffi_free_string，#[no_mangle] 共 28 个），
+// （30 个 C 函数 + opi_ffi_free_string，#[no_mangle] 共 31 个），
 // 但「抄对了」与「能链接上」是两件事 —— 见 macos/README.md。
 //
-// OPI C ABI 声明面（macOS 端唯一一份，共 28 个导出）。
+// OPI C ABI 声明面（macOS 端唯一一份，共 31 个导出）。
 // ⚠️ ios/OpiFFI.h 是本文件的**转发头** —— 改这里两边都变，别在那边另抄一份。
 // Swift 侧经 bridging header（Xcode）或 module map（SwiftPM）看到这些符号：
 //   Xcode  : SWIFT_OBJC_BRIDGING_HEADER = macos/OpiFFI.h
@@ -17,10 +17,19 @@
 // 声明与 crates/opi-ffi/src/cabi.rs 一一对应；改动请同时改两边，不要在这里
 // 另起一份「顺手加个包装」的实现（fcitx5 轨的教训：同一语义抄三份必漂移）。
 //
-// 声明的完整性已于本机核对：`cargo rustc --crate-type staticlib` 产出的
-// aarch64-apple-darwin 归档里能数出 28 个 `_opi_*` 符号，与本文件的 28 条声明
-// **逐个 diff 一致**（本机 GNU nm/objdump 不认 Mach-O，用
-// `grep -a -o` 读归档的符号名，方法见 README「已验证」）。
+// 声明的完整性已于本机核对：`cargo rustc --crate-type staticlib` 产出的归档里能数出
+// `_opi_*` 符号，与本文件的声明**逐个 diff 一致**（本机 GNU nm/objdump 不认 Mach-O，
+// 用 `grep -a -o` 读归档的符号名，方法见 README「已验证」）。
+//
+// 核对记录（**平台写在数字旁边，别把两者拆开读**）：首次核对用的是
+// aarch64-apple-darwin 归档（当时 28）；2026-09-27 扩容到 31 后**重建同一个 target
+// 复跑**：31 个符号，与 cabi.rs 的导出名 diff 为空（`grep -a -o` 与 `strings`
+// 两种数法都是 31）。**另建**的 aarch64-apple-ios 归档同样是 31 —— 两条独立路径同一结论。
+// ⚠️ 顺带一条会让人挑错平台的坑：`rustup target list --installed` **不列出**
+// aarch64-apple-darwin（`rustup target add` 会以 `detected conflict: libaddr2line-*.rlib`
+// 失败），**但 `cargo rustc --target aarch64-apple-darwin` 照样能产出归档** ——
+// 我就为此先绕到了 iOS 平台。**别拿 `rustup target list` 的空输出当成「目标没装」**，
+// 详见 macos/README.md「复验」一节。
 //
 // 字符串约定：UTF-16（ptr + len，非 NUL 结尾），由 Rust 侧分配，
 // 调用方**必须**用 opi_ffi_free_string 释放恰好一次。
@@ -82,6 +91,53 @@ OpiString opi_select_page(uint32_t index);
 /// ⚠️ 越界值是**静默不动作**：没有返回值，调用方无从知道被忽略。
 void opi_switch_mode(int32_t mode);
 void opi_set_shift(bool on);
+
+// ---------- 全角 / 符号开关（B3 / B5 的语义出口；键位仍不在引擎层） ----------
+//
+// **四条硬约定**，全部经消费者对着 crates/engine-core/src/{engine,composer,router}.rs
+// 逐行核过：
+//
+// 1. `opi_switch_mode` 与 `opi_toggle_symbol` 是**仅有的两个**「调用后必须重读
+//    `opi_fullwidth_state()`」的出口。后者最容易漏：`opi_toggle_symbol` 内部调
+//    `switch_mode(target)`，而 `switch_mode` **无条件**把 fullwidth 重置为该模式的
+//    默认值 —— 按符号键时全角指示灯会**悄悄灭掉**（Symbol 默认半角）。
+// 2. 调完 `opi_toggle_symbol` 要重读的不止 fullwidth：`opi_mode` / `opi_buffer` /
+//    `opi_candidates*` / `opi_fullwidth_state` —— **四个全要**。
+// 3. `opi_toggle_symbol` 返回的是**切模式前那截缓冲**的待提交文本（见其声明下的说明）。
+// 4. 全角**随模式默认、跨模式不粘**：Pinyin | Traditional → 全角；
+//    English | Number | Symbol → 半角；**任何模式切换都重置**（含 `opi_toggle_symbol`
+//    内部那次）。硬理由：全局 sticky 会把拼音的全角带进英文模式，把 `,` 变成 `，`，
+//    违背「英文/数字半角直通」。
+//
+// ⚠️ **客户端不许自己推导映射**：撇号在缓冲非空时是音节分隔符（`engine.rs` 的
+// `'` 分支），所以**全角映射不是 `(mode, fullwidth)` 的纯函数**。
+// `opi_fullwidth_state()` 是给**状态栏显示**用的，不是给客户端预测按键结果用的 ——
+// 键一律整颗交给引擎（`opi_key_event` / `opi_input_key`），客户端别自己算
+// 「这个键在全角下该出什么」。
+
+/// 全角 ↔ 半角，返回**切换后的新状态**（状态栏直接拿去刷新，不必再查一次）。
+/// 全角只影响标点：中文模式出中文标点，其余模式是**机械全角**
+/// （`.` → `．` U+FF0E，**不是** `。` U+3002）；全角字母表不归本开关管。
+/// 引擎未装载 → false —— 与「已装载且是半角」共用同一个 false，**不是**在报错：
+/// 那时按键全部交系统，宿主拿到的就是半角字符，返回值与可观测行为一致。
+bool opi_toggle_fullwidth(void);
+
+/// 全角开关的**读侧**（与 `opi_shift_state` / `opi_mode` 同构）。
+/// 装载后、以及上面第 1 条点名的两个出口之后，**必须重读**。
+/// 引擎未装载 → false（同上，不是错误）。
+bool opi_fullwidth_state(void);
+
+/// 符号面板开关：返回**需要上屏的文本（空串 = 无提交）**。
+///
+/// 为什么不是 void：切进符号面板前要先收尾未提交的拼音缓冲（有候选 → 首候选；
+/// 缓冲是 `zzz` 这类无候选的乱码 → 直接清掉、**不上屏**），这段文本必须交出来，
+/// 否则就是「只记了学习记录却不上屏」。拿不到插入通道的端**不要调它**。
+/// 空串句柄可无条件 `opi_ffi_free_string`。引擎未装载 → 空句柄。
+///
+/// ⚠️ **返回的不是「刚切出来的那个符号」** —— 是**切换之前那截缓冲**的待提交文本。
+/// 名字里的 Symbol 指的是这次切换的**目标**，不是返回值的内容。
+OpiString opi_toggle_symbol(void);
+
 OpiString opi_input_space(void);
 
 /// JSON 文本数组，最多 limit 条，从全局第 0 条起（**不分页**）。

@@ -99,6 +99,79 @@ final class OpiInputController: IMKInputController {
         return (scalar.value, states)
     }
 
+    // ---------- 热键（引擎之前判） ----------
+
+    /// 引擎之前判掉的热键（键位与桌面两轨、以及 iOS 侧同一张表）。
+    private enum OpiHotkey {
+        case toggleEnglish      // Ctrl + '
+        case toggleSymbol       // Ctrl + \
+        case toggleFullwidth    // Shift + Space
+    }
+
+    /// 与 `tsf-opi/src/vk.rs` 的 `mode_hotkey` / `fullwidth_hotkey`
+    /// **同判**，也与 `ios/KeyboardViewController.swift` 的同名函数逐条对应。
+    /// 返回 nil = 不是热键，照常送 `wire` / 引擎。
+    ///
+    /// 用 `charactersIgnoringModifiers` 而**不是**虚拟键码：Ctrl 生效时 `characters`
+    /// 会变成控制字符，而 `charactersIgnoringModifiers` 不受 Ctrl 影响 —— 于是这里
+    /// **不需要**再引一张 `kVK_ANSI_*` 常量表（少一张没编译过的表）。
+    ///
+    /// ⚠️ **本函数故意不过滤抬起与 autorepeat** —— 它们**也是热键**，只是不该执行。
+    /// 由调用处决定「消费但不动作」：若在这里返回 nil，那一颗键就会漏给下面
+    /// 的 `keyEvent`（`Shift+Space` 的后果见调用处注释）。
+    private func hotkey(_ event: NSEvent) -> OpiHotkey? {
+        // `wire()` 已按同一套位算过 states，这里直接读 flags：两者用途不同
+        // （一个喂引擎、一个只判热键），不合并以免把两种语义搅在一起。
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        // ⚠️ **故意不看 `event.type == .keyUp`**：抬起的那一下**也要认出来**（见调用处）
+        // —— 只拦按下会给宿主一个**没有 keydown 的 keyup**。桌面两轨的
+        // `mode_hotkey`/`fullwidth_hotkey` 判「抬起返回 None」，但它们是在**引擎入口**
+        // 拦的，抬起本来也会被那一层消费掉；本层在引擎**之前**，不自己认就会漏给应用。
+        let chars = event.charactersIgnoringModifiers ?? ""
+        if flags.contains(.control) {
+            switch chars {
+            case "'": return .toggleEnglish
+            case "\\": return .toggleSymbol
+            default: return nil
+            }
+        }
+        // ⚠️ 这里**比 vk.rs 多排一个 ⌘**：那张表是 Win32 侧的（没有 ⌘），
+        // 而 macOS 上 ⌘Space 是 Spotlight、⌘⇧Space 也不是我们的 —— 不排掉会吃进系统键。
+        // 这是**有意的平台差异**，不是抄漏。
+        if flags.contains(.shift),
+           !flags.contains(.control), !flags.contains(.option), !flags.contains(.command),
+           chars == " " {
+            return .toggleFullwidth
+        }
+        return nil
+    }
+
+    /// 执行热键。三条都**不经过** `opi_key_event`。
+    ///
+    /// ⚠️ 目标模式在本层算是**对的**：桌面两轨也是客户端算的
+    /// （`hotkey_target` 在 `vk.rs`，不在引擎里）。约定禁止的是客户端推**全角映射**。
+    private func performHotkey(_ hot: OpiHotkey, sender: Any!) {
+        switch hot {
+        case .toggleEnglish:
+            // 与 `vk.rs` 的 `hotkey_target` 同判：**来回切**，已在英文就回拼音。
+            engine.switchMode(engine.mode() == .english ? .pinyin : .english)
+        case .toggleSymbol:
+            // 这个出口**自己**包办 Pinyin ⇄ Symbol 的来回切 **和** 缓冲收尾
+            // （有候选提交首候选、乱码缓冲清掉不上屏），所以本层**不判目标模式**
+            // —— 判了就是第二份 `toggle_symbol` 语义。
+            commit(engine.toggleSymbol(), to: sender)
+        case .toggleFullwidth:
+            engine.toggleFullwidth()
+            // ⚠️ **不刷候选面板**：这个开关只改**后续**的标点映射，不动缓冲也不动候选
+            // （`Engine::toggle_fullwidth` 只翻一个 bool），推一帧是白推。
+            // 与模式热键的差别正在这里 —— 那个切模式会清缓冲换候选。
+            // 桌面两轨同判（`tsf.rs` 里 `handleFullwidthHotkey` 调用点上方的注释 / `opi_fcitx5.cpp` 的
+            // `handleFullwidthHotkey`，两处措辞一致）。
+            return
+        }
+        refresh(sender)
+    }
+
     // ---------- 事件入口 ----------
 
     /// ⚠️ 覆写的选择器是 `handleEvent:client:`，Swift 侧若**没有被调用**（按键完全
@@ -108,6 +181,24 @@ final class OpiInputController: IMKInputController {
     /// 见 README「最不确定的 API」#1 末尾。
     override func handle(_ event: NSEvent, client sender: Any!) -> Bool {
         guard event.type == .keyDown || event.type == .keyUp else { return false }
+        // ⚠️ **热键必须在引擎之前判掉，不能落进下面的 `keyEvent`** ——
+        // `router.rs` 的 `key_event` 直通分支（`router.rs:245`）对 `CTRL|ALT|META`
+        // **在整个函数最前面就直通**，
+        // 所以 `Ctrl+'`/`Ctrl+\` 送进去等于交回宿主应用（模式一动不动、无日志）；
+        // 而 `Shift+Space` 的 SHIFT **不在**直通掩码里，会走到 `KEY_SPACE` 分支，
+        // 又因「空格分支不看 Shift 位」变成**选首候选**。
+        // 桌面两轨同判（`tsf.rs` 把 `mode_hotkey`/`fullwidth_hotkey` 判在引擎之前，
+        // 注释写明「送进引擎就是普通空格，会被当成选首候选」）。
+        // 抬起也一并消费：只拦按下会给客户端一个**没有 keydown 的 keyup**。
+        if let hot = hotkey(event) {
+            // 只在这一下是「**首次按下**」时才执行：抬起与 autorepeat 都**只消费、不动作**。
+            //   * 抬起只消费：否则按住不放会反复切模式。
+            //   * ⚠️ autorepeat **绝不能放行**给下面的 `keyEvent`：`Shift+Space` 的
+            //     SHIFT 不在 `router.rs` 的直通掩码里，放行会被当成**普通空格 = 选首候选**
+            //     —— 那比「反复切全角」更坏。四轨同判（`vk.rs` / `opi_fcitx5.cpp` 同轮加）。
+            if event.type == .keyDown, !event.isARepeat { performHotkey(hot, sender: sender) }
+            return true
+        }
         guard let (keyval, states) = wire(event) else { return false }
 
         let result = engine.keyEvent(keyval: keyval, states: states)

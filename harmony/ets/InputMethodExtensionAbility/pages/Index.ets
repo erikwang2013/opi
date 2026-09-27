@@ -220,6 +220,17 @@ struct Index {
       }, 1.3)
 
       if (this.mode === (OpiMode.Pinyin as number) || this.mode === (OpiMode.English as number)) {
+        // ⚠️ **⇪ 这个分支目前到不了，是已知缺口**（不是「已实现」）：
+        //    引擎进 LOCK 的唯一入口是 `tapShiftLongPress()`（states 带
+        //    `KEY_STATE_LONG_PRESSED`），而本文件**还没有给这个键绑长按手势**。
+        //    单击的 `tapShift()` 按 `router.rs` 的 `shift_tap` 只在 OFF↔SINGLE 之间
+        //    来回 —— 所以 LOCK 是枚举有、UI 有、用户按不出来的状态。
+        //    没在这里补 `.gesture(LongPressGesture())` 的原因：那是本机查不到、
+        //    也编不了的 ArkUI API，而 `KeyCap` 是字母键与整个功能行**共用的** @Builder
+        //    （5 个调用点，见下面的 KeyRows / FunctionRow；多参 @Builder 的坑见
+        //    README 的 U18）—— 往这条路径上塞凭记忆写的代码，
+        //    正是本目录存在的意义所要避免的那类改动。
+        //    DevEco 上要做的是：在候选栏的 ⇧ 键上绑长按 → `tapShiftLongPress()`。
         this.KeyCap(this.shift === (OpiShift.Lock as number) ? '⇪' : '⇧', () => {
           this.ctrl.tapShift();
         }, 1.3, this.shift !== (OpiShift.Off as number))
@@ -264,9 +275,21 @@ struct Index {
 
   // ------------------------------------------------------------ 小工具
 
-  /** ⇧ 点亮时字母键显示大写（**只是显示**，真正的大小写由引擎按 states 决定）。 */
+  /**
+   * ⇧ 点亮时字母键显示大写（**只是显示**，真正的大小写由引擎按 states 决定）。
+   *
+   * 判据是「字母模式」= Pinyin **或** English。原先只判 Pinyin，方向是反的：
+   * 引擎真正按 ⇧ 改大小写的地方在**英文**的直传路径
+   * （`router.rs` 的 `Mode::English` 空缓冲分支 → `to_ascii_uppercase()`），
+   * 拼音模式下字母进缓冲、大小写不参与检索 —— 也就是说旧写法**该显大写的不显、
+   * 不影响的显了**（⇧ 亮着打英文，键帽却还是小写）。
+   * 注：英文**缓冲非空**时引擎也不转大写（走 `input_key`），
+   * 那是与 fcitx5 / TSF 两轨逐行同构的既有语义，客户端不在这层纠正。
+   */
   private shiftLabel(ch: string): string {
-    if (this.shift === (OpiShift.Off as number) || this.mode !== (OpiMode.Pinyin as number)) {
+    const letterMode: boolean = this.mode === (OpiMode.Pinyin as number)
+      || this.mode === (OpiMode.English as number);
+    if (this.shift === (OpiShift.Off as number) || !letterMode) {
       return ch;
     }
     return ch.toUpperCase();

@@ -116,6 +116,38 @@ enum OpiMode: Int32 {
     case traditional = 4
 }
 
+/// `opi_symbol_blocks()` 的 JSON 元素：`[{id,start,end,name,common}]`
+/// （serde 固定输出，见 `crates/opi-ffi/src/api/convert.rs` 的 `symbol_blocks_json`）。
+///
+/// **只含 common 块**：`Engine::symbol_blocks()` 走的是 `symbols.common_blocks()`
+/// （`crates/engine-core/src/engine.rs`），非 common 块根本不在这个列表里 ——
+/// 所以 `common` 字段在本出口上恒为 true，别拿它当「全部块」用。
+///
+/// ⚠️ **id 的类型在两端不一样**（这是本出口唯一的陷阱）：
+/// Rust 侧是 `symbols::BlockId(pub u16)`，JSON 里就是 0..=65535；
+/// 而 C ABI 的 `opi_symbols_in_block(int16_t)` 收**有符号** 16 位 ——
+/// 两者只能对齐到 0..=32767。当前数据表 `data/raw/symbol_blocks.tsv` 的 id 是
+/// 1..6，够用；但若把 u16 直接按 `Int16` 解码，id > 32767 时 `JSONDecoder`
+/// 会**抛异常**，而这里对解析失败的处理是返回空数组 —— 后果是
+/// 「符号面板整块空掉、没有任何日志」。所以按 `Int` 解码、显式收窄、
+/// 收不下就 NSLog 跳过（不静默，与 `mode()` 的兜底同一条纪律）。
+struct OpiSymbolBlock: Decodable {
+    /// Rust 的 `BlockId(u16)`，按 Int 收（见上面的类型说明）。
+    let id: Int
+    /// Unicode 区块起止（u32 码点，闭区间）。
+    let start: Int
+    let end: Int
+    let name: String
+    let common: Bool
+
+    /// 收窄到 C ABI 的 `int16_t`。收不下（id > 32767）→ nil。
+    var abiId: Int16? {
+        let narrowed = Int16(exactly: id)
+        if narrowed == nil { NSLog("opi: 符号块 id %d 超出 C ABI 的 int16_t，该块不可查询", id) }
+        return narrowed
+    }
+}
+
 // ---------- OpiString 持有/释放（全模块唯一出口） ----------
 
 /// 取走 OpiString 的内容并释放句柄。**每个返回句柄恰好调用一次**。
@@ -200,9 +232,65 @@ final class OpiEngine {
 
     func mode() -> OpiMode { OpiMode(rawValue: opi_mode()) ?? .pinyin }
 
-    /// 切换模式。⚠️ macOS 端目前**没有**触发入口（无热键/菜单），见 README 缺口 G2。
-    /// 入参只可能是 0..=4（枚举封死了）；Rust 侧对越界值是**静默不动作**
+    /// 切换模式。入参只可能是 0..=4（枚举封死了）；Rust 侧对越界值是**静默不动作**
     /// （`api::mode_from_int` 返回 None → 什么都不做、无返回值可查），
     /// 所以将来若从菜单/配置读到裸整数，**必须先自己校验**再调。
     func switchMode(_ mode: OpiMode) { opi_switch_mode(mode.rawValue) }
+
+    // ---------- 全角 / 符号开关（三个出口 2026-09-27 落地，同日声明面补齐） ----------
+
+    /// 全角 ⇄ 半角，返回**切换后的新状态**。
+    /// 故意**不加** `@discardableResult`：返回值就是这条出口存在的理由。
+    func toggleFullwidth() -> Bool { opi_toggle_fullwidth() }
+
+    /// 全角开关的**读侧**（与 `shiftState()` / `mode()` 同构）。
+    ///
+    /// ⚠️ 三条硬约定**写在声明头里**（`macos/OpiFFI.h` 的「全角 / 符号开关」一节），
+    /// 此处**不重抄** —— 这个仓库被「同一语义抄多份」坑过多次，Rust 侧与头文件才是真源。
+    /// 只记两条 Swift 侧才有的：
+    ///   * 它给**状态显示**用，**别**拿去推「这个键在全角下该出什么」（映射不是纯函数）。
+    ///   * 本目录**还没有全角指示**（菜单项也没有），所以暂时没有陈旧值可清。
+    func fullwidthState() -> Bool { opi_fullwidth_state() }
+
+    /// 符号面板开关：**Pinyin ⇄ Symbol 来回切**（不是「切到 Symbol」）。
+    /// 返回**待上屏文本**（空串 = 无提交）。约定与出处见声明头，此处不重抄。
+    func toggleSymbol() -> String { take(opi_toggle_symbol()) }
+
+    // ---------- 符号库（面板数据） ----------
+    //
+    // 三个出口都是**只读查询**：不碰缓冲、不改页码、不参与键路由，所以可以
+    // 在任意时刻调用（面板打开时查一次即可）。
+    // ⚠️ 符号面板**不要**把符号键送回 `opi_key_event`：引擎的标点表会把 `,` 之类
+    // 改写成中文标点/全角（那是**文本**模式的行为），而用户在面板上点的 `,` 就是
+    // 要 `,`。Android 的 `SymbolPanel` 同样绕过引擎直提（`router::commitText`）。
+
+    /// 常用符号块（**只有 common 块**，见 `OpiSymbolBlock` 的注释）。
+    /// JSON 解析失败 → 空数组（面板空着，不崩）。引擎未装载 → 空数组。
+    func symbolBlocks() -> [OpiSymbolBlock] {
+        let raw = take(opi_symbol_blocks())
+        guard let data = raw.data(using: .utf8),
+              let list = try? JSONDecoder().decode([OpiSymbolBlock].self, from: data)
+        else {
+            // Rust 侧恒返回合法 JSON；走到这里说明两端契约漂了，别说成「没有符号」。
+            if !raw.isEmpty { NSLog("opi: symbol_blocks JSON 解码失败：%@", raw) }
+            return []
+        }
+        return list
+    }
+
+    /// 某个块里的符号（JSON 文本数组）。
+    /// 传 `OpiSymbolBlock.abiId`；nil（id 越界）→ 空数组。
+    /// ⚠️ 负 id 在 Rust 侧按**越界**处理（空数组，`cabi.rs` 的 `opi_symbols_in_block`），
+    /// 不会钳成块 0。
+    func symbolsInBlock(id: Int16) -> [String] {
+        guard id >= 0 else { return [] }
+        return takeTexts(opi_symbols_in_block(id))
+    }
+
+    /// 关键字搜索符号（JSON 文本数组）。
+    /// ⚠️ **空关键字返回全部条目**（`symbols::search("")`），不是「什么都没搜到」——
+    /// Android 的 `SymbolCatalog.all` 正是靠这个语义拿「全部」。
+    func searchSymbols(keyword: String) -> [String] {
+        withUTF16(keyword) { p, n in takeTexts(opi_search_symbols(p, n)) }
+    }
 }

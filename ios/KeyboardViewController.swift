@@ -26,8 +26,12 @@ final class KeyboardViewController: UIInputViewController {
 
     // MARK: - 状态
 
-    private let engine = OpiEngine()
-    private var layout: KeyboardLayout!
+    // ⚠️ 下面这几个成员与 `refresh` / `insert` / `modeLabel` 都是 **internal**
+    // （不是 `private`）：`KeyboardHardware.swift` 那个扩展要用它们，而 Swift 的
+    // `private` 只跨「**同文件**的扩展」可见，跨文件必须放开。
+    // **不要为了整洁把它们改回 `private`** —— 那会让 `KeyboardHardware.swift` 编译不过。
+    let engine = OpiEngine()
+    var layout: KeyboardLayout!
     // 这里**没有** `page` 状态了：页码只在显示「第 N 页 / 共 M 页」时读一次
     // `engine.page()`，选词走 `engine.selectPage(k)` 的页内索引 —— 都不需要本层持有。
 
@@ -54,6 +58,9 @@ final class KeyboardViewController: UIInputViewController {
             layout.topAnchor.constraint(equalTo: view.topAnchor),
             layout.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
+        // 键面字要跟真实模式一致：装载后引擎可能是任何模式（同一进程里另一个
+        // 键盘实例切过模式也会留在这里 —— 引擎单例是进程级的）。
+        layout.setModeLabel(Self.modeLabel(of: engine.mode()))
         refresh()
     }
 
@@ -100,7 +107,8 @@ final class KeyboardViewController: UIInputViewController {
     // MARK: - 刷新 UI
 
     /// 拉一次引擎状态刷新候选栏。**在这条路径上不要做别的**（不查磁盘、不发请求）。
-    private func refresh() {
+    /// ⚠️ internal（见上方状态节的说明）：`KeyboardHardware.swift` 的热键路径要调它。
+    func refresh() {
         guard dictionaryLoaded else {
             layout.updateCandidates(["词库未装载"])
             return
@@ -114,7 +122,8 @@ final class KeyboardViewController: UIInputViewController {
 
     /// 提交文本到宿主 App。所有 insertText 都走这里，方便将来加
     /// 「插前插后要通知宿主」这类修正时只有一处要改。
-    private func insert(_ text: String) {
+    /// ⚠️ internal（见上方状态节的说明）：`KeyboardHardware.swift` 的提交路径要调它。
+    func insert(_ text: String) {
         guard !text.isEmpty else { return }
         textDocumentProxy.insertText(text)
     }
@@ -155,6 +164,30 @@ final class KeyboardViewController: UIInputViewController {
         case .passThrough:
             applyFallback(fallback)
             refresh()
+        }
+    }
+
+    // MARK: - 硬件键盘（iPad 外接键盘）
+
+    /// 外接键盘的按下 / 抬起入口。**故意只做两件事**：把整批按键交给
+    /// `routeHardware`（在 `KeyboardHardware.swift`），没被接管的整批交回系统。
+    ///
+    /// ⚠️ 这两个 `override` 留在本文件、**不**跟其余硬件键盘逻辑一起搬走：覆写 ObjC
+    /// 方法能否写在**跨文件**的扩展里，本机没有编译器可问 —— 这是**未验证的取舍**，
+    /// 故按最保守的写法放在类自己的文件里。搬走的是纯方法
+    /// （`routeHardware` / `keyval(for:)` / `hotkey(for:states:)` /
+    /// `performHotkey(_:)` / `modifierStates(_:)`，见 `KeyboardHardware.swift`）。
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        if !routeHardware(presses, released: false, event: event) {
+            // 引擎没接管的键，必须交回系统 —— 否则宿主 App 收不到方向键、
+            // ⌘ 组合键等（用户的键盘就像坏了一样）。
+            super.pressesBegan(presses, with: event)
+        }
+    }
+
+    override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        if !routeHardware(presses, released: true, event: event) {
+            super.pressesEnded(presses, with: event)
         }
     }
 }
@@ -200,115 +233,72 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
 
     func keyboardLayout(_ layout: KeyboardLayout, didTapFunction name: KeyboardFunctionKey) {
         switch name {
-        case .toggleLayer:
-            layout.setLetterLayer(!layout.isLetterLayer)
-        case .toggleLanguage:
-            // 中/英切换：0=Pinyin 1=English。走备用出口是因为 opi_key_event 的
-            // 键空间里没有「切语言」这个键（两轨是走 UI 按钮的）。
-            // 注意：切到 English 后 ⇧ 状态机仍在引擎里，不受影响。
-            engine.switchMode(engine.mode() == .pinyin ? .english : .pinyin)
-            refresh()
+        case .showLetters:
+            layout.setLayer(.letters)
+        case .showNumbers:
+            layout.setLayer(.numbers)
+        case .showSymbols:
+            // 符号数据**现取**，不缓存：空结果是「没拿到」而不是「真的没有」，
+            // 缓存空会让面板从此永远空（Android `SymbolCatalog` 踩过这个坑）。
+            layout.setSymbols(engine.commonSymbols())
+            layout.setLayer(.symbols)
+        case .cycleMode:
+            cycleMode()
         case .nextInputMode:
             // 地球键：交给系统切到下一个输入法（Apple 要求自定义键盘自己提供）。
             advanceToNextInputMode()
+        case .commitText(let text):
+            // 符号面板的键**直提，不过引擎**：引擎的标点表会把 `,` 改写成中文标点/
+            // 全角（那是文本模式该做的事），而用户点的就是 `,`。
+            // 不调 refresh：缓冲没变，候选栏也不该变。
+            insert(text)
         }
     }
-}
 
-// MARK: - 硬件键盘（iPad 外接键盘）
-
-extension KeyboardViewController {
-
-    /// ⚠️ 本节的 API 用法是本文件**最不确定**的部分：`UIKey.keyCode` 的
-    /// `UIKeyboardHIDUsage` 枚举成员名、以及 pressesBegan 的参数签名，
-    /// 都是凭记忆写的，Mac 上很可能要改（见 README 最不确定清单第 1 条）。
+    /// 模式三态循环：中 → 繁 → 英 → 中。
     ///
-    /// 为什么值得写：router.rs 的路由表**依赖按下/抬起成对出现**，而软键盘
-    /// 只覆盖了一部分场景；外接键盘是唯一能产生 PageUp/PageDown/方向键的来源。
-    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        if !routeHardware(presses, released: false, event: event) {
-            // 引擎没接管的键，必须交回系统 —— 否则宿主 App 收不到方向键、
-            // ⌘ 组合键等（用户的键盘就像坏了一样）。
-            super.pressesBegan(presses, with: event)
-        }
-    }
-
-    override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        if !routeHardware(presses, released: true, event: event) {
-            super.pressesEnded(presses, with: event)
-        }
-    }
-
-    /// 返回 true = 本次事件已被引擎处理（不要再交回系统）。
-    private func routeHardware(
-        _ presses: Set<UIPress>, released: Bool, event: UIPressesEvent?
-    ) -> Bool {
-        var handledAny = false
-        for press in presses {
-            guard let key = press.key, let kv = keyval(for: key) else { continue }
-            var states = modifierStates(key.modifierFlags)
-            if released { states |= OpiKey.stateReleased }
-            switch engine.keyEvent(keyval: kv, states: states) {
-            case .passThrough:
-                continue    // 这一个交回系统（外层会调 super）
-            case .commit(let text):
-                // ⚠️ 容易漏：硬件键盘的提交文本也得自己 insertText，
-                // 不能因为「外接键盘」就以为系统会替我们上屏。漏了的表现是
-                // 「按字母有候选、按空格候选消失但字没上屏」。
-                insert(text)
-                handledAny = true
-            case .handled:
-                handledAny = true
-            }
-        }
-        // 有键被受理 → 刷新候选栏（缓冲/页码可能变了）。
-        if handledAny { refresh() }
-        return handledAny
-    }
-
-    /// `UIKey` → keyval。**不要按 `characters` 猜特殊键**（keys.rs 模块头明确警告：
-    /// 退格可能是 BS 也可能是 DEL，猜错的后果是该键在输入态下静默失效）。
-    /// 特殊键一律认 HID usage；只有可打印字符才取 `characters` 的码点。
-    private func keyval(for key: UIKey) -> UInt32? {
-        switch key.keyCode {
-        // ⚠️ 是 `.keyboardDeleteOrBackspace`（HID 0x2A），**没有** `.keyboardBackspace`
-        // 这个成员。写错是**编译错误**而不是静默失效 —— 也就是说这类错在 Mac 上
-        // 第一轮编译就会全部暴露，不会带到运行时。
-        case .keyboardDeleteOrBackspace: return OpiKey.backspace
-        // 注意：router.rs 把 KEY_DELETE 与 KEY_BACK_SPACE 归到同一分支（都按退格处理）,
-        // 这是既有的两轨语义，不是这里写错。
-        case .keyboardDeleteForward: return OpiKey.delete
-        case .keyboardReturnOrEnter: return OpiKey.ret
-        case .keyboardTab: return OpiKey.tab
-        case .keyboardEscape: return OpiKey.escape
-        case .keyboardPageUp: return OpiKey.pageUp
-        case .keyboardPageDown: return OpiKey.pageDown
-        case .keyboardLeftShift, .keyboardRightShift: return OpiKey.shift
-        case .keyboardUpArrow: return OpiKey.up
-        case .keyboardDownArrow: return OpiKey.down
-        case .keyboardLeftArrow: return OpiKey.left
-        case .keyboardRightArrow: return OpiKey.right
-        case .keyboardSpacebar: return OpiKey.space
+    /// **逐字对齐 Android `ImeScreen.kt` 的 `toggleMode()`**（含前两跳先 `clear()`）——
+    /// 离开拼音类模式前清掉打了一半的拼音，否则残留缓冲会被下一个空格/回车意外提交。
+    /// 本端不自创第三个模式的判定，理由见 `OpiMode.traditional` 的注释。
+    ///
+    /// ⚠️ 这里**没有**走「先提交未完成的缓冲」那条路，而且**原因不是「调不到」** ——
+    /// `opi_toggle_symbol` / `opi_toggle_fullwidth` / `opi_fullwidth_state` 三个出口
+    /// 头文件里**已经有了**（2026-09-28 实测 `cabi.rs` 31 ↔ `OpiFFI.h` 31、差集为空、签名不一致 0），
+    /// `KeyboardHardware.swift` 的热键路径正在调它们。真正的原因是**语义不同**：
+    /// `Engine::toggle_symbol` 是 **Pinyin ⇄ Symbol**（那是 `Ctrl+\` 那条热键），
+    /// 而本函数是**中→繁→英**三态循环 —— 拿它来切模式是把两个出口当成一个用。
+    /// 所以本函数照 Android `ImeScreen.kt` 的既有约定 `clear()`。
+    ///
+    /// ⚠️ **已裁决（2026-09-28，team-lead）：保持 `clear()`**，与 Android 的 `toggleMode()` 一致
+    /// —— 本仓的价值里有「四端一致」，单方面改成「提交」会造出一条**只有 Apple 两平台不同**的行为。
+    /// `toggle_symbol` 之所以要提交是因为**场景不同**：用户伸手去够符号时，那段拼音不该凭空消失；
+    /// 而模式轮转是**换一种输入方式**，用户预期就是丢掉重来。
+    /// **不要再问一遍，也不要顺手改成 `toggleSymbol()`** —— 那会连模式目标一起改掉。
+    private func cycleMode() {
+        switch engine.mode() {
+        case .pinyin:
+            engine.clear()
+            engine.switchMode(.traditional)
+        case .traditional:
+            engine.clear()
+            engine.switchMode(.english)
         default:
-            // 可打印字符：取 `characters`（**大小写已由平台应用**，keys.rs 的约定）。
-            // 空串（F1-F12、媒体键等无可打印表示）→ 返回 nil，整键交回系统。
-            guard let scalar = key.characters.unicodeScalars.first,
-                  key.characters.unicodeScalars.count == 1
-            else { return nil }
-            return OpiKey.printable(scalar)
+            // English / Number / Symbol 一律回拼音（与 Android 的 `else` 分支同义）。
+            engine.switchMode(.pinyin)
         }
+        layout.setModeLabel(Self.modeLabel(of: engine.mode()))
+        refresh()
     }
 
-    /// 修饰位映射。CTRL/ALT/META 必须传：router.rs 对它们**一律直通**，
-    /// 否则 ⌘A / ⌘C 会被吃进拼音缓冲。
-    private func modifierStates(_ f: UIKeyModifierFlags) -> UInt32 {
-        var s: UInt32 = 0
-        if f.contains(.shift) { s |= OpiKey.stateShift }
-        if f.contains(.alphaShift) { s |= OpiKey.stateCapsLock }
-        if f.contains(.control) { s |= OpiKey.stateCtrl }
-        if f.contains(.alternate) { s |= OpiKey.stateAlt }
-        if f.contains(.command) { s |= OpiKey.stateMeta }
-        return s
+    /// 模式键的键面字（对齐 Android `ImeScreen.kt` 的 `modeLabelOf`：中/繁/英）。
+    /// ⚠️ 键面必须说实话：它同时是「当前是什么模式」的显示器。
+    /// ⚠️ internal（见上方状态节的说明）：`KeyboardHardware.swift` 的热键路径要调它。
+    static func modeLabel(of mode: OpiMode) -> String {
+        switch mode {
+        case .pinyin: return "中"
+        case .traditional: return "繁"
+        default: return "英"
+        }
     }
 }
 

@@ -57,10 +57,54 @@ enum OpiMode: Int32 {
     case number = 2
     case symbol = 3
     /// 繁体模式。行为同拼音（小写入缓冲、⇧ 无效），引擎层路由到 trad 词典。
-    /// ⚠️ 当前键盘 UI **没有进入繁体模式的入口**（`toggleLanguage` 只在
-    /// 拼音 ⇄ 英文之间切）。这一条是**已知缺口**：引擎支持、UI 未接。
-    /// 接法参照 Android 的繁简开关，不要在 Swift 侧自创第三个模式的判定。
+    /// 模式入口见 `KeyboardFunctionKey.cycleMode`（中→繁→英→中，对齐 Android
+    /// `ImeScreen.kt` 的 `toggleMode()`）。
     case traditional = 4
+}
+
+/// 前端 ⇧ 三态（`opi_shift_state()`）：0=OFF 1=SINGLE 2=LOCK。
+///
+/// **与 `OpiKey.stateShift` 不是一回事**：那个是**引擎侧** shift 位（`opi_set_shift`
+/// 打的是同一个），而三态是**前端**状态 —— 英文直传路径的大小写由它决定，
+/// 引擎位看不出来。所以 ⇧ 的高亮（尤其 Single 与 Lock 的区别）只能读这里。
+///
+/// ⚠️ 本枚举**目前没有调用点**：`KeyboardLayout` 故意不画 ⇧ 高亮（见那里的长注释），
+/// 这里先把出口包出来（README「缺的出口：已落地」第 4 条点名的两步中的第 ① 步）。
+/// 第 ② 步（让 UI 读它）与「先过编译」的排序不变。
+enum OpiShiftState: Int32 {
+    case off = 0
+    /// 下个字母大写后**引擎会自动复位**（`KeyRouter` 的三态状态机），
+    /// 所以高亮不能缓存 —— 每次刷新都重读出口。
+    case single = 1
+    case lock = 2
+}
+
+/// `opi_symbol_blocks()` 的 JSON 元素：`[{id,start,end,name,common}]`
+/// （serde 固定输出，见 `crates/opi-ffi/src/api/convert.rs` 的 `symbol_blocks_json`）。
+///
+/// **只含 common 块**：`Engine::symbol_blocks()` 走的是 `symbols.common_blocks()`，
+/// 非 common 块不在这个列表里 —— `common` 字段在本出口上恒为 true。
+///
+/// ⚠️ **id 的类型两端不一样**：Rust 侧是 `symbols::BlockId(pub u16)`（JSON 里 0..=65535），
+/// 而 C ABI 的 `opi_symbols_in_block(int16_t)` 收**有符号** 16 位 —— 只能对齐到
+/// 0..=32767。当前 `data/raw/symbol_blocks.tsv` 的 id 是 1..6，够用；但把 u16 直接按
+/// `Int16` 解码会在 id > 32767 时**抛异常**，而本层对解析失败的处理是返回空数组 ——
+/// 后果是「符号面板整块空掉、无任何日志」。故按 `Int` 收、显式收窄、收不下就记日志。
+struct OpiSymbolBlock: Decodable {
+    let id: Int
+    let start: Int
+    let end: Int
+    let name: String
+    let common: Bool
+
+    /// 收窄到 C ABI 的 `int16_t`；id > 32767 → nil（并记日志，不静默）。
+    var abiId: Int16? {
+        let narrowed = Int16(exactly: id)
+        if narrowed == nil {
+            NSLog("[OPI] 符号块 id %d 超出 C ABI 的 int16_t，该块不可查询", id)
+        }
+        return narrowed
+    }
 }
 
 /// 键码常量，**唯一真源是 crates/engine-core/src/keys.rs**。
@@ -245,6 +289,23 @@ final class OpiEngine {
     /// 候选总页数（**无候选 → 0**，不是 1）。给「共 N 页」用。未装载 → 0。
     func pageCount() -> Int { Int(opi_page_count()) }
 
+    /// 前端 ⇧ 三态（0=OFF 1=SINGLE 2=LOCK）。**⇧ 高亮的唯一真源**。
+    ///
+    /// ⚠️ 不要把返回值缓存成「本地 shift 状态」再去 toggle：Single 会在引擎提交后
+    /// **自动复位**，本地镜像必然漂移（`KeyboardLayout` 里那段注释解释的就是这件事）。
+    /// 刷新时重读即可，这只是一次 C 调用。
+    ///
+    /// ⚠️ 未知编码（Rust 侧将来加了第四态）**不静默**兜底 —— 与 `mode()` 同一条纪律：
+    /// 兜成 `.off` 会让 ⇧ 看起来「按了没反应」，有日志才查得到。
+    func shiftState() -> OpiShiftState {
+        let raw = opi_shift_state()
+        guard let s = OpiShiftState(rawValue: raw) else {
+            NSLog("[OPI] 未知 ⇧ 三态编码 %d —— 两端状态表已漂移，按 OFF 处理", raw)
+            return .off
+        }
+        return s
+    }
+
     /// **点候选栏第 k 个**（**页内**索引，0 起）。越界/无候选/未装载 → 空串。
     ///
     /// **这是候选栏唯一该走的选词出口。** 它和数字键选词、回车提交**同源**
@@ -290,6 +351,88 @@ final class OpiEngine {
     /// 只会静默失效。macOS 侧已同样注明。
     func switchMode(_ m: OpiMode) { opi_switch_mode(m.rawValue) }
     func clear() { opi_clear() }
+
+    // MARK: - 全角 / 符号开关（三个出口 2026-09-27 落地）
+
+    /// 全角 ⇄ 半角，返回**切换后的新状态**。
+    ///
+    /// 故意**不加** `@discardableResult`：返回值就是这条出口存在的理由（上游本来可以
+    /// 返 void），丢掉它等于退回「按钮状态靠猜」。
+    func toggleFullwidth() -> Bool { opi_toggle_fullwidth() }
+
+    /// 全角开关的**读侧**（与 `shiftState()` / `mode()` 同构）。
+    ///
+    /// ⚠️ 三条硬约定**写在声明头里**（`macos/OpiFFI.h` 的「全角 / 符号开关」一节），
+    /// 这里**不重抄**：这个仓库反复被「同一语义抄多份」坑过，而 Rust 侧与头文件
+    /// 才是真源。要改行为先改那边。
+    /// 只记两条 Swift 侧才有的：
+    ///   * 它给**状态显示**用，**别**拿去推「这个键在全角下该出什么」（映射不是纯函数）。
+    ///   * 本目录**还没有全角指示灯**（同 `shiftState()`：包装有了、UI 没读），
+    ///     所以暂时没有陈旧值可清 —— 加指示灯时，重读写在这里。
+    func fullwidthState() -> Bool { opi_fullwidth_state() }
+
+    /// 符号面板开关：**Pinyin ⇄ Symbol 来回切**（不是「切到 Symbol」，也不是模式三态
+    /// 循环 —— 那个是 `KeyboardViewController.cycleMode()`）。
+    /// 返回**待上屏文本**（空串 = 无提交）。约定与出处见声明头，此处不重抄。
+    func toggleSymbol() -> String { OpiEngine.takeString(opi_toggle_symbol()) }
+
+    // MARK: - 符号库（面板数据）
+    //
+    // 三个出口都是**只读查询**：不碰缓冲、不改页码、不参与键路由，任意时刻可调。
+    // ⚠️ 符号键**不要**送回 `key_event`：引擎的标点表会把 `,` 之类改写成中文标点/全角
+    // （那是**文本**模式的行为），而用户在符号面板上点的 `,` 就是要 `,`。
+    // Android 的 `SymbolPanel` 同样绕过引擎直提（`router::commitText`），
+    // 本层对应 `KeyboardViewController.insert(_:)`。
+
+    /// 常用符号块（**只有 common 块**，见 `OpiSymbolBlock` 的注释）。
+    ///
+    /// ⚠️ **不要缓存成「算过一次就永久用」**：Android 的 `SymbolCatalog` 在这里
+    /// 踩过坑 —— 首次访问若引擎还没就绪就得到空列表，缓存空结果会让面板**从此永远空**，
+    /// 要重启进程才恢复。本层按「空 = 没拿到，不是真的没有」处理：不缓存，每次问引擎。
+    /// （代价是每次开面板一次 C 调用 + 一次 JSON 解码 —— 面板是低频操作，不值一个缓存。）
+    func symbolBlocks() -> [OpiSymbolBlock] {
+        let raw = OpiEngine.takeString(opi_symbol_blocks())
+        guard let data = raw.data(using: .utf8),
+              let list = try? JSONDecoder().decode([OpiSymbolBlock].self, from: data)
+        else {
+            // Rust 侧恒返回合法 JSON；走到这里说明两端契约漂了，别说成「没有符号」。
+            if !raw.isEmpty { NSLog("[OPI] symbol_blocks JSON 解码失败：%@", raw) }
+            return []
+        }
+        return list
+    }
+
+    /// 某个块里的符号（JSON 文本数组）。传 `OpiSymbolBlock.abiId`；nil/负值 → 空数组。
+    /// ⚠️ 负 id 在 Rust 侧按**越界**处理（空数组），不会钳成块 0。
+    func symbolsInBlock(id: Int16) -> [String] {
+        guard id >= 0 else { return [] }
+        return OpiEngine.decodeTexts(OpiEngine.takeString(opi_symbols_in_block(id)))
+    }
+
+    /// 关键字搜索符号（JSON 文本数组）。
+    /// ⚠️ **空关键字返回全部条目**（`symbols::search("")`），不是「什么都没搜到」——
+    /// Android 的 `SymbolCatalog.all` 正是靠这个语义取「全部」。
+    func searchSymbols(keyword: String) -> [String] {
+        OpiEngine.withUTF16(keyword) { p, n in
+            OpiEngine.decodeTexts(OpiEngine.takeString(opi_search_symbols(p, n)))
+        }
+    }
+
+    /// 常用符号（各 common 块的 `symbolsInBlock` 并集，按块序、按文本去重）。
+    ///
+    /// 这一份**合成**是本层唯一的「业务」——对齐 Android `SymbolCatalog.common`：
+    /// 引擎只给块与块内符号，不给「常用面板该摆哪些」。空结果同样不缓存（见上）。
+    func commonSymbols() -> [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        for block in symbolBlocks() {
+            guard let id = block.abiId else { continue }
+            for text in symbolsInBlock(id: id) where seen.insert(text).inserted {
+                out.append(text)
+            }
+        }
+        return out
+    }
 
     // MARK: - 用户词（学习）
 

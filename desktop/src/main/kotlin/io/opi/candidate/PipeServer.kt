@@ -194,12 +194,31 @@ class PipeServer(private val model: CandidateModel) {
         if (start < bytes.size) pending.write(bytes, start, bytes.size - start)
     }
 
-    private fun handleLine(line: String) {
+    /**
+     * 单行 → 模型。**线协议字段名在此**：发端是 `crates/tsf-opi/src/candidate_io.rs`
+     * 的 `CandidateClient::show`/`hide`/`position`，两侧字段名逐条对应（契约由
+     * WireContractTest 机械核对）。
+     *
+     * 发端两条易错约定，收端在此落地：
+     *  - `page`/`page_count` 是 **1 起**（`CandidateSink::on_composition_changed`
+     *    已经 `page + 1`，本侧**不得**再加）；
+     *  - 键序不可依赖：serde_json 未开 `preserve_order`，`Map` 是 BTreeMap，
+     *    `select` 实测发出来就是 `{"index":0,"type":"select"}`。故一律按名取。
+     *
+     * `internal` 而非 `private`：只为让 WireContractTest 能喂真实行进来 —— 本机无
+     * Windows、管道跑不起来，这一层是唯一能在 Linux 上验「字段名有没有抄错」的地方。
+     */
+    internal fun handleLine(line: String) {
         try {
             val obj = parseLine(line) ?: return
             when ((obj["type"] as? JVal.JStr)?.v) {
                 "show" -> {
-                    model.buffer = (obj["buffer"] as? JVal.JStr)?.v ?: ""
+                    // 没有 buffer 字段 = 不合契约的行 → 整行丢弃，**不得**用空值冲掉
+                    // 已有状态（否则一条 `{"type":"show"}` 就能把候选窗清空挂在那里：
+                    // 窗口可见、内容空白，且只有下一条 hide 才收得回来）。对端是不可信
+                    // 输入，见文件头；真发端 CandidateClient::show 永远带 buffer。
+                    val buffer = (obj["buffer"] as? JVal.JStr)?.v ?: return
+                    model.buffer = buffer
                     model.candidates = ((obj["candidates"] as? JVal.JArr)?.v
                         ?: emptyList()).mapNotNull { (it as? JVal.JStr)?.v }
                     model.page = ((obj["page"] as? JVal.JNum)?.v ?: 1L).toInt().coerceAtLeast(1)

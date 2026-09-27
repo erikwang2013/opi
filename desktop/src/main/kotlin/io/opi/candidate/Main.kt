@@ -42,10 +42,12 @@
 //! show 消息到达才显示；position 消息 → 跟随 caret（缺省固定默认位置）。
 //!
 //! 翻页：**本窗只发消息，不改本地页码** —— 页码的唯一真源是 TSF 回发的 show。
-//! 于是 CandidateWindow 的两个翻页箭头**当前是死键**：TSF 侧 next_page/prev_page
-//! 仍是骨架态 no-op（见 candidate_io.rs 的 CandidateAction / NoopAction），点了
-//! 只有一条消息出海、没有任何 show 回来。待接线（真机验收时接 logic.next_page /
-//! logic.prev_page），接线前这行注释不得再写成「本地即时翻转」。
+//! TSF 侧已接线：`candidate_io.rs` 的 `SharedAction::on_next_page`/`on_prev_page`
+//! → `TsfSharedState::next_page`/`prev_page` → `TsfLogic::next_page`/`prev_page`，
+//! 随后 `SharedAction::refresh` 回发一条带新页码的 show，故点了箭头窗口会跟着翻。
+//! 本窗仍**不得**自行改页码：页数上界与「页内索引 → 全局下标」的换算只在引擎侧
+//! （`TsfLogic::select_from` 的 `global = page * PAGE_SIZE + index` 只此一份），
+//! 前端各存一份必然漂移。
 //!
 //! 【拆分】协议全貌在此；NDJSON 行解析见 Protocol.kt，named pipe 服务器见
 //! PipeServer.kt，Compose 自绘 UI 见 CandidateWindow.kt。
