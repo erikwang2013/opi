@@ -148,8 +148,10 @@ final class OpiInputController: IMKInputController {
 
     /// 执行热键。三条都**不经过** `opi_key_event`。
     ///
-    /// ⚠️ 目标模式在本层算是**对的**：桌面两轨也是客户端算的
-    /// （`hotkey_target` 在 `vk.rs`，不在引擎里）。约定禁止的是客户端推**全角映射**。
+    /// ⚠️ **仅 `Ctrl+'`（`toggleEnglish`）这一支**：目标模式在本层算是**对的** ——
+    /// 桌面两轨也是客户端算的（`hotkey_target` 在 `vk.rs`，不在引擎里）。
+    /// **`Ctrl+\`（`toggleSymbol`）是唯一例外**：目标模式由引擎自己算，本层不重算 ——
+    /// 见该支自己的注释。约定禁止的是客户端推**全角映射**。
     private func performHotkey(_ hot: OpiHotkey, sender: Any!) {
         switch hot {
         case .toggleEnglish:
@@ -157,8 +159,9 @@ final class OpiInputController: IMKInputController {
             engine.switchMode(engine.mode() == .english ? .pinyin : .english)
         case .toggleSymbol:
             // 这个出口**自己**包办 Pinyin ⇄ Symbol 的来回切 **和** 缓冲收尾
-            // （有候选提交首候选、乱码缓冲清掉不上屏），所以本层**不判目标模式**
-            // —— 判了就是第二份 `toggle_symbol` 语义。
+            // （有候选提交首候选、乱码缓冲清掉不上屏），所以本层**不重算目标模式、
+            // 也不自己 `switchMode`** —— 判了就是第二份 `toggle_symbol` 语义。
+            // ⚠️ 下一行是**调用**：读成「本支不调这个出口」是反的。
             commit(engine.toggleSymbol(), to: sender)
         case .toggleFullwidth:
             engine.toggleFullwidth()
