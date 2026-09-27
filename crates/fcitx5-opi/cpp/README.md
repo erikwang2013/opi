@@ -7,8 +7,13 @@ Rust 侧（`../src/input_method.rs`，镜像 Android KeyRouter），本文件只
 
 ## 构建前提
 
-- fcitx5 头与库（≥ 5.1）。**不需要 root、不需要装包**：直接从发行版仓库
+- fcitx5 头与库（**≥ 5.0**，见下）。**不需要 root、不需要装包**：直接从发行版仓库
   下载 .deb 解包即可（本机实测 deepin 仓库，包版本 `5.1.12-2deepin12`）。
+  ⚠️ 这里是 **5.0** 不是 5.1：2026-09-28 实测 5.0.21（debian:12, g++ 12.2）与
+  5.0.14（ubuntu:22.04, g++ 11.4）都能 `-Wall -Wextra -Werror` 零警告编过并链接
+  （`ldd -r` 未定义符号 0），且 addon 真能被加载、e2e 结果与 5.1.12 逐字节相同。
+  真正的门槛在 `data/addon/opi_fcitx5.conf` 的 `[Addon/Dependencies]` 那行 ——
+  **那一行低了 fcitx5 就不加载**，所以它才是「支持到哪一版」的权威，本文件只是转述。
 - Rust cdylib 已构建：
 
 ```bash
