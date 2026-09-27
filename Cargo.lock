@@ -231,6 +231,7 @@ version = "1.0.15"
 dependencies = [
  "engine-core",
  "engine-data",
+ "opi_ffi",
  "proptest",
 ]
 
@@ -240,8 +241,10 @@ version = "1.0.15"
 dependencies = [
  "engine-core",
  "engine-data",
+ "fcitx5_opi",
  "jni",
  "serde_json",
+ "tsf_opi",
 ]
 
 [[package]]
