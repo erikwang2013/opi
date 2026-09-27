@@ -8,6 +8,13 @@ edition.workspace = true
 # staticlib：iOS / macOS 需要 .a（Rust 静态库）—— 缺它 Apple 两平台无法链接。
 crate-type = ["cdylib", "staticlib", "lib"]
 
+# 两轨**行为**对照测试用（crates/opi-ffi/tests/two_track_parity.rs）：
+# 同一串按键分别喂 fcitx5-opi 与 tsf-opi 的逻辑层，逐事件比对可观测状态。
+# 只进 dev-dependencies —— 产品库不因此多一个依赖。
+[dev-dependencies]
+fcitx5_opi = { path = "../fcitx5-opi" }
+tsf_opi = { path = "../tsf-opi" }
+
 [dependencies]
 engine-core = { path = "../engine-core" }
 engine-data = { path = "../engine-data" }

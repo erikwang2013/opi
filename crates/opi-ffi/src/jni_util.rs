@@ -71,6 +71,13 @@ pub unsafe fn rust_to_jstring(env: *mut sys::JNIEnv, s: &str) -> jstring {
 
 /// 构造 `[Ljava/lang/String;` 数组。失败返回 null。
 ///
+/// **本地引用纪律**：本函数创建的每个本地引用要么作为返回值移交调用方（`arr`），
+/// 要么**在完成使命后立刻 `DeleteLocalRef`**（`class`、循环里的每个 `js`）。
+/// 漏删不会在这里出错 —— ART 的本地引用表按帧计，默认上限 512（Android 侧
+/// `fetchLimit = 64` 时潜伏），一旦 `items.len()` 逼近上限，超限直接 abort，
+/// 且栈里看不出是这里。`SetObjectArrayElement` 之后数组自身已持引用，
+/// 删掉本地引用是安全的。
+///
 /// # Safety
 ///
 /// `env` 必须是当前线程有效且非空的 JNIEnv。
@@ -86,15 +93,21 @@ pub unsafe fn string_array(env: *mut sys::JNIEnv, items: Vec<String>) -> sys::jo
     let arr = unsafe {
         (iface.v1_1.NewObjectArray)(env, items.len() as jsize, class, std::ptr::null_mut())
     };
+    // class 只用于建数组，此后不再需要；arr 走返回值，不能删。
+    unsafe { (iface.v1_1.DeleteLocalRef)(env, class) };
     if arr.is_null() {
         return std::ptr::null_mut();
     }
     for (i, s) in items.into_iter().enumerate() {
         let js = unsafe { rust_to_jstring(env, &s) };
         if js.is_null() {
+            // 失败路径：arr 还没交出去，同样要释放，否则每次失败漏一个数组引用。
+            unsafe { (iface.v1_1.DeleteLocalRef)(env, arr) };
             return std::ptr::null_mut();
         }
         unsafe { (iface.v1_1.SetObjectArrayElement)(env, arr, i as jsize, js) };
+        // 数组已持引用，本地引用即可释放 —— 否则 items.len() 个引用全留在表里。
+        unsafe { (iface.v1_1.DeleteLocalRef)(env, js) };
     }
     arr
 }

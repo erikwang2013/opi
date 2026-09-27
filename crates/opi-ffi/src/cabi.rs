@@ -55,14 +55,14 @@ pub unsafe extern "C" fn opi_ffi_free_string(s: OpiString) {
     }
 }
 
-/// 读取 UTF-16 输入串（ptr 为 null → None）。
+/// 读取 UTF-16 输入串。`None` **只**表示「非法 UTF-16」；null/零长 → `Some("")`。
 ///
 /// # Safety
 ///
 /// `ptr` 必须指向至少 `len` 个 u16 的有效内存（或为 null）。
 unsafe fn read_utf16(ptr: *const u16, len: usize) -> Option<String> {
-    if ptr.is_null() {
-        return None;
+    if ptr.is_null() || len == 0 {
+        return Some(String::new());
     }
     // Safety: 调用方保证 ptr 指向至少 len 个 u16 的有效内存
     let units = unsafe { std::slice::from_raw_parts(ptr, len) };
@@ -76,15 +76,16 @@ fn texts_to_json(texts: Vec<String>) -> OpiString {
 
 // ---------- 27 个 C 函数（另有 opi_ffi_free_string 释放句柄） ----------
 
-/// load(path: const uint16_t*, len) -> bool。null/空串 → 内置回退词库；坏路径 → false。
+/// load(path: const uint16_t*, len) -> bool。① null / 空串 → 内置回退词库并返回
+/// **true**（既有契约，有意为之）；② 非法 UTF-16 → **false 且不替换**已有词库
+/// （折成一个 `None` 就会把乱码路径静默装成内置 35 词库）；③ 合法但加载失败 → false。
 /// # Safety
 ///
 /// `ptr` 必须指向至少 `len` 个有效 `u16`（或为 null，视为空串）。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_load(path: *const u16, len: usize) -> bool {
     catch_unwind(AssertUnwindSafe(|| {
-        let path = unsafe { read_utf16(path, len) };
-        api::install(path.as_deref()).is_ok()
+        unsafe { read_utf16(path, len) }.is_some_and(|p| api::install(Some(&p)).is_ok())
     }))
     .unwrap_or(false)
 }
