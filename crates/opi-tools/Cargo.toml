@@ -7,6 +7,8 @@ edition.workspace = true
 engine-data = { path = "../engine-data" }
 
 [dev-dependencies]
+# 词库跨层一致性测试用：同一份字节同时喂 CLI verify 与 FFI opi_load。
+opi_ffi = { path = "../opi-ffi" }
 engine-core = { path = "../engine-core" }
 engine-data = { path = "../engine-data" }
 proptest = "1"
