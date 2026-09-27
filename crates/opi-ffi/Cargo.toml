@@ -10,10 +10,18 @@ crate-type = ["cdylib", "staticlib", "lib"]
 
 # 两轨**行为**对照测试用（crates/opi-ffi/tests/two_track_parity.rs）：
 # 同一串按键分别喂 fcitx5-opi 与 tsf-opi 的逻辑层，逐事件比对可观测状态。
+#
+# syn/proc-macro2：`key_space_boundary.rs` 的判据内核（读三个轨道源文件、取 `KEY_*`
+# 常量名）。手写扫描状态机要对「哪些字符算代码」建模，字符串/字符字面量/嵌套块注释
+# 这些写法它漏一个就静默漏放（见该文件里那段账）；换成真解析器后这一整类问题不存在。
 # 只进 dev-dependencies —— 产品库不因此多一个依赖。
 [dev-dependencies]
 fcitx5_opi = { path = "../fcitx5-opi" }
 tsf_opi = { path = "../tsf-opi" }
+syn = { version = "2", features = ["full", "visit"] }
+# syn 的 token 类型就是 proc-macro2 的（`syn::Macro::tokens` 是 `proc_macro2::TokenStream`），
+# 而 syn 只 re-export 了 `Ident`，宏 token 流要按 token 走就得直接点名它。
+proc-macro2 = "1"
 
 [dependencies]
 engine-core = { path = "../engine-core" }

@@ -107,111 +107,85 @@ const SOURCES: &[(&str, &str)] = &[
 /// （TSF 的 `VK_DELETE = 0x2E` 撞 `.`）自动豁免，门禁当场失效。
 const PRINTABLE_BY_DESIGN: &[&str] = &["engine_core::KEY_SPACE", "fcitx5::KEY_SPACE"];
 
-/// 把**字符串字面量与注释**抹成空白（等长），其余原样保留。逐字符走，因为两者都能跨行。
+/// 轨道源码里的**键码名** —— 由 `syn` 的解析器给，不再手写扫描状态机。
 ///
-/// 三种写法都实测过，缺了它两边都错：
-/// - `/* pub const KEY_X: u32 = 1; */`（注释掉的旧代码）与
-///   `let _ = "请把 const KEY_X 登记";`（断言消息里的散文）会**假红** ——
-///   而假红比漏放更逼人犯错：「改到不红为止」的下一步是把**不存在的常量**登记进
-///   `all_special_codes()`，那张表本身是手写的、没有任何东西回头看它。
-/// - `const URL: &str = "https://…"; pub const KEY_X: u32 = 1;`（同行更早处的字符串里
-///   有 `//`）会把真声明**切掉** —— 那是漏网。
-fn strip_strings_and_comments(src: &str) -> String {
-    #[derive(Clone, Copy)]
-    enum St {
-        Code,
-        Line,
-        Block,
-        Str,
-    }
-    let mut out = String::with_capacity(src.len());
-    let mut it = src.chars().peekable();
-    let mut st = St::Code;
-    while let Some(c) = it.next() {
-        match st {
-            St::Code if c == '/' && it.peek() == Some(&'/') => {
-                it.next();
-                out.push_str("  ");
-                st = St::Line;
-            }
-            St::Code if c == '/' && it.peek() == Some(&'*') => {
-                it.next();
-                out.push_str("  ");
-                st = St::Block;
-            }
-            St::Code => {
-                if c == '"' {
-                    st = St::Str;
-                }
-                out.push(c);
-            }
-            St::Line => {
-                if c == '\n' {
-                    st = St::Code;
-                }
-                out.push(' ');
-            }
-            St::Block if c == '*' && it.peek() == Some(&'/') => {
-                it.next();
-                out.push_str("  ");
-                st = St::Code;
-            }
-            St::Block => out.push(' '),
-            St::Str if c == '\\' => {
-                it.next();
-                out.push_str("  ");
-            }
-            St::Str => {
-                if c == '"' {
-                    st = St::Code;
-                }
-                out.push(' ');
-            }
-        }
-    }
-    out
-}
-
-/// 轨道源码里出现的**键码名**：代码里的 `KEY_*` 标识符（字符串与注释已抹掉），
-/// **排除 `KEY_STATE_*`**。
+/// 为什么换掉手写状态机（第四轮的账）：状态机要自己对「哪些字符算代码」建模，而输入
+/// 字母表里有它没建模的成员，四轮补丁都在这上面打转 ——
+/// `'"'`（字符字面量里的引号把「在字符串里」的奇偶**反转**，吃掉后续整行乃至全文 ⇒
+/// 后面的真声明**静默漏掉**）、`r#"…"#`（裸字符串里的 `"` 提前收尾）、`/* /* */ */`
+/// （块注释可嵌套）。而每轮补丁自己又会引入新的**假红**（注释掉的旧代码、断言消息里的
+/// 散文）—— 假红比漏放更逼人犯错：「改到不红为止」的下一步是把**不存在的常量**登记进
+/// `all_special_codes()`，那张表没有任何东西回头看它。
+/// 解析器把这类问题**整类**消灭：它读 token 与 AST，字符串/注释/字符字面量在那里
+/// 根本不是标识符，「我漏建模了哪种写法」这一问不存在了。
 ///
-/// 判据取「**名字出现**」而不是「`const` 声明的行」，是三轮实测换来的：
-/// 行首匹配漏 `pub(crate)` / 裸 `const` / 同行属性 / 一行两条；改成逐 `const ` 出现处之后，
-/// 仍漏**参数化宏**（`macro_rules! { ($n:ident, $v:expr) => { pub const $n: u32 = $v; }; }`
-/// 加一次调用 —— 宏体里根本没有字面量 `KEY_`，`const` 后面跟的是 `$n`）。
-/// 按标识符取名字一并盖住：**宏调用里的 `KEY_X` 也是代码里的名字**。
+/// 收两条，都是**结构**（与写法无关 —— 带不带属性、`pub` 不 `pub`、一行几条、在不在
+/// `mod` 或函数体里，全都不影响）：
+/// 1. **声明**：任何 `ItemConst` / `ImplItemConst`，名字 `KEY_*` 且不是 `KEY_STATE_*`。
+/// 2. **宏 token 流里的裸名字**：参数化宏
+///    （`macro_rules! { ($n:ident, $v:expr) => { pub const $n: u32 = $v; }; }` 加一次调用）
+///    就是这样引入常量名的，AST 里没有它的声明可看，只能在调用处认这个名字。
+///    **限定路径不算**：`engine_core::keys::KEY_LEFT` 是**别处**的常量，记到本轨头上
+///    会逼着人往手写表里塞假条目。
 ///
-/// 代价如实记：**用到的名字**（不只是声明的）也算，所以本函数的输出比「常量声明表」宽。
-/// 这是有意的 —— 一个出现在轨道代码里、却不在 `all_special_codes()` 里的 `KEY_*` 名字，
-/// 无论它是声明还是引用，都该被过问。
-///
-/// 边界**按名划定**：`VK_*`（Win32 虚拟键码，`tsf-opi/src/vk.rs` 注明与引擎键码
-/// 「同值不同空间」）与 `SPECIAL_KEYS` 这类聚合数组名都不收；`KEY_STATE_*` 不收 ——
+/// 边界**按名划定**（与写法无关）：`VK_*`（Win32 虚拟键码，`tsf-opi/src/vk.rs` 注明与
+/// 引擎键码「同值不同空间」）与 `SPECIAL_KEYS` 这类聚合数组名都不收；`KEY_STATE_*` 不收 ——
 /// 那类有另一道执行点：`two_track_keycodes.rs` 的非空转护栏（实测把 `KEY_STATE_ZZZ`
 /// 加进 tsf 真源，那道门禁 EXIT=101，本门禁此时 GREEN 是设计内）。
-/// 未覆盖：裸字符串 `r#"…"#` 按普通字符串处理就结束在第一个 `"`（三个文件今天都没有）。
 fn key_names_in_code(src: &str) -> Vec<String> {
-    let code = strip_strings_and_comments(src);
-    let b = code.as_bytes();
-    let mut names = Vec::new();
-    let mut i = 0;
-    while i < b.len() {
-        if b[i] == b'_' || b[i].is_ascii_alphanumeric() {
-            let start = i;
-            while i < b.len() && (b[i] == b'_' || b[i].is_ascii_alphanumeric()) {
-                i += 1;
-            }
-            let tok = &code[start..i];
-            if tok.starts_with("KEY_") && !tok.starts_with("KEY_STATE_") {
-                names.push(tok.to_string());
-            }
-        } else {
-            i += 1;
-        }
+    let file = syn::parse_file(src).unwrap_or_else(|e| {
+        panic!("轨道源码 syn 解析失败：{e} —— 是判据坏了，别改成「解析不过就跳过」")
+    });
+    let mut v = KeyNames::default();
+    syn::visit::Visit::visit_file(&mut v, &file);
+    v.names.sort();
+    v.names.dedup();
+    v.names
+}
+
+/// 走 `syn` 的完整遍历：顶层、`mod` 内容、函数体、`impl` 里的常量都会走到。
+#[derive(Default)]
+struct KeyNames {
+    names: Vec<String>,
+}
+
+fn keep_if_key_code(ident: &syn::Ident, out: &mut Vec<String>) {
+    let n = ident.to_string();
+    if n.starts_with("KEY_") && !n.starts_with("KEY_STATE_") {
+        out.push(n);
     }
-    names.sort();
-    names.dedup();
-    names
+}
+
+impl<'ast> syn::visit::Visit<'ast> for KeyNames {
+    fn visit_item_const(&mut self, c: &'ast syn::ItemConst) {
+        keep_if_key_code(&c.ident, &mut self.names);
+    }
+
+    fn visit_impl_item_const(&mut self, c: &'ast syn::ImplItemConst) {
+        keep_if_key_code(&c.ident, &mut self.names);
+    }
+
+    fn visit_macro(&mut self, m: &'ast syn::Macro) {
+        scan_macro_tokens(&m.tokens, &mut self.names);
+        syn::visit::visit_macro(self, m);
+    }
+}
+
+/// 宏 token 流里的裸 `KEY_*` 名字。**`Group` 要进去走**：宏体整个活在一个花括号 Group 里
+/// （`macro_rules! zz { () => { pub const KEY_X: u32 = 1; }; }` —— 只看顶层会整个漏掉，
+/// 实测过：那形状在只走顶层的版本上是 GREEN）。
+/// 只看裸名字：紧跟在 `::` 后面的标识符是**路径尾段**，指向别处的常量；
+/// 进 Group 时 `::` 判定重置（`vec![a::b::KEY_X]` 里的 `KEY_X` 仍是路径尾段）。
+fn scan_macro_tokens(ts: &proc_macro2::TokenStream, out: &mut Vec<String>) {
+    let mut after_colon = false;
+    for tt in ts.clone() {
+        match &tt {
+            proc_macro2::TokenTree::Ident(id) if !after_colon => keep_if_key_code(id, out),
+            proc_macro2::TokenTree::Group(g) => scan_macro_tokens(&g.stream(), out),
+            _ => {}
+        }
+        after_colon = matches!(&tt, proc_macro2::TokenTree::Punct(p) if p.as_char() == ':');
+    }
 }
 
 /// 不变量 1：每个特殊键码都 > 0x7f，且能解码成非 ASCII 字符。

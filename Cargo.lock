@@ -243,7 +243,9 @@ dependencies = [
  "engine-data",
  "fcitx5_opi",
  "jni",
+ "proc-macro2",
  "serde_json",
+ "syn 2.0.119",
  "tsf_opi",
 ]
 
