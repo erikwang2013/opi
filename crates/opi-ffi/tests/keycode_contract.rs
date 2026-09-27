@@ -473,7 +473,8 @@ fn coverage_boundaries_are_honest() {
     //    同一坑）。所以此处**不纳入**。
     //    * 真正共享的是**状态位**（`1<<0..4` / `1<<26..28`，两处都有手抄），由已有的
     //      `two_track_keycodes.rs` 管；26/27/28 另有 fcitx5 C++ 侧的 `static_assert`
-    //      （`crates/fcitx5-opi/cpp/opi_fcitx5.cpp:417-419`）守线格式。
+    //      （`crates/fcitx5-opi/cpp/opi_fcitx5.cpp` 里 `kOpiWireMask` 后面那三条
+    //      `static_assert`；按符号 grep，别按行号 —— 行号引用在此处已错过一次）守线格式。
     //    ✅ **该缺口已闭合**（2026-09-28 订正：此处原写「本文件没做」，与现状相反）——
     //      `two_track_keycodes.rs::state_bits_are_anchored_to_the_true_source_not_to_each_other`
     //      把两轨这 7 个位**逐个对着真源** `engine_core::keys` 比（非两轨互比；`META` 两轨都没有，是子集）。

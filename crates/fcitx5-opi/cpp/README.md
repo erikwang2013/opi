@@ -55,13 +55,13 @@ LIB=/tmp/fcitx5-hdr/root/usr/lib/x86_64-linux-gnu
 INC="-I$HDR/Core -I$HDR/Utils -I$HDR/Config"
 
 # 1) 语法检查
-g++ -std=c++17 -fsyntax-only $INC opi_fcitx5.cpp
+g++ -std=c++20 -fsyntax-only $INC opi_fcitx5.cpp
 
 # 2) 编译成 .o
-g++ -std=c++17 -Wall -Wextra -c -fPIC -o /tmp/opi_fcitx5.o $INC opi_fcitx5.cpp
+g++ -std=c++20 -Wall -Wextra -c -fPIC -o /tmp/opi_fcitx5.o $INC opi_fcitx5.cpp
 
 # 3) 链接成插件 .so（首次真正链接通过）
-g++ -std=c++17 -shared -fPIC -o libfcitx5_opi_glue.so opi_fcitx5.cpp $INC \
+g++ -std=c++20 -shared -fPIC -o libfcitx5_opi_glue.so opi_fcitx5.cpp $INC \
     -L../../target/release -lfcitx5_opi \
     -L$LIB -lFcitx5Core -lFcitx5Utils -lFcitx5Config \
     -Wl,-rpath,'$ORIGIN'
@@ -69,6 +69,11 @@ g++ -std=c++17 -shared -fPIC -o libfcitx5_opi_glue.so opi_fcitx5.cpp $INC \
 
 装了 `fcitx5-dev` 的机器上，`$INC` 换成 `$(pkg-config --cflags fcitx5)`、
 `-L$LIB -lFcitx5...` 换成 `$(pkg-config --libs fcitx5)` 即可。
+
+> ⚠️ 上面三条的 `-std=c++20` 不是随手写的：fcitx5 5.1.21 起的头需要 C++20，钉 17 在
+> Arch 上是**硬错误**（`'std::span' is only available from C++20 onwards`）。理由、版本
+> 边界、以及「别删掉 CXX_STANDARD 让它继承」那个假绿陷阱，只写在 `CMakeLists.txt` 的
+> 「C++ 标准：20」段 —— 这里只留指针，别复制。
 
 链接结果（本机实测）：
 
