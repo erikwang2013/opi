@@ -92,6 +92,61 @@ jobs:
             cargo check -p opi_ffi --target "$t"
           done
 
+  # ---- MSRV 的**执行点** ----
+  #
+  # Cargo.toml 里那句 `rust-version` 是**声明**，而上面每个 Rust 步骤都跑在 @stable
+  # 上 —— 于是「声明」与「真的能编」之间没有任何执行点，两个方向都漏：
+  #   · 真用了晚于声明的 API/语法而声明没跟上 → 按 rust-version 挑工具链的人编不过，
+  #     而 CI 全绿（stable 编得过）；
+  #   · 有人把声明**往下调** → 也不会有人红（下界的来源见 Cargo.toml 的注释，别在此再抄）。
+  # 加了这个 job，改 rust-version 与「在那个版本上编不过」之间才有判据。
+  #
+  # ⚠️ 工具链**从声明推导**（下一步那个 `sed`），不写死版本号 —— 写死就是又造一份
+  # 会漂的真源，而且只堵得住上面第一条。注意 clippy 的 incompatible_msrv（跟着
+  # rust-version 声明打开，在 rust job 的 -D warnings 下即 deny）查的是**它认识的
+  # 那张 std API 表**，管不了语言特性（本仓卡下界的是 `if let … && …` 那个 let-chain，
+  # 它就表外）。所以「声明被下调」这条路只能靠这里堵。
+  #
+  # ⚠️ 两条 cargo 参数都是必需的，不是保险：
+  #   --all-targets：不带它，dev-deps 与 #[cfg(test)] 里的代码根本不编，
+  #                  而 test-only 的 API 同样在拉高下限 —— 漏了它只守得住一半。
+  #   --locked：不带它，cargo 会**静默改写** Cargo.lock 再据此编译，于是测的不是
+  #             锁定那份依赖。MSRV 最常见的顶破方式就是依赖升级。
+  #
+  # 工具链是按 job 装的，所以这个 job 必须**单独**存在：并进 rust job 当 step 的话，
+  # 「stable 绿」与「MSRV 绿」就分不清是谁的功劳。
+  msrv:
+    name: MSRV — 按 rust-version 真编一次
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: msrv
+        name: 从 Cargo.toml 取 rust-version
+        run: |
+          set -euo pipefail
+          v="$(sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)"
+          # 取不到就**响的红**，别让空值传下去：空 toolchain 输入不会得到「就是我们
+          # 要的那个版本」，而是别的工具链 —— 那就是「漂了却看不出来」，比钉住一个
+          # 会漂的版本号更坏。同理，`rust-version.workspace = true` 那种继承写法在
+          # 这里取不到值（上面只认顶层那个键），走的就是这条红。
+          [ -n "$v" ] || { echo "::error::Cargo.toml 里取不到 rust-version（键改名/挪走了？）—— 拒绝回落到默认工具链"; exit 1; }
+          # 形态也要当场认：rustup 说明符形如 1.88 / 1.88.0。
+          grep -Eq '^[0-9]+\.[0-9]+(\.[0-9]+)?$' <<<"$v" || { echo "::error::rust-version 的形态不认识: '$v'"; exit 1; }
+          echo "rust-version = $v —— 本 job 将在这个工具链上编译"
+          echo "v=$v" >> "$GITHUB_OUTPUT"
+
+      # ⚠️ 这里用浮动 ref @master 是**为了能传 toolchain 输入**，不是图省事：要按声明
+      # 换工具链，就需要一个不把版本写进 ref 的 ref。别"顺手"把它钉回 @1.88.0 之类 ——
+      # 那样上面那条推导就成摆设，「声明被下调仍全绿」会立刻回来。
+      # 信任级别与现有 @stable 相同（都是该仓库的分支 ref，不是 SHA 钉法）。
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.v }}
+
+      - name: cargo check --workspace --all-targets --locked
+        run: cargo check --workspace --all-targets --locked
+
   android:
     name: Android — JVM unit tests
     runs-on: ubuntu-latest
@@ -110,7 +165,7 @@ jobs:
         working-directory: android
 
   fcitx5:
-    name: fcitx5 — C++ 编译 + 打包落点
+    name: fcitx5 — C++ 编译 + 打包落点 + debian:12 真编真加载
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -231,3 +286,262 @@ jobs:
             echo "   以及 cpp/README.md「安装」一节。"
             exit 1
           }
+
+      # ---- 行为门禁：最老的被测发行版上，addon 必须**真的被加载** ----
+      #
+      # 为什么必须有这条：data/addon/opi_fcitx5.conf 里 `[Addon/Dependencies]` 的
+      # `0=core:X` 是**声明式门槛**，不是能力描述 —— X 一旦高于用户机器上 fcitx5 的
+      # 版本，addon **整个不加载**（本机实测：同一批 .so，只改这一行的值，写 5.1.0 时
+      # fcitx5 日志里该 addon 0 次加载、写 5.0.0 时 1 次）。用户侧的表现是「输入法
+      # 选得到、一个字都不出」，而**日志里没有任何 opi 相关的报错** —— 静默的那种坏。
+      #
+      # 也正因为静默，纯文本断言（「conf 里的数字 ≤ 最老发行的 fcitx5 版本」）没有
+      # 意义：挡不住写法变体，只会给人「已经守住了」的错觉。所以判据落在**行为**上：
+      # 加载了才算过。再加一次阴性对照（把门槛抬到 99.0.0，必须变成 0 次），一次证明
+      # 三件事：上面那条绿不是「反正都会加载」、这一行确实被解析（段内那些 # 注释没把
+      # 它读坏）、这道门禁有牙。
+      #
+      # 三臂的顺序是刻意的：**阳性对照**（门槛压到 0.0.0，必须加载 —— 它不验被测物，
+      # 验的是「这套探针在本次运行里确实能打出那一行」）→ **现行值**（conf 里真写的那个
+      # 数）→ **阴性对照**。缺了阳性臂，「目标行 0 条」这种红就分不清是 conf 有问题还是
+      # harness 压根没触发加载 —— 「三臂全 0、真因是输入法组里没有 opi」正是这个形态。
+      #
+      # ---- 同一个容器里还有第二面：拿 5.0 的头**真编一次** ----
+      #
+      # 「装完能加载」抓不到源码级的不兼容：胶水若用了 5.1 才有的头/符号，在 5.0 上可能
+      # 只是安静地少个功能（惰性绑定的 dlopen 会放它过去），而构建机上一切正常。所以
+      # 按发行版打包那条路（find_package 用系统头）真编一遍，再 `ldd -r`。
+      # 这一步也带对照：阳性 —— 构建日志里真有 opi_fcitx5.cpp 的编译行（「cmake 绿了」
+      # 可能只是没编它）、且 `-isystem` 指向本容器的 /usr/include/Fcitx5（不是别处的头）；
+      # 阴性 —— 往源码副本里注入一个只在 ≥5.1.21 才有的头（standardpaths.h），必须
+      # **编不过**，且失败原因必须就是找不到它。只断言「那个头在当前树里不存在」不够
+      # （那可能压根没被解析到），变异态才证明这条命令真的解析到 5.0 那棵树。
+      # 它的存在性三边用同一条 `find / -xdev -name 'standardpaths*'` 量过：5.0.21(debian:12)
+      # 0 条、5.1.12(本机解包) 0 条、5.1.23(Arch) 有 /usr/include/Fcitx5/Utils/fcitx-utils/
+      # standardpaths.h —— 两空一有，空才算证据（否则只是「没扫到」）。
+      #
+      # debian 12 是出版时**最老的被测发行版**（fcitx5 5.0.21），也正是这个下界的来源。
+      # 容器里铺的就是上面那套 cmake --install 的**同一棵暂存树**，不另造布局 ——
+      # 落点对不对交给 fcitx5 自己找不找得到来裁决，这比 opi_locate_check 那个探针更
+      # 贴用户（探针问的是「路径对不对」，这里问的是「装完了能不能用」）。
+      # 探针**能**在容器里跑（实测它只要 GLIBC_2.34，容器是 2.36），没重跑是因为它的
+      # 期望值取自宿主那次 install.log（带 DESTDIR 前缀），而它要断言的事已被这里覆盖。
+      #
+      # ⚠️ 容器里那段脚本只能写成 `-c '…'`（YAML 块里每一行都带缩进，而 heredoc 的
+      # 结束符必须在行首）—— 代价是它躲开了 shellcheck，所以它是**逐字**本机预演过的：
+      # 从本文件里抽出这段、在 debian:12 里真跑一遍（2026-09-28 本机实测）：
+      #   三臂 1 / 1 / 0 条；编译面 -isystem 三个目录都在容器里、standardpaths.h 0 个、
+      #   ldd -r 未定义符号 0；注入 <standardpaths.h> 后按预期红（原因就是找不到它）；
+      #   把 5.1 才有的符号（CandidateWord::setComment）直接用 asm 标签引用进胶水：
+      #   编译+链接**都过**、只有 `ldd -r` 报 undefined symbol ⇒ 门禁红。
+      #   最后一条同时说明：**光有「编译过」这半边会漏掉符号级不兼容**。
+      - name: debian:12 容器：addon 真被加载（三臂对照）+ 对 5.0 头真编一次
+        run: |
+          set -euo pipefail
+          timeout 600 docker run --rm \
+            -v "$PWD/stage:/stage:ro" \
+            -v "$PWD/crates/fcitx5-opi:/src:ro" \
+            debian:12 bash -euo pipefail -c '
+          echo "== 容器: debian $(cat /etc/debian_version) / $(uname -m)"
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq > /tmp/apt.log 2>&1 || { tail -20 /tmp/apt.log; exit 1; }
+          apt-get install -y -qq --no-install-recommends fcitx5 dbus >> /tmp/apt.log 2>&1 \
+            || { tail -30 /tmp/apt.log; exit 1; }
+
+          corever="$(dpkg-query -W -f="\${Version}" fcitx5)"
+          echo "== fcitx5: $corever"
+          case "$corever" in
+            5.0.*) ;;
+            *) echo "::error::容器里的 fcitx5 不是 5.0.x（$corever）—— 这条门禁的理由是「最老的被测发行版」，"
+               echo "   基座一变前提就变了。换基座前先重新确认下界，别让它悄悄变成「随便哪个版本」。"
+               exit 1 ;;
+          esac
+
+          # 用户装完包之后的落点：上面那套 cmake --install 的暂存树，整棵铺进 /usr
+          cp -a /stage/usr/. /usr/
+
+          # 用户加过 OPI 之后的输入法组。触发加载的是**这个**，不是 --enable：
+          # OnDemand=True 的 addon 要靠真被用到才加载（实测：只给 --enable、组里没有
+          # opi 时是 0 次 —— 「加载了没有」这件事只能从行为上看到）。
+          mkdir -p /root/.config/fcitx5
+          printf "%s\n" \
+            "[Groups/0]" "Name=Default" "Default Layout=us" "DefaultIM=opi" "" \
+            "[Groups/0/Items/0]" "Name=keyboard-us" "Layout=" "" \
+            "[Groups/0/Items/1]" "Name=opi" "Layout=" "" \
+            "[GroupOrder]" "0=Default" > /root/.config/fcitx5/profile
+
+          conf=/usr/share/fcitx5/addon/opi_fcitx5.conf
+
+          # 起一次 fcitx5，返回日志里目标行的条数。两次跑各用各的日志文件，
+          # 不吃前一次的残留（两个实例可以同时活着，实测）。
+          try_load() {
+            rm -f "$1"
+            dbus-run-session -- fcitx5 </dev/null >"$1" 2>&1 &
+            for _ in $(seq 1 80); do
+              grep -q "Loaded addon opi_fcitx5" "$1" && break
+              sleep 0.25
+            done
+            grep -c "Loaded addon opi_fcitx5" "$1" || true
+          }
+
+          cp "$conf" /tmp/conf.installed
+
+          # 阳性对照：把门槛压到任何 core 之下（0.0.0），它**必须**加载。这一臂不验被测物，
+          # 验的是「这套 harness 在本次运行里确实能打出那一行」。缺了它，「现行值 0 条」
+          # 这种红就分不清是 conf 有问题还是探针根本没触发加载。
+          sed -i "s/^0=core:.*$/0=core:0.0.0/" "$conf"
+          n0="$(try_load /tmp/fx0.log)"
+          started0="$(grep -c "Loaded addon " /tmp/fx0.log || true)"
+          echo "== 阳性对照（门槛 0.0.0）⇒ 目标行 $n0 条（该次运行共加载 $started0 个 addon）"
+          if [ "$started0" -lt 1 ]; then
+            echo "::error::阳性对照那次 fcitx5 没起来（0 个 addon）—— 先修容器/harness"
+            tail -20 /tmp/fx0.log || true
+            exit 1
+          fi
+          if [ "$n0" -lt 1 ]; then
+            echo "::error::阳性对照没加载（门槛已压到 0.0.0）⇒ 是这套探针/harness 不行，不是 conf 的事"
+            tail -15 /tmp/fx0.log || true
+            exit 1
+          fi
+          cp /tmp/conf.installed "$conf"   # 复原：下面验的是 conf 里真写的那个数
+
+          floor="$(sed -n "s/^0=core:\(.*\)$/\1/p" "$conf")"
+          n="$(try_load /tmp/fx1.log)"
+          started="$(grep -c "Loaded addon " /tmp/fx1.log || true)"
+          echo "== 声明的 core 门槛 $floor ⇒ 目标行 $n 条（该次运行共加载 $started 个 addon）"
+          # 先证明 fcitx5 真的起来了：不然「0 条」可能是「压根没跑」，那种绿比红更坏。
+          if [ "$started" -lt 1 ]; then
+            echo "::error::fcitx5 没起来（一个 addon 都没加载）—— 先查它为什么起不来，别把这读成「门槛没问题」"
+            tail -20 /tmp/fx1.log || true
+            exit 1
+          fi
+          if [ "$n" -lt 1 ]; then
+            echo "::error::门槛 $floor 时 addon 没被加载（fcitx5 $corever）"
+            echo "   这一行是**唯一**的观测：门槛不满足时 fcitx5 不会就 opi 报任何错，"
+            echo "   用户看到的是「输入法选得到、一个字都不出」。"
+            echo "--- 装进去的 conf 里那道门槛 ---"
+            grep -n "^0=core:" "$conf" || echo "   （没有 ^0=core: 这一行 —— 门槛本身丢了）"
+            echo "--- fcitx5 日志尾部 ---"
+            tail -15 /tmp/fx1.log || true
+            exit 1
+          fi
+
+          # 阴性对照：门槛抬到任何 core 之上，必须不再加载
+          sed -i "s/^0=core:.*$/0=core:99.0.0/" "$conf"
+          n2="$(try_load /tmp/fx2.log)"
+          started2="$(grep -c "Loaded addon " /tmp/fx2.log || true)"
+          echo "== 阴性对照（门槛 99.0.0）⇒ 目标行 $n2 条（该次运行共加载 $started2 个 addon）"
+          if [ "$started2" -lt 1 ]; then
+            echo "::error::阴性对照那次 fcitx5 没起来 ⇒ 这个 0 不能算数"
+            tail -20 /tmp/fx2.log || true
+            exit 1
+          fi
+          if [ "$n2" -ne 0 ]; then
+            echo "::error::门槛抬到 99.0.0 仍然加载 ⇒ 这一行根本没被 fcitx5 读，这道门禁没有牙"
+            exit 1
+          fi
+          echo "== 通过：fcitx5 $corever 上加载了、且那道门槛确实在起作用"
+
+          # ==== 第二面：用同一个容器里 5.0 的头真编一次胶水 + ldd -r ====
+          apt-get install -y -qq --no-install-recommends cmake make g++ \
+            libfcitx5core-dev libfcitx5utils-dev libfcitx5config-dev >> /tmp/apt.log 2>&1 \
+            || { tail -30 /tmp/apt.log; exit 1; }
+
+          devver="$(dpkg-query -W -f="\${Version}" libfcitx5core-dev)"
+          echo "== 头/库来自 libfcitx5core-dev $devver"
+          case "$devver" in
+            5.0.*) ;;
+            *) echo "::error::容器里的头文件不是 5.0 系（$devver）—— 这条门禁的理由是「最老的被测发行版」"
+               exit 1 ;;
+          esac
+
+          rustlib=/stage/usr/lib/x86_64-linux-gnu/fcitx5/libfcitx5_opi.so
+          dict=/stage/usr/share/opi/luna.opid
+          cp -a /src /tmp/src     # /src 是只读挂载（整个 crate，含 ../data）；变异对照要往里加一行
+
+          # $1=源码目录 $2=构建目录 $3=日志前缀。与宿主那步同样的配置口径
+          # （Release + /usr 前缀），只是这里用容器自己的 find_package 头。
+          build_glue() {
+            cmake -S "$1" -B "$2" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
+              -DOPI_RUST_LIB="$rustlib" -DOPI_LUNA_OPID="$dict" \
+              -DCMAKE_EXPORT_COMPILE_COMMANDS=ON > "$3-cmake.log" 2>&1 \
+              || { echo "--- cmake 配置失败（$3）---"; tail -20 "$3-cmake.log"; return 1; }
+            cmake --build "$2" -j2 > "$3-build.log" 2>&1 \
+              || { echo "--- 编译失败（$3）---"; tail -40 "$3-build.log"; return 1; }
+          }
+
+          build_glue /tmp/src/cpp /tmp/b-real /tmp/real || {
+            echo "::error::胶水在 debian:12（fcitx5 $corever / $devver）上编不过 —— 这正是这一步要抓的东西"
+            exit 1
+          }
+          # 阳性对照 1：真编了胶水。「cmake 构建成功」本身可能只是没编它（比如 target 改名、
+          # 或被 EXCLUDE_FROM_ALL 摘掉）。
+          grep -q "opi_fcitx5.cpp" /tmp/real-build.log || {
+            echo "::error::构建日志里没有 opi_fcitx5.cpp 的编译行 ⇒ 这一步没真编胶水，绿了也不算数"
+            tail -20 /tmp/real-build.log
+            exit 1
+          }
+          # 阳性对照 2：编的是**这个容器**里的头。compile_commands.json 就是编译命令行本身，
+          # 比「装过什么包」更直接 —— 它要是别处的头（比如解包出来的宿主头），下面那两条就假了。
+          incs="$(tr "\"," "  " < /tmp/b-real/compile_commands.json \
+                  | grep -oE -- "-isystem +[^ ]+" | sed -E "s/^-isystem +//" | sort -u)"
+          echo "== 编译命令里的 include 目录（-isystem）："
+          echo "$incs" | sed "s/^/   /"
+          echo "$incs" | grep -q "^/usr/include/Fcitx5/" || {
+            echo "::error::编译命令里没有容器的 /usr/include/Fcitx5 ⇒ 编的不是这个容器的头"
+            exit 1
+          }
+          bad="$(echo "$incs" | grep "Fcitx5" | grep -v "^/usr/include/Fcitx5/" || true)"
+          [ -z "$bad" ] || {
+            echo "::error::有 fcitx5 头目录不在本容器 /usr/include/Fcitx5 下：$bad"
+            exit 1
+          }
+
+          # 阴性对照：这一步有没有牙 —— 往源码里加一个只在 ≥5.1.21 才有的头，必须编不过。
+          # 它若编得过，说明这条命令解析到的不是 5.0.21 那棵树，上面的绿就是空转。
+          # 先记下标记本身：这个头 5.0.21 与 5.1.12 都没有、5.1.23 有。它若红，是「基座变了」；
+          # 变异那条若红，是「解析到别处」—— 两种红要分得清。
+          marks="$(find /usr/include/Fcitx5 -name "standardpaths.h" | wc -l | tr -d " ")"
+          echo "== 容器 /usr/include/Fcitx5 下 standardpaths.h：$marks 个（≥5.1.21 才有的头）"
+          [ "$marks" -eq 0 ] || {
+            echo "::error::容器里出现了 standardpaths.h ⇒ 基座不是 5.0.21 了，这条对照的前提没了"
+            exit 1
+          }
+          cp -a /tmp/src /tmp/src-mut
+          { printf "%s\n" "#include <standardpaths.h>"; cat /tmp/src-mut/cpp/opi_fcitx5.cpp; } \
+            > /tmp/src-mut/cpp/opi_fcitx5.cpp.mut
+          mv /tmp/src-mut/cpp/opi_fcitx5.cpp.mut /tmp/src-mut/cpp/opi_fcitx5.cpp
+          if build_glue /tmp/src-mut/cpp /tmp/b-mut /tmp/mut; then
+            echo "::error::注入 5.1 才有的 <standardpaths.h> 后仍编得过 ⇒ 解析到的头不是 5.0.21 那棵，这一步是空转"
+            exit 1
+          fi
+          grep -q "standardpaths.h: No such file or directory" /tmp/mut-build.log || {
+            echo "::error::变异态确实编不过，但不是因为找不到 standardpaths.h —— 红错了地方，不能当证据"
+            tail -20 /tmp/mut-build.log
+            exit 1
+          }
+          echo "== 阴性对照：注入 <standardpaths.h> 后编译失败，且原因就是找不到它"
+
+          # 现行值：真产物 + 依赖解析。判据取 ldd -r 的**文本**（缺库、未定义符号分别数），
+          # 不是它的退出码 —— ldd 只在「库找不到」时返回非零，未定义符号不影响退出码。
+          so=/tmp/b-real/libfcitx5_opi_glue.so
+          [ -f "$so" ] || { echo "::error::没产出 $so"; ls -la /tmp/b-real; exit 1; }
+          cp "$rustlib" /tmp/b-real/     # 与安装态同布局（两个 .so 同目录），$ORIGIN 才解析得到
+          ldd -r "$so" > /tmp/ldd.log 2>&1 || true
+          echo "== ldd -r 里 opi/fcitx5 相关的行："
+          grep -E "fcitx5|Fcitx5" /tmp/ldd.log | sed "s/^/   /" || true
+          nf="$(grep -c "not found" /tmp/ldd.log || true)"
+          nu="$(grep -c "undefined symbol" /tmp/ldd.log || true)"
+          echo "== ldd -r: not found $nf 行 / undefined symbol $nu 行"
+          [ "$nf" -eq 0 ] || {
+            echo "::error::有依赖没解析出来（not found $nf 行）—— \$ORIGIN rpath 或容器里缺运行时库"
+            grep "not found" /tmp/ldd.log
+            exit 1
+          }
+          [ "$nu" -eq 0 ] || {
+            echo "::error::有 $nu 处未定义符号 —— 5.0 的库里没有它，正是这一步要抓的那一类"
+            grep "undefined symbol" /tmp/ldd.log
+            exit 1
+          }
+          echo "== 通过：5.0.21 头真编过、ldd -r 干净；加载面与编译面都验了"
+          '
