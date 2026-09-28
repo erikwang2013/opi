@@ -5,6 +5,8 @@
 
 > 订正（2026-09-27 复核）：本文件是 2026-08-14 的**设计意图**，其中 iOS/macOS/鸿蒙三端**当时一行代码也没有**。此后按本文件写下了三个草案目录（`ios/` · `macos/` · `harmony/`），**但至今没有任何一行被编译过**（本仓库的验证环境是 Linux，缺 macOS + Xcode 与 DevEco + HarmonyOS SDK，连语法检查都做不到）。三处需要按实际订正，原表保留不动（设计留痕）：
 >
+> ⚠️ 上段的**归因经实测要一分为二（2026-09-28）**：**Apple 那半为真**（本机确无 macOS/Xcode/Apple SDK）；**鸿蒙那半为假** —— 本机装着鸿蒙命令行工具链（Command Line Tools `5.1.1.820` + SDK apiVersion **19** + `hvigor` · `codelinter` · `ohpm`），`harmony/` 之所以连静态检查都过不了，原因是**它不是一个工程**（缺 `build-profile.json5` / `hvigorfile.ts` / 工程级 `oh-package.json5`）—— 实测 `codelinter harmony/ets` 报「该路径不在工程路径下」。**结论（一行都没被编译过）不变，归因变了**；补上那三份脚手架后 ArkTS 在本机可被静态检查乃至构建。原文与旧注记均保留不动。
+>
 > 1. **§2 平台矩阵 / §1：「iOS 键盘扩展必须原生 SwiftUI」——「SwiftUI」是过细的写法，且草案没走这条路。** iOS 强制的是**键盘扩展必须原生**（根视图恒为 `UIInputViewController`，SwiftUI 也要经 `UIHostingController` 挂上去），原生可选 UIKit 或 SwiftUI。草案实际用的是 **UIKit**（`ios/*.swift` 只有 `import UIKit`，全库零 `SwiftUI`）；macOS 端是 `AppKit`/`Cocoa` + `InputMethodKit`。**这不是「谁错了」**：SwiftUI 仍是有效选项，草案的 UIKit 是**未经编译验证**的选择（键盘扩展内存预算紧），两者都还没被编译器看过。
 > 2. **范围已扩**：除 iOS（M7）外另写下了 macOS 与**鸿蒙 HarmonyOS**（ArkTS `InputMethodExtensionAbility`，`@kit.IMEKit`）草案 —— 本文件成文时没有这两端。三者的硬约束与现状核对见根 `README.md`「未来规划」表。
 > 3. **一处路径已过时**：下面偏差表里写「候选窗 UI 改用 foundation 自绘（…`candidate/Main.kt`）」—— 那是拆分前的写法。为满足「单文件 <500 行」，该文件于 2026-09-27 拆成 4 个同包文件：`Main.kt`（只留 `main()` 与候选模型）、`CandidateWindow.kt`（UI 自绘）、`Protocol.kt`（NDJSON 解析）、`PipeServer.kt`（命名管道）。原表保留不动。

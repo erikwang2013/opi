@@ -2,9 +2,25 @@
 
 > ## ⚠️ 先读这段
 >
-> **ArkTS（`ets/**` 那 5 个文件）一个字符都没有编译过** —— 本机没有 DevEco Studio、
-> 没有 HarmonyOS SDK、没有鸿蒙设备或模拟器，`import { InputMethodExtensionAbility }
-> from '@kit.IMEKit'` 在普通 tsc 下就断，**连语法检查都做不到**。
+> **ArkTS（`ets/**` 那 5 个文件）一个字符都没有编译过** —— `import {
+> InputMethodExtensionAbility } from '@kit.IMEKit'` 在普通 tsc 下就断，**连语法检查都做不到**。
+>
+> ⚠️ **2026-09-28 订正归因（原写作「本机没有 HarmonyOS SDK」，实测为假）**：
+> **本机是有鸿蒙工具链的** —— `/home/component/command-line-tools/` 下装着
+> Command Line Tools `5.1.1.820`、SDK `default/openharmony/{ets,js,native,toolchains,previewer}`
+> （`oh-uni-package.json` 逐个读过：apiVersion **19** / 5.1.1.202）、以及 `hvigor` ·
+> `codelinter` · `ohpm 5.1.4`。注意它是 **Command Line Tools，不是 DevEco Studio**（两个东西）。
+>
+> **真正的原因是本目录不是一个工程**：没有 `build-profile.json5`、没有 `hvigorfile.ts`、
+> 没有工程级 `oh-package.json5`（判据：`find harmony/ -name 'build-profile.json5'` 零命中）。
+> 实测 `codelinter harmony/ets` 报 **「The entered inspection path is incorrect, please make
+> sure this path is under the project path.」** ⇒ **任何工具都处理不了它，连静态检查都不肯做。**
+>
+> ⇒ 结论（ArkTS 一个字符没被检查过）**仍然成立**，但原因是**缺工程脚手架**，不是机器缺 SDK。
+> **补上那三份文件之后，ArkTS 在这台机器上是可以被静态检查、乃至被构建的** —— 这与原来那句
+> 「做不到」是不同的处境。
+>
+> （本机是否有鸿蒙**设备或模拟器**，本行未核实，不要据本段推断。）
 >
 > **N-API 桥（`cpp/napi_bridge.c`）本机跑过语法/类型检查，也真编出过 `.o`**
 > （见下方 §4、§4b）—— 但那用的是**宿主** clang + node 的真 N-API 头，
