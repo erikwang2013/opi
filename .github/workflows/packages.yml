@@ -2,16 +2,41 @@
 # SPDX-License-Identifier: MIT
 name: Packages
 
-# 打包 .deb / .rpm 并在发版时附到 release 上。
+# 打包 .deb / .rpm。**只在手动触发时跑** —— 发版不再自动构建，也不会自动附到 release 上。
+#
+# --- 为什么改成手动（2026-09-28）--------------------------------------------
+# 原先挂着 `on: release: types: [published]`：发一个 release 就会在**无人过目**的情况下
+# 顺手把 .deb/.rpm 挂上去。用户要的是对发版产物的控制权 —— 想打的时候自己打，想附的时候
+# 自己附。所以改的是**触发方式**，不是打包本身：脚本、debian:12 容器基座、符号版本
+# 守卫**一条没动**，下面那些注释里的结论一条没变，手动跑一次照样全绿。
+#
+# ⚠️ 这次改动**不是**因为发现了包本身的缺陷。「deb 在 deepin 装完没反应」已查明是没把
+#    OPI 加进 fcitx5 的输入法组（新装的输入法不会自动启用），包没问题 —— 别把这次改动
+#    读成对包的否定。
+#
+# --- 手动怎么跑 --------------------------------------------------------------
+#   gh workflow run packages.yml --ref <tag 或分支>   # 想打哪个提交就 --ref 哪个
+#   或 Actions 页面 → Packages → Run workflow（同样能选 ref）。可选输入项见下面 on.inputs。
+#   产物在本次 run 的 artifact `opi-packages` 里；只有填了 tag 输入项才会顺带附到 release。
+#   ⚠️ 附之前自己对一遍版本号：拿默认分支编出来的包去附一个旧 tag，gh 不会拦
+#      （文件名里的版本和 tag 不一致它照传，附上去也看不出来）。要附哪个 tag 就 --ref 哪个。
 #
 # 为什么单独一个 workflow（而不是塞进 ci.yml 的 fcitx5 job）：
 #   ci.yml 只**验**落点（装到暂存树，再问真 fcitx5 库「你去哪找」）。打包是另一件事 ——
-#   它要 nfpm、要两个格式各自的库目录布局、要在 publish 之后把产物挂到 release 上，
-#   而且**只在发版时才有意义**。两条通路的失败含义不同，不该互相拖累。
+#   它要 nfpm、要两个格式各自的库目录布局。两条通路的失败含义不同，不该互相拖累。
 #
-# ⚠️ release 事件 checkout 的是**那个 tag 的提交**，不是 main 的头部。
-#    所以 scripts/build-packages.sh 与 scripts/nfpm.yaml 必须在那次 tag **之前**
-#    就已经入库 —— 否则本 job 会在「找不到脚本」上红，而那是发布之后才发现的。
+# ⚠️ 手动跑的两个前提（别再靠印象）：
+#   1) 这个 workflow 必须存在于**默认分支**上才可被 dispatch —— 只在某个分支/tag 上有它，
+#      Actions 列表里根本看不到它，`gh workflow run` 也找不到。
+#   2) 本次 run 的 ref 就是你 --ref 选的那个，checkout 落在它上面（可能是个 tag ⇒ detached
+#      HEAD）。所以 scripts/build-packages.sh 与 scripts/nfpm.yaml 必须在**你 ref 到的那个
+#      提交**里 —— 拿一个脚本还没入库的旧 tag 当 ref 去跑，会在「找不到脚本」上红。
+#      （这个形态原先挂在 release 事件上，换手动后一样存在，只是现在红在你眼前而不是
+#      发布之后。）
+#   另外补一条**没写成断言**的（免得以后有人当事实用）：dispatch 一个 ref 时执行的到底是
+#   「选中 ref 的 YAML」还是「默认分支的 YAML」，网上两种互斥的实测记录都有，本机核不实 ——
+#   所以全文不拿它做任何判断。（两条路的安全后果一样：旧 tag 那份的挂载步也是按事件名
+#   判的，dispatch 时同样不挂。）
 #
 # ==========================================================================
 # 构建**在 debian:12 容器里**做，不在 runner 上。这不是洁癖，是 v1.3.2 的事故换来的：
@@ -44,12 +69,23 @@ name: Packages
 # 它在 runner 上编、再拿到 debian:12 里真加载。那边红就说明这一类又回来了 —— 那是**故意**
 # 留着的一道网，别把它改成「容器里编」。
 on:
-  release:
-    types: [published]
+  # 只有手动。加回 `release: types: [published]` 就等于把「发版顺手出包」请回来 ——
+  # 真要加，先想清楚是不是又想让产物在无人过目时出现在 release 上。
   workflow_dispatch:
+    inputs:
+      # 留空的默认路径是「只出 artifact、不碰任何 release」。要附 release 必须**手写**
+      # 那个 tag —— 默认值是空串（见下面的 default），不从 ref 或事件里推一个出来，
+      # 免得附到某个看起来对的 tag 上。
+      tag:
+        description: '要附产物的 release tag（留空 = 只出 artifact，不碰任何 release）'
+        required: false
+        type: string
+        # 显式写出默认值，别让 `if: inputs.tag != ''` 押在「未提供的可选输入会取什么值」
+        # 这条我没核实过的规则上。有了它，没填 ⇒ 确定是空串 ⇒ 那一步确定跳过。
+        default: ''
 
-# gh release upload 要写 release 上的资产。缺了它 gh 会以 403 失败，
-# 报错文本指向 token 而不是权限块，容易看错地方。
+# gh release upload 要写 release 上的资产 —— 只有末尾那一步、且只有手填了 tag 时才用到。
+# 缺了它 gh 会以 403 失败，报错文本指向 token 而不是权限块，容易看错地方。
 permissions:
   contents: write
 
@@ -206,8 +242,8 @@ jobs:
           echo "[守卫] 阳性对照按预期红了（它上面那行「红了」就是预期结果，不是故障）"
           '
 
-      # workflow_dispatch 那条通路没有 release 可挂，产物得从这里取，
-      # 否则手动跑一次只能证明「它绿了」，拿不到包。
+      # 产物从这里取（现在这是唯一的取法）：手动跑完在本次 run 的 artifact 里。
+      # 否则跑一次只能证明「它绿了」，拿不到包。
       # if-no-files-found: error —— 默认只 warn，而「绿了但没产物」正是本仓
       # 反复栽过的那种假绿。
       - uses: actions/upload-artifact@v4
@@ -218,17 +254,19 @@ jobs:
             dist/*.deb
             dist/*.rpm
 
-      # 只在 release 事件下挂资产；手动触发时这步整体跳过。
-      # 用 $GITHUB_REF_NAME（release 事件下即 tag 名）而不用 ${{ }} 插值 ——
-      # 少一处把 tag 名拼进 shell 的地方。用 --repo 显式给出仓库：release 事件
-      # checkout 的是 tag，处于 detached HEAD，别让 gh 去猜 remote。
+      # 附到 release 是**显式选择**，不是默认动作：只有手填了上面的 tag 输入项才跑。
+      # 留空时本步跳过 —— 不猜 tag、不碰任何 release，产物就停在上面的 artifact 里，
+      # 挂不挂由人决定。所以这里**不该**有「从 GITHUB_REF_NAME 之类推一个 tag 出来」的回退。
+      # tag 用 env 传、不在 run 里插值：少一处把外部字符串拼进 shell 的地方。
+      # 用 --repo 显式给出仓库：checkout 的可能是个 tag（detached HEAD），别让 gh 去猜 remote。
       # --clobber：重跑这个 job 时覆盖同名资产（否则 gh 报「资产已存在」而红）。
       #   ⚠️ 它也意味着**同名的手工上传物会被静默替换** —— 这是要的，
       #   但别在该版本已经手工传过包的情况下当成「只是补一个文件」。
-      - name: 附到 release
-        if: github.event_name == 'release'
+      - name: 附到 release（仅当手填了 tag 输入项）
+        if: inputs.tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
         run: |
-          gh release upload "$GITHUB_REF_NAME" dist/*.deb dist/*.rpm \
+          gh release upload "$TAG" dist/*.deb dist/*.rpm \
             --repo "$GITHUB_REPOSITORY" --clobber
