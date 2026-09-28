@@ -69,7 +69,7 @@
 
 **有端代码的是 3 个**：Android（Compose 原生 IME）、Linux（fcitx5 插件）、Windows（TSF 插件 + Compose Desktop 候选窗 —— 后者是**独立的 UI 代码库**，经命名管道与 TSF 通信）。各端 UI 不共享代码，只共享输入语义。
 
-**Apple 两平台与鸿蒙目前只有草案，没有可用的端**——三个目录（[`ios/`](ios/)、[`macos/`](macos/)、[`harmony/`](harmony/)）里有 Swift 与 ArkTS 骨架，但**一行都没有被编译过**（本机既无 macOS/Xcode/Apple SDK，也无 DevEco/HarmonyOS SDK，连语法检查都做不到）。**已就绪的只有平台中立的 C ABI**（`crates/opi-ffi`，见 `tests/cabi_test.rs`）——它不属于任何一端，且**已实测能为 Apple 与鸿蒙的多个目标编译**。三者的硬约束与现状见「未来规划」。
+**Apple 两平台与鸿蒙目前只有草案，没有可用的端**——三个目录（[`ios/`](ios/)、[`macos/`](macos/)、[`harmony/`](harmony/)）里有 Swift 与 ArkTS 骨架，**没有一行被编译器看过**。⚠️ 但**三者拦路的原因不是同一个，别把它们绑成一句**：Apple 两端是**机器不够** —— 本机无 macOS/Xcode/Apple SDK，连 Swift 语法检查都做不到；鸿蒙是**仓库缺工程脚手架** —— 本机**装着**鸿蒙命令行工具链（`codelinter` / `hvigor` / `ohpm` 与 SDK），但 `harmony/` 不是一个鸿蒙工程（缺工程级 `build-profile.json5`、`hvigorfile.ts` 与模块级 `build-profile.json5` —— **判据与完整清单见 [`harmony/README.md`](harmony/README.md)，别照抄这一句**），`codelinter` 直接以「path is incorrect … under the project path」拒绝处理。**已实测：补齐脚手架后，同一份 ArkTS 会被真正解析**（把 `harmony/ets` 原样放进补齐脚手架的项目里，塞入一个语法错误，`codelinter` 如实报出 `@parsing-error`）。**已就绪的还有平台中立的 C ABI**（`crates/opi-ffi`，见 `tests/cabi_test.rs`）——它不属于任何一端，且**已实测能为 Apple 与鸿蒙的多个目标编译**。三者的硬约束与现状见「未来规划」。
 
 #### 2. 隐私优先，而且可以自己核对
 - **默认本地化**：输入数据只留在本机。引擎层与出口层的依赖表里**没有 HTTP 客户端**，没有遥测，没有广告 SDK
@@ -100,7 +100,7 @@
 | 方向 | 状态 | 现状核对 |
 |---|---|---|
 | **更多平台**：Web（含小程序） | 未开始 | 代码与构建脚本里 grep 这些平台名零命中（`docs/` 也没有，只有本 README 提到） |
-| **鸿蒙 HarmonyOS** | **仅有草案**（`harmony/`）| 与 Apple 两平台同一硬约束：**需要 DevEco Studio + HarmonyOS SDK 才能编译，本仓库的验证环境（Linux）无法编译 ArkTS，连语法检查都做不到**。`harmony/` 下的 ArkTS（`InputMethodExtensionAbility` 等）**一行都没有被编译过**，是「起点 + 契约」。已就绪并可实测的是 **Rust 侧**：C ABI 能为鸿蒙目标编译（`cargo check --target aarch64-unknown-linux-ohos` 等，见目录内 README）|
+| **鸿蒙 HarmonyOS** | **仅有草案**（`harmony/`）| **拦路的不是 SDK，是仓库里没有工程脚手架。** 本机**装着**鸿蒙命令行工具链（`codelinter` / `hvigor` / `ohpm` 与 SDK），缺的是工程脚手架（工程级 `build-profile.json5`、`hvigorfile.ts` 与模块级 `build-profile.json5` —— **判据与完整清单见 [`harmony/README.md`](harmony/README.md)**），于是 `codelinter` 以「path is incorrect … under the project path」**拒绝处理**，而不是「本机没有 SDK」。`harmony/` 下的 ArkTS（`InputMethodExtensionAbility` 等）**一行都没有被编译过、也没有被检查过**，是「起点 + 契约」。**已实测**：把 `harmony/ets` 原样放进一个补齐脚手架的项目，`codelinter` 会**真正解析**它（塞入语法错误即报 `@parsing-error`）⇒ **补脚手架之后，ArkTS 在 Linux 上可以被静态检查**；**再往后的构建（`hvigorw`）本轮未验**。已就绪并可实测的还有 **Rust 侧**：C ABI 能为鸿蒙目标编译（`cargo check --target aarch64-unknown-linux-ohos` 等，见目录内 README）|
 | **Apple 两平台**：iOS · macOS | **仅有草案**（`ios/` · `macos/`）| **硬约束：两端都需要 macOS + Xcode 才能编译，本仓库的验证环境（Linux）无法编译、链接或运行它们，连 Swift 语法检查都做不到**（UIKit / InputMethodKit 是 Apple 独有框架）。两个目录里的 Swift **一行都没有被编译过**，是「起点 + 契约」而不是可用实现。已就绪的只有平台中立的 **C ABI**（`crates/opi-ffi`），且它**已实测能为 Apple 三个目标编译**（`cargo check --target aarch64-apple-ios / aarch64-apple-ios-sim / aarch64-apple-darwin` 均通过，已进 CI；还能产出 arm64 静态库 `libopi_ffi.a` 且导出符号无缺失）。**任何 Apple 端代码在被 Mac 上的编译器看过之前，都不应被当作已实现** —— 本项目已有两次教训：fcitx5 的 C++ 与 Windows 的 TSF 都是「写完了、读起来像完成」，实测却发现从未被编译过（前者 7 处 API 误写，后者文本插入根本没写） |
 | **多端云同步 / 端到端加密** | **不做**（用户裁决 2026-09-28） | 无加密库、无 HTTP 客户端：跨 `crates/` `android/` `desktop/` 的 `*.rs` / `*.toml` / `*.kt` 里，`reqwest` / `ureq` / `hyper` / `openssl` / `rustls` / `chacha` / `argon2` / `aes-gcm` / `https://` 逐个零命中。带 `sync` 的命中全是 Rust 同步原语与 TSF 标志（`std::sync`、`TF_ES_SYNC`、`trad_assets_in_sync`），与云同步无关。**注**：学习词库导出 JSON 里确有 `version` 字段，但那是**导出格式**的版本协商（`learner.rs` 的 `import_json` 拒收 `version != 1`），与云同步无关 |
 | **更多输入方案**：双拼 · 五笔 · 仓颉 · 注音 · 自定义输入规则 | V2 预留 | `Mode` 的成员只有拼音 / 繁体 / 英文 / 数字 / 符号（成员清单以 `composer.rs` 的 `enum Mode` 为准）。注释里提到由 `InputScheme` 扩展 —— **该类型尚不存在** |
@@ -117,7 +117,7 @@
 | **核心引擎** | 纯 Rust 实现，多 crate workspace（`engine-core` / `engine-data` / `opi-tools`）；其中 **`engine-core` 无 IO、无平台依赖**，`engine-data` 负责文件映射与字节解析，`opi-tools` 是编译 CLI |
 | **出口层** | `opi-ffi` 双 ABI（JNI + C）· `fcitx5-opi`（cdylib）· `tsf-opi`（cdylib COM 服务器），均以进程内单例持引擎 |
 | **客户端 UI** | 各端原生，不引入跨端框架：Android 为 Jetpack Compose；Linux 为 C++ AddonInstance 调 Rust 逻辑；Windows 为 TSF COM + Compose Desktop 候选窗（命名管道 NDJSON 通信）|
-| **平台接入** | Android (InputMethodService)、Linux (fcitx5)、Windows (TSF)、**iOS / macOS / 鸿蒙（仅有草案，分别需 macOS + Xcode 与 DevEco + HarmonyOS SDK 才能编译验证）** |
+| **平台接入** | Android (InputMethodService)、Linux (fcitx5)、Windows (TSF)、**iOS / macOS（仅有草案，需 macOS + Xcode 才能编译验证）· 鸿蒙（仅有草案 —— 工具链本机就有，缺的是仓库里的工程脚手架，见「未来规划」）** |
 | **数据同步** | **不做**（用户裁决 2026-09-28）：原计划为端到端加密 + 自托管服务支持；现决定**不提供云同步、不设账号体系**，用户数据只在本机 |
 | **版本** | 单一版本源：根 `Cargo.toml` 的 `[workspace.package] version`，全部 workspace 成员（清单见同文件 `members`）共用；Android `versionName` 与 desktop `packageVersion` 向它对齐，发布 tag 取同一号 |
 | **MSRV** | **1.88**，写在根 `Cargo.toml` 的 `[workspace.package] rust-version`（下界的来源与实测见该文件注释）。⚠️ 这句是**声明**，光有它两个方向都漏（真用了更新的语法而声明没跟上 / 声明被下调）—— 执行点是 CI 的 `msrv` job：它**从那个键推导**工具链，跑 `cargo check --workspace --all-targets --locked` |
@@ -225,7 +225,8 @@ android/                       # Android IME（Kotlin + Jetpack Compose）
 desktop/                       # Windows 候选窗（Compose Desktop / JVM，命名管道 NDJSON）
 ios/                           # iOS 键盘扩展 —— ⚠️ 草案，一行 Swift 都没编译过（见目录内 README）
 macos/                         # macOS 输入法（InputMethodKit）—— ⚠️ 同上
-harmony/                       # 鸿蒙输入法（ArkTS + N-API 原生模块）—— ⚠️ 同上，一行 ArkTS 都没编译过
+harmony/                       # 鸿蒙输入法（ArkTS + N-API 原生模块）—— ⚠️ 草案，一行 ArkTS 都没被
+                               #   工具链看过；⚠️ 但**原因与上面两个不同**：缺工程脚手架，不是缺 SDK
 shared/                        # 跨端共享的 Kotlin 源码
   pet/OpiPet.kt                #   项目宠物「小欧」的 Compose 绘制（Android 与 desktop 共用一份）
 data/                          # 词库数据
@@ -235,6 +236,7 @@ data/                          # 词库数据
   generated/                   #   编译产物：fallback.opid · trad.opid 入库；
                                #   luna.opid 未入库（本地重编产物，入库副本在 android assets）
 docs/                          # 宠物、图与设计文档
+  install/                     #   各端安装教程（android / linux / windows / ios / macos / harmony）
   opi-pet.svg                  #   项目宠物「小欧」
   diagrams/                    #   架构设计 · 功能设计 · 生命周期
   superpowers/                 #   specs（设计规格）+ plans（实施计划）

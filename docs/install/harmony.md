@@ -25,10 +25,11 @@
 >
 > **补上脚手架之后它真的会被解析**：把 `harmony/ets` 原样放进一个补齐脚手架的项目里，
 > `codelinter` 会**如实报出故意塞进去的语法错误**（`@parsing-error`）⇒ 那是阳性对照，
-> 证明解析器不是空转。
-> ⇒ **结论不变（ArkTS 一个字符没被检查过），但归因变了；而且新归因是可执行的** ——
-> 它把「本机做不到」换成了「**缺三份脚手架文件**」。
-> ⚠️ 本机是否有鸿蒙**设备或模拟器**未核实，别据本段推断。
+> 证明解析器不是空转。**但同一个脚手架里的负控也说明它只到解析层**（导入不被校验）——
+> 完整布局、两条控制、以及「退出码恒 0」这个陷阱都在 **§1.1**。
+> ⇒ **归因变了（不是「没有 SDK」，是「缺脚手架」），而结论只松了一格**：
+> 那 5 个文件现在算**被解析过**，**不算被检查过** —— U1–U20 一条都没消。
+> ⚠️ 本机**没有**设备或模拟器（`hdc list targets` → `[Empty]`），别据本段推断。
 > **别把「Rust 侧能编」读成「鸿蒙端能用」。** 本项目已经被「没被编译器看过的代码」
 > 坑过两次，本文档的存在正是为了避免第三次：
 >
@@ -62,7 +63,7 @@
 | 词库 | **现在不需要**：本端走 `opi_load('')` = 引擎**内置回退词库**（`engine-data/src/dictionary.rs` 的 `fallback_dict`）。完整词库 `data/generated/luna.opid` 的通路**尚未接线**（rawfile → 沙箱绝对路径，见「已知限制」G2） | `KeyboardController.ets` 的 `ensureDictionary()` |
 | 设备 | 真机或模拟器。**输入法不会自动生效**，必须在系统设置里手动启用 | `harmony/README.md` 的 P1（检索）|
 | 宿主 App | 输入法扩展**不能独立安装**，要在一个 DevEco 应用工程里 | 与 Apple 两端同一形态（未核实，凭记忆）|
-| 工程文件 | 仓库里**没有** `build-profile.json5`、没有工程级 `oh-package.json5`、没有 `hvigorfile.ts` —— 工程要在 DevEco 里新建 | 判据：`find harmony/ -name 'build-profile.json5'` 零命中 |
+| 工程文件 | 仓库里**没有** `build-profile.json5`、没有工程级 `oh-package.json5`、没有 `hvigorfile.ts` —— 工程要在 DevEco 里新建 | 判据：`find harmony/ -name 'build-profile.json5'` 零命中。**能跑通 `codelinter` 的最小布局见 §1.1** —— 比这三份还多两处（模块根下的 `build-profile.json5`、`src/main/module.json5`） |
 
 ```bash
 rustup target add aarch64-unknown-linux-ohos armv7-unknown-linux-ohos x86_64-unknown-linux-ohos
@@ -72,9 +73,72 @@ rustup target add aarch64-unknown-linux-ohos armv7-unknown-linux-ohos x86_64-unk
 （`harmony/README.md` 实测记录 §1 记了 `aarch64-apple-darwin` 的实例）。
 非空输出可以信，空输出不能当判据；**可靠做法是拿它真跑一次 `cargo check`**（下一条命令）。
 
+### 1.1 本机还能做到**解析层**：把 `harmony/ets` 交给真 ArkTS 解析器（2026-09-28 实测）
+
+> 这是**解析**，不是编译 —— 与第 2 步（Rust 真编）不是一回事，别合并读。
+> 结论见本节末尾那张控制表：**它证到的比看上去少**。
+
+`harmony/` 不是工程 ⇒ `codelinter` 拒绝处理（报错原文见文首订正段）。
+**把它当工程喂进去，它就真读。** 最小布局（`<工程根>` 是你新建的目录，
+`harmony/ets` 原样拷进 `<模块根>/src/main/ets`）：
+
+```
+<工程根>/
+├── build-profile.json5      # app 级，modules[].srcPath 指向 ./src
+├── oh-package.json5         # 工程级
+├── hvigorfile.ts
+└── src/                     # ← 模块根（由上面 srcPath 指定）
+    ├── build-profile.json5  # ⚠️ 第一堵墙：缺它报 ENOENT …/src/build-profile.json5
+    ├── oh-package.json5
+    ├── hvigorfile.ts
+    └── src/main/            # ⚠️ 第二堵墙：模块根下**还要**再一层 src/
+        ├── module.json5     # ← 缺它报 ENOENT …/src/src/main/module.json5
+        ├── ets/             # ← harmony/ets 拷这里
+        └── resources/
+```
+
+```bash
+/home/component/command-line-tools/bin/codelinter <工程根> > /tmp/lint.txt 2>&1; echo "EXIT=$?"
+```
+
+跑通的证据是**日志里的文件清单**（不是那句 `No defects found`）：
+
+```
+$ grep -o '"checkedFiles":\[[^]]*\]' .../codelinter/linter/result/codelinter.log
+  …/ets/InputMethodExtensionAbility/InputMethodService.ets  KeyboardController.ets
+  OpiEngine.ets  OpiPet.ets  …/pages/Index.ets          # 5 个，一个不少
+$ grep -o 'module language is [a-z]*' .../codelinter/linter/result/codelinter.log
+  module language is ets
+```
+
+**两条控制（缺一条就会过度乐观）**：
+
+| 控制 | 塞进 `ets/` 的东西 | 实测结果 | 证明了什么 |
+|---|---|---|---|
+| 正控 | 一个语法错误 | `Parsing error: '}' expected.`（rule `@parsing-error/parsing-error`），`Defects: 1` | 解析器**不是空转** —— 那 5 个文件真被解析过 |
+| 负控 | 把 `@kit.IMEKit` 换成 `@kit.NoSuchKitProbe` | **0 defects** | ⚠️ **导入说明符不被解析/校验** |
+
+⇒ 负控是本节最重要的结论：**「过了这一步」只等于「语法能解析」**。
+`@kit.IMEKit` 里的 API 存不存在、签名对不对、装饰器归谁管、`permission` 名怎么写
+—— **一条都没被验过**（`harmony/README.md` 的 U1–U20 一条都不归这条命令管）。
+它挡住的只有**语法层面**的错（括号、关键字、装饰器写歪）。
+⚠️ **「名字写错」正是它拦不住的那一类** —— 负控就是这么造出来的。
+而本项目前两次翻车恰好都是这一类：fcitx5 的 7 处 API 误写（连 `fcitx::InputMethod`
+这个类都不存在）在 ArkTS 上会被同样的机制放过；TSF 那种「函数在、语义不对」更拦不住。
+
+⚠️ **退出码在这儿是陷阱**（实测）：
+
+- **有缺陷时 `EXIT` 仍是 0**（正控那次就是 0）—— 只有文本变了：
+  `CodeLinter found some defects in your code.`
+- 工程路径/布局不对时，它**照样印** `No defects found in your code.`
+  （只在前面多一行红字 `Some error occurred during linting. This may cause incomplete report results.`）。
+
+⇒ 判据只能是**文本 + `checkedFiles` 里真有你的文件**；退出码和那句 "No defects" 都不能单独用。
+`hvigor` 是否真能**构建**（assembleHap）本机**没测**，别从本节推断。
+
 ---
 
-## 2. 第 1 步：Rust 侧 —— **本文唯一在本机实测过的部分**
+## 2. 第 1 步：Rust 侧 —— **本机唯一真编过的一段**
 
 ### 2.1 三个鸿蒙目标编译
 
@@ -293,7 +357,10 @@ HAP 里只装这一个原生库 —— 这也是选静态库而不是 `cdylib` �
 
 ## 5. 第 4 步：安装与启用
 
-> ⚠️ 整节的**命令与菜单名都是凭记忆**（本机没有 hdc、没有设备）。能用的一定是 DevEco 的
+> ⚠️ 整节的**命令与菜单名都是凭记忆**。**订正（2026-09-28 实测）**：本机**是有 `hdc` 的** ——
+> `/home/component/command-line-tools/sdk/default/openharmony/toolchains/hdc`（Ver `3.1.0e`，
+> `hdc -v` EXIT=0）；**没有的只是设备**：`hdc list targets` 输出 `[Empty]`、而 **EXIT 仍是 0**
+> —— 又一个「空 + 退出码 0」，别读成「连上了」。能用的一定是 DevEco 的
 > `Run` 或它自带的 Device Manager；`hdc` 那几条当**方向**读，参数以 `hdc help` 为准。
 
 ### 5.1 装到设备
@@ -509,7 +576,9 @@ comm -23 \
 
 ## 8. 未验证清单（**主体**，照抄现状，别读成已完成）
 
-**ArkTS：0 行编译过。** `harmony/ets/**` 的 5 个文件**连语法都没过过编译器**：
+**ArkTS：0 行编译过。** `harmony/ets/**` 的 5 个文件**从未被编译**：
+（§1.1 那次只是**解析** —— 真 ArkTS 解析器读了这 5 个文件、0 条语法错，但**导入不被校验**
+（负控实测），⇒ **那不算「检查过了」**，也不消 U1–U20 里的任何一条。）
 装饰器（`@Entry` `@Component` `@Prop` `@Watch` `@StorageLink` `@Builder`）、
 `@kit.IMEKit` / `@kit.ArkUI` 的 `display`、`Canvas` 与 `CanvasRenderingContext2D`、
 `JSON.parse(...) as string[]` 的断言，**全部凭记忆写的**。
@@ -542,6 +611,7 @@ comm -23 \
 
 **打包 / 安装 / 签名：完全没有验证。** 仓库里 `hdc` 零命中、没有任何打包或签名流程的记录
 （判据见第 4 节开头）⇒ 本文第 4、5 节是**从零写的操作指引**，不是记录。
+`hdc` 本身本机**是有的**（`toolchains/hdc` Ver `3.1.0e`），但**一次都没对设备跑过**（没设备，见第 5 节订正）。
 真机行为同理：**没有设备、没有模拟器**（⚠️ 订正：SDK 与工具链本机**是有的**，见文首订正段 ——
 缺的是 `harmony/` 的工程脚手架，所以那套工具用不起来）—— **「打 `ni` 出不出字」这件事，本机无法回答**。
 （唯一能回答一半的是 6.2：本机经 C ABI 在回退词库下确实出字。）
