@@ -12,6 +12,37 @@ name: Packages
 # ⚠️ release 事件 checkout 的是**那个 tag 的提交**，不是 main 的头部。
 #    所以 scripts/build-packages.sh 与 scripts/nfpm.yaml 必须在那次 tag **之前**
 #    就已经入库 —— 否则本 job 会在「找不到脚本」上红，而那是发布之后才发现的。
+#
+# ==========================================================================
+# 构建**在 debian:12 容器里**做，不在 runner 上。这不是洁癖，是 v1.3.2 的事故换来的：
+#
+#   现象：包在 Debian 12 / Ubuntu 22.04 / Mint 21 上装得上，插件却加载不了 ——
+#         `Error: /lib/x86_64-linux-gnu/libstdc++.so.6: version GLIBCXX_3.4.32 not found
+#          (required by .../libfcitx5_opi_glue.so)`。
+#   根因：.so 在 runner（ubuntu-latest，较新 GCC）上编，**链接时**就把 libstdc++ 的
+#         符号版本要求绑到了 3.4.32；而 debian:12 的 libstdc++ 只提供到 3.4.30。
+#         实测：v1.3.2 那份胶水 = 3.4.32，debian:12 = 3.4.30，宿主自编的那份只要
+#         3.4.21。凡「产物在更新鲜的机器上编」都带这一类：不止 GLIBCXX，glibc 的
+#         符号版本同理。
+#   修法：在**目标最老的被测发行版**里编，整类问题一次消掉，且与声明的 fcitx5 5.0
+#         下界自洽。**不选 -static-libstdc++** —— 那会让我们的 .so 与 fcitx5 各持一份
+#         libstdc++，而异常/RTTI 要跨这个边界（fcitx5 的 API 抛异常、胶水在 FFI 边界
+#         catch (const std::exception&)），是已知会出问题的形态。
+#   附带：runner 上的 fcitx5 头是 5.1.7，而声明的门槛是 5.0 —— 在 debian:12 里编，
+#         连「拿 5.1 的头编出要在 5.0 上跑的东西」这类不兼容也一并消掉（编译面另有一
+#         道门禁，见 ci.yml 的同名容器步骤）。
+#
+# 光把构建搬进容器是**约定**，会漂（有人改回 runner、或换基座，都看不出来）。所以下面
+# 还有一道**守卫**：从打出来的包里抽出那两个 .so，量它们的符号版本天花板
+# （GLIBCXX_3.4.N / GLIBC_X.Y），与**本容器提供的那一份**逐对比较。守卫自带对照 ——
+# 喂一个比本发行版更新的版本串必须红（否则「守卫绿」分不清是产物真好还是比较器瞎了），
+# 与本发行版恰好相等必须通过（把 > 写成 >= 的实现会在这里红）。历史上那份真阳性样本
+# （v1.3.2 的胶水：要 3.4.32 > 提供 3.4.30）本机拿来验过一次，见该轮的预演记录；CI 里
+# 不去拉旧 release，用合成串做对照。
+#
+# 反面那一课（**在新机器上编的产物能不能在旧机器上加载**）由 ci.yml 的 fcitx5 job 守着：
+# 它在 runner 上编、再拿到 debian:12 里真加载。那边红就说明这一类又回来了 —— 那是**故意**
+# 留着的一道网，别把它改成「容器里编」。
 on:
   release:
     types: [published]
@@ -24,23 +55,12 @@ permissions:
 
 jobs:
   packages:
-    name: 打包 .deb / .rpm
+    name: 打包 .deb / .rpm（debian:12 容器里构建）
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # 与 ci.yml 的 fcitx5 job 同一组包名（在 ubuntu:24.04 容器里实测可装，
-      # 版本 5.1.7-1build3）。CMake 侧靠 Fcitx5Utils 导出的 FCITX_INSTALL_ADDONDIR
-      # 定 addon 落点，所以**装不到 dev 包就会退化成解包头模式、落点随之不同**。
-      - name: 装 fcitx5 头/库
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libfcitx5core-dev libfcitx5utils-dev libfcitx5config-dev
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      # nfpm 是 Go 写的单二进制。装它的方式就是 scripts/build-packages.sh 里
-      # 那段「找不到 nfpm」提示写的那种（go install），保持一致。
+      # nfpm 是 Go 写的单二进制：**在外面装、挂进容器用**（容器里不装 Go、不拉模块）。
       - uses: actions/setup-go@v5
         with:
           go-version: 'stable'
@@ -52,16 +72,139 @@ jobs:
       # v2.47.0 = 本机这套脚本实测过的那个版本（Go 模块缓存里的版本号即为它）。
       # 注意它的 go.mod 要求 go >= 1.26.4；上面 setup-go 取 stable，
       # 若 runner 的 stable 更低，Go 会按 GOTOOLCHAIN=auto 自己拉工具链，不会红。
-      - name: 装 nfpm（钉 v2.47.0）
+      #
+      # CGO_ENABLED=0 不能省：默认会长出一个**动态链接 glibc** 的二进制，那它就又会
+      # 在 debian:12 里报 GLIBC_2.x not found —— 同一个坑换个位置再来一遍。置 0 得到
+      # 静态二进制，挂进去就能跑（下面那句 file + 容器里的 nfpm --version 是取证点）。
+      - name: 装 nfpm（钉 v2.47.0，静态）
         run: |
-          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0
+          set -euo pipefail
+          CGO_ENABLED=0 go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
-      # 脚本自己会：读 Cargo.toml 的 workspace version（不写死版本）、
-      # 为 deb/rpm 各建一棵 CMake 暂存树、跑空转护栏、打印包内清单。
-      # 这里**不重复任何一处落点或版本** —— 重复就是造第二个会漂的真源。
-      - name: 打包
-        run: scripts/build-packages.sh
+      # 整条构建链（cargo + cmake + nfpm）都在 debian:12 里跑，产物直接落在挂进来的
+      # 工作区 dist/ 上，后面两步照旧（上传 artifact / 挂 release）。
+      #
+      # ⚠️ 这段容器脚本只能写成 `-c '…'`（YAML 块里每一行都带缩进，而 heredoc 的结束符
+      # 必须在行首），代价是躲开了 shellcheck —— 所以它按 ci.yml 里同一套规矩办：**本条
+      # 本机用 debian:12 逐字预演过**（见该轮预演记录：整条链跑通、守卫三个数都量到、
+      # 阳性对照按预期红），改动后要重新预演。写法约束：单引号里不能再出现单引号；
+      # 容器内要展开的 $ 保持原样，要**字面**传给容器内命令的 $ 才写 \$。
+      - name: 在 debian:12 容器里构建 + 符号版本天花板守卫
+        run: |
+          set -euo pipefail
+          nfpm_bin="$(command -v nfpm)"
+          [ -n "$nfpm_bin" ] || { echo "::error::runner 上没有 nfpm（上一步没装上？）"; exit 1; }
+          file "$nfpm_bin"
+          timeout 1800 docker run --rm \
+            -v "$PWD:/w" \
+            -v "$nfpm_bin:/usr/local/bin/nfpm:ro" \
+            debian:12 bash -euo pipefail -c '
+          echo "== 容器: debian $(cat /etc/debian_version) / $(uname -m)"
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq > /tmp/apt.log 2>&1 || { tail -20 /tmp/apt.log; exit 1; }
+          # make 不能省：--no-install-recommends 的裸 debian:12 里没有它，缺了 cmake 会报
+          # 「CMAKE_MAKE_PROGRAM is not set」，并把紧接着的一条报成 CXX 编译器缺失（实测，
+          # 指向别处）。curl + ca-certificates 是 rustup 要的。
+          apt-get install -y -qq --no-install-recommends \
+            ca-certificates curl cmake make g++ \
+            libfcitx5core-dev libfcitx5utils-dev libfcitx5config-dev >> /tmp/apt.log 2>&1 \
+            || { tail -30 /tmp/apt.log; exit 1; }
+
+          # 基座自检：这个容器存在的理由就是「最老的被测发行版」。它漂了，前提就变了。
+          devver="$(dpkg-query -W -f="\${Version}" libfcitx5core-dev)"
+          case "$devver" in
+            5.0.*) ;;
+            *) echo "::error::容器里的 libfcitx5core-dev 不是 5.0.x（$devver）——"
+               echo "   换基座前先重新确认下界，别让它悄悄变成「随便哪个版本」。"
+               exit 1 ;;
+          esac
+          echo "== fcitx5 头/库: $devver"
+
+          # Rust 工具链装进容器（官方 rustc 以 glibc 2.17 为基线，能在 debian:12 上跑）。
+          # 用 stable 而不钉某个版本：产物兼容性由下面的守卫**实测**，不靠工具链自律。
+          curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs -o /tmp/rustup.sh \
+            || { echo "::error::拉 rustup 失败"; exit 1; }
+          sh /tmp/rustup.sh -y --profile minimal --default-toolchain stable --no-modify-path \
+            > /tmp/rustup.log 2>&1 || { tail -30 /tmp/rustup.log; exit 1; }
+          export PATH="$HOME/.cargo/bin:$PATH"
+          cargo --version
+
+          # nfpm 是挂进来的静态二进制（容器里不装 Go）—— 先证明它在**这个**发行版里跑得动。
+          nfpm --version
+
+          # 与本地同一个入口、同一个脚本，差别只在整条工具链都换成了 debian:12 的。
+          cd /w
+          OUT_DIR=/w/dist WORK_DIR=/tmp/opi-packages scripts/build-packages.sh
+
+          # ---- 守卫：产物自带的符号版本要求必须 ≤ 本发行版提供的那一份 ----
+          # 判据取自**打出来的 .deb 里那两份 .so**（不是构建树）：这样连「打包漏装/装错」
+          # 也一起覆盖。.rpm 不再抽一遍 —— 两个格式是同一次构建的两棵暂存树，工具链与
+          # 版本绑定完全相同，差别只在库目录名。
+          chk="$(mktemp -d)"
+          dpkg-deb -x /w/dist/opi_*.deb "$chk"
+          glue="$(find "$chk" -name libfcitx5_opi_glue.so -print -quit)"
+          rlib="$(find "$chk" -name libfcitx5_opi.so -print -quit)"
+          [ -n "$glue" ] && [ -n "$rlib" ] || {
+            echo "::error::包里没装到那两个 .so（胶水=$glue 引擎=$rlib）—— 先看上面 build-packages.sh 打的清单"
+            exit 1
+          }
+
+          # 量「这根构件要求到哪一版」：取它引用的符号版本里最高的那一个。
+          # sort -V 按段做数值比较（2.9 < 2.36），字符串排序会在这里读错。
+          # ⚠️ 两个坑都在本机预演里现过形（都是这一版改掉的）：
+          #   1) 只写 `GLIBCXX_3\.4\.[0-9]+` 会**漏掉只要求基底版 `GLIBCXX_3.4` 的构件** ——
+          #      而那恰好就是在 debian:12 里编出来的那种（实测：容器编的胶水只要 GLIBCXX_3.4，
+          #      runner 编的那份要 3.4.31/3.4.32）。所以正则收基底版：`GLIBCXX_3\.4(\.[0-9]+)?`。
+          #   2) `grep` 没匹配到就退出 1，在 `set -o pipefail` 下会把整段**静默**杀掉（一个字
+          #      的输出都没有，预演实测）。所以 grep 的失败要就地吃掉，输出为空这件事由下面的
+          #      判据自己决定 —— 别交给 shell 悄悄处理。
+          # 空值语义（想清楚再改）：**参照侧**量不出 = 容器坏了 ⇒ 红；**产物侧**量不出 = 这根
+          # 构件根本不引用这一族符号版本 ⇒ 不算异常（但仍打印，免得「没在量」被读成「量了且过」）。
+          ceiling() {  # $1=构件 $2=版本正则 $3=本发行版的参照库 $4=标签
+            art="$( { grep -aoE "$2" "$1" || true; } | sort -uV | tail -1)"
+            ref="$( { grep -aoE "$2" "$3" || true; } | sort -uV | tail -1)"
+            [ -n "$ref" ] || {
+              echo "::error::[守卫/$4] 参照库 $3 里量不出 $2 —— 容器本身不对，这道守卫的一切结论先别信"
+              return 1
+            }
+            [ -n "$art" ] || {
+              echo "[守卫/$4] 产物不引用这一族符号版本（$2）⇒ 按「没有要求」通过"
+              return 0
+            }
+            if [ "$art" = "$ref" ] \
+              || [ "$(printf "%s\n%s\n" "$art" "$ref" | sort -uV | tail -1)" = "$ref" ]; then
+              echo "[守卫/$4] 通过：产物要求 $art ≤ 发行版提供 $ref"
+            else
+              echo "${CEIL_PREFIX-::error::}[守卫/$4] 红了：产物要求 $art，本发行版只提供 $ref —— 这个 .so 在目标系统上加载不了"
+              return 1
+            fi
+          }
+
+          # libstdc++ 的两族（GLIBCXX + CXXABI）都量：这两种在用户端是同一种故障
+          # （`version CXXABI_1.3.13 not found`），只守一族等于留一半。
+          # 换成新版 GCC 还可能走 `GCC_3.x`，但那族是 C 语言的运行支持、跨版本几乎不动。
+          ceiling "$glue" "GLIBCXX_3\.4(\.[0-9]+)?" /lib/x86_64-linux-gnu/libstdc++.so.6 GLIBCXX
+          ceiling "$glue" "CXXABI_[0-9.]+" /lib/x86_64-linux-gnu/libstdc++.so.6 CXXABI
+          ceiling "$glue" "GLIBC_[0-9]+\.[0-9]+" /lib/x86_64-linux-gnu/libc.so.6 GLIBC-胶水
+          ceiling "$rlib" "GLIBC_[0-9]+\.[0-9]+" /lib/x86_64-linux-gnu/libc.so.6 GLIBC-引擎
+
+          # 边界对照：与本发行版**恰好相等**必须通过（写成 >= 的实现会在这里红）。
+          eq="$( { grep -aoE "GLIBCXX_3\.4(\.[0-9]+)?" /lib/x86_64-linux-gnu/libstdc++.so.6 || true; } | sort -uV | tail -1)"
+          printf "%s" "$eq" > /tmp/eq.so
+          ceiling /tmp/eq.so "GLIBCXX_3\.4(\.[0-9]+)?" /lib/x86_64-linux-gnu/libstdc++.so.6 边界对照
+
+          # 阳性对照（本段最后一条，不再往后的调用依赖 ::error:: 前缀）：喂一个要求
+          # GLIBCXX_3.4.99 的构件，比较器必须判红。缺了它，「守卫绿」就分不清是产物真好
+          # 还是比较器恒真 —— 那正是这一类门禁最容易变成的样子。
+          printf "GLIBCXX_3.4.99" > /tmp/newer.so
+          if CEIL_PREFIX="" ceiling /tmp/newer.so "GLIBCXX_3\.4(\.[0-9]+)?" \
+               /lib/x86_64-linux-gnu/libstdc++.so.6 阳性对照; then
+            echo "::error::阳性对照失败：要求 GLIBCXX_3.4.99 的构件被判通过 —— 这道守卫没有牙"
+            exit 1
+          fi
+          echo "[守卫] 阳性对照按预期红了（它上面那行「红了」就是预期结果，不是故障）"
+          '
 
       # workflow_dispatch 那条通路没有 release 可挂，产物得从这里取，
       # 否则手动跑一次只能证明「它绿了」，拿不到包。
