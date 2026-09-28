@@ -51,9 +51,16 @@ include(GNUInstallDirs)
 #
 # 为什么要这个口子：deb 里的 CMake 包把路径写死成 /usr/include（它按
 # FCITX_INSTALL_USE_FCITX_SYS_PATHS=On 构建，不做重定位），于是没装
-# fcitx5-dev 的机器上 find_package 会在 generate 期报
-# 「Imported target includes non-existent path /usr/include/Fcitx5/Core」——
-# 解包的头就在手边也用不上。
+# fcitx5-dev 的机器上 find_package **不可用** —— 解包的头就在手边也用不上。
+#
+# 实测（cmake 3.31.4 + deepin 5.1.12 的 deb 解包树）：configure 与 generate **都过**，
+# 红在**编译期**：imported target 的 INTERFACE_INCLUDE_DIRECTORIES 写死成
+# /usr/include/Fcitx5/Core，本机没那个目录 ⇒ `fatal error: fcitx-utils/standardpath.h:
+# 没有那个文件或目录`。（另：光给 `-DCMAKE_PREFIX_PATH=<解包根>` 连包都找不到 ——
+# deb 树是 rootfs，包在 <根>/usr 下，前缀得给 <根>/usr，或直接传 Fcitx5*_DIR。）
+# ⚠️ 本文档此前的说法是「在 **generate 期**报 Imported target includes non-existent
+# path」，那是**未在本机复现**的旧描述；3.16–3.30 上是否真是 generate 期硬错**未核实**，
+# 故不删、只降级。
 set(FCITX5_HEADERS "" CACHE PATH
     "含 Core/ Utils/ Config/ 的目录。设了就替掉 find_package（无 fcitx5-dev 的机器用）")
 set(FCITX5_LIBS "" CACHE PATH "FCITX5_HEADERS 模式下的库目录（含 libFcitx5Core.so）")

@@ -239,6 +239,13 @@ deb 解包后加 `-DFCITX5_HEADERS=<...>/usr/include/Fcitx5 -DFCITX5_LIBS=<...>/
 `.so.N` 在运行库包里，**两个都要解包到同一个 root/ 下**，否则链接期报找不到
 `-lFcitx5Core`。
 
+⚠️ 别指望拿这棵树去糊弄 `find_package`（实测 cmake 3.31.4）：deb 的 CMake 包把
+include 写死成 `/usr/include/Fcitx5/*`，指过去也是红 —— 而且是**编译期**红
+（`fatal error: fcitx-utils/standardpath.h`），**不是**配置期；另外 deb 解包树是
+rootfs，`-DCMAKE_PREFIX_PATH=<根>` 连包都找不到（包在 `<根>/usr` 下，前缀得给
+`<根>/usr`，或直接传 `Fcitx5*_DIR`）。细节与一处旧说法的订正见 `CMakeLists.txt`
+的「fcitx5 的头/库」段。
+
 下面 1/2/3 是手工通路（免 root、或只想改一处时用），与上面等价。
 
 ### 1. addon 元数据（两个 conf，**缺一不可**）
