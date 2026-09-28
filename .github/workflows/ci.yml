@@ -314,7 +314,8 @@ jobs:
       # 数）→ **阴性对照**。缺了阳性臂，「目标行 0 条」这种红就分不清是 conf 有问题还是
       # harness 压根没触发加载 —— 「三臂全 0、真因是输入法组里没有 opi」正是这个形态。
       #
-      # ---- 同一个容器里还有第二面：拿 5.0 的头**真编一次** ----
+      # ---- 同一个容器里还有第二件事：拿 5.0 的头**真编一次**，而且编出来的那份
+      #      **就是加载面要加载的那份**（顺序：先编 → 换上去 → 加载）----
       #
       # 「装完能加载」抓不到源码级的不兼容：胶水若用了 5.1 才有的头/符号，在 5.0 上可能
       # 只是安静地少个功能（惰性绑定的 dlopen 会放它过去），而构建机上一切正常。所以
@@ -328,21 +329,35 @@ jobs:
       # 0 条、5.1.12(本机解包) 0 条、5.1.23(Arch) 有 /usr/include/Fcitx5/Utils/fcitx-utils/
       # standardpaths.h —— 两空一有，空才算证据（否则只是「没扫到」）。
       #
+      # 为什么编出来的那份要**装上去**再让容器加载（而不是加载 runner 编的暂存树）：
+      # 加载面吃 runner 编的树时，那条断言**构造上必假** —— runner（ubuntu-latest）的 GCC
+      # 永远比 debian:12 新，于是每次 push 都红。恒红的门禁不是门禁，是噪音（v1.3.0 就是
+      # 带着红 CI 发的版）。换成「**为**这个发行版编的东西**能**在这个发行版上用」之后，
+      # 它真、且绿；而「在**新机器**上编的产物能不能落在**旧机器**上」由 packages.yml 直接
+      # 量**发出去的真产物**来守（判据同源、量的是产物而不是中间树）—— 一个判据量在正确的
+      # 地方，胜过两个地方各量一半。天花板预检保留、判据不变，只是现在量的是**即将被加载
+      # 的那一份**：它红了只有两种可能（有人把别处编的产物塞进来／引进了超出本发行版的
+      # 符号版本），两种都该当场拦。
+      #
       # debian 12 是出版时**最老的被测发行版**（fcitx5 5.0.21），也正是这个下界的来源。
       # 容器里铺的就是上面那套 cmake --install 的**同一棵暂存树**，不另造布局 ——
       # 落点对不对交给 fcitx5 自己找不找得到来裁决，这比 opi_locate_check 那个探针更
-      # 贴用户（探针问的是「路径对不对」，这里问的是「装完了能不能用」）。
+      # 贴用户（探针问的是「路径对不对」，这里问的是「装完了能不能用」）。换掉的只有胶水，
+      # 引擎仍是暂存树里那份 Rust cdylib（它只要 GLIBC_2.34 ≤ 2.36，两边都满足）。
       # 探针**能**在容器里跑（实测它只要 GLIBC_2.34，容器是 2.36），没重跑是因为它的
       # 期望值取自宿主那次 install.log（带 DESTDIR 前缀），而它要断言的事已被这里覆盖。
       #
       # ⚠️ 容器里那段脚本只能写成 `-c '…'`（YAML 块里每一行都带缩进，而 heredoc 的
       # 结束符必须在行首）—— 代价是它躲开了 shellcheck，所以它是**逐字**本机预演过的：
-      # 从本文件里抽出这段、在 debian:12 里真跑一遍（2026-09-28 本机实测）：
-      #   三臂 1 / 1 / 0 条；编译面 -isystem 三个目录都在容器里、standardpaths.h 0 个、
-      #   ldd -r 未定义符号 0；注入 <standardpaths.h> 后按预期红（原因就是找不到它）；
-      #   把 5.1 才有的符号（CandidateWord::setComment）直接用 asm 标签引用进胶水：
-      #   编译+链接**都过**、只有 `ldd -r` 报 undefined symbol ⇒ 门禁红。
-      #   最后一条同时说明：**光有「编译过」这半边会漏掉符号级不兼容**。
+      # 从本文件里抽出这段、在 debian:12 里真跑一遍（2026-09-28 本机实测，喂的是 v1.3.2
+      # 发布树当暂存树 —— 也就是 runner 编的那份胶水躺在里面）：整步 EXIT=0；三臂
+      # 1 / 1 / 0 条；`sha256(本容器编的) == sha256(装进去的)`（都 0ff705ed911b36ea）；
+      # 天花板两行绿（3.4 ≤ 3.4.30、1.3.9 ≤ 1.3.13）；ldd -r 未定义符号 0；
+      # 把同一段判据单独喂 runner 编的那份胶水 ⇒ 红（3.4.32 > 3.4.30）—— 判据仍有牙；
+      # 注入 <standardpaths.h> 后按预期红（原因就是找不到它）；
+      # 把 5.1 才有的符号（CandidateWord::setComment）直接用 asm 标签引用进胶水：
+      # 编译+链接**都过**、只有 `ldd -r` 报 undefined symbol ⇒ 门禁红。
+      # 最后一条同时说明：**光有「编译过」这半边会漏掉符号级不兼容**。
       - name: debian:12 容器：对 5.0 头真编胶水 → 装上去 → addon 真被加载（三臂对照）
         run: |
           set -euo pipefail
@@ -355,7 +370,8 @@ jobs:
           apt-get update -qq > /tmp/apt.log 2>&1 || { tail -20 /tmp/apt.log; exit 1; }
           # 一次装完：加载面要 fcitx5 + dbus；编译面要 cmake/make/g++ 与三个 -dev（裸 debian:12 里
           # --no-install-recommends 装不出 make，理由见 packages.yml 同一份包列表）。
-          apt-get install -y -qq --no-install-recommends fcitx5 dbus >> /tmp/apt.log 2>&1 \
+          apt-get install -y -qq --no-install-recommends fcitx5 dbus cmake make g++ \
+            libfcitx5core-dev libfcitx5utils-dev libfcitx5config-dev >> /tmp/apt.log 2>&1 \
             || { tail -30 /tmp/apt.log; exit 1; }
 
           corever="$(dpkg-query -W -f="\${Version}" fcitx5)"
