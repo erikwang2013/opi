@@ -77,7 +77,9 @@ if(FCITX5_HEADERS)
             "注意：只有 -dev 包里的 .so 符号链接还不够 —— 它指到 .so.7，而 .so.7 在\n"
             "运行库包（libfcitx5core7 等）里，两个都要解包到同一个 root/ 下。")
     endif()
-    target_include_directories(opi_fcitx5_deps INTERFACE
+    # ⚠️ SYSTEM 不是可有可无的关键字：理由见下面「为什么两个 .cpp 里有 #pragma …」
+    # 段的**末段**（回退路是 -I、find_package 路是 -isystem，不写就不等价）。
+    target_include_directories(opi_fcitx5_deps SYSTEM INTERFACE
         "${FCITX5_HEADERS}/Core" "${FCITX5_HEADERS}/Utils" "${FCITX5_HEADERS}/Config")
     target_link_directories(opi_fcitx5_deps INTERFACE "${FCITX5_LIBS}")
     target_link_libraries(opi_fcitx5_deps INTERFACE Fcitx5Core Fcitx5Utils Fcitx5Config)
@@ -206,6 +208,18 @@ endif()
 # 弃用一起关掉这道门禁，而它现在是有效的一票（5.1.23 上剥掉抑制即红）。
 # 何时删：不再支持 <5.1.21 时改用 StandardPaths，并连同两个 .cpp 里的 pragma 一起删。
 #
+# 这些 pragma 只盖得住**我们代码里的用法**，盖不住头文件内部的诊断：fcitx5 ≥5.1.21 的
+# standardpath.h 自己在 `using StandardPathFileMap = std::map<std::string,
+# StandardPathFile>` 那批 using / 声明里就用到 StandardPathFile，这类诊断在**解析头
+# 文件时**发出，比 .cpp 里任何 pragma 都早 ⇒ include 目录得按系统头给，光靠 .cpp 里
+# 的 pragma 不够。find_package 那条路经 imported target 自带 `-isystem`；解包头/库的
+# 回退路是裸的 target_include_directories，故那里写 SYSTEM 让两条路等价（反过来把
+# pragma 挪到 include 之前包住它也行，但那是两处源码改动、且与另一条路不同源）。
+# 实测（同一个 5.1.21 头）：回退路 EXIT=2 报 standardpath.h 的
+# -Werror=deprecated-declarations，同机 find_package 路 EXIT=0；加 SYSTEM 后两条路
+# 都 EXIT=0。SYSTEM 在 cmake 3.22.1 起实测生效（3.31.4 / 4.3.4 / 4.4.3 同）；比
+# 3.22 更老的没得测，故本文件声明的 3.16 下限对这一条**未覆盖**。
+#
 # 这段散文**只写这一处**：三个 pragma 点各留一行指针。复制成多份必漂（本仓老毛病），
 # 而且 opi_fcitx5.cpp 的行数余量本来就小（500 行门禁）。
 add_library(opi_fcitx5_glue SHARED opi_fcitx5.cpp)
@@ -267,16 +281,25 @@ target_link_libraries(opi_locate_check PRIVATE opi_fcitx5_deps)
 # 两个 .so 必须**同一目录**：胶水的 $ORIGIN rpath 找的就是旁边那个 cdylib。
 # 探针不装（不在下面的 install(TARGETS) 里）—— 它是构建期门禁，不是交付物。
 #
-# 权限**用缺省（0644），刻意不加 PERMISSIONS**：曾按「与同目录发行版 addon 一致」的
-# 理由想改成 0755，实测该目标本身没有唯一解 —— 邻居的 mode **按发行版族分裂**（同一
-# 目录实测：Arch 5.1.23 / Fedora / openSUSE 是 0755；Debian 12 / Ubuntu 22.04 /
-# Deepin 25 是 0644），而本构建面向 Debian 系 ⇒ **缺省即与邻居一致**。改变它也无功能
+# 权限**显式给 0755**（刻意为之，不是缺省）：两族约定本就不同 —— 同一目录实测
+# Arch 5.1.23 / Fedora / openSUSE 的 addon 是 0755，Debian 12 / Ubuntu 22.04 /
+# Deepin 25 是 0644 ⇒ **没有唯一可对齐的「邻居」**。取 0755 的理由：RPM 系工具挑 0644，
+# 没听说哪家挑 0755；要按包格式分支去「逐族匹配」是零功能收益的复杂度。改不改都无功能
 # 影响（非 root，uid 1000 下 dlopen 已实测不受影响）。
-# ⚠️ 要验 mode 只能在**包**里验（`dpkg-deb -c` / `rpm -qlp --dump`，mode 是**第 5 个
+# ⚠️ 两条规则各写一遍：装的是两个不同文件（CMake target 产物 + Rust cdylib），走
+# **两条不同的 install 规则**，只改一条会一好一坏。
+# ⚠️ 必须**显式**写，别指望缺省：缺省不是跨工具链的常量（同一份 CMakeLists 实测
+# cmake 3.31.4 下两条规则都装成 0644；cmake 4.4.3 下 `install(TARGETS … LIBRARY)`
+# 是 0755 而 `install(FILES)` 仍是 0644 ⇒ 同一个包里的两个 .so 会不一致）。
+# ⚠️ 验 mode 只能在**包**里验（`dpkg-deb -c` / `rpm -qlp --dump`，mode 是**第 5 个
 # 字段**，第一个是路径）：构建树的 mode 由链接器加 umask 决定（同一份源码实测本机账号
 # 0775、root 容器 0755）⇒ 拿构建树当判据必假绿。
-install(TARGETS opi_fcitx5_glue LIBRARY DESTINATION "${OPI_ADDON_DIR}")
-install(FILES "${OPI_RUST_LIB}" DESTINATION "${OPI_ADDON_DIR}")
+install(TARGETS opi_fcitx5_glue LIBRARY DESTINATION "${OPI_ADDON_DIR}"
+        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+                    GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+install(FILES "${OPI_RUST_LIB}" DESTINATION "${OPI_ADDON_DIR}"
+        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+                    GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 
 # 两个 conf：fcitx5 经 Type::PkgData 找，即 <prefix>/share/fcitx5/。
 # 少了 inputmethod/opi.conf 输入法条目注册不出来（可用输入法列表是扫这个目录来的）。
