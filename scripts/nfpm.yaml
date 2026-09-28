@@ -32,6 +32,24 @@ description: |
 depends:
   - fcitx5
 
+# ⚠️ 版本约束必须**按格式分开写**：deb 的语法是 `pkg (>= v)`，rpm 是 `pkg >= v`。
+# 写成同一条会让另一种格式拿到语法不对的依赖串。
+#
+# 为什么必须有：addon conf 里的门槛（`[Addon/Dependencies]`）是**声明式**的 ——
+# 实测在 fcitx5 低于它时，插件**完全静默地不加载**（无 error 无 warn，唯二症状是
+# 日志里少一行 `Loaded addon`、以及 /proc/<pid>/maps 里没有它），用户拿到的是
+# 「输入法能选中、一个字都不出」。而 packager 侧此前只声明了 `fcitx5` 不带版本
+# ⇒ **低于门槛的系统上 apt/rpm 会装成功、然后静默失效**。带上约束，apt/dnf 就会
+# 当场报依赖不满足 —— 把一种静默失败换成一次显式拒绝。
+# 版本取 5.0：那是实测出来的下界（5.0.21 / 5.0.14 都编得过、加载得了、出字正确）。
+overrides:
+  deb:
+    depends:
+      - fcitx5 (>= 5.0)
+  rpm:
+    depends:
+      - fcitx5 >= 5.0
+
 contents:
   # 暂存树整棵 —— 落点见上面那段说明
   - src: ${PKG_STAGE}/usr
