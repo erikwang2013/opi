@@ -233,6 +233,7 @@ plutil -lint ios/Info.plist      # 只能在 Mac 上跑
 | L7 | **REPEAT 位在 iOS 侧是预防性的** | `UIKeyModifierFlags` 里有没有 autorepeat 信号属于**记忆级**证据，未核对。`modifierStates(_:)` 里已写明「哪天真找到就加在这里，别在调用处手搓一个位」。 |
 | L8 | **繁体库不放就回落简体** | `trad.opid` 是可选资源；缺了不报错，繁体模式静默用简体库。 |
 | L9 | **长按 ⇧ → Lock 走的是另一套机制** | 软键盘长按 → `stateLongPressed`，与桌面轨的 `LONG_PRESSED` 键状态位不是同一条路。 |
+| L10 | **候选栏空态没有小欧** | 其他端（Android 候选栏、Windows 候选窗、鸿蒙）在「打不出候选」时会显示小欧 + 提示；iOS 的 `KeyboardLayout.updateCandidates(_:)` 在空数组时先清空子视图再 `return` ⇒ **纯空白**。接它只能走位图（`ios/README.md` §6 明文禁止第三份 CoreGraphics 几何），而 iOS 现在连 `.xcassets` 都没有。**本版没做。** |
 
 ---
 

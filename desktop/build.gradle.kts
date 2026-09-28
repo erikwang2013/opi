@@ -80,7 +80,26 @@ compose.desktop {
             // `-strip` 不是装饰：不加的话 imagemagick 会把本次生成的 date:create/date:modify 写进
             // PNG，同一张图每次重生成都得到不同字节（实测：像素签名相同、字节不同）—— 于是「没
             // 改过小欧」也会在 git 里显示成改动。加上才可复现（连跑两次 md5 相同）。
-            linux { iconFile.set(layout.projectDirectory.file("icons/opi-pet.png").asFile) }
+            // ⚠️ `appCategory` 是 **LinuxPlatformSettings** 上的属性（反编译该 class 确认），
+            // 只能写在 `linux {}` **里面** —— 写到外层是 `Unresolved reference 'appCategory'`。
+            //
+            // ⚠️⚠️ **但实测它在 CMP 1.11.1 的 Deb 目标上不生效**，写在这里是「备着」不是「管用」：
+            //   单变量实验 —— 把它设成 `"ZZZTEST"` 重建 .deb，`.desktop` 里**仍然是**
+            //   `Categories=未知`（判据：`dpkg-deb --fsys-tarfile <deb> | tar -xO --wildcards
+            //   '*.desktop' | grep Categories`；`.desktop` 的时间戳确认是本次生成的，非缓存）。
+            //   `AbstractJPackageTask` 确实有 `linuxAppCategory` 属性、也确实传给 jpackage，
+            //   但这条链接在 1.11.1 上不通。**别把它当成已修好的东西。**
+            //
+            // 「未知」多半是 jpackage 把它的默认值 `Unknown` 按本机 locale 翻译了 ——
+            // 也就是说这个值**在任何 locale 下都是无效分类**（Desktop Entry 只认固定的英文
+            // 集合）。影响面很小：候选窗是伴侣进程，用户不从菜单启动它，最坏是被归进
+            // 「未分类」。真要修得走 jpackage 的 `--resource-dir` 换 `.desktop` 模板，
+            // 那是另一件事，本轮没做。
+            // `Utility` 是语义上正确的值 —— 留着它，CMP 哪天把链接接通就自动生效。
+            linux {
+                iconFile.set(layout.projectDirectory.file("icons/opi-pet.png").asFile)
+                appCategory = "Utility"
+            }
             windows { iconFile.set(layout.projectDirectory.file("icons/opi-pet.ico").asFile) }
         }
     }

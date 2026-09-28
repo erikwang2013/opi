@@ -28,9 +28,10 @@ It looks like a single key on a keyboard, because that is what an input method o
 
 See [`docs/opi-pet.svg`](docs/opi-pet.svg) for the full figure (hand-written SVG, no external dependencies, scales to any size). It already lives inside the codebase:
 
-- **Android settings page**: a Compose component, `OpiPet`, whose expression tracks engine state — idle / waiting / puzzled / asleep (turn learning off and it dozes)
-- **Empty states**: on both the Android candidate bar and the Windows candidate window, Opi shrugs when pinyin yields no candidates, replacing what used to be a blank gap
-- **The app launcher icon**: adaptive icon, pure VectorDrawable, no extra PNG density buckets
+- **Android**: the settings-page expression tracks engine state (idle / waiting / puzzled / asleep); three empty states — the candidate bar's idle slot, "no match", and an empty symbol search; and the **launcher icon**, an adaptive vector foreground with five PNG fallbacks
+- **Windows**: Opi shrugs in the candidate window's empty state; and the shipped `.deb` / `.msi` app icon
+- **HarmonyOS**: the pet in the candidate bar — it is itself the "remember my words" switch
+- **Linux (fcitx5)**: the input method's icon in the input-method list and the tray
 - **The `opi-tools` CLI**: prints a character-art Opi on a successful compile or verify (single-width characters only, so it never misaligns in a CJK terminal), and `--version` carries it too
 
 Both Compose frontends (Android and the Windows candidate window) share a single [`shared/pet/OpiPet.kt`](shared/pet/OpiPet.kt). Not sharing UI code across platforms is a principle of this project — but the pet is one drawing, and two copies of the same geometry inevitably drift apart.

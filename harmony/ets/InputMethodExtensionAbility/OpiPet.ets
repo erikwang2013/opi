@@ -15,11 +15,24 @@
 // 改小欧请同时改这三处 + 本文件；**不要在鸿蒙端另发明一只小欧**。
 // 三者共享同一套几何：viewBox 240×250，所有坐标乘以缩放 u = 目标宽度 / 240。
 //
-// Compose → ArkUI Canvas 的两处**已知差异**（别当成 bug 去「修」）：
+// Compose → ArkUI Canvas 的**已知差异**（别当成 bug 去「修」）：
 //   1. Compose 的 drawText 以**左上角**定位，所以 OpiPet.kt 要拿 firstBaseline 反推；
 //      Canvas 的 fillText 默认以**基线**定位（textBaseline='alphabetic'），
 //      SVG 的 y="187" 本来就是基线 —— 所以这里直接写 187*u，**不需要**相减。
 //   2. Canvas 2D 没有 letterSpacing，所以 OPI 三个字母是逐字量宽 + 手动加字距画出来的。
+//   3. 【未核实】刻字**居中**的基准可能不同：OpiPet.kt 用 `layout.size.width` 居中，
+//      而 Compose 的 letterSpacing 在**最后一个字母后面也加**，所以那个 width 可能
+//      含一段尾随间距；本文件是显式减掉 gap、按**墨迹框**居中。若前者确实含尾随间距，
+//      这里的 OPI 会**偏右 gap/2 ≈ 2.25 设计单位**（34vp 时约 0.3vp）。方向与量级本机
+//      都测不了（无鸿蒙设备），故**两边都没改** —— 改了反而可能偏离 SVG 的
+//      text-anchor="middle"。要定案得在真机上量一次。
+//
+// ⚠️ 一条曾被怀疑、**已排除**的差异（留个记录，免得有人再查一遍）：**字号单位**不是差异。
+//   OpiPet.kt 写 `(21f*u).toSp()`、本文件写 `21*u` px，看着像两回事，其实等价 ——
+//   Compose 的 `Float.toSp()` 实现是 `toDp().toSp()` = `(px / density / fontScale).sp`，
+//   渲染时再乘回 `density × fontScale`，**净效果恰好等于原来的像素值**。所以两者
+//   在任何 fontScale 下都落在同一个像素尺寸上。（源码：ui-unit 的
+//   `Density.kt` 的 `Float.toSp()` 与 `FontScaling.kt` 的 `Dp.toSp()`。）
 
 /** 宠物情绪。由输入状态推导，不自己维护状态。 */
 export enum PetMood {
