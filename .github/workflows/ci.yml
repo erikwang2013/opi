@@ -374,7 +374,13 @@ jobs:
             libfcitx5core-dev libfcitx5utils-dev libfcitx5config-dev >> /tmp/apt.log 2>&1 \
             || { tail -30 /tmp/apt.log; exit 1; }
 
-          corever="$(dpkg-query -W -f="\${Version}" fcitx5)"
+          # 这一行与下面那条同理：apt 返 0 **不等于**包在那儿。别让 dpkg-query 的原始 stderr
+          # （`no packages found matching X`）当报文 —— 它分不清「apt 没装成」和「查早了」，
+          # 实测有人据此去查 apt 的怪行为。查不到就把 apt 日志一起打出来。
+          corever="$(dpkg-query -W -f="\${Version}" fcitx5 2>&1)" || {
+            echo "::error::容器里查不到 fcitx5（$corever）——上面那条 apt 报了成功却没有它。"
+            echo "--- apt 日志尾部 ---"; tail -30 /tmp/apt.log
+            exit 1; }
           echo "== fcitx5: $corever"
           case "$corever" in
             5.0.*) ;;
@@ -383,7 +389,11 @@ jobs:
                exit 1 ;;
           esac
 
-          devver="$(dpkg-query -W -f="\${Version}" libfcitx5core-dev)"
+          devver="$(dpkg-query -W -f="\${Version}" libfcitx5core-dev 2>&1)" || {
+            echo "::error::容器里查不到 libfcitx5core-dev（$devver）——上面那条 apt 报了成功却没有它。"
+            echo "   这条守卫抓的是「开发包没装成」这件事本身；别把它弱化成跳过。"
+            echo "--- apt 日志尾部 ---"; tail -30 /tmp/apt.log
+            exit 1; }
           echo "== 头/库来自 libfcitx5core-dev $devver"
           case "$devver" in
             5.0.*) ;;
