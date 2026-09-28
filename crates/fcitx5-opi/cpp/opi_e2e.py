@@ -11,7 +11,13 @@ run-harness.sh（它会建好私有 dbus 会话、独立 XDG_CONFIG_HOME、addon
 
 前置条件（照着 README「验证 harness」一节做，否则看到的是假故障）：
   - fcitx5 5.1.12 运行中，`--ui=testui --enable opi_fcitx5`（testui 会把其它
-    addon 全禁掉，不额外 --enable 则本 addon 根本不加载）
+    addon 全禁掉）
+    ⚠️ 订正（2026-09-28 实测）：**`--enable opi_fcitx5` 不是本 addon 加载的原因。**
+    单变量对照 —— 两份只差「组里有没有 opi 那一项」的 profile，**两臂都不带
+    `--enable`**：组里有 → 加载 1 次、`nihao` 提交「你好」；组里没有 → 加载 0 次、
+    每键返回 0、`SetCurrentIM("opi")` 静默无效。**真正的触发条件是「opi 在 profile
+    的输入法组里 + 切到它」** —— 也就是紧跟其后的那条前置条件本身。
+    （本行原写「不额外 --enable 则本 addon 根本不加载」，与实测不符。）
   - **独立 XDG_CONFIG_HOME**，其 profile 的输入法组里必须**同时**有
     keyboard-us 和目标 IM。否则 SetCurrentIM("opi") 静默无效（不报错、不切换、
     连 CurrentIM 信号都不发），表现为「按键被吃了但一个字都不出」。
