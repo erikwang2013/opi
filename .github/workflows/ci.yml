@@ -76,7 +76,7 @@ jobs:
           set -euo pipefail
           javac -d /tmp/jni-smoke android/jni_smoke/Main.java
           java -Dopi.so="$PWD/target/release/libopi_ffi.so" -cp /tmp/jni-smoke \
-            io.opi.input.jni.Main android/app/src/main/assets/luna.opid
+            xyz.erik.opi.jni.Main android/app/src/main/assets/luna.opid
 
       # cargo check 不链接，所以 Linux 上无需 msvc 链接器即可跑通。
       - name: cargo check -p tsf_opi (x86_64-pc-windows-msvc)

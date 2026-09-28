@@ -15,7 +15,7 @@
 // 数据来自 `OpiEngine.commonSymbols()` —— 它是 `opi_symbol_blocks()`（只回 common 块）
 // 与 `opi_symbols_in_block(id)` 的并集，**不在 Swift 里另抄一份符号表**：
 // 本项目已被「同一语义抄多份」坑过，而 Android 侧同样只把符号交给引擎
-// （`SymbolCatalog` + `SymbolPanel`，见 `android/app/src/main/kotlin/io/opi/input/keyboard/`）。
+// （`SymbolCatalog` + `SymbolPanel`，见 `android/app/src/main/kotlin/xyz/erik/opi/keyboard/`）。
 
 import UIKit
 

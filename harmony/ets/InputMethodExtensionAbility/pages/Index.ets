@@ -116,7 +116,7 @@ struct Index {
 
       // 候选：横向铺开。空态给一句提示而不是留白 —— 别让用户以为键盘坏了。
       if (this.candidates.length === 0) {
-        Text(this.mode === (OpiMode.Pinyin as number) ? '打拼音试试' : '')
+        Text(this.emptyHint())
           .fontSize(15)
           .fontColor('#9AA7A4')
           .layoutWeight(1)
@@ -293,6 +293,21 @@ struct Index {
       return ch;
     }
     return ch.toUpperCase();
+  }
+
+  /**
+   * 候选栏空态的那句话。
+   *
+   * **两种空态不是一回事**：缓冲为空 = 安静待命，提示怎么开始；有缓冲无候选 =
+   * 「我也没辙」（小欧此刻正是 PUZZLED），这时说「打拼音试试」是答非所问 ——
+   * 用户刚打的**就是**拼音。后一种照 Android 候选栏 / 符号面板 / 桌面候选窗
+   * 同一句话写「无匹配」（那三处都是小欧摊手 + 这句白话）。
+   */
+  private emptyHint(): string {
+    if (this.buffer.length > 0) {
+      return '无匹配';
+    }
+    return this.mode === (OpiMode.Pinyin as number) ? '打拼音试试' : '';
   }
 
   private modeLabel(): string {

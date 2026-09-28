@@ -315,6 +315,18 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../data/addon/opi_fcitx5.conf"
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../data/inputmethod/opi.conf"
               DESTINATION "${CMAKE_INSTALL_DATADIR}/fcitx5/inputmethod")
 
+# 项目宠物「小欧」当输入法图标。opi.conf 的 `Icon=opi-pet` 是**图标名**，
+# fcitx5 用 IconTheme::findIcon 在 XDG 图标目录里按名解析（hicolor 是 XDG 规定的
+# 公共回退主题，任何主题的继承链里都有它；其 index.theme 列出 scalable/apps）——
+# 所以装到 share/icons/hicolor/scalable/apps 就会被找到，不需要 fcitx5 专有目录。
+# ⚠️ **原样一份，不改名、不重绘**：几何真源是仓库根的 docs/opi-pet.svg，各端
+# （Android / Windows / macOS 计划）共用它；这里再画一次或转一次格式就是第三份
+# 几何，必然漂。源文件在 cpp/ 之外，是**有意**的 —— 跨目录取真源，好过复制一份。
+# ⚠️ 装出来的文件名必须**逐字**等于 opi.conf 的 Icon= 加扩展名：不一致时
+# 不报错、只是没图（回退文字标签），所以 opi_locate_check 拿这个值去问真库。
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../../docs/opi-pet.svg"
+              DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps")
+
 # 词库：loadDictionary() 找的是 Type::Data + "opi/luna.opid"，
 # 即 <prefix>/share/opi/luna.opid。**没有 fcitx5 中间层**，别顺手挪进
 # share/fcitx5/ 下面（那种装法 CI 会红，因为 opi_locate_check 问的是真库）。

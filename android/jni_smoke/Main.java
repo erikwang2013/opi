@@ -3,9 +3,9 @@
 //
 // 用法：
 //   javac -d /tmp/smoke-out Main.java
-//   java -Dopi.so=/path/to/libopi_ffi.so -cp /tmp/smoke-out io.opi.input.jni.Main [/path/to/luna.opid]
+//   java -Dopi.so=/path/to/libopi_ffi.so -cp /tmp/smoke-out xyz.erik.opi.jni.Main [/path/to/luna.opid]
 // 成功打印 SMOKE-OK；失败打印 FAIL: <原因> 并退出码 1。
-package io.opi.input.jni;
+package xyz.erik.opi.jni;
 
 final class OpiEngine {
     static native boolean load(String path);

@@ -246,7 +246,7 @@ pub fn parse_rust_registrations(src: &str) -> Result<Vec<Method>, String> {
     Ok(out)
 }
 
-/// `JNI_OnLoad` 里 `find_class` 的宿主类名（`io/opi/input/jni/OpiEngine`）。
+/// `JNI_OnLoad` 里 `find_class` 的宿主类名（`xyz/erik/opi/jni/OpiEngine`）。
 pub fn parse_host_class(src: &str) -> Result<String, String> {
     let text = strip_comments(src);
     let i = text
@@ -423,7 +423,7 @@ pub fn check_host_declares(reg: &[Method], host: &[Method], host_label: &str) ->
 pub const JNI_RS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni.rs");
 pub const KOTLIN_HOST: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../android/app/src/main/kotlin/io/opi/input/jni/OpiEngine.kt"
+    "/../../android/app/src/main/kotlin/xyz/erik/opi/jni/OpiEngine.kt"
 );
 pub const JAVA_SMOKE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),

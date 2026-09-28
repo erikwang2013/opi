@@ -139,7 +139,7 @@ error: linking with `cc` failed: exit status: 1
 | `SWIFT_OBJC_BRIDGING_HEADER` | `macos/OpiFFI.h`（Swift 看不见裸 C 符号，必须经一个头文件） |
 | 链接库 | `libopi_ffi.a`（或上一步的通用库） |
 | 链接框架 | `InputMethodKit`、`Cocoa` |
-| `PRODUCT_BUNDLE_IDENTIFIER` | 例如 `io.opi.inputmethod` —— 要进 Info.plist 的 `CFBundleIdentifier` |
+| `PRODUCT_BUNDLE_IDENTIFIER` | 例如 `xyz.erik.opi` —— 要进 Info.plist 的 `CFBundleIdentifier` |
 | 产物 | `OpiInputMethod.app` |
 
 **声明只有 `OpiFFI.h` 一份**，不要在 Swift 里再抄一遍 `@_silgen_name` 之类的第二份声明。

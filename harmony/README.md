@@ -157,7 +157,7 @@ DevEco 工程自己生成的那份才是权威，补一份进来可能与已有�
 |------|------|
 | `docs/opi-pet.svg` | 静态基准：240×250 设计空间、锚点坐标、配色释义 |
 | `shared/pet/OpiPet.kt` | 带情绪的 Compose 版（坐标已按情绪分化，**`OpiPet.ets` 照抄的是它**） |
-| `android/app/src/test/kotlin/io/opi/input/pet/OpiPetMoodTest.kt` | **`petMood()` 的验收规格** —— 鸿蒙端跑不了测试，这份 Kotlin 单测就是它的标准答案 |
+| `android/app/src/test/kotlin/xyz/erik/opi/pet/OpiPetMoodTest.kt` | **`petMood()` 的验收规格** —— 鸿蒙端跑不了测试，这份 Kotlin 单测就是它的标准答案 |
 | `harmony/ets/.../OpiPet.ets` | 本文件 |
 
 `petMood()` 的四条分支顺序**不能改**（学习关闭优先于一切，连候选都不看）。

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 //! JNI 出口：`JNI_OnLoad` + `RegisterNatives` 注册（不用 Java_ 命名导出，防签名脆断）。
-//! 宿主类：`io/opi/input/jni/OpiEngine`。每个函数 `catch_unwind` 包裹，
+//! 宿主类：`xyz/erik/opi/jni/OpiEngine`。每个函数 `catch_unwind` 包裹，
 //! panic / 错误返回哨兵（boolean false、int 0、String/数组 null）。
 //! 语义与 C ABI（cabi.rs）完全一致，共享 api::SINGLETON 与内部实现。
 //!
@@ -340,7 +340,7 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _reserved: *mut c
         };
         let env = guard.borrow_env_mut();
         let class = env
-            .find_class(jni_str!("io/opi/input/jni/OpiEngine"))
+            .find_class(jni_str!("xyz/erik/opi/jni/OpiEngine"))
             .map_err(|e| format!("find_class 失败: {e}"))?;
         let methods = unsafe {
             [

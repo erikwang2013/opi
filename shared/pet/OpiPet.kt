@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-package io.opi.input.pet
+package xyz.erik.opi.pet
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size

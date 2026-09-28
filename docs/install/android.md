@@ -101,7 +101,7 @@ cd android                      # 必须。仓库根、desktop/ 的 gradlew 都�
 【实测】`./gradlew testDebugUnitTest` → `BUILD SUCCESSFUL`，EXIT=0。**它不需要 Dart、也不需要 `.so`**：
 
 - 任务图里**没有** cargokit 那条（`./gradlew testDebugUnitTest --dry-run` → EXIT=0，`grep -c cargokit` 为 **0**）。对照：`./gradlew assembleRelease --dry-run` 的任务图里**有** `:rust_builder:android:cargokitCargoBuildOpi_ffiRelease`（`grep -c cargokit` 为 1）。
-- 原因是单测用的是假引擎与假 `FileOps`（`EngineLoader` 的文件操作与加载抽象就是为此抽出来的，见 `android/app/src/test/kotlin/io/opi/input/jni/EngineLoaderTest.kt`）。
+- 原因是单测用的是假引擎与假 `FileOps`（`EngineLoader` 的文件操作与加载抽象就是为此抽出来的，见 `android/app/src/test/kotlin/xyz/erik/opi/jni/EngineLoaderTest.kt`）。
 
 > 老实说清这次跑到的程度：本机这一次 `testDebugUnitTest` 是 **`UP-TO-DATE`**（此前跑过、输入没变，Gradle 跳过了执行）—— 所以 EXIT=0 证明的是「任务图能跑通、不依赖 cargokit」，**不是「测试真的重跑了一遍且全绿」**。要后者加 `--rerun-tasks`。
 
@@ -205,7 +205,7 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 ```bash
 grep -nE 'versionCode|versionName' android/app/build.gradle.kts             # 源码里那份，不需要构建
 cat android/app/build/outputs/apk/debug/output-metadata.json                # 已构建过的那份
-adb shell dumpsys package io.opi.input | grep -E 'versionCode|versionName'  # 机上装的那份
+adb shell dumpsys package xyz.erik.opi | grep -E 'versionCode|versionName'  # 机上装的那份
 ```
 
 （别用 `./gradlew :app:properties` 找 —— 【实测】它输出的是 `version: unspecified`，**没有** `versionCode` / `versionName`，照着找会以为值没配。）
@@ -214,7 +214,7 @@ adb shell dumpsys package io.opi.input | grep -E 'versionCode|versionName'  # �
 
 ### 3.3 签名不一致会怎样
 
-覆盖安装要求**签名相同**。debug 包的签名来自本机调试密钥库（§2.3，本机在 `~/.config/.android/debug.keystore`）：换一台机器、或清了 HOME/XDG 目录重新生成密钥库之后，同一个 APK 会变成「不同签名的同一个包」，覆盖安装失败（`INSTALL_FAILED_UPDATE_INCOMPATIBLE`）。解法只有先 `adb uninstall io.opi.input`（**会连 `filesDir` 里的词库副本与用户词表一起删掉**）。
+覆盖安装要求**签名相同**。debug 包的签名来自本机调试密钥库（§2.3，本机在 `~/.config/.android/debug.keystore`）：换一台机器、或清了 HOME/XDG 目录重新生成密钥库之后，同一个 APK 会变成「不同签名的同一个包」，覆盖安装失败（`INSTALL_FAILED_UPDATE_INCOMPATIBLE`）。解法只有先 `adb uninstall xyz.erik.opi`（**会连 `filesDir` 里的词库副本与用户词表一起删掉**）。
 
 ---
 
@@ -227,12 +227,12 @@ adb shell dumpsys package io.opi.input | grep -E 'versionCode|versionName'  # �
 命令行路径（【实测】，命令原样可用）：
 
 ```bash
-adb shell ime list -s -a                              # 列出所有可用输入法，本机输出含 io.opi.input/.OpiImeService
-adb shell ime enable io.opi.input/.OpiImeService      # 在「管理键盘」里勾上
-adb shell ime set    io.opi.input/.OpiImeService      # 切为当前输入法
+adb shell ime list -s -a                              # 列出所有可用输入法，本机输出含 xyz.erik.opi/.OpiImeService
+adb shell ime enable xyz.erik.opi/.OpiImeService      # 在「管理键盘」里勾上
+adb shell ime set    xyz.erik.opi/.OpiImeService      # 切为当前输入法
 ```
 
-本机实测输出分别是 `already enabled for user #0` 与 `Input method io.opi.input/.OpiImeService selected for user #0`（两次都 EXIT=0；因为机上本来就是它，所以是幂等的无操作）。
+本机实测输出分别是 `already enabled for user #0` 与 `Input method xyz.erik.opi/.OpiImeService selected for user #0`（两次都 EXIT=0；因为机上本来就是它，所以是幂等的无操作）。
 
 设置页的入口有两个：**启动器图标**（`AndroidManifest.xml` 把 `settings.SettingsActivity` 直接声明为 LAUNCHER，**没有 MainActivity**），以及**输入法自身的设置入口**（`res/xml/method.xml` 的 `android:settingsActivity` 指向同一个 Activity）。所以「设置页」和「输入法」是同一个 App —— 同一个进程、同一份 Rust 静态单例引擎，设置页改的开关在输入法里立刻生效。
 
@@ -301,7 +301,7 @@ I EngineLoader: trad loaded (2580782 bytes)
 
 ```bash
 unzip -v android/app/build/outputs/apk/debug/app-debug.apk | grep opid
-adb shell run-as io.opi.input ls -la files/          # 调试包才能 run-as
+adb shell run-as xyz.erik.opi ls -la files/          # 调试包才能 run-as
 ```
 
 【实测】三者对得上：
@@ -328,7 +328,7 @@ adb shell run-as io.opi.input ls -la files/          # 调试包才能 run-as
 **拷贝有没有被跳过【实测】**：看 `files/luna.opid` 的 **mtime** 会不会随 IME 启动而变。
 
 ```bash
-adb shell run-as io.opi.input ls -la --full-time files/
+adb shell run-as xyz.erik.opi ls -la --full-time files/
 ```
 
 本机结果：词库文件 mtime 停在 `2026-09-27 12:20:19`，而同一台机器上 IME 在 `2026-09-28 04:48` 与 `04:50` 各启动过一次（日志有时间戳）。**mtime 没动 = 没有重拷 = 尺寸校验的幂等路径真的走到了。**
@@ -346,12 +346,12 @@ unzip -v android/app/build/outputs/apk/debug/app-debug.apk | grep opid
 ### 5.4 装机状态
 
 ```bash
-adb shell dumpsys package io.opi.input | grep -E 'versionCode|versionName|primaryCpuAbi|lastUpdateTime'
+adb shell dumpsys package xyz.erik.opi | grep -E 'versionCode|versionName|primaryCpuAbi|lastUpdateTime'
 adb shell settings get secure default_input_method          # 当前输入法
 adb shell settings get secure enabled_input_methods         # 已启用的输入法列表
 ```
 
-【实测】本机分别给出 `versionCode=9 …`、`versionName=1.0.16`、`primaryCpuAbi=x86_64`、以及 `io.opi.input/.OpiImeService` —— **`primaryCpuAbi` 是模拟器/真机与 §1.3 那张 ABI 表的交点**，装错 ABI 的包会在这里露出来（或者是运行时 `UnsatisfiedLinkError`）。
+【实测】本机分别给出 `versionCode=9 …`、`versionName=1.0.16`、`primaryCpuAbi=x86_64`、以及 `xyz.erik.opi/.OpiImeService` —— **`primaryCpuAbi` 是模拟器/真机与 §1.3 那张 ABI 表的交点**，装错 ABI 的包会在这里露出来（或者是运行时 `UnsatisfiedLinkError`）。
 
 ### 5.5 出问题时看哪里
 
@@ -412,12 +412,12 @@ cd android
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 
 # 启用
-adb shell ime enable io.opi.input/.OpiImeService
-adb shell ime set    io.opi.input/.OpiImeService
+adb shell ime enable xyz.erik.opi/.OpiImeService
+adb shell ime set    xyz.erik.opi/.OpiImeService
 
 # 验证
 adb logcat -d -s EngineLoader:V OpiImeService:V                 # 词库装载字节数
 unzip -v android/app/build/outputs/apk/debug/app-debug.apk | grep opid   # 应为 Stored / 0%
-adb shell run-as io.opi.input ls -la --full-time files/         # 幂等：mtime 不该变
-adb shell dumpsys package io.opi.input | grep versionCode        # 机上版本
+adb shell run-as xyz.erik.opi ls -la --full-time files/         # 幂等：mtime 不该变
+adb shell dumpsys package xyz.erik.opi | grep versionCode        # 机上版本
 ```

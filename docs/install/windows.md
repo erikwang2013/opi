@@ -194,7 +194,7 @@ android/app/src/main/assets/luna.opid
 
 候选窗是**另一个进程**：Compose Desktop / JVM 应用，经命名管道 `\\.\pipe\opi-candidates`
 与插件通信（协议镜像两份：`crates/tsf-opi/src/candidate_io.rs` 与
-`desktop/src/main/kotlin/io/opi/candidate/Main.kt` 的模块头注释）。
+`desktop/src/main/kotlin/xyz/erik/opi/candidate/Main.kt` 的模块头注释）。
 
 - **不开它也能打字**：`CandidateClient::connect` 连不上时静默退避重试、本次发送放弃，
   降级为 no-op（**【推断】**，见 `candidate_io.rs` 的 `connect` / `send_json`）。
@@ -206,7 +206,7 @@ android/app/src/main/assets/luna.opid
   （jpackage / Compose Desktop 不能从 Linux 交叉打包 Windows 安装包）。**【未验证】**
 - 不改打包、只想跑起来：`desktop/` 是自带 wrapper 的 Gradle 工程，
   Windows 上用 `gradlew.bat`（`desktop/gradlew.bat` 存在，**【实测】**文件在）。
-  `build.gradle.kts` 里设了 `mainClass = "io.opi.candidate.MainKt"`，
+  `build.gradle.kts` 里设了 `mainClass = "xyz.erik.opi.candidate.MainKt"`，
   故 `.\gradlew.bat run` 应当能直接起窗。**【未验证】**（本机只有 Linux，没有在 Windows 上跑过）。
 
 ### 2.4 现状：**没有打包步骤**

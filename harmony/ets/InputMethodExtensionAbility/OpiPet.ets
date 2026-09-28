@@ -11,7 +11,7 @@
 // **几何与表情的真源不是本文件**，而是：
 //   * docs/opi-pet.svg          —— 静态基准（240×250 设计空间、锚点、配色释义）
 //   * shared/pet/OpiPet.kt      —— 带情绪的 Compose 版（坐标已按情绪分化，本文件照抄它）
-//   * android/app/src/test/kotlin/io/opi/input/pet/OpiPetMoodTest.kt —— petMood 的规格
+//   * android/app/src/test/kotlin/xyz/erik/opi/pet/OpiPetMoodTest.kt —— petMood 的规格
 // 改小欧请同时改这三处 + 本文件；**不要在鸿蒙端另发明一只小欧**。
 // 三者共享同一套几何：viewBox 240×250，所有坐标乘以缩放 u = 目标宽度 / 240。
 //
@@ -40,7 +40,7 @@ export enum PetMood {
  * 学习关闭 → 睡着（优先于一切，连候选都不看）；
  * 缓冲为空 → 待命；有候选 → 等选；否则 → 困惑。
  *
- * 规格：android/app/src/test/kotlin/io/opi/input/pet/OpiPetMoodTest.kt
+ * 规格：android/app/src/test/kotlin/xyz/erik/opi/pet/OpiPetMoodTest.kt
  * （鸿蒙端没有可跑的测试环境，那份 Kotlin 单测就是本函数的验收标准。）
  */
 export function petMood(buffer: string, candidateCount: number, learnerEnabled: boolean): PetMood {

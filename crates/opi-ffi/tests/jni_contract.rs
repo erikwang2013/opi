@@ -374,7 +374,7 @@ fn jni_registration_matches_kotlin() {
 /// 方法，是一个都装不上），README 公开发布的那份冒烟**根本跑不起来**。复现（本机 Java 18）：
 /// ```text
 /// javac -d /tmp/smoke-out android/jni_smoke/Main.java
-/// java -Dopi.so=target/release/libopi_ffi.so -cp /tmp/smoke-out io.opi.input.jni.Main
+/// java -Dopi.so=target/release/libopi_ffi.so -cp /tmp/smoke-out xyz.erik.opi.jni.Main
 /// → UnsatisfiedLinkError: unsupported JNI version 0x00000000 required by …/libopi_ffi.so
 /// ```
 /// （⚠️ 那句 "unsupported JNI version" 是**误导性**报错：真因是注册失败导致进程里没有

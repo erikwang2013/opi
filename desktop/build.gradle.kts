@@ -48,7 +48,7 @@ java {
 
 compose.desktop {
     application {
-        mainClass = "io.opi.candidate.MainKt"
+        mainClass = "xyz.erik.opi.candidate.MainKt"
 
         nativeDistributions {
             // 构建验证用 Deb（Linux 主机，dpkg-deb 本机可用）；CMP 1.11 已移除
@@ -60,6 +60,28 @@ compose.desktop {
             packageVersion = "1.3.5"
             description = "OPI 拼音输入法候选窗（TSF 插件经 named pipe 通信）"
             vendor = "OPI"
+
+            // 应用图标 = 项目宠物「小欧」，与 Android 启动图标、候选窗里摊手的那个是同一张图
+            // （几何真源 docs/opi-pet.svg）。不挂的话装出来是 CMP 的 Kotlin 默认图标。
+            //
+            // 必须按平台分两份：CMP 把 iconFile **原样**作为 `--icon` 传给 jpackage，不做格式
+            // 转换（反编译 AbstractJPackageTask 确认；它自带的默认图标也是每平台一份：jar 里
+            // default-compose-desktop-icon-{linux.png,windows.ico,mac.icns}），而 jpackage 在
+            // Linux 只认 .png、Windows 只认 .ico。用 `linux{}`/`windows{}` 分挂 = 构建主机是哪台
+            // 就取哪份，与 targetFormats 的现实一致（Linux 主机打 Deb、Windows 主机打 Msi）。
+            //
+            // 两份都是渲染产物，**别手改**（改了下次重生成就无声回退）。重生成（在 desktop/ 下执行）：
+            //   rsvg-convert -w 1000 -h 1042 ../docs/opi-pet.svg -o /tmp/pet.png
+            //   magick /tmp/pet.png -background none -gravity center -extent 1042x1042 /tmp/m.png
+            //   magick /tmp/m.png -strip -resize 256x256 icons/opi-pet.png
+            //   magick /tmp/m.png -strip -define icon:auto-resize=256,128,64,48,32,16 icons/opi-pet.ico
+            // SVG 的 viewBox 是 240x250（非正方形）——前两条只做「按比例渲染 + 居中留白到方形」，
+            // 几何一个数没动；小欧还是那张图。
+            // `-strip` 不是装饰：不加的话 imagemagick 会把本次生成的 date:create/date:modify 写进
+            // PNG，同一张图每次重生成都得到不同字节（实测：像素签名相同、字节不同）—— 于是「没
+            // 改过小欧」也会在 git 里显示成改动。加上才可复现（连跑两次 md5 相同）。
+            linux { iconFile.set(layout.projectDirectory.file("icons/opi-pet.png").asFile) }
+            windows { iconFile.set(layout.projectDirectory.file("icons/opi-pet.ico").asFile) }
         }
     }
 }

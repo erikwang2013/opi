@@ -23,7 +23,7 @@ use super::checker::{read, strip_comments};
 pub const CONVERT_RS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/api/convert.rs");
 pub const KOTLIN_ENGINE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../android/app/src/main/kotlin/io/opi/input/engine/EngineController.kt"
+    "/../../android/app/src/main/kotlin/xyz/erik/opi/engine/EngineController.kt"
 );
 
 /// `{` 的下标 → 配对 `}` 的下标。

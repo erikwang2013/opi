@@ -45,7 +45,7 @@
 | 9 | 「Unicode 18.0.0 共 1447 条、覆盖 1429」 | **已作废**（判据换过，见 §二.3） | `scripts/gen_symbols.py` 头注释 + `crates/engine-core/tests/symbol_coverage.rs` 的 `UTS51_EMOJI` |
 | 10 | 「C 33 / JNI 26」 | **仍不成立**（见 §二.4） | `crates/opi-ffi/tests/c_abi/run.sh`（C 导出覆盖）+ `crates/opi-ffi/tests/jni_contract.rs`（注册表 1:1） |
 | 11 | 「`scripts/gen_symbols.py` 560 行」 | **工作区面出现过、提交态从未到过 500**（见 §二.5） | 500 门禁 `crates/opi-ffi/tests/line_limit.rs` |
-| 12 | 「中文标点开关出口」（新增出口，tag 正文有） | 出口与宿主声明都在、**六端无入口**（唯一调用点是两个测试夹具，见 §一.7） | `android/app/src/main/kotlin/io/opi/input/jni/OpiEngine.kt` 的 `toggleChinesePunct` 只有声明；C 侧只有 `crates/opi-ffi/tests/c_abi/consumer.c` |
+| 12 | 「中文标点开关出口」（新增出口，tag 正文有） | 出口与宿主声明都在、**六端无入口**（唯一调用点是两个测试夹具，见 §一.7） | `android/app/src/main/kotlin/xyz/erik/opi/jni/OpiEngine.kt` 的 `toggleChinesePunct` 只有声明；C 侧只有 `crates/opi-ffi/tests/c_abi/consumer.c` |
 | 13 | 「英文联想词源入库」 | 数据在、**无消费方** | `grep -rn 'en_words' --include=*.rs .` 只命中生成器脚本 |
 | 14 | 「Emoji 80 → 1472 条（条目 583 → 3332）」 | **tag 时点成立**（其后判据被换，见 §二.3） | `data/raw/LICENSES.md` 的 symbols.tsv 行已改成「别写死数字」 |
 | 15 | 「云同步不做」 | 成立（裁决，未变） | 不在本文件范围（README + 图） |

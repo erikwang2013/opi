@@ -1,8 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   项目宠物「小欧」自适应启动图标（API 26+）。
-  旧设备继续用 mipmap-*/ic_launcher.png 回退，两者同为键帽精灵形象。
   前景是纯 VectorDrawable：不引入任何 PNG 密度桶，任意尺寸都清晰。
+
+  API 21–25（minSdk=21）看不到自适应图标，落回 mipmap-*/ic_launcher.png。
+  这 5 个桶 = 本文件前景 drawable/ic_launcher_foreground.xml 的**中央 72dp 可见区**
+  （自适应图标被遮罩窗口裁剩的那块）+ colors.xml 的 ic_launcher_background 底色，
+  按各自密度栅格化而成 —— 形象与本文件一致，不是另一套图形。
+  ⚠️ 改这个前景矢量（几何/配色）就要同步重出这 5 个 PNG，否则两套形象又会分叉：
+  2026-09-28 之前它们一直是脚手架带来的 **Flutter 默认图标**（蓝色 F），
+  与上面这句「两者同为键帽精灵形象」相反 —— 旧设备用户看到的是 Flutter logo。
 -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/ic_launcher_background"/>

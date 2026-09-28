@@ -4,7 +4,7 @@
 //! C3：候选窗通信（Windows 目标专属；lib.rs 以 `#[cfg(target_os = "windows")]`
 //! 引入本模块，Linux 主机不编译 —— 与 tsf.rs 同构的双重隔离）。
 //!
-//! 【线协议：NDJSON over named pipe】（与 desktop/src/main/kotlin/io/opi/candidate/Main.kt
+//! 【线协议：NDJSON over named pipe】（与 desktop/src/main/kotlin/xyz/erik/opi/candidate/Main.kt
 //! 头注释互为镜像，改协议须同步两处）
 //!
 //! ```text

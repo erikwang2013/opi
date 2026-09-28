@@ -8,7 +8,7 @@ plugins {
 }
 
 android {
-    namespace = "io.opi.input"
+    namespace = "xyz.erik.opi"
     compileSdk = 34
     ndkVersion = "27.0.12077973"
 
@@ -31,7 +31,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "io.opi.input"
+        applicationId = "xyz.erik.opi"
         minSdk = 21
         targetSdk = 34
         // 与发布 tag 对齐（此前 9 个 tag 期间 versionCode 一直是 1、versionName 一直是

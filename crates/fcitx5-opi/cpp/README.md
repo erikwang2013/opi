@@ -193,6 +193,17 @@ Rust 侧状态不变，缓冲与上次推出去的一样就直接跳过 —— �
   物理键事件拿不到。胶水因此不合成该位，`handle_shift` 的长按分支
   （→ `shift_long_press`）在 fcitx5 桌面端不会被触发。
   需要 B3 定入口（CapsLock 映射，或按住超时），不要靠猜补一个信号。
+- **候选窗里画不出宠物「小欧」**（能力边界，不是漏做）：候选栏归 fcitx5 的
+  UI addon（classicui）画，第三方输入法只能递**数据**，递不了图 ——
+  `CandidateWord` 只有 `text()` / `comment()` 两个 `Text`（`candidatelist.h`），
+  而 `Text` 能带的样式只有 `TextFormatFlag` 的六种（下划线/高亮/粗体/删除线/
+  斜体/不提交，`textformatflags.h`）。把 fcitx5 的头文件全 grep 一遍
+  （Core + Utils + Config，5.1.12 的解包树），`Image`/`Pixmap`/`cairo`
+  **零命中**；唯一带 `svg` 字样的是 `icontheme.h` 的 `.svg/.png/.xpm`
+  扩展名表 —— 即整套插件 API 里能放「图」的位置只有一处：**主题图标名**
+  （`icon()` 一族返回 `std::string`，最终解析成一个图片**文件路径**）。
+  所以 Linux 端的小欧只能是**输入法图标**，不能进候选栏。这与 macOS 那条（候选窗是系统的
+  `IMKCandidates`，画不进去）是同一类边界、不同成因，别把两者合并叙述。
 - **UI 的 `NextPage`/`PrevPage` 是空操作**（实测：调了没有任何面板更新信号）。
   面板候选表恒单页，前端因此不画翻页箭头，不存在「点了没反应的控件」。
   翻页只走 PageUp/PageDown 键。要让箭头可点，得把整份候选交给 C++ 列表翻页
@@ -208,14 +219,32 @@ cmake --build build-fcitx5
 sudo cmake --install build-fcitx5        # 发行版打包：DESTDIR=<暂存树> cmake --install ...
 ```
 
-`cpp/CMakeLists.txt` 会按 fcitx5 **自己的查找规则**把四样东西放到四个地方：
+`cpp/CMakeLists.txt` 会按 fcitx5 **自己的查找规则**把五样东西放到五个地方：
 
-| 装什么 | 落到 |
-|---|---|
-| `libfcitx5_opi_glue.so` + `libfcitx5_opi.so` | fcitx5 的 addon 目录（与 `fcitx5-diagnose` 一致） |
-| `../data/addon/opi_fcitx5.conf` | `<prefix>/share/fcitx5/addon/` |
-| `../data/inputmethod/opi.conf` | `<prefix>/share/fcitx5/inputmethod/` |
-| `luna.opid` | `<prefix>/share/opi/` |
+| 装什么 | 落到 | 谁去那找 |
+|---|---|---|
+| `libfcitx5_opi_glue.so` + `libfcitx5_opi.so` | fcitx5 的 addon 目录（与 `fcitx5-diagnose` 一致） | addon 加载器 |
+| `../data/addon/opi_fcitx5.conf` | `<prefix>/share/fcitx5/addon/` | `Type::PkgData` |
+| `../data/inputmethod/opi.conf` | `<prefix>/share/fcitx5/inputmethod/` | `Type::PkgData` |
+| `../../../docs/opi-pet.svg` | `<prefix>/share/icons/hicolor/scalable/apps/` | `IconTheme::findIcon` |
+| `luna.opid` | `<prefix>/share/opi/` | `Type::Data` |
+
+⚠️ **图标为什么是原样一份 SVG**：`opi.conf` 的 `Icon=` 是**主题图标名**，不是
+路径 —— fcitx5 拿它在 XDG 图标目录里按名解析（hicolor 是 XDG 规定的公共回退
+主题，任何主题的继承链里都有它，其 `index.theme` 列出了 `scalable/apps`）。
+于是「小欧」不需要重绘、不需要转 PNG，
+把几何真源 `docs/opi-pet.svg` **原样装一份**就行。
+**谁真的会显示它**（逐条有机制判据，别扩大）：classicui 的托盘图标 ——
+`Instance::inputMethodIcon()` 取 `entry->icon()`，而 classicui 里对这个函数
+只有一处调用（在画托盘的那段 cairo 代码前），取不到就回退成 `entry->label()`
+的文字；core 的 dbus 模块也把 `icon` 编进 `availableInputMethods` 的返回值
+（`libdbus.so` 里两处都在编整套 getter）。
+⚠️ **但配置工具看不到它**：本机的 Qt 绑定 `FcitxQtInputMethodEntry`
+（libFcitx5Qt6DBusAddons 5.1.9）只带 `name` 与 `uniqueName`。别把「值上了线」
+读成「配置工具里显示得出来」。
+⚠️ 名字对不上时**不报错**，只是没图、回退成文字标签 —— 与「本来就没配图标」
+在用户侧不可区分，故 `opi_locate_check.cpp` 从装好的 `opi.conf` 里读 `Icon=`
+再问真库找不找得到（`checkIcon()`）。
 
 ⚠️ **词库为什么不在 `share/fcitx5/` 下面**：`loadDictionary()` 问的是
 `StandardPath::Type::Data`（纯 XDG 数据目录），而两个 conf 是 fcitx5 的 addon
@@ -264,6 +293,16 @@ cp -r ../data/* "${XDG_DATA_HOME:-$HOME/.local/share}/fcitx5/"
 **少了 `inputmethod/opi.conf` 就注册不出输入法**：可用输入法列表是 fcitx5
 扫描 `inputmethod/*.conf` 得到的，与 addon 的 `OnDemand` 取什么值无关
 （实测 `OnDemand=True/False` 两种都能加载并注册）。
+
+图标（选装，缺了只是没图 —— 面板/托盘回退成文字标签）：
+
+```bash
+mkdir -p "${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps"
+cp ../../../docs/opi-pet.svg "${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps/"
+```
+
+文件名的**去扩展名部分**必须等于 `../data/inputmethod/opi.conf` 里的 `Icon=`
+（当前是 `opi-pet`）。名字对不上不报错，只是没图。
 
 ### 2. `.so`（两种落地方式，选一种）
 

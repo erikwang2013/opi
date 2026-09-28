@@ -302,7 +302,7 @@ Swift 看不见裸 C 符号，必须经一个头文件。两种接法，任选�
 | 链接库 | `libopi_ffi.a` |
 | 链接框架 | `InputMethodKit`、`Cocoa`（`-framework InputMethodKit -framework Cocoa`） |
 | `SWIFT_OBJC_BRIDGING_HEADER` | `macos/OpiFFI.h` |
-| `PRODUCT_BUNDLE_IDENTIFIER` | 例如 `io.opi.inputmethod`（要进 Info.plist 的 `CFBundleIdentifier`） |
+| `PRODUCT_BUNDLE_IDENTIFIER` | 例如 `xyz.erik.opi`（要进 Info.plist 的 `CFBundleIdentifier`） |
 | 产物 | `OpiInputMethod.app`（**必须**是 .app，`main.swift` 靠 `Bundle.main` 取连接名与 bundle id） |
 
 ## 安装与启用
