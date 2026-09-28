@@ -4,6 +4,12 @@
 
 ## 一款回归本质、人人可用的多端输入法
 
+> **想装到自己机器上？** 各端安装教程在 **[`docs/install/`](docs/install/README.md)**
+> （编译 / 打包 / 安装 / 使用，按平台分册）。
+> **装完还有一步必做**：重启 fcitx5 并把 OPI **加进输入法组** —— 新装的输入法不会自动
+> 启用，不做这步输入法列表里看得到它、打字什么都不会发生。
+> 逐条命令见 [`docs/install/linux.md`](docs/install/linux.md) 的 §4。
+
 <img src="docs/opi-pet.svg" width="168" align="right" alt="OPI 项目宠物：键帽精灵「小欧」">
 
 ### 🐾 认识小欧
@@ -83,7 +89,7 @@
 - **单字全覆盖门禁**：GB2312 全量单字逐一断言有候选（`trad_coverage` 集成测试，字数判据写在测试里）。改词库若撞坏覆盖度，CI 直接红
 - **词库坏了绝不崩输入法**：装载策略各端统一 —— **坏路径一律返回 `Err`，不静默回退**（`engine-data/src/dictionary.rs` 的 `load_or_fallback` 注释写明此前的静默回退是有意删除的：UI 会误以为完整词库已加载）；只有**未提供路径**（含空串）时才用内置回退词库（`data/raw/fallback.tsv`，条数以该文件行数为准）。是否再从 `Err` 兜底由调用方决定：Android 的 `EngineLoader` 接住后用内置词库重试（`EngineLoader.kt` 的 `fallback()`），fcitx5 / TSF 上抛（`fcitx5-opi/src/lib.rs` / `tsf-opi/src/tsf.rs` 的装载调用点）
 - **词库分发通路**：Android 走 assets → filesDir（`EngineLoader.kt`）、fcitx5 走 XDG 数据目录且由 CMake 安装（`fcitx5-opi/cpp/CMakeLists.txt`）、Windows 走 `OPI_DICT_PATH` 环境变量 → DLL 同目录 → `%LOCALAPPDATA%\opi` → 内置回退（`tsf-opi/src/dict_path.rs`）。⚠️ **Windows 侧仍无打包步骤**，故开箱即用仍是内置回退词库 —— 通路已备、拷贝动作没有
-- **Linux 侧已能打成发行版包**：`scripts/build-packages.sh` + `scripts/nfpm.yaml` 把 `cmake --install` 的暂存树原样搬进 `.deb` / `.rpm`（两个 `.so`、两个 conf、`luna.opid` 与两份许可证文本 —— **包内清单用 `dpkg-deb -c` / `rpm -qlp` 现场核，别照抄这句**），`.github/workflows/packages.yml` 在 release 时构建并附到 release 上。**运行时门槛是 fcitx5 5.0**：声明在 `crates/fcitx5-opi/data/addon/opi_fcitx5.conf` 的 `[Addon/Dependencies]`（写高了 addon 整个不加载，用户拿到一个「选得到、一个字都不出」的输入法，日志里还没有 opi 的报错），CI 在 debian:12 容器里带阳性 / 现行值 / 阴性三臂对照守着它。⚠️ 这条打包通路**只到「产物打得出来、包内清单与暂存树对得上」为止** —— 没有任何门禁真的 `dpkg -i` / `rpm -i` 过它；CI 验的是**同一棵暂存树**（`cmake --install` + `cp`），不是包本身
+- **Linux 侧已能打成发行版包**：`scripts/build-packages.sh` + `scripts/nfpm.yaml` 把 `cmake --install` 的暂存树原样搬进 `.deb` / `.rpm`（两个 `.so`、两个 conf、`luna.opid` 与两份许可证文本 —— **包内清单用 `dpkg-deb -c` / `rpm -qlp` 现场核，别照抄这句**），`.github/workflows/packages.yml` **手动触发**（`gh workflow run packages.yml --ref <tag 或分支>`，或 Actions 页面 → Packages → Run workflow）；产物在该次 run 的 artifact `opi-packages` 里，**只有填了 tag 输入项才会附到 release 上**。**运行时门槛是 fcitx5 5.0**：声明在 `crates/fcitx5-opi/data/addon/opi_fcitx5.conf` 的 `[Addon/Dependencies]`（写高了 addon 整个不加载，用户拿到一个「选得到、一个字都不出」的输入法，日志里还没有 opi 的报错），CI 在 debian:12 容器里带阳性 / 现行值 / 阴性三臂对照守着它。⚠️ 这条打包通路**只到「产物打得出来、包内清单与暂存树对得上」为止** —— 没有任何门禁真的 `dpkg -i` / `rpm -i` 过它；CI 验的是**同一棵暂存树**（`cmake --install` + `cp`），不是包本身
 - **词库共建**：源数据是纯文本 `data/raw/*.tsv`，提交 / 审核 / 合并走 PR。流程与**许可证要求**见 [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 #### 4. 拒绝「功能膨胀」
@@ -195,6 +201,10 @@ cd desktop && ./gradlew package             # Windows 候选窗（Compose Deskto
 > **硬错误**（与 `-Werror` 无关），而两个老版本的头在 C++20 下照样零警告零错误。
 > 分界在哪一版、两边各在什么版本上实测过，都写在该文件的头注释里；**别照抄这里的说法去改那个值**。
 
+> **上面这些命令的落点是「已经编出来 / 打成包了」，还不是「装上了」。** 装机步骤、以及
+> **装完之后那一步必做的动作**（重启 fcitx5 + 把 OPI 加进输入法组），见
+> [`docs/install/`](docs/install/README.md)。
+
 ### 📁 项目结构
 
 ```
@@ -250,8 +260,9 @@ scripts/                       # 词库生成：gen_luna_dict.py · gen_trad_dic
                                #   TSF Windows 目标 / Apple 目标）· msrv（按 rust-version 推导工具链真编）·
                                #   android · fcitx5（C++ 编译 + 安装落点 + debian:12 容器里带三臂对照真加载）
                                #   ⚠️ job 与步骤的完整清单以该文件为准，别照抄这一行
-.github/workflows/packages.yml # 打包 .deb / .rpm，release 时附到 release 上 —— 与 ci.yml 分开是
-                               #   因为两条通路的失败含义不同（它只在发版时有意义）
+.github/workflows/packages.yml # 打包 .deb / .rpm —— **手动触发**（`gh workflow run packages.yml --ref
+                               #   <tag 或分支>`，或 Actions 页面 → Packages → Run workflow）。产物在该次 run 的
+                               #   artifact `opi-packages` 里，**只有填了 tag 输入项才附到 release** —— 与 ci.yml 分开是因为两条通路的失败含义不同
 LICENSE · CONTRIBUTING.md      # MIT 全文 · 贡献指南（含词库许可证要求）
 ```
 

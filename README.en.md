@@ -4,6 +4,12 @@
 
 ## An input method that goes back to the basics — for everyone, on every device
 
+> **Want OPI on your own machine?** The per-platform tutorials live in
+> **[`docs/install/`](docs/install/README.md)** (build / package / install / use).
+> **One step is mandatory after installing**: restart fcitx5 and **add OPI to the input method
+> group** — a fresh install is not enabled automatically, and without it OPI shows up in the list
+> while typing does nothing. Steps: [`docs/install/linux.md`](docs/install/linux.md) §4.
+
 <img src="docs/opi-pet.svg" width="168" align="right" alt="OPI's project pet: Opi the keycap sprite">
 
 ### 🐾 Meet Opi
@@ -83,7 +89,7 @@ The name says it all:
 - **Full single-character coverage gate**: every GB2312 character is asserted to produce candidates (`trad_coverage` integration test; the character-count criterion lives inside the test). Break the coverage with a dictionary change and CI goes red
 - **A broken dictionary never crashes the input method**: the loading policy is the same on every client — **a bad path always returns `Err` and never falls back silently** (the comment on `engine-data/src/dictionary.rs`'s `load_or_fallback` records that the earlier silent fallback was deliberately removed: the UI would believe a full dictionary had loaded), and the built-in fallback dictionary (`data/raw/fallback.tsv`; take its size from that file's line count) is used only when **no path is configured at all** (an empty string counts as none). Whether to recover from that `Err` is the caller's decision: Android's `EngineLoader` catches it and retries with the built-in dictionary (`EngineLoader.kt`'s `fallback()`), while fcitx5 and TSF propagate it (the load call sites in `fcitx5-opi/src/lib.rs` and `tsf-opi/src/tsf.rs`)
 - **Dictionary distribution paths**: Android goes assets → filesDir (`EngineLoader.kt`), fcitx5 uses the XDG data directory and is installed by CMake (`fcitx5-opi/cpp/CMakeLists.txt`), and Windows tries `OPI_DICT_PATH` → the DLL's own directory → `%LOCALAPPDATA%\opi` → built-in fallback (`tsf-opi/src/dict_path.rs`). ⚠️ **Windows still has no packaging step**, so out of the box it still runs on the built-in fallback dictionary — the path exists, the copy does not
-- **Linux now produces distribution packages**: `scripts/build-packages.sh` plus `scripts/nfpm.yaml` move the `cmake --install` staging tree verbatim into `.deb` / `.rpm` (two `.so` files, two conf files, `luna.opid` and two licence texts — **check the package contents with `dpkg-deb -c` / `rpm -qlp` rather than copying this line**), and `.github/workflows/packages.yml` builds them on release and attaches them to the release. **The runtime floor is fcitx5 5.0**: it is declared in `crates/fcitx5-opi/data/addon/opi_fcitx5.conf`'s `[Addon/Dependencies]` (declare it too high and the addon does not load at all — the user gets an input method that can be selected and types nothing, with no opi-related error in the log), and CI guards it in a debian:12 container with positive / current / negative arms. ⚠️ This packaging path goes **only as far as "the artifact builds and the package contents match the staging tree"** — no gate has ever `dpkg -i` / `rpm -i`'d it; CI verifies the **same staging tree** (`cmake --install` + `cp`), not the package itself
+- **Linux now produces distribution packages**: `scripts/build-packages.sh` plus `scripts/nfpm.yaml` move the `cmake --install` staging tree verbatim into `.deb` / `.rpm` (two `.so` files, two conf files, `luna.opid` and two licence texts — **check the package contents with `dpkg-deb -c` / `rpm -qlp` rather than copying this line**), and `.github/workflows/packages.yml` is **manually triggered** (`gh workflow run packages.yml --ref <tag-or-branch>`, or Actions → Packages → Run workflow) — artifacts land in that run's artifact `opi-packages`, and **they are attached to a release only if the tag input is filled in**. **The runtime floor is fcitx5 5.0**: it is declared in `crates/fcitx5-opi/data/addon/opi_fcitx5.conf`'s `[Addon/Dependencies]` (declare it too high and the addon does not load at all — the user gets an input method that can be selected and types nothing, with no opi-related error in the log), and CI guards it in a debian:12 container with positive / current / negative arms. ⚠️ This packaging path goes **only as far as "the artifact builds and the package contents match the staging tree"** — no gate has ever `dpkg -i` / `rpm -i`'d it; CI verifies the **same staging tree** (`cmake --install` + `cp`), not the package itself
 - **Community dictionaries**: the source data is plain text in `data/raw/*.tsv`; submit, review and merge via PR. Process and **licensing requirements** are in [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 #### 4. No Feature Bloat
@@ -195,6 +201,10 @@ cd desktop && ./gradlew package             # Windows candidate window (Compose 
 > which versions were measured on each side are in that file's header comment; **do not change that
 > value based on what this line says**.
 
+> **The commands above get you to "it is built / packaged", not to "it is installed".** The install
+> steps — plus **the one mandatory action after installing** (restart fcitx5 and add OPI to the
+> input method group) — are in [`docs/install/`](docs/install/README.md).
+
 ### 📁 Repository Structure
 
 ```
@@ -250,8 +260,9 @@ scripts/                       # dictionary generation: gen_luna_dict.py · gen_
                                #   TSF Windows target / Apple targets) · msrv (derives the toolchain from rust-version and really compiles) ·
                                #   android · fcitx5 (C++ build + install location + real load in a debian:12 container with three-arm controls)
                                #   ⚠️ the full list of jobs and steps is that file — don't copy this line
-.github/workflows/packages.yml # builds .deb / .rpm and attaches them to the release — separate from ci.yml
-                               #   because the two paths fail for different reasons (and it only matters on release)
+.github/workflows/packages.yml # builds .deb / .rpm — **manually triggered** (`gh workflow run packages.yml
+                               #   --ref <tag-or-branch>`, or Actions → Packages → Run workflow). Artifacts land in that
+                               #   run's artifact `opi-packages`; **attached to a release only if the tag input is filled in** — separate from ci.yml because the two paths fail differently
 LICENSE · CONTRIBUTING.md      # MIT full text · contribution guide (incl. dictionary licensing)
 ```
 
