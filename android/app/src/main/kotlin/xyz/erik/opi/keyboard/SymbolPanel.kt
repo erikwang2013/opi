@@ -115,6 +115,12 @@ fun SymbolPanel(
                 val shown = if (tab == SymbolTab.Emoji) results.filter(catalog::isEmoji) else results
                 // 空结果此前是一片空白：用户分不清「搜过了没有」和「面板没反应」。
                 // 同候选栏的「无匹配」——小欧摊手 + 一句白话。
+                //
+                // ⚠️ 这里**有意**写死 `PUZZLED`，**不走 `petMood`** —— 别去「修」成与
+                // CandidateBar.kt 一致：那个「无匹配」是**词典**的直接产物（降级时几乎每次
+                // 输入都落到那里），所以它走真实 `petMood`；而符号搜索查的是**符号表**，
+                // 与 luna.opid **无因果关系**，词库降级根本不是这次「无匹配」的成因 ——
+                // 接上去就是让宠物**假报**「引擎坏了」。两处看着不一致，是**判据不同**。
                 if (shown.isEmpty()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         OpiPet(mood = PetMood.PUZZLED, size = 30.dp)
