@@ -3,10 +3,10 @@ resolver = "2"
 members = ["crates/engine-core", "crates/engine-data", "crates/opi-tools", "crates/opi-ffi", "crates/fcitx5-opi", "crates/tsf-opi"]
 
 # 单一版本源：6 个 crate 全用 version.workspace = true。
-# 与发布 tag（v1.3.7）及 android versionName / desktop packageVersion 对齐 ——
+# 与发布 tag（v1.4.0）及 android versionName / desktop packageVersion 对齐 ——
 # 此前 tag 已到 v1.0.8 而 crate 仍写死 0.1.0，`opi-tools --version` 无从报告真实版本。
 [workspace.package]
-version = "1.3.7"
+version = "1.4.0"
 edition = "2024"
 # MSRV：edition 2024 只要求 1.85，真正卡住下界的是 let-chain（1.88 才稳定）。
 # ⚠️ 别信「全仓只有一处」—— 编译在第一个失败处就停，下游客到不了，
