@@ -16,7 +16,9 @@ import xyz.erik.opi.jni.EngineLoader
 class SettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        EngineLoader.load(this)
-        setContent { SettingsScreen() }
+        // 装载返回值 = 小欧表情的降级信号（false = 回退内置 35 词库 → 折断天线）。
+        // 不能丢：设置页那只小欧就是给用户看引擎状态的，丢了就永远显示「一切正常」。
+        val dictionaryLoaded = EngineLoader.load(this)
+        setContent { SettingsScreen(dictionaryDegraded = !dictionaryLoaded) }
     }
 }

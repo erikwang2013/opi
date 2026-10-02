@@ -33,8 +33,12 @@ const SYM_ROW_1: string[] = ['[', ']', '{', '}', '#', '%', '^', '*', '+', '='];
 const SYM_ROW_2: string[] = ['_', '\\', '|', '~', '<', '>', '€', '£', '¥', '•'];
 const SYM_ROW_3: string[] = ['.', ',', '?', '!', '\'', '"', '-', ':', ';'];
 
-/** 候选栏里的小欧尺寸。**小于 64vp 所以自动不刻 OPI**（刻字会糊成脏点）。 */
-const PET_SIZE_IN_BAR: number = 34;
+/**
+ * 候选栏里的小欧尺寸。**小于 64vp 所以自动不刻 OPI**（刻字会糊成脏点）。
+ * 与 Android 三处落点同值（`ImeScreen.kt` / `CandidateBar.kt` / `SymbolPanel.kt`
+ * 的 `size = 30.dp`）—— 两端要一致改。
+ */
+const PET_SIZE_IN_BAR: number = 30;
 
 @Entry
 @Component
@@ -70,6 +74,12 @@ struct Index {
   /**
    * 小欧的情绪：**由输入状态推导，本页不自己维护**（与 Android 端同一套规则，
    * 纯函数 petMood 在 OpiPet.ets，规格见 OpiPetMoodTest.kt）。
+   *
+   * ⚠️ **只传 3 参**，`dictionaryDegraded` 用默认 `false` —— 不是漏了，是**鸿蒙端拿不到
+   * 那个信号**：`KeyboardController.ensureDictionary()` 调的是 `OpiEngine.loadDictionary('')`，
+   * 空路径按设计就直达内置词库（鸿蒙的完整词库装载尚未实现），所以它的返回值恒为 true，
+   * 区分不出「装上了」与「回退了」。
+   * ⇒ **鸿蒙端永远画不出 DEGRADED**。等哪天完整词库装载落地，这里要跟着接上。
    */
   private mood(): PetMood {
     return petMood(this.buffer, this.candidates.length, this.learner === 1);

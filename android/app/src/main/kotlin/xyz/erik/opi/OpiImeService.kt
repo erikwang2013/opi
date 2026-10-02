@@ -162,7 +162,9 @@ class OpiImeService : InputMethodService() {
         }
         Log.i(TAG, "onCreateInputView: start")
         // luna 词库编排（幂等：size 校验重拷；失败回退内置词库；与设置页共享 Rust 单例）
-        EngineLoader.load(this)
+        // 返回值是词库装载结果（false = 回退到内置 35 词库），接住它喂给宠物：降级时
+        // 候选栏待命位的小欧折断天线（DEGRADED），而不是照旧笑嘻嘻。
+        engineController.reportDictionaryLoad(EngineLoader.load(this))
         // 用户词导入必须在词库装载之后、建视图之前：文件缺失/损坏静默降级（不崩 IME），
         // 且要赶在第一次刷新候选之前生效
         userWords.load()

@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.sp
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.pet.OpiPet
-import xyz.erik.opi.pet.PetMood
+import xyz.erik.opi.pet.petMood
 
 /**
  * 候选栏高度（dp）。OpiImeService 把它算进 IME 窗口高度、ImeScreen 用它预留位置：
@@ -132,11 +132,19 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
                     fontSize = 20.sp,
                 )
             }
-            // 拼音无候选：小欧出来摊手，比一行灰字更不像"卡住了"
+            // 拼音无候选：小欧出来摊手，比一行灰字更不像"卡住了"。
+            // 情绪不能写死 PUZZLED：这里的「无匹配」是**词典**的直接产物，降级时（引擎
+            // 跑在内置 35 词库上）几乎每个输入都会走到这里，摊手就成了拿「你打错了」
+            // 冒充「引擎坏了」（petMood 头注点名要避免的）。关掉学习同理 → SLEEPY。
             if (candidates.isEmpty() && controller.buffer.isNotEmpty()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OpiPet(
-                        mood = PetMood.PUZZLED,
+                        mood = petMood(
+                            buffer = controller.buffer,
+                            candidateCount = controller.candidates.size,
+                            learnerEnabled = controller.learnerEnabled,
+                            dictionaryDegraded = controller.dictionaryDegraded,
+                        ),
                         size = 30.dp,
                         modifier = Modifier.padding(start = 12.dp),
                     )

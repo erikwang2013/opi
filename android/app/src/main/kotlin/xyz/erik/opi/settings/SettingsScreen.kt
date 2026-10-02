@@ -47,10 +47,14 @@ import java.io.IOException
  * 设置页（对齐 flutter settings_page.dart）：学习开关 / 清除用户词库（确认对话框）/
  * 导出词库 JSON 到剪贴板 / 从剪贴板或文件导入词库 JSON。JNI 直接调 Rust 静态单例——
  * 设置页与 IME 共享引擎与 Learner（spec §5），开关即时生效。
+ *
+ * @param dictionaryDegraded 词库装载是否失败（`EngineLoader.load` 返回 false）。
+ *   **没有默认值是有意的**：默认 false 会让将来的调用方静默退回「永远显示一切正常」，
+ *   那正是这个参数要修的毛病。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(dictionaryDegraded: Boolean) {
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -139,18 +143,32 @@ fun SettingsScreen() {
         ) {
             // 小欧报到：表情跟着「学习」开关走 —— 一眼看出引擎在不在记事，
             // 比读一行说明文字快。
+            //
+            // 优先级：**降级 > 睡着**（petMood 里 dictionaryDegraded 在链首，是有意的）。
+            // 所以词库没装上时，即便用户关了学习也不会显示睡着的表情 —— 断天线说的是
+            // 「引擎坏了」，比「我不记事」紧急，也不该让用户以为自己关过什么开关。
+            // 下面的文字必须跟着一起走：小欧是装饰性 mascot，语义由这行文本承担
+            //（见 OpiPet 头注），表情断天线而文字说「醒着」就是自相矛盾。
             ListItem(
                 leadingContent = {
                     OpiPet(
-                        mood = petMood(buffer = "", candidateCount = 0, learnerEnabled = learner),
+                        mood = petMood(
+                            buffer = "",
+                            candidateCount = 0,
+                            learnerEnabled = learner,
+                            dictionaryDegraded = dictionaryDegraded,
+                        ),
                         size = 72.dp,
                     )
                 },
                 headlineContent = { Text("Open People Input") },
                 supportingContent = {
                     Text(
-                        if (learner) "小欧醒着 —— 你选的词它都记着"
-                        else "小欧睡着了 —— 不记词，也不联网",
+                        when {
+                            dictionaryDegraded -> "小欧的词典没装上 —— 现在只认得几十个常用词"
+                            learner -> "小欧醒着 —— 你选的词它都记着"
+                            else -> "小欧睡着了 —— 不记词，也不联网"
+                        },
                     )
                 },
             )

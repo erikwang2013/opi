@@ -37,18 +37,34 @@ import androidx.compose.ui.unit.dp
  * docs/opi-pet.svg 与这里的常量，二者共享同一套几何。
  */
 
-/** 宠物情绪。由输入状态推导，不自己维护状态。 */
-enum class PetMood { IDLE, WAITING, PUZZLED, SLEEPY }
+/**
+ * 宠物情绪。由输入状态推导，不自己维护状态。
+ *
+ * 枚举顺序是跨端契约（鸿蒙端逐值镜像），新成员只能加在末尾。
+ */
+enum class PetMood { IDLE, WAITING, PUZZLED, SLEEPY, DEGRADED }
 
 /**
  * 由当前输入状态推导情绪（纯函数，无 Android 依赖，JVM 单测覆盖）。
  *
+ * - 词库没装上（跑在内置词库上）→ [PetMood.DEGRADED] 天线折断。优先于一切：这是
+ *   引擎自己的状态，与用户打了什么无关 —— 此时绝不能拿 [PetMood.PUZZLED] 冒充，
+ *   后者的定义是「用户打错了」，不是「引擎坏了」。
  * - 学习关闭 → [PetMood.SLEEPY] 睡着了，不记事
  * - 缓冲为空 → [PetMood.IDLE] 安静待命（英文/数字模式直传时同样是空缓冲）
  * - 有候选 → [PetMood.WAITING] 竖起天线等你挑
  * - 有缓冲无候选 → [PetMood.PUZZLED] 乱码拼音，它也没辙
+ *
+ * @param dictionaryDegraded 引擎是否降级（词库装载失败）。默认 `false` 是有意的：
+ *   宿主接上真信号之前，现有调用方不受影响。
  */
-fun petMood(buffer: String, candidateCount: Int, learnerEnabled: Boolean): PetMood = when {
+fun petMood(
+    buffer: String,
+    candidateCount: Int,
+    learnerEnabled: Boolean,
+    dictionaryDegraded: Boolean = false,
+): PetMood = when {
+    dictionaryDegraded -> PetMood.DEGRADED
     !learnerEnabled -> PetMood.SLEEPY
     buffer.isEmpty() -> PetMood.IDLE
     candidateCount > 0 -> PetMood.WAITING
@@ -96,6 +112,14 @@ private const val CANVAS_H = 250f
 /**
  * 画一只小欧。
  *
+ * 无障碍：这些落点**不用**挂 semantics —— 小欧画在 `Canvas` 没有 `contentDescription`
+ * 的那条重载上（Spacer + drawBehind，不产语义节点），读屏跳过它是**有意的口径**
+ * （已裁决）：小欧是装饰性 mascot，语义由它旁边的文本承担（候选栏 / 符号面板的
+ * 「无匹配」、设置页的「小欧醒着…」）；ImeScreen 的待命位旁边没有文本，那里是空缓冲，
+ * 本就无可播报的信息。`Canvas` 另有带 `contentDescription` 的重载，要改用那条时先看边界。
+ * 边界：若小欧将来成了某处的**唯一**信号（旁边再无文本），这条口径要重审。
+ * 参考：iOS 侧「每个键缺 `accessibilityLabel`」是另一回事，见 docs/install/ios.md 的 L3。
+ *
  * @param mood 情绪，决定眼睛、嘴与天线的形态；用 [petMood] 从输入状态推导。
  * @param palette 配色；深色底宿主传 [PetPalette.Dark]。
  * @param size 键帽宽度（高度按 240:250 自动推导）。
@@ -133,6 +157,7 @@ private fun DrawScope.drawPet(
     val sleepy = mood == PetMood.SLEEPY
     val puzzled = mood == PetMood.PUZZLED
     val waiting = mood == PetMood.WAITING
+    val broken = mood == PetMood.DEGRADED
 
     // 落地投影 + 底部按键涟漪（与 docs/opi-pet.svg 同几何）。
     // 小尺寸下几乎看不见，但文件头承诺「共享同一套几何」，缺了它这句话就不成立。
@@ -161,22 +186,49 @@ private fun DrawScope.drawPet(
         style = Stroke(4f * u, cap = StrokeCap.Round),
     )
 
-    // 天线：声调符号 ˉ（一声）。睡着时垂下来。
-    rotate(degrees = if (sleepy) 24f else 0f, pivot = Offset(120f * u, 48f * u)) {
+    // 天线：声调符号 ˉ（一声）。睡着时整体垂下来；引擎降级时折断 ——
+    // 杆变短、断口两侧不连，断掉的上半截带着朱砂横线绕断口斜挂 62°。
+    if (broken) {
         drawLine(
             color = primary,
             start = Offset(120f * u, 52f * u),
-            end = Offset(120f * u, if (waiting) 24f * u else 28f * u),
+            end = Offset(120f * u, 37f * u),
             strokeWidth = stroke,
             cap = StrokeCap.Round,
         )
-        drawLine(
-            color = accent,
-            start = Offset(103f * u, if (waiting) 14f * u else 20f * u),
-            end = Offset(137f * u, if (waiting) 14f * u else 20f * u),
-            strokeWidth = 7f * u,
-            cap = StrokeCap.Round,
-        )
+        rotate(degrees = 62f, pivot = Offset(120f * u, 37f * u)) {
+            drawLine(
+                color = primary,
+                start = Offset(120f * u, 37f * u),
+                end = Offset(120f * u, 28f * u),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = accent,
+                start = Offset(103f * u, 20f * u),
+                end = Offset(137f * u, 20f * u),
+                strokeWidth = 7f * u,
+                cap = StrokeCap.Round,
+            )
+        }
+    } else {
+        rotate(degrees = if (sleepy) 24f else 0f, pivot = Offset(120f * u, 48f * u)) {
+            drawLine(
+                color = primary,
+                start = Offset(120f * u, 52f * u),
+                end = Offset(120f * u, if (waiting) 24f * u else 28f * u),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = accent,
+                start = Offset(103f * u, if (waiting) 14f * u else 20f * u),
+                end = Offset(137f * u, if (waiting) 14f * u else 20f * u),
+                strokeWidth = 7f * u,
+                cap = StrokeCap.Round,
+            )
+        }
     }
 
     // 手臂：先画，接缝交给键帽正面压住。

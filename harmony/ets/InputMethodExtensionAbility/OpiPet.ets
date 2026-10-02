@@ -23,7 +23,7 @@
 //   3. 【未核实】刻字**居中**的基准可能不同：OpiPet.kt 用 `layout.size.width` 居中，
 //      而 Compose 的 letterSpacing 在**最后一个字母后面也加**，所以那个 width 可能
 //      含一段尾随间距；本文件是显式减掉 gap、按**墨迹框**居中。若前者确实含尾随间距，
-//      这里的 OPI 会**偏右 gap/2 ≈ 2.25 设计单位**（34vp 时约 0.3vp）。方向与量级本机
+//      这里的 OPI 会**偏右 gap/2 ≈ 2.25 设计单位**（30vp 时约 0.28vp）。方向与量级本机
 //      都测不了（无鸿蒙设备），故**两边都没改** —— 改了反而可能偏离 SVG 的
 //      text-anchor="middle"。要定案得在真机上量一次。
 //
@@ -44,19 +44,28 @@ export enum PetMood {
   Puzzled = 2,
   /** 睡着了，不记事（学习关闭） */
   Sleepy = 3,
+  /** 引擎降级：词库没装上，跑在内置词库上（天线折断） */
+  Degraded = 4,
 }
 
 /**
  * 由当前输入状态推导情绪（纯函数，无 UI 依赖）。
  *
- * **判断顺序不能改**，四条分支是 OpiPet.kt 的逐条镜像：
- * 学习关闭 → 睡着（优先于一切，连候选都不看）；
- * 缓冲为空 → 待命；有候选 → 等选；否则 → 困惑。
+ * **判断顺序不能改**，五条分支是 OpiPet.kt 的逐条镜像：
+ * 词库降级 → 降级（**优先于一切**：那是引擎自己的状态，与用户打了什么无关）；
+ * 学习关闭 → 睡着（连候选都不看）；缓冲为空 → 待命；有候选 → 等选；否则 → 困惑。
+ *
+ * ⚠️ **降级优先于睡着**是有意的：词库没装上比「学不学习」紧急得多。所以关掉学习
+ * 的同时又降级时，显示的是降级 —— 见 OpiPet.kt 里同一处的说明。
  *
  * 规格：android/app/src/test/kotlin/xyz/erik/opi/pet/OpiPetMoodTest.kt
  * （鸿蒙端没有可跑的测试环境，那份 Kotlin 单测就是本函数的验收标准。）
  */
-export function petMood(buffer: string, candidateCount: number, learnerEnabled: boolean): PetMood {
+export function petMood(buffer: string, candidateCount: number, learnerEnabled: boolean,
+                       dictionaryDegraded: boolean = false): PetMood {
+  if (dictionaryDegraded) {
+    return PetMood.Degraded;
+  }
   if (!learnerEnabled) {
     return PetMood.Sleepy;
   }
@@ -151,6 +160,7 @@ export struct OpiPet {
     const sleepy: boolean = this.mood === PetMood.Sleepy;
     const puzzled: boolean = this.mood === PetMood.Puzzled;
     const waiting: boolean = this.mood === PetMood.Waiting;
+    const broken: boolean = this.mood === PetMood.Degraded;
     const stroke: number = 5 * u;
 
     ctx.clearRect(0, 0, this.size, this.size * CANVAS_H / CANVAS_W);
@@ -175,26 +185,53 @@ export struct OpiPet {
     ctx.quadraticCurveTo(120 * u, 236 * u, 148 * u, 226 * u);
     ctx.stroke();
 
-    // 天线：拼音声调 ˉ（一声）。睡着时整根垂下来。
+    // 天线：拼音声调 ˉ（一声）。睡着时整根垂下来；引擎降级时折断 ——
+    // 杆变短、断掉的上半截带着朱砂横线绕断口斜挂 62°。
     ctx.save();
-    if (sleepy) {
-      ctx.translate(120 * u, 48 * u);
-      ctx.rotate(24 * Math.PI / 180);
-      ctx.translate(-120 * u, -48 * u);
-    }
     ctx.lineCap = 'round';
-    ctx.strokeStyle = p.primary;
-    ctx.lineWidth = stroke;
-    ctx.beginPath();
-    ctx.moveTo(120 * u, 52 * u);
-    ctx.lineTo(120 * u, (waiting ? 24 : 28) * u);
-    ctx.stroke();
-    ctx.strokeStyle = p.accent;
-    ctx.lineWidth = 7 * u;
-    ctx.beginPath();
-    ctx.moveTo(103 * u, (waiting ? 14 : 20) * u);
-    ctx.lineTo(137 * u, (waiting ? 14 : 20) * u);
-    ctx.stroke();
+    if (broken) {
+      // 杆只剩下半截
+      ctx.strokeStyle = p.primary;
+      ctx.lineWidth = stroke;
+      ctx.beginPath();
+      ctx.moveTo(120 * u, 52 * u);
+      ctx.lineTo(120 * u, 37 * u);
+      ctx.stroke();
+      // 断掉的上半截 + 朱砂横线，绕断口 (120,37) 斜挂
+      ctx.save();
+      ctx.translate(120 * u, 37 * u);
+      ctx.rotate(62 * Math.PI / 180);
+      ctx.translate(-120 * u, -37 * u);
+      ctx.beginPath();
+      ctx.moveTo(120 * u, 37 * u);
+      ctx.lineTo(120 * u, 28 * u);
+      ctx.stroke();
+      ctx.strokeStyle = p.accent;
+      ctx.lineWidth = 7 * u;
+      ctx.beginPath();
+      ctx.moveTo(103 * u, 20 * u);
+      ctx.lineTo(137 * u, 20 * u);
+      ctx.stroke();
+      ctx.restore();
+    } else {
+      if (sleepy) {
+        ctx.translate(120 * u, 48 * u);
+        ctx.rotate(24 * Math.PI / 180);
+        ctx.translate(-120 * u, -48 * u);
+      }
+      ctx.strokeStyle = p.primary;
+      ctx.lineWidth = stroke;
+      ctx.beginPath();
+      ctx.moveTo(120 * u, 52 * u);
+      ctx.lineTo(120 * u, (waiting ? 24 : 28) * u);
+      ctx.stroke();
+      ctx.strokeStyle = p.accent;
+      ctx.lineWidth = 7 * u;
+      ctx.beginPath();
+      ctx.moveTo(103 * u, (waiting ? 14 : 20) * u);
+      ctx.lineTo(137 * u, (waiting ? 14 : 20) * u);
+      ctx.stroke();
+    }
     ctx.restore();
 
     // 手臂：先画，接缝交给键帽正面压住。

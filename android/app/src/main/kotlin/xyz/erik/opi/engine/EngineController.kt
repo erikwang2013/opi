@@ -72,6 +72,31 @@ class EngineController(
     var learnerEnabled by mutableStateOf(true)
         private set
 
+    /**
+     * 词库降级：装载失败，引擎正跑在内置 35 词库上（[xyz.erik.opi.pet.petMood] 据此
+     * 画折断的天线 DEGRADED）。
+     *
+     * 与 [learnerEnabled] 有一处**刻意的不同**：这个状态**没有可重读的源**——引擎没有
+     * 对应的 JNI 出口，真值只存在于装载那一刻的返回值里（`EngineLoader.load(context)`
+     * 的 Boolean），所以 [refresh] **不重读也不重置它**，只能由宿主回报一次。
+     * 别把 `dictionaryDegraded = false` 挪进 refresh：那样下一次按键（每次输入都
+     * refresh）就会把降级抹掉，宠物只闪一帧断天线。
+     *
+     * 边界：false 只说明**词库**这一层没出问题。so 缺失/ABI 不匹配是另一个失败域，
+     * 那种情形 EngineLoader 根本没跑（见它头注），本状态表示不了。
+     */
+    var dictionaryDegraded by mutableStateOf(false)
+        private set
+
+    /**
+     * 回报一次词库装载结果，参数即 `EngineLoader.load(context)` 的返回值。
+     * 后者为 false 就是降级（资产缺失/损坏/写盘失败 → 回退内置词库）。
+     * 可重复调用，以最近一次为准（装载幂等，成功即意味着引擎已换回完整词库）。
+     */
+    fun reportDictionaryLoad(ok: Boolean) {
+        dictionaryDegraded = !ok
+    }
+
     companion object {
         const val pageSize = 8
         const val fetchLimit = 64

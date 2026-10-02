@@ -1,7 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
         android:label="OPI IME"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round">
         <!-- 设置入口（A5）：launcher 即设置页，与 IME 共享 Rust 静态单例引擎。 -->
         <activity
             android:name=".settings.SettingsActivity"

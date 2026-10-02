@@ -74,11 +74,12 @@ internal fun CandidatePanel(
             Spacer(Modifier.height(6.dp))
             if (model.candidates.isEmpty()) {
                 // 无候选：小欧出来摊手，替掉一片空白（与 Android 候选栏同一处理）。
+                // 尺寸与 Android 候选栏/鸿蒙候选栏统一为 30 —— 同一只小欧在三端应当一样大。
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OpiPet(
                         mood = PetMood.PUZZLED,
                         palette = PetPalette.Dark,
-                        size = 34.dp,
+                        size = 30.dp,
                     )
                     Spacer(Modifier.width(8.dp))
                     Text("无匹配", fontSize = 13.sp, color = DimColor)

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  项目宠物「小欧」自适应启动图标（API 26+）的**圆形**孪生，供 manifest 的
+  android:roundIcon 使用 —— 图形与 ic_launcher.xml 完全相同（同一前景 + 同一底色），
+  圆形由系统遮罩给出，所以这里**不需要**任何几何改动。
+  这是**生成物**：改 R4 前景或 R6 底色后跑 `python3 scripts/gen_launcher_icons.py` 重出。
+
+  API 25（roundIcon 正是这一版引入的）用不了自适应图标，落回
+  mipmap-*/ic_launcher_round.png：72dp 可见区的 r=36 内切圆，与圆形系统遮罩同径。
+  API 24 及以下不读 roundIcon，走 android:icon 的方形那套。
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background"/>
+    <foreground android:drawable="@drawable/ic_launcher_foreground"/>
+</adaptive-icon>

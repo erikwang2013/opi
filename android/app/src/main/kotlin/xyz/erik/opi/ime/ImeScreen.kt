@@ -78,12 +78,14 @@ fun ImeScreen(
                     // 槽位常驻是为了不让键区伸缩，但 pinyin/traditional 空缓冲时这里原本
                     // 什么都不画 —— 44dp 死白的代价（见上方注释）等于白付。让小欧站这儿：
                     // 它就是「安静待命」的样子，打完第一个字母自然让位给候选栏。
-                    // 情绪照旧由引擎状态推导（设置页关了学习 → 它睡着，不是笑嘻嘻）。
+                    // 情绪照旧由引擎状态推导（设置页关了学习 → 它睡着，不是笑嘻嘻；
+                    // 词库没装上 → 折断天线，且这一条优先于睡着）。
                     OpiPet(
                         mood = petMood(
                             buffer = controller.buffer,
                             candidateCount = controller.candidates.size,
                             learnerEnabled = controller.learnerEnabled,
+                            dictionaryDegraded = controller.dictionaryDegraded,
                         ),
                         size = 30.dp,
                         modifier = Modifier.padding(start = 12.dp),

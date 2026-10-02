@@ -6,6 +6,7 @@ package xyz.erik.opi.engine
 import xyz.erik.opi.pet.PetMood
 import xyz.erik.opi.pet.petMood
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -385,10 +386,50 @@ class EngineControllerTest {
         val fake = FakeEngine()
         val ctrl = EngineController(fake)
         assertTrue(ctrl.learnerEnabled)
-        assertEquals(PetMood.IDLE, petMood(ctrl.buffer, ctrl.candidates.size, ctrl.learnerEnabled))
+        assertEquals(
+            PetMood.IDLE,
+            petMood(ctrl.buffer, ctrl.candidates.size, ctrl.learnerEnabled, ctrl.dictionaryDegraded),
+        )
 
         fake.learner = false
         ctrl.refresh()
-        assertEquals(PetMood.SLEEPY, petMood(ctrl.buffer, ctrl.candidates.size, ctrl.learnerEnabled))
+        assertEquals(
+            PetMood.SLEEPY,
+            petMood(ctrl.buffer, ctrl.candidates.size, ctrl.learnerEnabled, ctrl.dictionaryDegraded),
+        )
+    }
+
+    @Test
+    fun dictionaryLoadFailureReadsThroughToPetMood() {
+        // 词库降级的**唯一**真值是 EngineLoader.load(context) 的返回值（false = 回退内置
+        // 35 词库）：引擎没有对应的 JNI 出口，宿主不回报的话 controller 的 degraded 恒为
+        // 默认 false，petMood 的 DEGRADED 分支永远到不了（断天线就是死代码）。
+        val fake = FakeEngine()
+        val ctrl = EngineController(fake)
+        assertFalse(ctrl.dictionaryDegraded)
+        assertEquals(
+            PetMood.IDLE,
+            petMood(ctrl.buffer, ctrl.candidates.size, ctrl.learnerEnabled, ctrl.dictionaryDegraded),
+        )
+
+        ctrl.reportDictionaryLoad(false)
+        assertTrue(ctrl.dictionaryDegraded)
+        assertEquals(
+            PetMood.DEGRADED,
+            petMood(ctrl.buffer, ctrl.candidates.size, ctrl.learnerEnabled, ctrl.dictionaryDegraded),
+        )
+
+        // refresh 不许把它抹掉：真值只在装载那一刻拿得到，refresh 没有可重读的源；
+        // 而每次按键都走一次 refresh —— 抹掉的话断天线只闪一帧，用户根本看不见。
+        ctrl.refresh()
+        assertTrue(ctrl.dictionaryDegraded)
+
+        // 反向：后来的装载成功了，判定要跟着回到正常（以最近一次为准）
+        ctrl.reportDictionaryLoad(true)
+        assertFalse(ctrl.dictionaryDegraded)
+        assertEquals(
+            PetMood.IDLE,
+            petMood(ctrl.buffer, ctrl.candidates.size, ctrl.learnerEnabled, ctrl.dictionaryDegraded),
+        )
     }
 }
