@@ -130,6 +130,9 @@ impl Engine {
         self.composer.clear();
     }
 
+    // ---- 标点表 / 全角一族：impl 体在 engine_punct.rs（500 行门禁拆出）----
+    // 字段的 pub(crate) 理由见那个文件的头注释。
+
     /// 处理一次击键，返回需要提交的文本（空串 = 无提交）。
     /// 空格键在 Engine 层拦截：拼音模式选首候选，其他模式提交缓冲。
     ///
@@ -137,9 +140,6 @@ impl Engine {
     /// 调用方是「没有客户端可交」的那些端（Android 面板经 JNI、C ABI 直调）——
     /// 三轨的「直通」是把自己交还给客户端应用，Android 没有这一层，返回空串
     /// 就等于吞键（NumberPad 的 `,` `.` 正是靠这条活在引擎里）。
-    // ---- 标点表 / 全角一族：impl 体在 engine_punct.rs（500 行门禁拆出）----
-    // 字段的 pub(crate) 理由见那个文件的头注释。
-
     pub fn input_key(&mut self, ch: char) -> String {
         if ch == ' ' {
             return self.input_space();

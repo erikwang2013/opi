@@ -442,6 +442,13 @@ jobs:
           [ -n "$glue" ] || { echo "::error::暂存树里没有胶水 .so（$glue）—— /stage 那步就坏了"; exit 1; }
           rustlib=/stage/usr/lib/x86_64-linux-gnu/fcitx5/libfcitx5_opi.so
           dict=/stage/usr/share/opi/luna.opid
+          # 繁体词库（2026-10-09 接线）。**必须像 luna 一样显式传**：CMakeLists 的缺省
+          # 候选是「相对源码目录找 android 部署副本」，而这里编的是 /tmp/src（只拷了
+          # crates/fcitx5-opi 一个 crate），那个相对路径落到 / 上 ⇒ OPI_TRAD_OPID 为空
+          # ⇒ configure 直接 FATAL（首发实测：报「找不到繁体词库源: ''」）。用暂存树里
+          # 装好的那份当源：与加载面吃的同一棵树，判据同源。
+          trad=/stage/usr/share/opi/trad.opid
+          [ -f "$trad" ] || { echo "::error::暂存树里没有 trad.opid（$trad）—— /stage 那步或 CMake 的 trad 安装落点坏了"; exit 1; }
 
           # ==== 一、先在**本容器**里对 5.0 头真编一次胶水 ====
           # 顺序是刻意的：下面的加载面吃的就是这里编出来的那份（见「二、换上去」）。以前顺序反
@@ -454,6 +461,7 @@ jobs:
           build_glue() {
             cmake -S "$1" -B "$2" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
               -DOPI_RUST_LIB="$rustlib" -DOPI_LUNA_OPID="$dict" \
+              -DOPI_TRAD_OPID="$trad" \
               -DCMAKE_EXPORT_COMPILE_COMMANDS=ON > "$3-cmake.log" 2>&1 \
               || { echo "--- cmake 配置失败（$3）---"; tail -20 "$3-cmake.log"; return 1; }
             cmake --build "$2" -j2 > "$3-build.log" 2>&1 \
