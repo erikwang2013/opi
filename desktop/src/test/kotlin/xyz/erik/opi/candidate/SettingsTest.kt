@@ -93,9 +93,18 @@ class SettingsTest {
     @Test
     fun `windows path is localappdata opi`() {
         // 对侧读侧 = crates/tsf-opi/src/settings.rs（与 dict_path.rs 的候选目录同一处）。
-        assertEquals(
-            "C:\\Users\\u\\AppData\\Local\\opi\\settings.ini",
-            settingsPathFor(windows = true, xdgConfigHome = null, home = null, localAppData = "C:\\Users\\u\\AppData\\Local").toString(),
+        //
+        // ⚠️ 断言的是**结构**（基目录 + opi/settings.ini 两段），不是那个反斜杠字面串：
+        // `Paths.get` 按**运行平台**的分隔符拼路径 —— 在 Linux 上跑这条测试时，
+        // Windows 字面串永远不会出现（实测：首版就是这么红的，errorFileCount=1）。
+        // 真正的 Windows 字面串只能在 Windows 上验；这里钉的是「拼了哪两段、基目录是谁」。
+        val p = settingsPathFor(
+            windows = true, xdgConfigHome = null, home = null,
+            localAppData = "C:\\Users\\u\\AppData\\Local",
         )
+        // 只用 Path 自己的 API（`takeLast` 那条扩展在 JDK11 目标下解析不到，实测红）
+        assertEquals("settings.ini", p.fileName.toString())
+        assertEquals("opi", p.parent.fileName.toString())
+        assertEquals("C:\\Users\\u\\AppData\\Local", p.parent.parent.toString())
     }
 }

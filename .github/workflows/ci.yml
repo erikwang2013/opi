@@ -287,9 +287,13 @@ jobs:
       - name: loadDictionary() 的查找常量没漂
         run: |
           set -euo pipefail
-          f=crates/fcitx5-opi/cpp/opi_fcitx5.cpp
-          grep -q 'Type::Data, "opi/luna.opid"' "$f" || {
-            echo "!! $f 里 loadDictionary() 的查找类型/路径变了。"
+          # ⚠️ 扫**整个 cpp/ 目录**而不是单个 .cpp：2026-10-08 把 loadDictionary() 拆进
+          # opi_engine.h（为 500 行门禁）之后，只 grep opi_fcitx5.cpp 的那一版**看不见它**
+          # —— 门禁照绿而常量已经漂了，正是这条门禁存在的理由。（同一类盲区，别只改一处：
+          # 凡按「某个文件」写的文本门禁，拆文件时都要跟着放宽。）
+          d=crates/fcitx5-opi/cpp
+          grep -rq 'Type::Data, "opi/luna.opid"' "$d" || {
+            echo "!! $d 下的 loadDictionary() 查找类型/路径变了。"
             echo "   要同步三处：cpp/CMakeLists.txt 的安装落点、opi_locate_check.cpp、"
             echo "   以及 cpp/README.md「安装」一节。"
             exit 1

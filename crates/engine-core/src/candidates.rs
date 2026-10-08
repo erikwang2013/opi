@@ -37,7 +37,6 @@ pub fn rank_score(static_freq: u32, user_freq: u32, boost: u64) -> u64 {
     (static_freq as u64).saturating_add((user_freq as u64).saturating_mul(boost))
 }
 
-/// 合并词典候选与符号候选，排序、去重、截断。
 /// 排序层的**开关**（用户在「属性设置」里能改的那两个；见 `Engine` 的同名字段）。
 ///
 /// 默认 = **两个都开**：这是本层的既有行为，也是 [`rank_and_pick`] 的语义
@@ -59,6 +58,7 @@ impl Default for RankOptions {
     }
 }
 
+/// 合并词典候选与符号候选，排序、去重、截断。
 /// 两个开关全开的 [`rank_and_pick_with`]（测试与既有调用方的入口；
 /// 与 `Engine::new` / `with_dictionaries` 的「旧入口 = 新入口的默认包装」同一条先例）。
 pub fn rank_and_pick<D: Dictionary + ?Sized>(
@@ -82,6 +82,11 @@ pub fn rank_and_pick<D: Dictionary + ?Sized>(
     )
 }
 
+// 8 个参数（原 7 个 + 选项尾巴）踩了 clippy 的默认上限。**有意放行**：本函数是公开
+// `rank_and_pick` 的直系（同参 + 一个 `RankOptions` 尾巴），把参数收进一个 struct
+// 会让这两个 API 的形状分叉，而唯一的调用方只有 `Engine::candidates` 一处。
+// 理由若要变（比如将来再加两个选项），改法是**收 struct**，不是再加 allow。
+#[allow(clippy::too_many_arguments)]
 pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
     dict: &D,
     symbols: &SymbolEngine,

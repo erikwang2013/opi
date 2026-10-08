@@ -29,6 +29,12 @@ use crate::api;
 pub(crate) mod utf16; // pub(crate)：cabi_user_words.rs 也要用它
 use utf16::{read_utf16, texts_to_json};
 
+/// **再导出**：拆出去的「学习 / 用户词」一组仍从 `cabi` 这个公开路径可用 ——
+/// 拆分是**内部**结构（500 行门禁逼的），不该改调用方看的路径：仓内多个测试按
+/// `opi_ffi::cabi::opi_set_learner` 之名引用，按符号名调的 C 调用方则完全不受影响。
+/// ⚠️ 将来再拆/再挪，这行要跟着看（它是「公开面 = cabi + 再导出」这条约定的唯一执行点）。
+pub use crate::cabi_user_words::*;
+
 /// UTF-16 字符串句柄（Rust 侧分配，调用方负责 opi_ffi_free_string）。
 /// `impl` 在 [`utf16`]（**非导出**辅助，拆出去给本文件腾行数；结构与导出留在这里，
 /// 因为 `c_abi_contract.rs` 只解析本文件）。
