@@ -202,6 +202,16 @@ int main(int argc, char **argv) {
     opi_set_learner(true);
     CHECK(opi_learner_enabled() == true, "set_learner(true) 后应读到 true");
     opi_set_learner(false);
+    /* 「属性设置」的另外两个开关（2026-10-08）。这里只做**表面的读写回环** ——
+     * 语义（关掉真的关掉）由引擎单测与 fcitx5 harness 管，别在这里重造一套。 */
+    opi_set_fuzzy(false);
+    CHECK(opi_fuzzy_enabled() == false, "set_fuzzy(false) 后应读到 false");
+    opi_set_fuzzy(true);
+    CHECK(opi_fuzzy_enabled() == true, "set_fuzzy(true) 后应读到 true");
+    opi_set_jianpin(false);
+    CHECK(opi_jianpin_enabled() == false, "set_jianpin(false) 后应读到 false");
+    opi_set_jianpin(true);
+    CHECK(opi_jianpin_enabled() == true, "set_jianpin(true) 后应读到 true");
 
     /* ---------- 多字符缓冲 + 逗号候选 ---------- */
     printf("[9] 双字候选 \"nihao\"\n");

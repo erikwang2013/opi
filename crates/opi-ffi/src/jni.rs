@@ -21,7 +21,7 @@ use jni::{JavaVM, NativeMethod, ScopeToken};
 use crate::api;
 use crate::jni_util;
 
-type JEnv = *mut sys::JNIEnv;
+pub(crate) type JEnv = *mut sys::JNIEnv;
 
 /// 出口统一包装：`catch_unwind` + 未装载哨兵。替代本文件里逐字重复的
 /// `catch_unwind(AssertUnwindSafe(|| …)).unwrap_or(…)`（26 份）。**语义逐条等价** ——
@@ -29,7 +29,7 @@ type JEnv = *mut sys::JNIEnv;
 /// 完整契约（panic 不跨 FFI 边界、未装载语义）见模块头 `# Safety`。
 /// ⚠️ 唯一不适用的是 `import_user_words`：它的哨兵是 **-1 而非 `Default`**，故仍用裸
 /// `catch_unwind` —— 别把它「顺手统一」掉，那会把「失败」变成「导入了 0 条」。
-fn guard<T: Default>(f: impl FnOnce() -> T) -> T {
+pub(crate) fn guard<T: Default>(f: impl FnOnce() -> T) -> T {
     catch_unwind(AssertUnwindSafe(f)).unwrap_or_default()
 }
 
@@ -173,6 +173,33 @@ pub unsafe extern "system" fn opijni_set_chinese_punct(
     guard(|| api::with_engine(|e| e.set_chinese_punct(on)));
 }
 
+/// fuzzyEnabled() -> boolean：「属性设置」的读侧之一（写侧见 `setFuzzy`）。
+/// 未装载 → false（哨兵语义见模块头）。**别当成"开关的默认值"** ——
+/// 默认值的真源是 `engine-core` 的 `RankOptions::default()`（两个都开）。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_fuzzy_enabled(_env: JEnv, _class: sys::jclass) -> jboolean {
+    guard(|| api::with_engine(|e| e.fuzzy_enabled()).unwrap_or_default())
+}
+
+/// jianpinEnabled() -> boolean：同上。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_jianpin_enabled(_env: JEnv, _class: sys::jclass) -> jboolean {
+    guard(|| api::with_engine(|e| e.jianpin_enabled()).unwrap_or_default())
+}
+
+/// setFuzzy(on: boolean)：模糊音开关（「属性设置」四个旋钮之一）。**无返回值**（设置项）；
+/// 要拿结果读 `fuzzyEnabled()`。未装载时是空操作。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_set_fuzzy(_env: JEnv, _class: sys::jclass, on: jboolean) {
+    guard(|| api::with_engine(|e| e.set_fuzzy(on)));
+}
+
+/// setJianpin(on: boolean)：简拼开关（同上）。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_set_jianpin(_env: JEnv, _class: sys::jclass, on: jboolean) {
+    guard(|| api::with_engine(|e| e.set_jianpin(on)));
+}
+
 /// toggleChinesePunct() -> boolean：中文标点表开关的**触发键入口**，返回**切换后的
 /// 新状态**。⚠️ 与 `toggleFullwidth` 的重读规则不通用（本档 `switchMode` 不重置）。
 /// 完整契约在 `cabi.rs` 的 `opi_toggle_chinese_punct` 上。未装载 → false。
@@ -267,64 +294,14 @@ pub unsafe extern "system" fn opijni_symbols_in_block(
     unsafe { jni_util::string_array(env, texts) }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_learner_enabled(_env: JEnv, _class: sys::jclass) -> jboolean {
-    guard(|| api::with_engine(|e| e.learner_enabled()).unwrap_or_default())
-}
+// 拆到 `jni_user_words.rs` 的六个函数：注册表仍在本文件（`JNI_OnLoad`），
+// 名字要从那边 use 进来 —— 少了这一行是**编译错误**（不是静默），正好。
+use crate::jni_user_words::{
+    opijni_clear_user_words, opijni_export_user_words, opijni_import_user_words,
+    opijni_learner_enabled, opijni_remove_user_word, opijni_set_learner,
+};
 
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_set_learner(
-    _env: JEnv,
-    _class: sys::jclass,
-    enabled: jboolean,
-) {
-    guard(|| api::with_engine(|e| e.set_learner(enabled)));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_clear_user_words(_env: JEnv, _class: sys::jclass) {
-    guard(|| api::with_engine(|e| e.clear_user_words()));
-}
-
-/// removeUserWord(text: String)。长按删词（B4）。词不存在 / null / 空串 → 无操作。
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_remove_user_word(
-    env: JEnv,
-    _class: sys::jclass,
-    text: jstring,
-) {
-    guard(|| {
-        let text = unsafe { jni_util::jstring_to_rust(env, text) }.unwrap_or_default();
-        api::with_engine(|e| e.remove_user_word(text));
-    });
-}
-
-/// importUserWords(json: String) -> Int。返回导入条数；
-/// 负数表示失败（非法 JSON / 版本不符 / 引擎未装载 / null）且不改动既有用户词。
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_import_user_words(
-    env: JEnv,
-    _class: sys::jclass,
-    json: jstring,
-) -> jint {
-    catch_unwind(AssertUnwindSafe(|| -> jint {
-        let Some(json) = (unsafe { jni_util::jstring_to_rust(env, json) }) else {
-            return -1;
-        };
-        match api::with_engine(|e| e.import_user_words(json)) {
-            Some(Ok(n)) => i32::try_from(n).unwrap_or(-1),
-            Some(Err(_)) | None => -1,
-        }
-    }))
-    .unwrap_or(-1)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_export_user_words(env: JEnv, _class: sys::jclass) -> jstring {
-    let out = guard(|| api::with_engine(|e| e.export_user_words()).unwrap_or_default());
-    unsafe { jni_util::rust_to_jstring(env, &out) }
-}
-
+// ---------- JNI_OnLoad ----------
 // ---------- JNI_OnLoad ----------
 
 #[unsafe(no_mangle)]
@@ -408,6 +385,26 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _reserved: *mut c
                     jni_str!("setChinesePunct"),
                     jni_str!("(Z)V"),
                     opijni_set_chinese_punct as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("fuzzyEnabled"),
+                    jni_str!("()Z"),
+                    opijni_fuzzy_enabled as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("setFuzzy"),
+                    jni_str!("(Z)V"),
+                    opijni_set_fuzzy as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("jianpinEnabled"),
+                    jni_str!("()Z"),
+                    opijni_jianpin_enabled as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("setJianpin"),
+                    jni_str!("(Z)V"),
+                    opijni_set_jianpin as *mut c_void,
                 ),
                 NativeMethod::from_raw_parts(
                     jni_str!("toggleChinesePunct"),

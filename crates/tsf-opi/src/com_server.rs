@@ -46,6 +46,7 @@ use crate::dll::{
     CLSID_TEXT_SERVICE, DISPLAY_NAME, DllLock, GUID_PROFILE, LANGID_ZH_CN, clsid_key,
     dll_can_unload, inproc_server_key,
 };
+use crate::settings;
 use crate::state::{EngineShared, TsfSharedState};
 use crate::tsf::{TsfSink, TsfTextService, ensure_panic_hook};
 
@@ -70,7 +71,7 @@ fn com_exit(f: impl FnOnce() -> Result<()>) -> HRESULT {
 /// 不存在"两处各写一遍 GUID 然后慢慢漂移"。形状由主机测试
 /// `guid_literals_have_parseable_shape` 钉住 —— 解析失败只可能是有人改错了
 /// 字面量（编译得过、单测会红），此处返回 E_FAIL 而不是猜一个。
-fn parse_guid(s: &str) -> Result<GUID> {
+pub(crate) fn parse_guid(s: &str) -> Result<GUID> {
     GUID::try_from(s).map_err(|_| E_FAIL.into())
 }
 
@@ -219,6 +220,11 @@ impl IClassFactory_Impl for ClassFactory_Impl {
             // sink 是 CandidateSink（C3 生产实现）：惰性连 named pipe，候选窗
             // 进程不在时降级为 no-op，不会让 CreateInstance 失败。
             let engine = Arc::new(EngineShared::with_dict(loaded.dict));
+            // 「属性设置」：创建时读一次（读不到 = 全默认）。之后每次 `Activate`
+            // 再读一次（本端没有在线刷新通道，见 settings.rs 模块头）。
+            if let Some(mut logic) = engine.lock_logic() {
+                logic.apply_settings(settings::load(std::env::var_os("LOCALAPPDATA").as_deref()));
+            }
             let action = Arc::new(SharedAction::new(Arc::clone(&engine)));
             let sink: Arc<dyn TsfSink> = Arc::new(CandidateSink::new(
                 Arc::clone(&action) as Arc<dyn CandidateAction>
@@ -347,7 +353,7 @@ impl Drop for ComGuard {
 /// （regsvr32.exe）。写进注册表等于让 COM 去加载宿主程序 —— regsvr32 报成功，
 /// 输入法却永远出现不了。要拿自己的 HMODULE 只有"按地址反查"这一招：传本模块内
 /// 一个函数的地址 + `FROM_ADDRESS`。`UNCHANGED_REFCOUNT` = 只查不加模块引用计数。
-fn own_module_path() -> Result<String> {
+pub(crate) fn own_module_path() -> Result<String> {
     let mut hmod = HMODULE::default();
     // SAFETY: DllRegisterServer 是本 DLL 内的函数，其地址必然落在本模块内；
     // hmod 是有效的输出位置。函数项先转函数指针再转数据指针。

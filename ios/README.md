@@ -811,6 +811,23 @@ xcodebuild -create-xcframework \
 
 ---
 
+### 属性设置（**未接**）
+
+四个开关（学习 / 中文标点 / 模糊音 / 简拼）**引擎侧已支持**
+（`Engine::set_learner` / `set_chinese_punct` / `set_fuzzy` / `set_jianpin`，默认全开；
+门禁见 `crates/engine-core/tests/fuzzy_jianpin_switches.rs`），另两端各有配置面
+（Linux = fcitx5 addon 配置 `opi_config.h` + Compose 设置窗；Windows =
+`%LOCALAPPDATA%\opi\settings.ini` + 同一个设置窗）。
+
+**C ABI 出口已落地**（2026-10-08：`opi_fuzzy_enabled` / `opi_set_fuzzy` /
+`opi_jianpin_enabled` / `opi_set_jianpin`；学习与中文标点的四个出口更早就有）。
+本端缺的是三件：**设置界面**（各端自己的设置页 / 首选项窗）、**落盘**
+（iOS/macOS = `UserDefaults`，鸿蒙 = preferences）、**启动时把四个值套到引擎**
+（对照 `tsf-opi/src/logic.rs` 的 `apply_settings` 与 fcitx5 的 `opi_config.h` +
+`applyOpiSettings`）。
+
+⚠️ **别新造第五个开关、别改语义**：真源是 `engine.rs` 的那四个 setter。
+
 ## 设计约定（改代码前先读）
 
 ### 1. Swift 要薄，逻辑在 Rust
@@ -1027,6 +1044,12 @@ OpiString opi_select_page(uint32_t k);  /* 当前页第 k 个；越界/未装载
 ---
 
 ## 全角 / 符号开关的出口：**已落地（Rust 31 / 头文件 31）**
+
+> ⚠️ **订正（2026-10-08）**：下面是 2026-09-27 的**状态快照**，别把 31 当现值读。
+> 那之后导出面又扩过两轮（最近一次：「属性设置」四个出口 `opi_set_fuzzy` /
+> `opi_set_jianpin` / `opi_fuzzy_enabled` / `opi_jianpin_enabled`），且 `cabi.rs`
+> 因 500 行门禁拆出了 `cabi_user_words.rs`（C ABI 门禁已改为读该模块**全部** `.rs`）。
+> **当前条数与指纹一律以 `cargo test -p opi_ffi --test c_abi_contract` 的输出为准。**
 
 ### 状态（2026-09-27 尾，实测；**本节当天经历了「差 3 个 → 补齐」**）
 

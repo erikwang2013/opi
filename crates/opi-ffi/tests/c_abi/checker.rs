@@ -366,6 +366,11 @@ pub fn check_struct(rust_src: &str, header_src: &str, name: &str) -> Vec<String>
 // ---------- 读文件 ----------
 
 pub const CABI: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/cabi.rs");
+/// `cabi.rs` 拆出去的那一半（2026-10-08：加「属性设置」出口后 500 行门禁越线）。
+/// ⚠️ **必须一起读**：本门禁的比对是「集合相等」，只读 cabi.rs 的话，拆出去的那批
+/// 会同时从两侧消失（头文件仍声明、Rust 侧解析不到）⇒ 报一堆假「头文件多出」，
+/// 或者更糟：等哪天头文件也跟着删了，就成了**静默的漏检面**。
+pub const CABI_USER_WORDS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/cabi_user_words.rs");
 pub const MACOS_H: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../macos/OpiFFI.h");
 pub const IOS_H: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../ios/OpiFFI.h");
 pub const HARMONY_H: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../harmony/cpp/opi_ffi.h");
@@ -376,6 +381,12 @@ pub const HARMONY_BRIDGE: &str = concat!(
 
 pub fn read(p: &str) -> String {
     fs::read_to_string(p).unwrap_or_else(|e| panic!("读不到 {p}：{e}"))
+}
+
+/// `cabi.rs` + 拆出去的文件拼成一份文本（解析与计数都在这一份上做，见 [`CABI_USER_WORDS`]）。
+/// 拼接用换行，保证相邻两文件的行不会粘成一行（解析按行扫）。
+pub fn read_cabi() -> String {
+    format!("{}\n{}", read(CABI), read(CABI_USER_WORDS))
 }
 
 pub fn report(diffs: Vec<String>) -> String {

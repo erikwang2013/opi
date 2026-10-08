@@ -169,7 +169,7 @@ macOS 输入法是**一个 .app**，由 `Info.plist` 里的 IMK 键声明：
 | `InputMethodServerControllerClass` | `$(PRODUCT_MODULE_NAME).OpiInputController` | 现代 Swift 构建**必须带模块名前缀**，否则 IMK 实例化不出控制器，症状是「输入法能选、但完全无响应」。非 Xcode 的构件系统**不展开**这个变量，要写字面值。Swift 侧另有 `@objc(OpiInputController)` 作为裸名兜底 |
 | `LSBackgroundOnly` / `LSUIElement` | `true` | 常驻后台、无 Dock 图标 |
 | `tsInputMethodCharacterRepertoireKey` | `Latn` + `zh-Hans` + `zh-Hant` | ⚠️ **取值未核实**。资料说该键收 ISO 15924 **文字**代码（不是语言代码），而 `zh-Hans`/`zh-Hant` 是 BCP-47 **语言**标签 —— 对不上（真正的文字代码是 `Hans`/`Hant`）。**查不到权威取值表，故保留现状**；Mac 上请打开 `/System/Library/Input Methods/` 下某个系统中文输入法的 `Info.plist` 对照后再决定改不改 |
-| `tsInputMethodIconFileKey` | `opi.tiff` | ⚠️ **仓库里没有这个文件**。缺文件时系统一般用默认图标；要正式发布就补一个，或在 plist 里去掉这个键 |
+| `tsInputMethodIconFileKey` | `opi.tiff` | ✅ **仓库已带**（`macos/opi.tiff`，生成物 —— 重出命令见 `scripts/gen_pet_icons.py`；打包时须放进 bundle 的 `Contents/Resources/`，本仓库没有工程文件，那一步由你在 Xcode 里补）。⚠️ 这个键走**模板渲染**：系统只按 alpha 通道着色（与图里的颜色无关）⇒ 菜单里看到的是小欧的**剪影**（键帽 + 天线；眼/嘴是内部元素，模板化后不可见） |
 | `CFBundleShortVersionString` / `CFBundleVersion` | 手写字面值 | **不**由 `Cargo.toml` 自动生成 —— 发版时容易忘记改。维护方式二选一：发版清单加一条「同步 `macos/Info.plist`」，或让构建脚本从 `Cargo.toml` 注入 |
 
 > 以上键名来自 InputMethodKit 的公开约定，**取值没被核对过**（`macos/README.md`

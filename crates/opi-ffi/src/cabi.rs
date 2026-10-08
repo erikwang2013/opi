@@ -26,7 +26,7 @@ use engine_core::router::KeyAction;
 
 use crate::api;
 
-mod utf16;
+pub(crate) mod utf16; // pub(crate)：cabi_user_words.rs 也要用它
 use utf16::{read_utf16, texts_to_json};
 
 /// UTF-16 字符串句柄（Rust 侧分配，调用方负责 opi_ffi_free_string）。
@@ -176,6 +176,42 @@ pub unsafe extern "C" fn opi_chinese_punct() -> bool {
 /// setChinesePunct(on: bool)：设置中文标点表是否生效。**无返回值** —— 它是设置项
 /// （勾选框知道要设成什么值），要拿结果请读 `opi_chinese_punct()`（未装载时是空操作）。
 /// **写入口有两个**：设置项走本出口，触发键走 `opi_toggle_chinese_punct()`（那个有返回值，
+/// 模糊音开关的当前值（「属性设置」的读侧，供设置界面回读；写侧见 `opi_set_fuzzy`）。
+/// 哨兵与 `opi_learner_enabled` 同档：**引擎未装载 → `false`**（模块头那句「未装载
+/// 哨兵一律是 Default」）。别把它当成"开关的默认值"读 —— 默认值的真源是
+/// `engine-core` 的 `RankOptions::default()`（两个都开）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fuzzy_enabled() -> bool {
+    catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.fuzzy_enabled()).unwrap_or(false)
+    }))
+    .unwrap_or(false)
+}
+
+/// 简拼开关的当前值（同上）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_jianpin_enabled() -> bool {
+    catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.jianpin_enabled()).unwrap_or(false)
+    }))
+    .unwrap_or(false)
+}
+
+/// setFuzzy(on)：模糊音开关（「属性设置」四个旋钮之一；同族见 `opi_set_learner` /
+/// `opi_set_chinese_punct` / `opi_set_jianpin`）。各端的配置面在各自那一层：
+/// Linux = fcitx5 addon 配置、Windows = settings.ini、Android = 设置页。
+/// 与触发键那档不同，本出口**不读结果**（客户端知道自己要设什么值）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_set_fuzzy(on: bool) {
+    let _ = catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.set_fuzzy(on))));
+}
+
+/// setJianpin(on)：简拼开关（同上）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_set_jianpin(on: bool) {
+    let _ = catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.set_jianpin(on))));
+}
+
 /// 且客户端本来就不知道该设成什么值）。只翻一个 bool，不改 buffer/候选/页码。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_set_chinese_punct(on: bool) {
@@ -420,70 +456,4 @@ pub unsafe extern "C" fn opi_symbols_in_block(id: i16) -> OpiString {
     }))
     .unwrap_or_default();
     texts_to_json(texts)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn opi_learner_enabled() -> bool {
-    catch_unwind(AssertUnwindSafe(|| {
-        api::with_engine(|e| e.learner_enabled()).unwrap_or(false)
-    }))
-    .unwrap_or(false)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn opi_set_learner(enabled: bool) {
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        api::with_engine(|e| e.set_learner(enabled))
-    }));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn opi_clear_user_words() {
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        api::with_engine(|e| e.clear_user_words())
-    }));
-}
-
-/// remove_user_word(text: const uint16_t*, len)。长按删词的 C ABI 出口
-/// （镜像 jni.rs 的 opijni_remove_user_word，两个 ABI 面语义必须一致）。
-/// 词不存在 / 空串 / null → 无操作；导出 JSON 逐字节不变。
-/// # Safety
-/// `ptr` 必须指向至少 `len` 个有效 `u16`（或为 null，视为空串）。
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn opi_remove_user_word(ptr: *const u16, len: usize) {
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        let text = unsafe { read_utf16(ptr, len) }.unwrap_or_default();
-        api::with_engine(|e| e.remove_user_word(text));
-    }));
-}
-
-/// import_user_words(json: const uint16_t*, len) -> i32。
-/// 返回导入条数；失败返回负值（-1）——非法 JSON / 版本不符 / 词表过大 /
-/// 引擎未装载 / null 入参。失败不改动既有用户词（引擎侧「全有或全无」）。
-/// # Safety
-/// `ptr` 必须指向至少 `len` 个有效 `u16`（或为 null，视为失败）。
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn opi_import_user_words(ptr: *const u16, len: usize) -> i32 {
-    catch_unwind(AssertUnwindSafe(|| -> i32 {
-        // null 与空串一律失败：空串不是合法 JSON，无需特判成空词表。
-        let Some(json) = (unsafe { read_utf16(ptr, len) }) else {
-            return -1;
-        };
-        match api::with_engine(|e| e.import_user_words(json)) {
-            // 条数上限 MAX_IMPORT_WORDS = 100_000，必然装得下 i32；
-            // try_from 只是不给理论溢出留 unwrap panic 的口子。
-            Some(Ok(n)) => i32::try_from(n).unwrap_or(-1),
-            Some(Err(_)) | None => -1,
-        }
-    }))
-    .unwrap_or(-1)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn opi_export_user_words() -> OpiString {
-    let out = catch_unwind(AssertUnwindSafe(|| {
-        api::with_engine(|e| e.export_user_words()).unwrap_or_default()
-    }))
-    .unwrap_or_default();
-    OpiString::from_utf16(&out)
 }

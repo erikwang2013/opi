@@ -39,7 +39,9 @@ impl OpiString {
 ///
 /// # Safety
 /// `ptr` 必须指向至少 `len` 个 u16 的有效内存（或为 null）。
-pub(super) unsafe fn read_utf16(ptr: *const u16, len: usize) -> Option<String> {
+// pub(crate)（不是 pub(super)）：`cabi_user_words.rs` 是本模块的**兄弟**，
+// 拆出去之后 pub(super) 够不到它（2026-10-08 拆的，理由见那个文件的头注释）。
+pub(crate) unsafe fn read_utf16(ptr: *const u16, len: usize) -> Option<String> {
     if ptr.is_null() || len == 0 {
         return Some(String::new());
     }
@@ -49,6 +51,6 @@ pub(super) unsafe fn read_utf16(ptr: *const u16, len: usize) -> Option<String> {
 }
 
 /// 共享文本数组 → JSON 字符串（OpiString）。
-pub(super) fn texts_to_json(texts: Vec<String>) -> OpiString {
+pub(crate) fn texts_to_json(texts: Vec<String>) -> OpiString {
     OpiString::from_utf16(&crate::api::texts_json(&texts))
 }

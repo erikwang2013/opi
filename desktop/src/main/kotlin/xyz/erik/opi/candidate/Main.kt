@@ -85,7 +85,25 @@ class CandidateModel {
 
 // ---------- 入口 ----------
 
-fun main() = application {
+fun main(args: Array<String>) = application {
+    // 两种模式共用一个可执行文件（jpackage 只有一份 mainClass / 一个安装包 / 一套图标）：
+    //   --settings        = 「属性设置」窗（两个平台都有）
+    //   无参数（Windows）  = 候选窗（TSF 经命名管道驱动；见本文件头部的线协议）
+    //   无参数（Linux）    = 也进「属性设置」—— **这不是偷懒，是语义**：候选窗是
+    //     TSF 的东西（命名管道两端都在 Windows），Linux 上这个应用**只有设置一个用途**，
+    //     所以「无参数的默认」在那边就该是设置窗（否则从启动器点开是一片空白）。
+    // `args` 与操作系统在进程生命周期里恒定 ⇒ 这个分支**不会来回切**（Compose 的早返回安全）。
+    if ("--settings" in args || !isWindows()) {
+        Window(
+            onCloseRequest = ::exitApplication,
+            state = rememberWindowState(width = 460.dp, height = 600.dp),
+            title = "OPI 属性设置",
+        ) {
+            SettingsWindow()
+        }
+        return@application
+    }
+
     val model = remember { CandidateModel() }
     val server = remember { PipeServer(model).also { it.start() } }
     val windowState = rememberWindowState(width = 320.dp, height = 168.dp)

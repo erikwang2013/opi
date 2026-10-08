@@ -156,6 +156,7 @@ cargo build --release -p tsf_opi --target x86_64-pc-windows-msvc
 | `tsf_opi.dll` | `cargo build --release -p tsf_opi --target x86_64-pc-windows-msvc` | TSF COM 服务器（进程内）。**必须注册才能用**，见 §3 |
 | `luna.opid` | 见 §2.2 | 词库。可选；缺了就退回内置词库 |
 | 候选窗（JVM 应用） | `desktop/` | **独立进程**，见 §2.3 |
+| （语言栏图标） | `crates/tsf-opi/assets/opi-langbar.ico` | **编译期嵌入 DLL**（`include_bytes!` + 运行期 `CreateIconFromResourceEx`）—— 打包时**不用**带上它；换图标要重编 DLL |
 
 ### 2.2 词库通路
 
@@ -373,6 +374,41 @@ regsvr32 /u "C:\path\to\tsf_opi.dll"
 5. **翻页不改本地页码**：窗口只发消息，页码唯一真源是 TSF 回发的 `show`
    （`Main.kt` 与 `CandidateWindow.kt` 都写明了）。
 
+### 4.4 属性设置（四个开关）
+
+**配置文件**：`%LOCALAPPDATA%\opi\settings.ini`（与 `dict_path.rs` 的候选词库目录
+同一处；键名与 Linux 侧逐字相同，见 `crates/tsf-opi/src/settings.rs`）：
+
+```ini
+Learn=True          # 学习（记住选过的词）
+ChinesePunct=True   # 中文标点（，。、与成对引号）
+Fuzzy=True          # 模糊音（z/zh、n/l…）
+Jianpin=True        # 简拼（声母缩写，nh → 你好）
+```
+
+**设置窗**：与候选窗是**同一个可执行文件**（`desktop/` 的 Compose 应用）：
+
+```
+opi-candidates.exe --settings     # 设置窗
+opi-candidates.exe                # 候选窗（无参数；TSF 走命名管道驱动它）
+```
+
+设置窗保存后**只落盘**。⚠️ **生效时机 = 输入法下一次激活**（切到别的程序再切回来）——
+TSF 侧**没有在线刷新通道**：`tsf.rs` 的 `Activate` 会重读一次这个文件
+（`logic.apply_settings`）。升级路径：设置窗与候选窗是同一条命名管道的两端，加一条
+`{"type":"reload"}` 消息即可即时生效 —— 要同时改线协议两侧（`candidate_io.rs` 与
+`desktop/.../Protocol.kt`），**本轮没做**。
+
+**「属性」入口已接线**（2026-10-08）：服务对象实现了 `ITfFunction` + `ITfFnConfigure`
+（`tsf.rs`），`Show()` 会拉起设置窗（`configure.rs`：从 **DLL 同目录** →
+`%LOCALAPPDATA%\opi\` 逐候选找 `opi-candidates.exe`，都找不到就**什么都不弹**）。
+控制面板那一页取它的办法是 `CoCreateInstance(CLSID, IID_ITfFnConfigure)`（MSDN 的
+`ITfFnConfigure` 页面）——⚠️ **本机只验到 `cargo check`**，真机上「属性」按钮会不会出现、
+点了起不起得来，都要在 Windows 上看（§6.1 有这一条）。
+
+⚠️ 仍然缺的：**Windows 没有打包**（§2.4）—— 设置窗没有安装包，`opi-candidates.exe`
+要用户自己放到上面那两个候选位置之一，「属性」才拉得起来。
+
 ---
 
 ## 5. 验证
@@ -456,6 +492,8 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | 7 | 四个 `cfg(windows)` 模块**没有任何测试** —— 只有 §1.2 那条 `cargo check` 看过它们 | §1.2 |
 | 8 | 候选窗在 Windows 上的构建与运行 | §2.3 |
 | 9 | `Ctrl+'` / `Ctrl+\` / `Shift+Space` 在 Windows 上有没有被别的软件占用 | §4.1 |
+| 10 | 语言栏按钮（`langbar.rs`）的运行期行为：`AddItem` 成不成、`GetIcon` 有没有被调、图标画没画出来 —— 只有 §1.2 那条 `cargo check` 看过它（"挑条目 + 校验 RT_ICON 形态"那半在 `langbar_icon.rs`，有主机单测） | §2.1、`crates/tsf-opi/src/langbar.rs` 头注释 |
+| 11 | **「属性设置」的生效时机**：设置窗落盘后要等下一次 `Activate` —— 本机无法验证（`Activate` 由 TSF 调）。读取/容错/落点那半在 `settings.rs`，有主机单测 | §4.4、`crates/tsf-opi/src/settings.rs` |
 
 ### 6.2 代码里已知的缺口（读源码得出，不是待办猜测）
 
@@ -472,6 +510,9 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | 9 | 模式键**丢弃未提交缓冲**（不先上屏） | `tsf.rs::toggle_mode` → `Engine::switch_mode`；`engine.rs::toggle_symbol` 注释 | 打到一半切模式 = 丢字 |
 | 10 | 候选窗单页显示上限 `MAX_CANDIDATES = 8` 与 Rust `logic::PAGE_SIZE` 同为 8，**但两者之间没有门禁**（Rust 那份有 `const` 断言绑 `engine-core`，Kotlin 那份只有一句注释说"一致"） | `CandidateWindow.kt` vs `logic.rs` | 若 `PAGE_SIZE` 改了，窗口会静默少显示最后一个候选 |
 | 11 | **模式热键不认键盘布局**：`vk::mode_hotkey` 比的是**裸 VK**（0xDE / 0xDC），即 US 布局上标着 `'` 与 `\` 的那两个物理键位；而字符键走的是布局感知的 `ToUnicodeEx`（`tsf.rs::to_engine_keycode`）。⇒ 非 US 布局（AZERTY / Dvorak）上，要按的是**那个位置**的键，不是键帽上的字符 | `vk.rs::mode_hotkey` 的 `VK_OEM_5` / `VK_OEM_7`；`tsf.rs::to_engine_keycode` | 非 US 布局用户会"按了没反应"（**未验证**：本机没有任何非 US 布局可测） |
+| 12 | 语言栏按钮**点击无动作**（有意：不假装有功能）；DLL **没有文件图标**（`.rc` / 资源编译器在本机与 CI 都不可验证 ⇒ 走 `include_bytes!`，代价就是缺这一块） | `langbar.rs` 的 `OnClick` 与模块头「为什么不用 .rc」 | 点击没反应是设计如此；资源管理器里 DLL 显示默认图标 |
+| 13 | **`ITfFnConfigure` 只过 `cargo check`**：控制面板里那个「属性」按钮会不会出现、点了拉不拉得起设置窗，本机无法验证；拉起的候选路径判定有主机单测（`settings_exe.rs`），Win32 那一步没有 | §4.4、`crates/tsf-opi/src/configure.rs` | 真机上「属性」可能不出现/不响应 |
+| 14 | **设置窗没有 Windows 安装包**：`desktop/` 的 jpackage 只配了 `Deb` 目标（`desktop/build.gradle.kts`），Windows 侧要出 `Exe`/`Msi` 得在 Windows 主机上构建（§2.4 同一条路） | §4.4、§2.4 | 用户拿不到设置窗的可执行文件 |
 
 ### 6.3 交付这件事本身
 

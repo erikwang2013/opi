@@ -32,6 +32,10 @@ final class OpiEngine {
     static native boolean loadTrad(String path);
     static native boolean learnerEnabled();
     static native void setLearner(boolean enabled);
+    static native boolean fuzzyEnabled();
+    static native void setFuzzy(boolean on);
+    static native boolean jianpinEnabled();
+    static native void setJianpin(boolean on);
     static native void clearUserWords();
     static native String exportUserWords();
     static native int importUserWords(String json);
@@ -109,6 +113,16 @@ public final class Main {
         check(!OpiEngine.learnerEnabled(), "setLearner(false) 生效");
         OpiEngine.setLearner(true);
         check(OpiEngine.learnerEnabled(), "setLearner(true) 生效");
+
+        // 「属性设置」的两个新开关（2026-10-08）：同样只做表面的读写回环。
+        check(OpiEngine.fuzzyEnabled(), "fuzzy 默认开启");
+        OpiEngine.setFuzzy(false);
+        check(!OpiEngine.fuzzyEnabled(), "setFuzzy(false) 生效");
+        OpiEngine.setFuzzy(true);
+        check(OpiEngine.jianpinEnabled(), "jianpin 默认开启");
+        OpiEngine.setJianpin(false);
+        check(!OpiEngine.jianpinEnabled(), "setJianpin(false) 生效");
+        OpiEngine.setJianpin(true);
 
         // 用户词导出/清空
         String words = OpiEngine.exportUserWords();

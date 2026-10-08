@@ -28,9 +28,10 @@ It looks like a single key on a keyboard, because that is what an input method o
 
 See [`docs/opi-pet.svg`](docs/opi-pet.svg) for the full figure (hand-written SVG, no external dependencies, scales to any size). It already lives inside the codebase:
 
-- **Android**: the settings-page expression tracks engine state (idle / waiting / puzzled / asleep); three empty states — the candidate bar's idle slot, "no match", and an empty symbol search; and the **launcher icon**, an adaptive vector foreground with five PNG fallbacks
-- **Windows**: Opi shrugs in the candidate window's empty state; and the shipped `.deb` / `.msi` app icon
-- **HarmonyOS**: the pet in the candidate bar — it is itself the "remember my words" switch
+- **Android**: the settings-page expression tracks engine state (idle / waiting / puzzled / asleep / degraded); three empty states — the candidate bar's idle slot, "no match", and an empty symbol search; and the **launcher icon**, an adaptive vector foreground with five PNG fallbacks
+- **Windows**: Opi shrugs in the candidate window's empty state; the shipped `.deb` / `.msi` app icon; and a **language-bar button** (TSF; visible only while the language bar is on)
+- **HarmonyOS**: the pet in the candidate bar — it is itself the "remember my words" switch; plus the app/subtype icon
+- **macOS**: the input-source menu icon (`macos/opi.tiff`) — ⚠️ that directory is a never-compiled draft, and the icon is only visible on a Mac
 - **Linux (fcitx5)**: the input method's icon in the input-method list and the tray
 - **The `opi-tools` CLI**: prints a character-art Opi on a successful compile or verify (single-width characters only, so it never misaligns in a CJK terminal), and `--version` carries it too
 
@@ -227,13 +228,14 @@ crates/                        # Rust workspace (the crate list is the root Carg
     cpp/CMakeLists.txt         #   the **one and only build + install path**; the location is guarded by the opi_locate_check probe and CI
   tsf-opi/                     # Windows TSF plugin: Rust logic + COM server + candidate-window protocol
     src/dict_path.rs           #   dictionary lookup order: env var → DLL directory → %LOCALAPPDATA% → built-in fallback
+    src/settings.rs            #   settings reader (%LOCALAPPDATA%\opi\settings.ini; key names mirror the settings window)
 android/                       # Android IME (Kotlin + Jetpack Compose)
   app/                         #   IME service · keyboard / candidate bar / panels · settings (incl. user-word import/export) · pet component
     src/main/assets/           #   luna.opid (simplified) · trad.opid (traditional)
     src/main/res/              #   adaptive launcher icon (VectorDrawable, featuring Opi)
   rust_builder/                #   standalone cargokit: compiles crates/opi-ffi → three-ABI .so
   jni_smoke/                   #   JNI connectivity smoke test
-desktop/                       # Windows candidate window (Compose Desktop / JVM, NDJSON over named pipe)
+desktop/                       # candidate window + settings window (Compose Desktop / JVM; one binary, two modes)
 ios/                           # iOS keyboard extension — ⚠️ draft, not a line of Swift ever compiled (see README inside)
 macos/                         # macOS input method (InputMethodKit) — ⚠️ same as above
 harmony/                       # HarmonyOS input method (ArkTS + N-API native module) — ⚠️ draft, not a line of
@@ -249,6 +251,7 @@ data/                          # dictionary data
 docs/                          # pet, diagrams and design docs
   install/                     #   per-platform install guides (android / linux / windows / ios / macos / harmony)
   opi-pet.svg                  #   the project pet, Opi
+  social-preview.svg · .en.svg #   bilingual social-preview image (each has a .png twin for GitHub Settings → Social preview)
   diagrams/                    #   architecture · features · lifecycle
   superpowers/                 #   specs (design) + plans (implementation)
   release-claim-corrections.md #   release-claim corrections (tag annotations cannot be edited, so the measured wording lands here)

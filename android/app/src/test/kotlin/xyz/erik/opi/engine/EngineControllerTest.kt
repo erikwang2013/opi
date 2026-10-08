@@ -29,6 +29,10 @@ class FakeEngine : OpiEngineApi {
     /** 学习开关（真引擎：learnerEnabled()/setLearner()）。 */
     var learner = true
 
+    /** 「属性设置」的两个新开关（真引擎：fuzzyEnabled()/jianpinEnabled()）。 */
+    var fuzzy = true
+    var jianpin = true
+
     /** 键 → 引擎要上屏的文本（真引擎：标点键有文本、字母/数字键没有）。 */
     var inputResults = mutableMapOf<String, String>()
 
@@ -79,6 +83,10 @@ class FakeEngine : OpiEngineApi {
     override fun mode(): Int = mode
 
     override fun learnerEnabled(): Boolean = learner
+
+    override fun fuzzyEnabled(): Boolean = fuzzy
+
+    override fun jianpinEnabled(): Boolean = jianpin
 
     /** 删用户词：记录文本；真引擎删完候选表里就没有它了（这里同样摘掉）。 */
     override fun removeUserWord(text: String) {

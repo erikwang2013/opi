@@ -41,6 +41,12 @@ interface OpiEngineApi {
 
     /** 学习开关读侧。宠物用它区分「醒着」与「睡着了」。 */
     fun learnerEnabled(): Boolean
+
+    /** 模糊音开关读侧（「属性设置」；写侧 = `OpiEngine.setFuzzy`）。 */
+    fun fuzzyEnabled(): Boolean
+
+    /** 简拼开关读侧（同上）。 */
+    fun jianpinEnabled(): Boolean
 }
 
 /**
@@ -70,6 +76,12 @@ class EngineController(
      * 之所以走这里而不是让 UI 直接读 OpiEngine：引擎状态一律经本类订阅（单一状态源）。
      */
     var learnerEnabled by mutableStateOf(true)
+        private set
+
+    /** 模糊音 / 简拼开关（引擎真值，随 [refresh] 重读；设置页写、候选栏读）。 */
+    var fuzzyEnabled by mutableStateOf(true)
+        private set
+    var jianpinEnabled by mutableStateOf(true)
         private set
 
     /**
@@ -115,6 +127,8 @@ class EngineController(
         buffer = api.buffer()
         mode = EngineMode.fromInt(api.mode())
         learnerEnabled = api.learnerEnabled()
+        fuzzyEnabled = api.fuzzyEnabled()
+        jianpinEnabled = api.jianpinEnabled()
         candidates = api.candidates(fetchLimit)?.toList() ?: emptyList() // JNI 可能返回 null
         if (buffer != lastQuery) {
             lastQuery = buffer

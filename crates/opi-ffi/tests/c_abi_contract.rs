@@ -39,7 +39,7 @@ use std::path::Path;
 
 #[test]
 fn parser_is_not_blind() {
-    let src = read(CABI);
+    let src = read_cabi();
     let parsed = parse_rust_exports(&src);
 
     // 自检锚点：这三个若解析不出来，说明解析器（而非契约）坏了，
@@ -241,7 +241,7 @@ fn checker_reports_extra_header_declaration() {
 /// Apple 侧唯一一份全量声明：要求**集合相等 + 逐参同型 + 结构体同布局**。
 #[test]
 fn macos_header_matches_cabi() {
-    let rust = read(CABI);
+    let rust = read_cabi();
     let h = read(MACOS_H);
     let mut diffs = check_header(&rust, &h);
     diffs.extend(check_struct(&rust, &h, "OpiString"));
@@ -288,7 +288,7 @@ fn ios_header_is_pure_forwarder() {
 /// **不要求等于全集** —— 那是有意设计，不是缺陷。
 #[test]
 fn harmony_header_is_consistent_use_site_subset() {
-    let rust = read(CABI);
+    let rust = read_cabi();
     let h = read(HARMONY_H);
     let decls = parse_c_decls(&h);
     assert!(
@@ -365,7 +365,7 @@ fn harmony_struct_layouts_match_macos() {
         );
     }
     // Rust 侧那两个 #[repr(C)] 结构体也要解析得出字段（失明则上面比的是空壳）。
-    let src = read(CABI);
+    let src = read_cabi();
     assert!(!parse_rust_struct(&src, "OpiString").is_empty());
     assert!(!parse_rust_struct(&src, "OpiKeyEventResult").is_empty());
 }
@@ -457,7 +457,7 @@ fn exported_symbols_exist_in_built_library() {
     };
     let bytes = fs::read(lib).expect("读 .so");
     let text = String::from_utf8_lossy(&bytes);
-    let expect = parse_rust_exports(&read(CABI));
+    let expect = parse_rust_exports(&read_cabi());
     let missing: Vec<&str> = expect
         .iter()
         .map(|(n, _)| n.as_str())

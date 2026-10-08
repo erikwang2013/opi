@@ -259,20 +259,34 @@ adb shell ime set    xyz.erik.opi/.OpiImeService      # 切为当前输入法
 
 - 候选栏在字母盘上方**固定预留 44dp**（`candidate/CandidateBar.kt` 的 `CANDIDATE_BAR_HEIGHT_DP`；`ImeScreen.kt` 里写了理由：候选栏出现/消失极其频繁，条件挂载会让键盘高度抖动）。
 - **每页 8 个**（`EngineController.pageSize`），左右箭头翻页，页码读作「第 N 页，共 M 页」。
+- 每个候选前带**可见序号**（页内 1–8，翻页后从 1 重数）—— 与数字选词的语义同源（引擎的按键约定见
+  `composer.rs`），也与 Windows 候选窗同款。⚠️ 如实记：**手机端字母盘没有数字行**，所以在这块键盘上
+  它是**排名/顺序**展示 —— 数字选词引擎支持、这里按不到。
 - **单击候选** = 选中并上屏（同时被学习记频）；**长按候选** = 删除这条用户自造词（`EngineController.removeUserWord`；只删用户词表里的条目，删非用户词无副作用）。
-- 读屏已接：候选变化自动播报（`liveRegion`），每个键有可读名称。
+- 读屏已接：候选变化自动播报（`liveRegion`），每个键有可读名称；候选项播报「第 N 项 + 词」，
+  其中 N 与**可见序号是同一个数**（页内）。此前播报的是全列表下标（翻页后唯一），可见序号立起来后
+  两者会打架（同一项看得见 3、念出来 11），已统一 —— 反转理由写在 `CandidateBar.kt` 的「反转记录」。
 
 ### 4.5 设置页
 
-`settings/SettingsScreen.kt`，五项：
+`settings/SettingsScreen.kt`，**七项**（2026-10-08 加了模糊音 / 简拼两个开关）：
 
 | 项 | 行为 |
 |---|---|
 | 学习（开关） | 关掉就不记用户词频；小欧的表情跟着这个开关走（睡着/醒着） |
+| 模糊音（开关） | `z↔zh`、`c↔ch`、`s↔sh`、`n↔l`、`f↔h` 等近音互查（引擎侧 `set_fuzzy`） |
+| 简拼（开关） | 声母缩写：`nh → 你好`、`zg → 中国`（引擎侧 `set_jianpin`） |
 | 清除用户词库 | 确认对话框 → 清内存里的用户词**并删掉落盘文件**（不删文件的话，输入法下次启动会把它 import 回来，「清除」等于重启后失效） |
 | 导出词库 JSON | 复制到剪贴板 |
 | 从剪贴板导入 | 与「导出」闭环（复制→粘回来），不经文件管理器 |
 | 导入词库 JSON 文件 | 系统文件选择器；MIME 放宽到 `application/json` / `text/plain` / `application/octet-stream`（云盘与 IM 转存的 `.json` 常被判成后两者），有**有界读**上限，超限给可见的失败提示而不是主线程 OOM |
+
+⚠️ **三个开关都不落盘**（学习 / 模糊音 / 简拼）：值只活在当前进程的引擎单例里，
+IME 进程被系统回收后回默认（三个都是**开**）。这是**本端既有缺口**（学习开关一直如此），
+不是这一轮引入的 —— 要修得给本端的设置存一份持久化（`SharedPreferences` 或复用
+`UserWordStore` 那套落盘），并在 `EngineLoader.load` 之后套一遍（对照
+`tsf-opi/src/logic.rs` 的 `apply_settings`）。**别的端都已经落盘**（Linux = fcitx5 addon
+配置、Windows = `settings.ini`、桌面设置窗 = 同一个文件），所以这条只在本端成立。
 
 ---
 

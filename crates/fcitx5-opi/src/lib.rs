@@ -255,6 +255,51 @@ pub unsafe extern "C" fn opi_fcitx5_switch_mode(mode: i32) {
     }));
 }
 
+/// setLearner(on)：学习开关（「属性设置」的旋钮之一；值来自 addon 配置的 `Learn`）。
+/// 配对：`tsf-opi/src/logic.rs` 的同名方法。
+/// # Safety
+///
+/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_set_learner(on: bool) {
+    ensure_panic_hook();
+    let _ = catch_unwind(AssertUnwindSafe(|| with_state(|s| s.set_learner(on))));
+}
+
+/// setChinesePunct(on)：中文标点开关（值来自 addon 配置的 `ChinesePunct`；与全角
+/// 是**两个独立开关**，见 engine.rs 的 `punct_text`）。
+/// # Safety
+///
+/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_set_chinese_punct(on: bool) {
+    ensure_panic_hook();
+    let _ = catch_unwind(AssertUnwindSafe(|| with_state(|s| s.set_chinese_punct(on))));
+}
+
+/// setFuzzy(on)：模糊音开关（「属性设置」的旋钮之一）。
+/// 配置来源 = fcitx5 的 **原生 addon 配置**（`~/.config/fcitx5/conf/opi_fcitx5.conf`）：
+/// C++ 侧 `OpiConfig` 声明字段、`reloadConfig()`/`setConfig()` 里把它推到这里
+/// （见 `cpp/opi_fcitx5.cpp`），配置工具改一下即时生效。
+/// # Safety
+///
+/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_set_fuzzy(on: bool) {
+    ensure_panic_hook();
+    let _ = catch_unwind(AssertUnwindSafe(|| with_state(|s| s.set_fuzzy(on))));
+}
+
+/// setJianpin(on)：简拼开关（同上）。
+/// # Safety
+///
+/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_set_jianpin(on: bool) {
+    ensure_panic_hook();
+    let _ = catch_unwind(AssertUnwindSafe(|| with_state(|s| s.set_jianpin(on))));
+}
+
 /// # Safety
 ///
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。

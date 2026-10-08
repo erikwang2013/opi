@@ -25,6 +25,7 @@
 #include <fcitx-utils/standardpath.h>
 
 #include "opi_json.h"     // parseJsonStringArray（拆出去是为了本文件守住 500 行硬规矩）
+#include "opi_config.h"  // 「属性设置」的两个开关（同样为了 500 行门禁拆出去）
 #include "opi_rust_ffi.h" // Rust 出口声明 + take()，同一次拆分
 
 #include <cstdint>
@@ -78,7 +79,8 @@ private:
 };
 
 // 把 Rust 侧当前状态（缓冲 = 预编辑串，当前页候选）推到 fcitx5 面板。
-static void refreshingPanelFor(fcitx::InputContext *ic);
+// 定义在下面；声明在 opi_engine.h（类声明搬走后它不能再是文件级 static）。
+void refreshingPanelFor(fcitx::InputContext *ic);
 
 void OpiCandidateWord::select(fcitx::InputContext *ic) const {
     // 点选是从 UI 线程调进来的第三个入口，同样要挡异常（见 keyEvent 的说明）。
@@ -94,7 +96,7 @@ void OpiCandidateWord::select(fcitx::InputContext *ic) const {
     }
 }
 
-static void refreshingPanelFor(fcitx::InputContext *ic) {
+void refreshingPanelFor(fcitx::InputContext *ic) {
     if (ic == nullptr) {
         return;
     }
@@ -138,6 +140,22 @@ static void refreshingPanelFor(fcitx::InputContext *ic) {
         }
         for (size_t i = 0; i < texts.size(); ++i) {
             list->append<OpiCandidateWord>(texts[i], i);
+        }
+        // 候选序号（「1. 你」）**必须在这里显式声明**，fcitx5 不会替我们编：
+        // 探针实测（真库、未起守护进程）：不调任何 label API 时 `list->label(i)`
+        // 返回**空串** ⇒ 面板一个序号都不画；调 `setSelectionKey` 后返回
+        // `"1. "` / `"2. "` …（探针源码与输出见 docs/install/linux.md 的「候选序号」）。
+        // 同时它把**数字键的选择路由**交给 fcitx5 的候选机制 —— 会调到
+        // OpiCandidateWord::select（**页内索引**），与 Rust 路由的数字处理同语义，
+        // 也与 Android / 鸿蒙 / Windows 候选窗的「页内 1–8」一致。
+        // 键数按**实际候选数**给（不写 9）：多出来的键若被当选择键，按下时会指到
+        // 不存在的候选上；按实际条数给，超出的数字自然落回 Rust 路由（两边同义）。
+        {
+            fcitx::KeyList selectionKeys;
+            for (size_t i = 0; i < texts.size(); ++i) {
+                selectionKeys.push_back(fcitx::Key(std::to_string(i + 1)));
+            }
+            list->setSelectionKey(selectionKeys);
         }
         // 候选栏高亮位（-1 = 无高亮，前端不画选中态）。
         // ⚠️ 空判是**必须**的：对**空**候选表调 setGlobalCursorIndex(0) 会抛
@@ -285,79 +303,7 @@ static bool handleFullwidthHotkey(fcitx::KeyEvent &keyEvent) {
 
 // ---------- fcitx5 插件本体（结构对齐 fcitx5 example/ime.cpp） ----------
 
-// fcitx::AddonInstance + fcitx::InputMethod 的组合基类在 fcitx5 5.1.x 里叫
-// InputMethodEngine（fcitx/inputmethodengine.h:17，已继承 AddonInstance），自带
-// `virtual void keyEvent(...) = 0` 与 `virtual void reset(...)`；仓库里没有别的
-// `fcitx::InputMethod` 类型（grep Core/ 只有 InputMethodEngine V2/V3/V4），原先
-// 多继承的两个基类都不存在。
-class OpiEngine : public fcitx::InputMethodEngine {
-public:
-    OpiEngine(fcitx::Instance *instance) : instance_(instance) { loadDictionary(); }
-
-    void keyEvent(const fcitx::InputMethodEntry &entry,
-                  fcitx::KeyEvent &keyEvent) override;
-
-    void reset(const fcitx::InputMethodEntry & /*entry*/,
-               fcitx::InputContextEvent &event) override {
-        // 同 keyEvent：这个入口抛出去也会带走整个守护进程。
-        try {
-            opi_fcitx5_clear();
-            // Rust 侧清了缓冲，但面板是 fcitx5 侧的状态：不一并清，失焦/切换
-            // 输入法后预编辑串与候选栏会继续挂在屏幕上（原码只清了引擎，没碰面板）。
-            refreshingPanelFor(event.inputContext());
-        } catch (const std::exception &e) {
-            fprintf(stderr, "fcitx5-opi: reset 异常，已忽略: %s\n", e.what());
-        }
-    }
-
-private:
-    // keyEvent 的实现体。拆出来只为了在唯一的虚函数入口上套 try/catch ——
-    // fcitx5 core **不捕获**引擎回调抛出的异常（实测：裸抛 → std::terminate →
-    // 整个守护进程死掉）。Rust 侧每个导出入口都套了 catch_unwind，两侧对齐：
-    // 把「整个输入法挂掉」降级成「这一次按键无效」。
-    void keyEventImpl(const fcitx::InputMethodEntry &entry,
-                      fcitx::KeyEvent &keyEvent);
-
-    // XDG 数据目录下找 OPI 词库（B3：Rust 侧 opi_fcitx5_init_dict 把插件分发的
-    // luna.opid 拷到 $XDG_DATA_HOME/opi/luna.opid，镜像 Android EngineLoader.
-    // FILE_NAME；此处探测同一路径）。B3 接线在验收阶段完成。
-    //
-    // **必须接返回值**：Rust 侧 `install()` 是 `CandidateState::load(path)?` ——
-    // 坏词库在 `?` 处提前返回，单例保持 None，`with_state` 恒为 None，所有导出
-    // 函数退化成空操作。而 `install(坏路径) -> Err` 是 Rust 侧**有意**的语义
-    // （lib.rs 的 install_singleton_fallback_and_path 断言「坏路径 → Err，不回
-    // 退」），所以回退必须由本层做 —— 这正是原码丢返回值造成的洞：词库**存在但
-    // 损坏**（下载不全/拷贝中断）时，插件进入「已加载、已注册、按键被接受、但一个
-    // 字都不出，且任何地方都没有错误信息」的状态。实测（XDG_DATA_HOME 指向 6 字节
-    // 垃圾 luna.opid）：四个键全 action=0；接上返回值后同场景回退内置词库，四键
-    // action=1/1/1/2 并提交 '好'。
-    //
-    // 注意 `opi_fcitx5_load` 收的是**路径**不是词库内容（Rust 侧 read_utf8 →
-    // install），故传 `path.data()` 是对的，不要改成传内容。
-    void loadDictionary() {
-        // StandardPath 自 5.1.21 起弃用，但**不能迁移**（老版本没有 StandardPaths）。
-        // 为什么 / 边界在哪 / 何时删这三件事只写在一处：cpp/CMakeLists.txt 的
-        // 「为什么两个 .cpp 里有 -Wdeprecated-declarations」段 —— 别在这里复制。
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-        auto path = fcitx::StandardPath::global().locate(
-            fcitx::StandardPath::Type::Data, "opi/luna.opid");
-#pragma GCC diagnostic pop
-        const bool ok =
-            !path.empty() &&
-            opi_fcitx5_load(reinterpret_cast<const uint8_t *>(path.data()), path.size());
-        if (!ok) {
-            if (!path.empty()) {
-                // 「文件在、装不上」（下载不全/拷贝中断）。这行日志是必要的：否则
-                // 词库损坏与「本来就没装词库」在用户侧无法区分，只表现为候选质量骤降。
-                fprintf(stderr, "fcitx5-opi: 词库 %s 装载失败，回退内置词库\n", path.c_str());
-            }
-            opi_fcitx5_load(nullptr, 0); // 不存在或装载失败 → 内置回退词库
-        }
-    }
-
-    fcitx::Instance *instance_;
-};
+#include "opi_engine.h" // addon 类声明（拆出去是为了 500 行门禁）
 
 // Rust 侧线格式占用的三位（../src/input_method.rs 的 KEY_STATE_RELEASED/
 // KEY_STATE_REPEAT/KEY_STATE_LONG_PRESSED = 1<<26 / 1<<27 / 1<<28）。

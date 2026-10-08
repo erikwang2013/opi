@@ -131,6 +131,28 @@ impl CandidateState {
         self.reset_page_if_buffer_changed();
     }
 
+    /// 学习开关（值来自 addon 配置的 `Learn` → `opi_fcitx5_set_learner`）。
+    /// 配对：`tsf-opi/src/logic.rs` 的同名方法（两轨同构，改一处必须改另一处）。
+    pub fn set_learner(&mut self, on: bool) {
+        self.engine.set_learner(on);
+    }
+
+    /// 中文标点开关（值来自 addon 配置的 `ChinesePunct`）。配对同上。
+    pub fn set_chinese_punct(&mut self, on: bool) {
+        self.engine.set_chinese_punct(on);
+    }
+
+    /// 模糊音开关（值来自 fcitx5 的 addon 配置 → `opi_fcitx5_set_fuzzy`）。
+    /// 配对：`tsf-opi/src/logic.rs` 的同名方法（两轨同构，改一处必须改另一处）。
+    pub fn set_fuzzy(&mut self, on: bool) {
+        self.engine.set_fuzzy(on);
+    }
+
+    /// 简拼开关。配对同上。
+    pub fn set_jianpin(&mut self, on: bool) {
+        self.engine.set_jianpin(on);
+    }
+
     pub fn switch_mode(&mut self, mode: Mode) {
         self.engine.switch_mode(mode);
         // ⇧ 只在 English 有意义，判据与 Android `EngineController.switchMode` 的

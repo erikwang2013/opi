@@ -38,6 +38,29 @@ pub fn rank_score(static_freq: u32, user_freq: u32, boost: u64) -> u64 {
 }
 
 /// 合并词典候选与符号候选，排序、去重、截断。
+/// 排序层的**开关**（用户在「属性设置」里能改的那两个；见 `Engine` 的同名字段）。
+///
+/// 默认 = **两个都开**：这是本层的既有行为，也是 [`rank_and_pick`] 的语义
+/// （测试与旧调用方一行不动）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RankOptions {
+    /// 模糊音（`z/zh`、`n/l`… 整串变体 + 逐音节兜底，表见 `fuzzy.rs`）。
+    pub fuzzy: bool,
+    /// 简拼（声母缩写 `nh → 你好`，展开见 `jianpin.rs`）。
+    pub jianpin: bool,
+}
+
+impl Default for RankOptions {
+    fn default() -> Self {
+        Self {
+            fuzzy: true,
+            jianpin: true,
+        }
+    }
+}
+
+/// 两个开关全开的 [`rank_and_pick_with`]（测试与既有调用方的入口；
+/// 与 `Engine::new` / `with_dictionaries` 的「旧入口 = 新入口的默认包装」同一条先例）。
 pub fn rank_and_pick<D: Dictionary + ?Sized>(
     dict: &D,
     symbols: &SymbolEngine,
@@ -46,6 +69,28 @@ pub fn rank_and_pick<D: Dictionary + ?Sized>(
     mode: Mode,
     limit: usize,
     boost: u64,
+) -> Vec<Candidate> {
+    rank_and_pick_with(
+        dict,
+        symbols,
+        learner,
+        input,
+        mode,
+        limit,
+        boost,
+        RankOptions::default(),
+    )
+}
+
+pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
+    dict: &D,
+    symbols: &SymbolEngine,
+    learner: &Learner,
+    input: &str,
+    mode: Mode,
+    limit: usize,
+    boost: u64,
+    opts: RankOptions,
 ) -> Vec<Candidate> {
     // 空输入守卫必须**先于**模式分派：`ranking_invariants.rs` 与 `adversarial_input.rs`
     // 都对「含 Symbol 的 5 模式 + 空输入」断言无候选（`search("")` 会返回全部条目）。
@@ -120,11 +165,17 @@ pub fn rank_and_pick<D: Dictionary + ?Sized>(
     // ⚠️ 此处曾写「给半额会让 `ranking_invariants.rs` 的 proptest 随机红」——**实测不复现**
     // （半额版连跑 10 次 10/10 绿：重叠文本被上面的 retain 先去重，逐音节路径又没有精确
     // 候选可违）。结论（0 加成）不变，但**那条机制不许再当理由引用**。
-    let mut fuzzy: Vec<Candidate> = fuzzy::input_variants(input)
-        .iter()
-        .flat_map(|v| dict.query_all(v))
-        .map(|e| hanzi(e, false))
-        .collect();
+    // `opts.fuzzy = false`：整串变体与逐音节兜底**一起**关（两个入口同一开关，
+    // 只关一个会让 `zongguo` 这类"整串查不到"的输入仍从逐音节拿到模糊结果）。
+    let mut fuzzy: Vec<Candidate> = if opts.fuzzy {
+        fuzzy::input_variants(input)
+            .iter()
+            .flat_map(|v| dict.query_all(v))
+            .map(|e| hanzi(e, false))
+            .collect()
+    } else {
+        Vec::new()
+    };
     let wide_hits = !fuzzy.is_empty();
     if merged.is_empty() && input.chars().count() > 1 {
         for syl in segment(input) {
@@ -162,7 +213,7 @@ pub fn rank_and_pick<D: Dictionary + ?Sized>(
             //   64×64 音节对的穷举里仍有 1285 个输入以它为**唯一**模糊来源（如 `ninv`→
             //   `nin→lin/ling`、`nifei`→`fei→hei`），只是那些多不是词。
             // 每音节 ≤3 次额外查询且同样被 take(3) 截住，无笛卡尔积。
-            if !wide_hits {
+            if opts.fuzzy && !wide_hits {
                 let mut syl_fuzzy: Vec<Candidate> = fuzzy::variants(&syl)
                     .iter()
                     .filter(|v| *v != &syl)
@@ -180,11 +231,15 @@ pub fn rank_and_pick<D: Dictionary + ?Sized>(
     // 与模糊同一分档规则、同一「非精确」约定（`exact = false`）：纯缩写输入下这个 flag
     // 本无机会成立 —— 每个音节 ≥ 2 字母 ⇒ 展开串比缩写长，`pinyin_len` 不可能等于输入
     // 长度。显式写死是因为这条判定对**替身词库**（键任意）同样成立，别让它去赌数据。
-    let mut jianpin: Vec<Candidate> = jianpin::expansions(dict, learner, boost, input)
-        .iter()
-        .flat_map(|v| dict.query_all(v))
-        .map(|e| hanzi(e, false))
-        .collect();
+    let mut jianpin: Vec<Candidate> = if opts.jianpin {
+        jianpin::expansions(dict, learner, boost, input)
+            .iter()
+            .flat_map(|v| dict.query_all(v))
+            .map(|e| hanzi(e, false))
+            .collect()
+    } else {
+        Vec::new()
+    };
     jianpin.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
 
     // 单字符时仅并入 emoji：符号英文关键字前缀（如 comma→顿号）泄漏进拼音候选是噪音

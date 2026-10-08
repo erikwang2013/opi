@@ -148,6 +148,50 @@ impl TsfLogic {
         self.reset_page_if_buffer_changed();
     }
 
+    /// 测试探针：四个开关的当前值。生产侧**没有读需求**（设置窗读的是配置文件，
+    /// 不从引擎回读），故打成 `cfg(test)` —— 不在生产面上多开一个出口。
+    #[cfg(test)]
+    pub(crate) fn switches(&self) -> (bool, bool, bool, bool) {
+        (
+            self.engine.learner_enabled(),
+            self.engine.chinese_punct(),
+            self.engine.fuzzy_enabled(),
+            self.engine.jianpin_enabled(),
+        )
+    }
+
+    /// 把「属性设置」的四个开关一次性套到引擎上。**唯一入口**（两处调用：
+    /// 服务创建 + 每次 `Activate`）—— 四处 setter 各调各的会漏，漏掉的那个是静默的。
+    pub fn apply_settings(&mut self, s: crate::settings::Settings) {
+        self.set_learner(s.learn);
+        self.set_chinese_punct(s.chinese_punct);
+        self.set_fuzzy(s.fuzzy);
+        self.set_jianpin(s.jianpin);
+    }
+
+    /// 学习开关（值来自 `%LOCALAPPDATA%\opi\settings.ini` 的 `Learn`；本端在
+    /// `Activate` 时重读一次 —— 没有在线刷新通道，见 settings.rs 模块头）。
+    /// 配对：`fcitx5-opi/src/candidate.rs` 的同名方法（两轨同构，改一处必须改另一处）。
+    pub fn set_learner(&mut self, on: bool) {
+        self.engine.set_learner(on);
+    }
+
+    /// 中文标点开关（值来自 settings.ini 的 `ChinesePunct`）。配对同上。
+    pub fn set_chinese_punct(&mut self, on: bool) {
+        self.engine.set_chinese_punct(on);
+    }
+
+    /// 模糊音开关（值同上，键 `Fuzzy`）。
+    /// 配对：`fcitx5-opi/src/candidate.rs` 的同名方法（两轨同构，改一处必须改另一处）。
+    pub fn set_fuzzy(&mut self, on: bool) {
+        self.engine.set_fuzzy(on);
+    }
+
+    /// 简拼开关。配对同上。
+    pub fn set_jianpin(&mut self, on: bool) {
+        self.engine.set_jianpin(on);
+    }
+
     pub fn switch_mode(&mut self, mode: Mode) {
         self.engine.switch_mode(mode);
         // ⇧ 只在 English 有意义，判据与 Android `EngineController.switchMode` 的

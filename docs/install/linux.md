@@ -452,8 +452,59 @@ Android `KeyRouter.kt`）：空格 = 缓冲非空时提交、空缓冲时把空�
 ### 4.4 中文标点 / 全角
 
 引擎侧**有**这两个开关（`set_chinese_punct` / `toggle_chinese_punct` 等出口都在），
-但 **Linux 端没有给它们配键位** —— 目前唯一的调用方是 Android 的 JNI 冒烟表。本插件
-里只有 `Shift+Space` 那个全角**模式**切换。**别把它读成「按了没反应是 bug」。**
+但 **Linux 端没有给它们配键位** —— 2026-10-08 起它们改由**属性设置**（见 §4.6）控制：
+中文标点 = 设置里的一个开关，全角仍是 `Shift+Space` 那个**模式**切换（两者相互独立，
+见 `engine.rs` 的 `punct_text` 真值表）。**键盘上没有这两个键位，别读成「按了没反应是 bug」。**
+
+### 4.5 候选序号（「1. 你」）
+
+候选前的序号**由插件显式声明**，不是 fcitx5 给的默认值。判据是探针（真库、**未起守护进程**）：
+
+| `CommonCandidateList` 的状态 | `label(0..2)` |
+|---|---|
+| 什么都不调（2026-10-08 之前的 OPI） | `''` `''` `''` —— 面板一个序号都不画 |
+| `setSelectionKey({"1",…})` 之后（现在的做法） | `'1. '` `'2. '` `'3. '` |
+
+`opi_fcitx5.cpp` 的 `refreshingPanelFor()` 因此给候选表设了**选择键**，键数按实际候选数给：
+序号是**页内**编号（1–8，翻页后从 1 重数），与 Android / 鸿蒙 / Windows 候选窗同义；
+顺带把数字键的选择路由交给 fcitx5 的候选机制（落点同样是 `OpiCandidateWord::select`
+的页内索引）。门禁：`opi_panel_driver` 的第 2 节会逐条核对 `label(i)` 以页内数字开头。
+
+⚠️ 面板**画不画**这个序号、画成什么样（字号/间距）由主题与 classicui 决定 —— 本层只保证
+「label 不再是空的」。看不到序号时先看主题那侧，别改这里。
+
+### 4.6 属性设置（四个开关）
+
+**配置落在 fcitx5 自己的 addon 配置里**：`$XDG_CONFIG_HOME/fcitx5/conf/opi_fcitx5.conf`
+（字段声明 = `crates/fcitx5-opi/cpp/opi_config.h` 的 `OpiSettings`）：
+
+```ini
+Learn=True          # 学习（记住选过的词）
+ChinesePunct=True   # 中文标点（，。、与成对引号）
+Fuzzy=True          # 模糊音（z/zh、n/l…）
+Jianpin=True        # 简拼（声母缩写，nh → 你好）
+```
+
+**两条路改它，都即时生效**（改完走 `reloadConfig()` → 引擎，不用重启输入法）：
+
+1. **设置窗**（推荐给用户）：本仓库的 Compose 应用，Linux 上直接运行就是它
+   （`opi-candidates --settings`，或从 jpackage 出来的启动器点开）；
+   保存后它会自己跑一次 `fcitx5-remote -r`。
+2. **手改文件 + 重载**：改完 `fcitx5-remote -r`（`-r` = reload fcitx config）。
+
+⚠️ **别**指望配置工具里多出一页：本仓库**没有**提供 Qt 配置模块（搜狗那种是自带一个
+设置应用 + 桌面入口，见它的 `*.configurer.desktop`），配置工具只显示带 UI 模块的 addon
+的页面。文件与 `opi_config.h` 里那四个键才是真源。
+
+⚠️ 读侧**容忍**：值大小写不敏感、`#` 行内注释、未知键忽略、缺键回默认（默认**四个全开**
+= 引擎既有行为）。手改坏一个值只会让那一项回默认。
+
+### 4.7 候选窗（桌面应用）与属性设置窗是同一个可执行文件
+
+`desktop/` 的 Compose 应用在 Linux 上**只有设置窗一个用途**（候选窗是 Windows/TSF 的
+东西：命名管道两端都在那边）⇒ 无参数启动也进设置窗；Windows 上无参数 = 候选窗，
+`--settings` = 设置窗。打包（jpackage 的 deb：应用 + 自带运行时）与桌面入口的补法
+见 `docs/install/windows.md` 的同名小节，**本仓库当前还没把它放进任何发行包**。
 
 ---
 

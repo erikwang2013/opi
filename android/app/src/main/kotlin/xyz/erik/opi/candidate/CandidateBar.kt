@@ -100,16 +100,25 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
             ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // 序号用全列表下标（翻页后仍唯一），读屏才能区分同音候选
-            val indexBase = controller.candidatePage * EngineController.pageSize
             for ((i, c) in candidates.withIndex()) {
-                Text(
-                    c,
+                // 可见序号 = **页内**下标 + 1（翻页后从 1 重数）。两条理由：
+                //   · 与数字选词的语义同源 —— 引擎里数字键选的是**页内索引**
+                //     （`composer.rs` 的数字键约定），写成全列表下标就与「按 3 选本页第 3 个」对不上；
+                //   · 与 Windows 候选窗同款（`CandidateWindow.kt` 的 `"$index."`，同样是页内）。
+                // ⚠️ 播报用的 `n` 与可见序号是**同一个值**（`"$n."`）—— 不许一处页内、一处全列表。
+                // ⚠️ 手机端字母盘**没有数字行** ⇒ 这个序号实际是**排名**展示：数字选词引擎支持、
+                //    手机端按不到。如实记在 docs/install/android.md §4.4，别读成「可以按数字选」。
+                val n = i + 1
+                Row(
                     // clickable 必须在 padding 之前：反过来的话热区只覆盖文字本身
                     // （20sp 高 ≈ 24dp），远小于候选栏 44dp，边距区域点了没反应。
                     modifier = Modifier
                         .semantics {
-                            contentDescription = "第 ${indexBase + i + 1} 项 $c"
+                            // ⚠️ 反转记录：此处原为**全列表**下标（`indexBase + i + 1`），理由是
+                            // 「翻页后仍唯一」。可见序号立起来之后那条理由不再成立 —— 同一项会出现
+                            // 两个数（看得见的是 3、念出来的是 11），两者只能留一个：留下的必须与
+                            // 看得见的一致。而「唯一」本身没丢：同一屏只渲染当前页，页内下标在本屏唯一。
+                            contentDescription = "第 $n 项 $c"
                             // 长按删词是不可发现的交互：读屏至少要有一条能念出来的动作。
                             // 不往 contentDescription 里塞「长按可删除自造词」——候选每次刷新
                             // 8 条都念一遍太吵，而且对词典词（删不掉）是假承诺；
@@ -129,8 +138,11 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
                             onLongClick = { onLongPress(i) },
                         )
                         .padding(horizontal = 12.dp, vertical = 8.dp),
-                    fontSize = 20.sp,
-                )
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("$n.", fontSize = 13.sp, color = Color(0x8A000000), modifier = Modifier.padding(end = 3.dp))
+                    Text(c, fontSize = 20.sp)
+                }
             }
             // 拼音无候选：小欧出来摊手，比一行灰字更不像"卡住了"。
             // 情绪不能写死 PUZZLED：这里的「无匹配」是**词典**的直接产物，降级时（引擎

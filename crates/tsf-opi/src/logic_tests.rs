@@ -21,6 +21,30 @@ fn state() -> TsfLogic {
     s.refresh_snapshot();
     s
 }
+// ---- 「属性设置」：四个开关一次套上（apply_settings 是唯一入口） ----
+#[test]
+fn apply_settings_lands_all_four_switches() {
+    let mut s = pinyin_state();
+    assert_eq!(
+        s.switches(),
+        (true, true, true, true),
+        "默认全开 = 引擎既有行为"
+    );
+    s.apply_settings(crate::settings::Settings {
+        learn: false,
+        chinese_punct: false,
+        fuzzy: false,
+        jianpin: false,
+    });
+    assert_eq!(s.switches(), (false, false, false, false));
+    s.apply_settings(crate::settings::Settings::default());
+    assert_eq!(
+        s.switches(),
+        (true, true, true, true),
+        "回默认也要落上（不是一次性的）"
+    );
+}
+
 fn pinyin_state() -> TsfLogic {
     let mut s = state();
     s.switch_mode(Mode::Pinyin);

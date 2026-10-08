@@ -134,7 +134,10 @@ PROFILE
 
 echo "== 5/6 C++ 检查（不需要 dbus/守护进程）"
 export LD_LIBRARY_PATH="$rustlib:$FCITX5_LIBS"
-XDG_DATA_HOME="$work/data" "$work/opi_panel_driver"
+# XDG_CONFIG_HOME 也指到临时目录：面板驱动的第 9 段要**写一份真实的
+# opi_fcitx5.conf** 来验「设置窗 → 配置文件 → 引擎」那条路；不指的话
+# StandardPath 会落到用户真实的 ~/.config（驱动里已加守卫，没设就 SKIP）。
+XDG_DATA_HOME="$work/data" XDG_CONFIG_HOME="$work/config" "$work/opi_panel_driver"
 echo
 "$work/opi_json_check"
 

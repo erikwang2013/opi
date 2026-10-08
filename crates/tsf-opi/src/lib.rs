@@ -40,6 +40,12 @@ pub mod com_server;
 /// 覆盖不到（本项目的开发/验收主机是 Linux）。
 pub mod vk;
 
+/// Windows 语言栏按钮的**图标载具**（平台中立：入库 ico 的 `include_bytes!` + 纯字节解析）。
+/// 与 `vk.rs`/`dll.rs`/`dict_path.rs` 同一个理由搬出来：真正会错的是「挑哪条、格式对不对」，
+/// 判定留在 `#[cfg(target_os = "windows")]` 的 `langbar.rs` 里，本机门禁一条都覆盖不到 ——
+/// 而它错了的表现是"按钮没图标"或"喂了非法位图"，全是静默的。
+pub mod langbar_icon;
+
 /// Windows 目标专属：候选窗通信（C3，named pipe 客户端 + TsfSink 生产实现）。
 /// 与 tsf.rs 同样的双重隔离（cfg 门 + windows 依赖 target 作用域），
 /// 主机（Linux）构建/测试不受影响。
@@ -50,5 +56,23 @@ pub mod candidate_io;
 /// 单独成文件的两个理由（B1 的顺序问题 + 500 行硬规矩）见模块头注释。
 #[cfg(target_os = "windows")]
 pub mod state;
+
+/// Windows 目标专属：语言栏按钮（宠物小欧的图标位；`langbar_icon.rs` 是它的
+/// 平台中立载具）。验证边界与"为什么不用 .rc"见模块头注释。
+#[cfg(target_os = "windows")]
+pub mod langbar;
+
+/// 设置窗可执行文件的候选表（`settings_exe.rs` 的纯函数；启动动作在 `configure.rs`）。
+/// 平台中立：判定错了的表现是「点属性没反应」这种静默失败，不该压在 Windows 胶水里。
+pub mod settings_exe;
+
+/// Windows 目标专属：`ITfFnConfigure::Show` 的执行体（拉起设置窗）。
+#[cfg(target_os = "windows")]
+pub mod configure;
+
+/// 「属性设置」的读侧（`%LOCALAPPDATA%\opi\settings.ini`）。
+/// 与 `dict_path.rs` 同样是**平台中立**的：真正要守的是「键名/容错/落点」，
+/// 它错了是静默的（用户以为改了）；写侧是 Compose 设置窗（desktop/）。
+pub mod settings;
 
 pub use logic::{KeyOutcome, ShiftState, TsfLogic};

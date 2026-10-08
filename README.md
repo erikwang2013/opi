@@ -28,9 +28,10 @@
 
 形象见 [`docs/opi-pet.svg`](docs/opi-pet.svg)（纯手写 SVG，无外部依赖，可任意缩放）。它已经住进了代码里：
 
-- **Android**：设置页的表情跟着引擎状态走（待命 / 等选 / 困惑 / 睡着）；候选栏待命位、「无匹配」与符号搜索空结果三处空态；**启动图标**是自适应矢量前景 + 5 档 PNG 回退
-- **Windows**：候选窗空态摊手；发行包（`.deb` / `.msi`）的应用图标
-- **鸿蒙**：候选栏里的小欧，它自己就是「记不记词」的开关
+- **Android**：设置页的表情跟着引擎状态走（待命 / 等选 / 困惑 / 睡着 / 降级）；候选栏待命位、「无匹配」与符号搜索空结果三处空态；**启动图标**是自适应矢量前景 + 5 档 PNG 回退
+- **Windows**：候选窗空态摊手；发行包（`.deb` / `.msi`）的应用图标；**语言栏按钮**（TSF；只在语言栏开着时可见）
+- **鸿蒙**：候选栏里的小欧，它自己就是「记不记词」的开关；应用/子类型图标
+- **macOS**：输入源菜单图标（`macos/opi.tiff`）——⚠️ 本目录是从未编译的草案，图标只在 Mac 上才看得见
 - **Linux（fcitx5）**：输入法条目在输入法列表与托盘里的图标
 - **`opi-tools` 命令行**：编译与校验成功时打印字符版小欧（只用单宽度字符，CJK 终端不错位），`--version` 也带上它
 
@@ -227,6 +228,7 @@ crates/                        # Rust 工作区（crate 清单以根 Cargo.toml 
     cpp/CMakeLists.txt         #   **唯一的编译 + 安装通路**，落点由 opi_locate_check 探针与 CI 守着
   tsf-opi/                     # Windows TSF 插件：Rust 逻辑 + COM 服务器 + 候选窗线协议
     src/dict_path.rs           #   词库查找顺序：环境变量 → DLL 同目录 → %LOCALAPPDATA% → 内置回退
+    src/settings.rs            #   属性设置读侧（%LOCALAPPDATA%\opi\settings.ini，键名与设置窗逐字对应）
 android/                       # Android IME（Kotlin + Jetpack Compose）
   app/                         #   IME 服务 · 键盘 / 候选栏 / 面板 · 设置页（含用户词导入导出）· 宠物组件
     src/main/assets/           #   luna.opid（简体）· trad.opid（繁体）
@@ -249,6 +251,7 @@ data/                          # 词库数据
 docs/                          # 宠物、图与设计文档
   install/                     #   各端安装教程（android / linux / windows / ios / macos / harmony）
   opi-pet.svg                  #   项目宠物「小欧」
+  social-preview.svg · .en.svg #   中英双语社交预览图（同名 .png 供 GitHub Settings → Social preview 上传）
   diagrams/                    #   架构设计 · 功能设计 · 生命周期
   superpowers/                 #   specs（设计规格）+ plans（实施计划）
   release-claim-corrections.md #   发布声明订正（tag 注释推出去改不了，实测到的正确说法落这里）

@@ -133,14 +133,23 @@ struct Index {
       } else {
         Row() {
           ForEach(this.candidates, (item: string, index: number) => {
-            Text(item)
-              .fontSize(20)
-              .fontColor('#1E6B63')
-              .padding({ left: 10, right: 10 })
-              .onClick(() => {
-                // **页内索引** —— 换算交给引擎，别自己算 page * 8 + index。
-                this.ctrl.tapCandidate(index);
-              })
+            Row() {
+              // 可见序号 = **页内**下标 + 1（翻页后从 1 重数）：与 Android 候选栏、
+              // Windows 候选窗同款，也与数字选词的语义（页内索引）一致。
+              // ⚠️ 端上字母盘没有数字行 ⇒ 实际是**排名**展示：数字选词引擎支持、鸿蒙端按不到。
+              Text(`${index + 1}.`)
+                .fontSize(13)
+                .fontColor('#9AA7A4')
+                .margin({ right: 3 })
+              Text(item)
+                .fontSize(20)
+                .fontColor('#1E6B63')
+            }
+            .padding({ left: 10, right: 10 })
+            .onClick(() => {
+              // **页内索引** —— 换算交给引擎，别自己算 page * 8 + index。
+              this.ctrl.tapCandidate(index);
+            })
           }, (item: string, index: number) => `${index}-${item}`)
         }
         .layoutWeight(1)

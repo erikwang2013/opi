@@ -27,7 +27,9 @@ windows = { version = "0.62", default-features = false, features = [
     "Win32_System_LibraryLoader", # DllRegisterServer：GetModuleHandleExW/GetModuleFileNameW
     "Win32_System_Registry",      # DllRegisterServer：RegCreateKeyExW/RegSetValueExW
     "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_System_Threading",     # configure.rs：CreateProcessW（点「属性」拉起设置窗）
     "Win32_UI_TextServices",
+    "Win32_UI_WindowsAndMessaging", # langbar.rs：HICON / CreateIconFromResourceEx（GetIcon 的返回类型经它门控）
 ] }
 # implement! 宏展开引用 `::windows_core::imp::…`，须为本 crate 直接依赖。
 windows-core = { version = "0.62", default-features = false }

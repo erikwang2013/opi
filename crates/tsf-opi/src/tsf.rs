@@ -24,25 +24,27 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::{Arc, Mutex, Once};
 
 use engine_core::composer::Mode;
-use windows::Win32::Foundation::{LPARAM, WPARAM};
+use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     GetKeyState, GetKeyboardLayout, GetKeyboardState, ToUnicodeEx, VK_CAPITAL, VK_CONTROL, VK_MENU,
     VK_SHIFT,
 };
 use windows::Win32::UI::TextServices::{
-    ITfContext, ITfKeyEventSink, ITfKeyEventSink_Impl, ITfKeystrokeMgr, ITfTextInputProcessor,
-    ITfTextInputProcessor_Impl, ITfThreadMgr,
+    ITfContext, ITfFnConfigure, ITfFnConfigure_Impl, ITfFunction, ITfFunction_Impl,
+    ITfKeyEventSink, ITfKeyEventSink_Impl, ITfKeystrokeMgr, ITfLangBarItem, ITfLangBarItemMgr,
+    ITfTextInputProcessor, ITfTextInputProcessor_Impl, ITfThreadMgr,
 };
 use windows::core::{
-    BOOL, ComObjectInterface, GUID, HRESULT, IUnknown, Interface, InterfaceRef, Ref, Result,
+    BOOL, BSTR, ComObjectInterface, GUID, HRESULT, IUnknown, Interface, InterfaceRef, Ref, Result,
     implement,
 };
 
-use crate::dll::DllLock;
+use crate::dll::{DISPLAY_NAME, DllLock};
 use crate::logic::{
     KEY_STATE_ALT, KEY_STATE_CAPS_LOCK, KEY_STATE_CTRL, KEY_STATE_RELEASED, KEY_STATE_REPEAT,
     KEY_STATE_SHIFT, KeyOutcome, TsfLogic,
 };
+use crate::settings;
 use crate::state::TsfSharedState;
 use crate::vk::{
     ModeHotkey, fullwidth_hotkey, hotkey_should_act, hotkey_target, mode_hotkey,
@@ -99,7 +101,9 @@ pub(crate) fn push_state(sink: &dyn TsfSink, logic: &TsfLogic) {
 /// TSF 服务对象：单对象实现两个 COM 接口，避免跨接口共享状态。
 /// - `ITfTextInputProcessor`：TSF 核心入口（Activate/Deactivate 生命周期）。
 /// - `ITfKeyEventSink`：按键转发（Activate 中经 ITfKeystrokeMgr::AdviseKeyEventSink 注册）。
-#[implement(ITfTextInputProcessor, ITfKeyEventSink)]
+// `ITfFunction` 是 `ITfFnConfigure` 的基接口，两个都要列（同 langbar.rs 的
+// ITfLangBarItem/ITfLangBarItemButton 那一对）。
+#[implement(ITfTextInputProcessor, ITfKeyEventSink, ITfFnConfigure, ITfFunction)]
 pub struct TsfTextService {
     /// 引擎（与候选窗回调共用同一份 `EngineShared`）+ 插入目标 + 编辑会话保活。
     /// **本对象是它唯一的持有者**：后两样不 Send，只该待在按键线程上，
@@ -107,6 +111,11 @@ pub struct TsfTextService {
     pub state: TsfSharedState,
     /// Activate 时保存的线程管理器（骨架：仅持有引用，候选窗/文档操作需要）。
     pub thread_mgr: Mutex<Option<ITfThreadMgr>>,
+    /// 语言栏按钮（`langbar.rs`）。挂上/摘下跟 Activate/Deactivate 配对 ——
+    /// 不摘的话语言栏会持一份指向本 DLL 的 vtable。**挂不上不致命**：
+    /// 语言栏没开（Win11 常态）就必然挂不上，那只意味着没那个图标，不该让
+    /// 整个输入法激活不了 ⇒ 这里是 `Option`，失败只落空、不冒泡。
+    pub langbar: Mutex<Option<(ITfLangBarItemMgr, ITfLangBarItem)>>,
     /// 候选窗接缝（见 `TsfSink`）。`Arc` 而非 `Box`：同一份还要交给候选窗回调
     /// （点选后得让窗口刷新/隐藏），两处各持一个引用，谁也不用等谁。
     pub sink: Arc<dyn TsfSink>,
@@ -128,6 +137,7 @@ impl TsfTextService {
         Self {
             state,
             thread_mgr: Mutex::new(None),
+            langbar: Mutex::new(None),
             sink,
             _module_lock: DllLock::new(),
         }
@@ -274,6 +284,11 @@ impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
             // client id 是 RequestEditSession 的必需参数：不存下来，插入就没有
             // 合法的 tid 可用（这就是"两处 on_commit 丢弃文本"之外的第二道墙）。
             self.state.set_client_id(tid);
+            // 「属性设置」重读一次：本端没有在线刷新通道，**下一次激活就是生效时机**
+            // （设置窗保存后切走再切回来）。读不到 = 保持/回默认，见 settings.rs。
+            if let Some(mut logic) = self.state.lock_logic() {
+                logic.apply_settings(settings::load(std::env::var_os("LOCALAPPDATA").as_deref()));
+            }
             // 注册按键监听：0.62 API 为 AdviseKeyEventSink（旧式 SetKeypressSink 已移除）。
             // fforeground=true：前台键盘事件也交本服务（输入法语义）。
             // 本对象同时实现 ITfKeyEventSink，as_interface_ref 取其 IUnknown 指针，
@@ -285,7 +300,17 @@ impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
             let sink: InterfaceRef<'_, IUnknown> = self.as_interface_ref();
             // cast = QueryInterface：对象支持 ITfKeyEventSink，取具体接口指针。
             let key_sink: ITfKeyEventSink = sink.cast()?;
-            unsafe { km.AdviseKeyEventSink(tid, &key_sink, true) }
+            unsafe { km.AdviseKeyEventSink(tid, &key_sink, true) }?;
+            // 语言栏按钮（宠物「小欧」在 Windows 上唯一新增的图标位，见 langbar.rs）。
+            // 失败**只落空、不冒泡**：语言栏没开（Win11 默认）就挂不上，而那是常态 ——
+            // 一个图标不值得让整个输入法激活不了。摘除在 Deactivate。
+            if let Some(tm) = (*ptim).as_ref()
+                && let Ok(pair) = crate::langbar::add(tm)
+                && let Ok(mut slot) = self.langbar.lock()
+            {
+                *slot = Some(pair);
+            }
+            Ok(())
         }))
         .unwrap_or_else(|_| Err(E_FAIL.into()))
     }
@@ -294,6 +319,13 @@ impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
         ensure_panic_hook();
         catch_unwind(AssertUnwindSafe(|| {
             // 骨架：仅清状态；验收补全点：UnadviseKeyEventSink + 释放 composition/候选窗。
+            // 语言栏按钮先摘（与 Activate 的 add 配对）：留着的条目持一份指向本 DLL
+            // 的 vtable，卸载后就是悬垂 —— 见 langbar.rs 的 remove。
+            if let Ok(mut slot) = self.langbar.lock()
+                && let Some((mgr, item)) = slot.take()
+            {
+                crate::langbar::remove(&mgr, &item);
+            }
             let mut tm = match self.thread_mgr.lock() {
                 Ok(g) => g,
                 Err(_) => return Ok(()), // 中毒锁：吞掉，避免经 COM vtable 泄漏 panic
@@ -341,6 +373,33 @@ impl ITfKeyEventSink_Impl for TsfTextService_Impl {
 
     fn OnPreservedKey(&self, _pic: Ref<ITfContext>, _rguid: *const GUID) -> Result<BOOL> {
         Ok(BOOL(0))
+    }
+}
+
+// ---------- ITfFunction / ITfFnConfigure：控制面板里的「属性设置」 ----------
+// 取法见 configure.rs 的模块头（控制面板 `CoCreateInstance(CLSID, IID_ITfFnConfigure)`）。
+
+impl ITfFunction_Impl for TsfTextService_Impl {
+    /// 「属性」这一项在控制面板里显示的名字。
+    fn GetDisplayName(&self) -> Result<BSTR> {
+        Ok(DISPLAY_NAME.into())
+    }
+}
+
+impl ITfFnConfigure_Impl for TsfTextService_Impl {
+    /// 点「属性」→ 拉起设置窗。失败返回 E_FAIL：控制面板知道失败了，
+    /// 而用户不会被弹一个空窗骗（宁可不响）。
+    fn Show(&self, _hwndparent: HWND, _langid: u16, _rguidprofile: *const GUID) -> Result<()> {
+        ensure_panic_hook();
+        // COM 出口：panic 逃出去 = abort 宿主进程（同 handle_key）。
+        match catch_unwind(AssertUnwindSafe(crate::configure::launch_settings)) {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => {
+                eprintln!("tsf-opi: 拉起设置窗失败: {e}");
+                Err(E_FAIL.into())
+            }
+            Err(_) => Err(E_FAIL.into()),
+        }
     }
 }
 

@@ -274,6 +274,24 @@ impl Api {
         self.router.engine().learner_enabled()
     }
 
+    /// 模糊音 / 简拼（「属性设置」的另外两个旋钮，2026-10-08）。
+    /// 与 `set_learner` 同一档：只翻引擎里的 bool，调用后不必重读 buffer/candidates。
+    pub fn set_fuzzy(&mut self, on: bool) {
+        self.router.engine_mut().set_fuzzy(on);
+    }
+
+    pub fn fuzzy_enabled(&self) -> bool {
+        self.router.engine().fuzzy_enabled()
+    }
+
+    pub fn set_jianpin(&mut self, on: bool) {
+        self.router.engine_mut().set_jianpin(on);
+    }
+
+    pub fn jianpin_enabled(&self) -> bool {
+        self.router.engine().jianpin_enabled()
+    }
+
     pub fn remove_user_word(&mut self, text: String) {
         self.router.engine_mut().remove_user_word(&text);
     }

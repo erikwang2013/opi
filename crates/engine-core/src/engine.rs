@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-use crate::candidates::{Candidate, DEFAULT_TOP_N, USER_BOOST, rank_and_pick};
+use crate::candidates::{Candidate, DEFAULT_TOP_N, RankOptions, USER_BOOST, rank_and_pick_with};
 use crate::composer::{Composer, KeyEffect, Mode};
 use crate::dictionary::Dictionary;
 use crate::learner::Learner;
@@ -31,6 +31,11 @@ pub struct Engine {
     chinese_punct: bool,
     /// 成对引号的交替状态（复位时机见 [`Quotes`]）。
     quotes: Quotes,
+    /// 模糊音开关（「属性设置」可改；排序层的门控见 `candidates::RankOptions`）。
+    /// 默认 `true` = 既有行为。
+    fuzzy: bool,
+    /// 简拼开关。默认 `true` = 既有行为。
+    jianpin: bool,
 }
 
 impl Engine {
@@ -60,6 +65,8 @@ impl Engine {
             fullwidth: Mode::default().default_fullwidth(),
             chinese_punct: true,
             quotes: Quotes::default(),
+            fuzzy: true,
+            jianpin: true,
         }
     }
 
@@ -373,7 +380,7 @@ impl Engine {
 
     pub fn candidates(&self, limit: usize) -> Vec<Candidate> {
         let s = self.composer.session();
-        rank_and_pick(
+        rank_and_pick_with(
             self.active_dict(),
             &self.symbols,
             &self.learner,
@@ -381,6 +388,10 @@ impl Engine {
             s.mode,
             limit,
             self.user_boost,
+            RankOptions {
+                fuzzy: self.fuzzy,
+                jianpin: self.jianpin,
+            },
         )
     }
 
@@ -424,6 +435,26 @@ impl Engine {
 
     pub fn set_learner(&mut self, enabled: bool) {
         self.learner.set_enabled(enabled);
+    }
+
+    /// 模糊音开关（「属性设置」的旋钮之一）。关掉 = `rank_and_pick_with` 跳过
+    /// 整串变体与逐音节兜底**两个**入口（只关一个会让 `zongguo` 这类输入仍从
+    /// 逐音节拿到模糊结果）。
+    pub fn set_fuzzy(&mut self, enabled: bool) {
+        self.fuzzy = enabled;
+    }
+
+    pub fn fuzzy_enabled(&self) -> bool {
+        self.fuzzy
+    }
+
+    /// 简拼开关（同上）。
+    pub fn set_jianpin(&mut self, enabled: bool) {
+        self.jianpin = enabled;
+    }
+
+    pub fn jianpin_enabled(&self) -> bool {
+        self.jianpin
     }
 
     pub fn learner_enabled(&self) -> bool {

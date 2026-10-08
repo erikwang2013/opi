@@ -131,7 +131,7 @@
 | `ets/InputMethodExtensionAbility/KeyboardController.ets` | 输入法会话唯一持有者：开面板、拿 `InputClient`、按键按 `action` 分派、状态推给 UI |
 | `ets/InputMethodExtensionAbility/OpiEngine.ets` | C ABI 薄桥：枚举、**键码常量唯一定义处**、JSON 候选解码 |
 | `ets/InputMethodExtensionAbility/OpiPet.ets` | 项目宠物「小欧」的 ArkTS 复刻（键帽精灵，表情跟引擎状态走） |
-| `ets/InputMethodExtensionAbility/pages/Index.ets` | 键盘 UI 最小骨架：候选栏 + preedit + 三行 QWERTY + 功能行 |
+| `ets/InputMethodExtensionAbility/pages/Index.ets` | 键盘 UI 最小骨架：候选栏（候选带页内序号）+ preedit + 三行 QWERTY + 功能行 |
 | `module.json5` | `extensionAbilities` 配置**片段**（不是能直接用的完整 manifest） |
 | `resources/base/profile/input_method_config.json` | 输入法子类型配置 |
 
@@ -936,6 +936,23 @@ grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|op
 > 硬造一个软键出来反而会与既有语义打架。接物理键盘时再补，判据照上面两条走。
 
 ---
+
+### 属性设置（**未接**）
+
+四个开关（学习 / 中文标点 / 模糊音 / 简拼）**引擎侧已支持**
+（`Engine::set_learner` / `set_chinese_punct` / `set_fuzzy` / `set_jianpin`，默认全开；
+门禁见 `crates/engine-core/tests/fuzzy_jianpin_switches.rs`），另两端各有配置面
+（Linux = fcitx5 addon 配置 `opi_config.h` + Compose 设置窗；Windows =
+`%LOCALAPPDATA%\opi\settings.ini` + 同一个设置窗）。
+
+**C ABI 出口已落地**（2026-10-08：`opi_fuzzy_enabled` / `opi_set_fuzzy` /
+`opi_jianpin_enabled` / `opi_set_jianpin`；学习与中文标点的四个出口更早就有）。
+本端缺的是三件：**设置界面**（各端自己的设置页 / 首选项窗）、**落盘**
+（iOS/macOS = `UserDefaults`，鸿蒙 = preferences）、**启动时把四个值套到引擎**
+（对照 `tsf-opi/src/logic.rs` 的 `apply_settings` 与 fcitx5 的 `opi_config.h` +
+`applyOpiSettings`）。
+
+⚠️ **别新造第五个开关、别改语义**：真源是 `engine.rs` 的那四个 setter。
 
 ## 参考（同为「未被验证」的同类，可对照着读）
 

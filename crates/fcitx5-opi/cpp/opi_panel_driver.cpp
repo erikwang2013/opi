@@ -22,6 +22,9 @@
 #include <fcitx/inputcontextmanager.h>
 
 #include <cstdio>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <string>
 
 namespace {
@@ -75,6 +78,16 @@ std::string candidateAt(fcitx::InputContext &ic, int idx) {
         return "<none>";
     }
     return list->candidate(idx).text().toString();
+}
+
+// 候选**序号**（label）：面板画的「1. 」来自它，不是候选文本的一部分。
+// 插件的 `setSelectionKey` 是它唯一的赋值点（见 opi_fcitx5.cpp 那段注释）。
+std::string candidateLabelAt(fcitx::InputContext &ic, int idx) {
+    auto list = ic.inputPanel().candidateList();
+    if (!list || idx < 0 || idx >= list->size()) {
+        return "<none>";
+    }
+    return list->label(idx).toString();
 }
 
 void check(bool ok, const std::string &what) {
@@ -138,6 +151,18 @@ int main() {
         parseJsonStringArray(take(opi_fcitx5_candidates(SIZE_MAX)));
     check(candidateCount(ic) == static_cast<int>(pageNow.size()),
           "候选表条数 == Rust 当前页条数（页大小由 Rust 定，此处不写死）");
+    // 候选**序号**：插件调了 setSelectionKey 面板才有得画 —— 探针实测「不设」
+    // 时 label 是**空串**（真库，见 docs/install/linux.md 的「候选序号」）。
+    // 只钉「以页内数字开头」不钉整串（`"1. "` 的尾随空格是 fcitx5 自己拼的，
+    // 跨版本会变）：改回不设 → 空串，第一条就红。逐条覆盖本页（不写死条数）。
+    bool labelsOk = candidateCount(ic) > 0;
+    for (int i = 0; i < candidateCount(ic); ++i) {
+        if (candidateLabelAt(ic, i).rfind(std::to_string(i + 1), 0) != 0) {
+            labelsOk = false;
+            break;
+        }
+    }
+    check(labelsOk, "候选序号按页内 1..n 编号（label 非空且以数字开头）");
     check(ic.inputPanel().preedit().cursor() == 5, "预编辑光标在末尾（字节 5）");
     check(clientPreeditOf(ic) == "nihao", "clientPreedit == 缓冲（内联预编辑通道）");
     check(candidateCursor(ic) == 0, "候选光标 = 0（候选栏有高亮）");
@@ -270,6 +295,67 @@ int main() {
                 candidateCount(ic));
     check(ic.committed_ == " ", "空缓冲空格直传（提交一个空格）");
     check(preeditOf(ic).empty() && candidateCount(ic) == 0, "直通后面板仍为空");
+
+    std::printf("== 8. 「属性设置」：简拼开关落到引擎了吗 ==\n");
+    // 输入挑 **nh**：词库里没有任何以 nh 开头的键，整串/逐音节回退与模糊音都够不着
+    // 「你好」—— 它只有简拼一条来路。于是这一段是开关的端到端门禁：
+    // Rust `engine.set_jianpin` → C 出口 → 面板候选表。
+    auto hasNiHao = [&]() {
+        for (int i = 0; i < candidateCount(ic); ++i) {
+            if (candidateAt(ic, i) == "你好") {
+                return true;
+            }
+        }
+        return false;
+    };
+    auto clearViaReset = [&]() {
+        fcitx::ResetEvent r(&ic);
+        engine.reset(entry, r);
+    };
+    type("nh");
+    std::printf("  简拼开：nh -> candidates=%d\n", candidateCount(ic));
+    check(hasNiHao(), "简拼开：nh 能查到「你好」");
+    opi_fcitx5_set_jianpin(false);
+    clearViaReset();
+    type("nh");
+    std::printf("  简拼关：nh -> candidates=%d\n", candidateCount(ic));
+    check(!hasNiHao(), "简拼关：nh 查不到「你好」（开关真的落到了引擎）");
+    opi_fcitx5_set_jianpin(true); // 还原（本段在末尾，仍还原，免得将来有人在后面加段）
+
+    std::printf("== 9. 配置文件 → 引擎（设置窗写的就是这个文件）==\n");
+    // 这一段走的是**设置窗那条路**：写 `$XDG_CONFIG_HOME/fcitx5/conf/opi_fcitx5.conf`
+    // （键名与 desktop/.../Settings.kt 逐字相同）→ `readOpiSettings`（= reloadConfig
+    // 调的那个函数）→ 引擎。⚠️ **只在 XDG_CONFIG_HOME 已指到临时目录时跑**：
+    // 没设的话 StandardPath 会落到用户真实的 ~/.config —— 不拿用户的配置做实验。
+    {
+        const char *cfgHome = std::getenv("XDG_CONFIG_HOME");
+        if (cfgHome == nullptr || *cfgHome == '\0') {
+            skip("未设 XDG_CONFIG_HOME（不拿用户真配置做实验）—— run-harness.sh 会指到临时目录");
+        } else {
+            const std::string dir = std::string(cfgHome) + "/fcitx5/conf";
+            const std::string path = dir + "/opi_fcitx5.conf";
+            std::filesystem::create_directories(dir);
+            auto writeConf = [&](const char *text) {
+                std::ofstream f(path, std::ios::trunc);
+                f << text;
+            };
+            writeConf("Jianpin=False\nFuzzy=True\n");
+            OpiSettings s;
+            readOpiSettings(s);
+            applyOpiSettings(s);
+            clearViaReset();
+            type("nh");
+            std::printf("  配置 Jianpin=False：nh -> candidates=%d\n", candidateCount(ic));
+            check(!hasNiHao(), "配置文件里的 Jianpin=False 被读进来并生效了");
+            writeConf("Jianpin=True\n");
+            readOpiSettings(s);
+            applyOpiSettings(s);
+            clearViaReset();
+            type("nh");
+            check(hasNiHao(), "改回 True 同样生效（值是从文件读的，不是一次性）");
+            std::filesystem::remove(path);
+        }
+    }
 
     std::printf("\n%s（失败 %d 项）\n", g_fail == 0 ? "ALL PASS" : "HAS FAILURES",
                 g_fail);

@@ -427,8 +427,12 @@ Mac 上很可能要改」的地方标出来了，接手人从这里开始最省�
   按猜测去改一个可能本来就正确的字面值，风险大于收益。
   ⚠️ **待 Mac 上核实**：打开 `/System/Library/Input Methods/` 下某个系统中文输入法的
   `Info.plist`，看这个键实际写的是什么，再决定这里的三个值是留是改。
-- `tsInputMethodIconFileKey` 指向 `opi.tiff`，**仓库里没有这个文件**。缺文件时系统一般
-  用默认图标；要正式发布就得补一个（或在 plist 里去掉这个键）。
+- `tsInputMethodIconFileKey` 指向 `opi.tiff`，**仓库已带**（`macos/opi.tiff`，生成物：
+  `scripts/gen_pet_icons.py` 从 R4「图标简化版」机械派生）。打包时放进 bundle 的
+  `Contents/Resources/` —— 本仓库没有工程文件，这一步由你在 Xcode 里补。
+  ⚠️ 这个键走**模板渲染**：系统按 alpha 通道着色，与图里的颜色无关 ⇒ 菜单栏里看到的
+  是**小欧的剪影**（键帽 + 天线），眼与嘴是内部元素、模板化后不可见。
+  **未在 Mac 上核实**：本机无 macOS，该 tiff 只验到「尺寸/DPI/透明通道」这一层。
 - `CFBundleShortVersionString` / `CFBundleVersion` 是**手写的字面值**，**不**由
   `Cargo.toml` 的工作区版本自动生成 —— 发版时容易忘记改，本文件就曾经落后过仓库版本。
   维护方式二选一：发版清单里加一条「同步 `macos/Info.plist`」，或让构建脚本从
@@ -578,6 +582,23 @@ Mac 上很可能要改」的地方标出来了，接手人从这里开始最省�
   按 `Int` 解码后**显式收窄**，直接解成 `Int16` 会在 id > 32767 时抛异常，
   而本层对解析失败的处理是「返回空数组」，后果是面板整块空掉且**无日志**；
   ③`opi_search_symbols("")` 返回**全部**条目，不是「没搜到」。
+
+### 属性设置（**未接**）
+
+四个开关（学习 / 中文标点 / 模糊音 / 简拼）**引擎侧已支持**
+（`Engine::set_learner` / `set_chinese_punct` / `set_fuzzy` / `set_jianpin`，默认全开；
+门禁见 `crates/engine-core/tests/fuzzy_jianpin_switches.rs`），另两端各有配置面
+（Linux = fcitx5 addon 配置 `opi_config.h` + Compose 设置窗；Windows =
+`%LOCALAPPDATA%\opi\settings.ini` + 同一个设置窗）。
+
+**C ABI 出口已落地**（2026-10-08：`opi_fuzzy_enabled` / `opi_set_fuzzy` /
+`opi_jianpin_enabled` / `opi_set_jianpin`；学习与中文标点的四个出口更早就有）。
+本端缺的是三件：**设置界面**（各端自己的设置页 / 首选项窗）、**落盘**
+（iOS/macOS = `UserDefaults`，鸿蒙 = preferences）、**启动时把四个值套到引擎**
+（对照 `tsf-opi/src/logic.rs` 的 `apply_settings` 与 fcitx5 的 `opi_config.h` +
+`applyOpiSettings`）。
+
+⚠️ **别新造第五个开关、别改语义**：真源是 `engine.rs` 的那四个 setter。
 
 ## 与 Rust 侧的契约（键码 / 状态位）
 

@@ -1,10 +1,15 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! 模糊拼音（**常开**，四端共享）：核心 8 组模糊音 → 单音节/整串变体。
+//! 模糊拼音（**可开关**，四端共享）：核心 8 组模糊音 → 单音节/整串变体。
 //!
-//! 常开而非开关：fcitx5（`Configurable=False`）与 TSF（无配置面）两端**没有配置面**，
-//! 做成开关只会让两端无法关闭或恒开。故本模块无状态、无开关，`rank_and_pick` 签名不动。
+//! **2026-10-08 起有开关**：唯一入口是 `Engine::set_fuzzy`，门控在 `candidates.rs` 的
+//! `RankOptions`；本模块仍无状态。配置来源按端：fcitx5 = 原生 addon 配置（`opi_config.h`）、
+//! Android = 设置页、TSF = settings.ini；C ABI / JNI 侧另有对应出口。
+//! ⚠️ 订正：原文写「常开而非开关：fcitx5（`Configurable=False`）与 TSF（无配置面）两端没有
+//! 配置面」—— 那条前提已被「属性设置」这一轮推翻（两端都有了配置面），故改成开关。
+//! ⚠️ 两处接入点（整串 + 逐音节兜底）**必须同开同关**：只关整串，`zongguo` 仍会从逐音节
+//! 拿到模糊结果（门禁：`tests/fuzzy_jianpin_switches.rs`）。
 //!
 //! **变体靠按位置锚定的替换生成，不动 `pinyin::SYLLABLES`**：那张表被 410 条计数断言、
 //! 贪婪切分断言、以及全 410 音节全前缀的二分单调性穷举锁着，扩表会连带推翻它们。

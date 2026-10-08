@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 erik.xyz | SPDX-License-Identifier: MIT -->
+<!--
+  GitHub 社交预览图（Social Preview）· 英文版。
+
+  用法：这是**可改真源** —— 文案、配色、排版都在这里改；改完重出 PNG（上传用的那份）：
+      rsvg-convert -w 1280 docs/social-preview.en.svg -o docs/social-preview.en.png
+  GitHub 规格：1280×640、PNG/JPG/GIF、<1MB。上传路径：仓库 → Settings → Social preview。
+  （社交预览**没有 API**，只能网页传 —— 这一步得手工做。）
+
+  中文版是逐行同构的孪生：docs/social-preview.svg（改文案时两边一起改）。
+
+  ⚠️ 宠物是**相对引用**（同目录的 opi-pet.svg），不是复制一份几何 —— 小欧改图这里自动跟。
+  代价如实记：单独把本文件拖到别处（或让 GitHub 的 SVG 消毒器渲染）时宠物会缺 ——
+  它本来也只用来本机渲染出 PNG。
+  ⚠️ 不在图上写平台计数/未落地的能力（三张设计图的教训）；文案全部取自
+  README / README.en.md 的标题行。
+-->
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     viewBox="0 0 1280 640" width="1280" height="640" role="img"
+     aria-labelledby="spTitle spDesc">
+  <title id="spTitle">OPI (Open People Input) — an input method that goes back to the basics, for everyone, on every device</title>
+  <desc id="spDesc">On a rice-paper white ground: the OPI wordmark and tagline on the left, the project pet Opi — a keycap sprite — on the right.</desc>
+
+  <!-- 底色：宣纸白（与宠物同一色值） -->
+  <rect width="1280" height="640" fill="#FBFAF6"/>
+
+  <!-- 右侧：项目宠物「小欧」（几何真源 = docs/opi-pet.svg，相对引用，不复制几何） -->
+  <image href="opi-pet.svg" xlink:href="opi-pet.svg" x="837" y="110" width="403" height="420"/>
+
+  <g font-family="'Noto Sans CJK SC','Source Han Sans SC','PingFang SC','Microsoft YaHei',-apple-system,'Segoe UI',sans-serif">
+    <!-- 字标：键帽侧壁的刻字位（等宽 + 字距，呼应 opi-pet.svg 的 OPI 刻字） -->
+    <rect x="80" y="96" width="118" height="50" rx="12" fill="#FFFFFF" stroke="#2E8B80" stroke-width="2.2"/>
+    <text x="139" y="129" text-anchor="middle" font-size="26" font-weight="700" letter-spacing="4"
+          fill="#1E6B63"
+          font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace">OPI</text>
+
+    <!-- 朱砂短线：全图唯一暖色，取自小欧头顶的声调天线 -->
+    <rect x="80" y="194" width="104" height="9" rx="4.5" fill="#D9553F"/>
+
+    <!-- 标题与标语：文案取自 README.en.md 的标题行（标题行原句较长，此处断成两行） -->
+    <text x="80" y="288" font-size="74" font-weight="700" letter-spacing="-1.5" fill="#22272E">Open People Input</text>
+    <text x="80" y="338" font-size="30" fill="#1E6B63">An input method that goes back to the basics</text>
+    <text x="80" y="376" font-size="30" fill="#1E6B63">for everyone, on every device</text>
+
+    <!-- 细线 + 三个标签（底色取自设计图的卡片色，保持一家人的观感） -->
+    <line x1="80" y1="408" x2="760" y2="408" stroke="#D8E9E6" stroke-width="1.5"/>
+    <g fill="#F4F9F8" stroke="#D8E9E6" stroke-width="1.5">
+      <rect x="80" y="440" width="177" height="44" rx="22"/>
+      <rect x="273" y="440" width="128" height="44" rx="22"/>
+      <rect x="417" y="440" width="115" height="44" rx="22"/>
+    </g>
+    <g font-size="24" fill="#1E6B63" text-anchor="middle">
+      <text x="168.5" y="469">Open source</text>
+      <text x="337" y="469">Offline</text>
+      <text x="474.5" y="469">Pinyin</text>
+    </g>
+
+    <!-- 页脚：仓库地址 + 许可证（muted 取自设计图的次级文字色） -->
+    <text x="80" y="552" font-size="26" fill="#6B7671">github.com/erikwang2013/opi</text>
+    <text x="452" y="552" font-size="26" fill="#8A948F">· MIT</text>
+  </g>
+</svg>

@@ -162,7 +162,7 @@ fn safety_doc_checker_reports_exactly_the_bare_pointer_export() {
 /// 真门禁：`cabi.rs` 那批指针/句柄导出，每一条都必须自带 `# Safety`。
 #[test]
 fn every_cabi_export_with_raw_args_documents_its_preconditions() {
-    let src = read(CABI);
+    let src = read_cabi();
     let parsed = parse_rust_exports(&src);
     // 解析器失明 => 下面的空列表是假绿。锚点取本门禁判据面上的那几条。
     for anchor in [
@@ -201,7 +201,7 @@ fn every_cabi_export_with_raw_args_documents_its_preconditions() {
 #[test]
 fn the_catch_unwind_exception_is_exactly_the_documented_one() {
     const DOCUMENTED_EXCEPTION: &str = "opi_ffi_free_string";
-    let unwrapped: Vec<String> = export_bodies(&read(CABI))
+    let unwrapped: Vec<String> = export_bodies(&read_cabi())
         .into_iter()
         .filter(|(_, body)| !body.contains("catch_unwind("))
         .map(|(n, _)| n)

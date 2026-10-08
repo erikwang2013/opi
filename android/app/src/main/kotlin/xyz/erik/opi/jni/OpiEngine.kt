@@ -91,6 +91,20 @@ object OpiEngine : OpiEngineApi, SymbolApi {
      */
     external fun toggleChinesePunct(): Boolean
 
+    /**
+     * fuzzyEnabled()/jianpinEnabled() -> Boolean：「属性设置」四个旋钮中的两个读侧
+     * （写侧见下面的 setFuzzy/setJianpin）。⚠️ 未装载 → false 是**哨兵**，不是
+     * "开关默认关" —— 默认值是开的（引擎侧 `RankOptions::default()`）。
+     */
+    external fun fuzzyEnabled(): Boolean
+    external fun jianpinEnabled(): Boolean
+
+    /** setFuzzy(on: Boolean)：模糊音开关（设置项，无返回值；要结果读 fuzzyEnabled()）。 */
+    external fun setFuzzy(on: Boolean)
+
+    /** setJianpin(on: Boolean)：简拼开关（同上）。 */
+    external fun setJianpin(on: Boolean)
+
     /** inputSpace() -> String。英文模式提交 buffer。 */
     override external fun inputSpace(): String
 

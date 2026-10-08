@@ -1,0 +1,106 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
+//! 「属性设置」的**读侧**（Windows）：`%LOCALAPPDATA%\opi\settings.ini`。
+//!
+//! 写侧是 Compose 设置窗（`desktop/src/main/kotlin/xyz/erik/opi/candidate/Settings.kt`，
+//! `opi-candidates --settings`）。两端**共用同一批键名**
+//! （`Learn` / `ChinesePunct` / `Fuzzy` / `Jianpin`）—— 改键名 = 老配置文件全部失效，
+//! 三处同改（Kotlin 写侧 ⇄ 本文件 ⇄ fcitx5 的 `cpp/opi_config.h`）。
+//!
+//! 本模块**平台中立**（无 windows 类型）且是**纯函数**（路径与环境量都由参数给）——
+//! 与 `dict_path.rs`/`vk.rs` 同理：解析判定若留在 `#[cfg(target_os = "windows")]` 的
+//! 胶水里，本机（Linux）门禁就一条都覆盖不到，而它的失败面是**静默**的
+//! （开关不生效，用户以为改了）。
+//!
+//! 【生效时机，如实记】本端**没有在线刷新通道**：设置窗落盘后，值在下一次
+//! `ITfTextInputProcessor::Activate`（= 切到别的应用再切回来）时读进来生效。
+//! 升级路径：设置窗与候选窗是同一条命名管道的两端，加一条 `{"type":"reload"}`
+//! 消息即可即时生效 —— 那要同时改线协议两侧（`candidate_io.rs` 与
+//! `desktop/.../Protocol.kt`），本轮未做。
+
+use std::ffi::OsStr;
+use std::path::PathBuf;
+
+/// 设置文件名（与 Compose 写侧约定一致：`<LOCALAPPDATA>/opi/settings.ini`）。
+pub const SETTINGS_FILE_NAME: &str = "settings.ini";
+
+/// 四个开关。默认值 = **引擎既有行为**（全开）—— 与 Kotlin 写侧、fcitx5 读侧的默认
+/// 一字不差：三处默认值不同的表现是「没配过 = 随机一种行为」。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Settings {
+    pub learn: bool,
+    pub chinese_punct: bool,
+    pub fuzzy: bool,
+    pub jianpin: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            learn: true,
+            chinese_punct: true,
+            fuzzy: true,
+            jianpin: true,
+        }
+    }
+}
+
+/// 解析 ini 文本。**永不失败**：手改坏的配置文件只该让坏掉的那几项回默认，
+/// 不该让输入法不出字。
+///
+/// 容错口径（与 Kotlin 写侧/读侧同一套，单测在 `settings_tests.rs`）：
+/// 键名区分大小写（写侧就写这四个）、值大小写不敏感、`#` 起行内注释、
+/// 未知键忽略（向前兼容：新版本写的文件在旧版本上照读）。
+pub fn parse(text: &str) -> Settings {
+    let mut out = Settings::default();
+    for raw in text.lines() {
+        let line = raw.split('#').next().unwrap_or("").trim();
+        let Some((k, v)) = line.split_once('=') else {
+            continue;
+        };
+        let Some(b) = parse_bool(v.trim()) else {
+            continue;
+        };
+        match k.trim() {
+            "Learn" => out.learn = b,
+            "ChinesePunct" => out.chinese_punct = b,
+            "Fuzzy" => out.fuzzy = b,
+            "Jianpin" => out.jianpin = b,
+            _ => {} // 未知键：忽略（向前兼容），不报错
+        }
+    }
+    out
+}
+
+fn parse_bool(v: &str) -> Option<bool> {
+    match v.to_ascii_lowercase().as_str() {
+        "true" | "1" | "yes" | "on" => Some(true),
+        "false" | "0" | "no" | "off" => Some(false),
+        _ => None,
+    }
+}
+
+/// `%LOCALAPPDATA%\opi\settings.ini`（写侧 `Settings.kt` 的 Windows 分支同此）。
+/// `local_appdata` 缺省/空串 → 相对路径 `opi/settings.ini`（与 `dict_path.rs`
+/// 对缺环境变量的处理同口径：不 panic，退化成"读不到 → 全默认"）。
+pub fn path_in(local_appdata: Option<&OsStr>) -> PathBuf {
+    let base = local_appdata
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_default();
+    base.join("opi").join(SETTINGS_FILE_NAME)
+}
+
+/// 读设置。**读不到 = 全默认**（不是错误：没配过就是没配过）。
+pub fn load(local_appdata: Option<&OsStr>) -> Settings {
+    match std::fs::read_to_string(path_in(local_appdata)) {
+        Ok(text) => parse(&text),
+        Err(_) => Settings::default(),
+    }
+}
+
+// 单测独立成文件（`#[path]` 引入）以保持各文件 <500 行：settings_tests.rs
+#[cfg(test)]
+#[path = "settings_tests.rs"]
+mod tests;

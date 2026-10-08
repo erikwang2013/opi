@@ -97,6 +97,12 @@ rustup target add aarch64-unknown-linux-ohos armv7-unknown-linux-ohos x86_64-unk
         └── resources/
 ```
 
+⚠️ **app 级 `build-profile.json5` 里必须写 `runtimeOS: "HarmonyOS"`**（写在 products 的元素里，
+与该元素的 `compileSdkVersion` / `compatibleSdkVersion` 并列）。缺了它的表现是**假绿**：
+`codelinter` 判 `projectType OpenHarmony`，报 `The type of command line tools does not match
+that of the project`，随后 **0 个文件被检查**，而终端上照样打印 `No defects found in your code.`
+（2026-10-08 实测；对照本节末尾那张控制表 —— 「绿」本身在这里什么都不证明，只有日志里的文件清单算数）。
+
 ```bash
 /home/component/command-line-tools/bin/codelinter <工程根> > /tmp/lint.txt 2>&1; echo "EXIT=$?"
 ```
@@ -245,6 +251,11 @@ test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out     
 | `harmony/cpp/types/libopiime/`（`index.d.ts` + `oh-package.json5`） | `entry/src/main/cpp/types/libopiime/` |
 | `harmony/ets/InputMethodExtensionAbility/*.ets`（5 个） | `entry/src/main/ets/InputMethodExtensionAbility/`（含 `pages/Index.ets`）|
 | `harmony/resources/base/profile/input_method_config.json` | `entry/src/main/resources/base/profile/` |
+| `harmony/resources/base/media/icon.png` | `entry/src/main/resources/base/media/` |
+
+> `icon.png` 是宠物「小欧」（生成物，见 `scripts/gen_pet_icons.py`），被三个 subtype
+> 的 `$media:icon` 引用 —— 从此那条引用**不再悬空**（此前它解析不到，表现是子类型条目
+> 不显示图标）。你的工程若已有同名 `icon.png`，覆盖前先确认那是你要的。
 
 **仓库故意不提供、必须由 DevEco 生成的两个文件**（覆盖会毁掉你已有的配置）：
 
@@ -465,7 +476,8 @@ opi_load(NULL,0) = true
 ### 6.3 真机冒烟（只能上设备）
 
 1. **设置里能看到「OPI 拼音」** ⇒ 清单与打包对了。此时还不能说明任何代码能跑。
-2. **打 `n` `i` ⇒ 候选栏出现「你」** ⇒ 「引擎 + 词库 + C ABI + N-API 桥 + ArkTS UI」整条链路的
+2. **打 `n` `i` ⇒ 候选栏出现「1. 你」**（候选前带页内序号，与 Android / Windows 候选窗同款；
+   ⚠️ 端上字母盘没有数字行 ⇒ 那是**排名**展示，不是「可以按数字选」）⇒ 「引擎 + 词库 + C ABI + N-API 桥 + ArkTS UI」整条链路的
    第一个可见成功点。**失败时对照 6.2**：本机同一套导出是出字的 ⇒ 问题在**桥/UI 层**，不在引擎。
 3. **打 `h` `a` `o` 再按空格 ⇒ 上屏「好」**（跨端最小冒烟）。
    这条与 fcitx5 轨的实测表逐字一致：`crates/fcitx5-opi/cpp/README.md` 那张表里，

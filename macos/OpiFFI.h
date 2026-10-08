@@ -201,6 +201,10 @@ OpiString opi_symbol_blocks(void);
 /// JSON 文本数组。负 id 按越界处理（空数组）。
 OpiString opi_symbols_in_block(int16_t id);
 
+bool opi_fuzzy_enabled(void);
+bool opi_jianpin_enabled(void);
+void opi_set_fuzzy(bool on);
+void opi_set_jianpin(bool on);
 bool opi_learner_enabled(void);
 void opi_set_learner(bool enabled);
 void opi_clear_user_words(void);

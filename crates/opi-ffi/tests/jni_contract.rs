@@ -29,6 +29,14 @@
 //! `1` 照样全绿、只静默把「繁体」显示成「英文」。**整数参数的取值约定**单独一条门禁，
 //! 见本文件末的 `mode_*` 一组与 `jni/mode.rs`。
 
+/// 读 jni 模块**全部** .rs 合成一份文本（理由见 checker 的 `JNI_USER_WORDS`）。
+fn read_jni() -> String {
+    // ⚠️ 这里必须是 `read(JNI_RS)`：上一版被一次**全局替换**连自己体内一起改成了
+    // `read_jni()` ⇒ 无限递归（编译器警告 "cannot return without recursing"、
+    // 运行期直接栈溢出）。教训：替换辅助函数时要把「新写的那个函数体」排除在外。
+    format!("{}\n{}", read(JNI_RS), read(JNI_USER_WORDS))
+}
+
 #[path = "jni/checker.rs"]
 mod checker;
 
@@ -129,7 +137,7 @@ final class Fake {
 
 #[test]
 fn rust_registration_parser_is_not_blind() {
-    let src = read(JNI_RS);
+    let src = read_jni();
     let reg = parse_rust_registrations(&src).expect("解析 jni.rs 注册表");
 
     // 锚点：抽出来的描述符必须逐字对，否则「解析成功但解析歪了」也会让后面的比对失真。
@@ -332,7 +340,7 @@ fn unknown_type_is_a_loud_error() {
 /// `find_class` 找的类名必须与 Kotlin 宿主类的实际路径一致。
 #[test]
 fn kotlin_is_the_class_jni_onload_finds() {
-    let want = parse_host_class(&read(JNI_RS)).expect("解析 find_class");
+    let want = parse_host_class(&read_jni()).expect("解析 find_class");
     let src = strip_comments(&read(KOTLIN_HOST));
     let pkg = src
         .lines()
@@ -353,7 +361,7 @@ fn kotlin_is_the_class_jni_onload_finds() {
 
 #[test]
 fn jni_registration_matches_kotlin() {
-    let reg = parse_rust_registrations(&read(JNI_RS)).expect("解析 jni.rs 注册表");
+    let reg = parse_rust_registrations(&read_jni()).expect("解析 jni.rs 注册表");
     let host = parse_kotlin_externals(&read(KOTLIN_HOST)).expect("解析 OpiEngine.kt");
     assert!(!reg.is_empty() && !host.is_empty(), "有一侧解析成空 = 假绿");
     let diffs = check_exact(&reg, &host, "OpiEngine.kt");
@@ -386,7 +394,7 @@ fn jni_registration_matches_kotlin() {
 /// 不是集合相等；多声明不报错，**少一条就红**（这正是整表失败的那个条件）。
 #[test]
 fn java_smoke_declares_every_registered_method() {
-    let reg = parse_rust_registrations(&read(JNI_RS)).expect("解析 jni.rs 注册表");
+    let reg = parse_rust_registrations(&read_jni()).expect("解析 jni.rs 注册表");
     let smoke = parse_java_natives(&read(JAVA_SMOKE)).expect("解析 Main.java");
     assert!(!smoke.is_empty(), "Main.java 解析成空 = 假绿");
     let diffs = check_host_declares(&reg, &smoke, "jni_smoke/Main.java");

@@ -59,6 +59,10 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var learner by remember { mutableStateOf(OpiEngine.learnerEnabled()) }
+    // 「属性设置」的另外两个旋钮（本轮新增）。⚠️ 与「学习」同一现状：**不落盘**，
+    // 进程重启回默认 —— 这是本端既有的缺口（见 docs/install/android.md §4.5 的注记）。
+    var fuzzy by remember { mutableStateOf(OpiEngine.fuzzyEnabled()) }
+    var jianpin by remember { mutableStateOf(OpiEngine.jianpinEnabled()) }
     var confirmClear by remember { mutableStateOf(false) }
 
     fun toast(msg: String) {
@@ -182,6 +186,34 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
                         onCheckedChange = { v ->
                             learner = v
                             OpiEngine.setLearner(v)
+                        },
+                    )
+                },
+            )
+            HorizontalDivider()
+            ListItem(
+                headlineContent = { Text("模糊音") },
+                supportingContent = { Text("z↔zh、c↔ch、s↔sh、n↔l、f↔h 等近音互查") },
+                trailingContent = {
+                    Switch(
+                        checked = fuzzy,
+                        onCheckedChange = { v ->
+                            fuzzy = v
+                            OpiEngine.setFuzzy(v)
+                        },
+                    )
+                },
+            )
+            HorizontalDivider()
+            ListItem(
+                headlineContent = { Text("简拼") },
+                supportingContent = { Text("声母缩写：nh → 你好、zg → 中国") },
+                trailingContent = {
+                    Switch(
+                        checked = jianpin,
+                        onCheckedChange = { v ->
+                            jianpin = v
+                            OpiEngine.setJianpin(v)
                         },
                     )
                 },

@@ -3,6 +3,11 @@
 
 // C3：候选窗（Compose Desktop）构建配置。
 // 仓库镜像在 settings.gradle.kts（与 android/ 同约定，仅 aliyun，无 google()）。
+// ⚠️ 必须 import：在 Kotlin DSL 里 `java.security.MessageDigest` 的 `java` 会被解析成
+// Gradle 的 `java` 扩展（JavaPluginExtension），不是包名 —— 实测报
+// `Unresolved reference 'security'`（脚本编译期就红，不是运行期）。
+import java.security.MessageDigest
+
 plugins {
     kotlin("jvm")
     id("org.jetbrains.compose")
@@ -57,7 +62,7 @@ compose.desktop {
             targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb)
             packageName = "opi-candidates"
             // 与发布 tag 对齐（同 android/app/build.gradle.kts 的 versionName）。
-            packageVersion = "1.4.0"
+            packageVersion = "1.5.0"
             description = "OPI 拼音输入法候选窗（TSF 插件经 named pipe 通信）"
             vendor = "OPI"
 
@@ -102,5 +107,89 @@ compose.desktop {
             }
             windows { iconFile.set(layout.projectDirectory.file("icons/opi-pet.ico").asFile) }
         }
+    }
+}
+
+// ---------- 「属性设置」的桌面入口（打包后注入）----------
+//
+// 为什么不交给 jpackage：`--linux-shortcut` 生成的 .desktop 用 `--name`
+// （opi-candidates）当 Name —— 菜单里显示成那样既不像设置程序、也叫不准；而且它
+// **没法给入口带参数**（本应用在 Linux 上无参数*也*进设置窗，但显式 `--settings`
+// 更不容易被将来的改动打翻）。jpackage 的 `--resource-dir` 换模板是更正统的路
+// （见上面 appCategory 那段的尾注），但它要猜 jpackage 对模板文件的命名约定；
+// 这里选**打包后注入**：拆包 → 写一个 .desktop → 重算 md5sums → 打回去。
+// 每一步都能用 `dpkg-deb -c` 核对。
+//
+// 调用：`./gradlew :desktop:packageDeb :desktop:injectSettingsDesktopEntry`
+tasks.register("injectSettingsDesktopEntry") {
+    dependsOn("packageDeb")
+    doLast {
+        val debDir = layout.buildDirectory.dir("compose/binaries/main/deb").get().asFile
+        val deb = debDir.listFiles { f: File -> f.name.endsWith(".deb") }?.maxByOrNull { it.name }
+            ?: error("找不到 jpackage 出的 .deb —— 先跑 :desktop:packageDeb")
+        val work = layout.buildDirectory.dir("tmp/settings-entry").get().asFile
+        work.deleteRecursively()
+        work.mkdirs()
+
+        fun sh(vararg cmd: String) {
+            val proc = ProcessBuilder(*cmd).redirectErrorStream(true).start()
+            val out = proc.inputStream.readBytes().decodeToString()
+            check(proc.waitFor() == 0) { "${cmd.joinToString(" ")} 失败：\n$out" }
+        }
+
+        val root = File(work, "root")
+        sh("dpkg-deb", "-R", deb.absolutePath, root.absolutePath)
+
+        // 从**包里**取真正的启动器与图标路径（不硬编码 —— jpackage 换布局时这里跟着走）
+        val bin = File(root, "opt").listFiles()?.firstOrNull()
+            ?.resolve("bin")?.listFiles()?.firstOrNull()
+            ?: error("包里没有 /opt/*/bin/* 启动器")
+        val icon = bin.parentFile.parentFile.resolve("lib").listFiles()
+            ?.firstOrNull { it.name.endsWith(".png") }
+            ?: error("包里没有 /opt/*/lib/*.png 图标")
+        val installedBin = "/opt/" + bin.toRelativeString(File(root, "opt"))
+        val installedIcon = "/opt/" + icon.toRelativeString(File(root, "opt"))
+
+        val apps = File(root, "usr/share/applications").apply { mkdirs() }
+        // 若 jpackage 自己那份也在（同一 --name，如 opi-candidates.desktop），删掉：
+        // 两份入口 = 菜单里两条，且那条不带 --settings。
+        apps.listFiles { f: File -> f.name.endsWith(".desktop") }
+            ?.filter { it.name != "opi-settings.desktop" }?.forEach { it.delete() }
+        File(apps, "opi-settings.desktop").writeText(
+            """
+            [Desktop Entry]
+            Type=Application
+            Name=OPI 属性设置
+            Name[en]=OPI Settings
+            Comment=Open People Input —— 学习 / 中文标点 / 模糊音 / 简拼
+            Comment[en]=Open People Input — learning, punctuation, fuzzy pinyin, jianpin
+            Exec=$installedBin --settings
+            Icon=$installedIcon
+            Terminal=false
+            Categories=Utility;Settings;
+            Keywords=ime;input;fcitx5;opi;settings;
+            """.trimIndent() + "\n",
+        )
+
+        // md5sums 必须重算：改了内容不更新它，`dpkg --verify` 会报一整包文件被改
+        // （`dpkg -i` 本身不看它，所以这是个**只在事后暴露**的坑）。
+        val md5 = File(root, "DEBIAN/md5sums")
+        if (md5.parentFile.isDirectory) {
+            val lines = root.walkTopDown()
+                .filter { it.isFile && !it.path.startsWith(File(root, "DEBIAN").path) }
+                .sortedBy { it.path }
+                .map { f ->
+                    val rel = f.toRelativeString(root)
+                    val sum = MessageDigest.getInstance("MD5")
+                        .digest(f.readBytes()).joinToString("") { "%02x".format(it) }
+                    "$sum  $rel"
+                }
+                .toList()
+            md5.writeText(lines.joinToString("\n", postfix = "\n"))
+        }
+
+        sh("dpkg-deb", "--build", "--root-owner-group", root.absolutePath, deb.absolutePath)
+        println("已注入桌面入口：$installedBin --settings  ->  ${deb.name}")
+        println("核对：dpkg-deb -c ${deb.absolutePath} | grep -E 'applications|bin/'")
     }
 }
