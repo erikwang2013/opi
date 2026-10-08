@@ -190,7 +190,8 @@ sudo cmake --install build-fcitx5
 | `/usr/lib/<arch>/fcitx5/`（RPM 系是 `lib64/fcitx5/`） | `libfcitx5_opi.so`（Rust 逻辑）+ `libfcitx5_opi_glue.so`（C++ 胶水） | fcitx5 的 addon 加载器 |
 | `/usr/share/fcitx5/addon/opi_fcitx5.conf` | addon 元数据 + 门槛 | `Type::PkgData + "addon/…"` |
 | `/usr/share/fcitx5/inputmethod/opi.conf` | 输入法条目 | `Type::PkgData + "inputmethod/…"` |
-| `/usr/share/opi/luna.opid` | 词库 | `Type::Data + "opi/luna.opid"` |
+| `/usr/share/opi/luna.opid` | 简体词库 | `Type::Data + "opi/luna.opid"` |
+| `/usr/share/opi/trad.opid` | 繁体词库（2026-10-09 起） | `Type::Data + "opi/trad.opid"` |
 | `/usr/share/doc/opi/LICENSE` + `LICENSES.md` | 许可证文本 | 人（授权要求，见 §6） |
 
 ⚠️ **两个 `.so` 必须同目录**：胶水用 `$ORIGIN` rpath 找旁边那个 Rust cdylib，
@@ -413,7 +414,7 @@ fcitx5-remote -s opi
 > **找不到 OPI？** 先看下面两条，别先怀疑包：
 >
 > 1. **按语言过滤被藏起来了** —— 那个「只显示当前语言」的过滤项是常见嫌疑。
->    本插件把这条输入法声明的语言写成 `zh_CN`、中文界面下的名字是「OPI 拼音」
+>    本插件把这条输入法声明的语言写成 `zh_CN`、中文界面下的名字是「opi输入法」
 >    （候选列表里显示 `Name[zh_CN]`，加进组之后显示 `Label`）—— **【推断：读
 >    `crates/fcitx5-opi/data/inputmethod/opi.conf` 的 `Name` / `Name[zh_CN]` / `Label` /
 >    `LangCode`，没有在本机 GUI 上看过】**。所以过滤项停在中文以外的语言时，它会被藏起来。
@@ -426,15 +427,21 @@ fcitx5-remote -s opi
 
 ### 4.3 键位
 
-模式热键判在 Rust 路由**之前**（`crates/fcitx5-opi/cpp/opi_fcitx5.cpp` 的
-`handleModeHotkey` / `handleFullwidthHotkey`）。三个键都在**同一个模式上来回切**，
-不是单向进入：
+模式热键判在 Rust 路由**之前**（`crates/fcitx5-opi/cpp/opi_mode.h` 的
+`handleModeHotkey` / `opi_fcitx5.cpp` 的 `handleFullwidthHotkey`）。四个键都在
+**同一个模式上来回切**，不是单向进入：
 
 | 键 | 作用 |
 |---|---|
 | `Ctrl+'` | 英文 ⇄ 拼音 |
 | `Ctrl+\` | 符号 ⇄ 拼音 |
+| `Ctrl+Shift+F` | 简体 ⇄ 繁体（2026-10-09 起；繁体查 `trad.opid`，见 §5.3） |
 | `Shift+Space` | 全角 ⇄ 半角 |
+
+> `Ctrl+Shift+F` 只认**大写的 F**（真前端对 Shift+字母给的就是大写 keysym）——
+> 单按 `Ctrl+F`（应用们的「查找」）**不会**被吃掉。注意实现是按 `rawKey()` 判的：
+> `key()` 被 `normalize()` 折过（任何修饰键 + 小写字母一律折成大写），
+> Ctrl+F 与 Ctrl+Shift+F 在那里分不开 —— 这是实测踩出来的（细节在 `opi_mode.h`）。
 
 其余按键路由在 `crates/fcitx5-opi/src/input_method.rs` 的模块头注释里（逐条对照
 Android `KeyRouter.kt`）：空格 = 缓冲非空时提交、空缓冲时把空格直传给客户端；回车 = 缓冲非空时选中并提交第 1 个
@@ -443,11 +450,12 @@ Android `KeyRouter.kt`）：空格 = 缓冲非空时提交、空缓冲时把空�
 
 > ⚠️ 这几个键是**逐个枚举**过 fcitx5 库里的占用后选的，不是随手挑的。比如 `Ctrl+;`
 > 看着更自然，但实测被剪贴板模块（`libclipboard.so`）抢走，且它是 PreInputMethod 阶段
-> 的 watcher，拦不住。理由与占用表在 `opi_fcitx5.cpp` 的注释里，**改键位前先读那段**。
+> 的 watcher，拦不住。理由与占用表在 `opi_mode.h` 的 `handleModeHotkey` 注释里
+> （2026-10-09 从 `opi_fcitx5.cpp` 搬过去），**改键位前先读那段**。
 >
 > ⚠️ **模式热键的实现目前在 C++ 侧，而 `input_method.rs` 的模块注释把 Ctrl/Alt 写成
 > 「一律直通」** —— 两处读起来像矛盾，实际是热键在送进 Rust 路由**之前**就被 C++ 拦掉
-> 了。这个归属是已知的临时状态，`opi_fcitx5.cpp` 里写明了长期归属是 Rust 侧。
+> 了。这个归属是已知的临时状态，`opi_mode.h` 里写明了长期归属是 Rust 侧。
 
 ### 4.4 中文标点 / 全角
 
@@ -473,7 +481,7 @@ Android `KeyRouter.kt`）：空格 = 缓冲非空时提交、空缓冲时把空�
 ⚠️ 面板**画不画**这个序号、画成什么样（字号/间距）由主题与 classicui 决定 —— 本层只保证
 「label 不再是空的」。看不到序号时先看主题那侧，别改这里。
 
-### 4.6 属性设置（四个开关）
+### 4.6 属性设置（六个选项，入口在 fcitx5 的配置面）
 
 **配置落在 fcitx5 自己的 addon 配置里**：`$XDG_CONFIG_HOME/fcitx5/conf/opi_fcitx5.conf`
 （字段声明 = `crates/fcitx5-opi/cpp/opi_config.h` 的 `OpiSettings`）：
@@ -483,28 +491,77 @@ Learn=True          # 学习（记住选过的词）
 ChinesePunct=True   # 中文标点（，。、与成对引号）
 Fuzzy=True          # 模糊音（z/zh、n/l…）
 Jianpin=True        # 简拼（声母缩写，nh → 你好）
+ShiftToggle=True    # Shift 轻按切换中英文（2026-10-09 起）
+Skin=不改动          # 候选面板皮肤（2026-10-09 起；值存的就是「不改动/浅色/深色/宣纸/朱砂」）
 ```
 
-**两条路改它，都即时生效**（改完走 `reloadConfig()` → 引擎，不用重启输入法）：
+**入口在配置工具里**（2026-10-09 用户裁决「设置功能不能在外层设置，必须到配置里才有设置入口」）：
 
-1. **设置窗**（推荐给用户）：本仓库的 Compose 应用，Linux 上直接运行就是它
-   （`opi-candidates --settings`，或从 jpackage 出来的启动器点开）；
-   保存后它会自己跑一次 `fcitx5-remote -r`。
-2. **手改文件 + 重载**：改完 `fcitx5-remote -r`（`-r` = reload fcitx config）。
+- Deepin 控制中心 → 键盘和语言 → **输入法**（页面名「输入法管理」）→ **高级设置 →
+  附加组件 → OPI** →（鼠标悬停时出现的）**齿轮** → 逐项开关/下拉。上游 fcitx5-configtool
+  同位置同交互（措辞随版本略有出入）。
+- 机制（本机核实，非推导）：配置工具按 `fcitx://config/addon/opi_fcitx5` 向守护进程要
+  **值 + 描述**（每个选项带中文说明）再逐项渲染。实测 `busctl call org.fcitx.Fcitx5
+  /controller org.fcitx.Fcitx.Controller1 GetConfig s 'fcitx://config/addon/opi_fcitx5'`
+  六项齐全。
+- ⚠️ **图形设置窗进不了「配置」这一层**：fcitx5 的 `ConfigureAddon` 是 **no-op**
+  （5.1.12 上游源码：`void Instance::configureAddon(const std::string &) {}`，
+  D-Bus 侧同款转调 `configure()` = 只启动配置工具本身）—— 框架**没有**从配置面拉起
+  外部程序的通道。所以设置入口是**两层**的：配置面里是上面这些原生选项；图形设置窗
+  走系统菜单入口（见 §4.7）。
 
-⚠️ **别**指望配置工具里多出一页：本仓库**没有**提供 Qt 配置模块（搜狗那种是自带一个
-设置应用 + 桌面入口，见它的 `*.configurer.desktop`），配置工具只显示带 UI 模块的 addon
-的页面。文件与 `opi_config.h` 里那四个键才是真源。
+**改它有三条路，都即时生效**（`reloadConfig()` → 引擎，不用重启输入法）：
 
-⚠️ 读侧**容忍**：值大小写不敏感、`#` 行内注释、未知键忽略、缺键回默认（默认**四个全开**
-= 引擎既有行为）。手改坏一个值只会让那一项回默认。
+1. 配置工具里那个齿轮（保存即生效）；2. 手改文件 + `fcitx5-remote -r`
+（`-r` = reload fcitx config）；3. `opi-candidates --settings`（本仓库的 Compose 设置窗；
+它**保留未知键**合并写，不会抹掉自己不认识的选项）。
 
-### 4.7 候选窗（桌面应用）与属性设置窗是同一个可执行文件
+**Shift 切换中英文（ShiftToggle，默认开）**：轻按**左或右** Shift 在 中文 ⇄ 英文 间切换
+（搜狗同款手势）。
 
-`desktop/` 的 Compose 应用在 Linux 上**只有设置窗一个用途**（候选窗是 Windows/TSF 的
-东西：命名管道两端都在那边）⇒ 无参数启动也进设置窗；Windows 上无参数 = 候选窗，
-`--settings` = 设置窗。打包（jpackage 的 deb：应用 + 自带运行时）与桌面入口的补法
-见 `docs/install/windows.md` 的同名小节，**本仓库当前还没把它放进任何发行包**。
+- 「轻按」= 按下后抬起前**没有别的键按下**（Shift+字母/方向/空格都不算），且按住时长
+  不超过 `ModifierOnlyKeyTimeout`（fcitx5 全局配置里的那个值，缺省 250ms；复用框架
+  同一个判定 helper）。
+- 英文模式 = 引擎既有的 English 模式（与 `Ctrl+'` 同一条通路）：字母直传上屏、中文标点
+  停用。切入时会顺带清掉「单次 Shift」状态 —— 否则切换后的第一个字母会莫名大写。
+- ⚠️ 别把 Shift 再配到 fcitx5 的**全局触发键** `TriggerKeys`：那是框架级的
+  激活/非激活切换（**所有**输入法都受影响，且组里多于两个输入法时是轮换语义）。
+  Deepin 控制中心「输入法 → 快捷键 → 中英文切换 = Shift」改的就是那个 —— 两种机制
+  二选一，同时开会双重切换。
+- ⚠️ fcitx5 < 5.1.12 上没有超时判定（那版没有这个 API，代码按能力探测降级）：按住
+  很久再抬起也会切一次；组合键的撤销判定不受影响。
+
+**皮肤（Skin）**：内置四张 —— 浅色 / 深色 / 宣纸 / 朱砂。⚠️ **候选面板不是本插件画的**：
+它由 UI addon（本机是 classicui）按主题绘制，所以「换皮肤」= 改
+`~/.config/fcitx5/conf/classicui.conf` 的 `Theme=`/`DarkTheme=` 并热重载 classicui。
+
+- **对所有输入法生效**（面板主题是框架级的一份设置，做不到只影响 OPI，如实记）。
+- 「不改动」= OPI 不介入（默认）。选皮肤只在**值发生变化**时才写文件：fcitx5 每次启动
+  不会拿旧值把用户后来改的主题顶回去。
+- 想换回系统主题：同一张「附加组件」列表里找**经典界面**（classicui）→ 齿轮 → 主题改回
+  `deepin-light`/`deepin-dark`；或把本项选回「不改动」后自己改。
+- ⚠️ 面板由 **classicui** 绘制才看得见这套主题（fcitx5-qt 等别的 UI 不吃它；
+  那种环境下文件仍会写、面板不变 —— 重载对未加载的 addon 是 no-op，不会多起面板）。
+- 主题内容是生成产物：`python3 scripts/gen_fcitx5_themes.py`（`--check` 与产物对账）。
+
+⚠️ 读侧**容忍**：值大小写不敏感、`#` 行内注释、未知键忽略、缺键回默认（默认**四项全开 +
+ShiftToggle 开 + 皮肤「不改动」**= 引擎既有行为/不介入）。手改坏一个值只会让那一项回默认。
+
+### 4.7 桌面应用（设置窗/候选窗）与打包
+
+`desktop/` 的 Compose 应用：Windows 上 = 候选窗（TSF 命名管道两端都在那边），
+Linux 上 = `--settings` 的设置窗（无参数启动也是它）。**v1.6.0 起它与插件装在同一个包里**
+（`.deb`/`.rpm` 一手装齐 —— `scripts/build-packages.sh` 的 `OPI_DESKTOP_DEB`；包体因此从
+~1.7MB 到 ~48MB，jpackage 自带 JRE，这是裁决时摆过的数）。
+
+- **系统菜单里有入口**：`/usr/share/applications/opi-settings.desktop`（`Name=opi输入法`，
+  点开即设置窗）—— 2026-10-09 晚用户裁决「设置功能要在外层可以设置」，由打包后注入
+  生成（理由与核对法见 `desktop/build.gradle.kts` 文件尾）。另有两条直启路：
+  `opi-candidates --settings`（装出来在 `/opt/opi-candidates/bin/opi-candidates`）、
+  以及配置面的原生选项（§4.6）—— **两层都能设置**。
+- 升级路径：装新包时 apt/dnf 按 `replaces`/`conflicts` 自动卸掉旧的独立设置窗包
+  `opi-candidates`（≤1.5.0）—— 不声明的话 `/opt/opi-candidates/**` 文件归属冲突会让
+  dpkg **拒绝安装**。
 
 ---
 
@@ -536,17 +593,29 @@ cmake -S crates/fcitx5-opi/cpp -B build-fcitx5 \
       -DOPI_LUNA_OPID=data/generated/luna.opid
 ```
 
-### 5.3 繁体库：Linux 端装不了
+### 5.3 繁体库：已接线（2026-10-09）
 
-`data/generated/trad.opid` 存在，但 **CMake 只装 `luna.opid`** —— Linux 端没有繁体
-入口。引擎与数据侧的繁体能力是完整的，缺的是这一端的接线。
+`trad.opid` 与 `luna.opid` 一样**随包安装**（`/usr/share/opi/trad.opid`，
+CMake 的 `OPI_TRAD_OPID`，缺省取入库副本 `android/app/src/main/assets/trad.opid`）。
+切换键是 **`Ctrl+Shift+F`**（§4.3），繁体模式下候选查的就是它。
+
+- **可选增强语义**：trad 装坏了/缺失时**不报错**，Traditional 模式回退 luna
+  （表现为「切了繁体、打出来还是简体」——那正是「回退」而不是「没装」的形态；
+  引擎侧只有一行 stderr）。luna 坏才是硬错误（整个插件没词库）。
+- 数据来源与授权：Unicode Unihan + rime-terra-pinyin（LGPL-3.0），生成器是
+  `scripts/gen_trad_dict.py`（**不是** `gen_luna_dict.py`）——逐条见
+  `data/raw/LICENSES.md`。
+- 落点门禁：`opi_locate_check` 的第 4 个参数 + `ci.yml` 的「查找常量没漂」grep
+  两条都盯着它（与 luna 同规格）。
 
 ---
 
 ## 6. 许可证：包内必须带文本
 
 代码是 MIT，但**这个包同时分发词库数据，而数据与代码分开授权**（`luna.opid` 由
-LGPL-3.0 的 rime-luna-pinyin 与 Apache-2.0 的 rime-pinyin-simp 数据编译而来）。
+LGPL-3.0 的 rime-luna-pinyin 与 Apache-2.0 的 rime-pinyin-simp 数据编译而来；
+`trad.opid` 由 Unicode Unihan 与 LGPL-3.0 的 rime-terra-pinyin 编译而来 ——
+逐条来源见 `data/raw/LICENSES.md`）。
 `scripts/nfpm.yaml` 因此显式把两个文件装进 `/usr/share/doc/opi/`：
 
 - `LICENSE`（代码，MIT）
@@ -560,7 +629,8 @@ LGPL-3.0 的 rime-luna-pinyin 与 Apache-2.0 的 rime-pinyin-simp 数据编译�
 ## 7. 已知限制（诚实清单）
 
 - **openEuler 不可用**：该发行版没有 fcitx5 包（§2.1），中文输入走 ibus。
-- **繁体库没有入口**（§5.3）。
+- **繁体词库坏时静默回退简体**（§5.3 的可选增强语义 —— 只有一行 stderr，
+  用户侧表现为「繁体模式打出来还是简体」）。
 - **中文标点 / 全角没有键位**（§4.4）。
 - **学习结果不落盘**：`fcitx5-opi` 学完照旧丢（Rust 侧的学习落盘
   `engine-data/src/user_words.rs` 全仓零调用方）。

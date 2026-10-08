@@ -425,6 +425,7 @@ pub const JNI_RS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni.rs");
 /// ⚠️ **必须一起读**：注册表在 `jni.rs`、函数体在这里 —— 只读一边会让这批出口从
 /// 门禁视野里消失（与 C ABI 侧 `CABI_USER_WORDS` 同一个理由）。
 pub const JNI_USER_WORDS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni_user_words.rs");
+pub const JNI_SCHEME: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni_scheme.rs");
 pub const KOTLIN_HOST: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../android/app/src/main/kotlin/xyz/erik/opi/jni/OpiEngine.kt"

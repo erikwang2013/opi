@@ -5,6 +5,7 @@ package xyz.erik.opi
 
 import android.inputmethodservice.InputMethodService
 import android.os.Build
+import android.view.Gravity
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
@@ -28,6 +29,8 @@ import xyz.erik.opi.ime.ImeState
 import xyz.erik.opi.ime.KeyRouter
 import xyz.erik.opi.ime.PendingCommit
 import xyz.erik.opi.keyboard.SymbolCatalog
+import xyz.erik.opi.keyboard.RareIndex
+import xyz.erik.opi.settings.ImePreferences
 import java.io.File
 import kotlin.math.min
 
@@ -57,6 +60,24 @@ class OpiImeService : InputMethodService() {
     private val imeState = ImeState(engineController)
     private val symbolCatalog = SymbolCatalog()
     private lateinit var keyRouter: KeyRouter
+
+    /** IME 偏好（输入模式/键盘模式/三个引擎开关）。懒初始化：字段初始化早于
+     *  `attachBaseContext`，那时 `getSharedPreferences` 拿不到 Context。 */
+    private val prefs: ImePreferences by lazy { ImePreferences.from(this) }
+
+    /**
+     * 生僻字索引（1.1MB TSV）。**懒加载到第一次真正打开生僻字面板** —— 别挪进
+     * `onCreateInputView`：那是每次键盘出现都走的热路径。资产损坏 → 空索引（面板
+     * 显示「无数据」而不是崩 IME），与词库装载同一条降级姿态。
+     */
+    private val rareIndex: Map<Int, Map<Int, List<String>>> by lazy {
+        try {
+            assets.open("rare_index.tsv").bufferedReader().use { RareIndex.parse(it.readText()) }
+        } catch (e: Exception) {
+            Log.w(TAG, "rare_index.tsv 读取失败，生僻字面板将为空: $e")
+            emptyMap()
+        }
+    }
 
     // Compose 需要 ViewTreeLifecycleOwner（IME Service 无 Activity 生命周期）。
     // 最小实现：lifecycleRegistry 手动推进（CREATED→RESUMED→STARTED→DESTROYED）。
@@ -88,6 +109,11 @@ class OpiImeService : InputMethodService() {
          * 与改造前逐像素一致）；裸像素在 density 1.0 上是 168dp、3.5 上是 48dp，差 3.5 倍。
          */
         private const val KEY_AREA_EXTRA_DP = 64
+
+        /** 悬浮/游戏模式下窗口宽度占屏宽的比例（收窄居中，见 applyKeyboardWindow）。 */
+        private const val FLOATING_WIDTH_RATIO = 0.86f
+        /** 游戏模式的窗口高度相对常规键盘高度的比例（更矮，少挡画面）。 */
+        private const val GAME_HEIGHT_RATIO = 0.72f
     }
 
     /**
@@ -168,6 +194,16 @@ class OpiImeService : InputMethodService() {
         // 用户词导入必须在词库装载之后、建视图之前：文件缺失/损坏静默降级（不崩 IME），
         // 且要赶在第一次刷新候选之前生效
         userWords.load()
+        // 偏好恢复（2026-10-09）：引擎三开关 + 输入模式（方案随它落进引擎）+ 键盘模式。
+        // 放这里而不是 onCreate：引擎可能装载失败，偏好是「引擎可用」才有意义的投影。
+        prefs.applyEngineSwitches(engineController)
+        imeState.persist = {
+            prefs.inputMode = imeState.inputMode
+            prefs.keyboardModes = imeState.keyboardModes
+            // 键盘模式里悬浮/游戏改的是**窗口**，改完立刻重排（不等系统下一次 configure）
+            window?.window?.let { applyKeyboardWindow(it) }
+        }
+        imeState.restore(prefs.inputMode, prefs.keyboardModes)
         val view = ComposeView(this)
         // 生命周期接线：置 CREATED（onWindowShown→RESUMED、onWindowHidden→STARTED、
         // onDestroy→DESTROYED），Compose 侧 remember/LaunchedEffect 依赖它。
@@ -183,7 +219,9 @@ class OpiImeService : InputMethodService() {
         )
         // IME 提交通道在视图创建时注入（构造期无 this 引用；面板打开提交 pending buffer 用）
         imeState.commit = ::commitWithRetry
-        view.setContent { ImeScreen(imeState, engineController, keyRouter, symbolCatalog) }
+        view.setContent {
+            ImeScreen(imeState, engineController, keyRouter, symbolCatalog, rareIndex = { rareIndex })
+        }
         Log.i(TAG, "onCreateInputView: window=${windowSizePx()} keyboardHeight=${keyboardHeight()}")
         inputViewCache = view
         return view
@@ -275,7 +313,41 @@ class OpiImeService : InputMethodService() {
         super.onConfigureWindow(win, isFullscreen, isCandidatesOnly)
         // 默认实现非全屏时设 WRAP_CONTENT，ComposeView 在 AT_MOST 下量出全屏
         // 导致窗口盖住被输入应用；窗口首次显示及每次模式变化都会走到这里，强制键盘高度。
-        win.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, keyboardHeight())
+        // 悬浮/游戏模式的窗口收窄/变矮也在这里统一施加（见 applyKeyboardWindow）。
+        applyKeyboardWindow(win)
+    }
+
+    /**
+     * 键盘窗口布局（2026-10-09，「键盘模式」里的**窗口层**两种）：
+     *   · 悬浮模式：窗口收窄到屏宽 [FLOATING_WIDTH_RATIO]、水平居中、贴底；
+     *   · 游戏模式：窗口更矮（[GAME_HEIGHT_RATIO] × 常规高度）+ 同样收窄居中，
+     *     尽量少挡画面。
+     * 默认（都关）：全宽 + 常规高度，与 2026-10-09 之前逐像素一致。
+     *
+     * ⚠️ **本机无真机**：窗口尺寸/重力只能真机看效果（分屏、手势条 inset 都可能影响）。
+     * 实现按 Android IME 窗口惯例（setAttributes 改 gravity/width + setLayout 设尺寸），
+     * 如实标在 docs/install/android.md；悬浮**不做拖动**（那要处理触摸重设 layout，
+     * 没有真机的反馈链不写这个）。
+     */
+    private fun applyKeyboardWindow(win: Window) {
+        val modes = imeState.keyboardModes
+        val height = if (modes.game) {
+            (keyboardHeight() * GAME_HEIGHT_RATIO).toInt().coerceAtLeast(1)
+        } else {
+            keyboardHeight()
+        }
+        val lp = win.attributes
+        if (modes.floating || modes.game) {
+            val (w, _) = windowSizePx()
+            lp.width = (w * FLOATING_WIDTH_RATIO).toInt()
+            win.attributes = lp
+            win.setGravity(Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL)
+        } else {
+            lp.width = ViewGroup.LayoutParams.MATCH_PARENT
+            win.attributes = lp
+            win.setGravity(Gravity.BOTTOM)
+        }
+        win.setLayout(lp.width, height)
     }
 
     /** 触屏输入法无条件显示输入视图。模拟器报告存在硬件键盘（qwerty）时，

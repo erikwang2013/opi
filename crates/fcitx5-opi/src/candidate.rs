@@ -61,15 +61,39 @@ impl CandidateState {
     /// load_or_fallback 原样语义（坏路径返回 Err）。语义与 opi-ffi
     /// api::install 一致（学习默认开）。
     pub fn load(path: Option<&str>) -> Result<Self, String> {
+        Self::load_with_trad(path, None)
+    }
+
+    /// 双词典装载（简 + 繁，2026-10-09）。`path`（luna）的语义与 [`Self::load`]
+    /// 一字不差；`trad` 是**可选增强**，坏法语义刻意与 luna 不同：
+    ///   · None/空串    → 无繁体词典（Traditional 模式按 engine.rs 的既有约定回退 luna）；
+    ///   · 有路径但坏   → **不**返回 Err：记一行 stderr、退回无繁体。繁体装坏了不该
+    ///     让用户连拼音都用不了；而 luna 坏 = 整个插件没词库，那种必须 Err
+    ///     （lib.rs 的 install 语义与 data_dir 的用例都钉着这一条）。
+    /// 路由本身在 engine-core（`Engine::with_dictionaries`，tests/trad_mode.rs 已有
+    /// 双词典路由的门禁），本层只负责「两条路径 → 一次构造」。
+    pub fn load_with_trad(path: Option<&str>, trad: Option<&str>) -> Result<Self, String> {
         let dict: Box<dyn engine_core::dictionary::Dictionary> = match path {
             Some(p) if !p.is_empty() => {
                 engine_data::load_or_fallback(Some(std::path::Path::new(p)))?
             }
             _ => Box::new(engine_data::fallback_dict()),
         };
+        let trad_dict: Option<Box<dyn engine_core::dictionary::Dictionary>> = match trad {
+            Some(p) if !p.is_empty() => {
+                match engine_data::load_or_fallback(Some(std::path::Path::new(p))) {
+                    Ok(d) => Some(d),
+                    Err(e) => {
+                        eprintln!("fcitx5-opi: 繁体词库装载失败，Traditional 回退简体: {e}");
+                        None
+                    }
+                }
+            }
+            _ => None,
+        };
         let symbols = engine_core::symbols::SymbolEngine::builtin();
         let mut s = CandidateState {
-            engine: Engine::new(dict, symbols, true),
+            engine: Engine::with_dictionaries(dict, trad_dict, symbols, true),
             page: 0,
             buffer_snapshot: String::new(),
             shift_state: ShiftState::Off,

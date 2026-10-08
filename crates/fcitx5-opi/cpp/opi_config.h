@@ -1,43 +1,68 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 //
-// 「属性设置」：fcitx5 的**原生 addon 配置**（两个排序开关 + 一个 `Configurable` 入口）。
+// 「属性设置」：fcitx5 的**原生 addon 配置**（六个选项 + 一个 `Configurable` 入口）。
 //
 // 落点是 fcitx5 给每个 addon 的标准位置（`StandardPath::Type::PkgConfig` +
 // `conf/opi_fcitx5.conf`，即 `$XDG_CONFIG_HOME/fcitx5/conf/opi_fcitx5.conf`）。
-// **不是自创格式** —— 由 fcitx5 自己的配置机制读写，于是两件事自动成立：
-//   · 用户那侧的配置工具（fcitx5-configtool / Deepin 内置的）能显示并编辑这两项，
-//     前提是 addon conf 里 `Configurable=True`（见 data/addon/opi_fcitx5.conf）；
+// **不是自创格式** —— 由 fcitx5 自己的配置机制读写，于是三件事自动成立：
+//   · 用户那侧的配置工具能显示并编辑这些选项，前提是 addon conf 里
+//     `Configurable=True`（见 data/addon/opi_fcitx5.conf）。**这是「设置入口在
+//     配置里」的唯一机制**（2026-10-09 核实）：控制中心/配置工具的
+//     「附加组件 → OPI → 齿轮」对话框按 `fcitx://config/addon/opi_fcitx5` 拉
+//     本结构的值 + **描述**（含中文说明）逐项渲染；而 ConfigureAddon 那个 D-Bus
+//     调用在 5.1.12 里是 no-op（上游源码：`void Instance::configureAddon(...) {}`），
+//     **没法**让配置工具拉一个外部程序 —— 所以图形设置窗进不了「配置」，能进的
+//     只有这里声明的选项。
 //   · 改完 `fcitx5-remote -r`（= ReloadConfig）即时生效 —— 走 `reloadConfig()`。
-// 本层不做「值之外的」任何事：读出来就推给引擎（Rust 单例），不存第二份状态。
+//   · 面板驱动（opi_panel_driver.cpp 第 9 段）走**同一条读路径**做端到端门禁。
+// 本层不做「值之外的」任何事：四个引擎旋钮推给 Rust 单例，ShiftToggle/Skin
+// 由 C++ 侧自己消费（前者见 opi_mode.h，后者见 opi_skin.h）。
 //
-// ⚠️ 字段名（`Fuzzy` / `Jianpin`）**就是配置文件里的键名**：改名 = 用户已有配置读不到。
-// 与 fcitx5 其它 addon 的惯例一致（首字母大写、无空格）。
-// ⚠️ 本文件是**唯一**声明这两个开关的地方；`opi_fcitx5.cpp` 只负责把它们接到
-// fcitx5 的生命周期上（那个文件有 500 行硬门禁，余量个位数 —— 新东西往这里放）。
+// ⚠️ 字段名（`Learn` / `ShiftToggle` / `Skin` …）**就是配置文件里的键名**：
+// 改名 = 用户已有配置读不到。与 fcitx5 其它 addon 的惯例一致（首字母大写、无空格）。
+// ⚠️ 本文件是**唯一**声明这些开关的地方；`opi_fcitx5.cpp` 只负责把它们接到
+// fcitx5 的生命周期上（那个文件有 500 行硬门禁 —— 新东西往这里放）。
+// ⚠️ 桌面设置窗（desktop/.../Settings.kt）只管理其中四个（Learn/ChinesePunct/
+// Fuzzy/Jianpin）。它保存时**保留未知键**（2026-10-09 起），所以本文件新增的
+// ShiftToggle/Skin 不会被它抹掉；但反过来，键改名仍会让它的读侧静默回默认值。
 
 #pragma once
 
 #include <fcitx-config/configuration.h>
 #include <fcitx-config/iniparser.h>
+#include <fcitx-config/option.h>
+#include <fcitx-utils/i18n.h>
 #include <fcitx-utils/standardpath.h>
 
 #include "opi_rust_ffi.h"
 
-// 默认值**四个都是 true** = 引擎既有行为（模糊音/简拼见 `RankOptions::default()`；
-// 学习/中文标点见各自 setter 的默认）。别改成 false：那样「配置文件不存在」这个
-// 最常见的情形会变成"悄悄关掉一半功能"。
-// ⚠️ 字段名必须与桌面设置窗（desktop/.../Settings.kt）写的**四个键**逐一对应：
-// 少一个的后果不是"少个开关"，而是 fcitx5 保存配置时**把它从文件里抹掉**
-// （readAsIni 认不出的键不会保留）—— 设置窗刚写下的值会在 fcitx5 退出时丢。
+// 皮肤枚举。取值 → `data/themes/` 下的主题目录名，映射在 opi_skin.h
+// （opiSkinThemeName）；三处（枚举/映射/生成脚本）改一处即漂，别只改这。
+// ⚠️ 用 WITH_I18N 变体（与 fcitx5-unikey 的字符集选项同惯例）：写进配置文件的
+// **字面值就是这里的字符串**（unmarshallOption 按字面匹配），显示名同源。
+// 换言之这些中文字面串是**对外契约**（配置文件里会存「浅色」这种值），别当注释改。
+enum class OpiSkin { Keep, Light, Dark, Paper, Cinnabar };
+FCITX_CONFIG_ENUM_NAME_WITH_I18N(OpiSkin, N_("不改动"), N_("浅色"), N_("深色"),
+                                 N_("宣纸"), N_("朱砂"));
+
+// 默认值**全是 true / Keep** = 「没配过」等于引擎既有行为（模糊音/简拼见
+// `RankOptions::default()`；学习/中文标点见各自 setter 的默认；ShiftToggle 取 true
+// 是用户裁决「Shift 就该能切英文」；Skin=Keep = OPI 不碰用户的 fcitx5 主题）。
+// 别改成 false：那样「配置文件不存在」这个最常见的情形会变成"悄悄关掉一半功能"。
 FCITX_CONFIGURATION(
     OpiSettings,
     fcitx::Option<bool> learn{this, "Learn", "学习（记住选过的词）", true};
     fcitx::Option<bool> chinesePunct{this, "ChinesePunct", "中文标点（，。、与成对引号）", true};
     fcitx::Option<bool> fuzzy{this, "Fuzzy", "模糊音（z/zh、n/l…）", true};
-    fcitx::Option<bool> jianpin{this, "Jianpin", "简拼（声母缩写，nh → 你好）", true};);
+    fcitx::Option<bool> jianpin{this, "Jianpin", "简拼（声母缩写，nh → 你好）", true};
+    fcitx::Option<bool> shiftToggle{this, "ShiftToggle", "Shift 轻按切换中英文（组合键与长按不触发）", true};
+    fcitx::OptionWithAnnotation<OpiSkin, OpiSkinI18NAnnotation> skin{
+        this, "Skin", "候选面板皮肤（fcitx5 全局主题，对所有输入法生效）", OpiSkin::Keep};);
 
-// 把配置推给引擎。**冷路径**（构造 / reloadConfig / setConfig 三处调用），不需要去抖。
+// 把四个**引擎旋钮**推给 Rust 侧。**冷路径**（构造 / reloadConfig / setConfig
+// 三处调用），不需要去抖。ShiftToggle 与 Skin 不在这里 —— 它们是 C++ 侧
+// 自己消费的开关（handleModeHotkey / applyOpiSkin），引擎根本不知道它们存在。
 inline void applyOpiSettings(const OpiSettings &settings) {
     opi_fcitx5_set_learner(*settings.learn);
     opi_fcitx5_set_chinese_punct(*settings.chinesePunct);

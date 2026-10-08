@@ -25,7 +25,9 @@
 #include <fcitx-utils/standardpath.h>
 
 #include "opi_json.h"     // parseJsonStringArray（拆出去是为了本文件守住 500 行硬规矩）
-#include "opi_config.h"  // 「属性设置」的两个开关（同样为了 500 行门禁拆出去）
+#include "opi_config.h"  // 「属性设置」的六个选项（同样为了 500 行门禁拆出去）
+#include "opi_engine.h"  // addon 类声明（opi_mode.h / opi_skin.h 由它带入）
+#include "opi_mode.h"    // 模式热键 + Shift 轻按（2026-10-09 从本文件搬出去）
 #include "opi_rust_ffi.h" // Rust 出口声明 + take()，同一次拆分
 
 #include <cstdint>
@@ -178,83 +180,11 @@ void refreshingPanelFor(fcitx::InputContext *ic) {
     g_pushedBuffer = buffer;
 }
 
-// ---------- 模式热键（B0/B5） ----------
-// 两个热键共用：这是按住不放补发的**重复**事件吗。**只能从 rawKey() 取** ——
-// key() 已过 Key::normalize()，Repeat 在那一步被滤掉（下面送 Rust 的 states 处有实测），
-// 拿 key().states() 判重复恒为 false。要排：热键是**切换**语义，按住时系统持续补发
-// 重复 ⇒ 不排就是模式疯狂来回切 / 全角位疯狂翻。要**认领但不动作**而不能放行：放行的
-// Shift+Space 会撞上 handleFullwidthHotkey 注释里那个 `KEY_SPACE` 坑（**不看 Shift 位**
-// ⇒ 被当成「选首候选」），Ctrl+' 的重复则会直通到应用（抬手已被我们吃掉）。同判见
-// tsf-opi/src/vk.rs 的 `hotkey_should_act`（两轨同构，改一处改两处）。
-static bool isRepeatEvent(const fcitx::KeyEvent &keyEvent) {
-    return keyEvent.rawKey().states().test(fcitx::KeyState::Repeat);
-}
-
-// 模式编码与 Rust 侧 mode_from_int / mode_to_int **逐值对应**（../src/lib.rs）。
-// 抄错一个值就是切到另一个模式，且两边都不报错。
-enum OpiMode : int32_t {
-    kModePinyin = 0,
-    kModeEnglish = 1,
-    kModeSymbol = 3,
-};
-
-// ⚠️ 这段路由**故意落在 C++ 侧**，与本文件开头「行为路由全部在 Rust 侧」相悖。
-// 原因很具体：Rust 侧拦 Ctrl 的是 handle_key 的首行
-// （src/input_method.rs：`states & (CTRL|ALT) → PassThrough`），Ctrl 组合键根本
-// 到不了 `opi_fcitx5_key_event` 的动作分发，只能在**送进去之前**拦。那个文件当前
-// 有别的改动在飞（B 系列符号模式本体），不动它。长期归属是 input_method.rs ——
-// 那里还能顺手覆盖 TSF 一侧，届时本段整体删除，改由 Rust 侧自己报模式变化。
-//
-// 两个键都**来回切**，不是单向进入：只能进不能出等于换个地方卡住。
-//   Ctrl+' (FcitxKey_apostrophe) → 英文 ⇄ 拼音（B0。英文模式今天也进不去，
-//                                   是「通路是否打通」的现成靶子）
-//   Ctrl+\ (FcitxKey_backslash)  → 符号 ⇄ 拼音（B5）
-// 不用 Ctrl+. ：那是 punctuation 模块的系统级占用（addon/punctuation.conf，
-// Category=Module）；不用 ` ：拼音生态里那是 quickphrase。
-// **不用 Ctrl+;（实测被剪贴板模块抢走）**：libclipboard.so 里就一行
-// `Control+semicolon`，而该模块 Category=Module + OnDemand=False → 恒加载、
-// 不分输入法。且它是 PreInputMethod 阶段的 watcher，排在输入法之前 ——
-// 我们这边 filterAndAccept() 也拦不住它已经弹出来的面板（07-xx 的 harness 里
-// e2e 阴性对照步实测到候选栏冒出剪贴板历史条目）。Ctrl+\ 是**逐个枚举**过
-// 所有 fcitx5 库的 Control+/Super+/Alt+/Shift+ 组合后确认无占用的键。
-//
-// **为什么不改用可打印键**（2026-09-27 评估过，别再提，与 tsf-opi/src/vk.rs 同一条）：
-// 裸键在中文模式下已被引擎的标点层认领 —— `\`→`、` 明写在 engine-core 的
-// CHINESE_PUNCT，`` ` ``→`｀` 走 ascii_fullwidth 兜底，而中文模式**默认全角**；
-// 裸 `'` 在缓冲为空时是引号。拿裸键当模式触发＝与用户裁决的标点功能抢同一个键。
-//
-// 不做键位可配置：一张两个条目的表，配置项等真有第二个人要改再说。
-// 返回 true = 本键已被本插件消费。
-static bool handleModeHotkey(fcitx::KeyEvent &keyEvent) {
-    const fcitx::Key key = keyEvent.key();
-    if (!key.states().test(fcitx::KeyState::Ctrl)) {
-        return false;
-    }
-    const int32_t cur = opi_fcitx5_mode();
-    int32_t target = cur;
-    switch (static_cast<uint32_t>(key.sym())) {
-    case FcitxKey_apostrophe:
-        target = (cur == kModeEnglish) ? kModePinyin : kModeEnglish;
-        break;
-    case FcitxKey_backslash:
-        target = (cur == kModeSymbol) ? kModePinyin : kModeSymbol;
-        break;
-    default:
-        return false;
-    }
-    // 抬起一并消费、但不再切。只拦按下的话，客户端会收到**无 keydown 的 keyup**
-    // （依赖键状态的游戏/编辑器卡键）—— 与 input_method.rs 里 last_printable
-    // 「抬起按按下时记下的结论回复」是同一个理由。不返回来切也是同一个道理：
-    // 按下切过去、抬起再切回来，用户看到的是模式纹丝不动。**重复**同理（见上）。
-    if (!keyEvent.isRelease() && !isRepeatEvent(keyEvent)) {
-        opi_fcitx5_switch_mode(target);
-        // 切模式会动缓冲/候选（Rust 侧 switch_mode → engine.switch_mode），面板
-        // 必须跟着走：漏了这步，切到英文后候选栏会继续挂着上一次的拼音候选。
-        refreshingPanelFor(keyEvent.inputContext());
-    }
-    keyEvent.filterAndAccept();
-    return true;
-}
+// ---------- 模式热键与 Shift 轻按 → 已整体搬去 opi_mode.h ----------
+// isRepeatEvent / OpiMode 编码 / handleModeHotkey / OpiShiftToggle 的**唯一家**是
+// opi_mode.h（2026-10-09 搬移，理由：本文件 500 行门禁）。搬移是机械的，判据与
+// 实测记录（键位占用表、REPEAT 实测、与 tsf-opi/src/vk.rs 的同构关系）随注释走。
+// 本文件只留：全角键（下一段）、按 Rust 路由的骨架、以及 keyEventImpl 里的接线。
 
 // ---------- 全角 ⇄ 半角切换键（用户裁决 2026-09-27） ----------
 
@@ -302,8 +232,8 @@ static bool handleFullwidthHotkey(fcitx::KeyEvent &keyEvent) {
 }
 
 // ---------- fcitx5 插件本体（结构对齐 fcitx5 example/ime.cpp） ----------
-
-#include "opi_engine.h" // addon 类声明（拆出去是为了 500 行门禁）
+// （opi_engine.h 的 include 已提到文件头部：opi_mode.h 的 inline 函数要在本文件
+// 的中间段落就可见。）
 
 // Rust 侧线格式占用的三位（../src/input_method.rs 的 KEY_STATE_RELEASED/
 // KEY_STATE_REPEAT/KEY_STATE_LONG_PRESSED = 1<<26 / 1<<27 / 1<<28）。
@@ -349,9 +279,12 @@ void OpiEngine::keyEvent(const fcitx::InputMethodEntry &entry,
 
 void OpiEngine::keyEventImpl(const fcitx::InputMethodEntry & /*entry*/,
                              fcitx::KeyEvent &keyEvent) {
+    // Shift 轻按判定**最先**：它要看每一个按下事件来撤销判定（Shift+字母/
+    // 方向/空格都不是轻按），且从不消费事件、不碰 Rust 状态（见 opi_mode.h）。
+    shiftToggle_.handle(keyEvent, *settings_.shiftToggle);
     // 模式热键**先于** Rust 路由：Ctrl 组合键在 input_method.rs 首行就被直通，
-    // 送进去也是白送（见 handleModeHotkey 上方说明）。
-    if (handleModeHotkey(keyEvent)) {
+    // 送进去也是白送（见 opi_mode.h 的说明）。
+    if (handleModeHotkey(keyEvent, shiftToggle_)) {
         return;
     }
     // 全角键同样先于 Rust 路由，理由见 handleFullwidthHotkey 上方。

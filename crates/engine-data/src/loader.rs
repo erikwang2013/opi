@@ -91,6 +91,23 @@ impl Dictionary for MmapDictionary {
         self.scan(pinyin)
     }
 
+    /// 全量遍历（9/14 键方案的按键类展开专用，见 engine-core 的
+    /// `Dictionary::visit_entries`）。表序扫描 —— blob 序即 pinyin 字节序，
+    /// 零拷贝借用；按**行**回调而不先收集，省掉一次约 100k 条目的分配。
+    fn visit_entries(&self, f: &mut dyn FnMut(&str, &str, u32)) {
+        let data = self.data();
+        let word_start = self.word_start();
+        let pinyin_start = self.pinyin_start();
+        for i in 0..self.count {
+            let (po, pl, wo, wl, freq) = self.record(data, i);
+            let pinyin = std::str::from_utf8(&data[pinyin_start + po..pinyin_start + po + pl])
+                .expect("validate 已校验 UTF-8");
+            let word = std::str::from_utf8(&data[word_start + wo..word_start + wo + wl])
+                .expect("validate 已校验 UTF-8");
+            f(pinyin, word, freq);
+        }
+    }
+
     fn len(&self) -> usize {
         self.count
     }

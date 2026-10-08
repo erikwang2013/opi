@@ -29,6 +29,7 @@ use crate::api;
 pub(crate) mod utf16; // pub(crate)：cabi_user_words.rs 也要用它
 use utf16::{read_utf16, texts_to_json};
 
+pub use crate::cabi_scheme::*;
 /// **再导出**：拆出去的「学习 / 用户词」一组仍从 `cabi` 这个公开路径可用 ——
 /// 拆分是**内部**结构（500 行门禁逼的），不该改调用方看的路径：仓内多个测试按
 /// `opi_ffi::cabi::opi_set_learner` 之名引用，按符号名调的 C 调用方则完全不受影响。
@@ -82,6 +83,8 @@ pub unsafe extern "C" fn opi_load_trad(path: *const u16, len: usize) -> bool {
     }))
     .unwrap_or(false)
 }
+
+// ---- 简繁/笔画/输入方案一族：出口体在 cabi_scheme.rs（500 行门禁拆出）----
 
 /// inputKey(ch) -> OpiString。永不 panic。单字符外返回空串。
 /// # Safety

@@ -22,6 +22,9 @@ object EngineLoader {
     const val FILE_NAME = "luna.opid"
     const val ASSET_NAME_TRAD = "trad.opid"
     const val FILE_NAME_TRAD = "trad.opid"
+    /** 笔画词典（2026-10-09，笔画键盘 / 生僻字键盘）。5.4MB —— 同样走 size 校验重拷。 */
+    const val ASSET_NAME_STROKE = "stroke.opid"
+    const val FILE_NAME_STROKE = "stroke.opid"
     private const val TAG = "EngineLoader"
 
     /** 文件操作抽象（JVM 测试注入假实现）。 */
@@ -52,6 +55,11 @@ object EngineLoader {
     /** 繁体词典加载抽象（trad 是可选增强：失败不回退内置，不触碰已装的 luna）。 */
     fun interface LoadTradApi {
         fun loadTrad(path: String): Boolean
+    }
+
+    /** 笔画词典加载抽象（同上，可选增强：失败 = 笔画方案回退普通路径）。 */
+    fun interface LoadStrokeApi {
+        fun loadStroke(path: String): Boolean
     }
 
     /** size 校验重拷规则（对齐 flutter：不存在或 size 不一致即重拷）。 */
@@ -131,6 +139,27 @@ object EngineLoader {
         }
     }
 
+    /**
+     * 笔画资产编排：与 loadTradAsset 逐行同构（size 校验重拷 + 失败只降级）——
+     * stroke.opid 是留给「笔画键盘 / 生僻字键盘」的可选增强，加载失败只让那两个方案
+     * 回退普通路径（logcat 告警），不碰 luna/trad。
+     */
+    fun loadStrokeAsset(fileOps: FileOps, api: LoadStrokeApi, targetPath: String): Boolean {
+        try {
+            val assetSize = fileOps.assetLength()
+            if (assetSize == null || needsCopy(assetSize, fileOps.existingSize())) {
+                fileOps.write(fileOps.readAsset())
+            }
+        } catch (e: Exception) {
+            return false
+        }
+        return try {
+            api.loadStroke(targetPath)
+        } catch (e: Throwable) {
+            false
+        }
+    }
+
     /** 生产入口：assets/luna.opid → filesDir/luna.opid → OpiEngine。 */
     fun load(context: Context): Boolean {
         val target = File(context.filesDir, FILE_NAME)
@@ -183,6 +212,32 @@ object EngineLoader {
         )
         if (tradOk) Log.i(TAG, "trad loaded (${tradTarget.length()} bytes)")
         else Log.w(TAG, "trad load failed, Traditional mode falls back to simplified dict")
+
+        // stroke 可选增强（2026-10-09）：失败仅告警，笔画方案回退普通路径
+        val strokeTarget = File(context.filesDir, FILE_NAME_STROKE)
+        val strokeOk = loadStrokeAsset(
+            fileOps = object : FileOps {
+                override fun assetLength(): Long? = try {
+                    context.assets.openFd(ASSET_NAME_STROKE).use { it.length }
+                } catch (e: IOException) {
+                    null
+                }
+
+                override fun readAsset(): ByteArray =
+                    context.assets.open(ASSET_NAME_STROKE).use { it.readBytes() }
+
+                override fun existingSize(): Long? =
+                    if (strokeTarget.exists()) strokeTarget.length() else null
+
+                override fun write(bytes: ByteArray) {
+                    strokeTarget.writeBytes(bytes)
+                }
+            },
+            api = LoadStrokeApi { OpiEngine.loadStroke(it) },
+            targetPath = strokeTarget.absolutePath,
+        )
+        if (strokeOk) Log.i(TAG, "stroke loaded (${strokeTarget.length()} bytes)")
+        else Log.w(TAG, "stroke load failed, Stroke scheme falls back to the plain path")
         return result
     }
 }

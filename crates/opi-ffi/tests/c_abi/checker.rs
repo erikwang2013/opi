@@ -371,6 +371,7 @@ pub const CABI: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/cabi.rs");
 /// 会同时从两侧消失（头文件仍声明、Rust 侧解析不到）⇒ 报一堆假「头文件多出」，
 /// 或者更糟：等哪天头文件也跟着删了，就成了**静默的漏检面**。
 pub const CABI_USER_WORDS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/cabi_user_words.rs");
+pub const CABI_SCHEME: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/cabi_scheme.rs");
 pub const MACOS_H: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../macos/OpiFFI.h");
 pub const IOS_H: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../ios/OpiFFI.h");
 pub const HARMONY_H: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../harmony/cpp/opi_ffi.h");
@@ -386,7 +387,12 @@ pub fn read(p: &str) -> String {
 /// `cabi.rs` + 拆出去的文件拼成一份文本（解析与计数都在这一份上做，见 [`CABI_USER_WORDS`]）。
 /// 拼接用换行，保证相邻两文件的行不会粘成一行（解析按行扫）。
 pub fn read_cabi() -> String {
-    format!("{}\n{}", read(CABI), read(CABI_USER_WORDS))
+    format!(
+        "{}\n{}\n{}",
+        read(CABI),
+        read(CABI_USER_WORDS),
+        read(CABI_SCHEME)
+    )
 }
 
 pub fn report(diffs: Vec<String>) -> String {

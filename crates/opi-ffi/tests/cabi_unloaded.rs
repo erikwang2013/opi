@@ -26,11 +26,12 @@ use opi_ffi::cabi::{
     OpiString, opi_backspace, opi_buffer, opi_candidates, opi_candidates_page, opi_chinese_punct,
     opi_clear, opi_clear_user_words, opi_export_user_words, opi_ffi_free_string,
     opi_fullwidth_state, opi_fuzzy_enabled, opi_import_user_words, opi_input_key, opi_input_space,
-    opi_jianpin_enabled, opi_key_event, opi_learner_enabled, opi_load_trad, opi_mode, opi_page,
-    opi_page_count, opi_remove_user_word, opi_search_symbols, opi_select, opi_select_page,
-    opi_set_chinese_punct, opi_set_fuzzy, opi_set_jianpin, opi_set_learner, opi_set_shift,
-    opi_shift_state, opi_switch_mode, opi_symbol_blocks, opi_symbols_in_block,
-    opi_toggle_chinese_punct, opi_toggle_fullwidth, opi_toggle_symbol,
+    opi_jianpin_enabled, opi_key_event, opi_learner_enabled, opi_load_stroke, opi_load_trad,
+    opi_mode, opi_page, opi_page_count, opi_remove_user_word, opi_scheme, opi_search_symbols,
+    opi_select, opi_select_page, opi_set_chinese_punct, opi_set_fuzzy, opi_set_jianpin,
+    opi_set_learner, opi_set_scheme, opi_set_shift, opi_shift_state, opi_switch_mode,
+    opi_symbol_blocks, opi_symbols_in_block, opi_toggle_chinese_punct, opi_toggle_fullwidth,
+    opi_toggle_symbol,
 };
 
 use engine_core::keys::{KEY_PAGE_DOWN, KEY_RETURN, KEY_SHIFT, KEY_SPACE, KEY_STATE_LONG_PRESSED};
@@ -127,6 +128,11 @@ fn every_export_returns_a_sentinel_when_engine_is_not_loaded() {
         // 与 opi_chinese_punct 同理：未装载 → false 是**哨兵**，不是"开关默认关"
         // （默认真源在引擎侧 RankOptions::default()，两个都开）。
         assert!(!opi_jianpin_enabled());
+        // 输入方案（2026-10-09）：未装载时写侧空操作、读侧 0（全键盘）是哨兵；
+        // 笔画词典未装载 → false（与 opi_load_trad 同一个可选增强姿态）。
+        opi_set_scheme(1);
+        assert!(opi_scheme() == 0, "未装载：读侧恒 0（哨兵），写侧空操作");
+        assert!(!opi_load_stroke(std::ptr::null(), 0));
         assert!(!opi_toggle_fullwidth(), "未装载：无引擎可切，返回半角");
         assert!(
             !opi_toggle_chinese_punct(),

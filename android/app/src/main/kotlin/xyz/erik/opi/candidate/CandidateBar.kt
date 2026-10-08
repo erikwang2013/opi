@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xyz.erik.opi.engine.EngineController
+import xyz.erik.opi.keyboard.LocalKeyboardPalette
 import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.pet.OpiPet
 import xyz.erik.opi.pet.petMood
@@ -51,11 +52,13 @@ const val CANDIDATE_BAR_HEIGHT_DP = 44
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress: (Int) -> Unit) {
+    // 配色走键盘色板（表情条/候选栏与键面同一套「暗光/长辈」换肤，见 Palette.kt）
+    val p = LocalKeyboardPalette.current
     // english 模式：候选栏退化为模式条，切换中/英有明确区域反馈
     if (controller.mode == EngineMode.ENGLISH) {
         Row(
             modifier = Modifier.fillMaxWidth().height(CANDIDATE_BAR_HEIGHT_DP.dp)
-                .background(Color(0xFFEEEEEE)),
+                .background(p.barBg),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -63,9 +66,9 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
                 modifier = Modifier.padding(horizontal = 12.dp),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF455A64),
+                color = p.accent,
             )
-            Text("字母直接上屏", fontSize = 13.sp, color = Color(0xFF757575))
+            Text("字母直接上屏", fontSize = 13.sp, color = p.barDimFg)
         }
         return
     }
@@ -73,7 +76,7 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
     val candidates = controller.pageCandidates
     Row(
         modifier = Modifier.fillMaxWidth().height(CANDIDATE_BAR_HEIGHT_DP.dp)
-            .background(Color(0xFFEEEEEE)),
+            .background(p.barBg),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -89,7 +92,7 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
                     liveRegion = LiveRegionMode.Polite
                 },
             fontSize = 18.sp,
-            color = Color(0x8A000000),
+            color = p.barBufferFg,
         )
         Row(
             // 候选整屏换新时滚动位置必须回起点，否则新一批的头几个候选留在视口外
@@ -140,8 +143,8 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("$n.", fontSize = 13.sp, color = Color(0x8A000000), modifier = Modifier.padding(end = 3.dp))
-                    Text(c, fontSize = 20.sp)
+                    Text("$n.", fontSize = 13.sp, color = p.barBufferFg, modifier = Modifier.padding(end = 3.dp))
+                    Text(c, fontSize = 20.sp, color = p.keyFg)
                 }
             }
             // 拼音无候选：小欧出来摊手，比一行灰字更不像"卡住了"。
@@ -164,7 +167,7 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
                         "无匹配",
                         modifier = Modifier.padding(start = 8.dp, end = 12.dp),
                         fontSize = 13.sp,
-                        color = Color(0xFF9E9E9E),
+                        color = p.barDimFg,
                     )
                 }
             }

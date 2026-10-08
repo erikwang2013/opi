@@ -81,7 +81,16 @@ adb devices             → emulator-5554  device（x86_64，ro.build.version.sd
 
 ### 1.5 词库是构建输入，不是构建产物
 
-`android/app/src/main/assets/` 下的 `luna.opid`（简体）与 `trad.opid`（繁体）**是入库的二进制文件**，由 `data/raw/*.tsv` 经 `opi-tools` 编译而来。**Android 的构建流程不会重新生成它们** —— 换了 `data/raw` 而不重新编译词库，APK 里装的还是旧词库。
+`android/app/src/main/assets/` 下四个**入库的构建输入**，Android 的构建流程**不会重新生成它们**（换了 `data/raw` 而不重新编译，APK 里装的还是旧的）：
+
+| 资产 | 内容 | 生成器 |
+|---|---|---|
+| `luna.opid` | 简体词库 | `scripts/gen_luna_dict.py`（经 `opi-tools compile`） |
+| `trad.opid` | 繁体词库 | `scripts/gen_trad_dict.py` |
+| `stroke.opid` | 笔画词典（2026-10-09：笔画键盘 / 生僻字按笔画查字） | `scripts/gen_stroke_dict.py` |
+| `rare_index.tsv` | 部首+总笔画索引（生僻字面板） | `scripts/gen_rare_index.py` |
+
+授权逐条记在 `data/raw/LICENSES.md`（stroke 为 LGPL-3.0、rare 为 Unicode License）。
 
 ---
 
@@ -222,7 +231,7 @@ adb shell dumpsys package xyz.erik.opi | grep -E 'versionCode|versionName'  # �
 
 ### 4.1 启用输入法
 
-图形路径：**系统设置 → 系统 → 语言和输入法 → 屏幕键盘 → 管理键盘 → 勾选「OPI IME」**，再在「当前键盘」里切过去。路径随 ROM 措辞不同（本项目 `AndroidManifest.xml` 里**一条 `uses-permission` 都没有**，所以不会有权限弹窗挡路）。
+图形路径：**系统设置 → 系统 → 语言和输入法 → 屏幕键盘 → 管理键盘 → 勾选「opi输入法」**，再在「当前键盘」里切过去。路径随 ROM 措辞不同（本项目 `AndroidManifest.xml` 里**一条 `uses-permission` 都没有**，所以不会有权限弹窗挡路）。
 
 命令行路径（【实测】，命令原样可用）：
 
@@ -238,8 +247,8 @@ adb shell ime set    xyz.erik.opi/.OpiImeService      # 切为当前输入法
 
 ### 4.2 字母盘与模式键
 
-- 左下角那个**单字模式键**循环 **中 → 繁 → 英 → 中**（`ImeScreen.kt` 的 `toggleMode`），键面字由 `modeLabelOf` 给出（中/繁/英）。读屏念的是「中英切换」（`keyboard/KeyButton.kt` 的 `spokenKeyName`）。
-- 切模式会**清掉未提交的拼音缓冲**（`toggleMode` 里显式 `clear()`，防止半截拼音被空格/回车意外提交成别的词）。
+- 左下角那个**单字模式键**循环 **中 → 繁 → 英 → 中**（`ImeState.cycleMode`），键面字由 `modeLabelOf` 给出（中/繁/英）。读屏念的是「中英切换」（`keyboard/KeyButton.kt` 的 `spokenKeyName`）。
+- 2026-10-09 起这个循环与**输入模式**接线对齐（键位不变，语义更准）：中→繁**只切引擎模式**（9 键仍是 9 键）；繁→英走英文输入模式（方案回全键盘 —— 9 键上打英文没有候选路）；英→中回到**上次的中文方案**（如 9 键）。切换前会把未提交的缓冲**先提交**（有候选选第一个），与开面板同一条收尾 —— 旧行为是直接 `clear()`（静默丢弃）。
 - **`⇧` 只在英文模式可见**（`ImeScreen.kt` 的 `shiftVisible`）。单击 = 下一个字母大写一次，长按 = 大写锁定；离开英文模式会强制复位（`EngineController.resetShift`）。
 - 空格：有缓冲 = 选第一个候选；无缓冲 = 直接上屏一个空格（`KeyRouter.handleSpace`）。
 - 回车：有缓冲 = 选第一个候选；无缓冲 = 读目标应用声明的 action，**action 位为 0 时提交换行**（`OpiImeService.performEnter`，不硬编码 SEND）。
@@ -267,7 +276,55 @@ adb shell ime set    xyz.erik.opi/.OpiImeService      # 切为当前输入法
   其中 N 与**可见序号是同一个数**（页内）。此前播报的是全列表下标（翻页后唯一），可见序号立起来后
   两者会打架（同一项看得见 3、念出来 11），已统一 —— 反转理由写在 `CandidateBar.kt` 的「反转记录」。
 
-### 4.5 设置页
+### 4.5 输入模式 / 键盘模式 / 工具条（2026-10-09，对齐搜狗移动端）
+
+**键盘顶部多了一条工具条**（`ime/ImeToolbar.kt`，36dp，计入 IME 窗口列布局），
+三个入口**全部用图标**（自绘矢量，`keyboard/OpiIcons.kt` —— 不引
+`material-icons-extended` 整包，理由在文件头）：
+
+| 图标 | 入口 |
+|---|---|
+| 笑脸 | **表情**：直接进符号面板的「表情」Tab（`ImeState.openEmoji`） |
+| 键盘 | **输入模式**菜单：七选一（见下表） |
+| 滑杆 | **键盘模式**菜单：繁体 / 单手（关/左/右）/ 悬浮 / 游戏 / 暗光 / 长辈（可连开多项） |
+
+**输入模式（七种）**——引擎轴是「方案 × 语言」，布局轴在 UI：
+
+| 菜单项 | 引擎（`InputScheme` × `EngineMode`） | 说明 |
+|---|---|---|
+| 拼音26键 | FULL × PINYIN | 既有字母盘 |
+| 英文26键 | FULL × ENGLISH | 既有英文盘（⇧ 只在它可见） |
+| 拼音9键 | NINE × PINYIN | T9：`2`–`9` 是**输入键**（引擎按键类展开），有候选时数字也不选词；`，` 键走引擎标点表 |
+| 拼音14键 | FOURTEEN × PINYIN | `qw er ty ui op / as df gh jk l / zx cv bn m`，发送键 = 字母对首字母 |
+| 拼音大9键 | NINE × PINYIN（同 9 键） | 只差键面字号（`big = true`） |
+| 笔画键盘 | STROKE × PINYIN | 五个键 `h/s/p/n/z`（横竖撇捺折），查 `stroke.opid`；底部另有「生僻字」入口 |
+| 生僻字键盘 | **不进引擎** | 面板式：**选部首 → 选笔画数 → 挑字**（`keyboard/RarePanel.kt` + `RareIndex.kt`，数据 = `assets/rare_index.tsv`，Unihan 部首+总笔画索引、覆盖扩展区、懒加载 1.1MB） |
+
+- 9/14 键的**匹配在引擎**（`engine-core/src/scheme.rs` 的按键类展开，全量遍历词库逐键比对）——
+  键位表在 `keyboard/NineKeyKeyboard.kt` / `FourteenKeyKeyboard.kt`，两边由单测**交叉核对**
+  （`NineKeyLayoutTest` / `FourteenKeyLayoutTest` 里各带一份 `scheme.rs` 的快照）。
+- 笔画词典 = `assets/stroke.opid`（|rime-stroke|，5.4MB，`gen_stroke_dict.py` 生成、入库）；
+  没装/坏了时候选为空（可选增强），键盘照常可打。
+
+**键盘模式（六种）**——落地层各不相同，改之前先看 `ime/KeyboardModes.kt` 的注释：
+
+| 项 | 落地层 | 状态 |
+|---|---|---|
+| 繁体模式 | **引擎模式**（与「中/繁/英」键同路） | ✅ |
+| 单手模式 | 布局：键盘区收窄到 76% 并靠左/右 | ✅（纯 Compose） |
+| 暗光模式 | 配色：`keyboard/Palette.kt` 的 `DarkPalette` | ✅ |
+| 长辈模式 | 配色（`ElderPalette` 高对比）+ 字号整体 +18% | ✅ |
+| 悬浮模式 | **IME 窗口**：收窄到屏宽 86%、居中贴底（`OpiImeService.applyKeyboardWindow`） | ⚠️ **无真机可验**；不做拖动 |
+| 游戏模式 | **IME 窗口**：高度 ×0.72 + 同样收窄 | ⚠️ 同上 |
+
+⚠️ **悬浮/游戏只在本机静态验证**（编译 + 单元测试），窗口尺寸/重力的真实观感
+要真机（分屏、手势条 inset 都可能影响）——别把「CI 绿」读成「真机上好看」。
+
+输入模式与键盘模式都**落盘**（`ImePreferences`，枚举按 name 存，未知值回默认）。
+换布局/换窗口模式的生效时机：输入模式立即（引擎 `setScheme` 清缓冲）；键盘模式里的
+窗口两项由 `applyKeyboardWindow` 当场重排，不等系统下一次 configure。
+
+### 4.6 设置页
 
 `settings/SettingsScreen.kt`，**七项**（2026-10-08 加了模糊音 / 简拼两个开关）：
 
@@ -281,12 +338,12 @@ adb shell ime set    xyz.erik.opi/.OpiImeService      # 切为当前输入法
 | 从剪贴板导入 | 与「导出」闭环（复制→粘回来），不经文件管理器 |
 | 导入词库 JSON 文件 | 系统文件选择器；MIME 放宽到 `application/json` / `text/plain` / `application/octet-stream`（云盘与 IM 转存的 `.json` 常被判成后两者），有**有界读**上限，超限给可见的失败提示而不是主线程 OOM |
 
-⚠️ **三个开关都不落盘**（学习 / 模糊音 / 简拼）：值只活在当前进程的引擎单例里，
-IME 进程被系统回收后回默认（三个都是**开**）。这是**本端既有缺口**（学习开关一直如此），
-不是这一轮引入的 —— 要修得给本端的设置存一份持久化（`SharedPreferences` 或复用
-`UserWordStore` 那套落盘），并在 `EngineLoader.load` 之后套一遍（对照
-`tsf-opi/src/logic.rs` 的 `apply_settings`）。**别的端都已经落盘**（Linux = fcitx5 addon
-配置、Windows = `settings.ini`、桌面设置窗 = 同一个文件），所以这条只在本端成立。
+✅ **三个开关已落盘**（2026-10-09 起，关掉了此前记在这里的既有缺口）：存
+`SharedPreferences`（`settings/ImePreferences.kt`，文件名 `opi_ime_prefs`），
+IME 服务在 `EngineLoader.load` 之后把三个值推给引擎（`prefs.applyEngineSwitches`）、
+设置页**先推后读**（设置页可能先于 IME 启动，不推一遍会读到引擎默认值而不是存过的）。
+至此四端都已落盘（Linux = fcitx5 addon 配置、Windows = `settings.ini`、桌面设置窗 =
+同一个文件）。
 
 ---
 

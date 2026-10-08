@@ -87,7 +87,7 @@
 （多端云同步**已裁决不做**（用户裁决 2026-09-28），见「未来规划」——**当前仓库里没有任何同步或加密代码**。）
 
 #### 3. 词库是「活」的，也有门禁守着
-- **简繁双库**：`luna.opid`（简体）+ `trad.opid`（繁体）；繁体库缺失自动回退简体库。⚠️ **入口现状：只有 Android / iOS 能切到繁体**（`ImeScreen.kt` / `KeyboardViewController.swift` 的模式轮转）；**macOS / Linux / Windows / 鸿蒙没有入口** —— 各自的模式键只覆盖拼音⇄英文、拼音⇄符号（macOS 与 fcitx5 的 `Ctrl+'`、`tsf-opi/src/vk.rs` 的 `mode_hotkey`），Linux 侧 CMake 也只装 `luna.opid`。引擎与数据侧的繁体能力本身是完整的
+- **简繁双库**：`luna.opid`（简体）+ `trad.opid`（繁体），两者都随包安装；繁体库缺失/损坏自动回退简体库。**入口**：Android / iOS 用键盘上的模式轮转键（`ImeScreen.kt` / `KeyboardViewController.swift`）；**fcitx5（Linux）2026-10-09 起有 `Ctrl+Shift+F`**（随包装 `trad.opid`，见 `docs/install/linux.md` §5.3）；macOS / Windows / 鸿蒙仍只有拼音⇄英文、拼音⇄符号（`Ctrl+'`、`tsf-opi/src/vk.rs` 的 `mode_hotkey`）——**还没有繁体入口**。引擎与数据侧的繁体能力本身是完整的
 - **单字全覆盖门禁**：GB2312 全量单字逐一断言有候选（`trad_coverage` 集成测试，字数判据写在测试里）。改词库若撞坏覆盖度，CI 直接红
 - **词库坏了绝不崩输入法**：装载策略各端统一 —— **坏路径一律返回 `Err`，不静默回退**（`engine-data/src/dictionary.rs` 的 `load_or_fallback` 注释写明此前的静默回退是有意删除的：UI 会误以为完整词库已加载）；只有**未提供路径**（含空串）时才用内置回退词库（`data/raw/fallback.tsv`，条数以该文件行数为准）。是否再从 `Err` 兜底由调用方决定：Android 的 `EngineLoader` 接住后用内置词库重试（`EngineLoader.kt` 的 `fallback()`），fcitx5 / TSF 上抛（`fcitx5-opi/src/lib.rs` / `tsf-opi/src/tsf.rs` 的装载调用点）
 - **词库分发通路**：Android 走 assets → filesDir（`EngineLoader.kt`）、fcitx5 走 XDG 数据目录且由 CMake 安装（`fcitx5-opi/cpp/CMakeLists.txt`）、Windows 走 `OPI_DICT_PATH` 环境变量 → DLL 同目录 → `%LOCALAPPDATA%\opi` → 内置回退（`tsf-opi/src/dict_path.rs`）。⚠️ **Windows 侧仍无打包步骤**，故开箱即用仍是内置回退词库 —— 通路已备、拷贝动作没有
@@ -111,7 +111,7 @@
 | **鸿蒙 HarmonyOS** | **仅有草案**（`harmony/`）| **拦路的不是 SDK，是仓库里没有工程脚手架。** 本机**装着**鸿蒙命令行工具链（`codelinter` / `hvigor` / `ohpm` 与 SDK），缺的是工程脚手架（工程级 `build-profile.json5`、`hvigorfile.ts` 与模块级 `build-profile.json5` —— **判据与完整清单见 [`harmony/README.md`](harmony/README.md)**），于是 `codelinter` 以「path is incorrect … under the project path」**拒绝处理**，而不是「本机没有 SDK」。`harmony/` 下的 ArkTS（`InputMethodExtensionAbility` 等）**一行都没有被编译过、也没有被检查过**，是「起点 + 契约」。**已实测**：把 `harmony/ets` 原样放进一个补齐脚手架的项目，`codelinter` 会**真正解析**它（塞入语法错误即报 `@parsing-error`）⇒ **补脚手架之后，ArkTS 在 Linux 上可以被静态检查**；**再往后的构建（`hvigorw`）本轮未验**。已就绪并可实测的还有 **Rust 侧**：C ABI 能为鸿蒙目标编译（`cargo check --target aarch64-unknown-linux-ohos` 等，见目录内 README）|
 | **Apple 两平台**：iOS · macOS | **仅有草案**（`ios/` · `macos/`）| **硬约束：两端都需要 macOS + Xcode 才能编译，本仓库的验证环境（Linux）无法编译、链接或运行它们，连 Swift 语法检查都做不到**（UIKit / InputMethodKit 是 Apple 独有框架）。两个目录里的 Swift **一行都没有被编译过**，是「起点 + 契约」而不是可用实现。已就绪的只有平台中立的 **C ABI**（`crates/opi-ffi`），且它**已实测能为 Apple 三个目标编译**（`cargo check --target aarch64-apple-ios / aarch64-apple-ios-sim / aarch64-apple-darwin` 均通过，已进 CI；还能产出 arm64 静态库 `libopi_ffi.a` 且导出符号无缺失）。**任何 Apple 端代码在被 Mac 上的编译器看过之前，都不应被当作已实现** —— 本项目已有两次教训：fcitx5 的 C++ 与 Windows 的 TSF 都是「写完了、读起来像完成」，实测却发现从未被编译过（前者 7 处 API 误写，后者文本插入根本没写） |
 | **多端云同步 / 端到端加密** | **不做**（用户裁决 2026-09-28） | 无加密库、无 HTTP 客户端：跨 `crates/` `android/` `desktop/` 的 `*.rs` / `*.toml` / `*.kt` 里，`reqwest` / `ureq` / `hyper` / `openssl` / `rustls` / `chacha` / `argon2` / `aes-gcm` / `https://` 逐个零命中。带 `sync` 的命中全是 Rust 同步原语与 TSF 标志（`std::sync`、`TF_ES_SYNC`、`trad_assets_in_sync`），与云同步无关。**注**：学习词库导出 JSON 里确有 `version` 字段，但那是**导出格式**的版本协商（`learner.rs` 的 `import_json` 拒收 `version != 1`），与云同步无关 |
-| **更多输入方案**：双拼 · 五笔 · 仓颉 · 注音 · 自定义输入规则 | V2 预留 | `Mode` 的成员只有拼音 / 繁体 / 英文 / 数字 / 符号（成员清单以 `composer.rs` 的 `enum Mode` 为准）。注释里提到由 `InputScheme` 扩展 —— **该类型尚不存在** |
+| **更多输入方案**：双拼 · 五笔 · 仓颉 · 注音 · 自定义输入规则 | 布局轴已落地（2026-10-09）；其余待做 | `Mode` 的成员仍是拼音 / 繁体 / 英文 / 数字 / 符号（`composer.rs`）；**按键布局**另有独立轴 `Scheme`（`scheme.rs`：全键盘 / 拼音9键 / 拼音14键 / 笔画 —— 匹配走按键类展开，Android 端已接线）；双拼 / 五笔 / 仓颉 / 注音 / 自定义规则仍未做 |
 | **英文联想** | **仅数据** | `docs/superpowers/specs/2026-08-12-opi-ime-design.md` 的「V1 不做」那条写明「V1 仅做单词联想」—— 承诺过、此前没兑现。词源 `data/raw/en_words.tsv` 现已入库（来源、许可证 CC-BY 3.0 与上游 pin 见 `data/raw/LICENSES.md`，**该表同时是署名载体**）；**候选逻辑仍未接线** —— `candidates.rs` 对英文 / 数字模式直接返回空表 |
 | **无障碍**：读屏软件 | 部分（仅 Android） | Android 键盘已接基础读屏语义：候选变化自动播报（`liveRegion`）、每个按键有可读名称（不再读字形「⇧」「⌫」）、⇧ 的锁定 / 单次大写状态可读。**其余平台（Windows / Linux / iOS）未接入** |
 | **语音输入 · 扫描输入** | 未开始 | 零命中 |
@@ -231,7 +231,7 @@ crates/                        # Rust 工作区（crate 清单以根 Cargo.toml 
     src/settings.rs            #   属性设置读侧（%LOCALAPPDATA%\opi\settings.ini，键名与设置窗逐字对应）
 android/                       # Android IME（Kotlin + Jetpack Compose）
   app/                         #   IME 服务 · 键盘 / 候选栏 / 面板 · 设置页（含用户词导入导出）· 宠物组件
-    src/main/assets/           #   luna.opid（简体）· trad.opid（繁体）
+    src/main/assets/           #   luna.opid（简体）· trad.opid（繁体）· stroke.opid（笔画）· rare_index.tsv（部首索引）
     src/main/res/              #   自适应启动图标（VectorDrawable，含小欧）
   rust_builder/                #   cargokit 独立版：编译 crates/opi-ffi → 三 ABI .so
   jni_smoke/                   #   JNI 连通性冒烟测试

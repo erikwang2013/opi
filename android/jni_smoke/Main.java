@@ -36,6 +36,9 @@ final class OpiEngine {
     static native void setFuzzy(boolean on);
     static native boolean jianpinEnabled();
     static native void setJianpin(boolean on);
+    static native int scheme();
+    static native void setScheme(int scheme);
+    static native boolean loadStroke(String path);
     static native void clearUserWords();
     static native String exportUserWords();
     static native int importUserWords(String json);
@@ -123,6 +126,16 @@ public final class Main {
         OpiEngine.setJianpin(false);
         check(!OpiEngine.jianpinEnabled(), "setJianpin(false) 生效");
         OpiEngine.setJianpin(true);
+
+        // 输入方案（2026-10-09）：整数回环 + 越界忽略 + 笔画词典坏路径哨兵。
+        check(OpiEngine.scheme() == 0, "scheme 默认全键盘");
+        OpiEngine.setScheme(1);
+        check(OpiEngine.scheme() == 1, "setScheme(1) 生效（9 键）");
+        OpiEngine.setScheme(99);
+        check(OpiEngine.scheme() == 1, "越界值忽略（仍为 1）");
+        OpiEngine.setScheme(0);
+        check(OpiEngine.scheme() == 0, "换回全键盘");
+        check(!OpiEngine.loadStroke(""), "loadStroke(空) 应为 false");
 
         // 用户词导出/清空
         String words = OpiEngine.exportUserWords();

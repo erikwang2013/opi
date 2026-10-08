@@ -1,11 +1,14 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-use crate::candidates::{Candidate, DEFAULT_TOP_N, RankOptions, USER_BOOST, rank_and_pick_with};
+use crate::candidates::{
+    Candidate, DEFAULT_TOP_N, RankOptions, USER_BOOST, rank_and_pick_scheme, rank_and_pick_with,
+};
 use crate::composer::{Composer, KeyEffect, Mode};
 use crate::dictionary::Dictionary;
 use crate::learner::Learner;
-use crate::punctuation::{self, Quotes};
+use crate::punctuation::Quotes;
+use crate::scheme::Scheme;
 use crate::symbols::{Block, BlockId, SymbolEngine, SymbolEntry};
 
 /// 引擎门面：输入法 UI 层（经 FFI）交互的唯一入口。
@@ -13,6 +16,10 @@ pub struct Engine {
     dict: Box<dyn Dictionary>,
     /// 繁体词典（trad.opid）；None 时 Traditional 模式回退 dict（spec 错误处理）。
     trad_dict: Option<Box<dyn Dictionary>>,
+    /// 笔画词典（stroke.opid，2026-10-09）：键是笔画串（`hspnz` 五个字母，
+    /// 横竖撇捺折），词是单字。`Scheme::Stroke` 时改查它。None = 笔画方案回退
+    /// 普通路径（可选增强，与 trad 同一姿态）。
+    stroke_dict: Option<Box<dyn Dictionary>>,
     composer: Composer,
     symbols: SymbolEngine,
     learner: Learner,
@@ -21,16 +28,16 @@ pub struct Engine {
     /// 全角开关：`true` = ASCII 标点出**机械全角**（U+FF01..U+FF5E 平移），
     /// `false` = 直通半角。只管宽度 —— 中文标点表是另一档（[`Self::chinese_punct`]）。
     /// 切模式重置为该模式的默认值（[`Mode::default_fullwidth`]）。
-    fullwidth: bool,
+    pub(crate) fullwidth: bool,
     /// 中文标点表开关（`,` → `，`、`\` → `、`，含成对引号交替）：`true` = 表生效。
     ///
     /// **全局布尔、不随模式重置**（与 [`Self::fullwidth`] 有意不同）：表只被
     /// Pinyin / Traditional 读，对它而言这是**用户偏好**而不是某个模式的默认值 ——
     /// 切模式重置一个没有 per-mode 含义的偏好是错的（切到英文再切回来，
     /// 用户关掉的表会自己打开）。默认 `true` = 保持既有行为。
-    chinese_punct: bool,
+    pub(crate) chinese_punct: bool,
     /// 成对引号的交替状态（复位时机见 [`Quotes`]）。
-    quotes: Quotes,
+    pub(crate) quotes: Quotes,
     /// 模糊音开关（「属性设置」可改；排序层的门控见 `candidates::RankOptions`）。
     /// 默认 `true` = 既有行为。
     fuzzy: bool,
@@ -58,6 +65,7 @@ impl Engine {
         Engine {
             dict,
             trad_dict: trad,
+            stroke_dict: None,
             composer: Composer::new(),
             symbols,
             learner: Learner::new(learner_enabled),
@@ -72,11 +80,16 @@ impl Engine {
 
     /// 换装繁体词典（FFI install_trad 用）。None = 清除（回退简体）。
     /// 重算 user_boost：trad.opid 静态最大词频 4e9，保持"一次选词压过全部静态词"。
+    /// ⚠️ 取三个词典的**全局**最大词频（含 stroke，2026-10-09 起）：只按「dict+trad」
+    /// 算的话，后装的 stroke 若词频更高，boost 会悄悄偏小 —— 学习者压不过静态词。
     pub fn set_trad_dict(&mut self, dict: Option<Box<dyn Dictionary>>) {
-        let max_freq = self
-            .dict
-            .max_freq()
-            .max(dict.as_ref().map_or(0, |d| d.max_freq()));
+        let max_freq = [dict.as_ref(), self.stroke_dict.as_ref()]
+            .into_iter()
+            .flatten()
+            .chain(std::iter::once(&self.dict))
+            .map(|d| d.max_freq())
+            .max()
+            .unwrap_or(0);
         self.user_boost = USER_BOOST.max(max_freq.saturating_mul(2));
         self.trad_dict = dict;
     }
@@ -89,6 +102,34 @@ impl Engine {
         }
     }
 
+    /// 换装笔画词典（FFI install_stroke 用）。None = 清除（笔画方案回退普通路径）。
+    /// 与 [`Self::set_trad_dict`] 同一形状（含重算 user_boost —— 别让更大的词频表
+    /// 静默改变「精确加成」的档位）。
+    pub fn set_stroke_dict(&mut self, dict: Option<Box<dyn Dictionary>>) {
+        let max_freq = [self.trad_dict.as_ref(), dict.as_ref()]
+            .into_iter()
+            .flatten()
+            .chain(std::iter::once(&self.dict))
+            .map(|d| d.max_freq())
+            .max()
+            .unwrap_or(0);
+        self.user_boost = USER_BOOST.max(max_freq.saturating_mul(2));
+        self.stroke_dict = dict;
+    }
+
+    /// 当前输入方案（9 键 / 14 键 / 笔画 / 全键盘）。
+    pub fn scheme(&self) -> Scheme {
+        self.composer.scheme()
+    }
+
+    /// 换输入方案。**清缓冲**（与 `switch_mode` 同一条理由）：缓冲是按旧方案
+    /// 打进去的串，留着会被新方案的匹配器读出个似是而非的结果（例如把 26 键的
+    /// "ni" 拿 9 键规则去套，凑出一堆不相关的候选）。清掉 = 明确的重新开始。
+    pub fn set_scheme(&mut self, scheme: Scheme) {
+        self.composer.set_scheme(scheme);
+        self.composer.clear();
+    }
+
     /// 处理一次击键，返回需要提交的文本（空串 = 无提交）。
     /// 空格键在 Engine 层拦截：拼音模式选首候选，其他模式提交缓冲。
     ///
@@ -96,6 +137,9 @@ impl Engine {
     /// 调用方是「没有客户端可交」的那些端（Android 面板经 JNI、C ABI 直调）——
     /// 三轨的「直通」是把自己交还给客户端应用，Android 没有这一层，返回空串
     /// 就等于吞键（NumberPad 的 `,` `.` 正是靠这条活在引擎里）。
+    // ---- 标点表 / 全角一族：impl 体在 engine_punct.rs（500 行门禁拆出）----
+    // 字段的 pub(crate) 理由见那个文件的头注释。
+
     pub fn input_key(&mut self, ch: char) -> String {
         if ch == ' ' {
             return self.input_space();
@@ -116,155 +160,6 @@ impl Engine {
             KeyEffect::Ignored if ch.is_ascii_punctuation() => self.input_space() + &ch.to_string(),
             KeyEffect::Ignored => String::new(),
         }
-    }
-
-    /// 标点键 → 需要上屏的文本；`None` = 本模式/本状态下不归标点表管，交调用方直通。
-    ///
-    /// **四端的单一判定点**：三轨（fcitx5 / TSF / 平台中立路由）在可打印分支开头问它，
-    /// [`Self::input_key`] 也问它。加进来的是引擎层，不是某一端 —— 用户裁决
-    /// 2026-09-27：「引擎层加标点表，四端走同一条路」。
-    pub fn input_punct(&mut self, ch: char) -> Option<String> {
-        let text = self.punct_text(ch)?;
-        // 缓冲非空：先走与空格**同一条**收尾（有候选提首候选、无候选提原文），
-        // 否则 `ni,` 上屏成 `，你` —— 标点抢在待提交的拼音前面。
-        // 不映射 ⇒ 不走这里：那是「直通」，由调用方自己插入，与三轨的 PassThrough 同形
-        // （两个开关都关时才是这一档，见 `punct_text`）。
-        let pending = if self.composer.session().buffer.is_empty() {
-            String::new()
-        } else {
-            self.input_space()
-        };
-        Some(pending + &text)
-    }
-
-    /// 标点映射本尊。`None` = 直通。
-    ///
-    /// **两档开关，互不牵连**（用户裁决 2026-09-28）：`chinese_punct` 管中文标点表那一档
-    /// （含引号交替），`fullwidth` 管机械全角那一档。本函数曾经的第一行是
-    /// `if !self.fullwidth { return None; }` —— 关全角把整张中文标点表一起关掉，
-    /// 两个本该独立的开关焊在一起；四组合真值表逐格实测见
-    /// tests/punctuation_switches.rs 的 `chinese_punct_and_fullwidth_are_independent`。
-    fn punct_text(&mut self, ch: char) -> Option<String> {
-        // 撇号在拼音/繁体是**音节分隔符**（`xi'an`）：只有缓冲空时它没有分隔语义，
-        // 这时才当引号 —— 两个需求都要，代价只有这一个条件。
-        // 排在两道闸**之前**：分隔符语义与标点开关无关，且闸关时不动引号交替状态。
-        if ch == '\'' && !self.composer.session().buffer.is_empty() {
-            return None;
-        }
-        let mapped = match self.composer.session().mode {
-            // 中文标点：表命中由 `chinese_punct` 把关，表未命中落到机械全角、由 `fullwidth`
-            // 把关（表里没有的键如 `^` 就是这条）。两闸各管一段，兜底不越过各自的闸。
-            Mode::Pinyin | Mode::Traditional => {
-                let table = if self.chinese_punct {
-                    punctuation::chinese(ch, &mut self.quotes)
-                } else {
-                    None
-                };
-                table.or_else(|| self.mechanical_fullwidth(ch))?
-            }
-            // 西文模式：**没有中文标点表这一档**（西文里冒出中文句号是错的），
-            // 只有机械全角，`.` 得 `．`(U+FF0E) 而不是 `。`
-            Mode::English | Mode::Number => self.mechanical_fullwidth(ch)?,
-            // 符号模式：**不映射**（我的裁决，依据是数据不是口味）：生产符号表的全部
-            // 关键字一律 `^[a-z0-9]+$`（tests/punctuation.rs 的 every_symbol_keyword_is_alnum
-            // 钉住），标点在那里既搜不出候选、也不是待上屏的中文文本。交调用方原样插入
-            // （Android 面板 / [`Self::input_key`]）或直通客户端（三轨），与 Number 同档。
-            // **两个开关在符号模式都不生效**：它是搜索模式，不是文本模式。
-            Mode::Symbol => return None,
-        };
-        Some(mapped.to_string())
-    }
-
-    /// 机械全角那一档（`fullwidth` 闸）：关 → `None`（半角直通）。
-    /// 表未命中的兜底与西文模式共用这一处 —— 「全角」这个开关的判定只此一份。
-    fn mechanical_fullwidth(&self, ch: char) -> Option<char> {
-        if self.fullwidth {
-            punctuation::ascii_fullwidth(ch)
-        } else {
-            None
-        }
-    }
-
-    /// 全角开关的当前值（`toggle_fullwidth` 的读侧，供状态栏/测试）。
-    pub fn fullwidth(&self) -> bool {
-        self.fullwidth
-    }
-
-    /// 触发键：全角 ↔ 半角，返回**切换后的状态**（状态栏显示用）。
-    ///
-    /// 语义只在本层，**键位不在本层**。桌面两轨的键位**已定：`Shift+Space`**
-    /// （`tsf-opi/src/vk.rs` 的 `fullwidth_hotkey` ≡ `fcitx5-opi/cpp/opi_fcitx5.cpp`
-    /// 的 `handleFullwidthHotkey`；两轨同构，改一处必须改另一处）—— Apple 两端接线时
-    /// 照这两处，别自创。为什么不用可打印键：见 `vk.rs` 里 `mode_hotkey` 的
-    /// 「为什么不改成可打印键」（2026-09-27 已裁决，裸键归标点层，别再评估）。
-    /// 调用方拿到状态后自行刷新 UI；不需要插入通道，故比 `toggle_symbol` 更容易接线。
-    pub fn toggle_fullwidth(&mut self) -> bool {
-        self.fullwidth = !self.fullwidth;
-        self.fullwidth
-    }
-
-    /// 中文标点表开关的当前值（[`Self::set_chinese_punct`] / [`Self::toggle_chinese_punct`]
-    /// 的读侧，供状态栏/设置页/测试）。
-    ///
-    /// **必须有读侧**：设置项会被切模式以外的路径改动（设置页、下次启动的持久化），
-    /// 平台侧只记一份本地副本必然漂 —— 与 `opi_fullwidth_state` 同一条理由。
-    pub fn chinese_punct(&self) -> bool {
-        self.chinese_punct
-    }
-
-    /// 设置中文标点表是否生效（设置页勾选框那一侧）。
-    ///
-    /// **本开关有两个入口**：设置项是这一个，触发键是 [`Self::toggle_chinese_punct`] ——
-    /// 两者指向同一个字段，没有先后。⚠️ 别把它写成「设置项所以没有 `toggle_` 形态」：
-    /// 那句话在加触发键之后就假了。
-    /// （对照：`fullwidth` **只有** `toggle` 一个入口，没有 `set_fullwidth` —— 这个不对称
-    /// 是有意的：全角有模式默认值、且切模式会重置，本来就不适合当持久设置项。）
-    /// 语义只在本层，**键位不在本层**（理由见 [`Self::toggle_chinese_punct`]）。
-    pub fn set_chinese_punct(&mut self, on: bool) {
-        self.chinese_punct = on;
-    }
-
-    /// 触发键：中文标点表 开 ↔ 关，返回**切换后的状态**（状态栏显示用），
-    /// 与 [`Self::toggle_fullwidth`] 同形。
-    ///
-    /// 语义只在本层，**键位不在本层** —— 与 [`Self::toggle_fullwidth`] 同一条约定。
-    /// 桌面两轨的键位**暂定 `Ctrl+/`**（未定稿，须两轨各自实测后确认）。
-    ///
-    /// **为什么是 `Ctrl+/`**（2026-09-28 本机三层实测均无占用）：
-    /// ① `strings` 扫 `/usr/lib/x86_64-linux-gnu/fcitx5/**/*.so`（34 个文件），Ctrl 类占用只有
-    /// `7` `8` `.` `;` `Return`（±Shift、±KP_Enter）`Shift+U` `Alt+E` `Alt+Shift+U`，
-    /// 非 Ctrl 类另有 `Shift+Tab` `Super+grave` `Super+semicolon`；
-    /// ② `~/.config/fcitx5/config` 的全局热键：`Control+space`、`Control+Shift+space`、
-    /// `Control+Shift_L/R`、`Super+space`、`Shift+Super+space`、`Control+Alt+P`；
-    /// ③ `/usr/share/fcitx5/addon/*.conf`（26 个）与 `~/.config/fcitx5/conf/*.conf`（4 个）：
-    /// 无任何热键式条目。单修饰键、无 Shift ⇒ 组合面最小。
-    /// （每层都留了阳性对照，否则「没搜到」可能是**空输入**而非「无占用」：`Control+semicolon`
-    /// 与 `Control+period` 各命中 1 次 ⇒ 扫库管道能开火；`Category` 在 26/26 个 conf 里命中
-    /// ⇒ 那组 glob 非空。）
-    ///
-    /// ⚠️ **三层缺一不可，别只扫第 ① 层。** **全局热键是配置值、不编进库** ⇒ 只扫库必然漏，
-    /// 且当场可复现：`Control+space` 在层 ① 全库扫是 **0 命中**，却在层 ② 的
-    /// `[Hotkey/TriggerKeys]` 里活着。⇒ **「库里没有」推不出「没被占用」**；同理，日后换键位
-    /// 时只跑一条 `strings` 就宣布「干净」是错的，那正是本轮 `Ctrl+;` 那次错前提的成因。
-    ///
-    /// 应用级惯例：`Ctrl+/` = 编辑器「切换注释」，只在编辑器内生效；故不取**同样三层干净**的
-    /// `Ctrl+,` —— 那是 GNOME/多数应用的「偏好设置」，**全局动作**、在哪都会按。
-    ///
-    /// ⚠️ **三层只是 fcitx5 内部**，别把「三层干净」读成「系统级干净」：DE/WM 与应用程序抢的
-    /// 键不在其中（`Super+grave` 能扫到是特例）。⚠️ 且这是 **Linux 一侧** —— Windows/TSF 按
-    /// `crates/tsf-opi/src/vk.rs` 自己的话是**本机核实不了**。⇒ **两轨各自实测后再定稿**，
-    /// 别拿一端的结论当另一端。
-    /// **备选 `Ctrl+Shift+.`**（未实测）：助记更强 —— Sogou 的「中英文标点切换」正是 `Ctrl+.`，
-    /// 而精确组合 `Ctrl+.` 被 fcitx5 的标点模块占着（`Control+period`）；但**它尚未按上面三层
-    /// 方法测过**。若某轨否掉 `Ctrl+/`，**先测它再换**，别直接换。
-    ///
-    /// ⚠️ **别照抄 `Ctrl+;`**：`crates/fcitx5-opi/cpp/opi_fcitx5.cpp` 的 `handleModeHotkey`
-    /// 记着它是**实测**被抢走的键（`Control+semicolon` 被恒加载的 PreInputMethod 模块
-    /// libclipboard 占着，`filterAndAccept()` 拦不住，e2e 阴性对照里实测到剪贴板面板弹出），
-    /// `crates/tsf-opi/src/vk.rs` 的 `mode_hotkey` 有同一条。
-    pub fn toggle_chinese_punct(&mut self) -> bool {
-        self.chinese_punct = !self.chinese_punct;
-        self.chinese_punct
     }
 
     /// 空格键：拼音/繁体/符号模式选中首候选；英文/数字模式提交缓冲。
@@ -380,6 +275,47 @@ impl Engine {
 
     pub fn candidates(&self, limit: usize) -> Vec<Candidate> {
         let s = self.composer.session();
+        // 输入方案分流（2026-10-09）：只在「会打拼音缓冲」的两个模式下有意义
+        // （English/Number/Symbol 的缓冲不是拼音串）。
+        if matches!(s.mode, Mode::Pinyin | Mode::Traditional) {
+            match self.scheme() {
+                // 9/14 键：按键类展开 —— 前缀查询表达不了（数字串不是任何拼音键的
+                // 前缀），走全量遍历 + 类匹配（candidates::rank_and_pick_scheme）。
+                // 「精确加成」按**键长相等**给（与全键盘的 pinyin_len == 输入长度同义）。
+                Scheme::Nine | Scheme::Fourteen => {
+                    return rank_and_pick_scheme(
+                        self.active_dict(),
+                        &self.learner,
+                        &s.buffer,
+                        limit,
+                        self.user_boost,
+                        self.scheme(),
+                    );
+                }
+                // 笔画：换词典 + **关掉模糊音/简拼**（两者对 hspnz 串没有意义，
+                // 开着只会把不相干的音节捞进来）。其余与全键盘完全同路。
+                Scheme::Stroke => {
+                    if let Some(d) = &self.stroke_dict {
+                        return rank_and_pick_with(
+                            d.as_ref(),
+                            &self.symbols,
+                            &self.learner,
+                            &s.buffer,
+                            s.mode,
+                            limit,
+                            self.user_boost,
+                            RankOptions {
+                                fuzzy: false,
+                                jianpin: false,
+                            },
+                        );
+                    }
+                    // 没装笔画词典：落到下面普通路径（候选基本为空）——
+                    // 与 trad 缺失同一种「可选增强」姿态，不在引擎里报错。
+                }
+                Scheme::Full => {}
+            }
+        }
         rank_and_pick_with(
             self.active_dict(),
             &self.symbols,

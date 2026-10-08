@@ -342,4 +342,42 @@ class ImeStateTest {
         state.onSearchFocus(false)
         assertFalse(state.searchActive)
     }
+
+    @Test
+    fun selectInputModeWritesEngineAndHandlesPanels() {
+        val fake = FakeEngine()
+        val state = newState(fake)
+        // 9 键：写 scheme + mode
+        state.selectInputMode(InputMode.PINYIN9)
+        assertEquals(listOf(1), fake.schemeCalls) // 1 = Nine
+        assertEquals(EngineMode.PINYIN, state.controller.mode)
+        assertEquals(ImeState.View.QWERTY, state.view)
+        // 生僻字：只切面板、**不碰引擎**（scheme/mode 调用数不变）
+        state.selectInputMode(InputMode.RARE)
+        assertEquals(listOf(1), fake.schemeCalls)
+        assertEquals(ImeState.View.RARE, state.view)
+        // 回字母盘
+        state.backToLetters()
+        assertEquals(ImeState.View.QWERTY, state.view)
+    }
+
+    @Test
+    fun cycleModeKeepsSchemeAndRestoresLastChinese() {
+        val fake = FakeEngine()
+        val state = newState(fake)
+        state.selectInputMode(InputMode.PINYIN9)
+        // 中 → 繁：只切引擎模式（不再写 scheme）
+        state.cycleMode()
+        assertEquals(listOf(1), fake.schemeCalls)
+        assertEquals(4, fake.switchCalls.last()) // 最后一次 switchMode = TRADITIONAL
+        // 繁 → 英：走英文输入模式（方案回全键盘 = 第 2 次写 scheme）
+        state.cycleMode()
+        assertEquals(EngineMode.ENGLISH, state.controller.mode)
+        assertEquals(listOf(1, 0), fake.schemeCalls)
+        // 英 → 中：回**上次的中文方案**（9 键）
+        state.cycleMode()
+        assertEquals(EngineMode.PINYIN, state.controller.mode)
+        assertEquals(listOf(1, 0, 1), fake.schemeCalls)
+        assertEquals(InputMode.PINYIN9, state.inputMode)
+    }
 }

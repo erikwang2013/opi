@@ -97,7 +97,7 @@ fun main(args: Array<String>) = application {
         Window(
             onCloseRequest = ::exitApplication,
             state = rememberWindowState(width = 460.dp, height = 600.dp),
-            title = "OPI 属性设置",
+            title = "opi输入法 设置",
         ) {
             SettingsWindow()
         }
@@ -117,7 +117,7 @@ fun main(args: Array<String>) = application {
         alwaysOnTop = true,
         resizable = false,
         focusable = false,
-        title = "OPI 候选窗",
+        title = "opi输入法 候选窗",
     ) {
         // 位置跟随（position 消息；缺省固定默认位置）。
         LaunchedEffect(model.x, model.y, model.visible) {

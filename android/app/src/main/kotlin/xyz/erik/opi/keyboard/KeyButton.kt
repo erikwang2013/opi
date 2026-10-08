@@ -40,7 +40,9 @@ fun KeyButton(
     highlighted: Boolean = false,
     stateDescription: String? = null,
 ) {
-    val bg = if (highlighted) Color(0xFF546E7A) else Color(0xFFE0E0E0) // blueGrey600 / grey300
+    val palette = LocalKeyboardPalette.current
+    val bg = if (highlighted) palette.keyHighlightBg else palette.keyBg
+    val fg = if (highlighted) palette.keyHighlightFg else palette.keyFg
     Box(
         modifier = modifier
             .padding(1.dp)
@@ -58,8 +60,19 @@ fun KeyButton(
             .fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, fontSize = 18.sp, maxLines = 1)
+        Text(label, fontSize = 18.sp, maxLines = 1, color = fg)
     }
+}
+
+/**
+ * 模式键（中/繁/英）的读屏状态描述。键面只有一个字，读屏分不清它是「当前模式」
+ * 还是「可切换项」—— QwertyKeyboard 与 9/14/笔画三个键盘共用这一处，别各写一份。
+ */
+internal fun modeStateDescription(modeLabel: String): String? = when (modeLabel) {
+    "中" -> "中文"
+    "繁" -> "繁体"
+    "英" -> "英文"
+    else -> null
 }
 
 /**
@@ -75,7 +88,9 @@ internal fun spokenKeyName(label: String): String = when (label) {
     "中", "繁", "英" -> "中英切换"
     "123", "?123" -> "数字与符号"
     "ABC" -> "字母"
-    "," -> "逗号"
+    "符" -> "符号" // 9/14 键与笔画键盘的符号入口键
+    "," , "，" -> "逗号"
     "." -> "句号"
+    "生僻字" -> "生僻字键盘"
     else -> if (label.length == 1 && label[0].isLetter()) "$label 键" else label
 }

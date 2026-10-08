@@ -108,14 +108,16 @@ int checkIcon(const char *confPath) {
 int main(int argc, char **argv) {
     if (argc < 2) {
         fprintf(stderr,
-                "用法: %s <期望词库路径> [期望 addon conf] [期望 inputmethod conf]\n",
+                "用法: %s <期望词库路径> [期望 addon conf] [期望 inputmethod conf]"
+                " [期望繁体词库路径]\n",
                 argv[0]);
         return 2;
     }
 
-    // ⚠️ 下面两个相对路径字面量必须与 opi_fcitx5.cpp 的 loadDictionary() 一致。
-    // 不一致时本程序会**照样通过**（它没读那份源码），所以 CI 里另有一条 grep
-    // 把 opi_fcitx5.cpp 的那一行钉住 —— 改常量的人会同时看到这条红。
+    // ⚠️ 下面这些相对路径字面量必须与 opi_fcitx5.cpp 的 loadDictionary() 一致
+    // （2026-10-09 起那块搬在 opi_engine.h）。不一致时本程序会**照样通过**
+    // （它没读那份源码），所以 CI 里另有一条 grep 把源码里的常量钉住 ——
+    // 改常量的人会同时看到这条红。
     check("词库", fcitx::StandardPath::Type::Data, "opi/luna.opid", argv[1]);
     if (argc > 2) {
         check("addon", fcitx::StandardPath::Type::PkgData,
@@ -125,8 +127,14 @@ int main(int argc, char **argv) {
         check("输入法", fcitx::StandardPath::Type::PkgData,
               "inputmethod/opi.conf", argv[3]);
         // 期望值取自刚校验过落点的那份 conf 本身（见 checkIcon 的说明），
-        // 故复用 argv[3]，不新增第四个参数 —— CI 现有的三参调用已经覆盖它。
+        // 故复用 argv[3]，不新增参数 —— CI 现有的调用已经覆盖它。
         checkIcon(argv[3]);
+    }
+    // 繁体词库（2026-10-09 接线）：第四个参数**可选** —— 没给就跳过
+    // （老 CI 调用不因此红；新 CI 传上，落点漂了就在这里红）。
+    if (argc > 4) {
+        check("繁体词库", fcitx::StandardPath::Type::Data, "opi/trad.opid",
+              argv[4]);
     }
 
     if (failures != 0) {

@@ -108,6 +108,12 @@ cp "$repo/crates/fcitx5-opi/data/inputmethod/opi.conf" "$work/data/fcitx5/inputm
 : "${OPI_LUNA_OPID:=$repo/android/app/src/main/assets/luna.opid}"
 [ -f "$OPI_LUNA_OPID" ] || { echo "!! 找不到词库源：$OPI_LUNA_OPID" >&2; exit 1; }
 cp "$OPI_LUNA_OPID" "$work/data/opi/luna.opid"
+# 繁体词库（2026-10-09）：与 luna 同一份入库源目录。**必须放**——没它
+# Traditional 模式静默回退简体，面板驱动的第 13 段与 e2e 的 modesch 变体
+# 都会测不到东西（那个变体因此会 SKIP 而不是假绿）。
+: "${OPI_TRAD_OPID:=$repo/android/app/src/main/assets/trad.opid}"
+[ -f "$OPI_TRAD_OPID" ] || { echo "!! 找不到繁体词库源：$OPI_TRAD_OPID" >&2; exit 1; }
+cp "$OPI_TRAD_OPID" "$work/data/opi/trad.opid"
 # 输入法组里必须**同时**有 keyboard-us 和 opi：opi 不在组里时 SetCurrentIM("opi")
 # 静默无效（不报错、不切换、不发 CurrentIM），看着就像插件坏了。
 cat > "$work/cfg/fcitx5/profile" <<'PROFILE'
@@ -163,7 +169,7 @@ e2e_rc=0
 vi=0
 # punct = 标点模块探针；`punct keyboard-us` 是它的**对照组**（同一个脚本换 IM，
 # 见 opi_e2e.py 的 punct 模式说明）。两组必须成对跑，否则「测不出来」没有参照。
-variants=(basic page passthrough "caps 0x12" "caps 0x8000000012" punct "punct keyboard-us" punctopi modes fullwidth)
+variants=(basic page passthrough "caps 0x12" "caps 0x8000000012" punct "punct keyboard-us" punctopi modes fullwidth shift)
 for variant in "${variants[@]}"; do
     vi=$((vi + 1))
     echo

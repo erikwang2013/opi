@@ -145,6 +145,26 @@ if(NOT EXISTS "${OPI_LUNA_OPID}")
 endif()
 message(STATUS "OPI 词库源: ${OPI_LUNA_OPID}")
 
+# 繁体词库（2026-10-09 接线）：与 luna 同一套取源/校验规则，同样必装 —— 缺了
+# Traditional 模式就只剩简体回退，而那**不报错**（只看得出「繁体模式打出来还是
+# 简体」这种静默降级）。入库副本同样在 android 部署目录（README 的树里写着
+# 「luna.opid（简体）· trad.opid（繁体）」），两份都在 git 里。
+set(OPI_TRAD_OPID "" CACHE FILEPATH
+    "trad.opid 源文件。缺省用入库的 android 部署副本")
+if(NOT OPI_TRAD_OPID)
+    set(_trad_cand "${CMAKE_CURRENT_SOURCE_DIR}/../../../android/app/src/main/assets/trad.opid")
+    if(EXISTS "${_trad_cand}")
+        set(OPI_TRAD_OPID "${_trad_cand}")
+    endif()
+endif()
+if(NOT EXISTS "${OPI_TRAD_OPID}")
+    message(FATAL_ERROR
+        "找不到繁体词库源: '${OPI_TRAD_OPID}'\n"
+        "生成一份：python3 scripts/gen_trad_dict.py（Unicode Unihan + rime-terra-pinyin）\n"
+        "或用 -DOPI_TRAD_OPID=/path/to/trad.opid 指一个已有文件。")
+endif()
+message(STATUS "OPI 繁体词库源: ${OPI_TRAD_OPID}")
+
 # ---- addon .so 的落点 ----
 #
 # FCITX_INSTALL_ADDONDIR 是 fcitx5 自己给的变量，但它跟着 CMAKE_INSTALL_PREFIX
@@ -327,9 +347,30 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../data/inputmethod/opi.conf"
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../../docs/opi-pet.svg"
               DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps")
 
+# 皮肤（候选面板主题）：classicui 从 StandardPath::Type::PkgData + "themes/" 找，
+# 即 <prefix>/share/fcitx5/themes/<目录名>（本机实装位置 —— /usr/share/fcitx5/
+# themes/{default,default-dark,deepin-light,deepin-dark} —— 就是这么装的）。
+# 内容是生成产物（scripts/gen_fcitx5_themes.py，--check 对账），别手改产物。
+# ⚠️ 目录名是**四处同名契约**：opi_skin.h 的 OpiSkin 映射、这里的清单、
+# data/themes/ 下的目录、生成脚本的 SKINS —— 任何一处改名 = 皮肤静默回落默认
+# 主题（classicui 找不到不报错）。加新皮肤四处一起加。
+install(DIRECTORY
+        "${CMAKE_CURRENT_SOURCE_DIR}/../data/themes/opi-light"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../data/themes/opi-dark"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../data/themes/opi-paper"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../data/themes/opi-cinnabar"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/fcitx5/themes")
+
 # 词库：loadDictionary() 找的是 Type::Data + "opi/luna.opid"，
 # 即 <prefix>/share/opi/luna.opid。**没有 fcitx5 中间层**，别顺手挪进
 # share/fcitx5/ 下面（那种装法 CI 会红，因为 opi_locate_check 问的是真库）。
 install(FILES "${OPI_LUNA_OPID}"
               DESTINATION "${CMAKE_INSTALL_DATADIR}/opi"
               RENAME luna.opid)
+
+# 繁体词库（2026-10-09）：同一条查找路（Type::Data + "opi/trad.opid"），
+# 由 opi_locate_check 的第 4 个参数守着。可选增强的语义在胶水侧
+# （load_with_trad：坏了退回简体，不拖垮拼音）。
+install(FILES "${OPI_TRAD_OPID}"
+              DESTINATION "${CMAKE_INSTALL_DATADIR}/opi"
+              RENAME trad.opid)

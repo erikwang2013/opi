@@ -35,32 +35,12 @@ pub(crate) fn guard<T: Default>(f: impl FnOnce() -> T) -> T {
 
 // ---------- native 方法（条数以 jni_contract 门禁为准） ----------
 
-/// load(path: String?) -> bool。null/空串 → 内置回退词库；坏路径 → false。
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_load(
-    env: JEnv,
-    _class: sys::jclass,
-    path: jstring,
-) -> jboolean {
-    guard(|| {
-        let path = unsafe { jni_util::jstring_to_rust(env, path) };
-        api::install(path.as_deref()).is_ok()
-    })
-}
-
-/// loadTrad(path: String) -> bool。空/坏路径/引擎未加载 → false（繁体模式回退简体库）。
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_load_trad(
-    env: JEnv,
-    _class: sys::jclass,
-    path: jstring,
-) -> jboolean {
-    guard(|| {
-        let path = unsafe { jni_util::jstring_to_rust(env, path) }.unwrap_or_default();
-        api::install_trad(&path).is_ok()
-    })
-}
-
+// 拆到 `jni_scheme.rs` 的五个函数（词典装载 + 输入方案）：注册表仍在本文件
+// （`JNI_OnLoad`），与 `jni_user_words.rs` 同一次拆分的手续 —— 这两个 use 是注册表
+// 能引用到它们的唯一原因，别删。
+use crate::jni_scheme::{
+    opijni_load, opijni_load_stroke, opijni_load_trad, opijni_scheme, opijni_set_scheme,
+};
 /// inputKey(ch: String) -> String。永不 panic。单字符外（空/多字符/非 ASCII）返回空串。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_input_key(
@@ -405,6 +385,21 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _reserved: *mut c
                     jni_str!("setJianpin"),
                     jni_str!("(Z)V"),
                     opijni_set_jianpin as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("setScheme"),
+                    jni_str!("(I)V"),
+                    opijni_set_scheme as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("scheme"),
+                    jni_str!("()I"),
+                    opijni_scheme as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("loadStroke"),
+                    jni_str!("(Ljava/lang/String;)Z"),
+                    opijni_load_stroke as *mut c_void,
                 ),
                 NativeMethod::from_raw_parts(
                     jni_str!("toggleChinesePunct"),

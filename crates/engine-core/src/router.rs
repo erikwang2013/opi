@@ -16,6 +16,10 @@ use crate::composer::Mode;
 use crate::engine::Engine;
 use crate::keys::*;
 
+// 数字键分派（方案门 + 页内选词）：impl 体在 router_digit.rs（500 行门禁拆出）。
+#[path = "router_digit.rs"]
+mod digit_impl;
+
 /// 每页候选数（与 Android 候选栏、两轨 `PAGE_SIZE` 一致）。
 pub const PAGE_SIZE: usize = 8;
 /// 一次抓取的候选批量上限：**不设上限**。曾是 64（对齐 Android fetchLimit），后果是
@@ -411,7 +415,7 @@ impl KeyRouter {
             // 繁体模式与拼音同构：字母/撇号入缓冲、数字选词、走引擎。
             Mode::Pinyin | Mode::Traditional => {
                 if c.is_ascii_digit() {
-                    return self.digit_select(c);
+                    return self.digit_dispatch(c);
                 }
                 // 字母/撇号入引擎缓冲；其余符号直通（Android 面板直传的对应物）
                 if c.is_ascii_alphabetic() || c == '\'' {
@@ -451,35 +455,10 @@ impl KeyRouter {
             Mode::Symbol => KeyAction::PassThrough,
         }
     }
-
-    /// 拼音/繁体/符号模式有候选时按数字选词（页内索引：'1'→第 0 个候选）；否则直通。
-    /// 无对应候选（本页没有第 9 项、'0'）不消费，交客户端处理 —— 本函数**不自己数**页内
-    /// 条数：页内越界由 `select_from` 的页内判据兜住（→ 空串 → 直通）。两处各数一遍正是
-    /// 缺陷的来源（旧 `select` 只判**全量**越界：数字键走对了、点击候选走错了；用例见
-    /// router_invariants.rs::digit_beyond_page_... 与 select_index_bounds.rs::select_beyond_...）。
-    /// 同一份抓取供选中用：旧路径 `candidates()` + `select()` 抓两次 ⇒ 每次数字选词排两遍。
-    fn digit_select(&mut self, c: char) -> KeyAction {
-        let fetched = self.fetched();
-        if self.mode().digit_selects_candidates() && !self.buffer().is_empty() {
-            let Some(idx) = c.to_digit(10).and_then(|d| d.checked_sub(1)) else {
-                return KeyAction::PassThrough;
-            };
-            // 与 `select` 同一套换算与收尾，只是复用上面那次抓取
-            let text = self.select_from(&fetched, idx as usize);
-            // 空串 = 页内没这一项（或无候选）→ 不消费，交客户端处理
-            if text.is_empty() {
-                KeyAction::PassThrough
-            } else {
-                KeyAction::Input(text)
-            }
-        } else {
-            KeyAction::PassThrough
-        }
-    }
 }
 
 /// 引擎输出空串 → 无提交；非空 → 提交到客户端。
-fn commit_or_handled(out: String) -> KeyAction {
+pub(crate) fn commit_or_handled(out: String) -> KeyAction {
     if out.is_empty() {
         KeyAction::EngineHandled
     } else {

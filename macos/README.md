@@ -592,7 +592,10 @@ Mac 上很可能要改」的地方标出来了，接手人从这里开始最省�
 `%LOCALAPPDATA%\opi\settings.ini` + 同一个设置窗）。
 
 **C ABI 出口已落地**（2026-10-08：`opi_fuzzy_enabled` / `opi_set_fuzzy` /
-`opi_jianpin_enabled` / `opi_set_jianpin`；学习与中文标点的四个出口更早就有）。
+`opi_jianpin_enabled` / `opi_set_jianpin`；学习与中文标点的四个出口更早就有。
+**2026-10-09 又加**：`opi_set_scheme` / `opi_scheme`（输入方案 0=全键盘 1=9键
+2=14键 3=笔画）与 `opi_load_stroke`（笔画词典）—— 移动端「输入模式」的引擎面，
+Android 已接线，Apple 两端的设计同样是**未接**）。
 本端缺的是三件：**设置界面**（各端自己的设置页 / 首选项窗）、**落盘**
 （iOS/macOS = `UserDefaults`，鸿蒙 = preferences）、**启动时把四个值套到引擎**
 （对照 `tsf-opi/src/logic.rs` 的 `apply_settings` 与 fcitx5 的 `opi_config.h` +

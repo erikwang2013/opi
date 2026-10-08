@@ -18,6 +18,7 @@ ProcessKeyEvent 与"每一步产生了哪些信号"，不碰信号订阅 / IC �
 """
 
 import re
+import time
 
 # xkb 修饰位（ProcessKeyEvent 的第三个参数 state）：Shift=1 Lock=2 Control=4。
 # 用字面量而非 dbus 侧的枚举 —— 这一层走的是 X11 state 掩码，不是 fcitx5 的
@@ -68,6 +69,28 @@ def plan_modes(ic):
          (lambda v: lambda: ic.ProcessKeyEvent(v, 0, 0, False, 0))(v), None)
         for c, v in (("d", 0x64), ("u", 0x75), ("n", 0x6E))
     ] + [
+        # ---- 简繁切换（Ctrl+Shift+F，2026-10-09）----
+        # 先按 Ctrl+Shift+F 切进繁体（顺带清掉上一步残留的缓冲 dun），再打同一个
+        # hou 读两侧候选差异 —— 判据同 check_modes 的其余各条：**同一输入的结果差异**。
+        # ⚠️ keyval 用**大写 F**（0x46）：真 X11 前端对 Shift+字母给的就是大写
+        # keysym，插件按 rawKey 判（key() 被 normalize 折过，分不出 Ctrl+F）。
+        # ⚠️⚠️ 参数位是 `(keyval, keycode, state, isRelease, time)` —— state 在
+        # **第三**位。首版把 state 写进了第二位（keycode 槽），守护进程收到的是
+        # 「大写 F 不带任何修饰键」，插件不认领、'f' 直落拼音缓冲，本变体当场红
+        # （真守护进程里抓到的形态；驱动那条没这个坑，因为它是直接构造 Key 的）。
+        ("m:Ctrl+Shift+F 切繁体",
+         lambda: (ic.ProcessKeyEvent(0x46, 0, CTRL_MASK | SHIFT_MASK, False, 0),
+                  ic.ProcessKeyEvent(0x46, 0, CTRL_MASK | SHIFT_MASK, True, 0)), None),
+        ("m:繁体 hou",
+         lambda: [ic.ProcessKeyEvent(v, 0, 0, False, 0)
+                  for v in (0x68, 0x6F, 0x75)], None),
+        ("m:Ctrl+Shift+F 切回简体",
+         lambda: (ic.ProcessKeyEvent(0x46, 0, CTRL_MASK | SHIFT_MASK, False, 0),
+                  ic.ProcessKeyEvent(0x46, 0, CTRL_MASK | SHIFT_MASK, True, 0)), None),
+        ("m:简体 hou",
+         lambda: [ic.ProcessKeyEvent(v, 0, 0, False, 0)
+                  for v in (0x68, 0x6F, 0x75)], None),
+    ] + [
         # 阴性对照，**必须放最后**：剪贴板面板一旦弹出来会吃掉后续按键，
         # 夹在中间会把后面每一步都污染成假红。
         # 计划原本建议 Ctrl+; 当符号触发键，实测被剪贴板模块抢走 ——
@@ -75,8 +98,8 @@ def plan_modes(ic):
         # 且该模块 Category=Module + OnDemand=False，恒加载、不分输入法。
         # 这条**只打印不断言**：客户端侧唯一能看到的「被抢走」的证据是候选栏
         # 冒出剪贴板历史，而内容取决于当时剪贴板里有什么，拿它做断言是给
-        # 自己埋雷。真正的锁在 opi_fcitx5.cpp 的 handleModeHotkey 注释里
-        # （strings 实测的那张占用表）。
+        # 自己埋雷。真正的锁在 opi_mode.h 的 handleModeHotkey 注释里
+        # （strings 实测的那张占用表；2026-10-09 从 opi_fcitx5.cpp 搬过去）。
         # ⚠️ **判读陷阱**：全新会话的剪贴板历史是**空的**，于是这一步大概率
         # 只看到 `候选=0 []` —— 那是**不结论**，不是「Ctrl+; 没被占用」。要复现
         # 占用得先往剪贴板放点东西。07-xx 那次能看到 `systemctl status …` 条目，
@@ -285,3 +308,103 @@ def check_modes(windows, failures):
         failures.append(
             f"B5 出不来：切回拼音后 'dun' 候选里没有汉字，"
             f"实际 {cands('m:回拼音后的 n')!r}")
+    # 6) 简繁（Ctrl+Shift+F）：同一个 'hou' 在两侧候选表的**成员**不同 ——
+    #    「後」只在繁体那侧出现。**不断首候选**：后/後 在繁体里都合法，真词库下
+    #    两侧的 top 都可能是「后」（实测 luna=trad 首候选均为后，差异在第 2 位），
+    #    成员差异才是路由的指纹。
+    if "後" not in cands("m:繁体 hou"):
+        failures.append(
+            f"简繁切进没生效：繁体模式 'hou' 候选里没有「後」，"
+            f"实际 {cands('m:繁体 hou')!r}")
+    if "後" in cands("m:简体 hou"):
+        failures.append(
+            f"简繁切出没生效：切回简体的 'hou' 候选里出现了「後」，"
+            f"实际 {cands('m:简体 hou')!r}")
+
+
+# ---- Shift 轻按切换中英文（2026-10-09）----
+#
+# 判据与 check_modes 同一条：**同一个键在不同模式下的结果差异**。
+# 英文模式的指纹是「空缓冲 + 字母 → 直传上屏（CommitString 'n'）」，拼音模式是
+# 「字母入缓冲（preedit），不提交」—— 两个指纹都不依赖词库内容。
+#
+# 超时那一半（按住超过 ModifierOnlyKeyTimeout 再抬起**不许**切）只能在这里测：
+# 它要真守护进程的 GlobalConfig（面板驱动用 nullptr 构造引擎，查不到时限）。
+SHIFT_L = 0xFFE1  # xkb keysym；右 Shift 是 0xFFE2
+
+
+def plan_shift(ic):
+    """Shift 轻按的步骤。期望一律 None（内容才是结论，断言在 check_shift）。"""
+
+    def tap():
+        ic.ProcessKeyEvent(SHIFT_L, 0, 0, False, 0)
+        ic.ProcessKeyEvent(SHIFT_L, 0, 0, True, 0)
+
+    def hold(seconds):
+        ic.ProcessKeyEvent(SHIFT_L, 0, 0, False, 0)
+        time.sleep(seconds)
+        ic.ProcessKeyEvent(SHIFT_L, 0, 0, True, 0)
+
+    def shift_then_letter():
+        ic.ProcessKeyEvent(SHIFT_L, 0, 0, False, 0)
+        ic.ProcessKeyEvent(0x6E, SHIFT_MASK, 0, False, 0)  # 中间键按下 → 撤销轻按判定
+        ic.ProcessKeyEvent(SHIFT_L, 0, 0, True, 0)
+
+    n = lambda: ic.ProcessKeyEvent(0x6E, 0, 0, False, 0)  # noqa: E731 —— 步骤表要短
+    return [
+        ("s:拼音基线 n", n, None),
+        ("s:轻按 Shift 切英文", tap, None),
+        ("s:英文下的 n", n, None),
+        ("s:轻按 Shift 切回", tap, None),
+        ("s:切回后的 n", n, None),
+        # 超时对照：按住 0.4s（> 默认 250ms 的 ModifierOnlyKeyTimeout）再抬起 ——
+        # 「按住 Shift 干别的」不该被判成轻按。下一步用同一个 'n' 读结果。
+        ("s:长按 Shift 0.4s 后抬起", lambda: hold(0.4), None),
+        ("s:长按后的 n（必须仍是拼音）", n, None),
+        # 组合键对照：按下后**别的键先来**，抬起不算轻按。
+        ("s:Shift 按下 → n（带 Shift 位）→ 抬起", shift_then_letter, None),
+        ("s:组合后的见证键 n（必须仍是拼音）", n, None),
+    ]
+
+
+def check_shift(windows, failures):
+    """Shift 轻按的结构性断言。"""
+    w = dict(windows)
+
+    def commits(label):
+        return [p for n, p in _win(w, label, failures) if n == "CommitString"]
+
+    def last_csui(label):
+        got = [p for n, p in _win(w, label, failures) if n == "UpdateClientSideUI"]
+        return got[-1] if got else ""
+
+    def preedit(label):
+        m = re.search(r'preedit="([^"]*)"', last_csui(label))
+        return m.group(1) if m else ""
+
+    # 1) 基线：拼音下 'n' 入缓冲、不提交。基线不成立就直接返回。
+    if commits("s:拼音基线 n") or preedit("s:拼音基线 n") != "n":
+        failures.append(
+            f"基线不成立：拼音下 'n' 应入缓冲不提交，实际 {w.get('s:拼音基线 n')}")
+        return
+    # 2) 进：轻按后同一个 'n' 必须直传上屏（英文模式指纹）。
+    if commits("s:英文下的 n") != ["n"]:
+        failures.append(
+            f"轻按 Shift 没切到英文：'n' 应提交 ['n']，实际 "
+            f"{commits('s:英文下的 n')}（面板窗口 {w.get('s:英文下的 n')!r}）")
+    # 3) 出：再轻按一次切回拼音。
+    if commits("s:切回后的 n"):
+        failures.append(
+            f"轻按切不回来：再轻按后 'n' 不应提交，实际 {commits('s:切回后的 n')}")
+    # 4) 超时：长按抬起不触发。判据同第 2/3 条 —— 若切到了英文，'n' 会提交 "n"。
+    if commits("s:长按后的 n（必须仍是拼音）"):
+        failures.append(
+            f"超时没生效：按住 0.4s 后抬起仍切了模式（'n' 直传上屏）——"
+            f"ModifierOnlyKeyTimeout 没被用上。实际 "
+            f"{commits('s:长按后的 n（必须仍是拼音）')!r}")
+    # 5) 组合键：Shift 按下后别的键先来，抬起不算轻按。见证键 'n' 提交 = 切了。
+    if commits("s:组合后的见证键 n（必须仍是拼音）"):
+        failures.append(
+            f"组合键误判：Shift+n 之后见证键 'n' 直传上屏（模式被切了）——"
+            f"「中间有别的键」没有撤销轻按判定。实际 "
+            f"{commits('s:组合后的见证键 n（必须仍是拼音）')!r}")

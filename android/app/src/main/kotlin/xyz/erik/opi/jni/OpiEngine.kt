@@ -100,10 +100,23 @@ object OpiEngine : OpiEngineApi, SymbolApi {
     override external fun jianpinEnabled(): Boolean
 
     /** setFuzzy(on: Boolean)：模糊音开关（设置项，无返回值；要结果读 fuzzyEnabled()）。 */
-    external fun setFuzzy(on: Boolean)
+    override external fun setFuzzy(on: Boolean)
 
     /** setJianpin(on: Boolean)：简拼开关（同上）。 */
-    external fun setJianpin(on: Boolean)
+    override external fun setJianpin(on: Boolean)
+
+    /**
+     * scheme() -> Int：输入方案读侧（0=全键盘 1=拼音9键 2=拼音14键 3=笔画）。
+     * ⚠️ 未装载 → 0 是**哨兵**（同 [fuzzyEnabled] 一档），不是"用户选的就是全键盘"。
+     */
+    override external fun scheme(): Int
+
+    /**
+     * setScheme(scheme: Int)：输入方案写侧（移动端「输入模式」，2026-10-09）。
+     * **无返回值**（设置项）；越界忽略。⚠️ **换方案清缓冲** —— 调用方重读
+     * buffer/候选/页码（见 EngineController.switchScheme）。
+     */
+    override external fun setScheme(scheme: Int)
 
     /** inputSpace() -> String。英文模式提交 buffer。 */
     override external fun inputSpace(): String
@@ -130,9 +143,12 @@ object OpiEngine : OpiEngineApi, SymbolApi {
     /** loadTrad(path: String) -> Boolean。坏路径/引擎未加载 → false（繁体模式回退简体库）。 */
     external fun loadTrad(path: String): Boolean
 
+    /** loadStroke(path: String) -> Boolean。笔画词典（stroke.opid）。坏路径/未装载 → false（笔画方案回退普通路径）。 */
+    external fun loadStroke(path: String): Boolean
+
     override external fun learnerEnabled(): Boolean
 
-    external fun setLearner(enabled: Boolean)
+    override external fun setLearner(enabled: Boolean)
 
     external fun clearUserWords()
 

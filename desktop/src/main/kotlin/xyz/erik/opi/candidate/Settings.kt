@@ -19,6 +19,11 @@
 //!
 //! ⚠️ 布尔写 **`True`/`False`**（fcitx5 的 ini 就是这个拼法；读侧大小写不敏感，
 //! 所以手改成 `true` 也能读，但**写回去统一成全大写首字母**，别两种混着出现）。
+//!
+//! ⚠️ 保存走 [mergeIni]：**保留本文件不认识的行**（fcitx5 侧新增的选项如
+//! `ShiftToggle`/`Skin`、手写注释、未知键）。2026-10-09 前是整文件重写 —— 那会让
+//! 「设置窗保存一次 = 把 fcitx5 配置面里本窗不知道的选项全抹掉」。读侧一直忽略
+//! 未知键（向前兼容），写侧从那天起同一条约定。
 
 package xyz.erik.opi.candidate
 
@@ -72,6 +77,40 @@ data class OpSettings(
 }
 
 private fun boolText(v: Boolean) = if (v) "True" else "False"
+
+/**
+ * 把 [s] 的四个键合进 [existing]，**其它行原样保留**（见文件头第 3 条 ⚠️）。
+ *
+ * 逐行处理：键在「本窗管理」集合里的行替换为新值，其余（注释/空行/未知键/别的
+ * 选项）逐字保留；最后补齐没出现过的管理键。注释判定按 fcitx5 ini 的惯例 ——
+ * 行内 `#` 之后是注释（`Fuzzy = false # 关模糊音` 也认）。
+ */
+fun mergeIni(existing: String, s: OpSettings): String {
+    val managed = linkedMapOf(
+        "Learn" to boolText(s.learn),
+        "ChinesePunct" to boolText(s.chinesePunct),
+        "Fuzzy" to boolText(s.fuzzy),
+        "Jianpin" to boolText(s.jianpin),
+    )
+    val seen = mutableSetOf<String>()
+    val out = StringBuilder()
+    existing.lineSequence().forEach { line ->
+        val key = line.substringBefore('#').substringBefore('=').trim()
+        val isAssignment = '=' in line.substringBefore('#')
+        if (isAssignment && key in managed) {
+            out.appendLine("$key=${managed[key]}")
+            seen += key
+        } else {
+            out.appendLine(line)
+        }
+    }
+    for ((k, v) in managed) {
+        if (k !in seen) {
+            out.appendLine("$k=$v")
+        }
+    }
+    return out.toString()
+}
 
 /** Windows 判定：fork 的 `os.name`（不引第三方库；本模块只需这一个判别）。 */
 fun isWindows(): Boolean = System.getProperty("os.name").lowercase().contains("win")
@@ -128,7 +167,13 @@ fun loadSettings(): OpSettings = try {
 fun saveSettings(s: OpSettings): Boolean {
     val p = settingsPath()
     p.parent?.let { Files.createDirectories(it) }
-    Files.writeString(p, s.toIni())
+    // 已有文件 → 合并写（保留未知键/注释）；文件不存在/为空 → 整份 toIni（含头部注释）。
+    val existing = try {
+        Files.readString(p)
+    } catch (_: Exception) {
+        ""
+    }
+    Files.writeString(p, if (existing.isBlank()) s.toIni() else mergeIni(existing, s))
     if (isWindows()) {
         return false
     }

@@ -323,3 +323,90 @@ fn digit_select_fetches_candidate_table_once() {
         "数字选词应只抓一次候选表（两次 = 整表排两遍）"
     );
 }
+
+// ---- 简繁双装（2026-10-09）----
+
+use std::fs;
+use std::path::PathBuf;
+
+/// 写一份最小 .opid 到临时目录（fixture 写法与 data_dir.rs 的 valid_dict_bytes 同源：
+/// engine_data::format::serialize）。返回路径。
+fn write_dict(dir: &std::path::Path, name: &str, entries: &[(&str, &str, u32)]) -> PathBuf {
+    use engine_data::format::{OpDict, RawEntry};
+    let dict = OpDict {
+        entries: entries
+            .iter()
+            .map(|(py, w, f)| RawEntry {
+                pinyin: (*py).into(),
+                word: (*w).into(),
+                freq: *f,
+            })
+            .collect(),
+        // pinyin_total 是**拼音 blob 的字节总数**（format.rs 的字段文档 +
+        // serialize 的 debug_assert 钉着），不是条目数 —— 首版按条目数写，
+        // 测试里直接 panic 在 debug_assert 上。
+        pinyin_total: entries.iter().map(|(py, _, _)| py.len()).sum(),
+    };
+    let p = dir.join(name);
+    fs::write(&p, engine_data::format::serialize(&dict)).expect("写 fixture 词库");
+    p
+}
+
+/// 唯一临时目录（并行用例互不冲突）。
+fn tmp_dir(tag: &str) -> PathBuf {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let dir = std::env::temp_dir().join(format!(
+        "opi-candtrad-{tag}-{}-{}",
+        std::process::id(),
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).expect("建临时目录");
+    dir
+}
+
+#[test]
+fn load_with_trad_routes_traditional_mode() {
+    let dir = tmp_dir("route");
+    let luna = write_dict(&dir, "luna.opid", &[("hou", "后", 5000)]);
+    let trad = write_dict(&dir, "trad.opid", &[("hou", "後", 5000)]);
+    let mut s =
+        CandidateState::load_with_trad(Some(luna.to_str().unwrap()), Some(trad.to_str().unwrap()))
+            .expect("双装");
+    // Traditional 查 trad
+    s.switch_mode(Mode::Traditional);
+    for c in ['h', 'o', 'u'] {
+        s.input_key(c);
+    }
+    assert_eq!(s.candidates()[0], "後");
+    // 切回拼音查 luna（同一份双装状态，不受繁体影响）
+    s.switch_mode(Mode::Pinyin);
+    for c in ['h', 'o', 'u'] {
+        s.input_key(c);
+    }
+    assert_eq!(s.candidates()[0], "后");
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn load_with_trad_tolerates_bad_trad_but_not_bad_luna() {
+    let dir = tmp_dir("tolerate");
+    let luna = write_dict(&dir, "luna.opid", &[("hou", "后", 5000)]);
+    let bad = dir.join("bad.opid");
+    fs::write(&bad, b"garbage").unwrap();
+    // trad 坏 → **不是** Err（可选增强），Traditional 回退 luna
+    let mut s =
+        CandidateState::load_with_trad(Some(luna.to_str().unwrap()), Some(bad.to_str().unwrap()))
+            .expect("trad 坏不该拖垮装载");
+    s.switch_mode(Mode::Traditional);
+    for c in ['h', 'o', 'u'] {
+        s.input_key(c);
+    }
+    assert_eq!(s.candidates()[0], "后", "trad 坏时应回退简体词典");
+    // luna 坏仍然 Err —— 与 install（单词典）的语义分界
+    assert!(CandidateState::load_with_trad(Some("/nonexistent/x.opid"), None).is_err());
+    // trad 路径为 None/空串 → 等价于单装
+    assert!(CandidateState::load_with_trad(Some(luna.to_str().unwrap()), Some("")).is_ok());
+    let _ = fs::remove_dir_all(&dir);
+}

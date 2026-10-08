@@ -27,11 +27,13 @@ class FakeEngine : OpiEngineApi {
     var throwOnRemove: Throwable? = null
 
     /** 学习开关（真引擎：learnerEnabled()/setLearner()）。 */
-    var learner = true
+    // ⚠️ 名字带 On 后缀：`var learner` 的属性 setter 在 JVM 上与接口方法
+    // `setLearner(Z)` **签名相同**（Platform declaration clash），改名是唯一出路。
+    var learnerOn = true
 
     /** 「属性设置」的两个新开关（真引擎：fuzzyEnabled()/jianpinEnabled()）。 */
-    var fuzzy = true
-    var jianpin = true
+    var fuzzyOn = true
+    var jianpinOn = true
 
     /** 键 → 引擎要上屏的文本（真引擎：标点键有文本、字母/数字键没有）。 */
     var inputResults = mutableMapOf<String, String>()
@@ -82,11 +84,34 @@ class FakeEngine : OpiEngineApi {
 
     override fun mode(): Int = mode
 
-    override fun learnerEnabled(): Boolean = learner
+    override fun learnerEnabled(): Boolean = learnerOn
 
-    override fun fuzzyEnabled(): Boolean = fuzzy
+    override fun fuzzyEnabled(): Boolean = fuzzyOn
 
-    override fun jianpinEnabled(): Boolean = jianpin
+    override fun jianpinEnabled(): Boolean = jianpinOn
+
+    override fun setLearner(enabled: Boolean) {
+        learnerOn = enabled
+    }
+
+    override fun setFuzzy(on: Boolean) {
+        fuzzyOn = on
+    }
+
+    override fun setJianpin(on: Boolean) {
+        jianpinOn = on
+    }
+
+    /** 输入方案（真引擎：scheme()/setScheme()）。 */
+    var schemeValue = InputScheme.FULL.value
+    val schemeCalls = mutableListOf<Int>()
+
+    override fun scheme(): Int = schemeValue
+
+    override fun setScheme(scheme: Int) {
+        schemeCalls += scheme
+        this.schemeValue = scheme
+    }
 
     /** 删用户词：记录文本；真引擎删完候选表里就没有它了（这里同样摘掉）。 */
     override fun removeUserWord(text: String) {
@@ -399,7 +424,7 @@ class EngineControllerTest {
             petMood(ctrl.buffer, ctrl.candidates.size, ctrl.learnerEnabled, ctrl.dictionaryDegraded),
         )
 
-        fake.learner = false
+        fake.learnerOn = false
         ctrl.refresh()
         assertEquals(
             PetMood.SLEEPY,
@@ -439,5 +464,23 @@ class EngineControllerTest {
             PetMood.IDLE,
             petMood(ctrl.buffer, ctrl.candidates.size, ctrl.learnerEnabled, ctrl.dictionaryDegraded),
         )
+    }
+
+    @Test
+    fun switchSchemeWritesEngineAndRereads() {
+        // 输入模式（2026-10-09）：控制器只做两件事 —— 写引擎（引擎侧清缓冲）+
+        // 重读把真值同步回来（与 switchMode 同一条「单一状态源」约定）。
+        val fake = FakeEngine()
+        val ctrl = EngineController(fake)
+        assertEquals(InputScheme.FULL, ctrl.inputScheme)
+        ctrl.switchScheme(InputScheme.NINE)
+        assertEquals(listOf(InputScheme.NINE.value), fake.schemeCalls)
+        assertEquals(InputScheme.NINE, ctrl.inputScheme)
+        ctrl.switchScheme(InputScheme.FULL)
+        assertEquals(
+            listOf(InputScheme.NINE.value, InputScheme.FULL.value),
+            fake.schemeCalls,
+        )
+        assertEquals(InputScheme.FULL, ctrl.inputScheme)
     }
 }

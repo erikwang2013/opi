@@ -25,9 +25,9 @@ homepage: https://github.com/erikwang2013/opi
 license: MIT
 
 description: |
-  OPI 拼音输入法 —— fcitx5 插件（含简体词库）
+  opi输入法 —— fcitx5 插件（含简体词库）
   模糊拼音 · 简拼 · 中文标点 · 全角半角 · 符号面板。
-  安装后重启 fcitx5 并在「输入法」里添加 OPI 即可使用。
+  安装后重启 fcitx5 并在「输入法」里添加 opi输入法 即可使用。
 
 depends:
   - fcitx5

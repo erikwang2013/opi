@@ -34,7 +34,12 @@ fn read_jni() -> String {
     // ⚠️ 这里必须是 `read(JNI_RS)`：上一版被一次**全局替换**连自己体内一起改成了
     // `read_jni()` ⇒ 无限递归（编译器警告 "cannot return without recursing"、
     // 运行期直接栈溢出）。教训：替换辅助函数时要把「新写的那个函数体」排除在外。
-    format!("{}\n{}", read(JNI_RS), read(JNI_USER_WORDS))
+    format!(
+        "{}\n{}\n{}",
+        read(JNI_RS),
+        read(JNI_USER_WORDS),
+        read(JNI_SCHEME)
+    )
 }
 
 #[path = "jni/checker.rs"]

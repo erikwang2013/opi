@@ -21,6 +21,22 @@ enum class EngineMode(val value: Int) {
 enum class ShiftState { OFF, SINGLE, LOCK }
 
 /**
+ * 输入方案（JNI `scheme()` 返回值）：0=全键盘 1=拼音9键 2=拼音14键 3=笔画。
+ *
+ * 「输入模式」= 方案 × 模式的组合（拼音9键 = NINE + PINYIN）；繁体模式是**模式**轴上的
+ * 事（[EngineMode.TRADITIONAL]），与方案正交 —— 9 键也能切繁体。
+ * ⚠️ 整数表是**协议**：opi-ffi 的 `scheme_from_int`、`OpiEngine.kt` 的注释、
+ * 这里三处逐值对应（jni_contract 只保签名不保语义）。
+ */
+enum class InputScheme(val value: Int) {
+    FULL(0), NINE(1), FOURTEEN(2), STROKE(3);
+
+    companion object {
+        fun fromInt(v: Int) = entries.firstOrNull { it.value == v } ?: FULL
+    }
+}
+
+/**
  * 引擎接口：EngineController 依赖抽象，JVM 测试用假引擎替换 JNI 实现
  * （OpiEngine 的 load/searchSymbols/symbolBlocks/symbolsInBlock 为面板/资产专用，不入接口）。
  */
@@ -42,11 +58,24 @@ interface OpiEngineApi {
     /** 学习开关读侧。宠物用它区分「醒着」与「睡着了」。 */
     fun learnerEnabled(): Boolean
 
+    /** 学习开关写侧（[EngineController.setLearner] 与偏好恢复共用）。 */
+    fun setLearner(enabled: Boolean)
+
     /** 模糊音开关读侧（「属性设置」；写侧 = `OpiEngine.setFuzzy`）。 */
     fun fuzzyEnabled(): Boolean
 
     /** 简拼开关读侧（同上）。 */
     fun jianpinEnabled(): Boolean
+
+    /** 写侧（[EngineController.setFuzzy] / [EngineController.setJianpin] 与偏好恢复共用）。 */
+    fun setFuzzy(on: Boolean)
+    fun setJianpin(on: Boolean)
+
+    /** 输入方案读侧（「输入模式」；写侧见 [EngineController.switchScheme]）。 */
+    fun scheme(): Int
+
+    /** 写侧：换方案**清缓冲** —— 调用方随后必须重读（[EngineController.switchScheme] 管这条）。 */
+    fun setScheme(scheme: Int)
 }
 
 /**
@@ -82,6 +111,12 @@ class EngineController(
     var fuzzyEnabled by mutableStateOf(true)
         private set
     var jianpinEnabled by mutableStateOf(true)
+        private set
+
+    /**
+     * 输入方案（引擎真值，随 [refresh] 重读）。键盘按它换布局、路由器按它分流。
+     */
+    var inputScheme by mutableStateOf(InputScheme.FULL)
         private set
 
     /**
@@ -129,6 +164,7 @@ class EngineController(
         learnerEnabled = api.learnerEnabled()
         fuzzyEnabled = api.fuzzyEnabled()
         jianpinEnabled = api.jianpinEnabled()
+        inputScheme = InputScheme.fromInt(api.scheme())
         candidates = api.candidates(fetchLimit)?.toList() ?: emptyList() // JNI 可能返回 null
         if (buffer != lastQuery) {
             lastQuery = buffer
@@ -171,6 +207,36 @@ class EngineController(
         api.switchMode(m.value)
         // ⇧ 只在 English 有意义：离开必须清，否则 LOCK/SINGLE 残留，切回 English 时字母全大写
         if (m != EngineMode.ENGLISH) resetShift()
+        refresh()
+    }
+
+    /**
+     * 换输入方案（「输入模式」菜单）。引擎侧**清缓冲**（换键盘布局后旧缓冲没有意义，
+     * 见 engine-core 的 `Engine::set_scheme`），所以这里跟着 refresh 重读
+     * buffer/候选/页码。
+     */
+    fun switchScheme(s: InputScheme) {
+        api.setScheme(s.value)
+        refresh()
+    }
+
+    // ---- 「属性设置」三个开关的写侧（设置页与偏好恢复共用；写引擎 + 重读）----
+    //
+    // 此前设置页直接调 OpiEngine.setXxx + 各自 refresh，两处（页/服务恢复）各写一份
+    // 必漂；统一到这里，单一状态源的约定才完整（读侧一直在本类）。
+
+    fun setLearner(enabled: Boolean) {
+        api.setLearner(enabled)
+        refresh()
+    }
+
+    fun setFuzzy(on: Boolean) {
+        api.setFuzzy(on)
+        refresh()
+    }
+
+    fun setJianpin(on: Boolean) {
+        api.setJianpin(on)
         refresh()
     }
 

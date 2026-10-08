@@ -25,83 +25,10 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <string>
 
-namespace {
-
-int g_fail = 0;
-
-struct TestIC : fcitx::InputContext {
-    explicit TestIC(fcitx::InputContextManager &m)
-        : fcitx::InputContext(m, "opi-test") {
-        // 声明 Preedit 能力 —— 胶水的 clientPreedit 通道就挂在这一位上。
-        // 不声明的话下面第 2 节的断言测不到东西（守卫会把通道整个关掉）。
-        setCapabilityFlags(fcitx::CapabilityFlag::Preedit);
-    }
-    const char *frontend() const override { return "test"; }
-    void commitStringImpl(const std::string &text) override {
-        committed_ += text;
-    }
-    void deleteSurroundingTextImpl(int, unsigned int) override {}
-    void forwardKeyImpl(const fcitx::ForwardKeyEvent &) override {}
-    void updatePreeditImpl() override {}
-    std::string committed_;
-};
-
-std::string q(const std::string &s) { return "\"" + s + "\""; }
-
-std::string preeditOf(fcitx::InputContext &ic) {
-    return ic.inputPanel().preedit().toString();
-}
-
-// 内联预编辑（clientPreedit）——与面板 preedit 是**两条**通道，见胶水里的说明。
-std::string clientPreeditOf(fcitx::InputContext &ic) {
-    return ic.inputPanel().clientPreedit().toString();
-}
-
-// 候选栏高亮位：-1 = 无高亮。对**空**候选表调 setGlobalCursorIndex 会抛
-// std::invalid_argument，所以这个值必须只在有候选时被设置。
-int candidateCursor(fcitx::InputContext &ic) {
-    auto list = ic.inputPanel().candidateList();
-    return list ? list->cursorIndex() : -1;
-}
-
-// 无候选表 = 0 条（panel.reset() 会把候选表置空，candidateList() 返回 nullptr）。
-int candidateCount(fcitx::InputContext &ic) {
-    auto list = ic.inputPanel().candidateList();
-    return list ? list->size() : 0;
-}
-
-std::string candidateAt(fcitx::InputContext &ic, int idx) {
-    auto list = ic.inputPanel().candidateList();
-    if (!list || idx < 0 || idx >= list->size()) {
-        return "<none>";
-    }
-    return list->candidate(idx).text().toString();
-}
-
-// 候选**序号**（label）：面板画的「1. 」来自它，不是候选文本的一部分。
-// 插件的 `setSelectionKey` 是它唯一的赋值点（见 opi_fcitx5.cpp 那段注释）。
-std::string candidateLabelAt(fcitx::InputContext &ic, int idx) {
-    auto list = ic.inputPanel().candidateList();
-    if (!list || idx < 0 || idx >= list->size()) {
-        return "<none>";
-    }
-    return list->label(idx).toString();
-}
-
-void check(bool ok, const std::string &what) {
-    std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", what.c_str());
-    if (!ok) {
-        ++g_fail;
-    }
-}
-
-void skip(const std::string &what) {
-    std::printf("  [SKIP] %s\n", what.c_str());
-}
-
-} // namespace
+#include "opi_driver_common.h"  // 测试器具（TestIC/check/预编辑与候选读回）
 
 int main() {
     fcitx::InputContextManager manager;
@@ -354,6 +281,205 @@ int main() {
             type("nh");
             check(hasNiHao(), "改回 True 同样生效（值是从文件读的，不是一次性）");
             std::filesystem::remove(path);
+        }
+    }
+
+    std::printf("== 10. Shift 轻按切换中英文（超时那半在 e2e 真守护进程里测）==\n");
+    // 直接以「按下/抬起」两个真 KeyEvent 驱动 opi_mode.h 的 handle()。驱动用
+    // nullptr 构造引擎 ⇒ 查不到 GlobalConfig 的时限，按「不判超时」处理 ——
+    // 超时那半（按住 >250ms 不许切）只能归 e2e 变体 shift（真守护进程里测）。
+    auto shiftKey = [&](bool isRelease) {
+        fcitx::KeyEvent ev(&ic, fcitx::Key(static_cast<fcitx::KeySym>(0xFFE1)),
+                           isRelease);
+        engine.keyEvent(entry, ev);
+    };
+    clearViaReset();
+    shiftKey(false);
+    shiftKey(true); // 之间没有别的键 ⇒ 轻按
+    ic.committed_.clear();
+    type("n");
+    std::printf("  轻按后 n -> committed=%s\n", q(ic.committed_).c_str());
+    check(ic.committed_ == "n", "轻按 Shift 切英文：'n' 直传上屏");
+    clearViaReset();
+    shiftKey(false);
+    shiftKey(true);
+    ic.committed_.clear();
+    type("n");
+    std::printf("  再轻按后 n -> preedit=%s committed=%s\n",
+                q(preeditOf(ic)).c_str(), q(ic.committed_).c_str());
+    check(ic.committed_.empty() && preeditOf(ic) == "n",
+          "再轻按切回拼音：'n' 入缓冲不提交");
+    // 组合键对照：中间有别的键按下 ⇒ 不算轻按。见证键 'n' 若提交即误判。
+    clearViaReset();
+    shiftKey(false);
+    press(0x6E); // 'n' 按下（撤销判定）；它自己产生什么提交无所谓
+    shiftKey(true);
+    clearViaReset(); // 上一个 n 的残留（若有）清掉，只看见证键
+    ic.committed_.clear();
+    type("n");
+    std::printf("  Shift+n 组合后见证键 -> committed=%s preedit=%s\n",
+                q(ic.committed_).c_str(), q(preeditOf(ic)).c_str());
+    check(ic.committed_.empty() && !preeditOf(ic).empty(),
+          "Shift+字母 不算轻按：见证键入缓冲（若误切英文它会直传上屏）");
+
+    std::printf("== 11. 「中/英」状态项：挂载与点击切换 ==\n");
+    // activate 才挂状态项 —— core 在每次 activate 之前清空 StatusGroup::InputMethod，
+    // 所以「挂上去」这件事只在 activate 里有意义（见 opi_mode.h 的 attach）。
+    fcitx::InputContextEvent activateEvent(
+        &ic, fcitx::EventType::InputContextSwitchInputMethod);
+    engine.activate(entry, activateEvent);
+    auto findModeAction = [&]() -> fcitx::Action * {
+        for (auto *a : ic.statusArea().allActions()) {
+            const std::string t = a->shortText(&ic);
+            if (t == "中" || t == "英") {
+                return a;
+            }
+        }
+        return nullptr;
+    };
+    fcitx::Action *modeAction = findModeAction();
+    check(modeAction != nullptr, "activate 后状态区里有「中/英」项");
+    if (modeAction != nullptr) {
+        check(modeAction->shortText(&ic) == "中", "初始显示「中」");
+        clearViaReset();
+        type("ni");
+        modeAction->activate(&ic); // 点它 = 切换（与 Shift 轻按同一条 toggle）
+        std::printf("  点击后 mode=%d preedit=%s 文案=%s\n",
+                    static_cast<int>(opi_fcitx5_mode()), q(preeditOf(ic)).c_str(),
+                    q(modeAction->shortText(&ic)).c_str());
+        check(opi_fcitx5_mode() == 1, "点击状态项切到英文（mode==1）");
+        check(modeAction->shortText(&ic) == "英", "状态项文案跟着变「英」");
+        check(preeditOf(ic).empty(), "切换同时清掉了预编辑");
+        modeAction->activate(&ic);
+        check(opi_fcitx5_mode() == 0 && modeAction->shortText(&ic) == "中",
+              "再点击切回「中」（能进能出）");
+    }
+
+    std::printf("== 12. 皮肤：classicui.conf 的改写（保留其它行 + 幂等）==\n");
+    {
+        const char *cfgHome = std::getenv("XDG_CONFIG_HOME");
+        if (cfgHome == nullptr || *cfgHome == '\0') {
+            skip("未设 XDG_CONFIG_HOME（不拿用户真配置做实验）—— run-harness.sh 会指到临时目录");
+        } else {
+            const std::string dir = std::string(cfgHome) + "/fcitx5/conf";
+            const std::string path = dir + "/classicui.conf";
+            std::filesystem::create_directories(dir);
+            {
+                std::ofstream f(path, std::ios::trunc);
+                f << "Theme=deepin-light\n# 手加的注释\nDarkTheme=deepin-dark\n"
+                     "UseDarkTheme=True\n";
+            }
+            check(opiSkinThemeName(OpiSkin::Keep) == nullptr,
+                  "Keep 不映射主题（= 不介入）");
+            check(std::string(opiSkinThemeName(OpiSkin::Cinnabar)) == "opi-cinnabar",
+                  "枚举 → 主题目录名映射正确（四处同名契约的一处）");
+            const bool ok = opiPatchClassicuiTheme(opiSkinThemeName(OpiSkin::Dark));
+            std::ifstream in(path);
+            std::stringstream ss;
+            ss << in.rdbuf();
+            const std::string got = ss.str();
+            check(ok, "写入返回成功");
+            check(got.find("Theme=opi-dark\n") != std::string::npos,
+                  "Theme 改为 opi-dark");
+            check(got.find("DarkTheme=opi-dark\n") != std::string::npos,
+                  "DarkTheme 同步改（皮肤不随明暗跳回系统色）");
+            check(got.find("UseDarkTheme=True\n") != std::string::npos &&
+                      got.find("# 手加的注释\n") != std::string::npos,
+                  "未知键与注释原样保留");
+            opiPatchClassicuiTheme(opiSkinThemeName(OpiSkin::Dark));
+            std::ifstream in2(path);
+            std::stringstream ss2;
+            ss2 << in2.rdbuf();
+            check(ss2.str() == got, "重复应用同一皮肤幂等（内容逐字节不变）");
+            // 文件不存在（首次应用）：两个键都该被补上。
+            std::filesystem::remove(path);
+            opiPatchClassicuiTheme(opiSkinThemeName(OpiSkin::Paper));
+            std::ifstream in3(path);
+            std::stringstream ss3;
+            ss3 << in3.rdbuf();
+            const std::string fresh = ss3.str();
+            check(fresh.find("Theme=opi-paper\n") != std::string::npos &&
+                      fresh.find("DarkTheme=opi-paper\n") != std::string::npos,
+                  "文件不存在时新建并写入两个键");
+            std::filesystem::remove(path);
+        }
+    }
+
+    std::printf("== 13. 简繁切换（Ctrl+Shift+F）与真繁体词库 ==\n");
+    // 繁体词库是**可选增强**：数据目录里有 opi/trad.opid 才测得到路由
+    // （run-harness.sh 负责放）。缺了 SKIP 而不是拿「回退简体」冒充路由。
+    {
+        const char *dataHome = std::getenv("XDG_DATA_HOME");
+        const std::string tradPath =
+            std::string(dataHome != nullptr ? dataHome : "") + "/opi/trad.opid";
+        if (dataHome == nullptr || *dataHome == '\0' ||
+            !std::filesystem::exists(tradPath)) {
+            skip("数据目录里没有 opi/trad.opid（不拿回退简体冒充繁体路由）");
+        } else {
+            // ctrl 组合键都按 rawKey 的原样构造（KeyEventBase 的构造只对 key()
+            // 做 normalize，rawKey 原样保留）——与真前端一致：Ctrl+F 的 keysym
+            // 是小写 'f'，Ctrl+Shift+F 是大写 'F'。
+            auto hotkey = [&](uint32_t sym, bool shift, bool isRelease) {
+                fcitx::KeyStates st(fcitx::KeyState::Ctrl);
+                if (shift) {
+                    st |= fcitx::KeyState::Shift;
+                }
+                fcitx::KeyEvent ev(
+                    &ic,
+                    fcitx::Key(static_cast<fcitx::KeySym>(sym), st), isRelease);
+                engine.keyEvent(entry, ev);
+            };
+            auto ctrlShiftF = [&](bool isRelease) {
+                hotkey(FcitxKey_F, true, isRelease);
+            };
+            auto topCands = [&]() {
+                std::string out;
+                for (int i = 0; i < std::min(4, candidateCount(ic)); ++i) {
+                    out += candidateAt(ic, i);
+                }
+                return out;
+            };
+            // 基线：拼音下 hou 的候选与提交
+            clearViaReset();
+            ic.committed_.clear();
+            type("hou");
+            const std::string simpCands = topCands();
+            std::printf("  拼音 hou 候选: %s\n", simpCands.c_str());
+            press(0x20);
+            std::printf("  拼音 hou+space -> %s\n", q(ic.committed_).c_str());
+            check(ic.committed_ == "后", "基线：拼音下 hou 提交简体「后」");
+            // Ctrl+Shift+F → 繁体
+            clearViaReset();
+            ctrlShiftF(false);
+            ctrlShiftF(true);
+            check(opi_fcitx5_mode() == 4, "Ctrl+Shift+F 切到繁体（mode==4）");
+            clearViaReset();
+            ic.committed_.clear();
+            type("hou");
+            const std::string tradCands = topCands();
+            std::printf("  繁体 hou 候选: %s\n", tradCands.c_str());
+            // 路由指纹用**候选表成员差异**：真词库下繁体有「後」而简体没有
+            // （两库的 top 都可能是「后」——后/後 在繁体里都合法，故不断提交首项，
+            // 断「後 只在繁体出现」这个更强的差异判据）。
+            check(simpCands.find("後") == std::string::npos &&
+                      tradCands.find("後") != std::string::npos,
+                  "繁体路由生效：候选里「後」只在繁体模式出现");
+            // 数字键选第 2 项：繁体提交「後」/（简体那侧对应是「候」）
+            press('2');
+            std::printf("  繁体 数字2 -> %s\n", q(ic.committed_).c_str());
+            check(ic.committed_ == "後", "繁体模式数字选词提交「後」");
+            // Ctrl+F（raw 是小写 'f'）**不许**切 —— 不抢应用的查找键
+            {
+                const int32_t before = opi_fcitx5_mode();
+                hotkey(FcitxKey_f, false, false);
+                check(opi_fcitx5_mode() == before,
+                      "Ctrl+F 不触发（rawKey 的小写 f 分界生效）");
+            }
+            // 再按一次切回拼音
+            clearViaReset();
+            ctrlShiftF(false);
+            ctrlShiftF(true);
+            check(opi_fcitx5_mode() == 0, "再按 Ctrl+Shift+F 切回拼音");
         }
     }
 

@@ -6,6 +6,7 @@
 // ⚠️ 必须 import：在 Kotlin DSL 里 `java.security.MessageDigest` 的 `java` 会被解析成
 // Gradle 的 `java` 扩展（JavaPluginExtension），不是包名 —— 实测报
 // `Unresolved reference 'security'`（脚本编译期就红，不是运行期）。
+// （2026-10-09 晚随桌面入口注入一起恢复 —— 用法见文件尾的任务。）
 import java.security.MessageDigest
 
 plugins {
@@ -51,6 +52,21 @@ java {
     targetCompatibility = JavaVersion.VERSION_11
 }
 
+// ---------- 桌面入口：注入已**恢复**（2026-10-09 晚，用户裁决） ----------
+//
+// 时间线（两次裁决都留在这里，别删任何一段 —— 它是「两层都要能设置」的由来）：
+//   · 2026-10-09 白天：「设置功能不能在外层设置，必须到配置里才有设置入口」
+//     ⇒ 撤掉了注入（下面的任务曾被整块删除）。
+//   · 2026-10-09 晚：「设置功能要在外层可以设置」⇒ 恢复注入。
+//   合起来的要求 = **两层都要能设置**：fcitx5 的配置面（控制中心 → 输入法 →
+//   高级设置 → 附加组件 → OPI → 齿轮；选项声明在 crates/fcitx5-opi/cpp/opi_config.h，
+//   那条链与本次恢复无关、照旧）+ 这个系统菜单入口。
+//   ⚠️ 「配置」按钮拉不起外部程序这一点没变（fcitx5 的 `Instance::configureAddon`
+//   是 no-op —— 上游源码；dbus 侧只转调 `configure()` = 启动配置工具本身）：
+//   这个入口只走**菜单**，两层的入口各自独立。
+// 应用本体两端并用：Windows = 候选窗（TSF 命名管道两端在那边），Linux = 设置窗
+// （`--settings`；无参数启动也是它）。
+
 compose.desktop {
     application {
         mainClass = "xyz.erik.opi.candidate.MainKt"
@@ -62,8 +78,8 @@ compose.desktop {
             targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb)
             packageName = "opi-candidates"
             // 与发布 tag 对齐（同 android/app/build.gradle.kts 的 versionName）。
-            packageVersion = "1.5.0"
-            description = "OPI 拼音输入法候选窗（TSF 插件经 named pipe 通信）"
+            packageVersion = "1.6.0"
+            description = "opi输入法 候选窗（TSF 插件经 named pipe 通信）"
             vendor = "OPI"
 
             // 应用图标 = 项目宠物「小欧」，与 Android 启动图标、候选窗里摊手的那个是同一张图
@@ -113,14 +129,18 @@ compose.desktop {
 // ---------- 「属性设置」的桌面入口（打包后注入）----------
 //
 // 为什么不交给 jpackage：`--linux-shortcut` 生成的 .desktop 用 `--name`
-// （opi-candidates）当 Name —— 菜单里显示成那样既不像设置程序、也叫不准；而且它
-// **没法给入口带参数**（本应用在 Linux 上无参数*也*进设置窗，但显式 `--settings`
-// 更不容易被将来的改动打翻）。jpackage 的 `--resource-dir` 换模板是更正统的路
-// （见上面 appCategory 那段的尾注），但它要猜 jpackage 对模板文件的命名约定；
-// 这里选**打包后注入**：拆包 → 写一个 .desktop → 重算 md5sums → 打回去。
-// 每一步都能用 `dpkg-deb -c` 核对。
+// （opi-candidates）当 Name —— 菜单里显示成那样既不像输入法/设置程序、也叫不准；
+// 而且它**没法给入口带参数**。jpackage 的 `--resource-dir` 换模板是更正统的路，
+// 但它要猜 jpackage 对模板文件的命名约定；这里选**打包后注入**：拆包 → 写一个
+// .desktop → 重算 md5sums → 打回去。每一步都能用 `dpkg-deb -c` 核对。
 //
-// 调用：`./gradlew :desktop:packageDeb :desktop:injectSettingsDesktopEntry`
+// ⚠️ 注入发生在 **desktop 自己的 .deb** 上，之后 packages.yml 的合并步骤
+// （scripts/build-packages.sh 的 OPI_DESKTOP_DEB）把这个 .deb 的数据文件解进
+// 主包暂存树 —— 所以主包里的 /usr/share/applications/opi-settings.desktop
+// 就是这么来的。
+//
+// 调用（packages.yml 的 desktop-deb job 用的就是这条）：
+//   ./gradlew packageDeb injectSettingsDesktopEntry --no-daemon
 tasks.register("injectSettingsDesktopEntry") {
     dependsOn("packageDeb")
     doLast {
@@ -155,14 +175,15 @@ tasks.register("injectSettingsDesktopEntry") {
         // 两份入口 = 菜单里两条，且那条不带 --settings。
         apps.listFiles { f: File -> f.name.endsWith(".desktop") }
             ?.filter { it.name != "opi-settings.desktop" }?.forEach { it.delete() }
+        // Name = 「opi输入法」（2026-10-09 用户裁决：所有端安装后显示名统一为它）。
+        // 菜单入口与 Deepin 上搜狗的「搜狗输入法」条目同款：点开就是设置窗。
         File(apps, "opi-settings.desktop").writeText(
             """
             [Desktop Entry]
             Type=Application
-            Name=OPI 属性设置
-            Name[en]=OPI Settings
-            Comment=Open People Input —— 学习 / 中文标点 / 模糊音 / 简拼
-            Comment[en]=Open People Input — learning, punctuation, fuzzy pinyin, jianpin
+            Name=opi输入法
+            Comment=opi输入法 —— 学习 / 中文标点 / 模糊音 / 简拼 / Shift 切换中英文 / 皮肤
+            Comment[en]=opi IME — learning, punctuation, fuzzy pinyin, jianpin, shift toggle, skins
             Exec=$installedBin --settings
             Icon=$installedIcon
             Terminal=false

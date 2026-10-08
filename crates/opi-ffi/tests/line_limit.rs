@@ -24,6 +24,7 @@
 //! | `.` 开头的目录 | 版本控制/工具目录（`.git` `.github` `.agents` `.claude-flow` `.gradle`） |
 //! | `target/` `build/` `__pycache__/` `node_modules/` | 构建与缓存产物 |
 //! | `data/generated/` `data/raw/` | 生成物与原始数据（`.tsv` 等） |
+//! | `android/app/src/main/assets/`（2026-10-09 加） | **随包分发的数据资产**：词库 `.opid`（二进制，本就按内容跳过）与部首索引 `.tsv`（文本 —— 正是它暴露了这条口径缺口）。与 `data/raw/` 同类，不是源码 |
 //! | `Cargo.lock`（按文件名） | cargo 生成并重写的锁文件（本仓 730 行），不是源码 —— 属于**按名字放行的两类**之一（另一类是下面的中间态） |
 //! | `*.tmp` / `*.tmp.*`（按文件名） | **原子写的中间态**：写完即 rename，正常只活毫秒级。本仓三处原子写用裸 `.tmp`（`engine-data/src/user_words.rs` 的 `TMP_SUFFIX`、`crates/fcitx5-opi/src/data_dir.rs:56`、`scripts/gen_*.py`），实测撞红的还有 `macos/README.md.tmp.<pid>.<rand>` 这一种。它**不是源码，是源码的中间态** —— 瞬时文件不该让门禁在并发树里周期性假红（那种红重跑就没有、不可复现，最容易被当成真回归查半天）。代价如实记：谁把一个超线的 `*.tmp` **永久**留在这儿，本门禁看不见 |
 //! | 非 UTF-8 文件 | 二进制（`.opid` `.so` `.a` `.class` `.deb` `ruvector.db` …）—— 按**内容**判，不列扩展名 |
@@ -51,7 +52,12 @@ fn dir_is_excluded(name: &str) -> bool {
 /// 路径级排除：生成物与原始数据（按**路径前缀**，不是按目录名 ——
 /// `crates/fcitx5-opi/data/` 是词的库数据，不在排除之列）。
 fn path_is_excluded(rel: &str) -> bool {
-    rel.starts_with("data/generated/") || rel.starts_with("data/raw/")
+    rel.starts_with("data/generated/")
+        || rel.starts_with("data/raw/")
+        // 随包分发的**数据资产**（词库 .opid、部首索引 .tsv，同 [data/raw] 一类）。
+        // 此前没撞上是运气：.opid 是二进制、按内容就被跳过了；2026-10-09 加的
+        // rare_index.tsv 是**文本**资产才把这条缺口暴露出来。数据不是源码。
+        || rel.starts_with("android/app/src/main/assets/")
 }
 
 /// 生成物（按**文件名**，任何目录下都算）。`Cargo.lock` 是 cargo 生成并**重写**的锁文件

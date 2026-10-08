@@ -60,8 +60,12 @@ fun SymbolPanel(
     onCommit: (String) -> Unit,
     onClose: () -> Unit,
     onBackToNumber: () -> Unit,
+    /** 起始 Tab：普通入口=常用，工具条的表情图标直达 [SymbolTab.Emoji]。 */
+    initialTab: SymbolTab = SymbolTab.Common,
 ) {
-    var tab by remember { mutableStateOf(SymbolTab.Common) }
+    val p = LocalKeyboardPalette.current
+    // 起始 Tab 由调用方定（工具条的表情入口直达 Emoji）；换入口时重放（remember 键）
+    var tab by remember(initialTab) { mutableStateOf(initialTab) }
 
     fun commit(text: String) {
         if (catalog.isEmoji(text)) catalog.recordRecent(text)
@@ -80,10 +84,10 @@ fun SymbolPanel(
                     modifier = Modifier.fillMaxSize().onFocusChanged { onSearchFocus(it.isFocused) },
                     singleLine = true,
                     textStyle = TextStyle(fontSize = 14.sp),
-                    placeholder = { Text("搜索（拼音/英文）", fontSize = 14.sp, color = Color(0xFF9E9E9E)) },
+                    placeholder = { Text("搜索（拼音/英文）", fontSize = 14.sp, color = p.barDimFg) },
                     colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.White,
-                        unfocusedContainerColor = Color.White,
+                        focusedContainerColor = p.panelBg,
+                        unfocusedContainerColor = p.panelBg,
                         focusedIndicatorColor = Color.Transparent,
                         unfocusedIndicatorColor = Color.Transparent,
                     ),
@@ -98,7 +102,7 @@ fun SymbolPanel(
                     modifier = Modifier
                         .weight(1f)
                         .height(36.dp)
-                        .background(if (t == tab) Color(0xFFE0E0E0) else Color.Transparent)
+                        .background(if (t == tab) p.keyBg else Color.Transparent)
                         .selectable(selected = t == tab, role = Role.Tab, onClick = { tab = t }),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -128,7 +132,7 @@ fun SymbolPanel(
                             "无匹配",
                             modifier = Modifier.padding(start = 8.dp),
                             fontSize = 13.sp,
-                            color = Color(0xFF9E9E9E),
+                            color = p.barDimFg,
                         )
                     }
                 } else {

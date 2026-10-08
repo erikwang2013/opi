@@ -66,7 +66,8 @@ import dbus.mainloop.glib
 from gi.repository import GLib
 
 # B0/B5 的步骤与断言（同目录；脚本以绝对路径运行，sys.path[0] = 脚本所在目录）。
-from opi_e2e_modes import check_fullwidth, check_modes, plan_fullwidth, plan_modes
+from opi_e2e_modes import (check_fullwidth, check_modes, check_shift,
+                           plan_fullwidth, plan_modes, plan_shift)
 
 DEST = "org.fcitx.Fcitx5"
 IC_IFACE = "org.fcitx.Fcitx.InputContext1"
@@ -213,6 +214,11 @@ def plan(mode, ic, caps):
         # 全角 ⇄ 半角切换键（Shift+Space），同上放模块里。
         return plan_fullwidth(ic)
 
+    if mode == "shift":
+        # Shift 轻按切换中英文（2026-10-09），同上放模块里。超时那一半只能在这里
+        # 测：它要真守护进程的 GlobalConfig（ModifierOnlyKeyTimeout）。
+        return plan_shift(ic)
+
     if mode == "passthrough":
         # 直通键（Rust 侧 action==0）：不消费按键、引擎状态不变。期望 **0 条**
         # 面板信号 —— 内容与上一次完全相同，重推只是白付一次跨 FFI + 客户端重绘。
@@ -241,7 +247,7 @@ def main():
         caps = int(sys.argv[2], 0) if len(sys.argv) > 2 else 0
     elif mode in ("basic", "page", "passthrough"):
         caps = CAPS_PANEL
-    elif mode in ("punctopi", "modes", "fullwidth"):
+    elif mode in ("punctopi", "modes", "fullwidth", "shift"):
         caps = CAPS_PANEL
     elif mode == "punct":
         caps = CAPS_PANEL
@@ -250,7 +256,7 @@ def main():
         im = sys.argv[2] if len(sys.argv) > 2 else "opi"
     else:
         print(f"未知模式 {mode!r}；可用: basic | page | passthrough | "
-              f"punct [im] | modes | caps <0x..>")
+              f"punct [im] | modes | fullwidth | shift | caps <0x..>")
         return 2
     CURRENT_IM = im
 
@@ -298,8 +304,9 @@ def main():
 
     def commits_by_im():
         """按 CurrentIM 信号把 CommitString 分桶：{'pinyin': [...], 'opi': [...]}。
-        CurrentIM 的 payload 形如 ['OPI 拼音', 'opi', 'zh_CN']，第二项是唯一名，
-        用它分流（'OPI 拼音' 里没有 'pinyin' 子串，'拼音' 里没有 'opi'）。"""
+        CurrentIM 的 payload 形如 ['opi输入法', 'opi', 'zh_CN']，第二项是唯一名，
+        用它分流（显示名里没有 'pinyin' 子串；匹配的是第二项的 'opi'/'pinyin'/
+        'keyboard-us' 唯一名，与显示名怎么改无关）。"""
         out = {}
         bucket = None
         for name, payload in events:
@@ -413,6 +420,8 @@ def main():
                     check_modes(_windows, _failures)
                 elif mode == "fullwidth":
                     check_fullwidth(_windows, _failures)
+                elif mode == "shift":
+                    check_shift(_windows, _failures)
                 finish()
                 return False
             label, fn, expect = steps[i]

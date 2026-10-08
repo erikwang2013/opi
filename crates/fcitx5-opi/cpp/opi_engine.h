@@ -24,7 +24,9 @@
 #include <fcitx-utils/standardpath.h>
 
 #include "opi_config.h"   // 「属性设置」：OpiSettings + read/apply/save
+#include "opi_mode.h"     // 模式热键（Ctrl+' / Ctrl+\）+ Shift 轻按切换 + 中/英状态项
 #include "opi_rust_ffi.h"
+#include "opi_skin.h"     // 皮肤：写 classicui.conf + 热重载
 
 void refreshingPanelFor(fcitx::InputContext *ic);
 
@@ -35,11 +37,18 @@ void refreshingPanelFor(fcitx::InputContext *ic);
 // 多继承的两个基类都不存在。
 class OpiEngine : public fcitx::InputMethodEngine {
 public:
-    OpiEngine(fcitx::Instance *instance) : instance_(instance) {
+    // 初始化列表按**声明顺序**写（instance_ 声明在类尾，shiftToggle_ 在前）——
+    // 都是拿构造参数初始化，纯粹为了过 -Werror=reorder。
+    OpiEngine(fcitx::Instance *instance)
+        : shiftToggle_(instance), instance_(instance) {
         loadDictionary();
         // 配置推给引擎必须在 loadDictionary 之后：Rust 侧单例在那一刻才建起来。
         readOpiSettings(settings_);
         applyOpiSettings(settings_);
+        // 皮肤**不在构造时应用**（理由在 opi_skin.h 头部）：只把读到的值记为
+        // 「已应用」，免得每次 fcitx5 启动都拿配置里的旧值改写 classicui.conf、
+        // 把用户后来在别处改的主题顶回去。
+        lastSkin_ = *settings_.skin;
     }
 
     // ---- 「属性设置」：fcitx5 的 addon 配置（字段与落点见 opi_config.h）----
@@ -49,12 +58,21 @@ public:
     void setConfig(const fcitx::RawConfig &raw) override {
         settings_.load(raw, true);
         applyOpiSettings(settings_);
+        applyOpiSkin(*settings_.skin, lastSkin_, instance_); // 值变了才动
     }
     void reloadConfig() override {
         readOpiSettings(settings_);
         applyOpiSettings(settings_);
+        applyOpiSkin(*settings_.skin, lastSkin_, instance_);
     }
     void save() override { saveOpiSettings(settings_); }
+
+    // 状态区「中/英」随激活挂上去（见 opi_mode.h 的 OpiShiftToggle::attach；
+    // 该组在下次 activate 前由 core 自动清空，不必自己去重）。
+    void activate(const fcitx::InputMethodEntry & /*entry*/,
+                  fcitx::InputContextEvent &event) override {
+        shiftToggle_.attach(event.inputContext());
+    }
 
     void keyEvent(const fcitx::InputMethodEntry &entry,
                   fcitx::KeyEvent &keyEvent) override;
@@ -64,6 +82,9 @@ public:
         // 同 keyEvent：这个入口抛出去也会带走整个守护进程。
         try {
             opi_fcitx5_clear();
+            // Shift「轻按」判定态也要清：按住 Shift 时失焦，抬起事件可能到不了
+            // 本 IC（或到了别的 IC），不清就是一次「幽灵切换」（opi_mode.h）。
+            shiftToggle_.disarm();
             // Rust 侧清了缓冲，但面板是 fcitx5 侧的状态：不一并清，失焦/切换
             // 输入法后预编辑串与候选栏会继续挂在屏幕上（原码只清了引擎，没碰面板）。
             refreshingPanelFor(event.inputContext());
@@ -74,6 +95,13 @@ public:
 
 private:
     OpiSettings settings_;
+
+    // Shift 轻按切换 + 「中/英」状态项（判定与状态项都在 opi_mode.h）。
+    // 构造用构造参数 instance，不读 instance_ 成员 —— 与成员声明顺序无关。
+    OpiShiftToggle shiftToggle_;
+
+    // 皮肤「已应用」的最后值（opi_skin.h）：构造时只记住、不应用。
+    OpiSkin lastSkin_ = OpiSkin::Keep;
 
     // keyEvent 的实现体。拆出来只为了在唯一的虚函数入口上套 try/catch ——
     // fcitx5 core **不捕获**引擎回调抛出的异常（实测：裸抛 → std::terminate →
@@ -106,10 +134,19 @@ private:
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         auto path = fcitx::StandardPath::global().locate(
             fcitx::StandardPath::Type::Data, "opi/luna.opid");
+        // 繁体词典是**可选增强**（2026-10-09 接线）：装了就一起传给引擎
+        // （Traditional 模式查它），没装/坏了都退回简体，不影响拼音可用性 ——
+        // 语义分别钉在 opi_rust_ffi.h 的声明注释与 candidate.rs 的 load_with_trad。
+        // 落点常量与 luna 同一条路（Type::Data + opi/），由 opi_locate_check 的
+        // 第 4 个参数与 ci.yml 的「查找常量没漂」grep 一并守着。
+        auto trad = fcitx::StandardPath::global().locate(
+            fcitx::StandardPath::Type::Data, "opi/trad.opid");
 #pragma GCC diagnostic pop
         const bool ok =
             !path.empty() &&
-            opi_fcitx5_load(reinterpret_cast<const uint8_t *>(path.data()), path.size());
+            opi_fcitx5_load_with_trad(
+                reinterpret_cast<const uint8_t *>(path.data()), path.size(),
+                reinterpret_cast<const uint8_t *>(trad.data()), trad.size());
         if (!ok) {
             if (!path.empty()) {
                 // 「文件在、装不上」（下载不全/拷贝中断）。这行日志是必要的：否则

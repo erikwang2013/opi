@@ -82,6 +82,24 @@ impl Trie {
         acc
     }
 
+    /// 全量遍历：`f(pinyin, word, freq)`。给**按键类展开**（9/14 键方案）用 ——
+    /// 那种匹配没法用前缀查询表达（数字串不是任何拼音键的前缀，见 scheme.rs），
+    /// 只能整体走一遍。顺序 = BTreeMap 的确定性字典序（pinyin 字节序 + 同键按词序）。
+    pub fn for_each(&self, f: &mut dyn FnMut(&str, &str, u32)) {
+        fn walk(node: &Node, prefix: &mut String, f: &mut dyn FnMut(&str, &str, u32)) {
+            for (word, freq) in &node.entries {
+                f(prefix, word, *freq);
+            }
+            for (c, child) in &node.children {
+                prefix.push(*c);
+                walk(child, prefix, f);
+                prefix.pop();
+            }
+        }
+        let mut prefix = String::new();
+        walk(&self.root, &mut prefix, f);
+    }
+
     pub fn len(&self) -> usize {
         self.len
     }

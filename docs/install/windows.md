@@ -268,7 +268,7 @@ regsvr32 /u "C:\path\to\tsf_opi.dll"
 
 | 键 | 值 |
 |---|---|
-| `HKCR\CLSID\{<CLSID_TEXT_SERVICE>}` | 默认值 = `DISPLAY_NAME`（"OPI 拼音输入法"） |
+| `HKCR\CLSID\{<CLSID_TEXT_SERVICE>}` | 默认值 = `DISPLAY_NAME`（"opi输入法"） |
 | `HKCR\CLSID\{<CLSID_TEXT_SERVICE>}\InprocServer32` | 默认值 = DLL 全路径；`ThreadingModel` = `"Apartment"` |
 
 `CLSID_TEXT_SERVICE` 与 `GUID_PROFILE` 的字面值在 `crates/tsf-opi/src/dll.rs`（**去那里读，别从这里抄**）。
@@ -290,7 +290,7 @@ regsvr32 /u "C:\path\to\tsf_opi.dll"
 这一语言的键盘列表里：
 
 1. 确认系统已装「中文(简体，中国)」语言。
-2. 设置 → 时间和语言 → 语言和区域 → 中文(简体，中国) 的「语言选项」→「键盘」→ 添加键盘 → 应能看到 **OPI 拼音输入法**。
+2. 设置 → 时间和语言 → 语言和区域 → 中文(简体，中国) 的「语言选项」→「键盘」→ 添加键盘 → 应能看到 **opi输入法**。
 3. 用 `Win` + `Space` 轮换输入法。
 
 **【未验证】**：以上三步没有任何人在 Windows 上走过；"出现在哪个列表里""要不要重启"都没有实测。

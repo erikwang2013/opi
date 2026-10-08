@@ -159,7 +159,7 @@ xcodebuild -create-xcframework \
 | `NSExtensionPointIdentifier` | `com.apple.keyboard-service` | 凭记忆 |
 | `NSExtensionPrincipalClass` | `$(PRODUCT_MODULE_NAME).KeyboardViewController` | 必须与 `KeyboardViewController.swift` 的 `@objc(KeyboardViewController)` **一致**；**启动即崩先查这个** |
 | `NSExtensionAttributes` | `IsASCIICapable` / `PrefersRightToLeft` / `PrimaryLanguage` / `RequestsOpenAccess` | **四个键名全部凭记忆**，Mac 上以 Xcode 模板为准 |
-| 显示名 | `CFBundleDisplayName` = `OPI 拼音` —— 设置里键盘列表显示的就是它 | —— |
+| 显示名 | `CFBundleDisplayName` = `opi输入法` —— 设置里键盘列表显示的就是它 | —— |
 
 `RequestsOpenAccess = false` 是**有意选的**，不是漏了：OPI 是离线优先输入法，不需要网络；
 用户词也只需要写在扩展自己的容器里。代价见「已知限制」。
@@ -178,7 +178,7 @@ plutil -lint ios/Info.plist      # 只能在 Mac 上跑
 
 1. 用 Xcode 把**宿主 App** 跑到真机上 —— 扩展随宿主 App 一起装进 `PlugIns/`。
    （模拟器对第三方键盘的支持不可靠，**未核实**，建议直接用真机。）
-2. 真机上：**设置 → 通用 → 键盘 → 键盘 → 添加新键盘 → 第三方键盘 → OPI 拼音**。
+2. 真机上：**设置 → 通用 → 键盘 → 键盘 → 添加新键盘 → 第三方键盘 → opi输入法**。
    扩展**不能自己把自己启用**（无法引导、无法弹窗），这一步只能用户手动做。
 3. 打开任意文本框，长按地球键切到 OPI。
 4. **密码框里第三方键盘默认不可用**，系统会强制用内置键盘 —— 这是系统行为，不是缺陷。
@@ -201,7 +201,7 @@ plutil -lint ios/Info.plist      # 只能在 Mac 上跑
 
 按顺序走，**每一步只证明一件事**，别跳：
 
-1. **设置里能看到「OPI 拼音」** ⇒ 扩展被打包正确、被系统识别（`NSExtension*` 那组键对了）。
+1. **设置里能看到「opi输入法」** ⇒ 扩展被打包正确、被系统识别（`NSExtension*` 那组键对了）。
    —— 此时还不能说明任何代码能跑。
 2. **切到 OPI，敲软键盘 `n` `i`** ⇒ **候选栏出现候选**（`ios/README.md`「第一件要做的事」第 4 步）。
    这一步是「Rust 引擎 + 词库 + FFI 桥 + 键盘 UI」整条链路的第一个可见成功点。

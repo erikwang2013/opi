@@ -41,7 +41,7 @@ use crate::langbar_icon;
 use crate::tsf::{E_FAIL, ensure_panic_hook};
 
 /// 语言栏按钮上显示的文字（图标旁/悬停时另有 `GetTooltipString` 用全名）。
-const LABEL: &str = "OPI";
+const LABEL: &str = "opi输入法";
 
 /// ITfSource 只认这一个 sink 类型（协议规定的那一个）。
 /// 返回的 cookie 是常量：本对象只接受**一个** sink，不需要发号器。

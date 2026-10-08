@@ -13,6 +13,11 @@ pub trait Dictionary: Send + Sync {
     fn query_all(&self, pinyin: &str) -> Vec<Entry> {
         self.query(pinyin, usize::MAX)
     }
+    /// 全量遍历条目（零拷贝借用）。给**按键类展开**（9/14 键方案）用：那种匹配
+    /// 没法用前缀查询表达 —— 「64」不是任何拼音键的前缀，得沿**键类**（6∈{m,n,o}）
+    /// 比对全部键（见 `scheme.rs`）。默认空实现：替身词库（测试）按需覆写，
+    /// 生产词库（`MmapDictionary`）覆写为零拷贝扫描。
+    fn visit_entries(&self, _f: &mut dyn FnMut(&str, &str, u32)) {}
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool {
         self.len() == 0
@@ -46,6 +51,10 @@ impl InMemoryDictionary {
 impl Dictionary for InMemoryDictionary {
     fn query(&self, pinyin: &str, limit: usize) -> Vec<Entry> {
         self.trie.query_prefix(pinyin, limit)
+    }
+
+    fn visit_entries(&self, f: &mut dyn FnMut(&str, &str, u32)) {
+        self.trie.for_each(f);
     }
 
     fn len(&self) -> usize {

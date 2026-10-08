@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-/// 输入模式。V1 固定四模式（简繁共五种），双拼/五笔经 InputScheme 扩展（V2）。
+/// 输入模式。V1 固定四模式（简繁共五种）。**按键布局**是另一根轴 ——
+/// `crate::scheme::Scheme`（全键盘 / 9 键 / 14 键 / 笔画，2026-10-09）；
+/// 双拼/五笔等扩展「输入方案」仍未做（README 的能力表与这里同口径）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Mode {
     #[default]
@@ -57,13 +59,28 @@ pub struct Session {
 
 pub struct Composer {
     session: Session,
+    /// 输入方案（9 键 / 14 键 / 笔画 / 全键盘）。**不进 [`Session`]**：Session 是
+    /// 「一次输入会话」的快照（模式与缓冲），方案是**设备级偏好**（换键盘布局），
+    /// 生命周期不同 —— 放进快照会让所有 `Session { .. }` 字面量都要跟着改。
+    scheme: crate::scheme::Scheme,
 }
 
 impl Composer {
     pub fn new() -> Self {
         Composer {
             session: Session::default(),
+            scheme: crate::scheme::Scheme::default(),
         }
+    }
+
+    pub fn scheme(&self) -> crate::scheme::Scheme {
+        self.scheme
+    }
+
+    /// 换输入方案（不动缓冲 —— 换方案时该不该清缓冲由调用方定：Engine::set_scheme
+    /// 选择清，理由见那里）。
+    pub fn set_scheme(&mut self, scheme: crate::scheme::Scheme) {
+        self.scheme = scheme;
     }
 
     /// 处理一次击键，返回效果与新的会话快照。
@@ -78,6 +95,14 @@ impl Composer {
                     Updated
                 } else if ch.is_ascii_uppercase() {
                     self.session.buffer.push(ch.to_ascii_lowercase());
+                    Updated
+                } else if self.scheme == crate::scheme::Scheme::Nine && matches!(ch, '2'..='9') {
+                    // 9 键方案：数字是**输入键**（2–9 各映射三四个字母，见 scheme.rs），
+                    // 进缓冲而不是被丢弃。⚠️ 关掉「数字=选词」的路由门在**宿主侧**
+                    // （KeyRouter / 三轨 router 的 digit_select）；这里只保证
+                    // 「已经送进引擎的数字」在 Nine 方案下不被悄悄吃掉。
+                    // 0/1 不是 9 键的输入键（matches! 不含），落回 Ignored。
+                    self.session.buffer.push(ch);
                     Updated
                 } else {
                     Ignored

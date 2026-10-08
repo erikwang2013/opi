@@ -75,7 +75,7 @@ class ImeState(
     var commit: (String) -> Unit = {},
     private val debouncer: Debouncer = HandlerDebouncer(),
 ) {
-    enum class View { QWERTY, NUMBER, SYMBOL }
+    enum class View { QWERTY, NUMBER, SYMBOL, RARE }
 
     companion object {
         /** 搜索防抖窗口（对齐 flutter 250ms）。 */
@@ -106,6 +106,84 @@ class ImeState(
      */
     private var letterMode = EngineMode.PINYIN
 
+    // ---- 输入模式 / 键盘模式（2026-10-09）----
+
+    /** 当前输入模式（工具条与键盘布局按它画）。 */
+    var inputMode by mutableStateOf(InputMode.PINYIN26)
+        private set
+
+    /** 键盘模式（悬浮/游戏/单手/暗光/长辈）。繁体不在这里 —— 它在引擎 mode 上。 */
+    var keyboardModes by mutableStateOf(KeyboardModes())
+        private set
+
+    /** 符号面板的起始 Tab（工具条表情入口直达 Emoji）。 */
+    var symbolInitialTab by mutableStateOf(xyz.erik.opi.keyboard.SymbolTab.Common)
+        private set
+
+    /**
+     * 偏好落盘钩子（OpiImeService 注入；默认空 = JVM 测试不感知）。
+     * 与 [commit] 同一套「服务层注入副作用」的做法。
+     */
+    var persist: () -> Unit = {}
+
+    /** 上次的中文侧输入模式（9 键 ↔ 英文 往返时恢复用）。 */
+    private var lastChineseMode = InputMode.PINYIN26
+
+    /**
+     * 选一个输入模式（工具条菜单）。生僻字（[InputMode.panel]）**只切面板**，
+     * 不动引擎的 scheme/mode —— 它是浏览式查字，不是输入方案。
+     */
+    fun selectInputMode(m: InputMode) {
+        commitPendingBuffer()
+        inputMode = m
+        if (m.panel) {
+            view = View.RARE
+        } else {
+            if (m.engineMode == EngineMode.PINYIN || m.engineMode == EngineMode.TRADITIONAL) {
+                lastChineseMode = m
+            }
+            controller.switchScheme(m.scheme)
+            if (controller.mode != m.engineMode) controller.switchMode(m.engineMode)
+            view = View.QWERTY
+        }
+        persist()
+    }
+
+    /**
+     * 「中/繁/英」一键循环（既有键位，2026-10-09 起与方案/布局接线对齐）：
+     * 中→繁只切**引擎模式**（方案不动，9 键仍是 9 键）；繁→英走 [selectInputMode]
+     * 的英文项（方案回全键盘 —— 9 键上打英文没有候选路）；英→中回**上次的中文方案**。
+     */
+    fun cycleMode() {
+        when (controller.mode) {
+            EngineMode.PINYIN -> {
+                commitPendingBuffer()
+                controller.switchMode(EngineMode.TRADITIONAL)
+            }
+            EngineMode.TRADITIONAL -> selectInputMode(InputMode.ENGLISH26)
+            else -> selectInputMode(lastChineseMode)
+        }
+    }
+
+    /** 键盘模式变更（工具条菜单）→ 立即生效 + 落盘。 */
+    fun updateKeyboardModes(m: KeyboardModes) {
+        keyboardModes = m
+        persist()
+    }
+
+    /** 表情入口：开符号面板并直达表情页。 */
+    fun openEmoji() {
+        symbolInitialTab = xyz.erik.opi.keyboard.SymbolTab.Emoji
+        openSymbol()
+    }
+
+    /** 生僻字面板（工具条/笔画键盘的入口）。 */
+    fun openRare() {
+        commitPendingBuffer()
+        resetSearch()
+        view = View.RARE
+    }
+
     // ---- 面板切换（开面板前提交 pending buffer） ----
 
     fun openNumber() {
@@ -121,6 +199,16 @@ class ImeState(
         commitPendingBuffer()
         resetSearch()
         view = View.SYMBOL
+    }
+
+    /**
+     * 引擎侧恢复偏好（服务启动时调一次）：方案 + 开关 + 输入模式。
+     * 引擎是权威，UI 的 [inputMode]/[keyboardModes] 由服务从偏好装载后经
+     * [selectInputMode] 推一遍（引擎装载成功才调，见 OpiImeService）。
+     */
+    fun restore(inputMode: InputMode, modes: KeyboardModes) {
+        keyboardModes = modes
+        selectInputMode(inputMode)
     }
 
     /** 回 qwerty：失焦搜索并清空（对齐 flutter _backToLetters）。 */

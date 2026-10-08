@@ -29,6 +29,11 @@ struct OpiKeyEventResult {
 
 extern "C" {
 bool opi_fcitx5_load(const uint8_t *ptr, size_t len);
+// 简繁双装（2026-10-09）：两段都是**路径字符串**（同 opi_fcitx5_load 的约定）。
+// 返回值只反映第一段（luna，坏 → false → 调用方回退内置）；第二段（trad）坏是
+// 静默降级（Traditional 模式回退简体词典），不返回失败。
+bool opi_fcitx5_load_with_trad(const uint8_t *ptr, size_t len,
+                               const uint8_t *trad_ptr, size_t trad_len);
 OpiString opi_fcitx5_input_key(const uint8_t *ptr, size_t len);
 void opi_fcitx5_backspace();
 void opi_fcitx5_clear();

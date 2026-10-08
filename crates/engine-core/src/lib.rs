@@ -9,6 +9,8 @@ pub mod candidates;
 pub mod composer;
 pub mod dictionary;
 pub mod engine;
+#[path = "engine_punct.rs"]
+mod engine_punct_impl; // 标点/全角一族（500 行门禁拆出，见文件头）
 pub mod fuzzy;
 pub mod jianpin;
 pub mod keys;
@@ -16,6 +18,7 @@ pub mod learner;
 pub mod pinyin;
 pub mod punctuation;
 pub mod router;
+pub mod scheme;
 pub mod symbols;
 pub mod trie;
 
@@ -24,4 +27,5 @@ pub use dictionary::{Dictionary, InMemoryDictionary};
 pub use engine::Engine;
 pub use learner::{Learner, UserWord, UserWordExport};
 pub use router::{KeyAction, KeyRouter, ShiftState};
+pub use scheme::Scheme;
 pub use trie::Entry;

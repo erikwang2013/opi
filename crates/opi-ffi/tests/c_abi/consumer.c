@@ -213,6 +213,23 @@ int main(int argc, char **argv) {
     opi_set_jianpin(true);
     CHECK(opi_jianpin_enabled() == true, "set_jianpin(true) 后应读到 true");
 
+    /* 输入方案（2026-10-09）：整数回环 + 越界忽略 + 笔画词典的坏路径哨兵。
+     * 方案的行为语义（9 键真的能出字）由 engine-core 的 scheme_keys.rs 管，
+     * 这里只验 C 面的读写契约。 */
+    CHECK(opi_scheme() == 0, "默认方案 = 全键盘（0）");
+    opi_set_scheme(1);
+    CHECK(opi_scheme() == 1, "set_scheme(1) 后应读到 9 键");
+    opi_set_scheme(3);
+    CHECK(opi_scheme() == 3, "set_scheme(3) 后应读到笔画");
+    opi_set_scheme(99);
+    CHECK(opi_scheme() == 3, "越界值忽略（仍为 3）");
+    opi_set_scheme(0);
+    CHECK(opi_scheme() == 0, "换回全键盘");
+    {
+        static const uint16_t BAD_PATH[] = {0x2F, 0x6E, 0x6F, 0x70, 0x65}; /* "/nope" */
+        CHECK(!opi_load_stroke(BAD_PATH, 5), "笔画词典坏路径 → false");
+    }
+
     /* ---------- 多字符缓冲 + 逗号候选 ---------- */
     printf("[9] 双字候选 \"nihao\"\n");
     const uint16_t keys[] = {'n', 'i', 'h', 'a', 'o'};

@@ -297,6 +297,50 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
     merged
 }
 
+/// **按键类展开**（9/14 键方案，2026-10-09）：`input` 是一串按键符号，按
+/// [`crate::scheme::Scheme::matches`] 的类前缀语义匹配词库键。
+///
+/// 为什么另起一条路而不是塞进 [`rank_and_pick_with`]：这条匹配**表达不成前缀
+/// 查询**（「64」不是任何键的前缀），只能全量遍历词库逐键比对
+/// （`Dictionary::visit_entries`）—— 数据来源、算法形状都不同，硬合并会把两条
+/// 路都读不懂。打分/去重/截断规则与全键盘**逐字相同**（exact 加成按「键长相等」
+/// 判，与 pinyin_len == 输入长度同义），保证两套键盘的候选行为一致。
+pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
+    dict: &D,
+    learner: &Learner,
+    input: &str,
+    limit: usize,
+    boost: u64,
+    scheme: crate::scheme::Scheme,
+) -> Vec<Candidate> {
+    if input.is_empty() || limit == 0 {
+        return Vec::new();
+    }
+    let exact_bonus = boost / 2;
+    let input_len = input.len();
+    let mut merged: Vec<Candidate> = Vec::new();
+    dict.visit_entries(&mut |pinyin, word, freq| {
+        if !scheme.matches(input, pinyin) {
+            return;
+        }
+        let exact = pinyin.len() == input_len;
+        merged.push(Candidate {
+            text: word.to_string(),
+            kind: CandidateKind::Hanzi,
+            score: rank_score(freq, learner.freq_of(word), boost).saturating_add(if exact {
+                exact_bonus
+            } else {
+                0
+            }),
+        });
+    });
+    merged.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
+    let mut seen = std::collections::HashSet::new();
+    merged.retain(|c| seen.insert(c.text.clone()));
+    merged.truncate(limit);
+    merged
+}
+
 // 单测独立成文件（`#[path]` 引入）以保持本文件 <500 行，与 router_tests.rs 同惯例。
 #[cfg(test)]
 #[path = "candidates_tests.rs"]

@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xyz.erik.opi.engine.UserWordStore
 import xyz.erik.opi.ime.HandlerDebouncer
+import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.jni.OpiEngine
 import xyz.erik.opi.pet.OpiPet
 import xyz.erik.opi.pet.petMood
@@ -58,11 +59,14 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    var learner by remember { mutableStateOf(OpiEngine.learnerEnabled()) }
-    // 「属性设置」的另外两个旋钮（本轮新增）。⚠️ 与「学习」同一现状：**不落盘**，
-    // 进程重启回默认 —— 这是本端既有的缺口（见 docs/install/android.md §4.5 的注记）。
-    var fuzzy by remember { mutableStateOf(OpiEngine.fuzzyEnabled()) }
-    var jianpin by remember { mutableStateOf(OpiEngine.jianpinEnabled()) }
+    // 开关落盘（2026-10-09，关掉 android.md §4.6 记的既有缺口）。顺序有讲究：**先把偏好推给引擎
+    // 再读** —— 设置页可能先于 IME 启动，此刻引擎单例刚被本页 load 成默认值，
+    // 不推一遍，下面三个 remember 读到的是默认而不是用户存过的。
+    val prefs = remember { ImePreferences.from(context) }
+    remember { EngineController().also { prefs.applyEngineSwitches(it) } }
+    var learner by remember { mutableStateOf(prefs.learn) }
+    var fuzzy by remember { mutableStateOf(prefs.fuzzy) }
+    var jianpin by remember { mutableStateOf(prefs.jianpin) }
     var confirmClear by remember { mutableStateOf(false) }
 
     fun toast(msg: String) {
@@ -137,7 +141,7 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("OPI 设置") }) },
+        topBar = { TopAppBar(title = { Text("opi输入法 设置") }) },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         Column(
@@ -186,6 +190,7 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
                         onCheckedChange = { v ->
                             learner = v
                             OpiEngine.setLearner(v)
+                            prefs.learn = v
                         },
                     )
                 },
@@ -200,6 +205,7 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
                         onCheckedChange = { v ->
                             fuzzy = v
                             OpiEngine.setFuzzy(v)
+                            prefs.fuzzy = v
                         },
                     )
                 },
@@ -214,6 +220,7 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
                         onCheckedChange = { v ->
                             jianpin = v
                             OpiEngine.setJianpin(v)
+                            prefs.jianpin = v
                         },
                     )
                 },

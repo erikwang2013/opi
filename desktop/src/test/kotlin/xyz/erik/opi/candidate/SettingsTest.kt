@@ -46,6 +46,40 @@ class SettingsTest {
     }
 
     @Test
+    fun `merge keeps unknown keys and comments`() {
+        // 2026-10-09 起保存走 mergeIni：fcitx5 侧新增的选项（ShiftToggle/Skin）与
+        // 手写注释**不能被本窗抹掉** —— 此前是整文件重写，抹一次就是「设置窗
+        // 保存后 Shift 切换静默失效」。
+        val existing = """
+            # 手写的注释
+            Learn=True
+            ShiftToggle=False
+            Skin=浅色
+            # 保底
+        """.trimIndent() + "\n"
+        val merged = mergeIni(existing, OpSettings(learn = false))
+        // JUnit4 的两个参数是 (message, condition) —— 与 Kotlin 测试框架的习惯相反，
+        // 写反了是**编译错**（Boolean 塞不进 String 位），实测抓过。
+        assertTrue(merged, merged.contains("# 手写的注释\n"))
+        assertTrue(merged, merged.contains("ShiftToggle=False\n"))
+        assertTrue(merged, merged.contains("Skin=浅色\n"))
+        assertTrue(merged, merged.contains("Learn=False\n"))
+        assertFalse(merged, merged.contains("Learn=True"))
+        // 没出现过的管理键要补齐（旧文件里缺键 = 用默认值写回去）
+        assertTrue(merged, merged.contains("ChinesePunct=True\n"))
+    }
+
+    @Test
+    fun `merge output round trips through the reader`() {
+        // 行内注释、未知键、行内空格都掺上：合并结果必须仍被 fromIni 正确解析。
+        val existing = "Learn=True\nFuzzy=False # 关掉\n未知键=whatever\n"
+        val s = OpSettings(learn = false, chinesePunct = false, fuzzy = true, jianpin = true)
+        val merged = mergeIni(existing, s)
+        assertEquals(s, OpSettings.fromIni(merged))
+        assertTrue(merged, merged.contains("未知键=whatever\n"))
+    }
+
+    @Test
     fun `tolerant reader`() {
         // 手改的配置：小写值、行内注释、未知键、多余空格 —— 都该认/该忽略，不该抛。
         val s = OpSettings.fromIni(

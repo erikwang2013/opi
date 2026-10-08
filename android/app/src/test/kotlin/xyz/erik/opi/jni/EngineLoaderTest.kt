@@ -229,4 +229,57 @@ class EngineLoaderTest {
         assertFalse(ok)
         assertTrue(api.calls.isEmpty())
     }
+
+    // ---- 笔画词典（2026-10-09）：与 trad 逐条同构的三条 ----
+
+    /** 假 stroke 加载器：记录调用与结果。 */
+    private class FakeStrokeApi(var ok: Boolean = true) : EngineLoader.LoadStrokeApi {
+        val calls = mutableListOf<String>()
+
+        override fun loadStroke(path: String): Boolean {
+            calls += path
+            return ok
+        }
+    }
+
+    @Test
+    fun strokeLoadsWhenAssetReady() {
+        val fileOps = FakeFileOps(byteArrayOf(1, 2, 3), existingSize = null)
+        val api = FakeStrokeApi()
+
+        val ok = EngineLoader.loadStrokeAsset(fileOps, api, "/data/stroke.opid")
+
+        assertTrue(ok)
+        assertEquals(listOf("/data/stroke.opid"), api.calls)
+    }
+
+    @Test
+    fun strokeFailureKeepsEngineUntouched() {
+        val fileOps = FakeFileOps(byteArrayOf(1, 2, 3), existingSize = null)
+        val api = FakeStrokeApi(ok = false)
+
+        val ok = EngineLoader.loadStrokeAsset(fileOps, api, "/bad/stroke.opid")
+
+        assertFalse(ok)
+        assertEquals(listOf("/bad/stroke.opid"), api.calls)
+    }
+
+    @Test
+    fun strokeNativeLibraryErrorReturnsFalseWithoutCrash() {
+        // 生产入口 load(context) 紧接 trad 之后调它：这里不护住，同一进程仍会崩。
+        val fileOps = FakeFileOps(byteArrayOf(1, 2, 3), existingSize = null)
+        val api = object : EngineLoader.LoadStrokeApi {
+            val calls = mutableListOf<String>()
+
+            override fun loadStroke(path: String): Boolean {
+                calls += path
+                throw UnsatisfiedLinkError("libopi_ffi.so: ABI mismatch / missing")
+            }
+        }
+
+        val ok = EngineLoader.loadStrokeAsset(fileOps, api, "/data/stroke.opid")
+
+        assertFalse(ok)
+        assertEquals(listOf("/data/stroke.opid"), api.calls)
+    }
 }

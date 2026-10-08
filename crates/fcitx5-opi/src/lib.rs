@@ -50,7 +50,13 @@ pub(crate) fn ensure_panic_hook() {
 
 /// 装载引擎（替换单例）。`None`/空串 → 内置回退词库；坏路径 → false。
 pub fn install(path: Option<&str>) -> Result<(), String> {
-    let state = CandidateState::load(path)?;
+    install_with_trad(path, None)
+}
+
+/// 简繁双装（2026-10-09）：`path`（luna）语义同 [`install`]；`trad` 为可选增强，
+/// 坏了**不**返回 Err（退回无繁体，见 `CandidateState::load_with_trad` 的说明）。
+pub fn install_with_trad(path: Option<&str>, trad: Option<&str>) -> Result<(), String> {
+    let state = CandidateState::load_with_trad(path, trad)?;
     let mut guard = SINGLETON.lock().unwrap_or_else(|p| p.into_inner());
     *guard = Some(state);
     Ok(())
@@ -160,7 +166,8 @@ fn texts_to_json(texts: Vec<String>) -> OpString {
     OpString::from_utf8(&json)
 }
 
-// ---------- C 入口面（B0 约定 11 个 + B2 新增 key_event；B3 init_dict 见 cabi.rs） ----------
+// ---------- C 入口面（B0 约定 11 个 + B2 新增 key_event；B3 init_dict 见 cabi.rs；
+// 2026-10-09 新增 load_with_trad） ----------
 
 /// load(path: const uint8_t*, len) -> bool。null/空串 → 内置回退词库；坏路径 → false。
 /// # Safety
@@ -172,6 +179,29 @@ pub unsafe extern "C" fn opi_fcitx5_load(ptr: *const u8, len: usize) -> bool {
     catch_unwind(AssertUnwindSafe(|| {
         let path = unsafe { read_utf8(ptr, len) };
         install(path.as_deref()).is_ok()
+    }))
+    .unwrap_or(false)
+}
+
+/// loadWithTrad(lunaPath, lunaLen, tradPath, tradLen) -> bool。
+/// 两段都是**路径字符串**的裸字节（与 opi_fcitx5_load 同一约定，不是词库内容）：
+/// luna 空 = 内置回退；trad 空 = 无繁体词典。返回值只反映 luna（坏 → false，
+/// 调用方按既有路径回退内置）；**trad 坏是静默降级**（stderr 一行，见 install_with_trad）。
+/// # Safety
+///
+/// 两个 (ptr, len) 各自必须指向至少 len 字节的有效内存（或为 null/长度为 0）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_load_with_trad(
+    ptr: *const u8,
+    len: usize,
+    trad_ptr: *const u8,
+    trad_len: usize,
+) -> bool {
+    ensure_panic_hook();
+    catch_unwind(AssertUnwindSafe(|| {
+        let path = unsafe { read_utf8(ptr, len) };
+        let trad = unsafe { read_utf8(trad_ptr, trad_len) };
+        install_with_trad(path.as_deref(), trad.as_deref()).is_ok()
     }))
     .unwrap_or(false)
 }

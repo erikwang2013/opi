@@ -71,6 +71,15 @@ bool opi_load(const uint16_t *path, size_t len);
 /// 繁体词库。空/坏路径/引擎未装载 → false（繁体模式回退简体库）。
 bool opi_load_trad(const uint16_t *path, size_t len);
 
+/// 笔画词典（stroke.opid，2026-10-09）。空/坏路径/引擎未装载 → false。
+bool opi_load_stroke(const uint16_t *path, size_t len);
+
+/// 输入方案（2026-10-09）：0=全键盘 1=拼音9键 2=拼音14键 3=笔画，越界忽略。
+/// **换方案清缓冲** —— 调用后按 `opi_switch_mode` 那档重读 buffer/候选/页码。
+void opi_set_scheme(int32_t scheme);
+/// 方案读侧（未装载 → 0 是哨兵，不是"用户选的就是全键盘"）。
+int32_t opi_scheme(void);
+
 /// 单字符入引擎，返回需要提交的文本（多数时候是空串）。
 OpiString opi_input_key(const uint16_t *ch, size_t len);
 void opi_backspace(void);

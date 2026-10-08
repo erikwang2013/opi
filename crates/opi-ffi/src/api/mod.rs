@@ -67,6 +67,50 @@ pub fn install_trad(path: &str) -> Result<(), String> {
     }
 }
 
+/// 装载笔画词典并挂到已安装引擎上（2026-10-09，移动端笔画键盘 / 生僻字键盘）。
+/// 与 `install_trad` 同一条严格语义：load_mmap（坏路径不回落内置）、引擎未装载时
+/// 返回 Err（笔画方案回退普通路径，见 engine-core 的 `Engine::set_stroke_dict`）。
+pub fn install_stroke(path: &str) -> Result<(), String> {
+    let dict = engine_data::load_mmap(std::path::Path::new(path))
+        .map_err(|e| format!("load stroke {}: {e:?}", path))?;
+    let mut guard = SINGLETON.lock().unwrap_or_else(|p| p.into_inner());
+    match guard.as_mut() {
+        Some(api) => {
+            api.set_stroke_dict(Some(Box::new(dict)));
+            Ok(())
+        }
+        None => Err("engine not loaded".into()),
+    }
+}
+
+// ---- 输入方案：整数 ↔ 枚举（C ABI 与 JNI 两个边界**共用这一份**）----
+//
+// 0=全键盘 1=拼音9键 2=拼音14键 3=笔画。**越界 → None**（写侧忽略、读侧按 Full），
+// 与 `opi_switch_mode` / `switchMode` 的边界约定同款。改这张表 = 改协议：
+// `macos/OpiFFI.h`、`android/.../jni/OpiEngine.kt`、`OpiEngine.kt` 上方的注释
+// 三处都要跟（有 c_abi_contract / jni_contract 两道门禁在，但门禁只保签名不保语义）。
+
+/// 整数 → 方案。越界 → None。
+pub fn scheme_from_int(v: i32) -> Option<engine_core::Scheme> {
+    match v {
+        0 => Some(engine_core::Scheme::Full),
+        1 => Some(engine_core::Scheme::Nine),
+        2 => Some(engine_core::Scheme::Fourteen),
+        3 => Some(engine_core::Scheme::Stroke),
+        _ => None,
+    }
+}
+
+/// 方案 → 整数（与 [`scheme_from_int`] 逐值对应）。
+pub fn scheme_to_int(s: engine_core::Scheme) -> i32 {
+    match s {
+        engine_core::Scheme::Full => 0,
+        engine_core::Scheme::Nine => 1,
+        engine_core::Scheme::Fourteen => 2,
+        engine_core::Scheme::Stroke => 3,
+    }
+}
+
 /// 在引擎单例上执行操作；未 load 时返回 None（调用方按哨兵处理）。
 pub fn with_engine<R>(f: impl FnOnce(&mut Api) -> R) -> Option<R> {
     let mut g = SINGLETON.lock().unwrap_or_else(|p| p.into_inner());
@@ -146,6 +190,22 @@ impl Api {
     /// 换装繁体词典（trad.opid）。None = 清除（繁体模式回退简体库）。
     pub fn set_trad_dict(&mut self, dict: Option<Box<dyn Dictionary>>) {
         self.router.engine_mut().set_trad_dict(dict);
+    }
+
+    /// 换装笔画词典（stroke.opid，2026-10-09）。None = 清除（笔画方案回退普通路径）。
+    pub fn set_stroke_dict(&mut self, dict: Option<Box<dyn Dictionary>>) {
+        self.router.engine_mut().set_stroke_dict(dict);
+    }
+
+    /// 输入方案（移动端「输入模式」）。**换方案会清缓冲** —— 调用方按
+    /// `switch_mode` 同一档重读 buffer / 候选 / 页码（见 `Engine::set_scheme`）。
+    pub fn set_scheme(&mut self, scheme: engine_core::Scheme) {
+        self.router.engine_mut().set_scheme(scheme);
+    }
+
+    /// 输入方案读侧（与 `set_scheme` 成对，供 UI 回读/回环测试）。
+    pub fn scheme(&self) -> engine_core::Scheme {
+        self.router.engine().scheme()
     }
 
     /// 引擎侧 ⇧（`opi_set_shift`，Android UI 用）。走路由：换 shift 会改候选集，

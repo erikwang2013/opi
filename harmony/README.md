@@ -87,6 +87,9 @@
   resources/base/element/string.json 里补 input_method_config.json 用到的三个 key：
     subtype_pinyin_label / subtype_english_label / subtype_number_label
     缺了会让 profile 解析失败，可能表现为输入法直接不出现在系统列表里。
+    推荐值（2026-10-09 起全端显示名统一为「opi输入法」）：三个子键盘写
+    `opi输入法 拼音` / `opi输入法 英文` / `opi输入法 数字`；module.json5 的
+    `MainAbility_label` 写 `opi输入法`。
   （本仓库**故意没有**生成 string.json 与 main_pages.json —— 那是 DevEco
    生成的文件，覆盖会毁掉你已有的其它配置。）
 

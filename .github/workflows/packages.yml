@@ -90,11 +90,59 @@ permissions:
   contents: write
 
 jobs:
+  # 桌面应用（设置窗/候选窗 Compose 应用）先在这里编好，再把产物递进下面的容器。
+  #
+  # ⚠️ **为什么钉 ubuntu-22.04 而不是 ubuntu-latest**：jpackage 会把构建机的 JDK
+  # 运行时 jlink 进包 —— 那是绑 glibc 符号版本的产物，与 v1.3.2 的 GLIBCXX 事故
+  # 同一类（见下面容器那段的长注释）。22.04 的对更老的 glibc，装出来的运行时在
+  # 22.04 及以上都跑得动；换 latest(24.04) 会把设置窗的实际下界悄悄抬到 24.04，
+  # 老发行版上表现为「输入法能用、设置窗起不来」—— 不报错的静默降级，正是本仓库
+  # 反复栽过的那类。
+  desktop-deb:
+    name: 桌面应用（jpackage .deb，ubuntu-22.04）
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21' # jpackage 需要 ≥17；21 是当前 LTS
+
+      # 在 desktop/ 里跑（本模块有**自己的** gradlew + settings.gradle.kts，
+      # 与 android/ 同约定：阿里云镜像、无 google()）。
+      # 两个任务都要：packageDeb 出应用包，injectSettingsDesktopEntry 往它里面注入
+      # `/usr/share/applications/opi-settings.desktop`（外层设置入口 —— 2026-10-09 晚
+      # 用户裁决「设置功能要在外层可以设置」；理由与核对法见 desktop/build.gradle.kts
+      # 文件尾的任务注释）。下面 packages job 的合并步骤会把这个 .deb 的数据文件
+      # 原样解进主包暂存树。
+      - name: ./gradlew packageDeb injectSettingsDesktopEntry
+        run: ./gradlew packageDeb injectSettingsDesktopEntry --no-daemon
+        working-directory: desktop
+
+      # if-no-files-found: error —— 默认只 warn，而「绿了但没产物」正是本仓
+      # 反复栽过的那种假绿（它比红更坏：下一步拿不到包，报错指向别处）。
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opi-desktop-deb
+          if-no-files-found: error
+          path: desktop/build/compose/binaries/main/deb/*.deb
+
   packages:
     name: 打包 .deb / .rpm（debian:12 容器里构建）
     runs-on: ubuntu-latest
+    # 合并安装（用户裁决 2026-10-09）要桌面应用的产物先进来：desktop-deb 失败 ⇒
+    # 本 job 不跑（拿不到应用就没法「和到一起安装」，打一半的包不如不打）。
+    needs: desktop-deb
     steps:
       - uses: actions/checkout@v4
+
+      # 桌面应用的 .deb（desktop-deb job 产出）—— 容器步骤把它一并解进主包暂存树
+      # （scripts/build-packages.sh 的 OPI_DESKTOP_DEB，见那份脚本头部第 5 条）。
+      - uses: actions/download-artifact@v4
+        with:
+          name: opi-desktop-deb
+          path: desktop-deb
 
       # nfpm 是 Go 写的单二进制：**在外面装、挂进容器用**（容器里不装 Go、不拉模块）。
       - uses: actions/setup-go@v5
@@ -170,8 +218,16 @@ jobs:
           nfpm --version
 
           # 与本地同一个入口、同一个脚本，差别只在整条工具链都换成了 debian:12 的。
+          # 桌面应用由 desktop-deb job 递进来（挂载点 /w 下）；缺了就打不出
+          # 「和到一起安装」的那个包，宁可在这里红。
           cd /w
-          OUT_DIR=/w/dist WORK_DIR=/tmp/opi-packages scripts/build-packages.sh
+          ls /w/desktop-deb/*.deb > /dev/null 2>&1 || {
+            echo "::error::desktop-deb 的产物没进来（/w/desktop-deb/ 是空的）"
+            exit 1
+          }
+          OUT_DIR=/w/dist WORK_DIR=/tmp/opi-packages \
+            OPI_DESKTOP_DEB="$(ls /w/desktop-deb/*.deb | head -1)" \
+            scripts/build-packages.sh
 
           # ---- 守卫：产物自带的符号版本要求必须 ≤ 本发行版提供的那一份 ----
           # 判据取自**打出来的 .deb 里那两份 .so**（不是构建树）：这样连「打包漏装/装错」

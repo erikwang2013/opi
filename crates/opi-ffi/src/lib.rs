@@ -13,7 +13,9 @@
 //! 且零豁免要求每条导出都被 consumer.c 调用）才会红。**两道门禁互补，别只看一道。**
 pub mod api;
 pub mod cabi;
+pub mod cabi_scheme;
 pub mod cabi_user_words;
 pub mod jni;
+pub mod jni_scheme;
 pub mod jni_user_words;
 pub mod jni_util;

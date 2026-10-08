@@ -28,6 +28,14 @@
 #
 # 4. nfpm 只做「把树装进包」这一件事。它不编译、不解析依赖 —— 所以
 #    `depends: fcitx5` 是**声明**而非推导，正确性靠 CI 在真发行版里装一次来验。
+#
+# 5. **可选的桌面应用合并**（环境变量 OPI_DESKTOP_DEB=<jpackage 的 .deb>）：
+#    设了就把 jpackage 打出的桌面应用（/opt/opi-candidates/**，自带 JRE）解进
+#    暂存树，与插件装进**同一个**包 —— 用户裁决「和到一起安装」（2026-10-09）。
+#    代价如实记：包体 ~1.7MB → ~48MB（jpackage 自带运行时；这是那份裁决时摆过的
+#    数）；不设 = 只出插件包，脚本其余行为一字不变。
+#    对旧独立包 opi-candidates（≤1.5.0 时代的设置窗包）用 replaces+conflicts
+#    接管：不声明的话 dpkg 会因 /opt/opi-candidates/** 文件归属冲突**拒绝安装**。
 
 set -euo pipefail
 
@@ -57,6 +65,28 @@ while [ $# -gt 0 ]; do
     shift
 done
 [ ${#FORMATS[@]} -gt 0 ] || FORMATS=(deb rpm)
+
+# ---- 可选：桌面应用（jpackage 的 .deb）合并 ----
+DESKTOP_DEB="${OPI_DESKTOP_DEB:-}"
+if [ -n "$DESKTOP_DEB" ]; then
+    [ -f "$DESKTOP_DEB" ] || { echo "OPI_DESKTOP_DEB 指向的文件不存在：$DESKTOP_DEB" >&2; exit 1; }
+    # 先确认它确实是 jpackage 的应用包（防拿错文件进来）：包内要有 /opt/*/bin/ 启动器。
+    # ⚠️ 两个坑都是实测踩出来的，别改回 pipelining：
+    #   1) 路径列是 `./opt/...` 形态，模式里不能写带前导空格的 ' /opt/'（零命中）；
+    #   2) `dpkg-deb -c | grep -q` 在 pipefail 下**必假**：grep -q 一命中就退出，
+    #      dpkg-deb 的 tar 被子进程 SIGPIPE 杀掉（报「tar 子进程被信号(断开的管道) 终止了」），
+    #      pipeline 取到的是那个非零状态 —— 正确的输入也会被判成「不像 jpackage 包」。
+    # 拿变量 + case 匹配：没有管道，就不存在这两个形态。
+    listing="$(dpkg-deb -c "$DESKTOP_DEB")" || { echo "读不出 $DESKTOP_DEB 的内容" >&2; exit 1; }
+    case "$listing" in
+        *"/opt/"*"/bin/"*) ;;
+        *)
+            echo "OPI_DESKTOP_DEB 看着不像 jpackage 的包（包内没有 /opt/*/bin/ 启动器）：$DESKTOP_DEB" >&2
+            exit 1
+            ;;
+    esac
+    echo "==> 合并桌面应用：$DESKTOP_DEB"
+fi
 
 # ---- 前置 ----
 if ! command -v nfpm >/dev/null 2>&1; then
@@ -123,10 +153,12 @@ build_stage() {
     find "$stage" -type f | sed "s|$stage||" | sort | sed 's/^/    /' >&2 || return 1
 
     # 空转护栏：一个文件都没装出来就是构建坏了，别拿空树去过 nfpm。
+    # 5 是**下界**（两个 .so + 两个 conf + 词库）；皮肤（4 张主题 × 4 个文件）与
+    # 桌面应用（合并模式，/opt 整棵）都在它之上，不在这里点名。
     local n
     n="$(find "$stage" -type f | wc -l)"
     if [ "$n" -lt 5 ]; then
-        echo "  ✗ 暂存树只有 $n 个文件（期望 5：两个 .so + 两个 conf + 词库）—— 构建不完整，拒绝打包" >&2
+        echo "  ✗ 暂存树只有 $n 个文件（下界 5：两个 .so + 两个 conf + 词库）—— 构建不完整，拒绝打包" >&2
         return 1
     fi
     return 0
@@ -146,6 +178,20 @@ for fmt in "${FORMATS[@]}"; do
     esac
     stage="$STAGE_DIR"
 
+    # ---- 合并桌面应用（见头部第 5 条）----
+    # dpkg-deb -x 只解数据文件，不碰 DEBIAN/（jpackage 那份的控制脚本在这里无用，
+    # 且与 nfpm 生成的控制字段可能冲突）。应用自己的 .desktop 已被撤（见
+    # desktop/build.gradle.kts 的「桌面入口：已撤」段），故这一步只带进 /opt/**。
+    if [ -n "$DESKTOP_DEB" ]; then
+        dpkg-deb -x "$DESKTOP_DEB" "$stage"
+        # 阴性对照：解完必须真有启动器 —— 否则是「包打了、应用没进去」的静默形态。
+        if ! ls "$stage"/opt/*/bin/* >/dev/null 2>&1; then
+            echo "  ✗ 合并后暂存树里没有 /opt/*/bin/ 启动器 —— 应用没解进去" >&2
+            exit 1
+        fi
+        echo "==> [$fmt] 已合并桌面应用，暂存树 $(du -sh "$stage" | cut -f1)（含 JRE）"
+    fi
+
     echo "==> [$fmt] nfpm 打包"
     # ⚠️ **自己把 ${...} 换成字面值**，不依赖 nfpm 的变量展开。
     # 实测 nfpm 2.47 不展开 `contents.src` 里的 `${PKG_STAGE}`，报
@@ -162,6 +208,21 @@ for fmt in "${FORMATS[@]}"; do
         echo "  ✗ 配置里还有未替换的占位符：" >&2
         grep -n '\${PKG_' "$render_cfg" >&2
         exit 1
+    fi
+
+    # 合并模式：把 /opt 也纳入包内容，并声明接管旧的独立包 opi-candidates（见头部第 5 条）。
+    # ⚠️ **必须条件追加**：nfpm 的 contents.src 指向不存在的路径会直接报 Glob failed ——
+    # 非合并构建若也带上这条，会在打普通插件包时红。
+    # （追加在文件尾 = contents 数组续加一项 + 两个顶层键；YAML 对顶层键顺序无要求。）
+    if [ -n "$DESKTOP_DEB" ]; then
+        {
+            echo "  - src: $stage/opt"
+            echo "    dst: /opt"
+            echo "replaces:"
+            echo "  - opi-candidates"
+            echo "conflicts:"
+            echo "  - opi-candidates"
+        } >> "$render_cfg"
     fi
 
     nfpm package --config "$render_cfg" --packager "$fmt" --target "$OUT_DIR/"
