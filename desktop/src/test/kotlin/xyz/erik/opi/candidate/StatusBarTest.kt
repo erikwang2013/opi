@@ -26,12 +26,32 @@ class StatusBarTest {
 
     @Test
     fun `button order is the display order`() {
-        // 枚举序 = 条上从左到右（2026-10-10 深夜裁决②：logo 移到最前）。换序 = 用户
-        // 肌肉记忆全废，且没有任何东西会报错，所以钉住。
+        // 枚举序 = 条上从左到右（2026-10-10 深夜**最终冻结**：logo/中英/。，/简繁/
+        // 月相/键盘/Ω/设置）。换序 = 用户肌肉记忆全废，且没有任何东西会报错，所以钉住。
         assertEquals(
-            listOf("logo", "软键盘", "符号大全", "简繁转换", "中英标点", "中英文切换", "全半角", "设置"),
+            listOf("logo", "中英文切换", "符号大全", "简繁转换", "全半角", "软键盘", "中英标点", "设置"),
             StatusBarButton.entries.map { it.label },
         )
+    }
+
+    @Test
+    fun `frozen icon literals stay as the user picked them`() {
+        // 用户两轮都按「句号、逗号」写（先句号）——按字面来，别按中文标点惯例改回
+        // 「，。」；Ω 表「标点/特殊字符」，也不带状态显示。改字前先回去问。
+        assertEquals("。，", iconText(StatusBarButton.SYMBOLS, ImeState()))
+        assertEquals("Ω", iconText(StatusBarButton.PUNCT, ImeState()))
+        // 单字随状态（与 tradIcon/langIcon 同源，两处漂了这里会红）
+        assertEquals("繁", iconText(StatusBarButton.TRAD, ImeState(trad = true)))
+        assertEquals("简", iconText(StatusBarButton.TRAD, ImeState(trad = false)))
+        assertEquals("英", iconText(StatusBarButton.LANG, ImeState(zh = false)))
+        assertEquals("中", iconText(StatusBarButton.LANG, ImeState(zh = true)))
+        // 画图标的四个不出字（出字就会在自绘图形上叠一层文字）
+        for (b in listOf(
+            StatusBarButton.VK, StatusBarButton.LOGO,
+            StatusBarButton.FULLWIDTH, StatusBarButton.SETTINGS,
+        )) {
+            assertEquals("$b 该画图标、不出字", "", iconText(b, ImeState()))
+        }
     }
 
     @Test
@@ -66,7 +86,7 @@ class StatusBarTest {
         // Windows 上没有 opi-ctl / fcitx5-remote（那四个动作是 Linux 侧的），
         // 没动作的按钮不上条 ——「宁可少一页，不做点不动的开关」。
         assertEquals(
-            listOf(StatusBarButton.LOGO, StatusBarButton.VK, StatusBarButton.SYMBOLS, StatusBarButton.SETTINGS),
+            listOf(StatusBarButton.LOGO, StatusBarButton.SYMBOLS, StatusBarButton.VK, StatusBarButton.SETTINGS),
             visibleStatusButtons(StatusBarSettings(), windows = true),
         )
         // 设置窗的开关行用同一个判定（两处同源）
