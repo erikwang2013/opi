@@ -332,7 +332,7 @@ regsvr32 /u "C:\path\to\tsf_opi.dll"
 | 选词（页内第 1..9 个） | 数字 `1`..`9` | `logic_input_method.rs` 的 `digit_select` |
 | 提交首候选 / 提交 | `Space`（缓冲非空）· `Enter` | `handle_space` / `handle_enter` |
 | 删缓冲末字 | `Backspace` | `handle_backspace` |
-| 上下页 | `PageUp` / `PageDown` | `KEY_PAGE_UP` / `KEY_PAGE_DOWN` 分支 |
+| 上下页 | `PageUp` / `PageDown`；组字中 `-` / `=` | `KEY_PAGE_UP` / `KEY_PAGE_DOWN` 分支；`-`/`=` 见 `handle_printable` 顶部（2026-10-09 补） |
 | 切换 ⇧ 大小写 | `Shift` | `handle_shift`（Off → Single → Off，长按 → Lock） |
 
 候选窗里还能**点候选**和**点翻页箭头**（`desktop/.../CandidateWindow.kt` 的

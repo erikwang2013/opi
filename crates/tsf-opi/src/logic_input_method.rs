@@ -96,6 +96,8 @@ impl TsfLogic {
     /// - 退格：缓冲非空 → 引擎按码点删；空缓冲 → Unhandled（交应用）。
     /// - ⇧ 键：状态机 Off→Single→Off（长按 → Lock）。
     /// - 拼音模式有候选时数字 1..=9 按页内索引选词。
+    /// - `PageUp`/`PageDown` 翻页；**组字中（拼音/繁体且缓冲非空）`-` 上一页、`=` 下一页**
+    ///   （2026-10-09 用户报障补上；空缓冲不抢键，见 logic_page_tests.rs）。
     /// - 符号模式：可见 ASCII 入引擎缓冲当**关键字**（符号候选由此搜出），其余放行。
     /// - Ctrl/Alt 组合键一律 Unhandled（系统快捷键，不拦截）。
     pub fn input_key(&mut self, keyval: u32, key_state: u32) -> KeyOutcome {
@@ -235,6 +237,24 @@ impl TsfLogic {
 
     /// 可见 ASCII 字符按模式分流。
     fn handle_printable(&mut self, c: char) -> KeyOutcome {
+        // 组字中的 `-` / `=` 翻页（2026-10-09 用户报障「桌面端减号、等号不能翻页候选词」）。
+        // 与 PageUp/PageDown 同一动作；**必须排在标点表之前** —— 否则全角兜底会把 `-`
+        // 当成标点，组字中按下即提交「首候选＋－」（实测：按 `=` 曾提交「词00＝」）。
+        // 只在拼音/繁体（有候选页的模式）且缓冲非空时抢键：空缓冲走标点表/直通老路，
+        // 符号/英文模式另有归属，不碰。与 fcitx5 轨逐行同构（input_method.rs）。
+        if matches!(self.mode(), Mode::Pinyin | Mode::Traditional) && !self.buffer().is_empty() {
+            match c {
+                '-' => {
+                    self.prev_page();
+                    return KeyOutcome::CompositionChanged;
+                }
+                '=' => {
+                    self.next_page();
+                    return KeyOutcome::CompositionChanged;
+                }
+                _ => {}
+            }
+        }
         // 标点表（引擎层，四端同一条路）：中文模式出中文标点/全角，其余模式下不映射。
         // 放在模式分派**之前**：标点不属于任何模式的关键字/缓冲语义。
         if let Some(text) = self.input_punct(c) {
@@ -316,6 +336,9 @@ fn commit_or_changed(out: String) -> KeyOutcome {
 
 // 单测独立成文件（`#[path]` 引入）以保持各文件 <500 行：logic_tests.rs 为键
 // 路由测试，logic_release_tests.rs 为可打印键「按下/抬起同判」回归测试。
+#[cfg(test)]
+#[path = "logic_page_tests.rs"]
+mod page_tests;
 #[cfg(test)]
 #[path = "logic_punct_tests.rs"]
 mod punct_tests;
