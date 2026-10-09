@@ -75,15 +75,4 @@ class KeyRouter(
         val text = controller.selectFromPage(indexInPage)
         if (text.isNotEmpty()) commit(text)
     }
-
-    /**
-     * 点 9 键左列第 i 行拼音 = 上屏第 i 条候选（2026-10-09 用户裁决「拼音要可选」
-     * —— 落地为「点拼音 = 选那个词上屏」）。**全量**下标 —— 读数列是跨页的全量列表，
-     * 与候选行的页内下标（[handleCandidate]）不是一个坐标系；全局 select 的下标空间
-     * 与 candidates() 同源（engine.rs 的 `select` 门禁钉着），读数第 i 行即第 i 条。
-     */
-    fun handleReading(index: Int) {
-        val text = controller.select(index)
-        if (text.isNotEmpty()) commit(text)
-    }
 }

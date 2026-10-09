@@ -25,6 +25,12 @@ pub struct Engine {
     learner: Learner,
     /// 用户词频权重，按词典最大静态词频动态缩放（一次选词即压过所有静态词）。
     user_boost: u64,
+    /// 钉读音（9 键左列点一行拼音：**不确认**，候选收窄到该读音一族 —— 2026-10-09
+    /// 用户裁决「选择后所有候选词也跟着拼音变化显示出来，不要直接确认」）。
+    /// 存 `(钉它时的缓冲, 去分词的原读音)` 一对 —— 缓冲一变即作废（同
+    /// `scheme_readings` 的判据），**不需要在每个改缓冲的地方清它**。
+    /// 读写口在 engine_readings.rs（`set_pinned_reading` / `active_pin`）。
+    pub(crate) pinned_reading: Option<(String, String)>,
     /// 9 键方案的「拼音读数」（显示用，见 [Self::display_buffer] 与
     /// [Self::candidate_readings]）：由 `candidates()` 在九键分支里刷新 ——
     /// **逐条**（`readings[i]` = `candidates(limit)` 第 i 条的拼音，已分词；
@@ -83,6 +89,7 @@ impl Engine {
             learner: Learner::new(learner_enabled),
             user_boost,
             scheme_readings: std::cell::RefCell::new((String::new(), Vec::new())),
+            pinned_reading: None,
             fullwidth: Mode::default().default_fullwidth(),
             chinese_punct: true,
             quotes: Quotes::default(),
@@ -325,6 +332,7 @@ impl Engine {
                         limit,
                         self.user_boost,
                         self.scheme(),
+                        self.active_pin(),
                     );
                     // 读数随每次取候选刷新（逐条、已分词），**并与当时的缓冲绑存**
                     // （见 display_buffer：缓冲一变这对就作废，不许把旧缓冲的读数报给新状态）。

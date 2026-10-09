@@ -43,6 +43,18 @@ pub unsafe extern "system" fn opijni_candidate_readings(
     unsafe { jni_util::string_array(env, readings) }
 }
 
+/// pinReading(reading: String)：**钉读音**（空串/null = 解除）—— 9 键左列点一行拼音后
+/// **不确认**，候选列表收窄到该读音一族（2026-10-09 用户裁决「选择后所有候选词也跟着
+/// 拼音变化显示出来，不要直接确认」）。缓冲一变自动作废（引擎侧按缓冲配对校验）。
+/// 调用方重读 candidates/读数（refresh）。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_pin_reading(env: JEnv, _class: sys::jclass, reading: jstring) {
+    guard(|| {
+        let r = unsafe { jni_util::jstring_to_rust(env, reading) }.unwrap_or_default();
+        api::with_engine(|e| e.set_pinned_reading(if r.is_empty() { None } else { Some(r) }));
+    });
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_buffer(env: JEnv, _class: sys::jclass) -> jstring {
     let out = guard(|| api::with_engine(|e| e.buffer()).unwrap_or_default());

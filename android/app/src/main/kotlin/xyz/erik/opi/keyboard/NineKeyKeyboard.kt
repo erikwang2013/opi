@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -84,8 +85,10 @@ fun NineKeyKeyboard(
     /** 逐条候选拼音读数（9 键左列按候选逐行显示，如 `ni'hao`；与候选同序等长。
      * 空列表 = 没在输入/无候选，左列显示标点）。 */
     readings: List<String> = emptyList(),
-    /** 点第 i 行拼音 = 上屏第 i 条候选（**全量**下标，见本文件读数行的注释）。 */
+    /** 点第 i 行拼音 = 钉该读音（**不确认**，候选收窄到一族；见 onPickReading 的注释）。 */
     onPickReading: (Int) -> Unit = {},
+    /** 当前钉住的读音（空串 = 未钉；命中的行高亮强调色）。 */
+    pinnedReading: String = "",
     /** 读数列的滚动复位键（传缓冲：缓冲一变整列回顶部，别停在旧位置）。 */
     scrollKey: String = "",
     modeLabel: String = "中",
@@ -121,22 +124,29 @@ fun NineKeyKeyboard(
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             for ((i, r) in readings.withIndex()) {
+                                val pinned = r == pinnedReading && pinnedReading.isNotEmpty()
                                 Box(
-                                    // 点一行拼音 = **上屏对应候选**（2026-10-09 用户裁决；
-                                    // 下标是**全量列表**的下标 —— 读数列跨页，与候选行的
-                                    // 页内下标不同，收口在 KeyRouter.handleReading）。
+                                    // 点一行拼音 = **钉住该读音**（2026-10-09 用户裁决
+                                    // 「选择后候选词跟着拼音变化，不要直接确认」）：
+                                    // 候选列表收窄到该读音一族、不上屏；同一行再点 = 解除。
                                     modifier = Modifier.fillMaxWidth().height(cell)
                                         .clickable { onPickReading(i) }
                                         .semantics {
                                             role = Role.Button
-                                            contentDescription = "第 ${i + 1} 项拼音 $r，点击上屏"
+                                            contentDescription = "第 ${i + 1} 项拼音 $r" +
+                                                if (pinned) "，已选中，点击取消" else "，点击只看这一读音"
                                         },
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Text(
                                         r,
                                         fontSize = 13.sp,
-                                        color = LocalKeyboardPalette.current.barDimFg,
+                                        color = if (pinned) {
+                                            LocalKeyboardPalette.current.accent
+                                        } else {
+                                            LocalKeyboardPalette.current.barDimFg
+                                        },
+                                        fontWeight = if (pinned) FontWeight.Bold else FontWeight.Normal,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         textAlign = TextAlign.Center,

@@ -24,6 +24,7 @@ final class OpiEngine {
     static native String inputSpace();
     static native String[] candidates(int limit);
     static native String[] candidateReadings();
+    static native void pinReading(String reading);
     static native String buffer();
     static native String displayBuffer();
     static native int mode();
@@ -271,6 +272,23 @@ public final class Main {
         check("64".equals(OpiEngine.buffer()), "切回中文后缓冲仍在（实得：" + OpiEngine.buffer() + "）");
         String[] back = OpiEngine.candidates(8);
         check(back != null && back.length > 0, "切回后候选按同一缓冲重新算出");
+        OpiEngine.setScheme(0); // 回全键盘
+
+        // pinReading（2026-10-09）：钉读音 —— 候选**收窄**、**不上屏**；空串解除。
+        OpiEngine.setScheme(1); // 9 键
+        OpiEngine.inputKey("6");
+        OpiEngine.inputKey("4");
+        String[] wide = OpiEngine.candidates(64);
+        int wideN = wide == null ? 0 : wide.length;
+        check(wideN > 0, "前置：64 有候选");
+        OpiEngine.pinReading("ni'hao"); // 带分词的界面原串，引擎归一
+        String[] narrow = OpiEngine.candidates(64);
+        int narrowN = narrow == null ? 0 : narrow.length;
+        check(narrowN > 0 && narrowN <= wideN, "钉读音后候选收窄（" + wideN + " → " + narrowN + "）");
+        check("64".equals(OpiEngine.buffer()), "钉读音不上屏、不动缓冲");
+        OpiEngine.pinReading("");
+        String[] unpinned = OpiEngine.candidates(64);
+        check(unpinned != null && unpinned.length == wideN, "解除后回全量");
         OpiEngine.setScheme(0); // 回全键盘
 
         if (failures == 0) {

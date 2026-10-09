@@ -97,3 +97,40 @@ fn per_candidate_readings_align_with_candidates() {
         "退格后逐条读数立刻作废（下次 candidates() 才重算）"
     );
 }
+
+/// 钉读音（9 键左列点一行拼音）：候选**收窄**到该读音一族、**不上屏**；解除回全量；
+/// 缓冲一变自动作废（配对语义：同一缓冲内有效）。
+#[test]
+fn pinned_reading_narrows_candidates_without_committing() {
+    let mut e = engine();
+    e.set_scheme(Scheme::Nine);
+    type_str(&mut e, "64"); // ni 与 nihao 都命中
+    let all: Vec<String> = e.candidates(8).into_iter().map(|c| c.text).collect();
+    assert!(all.len() >= 2, "前置：64 有多条候选（{all:?}）");
+
+    // 钉「你好」那行的读音（带分词的原串 —— 引擎归一为去 `'` 的串）
+    e.set_pinned_reading(Some("ni'hao".into()));
+    let pinned: Vec<String> = e.candidates(8).into_iter().map(|c| c.text).collect();
+    assert_eq!(pinned, vec!["你好".to_string()], "收窄到 nihao 一族");
+    assert_eq!(e.buffer(), "64", "钉读音**不上屏**、不动缓冲");
+
+    // 解除 → 回全量
+    e.set_pinned_reading(None);
+    let back: Vec<String> = e.candidates(8).into_iter().map(|c| c.text).collect();
+    assert_eq!(back, all, "解除后回全量列表");
+
+    // 缓冲一变即作废（不用谁去清）：退格后含非 nihao 族
+    e.set_pinned_reading(Some("ni'hao".into()));
+    e.backspace(); // "6"
+    let after: Vec<String> = e.candidates(8).into_iter().map(|c| c.text).collect();
+    assert!(after.contains(&"你".to_string()), "退格后钉失效");
+    // 配对语义的边界（如实钉住）：缓冲回到 "64"，引擎层的钉**会复活** ——
+    // 应用侧在缓冲变化时显式 `pinReading("")` 清（见 EngineController.refresh 的看守）。
+    type_str(&mut e, "4");
+    let resurrected: Vec<String> = e.candidates(8).into_iter().map(|c| c.text).collect();
+    assert_eq!(
+        resurrected,
+        vec!["你好".to_string()],
+        "配对语义：同缓冲内钉仍在"
+    );
+}

@@ -46,6 +46,7 @@ use crate::jni_scheme::{
 // 越 500 行）。同样只为注册表能引用到它们。
 use crate::jni_candidates::{
     opijni_buffer, opijni_candidate_readings, opijni_candidates, opijni_display_buffer,
+    opijni_pin_reading,
 };
 /// inputKey(ch: String) -> String。永不 panic。单字符外（空/多字符/非 ASCII）返回空串。
 #[unsafe(no_mangle)]
@@ -409,6 +410,11 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _reserved: *mut c
                     jni_str!("candidateReadings"),
                     jni_str!("()[Ljava/lang/String;"),
                     opijni_candidate_readings as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("pinReading"),
+                    jni_str!("(Ljava/lang/String;)V"),
+                    opijni_pin_reading as *mut c_void,
                 ),
                 NativeMethod::from_raw_parts(
                     jni_str!("buffer"),

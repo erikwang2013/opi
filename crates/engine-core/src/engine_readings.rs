@@ -60,4 +60,26 @@ impl Engine {
         }
         cached.1.clone()
     }
+
+    /// 钉读音（9 键左列点一行拼音：**不确认**，候选列表收窄到该读音一族 ——
+    /// 2026-10-09 用户裁决「选择后所有候选词也跟着拼音变化显示出来，不要直接确认」）。
+    /// `None`/空串 = 解除。入参允许带分词（界面给的是 `ni'hao`），这里归一为去 `'` 的原串。
+    /// 与 `(缓冲, 读音)` 绑存：同一缓冲内有效，缓冲一走到别处即作废（不用谁去清）。
+    /// ⚠️ 配对语义的边界：缓冲「变了又变回去」（如退格再打同一串）会复活旧钉 ——
+    /// 调用侧（Android `EngineController`）在缓冲变化时显式 `pinReading("")` 清掉，
+    /// 引擎这层只管「同缓冲内有效」。
+    pub fn set_pinned_reading(&mut self, reading: Option<String>) {
+        self.pinned_reading = match reading {
+            Some(r) if !r.is_empty() => Some((self.buffer().to_string(), r.replace('\'', ""))),
+            _ => None,
+        };
+    }
+
+    /// 当前生效的钉读音（按缓冲校验过；不生效 ⇒ `None`）。`candidates()` 的九键分支用它。
+    pub(crate) fn active_pin(&self) -> Option<&str> {
+        match &self.pinned_reading {
+            Some((buf, r)) if buf == self.buffer() => Some(r.as_str()),
+            _ => None,
+        }
+    }
 }

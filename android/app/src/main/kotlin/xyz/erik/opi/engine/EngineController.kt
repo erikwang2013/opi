@@ -55,6 +55,10 @@ interface OpiEngineApi {
      * 非 9/14 键方案、或缓冲已变 ⇒ 空。调用顺序：先 [candidates]。 */
     fun candidateReadings(): Array<String>?
 
+    /** 钉读音（空串 = 解除）：9 键左列点一行拼音后**不确认**，候选收窄到该读音一族。
+     * 缓冲一变自动作废（引擎侧按缓冲配对校验；调用方还须在查看守里显式清）。 */
+    fun pinReading(reading: String)
+
     /** 显示用的拼音读数（9 键 = 带分词的 `ni'hao`；其余方案与 [buffer] 相同）。
      * **行为判定不许用它** —— 用 [buffer]（理由见 OpiEngine.displayBuffer）。 */
     fun displayBuffer(): String
@@ -118,6 +122,13 @@ class EngineController(
      * 逐条显示用（2026-10-09 用户裁决「一列多个、可滑动查看」）。 */
     var candidateReadings by mutableStateOf<List<String>>(emptyList())
         private set
+
+    /** 钉读音（9 键左列点一行拼音；空串 = 未钉）。候选列表收窄到该读音一族、**不上屏**。 */
+    var pinnedReading by mutableStateOf("")
+        private set
+
+    /** 钉它时的缓冲快照（缓冲一变即解除，见 [refresh] 的看守）。 */
+    private var pinBuffer: String? = null
 
     var shiftState by mutableStateOf(ShiftState.OFF)
         private set
@@ -185,6 +196,14 @@ class EngineController(
     /** 引擎状态回读；buffer 变化重置候选页码，候选数缩水时钳制页码。 */
     fun refresh() {
         buffer = api.buffer()
+        // 钉读音的缓冲看守：缓冲一走到别处即解除。引擎侧同样按缓冲配对校验（双保险），
+        // 但**不带这层的话「变了又变回」会让旧钉复活**（退格再打同一串）—— 见
+        // engine-core 的 `pinned_reading` 字段注释，那条边界就靠这里收。
+        if (pinBuffer != null && buffer != pinBuffer) {
+            api.pinReading("")
+            pinnedReading = ""
+            pinBuffer = null
+        }
         mode = EngineMode.fromInt(api.mode())
         learnerEnabled = api.learnerEnabled()
         fuzzyEnabled = api.fuzzyEnabled()
@@ -262,6 +281,23 @@ class EngineController(
         api.switchLanguage(mode.value, scheme.value)
         if (mode != EngineMode.ENGLISH) resetShift()
         refresh()
+    }
+
+    /**
+     * 钉/解钉一个读音（空串 = 解除）。2026-10-09 用户裁决：9 键左列点一行拼音，
+     * **不确认**，候选列表收窄到该读音一族。缓冲一变自动解除（[refresh] 的看守）。
+     */
+    fun pinReading(reading: String) {
+        api.pinReading(reading)
+        pinnedReading = reading
+        pinBuffer = if (reading.isEmpty()) null else buffer
+        refresh()
+    }
+
+    /** 点左列一行：同一读音再点 = 解除，否则钉上（都不上屏）。 */
+    fun togglePinnedReading(reading: String) {
+        if (reading.isEmpty()) return
+        pinReading(if (pinnedReading == reading) "" else reading)
     }
 
     // ---- 「属性设置」三个开关的写侧（设置页与偏好恢复共用；写引擎 + 重读）----

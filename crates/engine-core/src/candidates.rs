@@ -317,6 +317,7 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
     limit: usize,
     boost: u64,
     scheme: crate::scheme::Scheme,
+    pin: Option<&str>,
 ) -> (Vec<Candidate>, Vec<String>) {
     if input.is_empty() || limit == 0 {
         return (Vec::new(), Vec::new());
@@ -327,6 +328,13 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
     let mut merged: Vec<(Candidate, String)> = Vec::new();
     dict.visit_entries(&mut |pinyin, word, freq| {
         if !scheme.matches(input, pinyin) {
+            return;
+        }
+        // 钉读音（左列点一行拼音）：候选收窄到该读音一族 —— 前缀比较（`niu` 含
+        // `niuyou`），pin 已在边界处去掉分词 `'`（见 `Engine::set_pinned_reading`）。
+        if let Some(p) = pin
+            && !pinyin.starts_with(p)
+        {
             return;
         }
         let exact = pinyin.len() == input_len;

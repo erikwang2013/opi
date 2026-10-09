@@ -406,6 +406,25 @@ class EngineControllerTest {
     }
 
     @Test
+    fun pinnedReadingTogglesAndDiesWithTheBuffer() {
+        // 钉读音（点左列拼音行，2026-10-09 用户裁决「不要直接确认」）：同值再点 = 解除；
+        // 缓冲一变由 refresh 的看守清掉（引擎侧同样按缓冲校验，双保险）。
+        val fake = FakeEngine().apply { buf = "64" }
+        val ctrl = EngineController(fake)
+        ctrl.togglePinnedReading("niu")
+        assertEquals("niu", ctrl.pinnedReading)
+        assertEquals(listOf("niu"), fake.pinCalls)
+        ctrl.togglePinnedReading("niu") // 同一读音再点 = 解除
+        assertEquals("", ctrl.pinnedReading)
+        assertEquals(listOf("niu", ""), fake.pinCalls)
+        ctrl.togglePinnedReading("ni")
+        fake.buf = "6" // 缓冲一变
+        ctrl.refresh()
+        assertEquals("", ctrl.pinnedReading)
+        assertEquals("", fake.pinCalls.last())
+    }
+
+    @Test
     fun readingReflectsTheLatestCandidatesFetchNotAStaleOne() {
         // 读数必须**最后读**（refresh 的读序契约）：真引擎的读数是 candidates() 的
         // 副产物、且与算它时的缓冲绑存（FakeEngine.readingModel 按此模拟）。先读

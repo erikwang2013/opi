@@ -277,7 +277,12 @@ private fun KeyboardArea(
                     // 读数空（没候选/已提交/退空）就回到标点列；不回退显示数字串
                     // （那是上一版的自作主张，用户明确不要）。
                     readings = controller.candidateReadings,
-                    onPickReading = router::handleReading,
+                    onPickReading = { i ->
+                        // 点拼音行 = **钉读音**（2026-10-09 用户裁决「不要直接确认」）：
+                        // 候选收窄到该读音一族、不上屏；同一行再点 = 解除。
+                        controller.candidateReadings.getOrNull(i)?.let(controller::togglePinnedReading)
+                    },
+                    pinnedReading = controller.pinnedReading,
                     scrollKey = controller.buffer,
                     modeLabel = label,
                     big = state.inputMode == InputMode.BIG9,

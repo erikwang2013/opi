@@ -337,6 +337,12 @@ impl Api {
         self.router.engine().candidate_readings()
     }
 
+    /// 钉读音（JNI 出口 `pinReading`）：候选收窄到该读音一族、不上屏；空 = 解除。
+    /// 缓冲一变自动作废（引擎侧配对校验）。调用方重读 candidates/读数。
+    pub fn set_pinned_reading(&mut self, reading: Option<String>) {
+        self.router.engine_mut().set_pinned_reading(reading);
+    }
+
     /// raw 出口（**全局**索引，JNI 与既有 `opi_select` 用）。选中即清空 buffer →
     /// 必须对齐页码；越界返回空串、buffer 不变，此时对齐也是 no-op。
     /// 页内索引请用 [`Api::select_page`]（`opi_select_page`），UI 不需要知道 PAGE_SIZE。

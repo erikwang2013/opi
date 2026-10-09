@@ -93,6 +93,12 @@ class FakeEngine : OpiEngineApi {
     var candReadings: Array<String>? = null
     override fun candidateReadings(): Array<String>? = candReadings
 
+    /** 钉读音（真引擎：候选收窄到该读音一族；空串 = 解除）。 */
+    val pinCalls = mutableListOf<String>()
+    override fun pinReading(reading: String) {
+        pinCalls += reading
+    }
+
     /** 显示读数（真引擎：9 键 = 带分词的读音）。默认与 buf 同步，测试要区分时单设。 */
     var displayBuf: String? = null
 
