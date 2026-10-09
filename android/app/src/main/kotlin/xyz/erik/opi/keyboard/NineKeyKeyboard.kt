@@ -84,6 +84,8 @@ fun NineKeyKeyboard(
     /** 逐条候选拼音读数（9 键左列按候选逐行显示，如 `ni'hao`；与候选同序等长。
      * 空列表 = 没在输入/无候选，左列显示标点）。 */
     readings: List<String> = emptyList(),
+    /** 点第 i 行拼音 = 上屏第 i 条候选（**全量**下标，见本文件读数行的注释）。 */
+    onPickReading: (Int) -> Unit = {},
     /** 读数列的滚动复位键（传缓冲：缓冲一变整列回顶部，别停在旧位置）。 */
     scrollKey: String = "",
     modeLabel: String = "中",
@@ -118,9 +120,17 @@ fun NineKeyKeyboard(
                                 .verticalScroll(remember(scrollKey) { ScrollState(0) }),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            for (r in readings) {
+                            for ((i, r) in readings.withIndex()) {
                                 Box(
-                                    modifier = Modifier.fillMaxWidth().height(cell),
+                                    // 点一行拼音 = **上屏对应候选**（2026-10-09 用户裁决；
+                                    // 下标是**全量列表**的下标 —— 读数列跨页，与候选行的
+                                    // 页内下标不同，收口在 KeyRouter.handleReading）。
+                                    modifier = Modifier.fillMaxWidth().height(cell)
+                                        .clickable { onPickReading(i) }
+                                        .semantics {
+                                            role = Role.Button
+                                            contentDescription = "第 ${i + 1} 项拼音 $r，点击上屏"
+                                        },
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Text(

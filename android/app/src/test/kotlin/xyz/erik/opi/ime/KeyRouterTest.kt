@@ -84,6 +84,20 @@ class KeyRouterTest {
     }
 
     @Test
+    fun readingTapCommitsByGlobalIndex() {
+        // 点左列第 i 行拼音 = 上屏**全量**第 i 条候选（读数列跨页，不是页内下标）——
+        // 用第 9 条（> 页大小 8）钉坐标系别被写成页内。
+        val fake = FakeEngine().apply { selectResults[9] = "第九条" }
+        val ch = Channel()
+        val (_, r) = router(fake, ch)
+        r.handleReading(9)
+        assertEquals(listOf("第九条"), ch.commits)
+        // 越界（引擎回空串）不提交
+        r.handleReading(999)
+        assertEquals(listOf("第九条"), ch.commits)
+    }
+
+    @Test
     fun pinyinLetterRoutesToEngine() {
         val fake = FakeEngine().apply { buf = "w" }
         val ch = Channel()

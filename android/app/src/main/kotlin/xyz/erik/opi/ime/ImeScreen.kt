@@ -277,6 +277,7 @@ private fun KeyboardArea(
                     // 读数空（没候选/已提交/退空）就回到标点列；不回退显示数字串
                     // （那是上一版的自作主张，用户明确不要）。
                     readings = controller.candidateReadings,
+                    onPickReading = router::handleReading,
                     scrollKey = controller.buffer,
                     modeLabel = label,
                     big = state.inputMode == InputMode.BIG9,
