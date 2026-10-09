@@ -151,6 +151,26 @@ jobs:
         run: ./gradlew.bat packageMsi --no-daemon
         working-directory: desktop
 
+      # jpackage 是 Gradle 起的外部进程，**它的话不在 Gradle 的输出里** —— 失败时
+      # Gradle 只报「Exit code: 1」+ 两行日志文件路径，真原因（light.exe/candle.exe 说什么、
+      # 哪个参数不被接受）在那两个 .txt 里。缺了这一步，红的信息量只剩「jpackage 挂了」。
+      - name: jpackage 失败时把它的日志与参数打出来
+        if: failure()
+        shell: pwsh
+        run: |
+          $dir = 'desktop/build/compose/logs/packageMsi'
+          if (Test-Path $dir) {
+            Get-ChildItem "$dir/*.txt" | ForEach-Object {
+              Write-Host "==== $($_.Name) ===="
+              Get-Content $_.FullName
+            }
+          } else { Write-Host "没有 $dir（jpackage 没跑到写日志那一步）" }
+          $argsFile = 'desktop/build/compose/tmp/packageMsi.args.txt'
+          if (Test-Path $argsFile) {
+            Write-Host "==== jpackage 收到的参数 ===="
+            Get-Content $argsFile
+          } else { Write-Host "没有 $argsFile" }
+
       - uses: actions/upload-artifact@v4
         with:
           name: opi-desktop-msi-v${{ needs.version.outputs.version }}
