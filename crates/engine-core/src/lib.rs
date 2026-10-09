@@ -13,6 +13,8 @@ pub mod engine;
 mod engine_punct_impl; // 标点/全角一族（500 行门禁拆出，见文件头）
 #[path = "engine_readings.rs"]
 mod engine_readings_impl; // 9 键读数一族（500 行门禁拆出，见文件头）
+#[path = "engine_segment.rs"]
+mod engine_segment_impl; // 分词回退的收尾（500 行门禁拆出，见文件头）
 #[path = "engine_symbol_browse.rs"]
 mod engine_symbol_browse_impl; // 符号浏览一族（500 行门禁拆出，见文件头）
 pub mod fuzzy;

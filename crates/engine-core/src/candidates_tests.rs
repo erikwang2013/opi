@@ -194,9 +194,11 @@ fn dedupes_across_sources() {
     assert_eq!(got.len(), 3);
 }
 
-/// 逐音节回退分支必须与主路径遵守同一条不变式：**不能**按静态词频先截断再算分。
-/// 回归形态：`dict.query(&syl, 3)` 截的是静态前 3，学过的词在加 boost 之前就被丢弃，
-/// 于是「学了几十次也不出现」。
+/// 回退分支必须与主路径遵守同一条不变式：**不能**按静态词频先截断再算分。
+/// 回归形态：`dict.query(&syl, 3)` / `dict.query(input, n)` 截的是静态前 N，学过的词在加
+/// boost 之前就被丢弃，于是「学了几十次也不出现」。
+/// （2026-10-10 分词回退上线后 `haoxiao` 走**最长前缀 `hao`** 的整档、不再走逐音节汤，
+/// 断言仍逐字成立；逐音节汤那一份不变式由 tests/ranking_invariants.rs 的 `zhonx` 用例钉。）
 #[test]
 fn fallback_keeps_learned_word_beyond_static_top3() {
     let mut d = InMemoryDictionary::new();
@@ -209,7 +211,7 @@ fn fallback_keeps_learned_word_beyond_static_top3() {
     let mut l = Learner::new(true);
     l.record_selection("好");
 
-    // 整串 "haoxiao" 无词条 → 走逐音节回退
+    // 整串 "haoxiao" 无词条 → 走分词回退（最长前缀 `hao` 的整档）
     let got = rank_and_pick(
         &d,
         &s,
@@ -227,12 +229,19 @@ fn fallback_keeps_learned_word_beyond_static_top3() {
     assert_eq!(got[0].text, "好", "带 boost 的「好」应排首位");
 }
 
+/// 多音节整串无命中 ⇒ **分词回退**（2026-10-10 用户裁决「输入拼音无匹配时要分词匹配」）：
+/// 候选 = **最长可匹配前缀**的整档，选中后缓冲留剩下的后缀接着编。
+///
+/// 旧语义（本用例原名 `multi_syllable_falls_back_to_per_syllable`）：整串无命中时按音节
+/// **逐字**补候选 —— 好（hao 组）与 笑（xiao 组）各一条。新语义下 `hao` 的整档接管，
+/// `xiao` 一族不在候选里（那是选中「好」之后那一段的事），故断言换成
+/// 「与直接打前缀逐条同序」——同一条排序路径的**最强表述**。
 #[test]
-fn multi_syllable_falls_back_to_per_syllable() {
+fn multi_syllable_no_match_falls_back_to_the_longest_prefix() {
     let d = test_dict();
     let s = no_symbols();
     let l = Learner::new(false);
-    // 整串 "haoxiao" 无词条 → 按音节 [hao][xiao] 补出逐字候选
+    let direct = rank_and_pick(&d, &s, &l, "hao", Mode::Pinyin, DEFAULT_TOP_N, USER_BOOST);
     let got = rank_and_pick(
         &d,
         &s,
@@ -242,8 +251,17 @@ fn multi_syllable_falls_back_to_per_syllable() {
         DEFAULT_TOP_N,
         USER_BOOST,
     );
-    assert!(got.iter().any(|c| c.text == "好"));
-    assert!(got.iter().any(|c| c.text == "笑"));
+    let texts: Vec<&str> = got.iter().map(|c| c.text.as_str()).collect();
+    assert!(texts.contains(&"好"), "回退档丢了前缀的候选：{texts:?}");
+    assert!(
+        !texts.contains(&"笑"),
+        "第二个音节不该混进回退档（选中「好」后缓冲留着 xiao）：{texts:?}"
+    );
+    assert_eq!(
+        texts,
+        direct.iter().map(|c| c.text.as_str()).collect::<Vec<_>>(),
+        "回退档必须与「直接打前缀」逐条同序（同一条排序路径）"
+    );
 }
 
 /// 精确等长匹配必须整体排在前缀扩展之前：查询是前缀语义（`xian` 命中 `xiang`），
@@ -344,11 +362,15 @@ fn symbol_mode_returns_symbols_only() {
     );
 }
 
-/// 逐音节回退路径里也要有模糊（lead 订正 2）：整串无命中时按音节补候选，
-/// 每个音节除自身外还要查它的模糊变体 —— `zong` 的变体 `zhong` 才带得来「中」。
-/// 变体命中一律非精确，故「中」必须排在精确档的「总/国」之后。
+/// 回退档内部的分档规则与主路径同源（lead 订正 2 的延续）：**精确在前、模糊在后**。
+///
+/// 旧语义（本用例原名 `fallback_loop_appends_fuzzy_after_exact`）：逐音节汤里每个音节
+/// 除自身外再查一次模糊变体（`zong` 的变体 `zhong` 才带得来「中」），断言「总/国」在
+/// 「中」前。新语义下 `zongguo` 由最长前缀 `zong` 的整档接管，带出「中」的是**前缀
+/// 自己**的整串变体（`zong↔zhong`，「更具体的匹配优先」在递归里同样生效）；「国」不在
+/// 这一档 —— 选中「总」后缓冲剩 `guo`，下一轮才出。
 #[test]
-fn fallback_loop_appends_fuzzy_after_exact() {
+fn fallback_prefix_table_keeps_exact_before_fuzzy() {
     let mut d = InMemoryDictionary::new();
     d.insert("zong", "总", 1_000);
     d.insert("guo", "国", 900);
@@ -364,14 +386,15 @@ fn fallback_loop_appends_fuzzy_after_exact() {
         USER_BOOST,
     );
     let texts: Vec<&str> = got.iter().map(|c| c.text.as_str()).collect();
-    assert!(
-        texts.contains(&"中"),
-        "逐音节回退没有模糊：「中」缺：{texts:?}"
-    );
-    let pos = |w: &str| texts.iter().position(|t| *t == w).expect("候选必须在");
-    assert!(
-        pos("总") < pos("中") && pos("国") < pos("中"),
+    assert!(texts.contains(&"中"), "回退档没有模糊：「中」缺：{texts:?}");
+    assert_eq!(
+        texts.first(),
+        Some(&"总"),
         "模糊命中抢到精确档前面：{texts:?}"
+    );
+    assert!(
+        !texts.contains(&"国"),
+        "后一个音节不该混进回退档（选中「总」后缓冲留着 guo）：{texts:?}"
     );
 }
 

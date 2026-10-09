@@ -20,7 +20,7 @@ pub struct Engine {
     /// 横竖撇捺折），词是单字。`Scheme::Stroke` 时改查它。None = 笔画方案回退
     /// 普通路径（可选增强，与 trad 同一姿态）。
     stroke_dict: Option<Box<dyn Dictionary>>,
-    composer: Composer,
+    pub(crate) composer: Composer, // pub(crate)：engine_segment.rs 的收尾要用（见文件头）
     /// 符号表引擎（`symbol_blocks` 一族的 impl 在 engine_symbol_browse.rs，故 pub(crate)）。
     pub(crate) symbols: SymbolEngine,
     /// 符号浏览（「符号大全」）：数据 + 浏览态（`active` 字段）。**active 时劫持
@@ -63,7 +63,7 @@ pub struct Engine {
     pub(crate) quotes: Quotes,
     /// 模糊音开关（「属性设置」可改；排序层的门控见 `candidates::RankOptions`）。
     /// 默认 `true` = 既有行为。
-    fuzzy: bool,
+    pub(crate) fuzzy: bool, // pub(crate)：engine_segment.rs 判回退时要问它
     /// 简拼开关。默认 `true` = 既有行为。
     jianpin: bool,
 }
@@ -120,8 +120,8 @@ impl Engine {
         self.trad_dict = dict;
     }
 
-    /// 当前模式生效的词典。
-    fn active_dict(&self) -> &dyn Dictionary {
+    /// 当前模式生效的词典（`pub(crate)`：engine_segment.rs 的回退判定要用同一个词典）。
+    pub(crate) fn active_dict(&self) -> &dyn Dictionary {
         match self.composer.session().mode {
             Mode::Traditional => self.trad_dict.as_deref().unwrap_or(&*self.dict),
             _ => &*self.dict,
@@ -207,8 +207,9 @@ impl Engine {
                     self.composer.commit_buffer();
                     buffer
                 } else {
-                    // 走 select_from：候选提交的收尾（记学习 / 清缓冲 / 记页码）只此一份
-                    self.select_from(&cands, 0)
+                    let text = self.select_from(&cands, 0);
+                    self.composer.commit_buffer(); // 空格 = 整段上屏：不留回退后缀（钉：adversarial_input.rs）
+                    text
                 }
             }
             // 符号模式：候选就是符号（缓冲是关键字）。无候选 → 空串，路由层据此回
@@ -434,7 +435,7 @@ impl Engine {
             Some(c) => {
                 let text = c.text.clone();
                 self.learner.record_selection(&text);
-                self.composer.commit_buffer();
+                self.commit_buffer_after_select(); // 分词回退态只消耗前缀（engine_segment.rs）
                 // 符号模式一次一符号（用户裁决 2026-09-27）：提交后回拼音，不跨键保持
                 // ——下一次击键就是拼音，不需要先手动切回。放这一层是因为候选提交的收尾
                 // 只此一处：四端（fcitx5 / TSF / Android / Apple）自动一致，
@@ -495,6 +496,5 @@ impl Engine {
         self.learner.import_json(json)
     }
 
-    // `symbol_blocks` / `symbols_in_block` / `search_symbols` 一族搬去
-    // engine_symbol_browse.rs（500 行门禁，见那个文件头）——路径与语义一字未动。
+    // 【另有】符号大全 / 分词回退收尾分别在 engine_symbol_browse.rs / engine_segment.rs。
 }

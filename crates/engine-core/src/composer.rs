@@ -202,6 +202,17 @@ impl Composer {
         self.session.clone()
     }
 
+    /// 提交当前缓冲、但**留下后缀** `suffix`：缓冲缩成它，接着编（不记录学习，同
+    /// [`Self::commit_buffer`]）。分词回退的收尾专用 —— 判据与后缀怎么切在
+    /// `candidates::segment_fallback`，调用点在 `Engine::commit_buffer_after_select`。
+    /// `suffix` 必须是当前缓冲去掉前缀后的剩余（调用方保证；本层不做校验，
+    /// 与 `commit_buffer` 同一条「薄壳」定位）。
+    pub fn commit_keep_suffix(&mut self, suffix: &str) -> Session {
+        self.session.buffer.clear();
+        self.session.buffer.push_str(suffix);
+        self.session.clone()
+    }
+
     pub fn session(&self) -> &Session {
         &self.session
     }

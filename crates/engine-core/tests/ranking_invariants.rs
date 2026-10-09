@@ -159,20 +159,23 @@ fn limit_is_not_pushed_down_into_dictionary_query() {
 }
 
 /// 逐音节兜底路径的 top-3 同样必须按**含学习权重的最终分**选，不能按静态词频选 ——
-/// 静态垫底但学过的字（hao 组里的「好」，静态第 7）必须能进候选。
+/// 静态垫底但学过的字必须能进候选。
 /// 若把 top-3 交给 `dict.query(&syl, 3)`（或先按静态排序再 take），它在加 boost 前就被丢了。
+///
+/// 夹具 2026-10-10 换过：分词回退上线后 `haoxiao` 由最长前缀 `hao` 的整档接管、走不到
+/// 逐音节汤（那条新语义见下一条用例），故本用例改钉**首段切出来不是完整音节**的输入
+/// （`zhonx`：`zhon` 是音节前缀但不是音节 ⇒ 回退不成立 ⇒ 汤照旧）。机制断言一字不变。
 #[test]
 fn per_syllable_fallback_picks_top3_by_final_score() {
     let mut d = InMemoryDictionary::new();
     for i in 0..6 {
-        d.insert("hao", &format!("生{i}"), 10_000 - i as u32);
+        d.insert("zhong", &format!("生{i}"), 10_000 - i as u32);
     }
-    d.insert("hao", "好", 1); // 静态垫底
-    d.insert("xiao", "笑", 9_000);
+    d.insert("zhong", "好", 1); // 静态垫底（第 7）
     let mut l = Learner::new(true);
     l.record_selection("好");
     let boost = USER_BOOST.max(10_000 * 2);
-    let got = rank_and_pick(&d, &no_symbols(), &l, "haoxiao", Mode::Pinyin, 8, boost);
+    let got = rank_and_pick(&d, &no_symbols(), &l, "zhonx", Mode::Pinyin, 8, boost);
     assert_eq!(
         got[0].text,
         "好",
@@ -180,11 +183,44 @@ fn per_syllable_fallback_picks_top3_by_final_score() {
         cand_texts(&got)
     );
     assert!(
-        got.iter().any(|c| c.text == "笑"),
-        "第二个音节（xiao）的候选丢了：{:?}",
+        got.iter().any(|c| c.text == "生0"),
+        "逐音节 top-3 少了静态第二名：{:?}",
+        cand_texts(&got)
+    );
+    assert!(
+        !got.iter().any(|c| c.text == "生5"),
+        "逐音节档必须仍然 top-3 截断（否则整组都进候选）：{:?}",
         cand_texts(&got)
     );
     assert!(got.len() <= 8);
+}
+
+/// 上一条换夹具丢掉的那半（2026-10-10 分词回退）：整串无命中、且存在
+/// 「每段都是完整音节 + 有命中」的前缀时，候选换成**最长前缀的整档**，逐音节汤被取代 ——
+/// `haoxiao` → `hao` 的整档（好/号），「笑」不在里面；选中「好」后缓冲剩 `xiao` 接着编
+/// （收尾见 `engine_segment.rs`）。这是 `per_syllable_fallback_picks_top3_by_final_score`
+/// 旧夹具下的**新语义对应预期**。
+#[test]
+fn complete_syllable_prefix_takes_over_the_per_syllable_soup() {
+    let mut d = InMemoryDictionary::new();
+    d.insert("hao", "好", 5_000);
+    d.insert("hao", "号", 1_200);
+    d.insert("xiao", "笑", 9_000); // 静态更高，但不在回退档里
+    let got = rank_and_pick(
+        &d,
+        &no_symbols(),
+        &Learner::new(false),
+        "haoxiao",
+        Mode::Pinyin,
+        8,
+        USER_BOOST,
+    );
+    assert_eq!(
+        cand_texts(&got),
+        vec!["好", "号"],
+        "回退档 = 最长完整音节前缀的整档：{:?}",
+        cand_texts(&got)
+    );
 }
 
 /// 同一词挂在**多条拼音行**下（多音字：好 hǎo/hào，行 xíng/háng）时，`dict.query("ha")`
