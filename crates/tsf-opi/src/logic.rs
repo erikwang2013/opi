@@ -192,6 +192,8 @@ impl TsfLogic {
         self.engine.set_jianpin(on);
     }
 
+    /// 切模式（**不收尾**：待处理的缓冲由 `Composer::switch_mode` 直接清掉）。
+    /// 需要「有候选上首候选、无候选上原文」的切走收尾用 [`Self::switch_mode_confirmed`]。
     pub fn switch_mode(&mut self, mode: Mode) {
         self.engine.switch_mode(mode);
         // ⇧ 只在 English 有意义，判据与 Android `EngineController.switchMode` 的
@@ -202,6 +204,26 @@ impl TsfLogic {
             self.shift_state = ShiftState::Off;
         }
         self.reset_page_if_buffer_changed();
+    }
+
+    /// 切走/切英文的**直接确认 + 切换**（W1）：先把待处理的缓冲按「有候选上首候选、
+    /// 无候选上原文」收尾（**先退符号浏览**恢复真缓冲 —— 顺序承重，契约见
+    /// `engine-core/src/engine_symbol_browse.rs` 头），再切模式。返回**待上屏文本**
+    /// （空串 = 无提交）—— 调用方负责插入文档。
+    /// **先确认后切**也是承重的：确认发生在原模式下；顺序反了，英文模式的候选集是
+    /// 空的，「ni」会以原文上屏而不是首候选「你」。
+    /// 与 [`Self::switch_mode`] 的唯一差别就是这步收尾：那条路（本轨 Ctrl+' 的
+    /// `toggle_mode`）`Composer::switch_mode` 只清缓冲，打到一半的拼音被静默丢弃。
+    /// 配对：`fcitx5-opi/src/candidate.rs` 的同名方法（两轨同构，改一处必须改另一处）。
+    /// ⚠️ **本回合无生产调用方**（2026-10-10 裁决「状态机语义先立住、如实注明」）：
+    /// tsf 的切英文路径仍是 `toggle_mode` → `switch_mode`（丢缓冲）—— 接线 = 改调
+    /// 本函数并把返回值插入文档（Windows 侧插入面未验证，不目测）。fcitx5 侧同语义的
+    /// 另一个实现是 glue 的 C++（「先 `opi_fcitx5_symbol_browse(0)` 退浏览、再按
+    /// W1 提交」）。
+    pub fn switch_mode_confirmed(&mut self, mode: Mode) -> String {
+        let text = self.engine.confirm_pending();
+        self.switch_mode(mode); // 切换与 ⇧/页码收尾复用既有实现，不复制一份
+        text
     }
 
     /// 全角 ↔ 半角，返回切换后的状态（状态栏显示用）。语义全在引擎层
@@ -219,6 +241,46 @@ impl TsfLogic {
         // shift 不改变 buffer（reset_page_if_buffer_changed 不会触发），但
         // 可能改变候选集；将页码钳制到当前 page_count 边界，防 page 越界。
         self.set_page(self.page);
+    }
+
+    // ---- 符号浏览（「符号大全」）：转发 + 分页收敛。宿主键路由见
+    // logic_input_method.rs 的浏览分支；契约（buffer 劫持 / 未处理键先退出 /
+    // W1 先退出）在 engine-core/src/engine_symbol_browse.rs 头。
+    // 配对：fcitx5-opi/src/candidate.rs 的同名方法（两轨同构，改一处必须改另一处）。
+    // 【本回合 Windows 侧无装载接线】`load_symbol_categories` 暂无生产调用方
+    // （2026-10-10 裁决：Windows 符号页由桌面 Compose 自渲染，点选走
+    // candidate_io.rs 的 `commit_text` 直插）—— 无数据 ⇒ 入口恒 false 且
+    // `enter_symbol_browse` 被拒，即「没接线」的唯一后果是惰性，不是坏状态。
+
+    /// 装载类目数据（TSV 串；文件读取在宿主侧 —— engine-core 禁 IO）。
+    /// 返回跳过的坏行数；**替换**数据集并复位浏览态。buffer 随之变化 → 页码归零。
+    pub fn load_symbol_categories(&mut self, tsv: &str) -> usize {
+        let skipped = self.engine.load_symbol_categories(tsv);
+        self.reset_page_if_buffer_changed();
+        skipped
+    }
+
+    /// 类目数据是否可用（入口闸门：无数据 ⇒ false ⇒ 宿主把入口禁用）。
+    pub fn symbol_browse_available(&self) -> bool {
+        self.engine.symbol_browse_available()
+    }
+
+    pub fn is_symbol_browsing(&self) -> bool {
+        self.engine.is_symbol_browsing()
+    }
+
+    /// 进入浏览（无数据 → false，入口禁用）；已在浏览态 = no-op。
+    /// buffer 从真缓冲变标题 → 页码归零（reset）。
+    pub fn enter_symbol_browse(&mut self) -> bool {
+        let ok = self.engine.enter_symbol_browse();
+        self.reset_page_if_buffer_changed();
+        ok
+    }
+
+    /// 退出浏览（幂等、**同步**：返回时 buffer() 已是真缓冲 —— 切走前的强制前置）。
+    pub fn exit_symbol_browse(&mut self) {
+        self.engine.exit_symbol_browse();
+        self.reset_page_if_buffer_changed();
     }
 
     // ---- ⇧ 状态机（镜像 Android EngineController.shiftTap/ShiftLongPress/consumeSingleShift）----

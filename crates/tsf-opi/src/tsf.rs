@@ -16,8 +16,8 @@
 //!          （`state.rs` 的 `insert_into`：RequestEditSession + ITfEditSession::DoEditSession）。
 //!   [骨架] composition（拼音缓冲）不做进文档 —— 缓冲显示在独立候选窗里
 //!          （见 candidate_io.rs），故文档侧只有"插入"没有 composition 生命周期。
-//!   [已接线] 候选窗点击选词/翻页 → `candidate_io.rs` 的 `CandidateAction`，
-//!          插入目标由本文件每个键事件存进 `TsfSharedState`（B1）。
+//!   [已接线] 候选窗点击选词/翻页/直插文本（符号页 `commit_text`）→ `candidate_io.rs`
+//!          的 `CandidateAction`，插入目标由本文件每个键事件存进 `TsfSharedState`（B1）。
 //!   [已补] COM 服务器导出与注册在 `com_server.rs`（类工厂 / DllRegisterServer）。
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -150,21 +150,25 @@ impl TsfTextService {
             return BOOL(1); // 中毒锁：吞键，与 handle_key_inner 同策略
         };
         let target = hotkey_target(hot, logic.mode());
+        // 切走/切英文的收尾（W1：有候选首候选、无候选原文）在
+        // `logic.switch_mode_confirmed` —— 本函数走 `switch_mode`（丢缓冲）。
+        // 接线 = 改调它并把返回值插入文档（2026-10-10 裁决：状态机语义先立住，
+        // 插入面未接线如实注明）。
         logic.switch_mode(target);
         push_state(&*self.sink, &logic);
         BOOL(1)
     }
 
-    /// 候选窗点选的**唯一执行点**：读线程只把 index 排进队列（它拿不到
-    /// `ITfContext` —— 那是本线程的 COM 接口指针，见 state.rs 模块头），
+    /// 候选窗回复（点选 / 直插文本）的**唯一执行点**：读线程只把 index/文本排进
+    /// 队列（它拿不到 `ITfContext` —— 那是本线程的 COM 接口指针，见 state.rs 模块头），
     /// 真正走 COM 的插入在这里、在按键线程上跑。
     ///
     /// **已知代价：点到下一次按键之间才插入**。即时插入的两条升级路径（都要真机）
-    /// 写在 state.rs 模块头。一次按键最多清空队列（上限 16 条）。
+    /// 写在 state.rs 模块头。一次按键最多清空队列（各上限 16 条）。
     ///
     /// 已接受的一个边缘：点了候选后**没敲键就换文档**，插入会落到上一个文档
     /// （目标取自上一次键事件）。这是"排回按键线程"的固有代价 —— 队列里只有一个
-    /// index，没有可判定的新旧依据；换文档时的正确行为需要真机才能定。
+    /// index/文本，没有可判定的新旧依据；换文档时的正确行为需要真机才能定。
     fn drain_pending(&self) {
         while let Some(index) = self.state.take_pending_selection() {
             if self.state.select_and_insert(index).is_none() {
@@ -175,6 +179,12 @@ impl TsfTextService {
             if let Some(logic) = self.state.lock_logic() {
                 push_state(&*self.sink, &logic);
             }
+        }
+        // 候选窗「直接插入」（commit_text：符号页多选）：插文档但**不动引擎、不通知
+        // sink**（`on_commit` 会收起窗口，而符号页要留在屏幕上连续点选；裁决
+        // 2026-10-10，见 candidate_io.rs 协议头）。与上面同受"延迟到下一次按键"的约束。
+        while let Some(text) = self.state.take_pending_text() {
+            self.state.insert_text(&text);
         }
     }
 

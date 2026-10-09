@@ -9,7 +9,7 @@ use crate::dictionary::Dictionary;
 use crate::learner::Learner;
 use crate::punctuation::Quotes;
 use crate::scheme::Scheme;
-use crate::symbols::{Block, BlockId, SymbolEngine, SymbolEntry};
+use crate::symbols::SymbolEngine;
 
 /// 引擎门面：输入法 UI 层（经 FFI）交互的唯一入口。
 pub struct Engine {
@@ -21,8 +21,13 @@ pub struct Engine {
     /// 普通路径（可选增强，与 trad 同一姿态）。
     stroke_dict: Option<Box<dyn Dictionary>>,
     composer: Composer,
-    symbols: SymbolEngine,
-    learner: Learner,
+    /// 符号表引擎（`symbol_blocks` 一族的 impl 在 engine_symbol_browse.rs，故 pub(crate)）。
+    pub(crate) symbols: SymbolEngine,
+    /// 符号浏览（「符号大全」）：数据 + 浏览态（`active` 字段）。**active 时劫持
+    /// `buffer()` 返回标题**；契约（含「切走提交前必须先 exit」）见 engine_symbol_browse.rs 头。
+    pub(crate) symbol_browse: crate::symbol_browse::SymbolBrowse,
+    /// 学习器（`pub(crate)`：符号浏览的提交收尾与 `select_from` 同一条，归 engine_symbol_browse.rs）。
+    pub(crate) learner: Learner,
     /// 用户词频权重，按词典最大静态词频动态缩放（一次选词即压过所有静态词）。
     user_boost: u64,
     /// 钉读音（9 键左列点一行拼音：**不确认**，候选收窄到该读音一族 —— 2026-10-09
@@ -95,6 +100,7 @@ impl Engine {
             quotes: Quotes::default(),
             fuzzy: true,
             jianpin: true,
+            symbol_browse: Default::default(),
         }
     }
 
@@ -163,6 +169,9 @@ impl Engine {
     /// 三轨的「直通」是把自己交还给客户端应用，Android 没有这一层，返回空串
     /// 就等于吞键（NumberPad 的 `,` `.` 正是靠这条活在引擎里）。
     pub fn input_key(&mut self, ch: char) -> String {
+        // 浏览态：「未处理键先退出浏览、再按正常流程处理」的统一落点（契约见
+        // engine_symbol_browse.rs 头）——不许带着「符号」标题落进正常路由。
+        self.leave_symbol_browse_if_needed();
         if ch == ' ' {
             return self.input_space();
         }
@@ -189,6 +198,7 @@ impl Engine {
     /// 无候选时的行为**有意分叉**：拼音/繁体提交原始缓冲（这是「打英文」的逃生口），
     /// 符号模式什么都不提交 —— 缓冲里是关键字（`dunx`），不是要上屏的文本。
     pub fn input_space(&mut self) -> String {
+        self.leave_symbol_browse_if_needed(); // 直调引擎的出口（C ABI）也走同一条（契约 ②）
         match self.composer.session().mode {
             Mode::Pinyin | Mode::Traditional => {
                 let buffer = self.composer.session().buffer.clone();
@@ -221,10 +231,12 @@ impl Engine {
     }
 
     pub fn backspace(&mut self) {
+        self.leave_symbol_browse_if_needed(); // 同 input_space（契约 ②；宿主路由是主路，这里是兜底）
         self.composer.backspace();
     }
 
     pub fn clear(&mut self) {
+        self.symbol_browse.exit(); // 清会话 = 退出浏览（数据留着；面板随 buffer 空收起）
         self.composer.clear();
     }
 
@@ -288,6 +300,11 @@ impl Engine {
     }
 
     pub fn buffer(&self) -> &str {
+        // 浏览态返回的是**标题**（一级「符号」/ 二级「符号·名称」），不是 composer 真缓冲
+        // —— 面板按「buffer 非空」决定显示，这是载体不是意外（契约见 engine_symbol_browse.rs 头）。
+        if self.symbol_browse.is_active() {
+            return self.symbol_browse.preedit();
+        }
         &self.composer.session().buffer
     }
 
@@ -316,6 +333,10 @@ impl Engine {
     }
 
     pub fn candidates(&self, limit: usize) -> Vec<Candidate> {
+        // 浏览态：候选 = 浏览器当前层（类目 / 该类目的符号）；分页照旧归宿主（skip/take）。
+        if self.symbol_browse.is_active() {
+            return self.symbol_browse.candidates(limit);
+        }
         let s = self.composer.session();
         // 输入方案分流（2026-10-09）：只在「会打拼音缓冲」的两个模式下有意义
         // （English/Number/Symbol 的缓冲不是拼音串）。
@@ -404,6 +425,11 @@ impl Engine {
     /// 唯一区别是不重算候选表 —— 数字选词在 `digit_select` 里已经抓过一次，
     /// 再排一遍整表是纯浪费。`Engine::select` 保留原签名（C 出口的全局索引用它）。
     pub fn select_from(&mut self, cands: &[Candidate], index: usize) -> String {
+        // 浏览态：select = 激活浏览项（类目下钻返回空串 / 符号上屏并回一级），不是提交候选。
+        // 面板点击与数字键因此同一条，且任何路径都提交不出类目名（见 engine_symbol_browse.rs 头）。
+        if self.symbol_browse.is_active() {
+            return self.symbol_browse_select(index);
+        }
         match cands.get(index) {
             Some(c) => {
                 let text = c.text.clone();
@@ -469,15 +495,6 @@ impl Engine {
         self.learner.import_json(json)
     }
 
-    pub fn symbol_blocks(&self) -> Vec<Block> {
-        self.symbols.common_blocks()
-    }
-
-    pub fn symbols_in_block(&self, id: BlockId) -> Vec<SymbolEntry> {
-        self.symbols.entries_in_block(id)
-    }
-
-    pub fn search_symbols(&self, keyword: &str) -> Vec<SymbolEntry> {
-        self.symbols.search(keyword)
-    }
+    // `symbol_blocks` / `symbols_in_block` / `search_symbols` 一族搬去
+    // engine_symbol_browse.rs（500 行门禁，见那个文件头）——路径与语义一字未动。
 }

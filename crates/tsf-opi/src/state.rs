@@ -52,6 +52,9 @@ use crate::tsf::{E_FAIL, ensure_panic_hook};
 /// 让宿主进程的内存一直涨。16 远超人手点击速度，超过即丢弃（读线程不阻塞）。
 const MAX_PENDING_SELECT: usize = 16;
 
+/// 「直接插入文本」队列上限（理由同 `MAX_PENDING_SELECT`：对端是另一个进程）。
+const MAX_PENDING_TEXT: usize = 16;
+
 /// 引擎 + 点选队列：**候选窗读线程够得着的那一半**。
 ///
 /// `Send + Sync` 是编译器自己推的（字段只有 `Mutex`）—— 这个类型里**不允许**
@@ -60,6 +63,9 @@ pub struct EngineShared {
     logic: Mutex<TsfLogic>,
     /// 读线程排下的点选（页内 index），由按键线程取走执行（见 `enqueue_select`）。
     pending: Mutex<VecDeque<usize>>,
+    /// 读线程排下的「直接插入文本」（候选窗 `commit_text`，不经引擎选词），
+    /// 由按键线程取走执行（见 `enqueue_commit_text`）。
+    pending_text: Mutex<VecDeque<String>>,
 }
 
 impl EngineShared {
@@ -79,6 +85,7 @@ impl EngineShared {
         Self {
             logic: Mutex::new(logic),
             pending: Mutex::new(VecDeque::new()),
+            pending_text: Mutex::new(VecDeque::new()),
         }
     }
 
@@ -120,6 +127,24 @@ impl EngineShared {
     /// **按键线程**调：取一个待执行的点选。None = 队列空。
     pub fn take_pending_selection(&self) -> Option<usize> {
         self.pending.lock().ok()?.pop_front()
+    }
+
+    /// **读线程**调（候选窗 `commit_text`）：收下这段要直插文档的文本，**不做任何
+    /// COM 调用**（理由同 `enqueue_select`：插入目标不在这半）。返回 false = 队列满
+    /// 或锁中毒 —— 丢这一次，不阻塞读线程。
+    pub fn enqueue_commit_text(&self, text: String) -> bool {
+        match self.pending_text.lock() {
+            Ok(mut q) if q.len() < MAX_PENDING_TEXT => {
+                q.push_back(text);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// **按键线程**调：取一段待直插的文本。None = 队列空。
+    pub fn take_pending_text(&self) -> Option<String> {
+        self.pending_text.lock().ok()?.pop_front()
     }
 }
 
@@ -167,6 +192,11 @@ impl TsfSharedState {
         self.engine.take_pending_selection()
     }
 
+    /// **按键线程**调：取一段待直插的文本（见 `EngineShared::take_pending_text`）。
+    pub fn take_pending_text(&self) -> Option<String> {
+        self.engine.take_pending_text()
+    }
+
     /// Activate 记下的 tid；Deactivate 传 0（旧 tid 不再有效，插入会据此静默放弃）。
     pub fn set_client_id(&self, tid: u32) {
         self.client_id.store(tid, Ordering::Relaxed);
@@ -197,6 +227,18 @@ impl TsfSharedState {
             self.insert_into(&pic, &text);
         }
         Some(text)
+    }
+
+    /// 候选窗 `commit_text` 的**执行点**（按键线程）：把文本直插文档，**不经引擎** ——
+    /// 符号页多选：缓冲/候选/学习都不动，故也**不通知 sink**（`on_commit` 会让候选窗
+    /// 收起，而符号页要留在屏幕上供连续点选；裁决 2026-10-10，见 candidate_io.rs 协议头）。
+    /// 与 `select_and_insert` 同一条下沉路径（`insert_into`），只是没有逻辑层那一步。
+    /// 无插入目标（无焦点文档/未在键事件中记过 target）→ 静默放弃，与既有路径同策略。
+    pub fn insert_text(&self, text: &str) {
+        let pic = self.target.lock().ok().and_then(|g| g.clone());
+        if let Some(pic) = pic {
+            self.insert_into(&pic, text);
+        }
     }
 
     /// 把提交文本真正写进文档 —— 提交的**唯一下沉路径**（键事件与候选窗点选
