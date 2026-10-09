@@ -22,7 +22,7 @@ pub mod candidate;
 pub mod data_dir;
 pub mod input_method;
 
-pub use cabi::opi_fcitx5_init_dict;
+pub use cabi::{opi_fcitx5_init_dict, opi_fcitx5_load_symbols, opi_fcitx5_symbol_browse};
 
 use candidate::CandidateState;
 

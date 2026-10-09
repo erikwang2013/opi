@@ -16,7 +16,13 @@
 //! - `PageUp`/`PageDown` 翻页；**组字中（拼音/繁体且缓冲非空）`-` 上一页、`=` 下一页**
 //!   （2026-10-09 用户报障补上；空缓冲不抢键，见 input_method_page_tests.rs）。
 //! - 符号模式：可见 ASCII 入引擎缓冲当**关键字**（符号候选由此搜出），其余直通。
-//! - Ctrl/Alt 组合键一律直通（系统快捷键，不拦截）。
+//! - **符号浏览**（「符号大全」叠加态，2026-10-10）：浏览期间只有 `1`-`9`（激活浏览项：
+//!   类目下钻 / 符号上屏）、`-`/`=`（浏览翻页）、Esc（退出并吞掉）归浏览；**其余一律先
+//!   退出浏览恢复真缓冲、再按正常路由处理那个键** —— 绝不让「符号」标题落进正常路由
+//!   （契约 ②，见 engine-core/src/engine_symbol_browse.rs 头）。括号键 `0`、PageUp/Down、
+//!   Shift 等都在「其余」里（字面执行 lead 裁决的键集，别自作主张扩）。
+//! - Ctrl/Alt 组合键一律直通（系统快捷键，不拦截）—— 含插件热键 Ctrl+Shift+Z
+//!   （进入/退出浏览在 C++ 侧 opi_fcitx5_symbol_browse，见 cabi.rs）。
 //!
 //! 本模块为纯 Rust、无 fcitx5 类型依赖：`handle_key` 接收裸 `u32` 键值 +
 //! 修饰位，便于单测。键值/修饰位与 fcitx5 的映射见下方常量注释。
@@ -88,6 +94,38 @@ pub fn handle_key(state: &mut CandidateState, keyval: u32, states: u32) -> KeyAc
         return KeyAction::PassThrough;
     }
     let released = states & KEY_STATE_RELEASED != 0;
+    // 符号浏览（契约 ②，见 engine_symbol_browse.rs 头）：**按下**时只有 `1`-`9`、
+    // `-`/`=`、Esc 归浏览；其余键先把浏览退出（恢复真缓冲）再落进下面的正常路由 ——
+    // 「退出」放在这里（全部按键之前）而不是各分支里，单点免得某个键漏掉。
+    // 抬起不在此处理：各键的 press/release 对称由下方 last_printable 机制管。
+    if !released && state.is_symbol_browsing() {
+        // 三个提前 return 的分支必须记 `last_printable`：不记的话，抬起会命中
+        // **上一次**同名键留下的记录（可能 true）→ 放行一个按下时被拦下的 keyup
+        // （与退格/回车那两处的理由逐字相同）。浏览态一律不直通。
+        match keyval {
+            // `1`-`9`：激活浏览项（页内索引，与候选数字键同一套换算）
+            0x31..=0x39 => {
+                let action = browse_digit(state, keyval);
+                state.last_printable = Some((keyval, matches!(action, KeyAction::PassThrough)));
+                return action;
+            }
+            0x2d => {
+                state.prev_page(); // `-` 浏览上一页
+                state.last_printable = Some((keyval, false));
+                return KeyAction::EngineHandled;
+            }
+            0x3d => {
+                state.next_page(); // `=` 浏览下一页
+                state.last_printable = Some((keyval, false));
+                return KeyAction::EngineHandled;
+            }
+            // Esc：归下面的 KEY_ESCAPE 分支（退出 + 吞掉；press/release 对称在那）
+            KEY_ESCAPE => {}
+            // 其余（含空格/回车/退格/字母/`0`/PageUp/Down/Shift）：先退出浏览，
+            // 恢复真缓冲后按正常路由处理这个键（缓冲判据全部看真缓冲）。
+            _ => state.exit_symbol_browse(),
+        }
+    }
     match keyval {
         KEY_BACK_SPACE | KEY_DELETE => {
             if released {
@@ -139,7 +177,23 @@ pub fn handle_key(state: &mut CandidateState, keyval: u32, states: u32) -> KeyAc
             }
             KeyAction::EngineHandled
         }
-        KEY_TAB | KEY_ESCAPE => KeyAction::PassThrough,
+        KEY_TAB => KeyAction::PassThrough,
+        // Esc（2026-10-10 从 KEY_TAB 里拆出）：浏览态 → 退出并**吞掉**（lead 裁决
+        // 「Esc = exit and swallow」）；非浏览态 → 老行为直通（Tab 仍与 Esc 同档）。
+        KEY_ESCAPE => {
+            if released {
+                // 同退格：抬起按按下记下的结论回复（handle_escape 会退出浏览，
+                // 「当前」状态与按下时不同，只能复用记录）
+                match state.last_printable {
+                    Some((k, true)) if k == keyval => KeyAction::PassThrough,
+                    _ => KeyAction::EngineHandled,
+                }
+            } else {
+                let action = handle_escape(state);
+                state.last_printable = Some((keyval, matches!(action, KeyAction::PassThrough)));
+                action
+            }
+        }
         _ => match char::from_u32(keyval) {
             // 抬起必须判：本函数上面每个特殊键分支都判了 `released`，可打印
             // 分支此前漏判，导致同一个字符被第二次送进引擎 —— 拼音缓冲翻倍
@@ -193,6 +247,18 @@ fn handle_enter(state: &mut CandidateState) -> KeyAction {
         KeyAction::PassThrough
     } else {
         commit_or_handled(state.select(0))
+    }
+}
+
+/// Esc：浏览态 → 退出（恢复真缓冲）并**吞掉**（lead 裁决「Esc = exit and swallow」——
+/// 浏览是模态，Esc 不该同时把客户端对话框也关掉）；非浏览态 → 直通（老行为，
+/// 与 Tab 同档）。不做「二级退一级」的两段式返回：本回合字面执行键集裁决。
+fn handle_escape(state: &mut CandidateState) -> KeyAction {
+    if state.is_symbol_browsing() {
+        state.exit_symbol_browse();
+        KeyAction::EngineHandled
+    } else {
+        KeyAction::PassThrough
     }
 }
 
@@ -300,6 +366,16 @@ fn digit_select(state: &mut CandidateState, c: char) -> KeyAction {
     }
 }
 
+/// 浏览态数字键（`1`-`9`，区间由调用处保证）：页内索引激活浏览项 —— 类目下钻
+/// （无提交文本）/ 符号上屏。复用 `select_from` 的页内换算与收尾；激活语义在引擎层
+/// （契约 ③）。**永不直通**：下钻/越界都是空串，照样吞掉（浏览是模态，越界的数字
+/// 不该漏给客户端）。配对：tsf-opi/src/logic_input_method.rs 的同名函数。
+fn browse_digit(state: &mut CandidateState, keyval: u32) -> KeyAction {
+    let idx = (keyval - 0x31) as usize;
+    let fetched = state.fetched();
+    commit_or_handled(state.select_from(&fetched, idx))
+}
+
 /// 引擎输出空串 → 无提交；非空 → 提交到客户端。
 fn commit_or_handled(out: String) -> KeyAction {
     if out.is_empty() {
@@ -310,6 +386,9 @@ fn commit_or_handled(out: String) -> KeyAction {
 }
 
 // 单测独立成文件（input_method_tests.rs，`#[path]` 引入）以保持本文件 <500 行。
+#[cfg(test)]
+#[path = "input_method_browse_tests.rs"]
+mod browse_tests;
 #[cfg(test)]
 #[path = "input_method_page_tests.rs"]
 mod page_tests;

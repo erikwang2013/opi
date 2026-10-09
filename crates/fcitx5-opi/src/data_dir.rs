@@ -18,6 +18,25 @@ use crate::install;
 /// 词库文件名（镜像 EngineLoader.FILE_NAME = "luna.opid"）。
 pub const DICT_FILE_NAME: &str = "luna.opid";
 
+/// 符号类目文件名（「符号大全」；CMake 装到 `${CMAKE_INSTALL_DATADIR}/opi/`，与
+/// luna.opid 同目录。生成器 `scripts/gen_symbol_categories.py` 双写落点之二，
+/// 另一份是 Android 资产 —— 逐字节相等的门禁见本文件测试的 `bundled_asset_matches_android`）。
+pub const SYMBOL_FILE_NAME: &str = "symbol_categories.tsv";
+
+/// 读符号类目数据文件并装载进引擎。**路径由宿主 locate、读文件在 Rust** —— 与
+/// `opi_fcitx5_load`（收路径不收内容）同一条约定；engine-core 禁 IO，TSV 串与解析
+/// 的分工见 `engine_symbol_browse.rs` 头。
+///
+/// 返回**跳过的坏行数**（0 = 全好）。文件缺失/读不出 → Err；引擎未装载 → Err
+/// （调用方按「入口保持禁用 + 一行日志」降级，**不静默** —— C 边界见 cabi.rs）。
+/// 注意「读到空文件/全坏行」不是 Err：那是 `Ok(0)` 且类目可用性为假，调用方须再问
+/// `symbol_browse_available()` 才能区分（`opi_fcitx5_load_symbols` 的 -2 就是这么来的）。
+pub fn load_symbols(path: &Path) -> Result<usize, String> {
+    let tsv = fs::read_to_string(path).map_err(|e| format!("符号数据读取失败（{path:?}）: {e}"))?;
+    crate::with_state(|s| s.load_symbol_categories(&tsv))
+        .ok_or_else(|| "引擎未装载，符号数据无处可装（先 load 词库）".to_string())
+}
+
 /// OPI 数据目录（与 C++ 胶水 `StandardPath::Type::Data` + "opi/..." 探测路径
 /// 一致）：
 /// - $XDG_DATA_HOME 非空 → $XDG_DATA_HOME/opi
@@ -279,5 +298,56 @@ mod tests {
         let ok = unsafe { crate::opi_fcitx5_init_dict(std::ptr::null(), 0, std::ptr::null(), 0) };
         assert!(!ok);
         assert!(crate::with_state(|s| s.buffer()).is_some());
+    }
+
+    // ---- 符号类目数据（「符号大全」）----
+
+    /// 两份真资产**逐字节相等**的漂移门禁：`scripts/gen_symbol_categories.py` 双写
+    /// （Android 资产 + 本 crate 的 data/），改了脚本没重跑、或只手改一份 → 这里红。
+    #[test]
+    fn bundled_asset_matches_android() {
+        const BUNDLED: &str = include_str!("../data/symbol_categories.tsv");
+        const ANDROID: &str =
+            include_str!("../../../android/app/src/main/assets/symbol_categories.tsv");
+        assert_eq!(
+            BUNDLED, ANDROID,
+            "crates/fcitx5-opi/data 与 Android 资产漂移 —— 重跑 scripts/gen_symbol_categories.py 并两份一起提交"
+        );
+    }
+
+    #[test]
+    fn load_symbols_loads_real_asset_and_counts_nothing_skipped() {
+        let _g = crate::serial_install();
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("data")
+            .join(SYMBOL_FILE_NAME);
+        assert_eq!(
+            load_symbols(&path).expect("真资产可读"),
+            0,
+            "入库资产无坏行"
+        );
+        let (avail, cats) =
+            crate::with_state(|s| (s.symbol_browse_available(), s.enter_symbol_browse()))
+                .expect("引擎在位（serial_install）");
+        assert!(avail && cats, "入口可用");
+    }
+
+    #[test]
+    fn load_symbols_missing_file_errors_and_engine_off_errors() {
+        let _g = crate::serial_install();
+        // 文件缺失 → Err（调用方：入口保持禁用 + 日志）
+        assert!(load_symbols(Path::new("/nonexistent/symbol_categories.tsv")).is_err());
+    }
+
+    #[test]
+    fn load_symbols_empty_file_is_ok_but_unavailable() {
+        let _g = crate::serial_install();
+        let dir = temp_dir("symempty");
+        let path = dir.join(SYMBOL_FILE_NAME);
+        fs::write(&path, "").unwrap();
+        // 空文件 = Ok(0) 且**类目不可用** —— 与「读失败」是两种降级，别混
+        assert_eq!(load_symbols(&path).unwrap(), 0);
+        assert!(!crate::with_state(|s| s.symbol_browse_available()).unwrap());
+        let _ = fs::remove_dir_all(&dir);
     }
 }
