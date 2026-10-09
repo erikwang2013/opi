@@ -6,7 +6,7 @@ use crate::dictionary::Dictionary;
 use crate::fuzzy;
 use crate::jianpin;
 use crate::learner::Learner;
-use crate::pinyin::segment;
+use crate::pinyin::{is_syllable, segment};
 use crate::symbols::SymbolEngine;
 use crate::trie::Entry;
 
@@ -152,9 +152,13 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
     // nihao → [你][好] 逐字可选；单字母音节跳过避免噪音。
     // 每音节仅取 top 3：luna 繁体词库下全量并入会把生僻字顶进 top-8。
     //
+    // ⚠️ 本档只在**没有可回退前缀**时才跑到（上面那段：完整音节前缀有命中就整档接管，
+    // 判定见 `segment_fallback`）—— 它现在管的是「首段切出来不是完整音节」这类输入
+    // （如 `zhonx`：`zhon` 是前缀不是音节 ⇒ 回退不成立 ⇒ 逐音节汤仍在）。
+    //
     // 这个 top 3 必须按**含 learner boost 的最终分**排，不能下推给
     // `dict.query(&syl, 3)` —— 后者截的是静态词频前 3，学过的常用字会在加 boost
-    // 之前就被丢掉（"haoxiao" 里「好」在 hao 组排第 6，输入再多次也进不来）。
+    // 之前就被丢掉（用例见 tests/ranking_invariants.rs::per_syllable_fallback_picks_top3_by_final_score）。
     // 与下方 85-86 行主路径是同一条不变式，此处曾违反。
     // ── 模糊音：整串变体（常开；表与变体生成见 fuzzy.rs）──────────────────────
     // 先算，因为它决定逐音节回退里还要不要再做模糊（见下）：**更具体的匹配优先** ——
@@ -182,7 +186,27 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
         Vec::new()
     };
     let wide_hits = !fuzzy.is_empty();
-    if merged.is_empty() && input.chars().count() > 1 {
+    // ── 分词回退（2026-10-10 用户裁决「输入拼音无匹配时要分词匹配」）────────────
+    // 整串直接命中为空、整串模糊命中也为空时，候选换成**最长可匹配前缀**的整档
+    // （递归调本函数：精确/模糊/简拼/符号的分档规则全是同一条，不另起一套排序），
+    // 并**取代**下面的逐音节汤 —— 汤是「逐字可选」（你/好），回退是「先把这个词打出来」
+    // （`nihaob` → 你好一族）。选中后缓冲留剩下的后缀接着编（收尾见 engine_segment.rs）。
+    //
+    // 判定的唯一实现在 `segment_fallback`（收尾层调的是同一个函数，**不另存状态**：
+    // 结论由缓冲自证，不依赖「先取候选、再选中」的调用次序 —— 与 scheme_readings
+    // 同一条纪律）。`!wide_hits` = 边界「整串模糊命中优先」：`zongguo` 有中国档时
+    // 不许被 `zong` 的整档接管。
+    let mut seg_used = false;
+    if merged.is_empty()
+        && input.chars().count() > 1
+        && !wide_hits
+        && let Some(fb) = segment_fallback(dict, input, opts.fuzzy)
+    {
+        // 递归深度 ≤ 1：「前缀有命中」是入选条件，到了里面 `merged` 必非空。
+        merged = rank_and_pick_with(dict, symbols, learner, &fb.prefix, mode, limit, boost, opts);
+        seg_used = true;
+    }
+    if merged.is_empty() && input.chars().count() > 1 && !seg_used {
         for syl in segment(input) {
             if syl.chars().count() < 2 {
                 continue;
@@ -295,6 +319,103 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
     }
     merged.truncate(limit);
     merged
+}
+
+/// 分词回退的落点：候选出 `prefix` 的整档，选中后缓冲里留 `suffix` 接着编。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SegmentFallback {
+    /// 被消耗的前缀：**音节对齐**，且已去掉分词符（词库键不含 `'`，格式约定）。
+    pub prefix: String,
+    /// 留在缓冲里的**原文后缀**（其间的 `'` 原样保留）。
+    pub suffix: String,
+}
+
+/// 分词回退的**唯一判定**（2026-10-10 用户裁决「输入拼音无匹配时要分词匹配」）：
+/// 给定缓冲，返回「候选该出哪一段、选完缓冲剩什么」。
+///
+/// 两个调用点共用它 —— 候选层（[`rank_and_pick_with`] 的回退档）与收尾层
+/// （`Engine::commit_buffer_after_select`）；**纯函数，故不存状态**：收尾层不需要
+/// 「先取候选、再选中」的次序假设（缓冲自证，与 `scheme_readings` 的 `(缓冲, 值)`
+/// 绑存是同一条纪律）。
+///
+/// 判据（全成立才回退；**先算不查库的两条**，收尾层每次选中都要过一次它）：
+/// 1. 缓冲不止一个字符 —— 空/单字符维持既有「无匹配」；
+/// 2. 切分出来**至少两段** —— 单音节没有「分词」可言（边界：单音节无匹配维持原样）；
+/// 3. **整串直接命中为空** —— 有命中 = 更具体的档，不回退；
+/// 4. **整串模糊命中为空**（`fuzzy_enabled` 关掉时这条不问）—— 整串变体是整串替换、
+///    比前缀更具体：`zongguo` 有「中国」档时不许被 `zong` 的整档接管；
+///    然后从**最长**的音节对齐前缀往短试，第一个「每段都是完整音节 + 词库有命中」的胜出。
+///
+/// 「完整音节」是**门槛**（用户裁决的边界）：`qqq` / `zxcvb` 这类打错串切出来的段不是
+/// 完整音节 ⇒ 不回退 ⇒ 维持无候选（「打英文」的逃生口靠它，
+/// 钉子见 tests/punctuation.rs 与 tests/adversarial_input.rs）。
+///
+/// ⚠️ 门槛只管「段是不是音节」：首段**恰好**是完整音节的英文串会回退（`hello` → 前缀
+/// `he`，留 `llo`）。这是本规则的已知形态、不是漏网 —— 这类串在旧行为里同样有候选
+/// （逐音节汤也命中 `he`），而逃生口本就只对**无候选**的串开放（无候选时空格提交原文）。
+///
+/// 前缀串取**各段拼接**（去掉 `'`）：词库键不含分隔符，`ni'hao` 的整串直接查询本是空的，
+/// 拼起来查才是用户的本意（`ni'hao` → 你好一族）。
+pub(crate) fn segment_fallback<D: Dictionary + ?Sized>(
+    dict: &D,
+    input: &str,
+    fuzzy_enabled: bool,
+) -> Option<SegmentFallback> {
+    if input.chars().count() <= 1 {
+        return None;
+    }
+    let segs = segment(input);
+    if segs.len() < 2 {
+        return None;
+    }
+    if !dict.query_all(input).is_empty() {
+        return None;
+    }
+    if fuzzy_enabled
+        && fuzzy::input_variants(input)
+            .iter()
+            .any(|v| !dict.query_all(v).is_empty())
+    {
+        return None;
+    }
+    // 各段在拼接串里的累计字符数：`prefix_len[k-1]` = 前 k 段拼起来的长度，
+    // 用来在**原文**里定位后缀从哪开始。
+    let mut prefix_len = Vec::with_capacity(segs.len());
+    let mut total = 0usize;
+    for s in &segs {
+        total += s.chars().count();
+        prefix_len.push(total);
+    }
+    for k in (1..=segs.len()).rev() {
+        if !segs[..k].iter().all(|s| is_syllable(s)) {
+            continue;
+        }
+        let prefix: String = segs[..k].concat();
+        if !dict.query_all(&prefix).is_empty() {
+            return Some(SegmentFallback {
+                suffix: raw_suffix(input, prefix_len[k - 1]),
+                prefix,
+            });
+        }
+    }
+    None
+}
+
+/// 缓冲原文里「前 `consumed` 个非分隔符字符」之后的剩余（其间的 `'` 原样保留）：
+/// `("nihaob", 5)` → `"b"`、`("ni'hao", 5)` → `""`、`("ni'hao'x", 5)` → `"'x"`。
+/// 前缀串是去 `'` 的拼接，故按「数够 `consumed` 个非 `'` 字符」定位 ——
+/// 分隔符归**前段**（它标记的正是这个边界）。
+fn raw_suffix(input: &str, consumed: usize) -> String {
+    let mut seen = 0usize;
+    for (i, ch) in input.chars().enumerate() {
+        if ch != '\'' {
+            seen += 1;
+        }
+        if seen == consumed {
+            return input.chars().skip(i + 1).collect();
+        }
+    }
+    String::new()
 }
 
 /// **按键类展开**（9/14 键方案，2026-10-09）：`input` 是一串按键符号，按
