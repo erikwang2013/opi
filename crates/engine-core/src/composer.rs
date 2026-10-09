@@ -188,6 +188,14 @@ impl Composer {
         self.session.clone()
     }
 
+    /// 换模式但**保留缓冲**（语言切换专用；判据与理由见 `Engine::switch_language`）：
+    /// 与 [`Self::switch_mode`] 只差不清缓冲，shift 照常复位。
+    pub fn switch_mode_keep_buffer(&mut self, mode: Mode) -> Session {
+        self.session.mode = mode;
+        self.session.shift = false;
+        self.session.clone()
+    }
+
     /// 提交当前缓冲（不记录学习，由 Engine 层处理）。
     pub fn commit_buffer(&mut self) -> Session {
         self.session.buffer.clear();

@@ -81,6 +81,14 @@ class FakeEngine : OpiEngineApi {
 
     override fun buffer(): String = buf
 
+    /** 语言切换（真引擎：换模式+方案但保留缓冲）。记调用便于断言「没走清缓冲那条路」。 */
+    val switchLanguageCalls = mutableListOf<Pair<Int, Int>>()
+    override fun switchLanguage(mode: Int, scheme: Int) {
+        switchLanguageCalls += mode to scheme
+        this.mode = mode
+        schemeValue = scheme
+    }
+
     /** 逐条候选拼音读数（真引擎：与最近一次 candidates() 同序同源）。 */
     var candReadings: Array<String>? = null
     override fun candidateReadings(): Array<String>? = candReadings

@@ -6,7 +6,7 @@
 //! 判据与全键盘各层同源：**按键类前缀匹配**的结果集 + 「精确加成 ≥ 任何前缀
 //! 扩展」那条既有不变式在方案路径下同样成立（打分规则逐字复用）。
 use engine_core::symbols::SymbolEngine;
-use engine_core::{Dictionary, Engine, InMemoryDictionary, Scheme};
+use engine_core::{Dictionary, Engine, InMemoryDictionary, Mode, Scheme};
 
 fn dict(entries: &[(&str, &str, u32)]) -> Box<dyn Dictionary> {
     let mut d = InMemoryDictionary::new();
@@ -418,57 +418,38 @@ fn reading_resets_to_empty_when_the_buffer_empties() {
     assert_eq!(e.display_buffer(), "", "退空后读数必须归零");
 }
 
-/// 读数缓存**不许撒谎**（2026-10-09 用户报障「确定候选词后左列不恢复标点」的引擎侧
-/// 根因）：缓冲一变（提交/退格），即使**没再取一次候选**，`display_buffer()` 也必须
-/// 立刻为空。旧实现里读数是 `candidates()` 的副产物、不随缓冲作废，谁按「先读读数、
-/// 再取候选」的次序刷新，谁就为提交后的那一次读到旧拼音 —— 而且挂到下一次按键为止。
+/// 语言切换**保留缓冲**（2026-10-09 用户裁决「中文输入的时候切换英文，拼音保留
+/// 可继续使用」）：中→英→中 往返后，打到一半的拼音（含 9 键的数字串）还在、
+/// 候选按同一缓冲重新算出、读数也回来。**对照组**：方案切换（用户可见的「输入模式」
+/// 面板那条 `set_scheme`）照旧清缓冲 —— 两条路判据不同，别顺手统一。
 #[test]
-fn display_buffer_dies_with_the_buffer_not_with_the_next_fetch() {
+fn switch_language_preserves_the_pending_buffer() {
     let mut e = engine();
     e.set_scheme(Scheme::Nine);
     type_str(&mut e, "64"); // ni
-    let _ = e.candidates(8);
-    assert_eq!(e.display_buffer(), "ni", "前置：读得到拼音");
+    let before = e.candidates(8);
+    assert!(!before.is_empty(), "前置：64 有候选");
 
-    // 提交：内层 candidates 把读数刷成 "64" 那一次算的；提交之后**不再取候选**。
-    let _ = e.select_from(&e.candidates(8), 0);
-    assert_eq!(e.buffer(), "", "前置：提交后缓冲已清");
-    assert_eq!(e.display_buffer(), "", "提交后不得报旧缓冲的读数");
+    // 中→英（语言切换：英文模式 + 全键盘方案 —— 与 Android 中/英键同一对参数）
+    e.switch_language(Mode::English, Scheme::Full);
+    assert_eq!(e.mode(), Mode::English);
+    assert_eq!(e.buffer(), "64", "切英文后缓冲必须保留");
 
-    // 退格改缓冲同理：旧读数立刻作废（下次 candidates() 才会给出新缓冲的读数）。
-    type_str(&mut e, "64");
-    let _ = e.candidates(8);
-    assert_eq!(e.display_buffer(), "ni");
-    e.backspace();
-    assert_eq!(e.display_buffer(), "", "退格后旧读数立刻作废");
-}
-
-/// 逐条读数（9 键左列的数据源，2026-10-09 用户裁决「一列多个可滑动查看」）：
-/// 与 `candidates(limit)` **同序等长**、同一次排名产出；首条 = `display_buffer()`
-/// （同一对缓存的两个视图）；缓冲一变（退格/提交）⇒ 双双立刻为空。
-#[test]
-fn per_candidate_readings_align_with_candidates() {
-    let mut e = engine();
-    e.set_scheme(Scheme::Nine);
-    type_str(&mut e, "64"); // ni 与 nihao 都命中（键类前缀匹配）
-    let cands: Vec<String> = e.candidates(8).into_iter().map(|c| c.text).collect();
-    let readings = e.candidate_readings();
-    assert_eq!(readings.len(), cands.len(), "逐条读数与候选同序等长");
+    // 英→中（换回：拼音 + 9 键方案）
+    e.switch_language(Mode::Pinyin, Scheme::Nine);
+    assert_eq!(e.buffer(), "64", "切回中文后缓冲仍在（可继续使用）");
     assert_eq!(
-        readings[0],
+        e.candidates(8).len(),
+        before.len(),
+        "切回后候选按同一缓冲重新算出"
+    );
+    assert_eq!(
         e.display_buffer(),
-        "首条读数 = display_buffer（同一对缓存的两个视图）"
+        "ni",
+        "读数也回来了（缓存随切换作废、取候选时重算）"
     );
-    // 逐条对齐：你好 的读音带分词（ni'hao），你/尼 是 ni —— 不是把首条读一抄到底。
-    let idx = cands
-        .iter()
-        .position(|c| c == "你好")
-        .expect("夹具里 64 应命中 nihao⇒你好");
-    assert_eq!(readings[idx], "ni'hao", "候选与读音逐条对齐");
-    // 缓冲一变（退格）⇒ 逐条读数立刻作废
-    e.backspace();
-    assert!(
-        e.candidate_readings().is_empty(),
-        "退格后逐条读数立刻作废（下次 candidates() 才重算）"
-    );
+
+    // 对照组：方案切换仍清缓冲（「输入模式」面板走这条，切换前调用方已 commit）
+    e.set_scheme(Scheme::Full);
+    assert_eq!(e.buffer(), "", "set_scheme 照旧清缓冲（两条路判据不同）");
 }

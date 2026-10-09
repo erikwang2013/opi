@@ -179,6 +179,17 @@ impl KeyRouter {
         self.reset_page_if_buffer_changed();
     }
 
+    /// 语言切换（JNI `switchLanguage`）：换模式 + 方案但**保留缓冲**（判据与成对切换
+    /// 的理由见 [`Engine::switch_language`]）。前端 ⇧ 三态的收尾同 [`Self::switch_mode`]；
+    /// 缓冲没变 ⇒ 页码收尾是 no-op（保缓冲即保页码）。
+    pub fn switch_language(&mut self, mode: Mode, scheme: crate::scheme::Scheme) {
+        self.engine.switch_language(mode, scheme);
+        if mode != Mode::English {
+            self.shift_state = ShiftState::Off;
+        }
+        self.reset_page_if_buffer_changed();
+    }
+
     // ---- 候选分页（与两轨同构） ----
 
     /// 批量抓取（分页的唯一数据源：`page_count`/`candidates`/`select` 都从这一份算）。

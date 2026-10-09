@@ -159,18 +159,38 @@ class ImeState(
 
     /**
      * 「中/繁/英」一键循环（既有键位，2026-10-09 起与方案/布局接线对齐）：
-     * 中→繁只切**引擎模式**（方案不动，9 键仍是 9 键）；繁→英走 [selectInputMode]
-     * 的英文项（方案回全键盘 —— 9 键上打英文没有候选路）；英→中回**上次的中文方案**。
+     * 中→繁只切**引擎模式**（方案不动，9 键仍是 9 键）；英那条会换到全键盘方案
+     * （9 键上打英文没有候选路）；英→中回**上次的中文方案**。
+     *
+     * **二期（同日晚）：三条腿全部保留缓冲** —— 用户裁决「中文输入的时候切换英文，
+     * 拼音保留可继续使用」。走 [EngineController.switchLanguage]（引擎侧换模式/方案
+     * 但不清缓冲），不再 commit pending；英文模式下字母照常直传（见 KeyRouter），
+     * 保留的拼音切回中文后继续打/接着选。⚠️ 「输入模式」面板那条（[selectInputMode]）
+     * 仍先 commit 再换 —— 那是明确换布局的动作，判据不同，别顺手统一。
      */
     fun cycleMode() {
         when (controller.mode) {
-            EngineMode.PINYIN -> {
-                commitPendingBuffer()
-                controller.switchMode(EngineMode.TRADITIONAL)
-            }
-            EngineMode.TRADITIONAL -> selectInputMode(InputMode.ENGLISH26)
-            else -> selectInputMode(lastChineseMode)
+            EngineMode.PINYIN ->
+                controller.switchLanguage(EngineMode.TRADITIONAL, controller.inputScheme)
+            EngineMode.TRADITIONAL -> switchLanguageKeepingBuffer(InputMode.ENGLISH26)
+            else -> switchLanguageKeepingBuffer(lastChineseMode)
         }
+    }
+
+    /**
+     * 语言切换（中↔英）：换方案 + 模式，但**不提交、不清**缓冲（[cycleMode] 的两条腿）。
+     * 与 [selectInputMode] 的区别：那条是「输入模式」面板的明确换布局 —— 先 commit
+     * pending 再换；这条服从 2026-10-09 裁决「中文输入的时候切换英文，拼音保留可继续
+     * 使用」，缓冲原样留在引擎里，切回中文接着打/接着选。
+     */
+    private fun switchLanguageKeepingBuffer(m: InputMode) {
+        inputMode = m
+        if (m.engineMode == EngineMode.PINYIN || m.engineMode == EngineMode.TRADITIONAL) {
+            lastChineseMode = m
+        }
+        controller.switchLanguage(m.engineMode, m.scheme)
+        view = View.QWERTY
+        persist()
     }
 
     /** 键盘模式变更（工具条菜单）→ 立即生效 + 落盘。 */

@@ -118,6 +118,13 @@ object OpiEngine : OpiEngineApi, SymbolApi {
      */
     override external fun setScheme(scheme: Int)
 
+    /**
+     * switchLanguage(mode: Int, scheme: Int)：**语言切换**（中↔英/中↔繁）—— 换模式与
+     * 方案但**保留缓冲**（2026-10-09 用户裁决「中文输入的时候切换英文，拼音保留可继续
+     * 使用」）。取值同 [switchMode]/[setScheme]；任一越界整体忽略。调用方仍要 refresh。
+     */
+    override external fun switchLanguage(mode: Int, scheme: Int)
+
     /** inputSpace() -> String。英文模式提交 buffer。 */
     override external fun inputSpace(): String
 

@@ -73,6 +73,27 @@ pub unsafe extern "system" fn opijni_set_scheme(_env: JEnv, _class: sys::jclass,
     });
 }
 
+/// switchLanguage(mode: int, scheme: int)：**语言切换**（中↔英/中↔繁）—— 换模式与
+/// 方案但**保留缓冲**（2026-10-09 用户裁决「中文输入的时候切换英文，拼音保留可继续
+/// 使用」）。与 `switchMode`/`setScheme` 的区别只有不清缓冲这一条，判据与成对切换的
+/// 理由见 `engine_core::Engine::switch_language`。取值同 `switchMode`/`setScheme`
+/// 两张整数表；任一越界则整体忽略（宁可不动，也不做半程切换）。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_switch_language(
+    _env: JEnv,
+    _class: sys::jclass,
+    mode: jint,
+    scheme: jint,
+) {
+    guard(|| {
+        api::with_engine(|e| {
+            if let (Some(m), Some(s)) = (api::mode_from_int(mode), api::scheme_from_int(scheme)) {
+                e.switch_language(m.into(), s);
+            }
+        })
+    });
+}
+
 /// scheme() -> int：输入方案读侧（同 `setScheme` 的整数表）。未装载 → 0 是
 /// **哨兵**（同 `fuzzyEnabled` 一档），别读成"用户选的就是全键盘"。
 #[unsafe(no_mangle)]

@@ -84,6 +84,11 @@ interface OpiEngineApi {
 
     /** 写侧：换方案**清缓冲** —— 调用方随后必须重读（[EngineController.switchScheme] 管这条）。 */
     fun setScheme(scheme: Int)
+
+    /** 语言切换（中↔英/中↔繁）：换模式与方案但**保留缓冲**（判据见
+     * OpiEngine.switchLanguage）。与 [switchMode]/[setScheme] 的区别只有不清缓冲 ——
+     * 那两个仍归「输入模式」面板等明确要换方案的路径。 */
+    fun switchLanguage(mode: Int, scheme: Int)
 }
 
 /**
@@ -245,6 +250,17 @@ class EngineController(
      */
     fun switchScheme(s: InputScheme) {
         api.setScheme(s.value)
+        refresh()
+    }
+
+    /**
+     * 语言切换（中↔英/中↔繁）：换模式与方案但**保留缓冲** —— 用户裁决 2026-10-09
+     * 「中文输入的时候切换英文，拼音保留可继续使用」。⚠️ 与 [switchMode]+[switchScheme]
+     * 只差不清缓冲；用户可见的「输入模式」面板切换仍走那两个（且切换前已 commit）。
+     */
+    fun switchLanguage(mode: EngineMode, scheme: InputScheme) {
+        api.switchLanguage(mode.value, scheme.value)
+        if (mode != EngineMode.ENGLISH) resetShift()
         refresh()
     }
 

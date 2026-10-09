@@ -28,7 +28,12 @@ class KeyRouter(
      * 出文本（中文模式 `,` → `，`、半角 → 原样交回），丢弃返回值就等于吞键。
      */
     fun handleKey(ch: String) {
-        if (controller.mode == EngineMode.ENGLISH && controller.buffer.isEmpty()) {
+        // 英文模式**一律直传**（2026-10-09 二期）：语言切换不再清/提交缓冲 ⇒ 英文模式下
+        // 缓冲可能**被保留**着（用户裁决「中文输入的时候切换英文，拼音保留可继续使用」）。
+        // 那种状态里字母必须照打字面英文直传，绝不进引擎缓冲 —— 否则英文打不进去、
+        // 全喂给了保留的旧拼音。保留的拼音等切回中文继续用（见 ImeState.cycleMode）。
+        // 此前只在缓冲空时直传，非空走引擎（旧防御路径）；判据随语言切换语义一起改了。
+        if (controller.mode == EngineMode.ENGLISH) {
             // ⇧ 直传大写：直传路径绕过引擎，需本侧转大写。
             if (controller.shiftState != ShiftState.OFF) {
                 commit(ch.uppercase())

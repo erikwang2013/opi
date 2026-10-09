@@ -39,6 +39,7 @@ pub(crate) fn guard<T: Default>(f: impl FnOnce() -> T) -> T {
 // 能引用到它们的唯一原因，别删。
 use crate::jni_scheme::{
     opijni_load, opijni_load_stroke, opijni_load_trad, opijni_scheme, opijni_set_scheme,
+    opijni_switch_language,
 };
 // 拆到 `jni_candidates.rs` 的四个**读侧**出口（candidates / candidateReadings /
 // buffer / displayBuffer）：同一手续（2026-10-09：加 candidateReadings 后本文件
@@ -373,6 +374,11 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _reserved: *mut c
                     jni_str!("setScheme"),
                     jni_str!("(I)V"),
                     opijni_set_scheme as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("switchLanguage"),
+                    jni_str!("(II)V"),
+                    opijni_switch_language as *mut c_void,
                 ),
                 NativeMethod::from_raw_parts(
                     jni_str!("scheme"),

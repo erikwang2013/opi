@@ -40,6 +40,7 @@ final class OpiEngine {
     static native void setJianpin(boolean on);
     static native int scheme();
     static native void setScheme(int scheme);
+    static native void switchLanguage(int mode, int scheme);
     static native boolean loadStroke(String path);
     static native void clearUserWords();
     static native String exportUserWords();
@@ -257,6 +258,19 @@ public final class Main {
             check(rr[0].equals(OpiEngine.displayBuffer()),
                     "首条读数必须等于 displayBuffer（实得 " + rr[0] + "/" + OpiEngine.displayBuffer() + "）");
         }
+        OpiEngine.setScheme(0); // 回全键盘
+
+        // switchLanguage（2026-10-09 二期）：语言切换**保留缓冲** —— 中→英→中 往返后
+        // 打到一半的拼音还在、候选能接着出。声明了就必须真调（同上一条规矩）。
+        OpiEngine.setScheme(1); // 9 键
+        OpiEngine.inputKey("6");
+        OpiEngine.inputKey("4");
+        OpiEngine.switchLanguage(1, 0); // 英文 + 全键盘
+        check("64".equals(OpiEngine.buffer()), "切英文后缓冲必须保留（实得：" + OpiEngine.buffer() + "）");
+        OpiEngine.switchLanguage(0, 1); // 拼音 + 9 键
+        check("64".equals(OpiEngine.buffer()), "切回中文后缓冲仍在（实得：" + OpiEngine.buffer() + "）");
+        String[] back = OpiEngine.candidates(8);
+        check(back != null && back.length > 0, "切回后候选按同一缓冲重新算出");
         OpiEngine.setScheme(0); // 回全键盘
 
         if (failures == 0) {

@@ -36,7 +36,7 @@ pub struct Engine {
     /// 刷新先读 display_buffer 再取候选）。
     /// `RefCell` 是因为 `candidates()` 是 `&self`
     /// （读侧出口遍布 FFI，改 `&mut` 会连锁）；引擎单例在 Mutex 里，Send 足够。
-    scheme_readings: std::cell::RefCell<(String, Vec<String>)>,
+    pub(crate) scheme_readings: std::cell::RefCell<(String, Vec<String>)>,
     /// 全角开关：`true` = ASCII 标点出**机械全角**（U+FF01..U+FF5E 平移），
     /// `false` = 直通半角。只管宽度 —— 中文标点表是另一档（[`Self::chinese_punct`]）。
     /// 切模式重置为该模式的默认值（[`Mode::default_fullwidth`]）。
@@ -284,52 +284,28 @@ impl Engine {
         &self.composer.session().buffer
     }
 
-    /// **显示用**缓冲（2026-10-09，用户裁决「输入的时候没在左侧显示拼音」）：
-    /// 9 键方案的缓冲是**数字串**（键位序列，不是拼音）——直接摆出来用户不认；
-    /// 换成**首条候选的拼音**（「64」→ ni、「64426」→ nihao），即搜狗 9 键候选栏
-    /// 左侧那格「输入时显示的拼音」。无候选时为空串。
-    /// 其余方案 = 实际缓冲（26/14 键的字母串本来就是拼音；英文/数字/符号模式的
-    /// 缓冲也不是拼音，一律回本体）。FFI 的 buffer 出口读这里 —— 别的端没有 9 键
-    /// 方案，读到的与原值逐字节相同。
-    pub fn display_buffer(&self) -> String {
-        if matches!(self.mode(), Mode::Pinyin | Mode::Traditional) && self.scheme() == Scheme::Nine
-        {
-            // **带分词的**读数（搜狗「拼音9键显示分词」同款）：音节用 `'` 连起来，
-            // 「nihao」显示成「ni'hao」—— 一眼看到引擎怎么切的音节。
-            let cached = self.scheme_readings.borrow();
-            // 缓冲变了（提交/退格/清空）而读数还是旧缓冲那一次算的 ⇒ 作废，报空串 ——
-            // 界面按「读不到拼音」处理（左列回标点列）。下次 candidates() 会按新缓冲重算。
-            if cached.0 != self.buffer() {
-                return String::new();
-            }
-            return cached.1.first().cloned().unwrap_or_default();
-        }
-        self.buffer().to_string()
-    }
-
-    /// **逐条**候选拼音读数（已分词）：`readings[i]` = 最近一次 `candidates(limit)` 的
-    /// 第 i 条候选的拼音（两串同序等长）。9 键左列按候选逐条显示用（2026-10-09 用户
-    /// 裁决「一列多个、可滑动查看后面候选/下一页」）。
-    ///
-    /// 与 [`Self::display_buffer`] 是**同一对缓存的两个视图**：非 9/14 键方案、
-    /// 或缓冲已变（提交/退格/清空）⇒ 空数组。调用方先 `candidates()` 再读它
-    /// （同一次刷新里相邻调用 = 同一次排名，不会再扫一遍词库）。
-    pub fn candidate_readings(&self) -> Vec<String> {
-        if !matches!(self.mode(), Mode::Pinyin | Mode::Traditional) {
-            return Vec::new();
-        }
-        if !matches!(self.scheme(), Scheme::Nine | Scheme::Fourteen) {
-            return Vec::new();
-        }
-        let cached = self.scheme_readings.borrow();
-        if cached.0 != self.buffer() {
-            return Vec::new();
-        }
-        cached.1.clone()
-    }
-
     pub fn mode(&self) -> Mode {
         self.composer.session().mode
+    }
+
+    /// **语言切换**（中↔英 / 中↔繁，2026-10-09 用户裁决「中文输入的时候切换英文，
+    /// 拼音保留可继续使用」）：换模式与方案，但**保留缓冲** —— 与 [`Self::switch_mode`] /
+    /// [`Self::set_scheme`] 的区别只有这一步。
+    ///
+    /// 为什么这里可以不清：调用方保证**成对**切换（中→英换到英文方案、英→中换回原方案；
+    /// 中→繁只动模式不动方案），缓冲在两头仍是同一套方案语义下的串；而清理的理由
+    /// （见 [`Self::set_scheme`] 的注释）是「按旧方案打的串被新方案匹配器读出似是而非的
+    /// 结果」——成对切换不产生这个处境。用户可见的「输入模式」面板切换（26/9/14/笔画）
+    /// **不走这里**，仍走清缓冲路径（且切换前调用方已 commit pending）。
+    ///
+    /// 9 键的读数缓存随之作废（同一个缓冲换过方案/模式后，旧读数不再对应当前语境）；
+    /// 切回来时下一次 `candidates()` 会重算。
+    pub fn switch_language(&mut self, mode: Mode, scheme: Scheme) {
+        self.fullwidth = mode.default_fullwidth();
+        self.quotes.reset();
+        self.composer.set_scheme(scheme);
+        self.composer.switch_mode_keep_buffer(mode);
+        *self.scheme_readings.borrow_mut() = (String::new(), Vec::new());
     }
 
     pub fn candidates(&self, limit: usize) -> Vec<Candidate> {

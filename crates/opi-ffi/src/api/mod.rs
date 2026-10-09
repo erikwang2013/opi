@@ -182,6 +182,14 @@ impl Api {
         self.router.switch_mode(mode.into());
     }
 
+    /// 语言切换（JNI `switchLanguage`）：换模式与方案但**保留缓冲**（判据与成对切换的
+    /// 理由见 `engine_core::Engine::switch_language`）。同样走路由（清前端 ⇧ 三态）。
+    /// ⚠️ 与 [`Self::switch_mode`]/[`Self::set_scheme`] 的区别只有不清缓冲 ——
+    /// 「输入模式」面板仍走那两个。
+    pub fn switch_language(&mut self, mode: ApiMode, scheme: engine_core::Scheme) {
+        self.router.switch_language(mode.into(), scheme);
+    }
+
     /// 键路由（C ABI `opi_key_event` 的实现体）：平台中立键码 + 修饰位 → 动作。
     pub fn key_event(&mut self, keyval: u32, states: u32) -> KeyAction {
         self.router.key_event(keyval, states)
