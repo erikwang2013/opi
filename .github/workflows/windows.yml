@@ -1,0 +1,231 @@
+# SPDX-FileCopyrightText: 2026 erik.xyz
+# SPDX-License-Identifier: MIT
+name: Windows 打包
+
+# 这个 workflow 的存在理由：Windows 端的两件产物**只能在 windows runner 上真编**。
+#   · `tsf_opi.dll` 是 cdylib，本机（Linux）缺 MSVC 导入库，**链接**这一步过不去 ——
+#     ci.yml 里那条 `cargo check -p tsf_opi --target x86_64-pc-windows-msvc` 只到类型检查
+#     （check 与 build 的差别逐条列在 docs/install/windows.md §1.2：链接、导出表、DLL 本体
+#     三样都在 check 之外）。
+#   · 桌面应用（desktop/，设置窗/候选窗）的 `.msi` 由 jpackage 产出，而 jpackage
+#     **不能交叉打包**：它会把**构建机上那个 JDK** 的运行时 jlink 进包 —— 所以 Windows
+#     包必须在 Windows 上打（同 packages.yml 里 deb 钉 ubuntu-22.04 的那条理由，方向相反）。
+#
+# ⚠️ 边界（**别把「打包绿了」读成「Windows 端能用」**）：
+#   本 workflow 只证明「这两个产物能在 Windows 上被编出来、DLL 的导出表长这样、能下载」。
+#   它**不**注册、**不**安装、**不**运行任何东西。CLSID 注册、TSF 能不能认出这个 TIP、
+#   文本插入有没有真的落进文档 —— 全部仍是【未验证】。缺口清单见
+#   docs/install/windows.md 的 §6.1（从未验过的事）与 §6.2（读源码得出的缺口）。
+#   本 workflow 也**不**打包 `luna.opid`：词库分发通路一条没动（§2.4 的判断仍然成立 ——
+#   仍然没有任何步骤把词库和 DLL 放到一起）。
+#
+# 触发方式（2026-10-09 定）：手动 dispatch + 默认分支 push（限下面 paths）。
+#   改动落在 Windows 侧代码上时就该重跑一次；产物只在本次 run 的 artifact 里，
+#   **不自动附 release**（与 packages.yml 同一条约定：发版产物的控制权归人）。
+on:
+  workflow_dispatch:
+  # 迭代期用本分支 push 触发（本仓约定：workflow 必须存在于默认分支才可 dispatch，
+  # 而集成分支不许推 main）。**合并前改回 [main]**。
+  push:
+    branches: [feat/windows-packaging]
+    paths:
+      - 'crates/tsf-opi/**'
+      - 'desktop/**'
+      - '.github/workflows/windows.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  # 版本号只在这里解析一次，两个构建 job 都从这里取 —— 顺带把「跨端版本号漂移」变成一条
+  # 会红的判据（见下面的比对）。空值/取不到一律红：产物名里的版本号要是空的，
+  # 那个名字比没有名字更坏（它看起来像有版本）。
+  version:
+    name: 版本号（单一来源 + 跨端一致）
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: v
+        shell: bash
+        run: |
+          set -euo pipefail
+          # 单一来源 = Cargo.toml 的 [workspace.package] version（六个 crate 共用一份，
+          # 见该文件头注释）。同一手法与 ci.yml 的 msrv job 取 rust-version 一致。
+          ver="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+          [ -n "$ver" ] || { echo "::error::Cargo.toml 里取不到 version"; exit 1; }
+
+          # desktop 的 opiAppVersion 是**另一处**写死的版本号（jpackage 的 packageVersion
+          # 与设置窗标题栏都从它来，见 desktop/build.gradle.kts 的注释）。两处必须相等，
+          # 否则 artifact 名（用 Cargo 版本）与 .msi 里真实的 packageVersion 会各说各话 ——
+          # 这正是本仓栽过的那类「摆在使用者眼前的假话」（设置窗写死过一份 1.4.0）。
+          # 它不相等时**在这里红**，而不是打出一个名字撒谎的包。
+          desk="$(sed -n 's/^val opiAppVersion = "\(.*\)"/\1/p' desktop/build.gradle.kts)"
+          [ -n "$desk" ] || { echo "::error::desktop/build.gradle.kts 里取不到 opiAppVersion"; exit 1; }
+          [ "$ver" = "$desk" ] || {
+            echo "::error::版本号漂了：Cargo.toml=$ver，desktop opiAppVersion=$desk —— 两处要一起动"
+            exit 1
+          }
+          echo "版本 $ver（Cargo.toml 与 desktop/build.gradle.kts 一致）"
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+
+  tsf-dll:
+    name: TSF DLL（windows-latest，真链接）
+    runs-on: windows-latest
+    needs: version
+    steps:
+      - uses: actions/checkout@v4
+
+      # x86_64-pc-windows-msvc 在 Windows 上是**宿主**目标（工具链自带），写出来是自证
+      # 「编的是哪个目标」，与 ci.yml 里显式列 targets 的写法一致。
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      # --locked：按 Cargo.lock 编，不让 cargo 静默改写依赖树再据此编译（本仓 msrv job
+      # 同一条约定：不加 --locked，测的就不是锁定那份依赖）。锁文件漂了会在这一步响的红。
+      # lto=true（根的 [profile.release]）在这里是**真做**的 —— 这是本仓第一次在
+      # Windows 目标上跑完整 release 链接。
+      - name: cargo build --release -p tsf_opi（真链接出 DLL）
+        run: cargo build --release --locked -p tsf_opi --target x86_64-pc-windows-msvc
+
+      # 「编出来了」与「这个 DLL 里真有 COM 入口」是两件事：导出名漏一个（或名字被
+      # 装饰），宿主看到的就是「导出不存在」——regsvr32 报找不到入口点，产物外观毫无异样。
+      # 所以这里真读一次导出表，四个入口缺一个就红。它同时是 §6.1 第 2 条
+      # （「导出表从未被检视」）的执行点。
+      - name: 导出表取证（四个 COM 入口在不在）
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dll = 'target/x86_64-pc-windows-msvc/release/tsf_opi.dll'
+          if (-not (Test-Path $dll)) { throw "没编出 $dll" }
+
+          # dumpbin 不在 PATH 上（runner 镜像不预置 VS 开发者命令行的环境）。用 vswhere
+          # 找 VS 安装，再从它下面取 dumpbin —— 不猜版本目录名（Enterprise/Community/年份都会变）。
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $dumpbin = Get-ChildItem (Join-Path $vs 'VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe') |
+            Select-Object -First 1
+          if (-not $dumpbin) { throw "找不到 dumpbin.exe（VS 在 $vs）" }
+
+          $out = & $dumpbin.FullName /nologo /exports $dll
+          $out
+          foreach ($sym in 'DllGetClassObject', 'DllCanUnloadNow', 'DllRegisterServer', 'DllUnregisterServer') {
+            if (-not ($out | Select-String -SimpleMatch $sym -Quiet)) { throw "导出表里没有 $sym" }
+          }
+          Write-Host "四个 COM 导出都在（名字未被装饰）"
+
+      # if-no-files-found: error —— 默认只 warn，而「绿了但没产物」正是本仓反复栽过的
+      # 那种假绿（比红更坏：拿到手才发现空）。
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opi-tsf-dll-v${{ needs.version.outputs.version }}
+          if-no-files-found: error
+          path: target/x86_64-pc-windows-msvc/release/tsf_opi.dll
+
+  desktop-msi:
+    name: 桌面应用 .msi（windows-latest，jpackage）
+    runs-on: windows-latest
+    needs: version
+    steps:
+      - uses: actions/checkout@v4
+
+      # 前置守卫：description/vendor/packageName 会被 jpackage 写进 MSI **数据库**，而数据库
+      # 代码页是 WiX 本地化文件里的 1252（Windows Installer 不支持 65001/UTF-8）。这些值里
+      # 出现中文/全角字符时 light.exe 会以 LGHT0311 退出（2026-10-09 实测：退出码 311，描述
+      # 原文案带中文就挂在这；Gradle 只报「Exit code: 1」，真原因藏在下面那条诊断步骤打的
+      # jpackage 日志里）。把判据前置，红的时候一眼知道改哪，不用先学会读 light.exe。
+      # sed 取值的锚点与上面 version job 取 opiAppVersion 同一手法。
+      - name: 检查 description/vendor/packageName 是纯 ASCII（否则 MSI 必挂 LGHT0311）
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in description vendor packageName; do
+            val="$(sed -n "s/^ *${key} = \"\(.*\)\"/\1/p" desktop/build.gradle.kts)"
+            [ -n "$val" ] || { echo "::error::从 desktop/build.gradle.kts 取不到 ${key}"; exit 1; }
+            if printf '%s' "$val" | LC_ALL=C grep -q '[^ -~]'; then
+              echo "::error::${key} 含非 ASCII 字符：$val"
+              echo "MSI 数据库代码页 1252，light.exe 会以 LGHT0311（退出码 311）失败；"
+              echo "改回 ASCII，或按 desktop/build.gradle.kts 里那段注释走 --resource-dir 那条路。"
+              exit 1
+            fi
+            echo "${key} 全 ASCII：$val"
+          done
+
+      # 与 packages.yml 的 desktop-deb job 同源（temurin 21）：jpackage 需要 ≥17，21 是
+      # 当前 LTS。注意 jpackage 会把**这一份** JDK 的运行时 jlink 进包 ⇒ Windows 侧必须
+      # 用 Windows 的 JDK，不能拿 Linux 的交叉打（这也是本 workflow 必须存在的理由之一）。
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # 在 desktop/ 里跑（本模块有**自己的** gradlew + settings.gradle.kts，与 android/
+      # 同约定：阿里云镜像优先、mavenCentral 兜底、无 google()）。Windows 上必须用
+      # gradlew.bat（gradlew 是 sh 包装，pwsh 里跑不了）。
+      # `packageMsi` 任务**只在 targetFormats 列了 Msi 时才存在** —— 列哪个格式就注册哪个
+      # 任务，那条前提写在 desktop/build.gradle.kts 的注释里（2026-10-09 加 Msi 时订正）。
+      # WiX（jpackage 打 msi 的后端）不预装也行：CMP 1.11.1 自己在 Windows 主机上接一条
+      # downloadWix → unzipWix 的线（未设 WIX_PATH 时从 github.com 拉 wix311 二进制）。
+      - name: ./gradlew.bat packageMsi
+        run: ./gradlew.bat packageMsi --no-daemon
+        working-directory: desktop
+
+      # jpackage 是 Gradle 起的外部进程，**它的话不在 Gradle 的输出里** —— 失败时
+      # Gradle 只报「Exit code: 1」+ 两行日志文件路径，真原因（light.exe/candle.exe 说什么、
+      # 哪个参数不被接受）在那两个 .txt 里。缺了这一步，红的信息量只剩「jpackage 挂了」。
+      - name: jpackage 失败时把它的日志与参数打出来
+        if: failure()
+        shell: pwsh
+        run: |
+          $dir = 'desktop/build/compose/logs/packageMsi'
+          if (Test-Path $dir) {
+            Get-ChildItem "$dir/*.txt" | ForEach-Object {
+              Write-Host "==== $($_.Name) ===="
+              Get-Content $_.FullName
+            }
+          } else { Write-Host "没有 $dir（jpackage 没跑到写日志那一步）" }
+          $argsFile = 'desktop/build/compose/tmp/packageMsi.args.txt'
+          if (Test-Path $argsFile) {
+            Write-Host "==== jpackage 收到的参数 ===="
+            Get-Content $argsFile
+          } else { Write-Host "没有 $argsFile" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opi-desktop-msi-v${{ needs.version.outputs.version }}
+          if-no-files-found: error
+          path: desktop/build/compose/binaries/main/msi/*.msi
+
+  # ---- 只报不进卡的 clippy（Windows 目标）----
+  #
+  # 本仓已知盲区：ci.yml 的 clippy 只跑**主机目标**，而 tsf-opi 有四个模块整个在
+  # `#[cfg(target_os = "windows")]` 里 —— 主机 clippy 一行都看不到它们。这条补上。
+  #
+  # ⚠️ 它是 `continue-on-error`，因为**既有代码本来就有 8 条红**（本机 rustc 1.99.0
+  #    实测，`cargo clippy -p tsf_opi --target x86_64-pc-windows-msvc -- -D warnings`）：
+  #      · not_unsafe_ptr_arg_deref ×4 —— com_server.rs:282/289/290（DllGetClassObject
+  #        解引用裸指针而没标 unsafe fn；那是 COM 的固定导出形状，改签名等于改 ABI）
+  #      · result_unit_err ×1 —— candidate_io.rs:349（attach_sink 返回 Result<(), ()>）
+  #      · doc_lazy_continuation ×3 —— state.rs:208/209/210（续行没缩进）
+  #    本轮**不修代码**（任务边界：只做打包）。修掉这 8 条之后，把 continue-on-error
+  #    去掉即可变成门禁；在那之前它只是「每次 run 都把既有红摆在日志里」的取证点。
+  #    另一个不加卡的理由：clippy 的 lint 集合跟着工具链走（runner 的 stable 可能比
+  #    本机新），进卡会变成随工具链飘的红。
+  clippy-windows:
+    name: clippy（Windows 目标，只报不进卡）
+    runs-on: windows-latest
+    needs: version
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+          components: clippy
+
+      - name: cargo clippy -p tsf_opi --target x86_64-pc-windows-msvc -- -D warnings
+        run: cargo clippy --locked -p tsf_opi --target x86_64-pc-windows-msvc -- -D warnings
