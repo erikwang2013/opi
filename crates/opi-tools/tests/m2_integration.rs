@@ -4,6 +4,7 @@
 //! M2 端到端集成测试：Engine + mmap 词典（编译 → 序列化 → 加载 → 输入 → 选词）。
 //! 验证词典注入后引擎全链路可用，以及词库损坏时的回退路径。
 
+use engine_core::Scheme;
 use engine_core::engine::Engine;
 use engine_core::symbols::SymbolEngine;
 use engine_data::{
@@ -124,4 +125,83 @@ fn segment_fallback_on_real_luna_dictionary() {
     assert!(texts(&eng).is_empty(), "`zxcvb` 不得被分词回退救活");
     assert_eq!(eng.input_key(' '), "zxcvb", "无候选 ⇒ 空格提交原文");
     assert_eq!(eng.buffer(), "");
+}
+
+/// 9/14 键**数字空间回退**（2026-10-10 裁决「回退扩到 9 键」）在**真词库**上的验收；
+/// 内联夹具版在 `engine-core/tests/segment_fallback.rs`。用户现场：9 键打长句
+/// 「打超到下一音节首键」（`64426`→`644269` = nihao + [wxyz]）恰好撞无候选。
+/// 本条钉真 luna 数据下的四条：回退档与命中态整档**逐条相同**、选中只消耗前缀键
+/// （尾部键留在缓冲、接着编与另开一台直打逐条相同）、14 键同一条判定自然覆盖
+/// （`bugaoml` → 前缀 `bugao` 的整档 + 尾 `ml`；`bugaom` 是命中态不丢尾：真库里有
+/// 7 字母的 `buhaoma`/`nihaoma` 把它吃成整串前缀）、垃圾串维持死 + 逃生口不动。
+#[test]
+fn scheme_fallback_on_real_luna_dictionary() {
+    let luna = || {
+        Engine::new(
+            Box::new(
+                load_mmap(Path::new(LUNA_OPID))
+                    .unwrap_or_else(|e| panic!("加载 {LUNA_OPID} 失败：{e:?}")),
+            ),
+            SymbolEngine::new(Vec::new(), Vec::new()),
+            false,
+        )
+    };
+    let texts =
+        |e: &Engine| -> Vec<String> { e.candidates(8).into_iter().map(|c| c.text).collect() };
+    let type_str = |e: &mut Engine, s: &str| {
+        for ch in s.chars() {
+            e.input_key(ch);
+        }
+    };
+    // 9 键主用例：`644269` 整串无命中 ⇒ 回退档 = 键前缀 `64426`（nihao）的整档
+    let mut nine = luna();
+    nine.set_scheme(Scheme::Nine);
+    let mut hit = luna();
+    hit.set_scheme(Scheme::Nine);
+    type_str(&mut hit, "64426");
+    type_str(&mut nine, "644269");
+    assert_eq!(
+        nine.display_buffer(),
+        hit.display_buffer(),
+        "读数照旧是首条候选的拼音（回退不把左列打空）"
+    );
+    assert_eq!(texts(&nine), texts(&hit), "回退档 = 命中态整档，逐条相同");
+    assert_eq!(nine.select(0), "你好");
+    assert_eq!(nine.buffer(), "9", "只消耗前缀键：尾部键留下接着编");
+    // 接着编：`9` + `6` = 下一个音的键 → 与另开一台直打 `96` 逐条相同
+    type_str(&mut nine, "6");
+    assert_eq!(nine.buffer(), "96");
+    let mut fresh = luna();
+    fresh.set_scheme(Scheme::Nine);
+    type_str(&mut fresh, "96");
+    assert_eq!(texts(&nine)[0], "我", "{:?}", texts(&nine));
+    assert_eq!(texts(&nine), texts(&fresh), "尾部键接着编走同一条路径");
+    // 14 键同一条判定：`bugaoml`（bugao + 尾 `ml`）⇒ 前缀 `bugao` 的整档 + 尾留缓冲
+    let mut fourteen = luna();
+    fourteen.set_scheme(Scheme::Fourteen);
+    type_str(&mut fourteen, "bugaoml");
+    let mut hit14 = luna();
+    hit14.set_scheme(Scheme::Fourteen);
+    type_str(&mut hit14, "bugao");
+    assert_eq!(
+        texts(&fourteen),
+        texts(&hit14),
+        "14 键回退档 = 前缀 `bugao` 的整档，逐条相同"
+    );
+    assert_eq!(fourteen.select(0), "不好");
+    assert_eq!(fourteen.buffer(), "ml", "两个尾部键都留下");
+    // 14 键对照：打满到 `bugaom` **不是**回退态（真库里 7 字母的 buhaoma/nihaoma 命中，
+    // 整串前缀语义）—— 选中后缓冲清空，证明没走「丢尾」那条腿
+    let mut full = luna();
+    full.set_scheme(Scheme::Fourteen);
+    type_str(&mut full, "bugaom");
+    assert_eq!(full.select(0), "不好吗");
+    assert_eq!(full.buffer(), "", "命中态不丢尾：缓冲整段被消耗");
+    // 垃圾串维持死 + 逃生口（单段/无见证者不救）
+    let mut dead = luna();
+    dead.set_scheme(Scheme::Nine);
+    type_str(&mut dead, "55");
+    assert!(texts(&dead).is_empty(), "`55` 没有音节对齐的见证者，维持死");
+    assert_eq!(dead.input_key(' '), "55", "无候选 ⇒ 空格提交原文");
+    assert_eq!(dead.buffer(), "");
 }

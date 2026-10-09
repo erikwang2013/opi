@@ -425,7 +425,8 @@ fn raw_suffix(input: &str, consumed: usize) -> String {
 /// 查询**（「64」不是任何键的前缀），只能全量遍历词库逐键比对
 /// （`Dictionary::visit_entries`）—— 数据来源、算法形状都不同，硬合并会把两条
 /// 路都读不懂。打分/去重/截断规则与全键盘**逐字相同**（exact 加成按「键长相等」
-/// 判，与 pinyin_len == 输入长度同义），保证两套键盘的候选行为一致。
+/// 判，与 pinyin_len == 输入长度同义），保证两套键盘的候选行为一致；整串无命中时
+/// 还有 26 键同一条**回退**（2026-10-10 扩到 9 键：`644269` → 你好一族）。
 /// 返回 `(候选, 逐条读音)`：`readings[i]` = `cands[i]` 的词典拼音（截断后同序，
 /// 两串等长）。9 键的缓冲是数字串，界面上要显示「拼音读数」时靠它 ——
 /// `display_buffer` 取第一条（搜狗 9 键候选栏左侧那格同款），
@@ -444,34 +445,43 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
         return (Vec::new(), Vec::new());
     }
     let exact_bonus = boost / 2;
-    let input_len = input.len();
-    // 读音随条目一起暂存（pinyin 的生命周期出不了 visit_entries 的回调，故复制）。
-    let mut merged: Vec<(Candidate, String)> = Vec::new();
-    dict.visit_entries(&mut |pinyin, word, freq| {
-        if !scheme.matches(input, pinyin) {
-            return;
-        }
-        // 钉读音（左列点一行拼音）：候选收窄到该读音一族 —— 前缀比较（`niu` 含
-        // `niuyou`），pin 已在边界处去掉分词 `'`（见 `Engine::set_pinned_reading`）。
-        if let Some(p) = pin
-            && !pinyin.starts_with(p)
-        {
-            return;
-        }
-        let exact = pinyin.len() == input_len;
-        merged.push((
-            Candidate {
-                text: word.to_string(),
-                kind: CandidateKind::Hanzi,
-                score: rank_score(freq, learner.freq_of(word), boost).saturating_add(if exact {
-                    exact_bonus
-                } else {
-                    0
-                }),
-            },
-            pinyin.to_string(),
-        ));
-    });
+    // 一趟扫描 = 一个输入串的整档（读音随条目一起暂存：pinyin 的生命周期出不了
+    // visit_entries 的回调）。两趟（回退态）共用这一份。
+    let scan = |input: &str| -> Vec<(Candidate, String)> {
+        let input_len = input.len();
+        let mut merged: Vec<(Candidate, String)> = Vec::new();
+        dict.visit_entries(&mut |pinyin, word, freq| {
+            if !scheme.matches(input, pinyin) {
+                return;
+            }
+            // 钉读音（左列点一行拼音）：候选收窄到该读音一族 —— 前缀比较（`niu` 含
+            // `niuyou`），pin 已在边界处去掉分词 `'`（见 `Engine::set_pinned_reading`）。
+            if let Some(p) = pin
+                && !pinyin.starts_with(p)
+            {
+                return;
+            }
+            let exact = pinyin.len() == input_len;
+            merged.push((
+                Candidate {
+                    text: word.to_string(),
+                    kind: CandidateKind::Hanzi,
+                    score: rank_score(freq, learner.freq_of(word), boost)
+                        .saturating_add(if exact { exact_bonus } else { 0 }),
+                },
+                pinyin.to_string(),
+            ));
+        });
+        merged
+    };
+    // ── 数字空间回退（2026-10-10 扩到 9 键）：整串无命中改扫最长音节对齐键前缀的整档
+    // （判定唯一实现 `scheme::scheme_fallback_len`；命中态非空 ⇒ 一行不重，重扫深度 ≤ 1）。
+    let mut merged = scan(input);
+    if merged.is_empty()
+        && let Some(k) = crate::scheme::scheme_fallback_len(dict, input, scheme, pin)
+    {
+        merged = scan(&input[..k]);
+    }
     merged.sort_by(|a, b| b.0.score.cmp(&a.0.score).then(a.0.text.cmp(&b.0.text)));
     let mut seen = std::collections::HashSet::new();
     merged.retain(|(c, _)| seen.insert(c.text.clone()));
