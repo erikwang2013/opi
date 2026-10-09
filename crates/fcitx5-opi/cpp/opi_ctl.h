@@ -66,17 +66,32 @@
 inline constexpr const char *kOpiCtlPath = "/opi";
 inline constexpr const char *kOpiCtlInterface = "org.fcitx.Fcitx5.Opi1";
 
-// 动作 → 结果串。结果串就是**返回值协议**（唯一的跨进程契约）：
-//   "ok"                成功
-//   "err:<退出码>:<原因>" 失败，退出码给 opi-ctl 原样当进程退出码（见 .rs 侧注释：
-//                        4 = 功能不可用/未接线，5 = 动作被拒或内部错误）
+// 动作/查询 → 结果串。结果串就是**返回值协议**（唯一的跨进程契约）：
+//   · Trigger（动作，入参是动作串）：
+//       "ok"                成功
+//       "err:<退出码>:<原因>" 失败，退出码给 opi-ctl 原样当进程退出码（见 .rs 侧注释：
+//                            4 = 功能不可用/未接线，5 = 动作被拒或内部错误）
+//   · State（只读查询，**无入参**：2026-10-10 用户裁决加）：
+//       一行冻结格式的状态串（见下），或同样的 "err:<码>:<原因>"
 // 返回值用字符串而不是元组：`FCITX_OBJECT_VTABLE_METHOD` 的 RET 参数支持多值
 // struct，但那要两端都对上 fcitx 的 tuple 映射；这里只有一个短串，字符串够用。
 using OpiCtlHandler = std::function<std::string(const std::string &)>;
+using OpiCtlStateHandler = std::function<std::string()>;
 
+// ---- State 的返回串：**冻结格式**（桌面状态栏每秒轮询它渲染图标：月亮盈亏 =
+// 全/半角，zh/en = 语言）----
+//     lang=zh|en;trad=on|off;punct=on|off;fw=on|off
+// 键序**固定**（桌面端按位置解析）；四个值全部来自**既有 getter**，不新造状态
+// （哪四个、都是谁，写在 opi_engine.h 的 stateLine_ 上）。改这个格式要三处同改：
+// 这里、opi-ctl.rs 的 check_state_shape、desktop 的解析处。
+// **没有「当前 IC」时不是失败**：四个值都是进程级单例（Rust 引擎的模式/全角 +
+// addon 的配置面），所有 IC 同值 ⇒ 无 IC 时照常返回同一行、rc 0。桌面每秒轮询，
+// 且轮询时**常常没有焦点窗口**，把它判成错误会让图标在这类时刻闪成「读不到」。
+// 与 Trigger 不同：那条路必须有 IC（要刷它的面板），state 这条路不需要。
 class OpiCtlObject : public fcitx::dbus::ObjectVTable<OpiCtlObject> {
 public:
-    explicit OpiCtlObject(OpiCtlHandler handler) : handler_(std::move(handler)) {}
+    OpiCtlObject(OpiCtlHandler handler, OpiCtlStateHandler stateHandler)
+        : handler_(std::move(handler)), stateHandler_(std::move(stateHandler)) {}
 
     // 方法实现：把动作串原样交给宿主（OpiEngine）的处理器。**异常必须在处理器里
     // 挡住**（dbus 的分发路径不捕 C++ 异常，逃出去就是守护进程死），见 opi_engine.h。
@@ -85,8 +100,15 @@ public:
     // 注册 D-Bus 方法：Trigger(string) -> string（名字/签名两头对齐 opi-ctl.rs）。
     FCITX_OBJECT_VTABLE_METHOD(trigger, "Trigger", "s", "s");
 
+    // 只读查询：无入参（空签名）→ 上面那行状态串。空签名**两版头都编得过**：
+    // `FCITX_STRING_TO_DBUS_TUPLE("")` 展开成 `std::tuple<>`（探针在 5.1.12 与
+    // 5.0.21 两套头上 -fsyntax-only/-c 各跑过一次，rc 0），别改成带占位参数的形态。
+    std::string state() { return stateHandler_(); }
+    FCITX_OBJECT_VTABLE_METHOD(state, "State", "", "s");
+
 private:
     OpiCtlHandler handler_;
+    OpiCtlStateHandler stateHandler_;
 };
 
 // 把 obj 注册到 fcitx5 自己的会话总线上。返回 false = 这条通道没接上（原因已打 stderr）。
