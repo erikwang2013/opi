@@ -180,6 +180,41 @@ void refreshingPanelFor(fcitx::InputContext *ic) {
     g_pushedBuffer = buffer;
 }
 
+// ---------- W1「直接确认」：切走/切英文时把待定输入提交掉（2026-10-10） ----------
+//
+// 用户裁决：焦点移出**不提交**（静默清空）；但**切输入法**与**切英文**要把用户已经
+// 打了一半的拼音提交出去，别丢输入 —— 有候选就上首候选，没候选就提交原文。
+//
+// 顺序契约（lead 2026-10-10，且与符号浏览有关）：**先退浏览、后提交** ——
+// 符号浏览进行中时先让引擎退出浏览（恢复浏览前的真缓冲），再按 W1 提交。反过来的话
+// 提交出去的是浏览态的标题串（或首个分类），那就成了「按一下 Shift 多出一串分类名」。
+//
+// 判「有没有候选」**不去查候选表**：`opi_fcitx5_select(0)` 本身就是这个判据 ——
+// 无候选时 Rust 侧返回空串且**不改状态**（candidate.rs 的 CandidateState::select：
+// index ≥ page_len ⇒ 空串、不 mutate），空串恰好等于「没有候选」。反过来先查
+// candidates() 再决定走哪条，就多了一个会与 Rust 侧漂的判据（还要再解析一遍 JSON）。
+void opiDirectConfirm(fcitx::InputContext *ic) {
+    if (ic == nullptr) {
+        return;
+    }
+    // ① 先退浏览（幂等；引擎侧入口未接线时是 no-op，见 opi_mode.h 的 opiSymbolBrowseCall）
+    opiSymbolBrowseHook()(kOpiSymbolBrowseExit);
+    // ② 有候选 → 首候选（select 成功时 Rust 侧同时清缓冲）
+    std::string out = take(opi_fcitx5_select(0));
+    if (out.empty()) {
+        // ③ 无候选 → 原文。缓冲也是空的（没打过字 / 已是英文模式）就什么都不提交 ——
+        //    commitString("") 没有意义，空串正好兼作「没东西可提交」的判据。
+        out = take(opi_fcitx5_buffer());
+        if (!out.empty()) {
+            // 原文已经交出去了，引擎状态要跟着清，否则预编辑串会留在屏幕上。
+            opi_fcitx5_clear();
+        }
+    }
+    if (!out.empty()) {
+        ic->commitString(out);
+    }
+}
+
 // ---------- 模式热键与 Shift 轻按 → 已整体搬去 opi_mode.h ----------
 // isRepeatEvent / OpiMode 编码 / handleModeHotkey / OpiShiftToggle 的**唯一家**是
 // opi_mode.h（2026-10-09 搬移，理由：本文件 500 行门禁）。搬移是机械的，判据与

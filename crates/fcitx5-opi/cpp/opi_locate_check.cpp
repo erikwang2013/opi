@@ -109,7 +109,7 @@ int main(int argc, char **argv) {
     if (argc < 2) {
         fprintf(stderr,
                 "用法: %s <期望词库路径> [期望 addon conf] [期望 inputmethod conf]"
-                " [期望繁体词库路径]\n",
+                " [期望繁体词库路径] [期望符号类目路径]\n",
                 argv[0]);
         return 2;
     }
@@ -135,6 +135,11 @@ int main(int argc, char **argv) {
     if (argc > 4) {
         check("繁体词库", fcitx::StandardPath::Type::Data, "opi/trad.opid",
               argv[4]);
+    }
+    // 符号类目数据（2026-10-10）：同一条路（Type::Data + opi/）。
+    if (argc > 5) {
+        check("符号类目", fcitx::StandardPath::Type::Data,
+              "opi/symbol_categories.tsv", argv[5]);
     }
 
     if (failures != 0) {

@@ -24,7 +24,8 @@
 #include <fcitx-utils/standardpath.h>
 
 #include "opi_config.h"   // 「属性设置」：OpiSettings + read/apply/save
-#include "opi_mode.h"     // 模式热键（Ctrl+' / Ctrl+\）+ Shift 轻按切换 + 中/英、简/繁状态项
+#include "opi_ctl.h"      // opi-ctl 接收侧（D-Bus 对象 + 注册；spike 结论在那边）
+#include "opi_mode.h"     // 模式热键（Ctrl+' / Ctrl+\ / Ctrl+Shift+Z）+ Shift 轻按切换 + 状态项
 #include "opi_rust_ffi.h"
 #include "opi_skin.h"     // 皮肤：写 classicui.conf + 热重载
 #include "opi_status.h"   // 状态区「设置」项（拉起设置窗）
@@ -42,6 +43,7 @@ public:
     // 都是拿构造参数初始化，纯粹为了过 -Werror=reorder。
     OpiEngine(fcitx::Instance *instance)
         : shiftToggle_(instance), fanjianToggle_(instance), settingsAction_(instance),
+          ctlObject_([this](const std::string &action) { return ctlAction_(action); }),
           instance_(instance) {
         loadDictionary();
         // 配置推给引擎必须在 loadDictionary 之后：Rust 侧单例在那一刻才建起来。
@@ -57,6 +59,11 @@ public:
             [this](fcitx::InputContext *ic) { fanjianToggle_.update(ic); });
         fanjianToggle_.setOnModeChanged(
             [this](fcitx::InputContext *ic) { shiftToggle_.update(ic); });
+        // opi-ctl 通道（接收侧）：构造期先试一次。**失败不报错** —— 构造期拿不到
+        // 多半只是加载顺序（dbus 模块是 Category=Module + OnDemand=False，正常在
+        // 进程启动时就加载好了，此时 addon("dbus", true) 直接命中缓存），留给
+        // activate() 再试一次并在那里作诊断（见 ensureCtlService_）。
+        ensureCtlService_(false);
     }
 
     // ---- 「属性设置」：fcitx5 的 addon 配置（字段与落点见 opi_config.h）----
@@ -82,28 +89,155 @@ public:
         shiftToggle_.attach(event.inputContext());
         fanjianToggle_.attach(event.inputContext());
         settingsAction_.attach(event.inputContext());
+        // opi-ctl 的 D-Bus 服务在这里才是可靠的注册时机：守护进程起完了、事件循环
+        // 在跑、dbus 模块在。构造期已成功的话这里是一条空操作。
+        // 无 IC 时状态栏按钮也不存在，所以「服务恰好在这时才有」不构成缺口。
+        ensureCtlService_(true);
     }
 
     void keyEvent(const fcitx::InputMethodEntry &entry,
                   fcitx::KeyEvent &keyEvent) override;
 
+    // ---- 切走 / 切英文：先退浏览，再按 W1 提交；焦点移出 / 重置：静默清空 ----
+    //
+    // 落点为什么是 deactivate() 而不是 reset()（**取证过的，不是猜**）：
+    //   · fcitx5 5.0.21 的 src/lib/fcitx/instance.cpp 里，FocusOut watcher 与
+    //     SwitchInputMethod watcher **都**调 deactivateInputMethod() → engine->deactivate()；
+    //     只有 InputContextReset 走 engine->reset()。即 reset() **收不到**「切输入法」
+    //     「焦点移出」—— 「切走时把拼音交出去」写在 reset() 里永远不触发。
+    //   · 类型判别两版都有（fcitx/event.h）：EventType::InputContextFocusOut
+    //     ( = InputContextEventFlag|0x4 ) 与 EventType::InputContextSwitchInputMethod
+    //     ( = |0xA )，5.0.21 与 5.1.12 **逐值相同**，`Event::type()` 两版也都有。
+    //     ⇒ 直接按事件类型分支，不需要任何版本探测。
+    //   · 不 override 的话基类的 deactivate 只是转发给 reset()（inputmethodengine.h
+    //     两版都写 `deactivate(...) { reset(...); }`），那「提交」这一半就没地方落。
+    //
+    // 覆盖面（lead 2026-10-10 裁决）：
+    //   · SwitchInputMethod → 先退符号浏览、再按 W1 提交（opiDirectConfirm；顺序是
+    //     契约，见那个函数的注释）。能力位变化（进密码框之类）发的也是这个事件，
+    //     所以「打了半截拼音点了密码框」会把拼音交出去 —— 与「切走不丢输入」同一意图。
+    //   · FocusOut / InputContextReset → **静默清空**，绝不提交（用户裁决：焦点移出
+    //     不能提交）。两者都落到 clearState_。
+    void deactivate(const fcitx::InputMethodEntry & /*entry*/,
+                    fcitx::InputContextEvent &event) override {
+        // 同 keyEvent：这个入口抛出去也会带走整个守护进程。
+        try {
+            if (event.type() == fcitx::EventType::InputContextSwitchInputMethod) {
+                opiDirectConfirm(event.inputContext());
+            }
+            clearState_(event.inputContext());
+        } catch (const std::exception &e) {
+            fprintf(stderr, "fcitx5-opi: deactivate 异常，已忽略: %s\n", e.what());
+        }
+    }
+
     void reset(const fcitx::InputMethodEntry & /*entry*/,
                fcitx::InputContextEvent &event) override {
         // 同 keyEvent：这个入口抛出去也会带走整个守护进程。
         try {
-            opi_fcitx5_clear();
-            // Shift「轻按」判定态也要清：按住 Shift 时失焦，抬起事件可能到不了
-            // 本 IC（或到了别的 IC），不清就是一次「幽灵切换」（opi_mode.h）。
-            shiftToggle_.disarm();
-            // Rust 侧清了缓冲，但面板是 fcitx5 侧的状态：不一并清，失焦/切换
-            // 输入法后预编辑串与候选栏会继续挂在屏幕上（原码只清了引擎，没碰面板）。
-            refreshingPanelFor(event.inputContext());
+            clearState_(event.inputContext());
         } catch (const std::exception &e) {
             fprintf(stderr, "fcitx5-opi: reset 异常，已忽略: %s\n", e.what());
         }
     }
 
+    // opi-ctl 的动作分发（接收侧）。动作串是**冻结的契约**（任务书）：
+    //   symbols|trad|punct|fullwidth|lang —— 新增动作要先找 lead 定，别自己加。
+    // 这里跑在**主循环线程**（dbus 模块把总线挂在自己的事件循环上），所以可以安全地
+    // 碰引擎单例与 IC，也就能满足「作用于当前 IC」。
+    std::string handleCtlAction_(const std::string &action) {
+        // 「当前 IC」= 最近获得焦点的那个；没有 IC 时动作仍会改引擎状态（单例），
+        // 只是没有面板可刷 —— 不是错误。
+        fcitx::InputContext *ic =
+            instance_ != nullptr ? instance_->mostRecentInputContext() : nullptr;
+        if (action == "symbols") {
+            // 三态（-1 未接线 / 0 不在浏览 / 1 在浏览），0 是二义的（见 opi_mode.h）：
+            // 「数据没装上、入口禁用」与「刚从浏览里退出来」都返回 0。用本类记的
+            // 装载态 symbolDataOk_ 把它们分开 —— 数据没装上时报 4 而不是哑成功，
+            // 否则状态栏按钮点了没反应还报成功（lead 明确要的「非零=可见反馈」）。
+            const int32_t st = opiSymbolBrowseHook()(kOpiSymbolBrowseToggle);
+            if (st < 0) {
+                // 引擎侧入口还没接线 —— 用 4（功能不可用）而不是 5，
+                // opi-ctl 会原样把它当进程退出码（desktop-ui 按非零=可见反馈处理）。
+                return "err:4:符号浏览入口未接线（引擎侧未落地），本次动作无效";
+            }
+            if (st == 0 && !symbolDataOk_) {
+                return "err:4:符号类目数据缺失（$XDG_DATA_DIRS 下没有 opi/symbol_categories.tsv），"
+                       "本次动作无效";
+            }
+            refreshingPanelFor(ic);
+        } else if (action == "trad") {
+            // 与 Ctrl+Shift+F、状态栏「简/繁」项**共用** opiToggleTraditional
+            // （两份实现会在「英文/符号模式里按下时报切到哪」这类角落上漂）。
+            opiToggleTraditional(ic);
+            fanjianToggle_.update(ic);
+            shiftToggle_.update(ic);
+        } else if (action == "punct") {
+            // 中文标点开关：改的是**配置面**（opi_config.h 的 ChinesePunct）——
+            // 与配置工具/设置窗读的是同一个值，改完落盘 ⇒ 下次 reloadConfig 不会
+            // 把它顶回去、设置窗显示的也是新值（内存里翻一个 bool 会两头都错）。
+            settings_.chinesePunct.setValue(!settings_.chinesePunct.value());
+            applyOpiSettings(settings_);
+            saveOpiSettings(settings_);
+        } else if (action == "fullwidth") {
+            opi_fcitx5_toggle_fullwidth();
+        } else if (action == "lang") {
+            // 中/英切换 = 引擎 English 模式（**不是** `fcitx5-remote -t`：那是整个
+            // IM 的激活开关，会让状态栏文案不同步、且之后 OPI 热键全部失效 ——
+            // 2026-10-10 裁决）。与 Shift 轻按共用 toggle（含 W1 直接确认与状态项刷新）。
+            shiftToggle_.toggle(ic);
+        } else {
+            return "err:5:未知动作：" + action;
+        }
+        return "ok";
+    }
+
 private:
+    // 「回到无 composing」的唯一实现：deactivate 与 reset 共用。
+    void clearState_(fcitx::InputContext *ic) {
+        opi_fcitx5_clear();
+        // Shift「轻按」判定态也要清：按住 Shift 时失焦，抬起事件可能到不了
+        // 本 IC（或到了别的 IC），不清就是一次「幽灵切换」（opi_mode.h）。
+        shiftToggle_.disarm();
+        // Rust 侧清了缓冲，但面板是 fcitx5 侧的状态：不一并清，失焦/切换
+        // 输入法后预编辑串与候选栏会继续挂在屏幕上（原码只清了引擎，没碰面板）。
+        refreshingPanelFor(ic);
+    }
+
+    // opi-ctl 的 D-Bus 处理器外壳：**异常在这里挡住**。dbus 的分发路径不捕 C++
+    // 异常，逃出去就是守护进程死（与 keyEvent 那条同一类风险）。
+    // 返回串是跨进程协议："ok" / "err:<退出码>:<原因>"（见 opi_ctl.h）。
+    std::string ctlAction_(const std::string &action) noexcept {
+        try {
+            return handleCtlAction_(action);
+        } catch (const std::exception &e) {
+            return std::string("err:5:内部异常：") + e.what();
+        } catch (...) {
+            return "err:5:内部异常（非 std::exception）";
+        }
+    }
+
+    // 注册 opi-ctl 的 D-Bus 服务（构造期试一次、activate 再试一次）。见 opi_ctl.h 的
+    // spike 段：注册对象是**本类的成员** ctlObject_，它析构时自动从总线注销。
+    bool ensureCtlService_(bool warnOnFailure) {
+        if (ctlRegistered_) {
+            return true;
+        }
+        if (!opiRegisterCtlService(instance_, ctlObject_)) {
+            // 只在**后一次**（activate）报错，且只报一次：构造期那次失败多半只是
+            // 加载顺序，报出来是假警报；每个 IC 激活都报会刷屏。
+            if (warnOnFailure && !ctlWarned_) {
+                ctlWarned_ = true;
+                fprintf(stderr,
+                        "fcitx5-opi: opi-ctl 通道没接上（原因见上一行）—— 状态栏的"
+                        "符号/简繁/标点/全角/中英按钮会报失败；插件其余功能不受影响\n");
+            }
+            return false;
+        }
+        ctlRegistered_ = true;
+        return true;
+    }
+
     OpiSettings settings_;
 
     // Shift 轻按切换 + 「中/英」状态项（判定与状态项都在 opi_mode.h）。
@@ -113,6 +247,18 @@ private:
     // 「简/繁」状态项（opi_mode.h）与「设置」项（opi_status.h）—— 外层入口。
     OpiFanjianToggle fanjianToggle_;
     OpiSettingsAction settingsAction_;
+
+    // opi-ctl 的 D-Bus 对象（opi_ctl.h）。**是成员**：它析构时自动从总线注销，
+    // 所以 addon 被卸载时不会在总线上留下指向已释放对象的 vtable。
+    // 声明位置要在 instance_ 之前 —— 初始化列表按声明顺序走（-Werror=reorder）。
+    OpiCtlObject ctlObject_;
+    bool ctlRegistered_ = false;
+    bool ctlWarned_ = false;
+
+    // 符号类目数据装载态（loadDictionary 里定，只写一次；handleCtlAction_ 的
+    // symbols 动作要读）。false 的两条路：文件不在（locate 空串）/弱符号没接线/
+    // Rust 侧读不出（返回 -1）—— 对调用方是同一种「入口禁用」。
+    bool symbolDataOk_ = false;
 
     // 皮肤「已应用」的最后值（opi_skin.h）：构造时只记住、不应用。
     OpiSkin lastSkin_ = OpiSkin::Keep;
@@ -155,6 +301,12 @@ private:
         // 第 4 个参数与 ci.yml 的「查找常量没漂」grep 一并守着。
         auto trad = fcitx::StandardPath::global().locate(
             fcitx::StandardPath::Type::Data, "opi/trad.opid");
+        // 符号类目数据（22 类目，engine-track 2026-10-10 定稿）：**同一约定** ——
+        // 这里只 locate 路径，Rust 侧读文件。路径为空就跳过调用（零噪音）。
+        // 落点常量与 luna/trad 同一条路（Type::Data + opi/），由 opi_locate_check 的
+        // 第 5 个参数与 ci.yml 的「查找常量没漂」grep 一并守着。
+        auto sym = fcitx::StandardPath::global().locate(
+            fcitx::StandardPath::Type::Data, "opi/symbol_categories.tsv");
 #pragma GCC diagnostic pop
         const bool ok =
             !path.empty() &&
@@ -168,6 +320,19 @@ private:
                 fprintf(stderr, "fcitx5-opi: 词库 %s 装载失败，回退内置词库\n", path.c_str());
             }
             opi_fcitx5_load(nullptr, 0); // 不存在或装载失败 → 内置回退词库
+        }
+        // 符号类目数据与拼音可用性**解耦**：装不上只让符号浏览入口保持禁用
+        // （引擎侧「无数据 = 不动」；opi-ctl/热键会报错或被诊断），其余功能不受影响。
+        // 装载态记下来 —— symbols 动作靠它把「数据缺失」与「刚退出浏览」分开
+        // （两者都返回 0，见 opi_mode.h 的三态说明）。
+        // 弱符号为 nullptr（引擎侧未落地）时静默跳过：那种情况由浏览入口的
+        // 一次性诊断负责报出来，这里再报就是重复噪音。
+        if (!sym.empty() && opi_fcitx5_load_symbols != nullptr) {
+            // 返回值：-1 = 读不出 / -2 = 零合法类目（都禁用入口）；≥0 = 跳过的坏行数
+            // （0 = 全好，可用）。判据就一条 `>= 0`。日志由 Rust 侧打。
+            symbolDataOk_ = opi_fcitx5_load_symbols(
+                                reinterpret_cast<const uint8_t *>(sym.data()),
+                                sym.size()) >= 0;
         }
     }
 

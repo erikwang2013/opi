@@ -34,6 +34,8 @@ run-harness.sh（它会建好私有 dbus 会话、独立 XDG_CONFIG_HOME、addon
   punctopi     决定性探针：先切 pinyin（libpinyin 会去加载 libpunctuation），
                再切回 opi 送同样三个键 —— 用来分辨「标点模块是全局的、只是没人
                为 opi 加载它」与「它本来就跳过 opi」
+  ctl          opi-ctl 通道（状态栏按钮那条链，2026-10-10）：真 opi-ctl 二进制 +
+               真会话总线 + 真 /opi 服务对象，见 opi_e2e_ctl.py
   modes        模式热键（B0/B5）：Ctrl+' 切英文、Ctrl+; 切符号，各切进再切出。
                断言不是「有没有信号」（面板重推也会给信号），而是**同一个键在三
                种模式下的结果必须不同** —— 见 check_modes()
@@ -68,6 +70,8 @@ from gi.repository import GLib
 # B0/B5 的步骤与断言（同目录；脚本以绝对路径运行，sys.path[0] = 脚本所在目录）。
 from opi_e2e_modes import (check_fullwidth, check_modes, check_shift,
                            plan_fullwidth, plan_modes, plan_shift)
+# opi-ctl 通道（2026-10-10）：真 opi-ctl → dbus-send → /opi → handleCtlAction_。
+from opi_e2e_ctl import check_ctl, plan_ctl
 
 DEST = "org.fcitx.Fcitx5"
 IC_IFACE = "org.fcitx.Fcitx.InputContext1"
@@ -219,6 +223,10 @@ def plan(mode, ic, caps):
         # 测：它要真守护进程的 GlobalConfig（ModifierOnlyKeyTimeout）。
         return plan_shift(ic)
 
+    if mode == "ctl":
+        # opi-ctl 通道（状态栏按钮那条链）—— 同上放模块里。
+        return plan_ctl(ic)
+
     if mode == "passthrough":
         # 直通键（Rust 侧 action==0）：不消费按键、引擎状态不变。期望 **0 条**
         # 面板信号 —— 内容与上一次完全相同，重推只是白付一次跨 FFI + 客户端重绘。
@@ -247,7 +255,7 @@ def main():
         caps = int(sys.argv[2], 0) if len(sys.argv) > 2 else 0
     elif mode in ("basic", "page", "passthrough"):
         caps = CAPS_PANEL
-    elif mode in ("punctopi", "modes", "fullwidth", "shift"):
+    elif mode in ("punctopi", "modes", "fullwidth", "shift", "ctl"):
         caps = CAPS_PANEL
     elif mode == "punct":
         caps = CAPS_PANEL
@@ -256,7 +264,7 @@ def main():
         im = sys.argv[2] if len(sys.argv) > 2 else "opi"
     else:
         print(f"未知模式 {mode!r}；可用: basic | page | passthrough | "
-              f"punct [im] | modes | fullwidth | shift | caps <0x..>")
+              f"punct [im] | modes | fullwidth | shift | ctl | caps <0x..>")
         return 2
     CURRENT_IM = im
 
@@ -422,6 +430,8 @@ def main():
                     check_fullwidth(_windows, _failures)
                 elif mode == "shift":
                     check_shift(_windows, _failures)
+                elif mode == "ctl":
+                    check_ctl(_windows, _failures)
                 finish()
                 return False
             label, fn, expect = steps[i]

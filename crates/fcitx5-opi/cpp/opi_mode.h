@@ -42,10 +42,14 @@
 
 #include "opi_rust_ffi.h"
 
-// 面板推送函数（refreshingPanelFor）的定义在 opi_fcitx5.cpp、主声明在
+// ---- 面板推送函数（refreshingPanelFor）的定义在 opi_fcitx5.cpp、主声明在
 // opi_engine.h。这里再声明一次：本头文件要独立于 opi_engine.h 可用
 // （后者 include 了本文件，反向引用会成环）。同签名重复声明是合法的。
 void refreshingPanelFor(fcitx::InputContext *ic);
+
+// W1「直接确认」的实现体也在 opi_fcitx5.cpp（同一个理由：它要用 take()，
+// 而 take() 是**每个 TU 一份**的 static 函数，放进本头的 inline 体里会踩 ODR）。
+void opiDirectConfirm(fcitx::InputContext *ic);
 
 // 模式编码与 Rust 侧 mode_from_int / mode_to_int **逐值对应**（../src/lib.rs）。
 // 抄错一个值就是切到另一个模式，且两边都不报错。
@@ -97,6 +101,49 @@ inline bool opiModifierTimeoutOk(const Config &config, uint64_t pressTime) {
         (void)pressTime;
         return true;
     }
+}
+
+// ---- 符号浏览（22 类目）的进出入口 + W1「直接确认」（2026-10-10）----
+//
+// 两件事合在一处，因为**顺序**是它们之间的契约：
+//   切走/切英文 → ① 先退浏览（恢复真缓冲）→ ② 再按 W1 提交（有候选上首候选、
+//   无候选原文）。顺序反了就把浏览态的标题串（或首个分类）当用户输入提交出去
+//   —— 这条是 lead 2026-10-10 的裁决，落点见它下面的 opiDirectConfirm。
+//
+// 引擎侧入口 `opi_fcitx5_symbol_browse` 是**弱符号**（契约段在 opi_rust_ffi.h）：
+// 落地前为 nullptr。缺符号时只打**一次** stderr 诊断（含期望符号名 —— 名字若与
+// engine-track 的导出漂移，那是唯一看得见的地方，所以把名字写进去，别只写「未接线」）。
+inline constexpr int32_t kOpiSymbolBrowseExit = 0;   // 幂等：非浏览态是 no-op
+inline constexpr int32_t kOpiSymbolBrowseEnter = 1;
+inline constexpr int32_t kOpiSymbolBrowseToggle = 2; // 引擎看自己的状态决定进/出
+
+// 唯一调用点（判空 + 诊断都只在这里）。返回值三态：
+//   -1 = 引擎侧入口没接线（弱符号仍是 nullptr，诊断已打）；
+//   ≥0 = 引擎给的**执行后浏览态**（1=在浏览 / 0=不在，engine-track 的返回契约）。
+// 注意 0 是二义的（「刚退出来」与「无数据进不去」都是 0）—— 要看真值的调用方
+// 得自己判装载态（opi_engine.h 的 symbols 动作就是这么做的）。
+inline int32_t opiSymbolBrowseCall(int32_t action) {
+    if (opi_fcitx5_symbol_browse == nullptr) {
+        static bool warned = false;
+        if (!warned) {
+            warned = true;
+            fprintf(stderr,
+                    "fcitx5-opi: 引擎侧符号浏览入口没接线 —— 期望的导出符号是"
+                    " `opi_fcitx5_symbol_browse`（弱符号，当前解析为 nullptr）。"
+                    "本次动作 %d 无效；插件其余功能不受影响。\n",
+                    static_cast<int>(action));
+        }
+        return -1;
+    }
+    return opi_fcitx5_symbol_browse(action);
+}
+
+// 测试缝（与 opi_status.h 的 opiSettingsLauncherHook 同一先例）：面板驱动把这里
+// 换成假货，才能验「先退浏览、后提交」的**顺序** —— 真入口是弱符号，落到本分支
+// 之前驱动无法通过它观察任何东西（而顺序断言本来就该独立于引擎侧实现）。
+inline std::function<int32_t(int32_t)> &opiSymbolBrowseHook() {
+    static std::function<int32_t(int32_t)> f = opiSymbolBrowseCall;
+    return f;
 }
 
 // ---- Shift 轻按切换中英文 + 中/英状态项（2026-10-09）----
@@ -207,6 +254,10 @@ public:
         const int32_t cur = opi_fcitx5_mode();
         const int32_t next = (cur == kModeEnglish) ? kModePinyin : kModeEnglish;
         if (next == kModeEnglish) {
+            // 「中→英」＝ 用户裁决里的「切英文」：先把待定拼音提交掉（W1；顺序见
+            // opiDirectConfirm：先退浏览、后提交）。**必须在任何 switch_mode 之前** ——
+            // switch_mode 会清缓冲（Rust 侧 composer.switch_mode），之后再提交就只剩空串。
+            opiDirectConfirm(ic);
             // 进英文时 Rust 的「单次 Shift」状态**按设计**保留 ——
             // `CandidateState::switch_mode` 只在**离开** English 时清它
             // （candidate.rs，判据与 Android `EngineController.switchMode` 逐字一致）：
@@ -359,6 +410,42 @@ inline bool handleModeHotkey(fcitx::KeyEvent &keyEvent, OpiShiftToggle &shift,
             return true;
         }
     }
+    // ---- Ctrl+Shift+Z：进入/退出符号浏览（22 类目，2026-10-10）----
+    // 判据与上面 Ctrl+Shift+F **逐条同源**（rawKey、Shift 显式在位、排 Alt）：
+    // normalize() 会把 Ctrl+z 与 Ctrl+Shift+z 折成同一个 key()（sym='Z'、states=Ctrl），
+    // 拿 key() 判会把应用的「撤销」一起吃掉。本块是**唯一**决定这个键位的地方
+    // （换键 = 改这一处；备选见下），动作只调 opiSymbolBrowseHook() 一处。
+    //
+    // 占用表实测（方法同 handleFullwidthHotkey 那段）：`strings` 扫本机全部 fcitx5
+    // 库的 `^(Shift|Control|Super|Alt)\+` 默认组合，去重后是 Control+7 / Control+8 /
+    // Control+KP_Enter / Control+period / Control+Return / Control+semicolon /
+    // Control+Shift+KP_Enter / Control+Shift+Return / Control+Shift+U /
+    // Control+Alt+E / Control+Alt+Shift+U / Shift+Tab / Super+grave / Super+semicolon
+    // —— **含 Z 的零命中**；/usr/share/fcitx5/addon/*.conf 与用户 conf 里也搜不到。
+    // ⚠️ 但它与**生态**冲突：编辑器/IDE 的 Ctrl+Shift+Z = 重做（与 Ctrl+Y 同位），
+    // 中文态下会被本插件吃掉，用户按重做没反应。lead 2026-10-10 裁决**维持**这个
+    // 键（搜狗 PC 的「符号大全」就是它，属用户预期），冲突如实记在
+    // docs/install/linux.md 与交付说明里。备选（真要换时从这里挑）：
+    // Ctrl+Shift+J（终端里是换行，冲突面更小）、Alt+Shift+Z、双击 Shift。
+    // 用**切换**语义（不是只能进）：只能进不能出等于换个地方卡住，与上面三个热键同一条。
+    {
+        const fcitx::Key raw = keyEvent.rawKey();
+        if (raw.sym() == FcitxKey_Z &&
+            raw.states().test(fcitx::KeyState::Ctrl) &&
+            raw.states().test(fcitx::KeyState::Shift) &&
+            !raw.states().test(fcitx::KeyState::Alt)) {
+            if (!keyEvent.isRelease() && !isRepeatEvent(keyEvent)) {
+                // ≥0 = 入口已接线（-1 = 弱符号还是 nullptr，诊断已由唯一调用点打过）。
+                // 返回值本身（进/出）不用于分支：进和出都要重推面板 —— 浏览态换了
+                // 候选面（分类），退出则要把真缓冲的预编辑/候选还原上来。
+                if (opiSymbolBrowseHook()(kOpiSymbolBrowseToggle) >= 0) {
+                    refreshingPanelFor(keyEvent.inputContext());
+                }
+            }
+            keyEvent.filterAndAccept();
+            return true;
+        }
+    }
     // ---- Ctrl+' / Ctrl+\（通用门：key() 够用，这两个键符不是字母，normalize 不动它们）----
     const fcitx::Key key = keyEvent.key();
     if (!key.states().test(fcitx::KeyState::Ctrl)) {
@@ -381,6 +468,12 @@ inline bool handleModeHotkey(fcitx::KeyEvent &keyEvent, OpiShiftToggle &shift,
     // 「抬起按按下时记下的结论回复」是同一个理由。不返回来切也是同一个道理：
     // 按下切过去、抬起再切回来，用户看到的是模式纹丝不动。**重复**同理（见上）。
     if (!keyEvent.isRelease() && !isRepeatEvent(keyEvent)) {
+        if (target == kModeEnglish) {
+            // 「中→英」与 Shift 轻按是同一条裁决（W1 直接确认，顺序：先退浏览、
+            // 后提交）—— 必须赶在 switch_mode 之前，它会清缓冲。Ctrl+\（符号模式）
+            // **不**走这条：那不是「切英文」，缓冲本来也会被 switch_mode 清掉。
+            opiDirectConfirm(keyEvent.inputContext());
+        }
         opi_fcitx5_switch_mode(target);
         // 切模式会动缓冲/候选（Rust 侧 switch_mode → engine.switch_mode），面板
         // 必须跟着走：漏了这步，切到英文后候选栏会继续挂着上一次的拼音候选。

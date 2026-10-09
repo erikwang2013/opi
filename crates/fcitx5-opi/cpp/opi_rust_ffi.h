@@ -53,6 +53,40 @@ OpiKeyEventResult opi_fcitx5_key_event(uint32_t keyval, uint32_t states);
 void opi_ffi_free_string_utf8(OpiString s);
 }
 
+// ---- 符号浏览（22 类目）的进出入口 + 类目数据装载 ----
+//
+// 一个入口、三个动作：0 = 退出浏览（幂等：非浏览态调用是 no-op）、1 = 进入、
+// 2 = 切换（引擎看自己的状态决定进/出；C++ 侧看不到「是否在浏览态」，而热键要
+// 来回切 —— 「只能进不能出等于换个地方卡住」是本仓库热键的既有原则）。
+//
+// 语义契约（engine-track 2026-10-10 定稿，C++ 侧全靠它）：
+//   · 退出**必须恢复进入浏览前的真缓冲**（用户进浏览前打了一半的拼音）；
+//   · **同步**：调用返回时 `opi_fcitx5_buffer()` 已经是真缓冲。切走/切英文的顺序
+//     是「先退浏览 → 再按 W1 提交（有候选上首候选、无候选原文）」，异步实现会把
+//     浏览态的标题串/首个分类当用户输入提交出去 —— 正是这条契约要防的东西。
+//   · **返回值 = 执行后的浏览态**（1=在浏览 / 0=不在）。无数据时 1/2 是静默
+//     no-op（引擎侧「无数据 = 不动」，入口禁用），故 0 分不清「刚退出来」与
+//     「进不去」；需要区分的调用方（opi-ctl 的 symbols，见 opi_engine.h）另按
+//     自己知道的装载态判。
+//
+// ⚠️ **弱符号**声明（`__attribute__((weak))`，GCC/Clang 都支持）：入口落地前，
+// 这里的引用在链接/加载期解析为 nullptr —— **弱引用不会让链接或 dlopen 失败**，
+// 插件照常加载；入口落地后**同一个二进制**自动接上真入口（动态符号解析发生在
+// 加载期），不需要回头改本文件。调用点必须判空（opi_mode.h 的 opiSymbolBrowseCall
+// 是唯一调用点，缺符号时打一行 stderr 诊断，不静默）。
+// 名字是**跨 agent 契约**（已发给 engine-track）：改名要两侧同时动，且本仓
+// 无 CI 能看见它 —— 唯一看得见的是那句一次性诊断。
+extern "C" int32_t opi_fcitx5_symbol_browse(int32_t action) __attribute__((weak));
+
+// 装载符号类目数据（engine-track 2026-10-10 定稿）：**与两份词库同一约定** ——
+// C++ 只 locate 路径，Rust 读文件。返回值：-1 = 文件缺失/读不出；-2 = 读到但零
+// 合法类目（两者都让入口保持禁用；Rust 侧自己打一行 stderr，不静默）；
+// ≥0 = 跳过的坏行数（0 = 全好；Rust 同时打「N 类目，跳 M 行」一行）。
+// 调用方判据就一条：`>= 0` 即数据可用（opi_engine.h 的 symbolDataOk_）。
+// 同样是弱符号（引擎侧落地前照常编译/加载）；路径为空时调用方**直接跳过调用**。
+extern "C" int32_t opi_fcitx5_load_symbols(const uint8_t *ptr,
+                                           size_t len) __attribute__((weak));
+
 // 取走并释放 Rust 侧字符串。ptr==nullptr 视为空串（Rust 侧 OpString::empty 的
 // 表示）；仅守卫构造，free 契约不变：每个返回的 OpString 恰好 free 一次。
 //

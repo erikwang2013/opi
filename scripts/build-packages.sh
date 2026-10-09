@@ -123,6 +123,20 @@ echo "==> OPI 打包：版本 $PKG_VERSION / 架构 $MACHINE / 格式 ${FORMATS[
 echo "==> 构建 Rust cdylib"
 cargo build --release -p fcitx5_opi --locked
 
+# ---- opi-ctl（桌面状态栏的 CLI，两种格式共用同一份）----
+# 它也**不进 CMake 暂存树**（CMakeLists 只管 fcitx5 侧的胶水与数据）——
+# 落点由 nfpm.yaml 的 ${PKG_CTL_BIN} → /usr/bin/opi-ctl 声明，源就是这里的产物。
+echo "==> 构建 opi-ctl"
+cargo build --release -p opi-tools --bin opi-ctl --locked
+# 相对路径（脚本全程以仓库根为 CWD，与 LICENSE / data/raw 那两条 contents 同一约定）。
+PKG_CTL_BIN="target/release/opi-ctl"
+# 编完却找不到产物 = 构建坏了或有人设了 CARGO_TARGET_DIR —— 立刻拦，别让 nfpm
+# 拿着不存在的 src 去 Glob（那会打出一个没有 opi-ctl 的包，检查不出「按钮点了没反应」）。
+[ -x "$PKG_CTL_BIN" ] || {
+    echo "  ✗ cargo 编完成功但 $PKG_CTL_BIN 不存在（设了 CARGO_TARGET_DIR？）" >&2
+    exit 1
+}
+
 build_stage() {
     # $1 = 暂存目录名  $2 = CMAKE_INSTALL_LIBDIR（空 = 让 GNUInstallDirs 自己算）
     #
@@ -153,8 +167,9 @@ build_stage() {
     find "$stage" -type f | sed "s|$stage||" | sort | sed 's/^/    /' >&2 || return 1
 
     # 空转护栏：一个文件都没装出来就是构建坏了，别拿空树去过 nfpm。
-    # 5 是**下界**（两个 .so + 两个 conf + 词库）；皮肤（4 张主题 × 4 个文件）与
-    # 桌面应用（合并模式，/opt 整棵）都在它之上，不在这里点名。
+    # 5 是**下界**（现在实际是「两个 .so + 两个 conf + 两份词库 + 符号类目」6 个，
+    # 只写 5 是刻意留松）；皮肤（4 张主题 × 4 个文件）与桌面应用（合并模式，/opt
+    # 整棵）都在它之上，不在这里点名。
     local n
     n="$(find "$stage" -type f | wc -l)"
     if [ "$n" -lt 5 ]; then
@@ -201,6 +216,7 @@ for fmt in "${FORMATS[@]}"; do
     sed -e "s|\${PKG_ARCH}|$pkg_arch|g" \
         -e "s|\${PKG_VERSION}|$PKG_VERSION|g" \
         -e "s|\${PKG_STAGE}|$stage|g" \
+        -e "s|\${PKG_CTL_BIN}|$PKG_CTL_BIN|g" \
         scripts/nfpm.yaml > "$render_cfg"
 
     # 渲染后不许再有残留占位符 —— 否则就是「路径没填」，会打出一个空包或错路径的包
