@@ -59,8 +59,10 @@ fun NineKeyKeyboard(
     modeLabel: String = "中",
     big: Boolean = false,
 ) {
-    val numSize = if (big) 30.sp else 22.sp
-    val hintSize = if (big) 14.sp else 11.sp
+    // 键面按搜狗排：**字母为主、数字缩小到下面**（2026-10-09 用户裁决「现在的
+    // 排版太不适应」）。此前是反的（数字 22sp、字母 11sp）—— 人们认键靠字母。
+    val letterSize = if (big) 26.sp else 18.sp
+    val digitSize = if (big) 13.sp else 10.sp
     Column(modifier = modifier.fillMaxSize()) {
         for (row in nineKeyRows) {
             Row(modifier = Modifier.weight(1f).fillMaxSize()) {
@@ -74,11 +76,14 @@ fun NineKeyKeyboard(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
                         ) {
-                            Text(k.label, fontSize = numSize)
-                            if (k.hint.isNotEmpty()) {
+                            if (k.hint.isEmpty()) {
+                                // 「，」这类无字母组的键：单行大字，别留一个空行
+                                Text(k.label, fontSize = letterSize)
+                            } else {
+                                Text(k.hint, fontSize = letterSize)
                                 Text(
-                                    k.hint,
-                                    fontSize = hintSize,
+                                    k.label,
+                                    fontSize = digitSize,
                                     color = LocalKeyboardPalette.current.barDimFg,
                                 )
                             }
@@ -87,14 +92,16 @@ fun NineKeyKeyboard(
                 }
             }
         }
+        // 底行按搜狗排：**[符] 在左、[中/英] 其次**（2026-10-09；此前是反的），
+        // 再空格、⌫、↵。四种字母布局（9/14/26/笔画）同一套顺序。
         Row(modifier = Modifier.weight(1f).fillMaxSize()) {
+            KeyButton("符", modifier = Modifier.weight(1f), onTap = onSymbol)
             KeyButton(
                 modeLabel,
                 modifier = Modifier.weight(1f),
                 onTap = onModeSwitch,
                 stateDescription = modeStateDescription(modeLabel),
             )
-            KeyButton("符", modifier = Modifier.weight(1f), onTap = onSymbol)
             KeyButton("空格", modifier = Modifier.weight(2f), onTap = onSpace)
             KeyButton("⌫", modifier = Modifier.weight(1f), onTap = onBackspace)
             KeyButton("↵", modifier = Modifier.weight(1f), onTap = onEnter)

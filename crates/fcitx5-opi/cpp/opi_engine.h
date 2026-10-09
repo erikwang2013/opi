@@ -24,9 +24,10 @@
 #include <fcitx-utils/standardpath.h>
 
 #include "opi_config.h"   // 「属性设置」：OpiSettings + read/apply/save
-#include "opi_mode.h"     // 模式热键（Ctrl+' / Ctrl+\）+ Shift 轻按切换 + 中/英状态项
+#include "opi_mode.h"     // 模式热键（Ctrl+' / Ctrl+\）+ Shift 轻按切换 + 中/英、简/繁状态项
 #include "opi_rust_ffi.h"
 #include "opi_skin.h"     // 皮肤：写 classicui.conf + 热重载
+#include "opi_status.h"   // 状态区「设置」项（拉起设置窗）
 
 void refreshingPanelFor(fcitx::InputContext *ic);
 
@@ -40,7 +41,8 @@ public:
     // 初始化列表按**声明顺序**写（instance_ 声明在类尾，shiftToggle_ 在前）——
     // 都是拿构造参数初始化，纯粹为了过 -Werror=reorder。
     OpiEngine(fcitx::Instance *instance)
-        : shiftToggle_(instance), instance_(instance) {
+        : shiftToggle_(instance), fanjianToggle_(instance), settingsAction_(instance),
+          instance_(instance) {
         loadDictionary();
         // 配置推给引擎必须在 loadDictionary 之后：Rust 侧单例在那一刻才建起来。
         readOpiSettings(settings_);
@@ -49,6 +51,12 @@ public:
         // 「已应用」，免得每次 fcitx5 启动都拿配置里的旧值改写 classicui.conf、
         // 把用户后来在别处改的主题顶回去。
         lastSkin_ = *settings_.skin;
+        // 两个状态项互相刷：模式一变，另一项的文案跟着变（「中/英」↔「简/繁」；
+        // 从英文点「简」会切进繁体 ⇒「中/英」要回「中」，反之亦然）。
+        shiftToggle_.setOnModeChanged(
+            [this](fcitx::InputContext *ic) { fanjianToggle_.update(ic); });
+        fanjianToggle_.setOnModeChanged(
+            [this](fcitx::InputContext *ic) { shiftToggle_.update(ic); });
     }
 
     // ---- 「属性设置」：fcitx5 的 addon 配置（字段与落点见 opi_config.h）----
@@ -67,11 +75,13 @@ public:
     }
     void save() override { saveOpiSettings(settings_); }
 
-    // 状态区「中/英」随激活挂上去（见 opi_mode.h 的 OpiShiftToggle::attach；
+    // 状态区三项（中/英、简/繁、设）随激活挂上去（见 opi_mode.h 的 attach；
     // 该组在下次 activate 前由 core 自动清空，不必自己去重）。
     void activate(const fcitx::InputMethodEntry & /*entry*/,
                   fcitx::InputContextEvent &event) override {
         shiftToggle_.attach(event.inputContext());
+        fanjianToggle_.attach(event.inputContext());
+        settingsAction_.attach(event.inputContext());
     }
 
     void keyEvent(const fcitx::InputMethodEntry &entry,
@@ -99,6 +109,10 @@ private:
     // Shift 轻按切换 + 「中/英」状态项（判定与状态项都在 opi_mode.h）。
     // 构造用构造参数 instance，不读 instance_ 成员 —— 与成员声明顺序无关。
     OpiShiftToggle shiftToggle_;
+
+    // 「简/繁」状态项（opi_mode.h）与「设置」项（opi_status.h）—— 外层入口。
+    OpiFanjianToggle fanjianToggle_;
+    OpiSettingsAction settingsAction_;
 
     // 皮肤「已应用」的最后值（opi_skin.h）：构造时只记住、不应用。
     OpiSkin lastSkin_ = OpiSkin::Keep;

@@ -22,10 +22,11 @@
 
 **几何来源**：只读 R4（`android/.../drawable/ic_launcher_foreground.xml`），
 把它**机械转成 SVG**（`android:pathData` 本就是 SVG path 语法；`android:viewportWidth/
-Height` 定 viewBox），**不新写几何、不改 R4**。底色读 R6（`values/colors.xml` 的
-`ic_launcher_background`），不硬编码 —— 否则又是一个真值面。
-⚠️ 其余三端**不用底色**：macOS 的输入源图标走模板渲染（只看 alpha，加底色 = 一块
-实心方块）、鸿蒙那条是子类型图标（列表里一枚小徽标）、Windows 语言栏同理。
+Height` 定 viewBox），**不新写几何、不改 R4**。
+**四端一律不铺底色**（2026-10-09 用户裁决「应用图标就不要加绿色背景，直接放 logo」）：
+Android 那套此前铺过 R6 的纯色（#2E8B80），已撤 —— 自适应背景层改透明、旧版位图
+改透明底；macOS 的输入源图标走模板渲染（只看 alpha，加底色 = 一块实心方块）、
+鸿蒙那条是子类型图标（列表里一枚小徽标）、Windows 语言栏同理，本来就无底色。
 
 **可见区**：自适应图标渲染时把 108×108 画布裁到正中 72×72 再放大到图标尺寸，所以
 Android 旧版位图要铺满的正是那 72×72。**其余三端再裁一步**：R4 的 72 窗口自带约 15%
@@ -56,10 +57,7 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[1]
 RES = ROOT / "android/app/src/main/res"
 FOREGROUND = RES / "drawable/ic_launcher_foreground.xml"
-COLORS = RES / "values/colors.xml"
 AND = "{http://schemas.android.com/apk/res/android}"
-BACKGROUND_NAME = "ic_launcher_background"
-
 HARMONY_ICON = ROOT / "harmony/resources/base/media/icon.png"
 MACOS_TIFF = ROOT / "macos/opi.tiff"
 TSF_ICO = ROOT / "crates/tsf-opi/assets/opi-langbar.ico"
@@ -89,30 +87,23 @@ PAD_RATIO = 0.06
 VARIANTS = {"ic_launcher": None, "ic_launcher_round": ROUND_RADIUS}
 
 
-def background_color() -> str:
-    """R6：ic_launcher_background。**读出来**，不抄一份常量。"""
-    root = ET.parse(COLORS).getroot()
-    for c in root:
-        if c.tag == "color" and c.get("name") == BACKGROUND_NAME:
-            return c.text.strip()
-    raise SystemExit(f"{COLORS} 里找不到 {BACKGROUND_NAME}")
-
-
 def adaptive_xml() -> str:
     """API 26+ 的自适应圆图标。方形的 ic_launcher.xml 是等价的孪生（手写在 res 里）。"""
     return f"""<?xml version="1.0" encoding="utf-8"?>
 <!--
   项目宠物「小欧」自适应启动图标（API 26+）的**圆形**孪生，供 manifest 的
-  android:roundIcon 使用 —— 图形与 ic_launcher.xml 完全相同（同一前景 + 同一底色），
+  android:roundIcon 使用 —— 图形与 ic_launcher.xml 完全相同（同一前景 + 透明背景），
   圆形由系统遮罩给出，所以这里**不需要**任何几何改动。
-  这是**生成物**：改 R4 前景或 R6 底色后跑 `python3 scripts/gen_pet_icons.py` 重出。
+  **背景层是透明的**（2026-10-09 用户裁决「不要背景，直接放 logo」）—— 不出这个
+  决定之前它是 R6 的纯色；`@android:color/transparent` 是平台资源，没有生成期输入。
+  这是**生成物**：改 R4 前景后跑 `python3 scripts/gen_pet_icons.py` 重出。
 
   API 25（roundIcon 正是这一版引入的）用不了自适应图标，落回
   mipmap-*/ic_launcher_round.png：72dp 可见区的 r=36 内切圆，与圆形系统遮罩同径。
   API 24 及以下不读 roundIcon，走 android:icon 的方形那套。
 -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@color/{BACKGROUND_NAME}"/>
+    <background android:drawable="@android:color/transparent"/>
     <foreground android:drawable="@drawable/{FOREGROUND.stem}"/>
 </adaptive-icon>
 """
@@ -190,8 +181,10 @@ def png_bytes(img: Image.Image, mode: str = "RGBA") -> bytes:
 
 
 def render(size: int, mask_radius: float | None = None) -> bytes:
-    """Android 旧版桶：方形不带 alpha（与历史字节一致），圆形靠 alpha 让四角透掉。"""
-    return png_bytes(raster(size, mask_radius), "RGB" if mask_radius is None else "RGBA")
+    """Android 旧版桶：**不铺底色**、一律带 alpha（2026-10-09 用户裁决「应用图标
+    就不要加绿色背景，直接放 logo」）。方形四个角与圆形圈外全是透明；此前方形
+    是 RGB（底色铺满）、圆形靠 alpha 裁角。"""
+    return png_bytes(raster(size, mask_radius, plate=False), "RGBA")
 
 
 def square_mark(size: int) -> Image.Image:

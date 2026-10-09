@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- 小欧的青底：与 docs/opi-pet.svg 的 primary (#2E8B80) 同色。 -->
-    <color name="ic_launcher_background">#2E8B80</color>
-</resources>
+<!--
+  启动图标的底色**已撤**（2026-10-09 用户裁决「应用图标就不要加绿色背景，不要背景，
+  直接放 logo」）：原 ic_launcher_background（#2E8B80 青底）不再存在，自适应图标的
+  背景层在 ic_launcher.xml / ic_launcher_round.xml 里写 @android:color/transparent。
+  本文件保留为空壳：将来若要加配色资源，还往这里放（别散进布局）。
+-->
+<resources/>

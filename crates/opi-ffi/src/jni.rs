@@ -235,13 +235,15 @@ pub unsafe extern "system" fn opijni_search_symbols(
     unsafe { jni_util::string_array(env, texts) }
 }
 
-/// emojiSymbols() -> String[]。引擎 `emoji` 标志为真的全部条目文本（理由见 `api::emoji_symbol_texts`）。
+/// emojiSymbols() -> String[]。表情面板的浏览全量（官方分组序；理由与换源记录见
+/// `api::emoji_symbol_texts`）。**不再经引擎单例** —— 它是编译期嵌入的静态表，
+/// 引擎没装载也返回得了（宿主的面板因此不依赖引擎就绪）。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_emoji_symbols(
     env: JEnv,
     _class: sys::jclass,
 ) -> sys::jobjectArray {
-    let texts = guard(|| api::with_engine(|e| api::emoji_symbol_texts(e)).unwrap_or_default());
+    let texts = guard(api::emoji_symbol_texts);
     unsafe { jni_util::string_array(env, texts) }
 }
 

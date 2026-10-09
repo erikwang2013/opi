@@ -481,7 +481,7 @@ Android `KeyRouter.kt`）：空格 = 缓冲非空时提交、空缓冲时把空�
 ⚠️ 面板**画不画**这个序号、画成什么样（字号/间距）由主题与 classicui 决定 —— 本层只保证
 「label 不再是空的」。看不到序号时先看主题那侧，别改这里。
 
-### 4.6 属性设置（六个选项，入口在 fcitx5 的配置面）
+### 4.6 属性设置（六个选项；入口：配置面 + 状态栏 + 桌面窗）
 
 **配置落在 fcitx5 自己的 addon 配置里**：`$XDG_CONFIG_HOME/fcitx5/conf/opi_fcitx5.conf`
 （字段声明 = `crates/fcitx5-opi/cpp/opi_config.h` 的 `OpiSettings`）：
@@ -509,6 +509,23 @@ Skin=不改动          # 候选面板皮肤（2026-10-09 起；值存的就是�
   D-Bus 侧同款转调 `configure()` = 只启动配置工具本身）—— 框架**没有**从配置面拉起
   外部程序的通道。所以设置入口是**两层**的：配置面里是上面这些原生选项；图形设置窗
   走系统菜单入口（见 §4.7）。
+
+**状态栏（外层）三个入口**（2026-10-09 用户裁决「外层……没有设置入口」「没有切换繁体」
+补齐；实现在 `opi_mode.h` 的 `OpiShiftToggle`/`OpiFanjianToggle` 与 `opi_status.h`）：
+
+| 项 | 点击效果 |
+|---|---|
+| `中` / `英` | 中英文切换（与 Shift 轻按同一条 toggle） |
+| `简` / `繁` | 简体 ⇄ 繁体（与 `Ctrl+Shift+F` 共用同一个实现 `opiToggleTraditional`） |
+| `设` | 打开属性设置窗 |
+
+- 三项都挂在 fcitx5 的 `StatusGroup::InputMethod` 状态区，随输入法激活挂上。
+- 两个模式项的文案显示**当前**状态，且**互相同步**：从英文态点「简」会切进繁体，
+  「中/英」项同时刷回「中」（`setOnModeChanged` 钩子，见 `opi_engine.h` 构造）。
+- `设` 的启动顺序：`/opt/opi-candidates/bin/opi-candidates --settings`（合并包落点）→
+  PATH 里的 `opi-candidates` → `fcitx5-configtool` 兜底（至少能到配置面）。
+  ⚠️ 如实记：它只保证**发起启动**（`posix_spawnp`），窗口有没有起来这里看不到；
+  一个都找不到时往 stderr 打一行。
 
 **改它有三条路，都即时生效**（`reloadConfig()` → 引擎，不用重启输入法）：
 
@@ -538,6 +555,9 @@ Skin=不改动          # 候选面板皮肤（2026-10-09 起；值存的就是�
 - **对所有输入法生效**（面板主题是框架级的一份设置，做不到只影响 OPI，如实记）。
 - 「不改动」= OPI 不介入（默认）。选皮肤只在**值发生变化**时才写文件：fcitx5 每次启动
   不会拿旧值把用户后来改的主题顶回去。
+- **图形化的选法**（2026-10-09 起）：设置窗（§4.7，菜单「opi输入法」或状态栏「设」）
+  有「外观」一节 —— 五张**预览卡**（底色 + 样字 + 强调条），点击即换。颜色取自
+  `scripts/gen_fcitx5_themes.py` 的调色板，与配置面 `Skin=` 的五个字面值一一对应。
 - 想换回系统主题：同一张「附加组件」列表里找**经典界面**（classicui）→ 齿轮 → 主题改回
   `deepin-light`/`deepin-dark`；或把本项选回「不改动」后自己改。
 - ⚠️ 面板由 **classicui** 绘制才看得见这套主题（fcitx5-qt 等别的 UI 不吃它；
@@ -558,7 +578,13 @@ Linux 上 = `--settings` 的设置窗（无参数启动也是它）。**v1.6.0 �
   点开即设置窗）—— 2026-10-09 晚用户裁决「设置功能要在外层可以设置」，由打包后注入
   生成（理由与核对法见 `desktop/build.gradle.kts` 文件尾）。另有两条直启路：
   `opi-candidates --settings`（装出来在 `/opt/opi-candidates/bin/opi-candidates`）、
-  以及配置面的原生选项（§4.6）—— **两层都能设置**。
+  以及配置面的原生选项（§4.6）—— **两层都能设置**；状态栏还有第三个入口
+  （「设」，见 §4.6）。
+- 设置窗内容：常规（学习 / 中文标点）、输入（模糊音 / 简拼）、**外观**（皮肤预览卡，
+  Linux 才有；Windows 不显示 —— 那边没有 fcitx5 主题这回事）、关于。
+- 版本号是**单一来源**：`desktop/build.gradle.kts` 的 `opiAppVersion` 同时喂给
+  jpackage 包版本与窗口标题（构建时生成 `Version.kt`）。此前窗口里写死过一份，
+  到 1.6.0 就成了摆在用户眼前的假话 —— 别再写死第二处。
 - 升级路径：装新包时 apt/dnf 按 `replaces`/`conflicts` 自动卸掉旧的独立设置窗包
   `opi-candidates`（≤1.5.0）—— 不声明的话 `/opt/opi-candidates/**` 文件归属冲突会让
   dpkg **拒绝安装**。

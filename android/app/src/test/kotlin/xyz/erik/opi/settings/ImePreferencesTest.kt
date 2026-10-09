@@ -7,6 +7,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import xyz.erik.opi.ime.InputMode
 import xyz.erik.opi.ime.KeyboardModes
+import xyz.erik.opi.keyboard.SkinOption
 
 /** 偏好读写：默认值、往返、未知枚举名回默认（损坏容错与设置页读侧同一条约定）。 */
 class ImePreferencesTest {
@@ -33,6 +34,7 @@ class ImePreferencesTest {
         assertEquals(true, p.learn)
         assertEquals(true, p.fuzzy)
         assertEquals(true, p.jianpin)
+        assertEquals(SkinOption.FOLLOW, p.skin)
     }
 
     @Test
@@ -47,6 +49,7 @@ class ImePreferencesTest {
         p.learn = false
         p.fuzzy = false
         p.jianpin = true
+        p.skin = SkinOption.PAPER
         val q = ImePreferences(store)
         assertEquals(InputMode.PINYIN14, q.inputMode)
         assertEquals(
@@ -56,6 +59,7 @@ class ImePreferencesTest {
         assertEquals(false, q.learn)
         assertEquals(false, q.fuzzy)
         assertEquals(true, q.jianpin)
+        assertEquals(SkinOption.PAPER, q.skin)
     }
 
     @Test
@@ -63,8 +67,10 @@ class ImePreferencesTest {
         val store = FakeStore()
         store.put(ImePreferences.KEY_INPUT_MODE, "SOMETHING_ELSE")
         store.put(ImePreferences.KEY_ONE_HAND, "MIDDLE")
+        store.put(ImePreferences.KEY_SKIN, "RAINBOW")
         val p = ImePreferences(store)
         assertEquals(InputMode.PINYIN26, p.inputMode)
         assertEquals(KeyboardModes.OneHand.OFF, p.keyboardModes.oneHand)
+        assertEquals(SkinOption.FOLLOW, p.skin)
     }
 }

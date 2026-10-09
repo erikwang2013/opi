@@ -73,14 +73,15 @@ fun FourteenKeyKeyboard(
                 }
             }
         }
+        // 底行：[符] 在左、[中/英] 其次（与 9 键同序，2026-10-09）。
         Row(modifier = Modifier.weight(1f).fillMaxSize()) {
+            KeyButton("符", modifier = Modifier.weight(1f), onTap = onSymbol)
             KeyButton(
                 modeLabel,
                 modifier = Modifier.weight(1f),
                 onTap = onModeSwitch,
                 stateDescription = modeStateDescription(modeLabel),
             )
-            KeyButton("符", modifier = Modifier.weight(1f), onTap = onSymbol)
             KeyButton("空格", modifier = Modifier.weight(2f), onTap = onSpace)
             KeyButton("⌫", modifier = Modifier.weight(1f), onTap = onBackspace)
             KeyButton("↵", modifier = Modifier.weight(1f), onTap = onEnter)

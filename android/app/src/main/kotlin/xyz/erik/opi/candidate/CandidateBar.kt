@@ -104,13 +104,10 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
             verticalAlignment = Alignment.CenterVertically,
         ) {
             for ((i, c) in candidates.withIndex()) {
-                // 可见序号 = **页内**下标 + 1（翻页后从 1 重数）。两条理由：
-                //   · 与数字选词的语义同源 —— 引擎里数字键选的是**页内索引**
-                //     （`composer.rs` 的数字键约定），写成全列表下标就与「按 3 选本页第 3 个」对不上；
-                //   · 与 Windows 候选窗同款（`CandidateWindow.kt` 的 `"$index."`，同样是页内）。
-                // ⚠️ 播报用的 `n` 与可见序号是**同一个值**（`"$n."`）—— 不许一处页内、一处全列表。
-                // ⚠️ 手机端字母盘**没有数字行** ⇒ 这个序号实际是**排名**展示：数字选词引擎支持、
-                //    手机端按不到。如实记在 docs/install/android.md §4.4，别读成「可以按数字选」。
+                // 可见序号**已去掉**（2026-10-09 用户裁决「候选词最前面会显示一串数字」）：
+                // 手机端字母盘没有数字行 ⇒ 数字选词根本按不到，那串「1. 2. 3.…」是纯噪声。
+                // ⚠️ 播报仍带「第 N 项」（读屏用户需要位置感）—— 那是**页内**下标（翻页后从 1
+                // 重数），与曾经的可见序号同一个值，不允许写成全列表下标。
                 val n = i + 1
                 Row(
                     // clickable 必须在 padding 之前：反过来的话热区只覆盖文字本身
@@ -143,7 +140,6 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("$n.", fontSize = 13.sp, color = p.barBufferFg, modifier = Modifier.padding(end = 3.dp))
                     Text(c, fontSize = 20.sp, color = p.keyFg)
                 }
             }

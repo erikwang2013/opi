@@ -86,6 +86,73 @@ val ElderPalette = KeyboardPalette(
     toolbarFg = Color(0xFF263238),
 )
 
+/** 宣纸皮肤（2026-10-09）：底色/字色/强调取 fcitx5 侧 opi-paper 主题的同一套
+ * （scripts/gen_fcitx5_themes.py 的 PALETTES：「宣纸」#F5EFE1 / #3D3222 / #8A5A2B），
+ * 键面比底略深一档做分离。 */
+val PaperPalette = KeyboardPalette(
+    keyBg = Color(0xFFE7DFCC),
+    keyFg = Color(0xFF3D3222),
+    keyHighlightBg = Color(0xFF8A5A2B),
+    keyHighlightFg = Color(0xFFFFFBF2),
+    barBg = Color(0xFFF5EFE1),
+    barBufferFg = Color(0xCC3D3222),
+    barDimFg = Color(0xFF8A7A5B),
+    accent = Color(0xFF8A5A2B),
+    panelBg = Color(0xFFF5EFE1),
+    panelFg = Color(0xFF3D3222),
+    toolbarBg = Color(0xFFE7DFCC),
+    toolbarFg = Color(0xFF8A5A2B),
+)
+
+/** 朱砂皮肤：fcitx5 opi-cinnabar 主题同套（#B3272D / #FFF6EC / #FFD9A0），
+ * 键面取主题的 menu_bg 一档（#9E2228）压暗。 */
+val CinnabarPalette = KeyboardPalette(
+    keyBg = Color(0xFF9E2228),
+    keyFg = Color(0xFFFFF6EC),
+    keyHighlightBg = Color(0xFFFFD9A0),
+    keyHighlightFg = Color(0xFF5A1012),
+    barBg = Color(0xFF8A1C21),
+    barBufferFg = Color(0xCCFFF6EC),
+    barDimFg = Color(0xFFE8BCB4),
+    accent = Color(0xFFFFD9A0),
+    panelBg = Color(0xFF9E2228),
+    panelFg = Color(0xFFFFF6EC),
+    toolbarBg = Color(0xFF8A1C21),
+    toolbarFg = Color(0xFFFFD9A0),
+)
+
+/**
+ * 皮肤（2026-10-09 用户裁决「移动端没有皮肤设置」）。五款与桌面/配置面**同名**
+ * （不改动/浅色/深色/宣纸/朱砂），配色与 fcitx5 主题同一套设计语言。
+ *
+ * 三条配色轴的**优先级**（ImeScreen 里那条 when 就是这个顺序）：
+ *   长辈模式 > 暗光模式 > 皮肤 —— 模式是临时状态、皮肤是底：
+ *   「深色皮肤」与「暗光模式」是同一个观感，两者同时开时暗光赢，不冲突。
+ * 「不改动」= 不指定皮肤（默认观感，等于此前只有浅色板的行为）。
+ */
+enum class SkinOption(val id: String, val label: String) {
+    FOLLOW("follow", "不改动"),
+    LIGHT("light", "浅色"),
+    DARK("dark", "深色"),
+    PAPER("paper", "宣纸"),
+    CINNABAR("cinnabar", "朱砂"),
+    ;
+
+    /** 皮肤 → 色板。「不改动」与「浅色」同板（默认观感）。 */
+    val palette: KeyboardPalette
+        get() = when (this) {
+            FOLLOW, LIGHT -> LightPalette
+            DARK -> DarkPalette
+            PAPER -> PaperPalette
+            CINNABAR -> CinnabarPalette
+        }
+
+    companion object {
+        /** 未知 id（旧版本/手改坏了）→ 不改动，不抛（与其它偏好同一条容错约定）。 */
+        fun fromId(id: String?): SkinOption = entries.firstOrNull { it.id == id } ?: FOLLOW
+    }
+}
+
 /**
  * 由 [xyz.erik.opi.ime.ImeScreen] 提供；`staticCompositionLocalOf` 的取舍：
  * 换肤时整棵键盘子树本来就要重组（颜色全换），不需要细粒度失效。

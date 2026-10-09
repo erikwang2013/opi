@@ -6,6 +6,10 @@ package xyz.erik.opi.ime
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.DropdownMenu
@@ -25,9 +29,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xyz.erik.opi.keyboard.LocalKeyboardPalette
 import xyz.erik.opi.keyboard.OpiIcons
+import xyz.erik.opi.pet.OpiPet
+import xyz.erik.opi.pet.PetMood
 
-/** 工具条高度（dp）：计入 ImeScreen 的列布局，不占键盘权重行。 */
-const val IME_TOOLBAR_HEIGHT_DP = 36
+/** 工具条高度（dp）：计入 ImeScreen 的列布局，不占键盘权重行。
+ * 40（原 36）：2026-10-09 起小欧并入本行（用户裁决「入口要和 logo 图标在一行，
+ * 放在 logo 后面」），给 28dp 的它留出上下呼吸。 */
+const val IME_TOOLBAR_HEIGHT_DP = 40
 
 /**
  * 键盘顶部工具条（2026-10-09，对齐搜狗移动端）：**入口全部用图标** ——
@@ -42,7 +50,10 @@ fun ImeToolbar(
     currentMode: InputMode,
     keyboardModes: KeyboardModes,
     traditional: Boolean,
+    /** 小欧的表情（由 ImeScreen 按引擎状态算好；本组件不碰引擎）。 */
+    petMood: PetMood,
     onOpenEmoji: () -> Unit,
+    onOpenSkin: () -> Unit,
     onSelectInputMode: (InputMode) -> Unit,
     onToggleTraditional: () -> Unit,
     onUpdateKeyboardModes: (KeyboardModes) -> Unit,
@@ -56,7 +67,12 @@ fun ImeToolbar(
             .background(p.toolbarBg),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // 小欧在最左（2026-10-09 用户裁决：入口与 logo 同行、在其后）。它此前站在
+        // 候选栏槽位的待命位 —— 移到本行后那个槽位空闲时就是空的（不多画东西）。
+        OpiPet(mood = petMood, size = 28.dp, modifier = Modifier.padding(start = 6.dp))
+        Spacer(Modifier.width(2.dp))
         ToolbarIcon(OpiIcons.Emoji, "表情") { onOpenEmoji() }
+        ToolbarIcon(OpiIcons.Palette, "皮肤") { onOpenSkin() }
         Box {
             ToolbarIcon(
                 OpiIcons.InputMode,

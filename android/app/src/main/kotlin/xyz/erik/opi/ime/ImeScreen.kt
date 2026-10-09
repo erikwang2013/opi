@@ -24,6 +24,7 @@ import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.engine.ShiftState
 import xyz.erik.opi.keyboard.DarkPalette
 import xyz.erik.opi.keyboard.ElderPalette
+import xyz.erik.opi.keyboard.SkinPanel
 import xyz.erik.opi.keyboard.FourteenKeyKeyboard
 import xyz.erik.opi.keyboard.LightPalette
 import xyz.erik.opi.keyboard.LocalKeyboardPalette
@@ -34,7 +35,6 @@ import xyz.erik.opi.keyboard.RarePanel
 import xyz.erik.opi.keyboard.StrokeKeyboard
 import xyz.erik.opi.keyboard.SymbolCatalog
 import xyz.erik.opi.keyboard.SymbolPanel
-import xyz.erik.opi.pet.OpiPet
 import xyz.erik.opi.pet.petMood
 
 /**
@@ -58,10 +58,11 @@ fun ImeScreen(
     rareIndex: () -> Map<Int, Map<Int, List<String>>> = { emptyMap() },
 ) {
     val modes = state.keyboardModes
+    // 优先级：长辈 > 暗光 > 皮肤（皮肤是「底」，模式是临时覆盖；见 SkinOption 的说明）。
     val palette = when {
         modes.elder -> ElderPalette
         modes.dark -> DarkPalette
-        else -> LightPalette
+        else -> state.skin.palette
     }
     // 长辈模式：字号整体 +18%（配 ElderPalette 的高对比）。改 LocalDensity 只动字号，
     // 不动像素尺寸（键高仍由窗口高度均分），所以不会把键挤出屏幕。
@@ -82,7 +83,14 @@ fun ImeScreen(
                 currentMode = state.inputMode,
                 keyboardModes = modes,
                 traditional = controller.mode == EngineMode.TRADITIONAL,
+                petMood = petMood(
+                    buffer = controller.buffer,
+                    candidateCount = controller.candidates.size,
+                    learnerEnabled = controller.learnerEnabled,
+                    dictionaryDegraded = controller.dictionaryDegraded,
+                ),
                 onOpenEmoji = state::openEmoji,
+                onOpenSkin = state::openSkin,
                 onSelectInputMode = state::selectInputMode,
                 onToggleTraditional = {
                     // 与「中/繁/英」键同一条路：只切引擎模式，方案（9/14/键布局）不动
@@ -120,23 +128,10 @@ fun ImeScreen(
                             onTap = router::handleCandidate,
                             onLongPress = controller::removeUserWord,
                         )
-                    } else {
-                        // 槽位常驻是为了不让键区伸缩，但 pinyin/traditional 空缓冲时这里原本
-                        // 什么都不画 —— 44dp 死白的代价（见上方注释）等于白付。让小欧站这儿：
-                        // 它就是「安静待命」的样子，打完第一个字母自然让位给候选栏。
-                        // 情绪照旧由引擎状态推导（设置页关了学习 → 它睡着，不是笑嘻嘻；
-                        // 词库没装上 → 折断天线，且这一条优先于睡着）。
-                        OpiPet(
-                            mood = petMood(
-                                buffer = controller.buffer,
-                                candidateCount = controller.candidates.size,
-                                learnerEnabled = controller.learnerEnabled,
-                                dictionaryDegraded = controller.dictionaryDegraded,
-                            ),
-                            size = 30.dp,
-                            modifier = Modifier.padding(start = 12.dp),
-                        )
                     }
+                    // else：槽位空着。小欧 2026-10-09 已并入工具条（用户裁决
+                    // 「入口要和 logo 图标在一行」）—— 待命位不再画它，槽位只做
+                    // 「不让键区伸缩」的占位（见上）。
                 }
             }
             // ---- 键盘区：单手模式整体偏移 + 收窄（纯布局层）----
@@ -175,6 +170,12 @@ private fun KeyboardArea(
         ImeState.View.RARE -> RarePanel(
             index = rareIndex(),
             onCommit = router::commitText,
+            onClose = state::backToLetters,
+            modifier = modifier,
+        )
+        ImeState.View.SKIN -> SkinPanel(
+            selected = state.skin,
+            onSelect = state::selectSkin,
             onClose = state::backToLetters,
             modifier = modifier,
         )

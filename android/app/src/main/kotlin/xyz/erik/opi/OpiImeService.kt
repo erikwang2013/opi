@@ -200,10 +200,11 @@ class OpiImeService : InputMethodService() {
         imeState.persist = {
             prefs.inputMode = imeState.inputMode
             prefs.keyboardModes = imeState.keyboardModes
+            prefs.skin = imeState.skin
             // 键盘模式里悬浮/游戏改的是**窗口**，改完立刻重排（不等系统下一次 configure）
             window?.window?.let { applyKeyboardWindow(it) }
         }
-        imeState.restore(prefs.inputMode, prefs.keyboardModes)
+        imeState.restore(prefs.inputMode, prefs.keyboardModes, prefs.skin)
         val view = ComposeView(this)
         // 生命周期接线：置 CREATED（onWindowShown→RESUMED、onWindowHidden→STARTED、
         // onDestroy→DESTROYED），Compose 侧 remember/LaunchedEffect 依赖它。

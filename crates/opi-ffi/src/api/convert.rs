@@ -52,22 +52,21 @@ pub fn search_symbol_texts(api: &Api, keyword: &str) -> Vec<String> {
         .collect()
 }
 
-/// 引擎口径下的**全部 emoji 条目**文本（`SymbolEntry.emoji`，即 `symbols.tsv` 的 emoji 列，
-/// 由 UTS#51 `Emoji` 属性判定并排除 `Emoji_Modifier ∪ Emoji_Component`）。
+/// 表情面板「表情」页的**浏览全量**：`data/raw/emoji.tsv`（UTS#51 `emoji-test.txt` 的
+/// 完全限定条目，3963 条，含旗帜/家庭/键帽等多码位序列），**按官方分组序**。
 ///
-/// 存在的理由：Android 符号面板的「表情」页此前让 `SymbolCatalog.isEmoji()` 自己判
-/// 「含代理对」——那是本函数的**复制品**。2026-09-28 引擎换判据后两份判据静默漂开
-/// **429 条**（实测 `data/raw/symbols.tsv`：265 条假 emoji —— 补充平面里 `emoji=false` 的
-/// 图形符号，如 🞀/🞁/🞂 U+1F780–1F782；164 条漏 emoji —— BMP 区 `emoji=true` 的
-/// ☺ U+263A、♥ U+2665 等）。把标志透出去，宿主侧就不再持有任何判据。
+/// 上一版取的是「符号表里 `emoji` 标志为真的条目」（symbols.tsv 的 emoji 列）。
+/// 2026-10-09 用户裁决「表情中常用主流 emoji 不全」后换源 —— 那一路是**搜索**用的
+/// 集合（生成器有意不收麻将/带圈等低码位块，见 gen_symbols.py），浏览要全：
+/// 换源前查实缺 1F000–1F1FF / 1F200–1F2FF 整段（🀄🃏🅰️🈁 与全部国旗）、
+/// 无任何 VS16 序形（❤ 显示成单色字形）、全部 ZWJ 序列。
+/// ⚠️ symbols.tsv 的 emoji 列**不动**：单键候选反馈（`search_emoji`）仍走它。
 ///
-/// 空关键字即全量（`search_filtered` 里 `byte_successor(b"")` 返回 `None` ⇒ `hi = len`），
-/// 结果按 text 升序去重 —— 与宿主侧 `searchSymbols("")` 的「全部」同序。
-pub fn emoji_symbol_texts(api: &Api) -> Vec<String> {
-    api.search_symbols(String::new())
+/// 与 [`crate::api::Api`] 无关（纯静态数据）—— 参数去掉后调用点是 jni.rs 一处。
+pub fn emoji_symbol_texts() -> Vec<String> {
+    engine_core::symbols::SymbolEngine::builtin_emoji_texts()
         .into_iter()
-        .filter(|s| s.emoji)
-        .map(|s| s.text)
+        .map(str::to_owned)
         .collect()
 }
 

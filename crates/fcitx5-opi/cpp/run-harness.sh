@@ -91,9 +91,13 @@ echo "   ldd -r 未定义符号数: $undef（0 才正常）"
 nm -D --defined-only "$addons/libfcitx5_opi_glue.so" | grep fcitx_addon_factory \
     || { echo "   !! 导出符号里没有 fcitx_addon_factory_instance，addon 加载不进来"; exit 1; }
 
-echo "== 3/6 编译两支 C++ 检查程序"
+echo "== 3/6 编译三支 C++ 检查程序"
 g++ -std=c++20 -Wall -Wextra -Werror -o "$work/opi_panel_driver" \
     "$here/opi_panel_driver.cpp" "${INC[@]}" "${LNK[@]}"
+# 状态区外层入口（中/英、简/繁、设）单独一支 —— 面板驱动已 489/500 行，见
+# opi_status_driver.cpp 头注释。
+g++ -std=c++20 -Wall -Wextra -Werror -o "$work/opi_status_driver" \
+    "$here/opi_status_driver.cpp" "${INC[@]}" "${LNK[@]}"
 g++ -std=c++20 -Wall -Wextra -Werror -o "$work/opi_json_check" \
     "$here/opi_json_check.cpp" "${INC[@]}" "${LNK[@]}"
 
@@ -144,6 +148,8 @@ export LD_LIBRARY_PATH="$rustlib:$FCITX5_LIBS"
 # opi_fcitx5.conf** 来验「设置窗 → 配置文件 → 引擎」那条路；不指的话
 # StandardPath 会落到用户真实的 ~/.config（驱动里已加守卫，没设就 SKIP）。
 XDG_DATA_HOME="$work/data" XDG_CONFIG_HOME="$work/config" "$work/opi_panel_driver"
+echo
+"$work/opi_status_driver"
 echo
 "$work/opi_json_check"
 

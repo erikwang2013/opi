@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import xyz.erik.opi.engine.EngineController
+import xyz.erik.opi.keyboard.SkinOption
 import xyz.erik.opi.engine.EngineMode
 
 /** 防抖调度抽象：生产用主线程 Handler，JVM 测试注入假时钟（确定性，无 Thread.sleep）。 */
@@ -75,7 +76,7 @@ class ImeState(
     var commit: (String) -> Unit = {},
     private val debouncer: Debouncer = HandlerDebouncer(),
 ) {
-    enum class View { QWERTY, NUMBER, SYMBOL, RARE }
+    enum class View { QWERTY, NUMBER, SYMBOL, RARE, SKIN }
 
     companion object {
         /** 搜索防抖窗口（对齐 flutter 250ms）。 */
@@ -114,6 +115,13 @@ class ImeState(
 
     /** 键盘模式（悬浮/游戏/单手/暗光/长辈）。繁体不在这里 —— 它在引擎 mode 上。 */
     var keyboardModes by mutableStateOf(KeyboardModes())
+        private set
+
+    /**
+     * 皮肤（工具条「皮肤」面板的当前选择）。与键盘模式的优先级见 [SkinOption]：
+     * 长辈 > 暗光 > 皮肤 —— 皮肤是「底」，模式是临时覆盖。
+     */
+    var skin by mutableStateOf(xyz.erik.opi.keyboard.SkinOption.FOLLOW)
         private set
 
     /** 符号面板的起始 Tab（工具条表情入口直达 Emoji）。 */
@@ -171,6 +179,12 @@ class ImeState(
         persist()
     }
 
+    /** 皮肤选择（工具条「皮肤」面板）→ 立即生效 + 落盘。面板**不自动关**（可连着换着看）。 */
+    fun selectSkin(s: xyz.erik.opi.keyboard.SkinOption) {
+        skin = s
+        persist()
+    }
+
     /** 表情入口：开符号面板并直达表情页。 */
     fun openEmoji() {
         symbolInitialTab = xyz.erik.opi.keyboard.SymbolTab.Emoji
@@ -182,6 +196,12 @@ class ImeState(
         commitPendingBuffer()
         resetSearch()
         view = View.RARE
+    }
+
+    /** 皮肤面板（工具条入口）。只换观感，不碰引擎 —— 与输入模式那类切换不同，无缓冲语义。 */
+    fun openSkin() {
+        resetSearch()
+        view = View.SKIN
     }
 
     // ---- 面板切换（开面板前提交 pending buffer） ----
@@ -206,8 +226,9 @@ class ImeState(
      * 引擎是权威，UI 的 [inputMode]/[keyboardModes] 由服务从偏好装载后经
      * [selectInputMode] 推一遍（引擎装载成功才调，见 OpiImeService）。
      */
-    fun restore(inputMode: InputMode, modes: KeyboardModes) {
+    fun restore(inputMode: InputMode, modes: KeyboardModes, skin: SkinOption = SkinOption.FOLLOW) {
         keyboardModes = modes
+        this.skin = skin
         selectInputMode(inputMode)
     }
 

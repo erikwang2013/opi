@@ -33,7 +33,10 @@ class SettingsTest {
         // 键名是**三处逐字对应**的契约（本文件 ⇄ opi_config.h ⇄ tsf settings.rs）。
         // 钉整行而不是 contains("Learn")：改名/改大小写/改空格都该在这里红。
         val ini = OpSettings().toIni()
-        for (line in listOf("Learn=True", "ChinesePunct=True", "Fuzzy=True", "Jianpin=True")) {
+        for (line in listOf(
+            "Learn=True", "ChinesePunct=True", "Fuzzy=True", "Jianpin=True",
+            "Skin=不改动",
+        )) {
             assertTrue("缺少键行：$line\n$ini", ini.contains("$line\n"))
         }
     }
@@ -47,14 +50,15 @@ class SettingsTest {
 
     @Test
     fun `merge keeps unknown keys and comments`() {
-        // 2026-10-09 起保存走 mergeIni：fcitx5 侧新增的选项（ShiftToggle/Skin）与
-        // 手写注释**不能被本窗抹掉** —— 此前是整文件重写，抹一次就是「设置窗
-        // 保存后 Shift 切换静默失效」。
+        // 2026-10-09 起保存走 mergeIni：本窗**不管**的键（ShiftToggle 等由配置面/
+        // 状态项管的选项）与手写注释**不能被本窗抹掉** —— 此前是整文件重写，抹一次
+        // 就是「设置窗保存后 Shift 切换静默失效」。
+        // ⚠️ Skin 从这轮起是**管理键**（本窗有皮肤选择器了），故不再属于此列 ——
+        // 它由 loadSettings 先读进来、原值写回去（见 `merge rewrites skin`）。
         val existing = """
             # 手写的注释
             Learn=True
             ShiftToggle=False
-            Skin=浅色
             # 保底
         """.trimIndent() + "\n"
         val merged = mergeIni(existing, OpSettings(learn = false))
@@ -62,11 +66,43 @@ class SettingsTest {
         // 写反了是**编译错**（Boolean 塞不进 String 位），实测抓过。
         assertTrue(merged, merged.contains("# 手写的注释\n"))
         assertTrue(merged, merged.contains("ShiftToggle=False\n"))
-        assertTrue(merged, merged.contains("Skin=浅色\n"))
         assertTrue(merged, merged.contains("Learn=False\n"))
         assertFalse(merged, merged.contains("Learn=True"))
         // 没出现过的管理键要补齐（旧文件里缺键 = 用默认值写回去）
         assertTrue(merged, merged.contains("ChinesePunct=True\n"))
+        assertTrue(merged, merged.contains("Skin=不改动\n"))
+    }
+
+    @Test
+    fun `merge rewrites skin and preserves other unknowns`() {
+        val existing = "# 手写的注释\nSkin=深色\nShiftToggle=False\n"
+        // 真流程是「先 loadSettings（把 Skin=深色 读进来）再保存」——这里模拟的
+        // 正是那一步：读到的值原样写回，别的键一个不动。
+        val loaded = OpSettings.fromIni(existing)
+        assertEquals(SkinOption.DARK, loaded.skin)
+        val merged = mergeIni(existing, loaded.copy(learn = false))
+        assertTrue(merged, merged.contains("Skin=深色\n"))
+        assertTrue(merged, merged.contains("ShiftToggle=False\n"))
+        assertTrue(merged, merged.contains("Learn=False\n"))
+        assertEquals(loaded.copy(learn = false), OpSettings.fromIni(merged))
+    }
+
+    @Test
+    fun `skin literal values match the cpp enum`() {
+        // 与 opi_config.h 的 FCITX_CONFIG_ENUM_NAME_WITH_I18N 逐字对应：两侧按
+        // **字面值**匹配（C++ 的 unmarshallOption），写错一个字 = 静默回「不改动」。
+        // 顺序也钉：opi_skin.h 的 opiSkinThemeName 与主题目录按同一顺序对应。
+        assertEquals(
+            listOf("不改动", "浅色", "深色", "宣纸", "朱砂"),
+            SkinOption.entries.map { it.value },
+        )
+    }
+
+    @Test
+    fun `unknown skin falls back to keep`() {
+        // 手改坏/未来版本的键值 ⇒ 默认「不改动」（与 bool 坏值同一档，不抛）。
+        assertEquals(SkinOption.KEEP, OpSettings.fromIni("Skin=彩虹\n").skin)
+        assertEquals(SkinOption.KEEP, OpSettings.fromIni("").skin)
     }
 
     @Test

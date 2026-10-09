@@ -7,6 +7,7 @@ import android.content.Context
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.ime.InputMode
 import xyz.erik.opi.ime.KeyboardModes
+import xyz.erik.opi.keyboard.SkinOption
 
 /**
  * 键值存储抽象：生产 = SharedPreferences（[AndroidPrefStore]），JVM 测试注入内存实现
@@ -45,6 +46,7 @@ class AndroidPrefStore(context: Context) : PrefStore {
  * 存的是**三类**：
  *   · 输入模式（[InputMode]，7 选 1）；
  *   · 键盘模式（[KeyboardModes]：悬浮/游戏/单手/暗光/长辈 —— 繁体在引擎 mode 上，不存这里）；
+ *   · 皮肤（[SkinOption]，2026-10-09 起；五款与桌面/配置面同名）；
  *   · 设置页的三个引擎开关（学习/模糊音/简拼）—— ⚠️ **这三个此前不落盘**（进程重启
  *     回默认，docs/install/android.md §4.5 记着的既有缺口）；本次顺手关掉：存的是
  *     开关的**当前值**，恢复时设置页与服务各读一次。
@@ -79,6 +81,11 @@ class ImePreferences(private val store: PrefStore) {
             store.put(KEY_ELDER, v.elder)
         }
 
+    /** 皮肤（[SkinOption] 的 id 字符串；未知值回默认，同其它偏好）。 */
+    var skin: SkinOption
+        get() = SkinOption.fromId(store.getString(KEY_SKIN))
+        set(v) = store.put(KEY_SKIN, v.id)
+
     var learn: Boolean
         get() = store.getBoolean(KEY_LEARN, true)
         set(v) = store.put(KEY_LEARN, v)
@@ -105,6 +112,7 @@ class ImePreferences(private val store: PrefStore) {
         const val KEY_ONE_HAND = "kb_one_hand"
         const val KEY_DARK = "kb_dark"
         const val KEY_ELDER = "kb_elder"
+        const val KEY_SKIN = "kb_skin"
         const val KEY_LEARN = "engine_learn"
         const val KEY_FUZZY = "engine_fuzzy"
         const val KEY_JIANPIN = "engine_jianpin"

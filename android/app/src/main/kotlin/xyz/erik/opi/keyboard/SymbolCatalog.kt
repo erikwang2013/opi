@@ -9,6 +9,9 @@ import xyz.erik.opi.jni.OpiEngine
 /** 符号查询接口（OpiEngine 的面板专用 JNI；JVM 测试注入假实现）。 */
 interface SymbolApi {
     fun searchSymbols(keyword: String): Array<String>?
+
+    /** 表情**浏览**全量（官方分组序，含多码位序列）；与 symbols.tsv 的 emoji 列
+     * 是两条路 —— 那是搜索、这是浏览（详见引擎侧 `api::emoji_symbol_texts`）。 */
     fun emojiSymbols(): Array<String>?
     fun symbolBlocks(): String
     fun symbolsInBlock(id: Short): Array<String>?
@@ -56,8 +59,17 @@ class SymbolCatalog(private val api: SymbolApi = OpiEngine) {
         return list.also { if (it.isNotEmpty()) _all = it }
     }
 
-    /** 表情 = 全量里**引擎判定为 emoji** 的那些。**不能用 `by lazy`** —— 它只算一次，首次若全空就永久空。 */
-    val emoji: List<String> get() = all.filter(::isEmoji)
+    /**
+     * 表情页 = 引擎的**浏览全量**（`emojiSymbols()`，官方分组序：笑脸在前、旗帜在后），
+     * **不再从 `all` 里过滤**。
+     *
+     * 2026-10-09 换源（用户裁决「表情中常用主流 emoji 不全」）：旧写法取
+     * 「符号表 ∩ emoji 集」—— 符号表有意不收麻将/带圈等低码位块（见 gen_symbols.py），
+     * 于是国旗、🀄、❤️（VS16 形）、ZWJ 家庭这些一律进不了表情页。浏览要「全」，
+     * 集合就不该由符号表决定；引擎的表本身来自 UTS#51 `emoji-test.txt`。
+     * **不能用 `by lazy`** —— 它只算一次，首次若全空就永久空。
+     */
+    val emoji: List<String> get() = emojiData.first
 
     /**
      * emoji 判定：**查引擎给的表**。
@@ -68,19 +80,24 @@ class SymbolCatalog(private val api: SymbolApi = OpiEngine) {
      * 如 🞀 U+1F780）。**任何在宿主侧重算引擎判据的写法都会重演这一幕**，
      * 所以判据只留一份：引擎的 `emoji` 标志，经 [SymbolApi.emojiSymbols] 透出来。
      */
-    fun isEmoji(text: String): Boolean = emojiSet.contains(text)
+    fun isEmoji(text: String): Boolean = emojiData.second.contains(text)
 
-    private var _emoji: Set<String>? = null
+    private var _emojiData: Pair<List<String>, Set<String>>? = null
 
     /**
-     * 引擎口径的表情集。**空结果不写进缓存**，理由同 [common]：空 = 没拿到（引擎未就绪 /
-     * FFI 抖一下），不是「真的没有」，否则「表情」页会一直空到重启进程。
+     * 引擎口径的表情集：**列表与集合同一次取回**（列表给表情页、集合给 isEmoji 的
+     * 每帧查），一次 FFI 两次用 —— 「每条符号各打一次 FFI」会让面板滚动卡顿，
+     * 而分开缓存会让首帧打两次（两者都有测试钉着）。
+     * **空结果不写进缓存**，理由同 [common]：空 = 没拿到（引擎未就绪 / FFI 抖一下），
+     * 不是「真的没有」，否则「表情」页会一直空到重启进程。
      */
-    private val emojiSet: Set<String>
+    private val emojiData: Pair<List<String>, Set<String>>
         get() {
-            _emoji?.takeIf { it.isNotEmpty() }?.let { return it }
-            val s = api.emojiSymbols()?.toSet() ?: emptySet()
-            return s.also { if (it.isNotEmpty()) _emoji = it }
+            _emojiData?.takeIf { it.first.isNotEmpty() }?.let { return it }
+            val list = api.emojiSymbols()?.toList() ?: emptyList()
+            val pair = list to list.toHashSet()
+            if (list.isNotEmpty()) _emojiData = pair
+            return pair
         }
 
     fun search(q: String): List<String> {

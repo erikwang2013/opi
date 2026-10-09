@@ -284,7 +284,7 @@ void OpiEngine::keyEventImpl(const fcitx::InputMethodEntry & /*entry*/,
     shiftToggle_.handle(keyEvent, *settings_.shiftToggle);
     // 模式热键**先于** Rust 路由：Ctrl 组合键在 input_method.rs 首行就被直通，
     // 送进去也是白送（见 opi_mode.h 的说明）。
-    if (handleModeHotkey(keyEvent, shiftToggle_)) {
+    if (handleModeHotkey(keyEvent, shiftToggle_, fanjianToggle_)) {
         return;
     }
     // 全角键同样先于 Rust 路由，理由见 handleFullwidthHotkey 上方。

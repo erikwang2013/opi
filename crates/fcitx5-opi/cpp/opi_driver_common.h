@@ -18,7 +18,7 @@
 
 namespace {
 
-int g_fail = 0;
+inline int g_fail = 0;
 
 struct TestIC : fcitx::InputContext {
     explicit TestIC(fcitx::InputContextManager &m)
@@ -37,31 +37,31 @@ struct TestIC : fcitx::InputContext {
     std::string committed_;
 };
 
-std::string q(const std::string &s) { return "\"" + s + "\""; }
+inline std::string q(const std::string &s) { return "\"" + s + "\""; }
 
-std::string preeditOf(fcitx::InputContext &ic) {
+inline std::string preeditOf(fcitx::InputContext &ic) {
     return ic.inputPanel().preedit().toString();
 }
 
 // 内联预编辑（clientPreedit）——与面板 preedit 是**两条**通道，见胶水里的说明。
-std::string clientPreeditOf(fcitx::InputContext &ic) {
+inline std::string clientPreeditOf(fcitx::InputContext &ic) {
     return ic.inputPanel().clientPreedit().toString();
 }
 
 // 候选栏高亮位：-1 = 无高亮。对**空**候选表调 setGlobalCursorIndex 会抛
 // std::invalid_argument，所以这个值必须只在有候选时被设置。
-int candidateCursor(fcitx::InputContext &ic) {
+inline int candidateCursor(fcitx::InputContext &ic) {
     auto list = ic.inputPanel().candidateList();
     return list ? list->cursorIndex() : -1;
 }
 
 // 无候选表 = 0 条（panel.reset() 会把候选表置空，candidateList() 返回 nullptr）。
-int candidateCount(fcitx::InputContext &ic) {
+inline int candidateCount(fcitx::InputContext &ic) {
     auto list = ic.inputPanel().candidateList();
     return list ? list->size() : 0;
 }
 
-std::string candidateAt(fcitx::InputContext &ic, int idx) {
+inline std::string candidateAt(fcitx::InputContext &ic, int idx) {
     auto list = ic.inputPanel().candidateList();
     if (!list || idx < 0 || idx >= list->size()) {
         return "<none>";
@@ -71,7 +71,7 @@ std::string candidateAt(fcitx::InputContext &ic, int idx) {
 
 // 候选**序号**（label）：面板画的「1. 」来自它，不是候选文本的一部分。
 // 插件的 `setSelectionKey` 是它唯一的赋值点（见 opi_fcitx5.cpp 那段注释）。
-std::string candidateLabelAt(fcitx::InputContext &ic, int idx) {
+inline std::string candidateLabelAt(fcitx::InputContext &ic, int idx) {
     auto list = ic.inputPanel().candidateList();
     if (!list || idx < 0 || idx >= list->size()) {
         return "<none>";
@@ -79,14 +79,14 @@ std::string candidateLabelAt(fcitx::InputContext &ic, int idx) {
     return list->label(idx).toString();
 }
 
-void check(bool ok, const std::string &what) {
+inline void check(bool ok, const std::string &what) {
     std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", what.c_str());
     if (!ok) {
         ++g_fail;
     }
 }
 
-void skip(const std::string &what) {
+inline void skip(const std::string &what) {
     std::printf("  [SKIP] %s\n", what.c_str());
 }
 

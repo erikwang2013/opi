@@ -5,6 +5,7 @@ package xyz.erik.opi.ime
 
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.engine.EngineMode
+import xyz.erik.opi.keyboard.SkinOption
 import xyz.erik.opi.engine.FakeEngine
 import xyz.erik.opi.engine.ShiftState
 import org.junit.Assert.assertEquals
@@ -379,5 +380,39 @@ class ImeStateTest {
         assertEquals(EngineMode.PINYIN, state.controller.mode)
         assertEquals(listOf(1, 0, 1), fake.schemeCalls)
         assertEquals(InputMode.PINYIN9, state.inputMode)
+    }
+
+    // ---- 皮肤（2026-10-09 用户裁决「移动端没有皮肤设置」）----
+
+    @Test
+    fun selectSkinSwitchesPanelAndPersists() {
+        var persisted = 0
+        val state = newState().apply { persist = { persisted++ } }
+        state.openSkin()
+        assertEquals(ImeState.View.SKIN, state.view)
+        state.selectSkin(SkinOption.CINNABAR)
+        assertEquals(SkinOption.CINNABAR, state.skin)
+        assertEquals("选择即落盘", 1, persisted)
+        // 面板不自动关（连换着比才顺手）
+        assertEquals(ImeState.View.SKIN, state.view)
+        state.backToLetters()
+        assertEquals(ImeState.View.QWERTY, state.view)
+    }
+
+    @Test
+    fun openSkinDoesNotTouchTheEngine() {
+        // 皮肤只换观感：不切 scheme/mode、不提交缓冲（与输入模式那类切换的区别）
+        val fake = FakeEngine()
+        val state = newState(fake)
+        state.openSkin()
+        assertEquals(emptyList<Int>(), fake.schemeCalls)
+        assertEquals(emptyList<Int>(), fake.switchCalls)
+    }
+
+    @Test
+    fun restoreCarriesTheSkin() {
+        val state = newState()
+        state.restore(InputMode.PINYIN26, KeyboardModes(), SkinOption.PAPER)
+        assertEquals(SkinOption.PAPER, state.skin)
     }
 }

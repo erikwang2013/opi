@@ -42,6 +42,38 @@ kotlin {
     }
 }
 
+// ---------- 版本号单一来源（2026-10-09）----------
+//
+// jpackage 的包版本与设置窗标题栏都从这里取。**此前设置窗里写死过一份**
+// （"1.4.0"），到 1.6.0 就成了摆在用户眼前的假话 —— 两处写死是漂移的充分条件，
+// 生成一个常量是把它压成一处的最短路径（同 android 侧 versionName 的单一来源约定）。
+val opiAppVersion = "1.7.0"
+
+val generateOpiVersionSource by tasks.registering {
+    val outDir = layout.buildDirectory.dir("generated/sources/opiVersion/kotlin")
+    outputs.dir(outDir)
+    val v = opiAppVersion
+    doLast {
+        val f = outDir.get().file("xyz/erik/opi/candidate/Version.kt").asFile
+        f.parentFile.mkdirs()
+        f.writeText(
+            """
+            // SPDX-FileCopyrightText: 2026 erik.xyz
+            // SPDX-License-Identifier: MIT
+            //
+            // 生成文件，**勿手改** —— 版本号来源是 desktop/build.gradle.kts 的 opiAppVersion。
+
+            package xyz.erik.opi.candidate
+
+            /** 设置窗标题栏显示的版本；与 jpackage 的包版本同源。 */
+            const val OPI_VERSION: String = "$v"
+            """.trimIndent() + "\n",
+        )
+    }
+}
+// srcDir(taskProvider) = 「用这个任务的输出目录、并自动接上依赖」（Gradle 的既有语义）。
+kotlin.sourceSets["main"].kotlin.srcDir(generateOpiVersionSource)
+
 // 共享源码：小欧的 Compose 绘制只有一份（shared/pet），与 android/app 同一份几何
 // （candidate_io.rs 的线协议注释也是同样的「改协议须同步两处」约定）。
 sourceSets["main"].kotlin.srcDir("../shared/pet")
@@ -77,8 +109,9 @@ compose.desktop {
             // Windows .msi 为验收阶段（Windows 主机上构建）。
             targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb)
             packageName = "opi-candidates"
-            // 与发布 tag 对齐（同 android/app/build.gradle.kts 的 versionName）。
-            packageVersion = "1.6.0"
+            // 与发布 tag 对齐（同 android/app/build.gradle.kts 的 versionName）；
+            // 值来自文件上方的 opiAppVersion 单一来源。
+            packageVersion = opiAppVersion
             description = "opi输入法 候选窗（TSF 插件经 named pipe 通信）"
             vendor = "OPI"
 
@@ -214,3 +247,4 @@ tasks.register("injectSettingsDesktopEntry") {
         println("核对：dpkg-deb -c ${deb.absolutePath} | grep -E 'applications|bin/'")
     }
 }
+

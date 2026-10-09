@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 //
-// 模式切换的两条入口 + 中/英状态项：
+// 模式切换的两条入口 + 中/英、简/繁两个状态项：
 //   · 模式热键（Ctrl+' / Ctrl+\）—— 2026-10-09 从 opi_fcitx5.cpp **原样搬来**
 //     （那个文件有 500 行硬门禁；搬移是机械的，判据与实测记录随注释一起走）；
 //   · Shift 轻按切换中英文（新）—— 走引擎**已有**的 English 模式（与 Ctrl+' 同一条
@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <ctime>
+#include <functional>
 #include <type_traits>
 #include <utility>
 
@@ -194,6 +195,12 @@ public:
         }
     }
 
+    // 模式变了之后的补充刷新（「简/繁」项）。由 OpiEngine 在构造时接上 ——
+    // 别在这里直接持有对面那个类：两个状态项互相刷，指针会成环。
+    void setOnModeChanged(std::function<void(fcitx::InputContext *)> f) {
+        onModeChanged_ = std::move(f);
+    }
+
     // 切换 + 刷面板 + 刷状态项。面板必须刷：切模式会清缓冲换候选
     // （与 handleModeHotkey 的处理同一条理由）。
     void toggle(fcitx::InputContext *ic) {
@@ -214,14 +221,81 @@ public:
         opi_fcitx5_switch_mode(next);
         refreshingPanelFor(ic);
         update(ic);
+        if (onModeChanged_) {
+            onModeChanged_(ic);
+        }
     }
 
 private:
     fcitx::Instance *instance_;
     fcitx::SimpleAction action_;
     fcitx::ScopedConnection connection_;
+    std::function<void(fcitx::InputContext *)> onModeChanged_;
     bool armed_ = false;
     uint64_t pressTime_ = 0;
+};
+
+// ---- 「简/繁」状态项 + 简繁切换的**唯一实现**（2026-10-09，外层入口补齐）----
+//
+// 与「中/英」项同档：挂在 StatusGroup::InputMethod 状态区，点击即切。用户在外层
+// （状态栏）看到一个「中」、一个「设」、一个「简」，与配置面的六选项互不替代。
+// 热键（Ctrl+Shift+F）与状态项**共用下面这一个函数** —— 两份实现会在
+// 「英文/符号模式里按下时报切到哪」这类角落上漂，别抄第二份。
+inline void opiToggleTraditional(fcitx::InputContext *ic) {
+    const int32_t cur = opi_fcitx5_mode();
+    opi_fcitx5_switch_mode(cur == kModeTraditional ? kModePinyin : kModeTraditional);
+    refreshingPanelFor(ic);
+}
+
+class OpiFanjianToggle {
+public:
+    explicit OpiFanjianToggle(fcitx::Instance *instance) : instance_(instance) {
+        action_.setShortText("简");
+        action_.setLongText("点击切换简体/繁体（等同 Ctrl+Shift+F）");
+        if (instance_ != nullptr) {
+            instance_->userInterfaceManager().registerAction("opi-fanjian-toggle",
+                                                             &action_);
+        }
+        connection_ = fcitx::ScopedConnection(
+            action_.connect<fcitx::SimpleAction::Activated>(
+                [this](fcitx::InputContext *ic) { toggle(ic); }));
+    }
+
+    // 见 OpiShiftToggle::setOnModeChanged（反向那一半，由 OpiEngine 接上）：
+    // 从英文态点「简」会切进繁体 ⇒「中/英」项也要跟着刷回「中」。
+    void setOnModeChanged(std::function<void(fcitx::InputContext *)> f) {
+        onModeChanged_ = std::move(f);
+    }
+
+    void attach(fcitx::InputContext *ic) {
+        if (ic == nullptr) {
+            return;
+        }
+        ic->statusArea().addAction(fcitx::StatusGroup::InputMethod, &action_);
+        update(ic);
+    }
+
+    // 文案显示**当前**状态（同「中/英」项）：繁体态显示「繁」，其余显示「简」。
+    void update(fcitx::InputContext *ic) {
+        action_.setShortText(opi_fcitx5_mode() == kModeTraditional ? "繁" : "简");
+        if (ic != nullptr) {
+            action_.update(ic);
+        }
+    }
+
+    void toggle(fcitx::InputContext *ic) {
+        opiToggleTraditional(ic);
+        update(ic); // 刷**自己**的文案（首版漏了这行：模式切了、按钮还写着「简」）
+        if (onModeChanged_) {
+            onModeChanged_(ic); // 再刷对面那项（中/英）
+        }
+    }
+
+private:
+    fcitx::Instance *instance_;
+    fcitx::SimpleAction action_;
+    fcitx::ScopedConnection connection_;
+    std::function<void(fcitx::InputContext *)> onModeChanged_;
 };
 
 // ---- 模式热键（B0/B5）——原样搬自 opi_fcitx5.cpp ----
@@ -253,9 +327,11 @@ private:
 // 不做键位可配置：一张两个条目的表，配置项等真有第二个人要改再说。
 // 返回 true = 本键已被本插件消费。
 //
-// indicator：切模式后同步中/英状态项（Ctrl+' 切换同样要更新它 —— 否则状态项只对
-// Shift 那条路正确）。指针允许为空？不 —— 从 .cpp 调用处传 shiftToggle_，恒有效。
-inline bool handleModeHotkey(fcitx::KeyEvent &keyEvent, OpiShiftToggle &indicator) {
+// shift / fanjian：切模式后要同步的两个状态项（Ctrl+' 切换同样要更新它们 ——
+// 否则状态项只对 Shift 那条路正确；繁体那条还要刷「中/英」，见 opiToggleTraditional
+// 与两边的 setOnModeChanged）。指针允许为空？不 —— 从 .cpp 调用处传两个成员，恒有效。
+inline bool handleModeHotkey(fcitx::KeyEvent &keyEvent, OpiShiftToggle &shift,
+                             OpiFanjianToggle &fanjian) {
     // ---- Ctrl+Shift+F：简体 ⇄ 繁体（2026-10-09）----
     // 单独判、且**必须看 rawKey()**：normalize() 对我们不利 —— 源实现
     // （fcitx5 的 Key::normalize()）对「任何非空修饰键状态 + 小写字母」一律把小写
@@ -275,11 +351,9 @@ inline bool handleModeHotkey(fcitx::KeyEvent &keyEvent, OpiShiftToggle &indicato
             raw.states().test(fcitx::KeyState::Shift) &&
             !raw.states().test(fcitx::KeyState::Alt)) {
             if (!keyEvent.isRelease() && !isRepeatEvent(keyEvent)) {
-                const int32_t cur = opi_fcitx5_mode();
-                opi_fcitx5_switch_mode(cur == kModeTraditional ? kModePinyin
-                                                               : kModeTraditional);
-                refreshingPanelFor(keyEvent.inputContext());
-                indicator.update(keyEvent.inputContext());
+                opiToggleTraditional(keyEvent.inputContext());
+                shift.update(keyEvent.inputContext());
+                fanjian.update(keyEvent.inputContext());
             }
             keyEvent.filterAndAccept();
             return true;
@@ -311,7 +385,8 @@ inline bool handleModeHotkey(fcitx::KeyEvent &keyEvent, OpiShiftToggle &indicato
         // 切模式会动缓冲/候选（Rust 侧 switch_mode → engine.switch_mode），面板
         // 必须跟着走：漏了这步，切到英文后候选栏会继续挂着上一次的拼音候选。
         refreshingPanelFor(keyEvent.inputContext());
-        indicator.update(keyEvent.inputContext());
+        shift.update(keyEvent.inputContext());
+        fanjian.update(keyEvent.inputContext());
     }
     keyEvent.filterAndAccept();
     return true;

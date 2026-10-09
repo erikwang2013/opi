@@ -16,6 +16,9 @@
 //! ⚠️ **键名三处逐字对应**（改一处 = 老配置文件全部失效）：
 //!   本文件 ⇄ `crates/fcitx5-opi/cpp/opi_config.h`（Linux 读侧）⇄
 //!   `crates/tsf-opi/src/settings.rs`（Windows 读侧）。
+//!   ⚠️ `Skin` 的值是**中文字面值**（`SkinOption` / opi_config.h 的
+//!   `FCITX_CONFIG_ENUM_NAME_WITH_I18N`）：两侧按字面匹配，写错字 = 静默回「不改动」。
+//!   Windows 读侧没有这个键（未知键忽略）；设置窗在 Windows 上不显示皮肤一节。
 //!
 //! ⚠️ 布尔写 **`True`/`False`**（fcitx5 的 ini 就是这个拼法；读侧大小写不敏感，
 //! 所以手改成 `true` 也能读，但**写回去统一成全大写首字母**，别两种混着出现）。
@@ -31,12 +34,34 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 
-/** 四个开关。默认值 = 引擎既有行为（全开），与两端的读侧默认值一字不差。 */
+/**
+ * 「皮肤」的合法值。**字面值就是写进配置的字符串** —— 与 fcitx5 侧 `OpiSkin`
+ * 的枚举字面值（`opi_config.h` 的 `FCITX_CONFIG_ENUM_NAME_WITH_I18N`）逐字相同：
+ * Rust/C++ 读侧按字面匹配（`unmarshallOption`），写错一个字节 = 静默回默认值。
+ * 五款的顺序与 `opi_skin.h` 的 `opiSkinThemeName` 一一对应。
+ */
+enum class SkinOption(val value: String) {
+    KEEP("不改动"),
+    LIGHT("浅色"),
+    DARK("深色"),
+    PAPER("宣纸"),
+    CINNABAR("朱砂"),
+    ;
+
+    companion object {
+        /** 未知值（手改坏/别的版本写的）回默认 —— 与 bool 的坏值处理同一档。 */
+        fun fromValue(v: String?): SkinOption =
+            entries.firstOrNull { it.value == v } ?: KEEP
+    }
+}
+
+/** 四个开关 + 皮肤。默认值 = 引擎既有行为（开关全开、皮肤不改动），与两端的读侧一字不差。 */
 data class OpSettings(
     val learn: Boolean = true,
     val chinesePunct: Boolean = true,
     val fuzzy: Boolean = true,
     val jianpin: Boolean = true,
+    val skin: SkinOption = SkinOption.KEEP,
 ) {
     /** 写成 ini。键名见文件头「三处逐字对应」。 */
     fun toIni(): String = buildString {
@@ -47,6 +72,10 @@ data class OpSettings(
         appendLine("ChinesePunct=${boolText(chinesePunct)}")
         appendLine("Fuzzy=${boolText(fuzzy)}")
         appendLine("Jianpin=${boolText(jianpin)}")
+        // 皮肤只在 Linux 侧有意义（fcitx5 主题）；Windows 侧读侧忽略未知键，
+        // 但设置窗在 Windows 上不显示这一节，写不写都到不了那条路 —— 写，
+        // 是为了「同一份文件格式」不因平台分叉。
+        appendLine("Skin=${skin.value}")
     }
 
     companion object {
@@ -71,6 +100,7 @@ data class OpSettings(
                 chinesePunct = bool("ChinesePunct", true),
                 fuzzy = bool("Fuzzy", true),
                 jianpin = bool("Jianpin", true),
+                skin = SkinOption.fromValue(map["Skin"]),
             )
         }
     }
@@ -79,7 +109,7 @@ data class OpSettings(
 private fun boolText(v: Boolean) = if (v) "True" else "False"
 
 /**
- * 把 [s] 的四个键合进 [existing]，**其它行原样保留**（见文件头第 3 条 ⚠️）。
+ * 把 [s] 的五个键（四开关 + Skin）合进 [existing]，**其它行原样保留**（见文件头第 3 条 ⚠️）。
  *
  * 逐行处理：键在「本窗管理」集合里的行替换为新值，其余（注释/空行/未知键/别的
  * 选项）逐字保留；最后补齐没出现过的管理键。注释判定按 fcitx5 ini 的惯例 ——
@@ -91,6 +121,7 @@ fun mergeIni(existing: String, s: OpSettings): String {
         "ChinesePunct" to boolText(s.chinesePunct),
         "Fuzzy" to boolText(s.fuzzy),
         "Jianpin" to boolText(s.jianpin),
+        "Skin" to s.skin.value,
     )
     val seen = mutableSetOf<String>()
     val out = StringBuilder()

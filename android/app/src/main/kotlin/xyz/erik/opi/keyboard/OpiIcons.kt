@@ -31,7 +31,7 @@ object OpiIcons {
             viewportWidth = 24f,
             viewportHeight = 24f,
         ).apply {
-            stroke(fill = Color.Black, width = 1.8f) {
+            stroke(width = 1.8f) {
                 // 头（整圆：两段半圆闭合）
                 moveTo(12f, 3f)
                 arcToRelative(9f, 9f, 0f, true, true, 0f, 18f)
@@ -58,7 +58,7 @@ object OpiIcons {
             viewportWidth = 24f,
             viewportHeight = 24f,
         ).apply {
-            stroke(fill = Color.Black, width = 1.8f) {
+            stroke(width = 1.8f) {
                 moveTo(3f, 6f)
                 lineTo(21f, 6f)
                 lineTo(21f, 18f)
@@ -84,7 +84,7 @@ object OpiIcons {
             viewportWidth = 24f,
             viewportHeight = 24f,
         ).apply {
-            stroke(fill = Color.Black, width = 1.8f) {
+            stroke(width = 1.8f) {
                 // 三根滑轨
                 moveTo(4f, 7f)
                 lineTo(20f, 7f)
@@ -103,6 +103,34 @@ object OpiIcons {
         }.build()
     }
 
+    /** 皮肤入口（调色板：圆 + 四枚颜料点 + 一角留缺口）。 */
+    val Palette: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "OpiPalette",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f,
+        ).apply {
+            stroke(width = 1.8f) {
+                // 盘身：整圆（两段半圆闭合，同 Emoji 的头部）
+                moveTo(12f, 3f)
+                arcToRelative(9f, 9f, 0f, true, true, 0f, 18f)
+                arcToRelative(9f, 9f, 0f, true, true, 0f, -18f)
+                close()
+                // 四枚颜料点（短线段 + 圆头 = 点；位置错开，右下留远一点当「拇指缺口」的暗示）
+                moveTo(8.6f, 8.2f)
+                lineTo(8.6f, 9.2f)
+                moveTo(15.4f, 8.6f)
+                lineTo(15.4f, 9.6f)
+                moveTo(8.0f, 13.4f)
+                lineTo(8.0f, 14.4f)
+                moveTo(13.2f, 15.2f)
+                lineTo(13.2f, 16.2f)
+            }
+        }.build()
+    }
+
     /** 关闭/收起（菜单与面板右上角）。 */
     val Close: ImageVector by lazy {
         ImageVector.Builder(
@@ -112,7 +140,7 @@ object OpiIcons {
             viewportWidth = 24f,
             viewportHeight = 24f,
         ).apply {
-            stroke(fill = Color.Black, width = 1.8f) {
+            stroke(width = 1.8f) {
                 moveTo(6f, 6f)
                 lineTo(18f, 18f)
                 moveTo(18f, 6f)
@@ -125,15 +153,19 @@ object OpiIcons {
 /**
  * 建一条线稿路径（本文件四个图标的共同参数：只描边、不填充、圆头圆角）。
  * 抽出来只为四个图标参数一致 —— 不是为了复用花样。
+ *
+ * ⚠️ `fill = null` 是承重的，别"顺手补上颜色"：首版这里写的是
+ * `fill = SolidColor(fill)`，于是**闭环子路径全被填成实心** —— 笑脸变实心圆饼、
+ * 键盘变实心方块（2026-10-09 渲染复核抓到的，数值检查看不见这种形态）。
+ * 填色交给 `Icon(tint=…)` 统一染色，本文件一律线稿。
  */
 private fun ImageVector.Builder.stroke(
-    fill: Color,
     width: Float,
     block: androidx.compose.ui.graphics.vector.PathBuilder.() -> Unit,
 ) {
     path(
-        fill = SolidColor(fill),
-        stroke = SolidColor(fill),
+        fill = null,
+        stroke = SolidColor(Color.Black),
         strokeLineWidth = width,
         strokeLineCap = StrokeCap.Round,
         strokeLineJoin = androidx.compose.ui.graphics.StrokeJoin.Round,

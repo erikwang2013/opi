@@ -70,6 +70,7 @@ fun StrokeKeyboard(
             }
         }
         Row(modifier = Modifier.weight(1f).fillMaxSize()) {
+            KeyButton("符", modifier = Modifier.weight(1f), onTap = onSymbol)
             KeyButton(
                 modeLabel,
                 modifier = Modifier.weight(1f),
@@ -77,7 +78,6 @@ fun StrokeKeyboard(
                 stateDescription = modeStateDescription(modeLabel),
             )
             KeyButton("生僻字", modifier = Modifier.weight(1.4f), onTap = onRare)
-            KeyButton("符", modifier = Modifier.weight(1f), onTap = onSymbol)
             KeyButton("空格", modifier = Modifier.weight(2f), onTap = onSpace)
             KeyButton("⌫", modifier = Modifier.weight(1f), onTap = onBackspace)
             KeyButton("↵", modifier = Modifier.weight(1f), onTap = onEnter)

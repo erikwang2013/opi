@@ -217,16 +217,21 @@ class SymbolCatalogTest {
         assertTrue("应当重新查了一次", api.blocksCalls > firstBlocksCalls)
     }
 
-    /** 同上，`all` 也不能缓存空；`emoji` 跟着恢复（它曾是 `by lazy`，只算一次）。 */
+    /**
+     * 同上，`all` 也不能缓存空；而 `emoji` 与它**是两条独立出口** ——
+     * 2026-10-09 换源后表情页直接用引擎的浏览全量，「全部」还没就绪时它照样能给。
+     * 旧写法 `all.filter(isEmoji)` 会让表情页跟着 `all` 一起空（本用例原名
+     * `...EmojiFollows`，钉的就是那份耦合 —— 换源的收益之一就是把它解开）。
+     */
     @Test
-    fun emptyAllIsNotCachedAndEmojiFollows() {
+    fun emptyAllIsNotCachedAndEmojiIsIndependent() {
         val api = FakeSymbolApi().apply {
             searchResults = emptyList()
             emojiResults = listOf("😄")
         }
         val catalog = SymbolCatalog(api)
         assertTrue(catalog.all.isEmpty())
-        assertTrue(catalog.emoji.isEmpty())
+        assertEquals("表情页不再依赖 all（引擎全量独立可用）", listOf("😄"), catalog.emoji)
 
         api.searchResults = listOf("。", "😄")
         assertEquals(listOf("。", "😄"), catalog.all)
