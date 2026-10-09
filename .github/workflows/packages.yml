@@ -242,6 +242,26 @@ jobs:
             exit 1
           }
 
+          # ---- 安装面契约（2026-10-10）：两个**跨仓契约**的落点，只在包里能验完整 ----
+          #   · /usr/bin/opi-ctl —— desktop-ui 用 ProcessBuilder 按**名字**调（PATH 上
+          #     找得到），必须**可执行**。少了它/没执行位：状态栏那五个按钮静默变成
+          #     「点了没反应」，而这在构建树、暂存树里都看不出来（是打包这一步的事）。
+          #   · /usr/share/opi/symbol_categories.tsv —— desktop-ui 的 Linux 兜底读它，
+          #     插件也从同一条 XDG 数据路径 locate（第五参在 fcitx5 job 被钉过）。
+          # 判据取**解包后的真实路径**，与上面 .so 同一处、同一条理由。
+          [ -x "$chk/usr/bin/opi-ctl" ] || {
+            echo "::error::包里没有可执行的 /usr/bin/opi-ctl —— desktop-ui 会静默失效"
+            ls -la "$chk/usr/bin/" 2>&1 | head -5
+            exit 1
+          }
+          [ -f "$chk/usr/share/opi/symbol_categories.tsv" ] || {
+            echo "::error::包里没有 /usr/share/opi/symbol_categories.tsv —— 符号浏览与 desktop-ui 兜底都会失效"
+            ls -la "$chk/usr/share/opi/" 2>&1 | head -5
+            exit 1
+          }
+          echo "== 安装面：$(stat -c "%a %s" "$chk/usr/bin/opi-ctl") /usr/bin/opi-ctl"
+          echo "          $(stat -c "%a %s" "$chk/usr/share/opi/symbol_categories.tsv") /usr/share/opi/symbol_categories.tsv"
+
           # 量「这根构件要求到哪一版」：取它引用的符号版本里最高的那一个。
           # sort -V 按段做数值比较（2.9 < 2.36），字符串排序会在这里读错。
           # ⚠️ 两个坑都在本机预演里现过形（都是这一版改掉的）：

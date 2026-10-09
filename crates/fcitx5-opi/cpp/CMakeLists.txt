@@ -165,6 +165,35 @@ if(NOT EXISTS "${OPI_TRAD_OPID}")
 endif()
 message(STATUS "OPI 繁体词库源: ${OPI_TRAD_OPID}")
 
+# 符号类目数据（22 类目，2026-10-10 接线）：符号浏览面板的数据源。C++ 侧只 locate
+# 路径（opi_engine.h 的 loadDictionary），读文件在 Rust 侧（opi_fcitx5_load_symbols）。
+# ⚠️ **入库真源 = scripts/gen_symbol_categories.py 的双输出** ——
+# crates/fcitx5-opi/data/ 与 android/app/src/main/assets/ 这两份是同一次生成的、
+# 逐字节相同的产物（脚本确定性输出，重跑字节相同）；**android 副本只是兼容旧部署
+# 路径**（它先于本接线存在），不是「另一份真源」。两份若漂了：以生成器重跑为准、
+# 重新双写，别手工修其中一份。
+# 源优先级：-DOPI_SYMBOL_CATEGORIES > data/ 下的入库副本 > android 部署副本。
+set(OPI_SYMBOL_CATEGORIES "" CACHE FILEPATH
+    "symbol_categories.tsv 源文件。缺省取 crates/fcitx5-opi/data/ 的入库副本")
+if(NOT OPI_SYMBOL_CATEGORIES)
+    foreach(_sym_cand
+            "${CMAKE_CURRENT_SOURCE_DIR}/../data/symbol_categories.tsv"
+            "${CMAKE_CURRENT_SOURCE_DIR}/../../../android/app/src/main/assets/symbol_categories.tsv")
+        if(NOT OPI_SYMBOL_CATEGORIES AND EXISTS "${_sym_cand}")
+            set(OPI_SYMBOL_CATEGORIES "${_sym_cand}")
+        endif()
+    endforeach()
+endif()
+# 缺了就是 FATAL（与 luna/trad 同档）：不装的后果是符号浏览入口**静默禁用**
+# （热键收到、面板不弹，用户只看得出「按了没反应」）—— 构建期拦下比用户侧发现好。
+if(NOT EXISTS "${OPI_SYMBOL_CATEGORIES}")
+    message(FATAL_ERROR
+        "找不到符号类目数据源: '${OPI_SYMBOL_CATEGORIES}'\n"
+        "生成一份：python3 scripts/gen_symbol_categories.py（双写入库路径）\n"
+        "或用 -DOPI_SYMBOL_CATEGORIES=/path/to/symbol_categories.tsv 指一个已有文件。")
+endif()
+message(STATUS "OPI 符号类目源: ${OPI_SYMBOL_CATEGORIES}")
+
 # ---- addon .so 的落点 ----
 #
 # FCITX_INSTALL_ADDONDIR 是 fcitx5 自己给的变量，但它跟着 CMAKE_INSTALL_PREFIX
@@ -374,3 +403,13 @@ install(FILES "${OPI_LUNA_OPID}"
 install(FILES "${OPI_TRAD_OPID}"
               DESTINATION "${CMAKE_INSTALL_DATADIR}/opi"
               RENAME trad.opid)
+
+# 符号类目数据（2026-10-10）：loadDictionary() 找的是 Type::Data +
+# "opi/symbol_categories.tsv"，即 <prefix>/share/opi/symbol_categories.tsv ——
+# 与两个词库同一层（**没有** fcitx5 中间层，别顺手挪进 share/fcitx5/ 下）。
+# 落点由 opi_locate_check 的第 5 个参数与 ci.yml 的「查找常量没漂」grep 守着。
+# ⚠️ 源的真源说明见上面取源段：入库真源 = scripts/gen_symbol_categories.py 的
+# 双输出，android 那份只是兼容旧部署路径。
+install(FILES "${OPI_SYMBOL_CATEGORIES}"
+              DESTINATION "${CMAKE_INSTALL_DATADIR}/opi"
+              RENAME symbol_categories.tsv)

@@ -260,7 +260,9 @@ jobs:
           im=$(pick 'inputmethod/opi\.conf$')
           # 繁体词库（2026-10-09 接线）：同一条「安装器落点 == 求解落点」的比对
           trad=$(pick 'trad\.opid$')
-          for v in "$dict" "$addon" "$im" "$trad"; do
+          # 符号类目数据（2026-10-10 接线）：同上
+          sym=$(pick 'symbol_categories\.tsv$')
+          for v in "$dict" "$addon" "$im" "$trad" "$sym"; do
             [ -n "$v" ] || { echo "!! 安装日志里没有对应落点，别在空值上比"; exit 1; }
           done
           echo "安装器落点: $dict"
@@ -273,7 +275,7 @@ jobs:
           # 丢掉 XDG_DATA_HOME：只让 XDG_DATA_DIRS（暂存树）起作用。否则 runner
           # 上若恰好有真的词库，测的就不是我们刚装的那份了。
           env -u XDG_DATA_HOME XDG_DATA_DIRS="$stage/usr/share" \
-            "$locate_check" "$dict" "$addon" "$im" "$trad"
+            "$locate_check" "$dict" "$addon" "$im" "$trad" "$sym"
 
           # ---- 身份：落点对只证明「装到对的地方」，不证明「装的是对的东西」----
           # 拿 -DOPI_LUNA_OPID=data/generated/fallback.opid（715B / 35 词）装成
@@ -329,6 +331,31 @@ jobs:
             echo "   ci.yml 本步骤的 pick 'trad\\.opid\$'。"
             exit 1
           }
+          # 符号类目数据的查找常量（2026-10-10 接线）：同一道门禁、同一条理由 ——
+          # opi_locate_check 的第 5 个参数与它成对，改一处这里先红。
+          grep -rq 'Type::Data, "opi/symbol_categories.tsv"' "$d" || {
+            echo "!! $d 下的符号类目查找类型/路径变了（opi_engine.h 的 loadDictionary）。"
+            echo "   要同步三处：cpp/CMakeLists.txt 的符号类目安装落点、opi_locate_check.cpp 第 5 参、"
+            echo "   ci.yml 本步骤的 pick 'symbol_categories\\.tsv\$'。"
+            exit 1
+          }
+          # 符号类目数据的**两份入库副本**不许漂：真源是
+          # scripts/gen_symbol_categories.py 的双输出（crates/fcitx5-opi/data/ 与
+          # android/app/src/main/assets/），两份是同一次生成的逐字节相同产物。
+          # 漂了就等于「有两份真源」，装哪一份取决于构建路径 —— 正是要防的。
+          # data/ 那份由引擎侧入库（本接线落地时它还不存在）：不在时**明说跳过**
+          # （不静默 —— 静默跳过的门禁等于没有门禁），在就必须逐字节相同。
+          if [ -f crates/fcitx5-opi/data/symbol_categories.tsv ]; then
+            cmp -s crates/fcitx5-opi/data/symbol_categories.tsv \
+                   android/app/src/main/assets/symbol_categories.tsv || {
+              echo "!! 符号类目数据两份入库副本不一致 —— 别手改其中一份，"
+              echo "   重跑 python3 scripts/gen_symbol_categories.py 重新双写。"
+              exit 1
+            }
+            echo "符号类目数据两份入库副本一致（data/ == android/）"
+          else
+            echo "符号类目数据 data/ 副本尚未入库（引擎侧未落地）—— 本次跳过副本一致性比对"
+          fi
 
       # ---- 行为门禁：最老的被测发行版上，addon 必须**真的被加载** ----
       #
@@ -449,6 +476,13 @@ jobs:
           # 装好的那份当源：与加载面吃的同一棵树，判据同源。
           trad=/stage/usr/share/opi/trad.opid
           [ -f "$trad" ] || { echo "::error::暂存树里没有 trad.opid（$trad）—— /stage 那步或 CMake 的 trad 安装落点坏了"; exit 1; }
+          # 符号类目数据（2026-10-10 接线）：与 trad 同一条理由 —— CMakeLists 的缺省
+          # 候选是相对源码目录找（/tmp/src 只拷了 crates/fcitx5-opi，相对路径落到 / 上），
+          # 不显式传就 FATAL（报找不到数据源、值为空）。用暂存树里装好的那份。
+          # （这段脚本的引号只成对出现 —— 单个引号会提前掐断外层 bash -c 的引号，
+          #   改文案时别在注释里加落单的撇号。）
+          sym=/stage/usr/share/opi/symbol_categories.tsv
+          [ -f "$sym" ] || { echo "::error::暂存树里没有 symbol_categories.tsv（$sym）—— /stage 那步或 CMake 的符号类目安装落点坏了"; exit 1; }
 
           # ==== 一、先在**本容器**里对 5.0 头真编一次胶水 ====
           # 顺序是刻意的：下面的加载面吃的就是这里编出来的那份（见「二、换上去」）。以前顺序反
@@ -461,7 +495,7 @@ jobs:
           build_glue() {
             cmake -S "$1" -B "$2" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
               -DOPI_RUST_LIB="$rustlib" -DOPI_LUNA_OPID="$dict" \
-              -DOPI_TRAD_OPID="$trad" \
+              -DOPI_TRAD_OPID="$trad" -DOPI_SYMBOL_CATEGORIES="$sym" \
               -DCMAKE_EXPORT_COMPILE_COMMANDS=ON > "$3-cmake.log" 2>&1 \
               || { echo "--- cmake 配置失败（$3）---"; tail -20 "$3-cmake.log"; return 1; }
             cmake --build "$2" -j2 > "$3-build.log" 2>&1 \
