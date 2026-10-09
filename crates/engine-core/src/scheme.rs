@@ -23,6 +23,8 @@
 //! **首个字母**为规范符号（`qw`→`q`），`l`/`m` 为单字母键。宿主按此布局画键盘、
 //! 发符号；改这张表 = 改协议，四端要一起改（有单测钉着）。
 
+use crate::dictionary::Dictionary;
+
 /// 输入方案。**默认 Full = 既有行为**（老调用方一行不动）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Scheme {
@@ -155,6 +157,78 @@ impl Scheme {
 fn boundary_aligned(head: &str) -> bool {
     let segs = crate::pinyin::segment(head);
     !segs.is_empty() && segs.iter().all(|s| crate::pinyin::is_syllable(s)) && segs.concat() == head
+}
+
+/// **9/14 键的数字空间回退**（2026-10-10 用户裁决「回退扩到 9 键」）：整串按键无命中时，
+/// 丢掉尾部凑不满音节的键，返回**最长「音节对齐且查得到」键前缀**的字节长度 ——
+/// 候选层拿它重扫该前缀的整档（`candidates::rank_and_pick_scheme`），收尾层拿它定位
+/// 留在缓冲里的尾部键（`Engine::commit_buffer_after_select`）。
+///
+/// 用户视角：9 键打长句「打超到下一音节的首键」（`64426`→`644269`）正是撞无候选的
+/// 现场 —— 回退后仍出 `64426`（nihao）的整档，选中只消耗前缀、尾部键留着接着编。
+/// 语义与 26 键的分词回退（[`crate::candidates::segment_fallback`]，那边有逐条判据）
+/// 对齐；判定只有这一处实现，两个调用点结论必同（纯函数、不存状态，与 26 键同一条
+/// 纪律：结论由缓冲自证，不依赖「先取候选、再选中」的次序）。
+///
+/// 判据（全成立才回退）：
+/// 1. 只对 9/14 键问 —— Full/Stroke 走自己的分词回退，别叠两套；
+/// 2. 不含分词符 —— `'` 是用户**显式**的音节边界主张，`matches_segmented` 的严格语义
+///    不受回退影响（`644'26` 断在 nih 后照旧谁都不匹配）；
+/// 3. **整串（过 `pin` 滤后）一个命中都没有** —— 有命中 = 更具体的档，不回退；
+/// 4. 存在**见证者**：词库键 `pinyin` 比整串**短**、音节对齐（[`boundary_aligned`]，
+///    与 9 键读数链同一个 `pinyin::segment` 分段源）、且其键像恰是输入的类匹配前缀。
+///    取最长见证者，返回其字节长度 `k` —— 「前缀重扫必命中」由见证者**自证**
+///    （它就是那次重扫里的一条），不需要额外查询。
+///
+/// 边界（与 26 键对齐）：单键输入没有更短的前缀 ⇒ 天然维持死（`5` 这类没有见证者）；
+/// 单音节整串（如恰好一个音节的键）本来就命中、走不到这里；垃圾串（无见证者）同样维持
+/// 死。⚠️ 尾部本身**可以**凑满音节（完整的音节键也会被丢）——判定是「丢到最长查得到的
+/// 前缀为止」，与 26 键「从最长段往前试」逐字同形，不是「尾部必须残缺」。
+pub(crate) fn scheme_fallback_len<D: Dictionary + ?Sized>(
+    dict: &D,
+    input: &str,
+    scheme: Scheme,
+    pin: Option<&str>,
+) -> Option<usize> {
+    if input.is_empty()
+        || input.contains('\'')
+        || !matches!(scheme, Scheme::Nine | Scheme::Fourteen)
+    {
+        return None;
+    }
+    let mut hits_full = false;
+    let mut best = 0usize;
+    dict.visit_entries(&mut |pinyin, _word, _freq| {
+        if hits_full {
+            return;
+        }
+        if let Some(p) = pin
+            && !pinyin.starts_with(p)
+        {
+            return;
+        }
+        if scheme.matches(input, pinyin) {
+            hits_full = true;
+            return;
+        }
+        // 见证者筛选：先免费的长度条件，再类匹配（复用 matches，无分配），音节对齐最贵
+        // （要切分）放最后。
+        let l = pinyin.len();
+        if l <= best || l >= input.len() {
+            return;
+        }
+        if let Some(head) = input.get(..l)
+            && scheme.matches(head, pinyin)
+            && boundary_aligned(pinyin)
+        {
+            best = l;
+        }
+    });
+    if hits_full || best == 0 {
+        None
+    } else {
+        Some(best)
+    }
 }
 
 #[cfg(test)]

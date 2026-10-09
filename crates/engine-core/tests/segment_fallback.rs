@@ -11,15 +11,22 @@
 //! 3. **选中**：提交该候选文本、缓冲**只消耗那个前缀**、剩下的后缀留着接着编
 //!    （`nihaob` 选「你好」→ 缓冲变 `b`）；提交文本/学习/清缓冲的收尾仍是 `select_from`
 //!    那一处（四端自动一致）；
-//! 4. **读数**：回退态下 `display_buffer()` 仍是**用户打的整串**（预编辑不缩水）、
-//!    `candidate_readings()` 仍是空（那是 9/14 键专用，回退不覆盖 9/14）；
+//! 4. **读数**：26 键回退态下 `display_buffer()` 仍是**用户打的整串**（预编辑不缩水）、
+//!    `candidate_readings()` 仍是空（那是 9/14 键专用）；9 键回退态下读数照旧是
+//!    「首条候选的拼音」（`644269` → `ni'hao`，左列不因回退而空白）；
 //! 5. **边界**：单音节无匹配维持原「无匹配」；前缀也无候选维持原「无匹配」；
-//!    垃圾串（段不是完整音节：`qqq`/`zxcvb`）维持死 —— 「打英文」的逃生口不动；
-//!    9/14 键不做回退（缓冲是数字串/紧簇，分词对它们没有意义）。
+//!    垃圾串维持死（26 键：段不是完整音节 `qqq`/`zxcvb`；9/14 键：没有音节对齐的
+//!    见证者）—— 「打英文」的逃生口不动。
 //!
-//! ⚠️ **空格键有意例外**：`Engine::input_space` 是「整段上屏」（无候选才提交原始缓冲的
-//! 逃生口）——回退态下它提交首候选并**整段清空**，不收后缀（钉子：
-//! tests/adversarial_input.rs 的「提交过就必须清空缓冲」；另有
+//! **9/14 键是同一语义的数字空间版**（2026-10-10 裁决「回退扩到 9 键」）：按键串无命中
+//! 时丢掉尾部凑不满音节的键，候选换成最长「音节对齐且查得到」键前缀的整档、选中只消耗
+//! 前缀的键（`64426`→`644269` = nihao + 下一音节首键，用户报障的现场）。判定唯一实现在
+//! `scheme::scheme_fallback_len`（复用 `Scheme::matches` 的按键类与 `pinyin::segment`
+//! 分段源 —— 与 9 键读数链同一套，不另起一套）；14 键走同一判定自然覆盖（`bugaom`）。
+//!
+//! ⚠️ **空格键有意例外**（两条回退腿同一条代码）：`Engine::input_space` 是「整段上屏」
+//! （无候选才提交原始缓冲的逃生口）——回退态下它提交首候选并**整段清空**，不收后缀
+//! （钉子：tests/adversarial_input.rs 的「提交过就必须清空缓冲」；另有
 //! `tests/punctuation.rs` 的英文逃生口）。逐候选选中（点击 / 数字键）才是「选一个留一段」。
 //!
 //! 夹具是**内联词库 + 空符号表**（计数断言/收录断言不该被符号表掺料，见
@@ -221,25 +228,86 @@ fn separator_input_joins_segments_for_the_prefix() {
     assert_eq!(e.buffer(), "");
 }
 
-/// 分词回退只覆盖 26 键 / 笔画：9/14 键走 `rank_and_pick_scheme`（按键类展开），
-/// 没有回退档 —— 缓冲是数字串/紧簇，分词对它们没有意义。
+/// 9 键数字空间回退（用户报障的现场：`64426`→`644269` = nihao + 下一音节首键 `9`）：
+/// 整串无命中 ⇒ 丢掉尾部凑不满音节的键，候选换成最长音节对齐键前缀 `64426`（nihao）
+/// 的整档；选中只消耗前缀的键，尾部键留在缓冲里接着编。判定复用 9 键既有 machinery
+/// （`Scheme::matches` 的按键类 + `boundary_aligned`/`pinyin::segment` 分段源）。
 #[test]
-fn nine_and_fourteen_keys_do_not_fall_back() {
+fn nine_key_drops_the_incomplete_tail_and_keeps_it_in_the_buffer() {
     let mut nine = engine(false);
     nine.set_scheme(Scheme::Nine);
     type_str(&mut nine, "64426");
-    assert_eq!(texts(&nine, 8)[0], "你好", "9 键本身照常（按键类展开）");
-    // 多打一位 ⇒ 按键类展开无命中；不得回退到 `64426` 那档
+    assert_eq!(texts(&nine, 8)[0], "你好", "前置：命中态照旧（按键类展开）");
     type_str(&mut nine, "9");
-    assert!(
-        texts(&nine, 8).is_empty(),
-        "9 键整串无命中维持无候选（不做分词回退）"
+    assert_eq!(nine.buffer(), "644269", "预编辑仍是用户打的整串");
+    assert_eq!(
+        texts(&nine, 8),
+        vec!["你好", "你好啊", "利好"],
+        "回退档 = 键前缀 64426 的整档"
     );
-    let mut fourteen = engine(false);
-    fourteen.set_scheme(Scheme::Fourteen);
-    type_str(&mut fourteen, "bubu");
-    assert!(
-        texts(&fourteen, 8).is_empty(),
-        "14 键整串无命中维持无候选（不做分词回退）"
+    assert_eq!(
+        nine.display_buffer(),
+        "ni'hao",
+        "9 键读数照旧是首条候选的拼音（回退不把左列打空）"
     );
+    assert_eq!(nine.select(0), "你好");
+    assert_eq!(nine.buffer(), "9", "只消耗前缀的键：尾部键留下接着编");
+}
+
+/// 14 键同问的答案（2026-10-10 裁决「14 键若同机制自然适用」）：能 —— `bugaom` =
+/// bugao（= nihao 的键）+ 尾部 `m`（凑不满音节），同一个 `scheme_fallback_len` 给出
+/// k=5，候选 = nihao 整档、缓冲留 `m`，不需要第二套实现。
+#[test]
+fn fourteen_key_covers_the_same_fallback() {
+    let mut e14 = engine(false);
+    e14.set_scheme(Scheme::Fourteen);
+    type_str(&mut e14, "bugaom");
+    assert_eq!(
+        texts(&e14, 8),
+        vec!["你好", "你好啊", "利好"],
+        "14 键同一条回退：bugao（nihao 的键）+ 尾 m"
+    );
+    assert_eq!(e14.select(0), "你好");
+    assert_eq!(e14.buffer(), "m", "尾部键留在缓冲里接着编");
+}
+
+/// 边界沿用：单键/垃圾串维持死（没有「音节对齐且查得到」的见证者）；`'` 是用户
+/// **显式**的音节边界主张，回退免谈 —— `matches_segmented` 的严格语义不动
+/// （断点语义的钉子还在 tests/scheme_keys.rs::segment_key_forces_the_syllable_boundary）。
+#[test]
+fn scheme_fallback_boundaries_stay_dead() {
+    // 单键：没有更短的前缀可丢（`5` = jkl，夹具里没有 j/k/l 起头的键）
+    let mut nine = engine(false);
+    nine.set_scheme(Scheme::Nine);
+    type_str(&mut nine, "5");
+    assert!(texts(&nine, 8).is_empty(), "单键输入维持死");
+    // 乱按：没有见证者（`55` 的每一段都凑不出音节）
+    type_str(&mut nine, "5");
+    assert_eq!(nine.buffer(), "55");
+    assert!(texts(&nine, 8).is_empty(), "无见证者的乱按维持死");
+
+    let mut e14 = engine(false);
+    e14.set_scheme(Scheme::Fourteen);
+    type_str(&mut e14, "ll");
+    assert!(texts(&e14, 8).is_empty(), "14 键垃圾串维持死");
+
+    // 分词符输入不做数字空间回退（显式边界，与 matches_segmented 同语义）
+    let mut seg_input = engine(false);
+    seg_input.set_scheme(Scheme::Nine);
+    type_str(&mut seg_input, "644'26");
+    assert!(
+        texts(&seg_input, 8).is_empty(),
+        "`644'26` 断在 nih 后（非音节边界）谁都不匹配，回退也不救"
+    );
+}
+
+/// 空格例外对 9 键同一条代码（`input_space`）：回退态下空格提交首候选并**整段**清空
+/// ——尾部键随之丢弃，与 26 键 `nihaob` 的空格行为逐字一致（钉子见本文件头注记）。
+#[test]
+fn nine_key_space_flushes_the_whole_buffer_too() {
+    let mut nine = engine(false);
+    nine.set_scheme(Scheme::Nine);
+    type_str(&mut nine, "644269");
+    assert_eq!(nine.input_key(' '), "你好", "空格提交首候选");
+    assert_eq!(nine.buffer(), "", "空格是整段上屏：尾部键不留");
 }
