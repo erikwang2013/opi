@@ -17,14 +17,19 @@
 //! 器」）——`--statusbar` 在 Windows 上能跑，只是没有东西会去起它。写到这儿而不是
 //! 埋在代码里。
 //!
-//! 条上按钮：软键盘 / 符号大全 / 简繁转换 / 中英文标点 / 中英文切换 / logo /
-//! 全半角 / 设置（顺序 = [StatusBarButton] 的枚举序）。logo = 品牌标识兼拖动把手，
-//! 单击打开设置（用户裁决③）。
+//! 条上按钮（2026-10-10 深夜裁决②，从左到右 = [StatusBarButton] 的枚举序）：
+//! logo / 软键盘 / ，。符号大全 / 简繁 / Ω标点 / 中英 / 月相全半角 / 设置。
+//! logo = 品牌标识兼拖动把手（移到了最前），单击打开设置（用户裁决③）。
 //!
-//! 图标口径：**没有图片资产、没有新依赖**。形状能一眼认出来的（键盘、小欧）用
-//! DrawScope 自绘；其余用一两个字 —— 这些开关的真实状态在**输入法里**，本进程读不到
-//! （没有任何查询通道），所以画的是「它切换的那对状态」（简繁/中英/，./全半），
-//! 不假扮当前状态。
+//! 图标口径：**没有图片资产、没有新依赖**。自绘（键盘/月相/四小方块/小欧）或单字与
+//! 符号（，。 Ω 简/繁 中/英）—— 逐项冻结，见各图标函数的注释（PUNCT = Ω 是用户选的，
+//! 别「改回去」）。
+//!
+//! **状态实时可见**（2026-10-10 深夜裁决）：简/繁、中/英、月相随输入法真实状态翻转。
+//! 状态 = `opi-ctl state`（契约见 Actions.kt），1s 轮询 + **每次按钮动作返回后立刻
+//! 补读一次**（「即时生效」的落点，见 [actionWithStateRefresh]）。读不到/坏串/缺键
+//! ⇒ 中性缺省（中/简/半月）—— 旧原则「读不到状态就不画成当前状态」被本裁决取代，
+//! 缺省语义定案见 Actions.kt 的 [ImeState]。
 
 package xyz.erik.opi.candidate
 
@@ -105,18 +110,23 @@ private fun barPosition(widthDp: Int): WindowPosition {
 @Composable
 fun StatusBarApp(symbolCommit: (String) -> Boolean) {
     var s by remember { mutableStateOf(loadSettings()) }
+    // 起始 = 中性缺省，首拍轮询（≤1s）补上真实状态 —— 不在组合期做进程调用。
+    var imeState by remember { mutableStateOf(ImeState()) }
     var settingsOpen by remember { mutableStateOf(false) }
     var vkOpen by remember { mutableStateOf(false) }
     var symbolsOpen by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
 
-    // 1s 轮询配置文件：设置窗可能在**另一个进程**里（Linux 无参数模式就是设置窗），
-    // 进程间没有通知通道 —— 轮询是这里唯一可靠的一手信号。文件小、每秒一次，代价可忽略。
+    // 1s 轮询两件事，并进这一个循环：设置文件（设置窗可能在**另一个进程**里，进程间
+    // 没有通知通道）+ 输入法状态（简/繁、中/英、月相要跟着真实状态走，用户裁决
+    // 2026-10-10 深夜）。一拍 = 一次小文件读 + 一个短命进程，代价可忽略。
     LaunchedEffect(Unit) {
         while (true) {
             delay(1000)
             val next = loadSettings()
             if (next != s) s = next // 变了才写状态：否则每秒一次无谓重组
+            val st = readImeState()
+            if (st != imeState) imeState = st
         }
     }
     LaunchedEffect(notice) {
@@ -144,7 +154,7 @@ fun StatusBarApp(symbolCommit: (String) -> Boolean) {
         }
     }
 
-    fun onButton(b: StatusBarButton) {
+    fun dispatch(b: StatusBarButton) {
         when (b) {
             StatusBarButton.VK -> vkOpen = !vkOpen
             StatusBarButton.LOGO, StatusBarButton.SETTINGS -> settingsOpen = true
@@ -155,6 +165,12 @@ fun StatusBarApp(symbolCommit: (String) -> Boolean) {
                 else report(statusActionCommand(b)?.let { runExternal(it) })
             else -> report(statusActionCommand(b)?.let { runExternal(it) })
         }
+    }
+
+    fun onButton(b: StatusBarButton) {
+        // 动作一返回就补读状态（点完马上看到翻转，不等下一秒的轮询）。补读与轮询并存：
+        // fcitx5 应用切换是异步的，个别时候补读会早于状态落定 —— 1s 轮询是兜底。
+        actionWithStateRefresh({ dispatch(b) }) { imeState = readImeState() }
     }
 
     Window(
@@ -177,7 +193,7 @@ fun StatusBarApp(symbolCommit: (String) -> Boolean) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(GAP.dp),
                 ) {
-                    for (b in buttons) BarButton(b, windowState, ::onButton)
+                    for (b in buttons) BarButton(b, imeState, windowState, ::onButton)
                 }
             } else {
                 // 提示期间**替掉**按钮列（而不是盖在上面）：否则按钮还在下面接着点击，
@@ -212,7 +228,12 @@ fun StatusBarApp(symbolCommit: (String) -> Boolean) {
 // ---------- 一个按钮 ----------
 
 @Composable
-private fun BarButton(b: StatusBarButton, windowState: WindowState, onClick: (StatusBarButton) -> Unit) {
+private fun BarButton(
+    b: StatusBarButton,
+    st: ImeState,
+    windowState: WindowState,
+    onClick: (StatusBarButton) -> Unit,
+) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     Box(
@@ -224,28 +245,84 @@ private fun BarButton(b: StatusBarButton, windowState: WindowState, onClick: (St
             .semantics { contentDescription = b.label },
         contentAlignment = Alignment.Center,
     ) {
-        when {
-            b == StatusBarButton.LOGO ->
-                // 品牌标识兼拖动把手：就是设置页里那只小欧，缩小到按钮里。
-                OpiPet(mood = PetMood.IDLE, palette = PetPalette.Dark, size = 26.dp)
-            b == StatusBarButton.VK -> VkIcon()
-            else -> Text(iconText(b), fontSize = 12.sp, color = BarFg, maxLines = 1)
+        when (b) {
+            // 品牌标识兼拖动把手：就是设置页里那只小欧，缩小到按钮里。
+            StatusBarButton.LOGO -> OpiPet(mood = PetMood.IDLE, palette = PetPalette.Dark, size = 26.dp)
+            StatusBarButton.VK -> VkIcon()
+            StatusBarButton.FULLWIDTH -> MoonIcon(st.fullwidth)
+            StatusBarButton.SETTINGS -> SettingsIcon()
+            else -> Text(iconText(b, st), fontSize = 12.sp, color = BarFg, maxLines = 1)
         }
     }
 }
 
 /**
- * 按钮面上的字。动作 = 单字（符/设）；开关 = 它切换的**那对状态**（简繁/中英/，./全半）
- * —— 见文件头「图标口径」：真实状态在本进程里读不到，就不画成当前状态。
+ * 按钮面上的字。2026-10-10 深夜用户裁决②，**逐项冻结，别顺手「改回去」**：
+ * · SYMBOLS = 「，。」（用户选的 B 版）；
+ * · PUNCT = 「Ω」—— 看着与「中英标点」反直觉，但这是用户拍板的：Ω 表「标点/特殊
+ *   字符」，且**不带状态显示**。想改回 ，。 之前先回去问；
+ * · TRAD / LANG = 单字，且是**当前状态**（简/繁、中/英），随输入法状态翻转 ——
+ *   用户原话「文字标签全图标化」：多字标签（简繁/中英）全去。
+ * 全半角、设置不出字：画月相/四小方块（见 [MoonIcon]/[SettingsIcon]）。
  */
-private fun iconText(b: StatusBarButton): String = when (b) {
-    StatusBarButton.SYMBOLS -> "符"
-    StatusBarButton.TRAD -> "简繁"
-    StatusBarButton.PUNCT -> "，."
-    StatusBarButton.LANG -> "中英"
-    StatusBarButton.FULLWIDTH -> "全半"
-    StatusBarButton.SETTINGS -> "设"
-    StatusBarButton.VK, StatusBarButton.LOGO -> "" // 这两个画图标，不出字
+private fun iconText(b: StatusBarButton, st: ImeState): String = when (b) {
+    StatusBarButton.SYMBOLS -> "，。"
+    StatusBarButton.TRAD -> tradIcon(st)
+    StatusBarButton.PUNCT -> "Ω"
+    StatusBarButton.LANG -> langIcon(st)
+    StatusBarButton.FULLWIDTH, StatusBarButton.SETTINGS,
+    StatusBarButton.VK, StatusBarButton.LOGO -> "" // 这四个画图标，不出字
+}
+
+/** 简繁按钮面的字 = **当前输出**（转繁开着写「繁」）；用户裁决②：随真实状态翻转。 */
+internal fun tradIcon(st: ImeState): String = if (st.trad) "繁" else "简"
+
+/** 中英按钮面的字 = 当前模式（zh/en）。 */
+internal fun langIcon(st: ImeState): String = if (st.zh) "中" else "英"
+
+/**
+ * 全半角按钮 = 月相（用户裁决②：满月 = 全角、半月 = 半角）。
+ * 满月 = 实心圆；半月 = 描边圆 + 右半实心（缺的半边露的是条自己的底 —— 窗不透明，
+ * 不会透出背后的窗口内容）。
+ */
+@Composable
+private fun MoonIcon(fullwidth: Boolean) {
+    Canvas(Modifier.size(17.dp)) {
+        val r = size.minDimension / 2f - 1.dp.toPx()
+        val center = Offset(size.width / 2f, size.height / 2f)
+        if (fullwidth) {
+            drawCircle(color = BarFg, radius = r)
+        } else {
+            drawCircle(color = BarFg, radius = r, style = Stroke(1.5.dp.toPx()))
+            drawArc(
+                color = BarFg,
+                startAngle = -90f,
+                sweepAngle = 180f, // 右半
+                useCenter = true,
+                topLeft = Offset(center.x - r, center.y - r),
+                size = Size(r * 2f, r * 2f),
+            )
+        }
+    }
+}
+
+/** 设置按钮 = 四小方块（用户裁决②：多字的「设」去掉，画图标）。 */
+@Composable
+private fun SettingsIcon() {
+    Canvas(Modifier.size(13.dp)) {
+        val s = 5.dp.toPx()
+        val gap = 3.dp.toPx()
+        for (row in 0 until 2) {
+            for (col in 0 until 2) {
+                drawRoundRect(
+                    color = BarFg,
+                    topLeft = Offset(col * (s + gap), row * (s + gap)),
+                    size = Size(s, s),
+                    cornerRadius = CornerRadius(1.dp.toPx()),
+                )
+            }
+        }
+    }
 }
 
 /** 小键盘图标：一个键帽外框 + 六个键点。 */

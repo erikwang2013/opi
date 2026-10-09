@@ -78,16 +78,18 @@ data class StatusBarSettings(
 )
 
 /**
- * 状态栏按钮。**枚举顺序 = 条上从左到右的展示顺序**（用户裁决的列举顺序）。
- * `label` 兼作设置窗的开关名与状态栏的可访问性描述。
+ * 状态栏按钮。**枚举顺序 = 条上从左到右的展示顺序**（用户裁决 2026-10-10 深夜②：
+ * logo 移到最前，其后 键盘/符号/简繁/标点/中英/全半/设置）。
+ * `label` 兼作设置窗的开关名与状态栏的可访问性描述；条上的**图标**另有一套
+ * （见 StatusBar.kt 的 iconText / MoonIcon / SettingsIcon）。
  */
 enum class StatusBarButton(val label: String, val hint: String) {
+    LOGO("logo", "品牌标识兼拖动把手；单击打开设置"),
     VK("软键盘", "虚拟键盘窗：按键注入系统（会照常流经输入法）"),
     SYMBOLS("符号大全", "符号页入口"),
     TRAD("简繁转换", "简 ⇄ 繁（调 opi-ctl）"),
     PUNCT("中英标点", "中英文标点切换（调 opi-ctl）"),
     LANG("中英文切换", "与 Shift 轻按同一条通路（fcitx5-remote -t）"),
-    LOGO("logo", "品牌标识兼拖动把手；单击打开设置"),
     FULLWIDTH("全半角", "全角 ⇄ 半角（调 opi-ctl）"),
     SETTINGS("设置", "打开本设置窗"),
 }
