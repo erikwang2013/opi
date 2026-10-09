@@ -23,6 +23,8 @@ impl Engine {
     /// [`Self::input_key`] 也问它。加进来的是引擎层，不是某一端 —— 用户裁决
     /// 2026-09-27：「引擎层加标点表，四端走同一条路」。
     pub fn input_punct(&mut self, ch: char) -> Option<String> {
+        // 浏览态：同 input_key —— 先退出浏览恢复真缓冲，再按正常流程处理（契约 ②）。
+        self.leave_symbol_browse_if_needed();
         let text = self.punct_text(ch)?;
         // 缓冲非空：先走与空格**同一条**收尾（有候选提首候选、无候选提原文），
         // 否则 `ni,` 上屏成 `，你` —— 标点抢在待提交的拼音前面。
