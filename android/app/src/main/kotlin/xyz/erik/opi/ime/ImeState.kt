@@ -76,7 +76,7 @@ class ImeState(
     var commit: (String) -> Unit = {},
     private val debouncer: Debouncer = HandlerDebouncer(),
 ) {
-    enum class View { QWERTY, NUMBER, SYMBOL, RARE, SKIN }
+    enum class View { QWERTY, NUMBER, SYMBOL, RARE, SKIN, INPUT_MODE, KEYBOARD_MODE }
 
     companion object {
         /** 搜索防抖窗口（对齐 flutter 250ms）。 */
@@ -202,6 +202,25 @@ class ImeState(
     fun openSkin() {
         resetSearch()
         view = View.SKIN
+    }
+
+    /**
+     * 输入模式面板（工具条入口；2026-10-09 用户裁决「做成像皮肤那样的面板，不要弹框」）。
+     * 面板里选中即走 [selectInputMode]（它自己收尾回键面/生僻字面板）；只开面板不动引擎，
+     * 中途关掉也不会丢正在打的缓冲。
+     */
+    fun openInputMode() {
+        resetSearch()
+        view = View.INPUT_MODE
+    }
+
+    /**
+     * 键盘模式面板（同上）。面板**不自动关**：单手/暗光/长辈常要连开两三个
+     * （与皮肤面板同一条理由，见 ImeToolbar 的注释）。
+     */
+    fun openKeyboardMode() {
+        resetSearch()
+        view = View.KEYBOARD_MODE
     }
 
     // ---- 面板切换（开面板前提交 pending buffer） ----

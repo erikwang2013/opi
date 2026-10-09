@@ -415,4 +415,19 @@ class ImeStateTest {
         state.restore(InputMode.PINYIN26, KeyboardModes(), SkinOption.PAPER)
         assertEquals(SkinOption.PAPER, state.skin)
     }
+
+    @Test
+    fun modeEntriesOpenPanelsNotMenus() {
+        // 2026-10-09 用户裁决「输入模式/键盘模式做成像皮肤那样的面板，不要弹框」：
+        // 两个入口切的是**面板视图**（与皮肤同一条 when 分发），且都不碰引擎 ——
+        // 真正的选择/开关动作在面板内各自既有路径上做。
+        val fake = FakeEngine()
+        val state = newState(fake)
+        state.openInputMode()
+        assertEquals(ImeState.View.INPUT_MODE, state.view)
+        state.openKeyboardMode()
+        assertEquals(ImeState.View.KEYBOARD_MODE, state.view)
+        assertEquals(emptyList<Int>(), fake.schemeCalls)
+        assertEquals(emptyList<Int>(), fake.switchCalls)
+    }
 }

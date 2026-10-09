@@ -111,7 +111,6 @@ fun ImeScreen(
             ImeToolbar(
                 currentMode = state.inputMode,
                 keyboardModes = modes,
-                traditional = controller.mode == EngineMode.TRADITIONAL,
                 petMood = petMood(
                     buffer = controller.buffer,
                     candidateCount = controller.candidates.size,
@@ -120,18 +119,8 @@ fun ImeScreen(
                 ),
                 onOpenEmoji = state::openEmoji,
                 onOpenSkin = state::openSkin,
-                onSelectInputMode = state::selectInputMode,
-                onToggleTraditional = {
-                    // 与「中/繁/英」键同一条路：只切引擎模式，方案（9/14/键布局）不动
-                    controller.switchMode(
-                        if (controller.mode == EngineMode.TRADITIONAL) {
-                            EngineMode.PINYIN
-                        } else {
-                            EngineMode.TRADITIONAL
-                        },
-                    )
-                },
-                onUpdateKeyboardModes = state::updateKeyboardModes,
+                onOpenInputMode = state::openInputMode,
+                onOpenKeyboardMode = state::openKeyboardMode,
             )
             // ---- 键盘区：单手模式整体偏移 + 收窄（纯布局层）----
             // 键区自己刷底色（根列已透明）：键与键之间的缝是这一层 —— 换深色皮肤时
@@ -177,6 +166,31 @@ private fun KeyboardArea(
         ImeState.View.SKIN -> SkinPanel(
             selected = state.skin,
             onSelect = state::selectSkin,
+            onClose = state::backToLetters,
+            modifier = modifier,
+        )
+        // 输入模式/键盘模式面板（2026-10-09 用户裁决「做成像皮肤那样的面板，不要弹框」）：
+        // 形态与皮肤同一套；选中/开关的收尾走各自既有路径（selectInputMode 自己回键面）。
+        ImeState.View.INPUT_MODE -> InputModePanel(
+            current = state.inputMode,
+            onSelect = state::selectInputMode,
+            onClose = state::backToLetters,
+            modifier = modifier,
+        )
+        ImeState.View.KEYBOARD_MODE -> KeyboardModePanel(
+            traditional = controller.mode == EngineMode.TRADITIONAL,
+            keyboardModes = state.keyboardModes,
+            onToggleTraditional = {
+                // 与「中/繁/英」键同一条路：只切引擎模式，方案（9/14/键布局）不动
+                controller.switchMode(
+                    if (controller.mode == EngineMode.TRADITIONAL) {
+                        EngineMode.PINYIN
+                    } else {
+                        EngineMode.TRADITIONAL
+                    },
+                )
+            },
+            onUpdate = state::updateKeyboardModes,
             onClose = state::backToLetters,
             modifier = modifier,
         )
