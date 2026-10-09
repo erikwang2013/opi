@@ -106,8 +106,21 @@ compose.desktop {
         nativeDistributions {
             // 构建验证用 Deb（Linux 主机，dpkg-deb 本机可用）；CMP 1.11 已移除
             // Zip 格式（枚举仅 AppImage/Deb/Rpm/Dmg/Pkg/Exe/Msi）。
-            // Windows .msi 为验收阶段（Windows 主机上构建）。
-            targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb)
+            //
+            // Msi（2026-10-09 加）：Windows 侧由 .github/workflows/windows.yml 在
+            // windows runner 上跑 `gradlew.bat packageMsi` 打出 `.msi`。
+            // ⚠️ 加它的**理由**是机制性的，不是偏好：CMP 1.11.1 只为 `targetFormats` 里
+            // **列出的**格式注册 `package<格式>` 任务（反编译 configurePackagingTasks：
+            // 逐项遍历 getTargetFormats() 再 register）。实测：只列 Deb 时 `packageMsi`
+            // **不存在** —— `Task 'packageMsi' not found ... candidates: 'package',
+            // 'packageDeb'`，不是「任务在、只是跨平台打不出来」。
+            // Linux 侧不受影响（实测过 configuration 期）：Deb 照旧；Msi 的任务在 Linux
+            // 上不会被 `package`/`packageDistributionForCurrentOS` 选中（按当前 OS 过滤），
+            // 且 CMP 的 WiX 接线（configureWix）整个只在 Windows 主机上跑。
+            targetFormats(
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb,
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi,
+            )
             packageName = "opi-candidates"
             // 与发布 tag 对齐（同 android/app/build.gradle.kts 的 versionName）；
             // 值来自文件上方的 opiAppVersion 单一来源。
