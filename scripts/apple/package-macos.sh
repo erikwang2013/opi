@@ -119,16 +119,22 @@ plutil -replace CFBundleIdentifier -string "$BUNDLE_ID" "$plist"
 plutil -replace InputMethodServerControllerClass -string "$CONTROLLER" "$plist"
 plutil -lint "$plist" >/dev/null
 # 兜底门禁：bundle 里**不许**剩任何未展开的占位符（上面漏替换一个键就是这条红）。
-if grep -q '\$(' "$plist"; then
-  echo "!! bundle 的 Info.plist 里还有没展开的 Xcode 占位符：" >&2
-  grep -n '\$(' "$plist" >&2
+# ⚠️ 判据必须落在**值**上，不能直接 grep 原文：模板的 XML 注释里也写着 `$(` 例子
+# （macos/Info.plist 的说明段），grep 原文会把注释当漏替换 → 假红。
+# `plutil -p` 只吐解析后的键值，注释自然没了。
+plist_dump="$(plutil -p "$plist")"
+# 门禁自身的兜底：拿不到 dump 说明门禁失效 —— 红，别静默通过（本仓记过这类账）。
+[ -n "$plist_dump" ] || { echo "!! plutil -p 没输出，占位符门禁失效" >&2; exit 1; }
+if grep -q '\$(' <<<"$plist_dump"; then
+  echo "!! bundle 的 Info.plist 的**值**里还有没展开的 Xcode 占位符：" >&2
+  grep '\$(' <<<"$plist_dump" >&2
   exit 1
 fi
 # 版本号**不从命令行注入**：Info.plist 里的 CFBundleShortVersionString 是仓库的
 # 另一个同步位（`macos/README.md` 记着「它曾经落后过仓库版本」）。这里只**对账**，
 # 不改写 —— 改写会让「plist 漂了」这件事在打包时被静默抹掉。
 plist_ver="$(plutil -extract CFBundleShortVersionString raw "$plist")"
-[ "$plist_ver" = "$version" ] || echo "⚠️ Info.plist 版本 $plist_ver ≠ 工作区版本 $version（发布清单里要同步；本脚本按仓库的规矩**不动** plist）"
+[ "$plist_ver" = "$version" ] || echo "⚠️ Info.plist 版本 $plist_ver ≠ 工作区版本 ${version}（发布清单里要同步；本脚本按仓库的规矩**不动** plist）"
 
 # ---- 3) 放 Rust dylib 与图标 ----
 cp "$dylib" "$APP/Contents/Frameworks/"
@@ -199,4 +205,4 @@ echo "---- macOS 产物（未签名/未公证，开发用）----"
 echo "  $APP"
 echo "  $pkg"
 echo "  $out/opi-inputmethod-$version-unsigned.zip"
-echo "  版本：$version（取自 $(basename "$root")/Cargo.toml）；Info.plist 记的是 $plist_ver"
+echo "  版本：${version}（取自 $(basename "$root")/Cargo.toml）；Info.plist 记的是 $plist_ver"

@@ -155,8 +155,12 @@ plutil -replace CFBundleIdentifier -string "$KB_BUNDLE_ID" "$kb"
 plutil -replace CFBundleName -string "$FMWK" "$kb"
 plutil -replace NSExtension.NSExtensionPrincipalClass -string "KeyboardViewController" "$kb"
 plutil -lint "$kb" >/dev/null
-if grep -q '\$(' "$kb"; then
-  echo "!! 扩展 plist 里还有没展开的 Xcode 占位符：" >&2; grep -n '\$(' "$kb" >&2; exit 1
+# 判据落在**值**上（与 macOS 侧同一条理由）：`plutil -p` 只吐键值，注释里的 `$(` 例子不算。
+kb_dump="$(plutil -p "$kb")"
+[ -n "$kb_dump" ] || { echo "!! plutil -p 没输出，占位符门禁失效" >&2; exit 1; }
+if grep -q '\$(' <<<"$kb_dump"; then
+  echo "!! 扩展 plist 的**值**里还有没展开的 Xcode 占位符：" >&2
+  grep '\$(' <<<"$kb_dump" >&2; exit 1
 fi
 
 # ---- 5) 尽力而为：真 .appex 可执行（入口 _NSExtensionMain）----
@@ -174,7 +178,11 @@ if swiftc -parse-as-library -emit-executable ios/*.swift -o "$out/.appex-bin" \
   mv "$out/.appex-bin" "$appex/$FMWK"
   cp "$kb" "$appex/Info.plist"
   rm -f "$out/appex-link.log"
-  echo "appex 可执行链接成功：$appex（**未签名**，装不上真机）"
+  # ⚠️ `${appex}` 的花括号**不能省**：`$appex（` 这种「变量后紧跟多字节字符」的写法
+  # 在 macOS 的 /bin/bash（3.2）下会把 `（` 吞进变量名 → `appex…: unbound variable`
+  # （首轮实测就是这么红的：run 37934619550，链接都过了、死在最后一行 echo 上）。
+  # 本地 bash 5 复现不出来 —— 别用「本机跑过」当这条的判据。
+  echo "appex 可执行链接成功：${appex}（**未签名**，装不上真机）"
 else
   echo "!! .appex 可执行**未产出**（链接器原文见上）。本产物里只有 framework/xcframework。"
   echo "   这不是静默降级：上面那几行链接器输出就是原因，appex-link.log 也在产物里。"
@@ -192,4 +200,4 @@ echo "  $out/$FMWK.xcframework"
 echo "  $kb"
 if [ -d "$out/OpiKeyboard.appex" ]; then echo "  $out/OpiKeyboard.appex（未签名扩展目录）"; fi
 echo "  $zip"
-echo "  版本：$version（取自 Cargo.toml）"
+echo "  版本：${version}（取自 Cargo.toml）"
