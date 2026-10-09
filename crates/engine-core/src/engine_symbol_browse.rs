@@ -17,7 +17,8 @@
 //!    不是 composer 的真缓冲。这不是意外而是载体：fcitx5 面板与 tsf 候选窗都按
 //!    「buffer 非空」决定显示，没有这个非空标题，**面板根本不显示**（这是「UI 零改动」
 //!    的全部代价）。⇒ 任何**读缓冲去提交**的路径（切走确认 W1、IME 停用）**必须先
-//!    `exit_symbol_browse()`**，否则提交出「符号」两个字。
+//!    `exit_symbol_browse()`**，否则提交出「符号」两个字。单点实现 =
+//!    [`Engine::confirm_pending`]（两轨的 `switch_mode_confirmed` 走它）。
 //! ② **浏览期间未处理的键** = 先退出浏览恢复真缓冲 → 再按正常流程处理那个键
 //!    （不许带着标题落进正常路由）。路由整段在宿主（fcitx5 `input_method.rs` / tsf
 //!    `logic_input_method.rs` 的浏览分支，两轨逐行同构）；引擎层的
@@ -89,6 +90,26 @@ impl Engine {
     /// 出错形态只有一个（带着「符号」标题落进正常路由），单点免得某个入口漏掉。
     pub(crate) fn leave_symbol_browse_if_needed(&mut self) {
         self.symbol_browse.exit(); // exit 幂等且不动数据，无条件调用即可
+    }
+
+    /// 切走/切英文的**直接确认**（W1，2026-10-10 lead 裁决）：先退浏览（恢复真缓冲
+    /// —— 顺序承重，见文件头契约 ①），再把待处理的缓冲按「**有候选上首候选、
+    /// 无候选上原文**」换算成待上屏文本。返回空串 = 无提交（空缓冲）。
+    ///
+    /// 与 [`Self::switch_mode`]（清缓冲：打到一半的拼音被静默丢弃）和
+    /// [`Self::toggle_symbol`]（无候选把原文**丢掉**，Android `commitPendingBuffer`
+    /// 语义）的差别都在「无候选」这一支：W1 交出原文。收尾本身与
+    /// [`Self::input_space`] 同一条（记学习 / 清缓冲 / 页码只此一份），逐模式随之
+    /// 继承 —— 符号模式无候选**不**提交关键字（关键字不是要上屏的文本，判据在
+    /// input_space）。调用方负责把非空返回插入文档；拿不到插入通道的端别调
+    /// （同 [`Self::toggle_symbol`]）。
+    ///
+    /// 状态机侧的「确认 + 切换」入口：两轨的 `switch_mode_confirmed`（配对）。
+    pub fn confirm_pending(&mut self) -> String {
+        // 契约 ①。`input_space` 入口本身也有同款兜底（契约 ② 对直调引擎的出口），
+        // 这里是同一顺序的显式前置 —— 两处都幂等，不互为唯一防线。
+        self.leave_symbol_browse_if_needed();
+        self.input_space()
     }
 
     /// 浏览态选中的实际落点（`select_from` 的浏览分支）：类目 = 下钻（空串 ——

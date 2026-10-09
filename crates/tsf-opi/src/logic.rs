@@ -192,6 +192,8 @@ impl TsfLogic {
         self.engine.set_jianpin(on);
     }
 
+    /// 切模式（**不收尾**：待处理的缓冲由 `Composer::switch_mode` 直接清掉）。
+    /// 需要「有候选上首候选、无候选上原文」的切走收尾用 [`Self::switch_mode_confirmed`]。
     pub fn switch_mode(&mut self, mode: Mode) {
         self.engine.switch_mode(mode);
         // ⇧ 只在 English 有意义，判据与 Android `EngineController.switchMode` 的
@@ -202,6 +204,26 @@ impl TsfLogic {
             self.shift_state = ShiftState::Off;
         }
         self.reset_page_if_buffer_changed();
+    }
+
+    /// 切走/切英文的**直接确认 + 切换**（W1）：先把待处理的缓冲按「有候选上首候选、
+    /// 无候选上原文」收尾（**先退符号浏览**恢复真缓冲 —— 顺序承重，契约见
+    /// `engine-core/src/engine_symbol_browse.rs` 头），再切模式。返回**待上屏文本**
+    /// （空串 = 无提交）—— 调用方负责插入文档。
+    /// **先确认后切**也是承重的：确认发生在原模式下；顺序反了，英文模式的候选集是
+    /// 空的，「ni」会以原文上屏而不是首候选「你」。
+    /// 与 [`Self::switch_mode`] 的唯一差别就是这步收尾：那条路（本轨 Ctrl+' 的
+    /// `toggle_mode`）`Composer::switch_mode` 只清缓冲，打到一半的拼音被静默丢弃。
+    /// 配对：`fcitx5-opi/src/candidate.rs` 的同名方法（两轨同构，改一处必须改另一处）。
+    /// ⚠️ **本回合无生产调用方**（2026-10-10 裁决「状态机语义先立住、如实注明」）：
+    /// tsf 的切英文路径仍是 `toggle_mode` → `switch_mode`（丢缓冲）—— 接线 = 改调
+    /// 本函数并把返回值插入文档（Windows 侧插入面未验证，不目测）。fcitx5 侧同语义的
+    /// 另一个实现是 glue 的 C++（「先 `opi_fcitx5_symbol_browse(0)` 退浏览、再按
+    /// W1 提交」）。
+    pub fn switch_mode_confirmed(&mut self, mode: Mode) -> String {
+        let text = self.engine.confirm_pending();
+        self.switch_mode(mode); // 切换与 ⇧/页码收尾复用既有实现，不复制一份
+        text
     }
 
     /// 全角 ↔ 半角，返回切换后的状态（状态栏显示用）。语义全在引擎层

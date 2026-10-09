@@ -150,6 +150,10 @@ impl TsfTextService {
             return BOOL(1); // 中毒锁：吞键，与 handle_key_inner 同策略
         };
         let target = hotkey_target(hot, logic.mode());
+        // 切走/切英文的收尾（W1：有候选首候选、无候选原文）在
+        // `logic.switch_mode_confirmed` —— 本函数走 `switch_mode`（丢缓冲）。
+        // 接线 = 改调它并把返回值插入文档（2026-10-10 裁决：状态机语义先立住，
+        // 插入面未接线如实注明）。
         logic.switch_mode(target);
         push_state(&*self.sink, &logic);
         BOOL(1)

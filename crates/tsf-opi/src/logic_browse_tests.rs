@@ -197,7 +197,7 @@ fn switch_away_must_exit_first_or_it_commits_the_title() {
     // Windows 轨没有对应的「切走提交」点（tsf.rs 的 Deactivate 只清
     // 语言栏/线程管理器/client_id，不提交缓冲）—— 但「顺序是承重的」两轨同源，
     // 故在状态机层钉住：**不退出**时读到的是浏览内容（会让调用方上屏「符号」
-    // 「1.常用」）。
+    // 「1.常用」）。状态机侧的同序实现 = `switch_mode_confirmed`（见下一条用例）。
     let mut s = browse_state();
     typed(&mut s, "ni");
     assert!(s.enter_symbol_browse());
@@ -221,4 +221,60 @@ fn switch_away_must_exit_first_or_it_commits_the_title() {
     e.exit_symbol_browse();
     assert_eq!(e.buffer(), "", "无候选无原文：提交空串");
     assert!(e.candidates().is_empty());
+}
+
+// ---- W1 的状态机实现：switch_mode_confirmed（确认 + 切换，返回待上屏文本）----
+// 两轨逐条同构（fcitx5 轨本回合无 C 出口、本轨无生产调用方 —— 语义在状态机层
+// 钉住，接线状态各自的注释如实标注）。
+
+#[test]
+fn switch_mode_confirmed_takes_first_candidate_or_raw_buffer() {
+    // 有候选 → 首候选；无候选 → **原文**（与 toggle_symbol 的「无候选丢弃」不同支）
+    let mut s = browse_state();
+    typed(&mut s, "ni");
+    assert_eq!(s.candidates()[0], "你", "前置：真词库候选");
+    // 「先确认后切」是承重的：顺序反了，英文模式候选集为空，这里会拿到原文 "ni"
+    assert_eq!(
+        s.switch_mode_confirmed(Mode::English),
+        "你",
+        "有候选上首候选"
+    );
+    assert_eq!(s.buffer(), "", "确认后缓冲收干净");
+    assert_eq!(s.mode(), Mode::English, "切换真的发生了");
+    let mut z = browse_state();
+    typed(&mut z, "qqq"); // 别拿 zzz：它是 😴 的关键字，会走「有候选」那一支
+    assert!(z.candidates().is_empty(), "前置：qqq 无候选");
+    assert_eq!(
+        z.switch_mode_confirmed(Mode::English),
+        "qqq",
+        "无候选上原文（不丢弃）"
+    );
+    assert_eq!(z.buffer(), "");
+    assert_eq!(z.mode(), Mode::English);
+}
+
+#[test]
+fn switch_mode_confirmed_exits_browse_first_never_commits_the_title() {
+    // 顺序承重：浏览态下 buffer()/candidates() 是面板内容 → 确认必须先退浏览
+    let mut s = browse_state();
+    typed(&mut s, "ni");
+    assert!(s.enter_symbol_browse());
+    assert_eq!(s.buffer(), "符号", "负对照：不退出就是标题");
+    assert_eq!(
+        s.switch_mode_confirmed(Mode::English),
+        "你",
+        "先退浏览 → 真缓冲的候选"
+    );
+    assert!(!s.is_symbol_browsing(), "确认顺带退了浏览");
+    assert_eq!(s.buffer(), "");
+    // 空真缓冲（进浏览前的常见形态）：确认 = 空串，绝不是「符号」/「1.常用」
+    let mut e = browse_state();
+    assert!(e.enter_symbol_browse());
+    assert_eq!(
+        e.switch_mode_confirmed(Mode::English),
+        "",
+        "空真缓冲：W1 提交空串"
+    );
+    assert!(!e.is_symbol_browsing());
+    assert_eq!(e.mode(), Mode::English);
 }
