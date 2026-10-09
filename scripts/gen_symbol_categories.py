@@ -1,7 +1,16 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 erik.xyz
 # SPDX-License-Identifier: MIT
-"""生成 Android 符号页的类目数据：`android/app/src/main/assets/symbol_categories.tsv`。
+"""生成「符号大全」的类目数据，**一份内容、两处落点**（逐字节相同，同一次运行写出）：
+
+- `android/app/src/main/assets/symbol_categories.tsv` —— Android 符号页的运行时资产
+  （权威副本，解析语义的基准是 `SymbolCategories.kt`）；
+- `crates/fcitx5-opi/data/symbol_categories.tsv` —— fcitx5 插件打包用（CMake 装到
+  `${CMAKE_INSTALL_DATADIR}/opi/symbol_categories.tsv`，Rust 侧 `opi_fcitx5_load_symbols`
+  收路径读文件；desktop-ui 的 Linux 兜底也读这个安装位）。
+
+两副本逐字节相等的漂移门禁在 `crates/fcitx5-opi/src/data_dir.rs` 的
+`bundled_asset_matches_android` —— 改本脚本后**必须重跑并提交两份文件**，别只手改一份。
 
 格式（TSV，三列）：`序号 <TAB> 名称 <TAB> 符号1 符号2 …`（符号按**空格分隔的 token** 存，
 允许组合序列如 `o͘`、`╮(╯▽╰)╭` —— Kotlin 侧按空格切分，不按码点，代理对安全）。
@@ -166,12 +175,18 @@ def main() -> None:
         lines.append(f"{i}\t{name}\t{' '.join(syms)}")
     out = "\n".join(lines) + "\n"
 
-    dest = "android/app/src/main/assets/symbol_categories.tsv"
-    with open(dest, "w", encoding="utf-8") as f:
-        f.write(out)
+    # 两处落点，同一份 `out` 字符串（不是各自格式化 —— 「同一次运行、同一内容」是漂移门禁的前提）
+    dests = (
+        "android/app/src/main/assets/symbol_categories.tsv",
+        "crates/fcitx5-opi/data/symbol_categories.tsv",
+    )
+    for dest in dests:
+        with open(dest, "w", encoding="utf-8") as f:
+            f.write(out)
 
     total = sum(len(s) for _, s in CATEGORIES)
-    print(f"写入 {dest}：{len(CATEGORIES)} 类目 / {total} 个符号")
+    print(f"写入 {len(dests)} 处（逐字节相同）：{'；'.join(dests)}")
+    print(f"  {len(CATEGORIES)} 类目 / {total} 个符号")
     for i, (name, syms) in enumerate(CATEGORIES, start=1):
         print(f"  {i:>2}. {name}（{len(syms)}）")
 
