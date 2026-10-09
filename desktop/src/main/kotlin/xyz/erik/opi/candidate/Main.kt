@@ -70,6 +70,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import kotlin.system.exitProcess
 
 // ---------- 窗口状态（snapshot state，服务器线程跨线程写入） ----------
 
@@ -101,6 +102,14 @@ fun main(args: Array<String>) = application {
     //     所以「无参数的默认」在那边就该是设置窗（否则从启动器点开是一片空白）。
     // `args` 与操作系统在进程生命周期里恒定 ⇒ 这个分支**不会来回切**（Compose 的早返回安全）。
     if ("--statusbar" in args) {
+        // 单实例锁（2026-10-10）：设置窗会按需拉起本进程（见 StatusBarLock.kt），
+        // 重复的实例在这里安静退出 —— 否则会在桌面上叠出第二条、第三条。
+        if (!acquireStatusBarLock()) {
+            println("[opi-statusbar] 已有一个状态栏在跑，本实例退出")
+            // 硬退出，**不能**只 return@application：Compose/AWT 的事件线程会把 JVM
+            // 吊住（实测：只 return 时进程活着、没窗口，pgrep 里多一具）
+            exitProcess(0)
+        }
         // 符号页的上屏要命名管道，而管道被**候选窗进程**持有（单实例）—— 本条进程里
         // 只能如实失败（页面会把原因显示出来）。lead 裁决（2026-10-10）：本轮不开第二条
         // UI→TSF 通路（TSF 插入面未接线），现状如实保留；TSF 接线落地时再定 UI 进程拓扑

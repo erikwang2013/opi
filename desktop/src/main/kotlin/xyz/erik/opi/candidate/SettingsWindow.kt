@@ -37,6 +37,7 @@ import androidx.compose.material.Switch
 import androidx.compose.material.SwitchDefaults
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -172,6 +173,13 @@ fun SettingsWindow() {
     var s by remember { mutableStateOf(loadSettings()) }
     var status by remember { mutableStateOf("配置文件：${settingsPath()}") }
 
+    // 打开设置就意味着「用户在看/要调状态栏」：条该显示却没人拉起 ⇒ 直接拉一支
+    // （2026-10-10 用户报障「设置里开了、实际没出现」的根因：装包后没重登录，
+    // autostart 没跑；而设置窗原先**不拉起任何东西**）。只跑一次，失败进状态行。
+    LaunchedEffect(Unit) {
+        ensureStatusBarRunning(s.statusbar)?.let { status = it }
+    }
+
     fun apply(next: OpSettings) {
         s = next
         val live = saveSettings(next)
@@ -244,7 +252,12 @@ fun SettingsWindow() {
             "关掉整条隐藏（进程还在跑，拨回来就出现）；隐藏后就点不到条上的设置了，" +
                 "要回来用应用菜单里的「opi输入法」再进本页",
             !s.statusbar.hidden,
-        ) { apply(s.copy(statusbar = s.statusbar.copy(hidden = !it))) }
+        ) {
+            val next = s.copy(statusbar = s.statusbar.copy(hidden = !it))
+            apply(next)
+            // 拨回「显示」时立刻拉起（拨到隐藏不用管 —— 隐藏的语义是「进程还在跑，只是不显示」）
+            ensureStatusBarRunning(next.statusbar)?.let { status = it }
+        }
         // 八个按钮的常驻开关。Windows 上只列有动作的那几个 —— 与条上同一份判定
         // （statusButtonWired），两处各判一次必然漂移。
         for (b in StatusBarButton.entries.filter { statusButtonWired(it, isWindows()) }) {
