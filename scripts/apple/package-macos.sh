@@ -59,15 +59,21 @@ DEPLOY="11.0"
 
 # 通用 dylib：从两个 arch 的 cargo 产物当场 lipo（缺哪边就**响**，不静默退化成单架构）。
 # 落在 target/ 下而不是 $out 下 —— 后者会被上面的 rm -rf 清掉。
-for arch in arm64 x86_64; do
-  f="target/$arch-apple-darwin/release/libopi_ffi.dylib"
+#
+# ⚠️ 两个名字各管一段：clang/swiftc 认 `arm64`，cargo/rustc 认 `aarch64` —— **别互抄**。
+# 首轮 CI（run 37933196475）就红在这里：脚本按 `arm64-apple-darwin` 去找产物，
+# 而 cargo 落在 `target/aarch64-apple-darwin/`，于是「产物明明在，却报缺少」。
+# spec = clang arch:cargo 三元组。
+for spec in "arm64:aarch64-apple-darwin" "x86_64:x86_64-apple-darwin"; do
+  rustt="${spec#*:}"
+  f="target/$rustt/release/libopi_ffi.dylib"
   [ -f "$f" ] || {
-    echo "!! 缺少 $f —— 先 cargo build --release -p opi_ffi --target $arch-apple-darwin" >&2
+    echo "!! 缺少 $f —— 先 cargo build --release -p opi_ffi --target $rustt" >&2
     exit 1
   }
 done
 mkdir -p target/apple/macos
-lipo -create target/arm64-apple-darwin/release/libopi_ffi.dylib \
+lipo -create target/aarch64-apple-darwin/release/libopi_ffi.dylib \
             target/x86_64-apple-darwin/release/libopi_ffi.dylib \
   -output target/apple/macos/libopi_ffi.dylib
 libdir="target/apple/macos"
