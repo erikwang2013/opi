@@ -69,12 +69,21 @@ for spec in "ios-arm64:aarch64-apple-ios:iphoneos" "ios-sim:aarch64-apple-ios-si
     echo "!! 缺少 $rustlib/libopi_ffi.a —— 先 cargo build --release -p opi_ffi --target $rustt" >&2
     exit 1
   }
+  # ⚠️ 链接**必须按显式路径喂 .a，不许走 `-L … -lopi_ffi`**：crate-type 里有
+  # `cdylib`，所以同一目录里既有 `libopi_ffi.dylib` 又有 `libopi_ffi.a`，而 ld64 的
+  # `-l` 搜索**优先挑 .dylib** —— 链接会「成功」，产出一个**动态依赖** libopi_ffi 的
+  # framework：符号全部变成未定义导入，`nm -gU`（不列未定义）里一个 opi_ 符号都看不到。
+  # 首轮实测正是这个形态（run 37933881578：链接过、但「没有定义 _opi_load」）。
+  # iOS 上带第三方 dylib 的扩展本就不能装，所以 .a 是唯一正确的输入。
+  echo "== $rustt 的产物（注意同目录还有 .dylib，我们**不用**它）："
+  ls -la "$rustlib" | grep -i 'libopi' || true
   fw="$out/$plat/$FMWK.framework"
   mkdir -p "$fw"
+  staticlib="$PWD/$rustlib/libopi_ffi.a"
   common=(-import-objc-header ios/OpiFFI.h -module-name "$MODULE" -sdk "$sdk" -target "$target")
   swiftc "${common[@]}" -typecheck ios/*.swift
   swiftc "${common[@]}" -O -emit-library ios/*.swift -o "$fw/$FMWK" \
-    -L "$rustlib" -lopi_ffi \
+    -Xlinker "$staticlib" \
     -Xlinker -install_name -Xlinker "@rpath/$FMWK.framework/$FMWK"
   # framework 的 Info.plist：`xcodebuild -create-xcframework` 只收**像 framework** 的目录，
   # 缺 plist / PackageType 不是 FMWK 会被拒。键值照 Xcode 的模板写。
@@ -103,23 +112,30 @@ done
 # 「链接过了」不等于「符号都齐了」：本仓库的教训是只有 `ldd -r` 才看得见未定义符号
 # （`nm -u` 是同一件事在 Mach-O 上的做法）。iOS 上未定义符号默认是硬错，这条是补刀。
 fwbin="$out/ios-arm64/$FMWK.framework/$FMWK"
+# 失败时要能一眼看出是「没链进去」还是「链的是 dylib」，所以三条证据一起打。
+# （首轮那条「没有定义 _opi_load」就是靠后面的 otool 才定性成动态链接的 —— 这次直接给。）
+dump_evidence() {
+  echo "-- file：" >&2; file "$fwbin" >&2
+  echo "-- nm -g（已定义的外部符号，前 40 行）：" >&2; nm -g "$fwbin" | head -40 >&2
+  echo "-- nm -u（未定义符号）：" >&2; nm -u "$fwbin" | head -40 >&2
+  echo "-- otool -L（动态依赖）：" >&2; otool -L "$fwbin" >&2
+}
 for sym in _opi_load _opi_key_event _opi_ffi_free_string _opi_candidates_page; do
   nm -gU "$fwbin" | grep -q "$sym\$" || {
     echo "!! $FMWK 里没有定义 $sym —— Rust 静态库没链进去（链接线/crate-type 变了？）" >&2
-    exit 1
+    dump_evidence; exit 1
   }
 done
 if nm -u "$fwbin" | grep -q '_opi_'; then
   echo "!! $FMWK 里有未定义的 opi_ 符号 —— 链接不完整：" >&2
   nm -u "$fwbin" | grep '_opi_' >&2
-  exit 1
+  dump_evidence; exit 1
 fi
-# 静态库应当是**静态**链进去的：出现动态依赖就说明链接线被改成指向 .dylib 了
-# （iOS 上带第三方 dylib 的扩展装不上，而且这里会静默「成功」）。
+# 静态库应当是**静态**链进去的：出现动态依赖就说明链接线变成了 `-l`（ld64 会优先挑
+# 同目录的 .dylib）（iOS 上带第三方 dylib 的扩展装不上，而且那种链接会静默「成功」）。
 if otool -L "$fwbin" | grep -q 'libopi_ffi'; then
-  echo "!! $FMWK 动态依赖了 libopi_ffi —— 应为静态链接（-l 指向 .a，不是 .dylib）" >&2
-  otool -L "$fwbin" >&2
-  exit 1
+  echo "!! $FMWK 动态依赖了 libopi_ffi —— 应为按路径直链 .a：" >&2
+  dump_evidence; exit 1
 fi
 
 # ---- 3) xcframework ----
@@ -151,7 +167,7 @@ fi
 if swiftc -parse-as-library -emit-executable ios/*.swift -o "$out/.appex-bin" \
      -import-objc-header ios/OpiFFI.h -module-name "$MODULE" \
      -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" -target "arm64-apple-ios$IOS_MIN" \
-     -L target/aarch64-apple-ios/release -lopi_ffi \
+     -Xlinker "$PWD/target/aarch64-apple-ios/release/libopi_ffi.a" \
      -Xlinker -e -Xlinker _NSExtensionMain 2>&1 | tee "$out/appex-link.log"; then
   appex="$out/OpiKeyboard.appex"
   mkdir -p "$appex"
