@@ -3,10 +3,11 @@
 # SPDX-License-Identifier: MIT
 #
 # OPI fcitx5 胶水的验证 harness —— **手工跑，不进 CI**（CI 上没有 fcitx5 的
-# 头/库，也没有 dbus 会话）。它编译并运行三样东西：
+# 头/库，也没有 dbus 会话）。它编译并运行四样东西：
 #   opi_json_check    狭 JSON 解析器 vs 真 serde_json 输出（逐字节）
 #   opi_panel_driver  直接构造 OpiEngine + 真 fcitx::InputContext，验面板推进
-#   opi_e2e.py        真 fcitx5 守护进程 + 私有 dbus 会话，验用户实际收到的信号
+#   opi_ctl_driver    W1 直接确认 + 先退浏览再提交的顺序 + opi-ctl 动作分发
+#   opi_e2e.py        真 fcitx5 守护进程 + 私有 dbus 会话（含 opi-ctl 真链路）
 #
 # 用法：
 #   FCITX5_HEADERS=/tmp/fcitx5-hdr/root/usr/include/Fcitx5 \
@@ -73,6 +74,12 @@ mkdir -p "$addons" "$work/data/fcitx5/addon" "$work/data/fcitx5/inputmethod" \
 
 echo "== 1/6 构建 Rust cdylib"
 cargo build --release -p fcitx5_opi --manifest-path "$repo/Cargo.toml"
+# opi-ctl（状态栏按钮的 CLI）也要真编一份：e2e 变体 ctl 要跑**真二进制** —— 退出码
+# 与 stderr 是跨进程契约的一部分，拿脚本冒充测不到它。产物路径与 build-packages.sh
+# 同一处（target/release/opi-ctl），装到 /usr/bin/opi-ctl 见 scripts/nfpm.yaml。
+cargo build --release -p opi-tools --bin opi-ctl --manifest-path "$repo/Cargo.toml"
+OPI_CTL_BIN="$repo/target/release/opi-ctl"
+[ -x "$OPI_CTL_BIN" ] || { echo "!! 编完却找不到 $OPI_CTL_BIN" >&2; exit 1; }
 
 echo "== 2/6 编译并链接胶水 .so（-Wall -Wextra -Werror：警告即失败）"
 # -std=c++20 与 cpp/CMakeLists.txt 的 CXX_STANDARD 20 同档（别让两条通路漂）：
@@ -91,13 +98,17 @@ echo "   ldd -r 未定义符号数: $undef（0 才正常）"
 nm -D --defined-only "$addons/libfcitx5_opi_glue.so" | grep fcitx_addon_factory \
     || { echo "   !! 导出符号里没有 fcitx_addon_factory_instance，addon 加载不进来"; exit 1; }
 
-echo "== 3/6 编译三支 C++ 检查程序"
+echo "== 3/6 编译四支 C++ 检查程序"
 g++ -std=c++20 -Wall -Wextra -Werror -o "$work/opi_panel_driver" \
     "$here/opi_panel_driver.cpp" "${INC[@]}" "${LNK[@]}"
 # 状态区外层入口（中/英、简/繁、设）单独一支 —— 面板驱动已 489/500 行，见
 # opi_status_driver.cpp 头注释。
 g++ -std=c++20 -Wall -Wextra -Werror -o "$work/opi_status_driver" \
     "$here/opi_status_driver.cpp" "${INC[@]}" "${LNK[@]}"
+# W1 直接确认 + opi-ctl 动作分发（2026-10-10）：同一支里两件事互相咬合（先退浏览、
+# 再提交的顺序），拆开反而要跨驱动共享假 hook 状态。见 opi_ctl_driver.cpp 头注释。
+g++ -std=c++20 -Wall -Wextra -Werror -o "$work/opi_ctl_driver" \
+    "$here/opi_ctl_driver.cpp" "${INC[@]}" "${LNK[@]}"
 g++ -std=c++20 -Wall -Wextra -Werror -o "$work/opi_json_check" \
     "$here/opi_json_check.cpp" "${INC[@]}" "${LNK[@]}"
 
@@ -149,6 +160,8 @@ export LD_LIBRARY_PATH="$rustlib:$FCITX5_LIBS"
 # StandardPath 会落到用户真实的 ~/.config（驱动里已加守卫，没设就 SKIP）。
 XDG_DATA_HOME="$work/data" XDG_CONFIG_HOME="$work/config" "$work/opi_panel_driver"
 echo
+XDG_DATA_HOME="$work/data" XDG_CONFIG_HOME="$work/config" "$work/opi_ctl_driver"
+echo
 "$work/opi_status_driver"
 echo
 "$work/opi_json_check"
@@ -175,13 +188,13 @@ e2e_rc=0
 vi=0
 # punct = 标点模块探针；`punct keyboard-us` 是它的**对照组**（同一个脚本换 IM，
 # 见 opi_e2e.py 的 punct 模式说明）。两组必须成对跑，否则「测不出来」没有参照。
-variants=(basic page passthrough "caps 0x12" "caps 0x8000000012" punct "punct keyboard-us" punctopi modes fullwidth shift)
+variants=(basic page passthrough "caps 0x12" "caps 0x8000000012" punct "punct keyboard-us" punctopi modes fullwidth shift ctl)
 for variant in "${variants[@]}"; do
     vi=$((vi + 1))
     echo
     echo "--- e2e 变体 $vi/${#variants[@]}: opi_e2e.py $variant"
     dbus-run-session -- env HARNESS_WORK="$work" E2E_PY="$here/opi_e2e.py" \
-        VARIANT="$variant" LOG="$work/fcitx5-$vi.log" \
+        VARIANT="$variant" LOG="$work/fcitx5-$vi.log" OPI_CTL_BIN="$OPI_CTL_BIN" \
         LD_LIBRARY_PATH="$rustlib:$FCITX5_LIBS" bash -s <<'EOS' || e2e_rc=1
 set -u
 # FCITX_ADDON_DIRS 是**替换**语义：系统目录必须手抄在后面，否则拼音等一起失效。
