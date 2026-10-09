@@ -8,6 +8,13 @@ pluginManagement {
         maven { url = uri("https://maven.aliyun.com/repository/google") }
         maven { url = uri("https://maven.aliyun.com/repository/gradle-plugin") }
         maven { url = uri("https://maven.aliyun.com/repository/public") }
+        // ⚠️ 兜底：**只在阿里云不可达/半途失败时命中**（2026-10-09：CI 一小时里被阿里云
+        // 坑了两次 —— 插件解析 404 一次、构建中途 GET 失败一次，都是瞬时故障）。Gradle
+        // 按序尝试，本机（阿里云快）走不到这里。
+        // **仍绝不写 google()**（理由同上，那是 dl.google.com 的拦截）；mavenCentral 是
+        // 另一个主机（repo.maven.apache.org），与那条禁令无关。注意：AGP 本体只在
+        // Google Maven 上，若哪天连它也被镜像拖死，这条兜底救不了 —— 到时再议。
+        mavenCentral()
     }
 }
 
@@ -19,6 +26,13 @@ dependencyResolutionManagement {
         maven { url = uri("https://maven.aliyun.com/repository/google") }
         maven { url = uri("https://maven.aliyun.com/repository/gradle-plugin") }
         maven { url = uri("https://maven.aliyun.com/repository/public") }
+        // ⚠️ 兜底：**只在阿里云不可达/半途失败时命中**（2026-10-09：CI 一小时里被阿里云
+        // 坑了两次 —— 插件解析 404 一次、构建中途 GET 失败一次，都是瞬时故障）。Gradle
+        // 按序尝试，本机（阿里云快）走不到这里。
+        // **仍绝不写 google()**（理由同上，那是 dl.google.com 的拦截）；mavenCentral 是
+        // 另一个主机（repo.maven.apache.org），与那条禁令无关。注意：AGP 本体只在
+        // Google Maven 上，若哪天连它也被镜像拖死，这条兜底救不了 —— 到时再议。
+        mavenCentral()
     }
 }
 
