@@ -79,9 +79,10 @@ fun NineKeyKeyboard(
     onEnter: () -> Unit,
     onModeSwitch: () -> Unit,
     onSymbol: () -> Unit,
-    /** 分词键（搜狗同款）：切音节边界（xi|an）。**由宿主在缓冲空时拦住** —— 空缓冲
-     * 点它没有边界可切（引擎那边缓冲空时 `'` 是引号，不是分词符）。 */
-    onSegment: () -> Unit,
+    /** 重输键（2026-10-10 用户裁决「增加重输按钮，去掉分词按钮」）：清掉当前组合重来。
+     * 缓冲空时是空操作（[xyz.erik.opi.engine.EngineController.clear] 本身幂等）。
+     * 手动分词键已撤 —— 无匹配时的分词匹配改由引擎自动回退承担。 */
+    onRetype: () -> Unit,
     /** 逐条候选拼音读数（9 键左列按候选逐行显示，如 `ni'hao`；与候选同序等长。
      * 空列表 = 没在输入/无候选，左列显示标点）。 */
     readings: List<String> = emptyList(),
@@ -206,7 +207,8 @@ fun NineKeyKeyboard(
             }
         }
         // 底行按搜狗排：**[符] 在左、[中/英] 其次**（2026-10-09；此前是反的），
-        // 再**分词**、空格、⌫、↵。分词是 9 键专属（14/26/笔画没有这一行）。
+        // 再**重输**（2026-10-10 替下分词键）、空格、⌫、↵。重输是 9 键专属
+        // （14/26/笔画没有这一行）。
         Row(modifier = Modifier.weight(1f).fillMaxSize()) {
             KeyButton("符", modifier = Modifier.weight(1f), onTap = onSymbol)
             KeyButton(
@@ -215,7 +217,7 @@ fun NineKeyKeyboard(
                 onTap = onModeSwitch,
                 stateDescription = modeStateDescription(modeLabel),
             )
-            KeyButton("分词", modifier = Modifier.weight(1f), onTap = onSegment)
+            KeyButton("重输", modifier = Modifier.weight(1f), onTap = onRetype)
             KeyButton("空格", modifier = Modifier.weight(2f), onTap = onSpace)
             KeyButton("⌫", modifier = Modifier.weight(1f), onTap = onBackspace)
             KeyButton("↵", modifier = Modifier.weight(1f), onTap = onEnter)

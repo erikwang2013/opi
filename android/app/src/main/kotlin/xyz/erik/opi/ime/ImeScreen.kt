@@ -277,11 +277,10 @@ private fun KeyboardArea(
                     onEnter = router::handleEnter,
                     onModeSwitch = state::cycleMode,
                     onSymbol = state::openSymbolPage,
-                    // 分词键：**缓冲空时不发** —— 空缓冲的 `'` 在引擎里是引号
-                    // （标点表那条），不是分词符；没边界可切就什么都不做。
-                    onSegment = {
-                        if (controller.buffer.isNotEmpty()) router.handleKey("'")
-                    },
+                    // 重输（2026-10-10 用户裁决：去分词键、加「重输」）：清掉当前组合重来；
+                    // 空缓冲是空操作（clear 幂等）。手动分词已撤——无匹配的分词匹配改由
+                    // 引擎自动回退承担（见 engine-seg）。
+                    onRetype = controller::clear,
                     // 左侧一列：**只有读得到拼音时才替换**（搜狗同款，2026-10-09
                     // 用户裁决「不输入、回退、确定，就重置到初始化的一列」）——
                     // 读数空（没候选/已提交/退空）就回到标点列；不回退显示数字串
