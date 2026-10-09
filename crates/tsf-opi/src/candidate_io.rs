@@ -27,6 +27,10 @@
 //! 候选窗(SERVER) → TSF(CLIENT)：
 //!   select    {"type":"select","index":0}    // 用户点击第 index（页内 0 起）候选
 //!   next_page {"type":"next_page"} / {"type":"prev_page"}
+//!   commit_text {"type":"commit_text","text":"，"}   // 直插文本（2026-10-10）：
+//!             不经引擎选词 —— 缓冲/候选/学习都不动、也不通知 sink（多选不关窗，
+//!             发端是桌面自渲染的符号页）。文本排回按键线程执行，与 select 同一条
+//!             队列语义（见 state.rs 的线程模型）。
 //! ```
 //!
 //! 本模块是纯胶水（镜像 tsf.rs 结构）：经 `TsfSink` 接缝（on_commit /
@@ -81,11 +85,13 @@ const READ_BUF: usize = 4096;
 /// JSON 至多几 KB）；超限即协议错乱/恶意对端 → 丢弃残留并断开（下次发送重连）。
 const MAX_PENDING: usize = 1 << 20;
 
-/// 候选窗回复回调接缝：select/翻页 → TSF 文档操作（生产实现见 `SharedAction`）。
+/// 候选窗回复回调接缝：select/翻页/直插 → TSF 文档操作（生产实现见 `SharedAction`）。
 pub trait CandidateAction: Send + Sync {
     fn on_select(&self, _index: usize) {}
     fn on_next_page(&self) {}
     fn on_prev_page(&self) {}
+    /// 候选窗要求**直接插入**一段文本（不经引擎选词；符号页多选，见协议头）。
+    fn on_commit_text(&self, _text: &str) {}
 }
 
 /// 断开连接：仅当 `handle` 仍是当前持有的那个才关句柄并清空 conn
@@ -312,6 +318,11 @@ fn dispatch_line(line: &[u8], action: &dyn CandidateAction) {
         }
         Some("next_page") => action.on_next_page(),
         Some("prev_page") => action.on_prev_page(),
+        Some("commit_text") => {
+            if let Some(t) = v.get("text").and_then(|t| t.as_str()) {
+                action.on_commit_text(t);
+            }
+        }
         _ => {}
     }
 }
@@ -377,6 +388,12 @@ impl CandidateAction for SharedAction {
     fn on_prev_page(&self) {
         self.engine.prev_page();
         self.refresh();
+    }
+
+    /// 同 `on_select`：读线程只入队（COM 插入在按键线程执行，见 state.rs 的线程模型）。
+    /// 执行后**不刷新窗口**：直插不动引擎状态，而符号页要留在屏幕上供连续点选。
+    fn on_commit_text(&self, text: &str) {
+        self.engine.enqueue_commit_text(text.to_string());
     }
 }
 

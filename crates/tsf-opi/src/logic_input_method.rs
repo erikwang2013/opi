@@ -99,13 +99,51 @@ impl TsfLogic {
     /// - `PageUp`/`PageDown` 翻页；**组字中（拼音/繁体且缓冲非空）`-` 上一页、`=` 下一页**
     ///   （2026-10-09 用户报障补上；空缓冲不抢键，见 logic_page_tests.rs）。
     /// - 符号模式：可见 ASCII 入引擎缓冲当**关键字**（符号候选由此搜出），其余放行。
-    /// - Ctrl/Alt 组合键一律 Unhandled（系统快捷键，不拦截）。
+    /// - **符号浏览**（「符号大全」叠加态，2026-10-10）：浏览期间只有 `1`-`9`（激活浏览项：
+    ///   类目下钻 / 符号上屏）、`-`/`=`（浏览翻页）、Esc（退出并吞掉）归浏览；**其余一律先
+    ///   退出浏览恢复真缓冲、再按正常路由处理那个键** —— 绝不让「符号」标题落进正常路由
+    ///   （契约 ②，见 engine-core/src/engine_symbol_browse.rs 头）。括号键 `0`、PageUp/Down、
+    ///   Shift 等都在「其余」里（字面执行 lead 裁决的键集，别自作主张扩）。
+    /// - Ctrl/Alt 组合键一律 Unhandled（系统快捷键，不拦截）—— 进入/退出浏览由宿主直接
+    ///   调状态方法（见 logic.rs 那块注释；Windows 侧本回合无快捷键接线）。
     pub fn input_key(&mut self, keyval: u32, key_state: u32) -> KeyOutcome {
         // Ctrl/Alt 组合键（系统快捷键）不拦截，交应用处理。
         if key_state & (KEY_STATE_CTRL | KEY_STATE_ALT) != 0 {
             return KeyOutcome::Unhandled;
         }
         let released = key_state & KEY_STATE_RELEASED != 0;
+        // 符号浏览（契约 ②，见 engine_symbol_browse.rs 头）：**按下**时只有 `1`-`9`、
+        // `-`/`=`、Esc 归浏览；其余键先把浏览退出（恢复真缓冲）再落进下面的正常路由 ——
+        // 「退出」放在这里（全部按键之前）而不是各分支里，单点免得某个键漏掉。
+        // 抬起不在此处理：各键的 press/release 对称由下方 last_printable 机制管。
+        if !released && self.is_symbol_browsing() {
+            // 三个提前 return 的分支必须记 `last_printable`：不记的话，抬起会命中
+            // **上一次**同名键留下的记录（可能 true）→ 放行一个按下时被拦下的 keyup
+            // （与退格/回车那两处的理由逐字相同）。浏览态一律不直通。
+            match keyval {
+                // `1`-`9`：激活浏览项（页内索引，与候选数字键同一套换算）
+                0x31..=0x39 => {
+                    let outcome = self.browse_digit(keyval);
+                    self.last_printable = Some((keyval, matches!(outcome, KeyOutcome::Unhandled)));
+                    return outcome;
+                }
+                0x2d => {
+                    self.prev_page(); // `-` 浏览上一页
+                    self.last_printable = Some((keyval, false));
+                    return KeyOutcome::CompositionChanged;
+                }
+                0x3d => {
+                    self.next_page(); // `=` 浏览下一页
+                    self.last_printable = Some((keyval, false));
+                    return KeyOutcome::CompositionChanged;
+                }
+                // Esc：归下面的 KEY_ESCAPE 分支（退出 + 吞掉；press/release 对称在那）
+                KEY_ESCAPE => {}
+                // 其余（含空格/回车/退格/字母/`0`/PageUp/Down/Shift）：先退出浏览，
+                // 恢复真缓冲后按正常路由处理这个键（缓冲判据全部看真缓冲）。
+                _ => self.exit_symbol_browse(),
+            }
+        }
         match keyval {
             KEY_BACK_SPACE | KEY_DELETE => {
                 if released {
@@ -163,7 +201,23 @@ impl TsfLogic {
                     KeyOutcome::CompositionChanged
                 }
             }
-            KEY_TAB | KEY_ESCAPE => KeyOutcome::Unhandled,
+            KEY_TAB => KeyOutcome::Unhandled,
+            // Esc（2026-10-10 从 KEY_TAB 里拆出）：浏览态 → 退出并**吞掉**（lead 裁决
+            // 「Esc = exit and swallow」）；非浏览态 → 老行为 Unhandled（Tab 仍与 Esc 同档）。
+            KEY_ESCAPE => {
+                if released {
+                    // 同退格：抬起按按下记下的结论回复（handle_escape 会退出浏览，
+                    // 「当前」状态与按下时不同，只能复用记录）
+                    match self.last_printable {
+                        Some((k, true)) if k == keyval => KeyOutcome::Unhandled,
+                        _ => KeyOutcome::Consumed,
+                    }
+                } else {
+                    let outcome = self.handle_escape();
+                    self.last_printable = Some((keyval, matches!(outcome, KeyOutcome::Unhandled)));
+                    outcome
+                }
+            }
             _ => match char::from_u32(keyval) {
                 // 抬起必须判：本函数上面每个特殊键分支都判了 `released`，可打印
                 // 分支此前漏判，导致同一个字符被第二次送进引擎 —— 拼音缓冲翻倍
@@ -217,6 +271,18 @@ impl TsfLogic {
             KeyOutcome::Unhandled
         } else {
             commit_or_changed(self.select(0))
+        }
+    }
+
+    /// Esc：浏览态 → 退出（恢复真缓冲）并**吞掉**（lead 裁决「Esc = exit and swallow」——
+    /// 浏览是模态，Esc 不该同时把应用对话框也关掉）；非浏览态 → Unhandled（老行为，
+    /// 与 Tab 同档）。不做「二级退一级」的两段式返回：本回合字面执行键集裁决。
+    fn handle_escape(&mut self) -> KeyOutcome {
+        if self.is_symbol_browsing() {
+            self.exit_symbol_browse();
+            KeyOutcome::Consumed
+        } else {
+            KeyOutcome::Unhandled
         }
     }
 
@@ -323,6 +389,17 @@ impl TsfLogic {
             KeyOutcome::Unhandled
         }
     }
+
+    /// 浏览态数字键（`1`-`9`，区间由调用处保证）：页内索引激活浏览项 —— 类目下钻
+    /// （无提交文本）/ 符号上屏。复用 `select_from` 的页内换算与收尾；激活语义在引擎层
+    /// （契约 ③）。**永不直通**：下钻/越界都是空串，照样吞掉（浏览是模态，越界的数字
+    /// 不该漏给应用）—— 空串经 commit_or_changed 落 CompositionChanged（下钻改了面板，
+    /// 本轨要刷新）。配对：fcitx5-opi/src/input_method.rs 的同名函数。
+    fn browse_digit(&mut self, keyval: u32) -> KeyOutcome {
+        let idx = (keyval - 0x31) as usize;
+        let fetched = self.fetched();
+        commit_or_changed(self.select_from(&fetched, idx))
+    }
 }
 
 /// 引擎输出空串 → composition 变化（无提交文本）；非空 → 提交。
@@ -335,7 +412,11 @@ fn commit_or_changed(out: String) -> KeyOutcome {
 }
 
 // 单测独立成文件（`#[path]` 引入）以保持各文件 <500 行：logic_tests.rs 为键
-// 路由测试，logic_release_tests.rs 为可打印键「按下/抬起同判」回归测试。
+// 路由测试，logic_release_tests.rs 为可打印键「按下/抬起同判」回归测试，
+// logic_browse_tests.rs 为符号浏览键路由门禁（配对 fcitx5 轨 input_method_browse_tests.rs）。
+#[cfg(test)]
+#[path = "logic_browse_tests.rs"]
+mod browse_tests;
 #[cfg(test)]
 #[path = "logic_page_tests.rs"]
 mod page_tests;
