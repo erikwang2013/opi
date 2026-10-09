@@ -102,8 +102,9 @@ fun main(args: Array<String>) = application {
     // `args` 与操作系统在进程生命周期里恒定 ⇒ 这个分支**不会来回切**（Compose 的早返回安全）。
     if ("--statusbar" in args) {
         // 符号页的上屏要命名管道，而管道被**候选窗进程**持有（单实例）—— 本条进程里
-        // 只能如实失败（页面会把原因显示出来）。要真上屏得由候选窗进程代开，或另开
-        // 一条通路；这是待裁决项，见 SymbolsPage.kt 头注释的进程约束段。
+        // 只能如实失败（页面会把原因显示出来）。lead 裁决（2026-10-10）：本轮不开第二条
+        // UI→TSF 通路（TSF 插入面未接线），现状如实保留；TSF 接线落地时再定 UI 进程拓扑
+        // （候选窗/状态栏/符号页同进程是首选）。见 SymbolsPage.kt 头注释的进程约束段。
         StatusBarApp(symbolCommit = { false })
         return@application
     }

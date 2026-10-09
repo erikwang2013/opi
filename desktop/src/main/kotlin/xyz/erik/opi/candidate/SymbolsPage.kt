@@ -10,15 +10,18 @@
 //! ⚠️ **本页只有在候选窗进程里才上得了屏**：管道单实例（PipeServer 的
 //! MAX_INSTANCES=1）、由候选窗进程持有。状态栏进程里的符号页会把
 //! 「上屏失败」如实显示出来（见 StatusBar.kt 的 `symbolCommit`）。
-//! Windows 侧本轮**没有拉起触发器**（lead 裁决「代码就绪、无拉起触发器」）；
-//! 接线时请连同上面这条进程约束一起定（候选窗进程代开，或协议另开一条）。
+//! lead 裁决（2026-10-10）：本轮**不开第二条 UI→TSF 通路**（TSF 插入面还没接线，
+//! 通了也到不了文档），现状如实保留；**TSF 接线落地时再定 UI 进程拓扑**（候选窗/
+//! 状态栏/符号页同进程是首选）。Windows 侧本轮没有拉起触发器（lead 裁决「代码就绪、
+//! 无拉起触发器」），接线时连同上面这条一起定。
 //!
 //! 数据文件（真源 = `android/app/src/main/assets/symbol_categories.tsv`，由
-//! `scripts/gen_symbol_categories.py` 生成）：
-//! · Windows = `%LOCALAPPDATA%\opi\symbol_categories.tsv`（与 settings.ini 同目录；
-//!   打包侧负责拷进去 —— 本侧不硬编兜底数据，缺了就显示「没有类目数据」）。
-//! · Linux = `/usr/share/opi/symbol_categories.tsv`（fcitx5 侧安装）。Linux 上的
-//!   符号页是 fcitx5 的候选面板，不走本窗 —— 这里是共用代码。
+//! `scripts/gen_symbol_categories.py` 生成）。读取**顺位**见 [symbolDataCandidates]：
+//! · Windows = ① `%LOCALAPPDATA%\opi\`（与 settings.ini 同目录）→ ② **exe 同目录**
+//!   （windows.yml 打包时把 tsv 装在启动器旁）→ 都缺就显示「没有类目数据」
+//!   （本侧不硬编兜底数据）。
+//! · Linux = `/usr/share/opi/symbol_categories.tsv`（fcitx5-glue 的 CMake install
+//!   在装）。Linux 上的符号页是 fcitx5 的候选面板，不走本窗 —— 这里是共用代码。
 
 package xyz.erik.opi.candidate
 
@@ -108,24 +111,49 @@ object SymbolCategories {
 }
 
 /**
- * 数据文件落点（**纯函数**：环境量当参数传，单测才能钉住 —— 这是「本页读哪个文件」
- * 与「打包往哪拷」的接缝，错了就是静默显示「没有类目数据」）。
+ * 数据文件候选（**纯函数**：环境量当参数传，单测才能钉住 —— 这是「本页读哪个文件」
+ * 与「打包往哪拷」的接缝，错了就是静默显示「没有类目数据」）。**顺序即优先级**：
+ * Windows = ① `%LOCALAPPDATA%\opi\` → ② exe 同目录（对齐 `crates/tsf-opi/src/dict_path.rs`
+ * 的「DLL 同目录」候选：LOCALAPPDATA 那份可能没装上/被删，装机里自带的一份还能顶上）；
+ * `exeDir` 为 null（非 jpackage 启动：IDE/命令行）时该顺位退出。
  */
-fun symbolDataPathFor(windows: Boolean, localAppData: String?): Path = if (windows) {
-    val base = localAppData?.takeIf { it.isNotEmpty() } ?: "."
-    Paths.get(base, "opi", "symbol_categories.tsv")
-} else {
-    Paths.get("/usr/share/opi/symbol_categories.tsv")
-}
+fun symbolDataCandidates(windows: Boolean, localAppData: String?, exeDir: Path?): List<Path> =
+    if (windows) {
+        val base = localAppData?.takeIf { it.isNotEmpty() } ?: "."
+        listOfNotNull(
+            Paths.get(base, "opi", "symbol_categories.tsv"),
+            exeDir?.resolve("symbol_categories.tsv"),
+        )
+    } else {
+        listOf(Paths.get("/usr/share/opi/symbol_categories.tsv"))
+    }
 
-/** 真实环境下的落点（[symbolDataPathFor] 的取环境量包装）。 */
-fun symbolDataPath(): Path = symbolDataPathFor(isWindows(), System.getenv("LOCALAPPDATA"))
+/**
+ * exe 同目录 = jpackage 启动器所在目录（启动器会设 `jpackage.app-path`；本机 JDK17 的
+ * jdk.jpackage 模块里 grep 得到这个字面串，非杜撰）。从 IDE/命令行直接跑时没有它。
+ */
+internal fun exeDir(): Path? =
+    System.getProperty("jpackage.app-path")?.takeIf { it.isNotEmpty() }?.let { Paths.get(it).parent }
 
-/** 读盘 + 解析。读不到/解析空 → 空列表（页面显示「没有类目数据」，不崩）。 */
-fun loadSymbolCategories(): List<SymbolCategories.Category> = try {
-    SymbolCategories.parse(Files.readString(symbolDataPath()))
-} catch (_: Exception) {
-    emptyList()
+/**
+ * 读盘 + 解析：按候选顺位取**第一个真有数据**的文件；全都不行 → 空列表
+ * （页面显示「没有类目数据」，不崩、不硬编兜底）。
+ *
+ * 坏/空的候选**不算命中**、进下一顺位 —— 与 dict_path.rs 的 `load_dict` 同一语义
+ * （那边把坏原因记进 notes 再换候选；这边页面只有那一种降级显示，故不留 note）。
+ */
+fun loadSymbolCategories(
+    paths: List<Path> = symbolDataCandidates(isWindows(), System.getenv("LOCALAPPDATA"), exeDir()),
+): List<SymbolCategories.Category> {
+    for (p in paths) {
+        val cats = try {
+            SymbolCategories.parse(Files.readString(p))
+        } catch (_: Exception) {
+            continue // 缺/读不动 ⇒ 不是「有数据」，看下一顺位
+        }
+        if (cats.isNotEmpty()) return cats
+    }
+    return emptyList()
 }
 
 // ---------- 窗口 ----------

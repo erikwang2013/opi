@@ -63,18 +63,41 @@ class SymbolCategoriesTest {
     }
 
     @Test
-    fun `data file location per platform`() {
-        // Windows = %LOCALAPPDATA%\opi\symbol_categories.tsv（与 settings.ini 同目录，
-        // 打包侧往这拷）；Linux = /usr/share/opi/（fcitx5 侧安装）。路径错 = 静默
-        // 显示「没有类目数据」——不报任何错。
-        val win = symbolDataPathFor(windows = true, localAppData = "/la")
-        assertEquals("symbol_categories.tsv", win.fileName.toString())
-        assertEquals("opi", win.parent.fileName.toString())
-        assertEquals("/la", win.parent.parent.toString())
+    fun `data file candidates per platform`() {
+        // Windows 顺位：① %LOCALAPPDATA%\opi\（与 settings.ini 同目录）→ ② exe 同目录
+        // （windows.yml 打包时装 tsv 的地方）；Linux = /usr/share/opi/（fcitx5-glue 的
+        // CMake install 在装）。顺位/路径错 = 静默显示「没有类目数据」——不报任何错。
+        val exe = Paths.get("/app")
+        val win = symbolDataCandidates(windows = true, localAppData = "/la", exeDir = exe)
+        assertEquals(2, win.size)
+        assertEquals(Paths.get("/la", "opi", "symbol_categories.tsv"), win[0])
+        assertEquals(Paths.get("/app", "symbol_categories.tsv"), win[1])
         // LOCALAPPDATA 缺省（空串/未设）⇒ 退回当前目录，而不是抛
-        assertEquals(Paths.get(".", "opi", "symbol_categories.tsv"), symbolDataPathFor(true, null))
-        assertEquals(Paths.get(".", "opi", "symbol_categories.tsv"), symbolDataPathFor(true, ""))
-        assertEquals("/usr/share/opi/symbol_categories.tsv", symbolDataPathFor(false, "/la").toString())
+        assertEquals(Paths.get(".", "opi", "symbol_categories.tsv"), symbolDataCandidates(true, null, exe)[0])
+        assertEquals(Paths.get(".", "opi", "symbol_categories.tsv"), symbolDataCandidates(true, "", exe)[0])
+        // 非 jpackage 启动（IDE/命令行）⇒ 没有 exe 同目录这一顺位，而不是拼出个野路径
+        assertEquals(listOf(Paths.get("/la", "opi", "symbol_categories.tsv")), symbolDataCandidates(true, "/la", null))
+        assertEquals(
+            listOf(Paths.get("/usr/share/opi/symbol_categories.tsv")),
+            symbolDataCandidates(windows = false, localAppData = "/la", exeDir = exe),
+        )
+    }
+
+    @Test
+    fun `loader takes the first candidate that yields data`() {
+        // 兜底链的行为：① 缺/坏（解析空）⇒ 用 ②，而不是报「没有类目数据」把好数据藏起来；
+        // ①② 都好 ⇒ ① 优先；全不行 ⇒ 空表。坏候选落下一顺位与 dict_path.rs 的 load_dict 同语义。
+        val dir = Files.createTempDirectory("opi-sym")
+        val a = dir.resolve("a.tsv")
+        val b = dir.resolve("b.tsv")
+        Files.writeString(b, "1\t英文\t! ?\n")
+        assertEquals(listOf("英文"), loadSymbolCategories(listOf(a, b)).map { it.label }) // ① 缺
+        Files.writeString(a, "1\t常用\t， 。\n")
+        assertEquals(listOf("常用"), loadSymbolCategories(listOf(a, b)).map { it.label }) // ① 优先
+        Files.writeString(a, "不是TSV\n")
+        assertEquals(listOf("英文"), loadSymbolCategories(listOf(a, b)).map { it.label }) // ① 坏 ⇒ ②
+        assertTrue(loadSymbolCategories(listOf(dir.resolve("x.tsv"), dir.resolve("y.tsv"))).isEmpty())
+        dir.toFile().deleteRecursively()
     }
 
     /**
