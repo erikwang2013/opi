@@ -24,6 +24,11 @@
 //! ⚠️ 布尔写 **`True`/`False`**（fcitx5 的 ini 就是这个拼法；读侧大小写不敏感，
 //! 所以手改成 `true` 也能读，但**写回去统一成全大写首字母**，别两种混着出现）。
 //!
+//! ⚠️ `StatusBar*` 九个键（2026-10-10 加）**只有本窗读写**：两端 IME 读侧都不认识
+//! 它们（未知键会被忽略，向前兼容）；但 Linux 侧它们仍写在同一份 fcitx5 addon 配置
+//! 里 —— 用 fcitx5 配置工具保存时这些键**是否被保存方抹掉**本侧无法保证（上游行为，
+//! 本机未取证）。若真发生，表现是「状态栏设置被重置」，不是启动失败。
+//!
 //! ⚠️ 保存走 [mergeIni]：**保留本文件不认识的行**（fcitx5 侧新增的选项如
 //! `ShiftToggle`/`Skin`、手写注释、未知键）。2026-10-09 前是整文件重写 —— 那会让
 //! 「设置窗保存一次 = 把 fcitx5 配置面里本窗不知道的选项全抹掉」。读侧一直忽略
@@ -56,13 +61,87 @@ enum class SkinOption(val value: String) {
     }
 }
 
-/** 四个开关 + 皮肤。默认值 = 引擎既有行为（开关全开、皮肤不改动），与两端的读侧一字不差。 */
+/**
+ * 状态栏（悬浮条）设置：master 隐藏 + 8 个按钮的常驻开关（未常驻 = 不显示）。
+ * 默认 = 2026-10-10 用户裁决「8 按钮全上」：master 不隐藏、八个按钮全部常驻。
+ */
+data class StatusBarSettings(
+    val hidden: Boolean = false,
+    val vk: Boolean = true,
+    val symbols: Boolean = true,
+    val trad: Boolean = true,
+    val punct: Boolean = true,
+    val lang: Boolean = true,
+    val logo: Boolean = true,
+    val fullwidth: Boolean = true,
+    val settings: Boolean = true,
+)
+
+/**
+ * 状态栏按钮。**枚举顺序 = 条上从左到右的展示顺序**（用户裁决的列举顺序）。
+ * `label` 兼作设置窗的开关名与状态栏的可访问性描述。
+ */
+enum class StatusBarButton(val label: String, val hint: String) {
+    VK("软键盘", "虚拟键盘窗：按键注入系统（会照常流经输入法）"),
+    SYMBOLS("符号大全", "符号页入口"),
+    TRAD("简繁转换", "简 ⇄ 繁（调 opi-ctl）"),
+    PUNCT("中英标点", "中英文标点切换（调 opi-ctl）"),
+    LANG("中英文切换", "与 Shift 轻按同一条通路（fcitx5-remote -t）"),
+    LOGO("logo", "品牌标识兼拖动把手；单击打开设置"),
+    FULLWIDTH("全半角", "全角 ⇄ 半角（调 opi-ctl）"),
+    SETTINGS("设置", "打开本设置窗"),
+}
+
+/** 该按钮是否被设为常驻（用户开关）。 */
+fun StatusBarSettings.resident(b: StatusBarButton): Boolean = when (b) {
+    StatusBarButton.VK -> vk
+    StatusBarButton.SYMBOLS -> symbols
+    StatusBarButton.TRAD -> trad
+    StatusBarButton.PUNCT -> punct
+    StatusBarButton.LANG -> lang
+    StatusBarButton.LOGO -> logo
+    StatusBarButton.FULLWIDTH -> fullwidth
+    StatusBarButton.SETTINGS -> settings
+}
+
+/** 改一个按钮的常驻位（设置窗与单测共用的纯函数）。 */
+fun StatusBarSettings.with(b: StatusBarButton, on: Boolean): StatusBarSettings = when (b) {
+    StatusBarButton.VK -> copy(vk = on)
+    StatusBarButton.SYMBOLS -> copy(symbols = on)
+    StatusBarButton.TRAD -> copy(trad = on)
+    StatusBarButton.PUNCT -> copy(punct = on)
+    StatusBarButton.LANG -> copy(lang = on)
+    StatusBarButton.LOGO -> copy(logo = on)
+    StatusBarButton.FULLWIDTH -> copy(fullwidth = on)
+    StatusBarButton.SETTINGS -> copy(settings = on)
+}
+
+/**
+ * 该按钮在**本平台**有没有动作。Windows 上 `opi-ctl` / `fcitx5-remote` 都不存在
+ * （那四个动作是 Linux 侧的）—— 没有动作的按钮不上条、也不在设置窗出开关
+ * （「宁可少一页，不做点不动的开关」，见 SettingsWindow.kt 的既有原则）。
+ */
+internal fun statusButtonWired(b: StatusBarButton, windows: Boolean): Boolean = !windows ||
+    b == StatusBarButton.VK || b == StatusBarButton.SYMBOLS ||
+    b == StatusBarButton.LOGO || b == StatusBarButton.SETTINGS
+
+/**
+ * 纯函数：状态栏该显示哪些按钮（**master 隐藏优先**；未常驻不显示；Windows 过滤
+ * 无动作项）。状态栏窗与设置窗共用这一份判定，两处各自算必然漂移。
+ */
+fun visibleStatusButtons(sb: StatusBarSettings, windows: Boolean): List<StatusBarButton> {
+    if (sb.hidden) return emptyList()
+    return StatusBarButton.entries.filter { sb.resident(it) && statusButtonWired(it, windows) }
+}
+
+/** 四个开关 + 皮肤 + 状态栏。默认值 = 引擎既有行为（开关全开、皮肤不改动），与两端的读侧一字不差。 */
 data class OpSettings(
     val learn: Boolean = true,
     val chinesePunct: Boolean = true,
     val fuzzy: Boolean = true,
     val jianpin: Boolean = true,
     val skin: SkinOption = SkinOption.KEEP,
+    val statusbar: StatusBarSettings = StatusBarSettings(),
 ) {
     /** 写成 ini。键名见文件头「三处逐字对应」。 */
     fun toIni(): String = buildString {
@@ -78,6 +157,17 @@ data class OpSettings(
         // 但设置窗在 Windows 上不显示这一节，写不写都到不了那条路 —— 写，
         // 是为了「同一份文件格式」不因平台分叉。
         appendLine("Skin=${skin.value}")
+        // 状态栏九个键：只有本窗读写（见文件头 ⚠️）。同样不分平台地写全，
+        // 「同一份文件格式」是这里的既有纪律。
+        appendLine("StatusBarHidden=${boolText(statusbar.hidden)}")
+        appendLine("StatusBarVk=${boolText(statusbar.vk)}")
+        appendLine("StatusBarSymbols=${boolText(statusbar.symbols)}")
+        appendLine("StatusBarTrad=${boolText(statusbar.trad)}")
+        appendLine("StatusBarPunct=${boolText(statusbar.punct)}")
+        appendLine("StatusBarLang=${boolText(statusbar.lang)}")
+        appendLine("StatusBarLogo=${boolText(statusbar.logo)}")
+        appendLine("StatusBarFullwidth=${boolText(statusbar.fullwidth)}")
+        appendLine("StatusBarSettings=${boolText(statusbar.settings)}")
     }
 
     companion object {
@@ -103,6 +193,17 @@ data class OpSettings(
                 fuzzy = bool("Fuzzy", true),
                 jianpin = bool("Jianpin", true),
                 skin = SkinOption.fromValue(map["Skin"]),
+                statusbar = StatusBarSettings(
+                    hidden = bool("StatusBarHidden", false),
+                    vk = bool("StatusBarVk", true),
+                    symbols = bool("StatusBarSymbols", true),
+                    trad = bool("StatusBarTrad", true),
+                    punct = bool("StatusBarPunct", true),
+                    lang = bool("StatusBarLang", true),
+                    logo = bool("StatusBarLogo", true),
+                    fullwidth = bool("StatusBarFullwidth", true),
+                    settings = bool("StatusBarSettings", true),
+                ),
             )
         }
     }
@@ -111,7 +212,8 @@ data class OpSettings(
 private fun boolText(v: Boolean) = if (v) "True" else "False"
 
 /**
- * 把 [s] 的五个键（四开关 + Skin）合进 [existing]，**其它行原样保留**（见文件头第 3 条 ⚠️）。
+ * 把 [s] 管理的键（四开关 + Skin + 状态栏九个）合进 [existing]，**其它行原样保留**
+ * （见文件头第 3 条 ⚠️）。
  *
  * 逐行处理：键在「本窗管理」集合里的行替换为新值，其余（注释/空行/未知键/别的
  * 选项）逐字保留；最后补齐没出现过的管理键。注释判定按 fcitx5 ini 的惯例 ——
@@ -124,6 +226,15 @@ fun mergeIni(existing: String, s: OpSettings): String {
         "Fuzzy" to boolText(s.fuzzy),
         "Jianpin" to boolText(s.jianpin),
         "Skin" to s.skin.value,
+        "StatusBarHidden" to boolText(s.statusbar.hidden),
+        "StatusBarVk" to boolText(s.statusbar.vk),
+        "StatusBarSymbols" to boolText(s.statusbar.symbols),
+        "StatusBarTrad" to boolText(s.statusbar.trad),
+        "StatusBarPunct" to boolText(s.statusbar.punct),
+        "StatusBarLang" to boolText(s.statusbar.lang),
+        "StatusBarLogo" to boolText(s.statusbar.logo),
+        "StatusBarFullwidth" to boolText(s.statusbar.fullwidth),
+        "StatusBarSettings" to boolText(s.statusbar.settings),
     )
     val seen = mutableSetOf<String>()
     val out = StringBuilder()

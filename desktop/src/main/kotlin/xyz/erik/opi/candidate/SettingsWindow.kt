@@ -5,7 +5,11 @@
 //!
 //! 交互模型：**改一下就落盘 + 通知 IME**（不像桌面软件那样要再点「确定」）——
 //! 参照对象是搜狗那类输入的属性设置：开关拨完即生效，底部只如实显示结果。
-//! Linux 走 `fcitx5-remote -r`（即时）；Windows 只落盘、下次激活生效（见 Settings.kt）。
+//! Linux 走 `ReloadAddonConfig`（即那条实测有效的路，`fcitx5-remote -r` **不是**，
+//! 见 Settings.kt 的 notifyFcitxReload）；Windows 只落盘、下次激活生效。
+//!
+//! 本窗在**两个宿主**里都跑：`--settings` 模式（单独进程）与状态栏的「设置」按钮
+//! （状态栏进程内开一个窗，见 StatusBar.kt）—— 所以别在这里假设自己是整个应用。
 
 package xyz.erik.opi.candidate
 
@@ -233,6 +237,27 @@ fun SettingsWindow() {
                 color = Muted,
             )
         }
+
+        SectionTitle("状态栏")
+        SettingRow(
+            "显示状态栏悬浮条",
+            "关掉整条隐藏（进程还在跑，拨回来就出现）；隐藏后就点不到条上的设置了，" +
+                "要回来用应用菜单里的「opi输入法」再进本页",
+            !s.statusbar.hidden,
+        ) { apply(s.copy(statusbar = s.statusbar.copy(hidden = !it))) }
+        // 八个按钮的常驻开关。Windows 上只列有动作的那几个 —— 与条上同一份判定
+        // （statusButtonWired），两处各判一次必然漂移。
+        for (b in StatusBarButton.entries.filter { statusButtonWired(it, isWindows()) }) {
+            SettingRow(b.label, b.hint, s.statusbar.resident(b)) {
+                apply(s.copy(statusbar = s.statusbar.with(b, it)))
+            }
+        }
+        Text(
+            "这些开关存在配置文件里（Linux 就是 fcitx5 的 addon 配置）。" +
+                "⚠️ 用 fcitx5 自带配置工具改别的选项并保存时，这些键会不会被它清掉未经验证。",
+            fontSize = 12.sp,
+            color = Muted,
+        )
 
         SectionTitle("关于")
         Spacer(Modifier.height(6.dp))

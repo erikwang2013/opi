@@ -124,6 +124,43 @@ class WireContractTest {
         assertEquals(listOf("你", "尼"), m.candidates)
     }
 
+    // ---------- 本窗 → TSF：commit_text（符号页上屏，2026-10-10 加） ----------
+
+    /**
+     * `commit_text` 的**发端字节**：键序 = serde_json 的字典序（`text` 在 `type` 前），
+     * 中文原样不转义。发送路径只能在 Windows 上真跑（要管道），本机唯一能钉的就是这一行。
+     */
+    @Test
+    fun commitTextLineMatchesTheSerdeJsonShape() {
+        assertEquals("""{"text":"、","type":"commit_text"}""", commitTextLine("、"))
+        assertEquals("""{"text":"ni hao","type":"commit_text"}""", commitTextLine("ni hao"))
+    }
+
+    /**
+     * 转义：符号页会点到的字符里就有 `"` 与 `\`（英文类目整行都是）。拼不转义的话
+     * 对端 serde_json 解析失败 → **整行静默丢弃**（表现「点了某个符号没反应」、零日志）。
+     * 转义完还必须能被自家解析器读回来（发出去的行是合法 JSON）。
+     */
+    @Test
+    fun commitTextEscapesJsonSpecials() {
+        assertEquals("""{"text":"\"","type":"commit_text"}""", commitTextLine("\""))
+        assertEquals("""{"text":"\\","type":"commit_text"}""", commitTextLine("\\"))
+        assertEquals("""{"text":"a\nb","type":"commit_text"}""", commitTextLine("a\nb"))
+        val round = parseLine(commitTextLine("\"\\\n\u0001"))!!
+        assertEquals("\"\\\n\u0001", (round["text"] as JVal.JStr).v)
+        assertEquals("commit_text", (round["type"] as JVal.JStr).v)
+    }
+
+    /** `jsonString` 的口径与 serde_json 的写出对齐（非 ASCII 原样、`/` 不转）。 */
+    @Test
+    fun jsonStringMatchesSerdeJson() {
+        assertEquals("\"、\"", jsonString("、"))
+        assertEquals("\"😀\"", jsonString("😀")) // 代理对原样过（serde_json 也不转）
+        assertEquals("\"/\"", jsonString("/"))
+        assertEquals("\"\\u0007\"", jsonString("\u0007")) // 其余控制字符走 \u00XX
+        assertEquals("\"\"", jsonString(""))
+    }
+
     /** 复用同一个 server，喂若干行（坏行场景要保持模型已被 show 初始化过）。 */
     private fun feedInto(model: CandidateModel, vararg lines: String) {
         val server = PipeServer(model)

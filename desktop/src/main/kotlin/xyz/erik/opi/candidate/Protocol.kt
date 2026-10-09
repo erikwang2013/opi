@@ -148,3 +148,37 @@ private class JParse(private val s: String) {
 /** 解析一行消息为对象（失败返回 null）。 */
 internal fun parseLine(text: String): Map<String, JVal>? =
     (JParse(text).parse() as? JVal.JObj)?.v
+
+// ---------- JSON 字符串**编码**（解析的反向；commit_text 载荷要用它） ----------
+
+/**
+ * 把一个字符串编成合法的 JSON 字符串字面量（**含两侧引号**）。
+ *
+ * 为什么必须有它：符号页要发的符号里就有 `"` 与 `\`（英文类目整行都是），
+ * 直接拼会让收到的整行 JSON 解析失败 —— 而对端（serde_json）解析失败即静默丢弃
+ * 那行，表现是「点了某个符号没反应」，查起来毫无线索。
+ *
+ * 口径与 serde_json 的写出对齐：非 ASCII **原样**（两边约定走 UTF-8，不转义成
+ * `\uXXXX`，与 WireContractTest 里「中文不转义」的实测一致）；必须转义的只有
+ * `"` `\` 与 < 0x20 的控制字符（`\b \f \n \r \t`，其余走 `\u00XX`）。
+ * `/` 不转义（JSON 允许，serde_json 也不转）。
+ */
+internal fun jsonString(s: String): String {
+    val sb = StringBuilder(s.length + 2)
+    sb.append('"')
+    for (c in s) {
+        when {
+            c == '"' -> sb.append("\\\"")
+            c == '\\' -> sb.append("\\\\")
+            c == '\b' -> sb.append("\\b")
+            c == '\u000C' -> sb.append("\\f")
+            c == '\n' -> sb.append("\\n")
+            c == '\r' -> sb.append("\\r")
+            c == '\t' -> sb.append("\\t")
+            c < ' ' -> sb.append("\\u%04x".format(c.code))
+            else -> sb.append(c)
+        }
+    }
+    sb.append('"')
+    return sb.toString()
+}

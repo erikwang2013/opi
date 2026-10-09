@@ -249,6 +249,12 @@ class PipeServer(private val model: CandidateModel) {
     fun sendPrevPage() = send("""{"type":"prev_page"}""")
 
     /**
+     * 符号页点选 → TSF 上屏（协议条目见 Main.kt 头注释的 commit_text 段）。
+     * 返回 false = 没送出去（TSF 未连接）；调用方（符号页）负责出可见反馈。
+     */
+    fun sendCommitText(text: String) = send(commitTextLine(text))
+
+    /**
      * partial-write 循环（镜像 Rust 侧 candidate_io.rs）：写满或失败为止；失败返回 false。
      * 整个「取句柄 + 写」持 [connLock]，与 serveLoop 的「置 null + Disconnect + Close」
      * 互斥 —— 否则句柄号被复用后这里会写进下一条连接（Rust 侧同样在 conn 锁内写）。
@@ -270,3 +276,11 @@ class PipeServer(private val model: CandidateModel) {
         true
     }
 }
+
+/**
+ * `commit_text` 的整行 JSON。**纯函数、internal**：发送路径要在 Windows 上才能走
+ * 管道，本机（Linux）唯一能钉住的就是这一行字节 —— WireContractTest 管它
+ * （键序 = serde_json 字典序；text 经 [jsonString] 转义）。
+ */
+internal fun commitTextLine(text: String): String =
+    """{"text":${jsonString(text)},"type":"commit_text"}"""
