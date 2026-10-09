@@ -8,12 +8,15 @@
 > **Windows 是三个"有端代码"的平台（Android / Linux / Windows，见 `README.md`）里唯一
 > 没人装过、没人跑过的一端。本文是一份操作步骤，不是一份验证过的配方。**
 > （另外三个平台 iOS / macOS / 鸿蒙只有草案，更早一步 —— 它们的代码连编译器都没过。）
+> 2026-10-09 起多了**「能被构建出来」**这一档：DLL 与 .msi 会在 GitHub 的 windows runner 上
+> 真编出来（§2.5）。**「装上」「跑起来」仍然一次都没有** —— 别把 §2.5 读成验收通过。
 >
 > 每一条都带证据档位：
 >
 > | 标记 | 含义 |
 > |---|---|
-> | **【实测】** | 2026-09-28 在 Linux 开发机上真跑过，命令与输出在文内 |
+> | **【实测】** | 在 Linux 开发机上真跑过（主体是 2026-09-28 那一批；另跑过的在文中标注日期），命令与输出在文内 |
+> | **【CI 实测】** | 2026-10-09 在 GitHub 的 `windows-latest` runner 上真跑过（`.github/workflows/windows.yml`），命令与输出在 §2.5 |
 > | **【推断】** | 从源码读出来的结论，给出文件 + 符号；没有运行过 |
 > | **【未验证】** | 本机没有 Windows，**没有任何人跑过这一步** |
 >
@@ -124,6 +127,12 @@ grep -n 'tsf_opi' .github/workflows/ci.yml
 ⇒ **不链接、无产物**。另有一步 `dtolnay/rust-toolchain` 的 `targets:` 把这个目标预装进 runner
 （同处还列着四个 Apple 目标），那是**安装**不是**构建**。
 
+> **【订正 2026-10-09】** 上面这两段说的是 `ci.yml` —— 它至今仍然成立（`ci.yml` 一个字没动，
+> 那条 `cargo check` 仍是它唯一碰 Windows 目标的编译步骤，仍**只到类型检查**）。
+> 但仓库现在多了一份**只在 windows runner 上跑**的 `.github/workflows/windows.yml`：
+> 它做的正是上表里打 ❌ 的那几格 —— `cargo build --release`（**真链接**）→ `tsf_opi.dll` →
+> `dumpbin /exports` 读导出表。命令与实测输出见 §2.5。
+
 > 另一个容易混的对照：Linux 主机上 `cargo test -p tsf_opi` 是**能跑的**，
 > 但它只跑平台中立的那几个模块（`logic` / `vk` / `dll` / `dict_path`）。
 > **【实测】2026-09-28 本机：`cargo test -p tsf_opi --no-fail-fast` 全绿，
@@ -205,10 +214,20 @@ android/app/src/main/assets/luna.opid
   「Windows .msi 为验收阶段（Windows 主机上构建）」。
   ⇒ **要在 Windows 上出 `.msi` / `.exe`，得先改这个 `targetFormats`，且必须在 Windows 主机上构建**
   （jpackage / Compose Desktop 不能从 Linux 交叉打包 Windows 安装包）。**【未验证】**
+
+  > **【订正 2026-10-09】** 「只声明了 Deb」已不成立：`targetFormats` 现在列 `Deb` + `Msi`。
+  > 加这一项的理由是**机制性**的、不是偏好：CMP 1.11.1 只为 `targetFormats` 里**列出的**格式
+  > 注册 `package<格式>` 任务（反编译核实 + 实测：只列 Deb 时 `packageMsi` 任务**不存在**，
+  > 报 `Task 'packageMsi' not found`，不是「任务在、只是跨平台打不出来」）。
+  > 于是下一条「必须在 Windows 主机上构建」也**已经落地**：`.github/workflows/windows.yml`
+  > 在 windows runner 上真打 `.msi`（§2.5）。Linux 侧 deb 路径未受影响
+  > （**【实测】**2026-10-09 本机 `./gradlew packageDeb --dry-run --offline` 配置期照常 ——
+  > 是 dry-run，没有真打 deb；真打 deb 的是 `packages.yml` 里那条既有 job）。
 - 不改打包、只想跑起来：`desktop/` 是自带 wrapper 的 Gradle 工程，
   Windows 上用 `gradlew.bat`（`desktop/gradlew.bat` 存在，**【实测】**文件在）。
   `build.gradle.kts` 里设了 `mainClass = "xyz.erik.opi.candidate.MainKt"`，
   故 `.\gradlew.bat run` 应当能直接起窗。**【未验证】**（本机只有 Linux，没有在 Windows 上跑过）。
+  2026-10-09 起还多一条路：直接装 §2.5 的 `.msi` —— 但**没人装过**，两条路都还是【未验证】。
 
 ### 2.4 现状：**没有打包步骤**
 
@@ -226,6 +245,89 @@ android/app/src/main/assets/luna.opid
 3. `README.md` 的 M6c 一行与「词库分发通路」一条都写着 Windows 侧仍无打包步骤。
 
 ⇒ 本文的 §3、§4 里凡是涉及 `luna.opid` 的步骤，**都是手工动作**。
+
+> **【补充 2026-10-09】** §2.5 的自动打包**没有**改变这一段：它产出的两个 artifact 里
+> **都不含** `luna.opid`，也不会把词库放到 DLL 旁边（工作流里没有任何拷贝动作）。
+> 词库通路照旧走 §2.2 的四级查找 + 手工送货。
+
+### 2.5 自动打包（GitHub Actions，2026-10-09 起）
+
+`.github/workflows/windows.yml` —— **只在 windows runner 上跑**（`ci.yml` / `packages.yml`
+一个字没动）。它做的正是 §1.2 那张表里本机打 ❌ 的几格：**DLL 真链接、导出表检视、`.msi` 产出**。
+它**不**注册、**不**安装、**不**运行任何东西 —— 「能编出来」与「Windows 端能用」是两件事（§6）。
+
+| artifact | 内容 | 2026-10-09 那次 run 的实测体积 |
+|---|---|---|
+| `opi-tsf-dll-v<版本>` | `tsf_opi.dll`（zip 里就这一个文件） | DLL 本体 778,240 B；上传的 zip 331,390 B |
+| `opi-desktop-msi-v<版本>` | `opi-candidates-<版本>.msi`（zip 里就这一个文件） | 上传的 zip 58,683,236 B（58 MB 量级，主要是 jlink 出来的 JRE） |
+
+名字里的版本来自 `Cargo.toml` 的 `[workspace.package] version`（本仓六 crate 共用的单一来源），
+并与 `desktop/build.gradle.kts` 的 `opiAppVersion`（= jpackage 的 `packageVersion`）**比对**：
+两处不等时工作流直接红 —— 不打出「名字与内容各说各话」的包。
+
+**怎么拿**（Actions artifact 默认保留 90 天；**不自动附 Release**，与 `packages.yml`
+「发版产物归人管」同一条约定）：
+
+```bash
+gh run list   --workflow=windows.yml                 # 找最近一次成功的 run
+gh run download <run-id> -n opi-tsf-dll-v<版本>      # 或 -n opi-desktop-msi-v<版本>
+```
+
+或在 Actions 页面（仓库 → Actions → Windows 打包）点进某次 run 下载。
+**触发**：手动 dispatch，或 push 到默认分支且改动落在 `crates/tsf-opi/**` / `desktop/**` /
+`.github/workflows/windows.yml`。⚠️ 本仓约定 workflow 要**先存在于默认分支**才能在 Actions
+页面手动 dispatch —— 合并前它只能被分支 push 触发。
+
+**那次 run 里真发生的事（【CI 实测】：`windows-latest`，run 37934999798，全绿；
+https://github.com/erikwang2013/opi/actions/runs/37934999798 ）**：
+
+1. `cargo build --release --locked -p tsf_opi --target x86_64-pc-windows-msvc` ——
+   **本仓第一次在 Windows 目标上跑完整 release 链接**，产出 `tsf_opi.dll`。
+   链接器给 4 条 `LNK4104`（"export of symbol 'Dll…' should be PRIVATE"）：那是 cdylib 导出
+   这四个 COM 入口的常态建议，不是错 —— 下一条的导出表就是「它没挡住导出」的证明。
+2. `dumpbin /exports` 读导出表（**§6.1 第 2 条的消除证据**）：
+
+   ```
+       ordinal hint RVA      name
+             1    0 0000D4A0 DllCanUnloadNow = DllCanUnloadNow
+             2    1 0000D4B0 DllGetClassObject = DllGetClassObject
+             3    2 0000D9E0 DllRegisterServer = DllRegisterServer
+             4    3 0000E6A0 DllUnregisterServer = DllUnregisterServer
+   ```
+
+   ⇒ 四个 COM 入口都在，**名字未被装饰**（`regsvr32`/COM 要的就是这四个原名）。
+   少一个、或名字被装饰，工作流直接红（判据写在 YAML 里）。**RVA 每编一次都会变**，别抄那列。
+3. `./gradlew.bat packageMsi --no-daemon`（temurin **21**，jpackage）—— 产出
+   `opi-candidates-1.7.4.msi`。WiX **不用预装**：CMP 自己在 windows 主机上拉
+   `wix311-binaries.zip`（日志里两步：`downloadWix` → `unzipWix`）。Kotlin 编译有 4 条既有告警
+   （`Protocol.kt` 的 elvis 恒取左操作数），不挡构建。
+4. 两个 artifact 都用 `if-no-files-found: error` 上传 —— 「绿了但没产物」会直接红（本仓栽过）。
+
+**.msi 里是什么**（**【推断】**：读 `desktop/build.gradle.kts` 的配置 + jpackage 的产物结构，
+**没有**开箱验证过）：
+
+- 候选窗应用本体（`desktop/` 编出的 jar）+ **jlink 出来的 JRE 运行时**（58 MB 主要在这）+ 图标；
+- **没有** `tsf_opi.dll`（那是另一个 job 在另一台机器上编的，两个 artifact 互不相干）；
+- **没有** `luna.opid`，也不做任何注册/环境变量动作（§2.4 的判断不变）。
+
+**这个 artifact 明确不保证什么**（别读成「Windows 端能用了」）：
+
+- DLL **没有被注册**（§3.1 的 `regsvr32` 仍要手工跑），也**从未被任何宿主加载过**；
+- 「文本插入真的落进文档」**从未验证**（§5.3、§6.1 #5）；
+- .msi **未签名**：装的时候 Windows 会有来源警告（SmartScreen），这是现状不是故障；
+- Windows 上**没有人装过、跑过**这两个产物 —— §6 里所有【未验证】条目都不因这次打包而消失。
+
+**一条 Windows 侧硬约束（踩出来的，写在这里省一次排查）**：`description` / `vendor` /
+`packageName` 必须是**纯 ASCII**。jpackage 把 `--description` 写进 **MSI 数据库**，而数据库
+代码页由 WiX 本地化文件决定：jpackage 内置的 en-us 那份写死 **1252**（Windows Installer
+不支持 65001/UTF-8），中文描述会让 `light.exe` 以 **LGHT0311** 退出 —— **实测退出码 311**，
+且 Gradle 只转述「Exit code: 1」，真报错在 `desktop/build/compose/logs/packageMsi/*.txt`
+（工作流里有一条 `if: failure()` 的诊断步骤专门把它打出来）。
+现在 `description` 是 ASCII 的 `OPI IME candidate window (TSF plugin over a named pipe)`
+（`.deb` 的 `Description` 跟着一起变英文 —— CMP 的 DSL 只有**一处** `description`，没有按平台
+分设的接口）；工作流里另有一条前置守卫，这些值一旦出现非 ASCII 直接红。
+想在 Windows 上要中文文案：自带 `MsiInstallerStrings_*.wxl` 走 `--resource-dir`（那份的
+Culture 不能是 en-us），需要连 jpackage 选的 locale 一起换 —— en-US 的 runner 上做不到。
 
 ---
 
@@ -484,13 +586,13 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | # | 事项 | 落点 |
 |---|---|---|
 | 1 | 链接：需要 MSVC 导入库 | §1.2 实测卡在 `link.exe` |
-| 2 | `tsf_opi.dll` 从未被链接出来过，**导出表从未被检视** | §1.2 |
+| 2 | ~~`tsf_opi.dll` 从未被链接出来过，导出表从未被检视~~ **【已消除 2026-10-09】** 已在 windows runner 上真链接、导出表实测四个 COM 入口（名字未装饰，§2.5）；**仍未被 `regsvr32` 或任何宿主加载过** —— 「链接/导出表」与「能用」是两格 | §1.2、§2.5 |
 | 3 | `DllRegisterServer` / `DllUnregisterServer` 的注册效果、管理员判定 | §3.1 |
 | 4 | TSF 能否认出这个 TIP、键盘列表里出不出现 | §3.3 |
 | 5 | 按键回调、composition、文本插入的**全部运行期行为** | §5.3 |
 | 6 | 候选窗与插件的命名管道连通（含 `\\.\pipe\opi-candidates` 单实例语义） | §4.3 |
 | 7 | 四个 `cfg(windows)` 模块**没有任何测试** —— 只有 §1.2 那条 `cargo check` 看过它们 | §1.2 |
-| 8 | 候选窗在 Windows 上的构建与运行 | §2.3 |
+| 8 | 候选窗在 Windows 上的~~构建与~~**运行**：**构建已被 §2.5 覆盖**（.msi 真在 windows runner 上打出来了），**跑起来仍然一次都没有** | §2.3、§2.5 |
 | 9 | `Ctrl+'` / `Ctrl+\` / `Shift+Space` 在 Windows 上有没有被别的软件占用 | §4.1 |
 | 10 | 语言栏按钮（`langbar.rs`）的运行期行为：`AddItem` 成不成、`GetIcon` 有没有被调、图标画没画出来 —— 只有 §1.2 那条 `cargo check` 看过它（"挑条目 + 校验 RT_ICON 形态"那半在 `langbar_icon.rs`，有主机单测） | §2.1、`crates/tsf-opi/src/langbar.rs` 头注释 |
 | 11 | **「属性设置」的生效时机**：设置窗落盘后要等下一次 `Activate` —— 本机无法验证（`Activate` 由 TSF 调）。读取/容错/落点那半在 `settings.rs`，有主机单测 | §4.4、`crates/tsf-opi/src/settings.rs` |
@@ -500,7 +602,7 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | # | 缺口 | 依据 | 影响 |
 |---|---|---|---|
 | 1 | **没有打包步骤**：`luna.opid` 与 DLL 不会被放到一起 | §2.4 | 开箱只有内置回退词库 |
-| 2 | **没有人拉起候选窗进程**；候选窗也没有 Windows 安装包 | §4.3 #1 | 候选窗看不到（打字仍可用） |
+| 2 | **没有人拉起候选窗进程**（未变）；~~候选窗也没有 Windows 安装包~~ **【订正 2026-10-09】** 安装包有了（§2.5 的 `opi-desktop-msi-*` artifact），但它在 Release 之外、90 天过期，而且**仍然没人拉起它** | §4.3 #1、§2.5 | 候选窗看不到（打字仍可用） |
 | 3 | **点选延迟到下一个键事件才插入** | `state.rs` 模块头、`tsf.rs::drain_pending` | 点了不敲键 = 字不出现 |
 | 4 | `OnSetFocus` 空实现（drain 的天然落点没接） | `tsf.rs` 的 `OnSetFocus` | 同上，放大了 #3 |
 | 5 | 点选后换文档 → 插到上一个文档 | `tsf.rs::drain_pending` 注释 | 边缘场景 |
@@ -512,10 +614,15 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | 11 | **模式热键不认键盘布局**：`vk::mode_hotkey` 比的是**裸 VK**（0xDE / 0xDC），即 US 布局上标着 `'` 与 `\` 的那两个物理键位；而字符键走的是布局感知的 `ToUnicodeEx`（`tsf.rs::to_engine_keycode`）。⇒ 非 US 布局（AZERTY / Dvorak）上，要按的是**那个位置**的键，不是键帽上的字符 | `vk.rs::mode_hotkey` 的 `VK_OEM_5` / `VK_OEM_7`；`tsf.rs::to_engine_keycode` | 非 US 布局用户会"按了没反应"（**未验证**：本机没有任何非 US 布局可测） |
 | 12 | 语言栏按钮**点击无动作**（有意：不假装有功能）；DLL **没有文件图标**（`.rc` / 资源编译器在本机与 CI 都不可验证 ⇒ 走 `include_bytes!`，代价就是缺这一块） | `langbar.rs` 的 `OnClick` 与模块头「为什么不用 .rc」 | 点击没反应是设计如此；资源管理器里 DLL 显示默认图标 |
 | 13 | **`ITfFnConfigure` 只过 `cargo check`**：控制面板里那个「属性」按钮会不会出现、点了拉不拉得起设置窗，本机无法验证；拉起的候选路径判定有主机单测（`settings_exe.rs`），Win32 那一步没有 | §4.4、`crates/tsf-opi/src/configure.rs` | 真机上「属性」可能不出现/不响应 |
-| 14 | **设置窗没有 Windows 安装包**：`desktop/` 的 jpackage 只配了 `Deb` 目标（`desktop/build.gradle.kts`），Windows 侧要出 `Exe`/`Msi` 得在 Windows 主机上构建（§2.4 同一条路） | §4.4、§2.4 | 用户拿不到设置窗的可执行文件 |
+| 14 | ~~**设置窗没有 Windows 安装包**~~ **【订正 2026-10-09】** 安装包有了：`desktop/build.gradle.kts` 的 `targetFormats` 加了 `Msi`（原来只列 `Deb`），`.github/workflows/windows.yml` 在 Windows 主机上真打 `.msi`（§2.5）。剩下的缺口：**不在 Release 里、未签名、artifact 90 天过期**，拿到手得自己去 Actions 取 | §4.4、§2.5 | 装完也不会自己出现（本表 #2：没人拉起它） |
 
 ### 6.3 交付这件事本身
 
 **Windows 端目前没有可下载产物**（Release 不带 Windows 包），且**本文档是这一端的第一份安装文档**。
 「仓库无安装文档」此前是审计记录在案的共同拦路项之一 —— 本文件是它的第一部分，
 但**只覆盖 Windows 一路，且未经验证**。
+
+> **【订正 2026-10-09】** 「没有可下载产物」有了半步例外：**Actions 的 artifact 里有了**
+> （§2.5：`opi-tsf-dll-*` 与 `opi-desktop-msi-*`，默认 90 天过期），但 **Release 仍然不带
+> Windows 包** —— 与 `packages.yml` 那条「发版产物归人管」的约定一致（workflow 只上传 artifact，
+> 不碰 release）。「本文档…未经验证」的性质**不变**：产物能编出来 ≠ 装上能用。
