@@ -22,3 +22,7 @@ __pycache__/
 # 注：它的**工作目录**默认落在仓库外（见该脚本里 WORK_DIR 那段注释：在仓库内建
 # 构建目录会让 CMake 的编译器探测产物被 500 行门禁扫到），所以这里不需要它的条目。
 dist/
+
+# packages.yml 里 desktop-deb job 产物的**中转目录**（CI 里是 download-artifact 的
+# path，本地复刻打包流程时同样要放一份）；纯暂存，不入库。
+desktop-deb/
