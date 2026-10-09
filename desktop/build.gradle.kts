@@ -200,6 +200,9 @@ compose.desktop {
 // 主包暂存树 —— 所以主包里的 /usr/share/applications/opi-settings.desktop
 // 就是这么来的。
 //
+// 同一个任务还注入状态栏的自启项 /etc/xdg/autostart/opi-statusbar.desktop
+// （`--statusbar`；2026-10-10 lead 裁决走系统级目录）。
+//
 // 调用（packages.yml 的 desktop-deb job 用的就是这条）：
 //   ./gradlew packageDeb injectSettingsDesktopEntry --no-daemon
 tasks.register("injectSettingsDesktopEntry") {
@@ -253,6 +256,27 @@ tasks.register("injectSettingsDesktopEntry") {
             """.trimIndent() + "\n",
         )
 
+        // 状态栏的自启项（2026-10-10 lead 裁决：走**系统级** /etc/xdg/autostart/，
+        // 随本包一起装 —— 不用 ~/.config/autostart 是因为那要每用户写一次，
+        // 而安装包只有 root 那一次机会）。
+        // · Exec 带 --statusbar（`--settings` 那份是菜单入口，两者别混）；
+        // · 条上的 master 开关只隐藏悬浮条，进程照旧活着轮询（见 StatusBar.kt）；
+        // · Windows 那侧没有这个文件（.msi 里没有 XDG 这一套），也就没有触发器。
+        val autostart = File(root, "etc/xdg/autostart").apply { mkdirs() }
+        File(autostart, "opi-statusbar.desktop").writeText(
+            """
+            [Desktop Entry]
+            Type=Application
+            Name=opi输入法 状态栏
+            Comment=opi输入法悬浮状态栏（软键盘 / 符号 / 简繁 / 标点 / 中英 / 全半 / 设置）
+            Exec=$installedBin --statusbar
+            Icon=$installedIcon
+            Terminal=false
+            NoDisplay=true
+            X-GNOME-Autostart-enabled=true
+            """.trimIndent() + "\n",
+        )
+
         // md5sums 必须重算：改了内容不更新它，`dpkg --verify` 会报一整包文件被改
         // （`dpkg -i` 本身不看它，所以这是个**只在事后暴露**的坑）。
         val md5 = File(root, "DEBIAN/md5sums")
@@ -272,7 +296,8 @@ tasks.register("injectSettingsDesktopEntry") {
 
         sh("dpkg-deb", "--build", "--root-owner-group", root.absolutePath, deb.absolutePath)
         println("已注入桌面入口：$installedBin --settings  ->  ${deb.name}")
-        println("核对：dpkg-deb -c ${deb.absolutePath} | grep -E 'applications|bin/'")
+        println("已注入状态栏自启：$installedBin --statusbar  ->  /etc/xdg/autostart/opi-statusbar.desktop")
+        println("核对：dpkg-deb -c ${deb.absolutePath} | grep -E 'applications|autostart|bin/'")
     }
 }
 

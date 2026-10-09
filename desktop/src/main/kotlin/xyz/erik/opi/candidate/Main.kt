@@ -27,6 +27,11 @@
 //! 本窗(SERVER) → TSF(CLIENT)：
 //!   select    {"type":"select","index":0}   // 用户点击第 index（页内 0 起）候选
 //!   next_page {"type":"next_page"} / {"type":"prev_page"}
+//!   commit_text {"text":"、","type":"commit_text"}   // 符号页点选 → 上屏
+//!             // 键序 = serde_json 的字典序（text 在前）；text 经 Protocol.kt 的
+//!             // jsonString 转义（符号里就有 `"` 和 `\`）。语义（engine-track 冻结）：
+//!             // 在**文档插入点**插入，不动 composition/候选，也不隐藏候选窗；
+//!             // 当时没有焦点文档则静默跳过。整行由 PipeServer.commitTextLine 生成。
 //! ```
 //!
 //! 传输实现：JNA（net.java.dev.jna 5.6.0，本机缓存）直调 kernel32，全部经
@@ -86,13 +91,23 @@ class CandidateModel {
 // ---------- 入口 ----------
 
 fun main(args: Array<String>) = application {
-    // 两种模式共用一个可执行文件（jpackage 只有一份 mainClass / 一个安装包 / 一套图标）：
+    // 三个模式共用一个可执行文件（jpackage 只有一份 mainClass / 一个安装包 / 一套图标）：
     //   --settings        = 「属性设置」窗（两个平台都有）
+    //   --statusbar       = 状态栏悬浮条（Linux 随会话自启，见 build.gradle.kts 的
+    //     /etc/xdg/autostart；Windows 侧**代码就绪，但本轮没有拉起触发器**）
     //   无参数（Windows）  = 候选窗（TSF 经命名管道驱动；见本文件头部的线协议）
     //   无参数（Linux）    = 也进「属性设置」—— **这不是偷懒，是语义**：候选窗是
     //     TSF 的东西（命名管道两端都在 Windows），Linux 上这个应用**只有设置一个用途**，
     //     所以「无参数的默认」在那边就该是设置窗（否则从启动器点开是一片空白）。
     // `args` 与操作系统在进程生命周期里恒定 ⇒ 这个分支**不会来回切**（Compose 的早返回安全）。
+    if ("--statusbar" in args) {
+        // 符号页的上屏要命名管道，而管道被**候选窗进程**持有（单实例）—— 本条进程里
+        // 只能如实失败（页面会把原因显示出来）。要真上屏得由候选窗进程代开，或另开
+        // 一条通路；这是待裁决项，见 SymbolsPage.kt 头注释的进程约束段。
+        StatusBarApp(symbolCommit = { false })
+        return@application
+    }
+
     if ("--settings" in args || !isWindows()) {
         Window(
             onCloseRequest = ::exitApplication,
