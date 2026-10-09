@@ -24,10 +24,10 @@ name: Windows 打包
 #   **不自动附 release**（与 packages.yml 同一条约定：发版产物的控制权归人）。
 on:
   workflow_dispatch:
-  # 迭代期用本分支 push 触发（本仓约定：workflow 必须存在于默认分支才可 dispatch，
-  # 而集成分支不许推 main）。**合并前改回 [main]**。
+  # 合并后正式形态：默认分支 push 触发（迭代期曾用 feat/windows-packaging 分支
+  # 触发 —— 本仓约定「workflow 必须存在于默认分支才可 dispatch」，合并前只能那样）。
   push:
-    branches: [feat/windows-packaging]
+    branches: [main]
     paths:
       - 'crates/tsf-opi/**'
       - 'desktop/**'
