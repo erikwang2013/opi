@@ -195,8 +195,10 @@ for fmt in "${FORMATS[@]}"; do
 
     # ---- 合并桌面应用（见头部第 5 条）----
     # dpkg-deb -x 只解数据文件，不碰 DEBIAN/（jpackage 那份的控制脚本在这里无用，
-    # 且与 nfpm 生成的控制字段可能冲突）。应用自己的 .desktop 已被撤（见
-    # desktop/build.gradle.kts 的「桌面入口：已撤」段），故这一步只带进 /opt/**。
+    # 且与 nfpm 生成的控制字段可能冲突）。jpackage 自己的菜单入口已撤（见
+    # desktop/build.gradle.kts 的「桌面入口：已撤」段）；随它带进来的是 /opt/**
+    # 加 injectSettingsDesktopEntry 注入的两处桌面入口（/usr/share/applications
+    # 与 /etc/xdg/autostart）。
     if [ -n "$DESKTOP_DEB" ]; then
         dpkg-deb -x "$DESKTOP_DEB" "$stage"
         # 阴性对照：解完必须真有启动器 —— 否则是「包打了、应用没进去」的静默形态。
@@ -204,8 +206,23 @@ for fmt in "${FORMATS[@]}"; do
             echo "  ✗ 合并后暂存树里没有 /opt/*/bin/ 启动器 —— 应用没解进去" >&2
             exit 1
         fi
+        # 同款负控：两处注入的桌面入口也必须在暂存树里。少了它们是**静默**的 ——
+        # 2026-10-10 实测形态：autostart 注入进了桌面包、但 nfpm.yaml 的 contents
+        # 原先只打 `${PKG_STAGE}/usr`，/etc 那条被丢在主包外，用户装完永远没有
+        # 状态栏自启。判据钉在这一层，别只在桌面包那层验（那是「注入对了、
+        # 包没打进去」的层间落差）。
+        for f in usr/share/applications/opi-settings.desktop \
+                 etc/xdg/autostart/opi-statusbar.desktop; do
+            [ -f "$stage/$f" ] || {
+                echo "  ✗ 合并后暂存树缺 $f —— 桌面入口注入回退（或 nfpm contents 又漏了 /etc）" >&2
+                exit 1
+            }
+        done
         echo "==> [$fmt] 已合并桌面应用，暂存树 $(du -sh "$stage" | cut -f1)（含 JRE）"
     fi
+    # 不合并桌面应用时暂存树没有 /etc —— nfpm 的 `${PKG_STAGE}/etc` 会 Glob failed。
+    # 建一个空的顶住（空目录 nfpm 不打包任何文件，主包行为不变）。
+    mkdir -p "$stage/etc"
 
     echo "==> [$fmt] nfpm 打包"
     # ⚠️ **自己把 ${...} 换成字面值**，不依赖 nfpm 的变量展开。

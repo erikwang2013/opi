@@ -69,6 +69,15 @@ contents:
   # 暂存树整棵 —— 落点见上面那段说明
   - src: ${PKG_STAGE}/usr
     dst: /usr
+  # 暂存树的 /etc（2026-10-10 补）：合并桌面应用时 dpkg-deb -x 会解出
+  # /etc/xdg/autostart/opi-statusbar.desktop（状态栏随会话自启），但 contents
+  # 不加这一条它就被**静默丢掉** —— 实测形态：注入进了桌面包、没进主包，
+  # 用户装完永远没有自启。build-packages.sh 的合并负控会把「文件在不在
+  # 暂存树」断言住，这一条负责让它在包里。
+  # ⚠️ 不合并桌面应用时暂存树没有 /etc ⇒ Glob failed；build-packages.sh 会
+  # `mkdir -p` 一个空的顶住（空目录 nfpm 不打包任何文件）。
+  - src: ${PKG_STAGE}/etc
+    dst: /etc
   # 桌面状态栏调用的 CLI（2026-10-10 接线，契约：desktop-ui 用 ProcessBuilder 按
   # **名字**调 opi-ctl —— 所以必须在 PATH 上的 /usr/bin，别改名、别挪去
   # /usr/libexec 或 /usr/share/opi）。deb/rpm 都要（本文件对两种格式是同一份）。
