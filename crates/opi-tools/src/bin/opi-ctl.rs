@@ -3,9 +3,14 @@
 //
 // `opi-ctl`：桌面状态栏（desktop-ui 用 ProcessBuilder 按名字调 /usr/bin/opi-ctl）
 // 与 fcitx5-opi 插件之间的**唯一** CLI 面。动作集是**冻结契约**（任务书）：
-//     opi-ctl symbols|trad|punct|fullwidth|lang
+//     opi-ctl symbols|trad|punct|fullwidth|lang    （动作：会改状态）
+//     opi-ctl state                                 （只读查询，2026-10-10 用户裁决加）
 // 新增动作要先找 lead 定 —— 别在客户端先加一个服务端还没有的名字（那只会多出
 // 一条「未知动作」的失败路径）。
+// 两条路的**协议不同**：动作发 `Trigger(string:<动作>)`，应答 "ok" / "err:…"，
+// 成功静默；state 发 `State`（**无参数**），应答就是那一行状态串本身 —— 校验形状
+// 后原样打到 stdout（细节在 send_state / check_state_shape）。动作集仍是那五个：
+// state 不改任何状态，故不进 ACTIONS（desktop 的按钮映射也不含它）。
 //
 // 传输：本进程**不**自己说 D-Bus，而是起一个 `dbus-send` 把一条方法调用交给插件
 // 自己挂的 D-Bus 对象（接收侧的 spike 结论与拒绝理由在
@@ -27,6 +32,9 @@
 //     "ok"                成功
 //     "err:<码>:<原因>"    失败 —— <码> 由服务端分类（4=功能不可用，5=动作被拒），
 //                         本进程原样把它当**自己的退出码**。
+//   插件的方法 State() -> string（只读查询，无参数）：
+//     一行**冻结格式** `lang=zh|en;trad=on|off;punct=on|off;fw=on|off`（键序固定，
+//     桌面端按位置解析），或同样的 "err:<码>:<原因>"。
 //
 // 退出码（**契约**，lead 2026-10-10 钉死：0=成功；非 0 必须带可区分的 stderr 原因；
 // desktop-ui 按「非零 = 可见反馈」实现，不许只有哑失败）：
@@ -37,6 +45,9 @@
 //      不存在（插件没装 / 没加载 ⇒ 接收侧没注册）
 //   5  动作被拒 / 其他：服务端 err:5（未知动作、内部异常）或应答格式不认识
 // 3/4 的分界是「通道」与「功能」；4/5 的分界是「这东西没有」与「这东西拒绝了」。
+// state 走**同一张表**：0 = 拿到状态行（唯一会写 stdout 的路径）；3/4 同上面两条；
+// 5 多一档含义 —— 应答不是那个冻结形状（插件与本工具版本对不上：宁可在这里红，
+// 也别把错位的值交给桌面画图标）。
 
 use std::process::Command;
 
@@ -46,7 +57,8 @@ const DEST: &str = "org.fcitx.Fcitx5";
 const PATH: &str = "/opi";
 const IFACE: &str = "org.fcitx.Fcitx5.Opi1";
 
-// 冻结的动作集（顺序即 usage 里印的顺序）。
+// 冻结的动作集（顺序即 usage 里印的顺序）。state 不在其中 —— 它不改状态，
+// 走的是另一条协议（见文件头），单独分派。
 const ACTIONS: [&str; 5] = ["symbols", "trad", "punct", "fullwidth", "lang"];
 
 fn main() {
@@ -65,6 +77,7 @@ fn run() -> i32 {
             usage();
             0
         }
+        Some("state") => send_state(),
         Some(a) if ACTIONS.contains(&a) => send(a),
         Some(a) => {
             eprintln!("opi-ctl: 未知动作：{a}");
@@ -80,29 +93,96 @@ fn run() -> i32 {
 }
 
 fn usage() {
-    eprintln!("usage: opi-ctl symbols|trad|punct|fullwidth|lang");
+    eprintln!("usage: opi-ctl symbols|trad|punct|fullwidth|lang | state");
 }
 
 /// 发一条 Trigger(action)，把应答翻成退出码。参数顺序与落点是硬契约 ——
 /// `tests/opi_ctl_cli.rs` 拿假 dbus-send 把这条命令行的**逐字 argv**钉住。
 fn send(action: &str) -> i32 {
+    let arg = format!("string:{action}");
+    match call_bus(&format!("{IFACE}.Trigger"), Some(&arg)) {
+        Ok(reply) => handle_reply(&reply),
+        Err(code) => code,
+    }
+}
+
+/// state（只读查询）：State（无参）→ 那一行状态串（或 err:…）。
+/// 与动作路径的三处分歧都是**有意的**：无参数、方法名不同、成功时把状态行打到
+/// stdout（所以这是唯一会写 stdout 的路径；stderr 在成功时保持静默 —— 桌面端
+/// 每秒轮询一次，成功刷 stderr 会把日志刷满）。
+fn send_state() -> i32 {
+    let reply = match call_bus(&format!("{IFACE}.State"), None) {
+        Ok(r) => r,
+        Err(code) => return code,
+    };
+    // 服务端分类的失败与动作路径同一套映射（err:4 之类原样透传成退出码）。
+    if reply.starts_with("err:") {
+        return handle_reply(&reply);
+    }
+    match check_state_shape(&reply) {
+        Ok(()) => {
+            println!("{reply}");
+            0
+        }
+        Err(why) => {
+            eprintln!("opi-ctl: state 的输出不符合冻结格式（{why}）—— 插件与本工具版本对不上？");
+            eprintln!("       原始输出：{reply}");
+            5
+        }
+    }
+}
+
+/// 冻结的状态串键序与取值域（与 cpp/opi_ctl.h 的 State 注释成对；桌面端按 `;`
+/// 分段、按位置取值）。形状漂了**必须**红：宁可让状态栏显示「读不到状态」，也别
+/// 让它拿错位的值去画图标 —— 位置解析下 `trad=on` 跑到第一位就是「语言变繁体」。
+fn check_state_shape(line: &str) -> Result<(), String> {
+    const FIELDS: [(&str, &[&str]); 4] = [
+        ("lang", &["zh", "en"]),
+        ("trad", &["on", "off"]),
+        ("punct", &["on", "off"]),
+        ("fw", &["on", "off"]),
+    ];
+    let parts: Vec<&str> = line.split(';').collect();
+    if parts.len() != FIELDS.len() {
+        return Err(format!("应为 {} 段，实际 {} 段", FIELDS.len(), parts.len()));
+    }
+    for (i, (key, domain)) in FIELDS.iter().enumerate() {
+        let prefix = format!("{key}=");
+        let Some(val) = parts[i].strip_prefix(prefix.as_str()) else {
+            return Err(format!(
+                "第 {} 段不是 `{key}=…`（键序错了？）：{:?}",
+                i + 1,
+                parts[i]
+            ));
+        };
+        if !domain.contains(&val) {
+            return Err(format!("{key} 的取值 {val:?} 不在 {domain:?} 里"));
+        }
+    }
+    Ok(())
+}
+
+/// 发一条方法调用，取回应答 string。Err(码) = 传输面已判死（3/4/5，见 transport_error）。
+/// 参数带不带由调用方定：动作走 `Trigger(string:<动作>)`（那条命令行是**逐字契约**），
+/// state 走无参的 `State` —— 两者在总线上是同一个对象（/opi）。
+fn call_bus(method: &str, arg: Option<&str>) -> Result<String, i32> {
     // 先把会进 argv 的串都建好（引用临时值的数组活得比语句短，写在一行里太脆）。
     let dest = format!("--dest={DEST}");
-    let method = format!("{IFACE}.Trigger");
-    let arg = format!("string:{action}");
-    // --reply-timeout：动作都要在插件主循环上瞬间做完，5 秒足够；缺了它 dbus-send
+    let mut cmd = Command::new("dbus-send");
+    // --reply-timeout：都要在插件主循环上瞬间做完，5 秒足够；缺了它 dbus-send
     // 会按 libdbus 缺省等下去 —— 状态栏按钮不能挂几十秒。
-    let out = Command::new("dbus-send")
-        .args([
-            "--session",
-            "--print-reply",
-            "--reply-timeout=5000",
-            &dest,
-            PATH,
-            &method,
-            &arg,
-        ])
-        .output();
+    cmd.args([
+        "--session",
+        "--print-reply",
+        "--reply-timeout=5000",
+        &dest,
+        PATH,
+        method,
+    ]);
+    if let Some(a) = arg {
+        cmd.arg(a);
+    }
+    let out = cmd.output();
     let out = match out {
         Ok(o) => o,
         Err(e) => {
@@ -111,23 +191,22 @@ fn send(action: &str) -> i32 {
             eprintln!(
                 "       装 D-Bus 的命令行包再试：Debian/Ubuntu 是 dbus-bin，Fedora 是 dbus-tools"
             );
-            return 3;
+            return Err(3);
         }
     };
     if !out.status.success() {
-        return transport_error(&String::from_utf8_lossy(&out.stderr));
+        return Err(transport_error(&String::from_utf8_lossy(&out.stderr)));
     }
     let stdout = String::from_utf8_lossy(&out.stdout);
-    let reply = match parse_reply(&stdout) {
-        Ok(r) => r,
+    match parse_reply(&stdout) {
+        Ok(r) => Ok(r),
         Err(why) => {
             eprintln!("opi-ctl: 插件的应答看不懂（{why}）—— 插件与本工具版本对不上？");
             let first = stdout.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
             eprintln!("       原始输出：{first}");
-            return 5;
+            Err(5)
         }
-    };
-    handle_reply(&reply)
+    }
 }
 
 /// 服务端应答 → 退出码。协议见文件头。

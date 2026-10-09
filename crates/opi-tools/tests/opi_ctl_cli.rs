@@ -8,6 +8,9 @@
 //   2. 服务端应答 → 退出码的映射（"ok" → 0；err:<码>:<原因> → 原码 + 原因上 stderr）；
 //   3. dbus-send 失败/缺失/应答异形时的退出码分类（lead 钉的契约：非 0 必须带
 //      可区分的 stderr 原因；desktop-ui 按「非零 = 可见反馈」实现）。
+//   4. state（只读查询，2026-10-10）：**无参数**的 State 方法名、状态行原样进
+//      stdout，以及冻结形状的**负向**面（键序换位/少段/多段/取值域外 → 5：
+//      桌面按位置解析，放过去就是把值读错位）。
 // 不依赖机器上真有 fcitx5 与会话总线 —— 那是 e2e 的事，这里是纯客户端逻辑。
 //
 // 只用 cfg(unix)：假 dbus-send 是 sh 脚本 + 可执行位（本工具的宿主只有 Linux）。
@@ -192,6 +195,96 @@ fn unrecognized_reply_maps_to_5() {
     let (code, _, stderr) = run_ctl(&dir, &["fullwidth"]);
     assert_eq!(code, 5, "stderr={stderr}");
     assert!(stderr.contains("应答看不懂"), "stderr={stderr}");
+}
+
+/// state 的成功路径：**无参数**的 `State` 方法、那一行原样进 stdout、rc 0、
+/// stderr 静默（桌面每秒轮询 —— 成功刷屏等于刷日志）。命令行逐字如下：比动作那条
+/// **少**一个 `string:` 参数（服务端签名是空入参，多带一个参数会被总线判成坏调用）。
+#[test]
+fn state_query_sends_exact_wire_command_and_prints_line() {
+    let dir = fake(
+        REPLY_TO_STDOUT,
+        &reply_of("lang=zh;trad=off;punct=on;fw=on"),
+    );
+    let (code, stdout, stderr) = run_ctl(&dir, &["state"]);
+    assert_eq!(code, 0, "stderr={stderr}");
+    assert_eq!(
+        stdout, "lang=zh;trad=off;punct=on;fw=on\n",
+        "状态行要原样进 stdout"
+    );
+    assert_eq!(stderr, "", "成功不刷 stderr");
+    let argv = std::fs::read_to_string(dir.join("argv")).unwrap();
+    let got: Vec<&str> = argv.lines().collect();
+    assert_eq!(
+        got,
+        vec![
+            "--session",
+            "--print-reply",
+            "--reply-timeout=5000",
+            "--dest=org.fcitx.Fcitx5",
+            "/opi",
+            "org.fcitx.Fcitx5.Opi1.State",
+        ]
+    );
+}
+
+/// 两端值都原样透传（正、负两面）：on/off 是服务端给的，客户端不缓存、不改写 ——
+/// 客户端自己造状态正是这条查询要避免的事。
+#[test]
+fn state_values_pass_through_both_ways() {
+    for line in [
+        "lang=zh;trad=off;punct=on;fw=on",
+        "lang=en;trad=on;punct=off;fw=off",
+    ] {
+        let dir = fake(REPLY_TO_STDOUT, &reply_of(line));
+        let (code, stdout, stderr) = run_ctl(&dir, &["state"]);
+        assert_eq!(code, 0, "{line}: stderr={stderr}");
+        assert_eq!(stdout.trim_end(), line);
+    }
+}
+
+/// 冻结形状的**负向**面：键序换位、少段、多段、取值域外、键名重复 —— 一律 5 且
+/// stdout 为空。桌面端按位置解析，放过去就是把 `trad=on` 读成「语言变繁体」。
+#[test]
+fn state_broken_shapes_map_to_5() {
+    for bad in [
+        "trad=off;lang=zh;punct=on;fw=on",     // 键序换位（同一个值集合）
+        "lang=zh;trad=off;punct=on",           // 少一段
+        "lang=zh;trad=off;punct=on;fw=on;x=y", // 多一段
+        "lang=zh;trad=off;punct=on;fw=maybe",  // 取值域外
+        "lang=zh;trad=off;punct=on;lang=on",   // 键名重复（末位不是 fw）
+        "",                                    // 空串
+    ] {
+        let dir = fake(REPLY_TO_STDOUT, &reply_of(bad));
+        let (code, stdout, stderr) = run_ctl(&dir, &["state"]);
+        assert_eq!(code, 5, "{bad:?}: stderr={stderr}");
+        assert_eq!(stdout, "", "{bad:?}: 形状不对就不许往 stdout 写东西");
+        assert!(stderr.contains("格式"), "{bad:?}: stderr={stderr}");
+    }
+}
+
+/// 服务端分类的失败对 state 同样生效（与动作同一张退出码表）：通道通了但插件
+/// 内部异常时，桌面拿到的是非零 + 原因，不是一行假状态。
+#[test]
+fn state_server_error_propagates() {
+    let dir = fake(REPLY_TO_STDOUT, &reply_of("err:5:内部异常：std::bad_alloc"));
+    let (code, stdout, stderr) = run_ctl(&dir, &["state"]);
+    assert_eq!(code, 5, "stderr={stderr}");
+    assert_eq!(stdout, "");
+    assert!(stderr.contains("内部异常"), "原因要原样带出来：{stderr}");
+}
+
+/// 通道不通对 state 是 3（「通道」与「功能」的分界不变），且 stdout 不许留半行。
+#[test]
+fn state_service_unknown_maps_to_3() {
+    let dir = fake(
+        REPLY_TO_STDERR,
+        "Error org.freedesktop.DBus.Error.ServiceUnknown: The name org.fcitx.Fcitx5 was not provided by any .service files\n",
+    );
+    let (code, stdout, stderr) = run_ctl(&dir, &["state"]);
+    assert_eq!(code, 3, "stderr={stderr}");
+    assert_eq!(stdout, "", "通道不通时 stdout 不许有残留状态行");
+    assert!(stderr.contains("通道不通"), "stderr={stderr}");
 }
 
 /// 用法错在本地就判死（不发 D-Bus）：缺动作与未知动作都是 2 + usage。

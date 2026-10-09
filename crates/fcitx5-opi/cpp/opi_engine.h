@@ -43,7 +43,8 @@ public:
     // 都是拿构造参数初始化，纯粹为了过 -Werror=reorder。
     OpiEngine(fcitx::Instance *instance)
         : shiftToggle_(instance), fanjianToggle_(instance), settingsAction_(instance),
-          ctlObject_([this](const std::string &action) { return ctlAction_(action); }),
+          ctlObject_([this](const std::string &action) { return ctlAction_(action); },
+                     [this]() { return ctlState_(); }),
           instance_(instance) {
         loadDictionary();
         // 配置推给引擎必须在 loadDictionary 之后：Rust 侧单例在那一刻才建起来。
@@ -145,6 +146,8 @@ public:
     //   symbols|trad|punct|fullwidth|lang —— 新增动作要先找 lead 定，别自己加。
     // 这里跑在**主循环线程**（dbus 模块把总线挂在自己的事件循环上），所以可以安全地
     // 碰引擎单例与 IC，也就能满足「作用于当前 IC」。
+    // 只读查询 state **不在**这张表里：它走另一个 D-Bus 方法（vtable 的 State →
+    // ctlState_），动作与查询在协议上分开（见 opi_ctl.h 的 State 段）。
     std::string handleCtlAction_(const std::string &action) {
         // 「当前 IC」= 最近获得焦点的那个；没有 IC 时动作仍会改引擎状态（单例），
         // 只是没有面板可刷 —— 不是错误。
@@ -162,7 +165,11 @@ public:
                 return "err:4:符号浏览入口未接线（引擎侧未落地），本次动作无效";
             }
             if (st == 0 && !symbolDataOk_) {
-                return "err:4:符号类目数据缺失（$XDG_DATA_DIRS 下没有 opi/symbol_categories.tsv），"
+                // 措辞覆盖装载态为假的**三条路**（locate 空串 / 弱符号没接线 /
+                // Rust 侧读不出或零合法类目 —— 见 symbolDataOk_ 的注释）：原先只写
+                // 「$XDG_DATA_DIRS 下没有 …」，在「文件在但读了是零合法类目」时是错的
+                // （harness 的 data-nosym 现在就用零字节文件表达这一支）。
+                return "err:4:符号类目数据缺失或读不出（opi/symbol_categories.tsv），"
                        "本次动作无效";
             }
             refreshingPanelFor(ic);
@@ -192,6 +199,21 @@ public:
         return "ok";
     }
 
+    // opi-ctl state（只读查询）的入口。格式与「没有 IC 不是失败」的裁决写在
+    // opi_ctl.h 的 State 注释；四个值各自的出处写在 stateLine_ 上。
+    // public 与前一个同理由：C++ 驱动直接调它，验的就是 D-Bus 方法回复出去的那一行
+    // （vtable 的 stateHandler_ 就是这个函数）。
+    std::string ctlState_() noexcept {
+        try {
+            return stateLine_();
+        } catch (const std::exception &e) {
+            // 与 ctlAction_ 同一个外壳：dbus 的分发路径不捕 C++ 异常。
+            return std::string("err:5:内部异常：") + e.what();
+        } catch (...) {
+            return "err:5:内部异常（非 std::exception）";
+        }
+    }
+
 private:
     // 「回到无 composing」的唯一实现：deactivate 与 reset 共用。
     void clearState_(fcitx::InputContext *ic) {
@@ -215,6 +237,47 @@ private:
         } catch (...) {
             return "err:5:内部异常（非 std::exception）";
         }
+    }
+
+    // ---- opi-ctl state 的读侧（冻结格式见 opi_ctl.h 的 State 注释）----
+    //
+    // 四个值全部来自**既有 getter**，不新造状态：
+    //   · lang  = 引擎模式 == English —— 与「中/英」状态项同一条判据（opi_mode.h 的
+    //     update()）；zh 覆盖拼音/繁体/符号/数字四个「中文系」模式。
+    //   · trad  = 引擎模式 == Traditional —— 与「简/繁」状态项同一条判据。
+    //   · punct = 配置面 ChinesePunct —— 与设置窗/配置工具读的是同一个值（引擎侧的
+    //     chinese_punct 只由 applyOpiSettings 从它推过去，两条不会漂）。
+    //   · fw    = opiFullwidthState_()（借道读侧，见那里）。
+    // **不取 mostRecentInputContext()**：四个值都是进程级的（Rust 单例 + 本 addon 的
+    // 配置），所有 IC 同值 ⇒「没有 IC」不是失败，照常给这一行（理由与桌面轮询的
+    // 关系写在 opi_ctl.h）。动作路径（handleCtlAction_）才需要 IC —— 那里要刷面板。
+    std::string stateLine_() {
+        const int32_t mode = opi_fcitx5_mode();
+        std::string s = "lang=";
+        s += (mode == kModeEnglish) ? "en" : "zh";
+        s += ";trad=";
+        s += (mode == kModeTraditional) ? "on" : "off";
+        s += ";punct=";
+        s += settings_.chinesePunct.value() ? "on" : "off";
+        s += ";fw=";
+        s += opiFullwidthState_() ? "on" : "off";
+        return s;
+    }
+
+    // 全角读侧。**本轨 FFI 面只有 toggle、没有 getter**（opi_rust_ffi.h）：
+    // Rust 侧的 `Engine::fullwidth()` 存在（engine_punct.rs，toggle 的读侧），但
+    // 没导出到 fcitx5_opi 的 C 面；opi-ffi 那份 C ABI 的 `opi_fullwidth_state()`
+    // 读的是**另一条轨**的引擎单例（Android/TSF），在这里等于没初始化 —— 不能借。
+    // 借用 toggle 两次做读：①翻面 ②翻回，返回第二次的返回值（= 翻回后的 = 原状态）。
+    // 对观察者等价只读，靠两条：净效应为零（同一个 bool 翻两次）＋ 本函数只在
+    // **主循环线程**上跑（D-Bus 回调、按键、驱动都在那条线程）⇒ 没有调用者能插进
+    // 两次 toggle 之间。**不落本地镜像**：平台侧记副本必然漂（engine_punct.rs 对
+    // chinese_punct 写过同一句）。
+    // 升级路径：engine-track 把读侧导出成 `opi_fcitx5_fullwidth()` 之后，这里换成
+    // 一次调用、删掉本段（驱动 §8 里为这个借用形态写的三条断言随之简化）。
+    bool opiFullwidthState_() {
+        opi_fcitx5_toggle_fullwidth();        // ① 翻面（返回值是翻面后的，不用）
+        return opi_fcitx5_toggle_fullwidth(); // ② 翻回：返回值 = 原状态
     }
 
     // 注册 opi-ctl 的 D-Bus 服务（构造期试一次、activate 再试一次）。见 opi_ctl.h 的

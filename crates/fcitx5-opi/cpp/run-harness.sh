@@ -140,13 +140,24 @@ cp "$OPI_TRAD_OPID" "$work/data/opi/trad.opid"
 : "${OPI_SYMBOL_TSV:=$repo/crates/fcitx5-opi/data/symbol_categories.tsv}"
 [ -f "$OPI_SYMBOL_TSV" ] || { echo "!! 找不到符号类目源：$OPI_SYMBOL_TSV" >&2; exit 1; }
 cp "$OPI_SYMBOL_TSV" "$work/data/opi/symbol_categories.tsv"
-# ⚠️ opi_ctl_driver 单独用**没有这份 tsv** 的目录（data-nosym）：§7e 的
-# 「返回 0 且数据未装载 → err:4 数据缺失」用例靠**真定位失败**测出来；把 tsv 也
-# 放进它那份目录，装载态为真 ⇒ 同一用例走 ok 分支、断言静默翻红（实测过）。
-# 两份目录是**刻意分面、不是重复**：C++ 驱动测失败面（未接线 / 数据缺失），
+# ⚠️ opi_ctl_driver 单独用**符号类目装载失败**的目录（data-nosym）：§7e 的
+# 「返回 0 且数据未装载 → err:4 数据缺失」用例要一份装载态为假的目录。
+# **订正（2026-10-10，原写「目录里没有这份 tsv」——那条前提已被环境打破，别改回去）**：
+#   · fcitx5 的 `StandardPath::global()` 除 XDG 两个环境变量外还**永远**搜编译期
+#     datadir（本机 = /usr/share），跳过它的口子只有 5.1.9+ 的另一个构造
+#     （skipFcitxPath），global() 没有 ⇒ 机器上装了包（/usr/share/opi/
+#     symbol_categories.tsv）之后 locate 照样命中：实测 XDG_DATA_DIRS 指到空目录、
+#     XDG_DATA_DIRS 置空串这两组都仍命中 /usr/share 那份。
+#   · 于是「定位失败」在这类机器上**不可复现**，而断言没变 ⇒ §7e 静默翻红
+#     （假红形态：前提变了、断言没变）。现在放一个**零字节**的 tsv：
+#     locate 命中（XDG_DATA_HOME 优先于 /usr/share）、Rust 侧读出零合法类目返回
+#     -2 ⇒ 装载态为假，走的仍是「数据缺失」那一支，且全程真定位/真读文件/真判据
+#     （没有假 hook 替身）。
+# 两份目录仍是**刻意分面、不是重复**：C++ 驱动测失败面（未接线 / 装载失败），
 # 符号数据的成功面（真入口 + 真数据 + 真 IC）归 e2e ctl 变体 —— 别合并回去。
 mkdir -p "$work/data-nosym/opi"
 cp "$work/data/opi/luna.opid" "$work/data/opi/trad.opid" "$work/data-nosym/opi/"
+: > "$work/data-nosym/opi/symbol_categories.tsv"
 # 输入法组里必须**同时**有 keyboard-us 和 opi：opi 不在组里时 SetCurrentIM("opi")
 # 静默无效（不报错、不切换、不发 CurrentIM），看着就像插件坏了。
 cat > "$work/cfg/fcitx5/profile" <<'PROFILE'
@@ -178,8 +189,8 @@ export LD_LIBRARY_PATH="$rustlib:$FCITX5_LIBS"
 # StandardPath 会落到用户真实的 ~/.config（驱动里已加守卫，没设就 SKIP）。
 XDG_DATA_HOME="$work/data" XDG_CONFIG_HOME="$work/config" "$work/opi_panel_driver"
 echo
-# ctl 驱动故意用 data-nosym（有词库、**无**符号类目）：§7e 的「数据缺失」用例要
-# 一份真缺数据的目录 —— 理由与分面说明见 stage 4 末尾那段。
+# ctl 驱动故意用 data-nosym（有词库、符号类目是**零字节坏文件**＝装载失败）：
+# §7e 的「数据缺失」用例要一份装载态为假的目录 —— 理由与分面说明见 stage 4 末尾那段。
 XDG_DATA_HOME="$work/data-nosym" XDG_CONFIG_HOME="$work/config" "$work/opi_ctl_driver"
 echo
 "$work/opi_status_driver"

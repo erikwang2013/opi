@@ -13,11 +13,16 @@
 //      交出去 —— 本驱动用假 hook 把这条钉死（真引擎入口是弱符号，本分支未落地）。
 //   3. opi-ctl 的动作分发面（handleCtlAction_，与 D-Bus 接收侧同一个函数）：五个
 //      动作的返回值协议 "ok" / "err:<码>:<原因>"，以及「未接线 / 数据缺失」的区分。
+//   4. opi-ctl state（只读查询，2026-10-10 用户裁决）：ctlState_ = D-Bus State 方法
+//      回复出去的那一行 —— 冻结格式整行、trad/lang 两格跟着状态变、以及**只读性**
+//      （全角格是双翻面读的，得证明没把状态读漂）。
 //
 // 局限（如实记，别把它读成更强的结论）：
 //   · `OpiEngine engine(nullptr)` —— instance_ 为空：**D-Bus 注册本身**（真会话总线
 //     上挂 /opi）与「作用于当前 IC」（mostRecentInputContext）测不到，归 e2e 变体
 //     ctl（真守护进程 + 私有会话总线）；opi-ctl 客户端的退出码映射归它的 cargo 测试。
+//   · state 的「没有 IC 也照常回一行」是**结构保证**（stateLine_ 不取 IC，见
+//     opi_engine.h），本驱动有 IC，测不到「没有」那一半 —— 别再补一条假装测了。
 //   · 符号浏览**引擎侧**未落地时弱符号是 nullptr：假 hook 顶替它验顺序契约，真 hook
 //     只验「未接线时的一次性诊断」。引擎侧落地后那两条自动 SKIP（见 §7 FIN）。
 #include "opi_fcitx5.cpp"
@@ -288,7 +293,10 @@ int main() {
     const std::string notWired = engine.handleCtlAction_("symbols");
     check(notWired.rfind("err:4:", 0) == 0 && notWired.find("未接线") != std::string::npos,
           "入口未接线（hook 返回 -1）→ err:4：" + q(notWired));
-    opiSymbolBrowseHook() = [](int32_t) { return 0; }; // 0 = 二义态：得看装载态
+    // 0 = 二义态：得看装载态。harness 把本驱动跑在**装载失败**的目录上（data-nosym：
+    // 词库在、符号类目是零字节 tsv ⇒ Rust 侧返回 -2）—— 为什么不再用「没有 tsv」
+    // 那个形态、以及为什么它在这类机器上不可复现，见 run-harness.sh 的 stage 4 段。
+    opiSymbolBrowseHook() = [](int32_t) { return 0; };
     const std::string noData = engine.handleCtlAction_("symbols");
     check(noData.rfind("err:4:", 0) == 0 && noData.find("数据缺失") != std::string::npos,
           "返回 0 且数据未装载 → err:4（哑成功会让状态栏按钮「点了没反应还报成功」）");
@@ -306,6 +314,53 @@ int main() {
     } else {
         skip("引擎侧符号浏览入口已接线（弱符号非空）—— 未接线诊断这条在本树不可达");
     }
+
+    std::printf("== 8. state（只读查询；ctlState_ = D-Bus State 方法回复出去的那一行）==\n");
+    // 前置：§7c 收尾把模式切回拼音，而 switch_mode 顺带把全角重置为**模式缺省**
+    // （Mode::default_fullwidth：拼音/繁体 on，英文/符号 off）⇒ 开局是 fw=on；
+    // §7d 把标点配置翻回了原值（落盘值 = 内存值，两条不会漂）。state 读的就是这
+    // 四处既有状态，出处对照 opi_engine.h 的 stateLine_。
+    check(opi_fcitx5_mode() == kModePinyin, "前置：拼音模式（§7c 收尾，全角随模式重置为 on）");
+    std::string punctExp = "on";
+    {
+        OpiSettings readBack;
+        readOpiSettings(readBack);
+        punctExp = *readBack.chinesePunct ? "on" : "off";
+    }
+    const std::string s0 = engine.ctlState_();
+    check(s0 == "lang=zh;trad=off;punct=" + punctExp + ";fw=on",
+          "冻结格式整行（键序固定 lang;trad;punct;fw，桌面按位置解析）：" + q(s0));
+
+    std::printf("-- 8a 切 trad 前后整行变化（off→on 与 on→off 两向都断）--\n");
+    check(engine.handleCtlAction_("trad") == "ok" && opi_fcitx5_mode() == kModeTraditional,
+          "trad（翻面走动作路径，state 只是读它）");
+    const std::string s1 = engine.ctlState_();
+    check(s1 == "lang=zh;trad=on;punct=" + punctExp + ";fw=on",
+          "只有 trad 段翻成 on，其余三段逐字不变：" + q(s1));
+    check(s1 != s0, "切 trad 前后 state **不同**（状态栏「点了要有即时反馈」靠这一格）");
+    check(engine.handleCtlAction_("trad") == "ok" && opi_fcitx5_mode() == kModePinyin,
+          "trad 切回");
+    const std::string s2 = engine.ctlState_();
+    check(s2 == s0 && s1 != s2, "切回后整行逐字回到 s0（反方向也测到了）");
+
+    std::printf("-- 8b lang 段跟着模式走（另一格；英文模式的 switch_mode 会把全角重置为缺省）--\n");
+    check(engine.handleCtlAction_("lang") == "ok" && opi_fcitx5_mode() == kModeEnglish,
+          "lang 切英文");
+    const std::string s3 = engine.ctlState_();
+    check(s3 == "lang=en;trad=off;punct=" + punctExp + ";fw=off",
+          "lang=en 且全角随英文缺省变 off：" + q(s3));
+
+    std::printf("-- 8c 只读性：连读同值 + 行为面证明（全角那一格是双翻面读的，见 opi_engine.h）--\n");
+    const std::string a = engine.ctlState_();
+    const std::string b = engine.ctlState_();
+    check(a == b && a == s3, "连读两次值相同 —— 双翻面读法的净效应为零（没在读侧翻走状态）");
+    commitNow();
+    press(0x2C); // ','
+    check(commitNow() == ",",
+          "读 state 之后英文半角直传仍成立（全角位没被读漂 —— 行为面证据，不只看返回值）");
+    check(engine.handleCtlAction_("lang") == "ok" && opi_fcitx5_mode() == kModePinyin,
+          "lang 切回");
+    check(engine.ctlState_() == s0, "回到拼音后整行 == s0（本段不留副作用）");
 
     std::printf("\n== 结果：%s ==\n", g_fail == 0 ? "全过" : "有失败");
     return g_fail == 0 ? 0 : 1;
