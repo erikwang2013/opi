@@ -192,6 +192,9 @@ sudo cmake --install build-fcitx5
 | `/usr/share/fcitx5/inputmethod/opi.conf` | 输入法条目 | `Type::PkgData + "inputmethod/…"` |
 | `/usr/share/opi/luna.opid` | 简体词库 | `Type::Data + "opi/luna.opid"` |
 | `/usr/share/opi/trad.opid` | 繁体词库（2026-10-09 起） | `Type::Data + "opi/trad.opid"` |
+| `/usr/share/opi/symbol_categories.tsv` | 符号大全类目数据（22 类目；与 Android 资产同源同字节） | `Type::Data + "opi/symbol_categories.tsv"` |
+| `/usr/bin/opi-ctl` | 状态栏按钮的 CLI（D-Bus 打到插件，见 §4.8） | 状态栏悬浮条（按名字在 PATH 找） |
+| `/etc/xdg/autostart/opi-statusbar.desktop` | 状态栏悬浮条随会话自启（2026-10-10 起） | XDG autostart |
 | `/usr/share/doc/opi/LICENSE` + `LICENSES.md` | 许可证文本 | 人（授权要求，见 §6） |
 
 ⚠️ **两个 `.so` 必须同目录**：胶水用 `$ORIGIN` rpath 找旁边那个 Rust cdylib，
@@ -437,6 +440,7 @@ fcitx5-remote -s opi
 | `Ctrl+\` | 符号 ⇄ 拼音 |
 | `Ctrl+Shift+F` | 简体 ⇄ 繁体（2026-10-09 起；繁体查 `trad.opid`，见 §5.3） |
 | `Shift+Space` | 全角 ⇄ 半角 |
+| `Ctrl+Shift+Z` | 符号大全（2026-10-10 起；⚠️ 与编辑器「重做」冲突是已知项，见 §4.8） |
 
 > `Ctrl+Shift+F` 只认**大写的 F**（真前端对 Shift+字母给的就是大写 keysym）——
 > 单按 `Ctrl+F`（应用们的「查找」）**不会**被吃掉。注意实现是按 `rawKey()` 判的：
@@ -586,17 +590,69 @@ Linux 上 = `--settings` 的设置窗（无参数启动也是它）。**v1.6.0 �
 - **系统菜单里有入口**：`/usr/share/applications/opi-settings.desktop`（`Name=opi输入法`，
   点开即设置窗）—— 2026-10-09 晚用户裁决「设置功能要在外层可以设置」，由打包后注入
   生成（理由与核对法见 `desktop/build.gradle.kts` 文件尾）。另有两条直启路：
-  `opi-candidates --settings`（装出来在 `/opt/opi-candidates/bin/opi-candidates`）、
+  `opi-candidates --settings`（装出来在 `/opt/opi-candidates/bin/opi-candidates`；
+  状态栏悬浮条是同一二进制的 `--statusbar` 模式，见 §4.8）、
   以及配置面的原生选项（§4.6）—— **两层都能设置**；状态栏还有第三个入口
   （「设」，见 §4.6）。
 - 设置窗内容：常规（学习 / 中文标点）、输入（模糊音 / 简拼）、**外观**（皮肤预览卡，
-  Linux 才有；Windows 不显示 —— 那边没有 fcitx5 主题这回事）、关于。
+  Linux 才有；Windows 不显示 —— 那边没有 fcitx5 主题这回事）、**状态栏**（悬浮条开关 +
+  逐按钮常驻，见 §4.8）、关于。
 - 版本号是**单一来源**：`desktop/build.gradle.kts` 的 `opiAppVersion` 同时喂给
   jpackage 包版本与窗口标题（构建时生成 `Version.kt`）。此前窗口里写死过一份，
   到 1.6.0 就成了摆在用户眼前的假话 —— 别再写死第二处。
 - 升级路径：装新包时 apt/dnf 按 `replaces`/`conflicts` 自动卸掉旧的独立设置窗包
   `opi-candidates`（≤1.5.0）—— 不声明的话 `/opt/opi-candidates/**` 文件归属冲突会让
   dpkg **拒绝安装**。
+
+### 4.8 状态栏悬浮条 / 符号大全 / 虚拟键盘（2026-10-10）
+
+**状态栏悬浮条**（自绘；2026-10-10 用户裁决「直接上自绘悬浮条」）：
+
+- 8 个图标按钮：软键盘 / 符号大全 / 简繁转换 / 中英文符号切换 / 中英文切换 /
+  logo（拖动把手，单击开设置）/ 全半角切换 / 设置。
+- 自启：`/etc/xdg/autostart/opi-statusbar.desktop`（装包即生效，登录自动起）；
+  手动起：`/opt/opi-candidates/bin/opi-candidates --statusbar`。
+- 显示/隐藏：设置窗「状态栏」一节（master 隐藏 + 逐按钮常驻）。配置与 §4.6 的六个选项
+  **同住一个文件**（`$XDG_CONFIG_HOME/fcitx5/conf/opi_fcitx5.conf`，九键
+  `StatusBarHidden` / `StatusBar*`；写入在 `desktop/` 的 `Settings.kt`），改完 1s 内生效。
+  ⚠️ fcitx5 配置工具保存时会不会把这九键抹掉：**未取证**（配置面只声明它认识的六个选项），
+  已在 `Settings.kt` 头注释标注。
+- 按钮动作：「符号 / 简繁 / 标点 / 全角」走 `opi-ctl`（下节）；「中英文切换」切的是
+  **引擎英文模式**（与 `Ctrl+'`/Shift 轻按同一条 toggle）—— 不是停用整个输入法
+  （那样 OPI 热键会全失效）。
+- ⚠️ 与 fcitx5 自己的状态区（§4.6 的「中/英/简/繁/设」三项）**两套并存**：那套挂在
+  面板上，这套是独立悬浮窗；两边调同一批引擎动作，状态互相同步。
+
+**符号大全**（`Ctrl+Shift+Z`，或状态栏「符号」按钮 / `opi-ctl symbols`）：
+
+- 走 fcitx5 **原生候选面板**：一级 22 类目（`1.常用` … `22.藏文`），数字进类目；
+  二级符号按页出，`-`/`=` 翻页、数字上屏（上屏后回一级）、`Esc` 退出（吞键）。
+- 数据 `/usr/share/opi/symbol_categories.tsv`（真源 = `scripts/gen_symbol_categories.py`
+  的双输出之一，另一份给 Android，两份逐字节相同）。缺失/坏文件 ⇒ 入口禁用 +
+  `opi-ctl symbols` 返 4（「数据缺失」）—— 不会半开半死。
+- ⚠️ `Ctrl+Shift+Z` 与编辑器「重做」冲突（搜狗同键；这是默认选择）：中文态下会被
+  符号大全吃掉。要换键位：`opi_fcitx5.cpp` 里的单一常量点。
+- 切英文/切 IM 时若正在浏览：先退浏览恢复真缓冲、再走「直接确认」（§4.3 的
+  `Ctrl+'` 那条）—— 测试里钉了顺序，防止把「符号」标题当输入提交出去。
+
+**虚拟键盘**（状态栏「软键盘」）：
+
+- 无边框置顶键盘窗（qwerty + 数字行 + 空格/回车/退格），按键经 **XTEST** 注入系统
+  —— 注入的键与物理键盘同路（照常经过 fcitx5：中文态下打字母出候选是**正确**行为）。
+- ⚠️ **Wayland 原生窗口不支持**（XTEST 到不了）；XWayland 应用可用。X11 会话可用。
+
+**`opi-ctl`**（状态栏与脚本共用的 CLI）：
+
+```bash
+opi-ctl symbols|trad|punct|fullwidth|lang
+```
+
+- 通道：session 总线上 `org.fcitx.Fcitx5` 的 `/opi`（接口 `org.fcitx.Fcitx5.Opi1`，
+  插件内建服务）——作用于**当前输入上下文**，不是「改配置 + 重载」。
+- 退出码：`0` 成功 / `2` 用法 / `3` 通道不通（fcitx5 没跑或缺 dbus 模块）/
+  `4` 功能不可用（如符号数据缺失）/ `5` 动作被拒。状态栏按非零给可见反馈。
+- ⚠️ 它与「设置窗保存」的重载路（`ReloadAddonConfig`，见 `Settings.kt` 的订正段）
+  是两条不同的路：那条改配置，这条做动作。别互相替代。
 
 ---
 
