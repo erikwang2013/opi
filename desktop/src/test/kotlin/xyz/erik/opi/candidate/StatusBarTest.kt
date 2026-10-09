@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! 状态栏的**纯逻辑**门禁（无 UI、无进程、无 JNA）：可见性判定、命令映射、条宽。
+//! 状态栏的**纯逻辑**门禁（无 UI、无进程、无 JNA）：可见性判定、命令映射、条宽、
+//! 状态解析与图标选择、动作后补读。
 //!
 //! 为什么单列一份：这几条判定在状态栏窗与设置窗里**各用一次**（同一份纯函数），
 //! 两处各写一遍必然漂移；而漂移的表现是「设置里关了、条上还在」这种一眼假的错。
@@ -25,10 +26,10 @@ class StatusBarTest {
 
     @Test
     fun `button order is the display order`() {
-        // 枚举序 = 条上从左到右（用户裁决的列举顺序）。换序 = 用户肌肉记忆全废，
-        // 且没有任何东西会报错，所以钉住。
+        // 枚举序 = 条上从左到右（2026-10-10 深夜裁决②：logo 移到最前）。换序 = 用户
+        // 肌肉记忆全废，且没有任何东西会报错，所以钉住。
         assertEquals(
-            listOf("软键盘", "符号大全", "简繁转换", "中英标点", "中英文切换", "logo", "全半角", "设置"),
+            listOf("logo", "软键盘", "符号大全", "简繁转换", "中英标点", "中英文切换", "全半角", "设置"),
             StatusBarButton.entries.map { it.label },
         )
     }
@@ -65,7 +66,7 @@ class StatusBarTest {
         // Windows 上没有 opi-ctl / fcitx5-remote（那四个动作是 Linux 侧的），
         // 没动作的按钮不上条 ——「宁可少一页，不做点不动的开关」。
         assertEquals(
-            listOf(StatusBarButton.VK, StatusBarButton.SYMBOLS, StatusBarButton.LOGO, StatusBarButton.SETTINGS),
+            listOf(StatusBarButton.LOGO, StatusBarButton.VK, StatusBarButton.SYMBOLS, StatusBarButton.SETTINGS),
             visibleStatusButtons(StatusBarSettings(), windows = true),
         )
         // 设置窗的开关行用同一个判定（两处同源）
@@ -100,5 +101,70 @@ class StatusBarTest {
             statusBarWidthDp(9) - statusBarWidthDp(8),
         )
         assertTrue(statusBarWidthDp(8) > statusBarWidthDp(4))
+    }
+
+    // ---------- 状态通道：解析与图标选择（2026-10-10 深夜裁决②）----------
+
+    @Test
+    fun `state line parses every field`() {
+        // 契约：`opi-ctl state` 一行 lang=zh|en;trad=on|off;punct=on|off;fw=on|off。
+        assertEquals(
+            ImeState(zh = false, trad = true, punct = false, fullwidth = true),
+            parseImeState("lang=en;trad=on;punct=off;fw=on"),
+        )
+        assertEquals(
+            ImeState(zh = true, trad = false, punct = true, fullwidth = false),
+            parseImeState("lang=zh;trad=off;punct=on;fw=off"),
+        )
+    }
+
+    @Test
+    fun `sample state lines pick the icons`() {
+        // 「样例串 → 图标选择」：简/繁、中/英随状态翻转；月相看 fullwidth 位
+        // （满月 = 全角、半月 = 半角，见 StatusBar.kt 的 MoonIcon）。
+        assertEquals("繁", tradIcon(parseImeState("trad=on")))
+        assertEquals("简", tradIcon(parseImeState("trad=off")))
+        assertEquals("英", langIcon(parseImeState("lang=en")))
+        assertEquals("中", langIcon(parseImeState("lang=zh")))
+        assertTrue(parseImeState("fw=on").fullwidth) // 满月
+        assertFalse(parseImeState("fw=off").fullwidth) // 半月
+    }
+
+    @Test
+    fun `bad or partial state falls back to the neutral defaults`() {
+        // 容错是规格的一部分：读失败（通道不通 ⇒ runCapture 给不出行为 null）/坏串/
+        // 认不得的值/空输出都 ⇒ 中性缺省（中/简/半月），不抛、条上照常渲染。
+        // 缺省语义定案见 Actions.kt 的 ImeState。
+        val neutral = ImeState()
+        assertEquals(neutral, parseImeState(null))
+        assertEquals(neutral, parseImeState(""))
+        assertEquals(neutral, parseImeState("这不是状态"))
+        assertEquals(neutral, parseImeState("lang=fr;trad=yes;punct=maybe;fw=1"))
+        // 缺键 = 只有那个键落缺省，不把整行判坏（格式加字段时旧前端不至于全瞎）
+        assertEquals(ImeState(zh = false), parseImeState("lang=en"))
+        assertEquals(ImeState(trad = true), parseImeState("trad=on"))
+        // 空格容错（手写调试）：键值两侧的空格不管，无 '=' 的碎片忽略
+        assertEquals(
+            ImeState(zh = false, fullwidth = true),
+            parseImeState(" lang = en ; junk ; fw = on "),
+        )
+    }
+
+    @Test
+    fun `action always refreshes state right after it returns`() {
+        // 「点完立刻翻转」的落点：动作返回后一定补读一次。抽成纯函数就是为了这条 ——
+        // 埋在 Compose 里的话，将来重构掉了它，唯一表现是「点完等 1s 才变」，
+        // 没有任何测试会红。
+        val order = mutableListOf<String>()
+        val r = actionWithStateRefresh({ order.add("action"); 42 }, { order.add("refresh") })
+        assertEquals(42, r)
+        assertEquals(listOf("action", "refresh"), order)
+        // 动作抛异常也补读（finally）：否则一次异常之后状态可能一直停在旧值。
+        val order2 = mutableListOf<String>()
+        try {
+            actionWithStateRefresh({ order2.add("boom"); error("动作炸了") }, { order2.add("refresh") })
+        } catch (_: IllegalStateException) {
+        }
+        assertEquals(listOf("boom", "refresh"), order2)
     }
 }

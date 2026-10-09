@@ -7,6 +7,9 @@
 //! **`opi-ctl <action>`**，action ∈ `symbols|trad|punct|fullwidth`；`opi-ctl` 在
 //! `/usr/bin/opi-ctl`（PATH 上，按名调）。中英文切换走 `fcitx5-remote -t`（fcitx5
 //! 自带工具，与 Shift 轻按同一条通路）。
+//! 状态通道（2026-10-10 深夜冻结）：**`opi-ctl state`** → 一行
+//! `lang=zh|en;trad=on|off;punct=on|off;fw=on|off`（rc 0 成功；通道不通 rc≠0 且无输出）
+//! —— 状态栏的实时图标读它（[readImeState]）。
 //!
 //! ⚠️ 这些动作的效果在**别处**（输入法状态），命令成败是本侧唯一看得见的东西 ——
 //! 所以失败必须回到 UI 上（[runExternal] 的返回值就是给用户看的那句话）。
@@ -30,28 +33,115 @@ fun statusActionCommand(b: StatusBarButton): List<String>? = when (b) {
     StatusBarButton.VK, StatusBarButton.LOGO, StatusBarButton.SETTINGS -> null
 }
 
+// ---------- 跑命令 ----------
+
+/** 一条命令的结局。Timeout 与 Failed 分开是因为给用户的话不一样（「没响应」/「跑不了」）。 */
+private sealed interface RunResult {
+    /** 起得来也退出了：退出码 + 输出首行（null = 没输出）。state 靠首行当载荷。 */
+    class Exit(val code: Int, val firstLine: String?) : RunResult
+    object Timeout : RunResult
+    /** 进程都起不来（命令不存在/没权限）：`why` = 异常类名，够用户判断缺什么。 */
+    class Failed(val why: String) : RunResult
+}
+
 /**
- * 跑一条外部命令。返回 null = 退出码 0；非 null = **给用户看的**失败短语。
+ * 跑命令并抓输出首行。超时由调用方定 —— 它不是防御性编程而是必须的：卡在等输入法
+ * 应答上时同步等它，点一下按钮/一拍轮询就把 UI 冻住。到点 `destroyForcibly`。
  *
- * 超时（默认 3s）不是防御性编程而是必须的：`opi-ctl` 要是卡在等输入法应答上，同步
- * 等它 = 点一下状态栏就把 UI 冻住。到点 `destroyForcibly`，按钮立刻恢复可用。
- *
- * 输出只在**失败**时读一行当补充说明（成功路径的效果在输入法那边，输出没意义）；
- * 子进程输出没人读会撑满管道缓冲而卡住它 —— 我们自己的小工具输出一行以内，真卡住
- * 还有超时兜底，故不为此开读线程。
+ * 只读**一行**、不另开读线程：我们自己的小工具输出一行以内；真卡住还有超时兜底。
  */
-fun runExternal(cmd: List<String>, timeoutMs: Long = 3000): String? = try {
+private fun runCapture(cmd: List<String>, timeoutMs: Long): RunResult = try {
     val proc = ProcessBuilder(cmd).redirectErrorStream(true).start()
     if (!proc.waitFor(timeoutMs, TimeUnit.MILLISECONDS)) {
         proc.destroyForcibly()
-        "「${cmd.joinToString(" ")}」超时（无响应 ${timeoutMs / 1000}s）"
-    } else if (proc.exitValue() == 0) {
-        null
+        RunResult.Timeout
     } else {
-        val why = proc.inputStream.bufferedReader().readLine()?.trim()
-        "「${cmd.joinToString(" ")}」退出码 ${proc.exitValue()}${if (why.isNullOrEmpty()) "" else "：$why"}"
+        RunResult.Exit(proc.exitValue(), proc.inputStream.bufferedReader().readLine()?.trim())
     }
 } catch (e: Exception) {
     // 命令不存在（没装/不在 PATH）也走这里 —— 报出命令名，用户才知道缺什么。
-    "跑不了「${cmd.first()}」：${e.javaClass.simpleName}"
+    RunResult.Failed(e.javaClass.simpleName)
+}
+
+/** 跑一条外部命令。返回 null = 退出码 0；非 null = **给用户看的**失败短语。 */
+fun runExternal(cmd: List<String>, timeoutMs: Long = 3000): String? {
+    val name = cmd.joinToString(" ")
+    return when (val r = runCapture(cmd, timeoutMs)) {
+        is RunResult.Exit ->
+            if (r.code == 0) null
+            else "「$name」退出码 ${r.code}${if (r.firstLine.isNullOrEmpty()) "" else "：${r.firstLine}"}"
+        RunResult.Timeout -> "「$name」超时（无响应 ${timeoutMs / 1000}s）"
+        is RunResult.Failed -> "跑不了「${cmd.first()}」：${r.why}"
+    }
+}
+
+// ---------- 输入法状态 ----------
+
+/**
+ * 输入法实时状态（`opi-ctl state` 的解析结果）。
+ *
+ * **默认值 = 中性缺省渲染**（2026-10-10 深夜用户裁决的定案）：通道读不到/坏串/缺键时
+ * 就画这个 —— 中 / 简 / 半月。此前「读不到状态就不画成当前状态」的旧原则被该裁决
+ * 取代：现在读得到就画真的，读不到画缺省（一个中文输入法最中性的样子），不空白、
+ * 不报错。
+ *
+ * [punct] 只解析、不参与渲染（裁决：Ω 图标不带状态显示）；留字段是为了格式演进时
+ * 不至于读丢，且解析口径有测试钉住。
+ */
+data class ImeState(
+    val zh: Boolean = true,
+    val trad: Boolean = false,
+    val punct: Boolean = true,
+    val fullwidth: Boolean = false,
+)
+
+/**
+ * 解析 `opi-ctl state` 的一行。**容错是规格的一部分**（缺省语义见 [ImeState]）：
+ * · 空行/null、未知键、认不得的值、没有 `=` 的碎片 ⇒ 该处落缺省；
+ * · 缺键 = 只有那个键落缺省，不把整行判坏（格式加字段时旧前端不至于全瞎）；
+ * · `=`/`;` 两侧容忍空格（手写调试时难免）。
+ */
+fun parseImeState(line: String?): ImeState {
+    var st = ImeState()
+    for (kv in line.orEmpty().split(';')) {
+        val eq = kv.indexOf('=')
+        if (eq <= 0) continue // 无 '=' 或键为空：碎片，忽略
+        val v = kv.substring(eq + 1).trim()
+        val on: Boolean? = when (v) { "on" -> true; "off" -> false; else -> null }
+        st = when (kv.substring(0, eq).trim()) {
+            "lang" -> if (v == "zh" || v == "en") st.copy(zh = v == "zh") else st
+            "trad" -> if (on != null) st.copy(trad = on) else st
+            "punct" -> if (on != null) st.copy(punct = on) else st
+            "fw" -> if (on != null) st.copy(fullwidth = on) else st
+            else -> st // 以后多出来的键：忽略
+        }
+    }
+    return st
+}
+
+/**
+ * 读一次输入法状态。读不到（通道不通/超时/坏串）⇒ 中性缺省，**不弹提示** —— 条上
+ * 每秒都在做这件事，弹提示只会刷屏；「通道不通」的可见反馈在动作命令那条路上。
+ *
+ * 超时 1.5s：轮询节奏本来就是 1s，查询卡住时最多把它拖成 ~2.5s 一拍，而不是 4s+。
+ */
+fun readImeState(): ImeState = when (val r = runCapture(listOf("opi-ctl", "state"), 1500)) {
+    is RunResult.Exit -> if (r.code == 0) parseImeState(r.firstLine) else ImeState()
+    RunResult.Timeout, is RunResult.Failed -> ImeState()
+}
+
+// ---------- 动作 + 补读 ----------
+
+/**
+ * 点按钮的统一收尾：跑动作 → **无论成败立刻补读一次状态**（裁决：点完马上看到翻转，
+ * 这是「即时生效」的落点）。抽成纯函数只为一件事：让「动作返回后一定补读」有门禁
+ * 钉住，而不是埋在 Compose 里 —— 埋着的话将来重构掉了它，唯一表现是「点完等 1s
+ * 才翻转」，没有任何测试会红。
+ *
+ * 用 finally：动作抛异常也补读（否则一次异常之后状态可能一直停在旧值）。
+ */
+internal fun <R> actionWithStateRefresh(action: () -> R, refresh: () -> Unit): R = try {
+    action()
+} finally {
+    refresh()
 }
