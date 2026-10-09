@@ -3,8 +3,10 @@
 
 package xyz.erik.opi.keyboard
 
+import xyz.erik.opi.candidate.barBufferText
 import xyz.erik.opi.candidate.composingAnnouncement
 import xyz.erik.opi.engine.EngineMode
+import xyz.erik.opi.engine.InputScheme
 import xyz.erik.opi.ime.modeLabelOf
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -47,6 +49,23 @@ class KeyLabelTest {
     fun composingAnnouncementCountsCandidates() {
         assertEquals("拼音 nihao，5 个候选", composingAnnouncement("nihao", 5))
         assertEquals("拼音 nihao，无候选", composingAnnouncement("nihao", 0))
+    }
+
+    /**
+     * 无候选时缓冲格必须可见（2026-10-09 用户报障「无匹配时键盘像死了、没法输入」）：
+     * 9 键的左列在读数空时回标点列（1.7.2 裁决），这格是数字串在 9 键下唯一的可见载体。
+     */
+    @Test
+    fun nineKeyBufferCellHidesOnlyWhileCandidatesExist() {
+        // 有候选：与左列读数去重（1.7.2 裁决不变）
+        assertEquals("", barBufferText(InputScheme.NINE, "64", hasCandidates = true))
+        // 无候选：原样显示 —— 继续按键/退格在同一处逐键变化，不再「零反馈」
+        assertEquals("99999", barBufferText(InputScheme.NINE, "99999", hasCandidates = false))
+        // 空缓冲本来就无字可显
+        assertEquals("", barBufferText(InputScheme.NINE, "", hasCandidates = false))
+        // 其余方案（26/14/笔画）恒显示
+        assertEquals("ni", barBufferText(InputScheme.FULL, "ni", hasCandidates = true))
+        assertEquals("hh", barBufferText(InputScheme.STROKE, "hh", hasCandidates = false))
         // 选字后 buffer 清空而候选仍在：不能播成「拼音 ，3 个候选」
         assertEquals("3 个候选", composingAnnouncement("", 3))
     }

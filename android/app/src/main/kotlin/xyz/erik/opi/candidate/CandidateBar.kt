@@ -80,11 +80,10 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
             .background(p.barBg),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // 9 键方案下这格**不显示**：拼音读数在键盘的左侧一列（搜狗同款，见
-        // NineKeyKeyboard 的左列）—— 同一串字出现在两处是冗余。语义节点保留
-        // （读屏播报挂它，见下面语义块），隐藏时留空文本节点。
+        // 这格显示什么见 barBufferText 的文档（9 键平时隐藏、无候选时必须显示）。
+        // 语义节点恒在（读屏播报挂它，见下面语义块），隐藏时留空文本节点。
         val bufferShown =
-            if (controller.inputScheme == InputScheme.NINE) "" else controller.buffer
+            barBufferText(controller.inputScheme, controller.buffer, candidates.isNotEmpty())
         Text(
             bufferShown,
             modifier = Modifier
@@ -200,6 +199,22 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
         }
     }
 }
+
+/**
+ * 候选栏最左格（缓冲格）显示的文本。
+ *
+ * **9 键方案平时隐藏**（拼音读数在键盘左侧一列，同一串字两处显示是冗余，见
+ * NineKeyKeyboard 的左列）；**但无候选时必须显示**（2026-10-09 用户报障
+ * 「无匹配时键盘像死了、没法输入」）：此时左列按 1.7.2 裁决回标点列，这格再空
+ * ⇒ 用户打的数字串全屏无一处可见 —— 继续按键零变化、退格是盲数。
+ * 这格是缓冲内容在 9 键下的**唯一**可见载体（1.7.1 曾是左列的数字回退，已按裁决撤掉），
+ * 也是缓冲到顶「看得见」的承担者（到顶后按键静默，只见它不再变长）。
+ */
+internal fun barBufferText(
+    scheme: InputScheme,
+    buffer: String,
+    hasCandidates: Boolean,
+): String = if (scheme == InputScheme.NINE && hasCandidates) "" else buffer
 
 /** 拼音缓冲 + 候选数的播报文案；无候选时明说「无候选」，别让读屏用户以为卡住了。 */
 internal fun composingAnnouncement(buffer: String, candidateCount: Int): String {
