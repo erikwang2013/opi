@@ -35,6 +35,12 @@
 # 副本，与 CMakeLists 的缺省源同一份）—— 本地重编的那份 data/generated/luna.opid
 # **没入库**，指向它会让本脚本在全新 clone 上直接断在 cp。
 #
+# OPI_SYMBOL_TSV 选填：符号类目源。缺省取**入库副本**
+# crates/fcitx5-opi/data/symbol_categories.tsv（scripts/gen_symbol_categories.py
+# 的双写产物；android assets 那份是兼容旧部署路径的副本）。布置到
+# $work/data/opi/ —— 不放它，opi-ctl symbols / Ctrl+Shift+Z 走的是「数据缺失」
+# 的 err:4 路径（e2e ctl 变体要的是真链路成功面，故必须放）。
+#
 # 环境是隔离开的：独立的 XDG_CONFIG_HOME / XDG_DATA_HOME / dbus 会话，
 # **不会碰用户真正的 fcitx5 配置，也不会连到用户正在跑的实例上**。
 
@@ -112,7 +118,7 @@ g++ -std=c++20 -Wall -Wextra -Werror -o "$work/opi_ctl_driver" \
 g++ -std=c++20 -Wall -Wextra -Werror -o "$work/opi_json_check" \
     "$here/opi_json_check.cpp" "${INC[@]}" "${LNK[@]}"
 
-echo "== 4/6 布置 XDG 数据（addon/inputmethod conf + 词库）"
+echo "== 4/6 布置 XDG 数据（addon/inputmethod conf + 词库 + 符号类目）"
 cp "$repo/crates/fcitx5-opi/data/addon/opi_fcitx5.conf" "$work/data/fcitx5/addon/"
 cp "$repo/crates/fcitx5-opi/data/inputmethod/opi.conf" "$work/data/fcitx5/inputmethod/"
 # 词库源取**入库副本**（android 部署那份），与 cpp/CMakeLists.txt 的缺省源同一份。
@@ -129,6 +135,18 @@ cp "$OPI_LUNA_OPID" "$work/data/opi/luna.opid"
 : "${OPI_TRAD_OPID:=$repo/android/app/src/main/assets/trad.opid}"
 [ -f "$OPI_TRAD_OPID" ] || { echo "!! 找不到繁体词库源：$OPI_TRAD_OPID" >&2; exit 1; }
 cp "$OPI_TRAD_OPID" "$work/data/opi/trad.opid"
+# 符号类目数据（引擎侧 2026-10-10 落地后接线）：与 luna/trad 同一约定，可覆盖。
+# 不放它，opi-ctl symbols / Ctrl+Shift+Z 会走「数据缺失」的 err:4 路径。
+: "${OPI_SYMBOL_TSV:=$repo/crates/fcitx5-opi/data/symbol_categories.tsv}"
+[ -f "$OPI_SYMBOL_TSV" ] || { echo "!! 找不到符号类目源：$OPI_SYMBOL_TSV" >&2; exit 1; }
+cp "$OPI_SYMBOL_TSV" "$work/data/opi/symbol_categories.tsv"
+# ⚠️ opi_ctl_driver 单独用**没有这份 tsv** 的目录（data-nosym）：§7e 的
+# 「返回 0 且数据未装载 → err:4 数据缺失」用例靠**真定位失败**测出来；把 tsv 也
+# 放进它那份目录，装载态为真 ⇒ 同一用例走 ok 分支、断言静默翻红（实测过）。
+# 两份目录是**刻意分面、不是重复**：C++ 驱动测失败面（未接线 / 数据缺失），
+# 符号数据的成功面（真入口 + 真数据 + 真 IC）归 e2e ctl 变体 —— 别合并回去。
+mkdir -p "$work/data-nosym/opi"
+cp "$work/data/opi/luna.opid" "$work/data/opi/trad.opid" "$work/data-nosym/opi/"
 # 输入法组里必须**同时**有 keyboard-us 和 opi：opi 不在组里时 SetCurrentIM("opi")
 # 静默无效（不报错、不切换、不发 CurrentIM），看着就像插件坏了。
 cat > "$work/cfg/fcitx5/profile" <<'PROFILE'
@@ -160,7 +178,9 @@ export LD_LIBRARY_PATH="$rustlib:$FCITX5_LIBS"
 # StandardPath 会落到用户真实的 ~/.config（驱动里已加守卫，没设就 SKIP）。
 XDG_DATA_HOME="$work/data" XDG_CONFIG_HOME="$work/config" "$work/opi_panel_driver"
 echo
-XDG_DATA_HOME="$work/data" XDG_CONFIG_HOME="$work/config" "$work/opi_ctl_driver"
+# ctl 驱动故意用 data-nosym（有词库、**无**符号类目）：§7e 的「数据缺失」用例要
+# 一份真缺数据的目录 —— 理由与分面说明见 stage 4 末尾那段。
+XDG_DATA_HOME="$work/data-nosym" XDG_CONFIG_HOME="$work/config" "$work/opi_ctl_driver"
 echo
 "$work/opi_status_driver"
 echo

@@ -25,10 +25,13 @@ opi_e2e_modes.py 的先例（那个文件贴 500 行硬线）。
   · 未知动作走**线上**：dbus-send 直接发 string:bogus，回复必须是 "err:5:未知动作…"
     —— 这是服务端回复形态，跨进程协议的另一半（opi-ctl 把它映射成退出码 5 的行为
     在它的 cargo 测试里）。
-  · symbols：本分支引擎侧入口是弱符号（未落地）⇒ 预期 err:4「未接线」；引擎侧落地
-    且数据装上后是 0（ok）。所以**只断言形状**：rc ∈ {0,4}、rc==4 时 stderr 必须说
-    清是符号那件事（而不是 UnknownObject「通道没接上」那种 4）。写死一个数会让
-    merge 那天莫名红。
+  · symbols：**真链路成功面**（2026-10-10 引擎侧落地后）：run-harness 把入库的
+    symbol_categories.tsv 布置进 XDG 数据目录 ⇒ 必须 rc=0；且「浏览已开」要能**看见**
+    —— 引擎契约 ① 说浏览态劫持 buffer() 为标题（一级「符号」），glue 的成功分支
+    紧接着 refreshingPanelFor(ic) 推面板 ⇒ 客户端应收到带「符号」标题的面板信号。
+    再补一步「浏览中按 '1'」：类目下钻的二级标题同样要推到客户端。
+    失败面（未接线 / 数据缺失）由 opi_ctl_driver §7e 在**没有**数据的那份 XDG 目录里
+    用假 hook 测 —— 那两条在本变体里已经不可达（入口已接线、数据已布置）。
 """
 
 import os
@@ -85,6 +88,10 @@ def plan_ctl(ic):
         ("线上未知动作（dbus-send string:bogus）",
          lambda: run_dbus_send("bogus", "bogus"), None),
         ("opi-ctl symbols", lambda: run_ctl("symbols", "symbols"), None),
+        # 浏览中按 '1'：引擎侧 1-9 只在**浏览态**有专属路由（类目下钻/符号上屏），
+        # 非浏览态它只是普通数字键 —— 它的面板结果因此是「浏览真的开着」的进一步
+        # 证据，而不是「动作被接受了」的重复。
+        ("浏览中按 '1'（下钻类目 1）", key(0x31), None),
     ]
     return steps
 
@@ -133,19 +140,37 @@ def check_ctl(windows, failures):
             f"未知动作的线上回复不是 err:5（rc={rc} stdout={out!r} stderr={err!r}）"
             f" —— 两端共享的回复协议对不上了")
 
-    # 5) symbols：形状断言（见模块头）。rc==3 = 总线/服务不可达，那说明 /opi 这条
-    #    通道本身没接上（比第 3 条更早的失败面）；rc==4 必须带符号相关的原因，
-    #    否则就是「UnknownObject」冒充 —— 前者是预期中的未落地，后者是真故障。
+    # 5) symbols：真链路成功面（见模块头）。rc 必须 0，且「浏览已开」要能**看见**：
+    #    引擎契约 ① 说浏览态劫持 buffer() 为标题（一级「符号」），glue 的成功分支
+    #    紧接着 refreshingPanelFor(ic) 推面板 ⇒ 这一步的信号窗口里必须有带「符号」
+    #    字样的面板信号。rc==0 而窗口空 = 「按钮报成功、用户看不见」的静默形态。
+    #    关键词只钉「符号」不钉整串标题：标题格式（「符号·<名>」）归引擎侧，
+    #    格式漂了不该让本变体红 —— 红的是「标题整个没了」这件事。
+    def panel_texts(label):
+        return [p for n, p in by_label.get(label, []) if n.startswith("Update")]
+
     rc, out, err = RESULTS.get("symbols", (None, "", ""))
-    if rc == 0:
-        print("[e2e/ctl] symbols 返回 0 —— 引擎侧符号浏览入口已接线且数据可用", flush=True)
-    elif rc == 4:
-        if "符号" not in err and "符号" not in out:
-            failures.append(
-                f"opi-ctl symbols 退出码 4 但原因里没有「符号」：{err!r}/{out!r}"
-                f" —— 像是 UnknownObject（/opi 没注册）而不是未接线")
-        else:
-            print(f"[e2e/ctl] symbols 退出码 4（预期：引擎侧符号入口未落地/数据"
-                  f"未装上）：{err!r}", flush=True)
+    if rc != 0:
+        failures.append(
+            f"opi-ctl symbols 退出码 {rc}（应为 0：引擎入口已接线，且 run-harness 已把 "
+            f"symbol_categories.tsv 布置进 XDG 数据目录）：stderr={err!r} stdout={out!r}")
     else:
-        failures.append(f"opi-ctl symbols 退出码 {rc}（只允许 0 或 4）：stderr={err!r}")
+        print(f"[e2e/ctl] symbols 返回 0（真入口 + 真数据）：{out!r}", flush=True)
+        sym_panel = panel_texts("opi-ctl symbols")
+        titled = [p for p in sym_panel if "符号" in p]
+        if not sym_panel:
+            failures.append(
+                "opi-ctl symbols 返回 0 但客户端一条面板信号都没有 —— 浏览开了却看不见"
+                "（glue 成功分支应 refreshingPanelFor(ic) 把标题推出去）")
+        elif not titled:
+            failures.append(f"面板信号里没有「符号」标题（浏览态没推到客户端）：{sym_panel}")
+        else:
+            print(f"[e2e/ctl] 浏览已开且推到客户端：{titled[0]!r}", flush=True)
+        drill = panel_texts("浏览中按 '1'（下钻类目 1）")
+        d_titled = [p for p in drill if "符号" in p]
+        if not d_titled:
+            failures.append(
+                f"浏览中按 '1' 没有带「符号」标题的面板更新：{drill}"
+                f" —— 浏览态的键路由（类目下钻）没走到面板")
+        else:
+            print(f"[e2e/ctl] 下钻生效（二级标题推到客户端）：{d_titled[0]!r}", flush=True)
