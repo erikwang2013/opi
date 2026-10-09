@@ -125,7 +125,22 @@ compose.desktop {
             // 与发布 tag 对齐（同 android/app/build.gradle.kts 的 versionName）；
             // 值来自文件上方的 opiAppVersion 单一来源。
             packageVersion = opiAppVersion
-            description = "opi输入法 候选窗（TSF 插件经 named pipe 通信）"
+            // ⚠️ description / vendor / packageName 这几个值**必须是纯 ASCII** ——
+            // 它们在 Windows 上被 jpackage 写进 **MSI 数据库**，而数据库代码页由 WiX 的
+            // 本地化文件决定：jpackage 内置的 en-us 那份写死 Codepage 1252（Windows
+            // Installer 不支持 65001/UTF-8），于是任何中文/全角字符都让 light.exe 以
+            // **LGHT0311** 退出。2026-10-09 在 windows runner 上实测到了：描述原文案
+            // 「opi输入法 候选窗（TSF 插件经 named pipe 通信）」→ 退出码 311，而 Gradle
+            // 只转述「Exit code: 1」，真报错在
+            // desktop/build/compose/logs/packageMsi/*.txt 里（windows.yml 有一条守卫
+            // 会在这些值被改回非 ASCII 时直接红，省掉「light.exe 311 是什么」）。
+            // 想给 Windows 中文文案：自带 MsiInstallerStrings_*.wxl 走 --resource-dir，
+            // 但那份 Culture 不能是 en-us（否则又落回 1252）⇒ 得连 jpackage 选的 locale
+            // 一起换 —— runner 上做不到（jpackage 按系统 locale 选，en-US 上 LANG 无效）。
+            // 代价：.deb 的 Description 跟着一起变英文 —— CMP 的 DSL 只有**一处**
+            // description，没有按平台分设的接口（javap 核过：AbstractDistributions 全局
+            // 一处；WindowsPlatformSettings 上没有）。
+            description = "OPI IME candidate window (TSF plugin over a named pipe)"
             vendor = "OPI"
 
             // 应用图标 = 项目宠物「小欧」，与 Android 启动图标、候选窗里摊手的那个是同一张图

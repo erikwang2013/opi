@@ -132,6 +132,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 前置守卫：description/vendor/packageName 会被 jpackage 写进 MSI **数据库**，而数据库
+      # 代码页是 WiX 本地化文件里的 1252（Windows Installer 不支持 65001/UTF-8）。这些值里
+      # 出现中文/全角字符时 light.exe 会以 LGHT0311 退出（2026-10-09 实测：退出码 311，描述
+      # 原文案带中文就挂在这；Gradle 只报「Exit code: 1」，真原因藏在下面那条诊断步骤打的
+      # jpackage 日志里）。把判据前置，红的时候一眼知道改哪，不用先学会读 light.exe。
+      # sed 取值的锚点与上面 version job 取 opiAppVersion 同一手法。
+      - name: 检查 description/vendor/packageName 是纯 ASCII（否则 MSI 必挂 LGHT0311）
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in description vendor packageName; do
+            val="$(sed -n "s/^ *${key} = \"\(.*\)\"/\1/p" desktop/build.gradle.kts)"
+            [ -n "$val" ] || { echo "::error::从 desktop/build.gradle.kts 取不到 ${key}"; exit 1; }
+            if printf '%s' "$val" | LC_ALL=C grep -q '[^ -~]'; then
+              echo "::error::${key} 含非 ASCII 字符：$val"
+              echo "MSI 数据库代码页 1252，light.exe 会以 LGHT0311（退出码 311）失败；"
+              echo "改回 ASCII，或按 desktop/build.gradle.kts 里那段注释走 --resource-dir 那条路。"
+              exit 1
+            fi
+            echo "${key} 全 ASCII：$val"
+          done
+
       # 与 packages.yml 的 desktop-deb job 同源（temurin 21）：jpackage 需要 ≥17，21 是
       # 当前 LTS。注意 jpackage 会把**这一份** JDK 的运行时 jlink 进包 ⇒ Windows 侧必须
       # 用 Windows 的 JDK，不能拿 Linux 的交叉打（这也是本 workflow 必须存在的理由之一）。
