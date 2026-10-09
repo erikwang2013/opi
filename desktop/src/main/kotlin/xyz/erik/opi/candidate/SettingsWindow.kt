@@ -258,6 +258,8 @@ fun SettingsWindow() {
         Spacer(Modifier.height(4.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("MIT 许可 · 开源", fontSize = 12.sp, color = Muted)
+            // 版权行（2026-10-09 用户裁决「页面增加版权」）。
+            Text("© 2026 erik.xyz", fontSize = 12.sp, color = Muted)
         }
     }
 }
