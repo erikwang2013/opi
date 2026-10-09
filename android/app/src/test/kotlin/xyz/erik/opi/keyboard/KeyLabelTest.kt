@@ -52,20 +52,19 @@ class KeyLabelTest {
     }
 
     /**
-     * 无候选时缓冲格必须可见（2026-10-09 用户报障「无匹配时键盘像死了、没法输入」）：
-     * 9 键的左列在读数空时回标点列（1.7.2 裁决），这格是数字串在 9 键下唯一的可见载体。
+     * 9 键的缓冲格**恒空**（2026-10-09 用户二次裁决：「输入无匹配的时候，候选出现
+     * logo 图标，logo 图标前就不要显示数字了」）—— 别把「无候选时显示缓冲原文」
+     * 加回来（曾被当作反馈修复，用户明确不要）。
      */
     @Test
-    fun nineKeyBufferCellHidesOnlyWhileCandidatesExist() {
-        // 有候选：与左列读数去重（1.7.2 裁决不变）
-        assertEquals("", barBufferText(InputScheme.NINE, "64", hasCandidates = true))
-        // 无候选：原样显示 —— 继续按键/退格在同一处逐键变化，不再「零反馈」
-        assertEquals("99999", barBufferText(InputScheme.NINE, "99999", hasCandidates = false))
-        // 空缓冲本来就无字可显
-        assertEquals("", barBufferText(InputScheme.NINE, "", hasCandidates = false))
-        // 其余方案（26/14/笔画）恒显示
-        assertEquals("ni", barBufferText(InputScheme.FULL, "ni", hasCandidates = true))
-        assertEquals("hh", barBufferText(InputScheme.STROKE, "hh", hasCandidates = false))
+    fun nineKeyBufferCellStaysEmpty() {
+        // 9 键：有候选 / 无候选 / 空缓冲 —— 三种都不显示数字串
+        assertEquals("", barBufferText(InputScheme.NINE, "64"))
+        assertEquals("", barBufferText(InputScheme.NINE, "99999"))
+        assertEquals("", barBufferText(InputScheme.NINE, ""))
+        // 其余方案（26/14/笔画）显示实际缓冲（字母串本来就是拼音）
+        assertEquals("ni", barBufferText(InputScheme.FULL, "ni"))
+        assertEquals("hh", barBufferText(InputScheme.STROKE, "hh"))
         // 选字后 buffer 清空而候选仍在：不能播成「拼音 ，3 个候选」
         assertEquals("3 个候选", composingAnnouncement("", 3))
     }

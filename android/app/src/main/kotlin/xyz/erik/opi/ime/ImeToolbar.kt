@@ -44,7 +44,7 @@ import xyz.erik.opi.pet.PetMood
 /** 工具条高度（dp）：计入 ImeScreen 的列布局，不占键盘权重行。
  * 40（原 36）：2026-10-09 起小欧并入本行（用户裁决「入口要和 logo 图标在一行，
  * 放在 logo 后面」），给 28dp 的它留出上下呼吸。 */
-const val IME_TOOLBAR_HEIGHT_DP = 40
+const val IME_TOOLBAR_HEIGHT_DP = 44
 
 /**
  * 键盘顶部工具条（2026-10-09，对齐搜狗移动端）：**入口全部用图标** ——

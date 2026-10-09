@@ -96,8 +96,8 @@ fun NineKeyKeyboard(
 ) {
     // 键面按搜狗排：**字母为主、数字缩小到下面**（2026-10-09 用户裁决「现在的
     // 排版太不适应」）。此前是反的（数字 22sp、字母 11sp）—— 人们认键靠字母。
-    val letterSize = if (big) 26.sp else 18.sp
-    val digitSize = if (big) 13.sp else 10.sp
+    val letterSize = if (big) 30.sp else 21.sp
+    val digitSize = if (big) 15.sp else 12.sp
     Column(modifier = modifier.fillMaxSize()) {
         Row(modifier = Modifier.weight(3f).fillMaxSize()) {
             // ---- 左侧一列（2026-10-09，搜狗 9 键同款）----
@@ -140,7 +140,7 @@ fun NineKeyKeyboard(
                                 ) {
                                     Text(
                                         r,
-                                        fontSize = 13.sp,
+                                        fontSize = 15.sp,
                                         color = if (pinned) {
                                             LocalKeyboardPalette.current.accent
                                         } else {

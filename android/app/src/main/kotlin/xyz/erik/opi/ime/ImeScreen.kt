@@ -35,6 +35,7 @@ import xyz.erik.opi.keyboard.QwertyKeyboard
 import xyz.erik.opi.keyboard.RarePanel
 import xyz.erik.opi.keyboard.StrokeKeyboard
 import xyz.erik.opi.keyboard.SymbolCatalog
+import xyz.erik.opi.keyboard.SymbolPage
 import xyz.erik.opi.keyboard.SymbolPanel
 import xyz.erik.opi.pet.petMood
 
@@ -57,6 +58,8 @@ fun ImeScreen(
     router: KeyRouter,
     catalog: SymbolCatalog,
     rareIndex: () -> Map<Int, Map<Int, List<String>>> = { emptyMap() },
+    /** 符号页类目（懒读资产）：只在真正打开符号页时才取。 */
+    symbolCategories: () -> List<xyz.erik.opi.keyboard.SymbolCategories.Category> = { emptyList() },
 ) {
     val modes = state.keyboardModes
     // 优先级：长辈 > 暗光 > 皮肤（皮肤是「底」，模式是临时覆盖；见 SkinOption 的说明）。
@@ -136,7 +139,7 @@ fun ImeScreen(
                 if (modes.oneHand == KeyboardModes.OneHand.RIGHT) {
                     Box(modifier = Modifier.weight(0.24f)) // 右侧单手：左边留空
                 }
-                KeyboardArea(state, controller, router, catalog, rareIndex, modifier = Modifier.weight(1f))
+                KeyboardArea(state, controller, router, catalog, rareIndex, symbolCategories, modifier = Modifier.weight(1f))
                 if (modes.oneHand == KeyboardModes.OneHand.LEFT) {
                     Box(modifier = Modifier.weight(0.24f)) // 左侧单手：右边留空
                 }
@@ -153,12 +156,19 @@ private fun KeyboardArea(
     router: KeyRouter,
     catalog: SymbolCatalog,
     rareIndex: () -> Map<Int, Map<Int, List<String>>>,
+    symbolCategories: () -> List<xyz.erik.opi.keyboard.SymbolCategories.Category>,
     modifier: Modifier = Modifier,
 ) {
     val shiftVisible = controller.mode == EngineMode.ENGLISH
     when (state.view) {
         ImeState.View.RARE -> RarePanel(
             index = rareIndex(),
+            onCommit = router::commitText,
+            onClose = state::backToLetters,
+            modifier = modifier,
+        )
+        ImeState.View.SYMBOL_PAGE -> SymbolPage(
+            categories = symbolCategories(),
             onCommit = router::commitText,
             onClose = state::backToLetters,
             modifier = modifier,
@@ -199,7 +209,7 @@ private fun KeyboardArea(
             // 数字/标点走引擎（键码 = 字符）：引擎层标点表与全角开关在面板上同样生效
             // —— 旧路径 onKey = router::commitText 是 UI 直提，绕开引擎。
             onKey = router::handleKey,
-            onSymbol = state::openSymbol,
+            onSymbol = state::openSymbolPage,
             onLetters = state::backToLetters,
             onSpace = router::handleSpace,
             onBackspace = router::handleBackspace,
@@ -266,7 +276,7 @@ private fun KeyboardArea(
                     onBackspace = router::handleBackspace,
                     onEnter = router::handleEnter,
                     onModeSwitch = state::cycleMode,
-                    onSymbol = state::openSymbol,
+                    onSymbol = state::openSymbolPage,
                     // 分词键：**缓冲空时不发** —— 空缓冲的 `'` 在引擎里是引号
                     // （标点表那条），不是分词符；没边界可切就什么都不做。
                     onSegment = {
@@ -294,7 +304,7 @@ private fun KeyboardArea(
                     onBackspace = router::handleBackspace,
                     onEnter = router::handleEnter,
                     onModeSwitch = state::cycleMode,
-                    onSymbol = state::openSymbol,
+                    onSymbol = state::openSymbolPage,
                     modeLabel = label,
                 )
                 InputMode.STROKE -> StrokeKeyboard(
@@ -304,7 +314,7 @@ private fun KeyboardArea(
                     onBackspace = router::handleBackspace,
                     onEnter = router::handleEnter,
                     onModeSwitch = state::cycleMode,
-                    onSymbol = state::openSymbol,
+                    onSymbol = state::openSymbolPage,
                     onRare = state::openRare,
                     modeLabel = label,
                 )

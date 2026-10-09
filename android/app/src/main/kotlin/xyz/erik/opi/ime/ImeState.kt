@@ -76,7 +76,7 @@ class ImeState(
     var commit: (String) -> Unit = {},
     private val debouncer: Debouncer = HandlerDebouncer(),
 ) {
-    enum class View { QWERTY, NUMBER, SYMBOL, RARE, SKIN, INPUT_MODE, KEYBOARD_MODE }
+    enum class View { QWERTY, NUMBER, SYMBOL, RARE, SKIN, INPUT_MODE, KEYBOARD_MODE, SYMBOL_PAGE }
 
     companion object {
         /** 搜索防抖窗口（对齐 flutter 250ms）。 */
@@ -258,6 +258,17 @@ class ImeState(
         commitPendingBuffer()
         resetSearch()
         view = View.SYMBOL
+    }
+
+    /**
+     * 符号页（9 键左下角「符」；26/14/笔画同键也走它 —— 2026-10-09 用户裁决
+     * 「左下角符按钮点进去应该是个新的页面」）。收起旧符号面板那条路不变（表情图标
+     * 仍走 [openSymbol] 的表情 Tab）。开页面前先提交 pending buffer（同 openSymbol）。
+     */
+    fun openSymbolPage() {
+        commitPendingBuffer()
+        resetSearch()
+        view = View.SYMBOL_PAGE
     }
 
     /**

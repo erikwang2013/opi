@@ -43,7 +43,7 @@ import xyz.erik.opi.pet.petMood
  * 候选栏高度（dp）。OpiImeService 把它算进 IME 窗口高度、ImeScreen 用它预留位置：
  * 三处必须一致，所以只在这里定义一次。
  */
-const val CANDIDATE_BAR_HEIGHT_DP = 44
+const val CANDIDATE_BAR_HEIGHT_DP = 48
 
 /**
  * 候选栏：拼音缓冲 + 每屏 8 候选，点击选择、长按删自造词；页数>1 时显示 ‹ n/m › 翻页。
@@ -80,10 +80,9 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
             .background(p.barBg),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // 这格显示什么见 barBufferText 的文档（9 键平时隐藏、无候选时必须显示）。
+        // 这格显示什么见 barBufferText 的文档（9 键恒空）。
         // 语义节点恒在（读屏播报挂它，见下面语义块），隐藏时留空文本节点。
-        val bufferShown =
-            barBufferText(controller.inputScheme, controller.buffer, candidates.isNotEmpty())
+        val bufferShown = barBufferText(controller.inputScheme, controller.buffer)
         Text(
             bufferShown,
             modifier = Modifier
@@ -100,7 +99,7 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
                     )
                     liveRegion = LiveRegionMode.Polite
                 },
-            fontSize = 18.sp,
+            fontSize = 20.sp,
             color = p.barBufferFg,
         )
         Row(
@@ -153,7 +152,7 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("$n.", fontSize = 13.sp, color = p.barBufferFg, modifier = Modifier.padding(end = 3.dp))
-                    Text(c, fontSize = 20.sp, color = p.keyFg)
+                    Text(c, fontSize = 22.sp, color = p.keyFg)
                 }
             }
             // 拼音无候选：小欧出来摊手，比一行灰字更不像"卡住了"。
@@ -203,18 +202,17 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
 /**
  * 候选栏最左格（缓冲格）显示的文本。
  *
- * **9 键方案平时隐藏**（拼音读数在键盘左侧一列，同一串字两处显示是冗余，见
- * NineKeyKeyboard 的左列）；**但无候选时必须显示**（2026-10-09 用户报障
- * 「无匹配时键盘像死了、没法输入」）：此时左列按 1.7.2 裁决回标点列，这格再空
- * ⇒ 用户打的数字串全屏无一处可见 —— 继续按键零变化、退格是盲数。
- * 这格是缓冲内容在 9 键下的**唯一**可见载体（1.7.1 曾是左列的数字回退，已按裁决撤掉），
- * 也是缓冲到顶「看得见」的承担者（到顶后按键静默，只见它不再变长）。
+ * **9 键方案下恒空**（2026-10-09 用户二次裁决：「输入无匹配的时候，候选出现 logo
+ * 图标，**logo 图标前就不要显示数字了**」）—— 9 键的缓冲是数字串，候选区里没有它的
+ * 位置：无匹配时那格就该只有小欧 +「无匹配」。其余方案（26/14/笔画）显示实际缓冲
+ * （字母串本来就是拼音）。
+ *
+ * ⚠️ 别把「无候选时显示缓冲原文」加回来：2026-10-09 曾把它当作「无匹配时全屏无反馈」
+ * 的修复，用户看过之后明确不要（数字串在候选区是噪音）。若又收到「无匹配时键盘像死了」，
+ * 先与用户对反馈载体（键面/小欧/无匹配文案），别直接改这一格。
  */
-internal fun barBufferText(
-    scheme: InputScheme,
-    buffer: String,
-    hasCandidates: Boolean,
-): String = if (scheme == InputScheme.NINE && hasCandidates) "" else buffer
+internal fun barBufferText(scheme: InputScheme, buffer: String): String =
+    if (scheme == InputScheme.NINE) "" else buffer
 
 /** 拼音缓冲 + 候选数的播报文案；无候选时明说「无候选」，别让读屏用户以为卡住了。 */
 internal fun composingAnnouncement(buffer: String, candidateCount: Int): String {

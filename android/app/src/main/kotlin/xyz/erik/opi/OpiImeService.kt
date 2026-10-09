@@ -79,6 +79,18 @@ class OpiImeService : InputMethodService() {
         }
     }
 
+    /** 符号页类目（`assets/symbol_categories.tsv`，生成物入库）。同 rareIndex：懒读、
+     * 损坏 → 空列表（页面显示「没有类目数据」而不是崩 IME）。 */
+    private val symbolCategories: List<xyz.erik.opi.keyboard.SymbolCategories.Category> by lazy {
+        try {
+            assets.open("symbol_categories.tsv").bufferedReader()
+                .use { xyz.erik.opi.keyboard.SymbolCategories.parse(it.readText()) }
+        } catch (e: Exception) {
+            Log.w(TAG, "symbol_categories.tsv 读取失败，符号页将为空: $e")
+            emptyList()
+        }
+    }
+
     // Compose 需要 ViewTreeLifecycleOwner（IME Service 无 Activity 生命周期）。
     // 最小实现：lifecycleRegistry 手动推进（CREATED→RESUMED→STARTED→DESTROYED）。
     // SavedStateRegistryOwner 必须挂：Compose 1.7+ 的 AndroidComposeView.onAttachedToWindow
@@ -96,7 +108,7 @@ class OpiImeService : InputMethodService() {
     companion object {
         private const val TAG = "OpiImeService"
         /** 键区高度占可用窗口短边的比例（对齐 flutter ime_main.dart 的 0.42）。 */
-        private const val KEY_AREA_RATIO = 0.42
+        private const val KEY_AREA_RATIO = 0.48
         /**
          * 键区在比例基数之外额外加的高度（dp）。
          *
@@ -105,10 +117,14 @@ class OpiImeService : InputMethodService() {
          * 照样画到窗口最底（本机实测键底 y=2270，窗口底 y=2400）。真正把键区抬到手势条之上
          * 的是**系统导航栏 inset**（本机实测 129px，decorFitsSystemWindows 自动下的 padding），
          * 与这个常量无关，所以这里不需要再留"安全区"。
-         * 它现在的身份就是「键区加高」，按 dp 取实测等效值 64dp（density 2.625 → 168px，
-         * 与改造前逐像素一致）；裸像素在 density 1.0 上是 168dp、3.5 上是 48dp，差 3.5 倍。
+         * 它现在的身份就是「键区加高」，按 dp 取实测等效值。
+         * 2026-10-09 用户裁决「整体布局 UI 太小，没有搜狗输入法移动端显示大」：
+         * 64 → 76dp（连同比率 0.42 → 0.48），本机 1080×2400 实测键盘总高
+         * **736px → 843px**（占屏 30.7% → 35.1%，往搜狗/GBoard 的 40% 量级靠）；
+         * 键行 ≈91px → ≈106px、字母字号 18 → 21sp（见 NineKeyKeyboard/KeyButton）。
+         * 裸像素在 density 1.0 上是 199dp、3.5 上是 57dp，差 3.5 倍。
          */
-        private const val KEY_AREA_EXTRA_DP = 64
+        private const val KEY_AREA_EXTRA_DP = 76
 
         /** 悬浮/游戏模式下窗口宽度占屏宽的比例（收窄居中，见 applyKeyboardWindow）。 */
         private const val FLOATING_WIDTH_RATIO = 0.86f
@@ -221,7 +237,11 @@ class OpiImeService : InputMethodService() {
         // IME 提交通道在视图创建时注入（构造期无 this 引用；面板打开提交 pending buffer 用）
         imeState.commit = ::commitWithRetry
         view.setContent {
-            ImeScreen(imeState, engineController, keyRouter, symbolCatalog, rareIndex = { rareIndex })
+            ImeScreen(
+                imeState, engineController, keyRouter, symbolCatalog,
+                rareIndex = { rareIndex },
+                symbolCategories = { symbolCategories },
+            )
         }
         Log.i(TAG, "onCreateInputView: window=${windowSizePx()} keyboardHeight=${keyboardHeight()}")
         inputViewCache = view

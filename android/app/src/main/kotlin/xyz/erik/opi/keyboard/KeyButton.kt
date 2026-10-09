@@ -60,7 +60,7 @@ fun KeyButton(
             .fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, fontSize = 18.sp, maxLines = 1, color = fg)
+        Text(label, fontSize = 21.sp, maxLines = 1, color = fg)
     }
 }
 
