@@ -171,7 +171,6 @@ class EngineController(
     /** 引擎状态回读；buffer 变化重置候选页码，候选数缩水时钳制页码。 */
     fun refresh() {
         buffer = api.buffer()
-        reading = api.displayBuffer()
         mode = EngineMode.fromInt(api.mode())
         learnerEnabled = api.learnerEnabled()
         fuzzyEnabled = api.fuzzyEnabled()
@@ -184,6 +183,11 @@ class EngineController(
         }
         val maxPage = if (candidates.isEmpty()) 0 else (candidates.size - 1) / pageSize
         if (_candidatePage > maxPage) _candidatePage = maxPage
+        // 读数（9 键左列）**必须最后读**：真引擎的读数是 `candidates()` 的副产物
+        // （`scheme_reading` 缓存，且与算它时的缓冲绑存 —— 缓冲一变即作废报空）。
+        // 先读会拿到空串或上一条缓冲的旧值：2026-10-09 用户报障「确定候选词后左列
+        // 不恢复标点」的 Kotlin 侧根因。**别把这个赋值挪回前面**（有单测钉次序）。
+        reading = api.displayBuffer()
     }
 
     /**

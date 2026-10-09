@@ -26,9 +26,14 @@ pub struct Engine {
     /// 用户词频权重，按词典最大静态词频动态缩放（一次选词即压过所有静态词）。
     user_boost: u64,
     /// 9 键方案的「拼音读数」（显示用，见 [Self::display_buffer]）：由 `candidates()`
-    /// 在九键分支里刷新 = 首条候选的拼音。`RefCell` 是因为 `candidates()` 是 `&self`
+    /// 在九键分支里刷新 = 首条候选的拼音。**存 `(算它时的缓冲, 读数)` 一对** ——
+    /// 缓冲一变（提交/退格/清空）旧读数立即作废，`display_buffer()` 返回空串，
+    /// **不依赖调用方「之后又取了一次候选」的次序**（2026-10-09 用户报障「确定候选词后
+    /// 左列不恢复标点」：成因正是这个次序假设 —— 提交清缓冲时没清读数，而下一次
+    /// 刷新先读 display_buffer 再取候选）。
+    /// `RefCell` 是因为 `candidates()` 是 `&self`
     /// （读侧出口遍布 FFI，改 `&mut` 会连锁）；引擎单例在 Mutex 里，Send 足够。
-    scheme_reading: std::cell::RefCell<String>,
+    scheme_reading: std::cell::RefCell<(String, String)>,
     /// 全角开关：`true` = ASCII 标点出**机械全角**（U+FF01..U+FF5E 平移），
     /// `false` = 直通半角。只管宽度 —— 中文标点表是另一档（[`Self::chinese_punct`]）。
     /// 切模式重置为该模式的默认值（[`Mode::default_fullwidth`]）。
@@ -74,7 +79,7 @@ impl Engine {
             symbols,
             learner: Learner::new(learner_enabled),
             user_boost,
-            scheme_reading: std::cell::RefCell::new(String::new()),
+            scheme_reading: std::cell::RefCell::new((String::new(), String::new())),
             fullwidth: Mode::default().default_fullwidth(),
             chinese_punct: true,
             quotes: Quotes::default(),
@@ -134,7 +139,7 @@ impl Engine {
         self.composer.set_scheme(scheme);
         self.composer.clear();
         // 读数与缓冲同生命周期：不清的话换方案后的一次读会拿到上一条输入的拼音。
-        self.scheme_reading.borrow_mut().clear();
+        *self.scheme_reading.borrow_mut() = (String::new(), String::new());
     }
 
     // ---- 标点表 / 全角一族：impl 体在 engine_punct.rs（500 行门禁拆出）----
@@ -288,11 +293,13 @@ impl Engine {
         {
             // **带分词的**读数（搜狗「拼音9键显示分词」同款）：音节用 `'` 连起来，
             // 「nihao」显示成「ni'hao」—— 一眼看到引擎怎么切的音节。
-            let reading = self.scheme_reading.borrow();
-            if reading.is_empty() {
+            let cached = self.scheme_reading.borrow();
+            // 缓冲变了（提交/退格/清空）而读数还是旧缓冲那一次算的 ⇒ 作废，报空串 ——
+            // 界面按「读不到拼音」处理（左列回标点列）。下次 candidates() 会按新缓冲重算。
+            if cached.0 != self.buffer() || cached.1.is_empty() {
                 return String::new();
             }
-            return crate::pinyin::segment(&reading).join("'");
+            return crate::pinyin::segment(&cached.1).join("'");
         }
         self.buffer().to_string()
     }
@@ -319,8 +326,9 @@ impl Engine {
                         self.user_boost,
                         self.scheme(),
                     );
-                    // 读数随每次取候选刷新（9 键的显示缓冲靠它；见 display_buffer）。
-                    *self.scheme_reading.borrow_mut() = reading;
+                    // 读数随每次取候选刷新，**并与当时的缓冲绑存**（见 display_buffer：
+                    // 缓冲一变这对就作废，不许把旧缓冲的读数报给新状态）。
+                    *self.scheme_reading.borrow_mut() = (s.buffer.clone(), reading);
                     return cands;
                 }
                 // 笔画：换词典 + **关掉模糊音/简拼**（两者对 hspnz 串没有意义，

@@ -388,4 +388,21 @@ class EngineControllerTest {
         assertEquals("", ctrl.reading)
         assertEquals("999", ctrl.buffer)
     }
+
+    @Test
+    fun readingReflectsTheLatestCandidatesFetchNotAStaleOne() {
+        // 读数必须**最后读**（refresh 的读序契约）：真引擎的读数是 candidates() 的
+        // 副产物、且与算它时的缓冲绑存（FakeEngine.readingModel 按此模拟）。先读
+        // 读数再取候选 = 拿到空串或上一条缓冲的旧值 —— 2026-10-09 用户报障「确定
+        // 候选词后左列不恢复标点」的 Kotlin 侧根因，这条把次序钉死。
+        val fake = FakeEngine().apply { readingModel = { b -> "读($b)" } }
+        val ctrl = EngineController(fake)
+        ctrl.input("6")
+        ctrl.input("4")
+        assertEquals("组字中：读数与当前缓冲一致（不许慢一拍）", "读(64)", ctrl.reading)
+        fake.selectResults[0] = "命"
+        ctrl.select(0) // 提交：缓冲清空
+        assertEquals("", ctrl.buffer)
+        assertEquals("提交后读数必须立即归零（左列回标点）", "", ctrl.reading)
+    }
 }

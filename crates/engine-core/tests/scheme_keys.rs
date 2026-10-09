@@ -417,3 +417,28 @@ fn reading_resets_to_empty_when_the_buffer_empties() {
     assert_eq!(e.buffer(), "");
     assert_eq!(e.display_buffer(), "", "退空后读数必须归零");
 }
+
+/// 读数缓存**不许撒谎**（2026-10-09 用户报障「确定候选词后左列不恢复标点」的引擎侧
+/// 根因）：缓冲一变（提交/退格），即使**没再取一次候选**，`display_buffer()` 也必须
+/// 立刻为空。旧实现里读数是 `candidates()` 的副产物、不随缓冲作废，谁按「先读读数、
+/// 再取候选」的次序刷新，谁就为提交后的那一次读到旧拼音 —— 而且挂到下一次按键为止。
+#[test]
+fn display_buffer_dies_with_the_buffer_not_with_the_next_fetch() {
+    let mut e = engine();
+    e.set_scheme(Scheme::Nine);
+    type_str(&mut e, "64"); // ni
+    let _ = e.candidates(8);
+    assert_eq!(e.display_buffer(), "ni", "前置：读得到拼音");
+
+    // 提交：内层 candidates 把读数刷成 "64" 那一次算的；提交之后**不再取候选**。
+    let _ = e.select_from(&e.candidates(8), 0);
+    assert_eq!(e.buffer(), "", "前置：提交后缓冲已清");
+    assert_eq!(e.display_buffer(), "", "提交后不得报旧缓冲的读数");
+
+    // 退格改缓冲同理：旧读数立刻作废（下次 candidates() 才会给出新缓冲的读数）。
+    type_str(&mut e, "64");
+    let _ = e.candidates(8);
+    assert_eq!(e.display_buffer(), "ni");
+    e.backspace();
+    assert_eq!(e.display_buffer(), "", "退格后旧读数立刻作废");
+}

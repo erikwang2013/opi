@@ -73,6 +73,9 @@ class FakeEngine : OpiEngineApi {
 
     override fun candidates(limit: Int): Array<String>? {
         lastLimit = limit
+        // 真引擎契约（engine.rs 的 scheme_reading 缓存）：读数是取候选的**副产物**，
+        // 且与算它时的缓冲绑存 —— 缓冲一变即作废（报空串）。启用 model 时按此模拟。
+        readingModel?.let { cachedReading = if (buf.isEmpty()) "" else it(buf) }
         return cands
     }
 
@@ -80,7 +83,17 @@ class FakeEngine : OpiEngineApi {
 
     /** 显示读数（真引擎：9 键 = 带分词的读音）。默认与 buf 同步，测试要区分时单设。 */
     var displayBuf: String? = null
-    override fun displayBuffer(): String = displayBuf ?: buf
+
+    /**
+     * 读数真契约的模型（buf → 读数），null = 不启用（老用例行为不变）。
+     * 启用后 [displayBuffer] 只报「上一次 [candidates] 时按当时缓冲算出的」读数 ——
+     * 专供钉 `refresh()` 读序的用例（先读读数再取候选 = 拿到旧值/空串）。
+     */
+    var readingModel: ((String) -> String)? = null
+    private var cachedReading = ""
+
+    override fun displayBuffer(): String =
+        displayBuf ?: (if (readingModel != null) cachedReading else buf)
 
     override fun mode(): Int = mode
 
