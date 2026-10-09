@@ -7,8 +7,8 @@
 > | 层 | 状态 | 判据 |
 > |---|---|---|
 > | Rust 侧 C ABI（`crates/opi-ffi`） | **已实测**能为 `aarch64-apple-darwin` 编译、能产出 `libopi_ffi.a`，且导出符号集合与 `cabi.rs` 完全一致 | 见「产出 `libopi_ffi.a`」，本机可复现 |
-> | `macos/` 下的 Swift（3 个文件） | **一行都没有被编译过** | 本机是 Linux，没有 Xcode / Apple SDK，`import InputMethodKit` 就断 |
-> | `macos/OpiFFI.h` | 过了 `clang -fsyntax-only`（C 与 C++ 两种模式），**但从未被链接过** | 「clang 说这堆声明自洽」与「ld 能把它们接到 Rust 的符号上」是两件事 |
+> | `macos/` 下的 Swift（3 个文件） | **2026-10-09 起：过了真编译器**（CI `apple.yml` 对 `macos/` 跑 `swiftc -typecheck` + 真编 + 链接 + ad-hoc 签名打包；run 37935240583）。但**运行时行为仍是 0 验证** | 本机仍是 Linux（`import InputMethodKit` 就断），编译这一层由 CI 的 macos-latest 补上；见 §4.5 |
+> | `macos/OpiFFI.h` | 过了 `clang -fsyntax-only`（C 与 C++ 两种模式）。⏳ 2026-10-09 起**也被链接过了**：swiftc 真编时把它当桥接头、并链上 Rust 库（CI `apple.yml`，run 37935240583，见 §4.5） | 「clang 说这堆声明自洽」与「ld 能把它们接到 Rust 的符号上」是两件事——后者 2026-10-09 由 CI 补上；**没被 Swift 调到的声明**仍只过了语法检查 |
 >
 > **别把「Rust 侧能编」读成「macOS 端能用」。** 本项目已经被「没被编译器看过的代码」
 > 坑过两次，本目录的存在正是为了避免第三次：
@@ -152,6 +152,14 @@ Swift target 依赖它 —— 但**仓库里没有** `module.modulemap`，得自
    `NSEvent.keyCode` 的那张表、`IMKServer` 的启动顺序……）。
    **把编译错误当成这份草案的待办清单**：那个清单的长度本身就是本目录可信度的度量。
 
+   > ⏳ **2026-10-09 订正：首次编译已经发生**（CI `apple.yml`，见 §4.5）。撞出来的
+   > 编译错误共三类，都已就地修好：① `IMKServer(name:bundleIdentifier:)` 是
+   > **可失败** init（nil = 连接名被占用，改为 guard + 退出）；② `IMKCandidates` 的
+   > 构造也是**可失败**的（候选窗建不起来时只记日志、不退出——它是显示层）；
+   > ③ `updateCandidates()` 在 Swift 里叫 `update()`。清单里其余条目
+   > （`insertText`/`setMarkedText` 的 replacementRange 取值、run loop、plist 键）
+   > **依旧未验证** —— 编译过 ≠ 用起来对。
+
 另一种产物形态（不想改 `crate-type` 时的替代方案）：直接用现成的 `cdylib`，
 把 `libopi_ffi.dylib` 放进 `OpiInputMethod.app/Contents/Frameworks/`，
 并把 rpath 设成 `@executable_path/../Frameworks`。fcitx5 轨就是这么做的（`$ORIGIN` rpath），
@@ -174,6 +182,75 @@ macOS 输入法是**一个 .app**，由 `Info.plist` 里的 IMK 键声明：
 
 > 以上键名来自 InputMethodKit 的公开约定，**取值没被核对过**（`macos/README.md`
 > 「最不确定的 API」#6）。打包完第一件事是拿系统输入法的 plist 做比对。
+
+---
+
+## 4.5 CI 自动打包产物（未签名/未公证 —— **开发用，不能分发**）
+
+`.github/workflows/apple.yml`（macos-latest，三个 job：`rust` / `macos` / `ios`）每次运行都把
+`macos/` 的 Swift 真过一遍编译器（`swiftc -typecheck` → 真编两个架构 → `lipo` → 组装 IME
+bundle → ad-hoc 签名 → `.pkg`/`.zip`）。产物挂在**该次 run 的 Artifacts** 里。取法：
+
+```bash
+gh run list --workflow apple.yml                  # 找 run id（或网页 Actions 页）
+gh run download <run-id> -n "opi-macos-ime-v$(bash scripts/apple/version.sh)"
+gh run download <run-id> -n "opi-apple-rust-v$(bash scripts/apple/version.sh)"   # 只要 Rust 库时
+```
+
+| 产物名（版本号 = `Cargo.toml` 的 `[workspace.package] version`，唯一取法在 `scripts/apple/version.sh`） | 内容 |
+|---|---|
+| `opi-macos-ime-v<版本>` | `OpiInputMethod.app`（**通用** arm64+x86_64、ad-hoc 签名、内含 `Contents/Frameworks/libopi_ffi.dylib` 与 `Resources/opi.tiff`）· `opi-inputmethod-<版本>-unsigned.pkg`（装到 `/Library/Input Methods/`）· `opi-inputmethod-<版本>-unsigned.zip`（用户级安装用） |
+| `opi-apple-rust-v<版本>`（rust job） | `macos/libopi_ffi.dylib` 与 `macos/libopi_ffi.a`（都是**通用**库）· `headers/OpiFFI.h` · `opi_ffi.xcframework`（iOS 用） |
+
+**这次 run 真实证明了什么**（run 37935240583，证据都在 job 日志里，可复核）：
+
+- `macos/` 3 个 `.swift` 过 typecheck + 真编两个架构 + `lipo` 成通用可执行；
+- `codesign --verify --deep --strict` 通过（原话：`valid on disk` /
+  `satisfies its Designated Requirement`）；
+- app 对 `libopi_ffi` 的依赖名是 `@rpath/libopi_ffi.dylib`，且 app 里带
+  `@executable_path/../Frameworks` 的 rpath ⇒ **换台机器**（只要 dylib 在 bundle 里）能解析
+  （构建机绝对路径那种「CI 全绿、别人机器上 dyld 崩」的地雷已排除）；
+- **真跑过一次**：用 ctypes `dlopen` bundle 里的那份 dylib，并调真出口 ——
+  `opi_load(内置回退库) = True / opi_mode() = 0`（在 CI 的 arm64 机器上）；
+- `.pkg` 的 payload 真的含 `Library/Input Methods/OpiInputMethod.app` 的可执行文件与
+  `Info.plist`（`pkgutil --payload-files` 断言，防「空包也成功」）。
+
+**怎么用**：
+
+```bash
+# 装法 A：pkg（系统级；未签名 ⇒ installer 会报未签名，需 -allowUntrusted，或对 .app 右键打开）
+sudo installer -pkg opi-inputmethod-<版本>-unsigned.pkg -target / -allowUntrusted
+# 装法 B：用户级（不需要 sudo）——解压 zip，照 §5 的手工步骤复制到 ~/Library/Input Methods/
+```
+
+装完照 §5 走：`killall OpiInputMethod` → 注销重新登录 → 系统设置里添加。
+⚠️ 上面**装法本身的细节（`-allowUntrusted` 的确切行为）未在 Mac 上核过** —— CI 只做到
+「打包 + 签名校验 + 库能 dlopen」，**没有**装进系统这一步（runner 也不适合当这种验证点）。
+
+**它不能做什么（现状，别读成「降级」）**：
+
+- **未签名/未公证**：Gatekeeper 会拦；发给别人机器上很可能直接显示「已损坏」。
+  正式发布要 Developer ID 证书 + `notarytool` 公证 + `stapler` 装订 —— 三件都**不在**
+  本工作流范围内（仓库没有证书、不连签名服务）。
+- **运行时 0 验证**：系统输入法列表里出不出现、按键进不进引擎、preedit 显不显示、
+  候选窗对不对 —— 全都没测（§6 一步没走）。**编译过 ≠ 能用。**
+- `InputMethodServerControllerClass` 定成**裸名** `OpiInputController`：依据是源码里的
+  `@objc(OpiInputController)`（它把 ObjC 运行时名逐字定成裸名）。**运行期未验证** ——
+  装上后若「能选、但完全无响应」，先按 §4 的表查这个键。
+- 版本号取自 `Cargo.toml`；`macos/Info.plist` 里记的版本**只对账、不改写**
+  （漂了就漂着，由发版清单去同步 —— 见 §4 的表）。
+
+想在本机复现（不用 CI）：Mac 上先 `rustup target add` 两个 darwin 目标、两条
+`cargo build`（前置条件写在脚本头部），然后
+`bash scripts/apple/package-macos.sh "$(bash scripts/apple/version.sh)"`。
+
+⚠️ **自己写链接行时的一个坑**：cargo 产物目录里 `.a` 与 `.dylib` **并存**（`crate-type` 含
+`cdylib`），`-L … -lopi_ffi` 会优先挑 **`.dylib`**；而 cargo 那份 `.dylib` 的 install name
+常是**构建机上的绝对路径** —— 链接会成功、CI 全绿，装到别人机器上却是
+`dyld: Library not loaded: /Users/...`。本工作流把库改成 `@rpath/libopi_ffi.dylib`
+并断言 app 的依赖名就是 `@rpath/…`（见上面的证据清单），自己写链接行时**同样要改**
+`install_name_tool -id @rpath/libopi_ffi.dylib`，并让 app 带上
+`@executable_path/../Frameworks` 的 rpath。
 
 ---
 
@@ -258,11 +335,16 @@ cp luna.opid ~/Library/Application\ Support/opi/luna.opid
 ## 8. 未验证清单（照抄现状，别读成已完成）
 
 - `macos/` 下 **3 个 `.swift`**（`OpiEngine.swift` / `InputController.swift` / `main.swift`）：
-  **没有编译、没有 lint、没有单测**。
+  没有 lint、没有单测；**编译**这一条 2026-10-09 起由 CI 补上（`apple.yml`，
+  run 37935240583：typecheck + 真编 + 链接 + ad-hoc 签名，见 §4.5）。
+  **运行时（装进系统之后）验证数依旧是 0。**
 - `macos/Info.plist`：**没有被任何 macOS 构建系统读过**，也没有装进过任何系统的输入法列表。
 - `macos/OpiFFI.h`：过了 `clang -fsyntax-only`（C 与 C++ 两种模式，`-Werror` 下 exit 0），
-  也过了「把 `cabi.rs` 的每个导出名**取地址**」那个 TU。**但它从未被链接过**，
-  且那条检查对**签名/类型是瞎的**（`&f` → `const void *` 对任何函数类型都成立）。
+  也过了「把 `cabi.rs` 的每个导出名**取地址**」那个 TU。**2026-10-09 起它被链接过了**
+  （CI 的 swiftc 真编拿它当桥接头并链上 Rust dylib，run 37935240583）。
+  但「链接过」的分辨力有限：只有**被 Swift 代码实际调到**的声明过了 typecheck
+  （参数/返回类型对得上了），没被调到的声明仍只有语法检查；而那个取地址 TU
+  对**签名/类型是瞎的**（`&f` → `const void *` 对任何函数类型都成立）。
 - **「最不确定的 API 清单」共 10 条**，逐条都标了不确定点（提交文本、
   `setMarkedText` 签名、`IMKCandidates` 构造与常量名、`candidateSelected` 怎么拿客户端、
   启动与 run loop、`Info.plist` 键、`NSEvent.keyCode` 数值表、
