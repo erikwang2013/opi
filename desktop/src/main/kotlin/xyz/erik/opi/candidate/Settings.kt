@@ -7,8 +7,9 @@
 //! · Linux：写的是 **fcitx5 的原生 addon 配置**
 //!   （`$XDG_CONFIG_HOME/fcitx5/conf/opi_fcitx5.conf`；字段声明在
 //!   `crates/fcitx5-opi/cpp/opi_config.h` 的 `OpiSettings`）。写完跑
-//!   `fcitx5-remote -r`（= ReloadConfig）即时生效：fcitx5 → addon 的
-//!   `reloadConfig()` → 引擎。
+//!   **`ReloadAddonConfig("opi_fcitx5")`**（busctl/dbus-send）即时生效：fcitx5 →
+//!   addon 的 `reloadConfig()` → 引擎。⚠️ `fcitx5-remote -r` **不干这事**（实测，见
+//!   [notifyFcitxReload] 的订正段）。
 //! · Windows：`%LOCALAPPDATA%\opi\settings.ini`（与 `crates/tsf-opi/src/dict_path.rs`
 //!   的候选目录同一处）。⚠️ **生效时机 = 输入法下一次激活**：TSF 侧没有在线刷新通道
 //!   （upgrade path 写在 `crates/tsf-opi/src/settings.rs` 的模块头）。
@@ -66,7 +67,8 @@ data class OpSettings(
     /** 写成 ini。键名见文件头「三处逐字对应」。 */
     fun toIni(): String = buildString {
         appendLine("# OPI 属性设置 —— 由 `opi-candidates --settings` 写入，手工改也认。")
-        appendLine("# Linux：本文件就是 fcitx5 的 addon 配置；改完 `fcitx5-remote -r` 即时生效。")
+        // ⚠️ 别写「改完 fcitx5-remote -r 即时生效」—— 那条实测无效（见 notifyFcitxReload）。
+        appendLine("# Linux：本文件就是 fcitx5 的 addon 配置；设置窗/配置工具保存即重载。")
         appendLine("# 布尔写 True/False；未知键会被两端的读侧忽略（向前兼容）。")
         appendLine("Learn=${boolText(learn)}")
         appendLine("ChinesePunct=${boolText(chinesePunct)}")
@@ -188,8 +190,16 @@ fun loadSettings(): OpSettings = try {
 /**
  * 保存 + 通知 IME 侧。
  *
- * Linux：`fcitx5-remote -r` 请 fcitx5 重载配置（`-r` = reload fcitx config，
- * 见 `fcitx5-remote --help`）——它会把本 addon 的 `reloadConfig()` 走一遍。
+ * Linux：调 fcitx5 的 **`ReloadAddonConfig("opi_fcitx5")`** 让本 addon 重读刚写的
+ * 文件 —— 三级兜底 busctl（systemd 系，deepin 有）→ dbus-send（其余发行版）→
+ * `fcitx5-remote -r`（旧路，聊胜于无）。
+ *
+ * ⚠️ **2026-10-09 实测订正**：此前这里只跑 `fcitx5-remote -r`（= D-Bus ReloadConfig），
+ * 注释声称「会把本 addon 的 reloadConfig() 走一遍」—— **假的**。现场：文件里
+ * `Skin=宣纸`、daemon 里还是 `Skin=深色`，`fcitx5-remote -r` 反复调 GetConfig 纹丝
+ * 不动；换 `ReloadAddonConfig("opi_fcitx5")` 立刻回新值（本机 fcitx5 5.1.12 实测，
+ * 皮肤也跟着换）。用户报障「桌面端设置不能直接生效」就是这条。
+ *
  * ⚠️ 失败**不抛**、返回 false 并让 UI 如实显示：fcitx5 没在跑（或没装）时
  * 文件照样该写下去（下次启动生效），这不该是个错误弹窗。
  *
@@ -208,12 +218,37 @@ fun saveSettings(s: OpSettings): Boolean {
     if (isWindows()) {
         return false
     }
-    return try {
-        val proc = ProcessBuilder("fcitx5-remote", "-r")
-            .redirectErrorStream(true)
-            .start()
-        proc.waitFor() == 0
-    } catch (_: Exception) {
-        false
+    return notifyFcitxReload()
+}
+
+/**
+ * 让 fcitx5 重载**本 addon** 的配置（= 重读刚写的文件）。
+ *
+ * 三级兜底，任一成功即 true：busctl → dbus-send → `fcitx5-remote -r`。
+ * 前两条调的是 `ReloadAddonConfig("opi_fcitx5")`（实测有效）；最后一条是旧路
+ * （实测**不会**让 addon 重读配置，只在 dbus 工具缺失时聊胜于无）。
+ * ⚠️ addon 名硬编码没问题：这就是本程序的 addon（opi_fcitx5，见 addon conf 的 id）。
+ */
+internal fun notifyFcitxReload(): Boolean {
+    val calls = listOf(
+        listOf(
+            "busctl", "--user", "call", "org.fcitx.Fcitx5", "/controller",
+            "org.fcitx.Fcitx.Controller1", "ReloadAddonConfig", "s", "opi_fcitx5",
+        ),
+        listOf(
+            "dbus-send", "--session", "--print-reply",
+            "--dest=org.fcitx.Fcitx5", "/controller",
+            "org.fcitx.Fcitx.Controller1.ReloadAddonConfig", "string:opi_fcitx5",
+        ),
+        listOf("fcitx5-remote", "-r"),
+    )
+    for (cmd in calls) {
+        try {
+            val proc = ProcessBuilder(cmd).redirectErrorStream(true).start()
+            if (proc.waitFor() == 0) return true
+        } catch (_: Exception) {
+            // 这条工具没有/起不来 → 试下一条
+        }
     }
+    return false
 }

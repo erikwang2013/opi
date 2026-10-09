@@ -527,11 +527,19 @@ Skin=不改动          # 候选面板皮肤（2026-10-09 起；值存的就是�
   ⚠️ 如实记：它只保证**发起启动**（`posix_spawnp`），窗口有没有起来这里看不到；
   一个都找不到时往 stderr 打一行。
 
-**改它有三条路，都即时生效**（`reloadConfig()` → 引擎，不用重启输入法）：
+**改它有三条路，都即时生效**（addon 的 `reloadConfig()` → 引擎，不用重启输入法）：
 
-1. 配置工具里那个齿轮（保存即生效）；2. 手改文件 + `fcitx5-remote -r`
-（`-r` = reload fcitx config）；3. `opi-candidates --settings`（本仓库的 Compose 设置窗；
-它**保留未知键**合并写，不会抹掉自己不认识的选项）。
+1. 配置工具里那个齿轮（保存即生效）；2. 手改文件 + **`busctl --user call org.fcitx.Fcitx5
+/controller org.fcitx.Fcitx.Controller1 ReloadAddonConfig s opi_fcitx5`**；
+3. `opi-candidates --settings`（本仓库的 Compose 设置窗；它**保留未知键**合并写，
+不会抹掉自己不认识的选项，保存后走的就是第 2 条那个调用）。
+
+> ⚠️ **订正（2026-10-09 实测）**：此前此处写的是「手改文件 + `fcitx5-remote -r`」——
+> **那条不生效**。现场：文件里 `Skin=宣纸`、守护进程里还是 `Skin=深色`，
+> `fcitx5-remote -r`（= D-Bus `ReloadConfig`）反复调用、`GetConfig` 纹丝不动；
+> 换 `ReloadAddonConfig("opi_fcitx5")` 立刻回新值（皮肤也跟着换）。
+> 设置窗已改为三级兜底调后者（busctl → dbus-send → 旧路 `fcitx5-remote -r`）
+> —— 报障「桌面端设置不能直接生效」即此。
 
 **Shift 切换中英文（ShiftToggle，默认开）**：轻按**左或右** Shift 在 中文 ⇄ 英文 间切换
 （搜狗同款手势）。

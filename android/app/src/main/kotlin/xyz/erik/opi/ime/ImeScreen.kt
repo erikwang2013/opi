@@ -78,12 +78,36 @@ fun ImeScreen(
         LocalKeyboardPalette provides palette,
         LocalDensity provides density,
     ) {
-        // 整块键盘**统一底色**（2026-10-09 用户裁决「没有输入的时候功能栏和键盘之间
-        // 有空隙，要加上背景，整体统一」）：此前根列透明，空闲时候选槽是一道空缝、
-        // 键与键之间也露窗口底色（换深色皮肤时尤为扎眼）。刷成 barBg = 候选栏同色，
-        // 工具条自带底色不受影响。
-        Column(modifier = Modifier.fillMaxSize().background(palette.barBg)) {
-            // ---- 工具条：图标入口（表情 / 输入模式 / 键盘模式）----
+        // 根列**透明**：候选槽空着时就是空的（2026-10-09 用户裁决「候选词没词的时候
+        // 不显示背景」）—— 底色分片给：工具条、候选栏各自画，键区由下面 keyArea 那块刷。
+        Column(modifier = Modifier.fillMaxSize()) {
+            // ---- 候选栏槽位（**在工具条上面**：2026-10-09 用户裁决「功能按钮和候选词
+            // 位置上下一列调换位置」——搜狗移动端就是候选行在上、功能行在下）----
+            // 位置**固定预留** CANDIDATE_BAR_HEIGHT_DP：它出现/消失极其频繁（打第一个
+            // 字母出现、选词后消失），条件挂载等于让键区在"有没有栏"之间伸缩 —— 本机
+            // 实测键高 117px ↔ 89px、整块键盘下沉 116px。槽位常驻、高度只由
+            // OpiImeService.keyboardHeight 决定；**空槽不铺底色**（根列透明，见上）。
+            if (state.view == ImeState.View.QWERTY || state.view == ImeState.View.RARE) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(CANDIDATE_BAR_HEIGHT_DP.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    if (state.view == ImeState.View.RARE) {
+                        // 生僻字面板是浏览式查字：候选槽停用（保持空槽以免键区伸缩）。
+                    } else if (controller.mode == EngineMode.ENGLISH ||
+                        controller.buffer.isNotEmpty() ||
+                        controller.candidates.isNotEmpty()
+                    ) {
+                        // 长按候选 = 删除该自造词（下标语义同点击：页内下标）
+                        CandidateBar(
+                            controller = controller,
+                            onTap = router::handleCandidate,
+                            onLongPress = controller::removeUserWord,
+                        )
+                    }
+                }
+            }
+            // ---- 工具条：图标入口（小欧 logo + 表情 / 皮肤 / 输入模式 / 键盘模式）----
             ImeToolbar(
                 currentMode = state.inputMode,
                 keyboardModes = modes,
@@ -109,38 +133,10 @@ fun ImeScreen(
                 },
                 onUpdateKeyboardModes = state::updateKeyboardModes,
             )
-            // 候选栏位置**固定预留** CANDIDATE_BAR_HEIGHT_DP：它出现/消失极其频繁
-            // （打第一个字母出现、选词后消失），而窗口高度是常量，条件挂载就等于让 4 行键
-            // 在"有没有栏"之间伸缩 —— 本机实测键高 117px ↔ 89px、整块键盘下沉 116px，
-            // 每个词都跳两次。槽位常驻后键区高度只由 OpiImeService.keyboardHeight 决定。
-            // 代价：多占 44dp（english 模式是模式条，pinyin 空缓冲是小欧的待命位，见下）。
-            if (state.view == ImeState.View.QWERTY || state.view == ImeState.View.RARE) {
-                Box(
-                    modifier = Modifier.fillMaxWidth().height(CANDIDATE_BAR_HEIGHT_DP.dp),
-                    // 待命位（下面 else 分支）的小欧靠这个贴左边；候选栏自身填满整槽，不受影响
-                    contentAlignment = Alignment.CenterStart,
-                ) {
-                    if (state.view == ImeState.View.RARE) {
-                        // 生僻字面板是浏览式查字：候选栏槽位停用小欧（它不参与查找），
-                        // 保持空槽以免键区伸缩（同上面那条理由）。
-                    } else if (controller.mode == EngineMode.ENGLISH ||
-                        controller.buffer.isNotEmpty() ||
-                        controller.candidates.isNotEmpty()
-                    ) {
-                        // 长按候选 = 删除该自造词（下标语义同点击：页内下标）
-                        CandidateBar(
-                            controller = controller,
-                            onTap = router::handleCandidate,
-                            onLongPress = controller::removeUserWord,
-                        )
-                    }
-                    // else：槽位空着。小欧 2026-10-09 已并入工具条（用户裁决
-                    // 「入口要和 logo 图标在一行」）—— 待命位不再画它，槽位只做
-                    // 「不让键区伸缩」的占位（见上）。
-                }
-            }
             // ---- 键盘区：单手模式整体偏移 + 收窄（纯布局层）----
-            val keyArea = Modifier.weight(1f).fillMaxWidth().let {
+            // 键区自己刷底色（根列已透明）：键与键之间的缝是这一层 —— 换深色皮肤时
+            // 不刷会露出窗口底色（2026-10-09「整体统一」那条的落点）。
+            val keyArea = Modifier.weight(1f).fillMaxWidth().background(palette.barBg).let {
                 when (modes.oneHand) {
                     KeyboardModes.OneHand.OFF -> it
                     KeyboardModes.OneHand.LEFT -> it.fillMaxWidth(0.76f)
@@ -262,11 +258,11 @@ private fun KeyboardArea(
                     onSegment = {
                         if (controller.buffer.isNotEmpty()) router.handleKey("'")
                     },
-                    // 左侧一列的显示（左列由 NineKeyKeyboard 管）：有读数显示读数
-                    // （带分词，如 ni'hao）；读数空但缓冲有东西（打了一串拼不出的）
-                    // **回退到原始数字串** —— 每个键都看得见反馈，别让用户以为死机；
-                    // 两者都空 = 标点列。
-                    pinyin = controller.reading.ifEmpty { controller.buffer },
+                    // 左侧一列：**只有读得到拼音时才替换**（搜狗同款，2026-10-09
+                    // 用户裁决「不输入、回退、确定，就重置到初始化的一列」）——
+                    // 读数空（没候选/已提交/退空）就回到标点列；不回退显示数字串
+                    // （那是上一版的自作主张，用户明确不要）。
+                    pinyin = controller.reading,
                     modeLabel = label,
                     big = state.inputMode == InputMode.BIG9,
                 )

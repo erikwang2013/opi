@@ -389,3 +389,31 @@ fn buffer_cap_stays_silent_and_holds() {
     assert_eq!(e.input_key('b'), "", "到顶不提交");
     assert_eq!(e.buffer(), full, "到顶缓冲原样留着（绝不 flush）");
 }
+
+/// 左列复位（2026-10-09 用户裁决「不输入、回退、确定后选词、删除完后，左侧恢复
+/// 标点一列」）：**只要缓冲回到空，读数就必须为空** —— 界面据此把左列换回标点。
+/// （读数由 `display_buffer` 给，界面直接拿它当「显示什么」的判据。）
+#[test]
+fn reading_resets_to_empty_when_the_buffer_empties() {
+    let mut e = engine();
+    e.set_scheme(Scheme::Nine);
+    type_str(&mut e, "64"); // ni
+    let _ = e.candidates(8);
+    assert_eq!(e.display_buffer(), "ni", "前置：读得到拼音");
+
+    // 确定后选词（选中第一条 = 引擎的提交收尾）
+    let _ = e.select_from(&e.candidates(8), 0);
+    assert_eq!(e.buffer(), "", "前置：选词后缓冲已清");
+    let _ = e.candidates(8); // 界面每次操作后都会重取候选（refresh 那条路）
+    assert_eq!(e.display_buffer(), "", "选词后读数必须归零（左列回标点）");
+
+    // 回退删完
+    type_str(&mut e, "64");
+    let _ = e.candidates(8);
+    assert_eq!(e.display_buffer(), "ni");
+    e.backspace();
+    e.backspace();
+    let _ = e.candidates(8);
+    assert_eq!(e.buffer(), "");
+    assert_eq!(e.display_buffer(), "", "退空后读数必须归零");
+}
