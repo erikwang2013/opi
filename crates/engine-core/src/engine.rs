@@ -25,15 +25,18 @@ pub struct Engine {
     learner: Learner,
     /// 用户词频权重，按词典最大静态词频动态缩放（一次选词即压过所有静态词）。
     user_boost: u64,
-    /// 9 键方案的「拼音读数」（显示用，见 [Self::display_buffer]）：由 `candidates()`
-    /// 在九键分支里刷新 = 首条候选的拼音。**存 `(算它时的缓冲, 读数)` 一对** ——
-    /// 缓冲一变（提交/退格/清空）旧读数立即作废，`display_buffer()` 返回空串，
+    /// 9 键方案的「拼音读数」（显示用，见 [Self::display_buffer] 与
+    /// [Self::candidate_readings]）：由 `candidates()` 在九键分支里刷新 ——
+    /// **逐条**（`readings[i]` = `candidates(limit)` 第 i 条的拼音，已分词；
+    /// 同一次排名产出，见 `rank_and_pick_scheme`）。
+    /// **存 `(算它时的缓冲, 逐条读数)` 一对** ——
+    /// 缓冲一变（提交/退格/清空）旧读数立即作废，两个出口都返回空，
     /// **不依赖调用方「之后又取了一次候选」的次序**（2026-10-09 用户报障「确定候选词后
     /// 左列不恢复标点」：成因正是这个次序假设 —— 提交清缓冲时没清读数，而下一次
     /// 刷新先读 display_buffer 再取候选）。
     /// `RefCell` 是因为 `candidates()` 是 `&self`
     /// （读侧出口遍布 FFI，改 `&mut` 会连锁）；引擎单例在 Mutex 里，Send 足够。
-    scheme_reading: std::cell::RefCell<(String, String)>,
+    scheme_readings: std::cell::RefCell<(String, Vec<String>)>,
     /// 全角开关：`true` = ASCII 标点出**机械全角**（U+FF01..U+FF5E 平移），
     /// `false` = 直通半角。只管宽度 —— 中文标点表是另一档（[`Self::chinese_punct`]）。
     /// 切模式重置为该模式的默认值（[`Mode::default_fullwidth`]）。
@@ -79,7 +82,7 @@ impl Engine {
             symbols,
             learner: Learner::new(learner_enabled),
             user_boost,
-            scheme_reading: std::cell::RefCell::new((String::new(), String::new())),
+            scheme_readings: std::cell::RefCell::new((String::new(), Vec::new())),
             fullwidth: Mode::default().default_fullwidth(),
             chinese_punct: true,
             quotes: Quotes::default(),
@@ -139,7 +142,7 @@ impl Engine {
         self.composer.set_scheme(scheme);
         self.composer.clear();
         // 读数与缓冲同生命周期：不清的话换方案后的一次读会拿到上一条输入的拼音。
-        *self.scheme_reading.borrow_mut() = (String::new(), String::new());
+        *self.scheme_readings.borrow_mut() = (String::new(), Vec::new());
     }
 
     // ---- 标点表 / 全角一族：impl 体在 engine_punct.rs（500 行门禁拆出）----
@@ -293,15 +296,36 @@ impl Engine {
         {
             // **带分词的**读数（搜狗「拼音9键显示分词」同款）：音节用 `'` 连起来，
             // 「nihao」显示成「ni'hao」—— 一眼看到引擎怎么切的音节。
-            let cached = self.scheme_reading.borrow();
+            let cached = self.scheme_readings.borrow();
             // 缓冲变了（提交/退格/清空）而读数还是旧缓冲那一次算的 ⇒ 作废，报空串 ——
             // 界面按「读不到拼音」处理（左列回标点列）。下次 candidates() 会按新缓冲重算。
-            if cached.0 != self.buffer() || cached.1.is_empty() {
+            if cached.0 != self.buffer() {
                 return String::new();
             }
-            return crate::pinyin::segment(&cached.1).join("'");
+            return cached.1.first().cloned().unwrap_or_default();
         }
         self.buffer().to_string()
+    }
+
+    /// **逐条**候选拼音读数（已分词）：`readings[i]` = 最近一次 `candidates(limit)` 的
+    /// 第 i 条候选的拼音（两串同序等长）。9 键左列按候选逐条显示用（2026-10-09 用户
+    /// 裁决「一列多个、可滑动查看后面候选/下一页」）。
+    ///
+    /// 与 [`Self::display_buffer`] 是**同一对缓存的两个视图**：非 9/14 键方案、
+    /// 或缓冲已变（提交/退格/清空）⇒ 空数组。调用方先 `candidates()` 再读它
+    /// （同一次刷新里相邻调用 = 同一次排名，不会再扫一遍词库）。
+    pub fn candidate_readings(&self) -> Vec<String> {
+        if !matches!(self.mode(), Mode::Pinyin | Mode::Traditional) {
+            return Vec::new();
+        }
+        if !matches!(self.scheme(), Scheme::Nine | Scheme::Fourteen) {
+            return Vec::new();
+        }
+        let cached = self.scheme_readings.borrow();
+        if cached.0 != self.buffer() {
+            return Vec::new();
+        }
+        cached.1.clone()
     }
 
     pub fn mode(&self) -> Mode {
@@ -318,7 +342,7 @@ impl Engine {
                 // 前缀），走全量遍历 + 类匹配（candidates::rank_and_pick_scheme）。
                 // 「精确加成」按**键长相等**给（与全键盘的 pinyin_len == 输入长度同义）。
                 Scheme::Nine | Scheme::Fourteen => {
-                    let (cands, reading) = rank_and_pick_scheme(
+                    let (cands, readings) = rank_and_pick_scheme(
                         self.active_dict(),
                         &self.learner,
                         &s.buffer,
@@ -326,9 +350,15 @@ impl Engine {
                         self.user_boost,
                         self.scheme(),
                     );
-                    // 读数随每次取候选刷新，**并与当时的缓冲绑存**（见 display_buffer：
-                    // 缓冲一变这对就作废，不许把旧缓冲的读数报给新状态）。
-                    *self.scheme_reading.borrow_mut() = (s.buffer.clone(), reading);
+                    // 读数随每次取候选刷新（逐条、已分词），**并与当时的缓冲绑存**
+                    // （见 display_buffer：缓冲一变这对就作废，不许把旧缓冲的读数报给新状态）。
+                    *self.scheme_readings.borrow_mut() = (
+                        s.buffer.clone(),
+                        readings
+                            .iter()
+                            .map(|py| crate::pinyin::segment(py).join("'"))
+                            .collect(),
+                    );
                     return cands;
                 }
                 // 笔画：换词典 + **关掉模糊音/简拼**（两者对 hspnz 串没有意义，

@@ -390,6 +390,22 @@ class EngineControllerTest {
     }
 
     @Test
+    fun candidateReadingsComeThroughRefresh() {
+        // 逐条读数（9 键左列的数据源，2026-10-09 用户裁决）：与 candidates 同一次
+        // 刷新读出、同序等长；JNI 返回 null 时退空列表（不崩、不当成一条空读数）。
+        val fake = FakeEngine().apply {
+            cands = arrayOf("你", "你好")
+            candReadings = arrayOf("ni", "ni'hao")
+        }
+        val ctrl = EngineController(fake)
+        assertEquals(listOf("你", "你好"), ctrl.candidates)
+        assertEquals(listOf("ni", "ni'hao"), ctrl.candidateReadings)
+        fake.candReadings = null
+        ctrl.refresh()
+        assertEquals(emptyList<String>(), ctrl.candidateReadings)
+    }
+
+    @Test
     fun readingReflectsTheLatestCandidatesFetchNotAStaleOne() {
         // 读数必须**最后读**（refresh 的读序契约）：真引擎的读数是 candidates() 的
         // 副产物、且与算它时的缓冲绑存（FakeEngine.readingModel 按此模拟）。先读

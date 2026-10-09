@@ -124,6 +124,13 @@ object OpiEngine : OpiEngineApi, SymbolApi {
     /** candidates(limit: Int) -> String[]。仅文本数组；JNI 可能返回 null。 */
     override external fun candidates(limit: Int): Array<String>?
 
+    /**
+     * candidateReadings() -> String[]：**逐条**候选拼音读数（已分词），与最近一次
+     * [candidates] 同序同源 —— 9 键左列按候选逐条显示用（2026-10-09 用户裁决）。
+     * 非 9/14 键方案、或缓冲已变（提交/退格）⇒ 空数组。调用顺序：先 [candidates]。
+     */
+    override external fun candidateReadings(): Array<String>?
+
     override external fun buffer(): String
 
     /**

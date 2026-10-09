@@ -35,10 +35,11 @@ fn read_jni() -> String {
     // `read_jni()` ⇒ 无限递归（编译器警告 "cannot return without recursing"、
     // 运行期直接栈溢出）。教训：替换辅助函数时要把「新写的那个函数体」排除在外。
     format!(
-        "{}\n{}\n{}",
+        "{}\n{}\n{}\n{}",
         read(JNI_RS),
         read(JNI_USER_WORDS),
-        read(JNI_SCHEME)
+        read(JNI_SCHEME),
+        read(JNI_CANDIDATES)
     )
 }
 

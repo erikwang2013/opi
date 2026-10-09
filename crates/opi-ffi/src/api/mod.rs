@@ -322,6 +322,13 @@ impl Api {
             .collect()
     }
 
+    /// **逐条**候选拼音读数（JNI 出口 `candidateReadings`；9 键左列用）。
+    /// 与**最近一次** [`Self::candidates`] 同序同源（引擎侧同一对缓存）——
+    /// 调用方按「先 candidates(limit)、紧接读它」的顺序用；缓冲已变时为空。
+    pub fn candidate_readings(&self) -> Vec<String> {
+        self.router.engine().candidate_readings()
+    }
+
     /// raw 出口（**全局**索引，JNI 与既有 `opi_select` 用）。选中即清空 buffer →
     /// 必须对齐页码；越界返回空串、buffer 不变，此时对齐也是 no-op。
     /// 页内索引请用 [`Api::select_page`]（`opi_select_page`），UI 不需要知道 PAGE_SIZE。

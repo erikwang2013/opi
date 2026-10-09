@@ -262,7 +262,8 @@ private fun KeyboardArea(
                     // 用户裁决「不输入、回退、确定，就重置到初始化的一列」）——
                     // 读数空（没候选/已提交/退空）就回到标点列；不回退显示数字串
                     // （那是上一版的自作主张，用户明确不要）。
-                    pinyin = controller.reading,
+                    readings = controller.candidateReadings,
+                    scrollKey = controller.buffer,
                     modeLabel = label,
                     big = state.inputMode == InputMode.BIG9,
                 )

@@ -442,3 +442,33 @@ fn display_buffer_dies_with_the_buffer_not_with_the_next_fetch() {
     e.backspace();
     assert_eq!(e.display_buffer(), "", "退格后旧读数立刻作废");
 }
+
+/// 逐条读数（9 键左列的数据源，2026-10-09 用户裁决「一列多个可滑动查看」）：
+/// 与 `candidates(limit)` **同序等长**、同一次排名产出；首条 = `display_buffer()`
+/// （同一对缓存的两个视图）；缓冲一变（退格/提交）⇒ 双双立刻为空。
+#[test]
+fn per_candidate_readings_align_with_candidates() {
+    let mut e = engine();
+    e.set_scheme(Scheme::Nine);
+    type_str(&mut e, "64"); // ni 与 nihao 都命中（键类前缀匹配）
+    let cands: Vec<String> = e.candidates(8).into_iter().map(|c| c.text).collect();
+    let readings = e.candidate_readings();
+    assert_eq!(readings.len(), cands.len(), "逐条读数与候选同序等长");
+    assert_eq!(
+        readings[0],
+        e.display_buffer(),
+        "首条读数 = display_buffer（同一对缓存的两个视图）"
+    );
+    // 逐条对齐：你好 的读音带分词（ni'hao），你/尼 是 ni —— 不是把首条读一抄到底。
+    let idx = cands
+        .iter()
+        .position(|c| c == "你好")
+        .expect("夹具里 64 应命中 nihao⇒你好");
+    assert_eq!(readings[idx], "ni'hao", "候选与读音逐条对齐");
+    // 缓冲一变（退格）⇒ 逐条读数立刻作废
+    e.backspace();
+    assert!(
+        e.candidate_readings().is_empty(),
+        "退格后逐条读数立刻作废（下次 candidates() 才重算）"
+    );
+}

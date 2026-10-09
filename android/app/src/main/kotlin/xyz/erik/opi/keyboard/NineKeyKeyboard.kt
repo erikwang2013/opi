@@ -3,18 +3,24 @@
 
 package xyz.erik.opi.keyboard
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,6 +29,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -74,9 +81,11 @@ fun NineKeyKeyboard(
     /** 分词键（搜狗同款）：切音节边界（xi|an）。**由宿主在缓冲空时拦住** —— 空缓冲
      * 点它没有边界可切（引擎那边缓冲空时 `'` 是引号，不是分词符）。 */
     onSegment: () -> Unit,
-    /** 拼音读数（9 键方案下 = 引擎的 `display_buffer`：带分词，如 `ni'hao`；
-     * 空串 = 没在输入，左列显示标点）。 */
-    pinyin: String = "",
+    /** 逐条候选拼音读数（9 键左列按候选逐行显示，如 `ni'hao`；与候选同序等长。
+     * 空列表 = 没在输入/无候选，左列显示标点）。 */
+    readings: List<String> = emptyList(),
+    /** 读数列的滚动复位键（传缓冲：缓冲一变整列回顶部，别停在旧位置）。 */
+    scrollKey: String = "",
     modeLabel: String = "中",
     big: Boolean = false,
 ) {
@@ -87,23 +96,44 @@ fun NineKeyKeyboard(
     Column(modifier = modifier.fillMaxSize()) {
         Row(modifier = Modifier.weight(3f).fillMaxSize()) {
             // ---- 左侧一列（2026-10-09，搜狗 9 键同款）----
-            // 空闲 = 一列标点（可点，走引擎标点表）；输入时**整列换成拼音读数**
-            // （带分词：ni'hao）——「拼音是输入才替换到左侧一列」（用户原话）。
+            // 空闲 = 一列标点（可点，走引擎标点表）；输入时**整列换成逐条候选拼音**
+            // （一个候选一行：你好→ni'hao；2026-10-09 用户裁决「一列多个、可滑动
+            // 查看后面候选/下一页」）——「拼音是输入才替换到左侧一列」（用户原话）。
             Box(modifier = Modifier.weight(0.72f).fillMaxHeight()) {
-                if (pinyin.isNotEmpty()) {
-                    Box(
+                if (readings.isNotEmpty()) {
+                    BoxWithConstraints(
                         modifier = Modifier.fillMaxSize().semantics {
-                            contentDescription = "拼音 $pinyin"
+                            // 念前几条就够（全量可能几十条）；逐条与候选的对应靠候选
+                            // 自己的语义节点，这里只报「读数列有货」。
+                            contentDescription = "候选拼音 " + readings.take(4).joinToString("、") +
+                                if (readings.size > 4) "等" else ""
                         },
-                        contentAlignment = Alignment.Center,
                     ) {
-                        Text(
-                            pinyin,
-                            fontSize = 13.sp,
-                            color = LocalKeyboardPalette.current.barDimFg,
-                            maxLines = 8,
-                            textAlign = TextAlign.Center,
-                        )
+                        // 与标点列同一节奏：五格；多出来的候选（第 6 条起）滑动看。
+                        val cell = maxHeight / nineKeyStripPuncts.size
+                        Column(
+                            // 新一批读数（缓冲变了）整列回顶部 —— 否则继续输入后视口
+                            // 停在旧位置，与「当前读音」对不上（scrollKey 由宿主给缓冲）。
+                            modifier = Modifier.fillMaxSize()
+                                .verticalScroll(remember(scrollKey) { ScrollState(0) }),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            for (r in readings) {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().height(cell),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        r,
+                                        fontSize = 13.sp,
+                                        color = LocalKeyboardPalette.current.barDimFg,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        textAlign = TextAlign.Center,
+                                    )
+                                }
+                            }
+                        }
                     }
                 } else {
                     Column(modifier = Modifier.fillMaxSize()) {

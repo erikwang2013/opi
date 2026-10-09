@@ -40,6 +40,12 @@ pub(crate) fn guard<T: Default>(f: impl FnOnce() -> T) -> T {
 use crate::jni_scheme::{
     opijni_load, opijni_load_stroke, opijni_load_trad, opijni_scheme, opijni_set_scheme,
 };
+// 拆到 `jni_candidates.rs` 的四个**读侧**出口（candidates / candidateReadings /
+// buffer / displayBuffer）：同一手续（2026-10-09：加 candidateReadings 后本文件
+// 越 500 行）。同样只为注册表能引用到它们。
+use crate::jni_candidates::{
+    opijni_buffer, opijni_candidate_readings, opijni_candidates, opijni_display_buffer,
+};
 /// inputKey(ch: String) -> String。永不 panic。单字符外（空/多字符/非 ASCII）返回空串。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_input_key(
@@ -189,32 +195,6 @@ pub unsafe extern "system" fn opijni_toggle_chinese_punct(
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_input_space(env: JEnv, _class: sys::jclass) -> jstring {
     let out = guard(|| api::with_engine(|e| e.input_space()).unwrap_or_default());
-    unsafe { jni_util::rust_to_jstring(env, &out) }
-}
-
-/// candidates(limit: Int) -> String[]。仅文本数组（kind/score UI 不用）。
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_candidates(
-    env: JEnv,
-    _class: sys::jclass,
-    limit: jint,
-) -> sys::jobjectArray {
-    let texts = guard(|| {
-        api::with_engine(|e| api::candidate_texts(e, limit.max(0) as usize)).unwrap_or_default()
-    });
-    unsafe { jni_util::string_array(env, texts) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_buffer(env: JEnv, _class: sys::jclass) -> jstring {
-    let out = guard(|| api::with_engine(|e| e.buffer()).unwrap_or_default());
-    unsafe { jni_util::rust_to_jstring(env, &out) }
-}
-
-/// displayBuffer() -> String。显示用拼音读数（与 `buffer()` **两个出口**，见 `api::display_buffer`）。
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_display_buffer(env: JEnv, _class: sys::jclass) -> jstring {
-    let out = guard(|| api::with_engine(|e| e.display_buffer()).unwrap_or_default());
     unsafe { jni_util::rust_to_jstring(env, &out) }
 }
 
@@ -418,6 +398,11 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _reserved: *mut c
                     jni_str!("candidates"),
                     jni_str!("(I)[Ljava/lang/String;"),
                     opijni_candidates as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("candidateReadings"),
+                    jni_str!("()[Ljava/lang/String;"),
+                    opijni_candidate_readings as *mut c_void,
                 ),
                 NativeMethod::from_raw_parts(
                     jni_str!("buffer"),

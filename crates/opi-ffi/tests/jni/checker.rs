@@ -426,6 +426,8 @@ pub const JNI_RS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni.rs");
 /// 门禁视野里消失（与 C ABI 侧 `CABI_USER_WORDS` 同一个理由）。
 pub const JNI_USER_WORDS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni_user_words.rs");
 pub const JNI_SCHEME: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni_scheme.rs");
+/// 同上，候选/缓冲读侧那一半（2026-10-09：加 `candidateReadings` 后 500 行门禁越线）。
+pub const JNI_CANDIDATES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni_candidates.rs");
 pub const KOTLIN_HOST: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../android/app/src/main/kotlin/xyz/erik/opi/jni/OpiEngine.kt"

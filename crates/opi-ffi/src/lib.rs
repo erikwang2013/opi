@@ -16,6 +16,7 @@ pub mod cabi;
 pub mod cabi_scheme;
 pub mod cabi_user_words;
 pub mod jni;
+pub mod jni_candidates;
 pub mod jni_scheme;
 pub mod jni_user_words;
 pub mod jni_util;

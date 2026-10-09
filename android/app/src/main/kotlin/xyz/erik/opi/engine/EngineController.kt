@@ -51,6 +51,10 @@ interface OpiEngineApi {
     fun candidates(limit: Int): Array<String>?
     fun buffer(): String
 
+    /** 逐条候选拼音读数（与最近一次 [candidates] 同序同源；9 键左列用）。
+     * 非 9/14 键方案、或缓冲已变 ⇒ 空。调用顺序：先 [candidates]。 */
+    fun candidateReadings(): Array<String>?
+
     /** 显示用的拼音读数（9 键 = 带分词的 `ni'hao`；其余方案与 [buffer] 相同）。
      * **行为判定不许用它** —— 用 [buffer]（理由见 OpiEngine.displayBuffer）。 */
     fun displayBuffer(): String
@@ -103,6 +107,11 @@ class EngineController(
     var mode by mutableStateOf(EngineMode.PINYIN)
         private set
     var candidates by mutableStateOf<List<String>>(emptyList())
+        private set
+
+    /** 逐条候选拼音读数（已分词），与 [candidates] 同序等长 —— 9 键左列按候选
+     * 逐条显示用（2026-10-09 用户裁决「一列多个、可滑动查看」）。 */
+    var candidateReadings by mutableStateOf<List<String>>(emptyList())
         private set
 
     var shiftState by mutableStateOf(ShiftState.OFF)
@@ -177,6 +186,9 @@ class EngineController(
         jianpinEnabled = api.jianpinEnabled()
         inputScheme = InputScheme.fromInt(api.scheme())
         candidates = api.candidates(fetchLimit)?.toList() ?: emptyList() // JNI 可能返回 null
+        // 逐条读数：与 candidates 同一次排名的副产物（引擎侧同一对缓存），
+        // **必须紧跟 candidates 之后读**（同一读序契约，见本函数尾 reading 的注释）。
+        candidateReadings = api.candidateReadings()?.toList() ?: emptyList()
         if (buffer != lastQuery) {
             lastQuery = buffer
             _candidatePage = 0

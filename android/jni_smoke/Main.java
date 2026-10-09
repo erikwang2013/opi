@@ -23,6 +23,7 @@ final class OpiEngine {
     static native boolean toggleChinesePunct();
     static native String inputSpace();
     static native String[] candidates(int limit);
+    static native String[] candidateReadings();
     static native String buffer();
     static native String displayBuffer();
     static native int mode();
@@ -237,6 +238,26 @@ public final class Main {
         check(OpiEngine.mode() == 3, "toggleSymbol 后 mode==3(Symbol)");
         check("".equals(OpiEngine.toggleSymbol()), "再切一次仍返回空串");
         check(OpiEngine.mode() == 0, "再切一次回 Pinyin");
+
+        // candidateReadings（2026-10-09）：逐条候选拼音读数，与最近一次 candidates(limit)
+        // 同序等长 —— 9 键左列按候选逐条显示的数据源。与上面标点那组同理：声明了就必须
+        // 真调，否则这条 native 永不被执行过。
+        OpiEngine.setScheme(1); // 9 键（setScheme 清缓冲）
+        OpiEngine.inputKey("6");
+        OpiEngine.inputKey("4");
+        String[] rc = OpiEngine.candidates(8);
+        String[] rr = OpiEngine.candidateReadings();
+        check(rc != null && rr != null, "candidates/candidateReadings 都必须可读");
+        check(rc != null && rr != null && rc.length == rr.length,
+                "逐条读数与候选同序等长（实得 "
+                        + (rc == null ? -1 : rc.length) + "/" + (rr == null ? -1 : rr.length) + "）");
+        if (rc != null && rr != null && rc.length > 0) {
+            // 首条读数 = displayBuffer（同一对缓存的两个视图）。不断言具体词
+            // （内置回退词库与真库候选不同），分词形态归 scheme_keys.rs 钉。
+            check(rr[0].equals(OpiEngine.displayBuffer()),
+                    "首条读数必须等于 displayBuffer（实得 " + rr[0] + "/" + OpiEngine.displayBuffer() + "）");
+        }
+        OpiEngine.setScheme(0); // 回全键盘
 
         if (failures == 0) {
             System.out.println("SMOKE-OK");
