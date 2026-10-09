@@ -144,15 +144,27 @@ fun StatusBarApp(symbolCommit: (String) -> Boolean) {
         }
     }
 
+    /**
+     * 「符号」动作的**单点**（状态栏按钮与虚拟键盘「符」键共用，2026-10-10 用户裁决
+     * 「虚拟键盘要加符键」——两条入口必须是同一条动作，别再各写一份平台分支）。
+     * 返回 null = 成功；非 null = 给用户看的失败原因。
+     *
+     * 符号页两端不是同一个东西：Linux 是 fcitx5 的候选面板（由 opi-ctl 拉起），
+     * Windows 才是本进程里这个 Compose 页。
+     */
+    fun openSymbols(): String? =
+        if (isWindows()) {
+            symbolsOpen = !symbolsOpen
+            null
+        } else {
+            statusActionCommand(StatusBarButton.SYMBOLS)?.let { runExternal(it) }
+        }
+
     fun onButton(b: StatusBarButton) {
         when (b) {
             StatusBarButton.VK -> vkOpen = !vkOpen
             StatusBarButton.LOGO, StatusBarButton.SETTINGS -> settingsOpen = true
-            // 符号页两端不是同一个东西：Linux 是 fcitx5 的候选面板（由 opi-ctl 拉起），
-            // Windows 才是本进程里这个 Compose 页。
-            StatusBarButton.SYMBOLS ->
-                if (isWindows()) symbolsOpen = !symbolsOpen
-                else report(statusActionCommand(b)?.let { runExternal(it) })
+            StatusBarButton.SYMBOLS -> report(openSymbols())
             else -> report(statusActionCommand(b)?.let { runExternal(it) })
         }
     }
@@ -198,7 +210,7 @@ fun StatusBarApp(symbolCommit: (String) -> Boolean) {
             SettingsWindow() // 与 `--settings` 模式同一个主体（那份自带落盘 + 通知）
         }
     }
-    if (vkOpen) VirtualKeyboardWindow(onClose = { vkOpen = false })
+    if (vkOpen) VirtualKeyboardWindow(onClose = { vkOpen = false }, onSymbols = ::openSymbols)
     if (symbolsOpen) {
         SymbolWindow(
             onCommit = { text ->

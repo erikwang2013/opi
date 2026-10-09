@@ -19,7 +19,8 @@ import org.junit.Test
 
 class VirtualKeyboardTest {
 
-    private val allKeys = VK_ROWS.flatten() + VK_BOTTOM.map { it.first }
+    // 「符」是动作键（不是 VkKey）：注入类断言只对可注入键成立，别把它算进来。
+    private val allKeys = VK_ROWS.flatten() + VK_BOTTOM.filterIsInstance<VkBottomKey>().map { it.key }
 
     @Test
     fun `layout is the decided key set`() {
@@ -28,9 +29,18 @@ class VirtualKeyboardTest {
         assertEquals("qwertyuiop", VK_ROWS[1].map { it.label }.joinToString(""))
         assertEquals("asdfghjkl", VK_ROWS[2].map { it.label }.joinToString(""))
         assertEquals("zxcvbnm", VK_ROWS[3].map { it.label }.joinToString(""))
-        assertEquals(listOf("空格", "回车", "退格"), VK_BOTTOM.map { it.first.label })
-        // 底行格宽（空格 6 / 回车 2 / 退格 2）：与字母行的 10 格对齐
-        assertEquals(10, VK_BOTTOM.sumOf { it.second })
+        // 底行：[符][空格][回车][退格]（2026-10-10 用户裁决加「符」，对齐 Android 9 键底行惯例）
+        assertEquals(listOf("符", "空格", "回车", "退格"), VK_BOTTOM.map { it.label })
+        // 底行格宽（符 1 / 空格 5 / 回车 2 / 退格 2）：与字母行的 10 格对齐
+        assertEquals(10, VK_BOTTOM.sumOf { it.weight })
+    }
+
+    @Test
+    fun `symbol key is an action, not an injectable key`() {
+        // 「符」不注入按键（它开符号大全）——用**类型**钉住，而不是给 VkKey 塞空 keysym
+        // 哨兵：哨兵会带着空键名混进注入路径，表现是「点了没反应且不报错」。
+        assertEquals(VkBottomAction("符", 1), VK_SYMBOL)
+        assertEquals(VK_SYMBOL, VK_BOTTOM.first())
     }
 
     @Test

@@ -4,7 +4,9 @@
 //! 虚拟键盘窗（2026-10-10 用户裁决「虚拟键盘本期就做」）：无边框 + 置顶 +
 //! **不抢焦点**的 Compose 键盘；按键经 [injectKey] 注入系统（实现见 KeyInject.kt）。
 //!
-//! 键盘面 = qwerty + 数字行 + 空格/回车/退格（用户裁决的键集，本版不加别的键）。
+//! 键盘面 = qwerty + 数字行 + 底行。底行的「符」是**动作键**（不注入 —— 走
+//! [VirtualKeyboardWindow] 的 `onSymbols` 开符号大全；2026-10-10 用户裁决「要加」，
+//! 对齐 Android 9 键底行的 `[符][…]` 惯例），其余键都走注入。
 //! 键位表与「键 → 注入序列」的映射都是**纯数据/纯函数**（VirtualKeyboardTest 钉住）：
 //! 注入是唯一有副作用的一步，抽出来才能在本机（无 Windows）验其余部分。
 //!
@@ -82,11 +84,33 @@ val VK_ROWS: List<List<VkKey>> = listOf(
     "zxcvbnm".map(::letter),
 )
 
-/** 底行：[VK_SPACE]（6 格宽）/[VK_ENTER]（2 格）/[VK_BACKSPACE]（2 格）。 */
-val VK_BOTTOM: List<Pair<VkKey, Int>> = listOf(
-    VK_SPACE to 6,
-    VK_ENTER to 2,
-    VK_BACKSPACE to 2,
+/**
+ * 底行项：可注入键或**动作键**。动作键不产生注入事件（它不是 [VkKey]，从类型上就
+ * 进不了 [vkEventSequence]），点击执行一个 UI 动作 —— 显式两型而不是给 VkKey 塞
+ * 哨兵值：哨兵会带着空 keysym 混进注入路径，那正是「点了没反应且不报错」的形态。
+ */
+sealed interface VkBottomItem {
+    val weight: Int
+    val label: String
+}
+
+/** 可注入键 + 格宽。 */
+data class VkBottomKey(val key: VkKey, override val weight: Int) : VkBottomItem {
+    override val label: String get() = key.label
+}
+
+/** 动作键（如「符」→ 符号大全）。 */
+data class VkBottomAction(override val label: String, override val weight: Int) : VkBottomItem
+
+/** 「符」：动作键，开符号大全（平台分派在 StatusBarApp 的 openSymbols 单点）。 */
+val VK_SYMBOL: VkBottomAction = VkBottomAction("符", 1)
+
+/** 底行：符（1 格）/ [VK_SPACE]（5 格）/[VK_ENTER]（2 格）/[VK_BACKSPACE]（2 格）—— 合计 10 格。 */
+val VK_BOTTOM: List<VkBottomItem> = listOf(
+    VK_SYMBOL,
+    VkBottomKey(VK_SPACE, 5),
+    VkBottomKey(VK_ENTER, 2),
+    VkBottomKey(VK_BACKSPACE, 2),
 )
 
 // ---------- 键 → 注入序列（纯函数） ----------
@@ -125,9 +149,13 @@ private fun keyboardPosition(): WindowPosition {
 /**
  * 虚拟键盘窗。由状态栏的「软键盘」按钮开关（[StatusBarApp]），本窗自身没有关闭
  * 按钮（无边框、不抢焦点，关不了也不会挡事）。
+ *
+ * [onSymbols] = 底行「符」键的动作（符号大全）；返回 null = 成功、非 null = 失败
+ * 原因（同注入失败的提示口径）。平台分派在 [StatusBarApp] 的 `openSymbols` 单点
+ * ——本窗不自己写平台分支（它与状态栏「符号」按钮必须永远同一条动作）。
  */
 @Composable
-fun VirtualKeyboardWindow(onClose: () -> Unit) {
+fun VirtualKeyboardWindow(onClose: () -> Unit, onSymbols: () -> String?) {
     var notice by remember { mutableStateOf<String?>(null) }
     val windowState = rememberWindowState(
         width = KB_WIDTH_DP.dp,
@@ -159,7 +187,7 @@ fun VirtualKeyboardWindow(onClose: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     for (key in row) {
-                        VkKeyButton(key, Modifier.weight(1f)) { press(key) { notice = it } }
+                        VkKeyButton(key.label, Modifier.weight(1f)) { press(key) { notice = it } }
                     }
                 }
             }
@@ -167,8 +195,14 @@ fun VirtualKeyboardWindow(onClose: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                for ((key, weight) in VK_BOTTOM) {
-                    VkKeyButton(key, Modifier.weight(weight.toFloat())) { press(key) { notice = it } }
+                for (item in VK_BOTTOM) {
+                    VkKeyButton(item.label, Modifier.weight(item.weight.toFloat())) {
+                        when (item) {
+                            is VkBottomKey -> press(item.key) { notice = it }
+                            // 动作键（「符」）：不注入，走 onSymbols；失败原因同注入口径进提示行。
+                            is VkBottomAction -> onSymbols()?.let { notice = it }
+                        }
+                    }
                 }
             }
             // 注入失败提示（别静默）：固定高度，避免提示出现时整窗跳动。
@@ -191,7 +225,7 @@ private fun press(key: VkKey, onFailure: (String) -> Unit) {
 }
 
 @Composable
-private fun VkKeyButton(key: VkKey, modifier: Modifier, onClick: () -> Unit) {
+private fun VkKeyButton(label: String, modifier: Modifier, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     Box(
@@ -199,12 +233,12 @@ private fun VkKeyButton(key: VkKey, modifier: Modifier, onClick: () -> Unit) {
             .fillMaxSize()
             .background(if (pressed) KeyPressed else KeyBg)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-            .semantics { contentDescription = "虚拟键盘 ${key.label}" },
+            .semantics { contentDescription = "虚拟键盘 $label" },
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            key.label,
-            fontSize = if (key.label.length > 1) 13.sp else 16.sp,
+            label,
+            fontSize = if (label.length > 1) 13.sp else 16.sp,
             color = KbFg,
             maxLines = 1,
         )
