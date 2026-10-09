@@ -1,0 +1,176 @@
+# SPDX-FileCopyrightText: 2026 erik.xyz
+# SPDX-License-Identifier: MIT
+#
+# Apple 两平台（iOS / macOS）的**自动打包**。
+#
+# 为什么要有这条 workflow：`ios/`（8 个 .swift）与 `macos/`（3 个 .swift）从写下到今天
+# **没有被任何编译器看过** —— 两边的 README 自称「起点 + 契约，不是可用实现」。
+# CI 里唯一相关的那条（`ci.yml` 的 `cargo check -p opi_ffi` 四个 Apple 目标）只证明
+# **Rust 侧**能为这些目标编译；它**不**证明 Swift 能编，更**不**证明两边能链接到一起。
+# 本仓库已经因为「没被编译器看过的代码」栽过两次（fcitx5 C++ 首编 7 处 API 误写、
+# Windows TSF 文本插入从未实现），所以这里把缺的那一步补上，并把产物发出来：
+#
+#   rust  job：四个 Apple 目标的 cdylib/staticlib → darwin 通用库 + iOS xcframework
+#   macos job：`macos/` 真编译 → IME bundle（ad-hoc 签名）→ .pkg / .zip
+#   ios   job：`ios/` 真编译 → framework/xcframework（**未签名**）
+#
+# ⚠️ 关于「未签名」：本仓库**没有** Apple 开发者证书，也不连任何签名服务，所以
+# 产物只能 ad-hoc 签名 —— **开发可用、不能分发**（Gatekeeper 会拦）。详见两个打包脚本
+# 的头部注释（`scripts/apple/package-*.sh`），那里把「能做什么/不能做什么」逐条写明了。
+#
+# ⚠️ 触发方式：正式形态是 `workflow_dispatch` + 默认分支 push（path 过滤）。
+# 当前 `branches` 里还带着迭代分支 `feat/apple-packaging` —— 这么写是**必需**的：
+# 本仓约定（也是 GitHub 的平台规则）「workflow 必须先存在于默认分支才能手动 dispatch」，
+# 而迭代期不许推 main，所以只能靠分支 push 触发 `.github/workflows/apple.yml` 的首次运行。
+# **合并前把 `feat/apple-packaging` 从 branches 里删掉**（只删一个词，其余不动）。
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, feat/apple-packaging]
+    paths:
+      - 'ios/**'
+      - 'macos/**'
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'scripts/apple/**'
+      - '.github/workflows/apple.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: Rust 产物 — darwin 通用库 + iOS 静态库/xcframework
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # macOS runner 上 clang / ar / lipo / xcodebuild 全是原生的，直接 `cargo build --target`
+      # 即可。**不需要** Linux 上交叉编 Apple 目标时那套 `AR_aarch64_apple_darwin=ar`
+      # 之类的前缀环境变量 —— 别从那边照抄过来（那边是「用 GNU 工具链产 Mach-O」的绕法，
+      # 这里是原生工具链，绕法反而会指错工具）。
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin, aarch64-apple-ios, aarch64-apple-ios-sim
+
+      # 版本号只有一个真源（Cargo.toml 的 [workspace.package] version），取法也只有一份
+      # （scripts/apple/version.sh）。三个 job 各自取一次，是为了不让 job 之间多一条
+      # 「谁先谁后」的依赖 —— 取法本身不重复实现。
+      - name: 取版本号
+        id: ver
+        run: echo "v=$(bash scripts/apple/version.sh)" >> "$GITHUB_OUTPUT"
+
+      - name: 编四个 Apple 目标（cdylib + staticlib）
+        run: |
+          set -euo pipefail
+          for t in aarch64-apple-darwin x86_64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim; do
+            echo "== $t =="
+            cargo build --release -p opi_ffi --target "$t"
+          done
+
+      - name: lipo 通用库 + iOS xcframework
+        run: |
+          set -euo pipefail
+          out=target/apple-rust
+          mkdir -p "$out/macos" "$out/headers"
+          # dylib 与 staticlib 都合成通用（两个 arch 都在）—— macOS 侧集成时按需选一份。
+          lipo -create target/aarch64-apple-darwin/release/libopi_ffi.dylib \
+                      target/x86_64-apple-darwin/release/libopi_ffi.dylib \
+            -output "$out/macos/libopi_ffi.dylib"
+          lipo -create target/aarch64-apple-darwin/release/libopi_ffi.a \
+                      target/x86_64-apple-darwin/release/libopi_ffi.a \
+            -output "$out/macos/libopi_ffi.a"
+          # install name 改成 @rpath 形式：cargo cdylib 常把**构建机上的绝对路径**写进
+          # LC_ID_DYLIB，而任何用它链接的产物都会把那个路径抄进加载命令 —— 在别人机器上
+          # 就是 `dyld: Library not loaded`，且在 CI 里全绿（路径存在）。发出去的库不该带这种地雷。
+          install_name_tool -id @rpath/libopi_ffi.dylib "$out/macos/libopi_ffi.dylib"
+          otool -D "$out/macos/libopi_ffi.dylib"
+          # 通用性当场断言：lipo 少一片时**不报错**（它只会合成能合的那些），
+          # 产物名却仍叫 libopi_ffi.dylib —— 那就是「名字说通用、内容不通用」。
+          for f in "$out/macos/libopi_ffi.dylib" "$out/macos/libopi_ffi.a"; do
+            info="$(lipo -info "$f")"
+            echo "$info"
+            case "$info" in
+              *x86_64*arm64*|*arm64*x86_64*) ;;
+              *) echo "!! $f 不是通用库：$info"; exit 1 ;;
+            esac
+          done
+          # xcframework 里给的是**静态库**：iOS 扩展不允许带第三方 dylib。
+          # 头单独拷一份 —— `-headers` 收的是目录，别把 macos/ 整个塞进去（那会把
+          # opi.tiff、README.md 一起卷进 Headers/ 发出去）。
+          cp macos/OpiFFI.h "$out/headers/"
+          xcodebuild -create-xcframework \
+            -library target/aarch64-apple-ios/release/libopi_ffi.a -headers "$out/headers" \
+            -library target/aarch64-apple-ios-sim/release/libopi_ffi.a -headers "$out/headers" \
+            -output "$out/opi_ffi.xcframework"
+          find "$out" -type f | sort
+
+      # if-no-files-found: error 是**必需**的：默认只 warn，于是「跑绿了但一个文件都没上传」
+      # 与「真的没产物」在 UI 上长得一样 —— 本仓对这类假绿记过账（绿了但没产物比红更坏）。
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opi-apple-rust-v${{ steps.ver.outputs.v }}
+          path: target/apple-rust
+          if-no-files-found: error
+
+  macos:
+    name: macOS — Swift 真编译 + IME bundle + 未签名 pkg
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+
+      - name: 取版本号
+        id: ver
+        run: echo "v=$(bash scripts/apple/version.sh)" >> "$GITHUB_OUTPUT"
+
+      - name: 编 Rust 通用库的两个切片
+        run: |
+          set -euo pipefail
+          cargo build --release -p opi_ffi --target aarch64-apple-darwin
+          cargo build --release -p opi_ffi --target x86_64-apple-darwin
+
+      # 编译 + 组装 + 签名 + 打包全在脚本里：这类多行步骤写进 YAML 会立刻撞上本仓那条
+      # 「run 块里不能有 heredoc」的限制（块状 YAML 的 heredoc 结束符必须在行首），
+      # 于是要么把脚本挤成一行、要么躲开 shellcheck —— 两边都是坑。放脚本里还能本机跑。
+      - name: 组装 IME bundle + ad-hoc 签名 + .pkg
+        run: bash scripts/apple/package-macos.sh "${{ steps.ver.outputs.v }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opi-macos-ime-v${{ steps.ver.outputs.v }}
+          path: dist/apple/macos
+          if-no-files-found: error
+
+  ios:
+    name: iOS — Swift 真编译 + framework/xcframework（未签名）
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios, aarch64-apple-ios-sim
+
+      - name: 取版本号
+        id: ver
+        run: echo "v=$(bash scripts/apple/version.sh)" >> "$GITHUB_OUTPUT"
+
+      - name: 编 Rust iOS 静态库（device + simulator）
+        run: |
+          set -euo pipefail
+          cargo build --release -p opi_ffi --target aarch64-apple-ios
+          cargo build --release -p opi_ffi --target aarch64-apple-ios-sim
+
+      - name: 编译扩展 + 组装 framework/xcframework
+        run: bash scripts/apple/package-ios.sh "${{ steps.ver.outputs.v }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opi-ios-keyboard-v${{ steps.ver.outputs.v }}
+          path: dist/apple/ios
+          if-no-files-found: error

@@ -337,9 +337,17 @@ final class OpiCandidateWindow {
     private init() {}
 
     func configure(server: IMKServer) {
-        let w = IMKCandidates(server: server,
-                              panelType: kIMKSingleRowSteppingCandidatePanel,
-                              styleType: kIMKMain)
+        // ✅ 首编确认（CI run 37934619550，2026-10-09）：init 也是**可失败**的（`IMKCandidates?`）。
+        // 失败条件文档没写明；但候选窗是**显示层** —— 建不起来时输入法其余部分
+        // （预编辑、上屏）照常工作，只是没有候选面板。所以这里**不**退进程（对照
+        // main.swift 里 IMKServer 为 nil 时的 exit(1)：那是输入法根本没法工作），
+        // 只打日志记账。window 保持 nil，`update`/`hide` 里本来就有 guard。
+        guard let w = IMKCandidates(server: server,
+                                    panelType: kIMKSingleRowSteppingCandidatePanel,
+                                    styleType: kIMKMain) else {
+            NSLog("opi: 候选窗建不起来（IMKCandidates init 返回 nil）—— 输入法仍可用，仅无候选面板")
+            return
+        }
         // 可见性由本层驱动（缓冲空就 hide、有候选就 show），不让面板自己关。
         // ⚠️ 默认是 true：那样「回车选中候选」会由**面板**处理并回调
         // candidateSelected → 若此时按键也进了 handle（Rust 侧回车 = 提交首候选），
@@ -355,7 +363,9 @@ final class OpiCandidateWindow {
             return
         }
         w.setCandidateData(list)
-        w.updateCandidates()
+        // 首编确认（同轮）：ObjC 的 `updateCandidates` 在 Swift 里被改名为 `update()`
+        // —— 编译器原文：「'updateCandidates()' has been renamed to 'update()'」。
+        w.update()
         w.show(kIMKLocateCandidatesBelowHint)
     }
 

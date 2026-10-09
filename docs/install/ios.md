@@ -7,7 +7,7 @@
 > | 层 | 状态 | 判据 |
 > |---|---|---|
 > | Rust 侧 C ABI（`crates/opi-ffi`） | **已实测**能为 iOS 目标编译、能产出 `libopi_ffi.a` | 见「产出 libopi_ffi.a」一节，本机可复现 |
-> | `ios/` 下的 Swift（6 个文件） | **一行都没有被编译过** | 本机是 Linux，没有 Xcode / Apple SDK，`import UIKit` 就断 |
+> | `ios/` 下的 Swift（6 个文件） | **2026-10-09 起：过了真编译器**（CI `apple.yml` 对 `ios/` 跑 `swiftc -typecheck` + 真编 + 与 Rust 静态库链接；run 37935240583）。但**运行时行为仍是 0 验证** | 本机仍是 Linux（`import UIKit` 就断），编译这一层由 CI 的 macos-latest 补上；见 §4.5 |
 >
 > **别把「Rust 侧能编」读成「iOS 端能用」。** 本项目已经被「没被编译器看过的代码」
 > 坑过两次，本目录的存在正是为了避免第三次：
@@ -144,6 +144,13 @@ xcodebuild -create-xcframework \
    **把编译错误当成这份草案的待办清单，而不要当成本目录作者写错了什么** ——
    那个清单的长度本身就是这份草案可信度的度量。
 
+   > ⏳ **2026-10-09 订正：首次编译已经发生**（CI `apple.yml`，见 §4.5）。实际撞出来的
+   > 编译错误**只有一类**：`KeyboardLayout.layer` 与 `UIView.layer` 同名冲突
+   > （改名为 `keyLayer`）。上面点名的几个「凭记忆」项 —— `UIKey` / `UIKeyboardHIDUsage`
+   > 成员名、`textWillChange/textDidChange` 签名、`size_t` 的导入形态 —— **都过了编译器**
+   > （只剩两条警告：`contentEdgeInsets` 已废弃、`toggleFullwidth()` 返回值未用）。
+   > 编译过 ≠ 能用：**运行时仍然一步没走**。
+
 > 仓库里**没有** Xcode 工程文件是有意的：手写一个从未被 Xcode 打开过的 `project.pbxproj`
 > 会是第三件「没被工具看过的产物」，且比 Swift 更难人工核对。同理**不用** nib/storyboard。
 
@@ -171,6 +178,53 @@ plutil -lint ios/Info.plist      # 只能在 Mac 上跑
 ⚠️ 本机（Linux）**没有** Apple 的 `plutil`；`/usr/bin/plutil` 是 **GNUstep** 的，
 它对这份文件报 `non-NSData data argument passed to method`（exit=1）——**那是假红**，
 不代表 plist 有问题。别把它当缺陷。
+
+---
+
+## 4.5 CI 自动打包产物（未签名 —— **装不上真机**，是证据与集成起点）
+
+`.github/workflows/apple.yml`（macos-latest，三个 job：`rust` / `macos` / `ios`）每次运行都把
+`ios/` 的 Swift 真过一遍编译器（`swiftc -typecheck` → 真编 → 与 Rust 静态库链接），
+产物挂在**该次 run 的 Artifacts** 里。取法：
+
+```bash
+gh run list --workflow apple.yml                    # 找 run id（或网页 Actions 页）
+gh run download <run-id> -n "opi-ios-keyboard-v$(bash scripts/apple/version.sh)"
+```
+
+| 产物名（版本号 = `Cargo.toml` 的 `[workspace.package] version`，唯一取法在 `scripts/apple/version.sh`） | 内容 |
+|---|---|
+| `opi-ios-keyboard-v<版本>` | `OPIKeyboard.xcframework`（真机 arm64 + 模拟器 arm64，Rust **静态**链进去）· `KeyboardExtension-Info.plist`（占位符已展开成字面值）· `OpiKeyboard.appex/`（未签名的扩展目录 + 可执行）· 同名 zip（上面几样打一包）· 外加生成用的 `ios-arm64/`、`ios-sim/` 两个**中间** framework 目录（集成时用 xcframework，不用它们） |
+| `opi-apple-rust-v<版本>`（rust job） | `opi_ffi.xcframework`（同上的静态库版）+ `headers/OpiFFI.h` + macOS 用的通用库 |
+
+**这次 run 真实证明了什么**（run 37935240583，证据都在 job 日志里，可复核）：
+
+- `ios/` 6 个 `.swift` 过 `swiftc -typecheck` + 真编译（device 与模拟器两个 SDK 各一遍）；
+- framework 的 `nm -gU` 里有 `_opi_load` 等导出、`nm -u` 里**没有**未定义的 `opi_` 符号
+  ⇒ Rust 静态库**真的链进去了**（不是「链接命令没报错」就算）；
+- `otool -L` 里**没有** `libopi_ffi` ⇒ 是静态链接（iOS 扩展带第三方 dylib 装不上）；
+- `xcodebuild -create-xcframework` 成功；扩展可执行（`.appex`）也链出来了
+  （入口 `_NSExtensionMain`，链接期实测可过）。
+
+**它不能做什么（现状，别读成「降级」）**：
+
+- **装不上任何真机**：产物未签名（仓库没有 Apple 证书、不连签名服务），且键盘扩展
+  **必须**内嵌在宿主 App 的 `PlugIns/` 里 —— 仓库里没有宿主 App。
+  这份产物的用途就是两件：**编译/链接通过的证据** + **做宿主 App 时的集成起点**
+  （xcframework 拖进 Xcode 即可链接）。
+- **运行时 0 验证**：键盘在系统里出不出现、按键进不进引擎、候选栏有没有字、上屏对不对
+  —— 全部未测（§6 的五步一步都没走）。**编译过 ≠ 能用。**
+- 模拟器只有 arm64 切片：Intel Mac 的模拟器要 `x86_64-apple-ios`，本工作流没构建
+  （要加就是 `scripts/apple/package-ios.sh` 里 `for spec` 多一行，没有别的机关）。
+- Artifact 默认 90 天过期、随每次 run 重出 —— 它是 **CI 证据**，不是发布渠道。
+
+想在本机复现（不用 CI）：Mac 上先装两个 Rust target、两条 `cargo build`（前置条件写在脚本头部），
+然后 `bash scripts/apple/package-ios.sh "$(bash scripts/apple/version.sh)"`。
+
+⚠️ **自己写链接行时的一个坑**（CI 首轮实测撞出来的）：`crate-type` 含 `cdylib`
+⇒ `target/<iOS 三元组>/release/` 里 `libopi_ffi.dylib` 与 `libopi_ffi.a` **并存**，
+而 `-L … -lopi_ffi` 的搜索**优先挑 `.dylib`** —— 链接会「成功」，但符号全变成未定义导入
+（症状是 `nm -gU` 里一个 `opi_` 都看不到）。本工作流按**显式路径**直链 `.a`。
 
 ---
 
@@ -229,7 +283,7 @@ plutil -lint ios/Info.plist      # 只能在 Mac 上跑
 | L3 | **无障碍未接** | 每个键都没有 `accessibilityLabel`（⇧ / ⌫ / 回车 / 🌐 这类符号键尤其需要），VoiceOver 读不出来。已知缺口。 |
 | L4 | **键盘高度是拍的** | `viewWillAppear` 里写死 264pt（`priority = .defaultHigh`），**没按内容算、没处理旋转**。真机上要改。 |
 | L5 | **⇧ 三态高亮 UI 未接** | 出口（`opi_shift_state`）与 Swift 包装（`OpiEngine.shiftState()`）都已就绪，**UI 没读**。所以也仍然没有会漂移的镜像。 |
-| L6 | **外接键盘那一路风险最高** | `UIKey` / `UIKeyboardHIDUsage` 的成员名只做过**文档核对**（修掉一个：真名是 `.keyboardDeleteOrBackspace`，不是 `.keyboardBackspace`），**没有任何编译器看过**。`ios/README.md` 的建议是：**先把这一节整个注释掉**，让键盘在纯软键盘下跑通，再单独接硬件键盘。 |
+| L6 | **外接键盘那一路风险最高** | `UIKey` / `UIKeyboardHIDUsage` 的成员名只做过**文档核对**（修掉一个：真名是 `.keyboardDeleteOrBackspace`，不是 `.keyboardBackspace`）。⏳ 2026-10-09：这一节**已过编译器**（CI 真编，见 §4.5）—— 但**运行时**从未接过硬件键盘，风险仍在（`ios/README.md` 的原建议：先整节注释掉、纯软键盘跑通后再单独接，作为「万一运行时炸」的退路仍然有效）。 |
 | L7 | **REPEAT 位在 iOS 侧是预防性的** | `UIKeyModifierFlags` 里有没有 autorepeat 信号属于**记忆级**证据，未核对。`modifierStates(_:)` 里已写明「哪天真找到就加在这里，别在调用处手搓一个位」。 |
 | L8 | **繁体库不放就回落简体** | `trad.opid` 是可选资源；缺了不报错，繁体模式静默用简体库。 |
 | L9 | **长按 ⇧ → Lock 走的是另一套机制** | 软键盘长按 → `stateLongPressed`，与桌面轨的 `LONG_PRESSED` 键状态位不是同一条路。 |
@@ -239,11 +293,14 @@ plutil -lint ios/Info.plist      # 只能在 Mac 上跑
 
 ## 8. 未验证清单（照抄现状，别读成已完成）
 
-**本目录从未被任何 Apple 工具看过的东西：**
+**本目录的验证现状**（2026-10-09 更新，别读成已完成）：
 
-- `ios/` 下 **6 个 `.swift`**：没有编译、没有 lint、没有单测 —— **验证数是 0**。
-  第一条针对 Swift 的可执行验证就是「在 Mac 上编译通过」。
-- `ios/Info.plist`：本机只验过**格式**（`plistlib` 能解析）。**键名与取值全部凭记忆**。
+- `ios/` 下 **6 个 `.swift`**：没有 lint、没有单测；**编译**这一条 2026-10-09 起
+  由 CI 补上（`apple.yml`，run 37935240583：typecheck + 真编 + 静态链接 + `nm`
+  未定义符号检查，见 §4.5）。**运行时（装进系统之后）验证数依旧是 0。**
+- `ios/Info.plist`：本机只验过**格式**（`plistlib` 能解析）；CI 里也只得过
+  `plutil -lint` / `plutil -replace`（同样是格式层，`-replace` 对不存在的键照样成功）。
+  **键名与取值的语义全部凭记忆**。
 - `ios/OpiFFI.h`：**转发头**，自身没有独立内容（唯一的一份声明在 `macos/OpiFFI.h`）。
 
 **做过、但强度有限的检查（别当成「编译过了」）：**
@@ -254,8 +311,11 @@ plutil -lint ios/Info.plist      # 只能在 Mac 上跑
 - `KeyboardLayout.swift` / `KeyboardHardware.swift` 两次拆分做过的**定义集合 ↔ 引用集合**比对 ——
   只证「搬移没丢东西」，不证能编译。
 
-**唯一真正过了工具的两个东西**（都在 Rust 侧，不在 Swift 侧）：
-`cargo check` 的 iOS 目标（见「产出 `libopi_ffi.a`」）、以及那个含全部导出的 arm64 `.a`。
+**真正过了工具的东西**（截至 2026-10-09）：Rust 侧 —— `cargo check` 的 iOS 目标
+（见「产出 `libopi_ffi.a`」）、含全部导出的 arm64 `.a`；**Swift 侧** —— `ios/` 全部
+6 个 `.swift` 过了 typecheck + 真编 + 静态链接 + `nm` 无未定义符号
+（CI run 37935240583，见 §4.5）。**还没过任何工具的**：运行时行为 ——
+一段代码都没在 iOS 上真正跑过。
 
 ---
 

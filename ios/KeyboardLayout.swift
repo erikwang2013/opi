@@ -48,7 +48,12 @@ final class KeyboardLayout: UIView {
     weak var delegate: KeyboardLayoutDelegate?
 
     /// 当前层。**不要**在控制器里另存一份 —— 键面与层的真源在这里。
-    private(set) var layer: Layer = .letters
+    ///
+    /// 名字为什么不叫 `layer`：`UIView` 已有一个 `layer: CALayer`，同名的属性
+    /// 无法用别的类型覆盖 —— 首次真编译的报错就是
+    /// `property 'layer' with type 'KeyboardLayout.Layer' cannot override a property with type 'CALayer'`
+    /// （2026-10-09 CI run 37933196475）。改名是唯一符合 API 的修法。
+    private(set) var keyLayer: Layer = .letters
 
     /// 模式键的键面字（中/繁/英）。由控制器在切模式后同步（对齐 Android `modeLabelOf`）。
     ///
@@ -178,12 +183,12 @@ final class KeyboardLayout: UIView {
     /// 重建键位行（切层时调用）。
     private func rebuildKeys() {
         // 符号层由 `setSymbols(_:)` 画（数据来自引擎，不在这里现算）。
-        let isSymbols = (layer == .symbols)
+        let isSymbols = (keyLayer == .symbols)
         rowsStack.isHidden = isSymbols
         symbolPanel.isHidden = !isSymbols
         guard !isSymbols else { return }
         rowsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        let rows = layer == .letters ? letterRows() : numberRows()
+        let rows = keyLayer == .letters ? letterRows() : numberRows()
         let gap: CGFloat = 5
         for specs in rows {
             let row = UIStackView()
@@ -348,8 +353,8 @@ final class KeyboardLayout: UIView {
 
     /// 切换层。符号层的数据**不在这里取** —— 见 `setSymbols(_:)`。
     func setLayer(_ new: Layer) {
-        guard new != layer else { return }
-        layer = new
+        guard new != keyLayer else { return }
+        keyLayer = new
         rebuildKeys()
     }
 
@@ -365,7 +370,7 @@ final class KeyboardLayout: UIView {
         modeLabel = label
         // 键面字只在重建行时才读，所以这里必须重建（代价是 4 行按钮重建，
         // 切模式是低频操作）。符号层没有这个键，不用重建。
-        if layer != .symbols { rebuildKeys() }
+        if keyLayer != .symbols { rebuildKeys() }
     }
 }
 

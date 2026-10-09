@@ -29,8 +29,18 @@ let connectionName = (Bundle.main.infoDictionary?["InputMethodConnectionName"] a
     ?? "OpiInputMethod_Connection"
 
 // 启动即建 server：系统随后为每个客户端连接创建 OpiInputController 实例。
-// ⚠️ 未验证：init 签名（name:bundleIdentifier:）与「是否需要先起 NSApplication」。
-let server = IMKServer(name: connectionName, bundleIdentifier: bundleID)
+//
+// ✅ 首编（CI run 37933881578，2026-10-09）确认了一条 API 事实：这个 init 是
+// **可失败的**（`IMKServer?`），草案原样写成 `let server = ...` 会被编译器拦下：
+//   error: value of optional type 'IMKServer?' must be unwrapped to a value of type 'IMKServer'
+// 失败语义（文档 + 按最坏打算）：连接名已被占用时返回 nil（例如上一个实例还在跑）。
+// 没有 server 的输入法什么也做不了，所以这里与上面缺 CFBundleIdentifier 同一形态：
+// 打日志 + 退出，不静默降级、也不用 `!` 直接崩（崩掉的进程没有任何可读原因）。
+// 仍未验证：是否需要先起 NSApplication（见文件尾）。
+guard let server = IMKServer(name: connectionName, bundleIdentifier: bundleID) else {
+    NSLog("opi: IMKServer 建不起来 —— 连接名 \(connectionName) 可能已被占用（另一个实例还在跑？）")
+    exit(1)
+}
 
 // 候选窗依赖 server（IMKCandidates 的 init 要它）。
 OpiCandidateWindow.shared.configure(server: server)
