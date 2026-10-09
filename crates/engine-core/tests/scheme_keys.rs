@@ -210,3 +210,182 @@ fn full_scheme_digits_still_select_through_router() {
     );
     assert_eq!(r.buffer(), "", "选词后缓冲清空");
 }
+
+// ---- 显示用缓冲（2026-10-09：9 键左侧要显示「拼音读数」）----
+
+/// 9 键的引擎缓冲是数字串；**显示层**要的是首条候选的拼音（搜狗 9 键候选栏左侧
+/// 那格「输入时显示的拼音」）。FFI 的 buffer 出口读 `display_buffer`。
+#[test]
+fn nine_key_display_buffer_is_the_top_candidate_pinyin() {
+    let mut e = engine();
+    e.set_scheme(Scheme::Nine);
+    type_str(&mut e, "64"); // ni
+    let _ = e.candidates(8); // 取候选顺带刷新读数（宿主每键都这么走）
+    assert_eq!(e.buffer(), "64", "引擎缓冲本体仍是数字串（路由/退格靠它）");
+    assert_eq!(e.display_buffer(), "ni", "读数 = 首条候选「你」的拼音");
+
+    type_str(&mut e, "426"); // nihao
+    let _ = e.candidates(8);
+    assert_eq!(e.buffer(), "64426");
+    // 分数上 你好(6000+精确) 压过 你(5000+?)：读数跟着首条走
+    assert_eq!(
+        e.display_buffer(),
+        "ni'hao",
+        "读数带分词（搜狗「显示分词」同款）"
+    );
+
+    // 没有候选（乱按）：读数为空 —— 不把数字串端上去（用户裁决的本意）
+    let mut e2 = engine();
+    e2.set_scheme(Scheme::Nine);
+    type_str(&mut e2, "999");
+    let _ = e2.candidates(8);
+    assert_eq!(e2.display_buffer(), "");
+}
+
+/// 换方案把读数一起清掉（否则换方案后的一次读拿到上一条输入的拼音）。
+#[test]
+fn set_scheme_clears_the_display_reading() {
+    let mut e = engine();
+    e.set_scheme(Scheme::Nine);
+    type_str(&mut e, "64");
+    let _ = e.candidates(8);
+    assert_eq!(e.display_buffer(), "ni");
+    e.set_scheme(Scheme::Nine); // 同值重设也清（等于「重新开始」）
+    assert_eq!(e.display_buffer(), "", "换方案后读数必须为空");
+}
+
+/// 非 9 键方案：显示缓冲 = 实际缓冲，逐字节相同（26/14 键的字母串本来就是拼音，
+/// 别的端（fcitx5/TSF）读到的必须与改动前一致）。
+#[test]
+fn display_buffer_is_raw_outside_nine() {
+    let mut e = engine();
+    type_str(&mut e, "ni");
+    let _ = e.candidates(8);
+    assert_eq!(e.display_buffer(), "ni");
+    assert_eq!(e.buffer(), "ni");
+
+    let mut e14 = engine();
+    e14.set_scheme(Scheme::Fourteen);
+    type_str(&mut e14, "n"); // 14 键发的是字母对首字母，缓冲仍是字母串
+    let _ = e14.candidates(8);
+    assert_eq!(e14.display_buffer(), e14.buffer());
+}
+
+// ---- 分词键（`'`，2026-10-09 搜狗式「就在这里断」）----
+
+/// 分词把候选**约束到音节边界**上：`64'26` = ni|an ⇒ 命中 nian、不命中 nihao；
+/// 不带分词时两者都能前缀匹配；断点不对齐（`644'26`，断在 nih 后）谁都不匹配。
+#[test]
+fn segment_key_forces_the_syllable_boundary() {
+    let mut e = Engine::new(
+        dict(&[
+            ("nian", "年", 6000),
+            ("nihao", "你好", 7000),
+            ("ni", "你", 5000),
+        ]),
+        no_symbols(),
+        false,
+    );
+    e.set_scheme(Scheme::Nine);
+
+    // 基线（数字串别写错）：6426 = nian、64426 = nihao，各命中各的
+    type_str(&mut e, "6426");
+    let nian_only = texts(&e);
+    assert!(
+        nian_only.contains(&"年".to_string()),
+        "6426 应能命中 nian：{nian_only:?}"
+    );
+    assert!(
+        !nian_only.contains(&"你好".to_string()),
+        "6426 不该命中 nihao（那是 64426）：{nian_only:?}"
+    );
+
+    // 分词：64'26 = ni|an —— an 与 hao 不同键位，nihao 出局
+    let mut e2 = Engine::new(
+        dict(&[
+            ("nian", "年", 6000),
+            ("nihao", "你好", 7000),
+            ("ni", "你", 5000),
+        ]),
+        no_symbols(),
+        false,
+    );
+    e2.set_scheme(Scheme::Nine);
+    type_str(&mut e2, "64'26");
+    let seg = texts(&e2);
+    assert!(
+        seg.contains(&"年".to_string()),
+        "64'26 应命中 nian（ni|an）：{seg:?}"
+    );
+    assert!(
+        !seg.contains(&"你好".to_string()),
+        "64'26 不得命中 nihao：{seg:?}"
+    );
+
+    // 96(=wang) 不掺和；加课：64'426 = ni|hao → 命中 nihao
+    let mut e4 = Engine::new(
+        dict(&[("nian", "年", 6000), ("nihao", "你好", 7000)]),
+        no_symbols(),
+        false,
+    );
+    e4.set_scheme(Scheme::Nine);
+    type_str(&mut e4, "64'426");
+    assert!(
+        texts(&e4).contains(&"你好".to_string()),
+        "64'426 = ni|hao 应命中 nihao：{:?}",
+        texts(&e4)
+    );
+
+    // 断点不对齐（nih 不是音节边界）：无人匹配
+    let mut e3 = Engine::new(
+        dict(&[("nian", "年", 6000), ("nihao", "你好", 7000)]),
+        no_symbols(),
+        false,
+    );
+    e3.set_scheme(Scheme::Nine);
+    type_str(&mut e3, "644'26");
+    assert!(
+        texts(&e3).is_empty(),
+        "断在 nih 后的分词不该匹配任何词：{:?}",
+        texts(&e3)
+    );
+
+    // `'` 确实进了缓冲（显示/退格都基于它），且不是标点引号
+    assert!(
+        e2.buffer().contains('\''),
+        "分词符应在缓冲里：{:?}",
+        e2.buffer()
+    );
+}
+
+/// 单段（只有分词符在末尾/开头）与连打等价性：`64'` 应当与 `64` 一样出候选
+/// —— 末段可为前缀，分词符在末尾只表示「边界在这里（后面还没打）」。
+#[test]
+fn trailing_segment_marker_keeps_prefix_semantics() {
+    let mut e = engine();
+    e.set_scheme(Scheme::Nine);
+    type_str(&mut e, "64'");
+    assert!(
+        texts(&e).contains(&"你".to_string()),
+        "64' 应与 64 同义（末段可为空续打）：{:?}",
+        texts(&e)
+    );
+}
+
+// ---- 缓冲到顶：静默但可被看见（2026-10-09）----
+
+/// 到顶（MAX_BUFFER）后：缓冲**原样留着**、后续键不提交 —— 这是实测过的裁决
+/// （自动提交曾把用户打到一半的拼音整段冲上屏，回归在 tests/punctuation.rs）。
+/// 2026-10-09 把上限 16 提到 32（「不停输入」摸得到 16）；「看得见」由 UI 负责
+/// （9 键左列显示缓冲原样）。本用例按符号化写法钉住「满 = 静默」，改上限不用动。
+#[test]
+fn buffer_cap_stays_silent_and_holds() {
+    let mut e = Engine::new(dict(&[("ni", "你", 5000)]), no_symbols(), false);
+    for _ in 0..engine_core::composer::MAX_BUFFER {
+        e.input_key('n');
+    }
+    let full = e.buffer().to_string();
+    assert_eq!(full.chars().count(), engine_core::composer::MAX_BUFFER);
+    assert_eq!(e.input_key('b'), "", "到顶不提交");
+    assert_eq!(e.buffer(), full, "到顶缓冲原样留着（绝不 flush）");
+}

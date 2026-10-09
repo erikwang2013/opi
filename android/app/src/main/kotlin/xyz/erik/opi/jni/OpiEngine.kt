@@ -126,6 +126,17 @@ object OpiEngine : OpiEngineApi, SymbolApi {
 
     override external fun buffer(): String
 
+    /**
+     * displayBuffer() -> String：**显示用**的拼音读数（9 键方案下是带分词的读音
+     * `ni'hao`；其余方案与 [buffer] 相同）。
+     *
+     * ⚠️ 与 [buffer] **是两个出口，别混用**：`buffer()` 是缓冲本体，宿主拿它做
+     * **行为判定**（回退/空格/回车的「缓冲非空？」）—— 2026-10-09 把读数塞进
+     * buffer() 出口，9 键无候选时读数空 ⇒ 回退删了编辑器文字、引擎缓冲没退，
+     * 连着打字看不出变化（用户报「键盘没反应」）。
+     */
+    override external fun displayBuffer(): String
+
     override external fun mode(): Int
 
     /** searchSymbols(keyword: String) -> String[]。JNI 可能返回 null。 */

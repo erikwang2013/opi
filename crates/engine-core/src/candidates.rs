@@ -305,6 +305,10 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
 /// （`Dictionary::visit_entries`）—— 数据来源、算法形状都不同，硬合并会把两条
 /// 路都读不懂。打分/去重/截断规则与全键盘**逐字相同**（exact 加成按「键长相等」
 /// 判，与 pinyin_len == 输入长度同义），保证两套键盘的候选行为一致。
+/// 返回 `(候选, 首条读音)`。读音 = **最终排在第一名的那条词的拼音**（截断后取，
+/// 与用户看到的第一条一致）——9 键的缓冲是数字串，界面上要显示「拼音读数」时
+/// 就靠它（`Engine::display_buffer`，搜狗 9 键的左侧拼音栏同款）。没有候选时
+/// 为空串。14 键同路返回（它的缓冲本来就是字母串，读数字段无副作用）。
 pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
     dict: &D,
     learner: &Learner,
@@ -312,33 +316,38 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
     limit: usize,
     boost: u64,
     scheme: crate::scheme::Scheme,
-) -> Vec<Candidate> {
+) -> (Vec<Candidate>, String) {
     if input.is_empty() || limit == 0 {
-        return Vec::new();
+        return (Vec::new(), String::new());
     }
     let exact_bonus = boost / 2;
     let input_len = input.len();
-    let mut merged: Vec<Candidate> = Vec::new();
+    // 读音随条目一起暂存（pinyin 的生命周期出不了 visit_entries 的回调，故复制）。
+    let mut merged: Vec<(Candidate, String)> = Vec::new();
     dict.visit_entries(&mut |pinyin, word, freq| {
         if !scheme.matches(input, pinyin) {
             return;
         }
         let exact = pinyin.len() == input_len;
-        merged.push(Candidate {
-            text: word.to_string(),
-            kind: CandidateKind::Hanzi,
-            score: rank_score(freq, learner.freq_of(word), boost).saturating_add(if exact {
-                exact_bonus
-            } else {
-                0
-            }),
-        });
+        merged.push((
+            Candidate {
+                text: word.to_string(),
+                kind: CandidateKind::Hanzi,
+                score: rank_score(freq, learner.freq_of(word), boost).saturating_add(if exact {
+                    exact_bonus
+                } else {
+                    0
+                }),
+            },
+            pinyin.to_string(),
+        ));
     });
-    merged.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
+    merged.sort_by(|a, b| b.0.score.cmp(&a.0.score).then(a.0.text.cmp(&b.0.text)));
     let mut seen = std::collections::HashSet::new();
-    merged.retain(|c| seen.insert(c.text.clone()));
+    merged.retain(|(c, _)| seen.insert(c.text.clone()));
     merged.truncate(limit);
-    merged
+    let reading = merged.first().map(|(_, py)| py.clone()).unwrap_or_default();
+    (merged.into_iter().map(|(c, _)| c).collect(), reading)
 }
 
 // 单测独立成文件（`#[path]` 引入）以保持本文件 <500 行，与 router_tests.rs 同惯例。

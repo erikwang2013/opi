@@ -38,7 +38,13 @@ impl Mode {
 }
 
 /// 拼音缓冲上限：乱码拼音（非合法音节序列）无候选时不再无限累积。
-pub const MAX_BUFFER: usize = 16;
+///
+/// ⚠️ 到顶是**静默收下不了**（原样留着，绝不 flush）—— 这是实测过的裁决，别改：
+/// 曾有一个版本让第 17 个字母把用户打到一半的拼音整段提交上屏（见
+/// `tests/punctuation.rs::full_buffer_is_not_flushed_by_a_letter` 的回归记录）。
+/// 2026-10-09 把 16 提到 32：用户「不停输入直到没匹配」能摸到 16；到顶仍然安静，
+/// **可见反馈归 UI**（9 键左列会显示缓冲原样，见 NineKeyKeyboard）。
+pub const MAX_BUFFER: usize = 32;
 
 /// 一次击键的效果。提交由 Engine 层统一处理（空格键），Composer 只区分更新/忽略。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -98,10 +104,11 @@ impl Composer {
                     Updated
                 } else if self.scheme == crate::scheme::Scheme::Nine && matches!(ch, '2'..='9') {
                     // 9 键方案：数字是**输入键**（2–9 各映射三四个字母，见 scheme.rs），
-                    // 进缓冲而不是被丢弃。⚠️ 关掉「数字=选词」的路由门在**宿主侧**
-                    // （KeyRouter / 三轨 router 的 digit_select）；这里只保证
-                    // 「已经送进引擎的数字」在 Nine 方案下不被悄悄吃掉。
-                    // 0/1 不是 9 键的输入键（matches! 不含），落回 Ignored。
+                    // 进缓冲而不是被丢弃。`'`（分词符）不在这里 —— 上面那条
+                    // `ch == '\''` 分支对所有拼音模式已收（分词键发 `'` 走那条）。
+                    // ⚠️ 关掉「数字=选词」的路由门在**宿主侧**（KeyRouter / 三轨 router
+                    // 的 digit_select）；这里只保证「已经送进引擎的数字」在 Nine 方案下
+                    // 不被悄悄吃掉。0/1 不是 9 键的输入键（matches! 不含），落回 Ignored。
                     self.session.buffer.push(ch);
                     Updated
                 } else {

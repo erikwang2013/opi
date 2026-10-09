@@ -300,8 +300,13 @@ fn ascii_punctuation_never_vanishes() {
 #[test]
 fn full_buffer_is_not_flushed_by_a_letter() {
     let mut s = punct_state();
-    typed(&mut s, &"ni".repeat(8));
-    assert_eq!(s.buffer().chars().count(), 16, "前置：缓冲已到上限");
+    // 前置按 MAX_BUFFER 符号化（别写死 16/32）：改上限不用再动这里。
+    typed(&mut s, &"ni".repeat(engine_core::composer::MAX_BUFFER / 2));
+    assert_eq!(
+        s.buffer().chars().count(),
+        engine_core::composer::MAX_BUFFER,
+        "前置：缓冲已到上限"
+    );
     let before = s.buffer();
     assert_eq!(s.input_key('a' as u32, 0), KeyOutcome::CompositionChanged);
     assert_eq!(s.buffer(), before, "满缓冲必须原样留着");

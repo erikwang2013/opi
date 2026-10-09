@@ -6,3 +6,4 @@
 # everyone who runs the test benefits from these saved cases.
 cc 6759199265b55a25776d2385322a77509031b6c488841fa88821a29bb1a572a5 # shrinks to ops = [Key('a')], mode_idx = 4, shift = false, switch_at = None, switch_to = 0
 cc f6fa1845ceca4f8443facabef31cfd4812312979a46e8c42209cb5c603dd4f42 # shrinks to ops = [Key('\'')], mode_idx = 4, shift = false, switch_at = None, switch_to = 0
+cc 1ae084a4f59f6d3ae1f382a20644233940be048a8764157ec2c6075a5633aba1 # shrinks to keys = ['h', 'h', 'h', 'h', 'h', 'h', 'h', 'h', 'h', 'h', 'h', 'h', 'h', 'h', 'h', 'h', 'h']

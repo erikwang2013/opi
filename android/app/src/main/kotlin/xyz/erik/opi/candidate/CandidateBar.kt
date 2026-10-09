@@ -80,11 +80,9 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
             .background(p.barBg),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // ⚠️ 显示串：**9 键（T9）方案下缓冲区是数字串**（键位序列，不是拼音）——
-        // 摆在候选栏最前面会被读成「输入拼音时多出来的一串数字」（2026-10-09 用户
-        // 裁决原话）。候选本身就是反馈，这串不显示；其余方案（26/14/笔画）缓冲是
-        // 字母，照常显示。**节点不能整个删**：读屏播报挂在这个节点上（见下面语义块），
-        // 隐藏时留一个空文本节点（宽度只剩两侧 padding，肉眼看不见）。
+        // 9 键方案下这格**不显示**：拼音读数在键盘的左侧一列（搜狗同款，见
+        // NineKeyKeyboard 的左列）—— 同一串字出现在两处是冗余。语义节点保留
+        // （读屏播报挂它，见下面语义块），隐藏时留空文本节点。
         val bufferShown =
             if (controller.inputScheme == InputScheme.NINE) "" else controller.buffer
         Text(
@@ -96,7 +94,11 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
                     // （Compose issue 225780131 —— 只改 text 不触发，须同块给 contentDescription），
                     // 而候选项是 clickable 子节点（自身合并语义），父节点合并不了它们。
                     // 于是把「缓冲 + 候选数」并进这一个节点一起播报。
-                    contentDescription = composingAnnouncement(controller.buffer, candidates.size)
+                    // 播报用**读数**（9 键下是带分词的拼音；其余方案与 buffer 相同）
+                    contentDescription = composingAnnouncement(
+                        controller.reading.ifEmpty { controller.buffer },
+                        candidates.size,
+                    )
                     liveRegion = LiveRegionMode.Polite
                 },
             fontSize = 18.sp,

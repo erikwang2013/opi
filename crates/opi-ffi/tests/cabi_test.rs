@@ -10,8 +10,8 @@ use opi_ffi::cabi::{
     OpiString, opi_backspace, opi_buffer, opi_candidates, opi_candidates_page, opi_clear,
     opi_clear_user_words, opi_export_user_words, opi_ffi_free_string, opi_import_user_words,
     opi_input_key, opi_input_space, opi_key_event, opi_learner_enabled, opi_load, opi_load_trad,
-    opi_mode, opi_page, opi_page_count, opi_remove_user_word, opi_search_symbols, opi_select,
-    opi_select_page, opi_set_learner, opi_set_shift, opi_shift_state, opi_switch_mode,
+    opi_mode, opi_page, opi_page_count, opi_remove_user_word, opi_scheme, opi_search_symbols,
+    opi_select, opi_select_page, opi_set_learner, opi_set_shift, opi_shift_state, opi_switch_mode,
     opi_symbol_blocks, opi_symbols_in_block,
 };
 
@@ -400,6 +400,34 @@ fn cabi_load_trad_routes_traditional_mode() {
     );
     unsafe {
         opi_switch_mode(0);
+        opi_clear();
+    }
+}
+
+/// 9 键方案的 `opi_buffer` 必须是**缓冲本体**（数字串），不是显示读数。
+///
+/// 2026-10-09 回归（用户报「键盘没反应」）：读数一度被塞进 `buffer()` 出口，宿主
+/// 拿它当**行为判定** —— 9 键无候选时读数恰为空串，回退/空格/回车全走错分支
+/// （回退删的是编辑器文字、引擎缓冲没退）。读数现在走单独的 `display_buffer`
+/// （JNI 的 displayBuffer；C ABI 不导出它），这条把本体钉在 C ABI 面。
+#[test]
+fn cabi_buffer_stays_raw_under_nine_scheme() {
+    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    load_any();
+    unsafe { opi_ffi::cabi::opi_set_scheme(1) }; // 1 = Nine（整数表见 cabi_scheme.rs）
+    for c in ["6", "4"] {
+        let u = to_units(c);
+        unsafe { opi_input_key(u.as_ptr(), u.len()) };
+    }
+    assert_eq!(
+        read(unsafe { opi_buffer() }),
+        "64",
+        "9 键的缓冲本体是数字串"
+    );
+    assert_eq!(unsafe { opi_scheme() }, 1, "前置：方案确实是 Nine");
+    // 复位共享单例：其余用例假定全键盘。
+    unsafe {
+        opi_ffi::cabi::opi_set_scheme(0);
         opi_clear();
     }
 }

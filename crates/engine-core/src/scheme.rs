@@ -92,6 +92,11 @@ impl Scheme {
         match self {
             Scheme::Full | Scheme::Stroke => pinyin.starts_with(input),
             Scheme::Nine | Scheme::Fourteen => {
+                // 分词符（`'`，搜狗「分词键」发它）：词库键**不含**分隔符（格式约定），
+                // 按段长切开比 —— 语义见 matches_segmented。
+                if input.contains('\'') {
+                    return self.matches_segmented(input, pinyin);
+                }
                 if pinyin.len() < input.len() {
                     return false;
                 }
@@ -104,6 +109,52 @@ impl Scheme {
             }
         }
     }
+
+    /// 带**分词符**的匹配（2026-10-09，搜狗「分词键」）：`input` 按 `'` 分段，
+    /// 词库拼音按段长切开逐段比对（词库键不含分隔符）。
+    ///
+    /// - 每段仍走按键类（9/14 键），逐字节比 —— 与无分隔那条**同一条规则**；
+    /// - **非末段必须落在音节边界上**（`segment()` 的每块都是完整音节）：分词的
+    ///   意义就是「这里断」——`64'26` 要求拼音前两字母恰是一个音节（ni），
+    ///   才让「nian」按 ni|an 命中；`644'26`（断在 nih 后）不对齐，谁也不匹配。
+    /// - 末段可只到前缀（正在打，与全键盘「打一半」同义）。
+    /// - 空段（开头/结尾/连续 `'`）视为无效输入，不匹配。
+    fn matches_segmented(self, input: &str, pinyin: &str) -> bool {
+        let mut rest = pinyin;
+        let segs: Vec<&str> = input.split('\'').collect();
+        for (i, seg) in segs.iter().enumerate() {
+            if seg.is_empty() {
+                // 末段为空（`64'`：刚点分词还没继续打）= 与不带分词同义（前面的段
+                // 已验过音节边界）；开头/连续 `'` 的空段不是有效输入。
+                return i + 1 == segs.len();
+            }
+            if rest.len() < seg.len() {
+                return false;
+            }
+            let (head, tail) = rest.split_at(seg.len());
+            if !seg.bytes().zip(head.bytes()).all(|(k, p)| {
+                self.key_class(char::from(k))
+                    .is_some_and(|class| class.contains(&char::from(p)))
+            }) {
+                return false;
+            }
+            if i + 1 == segs.len() {
+                return true;
+            }
+            if !boundary_aligned(head) {
+                return false;
+            }
+            rest = tail;
+        }
+        false
+    }
+}
+
+/// `head` 是否落在**音节边界**上：贪婪切分后每块都是完整音节且拼回原串
+/// （`ni` ✓、`nihao` ✓；`nih` 切出 ["ni","h"]，`h` 不是音节 ⇒ ✗）。
+fn boundary_aligned(head: &str) -> bool {
+    let segs = crate::pinyin::segment(head);
+    !segs.is_empty() && segs.iter().all(|s| crate::pinyin::is_syllable(s)) && segs.concat() == head
 }
 
 #[cfg(test)]

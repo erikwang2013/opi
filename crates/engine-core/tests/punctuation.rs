@@ -30,6 +30,7 @@
 //! 用例会红（`chinese_halfwidth_passes_everything_through` 与 `*_release_tests.rs`
 //! 里以 `.` 直通为背景的两条），等下一波接线时一并改。别把那份红当成引擎回归。
 
+use engine_core::composer::MAX_BUFFER;
 use engine_core::dictionary::InMemoryDictionary;
 use engine_core::keys::{KEY_PAGE_DOWN, KEY_STATE_RELEASED};
 use engine_core::router::{KeyAction, KeyRouter};
@@ -278,10 +279,11 @@ fn ascii_punctuation_never_vanishes() {
 #[test]
 fn full_buffer_is_not_flushed_by_a_letter() {
     let mut e = engine();
-    for c in "ni".repeat(8).chars() {
-        e.input_key(c);
+    // 前置按 MAX_BUFFER 符号化（别写死 16/32）：改上限不用再动这里。
+    for _ in 0..MAX_BUFFER {
+        e.input_key('n');
     }
-    assert_eq!(e.buffer().chars().count(), 16, "前置：缓冲已到上限");
+    assert_eq!(e.buffer().chars().count(), MAX_BUFFER, "前置：缓冲已到上限");
     let before = e.buffer().to_string();
     assert_eq!(e.input_key('a'), "", "满缓冲下字母键不提交、也不进缓冲");
     assert_eq!(e.buffer(), before, "满缓冲必须原样留着");

@@ -25,6 +25,10 @@ pub struct Engine {
     learner: Learner,
     /// 用户词频权重，按词典最大静态词频动态缩放（一次选词即压过所有静态词）。
     user_boost: u64,
+    /// 9 键方案的「拼音读数」（显示用，见 [Self::display_buffer]）：由 `candidates()`
+    /// 在九键分支里刷新 = 首条候选的拼音。`RefCell` 是因为 `candidates()` 是 `&self`
+    /// （读侧出口遍布 FFI，改 `&mut` 会连锁）；引擎单例在 Mutex 里，Send 足够。
+    scheme_reading: std::cell::RefCell<String>,
     /// 全角开关：`true` = ASCII 标点出**机械全角**（U+FF01..U+FF5E 平移），
     /// `false` = 直通半角。只管宽度 —— 中文标点表是另一档（[`Self::chinese_punct`]）。
     /// 切模式重置为该模式的默认值（[`Mode::default_fullwidth`]）。
@@ -70,6 +74,7 @@ impl Engine {
             symbols,
             learner: Learner::new(learner_enabled),
             user_boost,
+            scheme_reading: std::cell::RefCell::new(String::new()),
             fullwidth: Mode::default().default_fullwidth(),
             chinese_punct: true,
             quotes: Quotes::default(),
@@ -128,6 +133,8 @@ impl Engine {
     pub fn set_scheme(&mut self, scheme: Scheme) {
         self.composer.set_scheme(scheme);
         self.composer.clear();
+        // 读数与缓冲同生命周期：不清的话换方案后的一次读会拿到上一条输入的拼音。
+        self.scheme_reading.borrow_mut().clear();
     }
 
     // ---- 标点表 / 全角一族：impl 体在 engine_punct.rs（500 行门禁拆出）----
@@ -269,6 +276,27 @@ impl Engine {
         &self.composer.session().buffer
     }
 
+    /// **显示用**缓冲（2026-10-09，用户裁决「输入的时候没在左侧显示拼音」）：
+    /// 9 键方案的缓冲是**数字串**（键位序列，不是拼音）——直接摆出来用户不认；
+    /// 换成**首条候选的拼音**（「64」→ ni、「64426」→ nihao），即搜狗 9 键候选栏
+    /// 左侧那格「输入时显示的拼音」。无候选时为空串。
+    /// 其余方案 = 实际缓冲（26/14 键的字母串本来就是拼音；英文/数字/符号模式的
+    /// 缓冲也不是拼音，一律回本体）。FFI 的 buffer 出口读这里 —— 别的端没有 9 键
+    /// 方案，读到的与原值逐字节相同。
+    pub fn display_buffer(&self) -> String {
+        if matches!(self.mode(), Mode::Pinyin | Mode::Traditional) && self.scheme() == Scheme::Nine
+        {
+            // **带分词的**读数（搜狗「拼音9键显示分词」同款）：音节用 `'` 连起来，
+            // 「nihao」显示成「ni'hao」—— 一眼看到引擎怎么切的音节。
+            let reading = self.scheme_reading.borrow();
+            if reading.is_empty() {
+                return String::new();
+            }
+            return crate::pinyin::segment(&reading).join("'");
+        }
+        self.buffer().to_string()
+    }
+
     pub fn mode(&self) -> Mode {
         self.composer.session().mode
     }
@@ -283,7 +311,7 @@ impl Engine {
                 // 前缀），走全量遍历 + 类匹配（candidates::rank_and_pick_scheme）。
                 // 「精确加成」按**键长相等**给（与全键盘的 pinyin_len == 输入长度同义）。
                 Scheme::Nine | Scheme::Fourteen => {
-                    return rank_and_pick_scheme(
+                    let (cands, reading) = rank_and_pick_scheme(
                         self.active_dict(),
                         &self.learner,
                         &s.buffer,
@@ -291,6 +319,9 @@ impl Engine {
                         self.user_boost,
                         self.scheme(),
                     );
+                    // 读数随每次取候选刷新（9 键的显示缓冲靠它；见 display_buffer）。
+                    *self.scheme_reading.borrow_mut() = reading;
+                    return cands;
                 }
                 // 笔画：换词典 + **关掉模糊音/简拼**（两者对 hspnz 串没有意义，
                 // 开着只会把不相干的音节捞进来）。其余与全键盘完全同路。

@@ -218,6 +218,18 @@ impl Api {
         self.router.engine().buffer().to_string()
     }
 
+    /// 9 键方案的**拼音读数**（显示用；见 `Engine::display_buffer`，带分词：
+    /// `ni'hao`）。非 9 键与 [`Self::buffer`] 逐字节相同。
+    ///
+    /// ⚠️ **两个出口别合并**（2026-10-09 血泪）：本轮曾把读数直接塞进 `buffer()`
+    /// 出口，而宿主（安卓）拿 `buffer()` 当**行为判定**（回退/空格/回车的「缓冲非空？」
+    /// 分支）—— 9 键无候选时读数恰为空串 ⇒ 回退走了 `deleteBackward()`（删的是
+    /// **编辑器里的文字**，引擎缓冲里的数字没退），连着打字看不出任何变化 ⇒
+    /// 用户报「键盘没反应」。显示是显示，判定是判定。
+    pub fn display_buffer(&self) -> String {
+        self.router.engine().display_buffer()
+    }
+
     pub fn mode(&self) -> ApiMode {
         self.router.engine().mode().into()
     }

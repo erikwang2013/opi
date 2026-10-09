@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,6 +22,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -37,8 +39,21 @@ import androidx.compose.ui.unit.sp
  */
 internal data class NineKey(val label: String, val key: String, val hint: String = "")
 
+/**
+ * **左侧一列**的默认内容 = 标点列（搜狗同款：空闲时一列标点，输入时整列换成拼音）。
+ * 发送键都取引擎中文标点表（punctuation.rs 的 CHINESE_PUNCT）**已有的键**：
+ * `,`→，`.`→。`\`→、`?`→？`!`→！ —— 上层不用另造标点通路。
+ */
+internal val nineKeyStripPuncts: List<NineKey> = listOf(
+    NineKey("，", ","),
+    NineKey("。", "."),
+    NineKey("、", "\\"),
+    NineKey("？", "?"),
+    NineKey("！", "!"),
+)
+
 internal val nineKeyRows: List<List<NineKey>> = listOf(
-    listOf(NineKey("，", ","), NineKey("2", "2", "abc"), NineKey("3", "3", "def")),
+    listOf(NineKey("，。?!", ","), NineKey("2", "2", "abc"), NineKey("3", "3", "def")),
     listOf(NineKey("4", "4", "ghi"), NineKey("5", "5", "jkl"), NineKey("6", "6", "mno")),
     listOf(NineKey("7", "7", "pqrs"), NineKey("8", "8", "tuv"), NineKey("9", "9", "wxyz")),
 )
@@ -56,6 +71,12 @@ fun NineKeyKeyboard(
     onEnter: () -> Unit,
     onModeSwitch: () -> Unit,
     onSymbol: () -> Unit,
+    /** 分词键（搜狗同款）：切音节边界（xi|an）。**由宿主在缓冲空时拦住** —— 空缓冲
+     * 点它没有边界可切（引擎那边缓冲空时 `'` 是引号，不是分词符）。 */
+    onSegment: () -> Unit,
+    /** 拼音读数（9 键方案下 = 引擎的 `display_buffer`：带分词，如 `ni'hao`；
+     * 空串 = 没在输入，左列显示标点）。 */
+    pinyin: String = "",
     modeLabel: String = "中",
     big: Boolean = false,
 ) {
@@ -64,28 +85,70 @@ fun NineKeyKeyboard(
     val letterSize = if (big) 26.sp else 18.sp
     val digitSize = if (big) 13.sp else 10.sp
     Column(modifier = modifier.fillMaxSize()) {
-        for (row in nineKeyRows) {
-            Row(modifier = Modifier.weight(1f).fillMaxSize()) {
-                for (k in row) {
-                    KeyBox(
-                        modifier = Modifier.weight(1f),
-                        description = nineKeySpoken(k),
-                        onTap = { onKey(k.key) },
+        Row(modifier = Modifier.weight(3f).fillMaxSize()) {
+            // ---- 左侧一列（2026-10-09，搜狗 9 键同款）----
+            // 空闲 = 一列标点（可点，走引擎标点表）；输入时**整列换成拼音读数**
+            // （带分词：ni'hao）——「拼音是输入才替换到左侧一列」（用户原话）。
+            Box(modifier = Modifier.weight(0.72f).fillMaxHeight()) {
+                if (pinyin.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize().semantics {
+                            contentDescription = "拼音 $pinyin"
+                        },
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                        ) {
-                            if (k.hint.isEmpty()) {
-                                // 「，」这类无字母组的键：单行大字，别留一个空行
+                        Text(
+                            pinyin,
+                            fontSize = 13.sp,
+                            color = LocalKeyboardPalette.current.barDimFg,
+                            maxLines = 8,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                } else {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        for (k in nineKeyStripPuncts) {
+                            KeyBox(
+                                modifier = Modifier.weight(1f),
+                                description = nineKeySpoken(k),
+                                onTap = { onKey(k.key) },
+                            ) {
                                 Text(k.label, fontSize = letterSize)
-                            } else {
-                                Text(k.hint, fontSize = letterSize)
-                                Text(
-                                    k.label,
-                                    fontSize = digitSize,
-                                    color = LocalKeyboardPalette.current.barDimFg,
-                                )
+                            }
+                        }
+                    }
+                }
+            }
+            // ---- 右侧 3×3 数字格 ----
+            Column(modifier = Modifier.weight(3f)) {
+                for (row in nineKeyRows) {
+                    Row(modifier = Modifier.weight(1f).fillMaxSize()) {
+                        for (k in row) {
+                            KeyBox(
+                                modifier = Modifier.weight(1f),
+                                description = nineKeySpoken(k),
+                                onTap = { onKey(k.key) },
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center,
+                                ) {
+                                    if (k.hint.isEmpty()) {
+                                        // 无字母组的键：单行大字。**多标点键**（，。?!）字号
+                                        // 收一档 —— 四个字形在 1/3 宽的键里要放得下。
+                                        Text(
+                                            k.label,
+                                            fontSize = if (k.label.length > 1) (digitSize.value + 3).sp else letterSize,
+                                        )
+                                    } else {
+                                        Text(k.hint, fontSize = letterSize)
+                                        Text(
+                                            k.label,
+                                            fontSize = digitSize,
+                                            color = LocalKeyboardPalette.current.barDimFg,
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -93,7 +156,7 @@ fun NineKeyKeyboard(
             }
         }
         // 底行按搜狗排：**[符] 在左、[中/英] 其次**（2026-10-09；此前是反的），
-        // 再空格、⌫、↵。四种字母布局（9/14/26/笔画）同一套顺序。
+        // 再**分词**、空格、⌫、↵。分词是 9 键专属（14/26/笔画没有这一行）。
         Row(modifier = Modifier.weight(1f).fillMaxSize()) {
             KeyButton("符", modifier = Modifier.weight(1f), onTap = onSymbol)
             KeyButton(
@@ -102,6 +165,7 @@ fun NineKeyKeyboard(
                 onTap = onModeSwitch,
                 stateDescription = modeStateDescription(modeLabel),
             )
+            KeyButton("分词", modifier = Modifier.weight(1f), onTap = onSegment)
             KeyButton("空格", modifier = Modifier.weight(2f), onTap = onSpace)
             KeyButton("⌫", modifier = Modifier.weight(1f), onTap = onBackspace)
             KeyButton("↵", modifier = Modifier.weight(1f), onTap = onEnter)
@@ -112,7 +176,8 @@ fun NineKeyKeyboard(
 /** 9 键键位的读屏名：「数字 2，字母 a b c」—— 只念数字会丢掉「这键打什么」。 */
 internal fun nineKeySpoken(k: NineKey): String = when {
     k.hint.isNotEmpty() -> "数字 ${k.label}，字母 ${k.hint.toCharArray().joinToString(" ")}"
-    k.label == "，" -> "逗号"
+    // 按**发送键**判逗号，不按键面：左上角的面是多标点「，。?!」（2026-10-09）
+    k.key == "," -> "逗号"
     else -> spokenKeyName(k.label)
 }
 

@@ -1,9 +1,8 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! JNI 出口：`JNI_OnLoad` + `RegisterNatives` 注册（不用 Java_ 命名导出，防签名脆断）。
-//! 宿主类：`xyz/erik/opi/jni/OpiEngine`。每个函数 `catch_unwind` 包裹，
-//! panic / 错误返回哨兵（boolean false、int 0、String/数组 null）。
+//! JNI 出口：`JNI_OnLoad` + `RegisterNatives` 注册（不用 Java_ 命名导出，防签名脆断）。宿主类：
+//! `xyz/erik/opi/jni/OpiEngine`。每个函数 `catch_unwind` 包裹，panic / 错误返回哨兵（false / 0 / null）；
 //! 语义与 C ABI（cabi.rs）完全一致，共享 api::SINGLETON 与内部实现。
 //!
 //! # Safety（本模块所有 `opijni_*` 与 `JNI_OnLoad` 的统一契约）
@@ -106,13 +105,9 @@ pub unsafe extern "system" fn opijni_set_shift(_env: JEnv, _class: sys::jclass, 
     guard(|| api::with_engine(|e| e.set_shift(on)));
 }
 
-// 标点/全角/符号这组开关出口：**完整契约在 `cabi.rs` 对应导出的 doc 上**（两个 ABI 面
-// 语义必须一致），这里只记 JNI 侧独有的一条：读侧哨兵与其余出口同构（未装载 → false /
-// 空串，不 panic，不报错码）。⚠️ `toggleFullwidth`/`fullwidthState` 与
-// `chinesePunct`/`toggleChinesePunct` **不是同构的两组** ——
-// 全角随模式默认（`switchMode` 后必须重读），中文标点是用户偏好
-// （`switchMode` / `toggleSymbol` **都不重置**）。当成同构照抄 = 造 bug。
-
+// 标点/全角/符号这组开关出口：**完整契约在 `cabi.rs` 对应导出的 doc 上**（两个 ABI 面语义必须一致），这里只记 JNI 侧独有的一条：
+// 读侧哨兵与其余出口同构（未装载 → false / 空串，不 panic，不报错码）。⚠️ `toggleFullwidth`/`fullwidthState` 与
+// `chinesePunct`/`toggleChinesePunct` **不是同构的两组** —— 全角随模式默认（`switchMode` 后必须重读）；中文标点是用户偏好（`switchMode` / `toggleSymbol` **都不重置**）。当成同构照抄 = 造 bug。
 /// toggleFullwidth() -> boolean：全角 ↔ 半角，返回**切换后的新状态**。未装载 → false。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_toggle_fullwidth(_env: JEnv, _class: sys::jclass) -> jboolean {
@@ -216,6 +211,13 @@ pub unsafe extern "system" fn opijni_buffer(env: JEnv, _class: sys::jclass) -> j
     unsafe { jni_util::rust_to_jstring(env, &out) }
 }
 
+/// displayBuffer() -> String。显示用拼音读数（与 `buffer()` **两个出口**，见 `api::display_buffer`）。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_display_buffer(env: JEnv, _class: sys::jclass) -> jstring {
+    let out = guard(|| api::with_engine(|e| e.display_buffer()).unwrap_or_default());
+    unsafe { jni_util::rust_to_jstring(env, &out) }
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_mode(_env: JEnv, _class: sys::jclass) -> jint {
     guard(|| api::with_engine(|e| api::mode_to_int(e.mode().into())).unwrap_or_default())
@@ -235,9 +237,8 @@ pub unsafe extern "system" fn opijni_search_symbols(
     unsafe { jni_util::string_array(env, texts) }
 }
 
-/// emojiSymbols() -> String[]。表情面板的浏览全量（官方分组序；理由与换源记录见
-/// `api::emoji_symbol_texts`）。**不再经引擎单例** —— 它是编译期嵌入的静态表，
-/// 引擎没装载也返回得了（宿主的面板因此不依赖引擎就绪）。
+/// emojiSymbols() -> String[]。表情面板浏览全量（官方分组序；见 `api::emoji_symbol_texts`）。
+/// **不过引擎单例**：编译期静态表，引擎没装载也返回得了。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_emoji_symbols(
     env: JEnv,
@@ -422,6 +423,11 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _reserved: *mut c
                     jni_str!("buffer"),
                     jni_str!("()Ljava/lang/String;"),
                     opijni_buffer as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("displayBuffer"),
+                    jni_str!("()Ljava/lang/String;"),
+                    opijni_display_buffer as *mut c_void,
                 ),
                 NativeMethod::from_raw_parts(
                     jni_str!("mode"),

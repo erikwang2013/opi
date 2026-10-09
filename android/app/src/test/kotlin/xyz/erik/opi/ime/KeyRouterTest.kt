@@ -201,4 +201,24 @@ class KeyRouterTest {
         r.handleCandidate(0)
         assertEquals(listOf("中"), ch.commits)
     }
+
+    /**
+     * 用户报障回归（2026-10-09）：「不停输入到没匹配，回退再输入，键盘没反应」。
+     * 根因：显示读数曾被塞进 buffer() 出口，9 键无候选时读数为空 ⇒ 回退的
+     * 「缓冲非空？」判假 ⇒ 走了 deleteBackward()（删**编辑器**文字），引擎缓冲里的
+     * 数字一个没退，连着打看不出变化。判据：读数空但有数字缓冲时，回退必须走引擎。
+     */
+    @Test
+    fun backspaceGoesToEngineEvenWhenTheReadingIsEmpty() {
+        val fake = FakeEngine().apply {
+            buf = "999" // 9 键的数字缓冲（无候选 → 读数空）
+            displayBuf = ""
+        }
+        val ch = Channel()
+        val (ctrl, r) = router(fake, ch)
+        assertEquals("前置：读数空而缓冲非空", "", ctrl.reading)
+        r.handleBackspace()
+        assertEquals("不许删编辑器文字", 0, ch.backspaceCount)
+        assertEquals("引擎缓冲要退回一格", 1, fake.backspaceCalls)
+    }
 }

@@ -10,117 +10,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** 假引擎：模拟 Rust 引擎状态（buffer/candidates/mode/shift），JVM 测试无需 JNI。 */
-class FakeEngine : OpiEngineApi {
-    var buf = ""
-    var mode = EngineMode.PINYIN.value
-    var cands: Array<String>? = null
-    var lastLimit = -1
-    val shiftCalls = mutableListOf<Boolean>()
-    val inputCalls = mutableListOf<String>()
-    var spaceResult = ""
-    val selectResults = mutableMapOf<Int, String>()
-    var backspaceCalls = 0
-    var clearCalls = 0
-    val switchCalls = mutableListOf<Int>()
-    val removed = mutableListOf<String>()
-    var throwOnRemove: Throwable? = null
-
-    /** 学习开关（真引擎：learnerEnabled()/setLearner()）。 */
-    // ⚠️ 名字带 On 后缀：`var learner` 的属性 setter 在 JVM 上与接口方法
-    // `setLearner(Z)` **签名相同**（Platform declaration clash），改名是唯一出路。
-    var learnerOn = true
-
-    /** 「属性设置」的两个新开关（真引擎：fuzzyEnabled()/jianpinEnabled()）。 */
-    var fuzzyOn = true
-    var jianpinOn = true
-
-    /** 键 → 引擎要上屏的文本（真引擎：标点键有文本、字母/数字键没有）。 */
-    var inputResults = mutableMapOf<String, String>()
-
-    override fun inputKey(ch: String): String {
-        inputCalls += ch
-        val out = inputResults[ch] ?: ""
-        if (out.isEmpty()) buf += ch else buf = ""
-        return out
-    }
-
-    override fun backspace() {
-        backspaceCalls++
-        if (buf.isNotEmpty()) buf = buf.dropLast(1)
-    }
-
-    override fun clear() {
-        clearCalls++
-        buf = ""
-    }
-
-    override fun select(index: Int): String {
-        val r = selectResults[index] ?: ""
-        if (r.isNotEmpty()) buf = ""
-        return r
-    }
-
-    override fun switchMode(mode: Int) {
-        switchCalls += mode
-        this.mode = mode
-    }
-
-    override fun setShift(on: Boolean) {
-        shiftCalls += on
-    }
-
-    override fun inputSpace(): String {
-        if (spaceResult.isNotEmpty()) buf = ""
-        return spaceResult
-    }
-
-    override fun candidates(limit: Int): Array<String>? {
-        lastLimit = limit
-        return cands
-    }
-
-    override fun buffer(): String = buf
-
-    override fun mode(): Int = mode
-
-    override fun learnerEnabled(): Boolean = learnerOn
-
-    override fun fuzzyEnabled(): Boolean = fuzzyOn
-
-    override fun jianpinEnabled(): Boolean = jianpinOn
-
-    override fun setLearner(enabled: Boolean) {
-        learnerOn = enabled
-    }
-
-    override fun setFuzzy(on: Boolean) {
-        fuzzyOn = on
-    }
-
-    override fun setJianpin(on: Boolean) {
-        jianpinOn = on
-    }
-
-    /** 输入方案（真引擎：scheme()/setScheme()）。 */
-    var schemeValue = InputScheme.FULL.value
-    val schemeCalls = mutableListOf<Int>()
-
-    override fun scheme(): Int = schemeValue
-
-    override fun setScheme(scheme: Int) {
-        schemeCalls += scheme
-        this.schemeValue = scheme
-    }
-
-    /** 删用户词：记录文本；真引擎删完候选表里就没有它了（这里同样摘掉）。 */
-    override fun removeUserWord(text: String) {
-        throwOnRemove?.let { throw it }
-        removed += text
-        cands = cands?.filter { it != text }?.toTypedArray()
-    }
-}
-
 class EngineControllerTest {
     private fun cands(n: Int) = Array(n) { "c$it" }
 
@@ -482,5 +371,21 @@ class EngineControllerTest {
             fake.schemeCalls,
         )
         assertEquals(InputScheme.FULL, ctrl.inputScheme)
+    }
+
+    @Test
+    fun readingAndBufferAreSeparateExports() {
+        // 两个出口各司其职（2026-10-09）：buffer = 缓冲本体（行为判定），reading = 显示
+        // 读数（9 键 = 带分词读音）。9 键无候选时 reading 为空而 buffer 是数字串 ——
+        // 谁也别拿对方当自己。
+        val fake = FakeEngine().apply { buf = "999"; displayBuf = "ni'hao" }
+        val ctrl = EngineController(fake)
+        assertEquals("999", ctrl.buffer)
+        assertEquals("ni'hao", ctrl.reading)
+        fake.displayBuf = "" // 无候选
+        fake.buf = "999"
+        ctrl.refresh()
+        assertEquals("", ctrl.reading)
+        assertEquals("999", ctrl.buffer)
     }
 }

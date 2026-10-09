@@ -41,17 +41,34 @@ class NineKeyLayoutTest {
 
     @Test
     fun commaKeyGoesThroughTheEnginePunctTable() {
-        // `，` 键**发送**的是半角逗号（由引擎标点表出全角），不是直接提交全角字
-        val comma = nineKeyRows.flatten().first { it.label == "，" }
-        assertEquals(",", comma.key)
+        // 左上角是**多标点键**（面「，。?!」，2026-10-09 搜狗风），但**发送**的仍是
+        // 半角逗号（由引擎标点表出全角），不是直接提交全角字。
+        val comma = nineKeyRows.flatten().first { it.key == "," }
+        assertEquals("键面按搜狗：多标点", "，。?!", comma.label)  // JUnit4：消息在最前
         assertEquals("逗号", spokenKeyName(",", ))
     }
 
     @Test
     fun spokenNamesCoverDigitsAndSymbols() {
         assertEquals("数字 2，字母 a b c", nineKeySpoken(NineKey("2", "2", "abc")))
-        assertEquals("逗号", nineKeySpoken(NineKey("，", ",")))
+        assertEquals("逗号", nineKeySpoken(NineKey("，。?!", ",")))
         assertEquals("符号", spokenKeyName("符"))
         assertEquals("生僻字键盘", spokenKeyName("生僻字"))
+    }
+
+    @Test
+    fun stripPunctsSendEnginePunctKeys() {
+        // 左列（空闲时）的标点：发送键必须落在 engine-core `punctuation.rs` 的
+        // CHINESE_PUNCT 表里（`,.\? !` 都有条目）—— 上层不另造标点通路。
+        assertEquals(
+            "键面与顺序（搜狗左列风格）",
+            listOf("，", "。", "、", "？", "！"),
+            nineKeyStripPuncts.map { it.label },
+        )
+        assertEquals(
+            "发送键（引擎标点表的键）",
+            listOf(",", ".", "\\", "?", "!"),
+            nineKeyStripPuncts.map { it.key },
+        )
     }
 }

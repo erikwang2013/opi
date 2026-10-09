@@ -50,6 +50,10 @@ interface OpiEngineApi {
     fun inputSpace(): String
     fun candidates(limit: Int): Array<String>?
     fun buffer(): String
+
+    /** 显示用的拼音读数（9 键 = 带分词的 `ni'hao`；其余方案与 [buffer] 相同）。
+     * **行为判定不许用它** —— 用 [buffer]（理由见 OpiEngine.displayBuffer）。 */
+    fun displayBuffer(): String
     fun mode(): Int
 
     /** 删除一个用户词（连同频次）；非用户词/不存在无副作用。 */
@@ -88,6 +92,13 @@ class EngineController(
     private val onLearned: () -> Unit = {},
 ) {
     var buffer by mutableStateOf("")
+        private set
+
+    /**
+     * 显示用的拼音读数（9 键方案的左列 + 读屏播报用它；见 [OpiEngineApi.displayBuffer]）。
+     * **只给显示**：判「缓冲有没有东西」一律用 [buffer]（[buffer] 是数字串，不能当空判据）。
+     */
+    var reading by mutableStateOf("")
         private set
     var mode by mutableStateOf(EngineMode.PINYIN)
         private set
@@ -160,6 +171,7 @@ class EngineController(
     /** 引擎状态回读；buffer 变化重置候选页码，候选数缩水时钳制页码。 */
     fun refresh() {
         buffer = api.buffer()
+        reading = api.displayBuffer()
         mode = EngineMode.fromInt(api.mode())
         learnerEnabled = api.learnerEnabled()
         fuzzyEnabled = api.fuzzyEnabled()

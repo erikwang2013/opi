@@ -257,6 +257,16 @@ private fun KeyboardArea(
                     onEnter = router::handleEnter,
                     onModeSwitch = state::cycleMode,
                     onSymbol = state::openSymbol,
+                    // 分词键：**缓冲空时不发** —— 空缓冲的 `'` 在引擎里是引号
+                    // （标点表那条），不是分词符；没边界可切就什么都不做。
+                    onSegment = {
+                        if (controller.buffer.isNotEmpty()) router.handleKey("'")
+                    },
+                    // 左侧一列的显示（左列由 NineKeyKeyboard 管）：有读数显示读数
+                    // （带分词，如 ni'hao）；读数空但缓冲有东西（打了一串拼不出的）
+                    // **回退到原始数字串** —— 每个键都看得见反馈，别让用户以为死机；
+                    // 两者都空 = 标点列。
+                    pinyin = controller.reading.ifEmpty { controller.buffer },
                     modeLabel = label,
                     big = state.inputMode == InputMode.BIG9,
                 )

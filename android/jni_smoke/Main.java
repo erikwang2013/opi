@@ -24,6 +24,7 @@ final class OpiEngine {
     static native String inputSpace();
     static native String[] candidates(int limit);
     static native String buffer();
+    static native String displayBuffer();
     static native int mode();
     static native String[] searchSymbols(String keyword);
     static native String[] emojiSymbols();
@@ -185,6 +186,14 @@ public final class Main {
         check(emojiSet.contains("🇨🇳"), "emojiSymbols 必须含国旗序列 🇨🇳（区域指示符成对）");
         check(emojiSet.contains("❤️"), "emojiSymbols 必须含 VS16 形 ❤️（旧表只有裸 ♥）");
         check(!emojiSet.contains("🞀"), "emojiSymbols 不得含非 emoji 的 🞀(U+1F780)");
+
+        // displayBuffer（2026-10-09）：显示用拼音读数，与 buffer 是**两个出口** ——
+        // 9 键下 buffer 是数字串、displayBuffer 是带分词的读音；非 9 键两者相同。
+        // 这里只冒烟：两者都拿得到、且非 9 键逐字节相同（9 键形态归 scheme_keys.rs 钉）。
+        String buf = OpiEngine.buffer();
+        String disp = OpiEngine.displayBuffer();
+        check(buf != null && disp != null, "buffer/displayBuffer 都必须可读");
+        check(buf.equals(disp), "非 9 键方案下 displayBuffer 必须与 buffer 相同（实得：" + buf + "/" + disp + "）");
 
         // loadTrad：空路径必须 false（引擎已装载，但坏路径不得动既有词库）
         check(!OpiEngine.loadTrad(""), "loadTrad(空) 应为 false");
