@@ -134,28 +134,54 @@ def foreground_svg(size: int, mask_radius: float | None = None, crop: bool = Tru
     if plate:
         # 自适应图标那层纯色 background：旧版位图里得自己铺满（PNG 没有 background 层）
         out.append(f'  <rect x="0" y="0" width="{vw}" height="{vh}" fill="{background_color()}"/>\n')
-    for p in root:
-        if not p.tag.endswith("path"):
-            continue
-        a = p.attrib
-        attrs = [
-            f'{dst}="{a[AND + src]}"'
-            for src, dst in (
-                ("fillColor", "fill"),
-                ("strokeColor", "stroke"),
-                ("strokeWidth", "stroke-width"),
-                ("strokeLineCap", "stroke-linecap"),
-                ("strokeLineJoin", "stroke-linejoin"),
-            )
-            if AND + src in a
-        ]
-        # ⚠️ 缺省值两边**不一样**：Android 的 fillColor 缺省 = 透明，SVG 的 fill 缺省 = 黑。
-        # R4 的嘴只有 strokeColor（圆环 = 字母 O），不显式 fill="none" 就渲成一块实心黑饼。
-        # 这脚 2026-09-28 踩过一次，且**外框 bbox 检查抓不到**（黑填充不改外框），只能靠看图。
-        if AND + "fillColor" not in a:
-            attrs.append('fill="none"')
-        attrs.append(f'd="{a[AND + "pathData"]}"')
-        out.append("  <path " + " ".join(attrs) + "/>\n")
+
+    def emit(node, depth: int) -> None:
+        pad = "  " * depth
+        tag = node.tag
+        a = node.attrib
+        if tag.endswith("path"):
+            attrs = [
+                f'{dst}="{a[AND + src]}"'
+                for src, dst in (
+                    ("fillColor", "fill"),
+                    ("strokeColor", "stroke"),
+                    ("strokeWidth", "stroke-width"),
+                    ("strokeLineCap", "stroke-linecap"),
+                    ("strokeLineJoin", "stroke-linejoin"),
+                    ("fillAlpha", "fill-opacity"),
+                    ("strokeAlpha", "stroke-opacity"),
+                )
+                if AND + src in a
+            ]
+            # ⚠️ 缺省值两边**不一样**：Android 的 fillColor 缺省 = 透明，SVG 的 fill 缺省 = 黑。
+            # R4 的嘴只有 strokeColor（圆环 = 字母 O），不显式 fill="none" 就渲成一块实心黑饼。
+            # 这脚 2026-09-28 踩过一次，且**外框 bbox 检查抓不到**（黑填充不改外框），只能靠看图。
+            if AND + "fillColor" not in a:
+                attrs.append('fill="none"')
+            attrs.append(f'd="{a[AND + "pathData"]}"')
+            out.append(f"{pad}<path " + " ".join(attrs) + "/>\n")
+            return
+        if tag.endswith("group"):
+            # 2026-10-09：R4 改版后前景有一层分组变换（设计空间 → 108 画布的居中缩放）。
+            # VectorDrawable 的组变换 = translate ∘ rotate ∘ scale（pivot 0 时即 T + S·p），
+            # 按同样的式子转成 SVG 的 transform（translate 在前、scale 在后 = 先缩后移）。
+            sx = float(a.get(AND + "scaleX", 1.0))
+            sy = float(a.get(AND + "scaleY", 1.0))
+            tx = float(a.get(AND + "translateX", 0.0))
+            ty = float(a.get(AND + "translateY", 0.0))
+            if "rotation" in a or "pivotX" in a or "pivotY" in a:
+                raise SystemExit("R4 出现了旋转/轴心的组变换 —— 转换只实现了 translate+scale")
+            out.append(f'{pad}<g transform="translate({tx} {ty}) scale({sx} {sy})">\n')
+            for child in node:
+                emit(child, depth + 1)
+            out.append(f"{pad}</g>\n")
+            return
+        # 其余节点（clip-path 等）本文件不用；出现即报错，别静默丢图形。
+        if tag is not ET.Comment and tag.endswith(("path", "group")) is False:
+            raise SystemExit(f"R4 里有没实现的节点：{tag}")
+
+    for child in root:
+        emit(child, 1)
     if mask_radius is not None:
         out.append("  </g>\n")
     return "".join(out) + "</svg>\n"

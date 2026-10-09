@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xyz.erik.opi.engine.EngineController
+import xyz.erik.opi.engine.InputScheme
 import xyz.erik.opi.keyboard.LocalKeyboardPalette
 import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.pet.OpiPet
@@ -79,8 +80,15 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
             .background(p.barBg),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // ⚠️ 显示串：**9 键（T9）方案下缓冲区是数字串**（键位序列，不是拼音）——
+        // 摆在候选栏最前面会被读成「输入拼音时多出来的一串数字」（2026-10-09 用户
+        // 裁决原话）。候选本身就是反馈，这串不显示；其余方案（26/14/笔画）缓冲是
+        // 字母，照常显示。**节点不能整个删**：读屏播报挂在这个节点上（见下面语义块），
+        // 隐藏时留一个空文本节点（宽度只剩两侧 padding，肉眼看不见）。
+        val bufferShown =
+            if (controller.inputScheme == InputScheme.NINE) "" else controller.buffer
         Text(
-            controller.buffer,
+            bufferShown,
             modifier = Modifier
                 .padding(horizontal = 12.dp)
                 .semantics {
@@ -104,10 +112,13 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
             verticalAlignment = Alignment.CenterVertically,
         ) {
             for ((i, c) in candidates.withIndex()) {
-                // 可见序号**已去掉**（2026-10-09 用户裁决「候选词最前面会显示一串数字」）：
-                // 手机端字母盘没有数字行 ⇒ 数字选词根本按不到，那串「1. 2. 3.…」是纯噪声。
-                // ⚠️ 播报仍带「第 N 项」（读屏用户需要位置感）—— 那是**页内**下标（翻页后从 1
-                // 重数），与曾经的可见序号同一个值，不允许写成全列表下标。
+                // 可见序号 = **页内**下标 + 1（翻页后从 1 重数）。两条理由：
+                //   · 与数字选词的语义同源 —— 引擎里数字键选的是**页内索引**
+                //     （`composer.rs` 的数字键约定），写成全列表下标就与「按 3 选本页第 3 个」对不上；
+                //   · 与 Windows 候选窗同款（`CandidateWindow.kt` 的 `"$index."`，同样是页内）。
+                // ⚠️ 播报用的 `n` 与可见序号是**同一个值**（`"$n."`）—— 不许一处页内、一处全列表。
+                // （2026-10-09：曾整串去掉过一版 —— 用户澄清「候选词前的数字还要的，
+                //  多出来的是 9 键那串键位数字」，故恢复。）
                 val n = i + 1
                 Row(
                     // clickable 必须在 padding 之前：反过来的话热区只覆盖文字本身
@@ -140,6 +151,7 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    Text("$n.", fontSize = 13.sp, color = p.barBufferFg, modifier = Modifier.padding(end = 3.dp))
                     Text(c, fontSize = 20.sp, color = p.keyFg)
                 }
             }

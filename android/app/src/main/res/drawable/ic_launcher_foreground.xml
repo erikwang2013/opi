@@ -1,18 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  启动图标前景：键帽精灵「小欧」（docs/opi-pet.svg 的图标简化版）。
+  启动图标前景：项目宠物「小欧」（键帽精灵）—— **与应用里画的那只同一套几何**
+  （shared/pet/OpiPet.kt 的 IDLE 形态、docs/opi-pet.svg 的设计稿）。
 
-  相对主图的取舍（图标有硬约束，不是随意删减）：
-    · 去掉 OPI 刻字 —— 48dp 下只有约 6dp 高，必然糊成一团
-    · 去掉手臂与按键涟漪 —— 细过 2dp 的笔画在图标栅格上会消失
-    · 键帽正面下两角改直角 —— 用一条直边当键帽棱线，比圆角更抗缩放
-  ⚠️ 订正（2026-09-28，算式见下）：**几何并未全落在 66dp 安全区内**。
-  朱砂天线（`M46.5,22 L61.5,22`，strokeWidth 4 + round cap）两端最远到半径
-  **34.87**，超出安全圈（108dp 画布同心圆半径 33）约 **1.87** 单位 ——
-  但**仍在 72dp 可见区（半径 36）内 1.13 单位**，所以标准自适应遮罩裁不到它，
-  只有更激进的 squircle 可能削到天线圆帽。原文写「几何落在 66dp 安全区内…
-  圆形遮罩不裁到任何笔画」，与实测不符。
-  算式：hypot(61.5-54, 22-54) + 4/2 = 32.867 + 2 = 34.867。
+  2026-10-09 改版（用户裁决「应用的 logo 图标要按项目宠物来 —— 我看你应用中的
+  logo 图标缩小还很清晰」）：此前这里是**扁平简化版**（无边线、无手臂、纯色块），
+  去底色之后在浅色桌面上糊成一团白；应用内的小欧是**线稿版**（青描边 + 深青眼睛
+  + 朱砂天线），缩到 24–28dp 仍然清晰 —— 图标就该用这套。旧版权衡（48dp 下省
+  刻字省手臂）随之作废：手臂留着（它是线稿观感的一半），刻字照旧不带
+  （21 设计单位在 48px 图标上不足 3px，必然糊）。
+
+  几何 = OpiPet.kt 的设计空间（240×250）原样搬入：
+    · 放进 108 画布正中 72 可见区（自适应遮罩的真实窗口，见 gen_pet_icons.py 的推导），
+      等比缩到 68 见方留一点边 —— 换算：bbox 宽 185 / 高 221.5，取 s = 68/221.5 = 0.307，
+      平移到中心 (54,54)。
+    · 颜色与 PetPalette.Default 逐值相同（primary #2E8B80 / shade #1E6B63 /
+      accent #D9553F / skirt #E9F3F1 / plate #FFFFFF）；设计稿那两条极淡渐变去掉，
+      改纯色 —— VectorDrawable 的渐变要走 aapt:attr，而 scripts/gen_pet_icons.py 的
+      VD→SVG 转换只认平铺色，留渐变会让旧版位图（API≤25）丢填充。
+    · 不含 OPI 刻字与「动画态」（眨眼/天线摇摆是天线的另两种形态，图标取静态 IDLE）。
+
+  ⚠️ 改本文件（几何/配色/分组变换）都要 `python3 scripts/gen_pet_icons.py` 重出
+  mipmap 位图；生成器的对账模式会拦「改了矢量忘了重出」。
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -20,40 +29,101 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- 键帽侧壁（略暗的青白，与正面区分出棱线） -->
-    <path
-        android:fillColor="#E9F3F1"
-        android:pathData="M33,62 L30.5,72 Q30,77 35,77 L73,77 Q78,77 77.5,72 L75,62 Z" />
+    <!-- 设计空间 (240×250) → 中心 72 窗口：p' = T + S·p（VectorDrawable 的分组
+         变换顺序是 scale → rotate → translate，pivot 为 0，故这里就是这式子）。 -->
+    <group
+        android:scaleX="0.307"
+        android:scaleY="0.307"
+        android:translateX="17.16"
+        android:translateY="14.94">
 
-    <!-- 键帽正面 -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M40,32 L68,32 A7,7 0 0 1 75,39 L75,58 A6,6 0 0 1 69,64 L39,64 A6,6 0 0 1 33,58 L33,39 A7,7 0 0 1 40,32 Z" />
+        <!-- 落地投影（几乎不可见，与设计稿同几何） -->
+        <path
+            android:pathData="M48,206 a72,8 0 1,0 144,0 a72,8 0 1,0 -144,0 Z"
+            android:fillColor="#22272E"
+            android:fillAlpha="0.08" />
 
-    <!-- 拼音声调天线 ˉ：白杆 + 朱砂横（全图唯一暖色） -->
-    <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="2.6"
-        android:strokeLineCap="round"
-        android:pathData="M54,33 L54,24" />
-    <path
-        android:strokeColor="#D9553F"
-        android:strokeWidth="4"
-        android:strokeLineCap="round"
-        android:pathData="M46.5,22 L61.5,22" />
+        <!-- 按键涟漪 -->
+        <path
+            android:pathData="M74,214 Q120,228 166,214"
+            android:strokeColor="#2E8B80"
+            android:strokeWidth="4"
+            android:strokeAlpha="0.5"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M92,226 Q120,236 148,226"
+            android:strokeColor="#2E8B80"
+            android:strokeWidth="4"
+            android:strokeAlpha="0.28"
+            android:strokeLineCap="round" />
 
-    <!-- 眼睛 -->
-    <path
-        android:fillColor="#1E6B63"
-        android:pathData="M40.9,45 a3.6,3.6 0 1 0 7.2,0 a3.6,3.6 0 1 0 -7.2,0 Z" />
-    <path
-        android:fillColor="#1E6B63"
-        android:pathData="M59.9,45 a3.6,3.6 0 1 0 7.2,0 a3.6,3.6 0 1 0 -7.2,0 Z" />
+        <!-- 天线：拼音声调 ˉ（静态 IDLE 形态） -->
+        <path
+            android:pathData="M120,52 L120,28"
+            android:strokeColor="#2E8B80"
+            android:strokeWidth="5"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M103,20 L137,20"
+            android:strokeColor="#D9553F"
+            android:strokeWidth="7"
+            android:strokeLineCap="round" />
 
-    <!-- 嘴：圆环 = 字母 O（Open） -->
-    <path
-        android:strokeColor="#1E6B63"
-        android:strokeWidth="2.6"
-        android:pathData="M49.8,56 a4.2,3.6 0 1 0 8.4,0 a4.2,3.6 0 1 0 -8.4,0 Z" />
+        <!-- 手臂（先画，接缝交给键帽正面压住） -->
+        <path
+            android:pathData="M62,118 L36,128"
+            android:strokeColor="#2E8B80"
+            android:strokeWidth="17"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M62,118 L36,128"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="7"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M178,118 L204,128"
+            android:strokeColor="#2E8B80"
+            android:strokeWidth="17"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M178,118 L204,128"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="7"
+            android:strokeLineCap="round" />
 
+        <!-- 键帽侧壁 -->
+        <path
+            android:pathData="M54,140 L44,184 Q42,202 62,202 L178,202 Q198,202 196,184 L186,140 Z"
+            android:fillColor="#E9F3F1"
+            android:strokeColor="#2E8B80"
+            android:strokeWidth="5"
+            android:strokeLineJoin="round" />
+
+        <!-- 键帽正面 -->
+        <path
+            android:pathData="M72,46 L168,46 A20,20 0 0,1 188,66 L188,130 A20,20 0 0,1 168,150 L72,150 A20,20 0 0,1 52,130 L52,66 A20,20 0 0,1 72,46 Z"
+            android:fillColor="#FFFFFF"
+            android:strokeColor="#2E8B80"
+            android:strokeWidth="5" />
+
+        <!-- 眼睛（圆 + 高光点） -->
+        <path
+            android:pathData="M93,84 a11,11 0 1,0 0,22 a11,11 0 1,0 0,-22 Z"
+            android:fillColor="#1E6B63" />
+        <path
+            android:pathData="M147,84 a11,11 0 1,0 0,22 a11,11 0 1,0 0,-22 Z"
+            android:fillColor="#1E6B63" />
+        <path
+            android:pathData="M89.2,87.6 a3.6,3.6 0 1,0 0,7.2 a3.6,3.6 0 1,0 0,-7.2 Z"
+            android:fillColor="#FFFFFF" />
+        <path
+            android:pathData="M143.2,87.6 a3.6,3.6 0 1,0 0,7.2 a3.6,3.6 0 1,0 0,-7.2 Z"
+            android:fillColor="#FFFFFF" />
+
+        <!-- 嘴：圆环 = 字母 O -->
+        <path
+            android:pathData="M108,128 a12,10 0 1,0 24,0 a12,10 0 1,0 -24,0 Z"
+            android:strokeColor="#1E6B63"
+            android:strokeWidth="5" />
+    </group>
 </vector>

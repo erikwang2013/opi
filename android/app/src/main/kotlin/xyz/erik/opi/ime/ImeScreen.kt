@@ -3,6 +3,7 @@
 
 package xyz.erik.opi.ime
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -77,7 +78,11 @@ fun ImeScreen(
         LocalKeyboardPalette provides palette,
         LocalDensity provides density,
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        // 整块键盘**统一底色**（2026-10-09 用户裁决「没有输入的时候功能栏和键盘之间
+        // 有空隙，要加上背景，整体统一」）：此前根列透明，空闲时候选槽是一道空缝、
+        // 键与键之间也露窗口底色（换深色皮肤时尤为扎眼）。刷成 barBg = 候选栏同色，
+        // 工具条自带底色不受影响。
+        Column(modifier = Modifier.fillMaxSize().background(palette.barBg)) {
             // ---- 工具条：图标入口（表情 / 输入模式 / 键盘模式）----
             ImeToolbar(
                 currentMode = state.inputMode,
