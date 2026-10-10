@@ -193,7 +193,8 @@ impl TsfLogic {
     }
 
     /// 切模式（**不收尾**：待处理的缓冲由 `Composer::switch_mode` 直接清掉）。
-    /// 需要「切走一律上缓冲原文」的收尾用 [`Self::switch_mode_confirmed`]（W1 订正版）。
+    /// 需要「切走收尾（拼音/繁体上原文、符号模式丢关键字）」的用
+    /// [`Self::switch_mode_confirmed`]（W1 订正版）。
     pub fn switch_mode(&mut self, mode: Mode) {
         self.engine.switch_mode(mode);
         // ⇧ 只在 English 有意义，判据与 Android `EngineController.switchMode` 的
@@ -207,10 +208,11 @@ impl TsfLogic {
     }
 
     /// 切走/切英文的**直接确认 + 切换**（W1 订正版，2026-10-10 深夜用户裁决
-    /// 「切英文 = 默认是拼音，不要是候选词」）：先把待处理的缓冲**原样**收尾成待上屏
-    /// 文本（一律原文，**不再**上首候选；**先退符号浏览**恢复真缓冲 —— 顺序承重，
-    /// 契约见 `engine-core/src/engine_symbol_browse.rs` 头），再切模式。返回**待上屏
-    /// 文本**（空缓冲 = 空串）—— 调用方负责插入文档。
+    /// 「切英文 = 默认是拼音，不要是候选词」）：先把待处理的缓冲收尾成待上屏文本
+    /// （拼音/繁体**原样原文**、**不再**上首候选；**符号模式丢关键字**——清掉、
+    /// 空串，同日裁决二；**先退符号浏览**恢复真缓冲 —— 顺序承重，契约见
+    /// `engine-core/src/engine_symbol_browse.rs` 头），再切模式。返回**待上屏文本**
+    /// （空缓冲 = 空串）—— 调用方负责插入文档。
     /// **先确认后切**也是承重的：顺序反了，`switch_mode` 会先把缓冲清掉，
     /// 返回值只能是空串（原文丢在清缓冲里）。
     /// 与 [`Self::switch_mode`] 的唯一差别就是这步收尾：那条路（本轨 Ctrl+' 的

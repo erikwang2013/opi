@@ -272,8 +272,8 @@ pub unsafe extern "C" fn opi_fcitx5_select(index: usize) -> OpString {
 }
 
 /// switchMode(mode: i32)。0=Pinyin 1=English 2=Number 3=Symbol 4=Traditional，越界忽略。
-/// 切走/切英文的收尾（W1 订正版：一律上缓冲原文）**不在此路** —— 归 glue 的
-/// C++（「先 `opi_fcitx5_symbol_browse(0)` 退浏览、再上原文」）；状态机侧同序
+/// 切走/切英文的收尾（W1 订正版：拼音/繁体上原文、符号模式丢关键字）**不在此路** ——
+/// 归 glue 的 C++（「先 `opi_fcitx5_symbol_browse(0)` 退浏览、再按 W1 收尾」）；状态机侧同序
 /// 实现 = `CandidateState::switch_mode_confirmed`（本回合无 C 出口，见该函数注释）。
 /// # Safety
 ///

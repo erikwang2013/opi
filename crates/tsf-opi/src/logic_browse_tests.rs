@@ -309,3 +309,20 @@ fn switch_mode_confirmed_never_emits_the_first_candidate() {
     assert_ne!(b.switch_mode_confirmed(Mode::English), "你");
     assert!(!b.is_symbol_browsing());
 }
+
+#[test]
+fn switch_mode_confirmed_drops_symbol_keyword_buffer() {
+    // 分叉（2026-10-10 深夜裁决二）：「一律原文」只覆盖拼音/繁体的字母缓冲。
+    // 符号模式的关键字（dun → 、）**不是待上屏文本** —— 切走时清掉、提交空串
+    // （塞进文档比丢缓冲更坏；与 input_space 对符号模式的判据同源）。
+    let mut s = browse_state();
+    s.switch_mode(Mode::Symbol);
+    typed(&mut s, "dun"); // 真关键字：dun → 、（data/raw/symbols.tsv:2）
+    assert_eq!(s.buffer(), "dun", "前置：关键字进缓冲");
+    assert_eq!(s.candidates()[0], "、", "前置：真符号候选");
+    let text = s.switch_mode_confirmed(Mode::English);
+    assert_ne!(text, "dun", "负对照：不许出关键字文本");
+    assert_eq!(text, "", "关键字不提交：清掉、空串");
+    assert_eq!(s.buffer(), "", "缓冲清掉");
+    assert_eq!(s.mode(), Mode::English, "切换真的发生了");
+}
