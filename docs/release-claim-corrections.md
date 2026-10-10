@@ -45,7 +45,7 @@
 | 9 | 「Unicode 18.0.0 共 1447 条、覆盖 1429」 | **已作废**（判据换过，见 §二.3） | `scripts/gen_symbols.py` 头注释 + `crates/engine-core/tests/symbol_coverage.rs` 的 `UTS51_EMOJI` |
 | 10 | 「C 33 / JNI 26」 | **仍不成立**（见 §二.4） | `crates/opi-ffi/tests/c_abi/run.sh`（C 导出覆盖）+ `crates/opi-ffi/tests/jni_contract.rs`（注册表 1:1） |
 | 11 | 「`scripts/gen_symbols.py` 560 行」 | **工作区面出现过、提交态从未到过 500**（见 §二.5） | 500 门禁 `crates/opi-ffi/tests/line_limit.rs` |
-| 12 | 「中文标点开关出口」（新增出口，tag 正文有） | 出口与宿主声明都在、**六端无入口**（唯一调用点是两个测试夹具，见 §一.7） | `android/app/src/main/kotlin/xyz/erik/opi/jni/OpiEngine.kt` 的 `toggleChinesePunct` 只有声明；C 侧只有 `crates/opi-ffi/tests/c_abi/consumer.c` |
+| 12 | 「中文标点开关出口」（新增出口，tag 正文有） | **部分接线**（订正 2026-10-10：Linux 桌面已接 —— 状态栏 `。，` 按钮 / 设置窗「中文标点」/ fcitx5 附加组件配置；Android、Apple、鸿蒙仍未接线，见 §一.7） | `desktop/` 的 `Settings.kt`（`StatusBarButton.PUNCT` → `opi-ctl punct`）与 `SettingsWindow.kt`（「中文标点」）；`crates/fcitx5-opi/cpp/opi_config.h` 的 `ChinesePunct` → `candidate.rs::set_chinese_punct`；Android 侧仍是 `OpiEngine.kt` 的声明 + `android/jni_smoke/Main.java`；C 侧仍只有 `crates/opi-ffi/tests/c_abi/consumer.c` |
 | 13 | 「英文联想词源入库」 | 数据在、**无消费方** | `grep -rn 'en_words' --include=*.rs .` 只命中生成器脚本 |
 | 14 | 「Emoji 80 → 1472 条（条目 583 → 3332）」 | **tag 时点成立**（其后判据被换，见 §二.3） | `data/raw/LICENSES.md` 的 symbols.tsv 行已改成「别写死数字」 |
 | 15 | 「云同步不做」 | 成立（裁决，未变） | 不在本文件范围（README + 图） |
@@ -288,11 +288,18 @@
 - **⚠️ 一道门禁为什么会放过它**：`crates/opi-ffi/tests/c_abi/run.sh` 要求「**库里每一条导出
   都被 C 消费者调用过**」—— 这个「消费者」是**门禁自带的 `consumer.c`**，不是一个真宿主。
   ⇒ **门禁全绿只证明「导出被调过」，不证明「有产品在调」**。加出口时别把这道绿当接线证据。
-- **正确说法**：出口与宿主**声明面**齐备（C 侧 `macos/OpiFFI.h`、JNI 侧 `OpiEngine.kt`
-  都写了），**六端无入口** —— 没有设置项勾选框、没有触发键绑定。
-- **现状**：**未接线**（截至本轮）。复核命令：
-  `grep -rn 'toggleChinesePunct' android/app/src/` —— 只有 `OpiEngine.kt` 自己那几行声明，
-  就是没接线。
+- **正确说法**（v1.3.0 时点）：出口与宿主**声明面**齐备（C 侧 `macos/OpiFFI.h`、JNI 侧
+  `OpiEngine.kt` 都写了），**六端无入口** —— 没有设置项勾选框、没有触发键绑定。
+  （后半句的「今天」见下面「现状」—— Linux 桌面 2026-10-10 起已接。）
+- **现状**：**部分接线**（订正 2026-10-10）。Android / C ABI / Apple / 鸿蒙侧不变
+  （复核命令照旧：`grep -rn 'toggleChinesePunct' android/app/src/` —— 只有 `OpiEngine.kt`
+  自己那几行声明）；**「六端无入口」在 Linux 上已不成立**：桌面状态栏「`。，`」按钮
+  （`desktop/` 的 `Settings.kt`：`StatusBarButton.PUNCT` → `opi-ctl punct`）、设置窗
+  「中文标点」勾选框（`SettingsWindow.kt`）、fcitx5 附加组件配置
+  （`crates/fcitx5-opi/cpp/opi_config.h` 的 `ChinesePunct` → `candidate.rs::set_chinese_punct`）
+  三条都在。`opi-ctl punct` 的切换与落盘有真链路 e2e（`crates/fcitx5-opi/cpp/opi_e2e_ctl_conf.py`）；
+  **状态栏按钮 → 该命令的一段是静态取证**（2026-10-10 桌面实测过的是状态栏的拉起/隐藏与
+  状态轮询，不是这个按钮的点按）。
 
 ### 二、不成立的 4 个数 + 1 条「只在工作区面成立」—— **删掉，不要换成新数**
 

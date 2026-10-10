@@ -21,7 +21,7 @@
     <rect x="30" y="86" width="1120" height="148" rx="14" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
     <rect x="46" y="74" width="112" height="24" rx="12" fill="#2E8B80"/>
     <text x="102" y="91" text-anchor="middle" font-size="12.5" font-weight="700" fill="#FFFFFF">输入模式</text>
-    <text x="170" y="91" font-size="11.5" fill="#8A948F">Composer 状态机判定每个按键的去留 —— 模式整数 0..4 在各端一致；标点映射分两档（中文标点表 / 机械全角），各由一个独立开关管（各端暂无 UI 入口）</text>
+    <text x="170" y="91" font-size="11.5" fill="#8A948F">Composer 状态机判定每个按键的去留 —— 模式整数 0..4 在各端一致；标点映射分两档（中文标点表 / 机械全角），各由一个独立开关管（Linux 桌面已接；Android 暂无 UI 入口）</text>
 
     <g>
       <rect x="30" y="112" width="208" height="106" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
@@ -116,8 +116,8 @@
     <text x="52" y="502" font-size="15" font-weight="700" fill="#22272E">符号与表情</text>
     <g fill="#2E8B80"><circle cx="57" cy="523" r="2.6"/><circle cx="57" cy="543" r="2.6"/><circle cx="57" cy="563" r="2.6"/><circle cx="57" cy="583" r="2.6"/><circle cx="57" cy="603" r="2.6"/></g>
     <g font-size="10.5" fill="#4A5551">
-      <text x="68" y="527">Unicode 符号块目录，常用块置顶</text>
-      <text x="68" y="547">块内浏览 + 关键字搜索双通道</text>
+      <text x="68" y="527">符号大全：22 类目目录（常用置顶）</text>
+      <text x="68" y="547">类目内浏览 + 关键字搜索双通道</text>
       <text x="68" y="567">emoji 与拼音候选同栏合并排序</text>
       <text x="68" y="587">emoji 覆盖面随 symbols.tsv 重生成（gen_symbols.py）</text>
       <text x="68" y="607">搜索 250ms 防抖，开面板先提交 pending 拼音</text>
