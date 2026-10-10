@@ -63,11 +63,13 @@ enum class SkinOption(val value: String) {
 
 /**
  * 状态栏（悬浮条）设置：master 隐藏 + 8 个按钮的常驻开关（未常驻 = 不显示）。
- * 默认 = 2026-10-10 用户裁决「8 按钮全上」：master 不隐藏、八个按钮全部常驻。
+ * 默认 = master 不隐藏，其余按钮常驻，**软键盘除外**：2026-10-10 早先裁决「8 按钮
+ * 全上」被**同日中午**的用户裁决收窄 —— 软键盘默认关（键盘窗不是人人要，要用的
+ * 在设置里自己开）；配置文件里的显式值照旧优先（读侧 [OpSettings.fromIni]）。
  */
 data class StatusBarSettings(
     val hidden: Boolean = false,
-    val vk: Boolean = true,
+    val vk: Boolean = false,
     val symbols: Boolean = true,
     val trad: Boolean = true,
     val punct: Boolean = true,
@@ -79,14 +81,15 @@ data class StatusBarSettings(
 
 /**
  * 状态栏按钮。**枚举顺序 = 条上从左到右的展示顺序**（用户 2026-10-10 深夜**最终
- * 冻结**：logo / 中英 / 。，符号 / 简繁 / 月相 / 键盘 / Ω / 设置 —— 那个「。，」
- * 是用户字面序，别按中文标点惯例改成「，。」）。
+ * 冻结**：logo / 中英 / Ω符号 / 简繁 / 月相 / 键盘 / 。，标点 / 设置）。
  * `label` 兼作设置窗的开关名与状态栏的可访问性描述；条上的**图标**另有一套
  * （见 StatusBar.kt 的 iconText / MoonIcon / SettingsIcon）。
  */
 enum class StatusBarButton(val label: String, val hint: String) {
     LOGO("logo", "品牌标识兼拖动把手；单击打开设置"),
-    LANG("中英文切换", "与 Shift 轻按同一条通路（fcitx5-remote -t）"),
+    // ⚠️ 通路是 opi-ctl lang，不是 fcitx5-remote -t（后者停用整个 fcitx5，
+    // 2026-10-10 中午用户踩过；事故留痕见 Actions.kt 头部与 StatusBarTest 的映射钉）。
+    LANG("中英文切换", "与 Shift 轻按同一条通路（opi-ctl lang）"),
     SYMBOLS("符号大全", "符号页入口"),
     TRAD("简繁转换", "简 ⇄ 繁（调 opi-ctl）"),
     FULLWIDTH("全半角", "全角 ⇄ 半角（调 opi-ctl）"),
@@ -120,8 +123,8 @@ fun StatusBarSettings.with(b: StatusBarButton, on: Boolean): StatusBarSettings =
 }
 
 /**
- * 该按钮在**本平台**有没有动作。Windows 上 `opi-ctl` / `fcitx5-remote` 都不存在
- * （那四个动作是 Linux 侧的）—— 没有动作的按钮不上条、也不在设置窗出开关
+ * 该按钮在**本平台**有没有动作。Windows 上 `opi-ctl` 不存在（那**五个**动作
+ * symbols/trad/punct/fullwidth/lang 是 Linux 侧的）—— 没有动作的按钮不上条、也不在设置窗出开关
  * （「宁可少一页，不做点不动的开关」，见 SettingsWindow.kt 的既有原则）。
  */
 internal fun statusButtonWired(b: StatusBarButton, windows: Boolean): Boolean = !windows ||
@@ -198,7 +201,10 @@ data class OpSettings(
                 skin = SkinOption.fromValue(map["Skin"]),
                 statusbar = StatusBarSettings(
                     hidden = bool("StatusBarHidden", false),
-                    vk = bool("StatusBarVk", true),
+                    // ⚠️ 缺键回落 false（2026-10-10 中午裁决：软键盘默认关）。别照着
+                    // 邻近行复制成 true —— SettingsTest 的「config without statusbar
+                    // keys」用例比对的是整个 StatusBarSettings()，两处漂了就红在那。
+                    vk = bool("StatusBarVk", false),
                     symbols = bool("StatusBarSymbols", true),
                     trad = bool("StatusBarTrad", true),
                     punct = bool("StatusBarPunct", true),

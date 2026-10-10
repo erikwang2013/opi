@@ -206,10 +206,13 @@ class SettingsTest {
 
     @Test
     fun `config without statusbar keys gets the decided defaults`() {
-        // 1.7.5 及更早写的配置文件没有这九个键 ⇒ 默认「不隐藏 + 八个按钮全常驻」
-        // （用户裁决），而不是全关 —— 全关会让老用户升级后条上什么都不剩。
+        // 1.7.5 及更早写的配置文件没有这九个键 ⇒ 默认「不隐藏 + 除软键盘外全常驻」
+        // （2026-10-10 中午裁决收窄：软键盘默认关），而不是全关 —— 全关会让老用户
+        // 升级后条上什么都不剩。比对**整个** StatusBarSettings()：fromIni 的回落值
+        // 与数据类默认漂了一处就会红在这里。
         val s = OpSettings.fromIni("Learn=False\nFuzzy=True\n")
         assertEquals(StatusBarSettings(), s.statusbar)
+        assertFalse("软键盘缺键时必须回落到关", s.statusbar.vk)
         assertFalse(s.learn) // 老键照旧生效
     }
 
@@ -226,15 +229,22 @@ class SettingsTest {
         // 旧值不能残留。这里**不能**写 contains("=False") 之类：False 本身是合法值
         // （新值里就有 StatusBarHidden=False），那种断言恒真、什么都证明不了 ——
         // 首版就是这么写的，一条真断言都没拦住（被自己的新值满足）。
-        assertFalse(merged, merged.contains("StatusBarVk=False\n"))
+        // 探测键必须在「旧值 ≠ 新值」的键里挑，且写得进 merged 才算数：
+        // · StatusBarTrad：旧 False → 新 True；
+        // （StatusBarVk 曾在这儿当过探测器 —— 2026-10-10 中午默认翻成 False 后两边
+        //   同值，它就退化成恒真了，按上面的规矩换掉。）
+        assertFalse(merged, merged.contains("StatusBarTrad=False\n"))
         assertFalse(merged, merged.contains("StatusBarHidden=True\n"))
     }
 
     @Test
     fun `merge still keeps unknown keys next to the statusbar block`() {
-        val merged = mergeIni("# 手写\nShiftToggle=True\nStatusBarVk=False\n", OpSettings())
+        // 旧值写 True（新默认是 False，2026-10-10 中午翻的）——「旧值被换成新值」这件
+        // 事才看得出来；两边同值时断言会退化成恒真（与上一条测试同一份教训）。
+        val merged = mergeIni("# 手写\nShiftToggle=True\nStatusBarVk=True\n", OpSettings())
         assertTrue(merged, merged.contains("ShiftToggle=True\n"))
         assertTrue(merged, merged.contains("# 手写\n"))
-        assertTrue(merged, merged.contains("StatusBarVk=True\n"))
+        assertTrue(merged, merged.contains("StatusBarVk=False\n"))
+        assertFalse(merged, merged.contains("StatusBarVk=True\n"))
     }
 }

@@ -136,15 +136,32 @@ fun OpiPet(
 ) {
     val measurer = rememberTextMeasurer()
     Canvas(modifier.size(width = size, height = size * CANVAS_H / CANVAS_W)) {
-        val u = this.size.width / CANVAS_W // 设计单位 → 像素
-        drawPet(mood, u, measurer, showLegend, palette)
+        drawOpiPet(mood, palette, showLegend, measurer)
     }
+}
+
+/**
+ * 在任意 [DrawScope] 里画一只小欧（非 Composable 场景的入口，如窗口图标 Painter）。
+ *
+ * 与 [OpiPet] **同一套形状代码**（下面那个 drawPet）——同一只小欧，别做第二套。
+ * 尺寸按本 scope 的宽度换算（与 [OpiPet] 的 u 完全同式）；画高 ≥ 240/236 宽的
+ * scope 都不会裁到（内容竖向只占 ~236/240 设计单位）。
+ *
+ * @param showLegend 要刻 OPI 时才需要 [measurer]（无文本环境传 null，自动不刻）。
+ */
+fun DrawScope.drawOpiPet(
+    mood: PetMood = PetMood.IDLE,
+    palette: PetPalette = PetPalette.Default,
+    showLegend: Boolean = false,
+    measurer: TextMeasurer? = null,
+) {
+    drawPet(mood, size.width / CANVAS_W, measurer, showLegend && measurer != null, palette)
 }
 
 private fun DrawScope.drawPet(
     mood: PetMood,
     u: Float,
-    measurer: TextMeasurer,
+    measurer: TextMeasurer?,
     legend: Boolean,
     palette: PetPalette,
 ) {
@@ -251,7 +268,7 @@ private fun DrawScope.drawPet(
     }
     drawPath(skirtPath, skirt)
     drawPath(skirtPath, primary, style = Stroke(stroke, join = StrokeJoin.Round))
-    if (legend) {
+    if (legend && measurer != null) {
         val layout = measurer.measure(
             AnnotatedString("OPI"),
             TextStyle(
