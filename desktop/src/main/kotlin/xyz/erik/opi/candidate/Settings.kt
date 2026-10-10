@@ -80,8 +80,12 @@ data class StatusBarSettings(
 )
 
 /**
- * 状态栏按钮。**枚举顺序 = 条上从左到右的展示顺序**（用户 2026-10-10 深夜**最终
- * 冻结**：logo / 中英 / Ω符号 / 简繁 / 月相 / 键盘 / 。，标点 / 设置）。
+ * 状态栏按钮。**枚举顺序 = 条上从左到右的展示顺序**（用户 2026-10-10 **最终冻结**：
+ * logo / 中英 / 。，标点 / 简繁 / 月相 / 键盘 / Ω符号大全 / 设置）。第 3 位 = 标点
+ * 双态（。，/.,）、第 7 位 = 符号大全（静态 Ω）—— 与图标映射（StatusBar.kt 的
+ * iconText）配套，别只改一处。验收订正留痕：2026-10-10 中午先按行为描述换了**图标**、
+ * 枚举序漏跟，用户真机截图（`[小欧][英][Ω][简][🌓][。，][⊞]`）抓到后同日把
+ * SYMBOLS/PUNCT 两键对调。
  * `label` 兼作设置窗的开关名与状态栏的可访问性描述；条上的**图标**另有一套
  * （见 StatusBar.kt 的 iconText / MoonIcon / SettingsIcon）。
  */
@@ -90,11 +94,11 @@ enum class StatusBarButton(val label: String, val hint: String) {
     // ⚠️ 通路是 opi-ctl lang，不是 fcitx5-remote -t（后者停用整个 fcitx5，
     // 2026-10-10 中午用户踩过；事故留痕见 Actions.kt 头部与 StatusBarTest 的映射钉）。
     LANG("中英文切换", "与 Shift 轻按同一条通路（opi-ctl lang）"),
-    SYMBOLS("符号大全", "符号页入口"),
+    PUNCT("中英标点", "中英文标点切换（调 opi-ctl）"),
     TRAD("简繁转换", "简 ⇄ 繁（调 opi-ctl）"),
     FULLWIDTH("全半角", "全角 ⇄ 半角（调 opi-ctl）"),
     VK("软键盘", "虚拟键盘窗：按键注入系统（会照常流经输入法）"),
-    PUNCT("中英标点", "中英文标点切换（调 opi-ctl）"),
+    SYMBOLS("符号大全", "符号页入口"),
     SETTINGS("设置", "打开本设置窗"),
 }
 

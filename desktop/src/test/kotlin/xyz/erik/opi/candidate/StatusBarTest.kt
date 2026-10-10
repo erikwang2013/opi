@@ -33,10 +33,14 @@ class StatusBarTest {
 
     @Test
     fun `button order is the display order`() {
-        // 枚举序 = 条上从左到右（2026-10-10 深夜**最终冻结**：logo/中英/。，/简繁/
-        // 月相/键盘/Ω/设置）。换序 = 用户肌肉记忆全废，且没有任何东西会报错，所以钉住。
+        // 枚举序 = 条上从左到右（用户 2026-10-10 **最终冻结**：logo/中英/。，/简繁/
+        // 月相/键盘/Ω/设置；第 3 位 = 标点「。，」、第 7 位 = 符号大全「Ω」）。
+        // 换序 = 用户肌肉记忆全废，且没有任何东西会报错，所以钉住。
+        // ⚠️ 边界（验收时发生过的错）：这条只锁**顺序**，锁不住「哪枚图标在哪个键上」
+        // —— 当时图标映射先改对、枚举序没跟着换，这条照样全绿；图标语义归
+        // `frozen icon literals` 那条管。两处配套，只改一处时对面的钉要跟着动。
         assertEquals(
-            listOf("logo", "中英文切换", "符号大全", "简繁转换", "全半角", "软键盘", "中英标点", "设置"),
+            listOf("logo", "中英文切换", "中英标点", "简繁转换", "全半角", "软键盘", "符号大全", "设置"),
             StatusBarButton.entries.map { it.label },
         )
     }
@@ -102,8 +106,9 @@ class StatusBarTest {
         // Windows 上没有 opi-ctl（那五个动作 symbols/trad/punct/fullwidth/lang 是
         // Linux 侧的），没动作的按钮不上条 ——「宁可少一页，不做点不动的开关」。
         // 显式开 VK：这条测的是「按有无动作过滤」，别被默认值变更（VK 默认关）牵连。
+        // 期望值按**枚举序**（VK 现在排 SYMBOLS 前面，见枚举头的验收订正）。
         assertEquals(
-            listOf(StatusBarButton.LOGO, StatusBarButton.SYMBOLS, StatusBarButton.VK, StatusBarButton.SETTINGS),
+            listOf(StatusBarButton.LOGO, StatusBarButton.VK, StatusBarButton.SYMBOLS, StatusBarButton.SETTINGS),
             visibleStatusButtons(StatusBarSettings(vk = true), windows = true),
         )
         // 设置窗的开关行用同一个判定（两处同源）
