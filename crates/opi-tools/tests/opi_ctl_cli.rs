@@ -204,12 +204,12 @@ fn unrecognized_reply_maps_to_5() {
 fn state_query_sends_exact_wire_command_and_prints_line() {
     let dir = fake(
         REPLY_TO_STDOUT,
-        &reply_of("lang=zh;trad=off;punct=on;fw=on"),
+        &reply_of("lang=zh;trad=off;punct=on;fw=on;im=opi"),
     );
     let (code, stdout, stderr) = run_ctl(&dir, &["state"]);
     assert_eq!(code, 0, "stderr={stderr}");
     assert_eq!(
-        stdout, "lang=zh;trad=off;punct=on;fw=on\n",
+        stdout, "lang=zh;trad=off;punct=on;fw=on;im=opi\n",
         "状态行要原样进 stdout"
     );
     assert_eq!(stderr, "", "成功不刷 stderr");
@@ -229,12 +229,15 @@ fn state_query_sends_exact_wire_command_and_prints_line() {
 }
 
 /// 两端值都原样透传（正、负两面）：on/off 是服务端给的，客户端不缓存、不改写 ——
-/// 客户端自己造状态正是这条查询要避免的事。
+/// 客户端自己造状态正是这条查询要避免的事。im 那一格**没有取值域**：别的输入法名
+/// 要放行，**空串也要放行**（= 没有 IC / 查不到，前端按「未知=维持现状」处理；
+/// 在这里把空串判成形状错，等于把「查不到」变成状态栏可见的失败）。
 #[test]
 fn state_values_pass_through_both_ways() {
     for line in [
-        "lang=zh;trad=off;punct=on;fw=on",
-        "lang=en;trad=on;punct=off;fw=off",
+        "lang=zh;trad=off;punct=on;fw=on;im=opi",
+        "lang=en;trad=on;punct=off;fw=off;im=keyboard-us",
+        "lang=zh;trad=off;punct=on;fw=on;im=",
     ] {
         let dir = fake(REPLY_TO_STDOUT, &reply_of(line));
         let (code, stdout, stderr) = run_ctl(&dir, &["state"]);
@@ -248,12 +251,12 @@ fn state_values_pass_through_both_ways() {
 #[test]
 fn state_broken_shapes_map_to_5() {
     for bad in [
-        "trad=off;lang=zh;punct=on;fw=on",     // 键序换位（同一个值集合）
-        "lang=zh;trad=off;punct=on",           // 少一段
-        "lang=zh;trad=off;punct=on;fw=on;x=y", // 多一段
-        "lang=zh;trad=off;punct=on;fw=maybe",  // 取值域外
-        "lang=zh;trad=off;punct=on;lang=on",   // 键名重复（末位不是 fw）
-        "",                                    // 空串
+        "trad=off;lang=zh;punct=on;fw=on;im=opi", // 键序换位（同一个值集合）
+        "lang=zh;trad=off;punct=on;fw=on",        // 少一段（im 缺席 —— 旧版插件？）
+        "lang=zh;trad=off;punct=on;fw=on;im=opi;x=y", // 多一段
+        "lang=zh;trad=off;punct=on;fw=maybe;im=", // 取值域外（im 空不背锅）
+        "lang=zh;trad=off;punct=on;fw=on;lang=zh", // 键名重复（末位不是 im）
+        "",                                       // 空串
     ] {
         let dir = fake(REPLY_TO_STDOUT, &reply_of(bad));
         let (code, stdout, stderr) = run_ctl(&dir, &["state"]);

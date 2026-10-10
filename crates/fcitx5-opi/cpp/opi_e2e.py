@@ -99,7 +99,7 @@ PAGE_DOWN = 0xFF56
 PAGE_UP = 0xFF55
 
 events = []
-_fd_keepalive = None  # 见 open_input_context()：不握住这个 fd，IC 会被销毁
+_ic_token = None  # 见 open_input_context()：CreateInputContext 的第二个返回值
 _failures = []
 _windows = []  # [(步骤标签, 该步产生的信号)]，report() 逐条追加；check_modes 用
 CURRENT_IM = "opi"  # main() 按模式改写；plan() 只借它打标签
@@ -128,14 +128,17 @@ def check_signals_known(bus, path):
 
 
 def open_input_context(bus):
-    global _fd_keepalive
+    global _ic_token
     im = dbus.Interface(
         bus.get_object(DEST, "/org/freedesktop/portal/inputmethod"), IM_IFACE,
     )
-    path, fd = im.CreateInputContext([("program", "opi-e2e"), ("display", "e2e")])
-    # CreateInputContext 的第二个返回值是 IC 的生命线 fd：一旦被 GC 关掉，IC 立刻
-    # 销毁，后续调用全变 UnknownObject。必须在整个运行期持有引用。
-    _fd_keepalive = fd
+    path, token = im.CreateInputContext([("program", "opi-e2e"), ("display", "e2e")])
+    # 第二个返回值（token）**不是**生命线：2026-10-10 实测（5.1.12）它是 16 字节
+    # 的 ay、不是 fd —— 丢掉引用 IC 照样活；IC 的真正生命线是**创建它的 D-Bus
+    # 连接**（探针：独立连接建的 IC，连接一关即 UnknownObject）。留引用无害
+    # （别的版本形态若真是 fd 也接得住），但别指望它销毁/保活 IC；要销毁走
+    # ic.DestroyIC()（见 ctl 变体的 destroy_ic）。
+    _ic_token = token
     path = str(path)
     ic = dbus.Interface(bus.get_object(DEST, path), IC_IFACE)
     for sig, handler in (
@@ -225,7 +228,17 @@ def plan(mode, ic, caps):
 
     if mode == "ctl":
         # opi-ctl 通道（状态栏按钮那条链）—— 同上放模块里。
-        return plan_ctl(ic)
+        # destroy_ic：真销毁这个 IC（② 的「没有 IC 时 state 照常回一行」那一面只有
+        # 这里能测；那一格的取值另说 —— 依 ShareInputState，All 有 dummy 兜底、
+        # No 才是空串，差分在 plan_ctl 里）。走 IC 接口自己的 DestroyIC —— **不是**关什么
+        # 「生命线 fd」：2026-10-10 实测（5.1.12）CreateInputContext 第二返回值是
+        # 16 字节 ay token、不是 h（见 open_input_context 注释）；本进程的连接还得
+        # 用，故显式 DestroyIC（探针实测：DestroyIC() 无参、返回 void，调完
+        # FocusIn 即 UnknownObject）。
+        def destroy_ic():
+            ic.DestroyIC()
+
+        return plan_ctl(ic, destroy_ic)
 
     if mode == "passthrough":
         # 直通键（Rust 侧 action==0）：不消费按键、引擎状态不变。期望 **0 条**

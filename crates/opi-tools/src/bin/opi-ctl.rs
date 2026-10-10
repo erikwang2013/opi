@@ -33,8 +33,11 @@
 //     "err:<码>:<原因>"    失败 —— <码> 由服务端分类（4=功能不可用，5=动作被拒），
 //                         本进程原样把它当**自己的退出码**。
 //   插件的方法 State() -> string（只读查询，无参数）：
-//     一行**冻结格式** `lang=zh|en;trad=on|off;punct=on|off;fw=on|off`（键序固定，
-//     桌面端按位置解析），或同样的 "err:<码>:<原因>"。
+//     一行**冻结格式** `lang=zh|en;trad=on|off;punct=on|off;fw=on|off;im=…`
+//     （键序固定，桌面端按位置解析；im = 当前输入法唯一名，**可为空** = 没有可报的
+//     输入法（无 IC 且 ShareInputState=No 没兜底）—— 前端约定按「未知 = 维持现状」，
+//     2026-10-10 追加在行尾 —— 旧解析只读前四段，多一段不会读错位），
+//     或同样的 "err:<码>:<原因>"。
 //
 // 退出码（**契约**，lead 2026-10-10 钉死：0=成功；非 0 必须带可区分的 stderr 原因；
 // desktop-ui 按「非零 = 可见反馈」实现，不许只有哑失败）：
@@ -135,12 +138,16 @@ fn send_state() -> i32 {
 /// 冻结的状态串键序与取值域（与 cpp/opi_ctl.h 的 State 注释成对；桌面端按 `;`
 /// 分段、按位置取值）。形状漂了**必须**红：宁可让状态栏显示「读不到状态」，也别
 /// 让它拿错位的值去画图标 —— 位置解析下 `trad=on` 跑到第一位就是「语言变繁体」。
+/// im 那一格没有取值域（输入法名是开放集合，且**空串合法** = 没有可报的输入法：
+/// 没有 IC 且 ShareInputState=No 没兜底 —— 见 cpp/opi_ctl.h；前端约定按
+/// 「未知 = 维持现状」处理）—— 但**段数与位置**照样钉死。
 fn check_state_shape(line: &str) -> Result<(), String> {
-    const FIELDS: [(&str, &[&str]); 4] = [
-        ("lang", &["zh", "en"]),
-        ("trad", &["on", "off"]),
-        ("punct", &["on", "off"]),
-        ("fw", &["on", "off"]),
+    const FIELDS: [(&str, Option<&[&str]>); 5] = [
+        ("lang", Some(&["zh", "en"])),
+        ("trad", Some(&["on", "off"])),
+        ("punct", Some(&["on", "off"])),
+        ("fw", Some(&["on", "off"])),
+        ("im", None),
     ];
     let parts: Vec<&str> = line.split(';').collect();
     if parts.len() != FIELDS.len() {
@@ -155,7 +162,9 @@ fn check_state_shape(line: &str) -> Result<(), String> {
                 parts[i]
             ));
         };
-        if !domain.contains(&val) {
+        if let Some(domain) = domain
+            && !domain.contains(&val)
+        {
             return Err(format!("{key} 的取值 {val:?} 不在 {domain:?} 里"));
         }
     }
