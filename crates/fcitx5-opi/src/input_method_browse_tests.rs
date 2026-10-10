@@ -7,8 +7,9 @@
 //! - 浏览期间只有 `1`-`9`（激活：类目下钻 / 符号上屏）、`-`/`=`（浏览翻页）、Esc
 //!   （退出并**吞掉**）归浏览；**其余键一律先退出浏览恢复真缓冲、再按正常路由处理**
 //!   —— 尤其是不许让「符号」标题落进任何读缓冲的路径。
-//! - 切走/切英文（W1）的顺序是**先退浏览再提交**；本文件用「先读后读」的对照把
-//!   这个顺序钉成承重条件（不退出时 W1 看到的就是面板首项「1.常用」）。
+//! - 切走/切英文（W1 订正版，2026-10-10 深夜用户裁决）的顺序是**先退浏览、再上
+//!   缓冲原文**；本文件用「先读后读」的对照把这个顺序钉成承重条件（不退出时
+//!   W1 提交的就是面板标题「符号」）。
 //!
 //! 两轨逐条同构：本文件 ↔ `crates/tsf-opi/src/logic_browse_tests.rs`（同名同序；
 //! 进入/退出在 tsf 轨与 fcitx5 轨同为「宿主直接调状态方法」，键路由部分逐键同构）。
@@ -192,10 +193,10 @@ fn page_keys_and_shift_are_literal_unhandled() {
 
 #[test]
 fn switch_away_must_exit_first_or_it_commits_the_title() {
-    // fcitx5-glue 的 W1 顺序：「先 opi_fcitx5_symbol_browse(0) → 再按 W1 提交
-    // （有候选首候选、无候选原文）」。本用例把「顺序是承重的」钉成事实：
-    // **不退出**时 W1 读到的缓冲/首候选就是浏览内容（会让用户上屏「符号」「1.常用」）。
-    // 状态机侧的同序实现 = `switch_mode_confirmed`（见下一条用例）。
+    // fcitx5-glue 的 W1 顺序：「先 opi_fcitx5_symbol_browse(0) → 再上缓冲原文」
+    // （2026-10-10 深夜用户裁决订正初版「有候选首候选」—— 本用例钉的「顺序承重」
+    // 与上屏物无关）。**不退出**时 W1 读到的缓冲就是面板标题，用户会白上屏
+    // 「符号」两个字。状态机侧的同序实现 = `switch_mode_confirmed`（见下一条用例）。
     let mut s = browse_state();
     typed(&mut s, "ni");
     assert!(s.enter_symbol_browse());
@@ -205,8 +206,13 @@ fn switch_away_must_exit_first_or_it_commits_the_title() {
     // 正确顺序：action 0（= exit_symbol_browse）→ 同步，返回后已是真缓冲/真候选
     s.exit_symbol_browse();
     assert_eq!(s.buffer(), "ni", "同步：退出返回后 buffer 已是真缓冲");
-    assert_eq!(s.candidates()[0], "你", "W1「有候选上首候选」= 真词库候选");
-    // 面板点击/确认第一条 = 真候选（不是类目展示串）
+    assert_eq!(
+        s.candidates()[0],
+        "你",
+        "退出后候选来自真词库（不是类目表）—— 这是面板点击要用的数据"
+    );
+    // 面板点击第一条 = 真候选（不是类目展示串）。注意与切走**不同**：
+    // 切走（W1 订正版）上的是原文，点击才上候选 —— 两条路都真实存在。
     assert_eq!(s.select(0), "你");
     // 空真缓冲：W1 提交原文 = 空（而不是「符号」两个字）
     let mut e = browse_state();
@@ -220,16 +226,23 @@ fn switch_away_must_exit_first_or_it_commits_the_title() {
 // ---- W1 的状态机实现：switch_mode_confirmed（确认 + 切换，返回待上屏文本）----
 
 #[test]
-fn switch_mode_confirmed_takes_first_candidate_or_raw_buffer() {
-    // 有候选 → 首候选；无候选 → **原文**（与 toggle_symbol 的「无候选丢弃」不同支）
+fn switch_mode_confirmed_takes_the_raw_buffer() {
+    // 订正时间线：W1 初版（2026-10-10 白天）钉「有候选上首候选」；
+    // **2026-10-10 深夜用户裁决**「切英文 = 默认是拼音，不要是候选词」——
+    // 本用例按新语义**有意识改写**：有候选也上**原文**（移动端同语义已实证：
+    // 字段收 ni'hao 而不是「你好」）。
     let mut s = browse_state();
     typed(&mut s, "ni");
-    assert_eq!(s.candidates()[0], "你", "前置：真词库候选");
-    // 「先确认后切」是承重的：顺序反了，英文模式候选集为空，这里会拿到原文 "ni"
+    assert_eq!(
+        s.candidates()[0],
+        "你",
+        "前置：真词库候选（本用例的对照点）"
+    );
+    // 「先确认后切」是承重的：顺序反了，`switch_mode` 先清缓冲，这里会拿到空串
     assert_eq!(
         s.switch_mode_confirmed(Mode::English),
-        "你",
-        "有候选上首候选"
+        "ni",
+        "有候选也上原文"
     );
     assert_eq!(s.buffer(), "", "确认后缓冲收干净");
     assert_eq!(s.mode(), Mode::English, "切换真的发生了");
@@ -239,7 +252,7 @@ fn switch_mode_confirmed_takes_first_candidate_or_raw_buffer() {
     assert_eq!(
         z.switch_mode_confirmed(Mode::English),
         "qqq",
-        "无候选上原文（不丢弃）"
+        "无候选同样是原文（与有候选同一条路）"
     );
     assert_eq!(z.buffer(), "");
     assert_eq!(z.mode(), Mode::English);
@@ -252,10 +265,12 @@ fn switch_mode_confirmed_exits_browse_first_never_commits_the_title() {
     typed(&mut s, "ni");
     assert!(s.enter_symbol_browse());
     assert_eq!(s.buffer(), "符号", "负对照：不退出就是标题");
+    // 订正（2026-10-10 深夜用户裁决）：本行旧版钉「先退浏览 → 真缓冲的**首候选**」，
+    // 按「切英文 = 默认是拼音」改写为原文 —— 退浏览的顺序照旧承重（标题仍不许出）。
     assert_eq!(
         s.switch_mode_confirmed(Mode::English),
-        "你",
-        "先退浏览 → 真缓冲的候选"
+        "ni",
+        "先退浏览 → 真缓冲的原文（标题/首候选都不出）"
     );
     assert!(!s.is_symbol_browsing(), "确认顺带退了浏览");
     assert_eq!(s.buffer(), "");
@@ -269,6 +284,25 @@ fn switch_mode_confirmed_exits_browse_first_never_commits_the_title() {
     );
     assert!(!e.is_symbol_browsing());
     assert_eq!(e.mode(), Mode::English);
+}
+
+#[test]
+fn switch_mode_confirmed_never_emits_the_first_candidate() {
+    // 负对照（2026-10-10 深夜用户裁决「切英文 = 默认是拼音，不要是候选词」）：
+    // 有候选时输出的必须是**原文**，任何情况下都不得是首候选文本。
+    let mut s = browse_state();
+    typed(&mut s, "ni");
+    let first = s.candidates()[0].clone();
+    assert_eq!(first, "你", "前置：真词库首候选");
+    let text = s.switch_mode_confirmed(Mode::English);
+    assert_ne!(text, first, "不许出首候选文本");
+    assert_eq!(text, "ni", "上的是原文");
+    // 浏览态同一条（先退浏览恢复真缓冲后仍是原文）
+    let mut b = browse_state();
+    typed(&mut b, "ni");
+    assert!(b.enter_symbol_browse());
+    assert_ne!(b.switch_mode_confirmed(Mode::English), "你");
+    assert!(!b.is_symbol_browsing());
 }
 
 // ---- C 入口面（opi_fcitx5_symbol_browse / opi_fcitx5_load_symbols）----
