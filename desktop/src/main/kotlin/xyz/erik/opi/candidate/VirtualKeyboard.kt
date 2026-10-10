@@ -126,6 +126,9 @@ private fun keyboardPosition(): WindowPosition {
 /**
  * 虚拟键盘窗。由状态栏的「软键盘」按钮开关（[StatusBarApp]），本窗自身没有关闭
  * 按钮（无边框、不抢焦点，关不了也不会挡事）。
+ *
+ * 不进任务栏与状态栏同一条（[SkipTaskbar]）—— 用户没点名本窗，属「同族顺手」：
+ * 它也漂浮、也常驻，留任务栏条目同样说不通。机制与取证状态见 SkipTaskbar.kt 头注释。
  */
 @Composable
 fun VirtualKeyboardWindow(onClose: () -> Unit) {
@@ -151,6 +154,8 @@ fun VirtualKeyboardWindow(onClose: () -> Unit) {
         title = "opi输入法 虚拟键盘",
         icon = OpiPetWindowIcon, // 窗口/任务栏图标 = 小欧（PetIcon.kt）
     ) {
+        // 不进任务栏（同状态栏，用户没点名、属同族顺手）：X11 属性直写，见 SkipTaskbar.kt。
+        LaunchedEffect(window) { SkipTaskbar.apply(window) }
         Column(
             modifier = Modifier.fillMaxSize().background(KbBg).padding(6.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),

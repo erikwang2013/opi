@@ -198,6 +198,44 @@ class StatusBarTest {
         )
     }
 
+    // ---------- 切到别的输入法就藏（2026-10-10 下午用户裁决）----------
+
+    @Test
+    fun `state line carries the im field`() {
+        // 契约扩展（Actions.kt 头）：行尾 `[;im=<uniqueName>]`。缺键 = ""（新 glue 没合时
+        // 旧输出正好长这样）；空值 `im=` 也归一成未知；既有四键的解析不受影响。
+        assertEquals("opi", parseImeState("lang=zh;trad=off;punct=on;fw=off;im=opi").im)
+        assertEquals("", parseImeState("lang=zh;trad=off;punct=on;fw=off").im) // 缺键
+        assertEquals("", parseImeState("im=").im) // 空值 = 未知
+        // im 是任意串（uniqueName 无枚举面），且不碰其它键
+        assertEquals(
+            ImeState(zh = false, trad = true, punct = false, fullwidth = true, im = "pinyin"),
+            parseImeState("lang=en;trad=on;punct=off;fw=on;im=pinyin"),
+        )
+    }
+
+    @Test
+    fun `bar hides while another input method is active`() {
+        // 四态：im 缺键/空串 = 未知 ⇒ 维持现状（可见，不闪）；"opi" ⇒ 可见；
+        // 其他输入法 ⇒ 隐藏。基线按钮 = 默认设置的 7 键（非空）。
+        val buttons = visibleStatusButtons(StatusBarSettings(), windows = false)
+        assertTrue(barVisible(buttons, im = "")) // 缺键 = 空串缺省（旧 glue / 读失败）
+        assertTrue(barVisible(buttons, im = "opi")) // 本输入法
+        assertFalse(barVisible(buttons, im = "pinyin")) // 别的输入法（fcitx5 内置拼音）
+        // 端到端串一下：整行 → 解析 → 判定（少一环的表现正是「切走了条还在」）
+        assertFalse(barVisible(buttons, parseImeState("lang=zh;trad=off;punct=on;fw=off;im=pinyin").im))
+        assertTrue(barVisible(buttons, parseImeState("lang=zh;trad=off;punct=on;fw=off;im=opi").im))
+    }
+
+    @Test
+    fun `master hidden still wins with im present`() {
+        // 老优先级不变：master 隐藏 / 按钮全关 ⇒ 恒隐藏，与 im 无关（隐藏不是「等 im 来救」）。
+        val none = visibleStatusButtons(StatusBarSettings(hidden = true), windows = false)
+        assertFalse(barVisible(none, im = ""))
+        assertFalse(barVisible(none, im = "opi"))
+        assertFalse(barVisible(emptyList(), im = "pinyin"))
+    }
+
     @Test
     fun `action always refreshes state right after it returns`() {
         // 「点完立刻翻转」的落点：动作返回后一定补读一次。抽成纯函数就是为了这条 ——

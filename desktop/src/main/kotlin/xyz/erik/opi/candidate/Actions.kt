@@ -14,8 +14,10 @@
 //! 就摆在状态栏 LANG 按钮下面；想「顺手」改回去之前先看 StatusBarTest 的映射回归钉。
 //!
 //! 状态通道（2026-10-10 深夜冻结）：**`opi-ctl state`** → 一行
-//! `lang=zh|en;trad=on|off;punct=on|off;fw=on|off`（rc 0 成功；通道不通 rc≠0 且无输出）
-//! —— 状态栏的实时图标读它（[readImeState]）。
+//! `lang=zh|en;trad=on|off;punct=on|off;fw=on|off[;im=<uniqueName>]`（rc 0 成功；通道不通
+//! rc≠0 且无输出）—— 状态栏的实时图标读它（[readImeState]）。`im` = 当前输入法
+//! （2026-10-10 下午用户裁决「切到其他输入法时状态栏消失」的数据位，glue 侧在途追加；
+//! 缺键/空串 = 未知，语义见 [ImeState.im] 与 StatusBar.kt 的 [barVisible]）。
 //!
 //! ⚠️ 这些动作的效果在**别处**（输入法状态），命令成败是本侧唯一看得见的东西 ——
 //! 所以失败必须回到 UI 上（[runExternal] 的返回值就是给用户看的那句话）。
@@ -99,12 +101,19 @@ fun runExternal(cmd: List<String>, timeoutMs: Long = 3000): String? {
  * 选择见 StatusBar.kt 的 [punctIcon]。时间线（防回退）：2026-10-10 深夜 B 版曾裁决
  * 「punct 只解析、不参与渲染」→ **同日中午按用户对按钮行为的描述订正**（。，/., 两态
  * 归标点按钮、符号大全改静态 Ω）；B 版那条已被取代，别按它「改回去」。
+ *
+ * [im] = 当前输入法 uniqueName（`im=` 位，2026-10-10 下午用户裁决）。**只定条的存亡、
+ * 不参与渲染**：缺键/空串 = 未知 ⇒ 状态栏判可见（维持现状，不闪）；非空且 ≠ `"opi"`
+ * ⇒ 隐藏（判定在 StatusBar.kt 的 [barVisible]）。这是**加键**：既有四键的解析语义一字
+ * 未动 —— 新 glue 没合时旧输出正好缺这个键，走「未知」分支。
  */
 data class ImeState(
     val zh: Boolean = true,
     val trad: Boolean = false,
     val punct: Boolean = true,
     val fullwidth: Boolean = false,
+    /** 当前输入法 uniqueName（`im=` 位）。缺键/空串 = 未知 —— 见类头 [im] 段。 */
+    val im: String = "",
 )
 
 /**
@@ -125,6 +134,8 @@ fun parseImeState(line: String?): ImeState {
             "trad" -> if (on != null) st.copy(trad = on) else st
             "punct" -> if (on != null) st.copy(punct = on) else st
             "fw" -> if (on != null) st.copy(fullwidth = on) else st
+            // 任意串都收（uniqueName 没有枚举面）；空值/缺键归一成 "" = 未知（见 ImeState.im）
+            "im" -> st.copy(im = v)
             else -> st // 以后多出来的键：忽略
         }
     }
