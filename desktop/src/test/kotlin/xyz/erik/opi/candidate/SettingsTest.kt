@@ -8,6 +8,8 @@
 
 package xyz.erik.opi.candidate
 
+import java.nio.file.Files
+import java.nio.file.Paths
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -93,9 +95,107 @@ class SettingsTest {
         // **字面值**匹配（C++ 的 unmarshallOption），写错一个字 = 静默回「不改动」。
         // 顺序也钉：opi_skin.h 的 opiSkinThemeName 与主题目录按同一顺序对应。
         assertEquals(
-            listOf("不改动", "浅色", "深色", "宣纸", "朱砂"),
+            listOf("不改动", "浅色", "深色", "宣纸", "朱砂", "清爽", "湛蓝", "柠檬", "晚霞", "星光"),
             SkinOption.entries.map { it.value },
         )
+    }
+
+    // ---------- 三端同集同序（2026-10-10 五款新皮肤时加的回归钉）----------
+
+    /** 仓库内文件太远就现读：desktop 的测试工作目录 = desktop/（同 SymbolCategoriesTest）。 */
+    private fun repoFile(rel: String): String {
+        val p = Paths.get("../$rel")
+        assertTrue("源文件不在了（搬家了？）：$rel ⇒ ${p.toAbsolutePath()}", Files.exists(p))
+        return Files.readString(p)
+    }
+
+    private fun captures(pattern: Regex, text: String, group: Int = 1): List<String> =
+        pattern.findAll(text).map { it.groupValues[group] }.toList()
+
+    @Test
+    fun `skin names stay in lockstep across all four ends`() {
+        // 皮肤名字/顺序是**跨语言契约**：Android（Palette.kt 的 label + id）、桌面（本
+        // 枚举的 value + 常量名）、fcitx5（opi_config.h 的枚举序与 i18n 名 = 配置字面值、
+        // opi_skin.h 的主题目录映射、CMakeLists 安装清单、生成脚本的 SKINS）。任一漂开 =
+        // 一端静默换错皮肤或不认识新值 —— 都不会报错（本仓的老毛病），所以这钉从
+        // **源文件现读现比**，不复述列表：复述的清单会跟着漂（老测试就是复述，正是这
+        // 轮要换掉的形态）。
+        val desktop = SkinOption.entries.map { it.value }
+
+        // Android：SkinOption(id, label) —— 显式中文名
+        val androidPairs = Regex("""\b([A-Z][A-Z_0-9]*)\("([a-z]+)", "([^"]+)"\)""")
+            .findAll(repoFile("android/app/src/main/kotlin/xyz/erik/opi/keyboard/Palette.kt"))
+            .map { it.groupValues[1] to (it.groupValues[2] to it.groupValues[3]) }.toList()
+        val androidIds = androidPairs.map { it.second.first }
+        val androidLabels = androidPairs.map { it.second.second }
+
+        // fcitx5：i18n 名（=写进配置的字面值）+ 枚举名→主题目录映射
+        val config = repoFile("crates/fcitx5-opi/cpp/opi_config.h")
+        val i18nStart = config.indexOf("FCITX_CONFIG_ENUM_NAME_WITH_I18N(OpiSkin,")
+        assertTrue("opi_config.h 里找不到 i18n 名清单（宏改名了？）", i18nStart >= 0)
+        val cppNames = captures(
+            Regex("""N_\("([^"]+)"\)"""),
+            config.substring(i18nStart, config.indexOf(");", i18nStart)),
+        )
+        val cppDirs = Regex("""case OpiSkin::(\w+):\s*return "(opi-[a-z]+)"""").findAll(
+            repoFile("crates/fcitx5-opi/cpp/opi_skin.h"),
+        ).map { it.groupValues[1].lowercase() to it.groupValues[2] }.toList()
+        // 枚举序 ⇄ i18n 宏是**按位置**配的（宏一个名对一个枚举值）：两边顺序漂开 =
+        // 「选清爽、存成湛蓝」这种错名落盘，故枚举声明顺序也一并现读现比。
+        val enumStart = config.indexOf("{", config.indexOf("enum class OpiSkin"))
+        assertTrue("opi_config.h 里找不到 OpiSkin 枚举声明（改名了？）", enumStart >= 0)
+        val cppEnum = captures(
+            Regex("""(\w+)"""),
+            config.substring(enumStart + 1, config.indexOf("}", enumStart)),
+        ).map { it.lowercase() }
+        assertEquals("先钉住枚举名单本身（多了少了都红）", listOf("keep") + androidIds.drop(1), cppEnum)
+
+        // 主题目录：生成脚本的 SKINS 键 + CMakeLists 的安装清单
+        val pyKeys = captures(Regex("""(?m)^    "([a-z]+)": \{"""), repoFile("scripts/gen_fcitx5_themes.py"))
+        val cmakeDirs = captures(
+            Regex("""data/themes/(opi-[a-z]+)""""),
+            repoFile("crates/fcitx5-opi/cpp/CMakeLists.txt"),
+        )
+
+        assertEquals("十款（含不改动）", 10, desktop.size)
+        assertEquals("Android 的中文名与桌面同集合同序", desktop, androidLabels)
+        assertEquals("fcitx5 的 i18n 名与桌面同集合同序", desktop, cppNames)
+        // 英文 id 一侧：「不改动」不映射主题（Keep → nullptr），故三份目录清单都是九款
+        assertEquals("Android 的 id 顺序与桌面常量名一致",
+            SkinOption.entries.drop(1).map { it.name.lowercase() }, androidIds.drop(1))
+        assertEquals("生成脚本的 SKINS 键与 id 同集合同序", androidIds.drop(1), pyKeys)
+        assertEquals("opi_config.h 的枚举序与 i18n 名序一致（按位置配对的契约）",
+            cppEnum.drop(1), androidIds.drop(1))
+        assertEquals("opi_skin.h 的映射与 id 同集合同序", androidIds.drop(1), cppDirs.map { it.first })
+        assertEquals("CMakeLists 的安装目录与映射一致",
+            cppDirs.map { it.second }, cmakeDirs)
+    }
+
+    @Test
+    fun `skin previews match the theme generator`() {
+        // SkinPicker 注释里的那条「预览与生成器逐值对应」：SettingsWindow.kt 的
+        // previewOf（bg/fg/accent）必须逐值等于 gen_fcitx5_themes.py 的 SKINS
+        // （bg/text/accent）。错了就是「图上一种颜色、选完另一种」，不报任何错。
+        val window = repoFile("desktop/src/main/kotlin/xyz/erik/opi/candidate/SettingsWindow.kt")
+        val previews = Regex(
+            """SkinOption\.(\w+) -> SkinPreview\(Color\(0x([0-9A-Fa-f]{8})\), """ +
+                """Color\(0x([0-9A-Fa-f]{8})\), Color\(0x([0-9A-Fa-f]{8})\)\)""",
+        ).findAll(window).associate {
+            it.groupValues[1] to it.groupValues.drop(2).map { h -> "#" + h.substring(2) }
+        }
+        val gen = repoFile("scripts/gen_fcitx5_themes.py")
+        fun field(name: String) = captures(Regex(""""$name": "(#[0-9A-Fa-f]{6})""""), gen)
+        val bg = field("bg")
+        val text = field("text")
+        val accent = field("accent")
+
+        val names = SkinOption.entries.drop(1).map { it.name }
+        assertEquals("预览支路要覆盖九款（不改动无主题）", 9, previews.size)
+        assertEquals(names, captures(Regex("""(?m)^    "([a-z]+)": \{"""), gen).map { it.uppercase() })
+        assertEquals(9, bg.size)
+        for ((i, name) in names.withIndex()) {
+            assertEquals("$name 的预览色必须与生成器逐值相同", listOf(bg[i], text[i], accent[i]), previews[name])
+        }
     }
 
     @Test

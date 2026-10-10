@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: MIT
 """生成 OPI 皮肤（fcitx5 classicui 主题目录）。
 
-产物：crates/fcitx5-opi/data/themes/opi-{light,dark,paper,cinnabar}/
+产物：crates/fcitx5-opi/data/themes/opi-{light,dark,paper,cinnabar,
+fresh,azure,lemon,sunset,starlight}/
   theme.conf            配色。**段落结构对照本机装着的 deepin-light**（那是我
                         们能核实的、真跑在用户机器上的主题格式），值换成本项目
                         的色板；缺段落的主题并非一定坏，但没人验过的省写就是
@@ -83,6 +84,65 @@ SKINS = {
         "hl_bg": "#FFFFFF26",
         "menu_bg": "#9E2228",
         "sep": "#CC5A5F",
+    },
+    # 2026-10-10 加五款（用户裁决「所有端皮肤增加颜色」）；键名/顺序与
+    # desktop 的 SkinOption、Android 的 SkinOption.id、opi_config.h 的 OpiSkin
+    # 一处不错位（SettingsTest 的 `skin names stay in lockstep` 现读现比）。
+    # 每款 text×bg ≥ 4.5、accent×bg ≥ 3（--check 不测这个，值定稿时用 WCAG 手核过）。
+    "fresh": {
+        "title": "opi输入法 清爽",
+        "desc": "浅青绿底 + 墨绿文字",
+        "bg": "#E6F5EE",
+        "border": "#16332B22",
+        "text": "#16332B",
+        "accent": "#2E7D6B",
+        "hl_bg": "#2E7D6B26",
+        "menu_bg": "#D8EEE3",
+        "sep": "#B9D8CB",
+    },
+    "azure": {
+        "title": "opi输入法 湛蓝",
+        "desc": "深天蓝底 + 月白文字",
+        "bg": "#3A679E",
+        "border": "#00000033",
+        "text": "#F4F8FD",
+        "accent": "#FFE3A8",
+        "hl_bg": "#FFFFFF26",
+        "menu_bg": "#33598A",
+        "sep": "#6E96C4",
+    },
+    "lemon": {
+        "title": "opi输入法 柠檬",
+        "desc": "柠檬黄底 + 深橄榄文字",
+        "bg": "#FBF6C8",
+        "border": "#3A300022",
+        "text": "#3A3000",
+        "accent": "#6B5700",
+        "hl_bg": "#6B570026",
+        "menu_bg": "#F2E9A4",
+        "sep": "#D9C97E",
+    },
+    "sunset": {
+        "title": "opi输入法 晚霞",
+        "desc": "暖橙粉底 + 深赭文字",
+        "bg": "#FBE0CD",
+        "border": "#5A2C1E22",
+        "text": "#5A2C1E",
+        "accent": "#B8431F",
+        "hl_bg": "#B8431F26",
+        "menu_bg": "#F3C6A8",
+        "sep": "#E2AC8C",
+    },
+    "starlight": {
+        "title": "opi输入法 星光",
+        "desc": "靛蓝夜空底 + 星金高亮",
+        "bg": "#1B2138",
+        "border": "#FFFFFF1F",
+        "text": "#E8EBF7",
+        "accent": "#FFD966",
+        "hl_bg": "#FFD96633",
+        "menu_bg": "#232A44",
+        "sep": "#3A4468",
     },
 }
 

@@ -121,9 +121,96 @@ val CinnabarPalette = KeyboardPalette(
     toolbarFg = Color(0xFFFFD9A0),
 )
 
+/** 清爽皮肤（2026-10-10）：清透浅青绿 —— fcitx5 opi-fresh 同套
+ * （#E6F5EE / #16332B / #2E7D6B），键面比底深一档做分离。 */
+val FreshPalette = KeyboardPalette(
+    keyBg = Color(0xFFCFE9DF),
+    keyFg = Color(0xFF16332B),
+    keyHighlightBg = Color(0xFF2E7D6B),
+    keyHighlightFg = Color(0xFFFFFFFF),
+    barBg = Color(0xFFE6F5EE),
+    barBufferFg = Color(0xCC16332B),
+    barDimFg = Color(0xFF4F7A6C),
+    accent = Color(0xFF2E7D6B),
+    panelBg = Color(0xFFE6F5EE),
+    panelFg = Color(0xFF16332B),
+    toolbarBg = Color(0xFFCFE9DF),
+    toolbarFg = Color(0xFF2E7D6B),
+)
+
+/** 湛蓝皮肤：深天空蓝 —— fcitx5 opi-azure 同套（#3A679E / #F4F8FD / #FFE3A8），
+ * 选中态用浅天蓝底 + 深海军蓝字（对比度 ~9:1，不必借强调色）。 */
+val AzurePalette = KeyboardPalette(
+    keyBg = Color(0xFF3C6AA3),
+    keyFg = Color(0xFFF4F8FD),
+    keyHighlightBg = Color(0xFFCFE6FF),
+    keyHighlightFg = Color(0xFF12395C),
+    barBg = Color(0xFF3A679E),
+    barBufferFg = Color(0xF0F4F8FD),
+    barDimFg = Color(0xFFC9DCF2),
+    accent = Color(0xFFFFE3A8),
+    panelBg = Color(0xFF3A679E),
+    panelFg = Color(0xFFF4F8FD),
+    toolbarBg = Color(0xFF33598A),
+    toolbarFg = Color(0xFFFFE3A8),
+)
+
+/** 柠檬皮肤：柠檬黄底 + 深橄榄字 —— fcitx5 opi-lemon 同套
+ * （#FBF6C8 / #3A3000 / #6B5700）；浅底必须深字，键面黄比底黄饱和一档。 */
+val LemonPalette = KeyboardPalette(
+    keyBg = Color(0xFFF5E76A),
+    keyFg = Color(0xFF3A3000),
+    keyHighlightBg = Color(0xFF6B5700),
+    keyHighlightFg = Color(0xFFFFFDF0),
+    barBg = Color(0xFFFBF6C8),
+    barBufferFg = Color(0xCC3A3000),
+    barDimFg = Color(0xFF6E5F1E),
+    accent = Color(0xFF6B5700),
+    panelBg = Color(0xFFFBF6C8),
+    panelFg = Color(0xFF3A3000),
+    toolbarBg = Color(0xFFF5E76A),
+    toolbarFg = Color(0xFF5A4A00),
+)
+
+/** 晚霞皮肤：橙粉暖色 —— fcitx5 opi-sunset 同套（#FBE0CD / #5A2C1E / #B8431F），
+ * 键面橙比底深一档，强调 = 落日橘。 */
+val SunsetPalette = KeyboardPalette(
+    keyBg = Color(0xFFF3C6A8),
+    keyFg = Color(0xFF5A2C1E),
+    keyHighlightBg = Color(0xFFB8431F),
+    keyHighlightFg = Color(0xFFFFF3E8),
+    barBg = Color(0xFFFBE0CD),
+    barBufferFg = Color(0xCC5A2C1E),
+    barDimFg = Color(0xFF8E5A40),
+    accent = Color(0xFFB8431F),
+    panelBg = Color(0xFFFBE0CD),
+    panelFg = Color(0xFF5A2C1E),
+    toolbarBg = Color(0xFFF3C6A8),
+    toolbarFg = Color(0xFFB4441F),
+)
+
+/** 星光皮肤（深色）：深靛蓝夜空底 + 亮星金强调 —— fcitx5 opi-starlight 同套
+ * （#1B2138 / #E8EBF7 / #FFD966）。与「暗光」的区分度：暗光是中性灰 + 雾蓝强调，
+ * 本款是靛蓝底 + 金色点缀（实测键面 #262E4A 也明显偏蓝）。 */
+val StarlightPalette = KeyboardPalette(
+    keyBg = Color(0xFF262E4A),
+    keyFg = Color(0xFFE8EBF7),
+    keyHighlightBg = Color(0xFFFFD966),
+    keyHighlightFg = Color(0xFF23283F),
+    barBg = Color(0xFF161B2E),
+    barBufferFg = Color(0xCCE8EBF7),
+    barDimFg = Color(0xFF9AA3C0),
+    accent = Color(0xFFFFD966),
+    panelBg = Color(0xFF1B2138),
+    panelFg = Color(0xFFE8EBF7),
+    toolbarBg = Color(0xFF262E4A),
+    toolbarFg = Color(0xFFFFD966),
+)
+
 /**
- * 皮肤（2026-10-09 用户裁决「移动端没有皮肤设置」）。五款与桌面/配置面**同名**
- * （不改动/浅色/深色/宣纸/朱砂），配色与 fcitx5 主题同一套设计语言。
+ * 皮肤（2026-10-09 用户裁决「移动端没有皮肤设置」；2026-10-10 加五款颜色）。
+ * **十款与桌面/配置面同名**（不改动/浅色/深色/宣纸/朱砂/清爽/湛蓝/柠檬/晚霞/星光），
+ * 配色与 fcitx5 主题同一套设计语言。
  *
  * 三条配色轴的**优先级**（ImeScreen 里那条 when 就是这个顺序）：
  *   长辈模式 > 暗光模式 > 皮肤 —— 模式是临时状态、皮肤是底：
@@ -136,6 +223,11 @@ enum class SkinOption(val id: String, val label: String) {
     DARK("dark", "深色"),
     PAPER("paper", "宣纸"),
     CINNABAR("cinnabar", "朱砂"),
+    FRESH("fresh", "清爽"),
+    AZURE("azure", "湛蓝"),
+    LEMON("lemon", "柠檬"),
+    SUNSET("sunset", "晚霞"),
+    STARLIGHT("starlight", "星光"),
     ;
 
     /** 皮肤 → 色板。「不改动」与「浅色」同板（默认观感）。 */
@@ -145,6 +237,11 @@ enum class SkinOption(val id: String, val label: String) {
             DARK -> DarkPalette
             PAPER -> PaperPalette
             CINNABAR -> CinnabarPalette
+            FRESH -> FreshPalette
+            AZURE -> AzurePalette
+            LEMON -> LemonPalette
+            SUNSET -> SunsetPalette
+            STARLIGHT -> StarlightPalette
         }
 
     companion object {

@@ -44,7 +44,8 @@ import java.nio.file.Paths
  * 「皮肤」的合法值。**字面值就是写进配置的字符串** —— 与 fcitx5 侧 `OpiSkin`
  * 的枚举字面值（`opi_config.h` 的 `FCITX_CONFIG_ENUM_NAME_WITH_I18N`）逐字相同：
  * Rust/C++ 读侧按字面匹配（`unmarshallOption`），写错一个字节 = 静默回默认值。
- * 五款的顺序与 `opi_skin.h` 的 `opiSkinThemeName` 一一对应。
+ * 十款的顺序与 `opi_skin.h` 的 `opiSkinThemeName` 一一对应；**三端同集合同顺序**
+ * 由 SettingsTest 的 `skin names stay in lockstep` 从四份源文件现读现比。
  */
 enum class SkinOption(val value: String) {
     KEEP("不改动"),
@@ -52,6 +53,11 @@ enum class SkinOption(val value: String) {
     DARK("深色"),
     PAPER("宣纸"),
     CINNABAR("朱砂"),
+    FRESH("清爽"),
+    AZURE("湛蓝"),
+    LEMON("柠檬"),
+    SUNSET("晚霞"),
+    STARLIGHT("星光"),
     ;
 
     companion object {

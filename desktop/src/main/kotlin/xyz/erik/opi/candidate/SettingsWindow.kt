@@ -94,8 +94,9 @@ private fun SectionTitle(text: String) {
 
 /**
  * 一款皮肤的预览色（bg/fg/accent 三项）。
- * ⚠️ 与 `scripts/gen_fcitx5_themes.py` 的 PALETTES 逐值对应 —— 改了主题生成器
- * 要同步这里，否则「图与实不符」，而这种错不报任何错（本仓的老毛病）。
+ * ⚠️ 与 `scripts/gen_fcitx5_themes.py` 的 SKINS 逐值对应（bg/text/accent）——
+ * 改了主题生成器要同步这里，否则「图与实不符」，而这种错不报任何错（本仓的老毛病）。
+ * 这条对应关系由 SettingsTest 的 `skin previews match the theme generator` 现读现比。
  */
 private data class SkinPreview(val bg: Color, val fg: Color, val accent: Color)
 
@@ -106,11 +107,17 @@ private fun previewOf(skin: SkinOption): SkinPreview = when (skin) {
     SkinOption.DARK -> SkinPreview(Color(0xFF1F1F1F), Color(0xFFE6E6E6), Color(0xFFFF8A80))
     SkinOption.PAPER -> SkinPreview(Color(0xFFF5EFE1), Color(0xFF3D3222), Color(0xFF8A5A2B))
     SkinOption.CINNABAR -> SkinPreview(Color(0xFFB3272D), Color(0xFFFFF6EC), Color(0xFFFFD9A0))
+    SkinOption.FRESH -> SkinPreview(Color(0xFFE6F5EE), Color(0xFF16332B), Color(0xFF2E7D6B))
+    SkinOption.AZURE -> SkinPreview(Color(0xFF3A679E), Color(0xFFF4F8FD), Color(0xFFFFE3A8))
+    SkinOption.LEMON -> SkinPreview(Color(0xFFFBF6C8), Color(0xFF3A3000), Color(0xFF6B5700))
+    SkinOption.SUNSET -> SkinPreview(Color(0xFFFBE0CD), Color(0xFF5A2C1E), Color(0xFFB8431F))
+    SkinOption.STARLIGHT -> SkinPreview(Color(0xFF1B2138), Color(0xFFE8EBF7), Color(0xFFFFD966))
 }
 
 /**
- * 五张卡一行排开（窗口内容宽 460-22×2=416dp；5×70 + 4×8 = 382 ≤ 416 —— 首版
- * 76/10 是 420 > 416，朱砂会掉到第二行，截图复核时抓到的）。窄了仍会折行。
+ * 十张卡按 FlowRow 折行排开（窗口内容宽 460-22×2=416dp：一行 5×70 + 4×8 = 382 ≤ 416，
+ * 第 6 张要 460 > 416 ⇒ 十款固定两行）。窄了仍会折行（首版 76/10=420 > 416 时
+ * 朱砂掉到第二行，截图复核时抓到过半宽问题本身）。
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
