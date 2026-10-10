@@ -38,13 +38,17 @@
 #include "opi_rust_ffi.h"
 
 // 皮肤枚举。取值 → `data/themes/` 下的主题目录名，映射在 opi_skin.h
-// （opiSkinThemeName）；三处（枚举/映射/生成脚本）改一处即漂，别只改这。
+// （opiSkinThemeName）；多处（枚举/i18n 名/映射/生成脚本/安装清单）改一处即漂，
+// 别只改这 —— 跨文件同集同序的回归钉在 desktop 的 SettingsTest
+// （`skin names stay in lockstep`），漂了先看它。
 // ⚠️ 用 WITH_I18N 变体（与 fcitx5-unikey 的字符集选项同惯例）：写进配置文件的
 // **字面值就是这里的字符串**（unmarshallOption 按字面匹配），显示名同源。
 // 换言之这些中文字面串是**对外契约**（配置文件里会存「浅色」这种值），别当注释改。
-enum class OpiSkin { Keep, Light, Dark, Paper, Cinnabar };
+// 顺序 = 枚举序 = 下面那条 i18n 宏的名字序（宏按位置取名字），插入要两处同一位置。
+enum class OpiSkin { Keep, Light, Dark, Paper, Cinnabar, Fresh, Azure, Lemon, Sunset, Starlight };
 FCITX_CONFIG_ENUM_NAME_WITH_I18N(OpiSkin, N_("不改动"), N_("浅色"), N_("深色"),
-                                 N_("宣纸"), N_("朱砂"));
+                                 N_("宣纸"), N_("朱砂"), N_("清爽"), N_("湛蓝"),
+                                 N_("柠檬"), N_("晚霞"), N_("星光"));
 
 // 默认值**全是 true / Keep** = 「没配过」等于引擎既有行为（模糊音/简拼见
 // `RankOptions::default()`；学习/中文标点见各自 setter 的默认；ShiftToggle 取 true
