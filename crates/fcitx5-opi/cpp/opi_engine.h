@@ -183,9 +183,18 @@ public:
             // 中文标点开关：改的是**配置面**（opi_config.h 的 ChinesePunct）——
             // 与配置工具/设置窗读的是同一个值，改完落盘 ⇒ 下次 reloadConfig 不会
             // 把它顶回去、设置窗显示的也是新值（内存里翻一个 bool 会两头都错）。
-            settings_.chinesePunct.setValue(!settings_.chinesePunct.value());
+            // 落盘**失败要可见**（2026-10-10 裁决）：回滚内存+引擎后报 err:5 ——
+            // 静默吞返回值 =「按钮报成功、重启后值又自己变回去」的幽灵。
+            // trad/lang/fw **不落盘**：模式类开关（会话内偏好），不是默认类值。
+            const bool want = !settings_.chinesePunct.value();
+            settings_.chinesePunct.setValue(want);
             applyOpiSettings(settings_);
-            saveOpiSettings(settings_);
+            if (!saveOpiSettings(settings_)) {
+                settings_.chinesePunct.setValue(!want);
+                applyOpiSettings(settings_);
+                return "err:5:中文标点配置保存失败（conf/opi_fcitx5.conf 写不进去？），"
+                       "本次切换已回滚";
+            }
         } else if (action == "fullwidth") {
             opi_fcitx5_toggle_fullwidth();
         } else if (action == "lang") {
@@ -248,9 +257,13 @@ private:
     //   · punct = 配置面 ChinesePunct —— 与设置窗/配置工具读的是同一个值（引擎侧的
     //     chinese_punct 只由 applyOpiSettings 从它推过去，两条不会漂）。
     //   · fw    = opiFullwidthState_()（借道读侧，见那里）。
-    // **不取 mostRecentInputContext()**：四个值都是进程级的（Rust 单例 + 本 addon 的
-    // 配置），所有 IC 同值 ⇒「没有 IC」不是失败，照常给这一行（理由与桌面轮询的
-    // 关系写在 opi_ctl.h）。动作路径（handleCtlAction_）才需要 IC —— 那里要刷面板。
+    //   · im    = 最近 IC 的当前输入法唯一名（Instance::currentInputMethod()，
+    //     2026-10-10 追加）—— **唯一与 IC 有关的一格**，给桌面判「状态栏该不该
+    //     显示」（== "opi" 显示，其他隐藏；见 opi_ctl.h 的 State 注释）。
+    // 前四格不取 IC：都是进程级的（Rust 单例 + 本 addon 的配置），所有 IC 同值 ⇒
+    // 「没有 IC」不是失败。im 那一格查不到时给**空串**（前端约定：未知=维持现状），
+    // 同样不是失败 —— 桌面每秒轮询时常常没有焦点窗口（理由细写在 opi_ctl.h）。
+    // 动作路径（handleCtlAction_）另取 IC —— 那是为了刷面板，与这里理由不同。
     std::string stateLine_() {
         const int32_t mode = opi_fcitx5_mode();
         std::string s = "lang=";
@@ -261,6 +274,15 @@ private:
         s += settings_.chinesePunct.value() ? "on" : "off";
         s += ";fw=";
         s += opiFullwidthState_() ? "on" : "off";
+        s += ";im=";
+        // currentInputMethod() 就是「最近 IC 的输入法唯一名，没有 IC 给空」——
+        // 空 ic 的保护在 fcitx5 里面（它的 inputMethodEntry 先取 inputMethod()，
+        // 空名直接 nullptr；两版都导出该符号，nm -D 核过）。本层只需守 instance_：
+        // 驱动用 nullptr 构造引擎。密码框/Disable 的 IC 按 fcitx5 语义返回
+        // keyboard-<布局> ⇒ 那种 IC 里状态栏本就该收起，与语义一致。
+        if (instance_ != nullptr) {
+            s += instance_->currentInputMethod();
+        }
         return s;
     }
 

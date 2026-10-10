@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: MIT
 
 """opi-ctl 通道的端到端变体（2026-10-10）—— 从 opi_e2e.py 分出来，同
-opi_e2e_modes.py 的先例（那个文件贴 500 行硬线）。
+opi_e2e_modes.py 的先例（那个文件贴 500 行硬线）；③① 与公用底层又分给
+opi_e2e_ctl_conf.py（本文件再贴线），② im 与基础通道面留在本文件。
 
 状态栏按钮走的就是这条链，**只有在这里**四样同时为真：
 
@@ -37,60 +38,43 @@ opi_e2e_modes.py 的先例（那个文件贴 500 行硬线）。
     失败面（未接线 / 数据缺失）由 opi_ctl_driver §7e 在**符号数据装载失败**的那份
     XDG 目录里用假 hook 测（data-nosym：零字节 tsv，见 run-harness.sh 的 stage 4 段）
     —— 那两条在本变体里已经不可达（入口已接线、数据已布置）。
+
+  · （2026-10-10 加）③ punct 动作 = 运行期切换 + **写回配置**：opi-ctl punct 之后
+    conf 文件里的 ChinesePunct 跟着翻面、state 的 punct 段与磁盘值一致（conf 与
+    活状态永远同一 —— 「显示与实际一致」的根治），再点一次两条都回原值。
+  · （2026-10-10 加）① ReloadAddonConfig 真链路（设置窗保存那条 wire）：**只改
+    conf 不重载** → state 与 '.' 键的引擎行为都不动（对照）；调 ReloadAddonConfig
+    后 → state 的 punct 段随 conf 变，且 '.' 键的提交从「。」变「．」（拼音全角
+    档的中文/机械标点分界 —— 引擎面证据，证明推的是活引擎、不只是配置内存）；
+    Jianpin 走同一 applyOpiSettings：关掉重载后 "nh" 不再出「你好」，开回来即还原。
+  · （2026-10-10 加）② im 格：state 行尾的 im = 当前输入法唯一名 —— 切到
+    keyboard-us 后跟着变、切回跟着回，且只有这一格变（其余四格逐字不变；切换的
+    前提由 IC 自己发的 CurrentIM 信号证明）。销毁 IC（InputContext1.DestroyIC ——
+    实测 CreateInputContext 第二返回值是 token 不是 fd，IC 生死跟创建连接走）后
+    state 照常回一行、rc 0；im 那一刻的值 = fcitx5 的 currentInputMethod()
+    （mostRecentInputContext 的 IM）：没有 IC 时看 ShareInputState —— All 给
+    dummy IC 兜底（= 下一扇窗会拿到的 IM，非空），No 才是**空串**（前端约定：
+    未知 = 维持现状）。两档都在本变体里**差分**测（写全局 config +
+    ReloadConfig 活生效），不赌机器默认是哪档。
 """
 
 import os
-import subprocess
 
-# run-harness.sh 编好并传进来的 opi-ctl（cargo 产物）。缺了不是本变体的错：
-# 报清楚、让 check 记一条失败（别静默跳过 —— 「没测」会被读成「测了且过」）。
-CTL = os.environ.get("OPI_CTL_BIN", "")
-DEST = "org.fcitx.Fcitx5"
-OPI_PATH = "/opi"
-OPI_IFACE = "org.fcitx.Fcitx5.Opi1"
-
-# 「通道不通」那条用的会话总线地址：指向一个不存在的 unix socket。dbus-send 连它
-# 立刻失败（Failed to open connection ...）⇒ opi-ctl 判成 3。真地址由
-# dbus-run-session 给，这一步显式盖掉它。
-DEAD_BUS_ADDR = "unix:path=/tmp/opi-e2e-nonexistent-bus-socket"
-
-# state 行的冻结键序与取值域（三处同步：cpp/opi_ctl.h 的 State 注释、opi-ctl.rs 的
-# check_state_shape、desktop 的解析处）。桌面端**按位置**取值，键序漂了这里必须红。
-STATE_FIELDS = (("lang", ("zh", "en")), ("trad", ("on", "off")),
-                ("punct", ("on", "off")), ("fw", ("on", "off")))
-
-# 每次调用的结果：{标签: (rc, stdout, stderr)}。信号窗口（_windows）只装 dbus 信号，
-# 装不下进程退出码，故这里单独记一份 —— check_ctl 两样都读。
-RESULTS = {}
+# 本变体的公用底层与 ③①（配置面：写回配置 / 重载推送）在 opi_e2e_ctl_conf.py
+# —— 那边是下发层，本文件（通道面 + ② im）反向 import 它，单向依赖不回头。
+from opi_e2e_ctl_conf import (DEAD_BUS_ADDR, RESULTS, STATE_FIELDS, _commits,
+                              _global_conf_path, check_conf_arms, drop_share_state,
+                              field_diff, plan_conf_arms, run_controller, run_ctl,
+                              run_dbus_send, run_global_reload, write_share_state)
 
 
-def run_ctl(label, action, env=None):
-    """跑一次真 opi-ctl。返回一句话给 report 打印。`env` 整体替换子进程环境
-    （只给「通道不通」那条用：把会话总线地址指到一个不存在的 socket）。"""
-    if not CTL or not os.path.exists(CTL):
-        RESULTS[label] = (-1, "", f"OPI_CTL_BIN 没指到可执行文件：{CTL!r}")
-        return f"!! 找不到 opi-ctl（OPI_CTL_BIN={CTL!r}）—— run-harness.sh 会编它"
-    proc = subprocess.run([CTL, action], capture_output=True, text=True, timeout=20,
-                          env=env)
-    RESULTS[label] = (proc.returncode, proc.stdout.strip(), proc.stderr.strip())
-    return (f"退出码 {proc.returncode} stdout={proc.stdout.strip()!r} "
-            f"stderr={proc.stderr.strip()!r}")
-
-
-def run_dbus_send(label, arg):
-    """绕过 opi-ctl，直接按线上形态发一条 —— 验服务端的回复协议本身。"""
-    argv = ["dbus-send", "--session", "--print-reply", "--reply-timeout=5000",
-            f"--dest={DEST}", OPI_PATH, f"{OPI_IFACE}.Trigger", f"string:{arg}"]
-    proc = subprocess.run(argv, capture_output=True, text=True, timeout=20)
-    RESULTS[label] = (proc.returncode, proc.stdout.strip(), proc.stderr.strip())
-    return (f"退出码 {proc.returncode} stdout={proc.stdout.strip()!r} "
-            f"stderr={proc.stderr.strip()!r}")
-
-
-def plan_ctl(ic):
+def plan_ctl(ic, destroy=None):
     """步骤表。每个 opi-ctl 调用的 expect 都是 None：这些动作的**结果**是提交文本
-    与退出码（在 check_ctl 里断言），面板推不推是另一件事，钉死条数只会白红。"""
+    与退出码（在 check_ctl 里断言），面板推不推是另一件事，钉死条数只会白红。
+    `destroy` = 销毁 IC 的回调（opi_e2e.py 传进来：走 IC 接口的 DestroyIC）
+    —— ② 的「没有 IC」面要真销毁，必须是最后一步。"""
     key = lambda v: (lambda: ic.ProcessKeyEvent(v, 0, 0, False, 0))  # noqa: E731
+
     steps = [
         ("输入 'n'", key(0x6E), True),
         ("输入 'i'", key(0x69), True),
@@ -106,6 +90,19 @@ def plan_ctl(ic):
         ("opi-ctl state（trad 切换后）", lambda: run_ctl("state2", "state"), None),
         ("opi-ctl trad 切回", lambda: run_ctl("trad2", "trad"), None),
         ("opi-ctl state（trad 再切回后）", lambda: run_ctl("state3", "state"), None),
+    ]
+    # ③①（写回配置 / 重载推送）的步骤在 opi_e2e_ctl_conf.py —— 顺序即协议：
+    # ③ 整轮 → ① 对照/重载/还原 → 简拼三口，夹在 state3 与 ② im 臂之间。
+    steps += plan_conf_arms(ic)
+    steps += [
+        # ---- ② im 格：状态栏「本输入法在不在前台」的依据（2026-10-10）----
+        ("opi-ctl state（im 基线）", lambda: run_ctl("state_im0", "state"), None),
+        ("切 keyboard-us（Controller1.SetCurrentIM）",
+         lambda: run_controller("im_us", "SetCurrentIM", "string:keyboard-us"), None),
+        ("opi-ctl state（切 IM 后）", lambda: run_ctl("state_im1", "state"), None),
+        ("切回 opi（SetCurrentIM）",
+         lambda: run_controller("im_back", "SetCurrentIM", "string:opi"), None),
+        ("opi-ctl state（切回 IM 后）", lambda: run_ctl("state_im2", "state"), None),
         # 通道不通：把会话总线地址指到一个不存在的 socket（dbus-run-session 给的是
         # 真地址，这里显式盖掉）。真 opi-ctl + 真 dbus-send 的连接失败路径真跑一遍 ——
         # 「rc 可区分」只有在这里能测（假 dbus-send 的 cargo 测试喂的是人造 stderr）。
@@ -120,12 +117,35 @@ def plan_ctl(ic):
         # 非浏览态它只是普通数字键 —— 它的面板结果因此是「浏览真的开着」的进一步
         # 证据，而不是「动作被接受了」的重复。
         ("浏览中按 '1'（下钻类目 1）", key(0x31), None),
+        # ---- ② 「没有 IC」面（必须最后：IC 一销毁，后面用 ic 的步骤全 UnknownObject）----
+        ("销毁 IC（InputContext1.DestroyIC）", lambda: destroy(), None),
+        ("opi-ctl state（没有 IC）", lambda: run_ctl("state_noic", "state"), None),
+        # ---- ② 无 IC 的 im 语义差分（2026-10-10 实测 + fcitx5 源码钉死）----
+        # im = currentInputMethod() = mostRecentInputContext() 的 IM；没有 IC 时由
+        # ShareInputState 决定：All → dummy IC 兜底（注册在册、policy 检查在
+        # mostRecentInputContext 里），给「下一扇窗会拿到的 IM」；No → 真没有 →
+        # 空串。ReloadConfig 会把策略活推给 IC manager（instance.cpp：
+        # setPropertyPropagatePolicy(shareInputState)），所以同一条链上先强制
+        # All 再强制 No —— 只有这一个变量，im 非空 ⇄ 空串 互为对照。机器默认档
+        # 是哪档随发行版（deepin 等把 All 当默认），不赌它，两条都显式写。
+        ("写全局 config：ShareInputState=All",
+         lambda: write_share_state("share_all", "All"), None),
+        ("ReloadConfig（全局重载，All 活生效）",
+         lambda: run_global_reload("reload_all"), None),
+        ("opi-ctl state（无 IC + 共享态 All）",
+         lambda: run_ctl("state_noshare_all", "state"), None),
+        ("写全局 config：ShareInputState=No",
+         lambda: write_share_state("share_no", "No"), None),
+        ("ReloadConfig（No 活生效）", lambda: run_global_reload("reload_no"), None),
+        ("opi-ctl state（无 IC + 共享态 No）",
+         lambda: run_ctl("state_noshare_no", "state"), None),
+        # 还原：删掉全局 config（fixture 原本没有这份文件）+ 重载回机器默认 ——
+        # 不还原的话，下一次 harness 跑的守护进程会带着上一轮的策略启动。
+        ("还原全局 config（删文件 + ReloadConfig）",
+         lambda: (drop_share_state("share_cleanup"),
+                  run_global_reload("reload_cleanup")), None),
     ]
     return steps
-
-
-def _commits(events):
-    return [p for n, p in events if n == "CommitString"]
 
 
 def check_ctl(windows, failures):
@@ -227,7 +247,7 @@ def check_ctl(windows, failures):
                                 f"位置取值会读错位）：{out!r}")
                 return None
             vals[k] = segs[i][len(k) + 1:]
-            if vals[k] not in dom:
+            if dom is not None and vals[k] not in dom:
                 failures.append(f"{label}: {k}={vals[k]!r} 不在取值域 {dom}")
         return vals
 
@@ -265,3 +285,61 @@ def check_ctl(windows, failures):
         failures.append(f"通道不通的 stderr 要指明是通道问题：{err!r}")
     else:
         print(f"[e2e/ctl] 通道不通：rc=3 stderr={err!r}", flush=True)
+
+    # 8)–10) ③① 的断言（③ conf/state 两面一致；① 对照 → 重载推送（state 面 +
+    # '.' 的引擎面）→ 还原；简拼行为面）在 opi_e2e_ctl_conf.py：注入同一批
+    # by_label / failures 与上面那个 parse_state（模块不反向 import）。
+    check_conf_arms(by_label, failures, parse_state)
+
+    # 11) ② im 格：切 IM 跟着变（前提由 IC 自己发的 CurrentIM 信号证明 —— 不看
+    #     SetCurrentIM 的返回值）、只有这一格变；没有 IC 时 state 照常一行（im 的
+    #     语义见 11b 的 ShareInputState 差分）。
+    s_im0, s_im1, s_im2 = (parse_state(l) for l in ("state_im0", "state_im1", "state_im2"))
+    if s_im0 is not None and s_im0["im"] != "opi":
+        failures.append(f"② im 基线应为 'opi'（本变体没切过 IM），实际 {s_im0['im']!r}")
+    im_win = by_label.get("切 keyboard-us（Controller1.SetCurrentIM）", [])
+    if not any(n == "CurrentIM" and "keyboard-us" in p for n, p in im_win):
+        failures.append(f"SetCurrentIM('keyboard-us') 后 IC 没发 CurrentIM 信号"
+                        f"（{im_win}）—— im 断言的前提不成立")
+    if s_im1 is not None and s_im1["im"] != "keyboard-us":
+        failures.append(f"② 切到 keyboard-us 后 state 的 im 是 {s_im1['im']!r}"
+                        f"（应 'keyboard-us'）")
+    if s_im0 is not None and s_im1 is not None:
+        got = field_diff(s_im0, s_im1)
+        if got != {"im": (s_im0["im"], "keyboard-us")}:
+            failures.append(f"② 切 IM 前后应只有 im 段变，实际差异 {got}"
+                            f"（{s_im0} → {s_im1}）")
+    if s_im0 is not None and s_im2 is not None and s_im2 != s_im0:
+        failures.append(f"② 切回 opi 后 state 没逐字回基线：{s_im0} → {s_im2}")
+    # 没有 IC 那一格：机器默认档只断「照常回一行」（rc/段数/键序由 parse_state
+    # 钉住），**值只打印不判** —— 默认 ShareInputState 随发行版（见 11b）。
+    s_noic = parse_state("state_noic")
+    if s_noic is not None:
+        print(f"[e2e/ctl] ② 没有 IC（机器默认档）：{s_noic}", flush=True)
+
+    # 11b) ② 无 IC 的 im 语义差分（确定性，不赌机器默认）：同一条链上只改全局
+    #      config + ReloadConfig —— All 档 dummy IC 兜底 ⇒ im 非空（「下一扇窗的
+    #      IM」，具体串随此前的传播状态，不钉死）；No 档真没有 ⇒ im 空串（前端
+    #      「未知 = 维持现状」）。两条互为对照：只写 config 不重载不会变（重载
+    #      的活性由这对差分本身证明）；最后一个还原臂把 fixture 恢复原样。
+    for label, what in (("reload_all", "ReloadConfig（→ All）"),
+                        ("reload_no", "ReloadConfig（→ No）"),
+                        ("reload_cleanup", "ReloadConfig（还原）")):
+        rc, _, err = RESULTS.get(label, (None, "", ""))
+        if rc != 0:
+            failures.append(f"② {what} 退出码 {rc}（应 0 —— 这条 wire 得通），"
+                            f"stderr={err!r}")
+    s_all = parse_state("state_noshare_all")
+    s_no = parse_state("state_noshare_no")
+    if s_all is not None and s_all["im"] == "":
+        failures.append("② ShareInputState=All 且没有 IC 时 im 不应为空串（dummy IC"
+                        " 兜底 = 下一扇窗的 IM）—— All 这档没生效？")
+    if s_no is not None and s_no["im"] != "":
+        failures.append(f"② ShareInputState=No 且没有 IC 时 im 应为空串（前端按"
+                        f"「未知 = 维持现状」处理），实际 {s_no['im']!r}")
+    if s_all is not None and s_all["im"] != "" and s_no is not None and s_no["im"] == "":
+        print(f"[e2e/ctl] ② 无 IC 差分：All → im={s_all['im']!r} ／ No → im=''",
+              flush=True)
+    if os.path.exists(_global_conf_path()):
+        failures.append(f"② 还原臂没把全局 config 删掉（{_global_conf_path()} 还在）"
+                        f" —— 会污染下一次 harness 跑的守护进程")

@@ -14,8 +14,9 @@
 //   3. opi-ctl 的动作分发面（handleCtlAction_，与 D-Bus 接收侧同一个函数）：五个
 //      动作的返回值协议 "ok" / "err:<码>:<原因>"，以及「未接线 / 数据缺失」的区分。
 //   4. opi-ctl state（只读查询，2026-10-10 用户裁决）：ctlState_ = D-Bus State 方法
-//      回复出去的那一行 —— 冻结格式整行、trad/lang 两格跟着状态变、以及**只读性**
-//      （全角格是双翻面读的，得证明没把状态读漂）。
+//      回复出去的那一行 —— 冻结格式整行（五格；im 在本驱动恒为空串，真值面归
+//      e2e 变体 ctl）、trad/lang 两格跟着状态变、以及**只读性**（全角格是双翻面
+//      读的，得证明没把状态读漂）。
 //
 // 局限（如实记，别把它读成更强的结论）：
 //   · `OpiEngine engine(nullptr)` —— instance_ 为空：**D-Bus 注册本身**（真会话总线
@@ -31,7 +32,8 @@
 
 #include <cstdio>
 #include <string>
-#include <unistd.h> // dup/dup2：捕获 stderr（Pin A 的诊断断言）
+#include <sys/stat.h> // chmod：§7d-2 的「写盘失败」形态
+#include <unistd.h>   // dup/dup2：捕获 stderr（Pin A 的诊断断言）
 
 #include "opi_driver_common.h" // 测试器具（TestIC/check/预编辑与候选读回）
 
@@ -286,6 +288,31 @@ int main() {
         check(*readBack.chinesePunct == before, "还原（本段不留副作用）");
         // 配置面翻面的**行为**后果（引擎侧标点表）在面板驱动与 e2e 里测，这里只管
         // 「改的是落盘的那个值」—— 内存里翻个 bool 才是错的（见 opi_engine.h）。
+        //
+        // 7d-2 写盘失败 = err:5 + 回滚（2026-10-10 裁决：失败要可见，别静默）。
+        // 造失败：conf 文件与目录都改只读 —— safeSaveAsIni 无论「就地截断」
+        // 还是「临时文件 + rename」形态都会 EACCES（两种都堵死，不押注实现）。
+        const std::string confDir = std::string(cfgHome) + "/fcitx5/conf";
+        const std::string conf = confDir + "/opi_fcitx5.conf";
+        const std::string lineBefore = engine.ctlState_();
+        const bool locked =
+            chmod(conf.c_str(), 0444) == 0 && chmod(confDir.c_str(), 0555) == 0;
+        if (!locked) {
+            skip("chmod 只读失败（权限？）—— 写盘失败的那条路在本环境测不了");
+        } else {
+            const std::string failReply = engine.handleCtlAction_("punct");
+            check(failReply.rfind("err:5:", 0) == 0
+                      && failReply.find("保存失败") != std::string::npos,
+                  "写盘失败 → err:5 且说清原因（不静默）：" + q(failReply));
+            const std::string lineAfter = engine.ctlState_();
+            check(lineAfter == lineBefore,
+                  "写盘失败 → 状态回滚（conf 与活状态不许漂）：" + q(lineAfter));
+            chmod(confDir.c_str(), 0755);
+            chmod(conf.c_str(), 0644);
+            readOpiSettings(readBack);
+            check(*readBack.chinesePunct == before,
+                  "失败臂没动 conf（回滚后文件与内存仍同值，§8 读它取 punctExp）");
+        }
     }
 
     std::printf("-- 7e symbols：三态区分（未接线 / 数据缺失 / 正常）--\n");
@@ -318,8 +345,8 @@ int main() {
     std::printf("== 8. state（只读查询；ctlState_ = D-Bus State 方法回复出去的那一行）==\n");
     // 前置：§7c 收尾把模式切回拼音，而 switch_mode 顺带把全角重置为**模式缺省**
     // （Mode::default_fullwidth：拼音/繁体 on，英文/符号 off）⇒ 开局是 fw=on；
-    // §7d 把标点配置翻回了原值（落盘值 = 内存值，两条不会漂）。state 读的就是这
-    // 四处既有状态，出处对照 opi_engine.h 的 stateLine_。
+    // §7d 把标点配置翻回原值、§7d-2 的写盘失败臂回滚后也没动它（落盘值 = 内存值，
+    // 两条不会漂）。state 读的就是这五处既有状态，出处对照 opi_engine.h 的 stateLine_。
     check(opi_fcitx5_mode() == kModePinyin, "前置：拼音模式（§7c 收尾，全角随模式重置为 on）");
     std::string punctExp = "on";
     {
@@ -328,15 +355,22 @@ int main() {
         punctExp = *readBack.chinesePunct ? "on" : "off";
     }
     const std::string s0 = engine.ctlState_();
-    check(s0 == "lang=zh;trad=off;punct=" + punctExp + ";fw=on",
-          "冻结格式整行（键序固定 lang;trad;punct;fw，桌面按位置解析）：" + q(s0));
+    check(s0 == "lang=zh;trad=off;punct=" + punctExp + ";fw=on;im=",
+          "冻结格式整行（键序固定 lang;trad;punct;fw;im，桌面按位置解析）：" + q(s0));
+    // im 那一格在**本驱动恒为空串**：instance_ 是 nullptr ⇒ glue 直接接空串
+    // （stateLine_ 里的 `instance_ != nullptr` 分支，没实例就没「最近 IC」可问）。
+    // 前端约定：未知 = 维持现状。**真值面**（切 IM 后 im 跟着变；无 IC 时 im 依
+    // ShareInputState：All 兜底给「下一扇窗的 IM」/ No 才是空串）归 e2e 变体 ctl
+    // —— 那里有真守护进程 + 真 IC（本驱动假装测它就是假证据）。
+    check(s0.size() >= 4 && s0.compare(s0.size() - 4, 4, ";im=") == 0,
+          "末格是 im=（本驱动空串：没实例可问，不是失败也不是别的值）");
 
     std::printf("-- 8a 切 trad 前后整行变化（off→on 与 on→off 两向都断）--\n");
     check(engine.handleCtlAction_("trad") == "ok" && opi_fcitx5_mode() == kModeTraditional,
           "trad（翻面走动作路径，state 只是读它）");
     const std::string s1 = engine.ctlState_();
-    check(s1 == "lang=zh;trad=on;punct=" + punctExp + ";fw=on",
-          "只有 trad 段翻成 on，其余三段逐字不变：" + q(s1));
+    check(s1 == "lang=zh;trad=on;punct=" + punctExp + ";fw=on;im=",
+          "只有 trad 段翻成 on，其余四段逐字不变：" + q(s1));
     check(s1 != s0, "切 trad 前后 state **不同**（状态栏「点了要有即时反馈」靠这一格）");
     check(engine.handleCtlAction_("trad") == "ok" && opi_fcitx5_mode() == kModePinyin,
           "trad 切回");
@@ -347,7 +381,7 @@ int main() {
     check(engine.handleCtlAction_("lang") == "ok" && opi_fcitx5_mode() == kModeEnglish,
           "lang 切英文");
     const std::string s3 = engine.ctlState_();
-    check(s3 == "lang=en;trad=off;punct=" + punctExp + ";fw=off",
+    check(s3 == "lang=en;trad=off;punct=" + punctExp + ";fw=off;im=",
           "lang=en 且全角随英文缺省变 off：" + q(s3));
 
     std::printf("-- 8c 只读性：连读同值 + 行为面证明（全角那一格是双翻面读的，见 opi_engine.h）--\n");

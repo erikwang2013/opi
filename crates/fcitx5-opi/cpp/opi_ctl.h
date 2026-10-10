@@ -80,13 +80,20 @@ using OpiCtlStateHandler = std::function<std::string()>;
 
 // ---- State 的返回串：**冻结格式**（桌面状态栏每秒轮询它渲染图标：月亮盈亏 =
 // 全/半角，zh/en = 语言）----
-//     lang=zh|en;trad=on|off;punct=on|off;fw=on|off
-// 键序**固定**（桌面端按位置解析）；四个值全部来自**既有 getter**，不新造状态
-// （哪四个、都是谁，写在 opi_engine.h 的 stateLine_ 上）。改这个格式要三处同改：
+//     lang=zh|en;trad=on|off;punct=on|off;fw=on|off;im=<输入法唯一名，可为空>
+// 键序**固定**（桌面端按位置解析）；值全部来自**既有 getter**，不新造状态
+// （每一格的出处写在 opi_engine.h 的 stateLine_ 上）。改这个格式要三处同改：
 // 这里、opi-ctl.rs 的 check_state_shape、desktop 的解析处。
-// **没有「当前 IC」时不是失败**：四个值都是进程级单例（Rust 引擎的模式/全角 +
-// addon 的配置面），所有 IC 同值 ⇒ 无 IC 时照常返回同一行、rc 0。桌面每秒轮询，
-// 且轮询时**常常没有焦点窗口**，把它判成错误会让图标在这类时刻闪成「读不到」。
+// im（2026-10-10 追加）：最近 IC 的当前输入法 uniqueName —— 桌面拿它判「本输入法
+// 在不在前台」（== "opi" 显示状态栏，其他隐藏）。**追加在行尾**是为兼容：旧桌面
+// 只解析前四段（按位置），多出来的一段不会让它读错位。取值域是**任意串**（可为空）。
+// 取值 = fcitx5 的 Instance::currentInputMethod()（= mostRecentInputContext 的
+// IM）：**没有「当前 IC」时不是失败** —— 前四格是进程级单例（Rust 引擎的模式/
+// 全角 + addon 的配置面），所有 IC 同值；im 那一格交给 fcitx5 自己回答：
+// ShareInputState=All 时它拿 dummy IC 兜底（= 下一扇窗会拿到的 IM），No 才是
+// **空串**（前端约定：未知 = 维持现状，不闪）。⇒ 无 IC 时照常返回同一行、rc 0。
+// 桌面每秒轮询，且轮询时**常常没有焦点窗口**，把它判成错误会让图标在这类时刻
+// 闪成「读不到」。
 // 与 Trigger 不同：那条路必须有 IC（要刷它的面板），state 这条路不需要。
 class OpiCtlObject : public fcitx::dbus::ObjectVTable<OpiCtlObject> {
 public:
