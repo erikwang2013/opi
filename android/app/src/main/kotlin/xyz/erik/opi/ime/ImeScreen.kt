@@ -60,6 +60,8 @@ fun ImeScreen(
     rareIndex: () -> Map<Int, Map<Int, List<String>>> = { emptyMap() },
     /** 符号页类目（懒读资产）：只在真正打开符号页时才取。 */
     symbolCategories: () -> List<xyz.erik.opi.keyboard.SymbolCategories.Category> = { emptyList() },
+    /** 收起键盘（工具栏最右图标）：服务层注入 requestHideSelf；默认空 = JVM 测试不感知。 */
+    onCloseKeyboard: () -> Unit = {},
 ) {
     val modes = state.keyboardModes
     // 优先级：长辈 > 暗光 > 皮肤（皮肤是「底」，模式是临时覆盖；见 SkinOption 的说明）。
@@ -124,6 +126,7 @@ fun ImeScreen(
                 onOpenSkin = state::openSkin,
                 onOpenInputMode = state::openInputMode,
                 onOpenKeyboardMode = state::openKeyboardMode,
+                onCloseKeyboard = onCloseKeyboard,
             )
             // ---- 键盘区：单手模式整体偏移 + 收窄（纯布局层）----
             // 键区自己刷底色（根列已透明）：键与键之间的缝是这一层 —— 换深色皮肤时
@@ -281,6 +284,10 @@ private fun KeyboardArea(
                     // 空缓冲是空操作（clear 幂等）。手动分词已撤——无匹配的分词匹配改由
                     // 引擎自动回退承担（见 engine-seg）。
                     onRetype = controller::clear,
+                    // 数字键盘（2026-10-10 用户裁决：底行新增）——与 26 键的 123 同路。
+                    onNumber = state::openNumber,
+                    // 英文键盘：切到英文 26 键（与输入模式面板「英文26键」同一条路）。
+                    onEnglish = { state.selectInputMode(InputMode.ENGLISH26) },
                     // 左侧一列：**只有读得到拼音时才替换**（搜狗同款，2026-10-09
                     // 用户裁决「不输入、回退、确定，就重置到初始化的一列」）——
                     // 读数空（没候选/已提交/退空）就回到标点列；不回退显示数字串

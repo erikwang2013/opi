@@ -43,7 +43,7 @@ import xyz.erik.opi.pet.petMood
  * 候选栏高度（dp）。OpiImeService 把它算进 IME 窗口高度、ImeScreen 用它预留位置：
  * 三处必须一致，所以只在这里定义一次。
  */
-const val CANDIDATE_BAR_HEIGHT_DP = 48
+const val CANDIDATE_BAR_HEIGHT_DP = 42
 
 /**
  * 候选栏：拼音缓冲 + 每屏 8 候选，点击选择、长按删自造词；页数>1 时显示 ‹ n/m › 翻页。
@@ -64,7 +64,7 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
         ) {
             Text(
                 "EN",
-                modifier = Modifier.padding(horizontal = 12.dp),
+                modifier = Modifier.padding(horizontal = 8.dp),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = p.accent,
@@ -86,7 +86,7 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
         Text(
             bufferShown,
             modifier = Modifier
-                .padding(horizontal = 12.dp)
+                .padding(horizontal = 8.dp)
                 .semantics {
                     // 播报候选变化只能挂在这里：读屏仅在「节点自身」语义变化时播报
                     // （Compose issue 225780131 —— 只改 text 不触发，须同块给 contentDescription），
@@ -169,11 +169,11 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
                             dictionaryDegraded = controller.dictionaryDegraded,
                         ),
                         size = 30.dp,
-                        modifier = Modifier.padding(start = 12.dp),
+                        modifier = Modifier.padding(start = 8.dp),
                     )
                     Text(
                         "无匹配",
-                        modifier = Modifier.padding(start = 8.dp, end = 12.dp),
+                        modifier = Modifier.padding(start = 8.dp, end = 8.dp),
                         fontSize = 13.sp,
                         color = p.barDimFg,
                     )

@@ -83,6 +83,11 @@ fun NineKeyKeyboard(
      * 缓冲空时是空操作（[xyz.erik.opi.engine.EngineController.clear] 本身幂等）。
      * 手动分词键已撤 —— 无匹配时的分词匹配改由引擎自动回退承担。 */
     onRetype: () -> Unit,
+    /** 数字键盘切换（2026-10-10 用户裁决：底行新增）：进数字面板（与 26 键的 123 同路）。 */
+    onNumber: () -> Unit,
+    /** 英文键盘切换（同上）：切到英文 26 键输入模式（与输入模式面板的「英文26键」同一条
+     * selectInputMode 路——它会先提交 pending 缓冲，那是「明确换布局」的既有语义）。 */
+    onEnglish: () -> Unit,
     /** 逐条候选拼音读数（9 键左列按候选逐行显示，如 `ni'hao`；与候选同序等长。
      * 空列表 = 没在输入/无候选，左列显示标点）。 */
     readings: List<String> = emptyList(),
@@ -105,7 +110,9 @@ fun NineKeyKeyboard(
             // 空闲 = 一列标点（可点，走引擎标点表）；输入时**整列换成逐条候选拼音**
             // （一个候选一行：你好→ni'hao；2026-10-09 用户裁决「一列多个、可滑动
             // 查看后面候选/下一页」）——「拼音是输入才替换到左侧一列」（用户原话）。
-            Box(modifier = Modifier.weight(0.72f).fillMaxHeight()) {
+            // 左列宽度 0.72 → 1.0 键宽（2026-10-10 用户裁决「把左侧一列按钮大了」；
+            // 右列要与它同宽，见下）。
+            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
                 if (readings.isNotEmpty()) {
                     BoxWithConstraints(
                         modifier = Modifier.fillMaxSize().semantics {
@@ -205,10 +212,17 @@ fun NineKeyKeyboard(
                     }
                 }
             }
+            // ---- 右侧一列（2026-10-10 用户裁决）----
+            // ⌫ / 重输 / 空格 从底行搬到右列：三格各占三分之一格高、**与左列同宽**
+            // （「大小和左侧一列一样」）。空格挪到高键上更好按，⌫ 也顺手。
+            Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                KeyButton("⌫", modifier = Modifier.weight(1f).fillMaxWidth(), onTap = onBackspace)
+                KeyButton("重输", modifier = Modifier.weight(1f).fillMaxWidth(), onTap = onRetype)
+                KeyButton("空格", modifier = Modifier.weight(1f).fillMaxWidth(), onTap = onSpace)
+            }
         }
-        // 底行按搜狗排：**[符] 在左、[中/英] 其次**（2026-10-09；此前是反的），
-        // 再**重输**（2026-10-10 替下分词键）、空格、⌫、↵。重输是 9 键专属
-        // （14/26/笔画没有这一行）。
+        // 底行（2026-10-10 用户裁决）：[符][中/英] + **新增 [123] 数字键盘与 [英文] 键盘
+        // 切换**，↵ 压尾。⌫/重输/空格 已移入右列。重输是 9 键专属（14/26/笔画无此行）。
         Row(modifier = Modifier.weight(1f).fillMaxSize()) {
             KeyButton("符", modifier = Modifier.weight(1f), onTap = onSymbol)
             KeyButton(
@@ -217,9 +231,8 @@ fun NineKeyKeyboard(
                 onTap = onModeSwitch,
                 stateDescription = modeStateDescription(modeLabel),
             )
-            KeyButton("重输", modifier = Modifier.weight(1f), onTap = onRetype)
-            KeyButton("空格", modifier = Modifier.weight(2f), onTap = onSpace)
-            KeyButton("⌫", modifier = Modifier.weight(1f), onTap = onBackspace)
+            KeyButton("123", modifier = Modifier.weight(1f), onTap = onNumber)
+            KeyButton("英文", modifier = Modifier.weight(1f), onTap = onEnglish)
             KeyButton("↵", modifier = Modifier.weight(1f), onTap = onEnter)
         }
     }

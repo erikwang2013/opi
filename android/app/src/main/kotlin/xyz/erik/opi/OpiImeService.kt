@@ -241,6 +241,8 @@ class OpiImeService : InputMethodService() {
                 imeState, engineController, keyRouter, symbolCatalog,
                 rareIndex = { rareIndex },
                 symbolCategories = { symbolCategories },
+                // 工具栏最右「收起键盘」（2026-10-10 用户裁决）：收回系统键盘。
+                onCloseKeyboard = { requestHideSelf(0) },
             )
         }
         Log.i(TAG, "onCreateInputView: window=${windowSizePx()} keyboardHeight=${keyboardHeight()}")
