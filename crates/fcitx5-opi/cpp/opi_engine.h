@@ -99,7 +99,8 @@ public:
     void keyEvent(const fcitx::InputMethodEntry &entry,
                   fcitx::KeyEvent &keyEvent) override;
 
-    // ---- 切走 / 切英文：先退浏览，再按 W1 提交；焦点移出 / 重置：静默清空 ----
+    // ---- 切走 / 切英文：先退浏览，再按 W1 提交（按模式分叉：拼音/繁体缓冲原文、
+    //      符号模式不上关键字）；焦点移出 / 重置：静默清空 ----
     //
     // 落点为什么是 deactivate() 而不是 reset()（**取证过的，不是猜**）：
     //   · fcitx5 5.0.21 的 src/lib/fcitx/instance.cpp 里，FocusOut watcher 与
@@ -114,8 +115,10 @@ public:
     //     两版都写 `deactivate(...) { reset(...); }`），那「提交」这一半就没地方落。
     //
     // 覆盖面（lead 2026-10-10 裁决）：
-    //   · SwitchInputMethod → 先退符号浏览、再按 W1 提交（opiDirectConfirm；顺序是
-    //     契约，见那个函数的注释）。能力位变化（进密码框之类）发的也是这个事件，
+    //   · SwitchInputMethod → 先退符号浏览、再按 W1 提交（opiDirectConfirm：拼音/
+    //     繁体**缓冲原文**、符号模式**不上关键字**，2026-10-10 深夜裁决 + 同夜模式
+    //     分叉；顺序是契约，见那个函数的注释）。能力位
+    //     变化（进密码框之类）发的也是这个事件，
     //     所以「打了半截拼音点了密码框」会把拼音交出去 —— 与「切走不丢输入」同一意图。
     //   · FocusOut / InputContextReset → **静默清空**，绝不提交（用户裁决：焦点移出
     //     不能提交）。两者都落到 clearState_。

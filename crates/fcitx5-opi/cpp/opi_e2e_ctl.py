@@ -19,9 +19,14 @@ opi_e2e_ctl_conf.py（本文件再贴线），② im 与基础通道面留在本
   应答形状）只有本变体覆盖 —— 写错任一处，前面的测试全绿，用户的按钮没反应。
 
 断言（都是「两端对上没有」，不是「引擎行为对不对」——后者归 opi_ctl_driver）：
-  · lang 的 W1：先打 nihao，再 opi-ctl lang —— IC 必须收到 CommitString「你好」；
-    然后英文模式真的生效（再按字母直传上屏）—— 这两条合起来证明「作用于当前 IC」
-    真的作用到了那个 IC 上。
+  · lang 的 W1：先打 nihao，再 opi-ctl lang —— IC 必须收到 CommitString **「nihao」
+    （缓冲原文）**，并带负对照「不是首候选「你好」」；然后英文模式真的生效（再按
+    字母直传上屏）—— 这几条合起来证明「作用于当前 IC」真的作用到了那个 IC 上。
+    （2026-10-10 深夜订正：原断言是「必须收到「你好」」—— 白天 lead 裁决「有候选上
+    首候选」，同夜用户裁决「切英文 = 默认是拼音，不要是候选词」后桌面统一为一律
+    原文，本断言随之**有意**改写；移动端同裁决已先改并实证。同夜追加：一律原文
+    **按模式分叉**，符号模式不上关键字 —— 本臂是拼音面，不受分叉影响；分叉的
+    正控/负对照在 opi_ctl_driver §1/§2b。）
   · trad/切回：退出码 0 且 stderr 为空（应答被正确解析成成功）。
   · state（只读查询，桌面的轮询就是它）：无参 State 方法在真总线上可调；每行按
     **位置**解析（键序固定，桌面按位置取值）；切 trad 前后**只有 trad 格**变、
@@ -154,14 +159,27 @@ def check_ctl(windows, failures):
 
     # 1) lang 的 W1：待定拼音必须**提交进那个 IC**（「作用于当前 IC」的实锤：
     #    handleCtlAction_ 取的 mostRecentInputContext() 要真的是这个 IC）。
+    #    2026-10-10 深夜订正（时间线）：白天 lead 裁决「有候选上首候选」，本断言原为
+    #    「必须收到「你好」」；同夜用户裁决「切英文 = 默认是拼音，不要是候选词」
+    #    （移动端先改并实证 [英文] → 字段收 ni'hao），桌面统一为一律原文 ⇒ 有意
+    #    改写为「收到缓冲原文 nihao」+ 负对照「不是首候选「你好」」——把 select(0)
+    #    加回去只应红本条的负对照（以及 opi_ctl_driver §1/§6 的同款负对照）。
+    #    同夜追加：一律原文**按模式分叉**（符号模式不上关键字）—— 本臂是拼音面，
+    #    分叉的正控/负对照在 opi_ctl_driver §1（拼音）/ §2b（符号）。
     lang_events = by_label.get("opi-ctl lang（切英文）", [])
     lang_commits = _commits(lang_events)
-    if "你好" not in lang_commits:
+    if "nihao" not in lang_commits:
         failures.append(
-            f"opi-ctl lang 之后 IC 没收到 CommitString「你好」（实际 {lang_commits}）"
-            f" —— W1 提交没作用到当前 IC 上")
+            f"opi-ctl lang 之后 IC 没收到 CommitString「nihao」（缓冲原文，实际 "
+            f"{lang_commits}）—— W1 提交没作用到当前 IC 上，或没走拼音面的"
+            f"「一律原文」")
+    elif "你好" in lang_commits:
+        failures.append(
+            f"opi-ctl lang 提交了首候选「你好」（实际 {lang_commits}）—— W1 又变成"
+            f"挑候选了？（2026-10-10 深夜用户裁决：切英文（拼音面）一律缓冲原文）")
     else:
-        print(f"[e2e/ctl] lang 的 W1 提交到位：{lang_commits}", flush=True)
+        print(f"[e2e/ctl] lang 的 W1 提交到位（原文，非首候选）：{lang_commits}",
+              flush=True)
 
     # 2) 英文模式真的切了：下一个字母直传上屏（拼音模式下它会进缓冲、不提交）。
     x_commits = _commits(by_label.get("英文模式：字母 'x'", []))

@@ -106,9 +106,11 @@ inline bool opiModifierTimeoutOk(const Config &config, uint64_t pressTime) {
 // ---- 符号浏览（22 类目）的进出入口 + W1「直接确认」（2026-10-10）----
 //
 // 两件事合在一处，因为**顺序**是它们之间的契约：
-//   切走/切英文 → ① 先退浏览（恢复真缓冲）→ ② 再按 W1 提交（有候选上首候选、
-//   无候选原文）。顺序反了就把浏览态的标题串（或首个分类）当用户输入提交出去
-//   —— 这条是 lead 2026-10-10 的裁决，落点见它下面的 opiDirectConfirm。
+//   切走/切英文 → ① 先退浏览（恢复真缓冲）→ ② 再按 W1 提交（**按模式分叉**：拼音/
+//   繁体上缓冲原文、符号模式不上关键字 —— 2026-10-10 深夜用户裁决「切英文 = 默认是
+//   拼音，不要是候选词」+ 同夜追加的模式分叉，白天那版「有候选上首候选」作废，
+//   时间线见 opiDirectConfirm）。顺序反了就把浏览态的标题串（或首个分类）当用户
+//   输入提交出去 —— 顺序这条是 lead 2026-10-10 的裁决。
 //
 // 引擎侧入口 `opi_fcitx5_symbol_browse` 是**弱符号**（契约段在 opi_rust_ffi.h）：
 // 落地前为 nullptr。缺符号时只打**一次** stderr 诊断（含期望符号名 —— 名字若与
@@ -254,9 +256,11 @@ public:
         const int32_t cur = opi_fcitx5_mode();
         const int32_t next = (cur == kModeEnglish) ? kModePinyin : kModeEnglish;
         if (next == kModeEnglish) {
-            // 「中→英」＝ 用户裁决里的「切英文」：先把待定拼音提交掉（W1；顺序见
-            // opiDirectConfirm：先退浏览、后提交）。**必须在任何 switch_mode 之前** ——
-            // switch_mode 会清缓冲（Rust 侧 composer.switch_mode），之后再提交就只剩空串。
+            // 「中→英」＝ 用户裁决里的「切英文」：先把待定拼音提交掉（W1：先退浏览、
+            // 后提交**缓冲原文**；符号模式那半是「不上关键字」—— 2026-10-10 深夜
+            // 裁决 + 同夜模式分叉，见 opiDirectConfirm）。
+            // **必须在任何 switch_mode 之前** —— switch_mode 会清缓冲
+            // （Rust 侧 composer.switch_mode），之后再提交就只剩空串。
             opiDirectConfirm(ic);
             // 进英文时 Rust 的「单次 Shift」状态**按设计**保留 ——
             // `CandidateState::switch_mode` 只在**离开** English 时清它
@@ -469,8 +473,9 @@ inline bool handleModeHotkey(fcitx::KeyEvent &keyEvent, OpiShiftToggle &shift,
     // 按下切过去、抬起再切回来，用户看到的是模式纹丝不动。**重复**同理（见上）。
     if (!keyEvent.isRelease() && !isRepeatEvent(keyEvent)) {
         if (target == kModeEnglish) {
-            // 「中→英」与 Shift 轻按是同一条裁决（W1 直接确认，顺序：先退浏览、
-            // 后提交）—— 必须赶在 switch_mode 之前，它会清缓冲。Ctrl+\（符号模式）
+            // 「中→英」与 Shift 轻按是同一条裁决（W1 直接确认：先退浏览、后提交
+            // 缓冲原文 —— 模式分叉见 opiDirectConfirm）—— 必须赶在 switch_mode
+            // 之前，它会清缓冲。Ctrl+\（符号模式）
             // **不**走这条：那不是「切英文」，缓冲本来也会被 switch_mode 清掉。
             opiDirectConfirm(keyEvent.inputContext());
         }
