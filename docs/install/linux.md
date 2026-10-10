@@ -706,13 +706,19 @@ opi-ctl state                               # 只读：当前状态，一行
 
 ### 5.2 什么时候才需要生成脚本
 
-只有你想**换词源**（改上游 pin、改排序规则）时：
+只有你想**换词源**（改上游 pin、改排序规则、改人工表）时。⚠️ **脚本要联网**
+（从 `raw.githubusercontent.com` 与 unicode.org 拉上游，见各自脚本头部注释），
+且 `gen_luna_dict.py` **需要一个参数**、产物走 stdout（不是直接写 .opid）：
 
 ```bash
-python3 scripts/gen_luna_dict.py     # → data/generated/luna.opid（未入库）
+# 外部词库层（2026-10-11 起；改 brand_terms/new_words/reading_overrides 也要重跑它）
+python3 scripts/gen_extra_phrases.py            # → data/raw/extra_phrases.tsv（入库）
+# 简并（会自动读上面那份 extra_phrases.tsv）
+python3 scripts/gen_luna_dict.py <luna_pinyin.dict.yaml> > /tmp/luna_merged.tsv
+# 编译成 .opid（未入库；部署副本在 android/app/src/main/assets/luna.opid）
+cargo run -p opi-tools -- compile /tmp/luna_merged.tsv data/generated/luna.opid
 ```
 
-⚠️ 这个脚本**要联网**（从 `raw.githubusercontent.com` 拉上游表，见脚本头部注释）。
 生成后这样用它：
 
 ```bash

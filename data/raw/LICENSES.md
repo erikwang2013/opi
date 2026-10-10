@@ -7,7 +7,7 @@
 |---|---|---|---|
 | fallback.tsv | OPI 项目自建 | MIT | 内置回退词库，由 opi-tools 编译为 data/generated/fallback.opid |
 | luna_pinyin.dict.yaml（M2 验证用） | https://github.com/rime/rime-luna-pinyin | **LGPL-3.0** | 官方拼音词库，889KB ~70771 行；由 scripts/gen_luna_dict.py 重排后编译为 luna.opid（产物不直接入库）：单字第三列是读音概率（非词频），旧版据此以 GB2312 码序为常用度替身、次读音排目标读音组尾、0% 读音剔除；现改以 Unihan kHanyuPinlu 逐读音词次排序，且**有词次证据的读音一律保留**（上游 0% 只是份额为 0，不等于读音不存在；0% 过滤器只对无证据读音生效），词组仍排在单字之后，详见脚本头注释。**2026-09-27：luna.opid 的**词组段**改由 pinyin_simp.dict.yaml（Apache-2.0，下一行）提供，本表只贡献单字层；上游自带的繁体成语段已整段退役（见下节）** |
-| pinyin_simp.dict.yaml（简体词组段，2026-09-27 加） | https://github.com/rime/rime-pinyin-simp | **Apache-2.0** | 简体常用词组词源（用户反馈「常用词组无法拼音或模糊拼音显示」的修复）。48078 条 2–4 字词组，**原生简体**（无需繁→简，无字形歧义）、拼音连写、带真实词频（我们 322329 / 什么 295403）；来源是 AOSP PinyinIME（同为 Apache-2.0）。由 scripts/gen_luna_dict.py 并入 luna.opid，是产物的**唯一**词组来源 —— 理由与实测代价见下节「简体词组段」 |
+| pinyin_simp.dict.yaml（简体词组段，2026-09-27 加） | https://github.com/rime/rime-pinyin-simp | **Apache-2.0** | 简体常用词组词源（用户反馈「常用词组无法拼音或模糊拼音显示」的修复）。48078 条 2–4 字词组，**原生简体**（无需繁→简，无字形歧义）、拼音连写、带真实词频（我们 322329 / 什么 295403）；来源是 AOSP PinyinIME（同为 Apache-2.0）。由 scripts/gen_luna_dict.py 并入 luna.opid；2026-10-11 外部词库并入前曾是产物的**唯一**词组来源，现与人工段/批量段构成三段序（见下节「外部词库并入（2026-10-11）」）—— 本节的理由与实测代价仍逐条有效 |
 | trad_hanzi.tsv（单字） | Unicode Unihan（kMandarin 读音 + kHanyuPinlu 词次 + kTraditionalVariant/kSimplifiedVariant 变体） | Unicode License（宽松，可再分发，保留版权声明） | GB2312 全量 6763 + terra 单字 + 其余 Unihan 单字，由 scripts/gen_trad_dict.py 生成（人工白名单 COMMON_TRAD 已退役，见脚本头注释） |
 | trad_phrases.tsv（词组） | https://github.com/rime/rime-terra-pinyin（terra_pinyin.dict.yaml） | **LGPL-3.0** | 常用繁体词组 + 人工常用词组（SUPPLEMENT_PHRASES，terra 缺 臺灣/電話/謝謝 等），由 scripts/gen_trad_dict.py 生成 |
 | stroke.dict.yaml（笔画序，2026-10-09 加） | https://github.com/rime/rime-stroke | **LGPL-3.0** | 五笔画码表（h 横 / s 竖 / p 撇 / n 捺 / z 折；主码表源自 CNS11643 全字库，超集扩充至扩展 J），由 scripts/gen_stroke_dict.py **钉 commit** 拉取后**原样**编译为 `android/app/src/main/assets/stroke.opid`（解析器按 rime 通用的「字\<TAB\>码」形状读，产出的键就是笔画串 —— 见脚本头注释）。移动端「笔画键盘」用它打字、「生僻字键盘」用它按笔画查字。**Linux 端不发它**（桌面三轨本轮没有笔画入口） |
@@ -15,6 +15,9 @@
 | symbol_blocks.tsv（符号区块） | Unicode UCD（UnicodeData.txt 的区块范围与字符名；2026-09-28 起新增的 emoji 区块范围取自 UTS#51 §2.1 区块表，仍是同一份 UCD 字符名） | Unicode License（同 Unihan 行） | 面板区块的 id/范围/名（**块数以 `data/raw/symbol_blocks.tsv` 的行数为准，别写死数字**；**id 5 是有意空号**），由 scripts/gen_symbols.py 生成；**符号面板的搜索关键字不来自上游**，357 条为 OPI 项目人工撰写（MIT，2026-09-28 起该手写表在 scripts/symbol_keywords.py —— 生成器撞 500 行门禁拆出去的，内容未改），86 条由区块名罗马字推导，其余 2880 条按 Unicode 名分词兜底 |
 | symbols.tsv（符号条目；**条数与 emoji 条数以生成器每次打印的为准，别写死数字**） | 同上（UnicodeData.txt 逐码位字符名 + **emoji-data.txt 的 `Emoji` 属性**判 emoji 列，2026-09-28 起） | Unicode License（同上，不新增来源、不新增许可证） | 同生成器产出。**emoji 列 = UTS#51 `Emoji` 属性**（含 BMP 区的 ☺♥⌚⭐），不再是「非 BMP」代理指标 —— 判据与复算命令见 scripts/gen_symbols.py 头与 crates/engine-core/tests/symbol_coverage.rs 的 `UTS51_EMOJI` 快照。**消费侧是编译期读取**：engine-core/src/symbols.rs `builtin()` 用 `include_str!("../../../data/raw/symbols.tsv")` 嵌入，故路径固定在 data/raw/ 而非 data/generated/（后者只放 .opid 二进制）；改目录必须两处同改，否则编不过 |
 | en_words.tsv（英文联想，10000 条，2026-09-28 加） | https://github.com/orgtre/google-books-ngram-frequency（Google Books Ngrams v3 英文 1-gram 的清洗产物） | **CC-BY 3.0** | 英文模式单词联想的数据源 —— spec §1「V1 仅做单词联想」承诺过、仓库此前没兑现（`candidates.rs` 对非拼音模式 `return Vec::new()`）。由 scripts/gen_en_dict.py 生成，`word\tpinyin\tfreq` 三列与 trad_hanzi.tsv 同形（第二列是 ASCII 小写查询键，多数与词形相同）。**本轮只落数据，候选逻辑未接线**；走 `.opid` 还是 include_str! 见下节。CC-BY 要求署名 + 保留许可声明：**本表就是署名载体**，分发含本数据的产品时须一并保留 |
+| brand_terms.tsv / new_words.tsv / reading_overrides.tsv（人工表，2026-10-11 加） | OPI 项目人工撰写（生成器只做机械校验：音节合法性按 `pinyin.rs` 的 SYLLABLES 全切分、长度/字面/繁形过滤） | MIT | 品牌白名单（600 条）、网络用语/新词（235 条）与词级注音覆盖表（422 条，拼音人工写死）。⚠️ 覆盖表另有对上游真值的自动复核：词在 base/ext 出现时其读音必须是上游读音之一（实测揪出 8 条笔误/选读错误，见生成器 stderr 与本节下「外部词库并入」）。由 `scripts/gen_extra_phrases.py` 合并进 extra_manual.tsv |
+| extra_manual.tsv / extra_phrases.tsv（生成物，2026-10-11 加） | 复合来源（逐源见「外部词库并入（2026-10-11）」节） | **合并产物按 GPL-3.0 分发**（含 GPL-3.0-only 的 rime-ice 层）；源码（生成器）仍 MIT | 词组三段序的前置段与批量段，由 `scripts/gen_extra_phrases.py` 生成、`gen_luna_dict.py` 并入 luna.opid。行数/体积**以生成器每次打印的为准**，别写死数字 |
+| GPL-3.0.txt（2026-10-11 加） | https://www.gnu.org/licenses/gpl-3.0.txt （与 Debian `/usr/share/common-licenses/GPL-3` 逐字节同文，双源 sha256 核过） | GPL-3.0 全文 | 随 .deb/.rpm 分发（`scripts/nfpm.yaml` 装进 `/usr/share/doc/opi/`）—— 合并产物按 GPL-3.0 分发时的许可文本义务 |
 
 ## 英文联想词源（2026-09-28）
 
@@ -70,6 +73,11 @@ zemegaode→zenmegaode）。现钉死到本次实际取到的版本，脚本内�
 | UnicodeData.txt | Unicode **18.0.0**（与 Unihan.zip 同版本目录）`https://www.unicode.org/Public/18.0.0/ucd/UnicodeData.txt` | `0736451de439ae7baf1425136617da495e09ee5afbe6e394374db7009ea08950`（2243593 字节） | scripts/gen_symbols.py |
 | emoji-data.txt（2026-09-28 加） | Unicode **18.0.0**（文件头 `Date: 2026-01-30`，与上一行同版本目录、同一份 Unicode License）`https://www.unicode.org/Public/18.0.0/ucd/emoji/emoji-data.txt` | `80d00f8e616a0ef27fd6b8de3b758c06383b5d917e2977709578e68baf733bf1`（108719 字节） | scripts/gen_symbols.py（emoji 列判据） |
 | 1grams_english.csv（2026-09-28 加） | commit `e20471c15a758be3362b16d07870b34df4f7ccc3`（orgtre/google-books-ngram-frequency） | `f7f63aa08f0bb2f7f654cddff3a7ced4968b27887b2c0e7cd4b4d108221e197d`（225089 字节） | scripts/gen_en_dict.py |
+| rime-ice base.dict.yaml + ext.dict.yaml（2026-10-11 加） | commit `da1fbe602e38f26db846fa10120ee64c2b0324c0`（iDvel/rime-ice） | base `0418d5103d8e40c8fff4b686a873ad03e9836cd0419ecae0b7e1e2526312dba0`（16602296 字节）/ ext `8e49a0294c0139e63c815cc33a2d438cc144eb7889297d30cec899a368697c06`（11922913 字节）；与 GitHub API 的 git-blob-sha1 逐字节核过 | scripts/gen_extra_phrases.py |
+| rime-essay essay.txt（2026-10-11 加） | commit `054920de4f54c9e5994276a96a4fc2a35cb51aa3`（rime/rime-essay） | `3e8512ebaa6657e35961b1f5762060717c647e3bf471d5e3b86e783b4e934ffb`（5887319 字节） | 同上 |
+| chinese-xinhua idiom.json + xiehouyu.json（2026-10-11 加） | commit `fe6d6c2e8baa82187f4c96bbe042e43f96c05666`（pwxcoo/chinese-xinhua） | idiom `1d4b4f454ce1c416d6a1ab2369d6e66c0ff99e04390172eef70790499e21ce19` / xiehouyu `22e3c4aa31c7d93765eaa842fe91983e6a109b29aec25956e1efacd9f71418d9`；blob-sha1 对过 API | 同上 |
+| THUOCL 五表 IT/医疗/法律/财经/成语（2026-10-11 加） | commit `a30ce79d895d01ab5132a5c74c29703ff7efb4cc`（thunlp/THUOCL） | 五份 sha256 全部写死在脚本常量（照本表体例，不在此复写）；blob-sha1 对过 API | 同上 |
+| OpenCC TSCharacters.txt（2026-10-11 加，**判繁判据**、非词源） | tag `ver.1.1.9`（BYVoid/OpenCC） | `6b5a0a799bea2bb22c001f635eaa3fc2904310f0c08addbff275477a80ecf09a`（4113 条） | 同上 |
 
 另：luna_pinyin.dict.yaml **仍未 pin**（上游取 rime-luna-pinyin master）。本次实测所用版本
 sha256 `75bcf6eb3ff62b129882ed89cc22b2d1b80a5347aa72bcfa2ccc839bac298e7314`
@@ -257,4 +265,106 @@ gen_trad_dict.py 的 parse_terra、gen_luna_dict.py 的 parse_rime），把 **CJ
 非「砍数据」而是该区块在面板里本就没有可用性：其 Unicode 名一律是 `CJK UNIFIED
 IDEOGRAPH-3400` 这类码位标签，分词后的关键字彼此不可区分，搜索与浏览双双失效，
 而「不知道读音」正是扩展 A 的常态 —— 任务一已按拼音让它可打（打 qiu 出 㐀）。
-id 5 空出不重编号：改编号会让仍认为「5 = 扩展 A」的旧代码**静默**取到平假名。
+id 5 空出不编号：改编号会让认为「5 = 扩展 A」的旧代码**静默**取到平假名。
+
+## 外部词库并入（2026-10-11；用户裁决「主流开源词库去重整合」）
+
+**一句话**：`luna.opid` 从 96,341 条扩到 **936,254 条**（词组改三段序），体积
+2.37MB → 33.27MB；**合并产物自此按 GPL-3.0 分发**（并入源含 GPL-3.0-only 的
+rime-ice），生成器源码仍 MIT。
+
+### 来源与取舍（全部 pin + sha256 + 行数，见上「上游 pin」表）
+
+| 源 | 许可 | 层 | 并入内容 |
+|---|---|---|---|
+| rime-ice base + ext（雾凇拼音） | **GPL-3.0-only** | 批量 | 520,282 + 317,532 条（现代词覆盖主力：微信/内卷/芯片/比亚迪…） |
+| rime-essay | LGPL-3.0 | 批量 | 31,781 条（无拼音，按字注音；繁形丢弃 281,016） |
+| chinese-xinhua idiom / xiehouyu | MIT | 批量 | 成语 2,903 + 歇后语 12,969 条 |
+| THUOCL IT/医疗/法律/财经 | MIT | 批量 | 89 + 701 + 57 + 161 条（与 base 大量重复——base 本身就是从 THUOCL 拼装的，净增 ~1,000） |
+| 品牌 / 新词 / 注音覆盖表 | MIT（本项目自撰） | **前置段** | 600 + 235 + 422 条 |
+
+**不收**（逐条核证）：rime-ice 的 tencent 层（腾讯词向量官方条款已不可得）、
+8105/41448/others 层（拼音含 zh.wiktionary CC BY-SA 成分）；jieba（数据来源未说明，
+issue #559 作者仅答「统计过来的」）；fcitx5-pinyin-zhwiki 全家（数据=维基百科派生，
+CC BY-SA 4.0 + GFDL）；libpinyin（GPL 壳 + 数据无独立声明）；SunPinyin（仓库内无
+词典数据）；白霜/GPL；rime-wanxiang（CC BY 4.0 但未声明词库上游、署名义务无从履行）；
+phrase-pinyin-data（63% 汉典抓取 + 21% CEDICT，剥离后仍脏）。
+
+### 层序与判据（改动前先读）
+
+- 词组三段序：**extra_manual（品牌/新词）→ 既有 simp 词组 → extra_phrases（批量）**。
+  人工前置的理由是实测反例：`威信`（simp 层权重 3.71e9）会把批量段里的「微信」压到第 3。
+  simp 段自身相对序不变（整体顺延人工段行数）；13 处首位钉与 m2/cabi 硬位置均已
+  扫描过与人工表零撞键（测试 `crates/opi-tools/tests/phrase_quality.rs`）。
+- **人工段降级规则**（2026-10-11，第二版）：人工词是某条**高频短词**的延续时
+  （中国邮政←中国、打工人←打工、腾讯视频←腾讯），移出人工段、放批量段队首。
+  来由是 `zongguo`（「中国」的模糊输入）实测：人工段的 中国邮政/中国黄金
+  （频率 3.8026e9）在**模糊比较**（无精确加成那条路）里把「中国」（3.8003e9）
+  顶出前 8。判据 = 键的真前缀 ∈ top_keys（人工段全部词键 ∪ simp 段前 **4096**
+  名的词键）；4096 是校准边界，锚点：中国（#51）触发、weixi 一族（微细/尾溪，
+  约 #4 万名）不触发（错误的第一版把 `微信` 也降走、weixin 首位钉直接红）。
+  降级只影响无加成比较与同键排序 —— 直接打全拼音走精确层（有加成）不受影响，
+  同键无竞争者的降级条目（打工人/显眼包/特斯拉）仍是该键首位。
+- 层内键（只影响同键先后）：base = 权重>1 先、`-权重,len,word`（6.2 万条权重=1 沉底）；
+  ext = `len,word`；essay = freq>0 先、`-freq,len,word`；成语/歇后语 = `len,word`；
+  术语 = `-DF,word`；人工表 = 文件序。**不做跨源词频校准**（候选竞争只在同键发生）。
+- **繁形判据（2026-10-11 升级）**：`OpenCC TSCharacters（剔除自靶行）∪ 旧 Unihan 判据`，
+  两者共用 GB2312 门。来由与边界：Unihan 的 kSimplifiedVariant **不是繁→简表**
+  （線→[缐]、喫/遊/錄 没有），单用它会漏 essay 层 **7,644 条**繁体词形（字频榜前 30
+  全是 線/喫/遊/羣…）；TSCharacters 的含自靶行（`乾→干 乾`）保护乾隆/覆盖类；
+  GB 门保护 後/於/吒（GB2312 成员，按本仓「GB 归属=简体字形」权威判据保留 ——
+  哪吒 曾因 `吒→咤` 无自靶被误杀，门后修复）。**丢弃不转换**（繁→简非单射是先例）。
+- 注音三级：词级人工覆盖 → kHanyuPinlu 词次 argmax → kMandarin 首读。**内建自测
+  92.9%**（vs base/ext 真拼音剥掉重注，n=5000，下限 90%）+ 错字榜（地/长/行/重/调…）
+  驱动覆盖表增长；覆盖表 422 条中 8 条经上游真值复核修正（了却 liaogue→liaoque、
+  弹道 daodao→dandao 等笔误）。**如实记：**被注音源 ~7% 的词键是猜的（多音字无
+  语境），打对了的键不受影响，猜错的表现为「该词在该拼音下查不到」。
+- 音节校验读单源：解析 `crates/engine-core/src/pinyin.rs` 的 SYLLABLES（断言 410）
+  做全切分，不复制音节表（跨语言镜像常量会静默漂）。长度上限：批量 ≤6 字、成语 ≤8、
+  人工表 ≤12、歇后语 ≤24；全源 ≥2 字（单字层不动）。歇后语整条为词（含 `——`），
+  键只由 CJK 字生成 —— 如实记：**档案价值为主**（长句极少被整条打）。
+
+### 逐层实测（**以生成器每次打印的 stderr 为准**，下表是 2026-10-11 快照）
+
+| 层 | 原始 | 繁形丢弃 | 其他丢弃 | 最终 |
+|---|---|---|---|---|
+| 品牌 | 600 | 0 | 0 | 600 |
+| 新词 | 235 | 0 | 0 | 235 |
+| base | 543,118 | 247 | 长度 21,421 / 对齐 392 / 字面 78 / 音节 137 / 重复 561 | 520,282 |
+| ext | 339,186 | 41 | 长度 16,536 / 对齐 4,975 / 字面 17 / 音节 1 / 重复 84 | 317,532 |
+| essay | 442,688 | 281,016 | 长度 4,410 / 字面 20,785 | 31,781 |
+| 成语 | 30,895 | 146 | 长度 486 / 对齐 109 / 音节 49 / 重复 27,202 | 2,903 |
+| 术语（四表） | 48,475 | 0 | 与 base/其它重复为主 | 1,008 |
+| 歇后语 | 14,032 | 1 | 长度 442 / 字面 261 | 12,969 |
+
+「对齐」= 上游音节数与 CJK 字数不等（多为含 `·`/`-` 的译名，实测多为 〇 U+3007 与
+扩展 B 以后的字 —— 与单字层收录域一致，**有意丢弃**）。注音计数：kph 29,254 /
+kmandarin 16,559 / override 5 / **suppressed 141,729**（注音层的词已在有拼音层出现
+⇒ 整条抑制）/ miss 1 / sylbad 364。总量：人工 835 条中 649 条留前置段、186 条按
+降级规则并入批量段队首 ⇒ **649 + 48,078 + 886,661 = 935,388 词组** + 48,263 单字行
+= 983,651 行 → compile 去重后 **936,254 条目 / 33,271,893 字节**，`verify` load
+103.7ms（旧库 15.6ms；一次性、随文件线性）。
+
+### 单字母前缀性能（头号风险，已解决）
+
+未加保护前：新库单字母前缀 80,502 条 / **41–50ms**（其中 `dict.query` 物化占 24.6ms；
+旧库同输入 3.5ms）。解法（同日用户裁决）：`dictionary::PREFIX_MATCH_CAP = 9,216` ——
+**前缀扩展层**按静态词频截断，**精确层不截**（「候选总数不设上限」的承诺保留在打全
+拼音的精确查询上）；`MmapDictionary` 流式 top-N（第一遍只读 freq 列做 select_nth，
+第二遍只物化 exact + top-N）。9,216 = 旧库最大单字母前缀原始命中 8,613 + 余量 ⇒
+**旧库行为逐字不变**（探针自证：z 仍 8,447 条，与新代码前逐字相同）。如实边界：
+学习词借 boost 跳进前缀 top-8 的机会只在 top-N 池内有。
+
+实测（新旧同进程交错取最小，release）：单字母 z/y/x/w/s/d/zh **3.3–3.8ms**（旧
+1.0–2.9ms）、`ni` 6.7ms（主层+模糊层两个 capped 层）、其余常用输入 ≤0.4ms；全部
+单字母候选 ≤9,200。⚠️ **9/14 键方案（`visit_entries` 全表扫描）与候选上限无关，
+本次未测** —— 936k 张表上 9 键首键的扫描耗时待真机量。
+
+### 许可证义务（合并产物按 GPL-3.0）
+
+`luna.opid`（及 extra_manual.tsv / extra_phrases.tsv）含 rime-ice 的 GPL-3.0-only
+内容 ⇒ **合并产物整体按 GPL-3.0 分发**；.deb/.rpm 随包带 GPL-3.0 全文
+（`data/raw/GPL-3.0.txt`，`scripts/nfpm.yaml` 装进 `/usr/share/doc/opi/`）。生成器
+与其它源码仍 MIT。如实记录（不做法律论断）：rime-ice 自述为多源拼装（华宇野风 +
+THUOCL + 现代汉语常用词表 + 腾讯词向量），本次只收 base+ext（其 tencent 层与
+含 wiktionary 拼音的 8105/41448 层不收），**base+ext 的注音上游链路上游未逐条声明**。

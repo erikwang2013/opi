@@ -179,6 +179,20 @@ def load_variants(text: str) -> tuple[dict[str, list[str]], dict[str, list[str]]
     return trad_of, simp_of
 
 
+def trad_only(ch: str, gb: set[str], simp_of: dict[str, list[str]]) -> bool:
+    """简体库判据：字**不在 GB2312**（=简体字符集）内，却有 kSimplifiedVariant 指向
+    GB2312 字 —— 即「这是个繁体专形，它有对应的简体字」。
+
+    不用 `simp_of[ch] 与 ch 不同` 判：那会把 著/覆/乾/藉/瑙/阪 判成繁体（它们有生僻
+    异构简形 着/复/干/借/碯/坂，但本身在简体里照常用 —— 著名/覆盖/乾隆/慰藉）——
+    实测误报 35 条。GB2312 归属才是「简体字形」的权威判据（國/學/電/說 都不在）。
+
+    原为 `gen_luna_dict.main` 的局部闭包（2026-10-11 提到本模块）：`gen_extra_phrases`
+    的外部词表也要同一判据（繁体条目丢弃而非转换 —— 繁→简非单射是先例，见
+    `gen_luna_dict.py` 头注释），两处 import 一份实现。"""
+    return ch not in gb and any(v in gb for v in simp_of.get(ch, []))
+
+
 _LEVELS: tuple[list[str], list[str]] | None = None
 
 

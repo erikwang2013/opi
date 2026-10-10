@@ -87,6 +87,7 @@
 （多端云同步**已裁决不做**（用户裁决 2026-09-28），见「未来规划」——**当前仓库里没有任何同步或加密代码**。）
 
 #### 3. 词库是「活」的，也有门禁守着
+- **多源整合（2026-10-11，用户裁决「主流开源词库去重整合」）**：rime-ice（雾凇）base+ext、rime-essay、chinese-xinhua 成语/歇后语、THUOCL 专业术语，加品牌/新词/注音三张人工表，去重后并入 `luna.opid`（9.6 万条 → 90 万条量级、33MB；首字母查询靠前缀层 top-N 截断保住延迟，实测与取舍见 `data/raw/LICENSES.md`）。⚠️ 合并产物因此**整体按 GPL-3.0 分发**（数据层；源码仍 MIT）
 - **简繁双库**：`luna.opid`（简体）+ `trad.opid`（繁体），两者都随包安装；繁体库缺失/损坏自动回退简体库。**入口**：Android / iOS 用键盘上的模式轮转键（`ImeScreen.kt` / `KeyboardViewController.swift`）；**fcitx5（Linux）2026-10-09 起有 `Ctrl+Shift+F`**（随包装 `trad.opid`，见 `docs/install/linux.md` §5.3）；macOS / Windows / 鸿蒙仍只有拼音⇄英文、拼音⇄符号（`Ctrl+'`、`tsf-opi/src/vk.rs` 的 `mode_hotkey`）——**还没有繁体入口**。引擎与数据侧的繁体能力本身是完整的
 - **单字全覆盖门禁**：GB2312 全量单字逐一断言有候选（`trad_coverage` 集成测试，字数判据写在测试里）。改词库若撞坏覆盖度，CI 直接红
 - **词库坏了绝不崩输入法**：装载策略各端统一 —— **坏路径一律返回 `Err`，不静默回退**（`engine-data/src/dictionary.rs` 的 `load_or_fallback` 注释写明此前的静默回退是有意删除的：UI 会误以为完整词库已加载）；只有**未提供路径**（含空串）时才用内置回退词库（`data/raw/fallback.tsv`，条数以该文件行数为准）。是否再从 `Err` 兜底由调用方决定：Android 的 `EngineLoader` 接住后用内置词库重试（`EngineLoader.kt` 的 `fallback()`），fcitx5 / TSF 上抛（`fcitx5-opi/src/lib.rs` / `tsf-opi/src/tsf.rs` 的装载调用点）
@@ -292,7 +293,7 @@ V1 里程碑进度：
 ### 📄 许可证
 
 - **代码**：MIT，全文见 [`LICENSE`](LICENSE)。源码文件头带机器可读的 **SPDX 标识**（`SPDX-FileCopyrightText: 2026 erik.xyz` + `SPDX-License-Identifier: MIT`），Rust 侧另有 `Cargo.toml` 的 `[workspace.package] license = "MIT"` 规范声明
-- **词库数据**：**与代码分开授权** —— `data/raw/*.tsv` 及由其编译出的 `.opid` **不适用 MIT**，各自按上游许可证（rime-luna-pinyin 为 LGPL-3.0；符号与 Unihan 系数据为 Unicode License；英文联想词源为 CC-BY 3.0，**该许可证要求署名** —— `LICENSES.md` 的对应行即署名载体，分发含该数据的产品时须一并保留），逐条来源、许可证与上游 pin 见 [`data/raw/LICENSES.md`](data/raw/LICENSES.md)；提交词表改动前请读 [`CONTRIBUTING.md`](CONTRIBUTING.md) 的许可证一节
+- **词库数据**：**与代码分开授权** —— `data/raw/*.tsv` 及由其编译出的 `.opid` **不适用 MIT**，各自按上游许可证；**`luna.opid` 因并入 rime-ice（GPL-3.0-only，2026-10-11）而整体按 GPL-3.0 分发**（含随产物提供上游数据的义务），其余来源：rime-luna-pinyin / terra / stroke 为 LGPL-3.0、rime-pinyin-simp 为 Apache-2.0、chinese-xinhua 与 THUOCL 为 MIT、符号与 Unihan 系为 Unicode License、英文联想词源为 CC-BY 3.0（**该许可证要求署名** —— `LICENSES.md` 的对应行即署名载体，分发含该数据的产品时须一并保留），逐条来源、许可证与上游 pin 见 [`data/raw/LICENSES.md`](data/raw/LICENSES.md)；提交词表改动前请读 [`CONTRIBUTING.md`](CONTRIBUTING.md) 的许可证一节
 
 ---
 

@@ -91,6 +91,55 @@ impl Dictionary for MmapDictionary {
         self.scan(pinyin)
     }
 
+    /// 前缀层 top-N 的**流式**实现（见 trait 文档）：第一遍只读 freq 列做 O(m) 选择
+    /// （`select_nth_unstable`），第二遍只对「exact 全量 + 词频 ≥ 阈值的恰好 n 条」
+    /// 做字符串物化 —— 被截掉的尾巴一次 String 分配都不发生（单字母 80k 命中的
+    /// 24.6ms 物化由此降到 ~1ms 量级，实测见 perf 报告）。
+    ///
+    /// .opid 的 freq 由行位置编码、逐行唯一（`gen_luna_dict` 的 spacing），故阈值法
+    /// 无并列项；若将来 freq 允许并列，n 边界上的取舍不保证确定 —— 语义无损：
+    /// 调用方按分数整体重排，并列 freq 在可见名次上的先后本就任意。
+    fn query_prefix_top(&self, prefix: &str, n: usize) -> Vec<Entry> {
+        if prefix.is_empty() || self.count == 0 {
+            return Vec::new();
+        }
+        let data = self.data();
+        let needle = prefix.as_bytes();
+        let plen = needle.len();
+        let (lo, hi) = self.range(data, needle);
+        // 第一遍：切开 exact / 非 exact（只读列，不物化）。
+        let mut exact_idx: Vec<usize> = Vec::new();
+        let mut rest: Vec<(u32, usize)> = Vec::with_capacity(hi - lo);
+        for i in lo..hi {
+            let (_, pl, _, _, freq) = self.record(data, i);
+            if pl == plen {
+                exact_idx.push(i);
+            } else {
+                rest.push((freq, i));
+            }
+        }
+        let take = n.min(rest.len());
+        if take < rest.len() {
+            rest.select_nth_unstable_by(take, |a, b| b.0.cmp(&a.0));
+            rest.truncate(take);
+        }
+        // 第二遍：只物化保留下来的条目。
+        let word_start = self.word_start();
+        let mut out: Vec<Entry> = Vec::with_capacity(exact_idx.len() + rest.len());
+        for i in exact_idx.into_iter().chain(rest.into_iter().map(|(_, i)| i)) {
+            let (_, pl, wo, wl, freq) = self.record(data, i);
+            let word = std::str::from_utf8(&data[word_start + wo..word_start + wo + wl])
+                .expect("validate 已校验 UTF-8")
+                .to_string();
+            out.push(Entry {
+                word,
+                freq,
+                pinyin_len: pl,
+            });
+        }
+        out
+    }
+
     /// 全量遍历（9/14 键方案的按键类展开专用，见 engine-core 的
     /// `Dictionary::visit_entries`）。表序扫描 —— blob 序即 pinyin 字节序，
     /// 零拷贝借用；按**行**回调而不先收集，省掉一次约 100k 条目的分配。
@@ -124,7 +173,25 @@ impl MmapDictionary {
             return Vec::new();
         }
         let data = self.data();
-        let needle = pinyin.as_bytes();
+        let (lo, hi) = self.range(data, pinyin.as_bytes());
+        let mut out: Vec<Entry> = Vec::new();
+        let word_start = self.word_start();
+        for i in lo..hi {
+            let (_, pl, wo, wl, freq) = self.record(data, i);
+            let word = std::str::from_utf8(&data[word_start + wo..word_start + wo + wl])
+                .expect("validate 已校验 UTF-8")
+                .to_string();
+            out.push(Entry {
+                word,
+                freq,
+                pinyin_len: pl,
+            });
+        }
+        out
+    }
+
+    /// 前缀 `needle` 的 `[lo, hi)` 条目区间（blob 序 = pinyin 字节序）。
+    fn range(&self, data: &[u8], needle: &[u8]) -> (usize, usize) {
         let lo = lower_bound(
             data,
             self.table_start(),
@@ -142,20 +209,7 @@ impl MmapDictionary {
             ),
             None => self.count,
         };
-        let mut out: Vec<Entry> = Vec::new();
-        let word_start = self.word_start();
-        for i in lo..hi {
-            let (_, pl, wo, wl, freq) = self.record(data, i);
-            let word = std::str::from_utf8(&data[word_start + wo..word_start + wo + wl])
-                .expect("validate 已校验 UTF-8")
-                .to_string();
-            out.push(Entry {
-                word,
-                freq,
-                pinyin_len: pl,
-            });
-        }
-        out
+        (lo, hi)
     }
 }
 

@@ -312,11 +312,14 @@ fn toggle_symbol_drops_a_buffer_with_no_candidate() {
     load_any();
     unsafe { opi_switch_mode(MODE_PINYIN) };
 
-    type_str("qqq");
+    // 哨兵 2026-10-11 换血（词库整合）：原 `qqq` 被新库的「氢气汽车」
+    // （qingqiqiche，base 层）经简拼前缀打破 ⇒ 换 `vvv` —— v 不是任何声母，
+    // 简拼展开天然为空、音节回退也不成立，抗数据漂移（扫描确认无 vvv 前缀键）。
+    type_str("vvv");
     assert_eq!(
         read(unsafe { opi_toggle_symbol() }),
         "",
-        "qqq 无候选 → 不交文本（拼音原文不上屏）"
+        "vvv 无候选 → 不交文本（拼音原文不上屏）"
     );
     assert_eq!(read(unsafe { opi_buffer() }), "");
     assert_eq!(unsafe { opi_mode() }, MODE_SYMBOL);

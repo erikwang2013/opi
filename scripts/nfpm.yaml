@@ -89,11 +89,14 @@ contents:
     dst: /usr/bin/opi-ctl
     file_info:
       mode: 0755
-  # ⚠️ 许可证文本**必须随包分发**：luna.opid 由 LGPL-3.0（rime-luna-pinyin）与
-  # Apache-2.0（rime-pinyin-simp）的数据编译而来，两者都要求在分发物中保留
-  # 许可与署名。少了这两个文件，包在授权上就是不完整的（而代码照样能跑，
+  # ⚠️ 许可证文本**必须随包分发**：luna.opid 由 LGPL-3.0（rime-luna-pinyin）、
+  # Apache-2.0（rime-pinyin-simp）、GPL-3.0-only（rime-ice，2026-10-11 起）等
+  # 数据编译而来，各自要求在分发物中保留许可与署名；GPL-3.0 还要求随分发物
+  # 提供完整许可文本。少了这三个文件，包在授权上就是不完整的（而代码照样能跑，
   # 所以它不会自己暴露 —— 只能在打包时守住）。
   - src: LICENSE
     dst: /usr/share/doc/opi/LICENSE
   - src: data/raw/LICENSES.md
     dst: /usr/share/doc/opi/LICENSES.md
+  - src: data/raw/GPL-3.0.txt
+    dst: /usr/share/doc/opi/GPL-3.0.txt

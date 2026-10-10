@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::composer::Mode;
-use crate::dictionary::Dictionary;
+use crate::dictionary::{Dictionary, PREFIX_MATCH_CAP};
 use crate::fuzzy;
 use crate::jianpin;
 use crate::learner::Learner;
@@ -140,8 +140,9 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
             0
         }),
     };
+    // 前缀扩展层按静态词频截到 PREFIX_MATCH_CAP（精确层不截）；取舍见 dictionary.rs 同常量。
     let mut merged: Vec<Candidate> = dict
-        .query_all(input)
+        .query_prefix_top(input, PREFIX_MATCH_CAP)
         .into_iter()
         .map(|e| {
             let exact = e.pinyin_len == input_len;
@@ -179,7 +180,9 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
     let mut fuzzy: Vec<Candidate> = if opts.fuzzy {
         fuzzy::input_variants(input)
             .iter()
-            .flat_map(|v| dict.query_all(v))
+            // 同样走上限：变体是全串替换，`ni` 的变体 `li` 会命中 3 万余条 ——
+            // 全量物化与主层同一量级的开销（实测 17.9ms，2026-10-11）。
+            .flat_map(|v| dict.query_prefix_top(v, PREFIX_MATCH_CAP))
             .map(|e| hanzi(e, false))
             .collect()
     } else {
@@ -212,7 +215,7 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
                 continue;
             }
             let mut syl_cands: Vec<Candidate> = dict
-                .query_all(&syl)
+                .query_prefix_top(&syl, PREFIX_MATCH_CAP)
                 .into_iter()
                 .map(|e| {
                     // 精确性按**音节**判（该路径下"输入"就是音节），与主路径同一条规则。
@@ -246,7 +249,7 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
                 let mut syl_fuzzy: Vec<Candidate> = fuzzy::variants(&syl)
                     .iter()
                     .filter(|v| *v != &syl)
-                    .flat_map(|v| dict.query_all(v))
+                    .flat_map(|v| dict.query_prefix_top(v, PREFIX_MATCH_CAP))
                     .map(|e| hanzi(e, false))
                     .collect();
                 syl_fuzzy.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));

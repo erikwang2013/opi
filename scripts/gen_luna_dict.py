@@ -87,6 +87,17 @@ luna 繁体成语段退役（2026-09-27，同一任务的后半）：
   顺带证伪：缺单字读音**不影响整串打词组**（`larou` 改前就已命中「腊肉」第 1 位），
   受影响的是**单音节**查询（`la` 出不出「腊」）。
 
+外部词库并入（2026-10-11，用户裁决「主流开源词库去重整合」）：
+  词组为三段序：`data/raw/extra_manual.tsv`（品牌/新词人工段）→ 既有 simp 词组 →
+  `data/raw/extra_phrases.tsv`（批量段：rime-ice base/ext、rime-essay、
+  chinese-xinhua 成语/歇后语、THUOCL）。两份 extra 由 `scripts/gen_extra_phrases.py`
+  生成（层序与去重见该脚本头注释）。本脚本只做三件事：按三段序拼接、复核 order 列
+  严格递减、报重合数。freq 仍由位置统一编码（`FMAX - idx*spacing`），不读 tsv 里的
+  order 数值。⚠️ 单字层与 simp 段自身的相对序不动，但 simp 段整体顺延人工段的
+  行数（835 行量级）—— 既有排序门禁（13 处首位钉等）已扫描过与人工表零撞键。
+  ⚠️ 该产物是复合数据、含 GPL-3.0-only 的 rime-ice ⇒ 并入后的 luna.opid 按 GPL-3.0
+  分发（源码仍 MIT），逐源声明见 `data/raw/LICENSES.md`。
+
 用法（需要网络，下载 Unihan.zip + pinyin_simp.dict.yaml）：
   python3 scripts/gen_luna_dict.py <luna_pinyin.dict.yaml> > /tmp/luna_merged.tsv
 产物不入库（luna.opid 本身 gitignore）；部署副本 android/app/src/main/assets/luna.opid。
@@ -94,6 +105,7 @@ luna 繁体成语段退役（2026-09-27，同一任务的后半）：
 import hashlib
 import sys
 import urllib.request
+from functools import partial
 
 from hanzi_freq import (
     FMAX,
@@ -102,6 +114,7 @@ from hanzi_freq import (
     load_khanyupinlu,
     load_variants,
     segpos,
+    trad_only,
     unihan_member,
 )
 
@@ -259,6 +272,32 @@ def corpus_readings(phrases: list[tuple[str, list[str], int]]) -> dict[str, set[
     return ev
 
 
+def read_extra(path: str) -> list[tuple[str, list[str], int]]:
+    """`data/raw/extra_phrases.tsv` → [(word, [连写键], 0)]（文件序 = 层序 = 最终序）。
+
+    第 3 列 order 只用于**防手改**：必须严格递减（生成器保证、这里复核）；真实 freq
+    由 main 按行位置统一编码，不读该列数值。拼音键在此不做音节校验 —— 生成器已按
+    pinyin.rs 的 SYLLABLES 全量校验过（校验读单源，见 gen_extra_phrases）。"""
+    rows: list[tuple[str, list[str], int]] = []
+    prev: int | None = None
+    with open(path, encoding="utf-8") as f:
+        for i, line in enumerate(f, 1):
+            line = line.rstrip("\n")
+            if not line:
+                continue
+            parts = line.split("\t")
+            if len(parts) != 3 or not parts[0] or not parts[1]:
+                sys.exit(f"FATAL: {path} 第 {i} 行形状不对（期望 word\\tpinyin\\torder）")
+            order = int(parts[2])
+            if prev is not None and order >= prev:
+                sys.exit(f"FATAL: {path} 第 {i} 行 order 非严格递减（被手改过？）")
+            prev = order
+            rows.append((parts[0], [parts[1]], 0))
+    if not rows:
+        sys.exit(f"FATAL: {path} 为空 —— 先跑 python3 scripts/gen_extra_phrases.py")
+    return rows
+
+
 def main() -> None:
     if len(sys.argv) != 2:
         print("usage: gen_luna_dict.py <luna_pinyin.dict.yaml> > luna_merged.tsv", file=sys.stderr)
@@ -273,16 +312,9 @@ def main() -> None:
     trad_of, simp_of = load_variants(unihan_member("Unihan_Variants.txt"))
     gb = set(first) | set(second)
 
-    def trad_only(ch: str) -> bool:
-        """简体库判据：字**不在 GB2312**（=简体字符集）内，却有 kSimplifiedVariant 指向
-        GB2312 字 —— 即「这是个繁体专形，它有对应的简体字」。
+    trad_only_local = partial(trad_only, gb=gb, simp_of=simp_of)
 
-        不用 `simp_of[ch] 与 ch 不同` 判：那会把 著/覆/乾/藉/瑙/阪 判成繁体（它们有生僻
-        异构简形 着/复/干/借/碯/坂，但本身在简体里照常用 —— 著名/覆盖/乾隆/慰藉）——
-        实测误报 35 条。GB2312 归属才是「简体字形」的权威判据（國/學/電/說 都不在）。"""
-        return ch not in gb and any(v in gb for v in simp_of.get(ch, []))
-
-    simp_phrases = parse_simp(fetch(SIMP_URL, SIMP_SHA256), trad_only)
+    simp_phrases = parse_simp(fetch(SIMP_URL, SIMP_SHA256), trad_only_local)
 
     # 词组语料反推的第二条读音证据（2026-09-27）—— 见 corpus_readings 文档。
     corpus = corpus_readings(simp_phrases)
@@ -345,10 +377,40 @@ def main() -> None:
         key=lambda cp: key_of(*cp),
     )
 
-    # 段 4 词组：只剩简体常用词组（luna 的繁体成语段已于 2026-09-27 退役），
-    # 按词频降序，文件序 tiebreak；词组整体排在全部单字之后（见 LICENSES.md）。
+    # 段 4 词组三段序（2026-10-11）：人工段（品牌/新词）→ 既有 simp 词组 →
+    # 外部批量段。人工段前置的理由：品牌词要在同键上压过既有常用词 —— 实测
+    # `威信`（simp 层权重 3.71e9）会把批量段的微信顶到第 3，前置换来的是
+    # 「curated 的排在前面」这条产品语义。simp 段自身的相对序不动（只是整段
+    # 顺延 835 行），13 处首位钉与 m2/cabi 硬位置均已扫描过与人工表零撞键。
     simp_phrases.sort(key=lambda p: (-p[2], p[0]))
-    all_phrases = simp_phrases
+    manual = read_extra("data/raw/extra_manual.tsv")
+    extra = read_extra("data/raw/extra_phrases.tsv")
+    # 人工段降级（2026-10-11）：词是某条**高频短词**的延续（中国邮政 ← 中国、
+    # 打工人 ← 打工、腾讯视频 ← 腾讯）⇒ 移出人工段、放批量段队首。理由：人工段
+    # 整段频率高于 simp 段，这类词会在**模糊/前缀比较**（无精确加成的那条路）里
+    # 压过那个更短的词 —— 实测 `zongguo`（中国的模糊输入）里 中国邮政/中国黄金
+    # 把「中国」顶出前 8（老 pin 直接红）。判据 = 键的真前缀是 **top_keys** 成员：
+    # 人工段的全部词键（腾讯/美团…）∪ simp 段**前 4096 名**的词键。4096 是条
+    # 校准过的边界，两个锚点：中国（simp #51）要触发降级（zongguo 案），
+    # weixi（微细/尾溪一族，约 #4 万名）不触发（否则把微信整条降走 —— 实测
+    # 错误版把 微信 降级、phrase_quality 的 weixin 首位钉直接红）。直接打全拼音
+    # 不受影响（精确层有精确加成），同键无竞争者的降级条目仍是该键首位。
+    top_keys = {k[0] for _w, k, _o in manual}
+    for w, toks, _f in simp_phrases[:4096]:
+        if len(w) >= 2:
+            top_keys.add("".join(toks))
+    promoted, held = [], []
+    for w, k, o in manual:
+        key = k[0]
+        if any(key[:i] in top_keys for i in range(1, len(key))):
+            held.append((w, k, o))
+        else:
+            promoted.append((w, k, o))
+    manual = promoted
+    extra = held + extra
+    simp_keys = {(w, "".join(t)) for w, t, _ in simp_phrases}
+    extra_overlap = sum(1 for w, t, _ in extra if (w, t[0]) in simp_keys)
+    all_phrases = manual + simp_phrases + extra
 
     n = len(ordered) + len(all_phrases)
     assert n < FMAX, "行数超过 FMAX，spacing 归零"
@@ -364,7 +426,9 @@ def main() -> None:
     print(f"单字: {len(chs)} (一级 {sum(1 for c in chs if c in first)}, "
           f"二级 {sum(1 for c in chs if c in second)}, 其余 {len(chs) - sum(1 for c in chs if c in first + second)})", file=sys.stderr)
     print(f"有词次单字: {sum(1 for c in chs if c in kph)}", file=sys.stderr)
-    print(f"词组: {len(all_phrases)}（全部为简体常用，luna 繁体成语段已退役）", file=sys.stderr)
+    print(f"词组: {len(all_phrases)}（人工 {len(manual)} + 内置 simp {len(simp_phrases)} "
+          f"+ 外部批量 {len(extra)}；批量段与 simp 的 (词,拼音) 重合 {extra_overlap}，"
+          f"交 compile 取 max freq）", file=sys.stderr)
     print(
         f"词组语料读音证据: 救回被 0% 丢掉的 {corpus_unfiltered} 条 + 新增表外读音 "
         f"{corpus_added} 条 = +{corpus_unfiltered + corpus_added} 条；"

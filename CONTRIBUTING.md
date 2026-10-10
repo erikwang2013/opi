@@ -41,12 +41,12 @@ cd desktop && ./gradlew package             # Windows 候选窗（Compose Deskto
 ### 许可证合规（必读）
 
 - **本仓库代码**：MIT（见 [`LICENSE`](LICENSE)）。
-- **词库数据**：按上游许可证**单独声明**，**不是 MIT**。当前上游中 `rime-luna-pinyin` 与 `rime-terra-pinyin` 均为 **LGPL-3.0**，Unicode Unihan 为 Unicode License。逐条来源与许可证见 [`data/raw/LICENSES.md`](data/raw/LICENSES.md)。
+- **词库数据**：按上游许可证**单独声明**，**不是 MIT**。当前上游含 **LGPL-3.0**（rime-luna-pinyin / rime-terra-pinyin / rime-stroke）、**Apache-2.0**（rime-pinyin-simp）、**GPL-3.0-only**（rime-ice，2026-10-11 起并入 `luna.opid`）、**MIT**（chinese-xinhua · THUOCL · 本项目自撰的人工表 brand_terms / new_words / reading_overrides）、**Unicode License**（Unihan）与 **CC-BY 3.0**（英文联想词源）。逐条来源与许可证见 [`data/raw/LICENSES.md`](data/raw/LICENSES.md)。
 
 因此：
 
-1. **提交词表改动即是对 LGPL-3.0 数据的派生**，编译产物（`.opid`）随之受 LGPL-3.0 约束。请确认你接受这一点。
-2. **新增任何数据来源，必须先在 `data/raw/LICENSES.md` 中登记**：文件、来源 URL、许可证、生成方式。**来源不明或许可证不兼容（如 GPL 与非 LGPL 混用）的数据一律不接受。**
+1. **提交词表改动即是对上述上游数据的派生**。合并产物的分发许可按**最严来源**：`luna.opid` 因含 GPL-3.0-only 层而**整体按 GPL-3.0 分发**（含随产物提供上游数据的义务）；`trad.opid` 仍按 LGPL-3.0。请确认你接受这一点。
+2. **新增任何数据来源，必须先在 `data/raw/LICENSES.md` 中登记**：文件、来源 URL、许可证、生成方式。**来源不明的一律不接受**；许可证必须与合并产物相容 —— **CC-BY-SA / CDDL / 无许可声明**不接受（share-alike 或条款不明会把产物锁死），**要在现有集合之外引入新的 copyleft 来源前先开 issue 裁决**。
 3. **不要把上游词表内容粘进 MIT 许可的源码文件**（`.rs` / `.kt` / `.py` 脚本的逻辑本身可以 MIT，词表内容不行）。词表内容只放 `data/raw/*.tsv`。
 4. 引用上游数据时保留其版权声明与许可证文本，不要删除。
 
@@ -55,18 +55,25 @@ cd desktop && ./gradlew package             # Windows 候选窗（Compose Deskto
 ```bash
 # 1. 改源数据 —— 只改 data/raw/*.tsv（或改 scripts/ 下的生成脚本后重新生成）
 #    繁体：python3 scripts/gen_trad_dict.py          （需网络，自行拉取 Unihan + terra 上游）
+#    简体外部层：python3 scripts/gen_extra_phrases.py（需网络；生成 data/raw/extra_phrases.tsv，
+#                gen_luna_dict 会自动读它 —— 只改 brand_terms / new_words / reading_overrides
+#                三张人工表时也要重跑它）
 #    简体：python3 scripts/gen_luna_dict.py <luna_pinyin.dict.yaml> > /tmp/luna_merged.tsv
 
 # 2. 合并并编译成 .opid（compile 一次只吃一个输入，繁体是两份 TSV 拼接后编译）
 cat data/raw/trad_hanzi.tsv data/raw/trad_phrases.tsv > /tmp/trad_merged.tsv
 cargo run -p opi-tools -- compile /tmp/trad_merged.tsv  data/generated/trad.opid
+cargo run -p opi-tools -- compile /tmp/luna_merged.tsv  data/generated/luna.opid
 cargo run -p opi-tools -- compile data/raw/fallback.tsv data/generated/fallback.opid
 
 # 3. 校验（校验和 + 条目顺序两道）
 cargo run -p opi-tools -- verify data/generated/trad.opid
+cargo run -p opi-tools -- verify data/generated/luna.opid   # 读样本查询做排序质量人眼抽检（见下）
 
 # 4. 更新部署副本（android assets 里的才是运行时真正加载的那份）
 cp data/generated/trad.opid android/app/src/main/assets/trad.opid
+cp data/generated/luna.opid android/app/src/main/assets/luna.opid
+sha256sum data/generated/luna.opid android/app/src/main/assets/luna.opid  # luna 无自动绑定门禁，手动核
 
 # 5. 跑门禁测试
 cargo test --workspace

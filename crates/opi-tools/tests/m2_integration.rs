@@ -87,24 +87,31 @@ fn segment_fallback_on_real_luna_dictionary() {
     };
     let texts =
         |e: &Engine| -> Vec<String> { e.candidates(8).into_iter().map(|c| c.text).collect() };
-    // 主用例：`nihaob` 整串（`query_all("nihaob")` 0 行）⇒ 最长前缀 `nihao` 的整档
+    // 主用例：`tament` 整串（`query_all("tament")` 0 行）⇒ 最长前缀 `tamen` 的整档。
+    // ⚠️ 前提标注（2026-10-11 词库整合，原用例 `nihaob` 的两次换血）：
+    // ① `nihaob` 并入后成了 `你号被盗了`（nihaobeidaole，base 层）的前缀 ⇒ 整串有
+    //    命中、回退不接管（分层规则的**正确**后果，不是回归）；
+    // ② 换 `nihaot` 后又撞上**模糊判据**：它的变体 `lihaot`（n↔l）命中 `李昊桐`
+    //    （lihaotong）⇒ 判据 4「整串模糊命中优先」拦下回退、落到逐音节汤。
+    // 现用 `tament`（他们+t）：ta/men 两个音节都不在任何模糊音对里（变体集为空）、
+    // `tament` 与 `tamen+L` 全系无前缀命中（对全库键扫描过），尾 `t` 续编 `tao` 有键。
     let mut eng = luna();
-    for ch in "nihaob".chars() {
+    for ch in "tament".chars() {
         eng.input_key(ch);
     }
-    assert_eq!(eng.buffer(), "nihaob", "预编辑仍是整串");
+    assert_eq!(eng.buffer(), "tament", "预编辑仍是整串");
     let got = texts(&eng);
-    assert_eq!(got[0], "你好", "{got:?}");
+    assert_eq!(got[0], "他们", "{got:?}");
     // 选中只消耗前缀 —— 旧语义（逐音节汤）在这里会把整个缓冲清掉
-    assert_eq!(eng.select(0), "你好");
-    assert_eq!(eng.buffer(), "b", "后缀留在缓冲里接着编");
+    assert_eq!(eng.select(0), "他们");
+    assert_eq!(eng.buffer(), "t", "后缀留在缓冲里接着编");
     for ch in "ao".chars() {
         eng.input_key(ch);
     }
-    assert_eq!(eng.buffer(), "bao");
-    // 后缀是真缓冲：候选表与另开一台直接打 `bao` 的**逐条相同**
+    assert_eq!(eng.buffer(), "tao");
+    // 后缀是真缓冲：候选表与另开一台直接打 `tao` 的**逐条相同**
     let mut fresh = luna();
-    for ch in "bao".chars() {
+    for ch in "tao".chars() {
         fresh.input_key(ch);
     }
     assert_eq!(texts(&eng), texts(&fresh), "后缀接着编走的是同一条路径");
@@ -129,7 +136,9 @@ fn segment_fallback_on_real_luna_dictionary() {
 
 /// 9/14 键**数字空间回退**（2026-10-10 裁决「回退扩到 9 键」）在**真词库**上的验收；
 /// 内联夹具版在 `engine-core/tests/segment_fallback.rs`。用户现场：9 键打长句
-/// 「打超到下一音节首键」（`64426`→`644269` = nihao + [wxyz]）恰好撞无候选。
+/// 「打超到下一音节首键」恰好撞无候选（原用例 `644269` = nihao + [wxyz]；2026-10-11
+/// 词库整合后该串被 `你好呀` 一族整串命中、回退不再接管，见证者换成品牌词
+/// `比亚迪`——两处前提标注见用例内注释）。
 /// 本条钉真 luna 数据下的四条：回退档与命中态整档**逐条相同**、选中只消耗前缀键
 /// （尾部键留在缓冲、接着编与另开一台直打逐条相同）、14 键同一条判定自然覆盖
 /// （`bugaoml` → 前缀 `bugao` 的整档 + 尾 `ml`；`bugaom` 是命中态不丢尾：真库里有
@@ -153,20 +162,26 @@ fn scheme_fallback_on_real_luna_dictionary() {
             e.input_key(ch);
         }
     };
-    // 9 键主用例：`644269` 整串无命中 ⇒ 回退档 = 键前缀 `64426`（nihao）的整档
+    // 9 键主用例：`8374529`（tesila=特斯拉 + 尾键 9）整串无命中 ⇒ 回退档 = 键前缀
+    // `837452` 的整档。⚠️ 前提标注（2026-10-11 词库整合）：原用例是 `644269`
+    // （nihao + 9）—— 并入后它被 `你好呀`（nihaoya）/`米高扬` 一族按 6 位前缀整串
+    // 命中、回退不再接管（分层规则的**正确**后果），故换一条**天然不接 wxyz 音节**
+    // 的见证者：品牌词 `特斯拉`（对全部品牌/新词表 835 条扫描，`8374529` 无任何键的
+    // 数字前缀匹配 —— 品牌词极少被更长的词继续）。尾键仍是 `9`，下文 `96` → 我 的
+    // 续编断言原样有效。
     let mut nine = luna();
     nine.set_scheme(Scheme::Nine);
     let mut hit = luna();
     hit.set_scheme(Scheme::Nine);
-    type_str(&mut hit, "64426");
-    type_str(&mut nine, "644269");
+    type_str(&mut hit, "837452");
+    type_str(&mut nine, "8374529");
     assert_eq!(
         nine.display_buffer(),
         hit.display_buffer(),
         "读数照旧是首条候选的拼音（回退不把左列打空）"
     );
     assert_eq!(texts(&nine), texts(&hit), "回退档 = 命中态整档，逐条相同");
-    assert_eq!(nine.select(0), "你好");
+    assert_eq!(nine.select(0), "特斯拉");
     assert_eq!(nine.buffer(), "9", "只消耗前缀键：尾部键留下接着编");
     // 接着编：`9` + `6` = 下一个音的键 → 与另开一台直打 `96` 逐条相同
     type_str(&mut nine, "6");
