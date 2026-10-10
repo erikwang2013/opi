@@ -196,39 +196,24 @@ pub(crate) fn scheme_fallback_len<D: Dictionary + ?Sized>(
     {
         return None;
     }
-    let mut hits_full = false;
-    let mut best = 0usize;
-    dict.visit_entries(&mut |pinyin, _word, _freq| {
-        if hits_full {
-            return;
-        }
-        if let Some(p) = pin
-            && !pinyin.starts_with(p)
-        {
-            return;
-        }
-        if scheme.matches(input, pinyin) {
-            hits_full = true;
-            return;
-        }
-        // 见证者筛选：先免费的长度条件，再类匹配（复用 matches，无分配），音节对齐最贵
-        // （要切分）放最后。
-        let l = pinyin.len();
-        if l <= best || l >= input.len() {
-            return;
-        }
-        if let Some(head) = input.get(..l)
-            && scheme.matches(head, pinyin)
-            && boundary_aligned(pinyin)
-        {
-            best = l;
-        }
-    });
-    if hits_full || best == 0 {
-        None
-    } else {
-        Some(best)
+    // 判据 3：整串（过 pin 滤后）一个命中都没有 —— 区间枚举走存在性（**不许被 top-N
+    // 截断**，故用 `scheme_find` 而不是 `scheme_entries`）。
+    if dict
+        .scheme_find(input, scheme, pin, &mut |_, _| true)
+        .is_some()
+    {
+        return None;
     }
+    // 判据 4：见证者 —— 从最长 head 往短试，第一个成立的 l 胜出（与旧版单趟全表
+    // 扫描的 best = max{l : 存在键长恰为 l、digits(键) == head[..l]、且音节对齐} 等价：
+    // 匹配是前缀单调的，从长到短的首个成立者就是那个 max）。`scheme_find` 的区间
+    // 含比 head 更长的键，故谓词里显式要求键长 == l。
+    (1..input.len()).rev().find(|&l| {
+        dict.scheme_find(&input[..l], scheme, pin, &mut |py, _| {
+            py.len() == l && boundary_aligned(py)
+        })
+        .is_some()
+    })
 }
 
 #[cfg(test)]

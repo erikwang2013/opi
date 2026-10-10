@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
+use crate::scheme::Scheme;
 use crate::trie::{Entry, Trie};
 
 /// 前缀扩展层的静态词频截断（2026-10-11，用户裁决；整合主流词库后的性能出口）。
@@ -12,8 +13,87 @@ use crate::trie::{Entry, Trie};
 /// 被截掉的是从没见过第 1025 页以后的尾巴。
 /// 语义边界如实记：学习词借 boost 跳进前缀 top-8 的机会只在 top-N 池内有；
 /// **精确层不截**（打全拼音翻页不受影响，「候选总数不设上限」的承诺在那里）。
+/// 9/14 键的按键类层走同一条取舍（见 [`Dictionary::scheme_entries`]）。
 /// 判定与实测出处：`data/raw/LICENSES.md` 的 2026-10-11「外部词库并入」一节。
 pub const PREFIX_MATCH_CAP: usize = 9216;
+
+/// 9/14 键按键类层的静态词频截断（2026-10-11 移动端提速；与 [`PREFIX_MATCH_CAP`]
+/// 同一族取舍）。为什么比 26 键小：scheme 层每个候选还要付**引擎侧**的钱 —— 逐条
+/// `segment()` 出左列读音 + 排序去重（实测 9k 候选 ≈ 11ms 桌面；loader 的区间枚举
+/// 本体只 1.9ms）。9 键候选栏每屏 8 个、真机可达翻页深度 ≪ 256 页（2048/8），
+/// 取 2048 把单键拉回 ~4ms（桌面），语义边界与 [`PREFIX_MATCH_CAP`] 逐字相同：
+/// 精确（键长 == 输入键数）不截、只截前缀扩展尾巴。
+pub const SCHEME_MATCH_CAP: usize = 2048;
+
+/// [`Dictionary::scheme_entries`] 的默认/回退实现（全表扫描 + 逐条 [`Scheme::matches`]）。
+/// `MmapDictionary` 的区间枚举覆写在**分词输入**（`'`，matches_segmented 按段长比）时
+/// 也走这里 —— 那套语义前缀区间表达不了。
+pub fn scheme_entries_scan<D: Dictionary + ?Sized>(
+    dict: &D,
+    input: &str,
+    scheme: Scheme,
+    pin: Option<&str>,
+    n: usize,
+) -> Vec<(Entry, String)> {
+    let mut all: Vec<(Entry, String)> = Vec::new();
+    dict.visit_entries(&mut |py, w, f| {
+        if !scheme.matches(input, py) {
+            return;
+        }
+        if let Some(p) = pin
+            && !py.starts_with(p)
+        {
+            return;
+        }
+        all.push((
+            Entry {
+                word: w.to_string(),
+                freq: f,
+                pinyin_len: py.len(),
+            },
+            py.to_string(),
+        ));
+    });
+    let plen = input.len();
+    let mut exact: Vec<(Entry, String)> = Vec::new();
+    let mut rest: Vec<(Entry, String)> = Vec::new();
+    for e in all {
+        if e.0.pinyin_len == plen {
+            exact.push(e);
+        } else {
+            rest.push(e);
+        }
+    }
+    rest.sort_by(|a, b| b.0.freq.cmp(&a.0.freq).then(a.0.word.cmp(&b.0.word)));
+    rest.truncate(n);
+    exact.extend(rest);
+    exact
+}
+
+/// [`Dictionary::scheme_find`] 的默认/回退实现（全表 + 早停；`'` 输入同 [`scheme_entries_scan`]）。
+pub fn scheme_find_scan<D: Dictionary + ?Sized>(
+    dict: &D,
+    input: &str,
+    scheme: Scheme,
+    pin: Option<&str>,
+    pred: &mut dyn FnMut(&str, &str) -> bool,
+) -> Option<usize> {
+    let mut found = None;
+    dict.visit_entries(&mut |py, w, _f| {
+        if found.is_some() || !scheme.matches(input, py) {
+            return;
+        }
+        if let Some(p) = pin
+            && !py.starts_with(p)
+        {
+            return;
+        }
+        if pred(py, w) {
+            found = Some(py.len());
+        }
+    });
+    found
+}
 
 /// 词典抽象。engine 只依赖此 trait，M2 换成 mmap 二进制实现。
 /// Send + Sync：FFI 层 frb auto-opaque 句柄要求 Api: Send + Sync。
@@ -62,6 +142,39 @@ pub trait Dictionary: Send + Sync {
     /// 比对全部键（见 `scheme.rs`）。默认空实现：替身词库（测试）按需覆写，
     /// 生产词库（`MmapDictionary`）覆写为零拷贝扫描。
     fn visit_entries(&self, _f: &mut dyn FnMut(&str, &str, u32)) {}
+
+    /// 按键类匹配（9/14 键）的整档：**精确匹配（键字节长 == 输入键数）全量 + 其余匹配里
+    /// 静态词频最高的至多 n 条**（与 [`Self::query_prefix_top`] 同一条取舍）；每条带拼音串
+    /// （9 键左列逐条读数要用）。顺序不保证。
+    ///
+    /// 语义与逐条 [`Scheme::matches`] + pin 过滤**等价**（`'` 分词输入也在内 —— 覆写把它
+    /// 交给 [`scheme_entries_scan`]）。默认实现 = 全表扫描（替身词库的量级无所谓）；
+    /// `MmapDictionary` 覆写为**按键类区间枚举**：表按拼音字节序排，「一位按键类 = 一组
+    /// 字母前缀 = 一组连续区间」，逐位枚举 + `lower_bound` 剪空子树 —— 2026-10-11 移动端
+    /// 实测：936k 条全表扫一次 ≈ 60ms 桌面，手机端每键秒级卡顿（那时还没有本方法）。
+    fn scheme_entries(
+        &self,
+        input: &str,
+        scheme: Scheme,
+        pin: Option<&str>,
+        n: usize,
+    ) -> Vec<(Entry, String)> {
+        scheme_entries_scan(self, input, scheme, pin, n)
+    }
+
+    /// 按键类匹配的**存在性/见证者查询**：在所有匹配键（含 pin 过滤）里用 `pred(pinyin, word)`
+    /// 找第一个为真者，返回其**键字节长度**；无则 None。`scheme::scheme_fallback_len` 的
+    /// 判据 3/4 专用 —— **不许被 top-N 截断**，故与 [`Self::scheme_entries`] 分开。
+    /// 默认实现 = 全表 + 早停；`MmapDictionary` 覆写为区间枚举 + 早停。
+    fn scheme_find(
+        &self,
+        input: &str,
+        scheme: Scheme,
+        pin: Option<&str>,
+        pred: &mut dyn FnMut(&str, &str) -> bool,
+    ) -> Option<usize> {
+        scheme_find_scan(self, input, scheme, pin, pred)
+    }
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool {
         self.len() == 0

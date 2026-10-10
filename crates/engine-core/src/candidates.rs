@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::composer::Mode;
-use crate::dictionary::{Dictionary, PREFIX_MATCH_CAP};
+use crate::dictionary::{Dictionary, PREFIX_MATCH_CAP, SCHEME_MATCH_CAP};
 use crate::fuzzy;
 use crate::jianpin;
 use crate::learner::Learner;
@@ -452,30 +452,25 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
     // visit_entries 的回调）。两趟（回退态）共用这一份。
     let scan = |input: &str| -> Vec<(Candidate, String)> {
         let input_len = input.len();
-        let mut merged: Vec<(Candidate, String)> = Vec::new();
-        dict.visit_entries(&mut |pinyin, word, freq| {
-            if !scheme.matches(input, pinyin) {
-                return;
-            }
-            // 钉读音（左列点一行拼音）：候选收窄到该读音一族 —— 前缀比较（`niu` 含
-            // `niuyou`），pin 已在边界处去掉分词 `'`（见 `Engine::set_pinned_reading`）。
-            if let Some(p) = pin
-                && !pinyin.starts_with(p)
-            {
-                return;
-            }
-            let exact = pinyin.len() == input_len;
-            merged.push((
-                Candidate {
-                    text: word.to_string(),
-                    kind: CandidateKind::Hanzi,
-                    score: rank_score(freq, learner.freq_of(word), boost)
-                        .saturating_add(if exact { exact_bonus } else { 0 }),
-                },
-                pinyin.to_string(),
-            ));
-        });
-        merged
+        // 按键类匹配走 `Dictionary::scheme_entries`（区间枚举 + 静态词频 top-N 截断）——
+        // 2026-10-11 移动端实测：此前是全表逐条 `matches`，936k 条下单键 268ms（桌面
+        // release），手机端每键秒级。pin 过滤（左列点一行拼音）语义在实现里同义保留。
+        dict.scheme_entries(input, scheme, pin, SCHEME_MATCH_CAP)
+            .into_iter()
+            .map(|(e, pinyin)| {
+                let exact = pinyin.len() == input_len;
+                let score = rank_score(e.freq, learner.freq_of(&e.word), boost)
+                    .saturating_add(if exact { exact_bonus } else { 0 });
+                (
+                    Candidate {
+                        text: e.word,
+                        kind: CandidateKind::Hanzi,
+                        score,
+                    },
+                    pinyin,
+                )
+            })
+            .collect()
     };
     // ── 数字空间回退（2026-10-10 扩到 9 键）：整串无命中改扫最长音节对齐键前缀的整档
     // （判定唯一实现 `scheme::scheme_fallback_len`；命中态非空 ⇒ 一行不重，重扫深度 ≤ 1）。

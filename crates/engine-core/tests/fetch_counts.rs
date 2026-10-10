@@ -90,12 +90,15 @@ fn digit_select_fetches_candidate_table_once() {
     );
 }
 
-/// 9 键回退腿的记账（2026-10-10 扩 9 键；与上一条同一件事的另一条腿）：按键类展开
-/// 全由 `visit_entries` 全量扫描给出（**零 query**）—— 命中态 1 扫，回退态 3 扫
-/// （主扫 + 判定扫 + 前缀重扫）；点击 = 一次抓取（3 扫）+ 一次收尾判定（1 扫）——
-/// 判定是同一个纯函数的重算（engine_segment.rs），不多抓。
+/// 9 键回退腿的记账（2026-10-10 扩 9 键；与上一条同一件事的另一条腿）：本夹具走
+/// `Dictionary` 的**默认**按键类实现（全表 `visit_entries`，生产实现是区间枚举，
+/// 见 loader）—— **零 query**；命中态 1 扫。回退态（2026-10-11 改）：判定拆成
+/// 「存在性 + 见证者」两步，故一次抓取 = 主扫(1) + 存在性(1) + 见证者 l 探测
+/// （本夹具的第一个 l 即中，1）+ 前缀重扫(1) = **4 扫**；点击 = 一次抓取 + 一次
+/// 收尾判定（存在性 + 见证者 = 2 扫），判定是同一个纯函数的重算
+/// （engine_segment.rs）—— 不多抓、零 query 这两条不变。
 #[test]
-fn nine_key_fallback_accounting_is_three_scans_and_zero_queries() {
+fn nine_key_fallback_accounting_is_bounded_scans_and_zero_queries() {
     use std::sync::atomic::{AtomicUsize, Ordering};
     let q = std::sync::Arc::new(AtomicUsize::new(0));
     let v = std::sync::Arc::new(AtomicUsize::new(0));
@@ -130,15 +133,15 @@ fn nine_key_fallback_accounting_is_three_scans_and_zero_queries() {
     let one_fetch = v.load(Ordering::Relaxed);
     assert_eq!(
         (one_fetch, q.load(Ordering::Relaxed)),
-        (3, 0),
-        "回退态一次抓取 = 主扫 + 判定扫 + 前缀重扫，零 query"
+        (4, 0),
+        "回退态一次抓取 = 主扫 + 存在性 + 见证者首探 + 前缀重扫，零 query"
     );
     v.store(0, Ordering::Relaxed);
     assert_eq!(r.select(0), "你好");
     assert_eq!(
         v.load(Ordering::Relaxed),
-        one_fetch + 1,
-        "点击 = 一次抓取 + 一次收尾判定（不多抓）"
+        one_fetch + 2,
+        "点击 = 一次抓取 + 一次收尾判定（存在性 + 见证者，不多抓）"
     );
     assert_eq!(r.buffer(), "9", "回退选中只消耗前缀的键（两侧 k 同值）");
 }

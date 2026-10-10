@@ -8,7 +8,8 @@
 use crate::format::{ENTRY_LEN, HEADER_LEN, Validated, validate};
 use engine_core::Entry;
 use engine_core::bytes::byte_successor;
-use engine_core::dictionary::Dictionary;
+use engine_core::dictionary::{Dictionary, scheme_entries_scan, scheme_find_scan};
+use engine_core::scheme::Scheme;
 use std::path::Path;
 
 /// 内存后盾：mmap 文件或堆上字节，避免自引用结构。
@@ -140,6 +141,100 @@ impl Dictionary for MmapDictionary {
         out
     }
 
+    /// 按键类匹配（9/14 键）的整档，见 trait 文档。实现 = `scheme_ranges` 区间枚举 +
+    /// 与 `query_prefix_top` 相同的「exact 全量 + 非 exact top-n」取舍；`'` 分词输入
+    /// 交给全表回退实现（matches_segmented 按段长比，前缀区间表达不了）。
+    fn scheme_entries(
+        &self,
+        input: &str,
+        scheme: Scheme,
+        pin: Option<&str>,
+        n: usize,
+    ) -> Vec<(Entry, String)> {
+        if input.is_empty() || input.contains('\'') {
+            return scheme_entries_scan(self, input, scheme, pin, n);
+        }
+        let data = self.data();
+        let ps = self.pinyin_start();
+        let plen = input.len();
+        let mut exact_idx: Vec<usize> = Vec::new();
+        let mut rest: Vec<(u32, usize)> = Vec::new();
+        for (lo, hi) in self.scheme_ranges(data, input, scheme) {
+            for i in lo..hi {
+                let (po, pl, _, _, freq) = self.record(data, i);
+                if let Some(p) = pin
+                    && !data[ps + po..ps + po + pl].starts_with(p.as_bytes())
+                {
+                    continue;
+                }
+                if pl == plen {
+                    exact_idx.push(i);
+                } else {
+                    rest.push((freq, i));
+                }
+            }
+        }
+        let take = n.min(rest.len());
+        if take < rest.len() {
+            rest.select_nth_unstable_by(take, |a, b| b.0.cmp(&a.0));
+            rest.truncate(take);
+        }
+        let word_start = self.word_start();
+        let mut out: Vec<(Entry, String)> = Vec::with_capacity(exact_idx.len() + rest.len());
+        for i in exact_idx.into_iter().chain(rest.into_iter().map(|(_, i)| i)) {
+            let (po, pl, wo, wl, freq) = self.record(data, i);
+            let pinyin = std::str::from_utf8(&data[ps + po..ps + po + pl])
+                .expect("validate 已校验 UTF-8")
+                .to_string();
+            let word = std::str::from_utf8(&data[word_start + wo..word_start + wo + wl])
+                .expect("validate 已校验 UTF-8")
+                .to_string();
+            out.push((
+                Entry {
+                    word,
+                    freq,
+                    pinyin_len: pl,
+                },
+                pinyin,
+            ));
+        }
+        out
+    }
+
+    /// 按键类匹配的存在性/见证者查询，见 trait 文档（区间枚举 + 早停；`'` 交回退实现）。
+    fn scheme_find(
+        &self,
+        input: &str,
+        scheme: Scheme,
+        pin: Option<&str>,
+        pred: &mut dyn FnMut(&str, &str) -> bool,
+    ) -> Option<usize> {
+        if input.is_empty() || input.contains('\'') {
+            return scheme_find_scan(self, input, scheme, pin, pred);
+        }
+        let data = self.data();
+        let ps = self.pinyin_start();
+        let word_start = self.word_start();
+        for (lo, hi) in self.scheme_ranges(data, input, scheme) {
+            for i in lo..hi {
+                let (po, pl, wo, wl, _f) = self.record(data, i);
+                let pinyin = std::str::from_utf8(&data[ps + po..ps + po + pl])
+                    .expect("validate 已校验 UTF-8");
+                if let Some(p) = pin
+                    && !pinyin.starts_with(p)
+                {
+                    continue;
+                }
+                let word = std::str::from_utf8(&data[word_start + wo..word_start + wo + wl])
+                    .expect("validate 已校验 UTF-8");
+                if pred(pinyin, word) {
+                    return Some(pl);
+                }
+            }
+        }
+        None
+    }
+
     /// 全量遍历（9/14 键方案的按键类展开专用，见 engine-core 的
     /// `Dictionary::visit_entries`）。表序扫描 —— blob 序即 pinyin 字节序，
     /// 零拷贝借用；按**行**回调而不先收集，省掉一次约 100k 条目的分配。
@@ -192,24 +287,42 @@ impl MmapDictionary {
 
     /// 前缀 `needle` 的 `[lo, hi)` 条目区间（blob 序 = pinyin 字节序）。
     fn range(&self, data: &[u8], needle: &[u8]) -> (usize, usize) {
-        let lo = lower_bound(
-            data,
-            self.table_start(),
-            self.pinyin_start(),
-            self.count,
-            needle,
-        );
+        let ts = self.table_start();
+        let ps = self.pinyin_start();
+        let lo = lower_bound(data, ts, ps, self.count, needle);
         let hi = match byte_successor(needle) {
-            Some(succ) => lower_bound(
-                data,
-                self.table_start(),
-                self.pinyin_start(),
-                self.count,
-                &succ,
-            ),
+            Some(succ) => lower_bound(data, ts, ps, self.count, &succ),
             None => self.count,
         };
         (lo, hi)
+    }
+
+    /// 按键类输入命中的**全部拼音区间**（未物化）：表按字节序排 ⇒ 每位按键类的每个
+    /// 字母把「当前前缀」延长一字节、仍是一个连续区间（`lower_bound` ∈ `byte_successor`）
+    /// —— 逐位枚举 + 空区间剪枝，取代全表逐条 `matches`。非法键 → 空。
+    fn scheme_ranges(&self, data: &[u8], input: &str, scheme: Scheme) -> Vec<(usize, usize)> {
+        let mut level: Vec<(String, usize, usize)> = vec![(String::new(), 0, self.count)];
+        for ch in input.chars() {
+            let Some(class) = scheme.key_class(ch) else {
+                return Vec::new();
+            };
+            let mut next: Vec<(String, usize, usize)> = Vec::new();
+            for (pfx, _lo, _hi) in &level {
+                for &letter in class {
+                    let mut np = pfx.clone();
+                    np.push(letter);
+                    let (lo, hi) = self.range(data, np.as_bytes());
+                    if lo < hi {
+                        next.push((np, lo, hi));
+                    }
+                }
+            }
+            if next.is_empty() {
+                return Vec::new();
+            }
+            level = next;
+        }
+        level.into_iter().map(|(_, lo, hi)| (lo, hi)).collect()
     }
 }
 
