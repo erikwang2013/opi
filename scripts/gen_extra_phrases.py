@@ -45,7 +45,7 @@ phrase-pinyin-data（汉典抓取 + CEDICT）。
 ## 用法（在仓库根运行；需要网络）：python3 scripts/gen_extra_phrases.py
 
 产物两份（均 `word\tpinyin\torder`，order 严格递减 = 文件序）：
-- `data/raw/extra_manual.tsv` —— 品牌 + 新词两张人工表（835 条量级）；
+- `data/raw/extra_manual.tsv` —— 品牌 + 新词两张人工表（千条量级：609 + 391）；
 - `data/raw/extra_phrases.tsv` —— 其余批量层。
 gen_luna_dict 把它们分别排在既有 simp 词组**之前**与**之后**（三段序：
 人工 → simp → 批量）—— 人工表前置是为了品牌词在同键上压过既有常用词
@@ -103,7 +103,7 @@ OPENCC = ("https://raw.githubusercontent.com/BYVoid/OpenCC/ver.1.1.9/data/dictio
           "6b5a0a799bea2bb22c001f635eaa3fc2904310f0c08addbff275477a80ecf09a", 4113)
 
 # 人工表行数（改表必须同改常量；0 = FATAL，防「忘了填」静默跳过）
-BRAND_ROWS, NEW_WORDS_ROWS, OVERRIDES_ROWS = 600, 235, 422
+BRAND_ROWS, NEW_WORDS_ROWS, OVERRIDES_ROWS = 609, 391, 422
 
 BULK_MAX_LEN = 6
 IDIOM_MAX_LEN = 8

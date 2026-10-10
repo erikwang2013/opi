@@ -15,7 +15,7 @@
 | symbol_blocks.tsv（符号区块） | Unicode UCD（UnicodeData.txt 的区块范围与字符名；2026-09-28 起新增的 emoji 区块范围取自 UTS#51 §2.1 区块表，仍是同一份 UCD 字符名） | Unicode License（同 Unihan 行） | 面板区块的 id/范围/名（**块数以 `data/raw/symbol_blocks.tsv` 的行数为准，别写死数字**；**id 5 是有意空号**），由 scripts/gen_symbols.py 生成；**符号面板的搜索关键字不来自上游**，357 条为 OPI 项目人工撰写（MIT，2026-09-28 起该手写表在 scripts/symbol_keywords.py —— 生成器撞 500 行门禁拆出去的，内容未改），86 条由区块名罗马字推导，其余 2880 条按 Unicode 名分词兜底 |
 | symbols.tsv（符号条目；**条数与 emoji 条数以生成器每次打印的为准，别写死数字**） | 同上（UnicodeData.txt 逐码位字符名 + **emoji-data.txt 的 `Emoji` 属性**判 emoji 列，2026-09-28 起） | Unicode License（同上，不新增来源、不新增许可证） | 同生成器产出。**emoji 列 = UTS#51 `Emoji` 属性**（含 BMP 区的 ☺♥⌚⭐），不再是「非 BMP」代理指标 —— 判据与复算命令见 scripts/gen_symbols.py 头与 crates/engine-core/tests/symbol_coverage.rs 的 `UTS51_EMOJI` 快照。**消费侧是编译期读取**：engine-core/src/symbols.rs `builtin()` 用 `include_str!("../../../data/raw/symbols.tsv")` 嵌入，故路径固定在 data/raw/ 而非 data/generated/（后者只放 .opid 二进制）；改目录必须两处同改，否则编不过 |
 | en_words.tsv（英文联想，10000 条，2026-09-28 加） | https://github.com/orgtre/google-books-ngram-frequency（Google Books Ngrams v3 英文 1-gram 的清洗产物） | **CC-BY 3.0** | 英文模式单词联想的数据源 —— spec §1「V1 仅做单词联想」承诺过、仓库此前没兑现（`candidates.rs` 对非拼音模式 `return Vec::new()`）。由 scripts/gen_en_dict.py 生成，`word\tpinyin\tfreq` 三列与 trad_hanzi.tsv 同形（第二列是 ASCII 小写查询键，多数与词形相同）。**本轮只落数据，候选逻辑未接线**；走 `.opid` 还是 include_str! 见下节。CC-BY 要求署名 + 保留许可声明：**本表就是署名载体**，分发含本数据的产品时须一并保留 |
-| brand_terms.tsv / new_words.tsv / reading_overrides.tsv（人工表，2026-10-11 加） | OPI 项目人工撰写（生成器只做机械校验：音节合法性按 `pinyin.rs` 的 SYLLABLES 全切分、长度/字面/繁形过滤） | MIT | 品牌白名单（600 条）、网络用语/新词（235 条）与词级注音覆盖表（422 条，拼音人工写死）。⚠️ 覆盖表另有对上游真值的自动复核：词在 base/ext 出现时其读音必须是上游读音之一（实测揪出 8 条笔误/选读错误，见生成器 stderr 与本节下「外部词库并入」）。由 `scripts/gen_extra_phrases.py` 合并进 extra_manual.tsv |
+| brand_terms.tsv / new_words.tsv / reading_overrides.tsv（人工表，2026-10-11 加） | OPI 项目人工撰写（生成器只做机械校验：音节合法性按 `pinyin.rs` 的 SYLLABLES 全切分、长度/字面/繁形过滤） | MIT | 品牌白名单（609 条）、网络用语/新词（391 条，含 2020–2023 时期词汇）与词级注音覆盖表（422 条，拼音人工写死）。⚠️ 覆盖表另有对上游真值的自动复核：词在 base/ext 出现时其读音必须是上游读音之一（实测揪出 8 条笔误/选读错误，见生成器 stderr 与本节下「外部词库并入」）。由 `scripts/gen_extra_phrases.py` 合并进 extra_manual.tsv |
 | extra_manual.tsv / extra_phrases.tsv（生成物，2026-10-11 加） | 复合来源（逐源见「外部词库并入（2026-10-11）」节） | **合并产物按 GPL-3.0 分发**（含 GPL-3.0-only 的 rime-ice 层）；源码（生成器）仍 MIT | 词组三段序的前置段与批量段，由 `scripts/gen_extra_phrases.py` 生成、`gen_luna_dict.py` 并入 luna.opid。行数/体积**以生成器每次打印的为准**，别写死数字 |
 | GPL-3.0.txt（2026-10-11 加） | https://www.gnu.org/licenses/gpl-3.0.txt （与 Debian `/usr/share/common-licenses/GPL-3` 逐字节同文，双源 sha256 核过） | GPL-3.0 全文 | 随 .deb/.rpm 分发（`scripts/nfpm.yaml` 装进 `/usr/share/doc/opi/`）—— 合并产物按 GPL-3.0 分发时的许可文本义务 |
 
@@ -281,7 +281,7 @@ rime-ice），生成器源码仍 MIT。
 | rime-essay | LGPL-3.0 | 批量 | 31,781 条（无拼音，按字注音；繁形丢弃 281,016） |
 | chinese-xinhua idiom / xiehouyu | MIT | 批量 | 成语 2,903 + 歇后语 12,969 条 |
 | THUOCL IT/医疗/法律/财经 | MIT | 批量 | 89 + 701 + 57 + 161 条（与 base 大量重复——base 本身就是从 THUOCL 拼装的，净增 ~1,000） |
-| 品牌 / 新词 / 注音覆盖表 | MIT（本项目自撰） | **前置段** | 600 + 235 + 422 条 |
+| 品牌 / 新词 / 注音覆盖表 | MIT（本项目自撰） | **前置段** | 609 + 391 + 422 条 |
 
 **不收**（逐条核证）：rime-ice 的 tencent 层（腾讯词向量官方条款已不可得）、
 8105/41448/others 层（拼音含 zh.wiktionary CC BY-SA 成分）；jieba（数据来源未说明，
@@ -340,10 +340,10 @@ phrase-pinyin-data（63% 汉典抓取 + 21% CEDICT，剥离后仍脏）。
 「对齐」= 上游音节数与 CJK 字数不等（多为含 `·`/`-` 的译名，实测多为 〇 U+3007 与
 扩展 B 以后的字 —— 与单字层收录域一致，**有意丢弃**）。注音计数：kph 29,254 /
 kmandarin 16,559 / override 5 / **suppressed 141,729**（注音层的词已在有拼音层出现
-⇒ 整条抑制）/ miss 1 / sylbad 364。总量：人工 835 条中 649 条留前置段、186 条按
-降级规则并入批量段队首 ⇒ **649 + 48,078 + 886,661 = 935,388 词组** + 48,263 单字行
-= 983,651 行 → compile 去重后 **936,254 条目 / 33,271,893 字节**，`verify` load
-103.7ms（旧库 15.6ms；一次性、随文件线性）。
+⇒ 整条抑制）/ miss 1 / sylbad 364。总量：人工 1,000 条中 743 条留前置段、257 条按
+降级规则并入批量段队首 ⇒ **743 + 48,078 + 886,623 = 935,444 词组** + 48,263 单字行
+= 983,707 行 → compile 去重后 **936,310 条目 / 33,274,020 字节**，`verify` load
+96.1ms（旧库 15.6ms；一次性、随文件线性）。
 
 ### 单字母前缀性能（头号风险，已解决）
 
