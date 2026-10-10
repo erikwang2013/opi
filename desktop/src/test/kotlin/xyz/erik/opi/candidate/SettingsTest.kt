@@ -151,7 +151,7 @@ class SettingsTest {
         assertEquals("先钉住枚举名单本身（多了少了都红）", listOf("keep") + androidIds.drop(1), cppEnum)
 
         // 主题目录：生成脚本的 SKINS 键 + CMakeLists 的安装清单
-        val pyKeys = captures(Regex("""(?m)^    "([a-z]+)": \{"""), repoFile("scripts/gen_fcitx5_themes.py"))
+        val pyKeys = captures(Regex("""(?m)^    "([a-z]+)": \{"""), repoFile("scripts/fcitx5_skins.py"))
         val cmakeDirs = captures(
             Regex("""data/themes/(opi-[a-z]+)""""),
             repoFile("crates/fcitx5-opi/cpp/CMakeLists.txt"),
@@ -183,7 +183,7 @@ class SettingsTest {
         ).findAll(window).associate {
             it.groupValues[1] to it.groupValues.drop(2).map { h -> "#" + h.substring(2) }
         }
-        val gen = repoFile("scripts/gen_fcitx5_themes.py")
+        val gen = repoFile("scripts/fcitx5_skins.py")
         fun field(name: String) = captures(Regex(""""$name": "(#[0-9A-Fa-f]{6})""""), gen)
         val bg = field("bg")
         val text = field("text")
