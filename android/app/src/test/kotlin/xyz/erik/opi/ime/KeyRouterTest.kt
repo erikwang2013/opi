@@ -184,13 +184,17 @@ class KeyRouterTest {
     }
 
     @Test
-    fun numberPadDigitEntersBufferAndCommitsNothing() {
+    fun numberPadDigitCommitsImmediatelyNotIntoBuffer() {
+        // 语义订正（2026-10-10 用户报障）：旧版钉的是「数字进引擎缓冲、**不提交**」
+        // （引擎 Number 模式攒缓冲、离开面板才收尾提交）——在数字面板上表现为
+        // 「点了没反应、切回拼音才出来」。现改为一律**立即 commit、不经引擎**。
         val fake = FakeEngine().apply { mode = EngineMode.NUMBER.value }
         val ch = Channel()
         val (_, r) = router(fake, ch)
         r.handleKey("1")
-        assertEquals("1", fake.buf)
-        assertTrue(ch.commits.isEmpty())
+        assertEquals("立即上屏", listOf("1"), ch.commits)
+        assertEquals("不许再攒进引擎缓冲", "", fake.buf)
+        assertTrue("不许再经引擎", fake.inputCalls.isEmpty())
     }
 
     @Test
@@ -224,5 +228,34 @@ class KeyRouterTest {
         r.handleBackspace()
         assertEquals("不许删编辑器文字", 0, ch.backspaceCount)
         assertEquals("引擎缓冲要退回一格", 1, fake.backspaceCalls)
+    }
+
+    // ---- 数字面板立即上屏（2026-10-10 用户报障）----
+
+    @Test
+    fun numberPadDigitsCommitImmediately() {
+        // 报障「切换到数字键盘点击数字没输入，再切回拼音才出来」：引擎 Number 模式把
+        // 数字**攒进缓冲、收尾才提交**（composer.rs 的 Mode::Number）——在数字面板上
+        // 读起来就是点了没反应。判据：Number 模式下数字必须**直接 commit 且不经引擎**。
+        val fake = FakeEngine().apply { mode = EngineMode.NUMBER.value }
+        val ch = Channel()
+        val (_, r) = router(fake, ch)
+        r.handleKey("1")
+        assertEquals(listOf("1"), ch.commits)
+        assertTrue("数字不许再进引擎缓冲", fake.inputCalls.isEmpty())
+    }
+
+    @Test
+    fun numberPadPunctuationStillGoesThroughEngine() {
+        // 直提只针对数字：`,`/`.` 仍走引擎（标点表与全角那两档在它们身上生效）。
+        val fake = FakeEngine().apply {
+            mode = EngineMode.NUMBER.value
+            inputResults[","] = "，"
+        }
+        val ch = Channel()
+        val (_, r) = router(fake, ch)
+        r.handleKey(",")
+        assertEquals(listOf(","), fake.inputCalls)
+        assertEquals(listOf("，"), ch.commits)
     }
 }

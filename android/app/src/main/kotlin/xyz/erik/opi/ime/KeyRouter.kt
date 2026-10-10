@@ -43,6 +43,17 @@ class KeyRouter(
             }
             return
         }
+        // 数字面板（Number 模式）：**数字点一下立即上屏**（2026-10-10 用户报障
+        // 「切换到数字键盘点击数字没输入，再切回拼音才出来」——引擎 Number 模式原为
+        // 「数字攒进缓冲、收尾时原样提交」（composer.rs 的 Mode::Number 分支），在
+        // 数字面板上表现为点了没反应）。数字在引擎里不经任何映射（ascii_fullwidth
+        // 只管 ASCII 标点，punctuation.rs），直提零损失；`,`/`.` 仍走引擎 ——
+        // 标点表与全角那两档在它们身上生效。
+        // ⚠️ 引擎侧的 Number 缓冲语义不动（那是引擎自己的设计），只是本面板不再用它。
+        if (controller.mode == EngineMode.NUMBER && ch.length == 1 && ch[0].isDigit()) {
+            commit(ch)
+            return
+        }
         val text = controller.input(ch)
         if (text.isNotEmpty()) commit(text)
     }

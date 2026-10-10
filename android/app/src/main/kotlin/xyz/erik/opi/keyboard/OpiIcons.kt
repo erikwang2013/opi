@@ -148,6 +148,27 @@ object OpiIcons {
             }
         }.build()
     }
+
+    /**
+     * 收起键盘（2026-10-10 用户裁决「隐藏键盘按钮图标不要用 x」）：
+     * 向下折角（⌄ 的线稿版）—— 输入法「收起」的通用语；✕ 语义是关闭，仍归 [Close]
+     * （关面板/关页在用，两者别混）。
+     */
+    val KeyboardHide: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "OpiKeyboardHide",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f,
+        ).apply {
+            stroke(width = 2.0f) {
+                moveTo(6f, 10f)
+                lineTo(12f, 16f)
+                lineTo(18f, 10f)
+            }
+        }.build()
+    }
 }
 
 /**

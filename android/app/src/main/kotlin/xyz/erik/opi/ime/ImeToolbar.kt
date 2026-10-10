@@ -88,9 +88,10 @@ fun ImeToolbar(
             OpiIcons.KeyboardMode,
             "键盘模式${if (keyboardModes.anyOn) "，有开启项" else ""}",
         ) { onOpenKeyboardMode() }
-        // 关闭键盘压在**最右**（用户裁决「功能按钮区域最右侧」）：弹性空白把它推到头。
+        // 收起键盘压在**最右**（用户裁决「功能按钮区域最右侧」）：弹性空白把它推到头。
+        // 图标 = 向下折角（2026-10-10 用户裁决「不要用 x」——✕ 是关闭语义）。
         Spacer(Modifier.weight(1f))
-        ToolbarIcon(OpiIcons.Close, "收起键盘") { onCloseKeyboard() }
+        ToolbarIcon(OpiIcons.KeyboardHide, "收起键盘") { onCloseKeyboard() }
     }
 }
 
