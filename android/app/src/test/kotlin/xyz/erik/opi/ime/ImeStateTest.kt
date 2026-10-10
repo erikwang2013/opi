@@ -575,4 +575,34 @@ class ImeStateTest {
         assertTrue("空缓冲切英文不许凭空提交", commits.isEmpty())
         assertEquals(InputMode.ENGLISH26, state.inputMode)
     }
+
+    @Test
+    fun inputModePanelEnglishAlsoCommitsPinyin() {
+        // 2026-10-10 深夜裁决统一三处英文入口（底行[英文]/中繁→英循环/输入模式面板的
+        // 英文26键）：「默认是拼音，不要是候选词」——面板那条此前会先上首候选。
+        val fake = FakeEngine().apply {
+            buf = "64426"
+            displayBuf = "ni'hao"
+            cands = arrayOf("你好", "你敢")
+            selectResults[0] = "你好"
+        }
+        val state = newState(fake)
+        state.selectInputMode(InputMode.ENGLISH26)
+        assertEquals("面板切英文也上拼音，不许首候选", listOf("ni'hao"), commits)
+        assertEquals("", fake.buf)
+        assertEquals(InputMode.ENGLISH26, state.inputMode)
+    }
+
+    @Test
+    fun inputModePanelOtherModesStillCommitFirstCandidate() {
+        // 对照：非英文的模式切换保持面板旧语义（有候选选首候选）——裁决只点名英文。
+        val fake = FakeEngine().apply {
+            buf = "64"
+            cands = arrayOf("你", "尼")
+            selectResults[0] = "你"
+        }
+        val state = newState(fake)
+        state.selectInputMode(InputMode.STROKE)
+        assertEquals(listOf("你"), commits)
+    }
 }

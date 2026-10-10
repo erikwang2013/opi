@@ -169,7 +169,15 @@ class ImeState(
      * 不动引擎的 scheme/mode —— 它是浏览式查字，不是输入方案。
      */
     fun selectInputMode(m: InputMode) {
-        commitPendingBuffer()
+        // 切到英文 ⇒ pending **按拼音原样上屏**（2026-10-10 用户裁决「拼音输入的时候切换
+        // 英文，就默认是拼音，不要是候选词」；与 [英文] 底行键、中繁→英循环腿同语义——
+        // 三处共用 [commitPendingAsPinyin]）。其余模式照旧「有候选选首候选」：那是输入模式
+        // 面板「明确换布局」的既有语义，用户裁决只点名了英文。
+        if (m.engineMode == EngineMode.ENGLISH) {
+            commitPendingAsPinyin()
+        } else {
+            commitPendingBuffer()
+        }
         inputMode = m
         if (m.panel) {
             view = View.RARE
@@ -211,15 +219,11 @@ class ImeState(
     }
 
     /**
-     * 「英文」键盘按钮（9 键底行；2026-10-10 新增）与 [cycleMode] 的英向腿共用：
-     * **先按拼音上屏 pending、再切英文 26 键**。与走 [selectInputMode] 的区别：
-     * 那条的 commitPendingBuffer 是「有候选选首候选」——切英文这条按用户裁决要的是
-     * **拼音（字母）**而不是候选词。落盘照旧（这是明确的键盘选择）。
+     * 「英文」键盘按钮（9 键底行；2026-10-10 新增）：**先按拼音上屏 pending、再切英文 26 键**。
+     * 语义单一来源 = [selectInputMode] 的英文档（2026-10-10 深夜裁决统一：面板的
+     * 「英文26键」也走同一条——三处英文入口共用 [commitPendingAsPinyin]）。落盘照旧。
      */
-    fun switchToEnglishKeyboard() {
-        commitPendingAsPinyin()
-        selectInputMode(InputMode.ENGLISH26)
-    }
+    fun switchToEnglishKeyboard() = selectInputMode(InputMode.ENGLISH26)
 
     /**
      * 把 pending 缓冲**按拼音原样上屏**（2026-10-10 用户裁决，切英文专用）：
