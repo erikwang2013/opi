@@ -286,8 +286,9 @@ private fun KeyboardArea(
                     onRetype = controller::clear,
                     // 数字键盘（2026-10-10 用户裁决：底行新增）——与 26 键的 123 同路。
                     onNumber = state::openNumber,
-                    // 英文键盘：切到英文 26 键（与输入模式面板「英文26键」同一条路）。
-                    onEnglish = { state.selectInputMode(InputMode.ENGLISH26) },
+                    // 英文键盘：先按拼音上屏 pending、再切英文 26 键
+                    //（2026-10-10 用户裁决「切英文默认是拼音，不要是候选词」）。
+                    onEnglish = state::switchToEnglishKeyboard,
                     // 左侧一列：**只有读得到拼音时才替换**（搜狗同款，2026-10-09
                     // 用户裁决「不输入、回退、确定，就重置到初始化的一列」）——
                     // 读数空（没候选/已提交/退空）就回到标点列；不回退显示数字串

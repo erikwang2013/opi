@@ -436,18 +436,27 @@ class ImeStateTest {
     }
 
     @Test
-    fun cycleModeKeepsTheBufferAndDoesNotCommit() {
-        // 2026-10-09 二期用户裁决「中文输入的时候切换英文，拼音保留可继续使用」：
-        // 中/繁/英三条腿全部走 switchLanguage（引擎侧保留缓冲），**不再 commitPendingBuffer**
-        // （旧行为会把打到一半的拼音上屏），也不走清缓冲的 switchMode/switchScheme。
-        val fake = FakeEngine().apply { buf = "ni" }
+    fun cycleModeToTraditionalKeepsBufferAndToEnglishCommitsPinyin() {
+        // 语义时间线（两次用户裁决）：
+        // · 2026-10-09：「中文输入的时候切换英文，拼音保留可继续使用」——中/繁两腿保留缓冲；
+        // · 2026-10-10：「拼音输入的时候切换英文，就默认是拼音，不要是候选词」——
+        //   **英向那条腿改成一进英文就把 pending 按拼音（读数/原字母）上屏、缓冲清空**
+        //   （不是首候选；「保留缓冲」下字段里看不见、切回才复活，用户判为异常）。
+        val fake = FakeEngine().apply {
+            buf = "ni"
+            displayBuf = "ni"
+            cands = arrayOf("你")
+        }
         val state = newState(fake)
         state.cycleMode() // 中→繁：只换模式（方案不动），缓冲保留
         assertEquals(
             listOf(EngineMode.TRADITIONAL.value to InputScheme.FULL.value),
             fake.switchLanguageCalls,
         )
-        state.cycleMode() // 繁→英：换到英文 + 全键盘方案
+        assertEquals("中→繁不提交", emptyList<String>(), commits)
+        state.cycleMode() // 繁→英：**拼音上屏**（不是候选「你」）+ 换全键盘方案
+        assertEquals(listOf("ni"), commits)
+        assertEquals("缓冲已清", "", fake.buf)
         assertEquals(
             EngineMode.ENGLISH.value to InputScheme.FULL.value,
             fake.switchLanguageCalls.last(),
@@ -457,7 +466,6 @@ class ImeStateTest {
             EngineMode.PINYIN.value to InputScheme.FULL.value,
             fake.switchLanguageCalls.last(),
         )
-        assertTrue("三条腿都不许提交 pending", commits.isEmpty())
         assertTrue("不许走清缓冲的 switchScheme", fake.schemeCalls.isEmpty())
     }
 
@@ -522,5 +530,49 @@ class ImeStateTest {
         assertEquals("已在英文：不记状态也不切换", callsBefore, fake.switchLanguageCalls.size)
         state.leaveTransientEnglish()
         assertEquals("没进过就不许把英文还原成中文", InputMode.ENGLISH26, state.inputMode)
+    }
+
+    // ---- 切英文 = 拼音上屏（2026-10-10 用户裁决「默认是拼音，不要是候选词」）----
+
+    @Test
+    fun switchToEnglishKeyboardCommitsPinyinNotCandidate() {
+        val fake = FakeEngine().apply {
+            buf = "64426" // 9 键数字缓冲
+            displayBuf = "ni'hao" // 读数 = 分词拼音
+            cands = arrayOf("你好", "你敢")
+            selectResults[0] = "你好"
+        }
+        val state = newState(fake)
+        state.switchToEnglishKeyboard()
+        assertEquals("上屏的是拼音（读数），不是首候选", listOf("ni'hao"), commits)
+        assertEquals("缓冲清空", "", fake.buf)
+        assertEquals(InputMode.ENGLISH26, state.inputMode)
+        // selectInputMode 的路径是 switchScheme + switchMode（不是 switchLanguage）
+        assertEquals(InputScheme.FULL.value, fake.schemeCalls.last())
+        assertEquals(EngineMode.ENGLISH.value, fake.switchCalls.last())
+    }
+
+    @Test
+    fun cycleToEnglishAlsoCommitsPinyin() {
+        val fake = FakeEngine().apply {
+            mode = EngineMode.TRADITIONAL.value
+            buf = "nihao"
+            displayBuf = "nihao"
+            cands = arrayOf("你好")
+            selectResults[0] = "你好"
+        }
+        val state = newState(fake)
+        state.cycleMode() // 繁 → 英 那条腿
+        assertEquals("不许把候选词上屏", listOf("nihao"), commits)
+        assertEquals("", fake.buf)
+        assertEquals(InputMode.ENGLISH26, state.inputMode)
+    }
+
+    @Test
+    fun switchToEnglishKeyboardWithEmptyBufferCommitsNothing() {
+        val state = newState(FakeEngine())
+        state.switchToEnglishKeyboard()
+        assertTrue("空缓冲切英文不许凭空提交", commits.isEmpty())
+        assertEquals(InputMode.ENGLISH26, state.inputMode)
     }
 }

@@ -199,9 +199,38 @@ class ImeState(
         when (controller.mode) {
             EngineMode.PINYIN ->
                 controller.switchLanguage(EngineMode.TRADITIONAL, controller.inputScheme)
-            EngineMode.TRADITIONAL -> switchLanguageKeepingBuffer(InputMode.ENGLISH26)
+            // 切英文前把 pending 按**拼音**上屏（2026-10-10 用户裁决「拼音输入的时候
+            // 切换英文，就默认是拼音，不要是候选词」——打了一半英文切键盘，字母原样留下；
+            // 此前是「保留缓冲」，但保留下来的拼音字段里看不见，切回才复活，用户判为异常）。
+            EngineMode.TRADITIONAL -> {
+                commitPendingAsPinyin()
+                switchLanguageKeepingBuffer(InputMode.ENGLISH26)
+            }
             else -> switchLanguageKeepingBuffer(lastChineseMode)
         }
+    }
+
+    /**
+     * 「英文」键盘按钮（9 键底行；2026-10-10 新增）与 [cycleMode] 的英向腿共用：
+     * **先按拼音上屏 pending、再切英文 26 键**。与走 [selectInputMode] 的区别：
+     * 那条的 commitPendingBuffer 是「有候选选首候选」——切英文这条按用户裁决要的是
+     * **拼音（字母）**而不是候选词。落盘照旧（这是明确的键盘选择）。
+     */
+    fun switchToEnglishKeyboard() {
+        commitPendingAsPinyin()
+        selectInputMode(InputMode.ENGLISH26)
+    }
+
+    /**
+     * 把 pending 缓冲**按拼音原样上屏**（2026-10-10 用户裁决，切英文专用）：
+     * 文本取显示读数（9 键 = `ni'hao` 这类分词拼音；其余 = 原字母），无候选也算数
+     * （读数空则退回原始缓冲——26 键字母串原样留下）。空缓冲 = 空操作。
+     */
+    private fun commitPendingAsPinyin() {
+        if (controller.buffer.isEmpty()) return
+        val text = controller.reading.ifEmpty { controller.buffer }
+        controller.clear()
+        if (text.isNotEmpty()) commit(text)
     }
 
     /**

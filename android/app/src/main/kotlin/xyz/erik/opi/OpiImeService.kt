@@ -52,6 +52,34 @@ internal fun isPasswordEditor(inputType: Int): Boolean {
     }
 }
 
+/** 回车键的决策（纯函数，单测钉）。 */
+internal sealed interface EnterDecision {
+    /** 执行应用声明的编辑器 action（搜索/发送/下一步…）。 */
+    data class PerformAction(val action: Int) : EnterDecision
+
+    /** 提交换行（多行编辑器、或应用未声明 action）。 */
+    object Newline : EnterDecision
+}
+
+/**
+ * 回车决策（2026-10-10 用户报障「换行无效」的订正）：
+ * **IME_FLAG_NO_ENTER_ACTION 优先于 action 位** —— 多行编辑器惯例上两样都设
+ * （NO_ENTER_ACTION + 一个残留的 action），旧逻辑只看 action 会把它们的回车发成
+ * 动作而不是换行；搜狗/AOSP 的判法都是先看这个 flag。纯函数，边界由单测钉。
+ */
+internal fun enterDecision(imeOptions: Int): EnterDecision {
+    val action = imeOptions and EditorInfo.IME_MASK_ACTION
+    val noEnterAction = (imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION) != 0
+    // 两个「没有动作」的编码都要走换行：UNSPECIFIED=0（未声明）与 NONE=1（明确说没有）。
+    val hasAction = action != EditorInfo.IME_ACTION_UNSPECIFIED &&
+        action != EditorInfo.IME_ACTION_NONE
+    return if (!noEnterAction && hasAction) {
+        EnterDecision.PerformAction(action)
+    } else {
+        EnterDecision.Newline
+    }
+}
+
 /** OPI IME 宿主：ComposeView 作为输入视图，面板状态在 ImeState（A3/A4 填 UI）。 */
 class OpiImeService : InputMethodService() {
     private var inputViewCache: View? = null
@@ -74,7 +102,54 @@ class OpiImeService : InputMethodService() {
             onWriteFailure = { Log.w(TAG, "user words save failed: $it") },
         )
     }
-    private val engineController = EngineController(onLearned = { userWords.scheduleSave() })
+    private val engineController = EngineController(
+        onLearned = { userWords.scheduleSave() },
+        onBufferSynced = ::pushComposingText,
+    )
+
+    /** 最近一次推给字段的组合串（提交/清空时要动它，见 [dropComposing] 的说明）。 */
+    private var lastComposing: String = ""
+
+    /**
+     * 组合串进字段（2026-10-10 用户裁决「需要」）：打字期间输入框里能看到拼音
+     * （搜狗式）——此前组合串只画在自家候选栏，字段里空空；用户以为没打进去。
+     * 文本用**显示读数**（`reading`：9 键 = `ni'hao` 这类分词拼音；其余 = 原字母）。
+     * 英文模式字母直传不经过缓冲 ⇒ 无组合串，正确。
+     *
+     * ⚠️ 缓冲空时**先 `setComposingText("")` 再 `finishComposingText`** —— 只 finish
+     * 会把组合区里**最后那段文字落定留在字段里**（退格到空会剩半截拼音）。
+     */
+    private fun pushComposingText() {
+        val ic = currentInputConnection ?: return
+        val text = engineController.reading.ifEmpty { engineController.buffer }
+        if (text.isEmpty()) {
+            ic.setComposingText("", 1)
+            ic.finishComposingText()
+            lastComposing = ""
+        } else {
+            ic.setComposingText(text, 1)
+            lastComposing = text
+        }
+    }
+
+    /**
+     * 提交前把上次推的组合串从字段里抹掉（2026-10-10 实测「ni'hao你好」的修法）。
+     *
+     * 次序成因：选词路径是「引擎 select（缓冲清空）→ refresh（组合区判空 ⇒ 落定成
+     * 普通文本）→ 调用方 commitText」——commitText 到得比组合区落定晚，替换不了它，
+     * 只能追加，字段里留下拼音痕迹。先把 lastComposing 那串删掉，**两种状态都得到
+     * 「替换」的净效果**（组合区仍活跃时删的就是它；已落定时删的是刚落定的那串）。
+     * 删除按码点（组合串是拼音/字母，ASCII 为主，按码点与退格同一条纪律）。
+     */
+    private fun dropComposing(ic: android.view.inputmethod.InputConnection) {
+        if (lastComposing.isEmpty()) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            ic.deleteSurroundingTextInCodePoints(lastComposing.length, 0)
+        } else {
+            ic.deleteSurroundingText(lastComposing.length, 0)
+        }
+        lastComposing = ""
+    }
     private val imeState = ImeState(engineController)
     private val symbolCatalog = SymbolCatalog()
     private lateinit var keyRouter: KeyRouter
@@ -272,6 +347,7 @@ class OpiImeService : InputMethodService() {
     private fun commitWithRetry(text: String) {
         val ic = currentInputConnection
         if (ic != null) {
+            dropComposing(ic)
             ic.commitText(text, 1)
             return
         }
@@ -279,8 +355,12 @@ class OpiImeService : InputMethodService() {
         // 排程与撤销都在 pendingCommit 内部，共用同一个 Handler —— 不再经 decorView
         pendingCommit.schedule {
             val ic2 = currentInputConnection
-            if (ic2 != null) ic2.commitText(text, 1)
-            else Log.w(TAG, "IC still null, commit dropped: \"$text\"")
+            if (ic2 != null) {
+                dropComposing(ic2)
+                ic2.commitText(text, 1)
+            } else {
+                Log.w(TAG, "IC still null, commit dropped: \"$text\"")
+            }
         }
     }
 
@@ -312,15 +392,19 @@ class OpiImeService : InputMethodService() {
     /** 回车：读目标应用声明的 action；action 位为 0 时回退提交换行。 */
     private fun performEnter() {
         // P6：硬编码 SEND 会把"搜索"键发成发送；读目标应用声明的 action。
-        // action 位为 0（应用未声明 action / 仅设 NO_ENTER_ACTION / 编辑器信息缺失）时
-        // performEditorAction(0) 是 no-op → 回车键死亡，回退提交换行（不硬编码 SEND）。
-        val action = currentInputEditorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
-            ?: 0
-        Log.i(TAG, "performEnter action=$action")
-        val ic = currentInputConnection
-        if (ic != null) {
-            if (action != 0) ic.performEditorAction(action)
-            else ic.commitText("\n", 1)
+        // 2026-10-10 用户报障「换行无效」——判据改为 [enterDecision]（多行编辑器惯例
+        // IME_FLAG_NO_ENTER_ACTION 优先于 action 位：真实世界不少应用两样都设，旧逻辑
+        // 会把它们的回车发成 action 而不是换行；搜狗/AOSP 均先看这个 flag）。
+        val opts = currentInputEditorInfo?.imeOptions ?: 0
+        val decision = enterDecision(opts)
+        Log.i(TAG, "performEnter opts=$opts -> $decision")
+        val ic = currentInputConnection ?: return
+        when (decision) {
+            is EnterDecision.PerformAction -> ic.performEditorAction(decision.action)
+            EnterDecision.Newline -> {
+                dropComposing(ic)
+                ic.commitText("\n", 1)
+            }
         }
     }
 

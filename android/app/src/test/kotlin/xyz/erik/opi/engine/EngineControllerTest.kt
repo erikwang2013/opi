@@ -440,4 +440,18 @@ class EngineControllerTest {
         assertEquals("", ctrl.buffer)
         assertEquals("提交后读数必须立即归零（左列回标点）", "", ctrl.reading)
     }
+
+    @Test
+    fun bufferSyncedCallbackFiresAfterEveryRefresh() {
+        // 组合串进字段（2026-10-10）的同步点：每次 refresh 收尾都要回调服务层
+        //（服务层据此 setComposingText/finishComposingText）。回调次数 ≥ 动作次数即可，
+        // 重点是从不调（那会让字段里的组合串原地冻结）。
+        var synced = 0
+        val ctrl = EngineController(FakeEngine(), onBufferSynced = { synced++ })
+        ctrl.input("n")
+        assertTrue("input 后应触发同步回调", synced > 0)
+        val afterInput = synced
+        ctrl.backspace()
+        assertTrue("backspace 后也要触发（退格到空时要收口组合区）", synced > afterInput)
+    }
 }

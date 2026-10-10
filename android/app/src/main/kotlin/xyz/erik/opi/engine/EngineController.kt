@@ -101,6 +101,15 @@ interface OpiEngineApi {
  */
 class EngineController(
     private val api: OpiEngineApi = OpiEngine,
+    /**
+     * 每次 [refresh] 收尾（组合串状态的单一同步点）后回调：服务层借此把组合串
+     * 推给输入框（setComposingText/finishComposingText，2026-10-10 用户裁决「需要」）。
+     * 放在**最后**：此刻 buffer/reading 已就位。默认空实现（JVM 测试不感知）。
+     * ⚠️ 参数顺序：它排在 onLearned **之前** —— 既有测试/调用方大量使用
+     * `EngineController(fake) { learned++ }` 的**尾随 lambda**（绑最后一个参数），
+     * 把新参数放最后会把那些 lambda 静默改绑到这里（8 个测试当场红，改序即修）。
+     */
+    private val onBufferSynced: () -> Unit = {},
     /** 学习状态变更（选词/删用户词）后的落盘通知；默认空实现（JVM 测试/无持久化场景不感知）。 */
     private val onLearned: () -> Unit = {},
 ) {
@@ -224,6 +233,8 @@ class EngineController(
         // 先读会拿到空串或上一条缓冲的旧值：2026-10-09 用户报障「确定候选词后左列
         // 不恢复标点」的 Kotlin 侧根因。**别把这个赋值挪回前面**（有单测钉次序）。
         reading = api.displayBuffer()
+        // 组合串同步点（必须最后）：服务层在此把「字段里的组合串」推给输入框。
+        onBufferSynced()
     }
 
     /**
