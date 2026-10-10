@@ -12,6 +12,7 @@ import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
+import android.text.InputType
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -33,6 +34,23 @@ import xyz.erik.opi.keyboard.RareIndex
 import xyz.erik.opi.settings.ImePreferences
 import java.io.File
 import kotlin.math.min
+
+/**
+ * 密码类编辑器判定（2026-10-10）：**文本类**里的 PASSWORD / VISIBLE_PASSWORD /
+ * WEB_PASSWORD 三种变体。纯函数，单测钉边界。
+ * ⚠️ 数字类密码（TYPE_CLASS_NUMBER|TYPE_NUMBER_VARIATION_PASSWORD）**不在列**——
+ * 数字面板默认直出数字，没有「被拼音吃掉」的问题，别顺手扩进来。
+ */
+internal fun isPasswordEditor(inputType: Int): Boolean {
+    if (inputType and InputType.TYPE_MASK_CLASS != InputType.TYPE_CLASS_TEXT) return false
+    return when (inputType and InputType.TYPE_MASK_VARIATION) {
+        InputType.TYPE_TEXT_VARIATION_PASSWORD,
+        InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,
+        InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD,
+        -> true
+        else -> false
+    }
+}
 
 /** OPI IME 宿主：ComposeView 作为输入视图，面板状态在 ImeState（A3/A4 填 UI）。 */
 class OpiImeService : InputMethodService() {
@@ -316,6 +334,15 @@ class OpiImeService : InputMethodService() {
             imeState.onEditorChanged()
             // 取消组合串（不提交，避免半截拼音泄入新编辑器）
             engineController.clear()
+            // 密码类字段自动临时英文（2026-10-10 用户报障「弹框里没法输入」的第二来源；
+            // 搜狗同场景自动切英文）。普通编辑器则还原上一处密码场的临时切换。
+            val pw = info != null && isPasswordEditor(info.inputType)
+            Log.i(TAG, "onStartInput: inputType=${info?.inputType} password=$pw")
+            if (pw) {
+                imeState.enterTransientEnglish()
+            } else {
+                imeState.leaveTransientEnglish()
+            }
         }
     }
 
@@ -373,9 +400,31 @@ class OpiImeService : InputMethodService() {
         win.setLayout(lp.width, height)
     }
 
-    /** 触屏输入法无条件显示输入视图。模拟器报告存在硬件键盘（qwerty）时，
-     *  默认实现返回 false → onCreateInputView 永不调用，键盘显示为空壳。 */
-    override fun onEvaluateInputViewShown(): Boolean = true
+    /**
+     * 输入视图显示判定（2026-10-10 修订）：**有「接受文本」的编辑器才返回 true**。
+     *
+     * 历史：原实现无条件 `= true` —— 理由是模拟器上报硬件键盘（qwerty）时默认实现
+     * 返回 false、onCreateInputView 永不调用（键盘空壳）。但无条件 true 还有另一面：
+     * 弹框 / 无编辑器的窗口抢焦时，系统想让键盘收起，我们仍把它亮着，留下
+     * 「**键盘可见、触摸全无反应**」的中间态（2026-10-10 用户报障「其他 app 有弹框就
+     * 没法输入，搜狗就可以」——搜狗走系统默认判定，从不进这个状态）。
+     *
+     * 改法：当前编辑器接受文本（inputType 类 ≠ TYPE_NULL）且输入连接在 ⇒ true
+     * （模拟器/硬键盘场景由这半保住）；其余一律 false 交回系统 —— 弹框抢焦、
+     * 无编辑器时键盘正常收起，不再留中间态。
+     */
+    override fun onEvaluateInputViewShown(): Boolean {
+        val info = currentInputEditorInfo
+        val acceptsText = info != null &&
+            (info.inputType and InputType.TYPE_MASK_CLASS) != InputType.TYPE_NULL
+        val verdict = acceptsText && currentInputConnection != null
+        Log.i(
+            TAG,
+            "onEvaluateInputViewShown: info=${info?.inputType} acceptsText=$acceptsText " +
+                "conn=${currentInputConnection != null} shown=$isInputViewShown -> $verdict",
+        )
+        return verdict
+    }
 
     override fun onWindowShown() {
         super.onWindowShown()

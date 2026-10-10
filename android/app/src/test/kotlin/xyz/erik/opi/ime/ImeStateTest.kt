@@ -475,4 +475,52 @@ class ImeStateTest {
         assertEquals(emptyList<Int>(), fake.schemeCalls)
         assertEquals(emptyList<Int>(), fake.switchCalls)
     }
+
+    // ---- 密码字段临时英文（2026-10-10）----
+
+    @Test
+    fun transientEnglishEntersWithoutPersisting() {
+        var persisted = 0
+        val fake = FakeEngine()
+        val state = newState(fake).apply { persist = { persisted++ } }
+        state.selectInputMode(InputMode.PINYIN9)
+        persisted = 0 // selectInputMode 自己会落盘一次，从这里开始数
+        state.enterTransientEnglish()
+        assertEquals("临时切英文不许落盘", 0, persisted)
+        assertEquals(InputMode.ENGLISH26, state.inputMode)
+        assertEquals(
+            EngineMode.ENGLISH.value to InputScheme.FULL.value,
+            fake.switchLanguageCalls.last(),
+        )
+    }
+
+    @Test
+    fun leaveTransientEnglishRestoresTheChineseMode() {
+        var persisted = 0
+        val fake = FakeEngine()
+        val state = newState(fake).apply { persist = { persisted++ } }
+        state.selectInputMode(InputMode.PINYIN9)
+        persisted = 0 // selectInputMode 自己会落盘一次，从这里开始数
+        state.enterTransientEnglish()
+        state.leaveTransientEnglish()
+        assertEquals("还原回进密码场之前的中文方案", InputMode.PINYIN9, state.inputMode)
+        assertEquals(
+            EngineMode.PINYIN.value to InputScheme.NINE.value,
+            fake.switchLanguageCalls.last(),
+        )
+        assertEquals("还原也不落盘", 0, persisted)
+    }
+
+    @Test
+    fun transientEnglishIsNoOpWhenAlreadyEnglish() {
+        val fake = FakeEngine()
+        val state = newState(fake)
+        // 用户自己先切到英文（cycleMode 的英那条腿）
+        state.selectInputMode(InputMode.ENGLISH26)
+        val callsBefore = fake.switchLanguageCalls.size
+        state.enterTransientEnglish()
+        assertEquals("已在英文：不记状态也不切换", callsBefore, fake.switchLanguageCalls.size)
+        state.leaveTransientEnglish()
+        assertEquals("没进过就不许把英文还原成中文", InputMode.ENGLISH26, state.inputMode)
+    }
 }

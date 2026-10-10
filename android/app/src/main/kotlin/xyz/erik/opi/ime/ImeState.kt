@@ -137,6 +137,33 @@ class ImeState(
     /** 上次的中文侧输入模式（9 键 ↔ 英文 往返时恢复用）。 */
     private var lastChineseMode = InputMode.PINYIN26
 
+    /** 「密码字段临时英文」进入前的中文模式；null = 不在该态。**不落盘**（见下）。 */
+    private var transientEnglishFrom: InputMode? = null
+
+    /**
+     * 密码类字段自动切英文（2026-10-10 用户报障「弹框里没法输入」的第二来源）：
+     * Wi-Fi 密码/登录框要的是英文数字**直出**，拼音候选在这儿帮倒忙——搜狗同场景
+     * 自动切英文，我们照做。**临时且不落盘**（与 [selectInputMode] 的区别：那条是
+     * 用户的明确选择、要 persist 这条是场景适配、离开字段即还原）。
+     * 已经在英文（用户自己切的）⇒ 空操作，也不记状态（leave 才不会乱还原）。
+     */
+    fun enterTransientEnglish() {
+        if (controller.mode == EngineMode.ENGLISH) return
+        transientEnglishFrom = inputMode
+        inputMode = InputMode.ENGLISH26
+        controller.switchLanguage(EngineMode.ENGLISH, InputMode.ENGLISH26.scheme)
+        view = View.QWERTY
+    }
+
+    /** 离开密码字段：还原进入前的中文模式（没进过 = 空操作）。 */
+    fun leaveTransientEnglish() {
+        val from = transientEnglishFrom ?: return
+        transientEnglishFrom = null
+        inputMode = from
+        controller.switchLanguage(from.engineMode, from.scheme)
+        view = View.QWERTY
+    }
+
     /**
      * 选一个输入模式（工具条菜单）。生僻字（[InputMode.panel]）**只切面板**，
      * 不动引擎的 scheme/mode —— 它是浏览式查字，不是输入方案。
