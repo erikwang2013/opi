@@ -353,7 +353,9 @@ kmandarin 16,559 / override 5 / **suppressed 141,729**（注音层的词已在�
 拼音的精确查询上）；`MmapDictionary` 流式 top-N（第一遍只读 freq 列做 select_nth，
 第二遍只物化 exact + top-N）。9,216 = 旧库最大单字母前缀原始命中 8,613 + 余量 ⇒
 **旧库行为逐字不变**（探针自证：z 仍 8,447 条，与新代码前逐字相同）。如实边界：
-学习词借 boost 跳进前缀 top-8 的机会只在 top-N 池内有。
+学习词借 boost 跳进前缀 top-8 的机会只在 top-N 池内有。9/14 键的**按键类层**同族
+（`dictionary.rs` 的 `SCHEME_MATCH_CAP = 2048` + loader 的区间枚举，单键 268→1.9ms）——
+全端性能预算与完整实测表在 [`docs/performance.md`](../../docs/performance.md)。
 
 实测（新旧同进程交错取最小，release）：单字母 z/y/x/w/s/d/zh **3.3–3.8ms**（旧
 1.0–2.9ms）、`ni` 6.7ms（主层+模糊层两个 capped 层）、其余常用输入 ≤0.4ms；全部

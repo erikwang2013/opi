@@ -9,9 +9,10 @@
 > `./gradlew` 都能真跑，所以本文多数条目是**【实测】**（三个有端代码的平台里，
 > Windows 那端本机完全没有条件，见 `docs/install/windows.md`）。
 >
-> **但有一条硬前提本机没满足：`./gradlew assembleDebug` 在本机是失败的** —— 缺 Dart SDK
-> （cargokit 的构建工具是 Dart 程序），见 §2.4。这不是仓库坏了，是工具链不全。
-> 照本文走之前，请先看 §2.4。
+> **订正（2026-10-11）**：早前「本机编不了」的硬前提已不成立 —— Dart SDK 已在
+> （`/usr/local/bin/dart`，随 Flutter 装上的），`assembleDebug` 与 `assembleRelease`
+> **都已真构建并实机运行过**；后者是**分发口径**（debug 构建的 Rust 是未优化版，
+> 见 §2.3）。全端性能预算与实测见 [`docs/performance.md`](../performance.md)。
 >
 > 每条都带证据档位：
 >
@@ -103,7 +104,7 @@ cd android                      # 必须。仓库根、desktop/ 的 gradlew 都�
 
 ./gradlew testDebugUnitTest     # JVM 单测（引擎控制器 / IME 状态机 / 键盘路由 / 用户词存储 / 词库装载 / 宠物）
 ./gradlew assembleDebug         # 打 debug APK（cargokit 顺带编 opi-ffi 三 ABI .so）
-./gradlew assembleRelease       # 打 release APK（未实测，见 §2.3）
+./gradlew assembleRelease       # 打 release APK（**分发口径**：debug 构建的 Rust 未优化、慢 3-20×，见 §2.3）
 ./gradlew clean                 # 根 build.gradle.kts 里注册的 Delete 任务
 ```
 
@@ -135,7 +136,7 @@ cd android                      # 必须。仓库根、desktop/ 的 gradlew 都�
 
 1. **release 目前用 debug 签名**（`signingConfig = signingConfigs.getByName("debug")`）。后果：release APK 与 debug APK 同签名，能互相覆盖安装 —— 但**不能上任何商店**，也不能换成正式签名后覆盖安装（换签名必须先卸载，`INSTALL_FAILED_UPDATE_INCOMPATIBLE`）。
 2. 那条注释里的**理由措辞是 Flutter 时期的**（`android/` 下早已没有 flutter 目录，Flutter 方案随 M6a 原生重构作废，见 `docs/superpowers/plans/2026-08-12-opi-ime-android-m4.md` 头部的订正注记）。**「release 用 debug 签名」这个事实仍然有效 —— 读的是代码，不是那段理由。**
-3. 【未验证】release 变体本机**没有真正构建过**（本机连 debug 都过不去，见 §2.4）。【实测】仅跑过 `./gradlew assembleRelease --dry-run`（EXIT=0，只出任务图，**不证明能编出来**）。
+3. **订正（2026-10-11）：release 变体已实测构建多次**（`BUILD SUCCESSFUL`，并实机安装运行），且成为 dist 的**分发口径** —— ⚠️ 关键差别：**`assembleDebug` 的 Rust 是 debug 编译**（cargokit 的 `builder.dart` 只在非 debug 时加 `--release`），同一按键实测 **46–239ms（debug） vs 23–83ms（release）**，3–20×。首次构建要拉 `lint-gradle` 工件，撞阿里云镜像 TLS 抖动**重试即可**。出处与完整实测表：[`docs/performance.md`](../performance.md)。
 
 debug 签名的证书是哪一张（本机实测）：
 
@@ -147,7 +148,11 @@ apksigner verify --print-certs app-debug.apk
 
 这张证书来自本机的调试密钥库。**本机它在 `~/.config/.android/debug.keystore`（XDG 路径），不在常见的 `~/.android/debug.keystore`** —— 【实测】后者不存在，前者别名 `androiddebugkey`，SHA-256 与上面 APK 的签名者逐位相同。**换机器/清 HOME 会换签名**，于是「覆盖安装」会失败，见 §3.3。
 
-### 2.4 【实测】本机 `assembleDebug` 失败：缺 Dart SDK
+### 2.4 【已订正】本机 `assembleDebug` 失败：缺 Dart SDK（2026-08-14 记录；今已满足）
+
+> **订正（2026-10-11）**：Dart 已在（`which dart` → `/usr/local/bin/dart`），本节的失败
+> **不再复现** —— debug/release 均实测构建通过。成因链保留作诊断记录（哪天换机器又缺
+> Dart，症状与下文逐字相同）。
 
 ```
 cd android && ./gradlew assembleDebug
@@ -518,6 +523,7 @@ adb shell settings get secure enabled_input_methods         # 已启用的输入
 
 - 现状：`engine/EngineController.kt` 的 `const val fetchLimit = 64`（**以该常量当前值为准** —— 修了它这条限制就没了，本文的 64 只是写作当天从代码里读到的），`refresh()` 里 `api.candidates(fetchLimit)` 一次取这么多条，翻页（每页 `pageSize`）纯客户端做，**引擎侧没有 offset**。
 - 引擎侧早就没有这个上限了：`FETCH_LIMIT` 与 `Engine::select` 内部那道截断都已拆掉，三处同值（`engine-core/src/router.rs` · `fcitx5-opi/src/candidate.rs` · `tsf-opi/src/logic.rs`，互相之间**有等值断言**）。【实测】后两处今天都是 `pub const FETCH_LIMIT: usize = usize::MAX;`，紧邻一行就是与 `engine_core::router::FETCH_LIMIT` 的 `assert!`。
+- **订正（2026-10-11）**：「引擎侧没有上限」只对**精确层**成立 —— 大词库整合后，**前缀扩展层**与 **9/14 键按键类层**各有静态词频 top-N 截断（`dictionary.rs` 的 `PREFIX_MATCH_CAP=9216` / `SCHEME_MATCH_CAP=2048`，缘由与实测见 [`docs/performance.md`](../performance.md)）。Android 一次取 64 条 ≪ 两个上限 ⇒ 本节的实际结论（翻不到第 64 条之后）不受影响。
 - 也就是说：**长前缀拼音打出的候选超过 64 条时，Android 端翻不到第 64 条之后**。macOS 端是同一个病：【实测】`macos/InputController.swift` 调 `engine.candidates(limit: 64)`，而默认值也是 64（`macos/OpiEngine.swift` 的 `candidates(limit: Int = 64)`）。
 - 【未验证】「长前缀能不能翻到末页」这件事**在 Android 真机/模拟器上没跑过** —— 这一条是静态取证（读 `EngineController` 的常量 + 引擎侧门禁），不是实测。
 
@@ -525,8 +531,8 @@ adb shell settings get secure enabled_input_methods         # 已启用的输入
 
 | # | 事项 | 依据 |
 |---|---|---|
-| 1 | **`assembleDebug` 过不去**：缺 Dart SDK（§2.4） | §2.4 实测报错 |
-| 2 | `assembleRelease` 从未真正构建过（只跑过 `--dry-run`） | §2.3 |
+| 1 | ~~`assembleDebug` 过不去：缺 Dart SDK~~ **已解决（2026-10-11）**：Dart 已在，debug/release 均实测构建 | §2.4 订正 |
+| 2 | ~~`assembleRelease` 从未真正构建过~~ **已实测（2026-10-11）**，且为 dist 分发口径 | §2.3 订正 |
 | 3 | 符号面板搜索态的 96dp 叠盘在**高 density 机型**上的实际观感 | `ImeScreen.kt` 该处注释自称「本机无设备，此改动未实测」 |
 | 4 | 横屏下键区占屏高（注释称 57%→68%，未在真横屏机上验） | `OpiImeService.keyboardHeight` 的注释 |
 | 5 | 真机（`arm64-v8a` / `armeabi-v7a`）上的任何行为 | §1.2 本机只有 x86_64 模拟器 |

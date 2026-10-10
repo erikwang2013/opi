@@ -19,7 +19,7 @@
 | 平台 | 适用情形 | 教程 |
 |---|---|---|
 | **Linux**（fcitx5 插件） | 想在自己桌面上真用起来。**目前唯一有 CI 在真 fcitx5 上验过「装完会不会被加载」**的一端，并产出 `.deb` / `.rpm` | [`linux.md`](linux.md) |
-| **Android**（原生 IME） | 有 Android SDK + NDK 和一台设备 / 模拟器。正文多数条目是【实测】，但 `assembleDebug` 在本机是失败的（缺 Dart SDK） | [`android.md`](android.md) |
+| **Android**（原生 IME） | 有 Android SDK + NDK 和一台设备 / 模拟器。正文多数条目是【实测】；早前「`assembleDebug` 本机失败（缺 Dart SDK）」已订正（2026-10-11）——debug/release 均可构建，**分发口径是 `assembleRelease`**（debug 的 Rust 未优化，见该篇 §2.3） | [`android.md`](android.md) |
 | **Windows**（TSF 插件） | 想在 Windows 上趟这一端。**本仓库没人装过、没人跑过** —— 正文是操作步骤，不是验证过的配方 | [`windows.md`](windows.md) |
 | **iOS**（键盘扩展） | 有 macOS + Xcode、想接着往下做。**草案**：Rust 侧能编，Swift 一行都没被编译过 | [`ios.md`](ios.md) |
 | **macOS**（InputMethodKit） | 同上，需要 macOS + Xcode。**草案**：Rust 侧能编，Swift 一行都没被编译过 | [`macos.md`](macos.md) |
