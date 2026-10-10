@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! 状态栏悬浮条（2026-10-10 用户裁决①：自绘悬浮条，8 个按钮全上）。
+//! 状态栏悬浮条（2026-10-10 用户裁决①：自绘悬浮条，8 个按钮全上；软键盘是否
+//! 默认上条见 [StatusBarSettings] —— 2026-10-10 中午起默认关）。
 //!
 //! 进程形态：`opi-candidates --statusbar`（Linux 随包装进 `/etc/xdg/autostart/` 随会话
 //! 自启；见 build.gradle.kts 的 injectSettingsDesktopEntry）。**独立进程**，与候选窗
@@ -18,12 +19,14 @@
 //! 埋在代码里。
 //!
 //! 条上按钮（2026-10-10 深夜**最终冻结**，从左到右 = [StatusBarButton] 的枚举序）：
-//! 小欧 / 中英 / 。，符号大全 / 简繁 / 月相全半角 / 软键盘 / Ω标点 / 设置。
+//! 小欧 / 中英 / Ω符号大全 / 简繁 / 月相全半角 / 软键盘 / 。，标点 / 设置。
 //! logo = 品牌标识兼拖动把手（第 1 位），单击打开设置（用户裁决③）。
 //!
 //! 图标口径：**没有图片资产、没有新依赖**。自绘（键盘/月相/四小方块/小欧）或单字与
-//! 符号（。， Ω 简/繁 中/英）—— 逐项冻结，见各图标函数的注释（PUNCT = Ω 是用户选的，
-//! 别「改回去」）。
+//! 符号（Ω 简/繁 中/英，标点两态）。**符号大全 = 静态 Ω；中英标点 = 双态**
+//! （punct on 「。，」/ off 「.,」）—— 这是 2026-10-10 **中午**按用户对按钮行为的描述
+//! 订正的结果（深夜 B 版曾把 。， 放符号大全、Ω 静态放标点，已废止）；逐项与时间线
+//! 见 iconText 的注释，别按任一半截「改回去」。
 //!
 //! **状态实时可见**（2026-10-10 深夜裁决）：简/繁、中/英、月相随输入法真实状态翻转。
 //! 状态 = `opi-ctl state`（契约见 Actions.kt），1s 轮询 + **每次按钮动作返回后立刻
@@ -73,6 +76,7 @@ import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.delay
 import xyz.erik.opi.pet.OpiPet
+import xyz.erik.opi.pet.OpiPetWindowIcon
 import xyz.erik.opi.pet.PetMood
 import xyz.erik.opi.pet.PetPalette
 
@@ -197,6 +201,8 @@ fun StatusBarApp(symbolCommit: (String) -> Boolean) {
         // 不抢焦点：点状态栏不该把用户正在打字的窗口的焦点夺走（与候选窗同一条理由）。
         focusable = false,
         title = "opi输入法 状态栏",
+        // 任务栏/窗口列表图标 = 小欧（与设置页那只同一套形状，见 PetIcon.kt）。
+        icon = OpiPetWindowIcon,
     ) {
         Box(Modifier.fillMaxSize().background(BarBg).border(1.dp, BarLine)) {
             if (notice == null) {
@@ -222,6 +228,7 @@ fun StatusBarApp(symbolCommit: (String) -> Boolean) {
             onCloseRequest = { settingsOpen = false },
             state = rememberWindowState(width = 460.dp, height = 600.dp),
             title = "opi输入法 设置",
+            icon = OpiPetWindowIcon,
         ) {
             SettingsWindow() // 与 `--settings` 模式同一个主体（那份自带落盘 + 通知）
         }
@@ -269,19 +276,20 @@ private fun BarButton(
 }
 
 /**
- * 按钮面上的字。2026-10-10 深夜用户**最终冻结**，**逐项别顺手「改回去」**：
- * · SYMBOLS = 「。，」—— **用户字面序（先句号）**，两轮都这么写；别按中文标点
- *   惯例改成「，。」；
- * · PUNCT = 「Ω」—— 看着与「中英标点」反直觉，但这是用户拍板的：Ω 表「标点/特殊
- *   字符」，且**不带状态显示**；
+ * 按钮面上的字。两轮裁决的**时间线**（防止按任一半截「改回去」）：
+ * · 2026-10-10 深夜 B 版：SYMBOLS = 「。，」静态、PUNCT = 「Ω」静态；
+ * · 同日**中午订正**（按用户对按钮行为的描述）：两枚**互换**且 PUNCT 变**双态** ——
+ *   SYMBOLS（符号大全）= 静态「Ω」；PUNCT（中英标点）= punct=on「。，」/ off「.,」。
+ * 字面都是用户写的：「。，」是中文侧（**先句号**，勿按惯例改成「，。」）；「.,」是
+ * 英文侧（先点号）—— 都不是笔误。
  * · TRAD / LANG = 单字，且是**当前状态**（简/繁、中/英），随输入法状态翻转 ——
  *   用户原话「文字标签全图标化」：多字标签（简繁/中英）全去。
  * 全半角、设置、键盘、小欧不出字：画月相/四小方块/键盘/小欧。
  */
 internal fun iconText(b: StatusBarButton, st: ImeState): String = when (b) {
-    StatusBarButton.SYMBOLS -> "。，"
+    StatusBarButton.SYMBOLS -> "Ω"
     StatusBarButton.TRAD -> tradIcon(st)
-    StatusBarButton.PUNCT -> "Ω"
+    StatusBarButton.PUNCT -> punctIcon(st)
     StatusBarButton.LANG -> langIcon(st)
     StatusBarButton.FULLWIDTH, StatusBarButton.SETTINGS,
     StatusBarButton.VK, StatusBarButton.LOGO -> "" // 这四个画图标，不出字
@@ -292,6 +300,12 @@ internal fun tradIcon(st: ImeState): String = if (st.trad) "繁" else "简"
 
 /** 中英按钮面的字 = 当前模式（zh/en）。 */
 internal fun langIcon(st: ImeState): String = if (st.zh) "中" else "英"
+
+/**
+ * 标点按钮面的字 = **当前标点态**（2026-10-10 中午订正：双态）。
+ * on = 中文标点「。，」（用户字面序，先句号）；off = 英文「.,」（用户字面序，先点号）。
+ */
+internal fun punctIcon(st: ImeState): String = if (st.punct) "。，" else ".,"
 
 /**
  * 全半角按钮 = 月相（用户裁决②：满月 = 全角、半月 = 半角）。

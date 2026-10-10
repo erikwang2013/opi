@@ -4,9 +4,15 @@
 //! 状态栏按钮的**外部命令**部分：把点击变成一条命令，并把失败如实报回来。
 //!
 //! 契约（2026-10-10 冻结，Linux 侧由另一条轨实现，本侧**只调用**）：
-//! **`opi-ctl <action>`**，action ∈ `symbols|trad|punct|fullwidth`；`opi-ctl` 在
-//! `/usr/bin/opi-ctl`（PATH 上，按名调）。中英文切换走 `fcitx5-remote -t`（fcitx5
-//! 自带工具，与 Shift 轻按同一条通路）。
+//! **`opi-ctl <action>`**，action ∈ `symbols|trad|punct|fullwidth|lang`；`opi-ctl` 在
+//! `/usr/bin/opi-ctl`（PATH 上，按名调）。
+//!
+//! ⚠️ **中英文切换只能走 `opi-ctl lang`，绝不能走 `fcitx5-remote -t`**（事故留痕，
+//! 2026-10-10 中午用户报障）：`-t` 切换的是**整个 fcitx5 的启用态**，不是中英模式 ——
+//! 用户点两下后整个输入法框架被停用，中文一个字打不出来（lead 在用户真机实测的指纹：
+//! 点两次后 `fcitx5-remote` 报 2 = 全框架已禁用）。旧的 `-t` 映射来自更早的任务文档，
+//! 就摆在状态栏 LANG 按钮下面；想「顺手」改回去之前先看 StatusBarTest 的映射回归钉。
+//!
 //! 状态通道（2026-10-10 深夜冻结）：**`opi-ctl state`** → 一行
 //! `lang=zh|en;trad=on|off;punct=on|off;fw=on|off`（rc 0 成功；通道不通 rc≠0 且无输出）
 //! —— 状态栏的实时图标读它（[readImeState]）。
@@ -29,7 +35,11 @@ fun statusActionCommand(b: StatusBarButton): List<String>? = when (b) {
     StatusBarButton.TRAD -> listOf("opi-ctl", "trad")
     StatusBarButton.PUNCT -> listOf("opi-ctl", "punct")
     StatusBarButton.FULLWIDTH -> listOf("opi-ctl", "fullwidth")
-    StatusBarButton.LANG -> listOf("fcitx5-remote", "-t")
+    // ⚠️ 事故（2026-10-10 中午用户报障）：这里曾是 listOf("fcitx5-remote", "-t") ——
+    // `-t` 切的是**整个 fcitx5 的启用态**，不是中英模式。用户点两下 ⇒ 全框架被停用、
+    // 中文打不出来（lead 真机实测指纹：点两次后 `fcitx5-remote` 报 2）。正确动作是契约
+    // 里的 `opi-ctl lang`；有映射回归钉（StatusBarTest）。别改回去。
+    StatusBarButton.LANG -> listOf("opi-ctl", "lang")
     StatusBarButton.VK, StatusBarButton.LOGO, StatusBarButton.SETTINGS -> null
 }
 
@@ -85,8 +95,10 @@ fun runExternal(cmd: List<String>, timeoutMs: Long = 3000): String? {
  * 取代：现在读得到就画真的，读不到画缺省（一个中文输入法最中性的样子），不空白、
  * 不报错。
  *
- * [punct] 只解析、不参与渲染（裁决：Ω 图标不带状态显示）；留字段是为了格式演进时
- * 不至于读丢，且解析口径有测试钉住。
+ * [punct] **参与渲染**：中英标点按钮双态（punct=on → 「。，」；off → 「.,」），图标
+ * 选择见 StatusBar.kt 的 [punctIcon]。时间线（防回退）：2026-10-10 深夜 B 版曾裁决
+ * 「punct 只解析、不参与渲染」→ **同日中午按用户对按钮行为的描述订正**（。，/., 两态
+ * 归标点按钮、符号大全改静态 Ω）；B 版那条已被取代，别按它「改回去」。
  */
 data class ImeState(
     val zh: Boolean = true,

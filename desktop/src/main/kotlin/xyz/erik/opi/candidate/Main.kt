@@ -71,6 +71,7 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import kotlin.system.exitProcess
+import xyz.erik.opi.pet.OpiPetWindowIcon
 
 // ---------- 窗口状态（snapshot state，服务器线程跨线程写入） ----------
 
@@ -123,6 +124,7 @@ fun main(args: Array<String>) = application {
             onCloseRequest = ::exitApplication,
             state = rememberWindowState(width = 460.dp, height = 600.dp),
             title = "opi输入法 设置",
+            icon = OpiPetWindowIcon, // 窗口/任务栏图标 = 小欧（PetIcon.kt）
         ) {
             SettingsWindow()
         }
@@ -143,6 +145,7 @@ fun main(args: Array<String>) = application {
         resizable = false,
         focusable = false,
         title = "opi输入法 候选窗",
+        icon = OpiPetWindowIcon, // 窗口/任务栏图标 = 小欧（PetIcon.kt）
     ) {
         // 位置跟随（position 消息；缺省固定默认位置）。
         LaunchedEffect(model.x, model.y, model.visible) {

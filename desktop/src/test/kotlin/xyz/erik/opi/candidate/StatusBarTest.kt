@@ -18,10 +18,17 @@ import org.junit.Test
 class StatusBarTest {
 
     @Test
-    fun `default is all eight buttons visible`() {
-        // 2026-10-10 用户裁决「8 按钮全上」—— 默认值不是「全关」。
-        assertEquals(StatusBarButton.entries.toList(), visibleStatusButtons(StatusBarSettings(), windows = false))
-        assertEquals(8, StatusBarButton.entries.size)
+    fun `default shows every button except the soft keyboard`() {
+        // 2026-10-10 早先裁决「8 按钮全上」被**同日中午**的用户裁决收窄：软键盘默认关
+        // （要用的在设置里自己开；已有配置里的显式值照旧）。其余七个仍默认常驻 ——
+        // 「全关」会让老用户升级后条上什么都不剩。
+        assertEquals(
+            StatusBarButton.entries.filter { it != StatusBarButton.VK },
+            visibleStatusButtons(StatusBarSettings(), windows = false),
+        )
+        assertEquals(7, visibleStatusButtons(StatusBarSettings(), windows = false).size)
+        assertFalse("软键盘默认必须是关（2026-10-10 中午裁决）", StatusBarSettings().vk)
+        assertFalse("缺键的旧配置读出来也得是关（fromIni 的回落别写成 true）", OpSettings.fromIni("").statusbar.vk)
     }
 
     @Test
@@ -36,10 +43,15 @@ class StatusBarTest {
 
     @Test
     fun `frozen icon literals stay as the user picked them`() {
-        // 用户两轮都按「句号、逗号」写（先句号）——按字面来，别按中文标点惯例改回
-        // 「，。」；Ω 表「标点/特殊字符」，也不带状态显示。改字前先回去问。
-        assertEquals("。，", iconText(StatusBarButton.SYMBOLS, ImeState()))
-        assertEquals("Ω", iconText(StatusBarButton.PUNCT, ImeState()))
+        // 两轮裁决的**时间线**（别按任一半截「改回去」）：
+        // · 2026-10-10 深夜 B 版：SYMBOLS = 「。，」静态、PUNCT = 「Ω」静态；
+        // · 同日**中午订正**（按用户对按钮行为的描述）：两枚**互换**且 PUNCT 双态 ——
+        //   SYMBOLS（符号大全）= 静态「Ω」；PUNCT（中英标点）= punct on「。，」/ off「.,」。
+        // 字面都是用户写的：「。，」中文侧**先句号**（勿按惯例改成「，。」）；「.,」
+        // 英文侧**先点号** —— 都不是笔误。
+        assertEquals("Ω", iconText(StatusBarButton.SYMBOLS, ImeState()))
+        assertEquals("。，", iconText(StatusBarButton.PUNCT, ImeState(punct = true)))
+        assertEquals(".,", iconText(StatusBarButton.PUNCT, ImeState(punct = false)))
         // 单字随状态（与 tradIcon/langIcon 同源，两处漂了这里会红）
         assertEquals("繁", iconText(StatusBarButton.TRAD, ImeState(trad = true)))
         assertEquals("简", iconText(StatusBarButton.TRAD, ImeState(trad = false)))
@@ -63,11 +75,15 @@ class StatusBarTest {
     @Test
     fun `each button can be turned off alone`() {
         // 覆盖 resident ⇄ with 的八对分支：任一对写错（比如 VK 那行复制成 SYMBOLS），
-        // 这条就在那个按钮上红。
+        // 这条就在那个按钮上红。基线取**全开**（默认里 VK 已是关，拿默认当基线的话
+        // 「关 VK」是空操作，那条分支就测不到了）。
+        val allOn = StatusBarButton.entries.fold(StatusBarSettings()) { sb, b -> sb.with(b, true) }
         for (b in StatusBarButton.entries) {
-            val shown = visibleStatusButtons(StatusBarSettings().with(b, false), windows = false)
-            assertFalse("$b 关掉后不该在条上", b in shown)
-            assertEquals("关掉 $b 只该少它一个", 7, shown.size)
+            assertEquals(
+                "关掉 $b 只该少它一个",
+                StatusBarButton.entries.filter { it != b },
+                visibleStatusButtons(allOn.with(b, false), windows = false),
+            )
         }
     }
 
@@ -83,11 +99,12 @@ class StatusBarTest {
 
     @Test
     fun `windows only keeps buttons that have an action there`() {
-        // Windows 上没有 opi-ctl / fcitx5-remote（那四个动作是 Linux 侧的），
-        // 没动作的按钮不上条 ——「宁可少一页，不做点不动的开关」。
+        // Windows 上没有 opi-ctl（那五个动作 symbols/trad/punct/fullwidth/lang 是
+        // Linux 侧的），没动作的按钮不上条 ——「宁可少一页，不做点不动的开关」。
+        // 显式开 VK：这条测的是「按有无动作过滤」，别被默认值变更（VK 默认关）牵连。
         assertEquals(
             listOf(StatusBarButton.LOGO, StatusBarButton.SYMBOLS, StatusBarButton.VK, StatusBarButton.SETTINGS),
-            visibleStatusButtons(StatusBarSettings(), windows = true),
+            visibleStatusButtons(StatusBarSettings(vk = true), windows = true),
         )
         // 设置窗的开关行用同一个判定（两处同源）
         assertEquals(4, StatusBarButton.entries.count { statusButtonWired(it, windows = true) })
@@ -98,13 +115,16 @@ class StatusBarTest {
     fun `command mapping is the frozen opi-ctl contract`() {
         // 契约：`opi-ctl <action>`，动作名 2026-10-10 冻结（另一条轨实现）。
         // 改这里的字符串 = 状态栏点了没反应（进程起来了、退出码 0、什么都没发生）：
-        // 这是跨轨契约，本仓惯例是「钉死在测试里」。
+        // 这是跨轨契约，本仓惯例是「钉死在测试里」。五个动作**逐条钉字面**。
         assertEquals(listOf("opi-ctl", "symbols"), statusActionCommand(StatusBarButton.SYMBOLS))
         assertEquals(listOf("opi-ctl", "trad"), statusActionCommand(StatusBarButton.TRAD))
         assertEquals(listOf("opi-ctl", "punct"), statusActionCommand(StatusBarButton.PUNCT))
         assertEquals(listOf("opi-ctl", "fullwidth"), statusActionCommand(StatusBarButton.FULLWIDTH))
-        // 中英文切换走 fcitx5 自带工具（与 Shift 轻按同一条通路）
-        assertEquals(listOf("fcitx5-remote", "-t"), statusActionCommand(StatusBarButton.LANG))
+        // ⚠️ 事故留痕（2026-10-10 中午用户报障）：LANG 曾是 fcitx5-remote -t ——
+        // `-t` 切的是**整个 fcitx5 的启用态**，不是中英模式：用户点两下 ⇒ 全框架被
+        // 停用、中文一个字打不出来（lead 真机实测指纹：点两次后 `fcitx5-remote` 报 2）。
+        // 中英切换的正确动作是契约里的 `opi-ctl lang`。改回 -t 之前先读完这段。
+        assertEquals(listOf("opi-ctl", "lang"), statusActionCommand(StatusBarButton.LANG))
         // 这三个是进程内动作（开键盘窗 / 开符号页 / 开设置窗），不出命令
         assertNull(statusActionCommand(StatusBarButton.VK))
         assertNull(statusActionCommand(StatusBarButton.LOGO))
@@ -140,12 +160,15 @@ class StatusBarTest {
 
     @Test
     fun `sample state lines pick the icons`() {
-        // 「样例串 → 图标选择」：简/繁、中/英随状态翻转；月相看 fullwidth 位
-        // （满月 = 全角、半月 = 半角，见 StatusBar.kt 的 MoonIcon）。
+        // 「样例串 → 图标选择」端到端：简/繁、中/英、标点两态随状态翻转；月相看
+        // fullwidth 位（满月 = 全角、半月 = 半角，见 StatusBar.kt 的 MoonIcon）。
         assertEquals("繁", tradIcon(parseImeState("trad=on")))
         assertEquals("简", tradIcon(parseImeState("trad=off")))
         assertEquals("英", langIcon(parseImeState("lang=en")))
         assertEquals("中", langIcon(parseImeState("lang=zh")))
+        // 标点双态（2026-10-10 中午订正）：整行状态串 → 按钮面
+        assertEquals("。，", iconText(StatusBarButton.PUNCT, parseImeState("lang=zh;punct=on;fw=off")))
+        assertEquals(".,", iconText(StatusBarButton.PUNCT, parseImeState("lang=zh;punct=off;fw=off")))
         assertTrue(parseImeState("fw=on").fullwidth) // 满月
         assertFalse(parseImeState("fw=off").fullwidth) // 半月
     }

@@ -48,6 +48,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.delay
+import xyz.erik.opi.pet.OpiPetWindowIcon
 
 // ---------- 键位表（纯数据） ----------
 
@@ -176,6 +177,7 @@ fun VirtualKeyboardWindow(onClose: () -> Unit, onSymbols: () -> String?) {
         resizable = false,
         focusable = false, // 承重：见文件头 ⚠️
         title = "opi输入法 虚拟键盘",
+        icon = OpiPetWindowIcon, // 窗口/任务栏图标 = 小欧（PetIcon.kt）
     ) {
         Column(
             modifier = Modifier.fillMaxSize().background(KbBg).padding(6.dp),

@@ -64,6 +64,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.delay
+import xyz.erik.opi.pet.OpiPetWindowIcon
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -209,6 +210,7 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit) {
         // 不抢焦点：上屏要求文档窗口仍持有焦点（没焦点时 TSF 会跳过插入）。
         focusable = false,
         title = "opi输入法 符号大全",
+        icon = OpiPetWindowIcon, // 窗口/任务栏图标 = 小欧（PetIcon.kt）
     ) {
         Column(Modifier.fillMaxSize().background(SymBg)) {
             Row(

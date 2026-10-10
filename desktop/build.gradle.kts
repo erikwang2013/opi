@@ -224,15 +224,20 @@ tasks.register("injectSettingsDesktopEntry") {
         val root = File(work, "root")
         sh("dpkg-deb", "-R", deb.absolutePath, root.absolutePath)
 
-        // 从**包里**取真正的启动器与图标路径（不硬编码 —— jpackage 换布局时这里跟着走）
+        // 从**包里**取真正的启动器路径（不硬编码 —— jpackage 换布局时这里跟着走）
         val bin = File(root, "opt").listFiles()?.firstOrNull()
             ?.resolve("bin")?.listFiles()?.firstOrNull()
             ?: error("包里没有 /opt/*/bin/* 启动器")
-        val icon = bin.parentFile.parentFile.resolve("lib").listFiles()
-            ?.firstOrNull { it.name.endsWith(".png") }
-            ?: error("包里没有 /opt/*/lib/*.png 图标")
         val installedBin = "/opt/" + bin.toRelativeString(File(root, "opt"))
-        val installedIcon = "/opt/" + icon.toRelativeString(File(root, "opt"))
+        // Icon **不再**指 jpackage 那份 /opt/*/lib/*.png（栅格图：同一只小欧，却是
+        // 构建产物、没进 git）。改指 hicolor 里的矢量口径 docs/opi-pet.svg —— 由
+        // crates/fcitx5-opi/cpp/CMakeLists.txt 的
+        //   install(FILES docs/opi-pet.svg DESTINATION .../icons/hicolor/scalable/apps)
+        // 装到 /usr/share/icons/hicolor/scalable/apps/opi-pet.svg，packages.yml 的
+        // 合并步把它并进主包 ⇒ 装完必在（2026-10-10 lead 核过；发布物是合并后的
+        // 主包，desktop 的 .deb 单独装时这份不在）。用户裁决同日：菜单/桌面入口的
+        // 图标也要是 logo。窗口图标（Painter）在那边是另一份，见 PetIcon.kt。
+        val installedIcon = "/usr/share/icons/hicolor/scalable/apps/opi-pet.svg"
 
         val apps = File(root, "usr/share/applications").apply { mkdirs() }
         // 若 jpackage 自己那份也在（同一 --name，如 opi-candidates.desktop），删掉：
