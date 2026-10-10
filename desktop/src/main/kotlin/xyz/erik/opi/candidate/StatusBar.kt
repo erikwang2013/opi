@@ -33,6 +33,17 @@
 //! 补读一次**（「即时生效」的落点，见 [actionWithStateRefresh]）。读不到/坏串/缺键
 //! ⇒ 中性缺省（中/简/半月）—— 旧原则「读不到状态就不画成当前状态」被本裁决取代，
 //! 缺省语义定案见 Actions.kt 的 [ImeState]。
+//!
+//! **条窗不进任务栏/菜单栏**（用户裁决 2026-10-10 下午：「桌面端状态栏是不在菜单栏
+//! 显示图标的」）：机制 = X11 属性直写（`_NET_WM_WINDOW_TYPE_UTILITY` +
+//! `_NET_WM_STATE_SKIP_TASKBAR/SKIP_PAGER`），全在 [SkipTaskbar]，**已真机 xprop 验过**。
+//! ⚠️ 别改回 `java.awt.Window.setType(UTILITY)`：JDK 的 XAWT 里那条路是死的（构造器
+//! 字段初始化把 preInit 抄的值覆成 NORMAL，实证见 SkipTaskbar.kt 头注释），试过了。
+//! 窗口图标（小欧）那条裁决不受影响 —— 说的是「任务栏条目」，不是窗口图标。
+//!
+//! **切到别的输入法就藏**（用户裁决 2026-10-10 下午）：`state` 的 `im=` 位非空且 ≠ "opi"
+//! ⇒ 整条隐藏；切回 opi 由 1s 轮询让它自己出现；缺键/空串 = 未知 ⇒ 维持现状（不闪）。
+//! 判定全在 [barVisible]（纯函数，四态有单测钉住）。
 
 package xyz.erik.opi.candidate
 
@@ -96,6 +107,22 @@ private const val BAR_H = 42
 /** 条宽随按钮数变（隐藏的按钮不占位）。纯函数，单测钉住。 */
 internal fun statusBarWidthDp(buttonCount: Int): Int =
     PAD * 2 + BTN * buttonCount + GAP * (buttonCount - 1).coerceAtLeast(0)
+
+/**
+ * 纯函数：条该不该显示（[StatusBarApp] 的 visible 用它）。
+ *
+ * 规则（2026-10-10 下午用户裁决「切到其他输入法时状态栏消失」）：
+ * `enabled && (im 未知 || im == "opi")` ——
+ * · [buttons] 空 = master 隐藏 / 按钮全关 ⇒ 恒隐藏（老规则，优先级最高，与 [im] 无关）；
+ * · [im] 缺键/空串 = **未知** ⇒ 维持现状（可见），不闪 —— glue 的 `im=` 还没合时旧输出
+ *   正好落这里，轮询读失败（中性缺省）也落这里；
+ * · [im] 非空且 ≠ "opi"（当前是别的输入法）⇒ 隐藏；切回 opi 由 1s 轮询让它自己出现。
+ *
+ * ⚠️ `"opi"` 是**跨轨字面**（glue 侧追加的 `im=` 值 = 本 addon 的 uniqueName）。对不上的
+ * 表现是「opi 激活时条一直藏着」——响的错，不是静默错；但改它必须两侧一起改。
+ */
+internal fun barVisible(buttons: List<StatusBarButton>, im: String): Boolean =
+    buttons.isNotEmpty() && (im.isEmpty() || im == "opi")
 
 /** 初始位置：屏幕底部居中、离下沿一截（别贴边，也别压任务栏）。 */
 private fun barPosition(widthDp: Int): WindowPosition {
@@ -193,8 +220,10 @@ fun StatusBarApp(symbolCommit: (String) -> Boolean) {
         // 无边框窗没有关闭入口；「隐藏」走设置里的 master 开关（进程留着，见 visible 一行）。
         onCloseRequest = {},
         state = windowState,
-        // master 隐藏 / 按钮全关 → 整条隐藏。进程继续轮询 ⇒ 设置里拨回来它就自己出现。
-        visible = buttons.isNotEmpty(),
+        // master 隐藏 / 按钮全关 → 整条隐藏（进程继续轮询 ⇒ 设置里拨回来它就自己出现）；
+        // 切到别的输入法（im 非空且 ≠ opi）也隐藏，切回来 1s 轮询让它自己出现 —— 判定
+        // 全在 [barVisible]，四态单测钉住。
+        visible = barVisible(buttons, imeState.im),
         undecorated = true,
         alwaysOnTop = true,
         resizable = false,
@@ -204,6 +233,9 @@ fun StatusBarApp(symbolCommit: (String) -> Boolean) {
         // 任务栏/窗口列表图标 = 小欧（与设置页那只同一套形状，见 PetIcon.kt）。
         icon = OpiPetWindowIcon,
     ) {
+        // 不进任务栏/菜单栏（用户裁决 2026-10-10 下午）：X11 属性直写，机制与取证状态
+        // 见 SkipTaskbar.kt（关键实现：新窗创建时注册一次，之后它自己跟随每次显示重贴）。
+        LaunchedEffect(window) { SkipTaskbar.apply(window) }
         Box(Modifier.fillMaxSize().background(BarBg).border(1.dp, BarLine)) {
             if (notice == null) {
                 Row(

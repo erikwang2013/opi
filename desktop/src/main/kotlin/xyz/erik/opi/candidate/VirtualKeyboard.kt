@@ -154,6 +154,9 @@ private fun keyboardPosition(): WindowPosition {
  * [onSymbols] = 底行「符」键的动作（符号大全）；返回 null = 成功、非 null = 失败
  * 原因（同注入失败的提示口径）。平台分派在 [StatusBarApp] 的 `openSymbols` 单点
  * ——本窗不自己写平台分支（它与状态栏「符号」按钮必须永远同一条动作）。
+ *
+ * 不进任务栏与状态栏同一条（[SkipTaskbar]）—— 用户没点名本窗，属「同族顺手」：
+ * 它也漂浮、也常驻，留任务栏条目同样说不通。机制与取证状态见 SkipTaskbar.kt 头注释。
  */
 @Composable
 fun VirtualKeyboardWindow(onClose: () -> Unit, onSymbols: () -> String?) {
@@ -179,6 +182,8 @@ fun VirtualKeyboardWindow(onClose: () -> Unit, onSymbols: () -> String?) {
         title = "opi输入法 虚拟键盘",
         icon = OpiPetWindowIcon, // 窗口/任务栏图标 = 小欧（PetIcon.kt）
     ) {
+        // 不进任务栏（同状态栏，用户没点名、属同族顺手）：X11 属性直写，见 SkipTaskbar.kt。
+        LaunchedEffect(window) { SkipTaskbar.apply(window) }
         Column(
             modifier = Modifier.fillMaxSize().background(KbBg).padding(6.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
