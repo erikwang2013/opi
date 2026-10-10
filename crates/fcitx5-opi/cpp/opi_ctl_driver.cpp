@@ -6,8 +6,11 @@
 //
 // 直接 #include 胶水源码（验的就是即将装进插件的那份代码）。三件事，都是**跨 agent
 // 契约**而不是内部细节：
-//   1. W1 覆盖面：切输入法 / 切英文 → 有候选上首候选、无候选提交原文；
-//      焦点移出 / reset → **静默清空，绝不提交**（用户裁决，与上一条成对照）。
+//   1. W1 覆盖面：切输入法 / 切英文 → **按模式分叉**：拼音/繁体提交缓冲原文、符号
+//      模式不上关键字（2026-10-10 深夜用户裁决「切英文 = 默认是拼音，不要是候选
+//      词」+ 同夜追加的模式分叉；白天那版「有候选上首候选」作废 —— 订正时间线、
+//      正控与负对照见 §1/§2b）；焦点移出 / reset → **静默清空，绝不提交**
+//      （用户裁决，与上一条成对照）。
 //   2. **顺序契约**（lead 2026-10-10）：符号浏览进行中切走 ⇒ 先退浏览（恢复进入
 //      浏览前的真缓冲）→ 再按 W1 提交。顺序反了就是把浏览态的标题串当用户输入
 //      交出去 —— 本驱动用假 hook 把这条钉死（真引擎入口是弱符号，本分支未落地）。
@@ -105,27 +108,62 @@ int main() {
     // 与浏览入口的实现无关。
     opiSymbolBrowseHook() = [](int32_t) { return 0; };
 
-    std::printf("== 1. W1：切输入法 = 有候选上首候选 ==\n");
+    std::printf("== 1. W1：切输入法 = 有候选也上**原文**（2026-10-10 深夜改写）==\n");
+    // 订正时间线（本段原断言「提交首候选」）：2026-10-10 白天 lead 裁决「有候选上
+    // 首候选」；同夜用户裁决「切英文 = 默认是拼音，不要是候选词」（移动端先改并
+    // 实证 [英文] → 字段收 ni'hao），桌面统一为一律原文 ⇒ 本段随语义**有意**改写：
+    // 正控 = 提交的就是缓冲原文（逐字），负对照 = **不是**首候选（把 select(0) 加
+    // 回去只应红本段负对照与 §6 那两条，别的地方不该动）。同夜追加：一律原文
+    // **按模式分叉** —— 本段是拼音面，符号模式那半（不上关键字）见 §2b。
     resetVia();
     commitNow();
     type("nihao");
     const std::string nihao0 = firstCand();
+    const std::string raw0 = bufferOf();
     check(candidateCount(ic) > 0 && nihao0 != "<none>",
-          "「nihao」有候选（被测前提；没候选时本段测的是§2 那条路）");
+          "「nihao」有候选（被测前提）");
+    check(raw0 == "nihao", "原文 = 打进去的串逐字（被测前提，实际 " + q(raw0) + "）");
+    check(raw0 != nihao0, "前提：原文与首候选本就不同（否则负对照无分辨力；首候选 "
+          + q(nihao0) + "）");
     switchIM();
-    check(commitNow() == nihao0, "切输入法：提交首候选 " + q(nihao0));
+    const std::string c1 = commitNow();
+    check(c1 == raw0, "切输入法：提交缓冲原文 " + q(raw0) + "（不挑候选）");
+    check(c1 != nihao0, "负对照：提交的**不是**首候选 " + q(nihao0));
     check(preeditOf(ic).empty() && candidateCount(ic) == 0 && bufferOf().empty(),
           "提交后引擎与面板都清干净（无缓冲、无预编辑、无候选）");
 
-    std::printf("== 2. W1：无候选 = 提交原文 ==\n");
+    std::printf("== 2. W1：无候选 = 提交原文（与 §1 同一条路 —— 分档已取消）==\n");
     resetVia();
     commitNow();
     type("zzzz");
     check(bufferOf() == "zzzz" && candidateCount(ic) == 0,
           "「zzzz」在缓冲里且零候选（被测前提）");
     switchIM();
-    check(commitNow() == "zzzz", "切输入法：无候选时提交原文（别把用户打的丢掉）");
+    check(commitNow() == "zzzz",
+          "切输入法：提交原文（别把用户打的丢掉；无候选只是 §1 同一实现的退化情形）");
     check(preeditOf(ic).empty(), "提交后面板同样清干净");
+
+    std::printf("== 2b. W1：符号模式 = 不上关键字（模式分叉的另一半，与 §1/§2 成对）==\n");
+    // 同夜追加裁决（2026-10-10）：「一律原文」**按模式分叉** —— 拼音/繁体（字母
+    // 缓冲）上原文（§1/§2 那两段），符号模式的关键字（`、,` 这类，缓冲里是
+    // `dun`/`;sh` 这种）**不上屏**：切走只清缓冲、提交空串。理由：关键字不是待
+    // 上屏文本，塞进文档比丢缓冲更坏。正控 = 提交空串；负对照 = 提交里**不许**
+    // 出现关键字（把符号分支删掉只应红本段——`dun` 会被当原文交出去）。
+    // 判据是**引擎当前 mode**（FFI 已有读口 opi_fcitx5_mode()，不需要新出口）。
+    resetVia();
+    commitNow();
+    opi_fcitx5_switch_mode(kModeSymbol);
+    type("dun");
+    const std::string kw0 = bufferOf();
+    check(kw0 == "dun", "符号模式：关键字进了缓冲（被测前提，实际 " + q(kw0) + "）");
+    switchIM();
+    const std::string kwCommit = commitNow();
+    check(kwCommit.empty(),
+          "切走：符号关键字**不上屏**（提交空串；实际 " + q(kwCommit)
+              + "；塞进文档比丢缓冲更坏）");
+    check(preeditOf(ic).empty() && bufferOf().empty() && candidateCount(ic) == 0,
+          "切走：缓冲/候选/预编辑仍清干净");
+    opi_fcitx5_switch_mode(kModePinyin); // 复位：§3 的「空缓冲」前提别沾上符号模式
 
     std::printf("== 3. W1：空缓冲 = 什么都不提交 ==\n");
     resetVia();
@@ -155,10 +193,14 @@ int main() {
     // 「标题串」（真引擎里浏览态的候选面就是类目标题），退出时同步恢复真缓冲
     // （opi_rust_ffi.h 的同步契约）。这样就能判两件事：调用**顺序**，以及提交出去
     // 的到底是恢复后的真缓冲还是浏览态那串。
+    // 2026-10-10 深夜随 W1 语义订正改写：提交物从「真缓冲的首候选」改成「真缓冲
+    // **原文**」；负对照留两条 —— 不是真缓冲首候选（select(0) 加回来这条红）、
+    // 不是浏览态标题串的首候选（顺序反了这条红）。
     resetVia();
     type("hao");
     const std::string hao0 = firstCand();
-    check(candidateCount(ic) > 0, "用户真缓冲「hao」有候选（被测前提）");
+    check(candidateCount(ic) > 0 && hao0 != "<none>", "用户真缓冲「hao」有候选（被测前提）");
+    check(hao0 != "hao", "前提：首候选与缓冲原文不同（否则 §6 的负对照无分辨力）");
     std::string log;
     std::string browseSaved; // 浏览入口保存的真缓冲
     std::string exitSaw;     // 退出钩子**当时看到**的缓冲
@@ -190,15 +232,17 @@ int main() {
     const std::string enterReply = engine.handleCtlAction_("symbols");
     check(enterReply == "ok", "进入浏览（symbols 动作，假 hook 返回 1）应答 ok");
     const std::string junk0 = firstCand();
-    std::printf("  浏览态首候选=%s 真缓冲首候选=%s\n", q(junk0).c_str(),
-                q(hao0).c_str());
+    std::printf("  浏览态首候选=%s 真缓冲首候选=%s（负对照的两个靶子）\n",
+                q(junk0).c_str(), q(hao0).c_str());
     switchIM(); // 切走：契约要求「先退浏览 → 再 W1 提交」
     const std::string committed = commitNow();
     check(log == "enter;exit;", "调用顺序 enter → exit（实际 [" + log + "]）");
     check(exitSaw == "fuhao",
           "退出钩子看到的仍是浏览态缓冲（证明 exit 发生在 W1 取缓冲**之前**）");
-    check(committed == hao0, "提交的是真缓冲「hao」的首候选 " + q(hao0));
-    check(committed != junk0, "提交的**不是**浏览态标题串的首候选 " + q(junk0));
+    check(committed == browseSaved,
+          "提交的是恢复后的真缓冲**原文**「hao」（不挑候选）");
+    check(committed != hao0, "负对照：提交的**不是**真缓冲的首候选 " + q(hao0));
+    check(committed != junk0, "负对照：提交的**不是**浏览态标题串的首候选 " + q(junk0));
     check(preeditOf(ic).empty() && bufferOf().empty(), "提交后引擎与面板都清干净");
 
     // §7 的 lang（切英文）会走 opiDirectConfirm —— 换回空操作 hook，别让 §6 的
@@ -252,7 +296,8 @@ int main() {
     // handleCtlAction_ 的「当前 IC」取自 instance_->mostRecentInputContext()，而这里
     // 用 nullptr 构造引擎 ⇒ opiDirectConfirm(ic) 在空指针守卫处就返回了。本段只验
     // 状态后果（切模式清缓冲）；**提交**那半归 e2e 变体 ctl —— 那边在真守护进程里
-    // 先打 nihao、再跑 opi-ctl lang，断言 IC 真收到 CommitString「你好」。
+    // 先打 nihao、再跑 opi-ctl lang，断言 IC 真收到 CommitString「nihao」（缓冲
+    // 原文；2026-10-10 深夜语义订正，见 opi_e2e_ctl.py 那条断言的订正注记）。
     check(bufferOf().empty(), "lang：切模式清了缓冲（提交那一半需要真 IC，见注释）");
     fcitx::Action *modeItem = findAction("中", "英");
     check(modeItem != nullptr && modeItem->shortText(&ic) == "英",
