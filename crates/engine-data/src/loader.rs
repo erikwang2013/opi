@@ -127,7 +127,10 @@ impl Dictionary for MmapDictionary {
         // 第二遍：只物化保留下来的条目。
         let word_start = self.word_start();
         let mut out: Vec<Entry> = Vec::with_capacity(exact_idx.len() + rest.len());
-        for i in exact_idx.into_iter().chain(rest.into_iter().map(|(_, i)| i)) {
+        for i in exact_idx
+            .into_iter()
+            .chain(rest.into_iter().map(|(_, i)| i))
+        {
             let (_, pl, wo, wl, freq) = self.record(data, i);
             let word = std::str::from_utf8(&data[word_start + wo..word_start + wo + wl])
                 .expect("validate 已校验 UTF-8")
@@ -181,7 +184,10 @@ impl Dictionary for MmapDictionary {
         }
         let word_start = self.word_start();
         let mut out: Vec<(Entry, String)> = Vec::with_capacity(exact_idx.len() + rest.len());
-        for i in exact_idx.into_iter().chain(rest.into_iter().map(|(_, i)| i)) {
+        for i in exact_idx
+            .into_iter()
+            .chain(rest.into_iter().map(|(_, i)| i))
+        {
             let (po, pl, wo, wl, freq) = self.record(data, i);
             let pinyin = std::str::from_utf8(&data[ps + po..ps + po + pl])
                 .expect("validate 已校验 UTF-8")

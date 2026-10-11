@@ -21,8 +21,8 @@
 //! （電/話 是 luna 既有字形，文档写明「单字层的繁体字形一个不动」），拿候选栏判
 //! 会与那条规定打架；词形级别的「0 条」用整词字节扫描最准。
 
-use engine_core::symbols::SymbolEngine;
 use engine_core::Engine;
+use engine_core::symbols::SymbolEngine;
 use engine_data::load_mmap;
 use std::path::Path;
 

@@ -38,8 +38,16 @@ fn set_of(rows: Vec<(engine_core::Entry, String)>) -> HashSet<Row> {
 fn scheme_fast_path_matches_full_scan() {
     let dict = load_mmap(Path::new(LUNA_OPID)).expect("加载词库");
     let cases: &[(Scheme, &[&str], Option<&str>)] = &[
-        (Scheme::Nine, &["6", "64", "644", "64426", "94", "96", "9"], None),
-        (Scheme::Fourteen, &["b", "bu", "bug", "bugao", "bugaoml"], None),
+        (
+            Scheme::Nine,
+            &["6", "64", "644", "64426", "94", "96", "9"],
+            None,
+        ),
+        (
+            Scheme::Fourteen,
+            &["b", "bu", "bug", "bugao", "bugaoml"],
+            None,
+        ),
         (Scheme::Nine, &["64", "644"], Some("ni")), // pin 过滤腿
     ];
     let mut checked = 0usize;
@@ -52,7 +60,10 @@ fn scheme_fast_path_matches_full_scan() {
             assert!(
                 fast_set.is_subset(&reference_set),
                 "{scheme:?} {input:?} pin={pin:?}: 快路径返回了参考实现没有的条目：{:?}",
-                fast_set.difference(&reference_set).take(5).collect::<Vec<_>>()
+                fast_set
+                    .difference(&reference_set)
+                    .take(5)
+                    .collect::<Vec<_>>()
             );
             let exact: Vec<_> = reference_set
                 .iter()
