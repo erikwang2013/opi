@@ -29,7 +29,8 @@ class ImePreferencesTest {
     @Test
     fun defaultsWhenEmpty() {
         val p = ImePreferences(FakeStore())
-        assertEquals(InputMode.PINYIN26, p.inputMode)
+        // 默认 9 键（2026-10-11 用户裁决「移动端默认初始 9 键」）
+        assertEquals(InputMode.PINYIN9, p.inputMode)
         assertEquals(KeyboardModes(), p.keyboardModes)
         assertEquals(true, p.learn)
         assertEquals(true, p.fuzzy)
@@ -69,7 +70,7 @@ class ImePreferencesTest {
         store.put(ImePreferences.KEY_ONE_HAND, "MIDDLE")
         store.put(ImePreferences.KEY_SKIN, "RAINBOW")
         val p = ImePreferences(store)
-        assertEquals(InputMode.PINYIN26, p.inputMode)
+        assertEquals(InputMode.PINYIN9, p.inputMode)
         assertEquals(KeyboardModes.OneHand.OFF, p.keyboardModes.oneHand)
         assertEquals(SkinOption.FOLLOW, p.skin)
     }

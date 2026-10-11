@@ -119,6 +119,22 @@ class ImeStateEnglishSwitchTest {
     }
 
     @Test
+    fun switchToEnglishWithUnmatchedNineKeyDigitsCommitsNothing() {
+        // 9 键无匹配（读数空）切英文：不回退数字（2026-10-11 修「9 键没匹配的时候会
+        // 变成数字输入」——本入口与 preedit/空格同类：缓冲是按键编码不是文本）。
+        val fake = FakeEngine().apply {
+            buf = "94642"
+            displayBuf = "" // 无匹配 ⇒ 读数空
+            schemeValue = InputScheme.NINE.value
+        }
+        val state = newState(fake)
+        state.switchToEnglishKeyboard()
+        assertTrue("9 键无匹配切英文不许把数字上屏", commits.isEmpty())
+        assertEquals("缓冲照清（离开中文即弃）", "", fake.buf)
+        assertEquals(InputMode.ENGLISH26, state.inputMode)
+    }
+
+    @Test
     fun inputModePanelEnglishAlsoCommitsPinyin() {
         // 2026-10-10 深夜裁决统一三处英文入口（底行[英文]/中繁→英循环/输入模式面板的
         // 英文26键）：「默认是拼音，不要是候选词」——面板那条此前会先上首候选。

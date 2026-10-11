@@ -142,7 +142,10 @@ fn segment_fallback_on_real_luna_dictionary() {
 /// 本条钉真 luna 数据下的四条：回退档与命中态整档**逐条相同**、选中只消耗前缀键
 /// （尾部键留在缓冲、接着编与另开一台直打逐条相同）、14 键同一条判定自然覆盖
 /// （`bugaoml` → 前缀 `bugao` 的整档 + 尾 `ml`；`bugaom` 是命中态不丢尾：真库里有
-/// 7 字母的 `buhaoma`/`nihaoma` 把它吃成整串前缀）、垃圾串维持死 + 逃生口不动。
+/// 7 字母的 `buhaoma`/`nihaoma` 把它吃成整串前缀）、垃圾串维持死；**9 键无候选
+/// 不再走「空格提交原文」逃生口**（2026-10-11 用户报障「9 键没匹配的时候会变成数字
+/// 输入」—— 缓冲是按键编码不是文本；14/26 键缓冲是字母，逃生口语义仍成立、不动）。
+/// ⚠️ 本条此前断言 9 键提交 `"55"`，是旧语义的见证者，已随裁决翻面。
 #[test]
 fn scheme_fallback_on_real_luna_dictionary() {
     let luna = || {
@@ -212,11 +215,14 @@ fn scheme_fallback_on_real_luna_dictionary() {
     type_str(&mut full, "bugaom");
     assert_eq!(full.select(0), "不好吗");
     assert_eq!(full.buffer(), "", "命中态不丢尾：缓冲整段被消耗");
-    // 垃圾串维持死 + 逃生口（单段/无见证者不救）
+    // 垃圾串维持死；空格**不上屏也不清缓冲**（9 键专属：缓冲是按键编码，提交原文 =
+    // 把数字打进字段 —— 2026-10-11 用户报障；与符号模式「关键字留在预编辑里」同理由）。
+    // 14/26 键的「打英文」逃生口仍是「提交原文」，见证者在 `segment_fallback.rs` /
+    // 本文件 133 行（`zxcvb`）。
     let mut dead = luna();
     dead.set_scheme(Scheme::Nine);
     type_str(&mut dead, "55");
     assert!(texts(&dead).is_empty(), "`55` 没有音节对齐的见证者，维持死");
-    assert_eq!(dead.input_key(' '), "55", "无候选 ⇒ 空格提交原文");
-    assert_eq!(dead.buffer(), "");
+    assert_eq!(dead.input_key(' '), "", "9 键无候选：空格不上屏任何文本");
+    assert_eq!(dead.buffer(), "55", "也不清缓冲：退格改一键还能重来");
 }

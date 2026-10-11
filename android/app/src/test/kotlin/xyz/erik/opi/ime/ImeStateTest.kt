@@ -446,11 +446,14 @@ class ImeStateTest {
             buf = "ni"
             displayBuf = "ni"
             cands = arrayOf("你")
+            // 全新默认态（2026-10-11 起默认 9 键）：引擎方案 = NINE。
+            // 真机上由 restore() 推入；本用例不走 restore，直接置成该态。
+            schemeValue = InputScheme.NINE.value
         }
         val state = newState(fake)
         state.cycleMode() // 中→繁：只换模式（方案不动），缓冲保留
         assertEquals(
-            listOf(EngineMode.TRADITIONAL.value to InputScheme.FULL.value),
+            listOf(EngineMode.TRADITIONAL.value to InputScheme.NINE.value),
             fake.switchLanguageCalls,
         )
         assertEquals("中→繁不提交", emptyList<String>(), commits)
@@ -461,9 +464,9 @@ class ImeStateTest {
             EngineMode.ENGLISH.value to InputScheme.FULL.value,
             fake.switchLanguageCalls.last(),
         )
-        state.cycleMode() // 英→中：回上次的中文方案
+        state.cycleMode() // 英→中：回上次的中文方案（全新默认态即 9 键）
         assertEquals(
-            EngineMode.PINYIN.value to InputScheme.FULL.value,
+            EngineMode.PINYIN.value to InputScheme.NINE.value,
             fake.switchLanguageCalls.last(),
         )
         assertTrue("不许走清缓冲的 switchScheme", fake.schemeCalls.isEmpty())

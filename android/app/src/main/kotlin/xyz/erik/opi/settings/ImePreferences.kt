@@ -57,10 +57,11 @@ class AndroidPrefStore(context: Context) : PrefStore {
  */
 class ImePreferences(private val store: PrefStore) {
 
+    /** 默认 **9 键**（2026-10-11 用户裁决「移动端默认初始 9 键」）；已存过选择的用户读自己的值，不被改写。 */
     var inputMode: InputMode
         get() = store.getString(KEY_INPUT_MODE)
             ?.let { name -> InputMode.entries.firstOrNull { it.name == name } }
-            ?: InputMode.PINYIN26
+            ?: InputMode.PINYIN9
         set(v) = store.put(KEY_INPUT_MODE, v.name)
 
     var keyboardModes: KeyboardModes

@@ -390,6 +390,22 @@ class EngineControllerTest {
     }
 
     @Test
+    fun composingTextNeverLeaksNineKeyDigits() {
+        // preedit 取值（2026-10-11 修「9 键没匹配的时候会变成数字输入」）：读数优先；
+        // 读数空时 26 键回退缓冲（旧行为不动）、9 键回退**空串**（缓冲是数字串，
+        // 画进字段就是数字输入）。
+        val fake = FakeEngine().apply { buf = "94642"; displayBuf = "" }
+        val ctrl = EngineController(fake)
+        assertEquals("26 键：读数空回退缓冲（旧行为）", "94642", ctrl.composingText())
+        fake.schemeValue = InputScheme.NINE.value
+        ctrl.refresh()
+        assertEquals("9 键：读数空不回退数字", "", ctrl.composingText())
+        fake.displayBuf = "xiang'gang"
+        ctrl.refresh()
+        assertEquals("有读数时以读数为准", "xiang'gang", ctrl.composingText())
+    }
+
+    @Test
     fun candidateReadingsComeThroughRefresh() {
         // 逐条读数（9 键左列的数据源，2026-10-09 用户裁决）：与 candidates 同一次
         // 刷新读出、同序等长；JNI 返回 null 时退空列表（不崩、不当成一条空读数）。

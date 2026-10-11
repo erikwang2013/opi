@@ -109,8 +109,8 @@ class ImeState(
 
     // ---- 输入模式 / 键盘模式（2026-10-09）----
 
-    /** 当前输入模式（工具条与键盘布局按它画）。 */
-    var inputMode by mutableStateOf(InputMode.PINYIN26)
+    /** 当前输入模式（工具条与键盘布局按它画）。初始值 = 偏好默认的 9 键，restore 后以偏好为准。 */
+    var inputMode by mutableStateOf(InputMode.PINYIN9)
         private set
 
     /** 键盘模式（悬浮/游戏/单手/暗光/长辈）。繁体不在这里 —— 它在引擎 mode 上。 */
@@ -134,8 +134,8 @@ class ImeState(
      */
     var persist: () -> Unit = {}
 
-    /** 上次的中文侧输入模式（9 键 ↔ 英文 往返时恢复用）。 */
-    private var lastChineseMode = InputMode.PINYIN26
+    /** 上次的中文侧输入模式（9 键 ↔ 英文 往返时恢复用）。初始同偏好默认（9 键）。 */
+    private var lastChineseMode = InputMode.PINYIN9
 
     /** 「密码字段临时英文」进入前的中文模式；null = 不在该态。**不落盘**（见下）。 */
     private var transientEnglishFrom: InputMode? = null
@@ -227,12 +227,14 @@ class ImeState(
 
     /**
      * 把 pending 缓冲**按拼音原样上屏**（2026-10-10 用户裁决，切英文专用）：
-     * 文本取显示读数（9 键 = `ni'hao` 这类分词拼音；其余 = 原字母），无候选也算数
-     * （读数空则退回原始缓冲——26 键字母串原样留下）。空缓冲 = 空操作。
+     * 文本即组合串 [EngineController.composingText]（读数优先；26 键无候选回退原字母
+     * ——「字母串原样留下」；**9 键读数空不回退数字** —— 那是按键编码不是文本，
+     * 2026-10-11 修「9 键没匹配的时候会变成数字输入」的第三扇门）。空文本 = 只清
+     * 不上屏；空缓冲 = 空操作。
      */
     private fun commitPendingAsPinyin() {
         if (controller.buffer.isEmpty()) return
-        val text = controller.reading.ifEmpty { controller.buffer }
+        val text = controller.composingText()
         controller.clear()
         if (text.isNotEmpty()) commit(text)
     }

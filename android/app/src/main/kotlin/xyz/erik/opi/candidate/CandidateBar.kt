@@ -92,9 +92,10 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
                     // （Compose issue 225780131 —— 只改 text 不触发，须同块给 contentDescription），
                     // 而候选项是 clickable 子节点（自身合并语义），父节点合并不了它们。
                     // 于是把「缓冲 + 候选数」并进这一个节点一起播报。
-                    // 播报用**读数**（9 键下是带分词的拼音；其余方案与 buffer 相同）
+                    // 播报取**组合串**（读数优先；9 键读数空不回退数字 —— 可见格已是空，
+                    // 念出键位数字既对不上屏幕又是「变成数字输入」同族，2026-10-11 一并收口）
                     contentDescription = composingAnnouncement(
-                        controller.reading.ifEmpty { controller.buffer },
+                        controller.composingText(),
                         candidates.size,
                     )
                     liveRegion = LiveRegionMode.Polite

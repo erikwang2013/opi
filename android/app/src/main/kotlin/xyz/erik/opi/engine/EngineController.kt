@@ -122,6 +122,17 @@ class EngineController(
      */
     var reading by mutableStateOf("")
         private set
+
+    /**
+     * 推给字段的组合串：读数优先（9 键 = `ni'hao` 这类分词拼音；其余 = 原字母）；
+     * 读数空时回退缓冲 —— **9 键例外**：它的缓冲是数字串（按键编码），读数空
+     * （无匹配）还回退就会把数字画进字段（2026-10-11 用户报障「9 键没匹配的时候
+     * 会变成数字输入」）。9 键读数空 ⇒ 空串，服务层据此清组合区。
+     */
+    fun composingText(): String {
+        if (reading.isNotEmpty()) return reading
+        return if (inputScheme == InputScheme.NINE) "" else buffer
+    }
     var mode by mutableStateOf(EngineMode.PINYIN)
         private set
     var candidates by mutableStateOf<List<String>>(emptyList())

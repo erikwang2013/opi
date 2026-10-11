@@ -72,14 +72,15 @@ class OpiImeService : InputMethodService() {
      * 组合串进字段（2026-10-10 用户裁决「需要」）：打字期间输入框里能看到拼音
      * （搜狗式）——此前组合串只画在自家候选栏，字段里空空；用户以为没打进去。
      * 文本用**显示读数**（`reading`：9 键 = `ni'hao` 这类分词拼音；其余 = 原字母）。
-     * 英文模式字母直传不经过缓冲 ⇒ 无组合串，正确。
+     * 英文模式字母直传不经过缓冲 ⇒ 无组合串，正确。读数空时的回退见
+     * [EngineController.composingText]（9 键不回退数字缓冲，2026-10-11 修）。
      *
      * ⚠️ 缓冲空时**先 `setComposingText("")` 再 `finishComposingText`** —— 只 finish
      * 会把组合区里**最后那段文字落定留在字段里**（退格到空会剩半截拼音）。
      */
     private fun pushComposingText() {
         val ic = currentInputConnection ?: return
-        val text = engineController.reading.ifEmpty { engineController.buffer }
+        val text = engineController.composingText()
         if (text.isEmpty()) {
             ic.setComposingText("", 1)
             ic.finishComposingText()

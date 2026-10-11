@@ -65,7 +65,7 @@ pub struct Engine {
     /// 默认 `true` = 既有行为。
     pub(crate) fuzzy: bool, // pub(crate)：engine_segment.rs 判回退时要问它
     /// 简拼开关。默认 `true` = 既有行为。
-    jianpin: bool,
+    pub(crate) jianpin: bool, // pub(crate)：engine_user_words.rs 的开关一族要用
 }
 
 impl Engine {
@@ -197,6 +197,9 @@ impl Engine {
     ///
     /// 无候选时的行为**有意分叉**：拼音/繁体提交原始缓冲（这是「打英文」的逃生口），
     /// 符号模式什么都不提交 —— 缓冲里是关键字（`dunx`），不是要上屏的文本。
+    /// **9 键走符号模式那条**：缓冲是数字（按键编码），提交原文 = 把数字打进字段
+    /// （2026-10-11 用户报障「9 键没匹配的时候会变成数字输入」）；14/26 键缓冲是
+    /// 字母，逃生口语义仍成立，不动。
     pub fn input_space(&mut self) -> String {
         self.leave_symbol_browse_if_needed(); // 直调引擎的出口（C ABI）也走同一条（契约 ②）
         match self.composer.session().mode {
@@ -204,6 +207,11 @@ impl Engine {
                 let buffer = self.composer.session().buffer.clone();
                 let cands = self.candidates(DEFAULT_TOP_N);
                 if cands.is_empty() {
+                    if self.scheme() == Scheme::Nine {
+                        // 不上屏也**不清缓冲**：数字串还留着，退格改一键还能重来
+                        // ——与符号模式「关键字仍留在预编辑里」同一条理由。
+                        return String::new();
+                    }
                     self.composer.commit_buffer();
                     buffer
                 } else {
@@ -449,52 +457,6 @@ impl Engine {
         }
     }
 
-    pub fn set_learner(&mut self, enabled: bool) {
-        self.learner.set_enabled(enabled);
-    }
-
-    /// 模糊音开关（「属性设置」的旋钮之一）。关掉 = `rank_and_pick_with` 跳过
-    /// 整串变体与逐音节兜底**两个**入口（只关一个会让 `zongguo` 这类输入仍从
-    /// 逐音节拿到模糊结果）。
-    pub fn set_fuzzy(&mut self, enabled: bool) {
-        self.fuzzy = enabled;
-    }
-
-    pub fn fuzzy_enabled(&self) -> bool {
-        self.fuzzy
-    }
-
-    /// 简拼开关（同上）。
-    pub fn set_jianpin(&mut self, enabled: bool) {
-        self.jianpin = enabled;
-    }
-
-    pub fn jianpin_enabled(&self) -> bool {
-        self.jianpin
-    }
-
-    pub fn learner_enabled(&self) -> bool {
-        self.learner.is_enabled()
-    }
-
-    pub fn remove_user_word(&mut self, text: &str) {
-        self.learner.remove_word(text);
-    }
-
-    pub fn clear_user_words(&mut self) {
-        self.learner.clear();
-    }
-
-    pub fn export_user_words(&self) -> String {
-        self.learner.export_json()
-    }
-
-    /// 导入 [`Engine::export_user_words`] 的产物（Android 侧启动时读文件后传入，
-    /// engine 不做 IO）。合并语义、幂等性与失败原子性见 [`Learner::import_json`]。
-    /// 返回导入条数；非法输入返回 Err 且不改动内存状态。
-    pub fn import_user_words(&mut self, json: &str) -> Result<usize, String> {
-        self.learner.import_json(json)
-    }
-
-    // 【另有】符号大全 / 分词回退收尾分别在 engine_symbol_browse.rs / engine_segment.rs。
+    // 【另有】符号大全 / 分词回退收尾分别在 engine_symbol_browse.rs / engine_segment.rs；
+    // 用户词与开关一族（2026-10-11 拆出）在 engine_user_words.rs。
 }

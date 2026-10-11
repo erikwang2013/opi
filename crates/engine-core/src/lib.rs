@@ -17,6 +17,8 @@ mod engine_readings_impl; // 9 键读数一族（500 行门禁拆出，见文件
 mod engine_segment_impl; // 分词回退的收尾（500 行门禁拆出，见文件头）
 #[path = "engine_symbol_browse.rs"]
 mod engine_symbol_browse_impl; // 符号浏览一族（500 行门禁拆出，见文件头）
+#[path = "engine_user_words.rs"]
+mod engine_user_words_impl; // 用户词与开关一族（500 行门禁拆出，见文件头）
 pub mod fuzzy;
 pub mod jianpin;
 pub mod keys;

@@ -311,3 +311,20 @@ fn nine_key_space_flushes_the_whole_buffer_too() {
     assert_eq!(nine.input_key(' '), "你好", "空格提交首候选");
     assert_eq!(nine.buffer(), "", "空格是整段上屏：尾部键不留");
 }
+
+/// 9 键**无候选**时空格什么都不上屏：缓冲是按键编码不是文本，「无候选提交原文」的
+/// 逃生口对它不成立 —— 提交原文 = 把数字打进字段（2026-10-11 用户报障「9 键没匹配
+/// 的时候会变成数字输入」）。返回空串且**不清缓冲**：退格改一键还能重来（与符号
+/// 模式同一条理由）。
+#[test]
+fn nine_key_space_with_no_match_commits_nothing() {
+    let mut nine = engine(false);
+    nine.set_scheme(Scheme::Nine);
+    type_str(&mut nine, "644'26");
+    assert!(
+        texts(&nine, 8).is_empty(),
+        "前提：该串无候选（同上一条测试）"
+    );
+    assert_eq!(nine.input_key(' '), "", "无候选：空格不上屏任何文本");
+    assert_eq!(nine.buffer(), "644'26", "不清缓冲：退格改一键仍可重来");
+}
