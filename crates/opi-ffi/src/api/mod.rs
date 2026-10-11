@@ -330,9 +330,10 @@ impl Api {
             .collect()
     }
 
-    /// **逐条**候选拼音读数（JNI 出口 `candidateReadings`；9 键左列用）。
-    /// 与**最近一次** [`Self::candidates`] 同序同源（引擎侧同一对缓存）——
-    /// 调用方按「先 candidates(limit)、紧接读它」的顺序用；缓冲已变时为空。
+    /// 候选拼音读数（JNI 出口 `candidateReadings`；9 键左列用），**按读音去重保序**
+    /// （2026-10-12 用户裁决「左列去重」）。与**最近一次** [`Self::candidates`]
+    /// 同源同一次排名（引擎侧同一对缓存）—— 调用方按「先 candidates(limit)、紧接
+    /// 读它」的顺序用；缓冲已变时为空。
     pub fn candidate_readings(&self) -> Vec<String> {
         self.router.engine().candidate_readings()
     }

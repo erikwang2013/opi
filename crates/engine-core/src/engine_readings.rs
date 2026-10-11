@@ -40,9 +40,14 @@ impl Engine {
         self.buffer().to_string()
     }
 
-    /// **逐条**候选拼音读数（已分词）：`readings[i]` = 最近一次 `candidates(limit)` 的
-    /// 第 i 条候选的拼音（两串同序等长）。9 键左列按候选逐条显示用（2026-10-09 用户
-    /// 裁决「一列多个、可滑动查看后面候选/下一页」）。
+    /// 候选拼音读数（已分词），**去重保序**：同一读音只出一行，行序 = 首次出现序
+    /// （= 该读音最好那条候选的名次）。9 键左列的数据源（2026-10-09 用户裁决「一列
+    /// 多个、可滑动查看」；2026-10-12 用户裁决「左列去重」——此前逐候选出一行，
+    /// 真库 `426` 实测 8 行里 5 行重复）。
+    ///
+    /// ⚠️ 去重发生在**本出口**，内部缓存（`scheme_readings`）与 [`Self::display_buffer`]
+    /// 一字不动：候选↔读数的逐条对应不再是公共契约（左列不需要它；钉读音按
+    /// **字符串**传动，见 [`Self::set_pinned_reading`]，不靠下标）。
     ///
     /// 与 [`Self::display_buffer`] 是**同一对缓存的两个视图**：非 9/14 键方案、
     /// 或缓冲已变（提交/退格/清空）⇒ 空数组。调用方先 `candidates()` 再读它
@@ -58,7 +63,16 @@ impl Engine {
         if cached.0 != self.buffer() {
             return Vec::new();
         }
-        cached.1.clone()
+        // 去重保序：n = 候选数（≤ 调用方的 limit，量级 8–64）—— 一趟遍历 + 集合判重，
+        // 成本在字符级（读音串很短），相对本函数的调用点（一次全库排名）可忽略。
+        let mut seen = std::collections::HashSet::new();
+        let mut out = Vec::with_capacity(cached.1.len());
+        for r in &cached.1 {
+            if seen.insert(r.as_str()) {
+                out.push(r.clone());
+            }
+        }
+        out
     }
 
     /// 钉读音（9 键左列点一行拼音：**不确认**，候选列表收窄到该读音一族 ——

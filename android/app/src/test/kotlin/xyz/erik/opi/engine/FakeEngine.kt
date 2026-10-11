@@ -89,7 +89,7 @@ class FakeEngine : OpiEngineApi {
         schemeValue = scheme
     }
 
-    /** 逐条候选拼音读数（真引擎：与最近一次 candidates() 同序同源）。 */
+    /** 候选拼音读数（真引擎：与最近一次 candidates() 同源；出口已按读音去重保序）。 */
     var candReadings: Array<String>? = null
     override fun candidateReadings(): Array<String>? = candReadings
 

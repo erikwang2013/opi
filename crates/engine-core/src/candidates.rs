@@ -433,7 +433,8 @@ fn raw_suffix(input: &str, consumed: usize) -> String {
 /// 返回 `(候选, 逐条读音)`：`readings[i]` = `cands[i]` 的词典拼音（截断后同序，
 /// 两串等长）。9 键的缓冲是数字串，界面上要显示「拼音读数」时靠它 ——
 /// `display_buffer` 取第一条（搜狗 9 键候选栏左侧那格同款），
-/// `candidate_readings` 带全量（9 键左列按候选逐条显示，2026-10-09 用户裁决）。
+/// `candidate_readings` 读同一份缓存并按读音**去重保序**（2026-10-12 用户裁决
+/// 「左列去重」；逐条对应只到本函数返回值与引擎内部缓存为止，不再是出口契约）。
 /// 没有候选时两条都为空。14 键同路返回（它的缓冲本来就是字母串，读数字段无副作用）。
 pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
     dict: &D,

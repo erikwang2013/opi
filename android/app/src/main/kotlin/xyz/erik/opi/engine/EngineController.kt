@@ -51,7 +51,8 @@ interface OpiEngineApi {
     fun candidates(limit: Int): Array<String>?
     fun buffer(): String
 
-    /** 逐条候选拼音读数（与最近一次 [candidates] 同序同源；9 键左列用）。
+    /** 候选拼音读数（**按读音去重保序**，2026-10-12 用户裁决「左列去重」；
+     * 与最近一次 [candidates] 同源同一次排名；9 键左列用）。
      * 非 9/14 键方案、或缓冲已变 ⇒ 空。调用顺序：先 [candidates]。 */
     fun candidateReadings(): Array<String>?
 
@@ -138,8 +139,9 @@ class EngineController(
     var candidates by mutableStateOf<List<String>>(emptyList())
         private set
 
-    /** 逐条候选拼音读数（已分词），与 [candidates] 同序等长 —— 9 键左列按候选
-     * 逐条显示用（2026-10-09 用户裁决「一列多个、可滑动查看」）。 */
+    /** 候选拼音读数（已分词），**按读音去重保序**（首现序 = 该读音最好那条候选的
+     * 名次）—— 9 键左列用（2026-10-09 用户裁决「一列多个、可滑动查看」；
+     * 2026-10-12 用户裁决「左列去重」，去重发生在引擎出口）。 */
     var candidateReadings by mutableStateOf<List<String>>(emptyList())
         private set
 
@@ -230,8 +232,9 @@ class EngineController(
         jianpinEnabled = api.jianpinEnabled()
         inputScheme = InputScheme.fromInt(api.scheme())
         candidates = api.candidates(fetchLimit)?.toList() ?: emptyList() // JNI 可能返回 null
-        // 逐条读数：与 candidates 同一次排名的副产物（引擎侧同一对缓存），
-        // **必须紧跟 candidates 之后读**（同一读序契约，见本函数尾 reading 的注释）。
+        // 读数（引擎出口已按读音去重保序）：与 candidates 同一次排名的副产物
+        // （引擎侧同一对缓存），**必须紧跟 candidates 之后读**（同一读序契约，
+        // 见本函数尾 reading 的注释）。
         candidateReadings = api.candidateReadings()?.toList() ?: emptyList()
         if (buffer != lastQuery) {
             lastQuery = buffer

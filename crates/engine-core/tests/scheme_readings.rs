@@ -68,33 +68,51 @@ fn display_buffer_dies_with_the_buffer_not_with_the_next_fetch() {
     assert_eq!(e.display_buffer(), "", "退格后旧读数立刻作废");
 }
 
-/// 逐条读数（9 键左列的数据源，2026-10-09 用户裁决「一列多个可滑动查看」）：
-/// 与 `candidates(limit)` **同序等长**、同一次排名产出；首条 = `display_buffer()`
-/// （同一对缓存的两个视图）；缓冲一变（退格/提交）⇒ 双双立刻为空。
+/// 读数出口（9 键左列的数据源）**去重保序**（2026-10-12 用户裁决「左列去重」）：
+/// 读数按**首次出现序**去重 —— 同一读音只出一行，行的顺序 = 它最好那条候选的名次。
+/// 首条仍 = `display_buffer()`（同一对缓存的两个视图）；缓冲一变（退格/提交）⇒ 立刻为空。
+///
+/// ⚠️ 旧契约是「与 `candidates(limit)` 同序等长、逐条对齐」（`readings[i]` = 第 i 条
+/// 候选的拼音）—— 那条契约让左列出现 hao gao gan gao gan… 的重复行（真库 `426` 实测
+/// 8 行里 5 行重复），用户裁决改为去重。候选↔读数的**逐条**对应关系随之不再是公共
+/// 契约（左列不需要它；钉读音按**字符串**传动，不靠下标）。
 #[test]
-fn per_candidate_readings_align_with_candidates() {
+fn readings_are_deduped_in_first_appearance_order() {
     let mut e = engine();
     e.set_scheme(Scheme::Nine);
-    type_str(&mut e, "64"); // ni 与 nihao 都命中（键类前缀匹配）
+    type_str(&mut e, "64"); // 你/尼（ni，精确档在前）与 你好（ni'hao）都命中
     let cands: Vec<String> = e.candidates(8).into_iter().map(|c| c.text).collect();
+    assert!(cands.len() >= 3, "前置：夹具 64 应有多条候选（{cands:?}）");
     let readings = e.candidate_readings();
-    assert_eq!(readings.len(), cands.len(), "逐条读数与候选同序等长");
+    assert_eq!(
+        readings,
+        vec!["ni".to_string(), "ni'hao".to_string()],
+        "去重保序：ni 只出一行（你/尼 合流），ni'hao 随后 —— 不是逐候选的 ni ni ni'hao"
+    );
+    assert!(
+        readings.len() < cands.len(),
+        "去重后行数必然少于候选数（本夹具 3 候选 → 2 读数）"
+    );
     assert_eq!(
         readings[0],
         e.display_buffer(),
         "首条读数 = display_buffer（同一对缓存的两个视图）"
     );
-    // 逐条对齐：你好 的读音带分词（ni'hao），你/尼 是 ni —— 不是把首条读一抄到底。
-    let idx = cands
-        .iter()
-        .position(|c| c == "你好")
-        .expect("夹具里 64 应命中 nihao⇒你好");
-    assert_eq!(readings[idx], "ni'hao", "候选与读音逐条对齐");
-    // 缓冲一变（退格）⇒ 逐条读数立刻作废
+    // 钉住一个读音 ⇒ 候选收窄到一族 ⇒ 读数只剩那一行（左列单行高亮，不再数行同亮）。
+    // 钉 `ni'hao`（= 左列里「你好」那一行）：你/尼 的 ni 档被收窄掉，只剩 ni'hao。
+    e.set_pinned_reading(Some("ni'hao".into()));
+    let _ = e.candidates(8);
+    assert_eq!(
+        e.candidate_readings(),
+        vec!["ni'hao".to_string()],
+        "钉住后读数只剩被钉读音那一族（单行）"
+    );
+    e.set_pinned_reading(None);
+    // 缓冲一变（退格）⇒ 读数立刻作废（**不**再取候选：作废靠缓冲绑存，不靠调用次序）
     e.backspace();
     assert!(
         e.candidate_readings().is_empty(),
-        "退格后逐条读数立刻作废（下次 candidates() 才重算）"
+        "退格后读数立刻作废（下次 candidates() 才重算）"
     );
 }
 

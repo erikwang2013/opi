@@ -241,19 +241,26 @@ public final class Main {
         check("".equals(OpiEngine.toggleSymbol()), "再切一次仍返回空串");
         check(OpiEngine.mode() == 0, "再切一次回 Pinyin");
 
-        // candidateReadings（2026-10-09）：逐条候选拼音读数，与最近一次 candidates(limit)
-        // 同序等长 —— 9 键左列按候选逐条显示的数据源。与上面标点那组同理：声明了就必须
-        // 真调，否则这条 native 永不被执行过。
+        // candidateReadings（2026-10-09；2026-10-12 用户裁决「左列去重」）：候选拼音
+        // 读数，**按读音去重保序** —— 9 键左列的数据源。与上面标点那组同理：声明了就
+        // 必须真调，否则这条 native 永不被执行过。
         OpiEngine.setScheme(1); // 9 键（setScheme 清缓冲）
         OpiEngine.inputKey("6");
         OpiEngine.inputKey("4");
         String[] rc = OpiEngine.candidates(8);
         String[] rr = OpiEngine.candidateReadings();
         check(rc != null && rr != null, "candidates/candidateReadings 都必须可读");
-        check(rc != null && rr != null && rc.length == rr.length,
-                "逐条读数与候选同序等长（实得 "
+        check(rc != null && rr != null && rr.length <= rc.length,
+                "读数数 = 去重后的候选数（≤ 候选数；实得 "
                         + (rc == null ? -1 : rc.length) + "/" + (rr == null ? -1 : rr.length) + "）");
-        if (rc != null && rr != null && rc.length > 0) {
+        if (rr != null) {
+            // 去重（保序）断言：同一读音只许出现一次。
+            java.util.Set<String> seen = new java.util.HashSet<>();
+            for (String r : rr) {
+                check(seen.add(r), "读数不得重复（实得 " + java.util.Arrays.toString(rr) + "）");
+            }
+        }
+        if (rc != null && rr != null && rr.length > 0) {
             // 首条读数 = displayBuffer（同一对缓存的两个视图）。不断言具体词
             // （内置回退词库与真库候选不同），分词形态归 scheme_keys.rs 钉。
             check(rr[0].equals(OpiEngine.displayBuffer()),

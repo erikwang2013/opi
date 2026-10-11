@@ -39,7 +39,8 @@ pub struct Engine {
     /// 9 键方案的「拼音读数」（显示用，见 [Self::display_buffer] 与
     /// [Self::candidate_readings]）：由 `candidates()` 在九键分支里刷新 ——
     /// **逐条**（`readings[i]` = `candidates(limit)` 第 i 条的拼音，已分词；
-    /// 同一次排名产出，见 `rank_and_pick_scheme`）。
+    /// 同一次排名产出，见 `rank_and_pick_scheme`）—— 这是**缓存**的形态；
+    /// 出口 `candidate_readings` 会按读音去重保序（2026-10-12 用户裁决「左列去重」）。
     /// **存 `(算它时的缓冲, 逐条读数)` 一对** ——
     /// 缓冲一变（提交/退格/清空）旧读数立即作废，两个出口都返回空，
     /// **不依赖调用方「之后又取了一次候选」的次序**（2026-10-09 用户报障「确定候选词后

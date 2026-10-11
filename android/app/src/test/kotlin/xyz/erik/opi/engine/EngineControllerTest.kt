@@ -407,8 +407,9 @@ class EngineControllerTest {
 
     @Test
     fun candidateReadingsComeThroughRefresh() {
-        // 逐条读数（9 键左列的数据源，2026-10-09 用户裁决）：与 candidates 同一次
-        // 刷新读出、同序等长；JNI 返回 null 时退空列表（不崩、不当成一条空读数）。
+        // 读数（9 键左列的数据源，2026-10-09 用户裁决）：与 candidates 同一次刷新
+        // 读出（**去重保序在引擎出口**做，本类只透传）；JNI 返回 null 时退空列表
+        // （不崩、不当成一条空读数）。
         val fake = FakeEngine().apply {
             cands = arrayOf("你", "你好")
             candReadings = arrayOf("ni", "ni'hao")

@@ -31,9 +31,11 @@ pub unsafe extern "system" fn opijni_candidates(
     unsafe { jni_util::string_array(env, texts) }
 }
 
-/// candidateReadings() -> String[]。**逐条**候选拼音读数（已分词），与最近一次
-/// `candidates(limit)` 同序同源 —— 9 键左列按候选逐条显示用（2026-10-09 用户裁决
-/// 「一列多个、可滑动查看」）。非 9/14 键方案、或缓冲已变（提交/退格）⇒ 空数组。
+/// candidateReadings() -> String[]。候选拼音读数（已分词），**按读音去重保序**、
+/// 与最近一次 `candidates(limit)` 同源同一次排名 —— 9 键左列用（2026-10-09 用户
+/// 裁决「一列多个、可滑动查看」；2026-10-12 用户裁决「左列去重」——此前逐候选
+/// 出一行，真库 `426` 实测 8 行里 5 行重复）。非 9/14 键方案、或缓冲已变
+/// （提交/退格）⇒ 空数组。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_candidate_readings(
     env: JEnv,
