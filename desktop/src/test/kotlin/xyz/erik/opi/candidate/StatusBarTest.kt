@@ -9,6 +9,8 @@
 
 package xyz.erik.opi.candidate
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -253,4 +255,34 @@ class StatusBarTest {
         }
         assertEquals(listOf("boom", "refresh"), order2)
     }
+
+    @Test
+    fun `bar palette follows the skin and keep stays the built-in dark`() {
+        // 2026-10-12 用户报障「设置皮肤后状态栏皮肤没同步变化」的修复：条按 `Skin=` 取色。
+        // 两条判据（纯函数，色值逐项）：
+        //   · KEEP（不改动）= 条自绘以来的固定深色 —— 行为必须一字不变；
+        //   · 选了一款 = 该款 SKINS 的角色表（这里以宣纸为例；五角色与生成器的
+        //     逐值比对在 SettingsTest 的 `skin palettes match the theme generator`）。
+        assertEquals(
+            "KEEP = 1.7.14 的五个常量原值",
+            listOf(0xFF2D2D2DL, 0xFFE8E8E8L, 0xFF3F3F3FL, 0xFF4A4A4AL, 0xFFFF8A80L),
+            listOf(
+                argb(KeepColors.bg), argb(KeepColors.fg), argb(KeepColors.hover),
+                argb(KeepColors.line), argb(KeepColors.accent),
+            ),
+        )
+        assertEquals("不改动与缺省同一份", KeepColors, skinColors(SkinOption.KEEP))
+        val paper = skinColors(SkinOption.PAPER)
+        assertEquals(
+            "宣纸 = SKINS paper 的 bg/text/hl_bg/sep/accent",
+            listOf(0xFFF5EFE1L, 0xFF3D3222L, 0x1F8A5A2BL, 0xFFD8CDB4L, 0xFF8A5A2BL),
+            listOf(
+                argb(paper.bg), argb(paper.fg), argb(paper.hover),
+                argb(paper.line), argb(paper.accent),
+            ),
+        )
+    }
+
+    /** `Color` → `0xAARRGGBB` 的无符号 Long（`toArgb()` 是带符号 Int，掩一下再比）。 */
+    private fun argb(c: Color): Long = c.toArgb().toLong() and 0xFFFFFFFFL
 }

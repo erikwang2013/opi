@@ -172,29 +172,48 @@ class SettingsTest {
     }
 
     @Test
-    fun `skin previews match the theme generator`() {
-        // SkinPicker 注释里的那条「预览与生成器逐值对应」：SettingsWindow.kt 的
-        // previewOf（bg/fg/accent）必须逐值等于 gen_fcitx5_themes.py 的 SKINS
-        // （bg/text/accent）。错了就是「图上一种颜色、选完另一种」，不报任何错。
-        val window = repoFile("desktop/src/main/kotlin/xyz/erik/opi/candidate/SettingsWindow.kt")
-        val previews = Regex(
-            """SkinOption\.(\w+) -> SkinPreview\(Color\(0x([0-9A-Fa-f]{8})\), """ +
-                """Color\(0x([0-9A-Fa-f]{8})\), Color\(0x([0-9A-Fa-f]{8})\)\)""",
-        ).findAll(window).associate {
-            it.groupValues[1] to it.groupValues.drop(2).map { h -> "#" + h.substring(2) }
-        }
+    fun `skin palettes match the theme generator`() {
+        // 调色板（SkinPalette.kt 的 skinColors）必须逐值等于 scripts/fcitx5_skins.py
+        // 的 SKINS：bg←bg、fg←text、hover←hl_bg（#RRGGBBAA → Color(0xAARRGGBB)）、
+        // line←sep、accent←accent。错了就是「预览卡/状态栏一种颜色、fcitx5 另一种」，
+        // 两端都不报任何错（本仓的老毛病）。
+        // 2026-10-12：比对对象从 SettingsWindow.kt 的预览三色改成 SkinPalette.kt 的
+        // 五角色表 —— 状态栏也吃这份色板（用户报障「设皮肤后状态栏没同步」），
+        // 预览卡改为从同一份派生（SettingsWindow.previewOf 的 else 支路）。
+        val palette = repoFile("desktop/src/main/kotlin/xyz/erik/opi/candidate/SkinPalette.kt")
         val gen = repoFile("scripts/fcitx5_skins.py")
-        fun field(name: String) = captures(Regex(""""$name": "(#[0-9A-Fa-f]{6})""""), gen)
-        val bg = field("bg")
-        val text = field("text")
-        val accent = field("accent")
 
         val names = SkinOption.entries.drop(1).map { it.name }
-        assertEquals("预览支路要覆盖九款（不改动无主题）", 9, previews.size)
+        // 每个支路块：`SkinOption.NAME -> SkinColors(` 起到该调用的收尾 `    )` 为止。
+        val blocks = Regex(
+            """SkinOption\.(\w+) -> SkinColors\((.*?)\n    \)""",
+            RegexOption.DOT_MATCHES_ALL,
+        ).findAll(palette).associate { it.groupValues[1] to it.groupValues[2] }
+        assertEquals("九款支路全在（不改动 = KeepColors，不参与本比对）", names, blocks.keys.toList())
+
+        fun role(block: String, key: String): String? =
+            Regex("""$key = Color\(0x([0-9A-Fa-f]{8})\)""").find(block)?.groupValues?.get(1)
+
+        fun field(name: String) = captures(Regex(""""$name": "#([0-9A-Fa-f]{6,8})""""), gen)
+        val bg = field("bg")
+        val text = field("text")
+        val hl = field("hl_bg")
+        val sep = field("sep")
+        val accent = field("accent")
+        assertEquals("生成器九款字段齐", 9, bg.size)
         assertEquals(names, captures(Regex("""(?m)^    "([a-z]+)": \{"""), gen).map { it.uppercase() })
-        assertEquals(9, bg.size)
+
+        /** 生成器的 `#RRGGBB`（或 `#RRGGBBAA`）→ Kotlin 的 `Color(0xAARRGGBB)` 字面。 */
+        fun argb(py: String): String =
+            if (py.length == 6) "FF${py.uppercase()}" else (py.substring(6) + py.substring(0, 6)).uppercase()
+
         for ((i, name) in names.withIndex()) {
-            assertEquals("$name 的预览色必须与生成器逐值相同", listOf(bg[i], text[i], accent[i]), previews[name])
+            val b = blocks.getValue(name)
+            assertEquals("$name 的 bg 必须与生成器逐值相同", argb(bg[i]), role(b, "bg"))
+            assertEquals("$name 的 fg（←text）", argb(text[i]), role(b, "fg"))
+            assertEquals("$name 的 hover（←hl_bg，注意 alpha 搬位）", argb(hl[i]), role(b, "hover"))
+            assertEquals("$name 的 line（←sep）", argb(sep[i]), role(b, "line"))
+            assertEquals("$name 的 accent", argb(accent[i]), role(b, "accent"))
         }
     }
 

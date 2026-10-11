@@ -94,24 +94,17 @@ private fun SectionTitle(text: String) {
 
 /**
  * 一款皮肤的预览色（bg/fg/accent 三项）。
- * ⚠️ 与 `scripts/gen_fcitx5_themes.py` 的 SKINS 逐值对应（bg/text/accent）——
- * 改了主题生成器要同步这里，否则「图与实不符」，而这种错不报任何错（本仓的老毛病）。
- * 这条对应关系由 SettingsTest 的 `skin previews match the theme generator` 现读现比。
+ * ⚠️ 九款的色值**不再各写一份**（2026-10-12）：统一取自 `SkinPalette.skinColors`
+ * —— 那份的逐值对应由 SettingsTest 的 `skin palettes match the theme generator`
+ * 现读现比（同一个「图与实」门禁，只是比对对象从本文件挪去了 SkinPalette.kt）。
  */
 private data class SkinPreview(val bg: Color, val fg: Color, val accent: Color)
 
 private fun previewOf(skin: SkinOption): SkinPreview = when (skin) {
-    // 「不改动」不指定主题：预览画一浅一深的双色底（表意「跟随系统」）。
+    // 「不改动」不指定主题：预览画一浅一深的双色底（表意「跟随系统」）—— 这是预览
+    // 专属的中性表示，**不是** SkinPalette.KeepColors（那个是状态栏的固定深色）。
     SkinOption.KEEP -> SkinPreview(Color(0xFFF2F2F2), Color(0xFF888888), Teal)
-    SkinOption.LIGHT -> SkinPreview(Color(0xFFFFFFFF), Color(0xFF1F1F1F), Color(0xFFC0392B))
-    SkinOption.DARK -> SkinPreview(Color(0xFF1F1F1F), Color(0xFFE6E6E6), Color(0xFFFF8A80))
-    SkinOption.PAPER -> SkinPreview(Color(0xFFF5EFE1), Color(0xFF3D3222), Color(0xFF8A5A2B))
-    SkinOption.CINNABAR -> SkinPreview(Color(0xFFB3272D), Color(0xFFFFF6EC), Color(0xFFFFD9A0))
-    SkinOption.FRESH -> SkinPreview(Color(0xFFE6F5EE), Color(0xFF16332B), Color(0xFF2E7D6B))
-    SkinOption.AZURE -> SkinPreview(Color(0xFF3A679E), Color(0xFFF4F8FD), Color(0xFFFFE3A8))
-    SkinOption.LEMON -> SkinPreview(Color(0xFFFBF6C8), Color(0xFF3A3000), Color(0xFF6B5700))
-    SkinOption.SUNSET -> SkinPreview(Color(0xFFFBE0CD), Color(0xFF5A2C1E), Color(0xFFB8431F))
-    SkinOption.STARLIGHT -> SkinPreview(Color(0xFF1B2138), Color(0xFFE8EBF7), Color(0xFFFFD966))
+    else -> skinColors(skin).let { SkinPreview(it.bg, it.fg, it.accent) }
 }
 
 /**

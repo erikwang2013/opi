@@ -62,6 +62,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -91,13 +92,12 @@ import xyz.erik.opi.pet.OpiPetWindowIcon
 import xyz.erik.opi.pet.PetMood
 import xyz.erik.opi.pet.PetPalette
 
-// ---------- 配色与尺寸（沿用候选窗那套深色） ----------
+// ---------- 配色与尺寸 ----------
 
-private val BarBg = Color(0xFF2D2D2D)
-private val BarFg = Color(0xFFE8E8E8)
-private val BarHover = Color(0xFF3F3F3F)
-private val BarLine = Color(0xFF4A4A4A)
-private val BarDim = Color(0xFFFF8A80)
+// 配色在 SkinPalette.kt（值的唯一源 = scripts/fcitx5_skins.py）：条随 `Skin=` 走
+// —— 2026-10-12 用户报障「设置皮肤后状态栏皮肤没同步变化」的修复（此前五个颜色
+// 全是写死的深色常量，条从没读过皮肤）。同步靠本文件既有的 1s 配置轮询，自动。
+// 「不改动」= SkinPalette.KeepColors（= 上述那五个常量原值，行为一字不变）。
 
 private const val BTN = 30 // 按钮边长
 private const val GAP = 4
@@ -236,20 +236,25 @@ fun StatusBarApp(symbolCommit: (String) -> Boolean) {
         // 不进任务栏/菜单栏（用户裁决 2026-10-10 下午）：X11 属性直写，机制与取证状态
         // 见 SkipTaskbar.kt（关键实现：新窗创建时注册一次，之后它自己跟随每次显示重贴）。
         LaunchedEffect(window) { SkipTaskbar.apply(window) }
-        Box(Modifier.fillMaxSize().background(BarBg).border(1.dp, BarLine)) {
-            if (notice == null) {
-                Row(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = PAD.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(GAP.dp),
-                ) {
-                    for (b in buttons) BarButton(b, imeState, windowState, ::onButton)
-                }
-            } else {
-                // 提示期间**替掉**按钮列（而不是盖在上面）：否则按钮还在下面接着点击，
-                // 用户会在「看不见的按钮」上点出错愕的结果。4s 后自动让开。
-                Box(Modifier.fillMaxSize().padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
-                    Text(notice!!, fontSize = 11.sp, color = BarDim, maxLines = 2)
+        // 条随 `Skin=` 换装（≤1s，见文件头的同步说明）：根部 provide 一次，子
+        // composable 读 LocalBarPalette —— 与 Android 侧 LocalKeyboardPalette 同套做法。
+        val palette = skinColors(s.skin)
+        CompositionLocalProvider(LocalBarPalette provides palette) {
+            Box(Modifier.fillMaxSize().background(palette.bg).border(1.dp, palette.line)) {
+                if (notice == null) {
+                    Row(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = PAD.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(GAP.dp),
+                    ) {
+                        for (b in buttons) BarButton(b, imeState, windowState, ::onButton)
+                    }
+                } else {
+                    // 提示期间**替掉**按钮列（而不是盖在上面）：否则按钮还在下面接着点击，
+                    // 用户会在「看不见的按钮」上点出错愕的结果。4s 后自动让开。
+                    Box(Modifier.fillMaxSize().padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
+                        Text(notice!!, fontSize = 11.sp, color = palette.accent, maxLines = 2)
+                    }
                 }
             }
         }
@@ -287,10 +292,11 @@ private fun BarButton(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
+    val palette = LocalBarPalette.current
     Box(
         modifier = Modifier
             .size(BTN.dp)
-            .background(if (hovered) BarHover else Color.Transparent)
+            .background(if (hovered) palette.hover else Color.Transparent)
             .clickable(interactionSource = interaction, indication = null) { onClick(b) }
             .then(if (b == StatusBarButton.LOGO) dragToMove(windowState) else Modifier)
             .semantics { contentDescription = b.label },
@@ -302,7 +308,7 @@ private fun BarButton(
             StatusBarButton.VK -> VkIcon()
             StatusBarButton.FULLWIDTH -> MoonIcon(st.fullwidth)
             StatusBarButton.SETTINGS -> SettingsIcon()
-            else -> Text(iconText(b, st), fontSize = 12.sp, color = BarFg, maxLines = 1)
+            else -> Text(iconText(b, st), fontSize = 12.sp, color = palette.fg, maxLines = 1)
         }
     }
 }
@@ -346,15 +352,16 @@ internal fun punctIcon(st: ImeState): String = if (st.punct) "。，" else ".,"
  */
 @Composable
 private fun MoonIcon(fullwidth: Boolean) {
+    val fg = LocalBarPalette.current.fg
     Canvas(Modifier.size(17.dp)) {
         val r = size.minDimension / 2f - 1.dp.toPx()
         val center = Offset(size.width / 2f, size.height / 2f)
         if (fullwidth) {
-            drawCircle(color = BarFg, radius = r)
+            drawCircle(color = fg, radius = r)
         } else {
-            drawCircle(color = BarFg, radius = r, style = Stroke(1.5.dp.toPx()))
+            drawCircle(color = fg, radius = r, style = Stroke(1.5.dp.toPx()))
             drawArc(
-                color = BarFg,
+                color = fg,
                 startAngle = -90f,
                 sweepAngle = 180f, // 右半
                 useCenter = true,
@@ -368,13 +375,14 @@ private fun MoonIcon(fullwidth: Boolean) {
 /** 设置按钮 = 四小方块（用户裁决②：多字的「设」去掉，画图标）。 */
 @Composable
 private fun SettingsIcon() {
+    val fg = LocalBarPalette.current.fg
     Canvas(Modifier.size(13.dp)) {
         val s = 5.dp.toPx()
         val gap = 3.dp.toPx()
         for (row in 0 until 2) {
             for (col in 0 until 2) {
                 drawRoundRect(
-                    color = BarFg,
+                    color = fg,
                     topLeft = Offset(col * (s + gap), row * (s + gap)),
                     size = Size(s, s),
                     cornerRadius = CornerRadius(1.dp.toPx()),
@@ -387,12 +395,13 @@ private fun SettingsIcon() {
 /** 小键盘图标：一个键帽外框 + 六个键点。 */
 @Composable
 private fun VkIcon() {
+    val fg = LocalBarPalette.current.fg
     Canvas(Modifier.size(17.dp)) {
         val stroke = 1.5.dp.toPx()
         val h = size.height * 0.72f
         val top = (size.height - h) / 2f
         drawRoundRect(
-            color = BarFg,
+            color = fg,
             topLeft = Offset(0f, top),
             size = Size(size.width, h),
             cornerRadius = CornerRadius(2.5.dp.toPx()),
@@ -401,7 +410,7 @@ private fun VkIcon() {
         for (r in 0 until 2) {
             for (c in 0 until 3) {
                 drawCircle(
-                    color = BarFg,
+                    color = fg,
                     radius = 1.1.dp.toPx(),
                     center = Offset(size.width * (0.28f + c * 0.22f), top + h * (0.35f + r * 0.3f)),
                 )

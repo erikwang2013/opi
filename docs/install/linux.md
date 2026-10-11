@@ -575,6 +575,7 @@ Skin=不改动          # 候选面板皮肤（2026-10-09 起；值存的就是�
 `~/.config/fcitx5/conf/classicui.conf` 的 `Theme=`/`DarkTheme=` 并热重载 classicui。
 
 - **对所有输入法生效**（面板主题是框架级的一份设置，做不到只影响 OPI，如实记）。
+- 状态栏悬浮条自 2026-10-12 起**也随这张皮肤换色**（自绘窗要吃同一份色板，见 §4.8）。
 - 「不改动」= OPI 不介入（默认）。选皮肤只在**值发生变化**时才写文件：fcitx5 每次启动
   不会拿旧值把用户后来改的主题顶回去。
 - **图形化的选法**（2026-10-09 起）：设置窗（§4.7，菜单「opi输入法」或状态栏「设」）
@@ -631,6 +632,13 @@ Linux 上 = `--settings` 的设置窗（无参数启动也是它）。**v1.6.0 �
   （那是停用整个输入法：实测指纹 = `fcitx5-remote` 报 2、OPI 热键全失效、状态行不动）。
 - 自启：`/etc/xdg/autostart/opi-statusbar.desktop`（装包即生效，登录自动起）；
   手动起：`/opt/opi-candidates/bin/opi-candidates --statusbar`。
+- **跟随皮肤**（2026-10-12 用户报障「设置皮肤后状态栏皮肤没同步变化」的修复）：条按配置
+  里的 `Skin=` 取色 —— 色板 `desktop/…/SkinPalette.kt`（五角色 ← §皮肤那节 SKINS 的
+  `bg`/`text`/`hl_bg`/`sep`/`accent`，逐值由 SettingsTest 的 `skin palettes match the
+  theme generator` 现读现比；「不改动」= 条自绘以来的固定深色，行为一字不变）。
+  同步**没有第二条通道**：条本来就每秒重读配置文件（§4.8 上一条），保存后 ≤1s 自己换。
+  ⚠️ **同类未做**：虚拟键盘窗、符号大全窗（以及 Windows 候选窗）仍各写死深色 —— 要一起
+  随皮肤的话另立一条（色板已备好，见 `SkinPalette.kt`）。
 - 显示/隐藏：设置窗「状态栏」一节（master 隐藏 + 逐按钮常驻）。配置与 §4.6 的六个选项
   **同住一个文件**（`$XDG_CONFIG_HOME/fcitx5/conf/opi_fcitx5.conf`，九键
   `StatusBarHidden` / `StatusBar*`；写入在 `desktop/` 的 `Settings.kt`），改完 1s 内生效。
