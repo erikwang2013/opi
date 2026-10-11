@@ -66,6 +66,10 @@ fun ImeToolbar(
     onOpenSkin: () -> Unit,
     onOpenInputMode: () -> Unit,
     onOpenKeyboardMode: () -> Unit,
+    /** 全角开关当前状态（图标两态：满月=全角、半月=半角，与桌面状态栏同款）。 */
+    fullwidth: Boolean = false,
+    /** 点月相 = 切全角/半角（2026-10-12 用户裁决「Android 补入口」）。 */
+    onToggleFullwidth: () -> Unit = {},
     /** 收起键盘（2026-10-10 用户裁决：功能按钮区最右侧加关闭键盘图标）——
      * 服务层注入 requestHideSelf。 */
     onCloseKeyboard: () -> Unit,
@@ -88,6 +92,12 @@ fun ImeToolbar(
             OpiIcons.KeyboardMode,
             "键盘模式${if (keyboardModes.anyOn) "，有开启项" else ""}",
         ) { onOpenKeyboardMode() }
+        // 全角/半角（2026-10-12 用户裁决补入口）：图标两态 + 状态进 contentDescription
+        //（与「输入模式，当前 …」同一口径：只说当前状态，不描述点击行为）。
+        ToolbarIcon(
+            if (fullwidth) OpiIcons.MoonFull else OpiIcons.MoonHalf,
+            "全角/半角，当前${if (fullwidth) "全角" else "半角"}",
+        ) { onToggleFullwidth() }
         // 收起键盘压在**最右**（用户裁决「功能按钮区域最右侧」）：弹性空白把它推到头。
         // 图标 = 向下折角（2026-10-10 用户裁决「不要用 x」——✕ 是关闭语义）。
         Spacer(Modifier.weight(1f))

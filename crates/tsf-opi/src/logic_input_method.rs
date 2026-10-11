@@ -259,6 +259,8 @@ impl TsfLogic {
     /// 空格：缓冲非空 → 引擎提交；空缓冲 → 提交 " "（镜像 `handleSpace`）。
     fn handle_space(&mut self) -> KeyOutcome {
         if self.buffer().is_empty() {
+            // 空格**不宽化**（有意）：全角在拼音模式默认开，宽它会把这个高频动作换成
+            // U+3000 —— 见 `Engine::fullwidthize` 头注的「空格不宽化」。
             KeyOutcome::Commit(" ".to_string())
         } else {
             commit_or_changed(self.input_space())
@@ -341,19 +343,27 @@ impl TsfLogic {
             }
             Mode::English => {
                 if self.buffer().is_empty() {
-                    // 直传路径：shift 非 OFF → 转大写并消费 single（镜像 `handleKey`）
-                    if self.shift_state() != ShiftState::Off {
+                    // 直传路径：shift 非 OFF → 转大写并消费 single（镜像 `handleKey`）；
+                    // 全角开 ⇒ 出全角字母（用户裁决 2026-10-12「字母、数字也要」）——
+                    // 映射与开关唯一在引擎（`fullwidthize`），本层只调它。
+                    let text = if self.shift_state() != ShiftState::Off {
                         self.consume_single_shift();
-                        KeyOutcome::Commit(c.to_ascii_uppercase().to_string())
+                        c.to_ascii_uppercase().to_string()
                     } else {
-                        KeyOutcome::Commit(c.to_string())
-                    }
+                        c.to_string()
+                    };
+                    KeyOutcome::Commit(self.fullwidthize(&text))
                 } else if c.is_ascii_alphabetic() {
                     // 缓冲非空：字母入引擎（composer 按引擎 shift 决定大小写）
                     commit_or_changed(self.input_char(c))
                 } else {
                     KeyOutcome::Unhandled
                 }
+            }
+            // 全角开 ⇒ 数字也出全角（同上裁决）。数字在引擎里是**直通**档（客户端自己插），
+            // 所以要在直传点换成全角字符 —— 非 ASCII 图形字符（空格/汉字）恒等，照旧直通。
+            Mode::Number if self.fullwidth() && c.is_ascii_graphic() => {
+                KeyOutcome::Commit(self.fullwidthize(&c.to_string()))
             }
             Mode::Number => KeyOutcome::Unhandled,
             // 符号模式（B3）：可见 ASCII 当关键字入缓冲（dun → 、）；数字**先**当选词键

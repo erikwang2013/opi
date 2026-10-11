@@ -47,7 +47,7 @@ object OpiEngine : OpiEngineApi, SymbolApi {
      * toggleFullwidth() -> Boolean：全角 ↔ 半角，返回**切换后的新状态**（状态栏直接
      * 拿去刷新）。未装载 → false。
      */
-    external fun toggleFullwidth(): Boolean
+    override external fun toggleFullwidth(): Boolean
 
     /**
      * fullwidthState() -> Boolean：全角开关读侧。**每一次 `switchMode` 之后都必须重读**
@@ -55,7 +55,7 @@ object OpiEngine : OpiEngineApi, SymbolApi {
      *
      * ⚠️ 本出口与 `chinesePunct` **不是一档**：那条硬规则只对全角成立。
      */
-    external fun fullwidthState(): Boolean
+    override external fun fullwidthState(): Boolean
 
     /**
      * toggleSymbol() -> String：符号面板开关，**返回需要上屏的文本（空串 = 无提交）**。

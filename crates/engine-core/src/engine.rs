@@ -233,9 +233,11 @@ impl Engine {
                 }
             }
             _ => {
+                // 英文/数字：缓冲即待上屏文本 ⇒ 全角开时一并宽化（与各端**直传点**的
+                // `fullwidthize` 同一条规则与同一个开关 —— 用户裁决 2026-10-12）。
                 let buffer = self.composer.session().buffer.clone();
                 self.composer.commit_buffer();
-                buffer
+                self.fullwidthize(&buffer)
             }
         }
     }

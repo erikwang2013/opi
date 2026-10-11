@@ -103,13 +103,32 @@ pub fn chinese(ch: char, quotes: &mut Quotes) -> Option<char> {
         .map(|&(_, target)| target)
 }
 
-/// 机械全角：ASCII 标点平移 +0xFEE0。
+/// 机械全角（**标点档**）：ASCII 标点平移 +0xFEE0。
 ///
 /// Unicode 全角区的 U+FF01..U+FF5E 与 ASCII 的 0x21..0x7E **一一连续对应**，
-/// 所以这里不需要表。字母数字**不在内**：全角字母表是另一件事（本表只管标点，
-/// 也不该改掉英文直传路径的大小写行为）。
+/// 所以这里不需要表。字母数字**不在内**：这档只给拼音/繁体模式的标点兜底用 ——
+/// 那些模式下字母数字是要进缓冲的**输入码**，宽了就等于把「打 a」变成「上屏 ａ」
+/// （会把拼音打字整条打断）。
+///
+/// 字母/数字也要宽的场合（它们是**文本**的模式：英文/数字，且只在宿主直传点）
+/// 走 [`ascii_fullwidth_wide`]，别把本函数放开。
 pub fn ascii_fullwidth(ch: char) -> Option<char> {
     if !ch.is_ascii_punctuation() {
+        return None;
+    }
+    char::from_u32(ch as u32 + 0xFEE0)
+}
+
+/// 机械全角（**宽档**）：ASCII 可打印字符（字母/数字/标点，**除空格**）平移 +0xFEE0。
+///
+/// 与 [`ascii_fullwidth`] 的唯一差别是范围 —— 用在哪：英文/数字模式下字母数字是**待上屏
+/// 文本**（不是输入码），但它们在**各端都是直传**（不进引擎，见 `Engine::fullwidthize`
+/// 的头注），所以这档只在宿主的直传点被调用。
+///
+/// 空格不动：全角空格是 U+3000，不在 +0xFEE0 这条连续段上（0x20 + 0xFEE0 = U+FF00，
+/// 未分配）；标点/候选提交的语义都不该因为「全角」把空格换掉。
+pub fn ascii_fullwidth_wide(ch: char) -> Option<char> {
+    if !ch.is_ascii_graphic() {
         return None;
     }
     char::from_u32(ch as u32 + 0xFEE0)

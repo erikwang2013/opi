@@ -153,13 +153,15 @@ fn english_punctuation_is_halfwidth_until_the_toggle_is_on() {
     assert_eq!(key('?'), "？");
     assert_eq!(key('"'), "＂", "西文引号不成对交替（中文模式才交替）");
 
-    // 全角只管标点：字母/数字照原样提交，全角字母表（ａ１）是另一件事，不归本开关。
+    // 全角**也动字母/数字**（用户裁决 2026-10-12「字母、数字也要」）——「只管标点」
+    // 那条边界只在**拼音模式**成立（那里的字母数字是输入码，见 `ascii_fullwidth` 头注）；
+    // 英文/数字模式下它们是待上屏文本，直传点宽化（`Engine::fullwidthize`）。
     // 走**键路由**量 —— raw 出口 `opi_input_key` 对放行类字符返回空串（那是
     // 「引擎不产文本、宿主自己插入」的表达），拿它当「字符丢了」会读错。
     let (action, text) = route('1');
-    assert_eq!((action, text.as_str()), (2, "1"), "全角开着也不动数字");
+    assert_eq!((action, text.as_str()), (2, "１"), "全角开着数字也宽");
     let (action, text) = route('a');
-    assert_eq!((action, text.as_str()), (2, "a"), "全角开着也不动字母");
+    assert_eq!((action, text.as_str()), (2, "ａ"), "全角开着字母也宽");
 }
 
 // ---------- 中文标点那一档 ----------

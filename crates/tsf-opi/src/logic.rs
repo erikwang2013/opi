@@ -117,6 +117,16 @@ impl TsfLogic {
         self.engine.mode()
     }
 
+    /// 全角开关的读侧（直传点判据；语义与 `Engine::fullwidth` 同）。
+    pub fn fullwidth(&self) -> bool {
+        self.engine.fullwidth()
+    }
+
+    /// 全角化待上屏文本（宽档；见 `Engine::fullwidthize` 头注 —— 宿主直传点的唯一入口）。
+    pub fn fullwidthize(&self, text: &str) -> String {
+        self.engine.fullwidthize(text)
+    }
+
     /// 单字符入引擎（路由内部用）。返回引擎输出（如英文模式已提交文本）。
     fn input_char(&mut self, ch: char) -> String {
         let out = self.engine.input_key(ch);

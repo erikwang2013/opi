@@ -87,6 +87,12 @@ interface OpiEngineApi {
     /** 输入方案读侧（「输入模式」；写侧见 [EngineController.switchScheme]）。 */
     fun scheme(): Int
 
+    /** 全角开关读侧（**每次切模式后必须重读**，见 [EngineController.fullwidth] 的注释）。 */
+    fun fullwidthState(): Boolean
+
+    /** 全角↔半角Toggle（工具条月相按钮）；返回切完的新状态。 */
+    fun toggleFullwidth(): Boolean
+
     /** 写侧：换方案**清缓冲** —— 调用方随后必须重读（[EngineController.switchScheme] 管这条）。 */
     fun setScheme(scheme: Int)
 
@@ -172,6 +178,14 @@ class EngineController(
         private set
 
     /**
+     * 全角开关（引擎真值，随 [refresh] 重读；工具条月相按钮切）。
+     * ⚠️ **必须在 refresh 里重读**：切模式把它重置为该模式默认值（拼音/繁体全角、
+     * 英文/数字/符号半角）—— 与 `OpiEngine.fullwidthState` 头注同一条理由。
+     */
+    var fullwidth by mutableStateOf(false)
+        private set
+
+    /**
      * 输入方案（引擎真值，随 [refresh] 重读）。键盘按它换布局、路由器按它分流。
      */
     var inputScheme by mutableStateOf(InputScheme.FULL)
@@ -230,6 +244,7 @@ class EngineController(
         learnerEnabled = api.learnerEnabled()
         fuzzyEnabled = api.fuzzyEnabled()
         jianpinEnabled = api.jianpinEnabled()
+        fullwidth = api.fullwidthState() // 切模式会重置它 ⇒ 每次刷新都重读
         inputScheme = InputScheme.fromInt(api.scheme())
         candidates = api.candidates(fetchLimit)?.toList() ?: emptyList() // JNI 可能返回 null
         // 读数（引擎出口已按读音去重保序）：与 candidates 同一次排名的副产物
@@ -421,6 +436,28 @@ class EngineController(
         }
     }
 
+    // ---- 全角 / 半角 ----
+
+    /** 切换全角（工具条月相按钮）。引擎返回**切完的新状态**，照抄 + 全量刷新。 */
+    fun toggleFullwidth() {
+        fullwidth = api.toggleFullwidth()
+        refresh()
+    }
+
+    /**
+     * 全角化待上屏文本（**宽档**：ASCII 可打印平移 +0xFEE0；空格与非 ASCII 恒等）。
+     * 开关关 ⇒ 原样返回。
+     *
+     * 为什么要在本类里再写一遍映射：**英文/数字模式下的字母数字各端都是直传**，
+     * 不进引擎（[xyz.erik.opi.ime.KeyRouter] 的英文直传与数字面板直提），引擎收不到
+     * 那些字符 —— 规则搬不过来，只能镜像；语义源 = engine-core 的
+     * `punctuation::ascii_fullwidth_wide` 与 `Engine::fullwidthize`（那边的头注写着
+     * 「宿主直传点的唯一入口」）。⚠️ 改一边必须改另一边：`FullwidthTextTest` 现读
+     * `punctuation.rs` 的常数与范围，两边的用例集相同。
+     */
+    fun fullwidthize(text: String): String =
+        if (!fullwidth) text else text.map(::widenAscii).joinToString("")
+
     /**
      * 无论 single/lock 一律复位（UI 与引擎同步）。模式切换/输入目标变更时调用：
      * shiftVisible 只能隐藏 ⇧ 按钮，清不掉状态——中→繁→英 长按锁定后离开再切回 English，
@@ -432,3 +469,13 @@ class EngineController(
         api.setShift(false)
     }
 }
+
+/**
+ * 全角宽档的单字符映射（**镜像** engine-core 的 `punctuation::ascii_fullwidth_wide`）：
+ * ASCII 可打印（0x21..0x7E：字母/数字/标点，**除空格**）平移 +0xFEE0；其余原样。
+ * ⚠️ 空格：全角空格是 U+3000，不在那条连续段上（0x20+0xFEE0 = U+FF00，未分配），
+ * 且引擎侧**有意不宽化空格**（见 `Engine::fullwidthize` 头注）—— 这里保持一致。
+ * 锁同步：`FullwidthTextTest` 现读 `punctuation.rs` 的常数与范围。
+ */
+internal fun widenAscii(ch: Char): Char =
+    if (ch.code in 0x21..0x7E) (ch.code + 0xFEE0).toChar() else ch

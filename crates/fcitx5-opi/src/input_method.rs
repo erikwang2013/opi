@@ -235,6 +235,8 @@ fn handle_backspace(state: &mut CandidateState) -> KeyAction {
 /// 空格：缓冲非空 → 引擎提交；空缓冲 → 直传 " "（镜像 `handleSpace`）。
 fn handle_space(state: &mut CandidateState) -> KeyAction {
     if state.buffer().is_empty() {
+        // 空格**不宽化**（有意）：全角在拼音模式默认开，宽它会把这个高频动作换成
+        // U+3000 —— 见 `Engine::fullwidthize` 头注的「空格不宽化」。
         KeyAction::Input(" ".to_string())
     } else {
         commit_or_handled(state.input_space())
@@ -317,19 +319,27 @@ fn handle_printable(state: &mut CandidateState, c: char) -> KeyAction {
         }
         Mode::English => {
             if state.buffer().is_empty() {
-                // 直传路径：shift 非 OFF → 转大写并消费 single（镜像 `handleKey`）
-                if state.shift_state() != ShiftState::Off {
+                // 直传路径：shift 非 OFF → 转大写并消费 single（镜像 `handleKey`）；
+                // 全角开 ⇒ 出全角字母（用户裁决 2026-10-12「字母、数字也要」）——
+                // 映射与开关唯一在引擎（`fullwidthize`），本层只调它。
+                let text = if state.shift_state() != ShiftState::Off {
                     state.consume_single_shift();
-                    KeyAction::Input(c.to_ascii_uppercase().to_string())
+                    c.to_ascii_uppercase().to_string()
                 } else {
-                    KeyAction::Input(c.to_string())
-                }
+                    c.to_string()
+                };
+                KeyAction::Input(state.fullwidthize(&text))
             } else if c.is_ascii_alphabetic() {
                 // 缓冲非空：字母入引擎（composer 按引擎 shift 决定大小写）
                 commit_or_handled(state.input_key(c))
             } else {
                 KeyAction::PassThrough
             }
+        }
+        // 全角开 ⇒ 数字也出全角（同上裁决）。数字在引擎里是**直通**档（客户端自己插），
+        // 所以要在直传点换成全角字符 —— 非 ASCII 图形字符（空格/汉字）恒等，照旧直通。
+        Mode::Number if state.fullwidth() && c.is_ascii_graphic() => {
+            KeyAction::Input(state.fullwidthize(&c.to_string()))
         }
         Mode::Number => KeyAction::PassThrough,
         // 符号模式（B3）：可见 ASCII 当关键字入缓冲（dun → 、）；数字**先**当选词键

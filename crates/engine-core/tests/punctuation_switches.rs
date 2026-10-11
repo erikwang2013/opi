@@ -242,7 +242,53 @@ fn non_chinese_fullwidth_is_mechanical_not_cjk() {
     assert_eq!(e.input_punct('.').as_deref(), Some("．"));
     assert_eq!(e.input_punct('"').as_deref(), Some("＂"), "西文引号不交替");
     assert_eq!(e.input_punct('"').as_deref(), Some("＂"), "第二次还是它");
-    // 字母/数字不进全角：全角字母表是另一件事，本表只管标点
+    // **标点档**不管字母/数字（`ascii_fullwidth` 的范围钉）：那些字符走模式分派 ——
+    // 英文/数字模式在宿主**直传点**宽化（`fullwidthize`，见下一批用例），
+    // 拼音模式进缓冲当输入码、绝不宽。
     assert_eq!(e.input_punct('a'), None);
     assert_eq!(e.input_punct('1'), None);
+}
+
+// ---------- 全角宽档（字母/数字/空格；用户裁决 2026-10-12「字母、数字也要」） ----------
+
+/// `fullwidthize` —— 宿主**直传点**的唯一入口（英文/数字模式下字母数字是待上屏文本，
+/// 但各端都是直传、不进引擎，所以规则放这里、由宿主在直传点调用）：
+/// ASCII 可打印平移 +0xFEE0；**空格不宽化**（有意，见该函数头注）；开关关/非 ASCII 恒等。
+#[test]
+fn fullwidthize_widens_text_for_direct_passthrough_points() {
+    let mut e = engine();
+    e.switch_mode(Mode::English);
+    assert_eq!(e.fullwidthize("aA1. "), "aA1. ", "开关关 ⇒ 恒等");
+    e.toggle_fullwidth();
+    assert_eq!(e.fullwidthize("aA1. "), "ａＡ１． ", "空格保持半角");
+    assert_eq!(
+        e.fullwidthize("你好"),
+        "你好",
+        "非 ASCII 恒等（汉字天然双宽）"
+    );
+}
+
+/// **拼音模式绝不宽字母/数字**（回归钉）：它们是**输入码**不是文本 —— 宽了会把
+/// 「打 a」变成「上屏 ａ」，拼音打字整条断（`punctuation::ascii_fullwidth` 头注）。
+#[test]
+fn pinyin_composition_letters_are_never_widened() {
+    let mut e = engine();
+    assert!(e.fullwidth(), "前置：拼音默认全角");
+    assert_eq!(e.input_key('n'), "", "字母进缓冲，不上屏");
+    assert_eq!(e.buffer(), "n", "缓冲里是半角输入码");
+    assert_eq!(e.input_key('i'), "");
+    assert_eq!(e.buffer(), "ni");
+}
+
+/// 英文模式的**引擎内**提交路径也宽化：缓冲非空时字母入引擎、空格提交缓冲 ——
+/// 与两轨直传点同一条规则（`input_space` 的 `_` 分支调 `fullwidthize`）。
+#[test]
+fn english_mode_buffer_commit_widens_too() {
+    let mut e = engine();
+    e.switch_mode(Mode::English);
+    e.toggle_fullwidth();
+    e.input_key('h'); // 缓冲非空 ⇒ 进引擎（宿主直传点是另一条，两轨各有用例）
+    e.input_key('i');
+    assert_eq!(e.input_space(), "ｈｉ", "空格提交缓冲：全角");
+    assert_eq!(e.buffer(), "", "提交后缓冲清空");
 }

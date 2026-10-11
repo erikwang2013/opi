@@ -144,6 +144,16 @@ class FakeEngine : OpiEngineApi {
         this.schemeValue = scheme
     }
 
+    /** 全角开关（真引擎：fullwidthState()/toggleFullwidth()；切模式重置是引擎的事）。 */
+    var fullwidthValue = false
+
+    override fun fullwidthState(): Boolean = fullwidthValue
+
+    override fun toggleFullwidth(): Boolean {
+        fullwidthValue = !fullwidthValue
+        return fullwidthValue
+    }
+
     /** 删用户词：记录文本；真引擎删完候选表里就没有它了（这里同样摘掉）。 */
     override fun removeUserWord(text: String) {
         throwOnRemove?.let { throw it }

@@ -34,24 +34,26 @@ class KeyRouter(
         // 全喂给了保留的旧拼音。保留的拼音等切回中文继续用（见 ImeState.cycleMode）。
         // 此前只在缓冲空时直传，非空走引擎（旧防御路径）；判据随语言切换语义一起改了。
         if (controller.mode == EngineMode.ENGLISH) {
-            // ⇧ 直传大写：直传路径绕过引擎，需本侧转大写。
+            // ⇧ 直传大写：直传路径绕过引擎，需本侧转大写；全角由本侧宽化
+            // （2026-10-12 用户裁决「字母、数字也要」——直传绕过引擎，规则只能镜像，
+            // 语义源见 EngineController.fullwidthize 的头注）。
             if (controller.shiftState != ShiftState.OFF) {
-                commit(ch.uppercase())
+                commit(controller.fullwidthize(ch.uppercase()))
                 controller.consumeSingleShift()
             } else {
-                commit(ch)
+                commit(controller.fullwidthize(ch))
             }
             return
         }
         // 数字面板（Number 模式）：**数字点一下立即上屏**（2026-10-10 用户报障
         // 「切换到数字键盘点击数字没输入，再切回拼音才出来」——引擎 Number 模式原为
         // 「数字攒进缓冲、收尾时原样提交」（composer.rs 的 Mode::Number 分支），在
-        // 数字面板上表现为点了没反应）。数字在引擎里不经任何映射（ascii_fullwidth
-        // 只管 ASCII 标点，punctuation.rs），直提零损失；`,`/`.` 仍走引擎 ——
-        // 标点表与全角那两档在它们身上生效。
+        // 数字面板上表现为点了没反应）。数字直提零损失（标点档只管标点，字母数字
+        // 在引擎里不映射）；全角开时由本侧宽化（数字同属直提路径）—— `,`/`.` 仍走
+        // 引擎，标点表与全角那两档在它们身上生效。
         // ⚠️ 引擎侧的 Number 缓冲语义不动（那是引擎自己的设计），只是本面板不再用它。
         if (controller.mode == EngineMode.NUMBER && ch.length == 1 && ch[0].isDigit()) {
-            commit(ch)
+            commit(controller.fullwidthize(ch))
             return
         }
         val text = controller.input(ch)
@@ -63,6 +65,8 @@ class KeyRouter(
             val text = controller.inputSpace()
             if (text.isNotEmpty()) commit(text)
         } else {
+            // 空格**不宽化**（有意）：全角在拼音模式默认开，宽它会把「中文模式按空格」
+            // 换成 U+3000 —— 见 engine-core `Engine::fullwidthize` 头注。
             commit(" ")
         }
     }

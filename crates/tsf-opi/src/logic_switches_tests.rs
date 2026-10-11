@@ -158,8 +158,20 @@ fn non_chinese_fullwidth_is_mechanical_not_cjk() {
         KeyOutcome::Commit("＂".into()),
         "西文引号不交替"
     );
-    // 字母/数字不进全角：全角字母表是另一件事，本表只管标点
-    assert_eq!(s.input_key('a' as u32, 0), KeyOutcome::Commit("a".into()));
+    // 字母/数字**也**进全角（用户裁决 2026-10-12「需要，修复所有问题」）——
+    // 与「标点档只管标点」的分档是两回事：判据是**这个字符在这模式下是不是待上屏文本**
+    // （英文/数字模式是；拼音模式是输入码，绝不宽 —— 见 engine-core 的
+    // punctuation::ascii_fullwidth 头注）。映射与开关唯一在引擎 `Engine::fullwidthize`。
+    assert_eq!(s.input_key('a' as u32, 0), KeyOutcome::Commit("ａ".into()));
+    assert_eq!(s.input_key('1' as u32, 0), KeyOutcome::Commit("１".into()));
+    // 空格**不宽化**（有意，别顺手补）：全角在拼音模式默认开，宽空格会把「中文模式按
+    // 一下空格」换成 U+3000 —— 见 `Engine::fullwidthize` 头注。
+    s.engine.clear();
+    assert_eq!(
+        s.input_key(' ' as u32, 0),
+        KeyOutcome::Commit(" ".into()),
+        "空缓冲的空格照旧半角（全角只吃 ASCII 可打印、除空格）"
+    );
 }
 
 /// 符号模式：不映射 —— 标点在关键字表里根本不存在（生产表关键字全是 `[a-z0-9]`，

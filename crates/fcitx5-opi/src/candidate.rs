@@ -123,6 +123,16 @@ impl CandidateState {
         self.engine.mode()
     }
 
+    /// 全角开关的读侧（直传点判据；语义与 `Engine::fullwidth` 同）。
+    pub fn fullwidth(&self) -> bool {
+        self.engine.fullwidth()
+    }
+
+    /// 全角化待上屏文本（宽档；见 `Engine::fullwidthize` 头注 —— 宿主直传点的唯一入口）。
+    pub fn fullwidthize(&self, text: &str) -> String {
+        self.engine.fullwidthize(text)
+    }
+
     /// 输入单字符键。空串/多字符由调用方（input_method）拒绝；
     /// 非 ASCII 由引擎层拒绝。返回引擎输出（如英文模式下已提交文本）。
     pub fn input_key(&mut self, ch: char) -> String {

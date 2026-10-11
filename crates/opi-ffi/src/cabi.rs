@@ -147,8 +147,13 @@ pub unsafe extern "C" fn opi_set_shift(on: bool) {
 // 的模块注释里 —— 那里同时是这些条款的门禁。
 
 /// toggleFullwidth() -> bool：全角 ↔ 半角，返回**切换后的新状态**（状态栏直接拿去
-/// 刷新）。只影响标点（中文模式出中文标点，其余机械全角），字母/数字不动；
-/// 未装载 → false（那时按键全走 action=0，宿主拿到的就是半角，不是错误码）。
+/// 刷新）。宽档 = ASCII 可打印（字母/数字/标点）平移 +0xFEE0，**空格不动**（判据与
+/// 边界见 `Engine::fullwidthize` 头注，用户裁决 2026-10-12）；拼音/繁体模式下字母数字
+/// 是输入码、**绝不宽化**。⚠️ 英文/数字的字母数字**各端直传、不进引擎** ⇒ 宿主在直传点
+/// 自己调宽化；本面（与 JNI 面）**都没有** text 宽化出口 —— Android 是 Kotlin 镜像
+/// （`EngineController.fullwidthize`），Apple/鸿蒙接线直传时同理，要加出口得连头文件与
+/// 鸿蒙 use-site 门禁一起动（别默默加）。未装载 → false（那时按键全走 action=0，
+/// 宿主拿到的就是半角，不是错误码）。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_toggle_fullwidth() -> bool {
     catch_unwind(AssertUnwindSafe(|| {
