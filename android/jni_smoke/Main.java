@@ -30,6 +30,7 @@ final class OpiEngine {
     static native int mode();
     static native String[] searchSymbols(String keyword);
     static native String[] emojiSymbols();
+    static native String emojiGroups();
     static native String symbolBlocks();
     static native String[] symbolsInBlock(short id);
     static native boolean loadTrad(String path);
@@ -189,6 +190,44 @@ public final class Main {
         check(emojiSet.contains("🇨🇳"), "emojiSymbols 必须含国旗序列 🇨🇳（区域指示符成对）");
         check(emojiSet.contains("❤️"), "emojiSymbols 必须含 VS16 形 ❤️（旧表只有裸 ♥）");
         check(!emojiSet.contains("🞀"), "emojiSymbols 不得含非 emoji 的 🞀(U+1F780)");
+
+        // emojiGroups（2026-10-12）：表情面板分类条 —— `[{name,start,count}]`，纯静态表
+        // （与引擎装载无关，未装载也有值）。判据：JSON 形状 + 9 组 + 首组「笑脸」start=0
+        // + 各组 count 之和 == emojiSymbols 条数（下标必须对得上，点分类才滚得准）。
+        String groups = OpiEngine.emojiGroups();
+        check(groups != null && groups.contains("\"name\""), "emojiGroups 含 name");
+        // ⚠️ 逐字段抓、**不假设键序**：serde_json 未开 preserve_order ⇒ 键是**字典序**
+        // （实发 `{"count":…,"name":…,"start":…}`），按 `name,start,count` 的顺序写一个
+        // 正则会把整段解析成 0 条（本冒烟第一版就是这么红的）。
+        java.util.regex.Matcher obj = java.util.regex.Pattern.compile("\\{[^{}]*\\}")
+                .matcher(groups == null ? "" : groups);
+        java.util.regex.Pattern pName = java.util.regex.Pattern.compile("\"name\":\"([^\"]+)\"");
+        java.util.regex.Pattern pStart = java.util.regex.Pattern.compile("\"start\":(\\d+)");
+        java.util.regex.Pattern pCount = java.util.regex.Pattern.compile("\"count\":(\\d+)");
+        int groupCount = 0;
+        int groupSum = 0;
+        int lastStart = 0;
+        String firstGroup = "";
+        while (obj.find()) {
+            String s = obj.group();
+            java.util.regex.Matcher mName = pName.matcher(s);
+            java.util.regex.Matcher mStart = pStart.matcher(s);
+            java.util.regex.Matcher mCount = pCount.matcher(s);
+            if (!mName.find() || !mStart.find() || !mCount.find()) {
+                continue;
+            }
+            if (groupCount == 0) {
+                firstGroup = mName.group(1);
+                lastStart = Integer.parseInt(mStart.group(1));
+            }
+            groupCount++;
+            groupSum += Integer.parseInt(mCount.group(1));
+        }
+        check(groupCount == 9, "emojiGroups 应有 9 组（实得 " + groupCount + "）");
+        check("笑脸".equals(firstGroup), "首组应为「笑脸」（官方组序；实得 " + firstGroup + "）");
+        check(lastStart == 0, "首组的 start 应为 0（实得 " + lastStart + "）");
+        check(groupSum == emojiCount, "各组 count 之和应 == emojiSymbols 条数（"
+                + groupSum + " vs " + emojiCount + "）");
 
         // displayBuffer（2026-10-09）：显示用拼音读数，与 buffer 是**两个出口** ——
         // 9 键下 buffer 是数字串、displayBuffer 是带分词的读音；非 9 键两者相同。

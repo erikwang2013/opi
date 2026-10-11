@@ -70,6 +70,22 @@ pub fn emoji_symbol_texts() -> Vec<String> {
         .collect()
 }
 
+/// emojiGroups JSON：`[{"count","name","start"}]`（**serde 字典序** —— 未开
+/// preserve_order，消费方别按书写顺序写正则）—— 表情面板**分类条**用（2026-10-12
+/// 用户裁决「中间是表情分类」；形状照 [`symbol_blocks_json`]）。
+/// `start` 与 [`emoji_symbol_texts`] 的下标对齐：点分类 = 网格滚到 `start`。
+/// 与 `Api` 无关（纯静态数据），同 `emoji_symbol_texts`。
+pub fn emoji_groups_json() -> String {
+    let arr: Vec<serde_json::Value> =
+        engine_core::symbols::SymbolEngine::builtin_emoji_groups()
+            .into_iter()
+            .map(|(name, start, count)| {
+                serde_json::json!({ "name": name, "start": start, "count": count })
+            })
+            .collect();
+    serde_json::to_string(&arr).unwrap_or_default()
+}
+
 /// 文本列表 → JSON 数组字符串。
 pub fn texts_json(texts: &[String]) -> String {
     serde_json::to_string(texts).unwrap_or_default()

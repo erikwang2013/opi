@@ -428,6 +428,18 @@ pub const JNI_USER_WORDS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni_u
 pub const JNI_SCHEME: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni_scheme.rs");
 /// 同上，候选/缓冲读侧那一半（2026-10-09：加 `candidateReadings` 后 500 行门禁越线）。
 pub const JNI_CANDIDATES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni_candidates.rs");
+/// 同上，符号/表情那一半（2026-10-12：加 `emojiGroups` 后 500 行门禁越线）。
+pub const JNI_SYMBOLS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni_symbols.rs");
+/// jni 模块**全部** .rs 的清单（`read_jni` 的合成语料就是按它读的）。
+/// ⚠️ 新拆一个 `jni_*.rs` 要加到这里 —— 漏了那批出口会从门禁视野里消失
+/// （`rust_registration_parser_is_not_blind` 的计数护栏会红）。
+pub const JNI_ALL: [&str; 5] = [
+    JNI_RS,
+    JNI_USER_WORDS,
+    JNI_SCHEME,
+    JNI_CANDIDATES,
+    JNI_SYMBOLS,
+];
 pub const KOTLIN_HOST: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../android/app/src/main/kotlin/xyz/erik/opi/jni/OpiEngine.kt"

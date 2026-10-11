@@ -68,3 +68,33 @@ fn emoji_browse_covers_the_2026_10_09_gaps() {
     assert!(has("❤️"), "VS16 爱心（旧表只有裸 ❤，渲染成单色字形）");
     assert!(!has("❤"), "裸 ❤ 不该单独出现 —— 那是旧的单色形态");
 }
+
+/// 分类条的分组（2026-10-12 加，用户裁决「中间是表情分类」）：分组必须**连续覆盖**
+/// 全表（无空洞、无重叠）、名字非空、顺序 = 官方组序 —— 面板点分类就是
+/// `grid.scrollToItem(start)`，空洞会让某个分类滚到别的组里去。
+#[test]
+fn emoji_groups_cover_the_table_contiguously() {
+    let groups = SymbolEngine::builtin_emoji_groups();
+    let list = SymbolEngine::builtin_emoji_texts();
+    let mut next = 0usize;
+    let mut names: Vec<&str> = Vec::new();
+    for (name, start, count) in &groups {
+        assert!(!name.is_empty(), "组名不得为空");
+        assert_eq!(
+            *start, next,
+            "组 {name} 的起始下标必须接上一组末尾（无空洞/无重叠）"
+        );
+        assert!(*count > 0, "组 {name} 为空");
+        next += count;
+        names.push(name);
+    }
+    assert_eq!(next, list.len(), "分组必须覆盖全表");
+    // 官方 9 组（Component 全是 `component` 状态、被「只收完全限定」滤掉 —— 生成器
+    // 的 EMOJI_GROUP_CN 仍列着它，上游改版时红的在生成期）。
+    assert_eq!(
+        names,
+        [
+            "笑脸", "人物", "动物", "食物", "旅行", "活动", "物品", "符号", "旗帜"
+        ]
+    );
+}

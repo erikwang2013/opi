@@ -14,7 +14,7 @@ use std::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use jni::jni_str;
-use jni::sys::{self, jboolean, jint, jshort, jstring};
+use jni::sys::{self, jboolean, jint, jstring};
 use jni::{JavaVM, NativeMethod, ScopeToken};
 
 use crate::api;
@@ -205,59 +205,13 @@ pub unsafe extern "system" fn opijni_mode(_env: JEnv, _class: sys::jclass) -> ji
     guard(|| api::with_engine(|e| api::mode_to_int(e.mode().into())).unwrap_or_default())
 }
 
-/// searchSymbols(keyword: String) -> String[]。仅文本数组。
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_search_symbols(
-    env: JEnv,
-    _class: sys::jclass,
-    keyword: jstring,
-) -> sys::jobjectArray {
-    let texts = guard(|| {
-        let kw = unsafe { jni_util::jstring_to_rust(env, keyword) }.unwrap_or_default();
-        api::with_engine(|e| api::search_symbol_texts(e, &kw)).unwrap_or_default()
-    });
-    unsafe { jni_util::string_array(env, texts) }
-}
-
-/// emojiSymbols() -> String[]。表情面板浏览全量（官方分组序；见 `api::emoji_symbol_texts`）。
-/// **不过引擎单例**：编译期静态表，引擎没装载也返回得了。
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_emoji_symbols(
-    env: JEnv,
-    _class: sys::jclass,
-) -> sys::jobjectArray {
-    let texts = guard(api::emoji_symbol_texts);
-    unsafe { jni_util::string_array(env, texts) }
-}
-
-/// symbolBlocks() -> String。JSON：`[{id,start,end,name,common}]`。
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_symbol_blocks(env: JEnv, _class: sys::jclass) -> jstring {
-    let json = guard(|| api::with_engine(|e| api::symbol_blocks_json(e)).unwrap_or_default());
-    unsafe { jni_util::rust_to_jstring(env, &json) }
-}
-
-/// symbolsInBlock(id: Short) -> String[]。仅文本数组。
-#[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_symbols_in_block(
-    env: JEnv,
-    _class: sys::jclass,
-    id: jshort,
-) -> sys::jobjectArray {
-    let texts = guard(|| {
-        // 负 id 同理按越界处理（空数组），不钳成块 0。jshort 转 u16 前必须先判负，
-        // 否则 -1 会变成 65535（一个合法但错误的块号）。
-        api::with_engine(|e| {
-            if id < 0 {
-                Vec::new()
-            } else {
-                api::symbol_texts(e, id as u16)
-            }
-        })
-        .unwrap_or_default()
-    });
-    unsafe { jni_util::string_array(env, texts) }
-}
+// 拆到 `jni_symbols.rs` 的五个函数（符号 / 表情一族）：注册表仍在本文件
+// （`JNI_OnLoad`），名字要从那边 use 进来 —— 少了这一行是**编译错误**（不是静默），
+// 正好。
+use crate::jni_symbols::{
+    opijni_emoji_groups, opijni_emoji_symbols, opijni_search_symbols, opijni_symbol_blocks,
+    opijni_symbols_in_block,
+};
 
 // 拆到 `jni_user_words.rs` 的六个函数：注册表仍在本文件（`JNI_OnLoad`），
 // 名字要从那边 use 进来 —— 少了这一行是**编译错误**（不是静默），正好。
@@ -445,6 +399,11 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _reserved: *mut c
                     jni_str!("symbolBlocks"),
                     jni_str!("()Ljava/lang/String;"),
                     opijni_symbol_blocks as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("emojiGroups"),
+                    jni_str!("()Ljava/lang/String;"),
+                    opijni_emoji_groups as *mut c_void,
                 ),
                 NativeMethod::from_raw_parts(
                     jni_str!("symbolsInBlock"),

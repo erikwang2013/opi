@@ -7,12 +7,16 @@
 产物（UTF-8，无表头，制表符分隔）：
   data/raw/symbol_blocks.tsv   id \\t start(十六进制) \\t end \\t name \\t common(0/1)
   data/raw/symbols.tsv         text \\t name \\t keywords(逗号分隔,无空格) \\t block_id \\t emoji(0/1)
-  data/raw/emoji.tsv           text \\t name        ← 2026-10-09 起；表情面板的**浏览**全量，
-                               取自 emoji-test.txt 的完全限定序列（含旗帜/家庭/键帽等
-                               多码位序列）。与 symbols.tsv 的 emoji 列**是两条路**：
-                               那一列是**搜索**路径（受单键候选排序约束，见下面「不收
-                               非图形块」的说明），这一份是浏览路径（要全、按 UTS#51
-                               官方分组序）—— 用户裁决「表情中常用主流 emoji 不全」。
+  data/raw/emoji.tsv           text \\t name \\t group   ← 2026-10-09 起；表情面板的
+                               **浏览**全量，取自 emoji-test.txt 的完全限定序列
+                               （含旗帜/家庭/键帽等多码位序列）。与 symbols.tsv 的
+                               emoji 列**是两条路**：那一列是**搜索**路径（受单键
+                               候选排序约束，见下面「不收非图形块」的说明），
+                               这一份是浏览路径（要全、按 UTS#51 官方分组序）——
+                               用户裁决「表情中常用主流 emoji 不全」。
+                               group 列 = 中文组名（2026-10-12 加，面板分类条用；
+                               源是 emoji-test.txt 的 `# group:` 注释，映射见
+                               EMOJI_GROUP_CN）。
 
 落在 `data/raw/` 而非任务书写的 `data/generated/`：消费侧
 `engine-core/src/symbols.rs::builtin()` 用 `include_str!("../../../data/raw/symbols.tsv")`
@@ -109,6 +113,26 @@ EMOJI_DATA_SHA256 = "80d00f8e616a0ef27fd6b8de3b758c06383b5d917e2977709578e68baf7
 # 不会静默换数据。等 18.0/ 目录出现后把 URL 换成它（SHA 不动）。
 EMOJI_TEST_URL = "https://www.unicode.org/Public/emoji/latest/emoji-test.txt"
 EMOJI_TEST_SHA256 = "8f3735cda1f92a779d78af67cf86066bb1f07143dc22f2ac29394d9bc57ab21a"
+
+# emoji-test.txt 的组名 → 面板分类条上的**中文标签**（2026-10-12 加，用户裁决
+# 「中间是表情分类」）。组的全集与顺序由 emoji-test.txt 决定（生成期断言：见过的组
+# 必须在本表里，否则 FATAL）；本表只做翻译 + 屏宽友好的缩短（Smileys & Emotion →
+# 笑脸）。标签保持 2 字，与符号面板那 22 个类目同一屏宽口径。
+# ⚠️ Component 组（肤色/发色）在 emoji-test.txt 里全是 `component` 状态 ⇒ 被「只收
+# 完全限定」滤掉、产物里不出这个组 —— 仍然列出它：上游哪天把组件标成完全限定，
+# 断言会**红在生成期**，而不是让面板静默多出一组没标签的条目。
+EMOJI_GROUP_CN = {
+    "Smileys & Emotion": "笑脸",
+    "People & Body": "人物",
+    "Component": "组件",
+    "Animals & Nature": "动物",
+    "Food & Drink": "食物",
+    "Travel & Places": "旅行",
+    "Activities": "活动",
+    "Objects": "物品",
+    "Symbols": "符号",
+    "Flags": "旗帜",
+}
 
 # (id, start, end, name, common)。id 与 engine-core `builtin()` 逐一对应，
 # **id 5 空出不重编号**：平假名若改成 5，任何仍认为「5 = 扩展 A」的旧代码会
@@ -293,16 +317,22 @@ def rows_for_block(block: tuple[int, int, int, str, int], chars: dict[int, tuple
         yield chr(cp), name, list(dict.fromkeys(keys)), bid, 1 if in_ranges(emoji_prop, cp) else 0
 
 
-def parse_emoji_test(text: str) -> list[tuple[str, str]]:
-    """emoji-test.txt → [(序列, 英文名), ...]：**只收完全限定**、按文件序（= UTS#51 官方分组序）。
+def parse_emoji_test(text: str) -> list[tuple[str, str, str]]:
+    """emoji-test.txt → [(序列, 英文名, 组名), ...]：**只收完全限定**、按文件序（= UTS#51 官方分组序）。
 
     行格式 `1F600 ; fully-qualified # 😀 E1.0 grinning face`。字符从 `;` **左侧的码位表
     重建**，不抄 `#` 后那份字形 —— 重建是权威（字形是给人看的显示习惯）。
     `component`（肤色/发色）与 minimally/unqualified 变体一律不收：面板要的是
     「键盘上真能打出来的那一个」。
+    组名取自文件里的 `# group: X` 注释行（2026-10-12 加）：**分组只存在于注释里**，
+    面板的分类条要靠它 ⇒ 产物必须把组名一起带出去（见 EMOJI_GROUP_CN）。
     """
-    out: list[tuple[str, str]] = []
+    out: list[tuple[str, str, str]] = []
+    group = ""
     for line in text.splitlines():
+        if line.startswith("# group:"):
+            group = line.split(":", 1)[1].strip()
+            continue
         if not line or line.startswith("#"):
             continue
         left, _sep, right = line.partition("#")
@@ -312,7 +342,7 @@ def parse_emoji_test(text: str) -> list[tuple[str, str]]:
         seq = "".join(chr(int(cp, 16)) for cp in fields[0].split())
         parts = right.strip().split(" ", 2)
         name = parts[2] if len(parts) == 3 else ""
-        out.append((seq, name))
+        out.append((seq, name, group))
     return out
 
 
@@ -389,13 +419,20 @@ def main() -> None:
         raise SystemExit(
             f"FATAL: emoji-test 完全限定条目只有 {len(emoji_rows)} 条（疑似解析/上游异常）"
         )
-    if len({t for t, _ in emoji_rows}) != len(emoji_rows):
+    if len({t for t, _, _ in emoji_rows}) != len(emoji_rows):
         raise SystemExit("FATAL: emoji-test 出现重复序列")
     if emoji_rows[0][0] != chr(0x1F600):
         raise SystemExit(
             "FATAL: emoji-test 首条不是 😀 —— 文件序（= 官方分组序）是面板的排序依据"
         )
-    have_emoji = {t for t, _ in emoji_rows}
+    # 分类条的组：见过的组必须都有中文标签（新增组 = 上游改版 ⇒ 这里红，别静默出
+    # 无标签的组）；顺序 = 文件序（面板按产物顺序出分类条）。
+    unknown_groups = sorted({g for _, _, g in emoji_rows} - set(EMOJI_GROUP_CN))
+    if unknown_groups:
+        raise SystemExit(
+            f"FATAL: emoji-test 出现未映射的组 {unknown_groups} —— 补 EMOJI_GROUP_CN 再跑"
+        )
+    have_emoji = {t for t, _, _ in emoji_rows}
     for want, why in [
         ("\U0001f1e8\U0001f1f3", "国旗序列"),
         ("\U0001f468‍\U0001f469‍\U0001f467", "ZWJ 家庭"),
@@ -403,10 +440,13 @@ def main() -> None:
     ]:
         if want not in have_emoji:
             raise SystemExit(f"FATAL: emoji-test 缺{why} {want!r}")
-    for t, n in emoji_rows:
-        if not t or not n or "\t" in t or "\t" in n:
-            raise SystemExit(f"FATAL: emoji-test 条目缺字段/含制表符: {t!r} {n!r}")
-    write_atomic("data/raw/emoji.tsv", [f"{t}\t{n}" for t, n in emoji_rows])
+    for t, n, g in emoji_rows:
+        if not t or not n or not g or "\t" in t or "\t" in n:
+            raise SystemExit(f"FATAL: emoji-test 条目缺字段/含制表符: {t!r} {n!r} {g!r}")
+    write_atomic(
+        "data/raw/emoji.tsv",
+        [f"{t}\t{n}\t{EMOJI_GROUP_CN[g]}" for t, n, g in emoji_rows],
+    )
 
     print(f"UCD {UNIHAN_VERSION} UnicodeData.txt + emoji-data.txt sha256 校验通过"
           f"（emoji 属性 {len(emoji_prop)} 段，排除的修饰符/组件 {len(component_prop)} 段）")

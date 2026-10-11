@@ -17,8 +17,8 @@ mod tests;
 
 pub use convert::{
     ApiBlock, ApiCandidate, ApiCandidateKind, ApiMode, ApiSymbolEntry, candidate_texts,
-    emoji_symbol_texts, mode_from_int, mode_to_int, search_symbol_texts, symbol_blocks_json,
-    symbol_texts, texts_json,
+    emoji_groups_json, emoji_symbol_texts, mode_from_int, mode_to_int, search_symbol_texts,
+    symbol_blocks_json, symbol_texts, texts_json,
 };
 
 /// 引擎单例：load 后可供 JNI / C 出口共享。

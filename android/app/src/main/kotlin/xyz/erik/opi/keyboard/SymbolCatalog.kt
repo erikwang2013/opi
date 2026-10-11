@@ -13,6 +13,9 @@ interface SymbolApi {
     /** 表情**浏览**全量（官方分组序，含多码位序列）；与 symbols.tsv 的 emoji 列
      * 是两条路 —— 那是搜索、这是浏览（详见引擎侧 `api::emoji_symbol_texts`）。 */
     fun emojiSymbols(): Array<String>?
+
+    /** 表情**分类条**：JSON `[{name,start,count}]`（下标对齐 [emojiSymbols]）。 */
+    fun emojiGroups(): String?
     fun symbolBlocks(): String
     fun symbolsInBlock(id: Short): Array<String>?
 }
@@ -105,6 +108,21 @@ class SymbolCatalog(private val api: SymbolApi = OpiEngine) {
         return api.searchSymbols(q)?.toList() ?: emptyList()
     }
 
+    /** 表情分类条的一项：`start` 是 [emoji] 里的下标（点它 = 网格滚到那里）。 */
+    data class EmojiGroup(val name: String, val start: Int, val count: Int)
+
+    private var _emojiGroups: List<EmojiGroup>? = null
+
+    /**
+     * 表情分类（官方 9 组；2026-10-12 用户裁决「中间是表情分类」）。
+     * 空结果不写进缓存（同 [common]：空 = 没拿到，不是「真的没有」）。
+     */
+    val emojiGroups: List<EmojiGroup> get() {
+        _emojiGroups?.takeIf { it.isNotEmpty() }?.let { return it }
+        val list = parseEmojiGroups(api.emojiGroups() ?: "")
+        return list.also { if (it.isNotEmpty()) _emojiGroups = it }
+    }
+
     val recents: List<String> get() = _recent.toList()
 
     fun recordRecent(text: String) {
@@ -131,6 +149,33 @@ class SymbolCatalog(private val api: SymbolApi = OpiEngine) {
             }
             return out
         }
+
+        /** 解析 emojiGroups() JSON（serde 固定输出 `[{"name","start","count"}]`）。 */
+        fun parseEmojiGroups(json: String): List<EmojiGroup> {
+            val out = mutableListOf<EmojiGroup>()
+            for (m in blockRe.findAll(json)) {
+                val s = m.value
+                val name = nameRe.find(s)?.groupValues?.getOrNull(1) ?: ""
+                out += EmojiGroup(
+                    name = name.replace("\\\"", "\""),
+                    start = startRe.find(s)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0,
+                    count = countRe.find(s)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0,
+                )
+            }
+            return out
+        }
+
+        /**
+         * 网格下标 → 分类条要亮第几项（纯函数，单测钉住）。
+         * 分组**连续覆盖全表**由引擎侧门禁保证（`emoji_groups_cover_the_table_contiguously`），
+         * 所以这里取「最后一个 start ≤ index 的组」即可；空表/负数 → -1（不亮）。
+         */
+        fun groupIndexOf(groups: List<EmojiGroup>, index: Int): Int {
+            for (i in groups.indices.reversed()) {
+                if (index >= groups[i].start) return i
+            }
+            return -1
+        }
     }
 }
 
@@ -143,3 +188,4 @@ private val startRe = Regex(""""start":(\d+)""")
 private val endRe = Regex(""""end":(\d+)""")
 private val nameRe = Regex(""""name":"((?:[^"\\]|\\.)*)"""")
 private val commonRe = Regex(""""common":(true|false)""")
+private val countRe = Regex(""""count":(\d+)""")

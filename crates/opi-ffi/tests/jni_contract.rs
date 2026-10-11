@@ -30,17 +30,13 @@
 //! 见本文件末的 `mode_*` 一组与 `jni/mode.rs`。
 
 /// 读 jni 模块**全部** .rs 合成一份文本（理由见 checker 的 `JNI_USER_WORDS`）。
+/// ⚠️ 新拆一个 `jni_*.rs` 要在**这里的清单**里加一项，否则那批出口从门禁视野里消失
+/// （`rust_registration_parser_is_not_blind` 的计数护栏会在下一次红出来）。
 fn read_jni() -> String {
     // ⚠️ 这里必须是 `read(JNI_RS)`：上一版被一次**全局替换**连自己体内一起改成了
     // `read_jni()` ⇒ 无限递归（编译器警告 "cannot return without recursing"、
     // 运行期直接栈溢出）。教训：替换辅助函数时要把「新写的那个函数体」排除在外。
-    format!(
-        "{}\n{}\n{}\n{}",
-        read(JNI_RS),
-        read(JNI_USER_WORDS),
-        read(JNI_SCHEME),
-        read(JNI_CANDIDATES)
-    )
+    JNI_ALL.map(read).join("\n")
 }
 
 #[path = "jni/checker.rs"]

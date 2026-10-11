@@ -33,6 +33,15 @@ class FakeSymbolApi : SymbolApi {
         return emojiResults?.toTypedArray()
     }
 
+    /** `emojiGroups()` 的返回（分类条）。null 模拟 JNI 回 null。 */
+    var groupsJson: String? = null
+    var groupsCalls = 0
+
+    override fun emojiGroups(): String? {
+        groupsCalls++
+        return groupsJson
+    }
+
     override fun symbolBlocks(): String {
         blocksCalls++
         return blocksJson
@@ -256,5 +265,57 @@ class SymbolCatalogTest {
         api.emojiResults = listOf("😄") // 引擎就绪
         assertEquals("空结果被缓存了 → 表情页永远空到重启", listOf("😄"), catalog.emoji)
         assertTrue("应当重新查了一次", api.emojiCalls > firstEmojiCalls)
+    }
+
+    // ---- 表情分类条（2026-10-12 用户裁决「中间是表情分类」）----
+
+    /** 引擎 serde 的固定形状：`[{"name","start","count"}]`。 */
+    private val groupsJson = """[{"name":"笑脸","start":0,"count":3},{"name":"人物","start":3,"count":2}]"""
+
+    @Test
+    fun emojiGroupsParseAndCache() {
+        val api = FakeSymbolApi().apply { groupsJson = this@SymbolCatalogTest.groupsJson }
+        val catalog = SymbolCatalog(api)
+        assertEquals(
+            listOf(
+                SymbolCatalog.EmojiGroup("笑脸", 0, 3),
+                SymbolCatalog.EmojiGroup("人物", 3, 2),
+            ),
+            catalog.emojiGroups,
+        )
+        val calls = api.groupsCalls
+        catalog.emojiGroups
+        assertEquals("拿到后应缓存，不重复打 JNI", calls, api.groupsCalls)
+    }
+
+    @Test
+    fun emptyEmojiGroupsIsNotCachedSoItRecovers() {
+        val api = FakeSymbolApi().apply { groupsJson = null } // 未就绪
+        val catalog = SymbolCatalog(api)
+        assertTrue("首次本来就该是空", catalog.emojiGroups.isEmpty())
+        api.groupsJson = """[{"name":"笑脸","start":0,"count":3963}]"""
+        assertEquals(
+            "空结果被缓存 → 分类条永远不出现",
+            listOf(SymbolCatalog.EmojiGroup("笑脸", 0, 3963)),
+            catalog.emojiGroups,
+        )
+    }
+
+    /** 分组高亮：网格首个可见项落在哪一组。分组连续覆盖由引擎门禁保证，这里钉边界。 */
+    @Test
+    fun groupIndexOfPicksTheGroupContainingTheIndex() {
+        // 连续覆盖（真实数据由引擎门禁钉住；夹具照它的形状：每组的 start 接上一组末尾）。
+        val g = listOf(
+            SymbolCatalog.EmojiGroup("笑脸", 0, 172),
+            SymbolCatalog.EmojiGroup("人物", 172, 2430),
+            SymbolCatalog.EmojiGroup("旗帜", 2602, 270),
+        )
+        assertEquals(0, SymbolCatalog.groupIndexOf(g, 0))
+        assertEquals(0, SymbolCatalog.groupIndexOf(g, 171))
+        assertEquals(1, SymbolCatalog.groupIndexOf(g, 172))
+        assertEquals(1, SymbolCatalog.groupIndexOf(g, 2601))
+        assertEquals(2, SymbolCatalog.groupIndexOf(g, 2602))
+        assertEquals(2, SymbolCatalog.groupIndexOf(g, 3962))
+        assertEquals("空表 → 不亮", -1, SymbolCatalog.groupIndexOf(emptyList(), 0))
     }
 }

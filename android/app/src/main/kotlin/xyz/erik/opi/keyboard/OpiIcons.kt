@@ -170,6 +170,45 @@ object OpiIcons {
         }.build()
     }
 
+    /** 返回（表情页工具条左格，2026-10-12）：一横一折的箭头。 */
+    val ArrowBack: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "OpiArrowBack",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f,
+        ).apply {
+            stroke(width = 1.8f) {
+                moveTo(20f, 12f)
+                lineTo(4f, 12f)
+                moveTo(11f, 5f)
+                lineTo(4f, 12f)
+                lineTo(11f, 19f)
+            }
+        }.build()
+    }
+
+    /** 搜索（表情页工具条右格）：镜圈 + 手柄。 */
+    val Search: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "OpiSearch",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f,
+        ).apply {
+            stroke(width = 1.8f) {
+                moveTo(11f, 4f)
+                arcToRelative(7f, 7f, 0f, true, true, 0f, 14f)
+                arcToRelative(7f, 7f, 0f, true, true, 0f, -14f)
+                close()
+                moveTo(16f, 16f)
+                lineTo(20.5f, 20.5f)
+            }
+        }.build()
+    }
+
     /** 关闭/收起（菜单与面板右上角）。 */
     val Close: ImageVector by lazy {
         ImageVector.Builder(

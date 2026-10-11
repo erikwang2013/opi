@@ -186,6 +186,37 @@ impl SymbolEngine {
             .collect()
     }
 
+    /// 表情**分类条**的分组（2026-10-12 用户裁决「中间是表情分类」）：按 `emoji.tsv`
+    /// 第 3 列（中文组名）**顺序**切出 `(组名, 起始下标, 条数)`。
+    ///
+    /// - 顺序 = 文件序 = UTS#51 官方组序（笑脸在前、旗帜在后）；组名的中文标签由生成器
+    ///   按 `EMOJI_GROUP_CN` 写进产物（翻译不在引擎层）。
+    /// - `start` 与 [`Self::builtin_emoji_texts`] 的下标对齐 —— 面板点分类条就是
+    ///   `grid.scrollToItem(start)`（引擎不替 UI 分页，只给锚点）。
+    /// - 缺第 3 列直接 panic（同 `builtin()` 的姿态：产物损坏 = 仓库损坏，**响亮地**死；
+    ///   静默退化成「一个没名字的组」才是最难查的形态）。
+    pub fn builtin_emoji_groups() -> Vec<(&'static str, usize, usize)> {
+        const EMOJI_TSV: &str = include_str!("../../../data/raw/emoji.tsv");
+        let mut out: Vec<(&'static str, usize, usize)> = Vec::new();
+        let mut idx = 0usize;
+        for line in EMOJI_TSV.lines() {
+            let mut cols = line.split('\t');
+            let text = cols.next().unwrap_or("");
+            if text.is_empty() {
+                continue;
+            }
+            let group = cols
+                .nth(1)
+                .expect("emoji.tsv 缺第 3 列（组名）—— 重跑 scripts/gen_symbols.py");
+            match out.last_mut() {
+                Some((g, _, n)) if *g == group => *n += 1,
+                _ => out.push((group, idx, 1)),
+            }
+            idx += 1;
+        }
+        out
+    }
+
     /// 查询字符所属区块。
     pub fn block_of(&self, ch: char) -> Option<Block> {
         let cp = ch as u32;
