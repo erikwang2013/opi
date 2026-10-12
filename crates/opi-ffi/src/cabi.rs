@@ -30,6 +30,9 @@ pub(crate) mod utf16; // pub(crate)：cabi_user_words.rs 也要用它
 use utf16::{read_utf16, texts_to_json};
 
 pub use crate::cabi_scheme::*;
+/// 符号 / 表情一族（2026-10-13 从 `cabi.rs` 拆出，见 `cabi_symbols.rs`）：与下面那条
+/// **再导出**同一个约定 —— 公开路径仍是 `cabi`，调用方不受拆分影响。
+pub use crate::cabi_symbols::*;
 /// **再导出**：拆出去的「学习 / 用户词」一组仍从 `cabi` 这个公开路径可用 ——
 /// 拆分是**内部**结构（500 行门禁逼的），不该改调用方看的路径：仓内多个测试按
 /// `opi_ffi::cabi::opi_set_learner` 之名引用，按符号名调的 C 调用方则完全不受影响。
@@ -430,44 +433,6 @@ pub unsafe extern "C" fn opi_mode() -> i32 {
     .unwrap_or(0)
 }
 
-/// searchSymbols(keyword) -> JSON 文本数组。
-/// # Safety
-/// `ptr` 必须指向至少 `len` 个有效 `u16`（或为 null，视为空串）。
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn opi_search_symbols(ptr: *const u16, len: usize) -> OpiString {
-    let texts = catch_unwind(AssertUnwindSafe(|| {
-        let kw = unsafe { read_utf16(ptr, len) }.unwrap_or_default();
-        api::with_engine(|e| api::search_symbol_texts(e, &kw)).unwrap_or_default()
-    }))
-    .unwrap_or_default();
-    texts_to_json(texts)
-}
-
-/// symbolBlocks() -> JSON：`[{id,start,end,name,common}]`。
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn opi_symbol_blocks() -> OpiString {
-    let json = catch_unwind(AssertUnwindSafe(|| {
-        api::with_engine(|e| api::symbol_blocks_json(e)).unwrap_or_default()
-    }))
-    .unwrap_or_default();
-    OpiString::from_utf16(&json)
-}
-
-/// symbolsInBlock(id: i16) -> JSON 文本数组。
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn opi_symbols_in_block(id: i16) -> OpiString {
-    let texts = catch_unwind(AssertUnwindSafe(|| {
-        // 负 id 按越界处理（空数组），不钳成块 0 —— 与 jni.rs 的
-        // opijni_symbols_in_block 同语义，两个 ABI 面必须一致。
-        api::with_engine(|e| {
-            if id < 0 {
-                Vec::new()
-            } else {
-                api::symbol_texts(e, id as u16)
-            }
-        })
-        .unwrap_or_default()
-    }))
-    .unwrap_or_default();
-    texts_to_json(texts)
-}
+// ---- 符号 / 表情一族（含 2026-10-13 加的表情两出口）：出口体在 cabi_symbols.rs ----
+// （加表情两出口后本文件到 499/500 —— 按本仓先例拆族，同时与 `jni_symbols.rs` 保持
+// 镜像；那里 2026-10-12 因同一个族越线拆过一份。）

@@ -24,14 +24,14 @@ mod checker;
 
 use opi_ffi::cabi::{
     OpiString, opi_backspace, opi_buffer, opi_candidates, opi_candidates_page, opi_chinese_punct,
-    opi_clear, opi_clear_user_words, opi_export_user_words, opi_ffi_free_string,
-    opi_fullwidth_state, opi_fuzzy_enabled, opi_import_user_words, opi_input_key, opi_input_space,
-    opi_jianpin_enabled, opi_key_event, opi_learner_enabled, opi_load_stroke, opi_load_trad,
-    opi_mode, opi_page, opi_page_count, opi_remove_user_word, opi_scheme, opi_search_symbols,
-    opi_select, opi_select_page, opi_set_chinese_punct, opi_set_fuzzy, opi_set_jianpin,
-    opi_set_learner, opi_set_scheme, opi_set_shift, opi_shift_state, opi_switch_mode,
-    opi_symbol_blocks, opi_symbols_in_block, opi_toggle_chinese_punct, opi_toggle_fullwidth,
-    opi_toggle_symbol,
+    opi_clear, opi_clear_user_words, opi_emoji_groups, opi_emoji_symbols, opi_export_user_words,
+    opi_ffi_free_string, opi_fullwidth_state, opi_fuzzy_enabled, opi_import_user_words,
+    opi_input_key, opi_input_space, opi_jianpin_enabled, opi_key_event, opi_learner_enabled,
+    opi_load_stroke, opi_load_trad, opi_mode, opi_page, opi_page_count, opi_remove_user_word,
+    opi_scheme, opi_search_symbols, opi_select, opi_select_page, opi_set_chinese_punct,
+    opi_set_fuzzy, opi_set_jianpin, opi_set_learner, opi_set_scheme, opi_set_shift,
+    opi_shift_state, opi_switch_mode, opi_symbol_blocks, opi_symbols_in_block,
+    opi_toggle_chinese_punct, opi_toggle_fullwidth, opi_toggle_symbol,
 };
 
 use engine_core::keys::{KEY_PAGE_DOWN, KEY_RETURN, KEY_SHIFT, KEY_SPACE, KEY_STATE_LONG_PRESSED};
@@ -80,6 +80,19 @@ fn every_export_returns_a_sentinel_when_engine_is_not_loaded() {
         assert_eq!(read(opi_buffer()), "");
         assert_eq!(read(opi_export_user_words()), "");
         assert_eq!(read(opi_symbol_blocks()), "");
+        // 表情两出口（2026-10-13）**不走单例**：纯静态表 —— 冷进程里**照样给全量**。
+        // 它们是全 ABI 仅有的两个未装载不退化哨兵的查询出口，与上面「字符串 → 空串、
+        // 数组 → `[]`」那条规则**相反**；别把这里读成「哨兵写漏了」。
+        // 下标对齐（start/count ↔ 全量）由 `emoji_groups_index_the_full_emoji_list` 钉。
+        // 判据是 `len > 2`：`[]`（上面的数组哨兵）长 2，正是要与之区分的那一档。
+        assert!(
+            read(opi_emoji_symbols()).len() > 2,
+            "表情全量未装载时也应有数据（不该是 `[]` 哨兵）"
+        );
+        assert!(
+            read(opi_emoji_groups()).len() > 2,
+            "表情分组未装载时也应有数据（不该是 `[]` 哨兵）"
+        );
         assert_eq!(read(opi_candidates(8)), "[]");
         assert_eq!(read(opi_candidates_page()), "[]");
         assert_eq!(read(opi_input_space()), "");
@@ -185,9 +198,50 @@ fn repeated_calls_while_unloaded_stay_sentinels() {
     }
 }
 
+/// 表情两出口的**下标对齐**契约（点分类 = 网格滚到 `start`）：`opi_emoji_groups()`
+/// 每组的 `start` / `count` 必须与 `opi_emoji_symbols()` 的数组下标逐组对上，且
+/// `count` 之和 == 全量条数。本用例在**冷进程**里跑 —— 顺带把「两出口不经引擎单例」
+/// 证成行为（上面那条哨兵用例里的 `len > 2` 只是形状，这里是数据）。
+///
+/// 2026-10-13 随 C ABI 出口落地（此前该契约只有 JNI 面，Android 的分类条在用）。
+/// 空转护栏：先钉住两侧都非空 —— 两边都是空数组时 `0 == 0` 会假绿。
+#[test]
+fn emoji_groups_index_the_full_emoji_list() {
+    let syms: Vec<String> = serde_json::from_str(&read(unsafe { opi_emoji_symbols() }))
+        .expect("表情全量应是合法 JSON 文本数组");
+    assert!(!syms.is_empty(), "表情全量为空 —— 下面的对齐断言全是空转");
+    let groups: Vec<serde_json::Value> = serde_json::from_str(&read(unsafe { opi_emoji_groups() }))
+        .expect("表情分组应是合法 JSON（`[{name,start,count}]`）");
+    assert!(!groups.is_empty(), "表情分组为空 —— 下面的累加断言是空转");
+
+    let mut next = 0usize;
+    for g in &groups {
+        let start = g["start"].as_u64().expect("start 应是无符号整数") as usize;
+        let count = g["count"].as_u64().expect("count 应是无符号整数") as usize;
+        assert_eq!(
+            start, next,
+            "分组 {g} 的 start 与全量下标脱节 —— 点分类会滚到错的位置"
+        );
+        next += count;
+    }
+    assert_eq!(
+        next,
+        syms.len(),
+        "分组 count 之和应等于全量条数（有条目不属于任何组 = 面板上够不到）"
+    );
+
+    // 换源时点名的缺口（见 `api::emoji_symbol_texts` 头注）：多码位序列必须在。
+    // 任一含 >1 个 Unicode 标量的条目即可证明全量不是「只存单码点」的旧集合
+    // （旗帜 = 两个 regional indicator，ZWJ 家庭更多）。
+    assert!(
+        syms.iter().any(|s| s.chars().count() > 1),
+        "全量里应含多码位序列条目（旗帜/ZWJ 家庭）"
+    );
+}
+
 /// **本文件是不是真的覆盖了每个导出** —— 不是承诺，是现场解析出来的：从 `cabi.rs`
-/// 取导出全集，减去按设计排除的那条，其余每条都必须在本文件的**代码**里被调用
-/// （认 `name(` 这个调用形状）。
+/// **及拆出去的族文件**取导出全集，减去按设计排除的那条，其余每条都必须在本文件的
+/// **代码**里被调用（认 `name(` 这个调用形状）。
 ///
 /// 为什么需要它：本文件头原先写着「将来新增导出忘了处理未装载态时，这里少一条就会
 /// 红」，而**没有任何东西在核对这份清单** —— 2026-09-28 审计实测：导出全集里 32 条被
@@ -200,7 +254,10 @@ fn every_export_is_actually_exercised_here() {
 
     // 只看**代码**：注释先剥掉，免得文档里提一句 `opi_xxx(` 就被算作已覆盖。
     let body = checker::strip_c_comments(include_str!("cabi_unloaded.rs"));
-    let exports = checker::parse_rust_exports(&checker::read(checker::CABI));
+    // ⚠️ 用 `read_cabi()`（= cabi.rs + 拆出去的三个族文件），**不是** `read(CABI)`：
+    // 2026-10-13 拆出 `cabi_symbols.rs` 时发现这里只读 cabi.rs —— 拆走的族会从「全覆盖」
+    // 的视野里**静默消失**（少的不报，等哪天全没了也不报）。族边界一变，这里跟着变。
+    let exports = checker::parse_rust_exports(&checker::read_cabi());
 
     // 非空转护栏：解析器失明 ⇒ 下面的 `missing` 为空 = 假绿。锚点取刚补上的那条、
     // 按设计排除的那条，以及最普通的一条。

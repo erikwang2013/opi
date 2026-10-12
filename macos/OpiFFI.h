@@ -212,6 +212,16 @@ OpiString opi_symbol_blocks(void);
 /// JSON 文本数组。负 id 按越界处理（空数组）。
 OpiString opi_symbols_in_block(int16_t id);
 
+/// 表情面板**浏览全量**（JSON 文本数组：官方分组序，含旗帜/家庭等多**码位序列**条目）。
+/// ⚠️ **不经引擎**：编译期静态表 —— `opi_load` 失败（未装载）时上面几条都退化成
+/// 空串 / `[]`，本出口**照样返回全量**（数据不依赖词库，冷启动第一帧就能画）。
+/// `opi_emoji_groups()` 的 `start`/`count` 就是本数组的下标。
+OpiString opi_emoji_symbols(void);
+
+/// 表情**分类条**（JSON：`[{name,start,count}]`）。`start` 与 `opi_emoji_symbols()`
+/// 下标对齐：点分类 = 网格滚到 `start`。同上，未装载也有值。
+OpiString opi_emoji_groups(void);
+
 bool opi_fuzzy_enabled(void);
 bool opi_jianpin_enabled(void);
 void opi_set_fuzzy(bool on);

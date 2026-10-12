@@ -93,6 +93,29 @@ OpiString opi_select_page(uint32_t index);
 /// 显示当前页必须用本出口，不要拿全量候选自己按 8 切（同上，页大小是引擎侧常量）。
 OpiString opi_candidates_page(void);
 
+// ---- 符号 / 表情（2026-10-13 加：鸿蒙表情页的搜索框 + 网格；桥侧 Js* 调用见 cpp/napi_bridge.c）----
+//
+// ⚠️ 本文件**故意不抄** opi_symbol_blocks / opi_symbols_in_block —— 鸿蒙侧没有调用方，
+// 抄进来「声明了就必须被桥调用」那条门禁立刻红。要接符号分类页时再把它们搬进来。
+
+/// 符号搜索（与 Android 表情页同一个口径：引擎符号搜索 ∩ 表情集），返回 JSON 文本数组。
+/// **空关键字 = 全表**（实现层：空词取 `[0, len)` 全区间，随后按文本去重排序）：
+/// `ptr == NULL`、`len == 0`、**非法 UTF-16** 三者同解（都按空串，不是错误）。
+/// ⚠️ 测试钉住的**只是**「三者同解 + 空词结果非空 + 真关键字会缩小结果」——
+/// `tests/cabi_boundary.rs::search_symbols_null_and_broken_utf16_mean_empty_keyword`
+/// 有意**不**逐条断言全表（那会随符号表增长而红）。未装载 → `[]`（与 opi_candidates_page 同姿态）。
+OpiString opi_search_symbols(const uint16_t *keyword, size_t len);
+
+/// 表情面板**浏览全量**（JSON 文本数组：官方分组序，含旗帜/家庭等多**码位序列**条目）。
+/// ⚠️ **不经引擎**：编译期静态表 —— `opi_load` 失败（未装载）时上面几条都退化成
+/// 空串 / `[]`，本出口**照样返回全量**（数据不依赖词库，冷启动第一帧就能画）。
+/// `opi_emoji_groups()` 的 `start`/`count` 就是本数组的下标。
+OpiString opi_emoji_symbols(void);
+
+/// 表情**分类条**（JSON：`[{name,start,count}]`）。`start` 与 `opi_emoji_symbols()`
+/// 下标对齐：点分类 = 网格滚到 `start`。同上，未装载也有值。
+OpiString opi_emoji_groups(void);
+
 /// 当前拼音缓冲（= preedit 的来源）。
 OpiString opi_buffer(void);
 

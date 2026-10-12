@@ -191,6 +191,21 @@ int main(int argc, char **argv) {
     CHECK(search.ptr == NULL || search.ptr[0] == '[', "符号搜索结果应是 JSON 数组");
     opi_ffi_free_string(search);
 
+    /* 表情两出口（2026-10-13）：iOS / 鸿蒙表情页的数据面。形状够了 ——
+     * 「不经引擎、未装载也有值」与下标对齐由 Rust 侧的 cabi_unloaded.rs 钉，
+     * 这里只验 C 面调得到、签名对、句柄能释放。 */
+    OpiString emojis = opi_emoji_symbols();
+    dump("  opi_emoji_symbols()", emojis);
+    CHECK(emojis.ptr != NULL && emojis.ptr[0] == '[' && emojis.len > 2,
+          "表情全量应是 JSON 文本数组（非空）");
+    opi_ffi_free_string(emojis);
+
+    OpiString egroups = opi_emoji_groups();
+    dump("  opi_emoji_groups()", egroups);
+    CHECK(egroups.ptr != NULL && egroups.ptr[0] == '[' && egroups.len > 2,
+          "表情分组应是 JSON 数组 `[{name,start,count}]`（非空）");
+    opi_ffi_free_string(egroups);
+
     int32_t imported = opi_import_user_words((const uint16_t[]){'{', '}'}, 2); /* 非词表 JSON */
     printf("  opi_import_user_words(\"{}\") = %d\n", imported);
     CHECK(imported <= 0, "非法 JSON 应返回负值");

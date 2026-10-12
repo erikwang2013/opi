@@ -372,6 +372,9 @@ pub const CABI: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/cabi.rs");
 /// 或者更糟：等哪天头文件也跟着删了，就成了**静默的漏检面**。
 pub const CABI_USER_WORDS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/cabi_user_words.rs");
 pub const CABI_SCHEME: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/cabi_scheme.rs");
+/// 同上，符号/表情那一半（2026-10-13：加表情两出口后 `cabi.rs` 到 499/500 拆出）。
+/// ⚠️ 与 `jni/checker.rs` 的 `JNI_SYMBOLS` 是镜像——两轨族边界一致。
+pub const CABI_SYMBOLS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/cabi_symbols.rs");
 pub const MACOS_H: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../macos/OpiFFI.h");
 pub const IOS_H: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../ios/OpiFFI.h");
 pub const HARMONY_H: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../harmony/cpp/opi_ffi.h");
@@ -388,10 +391,11 @@ pub fn read(p: &str) -> String {
 /// 拼接用换行，保证相邻两文件的行不会粘成一行（解析按行扫）。
 pub fn read_cabi() -> String {
     format!(
-        "{}\n{}\n{}",
+        "{}\n{}\n{}\n{}",
         read(CABI),
         read(CABI_USER_WORDS),
-        read(CABI_SCHEME)
+        read(CABI_SCHEME),
+        read(CABI_SYMBOLS)
     )
 }
 
