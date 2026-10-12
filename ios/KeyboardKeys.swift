@@ -40,6 +40,11 @@ enum KeyboardFunctionKey {
     case showNumbers
     /// 切到符号层。符号数据来自引擎的符号库出口（`OpiEngine.commonSymbols()`）。
     case showSymbols
+    /// 切到表情层（2026-10-13）。数据来自引擎的表情两出口
+    /// （`OpiEngine.emojiSymbols()` / `emojiGroups()`）—— 与符号层是**两条**数据通路，
+    /// 别拿 `commonSymbols()` 当表情用（那只是符号表里的 common 块，表情表的真源
+    /// 是 UTS#51 `emoji-test.txt`，两边的「全套」不是一回事）。
+    case showEmoji
     /// 中 → 繁 → 英 → 中（**逐字对齐 Android `ImeScreen.kt` 的 `toggleMode()`**：
     /// 离开拼音类模式前先 `clear()`，否则残留的拼音缓冲会被下一个空格/回车
     /// 意外提交）。

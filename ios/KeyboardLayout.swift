@@ -31,18 +31,24 @@ protocol KeyboardLayoutDelegate: AnyObject {
     func keyboardLayout(_ layout: KeyboardLayout, didRequestPage delta: Int)
     /// 功能键按下。
     func keyboardLayout(_ layout: KeyboardLayout, didTapFunction name: KeyboardFunctionKey)
+    /// 表情页搜索框的内容变了（**原始文本、未去空白**）。防抖与去空白在控制器里
+    /// （对齐 Android：`searchText` 实时上报、`searchQuery` 防抖 250ms 后生效）。
+    func keyboardLayout(_ layout: KeyboardLayout, didSearchEmoji query: String)
 }
 
 /// 键盘布局（候选栏 + 键位行）。全代码构建，不用 xib/storyboard ——
 /// 键盘扩展加 xib 只会多一个「只能在 Mac 上调」的故障面，而本机连编译都做不到。
 final class KeyboardLayout: UIView {
 
-    /// 键盘层。三层而不是「字母/数字」两层：符号层的数据来自引擎的符号库出口，
-    /// 与另外两层的键位表不是同一类东西（符号键**不过引擎**，见 `commitText`）。
+    /// 键盘层。四层而不是「字母/数字」两层：符号层与表情层的数据都来自引擎的查询出口，
+    /// 与另外两层的键位表不是同一类东西（点它们**不过引擎**，见 `commitText`）。
+    /// 表情层（2026-10-13）与符号层是**两条独立数据通路**（符号表 / UTS#51 表情表），
+    /// 面板也是两个类 —— 别把表情塞进 `symbolPanel` 里当一栏画。
     enum Layer {
         case letters
         case numbers
         case symbols
+        case emoji
     }
 
     weak var delegate: KeyboardLayoutDelegate?
@@ -85,6 +91,10 @@ final class KeyboardLayout: UIView {
     /// 网格的画法搬到 `SymbolPanel.swift`（键位行是编译期常量、符号是运行时数据，
     /// 两件东西；顺带把本文件压回 500 行源码上限内）。本层只管摆位置与转发点击。
     private let symbolPanel = SymbolPanel()
+    /// 表情层（2026-10-13）。与 `symbolPanel` **同位置、三者互斥显示**（字母行/符号/表情），
+    /// 数据与画法都在 `EmojiPanel.swift`（那边有理由：分类条/搜索/字形过滤是表情页自己的事），
+    /// 本层只管摆位置 + 转发点击与搜索词。
+    private let emojiPanel = EmojiPanel()
 
     init() {
         super.init(frame: .zero)
@@ -157,6 +167,7 @@ final class KeyboardLayout: UIView {
             rowsStack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
         ])
         buildSymbolPanel()
+        buildEmojiPanel()
         rebuildKeys()
     }
 
@@ -181,13 +192,47 @@ final class KeyboardLayout: UIView {
         symbolPanel.isHidden = true
     }
 
+    /// 表情层容器（2026-10-13）。摆法与 `buildSymbolPanel` 逐条相同（同位置互斥），
+    /// 只是回调多两个：返回（回字母层，`onBack`）与搜索词（`onSearch`）。
+    ///
+    /// 三个回调的语义：
+    ///   `onPick`   → `.commitText`（直提，不过引擎 —— 同符号键，理由见 `commitText`）；
+    ///   `onBack`   → `.showLetters`（**复用既有功能键**，不为「退出表情页」新造机制）；
+    ///   `onSearch` → 新委托方法（去抖与查询都归控制器：那里才有 engine 与 Timer）。
+    private func buildEmojiPanel() {
+        emojiPanel.translatesAutoresizingMaskIntoConstraints = false
+        emojiPanel.onPick = { [weak self] text in
+            guard let self else { return }
+            self.delegate?.keyboardLayout(self, didTapFunction: .commitText(text))
+        }
+        emojiPanel.onBack = { [weak self] in
+            guard let self else { return }
+            self.delegate?.keyboardLayout(self, didTapFunction: .showLetters)
+        }
+        emojiPanel.onSearch = { [weak self] query in
+            guard let self else { return }
+            self.delegate?.keyboardLayout(self, didSearchEmoji: query)
+        }
+        addSubview(emojiPanel)
+        NSLayoutConstraint.activate([
+            emojiPanel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 3),
+            emojiPanel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -3),
+            emojiPanel.topAnchor.constraint(equalTo: candidateScroll.bottomAnchor, constant: 4),
+            emojiPanel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
+        ])
+        emojiPanel.isHidden = true
+    }
+
     /// 重建键位行（切层时调用）。
     private func rebuildKeys() {
-        // 符号层由 `setSymbols(_:)` 画（数据来自引擎，不在这里现算）。
+        // 符号层由 `setSymbols(_:)` 画、表情层由 `setEmojiBrowse(_:groups:)` 画
+        // （数据都来自引擎，不在这里现算）。
         let isSymbols = (keyLayer == .symbols)
-        rowsStack.isHidden = isSymbols
+        let isEmoji = (keyLayer == .emoji)
+        rowsStack.isHidden = isSymbols || isEmoji
         symbolPanel.isHidden = !isSymbols
-        guard !isSymbols else { return }
+        emojiPanel.isHidden = !isEmoji
+        guard !isSymbols && !isEmoji else { return }
         rowsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         let rows = keyLayer == .letters ? letterRows() : numberRows()
         let gap: CGFloat = 5
@@ -271,6 +316,10 @@ final class KeyboardLayout: UIView {
         ]
         let funcRow: [KeySpec] = [
             KeySpec("#+=", function: .showSymbols),
+            // 表情入口（2026-10-13）：紧挨符号入口。Android 的表情是从**工具条**进的
+            // （`SymbolTab.Emoji`，任何一层都能直达）；iOS 这一版先只加这一个入口 ——
+            // 与上面「#+= → 符号」同级，别的地点（字母层功能行）保持原样。
+            KeySpec("😊", function: .showEmoji),
             KeySpec(modeLabel, function: .cycleMode),
             KeySpec("空格", keyval: OpiKey.space, fallback: .text(" "), widthUnits: 5),
             KeySpec("回车", keyval: OpiKey.ret, fallback: .text("\n"), widthUnits: 1.6),
@@ -366,19 +415,32 @@ final class KeyboardLayout: UIView {
         symbolPanel.setSymbols(list)
     }
 
+    /// 交给表情层的**原始**数据（来自 `OpiEngine.emojiSymbols()` / `emojiGroups()`，
+    /// 由控制器在切到表情层时取）。字形过滤与分类下标重算都在 `EmojiPanel` 里做
+    /// （那边有理由），本层一个字都不判。
+    func setEmojiBrowse(_ list: [String], groups: [OpiEmojiGroup]) {
+        emojiPanel.showBrowse(list, groups: groups)
+    }
+
+    /// 交给表情层的搜索结果（来自 `OpiEngine.searchSymbols(keyword:)`）。
+    /// `query` 传**去空白后**的查询词（控制器 trim）—— 空查询时面板画浏览内容。
+    func setEmojiResults(_ results: [String], query: String) {
+        emojiPanel.showResults(results, query: query)
+    }
+
     /// 同步模式键的键面字（中/繁/英）。控制器在切模式后调 —— 键面是模式的显示器。
     func setModeLabel(_ label: String) {
         guard label != modeLabel else { return }
         modeLabel = label
         // 键面字只在重建行时才读，所以这里必须重建（代价是 4 行按钮重建，
-        // 切模式是低频操作）。符号层没有这个键，不用重建。
-        if keyLayer != .symbols { rebuildKeys() }
+        // 切模式是低频操作）。符号层与表情层都没有这个键，不用重建。
+        if keyLayer != .symbols && keyLayer != .emoji { rebuildKeys() }
     }
 }
 
-/// 候选栏/翻页栏/符号面板上的小按钮。
-/// 不是 `private`：`SymbolPanel.swift` 也用它（同一文件里才 private 的那种小类型，
-/// 拆成两个文件后必须放开可见性）。
+/// 候选栏/翻页栏/符号面板/表情面板上的小按钮。
+/// 不是 `private`：`SymbolPanel.swift` 与 `EmojiPanel.swift` 都用它
+/// （同一文件里才 private 的那种小类型，拆成两个文件后必须放开可见性）。
 final class BarButton: UIButton {
     private let onTap: () -> Void
     init(title: String, onTap: @escaping () -> Void) {

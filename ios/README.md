@@ -61,10 +61,11 @@
 | 文件 | 作用 |
 |------|------|
 | `OpiFFI.h` | **转发头**，`#include "../macos/OpiFFI.h"`。C ABI 的声明只有那一份，这里故意不重抄（本项目已被「同一语义抄三份」坑过） |
-| `OpiEngine.swift` | C ABI 薄桥：`OpiString` 所有权、`opi_key_event` → Swift 枚举、JSON 候选解码、符号库三个出口 |
+| `OpiEngine.swift` | C ABI 薄桥：`OpiString` 所有权、`opi_key_event` → Swift 枚举、JSON 候选解码、符号库三个出口、表情两出口（2026-10-13） |
 | `KeyboardKeys.swift` | 「一个键是什么」：`KeySpec` / `KeyFallback` / `KeyboardFunctionKey` / `KeyButton`。不含布局 |
 | `KeyboardLayout.swift` | 键盘 UI 骨架的视图装配：候选栏（含翻页）+ 字母/数字层 + 触摸接线 + 外部刷新入口 |
-| `SymbolPanel.swift` | 符号层的网格（竖向滚动）。数据来自 `OpiEngine.commonSymbols()`，点击直提 |
+| `SymbolPanel.swift` | 符号层的网格（竖向滚动）。数据来自 `OpiEngine.commonSymbols()`，点击直提。另含 `canRender`（字形判定，表情层共用） |
+| `EmojiPanel.swift` | 表情页（2026-10-13）：分类条 + 网格 + 搜索框两态工具条。数据来自 `OpiEngine.emojiSymbols()`/`emojiGroups()`，点击直提 |
 | `KeyboardViewController.swift` | `UIInputViewController` 入口：生命周期、词库装载、**软键盘**路由、`textDocumentProxy`，外加外接键盘的两个入口 `pressesBegan/pressesEnded`（逻辑在下一行那个文件） |
 | `KeyboardHardware.swift` | **外接键盘那一路**：`UIKey`/`UIPress` → 引擎键码、修饰位，以及**引擎之前**判掉的三个热键（`Ctrl+'` / `Ctrl+\` / `Shift+Space`）。不含触摸与布局 |
 | `Info.plist` | 键盘扩展的 `NSExtension` 配置（**键名未核对**） |
@@ -1023,6 +1024,15 @@ OpiString opi_select_page(uint32_t k);  /* 当前页第 k 个；越界/未装载
    这几行也含该词，不带过滤会把「文档提到」当成「代码调用」。
    要接的话 Android 的 `SymbolCatalog` 是现成参考：它用 `opi_search_symbols("")`
    拿全部条目（契约 ③）。**别把「包装已写」读成「面板能拿到全部符号」。**
+
+   ⚠️ **订正（2026-10-13）**：上面「零调用者」一句**对符号面板仍然成立、对整个目录已不成立** ——
+   表情页（见下节）的搜索框接上了它：`grep -rn 'searchSymbols' --include=*.swift .`
+   现在除了定义那一行（`OpiEngine.swift`）与若干**注释提及**之外，还命中
+   `KeyboardViewController.runEmojiSearch` 里**唯一一处真正的调用**
+   （`engine.searchSymbols(keyword: q)`）。**符号面板本身仍只用 common 块**
+   （`commonSymbols()`），「非 common 块的条目在符号面板上够不到」这条**没变**；
+   表情是**另开的一条数据通路**（`opi_emoji_symbols()`，全 3963 条），
+   不是把符号面板补全了。
 2. **块 id 的类型在两端不一样。** Rust 侧是 `BlockId(pub u16)`（0..=65535），
    C ABI 的 `opi_symbols_in_block(int16_t)` 收**有符号** 16 位 —— 只能对齐到
    0..=32767。所以 Swift 侧按 `Int` 解码、**显式收窄并 NSLog 越界**，
@@ -1043,6 +1053,65 @@ OpiString opi_select_page(uint32_t k);  /* 当前页第 k 个；越界/未装载
 
 ---
 
+## 表情页（2026-10-13 加，**已写，未编译**）
+
+> ⚠️ 本节与上面几节同一个前提：**Swift 一行都没编译过**。下面每一条都是
+> 「文本级一致」或「抄自哪份实现」，不是「跑过」。
+
+### 加了什么
+
+| 层 | 新增 | Android 侧的对应物（证据） |
+|---|---|---|
+| 桥 | `OpiEngine.emojiSymbols()` / `emojiGroups()` + `struct OpiEmojiGroup` | `SymbolApi.emojiSymbols()` / `emojiGroups()`（`SymbolCatalog.kt`） |
+| UI | `EmojiPanel.swift`（分类条 + 网格 + 两态工具条）+ 键盘第四层 `Layer.emoji` | `SymbolPanel.kt` 的 `EmojiTopBar` / 表情 Tab |
+| 入口 | 数字层功能行 `😊`（紧挨 `#+=`，`KeyboardFunctionKey.showEmoji`） | 工具栏的表情入口（`SymbolTab.Emoji`；iOS 只加了这一个入口） |
+| 搜索 | 控制器 250ms 防抖 + trim（`runEmojiSearch`） | `ImeState.SEARCH_DEBOUNCE_MS` / `updateSearchText` |
+| 字形过滤 | `SymbolPanel.canRender` + `EmojiPanel.filterAndRegroup`（前缀存活表） | `SymbolCatalog.canRenderGlyph` / `emojiGroups` 的 `aliveUpTo` |
+
+### 三条契约（照 Android 逐条核过）
+
+1. **两个表情出口不经引擎单例。** 编译期静态表 —— `opi_load` 失败时其它出口都退化，
+   它们照样返回全量（`cabi_symbols.rs` 头注 + `cabi_unloaded.rs` 的
+   `emoji_groups_index_the_full_emoji_list` 两处都写明）。所以 `.showEmoji` 这一支
+   **不看 `dictionaryLoaded`**、也不画「词库未装载」——表情不依赖词库。
+   这也是全 ABI **仅有的**两个「未装载不退化」的查询出口，别照抄这个姿态去改别的出口。
+2. **字形过滤与分类下标必须一起重算**（`EmojiPanel.filterAndRegroup` 一个函数同时返回
+   两者）。`start` 是**过滤后**列表里的下标：过滤会摘掉若干条，原下标整体偏前 ——
+   点分类是 `scrollToGroup(组.start)`，不重算就滚错组，而屏幕上看不出「这是错的」。
+   两件事分成两个函数就给了「只调其中一个」的机会，那是静默错位。
+   表拿不到时**原样返回不重算**（硬算会把所有 `start` 压成 0，比不显示分类更坏）。
+
+   ⚠️ 这条重算的**承重前提**是分组连续覆盖全表（`start` 严格累加、无空洞），
+   由两面钉子钉住：引擎侧 `crates/engine-core/tests/emoji_coverage.rs` 的
+   `emoji_groups_cover_the_table_contiguously`，C ABI 侧
+   `crates/opi-ffi/tests/cabi_unloaded.rs` 的 `emoji_groups_index_the_full_emoji_list`
+   （后者还钉了「Σcount == 全量条数」与「多码位序列必须在」）。**改分组语义前先看这两条**：
+   `scrollToGroup` 的偏移是 `start / perRow × (行高 + 行距)`，空洞会让某个分类滚进别的组，
+   而屏幕上看不出这是错的。
+3. **空查询 = 回浏览内容，不是「搜到 0 条」**（Android 的内容分支是
+   `searchActive && searchQuery.isNotEmpty()`）。所以进搜索态不发 FFI、空查询也不发
+   ——`searchSymbols("")` 返回**全部**条目，发了是白捞全表。
+
+### 一处订正（**这轮动的唯一既有代码**）
+
+`SymbolPanel.canRender` 的守卫原先是 `guard text.unicodeScalars.count > 1 else { return true }`
+—— **判反了**（`b55e3b5` 引入，与它自己上一行的注释相反）。两头都错：单码位（正是
+U+1FAEB 那种要判的）从不被过滤，多码位（旗帜/家庭/键帽）反倒被拿去问「整串连字有没有
+字形」→ 误判成没有 → 把整类藏掉。已订正为 `== 1`，与 Android 的
+`codePointCount > 1 || hasGlyph` 逐字对齐。**未编译过**，Mac 上第一件事是核实它。
+
+### 未做 / 未知数（如实记）
+
+- **搜索框在扩展里能不能输入，本机无法验证。** iOS 键盘扩展不能唤起系统键盘，
+  Android 靠「IME 窗口内 TextField + 面板下方叠字母盘」解决，iOS 没有可直抄的等价机制。
+  三种走向与处置写在 `EmojiPanel.setSearching` 的注释里（弹得出 → 就这样；不弹 →
+  Gboard 式自喂，要动层机制；都不行 → 删掉 🔍 键，别留点了没反应的按钮）。
+- Android 有而这里**故意没做**：最近使用一行、分类条的滚动跟随高亮、空结果的小欧宠物。
+- **符号面板的入口是死胡同**（进去后只有 `#+=` 那层没有回头路）—— 这是**既有缺口**，
+  本轮没修，表情页自己带了返回键（`onBack` → `.showLetters`）。
+
+---
+
 ## 全角 / 符号开关的出口：**已落地（Rust 31 / 头文件 31）**
 
 > ⚠️ **订正（2026-10-08）**：下面是 2026-09-27 的**状态快照**，别把 31 当现值读。
@@ -1050,6 +1119,11 @@ OpiString opi_select_page(uint32_t k);  /* 当前页第 k 个；越界/未装载
 > `opi_set_jianpin` / `opi_fuzzy_enabled` / `opi_jianpin_enabled`），且 `cabi.rs`
 > 因 500 行门禁拆出了 `cabi_user_words.rs`（C ABI 门禁已改为读该模块**全部** `.rs`）。
 > **当前条数与指纹一律以 `cargo test -p opi_ffi --test c_abi_contract` 的输出为准。**
+>
+> ⚠️ **再订正（2026-10-13）**：上面「最近一次 = 属性设置四个出口」也过期了 ——
+> 表情两出口（`opi_emoji_symbols` / `opi_emoji_groups`）已落地，且与 `cabi.rs` 拆出
+> `cabi_symbols.rs` 是同一轮（那个文件是这批**新签名的唯一真源**；`ios/OpiFFI.h`
+> 是转发头，本目录按规矩没动它）。指纹与条数仍然**只认门禁输出**，本节不写数字。
 
 ### 状态（2026-09-27 尾，实测；**本节当天经历了「差 3 个 → 补齐」**）
 

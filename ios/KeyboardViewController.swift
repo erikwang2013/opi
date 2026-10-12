@@ -42,6 +42,17 @@ final class KeyboardViewController: UIInputViewController {
     /// 与 fcitx5 轨「词库损坏时插件静默全失效」是同一个坑。
     private var dictionaryLoaded = false
 
+    /// 表情搜索的防抖表（对齐 Android `ImeState.SEARCH_DEBOUNCE_MS = 250`：
+    /// 每敲一个字就查一次全表是白费的，手停下才查）。
+    ///
+    /// 这里 `private` 是**对的**（与上面那几个成员相反，别顺手改成 internal）：
+    /// 它只在本文件的委托扩展里用，`KeyboardHardware.swift` 碰不到它。
+    /// ⚠️ 未编译：`Timer(timeInterval:repeats:block:)` 与 `RunLoop.add(_:forMode:)`
+    /// 都是本仓**没用过**的 API（iOS 10+ 的块回调版）—— Mac 上第一件事是核实这两个，
+    /// 若不便，退回 `Selector` 版（`scheduledTimer(timeInterval:target:selector:...)`）。
+    private var emojiSearchTimer: Timer?
+    private static let emojiSearchDebounce: TimeInterval = 0.25
+
     // MARK: - 生命周期
 
     override func viewDidLoad() {
@@ -268,6 +279,16 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             // 缓存空会让面板从此永远空（Android `SymbolCatalog` 踩过这个坑）。
             layout.setSymbols(engine.commonSymbols())
             layout.setLayer(.symbols)
+        case .showEmoji:
+            // 表情数据**现取**，不缓存（同符号层）。
+            // ⚠️ 与符号层有一处**实质差别**：`emojiSymbols()` / `emojiGroups()` 两个出口
+            // **不经引擎单例** —— 编译期静态表，`opi_load` 失败时照样返回全量
+            // （cabi 在 `cabi_symbols.rs` 头注与 `cabi_unloaded.rs` 的
+            // `emoji_groups_index_the_full_emoji_list` 两处写明，并点名「别照抄它们的
+            // 姿态去改别的出口」）。所以这里**不看 `dictionaryLoaded`**、面板也不会
+            // 显示「词库未装载」—— 表情本来就不依赖词库。
+            layout.setEmojiBrowse(engine.emojiSymbols(), groups: engine.emojiGroups())
+            layout.setLayer(.emoji)
         case .cycleMode:
             cycleMode()
         case .nextInputMode:
@@ -279,6 +300,35 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             // 不调 refresh：缓冲没变，候选栏也不该变。
             insert(text)
         }
+    }
+
+    func keyboardLayout(_ layout: KeyboardLayout, didSearchEmoji query: String) {
+        // 防抖 250ms（对齐 Android `ImeState`）：每敲一个字打一次 FFI 是白费的
+        // —— 符号搜索要扫全表。去空白与「空查询怎么办」都在 [runEmojiSearch]。
+        emojiSearchTimer?.invalidate()
+        let t = Timer(timeInterval: Self.emojiSearchDebounce, repeats: false) { [weak self] _ in
+            self?.runEmojiSearch(query)
+        }
+        // 加进 `.common` 而不是默认模式：`.default` 在滚动/连续触摸时会停表，
+        // 防抖的语义是「手停下来才查」，停表会把它拖到松手之后。
+        RunLoop.current.add(t, forMode: .common)
+        emojiSearchTimer = t
+    }
+
+    /// 真去查（防抖到点后）。搜索词在**这里**去空白（对齐 Android `searchText.trim()`
+    /// —— 那边也是实时 text、去抖后 query 才生效）。
+    ///
+    /// ⚠️ 未编译：`trimmingCharacters(in: .whitespacesAndNewlines)` 是 Foundation 常规
+    /// API，但本仓没用过；它与 Kotlin `trim()` 的空白集不完全相同（Kotlin 按
+    /// `Char.isWhitespace`，更宽），差集在少数控制字符上 —— Mac 上顺手核一眼。
+    ///
+    /// 空查询 = **回浏览内容，不是「搜到 0 条」**：Android 的内容分支是
+    /// `searchActive && searchQuery.isNotEmpty()`，空查询画的就是浏览网格。
+    /// 所以这里连 FFI 都不发 —— `searchSymbols("")` 会返回**全部**符号，白捞一遍全表。
+    private func runEmojiSearch(_ raw: String) {
+        let q = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let results = q.isEmpty ? [] : engine.searchSymbols(keyword: q)
+        layout.setEmojiResults(results, query: q)
     }
 
     /// 模式三态循环：中 → 繁 → 英 → 中。

@@ -35,7 +35,10 @@ final class SymbolPanel: UIView {
 
     /// 字形判定用的探针字体：与符号键实际用的一致（系统字体、正文尺寸）。
     /// ⚠️ 未编译：尺寸只要非 0 即可（`CTFontGetGlyphsForCharacters` 只问映射）。
-    private static let probeFont = UIFont.systemFont(ofSize: 17)
+    /// 2026-10-13：由 `private` 放开成 internal —— `EmojiPanel` 也要用同一颗探针字体
+    /// （它同样要过 `canRender`）。**别在那边再造一颗**：两份字体参数一旦漂开，
+    /// 「同一台机器上符号过得了、表情过不了」这种不一致没有任何报错。
+    static let probeFont = UIFont.systemFont(ofSize: 17)
 
     private let scroll = UIScrollView()
     private let stack = UIStackView()
@@ -91,7 +94,12 @@ final class SymbolPanel: UIView {
         // ⚠️ 按**码点**判（`unicodeScalars.count`），别按 `utf16.count`：
         // 后者会把代理对（emoji 全是）当成「多码位」直接放行 —— 而正是 U+1FAEB
         // 这种代理对才需要判（我第一版就写成这样，注释与代码相反，改前先看这条）。
-        guard text.unicodeScalars.count > 1 else { return true }
+        // ⚠️ 2026-10-13 订正：这里原先是 `count > 1`，**判反了**（b55e3b5 引入）。
+        // 判反的后果是两头都错：单码位（正是要判的 U+1FAEB 那种）直接放行、从不被过滤，
+        // 而多码位（旗帜/家庭/键帽）反倒拿去问「整串连字有没有字形」→ 误判成没有 →
+        // 把上面注释说不该藏的整类藏掉。Android 侧是 `codePointCount > 1 || hasGlyph`，
+        // 两边语义现在逐字对齐。
+        guard text.unicodeScalars.count == 1 else { return true }
         let ctFont = CTFontCreateWithName(font.fontName as CFString, font.pointSize, nil)
         var chars = Array(text.utf16)
         var glyphs = [CGGlyph](repeating: 0, count: chars.count)
