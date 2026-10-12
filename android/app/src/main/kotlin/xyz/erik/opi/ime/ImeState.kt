@@ -3,6 +3,7 @@
 
 package xyz.erik.opi.ime
 
+import xyz.erik.opi.engine.pendingCommitText
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.runtime.getValue

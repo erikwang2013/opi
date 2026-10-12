@@ -165,6 +165,13 @@ class SymbolCatalog(
     companion object {
         const val maxRecents = 50
 
+        /** Android 端的缺省构造：把 [canRenderGlyph] 接到真实字体上（探针 Paint 只需一个）。
+         * 放在这里而不是服务里：字形判定的**全部知识**留在本文件（服务那边一行）。 */
+        fun androidDefault(): SymbolCatalog {
+            val paint = android.graphics.Paint()
+            return SymbolCatalog(canRender = { canRenderGlyph(paint, it) })
+        }
+
         /**
          * 「本机字体画不画得出这个字形」（`Paint.hasGlyph`，API 23+）。
          *

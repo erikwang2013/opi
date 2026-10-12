@@ -3,6 +3,7 @@
 
 package xyz.erik.opi
 
+import xyz.erik.opi.engine.composingText
 import android.inputmethodservice.InputMethodService
 import android.os.Build
 import android.view.Gravity
@@ -110,11 +111,7 @@ class OpiImeService : InputMethodService() {
         lastComposing = ""
     }
     private val imeState = ImeState(engineController)
-    /** 字形可用性探针（表情网格过滤用；只需一个 0 号字号的 Paint，见 canRenderGlyph）。 */
-    private val glyphPaint = android.graphics.Paint()
-    private val symbolCatalog = SymbolCatalog(
-        canRender = { SymbolCatalog.canRenderGlyph(glyphPaint, it) },
-    )
+    private val symbolCatalog = SymbolCatalog.androidDefault()
     private lateinit var keyRouter: KeyRouter
 
     /** IME 偏好（输入模式/键盘模式/三个引擎开关）。懒初始化：字段初始化早于

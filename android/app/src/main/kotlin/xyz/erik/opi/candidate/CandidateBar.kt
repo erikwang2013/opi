@@ -3,6 +3,7 @@
 
 package xyz.erik.opi.candidate
 
+import xyz.erik.opi.engine.composingText
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
