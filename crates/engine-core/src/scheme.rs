@@ -82,6 +82,33 @@ impl Scheme {
         }
     }
 
+    /// 拼音键 → **键位串**（[`Self::key_class`] 的逆映射；2026-10-12 加）。
+    ///
+    /// 用途只有一个：**联想**（`candidates::rank_and_pick_scheme_with_ctx`）—— 9/14 键
+    /// 的缓冲是数字/键位，上文的拼音要先转成键位才能与当前缓冲拼成整串走按键类匹配。
+    /// 类表覆盖不到的字符（非 ASCII、`'` 等）⇒ `None`（整个串不转，联想那一档跳过）。
+    /// `Full`/`Stroke` 恒 `None`（它们不走按键类，联想在字母路上直接拼拼音）。
+    pub fn digits_of(self, pinyin: &str) -> Option<String> {
+        if matches!(self, Scheme::Full | Scheme::Stroke) {
+            return None;
+        }
+        pinyin.chars().map(|c| self.digit_of(c)).collect()
+    }
+
+    /// 单个字母 → 它的键（哪个键的类里含它）。6/7 键之外的键不在扫描范围。
+    fn digit_of(self, ch: char) -> Option<char> {
+        let keys: &[char] = match self {
+            Scheme::Nine => &['2', '3', '4', '5', '6', '7', '8', '9'],
+            Scheme::Fourteen => &[
+                'q', 'e', 't', 'u', 'o', 'a', 'd', 'g', 'j', 'l', 'z', 'c', 'b', 'm',
+            ],
+            Scheme::Full | Scheme::Stroke => return None,
+        };
+        keys.iter()
+            .copied()
+            .find(|k| self.key_class(*k).is_some_and(|cls| cls.contains(&ch)))
+    }
+
     /// 前缀语义匹配：`pinyin` 的前 `input.len()` 个字母逐个落在 `input` 按键的类里。
     ///
     /// `Full`/`Stroke` 退化成正前缀（`starts_with`）—— 生产路径不会用它们走这里

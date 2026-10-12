@@ -45,7 +45,11 @@ fn browse_hijacks_panel_then_digit_drills_and_commits() {
     let mut s = browse_state();
     assert!(s.enter_symbol_browse());
     assert_eq!(s.buffer(), "符号", "浏览态 buffer = 标题（面板靠它显示）");
-    assert_eq!(s.candidates()[0], "常用", "一级第一页 = 类目 1..8（名字不带序号，序号归面板）");
+    assert_eq!(
+        s.candidates()[0],
+        "常用",
+        "一级第一页 = 类目 1..8（名字不带序号，序号归面板）"
+    );
     // 按 `1` → 下钻：无提交文本，标题带类目名（CompositionChanged = 面板要刷新）
     assert_eq!(s.input_key('1' as u32, 0), KeyOutcome::CompositionChanged);
     assert_eq!(s.buffer(), "符号·常用");

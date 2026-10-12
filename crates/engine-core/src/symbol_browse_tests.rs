@@ -105,7 +105,10 @@ fn enter_drill_commit_cycle() {
     assert_eq!(b.level2(), None);
     assert_eq!(b.preedit(), BROWSE_TITLE);
     let l1 = b.candidates(usize::MAX);
-    assert_eq!(l1[0].text, "常用", "类目条款式 = 纯名字（序号由宿主面板画）");
+    assert_eq!(
+        l1[0].text, "常用",
+        "类目条款式 = 纯名字（序号由宿主面板画）"
+    );
     assert_eq!(l1[2].text, "拖尾空格");
     // 下钻：无提交文本，进二级
     assert_eq!(b.select(0), Selection::Drill);

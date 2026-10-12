@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 use crate::candidates::{
-    Candidate, DEFAULT_TOP_N, RankOptions, USER_BOOST, rank_and_pick_scheme, rank_and_pick_with,
+    Candidate, DEFAULT_TOP_N, RankOptions, USER_BOOST, rank_and_pick_scheme_with_ctx,
+    rank_and_pick_with_ctx,
 };
 use crate::composer::{Composer, KeyEffect, Mode};
 use crate::dictionary::Dictionary;
@@ -30,6 +31,17 @@ pub struct Engine {
     pub(crate) learner: Learner,
     /// 用户词频权重，按词典最大静态词频动态缩放（一次选词即压过所有静态词）。
     user_boost: u64,
+    /// **联想上下文**（用户裁决 2026-10-12「选词后接着打要能接着匹配」）：最近一次
+    /// 提交的**词的拼音**。候选层据此额外查 `上文 + 当前输入` 的整串、排在最前
+    /// （实现 `candidates::rank_and_pick_with_ctx` / `..._scheme_with_ctx`）。
+    ///
+    /// 语义：**每次提交替换**（是「我刚打的那个词」，不是整段历史；累计整段是另一条
+    /// 裁决）。清空时机 = 切模式 / 换方案 / 清缓冲 / 非拼音模式提交（英文/数字/符号）
+    /// 与「打英文」逃生口；**标点不清**（逗号不断句）。9/14 键存**选中候选的读数**
+    /// （缓冲是数字串，读数才准）；26 键存选词那一刻的缓冲（词库键长度拿不到，近似）。
+    /// 读写口在 engine_assoc.rs（`note_assoc_on_select`）—— **pub(crate)** 是那一次
+    /// 拆分（500 行门禁）的代价，同其它 engine_*.rs 的拆分裂先例。
+    pub(crate) assoc_pinyin: String,
     /// 钉读音（9 键左列点一行拼音：**不确认**，候选收窄到该读音一族 —— 2026-10-09
     /// 用户裁决「选择后所有候选词也跟着拼音变化显示出来，不要直接确认」）。
     /// 存 `(钉它时的缓冲, 去分词的原读音)` 一对 —— 缓冲一变即作废（同
@@ -94,6 +106,7 @@ impl Engine {
             symbols,
             learner: Learner::new(learner_enabled),
             user_boost,
+            assoc_pinyin: String::new(),
             scheme_readings: std::cell::RefCell::new((String::new(), Vec::new())),
             pinned_reading: None,
             fullwidth: Mode::default().default_fullwidth(),
@@ -153,6 +166,7 @@ impl Engine {
     /// 打进去的串，留着会被新方案的匹配器读出个似是而非的结果（例如把 26 键的
     /// "ni" 拿 9 键规则去套，凑出一堆不相关的候选）。清掉 = 明确的重新开始。
     pub fn set_scheme(&mut self, scheme: Scheme) {
+        self.assoc_pinyin.clear(); // 换布局 = 换输入世界（联想上文作废）
         self.composer.set_scheme(scheme);
         self.composer.clear();
         // 读数与缓冲同生命周期：不清的话换方案后的一次读会拿到上一条输入的拼音。
@@ -213,6 +227,8 @@ impl Engine {
                         // ——与符号模式「关键字仍留在预编辑里」同一条理由。
                         return String::new();
                     }
+                    // 「打英文」逃生口：提交的是字母原文、不是中文词 ⇒ 联想上文作废。
+                    self.assoc_pinyin.clear();
                     self.composer.commit_buffer();
                     buffer
                 } else {
@@ -234,8 +250,10 @@ impl Engine {
             }
             _ => {
                 // 英文/数字：缓冲即待上屏文本 ⇒ 全角开时一并宽化（与各端**直传点**的
-                // `fullwidthize` 同一条规则与同一个开关 —— 用户裁决 2026-10-12）。
+                // `fullwidthize` 同一条规则与同一个开关 —— 用户裁决 2026-10-12）；
+                // 非拼音提交 ⇒ 联想上文作废。
                 let buffer = self.composer.session().buffer.clone();
+                self.assoc_pinyin.clear();
                 self.composer.commit_buffer();
                 self.fullwidthize(&buffer)
             }
@@ -248,6 +266,7 @@ impl Engine {
     }
 
     pub fn clear(&mut self) {
+        self.assoc_pinyin.clear();
         self.symbol_browse.exit(); // 清会话 = 退出浏览（数据留着；面板随 buffer 空收起）
         self.composer.clear();
     }
@@ -257,6 +276,7 @@ impl Engine {
     ///
     /// **`chinese_punct` 不在此列**：它是用户偏好而非模式默认值（理由见字段注释）。
     pub fn switch_mode(&mut self, mode: Mode) {
+        self.assoc_pinyin.clear();
         self.fullwidth = mode.default_fullwidth();
         self.quotes.reset();
         self.composer.switch_mode(mode);
@@ -358,7 +378,7 @@ impl Engine {
                 // 前缀），走全量遍历 + 类匹配（candidates::rank_and_pick_scheme）。
                 // 「精确加成」按**键长相等**给（与全键盘的 pinyin_len == 输入长度同义）。
                 Scheme::Nine | Scheme::Fourteen => {
-                    let (cands, readings) = rank_and_pick_scheme(
+                    let (cands, readings) = rank_and_pick_scheme_with_ctx(
                         self.active_dict(),
                         &self.learner,
                         &s.buffer,
@@ -366,6 +386,7 @@ impl Engine {
                         self.user_boost,
                         self.scheme(),
                         self.active_pin(),
+                        &self.assoc_pinyin,
                     );
                     // 读数随每次取候选刷新（逐条、已分词），**并与当时的缓冲绑存**
                     // （见 display_buffer：缓冲一变这对就作废，不许把旧缓冲的读数报给新状态）。
@@ -382,7 +403,7 @@ impl Engine {
                 // 开着只会把不相干的音节捞进来）。其余与全键盘完全同路。
                 Scheme::Stroke => {
                     if let Some(d) = &self.stroke_dict {
-                        return rank_and_pick_with(
+                        return rank_and_pick_with_ctx(
                             d.as_ref(),
                             &self.symbols,
                             &self.learner,
@@ -394,6 +415,7 @@ impl Engine {
                                 fuzzy: false,
                                 jianpin: false,
                             },
+                            &self.assoc_pinyin,
                         );
                     }
                     // 没装笔画词典：落到下面普通路径（候选基本为空）——
@@ -402,7 +424,7 @@ impl Engine {
                 Scheme::Full => {}
             }
         }
-        rank_and_pick_with(
+        rank_and_pick_with_ctx(
             self.active_dict(),
             &self.symbols,
             &self.learner,
@@ -414,6 +436,7 @@ impl Engine {
                 fuzzy: self.fuzzy,
                 jianpin: self.jianpin,
             },
+            &self.assoc_pinyin,
         )
     }
 
@@ -445,6 +468,9 @@ impl Engine {
         match cands.get(index) {
             Some(c) => {
                 let text = c.text.clone();
+                // 联想上文（见 `assoc_pinyin` 字段注）：必须在 `commit_buffer_after_select`
+                // **之前**取 —— 它会动缓冲（回退态只消耗前缀）。
+                self.note_assoc_on_select(index, &text);
                 self.learner.record_selection(&text);
                 self.commit_buffer_after_select(); // 分词回退态只消耗前缀（engine_segment.rs）
                 // 符号模式一次一符号（用户裁决 2026-09-27）：提交后回拼音，不跨键保持

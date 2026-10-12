@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::composer::Mode;
-use crate::dictionary::{Dictionary, PREFIX_MATCH_CAP, SCHEME_MATCH_CAP};
+use crate::dictionary::{Dictionary, PREFIX_MATCH_CAP};
 use crate::fuzzy;
 use crate::jianpin;
 use crate::learner::Learner;
@@ -16,6 +16,9 @@ use crate::trie::Entry;
 pub const USER_BOOST: u64 = 100_000;
 /// 默认候选栏容量。
 pub const DEFAULT_TOP_N: usize = 8;
+/// 联想档一次最多插几条（用户裁决 2026-10-12）：**少而准** —— 它排在最前、直接挤掉
+/// 单字候选的首位，多了会变成「打完一个词之后每次选词都在赌我是不是想接着打」。
+pub const ASSOC_TOP_N: usize = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CandidateKind {
@@ -96,6 +99,35 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
     limit: usize,
     boost: u64,
     opts: RankOptions,
+) -> Vec<Candidate> {
+    rank_and_pick_with_ctx(dict, symbols, learner, input, mode, limit, boost, opts, "")
+}
+
+/// [`rank_and_pick_with`] + **联想上下文**（`ctx` = 上文词的拼音；2026-10-12 用户裁决
+/// 「选词后接着打要能接着匹配」）。
+///
+/// 有 `ctx` 时额外查 `ctx + input` 的整串命中，**排在最前**（截断前插入 ⇒ 优先保它们）：
+/// 打「你好」选掉、再打 `ma`，候选里就有「你好吗」（键 `nihaoma`，没有上下文时永远轮不到
+/// 它）。上限 [`ASSOC_TOP_N`] 条、与主档去重。`ctx` 空 ⇒ 逐字等于旧行为（包装函数）。
+///
+/// ⚠️ `ctx` 是**近似**：26 键的词库键长度拿不到（`Entry` 只带 `pinyin_len`），调用方
+/// 传的是**选词那一刻的缓冲** —— 精确命中时逐字正确；前缀扩展/分词回退档选中的词，
+/// 缓冲只是它的前缀（已知近似，v1 接受；9/14 键走读数所以是精确的，见
+/// `rank_and_pick_scheme_with_ctx`）。
+// 同 [`rank_and_pick_with`] 顶上的 allow：`ctx` 是第 9 个参数（那条注释说的「再加两个
+// 选项就收 struct」尚未成立 —— 只多了一个，且这个尾巴正是「旧入口 = 新入口的默认包装」
+// 那条先例的载体）。
+#[allow(clippy::too_many_arguments)]
+pub fn rank_and_pick_with_ctx<D: Dictionary + ?Sized>(
+    dict: &D,
+    symbols: &SymbolEngine,
+    learner: &Learner,
+    input: &str,
+    mode: Mode,
+    limit: usize,
+    boost: u64,
+    opts: RankOptions,
+    ctx: &str,
 ) -> Vec<Candidate> {
     // 空输入守卫必须**先于**模式分派：`ranking_invariants.rs` 与 `adversarial_input.rs`
     // 都对「含 Symbol 的 5 模式 + 空输入」断言无候选（`search("")` 会返回全部条目）。
@@ -206,7 +238,9 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
         && let Some(fb) = segment_fallback(dict, input, opts.fuzzy)
     {
         // 递归深度 ≤ 1：「前缀有命中」是入选条件，到了里面 `merged` 必非空。
-        merged = rank_and_pick_with(dict, symbols, learner, &fb.prefix, mode, limit, boost, opts);
+        merged = rank_and_pick_with_ctx(
+            dict, symbols, learner, &fb.prefix, mode, limit, boost, opts, ctx,
+        );
         seg_used = true;
     }
     if merged.is_empty() && input.chars().count() > 1 && !seg_used {
@@ -320,6 +354,26 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
     } else {
         merged.extend(jianpin);
     }
+    // ── 联想档（见函数头注）：插在**最前**，截断按新序生效（它们优先保住）──────
+    if !ctx.is_empty() && !input.is_empty() {
+        let joined = format!("{ctx}{input}");
+        let mut assoc: Vec<Candidate> = dict
+            .query_prefix_top(&joined, PREFIX_MATCH_CAP)
+            .into_iter()
+            // 键必须**比上文长**：等长的就是上文那个词自己（重复报它没有意义）。
+            .filter(|e| e.pinyin_len > ctx.len())
+            .map(|e| hanzi(e, false)) // 键比输入长 ⇒ 天然非精确，不吃 exact_bonus
+            .filter(|c| !seen.contains(&c.text)) // 与主/模糊/简拼三档去重
+            .collect();
+        assoc.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
+        let mut s2 = std::collections::HashSet::new();
+        assoc.retain(|c| s2.insert(c.text.clone())); // 自己内部也去重
+        assoc.truncate(ASSOC_TOP_N);
+        if !assoc.is_empty() {
+            assoc.extend(merged);
+            merged = assoc;
+        }
+    }
     merged.truncate(limit);
     merged
 }
@@ -421,74 +475,8 @@ fn raw_suffix(input: &str, consumed: usize) -> String {
     String::new()
 }
 
-/// **按键类展开**（9/14 键方案，2026-10-09）：`input` 是一串按键符号，按
-/// [`crate::scheme::Scheme::matches`] 的类前缀语义匹配词库键。
-///
-/// 为什么另起一条路而不是塞进 [`rank_and_pick_with`]：这条匹配**表达不成前缀
-/// 查询**（「64」不是任何键的前缀），只能全量遍历词库逐键比对
-/// （`Dictionary::visit_entries`）—— 数据来源、算法形状都不同，硬合并会把两条
-/// 路都读不懂。打分/去重/截断规则与全键盘**逐字相同**（exact 加成按「键长相等」
-/// 判，与 pinyin_len == 输入长度同义），保证两套键盘的候选行为一致；整串无命中时
-/// 还有 26 键同一条**回退**（2026-10-10 扩到 9 键：`644269` → 你好一族）。
-/// 返回 `(候选, 逐条读音)`：`readings[i]` = `cands[i]` 的词典拼音（截断后同序，
-/// 两串等长）。9 键的缓冲是数字串，界面上要显示「拼音读数」时靠它 ——
-/// `display_buffer` 取第一条（搜狗 9 键候选栏左侧那格同款），
-/// `candidate_readings` 读同一份缓存并按读音**去重保序**（2026-10-12 用户裁决
-/// 「左列去重」；逐条对应只到本函数返回值与引擎内部缓存为止，不再是出口契约）。
-/// 没有候选时两条都为空。14 键同路返回（它的缓冲本来就是字母串，读数字段无副作用）。
-pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
-    dict: &D,
-    learner: &Learner,
-    input: &str,
-    limit: usize,
-    boost: u64,
-    scheme: crate::scheme::Scheme,
-    pin: Option<&str>,
-) -> (Vec<Candidate>, Vec<String>) {
-    if input.is_empty() || limit == 0 {
-        return (Vec::new(), Vec::new());
-    }
-    let exact_bonus = boost / 2;
-    // 一趟扫描 = 一个输入串的整档（读音随条目一起暂存：pinyin 的生命周期出不了
-    // visit_entries 的回调）。两趟（回退态）共用这一份。
-    let scan = |input: &str| -> Vec<(Candidate, String)> {
-        let input_len = input.len();
-        // 按键类匹配走 `Dictionary::scheme_entries`（区间枚举 + 静态词频 top-N 截断）——
-        // 2026-10-11 移动端实测：此前是全表逐条 `matches`，936k 条下单键 268ms（桌面
-        // release），手机端每键秒级。pin 过滤（左列点一行拼音）语义在实现里同义保留。
-        dict.scheme_entries(input, scheme, pin, SCHEME_MATCH_CAP)
-            .into_iter()
-            .map(|(e, pinyin)| {
-                let exact = pinyin.len() == input_len;
-                let score = rank_score(e.freq, learner.freq_of(&e.word), boost)
-                    .saturating_add(if exact { exact_bonus } else { 0 });
-                (
-                    Candidate {
-                        text: e.word,
-                        kind: CandidateKind::Hanzi,
-                        score,
-                    },
-                    pinyin,
-                )
-            })
-            .collect()
-    };
-    // ── 数字空间回退（2026-10-10 扩到 9 键）：整串无命中改扫最长音节对齐键前缀的整档
-    // （判定唯一实现 `scheme::scheme_fallback_len`；命中态非空 ⇒ 一行不重，重扫深度 ≤ 1）。
-    let mut merged = scan(input);
-    if merged.is_empty()
-        && let Some(k) = crate::scheme::scheme_fallback_len(dict, input, scheme, pin)
-    {
-        merged = scan(&input[..k]);
-    }
-    merged.sort_by(|a, b| b.0.score.cmp(&a.0.score).then(a.0.text.cmp(&b.0.text)));
-    let mut seen = std::collections::HashSet::new();
-    merged.retain(|(c, _)| seen.insert(c.text.clone()));
-    merged.truncate(limit);
-    // 读音**逐条**带出（与候选同序、同一次排名）—— 调用方按需取首条或全量；
-    // 分开再算一次 = 第二次全量扫描，别在调用链上再开这条路。
-    merged.into_iter().unzip()
-}
+// 按键类展开一族（9/14 键；含联想档）在 `candidates_scheme.rs`（2026-10-12 拆出）。
+pub use crate::candidates_scheme_impl::{rank_and_pick_scheme, rank_and_pick_scheme_with_ctx};
 
 // 单测独立成文件（`#[path]` 引入）以保持本文件 <500 行，与 router_tests.rs 同惯例。
 #[cfg(test)]

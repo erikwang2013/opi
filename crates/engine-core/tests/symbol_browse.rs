@@ -78,7 +78,10 @@ fn browse_hijacks_buffer_and_candidates_but_keeps_real_buffer() {
     assert_eq!(e.buffer(), BROWSE_TITLE);
     let l1 = e.candidates(usize::MAX);
     assert_eq!(l1.len(), 22);
-    assert_eq!(l1[0].text, "常用", "类目条款式 = 纯名字（序号归宿主面板画）");
+    assert_eq!(
+        l1[0].text, "常用",
+        "类目条款式 = 纯名字（序号归宿主面板画）"
+    );
     // 条件 ①c：浏览期间不写 composer 真缓冲（标题不进缓冲；缓冲也不被清）
     e.exit_symbol_browse();
     assert_eq!(e.buffer(), "ni", "退出后真缓冲原样（浏览期间零改动）");
