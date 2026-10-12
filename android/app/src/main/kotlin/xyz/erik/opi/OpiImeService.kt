@@ -95,11 +95,10 @@ class OpiImeService : InputMethodService() {
     /**
      * 提交前把上次推的组合串从字段里抹掉（2026-10-10 实测「ni'hao你好」的修法）。
      *
-     * 次序成因：选词路径是「引擎 select（缓冲清空）→ refresh（组合区判空 ⇒ 落定成
-     * 普通文本）→ 调用方 commitText」——commitText 到得比组合区落定晚，替换不了它，
-     * 只能追加，字段里留下拼音痕迹。先把 lastComposing 那串删掉，**两种状态都得到
-     * 「替换」的净效果**（组合区仍活跃时删的就是它；已落定时删的是刚落定的那串）。
-     * 删除按码点（组合串是拼音/字母，ASCII 为主，按码点与退格同一条纪律）。
+     * 次序成因：选词路径是「引擎 select（缓冲清空）→ refresh（组合区判空 ⇒ 落定成普通
+     * 文本）→ 调用方 commitText」——commitText 到得比组合区落定晚，替换不了它，只能追加，
+     * 字段里留下拼音痕迹。先把 lastComposing 那串删掉，**两种状态都得到「替换」的净效果**
+     * （活跃时删的就是组合区、已落定时删的是刚落定的那串）。删除按码点（同退格一条纪律）。
      */
     private fun dropComposing(ic: android.view.inputmethod.InputConnection) {
         if (lastComposing.isEmpty()) return

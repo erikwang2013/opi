@@ -48,7 +48,7 @@
 //! 产物：本测试只读不联网。luna 取 android 部署副本（data/generated/luna.opid 是
 //! gitignore 的构建中间物），trad 取入库产物 data/generated/trad.opid。
 
-use engine_core::Engine;
+use engine_core::{Engine, Mode};
 use engine_core::symbols::SymbolEngine;
 use engine_data::load_mmap;
 use std::path::Path;
@@ -240,6 +240,14 @@ fn gate(label: &str, path: &str, trad: bool) {
     let dict = load_mmap(Path::new(path)).unwrap_or_else(|e| panic!("加载 {path} 失败：{e:?}"));
     // learner 关闭：门禁锁静态排序；学习后的反超由 engine-core 单测覆盖（否则跑两次结果不同）。
     let mut engine = Engine::new(Box::new(dict), no_symbols(), false);
+    if trad {
+        // 2026-10-13 订正：本夹具原先是「**拼音模式** + 繁体库」—— 那不是生产里的组合
+        // （生产：简体模式用 luna、繁体模式用 trad，切繁体走 Ctrl+Shift+F / 中繁键）。
+        // 用户裁决「简体模式混排时简体优先」之后，那个组合里期望「繁体形在前」直接与
+        // 裁决冲突（沒 掉到第 175 位）。改法不是放宽断言，而是**让夹具按生产语义跑**：
+        // 繁体库就在繁体模式下测。门禁的判据（繁体的首位命中率/可达性）一字未动。
+        engine.switch_mode(Mode::Traditional);
+    }
     let (mut first, mut fails, mut total) = (0usize, Vec::new(), 0usize);
     for (tier, max_rank) in [(STRICT, 1usize), (NEAR, 3)] {
         for (py, simp, tr) in tier {

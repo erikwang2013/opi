@@ -31,6 +31,7 @@ pub mod router;
 pub mod scheme;
 pub mod symbol_browse;
 pub mod symbols;
+pub mod trad_chars;
 pub mod trie;
 
 pub use composer::{Composer, KeyEffect, Mode, Session};

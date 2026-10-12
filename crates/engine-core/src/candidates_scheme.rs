@@ -30,6 +30,11 @@ use crate::learner::Learner;
 /// `candidate_readings` 读同一份缓存并按读音**去重保序**（2026-10-12 用户裁决
 /// 「左列去重」；逐条对应只到本函数返回值与引擎内部缓存为止，不再是出口契约）。
 /// 没有候选时两条都为空。14 键同路返回（它的缓冲本来就是字母串，读数字段无副作用）。
+// 8 个参数（7 个 + `prefer_simplified`）踩了 clippy 的默认上限。**有意放行**：
+// 这个开关必须在**本函数内部的截断之前**生效（截断后再分区 = 被截掉的简体候选回不来），
+// 所以只能从参数进来；而把它收进 struct 会牵动唯一调用方之外的测试与全键盘那条路
+// （`RankOptions` 已有三个开关，两条路的开关面并不相同 —— 合并要另立一次裁决）。
+#[allow(clippy::too_many_arguments)]
 pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
     dict: &D,
     learner: &Learner,
@@ -38,6 +43,7 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
     boost: u64,
     scheme: crate::scheme::Scheme,
     pin: Option<&str>,
+    prefer_simplified: bool,
 ) -> (Vec<Candidate>, Vec<String>) {
     if input.is_empty() || limit == 0 {
         return (Vec::new(), Vec::new());
@@ -78,6 +84,16 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
     merged.sort_by(|a, b| b.0.score.cmp(&a.0.score).then(a.0.text.cmp(&b.0.text)));
     let mut seen = std::collections::HashSet::new();
     merged.retain(|(c, _)| seen.insert(c.text.clone()));
+    // 简体优先（见参数注）：**截断之前**分区。
+    if prefer_simplified {
+        // 成对分区（读音跟候选一起搬 —— 两者必须保持同序），档位线同全键盘路。
+        crate::trad_chars::demote_traditional_by(
+            &mut merged,
+            boost / 2,
+            |(c, _)| c.score,
+            |(c, _)| &c.text,
+        );
+    }
     merged.truncate(limit);
     // 读音**逐条**带出（与候选同序、同一次排名）—— 调用方按需取首条或全量；
     // 分开再算一次 = 第二次全量扫描，别在调用链上再开这条路。

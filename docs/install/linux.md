@@ -818,6 +818,19 @@ CMake 的 `OPI_TRAD_OPID`，缺省取入库副本 `android/app/src/main/assets/t
   `data/raw/LICENSES.md`。
 - 落点门禁：`opi_locate_check` 的第 4 个参数 + `ci.yml` 的「查找常量没漂」grep
   两条都盯着它（与 luna 同规格）。
+- **简体优先**（2026-10-13 用户裁决：「所有端切换简体就用简体数据，切换繁体就用繁体
+  数据，默认简体，如果是混合就优先显示简体」）：模式→词典的路由本来就有（简体 → luna、
+  繁体 → trad，默认 luna ✓），这条管的是**数据里混了另一种字形时谁排前面** ——
+  简体模式下把含**繁体专属字**的候选稳定分区到后面（繁体模式不动，那边繁体在前是
+  既定行为）。
+  - 判据表 `data/raw/trad_chars.tsv`（2396 条，`scripts/gen_trad_chars.py` 生成；
+    判据 = 仓里既有的 `hanzi_freq.trad_only`：字不在 GB2312 且 `kSimplifiedVariant`
+    指向 GB2312 字 —— 更松的「变体与自身不同」会把 著/覆/乾/藉/瑙/阪 误判成繁体）。
+  - 为什么运行期还要兜底：数据侧本该干净（`gen_luna_dict.py` **拒收**繁体字形条目），
+    但那份守卫只覆盖 pinyin_simp 那一路，2026-10-11 词库整合后实测简体库候选里又出现
+    國/學/車/電。四端共用引擎这一层 ⇒ 次序一致。
+  - 门禁：`crates/engine-core/tests/trad_priority.rs`（表的分辨力 + 分区稳定性 +
+    简体/繁体两种模式 + 9 键那条路）。
 
 ---
 

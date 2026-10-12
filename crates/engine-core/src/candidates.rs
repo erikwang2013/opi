@@ -47,6 +47,10 @@ pub struct RankOptions {
     pub fuzzy: bool,
     /// 简拼（声母缩写 `nh → 你好`，展开见 `jianpin.rs`）。
     pub jianpin: bool,
+    /// **简体优先**（2026-10-13 用户裁决「如果是混合就优先显示简体」）：截断前把含
+    /// 繁体专属字的候选稳定分区到后面，见 `trad_chars::demote_traditional`。
+    /// 默认 `false` = 本层既有行为（老调用方一行不动）；`Engine` 在**简体模式**下显式开。
+    pub prefer_simplified: bool,
 }
 
 impl Default for RankOptions {
@@ -54,6 +58,7 @@ impl Default for RankOptions {
         Self {
             fuzzy: true,
             jianpin: true,
+            prefer_simplified: false,
         }
     }
 }
@@ -325,6 +330,11 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
         merged = jianpin;
     } else {
         merged.extend(jianpin);
+    }
+    // 简体优先（见 RankOptions::prefer_simplified）：**截断之前**分区 —— 截断后才排
+    // 等于「被截掉的简体候选永远回不来」。
+    if opts.prefer_simplified {
+        crate::trad_chars::demote_traditional(&mut merged, boost / 2);
     }
     merged.truncate(limit);
     merged
