@@ -338,5 +338,36 @@ export class KeyboardController {
     AppStorage.setOrCreate<number>(KEY_MODE, OpiEngine.mode() as number);
     AppStorage.setOrCreate<number>(KEY_SHIFT, OpiEngine.shiftState() as number);
     AppStorage.setOrCreate<number>(KEY_LEARNER, OpiEngine.learnerEnabled() ? 1 : 0);
+    this.syncPreviewText();
+  }
+
+  /**
+   * 组合串推进**宿主输入框** —— 鸿蒙的原语是 **preview text**（预上屏）。
+   *
+   * 功能与 Android 同一条裁决（2026-10-10「打字期间输入框里能看到拼音」，以及
+   * 2026-10-12 晚「待编的键必须看得见」）：本端此前只在**自家面板**的 preedit 里
+   * 显示缓冲（`pages/Index.ets` 的 PreeditBar），宿主的输入框里一个字都没有 ——
+   * 用户判为「没输入进去」。iOS 端的对应物是 marked text（见 `ios/KeyboardViewController.swift`
+   * 的 `syncMarkedText`），鸿蒙这边就是这一对调用。
+   *
+   * ⚠️⚠️ **API 名与签名待 DevEco 确认**（本机是 Linux：没有 SDK、没有编译器，
+   * 这一整包 ets 从来没被编译过 —— 见 harmony/README.md 第 1 步「大概率要修一堆
+   * API 名字与签名」）。按社区资料，`inputMethodEngine.InputClient` 的预上屏一族是：
+   *   · `setPreviewText(text, offset)` —— offset 是**光标位置**（本端取缓冲长度）
+   *   · 备选签名：`setPreviewTextWithRange(text, { start, end })`
+   *   · 收尾：`finishTextPreview()`（有的版本叫 `clearPreviewText()`）
+   * 任一处名字对不上 ⇒ **第一次 DevEco 构建在本函数报错** —— 那正是预期内的，
+   * 照 SDK 的 d.ts 改名即可，别把整段删了（删了 = 退回「输入框里看不见拼音」）。
+   */
+  private syncPreviewText(): void {
+    if (this.client === null) {
+      return;
+    }
+    const buf: string = OpiEngine.buffer();
+    if (buf.length === 0) {
+      this.client.finishTextPreview();
+      return;
+    }
+    this.client.setPreviewText(buf, buf.length);
   }
 }

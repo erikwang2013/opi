@@ -17,6 +17,7 @@
 // 本项目已被「同一语义抄多份」坑过，而 Android 侧同样只把符号交给引擎
 // （`SymbolCatalog` + `SymbolPanel`，见 `android/app/src/main/kotlin/xyz/erik/opi/keyboard/`）。
 
+import CoreText
 import UIKit
 
 /// 符号网格。只负责画与发射点击，**不上屏、不碰引擎**。
@@ -31,6 +32,10 @@ final class SymbolPanel: UIView {
     /// 滚动视图里的行**必须**有明确高度 —— `KeyboardLayout` 的字母层用的是
     /// `.fillEqually`（按容器高度平分），那在滚动视图里会退化成 0 高。
     private static let rowHeight: CGFloat = 40
+
+    /// 字形判定用的探针字体：与符号键实际用的一致（系统字体、正文尺寸）。
+    /// ⚠️ 未编译：尺寸只要非 0 即可（`CTFontGetGlyphsForCharacters` 只问映射）。
+    private static let probeFont = UIFont.systemFont(ofSize: 17)
 
     private let scroll = UIScrollView()
     private let stack = UIStackView()
@@ -73,8 +78,32 @@ final class SymbolPanel: UIView {
     /// ⚠️ 调用方每开一次面板就重取一次、本层**不做缓存**：空结果是「没拿到」，
     /// 缓存它会让面板从此永远空（Android `SymbolCatalog` 踩过这个坑，
     /// 见那里「空结果不写进缓存」的注释）。
+    /// 本机字体画不画得出这个字形 —— 与 Android `SymbolCatalog.canRenderGlyph`
+    /// （`Paint.hasGlyph`）**同功能**，用 iOS 的原语：CoreText 要字库的真实映射。
+    ///
+    /// 来由（2026-10-12 用户报障「有个表情显示是长方形框」，Android 侧修的）：
+    /// 引擎给的表里可能有本机字体没覆盖的码位（如 Unicode 17.0 的新表情），
+    /// 硬画出来就是一个空心矩形。
+    ///
+    /// ⚠️ **只判单码位**：多码位序列（组合字符、ZWJ）在字库里问的是「整串连字」，
+    /// 会误判成没有 —— 把本来能显示的整类藏掉比留一个空心框更坏（同 Android 口径）。
+    static func canRender(_ text: String, font: UIFont) -> Bool {
+        // ⚠️ 按**码点**判（`unicodeScalars.count`），别按 `utf16.count`：
+        // 后者会把代理对（emoji 全是）当成「多码位」直接放行 —— 而正是 U+1FAEB
+        // 这种代理对才需要判（我第一版就写成这样，注释与代码相反，改前先看这条）。
+        guard text.unicodeScalars.count > 1 else { return true }
+        let ctFont = CTFontCreateWithName(font.fontName as CFString, font.pointSize, nil)
+        var chars = Array(text.utf16)
+        var glyphs = [CGGlyph](repeating: 0, count: chars.count)
+        let ok = CTFontGetGlyphsForCharacters(ctFont, &chars, &glyphs, chars.count)
+        // 全 0 字形也算没有（字库给了映射但画不出 —— 防御性，实测未见）
+        return ok && glyphs.contains { $0 != 0 }
+    }
+
     func setSymbols(_ symbols: [String]) {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        // 渲染前过一道字形可用性（见 canRender 的头注）。
+        let symbols = symbols.filter { Self.canRender($0, font: Self.probeFont) }
         guard !symbols.isEmpty else {
             stack.addArrangedSubview(BarButton(title: "（符号库未就绪）") {})
             return

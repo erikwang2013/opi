@@ -116,6 +116,29 @@ final class KeyboardViewController: UIInputViewController {
         // 候选列表**读引擎**（引擎分好的当前页）。本层既不按 8 切片、也不算页码 ——
         // 两处都曾是 PAGE_SIZE 的副本，现已分别由 opi_candidates_page / opi_select_page 消灭。
         layout.updateCandidates(engine.candidatesPage())
+        syncMarkedText()
+    }
+
+    /// 组合串进字段 —— iOS 的原语是 **marked text**（`UITextDocumentProxy.setMarkedText`）。
+    ///
+    /// 功能与 Android 两条裁决同源（2026-10-10「打字期间输入框里能看到拼音」+
+    /// 2026-10-12 晚「待编的键必须看得见」）：此前本端**一个字都不进字段** ——
+    /// 打拼音时字段毫无动静，无匹时更是完全没反馈，与 Android 修之前是同一种病。
+    /// 本端缓冲就是字母（全键盘方案），原样标出去即可，不需要 Android 那套「·」记号。
+    ///
+    /// 收尾：缓冲空 ⇒ `unmarkText()`（组合区收干净，别把标记留成孤岛）；
+    /// 提交路径见 [insert]（先 unmark 再插，与 Android `dropComposing` 的次序同理由）。
+    /// ⚠️ internal：热键路径（`KeyboardHardware.swift`）也走 [refresh]。
+    func syncMarkedText() {
+        let buffer = engine.buffer()
+        guard !buffer.isEmpty else {
+            if textDocumentProxy.markedTextRange != nil { textDocumentProxy.unmarkText() }
+            return
+        }
+        textDocumentProxy.setMarkedText(
+            buffer,
+            selectedRange: NSRange(location: (buffer as NSString).length, length: 0)
+        )
     }
 
     // MARK: - 文本提交
@@ -125,6 +148,9 @@ final class KeyboardViewController: UIInputViewController {
     /// ⚠️ internal（见上方状态节的说明）：`KeyboardHardware.swift` 的提交路径要调它。
     func insert(_ text: String) {
         guard !text.isEmpty else { return }
+        // 先收组合区再插：否则 insertText 落进 marked range 里、替换掉那段拼音，
+        // 表现随宿主而异（有的留下拼音、有的吞字）。对齐 Android `dropComposing`。
+        if textDocumentProxy.markedTextRange != nil { textDocumentProxy.unmarkText() }
         textDocumentProxy.insertText(text)
     }
 
