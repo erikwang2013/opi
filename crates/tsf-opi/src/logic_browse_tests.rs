@@ -45,7 +45,7 @@ fn browse_hijacks_panel_then_digit_drills_and_commits() {
     let mut s = browse_state();
     assert!(s.enter_symbol_browse());
     assert_eq!(s.buffer(), "符号", "浏览态 buffer = 标题（面板靠它显示）");
-    assert_eq!(s.candidates()[0], "1.常用", "一级第一页 = 类目 1..8");
+    assert_eq!(s.candidates()[0], "常用", "一级第一页 = 类目 1..8（名字不带序号，序号归面板）");
     // 按 `1` → 下钻：无提交文本，标题带类目名（CompositionChanged = 面板要刷新）
     assert_eq!(s.input_key('1' as u32, 0), KeyOutcome::CompositionChanged);
     assert_eq!(s.buffer(), "符号·常用");
@@ -57,7 +57,7 @@ fn browse_hijacks_panel_then_digit_drills_and_commits() {
         KeyOutcome::Commit("，".to_string())
     );
     assert_eq!(s.buffer(), "符号", "提交后回一级");
-    assert_eq!(s.candidates()[0], "1.常用");
+    assert_eq!(s.candidates()[0], "常用");
     assert!(s.is_symbol_browsing());
 }
 
@@ -96,7 +96,7 @@ fn minus_and_equal_page_in_browse() {
     assert!(s.enter_symbol_browse());
     assert_eq!(s.input_key('=' as u32, 0), KeyOutcome::CompositionChanged);
     assert_eq!(s.page(), 1);
-    assert_eq!(s.candidates()[0], "9.平假", "第二页从第 9 个类目开始");
+    assert_eq!(s.candidates()[0], "平假", "第二页从第 9 个类目开始");
     assert_eq!(s.input_key('-' as u32, 0), KeyOutcome::CompositionChanged);
     assert_eq!(s.page(), 0, "'-' 上一页");
     assert_eq!(s.input_key('-' as u32, 0), KeyOutcome::CompositionChanged);
@@ -204,7 +204,7 @@ fn switch_away_must_exit_first_or_it_commits_the_title() {
     typed(&mut s, "ni");
     assert!(s.enter_symbol_browse());
     // 负对照：不退出 → 面板首项是类目、缓冲是标题（这就是「顺序错了」的形态）
-    assert_eq!(s.candidates()[0], "1.常用");
+    assert_eq!(s.candidates()[0], "常用");
     assert_eq!(s.buffer(), "符号");
     // 正确顺序：先 exit_symbol_browse() → 返回后已是真缓冲/真候选
     s.exit_symbol_browse();

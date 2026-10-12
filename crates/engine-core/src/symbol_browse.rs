@@ -3,7 +3,7 @@
 
 //! 符号浏览（「符号大全」）：候选面板式的两级浏览状态。
 //!
-//! 一级 = 类目列表（显示 `序号.名称`），二级 = 该类目的符号。选中类目**下钻**、
+//! 一级 = 类目列表（显示**纯类目名**；序号由宿主面板的页内编号画 —— 2026-10-12 去重，见 `candidates()` 头注），二级 = 该类目的符号。选中类目**下钻**、
 //! 选中符号**上屏并回一级**（不是退出）。分页不入本模块：`candidates(limit)`
 //! 一次性给全量，宿主按既有 `PAGE_SIZE` 切（`.skip().take()`），翻页键走宿主的
 //! 既有 paging 接线 —— 本模块只出语义（与 `Engine::select_from` 同一条分工）。
@@ -22,7 +22,7 @@ use crate::candidates::{Candidate, CandidateKind};
 /// 一级的预编辑标题（面板显示的「正在浏览什么」）。
 pub const BROWSE_TITLE: &str = "符号";
 
-/// 一个类目：序号（1 起，与展示的「1.常用」一致）、名称、符号表（表序 = 生成序）。
+/// 一个类目：序号（1 起，数据列；**不再进展示文本** —— 宿主面板自己画页内序号）、名称、符号表（表序 = 生成序）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SymbolCategory {
     pub index: u32,
@@ -196,7 +196,15 @@ impl SymbolBrowse {
     }
 
     /// 当前层**全量**候选（分页归宿主：`.skip(page * PAGE_SIZE).take(PAGE_SIZE)`）；
-    /// 非浏览态 = 空表。类目条款式为 `序号.名称`（序号取数据列，不是行号）；
+    /// 非浏览态 = 空表。类目条款式 = **纯类目名**（2026-10-12 起不再带 `序号.` 前缀）。
+    ///
+    /// ⚠️ 为什么去掉序号（用户报障「分类前数字不要重复加」）：两轨宿主的面板**自己
+    /// 会给每个候选画页内序号**（fcitx5 的 `setSelectionKey` 标签 `"1. "`，见
+    /// `fcitx5-opi/cpp/opi_panel_driver.cpp` 的实测；TSF 候选窗同款 `"$index."`），
+    /// 引擎再自带一个绝对序号 ⇒ 真机上显示成 `1. 1.常用`。绝对序号（1..22）在这里
+    /// 本来也没用：用户按的数字是**页内**序号，与数据列序号无关。Android 面板不读这里
+    /// （它有自己的类目条，序号由 `symbol_categories.tsv` 出）—— 不受本改动影响。
+    ///
     /// `kind` 一律 `Symbol` —— 类目不可上屏，宿主按浏览态路由，不存在
     /// 「把它当符号提交」的路径。
     pub fn candidates(&self, limit: usize) -> Vec<Candidate> {
@@ -206,7 +214,7 @@ impl SymbolBrowse {
         }
         match self.selected {
             None => out.extend(self.categories.iter().map(|c| Candidate {
-                text: format!("{}.{}", c.index, c.label),
+                text: c.label.clone(),
                 kind: CandidateKind::Symbol,
                 score: 0,
             })),

@@ -105,8 +105,8 @@ fn enter_drill_commit_cycle() {
     assert_eq!(b.level2(), None);
     assert_eq!(b.preedit(), BROWSE_TITLE);
     let l1 = b.candidates(usize::MAX);
-    assert_eq!(l1[0].text, "1.常用");
-    assert_eq!(l1[2].text, "5.拖尾空格");
+    assert_eq!(l1[0].text, "常用", "类目条款式 = 纯名字（序号由宿主面板画）");
+    assert_eq!(l1[2].text, "拖尾空格");
     // 下钻：无提交文本，进二级
     assert_eq!(b.select(0), Selection::Drill);
     assert_eq!(b.level2(), Some(0));
@@ -131,6 +131,6 @@ fn candidates_limit_truncates_without_reindex() {
     // limit 是「取多少条」，不是「第几条开始」—— 分页归宿主 skip/take（与 fetched 同义）
     let top = b.candidates(2);
     assert_eq!(top.len(), 2);
-    assert_eq!(top[0].text, "1.常用");
-    assert_eq!(top[1].text, "2.英文");
+    assert_eq!(top[0].text, "常用");
+    assert_eq!(top[1].text, "英文");
 }

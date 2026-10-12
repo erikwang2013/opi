@@ -78,7 +78,7 @@ fn browse_hijacks_buffer_and_candidates_but_keeps_real_buffer() {
     assert_eq!(e.buffer(), BROWSE_TITLE);
     let l1 = e.candidates(usize::MAX);
     assert_eq!(l1.len(), 22);
-    assert_eq!(l1[0].text, "1.常用");
+    assert_eq!(l1[0].text, "常用", "类目条款式 = 纯名字（序号归宿主面板画）");
     // 条件 ①c：浏览期间不写 composer 真缓冲（标题不进缓冲；缓冲也不被清）
     e.exit_symbol_browse();
     assert_eq!(e.buffer(), "ni", "退出后真缓冲原样（浏览期间零改动）");
@@ -96,7 +96,7 @@ fn select_in_browse_drills_then_commits_symbol() {
     // 选一个符号 → 上屏其文本，并回一级（不是退出）
     assert_eq!(e.select(2), "、");
     assert_eq!(e.buffer(), BROWSE_TITLE, "提交后回一级");
-    assert_eq!(e.candidates(usize::MAX)[0].text, "1.常用");
+    assert_eq!(e.candidates(usize::MAX)[0].text, "常用");
     // 越界（本层没有第 22 项）→ 空串，状态不变
     assert_eq!(e.select(99), "");
     assert_eq!(e.buffer(), BROWSE_TITLE);
@@ -105,7 +105,7 @@ fn select_in_browse_drills_then_commits_symbol() {
 #[test]
 fn category_labels_are_uncommittable_through_every_select_path() {
     // 条件 ③ 的机制证明：一级任何 index 都只可能下钻（返回空串）——类目展示串
-    // （"1.常用"）没有任何返回路径；只有进二级才出可上屏的符号文本。
+    // （"常用"）没有任何返回路径；只有进二级才出可上屏的符号文本。
     let mut e = browse_engine();
     for i in 0..=22 {
         assert!(e.enter_symbol_browse());
