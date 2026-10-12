@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
+use crate::jianpin::SyllableMemo;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -28,6 +29,15 @@ pub struct Learner {
     enabled: bool,
     user_freq: BTreeMap<String, u32>,
     user_words: BTreeSet<String>,
+    /// 简拼每音节最优分的记忆（[`SyllableMemo`]）。
+    ///
+    /// **为什么在学习器里**：那份记忆的有效性由「词库 + boost + 学习状态」三者决定（键里
+    /// 带着它们），而学习器正是这三者的流经点，也是排序链路上唯一处处都传得到的共享引用
+    /// （`&Learner`）—— 放这儿 = 排序层签名零改动（`jianpin::expansions` 按 `&Learner` 取）。
+    memo: SyllableMemo,
+    /// 学习状态版本号：**每个 mutator 都 +1**（见文件尾的 `bump_revision`）。记忆的键含它
+    /// ⇒ 学过的词立刻反映到简拼榜；陈旧项不是「记得清」而是**读不到**（构造上不可能吃旧值）。
+    revision: u64,
 }
 
 impl Learner {
@@ -36,6 +46,8 @@ impl Learner {
             enabled,
             user_freq: BTreeMap::new(),
             user_words: BTreeSet::new(),
+            memo: SyllableMemo::default(),
+            revision: 0,
         }
     }
 
@@ -48,17 +60,20 @@ impl Learner {
         let slot = self.user_freq.entry(text.to_string()).or_insert(0);
         *slot = slot.saturating_add(1);
         self.user_words.insert(text.to_string());
+        self.bump_revision();
     }
 
     /// 删除自造词（同时清掉频次）。
     pub fn remove_word(&mut self, text: &str) {
         self.user_freq.remove(text);
         self.user_words.remove(text);
+        self.bump_revision();
     }
 
     pub fn clear(&mut self) {
         self.user_freq.clear();
         self.user_words.clear();
+        self.bump_revision();
     }
 
     /// 用户词频查询（无记录返回 0）。
@@ -72,6 +87,22 @@ impl Learner {
 
     pub fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
+        self.bump_revision();
+    }
+
+    /// 学习状态版本号（记忆的键之一；每次改动 +1）。`pub` 给简拼记忆与测试用。
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    /// 简拼每音节最优分的记忆（见字段注）。
+    pub fn syll_memo(&self) -> &SyllableMemo {
+        &self.memo
+    }
+
+    /// 每次改动学习状态都要过一次这里 —— 忘掉它 = 简拼榜可能吃到学习前的旧分。
+    fn bump_revision(&mut self) {
+        self.revision = self.revision.wrapping_add(1);
     }
 
     /// 导出为用户可读/可迁移的 JSON。
@@ -126,6 +157,7 @@ impl Learner {
                 .or_insert(w.freq);
             self.user_words.insert(w.text);
         }
+        self.bump_revision();
         Ok(count)
     }
 }

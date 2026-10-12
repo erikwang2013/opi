@@ -42,6 +42,86 @@ fn per_position_cap_never_breaks_the_ceiling() {
     assert_eq!(per_position_cap(64), 1);
 }
 
+/// **记忆门禁**（2026-10-12 晚：用户报障「输入无匹的时候会出现无响应」的修法）。
+///
+/// 判据用**计数词库**（不是计时 —— 计时在共享机器上是噪声）：
+/// 1. 同一个（词库, boost, 学习版本）下第二次展开 ⇒ 词库查询次数**为 0**（全命中记忆）；
+/// 2. 换代（学习 +1）后再展开 ⇒ 又有查询（记忆被换代清空），且结果与「冷记忆」逐串相同
+///    —— 这一条同时钉住「学到了的词立刻反映到简拼榜」没有被记忆吃掉；
+/// 3. 负结果也进记忆（无匹音节不重查）。
+#[test]
+fn syllable_scores_are_memoized_and_wiped_on_learning() {
+    use crate::trie::Entry;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// 计数包装：只统计 `query_all`（简拼扫音节用的那一个）。
+    struct CountingDict {
+        inner: InMemoryDictionary,
+        calls: AtomicUsize,
+    }
+    impl Dictionary for CountingDict {
+        fn query(&self, pinyin: &str, limit: usize) -> Vec<Entry> {
+            self.inner.query(pinyin, limit)
+        }
+        fn query_all(&self, pinyin: &str) -> Vec<Entry> {
+            self.calls.fetch_add(1, Ordering::Relaxed);
+            self.inner.query_all(pinyin)
+        }
+        fn len(&self) -> usize {
+            self.inner.len()
+        }
+        fn max_freq(&self) -> u64 {
+            self.inner.max_freq()
+        }
+    }
+
+    let mut d = InMemoryDictionary::new();
+    for (py, w, f) in [
+        ("zhong", "中", 9000),
+        ("guo", "国", 8000),
+        ("zhongguo", "中国", 7000),
+        ("zai", "在", 6000),
+        ("hao", "好", 5000),
+    ] {
+        d.insert(py, w, f);
+    }
+    let dict = CountingDict {
+        inner: d,
+        calls: AtomicUsize::new(0),
+    };
+    let learner = Learner::new(true);
+
+    let first = expansions(&dict, &learner, USER_BOOST, "zg");
+    let after_first = dict.calls.load(Ordering::Relaxed);
+    assert!(!first.is_empty(), "前置：zg 应展开出键（{first:?}）");
+    assert!(after_first > 0, "首次展开必然要查库（实得 {after_first}）");
+
+    let second = expansions(&dict, &learner, USER_BOOST, "zg");
+    assert_eq!(first, second, "记忆不得改变结果");
+    assert_eq!(
+        dict.calls.load(Ordering::Relaxed),
+        after_first,
+        "第二次展开必须全命中记忆（零查询）—— 否则 O(k²) 那条路还在"
+    );
+
+    // 换代：学一次 ⇒ 版本 +1 ⇒ 记忆整表作废，结果与「从零算」的引擎逐串相同。
+    let mut learned = Learner::new(true);
+    learned.record_selection("中国");
+    let warm = expansions(&dict, &learned, USER_BOOST, "zg");
+    let after_learn = dict.calls.load(Ordering::Relaxed);
+    assert!(
+        after_learn > after_first,
+        "学习换代后必须重算（记忆不能吃旧分）"
+    );
+    let again = expansions(&dict, &learned, USER_BOOST, "zg");
+    assert_eq!(warm, again);
+    assert_eq!(
+        dict.calls.load(Ordering::Relaxed),
+        after_learn,
+        "换代后同代内继续命中记忆"
+    );
+}
+
 /// 排的是**该音节自身键**的证据，不是「该前缀下最大词频」：查询是前缀语义，短音节会白拿
 /// 长音节的词。真库实测有这种「幽灵音节」（`za`←`zai`、`zha`←`zhan`…，判据 = 该音节**最高分
 /// 条目**的 `pinyin_len ≠ 音节长度`），幽灵按继承来的高分插榜会把真音节挤下去

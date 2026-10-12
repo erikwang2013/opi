@@ -44,6 +44,18 @@
 //! 这些数字来自临时探针（已删），不是门禁 —— 真库下目标词可能超 `FETCH_LIMIT`，那种断言是
 //! 假绿。门禁只管「上限存在且组合数不越界」（`tests/jianpin_ranking.rs`）。
 //!
+//! ## 每音节最优分的**记忆**（2026-10-12 晚加，用户报障「输入无匹的时候会出现无响应」）
+//!
+//! [`top_syllables`] 对**该字母下每个音节**各一次 `query_all`（真库 30~40 次前缀查询
+//! ≈ 2~3ms/字母），而它**每次击键**都要重算缓冲里的**全部**字母 ⇒ 打 k 个字母的累计成本
+//! **O(k²)**。真库 release 实测（探针已删）：无匹纯辅音串 5 字母 43ms、10 字母 82ms、
+//! 18 字母 **162ms**；把简拼关掉只剩 5~7ms ⇒ 成本全在这一档。手机端按 2~5× 放大就是
+//! 「打字像死了」（用户端表现为「无响应」，切走输入法再切回才恢复）。
+//!
+//! 修法 = [`SyllableMemo`]（每音节最优分只查一次），键 =（音节, 词库指纹, boost, 学习版本）
+//! —— 任一项变化即**换代清空**，陈旧项读不到（不是靠记得清）。放 [`crate::learner::Learner`]
+//! 里（见那边的字段注）：签名零改动，且「学习一变就作废」由学习器自己保证。
+//!
 //! ⚠️ 简拼档的可见性靠**精确档为空**：`zg`/`nh` 这类纯缩写在词库里（拼音键都是音节序列）
 //! 查不出任何东西，故简拼档直接成为主结果。混合输入下它只能追加在精确档之后、可能落在
 //! `FETCH_LIMIT` 之外 —— 那不是本档的问题（分档规则与模糊同源），别据此改。
@@ -52,6 +64,68 @@ use crate::candidates::rank_score;
 use crate::dictionary::Dictionary;
 use crate::learner::Learner;
 use crate::pinyin::{SYLLABLES, is_syllable, segment};
+use std::cell::RefCell;
+use std::collections::HashMap;
+
+/// 每音节最优分的记忆（`best_score` 的 memo）。
+///
+/// 键 = `(词库指纹, boost, 学习版本)` —— **换代即整表清空**（只保留一代表 ⇒ 内存上界 =
+/// 音节表里被查过的音节数，≤ 410 条）。词库指纹取 `(len, max_freq)`：两个都是 O(1) 读的
+/// 字段，且把「换词库」（`load_trad` / `load_stroke` 会在同一进程里替换词典）也纳入键 ——
+/// 用地址会栽在「旧词库析构、新词库复用同一地址」上。
+///
+/// ⚠️ 值里的 `Option` 是**两层**：`Some(None)` = 「查过了，这个音节没有条目」（缓存负结果，
+/// 否则无匹串每次都把负结果重查一遍 —— 那正是本记忆要治的病）。
+#[derive(Default)]
+pub struct SyllableMemo {
+    inner: RefCell<MemoState>,
+}
+
+#[derive(Default)]
+struct MemoState {
+    /// 当前代的键；`None` = 还没写过。
+    key: Option<(usize, u64, u64, u64)>,
+    map: HashMap<&'static str, Option<(u8, u64)>>,
+}
+
+impl SyllableMemo {
+    /// 读：`None` = 未命中（要算）；`Some(v)` = 命中（`v` 可能是 `None` = 负结果）。
+    pub fn get(&self, key: (usize, u64, u64, u64), syllable: &str) -> Option<Option<(u8, u64)>> {
+        let mut st = self.inner.borrow_mut();
+        if st.key != Some(key) {
+            st.map.clear();
+            st.key = Some(key);
+            return None; // 刚换代：本项必然不在
+        }
+        st.map.get(syllable).copied()
+    }
+
+    /// 写（换代判定同一处逻辑：`get` 已换代过，这里只在同代时插入）。
+    pub fn put(
+        &self,
+        key: (usize, u64, u64, u64),
+        syllable: &'static str,
+        value: Option<(u8, u64)>,
+    ) {
+        let mut st = self.inner.borrow_mut();
+        if st.key != Some(key) {
+            st.map.clear();
+            st.key = Some(key);
+        }
+        st.map.insert(syllable, value);
+    }
+
+    /// 当前代里的条目数（门禁用：钉「第二次调用零查询」）。
+    pub fn len(&self) -> usize {
+        self.inner.borrow().map.len()
+    }
+
+    /// 与 [`Self::len`] 配对（clippy 的 `len_without_is_empty`）：换代前后都可能为空
+    /// （还没写过、或刚换代）。`pub` 只为对称，没有别的调用方。
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
 
 /// 简拼展开键的条数上限（= 每次击键的词库前缀查询次数上限）。
 pub const MAX_EXPANSIONS: usize = 512;
@@ -182,6 +256,23 @@ fn top_syllables<D: Dictionary + ?Sized>(
 /// 用 `query_all` 而不是 `query(syl, 1)`：后者截的是**静态**词频前 1，学过的词在加 boost
 /// 之前就被丢掉了（与 candidates.rs 逐音节回退那条是同一条不变式，那里栽过）。
 fn best_score<D: Dictionary + ?Sized>(
+    dict: &D,
+    learner: &Learner,
+    boost: u64,
+    syllable: &'static str,
+) -> Option<(u8, u64)> {
+    // 记忆（见 [`SyllableMemo`]）：词库指纹两个字段都是 O(1)；换代判定在 get/put 里。
+    let key = (dict.len(), dict.max_freq(), boost, learner.revision());
+    if let Some(hit) = learner.syll_memo().get(key, syllable) {
+        return hit;
+    }
+    let v = best_score_uncached(dict, learner, boost, syllable);
+    learner.syll_memo().put(key, syllable, v);
+    v
+}
+
+/// [`best_score`] 的实算部分（无记忆）。
+fn best_score_uncached<D: Dictionary + ?Sized>(
     dict: &D,
     learner: &Learner,
     boost: u64,
