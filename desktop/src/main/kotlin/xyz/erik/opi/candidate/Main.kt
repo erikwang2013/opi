@@ -111,29 +111,16 @@ fun main(args: Array<String>) = application {
             // 吊住（实测：只 return 时进程活着、没窗口，pgrep 里多一具）
             exitProcess(0)
         }
-        // 符号页的上屏通道（2026-10-12 用户裁决「点击后要是个大的页面，可以翻页选择」
-        // —— 两个平台都开大页面，见 StatusBar.openSymbols）：
-        //  · Linux：`opi-ctl insert <文本>` → D-Bus Trigger → addon 的 `ic->commitString`
-        //    （FocusIn 之后生效）。成功 = 退出码 0（[runExternal] 返回 null）；命令不在
-        //    PATH / 没有焦点输入框等一律返回失败短语，页面把原因显示给用户。
-        //  · Windows：仍是如实失败 —— 命名管道被**候选窗进程**持有（单实例），本条进程
-        //    送不出去。lead 裁决（2026-10-10）：本轮不开第二条 UI→TSF 通路（TSF 插入面未
-        //    接线）；TSF 接线落地时再定 UI 进程拓扑（候选窗/状态栏/符号页同进程是首选）。
-        //    见 SymbolsPage.kt 头注释的进程约束段。
-        StatusBarApp(symbolCommit = { text ->
-            if (isWindows()) {
-                "上屏失败：没连上输入法（符号页要由候选窗进程上屏）"
-            } else {
-                runExternal(listOf("opi-ctl", "insert", text))
-            }
-        })
+        // 符号页/表情页的上屏：共用 desktopSymbolCommit（Actions.kt 的单点：Linux =
+        // `opi-ctl insert`、Windows = 如实失败）。设置窗开的那两个窗走同一条。
+        StatusBarApp(symbolCommit = ::desktopSymbolCommit)
         return@application
     }
 
     if ("--settings" in args || !isWindows()) {
         Window(
             onCloseRequest = ::exitApplication,
-            state = rememberWindowState(width = 460.dp, height = 600.dp),
+            state = rememberWindowState(width = 800.dp, height = 560.dp),
             title = "opi输入法 设置",
             icon = OpiPetWindowIcon, // 窗口/任务栏图标 = 小欧（PetIcon.kt）
         ) {

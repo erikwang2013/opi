@@ -29,8 +29,8 @@
 //! 里 —— 用 fcitx5 配置工具保存时这些键**是否被保存方抹掉**本侧无法保证（上游行为，
 //! 本机未取证）。若真发生，表现是「状态栏设置被重置」，不是启动失败。
 //!
-//! ⚠️ 保存走 [mergeIni]：**保留本文件不认识的行**（fcitx5 侧新增的选项如
-//! `ShiftToggle`/`Skin`、手写注释、未知键）。2026-10-09 前是整文件重写 —— 那会让
+//! ⚠️ 保存走 [mergeIni]：**保留本文件不认识的行**（fcitx5 侧新增的选项、手写注释、
+//! 未知键）。2026-10-09 前是整文件重写 —— 那会让
 //! 「设置窗保存一次 = 把 fcitx5 配置面里本窗不知道的选项全抹掉」。读侧一直忽略
 //! 未知键（向前兼容），写侧从那天起同一条约定。
 
@@ -151,12 +151,20 @@ fun visibleStatusButtons(sb: StatusBarSettings, windows: Boolean): List<StatusBa
     return StatusBarButton.entries.filter { sb.resident(it) && statusButtonWired(it, windows) }
 }
 
-/** 四个开关 + 皮肤 + 状态栏。默认值 = 引擎既有行为（开关全开、皮肤不改动），与两端的读侧一字不差。 */
+/**
+ * 五个开关 + 皮肤 + 状态栏。默认值 = 引擎既有行为（开关全开、皮肤不改动），与两端的
+ * 读侧一字不差。
+ *
+ * ⚠️ [shiftToggle]（2026-10-12 加）**只有 Linux 读侧认它**（`opi_config.h` 的
+ * `ShiftToggle`）；`crates/tsf-opi/src/settings.rs` 只读前四个开关 ⇒ 设置窗在 Windows
+ * 上不列这一行（「宁可少一页，不做点不动的开关」）。写侧照旧不分平台地写全。
+ */
 data class OpSettings(
     val learn: Boolean = true,
     val chinesePunct: Boolean = true,
     val fuzzy: Boolean = true,
     val jianpin: Boolean = true,
+    val shiftToggle: Boolean = true,
     val skin: SkinOption = SkinOption.KEEP,
     val statusbar: StatusBarSettings = StatusBarSettings(),
 ) {
@@ -170,6 +178,9 @@ data class OpSettings(
         appendLine("ChinesePunct=${boolText(chinesePunct)}")
         appendLine("Fuzzy=${boolText(fuzzy)}")
         appendLine("Jianpin=${boolText(jianpin)}")
+        // Shift 轻按切换中英文（Linux 读侧 = opi_config.h 的 ShiftToggle；Windows 读侧
+        // 不认这个键、忽略之 —— 见本 data class 的头注）。
+        appendLine("ShiftToggle=${boolText(shiftToggle)}")
         // 皮肤只在 Linux 侧有意义（fcitx5 主题）；Windows 侧读侧忽略未知键，
         // 但设置窗在 Windows 上不显示这一节，写不写都到不了那条路 —— 写，
         // 是为了「同一份文件格式」不因平台分叉。
@@ -209,6 +220,7 @@ data class OpSettings(
                 chinesePunct = bool("ChinesePunct", true),
                 fuzzy = bool("Fuzzy", true),
                 jianpin = bool("Jianpin", true),
+                shiftToggle = bool("ShiftToggle", true),
                 skin = SkinOption.fromValue(map["Skin"]),
                 statusbar = StatusBarSettings(
                     hidden = bool("StatusBarHidden", false),
@@ -245,6 +257,7 @@ fun mergeIni(existing: String, s: OpSettings): String {
         "ChinesePunct" to boolText(s.chinesePunct),
         "Fuzzy" to boolText(s.fuzzy),
         "Jianpin" to boolText(s.jianpin),
+        "ShiftToggle" to boolText(s.shiftToggle),
         "Skin" to s.skin.value,
         "StatusBarHidden" to boolText(s.statusbar.hidden),
         "StatusBarVk" to boolText(s.statusbar.vk),

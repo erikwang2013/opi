@@ -3,25 +3,29 @@
 
 //! 「属性设置」窗口（Compose 自绘；配色沿用项目色 —— 宣纸白底、青、朱砂）。
 //!
-//! 交互模型：**改一下就落盘 + 通知 IME**（不像桌面软件那样要再点「确定」）——
-//! 参照对象是搜狗那类输入的属性设置：开关拨完即生效，底部只如实显示结果。
+//! **布局 = 左分类导航 + 右内容 + 底部状态行**（2026-10-12 用户裁决「设置页面布局和
+//! 功能参考搜狗输入法」；此前是单列长滚动）。页集合见 [SettingsTab]：每页的内容在
+//! SettingsPages.kt，**只列引擎真的支持的开关**。
+//!
+//! 交互模型不变：**改一下就落盘 + 通知 IME**（不像桌面软件那样要再点「确定」）——
+//! 参照对象正是搜狗那类输入的属性设置：开关拨完即生效，底部只如实显示结果。
 //! Linux 走 `ReloadAddonConfig`（即那条实测有效的路，`fcitx5-remote -r` **不是**，
 //! 见 Settings.kt 的 notifyFcitxReload）；Windows 只落盘、下次激活生效。
 //!
 //! 本窗在**两个宿主**里都跑：`--settings` 模式（单独进程）与状态栏的「设置」按钮
 //! （状态栏进程内开一个窗，见 StatusBar.kt）—— 所以别在这里假设自己是整个应用。
+//!
+//! 本窗还会开**符号页/表情页**（「符号与表情」页那两个按钮）：那是同一个 SymbolWindow
+//! （见 SymbolsPage.kt），上屏走 desktopSymbolCommit —— **进程拓扑与状态栏那边一样**：
+//! Linux 靠 opi-ctl，Windows 只能如实失败（管道在候选窗进程手里）。
 
 package xyz.erik.opi.candidate
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -44,7 +48,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -53,15 +56,40 @@ import xyz.erik.opi.pet.OpiPet
 import xyz.erik.opi.pet.PetMood
 
 // ---------- 配色（与 docs/opi-pet.svg 同一套） ----------
-private val Paper = Color(0xFFFBFAF6) // 宣纸白
-private val Ink = Color(0xFF22272E) // 正文
-private val Muted = Color(0xFF6B7671) // 次级文字
-private val Teal = Color(0xFF2E8B80) // 青（开关选中）
-private val Hairline = Color(0xFFE3E8E6) // 分隔线
+// internal：SettingsPages.kt 共用（一个窗的两半）。
+internal val Paper = Color(0xFFFBFAF6) // 宣纸白
+internal val Ink = Color(0xFF22272E) // 正文
+internal val Muted = Color(0xFF6B7671) // 次级文字
+internal val Teal = Color(0xFF2E8B80) // 青（开关选中）
+internal val Hairline = Color(0xFFE3E8E6) // 分隔线
+
+// 导航列底色/选中态：比宣纸白略深一档，选中 = 白底 + 青色左条（搜狗那类设置页的做法）。
+private val NavBg = Color(0xFFF1F3F1)
+private val NavSelBg = Color(0xFFFBFAF6)
+
+/** 一页：导航项。**顺序 = 展示序**（与搜狗一致的排法：常用在前、关于在最后）。 */
+internal enum class SettingsTab(val label: String) {
+    COMMON("常用"),
+    KEYS("按键"),
+    APPEARANCE("外观"),
+    STATUSBAR("状态栏"),
+    SYMBOLS("符号与表情"),
+    ABOUT("关于"),
+}
+
+/**
+ * 纯函数：本平台该出哪些页。Windows 上没有皮肤（fcitx5 主题）也没有 `ShiftToggle`
+ * 的读侧（见 OpSettings 头注）⇒ **按键与外观两页不出**（「宁可少一页，不做点不动的
+ * 开关」——那条原则在本窗是写在「关于」页里的自述，别让这里漂）。
+ */
+internal fun settingsTabs(windows: Boolean): List<SettingsTab> =
+    SettingsTab.entries.filter { !windows || (it != SettingsTab.KEYS && it != SettingsTab.APPEARANCE) }
+
+// ---------- 小部件 ----------
 
 /** 一行开关：左说明、右 Switch。`onChange` 由调用方负责落盘 + 提示。 */
 @Composable
-private fun SettingRow(
+internal fun SettingRow(
     title: String,
     hint: String,
     checked: Boolean,
@@ -83,95 +111,45 @@ private fun SettingRow(
     }
 }
 
+/** 一行动作：左说明、右按钮（开窗这类不是开关的动作）。 */
 @Composable
-private fun SectionTitle(text: String) {
+internal fun ActionRow(title: String, hint: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, fontSize = 15.sp, color = Ink)
+            Text(hint, fontSize = 12.sp, color = Muted)
+        }
+        Box(
+            modifier = Modifier
+                .border(1.dp, Teal)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 14.dp, vertical = 6.dp),
+        ) {
+            Text(title.removePrefix("打开"), fontSize = 13.sp, color = Teal)
+        }
+    }
+}
+
+@Composable
+internal fun SectionTitle(text: String) {
     Spacer(Modifier.height(14.dp))
     Text(text, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Teal)
     Divider(color = Hairline)
 }
 
-// ---------- 皮肤选择器（2026-10-09：外层皮肤设置做成可视卡，替掉纯文字清单）----------
+// ---------- 主体 ----------
 
-/**
- * 一款皮肤的预览色（bg/fg/accent 三项）。
- * ⚠️ 九款的色值**不再各写一份**（2026-10-12）：统一取自 `SkinPalette.skinColors`
- * —— 那份的逐值对应由 SettingsTest 的 `skin palettes match the theme generator`
- * 现读现比（同一个「图与实」门禁，只是比对对象从本文件挪去了 SkinPalette.kt）。
- */
-private data class SkinPreview(val bg: Color, val fg: Color, val accent: Color)
-
-private fun previewOf(skin: SkinOption): SkinPreview = when (skin) {
-    // 「不改动」不指定主题：预览画一浅一深的双色底（表意「跟随系统」）—— 这是预览
-    // 专属的中性表示，**不是** SkinPalette.KeepColors（那个是状态栏的固定深色）。
-    SkinOption.KEEP -> SkinPreview(Color(0xFFF2F2F2), Color(0xFF888888), Teal)
-    else -> skinColors(skin).let { SkinPreview(it.bg, it.fg, it.accent) }
-}
-
-/**
- * 十张卡按 FlowRow 折行排开（窗口内容宽 460-22×2=416dp：一行 5×70 + 4×8 = 382 ≤ 416，
- * 第 6 张要 460 > 416 ⇒ 十款固定两行）。窄了仍会折行（首版 76/10=420 > 416 时
- * 朱砂掉到第二行，截图复核时抓到过半宽问题本身）。
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun SkinPicker(selected: SkinOption, onSelect: (SkinOption) -> Unit) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        for (skin in SkinOption.entries) {
-            SkinCard(skin, skin == selected) { onSelect(skin) }
-        }
-    }
-}
-
-/** 一张皮肤卡：候选面板样张（底色 + 样字 + 朱砂/青的强调条）+ 名字。选中 = 青边 + 青字。 */
-@Composable
-private fun SkinCard(skin: SkinOption, selected: Boolean, onClick: () -> Unit) {
-    val pv = previewOf(skin)
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.width(70.dp).clickable(onClick = onClick).padding(2.dp),
-    ) {
-        Box(
-            modifier = Modifier.fillMaxWidth().height(40.dp)
-                .background(pv.bg)
-                .border(
-                    width = if (selected) 2.dp else 1.dp,
-                    color = if (selected) Teal else Hairline,
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (skin == SkinOption.KEEP) {
-                // 「跟随系统」：一浅一深的双色底（不写字，免得误读成某个具体主题）
-                Row(Modifier.fillMaxSize()) {
-                    Box(Modifier.weight(1f).fillMaxHeight().background(Color(0xFFF2F2F2)))
-                    Box(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF3A3A3A)))
-                }
-            } else {
-                Text("你", fontSize = 17.sp, color = pv.fg)
-            }
-            // 强调条贴底：每款的 accent，命中面板的选中下划线
-            Box(
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth(0.7f).height(3.dp)
-                    .background(pv.accent),
-            )
-        }
-        Spacer(Modifier.height(5.dp))
-        Text(
-            skin.value,
-            fontSize = 12.sp,
-            color = if (selected) Teal else Ink,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-        )
-    }
-}
-
-/** 设置窗主体。状态在本地；每次改动立刻 `saveSettings` 并把结果写进状态行。 */
+/** 设置窗主体。状态在本地；每次改动立刻 `saveSettings` 并把结果写进底部状态行。 */
 @Composable
 fun SettingsWindow() {
     var s by remember { mutableStateOf(loadSettings()) }
     var status by remember { mutableStateOf("配置文件：${settingsPath()}") }
+    var tab by remember { mutableStateOf(SettingsTab.COMMON) }
+    // 符号页/表情页：null = 关；false = 符号；true = 表情（initialEmoji）。
+    var symbolWin by remember { mutableStateOf<Boolean?>(null) }
 
     // 打开设置就意味着「用户在看/要调状态栏」：条该显示却没人拉起 ⇒ 直接拉一支
     // （2026-10-10 用户报障「设置里开了、实际没出现」的根因：装包后没重登录，
@@ -192,112 +170,88 @@ fun SettingsWindow() {
         }
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize().background(Paper)
-            .verticalScroll(rememberScrollState()).padding(22.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            OpiPet(mood = PetMood.IDLE, size = 64.dp) // 64dp 起侧壁刻 OPI
-            Spacer(Modifier.width(14.dp))
-            Column {
-                Text("OPI 属性设置", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Ink)
-                // OPI_VERSION 是构建时生成的（build.gradle.kts 的 opiAppVersion）——
-                // 此前这里写死过 "1.4.0"，到 1.6.0 就成了假话，单一来源才不会再漂。
-                Text("回归本质、人人可用的多端输入法 · v$OPI_VERSION", fontSize = 12.sp, color = Muted)
+    Row(Modifier.fillMaxSize().background(Paper)) {
+        NavColumn(tab) { tab = it }
+        Column(Modifier.weight(1f).fillMaxHeight()) {
+            Column(
+                Modifier.weight(1f).fillMaxWidth()
+                    .verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 6.dp),
+            ) {
+                when (tab) {
+                    SettingsTab.COMMON -> CommonPage(s, ::apply)
+                    SettingsTab.KEYS -> KeysPage(s, ::apply)
+                    SettingsTab.APPEARANCE -> AppearancePage(s, ::apply)
+                    SettingsTab.STATUSBAR -> StatusBarPage(s, ::apply) { status = it }
+                    SettingsTab.SYMBOLS -> SymbolsPage(
+                        onOpenSymbols = { symbolWin = false },
+                        onOpenEmoji = { symbolWin = true },
+                    )
+                    SettingsTab.ABOUT -> AboutPage(status)
+                }
+            }
+            // 底部状态行：拨完任何开关都能立刻看到结果（此前它在「关于」页里，换个页就看不见了）。
+            Row(
+                modifier = Modifier.fillMaxWidth().height(28.dp).background(NavBg)
+                    .padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(status, fontSize = 11.sp, color = Muted, maxLines = 1)
             }
         }
+    }
+    symbolWin?.let { emoji ->
+        SymbolWindow(
+            onCommit = ::desktopSymbolCommit,
+            onClose = { symbolWin = null },
+            initialEmoji = emoji,
+        )
+    }
+}
 
-        SectionTitle("常规")
-        SettingRow(
-            "学习（记住选过的词）",
-            "关掉后不再累计词频；已学的词仍在（清空要用各端自己的入口）",
-            s.learn,
-        ) { apply(s.copy(learn = it)) }
-        SettingRow(
-            "中文标点",
-            "，。、 与成对引号的自动转换（与全角开关相互独立）",
-            s.chinesePunct,
-        ) { apply(s.copy(chinesePunct = it)) }
-
-        SectionTitle("输入")
-        SettingRow(
-            "模糊音",
-            "z↔zh、c↔ch、s↔sh、n↔l、f↔h 等近音互查",
-            s.fuzzy,
-        ) { apply(s.copy(fuzzy = it)) }
-        SettingRow(
-            "简拼",
-            "声母缩写：nh → 你好、zg → 中国",
-            s.jianpin,
-        ) { apply(s.copy(jianpin = it)) }
-
-        // 皮肤只在 Linux 侧有意义（fcitx5 主题）；Windows 上不显示 ——「宁可少一页，
-        // 不做点不动的开关」是这页的既有原则（见下面「关于」一节）。
-        if (!isWindows()) {
-            SectionTitle("外观")
-            Spacer(Modifier.height(8.dp))
-            SkinPicker(s.skin) { apply(s.copy(skin = it)) }
-            Spacer(Modifier.height(7.dp))
-            Text(
-                "皮肤是 fcitx5 的全局主题（对所有输入法生效）；选一款即时换。" +
-                    "「不改动」= OPI 不介入主题。",
-                fontSize = 12.sp,
-                color = Muted,
-            )
-        }
-
-        SectionTitle("状态栏")
-        SettingRow(
-            "显示状态栏悬浮条",
-            "关掉整条隐藏（进程还在跑，拨回来就出现）；隐藏后就点不到条上的设置了，" +
-                "要回来用应用菜单里的「opi输入法」再进本页",
-            !s.statusbar.hidden,
+/** 左导航列：顶部小欧 + 标题，中间分类，底部版本与版权。 */
+@Composable
+private fun NavColumn(selected: SettingsTab, onSelect: (SettingsTab) -> Unit) {
+    Column(Modifier.width(180.dp).fillMaxHeight().background(NavBg)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 14.dp, top = 14.dp, end = 10.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            val next = s.copy(statusbar = s.statusbar.copy(hidden = !it))
-            apply(next)
-            // 拨回「显示」时立刻拉起（拨到隐藏不用管 —— 隐藏的语义是「进程还在跑，只是不显示」）
-            ensureStatusBarRunning(next.statusbar)?.let { status = it }
-        }
-        // 八个按钮的常驻开关。Windows 上只列有动作的那几个 —— 与条上同一份判定
-        // （statusButtonWired），两处各判一次必然漂移。
-        for (b in StatusBarButton.entries.filter { statusButtonWired(it, isWindows()) }) {
-            SettingRow(b.label, b.hint, s.statusbar.resident(b)) {
-                apply(s.copy(statusbar = s.statusbar.with(b, it)))
+            OpiPet(mood = PetMood.IDLE, size = 44.dp) // 起侧壁刻 OPI
+            Spacer(Modifier.width(8.dp))
+            Column {
+                Text("OPI", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Ink)
+                Text("属性设置", fontSize = 11.sp, color = Muted)
             }
         }
-        Text(
-            "这些开关存在配置文件里（Linux 就是 fcitx5 的 addon 配置）。" +
-                "⚠️ 用 fcitx5 自带配置工具改别的选项并保存时，这些键会不会被它清掉未经验证。",
-            fontSize = 12.sp,
-            color = Muted,
-        )
-
-        SectionTitle("关于")
-        Spacer(Modifier.height(6.dp))
-        Text(status, fontSize = 12.sp, color = Muted)
-        Spacer(Modifier.height(4.dp))
-        // 一句话说明「为什么没有别的页」——搜狗那套有十几页，我们引擎现在只有这几个
-        // 真旋钮；把引擎没有的开关摆上来就是假承诺（宁可少一页，不做点不动的开关）。
-        Text(
-            "本页只列引擎真的支持的开关；按键 / 词库那些页要等引擎支持了再加。",
-            fontSize = 12.sp,
-            color = Muted,
-        )
-        Spacer(Modifier.height(10.dp))
-        Canvas(Modifier.fillMaxWidth().height(9.dp)) {
-            // 朱砂短线：与小欧头顶的声调天线同一笔（本窗唯一的暖色）。
-            drawLine(
-                color = Color(0xFFD9553F),
-                start = Offset(0f, size.height / 2),
-                end = Offset(104.dp.toPx(), size.height / 2),
-                strokeWidth = size.height,
-            )
+        for (t in settingsTabs(isWindows())) {
+            val on = t == selected
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .background(if (on) NavSelBg else Color.Transparent)
+                    .clickable { onSelect(t) }
+                    .padding(start = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // 青色左条：选中标记（比整行反色轻，与搜狗那类设置页一致）
+                Box(
+                    Modifier.width(3.dp).height(20.dp)
+                        .background(if (on) Teal else Color.Transparent),
+                )
+                Text(
+                    t.label,
+                    modifier = Modifier.padding(start = 11.dp, top = 9.dp, bottom = 9.dp),
+                    fontSize = 14.sp,
+                    fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+                    color = if (on) Teal else Ink,
+                )
+            }
         }
-        Spacer(Modifier.height(4.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("MIT 许可 · 开源", fontSize = 12.sp, color = Muted)
-            // 版权行（2026-10-09 用户裁决「页面增加版权」）。
-            Text("© 2026 erik.xyz", fontSize = 12.sp, color = Muted)
+        Spacer(Modifier.weight(1f))
+        Column(Modifier.fillMaxWidth().padding(start = 17.dp, bottom = 12.dp)) {
+            // OPI_VERSION 是构建时生成的（build.gradle.kts 的 opiAppVersion）——
+            // 此前这里写死过 "1.4.0"，到 1.6.0 就成了假话，单一来源才不会再漂。
+            Text("回归本质、人人可用的多端输入法", fontSize = 10.sp, color = Muted)
+            Text("v$OPI_VERSION · © 2026 erik.xyz", fontSize = 10.sp, color = Muted)
         }
     }
 }

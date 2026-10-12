@@ -165,13 +165,14 @@ fun loadSymbolCategories(
 
 // ---------- 窗口 ----------
 
-private val SymBg = Color(0xFF2D2D2D)
-private val SymFg = Color(0xFFE8E8E8)
-private val SymDim = Color(0xFF9E9E9E)
-private val SymStrip = Color(0xFF3A3A3A)
-private val SymHover = Color(0xFF454545)
-private val SymAccent = Color(0xFF4C8DFF)
-private val SymErr = Color(0xFFFF8A80)
+// internal（不是 private）：EmojiPage.kt 的「表情」页共用同一套色（同一个窗的两页）。
+internal val SymBg = Color(0xFF2D2D2D)
+internal val SymFg = Color(0xFFE8E8E8)
+internal val SymDim = Color(0xFF9E9E9E)
+internal val SymStrip = Color(0xFF3A3A3A)
+internal val SymHover = Color(0xFF454545)
+internal val SymAccent = Color(0xFF4C8DFF)
+internal val SymErr = Color(0xFFFF8A80)
 
 // 大页面（2026-10-12 用户裁决）：520×430 → 820×600；页面本身早就有翻页（HorizontalPager
 // + 左右滑动），放大只是让一页装得下更多（见 PAGE_SIZE）。
@@ -186,17 +187,19 @@ private fun symbolPosition(): WindowPosition {
 }
 
 /**
- * 符号页窗。
+ * 符号页窗（**两页**：符号 / 表情 —— 页选择在右竖条首项，`-1` = 表情）。
  *
  * [onCommit] 返回 null = 已送出去，非 null = **给用户看的**失败原因（页面显示它）。
  * 点完**不收页也不回第 1 页**：连着点几个符号是常态；收页由用户按 ✕（这是本窗自己的
  * 页级状态决策 —— 引擎侧只负责把 text 插到插入点，不管本页停在哪）。
+ * [initialEmoji] = 开窗直接落在表情页（设置里的「表情」入口；状态栏 Ω 仍从符号页开）。
  */
 @Composable
-fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit) {
+fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoji: Boolean = false) {
     // 开窗读一次（同 Android「面板第一次打开时读资产」）；窗口重开才会重读。
     val categories = remember { loadSymbolCategories() }
-    var selected by remember { mutableStateOf(0) }
+    val emoji = remember { loadEmojiData() }
+    var selected by remember { mutableStateOf(if (initialEmoji) TAB_EMOJI else 0) }
     var notice by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(notice) {
         if (notice != null) {
@@ -209,6 +212,7 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit) {
         height = WIN_H.dp,
         position = remember { symbolPosition() },
     )
+    val onEmoji = selected == TAB_EMOJI
     Window(
         onCloseRequest = onClose,
         state = windowState,
@@ -217,7 +221,7 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit) {
         resizable = false,
         // 不抢焦点：上屏要求文档窗口仍持有焦点（没焦点时 TSF 会跳过插入）。
         focusable = false,
-        title = "opi输入法 符号大全",
+        title = if (onEmoji) "opi输入法 表情" else "opi输入法 符号大全",
         icon = OpiPetWindowIcon, // 窗口/任务栏图标 = 小欧（PetIcon.kt）
     ) {
         Column(Modifier.fillMaxSize().background(SymBg)) {
@@ -225,9 +229,15 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 6.dp, top = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("符号大全", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = SymFg)
+                Text(
+                    if (onEmoji) "表情" else "符号大全",
+                    fontSize = 15.sp, fontWeight = FontWeight.Bold, color = SymFg,
+                )
                 Spacer(Modifier.width(10.dp))
-                Text("点符号上屏；左右滑动翻页", fontSize = 11.sp, color = SymDim)
+                Text(
+                    if (onEmoji) "点表情上屏；左右滑动翻页，点分类条跳组" else "点符号上屏；左右滑动翻页",
+                    fontSize = 11.sp, color = SymDim,
+                )
                 Spacer(Modifier.weight(1f))
                 CloseButton(onClose)
             }
@@ -236,33 +246,41 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit) {
                 notice?.let { Text(it, fontSize = 11.sp, color = SymErr, maxLines = 1) }
             }
             Row(Modifier.weight(1f).fillMaxWidth()) {
-                val cat = categories.getOrNull(selected)
-                if (cat == null) {
-                    Box(
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("没有类目数据", fontSize = 14.sp, color = SymDim)
-                    }
+                fun pick(sym: String) {
+                    onCommit(sym)?.let { notice = it }
+                }
+                if (onEmoji) {
+                    EmojiPane(emoji, Modifier.weight(1f).fillMaxHeight(), ::pick)
                 } else {
-                    val pages = (cat.symbols.size + SymbolCategories.PAGE_SIZE - 1) / SymbolCategories.PAGE_SIZE
-                    val pager = rememberPagerState { pages }
-                    // 换类目回第 1 页：否则停在上一个类目的页码上，页数还可能变少而越界。
-                    LaunchedEffect(selected) { pager.scrollToPage(0) }
-                    HorizontalPager(
-                        state = pager,
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                    ) { page ->
-                        SymbolGridPage(cat.symbols, page) { sym ->
-                            onCommit(sym)?.let { notice = it }
+                    val cat = categories.getOrNull(selected)
+                    if (cat == null) {
+                        Box(
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text("没有类目数据", fontSize = 14.sp, color = SymDim)
+                        }
+                    } else {
+                        val pages = (cat.symbols.size + SymbolCategories.PAGE_SIZE - 1) / SymbolCategories.PAGE_SIZE
+                        val pager = rememberPagerState { pages }
+                        // 换类目回第 1 页：否则停在上一个类目的页码上，页数还可能变少而越界。
+                        LaunchedEffect(selected) { pager.scrollToPage(0) }
+                        HorizontalPager(
+                            state = pager,
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                        ) { page ->
+                            SymbolGridPage(cat.symbols, page, onPick = ::pick)
                         }
                     }
                 }
-                CategoryStrip(categories, selected) { selected = it }
+                CategoryStrip(categories, selected, onEmoji) { selected = it }
             }
         }
     }
 }
+
+/** 右竖条的「表情」项 = 特殊下标（`.tsv` 类目从 0 起）。 */
+private const val TAB_EMOJI = -1
 
 /** ✕ 关闭（自绘窗没有系统标题栏，关闭入口得自己给）。 */
 @Composable
@@ -282,11 +300,14 @@ private fun CloseButton(onClose: () -> Unit) {
 }
 
 /**
- * 一页符号网格：8 列 × 4 行。单字符 20sp、多字符 token（网络表情等）收到 13sp 并允许
- * 省略号。末行/末页补空格子 —— 网格高度稳定，翻页不跳。
+ * 一页符号网格：12 列 × 6 行（`PAGE_SIZE/COLUMNS`）。单字符 20sp、多字符 token（网络
+ * 表情等）收到 13sp 并允许省略号。末行/末页补空格子 —— 网格高度稳定，翻页不跳。
+ *
+ * [emoji] = 表情页：emoji 基本是代理对（UTF-16 长度 2），按「多字符」那档会被缩到 13sp；
+ * 表情页改用**单档大字**（组内还会有 👨👩👧 这种多码位序列，统一 22sp 最稳）。
  */
 @Composable
-private fun SymbolGridPage(all: List<String>, page: Int, onPick: (String) -> Unit) {
+internal fun SymbolGridPage(all: List<String>, page: Int, emoji: Boolean = false, onPick: (String) -> Unit) {
     val start = page * SymbolCategories.PAGE_SIZE
     val cells = all.subList(start, minOf(start + SymbolCategories.PAGE_SIZE, all.size))
     val cols = SymbolCategories.COLUMNS
@@ -295,14 +316,14 @@ private fun SymbolGridPage(all: List<String>, page: Int, onPick: (String) -> Uni
             Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 for (i in rowStart until minOf(rowStart + cols, cells.size)) {
                     val s = cells[i]
-                    SymbolCell(s, Modifier.weight(1f)) { onPick(s) }
+                    SymbolCell(s, Modifier.weight(1f), emoji) { onPick(s) }
                 }
                 for (i in minOf(rowStart + cols, cells.size) until rowStart + cols) {
                     Box(Modifier.weight(1f))
                 }
             }
         }
-        // 末页不足 4 行时补空行（高度稳定）
+        // 末页不足 6 行时补空行（高度稳定）
         for (r in (cells.size + cols - 1) / cols until SymbolCategories.PAGE_SIZE / cols) {
             Row(modifier = Modifier.weight(1f).fillMaxWidth()) {}
         }
@@ -310,7 +331,7 @@ private fun SymbolGridPage(all: List<String>, page: Int, onPick: (String) -> Uni
 }
 
 @Composable
-private fun SymbolCell(sym: String, modifier: Modifier, onPick: () -> Unit) {
+private fun SymbolCell(sym: String, modifier: Modifier, emoji: Boolean, onPick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     Box(
@@ -319,12 +340,16 @@ private fun SymbolCell(sym: String, modifier: Modifier, onPick: () -> Unit) {
             .padding(1.dp)
             .background(if (hovered) SymHover else Color.Transparent)
             .clickable(interactionSource = interaction, indication = null, onClick = onPick)
-            .semantics { contentDescription = "符号 $sym" },
+            .semantics { contentDescription = if (emoji) "表情 $sym" else "符号 $sym" },
         contentAlignment = Alignment.Center,
     ) {
         Text(
             sym,
-            fontSize = if (sym.length > 1) 13.sp else 20.sp,
+            fontSize = when {
+                emoji -> 22.sp
+                sym.length > 1 -> 13.sp
+                else -> 20.sp
+            },
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             color = SymFg,
@@ -332,11 +357,12 @@ private fun SymbolCell(sym: String, modifier: Modifier, onPick: () -> Unit) {
     }
 }
 
-/** 右：类目条（`序号.名称`，可竖滑；选中 = 强调色粗体）。 */
+/** 右：类目条（首项 = 「表情」页，其余 `序号.名称`；可竖滑；选中 = 强调色粗体）。 */
 @Composable
 private fun CategoryStrip(
     categories: List<SymbolCategories.Category>,
     selected: Int,
+    emojiSelected: Boolean,
     onSelect: (Int) -> Unit,
 ) {
     Column(
@@ -344,6 +370,7 @@ private fun CategoryStrip(
             .background(SymStrip)
             .verticalScroll(rememberScrollState()),
     ) {
+        EmojiStripEntry(emojiSelected) { onSelect(TAB_EMOJI) }
         for ((i, c) in categories.withIndex()) {
             val on = i == selected
             Text(

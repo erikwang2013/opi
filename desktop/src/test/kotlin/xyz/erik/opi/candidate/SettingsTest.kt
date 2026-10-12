@@ -19,7 +19,9 @@ class SettingsTest {
 
     @Test
     fun `round trip keeps every switch`() {
-        val s = OpSettings(learn = false, chinesePunct = true, fuzzy = false, jianpin = true)
+        val s = OpSettings(
+            learn = false, chinesePunct = true, fuzzy = false, jianpin = true, shiftToggle = false,
+        )
         assertEquals(s, OpSettings.fromIni(s.toIni()))
     }
 
@@ -37,7 +39,7 @@ class SettingsTest {
         val ini = OpSettings().toIni()
         for (line in listOf(
             "Learn=True", "ChinesePunct=True", "Fuzzy=True", "Jianpin=True",
-            "Skin=不改动",
+            "ShiftToggle=True", "Skin=不改动",
         )) {
             assertTrue("缺少键行：$line\n$ini", ini.contains("$line\n"))
         }
@@ -52,39 +54,41 @@ class SettingsTest {
 
     @Test
     fun `merge keeps unknown keys and comments`() {
-        // 2026-10-09 起保存走 mergeIni：本窗**不管**的键（ShiftToggle 等由配置面/
-        // 状态项管的选项）与手写注释**不能被本窗抹掉** —— 此前是整文件重写，抹一次
-        // 就是「设置窗保存后 Shift 切换静默失效」。
-        // ⚠️ Skin 从这轮起是**管理键**（本窗有皮肤选择器了），故不再属于此列 ——
-        // 它由 loadSettings 先读进来、原值写回去（见 `merge rewrites skin`）。
+        // 2026-10-09 起保存走 mergeIni：本窗**不管**的键与手写注释**不能被本窗抹掉**
+        // —— 此前是整文件重写，抹一次就是「设置窗保存后那个选项静默失效」。
+        // ⚠️ 例子用 `DisplayName`（fcitx5 配置面的字段，本窗不管理）。**别再拿
+        // ShiftToggle/Skin 举例**：两个都已是管理键（2026-10-12 起 ShiftToggle 有开关行；
+        // 详见 `shift toggle round-trips`）—— 拿管理键当「未知键」的样本，这条用例
+        // 测的就是另一回事了。
         val existing = """
             # 手写的注释
             Learn=True
-            ShiftToggle=False
+            DisplayName=OPI
             # 保底
         """.trimIndent() + "\n"
         val merged = mergeIni(existing, OpSettings(learn = false))
         // JUnit4 的两个参数是 (message, condition) —— 与 Kotlin 测试框架的习惯相反，
         // 写反了是**编译错**（Boolean 塞不进 String 位），实测抓过。
         assertTrue(merged, merged.contains("# 手写的注释\n"))
-        assertTrue(merged, merged.contains("ShiftToggle=False\n"))
+        assertTrue(merged, merged.contains("DisplayName=OPI\n"))
         assertTrue(merged, merged.contains("Learn=False\n"))
         assertFalse(merged, merged.contains("Learn=True"))
         // 没出现过的管理键要补齐（旧文件里缺键 = 用默认值写回去）
         assertTrue(merged, merged.contains("ChinesePunct=True\n"))
         assertTrue(merged, merged.contains("Skin=不改动\n"))
+        assertTrue(merged, merged.contains("ShiftToggle=True\n"))
     }
 
     @Test
     fun `merge rewrites skin and preserves other unknowns`() {
-        val existing = "# 手写的注释\nSkin=深色\nShiftToggle=False\n"
+        val existing = "# 手写的注释\nSkin=深色\nDisplayName=OPI\n"
         // 真流程是「先 loadSettings（把 Skin=深色 读进来）再保存」——这里模拟的
         // 正是那一步：读到的值原样写回，别的键一个不动。
         val loaded = OpSettings.fromIni(existing)
         assertEquals(SkinOption.DARK, loaded.skin)
         val merged = mergeIni(existing, loaded.copy(learn = false))
         assertTrue(merged, merged.contains("Skin=深色\n"))
-        assertTrue(merged, merged.contains("ShiftToggle=False\n"))
+        assertTrue(merged, merged.contains("DisplayName=OPI\n"))
         assertTrue(merged, merged.contains("Learn=False\n"))
         assertEquals(loaded.copy(learn = false), OpSettings.fromIni(merged))
     }
@@ -360,10 +364,44 @@ class SettingsTest {
     fun `merge still keeps unknown keys next to the statusbar block`() {
         // 旧值写 True（新默认是 False，2026-10-10 中午翻的）——「旧值被换成新值」这件
         // 事才看得出来；两边同值时断言会退化成恒真（与上一条测试同一份教训）。
-        val merged = mergeIni("# 手写\nShiftToggle=True\nStatusBarVk=True\n", OpSettings())
-        assertTrue(merged, merged.contains("ShiftToggle=True\n"))
+        // ⚠️ 未知键的样本用 `DisplayName`（不再用 ShiftToggle：2026-10-12 起它是管理键，
+        // 再拿它当样本这条会测成「管理键被重写」，与用例名不是一回事）。
+        val merged = mergeIni("# 手写\nDisplayName=OPI\nStatusBarVk=True\n", OpSettings())
+        assertTrue(merged, merged.contains("DisplayName=OPI\n"))
         assertTrue(merged, merged.contains("# 手写\n"))
         assertTrue(merged, merged.contains("StatusBarVk=False\n"))
         assertFalse(merged, merged.contains("StatusBarVk=True\n"))
+    }
+
+    @Test
+    fun `tabs follow the platform's real knobs`() {
+        // 2026-10-12（用户裁决「布局和功能参考搜狗输入法」）：左导航的页集合是纯函数，
+        // 按平台过滤 —— 少了这个判据，Windows 上会出两页点不动的开关。
+        assertEquals(
+            listOf(
+                SettingsTab.COMMON, SettingsTab.KEYS, SettingsTab.APPEARANCE,
+                SettingsTab.STATUSBAR, SettingsTab.SYMBOLS, SettingsTab.ABOUT,
+            ),
+            settingsTabs(windows = false),
+        )
+        // Windows：按键（ShiftToggle 只有 Linux 读侧认）与外观（Skin 是 fcitx5 主题）不出。
+        assertEquals(
+            listOf(SettingsTab.COMMON, SettingsTab.STATUSBAR, SettingsTab.SYMBOLS, SettingsTab.ABOUT),
+            settingsTabs(windows = true),
+        )
+    }
+
+    @Test
+    fun `shift toggle round-trips and is a managed key`() {
+        // 2026-10-12 加：Linux 读侧（opi_config.h 的 ShiftToggle）本来就在，本窗此前
+        // 只是「不认识」它。三条：写得出、读得回、保存时**跟着内存值走**（管理键语义）。
+        assertTrue(OpSettings(shiftToggle = false).toIni().contains("ShiftToggle=False\n"))
+        assertEquals(false, OpSettings.fromIni("ShiftToggle=False\n").shiftToggle)
+        assertEquals(true, OpSettings.fromIni("ShiftToggle=yes\n").shiftToggle) // 宽容读
+        val merged = mergeIni("ShiftToggle=True\n", OpSettings(shiftToggle = false))
+        assertTrue(merged, merged.contains("ShiftToggle=False\n"))
+        assertFalse(merged, merged.contains("ShiftToggle=True\n"))
+        // 缺键 → 默认 true（引擎既有行为：Shift 轻按本来就开着）
+        assertEquals(OpSettings(), OpSettings.fromIni("Learn=True\n"))
     }
 }

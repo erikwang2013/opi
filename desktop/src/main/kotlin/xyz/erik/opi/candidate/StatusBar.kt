@@ -268,7 +268,8 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
     if (settingsOpen) {
         Window(
             onCloseRequest = { settingsOpen = false },
-            state = rememberWindowState(width = 460.dp, height = 600.dp),
+            // 与 `--settings` 模式同一个尺寸（800×560，2026-10-12 左导航布局起）
+            state = rememberWindowState(width = 800.dp, height = 560.dp),
             title = "opi输入法 设置",
             icon = OpiPetWindowIcon,
         ) {

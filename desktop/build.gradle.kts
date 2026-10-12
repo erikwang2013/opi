@@ -74,6 +74,29 @@ val generateOpiVersionSource by tasks.registering {
 // srcDir(taskProvider) = 「用这个任务的输出目录、并自动接上依赖」（Gradle 的既有语义）。
 kotlin.sourceSets["main"].kotlin.srcDir(generateOpiVersionSource)
 
+// ---------- 表情数据（2026-10-12）----------
+//
+// 桌面符号页的「表情」页要**全量** emoji —— 与引擎 `builtin_emoji_texts()` 同一份表。
+// 真源 = `data/raw/emoji.tsv`（`scripts/gen_symbols.py` 生成；引擎侧 `include_str!`
+// 编进 .so，桌面是 JVM 进程读不到那一份）⇒ **构建期原样拷进资源**。
+// ⚠️ 这不是「第二份入库副本」：复制发生在每次构建，盘上没有可漂的第二份（对照
+// `crates/fcitx5-opi/data/symbol_categories.tsv` 那种真·双输出 —— 那个要 CI 逐字节比，
+// 本文件不需要、也不该有那种比对）。运行期按 classpath 资源读，两端同一条路。
+// 源文件不在 = **响亮地死**（与 CMakeLists 对 luna/符号类目源的 FATAL 同姿态）：
+// 少装的表情页只会表现为「打开是空的」，没有人会去查构建配置。
+val copyEmojiData by tasks.registering(Copy::class) {
+    val src = file("../data/raw/emoji.tsv")
+    doFirst {
+        check(src.isFile) {
+            "找不到表情数据源: ${src.path}\n" +
+                "生成一份：python3 scripts/gen_symbols.py（写入 data/raw/emoji.tsv）"
+        }
+    }
+    from(src)
+    into(layout.buildDirectory.dir("generated/opiResources"))
+}
+sourceSets["main"].resources.srcDir(copyEmojiData)
+
 // 共享源码：小欧的 Compose 绘制只有一份（shared/pet），与 android/app 同一份几何
 // （candidate_io.rs 的线协议注释也是同样的「改协议须同步两处」约定）。
 sourceSets["main"].kotlin.srcDir("../shared/pet")

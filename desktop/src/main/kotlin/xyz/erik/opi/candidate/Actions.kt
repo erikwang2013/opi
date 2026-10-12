@@ -91,6 +91,22 @@ fun runExternal(cmd: List<String>, timeoutMs: Long = 3000): String? {
     }
 }
 
+/**
+ * 符号页/表情页的上屏（**两个宿主共用**：状态栏进程与设置窗）。
+ * 返回 null = 送上去了；非 null = 给用户看的失败原因（页面原样显示）。
+ *
+ * · Linux：`opi-ctl insert <文本>`（D-Bus → addon 的 `ic->commitString`）—— 只要
+ *   fcitx5 里有焦点输入框就能上屏，与进程拓扑无关；失败短语来自 [runExternal]，逐字有用。
+ * · Windows：只能如实失败 —— 命名管道被**候选窗进程**持有（单实例）。lead 裁决
+ *   （2026-10-10）：本轮不开第二条 UI→TSF 通路（TSF 插入面未接线）。见 SymbolsPage.kt 头注。
+ *
+ * ⚠️ 两个宿主（状态栏、设置窗）**必须走这一条**：各写一份平台分支必然漂（此前
+ * StatusBarApp 的调用方把 false 翻成写死的 Windows 解释，Linux 上的真实原因被顶掉了）。
+ */
+fun desktopSymbolCommit(text: String): String? =
+    if (isWindows()) "上屏失败：没连上输入法（符号页要由候选窗进程上屏）"
+    else runExternal(listOf("opi-ctl", "insert", text))
+
 // ---------- 输入法状态 ----------
 
 /**
