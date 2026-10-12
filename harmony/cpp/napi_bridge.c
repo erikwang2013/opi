@@ -351,6 +351,41 @@ static napi_value JsToggleSymbol(napi_env env, napi_callback_info info) {
     return take_string(env, opi_toggle_symbol());
 }
 
+// ---- 表情 / 符号数据面（2026-10-13：喂键盘面板刚补的表情页）----
+
+/// emojiSymbols(): string —— JSON 文本数组：表情**浏览全量**（官方 UTS#51 分组序）。
+///
+/// ⚠️ **本出口不经引擎单例**（编译期静态表）：`opi_load` 没调过/失败时它**照样返回
+/// 全量**，所以 ArkTS 侧「空数组」只意味着真出错，别读成「引擎没起来」——
+/// 这与 `candidatesPage` 的空语义**相反**（`cabi_symbols.rs` 顶部有同一条注记）。
+/// `emojiGroups()` 的 start/count 就是本数组的下标。
+static napi_value JsEmojiSymbols(napi_env env, napi_callback_info info) {
+    (void)info;
+    return take_string(env, opi_emoji_symbols());
+}
+
+/// emojiGroups(): string —— JSON `[{name,start,count}]`（serde **字典序**，未开
+/// preserve_order ⇒ 消费方别按书写顺序写正则）。分类条：点一项 = 取 `[start, start+count)`。
+static napi_value JsEmojiGroups(napi_env env, napi_callback_info info) {
+    (void)info;
+    return take_string(env, opi_emoji_groups());
+}
+
+/// searchSymbols(keyword: string): string —— JSON 文本数组：符号搜索。
+///
+/// ⚠️ 返回的是**符号表**里匹配的条目，**不是表情集** —— 表情页要用得自己与
+/// `emojiSymbols()` 求交（判据在 ArkTS 侧，与 Android `SymbolCatalog.isEmoji` 同一件事）。
+/// ⚠️ 这条**走引擎单例**：未装载 → `[]`（与上面两条的空语义相反，别混为一谈）。
+static napi_value JsSearchSymbols(napi_env env, napi_callback_info info) {
+    napi_value argv[1];
+    size_t argc = get_args(env, info, argv, 1);
+    size_t len = 0;
+    char16_t *kw = (argc >= 1) ? js_to_utf16(env, argv[0], &len) : NULL;
+    OpiString s = opi_search_symbols((const uint16_t *)kw, len);
+    free(kw);  // Rust 侧已拷成 String，不留引用
+    return take_string(env, s);
+}
+
 // ============================================================================
 // 模块注册
 // ============================================================================
@@ -375,6 +410,9 @@ static napi_value OpiImeInit(napi_env env, napi_value exports) {
         {"toggleFullwidth", NULL, JsToggleFullwidth, NULL, NULL, NULL, napi_default, NULL},
         {"fullwidthState", NULL, JsFullwidthState, NULL, NULL, NULL, napi_default, NULL},
         {"toggleSymbol", NULL, JsToggleSymbol, NULL, NULL, NULL, napi_default, NULL},
+        {"emojiSymbols", NULL, JsEmojiSymbols, NULL, NULL, NULL, napi_default, NULL},
+        {"emojiGroups", NULL, JsEmojiGroups, NULL, NULL, NULL, napi_default, NULL},
+        {"searchSymbols", NULL, JsSearchSymbols, NULL, NULL, NULL, napi_default, NULL},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
     return exports;

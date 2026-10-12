@@ -97,3 +97,24 @@ export const fullwidthState: () => boolean;
  * 拿不到「插入文本」通道的端不要调它。
  */
 export const toggleSymbol: () => string;
+
+/**
+ * JSON 文本数组：表情面板的**浏览全量**（官方 UTS#51 分组序，含旗帜/家庭等多码位序列）。
+ * ⚠️ **空语义与 `candidatesPage` 不同**：本出口**不经引擎单例**（编译期静态表），
+ * 未 `load` 时**照样返回全量** —— 空数组只意味着真出错。`emojiGroups` 的 start/count
+ * 就是本数组的下标。
+ */
+export const emojiSymbols: () => string;
+
+/**
+ * JSON `[{name,start,count}]`：表情分类条。⚠️ serde **字典序**（未开 preserve_order），
+ * 别按书写顺序写正则。同上不经引擎单例，未装载也有值。
+ */
+export const emojiGroups: () => string;
+
+/**
+ * JSON 文本数组：符号搜索（关键词 → 符号表里匹配的条目）。
+ * ⚠️ 返回的是**符号表**条目、**不是表情集** —— 表情页要用得自己与 `emojiSymbols` 求交。
+ * ⚠️ 这条**走引擎单例**：未装载 → `[]`（与上面两条的空语义**相反**，别混）。
+ */
+export const searchSymbols: (keyword: string) => string;

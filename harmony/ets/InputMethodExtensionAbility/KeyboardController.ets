@@ -18,7 +18,7 @@
 import { inputMethodEngine, InputMethodExtensionContext } from '@kit.IMEKit';
 import { display } from '@kit.ArkUI';
 import * as OpiEngine from './OpiEngine';
-import { KeyResult, OpiAction, OpiMode, OpiShift } from './OpiEngine';
+import { EmojiGroup, KeyResult, OpiAction, OpiMode, OpiShift } from './OpiEngine';
 
 /** 键盘占屏高的比例。凭感觉定的，真机上要按候选栏行数调。 */
 const PANEL_HEIGHT_RATIO: number = 0.42;
@@ -322,6 +322,92 @@ export class KeyboardController {
   /** 当前 ⇧ 是否点亮（供按键高亮 + 送进 states）。 */
   private shiftStates(): number {
     return OpiEngine.shiftState() === OpiShift.Off ? 0 : OpiEngine.STATE_SHIFT;
+  }
+
+  // -------------------------------------------------------------- 表情页（2026-10-13）
+
+  private emojiCache: string[] | null = null;
+  private emojiSetCache: Set<string> | null = null;
+  private emojiGroupsCache: EmojiGroup[] | null = null;
+
+  /**
+   * 表情浏览全量（官方分组序），懒取一次并缓存。
+   *
+   * ⚠️ **空结果不写进缓存** —— 与 Android `SymbolCatalog` 同一条纪律：空 = 「没拿到」，
+   * 不是「真的没有」；缓存了就会**永远空到下次重启**。（这条出口不经引擎单例，正常
+   * 冷启动第一帧就有；这里防的是模块没起来 / JSON 解码失败那一瞬。）
+   */
+  emojiSymbols(): string[] {
+    if (this.emojiCache === null) {
+      const list: string[] = OpiEngine.emojiSymbols();
+      if (list.length > 0) {
+        this.emojiCache = list;
+      }
+      return list;
+    }
+    return this.emojiCache;
+  }
+
+  /** 表情分组（分类条）。缓存纪律同 [emojiSymbols]。 */
+  emojiGroups(): EmojiGroup[] {
+    if (this.emojiGroupsCache === null) {
+      const groups: EmojiGroup[] = OpiEngine.emojiGroups();
+      if (groups.length > 0) {
+        this.emojiGroupsCache = groups;
+      }
+      return groups;
+    }
+    return this.emojiGroupsCache;
+  }
+
+  /**
+   * 表情页搜索：**引擎搜索 ∩ 表情集**。
+   *
+   * 求交的理由：`searchSymbols` 查的是**符号表**（含箭头、数学符号等非表情条目），
+   * 而这一页是表情页 —— 与 Android 的 `results.filter(catalog::isEmoji)` 同一件事。
+   * ⚠️ **每次输入都打一次引擎**（本端不缓存中间结果）：开销主要在 JSON 解码。真机上若
+   * 发现打字卡，照 Android 的做法**按 query 缓存**（那边是 `remember(searchQuery)`）。
+   */
+  searchEmoji(q: string): string[] {
+    const all: string[] = OpiEngine.searchSymbols(q);
+    if (all.length === 0) {
+      return [];
+    }
+    if (this.emojiSetCache === null) {
+      // ⚠️ 未编译：`Set<string>` 在 ArkTS 里的可用性（与 Index.ets 的 `Array.from` 同一族，
+      // 见 README 的 U23）；备选 = 每次线性扫表情全量（O(n) 换 O(1)，n≈4000，会明显变慢）。
+      const set: Set<string> = new Set<string>();
+      const emojis: string[] = this.emojiSymbols();
+      for (let i = 0; i < emojis.length; i++) {
+        set.add(emojis[i]);
+      }
+      // 表情集为空**不写缓存**（同上纪律：空 = 没拿到），下次重试。
+      if (set.size > 0) {
+        this.emojiSetCache = set;
+      }
+    }
+    if (this.emojiSetCache === null) {
+      // 表情集没拿到 ⇒ 交集为空。**别退化成「把非表情也搜出来」**。
+      return [];
+    }
+    const out: string[] = [];
+    for (let i = 0; i < all.length; i++) {
+      if (this.emojiSetCache.has(all[i])) {
+        out.push(all[i]);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * 点一个表情：**直提**（`insertText`），**不过引擎** —— 与 Android
+   * （`ImeScreen.kt` 的 `onCommit = router::commitText`）同一条纪律：引擎的标点表会把
+   * `,` 改写成中文标点，而表情页点的是什么就该出什么。
+   * ⚠️ **整串送**（旗帜/家庭是多码位序列）：不要拆成按键走 `pressKey`，那既不是它认识的
+   * 样子，也会被当成多个键。
+   */
+  tapEmoji(text: string): void {
+    this.insertText(text);
   }
 
   // -------------------------------------------------------------- 状态推送

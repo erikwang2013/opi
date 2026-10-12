@@ -330,3 +330,95 @@ export function charKeyval(ch: string): number {
 export function charFromKeyval(keyval: number): string {
   return String.fromCharCode(keyval);
 }
+
+// ---------------------------------------------------------------- 表情 / 符号数据面
+//
+// 2026-10-13 新增：喂键盘面板的表情页（Symbol 模式）。这几条**不是候选** —— 表情页
+// 点一格是**直接上屏**（`KeyboardController.tapEmoji`），不过引擎的标点表。
+// 与 JNI 面（`jni_symbols.rs`）同名同源，都走 `api::` 的同一份实现（同一份引擎）。
+//
+// ⚠️ **未编译**：下面三条 `opiime.*` 是 N-API 注册表上新加的导出，**名字必须与
+// `cpp/types/libopiime/index.d.ts` 逐条对齐**（对不上 = 运行期 `xxx is not a function`；
+// 核对命令在 `cpp/napi_bridge.c` 的「模块导出」那段）。
+// 备选写法（真机上若某条不存在）：`searchSymbols` 退化成**本地子串过滤**表情全量
+// （弱得多：引擎那套是拼音/英文索引，本端只匹配字面）；`emojiSymbols`/`emojiGroups`
+// 没有等价备选 —— 面板就只剩空态（那说明 .so 没重新编，先查构建产物而不是改这里）。
+
+/** 表情分组的一项。`start`/`count` 是 [emojiSymbols] 的**下标与条数**（点分组 = 取这截）。 */
+export interface EmojiGroup {
+  name: string;
+  start: number;
+  count: number;
+}
+
+/**
+ * 表情**浏览**全量（官方 UTS#51 分组序，含旗帜/家庭等多码位序列）。
+ *
+ * ⚠️ **空语义与 `candidatesPage` 不同**：这条出口**不经引擎单例**（编译期静态表），
+ * `loadDictionary` 失败或还没调时**照样返回全量** —— 冷启动第一帧就能画。
+ * 所以空数组只意味着**真出错**，别读成「引擎没起来」。
+ */
+export function emojiSymbols(): string[] {
+  const raw: string = opiime.emojiSymbols();
+  if (raw.length === 0) {
+    return [];
+  }
+  try {
+    return JSON.parse(raw) as string[];
+  } catch (e) {
+    return [];
+  }
+}
+
+/**
+ * 表情分组（分类条）。JSON `[{name,start,count}]`（serde **字典序**，别按书写顺序猜）。
+ * 与 `emojiSymbols()` 同源、同「未装载不退化」姿态；`[start, start+count)` 连续覆盖
+ * 全表由引擎门禁保证（`emoji_groups_cover_the_table_contiguously`）。
+ */
+export function emojiGroups(): EmojiGroup[] {
+  const raw: string = opiime.emojiGroups();
+  if (raw.length === 0) {
+    return [];
+  }
+  let parsed: EmojiGroup[];
+  try {
+    parsed = JSON.parse(raw) as EmojiGroup[];
+  } catch (e) {
+    return [];
+  }
+  // ⚠️ 逐条**校验**、坏的跳过（别整批丢）：版本错位时才可能出现，让一条坏数据吃掉整条
+  // 分类条不值。start/count 为负会让 UI 切出空网格，一并挡掉。
+  const out: EmojiGroup[] = [];
+  for (let i = 0; i < parsed.length; i++) {
+    const it: EmojiGroup = parsed[i];
+    if (typeof it.name === 'string' && typeof it.start === 'number' && it.start >= 0
+      && typeof it.count === 'number' && it.count >= 0) {
+      out.push(it);
+    }
+  }
+  return out;
+}
+
+/**
+ * 符号搜索（拼音/英文关键词 → 符号文本 JSON 数组，**引擎未装载 → `[]`**）。
+ *
+ * ⚠️ 返回的是**符号表**里匹配的全部条目，**不是表情集** —— 表情页要用它得自己与
+ * `emojiSymbols()` 求交（Android `SymbolPanel` 的 `results.filter(catalog::isEmoji)`
+ * 是同一件事，本端在 `KeyboardController.searchEmoji` 里做）。
+ *
+ * ⚠️ **空关键字 = 全表**（不是错误）：`NULL` / `len=0` / **非法 UTF-16** 三者同解
+ * （`opi-ffi/tests/cabi_boundary.rs::search_symbols_null_and_broken_utf16_mean_empty_keyword`
+ * 钉的是这条等价关系）。本端搜索框只在 `emojiQuery.length > 0` 时调这里 ⇒
+ * 空输入走的是分组切片、**不经过这条出口**（别顺手改成「先清空再搜」）。
+ */
+export function searchSymbols(keyword: string): string[] {
+  const raw: string = opiime.searchSymbols(keyword);
+  if (raw.length === 0) {
+    return [];
+  }
+  try {
+    return JSON.parse(raw) as string[];
+  } catch (e) {
+    return [];
+  }
+}

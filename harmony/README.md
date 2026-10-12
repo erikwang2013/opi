@@ -21,6 +21,10 @@
 > 如实报出故意塞进去的语法错误 —— 但**注意退出码陷阱**：有缺陷时 EXIT 仍是 0，
 > 布局不对时它**照样印** `No defects found`，判据只能是文本 + `checkedFiles` 里真有你的文件）。
 > ⚠️ **「乃至被构建」没有任何证据** —— `hvigorw` / assembleHap 本机没测，别从这句推断。
+> **2026-10-13 补**：这条本轮**真用上了** —— 按上面那份最小布局搭的探针工程跑过 `codelinter`，
+> `ets/**` 全量 5 个文件（sha256 与仓库定稿逐文件相同）**零 parse 错**，且先跑了**两个正控**
+> 证明它有分辨力（原样输出 + 三个坑见 **§5e ⑥**）。措辞照旧卡死：**它只到解析层** ——
+> 无类型检查、无装饰器语义、连类型错都放过 ⇒ 本节第一句「一个字符都没有编译过」**仍然成立**。
 > **最小工程布局、两道墙（模块级 `build-profile.json5`、模块根下再一层 `src/`）、
 > 正控与负控，全写在 [`docs/install/harmony.md`](../docs/install/harmony.md) 的 §1.1**
 > —— **本行不复述那份清单**：它是一份实测的最小布局，抄到这里就多一份会漂的枚举。
@@ -110,8 +114,12 @@
   → 第一件该验证的事：**打 `ni`，看候选栏出不出字**
     （词库现在是内置回退库，见下方「已知缺口」，词少但够验证通路）。
 
-第 5 步之后才是：补符号面板、补用户词持久化、补 rawfile 完整词库、
+第 5 步之后才是：补用户词持久化、补 rawfile 完整词库、
   补子类型切换（setSubtype）、调键盘高度。
+  ⚠️ **2026-10-13 订正**：上面原文里的「补符号面板」**只完成了一半** ——
+  Symbol 模式换成了**表情页**（分组条 + 网格 + 搜索框，见下方 §5e），
+  但**符号面板本身仍是缺的**（`opi_symbol_blocks` / `opi_symbols_in_block`
+  未桥，原来那 29 个 ASCII 符号也不再一键可达）。原文不改，留痕。
 ```
 
 **不要跳过第 1 步去「顺手重构一下分层」。** 这份代码的分层是按
@@ -131,10 +139,10 @@
 | `cpp/types/libopiime/index.d.ts` | `libopiime.so` 的 ArkTS 类型声明，与 bridge 的 `desc[]` **机械核对一致**（名字一一对应；两边都不写条数） |
 | `cpp/types/libopiime/oh-package.json5` | 把 `libopiime.so` 映射到上面的 `.d.ts` |
 | `ets/InputMethodExtensionAbility/InputMethodService.ets` | `InputMethodExtensionAbility` 入口。**故意只做转发**，零逻辑 |
-| `ets/InputMethodExtensionAbility/KeyboardController.ets` | 输入法会话唯一持有者：开面板、拿 `InputClient`、按键按 `action` 分派、状态推给 UI |
-| `ets/InputMethodExtensionAbility/OpiEngine.ets` | C ABI 薄桥：枚举、**键码常量唯一定义处**、JSON 候选解码 |
+| `ets/InputMethodExtensionAbility/KeyboardController.ets` | 输入法会话唯一持有者：开面板、拿 `InputClient`、按键按 `action` 分派、状态推给 UI；表情数据的**缓存与去重**也在这（`emojiSymbols`/`emojiGroups`/`searchEmoji`） |
+| `ets/InputMethodExtensionAbility/OpiEngine.ets` | C ABI 薄桥：枚举、**键码常量唯一定义处**、JSON 候选解码；表情数据三条（`emojiSymbols`/`emojiGroups`/`searchSymbols`）在文件末尾 |
 | `ets/InputMethodExtensionAbility/OpiPet.ets` | 项目宠物「小欧」的 ArkTS 复刻（键帽精灵，表情跟引擎状态走） |
-| `ets/InputMethodExtensionAbility/pages/Index.ets` | 键盘 UI 最小骨架：候选栏（候选带页内序号）+ preedit + 三行 QWERTY + 功能行 |
+| `ets/InputMethodExtensionAbility/pages/Index.ets` | 键盘 UI 最小骨架：候选栏（候选带页内序号）+ preedit + 三行 QWERTY + 功能行；**Symbol 模式整片是表情页**（`EmojiPage`，2026-10-13） |
 | `module.json5` | `extensionAbilities` 配置**片段**（不是能直接用的完整 manifest） |
 | `resources/base/profile/input_method_config.json` | 输入法子类型配置 |
 
@@ -435,6 +443,23 @@ $ comm -23 \
 > 它们是同日新加的导出。所以「未桥数」**那次是巧合相等**，不是不变量 ——
 > 这正是上面把清单换成 `comm` 命令的原因（写死的清单会把「巧合」固化成「事实」）。
 
+> **订正注记（2026-10-13，表情页接线）**：本节标题的 19/19 是**写下当时**的数。
+> 本轮桥里加了 3 条 `opi_*` 调用（`opi_emoji_symbols` / `opi_emoji_groups` /
+> `opi_search_symbols`），**且这回第一次从「未桥清单」里真的拿走了一条** ——
+> `opi_search_symbols` 原先正是缺口 3 点名的那一条（`opi_symbol_blocks` /
+> `opi_symbols_in_block` 仍未桥）。实测输出与红/绿判据见 **§5e**，原文不改，留痕。
+>
+> ⚠️ 本轮还撞上了本节那条规矩的一个实例：**新声明必须与桥里的真调用同一批落地**。
+> 那三条声明在 `cpp/opi_ffi.h`（**cabi 名下、本端不改**），本轮由 cabi 补 ——
+> 在他落地之前，桥里的调用会让 `clang -fsyntax-only` 报 `implicit-function-declaration`
+> （**三处，正好对应三条声明**）。这个红的成因是**跨文件的先后**，不是 C 面写错了，
+> 别照着报错去改桥。
+>
+> **收尾（2026-10-13 02:33）**：cabi 已落（他补在「符号 / 表情」那段，三行与 `macos/OpiFFI.h`
+> 逐字相同）。中间两边**撞过一次**（文件里一度两份同名声明，已去掉多余的那份）。
+> 去重后：`clang` 对真头 **exit=0**、双向 `comm` **两侧皆空**、`c_abi_contract` **14/14**。
+> 逐条讨论在原样输出里 —— 见 **§5e** 的 ③/④/⑤ 三段。
+
 **2026-09-27 补：签名也核过了（不只是名字）。** 上一条保留写的是「签名没有核对」——
 现在每一条都逐条对过 `cabi.rs`：参数类型、返回值、`#[repr(C)]` 结构体字段顺序全部一致
 （下表含同日新加的三条）：
@@ -477,6 +502,11 @@ OHOS 链接器，本机没有）。
 > 两者数量不相等是正常的，不是漂移 —— C 侧含 `opi_ffi_free_string` 这种没有 JS 描述符的
 > 辅助出口，且一个 `JsXxx` 也可能调多个 `opi_*`。同一句提醒也写在
 > `napi_bridge.c` 顶部（那段还给了 `diff` 的跑法，且**两边都不写条数**）。
+
+> **订正注记（2026-10-13，表情页接线）**：本节原文写的是 18/18 —— 那是**写下当时**的数。
+> 本轮桥里加了 3 条（`emojiSymbols` / `emojiGroups` / `searchSymbols`，见 §5e），
+> 实测 §标题那个数已经过期；**确数不写在这里**（它随出口增删而漂），跑下面第一条 `diff`：
+> 2026-10-13 实测输出 `IDENTICAL`。原文不改，留痕。
 
 机械核对（无输出 = 一致）：
 
@@ -578,13 +608,185 @@ test result: FAILED. 13 passed; 1 failed        # 只红这一条，其余 13 �
 **一行都没编译过**，`toggleSymbol` 返回的字符串**没有真的上屏过**，
 全角指示**没有真的显示过**。
 
+### 5e. 表情页接线（2026-10-13）—— **三条新出口：桥已挂、UI 已接**
+
+引擎侧同日长出的**表情页数据面**三条（`crates/opi-ffi/src/cabi_symbols.rs`，
+语义与 JNI 面的 `opijni_emoji_symbols` / `opijni_emoji_groups` / `opijni_search_symbols`
+逐条一致、共享 `api::` 的同一份实现）。本端接的是「分组条 + 网格 + 搜索框」那一页
+（`pages/Index.ets` 的 `EmojiPage`），**没有新路由、没有新面板** —— 走的是 `build()` 里
+`this.mode === OpiMode.Symbol` 那个分支，与 `letterRows()` 换键行是**同一处判据**。
+
+| C 出口（`cabi_symbols.rs`） | 桥里 | ArkTS 包装 | 空语义 |
+|---|---|---|---|
+| `OpiString opi_emoji_symbols(void)` | `JsEmojiSymbols` | `OpiEngine.emojiSymbols()` | **不经引擎单例**：未 `load` 也返回全量 ⇒ 空数组只意味真出错 |
+| `OpiString opi_emoji_groups(void)` | `JsEmojiGroups` | `OpiEngine.emojiGroups()` | 同上（**与 `opi_symbol_blocks` 未装载回空串相反**） |
+| `OpiString opi_search_symbols(const uint16_t *, size_t)` | `JsSearchSymbols` | `OpiEngine.searchSymbols()` | **走引擎单例**：未装载 → `[]`（与上面两条相反） |
+
+⚠️ **三种「空」的语义两两不同**（前两条不退化、第三条退化、`candidatesPage` 也退化）。
+三条的 ArkTS 注释里各写了一遍 —— 混用会把「引擎没起来」读成「表情库是空的」，
+而这两种情况该做的事完全不同（一个要等 `inputStart`，一个要查模块）。
+
+⚠️ 搜索那条出口返回的是**符号表**的匹配条目、**不是表情集**，表情页自己与
+`emojiSymbols()` 求交（`KeyboardController.searchEmoji`）—— 与 Android
+`SymbolPanel` 的 `results.filter(catalog::isEmoji)` 是同一件事、同一层。
+
+**本机跑过的（原样输出）：**
+
+```
+# ① 注册表 ↔ 手抄 .d.ts 的名字集合（§5b 那条 diff）
+$ diff <(grep -o '{"[a-zA-Z]*"' cpp/napi_bridge.c | tr -d '{"' | sort) \
+       <(grep -o '^export const [a-zA-Z]*' cpp/types/libopiime/index.d.ts | awk '{print $3}' | sort)
+IDENTICAL                      # 两边名字集合相等（条数两边都不写，见 §5b）
+
+# ② 桥调用 ∖ 头声明：差的三条**正是等 cabi 落进 opi_ffi.h 的**
+$ comm -23 <(桥里调用的 opi_*) <(opi_ffi.h 声明的 opi_*)
+opi_emoji_groups
+opi_emoji_symbols
+opi_search_symbols
+$ comm -13 <(桥里调用的 opi_*) <(opi_ffi.h 声明的 opi_*)
+（空）                          # 反向：声明了但桥没调用 —— 没有
+
+# ③ clang：桥本身对着**补了那三条声明的副本头**零诊断
+$ clang -std=c11 -Wall -Wextra -Wpedantic -fsyntax-only \
+      -I/tmp/opi_bridge_check -I/usr/local/node/include/node /tmp/opi_bridge_check/napi_bridge.c
+exit=0
+#   （副本与仓库里的 napi_bridge.c **sha256 当场相同**，只多了三行声明；垫片同 §4）
+$ # 同一份桥、对**真头文件**（尚未补声明）：
+exit=1，3 个函数 / 共 6 条 error（每条 undeclared 后还跟着一条类型错）
+#   napi_bridge.c:364 'opi_emoji_symbols'  → passing 'int' to 'OpiString'
+#   napi_bridge.c:371 'opi_emoji_groups'   → 同上
+#   napi_bridge.c:384 'opi_search_symbols' → initializing 'OpiString' with 'int'
+⇒ **这是跨文件的先后，不是 C 面写错**：`opi_ffi.h` 是 cabi 的声明面（本端不改），
+  三条声明与桥里的调用必须**同一批**落地；只加声明不加调用会红
+  `harmony_header_is_consistent_use_site_subset`（§5 里那条规矩的另一半）。
+
+# ③b ⚠️ **方法坑（当场踩到，值得记住）**：桥里是 `#include "opi_ffi.h"`，**引号形式**
+#    ⇒ clang 先在**源文件所在目录**找，`-I` 的先后**压不过**它。
+#    第一次写「对着真头编」时源文件还在补丁副本目录里 ⇒ 读到的**还是副本**，
+#    exit=0 的**假绿**。把 napi_bridge.c 也拷进真头目录后再编才是上面这个 B 的真值。
+#    （判「读的是哪份头」别靠 -I 顺序，靠**源文件位置**。）
+
+# ④ 头侧 comm 的两个坑（同一次实测）
+$ grep -oE '\bopi_[a-z_0-9]+\b' cpp/opi_ffi.h   # ← 会连**注释里**的名字一起抓
+#   假阳性：opi_input_space / opi_select —— 两条只出现在头文件的注释里
+#   （`opi_select_page` 的说明旁），不是声明。⇒ 头侧必须**行首锚定**（`^<类型> opi_名`）
+$ # 锚定后：声明 19 条、桥调用 22 条
+$ comm -23 调用 声明   → opi_emoji_symbols / opi_emoji_groups / opi_search_symbols（就这三条）
+$ comm -13 调用 声明   → （空）
+
+# ⑤ 项目自己的门禁（crates/opi-ffi/tests/c_abi_contract.rs）—— 分两次跑，两次原样输出都留
+#    第一次（②③ 还没落地、产物也是旧的）：
+test harmony_header_is_consistent_use_site_subset ... ok    ← 本端那条
+test exported_symbols_exist_in_built_library ... FAILED     ← **不是本端红**，别算到桥头上
+    找不到 ["opi_emoji_symbols", "opi_emoji_groups"]
+#   归因（取证不是猜）：产物 target/release/libopi_ffi.so 是 10-12 20:01 的，
+#   cabi_symbols.rs 01:33 / cabi.rs 01:41 ⇒ 缺的正是新加的两条；
+#   opi_search_symbols 在旧产物里**本来就有**（它是老出口）。⇒ **产物陈旧**，不是源码缺陷。
+#    第二次（收尾：声明已落、产物已是新的）：
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured
+$ nm -D --defined-only target/release/libopi_ffi.so | grep -E 'opi_(emoji|search)'
+00000000000b28b0 T opi_emoji_groups
+00000000000b29b0 T opi_emoji_symbols
+00000000000b2cc0 T opi_search_symbols
+#   ⚠️ 产物**不是我重编好的**：我那条 `cargo build --release -p opi_ffi` 只印
+#      「Finished in 0.20s」（零工作可做）⇒ 跑之前它就已是新的（他方重编）。归因写清，别记成我的功劳。
+```
+
+⚠️ **那条绿不能反推「声明已落地」**：`harmony_header_is_consistent_use_site_subset` 是**单向**
+子集（头里每条声明都要同型 **且** 被桥调用）；**头里没有那三条，它就无从检查**。
+判「落没落」要看 ④ 的 `comm -23`。（**本条写于落地之前**；落地后那一侧已空 —— 但规矩不变，
+下一次加出口时它又会非空一次。）
+
+⚠️ **反方向没有任何自动守卫（cabi 指出，我去源码核过）**：那条门禁的循环是
+`for (name, csig) in &decls`（只遍历**头里的声明**），**从不**反过来遍历桥的调用 ⇒
+「**桥调了、头没声明**」没有任何自动守卫。
+它唯一的守卫就是 §4 那套**手工** `clang -fsyntax-only`（要 node 头垫片）与 ④ 那个**双向** `comm`。
+⇒ 这两条不是「顺带跑跑」，而是**这半个方向的全部证据**；加出口的人得自己跑，不会有人替你红。
+
+⚠️ **订正（2026-10-13，cabi 复核后）：本段上一版写的是「CI 也不管」，那是错的。**
+错因正是**判据射程**：我拿 `grep -rni 'harmony\|hongmeng\|ohos' .github/workflows/` 零命中当
+「CI 不管鸿蒙」的证据 —— 而 CI 里 `ci.yml:40` 的 `cargo test --workspace --no-fail-fast`
+**真的管着这条线**，只是它跑的门禁把路径**硬编码**在测试里（`c_abi_contract.rs` 读 `HARMONY_H`），
+workflow 文本里一个「harmony」字样都没有 —— **名字 grep 看不见硬编码路径**。
+正确的分法是两半各归各的（正方向 CI 管、反方向无人管）：
+
+· **正方向：CI 管。** `cargo test --workspace` ⇒ `cabi_unloaded`/`c_abi_contract` 等
+  ⇒ `harmony_header_is_consistent_use_site_subset`。两种会红的样子：**头里声明了但桥没调**、
+  **声明与 `cabi.rs` 不同型**。且该门禁读 `read_cabi()`（= `cabi.rs` + 拆出去的族文件）
+  ⇒ 拆族时漏加文件它同样红。
+· **反方向：无人管。** 「桥调了、头没声明」只有 `clang` 的 implicit-function-declaration 能抓，
+  而 **CI 从不编 `napi_bridge.c`**（workflow 里对 `napi_bridge` 零引用；唯一那处 `clang`
+  编的是 `macos/OpiFFI.h`）⇒ **① 反方向、② `napi_bridge.c` 自身的 C 编译**，这两件
+  就是上面 §4 + ④ 的**独家证据**。
+· 顺带：`cargo test --workspace` 还覆盖着 `cabi_unloaded`（未装载哨兵 + 末尾那条
+  `every_export_is_actually_exercised_here` —— 它**现场**从 `read_cabi()` 解析导出全集，
+  新导出没被调用就点名）与 `line_limit` 的 500 行。
+  ⇒ 鸿蒙这条线被 CI 覆盖的**是这三样**（正方向契约 / 未装载哨兵与导出覆盖 / 行数），
+  **不是「零覆盖」** —— 别按「CI 里零命中」那句话去推「所以随便写都行」。
+
+**收尾（2026-10-13 02:33）：三条声明已落。** 落在 `harmony/cpp/opi_ffi.h` 的
+「符号 / 表情（2026-10-13 加…）」那一段 —— **是 cabi 自己补的**（与我拟补的三行逐字相同）。
+lead 事后授权我代落，我落完才发现**两边撞了**（文件里一度有两份同名声明）；已删掉我那份、
+保留文件主人那份。去重后的实测（对**最终文件**）：`clang -fsyntax-only` 对真头
+**exit=0（0 error / 0 warning）**；双向 `comm` **两侧皆空**（22 调用 / 22 声明）；
+`c_abi_contract` **14 passed / 0 failed**。**回归对照**（同一份桥、对 `git show HEAD:` 那份头）
+仍是 **exit=1 / 6 条 error** ⇒ 这次的绿不是空转。
+`line_limit` 剩 **1** 处红（`android/.../OpiImeService.kt` 501 行，**别人的文件**）；本目录全部 < 500。
+②③④ 三条在我复跑时都重来了一遍（对去重后的同一份文件）：`clang` 仍 exit=0、
+`comm` 仍两侧空。**判据用 `grep -cE '^<类型> opi_<名>\('` 数「同名声明恰好 1 条」** ——
+不抄行号、也不抄文件 hash：那两样都会静默漂。
+（写完之后该头又落了一次**纯注释**修订 —— 把「空关键字 = 全表」拆成「实现层事实」与
+「测试只钉了三条」两句。**我据新版本把 ②③④ 再跑了一遍**：`clang` exit=0（0 warning）、
+`comm` 22/22 两侧空、同名声明各 1 条；三条声明与 `macos/OpiFFI.h` 仍**逐字节相同**。
+⇒ **结论按「跑的最后那版」为准**：本条不记 hash，也就不存在「记录作废」这回事。）
+
+⚠️ **本轮撞出来的一个门禁盲区（值得单列）**：`harmony/cpp/opi_ffi.h` 里**一度有两份**同名声明
+（cabi 与我各落了一份，谁都不是抄错）。**没有任何门禁会红** —— `crates/opi-ffi/tests/c_abi/checker.rs`
+的 `check_header` 把两侧解析结果收进 `BTreeMap<&str, &Sig>`（**按名字做键**，重复项静默覆盖），
+且全仓没有一处断言「声明有几条」。⇒ 「门禁全绿」在这里**不蕴含「声明只有一份」**：
+这份重复是**肉眼 + `grep -c`** 发现的。补出口时顺手数一遍同名声明条数（一条命令的事）。
+
+⚠️ **出口面减法**：`cabi_symbols.rs` 现在共 **5** 条导出，本端桥了 **3** 条。
+未桥的两条是 `opi_symbol_blocks()` / `opi_symbols_in_block(id)`（**通用符号块**，
+`[{id,start,end,name,common}]`，与 `opi_emoji_groups` 不是一回事）——
+它们是**引擎单例**语义（未装载 → 空串/`[]`，与表情那两条**相反**），
+留给「符号分类页」那条线；本端没有调用方，**不预挂**（照 §5 的规矩：加声明必须同批加真调用）。
+
+```
+# ⑥ codelinter（本机 Command Line Tools 5.1.1.820 里那把 ArkTS linter）——**只证解析层**
+$ codelinter -f json -o /tmp/codelinter-final.json /tmp/harmony-probe/src/src/main/ets
+[]          # 零 parse 错
+#   分辨力**先跑过两个正控**（否则 `[]` 可能是「根本没扫到」）：
+#     正控 A：根目录塞一个 `const broken: number = ;` ⇒ 报告非空、指向该文件该行
+#     正控 B：把 pages/Index.ets 抄一份、只坏一个常量、放回 pages/ ⇒ 报告指向
+#             ZZBadCopy.ets:35:30 —— 一次证两件事：**会递归下探子目录**、
+#             且**这种形状（装饰器 / `struct` / `@Builder`）确实被解析过**
+#   范围：探针里 **`ets/**` 的全量 5 个文件**与仓库定稿**逐文件 sha256 相同**
+#         （当场核过，不是「记得同步过」——第一次跑就踩了：有 2 个文件是旧快照）
+#         ⚠️ 这个「逐文件相同」是**跑之前**的门槛，不是跑之后的自证：之后再改一行就不算数了。
+#         `OpiEngine.ets` 收尾时加过一段注释（空关键字契约），**加完重跑过**，同样是 `[]`。
+#   ⚠️ 三个坑：① 退出码**恒 0**，判据只看报告内容；② 参数写错（例如把目录喂给 `-c`）
+#     会**不产出报告**且照样 exit 0 —— 静默假绿；③ 它**连类型错都放过** ⇒
+#     `[]` 只等于「**语法没断**」，不等于「类型对」「ArkTS 语义对」。
+```
+
+**仍未验证**：ETS 侧那几条新包装与整个表情页**一行都没编译过**（U21–U23）；
+表情**没有真的上屏过**；分组条**没有真的滚过**；`Set`/`Array.from` 那行是否被 ArkTS
+接受未知。**DevEco 上第一次构建的核对顺序**写在 `cpp/napi_bridge.c` 顶部与
+`pages/Index.ets` 的 `EmojiPage` 注释里（照第 1 步的既有套路：先编译、再按报错改名）。
+
 ### 6. 没验证的（**比上面长得多 —— 本节才是主体**）
 
 **ArkTS（`ets/**` 全部 5 个文件）：0 行编译过。**
-不只是「没测过」——**连语法都没过过编译器**。装饰器（`@Entry` `@Component` `@Prop`
+不只是「没测过」——**连类型都没过过编译器**。装饰器（`@Entry` `@Component` `@Prop`
 `@Watch` `@StorageLink` `@Builder`）、`@kit.IMEKit`、`@kit.ArkUI` 的 `display`、
 Canvas / `CanvasRenderingContext2D`、`JSON.parse(...) as string[]` 的断言，
 **全部凭记忆写的**。上面「最不确定的 API」那张表 U1–U20 一条都没消。
+
+> **2026-10-13 补充（缩的是「语法」那一格，不是「编译」）**：`ets/**` 全量 5 个文件
+> 过了 codelinter 的**解析器**（零 parse 错，且先跑过两个正控证明它有分辨力）。
+> 但**这仍然不是编译**：没类型检查、没装饰器语义、没 ArkTS 特有的约束
+> （它连类型错都放过）。所以本节标题的「0 行编译过」**不变**。
 
 > 本轮新接的三条（`toggleFullwidth` / `fullwidthState` / `toggleSymbol`）**同样落在这一段**：
 > `OpiEngine.ets` 里那三个包装函数**一行都没编译过**，`toggleSymbol` 返回的字符串
@@ -747,6 +949,12 @@ ABI 目录名对应关系（`CMakeLists.txt` 靠 `libs/${OHOS_ARCH}/` 找）：
 > 参数个数与类型都核过（详见上面 §4）。**U5 的头文件名、U7 的注册方式、
 > U8 的 NUL 语义、U9 的拷贝语义仍然未验证** —— 那几条是**运行时/鸿蒙实现**问题，
 > 语法检查看不出来。**U1–U4、U10–U20 一条都没消。**
+>
+> **再补（2026-10-13，表情页接线）**：本轮又添 **U21–U23** 三条，全在「中」档
+> （错了 UI 不对、键盘还能用），来源是表情页那三处新写法（`TextInput` / 横向 `Scroll` /
+> `Set`+`Array.from`）。**一条都没验证** —— 本机没有 ArkTS 编译器，
+> 但**解析层过了 codelinter**（它只证语法解析、不证类型，判据与退出码陷阱见开头那段
+> 2026-09-28 订正与 §5e 的原样输出）。
 
 ### 极高：错了整个端起不来
 
@@ -782,6 +990,9 @@ ABI 目录名对应关系（`CMakeLists.txt` 靠 `libs/${OHOS_ARCH}/` 找）：
 | U18 | `@Builder` 方法带**多个参数 + 函数参数**（`KeyCap(label, action, weight, active)`） | ArkUI 的 `@Builder` 多参传递在部分版本有「值传递不刷新」的限制。不刷新只影响高亮。 |
 | U19 | `display.getDefaultDisplaySync()` 返回的 `width`/`height` **单位是 px**，直接喂给 `panel.resize()` | 单位是否为 px、要不要 `vp2px` 换算。**键盘高度明显不对时先查这里。** |
 | U20 | `JSON.parse(raw) as string[]` 在 ArkTS 严格模式下可用 | ArkTS 对 `JSON.parse` 返回值（`Object`）的断言限制 |
+| U21 | 搜索框 `TextInput({ placeholder, text })` + `.onChange(v => …)`（2026-10-13 新增） | **组件名与这三个入参**；更要紧的是**IME 面板内能否聚焦**（面板自己就是输入法，系统没有第二个输入法可唤起）。 | 编译不过（好）；或**能显示、打不了字**（静默退化：只能点分组看）→ 备选 `Search({ value, placeholder })`，再退是面板字母键直接喂 `emojiQuery` |
+| U22 | 分组条 `Scroll(){…}.scrollable(ScrollDirection.Horizontal)`（2026-10-13 新增） | `scrollable` 与 `ScrollDirection` 的名字/取值。 | 编译不过，或分组条不滚；备选 `List(){…}.listDirection(Axis.Horizontal)`，再退裸 `Row`（9 组会横向溢出） |
+| U23 | `new Set<string>(数组)` + `Array.from(set)` 去重、`Array.prototype.slice` 切行（2026-10-13 新增） | ArkTS 严格模式对泛型构造与 `Array.from` 的限制（与 U20 的 `JSON.parse` 同一族）。 | 表情页去重/切行那两处编译不过；备选是手写 `has`/`add` 循环与下标循环 |
 
 ### 待 DevEco 确认：`@StorageLink` 的入参必须是字符串字面量
 
@@ -813,6 +1024,13 @@ grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|op
 - 鸿蒙是否要求输入法声明某个权限（如 `ohos.permission.INPUT_METHOD`）。
   检索**没有**找到可靠说法；P2 里那个 `BIND_INPUT_METHOD` 疑似错误信息，未采纳。
 - `deleteForward(n)` 的 `n` 对代理对（emoji）如何计数。
+- **「本机字体画不画得出这个字形」的对应 API。** Android 是
+  `Paint.hasGlyph`、iOS 是 `CTFontGetGlyphsForCharacters`，**鸿蒙侧本机没有 SDK，
+  查不到对应物**（是 `@ohos.graphics.text` / 字体管理那几族里？没有把握）。
+  按规矩**不编一个**：表情页**不做这个过滤**，代价（个别新码位画成空心框）如实写在
+  `Index.ets` 的 `EmojiPage` 注释与「已知缺口」第 3 条。⚠️ 补的时候**只判单码位** ——
+  多码位序列（国旗/家庭/键帽）会被误判成「没有」，把整类能显示的藏掉，比空心框更坏
+  （Android `SymbolCatalog.canRenderGlyph` 为此写了 `codePointCount > 1 ||` 的短路）。
 - **把回车「交还给应用」的接口在鸿蒙叫什么。** 引擎在缓冲为空时按设计放行回车
   （`KeyAction::PassThrough`，语义是「这个键归应用」），客户端必须有个通道把它送出去 ——
   Android 侧是 `InputConnection.performEditorAction`（`KeyRouter.kt` 的 `performEnter`），
@@ -828,8 +1046,34 @@ grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|op
 2. **词库是内置回退库**（`loadDictionary('')`）。完整词库要先把 rawfile
    拷进沙箱再传绝对路径 —— 引擎要文件系统路径，不是资源 ID。
    步骤写在 `KeyboardController.ensureDictionary()` 的注释里。
-3. **无符号面板**（`opi_search_symbols` / `opi_symbol_blocks` /
-   `opi_symbols_in_block` 未桥接）。Symbol 模式现在只有一页硬编码符号。
+3. **无符号面板**（`opi_symbol_blocks` / `opi_symbols_in_block` 未桥接）。
+
+   > **2026-10-13 部分更新（表情页接线）**：`opi_search_symbols` **已桥**
+   > （见 §5e）；Symbol 模式不再是一页硬编码符号，换成了**表情页**
+   > （分组条 + 网格 + 搜索框）。**但「符号面板」这件事只做了一半** ——
+   > 上面原文那三个出口里还有两个没桥，而下面四条是本轮**新产生的**代价/缺口：
+   >
+   > 1. **29 个 ASCII 符号不再一键可达**：原 `SYM_ROW_1..3`（`[]{}#%^*+=_\|~<>€£¥•` 等）
+   >    随本轮删除，而 Android 那边这些符号在「常用/全部」两个 Tab 里 —— 本端**没有 Tab**。
+   >    补法有两条，都要先裁决：① 加「常用/全部/表情」三 Tab（要桥 `opi_symbol_blocks` +
+   >    `opi_symbols_in_block` 两条出口）；② 只在表情页里加一个「符号」分组（**不是**
+   >    emoji 表的内容，得另找数据源）。**别**把符号行塞回 `letterRows()`：那会与
+   >    「Symbol 模式整片是表情页」的分支打架。
+   > 2. **搜索框的输入通道未定**：面板自己就是输入法，`TextInput` 聚焦时系统没有第二个
+   >    输入法可唤起 ⇒ 真机上大概率「能显示、不能打字」。Android 的做法是搜索激活时把
+   >    **面板自己的键行**重定向进搜索框（`ImeState::searchKey`），本端照做要先解决
+   >    「键盘往哪儿摆」（面板只有 0.42 屏高，见 `KeyboardController.PANEL_HEIGHT_RATIO`），**本轮没做**。
+   > 3. **画不出的字形不过滤**：Android 用 `Paint.hasGlyph`、iOS 用
+   >    `CTFontGetGlyphsForCharacters`，鸿蒙侧的对应 API **本机查不到、也没编**
+   >    （`Index.ets` 的 `EmojiPage` 里如实标着）⇒ 个别新码位（如 U+1FAEB）画成空心框。
+   >    补的时候**只判单码位**，且**分组 `start`/`count` 要跟着重算** ——
+   >    Android `SymbolCatalog.emojiGroups` 就是为此把下标按过滤后列表重算的。
+   > 4. **网格不虚拟化**：`Scroll + Column + ForEach` 是**全量铺节点**，
+   >    「人物」组 2430 项 ≈ 300 行的节点会在真机点它那一下一起建出来。
+   >    换 `List{LazyForEach}` 需要一个 `IDataSource` 实现，且 ArkUI 的 `LazyForEach`
+   >    **只能**做 `List`/`Grid`/`Swiper` 的直接子节点（**塞不进 `Scroll`/`Column`**）——
+   >    所以这不是「加一行」，是换容器。骨架本轮**没写**（写一个没编译过的
+   >    `IDataSource` 只会再欠一笔）。
 4. **无用户词持久化**（`opi_import_user_words` / `opi_export_user_words` /
    `opi_clear_user_words` / `opi_remove_user_word` 未桥接）。
 5. **无繁体切换入口**（`opi_load_trad` 未桥接；`OpiMode.Traditional` 有枚举
