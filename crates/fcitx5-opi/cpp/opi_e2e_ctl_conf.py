@@ -79,6 +79,22 @@ def run_dbus_send(label, arg):
             f"stderr={proc.stderr.strip()!r}")
 
 
+def run_dbus_search(label, keyword):
+    """直接调线上方法 **Search**（2026-10-13 加的第二个方法，`s -> s`）。
+
+    为什么不复用 `run_dbus_send`（Trigger）：两条是**不同的 D-Bus 方法**，注册面也不同
+    —— C++ 驱动那份只调 `handleCtlSearch_`（handler），**vtable 里方法名/签名写错它照样绿**
+    （`FCITX_OBJECT_VTABLE_METHOD(search, "Search", "s", "s")` 是宏里的一行字符串）。
+    真守护进程上的这一问才是「注册有没有落到总线上」的证据 —— 与 Trigger 同一条理由：
+    这种「有实现、没接线」的形态在本仓反复出现过。"""
+    argv = ["dbus-send", "--session", "--print-reply", "--reply-timeout=5000",
+            f"--dest={DEST}", OPI_PATH, f"{OPI_IFACE}.Search", f"string:{keyword}"]
+    proc = subprocess.run(argv, capture_output=True, text=True, timeout=20)
+    RESULTS[label] = (proc.returncode, proc.stdout.strip(), proc.stderr.strip())
+    return (f"退出码 {proc.returncode} stdout={proc.stdout.strip()!r} "
+            f"stderr={proc.stderr.strip()!r}")
+
+
 # 设置窗（desktop Settings.kt 的 notifyFcitxReload）走的那条 wire：/controller 上的
 # **org.fcitx.Fcitx.Controller1** —— fcitx4 时代的接口名，fcitx5 原样沿用（实测；
 # 写成 org.fcitx.Fcitx5.Controller1 会 UnknownMethod rc=1，别“顺手订正”）。

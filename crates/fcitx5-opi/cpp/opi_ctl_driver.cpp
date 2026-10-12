@@ -20,6 +20,12 @@
 //      回复出去的那一行 —— 冻结格式整行（五格；im 在本驱动恒为空串，真值面归
 //      e2e 变体 ctl）、trad/lang 两格跟着状态变、以及**只读性**（全角格是双翻面
 //      读的，得证明没把状态读漂）。
+//   5. opi-ctl search（只读查询，2026-10-13）：**拆在 opi_ctl_search_driver.cpp**（本文件 500 行门禁）。handleCtlSearch_ = D-Bus Search 落到
+//      的那一段（与 §7 调 handleCtlAction_ 同一先例）—— 空关键字 → err:2（用法错误）、
+//      有/无命中的载荷类型、以及**关键字真的被传下去了**（命中数是全表真子集）。
+//      搜索**语义**在 Rust 侧（engine-core 的 symbols 测试 + fcitx5_opi 的
+//      cabi_search_tests），本段只验 C++ 协议层，故不写死任何具体符号（数据更新
+//      不该让它红）。
 //
 // 局限（如实记，别把它读成更强的结论）：
 //   · `OpiEngine engine(nullptr)` —— instance_ 为空：**D-Bus 注册本身**（真会话总线
@@ -39,6 +45,7 @@
 #include <unistd.h>   // dup/dup2：捕获 stderr（Pin A 的诊断断言）
 
 #include "opi_driver_common.h" // 测试器具（TestIC/check/预编辑与候选读回）
+#include "opi_ctl_search_driver.cpp" // §9 search 整段（500 行门禁拆出去的；要在器具之后）
 
 int main() {
     fcitx::InputContextManager manager;
@@ -453,6 +460,8 @@ int main() {
     check(engine.handleCtlAction_("lang") == "ok" && opi_fcitx5_mode() == kModePinyin,
           "lang 切回");
     check(engine.ctlState_() == s0, "回到拼音后整行 == s0（本段不留副作用）");
+
+    runCtlSearchChecks(engine, bufferOf); // §9 拆在 opi_ctl_search_driver.cpp（500 行门禁）
 
     std::printf("\n== 结果：%s ==\n", g_fail == 0 ? "全过" : "有失败");
     return g_fail == 0 ? 0 : 1;

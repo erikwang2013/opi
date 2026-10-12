@@ -73,6 +73,47 @@ object EmojiData {
 
     /** 某组第一页的页码（组条跳转用）。 */
     fun pageOfGroup(g: Group): Int = g.start / SymbolCategories.PAGE_SIZE
+
+    /**
+     * 按「本机画不画得出」过滤条目，并**重算分组条的 `start`/`count`**（2026-10-13，
+     * 口径对齐 Android `SymbolCatalog.emojiGroups`）。保序、幂等。
+     *
+     * 为什么必须重算：`start` 是**过滤后**列表里的下标（组条点击 = `pageOfGroup(g)`
+     * 跳页），摘掉若干条后原下标整体偏前，不重算就跳到错的页；`count` 是组条文案里
+     * 报的个数和读屏文案（「笑脸（N 个）」），不跟着减就会把摘掉的也算进去。
+     *
+     * 算法用**前缀存活数**（`aliveUpTo`）而不是逐组累加：组的边界是原下标，
+     * 逐组累加会把「整组被摘空」这类情况算错。`start` 与 `count` 一起重算 ⇒
+     * 被摘空的组退化成 `start = 上一组的 start`、`count = 0`。
+     *
+     * 摘空的组**保留在组条里**（与 Android 同）：组条是按官方组序的固定格位，
+     * 格位随字体变化就没法靠位置记「第三个是手势」了。
+     *
+     * 全表被摘空 ⇒ 返回空 Data（走 EmojiPane 现有的「没有表情数据」降级），
+     * 此时组条没有意义（没有条目可跳）。
+     */
+    fun filter(data: Data, canRender: (String) -> Boolean): Data {
+        val aliveUpTo = IntArray(data.entries.size + 1)
+        val entries = ArrayList<String>(data.entries.size)
+        var alive = 0
+        for (i in data.entries.indices) {
+            aliveUpTo[i] = alive
+            val e = data.entries[i]
+            if (canRender(e)) {
+                entries.add(e)
+                alive++
+            }
+        }
+        aliveUpTo[data.entries.size] = alive
+        if (alive == data.entries.size) return data // 一条没摘 ⇒ 原样（也顺带保证了幂等）
+        if (alive == 0) return Data(emptyList(), emptyList())
+        val groups = data.groups.map { g ->
+            val from = g.start.coerceIn(0, data.entries.size)
+            val to = (g.start + g.count).coerceIn(0, data.entries.size)
+            g.copy(start = aliveUpTo[from], count = aliveUpTo[to] - aliveUpTo[from])
+        }
+        return Data(entries, groups)
+    }
 }
 
 /** 读 classpath 资源 `/emoji.tsv`（构建期从 `data/raw/emoji.tsv` 拷入，见 build.gradle.kts）。 */

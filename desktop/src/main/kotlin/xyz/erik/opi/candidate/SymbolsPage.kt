@@ -51,10 +51,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -64,7 +66,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberWindowState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import xyz.erik.opi.pet.OpiPetWindowIcon
 import java.nio.file.Files
 import java.nio.file.Path
@@ -112,6 +117,26 @@ object SymbolCategories {
      * 走，两端不再同值（原先「同值」那句注释随本次裁决作废）。
      */
     const val PAGE_SIZE = 72
+
+    /**
+     * 按「本机画不画得出这个字形」过滤每类的符号表（2026-10-13）。保序、幂等。
+     *
+     * 类目本身**不删**（哪怕整类被摘空）—— 与表情页组条同一裁决：右竖条是按序号的
+     * 固定格位，格位随字体变化就没法靠位置记「第三个是数学符号」了；摘空的类目显示成
+     * 空网格（不是「没有类目数据」，那是我一句都没有的降级）。
+     *
+     * 为什么符号页也要过这一遍：Android 只过滤表情列表（那边的符号块是 Unicode 块展出，
+     * 缺字形罕见），而桌面这两页是同一份数据、同一个字体问题 —— 空心的方框在哪一页都
+     * 不该出现。页索引不用另算：页数由**过滤后**的 `symbols.size` 现推（见调用点）。
+     */
+    fun filter(categories: List<Category>, canRender: (String) -> Boolean): List<Category> {
+        var changed = false
+        val out = categories.map { c ->
+            val kept = c.symbols.filter(canRender)
+            if (kept.size == c.symbols.size) c else { changed = true; c.copy(symbols = kept) }
+        }
+        return if (changed) out else categories
+    }
 
     /** 网格列数（行数由 [PAGE_SIZE] 推出）。 */
     const val COLUMNS = 12
@@ -199,6 +224,15 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
     // 开窗读一次（同 Android「面板第一次打开时读资产」）；窗口重开才会重读。
     val categories = remember { loadSymbolCategories() }
     val emoji = remember { loadEmojiData() }
+    // 字形过滤（2026-10-13）：**渲染前**摘掉本机字体画不出的字形（判据见 GlyphCoverage，
+    // 规则逐条对齐 Android 的 canRenderGlyph）。与 categories/emoji 同寿命 —— 数据一份
+    // 读一次，过滤也就一次（每帧重滤 = 每帧几千次字体查询）。
+    val catsShown = remember(categories) { SymbolCategories.filter(categories, GlyphCoverage::canRender) }
+    val emojiShown = remember(emoji) { EmojiData.filter(emoji, GlyphCoverage::canRender) }
+    // 表情搜索的「像不像表情」判据（见 searchView）：用**未过滤**的 emoji 表建集。
+    // 判据同 Android 的 `isEmoji`（那边用过滤后的列表，差别只在本机画不出的那些条目 ——
+    // 它们随后会被 canRender 再摘一次，两种取法的结果相同）。
+    val emojiSet = remember(emoji) { emoji.entries.toHashSet() }
     var selected by remember { mutableStateOf(if (initialEmoji) TAB_EMOJI else 0) }
     var notice by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(notice) {
@@ -206,6 +240,27 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
             delay(3500)
             notice = null
         }
+    }
+    // 搜索（2026-10-13）：query = 输入框内容，search = 最近一次结局（null = 还没有结局）。
+    // 空关键词 = 浏览态（不发命令：空关键词在 CLI 侧是用法错误，见 desktopSymbolSearch）。
+    var query by remember { mutableStateOf("") }
+    var search by remember { mutableStateOf<SymbolSearch?>(null) }
+    // 本窗能不能拿系统键盘焦点（默认不能 —— 见 Window 的 focusable 注释）。只由搜索框的
+    // 焦点驱动：点进搜索框才需要打字，点选符号时交还。
+    var typing by remember { mutableStateOf(false) }
+    val focus = LocalFocusManager.current
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(query) {
+        val q = query.trim()
+        if (q.isEmpty()) {
+            search = null
+            return@LaunchedEffect
+        }
+        search = null // 立刻回「搜索中…」：旧结果留在屏上会被当成新关键词的结果
+        // 防抖 250ms：用户打字约 100ms 一个字，每个字都发一次进程 + D-Bus 太贵。
+        delay(250)
+        // ⚠️ 不能在组合线程上跑：那是一整次子进程 + D-Bus 往返（超时 3s），会把界面冻住。
+        search = withContext(Dispatchers.IO) { desktopSymbolSearch(q) }
     }
     val windowState = rememberWindowState(
         width = WIN_W.dp,
@@ -219,11 +274,23 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
         undecorated = true,
         alwaysOnTop = true,
         resizable = false,
-        // 不抢焦点：上屏要求文档窗口仍持有焦点（没焦点时 TSF 会跳过插入）。
-        focusable = false,
+        // 默认不抢焦点：上屏要求文档窗口仍持有焦点（Windows 侧 TSF 无焦点会跳过插入；
+        // Linux 侧 `opi-ctl insert` 提交到「最近获得焦点的输入上下文」，抢了焦那个上下文
+        // 就成了本窗）。**搜索要打字**（键入事件来自 AWT 窗口，窗口没拿到系统焦点就一个字
+        // 打不进），所以按需开：搜索框拿到焦点 ⇒ [typing]，点选符号时交还（见 pick）。
+        focusable = typing,
         title = if (onEmoji) "opi输入法 表情" else "opi输入法 符号大全",
         icon = OpiPetWindowIcon, // 窗口/任务栏图标 = 小欧（PetIcon.kt）
     ) {
+        // 允许获焦之后才申请系统焦点（顺序反了申请无效）。交还键盘时只关 focusable 不够：
+        // :0 探针实测 —— 关掉后 X 焦点仍留在本窗、用户的键入被静默丢掉；重挂一次窗才会按
+        // WM 的焦点历史落回文档窗，且 focusable=false 的窗重新映射不会再抢回来。
+        LaunchedEffect(typing) {
+            if (typing) window.requestFocus() else if (window.isFocused) {
+                window.isVisible = false
+                window.isVisible = true
+            }
+        }
         Column(Modifier.fillMaxSize().background(SymBg)) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 6.dp, top = 6.dp),
@@ -239,6 +306,15 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
                     fontSize = 11.sp, color = SymDim,
                 )
                 Spacer(Modifier.weight(1f))
+                // 搜索框进标题行（本行本来就是「标题 + 提示 + 关闭」的自绘条）：不新开一行，
+                // 页面高度与两页的内容区一点不动（布局纪律：现有类别条/网格结构不改）。
+                SymbolSearchField(
+                    query = query,
+                    onQuery = { query = it },
+                    onFocusChanged = { typing = it },
+                    modifier = Modifier.width(220.dp),
+                )
+                Spacer(Modifier.width(8.dp))
                 CloseButton(onClose)
             }
             // 固定高的提示行：失败提示出现/消失不该让整页跳。
@@ -247,18 +323,47 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
             }
             Row(Modifier.weight(1f).fillMaxWidth()) {
                 fun pick(sym: String) {
-                    onCommit(sym)?.let { notice = it }
+                    // 先交还键盘再上屏（Linux 的 `opi-ctl insert` 提交给「最近获得焦点的输入
+                    // 上下文」，不还就会插进本窗自己）；交还异步入账，故等焦点真离开本窗，等不到
+                    // 也照上。没搜过时本窗没拿过焦点，走同步那条（与改动前同一条路）。
+                    focus.clearFocus()
+                    if (!window.isFocused) {
+                        onCommit(sym)?.let { notice = it }
+                        return
+                    }
+                    scope.launch {
+                        var waited = 0
+                        while (window.isFocused && waited < 300) { delay(20); waited += 20 }
+                        onCommit(sym)?.let { notice = it }
+                    }
                 }
-                if (onEmoji) {
-                    EmojiPane(emoji, Modifier.weight(1f).fillMaxHeight(), ::pick)
+                if (query.isNotBlank()) {
+                    SearchResultPane(
+                        searchView(search, onEmoji, emojiSet),
+                        emoji = onEmoji,
+                        emptyText = if (onEmoji) "没有匹配的表情" else "没有匹配的符号",
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                        onPick = ::pick,
+                    )
+                } else if (onEmoji) {
+                    EmojiPane(emojiShown, Modifier.weight(1f).fillMaxHeight(), ::pick)
                 } else {
-                    val cat = categories.getOrNull(selected)
+                    val cat = catsShown.getOrNull(selected)
                     if (cat == null) {
                         Box(
                             modifier = Modifier.weight(1f).fillMaxHeight(),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text("没有类目数据", fontSize = 14.sp, color = SymDim)
+                        }
+                    } else if (cat.symbols.isEmpty()) {
+                        // 整类被字形过滤摘空（这一类的字本机一个都画不出）：既不是「没有类目
+                        // 数据」，也不能给分页器一个 0 页数（pageCount=0 是未定义用法）。
+                        Box(
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text("这一类在本机没有可显示的字形", fontSize = 13.sp, color = SymDim)
                         }
                     } else {
                         val pages = (cat.symbols.size + SymbolCategories.PAGE_SIZE - 1) / SymbolCategories.PAGE_SIZE
@@ -273,7 +378,9 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
                         }
                     }
                 }
-                CategoryStrip(categories, selected, onEmoji) { selected = it }
+                // 换类目 = 回浏览态：清掉关键词（否则点完类目，网格仍是上一个关键词的结果，
+                // 而右竖条的高亮已经跳到新类目了）。
+                CategoryStrip(catsShown, selected, onEmoji) { selected = it; query = "" }
             }
         }
     }

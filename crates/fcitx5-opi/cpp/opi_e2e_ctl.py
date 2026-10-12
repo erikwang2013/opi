@@ -70,7 +70,8 @@ import os
 from opi_e2e_ctl_conf import (DEAD_BUS_ADDR, RESULTS, STATE_FIELDS, _commits,
                               _global_conf_path, check_conf_arms, drop_share_state,
                               field_diff, plan_conf_arms, run_controller, run_ctl,
-                              run_dbus_send, run_global_reload, write_share_state)
+                              run_dbus_search, run_dbus_send, run_global_reload,
+                              write_share_state)
 
 
 def plan_ctl(ic, destroy=None):
@@ -124,6 +125,15 @@ def plan_ctl(ic, destroy=None):
                                   DBUS_SESSION_BUS_ADDRESS=DEAD_BUS_ADDR)), None),
         ("线上未知动作（dbus-send string:bogus）",
          lambda: run_dbus_send("bogus", "bogus"), None),
+        # ---- Search（2026-10-13 加的**第二个 D-Bus 方法**）：验的是**注册面** ----
+        # 桌面符号/表情页的搜索走它（opi-ctl search）。只把 handler 调对不够 ——
+        # vtable 宏那一行字符串写错时，真总线这一问就是 UnknownMethod。
+        ("线上 Search（dbus-send string:heart）",
+         lambda: run_dbus_search("search_online", "heart"), None),
+        # 负对照：乱码关键词必须回**空数组**而不是「有命中」—— 缺了这条，
+        # 上面那条就会被「实现恒真/恒非空」蒙混过去（本仓对否定判据的既有纪律）。
+        ("线上 Search 无命中（string:zzzqqx）",
+         lambda: run_dbus_search("search_online_none", "zzzqqx"), None),
         ("opi-ctl symbols", lambda: run_ctl("symbols", "symbols"), None),
         # 浏览中按 '1'：引擎侧 1-9 只在**浏览态**有专属路由（类目下钻/符号上屏），
         # 非浏览态它只是普通数字键 —— 它的面板结果因此是「浏览真的开着」的进一步
@@ -217,6 +227,44 @@ def check_ctl(windows, failures):
             failures.append(f"{what} 退出码 {rc}（应 0），stderr={err!r}")
         elif err:
             failures.append(f"{what} 退出码 0 但 stderr 有内容（应静默）：{err!r}")
+
+    # 3b) **Search 的注册面**（2026-10-13 加）：真守护进程上直接调那个方法。
+    #     判据两条成对：真关键词要回**非空** JSON 文本数组、乱码要回**空**数组 ——
+    #     缺任一条都可能是「恒真/恒空」的实现蒙混过关（vtable 名字写错则是 UnknownMethod）。
+    import json as _json
+
+    def _search_payload(label):
+        rc, out, err = RESULTS.get(label, (None, "", ""))
+        if rc != 0:
+            return None, f"退出码 {rc}（{out!r} / {err!r}）"
+        # dbus-send --print-reply 的形态：一行 `string "…"`（外层还有 method return 行）
+        for line in out.splitlines():
+            line = line.strip()
+            if line.startswith("string "):
+                raw = line[len("string "):].strip()
+                if len(raw) >= 2 and raw[0] == '"' and raw[-1] == '"':
+                    raw = raw[1:-1]
+                # dbus-send 会把内层引号转义成 \"
+                raw = raw.replace('\\"', '"')
+                try:
+                    return _json.loads(raw), None
+                except Exception as e:  # noqa: BLE001
+                    return None, f"载荷不是 JSON：{e}；原文 {raw[:120]!r}"
+        return None, f"回复里没有 string 行：{out[:120]!r}"
+
+    hits, why = _search_payload("search_online")
+    if why is not None:
+        failures.append(f"线上 Search 没拿到合法载荷：{why}")
+    elif not isinstance(hits, list) or not hits:
+        failures.append(f"线上 Search 对真关键词回空了（载荷 {hits!r}）—— 要么没接上，要么数据缺失")
+    else:
+        print(f"[e2e/ctl] 线上 Search 命中 {len(hits)} 条（首个 {hits[0]!r}）", flush=True)
+
+    none_hits, why2 = _search_payload("search_online_none")
+    if why2 is not None:
+        failures.append(f"线上 Search（无命中那条）没拿到合法载荷：{why2}")
+    elif none_hits:
+        failures.append(f"乱码关键词竟有命中（{none_hits[:3]!r}）—— 判据分辨力有问题")
 
     # 4) 线上回复协议：服务端对未知动作必须回 err:5:…（这一条不经过 opi-ctl，
     #    验的是 /opi 的应答形状本身）。

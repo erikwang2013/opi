@@ -48,8 +48,8 @@
 //! 产物：本测试只读不联网。luna 取 android 部署副本（data/generated/luna.opid 是
 //! gitignore 的构建中间物），trad 取入库产物 data/generated/trad.opid。
 
-use engine_core::{Engine, Mode};
 use engine_core::symbols::SymbolEngine;
+use engine_core::{Engine, Mode};
 use engine_data::load_mmap;
 use std::path::Path;
 

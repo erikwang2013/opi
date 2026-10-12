@@ -89,6 +89,20 @@ extern "C" int32_t opi_fcitx5_symbol_browse(int32_t action) __attribute__((weak)
 extern "C" int32_t opi_fcitx5_load_symbols(const uint8_t *ptr,
                                            size_t len) __attribute__((weak));
 
+// 关键字搜索（2026-10-13，桌面符号/表情页的搜索框）：关键字（**不是路径**，
+// 也不是命令）→ 命中条目的 **JSON 文本数组**（`["…"]`，serde_json 输出）。
+//   · 空关键字 = 全部条目（引擎既有语义，同 Android searchSymbols("")）；
+//   · 无命中 = `[]`；引擎未装载 = `[]` —— 这一层**没有错误码**：分不清「没搜到」
+//     与「引擎没装载」，也不该在这一层分（调用方不需要区分它们）。
+//   · 「空关键字 = 用法错误」的裁决在**调用方**（opi_engine.h 的
+//     handleCtlSearch_ 先拒，opi-ctl 本地再拒一次）—— 那一层才是协议边界。
+//   · 与类目数据装载（opi_fcitx5_load_symbols）**无关**：搜索表是编译内嵌的
+//     （SymbolEngine::builtin），没装 symbol_categories.tsv 也能搜 —— 调用方
+//     别拿 symbolDataOk_ 卡这条出口。
+// 同样是弱符号（引擎侧落地前照常编译/加载）；调用点必须判空（opi_engine.h）。
+extern "C" OpiString opi_fcitx5_search_symbols(const uint8_t *ptr,
+                                               size_t len) __attribute__((weak));
+
 // 取走并释放 Rust 侧字符串。ptr==nullptr 视为空串（Rust 侧 OpString::empty 的
 // 表示）；仅守卫构造，free 契约不变：每个返回的 OpString 恰好 free 一次。
 //

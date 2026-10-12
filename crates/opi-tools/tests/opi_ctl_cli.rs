@@ -318,6 +318,101 @@ fn state_service_unknown_maps_to_3() {
     assert!(stderr.contains("通道不通"), "stderr={stderr}");
 }
 
+/// search 的成功路径：`Search(string:<关键词>)`（**带参数**、方法名与 State 同族）、
+/// 载荷（JSON 文本数组）原样进 stdout、rc 0、stderr 静默。命令行逐字如下 ——
+/// 与 cpp/opi_ctl.h 的 `FCITX_OBJECT_VTABLE_METHOD(search, "Search", "s", "s")` 成对，
+/// 任一侧改名/改签名这条就红。
+#[test]
+fn search_query_sends_exact_wire_command_and_prints_payload() {
+    let dir = fake(REPLY_TO_STDOUT, &reply_of(r#"["♥","、"]"#));
+    let (code, stdout, stderr) = run_ctl(&dir, &["search", "heart"]);
+    assert_eq!(code, 0, "stderr={stderr}");
+    assert_eq!(stdout, "[\"♥\",\"、\"]\n", "载荷要原样进 stdout");
+    assert_eq!(stderr, "", "成功不刷 stderr");
+    let argv = std::fs::read_to_string(dir.join("argv")).unwrap();
+    let got: Vec<&str> = argv.lines().collect();
+    assert_eq!(
+        got,
+        vec![
+            "--session",
+            "--print-reply",
+            "--reply-timeout=5000",
+            "--dest=org.fcitx.Fcitx5",
+            "/opi",
+            "org.fcitx.Fcitx5.Opi1.Search",
+            "string:heart",
+        ]
+    );
+}
+
+/// 空关键词 = **用法错误 2**，本地判定、不上总线 —— 引擎侧 `search("")` 的语义是
+/// 「全部条目」（浏览不是搜索），桌面清空搜索框时该回浏览态，不发这一问。
+/// 服务端也拒一次（err:2，另见 opi_engine.h），这里是客户端那一次。
+#[test]
+fn search_empty_keyword_is_local_usage_error() {
+    for bad in [vec!["search"], vec!["search", ""]] {
+        let dir = fake(REPLY_TO_STDOUT, &reply_of("[]"));
+        let (code, stdout, stderr) = run_ctl(&dir, &bad);
+        assert_eq!(code, 2, "{bad:?}: 用法错误应为 2（stderr={stderr}）");
+        assert_eq!(stdout, "", "{bad:?}: 不许往 stdout 写东西");
+        assert!(stderr.contains("usage:"), "{bad:?}: stderr={stderr}");
+        assert!(
+            !dir.join("argv").exists(),
+            "{bad:?}: 用法错误不该上总线（实发了：{:?}）",
+            std::fs::read_to_string(dir.join("argv")).ok()
+        );
+    }
+}
+
+/// 载荷形状不对 → 5 + 原始输出带出来，且**不许**往 stdout 写半行。负向形态里
+/// `ok` 是**版本对不上**的指纹：旧插件（没有 Search 方法）或把 search 接回
+/// Trigger 那种接线错，回的就是 "ok" —— 桌面会把 "ok" 当搜索结果画成两个字母。
+#[test]
+fn search_broken_payload_maps_to_5() {
+    for bad in [
+        "ok",           // 旧/错接线的指纹（Trigger 的应答）
+        "[",            // 截断
+        "[\"a\",\"b\"", // 少收尾
+        "{}",           // 对象而不是数组
+        "",             // 空串
+    ] {
+        let dir = fake(REPLY_TO_STDOUT, &reply_of(bad));
+        let (code, stdout, stderr) = run_ctl(&dir, &["search", "heart"]);
+        assert_eq!(code, 5, "{bad:?}: stderr={stderr}");
+        assert_eq!(stdout, "", "{bad:?}: 形状不对就不许往 stdout 写东西");
+        assert!(stderr.contains("JSON"), "{bad:?}: stderr={stderr}");
+    }
+}
+
+/// 空数组是**合法**载荷（= 没搜到）：rc 0、`[]` 进 stdout —— 桌面据此显示
+/// 「没有匹配」；把它判成形状错会让「搜不到」变成一条可见的失败。
+#[test]
+fn search_empty_array_is_a_valid_payload() {
+    let dir = fake(REPLY_TO_STDOUT, &reply_of("[]"));
+    let (code, stdout, stderr) = run_ctl(&dir, &["search", "zzzz"]);
+    assert_eq!(code, 0, "stderr={stderr}");
+    assert_eq!(stdout, "[]\n");
+}
+
+/// 服务端分类的失败对 search 同样生效（与动作/state 同一张退出码表）：
+/// err:4（搜索入口未接线）/ err:2（空关键词，服务端那一次）原样透传成退出码。
+#[test]
+fn search_server_error_propagates() {
+    for (n, msg) in [
+        (4, "符号搜索入口未接线（引擎侧未落地），本次查询无效"),
+        (
+            2,
+            "搜索关键字为空（用法错误：opi-ctl search 需要一个关键词）",
+        ),
+    ] {
+        let dir = fake(REPLY_TO_STDOUT, &reply_of(&format!("err:{n}:{msg}")));
+        let (code, stdout, stderr) = run_ctl(&dir, &["search", "heart"]);
+        assert_eq!(code, n, "stderr={stderr}");
+        assert_eq!(stdout, "", "服务端报错时 stdout 不许有残留");
+        assert!(stderr.contains(msg), "原因要原样带出来：{stderr}");
+    }
+}
+
 /// 用法错在本地就判死（不发 D-Bus）：缺动作与未知动作都是 2 + usage。
 #[test]
 fn usage_errors_are_local_and_exit_2() {

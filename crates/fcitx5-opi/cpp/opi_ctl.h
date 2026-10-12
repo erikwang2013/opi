@@ -73,10 +73,15 @@ inline constexpr const char *kOpiCtlInterface = "org.fcitx.Fcitx5.Opi1";
 //                            4 = 功能不可用/未接线，5 = 动作被拒或内部错误）
 //   · State（只读查询，**无入参**：2026-10-10 用户裁决加）：
 //       一行冻结格式的状态串（见下），或同样的 "err:<码>:<原因>"
+//   · Search（只读查询，**一个入参**：2026-10-13 加，桌面符号/表情页搜索）：
+//       命中条目的 **JSON 文本数组**（`["…"]`，`[]` = 没搜到），或 "err:<码>:<原因>"。
+//       空关键字在处理器里就被挡成 err:2（用法错误）—— 见 opi_engine.h 的
+//       handleCtlSearch_；这一层只管搬运。
 // 返回值用字符串而不是元组：`FCITX_OBJECT_VTABLE_METHOD` 的 RET 参数支持多值
 // struct，但那要两端都对上 fcitx 的 tuple 映射；这里只有一个短串，字符串够用。
 using OpiCtlHandler = std::function<std::string(const std::string &)>;
 using OpiCtlStateHandler = std::function<std::string()>;
+using OpiCtlSearchHandler = std::function<std::string(const std::string &)>;
 
 // ---- State 的返回串：**冻结格式**（桌面状态栏每秒轮询它渲染图标：月亮盈亏 =
 // 全/半角，zh/en = 语言）----
@@ -97,8 +102,10 @@ using OpiCtlStateHandler = std::function<std::string()>;
 // 与 Trigger 不同：那条路必须有 IC（要刷它的面板），state 这条路不需要。
 class OpiCtlObject : public fcitx::dbus::ObjectVTable<OpiCtlObject> {
 public:
-    OpiCtlObject(OpiCtlHandler handler, OpiCtlStateHandler stateHandler)
-        : handler_(std::move(handler)), stateHandler_(std::move(stateHandler)) {}
+    OpiCtlObject(OpiCtlHandler handler, OpiCtlStateHandler stateHandler,
+                 OpiCtlSearchHandler searchHandler)
+        : handler_(std::move(handler)), stateHandler_(std::move(stateHandler)),
+          searchHandler_(std::move(searchHandler)) {}
 
     // 方法实现：把动作串原样交给宿主（OpiEngine）的处理器。**异常必须在处理器里
     // 挡住**（dbus 的分发路径不捕 C++ 异常，逃出去就是守护进程死），见 opi_engine.h。
@@ -113,9 +120,16 @@ public:
     std::string state() { return stateHandler_(); }
     FCITX_OBJECT_VTABLE_METHOD(state, "State", "", "s");
 
+    // 关键字搜索（2026-10-13）：入参 = 关键字（拼音/英文前缀），返回命中条目的
+    // JSON 文本数组。**名字与签名两头对齐** opi-ctl.rs 的 `send_search`
+    // （`org.fcitx.Fcitx5.Opi1.Search` + `string:<关键字>`）。
+    std::string search(const std::string &keyword) { return searchHandler_(keyword); }
+    FCITX_OBJECT_VTABLE_METHOD(search, "Search", "s", "s");
+
 private:
     OpiCtlHandler handler_;
     OpiCtlStateHandler stateHandler_;
+    OpiCtlSearchHandler searchHandler_;
 };
 
 // 把 obj 注册到 fcitx5 自己的会话总线上。返回 false = 这条通道没接上（原因已打 stderr）。

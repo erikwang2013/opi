@@ -34,6 +34,18 @@ private class JParse(private val s: String) {
         return v
     }
 
+    /**
+     * 整串解析：[parse] 之后必须已经吃完整串（尾部还有残渣 = 这份载荷坏了）。
+     * 为什么另开一个入口而不是改 [parse]：行协议那边要的正是「容忍尾部」（一行进来的
+     * 就是一行，宽容不吃亏），而载荷那边要的是「必须是整串」（截断的半个数组必须报失败，
+     * 不能被当成合法前缀静默通过）。
+     */
+    fun parseWhole(): JVal? {
+        val v = parse()
+        skipWs()
+        return if (i >= s.length) v else null
+    }
+
     private fun skipWs() {
         while (i < s.length && s[i].isWhitespace()) i++
     }
@@ -181,4 +193,23 @@ internal fun jsonString(s: String): String {
     }
     sb.append('"')
     return sb.toString()
+}
+
+// ---------- JSON 字符串数组**解码**（`opi-ctl search` 的载荷，2026-10-13） ----------
+
+/**
+ * 解析**一整串** JSON 字符串数组（`["…","…"]`）；形状不对 → null。
+ *
+ * 与 [parseLine] 的分工：那个是行协议（对象 + 容忍尾部），这个是搜索载荷。二者共用
+ * [JParse]，所以转义口径必然一致 —— 而 `opi-ctl` 侧只做了首尾括号的轻量形状检查
+ * （它没有 serde_json，手写半个词法器必然与这份漂），真正的解析在这里。
+ *
+ * **返回 null 与空列表不是一回事**：null = 载荷坏了（界面上如实报失败），
+ * 空列表 = 引擎说没搜到（界面报「没有匹配」）。所以坏载荷绝不许降级成空列表。
+ */
+internal fun parseJsonStringArray(text: String): List<String>? {
+    val arr = JParse(text).parseWhole() as? JVal.JArr ?: return null
+    val out = ArrayList<String>(arr.v.size)
+    for (e in arr.v) out.add((e as? JVal.JStr)?.v ?: return null)
+    return out
 }

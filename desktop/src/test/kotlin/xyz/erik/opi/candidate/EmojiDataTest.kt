@@ -10,6 +10,7 @@
 package xyz.erik.opi.candidate
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.ceil
@@ -90,5 +91,78 @@ class EmojiDataTest {
             "页数算法与页大小对不上",
             ceil(d.entries.size.toDouble() / SymbolCategories.PAGE_SIZE).toInt() >= 1,
         )
+    }
+
+    // ---------- 字形过滤（2026-10-13，口径对齐 Android `SymbolCatalog.emojiGroups`） ----------
+
+    @Test
+    fun `filter keeps order and remaps group start and count together`() {
+        val d = EmojiData.parse(
+            "😀\ta\t笑脸\n😃\tb\t笑脸\n🐶\tc\t动物\n🍎\td\t食物\n",
+        )
+        val f = EmojiData.filter(d) { it != "😃" && it != "🍎" }
+        assertEquals(listOf("😀", "🐶"), f.entries)
+        // start 与 count **一起**重算：start 是过滤后列表里的下标（组条点击 = pageOfGroup），
+        // count 是组条文案里报的个数 —— 只重算一个就是「点 A 组跳到 B 组」或「个数多报」。
+        assertEquals(
+            listOf(
+                EmojiData.Group("笑脸", 0, 1),
+                EmojiData.Group("动物", 1, 1),
+                EmojiData.Group("食物", 2, 0),
+            ),
+            f.groups,
+        )
+    }
+
+    @Test
+    fun `filter maps a fully dropped group to zero count at the previous group's start`() {
+        // 整组被摘空（本机一个新码位表情都没有）：该组退化成 count = 0、start 与下一组
+        // 相同 —— 组条上它还是个格位（与 Android 同），只是点它跳到的是下一组。
+        val d = EmojiData.parse("😀\ta\t笑脸\n🐶\tb\t动物\n🍎\tc\t食物\n")
+        val f = EmojiData.filter(d) { it != "🐶" }
+        assertEquals(listOf("😀", "🍎"), f.entries)
+        assertEquals(
+            listOf(
+                EmojiData.Group("笑脸", 0, 1),
+                EmojiData.Group("动物", 1, 0),
+                EmojiData.Group("食物", 1, 1),
+            ),
+            f.groups,
+        )
+    }
+
+    @Test
+    fun `filter is idempotent and hands back the same table when nothing is dropped`() {
+        val d = EmojiData.parse("😀\ta\t笑脸\n🐶\tb\t动物\n")
+        assertSame("一条没摘该原样返回", d, EmojiData.filter(d) { true })
+        val once = EmojiData.filter(d) { it != "🐶" }
+        assertEquals(once, EmojiData.filter(once) { it != "🐶" })
+    }
+
+    @Test
+    fun `filter emptying the table degrades to the empty table`() {
+        // 全表被摘空 ⇒ 空 Data（页面走既有的「没有表情数据」降级）；此时组条没有意义。
+        val d = EmojiData.parse("😀\ta\t笑脸\n")
+        assertEquals(EmojiData.Data(emptyList(), emptyList()), EmojiData.filter(d) { false })
+    }
+
+    @Test
+    fun `filtering the real table keeps the group arithmetic intact`() {
+        // 真表 + **确定性**谓词（隔一条摘一条，与字体无关）：重算后的分组仍必须严丝合缝
+        // —— 这是「点组条跳到哪一页」的全部依据。谓词带计数器：顺带钉住
+        // 「每条只问一次、按表序问」（问两次会让这个计数器错位，实现真的变了才红）。
+        val d = loadEmojiData()
+        assertTrue("真表没读到", d.entries.isNotEmpty())
+        var n = -1
+        val f = EmojiData.filter(d) { n++; n % 2 == 0 }
+        assertEquals("每条只问一次且按序", d.entries.size - 1, n)
+        assertEquals((d.entries.size + 1) / 2, f.entries.size)
+        assertEquals("保序（是原表的子序列）", d.entries.filterIndexed { i, _ -> i % 2 == 0 }, f.entries)
+        assertEquals(0, f.groups[0].start)
+        for (k in 1 until f.groups.size) {
+            assertEquals("第 $k 组的起点不接上一组", f.groups[k - 1].start + f.groups[k - 1].count, f.groups[k].start)
+        }
+        assertEquals(f.entries.size, f.groups.sumOf { it.count })
+        assertTrue("末组越界", f.groups.last().start + f.groups.last().count <= f.entries.size)
     }
 }

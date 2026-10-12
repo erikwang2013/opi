@@ -44,7 +44,8 @@ public:
     OpiEngine(fcitx::Instance *instance)
         : shiftToggle_(instance), fanjianToggle_(instance), settingsAction_(instance),
           ctlObject_([this](const std::string &action) { return ctlAction_(action); },
-                     [this]() { return ctlState_(); }),
+                     [this]() { return ctlState_(); },
+                     [this](const std::string &keyword) { return ctlSearch_(keyword); }),
           instance_(instance) {
         loadDictionary();
         // 配置推给引擎必须在 loadDictionary 之后：Rust 侧单例在那一刻才建起来。
@@ -225,6 +226,32 @@ public:
         return "ok";
     }
 
+    // opi-ctl search（只读查询，2026-10-13）的入口：关键字 → 命中条目的 JSON 文本
+    // 数组，或 "err:<码>:<原因>"（协议见 opi_ctl.h 的 Search 段）。
+    // public 与 handleCtlAction_ 同理由：C++ 驱动直接调它（vtable 的 searchHandler_
+    // 就是这个函数，测到的就是 D-Bus 回复出去的那一串）。
+    //
+    // · 空关键字 = **用法错误**（err:2）—— opi-ctl 的 2 就是「用法错误」，本侧不另
+    //   造码。引擎侧 `search("")` 的语义是**全部条目**（Android searchSymbols("")
+    //   同义），把它当搜索结果回出去是答非所问（桌面搜索框清空时该回浏览态，不发
+    //   这一问）。opi-ctl 本地也拒一次（双保险：手发 dbus-send 的人不会绕过）。
+    // · 弱符号为 nullptr（引擎侧未落地）⇒ err:4（功能不可用），同符号浏览那条 ——
+    //   别静默回空数组：桌面会把它显示成「没搜到」，那是**假成功**。
+    // · 类目数据装载态（symbolDataOk_）**不参与**判据：搜索表是编译内嵌的
+    //   （SymbolEngine::builtin），没装 symbol_categories.tsv 也照样能搜。
+    // · **不取 IC**：搜索是进程级单例里的数据，与「当前焦点窗口」无关 ⇒ 没有 IC
+    //   也照常回（与 state 同一条裁决），失败面比 insert/symbols 小一格。
+    std::string handleCtlSearch_(const std::string &keyword) {
+        if (keyword.empty()) {
+            return "err:2:搜索关键字为空（用法错误：opi-ctl search 需要一个关键词）";
+        }
+        if (opi_fcitx5_search_symbols == nullptr) {
+            return "err:4:符号搜索入口未接线（引擎侧未落地），本次查询无效";
+        }
+        return take(opi_fcitx5_search_symbols(
+            reinterpret_cast<const uint8_t *>(keyword.data()), keyword.size()));
+    }
+
     // opi-ctl state（只读查询）的入口。格式与「没有 IC 不是失败」的裁决写在
     // opi_ctl.h 的 State 注释；四个值各自的出处写在 stateLine_ 上。
     // public 与前一个同理由：C++ 驱动直接调它，验的就是 D-Bus 方法回复出去的那一行
@@ -258,6 +285,18 @@ private:
     std::string ctlAction_(const std::string &action) noexcept {
         try {
             return handleCtlAction_(action);
+        } catch (const std::exception &e) {
+            return std::string("err:5:内部异常：") + e.what();
+        } catch (...) {
+            return "err:5:内部异常（非 std::exception）";
+        }
+    }
+
+    // search 的外壳：与 ctlAction_ 逐条同构（同一个 D-Bus 分发路径，同样不捕 C++
+    // 异常）。转发本身要走 std::function 与 take()（拷贝 JSON），都可能 bad_alloc。
+    std::string ctlSearch_(const std::string &keyword) noexcept {
+        try {
+            return handleCtlSearch_(keyword);
         } catch (const std::exception &e) {
             return std::string("err:5:内部异常：") + e.what();
         } catch (...) {

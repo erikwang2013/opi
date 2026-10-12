@@ -6,12 +6,14 @@
 //     opi-ctl symbols|trad|punct|fullwidth|lang    （动作：会改状态）
 //     opi-ctl insert <文本>                        （大页面的上屏通道，2026-10-12 加）
 //     opi-ctl state                                 （只读查询，2026-10-10 用户裁决加）
+//     opi-ctl search <关键词>                       （只读查询，2026-10-13 加）
 // 新增动作要先找 lead 定 —— 别在客户端先加一个服务端还没有的名字（那只会多出
 // 一条「未知动作」的失败路径）。
 // 两条路的**协议不同**：动作发 `Trigger(string:<动作>)`，应答 "ok" / "err:…"，
-// 成功静默；state 发 `State`（**无参数**），应答就是那一行状态串本身 —— 校验形状
-// 后原样打到 stdout（细节在 send_state / check_state_shape）。动作集仍是那五个：
-// state 不改任何状态，故不进 ACTIONS（desktop 的按钮映射也不含它）。
+// 成功静默；state 发 `State`（**无参数**）、search 发 `Search(string:<关键词>)`，
+// 应答就是载荷本身 —— 校验形状后原样打到 stdout（细节在 send_state /
+// check_state_shape / send_search / check_search_shape）。动作集仍是那五个：
+// state/search 不改任何状态，故不进 ACTIONS（desktop 的按钮映射也不含它们）。
 //
 // 传输：本进程**不**自己说 D-Bus，而是起一个 `dbus-send` 把一条方法调用交给插件
 // 自己挂的 D-Bus 对象（接收侧的 spike 结论与拒绝理由在
@@ -39,19 +41,25 @@
 //     输入法（无 IC 且 ShareInputState=No 没兜底）—— 前端约定按「未知 = 维持现状」，
 //     2026-10-10 追加在行尾 —— 旧解析只读前四段，多一段不会读错位），
 //     或同样的 "err:<码>:<原因>"。
+//   插件的方法 Search(string) -> string（只读查询，一个入参，2026-10-13 加）：
+//     **JSON 文本数组**（`["…"]`，serde_json 输出；`[]` = 没搜到），或同样的
+//     "err:<码>:<原因>"。空关键词在**本地**就拒（不发 D-Bus，退出码 2）—— 服务端
+//     也拒一次（err:2），手发 dbus-send 的人不会绕过。载荷的完整解析归桌面
+//     （JParse），这里只做轻量形状检查（理由见 check_search_shape）。
 //
 // 退出码（**契约**，lead 2026-10-10 钉死：0=成功；非 0 必须带可区分的 stderr 原因；
 // desktop-ui 按「非零 = 可见反馈」实现，不许只有哑失败）：
 //   0  成功
-//   2  用法错误（动作缺失 / 未知动作）—— 本地就能判，不发 D-Bus
+//   2  用法错误（动作缺失 / 未知动作 / insert-search 缺参数）—— 本地就能判，不发 D-Bus
 //   3  D-Bus 通道不通：会话总线连不上 / fcitx5 不在总线上（没在运行）/ dbus-send 缺失
-//   4  功能不可用：服务端 err:4（符号浏览入口未接线、类目数据缺失）或对象/接口
-//      不存在（插件没装 / 没加载 ⇒ 接收侧没注册）
+//   4  功能不可用：服务端 err:4（符号浏览入口未接线、类目数据缺失、搜索入口未接线）
+//      或对象/接口/方法不存在（插件没装 / 没加载 ⇒ 接收侧没注册、或插件版本旧到
+//      还没有 Search 方法）
 //   5  动作被拒 / 其他：服务端 err:5（未知动作、内部异常）或应答格式不认识
 // 3/4 的分界是「通道」与「功能」；4/5 的分界是「这东西没有」与「这东西拒绝了」。
-// state 走**同一张表**：0 = 拿到状态行（唯一会写 stdout 的路径）；3/4 同上面两条；
-// 5 多一档含义 —— 应答不是那个冻结形状（插件与本工具版本对不上：宁可在这里红，
-// 也别把错位的值交给桌面画图标）。
+// state/search 走**同一张表**：0 = 拿到载荷（只有这两条会写 stdout，各写各的形状）；
+// 3/4 同上面两条；5 多一档含义 —— 应答不是那个冻结形状（插件与本工具版本对不上：
+// 宁可在这里红，也别把错位的值交给桌面画图标 / 显示成搜索结果）。
 
 use std::process::Command;
 
@@ -94,6 +102,18 @@ fn run() -> i32 {
                 2
             }
         },
+        // `search <关键词>`：桌面符号/表情页搜索框的数据来源（2026-10-13）。桌面进程
+        // 够不着引擎（引擎在插件进程里），所以搜索与上屏一样走 CLI。**空关键词 = 用法
+        // 错误**（2）：引擎侧 search("") 的语义是「全部条目」，那是浏览不是搜索 ——
+        // 桌面清空搜索框时该回浏览态，不发这一问。服务端也拒一次（见文件头协议段）。
+        Some("search") => match args.get(2).map(String::as_str) {
+            Some(kw) if !kw.is_empty() => send_search(kw),
+            _ => {
+                eprintln!("opi-ctl: search 需要一个非空关键词");
+                usage();
+                2
+            }
+        },
         Some(a) if ACTIONS.contains(&a) => send(a),
         Some(a) => {
             eprintln!("opi-ctl: 未知动作：{a}");
@@ -109,7 +129,9 @@ fn run() -> i32 {
 }
 
 fn usage() {
-    eprintln!("usage: opi-ctl symbols|trad|punct|fullwidth|lang [insert <文本>] | state");
+    eprintln!(
+        "usage: opi-ctl symbols|trad|punct|fullwidth|lang [insert <文本>] | state | search <关键词>"
+    );
 }
 
 /// 发一条 Trigger(action)，把应答翻成退出码。参数顺序与落点是硬契约 ——
@@ -146,6 +168,55 @@ fn send_state() -> i32 {
             5
         }
     }
+}
+
+/// 搜索（只读查询）：`Search(string:<关键词>)` → 命中条目的 JSON 文本数组（或 err:…）。
+/// 与 state 同路（只读、方法名不同、成功时打 stdout）；与动作路径的分歧多一处 ——
+/// **带一个参数**（state 是无参那半）。
+///
+/// 载荷的**完整**解析归桌面（那边有 JParse 递归下降解析器，能把元素逐个拿出来建
+/// 网格）；这里只查形状。为什么不做完整解析：opi-tools **没有 serde_json 依赖**
+/// （Cargo.toml 里就四个依赖，加一个穿透到打包镜像的离线构建 —— 为一个「看一眼」
+/// 的形状检查不值得），而轻量检查已经够本层的用途：把「插件与本工具版本对不上 /
+/// 应答被截断」与「真的拿到了数组」分开，别把错位的值当搜索结果涂到屏幕上。
+fn send_search(keyword: &str) -> i32 {
+    let arg = format!("string:{keyword}");
+    let reply = match call_bus(&format!("{IFACE}.Search"), Some(&arg)) {
+        Ok(r) => r,
+        Err(code) => return code,
+    };
+    // 服务端分类的失败与动作路径同一套映射（err:2 空关键词 / err:4 未接线 原样透传）。
+    if reply.starts_with("err:") {
+        return handle_reply(&reply);
+    }
+    match check_search_shape(&reply) {
+        Ok(()) => {
+            println!("{reply}");
+            0
+        }
+        Err(why) => {
+            eprintln!(
+                "opi-ctl: search 的输出不像 JSON 文本数组（{why}）—— 插件与本工具版本对不上？"
+            );
+            eprintln!("       原始输出：{reply}");
+            5
+        }
+    }
+}
+
+/// 搜索载荷的**轻量**形状检查：去首尾空白后 `[` 开头、`]` 结尾。
+/// 刻意**只**查这两头：数组里每个元素是不是合法 JS 字符串（转义、代理对）归桌面的
+/// 真解析器判 —— 这里手写一个半吊子 JSON 词法器才是真正的风险（两份实现必然漂，
+/// 且漂的那份是错的没人知道）。空数组 `[]` 合法（= 没搜到）。
+fn check_search_shape(reply: &str) -> Result<(), String> {
+    let t = reply.trim();
+    if !t.starts_with('[') {
+        return Err("开头不是 `[`".to_string());
+    }
+    if !t.ends_with(']') {
+        return Err("结尾不是 `]`".to_string());
+    }
+    Ok(())
 }
 
 /// 冻结的状态串键序与取值域（与 cpp/opi_ctl.h 的 State 注释成对；桌面端按 `;`

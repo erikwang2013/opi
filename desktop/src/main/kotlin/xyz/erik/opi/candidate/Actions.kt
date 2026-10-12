@@ -107,6 +107,63 @@ fun desktopSymbolCommit(text: String): String? =
     if (isWindows()) "上屏失败：没连上输入法（符号页要由候选窗进程上屏）"
     else runExternal(listOf("opi-ctl", "insert", text))
 
+// ---------- 符号/表情搜索（2026-10-13） ----------
+
+/**
+ * 一次搜索的结局。**Failed 与「命中为空」必须分开**：前者是通道/协议坏了（原因要如实
+ * 显示），后者是引擎说没搜到（正常的空结果）—— 把坏载荷画成「没搜到」正是最要防的假绿。
+ */
+sealed interface SymbolSearch {
+    /** 引擎命中的条目文本（保序、已按引擎口径去重 —— 本侧不重排、不合并）。 */
+    class Hits(val texts: List<String>) : SymbolSearch
+
+    /** 通道/协议失败：`why` = **给用户看的**那句话（与上屏失败同一条纪律）。 */
+    class Failed(val why: String) : SymbolSearch
+}
+
+/**
+ * `opi-ctl search` 的一次应答 → 结局（纯函数：退出码 + 输出首行）。抽出来只为一件事：
+ * 让「退出码/载荷怎么翻译成用户看到的话」有测试钉住 —— 进程那一段（[runCapture]）
+ * 与 `insert`/`state` 是同一条路，不重复测。
+ *
+ * 载荷 = **一整行** JSON 字符串数组（`["…","…"]`；serde_json 写出，控制字符转义成
+ * `\n` 这类转义序列，所以永远是一行）。退出码语义与其它动作同（`opi-ctl` 头部那张表）
+ * —— 2=用法错误、3=通道不通、4=功能不可用、5=应答异形；这里不分类，只把原始原因带出来。
+ */
+internal fun searchResult(code: Int, firstLine: String?): SymbolSearch {
+    if (code != 0) {
+        return SymbolSearch.Failed(
+            "「opi-ctl search」退出码 $code${if (firstLine.isNullOrEmpty()) "" else "：$firstLine"}",
+        )
+    }
+    val texts = parseJsonStringArray(firstLine.orEmpty())
+        ?: return SymbolSearch.Failed(
+            "「opi-ctl search」应答看不懂（不是 JSON 文本数组）：${firstLine.orEmpty().take(120)}",
+        )
+    return SymbolSearch.Hits(texts)
+}
+
+/**
+ * 搜一次。关键词必须非空 —— 空关键词在 `opi-ctl` 侧是**用法错误**（退出码 2），
+ * 界面清空搜索框时该回浏览态，不该发这一问；真被问到就回「没有命中」，不把
+ * 「搜索框空着」这种事报成错误。
+ *
+ * · Linux：`opi-ctl search <关键词>`（D-Bus `Search(string)` → 引擎 `search_symbols`）。
+ * · Windows：只能如实失败，理由同 [desktopSymbolCommit] —— 引擎在候选窗进程里，
+ *   本轮没接线（不是「暂不支持」的客气话，是那条通路真的不存在）。
+ *
+ * 超时 3s：与状态栏动作同档。搜索是**打一个字发一次**（防抖在调用方），挂住不能等。
+ */
+fun desktopSymbolSearch(query: String, timeoutMs: Long = 3000): SymbolSearch {
+    if (query.isBlank()) return SymbolSearch.Hits(emptyList())
+    if (isWindows()) return SymbolSearch.Failed("Windows 上还没接搜索通道（引擎在候选窗进程里）")
+    return when (val r = runCapture(listOf("opi-ctl", "search", query), timeoutMs)) {
+        is RunResult.Exit -> searchResult(r.code, r.firstLine)
+        RunResult.Timeout -> SymbolSearch.Failed("「opi-ctl search」超时（无响应 ${timeoutMs / 1000}s）")
+        is RunResult.Failed -> SymbolSearch.Failed("跑不了「opi-ctl」：${r.why}")
+    }
+}
+
 // ---------- 输入法状态 ----------
 
 /**

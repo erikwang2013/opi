@@ -9,6 +9,7 @@
 package xyz.erik.opi.candidate
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.file.Files
@@ -124,5 +125,60 @@ class SymbolCategoriesTest {
         )
         assertEquals("常用", cats[0].label)
         assertEquals("拼音", cats[12].label) // 序号 13：字段 2 是名称、行序即序号序
+    }
+
+    // ---------- 字形过滤（2026-10-13） ----------
+
+    @Test
+    fun `filter drops unrenderable symbols and keeps category order and indices`() {
+        val cats = SymbolCategories.parse("1\t常用\t， 。 、\n2\t英文\t! \" #\n")
+        val f = SymbolCategories.filter(cats) { it != "。" && it != "\"" }
+        // 序号与类目顺序一字不动（序号是右竖条的显示名，也是 `selected` 的下标）
+        assertEquals(listOf(1, 2), f.map { it.index })
+        assertEquals(listOf("，", "、"), f[0].symbols)
+        assertEquals(listOf("!", "#"), f[1].symbols)
+    }
+
+    @Test
+    fun `filter keeps a fully dropped category as an empty grid`() {
+        // 类目本身不删（哪怕整类都被摘空）：右竖条是按序号的固定格位，格位随字体变化
+        // 就没法靠位置记「第三个是数学符号」了。空类目显示成空网格，不是「没有类目数据」。
+        val cats = SymbolCategories.parse("1\t常用\t， 。\n2\t英文\t!\n")
+        val f = SymbolCategories.filter(cats) { it != "，" && it != "。" }
+        assertEquals(2, f.size)
+        assertTrue("被摘空的类目该留下但符号表空", f[0].symbols.isEmpty())
+        assertEquals(listOf("!"), f[1].symbols)
+    }
+
+    @Test
+    fun `filter preserves the table when nothing is dropped and is idempotent`() {
+        val cats = SymbolCategories.parse("1\t常用\t， 。 、\n2\t英文\t! ?\n")
+        // 一条没摘 ⇒ **原实例**返回（不是「等值的新表」）：页面的 remember 键就是它。
+        assertSame("一条没摘该原样返回", cats, SymbolCategories.filter(cats) { true })
+        val once = SymbolCategories.filter(cats) { it != "。" }
+        assertEquals(once, SymbolCategories.filter(once) { it != "。" })
+    }
+
+    @Test
+    fun `filtering the shipped asset keeps every category and every surviving symbol`() {
+        // 真资产过一遍过滤。谓词选**确定性**的（与字体无关，否则这台机器上绿、换台红）：
+        // 「长度 ≤ 3」在真资产上会摘掉那几条多字符 token（颜文字之类），
+        // 而每条残留都必须与原表逐条同序 —— 过滤不许重排、不许换条目。
+        val f = Paths.get("../android/app/src/main/assets/symbol_categories.tsv")
+        assertTrue("资产不在了：${f.toAbsolutePath()}", Files.exists(f))
+        val cats = SymbolCategories.parse(Files.readString(f))
+        val out = SymbolCategories.filter(cats) { it.length <= 3 }
+        assertEquals("类目一个不少（竖条格位固定）", 22, out.size)
+        assertEquals((1..22).toList(), out.map { it.index })
+        var dropped = 0
+        for ((i, c) in out.withIndex()) {
+            assertEquals(
+                "第 ${c.index} 类的残留表该与原表同序同条目",
+                cats[i].symbols.filter { it.length <= 3 },
+                c.symbols,
+            )
+            dropped += cats[i].symbols.size - c.symbols.size
+        }
+        assertTrue("这个谓词在真资产上该真摘掉东西（否则这条测的是恒等式）", dropped > 0)
     }
 }

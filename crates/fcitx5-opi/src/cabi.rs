@@ -9,7 +9,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
 
 use crate::data_dir;
-use crate::{ensure_panic_hook, install, read_utf8, with_state};
+use crate::{OpString, ensure_panic_hook, install, read_utf8, texts_to_json, with_state};
 
 /// 初始化词库（B3）：源路径 + XDG 数据目录 → 建目录 + size 校验拷贝 + 装载引擎；任一步失败 → 内置回退词库并返回 false（对照 EngineLoader：load(null)）。
 /// # Safety
@@ -124,3 +124,49 @@ pub unsafe extern "C" fn opi_fcitx5_load_symbols(ptr: *const u8, len: usize) -> 
     }))
     .unwrap_or(-1)
 }
+
+/// 关键字搜索（2026-10-13，桌面符号/表情页的搜索框）：关键字字节 + 长度 →
+/// **命中条目的 JSON 文本数组**（`["…","…"]`，serde_json 输出，非 NUL 结尾）。
+///
+/// 语义**逐字来自引擎**（`Engine::search_symbols` → `SymbolEngine::search`）：
+/// 拼音/英文前缀匹配、按 text 排序后按 text 去重 —— 与 Android 的
+/// `searchSymbols(keyword)` 同一张表（`symbols.tsv`，编译期内嵌）、同一套排序。
+/// ⚠️ **不在宿主侧重算**：Android 那边有过「宿主侧照抄引擎判据」的教训
+/// （SymbolCatalog 头注：引擎换判据后宿主侧静默漂了整整一批条目），故这条出口
+/// 只做投影，不做筛选/排序/去重。
+///
+/// 与符号类目数据（`symbol_categories.tsv`）**无关**：搜索表是编译内嵌的
+/// （`SymbolEngine::builtin`），没装类目数据也能搜 —— 与 Android「搜索独立于
+/// 浏览数据」同一条路；调用方**不要**拿 `opi_fcitx5_load_symbols` 的返回值
+/// 卡这条出口。
+///
+/// · 空关键字 → **全部条目**（引擎既有语义，同 Android `searchSymbols('')`）。
+///   「空关键字 = 用法错误」是**协议层**（C++ 的 Search 方法 / opi-ctl）的裁决，
+///   不在这一层 —— 那层拒了才是它该拒的，这里只管投影。
+/// · 引擎未装载 → 空数组（`with_state` 为 None；与 `opi_fcitx5_candidates` 的
+///   哨兵一致：拿不到 = 空，不是错误）。
+/// # Safety
+///
+/// `ptr` 必须指向至少 `len` 字节的有效内存（或为 null，视为空串 → 全部条目）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_search_symbols(ptr: *const u8, len: usize) -> OpString {
+    ensure_panic_hook();
+    let texts = catch_unwind(AssertUnwindSafe(|| {
+        let keyword = unsafe { read_utf8(ptr, len) }.unwrap_or_default();
+        with_state(|s| {
+            s.engine
+                .search_symbols(&keyword)
+                .into_iter()
+                .map(|e| e.text)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default()
+    }))
+    .unwrap_or_default();
+    texts_to_json(texts)
+}
+
+// 单测独立成文件（`#[path]` 引入）以保持本文件 <500 行，与 lib.rs 的 tests 同惯例。
+#[cfg(test)]
+#[path = "cabi_search_tests.rs"]
+mod search_tests;

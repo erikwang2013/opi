@@ -24,7 +24,10 @@ use engine_core::{Engine, Mode, Scheme};
 fn table_marks_traditional_forms_and_spares_the_lookalikes() {
     // 真·繁体专形（都有对应简体、且自己不在 GB2312）
     for (t, s) in [("國", "国"), ("學", "学"), ("臺", "台"), ("發", "发")] {
-        assert!(is_trad_only(t.chars().next().unwrap()), "{t}（简 {s}）应在表里");
+        assert!(
+            is_trad_only(t.chars().next().unwrap()),
+            "{t}（简 {s}）应在表里"
+        );
         assert!(
             !is_trad_only(s.chars().next().unwrap()),
             "{s} 是简体形，不该被判成繁体"
