@@ -11,8 +11,6 @@ mod candidates_scheme_impl;
 pub mod composer;
 pub mod dictionary;
 pub mod engine;
-#[path = "engine_assoc.rs"]
-mod engine_assoc_impl; // 联想一族（500 行门禁拆出，见文件头）
 #[path = "engine_punct.rs"]
 mod engine_punct_impl; // 标点/全角一族（500 行门禁拆出，见文件头）
 #[path = "engine_readings.rs"]

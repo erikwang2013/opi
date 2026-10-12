@@ -116,6 +116,60 @@ fn readings_are_deduped_in_first_appearance_order() {
     );
 }
 
+/// 左列读数**短→长**（2026-10-12 晚用户裁决「输入的拼音，在左侧排列从短到长」）。
+///
+/// 怎么造出「名次序 ≠ 长度序」的夹具：先用一次选词把长词 `号码`（键 `haoma`，5 键）
+/// 学进用户词，下次取候选它靠 **user_boost** 压过精确档（引擎既有行为：用户词 +
+/// boost > 精确加成 boost/2 > 静态词频，见 `rank_score`）。于是名次序 = 号码(长)、
+/// 嘎(短、精确)、好、干 —— **长读音排在最前**，名次序照抄的实现必红。
+#[test]
+fn readings_are_sorted_short_to_long_and_stable() {
+    let mut e = Engine::new(
+        dict(&[
+            ("hao", "好", 9000),
+            ("gan", "干", 8000),
+            ("ga", "嘎", 100),
+            ("haoma", "号码", 7000),
+        ]),
+        no_symbols(),
+        true, // 学习开：下面要先学一次 号码
+    );
+    e.set_scheme(Scheme::Nine);
+    // 学前置：42662 = haoma，选首位（整串精确命中）——把它记进学习器
+    type_str(&mut e, "42662");
+    let first = e
+        .candidates(8)
+        .into_iter()
+        .map(|c| c.text)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        first.first().map(String::as_str),
+        Some("号码"),
+        "前置：42662 首位是号码"
+    );
+    let _ = e.select(0);
+
+    type_str(&mut e, "42"); // 4=ghi 2=abc：ha* / ga* 一族
+    let cands: Vec<String> = e.candidates(8).into_iter().map(|c| c.text).collect();
+    assert_eq!(
+        cands.first().map(String::as_str),
+        Some("号码"),
+        "前置：学过的长词现在排最前（否则这条测不出排序；{cands:?}）"
+    );
+    let readings = e.candidate_readings();
+    assert_eq!(
+        readings.first().map(String::as_str),
+        Some("ga"),
+        "读数首位必须是**最短**那条（名次序里它在长词之后）：{readings:?}"
+    );
+    let lens: Vec<usize> = readings.iter().map(|r| r.chars().count()).collect();
+    assert!(
+        lens.windows(2).all(|w| w[0] <= w[1]),
+        "读数必须按长度不降序（同长度保持名次序 —— 稳定）：{readings:?} / {lens:?}"
+    );
+    assert_eq!(readings.len(), 4, "四条读音各出一行：{readings:?}");
+}
+
 /// 钉读音（9 键左列点一行拼音）：候选**收窄**到该读音一族、**不上屏**；解除回全量；
 /// 缓冲一变自动作废（配对语义：同一缓冲内有效）。
 #[test]
