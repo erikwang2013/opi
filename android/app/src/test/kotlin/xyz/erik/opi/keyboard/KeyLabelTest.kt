@@ -7,7 +7,7 @@ import xyz.erik.opi.candidate.barBufferText
 import xyz.erik.opi.candidate.composingAnnouncement
 import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.engine.InputScheme
-import xyz.erik.opi.ime.modeLabelOf
+import xyz.erik.opi.ime.modeKeyLabelOf
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -70,12 +70,19 @@ class KeyLabelTest {
     }
 
     @Test
-    fun modeLabelFollowsActualMode() {
-        // 符号搜索叠盘的模式键原先硬编码 "中"：实际是英文/繁体时键面撒谎
-        // （读屏还会照着这个字念「中英切换」）
-        assertEquals("中", modeLabelOf(EngineMode.PINYIN))
-        assertEquals("繁", modeLabelOf(EngineMode.TRADITIONAL))
-        assertEquals("英", modeLabelOf(EngineMode.ENGLISH))
-        assertEquals("英", modeLabelOf(EngineMode.NUMBER)) // 非拼音类一律按英文显示
+    fun modeKeyLabelShowsTheTargetNotTheCurrentMode() {
+        // 2026-10-12 晚用户裁决：「点击英文按钮切换到英文键盘，这时为何在英文键盘还显示
+        // 英的按钮，点击了是中文键盘，按钮是中才对」——键面写字面目标（与 9 键底行
+        // 「英文」键同一条语义）。逐条对齐 cycleMode() 的次序：中→繁、繁→英、英→回中文。
+        assertEquals("繁", modeKeyLabelOf(EngineMode.PINYIN, lastChineseIsTrad = false))
+        assertEquals("英", modeKeyLabelOf(EngineMode.TRADITIONAL, lastChineseIsTrad = false))
+        assertEquals("中", modeKeyLabelOf(EngineMode.ENGLISH, lastChineseIsTrad = false))
+        // 数字面板也走 cycleMode 的 else 档（回上次的中文方案）⇒ 键面是「中」不是「英」。
+        // ⚠️ 我第一版把这条写成了「英」——是照抄旧语义（当前态一律非拼音按英文）写的，
+        // 实现是对的、期望错了，跑出来红在这条（expected 英 but was 中）。
+        assertEquals("中", modeKeyLabelOf(EngineMode.NUMBER, lastChineseIsTrad = false))
+        // 「英→回上次的中文方案」：上次是繁体就回繁体（键面同说实话）
+        assertEquals("繁", modeKeyLabelOf(EngineMode.ENGLISH, lastChineseIsTrad = true))
+        assertEquals("繁", modeKeyLabelOf(EngineMode.NUMBER, lastChineseIsTrad = true))
     }
 }

@@ -59,11 +59,12 @@ fun QwertyKeyboard(
                 modeLabel,
                 modifier = Modifier.weight(1f),
                 onTap = onModeSwitch,
-                // 键面只有「中/繁/英」一个字，读屏分不清这是当前模式还是可切换项
+                // 键面字是**点它会切到哪**（2026-10-12 晚裁决，见 ime/ImeScreen.kt 的
+                // modeKeyLabelOf）—— 读屏按同一语义念成「切到X」，别念成当前模式。
                 stateDescription = when (modeLabel) {
-                    "中" -> "中文"
-                    "繁" -> "繁体"
-                    "英" -> "英文"
+                    "中" -> "切到中文"
+                    "繁" -> "切到繁体"
+                    "英" -> "切到英文"
                     else -> null
                 },
             )

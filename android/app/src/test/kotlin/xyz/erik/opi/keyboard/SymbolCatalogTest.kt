@@ -289,6 +289,31 @@ class SymbolCatalogTest {
     }
 
     @Test
+    fun unrenderableGlyphsAreFilteredAndGroupStartsFollow() {
+        // 2026-10-12 用户报障「有个表情显示是长方形框」= U+1FAEB（Unicode 17.0），
+        // 设备系统字体没这个字形。面板层按 canRender 摘掉它；**分组下标必须跟着重算**
+        // —— 点分类条是 scrollToItem(组.start)，不重算就滚错组。
+        // 夹具：5 条表情，第 1 条（下标 1）渲染不出；组 = [0,3) 笑脸 / [3,5) 人物。
+        val api = FakeSymbolApi().apply {
+            emojiResults = listOf("😀", "🫫", "😄", "🐶", "🐱")
+            groupsJson = "[{\"name\":\"笑脸\",\"start\":0,\"count\":3},{\"name\":\"人物\",\"start\":3,\"count\":2}]"
+        }
+        val catalog = SymbolCatalog(api, canRender = { it != "🫫" })
+        assertEquals(listOf("😀", "😄", "🐶", "🐱"), catalog.emoji)
+        // 笑脸组：原 [0,3) → 摘掉 1 条 ⇒ start=0 / count=2；人物组：原 [3,5) → 前面活了 2 条 ⇒ start=2 / count=2
+        assertEquals(
+            listOf(
+                SymbolCatalog.EmojiGroup("笑脸", 0, 2),
+                SymbolCatalog.EmojiGroup("人物", 2, 2),
+            ),
+            catalog.emojiGroups,
+        )
+        // 全部渲染不出 ⇒ 空列表（页面显示空态，不是画一排空心框）
+        val none = SymbolCatalog(api, canRender = { false })
+        assertTrue(none.emoji.isEmpty())
+    }
+
+    @Test
     fun emptyEmojiGroupsIsNotCachedSoItRecovers() {
         val api = FakeSymbolApi().apply { groupsJson = null } // 未就绪
         val catalog = SymbolCatalog(api)

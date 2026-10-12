@@ -266,13 +266,13 @@ private fun KeyboardArea(
                     onShift = null,
                     onShiftLongPress = null,
                     shiftState = ShiftState.OFF,
-                    modeLabel = modeLabelOf(controller.mode),
+                    modeLabel = state.modeKeyLabel,
                 )
             }
         }
         ImeState.View.QWERTY -> {
             // 输入模式分发（生僻字是面板，已在上面分支）。
-            val label = modeLabelOf(controller.mode)
+            val label = state.modeKeyLabel
             when (state.inputMode) {
                 InputMode.PINYIN9, InputMode.BIG9 -> NineKeyKeyboard(
                     modifier = modifier,
@@ -348,12 +348,18 @@ private fun KeyboardArea(
 }
 
 /**
- * 模式键键面字（字母盘与符号搜索叠盘共用一张表）。
- * 键面只有一个字，读屏靠 [xyz.erik.opi.keyboard.spokenKeyName] 念成「中英切换」，
- * 所以这个字必须说实话 —— 叠盘里曾经硬编码「中」。
+ * 模式键键面字 = **点它会切到哪**（不是当前模式；用户裁决 2026-10-12 晚）。
+ * 纯函数，单测钉住（[xyz.erik.opi.ime.ImeState.modeKeyLabel] 是它的读侧）。
+ *
+ * 与 `cycleMode()` 的次序**逐条对应**：中→繁、繁→英、英→回上次的中文方案
+ * （`lastChineseIsTrad` = 上次的中文方案是不是繁体）。改次序必须同改这里。
+ *
+ * ⚠️ 历史：此前这里返回的是**当前**模式（中/繁/英）—— 用户实测报「切到英文键盘后
+ * 键面还写着英，点下去却是中文键盘，键面该是「中」才对」。键面写动作、当前态由键盘
+ * 布局本身表达（英文态就是 26 键盘），与 9 键底行「英文」键同一条语义。
  */
-internal fun modeLabelOf(mode: EngineMode): String = when (mode) {
-    EngineMode.PINYIN -> "中"
-    EngineMode.TRADITIONAL -> "繁"
-    else -> "英"
+internal fun modeKeyLabelOf(mode: EngineMode, lastChineseIsTrad: Boolean): String = when (mode) {
+    EngineMode.PINYIN -> "繁"
+    EngineMode.TRADITIONAL -> "英"
+    else -> if (lastChineseIsTrad) "繁" else "中"
 }

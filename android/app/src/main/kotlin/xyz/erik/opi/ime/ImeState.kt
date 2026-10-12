@@ -203,6 +203,21 @@ class ImeState(
      * 保留的拼音切回中文后继续打/接着选。⚠️ 「输入模式」面板那条（[selectInputMode]）
      * 仍先 commit 再换 —— 那是明确换布局的动作，判据不同，别顺手统一。
      */
+    /**
+     * 26 键底行模式键的**键面字 = 点它会切到哪**（用户裁决 2026-10-12 晚：
+     * 「点击英文按钮切换到英文键盘，这时为何在英文键盘还显示英的按钮，点击了是中文键盘，
+     * 按钮是中才对」）。与 9 键底行「英文」键**同一条语义** —— 键面写字面目标（那是动作），
+     * 不写当前态；当前态由候选栏/键盘布局本身表达（英文态是 26 键盘）。
+     *
+     * 目标 = [cycleMode] 的下一档：中→繁、繁→英、英→（回上次的中文方案）。
+     * ⚠️ 改 [cycleMode] 的次序时**必须同改这里** —— 键面说谎比没有键面更坏。
+     */
+    val modeKeyLabel: String
+        get() = modeKeyLabelOf(
+            controller.mode,
+            lastChineseMode.engineMode == EngineMode.TRADITIONAL,
+        )
+
     fun cycleMode() {
         when (controller.mode) {
             EngineMode.PINYIN ->
@@ -227,14 +242,15 @@ class ImeState(
 
     /**
      * 把 pending 缓冲**按拼音原样上屏**（2026-10-10 用户裁决，切英文专用）：
-     * 文本即组合串 [EngineController.composingText]（读数优先；26 键无候选回退原字母
+     * 文本取 [EngineController.pendingCommitText]（读数优先；26 键无候选回退原字母；
+     * ⚠️ **不是** [EngineController.composingText] —— 那个带待编键的「·」显示记号
      * ——「字母串原样留下」；**9 键读数空不回退数字** —— 那是按键编码不是文本，
      * 2026-10-11 修「9 键没匹配的时候会变成数字输入」的第三扇门）。空文本 = 只清
      * 不上屏；空缓冲 = 空操作。
      */
     private fun commitPendingAsPinyin() {
         if (controller.buffer.isEmpty()) return
-        val text = controller.composingText()
+        val text = controller.pendingCommitText()
         controller.clear()
         if (text.isNotEmpty()) commit(text)
     }

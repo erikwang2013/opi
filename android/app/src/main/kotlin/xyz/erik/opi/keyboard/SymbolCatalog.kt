@@ -26,7 +26,14 @@ interface SymbolApi {
  *
  * emoji 与否**由引擎判定**（`emojiSymbols()`），本类不持有任何码位启发式 —— 见 [isEmoji]。
  */
-class SymbolCatalog(private val api: SymbolApi = OpiEngine) {
+class SymbolCatalog(
+    private val api: SymbolApi = OpiEngine,
+    /**
+     * 「本机字体画不画得出这个字形」—— 判据见 [canRenderGlyph]（测试注入 `{ true }`）。
+     * **只对单码位条目生效**（多码位序列的判定不可靠，理由见那个函数）。
+     */
+    private val canRender: (String) -> Boolean = { true },
+) {
 
     /** 符号块（symbolBlocks() JSON 解析，serde 输出固定 schema）。 */
     data class Block(val id: Short, val start: Int, val end: Int, val name: String, val common: Boolean)
@@ -97,7 +104,7 @@ class SymbolCatalog(private val api: SymbolApi = OpiEngine) {
     private val emojiData: Pair<List<String>, Set<String>>
         get() {
             _emojiData?.takeIf { it.first.isNotEmpty() }?.let { return it }
-            val list = api.emojiSymbols()?.toList() ?: emptyList()
+            val list = (api.emojiSymbols()?.toList() ?: emptyList()).filter(canRender)
             val pair = list to list.toHashSet()
             if (list.isNotEmpty()) _emojiData = pair
             return pair
@@ -119,7 +126,31 @@ class SymbolCatalog(private val api: SymbolApi = OpiEngine) {
      */
     val emojiGroups: List<EmojiGroup> get() {
         _emojiGroups?.takeIf { it.isNotEmpty() }?.let { return it }
-        val list = parseEmojiGroups(api.emojiGroups() ?: "")
+        val raw = parseEmojiGroups(api.emojiGroups() ?: "")
+        // ⚠️ `start` 必须是**过滤后**列表里的下标（过滤会摘掉若干条，原下标会整体偏前）
+        // —— 点分类条是 `grid.scrollToItem(组.start)`，不重算就会滚错组。
+        // 前缀存活数：raw 的 [0, start) 里有多少条通过了同一套 [canRender]。
+        val rawList = api.emojiSymbols()?.toList() ?: emptyList()
+        // 表情列表拿不到（引擎未就绪）⇒ **不重算**：没有列表就没有「过滤后下标」可言，
+        // 硬算会把所有组的 start 压成 0（那比不显示分类更坏）。
+        val list = if (rawList.isEmpty()) {
+            raw
+        } else {
+            val aliveUpTo = IntArray(rawList.size + 1)
+            var alive = 0
+            for (i in rawList.indices) {
+                aliveUpTo[i] = alive
+                if (canRender(rawList[i])) alive++
+            }
+            aliveUpTo[rawList.size] = alive
+            // start 与 count **一起**重算：count 是分类条读屏文案（「笑脸（N 个）」），
+            // 不跟着减就会把摘掉的条数也报进去。
+            raw.map { g ->
+                val from = g.start.coerceIn(0, rawList.size)
+                val to = (g.start + g.count).coerceIn(0, rawList.size)
+                g.copy(start = aliveUpTo[from], count = aliveUpTo[to] - aliveUpTo[from])
+            }
+        }
         return list.also { if (it.isNotEmpty()) _emojiGroups = it }
     }
 
@@ -133,6 +164,21 @@ class SymbolCatalog(private val api: SymbolApi = OpiEngine) {
 
     companion object {
         const val maxRecents = 50
+
+        /**
+         * 「本机字体画不画得出这个字形」（`Paint.hasGlyph`，API 23+）。
+         *
+         * 来由（2026-10-12 用户报障「有个表情显示是长方形框」）：数据里有 U+1FAEB
+         * 「cracking face」（Unicode 17.0），而设备系统字体（Noto Color Emoji）没覆盖
+         * ⇒ 网格里画出一个空心矩形。数据本身没错（新机型/新字体会显示），错的只是把它
+         * 硬画出来。
+         *
+         * ⚠️ **只判单码位**：`hasGlyph` 对多码位序列问的是「整串连字有没有字形」，
+         * 旗帜（🇨🇳 = 两个区域指示符）/家庭（ZWJ）/键帽这类会**误判成没有**，把本来
+         * 能显示的整类藏掉 —— 那比留一个空心框更坏。多码位一律放行。
+         */
+        fun canRenderGlyph(paint: android.graphics.Paint, text: String): Boolean =
+            text.codePointCount(0, text.length) > 1 || paint.hasGlyph(text)
 
         /** 解析 symbolBlocks() JSON（serde 固定输出 `[{"id","start","end","name","common"}]`）。 */
         fun parseBlocks(json: String): List<Block> {
