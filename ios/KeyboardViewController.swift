@@ -26,7 +26,7 @@ final class KeyboardViewController: UIInputViewController {
 
     // MARK: - 状态
 
-    // ⚠️ 下面这几个成员与 `refresh` / `insert` / `modeLabel` 都是 **internal**
+    // ⚠️ 下面这几个成员与 `refresh` / `insert` / `modeKeyLabel` 都是 **internal**
     // （不是 `private`）：`KeyboardHardware.swift` 那个扩展要用它们，而 Swift 的
     // `private` 只跨「**同文件**的扩展」可见，跨文件必须放开。
     // **不要为了整洁把它们改回 `private`** —— 那会让 `KeyboardHardware.swift` 编译不过。
@@ -60,7 +60,7 @@ final class KeyboardViewController: UIInputViewController {
         ])
         // 键面字要跟真实模式一致：装载后引擎可能是任何模式（同一进程里另一个
         // 键盘实例切过模式也会留在这里 —— 引擎单例是进程级的）。
-        layout.setModeLabel(Self.modeLabel(of: engine.mode()))
+        layout.setModeLabel(Self.modeKeyLabel(of: engine.mode()))
         refresh()
     }
 
@@ -286,18 +286,21 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             // English / Number / Symbol 一律回拼音（与 Android 的 `else` 分支同义）。
             engine.switchMode(.pinyin)
         }
-        layout.setModeLabel(Self.modeLabel(of: engine.mode()))
+        layout.setModeLabel(Self.modeKeyLabel(of: engine.mode()))
         refresh()
     }
 
-    /// 模式键的键面字（对齐 Android `ImeScreen.kt` 的 `modeLabelOf`：中/繁/英）。
-    /// ⚠️ 键面必须说实话：它同时是「当前是什么模式」的显示器。
+    /// 模式键的键面字 = **点它会切到哪**（2026-10-12 晚与 Android 同步的裁决：
+    /// 用户实测「切到英文键盘后键面还写着英，点下去却是中文键盘，键面该是『中』才对」）。
+    /// 逐条对齐本端 [`cycleMode`] 的次序：中→繁、繁→英、英/数字/符号→中（本端 else 档
+    /// **恒回拼音**，与 Android 的「回上次中文方案」略有分叉 —— 键面按**各自**的循环给，
+    /// 别照抄另一端）。
     /// ⚠️ internal（见上方状态节的说明）：`KeyboardHardware.swift` 的热键路径要调它。
-    static func modeLabel(of mode: OpiMode) -> String {
+    static func modeKeyLabel(of mode: OpiMode) -> String {
         switch mode {
-        case .pinyin: return "中"
-        case .traditional: return "繁"
-        default: return "英"
+        case .pinyin: return "繁"
+        case .traditional: return "英"
+        default: return "中"
         }
     }
 }

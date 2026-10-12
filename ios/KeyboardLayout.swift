@@ -55,7 +55,8 @@ final class KeyboardLayout: UIView {
     /// （2026-10-09 CI run 37933196475）。改名是唯一符合 API 的修法。
     private(set) var keyLayer: Layer = .letters
 
-    /// 模式键的键面字（中/繁/英）。由控制器在切模式后同步（对齐 Android `modeLabelOf`）。
+    /// 模式键的键面字（中/繁/英）= **点它会切到哪**（2026-10-12 晚裁决；与 Android
+    /// `modeKeyLabelOf` 同语义，各端按自己的循环给值）。由控制器在切模式后同步。
     ///
     /// 为什么键面要跟着模式变：这个键同时是「当前是什么模式」的显示器 ——
     /// 写死「中/英」时切到繁体后键面仍在说「中/英」，用户按下去看到的是变繁，
@@ -238,7 +239,8 @@ final class KeyboardLayout: UIView {
 
         let funcRow: [KeySpec] = [
             KeySpec("123", function: .showNumbers),
-            // 键面字跟着模式走（中/繁/英），不是写死的 "中/英"。
+            // 键面字 = **点它会切到哪**（2026-10-12 晚裁决，见 KeyboardViewController 的
+            // modeKeyLabel 注释），不是写死的 "中/英"。
             KeySpec(modeLabel, function: .cycleMode),
             KeySpec("空格", keyval: OpiKey.space, fallback: .text(" "), widthUnits: 5),
             KeySpec("回车", keyval: OpiKey.ret, fallback: .text("\n"), widthUnits: 1.6),

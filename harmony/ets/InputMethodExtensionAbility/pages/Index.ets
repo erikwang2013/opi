@@ -329,18 +329,22 @@ struct Index {
     return this.mode === (OpiMode.Pinyin as number) ? '打拼音试试' : '';
   }
 
+  /**
+   * 模式键的键面字 = **点它会切到哪**（2026-10-12 晚与 Android 同步的裁决：用户实测
+   * 「切到英文键盘后键面还写着英，点下去却是中文键盘，键面该是『中』才对」）。
+   * 逐条对齐本端 [`nextMode`] 的四态循环：中→EN、EN→123、123→#+=、#+=→中；
+   * 繁体档本端循环里到不了（`nextMode` 无该分支 ⇒ 落回拼音）⇒ 键面给「中」。
+   * ⚠️ **别照抄 Android 的表**：那边是三态（中→繁→英→中），本端是四态。
+   */
   private modeLabel(): string {
-    if (this.mode === (OpiMode.English as number)) {
+    if (this.mode === (OpiMode.Pinyin as number)) {
       return 'EN';
     }
-    if (this.mode === (OpiMode.Number as number)) {
+    if (this.mode === (OpiMode.English as number)) {
       return '123';
     }
-    if (this.mode === (OpiMode.Symbol as number)) {
+    if (this.mode === (OpiMode.Number as number)) {
       return '#+=';
-    }
-    if (this.mode === (OpiMode.Traditional as number)) {
-      return '繁';
     }
     return '中';
   }

@@ -17,7 +17,7 @@
 //    本机没有编译器可问（这是**未验证的取舍**，不是已验证的结论），故按最保守的
 //    写法留在类自己的文件里。它们只做「把整批按键交给 `routeHardware`，没接管就 super」。
 //
-// ⚠️ 本扩展用到 `engine` / `layout` / `insert` / `refresh` / `modeLabel`，它们因此
+// ⚠️ 本扩展用到 `engine` / `layout` / `insert` / `refresh` / `modeKeyLabel`，它们因此
 //    在主文件里是 **internal**（Swift 的 `private` 只跨「同文件的扩展」可见，跨文件必须放开）。
 //    **不要为了整洁把它们改回 `private`** —— 那会让本文件编译不过。
 
@@ -187,7 +187,7 @@ extension KeyboardViewController {
             return
         }
         // 模式可能变了 → 键面必须跟着说实话（它同时是「当前是什么模式」的显示器）。
-        layout.setModeLabel(Self.modeLabel(of: engine.mode()))
+        layout.setModeLabel(Self.modeKeyLabel(of: engine.mode()))
         // ⚠️ 约定 1 说 `switchMode` / `toggleSymbol` 之后必须重读全角。本目录
         // **没有全角指示灯**（同 `shiftState()` 那条：出口有了、包装有了、UI 没读），
         // 所以当前没有陈旧值可清。**哪天真加了指示灯，重读就写在这里** ——
