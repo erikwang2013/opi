@@ -33,7 +33,11 @@ import java.util.concurrent.TimeUnit
  * 只在 Linux 上走这条路 —— 见 [statusButtonWired] 与 StatusBar.kt 的分派。
  */
 fun statusActionCommand(b: StatusBarButton): List<String>? = when (b) {
-    StatusBarButton.SYMBOLS -> listOf("opi-ctl", "symbols")
+    // SYMBOLS 2026-10-12 起**不再出命令**：用户裁决「点击后要是个大的页面，可以翻页
+    // 选择」⇒ 两端都开符号页窗（见 StatusBar.openSymbols）。原来的
+    // `opi-ctl symbols` 是 fcitx5 的小候选条浏览，命令本身还在（CLI 仍可用），
+    // 只是**不再挂在这个按钮上** —— 别按老映射「改回去」。
+    StatusBarButton.SYMBOLS -> null
     StatusBarButton.TRAD -> listOf("opi-ctl", "trad")
     StatusBarButton.PUNCT -> listOf("opi-ctl", "punct")
     StatusBarButton.FULLWIDTH -> listOf("opi-ctl", "fullwidth")

@@ -133,8 +133,9 @@ fun StatusBarSettings.with(b: StatusBarButton, on: Boolean): StatusBarSettings =
 }
 
 /**
- * 该按钮在**本平台**有没有动作。Windows 上 `opi-ctl` 不存在（那**五个**动作
- * symbols/trad/punct/fullwidth/lang 是 Linux 侧的）—— 没有动作的按钮不上条、也不在设置窗出开关
+ * 该按钮在**本平台**有没有动作。Windows 上 `opi-ctl` 不存在（那**四个**动作
+ * trad/punct/fullwidth/lang 是 Linux 侧的；symbols 自 2026-10-12 起两端都开符号页窗、
+ * 不是命令）—— 没有动作的按钮不上条、也不在设置窗出开关
  * （「宁可少一页，不做点不动的开关」，见 SettingsWindow.kt 的既有原则）。
  */
 internal fun statusButtonWired(b: StatusBarButton, windows: Boolean): Boolean = !windows ||

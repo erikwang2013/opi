@@ -117,19 +117,24 @@ int main() {
     // 面板停在**上一次**的候选表上，于是下面两条断言失败（candidates=1 而非 0）。
     // 守卫和 catch **都**去掉 —— 异常就地 terminate，驱动 abort（exit 134），真
     // fcitx5 里的表现就是守护进程消失。而「缓冲非空 + 候选 0 条」是常态，
-    // `v` / `zzzz` 这类拼音本来就查不到候选。
+    // `vvv` 这类拼音本来就查不到候选。
+    //
+    // 哨兵 2026-10-12 换血（词库整合）：原 `zzzz` 现经**简拼**命中「自自在在」
+    // （zzzz 恰是它的声母串）⇒ 前提翻面，本节两条断言红。换 `vvv` —— v 不是任何
+    // 声母，简拼展开天然为空、音节回退也不成立（探针实测 0 候选）。同轮换掉
+    // `opi_ctl_driver.cpp` §2 的同款哨兵。⚠️ 本文件行数贴着 500 门禁，注释从简。
     {
         fcitx::ResetEvent clearEvent(&ic);
         engine.reset(entry, clearEvent);
     }
-    type("zzzz");
-    std::printf("  'zzzz' -> preedit=%s clientPreedit=%s candidates=%d\n",
+    type("vvv");
+    std::printf("  'vvv' -> preedit=%s clientPreedit=%s candidates=%d\n",
                 q(preeditOf(ic)).c_str(), q(clientPreeditOf(ic)).c_str(),
                 candidateCount(ic));
-    check(preeditOf(ic) == "zzzz", "无候选时缓冲照样进预编辑");
+    check(preeditOf(ic) == "vvv", "无候选时缓冲照样进预编辑");
     check(candidateCount(ic) == 0, "确实 0 条候选（走了守卫，没抛异常）");
     check(candidateCursor(ic) == -1, "无候选时不给候选光标（-1）");
-    check(clientPreeditOf(ic) == "zzzz", "无候选时 clientPreedit 照常");
+    check(clientPreeditOf(ic) == "vvv", "无候选时 clientPreedit 照常");
 
     std::printf("== 3. 翻页（PageDown/PageUp 走 Rust 页码）==\n");
     // "nihao" 只有一页；换单字母缓冲 "n"（满 8 条，说明还有下一页）。

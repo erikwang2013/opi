@@ -100,6 +100,13 @@ def plan_ctl(ic, destroy=None):
     # ③ 整轮 → ① 对照/重载/还原 → 简拼三口，夹在 state3 与 ② im 臂之间。
     steps += plan_conf_arms(ic)
     steps += [
+        # ---- insert（2026-10-12 加）：大页面（符号/表情）的**上屏通道** ----
+        # 真 opi-ctl → 私有总线 → 插件 handleCtlAction_("insert:<文本>") → commitString
+        # 到 mostRecentInputContext：这是「作用于当前 IC」在真守护进程里的实锤。
+        ("opi-ctl insert 你好", lambda: run_ctl("insert", "insert", "你好"), None),
+        ("opi-ctl insert 空文本（用法错误）",
+         lambda: run_ctl("insert_bad", "insert", ""), None),
+
         # ---- ② im 格：状态栏「本输入法在不在前台」的依据（2026-10-10）----
         ("opi-ctl state（im 基线）", lambda: run_ctl("state_im0", "state"), None),
         ("切 keyboard-us（Controller1.SetCurrentIM）",
@@ -166,6 +173,19 @@ def check_ctl(windows, failures):
     #    加回去只应红本条的负对照（以及 opi_ctl_driver §1/§6 的同款负对照）。
     #    同夜追加：一律原文**按模式分叉**（符号模式不上关键字）—— 本臂是拼音面，
     #    分叉的正控/负对照在 opi_ctl_driver §1（拼音）/ §2b（符号）。
+    # 0) insert 通道（2026-10-12）：文本必须真提交进那个 IC；空文本是**用法错误**
+    #    （本地判定、不上总线，退出码 2 —— 与「动作被拒 5」不是一档）。
+    ins_commits = _commits(by_label.get("opi-ctl insert 你好", []))
+    if "你好" not in ins_commits:
+        failures.append(
+            f"opi-ctl insert 没把文本提交进 IC（实际 {ins_commits}）—— "
+            f"要么 handleCtlAction_ 的 insert 分支没接，要么 mostRecentInputContext 是空的")
+    else:
+        print(f"[e2e/ctl] insert 通道到位（IC 收到「你好」）：{ins_commits}", flush=True)
+    ins_bad = RESULTS.get("insert_bad", (None, "", ""))
+    if ins_bad[0] != 2:
+        failures.append(f"opi-ctl insert 空文本应退出 2（实得 {ins_bad}）")
+
     lang_events = by_label.get("opi-ctl lang（切英文）", [])
     lang_commits = _commits(lang_events)
     if "nihao" not in lang_commits:

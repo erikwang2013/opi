@@ -8,11 +8,12 @@
 //! 自启；见 build.gradle.kts 的 injectSettingsDesktopEntry）。**独立进程**，与候选窗
 //! 进程无关 —— 这一条决定了两件事：
 //!  1. 设置、可见性靠**轮询配置文件**同步（见 [StatusBarApp] 的 1s 轮询）；
-//!  2. 符号页的上屏（`commit_text`）走命名管道，而管道被**候选窗进程**持有
-//!     （单实例）⇒ 本条进程里的符号页**上屏会失败**并如实报出来（见 [StatusBarApp]
-//!     的 `symbolCommit` 参数与 SymbolsPage.kt 头注释）。lead 裁决（2026-10-10）：
-//!     本轮不开第二条 UI→TSF 通路 —— 现状如实保留，TSF 接线落地时再定 UI 进程拓扑
-//!     （候选窗/状态栏/符号页同进程是首选）。
+//!  2. 符号页的上屏**按平台两条路**（见 [StatusBarApp] 的 `symbolCommit` 参数与
+//!     SymbolsPage.kt 头注释）：Linux = `opi-ctl insert`（D-Bus → addon 提交，与进程
+//!     拓扑无关，2026-10-12 落地）；Windows = 命名管道的 `commit_text`，而管道被
+//!     **候选窗进程**持有（单实例）⇒ 本条进程里的符号页**只能如实失败**。lead 裁决
+//!     （2026-10-10）：不开第二条 UI→TSF 通路 —— 现状如实保留，TSF 接线落地时再定
+//!     UI 进程拓扑（候选窗/状态栏/符号页同进程是首选）。
 //!
 //! ⚠️ Windows：同构尽力，但**本轮没有拉起触发器**（lead 裁决「代码就绪、无拉起触发
 //! 器」）——`--statusbar` 在 Windows 上能跑，只是没有东西会去起它。写到这儿而不是
@@ -135,11 +136,13 @@ private fun barPosition(widthDp: Int): WindowPosition {
 /**
  * 状态栏应用（含它开的几个窗：设置/虚拟键盘/符号页）。
  *
- * [symbolCommit] 由入口注入：**Windows 上只有候选窗进程能上屏**（管道单实例），
- * 其它进程只能如实失败 —— 见文件头第 2 条。返回 false = 没送出去。
+ * [symbolCommit] 由入口注入（形状与 [SymbolWindow] 的 `onCommit` 同款：null = 送上去了，
+ * 非 null = **给用户看的**失败原因，原样透传）。两条通路见 Main.kt 的 symbolCommit：
+ * Linux = `opi-ctl insert`（失败短语来自 runExternal，逐字有用）；Windows = 如实失败
+ * —— **只有候选窗进程能上屏**（管道单实例，见文件头第 2 条）。
  */
 @Composable
-fun StatusBarApp(symbolCommit: (String) -> Boolean) {
+fun StatusBarApp(symbolCommit: (String) -> String?) {
     var s by remember { mutableStateOf(loadSettings()) }
     // 起始 = 中性缺省，首拍轮询（≤1s）补上真实状态 —— 不在组合期做进程调用。
     var imeState by remember { mutableStateOf(ImeState()) }
@@ -193,13 +196,15 @@ fun StatusBarApp(symbolCommit: (String) -> Boolean) {
      * 符号页两端不是同一个东西：Linux 是 fcitx5 的候选面板（由 opi-ctl 拉起），
      * Windows 才是本进程里这个 Compose 页。
      */
-    fun openSymbols(): String? =
-        if (isWindows()) {
-            symbolsOpen = !symbolsOpen
-            null
-        } else {
-            statusActionCommand(StatusBarButton.SYMBOLS)?.let { runExternal(it) }
-        }
+    fun openSymbols(): String? {
+        // 2026-10-12 用户裁决「点击后要是个**大的**页面，可以翻页选择」：**两个平台都开
+        // 大页面**（此前 Linux 走 `opi-ctl symbols` = fcitx5 的小候选条）。上屏通道：
+        // Windows = 候选窗进程的命名管道；Linux = `opi-ctl insert`（插件提交进当前输入框，
+        // 见 Main.kt 注入的那个 symbolCommit）。引擎的候选条浏览仍可由 opi-ctl/热键唤起，
+        // 只是不再挂在这个按钮上。
+        symbolsOpen = !symbolsOpen
+        return null
+    }
 
     fun dispatch(b: StatusBarButton) {
         when (b) {
@@ -272,12 +277,9 @@ fun StatusBarApp(symbolCommit: (String) -> Boolean) {
     }
     if (vkOpen) VirtualKeyboardWindow(onClose = { vkOpen = false }, onSymbols = ::openSymbols)
     if (symbolsOpen) {
-        SymbolWindow(
-            onCommit = { text ->
-                if (symbolCommit(text)) null else "上屏失败：没连上输入法（符号页要由候选窗进程上屏）"
-            },
-            onClose = { symbolsOpen = false },
-        )
+        // 失败原因**原样透传**（2026-10-12）：此前这里把 false 统一翻成一句写死的
+        // Windows 解释 —— Linux 上「没有焦点输入框」这类真实原因会被顶掉。
+        SymbolWindow(onCommit = symbolCommit, onClose = { symbolsOpen = false })
     }
 }
 

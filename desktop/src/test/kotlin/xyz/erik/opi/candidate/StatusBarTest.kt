@@ -105,7 +105,7 @@ class StatusBarTest {
 
     @Test
     fun `windows only keeps buttons that have an action there`() {
-        // Windows 上没有 opi-ctl（那五个动作 symbols/trad/punct/fullwidth/lang 是
+        // Windows 上没有 opi-ctl（那四个动作 trad/punct/fullwidth/lang 是
         // Linux 侧的），没动作的按钮不上条 ——「宁可少一页，不做点不动的开关」。
         // 显式开 VK：这条测的是「按有无动作过滤」，别被默认值变更（VK 默认关）牵连。
         // 期望值按**枚举序**（VK 现在排 SYMBOLS 前面，见枚举头的验收订正）。
@@ -122,8 +122,7 @@ class StatusBarTest {
     fun `command mapping is the frozen opi-ctl contract`() {
         // 契约：`opi-ctl <action>`，动作名 2026-10-10 冻结（另一条轨实现）。
         // 改这里的字符串 = 状态栏点了没反应（进程起来了、退出码 0、什么都没发生）：
-        // 这是跨轨契约，本仓惯例是「钉死在测试里」。五个动作**逐条钉字面**。
-        assertEquals(listOf("opi-ctl", "symbols"), statusActionCommand(StatusBarButton.SYMBOLS))
+        // 这是跨轨契约，本仓惯例是「钉死在测试里」。四个动作**逐条钉字面**。
         assertEquals(listOf("opi-ctl", "trad"), statusActionCommand(StatusBarButton.TRAD))
         assertEquals(listOf("opi-ctl", "punct"), statusActionCommand(StatusBarButton.PUNCT))
         assertEquals(listOf("opi-ctl", "fullwidth"), statusActionCommand(StatusBarButton.FULLWIDTH))
@@ -132,8 +131,11 @@ class StatusBarTest {
         // 停用、中文一个字打不出来（lead 真机实测指纹：点两次后 `fcitx5-remote` 报 2）。
         // 中英切换的正确动作是契约里的 `opi-ctl lang`。改回 -t 之前先读完这段。
         assertEquals(listOf("opi-ctl", "lang"), statusActionCommand(StatusBarButton.LANG))
-        // 这三个是进程内动作（开键盘窗 / 开符号页 / 开设置窗），不出命令
+        // 这四个是进程内动作（开键盘窗 / 开符号页 / 开设置窗），不出命令。
+        // SYMBOLS 2026-10-12 从「跑 opi-ctl symbols」改到这一档：用户裁决「点击后要是
+        // 个大的页面，可以翻页选择」（两端同款符号页窗，见 StatusBar.openSymbols）。
         assertNull(statusActionCommand(StatusBarButton.VK))
+        assertNull(statusActionCommand(StatusBarButton.SYMBOLS))
         assertNull(statusActionCommand(StatusBarButton.LOGO))
         assertNull(statusActionCommand(StatusBarButton.SETTINGS))
     }

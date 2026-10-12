@@ -4,6 +4,7 @@
 // `opi-ctl`：桌面状态栏（desktop-ui 用 ProcessBuilder 按名字调 /usr/bin/opi-ctl）
 // 与 fcitx5-opi 插件之间的**唯一** CLI 面。动作集是**冻结契约**（任务书）：
 //     opi-ctl symbols|trad|punct|fullwidth|lang    （动作：会改状态）
+//     opi-ctl insert <文本>                        （大页面的上屏通道，2026-10-12 加）
 //     opi-ctl state                                 （只读查询，2026-10-10 用户裁决加）
 // 新增动作要先找 lead 定 —— 别在客户端先加一个服务端还没有的名字（那只会多出
 // 一条「未知动作」的失败路径）。
@@ -81,6 +82,18 @@ fn run() -> i32 {
             0
         }
         Some("state") => send_state(),
+        // `insert <文本>`：大页面（桌面符号/表情窗）的**上屏通道**（用户裁决 2026-10-12
+        // 「符号按钮点击后要是个大的页面」）。自绘窗拿不到 fcitx5 的提交通道（那在插件
+        // 进程里），所以文本经 `Trigger("insert:<text>")` 下沉给插件提交到当前输入框。
+        // **带参数的动作**：不在冻结集里，单独分派（空文本/缺参数 = 用法错误 2）。
+        Some("insert") => match args.get(2).map(String::as_str) {
+            Some(text) if !text.is_empty() => send(&format!("insert:{text}")),
+            _ => {
+                eprintln!("opi-ctl: insert 需要一个非空文本参数");
+                usage();
+                2
+            }
+        },
         Some(a) if ACTIONS.contains(&a) => send(a),
         Some(a) => {
             eprintln!("opi-ctl: 未知动作：{a}");
@@ -96,7 +109,7 @@ fn run() -> i32 {
 }
 
 fn usage() {
-    eprintln!("usage: opi-ctl symbols|trad|punct|fullwidth|lang | state");
+    eprintln!("usage: opi-ctl symbols|trad|punct|fullwidth|lang [insert <文本>] | state");
 }
 
 /// 发一条 Trigger(action)，把应答翻成退出码。参数顺序与落点是硬契约 ——

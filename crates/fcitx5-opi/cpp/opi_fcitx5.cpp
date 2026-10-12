@@ -162,7 +162,8 @@ void refreshingPanelFor(fcitx::InputContext *ic) {
         // 候选栏高亮位（-1 = 无高亮，前端不画选中态）。
         // ⚠️ 空判是**必须**的：对**空**候选表调 setGlobalCursorIndex(0) 会抛
         // `std::invalid_argument`（"CommonCandidateList: invalid global index"），
-        // 而「缓冲非空 + 候选 0 条」是常态（`v`/`xz`/`zzzz` 都没候选）。抛出后：
+        // 而「缓冲非空 + 候选 0 条」是常态（`v`/`xz`/`vvv` 都没候选；**别用
+        // `zzzz` 举例** —— 2026-10-12 起它经简拼命中「自自在在」）。抛出后：
         // 有 try/catch 时该键作废、面板停在上一次的候选表上；没有时 → abort。
         if (!texts.empty()) {
             list->setGlobalCursorIndex(0);

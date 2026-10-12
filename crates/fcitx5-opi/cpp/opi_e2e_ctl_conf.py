@@ -55,14 +55,15 @@ STATE_FIELDS = (("lang", ("zh", "en")), ("trad", ("on", "off")),
 RESULTS = {}
 
 
-def run_ctl(label, action, env=None):
-    """跑一次真 opi-ctl。返回一句话给 report 打印。`env` 整体替换子进程环境
-    （只给「通道不通」那条用：把会话总线地址指到一个不存在的 socket）。"""
+def run_ctl(label, action, *extra, env=None):
+    """跑一次真 opi-ctl（`extra` = 附加参数，只有 `insert <文本>` 用）。返回一句话给
+    report 打印。`env` 整体替换子进程环境（只给「通道不通」那条用：把会话总线地址
+    指到一个不存在的 socket）。"""
     if not CTL or not os.path.exists(CTL):
         RESULTS[label] = (-1, "", f"OPI_CTL_BIN 没指到可执行文件：{CTL!r}")
         return f"!! 找不到 opi-ctl（OPI_CTL_BIN={CTL!r}）—— run-harness.sh 会编它"
-    proc = subprocess.run([CTL, action], capture_output=True, text=True, timeout=20,
-                          env=env)
+    proc = subprocess.run([CTL, action, *extra], capture_output=True, text=True,
+                          timeout=20, env=env)
     RESULTS[label] = (proc.returncode, proc.stdout.strip(), proc.stderr.strip())
     return (f"退出码 {proc.returncode} stdout={proc.stdout.strip()!r} "
             f"stderr={proc.stderr.strip()!r}")

@@ -54,11 +54,12 @@ class SymbolCategoriesTest {
     }
 
     @Test
-    fun `page size matches android`() {
-        // 8 列 × 4 行。与 Android 的 SymbolCategories.PAGE_SIZE 同值 —— 页大小不同
-        // 会让同一类目在两端的第 2 页内容不一样（用户看着像「翻页错位」）。
-        assertEquals(32, SymbolCategories.PAGE_SIZE)
-        assertEquals(8, SymbolCategories.COLUMNS)
+    fun `page size is sized for the desktop window`() {
+        // 12 列 × 6 行。本用例原名 `page size matches android`（两端同值 8×4=32）——
+        // 2026-10-12 用户裁决「符号按钮点击后要是个**大的**页面」后桌面放大到 72，
+        // **两端有意不同值**：页大小跟屏走（手机 32、桌面 72）。
+        assertEquals(72, SymbolCategories.PAGE_SIZE)
+        assertEquals(12, SymbolCategories.COLUMNS)
         assertEquals(0, SymbolCategories.PAGE_SIZE % SymbolCategories.COLUMNS)
     }
 
@@ -117,7 +118,10 @@ class SymbolCategoriesTest {
         assertEquals((1..22).toList(), cats.map { it.index })
         assertTrue("每个类目都得有符号", cats.all { it.symbols.isNotEmpty() })
         // 每类都超过一页 ⇒ 翻页这条交互在真资产上真的会用到（否则就是死代码）
-        assertTrue("22 类里应有超过 32 个符号的类目", cats.any { it.symbols.size > SymbolCategories.PAGE_SIZE })
+        assertTrue(
+            "22 类里应有超过一页的类目（翻页才活）",
+            cats.any { it.symbols.size > SymbolCategories.PAGE_SIZE },
+        )
         assertEquals("常用", cats[0].label)
         assertEquals("拼音", cats[12].label) // 序号 13：字段 2 是名称、行序即序号序
     }

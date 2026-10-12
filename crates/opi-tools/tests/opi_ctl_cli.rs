@@ -111,6 +111,34 @@ fn ok_path_sends_exact_wire_command() {
     );
 }
 
+/// `insert <文本>`（2026-10-12 加）：**带参数的动作** —— 文本经 `insert:` 前缀搭
+/// 既有 `Trigger(string)` 契约走（不新增 D-Bus 方法），逐字钉住落点；缺参/空参 = 用法
+/// 错误 2（**本地**判定，不上总线 —— 空文本没有任何意义）。
+#[test]
+fn insert_action_carries_the_text_through_the_trigger_slot() {
+    let dir = fake(REPLY_TO_STDOUT, OK_REPLY);
+    let (code, _, stderr) = run_ctl(&dir, &["insert", "好"]);
+    assert_eq!(code, 0, "stderr={stderr}");
+    let argv = std::fs::read_to_string(dir.join("argv")).unwrap();
+    assert_eq!(
+        argv.lines().last(),
+        Some("string:insert:好"),
+        "文本要逐字跟在 insert: 前缀后面"
+    );
+
+    for bad in [vec!["insert"], vec!["insert", ""]] {
+        let dir = fake(REPLY_TO_STDOUT, OK_REPLY);
+        let (code, stdout, stderr) = run_ctl(&dir, &bad);
+        assert_eq!(code, 2, "{bad:?}: 用法错误应为 2（stderr={stderr}）");
+        assert_eq!(stdout, "", "{bad:?}: 不许往 stdout 写东西");
+        assert!(
+            !dir.join("argv").exists(),
+            "{bad:?}: 用法错误不该上总线（实发了：{:?}）",
+            std::fs::read_to_string(dir.join("argv")).ok()
+        );
+    }
+}
+
 /// 五个冻结动作都能原样走到总线上（动作名不许在客户端被改写成别的）。
 #[test]
 fn all_frozen_actions_pass_through() {

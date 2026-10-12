@@ -1,19 +1,20 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! 符号页（Windows 路径）：22 类目右竖条 + 网格左右滑动翻页 + 点符号上屏。
-//! 交互与布局对齐 Android 的 `SymbolPage.kt`（那边是键区内嵌面板，这里是独立窗）。
+//! 符号页（**两个平台共用** —— 2026-10-12 用户裁决「符号按钮点击后要是个大的页面，
+//! 可以翻页选择」后，Linux 不再走 fcitx5 的候选条，也开本窗）：22 类目右竖条 +
+//! 网格左右滑动翻页 + 点符号上屏。交互与布局对齐 Android 的 `SymbolPage.kt`
+//! （那边是键区内嵌面板，这里是独立窗）。
 //!
-//! 上屏通路 = 命名管道的 `commit_text`（协议条目见 Main.kt 头注释；TSF 侧
-//! 在插入点插入，不动候选/composition）。
-//!
-//! ⚠️ **本页只有在候选窗进程里才上得了屏**：管道单实例（PipeServer 的
-//! MAX_INSTANCES=1）、由候选窗进程持有。状态栏进程里的符号页会把
-//! 「上屏失败」如实显示出来（见 StatusBar.kt 的 `symbolCommit`）。
-//! lead 裁决（2026-10-10）：本轮**不开第二条 UI→TSF 通路**（TSF 插入面还没接线，
-//! 通了也到不了文档），现状如实保留；**TSF 接线落地时再定 UI 进程拓扑**（候选窗/
-//! 状态栏/符号页同进程是首选）。Windows 侧本轮没有拉起触发器（lead 裁决「代码就绪、
-//! 无拉起触发器」），接线时连同上面这条一起定。
+//! 上屏通路**两条**，由入口注入的 `onCommit` 决定（见 Main.kt 的 symbolCommit）：
+//! · Windows = 命名管道的 `commit_text`（协议条目见 Main.kt 头注释；TSF 侧在插入点
+//!   插入，不动候选/composition）；管道单实例（PipeServer 的 MAX_INSTANCES=1）且有
+//!   **候选窗进程**持有 ⇒ ⚠️ 状态栏进程里的符号页**上不了屏**，会把失败如实显示。
+//!   lead 裁决（2026-10-10）：本轮**不开第二条 UI→TSF 通路**（TSF 插入面还没接线，
+//!   通了也到不了文档）；**TSF 接线落地时再定 UI 进程拓扑**（候选窗/状态栏/符号页同
+//!   进程是首选）。Windows 侧本轮没有拉起触发器（lead 裁决「代码就绪、无拉起触发器」）。
+//! · Linux = `opi-ctl insert <文本>`（D-Bus → addon 的 `ic->commitString`）—— 只要
+//!   fcitx5 里有**焦点输入框**就能上屏，与进程拓扑无关。
 //!
 //! 数据文件（真源 = `android/app/src/main/assets/symbol_categories.tsv`，由
 //! `scripts/gen_symbol_categories.py` 生成）。读取**顺位**见 [symbolDataCandidates]：
@@ -21,7 +22,7 @@
 //!   （windows.yml 打包时把 tsv 装在启动器旁）→ 都缺就显示「没有类目数据」
 //!   （本侧不硬编兜底数据）。
 //! · Linux = `/usr/share/opi/symbol_categories.tsv`（fcitx5-glue 的 CMake install
-//!   在装）。Linux 上的符号页是 fcitx5 的候选面板，不走本窗 —— 这里是共用代码。
+//!   在装；本机实测在：`ls -l /usr/share/opi/`）。
 
 package xyz.erik.opi.candidate
 
@@ -104,11 +105,16 @@ object SymbolCategories {
         return out
     }
 
-    /** 每页符号数（8 列 × 4 行，与 Android 同值）。页数 = ⌈符号数 / 本值⌉。 */
-    const val PAGE_SIZE = 32
+    /**
+     * 每页符号数（**12 列 × 6 行**；2026-10-12 用户裁决「符号按钮点击后要是个**大的**
+     * 页面，可以翻页选择」后从 8×4=32 放大到 72 —— 桌面窗比手机屏大得多，32 个一页
+     * 要翻太多次）。⚠️ 与 Android 的 `PAGE_SIZE`（32）**有意不同**了：页大小跟**屏**
+     * 走，两端不再同值（原先「同值」那句注释随本次裁决作废）。
+     */
+    const val PAGE_SIZE = 72
 
     /** 网格列数（行数由 [PAGE_SIZE] 推出）。 */
-    const val COLUMNS = 8
+    const val COLUMNS = 12
 }
 
 /**
@@ -167,8 +173,10 @@ private val SymHover = Color(0xFF454545)
 private val SymAccent = Color(0xFF4C8DFF)
 private val SymErr = Color(0xFFFF8A80)
 
-private const val WIN_W = 520
-private const val WIN_H = 430
+// 大页面（2026-10-12 用户裁决）：520×430 → 820×600；页面本身早就有翻页（HorizontalPager
+// + 左右滑动），放大只是让一页装得下更多（见 PAGE_SIZE）。
+private const val WIN_W = 820
+private const val WIN_H = 600
 private const val STRIP_W = 96
 
 /** 屏幕右下角往内缩一截（别压任务栏）。 */

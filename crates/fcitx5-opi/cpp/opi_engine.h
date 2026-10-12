@@ -147,6 +147,8 @@ public:
 
     // opi-ctl 的动作分发（接收侧）。动作串是**冻结的契约**（任务书）：
     //   symbols|trad|punct|fullwidth|lang —— 新增动作要先找 lead 定，别自己加。
+    //   insert:<文本>（2026-10-12 用户裁决加）：桌面大页面（符号/表情）的上屏通道 ——
+    //   自绘窗自己没有提交通道（那在插件进程里），文本经既有 Trigger(string) 下沉到这里。
     // 这里跑在**主循环线程**（dbus 模块把总线挂在自己的事件循环上），所以可以安全地
     // 碰引擎单例与 IC，也就能满足「作用于当前 IC」。
     // 只读查询 state **不在**这张表里：它走另一个 D-Bus 方法（vtable 的 State →
@@ -156,7 +158,19 @@ public:
         // 只是没有面板可刷 —— 不是错误。
         fcitx::InputContext *ic =
             instance_ != nullptr ? instance_->mostRecentInputContext() : nullptr;
-        if (action == "symbols") {
+        if (action.rfind("insert:", 0) == 0) {
+            // 大页面上屏（见动作表注释）：提交到**当前焦点 IC**。
+            const std::string text = action.substr(7);
+            if (text.empty()) {
+                return "err:5:insert 的文本为空";
+            }
+            if (ic == nullptr) {
+                // 没有焦点窗口 = 现在没有地方可上屏。给**可见原因**（非零退出码），
+                // 别静默成功 —— 与 symbols 那条「入口禁用报 4」同一条纪律。
+                return "err:4:没有焦点输入框（先点到要输入的地方再试）";
+            }
+            ic->commitString(text);
+        } else if (action == "symbols") {
             // 三态（-1 未接线 / 0 不在浏览 / 1 在浏览），0 是二义的（见 opi_mode.h）：
             // 「数据没装上、入口禁用」与「刚从浏览里退出来」都返回 0。用本类记的
             // 装载态 symbolDataOk_ 把它们分开 —— 数据没装上时报 4 而不是哑成功，

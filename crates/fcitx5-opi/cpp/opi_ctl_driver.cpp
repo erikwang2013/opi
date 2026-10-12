@@ -133,13 +133,16 @@ int main() {
           "提交后引擎与面板都清干净（无缓冲、无预编辑、无候选）");
 
     std::printf("== 2. W1：无候选 = 提交原文（与 §1 同一条路 —— 分档已取消）==\n");
+    // 哨兵 2026-10-12 换血：原 `zzzz` 现经简拼命中「自自在在」⇒ 前提翻面。
+    // 换 `vvv`（v 非声母，探针实测 0 候选；同 opi_panel_driver.cpp §2b 与
+    // cabi_fullwidth 的哨兵）。
     resetVia();
     commitNow();
-    type("zzzz");
-    check(bufferOf() == "zzzz" && candidateCount(ic) == 0,
-          "「zzzz」在缓冲里且零候选（被测前提）");
+    type("vvv");
+    check(bufferOf() == "vvv" && candidateCount(ic) == 0,
+          "「vvv」在缓冲里且零候选（被测前提）");
     switchIM();
-    check(commitNow() == "zzzz",
+    check(commitNow() == "vvv",
           "切输入法：提交原文（别把用户打的丢掉；无候选只是 §1 同一实现的退化情形）");
     check(preeditOf(ic).empty(), "提交后面板同样清干净");
 
@@ -229,6 +232,16 @@ int main() {
         type(browseSaved.c_str()); // 恢复真缓冲（同步完成）
         return 0;
     };
+    // insert（2026-10-12 加）：本驱动 instance_ = nullptr ⇒「当前 IC」拿不到 ——
+    // 这里钉两条**边界**（空文本 5 / 无焦点框 4）；成功路径（真提交进 IC）归 e2e 变体 ctl。
+    {
+        const std::string e1 = engine.handleCtlAction_("insert:");
+        check(e1 == "err:5:insert 的文本为空", "insert 空文本 → err:5（实际 " + q(e1) + "）");
+        const std::string e2 = engine.handleCtlAction_("insert:你好");
+        check(e2.rfind("err:4:", 0) == 0,
+              "无焦点 IC → err:4（实际 " + q(e2) + "）");
+    }
+
     const std::string enterReply = engine.handleCtlAction_("symbols");
     check(enterReply == "ok", "进入浏览（symbols 动作，假 hook 返回 1）应答 ok");
     const std::string junk0 = firstCand();
