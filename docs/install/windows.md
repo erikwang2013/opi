@@ -501,6 +501,15 @@ TSF 侧**没有在线刷新通道**：`tsf.rs` 的 `Activate` 会重读一次这
 `{"type":"reload"}` 消息即可即时生效 —— 要同时改线协议两侧（`candidate_io.rs` 与
 `desktop/.../Protocol.kt`），**本轮没做**。
 
+⚠️ **2026-10-12 布局改过**（用户裁决「布局和功能参考搜狗输入法」）：设置窗从单列长滚动
+改成**左分类导航 + 右内容 + 底部状态行**（与 Linux 同一份代码，`SettingsWindow.kt`）。
+Windows 上只出**常用 / 状态栏 / 符号与表情 / 关于**四页 —— **按键**（`ShiftToggle`）与
+**外观**（`Skin` 是 fcitx5 主题）两页不出：`crates/tsf-opi/src/settings.rs` 的读侧不认
+这两个键（「宁可少一页，不做点不动的开关」；过滤是纯函数 `settingsTabs`，有单测钉）。
+「符号与表情」页那两个按钮在 Windows 上**打开会失败并如实显示原因** —— 符号页上屏要
+命名管道，而管道被候选窗进程持有（单实例），设置窗进程送不出去（`desktopSymbolCommit`
+的 Windows 分支）。上面那段 `settings.ini` 的四个键不受影响（照旧四个）。
+
 **「属性」入口已接线**（2026-10-08）：服务对象实现了 `ITfFunction` + `ITfFnConfigure`
 （`tsf.rs`），`Show()` 会拉起设置窗（`configure.rs`：从 **DLL 同目录** →
 `%LOCALAPPDATA%\opi\` 逐候选找 `opi-candidates.exe`，都找不到就**什么都不弹**）。
