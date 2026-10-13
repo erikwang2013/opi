@@ -53,6 +53,10 @@ extern "C" void opi_fcitx5_set_shuangpin_layout(int32_t index) __attribute__((we
 // 拼音方式 / 输入方案（2026-10-14）：方案整数码（0=全拼 4=双拼，= `Scheme::code`，
 // C++ 的 OpiPinyinMethod 枚举值就取这两个码）。同样是弱符号。
 extern "C" void opi_fcitx5_set_scheme(int32_t code) __attribute__((weak));
+// 方案**读侧**（2026-10-14，与 set_scheme 配对）：当前方案码（`Scheme::code`）。
+// opi-ctl 的 `mode` 动作派生态 token（pinyin/en26）靠它 —— 调用点见 opi_ctl_mode.h。
+// 同样是弱符号（落地前按全拼 0 处理，读侧缺省与 `opi_fcitx5_mode()` 未装载给 0 同姿态）。
+extern "C" int32_t opi_fcitx5_scheme() __attribute__((weak));
 bool opi_fcitx5_toggle_fullwidth();        // 返回切换后的状态（true = 全角）
 void opi_fcitx5_set_shift(bool on);
 OpiString opi_fcitx5_input_space();

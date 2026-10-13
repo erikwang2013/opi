@@ -11,6 +11,10 @@
 //   4. state（只读查询，2026-10-10）：**无参数**的 State 方法名、状态行原样进
 //      stdout，以及冻结形状的**负向**面（键序换位/少段/多段/取值域外 → 5：
 //      桌面按位置解析，放过去就是把值读错位）。
+//   5. mode（模式循环，2026-10-14）：成功应答**不是 "ok"** 而是状态 token
+//      （pinyin/en26，未来 wubi）—— 唯一这样的动作；token 原样进 stdout，取值域
+//      钉死（"ok"/大小写/带空白/多词都判 5，见 mode_broken_payload_maps_to_5）。
+//      这三条测试在子模块 `tests/opi_ctl_cli/mode.rs`（本文件加上它们顶破 500 行门禁）。
 // 不依赖机器上真有 fcitx5 与会话总线 —— 那是 e2e 的事，这里是纯客户端逻辑。
 //
 // 只用 cfg(unix)：假 dbus-send 是 sh 脚本 + 可执行位（本工具的宿主只有 Linux）。
@@ -84,6 +88,13 @@ fn reply_of(s: &str) -> String {
         "method return time=1.0 sender=:1.2 -> destination=:1.3 serial=7 reply_serial=2\n   string \"{s}\"\n"
     )
 }
+
+// mode 那一组（文件头第 5 条）拆成子模块文件，见其文件头：本文件加上那三条
+// 会顶破 500 行门禁。[path] 是必须的：**测试文件是 crate root**，`mod x;` 会在
+// 本层目录找 `tests/x.rs`，不自带「同名子目录」规则（同 opi-ffi 的
+// `#[path = "c_abi/checker.rs"]` 先例）。
+#[path = "opi_ctl_cli/mode.rs"]
+mod mode;
 
 /// 成功路径：退出 0、静默（成功不刷屏），且发出去的命令行**逐字**如下 ——
 /// 这一段与 cpp/opi_ctl.h 的 kOpiCtlPath / kOpiCtlInterface 是一对，改任一处
@@ -232,12 +243,12 @@ fn unrecognized_reply_maps_to_5() {
 fn state_query_sends_exact_wire_command_and_prints_line() {
     let dir = fake(
         REPLY_TO_STDOUT,
-        &reply_of("lang=zh;trad=off;punct=on;fw=on;im=opi"),
+        &reply_of("lang=zh;trad=off;punct=on;fw=on;im=opi;mode=pinyin"),
     );
     let (code, stdout, stderr) = run_ctl(&dir, &["state"]);
     assert_eq!(code, 0, "stderr={stderr}");
     assert_eq!(
-        stdout, "lang=zh;trad=off;punct=on;fw=on;im=opi\n",
+        stdout, "lang=zh;trad=off;punct=on;fw=on;im=opi;mode=pinyin\n",
         "状态行要原样进 stdout"
     );
     assert_eq!(stderr, "", "成功不刷 stderr");
@@ -259,13 +270,16 @@ fn state_query_sends_exact_wire_command_and_prints_line() {
 /// 两端值都原样透传（正、负两面）：on/off 是服务端给的，客户端不缓存、不改写 ——
 /// 客户端自己造状态正是这条查询要避免的事。im 那一格**没有取值域**：别的输入法名
 /// 要放行，**空串也要放行**（= 没有 IC / 查不到，前端按「未知=维持现状」处理；
-/// 在这里把空串判成形状错，等于把「查不到」变成状态栏可见的失败）。
+/// 在这里把空串判成形状错，等于把「查不到」变成状态栏可见的失败）。mode 那一格
+/// （2026-10-14 追加，行尾）取值域是 token 表：`wubi` 服务端现在还不会发，但**先
+/// 放行**（前向兼容 —— 引擎加档时客户端不必跟着发版，同 check_mode_shape）。
 #[test]
 fn state_values_pass_through_both_ways() {
     for line in [
-        "lang=zh;trad=off;punct=on;fw=on;im=opi",
-        "lang=en;trad=on;punct=off;fw=off;im=keyboard-us",
-        "lang=zh;trad=off;punct=on;fw=on;im=",
+        "lang=zh;trad=off;punct=on;fw=on;im=opi;mode=pinyin",
+        "lang=en;trad=on;punct=off;fw=off;im=keyboard-us;mode=en26",
+        "lang=zh;trad=off;punct=on;fw=on;im=;mode=pinyin",
+        "lang=zh;trad=off;punct=on;fw=on;im=;mode=wubi", // 预放行的未来档
     ] {
         let dir = fake(REPLY_TO_STDOUT, &reply_of(line));
         let (code, stdout, stderr) = run_ctl(&dir, &["state"]);
@@ -274,17 +288,21 @@ fn state_values_pass_through_both_ways() {
     }
 }
 
-/// 冻结形状的**负向**面：键序换位、少段、多段、取值域外、键名重复 —— 一律 5 且
-/// stdout 为空。桌面端按位置解析，放过去就是把 `trad=on` 读成「语言变繁体」。
+/// 冻结形状的**负向**面：键序换位、少段、多段、取值域外（fw 与 mode 各一）、
+/// 键名重复 —— 一律 5 且 stdout 为空。桌面端按位置解析，放过去就是把 `trad=on`
+/// 读成「语言变繁体」。**少一段那条现在少的是 mode**（= 老插件的输出）：本工具
+/// 这一层**照样判 5**（「插件与本工具版本对不上」的如实分类）；对缺这一格的**容错
+/// 在桌面解析侧**（Actions.kt 的 ImeState.mode 回落「拼音」），别把两层的口径搞混。
 #[test]
 fn state_broken_shapes_map_to_5() {
     for bad in [
-        "trad=off;lang=zh;punct=on;fw=on;im=opi", // 键序换位（同一个值集合）
-        "lang=zh;trad=off;punct=on;fw=on",        // 少一段（im 缺席 —— 旧版插件？）
-        "lang=zh;trad=off;punct=on;fw=on;im=opi;x=y", // 多一段
-        "lang=zh;trad=off;punct=on;fw=maybe;im=", // 取值域外（im 空不背锅）
-        "lang=zh;trad=off;punct=on;fw=on;lang=zh", // 键名重复（末位不是 im）
-        "",                                       // 空串
+        "trad=off;lang=zh;punct=on;fw=on;im=opi;mode=pinyin", // 键序换位（同一个值集合）
+        "lang=zh;trad=off;punct=on;fw=on;im=opi",             // 少一段（缺 mode —— 老插件）
+        "lang=zh;trad=off;punct=on;fw=on;im=opi;mode=pinyin;x=y", // 多一段
+        "lang=zh;trad=off;punct=on;fw=maybe;im=;mode=pinyin", // 取值域外（im 空不背锅）
+        "lang=zh;trad=off;punct=on;fw=on;im=;mode=quanpin",   // mode 取值域外（token 表外）
+        "lang=zh;trad=off;punct=on;fw=on;im=opi;lang=zh",     // 键名重复（末位不是 mode）
+        "",                                                   // 空串
     ] {
         let dir = fake(REPLY_TO_STDOUT, &reply_of(bad));
         let (code, stdout, stderr) = run_ctl(&dir, &["state"]);

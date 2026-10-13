@@ -39,7 +39,7 @@ class SettingsTest {
         val ini = OpSettings().toIni()
         for (line in listOf(
             "Learn=True", "ChinesePunct=True", "Fuzzy=True", "Jianpin=True",
-            "ShiftToggle=True", "Skin=不改动",
+            "ShiftToggle=True", "Skin=不改动", "CandidateFont=中",
         )) {
             assertTrue("缺少键行：$line\n$ini", ini.contains("$line\n"))
         }
@@ -243,6 +243,20 @@ class SettingsTest {
         assertTrue(merged, merged.contains("# 手写\n"))
         assertTrue(merged, merged.contains("StatusBarVk=False\n"))
         assertFalse(merged, merged.contains("StatusBarVk=True\n"))
+    }
+
+    @Test
+    fun `merge does not grow the file on repeated saves`() {
+        // 2026-10-14（写候选字号的 merge 时被同形门禁抓到的既有毛病）：文件以 \n 结尾时
+        // 按行切会多出一个空段，把它当独立行拼回去 ⇒ 每保存一次文件末尾多一行空行。
+        // 真机 ~/.config/fcitx5/conf/opi_fcitx5.conf 末尾就躺着一行这样的空行。
+        // 判据 = 幂等（保存两次与一次同形）+ 末尾不许是 \n\n。
+        val once = mergeIni("Learn=True\nFuzzy=True\n", OpSettings())
+        assertEquals(once, mergeIni(once, OpSettings()))
+        assertFalse("保存后文件末尾多出空行：\n$once", once.endsWith("\n\n"))
+        // 空行在**中间**照旧逐字保留（只有「表示结尾」的那一个空段被吸收）。
+        val kept = mergeIni("Learn=True\n\nFuzzy=True\n", OpSettings())
+        assertTrue(kept, kept.contains("Learn=True\n\nFuzzy=True\n"))
     }
 
     @Test

@@ -4,8 +4,9 @@
 //! 状态栏按钮的**外部命令**部分：把点击变成一条命令，并把失败如实报回来。
 //!
 //! 契约（2026-10-10 冻结，Linux 侧由另一条轨实现，本侧**只调用**）：
-//! **`opi-ctl <action>`**，action ∈ `symbols|trad|punct|fullwidth|lang`；`opi-ctl` 在
-//! `/usr/bin/opi-ctl`（PATH 上，按名调）。
+//! **`opi-ctl <action>`**，action ∈ `symbols|trad|punct|fullwidth|lang|mode`；`opi-ctl` 在
+//! `/usr/bin/opi-ctl`（PATH 上，按名调）。`mode`（2026-10-14 加）是**唯一**成功应答
+//! 不是 "ok" 的动作：它回新状态 token（见 [cycleMode]），别按「回 ok 才成功」读它。
 //!
 //! ⚠️ **中英文切换只能走 `opi-ctl lang`，绝不能走 `fcitx5-remote -t`**（事故留痕，
 //! 2026-10-10 中午用户报障）：`-t` 切换的是**整个 fcitx5 的启用态**，不是中英模式 ——
@@ -14,10 +15,14 @@
 //! 就摆在状态栏 LANG 按钮下面；想「顺手」改回去之前先看 StatusBarTest 的映射回归钉。
 //!
 //! 状态通道（2026-10-10 深夜冻结）：**`opi-ctl state`** → 一行
-//! `lang=zh|en;trad=on|off;punct=on|off;fw=on|off[;im=<uniqueName>]`（rc 0 成功；通道不通
-//! rc≠0 且无输出）—— 状态栏的实时图标读它（[readImeState]）。`im` = 当前输入法
-//! （2026-10-10 下午用户裁决「切到其他输入法时状态栏消失」的数据位，glue 侧在途追加；
-//! 缺键/空串 = 未知，语义见 [ImeState.im] 与 StatusBar.kt 的 [barVisible]）。
+//! `lang=zh|en;trad=on|off;punct=on|off;fw=on|off[;im=<uniqueName>][;mode=<档位>]`
+//! （rc 0 成功；通道不通 rc≠0 且无输出）—— 状态栏的实时图标读它（[readImeState]）。
+//! `im` = 当前输入法（2026-10-10 下午用户裁决「切到其他输入法时状态栏消失」的数据位，
+//! glue 侧在途追加；缺键/空串 = 未知，语义见 [ImeState.im] 与 StatusBar.kt 的 [barVisible]）。
+//! `mode` = 档位 token（2026-10-14 追加，**行尾**）：取值域同 [cycleMode] 的应答
+//! （[MODE_TOKENS]），缺键/认不得 = **未知（空串）**，与 `im` 同一档 —— 老插件的输出
+//! 没有这一格，不许变成解析失败；「未知 → 拼音」的回落归**消费方**（状态栏那条，
+//! 见 SkinAndStatus.kt 的 barMode）—— 见 [ImeState.mode]。
 //!
 //! ⚠️ 这些动作的效果在**别处**（输入法状态），命令成败是本侧唯一看得见的东西 ——
 //! 所以失败必须回到 UI 上（[runExternal] 的返回值就是给用户看的那句话）。
@@ -46,6 +51,9 @@ fun statusActionCommand(b: StatusBarButton): List<String>? = when (b) {
     // 中文打不出来（lead 真机实测指纹：点两次后 `fcitx5-remote` 报 2）。正确动作是契约
     // 里的 `opi-ctl lang`；有映射回归钉（StatusBarTest）。别改回去。
     StatusBarButton.LANG -> listOf("opi-ctl", "lang")
+    // MODE 也不出命令：它走 [cycleMode]（进程内一次 `opi-ctl mode` 循环，返回新档位
+    // token），与这张「按钮 → 命令行」的表不是一件事（分派见 StatusBar.dispatch）。
+    StatusBarButton.MODE -> null
     StatusBarButton.VK, StatusBarButton.LOGO, StatusBarButton.SETTINGS -> null
 }
 
@@ -164,6 +172,52 @@ fun desktopSymbolSearch(query: String, timeoutMs: Long = 3000): SymbolSearch {
     }
 }
 
+// ---------- 模式循环（2026-10-14） ----------
+
+/**
+ * `opi-ctl mode` 能回的模式 token —— 与 `crates/opi-tools/src/bin/opi-ctl.rs` 的
+ * `check_mode_shape`、C++ 侧 `opi_ctl_mode.h` 的派生表**同一张枚举**（三处同改）。
+ * `wubi` 引擎现在不会发（五笔未落地）：先收下是**前向兼容** —— 引擎侧加档时桌面
+ * 不必跟着发版（同 CLI 侧那条放行）。
+ */
+private val MODE_TOKENS = setOf("pinyin", "en26", "wubi")
+
+/**
+ * 一次 `opi-ctl mode` 的应答 → 新模式 token（纯函数）。**空串 = 失败/认不得**：
+ * 退出码非 0、或首行不在取值域里（`ok`、空行、大小写不对、带尾巴……）都回空串 ——
+ * 认不得的应答绝不能当模式名画到条上（最要紧的指纹是 `ok`：插件把 mode 接到了旧路径）。
+ *
+ * 与 [searchResult] 的差别：那边失败要**带原因给用户看**，这边契约（2026-10-14 冻结）
+ * 就是「token 或空串」，调用方按「空串 = 什么都没切成」处理。
+ */
+internal fun cycleModeToken(code: Int, firstLine: String?): String {
+    if (code != 0) return ""
+    val t = firstLine.orEmpty()
+    return if (t in MODE_TOKENS) t else ""
+}
+
+/**
+ * 点一下模式按钮：`opi-ctl mode` 循环 **拼音(全拼) → 英文26键**（未来五笔）。
+ * 返回**新模式 token**（`pinyin` / `en26`，未来 `wubi`）；**空串 = 没切成**
+ * （通道不通/超时/应答异形）—— 此时显示保持原样，别把旧值当新档画。
+ *
+ * · Linux：`opi-ctl mode`（D-Bus Trigger → addon 的 `opiCtlCycleMode`，作用于当前 IC）。
+ * · Windows：没有 opi-ctl，回空串（同 [desktopSymbolCommit] 的「如实失败」纪律 ——
+ *   只是这条路的失败面是空串，没有给用户看的原因，见文件头的契约）。
+ * 超时 3s：与状态栏动作同档。
+ *
+ * ⚠️ 与 [StatusBarButton.LANG] 的 `opi-ctl lang` **不是一条路**（2026-10-14 裁决）：
+ * lang 只切中英，mode 是循环档位；今天两者结果恰好同形，五笔落地后才分家 ——
+ * 别把中英按钮改到这条路上（StatusBarTest 有映射回归钉）。
+ */
+fun cycleMode(timeoutMs: Long = 3000): String {
+    if (isWindows()) return ""
+    return when (val r = runCapture(listOf("opi-ctl", "mode"), timeoutMs)) {
+        is RunResult.Exit -> cycleModeToken(r.code, r.firstLine)
+        RunResult.Timeout, is RunResult.Failed -> ""
+    }
+}
+
 // ---------- 输入法状态 ----------
 
 /**
@@ -183,6 +237,20 @@ fun desktopSymbolSearch(query: String, timeoutMs: Long = 3000): SymbolSearch {
  * 不参与渲染**：缺键/空串 = 未知 ⇒ 状态栏判可见（维持现状，不闪）；非空且 ≠ `"opi"`
  * ⇒ 隐藏（判定在 StatusBar.kt 的 [barVisible]）。这是**加键**：既有四键的解析语义一字
  * 未动 —— 新 glue 没合时旧输出正好缺这个键，走「未知」分支。
+ *
+ * [mode] = 档位 token（`mode=` 位，2026-10-14 追加，**行尾**）。**定状态栏模式按钮的
+ * 初始档**：此前那条只能记住「自己点出来的档」，条一重启（或从别处改了模式）就与实际
+ * 引擎不符，要点一下才对齐。取值域同 [cycleMode] 的应答（[MODE_TOKENS]）；缺键/认不得
+ * = **未知（空串）** —— 与 [im] 的「缺键 = 未知」同一族（且与 interface 对齐过的形状：
+ * statusbar 侧读 [ImeState.mode]，`""` 回落到「拼音」）。这里**不代为回落**：「未知 ⇒
+ * 拼音」是消费方（状态栏）的回落，落在这边的话状态栏那道「老版本无 mode 位 ⇒ 拼音」
+ * 的门禁就算删掉回落代码也照样绿 —— 回落归它，门禁才有牙。老插件的输出本来就没有这一
+ * 格（那时也确实只有拼音/英文两档，且英文档那半由旧条自己的点击记住），**不许把老 CLI
+ * 的输出变成解析失败**。⚠️ 服务端对「不在循环面上的态」（繁体/符号/双拼）报的是
+ * **pinyin**（面外态收成「拼」：读法仍是拼音；2026-10-14 改判，见 cpp/opi_ctl_mode.h
+ * 的改判记录）—— 所以 `trad=on` 与 `mode=pinyin` 同现是**正常**的（简繁由 `trad`
+ * 格自述，两格各管各）。初版收的是 en26，那会让繁体中文输入时条上画英文档位 = 假
+ * 标签；别把这条改回去，也别在这里「修」成别的。
  */
 data class ImeState(
     val zh: Boolean = true,
@@ -191,6 +259,11 @@ data class ImeState(
     val fullwidth: Boolean = false,
     /** 当前输入法 uniqueName（`im=` 位）。缺键/空串 = 未知 —— 见类头 [im] 段。 */
     val im: String = "",
+    /**
+     * 档位 token（`mode=` 位）。缺键/认不得 = `""` = 未知（**不回落**；回落「拼音」在
+     * 消费方）—— 见类头 [mode] 段。
+     */
+    val mode: String = "",
 )
 
 /**
@@ -213,6 +286,12 @@ fun parseImeState(line: String?): ImeState {
             "fw" -> if (on != null) st.copy(fullwidth = on) else st
             // 任意串都收（uniqueName 没有枚举面）；空值/缺键归一成 "" = 未知（见 ImeState.im）
             "im" -> st.copy(im = v)
+            // 档位 token（`mode=` 位，2026-10-14 追加）：取值域内原样收，域外（"ok"/
+            // 大小写/将来才有的 token）归一成 "" = 未知 —— **不原样收**：im 那边「任意
+            // 串都收」是因为 uniqueName 没有枚举面，mode 有，收下等于把来路不明的串
+            // 交给界面画档位。也不把整行判坏（老插件没这一格，硬判 = 把「版本旧」变成
+            // 状态栏可见的失败）。
+            "mode" -> st.copy(mode = if (v in MODE_TOKENS) v else "")
             else -> st // 以后多出来的键：忽略
         }
     }

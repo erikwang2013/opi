@@ -713,6 +713,7 @@ Linux 上 = `--settings` 的设置窗（无参数启动也是它）。**v1.6.0 �
 
 ```bash
 opi-ctl symbols|trad|punct|fullwidth|lang   # 动作（作用于当前输入上下文）
+opi-ctl mode                                # 模式循环 拼音 → 英文26键 →（未来五笔），回新档 token
 opi-ctl insert <文本>                        # 把文本提交进当前输入框（符号页上屏用；空文本 = 用法错）
 opi-ctl state                               # 只读：当前状态，一行
 ```
@@ -724,7 +725,11 @@ opi-ctl state                               # 只读：当前状态，一行
   `insert` 的两条边界：**空文本 = 用法错（2，本侧拦下不发 D-Bus）**；到了插件端却没有
   **焦点输入框** = `4`（插件的 err:4，短语随状态栏/符号页显示给用户）。
 - `state` 输出**键序冻结**（桌面状态栏按位置解析，漂了有门禁报红）：
-  `lang=zh|en;trad=on|off;punct=on|off;fw=on|off;im=<输入法名>`。**没有当前输入上下文
+  `lang=zh|en;trad=on|off;punct=on|off;fw=on|off;im=<输入法名>;mode=pinyin|en26|wubi`
+  （`mode` = 2026-10-14 加，**追加在行尾**：旧前端按位置读前几段不受影响；取值域
+  `pinyin|en26|wubi`（五笔未落地、token 已预放行）；**未定义档（繁体/数字/符号）报
+  `pinyin`** —— 它们是拼音读法的变体/瞬态面板，简繁由 `trad` 位单独表达）。
+  **没有当前输入上下文
   也照常返回**（rc 0，按缺省渲染）——轮询常在无焦点时发生，判错会让状态栏图标闪。
   `im` = 当前输入法 uniqueName（状态栏据此在切走时隐藏、切回「opi」时回来）；无
   IC/查不到时空串（前端按「未知=维持现状」不闪。fcitx5 的 `ShareInputState=All`

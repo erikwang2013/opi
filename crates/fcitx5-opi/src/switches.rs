@@ -121,3 +121,25 @@ pub unsafe extern "C" fn opi_fcitx5_set_scheme(code: i32) {
         }
     }));
 }
+
+/// scheme()：读回当前方案码（`Scheme::code`；0=全拼 4=双拼 —— 与 `set_scheme`
+/// 同一个值域）。**读侧出口**（2026-10-14 与 set_scheme 同时落地）：opi-ctl 的
+/// `mode` 动词要按「mode + scheme」派生对外状态 token（pinyin / en26，未来的
+/// wubi 也只靠 scheme 跟全拼分得开）—— 不落本地镜像，见 `cpp/opi_ctl_mode.h`。
+/// 直接读 `CandidateState.engine`（crate 内可见）：本轨还没有 scheme 的 façade 读口，
+/// 而给它加一个方法会让 `candidate.rs` ↔ `tsf-opi/src/logic.rs` 的逐行同构漂一格
+/// （两轨同构纪律），不值得为一个出口动那个面。
+///
+/// 引擎未装载 → 0（全拼）：与 `opi_fcitx5_mode()` 未装载给 0（Pinyin）同一个缺省
+/// 姿态 —— 空引擎下「拼音 + 全拼」是最中性的读数，调用方不用区分这一格。
+/// # Safety
+///
+/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_scheme() -> i32 {
+    ensure_panic_hook();
+    catch_unwind(AssertUnwindSafe(|| {
+        with_state(|s| s.engine.scheme().code()).unwrap_or(0)
+    }))
+    .unwrap_or(0)
+}

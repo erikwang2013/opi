@@ -19,8 +19,11 @@
 //! 器」）——`--statusbar` 在 Windows 上能跑，只是没有东西会去起它。写到这儿而不是
 //! 埋在代码里。
 //!
-//! 条上按钮（2026-10-10 **最终冻结**，从左到右 = [StatusBarButton] 的枚举序）：
-//! 小欧 / 中英 / 。，标点(双态) / 简繁 / 月相全半角 / 软键盘 / Ω符号大全 / 设置。
+//! 条上按钮（从左到右 = [StatusBarButton] 的枚举序）：小欧 / 中英 / 。，标点(双态) /
+//! 简繁 / **模式** / 月相全半角 / 软键盘 / Ω符号大全 / 设置。前八枚 2026-10-10
+//! **最终冻结**；**模式**是 2026-10-14 用户裁决加的第 5 位（原话「在简繁按钮后增加
+//! 模式切换按钮」= 插在简繁与月相之间）——枚举序即显示序，见 SkinAndStatus.kt 的
+//! [StatusBarButton] 头注释。
 //! logo = 品牌标识兼拖动把手（第 1 位），**单击换下一款皮肤**（2026-10-13 用户裁决
 //! 「点击 logo 的颜色变化」；取代早先「单击打开设置」③ —— 设置仍走右侧「设置」钮）。
 //!
@@ -29,6 +32,9 @@
 //! （punct on 「。，」/ off 「.,」）—— 这是 2026-10-10 **中午**按用户对按钮行为的描述
 //! 订正的结果（深夜 B 版曾把 。， 放符号大全、Ω 静态放标点，已废止）；逐项与时间线
 //! 见 iconText 的注释，别按任一半截「改回去」。
+//! **面上的字/图标一律「按按钮取最大且不溢出」**（2026-10-14 用户裁决，原话与实现
+//! 见 BarGlyphs.kt 文件头）—— 面（字形排版、三个图标、每按钮的槽位表）整体在
+//! BarGlyphs.kt，本文件只管条、按钮框、动作与轮询。
 //!
 //! **状态实时可见**（2026-10-10 深夜裁决）：简/繁、中/英、月相随输入法真实状态翻转。
 //! 状态 = `opi-ctl state`（契约见 Actions.kt），1s 轮询 + **每次按钮动作返回后立刻
@@ -49,7 +55,6 @@
 
 package xyz.erik.opi.candidate
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -73,12 +78,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
@@ -96,10 +96,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import xyz.erik.opi.pet.OpiPet
 import xyz.erik.opi.pet.OpiPetWindowIcon
-import xyz.erik.opi.pet.PetMood
-import xyz.erik.opi.pet.PetPalette
 
 // ---------- 配色与尺寸 ----------
 
@@ -108,7 +105,7 @@ import xyz.erik.opi.pet.PetPalette
 // 全是写死的深色常量，条从没读过皮肤）。同步靠本文件既有的 1s 配置轮询，自动。
 // 「不改动」= SkinPalette.KeepColors（= 上述那五个常量原值，行为一字不变）。
 
-private const val BTN = 30 // 按钮边长
+internal const val BTN = 30 // 按钮边长
 private const val GAP = 4
 private const val PAD = 6
 private const val BAR_H = 42
@@ -154,6 +151,11 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
     var s by remember { mutableStateOf(loadSettings()) }
     // 起始 = 中性缺省，首拍轮询（≤1s）补上真实状态 —— 不在组合期做进程调用。
     var imeState by remember { mutableStateOf(ImeState()) }
+    // 模式档位（模式按钮面用）。2026-10-14 起 `opi-ctl state` 带 `mode=` 位（modeplumb 落地），
+    // 所以真值来自轮询、不是本进程的记忆：**点击 = 乐观更新，轮询 = 权威**（下面每拍
+    // `mode = barMode(st)`）。两者不会打架：`opi-ctl mode` 只在引擎切完之后才返回新 token，
+    // 所以下一拍 state 必然与它一致。初值 = 拼音（用户裁决的默认档；首拍 ≤1s 就补齐）。
+    var mode by remember { mutableStateOf(MODE_DEFAULT) }
     var settingsOpen by remember { mutableStateOf(false) }
     var vkOpen by remember { mutableStateOf(false) }
     var symbolsOpen by remember { mutableStateOf(false) }
@@ -173,6 +175,7 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
             val (next, st) = withContext(Dispatchers.IO) { loadSettings() to readImeState() }
             if (next != s) s = next // 变了才写状态：否则每秒一次无谓重组
             if (st != imeState) imeState = st
+            mode = barMode(st) // 档位跟着 state 走（缺 mode 位的老插件 ⇒ barMode 回落默认档）
         }
     }
     LaunchedEffect(notice) {
@@ -236,6 +239,16 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
             StatusBarButton.LOGO -> cycleSkin()
             StatusBarButton.SETTINGS -> settingsOpen = true
             StatusBarButton.SYMBOLS -> report(openSymbols())
+            // 模式：循环一次（「拼音→en26→（未来五笔）」，引擎侧与 token 派生见
+            // Actions.cycleMode）。返回**新档位 token**，当场换字（不等 1s 轮询：
+            // 模式不在 state 行里，轮询也读不回来）。
+            // **空串 = 没切成**（通道不通/超时/应答异形）⇒ 保留原档 + 报一句 ——
+            // Actions.cycleMode 的契约就是「token 或空串」，认不得的应答不许当档位
+            // 画到条上（把空串写进 mode 的话面会退成默认「拼」，等于谎报切成了拼音）。
+            StatusBarButton.MODE -> {
+                val next = cycleMode()
+                if (next.isEmpty()) report("模式切换失败：opi-ctl 无应答或应答不认得") else mode = next
+            }
             else -> report(statusActionCommand(b)?.let { runExternal(it) })
         }
     }
@@ -295,7 +308,7 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(GAP.dp),
                     ) {
-                        for (b in buttons) BarButton(b, imeState, windowState, ::onButton)
+                        for (b in buttons) BarButton(b, imeState, mode, windowState, ::onButton)
                     }
                 } else {
                     // 提示期间**替掉**按钮列（而不是盖在上面）：否则按钮还在下面接着点击，
@@ -329,10 +342,19 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
 
 // ---------- 一个按钮 ----------
 
+/**
+ * 一枚按钮：30dp 的框 + 悬停底 + 点击（LOGO 另挂拖动）。**面**（图标/字形）在
+ * [StatusBarButtonFace]（BarGlyphs.kt）—— 分开是为了让门禁能离屏直接渲那一支。
+ *
+ * 面的盒就是**这块 30dp 的按钮本身**（不内缩）：用户 2026-10-14 的「根据按钮显示最大」
+ * 按的就是按钮这块盒，字号由 BarGlyphs 按墨迹取满（见其文件头）。别在这里再垫留白 ——
+ * 垫掉多少，字就小多少（曾经的 26dp「面盒」就是这么把 logo 从 30 缩回 26 的）。
+ */
 @Composable
 private fun BarButton(
     b: StatusBarButton,
     st: ImeState,
+    mode: String,
     windowState: WindowState,
     onClick: (StatusBarButton) -> Unit,
 ) {
@@ -348,20 +370,7 @@ private fun BarButton(
             .semantics { contentDescription = b.label },
         contentAlignment = Alignment.Center,
     ) {
-        when (b) {
-            // 品牌标识兼拖动把手：就是设置页里那只小欧，缩小到按钮里；单击换皮肤（见 dispatch）。
-            // 30dp = 按钮边长（2026-10-13 用户「logo 大点」；再大就压到相邻按钮上了）。
-            // 配色随条底深浅切：浅底上用深底版那套（近白身 + 淡青描边）会糊进底色。
-            StatusBarButton.LOGO -> OpiPet(
-                mood = PetMood.IDLE,
-                palette = if (palette.bg.luminance() < 0.5f) PetPalette.Dark else PetPalette.Default,
-                size = 30.dp,
-            )
-            StatusBarButton.VK -> VkIcon()
-            StatusBarButton.FULLWIDTH -> MoonIcon(st.fullwidth)
-            StatusBarButton.SETTINGS -> SettingsIcon()
-            else -> Text(iconText(b, st), fontSize = 12.sp, color = palette.fg, maxLines = 1)
-        }
+        StatusBarButtonFace(b, st, mode, BTN.dp)
     }
 }
 
@@ -381,6 +390,9 @@ internal fun iconText(b: StatusBarButton, st: ImeState): String = when (b) {
     StatusBarButton.TRAD -> tradIcon(st)
     StatusBarButton.PUNCT -> punctIcon(st)
     StatusBarButton.LANG -> langIcon(st)
+    // MODE 不从这里出字：它的面由**档位 token** 驱动（[modeFace]/[modeCorner]，面在
+    // BarGlyphs.kt 的 modeSlots）—— 本函数的入参里没有档位，给不出正确字面。
+    StatusBarButton.MODE -> ""
     StatusBarButton.FULLWIDTH, StatusBarButton.SETTINGS,
     StatusBarButton.VK, StatusBarButton.LOGO -> "" // 这四个画图标，不出字
 }
@@ -396,80 +408,6 @@ internal fun langIcon(st: ImeState): String = if (st.zh) "中" else "英"
  * on = 中文标点「。，」（用户字面序，先句号）；off = 英文「.,」（用户字面序，先点号）。
  */
 internal fun punctIcon(st: ImeState): String = if (st.punct) "。，" else ".,"
-
-/**
- * 全半角按钮 = 月相（用户裁决②：满月 = 全角、半月 = 半角）。
- * 满月 = 实心圆；半月 = 描边圆 + 右半实心（缺的半边露的是条自己的底 —— 窗不透明，
- * 不会透出背后的窗口内容）。
- */
-@Composable
-private fun MoonIcon(fullwidth: Boolean) {
-    val fg = LocalBarPalette.current.fg
-    Canvas(Modifier.size(17.dp)) {
-        val r = size.minDimension / 2f - 1.dp.toPx()
-        val center = Offset(size.width / 2f, size.height / 2f)
-        if (fullwidth) {
-            drawCircle(color = fg, radius = r)
-        } else {
-            drawCircle(color = fg, radius = r, style = Stroke(1.5.dp.toPx()))
-            drawArc(
-                color = fg,
-                startAngle = -90f,
-                sweepAngle = 180f, // 右半
-                useCenter = true,
-                topLeft = Offset(center.x - r, center.y - r),
-                size = Size(r * 2f, r * 2f),
-            )
-        }
-    }
-}
-
-/** 设置按钮 = 四小方块（用户裁决②：多字的「设」去掉，画图标）。 */
-@Composable
-private fun SettingsIcon() {
-    val fg = LocalBarPalette.current.fg
-    Canvas(Modifier.size(13.dp)) {
-        val s = 5.dp.toPx()
-        val gap = 3.dp.toPx()
-        for (row in 0 until 2) {
-            for (col in 0 until 2) {
-                drawRoundRect(
-                    color = fg,
-                    topLeft = Offset(col * (s + gap), row * (s + gap)),
-                    size = Size(s, s),
-                    cornerRadius = CornerRadius(1.dp.toPx()),
-                )
-            }
-        }
-    }
-}
-
-/** 小键盘图标：一个键帽外框 + 六个键点。 */
-@Composable
-private fun VkIcon() {
-    val fg = LocalBarPalette.current.fg
-    Canvas(Modifier.size(17.dp)) {
-        val stroke = 1.5.dp.toPx()
-        val h = size.height * 0.72f
-        val top = (size.height - h) / 2f
-        drawRoundRect(
-            color = fg,
-            topLeft = Offset(0f, top),
-            size = Size(size.width, h),
-            cornerRadius = CornerRadius(2.5.dp.toPx()),
-            style = Stroke(stroke),
-        )
-        for (r in 0 until 2) {
-            for (c in 0 until 3) {
-                drawCircle(
-                    color = fg,
-                    radius = 1.1.dp.toPx(),
-                    center = Offset(size.width * (0.28f + c * 0.22f), top + h * (0.35f + r * 0.3f)),
-                )
-            }
-        }
-    }
-}
 
 /**
  * 把窗口拖动交给这个修饰符（只有 logo 挂它）。

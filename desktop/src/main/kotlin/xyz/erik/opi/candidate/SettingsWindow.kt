@@ -172,6 +172,11 @@ fun SettingsWindow() {
     val saveLock = remember { Mutex() }
 
     fun apply(next: OpSettings) {
+        // 候选字号（2026-10-14）：**只在改这一档时**才写 classicui.conf —— 每次保存都写会
+        // 在无关开关上把用户手改的 Font= 盖回（契约见 ClassicUiFont.kt）。外观页在 Windows
+        // 上不出现 ⇒ 那条路永不触发（外加一道 isWindows 防线：免得手写的配置值把文件写到
+        // Windows 的 ~/.config 去）。
+        val fontChanged = !isWindows() && next.candidateFont != s.candidateFont
         s = next
         // ⚠️ saveSettings 里是文件写 + `notifyFcitxReload`（busctl 那条 `waitFor` **无超时**，
         // 2026-10-13 实抓 EDT 停在那里）—— 整个保存挪出组合线程；拨开关仍然即时可见（s
@@ -179,7 +184,18 @@ fun SettingsWindow() {
         scope.launch {
             saveLock.withLock {
                 val live = withContext(Dispatchers.IO) { saveSettings(next) }
-                status = saveStatusMessage(live)
+                var msg = saveStatusMessage(live)
+                if (fontChanged) {
+                    // classicui 那条 = 文件写 + ReloadAddonConfig 子进程，同样挪到 IO
+                    // （与状态栏那边的纪律一致；失败的措辞与 saveStatusMessage 同调）。
+                    val uiOk = withContext(Dispatchers.IO) { applyClassicUiFont(next.candidateFont) }
+                    msg += if (uiOk) {
+                        "；候选字号已写入 classicui.conf 并重载"
+                    } else {
+                        "；候选字号已写入 classicui.conf，但没能通知 fcitx5 重载（它没在跑？重启输入法后生效）"
+                    }
+                }
+                status = msg
             }
         }
     }

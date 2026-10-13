@@ -183,4 +183,17 @@ fn shuangpin_layout_and_scheme_exports_land_on_the_engine() {
         Some(Scheme::Full),
         "码 0 切回全拼"
     );
+    // 读侧出口（2026-10-14 加，与 set_scheme 配对）：C 面的 opi_fcitx5_scheme() 必须
+    // 与引擎同一值 —— opi-ctl 的 `mode` 动作就靠它派生状态 token（无本地镜像）。
+    // 逐值对一遍写侧刚设过的两个码，外加「越界码是空操作」这条在读侧也看得见。
+    unsafe { opi_fcitx5_set_scheme(4) };
+    assert_eq!(unsafe { opi_fcitx5_scheme() }, 4, "读侧该回双拼码 4");
+    unsafe { opi_fcitx5_set_scheme(99) };
+    assert_eq!(
+        unsafe { opi_fcitx5_scheme() },
+        4,
+        "越界写不动引擎 ⇒ 读侧也不动"
+    );
+    unsafe { opi_fcitx5_set_scheme(0) };
+    assert_eq!(unsafe { opi_fcitx5_scheme() }, 0, "读侧该回全拼码 0");
 }

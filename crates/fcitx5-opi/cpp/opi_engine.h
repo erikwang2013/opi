@@ -25,6 +25,7 @@
 
 #include "opi_config.h"   // 「属性设置」：OpiSettings + read/apply/save
 #include "opi_ctl.h"      // opi-ctl 接收侧（D-Bus 对象 + 注册；spike 结论在那边）
+#include "opi_ctl_mode.h" // opi-ctl `mode` 动词（模式循环；500 行门禁拆出）
 #include "opi_mode.h"     // 模式热键（Ctrl+' / Ctrl+\ / Ctrl+Shift+Z）+ Shift 轻按切换 + 状态项
 #include "opi_rust_ffi.h"
 #include "opi_skin.h"     // 皮肤：写 classicui.conf + 热重载
@@ -148,6 +149,8 @@ public:
 
     // opi-ctl 的动作分发（接收侧）。动作串是**冻结的契约**（任务书）：
     //   symbols|trad|punct|fullwidth|lang —— 新增动作要先找 lead 定，别自己加。
+    //   mode（2026-10-14 用户裁决加）：模式循环 拼→英→（未来五笔）；是**唯一**
+    //   成功应答不是 "ok" 而是状态 token（pinyin/en26）的动作（协议见 opi_ctl.h）。
     //   insert:<文本>（2026-10-12 用户裁决加）：桌面大页面（符号/表情）的上屏通道 ——
     //   自绘窗自己没有提交通道（那在插件进程里），文本经既有 Trigger(string) 下沉到这里。
     // 这里跑在**主循环线程**（dbus 模块把总线挂在自己的事件循环上），所以可以安全地
@@ -220,6 +223,12 @@ public:
             // IM 的激活开关，会让状态栏文案不同步、且之后 OPI 热键全部失效 ——
             // 2026-10-10 裁决）。与 Shift 轻按共用 toggle（含 W1 直接确认与状态项刷新）。
             shiftToggle_.toggle(ic);
+        } else if (action == "mode") {
+            // 模式循环（用户裁决 2026-10-14；实现、派生与五笔插入点都在
+            // opi_ctl_mode.h 的 opiCtlCycleMode —— 本文件 500 行门禁）。与 lang
+            // 今天同效、**语义不同轴**：lang 是二值切换，本动词是 N 档循环，
+            // 五笔落地后两者分家；返回的是新状态 token，不是 "ok"。
+            return opiCtlCycleMode(ic, shiftToggle_, fanjianToggle_);
         } else {
             return "err:5:未知动作：" + action;
         }
@@ -306,7 +315,7 @@ private:
 
     // ---- opi-ctl state 的读侧（冻结格式见 opi_ctl.h 的 State 注释）----
     //
-    // 四个值全部来自**既有 getter**，不新造状态：
+    // 六个值全部来自**既有 getter**，不新造状态：
     //   · lang  = 引擎模式 == English —— 与「中/英」状态项同一条判据（opi_mode.h 的
     //     update()）；zh 覆盖拼音/繁体/符号/数字四个「中文系」模式。
     //   · trad  = 引擎模式 == Traditional —— 与「简/繁」状态项同一条判据。
@@ -316,7 +325,11 @@ private:
     //   · im    = 最近 IC 的当前输入法唯一名（Instance::currentInputMethod()，
     //     2026-10-10 追加）—— **唯一与 IC 有关的一格**，给桌面判「状态栏该不该
     //     显示」（== "opi" 显示，其他隐藏；见 opi_ctl.h 的 State 注释）。
-    // 前四格不取 IC：都是进程级的（Rust 单例 + 本 addon 的配置），所有 IC 同值 ⇒
+    //   · mode  = 档位 token（`pinyin` / `en26`；2026-10-14 追加，**追加在行尾**）——
+    //     与 `opi-ctl mode` 的应答**同一张 token 表**（opi_ctl_mode.h 的
+    //     opiCtlStateModeToken：面外态收成 pinyin，见那里的改判记录）；状态栏的
+    //     初始档读的就是这一格。
+    // 除 im 外都不取 IC：都是进程级的（Rust 单例 + 本 addon 的配置），所有 IC 同值 ⇒
     // 「没有 IC」不是失败。im 那一格查不到时给**空串**（前端约定：未知=维持现状），
     // 同样不是失败 —— 桌面每秒轮询时常常没有焦点窗口（理由细写在 opi_ctl.h）。
     // 动作路径（handleCtlAction_）另取 IC —— 那是为了刷面板，与这里理由不同。
@@ -339,6 +352,10 @@ private:
         if (instance_ != nullptr) {
             s += instance_->currentInputMethod();
         }
+        s += ";mode=";
+        // 档位 token（2026-10-14 追加，**行尾**：旧前端按位置读前面几段，不看末格）。
+        // 派生与 `opi-ctl mode` 同一份 —— opi_ctl_mode.h 的 opiCtlStateModeToken。
+        s += opiCtlStateModeToken(mode);
         return s;
     }
 

@@ -192,10 +192,8 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
     // ⚠️ 此处曾写「给半额会让 `ranking_invariants.rs` 的 proptest 随机红」——**实测不复现**
     // （半额版连跑 10 次 10/10 绿：重叠文本被上面的 retain 先去重，逐音节路径又没有精确
     // 候选可违）。结论（0 加成）不变，但**那条机制不许再当理由引用**。
-    // `opts.fuzzy = false`：整串变体与逐音节兜底**一起**关（两个入口同一开关，
-    // 只关一个会让 `zongguo` 这类"整串查不到"的输入仍从逐音节拿到模糊结果）。
-    // 纠错（2026-10-13）与模糊音**并进同一档**：同为「近音/纠错」的非精确候选，
-    // 下游的分档/去重/截断逻辑一字不改（`fuzzy` 这个变量自此是「近音+纠错」档）。
+    // `opts.fuzzy = false`：整串变体与逐音节兜底**一起**关（两个入口同一开关，只关一个
+    // 会让 `zongguo` 这类"整串查不到"的输入仍从逐音节拿到模糊结果）。纠错不在本档。
     let near_variants: Vec<String> = if opts.fuzzy != 0 {
         fuzzy::input_variants(input, opts.fuzzy)
     } else {
@@ -212,21 +210,17 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
     } else {
         Vec::new()
     };
-    // 纠错档（2026-10-13）：与模糊同档（非精确、进 `fuzzy`），但**查询走精确键**
-    // （`query_all`，不展开前缀）—— typo 修的是完整词，且前缀查询是本函数的贵项。
-    // 成本实测与语义代价见 `correction.rs` 头注；每变体取 top-3（同逐音节相）。
-    if opts.correction {
-        for v in correction::input_corrections(input) {
-            let mut hits: Vec<Candidate> = dict
-                .query_all(&v)
-                .into_iter()
-                .map(|e| hanzi(e, false))
-                .collect();
-            hits.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
-            fuzzy.extend(hits.into_iter().take(3));
-        }
-    }
-    let wide_hits = !fuzzy.is_empty();
+    // 纠错档（2026-10-13）：单独一档、排在简拼之外的最外档 —— 为什么不许并进 `fuzzy`
+    // 与「混合参与排序」的关系，全在 `correction::tier_hits` 的文档里（实现与那段注释
+    // 一起搬去了 `correction.rs`：本文件 521/500 撞门禁，2026-10-14 拆）。
+    let mut corr: Vec<Candidate> = if opts.correction {
+        correction::tier_hits(dict, input, learner, boost)
+    } else {
+        Vec::new()
+    };
+    // 分词回退的「有候选就别接管」判据（下一条注释）：纠错命中也算候选 —— 与它此前
+    // 混在 fuzzy 里时的语义一致（`nihap` 纠出「你好」后不许再被 `niha` 的整档接管）。
+    let wide_hits = !fuzzy.is_empty() || !corr.is_empty();
     // ── 分词回退（2026-10-10 用户裁决「输入拼音无匹配时要分词匹配」）────────────
     // 整串直接命中为空、整串模糊命中也为空时，候选换成**最长可匹配前缀**的整档
     // （递归调本函数：精确/模糊/简拼/符号的分档规则全是同一条，不另起一套排序），
@@ -372,6 +366,15 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
         merged = jianpin;
     } else {
         merged.extend(jianpin);
+    }
+    // 纠错档：**最外层**（见 `correction::tier_hits`）。分档规则同上面逐字相同：只有
+    // 前三档全空时它才当主结果（`nihap` 的整串查不到东西，纠出的就是唯一来路）。
+    corr.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
+    corr.retain(|c| seen.insert(c.text.clone()));
+    if merged.is_empty() {
+        merged = corr;
+    } else {
+        merged.extend(corr);
     }
     // 简体优先（见 RankOptions::prefer_simplified）：**截断之前**分区 —— 截断后才排
     // 等于「被截掉的简体候选永远回不来」。

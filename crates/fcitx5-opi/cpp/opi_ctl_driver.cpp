@@ -26,6 +26,9 @@
 //      搜索**语义**在 Rust 侧（engine-core 的 symbols 测试 + fcitx5_opi 的
 //      cabi_search_tests），本段只验 C++ 协议层，故不写死任何具体符号（数据更新
 //      不该让它红）。
+//   6. opi-ctl mode（模式循环，2026-10-14 用户裁决）：**拆在 opi_ctl_mode_driver.cpp**
+//      （同一个 500 行门禁）。token（pinyin/en26）与引擎读回逐条一致、双拼档的
+//      收编与「进拼音摆回全拼」，都在那边。
 //
 // 局限（如实记，别把它读成更强的结论）：
 //   · `OpiEngine engine(nullptr)` —— instance_ 为空：**D-Bus 注册本身**（真会话总线
@@ -46,6 +49,7 @@
 
 #include "opi_driver_common.h" // 测试器具（TestIC/check/预编辑与候选读回）
 #include "opi_ctl_search_driver.cpp" // §9 search 整段（500 行门禁拆出去的；要在器具之后）
+#include "opi_ctl_mode_driver.cpp"   // §10 mode（模式循环）整段（同上，2026-10-14 拆出）
 
 int main() {
     fcitx::InputContextManager manager;
@@ -411,7 +415,10 @@ int main() {
     // 前置：§7c 收尾把模式切回拼音，而 switch_mode 顺带把全角重置为**模式缺省**
     // （Mode::default_fullwidth：拼音/繁体 on，英文/符号 off）⇒ 开局是 fw=on；
     // §7d 把标点配置翻回原值、§7d-2 的写盘失败臂回滚后也没动它（落盘值 = 内存值，
-    // 两条不会漂）。state 读的就是这五处既有状态，出处对照 opi_engine.h 的 stateLine_。
+    // 两条不会漂）。state 读的就是这六处既有状态，出处对照 opi_engine.h 的 stateLine_。
+    // mode 那一格（2026-10-14 追加，行尾）在本驱动**有真值**：方案读口是弱符号，
+    // 真 .so 在时 opiCtlSchemeRead() = 引擎实际方案（本段全程全拼 ⇒ 拼音档），
+    // 符号缺失时它按全拼兜底 —— 两条在本段的取值相同（见 opi_ctl_mode.h）。
     check(opi_fcitx5_mode() == kModePinyin, "前置：拼音模式（§7c 收尾，全角随模式重置为 on）");
     std::string punctExp = "on";
     {
@@ -420,22 +427,30 @@ int main() {
         punctExp = *readBack.chinesePunct ? "on" : "off";
     }
     const std::string s0 = engine.ctlState_();
-    check(s0 == "lang=zh;trad=off;punct=" + punctExp + ";fw=on;im=",
-          "冻结格式整行（键序固定 lang;trad;punct;fw;im，桌面按位置解析）：" + q(s0));
+    check(s0 == "lang=zh;trad=off;punct=" + punctExp + ";fw=on;im=;mode=pinyin",
+          "冻结格式整行（键序固定 lang;trad;punct;fw;im;mode，桌面按位置解析）："
+              + q(s0));
     // im 那一格在**本驱动恒为空串**：instance_ 是 nullptr ⇒ glue 直接接空串
     // （stateLine_ 里的 `instance_ != nullptr` 分支，没实例就没「最近 IC」可问）。
     // 前端约定：未知 = 维持现状。**真值面**（切 IM 后 im 跟着变；无 IC 时 im 依
     // ShareInputState：All 兜底给「下一扇窗的 IM」/ No 才是空串）归 e2e 变体 ctl
     // —— 那里有真守护进程 + 真 IC（本驱动假装测它就是假证据）。
-    check(s0.size() >= 4 && s0.compare(s0.size() - 4, 4, ";im=") == 0,
-          "末格是 im=（本驱动空串：没实例可问，不是失败也不是别的值）");
+    check(s0.find(";im=;") != std::string::npos,
+          "im 格是空串（本驱动没实例可问，不是失败也不是别的值）");
+    // mode **追加在行尾**（2026-10-14）：按位置读前五段的旧前端照旧 —— 这一条同时
+    // 钉住「追加在末位」这个位置选择本身。
+    check(s0.size() > 12 && s0.compare(s0.size() - 12, 12, ";mode=pinyin") == 0,
+          "末格是 mode=pinyin（拼音 + 全拼 ⇒ pinyin 档；追加在行尾）");
 
     std::printf("-- 8a 切 trad 前后整行变化（off→on 与 on→off 两向都断）--\n");
     check(engine.handleCtlAction_("trad") == "ok" && opi_fcitx5_mode() == kModeTraditional,
           "trad（翻面走动作路径，state 只是读它）");
     const std::string s1 = engine.ctlState_();
-    check(s1 == "lang=zh;trad=on;punct=" + punctExp + ";fw=on;im=",
-          "只有 trad 段翻成 on，其余四段逐字不变：" + q(s1));
+    check(s1 == "lang=zh;trad=on;punct=" + punctExp + ";fw=on;im=;mode=pinyin",
+          "lang/punct/fw/im 四段逐字不变，trad 翻 on，**mode 段原地不动**（繁体是"
+          "面外态 ⇒ 收成 pinyin：读法仍是拼音，简繁由 trad 格自述。2026-10-14 改判，"
+          "见 opi_ctl_mode.h 的 opiCtlStateModeToken）："
+              + q(s1));
     check(s1 != s0, "切 trad 前后 state **不同**（状态栏「点了要有即时反馈」靠这一格）");
     check(engine.handleCtlAction_("trad") == "ok" && opi_fcitx5_mode() == kModePinyin,
           "trad 切回");
@@ -446,8 +461,10 @@ int main() {
     check(engine.handleCtlAction_("lang") == "ok" && opi_fcitx5_mode() == kModeEnglish,
           "lang 切英文");
     const std::string s3 = engine.ctlState_();
-    check(s3 == "lang=en;trad=off;punct=" + punctExp + ";fw=off;im=",
-          "lang=en 且全角随英文缺省变 off：" + q(s3));
+    check(s3 == "lang=en;trad=off;punct=" + punctExp + ";fw=off;im=;mode=en26",
+          "lang=en 且全角随英文缺省变 off，mode 格 = en26（英文档 —— lang 与 mode "
+          "两格在英文态**同向**变）："
+              + q(s3));
 
     std::printf("-- 8c 只读性：连读同值 + 行为面证明（全角那一格是双翻面读的，见 opi_engine.h）--\n");
     const std::string a = engine.ctlState_();
@@ -462,6 +479,7 @@ int main() {
     check(engine.ctlState_() == s0, "回到拼音后整行 == s0（本段不留副作用）");
 
     runCtlSearchChecks(engine, bufferOf); // §9 拆在 opi_ctl_search_driver.cpp（500 行门禁）
+    runCtlModeChecks(engine, ic, bufferOf, findAction, type); // §10 同一个理由拆出
 
     std::printf("\n== 结果：%s ==\n", g_fail == 0 ? "全过" : "有失败");
     return g_fail == 0 ? 0 : 1;

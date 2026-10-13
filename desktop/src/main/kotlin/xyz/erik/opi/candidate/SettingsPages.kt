@@ -185,6 +185,29 @@ internal fun AppearancePage(s: OpSettings, apply: (OpSettings) -> Unit) {
             "「不改动」= OPI 不介入主题。",
         fontSize = 12.sp, color = Muted,
     )
+    SectionTitle("候选字号")
+    Spacer(Modifier.height(8.dp))
+    // 三档名表 = CLASSIC_UI_FONT_CHOICES 的键（名字 ↔ pango 描述的唯一映射在
+    // ClassicUiFont.kt）。改这一档 ⇒ apply 时把 Font= 写进 classicui.conf 并重载。
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        for (name in CLASSIC_UI_FONT_NAMES) {
+            LayoutChip(name, name == s.candidateFont) { apply(s.copy(candidateFont = name)) }
+        }
+    }
+    Spacer(Modifier.height(7.dp))
+    // 如实写三件事：改的是谁的字体、写到哪个文件、手改会怎样（措辞不许比实现承诺得多：
+    // 只有「改这一档」时才写，所以手改只在下次改档时被盖回 —— ClassicUiFontTest 钉行为）。
+    Text(
+        "改的是 fcitx5 候选面板（classicui）的字体，对所有输入法生效：" +
+            "小 = Sans 10（fcitx5 默认）、中 = Sans 12、大 = Sans 14。" +
+            "选择写进 fcitx5 的 classicui.conf 的 Font= 行（缺省路径 " +
+            "~/.config/fcitx5/conf/classicui.conf；只在改这一档时写，" +
+            "那时会把手改的那行盖回）。",
+        fontSize = 12.sp, color = Muted,
+    )
 }
 
 // ---------- 状态栏 ----------

@@ -28,6 +28,8 @@
 //! 它们（未知键会被忽略，向前兼容）；但 Linux 侧它们仍写在同一份 fcitx5 addon 配置
 //! 里 —— 用 fcitx5 配置工具保存时这些键**是否被保存方抹掉**本侧无法保证（上游行为，
 //! 本机未取证）。若真发生，表现是「状态栏设置被重置」，不是启动失败。
+//! `CandidateFont`（2026-10-14 候选字号）同理 —— 且它的**真落点**根本不在本文件：
+//! 见 ClassicUiFont.kt（fcitx5 classicui.conf 的 `Font=`）。
 //!
 //! ⚠️ 保存走 [mergeIni]：**保留本文件不认识的行**（fcitx5 侧新增的选项、手写注释、
 //! 未知键）。2026-10-09 前是整文件重写 —— 那会让
@@ -77,6 +79,13 @@ data class OpSettings(
     val pinyinMethod: String = SCHEME_NAMES.first(),
     val shiftToggle: Boolean = true,
     val skin: SkinOption = SkinOption.KEEP,
+    /**
+     * 候选字号（2026-10-14 用户裁决；键 `CandidateFont`）：**档位名**
+     * （[CLASSIC_UI_FONT_NAMES] 之一 —— 小/中/大）。存的只是名字，真正的落点是 fcitx5
+     * classicui 的 `Font=`（三档 ↔ pango 描述与写入见 ClassicUiFont.kt）——
+     * 与 Skin/拼音方式同一条「存名字不存实现值」惯例。缺键/认不得 → 中。
+     */
+    val candidateFont: String = CLASSIC_UI_FONT_DEFAULT,
     val statusbar: StatusBarSettings = StatusBarSettings(),
 ) {
     /** 写成 ini。键名见文件头「三处逐字对应」。 */
@@ -100,6 +109,10 @@ data class OpSettings(
         // 但设置窗在 Windows 上不显示这一节，写不写都到不了那条路 —— 写，
         // 是为了「同一份文件格式」不因平台分叉。
         appendLine("Skin=${skin.value}")
+        // 候选字号：存的只是档位名；真正的落点是 fcitx5 classicui.conf 的 Font=
+        // （保存时按需写过去，见 ClassicUiFont.kt）。两侧 IME 读侧都不认这个键
+        // （与 StatusBar* 同一条：未知键忽略），写全只为文件格式不因平台分叉。
+        appendLine("CandidateFont=$candidateFont")
         // 状态栏九个键：只有本窗读写（见文件头 ⚠️）。同样不分平台地写全，
         // 「同一份文件格式」是这里的既有纪律。
         appendLine("StatusBarHidden=${boolText(statusbar.hidden)}")
@@ -145,6 +158,9 @@ data class OpSettings(
                     ?: SCHEME_NAMES.first(),
                 shiftToggle = bool("ShiftToggle", true),
                 skin = SkinOption.fromValue(map["Skin"]),
+                candidateFont = map["CandidateFont"]
+                    ?.takeIf { it in CLASSIC_UI_FONT_NAMES }
+                    ?: CLASSIC_UI_FONT_DEFAULT,
                 statusbar = StatusBarSettings(
                     hidden = bool("StatusBarHidden", false),
                     // ⚠️ 缺键回落 false（2026-10-10 中午裁决：软键盘默认关）。别照着
@@ -221,7 +237,8 @@ internal fun OpSettings.toggleFuzzyPair(name: String): OpSettings {
 }
 
 /**
- * 把 [s] 管理的键（四开关 + Skin + 状态栏九个）合进 [existing]，**其它行原样保留**
+ * 把 [s] 管理的键（本窗列出的全部：各开关 + 名字键 + 状态栏九个）合进 [existing]，
+ * **其它行原样保留**
  * （见文件头第 3 条 ⚠️）。
  *
  * 逐行处理：键在「本窗管理」集合里的行替换为新值，其余（注释/空行/未知键/别的
@@ -240,6 +257,9 @@ fun mergeIni(existing: String, s: OpSettings): String {
         "PinyinMethod" to s.pinyinMethod,
         "ShiftToggle" to boolText(s.shiftToggle),
         "Skin" to s.skin.value,
+        // 候选字号只在本窗读写（真正的落点在 classicui.conf，见 ClassicUiFont.kt）——
+        // 进 managed 是为了「同一份 ini 的键由本窗统一负责」，与 StatusBar* 同理。
+        "CandidateFont" to s.candidateFont,
         "StatusBarHidden" to boolText(s.statusbar.hidden),
         "StatusBarVk" to boolText(s.statusbar.vk),
         "StatusBarSymbols" to boolText(s.statusbar.symbols),
@@ -251,23 +271,40 @@ fun mergeIni(existing: String, s: OpSettings): String {
         "StatusBarSettings" to boolText(s.statusbar.settings),
     )
     val seen = mutableSetOf<String>()
-    val out = StringBuilder()
-    existing.lineSequence().forEach { line ->
+    val body = rewriteIniLines(existing) { line ->
         val key = line.substringBefore('#').substringBefore('=').trim()
         val isAssignment = '=' in line.substringBefore('#')
         if (isAssignment && key in managed) {
-            out.appendLine("$key=${managed[key]}")
             seen += key
+            "$key=${managed[key]}"
         } else {
-            out.appendLine(line)
+            line
         }
     }
+    val out = StringBuilder(body)
     for ((k, v) in managed) {
         if (k !in seen) {
             out.appendLine("$k=$v")
         }
     }
     return out.toString()
+}
+
+/**
+ * 逐行改写 ini 文本，[rewrite] 返回 null = 丢弃该行。**末尾的「空行」不当行处理**：
+ * 文件以 `\n` 结尾时按行切会多出一个空段，把它当独立行再拼回去 = 每保存一次文件末尾
+ * 多一行空行（2026-10-14 写 ClassicUiFont 的 merge 时被门禁抓到；`mergeIni` 同形，
+ * 一起改 —— 真机 `~/.config/fcitx5/conf/opi_fcitx5.conf` 末尾就躺着一行多出来的空行）。
+ * 空行**在中间**照旧逐字保留（只有「表示结尾」的那一个空段被吸收）。
+ */
+internal fun rewriteIniLines(existing: String, rewrite: (String) -> String?): String {
+    if (existing.isEmpty()) return ""
+    val body = existing.split('\n').let { if (existing.endsWith("\n")) it.dropLast(1) else it }
+    val out = ArrayList<String>(body.size + 4)
+    for (line in body) {
+        rewrite(line)?.let { out += it }
+    }
+    return out.joinToString("\n", postfix = if (out.isEmpty()) "" else "\n")
 }
 
 /** Windows 判定：fork 的 `os.name`（不引第三方库；本模块只需这一个判别）。 */
@@ -292,9 +329,18 @@ fun settingsPathFor(
         val base = localAppData?.takeIf { it.isNotEmpty() } ?: "."
         return Paths.get(base, "opi", "settings.ini")
     }
+    return fcitxConfDir(xdgConfigHome, home).resolve("opi_fcitx5.conf")
+}
+
+/**
+ * fcitx5 的配置目录（`$XDG_CONFIG_HOME/fcitx5/conf`，缺省 `$HOME/.config/…`；空串等同
+ * 未设置）。**单独抽出来**是因为本窗要写两个文件：本 addon 配置与 classicui.conf
+ * （2026-10-14 的候选字号，见 ClassicUiFont.kt）—— 推导只有这一处，别各写一份。
+ */
+internal fun fcitxConfDir(xdgConfigHome: String?, home: String?): Path {
     val base = xdgConfigHome?.takeIf { it.isNotEmpty() }
         ?: ((home ?: "") + "/.config")
-    return Paths.get(base, "fcitx5", "conf", "opi_fcitx5.conf")
+    return Paths.get(base, "fcitx5", "conf")
 }
 
 /** 真实环境下的落点（`settingsPathFor` 的取环境量包装）。 */
@@ -359,24 +405,32 @@ internal fun saveStatusMessage(live: Boolean): String = when {
 
 /**
  * 让 fcitx5 重载**本 addon** 的配置（= 重读刚写的文件）。
- *
- * 三级兜底，任一成功即 true：busctl → dbus-send → `fcitx5-remote -r`。
- * 前两条调的是 `ReloadAddonConfig("opi_fcitx5")`（实测有效）；最后一条是旧路
- * （实测**不会**让 addon 重读配置，只在 dbus 工具缺失时聊胜于无）。
- * ⚠️ addon 名硬编码没问题：这就是本程序的 addon（opi_fcitx5，见 addon conf 的 id）。
+ * addon 名 `opi_fcitx5` 就是本程序的 addon（见 addon conf 的 id）；保留旧路兜底
+ * （[reloadAddonConfig] 的 `legacyRemote`，语义见那个函数）。
  */
-internal fun notifyFcitxReload(): Boolean {
-    val calls = listOf(
+internal fun notifyFcitxReload(): Boolean = reloadAddonConfig("opi_fcitx5", legacyRemote = true)
+
+/**
+ * 让 fcitx5 重载**某个 addon** 的配置：两级，任一成功即 true ——
+ * busctl（systemd 系，deepin 有）→ dbus-send（其余发行版），都调
+ * `ReloadAddonConfig(name)`（2026-10-09 实测有效的那条）。
+ *
+ * [legacyRemote] = 是否再挂 `fcitx5-remote -r` 当最后一级。它**不会**让 addon 重读
+ * 配置（实测），只在没有 dbus 工具时聊胜于无 ⇒ 本 addon 那条保留（旧路，别动）；
+ * **classicui 不挂**：那边实测它是「退出码 0、无声无效」的假绿（见 ClassicUiFont.kt）。
+ */
+internal fun reloadAddonConfig(name: String, legacyRemote: Boolean): Boolean {
+    val calls = listOfNotNull(
         listOf(
             "busctl", "--user", "call", "org.fcitx.Fcitx5", "/controller",
-            "org.fcitx.Fcitx.Controller1", "ReloadAddonConfig", "s", "opi_fcitx5",
+            "org.fcitx.Fcitx.Controller1", "ReloadAddonConfig", "s", name,
         ),
         listOf(
             "dbus-send", "--session", "--print-reply",
             "--dest=org.fcitx.Fcitx5", "/controller",
-            "org.fcitx.Fcitx.Controller1.ReloadAddonConfig", "string:opi_fcitx5",
+            "org.fcitx.Fcitx.Controller1.ReloadAddonConfig", "string:$name",
         ),
-        listOf("fcitx5-remote", "-r"),
+        if (legacyRemote) listOf("fcitx5-remote", "-r") else null,
     )
     for (cmd in calls) {
         try {

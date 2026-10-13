@@ -71,6 +71,10 @@ inline constexpr const char *kOpiCtlInterface = "org.fcitx.Fcitx5.Opi1";
 //       "ok"                成功
 //       "err:<退出码>:<原因>" 失败，退出码给 opi-ctl 原样当进程退出码（见 .rs 侧注释：
 //                            4 = 功能不可用/未接线，5 = 动作被拒或内部错误）
+//     ⚠️ **唯一例外**：`mode` 动作（2026-10-14 加）成功时的应答是**新状态 token**
+//     （`pinyin` / `en26`，未来 `wubi`）而不是 "ok" —— 桌面状态栏的模式按钮要拿它
+//     立即显示新档位（见 opi_ctl_mode.h 的派生段与 opi-ctl.rs 的 check_mode_shape）。
+//     其余动作一字不动。
 //   · State（只读查询，**无入参**：2026-10-10 用户裁决加）：
 //       一行冻结格式的状态串（见下），或同样的 "err:<码>:<原因>"
 //   · Search（只读查询，**一个入参**：2026-10-13 加，桌面符号/表情页搜索）：
@@ -85,7 +89,7 @@ using OpiCtlSearchHandler = std::function<std::string(const std::string &)>;
 
 // ---- State 的返回串：**冻结格式**（桌面状态栏每秒轮询它渲染图标：月亮盈亏 =
 // 全/半角，zh/en = 语言）----
-//     lang=zh|en;trad=on|off;punct=on|off;fw=on|off;im=<输入法唯一名，可为空>
+//     lang=zh|en;trad=on|off;punct=on|off;fw=on|off;im=<输入法唯一名，可为空>;mode=<档位 token>
 // 键序**固定**（桌面端按位置解析）；值全部来自**既有 getter**，不新造状态
 // （每一格的出处写在 opi_engine.h 的 stateLine_ 上）。改这个格式要三处同改：
 // 这里、opi-ctl.rs 的 check_state_shape、desktop 的解析处。
@@ -99,6 +103,14 @@ using OpiCtlSearchHandler = std::function<std::string(const std::string &)>;
 // **空串**（前端约定：未知 = 维持现状，不闪）。⇒ 无 IC 时照常返回同一行、rc 0。
 // 桌面每秒轮询，且轮询时**常常没有焦点窗口**，把它判成错误会让图标在这类时刻
 // 闪成「读不到」。
+// mode（2026-10-14 追加）：档位 token，取值域与 `opi-ctl mode` 的成功应答**同域**
+// （上面 Trigger 那条的例外段）—— `pinyin` / `en26`，五笔落地后含 `wubi`。桌面
+// 状态栏的模式按钮拿它定**初始档**（此前只能记住自己点出来的档，条一重启就与现实
+// 不符）。**同样追加在行尾**，理由与 im 同。派生 = 同一张 token 表（opi_ctl_mode.h
+// 的 opiCtlStateModeToken = opiCtlModeToken + 「面外态收成 pinyin」，2026-10-14
+// 改判：初版收进 en26，会让繁体中文显示成英文档 —— 假标签，见那里的改判记录），
+// 两处各写一套必漂。读侧对**缺这一格**必须容错（老插件/老 CLI 的输出）：回落
+// 「拼音」，不是解析失败（见 desktop Actions.kt 的 [ImeState.mode]）。
 // 与 Trigger 不同：那条路必须有 IC（要刷它的面板），state 这条路不需要。
 class OpiCtlObject : public fcitx::dbus::ObjectVTable<OpiCtlObject> {
 public:

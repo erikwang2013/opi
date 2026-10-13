@@ -5,6 +5,7 @@
 // 与 fcitx5-opi 插件之间的**唯一** CLI 面。动作集是**冻结契约**（任务书）：
 //     opi-ctl symbols|trad|punct|fullwidth|lang    （动作：会改状态）
 //     opi-ctl insert <文本>                        （大页面的上屏通道，2026-10-12 加）
+//     opi-ctl mode                                 （模式循环，2026-10-14 用户裁决加）
 //     opi-ctl state                                 （只读查询，2026-10-10 用户裁决加）
 //     opi-ctl search <关键词>                       （只读查询，2026-10-13 加）
 // 新增动作要先找 lead 定 —— 别在客户端先加一个服务端还没有的名字（那只会多出
@@ -35,11 +36,17 @@
 //     "ok"                成功
 //     "err:<码>:<原因>"    失败 —— <码> 由服务端分类（4=功能不可用，5=动作被拒），
 //                         本进程原样把它当**自己的退出码**。
+//     ⚠️ **唯一例外**：动作 `mode`（2026-10-14 加）成功时**不是** "ok"，而是新状态
+//     token：`pinyin` / `en26`（未来 `wubi`）—— 桌面状态栏的模式按钮要拿它立即显示
+//     新档位，所以它同 state/search 一样把载荷打进 stdout（形状检查见
+//     check_mode_shape）。其余动作一字不动。
 //   插件的方法 State() -> string（只读查询，无参数）：
-//     一行**冻结格式** `lang=zh|en;trad=on|off;punct=on|off;fw=on|off;im=…`
+//     一行**冻结格式** `lang=zh|en;trad=on|off;punct=on|off;fw=on|off;im=…;mode=…`
 //     （键序固定，桌面端按位置解析；im = 当前输入法唯一名，**可为空** = 没有可报的
 //     输入法（无 IC 且 ShareInputState=No 没兜底）—— 前端约定按「未知 = 维持现状」，
-//     2026-10-10 追加在行尾 —— 旧解析只读前四段，多一段不会读错位），
+//     2026-10-10 追加在行尾 —— 旧解析只读前四段，多一段不会读错位；mode = 档位
+//     token（取值域同 `mode` 动作的应答：pinyin / en26 / 未来 wubi），2026-10-14
+//     **同样追加在行尾**，桌面拿它定状态栏模式按钮的初始档），
 //     或同样的 "err:<码>:<原因>"。
 //   插件的方法 Search(string) -> string（只读查询，一个入参，2026-10-13 加）：
 //     **JSON 文本数组**（`["…"]`，serde_json 输出；`[]` = 没搜到），或同样的
@@ -57,9 +64,9 @@
 //      还没有 Search 方法）
 //   5  动作被拒 / 其他：服务端 err:5（未知动作、内部异常）或应答格式不认识
 // 3/4 的分界是「通道」与「功能」；4/5 的分界是「这东西没有」与「这东西拒绝了」。
-// state/search 走**同一张表**：0 = 拿到载荷（只有这两条会写 stdout，各写各的形状）；
-// 3/4 同上面两条；5 多一档含义 —— 应答不是那个冻结形状（插件与本工具版本对不上：
-// 宁可在这里红，也别把错位的值交给桌面画图标 / 显示成搜索结果）。
+// state/search/mode 走**同一张表**：0 = 拿到载荷（只有这三条会写 stdout，各写各的
+// 形状）；3/4 同上面两条；5 多一档含义 —— 应答不是那个冻结形状（插件与本工具版本
+// 对不上：宁可在这里红，也别把错位的值交给桌面画图标 / 显示成搜索结果 / 当模式显示）。
 
 use std::process::Command;
 
@@ -70,7 +77,8 @@ const PATH: &str = "/opi";
 const IFACE: &str = "org.fcitx.Fcitx5.Opi1";
 
 // 冻结的动作集（顺序即 usage 里印的顺序）。state 不在其中 —— 它不改状态，
-// 走的是另一条协议（见文件头），单独分派。
+// 走的是另一条协议（见文件头），单独分派。**mode 也不在其中**（2026-10-14）：
+// 它改状态，但成功应答是状态 token 而不是 "ok"，与 insert 一样单独分派。
 const ACTIONS: [&str; 5] = ["symbols", "trad", "punct", "fullwidth", "lang"];
 
 fn main() {
@@ -114,6 +122,10 @@ fn run() -> i32 {
                 2
             }
         },
+        // `mode`：模式循环（用户裁决 2026-10-14；桌面状态栏的「模式」按钮 = 循环
+        // 一次）。动作名搭既有的 `Trigger(string)` 走，但成功应答是**新状态 token**
+        // （不是 "ok"）—— 单独分派，理由与形状检查都在 send_mode / check_mode_shape。
+        Some("mode") => send_mode(),
         Some(a) if ACTIONS.contains(&a) => send(a),
         Some(a) => {
             eprintln!("opi-ctl: 未知动作：{a}");
@@ -130,7 +142,7 @@ fn run() -> i32 {
 
 fn usage() {
     eprintln!(
-        "usage: opi-ctl symbols|trad|punct|fullwidth|lang [insert <文本>] | state | search <关键词>"
+        "usage: opi-ctl symbols|trad|punct|fullwidth|lang|mode [insert <文本>] | state | search <关键词>"
     );
 }
 
@@ -204,6 +216,57 @@ fn send_search(keyword: &str) -> i32 {
     }
 }
 
+/// 模式循环（`mode`，2026-10-14 用户裁决）：`Trigger(string:mode)` → **新状态
+/// token**（`pinyin` / `en26`，未来 `wubi`），或 err:…。与动作路径的分歧只有一处
+/// 但很关键：成功应答**不是** "ok" 而是 token —— 桌面的模式按钮靠它立即显示新档位
+/// （见文件头协议段）。落点、退出码表与 state/search 同族：方法名 `Trigger`（不是
+/// 新方法）、rc 0 + 载荷进 stdout、形状不对 = 5。
+///
+/// 不识别的动作（老插件没有 mode 分支）由**服务端**回 err:5 未知动作 —— 措辞那边
+/// 更准，本层不重复判（mode 是合法的动词名，本地拒了反而把「插件旧」误报成用法错）。
+fn send_mode() -> i32 {
+    let reply = match call_bus(&format!("{IFACE}.Trigger"), Some("string:mode")) {
+        Ok(r) => r,
+        Err(code) => return code,
+    };
+    // 服务端分类的失败与动作路径同一套映射（err:5 未知动作/内部异常原样透传）。
+    if reply.starts_with("err:") {
+        return handle_reply(&reply);
+    }
+    match check_mode_shape(&reply) {
+        Ok(()) => {
+            println!("{reply}");
+            0
+        }
+        Err(why) => {
+            eprintln!("opi-ctl: mode 的输出不是状态 token（{why}）—— 插件与本工具版本对不上？");
+            eprintln!("       原始输出：{reply}");
+            5
+        }
+    }
+}
+
+/// 档位 token 的取值域：`mode` 动作的应答**与** state 的 `mode=` 格同域（服务端
+/// 由同一个函数派生，见 cpp/opi_ctl_mode.h）—— 放一处，免得两份取值域各自漂。
+const MODE_TOKENS: [&str; 3] = ["pinyin", "en26", "wubi"];
+
+/// mode 载荷的形状检查：**钉死取值域** `{pinyin, en26, wubi}`（不是「非空即可」）。
+/// 钉死而不是放行的理由同 check_state_shape：桌面会把返回值直接当档位显示，放过去
+/// 就是把错位的值画到条上。最要防的一种错接线是插件回 `"ok"`（Trigger 的通用成功
+/// 应答 —— 说明它把 mode 接到了旧路径）—— 桌面会把 "ok" 当模式名显示出来。
+/// `wubi` 服务端现在**还不会发**（五笔未落地）：先放行是前向兼容 —— 引擎侧加档时
+/// 客户端不必跟着发版才不红（另一方向不成立：老客户端遇新 token 会判 5，那是
+/// 「版本对不上」的如实分类）。
+fn check_mode_shape(reply: &str) -> Result<(), String> {
+    // **不 trim**：取值域是枚举，前后空白不是「服务端口气」而是另一个值 ——
+    // 放行它就等于把「形状检查」降级成「非空检查」（同 check_state_shape 的口径）。
+    if MODE_TOKENS.contains(&reply) {
+        Ok(())
+    } else {
+        Err(format!("不是 {MODE_TOKENS:?} 之一：{reply:?}"))
+    }
+}
+
 /// 搜索载荷的**轻量**形状检查：去首尾空白后 `[` 开头、`]` 结尾。
 /// 刻意**只**查这两头：数组里每个元素是不是合法 JS 字符串（转义、代理对）归桌面的
 /// 真解析器判 —— 这里手写一个半吊子 JSON 词法器才是真正的风险（两份实现必然漂，
@@ -225,13 +288,18 @@ fn check_search_shape(reply: &str) -> Result<(), String> {
 /// im 那一格没有取值域（输入法名是开放集合，且**空串合法** = 没有可报的输入法：
 /// 没有 IC 且 ShareInputState=No 没兜底 —— 见 cpp/opi_ctl.h；前端约定按
 /// 「未知 = 维持现状」处理）—— 但**段数与位置**照样钉死。
+/// mode（2026-10-14 追加，**行尾**）：取值域 = [`MODE_TOKENS`]（与 `mode` 动作的
+/// 应答同域，服务端同一份派生）。段数照旧**钉死** —— 老插件的五行输出在本工具这里
+/// 照样判 5（「插件与本工具版本对不上」的如实分类）；对**缺这一格**的容错在桌面
+/// 解析侧（Actions.kt 的 [ImeState.mode] 回落「拼音」），不在这一层。
 fn check_state_shape(line: &str) -> Result<(), String> {
-    const FIELDS: [(&str, Option<&[&str]>); 5] = [
+    const FIELDS: [(&str, Option<&[&str]>); 6] = [
         ("lang", Some(&["zh", "en"])),
         ("trad", Some(&["on", "off"])),
         ("punct", Some(&["on", "off"])),
         ("fw", Some(&["on", "off"])),
         ("im", None),
+        ("mode", Some(MODE_TOKENS.as_slice())),
     ];
     let parts: Vec<&str> = line.split(';').collect();
     if parts.len() != FIELDS.len() {

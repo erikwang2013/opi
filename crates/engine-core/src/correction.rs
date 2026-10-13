@@ -184,6 +184,52 @@ pub fn input_corrections(input: &str) -> Vec<String> {
     out
 }
 
+/// 纠错档的候选（`candidates::rank_and_pick_with` 里的 `corr` 档；2026-10-14 从那里
+/// 搬来 —— 加完下面的注释后那个文件 521/500 撞门禁）。每变体查**精确键**
+/// （`query_all`，不展开前缀：typo 修的是完整词，前缀查询又是那条路的贵项），
+/// 每变体取 top-3（同逐音节相），最后按分排序。
+///
+/// ⚠️ **它是独立一档、排在最外**（主档 → 模糊 → 简拼 → 纠错），**不许并进 `fuzzy`**
+/// —— 真词库探针抓到的产品回归（2026-10-14 修）：
+/// ```text
+/// 输入 `nh`（简拼「你好」），产品默认（纠错开）：
+///   纠错开：安徽 安徽省 那好 那会 呐喊 暗黑 恩惠 嗯哼 蒽环类 | 南航 内耗 你好 …  ← 第一页没有「你好」
+///   纠错关：南航 内耗 你好 女孩 女孩子 您好 你会 男孩 …                        ← 正常
+/// ```
+/// 机制：`fuzzy` 档有「主档为空时它就是这个输入的主结果」的晋升规则（`zongguo` →
+/// 「中国」那条）；纠错混进去后，`nh` 的主档本就为空 ⇒ `merged = fuzzy`（全是纠错
+/// 噪声）⇒ 简拼档只能被**追加**、再被 `truncate(limit)` 砍掉。噪声来源实测：`nh` 的
+/// 单段变体 `anh` 在真 luna 里键真有词（`query_all("anh")` 命中 安哈尔特/俺还/暗害/…，
+/// 含高频「安徽」= 3787750734）。
+///
+/// 排最外与用户裁决「混合参与排序」不冲突：纠错**一直参与**（有别的候选时也照出），
+/// 只是永远在最外层 —— 它是三档里最没把握的一档（「猜」）。生产回归钉见
+/// `crates/engine-core/tests/correction_tier_order.rs`（夹具版，含变异自检）。
+pub(crate) fn tier_hits<D: crate::dictionary::Dictionary + ?Sized>(
+    dict: &D,
+    input: &str,
+    learner: &crate::learner::Learner,
+    boost: u64,
+) -> Vec<crate::candidates::Candidate> {
+    let mut out: Vec<crate::candidates::Candidate> = Vec::new();
+    for v in input_corrections(input) {
+        let mut hits: Vec<crate::candidates::Candidate> = dict
+            .query_all(&v)
+            .into_iter()
+            .map(|e| crate::candidates::Candidate {
+                text: e.word.clone(),
+                kind: crate::candidates::CandidateKind::Hanzi,
+                // 变体命中一律 **exact = false**（理由见 candidates.rs 里那段
+                // 「变体命中一律不算精确匹配」—— 保长替换会让前缀扩展也巧合等长）。
+                score: crate::candidates::rank_score(e.freq, learner.freq_of(&e.word), boost),
+            })
+            .collect();
+        hits.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
+        out.extend(hits.into_iter().take(3));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

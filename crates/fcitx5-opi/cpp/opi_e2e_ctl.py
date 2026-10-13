@@ -309,7 +309,8 @@ def check_ctl(windows, failures):
         else:
             print(f"[e2e/ctl] 下钻生效（二级标题推到客户端）：{d_titled[0]!r}", flush=True)
 
-    # 6) state：只读查询的真链路（冻结格式 `lang=…;trad=…;punct=…;fw=…`，键序固定）。
+    # 6) state：只读查询的真链路（冻结格式 `lang=…;trad=…;punct=…;fw=…;im=…;mode=…`，
+    #    键序固定；末两格 2026-10-10 / 2026-10-14 先后追加在行尾）。
     #    每一条都按**位置**解析（桌面就是按位置取值 —— 键序漂了在这里必须红，
     #    放过就是把值读错位）。先断「切 trad 前后输出不同」这条主契约，再断它由
     #    **哪一格**变（其余三段逐字不变），最后断退回来逐字回到基线（两个方向）。
@@ -346,9 +347,15 @@ def check_ctl(windows, failures):
                         f" —— 状态没跟着真引擎模式走")
     if s1 is not None and s2 is not None:
         diff = {k: (s1[k], s2[k]) for k, _ in STATE_FIELDS if s1[k] != s2[k]}
+        # mode 那一格**在原地不动**（2026-10-14 改判；初版曾是 pinyin→en26）：繁体是
+        # 面外态 ⇒ 收成 pinyin（读法仍是拼音；给 en26 等于在中文输入时画英文档位这个
+        # 假标签）。派生在 cpp/opi_ctl_mode.h 的 opiCtlStateModeToken，驱动 §8a 钉的是
+        # 同一件事。所以这条又回到「只允许 trad 变」的原形 —— 而且这正是「加字段没顶
+        # 掉既有行」的活证：mode 位在场，但不掺进 trad 的差分。
         if diff != {"trad": ("off", "on")}:
             failures.append(
-                f"切 trad 前后 state 的差异应为 {{'trad': ('off', 'on')}}，实际 {diff}"
+                f"切 trad 前后 state 的差异应恰好是 {{'trad': ('off', 'on')}}"
+                f"（mode 是面外态 ⇒ 停在 pinyin，不跟着翻），实际 {diff}"
                 f"（state1={s1} state2={s2}）—— 要么输出没变，要么变了别的格")
         else:
             print(f"[e2e/ctl] state 切 trad 前后：{s1} → {s2}", flush=True)
