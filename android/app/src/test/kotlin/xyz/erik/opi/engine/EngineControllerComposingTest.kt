@@ -22,11 +22,10 @@ class EngineControllerComposingTest {
         assertEquals("26 键：读数空回退缓冲（旧行为）", "94642", ctrl.composingText())
         fake.schemeValue = InputScheme.NINE.value
         ctrl.refresh()
-        assertEquals(
-            "9 键：读数空不落数字，但每个待编键要有个记号（5 键 = 5 个 ·）",
-            "·····",
-            ctrl.composingText(),
-        )
+        // 2026-10-13 用户订正（「拼音输入会偶尔出现直接变成两个点」）：整段无匹时
+        // **不再补点** —— 字段留空，反馈交给候选栏的「无匹配」（条件 = 无候选且缓冲
+        // 非空，见 CandidateBar）。旧期望「·····」是 2026-10-12 那版的落点，已被取代。
+        assertEquals("9 键：读数空 ⇒ 字段留空（不落数字，也不补点）", "", ctrl.composingText())
         assertFalse("· 标记里不许出现数字", ctrl.composingText().any { it.isDigit() })
         fake.displayBuf = "xiang'gang"
         ctrl.refresh()

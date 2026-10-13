@@ -26,8 +26,16 @@ package xyz.erik.opi.engine
      *  2. 读数只覆盖**候选命中的前缀**（9 键的候选是「最长可匹配前缀」那一档），
      *     缓冲里没被覆盖的尾巴（连点 6 次 `6` 再点候选确认后剩 `66`；20 次剩 16 个）
      *     同样不显示 ⇒ 再按新键时读数与候选都**一字不变** ⇒ 看着像没响应。
-     * 现在**每个待编键补一个「·」**：不给数字（守 2026-10-11 那条裁决），也不编假
-     * 拼音（那会像真读音、比不显示更坏）。有读数时补在读数后面（`mo'mo··`）。
+     * 当时的修法：**每个待编键补一个「·」**（有读数时补在读数后面，`mo'mo··`）。
+     *
+     * ⚠️ 2026-10-13 用户订正（「输入的时候，拼音输入会偶尔出现直接变成两个点」）：
+     * **整段无匹（读数空）时一个点也不补** —— 用户按 `44` 这类串时字段被「··」占住，
+     * 看着像输入被换成了怪东西；而且点多长、按几下 ⌫ 才对不上（`ni'hao` 2 键 6 个字），
+     * 过量退格会顺势删掉已上屏的正文（用户同日报障「删除原来存在的输入」，模拟器
+     * 实测：⌫ 多按 2 下 → 「米哈游」变「米」）。反馈载体改回**候选栏既有的「无匹配」**
+     * （小欧 + 文案，条件 = 无候选且缓冲非空，见 CandidateBar）——那格本就在，
+     * 字段里不必再堆记号。**读数覆盖前缀时的尾巴补点不变**（那是 10-12 那条的落点，
+     * 且此时字段里有真拼音参照、不会看起来像"变成了点"）。
      */
 internal fun EngineController.composingText(): String = pendingCommitText() + pendingKeyMark()
 
@@ -47,11 +55,16 @@ internal fun EngineController.pendingCommitText(): String {
      *
      * 覆盖率按**字母数**算（9/14 键每个键恰好一个字母：9 键 = 每字母一个数字，
      * 14 键 = 缓冲本就是字母）—— 读数的 `'` 是分词符，不占键位。
-     * 非 9/14 键（缓冲即显示文本）恒空串；14 键的读数空时也不补（它的缓冲是字母，
-     * 本来就会原样显示）。
+     * 非 9/14 键（缓冲即显示文本）恒空串。
+     *
+     * ⚠️ **读数空（整段无匹）⇒ 一个点也不补**（2026-10-13 用户订正，见 [composingText]
+     * 的时间线）：9 键字段留空、反馈交给候选栏的「无匹配」；14 键的显示文本本来就是
+     * 字母缓冲（`pendingCommitText` 的回退），补点只会变成假记号 —— 这条同时兑现了
+     * 本函数旧头注「14 键的读数空时也不补」的承诺（旧代码漏了，14 键读数空会补满点）。
      */
 private fun EngineController.pendingKeyMark(): String {
         if (inputScheme != InputScheme.NINE && inputScheme != InputScheme.FOURTEEN) return ""
+        if (reading.isEmpty()) return ""
         val covered = reading.count { it != '\'' }
         val pending = buffer.length - covered
         return if (pending > 0) "·".repeat(pending) else ""
