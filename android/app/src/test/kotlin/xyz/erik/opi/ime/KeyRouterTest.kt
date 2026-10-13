@@ -6,6 +6,7 @@ package xyz.erik.opi.ime
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.engine.FakeEngine
+import xyz.erik.opi.engine.InputScheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -16,15 +17,20 @@ class KeyRouterTest {
         val commits = mutableListOf<String>()
         var backspaceCount = 0
         var enterCount = 0
+        var syncCount = 0
+
+        /** commit 与 sync 的**顺序**流水（二者次序是 2026-10-13 那条修复的判据）。 */
+        val order = mutableListOf<String>()
     }
 
     private fun router(fake: FakeEngine, ch: Channel): Pair<EngineController, KeyRouter> {
         val ctrl = EngineController(fake)
         return ctrl to KeyRouter(
             ctrl,
-            commit = { ch.commits += it },
+            commit = { ch.commits += it; ch.order += "commit" },
             deleteBackward = { ch.backspaceCount++ },
             performEnter = { ch.enterCount++ },
+            syncComposing = { ch.syncCount++; ch.order += "sync" },
         )
     }
 
@@ -257,5 +263,52 @@ class KeyRouterTest {
         r.handleKey(",")
         assertEquals(listOf(","), fake.inputCalls)
         assertEquals(listOf("，"), ch.commits)
+    }
+
+    /**
+     * 2026-10-13 用户报障「连按一个键出省略号，确认后把所有内容替换」的回归钉：
+     * 引擎驱动的提交**之后**必须重推组合串（剩余缓冲继续显示，见
+     * KeyRouter.commitAndResync 头注）——且次序必须是 commit 在前、sync 在后。
+     */
+    @Test
+    fun candidateCommitResyncsComposingAfterTheCommit() {
+        val fake = FakeEngine().apply {
+            schemeValue = InputScheme.NINE.value
+            buf = "6666666666666"
+            displayBuf = "mo'mo"
+            selectResults[0] = "默默"
+        }
+        val ch = Channel()
+        val (_, r) = router(fake, ch)
+        r.handleCandidate(0)
+        assertEquals(listOf("默默"), ch.commits)
+        assertEquals("提交后必须重推一次组合串", 1, ch.syncCount)
+        assertEquals("次序：先 commit 再 sync", listOf("commit", "sync"), ch.order)
+    }
+
+    /** 空格上屏（引擎候选）同样收尾。 */
+    @Test
+    fun spaceCommitResyncsComposing() {
+        val fake = FakeEngine().apply { buf = "ni"; spaceResult = "你" }
+        val ch = Channel()
+        val (_, r) = router(fake, ch)
+        r.handleSpace()
+        assertEquals(listOf("你"), ch.commits)
+        assertEquals(1, ch.syncCount)
+        assertEquals(listOf("commit", "sync"), ch.order)
+    }
+
+    /**
+     * 英文/数字**直提**路径绝不重推：那时缓冲可能是「切英文时保留的拼音」，
+     * 重推会把它复活成预编辑（见 KeyRouter.commitAndResync 头注的 ⚠️）。
+     */
+    @Test
+    fun englishDirectPathNeverResyncs() {
+        val fake = FakeEngine().apply { mode = EngineMode.ENGLISH.value; buf = "ni" }
+        val ch = Channel()
+        val (_, r) = router(fake, ch)
+        r.handleKey("a")
+        assertEquals(listOf("a"), ch.commits)
+        assertEquals("英文直提不许推组合串（会把保留的拼音复活）", 0, ch.syncCount)
     }
 }
