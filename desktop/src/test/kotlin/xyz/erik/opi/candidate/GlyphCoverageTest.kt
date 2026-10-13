@@ -6,18 +6,24 @@
 //! `codePointCount > 1 || hasGlyph`）：两端漂了就是「同一份数据在两端过滤得不一样」。
 //!
 //! ⚠️ 这一份测的是**规则**，不是「本机字体长什么样」：单码位有没有字形是字体决定的事实，
-//! 换台机器/换个 Noto 版本答案就变。所以夹具用**发现式**取法 —— 先探出一个本机确实缺的
-//! 码位，再拿它当夹具；一个都探不到就红（不是跳过）：那说明前提没了，得换候选，
+//! 换台机器/换个 Noto 版本答案就变。所以**正反两侧夹具都是发现式的**（[coveredCandidates]
+//! 与 [uncoveredCandidates]）；探不到就红（不是跳过）：那说明前提没了，得换候选，
 //! 而不是让一条测不出东西的用例静静变绿。
+//!
+//! ⚠️ 2026-10-13 的教训（CI 红）：正控原先把「中」写死 —— ubuntu runner 上没有覆盖 CJK
+//! 的字体，`canRender("中")` 是 false，这条当场红。写死具体字符就是把「这台机器装没装
+//! 中文字体」当成规则断言。夹具改成发现式之后，同一条规则在任何字体环境的机器上都成立。
 
 package xyz.erik.opi.candidate
 
+import org.jetbrains.skia.FontMgr
+import org.jetbrains.skia.FontStyle
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 本机可能缺字形的候选码位：先真 emoji 码位（Unicode 17.0 新增，正是这次报障的来源），
+ * 本机**可能缺字形**的候选码位：先真 emoji 码位（Unicode 17.0 新增，正是这次报障的来源），
  * 再私用区/未分配码位 —— 私用区按定义没有正经字体去覆盖，是「几乎必然缺」的兜底。
  * 顺序有意义：优先用真数据里出现的那种码位当夹具。
  *
@@ -25,16 +31,43 @@ import org.junit.Test
  */
 private val uncoveredCandidates = listOf(0x1FAEB, 0x1FAEC, 0x1FAEF, 0x10FFFD, 0xF0000, 0xE0001)
 
+/**
+ * 本机**必然有字形**的候选码位（顺序有意）：CJK → 日文假名 → 希腊文 → ASCII 字母/数字。
+ * 中文输入法的主场机器几乎必然命中前者；只有西文的最小环境落到 `a` —— ASCII 是
+ * 「装了字体的机器都盖得住」的兜底（CI 的 ubuntu runner 实测就落在这一档）。
+ */
+private val coveredCandidates = listOf(0x4E2D, 0x3042, 0x03A9, 0x61, 0x31)
+
+/**
+ * 字形覆盖的**独立取证**：与 `GlyphCoverage` 同一层的 Skia 原语，直接问。
+ *
+ * ⚠️ 发现夹具**不许走 `GlyphCoverage.canRender`**（那就成了自证：判据若恒定返回 true，
+ * 会发现「候选全是可渲染的」并让断言放行）。这个原语是**证据**，canRender 是被测对象。
+ */
+private fun coverageOracle(codePoint: Int): Boolean =
+    FontMgr.default.matchFamilyStyleCharacter(null, FontStyle.NORMAL, null, codePoint) != null
+
 /** 探一个本机画不出的单码位；一个都探不到 ⇒ 夹具前提没了，红（不是跳过）。 */
 internal fun discoveredUncoveredCodePoint(): String {
     for (cp in uncoveredCandidates) {
-        val s = String(Character.toChars(cp))
-        if (!GlyphCoverage.canRender(s)) return s
+        if (!coverageOracle(cp)) return String(Character.toChars(cp))
     }
     throw AssertionError(
         "本机字体把候选码位（${uncoveredCandidates.joinToString { "U+%04X".format(it) }}）全盖住了：" +
             "这份测试的夹具前提没了 —— 换更生僻的候选或换测法，别让用例空转变绿",
     )
+}
+
+/** 探 [n] 个本机画得出、且互不相同的单码位；凑不够 ⇒ 夹具前提没了，红（不是跳过）。 */
+internal fun discoveredCoveredCodePoints(n: Int): List<String> {
+    val out = coveredCandidates.filter(::coverageOracle).map { String(Character.toChars(it)) }
+    if (out.size < n) {
+        throw AssertionError(
+            "本机字体只盖住 ${out.size} 个候选码位（需要 $n 个）：这台机器连基本西文字形都缺，" +
+                "夹具前提没了 —— 红，而不是让用例空转变绿",
+        )
+    }
+    return out.take(n)
 }
 
 class GlyphCoverageTest {
@@ -65,9 +98,13 @@ class GlyphCoverageTest {
 
     @Test
     fun `single code point with a glyph is renderable`() {
-        // ASCII 与汉字：这两档在本机与 CI 上都有字形（比「某个 emoji 在不在」稳得多）。
-        assertTrue("ASCII", GlyphCoverage.canRender("a"))
-        assertTrue("汉字", GlyphCoverage.canRender("中"))
+        // 夹具是**发现**的（本机有字形的某个码位），不是写死的「中」—— 写死就是拿
+        // 「这台机器装没装中文字体」当规则断言（2026-10-13 CI 的 ubuntu runner 实测没有）。
+        val good = discoveredCoveredCodePoints(1).single()
+        assertTrue(
+            "U+%04X 本机有字形，判据该说可渲染".format(good.codePointAt(0)),
+            GlyphCoverage.canRender(good),
+        )
     }
 
     @Test

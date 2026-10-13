@@ -91,10 +91,12 @@ class SymbolRenderProbeTest {
     @Test
     fun `glyph filtering repacks the grid and drops what this machine cannot draw`() {
         val bad = discoveredUncoveredCodePoint()
-        // 三条：本机画不出的那个 + 两个必然画得出的（ASCII/汉字，做对照）。
-        val raw = listOf(bad, "a", "中")
+        // 三条：本机画不出的那个 + 两个本机画得出的。对照也**发现**（不是写死的 ASCII/汉字）：
+        // CI 的 ubuntu runner 没有覆盖 CJK 的字体，写死「中」当场红（2026-10-13）。
+        val good = discoveredCoveredCodePoints(2)
+        val raw = listOf(bad) + good
         val shown = raw.filter(GlyphCoverage::canRender)
-        assertEquals("判据该只摘掉那一条", listOf("a", "中"), shown)
+        assertEquals("判据该只摘掉那一条", good, shown)
 
         val before = probePng("grid-before.png", 820, 400) { SymbolGridPage(raw, 0) {} }
         val after = probePng("grid-after.png", 820, 400) { SymbolGridPage(shown, 0) {} }
