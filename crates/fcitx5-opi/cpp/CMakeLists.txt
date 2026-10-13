@@ -393,6 +393,8 @@ install(DIRECTORY
         "${CMAKE_CURRENT_SOURCE_DIR}/../data/themes/opi-lemon"
         "${CMAKE_CURRENT_SOURCE_DIR}/../data/themes/opi-sunset"
         "${CMAKE_CURRENT_SOURCE_DIR}/../data/themes/opi-starlight"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../data/themes/opi-wisteria"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../data/themes/opi-pine"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/fcitx5/themes")
 
 # 词库：loadDictionary() 找的是 Type::Data + "opi/luna.opid"，

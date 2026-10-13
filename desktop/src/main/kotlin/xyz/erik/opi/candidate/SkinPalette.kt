@@ -105,18 +105,18 @@ internal fun skinColors(skin: SkinOption): SkinColors = when (skin) {
         accent = Color(0xFFFFE3A8),
     )
     SkinOption.LEMON -> SkinColors(
-        bg = Color(0xFFFBF6C8),
+        bg = Color(0xFFFBEE7E),
         fg = Color(0xFF3A3000),
-        hover = Color(0x266B5700),
-        line = Color(0xFFD9C97E),
-        accent = Color(0xFF6B5700),
+        hover = Color(0x267E6200),
+        line = Color(0xFFD1C462),
+        accent = Color(0xFF7E6200),
     )
     SkinOption.SUNSET -> SkinColors(
-        bg = Color(0xFFFBE0CD),
-        fg = Color(0xFF5A2C1E),
-        hover = Color(0x26B8431F),
-        line = Color(0xFFE2AC8C),
-        accent = Color(0xFFB8431F),
+        bg = Color(0xFFF7C79C),
+        fg = Color(0xFF4A2317),
+        hover = Color(0x26A63412),
+        line = Color(0xFFD1A37F),
+        accent = Color(0xFFA63412),
     )
     SkinOption.STARLIGHT -> SkinColors(
         bg = Color(0xFF1B2138),
@@ -124,5 +124,19 @@ internal fun skinColors(skin: SkinOption): SkinColors = when (skin) {
         hover = Color(0x33FFD966),
         line = Color(0xFF3A4468),
         accent = Color(0xFFFFD966),
+    )
+    SkinOption.WISTERIA -> SkinColors(
+        bg = Color(0xFFEDE7FB),
+        fg = Color(0xFF3A2A63),
+        hover = Color(0x266B4BC4),
+        line = Color(0xFFCFC4EC),
+        accent = Color(0xFF6B4BC4),
+    )
+    SkinOption.PINE -> SkinColors(
+        bg = Color(0xFF1E3A2F),
+        fg = Color(0xFFDCEEE2),
+        hover = Color(0x337FD3A2),
+        line = Color(0xFF3C5C4C),
+        accent = Color(0xFF7FD3A2),
     )
 }

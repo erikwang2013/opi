@@ -1,8 +1,10 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! 不进任务栏/菜单栏：把状态栏/虚拟键盘这类**漂浮小窗**从任务栏、窗口列表里摘掉
-//! （用户裁决 2026-10-10 下午：「桌面端状态栏是不在菜单栏显示图标的」）。
+//! 不进任务栏/菜单栏：把状态栏/虚拟键盘/符号页这类**漂浮小窗**从任务栏、窗口列表里摘掉
+//! （用户裁决 2026-10-10 下午：「桌面端状态栏是不在菜单栏显示图标的」；2026-10-13 符号/表情页
+//! 也归入**输入工具窗**一类跟上 —— 先例是虚拟键盘。设置窗**不贴**：那是用户要找的窗）。
+//! 焦点不受影响：SKIP_* 只决定任务栏归属，符号页按需 `focusable`（搜索打字）那条路照旧。
 //!
 //! 【为什么不用 `java.awt.Window.setType(UTILITY)` —— 先试过，实证在 JDK 侧就是死的，别再回头】
 //! JDK 18 的 XAWT 里 `XWindowPeer.preInit` 抄了 `target.getType()`（XWindowPeer.java:158），
@@ -22,8 +24,10 @@
 //!   客户端窗在根之下 ≥2 层；用标题区分是因为同进程不止一条这种窗）。
 //!
 //! AWT 在**每次** map（含隐藏后再显示）都重写一遍 ⇒ 本模块也每次显示后重贴：窗口的
-//! shown/open 事件先到就先贴，1s 轮询兜底（与状态栏读状态的节奏同拍，最迟 1s 收敛）。
-//! 所有 X 调用都只走本模块这一个专用线程（Xlib 没开 XInitThreads，同一条连接别多线程碰）。
+//! shown/open 事件先到就先贴（**连发** 0/20/60/150ms，见 [SkipTaskbar.reapplySoon]），
+//! 1s 轮询兜底（与状态栏读状态的节奏同拍，最迟 1s 收敛）。
+//! 所有 X 调用都只走本模块这一个专用线程（Xlib 没开 XInitThreads —— 2026-10-13 用 `nm -D`
+//! 扫遍 `$JAVA_HOME/lib/*.so`（含 libawt_xawt）对 `XInitThreads` 零引用，同一条连接别多线程碰）。
 //!
 //! 尽力而为：连不上 X（如 Wayland 原生）/ 找不到窗口时**静默跳过**，绝不影响窗口本身的功能。
 //! 【取证状态】属性路线本机实测有效（写后 xprop 读回 UTILITY + SKIP_*，且隐藏-再显示后
@@ -86,6 +90,9 @@ private const val PROP_MODE_REPLACE = 0
 private const val ANY_PROPERTY_TYPE = 0L
 private const val TICK_MS = 1000L // 与状态栏读状态的轮询同拍
 
+/** 显示事件后的连发补贴时刻（ms）：把「AWT 稍后重写属性」的兜底窗口从 1s 压到 150ms。 */
+private val BURST_MS = longArrayOf(0, 20, 60, 150)
+
 /** 纯函数：把 [wanted] 里还不在 [existing] 的原子**追加**在后面（保序、既有项一个不动）。 */
 internal fun appendMissing(existing: List<Long>, wanted: List<Long>): List<Long> =
     existing + wanted.filter { it != 0L && it !in existing }
@@ -127,18 +134,37 @@ internal object SkipTaskbar {
 
     fun apply(window: Window) {
         if (isWindows()) return
-        // 标题只在 Frame/Dialog 上（java.awt.Window 自己没有）—— 两条窗都是 Frame（ComposeWindow）。
+        // 标题只在 Frame/Dialog 上（java.awt.Window 自己没有）—— 三条窗都是 Frame（ComposeWindow）。
         val title = (window as? java.awt.Frame)?.title ?: return
         // 同一标题的新窗 = 新 XID（虚拟键盘关了再开就是这条），旧缓存作废。
         tracked[title] = 0L
-        worker.execute { ensure(title) }
-        // 每次显示后 AWT 都会把窗口类型重写回 NORMAL ⇒ 显示事件先到就先贴，轮询兜底。
+        reapplySoon(title)
+        // 每次显示后 AWT 都会把窗口类型重写回 NORMAL ⇒ 显示事件先到就先贴，连发+轮询兜底。
         window.addWindowListener(object : WindowAdapter() {
-            override fun windowOpened(e: WindowEvent) { worker.execute { ensure(title) } }
+            override fun windowOpened(e: WindowEvent) { reapplySoon(title) }
         })
         window.addComponentListener(object : ComponentAdapter() {
-            override fun componentShown(e: ComponentEvent) { worker.execute { ensure(title) } }
+            override fun componentShown(e: ComponentEvent) { reapplySoon(title) }
         })
+    }
+
+    /**
+     * 显示后的**连发补贴**：0/20/60/150ms 在 worker 这条线程上各补一拍（show 事件本身也走它）。
+     *
+     * 为什么不「在显示事件里**同步**补」（原本最想做的形态）：那要求 Xlib 线程安全，而本机
+     * JDK 18.0.2.1 **没调过 XInitThreads** —— `nm -D` 扫遍 `$JAVA_HOME/lib` 下的每个
+     * `.so`（含 libawt_xawt）对 `XInitThreads` **零引用**，libX11 的全局锁也就没开；EDT 与 worker 同时
+     * （⚠ 这行本来写的是 `$JAVA_HOME/lib` 再接一个通配写法：块注释里出现「斜杠+星号」会
+     * 当场嵌套下去把后面整段吞成注释 —— Kotlin 的块注释**可嵌套**，2026-10-13 踩过一次。）
+     * 碰同一条 X 连接是 UB ⇒ 同步路的前提不成立，不硬上。连发保持「单线程串行 + 同一条连接」。
+     *
+     * 连发的目标是「AWT 的重写发生在我们这一拍**之后**」这个竞态。2026-10-13 5ms 粒度实测
+     * （hide→re-show，元件在 /tmp/opi-skip-{before,after}-5ms.log）：本机 AWT 的重写发生在
+     * 窗口**还 unmapped** 时、事件驱动的那一拍晚 7.6ms 到、映射前 17ms 属性已正确 ——
+     * 所以连发在本机观测不到差异，是防「别处 JDK/WM 顺序相反」的保险（1s 轮询仍是最后兜底）。
+     */
+    private fun reapplySoon(title: String) {
+        BURST_MS.forEach { d -> worker.schedule({ ensure(title) }, d, TimeUnit.MILLISECONDS) }
     }
 
     private fun ensure(title: String) {

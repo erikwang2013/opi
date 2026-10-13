@@ -58,6 +58,10 @@ inline const char *opiSkinThemeName(OpiSkin skin) {
         return "opi-sunset";
     case OpiSkin::Starlight:
         return "opi-starlight";
+    case OpiSkin::Wisteria:
+        return "opi-wisteria";
+    case OpiSkin::Pine:
+        return "opi-pine";
     case OpiSkin::Keep:
         break;
     }

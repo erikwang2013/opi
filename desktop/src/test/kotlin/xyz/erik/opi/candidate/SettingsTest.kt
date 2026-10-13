@@ -99,7 +99,7 @@ class SettingsTest {
         // **字面值**匹配（C++ 的 unmarshallOption），写错一个字 = 静默回「不改动」。
         // 顺序也钉：opi_skin.h 的 opiSkinThemeName 与主题目录按同一顺序对应。
         assertEquals(
-            listOf("不改动", "浅色", "深色", "宣纸", "朱砂", "清爽", "湛蓝", "柠檬", "晚霞", "星光"),
+            listOf("不改动", "浅色", "深色", "宣纸", "朱砂", "清爽", "湛蓝", "柠檬", "晚霞", "星光", "紫藤", "松林"),
             SkinOption.entries.map { it.value },
         )
     }
@@ -161,10 +161,10 @@ class SettingsTest {
             repoFile("crates/fcitx5-opi/cpp/CMakeLists.txt"),
         )
 
-        assertEquals("十款（含不改动）", 10, desktop.size)
+        assertEquals("十二款（含不改动）", 12, desktop.size)
         assertEquals("Android 的中文名与桌面同集合同序", desktop, androidLabels)
         assertEquals("fcitx5 的 i18n 名与桌面同集合同序", desktop, cppNames)
-        // 英文 id 一侧：「不改动」不映射主题（Keep → nullptr），故三份目录清单都是九款
+        // 英文 id 一侧：「不改动」不映射主题（Keep → nullptr），故三份目录清单都是十一款
         assertEquals("Android 的 id 顺序与桌面常量名一致",
             SkinOption.entries.drop(1).map { it.name.lowercase() }, androidIds.drop(1))
         assertEquals("生成脚本的 SKINS 键与 id 同集合同序", androidIds.drop(1), pyKeys)
@@ -193,7 +193,7 @@ class SettingsTest {
             """SkinOption\.(\w+) -> SkinColors\((.*?)\n    \)""",
             RegexOption.DOT_MATCHES_ALL,
         ).findAll(palette).associate { it.groupValues[1] to it.groupValues[2] }
-        assertEquals("九款支路全在（不改动 = KeepColors，不参与本比对）", names, blocks.keys.toList())
+        assertEquals("十一款支路全在（不改动 = KeepColors，不参与本比对）", names, blocks.keys.toList())
 
         fun role(block: String, key: String): String? =
             Regex("""$key = Color\(0x([0-9A-Fa-f]{8})\)""").find(block)?.groupValues?.get(1)
@@ -204,7 +204,7 @@ class SettingsTest {
         val hl = field("hl_bg")
         val sep = field("sep")
         val accent = field("accent")
-        assertEquals("生成器九款字段齐", 9, bg.size)
+        assertEquals("生成器十一款字段齐", 11, bg.size)
         assertEquals(names, captures(Regex("""(?m)^    "([a-z]+)": \{"""), gen).map { it.uppercase() })
 
         /** 生成器的 `#RRGGBB`（或 `#RRGGBBAA`）→ Kotlin 的 `Color(0xAARRGGBB)` 字面。 */

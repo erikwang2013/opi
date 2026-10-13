@@ -69,6 +69,8 @@ import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import xyz.erik.opi.pet.OpiPetWindowIcon
 import java.nio.file.Files
@@ -205,6 +207,12 @@ private const val WIN_W = 820
 private const val WIN_H = 600
 private const val STRIP_W = 96
 
+/** 居中的一行灰字占位（加载中/整类摘空/真没数据三态共用，措辞由调用方给全）。 */
+@Composable
+private fun CenteredHint(text: String, modifier: Modifier) {
+    Box(modifier, contentAlignment = Alignment.Center) { Text(text, fontSize = 14.sp, color = SymDim) }
+}
+
 /** 屏幕右下角往内缩一截（别压任务栏）。 */
 private fun symbolPosition(): WindowPosition {
     val screen = java.awt.Toolkit.getDefaultToolkit().screenSize
@@ -224,14 +232,8 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
     // 开窗读一次（同 Android「面板第一次打开时读资产」）；窗口重开才会重读。
     val categories = remember { loadSymbolCategories() }
     val emoji = remember { loadEmojiData() }
-    // 字形过滤（2026-10-13）：**渲染前**摘掉本机字体画不出的字形（判据见 GlyphCoverage，
-    // 规则逐条对齐 Android 的 canRenderGlyph）。与 categories/emoji 同寿命 —— 数据一份
-    // 读一次，过滤也就一次（每帧重滤 = 每帧几千次字体查询）。
-    val catsShown = remember(categories) { SymbolCategories.filter(categories, GlyphCoverage::canRender) }
-    val emojiShown = remember(emoji) { EmojiData.filter(emoji, GlyphCoverage::canRender) }
-    // 表情搜索的「像不像表情」判据（见 searchView）：用**未过滤**的 emoji 表建集。
-    // 判据同 Android 的 `isEmoji`（那边用过滤后的列表，差别只在本机画不出的那些条目 ——
-    // 它们随后会被 canRender 再摘一次，两种取法的结果相同）。
+    // 表情搜索的「像不像表情」判据（见 searchView）：用**未过滤**的 emoji 表建集；判据同
+    // Android 的 `isEmoji`（那边用过滤后的列表，差只在本机画不出的条目，随后 canRender 同摘）。
     val emojiSet = remember(emoji) { emoji.entries.toHashSet() }
     var selected by remember { mutableStateOf(if (initialEmoji) TAB_EMOJI else 0) }
     var notice by remember { mutableStateOf<String?>(null) }
@@ -248,8 +250,6 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
     // 本窗能不能拿系统键盘焦点（默认不能 —— 见 Window 的 focusable 注释）。只由搜索框的
     // 焦点驱动：点进搜索框才需要打字，点选符号时交还。
     var typing by remember { mutableStateOf(false) }
-    val focus = LocalFocusManager.current
-    val scope = rememberCoroutineScope()
     LaunchedEffect(query) {
         val q = query.trim()
         if (q.isEmpty()) {
@@ -282,6 +282,21 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
         title = if (onEmoji) "opi输入法 表情" else "opi输入法 符号大全",
         icon = OpiPetWindowIcon, // 窗口/任务栏图标 = 小欧（PetIcon.kt）
     ) {
+        // ⚠️ 这两个 local 必须读在**窗内容里**：`LocalFocusManager` 无默认值、只有 Window
+        // 内容才 provide —— 读在窗前时状态栏那条路（application{} 顶层，无 Window 祖先）
+        // 点 Ω 即整进程崩（2026-10-13 P0 真机复现；网见 SymbolWindowCallPathTest）。
+        val focus = LocalFocusManager.current
+        LaunchedEffect(window) { SkipTaskbar.apply(window) } // 同虚拟键盘：输入工具窗不进任务栏（设置窗不贴）
+        val scope = rememberCoroutineScope()
+        // 上屏串行锁：从前「点一下 = EDT 冻到上屏返回」，连点两下是 EDT 队列里顺序执行；
+        // 挪到 IO 后并发来自协程，这把锁把旧次序保住 —— 否则连点两个符号是两条并发
+        // `opi-ctl insert`，插进输入框的先后可能反序（用户的字就错位了）。
+        val pickLock = remember { Mutex() }
+        // 字形过滤（2026-10-13）：**渲染前**摘掉本机字体画不出的字形（判据见 GlyphCoverage，
+        // 规则逐条对齐 Android 的 canRenderGlyph）。与 categories/emoji 同寿命，读一次滤一次。
+        // ⚠️ 必须走 deferredFilter：过滤留在组合里会把「窗显示」推到它之后（真机实测 24.6s/15.6s）。
+        val catsShown = deferredFilter(emptyList(), categories) { SymbolCategories.filter(categories, GlyphCoverage::canRender) }
+        val emojiShown = deferredFilter(EmojiData.Empty, emoji) { EmojiData.filter(emoji, GlyphCoverage::canRender) }
         // 允许获焦之后才申请系统焦点（顺序反了申请无效）。交还键盘时只关 focusable 不够：
         // :0 探针实测 —— 关掉后 X 焦点仍留在本窗、用户的键入被静默丢掉；重挂一次窗才会按
         // WM 的焦点历史落回文档窗，且 focusable=false 的窗重新映射不会再抢回来。
@@ -325,16 +340,17 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
                 fun pick(sym: String) {
                     // 先交还键盘再上屏（Linux 的 `opi-ctl insert` 提交给「最近获得焦点的输入
                     // 上下文」，不还就会插进本窗自己）；交还异步入账，故等焦点真离开本窗，等不到
-                    // 也照上。没搜过时本窗没拿过焦点，走同步那条（与改动前同一条路）。
+                    // 也照上。没搜过时本窗没拿过焦点，等循环零次（与改动前同一条路）。
+                    //
+                    // ⚠️ 上屏（onCommit）是一次子进程 + D-Bus 往返（超时 3s）：挪出组合线程，
+                    // 别冻住页面 —— 与搜索那条同一条纪律（见上面 LaunchedEffect(query)；
+                    // 2026-10-13 EDT 取证轮补上点选这半边）。等焦点那段留在 UI 线程（读
+                    // window.isFocused 是窗口状态，跟子进程无关）。
                     focus.clearFocus()
-                    if (!window.isFocused) {
-                        onCommit(sym)?.let { notice = it }
-                        return
-                    }
                     scope.launch {
                         var waited = 0
                         while (window.isFocused && waited < 300) { delay(20); waited += 20 }
-                        onCommit(sym)?.let { notice = it }
+                        withContext(Dispatchers.IO) { pickLock.withLock { onCommit(sym) } }?.let { notice = it }
                     }
                 }
                 if (query.isNotBlank()) {
@@ -346,25 +362,20 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
                         onPick = ::pick,
                     )
                 } else if (onEmoji) {
-                    EmojiPane(emojiShown, Modifier.weight(1f).fillMaxHeight(), ::pick)
+                    // 同符号页那条诚实占位：表非空而过滤结果空 = 后台还在查（deferredFilter），
+                    // 不是「没有表情数据」—— 后者是 EmojiPane 对真空表的原话。
+                    val filtering = emoji.entries.isNotEmpty() && emojiShown.entries.isEmpty()
+                    if (filtering) CenteredHint("正在检查字形…", Modifier.weight(1f).fillMaxHeight())
+                    else EmojiPane(emojiShown, Modifier.weight(1f).fillMaxHeight(), ::pick)
                 } else {
                     val cat = catsShown.getOrNull(selected)
                     if (cat == null) {
-                        Box(
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text("没有类目数据", fontSize = 14.sp, color = SymDim)
-                        }
+                        // 过滤在后台（deferredFilter）：类目表非空而这里空 = 还没落地；真没数据仍报原话。
+                        CenteredHint(if (categories.isEmpty()) "没有类目数据" else "正在检查字形…", Modifier.weight(1f).fillMaxHeight())
                     } else if (cat.symbols.isEmpty()) {
                         // 整类被字形过滤摘空（这一类的字本机一个都画不出）：既不是「没有类目
                         // 数据」，也不能给分页器一个 0 页数（pageCount=0 是未定义用法）。
-                        Box(
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text("这一类在本机没有可显示的字形", fontSize = 13.sp, color = SymDim)
-                        }
+                        CenteredHint("这一类在本机没有可显示的字形", Modifier.weight(1f).fillMaxHeight())
                     } else {
                         val pages = (cat.symbols.size + SymbolCategories.PAGE_SIZE - 1) / SymbolCategories.PAGE_SIZE
                         val pager = rememberPagerState { pages }

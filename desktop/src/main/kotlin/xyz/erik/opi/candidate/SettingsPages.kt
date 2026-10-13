@@ -30,12 +30,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 // ---------- 常用 ----------
 
@@ -119,6 +123,7 @@ internal fun AppearancePage(s: OpSettings, apply: (OpSettings) -> Unit) {
 
 @Composable
 internal fun StatusBarPage(s: OpSettings, apply: (OpSettings) -> Unit, status: (String) -> Unit) {
+    val scope = rememberCoroutineScope()
     SectionTitle("悬浮条")
     SettingRow(
         "显示状态栏悬浮条",
@@ -129,7 +134,11 @@ internal fun StatusBarPage(s: OpSettings, apply: (OpSettings) -> Unit, status: (
         val next = s.copy(statusbar = s.statusbar.copy(hidden = !it))
         apply(next)
         // 拨回「显示」时立刻拉起（拨到隐藏不用管 —— 隐藏的语义是「进程还在跑，只是不显示」）
-        ensureStatusBarRunning(next.statusbar)?.let(status)
+        // ⚠️ 拉起 = fork/exec + 锁文件探测：挪到 IO（2026-10-13 EDT 取证轮），
+        // 与设置窗首次拉起那条同规矩；开关本身已即时可见（apply 先写 s）。
+        scope.launch {
+            withContext(Dispatchers.IO) { ensureStatusBarRunning(next.statusbar) }?.let(status)
+        }
     }
     SectionTitle("条上按钮（常驻）")
     // 只列有动作的按钮 —— 与条上同一份判定（statusButtonWired），两处各判一次必然漂移。

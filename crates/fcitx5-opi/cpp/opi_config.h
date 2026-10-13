@@ -45,10 +45,11 @@
 // **字面值就是这里的字符串**（unmarshallOption 按字面匹配），显示名同源。
 // 换言之这些中文字面串是**对外契约**（配置文件里会存「浅色」这种值），别当注释改。
 // 顺序 = 枚举序 = 下面那条 i18n 宏的名字序（宏按位置取名字），插入要两处同一位置。
-enum class OpiSkin { Keep, Light, Dark, Paper, Cinnabar, Fresh, Azure, Lemon, Sunset, Starlight };
+enum class OpiSkin { Keep, Light, Dark, Paper, Cinnabar, Fresh, Azure, Lemon, Sunset, Starlight, Wisteria, Pine };
 FCITX_CONFIG_ENUM_NAME_WITH_I18N(OpiSkin, N_("不改动"), N_("浅色"), N_("深色"),
                                  N_("宣纸"), N_("朱砂"), N_("清爽"), N_("湛蓝"),
-                                 N_("柠檬"), N_("晚霞"), N_("星光"));
+                                 N_("柠檬"), N_("晚霞"), N_("星光"), N_("紫藤"),
+                                 N_("松林"));
 
 // 默认值**全是 true / Keep** = 「没配过」等于引擎既有行为（模糊音/简拼见
 // `RankOptions::default()`；学习/中文标点见各自 setter 的默认；ShiftToggle 取 true

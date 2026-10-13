@@ -104,6 +104,17 @@ class StatusBarTest {
     }
 
     @Test
+    fun `logo click cycles every skin and comes back around`() {
+        // LOGO 单击 = 换下一款皮肤（2026-10-13 用户裁决「点击 logo 的颜色变化」）。
+        // 钉三件：第一步、一圈把每款都走到（**含「不改动」**，转得回条的本色）、再一步回到起点。
+        // 由 entries 驱动、不复述清单：将来加款这条自己跟上（加款要同时改的六处在 SettingsTest 钉着）。
+        assertEquals(SkinOption.LIGHT, nextSkin(SkinOption.KEEP))
+        val seen = generateSequence(SkinOption.KEEP) { nextSkin(it) }.take(SkinOption.entries.size).toList()
+        assertEquals("绕一圈该把每款都恰好走到一次", SkinOption.entries.toList(), seen.sorted())
+        assertEquals("再走一步该回到起点", SkinOption.KEEP, nextSkin(seen.last()))
+    }
+
+    @Test
     fun `windows only keeps buttons that have an action there`() {
         // Windows 上没有 opi-ctl（那四个动作 trad/punct/fullwidth/lang 是
         // Linux 侧的），没动作的按钮不上条 ——「宁可少一页，不做点不动的开关」。

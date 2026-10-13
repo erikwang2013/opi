@@ -21,7 +21,8 @@
 //!
 //! 条上按钮（2026-10-10 **最终冻结**，从左到右 = [StatusBarButton] 的枚举序）：
 //! 小欧 / 中英 / 。，标点(双态) / 简繁 / 月相全半角 / 软键盘 / Ω符号大全 / 设置。
-//! logo = 品牌标识兼拖动把手（第 1 位），单击打开设置（用户裁决③）。
+//! logo = 品牌标识兼拖动把手（第 1 位），**单击换下一款皮肤**（2026-10-13 用户裁决
+//! 「点击 logo 的颜色变化」；取代早先「单击打开设置」③ —— 设置仍走右侧「设置」钮）。
 //!
 //! 图标口径：**没有图片资产、没有新依赖**。自绘（键盘/月相/四小方块/小欧）或单字与
 //! 符号（Ω 简/繁 中/英，标点两态）。**符号大全 = 静态 Ω；中英标点 = 双态**
@@ -68,6 +69,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,6 +78,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
@@ -87,7 +90,12 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.rememberWindowState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import xyz.erik.opi.pet.OpiPet
 import xyz.erik.opi.pet.OpiPetWindowIcon
 import xyz.erik.opi.pet.PetMood
@@ -157,9 +165,13 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
     LaunchedEffect(Unit) {
         while (true) {
             delay(1000)
-            val next = loadSettings()
+            // ⚠️ 一拍 = 一次小文件读 + 一个短命进程（`opi-ctl state`，超时 1.5s）：必须挪出
+            // 组合线程（= AWT EDT）。fcitx5 的 D-Bus 一忙，`opi-ctl` 答不上来的那 1.5s 里
+            // EDT 就停摆 —— 用户报的「切换输入法状态栏卡死」正是这条（2026-10-13 jstack
+            // 实抓 EDT 停在 ProcessImpl.waitFor ← Actions.runCapture ← readImeState）。
+            // 循环仍是单条协程顺序执行：不可重入、次序（设置→状态）与超时值都不变。
+            val (next, st) = withContext(Dispatchers.IO) { loadSettings() to readImeState() }
             if (next != s) s = next // 变了才写状态：否则每秒一次无谓重组
-            val st = readImeState()
             if (st != imeState) imeState = st
         }
     }
@@ -206,19 +218,50 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
         return null
     }
 
+    /**
+     * LOGO 单击 = 换下一款皮肤（2026-10-13 用户裁决，见文件头）。生效走**既有那条通道**
+     * （写 `Skin=` + 通知 fcitx5 重载 = [saveSettings]），条自己**立刻**换装 —— `s` 就是
+     * 上面配色的来源，改它即重画，不必等 1s 轮询。成功**不吭声**：换色本身就是反馈，
+     * 而提示期间按钮列会被替掉（见下），连点换肤时反而挡路；没生效才占一行。
+     */
+    fun cycleSkin() {
+        val next = s.copy(skin = nextSkin(s.skin))
+        s = next
+        report(if (saveSettings(next)) null else saveStatusMessage(live = false))
+    }
+
     fun dispatch(b: StatusBarButton) {
         when (b) {
             StatusBarButton.VK -> vkOpen = !vkOpen
-            StatusBarButton.LOGO, StatusBarButton.SETTINGS -> settingsOpen = true
+            StatusBarButton.LOGO -> cycleSkin()
+            StatusBarButton.SETTINGS -> settingsOpen = true
             StatusBarButton.SYMBOLS -> report(openSymbols())
             else -> report(statusActionCommand(b)?.let { runExternal(it) })
         }
     }
 
+    val scope = rememberCoroutineScope()
+    // 动作串行锁：从前「点一下 = EDT 冻到动作跑完」，后续点击排在 AWT 事件队列里按序执行；
+    // 挪到 IO 后并发来自协程，这把锁把旧次序（一次一个、动作在前、补读在后）原样保住。
+    val actionLock = remember { Mutex() }
+
     fun onButton(b: StatusBarButton) {
         // 动作一返回就补读状态（点完马上看到翻转，不等下一秒的轮询）。补读与轮询并存：
         // fcitx5 应用切换是异步的，个别时候补读会早于状态落定 —— 1s 轮询是兜底。
-        actionWithStateRefresh({ dispatch(b) }) { imeState = readImeState() }
+        //
+        // ⚠️ 整段（动作 + 补读）都在 IO 线程上：动作分支里是子进程 —— `opi-ctl`（≤3s）与
+        // 换肤那条的 `notifyFcitxReload`（三条 D-Bus 工具，`waitFor` **无超时**），补读又是
+        // 一次 1.5s；留在 EDT 上就是「点一下冻 5 秒」（2026-10-13 实抓：EDT 停在
+        // notifyFcitxReload 的 waitFor ← saveSettings ← cycleSkin ← dispatch ← onButton）。
+        // dispatch 里那几个赋值（s/vkOpen/settingsOpen/notice）从 IO 线程写 Snapshot 状态
+        // 是安全的：Compose 的 Snapshot 状态跨线程可写，重组合照旧排到 UI 线程。
+        scope.launch {
+            actionLock.withLock {
+                withContext(Dispatchers.IO) {
+                    actionWithStateRefresh({ dispatch(b) }) { imeState = readImeState() }
+                }
+            }
+        }
     }
 
     Window(
@@ -306,8 +349,14 @@ private fun BarButton(
         contentAlignment = Alignment.Center,
     ) {
         when (b) {
-            // 品牌标识兼拖动把手：就是设置页里那只小欧，缩小到按钮里。
-            StatusBarButton.LOGO -> OpiPet(mood = PetMood.IDLE, palette = PetPalette.Dark, size = 26.dp)
+            // 品牌标识兼拖动把手：就是设置页里那只小欧，缩小到按钮里；单击换皮肤（见 dispatch）。
+            // 30dp = 按钮边长（2026-10-13 用户「logo 大点」；再大就压到相邻按钮上了）。
+            // 配色随条底深浅切：浅底上用深底版那套（近白身 + 淡青描边）会糊进底色。
+            StatusBarButton.LOGO -> OpiPet(
+                mood = PetMood.IDLE,
+                palette = if (palette.bg.luminance() < 0.5f) PetPalette.Dark else PetPalette.Default,
+                size = 30.dp,
+            )
             StatusBarButton.VK -> VkIcon()
             StatusBarButton.FULLWIDTH -> MoonIcon(st.fullwidth)
             StatusBarButton.SETTINGS -> SettingsIcon()

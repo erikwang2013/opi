@@ -18,6 +18,7 @@ package xyz.erik.opi.candidate
 
 import org.jetbrains.skia.FontMgr
 import org.jetbrains.skia.FontStyle
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -105,6 +106,28 @@ class GlyphCoverageTest {
             "U+%04X 本机有字形，判据该说可渲染".format(good.codePointAt(0)),
             GlyphCoverage.canRender(good),
         )
+    }
+
+    @Test
+    fun `the probe cache saves time without changing answers`() {
+        // 2026-10-13 加缓存时补：缓存只许省时间、不许改答案。两道判据 —— 与**独立原语**
+        // 对齐（coverageOracle 不经过 canRender），且**第二遍**（这一遍必走缓存）答案不变。
+        // 单测共用一个进程，头一遍未必是冷探（别的用例可能先问过）—— 故判据不看「第几遍」，
+        // 只看两遍都对：缓存写反/键写错（如按串长做键）都会在这一对正反夹具上露馅。
+        val good = discoveredCoveredCodePoints(1).single()
+        val bad = uncoveredCodePoint()
+        for ((text, expected) in listOf(good to true, bad to false)) {
+            assertEquals(
+                "第一遍该是 $expected",
+                expected,
+                GlyphCoverage.canRender(text),
+            )
+            assertEquals(
+                "第二遍（走缓存）与独立原语（coverageOracle）不一致 —— 缓存改变了答案",
+                coverageOracle(text.codePointAt(0)),
+                GlyphCoverage.canRender(text),
+            )
+        }
     }
 
     @Test

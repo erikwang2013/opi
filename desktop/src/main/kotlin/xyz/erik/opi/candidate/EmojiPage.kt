@@ -51,6 +51,9 @@ object EmojiData {
 
     data class Data(val entries: List<String>, val groups: List<Group>)
 
+    /** 空表：字形过滤没落地前（见 `deferredFilter`）与「全表被摘空」共用这一份。 */
+    val Empty = Data(emptyList(), emptyList())
+
     /** 解析 `emoji.tsv`。连续同名段 = 一组（口径同引擎 `builtin_emoji_groups`）。 */
     fun parse(text: String): Data {
         val entries = ArrayList<String>()
@@ -106,7 +109,7 @@ object EmojiData {
         }
         aliveUpTo[data.entries.size] = alive
         if (alive == data.entries.size) return data // 一条没摘 ⇒ 原样（也顺带保证了幂等）
-        if (alive == 0) return Data(emptyList(), emptyList())
+        if (alive == 0) return Empty
         val groups = data.groups.map { g ->
             val from = g.start.coerceIn(0, data.entries.size)
             val to = (g.start + g.count).coerceIn(0, data.entries.size)

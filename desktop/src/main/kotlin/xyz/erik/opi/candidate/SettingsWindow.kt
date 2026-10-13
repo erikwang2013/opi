@@ -45,6 +45,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,6 +53,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import xyz.erik.opi.pet.OpiPet
 import xyz.erik.opi.pet.PetMood
 
@@ -155,18 +161,26 @@ fun SettingsWindow() {
     // （2026-10-10 用户报障「设置里开了、实际没出现」的根因：装包后没重登录，
     // autostart 没跑；而设置窗原先**不拉起任何东西**）。只跑一次，失败进状态行。
     LaunchedEffect(Unit) {
-        ensureStatusBarRunning(s.statusbar)?.let { status = it }
+        // 拉条进程 = fork/exec（还带一次锁文件探测）：挪到 IO，规矩与状态栏那边一致
+        // —— 别在组合线程上碰进程与文件（2026-10-13 EDT 取证轮）。
+        withContext(Dispatchers.IO) { ensureStatusBarRunning(s.statusbar) }?.let { status = it }
     }
+
+    val scope = rememberCoroutineScope()
+    // 落盘串行锁：从前拨一下 = EDT 同步写完；挪到 IO 后并发来自协程，锁保住「写在前、
+    // 状态行在后」的旧次序（否则连拨两下可能后写先落，文件停在前一个值上）。
+    val saveLock = remember { Mutex() }
 
     fun apply(next: OpSettings) {
         s = next
-        val live = saveSettings(next)
-        status = if (live) {
-            "已保存并通知 fcitx5 重载（立即生效）"
-        } else if (isWindows()) {
-            "已保存；Windows 侧在**输入法下一次激活**时生效"
-        } else {
-            "已保存到文件；但没能通知 fcitx5 重载（它没在跑？重启输入法后生效）"
+        // ⚠️ saveSettings 里是文件写 + `notifyFcitxReload`（busctl 那条 `waitFor` **无超时**，
+        // 2026-10-13 实抓 EDT 停在那里）—— 整个保存挪出组合线程；拨开关仍然即时可见（s
+        // 已先写），状态行晚一步出现。措辞与状态栏的换肤提示共用一份（saveStatusMessage）。
+        scope.launch {
+            saveLock.withLock {
+                val live = withContext(Dispatchers.IO) { saveSettings(next) }
+                status = saveStatusMessage(live)
+            }
         }
     }
 

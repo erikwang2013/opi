@@ -58,6 +58,8 @@ enum class SkinOption(val value: String) {
     LEMON("柠檬"),
     SUNSET("晚霞"),
     STARLIGHT("星光"),
+    WISTERIA("紫藤"),
+    PINE("松林"),
     ;
 
     companion object {
@@ -66,6 +68,14 @@ enum class SkinOption(val value: String) {
             entries.firstOrNull { it.value == v } ?: KEEP
     }
 }
+
+/**
+ * 下一款皮肤（状态栏 LOGO 单击循环换肤用，2026-10-13 用户裁决「点击 logo 的颜色变化」）：
+ * 按枚举序绕一圈，**含「不改动」**——转一圈能回到条的本色，不是单向跑掉。
+ * 纯函数，首尾与「一圈不重样」由 StatusBarTest 钉住。
+ */
+internal fun nextSkin(skin: SkinOption): SkinOption =
+    SkinOption.entries[(skin.ordinal + 1) % SkinOption.entries.size]
 
 /**
  * 状态栏（悬浮条）设置：master 隐藏 + 8 个按钮的常驻开关（未常驻 = 不显示）。
@@ -96,7 +106,7 @@ data class StatusBarSettings(
  * （见 StatusBar.kt 的 iconText / MoonIcon / SettingsIcon）。
  */
 enum class StatusBarButton(val label: String, val hint: String) {
-    LOGO("logo", "品牌标识兼拖动把手；单击打开设置"),
+    LOGO("logo", "品牌标识兼拖动把手；单击换下一款皮肤"),
     // ⚠️ 通路是 opi-ctl lang，不是 fcitx5-remote -t（后者停用整个 fcitx5，
     // 2026-10-10 中午用户踩过；事故留痕见 Actions.kt 头部与 StatusBarTest 的映射钉）。
     LANG("中英文切换", "与 Shift 轻按同一条通路（opi-ctl lang）"),
@@ -363,6 +373,17 @@ fun saveSettings(s: OpSettings): Boolean {
         return false
     }
     return notifyFcitxReload()
+}
+
+/**
+ * 保存结果的**用户可见**措辞 —— 与 [saveSettings] 的三个面一一对应。
+ * 设置窗的状态行与状态栏的提示行**共用这一份**：两处各写一句必然会漂，而「没立即生效」
+ * 正是最容易被写错的一句。星号（`**…**`）一概不加：两处都是纯 Text，会原样显示。
+ */
+internal fun saveStatusMessage(live: Boolean): String = when {
+    live -> "已保存并通知 fcitx5 重载（立即生效）"
+    isWindows() -> "已保存；Windows 侧在输入法下一次激活时生效"
+    else -> "已保存到文件；但没能通知 fcitx5 重载（它没在跑？重启输入法后生效）"
 }
 
 /**
