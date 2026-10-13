@@ -66,6 +66,7 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
     remember { EngineController().also { prefs.applyEngineSwitches(it) } }
     var learner by remember { mutableStateOf(prefs.learn) }
     var fuzzy by remember { mutableStateOf(prefs.fuzzy) }
+    var fuzzyPairs by remember { mutableStateOf(prefs.fuzzyPairs) }
     var jianpin by remember { mutableStateOf(prefs.jianpin) }
     var confirmClear by remember { mutableStateOf(false) }
 
@@ -196,20 +197,52 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
                 },
             )
             HorizontalDivider()
+            // 模糊音**逐对多选**（2026-10-13 用户裁决「可多选类似 z=zh」）：总开关
+            // （开=全勾/关=全不勾）+ 逐组微调；首次触碰即把旧布尔态具体化成列表
+            // （合同：空列表 = 未设置 ⇒ 回落布尔；全不勾写空列表 + fuzzy=false）。
+            // 名字表见 FUZZY_PAIRS_ANDROID（锁步门禁 FuzzyPairsLockstepTest）。
+            val pairSet = if (fuzzyPairs.isNotEmpty()) {
+                fuzzyPairs.split(',').map { it.trim() }.filter { it in FUZZY_PAIRS_ANDROID }.toSet()
+            } else if (fuzzy) {
+                FUZZY_PAIRS_ANDROID.toSet()
+            } else {
+                emptySet()
+            }
+            fun writePairSet(next: Set<String>) {
+                val list = FUZZY_PAIRS_ANDROID.filter { it in next }.joinToString(",")
+                val any = next.isNotEmpty()
+                fuzzyPairs = list
+                fuzzy = any
+                OpiEngine.setFuzzyPairs(fuzzyMaskOf(list))
+                prefs.fuzzyPairs = list
+                prefs.fuzzy = any
+            }
             ListItem(
-                headlineContent = { Text("模糊音") },
-                supportingContent = { Text("z↔zh、c↔ch、s↔sh、n↔l、f↔h 等近音互查") },
+                headlineContent = { Text("模糊音（逐对）") },
+                supportingContent = { Text("总开关：开 = 全勾、关 = 全不勾；下面是逐组微调") },
                 trailingContent = {
                     Switch(
-                        checked = fuzzy,
+                        checked = pairSet.isNotEmpty(),
                         onCheckedChange = { v ->
-                            fuzzy = v
-                            OpiEngine.setFuzzy(v)
-                            prefs.fuzzy = v
+                            writePairSet(if (v) FUZZY_PAIRS_ANDROID.toSet() else emptySet())
                         },
                     )
                 },
             )
+            for (name in FUZZY_PAIRS_ANDROID) {
+                val (a, b) = name.split('/')
+                ListItem(
+                    headlineContent = { Text("　$a ↔ $b") },
+                    trailingContent = {
+                        Switch(
+                            checked = name in pairSet,
+                            onCheckedChange = { v ->
+                                writePairSet(pairSet.toMutableSet().apply { if (v) add(name) else remove(name) })
+                            },
+                        )
+                    },
+                )
+            }
             HorizontalDivider()
             ListItem(
                 headlineContent = { Text("简拼") },

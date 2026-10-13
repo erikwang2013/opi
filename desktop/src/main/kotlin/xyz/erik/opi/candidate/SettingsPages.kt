@@ -57,11 +57,21 @@ internal fun CommonPage(s: OpSettings, apply: (OpSettings) -> Unit) {
         s.chinesePunct,
     ) { apply(s.copy(chinesePunct = it)) }
     SectionTitle("输入")
+    // 模糊音**逐对多选**（2026-10-13 用户裁决「可多选类似 z=zh」）：逐组一开关；
+    // 全不勾 = 全关（同时写下 Fuzzy=False 的兼容投影）。名字表见 FUZZY_PAIR_NAMES
+    // （锁步门禁在 SettingsTest 钉住与引擎 fuzzy.rs 同序同名）。
     SettingRow(
-        "模糊音",
-        "z↔zh、c↔ch、s↔sh、n↔l、f↔h 等近音互查",
-        s.fuzzy,
-    ) { apply(s.copy(fuzzy = it)) }
+        "模糊音（逐对）",
+        "总开关：开 = 全勾、关 = 全不勾；下面是逐组微调。配置键名 FuzzyPairs",
+        s.fuzzyPairSet().isNotEmpty(),
+    ) { on ->
+        apply(s.copy(fuzzyPairs = if (on) FUZZY_PAIR_NAMES.joinToString(",") else "", fuzzy = on))
+    }
+    val checked = s.fuzzyPairSet()
+    for (name in FUZZY_PAIR_NAMES) {
+        val (a, b) = name.split('/')
+        SettingRow("　$a ↔ $b", "", name in checked) { apply(s.toggleFuzzyPair(name)) }
+    }
     SettingRow(
         "简拼",
         "声母缩写：nh → 你好、zg → 中国",

@@ -404,4 +404,51 @@ class SettingsTest {
         // 缺键 → 默认 true（引擎既有行为：Shift 轻按本来就开着）
         assertEquals(OpSettings(), OpSettings.fromIni("Learn=True\n"))
     }
+
+    // ---------- 模糊音逐对（2026-10-13 用户裁决「可多选类似 z=zh」）----------
+
+    /** 名字表/顺序是跨语言契约：从引擎源**现读现比**（复述会跟着漂）。 */
+    @Test
+    fun `fuzzy pairs stay in lockstep with the engine`() {
+        val src = repoFile("crates/engine-core/src/fuzzy.rs")
+        val block = src.substringAfter("pub const FUZZY_PAIRS").substringBefore("];")
+        // 源里是 `("zh", "z"),` 两个字符串一组：两组分别抽，配对重建。
+        val a = captures(Regex("\"([a-z]+)\", \"[a-z]+\""), block)
+        val b = captures(Regex("\"[a-z]+\", \"([a-z]+)\""), block)
+        val pairs = a.zip(b).map { (x, y) -> "$x/$y" }
+        assertEquals(
+            listOf("zh/z", "ch/c", "sh/s", "an/ang", "en/eng", "in/ing", "n/l", "f/h"),
+            pairs,
+        )
+        // 桌面侧的名字表必须与引擎同序同名（位序 = 掩码位序）。
+        assertEquals(pairs, FUZZY_PAIR_NAMES)
+    }
+
+    @Test
+    fun `fuzzy pairs round trip and fall back to the legacy switch`() {
+        // 非空列表：写得出、读得回（管理键）。
+        val s = OpSettings(fuzzyPairs = "zh/z,n/l", fuzzy = true)
+        assertTrue(s.toIni().contains("FuzzyPairs=zh/z,n/l\n"))
+        assertEquals("zh/z,n/l", OpSettings.fromIni(s.toIni()).fuzzyPairs)
+        // 缺键 = 空 = 未设置：生效集回落到旧布尔（全开/全关）。
+        assertEquals("", OpSettings.fromIni("Fuzzy=True\n").fuzzyPairs)
+        assertEquals(FUZZY_PAIR_NAMES.toSet(), OpSettings(fuzzy = true).fuzzyPairSet())
+        assertEquals(emptySet<String>(), OpSettings(fuzzy = false).fuzzyPairSet())
+        // 首次勾选把旧布尔态**具体化**成列表；再勾回来。
+        val all = OpSettings(fuzzy = true)
+        val t1 = all.toggleFuzzyPair("n/l")
+        assertEquals("取消 n/l 后应剩七组", "zh/z,ch/c,sh/s,an/ang,en/eng,in/ing,f/h", t1.fuzzyPairs)
+        val t2 = t1.toggleFuzzyPair("n/l")
+        assertEquals("再勾回 = 全列表", FUZZY_PAIR_NAMES.joinToString(","), t2.fuzzyPairs)
+        // 全不勾 = 空列表 + fuzzy=false（仍是「全关」，读侧一致）。
+        var off = OpSettings(fuzzyPairs = FUZZY_PAIR_NAMES.joinToString(","), fuzzy = true)
+        for (n in FUZZY_PAIR_NAMES) off = off.toggleFuzzyPair(n)
+        assertEquals("", off.fuzzyPairs)
+        assertFalse(off.fuzzy)
+        assertEquals(emptySet<String>(), off.fuzzyPairSet())
+        // merge：管理键（既有的 FuzzyPairs 行被新值顶掉）。
+        val merged = mergeIni("FuzzyPairs=zh/z\n", OpSettings(fuzzyPairs = "n/l"))
+        assertTrue(merged, merged.contains("FuzzyPairs=n/l\n"))
+        assertTrue(merged, !merged.contains("FuzzyPairs=zh/z\n"))
+    }
 }

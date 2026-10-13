@@ -25,13 +25,19 @@ use std::path::PathBuf;
 /// 设置文件名（与 Compose 写侧约定一致：`<LOCALAPPDATA>/opi/settings.ini`）。
 pub const SETTINGS_FILE_NAME: &str = "settings.ini";
 
-/// 四个开关。默认值 = **引擎既有行为**（全开）—— 与 Kotlin 写侧、fcitx5 读侧的默认
-/// 一字不差：三处默认值不同的表现是「没配过 = 随机一种行为」。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// 四个开关 + 模糊音逐对列表。默认值 = **引擎既有行为**（全开）—— 与 Kotlin 写侧、
+/// fcitx5 读侧的默认一字不差：三处默认值不同的表现是「没配过 = 随机一种行为」。
+///
+/// `fuzzy_pairs`（2026-10-13 加）：逗号分隔的组名串（规范见
+/// `engine_core::fuzzy::pair_names`）。**空串 = 未设置 ⇒ 回落到旧的 `fuzzy` 布尔**
+/// （老配置一字不动）；非空 ⇒ 以它为准（`fuzzy` 位仅作旧读侧的兼容投影，由设置面
+/// 同步写「任一组开着」）。加字段后本结构**不再是 `Copy`**（String 字段）。
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Settings {
     pub learn: bool,
     pub chinese_punct: bool,
     pub fuzzy: bool,
+    pub fuzzy_pairs: String,
     pub jianpin: bool,
 }
 
@@ -41,6 +47,7 @@ impl Default for Settings {
             learn: true,
             chinese_punct: true,
             fuzzy: true,
+            fuzzy_pairs: String::new(), // 空 = 未设置（回落到 fuzzy 布尔）
             jianpin: true,
         }
     }
@@ -59,10 +66,16 @@ pub fn parse(text: &str) -> Settings {
         let Some((k, v)) = line.split_once('=') else {
             continue;
         };
+        let key = k.trim();
+        if key == "FuzzyPairs" {
+            // 字符串键（2026-10-13）：值原样收（`#` 注释与空白已在上文剥过）。
+            out.fuzzy_pairs = v.trim().to_string();
+            continue;
+        }
         let Some(b) = parse_bool(v.trim()) else {
             continue;
         };
-        match k.trim() {
+        match key {
             "Learn" => out.learn = b,
             "ChinesePunct" => out.chinese_punct = b,
             "Fuzzy" => out.fuzzy = b,

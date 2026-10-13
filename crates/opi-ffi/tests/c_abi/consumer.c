@@ -226,6 +226,14 @@ int main(int argc, char **argv) {
     /* 逐对掩码（2026-10-13）：写 0b1000001（zh/z + n/l）→ 读回同位；越界位钳掉。 */
     opi_set_fuzzy_pairs(0x41);
     CHECK(opi_fuzzy_pairs() == 0x41, "set_fuzzy_pairs(0x41) 应原样读回");
+    /* 组名面（2026-10-13）：规范串读回后按名解析应与掩码面同解。 */
+    {
+        OpiString names = opi_fuzzy_pair_names();
+        CHECK(names.len > 0, "fuzzy_pair_names 应非空");
+        opi_set_fuzzy_pairs_names(names.ptr, names.len);
+        CHECK(opi_fuzzy_pairs() == 0xFF, "按名全表 = 0xFF");
+        opi_ffi_free_string(names);
+    }
     CHECK(opi_fuzzy_enabled() == true, "任一组开着 ⇒ 旧布尔读侧为 true");
     opi_set_fuzzy_pairs(0x141);
     CHECK(opi_fuzzy_pairs() == 0x41, "越界位（bit8）应被钳掉");

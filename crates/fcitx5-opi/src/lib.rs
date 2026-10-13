@@ -336,6 +336,24 @@ pub unsafe extern "C" fn opi_fcitx5_set_jianpin(on: bool) {
     let _ = catch_unwind(AssertUnwindSafe(|| with_state(|s| s.set_jianpin(on))));
 }
 
+/// setFuzzyPairsNames(names)：模糊音逐对（2026-10-13；逗号分隔组名，见
+/// `engine_core::fuzzy::pair_names`）。**空串 = 空操作** —— 回落旧布尔的裁决在
+/// C++ 的 `applyOpiSettings` 里（两档都写这里的话，老配置的 `Fuzzy=False` 会被
+/// 默认串覆盖）；名字认不得整条忽略。`(ptr, len)` = UTF-8 串，null/空 = 空操作。
+/// # Safety
+///
+/// `ptr` 必须指向至少 `len` 字节的有效内存（或为 null，视为空操作）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_set_fuzzy_pairs(ptr: *const u8, len: usize) {
+    ensure_panic_hook();
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        let Some(names) = (unsafe { read_utf8(ptr, len) }).filter(|n| !n.is_empty()) else {
+            return;
+        };
+        let _ = with_state(|s| s.set_fuzzy_pairs(&names));
+    }));
+}
+
 /// # Safety
 ///
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。

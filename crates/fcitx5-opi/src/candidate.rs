@@ -182,6 +182,14 @@ impl CandidateState {
         self.engine.set_fuzzy(on);
     }
 
+    /// 模糊音**逐对**（2026-10-13；配置键 `FuzzyPairs`，组名串见
+    /// `engine_core::fuzzy::pair_names`，解析走 `fuzzy::mask_from_names` —— 唯一一份）。
+    /// 配对：`tsf-opi/src/logic.rs` 的同名方法（两轨同构）。
+    pub fn set_fuzzy_pairs(&mut self, names: &str) {
+        self.engine
+            .set_fuzzy_pairs(engine_core::fuzzy::mask_from_names(names));
+    }
+
     /// 简拼开关。配对同上。
     pub fn set_jianpin(&mut self, on: bool) {
         self.engine.set_jianpin(on);

@@ -24,6 +24,7 @@ fn parses_every_key_false() {
             learn: false,
             chinese_punct: false,
             fuzzy: false,
+            fuzzy_pairs: String::new(),
             jianpin: false,
         }
     );
@@ -101,4 +102,30 @@ fn load_reads_the_real_file_and_falls_back() {
     assert_eq!(load(Some(missing.as_os_str())), Settings::default());
 
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// 模糊音逐对（2026-10-13）：字符串键 `FuzzyPairs` 的解析与缺省口径。
+#[test]
+fn parses_fuzzy_pairs_string() {
+    // 缺省 = 空 = 未设置（调用方回落到旧 `Fuzzy` 布尔）——老配置行为一字不变。
+    assert_eq!(parse("").fuzzy_pairs, "");
+    assert_eq!(parse("Fuzzy=True\n").fuzzy_pairs, "");
+    let s = parse("FuzzyPairs=zh/z,n/l  # 注释剥掉\n");
+    assert_eq!(s.fuzzy_pairs, "zh/z,n/l", "两侧空白与注释都剥掉");
+}
+
+/// 模糊音逐对（2026-10-13）：`FuzzyPairs` 非空 ⇒ 以列表为准；空 ⇒ 回落布尔。
+/// 断言走**引擎读侧**（`TsfLogic.engine.fuzzy_pairs()`），不是只测解析。
+/// 自足夹具（不复用 logic_tests 的 state()：那边已顶 500 行门禁，见 [path] 拆法）。
+#[test]
+fn apply_settings_prefers_the_pairs_list() {
+    use engine_core::fuzzy::FUZZY_ALL;
+    use engine_core::dictionary::InMemoryDictionary;
+    let mut s = crate::logic::TsfLogic::with_dict(Box::new(InMemoryDictionary::new()));
+    s.apply_settings(parse("Fuzzy=False\nFuzzyPairs=n/l\n"));
+    assert_eq!(s.engine.fuzzy_pairs(), 1 << 6, "列表为准：只开 n/l（bit6 = n/l）");
+    s.apply_settings(parse("Fuzzy=True\n"));
+    assert_eq!(s.engine.fuzzy_pairs(), FUZZY_ALL, "无列表 → 回落布尔全开");
+    s.apply_settings(parse("Fuzzy=False\n"));
+    assert_eq!(s.engine.fuzzy_pairs(), 0, "无列表 + 布尔关 → 全关");
 }

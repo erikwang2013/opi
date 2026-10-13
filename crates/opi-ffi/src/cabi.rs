@@ -241,6 +241,35 @@ pub unsafe extern "C" fn opi_fuzzy_pairs() -> i32 {
     .unwrap_or(0)
 }
 
+/// 模糊音组名的**规范串**（读侧；解析写侧见 `opi_set_fuzzy_pairs_names`）。
+/// 返回值随 `opi_fuzzy_pairs` 同族：未装载 → 空串。调用方（含设置界面）应把它当
+/// **唯一名源**做多选列表，别手抄名表（加组必漂）。UTF-16、调用方 free。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fuzzy_pair_names() -> OpiString {
+    let names = catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|_| engine_core::fuzzy::pair_names()).unwrap_or_default()
+    }))
+    .unwrap_or_default();
+    OpiString::from_utf16(&names)
+}
+
+/// setFuzzyPairsNames(names)：按**组名串**（逗号分隔，见 `opi_fuzzy_pair_names`）
+/// 设置启用集。解析在引擎侧只有一份（`engine_core::fuzzy::mask_from_names`）；
+/// 认不得的名字整条忽略。未装载/NULL → 空操作。
+///
+/// # Safety
+/// `ptr`/`len` 必须描述一段**有效、已初始化**的 UTF-16 内存（或 `ptr = null`
+/// 且 `len = 0`）；函数只读该段，不接管其所有权。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_set_fuzzy_pairs_names(ptr: *const u16, len: usize) {
+    let Some(names) = (unsafe { crate::cabi::utf16::read_utf16(ptr, len) }) else {
+        return;
+    };
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.set_fuzzy_pairs(engine_core::fuzzy::mask_from_names(&names)))
+    }));
+}
+
 /// setFuzzyPairs(mask)：模糊音逐对设置（位序同上；越界位钳掉，只留低 8 位）。
 /// `mask = 0xFF` 等价旧 `opi_set_fuzzy(true)`、`0` 等价 `false` —— 旧布尔入口
 /// 保留为包装（四端配置只写 `Fuzzy=` 的老配置走那条，行为一字不变）。

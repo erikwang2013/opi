@@ -60,6 +60,11 @@ FCITX_CONFIGURATION(
     fcitx::Option<bool> learn{this, "Learn", "学习（记住选过的词）", true};
     fcitx::Option<bool> chinesePunct{this, "ChinesePunct", "中文标点（，。、与成对引号）", true};
     fcitx::Option<bool> fuzzy{this, "Fuzzy", "模糊音（z/zh、n/l…）", true};
+    // 逐对多选（2026-10-13 用户裁决「可多选类似 z=zh」）：逗号分隔组名，名字表见
+    // 引擎的 `fuzzy::pair_names`（zh/z,ch/c,sh/s,an/ang,en/eng,in/ing,n/l,f/h）。
+    // **空 = 未设置 ⇒ 回落到上面的总开关**（老配置行为一字不变）；非空 ⇒ 以列表为准。
+    fcitx::Option<std::string> fuzzyPairs{
+        this, "FuzzyPairs", "模糊音逐对（逗号分隔，如 zh/z,n/l；留空按上面的总开关）", ""};
     fcitx::Option<bool> jianpin{this, "Jianpin", "简拼（声母缩写，nh → 你好）", true};
     fcitx::Option<bool> shiftToggle{this, "ShiftToggle", "Shift 轻按切换中英文（组合键与长按不触发）", true};
     fcitx::OptionWithAnnotation<OpiSkin, OpiSkinI18NAnnotation> skin{
@@ -71,7 +76,13 @@ FCITX_CONFIGURATION(
 inline void applyOpiSettings(const OpiSettings &settings) {
     opi_fcitx5_set_learner(*settings.learn);
     opi_fcitx5_set_chinese_punct(*settings.chinesePunct);
-    opi_fcitx5_set_fuzzy(*settings.fuzzy);
+    // 逐对列表非空 ⇒ 以它为准；空 ⇒ 回落旧布尔（合同与 TSF/桌面一侧一字不差）。
+    if (!settings.fuzzyPairs->empty() && opi_fcitx5_set_fuzzy_pairs != nullptr) {
+        const auto &s = *settings.fuzzyPairs;
+        opi_fcitx5_set_fuzzy_pairs(reinterpret_cast<const uint8_t *>(s.data()), s.size());
+    } else {
+        opi_fcitx5_set_fuzzy(*settings.fuzzy);
+    }
     opi_fcitx5_set_jianpin(*settings.jianpin);
 }
 

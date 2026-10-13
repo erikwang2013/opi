@@ -229,6 +229,9 @@ void opi_set_fuzzy(bool on);
 /// 0xFF = 全开（= opi_set_fuzzy(true)）；入参越界位钳掉（只留低 8 位）。未装载 → 读侧 0。
 int32_t opi_fuzzy_pairs(void);
 void opi_set_fuzzy_pairs(int32_t mask);
+/// 组名规范串（逗号分隔；设置界面把它当唯一名源）与按名设置（认不得的名字忽略）。
+OpiString opi_fuzzy_pair_names(void);
+void opi_set_fuzzy_pairs_names(const uint16_t *names, size_t len);
 void opi_set_jianpin(bool on);
 bool opi_learner_enabled(void);
 void opi_set_learner(bool enabled);

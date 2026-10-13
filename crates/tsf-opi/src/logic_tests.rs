@@ -34,6 +34,7 @@ fn apply_settings_lands_all_four_switches() {
         learn: false,
         chinese_punct: false,
         fuzzy: false,
+        fuzzy_pairs: String::new(),
         jianpin: false,
     });
     assert_eq!(s.switches(), (false, false, false, false));
@@ -491,3 +492,4 @@ fn printable_release_does_not_double_commit_english() {
         KeyOutcome::Consumed
     );
 }
+

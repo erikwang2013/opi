@@ -175,7 +175,12 @@ impl TsfLogic {
     pub fn apply_settings(&mut self, s: crate::settings::Settings) {
         self.set_learner(s.learn);
         self.set_chinese_punct(s.chinese_punct);
-        self.set_fuzzy(s.fuzzy);
+        // 模糊音：列表非空 ⇒ 以列表为准；空 ⇒ 回落旧的布尔（老配置行为一字不变）。
+        if s.fuzzy_pairs.is_empty() {
+            self.set_fuzzy(s.fuzzy);
+        } else {
+            self.set_fuzzy_pairs(&s.fuzzy_pairs);
+        }
         self.set_jianpin(s.jianpin);
     }
 
@@ -195,6 +200,14 @@ impl TsfLogic {
     /// 配对：`fcitx5-opi/src/candidate.rs` 的同名方法（两轨同构，改一处必须改另一处）。
     pub fn set_fuzzy(&mut self, on: bool) {
         self.engine.set_fuzzy(on);
+    }
+
+    /// 模糊音**逐对**（2026-10-13；键 `FuzzyPairs`，组名串见
+    /// `engine_core::fuzzy::pair_names`，解析走 `fuzzy::mask_from_names` —— 唯一一份）。
+    /// 配对：`fcitx5-opi/src/candidate.rs` 的同名方法（两轨同构）。
+    pub fn set_fuzzy_pairs(&mut self, names: &str) {
+        self.engine
+            .set_fuzzy_pairs(engine_core::fuzzy::mask_from_names(names));
     }
 
     /// 简拼开关。配对同上。

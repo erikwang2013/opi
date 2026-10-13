@@ -99,10 +99,25 @@ class ImePreferences(private val store: PrefStore) {
         get() = store.getBoolean(KEY_JIANPIN, true)
         set(v) = store.put(KEY_JIANPIN, v)
 
+    /**
+     * 模糊音**逐对**列表（2026-10-13 用户裁决「可多选类似 z=zh」）：
+     * 逗号分隔组名（[FUZZY_PAIRS_ANDROID] 的条目）。**空串 = 未设置 ⇒ 回落
+     * [fuzzy] 布尔**（老装机行为一字不变）；非空 ⇒ 以列表为准。
+     */
+    var fuzzyPairs: String
+        get() = store.getString(KEY_FUZZY_PAIRS) ?: ""
+        set(v) = store.put(KEY_FUZZY_PAIRS, v)
+
     /** 把三个引擎开关推给引擎（服务启动与设置页保存共用一处，防两处漂）。 */
     fun applyEngineSwitches(controller: EngineController) {
         controller.setLearner(learn)
-        controller.setFuzzy(fuzzy)
+        // 逐对列表非空 ⇒ 以它为准；空 ⇒ 回落旧布尔（合同与 TSF/桌面/fcitx5 一字不差）。
+        val pairs = fuzzyPairs
+        if (pairs.isEmpty()) {
+            controller.setFuzzy(fuzzy)
+        } else {
+            controller.setFuzzyPairs(fuzzyMaskOf(pairs))
+        }
         controller.setJianpin(jianpin)
     }
 
@@ -116,8 +131,28 @@ class ImePreferences(private val store: PrefStore) {
         const val KEY_SKIN = "kb_skin"
         const val KEY_LEARN = "engine_learn"
         const val KEY_FUZZY = "engine_fuzzy"
+        const val KEY_FUZZY_PAIRS = "engine_fuzzy_pairs"
         const val KEY_JIANPIN = "engine_jianpin"
 
         fun from(context: Context): ImePreferences = ImePreferences(AndroidPrefStore(context))
     }
 }
+
+/**
+ * 模糊音组名表（顺序 = 引擎 `engine-core/src/fuzzy.rs` 的 `FUZZY_PAIRS` 数组序 =
+ * 掩码位序）。**锁步门禁**：`FuzzyPairsLockstepTest` 文本读 `fuzzy.rs` 逐项比对
+ * —— 那边加组这里不加会红。展示与解析都用规范名 `zh/z`（与引擎 `pair_names()` 同形）。
+ */
+internal val FUZZY_PAIRS_ANDROID = listOf(
+    "zh/z", "ch/c", "sh/s", "an/ang", "en/eng", "in/ing", "n/l", "f/h",
+)
+
+/**
+ * 组名串 → 掩码（位序 = [FUZZY_PAIRS_ANDROID] 的下标）。容错口径与引擎的
+ * `fuzzy::mask_from_names` 一致：逗号切、去空白、认不得的整条忽略。
+ */
+internal fun fuzzyMaskOf(names: String): Int =
+    names.split(',').fold(0) { acc, raw ->
+        val i = FUZZY_PAIRS_ANDROID.indexOf(raw.trim())
+        if (i >= 0) acc or (1 shl i) else acc
+    }

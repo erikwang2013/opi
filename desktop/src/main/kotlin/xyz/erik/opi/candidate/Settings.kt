@@ -173,6 +173,14 @@ data class OpSettings(
     val learn: Boolean = true,
     val chinesePunct: Boolean = true,
     val fuzzy: Boolean = true,
+    /**
+     * 模糊音**逐对**列表（2026-10-13 用户裁决「可多选类似 z=zh」）：
+     * 逗号分隔组名，名字表 = [FUZZY_PAIR_NAMES]（顺序即引擎位序，见那个常量）。
+     *
+     * **空串 = 未设置 ⇒ 各端回落 [fuzzy] 布尔**（老配置行为一字不变）；非空 ⇒ 以列表
+     * 为准（[fuzzy] 此时只是「任一组开着」的兼容投影，由设置页在改动时同步写）。
+     */
+    val fuzzyPairs: String = "",
     val jianpin: Boolean = true,
     val shiftToggle: Boolean = true,
     val skin: SkinOption = SkinOption.KEEP,
@@ -187,6 +195,7 @@ data class OpSettings(
         appendLine("Learn=${boolText(learn)}")
         appendLine("ChinesePunct=${boolText(chinesePunct)}")
         appendLine("Fuzzy=${boolText(fuzzy)}")
+        appendLine("FuzzyPairs=$fuzzyPairs")
         appendLine("Jianpin=${boolText(jianpin)}")
         // Shift 轻按切换中英文（Linux 读侧 = opi_config.h 的 ShiftToggle；Windows 读侧
         // 不认这个键、忽略之 —— 见本 data class 的头注）。
@@ -229,6 +238,7 @@ data class OpSettings(
                 learn = bool("Learn", true),
                 chinesePunct = bool("ChinesePunct", true),
                 fuzzy = bool("Fuzzy", true),
+                fuzzyPairs = map["FuzzyPairs"] ?: "",
                 jianpin = bool("Jianpin", true),
                 shiftToggle = bool("ShiftToggle", true),
                 skin = SkinOption.fromValue(map["Skin"]),
@@ -254,6 +264,42 @@ data class OpSettings(
 private fun boolText(v: Boolean) = if (v) "True" else "False"
 
 /**
+ * 模糊音组名表（顺序 = 引擎 `engine-core/src/fuzzy.rs` 的 `FUZZY_PAIRS` 数组序 =
+ * 掩码位序）。**锁步门禁**：`SettingsTest` 文本读 `fuzzy.rs` 逐项比对 —— 那边加组
+ * 这里不加会红。展示用规范名 `zh/z`（与引擎 `fuzzy::pair_names()` 同形）。
+ */
+internal val FUZZY_PAIR_NAMES = listOf(
+    "zh/z", "ch/c", "sh/s", "an/ang", "en/eng", "in/ing", "n/l", "f/h",
+)
+
+/**
+ * 当前**生效**的模糊音组集（设置页与门禁共用；口径 = 各端读侧那一套）：
+ * `fuzzyPairs` 非空 ⇒ 解析它；空 ⇒ 回落 [OpSettings.fuzzy] 布尔（全开/全关）。
+ * 解析容错与引擎的 `fuzzy::mask_from_names` 一致：逗号切、去空白、认不得的忽略。
+ */
+internal fun OpSettings.fuzzyPairSet(): Set<String> =
+    if (fuzzyPairs.isNotEmpty()) {
+        fuzzyPairs.split(',').map { it.trim() }.filter { it in FUZZY_PAIR_NAMES }.toSet()
+    } else if (fuzzy) {
+        FUZZY_PAIR_NAMES.toSet()
+    } else {
+        emptySet()
+    }
+
+/**
+ * 勾/取消一组：**具体化**成 `fuzzyPairs` 列表（首次触碰即把旧布尔态落成显式列表，
+ * 这是「空 = 未设置」合同下的正确单程票），并同步 [OpSettings.fuzzy] 投影
+ * （任一组开着）。一个都不勾 ⇒ 列表为空串 + `fuzzy=false` —— 仍表达「全关」。
+ */
+internal fun OpSettings.toggleFuzzyPair(name: String): OpSettings {
+    val next = fuzzyPairSet().toMutableSet().apply { if (!add(name)) remove(name) }
+    return copy(
+        fuzzyPairs = FUZZY_PAIR_NAMES.filter { it in next }.joinToString(","),
+        fuzzy = next.isNotEmpty(),
+    )
+}
+
+/**
  * 把 [s] 管理的键（四开关 + Skin + 状态栏九个）合进 [existing]，**其它行原样保留**
  * （见文件头第 3 条 ⚠️）。
  *
@@ -266,6 +312,7 @@ fun mergeIni(existing: String, s: OpSettings): String {
         "Learn" to boolText(s.learn),
         "ChinesePunct" to boolText(s.chinesePunct),
         "Fuzzy" to boolText(s.fuzzy),
+        "FuzzyPairs" to s.fuzzyPairs,
         "Jianpin" to boolText(s.jianpin),
         "ShiftToggle" to boolText(s.shiftToggle),
         "Skin" to s.skin.value,

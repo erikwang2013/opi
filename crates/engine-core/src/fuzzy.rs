@@ -72,6 +72,43 @@ pub type FuzzyMask = u8;
 /// 全部 8 组都开（= 本层缺省值 = 既有行为，打开时逐字节不变）。
 pub const FUZZY_ALL: FuzzyMask = ((1u16 << FUZZY_PAIRS.len()) - 1) as FuzzyMask;
 
+/// 全部组名的**规范串**（逗号分隔，位序即 `FUZZY_PAIRS` 序）：
+/// `"zh/z,ch/c,sh/s,an/ang,en/eng,in/ing,n/l,f/h"`。
+///
+/// 这是四端设置面的**唯一名字源**：宿主拿它做多选列表（或核对自绘的列表），
+/// 别在各端手抄一遍名表 —— 加组时手抄必漂（本仓「优先消灭失败类别」的用例）。
+pub fn pair_names() -> String {
+    FUZZY_PAIRS
+        .iter()
+        .map(|(a, b)| format!("{a}/{b}"))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// 组名串 → 掩码（[`pair_names`] 的正向解析）。**唯一的解析入口**，
+/// 供各端配置面共用（fcitx5 的 `FuzzyPairs=`、TSF 的 settings.ini、Android/Kotlin
+/// 的偏好恢复都走它，别在宿主再写第二个解析器）。
+///
+/// 容错口径：按逗号切、两侧空白容忍；**认不得的名字整条忽略**（不回退、不报错 ——
+/// 配置里多写了个未来组的名字，旧版本不该因此把别的组也关掉）；同名重复无害。
+/// 空串 → `0`（全关；「键缺失」的缺省是全开，那是**调用方**的口径，见各端读侧）。
+pub fn mask_from_names(names: &str) -> FuzzyMask {
+    let mut mask: FuzzyMask = 0;
+    for raw in names.split(',') {
+        let name = raw.trim();
+        if name.is_empty() {
+            continue;
+        }
+        if let Some(i) = FUZZY_PAIRS
+            .iter()
+            .position(|(a, b)| name == format!("{a}/{b}") || name == format!("{b}/{a}"))
+        {
+            mask |= 1 << i;
+        }
+    }
+    mask
+}
+
 /// 整串变体上限。多音节是**笛卡尔积**（k 个音节 × 每音节变体），而每次变体查询是一次
 /// 词库前缀查询 —— 这条路在**每次击键**上，必须封顶（实测数据见 tests/fuzzy_ranking.rs）。
 pub const MAX_VARIANTS: usize = 16;
@@ -194,6 +231,32 @@ pub fn input_variants(input: &str, enabled: FuzzyMask) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::pinyin::SYLLABLES;
+
+    /// 名字串是四端唯一名源：规范串 ↔ 掩码必须**往返一致**（加组时这排会跟着长）。
+    #[test]
+    fn pair_names_round_trip() {
+        let names = pair_names();
+        assert_eq!(
+            names,
+            "zh/z,ch/c,sh/s,an/ang,en/eng,in/ing,n/l,f/h",
+            "规范串是对外契约（各端多选列表与解析都拿它）"
+        );
+        assert_eq!(mask_from_names(&names), FUZZY_ALL, "规范串解析回全开");
+    }
+
+    /// 解析容错口径：认不得的忽略、空白容忍、反写（l/n）也认、空串 = 全关。
+    #[test]
+    fn mask_from_names_tolerates_noise() {
+        assert_eq!(mask_from_names(""), 0, "空串 = 全关（键缺失的缺省是全开，那是调用方口径）");
+        assert_eq!(mask_from_names("n/l,xx/yy"), 1 << 6, "认不得的整条忽略");
+        assert_eq!(mask_from_names("l/n"), 1 << 6, "反写也认（两种写法同一组）");
+        assert_eq!(
+            mask_from_names("  zh/z , ch/c "),
+            (1 << 0) | (1 << 1),
+            "两侧空白容忍"
+        );
+        assert_eq!(mask_from_names("n/l,n/l"), 1 << 6, "重复无害");
+    }
 
     #[test]
     fn table_is_the_core_eight() {
