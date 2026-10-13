@@ -140,10 +140,15 @@ final class KeyboardViewController: UIInputViewController {
     /// 收尾：缓冲空 ⇒ `unmarkText()`（组合区收干净，别把标记留成孤岛）；
     /// 提交路径见 [insert]（先 unmark 再插，与 Android `dropComposing` 的次序同理由）。
     /// ⚠️ internal：热键路径（`KeyboardHardware.swift`）也走 [refresh]。
+    ///
+    /// ⚠️ `unmarkText()` 是**无条件**调的：键盘扩展的 `textDocumentProxy` 上**没有**
+    /// `markedTextRange`（那是 `UITextInput` 的属性）—— 原写法 `if …markedTextRange != nil`
+    /// 在真机 Swift 编译期就是 error（2026-10-13 apple.yml 的 iOS job 两处实测）。
+    /// 语义上本就不需要那个守卫：`unmarkText()` = 解除**当前**标记，没有标记就无事可做。
     func syncMarkedText() {
         let buffer = engine.buffer()
         guard !buffer.isEmpty else {
-            if textDocumentProxy.markedTextRange != nil { textDocumentProxy.unmarkText() }
+            textDocumentProxy.unmarkText()
             return
         }
         textDocumentProxy.setMarkedText(
@@ -161,7 +166,8 @@ final class KeyboardViewController: UIInputViewController {
         guard !text.isEmpty else { return }
         // 先收组合区再插：否则 insertText 落进 marked range 里、替换掉那段拼音，
         // 表现随宿主而异（有的留下拼音、有的吞字）。对齐 Android `dropComposing`。
-        if textDocumentProxy.markedTextRange != nil { textDocumentProxy.unmarkText() }
+        // 无条件 unmark（理由见 [syncMarkedText] 的注：proxy 上没有 markedTextRange）。
+        textDocumentProxy.unmarkText()
         textDocumentProxy.insertText(text)
     }
 
