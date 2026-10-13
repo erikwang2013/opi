@@ -119,6 +119,15 @@ class FakeEngine : OpiEngineApi {
 
     override fun fuzzyEnabled(): Boolean = fuzzyOn
 
+    /** 逐对掩码（2026-10-13）：缺省全开，与真引擎 `FUZZY_ALL` 同值。 */
+    var fuzzyPairsValue: Int = 0xFF
+
+    override fun fuzzyPairs(): Int = fuzzyPairsValue
+
+    override fun setFuzzyPairs(mask: Int) {
+        fuzzyPairsValue = mask and 0xFF
+    }
+
     override fun jianpinEnabled(): Boolean = jianpinOn
 
     override fun setLearner(enabled: Boolean) {

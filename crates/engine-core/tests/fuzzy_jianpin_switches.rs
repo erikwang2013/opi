@@ -35,6 +35,8 @@ fn dict() -> InMemoryDictionary {
         ("hao", "好", 3_997_635_583),
         ("zhongguo", "中国", 3_996_000_000),
         ("nihao", "你好", 47_594),
+        // 只有 n→l 够得着的第二条来路（`nan` → `lan`）：逐对门禁用。
+        ("lan", "兰", 3_990_000_000),
     ] {
         d.insert(py, w, f);
     }
@@ -120,4 +122,70 @@ fn switches_are_independent() {
         cands(&mut e, "zongguo").contains(&"中国".to_string()),
         "模糊没被牵连"
     );
+}
+
+
+// ---------- 2026-10-13：模糊音逐对多选（用户裁决「可多选类似 z=zh」） ----------
+
+/// 只开 `n=l`（第 6 位）时：`nan → lan` 的模糊要生效，`zongguo → zhongguo` 的**不许**生效。
+#[test]
+fn only_the_selected_pair_is_active() {
+    use engine_core::fuzzy::{FUZZY_ALL, FUZZY_PAIRS};
+    // 位序契约：`FUZZY_PAIRS` 数组序 = 位序（对外 ABI 同此）。
+    let n_l = 1u8 << FUZZY_PAIRS.iter().position(|p| *p == ("n", "l")).unwrap();
+    let zh_z = 1u8 << FUZZY_PAIRS.iter().position(|p| *p == ("zh", "z")).unwrap();
+
+    let mut e = engine();
+    e.set_fuzzy_pairs(n_l);
+    assert!(
+        cands(&mut e, "nan").contains(&"兰".to_string()),
+        "n=l 开着 ⇒ nan → lan 要能出「兰」"
+    );
+    assert!(
+        !cands(&mut e, "zongguo").contains(&"中国".to_string()),
+        "zh=z 关着 ⇒ zongguo 不许从模糊拿「中国」"
+    );
+
+    e.set_fuzzy_pairs(zh_z);
+    assert!(
+        cands(&mut e, "zongguo").contains(&"中国".to_string()),
+        "zh=z 开着 ⇒ 中国 要回来"
+    );
+    assert!(
+        !cands(&mut e, "nan").contains(&"兰".to_string()),
+        "n=l 关着 ⇒ nan 不许出「兰」"
+    );
+}
+
+/// 旧布尔入口 = 新掩码的**包装**：`false` ≡ 0（一条模糊不剩）、`true` ≡ `FUZZY_ALL`。
+#[test]
+fn boolean_wrapper_equals_all_or_none() {
+    use engine_core::fuzzy::FUZZY_ALL;
+
+    let mut e = engine();
+    e.set_fuzzy(false);
+    assert_eq!(e.fuzzy_pairs(), 0);
+    assert!(!e.fuzzy_enabled(), "读侧：任一组开着才为 true");
+    assert!(!cands(&mut e, "zongguo").contains(&"中国".to_string()));
+    assert!(!cands(&mut e, "nan").contains(&"兰".to_string()));
+
+    e.set_fuzzy(true);
+    assert_eq!(e.fuzzy_pairs(), FUZZY_ALL);
+    assert!(e.fuzzy_enabled());
+    assert!(cands(&mut e, "zongguo").contains(&"中国".to_string()));
+    assert!(cands(&mut e, "nan").contains(&"兰".to_string()));
+}
+
+/// ABI 契约钉：`FUZZY_ALL` = 8 位全 1；越界位写不进读侧（防未来加组时旧宿主误开新组）。
+#[test]
+fn mask_contract_is_eight_bits() {
+    use engine_core::fuzzy::FUZZY_ALL;
+    assert_eq!(FUZZY_ALL, 0xFF, "8 组的全开掩码是对外契约（setFuzzyPairs 的入参口径）");
+
+    // 引擎侧类型就是 u8（8 位 = 8 组）；「int 入参的超范围钳制」在 FFI 层
+    // （`setFuzzyPairs(i32)` 的钳制与它的门禁见 jni/c_abi 契约测试）。
+    let mut e = engine();
+    assert_eq!(e.fuzzy_pairs(), FUZZY_ALL, "缺省 = 全开（既有行为）");
+    e.set_fuzzy_pairs(0xFE);
+    assert_eq!(e.fuzzy_pairs(), 0xFE, "掩码按位原样存读");
 }

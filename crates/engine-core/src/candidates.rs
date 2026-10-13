@@ -43,8 +43,9 @@ pub fn rank_score(static_freq: u32, user_freq: u32, boost: u64) -> u64 {
 /// （测试与旧调用方一行不动）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RankOptions {
-    /// 模糊音（`z/zh`、`n/l`… 整串变体 + 逐音节兜底，表见 `fuzzy.rs`）。
-    pub fuzzy: bool,
+    /// 模糊音启用集（逐对位掩码，位序见 `fuzzy.rs::FUZZY_PAIRS`；`FUZZY_ALL` = 旧「开」）。
+    /// 整串变体 + 逐音节兜底共用它，表见 `fuzzy.rs`。
+    pub fuzzy: crate::fuzzy::FuzzyMask,
     /// 简拼（声母缩写 `nh → 你好`，展开见 `jianpin.rs`）。
     pub jianpin: bool,
     /// **简体优先**（2026-10-13 用户裁决「如果是混合就优先显示简体」）：截断前把含
@@ -56,7 +57,7 @@ pub struct RankOptions {
 impl Default for RankOptions {
     fn default() -> Self {
         Self {
-            fuzzy: true,
+            fuzzy: crate::fuzzy::FUZZY_ALL,
             jianpin: true,
             prefer_simplified: false,
         }
@@ -188,8 +189,8 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
     // 候选可违）。结论（0 加成）不变，但**那条机制不许再当理由引用**。
     // `opts.fuzzy = false`：整串变体与逐音节兜底**一起**关（两个入口同一开关，
     // 只关一个会让 `zongguo` 这类"整串查不到"的输入仍从逐音节拿到模糊结果）。
-    let mut fuzzy: Vec<Candidate> = if opts.fuzzy {
-        fuzzy::input_variants(input)
+    let mut fuzzy: Vec<Candidate> = if opts.fuzzy != 0 {
+        fuzzy::input_variants(input, opts.fuzzy)
             .iter()
             // 同样走上限：变体是全串替换，`ni` 的变体 `li` 会命中 3 万余条 ——
             // 全量物化与主层同一量级的开销（实测 17.9ms，2026-10-11）。
@@ -256,8 +257,8 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
             //   64×64 音节对的穷举里仍有 1285 个输入以它为**唯一**模糊来源（如 `ninv`→
             //   `nin→lin/ling`、`nifei`→`fei→hei`），只是那些多不是词。
             // 每音节 ≤3 次额外查询且同样被 take(3) 截住，无笛卡尔积。
-            if opts.fuzzy && !wide_hits {
-                let mut syl_fuzzy: Vec<Candidate> = fuzzy::variants(&syl)
+            if opts.fuzzy != 0 && !wide_hits {
+                let mut syl_fuzzy: Vec<Candidate> = fuzzy::variants(&syl, opts.fuzzy)
                     .iter()
                     .filter(|v| *v != &syl)
                     .flat_map(|v| dict.query_prefix_top(v, PREFIX_MATCH_CAP))
@@ -378,7 +379,7 @@ pub(crate) struct SegmentFallback {
 pub(crate) fn segment_fallback<D: Dictionary + ?Sized>(
     dict: &D,
     input: &str,
-    fuzzy_enabled: bool,
+    fuzzy_enabled: crate::fuzzy::FuzzyMask,
 ) -> Option<SegmentFallback> {
     if input.chars().count() <= 1 {
         return None;
@@ -390,8 +391,8 @@ pub(crate) fn segment_fallback<D: Dictionary + ?Sized>(
     if !dict.query_all(input).is_empty() {
         return None;
     }
-    if fuzzy_enabled
-        && fuzzy::input_variants(input)
+    if fuzzy_enabled != 0
+        && fuzzy::input_variants(input, fuzzy_enabled)
             .iter()
             .any(|v| !dict.query_all(v).is_empty())
     {

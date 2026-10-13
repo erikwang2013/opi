@@ -3,6 +3,9 @@
 
 //! 模糊拼音（**可开关**，四端共享）：核心 8 组模糊音 → 单音节/整串变体。
 //!
+//! **2026-10-13 起是逐对多选**（用户裁决「模糊音可多选类似 z=zh」）：入口加
+//! `set_fuzzy_pairs(FuzzyMask)`；`set_fuzzy(bool)` 保留为全开/全关的包装。
+//!
 //! **2026-10-08 起有开关**：唯一入口是 `Engine::set_fuzzy`，门控在 `candidates.rs` 的
 //! `RankOptions`；本模块仍无状态。配置来源按端：fcitx5 = 原生 addon 配置（`opi_config.h`）、
 //! Android = 设置页、TSF = settings.ini；C ABI / JNI 侧另有对应出口。
@@ -58,6 +61,17 @@ pub const FUZZY_PAIRS: &[(&str, &str)] = &[
     ("f", "h"),
 ];
 
+/// 模糊音**启用集**（位掩码；第 i 位 = [`FUZZY_PAIRS`] 第 i 组）。
+///
+/// 2026-10-13 用户裁决（搜狗式设置面）：「模糊音（可多选类似 z=zh）」—— 从单一布尔
+/// 开关升级为逐对可选。位序 = `FUZZY_PAIRS` 的数组序（那张表的顺序本身被
+/// `table_is_the_core_eight` 钉着）；这个位序**是对外契约**（C ABI / JNI 的
+/// `setFuzzyPairs(mask)`），改动必须四端同改。
+pub type FuzzyMask = u8;
+
+/// 全部 8 组都开（= 本层缺省值 = 既有行为，打开时逐字节不变）。
+pub const FUZZY_ALL: FuzzyMask = ((1u16 << FUZZY_PAIRS.len()) - 1) as FuzzyMask;
+
 /// 整串变体上限。多音节是**笛卡尔积**（k 个音节 × 每音节变体），而每次变体查询是一次
 /// 词库前缀查询 —— 这条路在**每次击键**上，必须封顶（实测数据见 tests/fuzzy_ranking.rs）。
 pub const MAX_VARIANTS: usize = 16;
@@ -70,13 +84,17 @@ pub const MAX_VARIANTS: usize = 16;
 /// 同一音节多对可命中时枚举**非空子集**：`nan` → `{lan（换声母）, nang（换韵母）,
 /// lang（都换）}`。逐对单独替换会漏掉 `lang`，全串替换连 `lan` 都给不出
 /// （`n→l` 命中串尾的 n 得 `lal`，非法被滤掉）。
-pub fn variants(syllable: &str) -> Vec<String> {
+pub fn variants(syllable: &str, enabled: FuzzyMask) -> Vec<String> {
     let mut out = vec![syllable.to_string()];
     if !is_syllable(syllable) {
         return out;
     }
     let n = FUZZY_PAIRS.len();
     for mask in 1u32..(1 << n) {
+        // 含被禁组的子集整支跳过（`enabled == FUZZY_ALL` 时恒不触发 ⇒ 旧行为逐字节不变）。
+        if mask & u32::from(!enabled) != 0 {
+            continue;
+        }
         let mut cur = syllable.to_string();
         let mut ok = true;
         for (i, (a, b)) in FUZZY_PAIRS.iter().enumerate() {
@@ -136,13 +154,13 @@ fn is_vowel(c: char) -> bool {
 
 /// 整串模糊变体（**不含自身**）：按音节替换后拼接。
 /// 取前 [`MAX_VARIANTS`] 个，顺序确定（最左音节变化最快 → 优先改动靠前的音节）。
-pub fn input_variants(input: &str) -> Vec<String> {
+pub fn input_variants(input: &str, enabled: FuzzyMask) -> Vec<String> {
     // `'` 是用户手写的硬分隔（pinyin.rs）：它表达「就按这个切」，不是模糊音。
     // 且 segment 会吃掉分隔符，拼回来的 "xian" 恰好绕过用户的意图 —— 直接不做变体。
     if input.contains('\'') {
         return Vec::new();
     }
-    let per: Vec<Vec<String>> = segment(input).iter().map(|s| variants(s)).collect();
+    let per: Vec<Vec<String>> = segment(input).iter().map(|s| variants(s, enabled)).collect();
     if per.iter().all(|v| v.len() < 2) {
         return Vec::new();
     }
@@ -216,7 +234,7 @@ mod tests {
             ("ha", "fa"),
         ];
         for (from, to) in cases {
-            let got = variants(from);
+            let got = variants(from, FUZZY_ALL);
             assert!(
                 got.contains(&from.to_string()),
                 "{from} 必须含自身：{got:?}"
@@ -233,11 +251,11 @@ mod tests {
     /// 于是 `nin → lin` 这条**真实存在的模糊**反而给不出来。
     #[test]
     fn initial_pairs_only_touch_position_zero() {
-        assert!(variants("zhong").contains(&"zong".to_string()));
+        assert!(variants("zhong", FUZZY_ALL).contains(&"zong".to_string()));
         assert!(
-            !variants("zhong").contains(&"zholg".to_string()),
+            !variants("zhong", FUZZY_ALL).contains(&"zholg".to_string()),
             "声母对碰到了串尾：{:?}",
-            variants("zhong")
+            variants("zhong", FUZZY_ALL)
         );
         for (syl, want) in [
             ("nin", "lin"),
@@ -246,9 +264,9 @@ mod tests {
             ("nv", "lv"),
         ] {
             assert!(
-                variants(syl).contains(&want.to_string()),
+                variants(syl, FUZZY_ALL).contains(&want.to_string()),
                 "{syl} 的变体里缺 {want}（声母 n↔l 只该动位置 0）：{:?}",
-                variants(syl)
+                variants(syl, FUZZY_ALL)
             );
         }
     }
@@ -256,14 +274,14 @@ mod tests {
     /// 韵母对**只作用于串尾**。全串替换会把 `zhuang` 变成 `zhuangg`。
     #[test]
     fn final_pairs_only_touch_the_tail() {
-        assert!(variants("zhuang").contains(&"zhuan".to_string()));
+        assert!(variants("zhuang", FUZZY_ALL).contains(&"zhuan".to_string()));
         assert!(
-            !variants("zhuang").contains(&"zhuangg".to_string()),
+            !variants("zhuang", FUZZY_ALL).contains(&"zhuangg".to_string()),
             "韵母对碰到了非串尾：{:?}",
-            variants("zhuang")
+            variants("zhuang", FUZZY_ALL)
         );
-        assert!(variants("zhuan").contains(&"zhuang".to_string()));
-        assert!(variants("shen").contains(&"sheng".to_string()));
+        assert!(variants("zhuan", FUZZY_ALL).contains(&"zhuang".to_string()));
+        assert!(variants("shen", FUZZY_ALL).contains(&"sheng".to_string()));
     }
 
     /// 同一音节多对可命中时枚举**非空子集**：`nan` 既要 `lan`（换声母）、`nang`（换韵母），
@@ -271,7 +289,7 @@ mod tests {
     #[test]
     fn pairs_combine_as_subsets() {
         let got: Vec<String> = {
-            let mut v = variants("nan");
+            let mut v = variants("nan", FUZZY_ALL);
             v.sort();
             v
         };
@@ -280,7 +298,7 @@ mod tests {
             vec!["lan", "lang", "nan", "nang"],
             "nan 的变体应是 {{lan, lang, nan, nang}}"
         );
-        let mut fang = variants("fang");
+        let mut fang = variants("fang", FUZZY_ALL);
         fang.sort();
         assert_eq!(fang, vec!["fan", "fang", "han", "hang"], "fang 的变体");
     }
@@ -325,7 +343,7 @@ mod tests {
             ("xuan", "xuang"),
         ];
         for (syl, bad) in forbidden {
-            let got = variants(syl);
+            let got = variants(syl, FUZZY_ALL);
             assert!(
                 !got.contains(&bad.to_string()),
                 "{syl} 生成了非法变体 {bad}：{got:?}"
@@ -334,13 +352,13 @@ mod tests {
         // 反向：合法的必须给得出。`hou → fou` 是位置 0 的 h→f（合法）；
         // 而 `huo` 的 h→f 得 `fuo`（不是音节），故 `huo` 在 f↔h 上什么都给不出 ——
         // `fo` 本身也只能由 `hou` 这类音节来，不能由 `huo` 缩掉一个字母造出来。
-        assert!(variants("hou").contains(&"fou".to_string()));
-        assert_eq!(variants("huo"), vec!["huo"], "fuo 不是音节，不得产生");
-        assert!(variants("su").contains(&"shu".to_string()));
-        assert!(variants("suan").contains(&"shuan".to_string()));
+        assert!(variants("hou", FUZZY_ALL).contains(&"fou".to_string()));
+        assert_eq!(variants("huo", FUZZY_ALL), vec!["huo"], "fuo 不是音节，不得产生");
+        assert!(variants("su", FUZZY_ALL).contains(&"shu".to_string()));
+        assert!(variants("suan", FUZZY_ALL).contains(&"shuan".to_string()));
         // 全部产物一律合法
         for syl in SYLLABLES {
-            for v in variants(syl) {
+            for v in variants(syl, FUZZY_ALL) {
                 assert!(is_syllable(&v), "{syl} 产生了非法音节变体 {v}");
             }
         }
@@ -350,7 +368,7 @@ mod tests {
     #[test]
     fn variants_are_unique_and_identity_preserving() {
         for syl in ["zhong", "zong", "ni", "li", "zhang", "xin", "shen"] {
-            let got = variants(syl);
+            let got = variants(syl, FUZZY_ALL);
             let mut uniq = got.clone();
             uniq.sort();
             uniq.dedup();
@@ -358,15 +376,15 @@ mod tests {
             assert_eq!(got.iter().filter(|v| *v == syl).count(), 1, "{syl}");
             assert_eq!(got[0], syl, "自身必须排第一（顺序确定）：{got:?}");
         }
-        assert_eq!(variants("n"), vec!["n"], "「n」不是音节，不生成变体");
+        assert_eq!(variants("n", FUZZY_ALL), vec!["n"], "「n」不是音节，不生成变体");
         assert_eq!(
-            variants("zh"),
+            variants("zh", FUZZY_ALL),
             vec!["zh"],
             "「zh」是前缀不是音节，不生成变体"
         );
         // 变体绝不能是空串（NaiveDict 那类替身对空串照答，会凭空造候选）
         for syl in SYLLABLES {
-            for v in variants(syl) {
+            for v in variants(syl, FUZZY_ALL) {
                 assert!(!v.is_empty());
             }
         }
@@ -376,22 +394,22 @@ mod tests {
     /// 无变体可用的输入返回空（不是「返回自身」）。
     #[test]
     fn input_variants_cross_syllables() {
-        assert_eq!(input_variants("zongguo"), vec!["zhongguo"]);
-        assert_eq!(input_variants("guoguo"), Vec::<String>::new());
-        assert_eq!(input_variants(""), Vec::<String>::new());
+        assert_eq!(input_variants("zongguo", FUZZY_ALL), vec!["zhongguo"]);
+        assert_eq!(input_variants("guoguo", FUZZY_ALL), Vec::<String>::new());
+        assert_eq!(input_variants("", FUZZY_ALL), Vec::<String>::new());
     }
 
     /// `'` 是用户手写的切分意图，不做变体。
     #[test]
     fn apostrophe_opts_out() {
-        assert_eq!(input_variants("xi'an"), Vec::<String>::new());
+        assert_eq!(input_variants("xi'an", FUZZY_ALL), Vec::<String>::new());
     }
 
     /// 上限：`zhang×5` 的笛卡尔积是 3^5=243，必须封顶且不含自身。
     #[test]
     fn variant_count_is_capped() {
         let long = "zhang".repeat(5);
-        let got = input_variants(&long);
+        let got = input_variants(&long, FUZZY_ALL);
         assert_eq!(got.len(), MAX_VARIANTS, "{got:?}");
         assert!(got.iter().all(|v| v != &long), "变体不得含自身");
     }

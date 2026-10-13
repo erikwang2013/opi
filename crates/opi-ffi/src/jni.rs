@@ -183,6 +183,27 @@ pub unsafe extern "system" fn opijni_set_jianpin(_env: JEnv, _class: sys::jclass
     guard(|| api::with_engine(|e| e.set_jianpin(on)));
 }
 
+/// setFuzzyPairs(mask: int)：模糊音**逐对**设置（2026-10-13 用户裁决「可多选类似 z=zh」）。
+/// 位序 = `engine_core::fuzzy::FUZZY_PAIRS` 的数组序（对外契约，四端同此）；
+/// `0xFF` = 全开（= 旧 `setFuzzy(true)`）；越界位钳掉（只保留低 8 位）。
+/// **无返回值**（设置项）；要拿结果读 `fuzzyPairs()`。未装载时是空操作。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_set_fuzzy_pairs(
+    _env: JEnv,
+    _class: sys::jclass,
+    mask: jint,
+) {
+    let m = (mask as u32 & 0xFF) as u8;
+    guard(|| api::with_engine(|e| e.set_fuzzy_pairs(m)));
+}
+
+/// fuzzyPairs() -> int：模糊音启用集的读侧（写侧见 `setFuzzyPairs`；旧布尔读侧
+/// `fuzzyEnabled` 保留 = 「任一组开着」）。未装载 → 0（哨兵语义同族）。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_fuzzy_pairs(_env: JEnv, _class: sys::jclass) -> jint {
+    guard(|| api::with_engine(|e| i32::from(e.fuzzy_pairs())).unwrap_or_default())
+}
+
 /// toggleChinesePunct() -> boolean：中文标点表开关的**触发键入口**，返回**切换后的
 /// 新状态**。⚠️ 与 `toggleFullwidth` 的重读规则不通用（本档 `switchMode` 不重置）。
 /// 完整契约在 `cabi.rs` 的 `opi_toggle_chinese_punct` 上。未装载 → false。
@@ -314,6 +335,16 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _reserved: *mut c
                     jni_str!("setFuzzy"),
                     jni_str!("(Z)V"),
                     opijni_set_fuzzy as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("fuzzyPairs"),
+                    jni_str!("()I"),
+                    opijni_fuzzy_pairs as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("setFuzzyPairs"),
+                    jni_str!("(I)V"),
+                    opijni_set_fuzzy_pairs as *mut c_void,
                 ),
                 NativeMethod::from_raw_parts(
                     jni_str!("jianpinEnabled"),

@@ -102,6 +102,16 @@ object OpiEngine : OpiEngineApi, SymbolApi {
     /** setFuzzy(on: Boolean)：模糊音开关（设置项，无返回值；要结果读 fuzzyEnabled()）。 */
     override external fun setFuzzy(on: Boolean)
 
+    /**
+     * fuzzyPairs(): Int / setFuzzyPairs(mask: Int)：模糊音**逐对**启用集
+     * （2026-10-13 用户裁决「可多选类似 z=zh」）。位序 = 引擎 `FUZZY_PAIRS` 数组序：
+     * bit0 zh/z、bit1 ch/c、bit2 sh/s、bit3 an/ang、bit4 en/eng、bit5 in/ing、
+     * bit6 n/l、bit7 f/h；`0xFF` = 全开（= setFuzzy(true)）。
+     * ⚠️ 未装载 → 读侧 0 是**哨兵**（同 [fuzzyEnabled] 一档）；越界位由 C 层钳掉。
+     */
+    override external fun fuzzyPairs(): Int
+    override external fun setFuzzyPairs(mask: Int)
+
     /** setJianpin(on: Boolean)：简拼开关（同上）。 */
     override external fun setJianpin(on: Boolean)
 

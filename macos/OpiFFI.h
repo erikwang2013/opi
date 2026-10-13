@@ -225,6 +225,10 @@ OpiString opi_emoji_groups(void);
 bool opi_fuzzy_enabled(void);
 bool opi_jianpin_enabled(void);
 void opi_set_fuzzy(bool on);
+/// 模糊音逐对启用集（2026-10-13）：位序 zh/z=0 ch/c=1 sh/s=2 an/ang=3 en/eng=4 in/ing=5 n/l=6 f/h=7，
+/// 0xFF = 全开（= opi_set_fuzzy(true)）；入参越界位钳掉（只留低 8 位）。未装载 → 读侧 0。
+int32_t opi_fuzzy_pairs(void);
+void opi_set_fuzzy_pairs(int32_t mask);
 void opi_set_jianpin(bool on);
 bool opi_learner_enabled(void);
 void opi_set_learner(bool enabled);

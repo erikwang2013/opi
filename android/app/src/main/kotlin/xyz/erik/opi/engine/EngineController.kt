@@ -77,6 +77,14 @@ interface OpiEngineApi {
     /** 模糊音开关读侧（「属性设置」；写侧 = `OpiEngine.setFuzzy`）。 */
     fun fuzzyEnabled(): Boolean
 
+    /** 模糊音**逐对**启用集（2026-10-13 用户裁决「可多选类似 z=zh」）。
+     * 位序 = 引擎 `FUZZY_PAIRS` 数组序（zh/z=bit0 … f/h=bit7；`0xFF` = 全开）；
+     * `0` = 全关。未装载 → 0（哨兵，同 [fuzzyEnabled] 一档）。 */
+    fun fuzzyPairs(): Int
+
+    /** 逐对写侧（[EngineController.setFuzzyPairs] 与偏好恢复共用）。 */
+    fun setFuzzyPairs(mask: Int)
+
     /** 简拼开关读侧（同上）。 */
     fun jianpinEnabled(): Boolean
 
@@ -342,6 +350,12 @@ class EngineController(
 
     fun setFuzzy(on: Boolean) {
         api.setFuzzy(on)
+        refresh()
+    }
+
+    /** 逐对模糊音（位序见 [OpiEngineApi.fuzzyPairs]；越界位由 FFI 侧钳掉）。 */
+    fun setFuzzyPairs(mask: Int) {
+        api.setFuzzyPairs(mask)
         refresh()
     }
 

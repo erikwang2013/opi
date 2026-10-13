@@ -38,6 +38,8 @@ final class OpiEngine {
     static native void setLearner(boolean enabled);
     static native boolean fuzzyEnabled();
     static native void setFuzzy(boolean on);
+    static native int fuzzyPairs();
+    static native void setFuzzyPairs(int mask);
     static native boolean jianpinEnabled();
     static native void setJianpin(boolean on);
     static native int scheme();
@@ -126,6 +128,13 @@ public final class Main {
         check(OpiEngine.fuzzyEnabled(), "fuzzy 默认开启");
         OpiEngine.setFuzzy(false);
         check(!OpiEngine.fuzzyEnabled(), "setFuzzy(false) 生效");
+        // 逐对掩码（2026-10-13）：默认全开；写 0x41 原样读回；越界位被钳。
+        check(OpiEngine.fuzzyPairs() == 0xFF, "fuzzyPairs 默认全开（0xFF）");
+        OpiEngine.setFuzzyPairs(0x41);
+        check(OpiEngine.fuzzyPairs() == 0x41, "setFuzzyPairs(0x41) 原样读回");
+        OpiEngine.setFuzzyPairs(0x141);
+        check(OpiEngine.fuzzyPairs() == 0x41, "越界位（bit8）被钳掉");
+        OpiEngine.setFuzzyPairs(0);
         OpiEngine.setFuzzy(true);
         check(OpiEngine.jianpinEnabled(), "jianpin 默认开启");
         OpiEngine.setJianpin(false);

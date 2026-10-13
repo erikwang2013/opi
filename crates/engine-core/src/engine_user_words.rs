@@ -23,12 +23,26 @@ impl Engine {
     /// 模糊音开关（「属性设置」的旋钮之一）。关掉 = `rank_and_pick_with` 跳过
     /// 整串变体与逐音节兜底**两个**入口（只关一个会让 `zongguo` 这类输入仍从
     /// 逐音节拿到模糊结果）。
+    /// 全开/全关的**包装**（2026-10-13 起真源是 [`Self::set_fuzzy_pairs`]；旧入口纪律：
+    /// 这是新入口的默认包装，四端配置不写 FuzzyPairs 键时走的还是这条）。
     pub fn set_fuzzy(&mut self, enabled: bool) {
-        self.fuzzy = enabled;
+        self.fuzzy = if enabled { crate::fuzzy::FUZZY_ALL } else { 0 };
     }
 
-    pub fn fuzzy_enabled(&self) -> bool {
+    /// 模糊音**逐对**设置（位掩码，位序 = `fuzzy.rs::FUZZY_PAIRS`）。
+    /// 越界位（> 8）不去动 —— 未来加组时旧宿主传的掩码不该把新组误开/误关。
+    pub fn set_fuzzy_pairs(&mut self, mask: crate::fuzzy::FuzzyMask) {
+        self.fuzzy = mask & crate::fuzzy::FUZZY_ALL;
+    }
+
+    /// 逐对读侧（写侧见 [`Self::set_fuzzy_pairs`]）。
+    pub fn fuzzy_pairs(&self) -> crate::fuzzy::FuzzyMask {
         self.fuzzy
+    }
+
+    /// 旧读侧（布尔）：**任一组开着就是 true**（旧 UI 的复选框语义）。
+    pub fn fuzzy_enabled(&self) -> bool {
+        self.fuzzy != 0
     }
 
     /// 简拼开关（同上）。

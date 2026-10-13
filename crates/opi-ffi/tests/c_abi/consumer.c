@@ -223,6 +223,15 @@ int main(int argc, char **argv) {
     CHECK(opi_fuzzy_enabled() == false, "set_fuzzy(false) 后应读到 false");
     opi_set_fuzzy(true);
     CHECK(opi_fuzzy_enabled() == true, "set_fuzzy(true) 后应读到 true");
+    /* 逐对掩码（2026-10-13）：写 0b1000001（zh/z + n/l）→ 读回同位；越界位钳掉。 */
+    opi_set_fuzzy_pairs(0x41);
+    CHECK(opi_fuzzy_pairs() == 0x41, "set_fuzzy_pairs(0x41) 应原样读回");
+    CHECK(opi_fuzzy_enabled() == true, "任一组开着 ⇒ 旧布尔读侧为 true");
+    opi_set_fuzzy_pairs(0x141);
+    CHECK(opi_fuzzy_pairs() == 0x41, "越界位（bit8）应被钳掉");
+    opi_set_fuzzy_pairs(0);
+    CHECK(opi_fuzzy_enabled() == false, "全 0 ⇒ 旧布尔读侧为 false");
+    opi_set_fuzzy_pairs(0xFF);
     opi_set_jianpin(false);
     CHECK(opi_jianpin_enabled() == false, "set_jianpin(false) 后应读到 false");
     opi_set_jianpin(true);

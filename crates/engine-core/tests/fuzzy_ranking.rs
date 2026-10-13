@@ -239,7 +239,7 @@ fn illegal_variant_is_never_queried() {
 #[test]
 fn long_input_variants_stay_capped() {
     let long = "zhang".repeat(8);
-    let vs = input_variants(&long);
+    let vs = input_variants(&long, engine_core::fuzzy::FUZZY_ALL);
     assert_eq!(vs.len(), MAX_VARIANTS, "{vs:?}");
     // 每个变体都由合法音节拼成（拼不出非法串去查库）
     for v in &vs {

@@ -64,7 +64,7 @@ pub struct Engine {
     pub(crate) quotes: Quotes,
     /// 模糊音开关（「属性设置」可改；排序层的门控见 `candidates::RankOptions`）。
     /// 默认 `true` = 既有行为。
-    pub(crate) fuzzy: bool, // pub(crate)：engine_segment.rs 判回退时要问它
+    pub(crate) fuzzy: crate::fuzzy::FuzzyMask, // pub(crate)：engine_segment.rs 判回退时要问它（位掩码 == 0 = 全关）
     /// 简拼开关。默认 `true` = 既有行为。
     pub(crate) jianpin: bool, // pub(crate)：engine_user_words.rs 的开关一族要用
 }
@@ -99,7 +99,7 @@ impl Engine {
             fullwidth: Mode::default().default_fullwidth(),
             chinese_punct: true,
             quotes: Quotes::default(),
-            fuzzy: true,
+            fuzzy: crate::fuzzy::FUZZY_ALL,
             jianpin: true,
             symbol_browse: Default::default(),
         }
@@ -393,7 +393,7 @@ impl Engine {
                             limit,
                             self.user_boost,
                             RankOptions {
-                                fuzzy: false,
+                                fuzzy: 0,
                                 jianpin: false,
                                 prefer_simplified: s.mode == Mode::Pinyin,
                             },

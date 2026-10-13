@@ -25,11 +25,13 @@ mod checker;
 use opi_ffi::cabi::{
     OpiString, opi_backspace, opi_buffer, opi_candidates, opi_candidates_page, opi_chinese_punct,
     opi_clear, opi_clear_user_words, opi_emoji_groups, opi_emoji_symbols, opi_export_user_words,
-    opi_ffi_free_string, opi_fullwidth_state, opi_fuzzy_enabled, opi_import_user_words,
+    opi_ffi_free_string, opi_fullwidth_state, opi_fuzzy_enabled, opi_fuzzy_pairs,
+    opi_import_user_words,
     opi_input_key, opi_input_space, opi_jianpin_enabled, opi_key_event, opi_learner_enabled,
     opi_load_stroke, opi_load_trad, opi_mode, opi_page, opi_page_count, opi_remove_user_word,
     opi_scheme, opi_search_symbols, opi_select, opi_select_page, opi_set_chinese_punct,
-    opi_set_fuzzy, opi_set_jianpin, opi_set_learner, opi_set_scheme, opi_set_shift,
+    opi_set_fuzzy, opi_set_fuzzy_pairs, opi_set_jianpin, opi_set_learner, opi_set_scheme,
+    opi_set_shift,
     opi_shift_state, opi_switch_mode, opi_symbol_blocks, opi_symbols_in_block,
     opi_toggle_chinese_punct, opi_toggle_fullwidth, opi_toggle_symbol,
 };
@@ -136,6 +138,10 @@ fn every_export_returns_a_sentinel_when_engine_is_not_loaded() {
         opi_set_shift(true);
         opi_set_learner(true);
         opi_set_fuzzy(false);
+        // 逐对掩码（2026-10-13）：未装载 → 读侧哨兵 0（Default）；写侧空操作。
+        assert_eq!(opi_fuzzy_pairs(), 0, "未装载读侧哨兵 = 0");
+        opi_set_fuzzy_pairs(0x41); // 未装载：空操作，不崩
+        assert_eq!(opi_fuzzy_pairs(), 0);
         opi_set_jianpin(true);
         assert!(!opi_fuzzy_enabled());
         // 与 opi_chinese_punct 同理：未装载 → false 是**哨兵**，不是"开关默认关"

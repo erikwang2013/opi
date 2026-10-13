@@ -229,6 +229,27 @@ pub unsafe extern "C" fn opi_set_jianpin(on: bool) {
     let _ = catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.set_jianpin(on))));
 }
 
+/// 模糊音**逐对**启用集的读侧（2026-10-13 用户裁决「可多选类似 z=zh」；写侧见
+/// `opi_set_fuzzy_pairs`）。位序 = `engine_core::fuzzy::FUZZY_PAIRS` 的数组序
+/// （**对外契约**：bit0=zh/z, bit1=ch/c, bit2=sh/s, bit3=an/ang, bit4=en/eng,
+/// bit5=in/ing, bit6=n/l, bit7=f/h；0xFF = 全开）。未装载 → 0（哨兵语义同族）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fuzzy_pairs() -> i32 {
+    catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| i32::from(e.fuzzy_pairs())).unwrap_or(0)
+    }))
+    .unwrap_or(0)
+}
+
+/// setFuzzyPairs(mask)：模糊音逐对设置（位序同上；越界位钳掉，只留低 8 位）。
+/// `mask = 0xFF` 等价旧 `opi_set_fuzzy(true)`、`0` 等价 `false` —— 旧布尔入口
+/// 保留为包装（四端配置只写 `Fuzzy=` 的老配置走那条，行为一字不变）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_set_fuzzy_pairs(mask: i32) {
+    let m = (mask as u32 & 0xFF) as u8;
+    let _ = catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.set_fuzzy_pairs(m))));
+}
+
 /// 且客户端本来就不知道该设成什么值）。只翻一个 bool，不改 buffer/候选/页码。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_set_chinese_punct(on: bool) {

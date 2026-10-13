@@ -378,6 +378,15 @@ impl Api {
         self.router.engine().fuzzy_enabled()
     }
 
+    /// 模糊音逐对启用集（位序见 `engine_core::fuzzy`；0xFF = 全开）。
+    pub fn set_fuzzy_pairs(&mut self, mask: u8) {
+        self.router.engine_mut().set_fuzzy_pairs(mask);
+    }
+
+    pub fn fuzzy_pairs(&self) -> u8 {
+        self.router.engine().fuzzy_pairs()
+    }
+
     pub fn set_jianpin(&mut self, on: bool) {
         self.router.engine_mut().set_jianpin(on);
     }
