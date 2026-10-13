@@ -343,6 +343,16 @@ pub unsafe extern "C" fn opi_fcitx5_set_jianpin(on: bool) {
 /// # Safety
 ///
 /// `ptr` 必须指向至少 `len` 字节的有效内存（或为 null，视为空操作）。
+/// setCorrection(on)：拼音纠错开关（2026-10-13；配置键 `Correction`）。
+/// # Safety
+///
+/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_set_correction(on: bool) {
+    ensure_panic_hook();
+    let _ = catch_unwind(AssertUnwindSafe(|| with_state(|s| s.set_correction(on))));
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_fcitx5_set_fuzzy_pairs(ptr: *const u8, len: usize) {
     ensure_panic_hook();

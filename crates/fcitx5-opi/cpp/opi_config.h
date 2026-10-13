@@ -66,6 +66,8 @@ FCITX_CONFIGURATION(
     fcitx::Option<std::string> fuzzyPairs{
         this, "FuzzyPairs", "模糊音逐对（逗号分隔，如 zh/z,n/l；留空按上面的总开关）", ""};
     fcitx::Option<bool> jianpin{this, "Jianpin", "简拼（声母缩写，nh → 你好）", true};
+    // 拼音纠错（2026-10-13 用户裁决「拼音纠错（混合参与排序）」）：相邻键错按/多打/少打。
+    fcitx::Option<bool> correction{this, "Correction", "拼音纠错（相邻键、多打、少打）", true};
     fcitx::Option<bool> shiftToggle{this, "ShiftToggle", "Shift 轻按切换中英文（组合键与长按不触发）", true};
     fcitx::OptionWithAnnotation<OpiSkin, OpiSkinI18NAnnotation> skin{
         this, "Skin", "候选面板皮肤（fcitx5 全局主题，对所有输入法生效）", OpiSkin::Keep};);
@@ -84,6 +86,7 @@ inline void applyOpiSettings(const OpiSettings &settings) {
         opi_fcitx5_set_fuzzy(*settings.fuzzy);
     }
     opi_fcitx5_set_jianpin(*settings.jianpin);
+    opi_fcitx5_set_correction(*settings.correction);
 }
 
 // 从磁盘读进 settings。**文件不存在不是错误**：readAsIni 会把字段留作默认值 ——

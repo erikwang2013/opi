@@ -77,6 +77,11 @@ internal fun CommonPage(s: OpSettings, apply: (OpSettings) -> Unit) {
         "声母缩写：nh → 你好、zg → 中国",
         s.jianpin,
     ) { apply(s.copy(jianpin = it)) }
+    SettingRow(
+        "拼音纠错",
+        "相邻键错按 / 多打 / 少打一个字母也能出候选（如 nihap → nihao）；配置键名 Correction",
+        s.correction,
+    ) { apply(s.copy(correction = it)) }
 }
 
 // ---------- 按键（只有 Linux 有真旋钮，见文件头）----------

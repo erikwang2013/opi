@@ -395,6 +395,15 @@ impl Api {
         self.router.engine().jianpin_enabled()
     }
 
+    /// 拼音纠错开关（2026-10-13）。
+    pub fn set_correction(&mut self, on: bool) {
+        self.router.engine_mut().set_correction(on);
+    }
+
+    pub fn correction_enabled(&self) -> bool {
+        self.router.engine().correction_enabled()
+    }
+
     pub fn remove_user_word(&mut self, text: String) {
         self.router.engine_mut().remove_user_word(&text);
     }

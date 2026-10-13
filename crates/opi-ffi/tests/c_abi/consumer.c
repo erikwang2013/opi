@@ -244,6 +244,11 @@ int main(int argc, char **argv) {
     CHECK(opi_jianpin_enabled() == false, "set_jianpin(false) 后应读到 false");
     opi_set_jianpin(true);
     CHECK(opi_jianpin_enabled() == true, "set_jianpin(true) 后应读到 true");
+    /* 拼音纠错（2026-10-13）：缺省开、关得掉、开得回。 */
+    CHECK(opi_correction_enabled() == true, "correction 缺省应为开");
+    opi_set_correction(false);
+    CHECK(opi_correction_enabled() == false, "set_correction(false) 后应读到 false");
+    opi_set_correction(true);
 
     /* 输入方案（2026-10-09）：整数回环 + 越界忽略 + 笔画词典的坏路径哨兵。
      * 方案的行为语义（9 键真的能出字）由 engine-core 的 scheme_keys.rs 管，

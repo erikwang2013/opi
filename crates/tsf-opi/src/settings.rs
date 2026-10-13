@@ -39,6 +39,8 @@ pub struct Settings {
     pub fuzzy: bool,
     pub fuzzy_pairs: String,
     pub jianpin: bool,
+    /// 拼音纠错（2026-10-13；键 `Correction`）。
+    pub correction: bool,
 }
 
 impl Default for Settings {
@@ -49,6 +51,7 @@ impl Default for Settings {
             fuzzy: true,
             fuzzy_pairs: String::new(), // 空 = 未设置（回落到 fuzzy 布尔）
             jianpin: true,
+            correction: true,
         }
     }
 }
@@ -80,6 +83,7 @@ pub fn parse(text: &str) -> Settings {
             "ChinesePunct" => out.chinese_punct = b,
             "Fuzzy" => out.fuzzy = b,
             "Jianpin" => out.jianpin = b,
+            "Correction" => out.correction = b,
             _ => {} // 未知键：忽略（向前兼容），不报错
         }
     }

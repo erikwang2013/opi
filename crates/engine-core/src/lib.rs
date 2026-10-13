@@ -6,6 +6,7 @@
 
 pub mod bytes;
 pub mod candidates;
+pub mod correction;
 #[path = "candidates_scheme.rs"]
 mod candidates_scheme_impl;
 pub mod composer;

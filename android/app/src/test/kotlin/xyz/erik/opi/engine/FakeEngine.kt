@@ -124,6 +124,15 @@ class FakeEngine : OpiEngineApi {
 
     override fun fuzzyPairs(): Int = fuzzyPairsValue
 
+    /** 拼音纠错开关（2026-10-13）：假侧缺省开（同真引擎缺省）。 */
+    var correctionOn: Boolean = true
+
+    override fun correctionEnabled(): Boolean = correctionOn
+
+    override fun setCorrection(on: Boolean) {
+        correctionOn = on
+    }
+
     override fun setFuzzyPairs(mask: Int) {
         fuzzyPairsValue = mask and 0xFF
     }

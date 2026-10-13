@@ -112,6 +112,11 @@ object OpiEngine : OpiEngineApi, SymbolApi {
     override external fun fuzzyPairs(): Int
     override external fun setFuzzyPairs(mask: Int)
 
+    /** correctionEnabled()/setCorrection(on)：拼音纠错开关（2026-10-13）。
+     *  ⚠️ 未装载 → 读侧 false 是**哨兵**；真缺省是 true（对齐搜狗）。 */
+    override external fun correctionEnabled(): Boolean
+    override external fun setCorrection(on: Boolean)
+
     /** setJianpin(on: Boolean)：简拼开关（同上）。 */
     override external fun setJianpin(on: Boolean)
 

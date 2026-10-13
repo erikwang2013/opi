@@ -99,6 +99,11 @@ class ImePreferences(private val store: PrefStore) {
         get() = store.getBoolean(KEY_JIANPIN, true)
         set(v) = store.put(KEY_JIANPIN, v)
 
+    /** 拼音纠错（2026-10-13；缺省开）。 */
+    var correction: Boolean
+        get() = store.getBoolean(KEY_CORRECTION, true)
+        set(v) = store.put(KEY_CORRECTION, v)
+
     /**
      * 模糊音**逐对**列表（2026-10-13 用户裁决「可多选类似 z=zh」）：
      * 逗号分隔组名（[FUZZY_PAIRS_ANDROID] 的条目）。**空串 = 未设置 ⇒ 回落
@@ -119,6 +124,7 @@ class ImePreferences(private val store: PrefStore) {
             controller.setFuzzyPairs(fuzzyMaskOf(pairs))
         }
         controller.setJianpin(jianpin)
+        controller.setCorrection(correction)
     }
 
     companion object {
@@ -133,6 +139,7 @@ class ImePreferences(private val store: PrefStore) {
         const val KEY_FUZZY = "engine_fuzzy"
         const val KEY_FUZZY_PAIRS = "engine_fuzzy_pairs"
         const val KEY_JIANPIN = "engine_jianpin"
+        const val KEY_CORRECTION = "engine_correction"
 
         fun from(context: Context): ImePreferences = ImePreferences(AndroidPrefStore(context))
     }

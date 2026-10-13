@@ -26,6 +26,7 @@ fn parses_every_key_false() {
             fuzzy: false,
             fuzzy_pairs: String::new(),
             jianpin: false,
+            correction: true,
         }
     );
 }
@@ -128,4 +129,13 @@ fn apply_settings_prefers_the_pairs_list() {
     assert_eq!(s.engine.fuzzy_pairs(), FUZZY_ALL, "无列表 → 回落布尔全开");
     s.apply_settings(parse("Fuzzy=False\n"));
     assert_eq!(s.engine.fuzzy_pairs(), 0, "无列表 + 布尔关 → 全关");
+}
+
+
+/// 拼音纠错（2026-10-13）：键 `Correction`，缺省开（对齐搜狗）。
+#[test]
+fn parses_correction_switch() {
+    assert!(parse("").correction, "缺省开");
+    assert!(!parse("Correction=False\n").correction);
+    assert!(parse("Correction=true\n").correction);
 }

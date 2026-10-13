@@ -65,6 +65,8 @@ pub struct Engine {
     /// 模糊音开关（「属性设置」可改；排序层的门控见 `candidates::RankOptions`）。
     /// 默认 `true` = 既有行为。
     pub(crate) fuzzy: crate::fuzzy::FuzzyMask, // pub(crate)：engine_segment.rs 判回退时要问它（位掩码 == 0 = 全关）
+    /// 拼音纠错开关（2026-10-13；写读侧见 `engine_user_words.rs`）。
+    pub(crate) correction: bool,
     /// 简拼开关。默认 `true` = 既有行为。
     pub(crate) jianpin: bool, // pub(crate)：engine_user_words.rs 的开关一族要用
 }
@@ -100,6 +102,7 @@ impl Engine {
             chinese_punct: true,
             quotes: Quotes::default(),
             fuzzy: crate::fuzzy::FUZZY_ALL,
+            correction: true,
             jianpin: true,
             symbol_browse: Default::default(),
         }
@@ -394,6 +397,7 @@ impl Engine {
                             self.user_boost,
                             RankOptions {
                                 fuzzy: 0,
+                                correction: false,
                                 jianpin: false,
                                 prefer_simplified: s.mode == Mode::Pinyin,
                             },
@@ -405,6 +409,11 @@ impl Engine {
                 Scheme::Full => {}
             }
         }
+        // 笔画的**无词典回退支**也要守「模糊音/纠错/简拼对 hspnz 串没有意义」：
+        // 上述装词典那支早关了这三个，落回本支时却只吃了全局开关 —— 模糊音在笔画串上
+        // 极少命中所以一直没露；2026-10-13 加纠错后 `hs` 被纠出错音节，
+        // `stroke_scheme_without_dict_is_empty_not_error` 当场抓到（红得正确）。
+        let stroke = self.scheme() == Scheme::Stroke;
         rank_and_pick_with(
             self.active_dict(),
             &self.symbols,
@@ -414,8 +423,9 @@ impl Engine {
             limit,
             self.user_boost,
             RankOptions {
-                fuzzy: self.fuzzy,
-                jianpin: self.jianpin,
+                fuzzy: if stroke { 0 } else { self.fuzzy },
+                correction: self.correction && !stroke,
+                jianpin: self.jianpin && !stroke,
                 prefer_simplified: s.mode == Mode::Pinyin,
             },
         )

@@ -10,7 +10,7 @@
 //! - 去重取**最高分**那一条：同一词挂在多条拼音行下（多音字）时，`dict.query` 会返回
 //!   同一文本多次，去重关掉即红。
 
-use engine_core::candidates::{Candidate, USER_BOOST, rank_and_pick, rank_score};
+use engine_core::candidates::{Candidate, RankOptions, USER_BOOST, rank_and_pick, rank_and_pick_with, rank_score};
 use engine_core::composer::Mode;
 use engine_core::dictionary::{Dictionary, InMemoryDictionary};
 use engine_core::learner::Learner;
@@ -93,7 +93,15 @@ fn pinyin_of(word: &str) -> &'static str {
 }
 
 /// 排序不变量（学习关闭时，对**任意**随机词频成立）：
-/// 1. 候选数 ≤ limit；2. 文本不重复；3. 按 (分数降序, 文本升序) 排；
+/// 1. 候选数 ≤ limit；2. 文本不重复；
+/// 3. **分档契约**（用户裁决「精确/前缀候选非空 ⇒ 模糊结果追加在最后，既有候选的
+///    集合与顺序一字不变」）：开扩展后的结果**以「不开扩展」的结果为前缀**，且各段
+///    内按 (分数降序, 文本升序)。
+///    ⚠️ 本档 2026-10-13 改写过：原断言是**全局**分数单调 —— 那只在「主档 = 全部
+///    带加成的精确命中」时成立；**前缀扩展主档是未加成的纯词频**，扩展档（模糊/纠错）
+///    带进来的更高频条目按裁决就该排在后面。加拼音纠错后 proptest 当场抓到
+///    （`xian` 的最小反例：丙 xiang(freq 0，主档前缀) 在 癸 xiao(freq 1，纠错变体
+///    `xia` 的前缀扩展) 之前）—— 修断言不修排序代码：排序代码与裁决一致。
 /// 4. **任取一个精确匹配与一个前缀扩展，前者的分数 ≥ 后者** ——
 ///    `exact_bonus = boost/2 ≥ 最大静态词频` 的直接推论，`exact_bonus = 0` 即红。
 #[test]
@@ -117,15 +125,33 @@ fn rank_and_pick_invariants() {
         uniq.sort();
         uniq.dedup();
         prop_assert_eq!(uniq.len(), texts.len(), "候选文本重复: {:?}", texts);
-        for w in got.windows(2) {
-            let ordered = w[0].score > w[1].score
-                || (w[0].score == w[1].score && w[0].text <= w[1].text);
-            prop_assert!(ordered, "排序错误：{:?} 在 {:?} 之前", w[0], w[1]);
+        // 分档契约（见本函数头注 3）：主档 = 关掉模糊/纠错/简拼的那一遍。
+        let base = rank_and_pick_with(
+            &d, &no_symbols(), &l, input, Mode::Pinyin, limit, boost,
+            RankOptions { fuzzy: 0, correction: false, jianpin: false, prefer_simplified: false },
+        );
+        for (i, c) in base.iter().enumerate().take(limit) {
+            let Some(g) = got.get(i) else { break };
+            prop_assert_eq!(&g.text, &c.text, "既有候选的顺序一字不变（前缀属性）");
         }
+        // 段内有序：主档段 + 追加段各自按 (分数降序, 文本升序)。
+        let sorted_ok = |cs: &[Candidate]| {
+            cs.windows(2).all(|w| {
+                w[0].score > w[1].score
+                    || (w[0].score == w[1].score && w[0].text <= w[1].text)
+            })
+        };
+        prop_assert!(sorted_ok(&base), "主档段未按分数排：{:?}", cand_texts(&base));
+        let tail: Vec<Candidate> = got.iter().skip(base.len().min(limit)).cloned().collect();
+        prop_assert!(sorted_ok(&tail), "追加段未按分数排：{:?}", cand_texts(&tail));
+        // 分类器：**拼音 == 输入**才算精确（2026-10-13 订正）。原来按「键长相等」判 ——
+        // 变体命中会破坏它：`xian` 的纠错变体 `xia` 会前缀扩展出 `xiao`（癸），键长同是 4
+        // 却被误判成精确，于是"精确 ≥ 扩展"拿变体（纯词频分）去比扩展，必然假红。
+        // 真精确带 boost（≥ exact_bonus > max_freq ≥ 任何扩展分），该不变量对真精确成立。
         let exact: Vec<&Candidate> = got.iter()
-            .filter(|c| pinyin_of(&c.text).len() == input.len()).collect();
+            .filter(|c| pinyin_of(&c.text) == input).collect();
         let ext: Vec<&Candidate> = got.iter()
-            .filter(|c| pinyin_of(&c.text).len() != input.len()).collect();
+            .filter(|c| pinyin_of(&c.text) != input).collect();
         for e in &exact {
             for n in &ext {
                 prop_assert!(e.score >= n.score,

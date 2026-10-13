@@ -36,6 +36,7 @@ fn apply_settings_lands_all_four_switches() {
         fuzzy: false,
         fuzzy_pairs: String::new(),
         jianpin: false,
+        correction: true,
     });
     assert_eq!(s.switches(), (false, false, false, false));
     s.apply_settings(crate::settings::Settings::default());

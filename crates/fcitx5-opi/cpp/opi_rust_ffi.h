@@ -45,7 +45,8 @@ void opi_fcitx5_set_fuzzy(bool on);   // 模糊音开关（addon 配置 → 引�
 // 模糊音逐对（2026-10-13）：组名串（UTF-8，逗号分隔，如 "zh/z,n/l"）。同样是弱符号。
 extern "C" void opi_fcitx5_set_fuzzy_pairs(const uint8_t *ptr,
                                             size_t len) __attribute__((weak));
-void opi_fcitx5_set_jianpin(bool on); // 简拼开关（同上）
+void opi_fcitx5_set_jianpin(bool on);
+void opi_fcitx5_set_correction(bool on);  // 拼音纠错（2026-10-13，同上） // 简拼开关（同上）
 bool opi_fcitx5_toggle_fullwidth();        // 返回切换后的状态（true = 全角）
 void opi_fcitx5_set_shift(bool on);
 OpiString opi_fcitx5_input_space();

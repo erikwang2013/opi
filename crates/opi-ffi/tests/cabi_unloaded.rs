@@ -27,11 +27,12 @@ use opi_ffi::cabi::{
     opi_clear, opi_clear_user_words, opi_emoji_groups, opi_emoji_symbols, opi_export_user_words,
     opi_ffi_free_string, opi_fullwidth_state, opi_fuzzy_enabled, opi_fuzzy_pairs,
     opi_import_user_words,
-    opi_input_key, opi_input_space, opi_jianpin_enabled, opi_key_event, opi_learner_enabled,
+    opi_correction_enabled, opi_input_key, opi_input_space, opi_jianpin_enabled,
+    opi_key_event, opi_learner_enabled,
     opi_load_stroke, opi_load_trad, opi_mode, opi_page, opi_page_count, opi_remove_user_word,
     opi_scheme, opi_search_symbols, opi_select, opi_select_page, opi_set_chinese_punct,
     opi_fuzzy_pair_names, opi_set_fuzzy, opi_set_fuzzy_pairs, opi_set_fuzzy_pairs_names,
-    opi_set_jianpin, opi_set_learner, opi_set_scheme,
+    opi_set_correction, opi_set_jianpin, opi_set_learner, opi_set_scheme,
     opi_set_shift,
     opi_shift_state, opi_switch_mode, opi_symbol_blocks, opi_symbols_in_block,
     opi_toggle_chinese_punct, opi_toggle_fullwidth, opi_toggle_symbol,
@@ -151,6 +152,11 @@ fn every_export_returns_a_sentinel_when_engine_is_not_loaded() {
         );
         opi_set_fuzzy_pairs_names(std::ptr::null(), 0); // 未装载 + NULL：不崩
         opi_set_jianpin(true);
+        // 拼音纠错（2026-10-13）：未装载读侧哨兵 = false；写侧空操作。
+        assert!(!opi_correction_enabled(), "未装载哨兵 = false");
+        opi_set_correction(true);
+        assert!(!opi_correction_enabled());
+        // ⚠️ 这一句曾在上一次补丁里被吞（cover 门禁当场抓到「opi_fuzzy_enabled 从未被调用」）。
         assert!(!opi_fuzzy_enabled());
         // 与 opi_chinese_punct 同理：未装载 → false 是**哨兵**，不是"开关默认关"
         // （默认真源在引擎侧 RankOptions::default()，两个都开）。

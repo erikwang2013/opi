@@ -233,6 +233,9 @@ void opi_set_fuzzy_pairs(int32_t mask);
 OpiString opi_fuzzy_pair_names(void);
 void opi_set_fuzzy_pairs_names(const uint16_t *names, size_t len);
 void opi_set_jianpin(bool on);
+/// 拼音纠错（2026-10-13）：缺省开；未装载读侧为 false（哨兵）。
+bool opi_correction_enabled(void);
+void opi_set_correction(bool on);
 bool opi_learner_enabled(void);
 void opi_set_learner(bool enabled);
 void opi_clear_user_words(void);

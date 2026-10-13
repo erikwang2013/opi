@@ -45,6 +45,15 @@ impl Engine {
         self.fuzzy != 0
     }
 
+    /// 拼音纠错开关（2026-10-13 用户裁决「混合参与排序」）。默认开（对齐搜狗）。
+    pub fn set_correction(&mut self, on: bool) {
+        self.correction = on;
+    }
+
+    pub fn correction_enabled(&self) -> bool {
+        self.correction
+    }
+
     /// 简拼开关（同上）。
     pub fn set_jianpin(&mut self, enabled: bool) {
         self.jianpin = enabled;

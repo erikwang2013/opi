@@ -40,6 +40,8 @@ final class OpiEngine {
     static native void setFuzzy(boolean on);
     static native int fuzzyPairs();
     static native void setFuzzyPairs(int mask);
+    static native boolean correctionEnabled();
+    static native void setCorrection(boolean on);
     static native boolean jianpinEnabled();
     static native void setJianpin(boolean on);
     static native int scheme();
@@ -135,6 +137,11 @@ public final class Main {
         OpiEngine.setFuzzyPairs(0x141);
         check(OpiEngine.fuzzyPairs() == 0x41, "越界位（bit8）被钳掉");
         OpiEngine.setFuzzyPairs(0);
+        // 拼音纠错（2026-10-13）：缺省开、关得掉、开得回。
+        check(OpiEngine.correctionEnabled(), "correction 缺省开");
+        OpiEngine.setCorrection(false);
+        check(!OpiEngine.correctionEnabled(), "setCorrection(false) 生效");
+        OpiEngine.setCorrection(true);
         OpiEngine.setFuzzy(true);
         check(OpiEngine.jianpinEnabled(), "jianpin 默认开启");
         OpiEngine.setJianpin(false);

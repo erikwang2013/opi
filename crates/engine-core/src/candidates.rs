@@ -3,6 +3,7 @@
 
 use crate::composer::Mode;
 use crate::dictionary::{Dictionary, PREFIX_MATCH_CAP};
+use crate::correction;
 use crate::fuzzy;
 use crate::jianpin;
 use crate::learner::Learner;
@@ -46,6 +47,9 @@ pub struct RankOptions {
     /// 模糊音启用集（逐对位掩码，位序见 `fuzzy.rs::FUZZY_PAIRS`；`FUZZY_ALL` = 旧「开」）。
     /// 整串变体 + 逐音节兜底共用它，表见 `fuzzy.rs`。
     pub fuzzy: crate::fuzzy::FuzzyMask,
+    /// 拼音纠错开关（2026-10-13 用户裁决「混合参与排序」；变体见 `correction.rs`）。
+    /// 与模糊音**同一条管线、同一档**（非精确、追加式），只是变体生成方式不同。
+    pub correction: bool,
     /// 简拼（声母缩写 `nh → 你好`，展开见 `jianpin.rs`）。
     pub jianpin: bool,
     /// **简体优先**（2026-10-13 用户裁决「如果是混合就优先显示简体」）：截断前把含
@@ -58,6 +62,7 @@ impl Default for RankOptions {
     fn default() -> Self {
         Self {
             fuzzy: crate::fuzzy::FUZZY_ALL,
+            correction: true,
             jianpin: true,
             prefer_simplified: false,
         }
@@ -189,8 +194,15 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
     // 候选可违）。结论（0 加成）不变，但**那条机制不许再当理由引用**。
     // `opts.fuzzy = false`：整串变体与逐音节兜底**一起**关（两个入口同一开关，
     // 只关一个会让 `zongguo` 这类"整串查不到"的输入仍从逐音节拿到模糊结果）。
-    let mut fuzzy: Vec<Candidate> = if opts.fuzzy != 0 {
+    // 纠错（2026-10-13）与模糊音**并进同一档**：同为「近音/纠错」的非精确候选，
+    // 下游的分档/去重/截断逻辑一字不改（`fuzzy` 这个变量自此是「近音+纠错」档）。
+    let near_variants: Vec<String> = if opts.fuzzy != 0 {
         fuzzy::input_variants(input, opts.fuzzy)
+    } else {
+        Vec::new()
+    };
+    let mut fuzzy: Vec<Candidate> = if !near_variants.is_empty() {
+        near_variants
             .iter()
             // 同样走上限：变体是全串替换，`ni` 的变体 `li` 会命中 3 万余条 ——
             // 全量物化与主层同一量级的开销（实测 17.9ms，2026-10-11）。
@@ -200,6 +212,20 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
     } else {
         Vec::new()
     };
+    // 纠错档（2026-10-13）：与模糊同档（非精确、进 `fuzzy`），但**查询走精确键**
+    // （`query_all`，不展开前缀）—— typo 修的是完整词，且前缀查询是本函数的贵项。
+    // 成本实测与语义代价见 `correction.rs` 头注；每变体取 top-3（同逐音节相）。
+    if opts.correction {
+        for v in correction::input_corrections(input) {
+            let mut hits: Vec<Candidate> = dict
+                .query_all(&v)
+                .into_iter()
+                .map(|e| hanzi(e, false))
+                .collect();
+            hits.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
+            fuzzy.extend(hits.into_iter().take(3));
+        }
+    }
     let wide_hits = !fuzzy.is_empty();
     // ── 分词回退（2026-10-10 用户裁决「输入拼音无匹配时要分词匹配」）────────────
     // 整串直接命中为空、整串模糊命中也为空时，候选换成**最长可匹配前缀**的整档
@@ -215,7 +241,7 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
     if merged.is_empty()
         && input.chars().count() > 1
         && !wide_hits
-        && let Some(fb) = segment_fallback(dict, input, opts.fuzzy)
+        && let Some(fb) = segment_fallback(dict, input, opts.fuzzy, opts.correction)
     {
         // 递归深度 ≤ 1：「前缀有命中」是入选条件，到了里面 `merged` 必非空。
         merged = rank_and_pick_with(dict, symbols, learner, &fb.prefix, mode, limit, boost, opts);
@@ -257,9 +283,24 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
             //   64×64 音节对的穷举里仍有 1285 个输入以它为**唯一**模糊来源（如 `ninv`→
             //   `nin→lin/ling`、`nifei`→`fei→hei`），只是那些多不是词。
             // 每音节 ≤3 次额外查询且同样被 take(3) 截住，无笛卡尔积。
-            if opts.fuzzy != 0 && !wide_hits {
-                let mut syl_fuzzy: Vec<Candidate> = fuzzy::variants(&syl, opts.fuzzy)
+            // 逐音节相**只做模糊音**（2026-10-13 定案）：纠错的同类形态已被**整串单笔误
+            // 枚举**覆盖（correction::input_corrections 的单段轮转），塞进本相是重复出查询
+            // ——实测「aaaaaaaa」8 个音节各查 8 个变体，单键 +345ms（本机负载下）。
+            let syl_variants: Vec<String> = if opts.fuzzy != 0 {
+                fuzzy::variants(&syl, opts.fuzzy)
+            } else {
+                Vec::new()
+            };
+            let near_on = opts.fuzzy != 0;
+            if near_on && !wide_hits {
+                // ⚠️ **变体查询本身要封顶**（不是只封 take(3) 的结果）：纠错的逐音节变体
+                // 可以十几二十个（单字母音节一次插入就出一大把合法音节），每个变体一次
+                // 前缀查询（十几 ms 量级）—— 2026-10-13 实测这套没封时「aaaaaaaa」单键
+                // 1.2s（本机负载下）。封到 8：给 fuzzy（每音节 ≤4）留余地，纠错的多余
+                // 变体砍掉（它们按确定性序排在后面，砍的都是低优先形态）。
+                let mut syl_fuzzy: Vec<Candidate> = syl_variants
                     .iter()
+                    .take(8)
                     .filter(|v| *v != &syl)
                     .flat_map(|v| dict.query_prefix_top(v, PREFIX_MATCH_CAP))
                     .map(|e| hanzi(e, false))
@@ -380,6 +421,7 @@ pub(crate) fn segment_fallback<D: Dictionary + ?Sized>(
     dict: &D,
     input: &str,
     fuzzy_enabled: crate::fuzzy::FuzzyMask,
+    correction_enabled: bool,
 ) -> Option<SegmentFallback> {
     if input.chars().count() <= 1 {
         return None;
@@ -393,6 +435,14 @@ pub(crate) fn segment_fallback<D: Dictionary + ?Sized>(
     }
     if fuzzy_enabled != 0
         && fuzzy::input_variants(input, fuzzy_enabled)
+            .iter()
+            .any(|v| !dict.query_all(v).is_empty())
+    {
+        return None;
+    }
+    // 同类第四条：整串**纠错**命中同样比前缀回退更具体（2026-10-13）。
+    if correction_enabled
+        && correction::input_corrections(input)
             .iter()
             .any(|v| !dict.query_all(v).is_empty())
     {

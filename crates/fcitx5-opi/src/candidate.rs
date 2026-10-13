@@ -195,6 +195,12 @@ impl CandidateState {
         self.engine.set_jianpin(on);
     }
 
+    /// 拼音纠错开关（2026-10-13；配置键 `Correction`）。
+    /// 配对：`tsf-opi/src/logic.rs` 的同名方法（两轨同构）。
+    pub fn set_correction(&mut self, on: bool) {
+        self.engine.set_correction(on);
+    }
+
     /// 切模式（**不收尾**：待处理的缓冲由 `Composer::switch_mode` 直接清掉）。
     /// 需要「切走收尾（拼音/繁体上原文、符号模式丢关键字）」的用
     /// [`Self::switch_mode_confirmed`]（W1 订正版）。

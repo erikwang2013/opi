@@ -307,6 +307,9 @@ fn per_keystroke_joined_queries_are_capped() {
     for input in ["zg", "zzzzzzzz"] {
         let rec = Recorder::new(full_grid_dict());
         let mut e = Engine::new(Box::new(Shared(Arc::clone(&rec))), no_symbols(), false);
+        // ⚠️ 纠错（2026-10-13）也会往 Recorder 里打查询（变体逐条查库）⇒ 本用例
+        // 测的是**简拼网格**的封顶，先关纠错做隔离（红得正确：加纠错后当场红）。
+        e.set_correction(false);
         e.clear();
         for ch in input.chars() {
             e.input_key(ch);

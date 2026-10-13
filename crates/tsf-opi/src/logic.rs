@@ -182,6 +182,7 @@ impl TsfLogic {
             self.set_fuzzy_pairs(&s.fuzzy_pairs);
         }
         self.set_jianpin(s.jianpin);
+        self.set_correction(s.correction);
     }
 
     /// 学习开关（值来自 `%LOCALAPPDATA%\opi\settings.ini` 的 `Learn`；本端在
@@ -213,6 +214,11 @@ impl TsfLogic {
     /// 简拼开关。配对同上。
     pub fn set_jianpin(&mut self, on: bool) {
         self.engine.set_jianpin(on);
+    }
+
+    /// 拼音纠错开关（2026-10-13；键 `Correction`）。配对：`fcitx5-opi/src/candidate.rs`。
+    pub fn set_correction(&mut self, on: bool) {
+        self.engine.set_correction(on);
     }
 
     /// 切模式（**不收尾**：待处理的缓冲由 `Composer::switch_mode` 直接清掉）。

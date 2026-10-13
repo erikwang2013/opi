@@ -67,6 +67,7 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
     var learner by remember { mutableStateOf(prefs.learn) }
     var fuzzy by remember { mutableStateOf(prefs.fuzzy) }
     var fuzzyPairs by remember { mutableStateOf(prefs.fuzzyPairs) }
+    var correction by remember { mutableStateOf(prefs.correction) }
     var jianpin by remember { mutableStateOf(prefs.jianpin) }
     var confirmClear by remember { mutableStateOf(false) }
 
@@ -243,6 +244,21 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
                     },
                 )
             }
+            HorizontalDivider()
+            ListItem(
+                headlineContent = { Text("拼音纠错") },
+                supportingContent = { Text("相邻键错按 / 多打 / 少打一个字母也能出候选") },
+                trailingContent = {
+                    Switch(
+                        checked = correction,
+                        onCheckedChange = { v ->
+                            correction = v
+                            OpiEngine.setCorrection(v)
+                            prefs.correction = v
+                        },
+                    )
+                },
+            )
             HorizontalDivider()
             ListItem(
                 headlineContent = { Text("简拼") },

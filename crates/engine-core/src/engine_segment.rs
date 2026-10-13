@@ -47,7 +47,7 @@ impl Engine {
             let buffer = &self.composer.session().buffer;
             match self.scheme() {
                 Scheme::Full | Scheme::Stroke => {
-                    segment_fallback(self.active_dict(), buffer, self.fuzzy)
+                    segment_fallback(self.active_dict(), buffer, self.fuzzy, self.correction)
                         .map(|fb| fb.suffix)
                         .filter(|suffix| !suffix.is_empty())
                 }

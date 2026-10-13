@@ -88,9 +88,15 @@ interface OpiEngineApi {
     /** 简拼开关读侧（同上）。 */
     fun jianpinEnabled(): Boolean
 
+    /** 拼音纠错开关读侧（2026-10-13；写侧 = `OpiEngine.setCorrection`）。 */
+    fun correctionEnabled(): Boolean
+
     /** 写侧（[EngineController.setFuzzy] / [EngineController.setJianpin] 与偏好恢复共用）。 */
     fun setFuzzy(on: Boolean)
     fun setJianpin(on: Boolean)
+
+    /** 拼音纠错写侧（2026-10-13）。 */
+    fun setCorrection(on: Boolean)
 
     /** 输入方案读侧（「输入模式」；写侧见 [EngineController.switchScheme]）。 */
     fun scheme(): Int
@@ -361,6 +367,12 @@ class EngineController(
 
     fun setJianpin(on: Boolean) {
         api.setJianpin(on)
+        refresh()
+    }
+
+    /** 拼音纠错（2026-10-13）。 */
+    fun setCorrection(on: Boolean) {
+        api.setCorrection(on)
         refresh()
     }
 

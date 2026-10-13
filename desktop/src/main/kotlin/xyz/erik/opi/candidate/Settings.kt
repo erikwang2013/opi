@@ -182,6 +182,8 @@ data class OpSettings(
      */
     val fuzzyPairs: String = "",
     val jianpin: Boolean = true,
+    /** 拼音纠错（2026-10-13 用户裁决「混合参与排序」；键 `Correction`）。 */
+    val correction: Boolean = true,
     val shiftToggle: Boolean = true,
     val skin: SkinOption = SkinOption.KEEP,
     val statusbar: StatusBarSettings = StatusBarSettings(),
@@ -197,6 +199,7 @@ data class OpSettings(
         appendLine("Fuzzy=${boolText(fuzzy)}")
         appendLine("FuzzyPairs=$fuzzyPairs")
         appendLine("Jianpin=${boolText(jianpin)}")
+        appendLine("Correction=${boolText(correction)}")
         // Shift 轻按切换中英文（Linux 读侧 = opi_config.h 的 ShiftToggle；Windows 读侧
         // 不认这个键、忽略之 —— 见本 data class 的头注）。
         appendLine("ShiftToggle=${boolText(shiftToggle)}")
@@ -240,6 +243,7 @@ data class OpSettings(
                 fuzzy = bool("Fuzzy", true),
                 fuzzyPairs = map["FuzzyPairs"] ?: "",
                 jianpin = bool("Jianpin", true),
+                correction = bool("Correction", true),
                 shiftToggle = bool("ShiftToggle", true),
                 skin = SkinOption.fromValue(map["Skin"]),
                 statusbar = StatusBarSettings(
@@ -314,6 +318,7 @@ fun mergeIni(existing: String, s: OpSettings): String {
         "Fuzzy" to boolText(s.fuzzy),
         "FuzzyPairs" to s.fuzzyPairs,
         "Jianpin" to boolText(s.jianpin),
+        "Correction" to boolText(s.correction),
         "ShiftToggle" to boolText(s.shiftToggle),
         "Skin" to s.skin.value,
         "StatusBarHidden" to boolText(s.statusbar.hidden),

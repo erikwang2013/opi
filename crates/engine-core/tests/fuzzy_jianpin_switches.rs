@@ -69,6 +69,11 @@ fn defaults_are_both_on() {
 #[test]
 fn fuzzy_off_kills_the_variant_only_word() {
     let mut e = engine();
+    // ⚠️ 纠错（2026-10-13）是**第三条来路**：它也能拼出同一些词（`zongguo` 插入 h
+    // 得 zhongguo、`nh` 也能经插入/相邻键拼到 nihao）。本用例测的是**模糊/简拼
+    // 各自的开关**，先关纠错做隔离 —— 否则「关掉某开关必须一条不剩」的断言
+    // 会被纠错档供词（这是 2026-10-13 加纠错后当场红出来的，红得正确）。
+    e.set_correction(false);
     assert!(
         cands(&mut e, "zongguo").contains(&"中国".to_string()),
         "默认（模糊开）：zongguo 应当经整串变体 zhongguo 拿到「中国」"
@@ -88,6 +93,11 @@ fn fuzzy_off_kills_the_variant_only_word() {
 #[test]
 fn jianpin_off_kills_the_abbreviation_word() {
     let mut e = engine();
+    // ⚠️ 纠错（2026-10-13）是**第三条来路**：它也能拼出同一些词（`zongguo` 插入 h
+    // 得 zhongguo、`nh` 也能经插入/相邻键拼到 nihao）。本用例测的是**模糊/简拼
+    // 各自的开关**，先关纠错做隔离 —— 否则「关掉某开关必须一条不剩」的断言
+    // 会被纠错档供词（这是 2026-10-13 加纠错后当场红出来的，红得正确）。
+    e.set_correction(false);
     assert!(
         cands(&mut e, "nh").contains(&"你好".to_string()),
         "默认（简拼开）：nh 应当展开到「你好」"
@@ -108,6 +118,7 @@ fn jianpin_off_kills_the_abbreviation_word() {
 fn switches_are_independent() {
     // 模糊关、简拼开
     let mut e = engine();
+    e.set_correction(false); // 隔离（见本文件纠错注）
     e.set_fuzzy(false);
     assert!(cands(&mut e, "zongguo").is_empty(), "模糊关 ⇒ zongguo 空");
     assert!(
@@ -116,6 +127,7 @@ fn switches_are_independent() {
     );
     // 简拼关、模糊开
     let mut e = engine();
+    e.set_correction(false); // 隔离（见本文件纠错注）
     e.set_jianpin(false);
     assert!(cands(&mut e, "nh").is_empty(), "简拼关 ⇒ nh 空");
     assert!(
@@ -136,6 +148,7 @@ fn only_the_selected_pair_is_active() {
     let zh_z = 1u8 << FUZZY_PAIRS.iter().position(|p| *p == ("zh", "z")).unwrap();
 
     let mut e = engine();
+    e.set_correction(false); // 隔离（见本文件纠错注：纠错也能拼出同一些词）
     e.set_fuzzy_pairs(n_l);
     assert!(
         cands(&mut e, "nan").contains(&"兰".to_string()),
@@ -163,6 +176,7 @@ fn boolean_wrapper_equals_all_or_none() {
     use engine_core::fuzzy::FUZZY_ALL;
 
     let mut e = engine();
+    e.set_correction(false); // 隔离（见本文件纠错注）
     e.set_fuzzy(false);
     assert_eq!(e.fuzzy_pairs(), 0);
     assert!(!e.fuzzy_enabled(), "读侧：任一组开着才为 true");
@@ -188,4 +202,65 @@ fn mask_contract_is_eight_bits() {
     assert_eq!(e.fuzzy_pairs(), FUZZY_ALL, "缺省 = 全开（既有行为）");
     e.set_fuzzy_pairs(0xFE);
     assert_eq!(e.fuzzy_pairs(), 0xFE, "掩码按位原样存读");
+
+// ---------- 2026-10-13：拼音纠错（用户裁决「拼音纠错（混合参与排序）」） ----------
+
+/// 少打一个字母：`zhonggu`（想打 zhongguo）经纠错补出「中国」。
+/// 这条走**整串纠错变体**（gu→guo 是插入），且必须过候选层（rank_and_pick_with）。
+#[test]
+fn correction_fixes_a_missing_letter() {
+    let mut e = engine();
+    e.set_fuzzy(false); // 隔离：只留纠错，证明候选确实来自纠错档
+    assert!(
+        cands(&mut e, "zhongguo").contains(&"中国".to_string()),
+        "前置：精确档本来就有中国"
+    );
+    assert!(
+        cands(&mut e, "zhonggu").contains(&"中国".to_string()),
+        "少打一个字母（zhonggu）该被纠错补出「中国」"
+    );
+    // 关掉纠错：这条来路必须消失（两级开关都要真的管用）。
+    e.set_correction(false);
+    assert!(
+        !cands(&mut e, "zhonggu").contains(&"中国".to_string()),
+        "纠错关了 ⇒ zhonggu 不许再出「中国」"
+    );
+}
+
+/// 错按：`haq`? 不 —— 用相邻键真对（p↔o）：打 `nihap`（想打 nihao）该纠出「你好」。
+/// ⚠️ 注意分段：nihap 会被切成 ni|ha|p（p 不是音节）—— 这条正是「跨段轮转」的
+/// 验收点（起草版被预算饿死过，见 correction.rs 的一相注释）。
+#[test]
+fn correction_fixes_an_adjacent_key_slip() {
+    let mut e = engine();
+    e.set_fuzzy(false);
+    assert!(
+        cands(&mut e, "nihap").contains(&"你好".to_string()),
+        "相邻键错按（p↔o）：nihap 该纠出「你好」"
+    );
+    e.set_correction(false);
+    assert!(
+        !cands(&mut e, "nihap").contains(&"你好".to_string()),
+        "纠错关了 ⇒ nihap 不许再出「你好」"
+    );
+}
+
+/// 结构性不变量：**纠错命中不吃精确加成**（与模糊同一条）。
+/// 夹具里让纠错目标词频**远高于**精确词：若纠错误吃 exact_bonus，它会把精确档顶掉。
+#[test]
+fn correction_hits_never_win_the_exact_slot() {
+    let mut d = engine_core::dictionary::InMemoryDictionary::new();
+    // 精确档：`zao` 只有 "早"（词频低）；纠错档：`zao`→`zaoo` 删除类命中 "灶"（不设，
+    // 用插入反向：输入 `zaoo`（多打）纠到 `zao`；这里用输入侧做受控：
+    d.insert("zao", "早", 100);
+    d.insert("zaoo", "造", 999_999);
+    let mut e = Engine::new(Box::new(d), no_symbols(), false);
+    e.set_fuzzy(false);
+    // 打 zaoo（多打一个 o）：**精确档命中「造」**（词库真有这个键）⇒ 纠错不得把它顶掉；
+    // 而打 zao 时纠错(多打不来，zao 已精确) —— 换个方向：打 zao 的纠错变体里有 zaoo，
+    // 但精确档「早」必须在前。
+    let got = cands(&mut e, "zao");
+    assert_eq!(got.first().map(String::as_str), Some("早"), "精确档首位不被纠错顶掉（{got:?}）");
+    assert!(got.contains(&"造".to_string()), "纠错命中仍应出现在后段（{got:?}）");
+}
 }
