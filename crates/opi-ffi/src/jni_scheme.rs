@@ -100,3 +100,31 @@ pub unsafe extern "system" fn opijni_switch_language(
 pub unsafe extern "system" fn opijni_scheme(_env: JEnv, _class: sys::jclass) -> jint {
     guard(|| api::with_engine(|e| api::scheme_to_int(e.scheme())).unwrap_or_default())
 }
+
+/// setShuangpinLayout(index: int)：双拼布局（2026-10-13，`Scheme::Shuangpin` 的配套
+/// 设置）。0=自然码 1=微软 2=小鹤 3=智能ABC 4=紫光 5=拼音加加（名字/顺序 =
+/// `engine_core::shuangpin_tables::SHUANGPIN_TABLES`，设置面的名字表有锁步门禁钉着）。
+/// **负数钳到 0、过大钳到末位**（不是忽略 —— 与 fuzzy 掩码同一条「坏值钳到确定
+/// 值」纪律；两个方向各取自己的确定值，理由见 `Engine::set_shuangpin_layout`）。
+/// **不清缓冲**：设置项，缓冲里的键序按新布局重新解码（下一次 candidates 见效）。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_set_shuangpin_layout(
+    _env: JEnv,
+    _class: sys::jclass,
+    index: jint,
+) {
+    guard(|| {
+        api::with_engine(|e| {
+            // 负数（jint 有符号）也归到 0：usize 强转会变成天文数字，虽然引擎侧 `min`
+            // 会把它钳回去，但依赖「超大到 min 恰好落在末位」是巧合不是设计。
+            e.set_shuangpin_layout(index.max(0) as usize);
+        })
+    });
+}
+
+/// shuangpinLayout() -> int：双拼布局读侧（同 `setShuangpinLayout` 的整数表）。
+/// 未装载 → 0 是**哨兵**（同 `scheme` 一档）。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_shuangpin_layout(_env: JEnv, _class: sys::jclass) -> jint {
+    guard(|| api::with_engine(|e| e.shuangpin_layout() as jint).unwrap_or_default())
+}

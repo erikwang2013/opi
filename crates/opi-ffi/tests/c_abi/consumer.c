@@ -262,6 +262,18 @@ int main(int argc, char **argv) {
     CHECK(opi_scheme() == 3, "越界值忽略（仍为 3）");
     opi_set_scheme(0);
     CHECK(opi_scheme() == 0, "换回全键盘");
+
+    /* 双拼布局（2026-10-13）：与方案同一条整数回环契约 + 钳制的两个方向。
+     * 「布局真的能解码」（nihk → 你好）由 engine-core 的 shuangpin_input.rs 管。 */
+    CHECK(opi_shuangpin_layout() == 0, "默认双拼布局 = 自然码（0）");
+    opi_set_shuangpin_layout(5);
+    CHECK(opi_shuangpin_layout() == 5, "set_shuangpin_layout(5) 后应读到拼音加加");
+    opi_set_shuangpin_layout(99);
+    CHECK(opi_shuangpin_layout() == 5, "过大钳到末位（不是钳 0、也不是忽略）");
+    opi_set_shuangpin_layout(-3);
+    CHECK(opi_shuangpin_layout() == 0, "负数钳到 0");
+    opi_set_shuangpin_layout(0);
+    CHECK(opi_shuangpin_layout() == 0, "换回自然码");
     {
         static const uint16_t BAD_PATH[] = {0x2F, 0x6E, 0x6F, 0x70, 0x65}; /* "/nope" */
         CHECK(!opi_load_stroke(BAD_PATH, 5), "笔画词典坏路径 → false");

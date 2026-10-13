@@ -122,12 +122,18 @@ def main() -> int:
     for var, cname, label, zero in LAYOUTS:
         finals = fill_single_char_finals(parse_table(text, cname))
         initials = parse_initials(text, cname.replace("SPMap_C_", "SPMap_S_"))
-        fin = ", ".join(f"('{k}', \"{v}\")" for k, v in finals)
+        # ⚠️ **格式与 `cargo fmt --check` 一致**（CI 会红），别照抄一行的写法：
+        # `finals` 30+ 项，rustfmt 会拆成一条一行；`initials` 只有三条（zh/ch/sh）、
+        # 一行放得下 ⇒ 保持一行。两种形状都是实测（rustfmt --check 的产物）。
         ini = ", ".join(f"('{k}', \"{v}\")" for k, v in initials)
         out += [
             "    ShuangpinTable {",
             f'        name: "{label}",',
-            f"        finals: &[{fin}],",
+            "        finals: &[",
+        ]
+        out += [f"            ('{k}', \"{v}\")," for k, v in finals]
+        out += [
+            "        ],",
             f"        initials: &[{ini}],",
             f'        zero: "{zero}",',
             "    },",

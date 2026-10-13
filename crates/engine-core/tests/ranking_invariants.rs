@@ -10,7 +10,9 @@
 //! - 去重取**最高分**那一条：同一词挂在多条拼音行下（多音字）时，`dict.query` 会返回
 //!   同一文本多次，去重关掉即红。
 
-use engine_core::candidates::{Candidate, RankOptions, USER_BOOST, rank_and_pick, rank_and_pick_with, rank_score};
+use engine_core::candidates::{
+    Candidate, RankOptions, USER_BOOST, rank_and_pick, rank_and_pick_with, rank_score,
+};
 use engine_core::composer::Mode;
 use engine_core::dictionary::{Dictionary, InMemoryDictionary};
 use engine_core::learner::Learner;

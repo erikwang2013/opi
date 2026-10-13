@@ -37,6 +37,8 @@ fn apply_settings_lands_all_four_switches() {
         fuzzy_pairs: String::new(),
         jianpin: false,
         correction: true,
+        shuangpin_layout: String::new(),
+        pinyin_method: String::new(),
     });
     assert_eq!(s.switches(), (false, false, false, false));
     s.apply_settings(crate::settings::Settings::default());
@@ -493,4 +495,3 @@ fn printable_release_does_not_double_commit_english() {
         KeyOutcome::Consumed
     );
 }
-

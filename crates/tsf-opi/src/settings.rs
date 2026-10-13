@@ -41,6 +41,15 @@ pub struct Settings {
     pub jianpin: bool,
     /// 拼音纠错（2026-10-13；键 `Correction`）。
     pub correction: bool,
+    /// 双拼布局（2026-10-13；键 `ShuangpinLayout`）：**方案名**（`自然码`/`微软`/
+    /// 小鹤/智能ABC/紫光/拼音加加 —— 与引擎 `shuangpin_tables.rs` 的表同名，桌面写侧
+    /// 同此）。**空串 = 未设置 ⇒ 引擎保持既有布局**（自然码 = 默认）；名字认不得同样
+    /// 不动引擎（写坏一个名字不该静默改用户的布局）。
+    pub shuangpin_layout: String,
+    /// 拼音方式（2026-10-14；键 `PinyinMethod`）：**方案名**（`全拼`/`双拼` —— 名字表
+    /// 见 `engine_core::Scheme::name`，桌面写侧同此）。**空串 = 未设置 ⇒ 引擎保持既有
+    /// 方案**（全拼）；名字认不得同样不动引擎。
+    pub pinyin_method: String,
 }
 
 impl Default for Settings {
@@ -52,6 +61,8 @@ impl Default for Settings {
             fuzzy_pairs: String::new(), // 空 = 未设置（回落到 fuzzy 布尔）
             jianpin: true,
             correction: true,
+            shuangpin_layout: String::new(), // 空 = 未设置（引擎保持默认布局）
+            pinyin_method: String::new(),    // 空 = 未设置（引擎保持全拼）
         }
     }
 }
@@ -70,6 +81,16 @@ pub fn parse(text: &str) -> Settings {
             continue;
         };
         let key = k.trim();
+        if key == "PinyinMethod" {
+            // 字符串键（2026-10-14）：值原样收（注释与空白已在上文剥过）。
+            out.pinyin_method = v.trim().to_string();
+            continue;
+        }
+        if key == "ShuangpinLayout" {
+            // 字符串键（2026-10-13）：值原样收（`#` 注释与空白已在上文剥过）。
+            out.shuangpin_layout = v.trim().to_string();
+            continue;
+        }
         if key == "FuzzyPairs" {
             // 字符串键（2026-10-13）：值原样收（`#` 注释与空白已在上文剥过）。
             out.fuzzy_pairs = v.trim().to_string();

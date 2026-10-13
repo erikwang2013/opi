@@ -46,6 +46,9 @@ impl Engine {
             // 虽然浏览态的选中根本走不到这里，别把「走不到」当默认）。
             let buffer = &self.composer.session().buffer;
             match self.scheme() {
+                // 双拼不支持「切一半」：解码只在**整串**能解析时才出候选（DFS 要求
+                // 到达键尾），选中即整段消耗 —— 回退臂给 None（走 commit_buffer）。
+                Scheme::Shuangpin => None,
                 Scheme::Full | Scheme::Stroke => {
                     segment_fallback(self.active_dict(), buffer, self.fuzzy, self.correction)
                         .map(|fb| fb.suffix)

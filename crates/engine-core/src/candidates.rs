@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 use crate::composer::Mode;
-use crate::dictionary::{Dictionary, PREFIX_MATCH_CAP};
 use crate::correction;
+use crate::dictionary::{Dictionary, PREFIX_MATCH_CAP};
 use crate::fuzzy;
 use crate::jianpin;
 use crate::learner::Learner;

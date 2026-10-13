@@ -25,7 +25,8 @@ impl Engine {
     /// 缓冲也不是拼音，一律回本体）。FFI 的 buffer 出口读这里 —— 别的端没有 9 键
     /// 方案，读到的与原值逐字节相同。
     pub fn display_buffer(&self) -> String {
-        if matches!(self.mode(), Mode::Pinyin | Mode::Traditional) && self.scheme() == Scheme::Nine
+        if matches!(self.mode(), Mode::Pinyin | Mode::Traditional)
+            && matches!(self.scheme(), Scheme::Nine | Scheme::Shuangpin)
         {
             // **带分词的**读数（搜狗「拼音9键显示分词」同款）：音节用 `'` 连起来，
             // 「nihao」显示成「ni'hao」—— 一眼看到引擎怎么切的音节。
@@ -63,7 +64,11 @@ impl Engine {
         if !matches!(self.mode(), Mode::Pinyin | Mode::Traditional) {
             return Vec::new();
         }
-        if !matches!(self.scheme(), Scheme::Nine | Scheme::Fourteen) {
+        // 双拼同列（2026-10-13）：读数 = 各解析的展示形（左列给的是**解析候选**）。
+        if !matches!(
+            self.scheme(),
+            Scheme::Nine | Scheme::Fourteen | Scheme::Shuangpin
+        ) {
             return Vec::new();
         }
         let cached = self.scheme_readings.borrow();

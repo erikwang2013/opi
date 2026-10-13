@@ -39,14 +39,14 @@ pub(crate) fn guard<T: Default>(f: impl FnOnce() -> T) -> T {
 // 能引用到它们的唯一原因，别删。
 // 「属性设置」旋钮族（2026-10-13 拆到 `jni_switches.rs`）：注册表仍在本文件，
 // 这些 use 是注册表引用的手续 —— 与 `jni_user_words.rs` 同一次拆分的手续。
+use crate::jni_scheme::{
+    opijni_load, opijni_load_stroke, opijni_load_trad, opijni_scheme, opijni_set_scheme,
+    opijni_set_shuangpin_layout, opijni_shuangpin_layout, opijni_switch_language,
+};
 use crate::jni_switches::{
     opijni_chinese_punct, opijni_correction_enabled, opijni_fuzzy_enabled, opijni_fuzzy_pairs,
     opijni_jianpin_enabled, opijni_set_chinese_punct, opijni_set_correction, opijni_set_fuzzy,
     opijni_set_fuzzy_pairs, opijni_set_jianpin, opijni_toggle_chinese_punct,
-};
-use crate::jni_scheme::{
-    opijni_load, opijni_load_stroke, opijni_load_trad, opijni_scheme, opijni_set_scheme,
-    opijni_switch_language,
 };
 // 拆到 `jni_candidates.rs` 的四个**读侧**出口（candidates / candidateReadings /
 // buffer / displayBuffer）：同一手续（2026-10-09：加 candidateReadings 后本文件
@@ -309,6 +309,16 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _reserved: *mut c
                     jni_str!("scheme"),
                     jni_str!("()I"),
                     opijni_scheme as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("setShuangpinLayout"),
+                    jni_str!("(I)V"),
+                    opijni_set_shuangpin_layout as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("shuangpinLayout"),
+                    jni_str!("()I"),
+                    opijni_shuangpin_layout as *mut c_void,
                 ),
                 NativeMethod::from_raw_parts(
                     jni_str!("loadStroke"),

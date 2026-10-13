@@ -40,9 +40,70 @@ pub enum Scheme {
     /// 本方案改变的是 [`crate::Engine::candidates`] 查哪个词典（`stroke_dict`）
     /// 以及**关掉模糊音/简拼**（对笔画串没有意义）。
     Stroke,
+    /// 双拼（2026-10-13 用户裁决「搜狗同款全套」）：键序按方案表**解码成全拼串**，
+    /// 下游复用既有全拼管线（见 [`crate::shuangpin`]）。具体布局（自然码/微软/小鹤/
+    /// 智能ABC/紫光/拼音加加）是 `Engine::shuangpin_layout` 的运行期状态，
+    /// 不在本枚举里 —— 枚举是「匹配语义」的轴，布局只是那张表的索引。
+    Shuangpin,
 }
 
 impl Scheme {
+    /// 方案**整数码**（对外协议）：0=全拼 1=拼音9键 2=拼音14键 3=笔画 4=双拼。
+    ///
+    /// 这是 JNI `scheme()`/`setScheme()` 与 C ABI `opi_scheme`/`opi_set_scheme` 的
+    /// 线上口径，也是 fcitx5 配置枚举 `OpiPinyinMethod` 的取值来源（那边把枚举值
+    /// 直接定义成这两个码）。**改这张表 = 改协议**：`api::scheme_from_int` 只是它的
+    /// 转发（2026-10-14 前那张表在 opi-ffi 里，与这里的语义重复 —— 已收拢成一份），
+    /// 两 ABI 的契约测试与四端注释都指着这里。
+    pub fn code(self) -> i32 {
+        match self {
+            Scheme::Full => 0,
+            Scheme::Nine => 1,
+            Scheme::Fourteen => 2,
+            Scheme::Stroke => 3,
+            Scheme::Shuangpin => 4,
+        }
+    }
+
+    /// 整数码 → 方案。**越界 → None**（写侧忽略、读侧按 Full，与 `switch_mode`
+    /// 的边界约定同款）。
+    pub fn from_code(v: i32) -> Option<Scheme> {
+        match v {
+            0 => Some(Scheme::Full),
+            1 => Some(Scheme::Nine),
+            2 => Some(Scheme::Fourteen),
+            3 => Some(Scheme::Stroke),
+            4 => Some(Scheme::Shuangpin),
+            _ => None,
+        }
+    }
+
+    /// 配置面的**名字**（设置窗/ini 用；桌面两轨的「拼音方式」键存的就是它）。
+    /// 与 Android 输入模式面板的中文标签刻意不同：那边是**键盘**的名字（拼音26键），
+    /// 这里是**方案**的名字（全拼）—— 同一件事在两个语境下的自然叫法，别hard拉平。
+    pub fn name(self) -> &'static str {
+        match self {
+            Scheme::Full => "全拼",
+            Scheme::Nine => "拼音9键",
+            Scheme::Fourteen => "拼音14键",
+            Scheme::Stroke => "笔画",
+            Scheme::Shuangpin => "双拼",
+        }
+    }
+
+    /// 名字 → 方案（**认不得 → None**；容错口径与 `fuzzy::mask_from_names` 一致：
+    /// 调用方按「认不得就不动引擎」处理，别静默跳回默认）。
+    pub fn from_name(name: &str) -> Option<Scheme> {
+        match name.trim() {
+            "全拼" => Some(Scheme::Full),
+            "拼音9键" => Some(Scheme::Nine),
+            "拼音14键" => Some(Scheme::Fourteen),
+            "笔画" => Some(Scheme::Stroke),
+            "双拼" => Some(Scheme::Shuangpin),
+            _ => None,
+        }
+    }
+
     /// 本方案下这个字符是不是**输入键**；是 → 返回该键覆盖的字母类。
     ///
     /// `Full`/`Stroke` 恒 `None`：Full 走既有字母路径；Stroke 的五个键是普通字母，
@@ -50,7 +111,8 @@ impl Scheme {
     /// 14 键十四个键），**别在宿主另抄一份**。
     pub fn key_class(self, ch: char) -> Option<&'static [char]> {
         match self {
-            Scheme::Full | Scheme::Stroke => None,
+            // 双拼的键也是普通字母（映射在引擎的解码层，不在键类层）。
+            Scheme::Full | Scheme::Stroke | Scheme::Shuangpin => None,
             Scheme::Nine => Some(match ch {
                 '2' => &['a', 'b', 'c'],
                 '3' => &['d', 'e', 'f'],
@@ -93,6 +155,9 @@ impl Scheme {
         }
         match self {
             Scheme::Full | Scheme::Stroke => pinyin.starts_with(input),
+            // 双拼的键序不是拼音前缀（要先解码，见 Engine::candidates 的 Shuangpin 支）：
+            // 本函数对它恒 false —— 真走到这里说明有人拿双拼键直查词库，是缺陷不是语义。
+            Scheme::Shuangpin => false,
             Scheme::Nine | Scheme::Fourteen => {
                 // 分词符（`'`，搜狗「分词键」发它）：词库键**不含**分隔符（格式约定），
                 // 按段长切开比 —— 语义见 matches_segmented。
@@ -219,6 +284,50 @@ pub(crate) fn scheme_fallback_len<D: Dictionary + ?Sized>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 整数码是**对外协议**（JNI/C ABI 两张整数表）：整表逐值钉，改一个数先在这里红。
+    #[test]
+    fn code_table_is_the_protocol() {
+        let table: [(Scheme, i32); 5] = [
+            (Scheme::Full, 0),
+            (Scheme::Nine, 1),
+            (Scheme::Fourteen, 2),
+            (Scheme::Stroke, 3),
+            (Scheme::Shuangpin, 4),
+        ];
+        for (s, c) in table {
+            assert_eq!(s.code(), c, "{s:?} 的码");
+            assert_eq!(Scheme::from_code(c), Some(s), "码 {c} 该读回 {s:?}");
+        }
+        // 越界 → None（写侧忽略、读侧按 Full —— 由 FFI 层落成各自哨兵）。
+        assert_eq!(Scheme::from_code(5), None);
+        assert_eq!(Scheme::from_code(-1), None);
+    }
+
+    /// 名字表（配置面）：往返 + 认不得 → None（**不是**回默认）。
+    #[test]
+    fn name_table_round_trips() {
+        for s in [
+            Scheme::Full,
+            Scheme::Nine,
+            Scheme::Fourteen,
+            Scheme::Stroke,
+            Scheme::Shuangpin,
+        ] {
+            assert_eq!(Scheme::from_name(s.name()), Some(s), "{s:?} 的名字往返");
+        }
+        assert_eq!(
+            Scheme::from_name(" 双拼 "),
+            Some(Scheme::Shuangpin),
+            "两侧空白容错"
+        );
+        assert_eq!(
+            Scheme::from_name("全拼含简拼"),
+            None,
+            "认不得 ⇒ None（简拼是另一个开关）"
+        );
+        assert_eq!(Scheme::from_name(""), None);
+    }
 
     #[test]
     fn nine_key_class_table() {

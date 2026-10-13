@@ -21,11 +21,15 @@ mod cabi;
 pub mod candidate;
 pub mod data_dir;
 pub mod input_method;
+mod switches;
 
 pub use cabi::{
     opi_fcitx5_init_dict, opi_fcitx5_load_symbols, opi_fcitx5_search_symbols,
     opi_fcitx5_symbol_browse,
 };
+// 「属性设置」旋钮族的出口（2026-10-14 从本文件拆出：加拼音方式后 526/500 越线；
+// 同一手续见 `cabi.rs`。这几个 `pub use` 是测试与内部调用方引用它们的唯一原因）。
+pub use switches::*;
 
 use candidate::CandidateState;
 
@@ -288,79 +292,6 @@ pub unsafe extern "C" fn opi_fcitx5_switch_mode(mode: i32) {
         if let Some(m) = mode_from_int(mode) {
             with_state(|s| s.switch_mode(m));
         }
-    }));
-}
-
-/// setLearner(on)：学习开关（「属性设置」的旋钮之一；值来自 addon 配置的 `Learn`）。
-/// 配对：`tsf-opi/src/logic.rs` 的同名方法。
-/// # Safety
-///
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn opi_fcitx5_set_learner(on: bool) {
-    ensure_panic_hook();
-    let _ = catch_unwind(AssertUnwindSafe(|| with_state(|s| s.set_learner(on))));
-}
-
-/// setChinesePunct(on)：中文标点开关（值来自 addon 配置的 `ChinesePunct`；与全角
-/// 是**两个独立开关**，见 engine.rs 的 `punct_text`）。
-/// # Safety
-///
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn opi_fcitx5_set_chinese_punct(on: bool) {
-    ensure_panic_hook();
-    let _ = catch_unwind(AssertUnwindSafe(|| with_state(|s| s.set_chinese_punct(on))));
-}
-
-/// setFuzzy(on)：模糊音开关（「属性设置」的旋钮之一）。
-/// 配置来源 = fcitx5 的 **原生 addon 配置**（`~/.config/fcitx5/conf/opi_fcitx5.conf`）：
-/// C++ 侧 `OpiConfig` 声明字段、`reloadConfig()`/`setConfig()` 里把它推到这里
-/// （见 `cpp/opi_fcitx5.cpp`），配置工具改一下即时生效。
-/// # Safety
-///
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn opi_fcitx5_set_fuzzy(on: bool) {
-    ensure_panic_hook();
-    let _ = catch_unwind(AssertUnwindSafe(|| with_state(|s| s.set_fuzzy(on))));
-}
-
-/// setJianpin(on)：简拼开关（同上）。
-/// # Safety
-///
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn opi_fcitx5_set_jianpin(on: bool) {
-    ensure_panic_hook();
-    let _ = catch_unwind(AssertUnwindSafe(|| with_state(|s| s.set_jianpin(on))));
-}
-
-/// setFuzzyPairsNames(names)：模糊音逐对（2026-10-13；逗号分隔组名，见
-/// `engine_core::fuzzy::pair_names`）。**空串 = 空操作** —— 回落旧布尔的裁决在
-/// C++ 的 `applyOpiSettings` 里（两档都写这里的话，老配置的 `Fuzzy=False` 会被
-/// 默认串覆盖）；名字认不得整条忽略。`(ptr, len)` = UTF-8 串，null/空 = 空操作。
-/// # Safety
-///
-/// `ptr` 必须指向至少 `len` 字节的有效内存（或为 null，视为空操作）。
-/// setCorrection(on)：拼音纠错开关（2026-10-13；配置键 `Correction`）。
-/// # Safety
-///
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn opi_fcitx5_set_correction(on: bool) {
-    ensure_panic_hook();
-    let _ = catch_unwind(AssertUnwindSafe(|| with_state(|s| s.set_correction(on))));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn opi_fcitx5_set_fuzzy_pairs(ptr: *const u8, len: usize) {
-    ensure_panic_hook();
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        let Some(names) = (unsafe { read_utf8(ptr, len) }).filter(|n| !n.is_empty()) else {
-            return;
-        };
-        let _ = with_state(|s| s.set_fuzzy_pairs(&names));
     }));
 }
 

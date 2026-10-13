@@ -162,6 +162,15 @@ class FakeEngine : OpiEngineApi {
         this.schemeValue = scheme
     }
 
+    /** 双拼布局（真引擎：shuangpinLayout()/setShuangpinLayout()；缺省 0=自然码）。 */
+    var shuangpinLayoutValue = 0
+
+    override fun shuangpinLayout(): Int = shuangpinLayoutValue
+
+    override fun setShuangpinLayout(index: Int) {
+        shuangpinLayoutValue = index
+    }
+
     /** 全角开关（真引擎：fullwidthState()/toggleFullwidth()；切模式重置是引擎的事）。 */
     var fullwidthValue = false
 

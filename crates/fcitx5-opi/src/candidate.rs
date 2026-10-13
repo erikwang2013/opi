@@ -201,6 +201,22 @@ impl CandidateState {
         self.engine.set_correction(on);
     }
 
+    /// 双拼布局（2026-10-13；配置键 `ShuangpinLayout`）。收**下标**（0=自然码…5=拼音加加，
+    /// 表序见 `shuangpin_tables.rs`）—— C++ 侧把它的枚举值转成下标传进来；越界钳制在
+    /// 引擎侧（`set_shuangpin_layout`）。
+    /// 配对：`tsf-opi/src/logic.rs` 的同名方法（两轨同构）。
+    pub fn set_shuangpin_layout(&mut self, index: usize) {
+        self.engine.set_shuangpin_layout(index);
+    }
+
+    /// 输入方案（2026-10-14；配置键 `PinyinMethod`，C++ 侧传枚举值 = 方案整数码）。
+    /// **清缓冲**（引擎侧语义，见 `Engine::set_scheme`）—— 冷路径（配置变更）调用，
+    /// 没有「按键路径上换方案」这种用法。
+    /// 配对：`tsf-opi/src/logic.rs` 的同名方法（两轨同构）。
+    pub fn set_scheme(&mut self, scheme: engine_core::Scheme) {
+        self.engine.set_scheme(scheme);
+    }
+
     /// 切模式（**不收尾**：待处理的缓冲由 `Composer::switch_mode` 直接清掉）。
     /// 需要「切走收尾（拼音/繁体上原文、符号模式丢关键字）」的用
     /// [`Self::switch_mode_confirmed`]（W1 订正版）。

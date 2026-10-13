@@ -41,6 +41,12 @@ pub fn layout_name(index: usize) -> Option<&'static str> {
     SHUANGPIN_TABLES.get(index).map(|t| t.name)
 }
 
+/// 名字 → 下标（认不得 → None）。**名字↔下标换算的唯一一份**：各端的配置里存的是
+/// 方案名（字符串，见 `ShuangpinLayout=` 这一族键），换下标处若再抄一张表就会漂。
+pub fn layout_index_of_name(name: &str) -> Option<usize> {
+    SHUANGPIN_TABLES.iter().position(|t| t.name == name)
+}
+
 fn table(index: usize) -> &'static ShuangpinTable {
     // 越界钳到 0（自然码）：FFI 侧另有钳制，这里是双保险 —— 与 fuzzy 掩码同纪律。
     &SHUANGPIN_TABLES[index.min(SHUANGPIN_TABLES.len() - 1)]
@@ -50,13 +56,30 @@ fn table(index: usize) -> &'static ShuangpinTable {
 /// 用常量表而不是 `Box::leak` 拼串：这条路在每次击键上，起草版的 leak 会被门禁
 /// 之外的人一眼看出来（也曾真写出来过）。
 static CONSONANT_INITIALS: &[(char, &str)] = &[
-    ('b', "b"), ('c', "c"), ('d', "d"), ('f', "f"), ('g', "g"), ('h', "h"), ('j', "j"),
-    ('k', "k"), ('l', "l"), ('m', "m"), ('n', "n"), ('p', "p"), ('q', "q"), ('r', "r"),
-    ('s', "s"), ('t', "t"), ('w', "w"), ('x', "x"), ('y', "y"), ('z', "z"),
+    ('b', "b"),
+    ('c', "c"),
+    ('d', "d"),
+    ('f', "f"),
+    ('g', "g"),
+    ('h', "h"),
+    ('j', "j"),
+    ('k', "k"),
+    ('l', "l"),
+    ('m', "m"),
+    ('n', "n"),
+    ('p', "p"),
+    ('q', "q"),
+    ('r', "r"),
+    ('s', "s"),
+    ('t', "t"),
+    ('w', "w"),
+    ('x', "x"),
+    ('y', "y"),
+    ('z', "z"),
 ];
 
 /// 键 k 能否当声母键（含 zh/ch/sh 与单字母声母；零声母标记不算）。
-fn initial_of<'a>(t: &'a ShuangpinTable, k: char) -> Option<&'a str> {
+fn initial_of(t: &ShuangpinTable, k: char) -> Option<&str> {
     for (key, ini) in t.initials {
         if *key == k {
             return Some(ini);
@@ -69,7 +92,7 @@ fn initial_of<'a>(t: &'a ShuangpinTable, k: char) -> Option<&'a str> {
 }
 
 /// 键 k 对应的全部韵母（一键多韵母都要枚举）。
-fn finals_of<'a>(t: &'a ShuangpinTable, k: char) -> Vec<&'a str> {
+fn finals_of(t: &ShuangpinTable, k: char) -> Vec<&str> {
     t.finals
         .iter()
         .filter(|(key, _)| *key == k)
@@ -108,19 +131,24 @@ fn dfs(t: &ShuangpinTable, keys: &[char], i: usize, cur: &mut String, out: &mut 
         return;
     }
     let k1 = keys[i];
-    // 1 键段：裸零声母（仅当方案接受裸形；韵母键本身可多解）。
-    if accepts_bare(t) && finals_of(t, k1).iter().any(|f| is_syllable(f)) {
-        for f in finals_of(t, k1) {
-            if !is_syllable(f) {
-                continue;
+    // ⚠️ **2 键段优先于 1 键段**（起草版反过来，测试打回）：双拼的正规形全是 2 键
+    // （声母+韵母 / 标记+韵母），裸形（1 键）只在小鹤那种 `*` 方案里给零声母用。
+    // 1 键优先会让 `nihk` 的 DFS 先吐出 `in…`（n=in 是韵母键，裸形合法）——
+    // 解析序第一个不是 `nihao`，读数（取首解析）就错位。
+    let k2_opt = keys.get(i + 1).copied();
+    let Some(k2) = k2_opt else {
+        // 键尾只剩 1 键：只能走裸形（如果方案接受）。
+        if accepts_bare(t) {
+            for f in finals_of(t, k1) {
+                if !is_syllable(f) {
+                    continue;
+                }
+                let n = cur.len();
+                cur.push_str(f);
+                dfs(t, keys, i + 1, cur, out);
+                cur.truncate(n);
             }
-            let n = cur.len();
-            cur.push_str(f);
-            dfs(t, keys, i + 1, cur, out);
-            cur.truncate(n);
         }
-    }
-    let Some(k2) = keys.get(i + 1).copied() else {
         return;
     };
     // 2 键段：零声母标记 + 韵母。
@@ -148,6 +176,18 @@ fn dfs(t: &ShuangpinTable, keys: &[char], i: usize, cur: &mut String, out: &mut 
             cur.truncate(n);
         }
     }
+    // 1 键段：裸零声母（排在 2 键段之后，见上）。
+    if accepts_bare(t) {
+        for f in finals_of(t, k1) {
+            if !is_syllable(f) {
+                continue;
+            }
+            let n = cur.len();
+            cur.push_str(f);
+            dfs(t, keys, i + 1, cur, out);
+            cur.truncate(n);
+        }
+    }
 }
 
 /// 展示形（音节用 `'` 分隔；非音节段原样保留：打一半的输入也要看得见）。
@@ -161,14 +201,20 @@ mod tests {
     use super::*;
 
     fn l(name: &str) -> usize {
-        SHUANGPIN_TABLES.iter().position(|t| t.name == name).unwrap()
+        SHUANGPIN_TABLES
+            .iter()
+            .position(|t| t.name == name)
+            .unwrap()
     }
 
     /// 六套都在、名字与顺序是指定集合。
     #[test]
     fn six_layouts_in_order() {
         let names: Vec<&str> = SHUANGPIN_TABLES.iter().map(|t| t.name).collect();
-        assert_eq!(names, ["自然码", "微软", "小鹤", "智能ABC", "紫光", "拼音加加"]);
+        assert_eq!(
+            names,
+            ["自然码", "微软", "小鹤", "智能ABC", "紫光", "拼音加加"]
+        );
     }
 
     /// 每套的**代表键**逐条钉（来自 libime 的 C 表，抽查会随生成物一起变红）。
@@ -191,7 +237,10 @@ mod tests {
     #[test]
     fn zero_initial_rules() {
         assert!(decode_keys("oj", l("自然码")).contains(&"an".to_string()));
-        assert!(decode_keys("j", l("自然码")).contains(&"an".to_string()), "o* 接受裸形");
+        assert!(
+            decode_keys("j", l("自然码")).contains(&"an".to_string()),
+            "o* 接受裸形"
+        );
         assert!(decode_keys("oj", l("微软")).contains(&"an".to_string()));
         assert!(
             !decode_keys("j", l("微软")).contains(&"an".to_string()),
@@ -206,9 +255,15 @@ mod tests {
     #[test]
     fn multi_final_keys_are_enumerated() {
         assert!(decode_keys("ds", l("自然码")).contains(&"dong".to_string()));
-        assert!(decode_keys("ds", l("自然码")).contains(&"diong".to_string()) == false, "diong 非法（被合法性过滤）");
+        assert!(
+            !decode_keys("ds", l("自然码")).contains(&"diong".to_string()),
+            "diong 非法（被合法性过滤）"
+        );
         assert!(decode_keys("dr", l("自然码")).contains(&"duan".to_string()));
-        assert!(decode_keys("dr", l("自然码")).contains(&"der".to_string()) == false, "der 非法");
+        assert!(
+            !decode_keys("dr", l("自然码")).contains(&"der".to_string()),
+            "der 非法"
+        );
     }
 
     /// 多音节：候选里出现完整连写（同一次 DFS 跨段拼接）。

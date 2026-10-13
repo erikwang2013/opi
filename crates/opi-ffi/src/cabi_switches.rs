@@ -15,7 +15,6 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use crate::api;
-use crate::cabi::utf16::read_utf16;
 use crate::cabi::OpiString;
 
 /// chinesePunct() -> bool：中文标点表开关读侧（`.。`、引号交替那一档）。未装载 → false。
@@ -85,7 +84,9 @@ pub unsafe extern "C" fn opi_correction_enabled() -> bool {
 /// 缺省开；变体见 `engine_core::correction`）。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_set_correction(on: bool) {
-    let _ = catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.set_correction(on))));
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.set_correction(on))
+    }));
 }
 
 /// 模糊音**逐对**启用集的读侧（2026-10-13 用户裁决「可多选类似 z=zh」；写侧见
@@ -135,7 +136,9 @@ pub unsafe extern "C" fn opi_set_fuzzy_pairs_names(ptr: *const u16, len: usize) 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_set_fuzzy_pairs(mask: i32) {
     let m = (mask as u32 & 0xFF) as u8;
-    let _ = catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.set_fuzzy_pairs(m))));
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.set_fuzzy_pairs(m))
+    }));
 }
 
 /// 且客户端本来就不知道该设成什么值）。只翻一个 bool，不改 buffer/候选/页码。
@@ -161,4 +164,3 @@ pub unsafe extern "C" fn opi_toggle_chinese_punct() -> bool {
     }))
     .unwrap_or(false)
 }
-

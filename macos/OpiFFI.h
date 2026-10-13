@@ -74,11 +74,17 @@ bool opi_load_trad(const uint16_t *path, size_t len);
 /// 笔画词典（stroke.opid，2026-10-09）。空/坏路径/引擎未装载 → false。
 bool opi_load_stroke(const uint16_t *path, size_t len);
 
-/// 输入方案（2026-10-09）：0=全键盘 1=拼音9键 2=拼音14键 3=笔画，越界忽略。
+/// 输入方案（2026-10-09）：0=全键盘 1=拼音9键 2=拼音14键 3=笔画 4=双拼，越界忽略。
 /// **换方案清缓冲** —— 调用后按 `opi_switch_mode` 那档重读 buffer/候选/页码。
 void opi_set_scheme(int32_t scheme);
 /// 方案读侧（未装载 → 0 是哨兵，不是"用户选的就是全键盘"）。
 int32_t opi_scheme(void);
+
+/// 双拼布局（2026-10-13）：0=自然码 1=微软 2=小鹤 3=智能ABC 4=紫光 5=拼音加加；
+/// 负数钳到 0、过大钳到末位。**不清缓冲**（区别于 setScheme）—— 下次取候选即按新布局解码。
+void opi_set_shuangpin_layout(int32_t index);
+/// 布局读侧（未装载 → 0 是哨兵，不是"用户选的就是自然码"）。
+int32_t opi_shuangpin_layout(void);
 
 /// 单字符入引擎，返回需要提交的文本（多数时候是空串）。
 OpiString opi_input_key(const uint16_t *ch, size_t len);

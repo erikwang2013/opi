@@ -11,8 +11,6 @@
 #![allow(clippy::missing_safety_doc)]
 // ⚠️ 同 `jni.rs` 顶上那条：按模块生效。
 
-use std::panic::{AssertUnwindSafe, catch_unwind};
-
 use jni::sys::{self, jboolean, jint};
 
 use crate::api;
@@ -67,7 +65,10 @@ pub unsafe extern "system" fn opijni_set_jianpin(_env: JEnv, _class: sys::jclass
 /// correctionEnabled() -> boolean：拼音纠错读侧（2026-10-13；写侧见 `setCorrection`）。
 /// 未装载 → false（哨兵语义同族；真缺省是 true —— 对齐搜狗，见引擎侧 Default）。
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_correction_enabled(_env: JEnv, _class: sys::jclass) -> jboolean {
+pub unsafe extern "system" fn opijni_correction_enabled(
+    _env: JEnv,
+    _class: sys::jclass,
+) -> jboolean {
     guard(|| api::with_engine(|e| e.correction_enabled()).unwrap_or_default())
 }
 
@@ -82,11 +83,7 @@ pub unsafe extern "system" fn opijni_set_correction(_env: JEnv, _class: sys::jcl
 /// `0xFF` = 全开（= 旧 `setFuzzy(true)`）；越界位钳掉（只保留低 8 位）。
 /// **无返回值**（设置项）；要拿结果读 `fuzzyPairs()`。未装载时是空操作。
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn opijni_set_fuzzy_pairs(
-    _env: JEnv,
-    _class: sys::jclass,
-    mask: jint,
-) {
+pub unsafe extern "system" fn opijni_set_fuzzy_pairs(_env: JEnv, _class: sys::jclass, mask: jint) {
     let m = (mask as u32 & 0xFF) as u8;
     guard(|| api::with_engine(|e| e.set_fuzzy_pairs(m)));
 }
@@ -108,4 +105,3 @@ pub unsafe extern "system" fn opijni_toggle_chinese_punct(
 ) -> jboolean {
     guard(|| api::with_engine(|e| e.toggle_chinese_punct()).unwrap_or_default())
 }
-

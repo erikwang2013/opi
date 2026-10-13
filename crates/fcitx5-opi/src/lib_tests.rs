@@ -137,3 +137,50 @@ fn key_event_ctrl_passes_through_and_shift_consumed() {
     let r = unsafe { opi_fcitx5_key_event(97, 0) };
     assert_eq!(read_and_free(r.text), "a");
 }
+
+/// 双拼两张设置出口（2026-10-13/14）：C++ 的枚举下标/方案码 → 引擎的布局与方案。
+/// 这条是 Linux 端的**唯一**程序化取证点（C++ 的 applyOpiSettings 在配置变更时走
+/// 同一条；那边要真 fcitx5 才能跑）。
+#[test]
+fn shuangpin_layout_and_scheme_exports_land_on_the_engine() {
+    use engine_core::Scheme;
+    let _g = serial_install();
+    // 布局：C++ 枚举下标原样进引擎（钳制在引擎侧）。
+    assert_eq!(with_state(|s| s.engine.shuangpin_layout()), Some(0));
+    unsafe { opi_fcitx5_set_shuangpin_layout(4) };
+    assert_eq!(
+        with_state(|s| s.engine.shuangpin_layout()),
+        Some(4),
+        "紫光（下标 4）该原样进引擎"
+    );
+    unsafe { opi_fcitx5_set_shuangpin_layout(99) };
+    assert_eq!(
+        with_state(|s| s.engine.shuangpin_layout()),
+        Some(5),
+        "过大钳到末位（同 opi_set_shuangpin_layout）"
+    );
+    // 方案：枚举值 = 方案整数码（0=全拼 4=双拼）。
+    assert_eq!(
+        with_state(|s| s.engine.scheme()),
+        Some(Scheme::Full),
+        "缺省全拼"
+    );
+    unsafe { opi_fcitx5_set_scheme(4) };
+    assert_eq!(
+        with_state(|s| s.engine.scheme()),
+        Some(Scheme::Shuangpin),
+        "码 4 该切到双拼"
+    );
+    unsafe { opi_fcitx5_set_scheme(99) };
+    assert_eq!(
+        with_state(|s| s.engine.scheme()),
+        Some(Scheme::Shuangpin),
+        "越界码 = 空操作（不静默跳回全拼）"
+    );
+    unsafe { opi_fcitx5_set_scheme(0) };
+    assert_eq!(
+        with_state(|s| s.engine.scheme()),
+        Some(Scheme::Full),
+        "码 0 切回全拼"
+    );
+}

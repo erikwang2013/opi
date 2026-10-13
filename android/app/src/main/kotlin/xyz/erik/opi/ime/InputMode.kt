@@ -33,6 +33,12 @@ enum class InputMode(
     BIG9(InputScheme.NINE, EngineMode.PINYIN, big = true),
     STROKE(InputScheme.STROKE, EngineMode.PINYIN),
     RARE(InputScheme.FULL, EngineMode.PINYIN, panel = true),
+
+    /**
+     * 双拼（2026-10-13）：键面就是 26 键（`ImeScreen` 的 else 臂画 QwertyKeyboard），
+     * 引擎方案不同 —— 解码与布局（自然码/微软/…，见设置页的「双拼布局」）在引擎侧。
+     */
+    SHUANGPIN(InputScheme.SHUANGPIN, EngineMode.PINYIN),
     ;
 
     /** 菜单里的名字（与搜狗同款措辞）。 */
@@ -45,6 +51,7 @@ enum class InputMode(
             BIG9 -> "拼音大9键"
             STROKE -> "笔画键盘"
             RARE -> "生僻字键盘"
+            SHUANGPIN -> "拼音双拼"
         }
 }
 
@@ -63,5 +70,8 @@ fun layoutFor(scheme: InputScheme, mode: EngineMode, previous: InputMode): Input
     scheme == InputScheme.NINE -> if (previous.big) InputMode.BIG9 else InputMode.PINYIN9
     scheme == InputScheme.FOURTEEN -> InputMode.PINYIN14
     scheme == InputScheme.STROKE -> InputMode.STROKE
+    // 双拼与全键盘**共用 26 键键面**，反推不出来是哪一个 ⇒ 只能报 [InputMode.SHUANGPIN]
+    // 还是 26键 取决于引擎方案（这正是本函数存在的理由）；方案非双拼时 else 臂照旧。
+    scheme == InputScheme.SHUANGPIN -> InputMode.SHUANGPIN
     else -> InputMode.PINYIN26
 }

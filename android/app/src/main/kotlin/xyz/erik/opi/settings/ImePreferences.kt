@@ -113,6 +113,17 @@ class ImePreferences(private val store: PrefStore) {
         get() = store.getString(KEY_FUZZY_PAIRS) ?: ""
         set(v) = store.put(KEY_FUZZY_PAIRS, v)
 
+    /**
+     * 双拼布局（2026-10-13）：存**方案名**（本文件对枚举的既有约定 —— 序数会随
+     * 表序增删漂；名字表见 [SHUANGPIN_LAYOUTS_ANDROID]）。未设置/认不得 → 表首
+     * （自然码，最通行的一套）。推进引擎时用 [shuangpinLayoutIndexOf] 转下标。
+     */
+    var shuangpinLayout: String
+        get() = store.getString(KEY_SHUANGPIN_LAYOUT)
+            ?.takeIf { it in SHUANGPIN_LAYOUTS_ANDROID }
+            ?: SHUANGPIN_LAYOUTS_ANDROID.first()
+        set(v) = store.put(KEY_SHUANGPIN_LAYOUT, v)
+
     /** 把三个引擎开关推给引擎（服务启动与设置页保存共用一处，防两处漂）。 */
     fun applyEngineSwitches(controller: EngineController) {
         controller.setLearner(learn)
@@ -125,6 +136,9 @@ class ImePreferences(private val store: PrefStore) {
         }
         controller.setJianpin(jianpin)
         controller.setCorrection(correction)
+        // 双拼布局（2026-10-13）：与方案正交 —— 无论当前是不是双拼都推进去（引擎侧
+        // 只在双拼方案下用它解码），这样切到双拼时布局已经是对的。
+        controller.setShuangpinLayout(shuangpinLayoutIndexOf(shuangpinLayout))
     }
 
     companion object {
@@ -140,6 +154,7 @@ class ImePreferences(private val store: PrefStore) {
         const val KEY_FUZZY_PAIRS = "engine_fuzzy_pairs"
         const val KEY_JIANPIN = "engine_jianpin"
         const val KEY_CORRECTION = "engine_correction"
+        const val KEY_SHUANGPIN_LAYOUT = "engine_shuangpin_layout"
 
         fun from(context: Context): ImePreferences = ImePreferences(AndroidPrefStore(context))
     }
@@ -163,3 +178,16 @@ internal fun fuzzyMaskOf(names: String): Int =
         val i = FUZZY_PAIRS_ANDROID.indexOf(raw.trim())
         if (i >= 0) acc or (1 shl i) else acc
     }
+
+/**
+ * 双拼方案名表（顺序 = 引擎 `engine-core/src/shuangpin_tables.rs` 的 `SHUANGPIN_TABLES`
+ * 表序 = FFI 的下标口径）。**锁步门禁**：`ShuangpinLayoutsLockstepTest` 文本读那张
+ * 生成表逐项比对 —— 那边加方案这里不加会红。
+ */
+internal val SHUANGPIN_LAYOUTS_ANDROID = listOf(
+    "自然码", "微软", "小鹤", "智能ABC", "紫光", "拼音加加",
+)
+
+/** 方案名 → FFI 下标（认不得 → 0 = 自然码，与引擎的钳制口径一致）。 */
+internal fun shuangpinLayoutIndexOf(name: String): Int =
+    SHUANGPIN_LAYOUTS_ANDROID.indexOf(name).coerceAtLeast(0)

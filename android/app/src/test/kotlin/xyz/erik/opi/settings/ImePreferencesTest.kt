@@ -69,9 +69,22 @@ class ImePreferencesTest {
         store.put(ImePreferences.KEY_INPUT_MODE, "SOMETHING_ELSE")
         store.put(ImePreferences.KEY_ONE_HAND, "MIDDLE")
         store.put(ImePreferences.KEY_SKIN, "RAINBOW")
+        store.put(ImePreferences.KEY_SHUANGPIN_LAYOUT, "打错了") // 双拼布局也走同一条容错
         val p = ImePreferences(store)
         assertEquals(InputMode.PINYIN9, p.inputMode)
         assertEquals(KeyboardModes.OneHand.OFF, p.keyboardModes.oneHand)
         assertEquals(SkinOption.FOLLOW, p.skin)
+        assertEquals(SHUANGPIN_LAYOUTS_ANDROID.first(), p.shuangpinLayout)
+    }
+
+    /** 双拼布局（2026-10-13）：存名字、读回同名；缺省 = 表首（自然码）。 */
+    @Test
+    fun shuangpinLayoutRoundTripsByName() {
+        val store = FakeStore()
+        val p = ImePreferences(store)
+        assertEquals("缺省 = 自然码（表首）", "自然码", p.shuangpinLayout)
+        p.shuangpinLayout = "小鹤"
+        assertEquals("小鹤", ImePreferences(store).shuangpinLayout)
+        assertEquals(2, shuangpinLayoutIndexOf("小鹤"))
     }
 }

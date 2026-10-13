@@ -27,6 +27,8 @@ fn parses_every_key_false() {
             fuzzy_pairs: String::new(),
             jianpin: false,
             correction: true,
+            shuangpin_layout: String::new(),
+            pinyin_method: String::new(),
         }
     );
 }
@@ -120,17 +122,20 @@ fn parses_fuzzy_pairs_string() {
 /// 自足夹具（不复用 logic_tests 的 state()：那边已顶 500 行门禁，见 [path] 拆法）。
 #[test]
 fn apply_settings_prefers_the_pairs_list() {
-    use engine_core::fuzzy::FUZZY_ALL;
     use engine_core::dictionary::InMemoryDictionary;
+    use engine_core::fuzzy::FUZZY_ALL;
     let mut s = crate::logic::TsfLogic::with_dict(Box::new(InMemoryDictionary::new()));
     s.apply_settings(parse("Fuzzy=False\nFuzzyPairs=n/l\n"));
-    assert_eq!(s.engine.fuzzy_pairs(), 1 << 6, "列表为准：只开 n/l（bit6 = n/l）");
+    assert_eq!(
+        s.engine.fuzzy_pairs(),
+        1 << 6,
+        "列表为准：只开 n/l（bit6 = n/l）"
+    );
     s.apply_settings(parse("Fuzzy=True\n"));
     assert_eq!(s.engine.fuzzy_pairs(), FUZZY_ALL, "无列表 → 回落布尔全开");
     s.apply_settings(parse("Fuzzy=False\n"));
     assert_eq!(s.engine.fuzzy_pairs(), 0, "无列表 + 布尔关 → 全关");
 }
-
 
 /// 拼音纠错（2026-10-13）：键 `Correction`，缺省开（对齐搜狗）。
 #[test]
@@ -138,4 +143,62 @@ fn parses_correction_switch() {
     assert!(parse("").correction, "缺省开");
     assert!(!parse("Correction=False\n").correction);
     assert!(parse("Correction=true\n").correction);
+}
+
+/// 双拼布局（2026-10-13）：字符串键 `ShuangpinLayout` 的解析 + **套到引擎读侧**。
+/// 两条语义各一断言：认得的名字真的改布局；空/认不得的名字**不动**引擎（不是把
+/// 用户的布局静默跳回自然码）。
+#[test]
+fn parses_and_applies_shuangpin_layout() {
+    use engine_core::dictionary::InMemoryDictionary;
+    // 解析：名字原样收，注释/空白剥掉；缺省 = 空串（未设置）。
+    assert_eq!(parse("").shuangpin_layout, "");
+    assert_eq!(parse("ShuangpinLayout=微软\n").shuangpin_layout, "微软");
+    assert_eq!(
+        parse("ShuangpinLayout=小鹤  # 注释\n").shuangpin_layout,
+        "小鹤"
+    );
+
+    let mut s = crate::logic::TsfLogic::with_dict(Box::new(InMemoryDictionary::new()));
+    assert_eq!(s.engine.shuangpin_layout(), 0, "缺省 = 自然码（引擎初值）");
+    s.apply_settings(parse("ShuangpinLayout=紫光\n"));
+    assert_eq!(s.engine.shuangpin_layout(), 4, "紫光 = 表序 4");
+    // 空串（未设置）与认不得的名字都不动引擎。
+    s.apply_settings(parse("Learn=True\n"));
+    assert_eq!(s.engine.shuangpin_layout(), 4, "未设置 ⇒ 保持");
+    s.apply_settings(parse("ShuangpinLayout=打错了\n"));
+    assert_eq!(
+        s.engine.shuangpin_layout(),
+        4,
+        "认不得的名字 ⇒ 保持（不静默跳回 0）"
+    );
+    s.apply_settings(parse("ShuangpinLayout=拼音加加\n"));
+    assert_eq!(s.engine.shuangpin_layout(), 5, "拼音加加 = 表序 5");
+}
+
+/// 拼音方式（2026-10-14）：字符串键 `PinyinMethod` 的解析 + **套到引擎读侧**。
+/// 缺省/认不得都**不动**引擎（老配置行为一字不变：全拼）。
+#[test]
+fn parses_and_applies_pinyin_method() {
+    use engine_core::Scheme;
+    use engine_core::dictionary::InMemoryDictionary;
+    assert_eq!(parse("").pinyin_method, "", "缺省 = 空 = 未设置");
+    assert_eq!(parse("PinyinMethod=双拼\n").pinyin_method, "双拼");
+    assert_eq!(parse("PinyinMethod=全拼 # 注释\n").pinyin_method, "全拼");
+
+    let mut s = crate::logic::TsfLogic::with_dict(Box::new(InMemoryDictionary::new()));
+    assert_eq!(s.engine.scheme(), Scheme::Full, "缺省 = 全拼（引擎初值）");
+    s.apply_settings(parse("PinyinMethod=双拼\n"));
+    assert_eq!(s.engine.scheme(), Scheme::Shuangpin, "双拼真的进了引擎");
+    // 认不得的名字/缺键都不动引擎（不静默跳回全拼）。
+    s.apply_settings(parse("Learn=True\n"));
+    assert_eq!(s.engine.scheme(), Scheme::Shuangpin, "未设置 ⇒ 保持");
+    s.apply_settings(parse("PinyinMethod=五笔\n"));
+    assert_eq!(
+        s.engine.scheme(),
+        Scheme::Shuangpin,
+        "认不得 ⇒ 保持（不静默跳回）"
+    );
+    s.apply_settings(parse("PinyinMethod=全拼\n"));
+    assert_eq!(s.engine.scheme(), Scheme::Full, "切回全拼");
 }

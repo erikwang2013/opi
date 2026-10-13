@@ -82,6 +82,59 @@ internal fun CommonPage(s: OpSettings, apply: (OpSettings) -> Unit) {
         "相邻键错按 / 多打 / 少打一个字母也能出候选（如 nihap → nihao）；配置键名 Correction",
         s.correction,
     ) { apply(s.copy(correction = it)) }
+    SectionTitle("拼音方式")
+    Text(
+        "全拼（打完整拼音）或双拼（一键一韵母，键位见表）；配置键名 PinyinMethod",
+        fontSize = 12.sp, color = Muted,
+    )
+    Spacer(Modifier.height(8.dp))
+    // 名字表 = SCHEME_NAMES（与引擎 `Scheme::name` 同集合同序，锁步门禁在 SettingsTest）。
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        for (name in SCHEME_NAMES) {
+            LayoutChip(name, name == s.pinyinMethod) { apply(s.copy(pinyinMethod = name)) }
+        }
+    }
+    Spacer(Modifier.height(10.dp))
+    Text(
+        "双拼布局（拼音方式选「双拼」时生效）；配置键名 ShuangpinLayout",
+        fontSize = 12.sp, color = Muted,
+    )
+    Spacer(Modifier.height(8.dp))
+    // 名字表 = SHUANGPIN_LAYOUT_NAMES（与引擎生成表同序同名，锁步门禁在 SettingsTest）。
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        for (name in SHUANGPIN_LAYOUT_NAMES) {
+            LayoutChip(name, name == s.shuangpinLayout) { apply(s.copy(shuangpinLayout = name)) }
+        }
+    }
+}
+
+/**
+ * 一枚选择 chip（拼音方式 / 双拼布局共用；选中 = 青边青字，同皮肤卡的选中表达）。
+ *
+ * ⚠️ 这里**不放键位对照图**：本窗不链接引擎（`desktop/` 只用 JNA 碰 X11），画键位图
+ * 就得在 Kotlin 里抄一份 26 键表 —— 那是「两处写必漂」的第二份数据（门禁只能事后
+ * 抓漂，抓不到「抄错一行」的语义错）。键位图的正确做法是从引擎导一张表出来（新
+ * ABI 出口）再画，属未排期项，别在这里起手抄表。
+ */
+@Composable
+private fun LayoutChip(name: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .border(
+                width = if (selected) 2.dp else 1.dp,
+                color = if (selected) Teal else Hairline,
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Text(name, fontSize = 13.sp, color = if (selected) Teal else Ink)
+    }
 }
 
 // ---------- 按键（只有 Linux 有真旋钮，见文件头）----------

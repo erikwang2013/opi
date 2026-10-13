@@ -29,7 +29,7 @@ pub struct Engine {
     /// 学习器（`pub(crate)`：符号浏览的提交收尾与 `select_from` 同一条，归 engine_symbol_browse.rs）。
     pub(crate) learner: Learner,
     /// 用户词频权重，按词典最大静态词频动态缩放（一次选词即压过所有静态词）。
-    user_boost: u64,
+    pub(crate) user_boost: u64, // pub(crate)：engine_shuangpin.rs 的合并排名要用
     /// 钉读音（9 键左列点一行拼音：**不确认**，候选收窄到该读音一族 —— 2026-10-09
     /// 用户裁决「选择后所有候选词也跟着拼音变化显示出来，不要直接确认」）。
     /// 存 `(钉它时的缓冲, 去分词的原读音)` 一对 —— 缓冲一变即作废（同
@@ -67,6 +67,8 @@ pub struct Engine {
     pub(crate) fuzzy: crate::fuzzy::FuzzyMask, // pub(crate)：engine_segment.rs 判回退时要问它（位掩码 == 0 = 全关）
     /// 拼音纠错开关（2026-10-13；写读侧见 `engine_user_words.rs`）。
     pub(crate) correction: bool,
+    /// 双拼布局索引（`shuangpin_tables::SHUANGPIN_TABLES` 的下标；越界钳到 0）。
+    pub(crate) shuangpin_layout: usize,
     /// 简拼开关。默认 `true` = 既有行为。
     pub(crate) jianpin: bool, // pub(crate)：engine_user_words.rs 的开关一族要用
 }
@@ -103,6 +105,7 @@ impl Engine {
             quotes: Quotes::default(),
             fuzzy: crate::fuzzy::FUZZY_ALL,
             correction: true,
+            shuangpin_layout: 0,
             jianpin: true,
             symbol_browse: Default::default(),
         }
@@ -382,6 +385,12 @@ impl Engine {
                             .collect(),
                     );
                     return cands;
+                }
+                // 双拼（2026-10-13）：解码 + 每解析一次全拼排名 + 合并。两块双拼专属
+                // 代码（本臂 + 布局 setter）在 `engine_shuangpin.rs`（500 行门禁拆出，
+                // 同 `engine_segment.rs` 先例）。
+                Scheme::Shuangpin => {
+                    return self.candidates_shuangpin(&s.buffer, s.mode, limit);
                 }
                 // 笔画：换词典 + **关掉模糊音/简拼**（两者对 hspnz 串没有意义，
                 // 开着只会把不相干的音节捞进来）。其余与全键盘完全同路。

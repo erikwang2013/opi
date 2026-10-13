@@ -21,100 +21,23 @@ enum class EngineMode(val value: Int) {
 enum class ShiftState { OFF, SINGLE, LOCK }
 
 /**
- * 输入方案（JNI `scheme()` 返回值）：0=全键盘 1=拼音9键 2=拼音14键 3=笔画。
+ * 输入方案（JNI `scheme()` 返回值）：0=全键盘 1=拼音9键 2=拼音14键 3=笔画 4=双拼。
  *
  * 「输入模式」= 方案 × 模式的组合（拼音9键 = NINE + PINYIN）；繁体模式是**模式**轴上的
  * 事（[EngineMode.TRADITIONAL]），与方案正交 —— 9 键也能切繁体。
+ * 双拼的**布局**（自然码/微软/…）在 [OpiEngineApi.shuangpinLayout] 上，与本枚举正交。
  * ⚠️ 整数表是**协议**：opi-ffi 的 `scheme_from_int`、`OpiEngine.kt` 的注释、
  * 这里三处逐值对应（jni_contract 只保签名不保语义）。
  */
 enum class InputScheme(val value: Int) {
-    FULL(0), NINE(1), FOURTEEN(2), STROKE(3);
+    FULL(0), NINE(1), FOURTEEN(2), STROKE(3), SHUANGPIN(4);
 
     companion object {
         fun fromInt(v: Int) = entries.firstOrNull { it.value == v } ?: FULL
     }
 }
 
-/**
- * 引擎接口：EngineController 依赖抽象，JVM 测试用假引擎替换 JNI 实现
- * （OpiEngine 的 load/searchSymbols/symbolBlocks/symbolsInBlock 为面板/资产专用，不入接口）。
- */
-interface OpiEngineApi {
-    fun inputKey(ch: String): String
-    fun backspace()
-    fun clear()
-    fun select(index: Int): String
-    fun switchMode(mode: Int)
-    fun setShift(on: Boolean)
-    fun inputSpace(): String
-    fun candidates(limit: Int): Array<String>?
-    fun buffer(): String
-
-    /** 候选拼音读数（**按读音去重保序**，2026-10-12 用户裁决「左列去重」；
-     * 与最近一次 [candidates] 同源同一次排名；9 键左列用）。
-     * 非 9/14 键方案、或缓冲已变 ⇒ 空。调用顺序：先 [candidates]。 */
-    fun candidateReadings(): Array<String>?
-
-    /** 钉读音（空串 = 解除）：9 键左列点一行拼音后**不确认**，候选收窄到该读音一族。
-     * 缓冲一变自动作废（引擎侧按缓冲配对校验；调用方还须在查看守里显式清）。 */
-    fun pinReading(reading: String)
-
-    /** 显示用的拼音读数（9 键 = 带分词的 `ni'hao`；其余方案与 [buffer] 相同）。
-     * **行为判定不许用它** —— 用 [buffer]（理由见 OpiEngine.displayBuffer）。 */
-    fun displayBuffer(): String
-    fun mode(): Int
-
-    /** 删除一个用户词（连同频次）；非用户词/不存在无副作用。 */
-    fun removeUserWord(text: String)
-
-    /** 学习开关读侧。宠物用它区分「醒着」与「睡着了」。 */
-    fun learnerEnabled(): Boolean
-
-    /** 学习开关写侧（[EngineController.setLearner] 与偏好恢复共用）。 */
-    fun setLearner(enabled: Boolean)
-
-    /** 模糊音开关读侧（「属性设置」；写侧 = `OpiEngine.setFuzzy`）。 */
-    fun fuzzyEnabled(): Boolean
-
-    /** 模糊音**逐对**启用集（2026-10-13 用户裁决「可多选类似 z=zh」）。
-     * 位序 = 引擎 `FUZZY_PAIRS` 数组序（zh/z=bit0 … f/h=bit7；`0xFF` = 全开）；
-     * `0` = 全关。未装载 → 0（哨兵，同 [fuzzyEnabled] 一档）。 */
-    fun fuzzyPairs(): Int
-
-    /** 逐对写侧（[EngineController.setFuzzyPairs] 与偏好恢复共用）。 */
-    fun setFuzzyPairs(mask: Int)
-
-    /** 简拼开关读侧（同上）。 */
-    fun jianpinEnabled(): Boolean
-
-    /** 拼音纠错开关读侧（2026-10-13；写侧 = `OpiEngine.setCorrection`）。 */
-    fun correctionEnabled(): Boolean
-
-    /** 写侧（[EngineController.setFuzzy] / [EngineController.setJianpin] 与偏好恢复共用）。 */
-    fun setFuzzy(on: Boolean)
-    fun setJianpin(on: Boolean)
-
-    /** 拼音纠错写侧（2026-10-13）。 */
-    fun setCorrection(on: Boolean)
-
-    /** 输入方案读侧（「输入模式」；写侧见 [EngineController.switchScheme]）。 */
-    fun scheme(): Int
-
-    /** 全角开关读侧（**每次切模式后必须重读**，见 [EngineController.fullwidth] 的注释）。 */
-    fun fullwidthState(): Boolean
-
-    /** 全角↔半角Toggle（工具条月相按钮）；返回切完的新状态。 */
-    fun toggleFullwidth(): Boolean
-
-    /** 写侧：换方案**清缓冲** —— 调用方随后必须重读（[EngineController.switchScheme] 管这条）。 */
-    fun setScheme(scheme: Int)
-
-    /** 语言切换（中↔英/中↔繁）：换模式与方案但**保留缓冲**（判据见
-     * OpiEngine.switchLanguage）。与 [switchMode]/[setScheme] 的区别只有不清缓冲 ——
-     * 那两个仍归「输入模式」面板等明确要换方案的路径。 */
-    fun switchLanguage(mode: Int, scheme: Int)
-}
+// 引擎接口（[OpiEngineApi]）在 OpiEngineApi.kt —— 同包契约文件，500 行门禁拆出。
 
 /**
  * 单一状态源：封装 OpiEngine，UI 经 mutableStateOf 订阅
@@ -375,6 +298,16 @@ class EngineController(
         api.setCorrection(on)
         refresh()
     }
+
+    /** 双拼布局（2026-10-13；0=自然码…5=拼音加加，见 [OpiEngine.shuangpinLayout]）。
+     * 与 [switchScheme] 的区别：**不清缓冲**，刷新只为按新布局重解已有键序。 */
+    fun setShuangpinLayout(index: Int) {
+        api.setShuangpinLayout(index)
+        refresh()
+    }
+
+    /** 双拼布局读侧（真值回读；设置页的显示源仍是偏好，这条供回环与测试）。 */
+    fun shuangpinLayout(): Int = api.shuangpinLayout()
 
     fun inputSpace(): String {
         val text = api.inputSpace()

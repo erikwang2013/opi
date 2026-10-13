@@ -46,6 +46,8 @@ final class OpiEngine {
     static native void setJianpin(boolean on);
     static native int scheme();
     static native void setScheme(int scheme);
+    static native int shuangpinLayout();
+    static native void setShuangpinLayout(int index);
     static native void switchLanguage(int mode, int scheme);
     static native boolean loadStroke(String path);
     static native void clearUserWords();
@@ -156,6 +158,16 @@ public final class Main {
         check(OpiEngine.scheme() == 1, "越界值忽略（仍为 1）");
         OpiEngine.setScheme(0);
         check(OpiEngine.scheme() == 0, "换回全键盘");
+
+        // 双拼布局（2026-10-13）：同一条整数回环 + 钳制的两个方向（与 C 面 consumer.c
+        // 逐条对照，那是双面的行为契约）。「布局真的能解码」归 engine-core。
+        check(OpiEngine.shuangpinLayout() == 0, "双拼布局默认自然码（0）");
+        OpiEngine.setShuangpinLayout(5);
+        check(OpiEngine.shuangpinLayout() == 5, "setShuangpinLayout(5) 生效（拼音加加）");
+        OpiEngine.setShuangpinLayout(99);
+        check(OpiEngine.shuangpinLayout() == 5, "过大钳到末位（不是钳 0、也不是忽略）");
+        OpiEngine.setShuangpinLayout(-3);
+        check(OpiEngine.shuangpinLayout() == 0, "负数钳到 0");
         check(!OpiEngine.loadStroke(""), "loadStroke(空) 应为 false");
 
         // 用户词导出/清空

@@ -85,30 +85,24 @@ pub fn install_stroke(path: &str) -> Result<(), String> {
 
 // ---- 输入方案：整数 ↔ 枚举（C ABI 与 JNI 两个边界**共用这一份**）----
 //
-// 0=全键盘 1=拼音9键 2=拼音14键 3=笔画。**越界 → None**（写侧忽略、读侧按 Full），
-// 与 `opi_switch_mode` / `switchMode` 的边界约定同款。改这张表 = 改协议：
-// `macos/OpiFFI.h`、`android/.../jni/OpiEngine.kt`、`OpiEngine.kt` 上方的注释
-// 三处都要跟（有 c_abi_contract / jni_contract 两道门禁在，但门禁只保签名不保语义）。
+// 0=全键盘 1=拼音9键 2=拼音14键 3=笔画 4=双拼（2026-10-13；**布局是另一个整数**，
+// 见 `set_shuangpin_layout`）。**越界 → None**（写侧忽略、读侧按 Full），
+// 与 `opi_switch_mode` / `switchMode` 的边界约定同款。
+//
+// ⚠️ 表**不在本文件**：真源是 `engine_core::scheme::Scheme::code/from_code`
+// （2026-10-14 收拢 —— 同一张表在两个 crate 各写一份是「两处写必漂」的典型，
+// 且 fcitx5 配置枚举的取值也要用它的子集）。本处两个函数只剩转发 + 类型桥。
+// 改协议时要跟的三处注释：`macos/OpiFFI.h`、`android/.../jni/OpiEngine.kt`、
+// `EngineController.kt` 的 InputScheme。
 
 /// 整数 → 方案。越界 → None。
 pub fn scheme_from_int(v: i32) -> Option<engine_core::Scheme> {
-    match v {
-        0 => Some(engine_core::Scheme::Full),
-        1 => Some(engine_core::Scheme::Nine),
-        2 => Some(engine_core::Scheme::Fourteen),
-        3 => Some(engine_core::Scheme::Stroke),
-        _ => None,
-    }
+    engine_core::Scheme::from_code(v)
 }
 
 /// 方案 → 整数（与 [`scheme_from_int`] 逐值对应）。
 pub fn scheme_to_int(s: engine_core::Scheme) -> i32 {
-    match s {
-        engine_core::Scheme::Full => 0,
-        engine_core::Scheme::Nine => 1,
-        engine_core::Scheme::Fourteen => 2,
-        engine_core::Scheme::Stroke => 3,
-    }
+    s.code()
 }
 
 /// 在引擎单例上执行操作；未 load 时返回 None（调用方按哨兵处理）。
@@ -214,6 +208,21 @@ impl Api {
     /// 输入方案读侧（与 `set_scheme` 成对，供 UI 回读/回环测试）。
     pub fn scheme(&self) -> engine_core::Scheme {
         self.router.engine().scheme()
+    }
+
+    /// 双拼布局（2026-10-13，`Scheme::Shuangpin` 的配套设置；0=自然码…5=拼音加加，
+    /// 见 `engine_core::shuangpin`）。钳制口径见 `Engine::set_shuangpin_layout`
+    /// （过大→末位；负值请调用方先归 0）。与 `set_fuzzy` 同一档：只改下次输入怎么
+    /// 解码，**不清缓冲、不必重读** —— 缓冲里已有的键序按新布局重新解码
+    /// （下一次 `candidates` 就见效）。
+    pub fn set_shuangpin_layout(&mut self, index: usize) {
+        self.router.engine_mut().set_shuangpin_layout(index);
+    }
+
+    /// 双拼布局读侧（与 `set_shuangpin_layout` 成对）。未装载 → 0 是**哨兵**
+    /// （别读成"用户选的就是自然码"）。
+    pub fn shuangpin_layout(&self) -> usize {
+        self.router.engine().shuangpin_layout()
     }
 
     /// 引擎侧 ⇧（`opi_set_shift`，Android UI 用）。走路由：换 shift 会改候选集，

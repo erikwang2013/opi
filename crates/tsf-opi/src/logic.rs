@@ -183,6 +183,15 @@ impl TsfLogic {
         }
         self.set_jianpin(s.jianpin);
         self.set_correction(s.correction);
+        // 双拼布局：空串（未设置）⇒ 不动引擎（老配置行为一字不变）；**认不得的名字
+        // 也不动**（配置面写坏一个名字不该静默把用户的布局跳回自然码）。
+        if let Some(i) = engine_core::shuangpin::layout_index_of_name(&s.shuangpin_layout) {
+            self.set_shuangpin_layout(i);
+        }
+        // 拼音方式：认不得的名字/空串都**不动**引擎（同上一条姿态）。
+        if let Some(scheme) = engine_core::Scheme::from_name(&s.pinyin_method) {
+            self.set_scheme(scheme);
+        }
     }
 
     /// 学习开关（值来自 `%LOCALAPPDATA%\opi\settings.ini` 的 `Learn`；本端在
@@ -219,6 +228,22 @@ impl TsfLogic {
     /// 拼音纠错开关（2026-10-13；键 `Correction`）。配对：`fcitx5-opi/src/candidate.rs`。
     pub fn set_correction(&mut self, on: bool) {
         self.engine.set_correction(on);
+    }
+
+    /// 双拼布局（2026-10-13；键 `ShuangpinLayout`）。收**下标**（0=自然码…5=拼音加加，
+    /// 表序见 `shuangpin_tables.rs`）—— 本端把 ini 里的方案名换算成下标再进来（换算在
+    /// [`Self::apply_settings`]，用 `shuangpin::layout_index_of_name` 这唯一一份）。
+    /// 配对：`fcitx5-opi/src/candidate.rs` 的同名方法（两轨同构）。
+    pub fn set_shuangpin_layout(&mut self, index: usize) {
+        self.engine.set_shuangpin_layout(index);
+    }
+
+    /// 输入方案（2026-10-14；键 `PinyinMethod`，值 = 方案名，名字表见
+    /// `engine_core::Scheme::from_name`）。**清缓冲**（引擎侧语义，见
+    /// `Engine::set_scheme`）；认不得的名字由调用方拦下（`apply_settings`）。
+    /// 配对：`fcitx5-opi/src/candidate.rs` 的同名方法（两轨同构）。
+    pub fn set_scheme(&mut self, scheme: engine_core::Scheme) {
+        self.engine.set_scheme(scheme);
     }
 
     /// 切模式（**不收尾**：待处理的缓冲由 `Composer::switch_mode` 直接清掉）。

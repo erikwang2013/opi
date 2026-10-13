@@ -6,12 +6,10 @@
 
 pub mod bytes;
 pub mod candidates;
-pub mod correction;
-pub mod shuangpin;
-pub mod shuangpin_tables;
 #[path = "candidates_scheme.rs"]
 mod candidates_scheme_impl;
 pub mod composer;
+pub mod correction;
 pub mod dictionary;
 pub mod engine;
 #[path = "engine_punct.rs"]
@@ -20,6 +18,8 @@ mod engine_punct_impl; // 标点/全角一族（500 行门禁拆出，见文件�
 mod engine_readings_impl; // 9 键读数一族（500 行门禁拆出，见文件头）
 #[path = "engine_segment.rs"]
 mod engine_segment_impl; // 分词回退的收尾（500 行门禁拆出，见文件头）
+#[path = "engine_shuangpin.rs"]
+mod engine_shuangpin_impl; // 双拼一族：布局设置 + 候选分支（500 行门禁拆出，见文件头）
 #[path = "engine_symbol_browse.rs"]
 mod engine_symbol_browse_impl; // 符号浏览一族（500 行门禁拆出，见文件头）
 #[path = "engine_user_words.rs"]
@@ -32,6 +32,8 @@ pub mod pinyin;
 pub mod punctuation;
 pub mod router;
 pub mod scheme;
+pub mod shuangpin;
+pub mod shuangpin_tables;
 pub mod symbol_browse;
 pub mod symbols;
 pub mod trad_chars;

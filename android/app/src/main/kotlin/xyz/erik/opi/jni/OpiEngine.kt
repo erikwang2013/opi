@@ -121,7 +121,7 @@ object OpiEngine : OpiEngineApi, SymbolApi {
     override external fun setJianpin(on: Boolean)
 
     /**
-     * scheme() -> Int：输入方案读侧（0=全键盘 1=拼音9键 2=拼音14键 3=笔画）。
+     * scheme() -> Int：输入方案读侧（0=全键盘 1=拼音9键 2=拼音14键 3=笔画 4=双拼）。
      * ⚠️ 未装载 → 0 是**哨兵**（同 [fuzzyEnabled] 一档），不是"用户选的就是全键盘"。
      */
     override external fun scheme(): Int
@@ -132,6 +132,17 @@ object OpiEngine : OpiEngineApi, SymbolApi {
      * buffer/候选/页码（见 EngineController.switchScheme）。
      */
     override external fun setScheme(scheme: Int)
+
+    /**
+     * shuangpinLayout() -> Int / setShuangpinLayout(index: Int)：双拼布局
+     * （2026-10-13；[scheme] 取 4 时的配套设置）。0=自然码 1=微软 2=小鹤
+     * 3=智能ABC 4=紫光 5=拼音加加（顺序 = 引擎 `shuangpin_tables.rs` 的表序，
+     * 设置页的名字表有锁步门禁钉着）。
+     * ⚠️ 未装载 → 读侧 0 是**哨兵**；负数钳到 0、过大钳到末位。
+     * **不清缓冲**（区别于 [setScheme]）—— 缓冲里的键序按新布局重新解码。
+     */
+    override external fun shuangpinLayout(): Int
+    override external fun setShuangpinLayout(index: Int)
 
     /**
      * switchLanguage(mode: Int, scheme: Int)：**语言切换**（中↔英/中↔繁）—— 换模式与

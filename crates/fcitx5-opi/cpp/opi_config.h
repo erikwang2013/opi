@@ -51,6 +51,27 @@ FCITX_CONFIG_ENUM_NAME_WITH_I18N(OpiSkin, N_("不改动"), N_("浅色"), N_("深
                                  N_("柠檬"), N_("晚霞"), N_("星光"), N_("紫藤"),
                                  N_("松林"));
 
+// 双拼布局（2026-10-13 用户裁决「搜狗同款全套」）。
+// ⚠️ 与皮肤同一条：**字面值就是这里的字符串**（unmarshallOption 按字面匹配），
+// 顺序 = 枚举序 = i18n 宏名字序 = 引擎 `shuangpin_tables.rs` 的 `SHUANGPIN_TABLES`
+// 表序（applyOpiSettings 传的是 `static_cast<int>` 下标，那个表序就是下标口径）。
+// 名字表还有三端镜像（桌面 `SHUANGPIN_LAYOUT_NAMES` / Android
+// `SHUANGPIN_LAYOUTS_ANDROID` / TSF 的 `ShuangpinLayout` 键），跨端同集同序的回归钉
+// 在 desktop 的 SettingsTest（`shuangpin layout names stay in lockstep`）。
+enum class OpiShuangpinLayout { Ziranma, MS, Xiaohe, ABC, Ziguang, PinyinJiaJia };
+FCITX_CONFIG_ENUM_NAME_WITH_I18N(OpiShuangpinLayout, N_("自然码"), N_("微软"), N_("小鹤"),
+                                 N_("智能ABC"), N_("紫光"), N_("拼音加加"));
+
+// 拼音方式（2026-10-14）：桌面端一直**只有全拼**（两轨的引擎方案从来是默认值 ——
+// 没有入口能换）。这张脸把「全拼/双拼」做进配置：与移动端的「输入模式」面板同一个轴
+// （`Engine::set_scheme`），只是桌面没有 9/14 键/笔画（物理键盘上那几个方案没有意义）。
+// ⚠️ 枚举值**就是方案整数码**（`engine_core::Scheme::code`：0=全拼 4=双拼）——
+// applyOpiSettings 直接 `static_cast<int32_t>` 传进引擎，中间**没有**「枚举序 ↔ 方案」
+// 的第二张映射表（那种表是两处写必漂）。非连续取值对 fcitx5 的配置框架无碍
+// （它按**字面值**存储：`PinyinMethod=双拼`）。
+enum class OpiPinyinMethod { Quanpin = 0, Shuangpin = 4 };
+FCITX_CONFIG_ENUM_NAME_WITH_I18N(OpiPinyinMethod, N_("全拼"), N_("双拼"));
+
 // 默认值**全是 true / Keep** = 「没配过」等于引擎既有行为（模糊音/简拼见
 // `RankOptions::default()`；学习/中文标点见各自 setter 的默认；ShiftToggle 取 true
 // 是用户裁决「Shift 就该能切英文」；Skin=Keep = OPI 不碰用户的 fcitx5 主题）。
@@ -70,11 +91,22 @@ FCITX_CONFIGURATION(
     fcitx::Option<bool> correction{this, "Correction", "拼音纠错（相邻键、多打、少打）", true};
     fcitx::Option<bool> shiftToggle{this, "ShiftToggle", "Shift 轻按切换中英文（组合键与长按不触发）", true};
     fcitx::OptionWithAnnotation<OpiSkin, OpiSkinI18NAnnotation> skin{
-        this, "Skin", "候选面板皮肤（fcitx5 全局主题，对所有输入法生效）", OpiSkin::Keep};);
+        this, "Skin", "候选面板皮肤（fcitx5 全局主题，对所有输入法生效）", OpiSkin::Keep};
+    // 双拼布局（2026-10-13）：**下面那项拼音方式选「双拼」时**才参与解码。
+    // 默认自然码 = 引擎默认布局（`Engine::shuangpin_layout` 的初值 0）。
+    fcitx::OptionWithAnnotation<OpiShuangpinLayout, OpiShuangpinLayoutI18NAnnotation> shuangpinLayout{
+        this, "ShuangpinLayout", "双拼布局（拼音方式选双拼时生效）", OpiShuangpinLayout::Ziranma};
+    fcitx::OptionWithAnnotation<OpiPinyinMethod, OpiPinyinMethodI18NAnnotation> pinyinMethod{
+        this, "PinyinMethod", "拼音方式（全拼 / 双拼）", OpiPinyinMethod::Quanpin};);
 
-// 把四个**引擎旋钮**推给 Rust 侧。**冷路径**（构造 / reloadConfig / setConfig
+// 把**引擎旋钮**推给 Rust 侧。**冷路径**（构造 / reloadConfig / setConfig
 // 三处调用），不需要去抖。ShiftToggle 与 Skin 不在这里 —— 它们是 C++ 侧
 // 自己消费的开关（handleModeHotkey / applyOpiSkin），引擎根本不知道它们存在。
+//
+// 双拼布局**在**这里（引擎要它解码）。传 `static_cast<int>` = 枚举下标：与引擎
+// `SHUANGPIN_TABLES` 表序同序（由 SettingsTest 的锁步门禁钉住），C++ 侧因此不必
+// 抄一张「枚举名 → 引擎下标」的映射表（抄了就是两处写必漂）。弱符号检查同
+// fuzzyPairs：老 .so 上没有这个出口时静默跳过，不是崩。
 inline void applyOpiSettings(const OpiSettings &settings) {
     opi_fcitx5_set_learner(*settings.learn);
     opi_fcitx5_set_chinese_punct(*settings.chinesePunct);
@@ -87,6 +119,14 @@ inline void applyOpiSettings(const OpiSettings &settings) {
     }
     opi_fcitx5_set_jianpin(*settings.jianpin);
     opi_fcitx5_set_correction(*settings.correction);
+    if (opi_fcitx5_set_shuangpin_layout != nullptr) {
+        opi_fcitx5_set_shuangpin_layout(static_cast<int>(*settings.shuangpinLayout));
+    }
+    // 拼音方式：**先切方案再设布局**（顺序无关紧要 —— 布局不清缓冲、方案清，
+    // 但两条都只改运行期状态；分开写只为可读）。
+    if (opi_fcitx5_set_scheme != nullptr) {
+        opi_fcitx5_set_scheme(static_cast<int32_t>(*settings.pinyinMethod));
+    }
 }
 
 // 从磁盘读进 settings。**文件不存在不是错误**：readAsIni 会把字段留作默认值 ——

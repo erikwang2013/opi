@@ -70,6 +70,9 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
     var correction by remember { mutableStateOf(prefs.correction) }
     var jianpin by remember { mutableStateOf(prefs.jianpin) }
     var confirmClear by remember { mutableStateOf(false) }
+    // 双拼布局（2026-10-13）：存**名字**（[SHUANGPIN_LAYOUTS_ANDROID] 之一）。
+    var shuangpinLayout by remember { mutableStateOf(prefs.shuangpinLayout) }
+    var showLayoutDialog by remember { mutableStateOf(false) }
 
     fun toast(msg: String) {
         scope.launch { snackbar.showSnackbar(msg) }
@@ -275,6 +278,17 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
                 },
             )
             HorizontalDivider()
+            // 双拼布局（2026-10-13）：只在拼音方式选「拼音双拼」（输入模式面板）时参与
+            // 解码 —— 其余方案下写它无害（引擎只在那一个方案里读）。名字表 =
+            // SHUANGPIN_LAYOUTS_ANDROID（锁步门禁 ShuangpinLayoutsLockstepTest）。
+            ListItem(
+                headlineContent = { Text("双拼布局") },
+                supportingContent = { Text("拼音方式选「拼音双拼」时生效（搜狗同款六套）") },
+                trailingContent = {
+                    TextButton(onClick = { showLayoutDialog = true }) { Text(shuangpinLayout) }
+                },
+            )
+            HorizontalDivider()
             ListItem(
                 headlineContent = { Text("清除用户词库") },
                 supportingContent = { Text("删除所有学习到的用户词") },
@@ -355,6 +369,32 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
             },
             dismissButton = {
                 TextButton(onClick = { confirmClear = false }) { Text("取消") }
+            },
+        )
+    }
+
+    // 双拼布局选择（六选一）。用 TextButton 列而不是 RadioButton：这里没有 androidx
+    // material 的 RadioButton 依赖（本页从没用过它），为六行选项引一个新组件不值当；
+    // 选中态用「✓ 」前缀表达，读屏走文本本身。
+    if (showLayoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showLayoutDialog = false },
+            title = { Text("双拼布局") },
+            text = {
+                Column {
+                    for (name in SHUANGPIN_LAYOUTS_ANDROID) {
+                        TextButton(onClick = {
+                            shuangpinLayout = name
+                            prefs.shuangpinLayout = name
+                            // 即时生效（引擎的布局只改「下次解码怎么切」，不清缓冲）
+                            OpiEngine.setShuangpinLayout(shuangpinLayoutIndexOf(name))
+                            showLayoutDialog = false
+                        }) { Text(if (name == shuangpinLayout) "✓ $name" else name) }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showLayoutDialog = false }) { Text("关闭") }
             },
         )
     }

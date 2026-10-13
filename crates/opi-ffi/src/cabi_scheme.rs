@@ -34,9 +34,9 @@ pub unsafe extern "C" fn opi_load_stroke(path: *const u16, len: usize) -> bool {
 }
 
 /// setScheme(scheme: int32)：输入方案（2026-10-09，移动端「输入模式」的引擎侧）。
-/// 取值：0=全键盘 1=拼音9键 2=拼音14键 3=笔画；**越界忽略**（与 `opi_switch_mode`
-/// 同一条边界约定）。⚠️ **换方案清缓冲** —— 调用后须按 `opi_switch_mode` 那一档
-/// 重读 buffer / 候选 / 页码。
+/// 取值：0=全键盘 1=拼音9键 2=拼音14键 3=笔画 4=双拼（2026-10-13）；**越界忽略**
+/// （与 `opi_switch_mode` 同一条边界约定）。⚠️ **换方案清缓冲** —— 调用后须按
+/// `opi_switch_mode` 那一档重读 buffer / 候选 / 页码。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_set_scheme(scheme: i32) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
@@ -55,6 +55,30 @@ pub unsafe extern "C" fn opi_set_scheme(scheme: i32) {
 pub unsafe extern "C" fn opi_scheme() -> i32 {
     catch_unwind(AssertUnwindSafe(|| {
         api::with_engine(|e| api::scheme_to_int(e.scheme())).unwrap_or(0)
+    }))
+    .unwrap_or(0)
+}
+
+/// setShuangpinLayout(index: int32)：双拼布局（2026-10-13；`opi_set_scheme(4)` 的配套
+/// 设置）。0=自然码 1=微软 2=小鹤 3=智能ABC 4=紫光 5=拼音加加（名字/顺序 =
+/// `engine_core::shuangpin_tables::SHUANGPIN_TABLES`；各端设置面的名字表有锁步门禁
+/// 钉着）。钳制口径与 `opi_set_fuzzy_pairs` 的掩码底线同一条纪律（坏值钳到确定值，
+/// 不回退成"随便一个"）：**负数钳到 0、过大钳到末位**（理由见
+/// `Engine::set_shuangpin_layout`）。**不清缓冲**：缓冲里的键序按新布局重新解码，
+/// 下一次 `opi_candidates` 就见效。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_set_shuangpin_layout(index: i32) {
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.set_shuangpin_layout(index.max(0) as usize));
+    }));
+}
+
+/// shuangpinLayout() -> int32：双拼布局读侧（同 [`opi_set_shuangpin_layout`] 的整数表）。
+/// 哨兵与 `opi_scheme` 同档：**引擎未装载 → 0（自然码）**，别读成"用户选的就是自然码"。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_shuangpin_layout() -> i32 {
+    catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.shuangpin_layout() as i32).unwrap_or(0)
     }))
     .unwrap_or(0)
 }

@@ -41,14 +41,48 @@ use crate::pinyin::{is_syllable, segment};
 /// 多一批变体查询，宁缺毋滥）。单测钉：覆盖 a–z、关系双向。
 const ADJACENT: &[(char, char)] = &[
     // 上行 q w e r t y u i o p
-    ('q', 'w'), ('w', 'e'), ('e', 'r'), ('r', 't'), ('t', 'y'), ('y', 'u'), ('u', 'i'), ('i', 'o'), ('o', 'p'),
+    ('q', 'w'),
+    ('w', 'e'),
+    ('e', 'r'),
+    ('r', 't'),
+    ('t', 'y'),
+    ('y', 'u'),
+    ('u', 'i'),
+    ('i', 'o'),
+    ('o', 'p'),
     // 中行 a s d f g h j k l
-    ('a', 's'), ('s', 'd'), ('d', 'f'), ('f', 'g'), ('g', 'h'), ('h', 'j'), ('j', 'k'), ('k', 'l'),
+    ('a', 's'),
+    ('s', 'd'),
+    ('d', 'f'),
+    ('f', 'g'),
+    ('g', 'h'),
+    ('h', 'j'),
+    ('j', 'k'),
+    ('k', 'l'),
     // 下行 z x c v b n m
-    ('z', 'x'), ('x', 'c'), ('c', 'v'), ('v', 'b'), ('b', 'n'), ('n', 'm'),
+    ('z', 'x'),
+    ('x', 'c'),
+    ('c', 'v'),
+    ('v', 'b'),
+    ('b', 'n'),
+    ('n', 'm'),
     // 上下相邻（同一指列）
-    ('q', 'a'), ('w', 's'), ('e', 'd'), ('r', 'f'), ('t', 'g'), ('y', 'h'), ('u', 'j'), ('i', 'k'), ('o', 'l'),
-    ('a', 'z'), ('s', 'x'), ('d', 'c'), ('f', 'v'), ('g', 'b'), ('h', 'n'), ('j', 'm'),
+    ('q', 'a'),
+    ('w', 's'),
+    ('e', 'd'),
+    ('r', 'f'),
+    ('t', 'g'),
+    ('y', 'h'),
+    ('u', 'j'),
+    ('i', 'k'),
+    ('o', 'l'),
+    ('a', 'z'),
+    ('s', 'x'),
+    ('d', 'c'),
+    ('f', 'v'),
+    ('g', 'b'),
+    ('h', 'n'),
+    ('j', 'm'),
 ];
 
 /// `c` 的相邻字母（双向；字母表外返回空表）。
@@ -74,7 +108,7 @@ pub fn neighbors(c: char) -> Vec<char> {
 pub fn corrections(syllable: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     let chars: Vec<char> = syllable.chars().collect();
-    let mut push = |s: String, out: &mut Vec<String>| {
+    let push = |s: String, out: &mut Vec<String>| {
         if is_syllable(&s) && !out.contains(&s) {
             out.push(s);
         }
@@ -122,7 +156,7 @@ pub fn input_corrections(input: &str) -> Vec<String> {
     let per: Vec<Vec<String>> = segs.iter().map(|s| corrections(s)).collect();
     let cap = MAX_CORRECTIONS;
     let mut out: Vec<String> = Vec::new();
-    let mut push = |cand: String, out: &mut Vec<String>| -> bool {
+    let push = |cand: String, out: &mut Vec<String>| -> bool {
         if cand != input && !out.contains(&cand) {
             out.push(cand);
         }
@@ -172,11 +206,20 @@ mod tests {
     #[test]
     fn three_typo_classes_are_corrected() {
         // 错按：p 与 o 相邻 ⇒ hap → hao（"nihap" 想打 "nihao" 的末键错按）。
-        assert!(corrections("hap").contains(&"hao".to_string()), "错按：hap → hao");
+        assert!(
+            corrections("hap").contains(&"hao".to_string()),
+            "错按：hap → hao"
+        );
         // 少打：gu → guo（"zhonggu" 想打 "zhongguo"）。
-        assert!(corrections("gu").contains(&"guo".to_string()), "少打：gu → guo");
+        assert!(
+            corrections("gu").contains(&"guo".to_string()),
+            "少打：gu → guo"
+        );
         // 多打：haoo → hao。
-        assert!(corrections("haoo").contains(&"hao".to_string()), "多打：haoo → hao");
+        assert!(
+            corrections("haoo").contains(&"hao".to_string()),
+            "多打：haoo → hao"
+        );
         // 负控：不相邻的键不该凭空纠出来（q 与 o 不相邻）。
         assert!(
             !corrections("haq").contains(&"hao".to_string()),
@@ -198,7 +241,10 @@ mod tests {
     #[test]
     fn whole_string_corrections_compose_per_syllable() {
         let vs = input_corrections("nihap");
-        assert!(vs.contains(&"nihao".to_string()), "nihap 应收出 nihao（{vs:?}）");
+        assert!(
+            vs.contains(&"nihao".to_string()),
+            "nihap 应收出 nihao（{vs:?}）"
+        );
         // 封顶与 fuzzy 同值；且不含自身。
         assert!(vs.len() <= MAX_CORRECTIONS);
         assert!(!vs.contains(&"nihap".to_string()));

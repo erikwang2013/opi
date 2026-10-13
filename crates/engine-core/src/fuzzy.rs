@@ -197,7 +197,10 @@ pub fn input_variants(input: &str, enabled: FuzzyMask) -> Vec<String> {
     if input.contains('\'') {
         return Vec::new();
     }
-    let per: Vec<Vec<String>> = segment(input).iter().map(|s| variants(s, enabled)).collect();
+    let per: Vec<Vec<String>> = segment(input)
+        .iter()
+        .map(|s| variants(s, enabled))
+        .collect();
     if per.iter().all(|v| v.len() < 2) {
         return Vec::new();
     }
@@ -237,8 +240,7 @@ mod tests {
     fn pair_names_round_trip() {
         let names = pair_names();
         assert_eq!(
-            names,
-            "zh/z,ch/c,sh/s,an/ang,en/eng,in/ing,n/l,f/h",
+            names, "zh/z,ch/c,sh/s,an/ang,en/eng,in/ing,n/l,f/h",
             "规范串是对外契约（各端多选列表与解析都拿它）"
         );
         assert_eq!(mask_from_names(&names), FUZZY_ALL, "规范串解析回全开");
@@ -247,7 +249,11 @@ mod tests {
     /// 解析容错口径：认不得的忽略、空白容忍、反写（l/n）也认、空串 = 全关。
     #[test]
     fn mask_from_names_tolerates_noise() {
-        assert_eq!(mask_from_names(""), 0, "空串 = 全关（键缺失的缺省是全开，那是调用方口径）");
+        assert_eq!(
+            mask_from_names(""),
+            0,
+            "空串 = 全关（键缺失的缺省是全开，那是调用方口径）"
+        );
         assert_eq!(mask_from_names("n/l,xx/yy"), 1 << 6, "认不得的整条忽略");
         assert_eq!(mask_from_names("l/n"), 1 << 6, "反写也认（两种写法同一组）");
         assert_eq!(
@@ -416,7 +422,11 @@ mod tests {
         // 而 `huo` 的 h→f 得 `fuo`（不是音节），故 `huo` 在 f↔h 上什么都给不出 ——
         // `fo` 本身也只能由 `hou` 这类音节来，不能由 `huo` 缩掉一个字母造出来。
         assert!(variants("hou", FUZZY_ALL).contains(&"fou".to_string()));
-        assert_eq!(variants("huo", FUZZY_ALL), vec!["huo"], "fuo 不是音节，不得产生");
+        assert_eq!(
+            variants("huo", FUZZY_ALL),
+            vec!["huo"],
+            "fuo 不是音节，不得产生"
+        );
         assert!(variants("su", FUZZY_ALL).contains(&"shu".to_string()));
         assert!(variants("suan", FUZZY_ALL).contains(&"shuan".to_string()));
         // 全部产物一律合法
@@ -439,7 +449,11 @@ mod tests {
             assert_eq!(got.iter().filter(|v| *v == syl).count(), 1, "{syl}");
             assert_eq!(got[0], syl, "自身必须排第一（顺序确定）：{got:?}");
         }
-        assert_eq!(variants("n", FUZZY_ALL), vec!["n"], "「n」不是音节，不生成变体");
+        assert_eq!(
+            variants("n", FUZZY_ALL),
+            vec!["n"],
+            "「n」不是音节，不生成变体"
+        );
         assert_eq!(
             variants("zh", FUZZY_ALL),
             vec!["zh"],

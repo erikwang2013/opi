@@ -47,6 +47,12 @@ extern "C" void opi_fcitx5_set_fuzzy_pairs(const uint8_t *ptr,
                                             size_t len) __attribute__((weak));
 void opi_fcitx5_set_jianpin(bool on);
 void opi_fcitx5_set_correction(bool on);  // 拼音纠错（2026-10-13，同上） // 简拼开关（同上）
+// 双拼布局（2026-10-13）：枚举**下标**（0=自然码…5=拼音加加，序见 opi_config.h 的
+// OpiShuangpinLayout = 引擎表序）。同样是弱符号。
+extern "C" void opi_fcitx5_set_shuangpin_layout(int32_t index) __attribute__((weak));
+// 拼音方式 / 输入方案（2026-10-14）：方案整数码（0=全拼 4=双拼，= `Scheme::code`，
+// C++ 的 OpiPinyinMethod 枚举值就取这两个码）。同样是弱符号。
+extern "C" void opi_fcitx5_set_scheme(int32_t code) __attribute__((weak));
 bool opi_fcitx5_toggle_fullwidth();        // 返回切换后的状态（true = 全角）
 void opi_fcitx5_set_shift(bool on);
 OpiString opi_fcitx5_input_space();
