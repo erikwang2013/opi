@@ -156,36 +156,38 @@ val AzurePalette = KeyboardPalette(
 )
 
 /** 柠檬皮肤：柠檬黄底 + 深橄榄字 —— fcitx5 opi-lemon 同套
- * （#FBF6C8 / #3A3000 / #6B5700）；浅底必须深字，键面黄比底黄饱和一档。 */
+ * （#FBEE7E / #3A3000 / #7E6200，2026-10-13 随 fcitx5 侧重色同步）；
+ * 浅底必须深字，键面取主题 menu_bg 一档（#F9EA6C，比底黄深）。 */
 val LemonPalette = KeyboardPalette(
-    keyBg = Color(0xFFF5E76A),
+    keyBg = Color(0xFFF9EA6C),
     keyFg = Color(0xFF3A3000),
-    keyHighlightBg = Color(0xFF6B5700),
+    keyHighlightBg = Color(0xFF7E6200),
     keyHighlightFg = Color(0xFFFFFDF0),
-    barBg = Color(0xFFFBF6C8),
+    barBg = Color(0xFFFBEE7E),
     barBufferFg = Color(0xCC3A3000),
     barDimFg = Color(0xFF6E5F1E),
-    accent = Color(0xFF6B5700),
-    panelBg = Color(0xFFFBF6C8),
+    accent = Color(0xFF7E6200),
+    panelBg = Color(0xFFFBEE7E),
     panelFg = Color(0xFF3A3000),
-    toolbarBg = Color(0xFFF5E76A),
+    toolbarBg = Color(0xFFF9EA6C),
     toolbarFg = Color(0xFF5A4A00),
 )
 
-/** 晚霞皮肤：橙粉暖色 —— fcitx5 opi-sunset 同套（#FBE0CD / #5A2C1E / #B8431F），
- * 键面橙比底深一档，强调 = 落日橘。 */
+/** 晚霞皮肤：橙粉暖色 —— fcitx5 opi-sunset 同套
+ * （#F7C79C / #4A2317 / #A63412，2026-10-13 随 fcitx5 侧重色同步），
+ * 键面取主题 menu_bg 一档（#F4BC8A，比底深），强调 = 落日橘。 */
 val SunsetPalette = KeyboardPalette(
-    keyBg = Color(0xFFF3C6A8),
-    keyFg = Color(0xFF5A2C1E),
-    keyHighlightBg = Color(0xFFB8431F),
+    keyBg = Color(0xFFF4BC8A),
+    keyFg = Color(0xFF4A2317),
+    keyHighlightBg = Color(0xFFA63412),
     keyHighlightFg = Color(0xFFFFF3E8),
-    barBg = Color(0xFFFBE0CD),
-    barBufferFg = Color(0xCC5A2C1E),
+    barBg = Color(0xFFF7C79C),
+    barBufferFg = Color(0xCC4A2317),
     barDimFg = Color(0xFF8E5A40),
-    accent = Color(0xFFB8431F),
-    panelBg = Color(0xFFFBE0CD),
-    panelFg = Color(0xFF5A2C1E),
-    toolbarBg = Color(0xFFF3C6A8),
+    accent = Color(0xFFA63412),
+    panelBg = Color(0xFFF7C79C),
+    panelFg = Color(0xFF4A2317),
+    toolbarBg = Color(0xFFF4BC8A),
     toolbarFg = Color(0xFFB4441F),
 )
 
@@ -207,9 +209,48 @@ val StarlightPalette = KeyboardPalette(
     toolbarFg = Color(0xFFFFD966),
 )
 
+/** 紫藤皮肤（浅色）：淡紫底 + 藤紫高亮 —— fcitx5 opi-wisteria 同套
+ * （底 #EDE7FB / 字 #3A2A63 / 强调 #6B4BC4），键面取主题 menu_bg 一档（#E3D9F8）。
+ * 不复用既有款的判据（按底色 HSL 算）：本款 H258/L95，最近的「星光」（底 #1B2138）
+ * H228/L16 —— 差的是**明度 79**，紫调只是看着相近。 */
+val WisteriaPalette = KeyboardPalette(
+    keyBg = Color(0xFFE3D9F8),
+    keyFg = Color(0xFF3A2A63),
+    keyHighlightBg = Color(0xFF6B4BC4),
+    keyHighlightFg = Color(0xFFF7F3FF),
+    barBg = Color(0xFFEDE7FB),
+    barBufferFg = Color(0xCC3A2A63),
+    barDimFg = Color(0xFF6E5E96),
+    accent = Color(0xFF6B4BC4),
+    panelBg = Color(0xFFEDE7FB),
+    panelFg = Color(0xFF3A2A63),
+    toolbarBg = Color(0xFFE3D9F8),
+    toolbarFg = Color(0xFF5A3AA8),
+)
+
+/** 松林皮肤（深色）：松林绿底 + 浅苔文字 —— fcitx5 opi-pine 同套
+ * （底 #1E3A2F / 字 #DCEEE2 / 强调 #7FD3A2），键面取主题 menu_bg 一档（#26473A）。
+ * 判据同上：本款 H156/L17，与「清爽」（底 #E6F5EE）H152/L93 是同色相族的深色版
+ * （明度差 76，是对照不是重复）；与「星光」同为深色但色相 156 vs 228。 */
+val PinePalette = KeyboardPalette(
+    keyBg = Color(0xFF26473A),
+    keyFg = Color(0xFFDCEEE2),
+    keyHighlightBg = Color(0xFF7FD3A2),
+    keyHighlightFg = Color(0xFF17301F),
+    barBg = Color(0xFF1E3A2F),
+    barBufferFg = Color(0xCCDCEEE2),
+    barDimFg = Color(0xFF9DBFAE),
+    accent = Color(0xFF7FD3A2),
+    panelBg = Color(0xFF1E3A2F),
+    panelFg = Color(0xFFDCEEE2),
+    toolbarBg = Color(0xFF26473A),
+    toolbarFg = Color(0xFF7FD3A2),
+)
+
 /**
- * 皮肤（2026-10-09 用户裁决「移动端没有皮肤设置」；2026-10-10 加五款颜色）。
- * **十款与桌面/配置面同名**（不改动/浅色/深色/宣纸/朱砂/清爽/湛蓝/柠檬/晚霞/星光），
+ * 皮肤（2026-10-09 用户裁决「移动端没有皮肤设置」；2026-10-10 加五款颜色；
+ * 2026-10-13 加两款：紫藤/松林）。
+ * **十二款与桌面/配置面同名**（不改动/浅色/深色/宣纸/朱砂/清爽/湛蓝/柠檬/晚霞/星光/紫藤/松林），
  * 配色与 fcitx5 主题同一套设计语言。
  *
  * 三条配色轴的**优先级**（ImeScreen 里那条 when 就是这个顺序）：
@@ -228,6 +269,8 @@ enum class SkinOption(val id: String, val label: String) {
     LEMON("lemon", "柠檬"),
     SUNSET("sunset", "晚霞"),
     STARLIGHT("starlight", "星光"),
+    WISTERIA("wisteria", "紫藤"),
+    PINE("pine", "松林"),
     ;
 
     /** 皮肤 → 色板。「不改动」与「浅色」同板（默认观感）。 */
@@ -242,6 +285,8 @@ enum class SkinOption(val id: String, val label: String) {
             LEMON -> LemonPalette
             SUNSET -> SunsetPalette
             STARLIGHT -> StarlightPalette
+            WISTERIA -> WisteriaPalette
+            PINE -> PinePalette
         }
 
     companion object {

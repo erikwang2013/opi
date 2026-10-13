@@ -126,8 +126,6 @@ fun ImeScreen(
                 onOpenSkin = state::openSkin,
                 onOpenInputMode = state::openInputMode,
                 onOpenKeyboardMode = state::openKeyboardMode,
-                fullwidth = controller.fullwidth,
-                onToggleFullwidth = controller::toggleFullwidth,
                 onCloseKeyboard = onCloseKeyboard,
             )
             // ---- 键盘区：单手模式整体偏移 + 收窄（纯布局层）----

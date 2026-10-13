@@ -428,7 +428,9 @@ class EngineController(
 
     // ---- 全角 / 半角 ----
 
-    /** 切换全角（工具条月相按钮）。引擎返回**切完的新状态**，照抄 + 全量刷新。 */
+    /** 切换全角（**Android 已无 UI 调用方**：2026-10-13 用户裁决「移动端功能区不需要
+     * 全角、半角切换功能」移除月相按钮 —— 能力保留，桌面状态栏仍用同一引擎出口，
+     * [fullwidthize] 的开关就是 [fullwidth]）。引擎返回**切完的新状态**，照抄 + 全量刷新。 */
     fun toggleFullwidth() {
         fullwidth = api.toggleFullwidth()
         refresh()

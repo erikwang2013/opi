@@ -131,45 +131,6 @@ object OpiIcons {
         }.build()
     }
 
-    /**
-     * 全角/半角的月相两态（工具条；与桌面状态栏的月相同一套语义：满月=全角、半月=半角）。
-     * 线稿表达：满月=整圆；半月=圆的右半（弧 + 直径闭合）—— 与系统「亮度/对比度」那对
-     * 图标同款，24dp 下不必靠填色分辨（本文件一律线稿，见 stroke 的头注）。
-     */
-    val MoonFull: ImageVector by lazy {
-        ImageVector.Builder(
-            name = "OpiMoonFull",
-            defaultWidth = 24.dp,
-            defaultHeight = 24.dp,
-            viewportWidth = 24f,
-            viewportHeight = 24f,
-        ).apply {
-            stroke(width = 1.8f) {
-                moveTo(12f, 3f)
-                arcToRelative(9f, 9f, 0f, true, true, 0f, 18f)
-                arcToRelative(9f, 9f, 0f, true, true, 0f, -18f)
-                close()
-            }
-        }.build()
-    }
-
-    /** 半月（半角态；见 [MoonFull]）。 */
-    val MoonHalf: ImageVector by lazy {
-        ImageVector.Builder(
-            name = "OpiMoonHalf",
-            defaultWidth = 24.dp,
-            defaultHeight = 24.dp,
-            viewportWidth = 24f,
-            viewportHeight = 24f,
-        ).apply {
-            stroke(width = 1.8f) {
-                moveTo(12f, 3f)
-                arcToRelative(9f, 9f, 0f, false, true, 0f, 18f)
-                close()
-            }
-        }.build()
-    }
-
     /** 返回（表情页工具条左格，2026-10-12）：一横一折的箭头。 */
     val ArrowBack: ImageVector by lazy {
         ImageVector.Builder(

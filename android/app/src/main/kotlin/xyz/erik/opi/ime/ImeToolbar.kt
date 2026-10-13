@@ -55,6 +55,12 @@ const val IME_TOOLBAR_HEIGHT_DP = 44
  * 「做成像选择皮肤的功能」）：点图标切 [ImeState.View.INPUT_MODE] /
  * [ImeState.View.KEYBOARD_MODE]，面板形态与皮肤/表情同一套（面板占键区、
  * 右上角关闭）—— 弹框那两个只盖一小块的浮层退役。
+ *
+ * **全角/半角月相按钮已移除**（用户裁决 2026-10-13「移动端功能区不需要全角、半角
+ * 切换功能」）：月相两态图标（`OpiIcons.MoonFull/MoonHalf`）一并撤掉。
+ * **引擎能力保留**（本条只管 UI 入口）：`EngineController.fullwidth` 仍是直传点
+ * 宽化（`EngineController.fullwidthize`，英文直传与数字直提在用）的开关，桌面
+ * 状态栏也仍在用同一引擎能力（`opi_toggle_fullwidth` 出口）—— 别把能力当死代码清。
  */
 @Composable
 fun ImeToolbar(
@@ -66,10 +72,6 @@ fun ImeToolbar(
     onOpenSkin: () -> Unit,
     onOpenInputMode: () -> Unit,
     onOpenKeyboardMode: () -> Unit,
-    /** 全角开关当前状态（图标两态：满月=全角、半月=半角，与桌面状态栏同款）。 */
-    fullwidth: Boolean = false,
-    /** 点月相 = 切全角/半角（2026-10-12 用户裁决「Android 补入口」）。 */
-    onToggleFullwidth: () -> Unit = {},
     /** 收起键盘（2026-10-10 用户裁决：功能按钮区最右侧加关闭键盘图标）——
      * 服务层注入 requestHideSelf。 */
     onCloseKeyboard: () -> Unit,
@@ -92,12 +94,6 @@ fun ImeToolbar(
             OpiIcons.KeyboardMode,
             "键盘模式${if (keyboardModes.anyOn) "，有开启项" else ""}",
         ) { onOpenKeyboardMode() }
-        // 全角/半角（2026-10-12 用户裁决补入口）：图标两态 + 状态进 contentDescription
-        //（与「输入模式，当前 …」同一口径：只说当前状态，不描述点击行为）。
-        ToolbarIcon(
-            if (fullwidth) OpiIcons.MoonFull else OpiIcons.MoonHalf,
-            "全角/半角，当前${if (fullwidth) "全角" else "半角"}",
-        ) { onToggleFullwidth() }
         // 收起键盘压在**最右**（用户裁决「功能按钮区域最右侧」）：弹性空白把它推到头。
         // 图标 = 向下折角（2026-10-10 用户裁决「不要用 x」——✕ 是关闭语义）。
         Spacer(Modifier.weight(1f))

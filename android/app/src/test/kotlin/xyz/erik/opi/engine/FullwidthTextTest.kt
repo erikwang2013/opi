@@ -53,7 +53,8 @@ class FullwidthTextTest {
         ctrl.toggleFullwidth()
         assertFalse("再切一次回半角", ctrl.fullwidth)
         // 切模式：引擎侧会重置为模式默认 —— 这里由 fake 改值 + refresh 模拟，
-        // 钉的是「refresh 必须重读」（漏了它，界面的月相会停在旧值）。
+        // 钉的是「refresh 必须重读」（漏了它，controller.fullwidth 会停在旧值；
+        // 2026-10-13 月相按钮移除后已无 UI 消费者，本档守控制器 ↔ 引擎的镜像）。
         fake.fullwidthValue = true
         ctrl.switchMode(EngineMode.PINYIN)
         assertTrue("切模式后 refresh 重读", ctrl.fullwidth)
