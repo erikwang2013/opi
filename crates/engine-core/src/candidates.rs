@@ -1,13 +1,15 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
+use crate::candidates_tiers_impl as tiers;
+use crate::candidates_tiers_impl::Meta;
 use crate::composer::Mode;
 use crate::correction;
 use crate::dictionary::{Dictionary, PREFIX_MATCH_CAP};
 use crate::fuzzy;
 use crate::jianpin;
 use crate::learner::Learner;
-use crate::pinyin::{is_syllable, segment};
+use crate::pinyin::segment;
 use crate::symbols::SymbolEngine;
 use crate::trie::Entry;
 
@@ -80,6 +82,32 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
     boost: u64,
     opts: RankOptions,
 ) -> Vec<Candidate> {
+    // 旧入口 = 新入口的默认包装：丢掉分档元数据。**次序逐条相同**（元数据只用于排序，
+    // 排完就没用了）；要元数据的调用方（双拼跨解析合并）走 `rank_and_pick_meta`。
+    rank_and_pick_meta(dict, symbols, learner, input, mode, limit, boost, opts)
+        .into_iter()
+        .map(|(c, _)| c)
+        .collect()
+}
+
+/// 同 [`rank_and_pick_with`]，但候选**连分档元数据一起**返回（2026-10-14 候选三档）。
+///
+/// 为什么元数据要出这一层：双拼一次按键解出多个候选拼音，**分档必须发生在跨解析合并
+/// 之后**（单次解析内分档会被那边的全局重排抹平），而「拼音多长、是否精确」这两条
+/// 出了本函数就没了。其余调用方（全键盘 / 9 键 / 五笔 / 笔画）只关心次序 ⇒ 走上面的
+/// 包装。`None` = 不是主查询条目（符号 / emoji / 逐音节汤 / 分词回退）⇒ 分档时落主块尾部。
+// 参数与包装逐字相同（8 个）—— allow 的理由见上面那条。
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
+    dict: &D,
+    symbols: &SymbolEngine,
+    learner: &Learner,
+    input: &str,
+    mode: Mode,
+    limit: usize,
+    boost: u64,
+    opts: RankOptions,
+) -> Vec<(Candidate, Option<Meta>)> {
     // ⚠️ **没有「上文拼接」档**（2026-10-12 晚用户裁决）：确认后再输入是**全新开始**，
     // 候选只按本次输入匹配。白天那版把「上次选中的词拼音 + 本次输入」的整串命中插在最前
     // （函数多一个 `ctx` 参数），点它会**重复上屏已确认的部分**（确认「你好」后再打 ma、
@@ -100,14 +128,20 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
             .search(input)
             .into_iter()
             .take(limit)
-            .map(|s| Candidate {
-                text: s.text.clone(),
-                kind: if s.emoji {
-                    CandidateKind::Emoji
-                } else {
-                    CandidateKind::Symbol
-                },
-                score: rank_score(0, learner.freq_of(&s.text), boost),
+            .map(|s| {
+                (
+                    Candidate {
+                        text: s.text.clone(),
+                        kind: if s.emoji {
+                            CandidateKind::Emoji
+                        } else {
+                            CandidateKind::Symbol
+                        },
+                        score: rank_score(0, learner.freq_of(&s.text), boost),
+                    },
+                    // 只出符号、没有词库主块 ⇒ 分档元数据恒 `None`（本臂不经过三档）。
+                    None,
+                )
             })
             .collect();
     }
@@ -119,6 +153,11 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
     // （见 Engine::with_dictionaries），故 boost/2 ≥ 最大静态词频 —— 任何精确匹配（哪怕
     // freq=0）都排在任何前缀扩展之前：输入 xian 不再由 xiang 的「想」占首位。
     // 而一次选词的最小收益是 1×boost > boost/2，学过的前缀扩展词仍能反超（缘起 #3 不受损）。
+    //
+    // ⚠️ **2026-10-14 起这条加成只是「主查询内部的分数」，不再是最终次序**：候选三档
+    // （`candidates_tiers.rs`，用户裁决）会把它排出来的主块切成「常用单字 → 词组 → 联想」。
+    // 它仍管着**同一档内部**的顺序，也仍把「想（xiang）」挡在 `xian` 的首位之外（想 落进
+    // 联想档，因为拼音更长）；被让到词组之后的只有精确单字里的**生僻尾巴**。
     let exact_bonus = boost / 2;
     let hanzi = |e: Entry, exact: bool| Candidate {
         text: e.word.clone(),
@@ -130,12 +169,22 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
         }),
     };
     // 前缀扩展层按静态词频截到 PREFIX_MATCH_CAP（精确层不截）；取舍见 dictionary.rs 同常量。
-    let mut merged: Vec<Candidate> = dict
+    //
+    // 主查询候选**连同分档元数据**一起收集（2026-10-14）：条目一出词库，「拼音多长、
+    // 是不是精确」就丢了 —— 排完序再想分档就分不出来。其余档（模糊/简拼/纠错/逐音节汤/
+    // 符号）不带元数据，分档时落「主块尾部」，相对次序一字不动。
+    let mut merged: Vec<(Candidate, Option<Meta>)> = dict
         .query_prefix_top(input, PREFIX_MATCH_CAP)
         .into_iter()
         .map(|e| {
             let exact = e.pinyin_len == input_len;
-            hanzi(e, exact)
+            let meta = Meta {
+                pinyin_len: e.pinyin_len,
+                exact,
+                // 学过的一律排在三档之前（第 0 档）—— 见 `candidates_tiers.rs` 头注。
+                learned: learner.freq_of(&e.word) > 0,
+            };
+            (hanzi(e, exact), Some(meta))
         })
         .collect();
     // 多音节整串无命中时按音节逐段补候选（segment 此前是死代码）：
@@ -211,7 +260,10 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
         && let Some(fb) = segment_fallback(dict, input, opts.fuzzy, opts.correction)
     {
         // 递归深度 ≤ 1：「前缀有命中」是入选条件，到了里面 `merged` 必非空。
-        merged = rank_and_pick_with(dict, symbols, learner, &fb.prefix, mode, limit, boost, opts);
+        merged = rank_and_pick_with(dict, symbols, learner, &fb.prefix, mode, limit, boost, opts)
+            .into_iter()
+            .map(|c| (c, None))
+            .collect();
         seg_used = true;
     }
     // 逐音节汤与分词回退同一开闸（`segment_fallback`）：五笔关闸后这里也不许漏 ——
@@ -231,7 +283,7 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
                 })
                 .collect();
             syl_cands.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
-            merged.extend(syl_cands.into_iter().take(3));
+            merged.extend(syl_cands.into_iter().take(3).map(|c| (c, None)));
             // 逐音节模糊：**只在整串变体一无所获时**才用。两库都有连写词组（新 luna 简体
             // 词组、trad），整串变体会带回「中国/中國」，那条更具体；再叠逐音节的「中/种/種」
             // 会把「中国」挤出 8 槽（实测 trad 7→10）。
@@ -275,7 +327,7 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
                     .map(|e| hanzi(e, false))
                     .collect();
                 syl_fuzzy.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
-                merged.extend(syl_fuzzy.into_iter().take(3));
+                merged.extend(syl_fuzzy.into_iter().take(3).map(|c| (c, None)));
             }
         }
     }
@@ -305,23 +357,50 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
         symbols.search(input)
     };
     for s in sym_hits {
-        // 符号不带拼音，故不参与「精确/扩展」分层（其分数本就只有学习权重）。
-        merged.push(Candidate {
-            text: s.text.clone(),
-            kind: if s.emoji {
-                CandidateKind::Emoji
-            } else {
-                CandidateKind::Symbol
+        // 符号不带拼音，故不参与「精确/扩展」分层（其分数本就只有学习权重）——
+        // 分档侧同样：`None` 元数据 ⇒ 落主块尾部（与旧次序里它们按微小分垫底等价）。
+        merged.push((
+            Candidate {
+                text: s.text.clone(),
+                kind: if s.emoji {
+                    CandidateKind::Emoji
+                } else {
+                    CandidateKind::Symbol
+                },
+                score: rank_score(0, learner.freq_of(&s.text), boost),
             },
-            score: rank_score(0, learner.freq_of(&s.text), boost),
-        });
+            None,
+        ));
     }
     // 不能下推 limit 到词库：学过的低静态词可反超截断线外的词，
     // 全量收集 + 排序是唯一正确方案（select 用有限 limit 只限 FFI 载荷）。
     // 故走 query_all：词库不必先按词频排一遍（下面这一排就是权威序）。
-    merged.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
+    merged.sort_by(|a, b| b.0.score.cmp(&a.0.score).then(a.0.text.cmp(&b.0.text)));
     let mut seen = std::collections::HashSet::new();
-    merged.retain(|c| seen.insert(c.text.clone()));
+    merged.retain(|(c, _)| seen.insert(c.text.clone()));
+    // ── 简体优先（见 `RankOptions::prefer_simplified`）**先于**分档 ──────────────
+    // 两个步骤都是「按位稳定分区」：谁在后面，谁的次序就是最终次序。它必须在**前面**
+    // （2026-10-14 实测：反过来的话它会把三档整段重排、档位消失）—— 跑在前面还让三档
+    // 继承它（档内保持简体在前）。追加档（模糊/简拼/纠错）不在主块里，见下面那次调用。
+    if opts.prefer_simplified {
+        crate::trad_chars::demote_traditional_by(
+            &mut merged,
+            boost / 2,
+            |(c, _)| c.score,
+            |(c, _)| &c.text,
+        );
+    }
+    // 主块的长度：分档只重排、不改长度（下面拿它对**追加档**那一截再跑一次简体优先）。
+    let main_len = merged.len();
+    // ── 候选三档（2026-10-14 用户裁决）────────────────────────────────────────
+    // 「优先给符合拼音的候选字，然后是词组，最后是联想的」—— 排完序、去完重之后切档，
+    // 档规则与理由全在 `candidates_tiers.rs`。`opts.tiers = false`（笔画/五笔）时
+    // 一步不动：码串不分档。
+    if opts.tiers {
+        merged = tiers::apply(merged);
+    }
+    // 分档完毕：后面几档（模糊/简拼/纠错）不带元数据、按既有规则追加，故这里剥掉它。
+    let mut merged: Vec<Candidate> = merged.into_iter().map(|(c, _)| c).collect();
     // 分档（用户裁决）：精确/前缀候选**非空** ⇒ 模糊结果**追加在最后**，既有候选的集合
     // 与顺序一字不变（= 开模糊后的列表以未开模糊的列表为前缀）；**为空** ⇒ 模糊结果就是
     // 主结果（打 zongguo 想打「中国」不该退到列表末尾）。两分支同一份代码：先追加再截断，
@@ -353,118 +432,21 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
     }
     // 简体优先（见 RankOptions::prefer_simplified）：**截断之前**分区 —— 截断后才排
     // 等于「被截掉的简体候选永远回不来」。
+    // 追加档那一截的简体优先（主块那一截已在分档之前跑过 —— 这里**只碰追加部分**，
+    // 碰主块会把档位重排掉，见上面那段）。
     if opts.prefer_simplified {
-        crate::trad_chars::demote_traditional(&mut merged, boost / 2);
+        crate::trad_chars::demote_traditional(&mut merged[main_len..], boost / 2);
     }
     merged.truncate(limit);
-    merged
+    // 出函数时统一补 `None`：后几档（模糊/简拼/纠错）本来就是「非主块」，不带元数据 ——
+    // 双拼侧拿它当「不参与分档」的判据（那边的分档在跨解析合并之后做，见 `_meta` 头注）。
+    merged.into_iter().map(|c| (c, None)).collect()
 }
 
-/// 分词回退的落点：候选出 `prefix` 的整档，选中后缓冲里留 `suffix` 接着编。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SegmentFallback {
-    /// 被消耗的前缀：**音节对齐**，且已去掉分词符（词库键不含 `'`，格式约定）。
-    pub prefix: String,
-    /// 留在缓冲里的**原文后缀**（其间的 `'` 原样保留）。
-    pub suffix: String,
-}
-
-/// 分词回退的**唯一判定**（2026-10-10 用户裁决「输入拼音无匹配时要分词匹配」）：
-/// 给定缓冲，返回「候选该出哪一段、选完缓冲剩什么」。
-///
-/// 两个调用点共用它 —— 候选层（[`rank_and_pick_with`] 的回退档）与收尾层
-/// （`Engine::commit_buffer_after_select`）；**纯函数，故不存状态**：收尾层不需要
-/// 「先取候选、再选中」的次序假设（缓冲自证，与 `scheme_readings` 的 `(缓冲, 值)`
-/// 绑存是同一条纪律）。
-///
-/// 判据（全成立才回退；**先算不查库的两条**，收尾层每次选中都要过一次它）：
-/// 1. 缓冲不止一个字符 —— 空/单字符维持既有「无匹配」；
-/// 2. 切分出来**至少两段** —— 单音节没有「分词」可言（边界：单音节无匹配维持原样）；
-/// 3. **整串直接命中为空** —— 有命中 = 更具体的档，不回退；
-/// 4. **整串模糊命中为空**（`fuzzy_enabled` 关掉时这条不问）—— 整串变体是整串替换、
-///    比前缀更具体：`zongguo` 有「中国」档时不许被 `zong` 的整档接管；
-///    然后从**最长**的音节对齐前缀往短试，第一个「每段都是完整音节 + 词库有命中」的胜出。
-///
-/// 「完整音节」是**门槛**（用户裁决的边界）：`qqq` / `zxcvb` 这类打错串切出来的段不是
-/// 完整音节 ⇒ 不回退 ⇒ 维持无候选（「打英文」的逃生口靠它，
-/// 钉子见 tests/punctuation.rs 与 tests/adversarial_input.rs）。
-///
-/// ⚠️ 门槛只管「段是不是音节」：首段**恰好**是完整音节的英文串会回退（`hello` → 前缀
-/// `he`，留 `llo`）。这是本规则的已知形态、不是漏网 —— 这类串在旧行为里同样有候选
-/// （逐音节汤也命中 `he`），而逃生口本就只对**无候选**的串开放（无候选时空格提交原文）。
-///
-/// 前缀串取**各段拼接**（去掉 `'`）：词库键不含分隔符，`ni'hao` 的整串直接查询本是空的，
-/// 拼起来查才是用户的本意（`ni'hao` → 你好一族）。
-pub(crate) fn segment_fallback<D: Dictionary + ?Sized>(
-    dict: &D,
-    input: &str,
-    fuzzy_enabled: crate::fuzzy::FuzzyMask,
-    correction_enabled: bool,
-) -> Option<SegmentFallback> {
-    if input.chars().count() <= 1 {
-        return None;
-    }
-    let segs = segment(input);
-    if segs.len() < 2 {
-        return None;
-    }
-    if !dict.query_all(input).is_empty() {
-        return None;
-    }
-    if fuzzy_enabled != 0
-        && fuzzy::input_variants(input, fuzzy_enabled)
-            .iter()
-            .any(|v| !dict.query_all(v).is_empty())
-    {
-        return None;
-    }
-    // 同类第四条：整串**纠错**命中同样比前缀回退更具体（2026-10-13）。
-    if correction_enabled
-        && correction::input_corrections(input)
-            .iter()
-            .any(|v| !dict.query_all(v).is_empty())
-    {
-        return None;
-    }
-    // 各段在拼接串里的累计字符数：`prefix_len[k-1]` = 前 k 段拼起来的长度，
-    // 用来在**原文**里定位后缀从哪开始。
-    let mut prefix_len = Vec::with_capacity(segs.len());
-    let mut total = 0usize;
-    for s in &segs {
-        total += s.chars().count();
-        prefix_len.push(total);
-    }
-    for k in (1..=segs.len()).rev() {
-        if !segs[..k].iter().all(|s| is_syllable(s)) {
-            continue;
-        }
-        let prefix: String = segs[..k].concat();
-        if !dict.query_all(&prefix).is_empty() {
-            return Some(SegmentFallback {
-                suffix: raw_suffix(input, prefix_len[k - 1]),
-                prefix,
-            });
-        }
-    }
-    None
-}
-
-/// 缓冲原文里「前 `consumed` 个非分隔符字符」之后的剩余（其间的 `'` 原样保留）：
-/// `("nihaob", 5)` → `"b"`、`("ni'hao", 5)` → `""`、`("ni'hao'x", 5)` → `"'x"`。
-/// 前缀串是去 `'` 的拼接，故按「数够 `consumed` 个非 `'` 字符」定位 ——
-/// 分隔符归**前段**（它标记的正是这个边界）。
-fn raw_suffix(input: &str, consumed: usize) -> String {
-    let mut seen = 0usize;
-    for (i, ch) in input.chars().enumerate() {
-        if ch != '\'' {
-            seen += 1;
-        }
-        if seen == consumed {
-            return input.chars().skip(i + 1).collect();
-        }
-    }
-    String::new()
-}
+// 分词回退一族（`SegmentFallback` / `segment_fallback` / `raw_suffix`）拆去
+// `candidates_segment.rs`（2026-10-14，500 行门禁）—— 判定函数走这里转发（对外路径
+// 不变）；结构体 `SegmentFallback` 只由返回值类型推断使用，故只在本模块内可见。
+pub(crate) use crate::candidates_segment_impl::segment_fallback;
 
 // 按键类展开一族（9/14 键）在 `candidates_scheme.rs`（2026-10-12 拆出，拆分保留）。
 pub use crate::candidates_scheme_impl::rank_and_pick_scheme;

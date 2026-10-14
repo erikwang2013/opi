@@ -27,6 +27,7 @@
 //! 本模块为纯 Rust、无 fcitx5 类型依赖：`handle_key` 接收裸 `u32` 键值 +
 //! 修饰位，便于单测。键值/修饰位与 fcitx5 的映射见下方常量注释。
 
+use engine_core::EnterAction;
 use engine_core::composer::Mode;
 
 use crate::candidate::{CandidateState, ShiftState};
@@ -243,12 +244,24 @@ fn handle_space(state: &mut CandidateState) -> KeyAction {
     }
 }
 
-/// 回车：缓冲非空 → 提交首候选；空缓冲 → 直通客户端（镜像 `handleEnter`）。
+/// 回车：缓冲非空 → **按引擎的判据**（`Engine::enter_action`：五笔读「回车行为」
+/// 设置位 —— 选首候选 / 清空 / 上屏原文；判据的单一实现在 `engine_enter.rs`）；
+/// 空缓冲 → 直通客户端（镜像 `handleEnter`）。
 fn handle_enter(state: &mut CandidateState) -> KeyAction {
     if state.buffer().is_empty() {
         KeyAction::PassThrough
     } else {
-        commit_or_handled(state.select(0))
+        match state.engine.enter_action() {
+            EnterAction::SelectFirst => commit_or_handled(state.select(0)),
+            EnterAction::Clear => {
+                state.clear();
+                KeyAction::EngineHandled
+            }
+            EnterAction::CommitRaw(raw) => {
+                state.clear();
+                KeyAction::Input(raw)
+            }
+        }
     }
 }
 
@@ -399,6 +412,9 @@ fn commit_or_handled(out: String) -> KeyAction {
 #[cfg(test)]
 #[path = "input_method_browse_tests.rs"]
 mod browse_tests;
+#[cfg(test)]
+#[path = "input_method_enter_tests.rs"]
+mod enter_tests;
 #[cfg(test)]
 #[path = "input_method_page_tests.rs"]
 mod page_tests;

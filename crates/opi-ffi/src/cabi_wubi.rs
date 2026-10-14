@@ -33,6 +33,17 @@ pub unsafe extern "C" fn opi_load_wubi(ptr: *const u16, len: usize) -> bool {
     .unwrap_or(false)
 }
 
+/// enterAction() -> int32：**回车（缓冲非空时）该做什么** —— 0=选首候选、1=清空缓冲、
+/// 2=上屏原文（宿主随后读 `opi_buffer()` 取原文）。判据在引擎（`Engine::enter_action`；
+/// 五笔读「回车行为」设置位，非五笔 / 空缓冲恒 0）。未装载 → 0（= 各端既有行为，安全默认）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_enter_action() -> i32 {
+    catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.enter_action()).unwrap_or(0)
+    }))
+    .unwrap_or(0)
+}
+
 /// wubiStyle() -> int32（0=纯五笔 1=五笔拼音混输）。哨兵同 `opi_scheme`：未装载 → 0。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_wubi_style() -> i32 {

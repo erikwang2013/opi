@@ -6,3 +6,4 @@
 # everyone who runs the test benefits from these saved cases.
 cc 43cd65e96dbdd108bb72e3cd2db4a49243dd0318696fe088062831fffabe39b7 # shrinks to input = "xian", rows = [(2, 0), (9, 1)], limit = 2
 cc cb0c310705c1feca45227620420f3bee1ad7f71f0868ac3b47e80ffdfd2f783e # shrinks to input = "xian", rows = [(9, 0), (2, 1)], limit = 2
+cc aed57e99a99e7a8c17d1fff1893499845cce41e85f01abe7ef4fe500bbeb2f6d # shrinks to input = "xi", rows = [(2, 887792), (9, 0)], limit = 2

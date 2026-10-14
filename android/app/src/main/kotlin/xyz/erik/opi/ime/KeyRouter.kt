@@ -102,11 +102,24 @@ class KeyRouter(
     }
 
     fun handleEnter() {
-        if (controller.buffer.isNotEmpty()) {
-            val text = controller.select(0)
-            if (text.isNotEmpty()) commitAndResync(text)
-        } else {
+        if (controller.buffer.isEmpty()) {
             performEnter()
+            return
+        }
+        // 判据在引擎（2026-10-14 接线）：五笔读「回车行为」设置位 —— 1=清空、2=上屏原文
+        // （读缓冲原样），0/其余 = 选首候选（既有行为）。**本端不自己判**，
+        // 见 engine-core `engine_enter.rs`（同一语义抄多份的教训）。
+        when (controller.enterAction()) {
+            1 -> controller.clear()
+            2 -> {
+                val raw = controller.buffer
+                controller.clear()
+                if (raw.isNotEmpty()) commitAndResync(raw)
+            }
+            else -> {
+                val text = controller.select(0)
+                if (text.isNotEmpty()) commitAndResync(text)
+            }
         }
     }
 

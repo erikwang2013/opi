@@ -51,6 +51,15 @@ class FakeEngine : OpiEngineApi {
         buf = ""
     }
 
+    /** 回车判据（2026-10-14）：测试按需设 0/1/2 —— 缺省 0 = 既有行为（选首候选）。 */
+    var enterActionValue = 0
+    var enterActionCalls = 0
+
+    override fun enterAction(): Int {
+        enterActionCalls++
+        return enterActionValue
+    }
+
     override fun select(index: Int): String {
         val r = selectResults[index] ?: ""
         if (r.isNotEmpty()) buf = ""

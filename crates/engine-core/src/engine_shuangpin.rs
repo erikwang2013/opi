@@ -15,7 +15,9 @@
 //! （`active_dict`/`symbols`/`learner`/`scheme_readings`/`fuzzy`/`correction`/`jianpin`）
 //! 早因 `engine_segment.rs` / `engine_user_words.rs` 升过 —— 同一条拆分裂代价。
 
-use crate::candidates::{Candidate, RankOptions, rank_and_pick_with};
+use crate::candidates::{Candidate, RankOptions, rank_and_pick_meta};
+use crate::candidates_tiers_impl as tiers;
+use crate::candidates_tiers_impl::Meta;
 use crate::composer::Mode;
 use crate::engine::Engine;
 
@@ -42,12 +44,15 @@ impl Engine {
         limit: usize,
     ) -> Vec<Candidate> {
         let parses = crate::shuangpin::decode_keys(buffer, self.shuangpin_layout);
-        let mut merged: Vec<Candidate> = Vec::new();
+        // 分档元数据跟着候选一起跨解析合并（2026-10-14）：**不许**在每次解析内部就分档
+        // —— 下面那次全局重排会把档位顺序抹平（分档必须发生在合并之后，见 `_meta` 与
+        // `candidates_tiers.rs`）。故每次解析传 `tiers: false`、这里合并完自己调 `apply`。
+        let mut merged: Vec<(Candidate, Option<Meta>)> = Vec::new();
         let mut seen = std::collections::HashSet::new();
         // 解析数封顶另有一道：MAX_PARSES 已封 8，这里再取前 4（每次击键
         // 每个解析都是一次全量排名）。
         for p in parses.iter().take(4) {
-            for c in rank_and_pick_with(
+            for (c, meta) in rank_and_pick_meta(
                 self.active_dict(),
                 &self.symbols,
                 &self.learner,
@@ -62,14 +67,18 @@ impl Engine {
                     prefer_simplified: mode == Mode::Pinyin,
                     // 解码结果就是**真拼音**，分词回退/逐音节汤对它照旧有效（既有行为）。
                     segment_fallback: true,
+                    // 分档在**合并之后**（见上）—— 这里只收元数据。
+                    tiers: false,
                 },
             ) {
                 if seen.insert(c.text.clone()) {
-                    merged.push(c);
+                    merged.push((c, meta));
                 }
             }
         }
-        merged.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
+        merged.sort_by(|a, b| b.0.score.cmp(&a.0.score).then(a.0.text.cmp(&b.0.text)));
+        // 双拼 = 拼音输入 ⇒ 三档常开（与全键盘同一条裁决；档规则见 `candidates_tiers.rs`）。
+        let mut merged: Vec<Candidate> = tiers::apply(merged).into_iter().map(|(c, _)| c).collect();
         merged.truncate(limit);
         // 读数缓存（同九键那对）：展示形带 `'` 分词，与**当时的缓冲**绑存。
         *self.scheme_readings.borrow_mut() = (

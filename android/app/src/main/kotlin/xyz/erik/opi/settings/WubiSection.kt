@@ -33,7 +33,8 @@ import androidx.compose.ui.unit.dp
  * · 其余五键即时推引擎（[ImePreferences.applyWubiSettings]）。
  *
  * ⚠️ 两条如实写、不许写成「已生效」：
- * · **回车行为**：引擎只存设置位，消费在四端路由（未接线）—— 文案照抄引擎文档；
+ * · **回车行为**：引擎侧判据已接线（`Engine::enter_action`，fcitx5 / Windows 已消费），
+ *   **Android 的 JNI 出口尚未接** —— 文案如实写「等待接线」，不写「已生效」；
  * · **编码提示**：读侧出口（`wubiNextKeys`）已备，宿主 UI 未做 —— 本节不摆它
  *   （摆了就是点不动的开关，见 SettingsScreen 的既有原则）。
  */
@@ -83,7 +84,7 @@ internal fun WubiSection(prefs: ImePreferences, toast: (String) -> Unit) {
     ListItem(
         headlineContent = { Text("　回车键（缓冲非空时）") },
         supportingContent = {
-            Text("本版只存设置：回车行为要等各端路由接上它才生效（接线前回车仍是既有行为）")
+            Text("本版只存设置：桌面端（fcitx5 / Windows）已按它走；Android 的回车要等接线（在此之前回车仍是既有行为：选首候选）")
         },
         trailingContent = { TextButton(onClick = { pending = "return" }) { Text(returnStyle) } },
     )

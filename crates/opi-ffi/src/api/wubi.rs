@@ -16,6 +16,7 @@
 //! | `wubiMixedEntry` | 0=直接字母 1=z键（**越界忽略**；只在混输下有语义） |
 //! | `wubiReturnStyle` | 0=清空 1=上屏原文（**越界忽略**；消费在四端路由，见引擎侧文档） |
 //! | `wubiCandidateLimit` | 1..=9，**越界钳到区间**（与双拼布局同纪律：坏值钳到确定值） |
+//! | `enterAction` | 0=选首候选 1=清空 2=上屏原文（**回车判据**，2026-10-14 接线） |
 //!
 //! 缺省值一律来自 `Engine` 侧的 `Default`（纯五笔 / 直接字母 / 清空 / 自动上屏开 /
 //! 个数 5）—— 本层**不另写一套默认**，免得两处漂。
@@ -26,7 +27,7 @@
 //! `engine_core::scheme::Scheme::code`）。码表没装（`loadWubi` 没调或失败）时，
 //! 方案走了普通路径 —— 引擎如实降级，不假装有候选（`engine_wubi.rs` 头的裁决）。
 
-use engine_core::{WubiMixedEntry, WubiReturnStyle, WubiStyle};
+use engine_core::{EnterAction, WubiMixedEntry, WubiReturnStyle, WubiStyle};
 
 use super::Api;
 
@@ -56,6 +57,17 @@ pub fn wubi_return_from_int(v: i32) -> Option<WubiReturnStyle> {
 
 pub fn wubi_return_to_int(s: WubiReturnStyle) -> i32 {
     s.code()
+}
+
+/// 回车判据 → 整数码（协议行见文件头注的表）。
+pub fn enter_action_to_int(a: EnterAction) -> i32 {
+    match a {
+        EnterAction::SelectFirst => 0,
+        EnterAction::Clear => 1,
+        // 原文串不上这条出口：宿主拿到 2 之后自己读 `buffer()`（同一次调用序列内不会变
+        // —— 判据与缓冲都取自同一时刻的引擎状态）。
+        EnterAction::CommitRaw(_) => 2,
+    }
 }
 
 impl Api {
@@ -104,6 +116,12 @@ impl Api {
 
     pub fn wubi_return_style(&self) -> WubiReturnStyle {
         self.router.engine().wubi_return_style()
+    }
+
+    /// 回车（缓冲非空时）该做什么 —— **判据在引擎**（`Engine::enter_action`，实现与
+    /// 理由见 `engine_enter.rs`）。宿主拿到 2（上屏原文）后再读 `buffer()` 取原文。
+    pub fn enter_action(&self) -> i32 {
+        enter_action_to_int(self.router.engine().enter_action())
     }
 
     /// 四码唯一自动上屏开关写侧（缺省开）。

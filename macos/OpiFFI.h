@@ -101,6 +101,9 @@ void opi_set_wubi_mixed_entry(int32_t entry);
 int32_t opi_wubi_candidate_limit(void);
 void opi_set_wubi_candidate_limit(int32_t n);
 int32_t opi_wubi_return_style(void);
+/// 回车（缓冲非空时）该做什么：0=选首候选、1=清空缓冲、2=上屏原文（随后读 opi_buffer()）。
+/// 判据在引擎（五笔读「回车行为」设置位；非五笔 / 空缓冲恒 0）。未装载 → 0。
+int32_t opi_enter_action(void);
 void opi_set_wubi_return_style(int32_t style);
 bool opi_wubi_auto_commit(void);
 void opi_set_wubi_auto_commit(bool on);

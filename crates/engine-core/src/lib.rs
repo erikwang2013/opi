@@ -10,6 +10,10 @@ pub mod candidates;
 mod candidates_options_impl; // 排序层开关 RankOptions（500 行门禁拆出，见文件头）
 #[path = "candidates_scheme.rs"]
 mod candidates_scheme_impl;
+#[path = "candidates_segment.rs"]
+mod candidates_segment_impl; // 分词回退一族（2026-10-14 从 candidates.rs 拆出，见文件头）
+#[path = "candidates_tiers.rs"]
+mod candidates_tiers_impl; // 候选三档（常用单字/词组/联想，2026-10-14 用户裁决；500 行门禁拆出）
 pub mod composer;
 pub mod correction;
 mod dict_layers; // 导入词库的合并层（M3 2b）：Engine 主库槽位的具体类型，字段私有故模块不公开
@@ -17,6 +21,8 @@ pub mod dictionary;
 pub mod engine;
 #[path = "engine_dicts.rs"]
 mod engine_dicts_impl; // 词典换装一族（trad/stroke/导入层）+ user_boost 重算（500 行门禁拆出）
+#[path = "engine_enter.rs"]
+mod engine_enter_impl; // 回车一族：缓冲非空时该做什么的单一判据（2026-10-14 接线）
 #[path = "engine_punct.rs"]
 mod engine_punct_impl; // 标点/全角一族（500 行门禁拆出，见文件头）
 #[path = "engine_readings.rs"]
@@ -38,6 +44,8 @@ pub mod learner;
 pub mod pinyin;
 pub mod punctuation;
 pub mod router;
+#[path = "router_edit_keys.rs"]
+mod router_edit_keys_impl; // 编辑键一族（退格/空格/回车，2026-10-14 从 router.rs 拆出）
 pub mod scheme;
 pub mod shuangpin;
 pub mod shuangpin_tables;
@@ -49,6 +57,7 @@ pub mod trie;
 pub use composer::{Composer, KeyEffect, Mode, Session};
 pub use dictionary::{Dictionary, InMemoryDictionary};
 pub use engine::Engine;
+pub use engine_enter_impl::EnterAction;
 pub use engine_wubi_impl::{
     WUBI_CANDIDATE_LIMIT_DEFAULT, WUBI_CANDIDATE_LIMIT_MAX, WubiMixedEntry, WubiReturnStyle,
     WubiStyle,

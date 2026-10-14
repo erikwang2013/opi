@@ -38,7 +38,8 @@ pub struct Engine {
     pub(crate) wubi_candidate_limit: usize,
     /// 四码唯一自动上屏的总闸（默认 `true` = 对齐搜狗缺省；判据见 engine_wubi.rs）。
     pub(crate) wubi_auto_commit: bool,
-    /// 五笔回车键行为（**设置位**：消费在四端路由，本波未接线 —— 见 `WubiReturnStyle`）。
+    /// 五笔回车键行为（设置位）。**消费判据在 `engine_enter.rs`**（`Engine::enter_action`，
+    /// 2026-10-14 接线）：router / fcitx5 / TSF 三处回车都问它；Android 待其 JNI 出口。
     pub(crate) wubi_return_style: WubiReturnStyle,
     pub(crate) composer: Composer, // pub(crate)：engine_segment.rs 的收尾要用（见文件头）
     /// 符号表引擎（`symbol_blocks` 一族的 impl 在 engine_symbol_browse.rs，故 pub(crate)）。
@@ -403,6 +404,8 @@ impl Engine {
                                 // 笔画串不是音节，分词回退对 hspnz 天然惰性 —— 保持
                                 // 既有值（true），别顺手统一成 false（那是五笔的理由）。
                                 segment_fallback: true,
+                                // 三档同理：hspnz 是编码不是拼音（见 RankOptions::tiers）。
+                                tiers: false,
                             },
                         );
                     }
@@ -441,6 +444,9 @@ impl Engine {
                 jianpin: self.jianpin && !plain,
                 prefer_simplified: s.mode == Mode::Pinyin,
                 segment_fallback: self.scheme() != Scheme::Wubi,
+                // 三档跟着 `plain` 走（笔画/五笔 = 码类，不分档）—— 这里正是 **全键盘
+                // 拼音**那条路（Scheme::Full），`plain` 为假 ⇒ 分档生效（2026-10-14 裁决）。
+                tiers: !plain,
             },
         )
     }

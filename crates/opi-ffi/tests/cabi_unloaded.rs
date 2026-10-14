@@ -35,6 +35,7 @@ use opi_ffi::cabi::{
     opi_dict_list,
     opi_emoji_groups,
     opi_emoji_symbols,
+    opi_enter_action,
     opi_export_user_words,
     opi_ffi_free_string,
     opi_fullwidth_state,
@@ -236,6 +237,8 @@ fn every_export_returns_a_sentinel_when_engine_is_not_loaded() {
         assert!(opi_wubi_mixed_entry() == 0, "未装载：混入方式读侧恒 0");
         assert!(opi_wubi_candidate_limit() == 0, "未装载：个数读侧恒 0");
         assert!(opi_wubi_return_style() == 0, "未装载：回车读侧恒 0");
+        // 回车判据（2026-10-14）：未装载 → 0（安全默认 = 各端既有行为）。
+        assert!(opi_enter_action() == 0, "未装载：回车判据恒 0（选首候选）");
         assert!(!opi_wubi_auto_commit(), "未装载：自动上屏读侧恒 false");
         let hint = opi_wubi_next_keys();
         assert!(

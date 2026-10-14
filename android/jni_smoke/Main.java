@@ -62,6 +62,7 @@ final class OpiEngine {
     static native int wubiCandidateLimit();
     static native void setWubiCandidateLimit(int n);
     static native int wubiReturnStyle();
+    static native int enterAction();
     static native void setWubiReturnStyle(int style);
     static native boolean wubiAutoCommit();
     static native void setWubiAutoCommit(boolean on);
@@ -479,6 +480,13 @@ public final class Main {
         check(OpiEngine.wubiCandidateLimit() == 1, "0/负数归 1");
         OpiEngine.setWubiCandidateLimit(5);
         check("".equals(OpiEngine.wubiNextKeys()), "空缓冲 → 无编码提示（空串）");
+        // 回车判据（2026-10-14 接线）：空缓冲 0；打字后按设置位（行为，非只读设置位）。
+        check(OpiEngine.enterAction() == 0, "空缓冲 → 回车判据 0（选首候选）");
+        OpiEngine.inputKey("w");
+        check(OpiEngine.enterAction() == 1, "五笔 + 缓冲非空 + 缺省档 → 1（清空）");
+        OpiEngine.setWubiReturnStyle(1);
+        check(OpiEngine.enterAction() == 2, "上屏原文档 → 2");
+        OpiEngine.setWubiReturnStyle(0);
         OpiEngine.setScheme(0);
         check(OpiEngine.scheme() == 0, "切回全键盘");
 

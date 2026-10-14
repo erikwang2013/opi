@@ -38,6 +38,13 @@ pub unsafe extern "system" fn opijni_load_wubi(
     })
 }
 
+/// enterAction() -> int：回车（缓冲非空时）该做什么（0=选首候选 1=清空 2=上屏原文）。
+/// 判据在引擎（`Engine::enter_action`）；未装载 → 0（安全默认 = 各端既有行为）。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_enter_action(_env: JEnv, _class: sys::jclass) -> jint {
+    guard(|| api::with_engine(|e| e.enter_action()).unwrap_or_default())
+}
+
 /// wubiStyle() -> int（0=纯五笔 1=五笔拼音混输）。未装载 → 0 是**哨兵**
 /// （同 `scheme` 一档），别读成"用户选的就是纯五笔"。
 #[unsafe(no_mangle)]
@@ -201,6 +208,11 @@ pub(crate) fn wubi_native_methods() -> Vec<NativeMethod<'static>> {
                 jni_str!("setWubiReturnStyle"),
                 jni_str!("(I)V"),
                 opijni_set_wubi_return_style as *mut c_void,
+            ),
+            NativeMethod::from_raw_parts(
+                jni_str!("enterAction"),
+                jni_str!("()I"),
+                opijni_enter_action as *mut c_void,
             ),
             NativeMethod::from_raw_parts(
                 jni_str!("wubiAutoCommit"),

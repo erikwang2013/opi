@@ -37,6 +37,13 @@ pub struct RankOptions {
     /// 码串，候选层给出的会是**更短前缀**的候选项，而收尾层对五笔整段消耗
     /// （`engine_segment.rs`），两层的「匹配了多少」对不上（见 `engine_wubi.rs` 头）。
     pub segment_fallback: bool,
+    /// **候选三档**（2026-10-14 用户裁决「优先给符合拼音的候选字，然后是词组，最后是
+    /// 联想的」；实现见 `candidates_tiers.rs`）。默认 `true` = 拼音类输入的产品行为；
+    /// **码类方案（笔画 / 五笔）显式关** —— 缓冲是编码不是拼音，拿「单字/词组/联想」去切
+    /// 码串是似是而非（与 `segment_fallback` 在五笔上的裁决同一条理由）。
+    /// ⚠️ 双拼那条路**跨解析合并之后**才分档，故它给每次解析传 `false`、在合并处自己调
+    /// `candidates_tiers::apply`（见 `engine_shuangpin.rs`）。
+    pub tiers: bool,
 }
 
 impl Default for RankOptions {
@@ -47,6 +54,7 @@ impl Default for RankOptions {
             jianpin: true,
             prefer_simplified: false,
             segment_fallback: true,
+            tiers: true,
         }
     }
 }

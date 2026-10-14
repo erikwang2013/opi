@@ -370,7 +370,8 @@ fn return_style_is_a_setting_bit() {
     e.set_wubi_return_style(WubiReturnStyle::CommitRaw);
     assert_eq!(e.wubi_return_style(), WubiReturnStyle::CommitRaw);
     assert_ne!(WubiReturnStyle::default(), WubiReturnStyle::CommitRaw);
-    // ⚠️ 消费点在四端路由（本波未接线，见 WubiReturnStyle 头注）—— 引擎侧只此设置位。
+    // 消费判据在 `Engine::enter_action`（2026-10-14 接线，见 `engine_enter.rs`）——
+    // 本文件只钉设置位本身；行为级用例在 tests/enter_action.rs。
 }
 
 // ---- 换装口重算 user_boost（engine_dicts.rs 的不变量）----

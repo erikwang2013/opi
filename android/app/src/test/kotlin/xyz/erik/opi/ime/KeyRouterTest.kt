@@ -145,6 +145,33 @@ class KeyRouterTest {
         assertEquals(0, ch.enterCount)
     }
 
+    /** 回车判据（2026-10-14 接线）：1=清空（不上屏）、2=上屏原文、0=既有行为。 */
+    @Test
+    fun enterHonoursTheEngineEnterAction() {
+        // 1 = 清空：缓冲丢掉、**什么都不上屏**、也不走应用回车。
+        val clear = FakeEngine().apply {
+            buf = "wqvb"
+            enterActionValue = 1
+        }
+        val ch1 = Channel()
+        val (_, r1) = router(clear, ch1)
+        r1.handleEnter()
+        assertTrue("清空档不得提交任何文本：${ch1.commits}", ch1.commits.isEmpty())
+        assertEquals(0, ch1.enterCount)
+        assertEquals(1, clear.clearCalls)
+
+        // 2 = 上屏原文：把缓冲原样提交（读的是清空**之前**的缓冲）。
+        val raw = FakeEngine().apply {
+            buf = "wqvb"
+            enterActionValue = 2
+        }
+        val ch2 = Channel()
+        val (_, r2) = router(raw, ch2)
+        r2.handleEnter()
+        assertEquals(listOf("wqvb"), ch2.commits)
+        assertEquals(1, raw.clearCalls)
+    }
+
     @Test
     fun enterEmptyBufferPerformsEnter() {
         val fake = FakeEngine()

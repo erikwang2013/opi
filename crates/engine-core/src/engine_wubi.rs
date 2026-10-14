@@ -143,11 +143,11 @@ impl WubiMixedEntry {
 
 /// 五笔回车键行为（搜狗「特殊习惯」里的「回车键」一档）。**默认 [`Self::Clear`]**。
 ///
-/// ⚠️ **本波（M4 3b）只落设置位**：引擎侧不处理回车（`Engine::input_key` 从不收
-/// `'\r'`，缓冲里也不会出现），消费点在**四端路由**——`crate::router::KeyRouter::handle_enter`
-/// （Apple 两平台）、`crates/fcitx5-opi/src/input_method.rs` 与 `crates/tsf-opi/src/logic.rs`
-/// 的 handleEnter、Android `EngineController` 的回车分支。**接线前四端仍是「提交首候选」，
-/// 本设置不生效**（下一波工作，见计划 3b 报告）。语义在接线时按下表落：
+/// **消费判据已接线**（2026-10-14）：引擎侧仍不处理回车（`Engine::input_key` 从不收
+/// `'\r'`），但**判据**集中在一处 —— [`crate::Engine::enter_action`]（实现与理由见
+/// `engine_enter.rs`），三处宿主的 handleEnter（`router.rs`、`crates/fcitx5-opi`、
+/// `crates/tsf-opi`）都问它；**Android 待其 JNI 出口**（在那之前 Android 上本设置不生效，
+/// 设置页文案如实这么写）。语义按下表：
 ///
 /// | 取值 | 缓冲非空时回车 |
 /// |---|---|
@@ -258,7 +258,7 @@ impl Engine {
         self.wubi_candidate_limit
     }
 
-    // ---- 回车行为（设置位；消费在四端路由，见 WubiReturnStyle 头注）----
+    // ---- 回车行为（设置位；消费判据见 `Engine::enter_action` / `engine_enter.rs`）----
 
     pub fn set_wubi_return_style(&mut self, style: WubiReturnStyle) {
         self.wubi_return_style = style;
@@ -341,12 +341,16 @@ impl Engine {
         };
         let cap = limit.min(self.wubi_candidate_limit);
         // 三档与分词回退对码串全关，理由见文件头与 `RankOptions::segment_fallback`。
+        // ⚠️ `tiers` 也在这里关掉**且对混输那条拼音支同样生效**（它复用同一个 `opts`）：
+        // 五笔下候选栏的主语是码候选，拼音候选是叠加上去的一路 —— 给它单开分档是另一条
+        // 产品裁决，本轮（2026-10-14）没做、如实记在交付说明里。
         let opts = RankOptions {
             fuzzy: 0,
             correction: false,
             jianpin: false,
             prefer_simplified: mode == Mode::Pinyin,
             segment_fallback: false,
+            tiers: false,
         };
         // z 键进入方式（只混输；表与两条子决定见 `WubiMixedEntry` 头注）：
         // z 段**只出拼音**（余串空 ⇒ 无候选，`z` 本身不是输入），非 z 段**只出码** ——

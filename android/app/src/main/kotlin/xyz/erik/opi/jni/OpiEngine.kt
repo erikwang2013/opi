@@ -155,7 +155,7 @@ object OpiEngine : OpiEngineApi, SymbolApi {
      * 五笔旋钮族（2026-10-14，M4）。整数表（与 C ABI 同值，四端协议）：
      * · [wubiStyle] 0=纯五笔 1=五笔拼音混输（越界忽略；未装载 → 0 是哨兵）
      * · [wubiMixedEntry] 0=直接字母 1=z键（只在混输下有语义；越界忽略）
-     * · [wubiReturnStyle] 0=清空 1=上屏原文（**设置位**：消费在四端路由，接线前无行为效果）
+     * · [wubiReturnStyle] 0=清空 1=上屏原文（设置位；**消费判据见 [enterAction]**）
      * · [wubiCandidateLimit] 1..=9（**越界钳到区间**，与双拼布局同纪律）；缺省 5
      * · [wubiAutoCommit] 四码唯一自动上屏（缺省 true；未装载 → false 是哨兵）
      * 全部**不清缓冲**（与 [setScheme] 相反：它们只改「同一缓冲怎么装配候选」）。
@@ -168,6 +168,13 @@ object OpiEngine : OpiEngineApi, SymbolApi {
     external fun setWubiCandidateLimit(n: Int)
     external fun wubiReturnStyle(): Int
     external fun setWubiReturnStyle(style: Int)
+
+    /**
+     * enterAction() -> Int：**回车（缓冲非空时）该做什么**（2026-10-14 接线）——
+     * 0=选首候选、1=清空缓冲、2=上屏原文（随后读 [buffer] 取原文）。
+     * 判据在引擎（五笔读「回车行为」设置位；非五笔 / 空缓冲恒 0 = 各端既有行为）。
+     */
+    override external fun enterAction(): Int
     external fun wubiAutoCommit(): Boolean
     external fun setWubiAutoCommit(on: Boolean)
 

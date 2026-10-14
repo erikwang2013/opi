@@ -58,7 +58,9 @@ pub enum ShiftState {
 /// 结构对应两轨的 `CandidateState` / `TsfLogic`：**持有引擎**，路由语义逐条同构。
 /// 状态随引擎生命周期走（调用方按需重建），不持有任何平台类型。
 pub struct KeyRouter {
-    engine: Engine,
+    // 同一 crate 内可见：编辑键一族拆去了 `router_edit_keys.rs`（2026-10-14 门禁），
+    // 那几个 impl 块要用它 —— 对外仍是私有字段（构造只走 `new`）。
+    pub(crate) engine: Engine,
     /// 当前页（0 起）。
     page: usize,
     /// 上次操作后的 buffer 快照；变化时页码归零。
@@ -365,38 +367,6 @@ impl KeyRouter {
                 // 必为补充平面字符），一律交系统 —— 绝不变成垃圾字符。
                 _ => KeyAction::PassThrough,
             },
-        }
-    }
-
-    /// 退格：缓冲非空 → 引擎删（引擎按码点删）；空缓冲 → 直通。
-    fn handle_backspace(&mut self) -> KeyAction {
-        if self.buffer().is_empty() {
-            KeyAction::PassThrough
-        } else {
-            self.engine.backspace();
-            self.reset_page_if_buffer_changed();
-            KeyAction::EngineHandled
-        }
-    }
-
-    /// 空格：缓冲非空 → 引擎提交；空缓冲 → 出 " "（镜像 `handleSpace`；空格**不宽化**，
-    /// 见 `Engine::fullwidthize` 头注）。
-    fn handle_space(&mut self) -> KeyAction {
-        if self.buffer().is_empty() {
-            KeyAction::Input(" ".to_string())
-        } else {
-            let out = self.engine.input_space();
-            self.reset_page_if_buffer_changed();
-            commit_or_handled(out)
-        }
-    }
-
-    /// 回车：缓冲非空 → 提交首候选；空缓冲 → 直通（镜像 `handleEnter`）。
-    fn handle_enter(&mut self) -> KeyAction {
-        if self.buffer().is_empty() {
-            KeyAction::PassThrough
-        } else {
-            commit_or_handled(self.select(0))
         }
     }
 

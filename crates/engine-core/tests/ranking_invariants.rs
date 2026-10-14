@@ -99,6 +99,8 @@ fn pinyin_of(word: &str) -> &'static str {
 /// 3. **分档契约**（用户裁决「精确/前缀候选非空 ⇒ 模糊结果追加在最后，既有候选的
 ///    集合与顺序一字不变」）：开扩展后的结果**以「不开扩展」的结果为前缀**，且各段
 ///    内按 (分数降序, 文本升序)。
+///    ⚠️ 主档段**不再**是单一分数序（2026-10-14 候选三档：常用单字/词组/联想）——
+///    它按档看，档号与档内键在下面独立算（第 3 条断言的形态随之改写，不是放宽）。
 ///    ⚠️ 本档 2026-10-13 改写过：原断言是**全局**分数单调 —— 那只在「主档 = 全部
 ///    带加成的精确命中」时成立；**前缀扩展主档是未加成的纯词频**，扩展档（模糊/纠错）
 ///    带进来的更高频条目按裁决就该排在后面。加拼音纠错后 proptest 当场抓到
@@ -136,6 +138,8 @@ fn rank_and_pick_invariants() {
                 jianpin: false,
                 prefer_simplified: false,
                 segment_fallback: true,
+                // 与 `rank_and_pick` 的默认态一致（2026-10-14 候选三档：默认开）。
+                tiers: true,
             },
         );
         for (i, c) in base.iter().enumerate().take(limit) {
@@ -149,7 +153,30 @@ fn rank_and_pick_invariants() {
                     || (w[0].score == w[1].score && w[0].text <= w[1].text)
             })
         };
-        prop_assert!(sorted_ok(&base), "主档段未按分数排：{:?}", cand_texts(&base));
+        // 主档段的三档契约（2026-10-14 用户裁决「常用单字 → 词组 → 联想」，见
+        // `candidates_tiers.rs`）。**档号与档内键由本测试独立算**（不复用实现）：
+        // 精确单字的前 5 个 = 0 档（按分数降序）；其余单字 = 1 档（拼音长度升序 →
+        // 分数降序 → 文本升序）。本夹具十个词**全是单字** ⇒ 词组档恒空（词组那一档
+        // 由 `tests/candidate_tiers.rs` 的真库门禁钉住）。
+        // ⚠️ 本条 2026-10-14 改写：原断言是「主档段整体分数降序」—— 那只在分档之前成立。
+        let slots = 5usize;
+        let mut taken = 0usize;
+        let key = |c: &Candidate, taken: &mut usize| {
+            let py = pinyin_of(&c.text);
+            if py == input && *taken < slots {
+                *taken += 1;
+                (0u8, 0usize, std::cmp::Reverse(c.score), c.text.clone())
+            } else {
+                (1u8, py.len(), std::cmp::Reverse(c.score), c.text.clone())
+            }
+        };
+        let keys: Vec<_> = base.iter().map(|c| key(c, &mut taken)).collect();
+        prop_assert!(
+            keys.windows(2).all(|w| w[0] <= w[1]),
+            "主档段三档次序不成立：{:?} / {:?}",
+            keys,
+            cand_texts(&base)
+        );
         let tail: Vec<Candidate> = got.iter().skip(base.len().min(limit)).cloned().collect();
         prop_assert!(sorted_ok(&tail), "追加段未按分数排：{:?}", cand_texts(&tail));
         // 分类器：**拼音 == 输入**才算精确（2026-10-13 订正）。原来按「键长相等」判 ——

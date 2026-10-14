@@ -14,6 +14,7 @@
 //! 概念；空缓冲退格/回车、Ctrl/Alt 组合等返回 `Unhandled`，由 C2 决定
 //! 是否交应用（不拦截则键自然流入）。
 
+use engine_core::EnterAction;
 use engine_core::composer::Mode;
 
 use crate::logic::{ShiftState, TsfLogic};
@@ -267,12 +268,24 @@ impl TsfLogic {
         }
     }
 
-    /// 回车：缓冲非空 → 提交首候选；空缓冲 → 交应用（镜像 `handleEnter`）。
+    /// 回车：缓冲非空 → **按引擎的判据**（`Engine::enter_action`：五笔读「回车行为」
+    /// 设置位 —— 选首候选 / 清空 / 上屏原文；判据的单一实现在 `engine_enter.rs`）；
+    /// 空缓冲 → 交应用（镜像 `handleEnter`）。
     fn handle_enter(&mut self) -> KeyOutcome {
         if self.buffer().is_empty() {
             KeyOutcome::Unhandled
         } else {
-            commit_or_changed(self.select(0))
+            match self.engine.enter_action() {
+                EnterAction::SelectFirst => commit_or_changed(self.select(0)),
+                EnterAction::Clear => {
+                    self.clear();
+                    KeyOutcome::Consumed
+                }
+                EnterAction::CommitRaw(raw) => {
+                    self.clear();
+                    KeyOutcome::Commit(raw)
+                }
+            }
         }
     }
 
@@ -427,6 +440,9 @@ fn commit_or_changed(out: String) -> KeyOutcome {
 #[cfg(test)]
 #[path = "logic_browse_tests.rs"]
 mod browse_tests;
+#[cfg(test)]
+#[path = "logic_enter_tests.rs"]
+mod enter_tests;
 #[cfg(test)]
 #[path = "logic_page_tests.rs"]
 mod page_tests;

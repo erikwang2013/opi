@@ -12,6 +12,8 @@
 //! `candidates::rank_and_pick_scheme`。
 
 use crate::candidates::{Candidate, CandidateKind, rank_score};
+use crate::candidates_tiers_impl as tiers;
+use crate::candidates_tiers_impl::Meta;
 use crate::dictionary::{Dictionary, SCHEME_MATCH_CAP};
 use crate::learner::Learner;
 
@@ -51,7 +53,9 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
     let exact_bonus = boost / 2;
     // 一趟扫描 = 一个输入串的整档（读音随条目一起暂存：pinyin 的生命周期出不了
     // visit_entries 的回调）。两趟（回退态）共用这一份。
-    let scan = |input: &str| -> Vec<(Candidate, String)> {
+    // 每条 =（候选，逐条读音，分档元数据）—— 三样必须**一起搬**（分档只换次序，
+    // 候选↔读音的配对不能散；元数据出了本函数就没有了）。`None` = 非主查询条目。
+    let scan = |input: &str| -> Vec<(Candidate, String, Option<Meta>)> {
         let input_len = input.len();
         // 按键类匹配走 `Dictionary::scheme_entries`（区间枚举 + 静态词频 top-N 截断）——
         // 2026-10-11 移动端实测：此前是全表逐条 `matches`，936k 条下单键 268ms（桌面
@@ -60,6 +64,12 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
             .into_iter()
             .map(|(e, pinyin)| {
                 let exact = pinyin.len() == input_len;
+                let meta = Meta {
+                    pinyin_len: pinyin.len(),
+                    exact,
+                    // 同全键盘：学过的排第 0 档（见 `candidates_tiers.rs` 头注）。
+                    learned: learner.freq_of(&e.word) > 0,
+                };
                 let score = rank_score(e.freq, learner.freq_of(&e.word), boost)
                     .saturating_add(if exact { exact_bonus } else { 0 });
                 (
@@ -69,6 +79,7 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
                         score,
                     },
                     pinyin,
+                    Some(meta),
                 )
             })
             .collect()
@@ -83,19 +94,25 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
     }
     merged.sort_by(|a, b| b.0.score.cmp(&a.0.score).then(a.0.text.cmp(&b.0.text)));
     let mut seen = std::collections::HashSet::new();
-    merged.retain(|(c, _)| seen.insert(c.text.clone()));
-    // 简体优先（见参数注）：**截断之前**分区。
+    merged.retain(|(c, _, _)| seen.insert(c.text.clone()));
+    // ── 候选三档（2026-10-14 用户裁决）────────────────────────────────────────
+    // 与全键盘**同一条**（「两套键盘的候选行为一致」是本文件头注里的既有契约）：
+    // 9/14 键的缓冲是按键串，读数就是它展开出的拼音，档位判据（精确 = 键长相等）
+    // 与全键盘同义。`apply` 只换次序，三元组整体搬 ⇒ 候选↔读音的配对不散。
+    // 简体优先（见参数注）：**截断之前**分区，且**必须先于分档** —— 两步都是按位稳定
+    // 分区，跑在后面会把三档重排掉（理由与实测见 `candidates_tiers.rs` 头注）。
+    // 成对分区（读音跟候选一起搬 —— 两者必须保持同序），档位线同全键盘路。
     if prefer_simplified {
-        // 成对分区（读音跟候选一起搬 —— 两者必须保持同序），档位线同全键盘路。
         crate::trad_chars::demote_traditional_by(
             &mut merged,
             boost / 2,
-            |(c, _)| c.score,
-            |(c, _)| &c.text,
+            |(c, _, _)| c.score,
+            |(c, _, _)| &c.text,
         );
     }
+    merged = tiers::apply(merged);
     merged.truncate(limit);
     // 读音**逐条**带出（与候选同序、同一次排名）—— 调用方按需取首条或全量；
     // 分开再算一次 = 第二次全量扫描，别在调用链上再开这条路。
-    merged.into_iter().unzip()
+    merged.into_iter().map(|(c, p, _)| (c, p)).unzip()
 }

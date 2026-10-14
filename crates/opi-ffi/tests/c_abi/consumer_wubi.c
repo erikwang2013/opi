@@ -82,12 +82,22 @@ static int wubi_segment(const char *wubi_path) {
     CHECK(cands.ptr != NULL && cands.len > 2, "五笔四码应出候选（wqvb）");
     opi_ffi_free_string(cands);
 
+    /* 回车判据（2026-10-14 接线）：四码在手 + 缺省档（清空）⇒ 1；
+       CommitRaw ⇒ 2；缓冲清掉 ⇒ 0（安全默认 = 各端既有行为）。 */
+    CHECK(opi_enter_action() == 1, "五笔 + 缓冲非空 + 缺省档 ⇒ 清空(1)，实为 %d",
+          opi_enter_action());
+    opi_set_wubi_return_style(1);
+    CHECK(opi_enter_action() == 2, "上屏原文档 ⇒ 2，实为 %d", opi_enter_action());
+    opi_set_wubi_return_style(0);
+    CHECK(opi_enter_action() == 1, "切回清空档 ⇒ 1，实为 %d", opi_enter_action());
+
     /* 编码提示：四码之后多半没有接续键（86 最长 4 码）⇒ 断言「取得到」（空串合法）。 */
     OpiString hint = opi_wubi_next_keys();
     printf("  opi_wubi_next_keys() len=%zu\n", hint.len);
     opi_ffi_free_string(hint);
 
     opi_clear();
+    CHECK(opi_enter_action() == 0, "空缓冲 ⇒ 0（选首候选，四端既有行为）");
     opi_set_scheme(0);
     return 1;
 }

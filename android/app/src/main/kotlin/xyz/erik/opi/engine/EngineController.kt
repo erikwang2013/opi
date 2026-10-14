@@ -214,6 +214,13 @@ class EngineController(
         refresh()
     }
 
+    /**
+     * 回车（缓冲非空时）该做什么 —— 0=选首候选、1=清空、2=上屏原文（2026-10-14 接线）。
+     * 判据在引擎（五笔读「回车行为」设置位；非五笔 / 空缓冲恒 0）—— 本端**只消费**，
+     * 不自己判（同一语义抄多份的教训见 engine-core `engine_enter.rs` 头注）。
+     */
+    fun enterAction(): Int = api.enterAction()
+
     fun select(index: Int): String {
         val text = api.select(index)
         refresh()
