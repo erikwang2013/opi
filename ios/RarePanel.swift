@@ -41,7 +41,9 @@ enum RareIndex {
         // 1.1MB / 10 万行：按行扫。⚠️ `components(separatedBy: .newlines)` 会先造出
         // 10 万个 String，`enumerateLines` 是逐行回调（不物化整表）。
         text.enumerateLines { line, _ in
-            if line.isEmpty { continue }
+            // ⚠️ 闭包里**不能** `continue`（2026-10-14 CI 实测：`'continue' is only allowed
+            // inside a loop`）—— 用 `return` 提前退出本次回调，语义等价（跳过这一行）。
+            if line.isEmpty { return }
             let parts = line.components(separatedBy: "\t")
             // 首列必须**恰好一个码点**（按标量数判，不是 utf16 —— 代理对在
             // Swift 里也是 1 个标量，与 Kotlin 的 codePointCount 同义）。
