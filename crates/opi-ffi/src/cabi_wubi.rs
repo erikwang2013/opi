@@ -105,7 +105,8 @@ pub unsafe extern "C" fn opi_set_wubi_candidate_limit(n: i32) {
 }
 
 /// wubiReturnStyle() -> int32（0=清空 1=上屏原文）。未装载 → 0（哨兵）。
-/// ⚠️ 本档是**设置位**：消费在四端路由（见 `WubiReturnStyle` 头注），接线前无行为效果。
+/// 回车行为设置位（0=清空 1=上屏原文）。**消费判据见 `opi_enter_action`**（2026-10-14
+/// 接线）—— 各端不再自己判「回车该干嘛」，问那一处。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_wubi_return_style() -> i32 {
     catch_unwind(AssertUnwindSafe(|| {

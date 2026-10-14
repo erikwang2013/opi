@@ -40,15 +40,22 @@ protocol KeyboardLayoutDelegate: AnyObject {
 /// 键盘扩展加 xib 只会多一个「只能在 Mac 上调」的故障面，而本机连编译都做不到。
 final class KeyboardLayout: UIView {
 
-    /// 键盘层。四层而不是「字母/数字」两层：符号层与表情层的数据都来自引擎的查询出口，
+    /// 键盘层。六层而不是「字母/数字」两层：符号层与表情层的数据都来自引擎的查询出口，
     /// 与另外两层的键位表不是同一类东西（点它们**不过引擎**，见 `commitText`）。
     /// 表情层（2026-10-13）与符号层是**两条独立数据通路**（符号表 / UTS#51 表情表），
     /// 面板也是两个类 —— 别把表情塞进 `symbolPanel` 里当一栏画。
+    /// 模式菜单与生僻字面板（2026-10-14）沿用同一条：四个面板类、四个兄弟视图、
+    /// 同位置互斥显示，靠 `isPanelLayer` 一处判定「该藏键位行了」。
     enum Layer {
         case letters
         case numbers
         case symbols
         case emoji
+        /// 输入模式菜单（2026-10-14）：面板占满键面，选项来自 `InputMode.allCases`。
+        /// **它不改任何引擎状态** —— 选中后才由控制器走 `applyInputMode`。
+        case modes
+        /// 生僻字面板（2026-10-14）：部首 → 笔画 → 字的浏览式查法，**不进引擎**。
+        case rare
     }
 
     weak var delegate: KeyboardLayoutDelegate?
@@ -60,6 +67,14 @@ final class KeyboardLayout: UIView {
     /// `property 'layer' with type 'KeyboardLayout.Layer' cannot override a property with type 'CALayer'`
     /// （2026-10-09 CI run 37933196475）。改名是唯一符合 API 的修法。
     private(set) var keyLayer: Layer = .letters
+
+    /// 当前**输入模式**（键面画哪一套 + 菜单高亮哪一项）。
+    ///
+    /// 为什么不让它从引擎反推：`scheme()` + `mode()` 反推不出「大 9 键」与
+    /// 「生僻字」这两种态（它们不进引擎），这正是 Android `layoutFor()` 头注
+    /// 写死的那件事。所以本层自己持有用户选过的模式，控制器在 `applyInputMode`
+    /// 里同步 —— 与 `modeLabel` 同一条纪律：**键面的真源在 UI 侧，引擎的真源在引擎侧**。
+    private(set) var inputMode: InputMode = .pinyin26
 
     /// 模式键的键面字（中/繁/英）= **点它会切到哪**（2026-10-12 晚裁决；与 Android
     /// `modeKeyLabelOf` 同语义，各端按自己的循环给值）。由控制器在切模式后同步。
@@ -86,15 +101,20 @@ final class KeyboardLayout: UIView {
     private let rowsStack = UIStackView()
     /// 符号层**自带**一个可竖向滚动的容器（符号数不是常量：当前数据表里
     /// 「常用」= CJK 符号块 60 个，将来加 common 块只会更多）。
-    /// 与 `rowsStack` 同位置、互斥显示 —— 不去改 `rowsStack` 的 `.fillEqually`
-    /// 布局，那会连字母层的行高一起改掉。
-    /// 网格的画法搬到 `SymbolPanel.swift`（键位行是编译期常量、符号是运行时数据，
-    /// 两件东西；顺带把本文件压回 500 行源码上限内）。本层只管摆位置与转发点击。
+    /// 与 `rowsStack` 同位置、互斥显示 —— 它的行高规则（固定行高 + 滚动）与键位行
+    /// （按权重分行）本来就不是一套，混在一起只会互相牵制。网格画法在 `SymbolPanel.swift`。
     private let symbolPanel = SymbolPanel()
     /// 表情层（2026-10-13）。与 `symbolPanel` **同位置、三者互斥显示**（字母行/符号/表情），
     /// 数据与画法都在 `EmojiPanel.swift`（那边有理由：分类条/搜索/字形过滤是表情页自己的事），
     /// 本层只管摆位置 + 转发点击与搜索词。
     private let emojiPanel = EmojiPanel()
+    /// 输入模式菜单（2026-10-14）。与上面两个面板**同位置、互斥显示**（四个里只亮一个），
+    /// 摆法与转发理由同上；画法与选项在 `InputModePanel.swift`。
+    private let modePanel = InputModePanel()
+    /// 生僻字面板（2026-10-14）。同上；数据与三级状态机在 `RarePanel.swift`。
+    /// ⚠️ 索引文件（`rare_index.tsv`）本仓 iOS 侧**没有** —— 面板会显示可见提示，
+    /// 见那里的头注。
+    private let rarePanel = RarePanel()
 
     init() {
         super.init(frame: .zero)
@@ -157,7 +177,10 @@ final class KeyboardLayout: UIView {
     private func buildRows() {
         rowsStack.axis = .vertical
         rowsStack.spacing = 6
-        rowsStack.distribution = .fillEqually
+        // .fill（2026-10-14 由 .fillEqually 改）：行高现在由 `ModeKeyRenderer` 按
+        // **行高权重**给显式约束（9 键主区是底行的 3 倍高）。原来 .fillEqually
+        // 「按容器高平分」表达不了权重。26 键/14 键/笔画的行权恒 1 ⇒ 结果与改前一致。
+        rowsStack.distribution = .fill
         rowsStack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(rowsStack)
         NSLayoutConstraint.activate([
@@ -168,6 +191,8 @@ final class KeyboardLayout: UIView {
         ])
         buildSymbolPanel()
         buildEmojiPanel()
+        buildModePanel()
+        buildRarePanel()
         rebuildKeys()
     }
 
@@ -223,108 +248,87 @@ final class KeyboardLayout: UIView {
         emojiPanel.isHidden = true
     }
 
-    /// 重建键位行（切层时调用）。
+    /// 输入模式菜单容器（2026-10-14）。摆法同符号面板（同位置互斥）。
+    /// ⚠️ 选中**不在这里**换引擎/换键面：那是控制器的事（`applyInputMode`）——
+    /// 面板只管报「用户点了哪一项」（`.selectInputMode` 带载荷的功能键，不新造委托方法）。
+    private func buildModePanel() {
+        modePanel.translatesAutoresizingMaskIntoConstraints = false
+        modePanel.onSelect = { [weak self] mode in
+            guard let self else { return }
+            self.delegate?.keyboardLayout(self, didTapFunction: .selectInputMode(mode))
+        }
+        modePanel.onClose = { [weak self] in
+            guard let self else { return }
+            self.delegate?.keyboardLayout(self, didTapFunction: .showLetters)
+        }
+        addSubview(modePanel)
+        NSLayoutConstraint.activate([
+            modePanel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 3),
+            modePanel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -3),
+            modePanel.topAnchor.constraint(equalTo: candidateScroll.bottomAnchor, constant: 4),
+            modePanel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
+        ])
+        modePanel.isHidden = true
+    }
+
+    /// 生僻字面板容器（2026-10-14）。摆法同上（同位置互斥）。
+    /// 提交是**直提**（`.commitText`，同符号/表情键的理由）；关闭回字母层。
+    private func buildRarePanel() {
+        rarePanel.translatesAutoresizingMaskIntoConstraints = false
+        rarePanel.onCommit = { [weak self] ch in
+            guard let self else { return }
+            self.delegate?.keyboardLayout(self, didTapFunction: .commitText(ch))
+        }
+        rarePanel.onClose = { [weak self] in
+            guard let self else { return }
+            self.delegate?.keyboardLayout(self, didTapFunction: .showLetters)
+        }
+        addSubview(rarePanel)
+        NSLayoutConstraint.activate([
+            rarePanel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 3),
+            rarePanel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -3),
+            rarePanel.topAnchor.constraint(equalTo: candidateScroll.bottomAnchor, constant: 4),
+            rarePanel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
+        ])
+        rarePanel.isHidden = true
+    }
+
+    /// 重建键位行（切层/换模式时调用）。
+    ///
+    /// 四个面板（符号/表情/模式菜单/生僻字）**互斥显示**、谁亮由 `keyLayer` 决定；
+    /// 行/格/列的**尺寸算式**搬去了 `ModeKeyRenderer`，本函数只挑「画哪套表」并接线。
     private func rebuildKeys() {
-        // 符号层由 `setSymbols(_:)` 画、表情层由 `setEmojiBrowse(_:groups:)` 画
-        // （数据都来自引擎，不在这里现算）。
+        // 符号层/表情层的内容由控制器现取（`setSymbols` / `setEmojiBrowse`），
+        // 模式菜单与生僻字面板是**静态结构**，自己管自己的内容。
         let isSymbols = (keyLayer == .symbols)
         let isEmoji = (keyLayer == .emoji)
-        rowsStack.isHidden = isSymbols || isEmoji
+        let isModes = (keyLayer == .modes)
+        let isRare = (keyLayer == .rare)
+        rowsStack.isHidden = isPanelLayer
         symbolPanel.isHidden = !isSymbols
         emojiPanel.isHidden = !isEmoji
-        guard !isSymbols && !isEmoji else { return }
+        modePanel.isHidden = !isModes
+        rarePanel.isHidden = !isRare
+        if isModes { modePanel.show(current: inputMode) }
+        if isRare { rarePanel.show() }
+        guard !isPanelLayer else { return }
         rowsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        let rows = keyLayer == .letters ? letterRows() : numberRows()
-        let gap: CGFloat = 5
-        for specs in rows {
-            let row = UIStackView()
-            row.axis = .horizontal
-            row.spacing = gap
-            // .fill（不是 .fillProportionally）：宽度由下面的显式比例约束决定。
-            // fillProportionally 只看 intrinsicContentSize，会无视 widthUnits。
-            row.distribution = .fill
-            let total = specs.reduce(0) { $0 + $1.widthUnits }
-            // 键间空隙要从总宽里扣掉，否则「各键比例之和 = 1」再加上空隙会超出行宽，
-            // 结果是约束冲突（布局崩 + 控制台刷警告）。
-            let gaps = gap * CGFloat(max(0, specs.count - 1))
-            for spec in specs {
-                let b = KeyButton(spec: spec)
-                attach(b)
-                row.addArrangedSubview(b)
-                // b.width = row.width × 比例 − 本键分摊的空隙
-                // 各键求和 = row.width − gaps，再加 gaps 恰好等于行宽。
-                let frac = spec.widthUnits / total
-                b.widthAnchor.constraint(
-                    equalTo: row.widthAnchor, multiplier: frac, constant: -gaps * frac
-                ).isActive = true
-            }
-            rowsStack.addArrangedSubview(row)
+        // 字母层按**当前输入模式**画（9 键/14 键/笔画各有自己的表）；数字层所有模式共用。
+        let rows = keyLayer == .letters
+            ? ModeKeyTables.rows(for: inputMode, modeLabel: modeLabel)
+            : ModeKeyTables.numberRows(modeLabel: modeLabel)
+        ModeKeyRenderer.render(rows, into: rowsStack, gap: 5) { [weak self] b in
+            self?.attach(b)
         }
     }
 
-    /// 字母层三行 + 功能行。
-    ///
-    /// 字母键一律送**小写码点 + states 0**，不自己做大写化：keys.rs 的约定是
-    /// 「大小写由码点携带」是给**物理键盘**的（平台已应用 ⇧）；而软键盘的 ⇧ 走
-    /// `handle_shift` 维护的引擎内状态机，由它决定英文模式的 Input 与拼音
-    /// composer 的大小写。这里若再自己转一次大写，就是第五份大小写逻辑。
-    private func letterRows() -> [[KeySpec]] {
-        let top = "qwertyuiop".map { KeySpec.char($0) }
-        let mid = "asdfghjkl".map { KeySpec.char($0) }
-        var bottom: [KeySpec] = [
-            // ⇧：单击/长按的**语义**（Off→Single→Lock）全在 Rust 的 handle_shift，
-            // 这里只把「长按」翻成 stateLongPressed 位。states 不送 KEY_STATE_SHIFT：
-            // handle_shift 不读它。
-            KeySpec("⇧", keyval: OpiKey.shift, widthUnits: 1.4)
-        ]
-        bottom += "zxcvbnm".map { KeySpec.char($0) }
-        bottom.append(
-            KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, widthUnits: 1.4)
-        )
-
-        let funcRow: [KeySpec] = [
-            KeySpec("123", function: .showNumbers),
-            // 键面字 = **点它会切到哪**（2026-10-12 晚裁决，见 KeyboardViewController 的
-            // modeKeyLabel 注释），不是写死的 "中/英"。
-            KeySpec(modeLabel, function: .cycleMode),
-            KeySpec("空格", keyval: OpiKey.space, fallback: .text(" "), widthUnits: 5),
-            KeySpec("回车", keyval: OpiKey.ret, fallback: .text("\n"), widthUnits: 1.6),
-            // 地球键：Apple 要求自定义键盘自己提供切输入法入口（系统不会替你画）。
-            // ⚠️ 未验证：`needsInputModeSwitchKey` 为 false 时是否该隐藏它，
-            // 我按「始终显示」写（点了就是 advanceToNextInputMode，无副作用）；
-            // Mac 上照 HIG 调整。
-            KeySpec("🌐", function: .nextInputMode, widthUnits: 1),
-        ]
-        return [top, mid, bottom, funcRow]
-    }
-
-    /// 数字/标点层（**最小集合**）。
-    ///
-    /// 这里没有「符号」键位表：符号来自引擎的符号库（`#+=` 切到 `.symbols` 层），
-    /// 不再在 Swift 里另抄一份符号表 —— Android 同样只把符号交给引擎/面板。
-    private func numberRows() -> [[KeySpec]] {
-        let r1 = "1234567890".map { KeySpec.char($0) }
-        let r2 = ["-", "/", ":", ";", "(", ")", "$", "&", "@", "\""].map { KeySpec.char(Character($0)) }
-        let r3 = [
-            KeySpec("ABC", function: .showLetters, widthUnits: 1.4),
-            KeySpec.char("."),
-            KeySpec.char(","),
-            KeySpec.char("?"),
-            KeySpec.char("!"),
-            KeySpec.char("'"),
-            KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, widthUnits: 1.4),
-        ]
-        let funcRow: [KeySpec] = [
-            KeySpec("#+=", function: .showSymbols),
-            // 表情入口（2026-10-13）：紧挨符号入口。Android 的表情是从**工具条**进的
-            // （`SymbolTab.Emoji`，任何一层都能直达）；iOS 这一版先只加这一个入口 ——
-            // 与上面「#+= → 符号」同级，别的地点（字母层功能行）保持原样。
-            KeySpec("😊", function: .showEmoji),
-            KeySpec(modeLabel, function: .cycleMode),
-            KeySpec("空格", keyval: OpiKey.space, fallback: .text(" "), widthUnits: 5),
-            KeySpec("回车", keyval: OpiKey.ret, fallback: .text("\n"), widthUnits: 1.6),
-        ]
-        return [r1, r2, r3, funcRow]
+    /// 换输入模式（键面按它重画；控制器在 `applyInputMode` 里同步）。
+    /// 与 `setLayer` 一样只在**变化时**重建 —— 9 键的键面重建要造几十个按钮。
+    func setInputMode(_ mode: InputMode) {
+        guard mode != inputMode else { return }
+        inputMode = mode
+        // 菜单层与生僻字层没有键位行可重建（rebuildKeys 会早退），代价可忽略。
+        rebuildKeys()
     }
 
     // MARK: - 触摸接线
@@ -335,10 +339,11 @@ final class KeyboardLayout: UIView {
             self, action: #selector(onTouchUp(_:)),
             for: [.touchUpInside, .touchUpOutside, .touchCancel]
         )
-        if b.spec.keyval == OpiKey.shift {
-            // ⇧ 有第三种语义（长按 = Lock），所以它的 touchDown **不能立刻上报** ——
-            // 上报了就先发生一次 tap，长按再补一次 lock，等于连按两下。
-            // 处理：按下时只起表，抬手时若长按没触发才补一次 tap。
+        // 两种键要长按识别：⇧（长按 = Lock）与带 `longPressFunction` 的键（模式键）。
+        if b.spec.keyval == OpiKey.shift || b.spec.longPressFunction != nil {
+            // 它们的 touchDown **不能立刻上报** —— 否则先干一次短按的事、长按再补一次，
+            // 等于连按两下（⇧ 是「先 tap 再 lock」，模式键是「先切模式再开菜单」）。
+            // 处理：按下只起表，抬手时若长按没触发才补一次短按。
             let lp = UILongPressGestureRecognizer(target: self, action: #selector(onLongPress(_:)))
             lp.minimumPressDuration = 0.5   // ⚠️ 0.5s 是拍的，真机上按手感调
             b.addGestureRecognizer(lp)
@@ -347,6 +352,11 @@ final class KeyboardLayout: UIView {
 
     @objc private func onTouchDown(_ sender: KeyButton) {
         if let fn = sender.spec.function {
+            // 带长按替代语义的功能键（模式键）：只起表，等抬手/长按定论。
+            if sender.spec.longPressFunction != nil {
+                sender.longPressFired = false
+                return
+            }
             delegate?.keyboardLayout(self, didTapFunction: fn)
             return
         }
@@ -360,12 +370,26 @@ final class KeyboardLayout: UIView {
     @objc private func onLongPress(_ g: UILongPressGestureRecognizer) {
         guard g.state == .began, let b = g.view as? KeyButton else { return }
         b.longPressFired = true
+        // 长按的**去向**由键位表给（`KeySpec.longPressFunction`），不在这里按
+        // 「这是模式键所以开菜单」硬判 —— 换表即换语义（见 KeySpec 的字段注释）。
+        if let fn = b.spec.longPressFunction {
+            delegate?.keyboardLayout(self, didTapFunction: fn)
+            return
+        }
         delegate?.keyboardLayout(self, didPress: b.spec, longPress: true)
     }
 
     @objc private func onTouchUp(_ sender: KeyButton) {
-        // 功能键按下时已处理完，没有引擎事件可发。
-        if sender.spec.function != nil { return }
+        if let fn = sender.spec.function {
+            // 带长按替代语义的功能键：没长按 → 补发一次普通功能键（长按已上报过）。
+            if sender.spec.longPressFunction != nil {
+                if !sender.longPressFired {
+                    delegate?.keyboardLayout(self, didTapFunction: fn)
+                }
+                sender.longPressFired = false
+            }
+            return
+        }
         if sender.spec.keyval == OpiKey.shift {
             if !sender.longPressFired {
                 // 没长按 → 这是一次普通点击：补发按下，抬起照常发。
@@ -432,9 +456,15 @@ final class KeyboardLayout: UIView {
     func setModeLabel(_ label: String) {
         guard label != modeLabel else { return }
         modeLabel = label
-        // 键面字只在重建行时才读，所以这里必须重建（代价是 4 行按钮重建，
-        // 切模式是低频操作）。符号层与表情层都没有这个键，不用重建。
-        if keyLayer != .symbols && keyLayer != .emoji { rebuildKeys() }
+        // 键面字只在重建行时才读，所以这里必须重建（代价是几行按钮重建，
+        // 切模式是低频操作）。四个面板层都没有这个键（菜单/生僻字里也不画），不用重建。
+        if !isPanelLayer { rebuildKeys() }
+    }
+
+    /// 当前层是不是「占满键面的面板」（四个面板里的一层）——
+    /// 它们都不画键位行，`rowsStack` 该藏起来。
+    private var isPanelLayer: Bool {
+        keyLayer == .symbols || keyLayer == .emoji || keyLayer == .modes || keyLayer == .rare
     }
 }
 

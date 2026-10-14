@@ -74,7 +74,8 @@ bool opi_load_trad(const uint16_t *path, size_t len);
 /// 笔画词典（stroke.opid，2026-10-09）。空/坏路径/引擎未装载 → false。
 bool opi_load_stroke(const uint16_t *path, size_t len);
 
-/// 输入方案（2026-10-09）：0=全键盘 1=拼音9键 2=拼音14键 3=笔画 4=双拼，越界忽略。
+/// 输入方案（2026-10-09；**2026-10-14 补 5=五笔**）：0=全键盘 1=拼音9键 2=拼音14键
+/// 3=笔画 4=双拼 5=五笔，越界忽略。真源 = `engine-core/src/scheme.rs` 的 `Scheme::code`。
 /// **换方案清缓冲** —— 调用后按 `opi_switch_mode` 那档重读 buffer/候选/页码。
 void opi_set_scheme(int32_t scheme);
 /// 方案读侧（未装载 → 0 是哨兵，不是"用户选的就是全键盘"）。

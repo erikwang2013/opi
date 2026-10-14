@@ -58,6 +58,10 @@ final class KeyboardViewController: UIInputViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         loadDictionaries()
+        // 可选增强（笔画 / 五笔码表）在同一刻装：引擎刚就绪，正是「文件 → 引擎」的落点
+        // （对齐 Android：`EngineLoader.load(context)` 里 luna → trad → stroke → wubi
+        // 一口气装完，缺哪个降级哪个）。
+        loadBundledDictionaries()
 
         layout = KeyboardLayout()
         layout.delegate = self
@@ -113,6 +117,43 @@ final class KeyboardViewController: UIInputViewController {
             // 不静默。候选栏里会显示「词库未装载」。
             NSLog("[OPI] 词库装载失败 —— 引擎将退化为空操作")
         }
+    }
+
+    /// 可选增强词库：笔画与五笔（2026-10-14）。
+    ///
+    /// 文件名与 Android `EngineLoader` 的常量**逐字对齐**
+    /// （`ASSET_NAME_STROKE` = `stroke.opid`、`ASSET_NAME_WUBI86` = `wubi86.opid`），
+    /// 源文件是 `data/generated/*.opid` 的生成物。
+    ///
+    /// ⚠️ **本仓 iOS 侧没有任何构建步骤把这些文件拷进扩展 bundle**（Xcode 工程还没进仓）——
+    /// 所以这条路现在的真实状态是「找不到文件 → 记日志 → 该方案没有候选、**不崩**」。
+    /// 要让它真能用：把 `data/generated/stroke.opid` 与 `wubi86.opid` 加进 Xcode target 的
+    /// Copy Bundle Resources，**文件名一个字都别改**（改了这里就找不到，而且没有报错）。
+    ///
+    /// 三条失败语义与 Android `EngineLoader.loadStrokeAsset/loadWubiAsset` 相同：
+    /// 缺文件 / 装载返回 false → **只降级**（那一个方案回退普通路径），不动 luna 与 trad。
+    private func loadBundledDictionaries() {
+        if let p = Bundle.main.path(forResource: "stroke", ofType: "opid") {
+            if !engine.loadStroke(path: p) {
+                NSLog("[OPI] stroke.opid 装载失败 —— 笔画键盘回退普通路径（无候选）")
+            }
+        } else {
+            NSLog("[OPI] bundle 里没有 stroke.opid —— 笔画键盘无候选（见 ios/README.md）")
+        }
+        // 五笔码表：**只装一张**（86/98 的码空间重叠、权重不可比，两张同时进引擎 =
+        // 两套体系打架；Android `EngineLoader` 与 fcitx5 的 `opi_wubi.h` 同一条裁决）。
+        // 本端**没有偏好存储** ⇒ 恒装 86（Android 的缺省也是 86）；要支持 98 得先有
+        // 设置界面，且那时是「二选一装一张」，不是两张都装。
+        if let p = Bundle.main.path(forResource: "wubi86", ofType: "opid") {
+            if !engine.loadWubi(path: p) {
+                NSLog("[OPI] wubi86.opid 装载失败 —— 五笔回退普通路径（无候选）")
+            }
+        } else {
+            NSLog("[OPI] bundle 里没有 wubi86.opid —— 五笔无候选（见 ios/README.md）")
+        }
+        // ⚠️ 装完**不换方案**（`opi_load_wubi` / `opi_load_stroke` 的契约：装载只管码表）：
+        // 要用它们得用户从输入模式菜单选「五笔」/「笔画键盘」——那时 `applyInputMode`
+        // 才会 `setScheme`。所以「装了没换成方案」不是 bug，是这两条出口的分工。
     }
 
     // MARK: - 刷新 UI
@@ -295,6 +336,26 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             // 显示「词库未装载」—— 表情本来就不依赖词库。
             layout.setEmojiBrowse(engine.emojiSymbols(), groups: engine.emojiGroups())
             layout.setLayer(.emoji)
+        case .showModes:
+            // 输入模式菜单（2026-10-14）：**只是切层** —— 菜单里的选项本身不动引擎，
+            // 换方案/换键面在用户选中后走 `applyInputMode`（`InputModes.swift`）。
+            layout.setLayer(.modes)
+        case .showRare:
+            // 生僻字面板（2026-10-14）：同上，只是切层。**数据不在这里取** ——
+            // 索引是 `rare_index.tsv`（不是引擎出口），面板自己在首次打开时读，
+            // 见 `RarePanel.show()`。这与符号/表情两层「控制器现取引擎数据」不同，
+            // 差别的原因就是数据来源不同（引擎 vs bundle 文件）。
+            layout.setLayer(.rare)
+        case .retype:
+            // 重输（9 键右列）：清掉当前组合重来。**不提交** —— 这个键的语义就是
+            // 「打错了重来」，直提缓冲会把 9 键的数字打进输入框。
+            // `clear()` 幂等（缓冲空时是空操作），所以不必先判空。
+            engine.clear()
+            refresh()
+        case .selectInputMode(let mode):
+            // 菜单选中一项。语义（换方案 + 换模式 + 换键面 + 清缓冲的取舍）全在
+            // `applyInputMode` 里，那里也写明了与 Android 的**能力缺口**。
+            applyInputMode(mode)
         case .cycleMode:
             cycleMode()
         case .nextInputMode:

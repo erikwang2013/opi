@@ -51,6 +51,27 @@ enum KeyboardFunctionKey {
     case cycleMode
     /// 地球键（切到下一个输入法）。
     case nextInputMode
+    /// 打开**输入模式菜单**（2026-10-14）。
+    ///
+    /// Android 从工具条的「输入模式」按钮进（`ImeToolbar` 的 `InputModePanel`）；
+    /// iOS 没有工具条，入口是**长按模式键**（中/繁/英 那个键，各键面都有它）——
+    /// 与搜狗 iOS 版的习惯一致。所以本 case 的实际发射者是 `onLongPress`，
+    /// 不是某颗键的按下。
+    case showModes
+    /// 打开**生僻字面板**（2026-10-14）。入口是笔画键盘功能行的「生僻字」键
+    /// （对齐 Android `StrokeKeyboard` 的 `onRare`）——「笔画打不出来」的下一步就是它。
+    /// ⚠️ 面板数据（`rare_index.tsv`）本仓 iOS 侧**不存在**，见 `RarePanel.swift` 头注。
+    case showRare
+    /// 重输：清掉当前组合重来（2026-10-10 Android 用户裁决「增加重输按钮，
+    /// 去掉分词按钮」）。9 键盘右列专属。缓冲空时是空操作（`clear()` 幂等）。
+    case retype
+    /// 选中一个输入模式（输入模式菜单的 chip 回调）。
+    ///
+    /// 走功能键而不是新加一个委托方法：菜单的「选中」与符号/表情面板的「点一个」
+    /// 是同一个形状（面板 → 控制器），复用它就不用给 `KeyboardLayoutDelegate`
+    /// 加新方法、也不用在 `KeyboardLayout` 里加转发。载荷是枚举本身
+    /// （同 `.commitText(String)` 的带载荷 case）。
+    case selectInputMode(InputMode)
     /// 直接上屏字面文本，**不过引擎**。
     ///
     /// 符号面板的键走这条：引擎的标点表会把 `,` 改写成中文标点/全角（那是**文本**
@@ -74,8 +95,20 @@ struct KeySpec {
     /// 显式字段而不是「按 label 认键」：label 一旦本地化（英文界面 "space"）
     /// 按字符串匹配就全断，而且断得静默。加这个字段只多一行。
     let function: KeyboardFunctionKey?
+    /// **长按**的功能键（2026-10-14）。nil = 长按无特殊语义。
+    ///
+    /// 为什么要有这个字段：长按的语义只有键位表知道（模式键长按 = 开输入模式菜单），
+    /// 而 `KeyboardLayout` 若写死「长按模式键就开菜单」，键位表换成别的排法时
+    /// 那条判断就悄悄失效了。放在**数据**里，换表即换语义。
+    /// ⚠️ 带了它的键，按下**不能**立刻上报（否则长按会先干一次短按的事）——
+    /// 处理与 ⇧ 的三态同款，见 `KeyboardLayout.attach/onTouchDown/onTouchUp`。
+    let longPressFunction: KeyboardFunctionKey?
     /// 相对宽度（1 = 普通字母键）。
     let widthUnits: CGFloat
+    /// 键面字号。⚠️ 只有一个字号（不分「数字行/字母行」两级）—— 9 键的键面是
+    /// `"2\nabc"` 这种两行文本，Android 那边数字小、字母大（12sp/21sp），
+    /// 本端两行同号。差异记在 ios/README.md，Mac 上做外观时再拆两行字体。
+    let fontSize: CGFloat
 
     init(
         _ label: String,
@@ -83,14 +116,18 @@ struct KeySpec {
         states: UInt32 = 0,
         fallback: KeyFallback = .none,
         function: KeyboardFunctionKey? = nil,
-        widthUnits: CGFloat = 1
+        longPressFunction: KeyboardFunctionKey? = nil,
+        widthUnits: CGFloat = 1,
+        fontSize: CGFloat = 20
     ) {
         self.label = label
         self.keyval = keyval
         self.states = states
         self.fallback = fallback
         self.function = function
+        self.longPressFunction = longPressFunction
         self.widthUnits = widthUnits
+        self.fontSize = fontSize
     }
 
     /// 可打印字符键的便捷构造：keyval = 码点，兜底 = 插入该字符。
@@ -118,7 +155,11 @@ final class KeyButton: UIButton {
         // ⚠️ 未编译：系统配色 API 按记忆写的，Mac 上确认语义色名与深色模式表现。
         setTitleColor(.label, for: .normal)
         backgroundColor = .secondarySystemBackground
-        titleLabel?.font = .systemFont(ofSize: 20)
+        titleLabel?.font = .systemFont(ofSize: spec.fontSize)
+        // 键面文本**可以换行**：9 键的 `"2\nabc"`、笔画键的 `"一\n横"` 都是两行
+        // （单行 label 不受影响）。
+        titleLabel?.numberOfLines = 0
+        titleLabel?.textAlignment = .center
         layer.cornerRadius = 5
         // ⚠️ 无障碍：正式版要给每个键设 accessibilityLabel（尤其 ⇧/⌫/回车这类
         // 符号键），否则 VoiceOver 读不出来。本骨架未做 —— 这是**已知缺口**。

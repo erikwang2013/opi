@@ -49,6 +49,9 @@
 第 5 步之后才是：补 UI、补符号面板、补用户词持久化。
 ```
 
+（2026-10-14 新增的六个文件 —— 输入模式/9 键/14 键/笔画/生僻字那一批 —— 各自的
+**首查项**在「输入模式（2026-10-14 加）」一节的「本机核不了的」里，按那里的次序过一遍。）
+
 **不要跳过第 1 步去「顺手重构一下分层」。** 这份代码的分层是按
 「Rust 侧是唯一逻辑真源」设计的，改之前先读
 `crates/engine-core/src/router.rs` 的模块头注释（那里解释了为什么
@@ -62,11 +65,17 @@
 |------|------|
 | `OpiFFI.h` | **转发头**，`#include "../macos/OpiFFI.h"`。C ABI 的声明只有那一份，这里故意不重抄（本项目已被「同一语义抄三份」坑过） |
 | `OpiEngine.swift` | C ABI 薄桥：`OpiString` 所有权、`opi_key_event` → Swift 枚举、JSON 候选解码、符号库三个出口、表情两出口（2026-10-13） |
-| `KeyboardKeys.swift` | 「一个键是什么」：`KeySpec` / `KeyFallback` / `KeyboardFunctionKey` / `KeyButton`。不含布局 |
-| `KeyboardLayout.swift` | 键盘 UI 骨架的视图装配：候选栏（含翻页）+ 字母/数字层 + 触摸接线 + 外部刷新入口 |
+| `OpiEngineScheme.swift` | 方案族包装（2026-10-14）：`scheme()`/`setScheme`/`shuangpinLayout()`/`setShuangpinLayout`/`loadStroke`。拆出来是因为主文件顶在 500 行上；拆法照 Rust 的族边界（`cabi_scheme.rs`） |
+| `OpiEngineWubi.swift` | 五笔旋钮族包装（2026-10-14）：`loadWubi` + 五个旋钮（风格/混入/个数/回车/自动上屏）。同上，对应 `cabi_wubi.rs`。**本文件没有任何 iOS 调用方**（没有设置界面） |
+| `KeyboardKeys.swift` | 「一个键是什么」：`KeySpec` / `KeyFallback` / `KeyboardFunctionKey` / `KeyButton`。不含布局。2026-10-14 加了 `fontSize` / `longPressFunction` 两个字段与四个功能键 case |
+| `KeyboardLayout.swift` | 键盘 UI 骨架的视图装配：候选栏（含翻页）+ 字母/数字层 + 触摸接线 + 外部刷新入口 + 四个互斥面板的摆位。**不含**键位表与尺寸算式（见下两行） |
+| `InputModes.swift` | 输入模式（2026-10-14）：九项枚举（`InputMode`）与三根轴的映射、各模式的**键位表**（26/9/14/笔画）、`applyInputMode`（控制器扩展）。**不含**视图装配 |
+| `ModeKeyRenderer.swift` | `[ModeRow]` → 视图树的**尺寸算式**（2026-10-14 从 `KeyboardLayout` 搬出）。含「列」形状（9 键的标点列/右功能列）与行高权重 |
+| `InputModePanel.swift` | 输入模式**菜单**（2026-10-14）：九项 chip，选中即换。摆位在 `KeyboardLayout`，语义在 `applyInputMode` |
+| `RarePanel.swift` | 生僻字面板（2026-10-14）：`RareIndex`（TSV 解析）+ 部首→笔画→字三级状态机，提交直提。⚠️ 索引文件本仓 iOS 侧**不存在**（见该文件头注与下面新节） |
 | `SymbolPanel.swift` | 符号层的网格（竖向滚动）。数据来自 `OpiEngine.commonSymbols()`，点击直提。另含 `canRender`（字形判定，表情层共用） |
 | `EmojiPanel.swift` | 表情页（2026-10-13）：分类条 + 网格 + 搜索框两态工具条。数据来自 `OpiEngine.emojiSymbols()`/`emojiGroups()`，点击直提 |
-| `KeyboardViewController.swift` | `UIInputViewController` 入口：生命周期、词库装载、**软键盘**路由、`textDocumentProxy`，外加外接键盘的两个入口 `pressesBegan/pressesEnded`（逻辑在下一行那个文件） |
+| `KeyboardViewController.swift` | `UIInputViewController` 入口：生命周期、词库装载（含 2026-10-14 加的 `loadBundledDictionaries()`）、**软键盘**路由、`textDocumentProxy`，外加外接键盘的两个入口 `pressesBegan/pressesEnded`（逻辑在下一行那个文件） |
 | `KeyboardHardware.swift` | **外接键盘那一路**：`UIKey`/`UIPress` → 引擎键码、修饰位，以及**引擎之前**判掉的三个热键（`Ctrl+'` / `Ctrl+\` / `Shift+Space`）。不含触摸与布局 |
 | `Info.plist` | 键盘扩展的 `NSExtension` 配置（**键名未核对**） |
 | `README.md` | 本文件 |
@@ -93,6 +102,22 @@
    Swift 的 `private` **只跨「同文件的扩展」可见** ⇒ 这 5 个成员被放开成 internal。
    **不要为了整洁改回 `private`** —— 那会让 `KeyboardHardware.swift` 编译不过。
    该风险有一条能红的检查看着，见「实测记录」5e。
+
+⚠️ **第三次拆分（2026-10-14，输入模式那一轮）：四个文件，两处搬移。**
+先量后动：`OpiEngine.swift` **496 行**、`KeyboardLayout.swift` **462 行** —— 都只剩个位数余量，
+而本轮要往两边各加几十行。所以：
+
+| 动的东西 | 搬去哪 | 那一次的理由 |
+|---|---|---|
+| `letterRows()` / `numberRows()`（约 53 行） | `InputModes.swift` 的 `ModeKeyTables`（**多了个 `modeLabel` 入参**：原先是读实例状态） | 键位表是**数据**，且新模式的键位表也要放同一处 |
+| `rebuildKeys()` 里的尺寸算式（约 26 行） | `ModeKeyRenderer.swift`（**触摸接线的 `attach` 仍留在 `KeyboardLayout`**，以闭包 `wire` 传入） | 算式与键位表是一对；顺带把 `InputModes.swift` 从 498 行压回 427 |
+| 方案族 / 五笔族的包装（新增） | `OpiEngineScheme.swift` / `OpiEngineWubi.swift` | 照 Rust 的 `cabi_scheme.rs` / `cabi_wubi.rs` 族边界切 |
+
+搬移的**校验只做了文本级**（符号名在新位置出现、旧位置零残留、`private` 没跨文件引用），
+**没有**做完整声明集合比对（本轮没有独立的比对脚本，5d/5e 那两次的强度这里**没有复现**）——
+如实记：**这只证「我搬了」，不证「搬对了、能编译」。**
+行数实测（搬完）：`KeyboardLayout.swift` 492、`InputModes.swift` 427、`ModeKeyRenderer.swift` 85、
+`KeyboardViewController.swift` 469、`KeyboardKeys.swift` 170 —— 全部 < 500。
 
 ---
 
@@ -649,10 +674,21 @@ xcodebuild -create-xcframework \
 |------|------|-------|
 | `luna.opid`（约 1.7 MB） | `data/generated/luna.opid` | 是 |
 | `trad.opid`（约 2.6 MB） | `data/generated/trad.opid` | 否（失败则繁体模式回退简体库） |
+| `stroke.opid`（约 5.4 MB） | `data/generated/stroke.opid` | 否（2026-10-14 加：笔画键盘用；失败则该方案无候选） |
+| `wubi86.opid`（约 3.2 MB） | `data/generated/wubi86.opid` | 否（2026-10-14 加：五笔用；只装**一张**，86/98 二选一） |
+| `wubi98.opid` | `data/generated/wubi98.opid` | 否（本轮**没接** —— 本端没有偏好存储，恒装 86） |
+| `rare_index.tsv`（1.1 MB） | `android/app/src/main/assets/rare_index.tsv` | 否（2026-10-14：生僻字面板用；**本端没接**，面板显示「未打包」提示） |
 | `fallback.opid` | `data/generated/fallback.opid` | 不用放 —— 内置回退词库已编译进二进制 |
 
 `KeyboardViewController.loadDictionaries()` 用 `Bundle.main.path(forResource:ofType:)` 找；
 **扩展的 `Bundle.main` 是扩展自己**，不是宿主 App。找不到时退化为内置回退词库并提示。
+
+⚠️ **上面这些文件本仓 iOS 侧没有一条构建步骤把它们拷进扩展 bundle**（Xcode 工程还没进仓，
+`loadBundledDictionaries()` 是 2026-10-14 新加的，跑起来只会打 NSLog）。
+文件名必须与 `data/generated/` 下**逐字相同**（`stroke.opid` / `wubi86.opid` /
+`rare_index.tsv`）—— 改了名这里找不到，而且**没有任何报错**，只是「那个方案没有候选」。
+三条失败语义与 Android `EngineLoader` 相同：缺文件 / 装载 false → 只降级那一个方案，
+不碰已装好的 luna/trad。
 
 ⚠️ 目录里现有的 `android/rust_builder/ios/`（cargokit 残留：`Classes/dummy_file.c`
 + `rust_lib_app.podspec`）是 Flutter/cargokit 的产物，指向 `crates/opi-ffi`。
@@ -1109,6 +1145,127 @@ U+1FAEB 那种要判的）从不被过滤，多码位（旗帜/家庭/键帽）�
 - Android 有而这里**故意没做**：最近使用一行、分类条的滚动跟随高亮、空结果的小欧宠物。
 - **符号面板的入口是死胡同**（进去后只有 `#+=` 那层没有回头路）—— 这是**既有缺口**，
   本轮没修，表情页自己带了返回键（`onBack` → `.showLetters`）。
+
+---
+
+## 输入模式（2026-10-14 加，**已写，未编译**）
+
+把键盘草案接到引擎**已有的**输入模式上：九项菜单 + 三套新键面 + 生僻字面板 + 两个可选词库。
+参照实现是 Android（`ime/InputMode.kt`、`keyboard/NineKeyKeyboard.kt`、`FourteenKeyKeyboard.kt`、
+`StrokeKeyboard.kt`、`RarePanel.kt`、`ime/ImeToolbar.kt` 的 `InputModePanel`）——
+**抄语义与键位，不抄 Kotlin 语法**。引擎侧真源：`scheme.rs`（方案整数码）、
+`cabi_scheme.rs` / `cabi_wubi.rs`（出口契约）、`engine_wubi.rs`（旋钮值域）。
+
+### 加了什么
+
+| 面 | 位置 | 状态 |
+|---|---|---|
+| 九项输入模式枚举（含三轴映射） | `InputModes.swift` 的 `InputMode` | 已写 |
+| 模式菜单（九 chip，选中即换） | `InputModePanel.swift` + `KeyboardLayout.buildModePanel()` | 已写。入口是**长按模式键**（Android 从工具条进，iOS 没有工具条） |
+| 9 键键面（5 列：标点列 / 3×3 数字格 / ⌫·重输·空格列 + 底行） | `ModeKeyTables.nineKeyRows` | 已写。**左列恒为标点** —— see 缺口 |
+| 14 键（`qw er ty ui op / as df gh jk l / zx cv bn m`，发首字母） | `ModeKeyTables.fourteenKeyRows` | 已写 |
+| 大 9 键 | 同 9 键表，只差 `fontSize`（21→30） | 已写 |
+| 笔画（`一丨丿丶乙` → `h/s/p/n/z`） | `ModeKeyTables.strokeRows` | 已写 |
+| 生僻字面板（部首→笔画→字，8 列，直提） | `RarePanel.swift` | **UI 骨架完整、数据永远为空** —— see 缺口 |
+| 选中模式的落地动作 | `InputModes.swift` 的 `applyInputMode` | 已写。**与 Android 有一处能力差异** —— see 缺口 |
+| 笔画 / 五笔码表装载 | `KeyboardViewController.loadBundledDictionaries()` | 已写。文件不在 bundle 里，现状只打 NSLog |
+| 方案族 / 五笔族包装 | `OpiEngineScheme.swift` / `OpiEngineWubi.swift` | 已写。**除 `setScheme`/`loadStroke`/`loadWubi` 外无调用方** |
+
+三根轴分清楚（`InputMode.kt` 的头注就是这条，别混）：**方案**（`OpiScheme`：按键→字母类）、
+**模式**（`OpiMode`：语言变体）、**输入模式**（UI：菜单里那一项）。大 9 键与拼音 9 键是
+**同一引擎配置**；生僻字**不进引擎**（面板式）。
+
+### ⚠️ 与 Android 的能力缺口（**不是「取舍」，是出口还没有**）
+
+2026-10-14 对着 `crates/opi-ffi/src/*.rs` 与 `macos/OpiFFI.h` 逐条查过 —— 下面这些
+**只在 JNI 面上有**，C ABI 没有对应出口。Apple 两平台因此在四处**做不到** Android 的事：
+
+| 缺的出口 | Android 拿它做什么 | iOS 的现状 |
+|---|---|---|
+| `opi_candidate_readings`（JNI 有 `opijni_candidate_readings`） | 9 键**左列显示拼音读数**（`ni'hao`），点一行 = 钉读音 | 拿不到 ⇒ **9 键左列恒为标点列**（读数栏整条路不可达） |
+| `opi_pin_reading`（JNI 独有） | 钉读音（候选收窄到一族，不确认） | 同上，无入口 |
+| `opi_switch_language`（engine-core 与 JNI 有） | 中⇄繁切换**保留缓冲** | 无出口 ⇒ 只能 `switchMode`（那条会复位全角/⇧ 三态） |
+| 「待提交文本」（无任何出口） | 换模式前 `commitPendingAsPinyin()` / `commitPendingBuffer()` | 无出口 ⇒ **换模式时未完成的缓冲丢掉**（见下） |
+| 双拼布局**名字**表 | 设置页显示「自然码/微软/…」 | 两个 ABI 都没有名字出口 ⇒ iOS 只包了下标读数/写数（也没有设置界面） |
+
+**结论（写死在 `applyInputMode` 的注释里，别改）**：换模式 = `setScheme`（**自己清缓冲**）
++ 必要时 `switchMode` + 换键面。**绝不**改成「把缓冲当文本直提」—— 9 键的缓冲是**数字**，
+直提就是把 `644269` 打进输入框；Android 2026-10-11 修掉的正是这个 bug
+（`EngineControllerComposing.pendingCommitText()`：NINE 方案**永不**回落到数字）。
+要补齐得先在 `opi-ffi` 加出口（`opi_candidate_readings` + 一条 pending 出口），不是 UI 层能绕的。
+
+另外一条**头文件文档漂移**（2026-10-14 实读）：`macos/OpiFFI.h` 的 `opi_set_scheme` 注释
+写「0=全键盘 1=拼音9键 2=拼音14键 3=笔画 4=双拼，越界忽略」——**漏了 5=五笔**
+（与 `opi_switch_mode` 漏 4=Traditional 同一类笔误）。行为以 `scheme.rs` 的 `code()` 为准。
+**我没有改那个头文件**（本轮约定不动 ios/ 以外的文件）——留给 Mac 上的人。
+
+### 回车一族与候选分档（2026-10-14 晚到的两条上下文）
+
+**① 回车该做什么：判据已集中到引擎，iOS 走 `opi_key_event` ⇒ 已覆盖。**
+`engine_core::Engine::enter_action()`（新文件 `engine_enter.rs`）是**唯一判据**：
+非五笔 / 空缓冲 → `SelectFirst`（既有行为）；五笔读「回车行为」设置位 → `Clear`（缺省档）
+或 `CommitRaw(缓冲原文)`。消费面当天实读：`router_edit_keys.rs::handle_enter`（**C ABI
+键路由，iOS 的回车正是这条**）、`fcitx5-opi/input_method.rs`、`tsf-opi/logic_input_method.rs`
+已接；**Android `KeyRouter.handleEnter` 实读仍是写死的 `select(0)`** —— 参照端这次落后
+于 iOS，别照它现在的样子抄。
+
+- iOS 的覆盖是**继承来的**、不是本轮新接的：`InputModes.swift` 那五个回车键都是
+  `KeySpec(keyval: OpiKey.ret, fallback: .text("\n"))` → `KeyboardViewController.route`
+  → `opi_key_event` → `KeyRouter::handle_enter`。硬件键盘同理（`KeyboardHardware.swift`
+  的 `.keyboardReturnOrEnter → OpiKey.ret`）。
+- **行为后果**：五笔缺省档 = 清空（Sogou 语义）⇒ 装了 `wubi86.opid`、选了「五笔」模式后，
+  打一半按回车**不上屏、直接清掉**。本端没有设置界面 ⇒ 卡在缺省档，改不了。
+- 独立出口 `opi_enter_action()`（`cabi_wubi.rs` / `macos/OpiFFI.h`）本端**故意不包**：
+  iOS 没有第二条通道会问它（理由同 `opi_wubi_next_keys()`，见 `OpiEngineWubi.swift` 末尾）。
+
+**② 候选分档（三档：常用单字 → 联想按拼音长度 → 生僻沉底）与 iOS 的关系：零。**
+iOS **没有**任何测试或注释断言候选次序 —— 实读 grep 的结果是：候选相关注释只说「页内索引
+0 起」「排序归引擎」，`KeyboardViewController.swift` 头注甚至明写「**不要**在这里加输入法
+逻辑（拼音怎么切、候选怎么排…）」。候选栏只是 `opi_candidates_page()` 的显示层 ⇒ 引擎改
+档位，iOS 自动跟随，**没有要改的旧断言**。唯一的「次序」断言在 `RarePanel.swift`：
+`rare_index.tsv` 的**表序**（码点升序）= 显示序 —— 那是 TSV 自己的序，与引擎候选分档无关
+（生僻字面板不进引擎）。
+
+⚠️ 本小节两条都是**文本级实读**，时间戳 2026-10-14 23:20 前后；那几分钟里
+`cabi_wubi.rs` / `macos/OpiFFI.h` / `router_edit_keys.rs` 都在被别的 agent 改
+（mtime 是分钟级的），复核时**按符号名重读**，别按行号。
+
+### 本机核不了的（Mac 上按这个次序查）
+
+1. **先让它编译**（老规矩）。本轮最可能报错的点：`KeySpec` 的两个新字段与各调用点的
+   实参顺序、`ModeCell`/`ModeRow` 的 switch 穷尽性、`KeyboardViewController` 那个
+   **没有 `default`** 的 `didTapFunction` switch（加了四个 case，漏一个就是编译错误 —— 这是好事）。
+2. **9 键/14 键的键位对着 `scheme.rs` 的 `key_class` 逐格核**：本端是**手抄**的，
+   Android 那边有 `NineKeyLayoutTest`/`FourteenKeyLayoutTest` 钉着，本端**没有**门禁。
+   14 键的发送键必须是字母对的首字母（`qw→q`）。
+3. **布局约束**：`rowsStack` 由 `.fillEqually` 改成了 `.fill`，行高由
+   `ModeKeyRenderer.render` 给（`行高 = stack 高 × 权重 − 行距分摊`）。
+   要确认：26 键/14 键/笔画（行权全 1）与 9 键（主区 3 : 底行 1）都不出约束冲突的警告。
+   **这一条是本轮最可能出问题的地方**（几何算式本机无法验算）。
+4. **长按手势**：模式键现在带 `longPressFunction`，处理与 ⇧ 同款（按下不立即上报，
+   抬手时若没长按才补发）。要确认：短按只切一次模式、长按只开菜单（各一次）。
+5. **打包**：`stroke.opid` / `wubi86.opid` / `rare_index.tsv` 加进扩展 target 后，
+   确认 `Bundle.main.path(forResource:ofType:)` 真找得到（找不到只有 NSLog，不崩）。
+6. **外观**：9 键键面用的两行 label（`"2\nabc"`）在 `KeyButton` 里是 `numberOfLines = 0`；
+   Android 是「字母大、数字小」两级字号，本端**两行同号**（差异如实记，不是漏抄）。
+7. **回车语义（晚到的上下文，见上一小节）**：装上 `wubi86.opid`、菜单里选「五笔」，
+   打两三个码后按回车 —— 按引擎缺省（清空档）**应当什么都不上屏、缓冲清掉**，
+   而不是提交首候选。若上屏了，先查那条判据链（`router_edit_keys.rs::handle_enter`
+   → `Engine::enter_action`）而不是先改 Swift：iOS 这边对本语义**一行代码都没写**。
+
+### 未做 / 未知数（如实记）
+
+- **生僻字面板的数据**：`rare_index.tsv` 在 `android/app/src/main/assets/`，本目录下没有，
+  也没有构建步骤拷它 ⇒ 面板第一层就会显示「（生僻字索引未打包 · 见 ios/README.md）」。
+  要让它真能用：把那份 TSV 加进 Xcode target 的 Copy Bundle Resources，**名字别改**。
+- **五笔 98**：本端没有偏好存储，恒装 86（Android 缺省也是 86）；98 要先有设置界面。
+- **双拼布局 / 五笔五个旋钮**：只包了出口（`OpiEngineScheme`/`OpiEngineWubi`），**没有 UI**。
+- **`opi_wubi_next_keys()` 故意没包**：iOS 没有编码提示条，包一个没有调用方的出口
+  只会让下一个人以为有 UI 在用（理由写在 `OpiEngineWubi.swift` 末尾）。
+- **无障碍**：新模式键面（9 键的数字+字母、笔画字形、生僻字格子）**都没有读屏名** ——
+  Android 那边每个键都有 `contentDescription`（`nineKeySpoken` 等）。这是**已知缺口**，
+  与 `KeyButton` 头注里那条是同一个。
+- **符号面板的返回死胡同**（既有缺口）在新键面上照旧：9 键底行的「符」进去后只有 `#+=`。
 
 ---
 
