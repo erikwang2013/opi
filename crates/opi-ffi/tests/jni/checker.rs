@@ -433,16 +433,20 @@ pub const JNI_SYMBOLS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni_symb
 /// 同上，「属性设置」旋钮族那一半（2026-10-13：加拼音纠错后 `jni.rs` 509/500 拆出）。
 /// ⚠️ 与 C ABI 侧的 `CABI_SWITCHES` 是镜像 —— 两轨族边界一致。
 pub const JNI_SWITCHES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni_switches.rs");
+/// 导入词库一族（2026-10-14：M3 落地时 `jni.rs` 加四条会贴到 500 行门禁）。
+/// ⚠️ 与 C ABI 侧的 `CABI_DICT` 是镜像 —— 两轨族边界一致。
+pub const JNI_DICT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni_dict.rs");
 /// jni 模块**全部** .rs 的清单（`read_jni` 的合成语料就是按它读的）。
 /// ⚠️ 新拆一个 `jni_*.rs` 要加到这里 —— 漏了那批出口会从门禁视野里消失
 /// （`rust_registration_parser_is_not_blind` 的计数护栏会红）。
-pub const JNI_ALL: [&str; 6] = [
+pub const JNI_ALL: [&str; 7] = [
     JNI_RS,
     JNI_USER_WORDS,
     JNI_SCHEME,
     JNI_CANDIDATES,
     JNI_SYMBOLS,
     JNI_SWITCHES,
+    JNI_DICT,
 ];
 pub const KOTLIN_HOST: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),

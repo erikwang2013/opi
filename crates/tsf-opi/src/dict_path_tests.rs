@@ -273,3 +273,40 @@ fn log_line_names_fallback_with_reasons() {
     assert!(line.contains("不存在"), "原因要写进日志：{line}");
     assert!(line.contains(DICT_FILE_NAME), "{line}");
 }
+
+// ---------- 导入词库目录（M3 2c，2026-10-14）：目录推导 + 列表 ----------
+// 契约镜像：`Dicts.kt` 的 dictsDirFor/listDicts、`cpp/opi_dicts.h` 的 opiDictsDir/
+// opiDictsImportAll。三处**任何一处**错 = 设置窗导入的词库 IME 永远读不到（静默）。
+
+#[test]
+fn dicts_dir_is_localappdata_opi_dicts() {
+    // 与 desktop Dicts.kt 的 Windows 分支逐字对应，也与 settings::path_in 同一形状。
+    assert_eq!(
+        dicts_dir(Some(OsStr::new("C:\\Users\\u\\AppData\\Local"))),
+        PathBuf::from("C:\\Users\\u\\AppData\\Local")
+            .join("opi")
+            .join("dicts")
+    );
+    // 缺/空环境变量：不 panic，退化成相对路径（扫不到 = 零导入词库）。
+    assert_eq!(dicts_dir(None), PathBuf::from("opi/dicts"));
+    assert_eq!(dicts_dir(Some(OsStr::new(""))), PathBuf::from("opi/dicts"));
+}
+
+#[test]
+fn list_dicts_takes_only_tsv_regular_files_sorted() {
+    let dir = TempDir::new("listdicts");
+    fs::write(dir.path().join("b.tsv"), "词\tci\t1\n").expect("写");
+    fs::write(dir.path().join("a.tsv"), "词\tci\t1\n").expect("写");
+    fs::write(dir.path().join("notes.txt"), "不是词库\n").expect("写");
+    fs::write(dir.path().join(".tsv"), "词干是空的\n").expect("写"); // 名字就是 .tsv：不列
+    fs::create_dir_all(dir.path().join("sub.tsv")).expect("建目录");
+
+    let listed = list_dicts(dir.path());
+    let names: Vec<&str> = listed.iter().map(|(n, _)| n.as_str()).collect();
+    assert_eq!(names, vec!["a", "b"], "只收 *.tsv 的普通文件，按名字排序");
+    // 名字 = 文件名去 `.tsv`（停用名单里写的就是这个名字）；路径就是目录里那个文件。
+    assert_eq!(listed[0].1.file_name().unwrap(), OsStr::new("a.tsv"));
+
+    // 目录不在：空表（**不是错误** —— 还没导入过是常态）。
+    assert!(list_dicts(&dir.path().join("nope")).is_empty());
+}

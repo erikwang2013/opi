@@ -18,6 +18,7 @@ fn state() -> CandidateState {
         buffer_snapshot: String::new(),
         shift_state: ShiftState::Off,
         last_printable: None,
+        dicts: Default::default(),
     };
     s.refresh_snapshot();
     s
@@ -107,6 +108,7 @@ fn hao_state() -> CandidateState {
         buffer_snapshot: String::new(),
         shift_state: ShiftState::Off,
         last_printable: None,
+        dicts: Default::default(),
     };
     for c in ['h', 'a', 'o'] {
         s.engine.input_key(c);
@@ -301,6 +303,7 @@ fn digit_select_fetches_candidate_table_once() {
         buffer_snapshot: String::new(),
         shift_state: ShiftState::Off,
         last_printable: None,
+        dicts: Default::default(),
     };
     s.refresh_snapshot();
     s.switch_mode(Mode::Pinyin);

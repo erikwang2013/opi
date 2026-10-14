@@ -170,9 +170,13 @@ impl TsfLogic {
         )
     }
 
-    /// 把「属性设置」的四个开关一次性套到引擎上。**唯一入口**（两处调用：
-    /// 服务创建 + 每次 `Activate`）—— 四处 setter 各调各的会漏，漏掉的那个是静默的。
-    pub fn apply_settings(&mut self, s: crate::settings::Settings) {
+    /// 把「属性设置」一次性套到引擎上（开关 + 导入词库）。**唯一入口**（两处调用：
+    /// 服务创建 + 每次 `Activate`）—— 各处 setter 各调各的会漏，漏掉的那个是静默的。
+    ///
+    /// `dicts_dir` = 导入词库目录（`dict_path::dicts_dir`，调用方从 `%LOCALAPPDATA%` 推
+    /// —— 本层不读环境，主机单测才能把它换成临时目录）。目录不在 ⇒ 零导入词库
+    /// （还没导入过是常态，零日志）。
+    pub fn apply_settings(&mut self, s: crate::settings::Settings, dicts_dir: &std::path::Path) {
         self.set_learner(s.learn);
         self.set_chinese_punct(s.chinese_punct);
         // 模糊音：列表非空 ⇒ 以列表为准；空 ⇒ 回落旧的布尔（老配置行为一字不变）。
@@ -192,6 +196,25 @@ impl TsfLogic {
         if let Some(scheme) = engine_core::Scheme::from_name(&s.pinyin_method) {
             self.set_scheme(scheme);
         }
+        // 导入词库：名单是配置值、目录是环境量，两个都到手才成立 —— 与 fcitx5 轨
+        // `applyOpiSettings → opiDictsSync` 同一条（那边目录由 C++ 现推）。
+        self.sync_extra_dicts(dicts_dir, &s.disabled_dicts);
+    }
+
+    /// 扫词库目录 + **整体替换**引擎里的导入层（判定在 `extra_dicts`，这里只转发 + 日志）。
+    /// 每次调用都从目录重算（零状态；后果与代价见 `extra_dicts` 头注）。返回装上的层数
+    /// （生产侧不用，门禁/排障要看）。
+    /// 配对：fcitx5-opi 的 `opi_fcitx5_import_dict` + `opi_fcitx5_set_dict_enabled` 那一对
+    /// 出口（那边由 C++ 宿主逐条调 —— 不对称的理由见 `extra_dicts` 头注）。
+    pub(crate) fn sync_extra_dicts(&mut self, dir: &std::path::Path, disabled_raw: &str) -> usize {
+        let report = crate::extra_dicts::load(dir, disabled_raw);
+        // 「装载结果必须接住」（本仓的坏词库静默失效前车之鉴）：没装上的在这里现形。
+        for line in &report.lines {
+            eprintln!("tsf-opi: {line}");
+        }
+        let count = report.dicts.len();
+        self.engine.set_extra_dicts(report.dicts);
+        count
     }
 
     /// 学习开关（值来自 `%LOCALAPPDATA%\opi\settings.ini` 的 `Learn`；本端在

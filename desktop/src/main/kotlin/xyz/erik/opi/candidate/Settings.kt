@@ -86,6 +86,12 @@ data class OpSettings(
      * 与 Skin/拼音方式同一条「存名字不存实现值」惯例。缺键/认不得 → 中。
      */
     val candidateFont: String = CLASSIC_UI_FONT_DEFAULT,
+    /**
+     * 导入词库的**停用名单**（2026-10-14 词库页；键 `DisabledDicts`）：逗号分隔的词库名
+     * （= 词库目录里的 `.tsv` 文件名去后缀，见 Dicts.kt 的文件头契约）。**空 = 全部启用**
+     * （缺省）。名字随用户导入的文件走，不是枚举 —— 认不得的名字只是没有对应文件，无害。
+     */
+    val disabledDicts: String = "",
     val statusbar: StatusBarSettings = StatusBarSettings(),
 ) {
     /** 写成 ini。键名见文件头「三处逐字对应」。 */
@@ -113,6 +119,9 @@ data class OpSettings(
         // （保存时按需写过去，见 ClassicUiFont.kt）。两侧 IME 读侧都不认这个键
         // （与 StatusBar* 同一条：未知键忽略），写全只为文件格式不因平台分叉。
         appendLine("CandidateFont=$candidateFont")
+        // 词库页的停用名单（2026-10-14）：逗号分隔的词库名，空 = 全部启用。
+        // 与其它键同一份文件；名单由 IME 侧在**下次启动**时读（Windows = 下次激活）。
+        appendLine("DisabledDicts=$disabledDicts")
         // 状态栏九个键：只有本窗读写（见文件头 ⚠️）。同样不分平台地写全，
         // 「同一份文件格式」是这里的既有纪律。
         appendLine("StatusBarHidden=${boolText(statusbar.hidden)}")
@@ -161,6 +170,8 @@ data class OpSettings(
                 candidateFont = map["CandidateFont"]
                     ?.takeIf { it in CLASSIC_UI_FONT_NAMES }
                     ?: CLASSIC_UI_FONT_DEFAULT,
+                // 缺键 = 空 = 全部启用（不是全停用！）—— 老配置升级后词库照常可用。
+                disabledDicts = map["DisabledDicts"] ?: "",
                 statusbar = StatusBarSettings(
                     hidden = bool("StatusBarHidden", false),
                     // ⚠️ 缺键回落 false（2026-10-10 中午裁决：软键盘默认关）。别照着
@@ -260,6 +271,9 @@ fun mergeIni(existing: String, s: OpSettings): String {
         // 候选字号只在本窗读写（真正的落点在 classicui.conf，见 ClassicUiFont.kt）——
         // 进 managed 是为了「同一份 ini 的键由本窗统一负责」，与 StatusBar* 同理。
         "CandidateFont" to s.candidateFont,
+        // 词库停用名单（2026-10-14）：与 StatusBar*/CandidateFont 同一条 ——「同一份 ini
+        // 的键由本窗统一负责」，不分平台地写全。
+        "DisabledDicts" to s.disabledDicts,
         "StatusBarHidden" to boolText(s.statusbar.hidden),
         "StatusBarVk" to boolText(s.statusbar.vk),
         "StatusBarSymbols" to boolText(s.statusbar.symbols),

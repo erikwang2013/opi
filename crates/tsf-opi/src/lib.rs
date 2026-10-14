@@ -23,6 +23,11 @@ pub mod dll;
 /// 就一条都覆盖不到 —— 而它错了的表现是"输入法装着却只有 35 个词"。
 pub mod dict_path;
 
+/// 导入词库装载（扫 `%LOCALAPPDATA%\opi\dicts` + 跳过 `DisabledDicts` 名单，M3 2c）。
+/// 与 `dict_path.rs` 同样是**平台中立**的：真正要守的判定是「扫到哪些、哪些没装上」，
+/// 它错了的表现是「词库静默不生效」——正是本仓出过事故的那种形态。
+pub mod extra_dicts;
+
 /// Windows 目标专属：TSF COM 胶水（ITfTextInputProcessor / ITfKeyEventSink）。
 /// Linux/其他主机不编译本模块（`windows` crate 依赖不进入主机构建路径），
 /// 保证 `cargo test --workspace` 在 Linux 上全绿。

@@ -50,6 +50,7 @@ public:
           instance_(instance) {
         loadDictionary();
         // 配置推给引擎必须在 loadDictionary 之后：Rust 侧单例在那一刻才建起来。
+        // 导入词库的启动扫描也走这条路（applyOpiSettings → opi_dicts.h 的 opiDictsSync）。
         readOpiSettings(settings_);
         applyOpiSettings(settings_);
         // 皮肤**不在构造时应用**（理由在 opi_skin.h 头部）：只把读到的值记为

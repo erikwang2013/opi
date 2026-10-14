@@ -170,6 +170,12 @@ use crate::jni_user_words::{
     opijni_learner_enabled, opijni_remove_user_word, opijni_set_learner,
 };
 
+// 拆到 `jni_dict.rs` 的四个函数（词库导入一族，2026-10-14）：同一手续 ——
+// 注册表能引用到它们全靠这一行，别删。
+use crate::jni_dict::{
+    opijni_dict_list, opijni_import_dict, opijni_remove_dict, opijni_set_dict_enabled,
+};
+
 // ---------- JNI_OnLoad ----------
 // ---------- JNI_OnLoad ----------
 
@@ -419,6 +425,27 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _reserved: *mut c
                     jni_str!("exportUserWords"),
                     jni_str!("()Ljava/lang/String;"),
                     opijni_export_user_words as *mut c_void,
+                ),
+                // —— 词库导入一族（2026-10-14，M3）——
+                NativeMethod::from_raw_parts(
+                    jni_str!("importDict"),
+                    jni_str!("(Ljava/lang/String;)I"),
+                    opijni_import_dict as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("dictList"),
+                    jni_str!("()Ljava/lang/String;"),
+                    opijni_dict_list as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("setDictEnabled"),
+                    jni_str!("(Ljava/lang/String;Z)Z"),
+                    opijni_set_dict_enabled as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("removeDict"),
+                    jni_str!("(Ljava/lang/String;)Z"),
+                    opijni_remove_dict as *mut c_void,
                 ),
             ]
         };

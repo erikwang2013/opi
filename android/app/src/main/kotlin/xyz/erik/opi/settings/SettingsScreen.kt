@@ -331,6 +331,10 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
                 },
             )
             HorizontalDivider()
+            // 词库一节（2026-10-14，M3 的 2c 移动端半边）：系统库只读 + 导入库开关/删除 +
+            // tsv 导入。启动装载也在这节里（失败提示就在装载结果那一行）。
+            DictSection(prefs, ::toast)
+            HorizontalDivider()
             Text(
                 text = "注：学习/词库作用于本应用内嵌引擎实例；设置页与输入法共享同一引擎（Rust 静态单例）。",
                 fontSize = 12.sp,

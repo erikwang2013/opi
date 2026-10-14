@@ -24,16 +24,17 @@ mod checker;
 
 use opi_ffi::cabi::{
     OpiString, opi_backspace, opi_buffer, opi_candidates, opi_candidates_page, opi_chinese_punct,
-    opi_clear, opi_clear_user_words, opi_correction_enabled, opi_emoji_groups, opi_emoji_symbols,
-    opi_export_user_words, opi_ffi_free_string, opi_fullwidth_state, opi_fuzzy_enabled,
-    opi_fuzzy_pair_names, opi_fuzzy_pairs, opi_import_user_words, opi_input_key, opi_input_space,
-    opi_jianpin_enabled, opi_key_event, opi_learner_enabled, opi_load_stroke, opi_load_trad,
-    opi_mode, opi_page, opi_page_count, opi_remove_user_word, opi_scheme, opi_search_symbols,
-    opi_select, opi_select_page, opi_set_chinese_punct, opi_set_correction, opi_set_fuzzy,
-    opi_set_fuzzy_pairs, opi_set_fuzzy_pairs_names, opi_set_jianpin, opi_set_learner,
-    opi_set_scheme, opi_set_shift, opi_set_shuangpin_layout, opi_shift_state, opi_shuangpin_layout,
-    opi_switch_mode, opi_symbol_blocks, opi_symbols_in_block, opi_toggle_chinese_punct,
-    opi_toggle_fullwidth, opi_toggle_symbol,
+    opi_clear, opi_clear_user_words, opi_correction_enabled, opi_dict_list, opi_emoji_groups,
+    opi_emoji_symbols, opi_export_user_words, opi_ffi_free_string, opi_fullwidth_state,
+    opi_fuzzy_enabled, opi_fuzzy_pair_names, opi_fuzzy_pairs, opi_import_dict,
+    opi_import_user_words, opi_input_key, opi_input_space, opi_jianpin_enabled, opi_key_event,
+    opi_learner_enabled, opi_load_stroke, opi_load_trad, opi_mode, opi_page, opi_page_count,
+    opi_remove_dict, opi_remove_user_word, opi_scheme, opi_search_symbols, opi_select,
+    opi_select_page, opi_set_chinese_punct, opi_set_correction, opi_set_dict_enabled,
+    opi_set_fuzzy, opi_set_fuzzy_pairs, opi_set_fuzzy_pairs_names, opi_set_jianpin,
+    opi_set_learner, opi_set_scheme, opi_set_shift, opi_set_shuangpin_layout, opi_shift_state,
+    opi_shuangpin_layout, opi_switch_mode, opi_symbol_blocks, opi_symbols_in_block,
+    opi_toggle_chinese_punct, opi_toggle_fullwidth, opi_toggle_symbol,
 };
 
 use engine_core::keys::{KEY_PAGE_DOWN, KEY_RETURN, KEY_SHIFT, KEY_SPACE, KEY_STATE_LONG_PRESSED};
@@ -180,6 +181,25 @@ fn every_export_returns_a_sentinel_when_engine_is_not_loaded() {
         assert_eq!(opi_import_user_words(std::ptr::null(), 0), -1);
         let word = to_units("我");
         opi_remove_user_word(word.as_ptr(), word.len());
+
+        // —— 导入词库（2026-10-14，M3）——
+        // 未装载 = 没有引擎可以挂额外层 ⇒ 导入 -1（导入类出口的负数哨兵）、开关 false、
+        // 删除 false；列表走**数组**哨兵 `[]`（不是空串，见 api::DICT_LIST_UNLOADED）。
+        assert_eq!(
+            opi_import_dict(std::ptr::null(), 0),
+            -1,
+            "未装载 → 导入失败（-1）"
+        );
+        assert_eq!(read(opi_dict_list()), "[]", "未装载 → 列表是 `[]` 哨兵");
+        let nm = to_units("luna");
+        assert!(
+            !opi_set_dict_enabled(nm.as_ptr(), nm.len(), true),
+            "未装载 → 开关 false"
+        );
+        assert!(
+            !opi_remove_dict(nm.as_ptr(), nm.len()),
+            "未装载 → 删除 false"
+        );
     }
 
     // 这一串调用之后仍未装载：状态没被「顺手」创建出来

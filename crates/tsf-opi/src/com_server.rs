@@ -221,9 +221,14 @@ impl IClassFactory_Impl for ClassFactory_Impl {
             // 进程不在时降级为 no-op，不会让 CreateInstance 失败。
             let engine = Arc::new(EngineShared::with_dict(loaded.dict));
             // 「属性设置」：创建时读一次（读不到 = 全默认）。之后每次 `Activate`
-            // 再读一次（本端没有在线刷新通道，见 settings.rs 模块头）。
+            // 再读一次（本端没有在线刷新通道，见 settings.rs 模块头）。导入词库
+            // （`DisabledDicts` 名单 + 词库目录）就在这同一次里装载，见 extra_dicts.rs。
             if let Some(mut logic) = engine.lock_logic() {
-                logic.apply_settings(settings::load(std::env::var_os("LOCALAPPDATA").as_deref()));
+                let lap = std::env::var_os("LOCALAPPDATA");
+                logic.apply_settings(
+                    settings::load(lap.as_deref()),
+                    &dict_path::dicts_dir(lap.as_deref()),
+                );
             }
             let action = Arc::new(SharedAction::new(Arc::clone(&engine)));
             let sink: Arc<dyn TsfSink> = Arc::new(CandidateSink::new(

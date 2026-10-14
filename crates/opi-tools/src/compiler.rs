@@ -1,134 +1,23 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! rime 文本解析器（dict.yaml / 项目 tsv → .opid 条目）。
+//! rime 文本解析器（dict.yaml / 项目 tsv → .opid 条目）的 **CLI 侧薄包装**。
 //!
-//! 解析规则见 M2 plan Task 5：跳过空行、`#` 注释、front-matter（文件开头的
-//! `---` … `---`/`...` 整段，未闭合则按格式错报）；
-//! `\t` 切分 2 列默认 freq=1000、3 列整数直接取、`NN.NN%` 按 round(percent × 1000)；
-//! 非 ASCII 或 >255 字节的 pinyin、>255 字节的 word、空 word/pinyin 跳过；
-//! 重复 (pinyin, word) 取最大 freq。文件首字节的 UTF-8 BOM 先剥离。
+//! 解析规则（跳过空行 / `#` 注释 / front-matter、`\t` 切 2..=3 列、词频百分比、
+//! BOM 剥离、坏行统计）与实现本体已于 2026-10-14（M3 计划 Task 2a）搬去
+//! `engine-data::dict_text`：导入词库要在不打 CLI 的情况下解析同一份文本，
+//! 两份实现必然漂移。这里只保留原名字（`parse_dict` / `parse_dict_report` /
+//! `Parsed`）与 re-export，**行为一字不变** —— 本文件的既有测试原样跑，
+//! 锁的就是这条「搬家没改行为」。
 
 use engine_data::format::{OpDict, RawEntry, serialize};
-use std::collections::HashMap;
 use std::path::Path;
 
-/// 解析结果：条目 + **被跳过的行**。
-///
-/// 只报一个 `kept entries` 数字是分不清「词库本来就空」与「TSV 写错了」的，
-/// 而后者写出一个空壳词库、一路 exit 0，正是本项目的经典故障形态。
-pub struct Parsed {
-    pub entries: Vec<RawEntry>,
-    /// 列数不在 2..=3 的行（1-based 行号 + 原文摘要）：这行**不像表的一行**
-    /// （空格 / 逗号分隔、少列、多列）。整份文件都是这种行 = 列分隔符用错了。
-    pub malformed: Vec<(usize, String)>,
-    /// 列数合法、但词条按文档规则不可用的行数（空 word/pinyin、非 ASCII 或超长
-    /// pinyin、超长 word、第三列词频解析失败）。这类跳过是**正常**的 ——
-    /// rime 词库里带声调的拼音行就靠它滤掉 —— 所以只统计，不报错。
-    pub unusable: usize,
-}
+pub use engine_data::dict_text::{Parsed, parse_report as parse_dict_report};
 
-/// 解析 rime dict.yaml / 项目 tsv 文本为条目。见 plan Task 5 规则。
+/// 解析 rime dict.yaml / 项目 tsv 文本为条目。规则见 [`engine_data::dict_text`]。
 pub fn parse_dict(text: &str) -> Vec<RawEntry> {
     parse_dict_report(text).entries
-}
-
-/// 同 [`parse_dict`]，但附带被跳过行的统计（CLI 据此区分「空词库」与「格式错」）。
-pub fn parse_dict_report(text: &str) -> Parsed {
-    // BOM 只可能出现在文件首字节。U+FEFF 是 `Cf` 而不是空白，`trim()` 去不掉它，
-    // 留着就让首行的 word 变成 "\u{FEFF}好"：条目数正常、校验和正常、exit 0，
-    // 而终端里肉眼看不出前缀 —— 用户永远打不出「好」这个词。
-    let text = text.strip_prefix('\u{FEFF}').unwrap_or(text);
-    let mut best: HashMap<(String, String), u32> = HashMap::new();
-    let mut malformed: Vec<(usize, String)> = Vec::new();
-    let mut unusable = 0usize;
-    // front-matter（rime 的 `---` … `...` 头）整段跳过、不进任何统计：它是本文件开头与
-    // `skips_comments_blanks_and_front_matter` 都写明要跳过的输入，不该被报成「列数不符」。
-    // 只在**首个条目之前**开：文件中间若也认 `---`，一份 TSV 里一个手滑的 `---` 就会把它
-    // 后面的词全部静默吃掉 —— 那正是本模块在防的故障。
-    let mut front_matter: Option<Vec<(usize, String)>> = None;
-    for (i, line) in text.lines().enumerate() {
-        let line = line.trim();
-        if let Some(mut pending) = front_matter.take() {
-            if line == "---" || line == "..." {
-                // 闭合：`pending` 直接丢掉 —— 区间内的行不报、不计数、不产条目。
-            } else {
-                // 先记账、不落地：没写收尾标记的 `---` 不是 front-matter 而是格式错，
-                // 否则一个没闭合的头会让整份文件静默消失（0 条产出、exit 0）。只记
-                // 「没有 front-matter 时也会被报的行」，空行/`#`/`-` 到哪儿都不算。
-                if !line.is_empty() && !line.starts_with('#') && !line.starts_with('-') {
-                    pending.push((i + 1, line.chars().take(40).collect()));
-                }
-                front_matter = Some(pending);
-            }
-            continue;
-        }
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        if line == "---" && best.is_empty() {
-            front_matter = Some(Vec::new());
-            continue;
-        }
-        if line.starts_with('-') {
-            continue;
-        }
-        let cols: Vec<&str> = line.split('\t').collect();
-        if !(2..=3).contains(&cols.len()) {
-            // 存摘要而不是全文：坏行可能是一整段没有 TAB 的文本。
-            malformed.push((i + 1, line.chars().take(40).collect()));
-            continue;
-        }
-        let word = cols[0].trim();
-        let pinyin = cols[1].trim().to_lowercase();
-        // word 与 pinyin 都得守 ≤255 字节：`serialize` 对两者都写死了这条不变式
-        // 并 `expect`，只守一边就等于那一边的 panic（中文 3 字节/字 → 85 字短语即可触发）。
-        if word.is_empty()
-            || pinyin.is_empty()
-            || !pinyin.is_ascii()
-            || pinyin.len() > u8::MAX as usize
-            || word.len() > u8::MAX as usize
-        {
-            unusable += 1;
-            continue;
-        }
-        let freq = match cols.get(2).map(|s| s.trim()).filter(|s| !s.is_empty()) {
-            None => 1000,
-            Some(s) => match parse_freq(s) {
-                Some(f) => f,
-                None => {
-                    unusable += 1;
-                    continue;
-                }
-            },
-        };
-        let key = (pinyin.clone(), word.to_string());
-        let prev = best.get(&key).copied().unwrap_or(0);
-        best.insert(key, freq.max(prev));
-    }
-    // 走到文件末尾还开着 = 这个头没闭合：按格式错落地，保住上面那条不静默的保证。
-    if let Some(pending) = front_matter {
-        malformed.extend(pending);
-    }
-    let mut entries: Vec<RawEntry> = best
-        .into_iter()
-        .map(|((pinyin, word), freq)| RawEntry { pinyin, word, freq })
-        .collect();
-    entries.sort_by(|a, b| a.pinyin.as_bytes().cmp(b.pinyin.as_bytes()));
-    Parsed {
-        entries,
-        malformed,
-        unusable,
-    }
-}
-
-/// 3 列词频：整数直接取；`NN.NN%` 按 round(percent × 1000)。
-fn parse_freq(s: &str) -> Option<u32> {
-    if let Ok(n) = s.parse::<u32>() {
-        return Some(n);
-    }
-    let pct = s.strip_suffix('%')?;
-    Some((pct.parse::<f64>().ok()? * 1000.0).round() as u32)
 }
 
 /// 排序 + 计算 pinyin_total，产出可序列化的 OpDict。

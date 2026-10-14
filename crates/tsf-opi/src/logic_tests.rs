@@ -21,33 +21,8 @@ fn state() -> TsfLogic {
     s.refresh_snapshot();
     s
 }
-// ---- 「属性设置」：四个开关一次套上（apply_settings 是唯一入口） ----
-#[test]
-fn apply_settings_lands_all_four_switches() {
-    let mut s = pinyin_state();
-    assert_eq!(
-        s.switches(),
-        (true, true, true, true),
-        "默认全开 = 引擎既有行为"
-    );
-    s.apply_settings(crate::settings::Settings {
-        learn: false,
-        chinese_punct: false,
-        fuzzy: false,
-        fuzzy_pairs: String::new(),
-        jianpin: false,
-        correction: true,
-        shuangpin_layout: String::new(),
-        pinyin_method: String::new(),
-    });
-    assert_eq!(s.switches(), (false, false, false, false));
-    s.apply_settings(crate::settings::Settings::default());
-    assert_eq!(
-        s.switches(),
-        (true, true, true, true),
-        "回默认也要落上（不是一次性的）"
-    );
-}
+// 「属性设置」的套用用例全在 `settings_tests.rs`（apply_settings 唯一入口 +
+// 键解析同源；这里只剩键路由/状态机）—— 本文件贴着 500 行门禁，那条测试搬过去了。
 
 fn pinyin_state() -> TsfLogic {
     let mut s = state();

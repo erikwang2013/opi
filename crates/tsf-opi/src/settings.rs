@@ -4,9 +4,10 @@
 //! 「属性设置」的**读侧**（Windows）：`%LOCALAPPDATA%\opi\settings.ini`。
 //!
 //! 写侧是 Compose 设置窗（`desktop/src/main/kotlin/xyz/erik/opi/candidate/Settings.kt`，
-//! `opi-candidates --settings`）。两端**共用同一批键名**
-//! （`Learn` / `ChinesePunct` / `Fuzzy` / `Jianpin`）—— 改键名 = 老配置文件全部失效，
-//! 三处同改（Kotlin 写侧 ⇄ 本文件 ⇄ fcitx5 的 `cpp/opi_config.h`）。
+//! `opi-candidates --settings`）。两端**共用同一批键名**（清单见 [`parse`]，逐键语义在
+//! [`Settings`] 的字段注释里）—— 改键名 = 老配置文件全部失效，三处同改
+//! （Kotlin 写侧 ⇄ 本文件 ⇄ fcitx5 的 `cpp/opi_config.h`）。
+//! ⚠️ 其中 `DisabledDicts` 是**名单**不是开关：空 = 全部启用（见 [`Settings`]）。
 //!
 //! 本模块**平台中立**（无 windows 类型）且是**纯函数**（路径与环境量都由参数给）——
 //! 与 `dict_path.rs`/`vk.rs` 同理：解析判定若留在 `#[cfg(target_os = "windows")]` 的
@@ -50,6 +51,11 @@ pub struct Settings {
     /// 见 `engine_core::Scheme::name`，桌面写侧同此）。**空串 = 未设置 ⇒ 引擎保持既有
     /// 方案**（全拼）；名字认不得同样不动引擎。
     pub pinyin_method: String,
+    /// 导入词库的**停用名单**（2026-10-14；键 `DisabledDicts`）：逗号分隔的**词库名**
+    /// （= 文件名去 `.tsv`），原样收，切分与去空白在 `extra_dicts::parse_disabled`。
+    /// **空串 = 全部启用**——⚠️ 与上面的 `fuzzy_pairs` **反着来**（那里空 = 回落布尔）：
+    /// 名单型选项的两种空语义别串。
+    pub disabled_dicts: String,
 }
 
 impl Default for Settings {
@@ -63,6 +69,7 @@ impl Default for Settings {
             correction: true,
             shuangpin_layout: String::new(), // 空 = 未设置（引擎保持默认布局）
             pinyin_method: String::new(),    // 空 = 未设置（引擎保持全拼）
+            disabled_dicts: String::new(),   // 空 = 全部启用（不是"未设置"）
         }
     }
 }
@@ -81,6 +88,12 @@ pub fn parse(text: &str) -> Settings {
             continue;
         };
         let key = k.trim();
+        if key == "DisabledDicts" {
+            // 字符串键（2026-10-14）：值原样收（`#` 注释与空白已在上文剥过）。
+            // 名字里的空白由 `parse_disabled` 逐段 trim —— 这里不先切（切分口径只留一份）。
+            out.disabled_dicts = v.trim().to_string();
+            continue;
+        }
         if key == "PinyinMethod" {
             // 字符串键（2026-10-14）：值原样收（注释与空白已在上文剥过）。
             out.pinyin_method = v.trim().to_string();

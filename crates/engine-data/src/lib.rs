@@ -4,12 +4,14 @@
 //! engine-data：.opid 二进制词库的格式、校验与 mmap 加载（M2）。
 
 pub mod checksum;
+pub mod dict_text;
 pub mod dictionary;
 pub mod format;
 pub mod loader;
 pub mod user_words;
 
 pub use checksum::fnv1a64;
+pub use dict_text::{Parsed, load_extra_dict, parse_report};
 pub use dictionary::{fallback_dict, load_or_fallback};
 pub use format::{FormatError, OpDict, RawEntry, Validated, parse, serialize, validate};
 pub use loader::{LoadError, MmapDictionary, load_bytes, load_mmap};

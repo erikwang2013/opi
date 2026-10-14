@@ -54,6 +54,10 @@ final class OpiEngine {
     static native String exportUserWords();
     static native int importUserWords(String json);
     static native void removeUserWord(String text);
+    static native int importDict(String path);
+    static native String dictList();
+    static native boolean setDictEnabled(String name, boolean on);
+    static native boolean removeDict(String name);
 }
 
 public final class Main {
@@ -64,6 +68,15 @@ public final class Main {
             failures++;
             System.out.println("FAIL: " + what);
         }
+    }
+
+    /** 候选数组里有没有这个字符串（candidates 可能返回 null）。 */
+    static boolean has(String[] arr, String s) {
+        if (arr == null) return false;
+        for (String x : arr) {
+            if (s.equals(x)) return true;
+        }
+        return false;
     }
 
     public static void main(String[] args) throws Exception {
@@ -368,6 +381,59 @@ public final class Main {
         String[] unpinned = OpiEngine.candidates(64);
         check(unpinned != null && unpinned.length == wideN, "解除后回全量");
         OpiEngine.setScheme(0); // 回全键盘
+
+        // 导入词库（2026-10-14，M3）：四条出口的**逐字段行为矩阵**归 opi-ffi 的
+        // tests/dict_import.rs（C ABI 面）；这里做的是 JNI 面唯一能做的事 ——
+        // 真调一次证明函数体被执行过（RegisterNatives 成功只证明名字+描述符对得上）。
+        // ⚠️ 词条是「词<TAB>拼音<TAB>频次」，**词在前**（列序真源 engine-data 的
+        // dict_text.rs：cols[0]=word；M3 任务书里的「拼音在前」是反的）。
+        // 非 ASCII 一律写成 Unicode 转义：javac 按平台编码读源码，字面量直接写中文
+        // 在非 UTF-8 的 locale 下会被读坏（转义在词法层处理，与编码无关）。
+        // ⚠️ 连**注释里**都不能出现反斜杠加 u 的那两个字（javac 在词法前先扫转义，
+        // 注释里的也一样 —— 本行起草时就因它红过:非法的 Unicode 转义）。
+        final String WORD = "\u6D4B\u8BCD"; // 测词（U+6D4B U+8BCD）
+        java.nio.file.Path dd = java.nio.file.Files.createTempDirectory("opi_jni_smoke_dict");
+        java.nio.file.Path tsv = dd.resolve("smoke.tsv"); // 词库名 = 文件名词干 ⇒ 必须正好叫 smoke
+        java.nio.file.Files.write(tsv,
+            (WORD + "\tce\t999999999\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        int dn = OpiEngine.importDict(tsv.toString());
+        check(dn == 1, "importDict 返回条目数 1（实得 " + dn + "）");
+
+        // 真进了引擎：打 ce 的候选里有它（limit 给 64 —— CI 拿的是完整 luna.opid，
+        // ce 一族候选比本地回退库多得多；频次贴 u32 上限保证排得进）。
+        OpiEngine.clear();
+        OpiEngine.inputKey("c");
+        OpiEngine.inputKey("e");
+        check(has(OpiEngine.candidates(64), WORD), "导入层的词应出现在候选里");
+        String dl = OpiEngine.dictList();
+        check(dl != null && dl.contains("\"name\":\"smoke\""),
+            "dictList 里应有一条 name=smoke（实得 " + dl + "）");
+        check(dl != null && dl.contains("\"name\":\"luna\""), "dictList 里应含系统词典 luna");
+
+        check(OpiEngine.setDictEnabled("smoke", false), "停用已导入的词库 → true");
+        OpiEngine.clear();
+        OpiEngine.inputKey("c");
+        OpiEngine.inputKey("e");
+        check(!has(OpiEngine.candidates(64), WORD), "停用后候选里不该再有它");
+        check(OpiEngine.setDictEnabled("smoke", false), "已是目标态 → 幂等 true");
+        check(!OpiEngine.setDictEnabled("luna", false), "系统词典不可停用 → false");
+
+        // 数据留在 FFI 层内存：**先把文件删掉**再启用，照样打得出来
+        // （宿主删文件与引擎状态解耦 —— 这是本族裁决 1 的 JNI 面执行点）。
+        java.nio.file.Files.delete(tsv);
+        check(OpiEngine.setDictEnabled("smoke", true), "原文件没了也要能再启用");
+        OpiEngine.clear();
+        OpiEngine.inputKey("c");
+        OpiEngine.inputKey("e");
+        check(has(OpiEngine.candidates(64), WORD), "再启用后候选里应有它");
+
+        check(OpiEngine.importDict(tsv.toString()) == -1, "路径已不存在 → -1");
+        check(OpiEngine.removeDict("smoke"), "removeDict → true");
+        check(!OpiEngine.removeDict("smoke"), "已经不在 → false");
+        check(!OpiEngine.removeDict("luna"), "系统词典 → false");
+        check(!OpiEngine.setDictEnabled("smoke", true), "删掉之后名字认不得 → false");
+        OpiEngine.clear();
+        java.nio.file.Files.delete(dd); // 目录已空 ⇒ 可删（别把空壳留在 /tmp）
 
         if (failures == 0) {
             System.out.println("SMOKE-OK");

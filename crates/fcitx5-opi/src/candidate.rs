@@ -12,6 +12,8 @@ use engine_core::Engine;
 use engine_core::candidates::Candidate;
 use engine_core::composer::Mode;
 
+use crate::dict_layer::DictLayer;
+
 /// 每页候选数（与 Android 候选栏一致）。
 pub const PAGE_SIZE: usize = 8;
 /// 一次抓取的候选批量上限：**不设上限**。曾是 64（对齐 Android fetchLimit），后果见
@@ -54,6 +56,8 @@ pub struct CandidateState {
     /// 抬起也放行」成立（见 input_method::handle_key 的可打印分支与退格/回车分支：
     /// 那两个按下分支会把缓冲改空，抬起再判「当前」缓冲就不对称了）。
     pub(crate) last_printable: Option<(u32, bool)>,
+    /// 导入词库层（2026-10-14，M3）。状态与语义见 `dict_layer.rs` 头注。
+    pub(crate) dicts: DictLayer,
 }
 
 impl CandidateState {
@@ -98,6 +102,7 @@ impl CandidateState {
             buffer_snapshot: String::new(),
             shift_state: ShiftState::Off,
             last_printable: None,
+            dicts: DictLayer::default(),
         };
         s.refresh_snapshot();
         Ok(s)
@@ -215,6 +220,20 @@ impl CandidateState {
     /// 配对：`tsf-opi/src/logic.rs` 的同名方法（两轨同构）。
     pub fn set_scheme(&mut self, scheme: engine_core::Scheme) {
         self.engine.set_scheme(scheme);
+    }
+
+    /// 导入一条词库（2026-10-14，M3；路径 = UTF-8 tsv，宿主扫目录或设置页给）。
+    /// 返回条目数；失败 / 无有效条目 → **-1**（既有导入层不动）。冷路径，逐条语义与
+    /// 三条裁决见 `dict_layer.rs` 头注（与 opi-ffi `api/dict.rs` 同源）。
+    /// 配对：`tsf-opi/src/logic.rs` 的同名方法（两轨同构，改一处必须改另一处）。
+    pub fn import_dict(&mut self, path: &str) -> i32 {
+        self.dicts.import(&mut self.engine, path)
+    }
+
+    /// 装载 / 卸载一条**导入**词库（原子；`false` = 名字认不得，含系统词典与未导入
+    /// 的名字）。停用后再启用**不依赖原文件还在**（数据在本层内存里）。配对同上。
+    pub fn set_dict_enabled(&mut self, name: &str, on: bool) -> bool {
+        self.dicts.set_enabled(&mut self.engine, name, on)
     }
 
     /// 切模式（**不收尾**：待处理的缓冲由 `Composer::switch_mode` 直接清掉）。

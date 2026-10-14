@@ -10,8 +10,11 @@ pub mod candidates;
 mod candidates_scheme_impl;
 pub mod composer;
 pub mod correction;
+mod dict_layers; // 导入词库的合并层（M3 2b）：Engine 主库槽位的具体类型，字段私有故模块不公开
 pub mod dictionary;
 pub mod engine;
+#[path = "engine_dicts.rs"]
+mod engine_dicts_impl; // 词典换装一族（trad/stroke/导入层）+ user_boost 重算（500 行门禁拆出）
 #[path = "engine_punct.rs"]
 mod engine_punct_impl; // 标点/全角一族（500 行门禁拆出，见文件头）
 #[path = "engine_readings.rs"]

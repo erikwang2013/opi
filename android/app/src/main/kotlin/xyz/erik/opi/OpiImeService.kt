@@ -21,6 +21,7 @@ import androidx.lifecycle.LifecycleRegistry
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryOwner
 import xyz.erik.opi.candidate.CANDIDATE_BAR_HEIGHT_DP
+import xyz.erik.opi.engine.DictStore
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.engine.UserWordStore
 import xyz.erik.opi.ime.HandlerDebouncer
@@ -224,6 +225,13 @@ class OpiImeService : InputMethodService() {
         // 用户词导入必须在词库装载之后、建视图之前：文件缺失/损坏静默降级（不崩 IME），
         // 且要赶在第一次刷新候选之前生效
         userWords.load()
+        // 词库目录装载（2026-10-14，M3）：目录里每个 *.tsv 进引擎，**停用名单在装载后重放**
+        // —— 引擎里导入层是内存态，同名重导入会置回启用（`api/dict.rs` 裁决 2 把重放
+        // 划给宿主）。单个失败不挡启动，只记一条日志（设置页「词库」节会把失败的显示出来）。
+        val dictReport = DictStore.from(this).loadAll(DictStore.parseDisabled(prefs.disabledDicts))
+        if (dictReport.failed.isNotEmpty()) {
+            Log.w(TAG, "词库装载失败 ${dictReport.failed.size} 个：${dictReport.failed.joinToString("、")}")
+        }
         // 偏好恢复（2026-10-09）：引擎三开关 + 输入模式（方案随它落进引擎）+ 键盘模式。
         // 放这里而不是 onCreate：引擎可能装载失败，偏好是「引擎可用」才有意义的投影。
         prefs.applyEngineSwitches(engineController)

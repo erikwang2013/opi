@@ -80,6 +80,8 @@ internal enum class SettingsTab(val label: String) {
     APPEARANCE("外观"),
     STATUSBAR("状态栏"),
     SYMBOLS("符号与表情"),
+    // 词库页（2026-10-14）：两平台都出（目录推导分平台，页本身同构，见 Dicts.kt）。
+    DICTS("词库"),
     ABOUT("关于"),
 }
 
@@ -216,6 +218,9 @@ fun SettingsWindow() {
                         onOpenSymbols = { symbolWin = false },
                         onOpenEmoji = { symbolWin = true },
                     )
+                    // 尾 lambda 写进括号里：DictsPage 的最后一个参数是 dir（带缺省），
+                    // 尾 lambda 只绑「最后一个参数是函数类型」的位置。
+                    SettingsTab.DICTS -> DictsPage(s, ::apply, { status = it })
                     SettingsTab.ABOUT -> AboutPage(status)
                 }
             }

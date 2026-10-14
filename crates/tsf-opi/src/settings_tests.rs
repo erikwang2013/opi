@@ -29,6 +29,7 @@ fn parses_every_key_false() {
             correction: true,
             shuangpin_layout: String::new(),
             pinyin_method: String::new(),
+            disabled_dicts: String::new(),
         }
     );
 }
@@ -125,15 +126,18 @@ fn apply_settings_prefers_the_pairs_list() {
     use engine_core::dictionary::InMemoryDictionary;
     use engine_core::fuzzy::FUZZY_ALL;
     let mut s = crate::logic::TsfLogic::with_dict(Box::new(InMemoryDictionary::new()));
-    s.apply_settings(parse("Fuzzy=False\nFuzzyPairs=n/l\n"));
+    s.apply_settings(
+        parse("Fuzzy=False\nFuzzyPairs=n/l\n"),
+        std::path::Path::new(""),
+    );
     assert_eq!(
         s.engine.fuzzy_pairs(),
         1 << 6,
         "列表为准：只开 n/l（bit6 = n/l）"
     );
-    s.apply_settings(parse("Fuzzy=True\n"));
+    s.apply_settings(parse("Fuzzy=True\n"), std::path::Path::new(""));
     assert_eq!(s.engine.fuzzy_pairs(), FUZZY_ALL, "无列表 → 回落布尔全开");
-    s.apply_settings(parse("Fuzzy=False\n"));
+    s.apply_settings(parse("Fuzzy=False\n"), std::path::Path::new(""));
     assert_eq!(s.engine.fuzzy_pairs(), 0, "无列表 + 布尔关 → 全关");
 }
 
@@ -161,18 +165,21 @@ fn parses_and_applies_shuangpin_layout() {
 
     let mut s = crate::logic::TsfLogic::with_dict(Box::new(InMemoryDictionary::new()));
     assert_eq!(s.engine.shuangpin_layout(), 0, "缺省 = 自然码（引擎初值）");
-    s.apply_settings(parse("ShuangpinLayout=紫光\n"));
+    s.apply_settings(parse("ShuangpinLayout=紫光\n"), std::path::Path::new(""));
     assert_eq!(s.engine.shuangpin_layout(), 4, "紫光 = 表序 4");
     // 空串（未设置）与认不得的名字都不动引擎。
-    s.apply_settings(parse("Learn=True\n"));
+    s.apply_settings(parse("Learn=True\n"), std::path::Path::new(""));
     assert_eq!(s.engine.shuangpin_layout(), 4, "未设置 ⇒ 保持");
-    s.apply_settings(parse("ShuangpinLayout=打错了\n"));
+    s.apply_settings(parse("ShuangpinLayout=打错了\n"), std::path::Path::new(""));
     assert_eq!(
         s.engine.shuangpin_layout(),
         4,
         "认不得的名字 ⇒ 保持（不静默跳回 0）"
     );
-    s.apply_settings(parse("ShuangpinLayout=拼音加加\n"));
+    s.apply_settings(
+        parse("ShuangpinLayout=拼音加加\n"),
+        std::path::Path::new(""),
+    );
     assert_eq!(s.engine.shuangpin_layout(), 5, "拼音加加 = 表序 5");
 }
 
@@ -188,17 +195,64 @@ fn parses_and_applies_pinyin_method() {
 
     let mut s = crate::logic::TsfLogic::with_dict(Box::new(InMemoryDictionary::new()));
     assert_eq!(s.engine.scheme(), Scheme::Full, "缺省 = 全拼（引擎初值）");
-    s.apply_settings(parse("PinyinMethod=双拼\n"));
+    s.apply_settings(parse("PinyinMethod=双拼\n"), std::path::Path::new(""));
     assert_eq!(s.engine.scheme(), Scheme::Shuangpin, "双拼真的进了引擎");
     // 认不得的名字/缺键都不动引擎（不静默跳回全拼）。
-    s.apply_settings(parse("Learn=True\n"));
+    s.apply_settings(parse("Learn=True\n"), std::path::Path::new(""));
     assert_eq!(s.engine.scheme(), Scheme::Shuangpin, "未设置 ⇒ 保持");
-    s.apply_settings(parse("PinyinMethod=五笔\n"));
+    s.apply_settings(parse("PinyinMethod=五笔\n"), std::path::Path::new(""));
     assert_eq!(
         s.engine.scheme(),
         Scheme::Shuangpin,
         "认不得 ⇒ 保持（不静默跳回）"
     );
-    s.apply_settings(parse("PinyinMethod=全拼\n"));
+    s.apply_settings(parse("PinyinMethod=全拼\n"), std::path::Path::new(""));
     assert_eq!(s.engine.scheme(), Scheme::Full, "切回全拼");
+}
+
+/// 导入词库停用名单（2026-10-14）：字符串键 `DisabledDicts` 的解析与缺省口径。
+/// ⚠️ 空串 = **全部启用**（不是"未设置"）—— 与 `FuzzyPairs` 的空语义**反着来**，别串。
+#[test]
+fn parses_disabled_dicts_list() {
+    assert_eq!(parse("").disabled_dicts, "", "缺省 = 空 = 全部启用");
+    assert_eq!(parse("DisabledDicts=a,b\n").disabled_dicts, "a,b");
+    assert_eq!(
+        parse("DisabledDicts= a , b  # 注释\n").disabled_dicts,
+        "a , b",
+        "原样收（逐段 trim 在 parse_disabled，切分口径只留一份）"
+    );
+    // 与 extra_dicts::parse_disabled 连上：本键的值能真的切成名字表。
+    assert_eq!(
+        crate::extra_dicts::parse_disabled(&parse("DisabledDicts= a ,, b \n").disabled_dicts),
+        vec!["a", "b"]
+    );
+}
+
+/// 四个开关一次套上（`apply_settings` 是唯一入口）。**本条从 `logic_tests.rs` 搬来**
+/// （那边贴着 500 行门禁，而 apply_settings 的用例本来就都在这份文件里）。
+/// 夹具用空词库即可：`switches()` 读的是四个引擎开关，与词库内容无关。
+#[test]
+fn apply_settings_lands_all_four_switches() {
+    use engine_core::dictionary::InMemoryDictionary;
+    let mut s = crate::logic::TsfLogic::with_dict(Box::new(InMemoryDictionary::new()));
+    assert_eq!(
+        s.switches(),
+        (true, true, true, true),
+        "默认全开 = 引擎既有行为"
+    );
+    let off = Settings {
+        learn: false,
+        chinese_punct: false,
+        fuzzy: false,
+        jianpin: false,
+        ..Default::default()
+    };
+    s.apply_settings(off, std::path::Path::new(""));
+    assert_eq!(s.switches(), (false, false, false, false));
+    s.apply_settings(Settings::default(), std::path::Path::new(""));
+    assert_eq!(
+        s.switches(),
+        (true, true, true, true),
+        "回默认也要落上（不是一次性的）"
+    );
 }

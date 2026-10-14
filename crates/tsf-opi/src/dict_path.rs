@@ -33,6 +33,12 @@ pub const DICT_FILE_NAME: &str = "luna.opid";
 /// 目录语义要靠文件名约定猜，全路径没有歧义）。空串等同未设置。
 pub const DICT_ENV_VAR: &str = "OPI_DICT_PATH";
 
+/// 导入词库目录名（`%LOCALAPPDATA%\opi\dicts`）。**与另外两端同一份契约**：
+/// Linux 轨 = `$XDG_DATA_HOME/opi/dicts`（`cpp/opi_dicts.h` 的 `opiDictsDir`）、
+/// 桌面设置窗 = `Dicts.kt` 的 `dictsDirFor`（正式文本在那份头注释里）。
+/// 三处**任何一处**错了的后果都是同一个静默失败：设置窗导入的词库，IME 永远读不到。
+pub const DICTS_DIR_NAME: &str = "dicts";
+
 /// 候选来源（顺序即优先级；日志与测试用）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Origin {
@@ -122,6 +128,43 @@ pub fn candidates(
 /// `OPI_DICT_PATH` 的值；空串或未设置 → `None`（与 XDG 轨"空串等同未设置"一致）。
 pub fn env_dict_path() -> Option<OsString> {
     std::env::var_os(DICT_ENV_VAR).filter(|v| !v.is_empty())
+}
+
+/// **导入**词库目录：`%LOCALAPPDATA%\opi\dicts`（小写 `opi`，与上面第三候选同处）。
+/// **纯函数**（`local_appdata` 由调用方给，同 `settings::path_in`）：本层不读环境，
+/// 主机单测才能把目录换成临时目录。缺/空 → 相对路径 `opi/dicts`
+/// （同 `settings::path_in` 的姿态：不 panic，退化成"扫不到" = 零导入词库）。
+pub fn dicts_dir(local_appdata: Option<&OsStr>) -> PathBuf {
+    local_appdata
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_default()
+        .join("opi")
+        .join(DICTS_DIR_NAME)
+}
+
+/// 列出目录里的导入词库：`*.tsv` 的**普通文件**，按名字排序；名字 = 文件名去 `.tsv`
+/// （= 停用名单 `DisabledDicts` 里写的那个名字）。
+///
+/// 判据与另外两端逐条对齐：非 `.tsv` 不列、目录/符号链接指向别处都排除（`is_file`
+/// 会跟随符号链接 —— `Dicts.kt` 的 `Files.isRegularFile` 与 `opi_dicts.h` 的 `stat`
+/// 同此）、空词干（`.tsv` 这种）不列。目录不在（还没导入过）/打不开 ⇒ 空表：
+/// **不是错误**（那是常态，零噪音）。本函数只读目录项，不认识词库内容。
+pub fn list_dicts(dir: &Path) -> Vec<(String, PathBuf)> {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut out: Vec<(String, PathBuf)> = rd
+        .flatten()
+        .filter_map(|e| {
+            let path = e.path();
+            let name = e.file_name().to_string_lossy().into_owned();
+            let stem = name.strip_suffix(".tsv").filter(|s| !s.is_empty())?;
+            path.is_file().then(|| (stem.to_string(), path))
+        })
+        .collect();
+    out.sort();
+    out
 }
 
 /// 依次尝试候选并装载。不存在 → 下一个；**存在但坏 → 记一条再下一个**

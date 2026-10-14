@@ -166,7 +166,59 @@ pub unsafe extern "C" fn opi_fcitx5_search_symbols(ptr: *const u8, len: usize) -
     texts_to_json(texts)
 }
 
+// ---------- 导入词库（2026-10-14，M3）----------
+//
+// ⚠️ 本轨**没有列表出口**（与 opi-ffi 的 `dictList` 不同，也不是疏漏）：契约里
+// fcitx5 宿主自己扫 `~/.local/share/opi/dicts/*.tsv`（`cpp/opi_dicts.h`），
+// 名字/条数来源就是那次扫描 + 本出口的返回值。逐条语义与三条裁决（数据留在内存、
+// 同名重导入覆盖、系统词典不接受开关）见 `dict_layer.rs` 头注。
+
+/// importDict(path) -> i32：读一个 UTF-8 tsv 词库（三列 `词<TAB>拼音<TAB>频次`，
+/// **词在前**）当一个导入层，返回条目数。
+///
+/// 失败 → **-1**，既有导入层不动：路径空/读不到、格式全坏、**没有有效条目**、
+/// **引擎未装载**（哨兵；同 [`opi_fcitx5_load_symbols`] 一档）。跳过坏行时打一行
+/// stderr 如实报数 —— 本仓有「坏词库静默失效」的前车之鉴，这里不许静默。
+/// 冷路径（启动扫目录 / 设置页），不在按键热路径。
+/// # Safety
+///
+/// `ptr` 必须指向至少 `len` 字节的有效内存（或为 null，视为空串 → -1）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_import_dict(ptr: *const u8, len: usize) -> i32 {
+    ensure_panic_hook();
+    catch_unwind(AssertUnwindSafe(|| {
+        let Some(path) = (unsafe { read_utf8(ptr, len) }).filter(|p| !p.is_empty()) else {
+            eprintln!("fcitx5-opi: 导入词库被跳过（路径为空）");
+            return -1;
+        };
+        with_state(|s| s.import_dict(&path)).unwrap_or_else(|| {
+            eprintln!("fcitx5-opi: 导入词库被跳过（引擎未装载）: {path}");
+            -1
+        })
+    }))
+    .unwrap_or(-1)
+}
+
+/// setDictEnabled(name, on) -> bool：装载 / 卸载一条**导入**词库（原子）。
+/// 已是目标态 → true（幂等）；名字认不得（含系统词典）、**引擎未装载** → false。
+/// # Safety
+///
+/// `ptr` 必须指向至少 `len` 字节的有效内存（或为 null，视为空串 → false）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_set_dict_enabled(ptr: *const u8, len: usize, on: bool) -> bool {
+    ensure_panic_hook();
+    catch_unwind(AssertUnwindSafe(|| {
+        let name = unsafe { read_utf8(ptr, len) }.unwrap_or_default();
+        with_state(|s| s.set_dict_enabled(&name, on)).unwrap_or(false)
+    }))
+    .unwrap_or(false)
+}
+
 // 单测独立成文件（`#[path]` 引入）以保持本文件 <500 行，与 lib.rs 的 tests 同惯例。
 #[cfg(test)]
 #[path = "cabi_search_tests.rs"]
 mod search_tests;
+// 导入词库出口的行为门禁（同惯例单独成文件）。
+#[cfg(test)]
+#[path = "cabi_dict_tests.rs"]
+mod dict_tests;

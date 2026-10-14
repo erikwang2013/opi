@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 //
-// 「属性设置」：fcitx5 的**原生 addon 配置**（六个选项 + 一个 `Configurable` 入口）。
+// 「属性设置」：fcitx5 的**原生 addon 配置**（原生选项 + 一个 `Configurable` 入口；
+// 条数不在这里写死 —— 看下面 FCITX_CONFIGURATION 块，它才是唯一出处）。
 //
 // 落点是 fcitx5 给每个 addon 的标准位置（`StandardPath::Type::PkgConfig` +
 // `conf/opi_fcitx5.conf`，即 `$XDG_CONFIG_HOME/fcitx5/conf/opi_fcitx5.conf`）。
@@ -16,8 +17,11 @@
 //     只有这里声明的选项。
 //   · 改完 `fcitx5-remote -r`（= ReloadConfig）即时生效 —— 走 `reloadConfig()`。
 //   · 面板驱动（opi_panel_driver.cpp 第 9 段）走**同一条读路径**做端到端门禁。
-// 本层不做「值之外的」任何事：四个引擎旋钮推给 Rust 单例，ShiftToggle/Skin
+// 本层不做「值之外的」任何事：引擎旋钮推给 Rust 单例，ShiftToggle/Skin
 // 由 C++ 侧自己消费（前者见 opi_mode.h，后者见 opi_skin.h）。
+// ⚠️ 唯一的例外是 `DisabledDicts`：推名单的同时还会**扫词库目录并逐条导入**
+// （零状态的代价与理由见 opi_dicts.h 头注）—— 那不是「顺手多做了点别的」，而是
+// 「导入层的启用位」这件事的全部实现就在那里，本层只负责在配置生效时调它。
 //
 // ⚠️ 字段名（`Learn` / `ShiftToggle` / `Skin` …）**就是配置文件里的键名**：
 // 改名 = 用户已有配置读不到。与 fcitx5 其它 addon 的惯例一致（首字母大写、无空格）。
@@ -35,6 +39,7 @@
 #include <fcitx-utils/i18n.h>
 #include <fcitx-utils/standardpath.h>
 
+#include "opi_dicts.h"    // 导入词库（扫目录 + DisabledDicts 名单）
 #include "opi_rust_ffi.h"
 
 // 皮肤枚举。取值 → `data/themes/` 下的主题目录名，映射在 opi_skin.h
@@ -97,7 +102,16 @@ FCITX_CONFIGURATION(
     fcitx::OptionWithAnnotation<OpiShuangpinLayout, OpiShuangpinLayoutI18NAnnotation> shuangpinLayout{
         this, "ShuangpinLayout", "双拼布局（拼音方式选双拼时生效）", OpiShuangpinLayout::Ziranma};
     fcitx::OptionWithAnnotation<OpiPinyinMethod, OpiPinyinMethodI18NAnnotation> pinyinMethod{
-        this, "PinyinMethod", "拼音方式（全拼 / 双拼）", OpiPinyinMethod::Quanpin};);
+        this, "PinyinMethod", "拼音方式（全拼 / 双拼）", OpiPinyinMethod::Quanpin};
+    // 导入词库的**停用名单**（2026-10-14 词库页，M3）：逗号分隔的**词库名**
+    // （= 文件名去 `.tsv`，如 `brand_terms.tsv` → `brand_terms`），与桌面窗写的
+    // 那个键同名同义。**空 = 全部启用**。⚠️ 与上面的 FuzzyPairs **反着来**
+    // （那里空 = 回落总开关）—— 名单型选项的两种空语义别串。
+    // ⚠️ 只管 `~/.local/share/opi/dicts` 下的**导入**词库；系统词库（luna/trad/
+    // stroke）不受它管（Rust 侧整条出口都拒系统词典）。目录与名单的字面口径见
+    // opi_dicts.h 头注（那份是契约的镜像）。
+    fcitx::Option<std::string> disabledDicts{
+        this, "DisabledDicts", "停用的导入词库（逗号分隔词库名；留空 = 全部启用）", ""};);
 
 // 把**引擎旋钮**推给 Rust 侧。**冷路径**（构造 / reloadConfig / setConfig
 // 三处调用），不需要去抖。ShiftToggle 与 Skin 不在这里 —— 它们是 C++ 侧
@@ -127,6 +141,11 @@ inline void applyOpiSettings(const OpiSettings &settings) {
     if (opi_fcitx5_set_scheme != nullptr) {
         opi_fcitx5_set_scheme(static_cast<int32_t>(*settings.pinyinMethod));
     }
+    // 导入词库（DisabledDicts）：名单是配置值，推给引擎的口就在本函数 —— 与上面那些
+    // 旋钮一字不差。⚠️ 本函数**还会重扫词库目录并逐条导入**（零状态的代价与理由见
+    // opi_dicts.h 头注），所以它不能在 loadDictionary 之前调 —— 那个先决条件本来就
+    // 写在 opi_engine.h 的构造注释里（「配置推给引擎必须在 loadDictionary 之后」）。
+    opiDictsSync(*settings.disabledDicts);
 }
 
 // 从磁盘读进 settings。**文件不存在不是错误**：readAsIni 会把字段留作默认值 ——

@@ -62,6 +62,7 @@ fn state_n(n: usize) -> CandidateState {
         buffer_snapshot: String::new(),
         shift_state: ShiftState::Off,
         last_printable: None,
+        dicts: Default::default(),
     };
     s.refresh_snapshot();
     s

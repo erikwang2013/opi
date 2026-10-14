@@ -226,4 +226,39 @@ object OpiEngine : OpiEngineApi, SymbolApi {
 
     /** 删除一个用户词（连同其频次）。 */
     override external fun removeUserWord(text: String)
+
+    // ---------- 导入词库（2026-10-14，M3）----------
+    // 契约四端同一份（完整裁决见 opi-ffi 的 api/dict.rs 头注）：
+    // · **名字 = 文件名词干**（`foo.tsv` → `foo`），与 `DisabledDicts` 名单同口径；
+    // · **数据留在 FFI 层内存里**：停用后再启用**不依赖原文件还在**；
+    // · 系统词典（luna/trad/stroke）不接受 [setDictEnabled] —— 按 `dictList` 的
+    //   `system: true` 隐藏开关；
+    // · [importDict] 收**绝对路径**（Android 侧是 `filesDir/dicts/foo.tsv`）。
+
+    /**
+     * importDict(path: String) -> Int。读一个 UTF-8 的 tsv 词库（三列
+     * `词<TAB>拼音<TAB>频次`，**词在前**）当一个导入层，返回条目数。
+     * 失败（读不到 / 格式全坏 / 没有有效条目 / 未装载）→ **-1**，既有导入层不动。
+     * 同名重导入 = **覆盖**并置为启用。
+     */
+    external fun importDict(path: String): Int
+
+    /**
+     * dictList() -> String。JSON 数组：系统词典在前（luna/trad/stroke，`system: true`），
+     * 导入层随后（导入顺序）；每项 `{name, count, enabled, system}`。
+     * **未装载 → `[]`**。⚠️ 键序是 serde 字典序（count/enabled/name/system）——按**键**取。
+     */
+    external fun dictList(): String?
+
+    /**
+     * setDictEnabled(name: String, on: Boolean) -> Boolean。装载 / 卸载一条**导入**词库
+     * （原子）。已是目标态 → true（幂等）；名字认不得（含系统词典）/ 未装载 → false。
+     */
+    external fun setDictEnabled(name: String, on: Boolean): Boolean
+
+    /**
+     * removeDict(name: String) -> Boolean。把一条**导入**词库从内存里删掉；
+     * **文件是宿主的事**（本层不碰磁盘）。名字认不得 / 已经不在 / 未装载 → false。
+     */
+    external fun removeDict(name: String): Boolean
 }

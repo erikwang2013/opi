@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 use crate::candidates::{
-    Candidate, DEFAULT_TOP_N, RankOptions, USER_BOOST, rank_and_pick_scheme, rank_and_pick_with,
+    Candidate, DEFAULT_TOP_N, RankOptions, rank_and_pick_scheme, rank_and_pick_with,
 };
 use crate::composer::{Composer, KeyEffect, Mode};
+use crate::dict_layers::LayeredDictionary;
 use crate::dictionary::Dictionary;
 use crate::learner::Learner;
 use crate::punctuation::Quotes;
@@ -13,13 +14,17 @@ use crate::symbols::SymbolEngine;
 
 /// 引擎门面：输入法 UI 层（经 FFI）交互的唯一入口。
 pub struct Engine {
-    dict: Box<dyn Dictionary>,
+    /// 主库 = 系统库 + 导入层（M3 2b，2026-10-14）。**具体类型**而非 `Box<dyn Dictionary>`：
+    /// `set_extra_dicts` 要直接替换层集合，字段持具体类型就不必下转型、也不会层层嵌套。
+    /// 层为空时全部方法直通 base（零分支开销之外的代价）；排序语义见 `dict_layers.rs` 头。
+    /// pub(crate)：engine_dicts.rs 的换装族要用（拆分裂代价，见该文件头）。
+    pub(crate) dict: LayeredDictionary,
     /// 繁体词典（trad.opid）；None 时 Traditional 模式回退 dict（spec 错误处理）。
-    trad_dict: Option<Box<dyn Dictionary>>,
+    pub(crate) trad_dict: Option<Box<dyn Dictionary>>,
     /// 笔画词典（stroke.opid，2026-10-09）：键是笔画串（`hspnz` 五个字母，
     /// 横竖撇捺折），词是单字。`Scheme::Stroke` 时改查它。None = 笔画方案回退
     /// 普通路径（可选增强，与 trad 同一姿态）。
-    stroke_dict: Option<Box<dyn Dictionary>>,
+    pub(crate) stroke_dict: Option<Box<dyn Dictionary>>,
     pub(crate) composer: Composer, // pub(crate)：engine_segment.rs 的收尾要用（见文件头）
     /// 符号表引擎（`symbol_blocks` 一族的 impl 在 engine_symbol_browse.rs，故 pub(crate)）。
     pub(crate) symbols: SymbolEngine,
@@ -86,18 +91,14 @@ impl Engine {
         symbols: SymbolEngine,
         learner_enabled: bool,
     ) -> Self {
-        let max_freq = dict
-            .max_freq()
-            .max(trad.as_ref().map_or(0, |d| d.max_freq()));
-        let user_boost = USER_BOOST.max(max_freq.saturating_mul(2));
-        Engine {
-            dict,
+        let mut engine = Engine {
+            dict: LayeredDictionary::new(dict),
             trad_dict: trad,
             stroke_dict: None,
             composer: Composer::new(),
             symbols,
             learner: Learner::new(learner_enabled),
-            user_boost,
+            user_boost: 0, // 占位：紧随其后的 recompute_user_boost 定型（唯一算法处）
             scheme_readings: std::cell::RefCell::new((String::new(), Vec::new())),
             pinned_reading: None,
             fullwidth: Mode::default().default_fullwidth(),
@@ -108,47 +109,13 @@ impl Engine {
             shuangpin_layout: 0,
             jianpin: true,
             symbol_browse: Default::default(),
-        }
+        };
+        engine.recompute_user_boost();
+        engine
     }
 
-    /// 换装繁体词典（FFI install_trad 用）。None = 清除（回退简体）。
-    /// 重算 user_boost：trad.opid 静态最大词频 4e9，保持"一次选词压过全部静态词"。
-    /// ⚠️ 取三个词典的**全局**最大词频（含 stroke，2026-10-09 起）：只按「dict+trad」
-    /// 算的话，后装的 stroke 若词频更高，boost 会悄悄偏小 —— 学习者压不过静态词。
-    pub fn set_trad_dict(&mut self, dict: Option<Box<dyn Dictionary>>) {
-        let max_freq = [dict.as_ref(), self.stroke_dict.as_ref()]
-            .into_iter()
-            .flatten()
-            .chain(std::iter::once(&self.dict))
-            .map(|d| d.max_freq())
-            .max()
-            .unwrap_or(0);
-        self.user_boost = USER_BOOST.max(max_freq.saturating_mul(2));
-        self.trad_dict = dict;
-    }
-
-    /// 当前模式生效的词典（`pub(crate)`：engine_segment.rs 的回退判定要用同一个词典）。
-    pub(crate) fn active_dict(&self) -> &dyn Dictionary {
-        match self.composer.session().mode {
-            Mode::Traditional => self.trad_dict.as_deref().unwrap_or(&*self.dict),
-            _ => &*self.dict,
-        }
-    }
-
-    /// 换装笔画词典（FFI install_stroke 用）。None = 清除（笔画方案回退普通路径）。
-    /// 与 [`Self::set_trad_dict`] 同一形状（含重算 user_boost —— 别让更大的词频表
-    /// 静默改变「精确加成」的档位）。
-    pub fn set_stroke_dict(&mut self, dict: Option<Box<dyn Dictionary>>) {
-        let max_freq = [self.trad_dict.as_ref(), dict.as_ref()]
-            .into_iter()
-            .flatten()
-            .chain(std::iter::once(&self.dict))
-            .map(|d| d.max_freq())
-            .max()
-            .unwrap_or(0);
-        self.user_boost = USER_BOOST.max(max_freq.saturating_mul(2));
-        self.stroke_dict = dict;
-    }
+    // ---- 词典换装一族（trad / stroke / 导入层）与 user_boost 重算：impl 体在
+    // engine_dicts.rs（500 行门禁拆出）；字段的 pub(crate) 理由见那个文件的头注释。
 
     /// 当前输入方案（9 键 / 14 键 / 笔画 / 全键盘）。
     pub fn scheme(&self) -> Scheme {

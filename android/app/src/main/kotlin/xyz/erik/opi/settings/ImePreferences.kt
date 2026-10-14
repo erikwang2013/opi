@@ -124,6 +124,19 @@ class ImePreferences(private val store: PrefStore) {
             ?: SHUANGPIN_LAYOUTS_ANDROID.first()
         set(v) = store.put(KEY_SHUANGPIN_LAYOUT, v)
 
+    /**
+     * 停用词库名单（2026-10-14，M3 词库管理）：逗号分隔的词库名，**空串 = 全部启用**
+     * （与桌面 `DisabledDicts` 同一份契约；解析/写回见 `DictStore.parseDisabled` /
+     * `DictStore.withDisabled`）。
+     *
+     * 为什么必须落盘：引擎里导入层是**内存态**，每次启动装载（`DictStore.loadAll`）
+     * 都会把目录里的词库置回启用 —— 停用配置得由宿主存着、在装载之后**重放**
+     * （引擎 `api/dict.rs` 裁决 2 把重放划给宿主）。不存 ⇒ 开关在重启后静默复活。
+     */
+    var disabledDicts: String
+        get() = store.getString(KEY_DISABLED_DICTS) ?: ""
+        set(v) = store.put(KEY_DISABLED_DICTS, v)
+
     /** 把三个引擎开关推给引擎（服务启动与设置页保存共用一处，防两处漂）。 */
     fun applyEngineSwitches(controller: EngineController) {
         controller.setLearner(learn)
@@ -155,6 +168,7 @@ class ImePreferences(private val store: PrefStore) {
         const val KEY_JIANPIN = "engine_jianpin"
         const val KEY_CORRECTION = "engine_correction"
         const val KEY_SHUANGPIN_LAYOUT = "engine_shuangpin_layout"
+        const val KEY_DISABLED_DICTS = "dicts_disabled"
 
         fun from(context: Context): ImePreferences = ImePreferences(AndroidPrefStore(context))
     }

@@ -295,9 +295,14 @@ impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
             // 合法的 tid 可用（这就是"两处 on_commit 丢弃文本"之外的第二道墙）。
             self.state.set_client_id(tid);
             // 「属性设置」重读一次：本端没有在线刷新通道，**下一次激活就是生效时机**
-            // （设置窗保存后切走再切回来）。读不到 = 保持/回默认，见 settings.rs。
+            // （设置窗保存后切走再切回来）。读不到 = 保持/回默认，见 settings.rs；
+            // 导入词库（`DisabledDicts` 名单 + 词库目录）在同一次里重装，见 extra_dicts.rs。
             if let Some(mut logic) = self.state.lock_logic() {
-                logic.apply_settings(settings::load(std::env::var_os("LOCALAPPDATA").as_deref()));
+                let lap = std::env::var_os("LOCALAPPDATA");
+                logic.apply_settings(
+                    settings::load(lap.as_deref()),
+                    &crate::dict_path::dicts_dir(lap.as_deref()),
+                );
             }
             // 注册按键监听：0.62 API 为 AdviseKeyEventSink（旧式 SetKeypressSink 已移除）。
             // fforeground=true：前台键盘事件也交本服务（输入法语义）。

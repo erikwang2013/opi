@@ -11,11 +11,18 @@
  * 用法：./consumer /path/to/luna.opid     （缺参 → opi_load(NULL,0) 的内置 35 词库）
  * 失败即非 0 退出并打印具体哪一条断言。
  */
+/* getpid / mkdir（[11d] 造夹具目录）在 `-std=c11` 严谨模式下默认**没声明**，
+ * 用了就是 -Werror 的 implicit-function-declaration。POSIX 宏必须写在任何
+ * include 之前（写在 include 之间等于没写 —— 头文件早按旧宏展开过了）。 */
+#define _POSIX_C_SOURCE 200809L
+
 #include "OpiFFI.h" /* 经 -I 指向 macos/ —— 与 Swift bridging header 看到的是同一份 */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h> /* mkdir */
+#include <unistd.h>   /* getpid */
 
 static int failures = 0;
 static int checks = 0;
@@ -56,6 +63,11 @@ static const uint16_t WO[] = {0x6211};   /* 我 */
 static const uint16_t NI[] = {0x4F60};   /* 你 */
 
 static const uint16_t W = 'w', O = 'o', X = 'x';
+
+/* [11d] 导入词库那一段在 consumer_dicts.c —— **#include 片段**，不是独立 TU。
+ * 拆出去的唯一理由是 500 行硬门禁（crates/opi-ffi/tests/line_limit.rs 扫全仓源码；
+ * 本文件加完那段是 612 行）。拆法与 fcitx5-opi 的 `opi_ctl_*_driver.cpp` 同一种。 */
+#include "consumer_dicts.c"
 
 int main(int argc, char **argv) {
     /* ---------- 装载 ---------- */
@@ -462,6 +474,8 @@ int main(int argc, char **argv) {
     opi_ffi_free_string(ts4);
     CHECK(opi_mode() == 0, "两次 toggle_symbol 后应回 Pinyin，实为 %d", opi_mode());
     opi_set_chinese_punct(true); /* 复位：别把状态漏给后面的段落 */
+
+    check_import_dicts();
 
     /* ---------- 释放语义：空句柄可无条件释放 ---------- */
     printf("[12] 释放语义\n");

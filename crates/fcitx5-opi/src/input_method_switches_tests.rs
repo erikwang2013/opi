@@ -30,6 +30,7 @@ fn punct_state() -> CandidateState {
         buffer_snapshot: String::new(),
         shift_state: ShiftState::Off,
         last_printable: None,
+        dicts: Default::default(),
     };
     s.switch_mode(Mode::Pinyin);
     s

@@ -253,6 +253,37 @@ int32_t opi_import_user_words(const uint16_t *json, size_t len);
 /// 导出用户词（JSON）。
 OpiString opi_export_user_words(void);
 
+// ---------- 导入词库（2026-10-14，M3）----------
+//
+// 宿主契约四端同一份（实现与完整裁决见 crates/opi-ffi/src/api/dict.rs 头注）：
+// · **名字 = 文件名词干**（`foo.tsv` → `foo`）——与桌面设置页（desktop/…/Dicts.kt）
+//   和 `DisabledDicts` 停用名单里写的那个名字同一口径；
+// · **数据留在 FFI 层内存里**：停用只把它从引擎的额外层里拿掉，**再启用不依赖原
+//   文件还在**（宿主删了/改了文件也照样能再启用）；
+// · **系统词典（luna/trad/stroke）不接受 set_dict_enabled** —— 它们不是「导入层」，
+//   宿主 UI 按 dictList 的 `system: true` 把开关隐藏；
+// · 路径由宿主给**绝对路径**；本层不碰磁盘（**删文件是宿主的事**）。
+
+/// 读一个 UTF-8 的 tsv 词库文件（三列 `词<TAB>拼音<TAB>频次`，**词在前** —— 列序
+/// 真源是 `engine-data/src/dict_text.rs` 的 `cols[0]=word`/`cols[1]=pinyin`）当**一个导入层**，
+/// 返回条目数。失败（读不到 / 格式全坏 / 没有有效条目 / 引擎未装载 / NULL）→ -1，
+/// 且不改动既有导入层。**同名重导入 = 覆盖**并置为启用。
+int32_t opi_import_dict(const uint16_t *path, size_t len);
+
+/// 词库列表（JSON 数组）：**系统词典在前**（luna/trad/stroke，`system: true`），
+/// 导入层随后（导入顺序）；每项 `{name, count, enabled, system}`。
+/// **未装载 → `[]`**（数组哨兵，不是空句柄 —— 宿主 parse 就得到空列表）。
+/// ⚠️ JSON 键序是 serde_json 的字典序（count/enabled/name/system）：按**键**取。
+OpiString opi_dict_list(void);
+
+/// 装载 / 卸载一条**导入**词库（原子：一次全量替换，引擎看不到半个集合）。
+/// 已是目标态 → true（幂等）；名字认不得（含系统词典）/ NULL / 未装载 → false。
+bool opi_set_dict_enabled(const uint16_t *name, size_t len, bool on);
+
+/// 把一条**导入**词库从内存里删掉（引擎的额外层跟着重算）；**文件是宿主的事**。
+/// 名字认不得 / 已经不在 / NULL / 未装载 → false（删掉的层要重新 importDict）。
+bool opi_remove_dict(const uint16_t *name, size_t len);
+
 /// 键事件路由（本轮新增，接口已冻结）。
 ///
 /// keyval：可打印字符 = Unicode 码点（空格 = 0x20）；

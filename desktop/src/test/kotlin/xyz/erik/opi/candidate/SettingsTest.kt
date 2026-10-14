@@ -266,13 +266,17 @@ class SettingsTest {
         assertEquals(
             listOf(
                 SettingsTab.COMMON, SettingsTab.KEYS, SettingsTab.APPEARANCE,
-                SettingsTab.STATUSBAR, SettingsTab.SYMBOLS, SettingsTab.ABOUT,
+                SettingsTab.STATUSBAR, SettingsTab.SYMBOLS, SettingsTab.DICTS, SettingsTab.ABOUT,
             ),
             settingsTabs(windows = false),
         )
-        // Windows：按键（ShiftToggle 只有 Linux 读侧认）与外观（Skin 是 fcitx5 主题）不出。
+        // Windows：按键（ShiftToggle 只有 Linux 读侧认）与外观（Skin 是 fcitx5 主题）不出；
+        // 词库页两平台都出（目录推导分平台，页本身同构 —— 见 Dicts.kt）。
         assertEquals(
-            listOf(SettingsTab.COMMON, SettingsTab.STATUSBAR, SettingsTab.SYMBOLS, SettingsTab.ABOUT),
+            listOf(
+                SettingsTab.COMMON, SettingsTab.STATUSBAR, SettingsTab.SYMBOLS,
+                SettingsTab.DICTS, SettingsTab.ABOUT,
+            ),
             settingsTabs(windows = true),
         )
     }

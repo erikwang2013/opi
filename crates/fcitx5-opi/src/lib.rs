@@ -20,12 +20,13 @@ use engine_core::composer::Mode;
 mod cabi;
 pub mod candidate;
 pub mod data_dir;
+pub(crate) mod dict_layer;
 pub mod input_method;
 mod switches;
 
 pub use cabi::{
-    opi_fcitx5_init_dict, opi_fcitx5_load_symbols, opi_fcitx5_search_symbols,
-    opi_fcitx5_symbol_browse,
+    opi_fcitx5_import_dict, opi_fcitx5_init_dict, opi_fcitx5_load_symbols,
+    opi_fcitx5_search_symbols, opi_fcitx5_set_dict_enabled, opi_fcitx5_symbol_browse,
 };
 // 「属性设置」旋钮族的出口（2026-10-14 从本文件拆出：加拼音方式后 526/500 越线；
 // 同一手续见 `cabi.rs`。这几个 `pub use` 是测试与内部调用方引用它们的唯一原因）。

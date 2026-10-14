@@ -17,6 +17,7 @@ fn state() -> CandidateState {
         buffer_snapshot: String::new(),
         shift_state: ShiftState::Off,
         last_printable: None,
+        dicts: Default::default(),
     };
     s.buffer_snapshot = s.engine.buffer().to_string();
     s

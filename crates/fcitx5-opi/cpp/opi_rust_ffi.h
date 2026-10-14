@@ -117,6 +117,31 @@ extern "C" int32_t opi_fcitx5_load_symbols(const uint8_t *ptr,
 extern "C" OpiString opi_fcitx5_search_symbols(const uint8_t *ptr,
                                                size_t len) __attribute__((weak));
 
+// ---- 导入词库（2026-10-14，M3）----
+//
+// ⚠️ **本轨没有「列出词库」的出口**：契约里 fcitx5 宿主自己扫
+// `~/.local/share/opi/dicts/*.tsv`（`opi_dicts.h` 的 OpiDicts），名字与条数的来源
+// 是那次扫描 + 下面 import 的返回值。别去别处找 `opi_fcitx5_dict_list`——不存在。
+//
+// 逐条语义与三条裁决（数据留 Rust 内存 / 同名重导入 = 原位覆盖 / 系统词典不归本层）
+// 与 opi-ffi 的 `api/dict.rs` 同源，全文见 `fcitx5-opi/src/dict_layer.rs` 头注。
+// 两条都是**弱符号**（引擎侧落地前照常编译/加载），调用点必须判空 ——
+// 调用点在 `opi_dicts.h`，缺符号时打一行 stderr 诊断并跳过整段（不静默）。
+
+// importDict(path) -> 条目数。路径是**路径**（同 opi_fcitx5_load 的约定，UTF-8 裸
+// 字节，不是文件内容）。失败（路径空/读不到/格式全坏/没有有效条目/引擎未装载）
+// → **-1**，既有导入层不动；跳过坏行时 Rust 侧打一行 stderr 如实报数
+// （「坏词库静默失效」是本仓出过的事故，这条出口不许静默）。
+extern "C" int32_t opi_fcitx5_import_dict(const uint8_t *ptr,
+                                          size_t len) __attribute__((weak));
+
+// setDictEnabled(name, on) -> 是否执行。`true` = 这条导入层的启用位已经是 `on`
+// （含本来就在目标态）；`false` = 名字认不得（含系统词典 luna/trad/stroke——
+// 它们不归本层管，两方向一律 false）、或引擎未装载。
+// 名字 = **文件名词干**（`foo.tsv` → `foo`，与 DisabledDicts 名单同口径）。
+extern "C" bool opi_fcitx5_set_dict_enabled(const uint8_t *ptr, size_t len,
+                                            bool on) __attribute__((weak));
+
 // 取走并释放 Rust 侧字符串。ptr==nullptr 视为空串（Rust 侧 OpString::empty 的
 // 表示）；仅守卫构造，free 契约不变：每个返回的 OpString 恰好 free 一次。
 //

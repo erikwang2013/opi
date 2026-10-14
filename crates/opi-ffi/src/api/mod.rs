@@ -12,6 +12,7 @@ use engine_core::router::{KeyAction, KeyRouter, ShiftState};
 use engine_core::symbols::BlockId;
 
 mod convert;
+mod dict;
 #[cfg(test)]
 mod tests;
 
@@ -20,6 +21,7 @@ pub use convert::{
     emoji_groups_json, emoji_symbol_texts, mode_from_int, mode_to_int, search_symbol_texts,
     symbol_blocks_json, symbol_texts, texts_json,
 };
+pub use dict::DICT_LIST_UNLOADED;
 
 /// 引擎单例：load 后可供 JNI / C 出口共享。
 pub static SINGLETON: Mutex<Option<Api>> = Mutex::new(None);
@@ -36,13 +38,15 @@ pub fn install(path: Option<&str>) -> Result<(), String> {
         _ => Box::new(engine_data::fallback_dict()),
     };
     let symbols = engine_core::symbols::SymbolEngine::builtin();
+    let luna_count = dict.len(); // dictList 的 {name:"luna", count}：移进 Engine 之前采集
     // 毒化恢复：某个 FFI 出口（`jni.rs` / `cabi.rs` 两面各自的 catch_unwind 包装）
     // 吞掉 panic 时锁已毒化，into_inner 取回数据；install 整体替换引擎，提供恢复路径。
     let mut guard = SINGLETON.lock().unwrap_or_else(|p| p.into_inner());
     let saved = guard.as_ref().map(|api| api.export_user_words());
-    *guard = Some(Api {
-        router: KeyRouter::new(Engine::new(dict, symbols, true)),
-    });
+    *guard = Some(Api::with_router(
+        KeyRouter::new(Engine::new(dict, symbols, true)),
+        luna_count,
+    ));
     if let Some(json) = saved
         && let Some(api) = guard.as_mut()
     {
@@ -57,10 +61,12 @@ pub fn install(path: Option<&str>) -> Result<(), String> {
 pub fn install_trad(path: &str) -> Result<(), String> {
     let dict = engine_data::load_mmap(std::path::Path::new(path))
         .map_err(|e| format!("load trad {}: {e:?}", path))?;
+    let count = dict.len(); // dictList 的 {name:"trad", count/enabled}
     let mut guard = SINGLETON.lock().unwrap_or_else(|p| p.into_inner());
     match guard.as_mut() {
         Some(api) => {
             api.set_trad_dict(Some(Box::new(dict)));
+            api.note_trad_count(count);
             Ok(())
         }
         None => Err("engine not loaded".into()),
@@ -73,10 +79,12 @@ pub fn install_trad(path: &str) -> Result<(), String> {
 pub fn install_stroke(path: &str) -> Result<(), String> {
     let dict = engine_data::load_mmap(std::path::Path::new(path))
         .map_err(|e| format!("load stroke {}: {e:?}", path))?;
+    let count = dict.len(); // dictList 的 {name:"stroke", count/enabled}
     let mut guard = SINGLETON.lock().unwrap_or_else(|p| p.into_inner());
     match guard.as_mut() {
         Some(api) => {
             api.set_stroke_dict(Some(Box::new(dict)));
+            api.note_stroke_count(count);
             Ok(())
         }
         None => Err("engine not loaded".into()),
@@ -120,23 +128,30 @@ pub fn with_engine<R>(f: impl FnOnce(&mut Api) -> R) -> Option<R> {
 /// 引擎本体经 `router.engine()/engine_mut()` 取用，对两个 ABI 面透明。
 pub struct Api {
     router: KeyRouter,
+    /// 导入词库层（M3，2026-10-14）：`dictList` / `setDictEnabled` / `removeDict` /
+    /// `importDict` 的状态与数据。三条语义裁决见 `api/dict.rs` 头注。
+    dicts: dict::DictLayer,
 }
 
 impl Api {
     pub fn load_fallback_sync() -> Result<Api, String> {
         let dict = engine_data::fallback_dict();
         let symbols = engine_core::symbols::SymbolEngine::builtin();
-        Ok(Api {
-            router: KeyRouter::new(Engine::new(Box::new(dict), symbols, true)),
-        })
+        let luna_count = dict.len();
+        Ok(Api::with_router(
+            KeyRouter::new(Engine::new(Box::new(dict), symbols, true)),
+            luna_count,
+        ))
     }
 
     pub fn load_sync(path: String) -> Result<Api, String> {
         let dict = engine_data::load_or_fallback(Some(std::path::Path::new(&path)))?;
         let symbols = engine_core::symbols::SymbolEngine::builtin();
-        Ok(Api {
-            router: KeyRouter::new(Engine::new(dict, symbols, true)),
-        })
+        let luna_count = dict.len();
+        Ok(Api::with_router(
+            KeyRouter::new(Engine::new(dict, symbols, true)),
+            luna_count,
+        ))
     }
 
     /// raw 出口（绕过键路由）。改完 buffer 必须对齐页码 —— 否则「翻页 → 清空 →
