@@ -7,6 +7,7 @@ import android.content.Context
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.ime.InputMode
 import xyz.erik.opi.ime.KeyboardModes
+import xyz.erik.opi.jni.OpiEngine
 import xyz.erik.opi.keyboard.SkinOption
 
 /**
@@ -137,6 +138,62 @@ class ImePreferences(private val store: PrefStore) {
         get() = store.getString(KEY_DISABLED_DICTS) ?: ""
         set(v) = store.put(KEY_DISABLED_DICTS, v)
 
+    /**
+     * 五笔六键（2026-10-14，M4 第二波）：方案 / 风格 / 混输进入方式 / 候选个数 /
+     * 回车 / 自动上屏。存**名字/档位**（与双拼布局同惯例）；缺省/认不得 → 表首
+     * （= 引擎缺省，见 `WubiNames.kt` 的三个名字表）。推进引擎走
+     * [applyWubiSettings]（名字→Int 的换算在用它的地方）。
+     */
+    var wubiPlan: String
+        get() = store.getString(KEY_WUBI_PLAN)?.takeIf { it in WUBI_PLAN_NAMES }
+            ?: WUBI_PLAN_NAMES.first()
+        set(v) = store.put(KEY_WUBI_PLAN, v)
+
+    var wubiStyle: String
+        get() = store.getString(KEY_WUBI_STYLE)?.takeIf { it in WUBI_STYLE_NAMES }
+            ?: WUBI_STYLE_NAMES.first()
+        set(v) = store.put(KEY_WUBI_STYLE, v)
+
+    var wubiMixedEntry: String
+        get() = store.getString(KEY_WUBI_MIXED_ENTRY)?.takeIf { it in WUBI_MIXED_ENTRY_NAMES }
+            ?: WUBI_MIXED_ENTRY_NAMES.first()
+        set(v) = store.put(KEY_WUBI_MIXED_ENTRY, v)
+
+    /**
+     * 候选个数档位（3..9；缺省 = 引擎 [WUBI_CANDIDATE_LIMIT_DEFAULT]）。
+     * **按字符串存**（`PrefStore` 只有 string/bool 两种，不为一个数字扩接口 ——
+     * 与双拼布局的「存名字」同一条：多一种存储类型就多一处会漂的读写）。
+     * 坏值/缺键 → 缺省（与其余键同一条容错）。
+     */
+    var wubiCandidateLimit: Int
+        get() = store.getString(KEY_WUBI_CANDIDATE_LIMIT)?.toIntOrNull()
+            ?.takeIf { it in WUBI_CANDIDATE_LIMIT_CHOICES }
+            ?: WUBI_CANDIDATE_LIMIT_DEFAULT
+        set(v) = store.put(KEY_WUBI_CANDIDATE_LIMIT, v.toString())
+
+    var wubiReturn: String
+        get() = store.getString(KEY_WUBI_RETURN)?.takeIf { it in WUBI_RETURN_NAMES }
+            ?: WUBI_RETURN_NAMES.first()
+        set(v) = store.put(KEY_WUBI_RETURN, v)
+
+    var wubiAutoCommit: Boolean
+        get() = store.getBoolean(KEY_WUBI_AUTO_COMMIT, true)
+        set(v) = store.put(KEY_WUBI_AUTO_COMMIT, v)
+
+    /**
+     * 把五笔五键推给引擎（方案不在这里 —— 它决定**装哪张表**，归 `EngineLoader`）。
+     * 名字→Int 的换算在 [WubiNames.kt] 的两个 index 函数（**唯一一份**；名字表与
+     * 引擎枚举同序，锁步门禁 `WubiNamesLockstepTest` 现读 `engine_wubi.rs` 比对）。
+     * 与 [applyEngineSwitches] 分开是刻意的：那一族是「拼音旋钮」，五笔是另一个面。
+     */
+    fun applyWubiSettings() {
+        OpiEngine.setWubiStyle(wubiStyleIndexOf(wubiStyle))
+        OpiEngine.setWubiMixedEntry(wubiMixedEntryIndexOf(wubiMixedEntry))
+        OpiEngine.setWubiCandidateLimit(wubiCandidateLimit)
+        OpiEngine.setWubiReturnStyle(wubiReturnIndexOf(wubiReturn))
+        OpiEngine.setWubiAutoCommit(wubiAutoCommit)
+    }
+
     /** 把三个引擎开关推给引擎（服务启动与设置页保存共用一处，防两处漂）。 */
     fun applyEngineSwitches(controller: EngineController) {
         controller.setLearner(learn)
@@ -168,6 +225,13 @@ class ImePreferences(private val store: PrefStore) {
         const val KEY_JIANPIN = "engine_jianpin"
         const val KEY_CORRECTION = "engine_correction"
         const val KEY_SHUANGPIN_LAYOUT = "engine_shuangpin_layout"
+        // 五笔六键（2026-10-14，M4 第二波）
+        const val KEY_WUBI_PLAN = "wubi_plan"
+        const val KEY_WUBI_STYLE = "wubi_style"
+        const val KEY_WUBI_MIXED_ENTRY = "wubi_mixed_entry"
+        const val KEY_WUBI_CANDIDATE_LIMIT = "wubi_candidate_limit"
+        const val KEY_WUBI_RETURN = "wubi_return"
+        const val KEY_WUBI_AUTO_COMMIT = "wubi_auto_commit"
         const val KEY_DISABLED_DICTS = "dicts_disabled"
 
         fun from(context: Context): ImePreferences = ImePreferences(AndroidPrefStore(context))

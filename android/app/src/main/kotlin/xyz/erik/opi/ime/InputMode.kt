@@ -39,6 +39,12 @@ enum class InputMode(
      * 引擎方案不同 —— 解码与布局（自然码/微软/…，见设置页的「双拼布局」）在引擎侧。
      */
     SHUANGPIN(InputScheme.SHUANGPIN, EngineMode.PINYIN),
+
+    /**
+     * 五笔（2026-10-14，M4）：键面同样是 26 键（else 臂的 Qwerty），引擎方案 = 五笔；
+     * 码表（86/98）与风格（纯五笔/五笔拼音）在设置页的「五笔」节。
+     */
+    WUBI(InputScheme.WUBI, EngineMode.PINYIN),
     ;
 
     /** 菜单里的名字（与搜狗同款措辞）。 */
@@ -52,6 +58,7 @@ enum class InputMode(
             STROKE -> "笔画键盘"
             RARE -> "生僻字键盘"
             SHUANGPIN -> "拼音双拼"
+            WUBI -> "五笔"
         }
 }
 
@@ -73,5 +80,6 @@ fun layoutFor(scheme: InputScheme, mode: EngineMode, previous: InputMode): Input
     // 双拼与全键盘**共用 26 键键面**，反推不出来是哪一个 ⇒ 只能报 [InputMode.SHUANGPIN]
     // 还是 26键 取决于引擎方案（这正是本函数存在的理由）；方案非双拼时 else 臂照旧。
     scheme == InputScheme.SHUANGPIN -> InputMode.SHUANGPIN
+    scheme == InputScheme.WUBI -> InputMode.WUBI
     else -> InputMode.PINYIN26
 }

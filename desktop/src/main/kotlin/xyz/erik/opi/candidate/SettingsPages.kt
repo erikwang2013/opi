@@ -123,7 +123,7 @@ internal fun CommonPage(s: OpSettings, apply: (OpSettings) -> Unit) {
  * ABI 出口）再画，属未排期项，别在这里起手抄表。
  */
 @Composable
-private fun LayoutChip(name: String, selected: Boolean, onClick: () -> Unit) {
+internal fun LayoutChip(name: String, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .border(

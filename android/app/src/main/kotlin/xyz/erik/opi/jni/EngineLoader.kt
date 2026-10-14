@@ -8,6 +8,8 @@ import android.util.Log
 import java.io.File
 import java.io.IOException
 
+import xyz.erik.opi.settings.ImePreferences
+
 /**
  * luna.opid 资产加载编排（对齐 flutter engine_controller.dart _loadLuna）：
  * - 资产解压到 filesDir；不存在或 size 不一致即重拷（app 升级后 asset 更新而旧文件残留）
@@ -24,7 +26,14 @@ object EngineLoader {
     const val FILE_NAME_TRAD = "trad.opid"
     /** 笔画词典（2026-10-09，笔画键盘 / 生僻字键盘）。5.4MB —— 同样走 size 校验重拷。 */
     const val ASSET_NAME_STROKE = "stroke.opid"
+
+    /** 五笔码表两张（2026-10-14，M4）：按用户选的方案装**一张**（见 `load` 的尾段）。 */
+    const val ASSET_NAME_WUBI86 = "wubi86.opid"
+    const val ASSET_NAME_WUBI98 = "wubi98.opid"
     const val FILE_NAME_STROKE = "stroke.opid"
+    /** 五笔码表的落地名（两张，按方案二选一；见 [ASSET_NAME_WUBI86] 段）。 */
+    const val FILE_NAME_WUBI86 = "wubi86.opid"
+    const val FILE_NAME_WUBI98 = "wubi98.opid"
     private const val TAG = "EngineLoader"
 
     /** 文件操作抽象（JVM 测试注入假实现）。 */
@@ -58,6 +67,11 @@ object EngineLoader {
     }
 
     /** 笔画词典加载抽象（同上，可选增强：失败 = 笔画方案回退普通路径）。 */
+    /** 五笔装载口（`OpiEngine.loadWubi`）—— 与 LoadStrokeApi 同一条形状（可注入假实现）。 */
+    fun interface LoadWubiApi {
+        fun loadWubi(path: String): Boolean
+    }
+
     fun interface LoadStrokeApi {
         fun loadStroke(path: String): Boolean
     }
@@ -160,6 +174,27 @@ object EngineLoader {
         }
     }
 
+    /**
+     * 五笔码表资产编排：与 loadStrokeAsset 逐行同构（size 校验重拷 + 失败只降级）——
+     * 码表是留给「五笔」方案的可选增强，装载失败只让那个方案回退普通路径（logcat 告警），
+     * 不碰 luna/trad/stroke。
+     */
+    fun loadWubiAsset(fileOps: FileOps, api: LoadWubiApi, targetPath: String): Boolean {
+        try {
+            val assetSize = fileOps.assetLength()
+            if (assetSize == null || needsCopy(assetSize, fileOps.existingSize())) {
+                fileOps.write(fileOps.readAsset())
+            }
+        } catch (e: Exception) {
+            return false
+        }
+        return try {
+            api.loadWubi(targetPath)
+        } catch (e: Throwable) {
+            false
+        }
+    }
+
     /** 生产入口：assets/luna.opid → filesDir/luna.opid → OpiEngine。 */
     fun load(context: Context): Boolean {
         val target = File(context.filesDir, FILE_NAME)
@@ -238,6 +273,43 @@ object EngineLoader {
         )
         if (strokeOk) Log.i(TAG, "stroke loaded (${strokeTarget.length()} bytes)")
         else Log.w(TAG, "stroke load failed, Stroke scheme falls back to the plain path")
+
+        // 五笔码表（2026-10-14，M4 第二波）：**按方案装一张**（86/98 二选一 —— 两表码
+        // 空间重叠、权重不可比，同时进引擎就是两套体系打架，见 desktop 的 Wubi.kt 与
+        // fcitx5 的 opi_wubi.h 同一条裁决）。方案读自偏好（缺省 86）。失败仅告警。
+        val plan = ImePreferences.from(context).wubiPlan
+        val wubiAsset = if (plan == "98") ASSET_NAME_WUBI98 else ASSET_NAME_WUBI86
+        val wubiFile = if (plan == "98") FILE_NAME_WUBI98 else FILE_NAME_WUBI86
+        val wubiTarget = File(context.filesDir, wubiFile)
+        val wubiOk = loadWubiAsset(
+            fileOps = object : FileOps {
+                override fun assetLength(): Long? = try {
+                    context.assets.openFd(wubiAsset).use { it.length }
+                } catch (e: IOException) {
+                    null
+                }
+
+                override fun readAsset(): ByteArray =
+                    context.assets.open(wubiAsset).use { it.readBytes() }
+
+                override fun existingSize(): Long? =
+                    if (wubiTarget.exists()) wubiTarget.length() else null
+
+                override fun write(bytes: ByteArray) {
+                    wubiTarget.writeBytes(bytes)
+                }
+            },
+            api = LoadWubiApi { OpiEngine.loadWubi(it) },
+            targetPath = wubiTarget.absolutePath,
+        )
+        if (wubiOk) Log.i(TAG, "wubi($plan) loaded (${wubiTarget.length()} bytes)")
+        else Log.w(TAG, "wubi($plan) load failed, Wubi scheme falls back to the plain path")
+
+        // 五键（风格/混输进入方式/个数/回车/自动上屏）也在这一刻推给引擎 —— 引擎刚建好，
+        // 正是「配置 → 引擎」的落点（与 fcitx5 的 applyOpiSettings、TSF 的 apply_settings
+        // 同一条）。方案不在这里（它已经在上面决定了装哪张表）。
+        // 值域/名字 → 整数码的换算在 WubiNames.kt（锁步门禁比对 engine_wubi.rs）。
+        ImePreferences.from(context).applyWubiSettings()
         return result
     }
 }

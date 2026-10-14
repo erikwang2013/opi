@@ -292,4 +292,38 @@ class SettingsLockstepTest {
         assertTrue(merged, merged.contains("PinyinMethod=全拼\n"))
         assertTrue(merged, !merged.contains("PinyinMethod=双拼\n"))
     }
+
+    /**
+     * 五笔六键（2026-10-14，M4 第二波）：**名字表与默认值从引擎源现读现比**。
+     * 漂开的表现：设置窗存「五笔拼音」而引擎只认「纯五笔」⇒ 改了没反应（静默）。
+     */
+    @Test
+    fun `wubi names stay in lockstep with the engine`() {
+        val src = repoFile("crates/engine-core/src/engine_wubi.rs")
+        fun namesOf(enumName: String): List<String> =
+            captures(Regex("""${enumName}::\w+ => "([^"]+)","""), src)
+        val style = namesOf("WubiStyle")
+        val entry = namesOf("WubiMixedEntry")
+        val ret = namesOf("WubiReturnStyle")
+        assertTrue("三个名字表都该非空（源码格式变了？）", style.isNotEmpty() && entry.isNotEmpty() && ret.isNotEmpty())
+        assertEquals("风格名字表必须与引擎同序同名", style, WUBI_STYLE_NAMES)
+        assertEquals("混输进入方式名字表必须与引擎同序同名", entry, WUBI_MIXED_ENTRY_NAMES)
+        assertEquals("回车名字表必须与引擎同序同名", ret, WUBI_RETURN_NAMES)
+
+        // 个数的默认值与上限：现读引擎常量（别在 UI 侧复述数字）。
+        val dflt = captures(Regex("""WUBI_CANDIDATE_LIMIT_DEFAULT: usize = (\d+);"""), src)
+        val max = captures(Regex("""WUBI_CANDIDATE_LIMIT_MAX: usize = (\d+);"""), src)
+        assertEquals("引擎缺省档", dflt.single().toInt(), WUBI_CANDIDATE_LIMIT_DEFAULT)
+        assertEquals("UI 档位上限 = 引擎上限（数字选词键那一档）", max.single().toInt(), WUBI_CANDIDATE_LIMIT_CHOICES.last())
+        assertTrue(
+            "缺省档必须在 UI 档位表里（否则开窗时没有选中项）",
+            WUBI_CANDIDATE_LIMIT_DEFAULT in WUBI_CANDIDATE_LIMIT_CHOICES,
+        )
+
+        // 方案代号表：每份代号都要有**真码表**在（摆了 06 却没有 06.opid = 「选了没候选」）。
+        for (plan in WUBI_PLAN_NAMES) {
+            val tsv = repoFile("data/raw/wubi$plan.tsv")
+            assertTrue("码表 $plan 的 tsv 该非空", tsv.isNotEmpty())
+        }
+    }
 }

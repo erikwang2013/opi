@@ -82,6 +82,9 @@ internal enum class SettingsTab(val label: String) {
     SYMBOLS("符号与表情"),
     // 词库页（2026-10-14）：两平台都出（目录推导分平台，页本身同构，见 Dicts.kt）。
     DICTS("词库"),
+    // 五笔页（2026-10-14，M4 第二波）：两平台都出 —— 六键**两端读侧都认**
+    // （fcitx5 的 opi_config.h / TSF 的 settings.rs），没有「一半平台够不着」的键。
+    WUBI("五笔"),
     ABOUT("关于"),
 }
 
@@ -221,6 +224,7 @@ fun SettingsWindow() {
                     // 尾 lambda 写进括号里：DictsPage 的最后一个参数是 dir（带缺省），
                     // 尾 lambda 只绑「最后一个参数是函数类型」的位置。
                     SettingsTab.DICTS -> DictsPage(s, ::apply, { status = it })
+                    SettingsTab.WUBI -> WubiPage(s, ::apply)
                     SettingsTab.ABOUT -> AboutPage(status)
                 }
             }

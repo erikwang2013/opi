@@ -27,15 +27,18 @@ class InputModeTest {
         // 双拼（2026-10-13）：引擎方案独立，键面复用 26 键（ImeScreen 的 else 臂）
         assertEquals(InputScheme.SHUANGPIN, InputMode.SHUANGPIN.scheme)
         assertEquals(EngineMode.PINYIN, InputMode.SHUANGPIN.engineMode)
+        // 五笔（2026-10-14，M4）：同上（键面 26 键，方案 = 五笔 5）
+        assertEquals(InputScheme.WUBI, InputMode.WUBI.scheme)
+        assertEquals(EngineMode.PINYIN, InputMode.WUBI.engineMode)
     }
 
     @Test
-    fun eightModesWithSogouStyleLabels() {
-        assertEquals(8, InputMode.entries.size)
+    fun nineModesWithSogouStyleLabels() {
+        assertEquals(9, InputMode.entries.size)
         assertEquals(
             listOf(
                 "拼音26键", "英文26键", "拼音9键", "拼音14键",
-                "拼音大9键", "笔画键盘", "生僻字键盘", "拼音双拼",
+                "拼音大9键", "笔画键盘", "生僻字键盘", "拼音双拼", "五笔",
             ),
             InputMode.entries.map { it.label },
         )
@@ -58,5 +61,7 @@ class InputModeTest {
         // 菜单选中项/后续行为会分叉）
         assertEquals(InputMode.SHUANGPIN, layoutFor(InputScheme.SHUANGPIN, EngineMode.PINYIN, InputMode.PINYIN26))
         assertEquals(InputMode.SHUANGPIN, layoutFor(InputScheme.SHUANGPIN, EngineMode.PINYIN, InputMode.SHUANGPIN))
+        // 五笔同理（反推得回来，否则菜单选中项会落在「拼音26键」）
+        assertEquals(InputMode.WUBI, layoutFor(InputScheme.WUBI, EngineMode.PINYIN, InputMode.PINYIN26))
     }
 }

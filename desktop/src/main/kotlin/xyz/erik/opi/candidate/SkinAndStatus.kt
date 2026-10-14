@@ -205,11 +205,11 @@ internal const val MODE_DEFAULT = "pinyin"
  * token 取值域在 `Actions.kt` 的 `MODE_TOKENS`（认不得的应答在那里就被丢掉，流不到这里）；
  * 最后要**引擎侧真会发**这个 token。
  *
- * `wubi` 这一行已在，但**可达性由引擎卡死**：引擎现在只循环 pinyin ↔ en26（用户 2026-10-14
- * 裁决「先两态，五笔随 M4 接」；条的循环只是把引擎应答的 token 存下来画，自己不造档）。
- * 换句话说 —— **这一行是防假标签，不是第三条可选态**：`MODE_TOKENS` 认 wubi，面表若没有它，
- * 引擎在五笔档时条上会写「拼」= 给用户看假档位（锁步门禁在 StatusBarTest 的
- * `mode tokens map to the frozen abbreviations`）。
+ * `wubi` 这一行**现在是真态**（2026-10-14 M4 第二波落地：引擎侧 `opi_ctl_mode.h` 的循环
+ * 已是 **拼 → 五 → en26 → 拼**，`wubi` 在 `MODE_TOKENS` 里、可达）。它当初（同日早些时候，
+ * 用户裁决「先两态，五笔随 M4 接」时）是**防假标签**：`MODE_TOKENS` 认 wubi 而面表没有它，
+ * 引擎在五笔档时条上会写「拼」= 给用户看假档位。锁定它的门禁（放行 token 必须有面）在
+ * `StatusBarTest` 的 `mode tokens map to the frozen abbreviations` —— 加第四档时那条先红。
  */
 internal fun modeFace(mode: String): String = when (mode) {
     "en26" -> "en"

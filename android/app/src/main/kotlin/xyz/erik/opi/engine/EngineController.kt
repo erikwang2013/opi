@@ -21,7 +21,7 @@ enum class EngineMode(val value: Int) {
 enum class ShiftState { OFF, SINGLE, LOCK }
 
 /**
- * 输入方案（JNI `scheme()` 返回值）：0=全键盘 1=拼音9键 2=拼音14键 3=笔画 4=双拼。
+ * 输入方案（JNI `scheme()` 返回值）：0=全键盘 1=拼音9键 2=拼音14键 3=笔画 4=双拼 5=五笔。
  *
  * 「输入模式」= 方案 × 模式的组合（拼音9键 = NINE + PINYIN）；繁体模式是**模式**轴上的
  * 事（[EngineMode.TRADITIONAL]），与方案正交 —— 9 键也能切繁体。
@@ -30,7 +30,7 @@ enum class ShiftState { OFF, SINGLE, LOCK }
  * 这里三处逐值对应（jni_contract 只保签名不保语义）。
  */
 enum class InputScheme(val value: Int) {
-    FULL(0), NINE(1), FOURTEEN(2), STROKE(3), SHUANGPIN(4);
+    FULL(0), NINE(1), FOURTEEN(2), STROKE(3), SHUANGPIN(4), WUBI(5);
 
     companion object {
         fun fromInt(v: Int) = entries.firstOrNull { it.value == v } ?: FULL

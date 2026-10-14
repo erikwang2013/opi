@@ -266,7 +266,10 @@ class SettingsTest {
         assertEquals(
             listOf(
                 SettingsTab.COMMON, SettingsTab.KEYS, SettingsTab.APPEARANCE,
-                SettingsTab.STATUSBAR, SettingsTab.SYMBOLS, SettingsTab.DICTS, SettingsTab.ABOUT,
+                SettingsTab.STATUSBAR, SettingsTab.SYMBOLS, SettingsTab.DICTS,
+                // 五笔页（2026-10-14，M4 第二波）：两平台都出 —— 六键两端读侧都认。
+                SettingsTab.WUBI,
+                SettingsTab.ABOUT,
             ),
             settingsTabs(windows = false),
         )
@@ -275,7 +278,7 @@ class SettingsTest {
         assertEquals(
             listOf(
                 SettingsTab.COMMON, SettingsTab.STATUSBAR, SettingsTab.SYMBOLS,
-                SettingsTab.DICTS, SettingsTab.ABOUT,
+                SettingsTab.DICTS, SettingsTab.WUBI, SettingsTab.ABOUT,
             ),
             settingsTabs(windows = true),
         )
@@ -307,5 +310,46 @@ class SettingsTest {
         val merged = mergeIni("ShuangpinLayout=微软\n", OpSettings(shuangpinLayout = "紫光"))
         assertTrue(merged, merged.contains("ShuangpinLayout=紫光\n"))
         assertTrue(merged, !merged.contains("ShuangpinLayout=微软\n"))
+    }
+
+    // ---------- 五笔六键（2026-10-14，M4 第二波）----------
+
+    @Test
+    fun `wubi keys round-trip and are managed keys`() {
+        // 六键：方案/风格/混输进入方式/候选个数/回车/自动上屏。**往返**（写得出读得回）
+        // + **管理键**（mergeIni 会顶掉旧值而不是留着当未知键）。
+        val s = OpSettings(
+            wubi = WubiSettings(
+                plan = "98",
+                style = "五笔拼音",
+                mixedEntry = "z键",
+                candidateLimit = 7,
+                returnStyle = "上屏原文",
+                autoCommit = false,
+            ),
+        )
+        val ini = s.toIni()
+        for (line in listOf(
+            "WubiPlan=98", "WubiStyle=五笔拼音", "WubiMixedEntry=z键",
+            "WubiCandidateLimit=7", "WubiReturn=上屏原文", "WubiAutoCommit=False",
+        )) {
+            assertTrue("缺少键行：$line\n$ini", ini.contains("$line\n"))
+        }
+        assertEquals(s.wubi, OpSettings.fromIni(ini).wubi)
+        // 缺键/坏值 ⇒ 回缺省（与其余名字键同一条容错）。
+        assertEquals(WubiSettings(), OpSettings.fromIni("Learn=True\n").wubi)
+        assertEquals(
+            WubiSettings(),
+            OpSettings.fromIni(
+                "WubiPlan=06\nWubiStyle=打错了\nWubiMixedEntry=x\n" +
+                    "WubiCandidateLimit=99\nWubiReturn=啥\nWubiAutoCommit=maybe\n",
+            ).wubi,
+        );
+        // merge：管理键（既有行被新值顶掉，不是当未知键留着）。
+        val merged = mergeIni("WubiPlan=98\nWubiStyle=五笔拼音\n", OpSettings())
+        assertTrue(merged, merged.contains("WubiPlan=86\n"))
+        assertTrue(merged, !merged.contains("WubiPlan=98\n"))
+        // 保存一次不增行（幂等：rewriteIniLines 的既有纪律，顺带覆盖新键段）。
+        assertEquals(merged, mergeIni(merged, OpSettings()))
     }
 }

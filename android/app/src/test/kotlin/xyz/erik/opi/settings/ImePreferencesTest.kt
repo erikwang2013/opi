@@ -87,4 +87,39 @@ class ImePreferencesTest {
         assertEquals("小鹤", ImePreferences(store).shuangpinLayout)
         assertEquals(2, shuangpinLayoutIndexOf("小鹤"))
     }
+
+    /** 五笔六键（2026-10-14，M4 第二波）：往返 + 坏值回缺省（与其余键同一条容错）。 */
+    @Test
+    fun wubiKeysRoundTripAndFallBack() {
+        val store = FakeStore()
+        val p = ImePreferences(store)
+        // 缺省 = 表首/引擎缺省。
+        assertEquals("86", p.wubiPlan)
+        assertEquals("纯五笔", p.wubiStyle)
+        assertEquals("直接字母", p.wubiMixedEntry)
+        assertEquals(WUBI_CANDIDATE_LIMIT_DEFAULT, p.wubiCandidateLimit)
+        assertEquals("清空", p.wubiReturn)
+        assertEquals(true, p.wubiAutoCommit)
+        p.wubiPlan = "98"
+        p.wubiStyle = "五笔拼音"
+        p.wubiMixedEntry = "z键"
+        p.wubiCandidateLimit = 7
+        p.wubiReturn = "上屏原文"
+        p.wubiAutoCommit = false
+        val q = ImePreferences(store)
+        assertEquals("98", q.wubiPlan)
+        assertEquals("五笔拼音", q.wubiStyle)
+        assertEquals("z键", q.wubiMixedEntry)
+        assertEquals(7, q.wubiCandidateLimit)
+        assertEquals("上屏原文", q.wubiReturn)
+        assertEquals(false, q.wubiAutoCommit)
+        // 坏值/认不得 ⇒ 回缺省（不抛）。
+        store.put(ImePreferences.KEY_WUBI_PLAN, "06")
+        store.put(ImePreferences.KEY_WUBI_STYLE, "打错了")
+        store.put(ImePreferences.KEY_WUBI_CANDIDATE_LIMIT, "99")
+        val r = ImePreferences(store)
+        assertEquals("86", r.wubiPlan)
+        assertEquals("纯五笔", r.wubiStyle)
+        assertEquals(WUBI_CANDIDATE_LIMIT_DEFAULT, r.wubiCandidateLimit)
+    }
 }

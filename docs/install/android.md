@@ -82,7 +82,7 @@ adb devices             → emulator-5554  device（x86_64，ro.build.version.sd
 
 ### 1.5 词库是构建输入，不是构建产物
 
-`android/app/src/main/assets/` 下四个**入库的构建输入**，Android 的构建流程**不会重新生成它们**（换了 `data/raw` 而不重新编译，APK 里装的还是旧的）：
+`android/app/src/main/assets/` 下六个**入库的构建输入**，Android 的构建流程**不会重新生成它们**（换了 `data/raw` 而不重新编译，APK 里装的还是旧的）：
 
 | 资产 | 内容 | 生成器 |
 |---|---|---|
@@ -90,8 +90,10 @@ adb devices             → emulator-5554  device（x86_64，ro.build.version.sd
 | `trad.opid` | 繁体词库 | `scripts/gen_trad_dict.py` |
 | `stroke.opid` | 笔画词典（2026-10-09：笔画键盘 / 生僻字按笔画查字） | `scripts/gen_stroke_dict.py` |
 | `rare_index.tsv` | 部首+总笔画索引（生僻字面板） | `scripts/gen_rare_index.py` |
+| `wubi86.opid` / `wubi98.opid` | 五笔码表两张（2026-10-14，M4；**按方案二选一装载**，见 `EngineLoader.load` 尾段） | `scripts/gen_wubi_dict.py` |
 
-授权逐条记在 `data/raw/LICENSES.md`（stroke 为 LGPL-3.0、rare 为 Unicode License）。
+授权逐条记在 `data/raw/LICENSES.md`（stroke 为 LGPL-3.0、rare 为 Unicode License、
+五笔 86 为 LGPL-3.0（与 luna 同族）/ 98 为 Unlicense）。
 
 ---
 
@@ -354,7 +356,8 @@ emoji 列**不动** —— 它管单键候选反馈（搜索路），与浏览�
   把能显示的整类藏掉比留一个空心框更坏。分类条的下标/条数**跟着重算**
   （`start`/`count` 一起过前缀存活表），否则点分类会滚错组。
 
-**输入模式（七种）**——引擎轴是「方案 × 语言」，布局轴在 UI：
+**输入模式（九种）**——引擎轴是「方案 × 语言」，布局轴在 UI（双拼与五笔分别于
+2026-10-13 / 2026-10-14 加入）：
 
 | 菜单项 | 引擎（`InputScheme` × `EngineMode`） | 说明 |
 |---|---|---|
@@ -365,6 +368,8 @@ emoji 列**不动** —— 它管单键候选反馈（搜索路），与浏览�
 | 拼音大9键 | NINE × PINYIN（同 9 键） | 只差键面字号（`big = true`） |
 | 笔画键盘 | STROKE × PINYIN | 五个键 `h/s/p/n/z`（横竖撇捺折），查 `stroke.opid`；底部另有「生僻字」入口 |
 | 生僻字键盘 | **不进引擎** | 面板式：**选部首 → 选笔画数 → 挑字**（`keyboard/RarePanel.kt` + `RareIndex.kt`，数据 = `assets/rare_index.tsv`，Unihan 部首+总笔画索引、覆盖扩展区、懒加载 1.1MB） |
+| 拼音双拼 | SHUANGPIN × PINYIN | 键面 = 26 键 QWERTY；解码与布局（自然码/微软/小鹤/智能ABC/紫光/拼音加加）在引擎侧，布局在设置页选 |
+| 五笔 | WUBI × PINYIN | 键面 = 26 键 QWERTY；码表（86/98）与风格（纯五笔/五笔拼音混输）在设置页「五笔」一节；四码唯一自动上屏默认开 |
 
 - **键面按搜狗**（2026-10-09 用户裁决「排版太不适应」）：9 键的字母是主显、数字缩小到
   字母下方（此前是反的）。26/14/笔画盘的**底行** `[符/123] [中/英] [空格] [⌫] [↵]`
@@ -463,6 +468,12 @@ fcitx5 配置面**同名**，宣纸/朱砂与后五款的配色取 `scripts/gen_
 观感相同，两者同开时暗光赢（不冲突）；「不改动」= 不指定皮肤（默认观感）。
 
 输入模式、键盘模式与皮肤都**落盘**（`ImePreferences`，枚举按 name/id 存，未知值回默认）。
+**五笔六键**（2026-10-14，M4）同样落盘（`wubi_plan`/`wubi_style`/`wubi_mixed_entry`/
+`wubi_candidate_limit`/`wubi_return`/`wubi_auto_commit`）；名字表与「名字 → FFI 整数码」
+换算在 `settings/WubiNames.kt`（锁步门禁 `WubiNamesLockstepTest` 现读 `engine_wubi.rs`）。
+两条如实记：**方案**（86/98）决定装哪张码表，**下次启动**才装载（`EngineLoader.load`
+读偏好、按方案装一张）；**回车行为**引擎只存设置位、四端路由未接线（改动不生效，
+设置页文案已写明）。
 **未设置过时默认「拼音9键」**（2026-10-11 用户裁决「移动端默认初始 9 键」；已存过选择的
 用户读自己的值，不被改写）。
 换布局/换窗口模式的生效时机：输入模式立即（引擎 `setScheme` 清缓冲）；键盘模式里的

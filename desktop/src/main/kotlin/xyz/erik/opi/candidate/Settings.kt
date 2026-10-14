@@ -92,6 +92,13 @@ data class OpSettings(
      * （缺省）。名字随用户导入的文件走，不是枚举 —— 认不得的名字只是没有对应文件，无害。
      */
     val disabledDicts: String = "",
+    /**
+     * 五笔六键（2026-10-14，M4 第二波）：方案 / 风格 / 混输进入方式 / 候选个数 /
+     * 回车 / 自动上屏。自成一族（模型 + 页 + 名字表都在 `Wubi.kt`）。值一律存
+     * **名字/档位**（与 Skin/拼音方式同惯例）；缺键/认不得回缺省
+     * （见 [WubiSettings.fromIni]）。
+     */
+    val wubi: WubiSettings = WubiSettings(),
     val statusbar: StatusBarSettings = StatusBarSettings(),
 ) {
     /** 写成 ini。键名见文件头「三处逐字对应」。 */
@@ -122,6 +129,8 @@ data class OpSettings(
         // 词库页的停用名单（2026-10-14）：逗号分隔的词库名，空 = 全部启用。
         // 与其它键同一份文件；名单由 IME 侧在**下次启动**时读（Windows = 下次激活）。
         appendLine("DisabledDicts=$disabledDicts")
+        // 五笔六键（2026-10-14）：整段 append（值口径与 mergeIni 的 managed() 同一份）。
+        append(wubi.toIniLines())
         // 状态栏九个键：只有本窗读写（见文件头 ⚠️）。同样不分平台地写全，
         // 「同一份文件格式」是这里的既有纪律。
         appendLine("StatusBarHidden=${boolText(statusbar.hidden)}")
@@ -172,6 +181,7 @@ data class OpSettings(
                     ?: CLASSIC_UI_FONT_DEFAULT,
                 // 缺键 = 空 = 全部启用（不是全停用！）—— 老配置升级后词库照常可用。
                 disabledDicts = map["DisabledDicts"] ?: "",
+                wubi = WubiSettings.fromIni(map),
                 statusbar = StatusBarSettings(
                     hidden = bool("StatusBarHidden", false),
                     // ⚠️ 缺键回落 false（2026-10-10 中午裁决：软键盘默认关）。别照着
@@ -283,7 +293,11 @@ fun mergeIni(existing: String, s: OpSettings): String {
         "StatusBarLogo" to boolText(s.statusbar.logo),
         "StatusBarFullwidth" to boolText(s.statusbar.fullwidth),
         "StatusBarSettings" to boolText(s.statusbar.settings),
-    )
+    ).apply {
+        // 五笔六键（2026-10-14）：整族并进管理键表 —— `putAll` 而不是逐键列一遍，
+        // 防两处各写一份（值口径与 toIniLines 同一份，见 WubiSettings.managed()）。
+        putAll(s.wubi.managed())
+    }
     val seen = mutableSetOf<String>()
     val body = rewriteIniLines(existing) { line ->
         val key = line.substringBefore('#').substringBefore('=').trim()
