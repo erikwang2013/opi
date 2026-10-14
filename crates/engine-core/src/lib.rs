@@ -50,7 +50,8 @@ pub use composer::{Composer, KeyEffect, Mode, Session};
 pub use dictionary::{Dictionary, InMemoryDictionary};
 pub use engine::Engine;
 pub use engine_wubi_impl::{
-    WUBI_CANDIDATE_LIMIT_DEFAULT, WUBI_CANDIDATE_LIMIT_MAX, WubiReturnStyle, WubiStyle,
+    WUBI_CANDIDATE_LIMIT_DEFAULT, WUBI_CANDIDATE_LIMIT_MAX, WubiMixedEntry, WubiReturnStyle,
+    WubiStyle,
 };
 pub use learner::{Learner, UserWord, UserWordExport};
 pub use router::{KeyAction, KeyRouter, ShiftState};

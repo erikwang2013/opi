@@ -86,6 +86,28 @@ void opi_set_shuangpin_layout(int32_t index);
 /// 布局读侧（未装载 → 0 是哨兵，不是"用户选的就是自然码"）。
 int32_t opi_shuangpin_layout(void);
 
+/// 五笔码表（wubi86.opid / wubi98.opid，2026-10-14）。空/坏路径/引擎未装载 → false
+/// （与 `opi_load_stroke` 同姿态：方案回退普通路径，不假装有候选）。
+/// ⚠️ 装载**不换方案**：要用五笔还得 `opi_set_scheme(5)`。
+bool opi_load_wubi(const uint16_t *path, size_t len);
+/// 五笔旋钮族（2026-10-14；整数表与哨兵见 `crates/opi-ffi/src/api/wubi.rs` 头注）：
+/// 风格 0=纯五笔 1=五笔拼音混输、混入方式 0=直接字母 1=z键、回车 0=清空 1=上屏原文
+/// —— 三条写侧**越界忽略**、读侧未装载 → 0（哨兵）；个数 1..=9 **钳区间**；
+/// 自动上屏缺省 true（未装载 → false 是哨兵）。全部**不清缓冲**。
+int32_t opi_wubi_style(void);
+void opi_set_wubi_style(int32_t style);
+int32_t opi_wubi_mixed_entry(void);
+void opi_set_wubi_mixed_entry(int32_t entry);
+int32_t opi_wubi_candidate_limit(void);
+void opi_set_wubi_candidate_limit(int32_t n);
+int32_t opi_wubi_return_style(void);
+void opi_set_wubi_return_style(int32_t style);
+bool opi_wubi_auto_commit(void);
+void opi_set_wubi_auto_commit(bool on);
+/// 编码提示：当前缓冲可接续的键（UTF-16 串；非五笔态/无提示 → 空句柄）。
+/// ⚠️ 引擎侧每次调用全量重算（O(26×前缀查询)），别在每帧渲染里调 —— 缓冲变化时取一次。
+OpiString opi_wubi_next_keys(void);
+
 /// 单字符入引擎，返回需要提交的文本（多数时候是空串）。
 OpiString opi_input_key(const uint16_t *ch, size_t len);
 void opi_backspace(void);

@@ -54,6 +54,18 @@ final class OpiEngine {
     static native String exportUserWords();
     static native int importUserWords(String json);
     static native void removeUserWord(String text);
+    static native boolean loadWubi(String path);
+    static native int wubiStyle();
+    static native void setWubiStyle(int style);
+    static native int wubiMixedEntry();
+    static native void setWubiMixedEntry(int entry);
+    static native int wubiCandidateLimit();
+    static native void setWubiCandidateLimit(int n);
+    static native int wubiReturnStyle();
+    static native void setWubiReturnStyle(int style);
+    static native boolean wubiAutoCommit();
+    static native void setWubiAutoCommit(boolean on);
+    static native String wubiNextKeys();
     static native int importDict(String path);
     static native String dictList();
     static native boolean setDictEnabled(String name, boolean on);
@@ -434,6 +446,41 @@ public final class Main {
         check(!OpiEngine.setDictEnabled("smoke", true), "删掉之后名字认不得 → false");
         OpiEngine.clear();
         java.nio.file.Files.delete(dd); // 目录已空 ⇒ 可删（别把空壳留在 /tmp）
+
+        // 五笔旋钮族（2026-10-14，M4 第二波）：缺省值 → 读写回环 → 越界语义 → 编码提示。
+        // ⚠️ 真码表（.opid）不在本冒烟的可选参数里：`loadWubi` 只验**坏路径哨兵**
+        //    （好路径那条由 C 消费者 run.sh 传 wubi86.opid 真跑，见 consumer_wubi.c）。
+        check(!OpiEngine.loadWubi("/nonexistent/wubi86.opid"), "坏路径 → false");
+        // 方案切到五笔（整数表 5；没装码表 ⇒ 如实降级、不假装有候选）。
+        OpiEngine.setScheme(5);
+        check(OpiEngine.scheme() == 5, "setScheme(5) 后应读到五笔");
+        check(OpiEngine.wubiStyle() == 0, "风格缺省 = 纯五笔");
+        check(OpiEngine.wubiMixedEntry() == 0, "混入方式缺省 = 直接字母");
+        check(OpiEngine.wubiReturnStyle() == 0, "回车缺省 = 清空");
+        check(OpiEngine.wubiAutoCommit(), "自动上屏缺省 = 开");
+        check(OpiEngine.wubiCandidateLimit() == 5, "候选个数缺省 = 5");
+        OpiEngine.setWubiStyle(1);
+        check(OpiEngine.wubiStyle() == 1, "setWubiStyle(1) 生效");
+        OpiEngine.setWubiStyle(99);
+        check(OpiEngine.wubiStyle() == 1, "越界风格忽略");
+        OpiEngine.setWubiStyle(0);
+        OpiEngine.setWubiMixedEntry(1);
+        check(OpiEngine.wubiMixedEntry() == 1, "setWubiMixedEntry(1) 生效");
+        OpiEngine.setWubiMixedEntry(0);
+        OpiEngine.setWubiReturnStyle(1);
+        check(OpiEngine.wubiReturnStyle() == 1, "setWubiReturnStyle(1) 生效");
+        OpiEngine.setWubiReturnStyle(0);
+        OpiEngine.setWubiAutoCommit(false);
+        check(!OpiEngine.wubiAutoCommit(), "关掉自动上屏");
+        OpiEngine.setWubiAutoCommit(true);
+        OpiEngine.setWubiCandidateLimit(99);
+        check(OpiEngine.wubiCandidateLimit() == 9, "过大钳到 9");
+        OpiEngine.setWubiCandidateLimit(0);
+        check(OpiEngine.wubiCandidateLimit() == 1, "0/负数归 1");
+        OpiEngine.setWubiCandidateLimit(5);
+        check("".equals(OpiEngine.wubiNextKeys()), "空缓冲 → 无编码提示（空串）");
+        OpiEngine.setScheme(0);
+        check(OpiEngine.scheme() == 0, "切回全键盘");
 
         if (failures == 0) {
             System.out.println("SMOKE-OK");

@@ -15,6 +15,7 @@ mod convert;
 mod dict;
 #[cfg(test)]
 mod tests;
+mod wubi;
 
 pub use convert::{
     ApiBlock, ApiCandidate, ApiCandidateKind, ApiMode, ApiSymbolEntry, candidate_texts,
@@ -22,6 +23,10 @@ pub use convert::{
     symbol_blocks_json, symbol_texts, texts_json,
 };
 pub use dict::DICT_LIST_UNLOADED;
+pub use wubi::{
+    wubi_mixed_entry_from_int, wubi_mixed_entry_to_int, wubi_return_from_int, wubi_return_to_int,
+    wubi_style_from_int, wubi_style_to_int,
+};
 
 /// 引擎单例：load 后可供 JNI / C 出口共享。
 pub static SINGLETON: Mutex<Option<Api>> = Mutex::new(None);

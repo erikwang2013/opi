@@ -25,6 +25,12 @@ if [ -n "${1:-}" ]; then
   DICT="$ROOT/$1"
   [ -f "$DICT" ] || { echo "词库不存在：$DICT"; exit 2; }
 fi
+# 第二个位置参数（可选）= 五笔码表（`.opid`）；不给则消费者跳过 [13] 段。
+WUBI=""
+if [ -n "${2:-}" ]; then
+  WUBI="$ROOT/$2"
+  [ -f "$WUBI" ] || { echo "五笔码表不存在：$WUBI"; exit 2; }
+fi
 
 echo "=== [1/4] 构建 libopi_ffi.so（release）==="
 cargo build -p opi_ffi --release --manifest-path "$ROOT/Cargo.toml" > "$OUT/build.log" 2>&1
@@ -92,7 +98,7 @@ echo "[覆盖] 库里 $(wc -l < "$OUT/exported.txt") 条导出全部被 C 消费
 echo
 echo "=== [4/4] 运行 ==="
 if [ -n "$DICT" ]; then
-  LD_LIBRARY_PATH="$ROOT/target/release" "$OUT/consumer" "$DICT"
+  LD_LIBRARY_PATH="$ROOT/target/release" "$OUT/consumer" "$DICT" "$WUBI"
 else
   LD_LIBRARY_PATH="$ROOT/target/release" "$OUT/consumer"
 fi

@@ -449,6 +449,10 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _reserved: *mut c
                 ),
             ]
         };
+        // 五笔旋钮族的 12 条在 `jni_wubi.rs`（本文件 500 行门禁：整块搬走，条目一字未改）。
+        // 数组没有 extend ⇒ 先转 Vec 再并。
+        let mut methods: Vec<NativeMethod> = methods.to_vec();
+        methods.extend(crate::jni_wubi::wubi_native_methods());
         unsafe {
             env.register_native_methods(class, &methods)
                 .map_err(|e| format!("register_natives 失败: {e}"))?;

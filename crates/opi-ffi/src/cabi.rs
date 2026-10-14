@@ -43,6 +43,7 @@ pub use crate::cabi_symbols::*;
 pub use crate::cabi_user_words::*;
 // 「属性设置」旋钮族（2026-10-13 拆出：加拼音纠错后本文件 505 行撞门禁）。
 pub use crate::cabi_switches::*;
+pub use crate::cabi_wubi::*;
 
 /// UTF-16 字符串句柄（Rust 侧分配，调用方负责 opi_ffi_free_string）。
 /// `impl` 在 [`utf16`]（**非导出**辅助，拆出去给本文件腾行数；结构与导出留在这里，

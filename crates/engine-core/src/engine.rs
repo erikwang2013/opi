@@ -7,7 +7,7 @@ use crate::candidates::{
 use crate::composer::{Composer, KeyEffect, Mode};
 use crate::dict_layers::LayeredDictionary;
 use crate::dictionary::Dictionary;
-use crate::engine_wubi_impl::{WubiReturnStyle, WubiStyle};
+use crate::engine_wubi_impl::{WubiMixedEntry, WubiReturnStyle, WubiStyle};
 use crate::learner::Learner;
 use crate::punctuation::Quotes;
 use crate::scheme::Scheme;
@@ -32,8 +32,12 @@ pub struct Engine {
     pub(crate) wubi_dict: Option<Box<dyn Dictionary>>,
     /// 五笔输入风格（纯五笔 / 拼音混输；语义与判定规则见 engine_wubi.rs 头）。
     pub(crate) wubi_style: WubiStyle,
+    /// 混输的拼音进入方式（直接字母 / z 键；只在 Mixed 下有语义）。
+    pub(crate) wubi_mixed_entry: WubiMixedEntry,
     /// 五笔候选个数档位（引擎侧截断；默认/上限见 engine_wubi.rs 的常量）。
     pub(crate) wubi_candidate_limit: usize,
+    /// 四码唯一自动上屏的总闸（默认 `true` = 对齐搜狗缺省；判据见 engine_wubi.rs）。
+    pub(crate) wubi_auto_commit: bool,
     /// 五笔回车键行为（**设置位**：消费在四端路由，本波未接线 —— 见 `WubiReturnStyle`）。
     pub(crate) wubi_return_style: WubiReturnStyle,
     pub(crate) composer: Composer, // pub(crate)：engine_segment.rs 的收尾要用（见文件头）
@@ -108,7 +112,9 @@ impl Engine {
             stroke_dict: None,
             wubi_dict: None,
             wubi_style: WubiStyle::default(),
+            wubi_mixed_entry: WubiMixedEntry::default(),
             wubi_candidate_limit: crate::engine_wubi_impl::WUBI_CANDIDATE_LIMIT_DEFAULT,
+            wubi_auto_commit: true,
             wubi_return_style: WubiReturnStyle::default(),
             composer: Composer::new(),
             symbols,

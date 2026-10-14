@@ -374,6 +374,8 @@ pub const CABI_USER_WORDS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/cabi
 /// 同上，导入词库一族（2026-10-14：M3 落地时 `cabi.rs` 加四条会贴到 500 行门禁）。
 /// ⚠️ 与 `jni/checker.rs` 的 `JNI_DICT` 是镜像 —— 两轨族边界一致。
 pub const CABI_DICT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/cabi_dict.rs");
+/// 五笔旋钮族的 C 出口（2026-10-14，M4 第二波）。
+pub const CABI_WUBI: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/cabi_wubi.rs");
 pub const CABI_SCHEME: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/cabi_scheme.rs");
 /// 同上，「属性设置」旋钮族那一半（2026-10-13：加拼音纠错后 cabi.rs 505/500 拆出）。
 /// ⚠️ 与 `jni/checker.rs` 的 `JNI_SWITCHES` 是镜像 —— 两轨族边界一致。
@@ -397,13 +399,14 @@ pub fn read(p: &str) -> String {
 /// 拼接用换行，保证相邻两文件的行不会粘成一行（解析按行扫）。
 pub fn read_cabi() -> String {
     format!(
-        "{}\n{}\n{}\n{}\n{}\n{}",
+        "{}\n{}\n{}\n{}\n{}\n{}\n{}",
         read(CABI),
         read(CABI_USER_WORDS),
         read(CABI_SCHEME),
         read(CABI_SYMBOLS),
         read(CABI_SWITCHES),
-        read(CABI_DICT)
+        read(CABI_DICT),
+        read(CABI_WUBI)
     )
 }
 

@@ -145,6 +145,40 @@ object OpiEngine : OpiEngineApi, SymbolApi {
     override external fun setShuangpinLayout(index: Int)
 
     /**
+     * loadWubi(path: String) -> Boolean：五笔码表（wubi86.opid / wubi98.opid，2026-10-14，M4）。
+     * 空/坏路径/未装载 → false（方案回退普通路径，与 `loadStroke` 同姿态）。
+     * ⚠️ 装载**不换方案**：要用五笔还要 `setScheme(5)`（[InputScheme.SHUANGPIN] 隔壁那位）。
+     */
+    external fun loadWubi(path: String): Boolean
+
+    /**
+     * 五笔旋钮族（2026-10-14，M4）。整数表（与 C ABI 同值，四端协议）：
+     * · [wubiStyle] 0=纯五笔 1=五笔拼音混输（越界忽略；未装载 → 0 是哨兵）
+     * · [wubiMixedEntry] 0=直接字母 1=z键（只在混输下有语义；越界忽略）
+     * · [wubiReturnStyle] 0=清空 1=上屏原文（**设置位**：消费在四端路由，接线前无行为效果）
+     * · [wubiCandidateLimit] 1..=9（**越界钳到区间**，与双拼布局同纪律）；缺省 5
+     * · [wubiAutoCommit] 四码唯一自动上屏（缺省 true；未装载 → false 是哨兵）
+     * 全部**不清缓冲**（与 [setScheme] 相反：它们只改「同一缓冲怎么装配候选」）。
+     */
+    external fun wubiStyle(): Int
+    external fun setWubiStyle(style: Int)
+    external fun wubiMixedEntry(): Int
+    external fun setWubiMixedEntry(entry: Int)
+    external fun wubiCandidateLimit(): Int
+    external fun setWubiCandidateLimit(n: Int)
+    external fun wubiReturnStyle(): Int
+    external fun setWubiReturnStyle(style: Int)
+    external fun wubiAutoCommit(): Boolean
+    external fun setWubiAutoCommit(on: Boolean)
+
+    /**
+     * wubiNextKeys() -> String：编码提示（当前缓冲可接续的键，拼成串；非五笔态 → 空串）。
+     * ⚠️ 引擎侧每次调用全量重算（O(26×前缀查询)）—— **别在每帧渲染里调**，
+     * 缓冲变化时取一次缓存住。
+     */
+    external fun wubiNextKeys(): String
+
+    /**
      * switchLanguage(mode: Int, scheme: Int)：**语言切换**（中↔英/中↔繁）—— 换模式与
      * 方案但**保留缓冲**（2026-10-09 用户裁决「中文输入的时候切换英文，拼音保留可继续
      * 使用」）。取值同 [switchMode]/[setScheme]；任一越界整体忽略。调用方仍要 refresh。

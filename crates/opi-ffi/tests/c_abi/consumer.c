@@ -68,6 +68,8 @@ static const uint16_t W = 'w', O = 'o', X = 'x';
  * 拆出去的唯一理由是 500 行硬门禁（crates/opi-ffi/tests/line_limit.rs 扫全仓源码；
  * 本文件加完那段是 612 行）。拆法与 fcitx5-opi 的 `opi_ctl_*_driver.cpp` 同一种。 */
 #include "consumer_dicts.c"
+/* [13] 五笔旋钮族那一段在 consumer_wubi.c —— 同上，#include 片段。 */
+#include "consumer_wubi.c"
 
 int main(int argc, char **argv) {
     /* ---------- 装载 ---------- */
@@ -476,6 +478,9 @@ int main(int argc, char **argv) {
     opi_set_chinese_punct(true); /* 复位：别把状态漏给后面的段落 */
 
     check_import_dicts();
+
+    /* [13] 五笔旋钮族：argv[2] = wubi 表路径（可选；不给就跳过本段）。 */
+    wubi_segment(argc > 2 ? argv[2] : NULL);
 
     /* ---------- 释放语义：空句柄可无条件释放 ---------- */
     printf("[12] 释放语义\n");

@@ -8,84 +8,17 @@
 //! 装配层）。夹具 = 测试内自建 `InMemoryDictionary`（码表数据由另一条线做，本文件
 //! 不等数据；键按真实形态取普通 ASCII 字母）。
 //!
-//! 覆盖：纯五笔前缀与逐步收窄 / 空槽不假装 / 四码唯一自动上屏（含两条「不自动」）/
-//! 混输合并与分辨判据 / 候选个数档位 / 编码提示出口 / 空格上屏 / 回车设置位 /
-//! 换装口重算 user_boost / 前缀查询成本量级。
+//! 覆盖：纯五笔前缀与逐步收窄 / 空槽不假装 / 四码唯一自动上屏（含两条「不自动」+
+//! 总闸开关两侧）/ 混输合并与分辨判据 / 混输拼音进入方式（DirectLetters / ZKey）/
+//! 候选个数档位 / 编码提示出口 / 空格上屏 / 回车设置位 / 换装口重算 user_boost /
+//! 前缀查询成本量级。夹具与 `type_str`/`texts` 在 `common/mod.rs`（共享，见那里头注）。
 
+mod common;
+
+use common::{engine, mixed_engine, no_symbols, pinyin_dict, texts, type_str, wubi_dict};
 use engine_core::dictionary::InMemoryDictionary;
 use engine_core::symbols::{Block, BlockId, SymbolEngine, SymbolEntry};
-use engine_core::{Engine, Scheme, WubiReturnStyle, WubiStyle};
-
-/// 符号表用空表：本文件测的是码表装配，符号数据不该参与断言。
-fn no_symbols() -> SymbolEngine {
-    SymbolEngine::new(Vec::new(), Vec::new())
-}
-
-/// 五笔码表夹具。每条都挂着一个判据（别随手改频点）：
-/// - `a` 同码多词（工/戈）—— 一级简码的常见形态；
-/// - `abc` 同码多词、`abcd` 唯一 —— 四码自动上屏的两面；
-/// - `aaaa` 四码同码多词 —— 「同码多词就不自动」的用例；
-/// - `efgh` 精确 + `efghi` 延伸 —— 「有更长的码 ⇒ 整档不止一条 ⇒ 不自动」；
-/// - `mnopq` 只有延伸码（`mnop` 无精确条目）—— 「唯一命中但是延伸 ⇒ 不自动」；
-/// - `ni` 与拼音夹具的 `ni` 同串 —— 混输「同一层合并」的用例。
-fn wubi_dict() -> InMemoryDictionary {
-    let mut d = InMemoryDictionary::new();
-    for (code, word, freq) in [
-        ("a", "工", 900u32),
-        ("a", "戈", 800),
-        ("ab", "式", 700),
-        ("abc", "节", 600),
-        ("abc", "世", 550),
-        ("abcd", "范", 500),
-        ("aaaa", "恭", 900),
-        ("aaaa", "靴", 800),
-        ("efgh", "森", 400),
-        ("efghi", "麓", 300),
-        ("mnopq", "奕", 200),
-        ("ni", "尼", 700),
-    ] {
-        d.insert(code, word, freq);
-    }
-    d
-}
-
-/// 拼音主库夹具（混输的拼音侧；也是「空槽落普通路径」用例的主库）。
-fn pinyin_dict() -> InMemoryDictionary {
-    let mut d = InMemoryDictionary::new();
-    for (py, w, f) in [
-        ("ni", "你", 5000u32),
-        ("nihao", "你好", 6000),
-        ("hao", "好", 7000),
-    ] {
-        d.insert(py, w, f);
-    }
-    d
-}
-
-/// 纯五笔引擎（默认风格 = Pure，风格门禁另有用例）。
-fn engine() -> Engine {
-    let mut e = Engine::new(Box::new(pinyin_dict()), no_symbols(), false);
-    e.set_wubi_dict(Some(Box::new(wubi_dict())));
-    e.set_scheme(Scheme::Wubi);
-    e
-}
-
-/// 混输引擎（同一对词典，只切风格）。
-fn mixed_engine() -> Engine {
-    let mut e = engine();
-    e.set_wubi_style(WubiStyle::Mixed);
-    e
-}
-
-fn type_str(e: &mut Engine, s: &str) {
-    for c in s.chars() {
-        e.input_key(c);
-    }
-}
-
-fn texts(e: &Engine) -> Vec<String> {
-    e.candidates(9).into_iter().map(|c| c.text).collect()
-}
+use engine_core::{Engine, Scheme, WubiMixedEntry, WubiReturnStyle, WubiStyle};
 
 // ---- 纯五笔：前缀与逐步收窄 ----
 
@@ -224,8 +157,67 @@ fn auto_commit_skips_when_the_symbol_layer_also_hits() {
 fn auto_commit_is_off_in_mixed_style() {
     let mut e = mixed_engine();
     type_str(&mut e, "abc");
-    assert_eq!(e.input_key('d'), "", "混输下 abcd 不自动");
+    assert_eq!(
+        e.input_key('d'),
+        "",
+        "混输下 abcd 不自动（DirectLetters 缺省档）"
+    );
     assert_eq!(e.buffer(), "abcd");
+}
+
+/// 总闸两侧（lead 收货时补的开关）：关 ⇒ 四码唯一也不自动；开回来 ⇒ 照旧自动。
+/// 变异自检：删掉 `wubi_autocommit` 开头的 `!self.wubi_auto_commit` 守卫 ⇒ 本用例红。
+#[test]
+fn auto_commit_can_be_switched_off() {
+    let mut e = engine();
+    assert!(e.wubi_auto_commit(), "默认开（对齐搜狗缺省）");
+    e.set_wubi_auto_commit(false);
+    type_str(&mut e, "abc");
+    assert_eq!(e.input_key('d'), "", "关掉后四码唯一也不自动");
+    assert_eq!(e.buffer(), "abcd", "缓冲原样留着等用户");
+    e.set_wubi_auto_commit(true);
+    assert_eq!(e.buffer(), "abcd", "翻开关不清缓冲（同一缓冲继续）");
+    e.clear();
+    type_str(&mut e, "abc");
+    assert_eq!(e.input_key('d'), "范", "开着才自动（另一侧）");
+}
+
+// ---- 混输的拼音进入方式（DirectLetters 默认 / ZKey）----
+
+#[test]
+fn mixed_z_key_entry_interprets_the_z_prefix_as_pinyin() {
+    let mut e = mixed_engine();
+    e.set_wubi_mixed_entry(WubiMixedEntry::ZKey);
+    type_str(&mut e, "znihao");
+    assert_eq!(texts(&e), ["你好"], "z 后按拼音（去前导 z）");
+    assert_eq!(e.buffer(), "znihao", "缓冲原文不动：z 只是解释标志");
+    e.clear();
+    type_str(&mut e, "nihao");
+    assert!(
+        texts(&e).is_empty(),
+        "ZKey 下非 z 段只出码候选（码表无此码 ⇒ 空）"
+    );
+    e.clear();
+    type_str(&mut e, "z");
+    assert!(
+        texts(&e).is_empty(),
+        "单个 z 没有余串 ⇒ 无候选（z 不是输入）"
+    );
+}
+
+#[test]
+fn direct_letters_is_the_default_entry() {
+    let mut e = mixed_engine();
+    assert_eq!(e.wubi_mixed_entry(), WubiMixedEntry::DirectLetters);
+    type_str(&mut e, "znihao");
+    assert!(texts(&e).is_empty(), "直接字母下 znihao 两边都不像 ⇒ 空");
+    e.set_wubi_mixed_entry(WubiMixedEntry::ZKey); // 换档不清缓冲：同一 z 串重解
+    assert_eq!(texts(&e), ["你好"], "两档的差别就是 ZKey 的存在理由");
+    // 纯五笔没有拼音侧 ⇒ z 档无效果（若 z 分支漏进 Pure，这里会出「你好」）
+    e.set_wubi_style(WubiStyle::Pure);
+    e.clear();
+    type_str(&mut e, "znihao");
+    assert!(texts(&e).is_empty(), "Pure 下 z 档惰性，不假装");
 }
 
 // ---- 混输：同一层合并 + 分辨判据 ----

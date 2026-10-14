@@ -43,7 +43,17 @@ exit 1
 /// 服务端成功应答（dbus-send --print-reply 的真实形状）。
 const OK_REPLY: &str = "method return time=1.0 sender=:1.2 -> destination=:1.3 serial=7 reply_serial=2\n   string \"ok\"\n";
 
+/// 夹具与 spawn 的**共用锁**（2026-10-14 修一个真竞态，见 `run_ctl_with_path` 的注）。
+static FIXTURE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// 造一个只含假 dbus-send 的目录。每例一个独立目录（测试并行跑）。
+///
+/// ⚠️ 写脚本这一段**必须在 [`FIXTURE_LOCK`] 里**：并行测试时，本线程 `fork`（见
+/// `run_ctl_with_path`）会继承**别的线程**此刻正打开的写 fd —— 那个 fd 指向的是
+/// 另一个用例的假脚本；若那个用例随后 exec 同一个 inode，内核给的就是
+/// `ETXTBSY (Text file busy)`（本仓实测：全量 workspace 并行跑时偶尔红在
+/// `state_service_unknown_maps_to_3`，单独跑 5/5 绿）。两侧同锁 ⇒ fork 与「写可执行
+/// 文件」不再可能重叠。
 fn fake(script: &str, reply: &str) -> PathBuf {
     static N: AtomicUsize = AtomicUsize::new(0);
     let dir = std::env::temp_dir().join(format!(
@@ -53,8 +63,9 @@ fn fake(script: &str, reply: &str) -> PathBuf {
     ));
     std::fs::create_dir_all(&dir).unwrap();
     let bin = dir.join("dbus-send");
-    std::fs::write(&bin, script).unwrap();
     {
+        let _g = FIXTURE_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        std::fs::write(&bin, script).unwrap();
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
     }
@@ -64,11 +75,18 @@ fn fake(script: &str, reply: &str) -> PathBuf {
 
 /// 跑 opi-ctl，返回 (退出码, stdout, stderr)，PATH **原样**给（调用方自己定）。
 fn run_ctl_with_path(path: &str, args: &[&str]) -> (i32, String, String) {
-    let out = Command::new(env!("CARGO_BIN_EXE_opi-ctl"))
-        .args(args)
-        .env("PATH", path)
-        .output()
-        .expect("起不了 opi-ctl");
+    // ⚠️ spawn+等待也在 [`FIXTURE_LOCK`] 里（与 `fake()` 同锁）：`output()` 内部
+    // fork 会继承全进程的 fd —— 锁住的正是「别的线程正拿着某个假脚本的写 fd」那个
+    // 窗口（成因与实测见 `fake()` 的注）。串行化的代价：本文件全是用例级快跑，
+    // 合并耗时 <1s。
+    let out = {
+        let _g = FIXTURE_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        Command::new(env!("CARGO_BIN_EXE_opi-ctl"))
+            .args(args)
+            .env("PATH", path)
+            .output()
+            .expect("起不了 opi-ctl")
+    };
     (
         out.status.code().unwrap_or(-1),
         String::from_utf8_lossy(&out.stdout).into_owned(),

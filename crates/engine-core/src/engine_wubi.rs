@@ -44,6 +44,30 @@ pub enum WubiStyle {
     Mixed,
 }
 
+/// 混输时**拼音怎么进**（搜狗「拼音进入方式」一档，2026-10-14 lead 收货时补）。
+/// **默认 [`Self::DirectLetters`]**。只在 [`WubiStyle::Mixed`] 下有意义 —— 纯五笔没有
+/// 拼音侧，本档开了也与关着等价（缓冲一律按码解释，z 码照打）。
+///
+/// | 取值 | 缓冲 `znihao` | 缓冲 `nihao` | 缓冲 `zzjp` |
+/// |---|---|---|---|
+/// | [`Self::DirectLetters`] | 空（两边都没这前缀） | 码候选 + 拼音候选**同层合并** | z 码候选（字面解释） |
+/// | [`Self::ZKey`] | 「你好」（z 后按拼音） | **码候选**（非 z 段不查拼音） | 空（z 段按拼音查 `zjp`） |
+///
+/// 两条**写死的子决定**（不是抄来的，是这里定的；要改成别的是一行的事，但改之前先裁决）：
+/// 1. z 段查拼音时**去掉前导 `z`**（`znihao` → 查 `nihao`），z 是标志不是输入；
+///    `z` 单独一个字符 ⇒ 余下为空 ⇒ **无候选**（与拼音输入法里 z 无输出一致）。
+/// 2. z 段**只出拼音候选**，非 z 段**只出码候选** —— 这正是本档存在的理由（把
+///    「两边都像」的模糊段拆成两个明确段）。代价如实记：**混输 + ZKey 下 z 码
+///    （677 行 zz 分类表）打不出来**（切回纯五笔或 DirectLetters 照打）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum WubiMixedEntry {
+    /// 直接字母（默认，对齐搜狗缺省）：字母串两边都查、同层合并。
+    #[default]
+    DirectLetters,
+    /// z 键：z 开头的那段按拼音解释，非 z 段按码解释（见上表）。
+    ZKey,
+}
+
 /// 五笔回车键行为（搜狗「特殊习惯」里的「回车键」一档）。**默认 [`Self::Clear`]**。
 ///
 /// ⚠️ **本波（M4 3b）只落设置位**：引擎侧不处理回车（`Engine::input_key` 从不收
@@ -82,6 +106,31 @@ impl Engine {
 
     pub fn wubi_style(&self) -> WubiStyle {
         self.wubi_style
+    }
+
+    // ---- 混输的拼音进入方式（只在 Mixed 下有语义，见 WubiMixedEntry 头注表）----
+
+    /// 换「拼音进入方式」。**不清缓冲**（与风格同：同一缓冲按新档重解）。
+    pub fn set_wubi_mixed_entry(&mut self, entry: WubiMixedEntry) {
+        self.wubi_mixed_entry = entry;
+    }
+
+    pub fn wubi_mixed_entry(&self) -> WubiMixedEntry {
+        self.wubi_mixed_entry
+    }
+
+    // ---- 四码唯一自动上屏的开关 ----
+
+    /// 四码唯一自动上屏开关。**默认 `true`**（对齐搜狗缺省：开）。关掉后四码唯一也
+    /// **不**自动上屏 —— 缓冲原样留着，用户自己选（空格/数字键/回车/继续打）。
+    /// 判据其余部分（[`Self::wubi_autocommit`]）一字不动，本开关只是它的总闸。
+    /// **不清缓冲**（与其余设置位同：关掉不会把正在打的码吐出去）。
+    pub fn set_wubi_auto_commit(&mut self, on: bool) {
+        self.wubi_auto_commit = on;
+    }
+
+    pub fn wubi_auto_commit(&self) -> bool {
+        self.wubi_auto_commit
     }
 
     // ---- 候选个数档位 ----
@@ -192,6 +241,45 @@ impl Engine {
             prefer_simplified: mode == Mode::Pinyin,
             segment_fallback: false,
         };
+        // z 键进入方式（只混输；表与两条子决定见 `WubiMixedEntry` 头注）：
+        // z 段**只出拼音**（余串空 ⇒ 无候选，`z` 本身不是输入），非 z 段**只出码** ——
+        // 本档下不走下面那条「两边都查再合并」的路，各段各走各的。
+        if self.wubi_style == WubiStyle::Mixed {
+            match self.wubi_mixed_entry {
+                // `buffer[1..]` 字节切片安全：前导是 ASCII `z`（1 字节）。
+                WubiMixedEntry::ZKey if buffer.starts_with('z') => {
+                    let py = &buffer[1..];
+                    return if py.is_empty() {
+                        Vec::new()
+                    } else {
+                        rank_and_pick_with(
+                            self.active_dict(),
+                            &self.symbols,
+                            &self.learner,
+                            py,
+                            mode,
+                            cap,
+                            self.user_boost,
+                            opts,
+                        )
+                    };
+                }
+                // 非 z 段：只出码候选（不查拼音）—— 与 Pure 的码侧装配同形。
+                WubiMixedEntry::ZKey => {
+                    return rank_and_pick_with(
+                        dict,
+                        &self.symbols,
+                        &self.learner,
+                        buffer,
+                        mode,
+                        cap,
+                        self.user_boost,
+                        opts,
+                    );
+                }
+                WubiMixedEntry::DirectLetters => {} // 落到下面「两边都查再合并」
+            }
+        }
         let mut merged = rank_and_pick_with(
             dict,
             &self.symbols,
@@ -229,6 +317,7 @@ impl Engine {
     /// `KeyEffect::Updated` 分支；宿主不需要任何新接线，也**没有**第二条提交通路）。
     ///
     /// 判据（全成立才自动；顺序 = 从廉到贵）：
+    /// 0. **总闸开着**（[`Engine::set_wubi_auto_commit`]，默认开）；
     /// 1. 方案 `Wubi` **且风格 `Pure`** —— 混输的理由见 [`Self::candidates_wubi`] 尾注；
     /// 2. 模式 Pinyin/Traditional（符号/英文/数字模式的缓冲不是码，见 composer 的门）；
     /// 3. **恰好 4 个字符**（「四码」的字面义；1–3 码是简码，绝不自动）；
@@ -257,6 +346,9 @@ impl Engine {
     /// 见下一波）；用户导入的词典走 `set_extra_dicts`（**主库层**，不参与本判据）。
     /// 判据留着是纵深：真遇到 >4 键表时，4 码唯一不该抢在「再多打一键」前面提交。
     pub(crate) fn wubi_autocommit(&mut self) -> Option<String> {
+        if !self.wubi_auto_commit {
+            return None;
+        }
         if self.scheme() != Scheme::Wubi
             || self.wubi_style != WubiStyle::Pure
             || !matches!(self.mode(), Mode::Pinyin | Mode::Traditional)
