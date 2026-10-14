@@ -64,7 +64,10 @@ jobs:
           # run.sh 用 clang。缺了它报错会埋在编译输出里，先说清楚。
           command -v clang >/dev/null || {
             echo "!! runner 上没有 clang（本步依赖 ubuntu-latest 预装）"; exit 1; }
-          bash crates/opi-ffi/tests/c_abi/run.sh android/app/src/main/assets/luna.opid
+          # 第二个位置参数 = 五笔 86 码表（2026-10-14，M4 第二波）：消费者据此真跑
+          # [13] 五笔旋钮族段（装载真表 → 打 wqvb 出候选 → 旋钮读写回环）。
+          bash crates/opi-ffi/tests/c_abi/run.sh android/app/src/main/assets/luna.opid \
+            data/generated/wubi86.opid
 
       - uses: actions/setup-java@v4
         with:
@@ -262,7 +265,10 @@ jobs:
           trad=$(pick 'trad\.opid$')
           # 符号类目数据（2026-10-10 接线）：同上
           sym=$(pick 'symbol_categories\.tsv$')
-          for v in "$dict" "$addon" "$im" "$trad" "$sym"; do
+          # 五笔码表两张（2026-10-14 接线，M4 第二波）：同一条「安装器落点 == 求解落点」
+          wubi86=$(pick 'wubi86\.opid$')
+          wubi98=$(pick 'wubi98\.opid$')
+          for v in "$dict" "$addon" "$im" "$trad" "$sym" "$wubi86" "$wubi98"; do
             [ -n "$v" ] || { echo "!! 安装日志里没有对应落点，别在空值上比"; exit 1; }
           done
           echo "安装器落点: $dict"
@@ -275,7 +281,7 @@ jobs:
           # 丢掉 XDG_DATA_HOME：只让 XDG_DATA_DIRS（暂存树）起作用。否则 runner
           # 上若恰好有真的词库，测的就不是我们刚装的那份了。
           env -u XDG_DATA_HOME XDG_DATA_DIRS="$stage/usr/share" \
-            "$locate_check" "$dict" "$addon" "$im" "$trad" "$sym"
+            "$locate_check" "$dict" "$addon" "$im" "$trad" "$sym" "$wubi86" "$wubi98"
 
           # ---- 身份：落点对只证明「装到对的地方」，不证明「装的是对的东西」----
           # 拿 -DOPI_LUNA_OPID=data/generated/fallback.opid（715B / 35 词）装成
@@ -337,6 +343,15 @@ jobs:
             echo "!! $d 下的符号类目查找类型/路径变了（opi_engine.h 的 loadDictionary）。"
             echo "   要同步三处：cpp/CMakeLists.txt 的符号类目安装落点、opi_locate_check.cpp 第 5 参、"
             echo "   ci.yml 本步骤的 pick 'symbol_categories\\.tsv\$'。"
+            exit 1
+          }
+          # 五笔码表的查找常量（2026-10-14 接线，M4 第二波）：同一道门禁、同一条理由
+          # —— opi_locate_check 的第 6/7 个参数成对，改一处这里先红。常量真源 =
+          # opi_wubi.h 的 opiWubiSync（它按 WubiPlan 选表，两条路径都在那里）。
+          grep -rq '"opi/wubi86.opid"' "$d" && grep -rq '"opi/wubi98.opid"' "$d" || {
+            echo "!! $d 下的五笔码表查找类型/路径变了（opi_wubi.h 的 opiWubiSync）。"
+            echo "   要同步三处：cpp/CMakeLists.txt 的两张码表安装落点、opi_locate_check.cpp 第 6/7 参、"
+            echo "   ci.yml 本步骤的 pick 'wubi86\\.opid\$' 与 'wubi98\\.opid\$'。"
             exit 1
           }
           # 符号类目数据的**两份入库副本**不许漂：真源是
@@ -483,6 +498,12 @@ jobs:
           #   改文案时别在注释里加落单的撇号。）
           sym=/stage/usr/share/opi/symbol_categories.tsv
           [ -f "$sym" ] || { echo "::error::暂存树里没有 symbol_categories.tsv（$sym）—— /stage 那步或 CMake 的符号类目安装落点坏了"; exit 1; }
+          # 五笔两张码表（2026-10-14 接线）：同一道存在性检查（缺了 = 五笔方案静默落回
+          # 普通路径，用户侧只表现为「打五笔一个字不出」）。
+          wubi86=/stage/usr/share/opi/wubi86.opid
+          wubi98=/stage/usr/share/opi/wubi98.opid
+          [ -f "$wubi86" ] || { echo "::error::暂存树里没有 wubi86.opid（$wubi86）—— /stage 那步或 CMake 的五笔 86 安装落点坏了"; exit 1; }
+          [ -f "$wubi98" ] || { echo "::error::暂存树里没有 wubi98.opid（$wubi98）—— /stage 那步或 CMake 的五笔 98 安装落点坏了"; exit 1; }
 
           # ==== 一、先在**本容器**里对 5.0 头真编一次胶水 ====
           # 顺序是刻意的：下面的加载面吃的就是这里编出来的那份（见「二、换上去」）。以前顺序反

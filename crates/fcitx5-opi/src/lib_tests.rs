@@ -197,3 +197,83 @@ fn shuangpin_layout_and_scheme_exports_land_on_the_engine() {
     unsafe { opi_fcitx5_set_scheme(0) };
     assert_eq!(unsafe { opi_fcitx5_scheme() }, 0, "读侧该回全拼码 0");
 }
+
+/// 五笔旋钮族（2026-10-14，M4 第二波）：六个出口真调 + 真码表端到端。
+/// 这条是 Linux 端五笔的**唯一**程序化取证点（C++ 的 applyOpiSettings 走同一批出口）。
+#[test]
+fn wubi_exports_land_on_the_engine() {
+    use engine_core::{Scheme, WubiMixedEntry, WubiReturnStyle, WubiStyle};
+    let _g = serial_install();
+    // 坏路径哨兵（空路径也 false；不回落内置）。
+    assert!(!unsafe { opi_fcitx5_load_wubi(std::ptr::null(), 0) });
+    let bad = b"/nonexistent/wubi86.opid";
+    assert!(!unsafe { opi_fcitx5_load_wubi(bad.as_ptr(), bad.len()) });
+
+    // 真表装载（路径按本仓布局推导；表缺失时跳过装载断言，旋钮照测）。
+    let path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/generated/wubi86.opid");
+    let bytes = path.to_string_lossy().into_owned();
+    let loaded = unsafe { opi_fcitx5_load_wubi(bytes.as_ptr(), bytes.len()) };
+    if loaded {
+        // 真打一个码：wqvb（86 的四码），方案切五笔后应有候选。
+        unsafe { opi_fcitx5_set_scheme(Scheme::Wubi.code()) };
+        assert_eq!(
+            with_state(|s| s.mode()),
+            Some(engine_core::composer::Mode::Pinyin)
+        );
+        for ch in ['w', 'q', 'v', 'b'] {
+            unsafe { opi_fcitx5_input_key(&(ch as u8), 1) };
+        }
+        let buf = with_state(|s| s.buffer()).unwrap_or_default();
+        assert_eq!(buf, "wqvb", "四码应进缓冲");
+        let cands = with_state(|s| s.page_count()).unwrap_or(0);
+        assert!(cands > 0, "五笔四码该有候选（页数 > 0）");
+        unsafe { opi_fcitx5_clear() };
+    } else {
+        eprintln!("（wubi86.opid 不在 data/generated/ ⇒ 跳过真表段；旋钮段照测）");
+    }
+
+    // 旋钮：缺省 → 写回环 → 越界忽略 / 钳制（读侧经引擎回读）。
+    assert_eq!(
+        with_state(|s| s.engine.wubi_style()),
+        Some(WubiStyle::Pure),
+        "缺省纯五笔"
+    );
+    unsafe { opi_fcitx5_set_wubi_style(WubiStyle::Mixed.code()) };
+    assert_eq!(
+        with_state(|s| s.engine.wubi_style()),
+        Some(WubiStyle::Mixed)
+    );
+    unsafe { opi_fcitx5_set_wubi_style(99) };
+    assert_eq!(
+        with_state(|s| s.engine.wubi_style()),
+        Some(WubiStyle::Mixed),
+        "越界风格忽略"
+    );
+    unsafe { opi_fcitx5_set_wubi_style(0) };
+
+    unsafe { opi_fcitx5_set_wubi_mixed_entry(WubiMixedEntry::ZKey.code()) };
+    assert_eq!(
+        with_state(|s| s.engine.wubi_mixed_entry()),
+        Some(WubiMixedEntry::ZKey)
+    );
+    unsafe { opi_fcitx5_set_wubi_mixed_entry(0) };
+
+    unsafe { opi_fcitx5_set_wubi_candidate_limit(99) };
+    assert_eq!(with_state(|s| s.engine.wubi_candidate_limit()), Some(9));
+    unsafe { opi_fcitx5_set_wubi_candidate_limit(0) };
+    assert_eq!(with_state(|s| s.engine.wubi_candidate_limit()), Some(1));
+    unsafe { opi_fcitx5_set_wubi_candidate_limit(5) };
+
+    unsafe { opi_fcitx5_set_wubi_return_style(WubiReturnStyle::CommitRaw.code()) };
+    assert_eq!(
+        with_state(|s| s.engine.wubi_return_style()),
+        Some(WubiReturnStyle::CommitRaw)
+    );
+    unsafe { opi_fcitx5_set_wubi_return_style(0) };
+
+    unsafe { opi_fcitx5_set_wubi_auto_commit(false) };
+    assert_eq!(with_state(|s| s.engine.wubi_auto_commit()), Some(false));
+    unsafe { opi_fcitx5_set_wubi_auto_commit(true) };
+    assert_eq!(with_state(|s| s.engine.wubi_auto_commit()), Some(true));
+}

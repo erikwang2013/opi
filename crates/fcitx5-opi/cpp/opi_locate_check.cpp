@@ -141,6 +141,17 @@ int main(int argc, char **argv) {
         check("符号类目", fcitx::StandardPath::Type::Data,
               "opi/symbol_categories.tsv", argv[5]);
     }
+    // 五笔码表（2026-10-14，M4 第二波）：两张各一个可选参数 —— 与 trad 同姿态
+    // （老 CI 调用不因此红；新 CI 传上，落点漂了就在这里红）。常量真源 =
+    // `opi_wubi.h` 的 opiWubiSync（"opi/wubi86.opid" / "opi/wubi98.opid"）。
+    if (argc > 6) {
+        check("五笔86码表", fcitx::StandardPath::Type::Data, "opi/wubi86.opid",
+              argv[6]);
+    }
+    if (argc > 7) {
+        check("五笔98码表", fcitx::StandardPath::Type::Data, "opi/wubi98.opid",
+              argv[7]);
+    }
 
     if (failures != 0) {
         printf("\n%d 项不符\n", failures);

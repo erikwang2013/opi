@@ -143,3 +143,93 @@ pub unsafe extern "C" fn opi_fcitx5_scheme() -> i32 {
     }))
     .unwrap_or(0)
 }
+
+// ---- 五笔旋钮族（2026-10-14，M4 第二波）----
+//
+// 整数码 ↔ 枚举的换算**不在本层**：`engine_core::{WubiStyle, WubiMixedEntry,
+// WubiReturnStyle}::from_code/code` 是四端唯一的真源（本 crate 不依赖 opi-ffi，
+// 所以更不能在这里抄第二张表）。写侧越界一律**忽略**（与 `opi_set_scheme` 同款）。
+
+/// loadWubi(path) -> bool：装载五笔码表（C++ 侧按 `WubiPlan` 选 wubi86/98 后传路径）。
+/// 坏路径/引擎未装载 → false（方案回退普通路径，与 `opi_fcitx5_load_stroke` 同姿态）。
+/// # Safety
+///
+/// `ptr` 必须指向至少 `len` 字节的有效内存（或为 null，视为空串）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_load_wubi(ptr: *const u8, len: usize) -> bool {
+    ensure_panic_hook();
+    catch_unwind(AssertUnwindSafe(|| {
+        let Some(path) = (unsafe { read_utf8(ptr, len) }).filter(|p| !p.is_empty()) else {
+            return false;
+        };
+        with_state(|s| s.load_wubi(&path)).unwrap_or(false)
+    }))
+    .unwrap_or(false)
+}
+
+/// setWubiStyle(style)：0=纯五笔 1=五笔拼音混输；越界忽略。**不清缓冲**。
+/// # Safety
+///
+/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_set_wubi_style(style: i32) {
+    ensure_panic_hook();
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        if let Some(s) = engine_core::WubiStyle::from_code(style) {
+            with_state(|st| st.set_wubi_style(s));
+        }
+    }));
+}
+
+/// setWubiMixedEntry(entry)：0=直接字母 1=z键（只在混输下有语义）；越界忽略。
+/// # Safety
+///
+/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_set_wubi_mixed_entry(entry: i32) {
+    ensure_panic_hook();
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        if let Some(x) = engine_core::WubiMixedEntry::from_code(entry) {
+            with_state(|st| st.set_wubi_mixed_entry(x));
+        }
+    }));
+}
+
+/// setWubiCandidateLimit(n)：1..=9（**负数/0 归 1、过大由引擎钳到 9** —— 坏值钳到
+/// 确定值，与 `opi_fcitx5_set_shuangpin_layout` 同纪律）。
+/// # Safety
+///
+/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_set_wubi_candidate_limit(n: i32) {
+    ensure_panic_hook();
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        with_state(|st| st.set_wubi_candidate_limit(n.max(1) as usize));
+    }));
+}
+
+/// setWubiReturn(style)：0=清空 1=上屏原文；越界忽略。**设置位**：消费在路由层。
+/// # Safety
+///
+/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_set_wubi_return_style(style: i32) {
+    ensure_panic_hook();
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        if let Some(s) = engine_core::WubiReturnStyle::from_code(style) {
+            with_state(|st| st.set_wubi_return_style(s));
+        }
+    }));
+}
+
+/// setWubiAutoCommit(on)：四码唯一自动上屏开关（缺省开）。
+/// # Safety
+///
+/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_set_wubi_auto_commit(on: bool) {
+    ensure_panic_hook();
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        with_state(|st| st.set_wubi_auto_commit(on));
+    }));
+}

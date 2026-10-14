@@ -30,53 +30,32 @@ use engine_core::{WubiMixedEntry, WubiReturnStyle, WubiStyle};
 
 use super::Api;
 
-/// 风格整数码 → 枚举。越界 → None（写侧忽略）。
+// 整数码 → 枚举 / 枚举 → 整数码：**转发到 engine-core**（`WubiStyle::code/from_code` 等）
+// —— 那张表是四端唯一的真源（fcitx5-opi 不依赖 opi-ffi，它取的是同一份）。本层只留
+// 函数名给两个 ABI 薄壳调用，别再在这里写第二张表。
+
 pub fn wubi_style_from_int(v: i32) -> Option<WubiStyle> {
-    match v {
-        0 => Some(WubiStyle::Pure),
-        1 => Some(WubiStyle::Mixed),
-        _ => None,
-    }
+    WubiStyle::from_code(v)
 }
 
-/// 枚举 → 整数码（与 [`wubi_style_from_int`] 逐值对应；读侧用）。
 pub fn wubi_style_to_int(s: WubiStyle) -> i32 {
-    match s {
-        WubiStyle::Pure => 0,
-        WubiStyle::Mixed => 1,
-    }
+    s.code()
 }
 
-/// 混输进入方式整数码 → 枚举。越界 → None。
 pub fn wubi_mixed_entry_from_int(v: i32) -> Option<WubiMixedEntry> {
-    match v {
-        0 => Some(WubiMixedEntry::DirectLetters),
-        1 => Some(WubiMixedEntry::ZKey),
-        _ => None,
-    }
+    WubiMixedEntry::from_code(v)
 }
 
 pub fn wubi_mixed_entry_to_int(e: WubiMixedEntry) -> i32 {
-    match e {
-        WubiMixedEntry::DirectLetters => 0,
-        WubiMixedEntry::ZKey => 1,
-    }
+    e.code()
 }
 
-/// 回车行为整数码 → 枚举。越界 → None。
 pub fn wubi_return_from_int(v: i32) -> Option<WubiReturnStyle> {
-    match v {
-        0 => Some(WubiReturnStyle::Clear),
-        1 => Some(WubiReturnStyle::CommitRaw),
-        _ => None,
-    }
+    WubiReturnStyle::from_code(v)
 }
 
 pub fn wubi_return_to_int(s: WubiReturnStyle) -> i32 {
-    match s {
-        WubiReturnStyle::Clear => 0,
-        WubiReturnStyle::CommitRaw => 1,
-    }
+    s.code()
 }
 
 impl Api {

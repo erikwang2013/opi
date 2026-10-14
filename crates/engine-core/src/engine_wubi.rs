@@ -44,6 +44,45 @@ pub enum WubiStyle {
     Mixed,
 }
 
+impl WubiStyle {
+    /// 配置面**名字**（四端同一套，与 `Scheme::name` 同一条纪律；桌面 ini / TSF ini 里
+    /// 存的就是它）。**名字↔枚举的换算只在 engine-core 这一处**。
+    pub fn name(self) -> &'static str {
+        match self {
+            WubiStyle::Pure => "纯五笔",
+            WubiStyle::Mixed => "五笔拼音",
+        }
+    }
+
+    /// 名字 → 枚举（认不得 → None；调用方按「认不得就不动引擎」处理）。
+    pub fn from_name(name: &str) -> Option<WubiStyle> {
+        match name.trim() {
+            "纯五笔" => Some(WubiStyle::Pure),
+            "五笔拼音" => Some(WubiStyle::Mixed),
+            _ => None,
+        }
+    }
+
+    /// **对外协议码**（四端同名同值：JNI/`OpiEngine`、C ABI、fcitx5/TSF 配置枚举均取它；
+    /// 与 `Scheme::code` 同一条纪律 —— 表只有这一份，别在别的 crate 再抄一张）。
+    /// 改这张表 = 改协议。
+    pub fn code(self) -> i32 {
+        match self {
+            WubiStyle::Pure => 0,
+            WubiStyle::Mixed => 1,
+        }
+    }
+
+    /// 协议码 → 枚举（越界 → None：写侧忽略）。
+    pub fn from_code(v: i32) -> Option<WubiStyle> {
+        match v {
+            0 => Some(WubiStyle::Pure),
+            1 => Some(WubiStyle::Mixed),
+            _ => None,
+        }
+    }
+}
+
 /// 混输时**拼音怎么进**（搜狗「拼音进入方式」一档，2026-10-14 lead 收货时补）。
 /// **默认 [`Self::DirectLetters`]**。只在 [`WubiStyle::Mixed`] 下有意义 —— 纯五笔没有
 /// 拼音侧，本档开了也与关着等价（缓冲一律按码解释，z 码照打）。
@@ -68,6 +107,40 @@ pub enum WubiMixedEntry {
     ZKey,
 }
 
+impl WubiMixedEntry {
+    /// 配置面名字（纪律同 [`WubiStyle::name`]）。
+    pub fn name(self) -> &'static str {
+        match self {
+            WubiMixedEntry::DirectLetters => "直接字母",
+            WubiMixedEntry::ZKey => "z键",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<WubiMixedEntry> {
+        match name.trim() {
+            "直接字母" => Some(WubiMixedEntry::DirectLetters),
+            "z键" => Some(WubiMixedEntry::ZKey),
+            _ => None,
+        }
+    }
+
+    /// 对外协议码（0=直接字母 1=z键；纪律同 [`WubiStyle::code`]）。
+    pub fn code(self) -> i32 {
+        match self {
+            WubiMixedEntry::DirectLetters => 0,
+            WubiMixedEntry::ZKey => 1,
+        }
+    }
+
+    pub fn from_code(v: i32) -> Option<WubiMixedEntry> {
+        match v {
+            0 => Some(WubiMixedEntry::DirectLetters),
+            1 => Some(WubiMixedEntry::ZKey),
+            _ => None,
+        }
+    }
+}
+
 /// 五笔回车键行为（搜狗「特殊习惯」里的「回车键」一档）。**默认 [`Self::Clear`]**。
 ///
 /// ⚠️ **本波（M4 3b）只落设置位**：引擎侧不处理回车（`Engine::input_key` 从不收
@@ -87,6 +160,40 @@ pub enum WubiReturnStyle {
     Clear,
     /// 上屏缓冲原文（正在打的码）。
     CommitRaw,
+}
+
+impl WubiReturnStyle {
+    /// 配置面名字（纪律同 [`WubiStyle::name`]）。
+    pub fn name(self) -> &'static str {
+        match self {
+            WubiReturnStyle::Clear => "清空",
+            WubiReturnStyle::CommitRaw => "上屏原文",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<WubiReturnStyle> {
+        match name.trim() {
+            "清空" => Some(WubiReturnStyle::Clear),
+            "上屏原文" => Some(WubiReturnStyle::CommitRaw),
+            _ => None,
+        }
+    }
+
+    /// 对外协议码（0=清空 1=上屏原文；纪律同 [`WubiStyle::code`]）。
+    pub fn code(self) -> i32 {
+        match self {
+            WubiReturnStyle::Clear => 0,
+            WubiReturnStyle::CommitRaw => 1,
+        }
+    }
+
+    pub fn from_code(v: i32) -> Option<WubiReturnStyle> {
+        match v {
+            0 => Some(WubiReturnStyle::Clear),
+            1 => Some(WubiReturnStyle::CommitRaw),
+            _ => None,
+        }
+    }
 }
 
 /// 五笔候选个数的默认档位（对齐搜狗「候选个数」默认 5）。

@@ -134,6 +134,19 @@ pub fn env_dict_path() -> Option<OsString> {
 /// **纯函数**（`local_appdata` 由调用方给，同 `settings::path_in`）：本层不读环境，
 /// 主机单测才能把目录换成临时目录。缺/空 → 相对路径 `opi/dicts`
 /// （同 `settings::path_in` 的姿态：不 panic，退化成"扫不到" = 零导入词库）。
+/// 五笔码表路径（2026-10-14，M4 第二波）：`<LOCALAPPDATA>\opi\wubi{86|98}.opid` ——
+/// **与 `luna.opid` 同目录**（即 [`dicts_dir`] 的父目录，故调用方不必再传 local_appdata）。
+/// 方案只认 "98"，其余（含空串）按 86 —— 与 fcitx5 轨 `opiWubiSync` 同口径。
+/// 文件在不在这里**不判**（装载侧用 `is_file()` 挡，与「表没装是常态」的姿态一致）。
+pub fn wubi_dict_path(dicts_dir: &std::path::Path, plan: &str) -> PathBuf {
+    let file = if plan == "98" {
+        "wubi98.opid"
+    } else {
+        "wubi86.opid"
+    };
+    dicts_dir.parent().unwrap_or(dicts_dir).join(file)
+}
+
 pub fn dicts_dir(local_appdata: Option<&OsStr>) -> PathBuf {
     local_appdata
         .filter(|v| !v.is_empty())

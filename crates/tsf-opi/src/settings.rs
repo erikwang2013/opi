@@ -56,6 +56,16 @@ pub struct Settings {
     /// **空串 = 全部启用**——⚠️ 与上面的 `fuzzy_pairs` **反着来**（那里空 = 回落布尔）：
     /// 名单型选项的两种空语义别串。
     pub disabled_dicts: String,
+    /// 五笔（2026-10-14，M4 第二波）：方案 / 风格 / 混输进入方式 / 候选个数 / 回车 /
+    /// 自动上屏。名字表 = `engine_core::WubiStyle::name` 那一族（**唯一真源**在
+    /// engine-core），认不得/空串一律**不动引擎**（与 pinyin_method 同一条姿态）。
+    /// 方案只认 "86" / "98"（认不得按 86 —— 与 fcitx5 轨 `opiWubiSync` 同口径）。
+    pub wubi_plan: String,
+    pub wubi_style: String,
+    pub wubi_mixed_entry: String,
+    pub wubi_candidate_limit: i64,
+    pub wubi_return: String,
+    pub wubi_auto_commit: bool,
 }
 
 impl Default for Settings {
@@ -70,6 +80,12 @@ impl Default for Settings {
             shuangpin_layout: String::new(), // 空 = 未设置（引擎保持默认布局）
             pinyin_method: String::new(),    // 空 = 未设置（引擎保持全拼）
             disabled_dicts: String::new(),   // 空 = 全部启用（不是"未设置"）
+            wubi_plan: String::new(),        // 空 = 未设置（按 86）
+            wubi_style: String::new(),       // 空 = 未设置（纯五笔）
+            wubi_mixed_entry: String::new(), // 空 = 未设置（直接字母）
+            wubi_candidate_limit: 0,         // 0/负 = 未设置（引擎缺省 5）
+            wubi_return: String::new(),      // 空 = 未设置（清空）
+            wubi_auto_commit: true,          // 缺省开（对齐搜狗）
         }
     }
 }
@@ -92,6 +108,24 @@ pub fn parse(text: &str) -> Settings {
             // 字符串键（2026-10-14）：值原样收（`#` 注释与空白已在上文剥过）。
             // 名字里的空白由 `parse_disabled` 逐段 trim —— 这里不先切（切分口径只留一份）。
             out.disabled_dicts = v.trim().to_string();
+            continue;
+        }
+        if key == "WubiPlan" || key == "WubiStyle" || key == "WubiMixedEntry" || key == "WubiReturn"
+        {
+            // 字符串键（2026-10-14，M4 第二波）：值原样收，语义由 apply_settings 换算
+            // （认不得的名字一律不动引擎 —— 与 PinyinMethod/ShuangpinLayout 同姿态）。
+            match key {
+                "WubiPlan" => out.wubi_plan = v.trim().to_string(),
+                "WubiStyle" => out.wubi_style = v.trim().to_string(),
+                "WubiMixedEntry" => out.wubi_mixed_entry = v.trim().to_string(),
+                _ => out.wubi_return = v.trim().to_string(),
+            }
+            continue;
+        }
+        if key == "WubiCandidateLimit" {
+            // **唯一的数字键**（2026-10-14）：解析失败按「未设置」（0）—— 与「坏值回
+            // 默认」同一档，别让它落到下面的布尔分支（那里会整条忽略，语义不同）。
+            out.wubi_candidate_limit = v.trim().parse::<i64>().unwrap_or(0);
             continue;
         }
         if key == "PinyinMethod" {
@@ -118,6 +152,7 @@ pub fn parse(text: &str) -> Settings {
             "Fuzzy" => out.fuzzy = b,
             "Jianpin" => out.jianpin = b,
             "Correction" => out.correction = b,
+            "WubiAutoCommit" => out.wubi_auto_commit = b,
             _ => {} // 未知键：忽略（向前兼容），不报错
         }
     }

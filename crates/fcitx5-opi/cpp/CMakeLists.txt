@@ -411,6 +411,49 @@ install(FILES "${OPI_TRAD_OPID}"
               DESTINATION "${CMAKE_INSTALL_DATADIR}/opi"
               RENAME trad.opid)
 
+# 五笔码表（2026-10-14，M4 第二波）：**两张都装**（运行时按 WubiPlan 选一张装载，
+# 见 opi_wubi.h 的裁决 —— 只装选中的，不是两张都进引擎）。查找路与 luna/trad 同一条
+# （Type::Data + "opi/wubi86.opid" / "opi/wubi98.opid"），由 opi_locate_check 的
+# 第 6/7 个参数守着。
+# ⚠️ 缺省源**直接指 data/generated/**（这两张表**没有** android 部署副本 ——
+# 桌面/Windows 才是五笔的主场，移动端本轮不发五笔）⇒ 与 trad 的差别是「源从哪来」，
+# 别照抄它那句「缺省用入库的 android 部署副本」。
+set(OPI_WUBI86_OPID "" CACHE FILEPATH "wubi86.opid 源文件。缺省用 data/generated/")
+if(NOT OPI_WUBI86_OPID)
+    set(_wubi86_cand "${CMAKE_CURRENT_SOURCE_DIR}/../../../data/generated/wubi86.opid")
+    if(EXISTS "${_wubi86_cand}")
+        set(OPI_WUBI86_OPID "${_wubi86_cand}")
+    endif()
+endif()
+if(NOT EXISTS "${OPI_WUBI86_OPID}")
+    message(FATAL_ERROR
+        "找不到五笔 86 码表源: '${OPI_WUBI86_OPID}'\n"
+        "生成一份：python3 scripts/gen_wubi_dict.py\n"
+        "或用 -DOPI_WUBI86_OPID=/path/to/wubi86.opid 指一个已有文件。")
+endif()
+message(STATUS "OPI 五笔 86 码表源: ${OPI_WUBI86_OPID}")
+install(FILES "${OPI_WUBI86_OPID}"
+              DESTINATION "${CMAKE_INSTALL_DATADIR}/opi"
+              RENAME wubi86.opid)
+
+set(OPI_WUBI98_OPID "" CACHE FILEPATH "wubi98.opid 源文件。缺省用 data/generated/")
+if(NOT OPI_WUBI98_OPID)
+    set(_wubi98_cand "${CMAKE_CURRENT_SOURCE_DIR}/../../../data/generated/wubi98.opid")
+    if(EXISTS "${_wubi98_cand}")
+        set(OPI_WUBI98_OPID "${_wubi98_cand}")
+    endif()
+endif()
+if(NOT EXISTS "${OPI_WUBI98_OPID}")
+    message(FATAL_ERROR
+        "找不到五笔 98 码表源: '${OPI_WUBI98_OPID}'\n"
+        "生成一份：python3 scripts/gen_wubi_dict.py\n"
+        "或用 -DOPI_WUBI98_OPID=/path/to/wubi98.opid 指一个已有文件。")
+endif()
+message(STATUS "OPI 五笔 98 码表源: ${OPI_WUBI98_OPID}")
+install(FILES "${OPI_WUBI98_OPID}"
+              DESTINATION "${CMAKE_INSTALL_DATADIR}/opi"
+              RENAME wubi98.opid)
+
 # 符号类目数据（2026-10-10）：loadDictionary() 找的是 Type::Data +
 # "opi/symbol_categories.tsv"，即 <prefix>/share/opi/symbol_categories.tsv ——
 # 与两个词库同一层（**没有** fcitx5 中间层，别顺手挪进 share/fcitx5/ 下）。

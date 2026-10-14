@@ -94,6 +94,11 @@ contents:
   # 数据编译而来，各自要求在分发物中保留许可与署名；GPL-3.0 还要求随分发物
   # 提供完整许可文本。少了这三个文件，包在授权上就是不完整的（而代码照样能跑，
   # 所以它不会自己暴露 —— 只能在打包时守住）。
+  # 2026-10-14 起另外两份码表（wubi86.opid = LGPL-3.0，与 luna 同族；wubi98.opid =
+  # Unlicense 公共领域）也随包装入 —— 逐源的许可与残留不一致（86 的 rime AUTHORS
+  # 写 LGPL 而上游 acevery 仓 COPYING 是 GPL-3.0 全文）都逐字记在
+  # data/raw/LICENSES.md 里，**该文件就是署名载体**；LGPL/GPL 族的完整文本由上面
+  # 那两个文件（LICENSE + GPL-3.0.txt）承担义务。Unlicense 无文本义务（公有领域）。
   - src: LICENSE
     dst: /usr/share/doc/opi/LICENSE
   - src: data/raw/LICENSES.md

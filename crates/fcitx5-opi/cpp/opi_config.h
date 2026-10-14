@@ -41,6 +41,7 @@
 
 #include "opi_dicts.h"    // 导入词库（扫目录 + DisabledDicts 名单）
 #include "opi_rust_ffi.h"
+#include "opi_wubi.h"
 
 // 皮肤枚举。取值 → `data/themes/` 下的主题目录名，映射在 opi_skin.h
 // （opiSkinThemeName）；多处（枚举/i18n 名/映射/生成脚本/安装清单）改一处即漂，
@@ -77,6 +78,17 @@ FCITX_CONFIG_ENUM_NAME_WITH_I18N(OpiShuangpinLayout, N_("自然码"), N_("微软
 enum class OpiPinyinMethod { Quanpin = 0, Shuangpin = 4 };
 FCITX_CONFIG_ENUM_NAME_WITH_I18N(OpiPinyinMethod, N_("全拼"), N_("双拼"));
 
+// 五笔（2026-10-14，M4）。三张枚举与前面几张同一条纪律：**字面值就是配置里存的值**
+// （unmarshallOption 按字面匹配），**枚举值 = engine-core 的协议码**
+// （`WubiStyle/WubiMixedEntry/WubiReturnStyle::code`，2026-10-14 起那张表在
+// engine-core —— 这里 `static_cast<int32_t>` 直接进引擎，中间没有第二张映射表）。
+enum class OpiWubiStyle { Pure = 0, Mixed = 1 };
+FCITX_CONFIG_ENUM_NAME_WITH_I18N(OpiWubiStyle, N_("纯五笔"), N_("五笔拼音"));
+enum class OpiWubiMixedEntry { DirectLetters = 0, ZKey = 1 };
+FCITX_CONFIG_ENUM_NAME_WITH_I18N(OpiWubiMixedEntry, N_("直接字母"), N_("z键"));
+enum class OpiWubiReturn { Clear = 0, CommitRaw = 1 };
+FCITX_CONFIG_ENUM_NAME_WITH_I18N(OpiWubiReturn, N_("清空"), N_("上屏原文"));
+
 // 默认值**全是 true / Keep** = 「没配过」等于引擎既有行为（模糊音/简拼见
 // `RankOptions::default()`；学习/中文标点见各自 setter 的默认；ShiftToggle 取 true
 // 是用户裁决「Shift 就该能切英文」；Skin=Keep = OPI 不碰用户的 fcitx5 主题）。
@@ -103,6 +115,18 @@ FCITX_CONFIGURATION(
         this, "ShuangpinLayout", "双拼布局（拼音方式选双拼时生效）", OpiShuangpinLayout::Ziranma};
     fcitx::OptionWithAnnotation<OpiPinyinMethod, OpiPinyinMethodI18NAnnotation> pinyinMethod{
         this, "PinyinMethod", "拼音方式（全拼 / 双拼）", OpiPinyinMethod::Quanpin};
+    // 五笔（2026-10-14，M4 第二波）：方案 + 输入风格 + 混输进入方式 + 候选个数 +
+    // 回车行为 + 自动上屏。方案决定装哪张码表（只装选中的那张，裁决见 opi_wubi.h）。
+    fcitx::Option<std::string> wubiPlan{this, "WubiPlan", "五笔方案（86 / 98）", "86"};
+    fcitx::OptionWithAnnotation<OpiWubiStyle, OpiWubiStyleI18NAnnotation> wubiStyle{
+        this, "WubiStyle", "五笔输入风格（纯五笔 / 五笔拼音混输）", OpiWubiStyle::Pure};
+    fcitx::OptionWithAnnotation<OpiWubiMixedEntry, OpiWubiMixedEntryI18NAnnotation> wubiMixedEntry{
+        this, "WubiMixedEntry", "混输时拼音的进入方式（直接字母 / z 键）",
+        OpiWubiMixedEntry::DirectLetters};
+    fcitx::Option<int> wubiCandidateLimit{this, "WubiCandidateLimit", "五笔候选个数（1-9）", 5};
+    fcitx::OptionWithAnnotation<OpiWubiReturn, OpiWubiReturnI18NAnnotation> wubiReturn{
+        this, "WubiReturn", "五笔回车键（清空 / 上屏原文；当前仅存设置位）", OpiWubiReturn::Clear};
+    fcitx::Option<bool> wubiAutoCommit{this, "WubiAutoCommit", "四码唯一自动上屏", true};
     // 导入词库的**停用名单**（2026-10-14 词库页，M3）：逗号分隔的**词库名**
     // （= 文件名去 `.tsv`，如 `brand_terms.tsv` → `brand_terms`），与桌面窗写的
     // 那个键同名同义。**空 = 全部启用**。⚠️ 与上面的 FuzzyPairs **反着来**
@@ -146,6 +170,17 @@ inline void applyOpiSettings(const OpiSettings &settings) {
     // opi_dicts.h 头注），所以它不能在 loadDictionary 之前调 —— 那个先决条件本来就
     // 写在 opi_engine.h 的构造注释里（「配置推给引擎必须在 loadDictionary 之后」）。
     opiDictsSync(*settings.disabledDicts);
+    // 五笔（2026-10-14，M4 第二波）：装表（按 WubiPlan 定位，弱符号守卫在
+    // `opiWubiSync` 里）+ 五个旋钮。旋钮**不清缓冲**（引擎侧语义：只改同一缓冲怎么
+    // 装配候选）—— 与上面的 set_scheme 相反，别照抄它的「换方案清缓冲」注释。
+    opiWubiSync(*settings.wubiPlan);
+    if (opi_fcitx5_set_wubi_style != nullptr) {
+        opi_fcitx5_set_wubi_style(static_cast<int32_t>(*settings.wubiStyle));
+        opi_fcitx5_set_wubi_mixed_entry(static_cast<int32_t>(*settings.wubiMixedEntry));
+        opi_fcitx5_set_wubi_candidate_limit(*settings.wubiCandidateLimit);
+        opi_fcitx5_set_wubi_return_style(static_cast<int32_t>(*settings.wubiReturn));
+        opi_fcitx5_set_wubi_auto_commit(*settings.wubiAutoCommit);
+    }
 }
 
 // 从磁盘读进 settings。**文件不存在不是错误**：readAsIni 会把字段留作默认值 ——

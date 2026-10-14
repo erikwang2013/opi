@@ -11,6 +11,7 @@
 //! composition/候选窗/文档插入（骨架，见 `tsf` 模块头注释）。
 
 pub mod logic;
+mod logic_settings;
 
 /// DLL 服务器资料（CLSID/GUID · 注册表键路径 · 模块级对象计数）。
 /// 与 `vk.rs` 同样是**平台中立**的：`windows_core::GUID` 是无条件依赖，

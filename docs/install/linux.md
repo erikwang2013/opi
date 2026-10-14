@@ -193,6 +193,8 @@ sudo cmake --install build-fcitx5
 | `/usr/share/opi/luna.opid` | 简体词库 | `Type::Data + "opi/luna.opid"` |
 | `/usr/share/opi/trad.opid` | 繁体词库（2026-10-09 起） | `Type::Data + "opi/trad.opid"` |
 | `/usr/share/opi/symbol_categories.tsv` | 符号大全类目数据（22 类目；与 Android 资产同源同字节） | `Type::Data + "opi/symbol_categories.tsv"` |
+| `/usr/share/opi/wubi86.opid` | 五笔 86 码表（2026-10-14 起；LGPL-3.0，与 luna 同族） | `Type::Data + "opi/wubi86.opid"` |
+| `/usr/share/opi/wubi98.opid` | 五笔 98 码表（2026-10-14 起；Unlicense 公共领域） | `Type::Data + "opi/wubi98.opid"` |
 | `/usr/bin/opi-ctl` | 状态栏按钮的 CLI（D-Bus 打到插件，见 §4.8） | 状态栏悬浮条（按名字在 PATH 找） |
 | `/etc/xdg/autostart/opi-statusbar.desktop` | 状态栏悬浮条随会话自启（2026-10-10 起） | XDG autostart |
 | `/usr/share/doc/opi/LICENSE` + `LICENSES.md` | 许可证文本 | 人（授权要求，见 §6） |
@@ -508,7 +510,7 @@ Android `KeyRouter.kt`）：空格 = 缓冲非空时提交、空缓冲时把空�
 不要重复加」）。现在类目名是**纯名字**，序号由本节的页内编号负责 —— 加任何新候选文本时
 同一条规矩：**文本里不要自己写数字序号**。
 
-### 4.6 属性设置（六个选项；入口：配置面 + 状态栏 + 桌面窗）
+### 4.6 属性设置（入口：配置面 + 状态栏 + 桌面窗）
 
 **配置落在 fcitx5 自己的 addon 配置里**：`$XDG_CONFIG_HOME/fcitx5/conf/opi_fcitx5.conf`
 （字段声明 = `crates/fcitx5-opi/cpp/opi_config.h` 的 `OpiSettings`）：
@@ -520,6 +522,18 @@ Fuzzy=True          # 模糊音（z/zh、n/l…）
 Jianpin=True        # 简拼（声母缩写，nh → 你好）
 ShiftToggle=True    # Shift 轻按切换中英文（2026-10-09 起）
 Skin=不改动          # 候选面板皮肤（2026-10-09 起；值存的就是「不改动/浅色/深色/宣纸/朱砂/清爽/湛蓝/柠檬/晚霞/星光/紫藤/松林」）
+# —— 2026-10-13/14 起补齐的一批（键名的唯一出处仍是 opi_config.h）——
+FuzzyPairs=         # 模糊音逐对（逗号分隔组名，如 zh/z,n/l；留空按上面的总开关）
+Correction=True     # 拼音纠错（相邻键/多打/少打）
+ShuangpinLayout=自然码 # 双拼布局（拼音方式选双拼时生效）
+PinyinMethod=全拼    # 拼音方式（全拼 / 双拼）
+WubiPlan=86         # 五笔方案（86 / 98；决定装 wubi86.opid 还是 wubi98.opid）
+WubiStyle=纯五笔     # 五笔输入风格（纯五笔 / 五笔拼音混输）
+WubiMixedEntry=直接字母 # 混输时拼音的进入方式（直接字母 / z键）
+WubiCandidateLimit=5 # 五笔候选个数（1-9；引擎钳）
+WubiReturn=清空      # 五笔回车键（清空 / 上屏原文；**当前仅存设置位**，消费在四端路由）
+WubiAutoCommit=True # 四码唯一自动上屏
+DisabledDicts=      # 停用的导入词库（逗号分隔；留空 = 全部启用）
 ```
 
 **入口在配置工具里**（2026-10-09 用户裁决「设置功能不能在外层设置，必须到配置里才有设置入口」）：
@@ -727,7 +741,7 @@ opi-ctl state                               # 只读：当前状态，一行
 - `state` 输出**键序冻结**（桌面状态栏按位置解析，漂了有门禁报红）：
   `lang=zh|en;trad=on|off;punct=on|off;fw=on|off;im=<输入法名>;mode=pinyin|en26|wubi`
   （`mode` = 2026-10-14 加，**追加在行尾**：旧前端按位置读前几段不受影响；取值域
-  `pinyin|en26|wubi`（五笔未落地、token 已预放行）；**未定义档（繁体/数字/符号）报
+  `pinyin|en26|wubi`（三档均已落地：拼 → 五 → en26 → 拼）；**未定义档（繁体/数字/符号）报
   `pinyin`** —— 它们是拼音读法的变体/瞬态面板，简繁由 `trad` 位单独表达）。
   **没有当前输入上下文
   也照常返回**（rc 0，按缺省渲染）——轮询常在无焦点时发生，判错会让状态栏图标闪。
@@ -813,6 +827,14 @@ cmake -S crates/fcitx5-opi/cpp -B build-fcitx5 \
 
 `trad.opid` 与 `luna.opid` 一样**随包安装**（`/usr/share/opi/trad.opid`，
 CMake 的 `OPI_TRAD_OPID`，缺省取入库副本 `android/app/src/main/assets/trad.opid`）。
+
+**五笔两张码表**（2026-10-14 起，M4 第二波）同样随包安装，但**两张都装、运行时只装
+选中那张**（`WubiPlan=86|98` → `opi/wubi86.opid` / `opi/wubi98.opid`；两表码空间重叠、
+权重不可比，同时进引擎等于两套体系打架 —— 裁决见 `crates/fcitx5-opi/cpp/opi_wubi.h`）。
+CMake 的 `OPI_WUBI86_OPID` / `OPI_WUBI98_OPID` 缺省直接取 `data/generated/`（**没有**
+android 部署副本：五笔是桌面/Windows 的主场）；生成：`python3 scripts/gen_wubi_dict.py`。
+逐源许可（86 = `rime/rime-wubi` LGPL-3.0、98 = `yanhuacuo/98wubi-tables` Unlicense 及其
+依据强度差异）记在 `data/raw/LICENSES.md`。
 切换键是 **`Ctrl+Shift+F`**（§4.3），繁体模式下候选查的就是它。
 
 - **可选增强语义**：trad 装坏了/缺失时**不报错**，Traditional 模式回退 luna

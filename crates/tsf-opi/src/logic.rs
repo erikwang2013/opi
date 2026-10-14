@@ -196,6 +196,28 @@ impl TsfLogic {
         if let Some(scheme) = engine_core::Scheme::from_name(&s.pinyin_method) {
             self.set_scheme(scheme);
         }
+        // 五笔（2026-10-14，M4 第二波）：名字认不得/空串**不动**引擎（同 pinyin_method
+        // 的姿态）；个数 0/负 = 未设置（引擎缺省 5），正数交给引擎钳到 1..=9。
+        if let Some(st) = engine_core::WubiStyle::from_name(&s.wubi_style) {
+            self.set_wubi_style(st);
+        }
+        if let Some(e) = engine_core::WubiMixedEntry::from_name(&s.wubi_mixed_entry) {
+            self.set_wubi_mixed_entry(e);
+        }
+        if let Some(r) = engine_core::WubiReturnStyle::from_name(&s.wubi_return) {
+            self.set_wubi_return_style(r);
+        }
+        if s.wubi_candidate_limit > 0 {
+            self.set_wubi_candidate_limit(s.wubi_candidate_limit as usize);
+        }
+        self.set_wubi_auto_commit(s.wubi_auto_commit);
+        // 码表：按 `WubiPlan` 选表，从**与 luna.opid 同目录**装载（`dicts_dir` 的父目录）。
+        // 文件不在是常态（可选增强，与 fcitx5 轨 opiWubiSync 一字不差）：跳过 + 零日志，
+        // 方案落普通路径；**文件在但装不上**才打日志（load_wubi 内部打）。
+        let wubi = crate::dict_path::wubi_dict_path(dicts_dir, &s.wubi_plan);
+        if wubi.is_file() {
+            let _ = self.load_wubi(&wubi.to_string_lossy());
+        }
         // 导入词库：名单是配置值、目录是环境量，两个都到手才成立 —— 与 fcitx5 轨
         // `applyOpiSettings → opiDictsSync` 同一条（那边目录由 C++ 现推）。
         self.sync_extra_dicts(dicts_dir, &s.disabled_dicts);
@@ -215,58 +237,6 @@ impl TsfLogic {
         let count = report.dicts.len();
         self.engine.set_extra_dicts(report.dicts);
         count
-    }
-
-    /// 学习开关（值来自 `%LOCALAPPDATA%\opi\settings.ini` 的 `Learn`；本端在
-    /// `Activate` 时重读一次 —— 没有在线刷新通道，见 settings.rs 模块头）。
-    /// 配对：`fcitx5-opi/src/candidate.rs` 的同名方法（两轨同构，改一处必须改另一处）。
-    pub fn set_learner(&mut self, on: bool) {
-        self.engine.set_learner(on);
-    }
-
-    /// 中文标点开关（值来自 settings.ini 的 `ChinesePunct`）。配对同上。
-    pub fn set_chinese_punct(&mut self, on: bool) {
-        self.engine.set_chinese_punct(on);
-    }
-
-    /// 模糊音开关（值同上，键 `Fuzzy`）。
-    /// 配对：`fcitx5-opi/src/candidate.rs` 的同名方法（两轨同构，改一处必须改另一处）。
-    pub fn set_fuzzy(&mut self, on: bool) {
-        self.engine.set_fuzzy(on);
-    }
-
-    /// 模糊音**逐对**（2026-10-13；键 `FuzzyPairs`，组名串见
-    /// `engine_core::fuzzy::pair_names`，解析走 `fuzzy::mask_from_names` —— 唯一一份）。
-    /// 配对：`fcitx5-opi/src/candidate.rs` 的同名方法（两轨同构）。
-    pub fn set_fuzzy_pairs(&mut self, names: &str) {
-        self.engine
-            .set_fuzzy_pairs(engine_core::fuzzy::mask_from_names(names));
-    }
-
-    /// 简拼开关。配对同上。
-    pub fn set_jianpin(&mut self, on: bool) {
-        self.engine.set_jianpin(on);
-    }
-
-    /// 拼音纠错开关（2026-10-13；键 `Correction`）。配对：`fcitx5-opi/src/candidate.rs`。
-    pub fn set_correction(&mut self, on: bool) {
-        self.engine.set_correction(on);
-    }
-
-    /// 双拼布局（2026-10-13；键 `ShuangpinLayout`）。收**下标**（0=自然码…5=拼音加加，
-    /// 表序见 `shuangpin_tables.rs`）—— 本端把 ini 里的方案名换算成下标再进来（换算在
-    /// [`Self::apply_settings`]，用 `shuangpin::layout_index_of_name` 这唯一一份）。
-    /// 配对：`fcitx5-opi/src/candidate.rs` 的同名方法（两轨同构）。
-    pub fn set_shuangpin_layout(&mut self, index: usize) {
-        self.engine.set_shuangpin_layout(index);
-    }
-
-    /// 输入方案（2026-10-14；键 `PinyinMethod`，值 = 方案名，名字表见
-    /// `engine_core::Scheme::from_name`）。**清缓冲**（引擎侧语义，见
-    /// `Engine::set_scheme`）；认不得的名字由调用方拦下（`apply_settings`）。
-    /// 配对：`fcitx5-opi/src/candidate.rs` 的同名方法（两轨同构）。
-    pub fn set_scheme(&mut self, scheme: engine_core::Scheme) {
-        self.engine.set_scheme(scheme);
     }
 
     /// 切模式（**不收尾**：待处理的缓冲由 `Composer::switch_mode` 直接清掉）。

@@ -51,39 +51,45 @@ static void runCtlModeChecks(OpiEngine &engine, TestIC &ic, BufferOf bufferOf,
                                       : s.substr(p + tag.size());
     };
 
-    std::printf("-- 10a 拼(全拼) → en26：token 与引擎读回逐条一致 --\n");
+    std::printf("-- 10a 拼(全拼) → 五笔：token=wubi，模式留 Pinyin、scheme 摆到 5 --\n");
     opi_fcitx5_switch_mode(kModePinyin); // 前置不靠上游段落的残留
     opi_fcitx5_set_scheme(0);
     check(opi_fcitx5_mode() == kModePinyin && schemeNow() == 0,
           "前置：拼音 + 全拼（读侧回 " + std::to_string(schemeNow()) + "）");
+    fcitx::Action *zhEn = findItem("中", "英");
     const std::string r1 = engine.handleCtlAction_("mode");
-    check(r1 == "en26", "拼 → 应答 token en26（实际 " + q(r1) + "）");
+    check(r1 == "wubi", "拼 → 应答 token wubi（实际 " + q(r1) + "）");
     check(r1 != "ok", "负对照：本动作的成功应答**不是** \"ok\"（协议是 token）");
-    check(opi_fcitx5_mode() == kModeEnglish, "拼 → 引擎模式真的切到 English");
-    check(engine.ctlState_().rfind("lang=en;", 0) == 0,
-          "拼 → state 的 lang 段跟着变（桌面状态栏读的那一格）");
+    check(opi_fcitx5_mode() == kModePinyin && schemeNow() == 5,
+          "拼 → 引擎读回 = 拼音 + 五笔（5）（实际 mode=" + std::to_string(opi_fcitx5_mode())
+              + " scheme=" + std::to_string(schemeNow()) + "）");
     check(stateMode() == r1,
           "拼 → state 的 mode 格与应答 token 逐字同源（同一份派生）：" + q(stateMode()));
-    fcitx::Action *zhEn = findItem("中", "英");
-    check(zhEn != nullptr && zhEn->shortText(&ic) == "英",
-          "拼 → 「中/英」状态项文案跟着变（§7c 那个「漏刷新」坑的同款检查）");
+    check(zhEn != nullptr && zhEn->shortText(&ic) == "中",
+          "拼 → 进五笔**不**碰「中/英」文案（模式没变 —— 与旧版「拼→en26」的差别）");
 
-    std::printf("-- 10b en26 → 拼音(全拼)：scheme 读回 = 全拼，循环闭合 --\n");
+    std::printf("-- 10a2 五笔 → en26 → 拼音(全拼)：三档循环闭合 --\n");
     const std::string r2 = engine.handleCtlAction_("mode");
-    check(r2 == "pinyin", "en26 → 应答 token pinyin（实际 " + q(r2) + "）");
-    check(opi_fcitx5_mode() == kModePinyin && schemeNow() == 0,
-          "en26 → 引擎读回 = 拼音 + 全拼（实际 mode=" + std::to_string(opi_fcitx5_mode())
-              + " scheme=" + std::to_string(schemeNow()) + "）");
-    check(zhEn != nullptr && zhEn->shortText(&ic) == "中", "「中/英」文案切回「中」");
-    check(stateMode() == r2,
-          "en26 → state 的 mode 格跟着回到 token（两向都同源）：" + q(stateMode()));
-    // 来回两轮：循环是**交替**的（不是单向进英文后卡住）；每步 token 与读回都一致。
+    check(r2 == "en26", "五笔 → 应答 token en26（实际 " + q(r2) + "）");
+    check(opi_fcitx5_mode() == kModeEnglish,
+          "五笔 → 引擎模式切到 English（走的是「其余一切 → en26」那条腿）");
+    check(stateMode() == r2, "五笔 → state mode 格跟着变：" + q(stateMode()));
+    check(zhEn != nullptr && zhEn->shortText(&ic) == "英",
+          "五笔 → en26 时「中/英」文案跟着变（§7c 那个「漏刷新」坑的同款检查）");
+    const std::string r3 = engine.handleCtlAction_("mode");
+    check(r3 == "pinyin" && opi_fcitx5_mode() == kModePinyin && schemeNow() == 0,
+          "en26 → 拼音（scheme 读回全拼 —— 「pinyin」token 的定义就是 mode=Pinyin+全拼）："
+              + q(r3));
+    check(stateMode() == r3, "en26 → state mode 格跟着回到 token：" + q(stateMode()));
+    // 再来一轮：**三档**循环（拼 → 五 → en26 → 拼），不是单向下坡也不卡在某一档。
+    check(engine.handleCtlAction_("mode") == "wubi" && schemeNow() == 5,
+          "再来一轮：拼 → 五（第二次）");
     check(engine.handleCtlAction_("mode") == "en26" && opi_fcitx5_mode() == kModeEnglish,
-          "再来一轮：拼 → en26（第二次，不是单向下坡）");
-    check(engine.handleCtlAction_("mode") == "pinyin" && opi_fcitx5_mode() == kModePinyin,
+          "再来一轮：五 → en26");
+    check(engine.handleCtlAction_("mode") == "pinyin" && schemeNow() == 0,
           "再来一轮：en26 → pinyin（循环闭合两次）");
 
-    std::printf("-- 10c 双拼档不在循环面上：state 报 pinyin，点一下进 en26、再点落回**全拼** --\n");
+    std::printf("-- 10c 双拼档不在循环面上：state 报 pinyin，点一下进**五笔**、再点 en26 再点落回全拼 --\n");
     // 「进拼音档把 scheme 摆到全拼」的可见后果就在这里（也是那条副作用的取证点：
     // 引擎运行值被摆到全拼，配置文件没动）。双拼的**行为**面（键序解码）在 Rust
     // 侧测；这里只看模式循环对它的处理。
@@ -93,34 +99,40 @@ static void runCtlModeChecks(OpiEngine &engine, TestIC &ic, BufferOf bufferOf,
           "双拼态的 state mode 格 = pinyin（面外态收成「拼」：读法仍是拼音；state 面"
           "永远给档位，不像动作路径那样会回空串 —— 状态栏初值读的就是这一格）："
               + q(stateMode()));
+    check(engine.handleCtlAction_("mode") == "wubi" && schemeNow() == 5,
+          "双拼 + 点 mode → **五笔**（面外态显示「拼」，按显示档往前走一格就是五笔）");
     check(engine.handleCtlAction_("mode") == "en26" && opi_fcitx5_mode() == kModeEnglish,
-          "双拼 + 点 mode → en26（面外态不进 token 表，但点一下就是正常的一腿）");
+          "再点 → en26");
     check(engine.handleCtlAction_("mode") == "pinyin" && schemeNow() == 0,
           "再点 → 落回全拼（scheme 读回 0 —— 「pinyin」token 的定义就是全拼）");
 
-    std::printf("-- 10d 其它面外态（繁体 / 符号）：state 报 pinyin，点一下才进 en26 --\n");
+    std::printf("-- 10d 其它面外态（繁体 / 符号）：state 报 pinyin，点一下进五笔再进 en26 --\n");
     opi_fcitx5_switch_mode(kModeTraditional);
     check(stateMode() == "pinyin",
           "繁体态的 state mode 格 = pinyin（**不是** en26 —— 中文输入时条上不许出现"
           "英文档位这个假标签；简繁由 trad 格自述。2026-10-14 改判）：" + q(stateMode()));
+    check(engine.handleCtlAction_("mode") == "wubi" && opi_fcitx5_mode() == kModePinyin,
+          "繁体 + 点 mode → 五笔（**模式归一为 Pinyin** —— 只换 scheme 会让 token 派生回"
+          "空串，那是「动作失败」的表示，而它明明成功了）");
     check(engine.handleCtlAction_("mode") == "en26" && opi_fcitx5_mode() == kModeEnglish,
-          "繁体 + 点 mode → en26（点之前显示「拼」，这一跳在显示面上真的变档 —— "
-          "初版那个「en26 → en26」的收编跳没有了）");
+          "再点 → en26");
     fcitx::Action *fanjian = findItem("简", "繁");
     check(fanjian != nullptr && fanjian->shortText(&ic) == "简",
           "「简/繁」文案也从「繁」刷回「简」（跨状态项刷新）");
     opi_fcitx5_switch_mode(kModeSymbol);
     check(stateMode() == "pinyin",
           "符号态同理：state mode 格 = pinyin（" + q(stateMode()) + "）");
-    check(engine.handleCtlAction_("mode") == "en26" && opi_fcitx5_mode() == kModeEnglish,
-          "符号 + 点 mode → en26");
+    check(engine.handleCtlAction_("mode") == "wubi" && opi_fcitx5_mode() == kModePinyin,
+          "符号 + 点 mode → 五笔");
 
     std::printf("-- 10e 待定拼音：切模式清缓冲（提交那半归 e2e，见文件头）--\n");
     opi_fcitx5_switch_mode(kModePinyin);
     opi_fcitx5_set_scheme(0);
     typeSeq("nihao"); // 驱动主文件的 type lambda：经引擎进缓冲
     check(bufferOf() == "nihao", "前置：缓冲里有待定拼音（实际 " + q(bufferOf()) + "）");
-    check(engine.handleCtlAction_("mode") == "en26", "有待定拼音时也能切（不卡住）");
+    check(engine.handleCtlAction_("mode") == "wubi",
+          "有待定拼音时也能切进五笔（不卡住；待定拼音由 opiDirectConfirm 先交出去 —— "
+          "提交那半见 e2e）");
     check(bufferOf().empty(), "切模式清了缓冲（提交那一半需要真 IC —— e2e 变体 ctl）");
 
     // 收尾：回到 §8 的基线状态（拼音 + 全拼），别给后续段落留模式残留。

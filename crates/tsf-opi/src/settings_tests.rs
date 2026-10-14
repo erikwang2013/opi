@@ -29,6 +29,12 @@ fn parses_every_key_false() {
             correction: true,
             shuangpin_layout: String::new(),
             pinyin_method: String::new(),
+            wubi_plan: String::new(),
+            wubi_style: String::new(),
+            wubi_mixed_entry: String::new(),
+            wubi_candidate_limit: 0,
+            wubi_return: String::new(),
+            wubi_auto_commit: true,
             disabled_dicts: String::new(),
         }
     );
@@ -260,4 +266,50 @@ fn apply_settings_lands_all_four_switches() {
         (true, true, true, true),
         "回默认也要落上（不是一次性的）"
     );
+}
+
+/// 五笔六键（2026-10-14，M4 第二波）：解析 + **套到引擎读侧**（认不得/空串都不动引擎）。
+#[test]
+fn parses_and_applies_wubi_keys() {
+    use engine_core::dictionary::InMemoryDictionary;
+    use engine_core::{WubiMixedEntry, WubiReturnStyle, WubiStyle};
+    // 解析：字符串键原样收、数字键解析失败按未设置（0）。
+    let s = parse(
+        "WubiPlan=98\nWubiStyle=五笔拼音\nWubiMixedEntry=z键\n\
+         WubiCandidateLimit=7\nWubiReturn=上屏原文\nWubiAutoCommit=False\n",
+    );
+    assert_eq!(s.wubi_plan, "98");
+    assert_eq!(s.wubi_style, "五笔拼音");
+    assert_eq!(s.wubi_mixed_entry, "z键");
+    assert_eq!(s.wubi_candidate_limit, 7);
+    assert_eq!(s.wubi_return, "上屏原文");
+    assert!(!s.wubi_auto_commit);
+    assert_eq!(parse("WubiCandidateLimit=abc\n").wubi_candidate_limit, 0);
+
+    let mut e = crate::logic::TsfLogic::with_dict(Box::new(InMemoryDictionary::new()));
+    // 缺省（未设置/空字典）不动引擎：仍是引擎初值。
+    e.apply_settings(parse("Learn=True\n"), std::path::Path::new(""));
+    assert_eq!(e.engine.wubi_style(), WubiStyle::Pure);
+    assert_eq!(e.engine.wubi_mixed_entry(), WubiMixedEntry::DirectLetters);
+    assert_eq!(e.engine.wubi_return_style(), WubiReturnStyle::Clear);
+    assert!(e.engine.wubi_auto_commit());
+    assert_eq!(e.engine.wubi_candidate_limit(), 5, "引擎缺省 5");
+    e.apply_settings(parse("WubiStyle=五笔拼音\n"), std::path::Path::new(""));
+    assert_eq!(e.engine.wubi_style(), WubiStyle::Mixed, "风格真的进了引擎");
+    e.apply_settings(parse("WubiMixedEntry=z键\n"), std::path::Path::new(""));
+    assert_eq!(e.engine.wubi_mixed_entry(), WubiMixedEntry::ZKey);
+    e.apply_settings(parse("WubiCandidateLimit=7\n"), std::path::Path::new(""));
+    assert_eq!(e.engine.wubi_candidate_limit(), 7);
+    e.apply_settings(parse("WubiCandidateLimit=99\n"), std::path::Path::new(""));
+    assert_eq!(e.engine.wubi_candidate_limit(), 9, "过大由引擎钳到 9");
+    e.apply_settings(parse("WubiReturn=上屏原文\n"), std::path::Path::new(""));
+    assert_eq!(e.engine.wubi_return_style(), WubiReturnStyle::CommitRaw);
+    e.apply_settings(parse("WubiAutoCommit=False\n"), std::path::Path::new(""));
+    assert!(!e.engine.wubi_auto_commit());
+    // 认不得的名字 ⇒ 不动引擎（不静默回默认）。
+    e.apply_settings(parse("WubiStyle=打错了\n"), std::path::Path::new(""));
+    assert_eq!(e.engine.wubi_style(), WubiStyle::Mixed, "认不得 ⇒ 保持");
+    // 个数 0/负 ⇒ 未设置（不动）；**空目录 ⇒ 不装载码表**（可选增强）。
+    e.apply_settings(parse("WubiCandidateLimit=0\n"), std::path::Path::new(""));
+    assert_eq!(e.engine.wubi_candidate_limit(), 9, "0 = 未设置 ⇒ 保持");
 }

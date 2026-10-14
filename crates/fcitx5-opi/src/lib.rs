@@ -19,6 +19,7 @@ use engine_core::composer::Mode;
 
 mod cabi;
 pub mod candidate;
+mod candidate_settings;
 pub mod data_dir;
 pub(crate) mod dict_layer;
 pub mod input_method;

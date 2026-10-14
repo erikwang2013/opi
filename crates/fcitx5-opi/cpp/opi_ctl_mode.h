@@ -40,9 +40,11 @@ inline std::string opiCtlModeToken(int32_t mode, int32_t scheme) {
         && scheme == static_cast<int32_t>(OpiPinyinMethod::Quanpin)) {
         return "pinyin";
     }
-    // 未来五笔的插入点（在这里加两行，判在下面 Full 那条**之前** —— 五笔与全拼
-    // 同为 Pinyin 模式，只有 scheme 分得开）：
-    //   if (mode == kModePinyin && scheme == <五笔码>) return "wubi";
+    // 五笔（2026-10-14 落地，M4 第二波）：与全拼同为 Pinyin 模式，**只有 scheme 分得开**
+    // ⇒ 必须判在下面那条之前。码 5 = `Scheme::code`（engine-core 的协议表）。
+    if (mode == kModePinyin && scheme == 5 /* Scheme::Wubi */) {
+        return "wubi";
+    }
     return "";
 }
 
@@ -57,8 +59,8 @@ inline int32_t opiCtlSchemeRead() {
 // `opi-ctl state` 行尾 `mode=` 那一格的取值（2026-10-14 追加，**同日改判**）。
 // **与动作路径同一张 token 表**（opiCtlModeToken —— 两处各写一套必漂，这一格的由来
 // 就是让状态栏初值有个真源）：
-//   · 循环面上的档（全拼+Pinyin / English）⇒ 原样；五笔将来在 opiCtlModeToken
-//     的插入点落地后自动带出来，这里不用改；
+//   · 循环面上的档（全拼+Pinyin / English / **五笔**）⇒ 原样（五笔已落地，
+//     自动带出来，本函数一字未改）；
 //   · 面外的态（繁体/数字/符号/**双拼** —— 点击不停在它们上）⇒ **pinyin**：它们的
 //     **读法仍是拼音**，繁体/数字/符号只是拼音的变体或瞬态面板，简繁另有 trad 位
 //     表达 ⇒ 档位如实报「拼」。
@@ -84,11 +86,13 @@ inline std::string opiCtlStateModeToken(int32_t mode) {
 // handleCtlAction_，测到的就是 D-Bus 回复出去的这一串）。返回值 = **动作后**的
 // 新状态 token（见上）。
 //
-// 当前档 → 下一档：
-//   en26          → 拼音（全拼）：scheme 先归全拼，再切 Pinyin。
-//   其余一切      → en26（含拼音/繁体/符号/数字/双拼 —— 未定义态一律先收进 en26，
-//                   下一次点击再回拼音，循环照样闭合）。
-//   未来五笔 = 插在「en26 → ?」这一跳上（那处有注释标明插入点）。
+// 当前档 → 下一档（**拼 → 五 → en26 → 拼**，用户 2026-10-14 定的三档循环）：
+//   全拼+Pinyin（拼）→ 五笔：只换 scheme（码 5），模式留在 Pinyin。
+//   五笔             → en26（走下面那条 else —— 五笔不在 en26 档里，天然落进去）。
+//   en26             → 拼音（全拼）：scheme 先归全拼，再切 Pinyin。
+//   其余一切（繁体/符号/数字/双拼）→ **五笔**：它们在**显示面上是「拼」**
+//   （opiCtlStateModeToken 的改判：面外态报 pinyin），所以按显示档往前走一格就是
+//   五笔 —— 与「拼 → 五」同一条腿。
 //
 // 「其余一切 → en26」= 切英文，与 lang/Shift 轻按**同一条 W1 裁决**（2026-10-10
 // 深夜）：先把待定拼音交出去（先退浏览、后提交缓冲原文；符号模式不上关键字 ——
@@ -104,9 +108,28 @@ inline std::string opiCtlCycleMode(fcitx::InputContext *ic, OpiShiftToggle &shif
         if (opi_fcitx5_set_scheme != nullptr) {
             opi_fcitx5_set_scheme(static_cast<int32_t>(OpiPinyinMethod::Quanpin));
         }
-        // 未来五笔的插入点：en26 的下一档变成 wubi 时，从这里分叉
-        // （换成 set_scheme(五笔码) + 必要的收尾，而不是下面这行 switch_mode）。
+        // en26 → 拼音：scheme 归全拼（见上「契约的一部分」）。
         opi_fcitx5_switch_mode(kModePinyin);
+    } else if (opiCtlStateModeToken(opi_fcitx5_mode()) == "pinyin"
+               && opi_fcitx5_set_scheme != nullptr) {
+        // **显示档是「拼」**（全拼 / 面外态：繁体/符号/数字/双拼）→ 五笔。
+        // 判据用**显示 token**而不是 scheme：面外态下 scheme 可能是 4/5/0 任意值
+        // （用户上次留下的运行值），「码已经是 5」不等于「档位在五笔」—— 用 scheme==5
+        // 判会漏掉「符号态 + scheme 已是 5」这种组合（驱动 §10d 抓到过：它应当进五笔，
+        // 却被判进了 en26）。显示 token 是「用户看到的那一格」，按它往前走一格永远对。
+        //
+        // ⚠️ **模式也要归一为 Pinyin**：面外态的 mode 不是 Pinyin，只换 scheme 的话
+        // token 派生会回空串（`opiCtlModeToken` 对非 Pinyin 态返回 ""）—— 那是「动作
+        // 失败」的表示，可这动作明明成功了。
+        // ⚠️ **待定拼音先交出去**（与 en26 那条同一条 W1 裁决）：留着会被新 scheme
+        // 当五笔码重解（打了一半的拼音秒变乱码候选）。顺序：先确认 → 归模式 → 摆 scheme。
+        opiDirectConfirm(ic);
+        opi_fcitx5_switch_mode(kModePinyin);
+        opi_fcitx5_set_scheme(5 /* Scheme::Wubi */);
+        refreshingPanelFor(ic);
+        shift.update(ic);
+        fanjian.update(ic);
+        return opiCtlModeToken(opi_fcitx5_mode(), opiCtlSchemeRead());
     } else {
         // 其余一切 → en26。W1 直接确认**必须赶在 switch_mode 之前**（switch_mode
         // 清缓冲，之后只剩空串 —— OpiShiftToggle::toggle 的同一条顺序）。ic 为空
