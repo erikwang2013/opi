@@ -517,6 +517,7 @@ jobs:
             cmake -S "$1" -B "$2" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
               -DOPI_RUST_LIB="$rustlib" -DOPI_LUNA_OPID="$dict" \
               -DOPI_TRAD_OPID="$trad" -DOPI_SYMBOL_CATEGORIES="$sym" \
+              -DOPI_WUBI86_OPID="$wubi86" -DOPI_WUBI98_OPID="$wubi98" \
               -DCMAKE_EXPORT_COMPILE_COMMANDS=ON > "$3-cmake.log" 2>&1 \
               || { echo "--- cmake 配置失败（$3）---"; tail -20 "$3-cmake.log"; return 1; }
             cmake --build "$2" -j2 > "$3-build.log" 2>&1 \

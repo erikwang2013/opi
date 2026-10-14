@@ -135,6 +135,15 @@ cp "$OPI_LUNA_OPID" "$work/data/opi/luna.opid"
 : "${OPI_TRAD_OPID:=$repo/android/app/src/main/assets/trad.opid}"
 [ -f "$OPI_TRAD_OPID" ] || { echo "!! 找不到繁体词库源：$OPI_TRAD_OPID" >&2; exit 1; }
 cp "$OPI_TRAD_OPID" "$work/data/opi/trad.opid"
+# 五笔码表两张（2026-10-14，M4 第二波）：与 trad 同一条 —— 放进 addon 的数据目录，
+# 让 `opiWubiSync` 真能定位到（否则它按「表不存在 = 可选增强」静默跳过，本 harness
+# 就没有走到装载那条路）。两张都给：方案决定装哪张，harness 里按缺省 86。
+: "${OPI_WUBI86_OPID:=$repo/data/generated/wubi86.opid}"
+: "${OPI_WUBI98_OPID:=$repo/data/generated/wubi98.opid}"
+[ -f "$OPI_WUBI86_OPID" ] || { echo "!! 找不到五笔 86 码表源：$OPI_WUBI86_OPID（先跑 scripts/gen_wubi_dict.py）" >&2; exit 1; }
+[ -f "$OPI_WUBI98_OPID" ] || { echo "!! 找不到五笔 98 码表源：$OPI_WUBI98_OPID" >&2; exit 1; }
+cp "$OPI_WUBI86_OPID" "$work/data/opi/wubi86.opid"
+cp "$OPI_WUBI98_OPID" "$work/data/opi/wubi98.opid"
 # 符号类目数据（引擎侧 2026-10-10 落地后接线）：与 luna/trad 同一约定，可覆盖。
 # 不放它，opi-ctl symbols / Ctrl+Shift+Z 会走「数据缺失」的 err:4 路径。
 : "${OPI_SYMBOL_TSV:=$repo/crates/fcitx5-opi/data/symbol_categories.tsv}"
