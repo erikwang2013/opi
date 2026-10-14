@@ -38,36 +38,8 @@ pub fn rank_score(static_freq: u32, user_freq: u32, boost: u64) -> u64 {
     (static_freq as u64).saturating_add((user_freq as u64).saturating_mul(boost))
 }
 
-/// 排序层的**开关**（用户在「属性设置」里能改的那两个；见 `Engine` 的同名字段）。
-///
-/// 默认 = **两个都开**：这是本层的既有行为，也是 [`rank_and_pick`] 的语义
-/// （测试与旧调用方一行不动）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct RankOptions {
-    /// 模糊音启用集（逐对位掩码，位序见 `fuzzy.rs::FUZZY_PAIRS`；`FUZZY_ALL` = 旧「开」）。
-    /// 整串变体 + 逐音节兜底共用它，表见 `fuzzy.rs`。
-    pub fuzzy: crate::fuzzy::FuzzyMask,
-    /// 拼音纠错开关（2026-10-13 用户裁决「混合参与排序」；变体见 `correction.rs`）。
-    /// 与模糊音**同一条管线、同一档**（非精确、追加式），只是变体生成方式不同。
-    pub correction: bool,
-    /// 简拼（声母缩写 `nh → 你好`，展开见 `jianpin.rs`）。
-    pub jianpin: bool,
-    /// **简体优先**（2026-10-13 用户裁决「如果是混合就优先显示简体」）：截断前把含
-    /// 繁体专属字的候选稳定分区到后面，见 `trad_chars::demote_traditional`。
-    /// 默认 `false` = 本层既有行为（老调用方一行不动）；`Engine` 在**简体模式**下显式开。
-    pub prefer_simplified: bool,
-}
-
-impl Default for RankOptions {
-    fn default() -> Self {
-        Self {
-            fuzzy: crate::fuzzy::FUZZY_ALL,
-            correction: true,
-            jianpin: true,
-            prefer_simplified: false,
-        }
-    }
-}
+// 排序层开关 [`RankOptions`] 在 `candidates_options.rs`（500 行门禁拆出，见那里头注）。
+pub use crate::candidates_options_impl::RankOptions;
 
 /// 合并词典候选与符号候选，排序、去重、截断。
 /// 两个开关全开的 [`rank_and_pick_with`]（测试与既有调用方的入口；
@@ -235,13 +207,16 @@ pub fn rank_and_pick_with<D: Dictionary + ?Sized>(
     if merged.is_empty()
         && input.chars().count() > 1
         && !wide_hits
+        && opts.segment_fallback
         && let Some(fb) = segment_fallback(dict, input, opts.fuzzy, opts.correction)
     {
         // 递归深度 ≤ 1：「前缀有命中」是入选条件，到了里面 `merged` 必非空。
         merged = rank_and_pick_with(dict, symbols, learner, &fb.prefix, mode, limit, boost, opts);
         seg_used = true;
     }
-    if merged.is_empty() && input.chars().count() > 1 && !seg_used {
+    // 逐音节汤与分词回退同一开闸（`segment_fallback`）：五笔关闸后这里也不许漏 ——
+    // 它是同一族「按拼音音节猜」的档（2026-10-14，见 RankOptions::segment_fallback）。
+    if merged.is_empty() && input.chars().count() > 1 && !seg_used && opts.segment_fallback {
         for syl in segment(input) {
             if syl.chars().count() < 2 {
                 continue;

@@ -60,6 +60,8 @@ impl Engine {
                     correction: self.correction,
                     jianpin: self.jianpin,
                     prefer_simplified: mode == Mode::Pinyin,
+                    // 解码结果就是**真拼音**，分词回退/逐音节汤对它照旧有效（既有行为）。
+                    segment_fallback: true,
                 },
             ) {
                 if seen.insert(c.text.clone()) {

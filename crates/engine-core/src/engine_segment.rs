@@ -48,7 +48,10 @@ impl Engine {
             match self.scheme() {
                 // 双拼不支持「切一半」：解码只在**整串**能解析时才出候选（DFS 要求
                 // 到达键尾），选中即整段消耗 —— 回退臂给 None（走 commit_buffer）。
-                Scheme::Shuangpin => None,
+                // 五笔同（2026-10-14，M4 3b）：候选层的分词回退对它已关闸
+                // （`RankOptions::segment_fallback`，理由见 engine_wubi.rs 头），
+                // 收尾层若还按音节去切就是两层判据不同源 —— 整段消耗，与候选层一致。
+                Scheme::Shuangpin | Scheme::Wubi => None,
                 Scheme::Full | Scheme::Stroke => {
                     segment_fallback(self.active_dict(), buffer, self.fuzzy, self.correction)
                         .map(|fb| fb.suffix)

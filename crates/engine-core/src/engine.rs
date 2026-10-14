@@ -7,6 +7,7 @@ use crate::candidates::{
 use crate::composer::{Composer, KeyEffect, Mode};
 use crate::dict_layers::LayeredDictionary;
 use crate::dictionary::Dictionary;
+use crate::engine_wubi_impl::{WubiReturnStyle, WubiStyle};
 use crate::learner::Learner;
 use crate::punctuation::Quotes;
 use crate::scheme::Scheme;
@@ -25,6 +26,16 @@ pub struct Engine {
     /// 横竖撇捺折），词是单字。`Scheme::Stroke` 时改查它。None = 笔画方案回退
     /// 普通路径（可选增强，与 trad 同一姿态）。
     pub(crate) stroke_dict: Option<Box<dyn Dictionary>>,
+    /// 五笔码表（2026-10-14，M4 3b）：键是码（普通 ASCII 字母），词是字/词。
+    /// `Scheme::Wubi` 时改查它；None = 五笔回退普通路径（与 stroke 同一姿态）。
+    /// 换装口 `set_wubi_dict` 在 engine_dicts.rs，候选装配在 engine_wubi.rs。
+    pub(crate) wubi_dict: Option<Box<dyn Dictionary>>,
+    /// 五笔输入风格（纯五笔 / 拼音混输；语义与判定规则见 engine_wubi.rs 头）。
+    pub(crate) wubi_style: WubiStyle,
+    /// 五笔候选个数档位（引擎侧截断；默认/上限见 engine_wubi.rs 的常量）。
+    pub(crate) wubi_candidate_limit: usize,
+    /// 五笔回车键行为（**设置位**：消费在四端路由，本波未接线 —— 见 `WubiReturnStyle`）。
+    pub(crate) wubi_return_style: WubiReturnStyle,
     pub(crate) composer: Composer, // pub(crate)：engine_segment.rs 的收尾要用（见文件头）
     /// 符号表引擎（`symbol_blocks` 一族的 impl 在 engine_symbol_browse.rs，故 pub(crate)）。
     pub(crate) symbols: SymbolEngine,
@@ -95,6 +106,10 @@ impl Engine {
             dict: LayeredDictionary::new(dict),
             trad_dict: trad,
             stroke_dict: None,
+            wubi_dict: None,
+            wubi_style: WubiStyle::default(),
+            wubi_candidate_limit: crate::engine_wubi_impl::WUBI_CANDIDATE_LIMIT_DEFAULT,
+            wubi_return_style: WubiReturnStyle::default(),
             composer: Composer::new(),
             symbols,
             learner: Learner::new(learner_enabled),
@@ -117,7 +132,7 @@ impl Engine {
     // ---- 词典换装一族（trad / stroke / 导入层）与 user_boost 重算：impl 体在
     // engine_dicts.rs（500 行门禁拆出）；字段的 pub(crate) 理由见那个文件的头注释。
 
-    /// 当前输入方案（9 键 / 14 键 / 笔画 / 全键盘）。
+    /// 当前输入方案（全键盘 / 9 键 / 14 键 / 笔画 / 双拼 / 五笔）。
     pub fn scheme(&self) -> Scheme {
         self.composer.scheme()
     }
@@ -154,7 +169,10 @@ impl Engine {
         }
         let (effect, _session) = self.composer.input_key(ch);
         match effect {
-            KeyEffect::Updated => String::new(),
+            // 五笔四码唯一自动上屏（2026-10-14，M4 3b 特殊习惯 1）：判据全在
+            // engine_wubi.rs::wubi_autocommit，此处只接既有的「单键返回待上屏文本」
+            // 通道 —— 非五笔/未命中时它恒 None，四种端的行为一字不动。
+            KeyEffect::Updated => self.wubi_autocommit().unwrap_or_default(),
             // 标点类**永远有归宿**：要么被标点表映射（上面那条），要么原样交回调用方。
             // 其余字符（字母/数字/控制符/非 ASCII）不在内 —— 它们各有去处（进缓冲，
             // 或这个模式明确不收），**且不能靠这条救**：缓冲满时 composer 同样返回
@@ -376,11 +394,22 @@ impl Engine {
                                 correction: false,
                                 jianpin: false,
                                 prefer_simplified: s.mode == Mode::Pinyin,
+                                // 笔画串不是音节，分词回退对 hspnz 天然惰性 —— 保持
+                                // 既有值（true），别顺手统一成 false（那是五笔的理由）。
+                                segment_fallback: true,
                             },
                         );
                     }
                     // 没装笔画词典：落到下面普通路径（候选基本为空）——
                     // 与 trad 缺失同一种「可选增强」姿态，不在引擎里报错。
+                }
+                // 五笔（2026-10-14，M4 3b）：纯前缀管线，候选装配（含混输合并与
+                // 候选个数档位）在 engine_wubi.rs。槽为空 ⇒ 落到下面普通路径
+                // （**如实**：不许假装有码表 —— 与 stroke 同一条「可选增强」姿态）。
+                Scheme::Wubi => {
+                    if self.wubi_dict.is_some() {
+                        return self.candidates_wubi(&s.buffer, s.mode, limit);
+                    }
                 }
                 Scheme::Full => {}
             }
@@ -389,7 +418,9 @@ impl Engine {
         // 上述装词典那支早关了这三个，落回本支时却只吃了全局开关 —— 模糊音在笔画串上
         // 极少命中所以一直没露；2026-10-13 加纠错后 `hs` 被纠出错音节，
         // `stroke_scheme_without_dict_is_empty_not_error` 当场抓到（红得正确）。
-        let stroke = self.scheme() == Scheme::Stroke;
+        // 五笔同族（2026-10-14）：无码表时也落本支，三档同关 + **分词回退也关**
+        // （码串没有音节，理由见 engine_wubi.rs 头）—— `plain` 是这两条路的共同判据。
+        let plain = matches!(self.scheme(), Scheme::Stroke | Scheme::Wubi);
         rank_and_pick_with(
             self.active_dict(),
             &self.symbols,
@@ -399,10 +430,11 @@ impl Engine {
             limit,
             self.user_boost,
             RankOptions {
-                fuzzy: if stroke { 0 } else { self.fuzzy },
-                correction: self.correction && !stroke,
-                jianpin: self.jianpin && !stroke,
+                fuzzy: if plain { 0 } else { self.fuzzy },
+                correction: self.correction && !plain,
+                jianpin: self.jianpin && !plain,
                 prefer_simplified: s.mode == Mode::Pinyin,
+                segment_fallback: self.scheme() != Scheme::Wubi,
             },
         )
     }

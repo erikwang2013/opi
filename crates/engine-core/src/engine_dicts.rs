@@ -21,14 +21,16 @@ use crate::engine::Engine;
 impl Engine {
     /// `user_boost` 的**唯一**算法：`max(USER_BOOST, 全库最大静态词频 × 2)`。
     ///
-    /// 取三个词典的**全局**最大词频（含 stroke，2026-10-09 起；导入层，2026-10-14 起
+    /// 取四个词典的**全局**最大词频（含 stroke，2026-10-09 起；导入层，2026-10-14 起
     /// —— `self.dict` 是分层库，它的 `max_freq` 已经把导入层算进去，见 `dict_layers.rs`
-    /// 裁决 4）。调用点：构造 + 三个换装口，**每个都要调**：漏一个就会让某个更大的词频
-    /// 表静默改变「一次选词压过全部静态词」的档位（那是既有不变量）。
+    /// 裁决 4；含 wubi，2026-10-14 M4 3b 起）。调用点：构造 + 四个换装口，**每个都要调**：
+    /// 漏一个就会让某个更大的词频表静默改变「一次选词压过全部静态词」的档位
+    /// （那是既有不变量）。
     pub(crate) fn recompute_user_boost(&mut self) {
         let max_freq = std::iter::once(&self.dict as &dyn Dictionary)
             .chain(self.trad_dict.as_deref())
             .chain(self.stroke_dict.as_deref())
+            .chain(self.wubi_dict.as_deref())
             .map(|d| d.max_freq())
             .max()
             .unwrap_or(0);
@@ -59,6 +61,15 @@ impl Engine {
     /// 静默改变「精确加成」的档位）。
     pub fn set_stroke_dict(&mut self, dict: Option<Box<dyn Dictionary>>) {
         self.stroke_dict = dict;
+        self.recompute_user_boost();
+    }
+
+    /// 换装五笔码表（M4 3b，2026-10-14）。None = 清除（五笔方案回退普通路径）。
+    /// 与 [`Self::set_stroke_dict`] 同一形状（含重算 user_boost —— 别让更大的词频表
+    /// 静默改变「精确加成」的档位）。换装**不清缓冲**（与两个 style 设置同：只改
+    /// 之后怎么装配，缓冲里的码按新表重解）。
+    pub fn set_wubi_dict(&mut self, dict: Option<Box<dyn Dictionary>>) {
+        self.wubi_dict = dict;
         self.recompute_user_boost();
     }
 

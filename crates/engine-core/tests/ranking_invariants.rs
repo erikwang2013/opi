@@ -130,7 +130,13 @@ fn rank_and_pick_invariants() {
         // 分档契约（见本函数头注 3）：主档 = 关掉模糊/纠错/简拼的那一遍。
         let base = rank_and_pick_with(
             &d, &no_symbols(), &l, input, Mode::Pinyin, limit, boost,
-            RankOptions { fuzzy: 0, correction: false, jianpin: false, prefer_simplified: false },
+            RankOptions {
+                fuzzy: 0,
+                correction: false,
+                jianpin: false,
+                prefer_simplified: false,
+                segment_fallback: true,
+            },
         );
         for (i, c) in base.iter().enumerate().take(limit) {
             let Some(g) = got.get(i) else { break };

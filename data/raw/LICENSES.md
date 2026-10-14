@@ -18,6 +18,8 @@
 | brand_terms.tsv / new_words.tsv / reading_overrides.tsv（人工表，2026-10-11 加） | OPI 项目人工撰写（生成器只做机械校验：音节合法性按 `pinyin.rs` 的 SYLLABLES 全切分、长度/字面/繁形过滤） | MIT | 品牌白名单（609 条）、网络用语/新词（391 条，含 2020–2023 时期词汇）与词级注音覆盖表（422 条，拼音人工写死）。⚠️ 覆盖表另有对上游真值的自动复核：词在 base/ext 出现时其读音必须是上游读音之一（实测揪出 8 条笔误/选读错误，见生成器 stderr 与本节下「外部词库并入」）。由 `scripts/gen_extra_phrases.py` 合并进 extra_manual.tsv |
 | extra_manual.tsv / extra_phrases.tsv（生成物，2026-10-11 加） | 复合来源（逐源见「外部词库并入（2026-10-11）」节） | **合并产物按 GPL-3.0 分发**（含 GPL-3.0-only 的 rime-ice 层）；源码（生成器）仍 MIT | 词组三段序的前置段与批量段，由 `scripts/gen_extra_phrases.py` 生成、`gen_luna_dict.py` 并入 luna.opid。行数/体积**以生成器每次打印的为准**，别写死数字 |
 | GPL-3.0.txt（2026-10-11 加） | https://www.gnu.org/licenses/gpl-3.0.txt （与 Debian `/usr/share/common-licenses/GPL-3` 逐字节同文，双源 sha256 核过） | GPL-3.0 全文 | 随 .deb/.rpm 分发（`scripts/nfpm.yaml` 装进 `/usr/share/doc/opi/`）—— 合并产物按 GPL-3.0 分发时的许可文本义务 |
+| wubi86.tsv（2026-10-14 加） | https://github.com/rime/rime-wubi @ commit `152a0d3f3efe40cae216d1e3b338242446848d07`（wubi86.dict.yaml） | **LGPL-3.0**（按 rime 仓声明；上游链路的残留不一致见下「五笔码表」节） | 五笔 86 码表（极点码表转 rime 格式）。由 scripts/gen_wubi_dict.py **钉 commit** 拉取后把 rime 四列转成仓内三列（`词\t码\t频次`；第 4 列 stem 丢弃），编译为 `data/generated/wubi86.opid`（入库）。weight 直接作词频（最大 4.25e9 < u32::MAX；引擎侧 u64 比较，无溢出）。**条数以生成器每次打印的为准，别写死数字** |
+| wubi98.tsv（2026-10-14 加） | https://github.com/yanhuacuo/98wubi-tables @ commit `6b8b6fb9d3c34e0d5e3b17211e1f1c100e7eb697`（`超集-rime格式码表.txt` 单字段 + `98五笔含词表-【单义】.txt` 词组段） | **Unlicense**（仓库 LICENSE 实测为 Unlicense 全文，blob `fdddb29aa445`；README「已无版权问题」的依据是讲**专利**的视频，不作版权依据——见下节） | 五笔 98 码表：单字取超集-rime 格式（全单字、**字覆盖为含词表的 3.6 倍**）、词组取含词表（唯一词组来源）。两份拼的理由、权重语义与自洽校验见下「五笔码表」节；编译产物 `data/generated/wubi98.opid`（入库） |
 
 ## 英文联想词源（2026-09-28）
 
@@ -78,6 +80,8 @@ zemegaode→zenmegaode）。现钉死到本次实际取到的版本，脚本内�
 | chinese-xinhua idiom.json + xiehouyu.json（2026-10-11 加） | commit `fe6d6c2e8baa82187f4c96bbe042e43f96c05666`（pwxcoo/chinese-xinhua） | idiom `1d4b4f454ce1c416d6a1ab2369d6e66c0ff99e04390172eef70790499e21ce19` / xiehouyu `22e3c4aa31c7d93765eaa842fe91983e6a109b29aec25956e1efacd9f71418d9`；blob-sha1 对过 API | 同上 |
 | THUOCL 五表 IT/医疗/法律/财经/成语（2026-10-11 加） | commit `a30ce79d895d01ab5132a5c74c29703ff7efb4cc`（thunlp/THUOCL） | 五份 sha256 全部写死在脚本常量（照本表体例，不在此复写）；blob-sha1 对过 API | 同上 |
 | OpenCC TSCharacters.txt（2026-10-11 加，**判繁判据**、非词源） | tag `ver.1.1.9`（BYVoid/OpenCC） | `6b5a0a799bea2bb22c001f635eaa3fc2904310f0c08addbff275477a80ecf09a`（4113 条） | 同上 |
+| wubi86.dict.yaml（2026-10-14 加） | commit `152a0d3f3efe40cae216d1e3b338242446848d07`（rime/rime-wubi） | `f833d86b72341fe82e069a425b6625f29ef85f1bc0f34f6fb7975fe514888b5a`（2289545 字节）；blob-sha1 `58d8f794…` | scripts/gen_wubi_dict.py |
+| 98 码表两份（2026-10-14 加） | commit `6b8b6fb9d3c34e0d5e3b17211e1f1c100e7eb697`（yanhuacuo/98wubi-tables） | 超集-rime格式码表 `728acbcc1c7ae57f6bfd88f0176754b5770d3af42490bc124bac6669e1913a53`（4692084 字节）/ 98五笔含词表-【单义】 `1b5a4c22eddae08d8e0e6aa8f926f92d45d6cdaa591e5cee0e8aad29271da1cc`（1988020 字节，UTF-16LE+CRLF）；两份 blob-sha1（`52bd9c2e…` / `8500e3b9…`）对过 GitHub API | 同上 |
 
 另：luna_pinyin.dict.yaml **仍未 pin**（上游取 rime-luna-pinyin master）。本次实测所用版本
 sha256 `75bcf6eb3ff62b129882ed89cc22b2d1b80a5347aa72bcfa2ccc839bac298e7314`
@@ -370,3 +374,51 @@ kmandarin 16,559 / override 5 / **suppressed 141,729**（注音层的词已在�
 与其它源码仍 MIT。如实记录（不做法律论断）：rime-ice 自述为多源拼装（华宇野风 +
 THUOCL + 现代汉语常用词表 + 腾讯词向量），本次只收 base+ext（其 tencent 层与
 含 wiktionary 拼音的 8105/41448 层不收），**base+ext 的注音上游链路上游未逐条声明**。
+
+## 五笔码表 wubi86 / wubi98（2026-10-14；M4 计划 3a）
+
+**裁决**：86 + 98 入库，新世纪（06）不做（无合规源）。两表由 `scripts/gen_wubi_dict.py`
+一处生成（钉 commit + sha256 逐次校验；上游文件缓存在 `data/generated/`、未入库；产物幂等）。
+**条数以生成器每次打印的为准。**
+
+**98 为什么是两份拼的**：`超集-rime格式码表.txt` **一条词组都没有**（全表 109,842 行全是
+单字，含简码形态，字覆盖 99,050），而 `98五笔含词表-【单义】.txt` 的词组（76,150 行）是唯一
+来源；含词表的单字实测全部 ⊂ 超集-rime 那份（0 例外，脚本里是断言）⇒ 单字段取 rime 格式、
+词组段取含词表，零丢失。
+
+**权重语义（两表不同，别当同一把尺）**：86 的 weight 是真实词频（含 42,724 行 0 值 —— 多为
+扩展区生僻字，排序沉底但仍可查）；98 单字的「权重」实测为**文件序的稠密排名**（1098420−i），
+只保证同码内相对序、**不是词频**；98 词组无权重，按 `parse_dict` 的缺省 1000。⇒ 同码内的
+相对序有意义，**跨表、跨码的 freq 比较无意义**。浮点权重（86 实测 1 条 χ/zzxx `450.5`）在
+生成器里取整 —— 原样落盘会被 `parse_freq` 按 unusable 整条丢弃（χ 从 zzxx 静默消失）；
+取整计数打在 stderr。
+
+**残留不一致（如实记，不做法律论断）**：
+- 86 的上游链路：rime-wubi 仓自述 LGPL-3.0，但原始码表提供者 acevery 仓的 COPYING 实测是
+  GPL-3.0 全文（rime 的 AUTHORS 只记了 LGPL 侧）。两者同属 copyleft 家族；随包分发要求的
+  许可文本义务由已在仓库的 `GPL-3.0.txt` 覆盖。
+- 98 的「已无版权问题」：README 该节只挂了一条 bilibili 视频（讲的是**专利**到期，不是版权
+  授权）；版权依据取仓库自己的 Unlicense 全文 LICENSE（blob `fdddb29aa445`）。**视频不作依据。**
+
+**有意保留、生成侧不过滤的两类行**（lead 已裁决保留，2026-10-14：与本仓 stroke 态度一致
+「超集照收」，可见性由显示侧的 `GlyphCoverage` 过滤 —— 词表层不替显示层做减法；改之前先读
+生成器文件头）：
+- 86 的 z 前缀行（实测 677 条：zzjp 片假名 / zzpj 平假名 / zzsx 数学符号 / zzpp 部首…）：
+  上游的「分类表」约定，不是五笔编码；z 在五笔里通常是万能键，两者会不会打架是 wubi-engine
+  的设计问题，数据侧原样保留并报数。
+- 词含 CJK 基本区/扩展 A/B 之外字符的行（86 830 行、98 30,135 行：扩展 C+、康熙部首、假名、
+  符号）。本仓收录范围口径（`hanzi_freq.CJK_RANGES`）是给拼音词库定的；五笔表是**码表**、
+  超集字是它的卖点，故不过滤。**局限：收录 ≠ 可见** —— 扩展 C+ 与假名多数字体不覆盖，
+  打出来是 tofu（与上面「收录范围」节同一结论）。
+
+**自洽校验**（每次生成打 stderr，条数实测、不许写死）：码只准 a-z、码长 1–4；同码冲突分布
+（「四码唯一自动上屏」的判据输入）；词组码规则核验（2 字 = 各取前两码、3 字 = 前两字首码 +
+末字前两码、4 字 = 各首码、>4 字 = 前 3 首码 + 末字首码）；编译自检（`opi-tools compile` 的
+kept entries == 生成行数、且 stderr 零「跳过」警告 —— 任何静默丢行都在这条上红）。核不到的
+如实记：词组组成字不在单字表里的行数、组成字多全码（取字典序首个）的行数，以及上游自身的
+28 条词组码不符规则（86；如 蹒跚 表内 `kakm`、按规则 `khkh`；占 0.05%）—— **原样保留**
+（数据保真优先，不替上游修码）。
+
+**分发面**：两表暂不随任何端分发（`.opid` 已入库 `data/generated/`）；接入端时要改的清单
+（fcitx5 安装落点/`opi_locate_check.cpp`/CI grep、Android assets、nfpm/MSI 装载清单）由接入
+任务列出。

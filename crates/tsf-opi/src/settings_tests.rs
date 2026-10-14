@@ -200,12 +200,17 @@ fn parses_and_applies_pinyin_method() {
     // 认不得的名字/缺键都不动引擎（不静默跳回全拼）。
     s.apply_settings(parse("Learn=True\n"), std::path::Path::new(""));
     assert_eq!(s.engine.scheme(), Scheme::Shuangpin, "未设置 ⇒ 保持");
-    s.apply_settings(parse("PinyinMethod=五笔\n"), std::path::Path::new(""));
+    // ⚠️ 「认不得」的样例**别用将来会合法化的大写方案名**：本条原写「五笔」，M4 加了
+    // `Scheme::from_name("五笔")` 之后它就成了合法名 —— 门禁当场红（2026-10-14，红得
+    // 正确）。改用一眼就不是方案名的串，并**另起一条**把「五笔现在合法」也钉住。
+    s.apply_settings(parse("PinyinMethod=打错了\n"), std::path::Path::new(""));
     assert_eq!(
         s.engine.scheme(),
         Scheme::Shuangpin,
         "认不得 ⇒ 保持（不静默跳回）"
     );
+    s.apply_settings(parse("PinyinMethod=五笔\n"), std::path::Path::new(""));
+    assert_eq!(s.engine.scheme(), Scheme::Wubi, "M4 起「五笔」是合法方案名");
     s.apply_settings(parse("PinyinMethod=全拼\n"), std::path::Path::new(""));
     assert_eq!(s.engine.scheme(), Scheme::Full, "切回全拼");
 }

@@ -248,12 +248,19 @@ class SettingsLockstepTest {
             .findAll(src).map { it.groupValues[2] }.toList()
         assertTrue("scheme.rs 里一条名字都没解析出来（源码格式变了？）", rustNames.isNotEmpty())
         assertEquals(
-            "引擎方案名字表（顺序 = 枚举声明序）",
-            listOf("全拼", "拼音9键", "拼音14键", "笔画", "双拼"),
+            "引擎方案名字表（顺序 = 枚举声明序；M4 起含五笔）",
+            listOf("全拼", "拼音9键", "拼音14键", "笔画", "双拼", "五笔"),
             rustNames,
         )
-        // 桌面可达的子集 = 全拼 + 双拼（9/14 键/笔画是移动端方案，物理键盘上没有意义）。
+        // 桌面可达的子集 = 全拼 + 双拼（9/14 键/笔画是移动端方案；**五笔要等码表随包分发、
+        // 且设置面加了「输入方案」控制后才列** —— 现在列出来就是「选了没候选」的假承诺，
+        // 见 M4 下一波）。子集断言改成「同序前缀」而不是硬编码两份，免得两边各抄一遍。
         assertEquals("桌面名字表 = 引擎名字表的可达子集（同序）", listOf("全拼", "双拼"), SCHEME_NAMES)
+        assertEquals(
+            "子集必须与引擎表同序（按引擎序过滤出来要逐字相等 —— 不是前缀：双拼在表尾附近）",
+            rustNames.filter { it in SCHEME_NAMES },
+            SCHEME_NAMES,
+        )
         assertEquals("SCHEME_NAMES 首项 = 缺省（全拼）", "全拼", OpSettings().pinyinMethod)
 
         val config = repoFile("crates/fcitx5-opi/cpp/opi_config.h")

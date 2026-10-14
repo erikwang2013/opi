@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 /// 输入模式。V1 固定四模式（简繁共五种）。**按键布局**是另一根轴 ——
-/// `crate::scheme::Scheme`（全键盘 / 9 键 / 14 键 / 笔画，2026-10-09）；
-/// 双拼/五笔等扩展「输入方案」仍未做（README 的能力表与这里同口径）。
+/// `crate::scheme::Scheme`（全键盘 / 9 键 / 14 键 / 笔画 2026-10-09 / 双拼 2026-10-13 /
+/// 五笔 2026-10-14 引擎侧；四端设置面与数据分发按各自的计划推进）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Mode {
     #[default]

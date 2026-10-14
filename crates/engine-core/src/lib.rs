@@ -6,6 +6,8 @@
 
 pub mod bytes;
 pub mod candidates;
+#[path = "candidates_options.rs"]
+mod candidates_options_impl; // 排序层开关 RankOptions（500 行门禁拆出，见文件头）
 #[path = "candidates_scheme.rs"]
 mod candidates_scheme_impl;
 pub mod composer;
@@ -27,6 +29,8 @@ mod engine_shuangpin_impl; // 双拼一族：布局设置 + 候选分支（500 �
 mod engine_symbol_browse_impl; // 符号浏览一族（500 行门禁拆出，见文件头）
 #[path = "engine_user_words.rs"]
 mod engine_user_words_impl; // 用户词与开关一族（500 行门禁拆出，见文件头）
+#[path = "engine_wubi.rs"]
+mod engine_wubi_impl; // 五笔一族：风格/候选个数/自动上屏/编码提示/回车设置位（500 行门禁拆出，见文件头）
 pub mod fuzzy;
 pub mod jianpin;
 pub mod keys;
@@ -45,6 +49,9 @@ pub mod trie;
 pub use composer::{Composer, KeyEffect, Mode, Session};
 pub use dictionary::{Dictionary, InMemoryDictionary};
 pub use engine::Engine;
+pub use engine_wubi_impl::{
+    WUBI_CANDIDATE_LIMIT_DEFAULT, WUBI_CANDIDATE_LIMIT_MAX, WubiReturnStyle, WubiStyle,
+};
 pub use learner::{Learner, UserWord, UserWordExport};
 pub use router::{KeyAction, KeyRouter, ShiftState};
 pub use scheme::Scheme;

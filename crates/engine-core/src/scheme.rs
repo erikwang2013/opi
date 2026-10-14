@@ -11,6 +11,7 @@
 //! | [`Scheme::Nine`] | `2`–`9` | `abc` / `def` / … / `wxyz`（T9 式） |
 //! | [`Scheme::Fourteen`] | `q e t u o / a d g j l / z c b m` | 见 `key_class` 的表 |
 //! | [`Scheme::Stroke`] | `h s p n z` | 1 对 1（**换的是词典**，见 Engine::set_stroke_dict） |
+//! | [`Scheme::Wubi`] | 26 键 | 1 对 1（**换的是词典**，见 Engine::set_wubi_dict，2026-10-14） |
 //!
 //! 匹配语义是**前缀**（与全键盘的 `query_prefix` 同义）：`"64"` 命中
 //! `ni`/`nihao`/`nu…` 之类以「按键类里包含 n、再包含 i」开头的键。
@@ -45,10 +46,16 @@ pub enum Scheme {
     /// 智能ABC/紫光/拼音加加）是 `Engine::shuangpin_layout` 的运行期状态，
     /// 不在本枚举里 —— 枚举是「匹配语义」的轴，布局只是那张表的索引。
     Shuangpin,
+    /// 五笔（2026-10-14，M4 3b）：键是普通 ASCII 字母、**匹配即前缀** —— 与
+    /// `Stroke` 同型（换的是词典，见 `Engine::set_wubi_dict`）。输入风格
+    /// （纯五笔 / 拼音混输）是 `Engine::wubi_style` 的运行期状态，不在本枚举里
+    /// （同 `Shuangpin` 与布局的切法：枚举管匹配语义，风格只是装配轴）。
+    /// 候选装配（含混输合并与特殊习惯）见 `engine_wubi.rs`。
+    Wubi,
 }
 
 impl Scheme {
-    /// 方案**整数码**（对外协议）：0=全拼 1=拼音9键 2=拼音14键 3=笔画 4=双拼。
+    /// 方案**整数码**（对外协议）：0=全拼 1=拼音9键 2=拼音14键 3=笔画 4=双拼 5=五笔。
     ///
     /// 这是 JNI `scheme()`/`setScheme()` 与 C ABI `opi_scheme`/`opi_set_scheme` 的
     /// 线上口径，也是 fcitx5 配置枚举 `OpiPinyinMethod` 的取值来源（那边把枚举值
@@ -62,6 +69,7 @@ impl Scheme {
             Scheme::Fourteen => 2,
             Scheme::Stroke => 3,
             Scheme::Shuangpin => 4,
+            Scheme::Wubi => 5,
         }
     }
 
@@ -74,6 +82,7 @@ impl Scheme {
             2 => Some(Scheme::Fourteen),
             3 => Some(Scheme::Stroke),
             4 => Some(Scheme::Shuangpin),
+            5 => Some(Scheme::Wubi),
             _ => None,
         }
     }
@@ -88,6 +97,7 @@ impl Scheme {
             Scheme::Fourteen => "拼音14键",
             Scheme::Stroke => "笔画",
             Scheme::Shuangpin => "双拼",
+            Scheme::Wubi => "五笔",
         }
     }
 
@@ -100,19 +110,21 @@ impl Scheme {
             "拼音14键" => Some(Scheme::Fourteen),
             "笔画" => Some(Scheme::Stroke),
             "双拼" => Some(Scheme::Shuangpin),
+            "五笔" => Some(Scheme::Wubi),
             _ => None,
         }
     }
 
     /// 本方案下这个字符是不是**输入键**；是 → 返回该键覆盖的字母类。
     ///
-    /// `Full`/`Stroke` 恒 `None`：Full 走既有字母路径；Stroke 的五个键是普通字母，
-    /// 也走既有路径（换词典不换映射）。宿主画键盘时用同一张表（9 键九个键、
-    /// 14 键十四个键），**别在宿主另抄一份**。
+    /// `Full`/`Stroke`/`Wubi` 恒 `None`：Full 走既有字母路径；Stroke 的五个键与
+    /// 五笔的 26 个字母键都是普通字母，也走既有路径（换词典不换映射）。宿主画键盘时
+    /// 用同一张表（9 键九个键、14 键十四个键），**别在宿主另抄一份**。
     pub fn key_class(self, ch: char) -> Option<&'static [char]> {
         match self {
             // 双拼的键也是普通字母（映射在引擎的解码层，不在键类层）。
-            Scheme::Full | Scheme::Stroke | Scheme::Shuangpin => None,
+            // 五笔同（映射就是字母本身，候选装配在 engine_wubi.rs）。
+            Scheme::Full | Scheme::Stroke | Scheme::Shuangpin | Scheme::Wubi => None,
             Scheme::Nine => Some(match ch {
                 '2' => &['a', 'b', 'c'],
                 '3' => &['d', 'e', 'f'],
@@ -146,15 +158,16 @@ impl Scheme {
 
     /// 前缀语义匹配：`pinyin` 的前 `input.len()` 个字母逐个落在 `input` 按键的类里。
     ///
-    /// `Full`/`Stroke` 退化成正前缀（`starts_with`）—— 生产路径不会用它们走这里
-    /// （candidates 只在 Nine/Fourteen 下调本函数），但保持语义自洽，单测也拿它
-    /// 当基线。输入为空 → false（空缓冲没有候选，与各层同一条约定）。
+    /// `Full`/`Stroke`/`Wubi` 退化成正前缀（`starts_with`）—— 生产路径不会用它们走
+    /// 这里（candidates 只在 Nine/Fourteen 下调本函数；五笔与笔画走各自词典的前缀
+    /// 查询，见 `engine_wubi.rs`），但保持语义自洽，单测也拿它当基线。输入为空 →
+    /// false（空缓冲没有候选，与各层同一条约定）。
     pub fn matches(self, input: &str, pinyin: &str) -> bool {
         if input.is_empty() {
             return false;
         }
         match self {
-            Scheme::Full | Scheme::Stroke => pinyin.starts_with(input),
+            Scheme::Full | Scheme::Stroke | Scheme::Wubi => pinyin.starts_with(input),
             // 双拼的键序不是拼音前缀（要先解码，见 Engine::candidates 的 Shuangpin 支）：
             // 本函数对它恒 false —— 真走到这里说明有人拿双拼键直查词库，是缺陷不是语义。
             Scheme::Shuangpin => false,
@@ -288,19 +301,20 @@ mod tests {
     /// 整数码是**对外协议**（JNI/C ABI 两张整数表）：整表逐值钉，改一个数先在这里红。
     #[test]
     fn code_table_is_the_protocol() {
-        let table: [(Scheme, i32); 5] = [
+        let table: [(Scheme, i32); 6] = [
             (Scheme::Full, 0),
             (Scheme::Nine, 1),
             (Scheme::Fourteen, 2),
             (Scheme::Stroke, 3),
             (Scheme::Shuangpin, 4),
+            (Scheme::Wubi, 5),
         ];
         for (s, c) in table {
             assert_eq!(s.code(), c, "{s:?} 的码");
             assert_eq!(Scheme::from_code(c), Some(s), "码 {c} 该读回 {s:?}");
         }
         // 越界 → None（写侧忽略、读侧按 Full —— 由 FFI 层落成各自哨兵）。
-        assert_eq!(Scheme::from_code(5), None);
+        assert_eq!(Scheme::from_code(6), None);
         assert_eq!(Scheme::from_code(-1), None);
     }
 
@@ -313,6 +327,7 @@ mod tests {
             Scheme::Fourteen,
             Scheme::Stroke,
             Scheme::Shuangpin,
+            Scheme::Wubi,
         ] {
             assert_eq!(Scheme::from_name(s.name()), Some(s), "{s:?} 的名字往返");
         }
@@ -411,5 +426,18 @@ mod tests {
         assert!(Scheme::Full.matches("ni", "nihao"));
         assert!(Scheme::Stroke.matches("hsp", "hspnz"));
         assert!(!Scheme::Stroke.matches("hsp", "hs"));
+    }
+
+    /// 五笔与 Full/Stroke 同为**纯前缀**（键是普通字母，无按键类展开、无解码）。
+    /// 这条是协议级判据：改 semantics 先在这里红（生产候选走词典前缀查询，
+    /// 与 matches 同判据，见 engine_wubi.rs）。
+    #[test]
+    fn wubi_matches_like_plain_prefix() {
+        assert!(Scheme::Wubi.matches("wq", "wqvb"));
+        assert!(!Scheme::Wubi.matches("wqvb", "wq"));
+        assert!(!Scheme::Wubi.matches("", "wqvb"));
+        assert_eq!(Scheme::Wubi.key_class('a'), None, "键是普通字母");
+        assert_eq!(Scheme::Wubi.code(), 5);
+        assert_eq!(Scheme::from_name("五笔"), Some(Scheme::Wubi));
     }
 }

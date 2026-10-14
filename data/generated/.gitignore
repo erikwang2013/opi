@@ -1,4 +1,8 @@
 *
 !fallback.opid
 !trad.opid
+# wubi86/98（2026-10-14 加）：编译产物入库，照 fallback/trad 先例。luna.opid 不入库是
+# 因为 android 资产另有它的部署副本（android/app/src/main/assets/）；wubi 暂无部署副本。
+!wubi86.opid
+!wubi98.opid
 !.gitignore
