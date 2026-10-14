@@ -118,3 +118,45 @@ export const emojiGroups: () => string;
  * ⚠️ 这条**走引擎单例**：未装载 → `[]`（与上面两条的空语义**相反**，别混）。
  */
 export const searchSymbols: (keyword: string) => string;
+
+// ---- 输入方案 / 五笔（2026-10-14：喂「输入模式」面板）----
+// 语义/哨兵/副作用与 cpp/opi_ffi.h 的同名声明、cpp/napi_bridge.c 的同名 Js* 一致。
+// ⚠️ 读侧在引擎未装载时回 0/false 是**哨兵** ⇒ UI 当前档位要自己存，别拿读侧当初始值。
+
+/** 装载笔画词典（stroke.opid）。空/坏路径 → false（不假装有候选）。 */
+export const loadStroke: (path?: string) => boolean;
+
+/** 装载五笔码表（86/98 **只装一张**）。⚠️ 装载不换方案，要用五笔还得 setScheme(5)。 */
+export const loadWubi: (path?: string) => boolean;
+
+/** 输入方案：0=全键盘 1=拼音9键 2=拼音14键 3=笔画 4=双拼 5=五笔（真源 scheme.rs）。 */
+export const setScheme: (scheme: number) => void;
+
+/** 方案读侧（未装载 → 0 是哨兵，不是「用户选的是全键盘」）。⚠️ setScheme **会清缓冲**。 */
+export const scheme: () => number;
+
+/** 双拼布局：0=自然码 1=微软 2=小鹤 3=智能ABC 4=紫光 5=拼音加加（越界钳到端点）。 */
+export const setShuangpinLayout: (index: number) => void;
+
+/** 布局读侧（未装载 → 0 是哨兵）。 */
+export const shuangpinLayout: () => number;
+
+/** 五笔风格：0=纯五笔 1=五笔拼音混输（越界忽略）。 */
+export const setWubiStyle: (style: number) => void;
+export const wubiStyle: () => number;
+
+/** 混输进入方式：0=直接字母 1=z键（越界忽略）。 */
+export const setWubiMixedEntry: (entry: number) => void;
+export const wubiMixedEntry: () => number;
+
+/** 候选个数：引擎侧 **1..=9 钳区间**（缺省 5）；UI 档位见各端设置页（3..9）。 */
+export const setWubiCandidateLimit: (n: number) => void;
+export const wubiCandidateLimit: () => number;
+
+/** 回车行为：0=清空 1=上屏原文（越界忽略）。 */
+export const setWubiReturnStyle: (style: number) => void;
+export const wubiReturnStyle: () => number;
+
+/** 自动上屏（缺省 true；未装载 → false 是哨兵）。 */
+export const setWubiAutoCommit: (on: boolean) => void;
+export const wubiAutoCommit: () => boolean;

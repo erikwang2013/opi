@@ -6,17 +6,27 @@
 // 本文件在 Linux 上编写，**未经过任何 ArkTS 编译器**。ArkUI 的 @Entry/@Component
 // 装饰器、@StorageLink、@Builder 在普通 tsc 下就断，所以这里一个字符都没编译过。
 //
-// 键盘面板的最小 UI 骨架：候选栏 + preedit + 三行 QWERTY + 功能行。
+// 键盘面板的最小 UI 骨架：候选栏 + preedit + 键面 + 功能行。
 // **本页不认识引擎** —— 只读 AppStorage、只调 KeyboardController。
 // 引擎状态的唯一来源是 KeyboardController.publish()。
+//
+// 键面按「输入模式」分支（2026-10-14）：26 键族（拼音/英文/双拼/五笔）用本页的
+// KeyRows；9 键/大 9 键/14 键/笔画/生僻字在 KeyPanels.ets（各自带底行，见 usesSharedRow）；
+// 表情页在 EmojiPad.ets（Symbol 模式，**不是**输入模式的一项）。
 //
 // ⚠️ 本页必须在 resources/base/profile/main_pages.json 里注册为 "pages/Index"，
 //    且与 KeyboardController 的 panel.setUiContent('pages/Index') 字符串一致。
 //    任一处对不上 → 面板起来了但是一片白。
 
 import { KeyboardController } from '../KeyboardController';
-import { EmojiGroup, OpiMode, OpiShift } from '../OpiEngine';
+import { OpiMode, OpiShift } from '../OpiEngine';
 import { OpiPet, PetMood, petMood } from '../OpiPet';
+import {
+  MODE_BIG9, MODE_PINYIN9, MODE_PINYIN14, MODE_RARE, MODE_SHUANGPIN, MODE_STROKE, MODE_WUBI,
+  modeLabel, nextMode
+} from '../InputModes';
+import { EmojiPad } from '../EmojiPad';
+import { FourteenKeyPanel, InputModePanel, NineKeyPanel, RarePanel, StrokeKeyPanel } from '../KeyPanels';
 
 /** QWERTY 三行。数字模式用下面的 NUM_ROW_* 顶上；Symbol 模式**不是键行**，是表情页。 */
 const ROW_1: string[] = ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'];
@@ -27,12 +37,6 @@ const ROW_3: string[] = ['z', 'x', 'c', 'v', 'b', 'n', 'm'];
 const NUM_ROW_1: string[] = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
 const NUM_ROW_2: string[] = ['-', '/', ':', ';', '(', ')', '$', '&', '@', '"'];
 const NUM_ROW_3: string[] = ['.', ',', '?', '!', '\'', '+', '=', '%'];
-
-/**
- * 每行几个表情。与 Android `SymbolPanel` 的 `perRow = 8` 同值（两端要一致改）。
- * ⚠️ 原先的 `SYM_ROW_1..3`（29 个 ASCII 符号）已随本轮换页删除 —— 见 README 缺口第 3 条。
- */
-const EMOJI_PER_ROW: number = 8;
 
 /**
  * 候选栏里的小欧尺寸。**小于 64vp 所以自动不刻 OPI**（刻字会糊成脏点）。
@@ -51,11 +55,14 @@ struct Index {
   // 这和 KeyboardController.ets 顶部那条「键名集中在这里，避免两边写不一致的字符串」
   // 是**直接冲突**的 —— 那边的做法在写入侧成立（`AppStorage.setOrCreate(KEY_X, …)`
   // 是运行时调用，不受限制），在**装饰器入参这个位置不成立**。
-  // 所以键名在两个文件里各存一份，**改一边必须改另一边**。当前值与本文件逐字对应：
+  // 所以键名在**用到它的每个文件里各存一份**（2026-10-14 起有三个：本文件、
+  // KeyboardController.ets 的写入侧常量、KeyPanels.ets 的 `opiMode`），
+  // **改一边必须改另一边**。当前值与本文件逐字对应：
   //   buffer=opiBuffer  candidates=opiCandidates  page=opiPage  pageCount=opiPageCount
   //   mode=opiMode  shift=opiShift  learner=opiLearner
-  // 核对命令（两边的字面量必须一一对应）：
-  //   grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|opiLearner" harmony/
+  //   layout=opiLayout（输入模式下标）  panel=opiPanel（输入模式面板开没开）
+  // 核对命令（各处的字面量必须一一对应）：
+  //   grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|opiLearner\|opiLayout\|opiPanel" harmony/
   // 漏改的表现是「面板起来了、按键也有反应，但候选栏/preedit 永远不刷新」——
   // **不报错、不崩溃**，属最难查的一类。
   // ⚠️ 这条 ArkTS 限制出自华为规格与一则同症状的求助帖，**二手资料，待 DevEco 确认**
@@ -69,13 +76,12 @@ struct Index {
   @StorageLink('opiMode') mode: number = OpiMode.Pinyin as number;
   @StorageLink('opiShift') shift: number = OpiShift.Off as number;
   @StorageLink('opiLearner') learner: number = 1;
+  /** 输入模式下标（InputModes.ets 的 INPUT_MODES；由控制器的 selectInputMode 写）。 */
+  @StorageLink('opiLayout') layout: number = 0;
+  /** 输入模式面板是否展开（1/0）。 */
+  @StorageLink('opiPanel') panel: number = 0;
 
   private ctrl: KeyboardController = KeyboardController.getInstance();
-
-  // ---- 表情页（Symbol 模式）的本地状态：只存「看哪一组/搜什么」，**不存数据** ——
-  // 数据每次渲染现读控制器（缓存与「空结果不缓存」的纪律都在那边），两处存两份迟早漂移。
-  @State emojiQuery: string = '';
-  @State emojiGroup: number = 0;
 
   /**
    * 小欧的情绪：**由输入状态推导，本页不自己维护**（与 Android 端同一套规则，
@@ -104,18 +110,57 @@ struct Index {
     return [ROW_1, ROW_2, ROW_3];
   }
 
+  /**
+   * 是否画**共用功能行**：26 键族（拼音/英文/双拼/五笔）与表情页要；
+   * 9 键/大 9 键/14 键/笔画/生僻字**各自带底行**（对齐 Android：每个键面自带底行，
+   * 那几行里有 符/中英/123/英文 这些快捷入口，共用行里没有）。
+   */
+  private usesSharedRow(): boolean {
+    if (this.mode === (OpiMode.Symbol as number)) {
+      // 表情页没有自己的底行 —— 模式键是它**唯一**的出口，这一行必须留着。
+      return true;
+    }
+    return this.mode === (OpiMode.Number as number)
+      || this.layout === 0 || this.layout === 1
+      || this.layout === MODE_SHUANGPIN || this.layout === MODE_WUBI;
+  }
+
   build() {
     Column() {
       this.CandidateBar()
       this.PreeditBar()
-      // Symbol 模式整片换成表情页（照 `letterRows()` 的同一处判据，**无新路由/新面板**）。
-      // 功能行留着：模式键是**退出表情页的唯一入口**（中→EN→123→#+=→中）。
-      if (this.mode === (OpiMode.Symbol as number)) {
-        this.EmojiPage()
+      if (this.panel === 1) {
+        // 输入模式面板：整片盖住键面与功能行（它自带「关闭」，见 KeyPanels.ets）。
+        InputModePanel()
       } else {
-        this.KeyRows()
+        // Symbol 模式整片换成表情页（照 `letterRows()` 的同一处判据，**无新路由/新面板**）。
+        // 功能行留着：模式键是**退出表情页的唯一入口**（中→EN→123→#+=→中）。
+        if (this.mode === (OpiMode.Symbol as number)) {
+          EmojiPad()
+        } else if (this.mode === (OpiMode.Number as number)) {
+          // 数字键面由**模式**决定，排在布局分支前：9 键/14 键/笔画/生僻字布局下按 123
+          // 也走这里（判据与 `letterRows()` 同一处）。Android 的 `openNumber()` 同款 ——
+          // 只 `switchMode(NUMBER)` 换 view，**不改输入模式** ⇒ 退出后键面照旧。
+          this.KeyRows()
+        } else if (this.layout === MODE_RARE) {
+          // 生僻字：面板式 —— **不进引擎**（见 InputModes.selectInputMode）。
+          RarePanel()
+        } else if (this.layout === MODE_PINYIN9) {
+          NineKeyPanel({ big: false })
+        } else if (this.layout === MODE_BIG9) {
+          NineKeyPanel({ big: true })
+        } else if (this.layout === MODE_PINYIN14) {
+          FourteenKeyPanel()
+        } else if (this.layout === MODE_STROKE) {
+          StrokeKeyPanel()
+        } else {
+          // 26 键族：拼音26键 / 英文26键 / 拼音双拼 / 五笔（方案不同、键面同为一套 QWERTY）。
+          this.KeyRows()
+        }
+        if (this.usesSharedRow()) {
+          this.FunctionRow()
+        }
       }
-      this.FunctionRow()
     }
     .width('100%')
     .backgroundColor('#F4F7F6')
@@ -188,6 +233,20 @@ struct Index {
         }
         .margin({ right: 6 })
       }
+
+      // 输入模式入口（2026-10-14）：点开九项面板（InputModePanel，见 KeyPanels.ets）。
+      // ⚠️ **与功能行的模式键是两根轴**，别合：功能行的键走**四态循环**（中/英/数/符，只换
+      //    语言模式），这个键换的是**键面布局 + 引擎方案**（拼音9键/双拼/五笔…）。
+      //    合掉任一个都会让另一件事没有入口。
+      // ⚠️ 面板只盖住**键面**（见 build()：面板排在候选栏下面），所以本键在面板开着时**还在**
+      //    ⇒ 再点一次即关（toggle）。关不掉的话面板里也另有一个「关闭」（KeyPanels.ets）。
+      Text('⌨')
+        .fontSize(20)
+        .fontColor('#1E6B63')
+        .padding({ left: 10, right: 10 })
+        .onClick(() => {
+          this.ctrl.toggleModePanel();
+        })
     }
     .height(46)
     .width('100%')
@@ -244,8 +303,10 @@ struct Index {
   FunctionRow() {
     Row() {
       // 模式键：中/英/数/符 轮转。⇧ 只在非数字/符号模式有意义。
-      this.KeyCap(this.modeLabel(), () => {
-        this.ctrl.switchMode(this.nextMode());
+      // 键面字/下一档都是 InputModes.ets 的**具名导出**（2026-10-14 从本页搬走：
+      // 9 键族底行的「中/EN」键也用同一张表，两处编两套迟早漂移）。
+      this.KeyCap(modeLabel(this.mode), () => {
+        this.ctrl.switchMode(nextMode(this.mode));
       }, 1.3)
 
       if (this.mode === (OpiMode.Pinyin as number) || this.mode === (OpiMode.English as number)) {
@@ -302,131 +363,11 @@ struct Index {
       .onClick(action)
   }
 
-  // ------------------------------------------------------------ 表情页（Symbol 模式）
-
-  /**
-   * 表情页：搜索框 + 分组条 + 网格（对标 Android `SymbolPanel.kt` 的表情 Tab，2026-10-13 补齐）。
-   *
-   * ⚠️ 两条**如实记下**的代价（README「已知缺口」第 3 条）：
-   *   ① 原 `SYM_ROW_1..3` 的 29 个 ASCII 符号不再一键可达（Android 有「常用/全部」Tab，本端没做）；
-   *   ② **搜索框的输入通道未定**：面板自己就是输入法，`TextInput` 聚焦时没有第二个输入法可唤起
-   *      ⇒ 真机上大概率「能显示、不能打字」（Android 的做法见 README 缺口第 3 条）——**没做**。
-   */
-  @Builder
-  EmojiPage() {
-    Column() {
-      // ⚠️ 未编译，DevEco 上核实 `TextInput` 的 placeholder/text/onChange 三参与面板内能否聚焦；
-      // 备选 `Search({ value, placeholder })`，再退 = 面板字母键直接喂 emojiQuery（见上 ②）。
-      TextInput({ placeholder: '搜索（拼音/英文）', text: this.emojiQuery })
-        .width('100%')
-        .height(38)
-        .fontSize(14)
-        .onChange((v: string) => { this.emojiQuery = v; })
-
-      if (this.emojiQuery.length === 0) {
-        // 分组条：点一项 = 网格换成那一组（搜索态不显示，同 Android 的两套工具条）。
-        // ⚠️ 与 Android **判据同、动作不同**：那边 `scrollToItem(组.start)` 滚动，这边**切片
-        // 过滤**（见 emojiShown）—— 少一条本机查不到的 `Scroller` API，也不必重算过滤后下标。
-        // ⚠️ 未编译：`Scroll` + `ScrollDirection.Horizontal`；备选
-        // `List(){…}.listDirection(Axis.Horizontal)`，再退裸 Row（9 组会横向溢出）。
-        Scroll() {
-          Row() {
-            ForEach(this.ctrl.emojiGroups(), (g: EmojiGroup, i: number) => {
-              Text(g.name)
-                .fontSize(14)
-                .fontColor(i === this.emojiGroup ? '#FFFFFF' : '#1E6B63')
-                .backgroundColor(i === this.emojiGroup ? '#2E8B80' : '#FFFFFF')
-                .borderRadius(6)
-                .padding({ left: 10, right: 10, top: 5, bottom: 5 })
-                .margin({ left: 3, right: 3 })
-                .onClick(() => {
-                  this.emojiGroup = i;
-                })
-            }, (g: EmojiGroup, i: number) => `${i}-${g.name}`)
-          }
-        }
-        .scrollable(ScrollDirection.Horizontal)
-        .width('100%')
-        .height(36)
-      }
-
-      if (this.ctrl.emojiSymbols().length === 0) {
-        // 空态给一句白话、别留白（iOS 同款）。表情表**不经引擎单例**，正常冷启动第一帧就有；
-        // 走到这里是模块/数据真没起来 —— 切走再切回即重试。
-        Text('表情库未就绪').fontSize(14).fontColor('#9AA7A4').margin({ top: 12 })
-      } else {
-        // 网格（每行 EMOJI_PER_ROW 个）。⚠️ 未编译，DevEco 上核实纵向 `Scroll`；备选
-        // `Grid{GridItem}.columnsTemplate('1fr '.repeat(8))`。Column/Row/ForEach 与 KeyRows 同构。
-        //
-        // ⚠️ 天花板：ForEach **不虚拟化** —— 选中一组就整组铺出来（「人物」2430 项 ≈ 300 行节点，
-        // 真机点它可能卡）。换 `List{LazyForEach}` 要一个 IDataSource，且 LazyForEach **只能**做
-        // List/Grid/Swiper 的直接子节点（塞不进 Scroll/Column）—— 骨架与判据见 README 缺口。
-        //
-        // ⚠️ **未做「画不出的字形」过滤**：Android 用 `Paint.hasGlyph`、iOS 用
-        // `CTFontGetGlyphsForCharacters`，鸿蒙侧的对应 API 本机查不到 —— **不编一个**。
-        // 现状是个别新码位（如 U+1FAEB）画成空心框；日后补上时**只判单码位**，且分组
-        // start/count 要跟着重算（Android 的教训：过滤会摘掉条目，原下标整体偏前）。
-        Scroll() {
-          Column() {
-            ForEach(this.emojiRows(), (row: string[], rowIndex: number) => {
-              Row() {
-                ForEach(row, (e: string, col: number) => {
-                  Text(e)
-                    .fontSize(24)
-                    .layoutWeight(1)
-                    .textAlign(TextAlign.Center)
-                    .onClick(() => {
-                      this.ctrl.tapEmoji(e);
-                    })
-                }, (e: string, col: number) => `${col}-${e}`)
-              }
-              .width('100%')
-              .margin({ top: rowIndex === 0 ? 6 : 4 })
-            }, (row: string[], rowIndex: number) => `emoji-${rowIndex}`)
-          }
-          .width('100%')
-        }
-        .layoutWeight(1).width('100%')
-      }
-    }
-    .width('100%').backgroundColor('#FFFFFF')
-  }
-
-  /**
-   * 当前该画的表情：有搜索词 → 引擎搜索 ∩ 表情集（判据在控制器/引擎，本页不另判）；
-   * 否则 → 选中分组的切片 `[start, start+count)`（「分组连续覆盖全表」由引擎门禁保证）；
-   * 分组拿不到 → **整表兜底**（别让页面全空）。末尾**保序去重**是渲染前最后一道
-   * （Android 同款裁决；上游已有零重复门禁，这里防将来哪层漏）。
-   */
-  private emojiShown(): string[] {
-    let list: string[];
-    if (this.emojiQuery.length > 0) {
-      list = this.ctrl.searchEmoji(this.emojiQuery);
-    } else {
-      const groups: EmojiGroup[] = this.ctrl.emojiGroups();
-      if (groups.length === 0) {
-        list = this.ctrl.emojiSymbols();
-      } else {
-        // 组数变了（引擎重载）而 emojiGroup 还停在大下标时夹回最后一组，别越界成空。
-        const g: EmojiGroup = groups[Math.min(this.emojiGroup, groups.length - 1)];
-        list = this.ctrl.emojiSymbols().slice(g.start, g.start + g.count);
-      }
-    }
-    // ⚠️ 未编译：`new Set(数组)` + `Array.from` 的 ArkTS 可用性；备选 = 手写 has/add 循环。
-    return Array.from(new Set<string>(list));
-  }
-
-  /** 每行 EMOJI_PER_ROW 个切成二维（ForEach 只铺一维）。 */
-  private emojiRows(): string[][] {
-    const list: string[] = this.emojiShown();
-    const out: string[][] = [];
-    for (let i = 0; i < list.length; i += EMOJI_PER_ROW) {
-      out.push(list.slice(i, i + EMOJI_PER_ROW));
-    }
-    return out;
-  }
-
   // ------------------------------------------------------------ 小工具
+  //
+  // （原「表情页」整段 + `emojiShown/emojiRows` 两个私有方法已于 2026-10-14 **原样**
+  //   搬到 EmojiPad.ets；`modeLabel/nextMode` 搬到 InputModes.ets 成为模块级函数。
+  //   本页现在只剩键面骨架与候选栏/preedit。）
 
   /**
    * ⇧ 点亮时字母键显示大写（**只是显示**，真正的大小写由引擎按 states 决定）。
@@ -463,36 +404,4 @@ struct Index {
     return this.mode === (OpiMode.Pinyin as number) ? '打拼音试试' : '';
   }
 
-  /**
-   * 模式键的键面字 = **点它会切到哪**（2026-10-12 晚与 Android 同步的裁决：用户实测
-   * 「切到英文键盘后键面还写着英，点下去却是中文键盘，键面该是『中』才对」）。
-   * 逐条对齐本端 [`nextMode`] 的四态循环：中→EN、EN→123、123→#+=、#+=→中；
-   * 繁体档本端循环里到不了（`nextMode` 无该分支 ⇒ 落回拼音）⇒ 键面给「中」。
-   * ⚠️ **别照抄 Android 的表**：那边是三态（中→繁→英→中），本端是四态。
-   */
-  private modeLabel(): string {
-    if (this.mode === (OpiMode.Pinyin as number)) {
-      return 'EN';
-    }
-    if (this.mode === (OpiMode.English as number)) {
-      return '123';
-    }
-    if (this.mode === (OpiMode.Number as number)) {
-      return '#+=';
-    }
-    return '中';
-  }
-
-  private nextMode(): OpiMode {
-    if (this.mode === (OpiMode.Pinyin as number)) {
-      return OpiMode.English;
-    }
-    if (this.mode === (OpiMode.English as number)) {
-      return OpiMode.Number;
-    }
-    if (this.mode === (OpiMode.Number as number)) {
-      return OpiMode.Symbol;
-    }
-    return OpiMode.Pinyin;
-  }
 }

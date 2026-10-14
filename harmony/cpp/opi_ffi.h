@@ -79,6 +79,59 @@ void opi_ffi_free_string(OpiString s);
 /// **返回值必须接**：false 时所有 opi_* 出口都会退化成空操作。
 bool opi_load(const uint16_t *path, size_t len);
 
+// ---- 输入方案 / 词表（2026-10-14 加：鸿蒙「输入模式」面板 —— 九项菜单里六项要真换方案）----
+//
+// 方案整数码的真源是 `crates/engine-core/src/scheme.rs` 的 `Scheme::code()`：
+// **0=全键盘 1=拼音9键 2=拼音14键 3=笔画 4=双拼 5=五笔**。（九键的按键类表也在同一个
+// 文件 `Scheme::key_class()`：`2`→abc … `9`→wxyz；十四键的两字母键取首字母。）
+// ArkTS 侧不许另编一套数字 —— 隔壁 android/.../engine/InputScheme.kt 是同一张表。
+//
+// ⚠️ **读侧哨兵**：引擎未装载时 `opi_scheme` / `opi_shuangpin_layout` 与五笔各读侧
+// 返回 **0 / false**，那是哨兵**不是**「用户选的就是全键盘/自然码/纯五笔」⇒
+// UI 的当前档位要自己存（ArkTS 侧见 ets/.../InputModes.ets 的注释）。
+
+/// 装载笔画词典（stroke.opid，2026-10-09）。空/坏路径/引擎未装载 → false ——
+/// 与 `opi_load` 同姿态：**不假装有候选**（方案照切，键进引擎，查不出字而已）。
+bool opi_load_stroke(const uint16_t *path, size_t len);
+
+/// 输入方案（0..=5，见本段头注）。**越界静默忽略**；**换方案清缓冲** ——
+/// 调用后按 `opi_switch_mode` 那档重读 buffer/候选/页码。
+void opi_set_scheme(int32_t scheme);
+
+/// 方案读侧（未装载 → 0 是哨兵）。
+int32_t opi_scheme(void);
+
+/// 双拼布局（2026-10-13）：0=自然码 1=微软 2=小鹤 3=智能ABC 4=紫光 5=拼音加加；
+/// 负数钳到 0、过大钳到末位。**不清缓冲**（区别于 `opi_set_scheme`）——
+/// 下次取候选即按新布局解码。真源 `engine_shuangpin.rs`（名字表同 android 设置页）。
+void opi_set_shuangpin_layout(int32_t index);
+
+/// 布局读侧（未装载 → 0 是哨兵）。
+int32_t opi_shuangpin_layout(void);
+
+/// 装载五笔码表（wubi86.opid / wubi98.opid，2026-10-14）。空/坏路径/引擎未装载 → false。
+/// ⚠️ **装载不换方案**：要用五笔还得 `opi_set_scheme(5)`。
+/// **两张表按用户选的方案装一张**（86/98 码空间重叠、权重不可比，同时装就是两套体系打架
+/// —— 同 android 的 EngineLoader 与桌面/fcitx5 的裁决）。
+bool opi_load_wubi(const uint16_t *path, size_t len);
+
+/// 五笔六键（2026-10-14）。整数表/值域真源 `crates/engine-core/src/engine_wubi.rs`
+/// （名字表同 android settings/WubiNames.kt，锁步门禁比对）：
+/// 风格 0=纯五笔 1=五笔拼音混输、混入方式 0=直接字母 1=z键、回车 0=清空 1=上屏原文
+/// —— 三条写侧**越界忽略**、读侧未装载 → 0（哨兵）；个数 1..=9 **钳区间**
+/// （缺省 5，见 `WUBI_CANDIDATE_LIMIT_DEFAULT`）；自动上屏缺省 true（未装载 → false 哨兵）。
+/// **五条全部不清缓冲**（只有 `opi_set_scheme` 清）。
+int32_t opi_wubi_style(void);
+void opi_set_wubi_style(int32_t style);
+int32_t opi_wubi_mixed_entry(void);
+void opi_set_wubi_mixed_entry(int32_t entry);
+int32_t opi_wubi_candidate_limit(void);
+void opi_set_wubi_candidate_limit(int32_t n);
+int32_t opi_wubi_return_style(void);
+void opi_set_wubi_return_style(int32_t style);
+bool opi_wubi_auto_commit(void);
+void opi_set_wubi_auto_commit(bool on);
+
 /// 单字符入引擎，返回需要提交的文本（多数时候是空串）。
 OpiString opi_input_key(const uint16_t *ch, size_t len);
 

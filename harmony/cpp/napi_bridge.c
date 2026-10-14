@@ -386,6 +386,32 @@ static napi_value JsSearchSymbols(napi_env env, napi_callback_info info) {
     return take_string(env, s);
 }
 
+// ---- 输入方案 / 五笔（2026-10-14：喂「输入模式」面板 —— 六项要真换引擎方案）----
+//
+// 每条出口的语义、哨兵、副作用**不在本层复述** —— 都写在 cpp/opi_ffi.h 的同名声明与
+// cpp/types/libopiime/index.d.ts 的同名条目上（同一段话抄三份是漂移的温床）。本层只记
+// 两条：读侧在引擎未装载时回 **0 / false 是哨兵**（UI 当前档位不能拿它当初始值，见
+// ets/.../InputModes.ets）；**换方案（setScheme）清缓冲**、改双拼布局与五笔六键**不清**
+// ⇒ 调用方按 `switchMode` 那档重读 buffer/候选/页码。
+// 本段函数体压成一行是**为 500 行门禁**（`crates/opi-ffi/tests/line_limit.rs`），
+// 形状与上面各条一致：缺参 = 0/false，不抛异常。
+static napi_value JsLoadStroke(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); size_t len = 0; char16_t *p = (n >= 1) ? js_to_utf16(env, a[0], &len) : NULL; bool ok = opi_load_stroke((const uint16_t *)p, len); free(p); napi_value out = NULL; napi_get_boolean(env, ok, &out); return out; }
+static napi_value JsLoadWubi(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); size_t len = 0; char16_t *p = (n >= 1) ? js_to_utf16(env, a[0], &len) : NULL; bool ok = opi_load_wubi((const uint16_t *)p, len); free(p); napi_value out = NULL; napi_get_boolean(env, ok, &out); return out; }
+static napi_value JsSetScheme(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); int32_t v = 0; if (n >= 1) { (void)napi_get_value_int32(env, a[0], &v); } opi_set_scheme(v); return ret_undefined(env); }
+static napi_value JsScheme(napi_env env, napi_callback_info info) { (void)info; napi_value out = NULL; napi_create_int32(env, opi_scheme(), &out); return out; }
+static napi_value JsSetShuangpinLayout(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); int32_t v = 0; if (n >= 1) { (void)napi_get_value_int32(env, a[0], &v); } opi_set_shuangpin_layout(v); return ret_undefined(env); }
+static napi_value JsShuangpinLayout(napi_env env, napi_callback_info info) { (void)info; napi_value out = NULL; napi_create_int32(env, opi_shuangpin_layout(), &out); return out; }
+static napi_value JsSetWubiStyle(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); int32_t v = 0; if (n >= 1) { (void)napi_get_value_int32(env, a[0], &v); } opi_set_wubi_style(v); return ret_undefined(env); }
+static napi_value JsWubiStyle(napi_env env, napi_callback_info info) { (void)info; napi_value out = NULL; napi_create_int32(env, opi_wubi_style(), &out); return out; }
+static napi_value JsSetWubiMixedEntry(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); int32_t v = 0; if (n >= 1) { (void)napi_get_value_int32(env, a[0], &v); } opi_set_wubi_mixed_entry(v); return ret_undefined(env); }
+static napi_value JsWubiMixedEntry(napi_env env, napi_callback_info info) { (void)info; napi_value out = NULL; napi_create_int32(env, opi_wubi_mixed_entry(), &out); return out; }
+static napi_value JsSetWubiCandidateLimit(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); int32_t v = 0; if (n >= 1) { (void)napi_get_value_int32(env, a[0], &v); } opi_set_wubi_candidate_limit(v); return ret_undefined(env); }
+static napi_value JsWubiCandidateLimit(napi_env env, napi_callback_info info) { (void)info; napi_value out = NULL; napi_create_int32(env, opi_wubi_candidate_limit(), &out); return out; }
+static napi_value JsSetWubiReturnStyle(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); int32_t v = 0; if (n >= 1) { (void)napi_get_value_int32(env, a[0], &v); } opi_set_wubi_return_style(v); return ret_undefined(env); }
+static napi_value JsWubiReturnStyle(napi_env env, napi_callback_info info) { (void)info; napi_value out = NULL; napi_create_int32(env, opi_wubi_return_style(), &out); return out; }
+static napi_value JsSetWubiAutoCommit(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); bool on = false; if (n >= 1) { (void)napi_get_value_bool(env, a[0], &on); } opi_set_wubi_auto_commit(on); return ret_undefined(env); }
+static napi_value JsWubiAutoCommit(napi_env env, napi_callback_info info) { (void)info; napi_value out = NULL; napi_get_boolean(env, opi_wubi_auto_commit(), &out); return out; }
+
 // ============================================================================
 // 模块注册
 // ============================================================================
@@ -413,6 +439,22 @@ static napi_value OpiImeInit(napi_env env, napi_value exports) {
         {"emojiSymbols", NULL, JsEmojiSymbols, NULL, NULL, NULL, napi_default, NULL},
         {"emojiGroups", NULL, JsEmojiGroups, NULL, NULL, NULL, napi_default, NULL},
         {"searchSymbols", NULL, JsSearchSymbols, NULL, NULL, NULL, napi_default, NULL},
+        {"loadStroke", NULL, JsLoadStroke, NULL, NULL, NULL, napi_default, NULL},
+        {"loadWubi", NULL, JsLoadWubi, NULL, NULL, NULL, napi_default, NULL},
+        {"setScheme", NULL, JsSetScheme, NULL, NULL, NULL, napi_default, NULL},
+        {"scheme", NULL, JsScheme, NULL, NULL, NULL, napi_default, NULL},
+        {"setShuangpinLayout", NULL, JsSetShuangpinLayout, NULL, NULL, NULL, napi_default, NULL},
+        {"shuangpinLayout", NULL, JsShuangpinLayout, NULL, NULL, NULL, napi_default, NULL},
+        {"setWubiStyle", NULL, JsSetWubiStyle, NULL, NULL, NULL, napi_default, NULL},
+        {"wubiStyle", NULL, JsWubiStyle, NULL, NULL, NULL, napi_default, NULL},
+        {"setWubiMixedEntry", NULL, JsSetWubiMixedEntry, NULL, NULL, NULL, napi_default, NULL},
+        {"wubiMixedEntry", NULL, JsWubiMixedEntry, NULL, NULL, NULL, napi_default, NULL},
+        {"setWubiCandidateLimit", NULL, JsSetWubiCandidateLimit, NULL, NULL, NULL, napi_default, NULL},
+        {"wubiCandidateLimit", NULL, JsWubiCandidateLimit, NULL, NULL, NULL, napi_default, NULL},
+        {"setWubiReturnStyle", NULL, JsSetWubiReturnStyle, NULL, NULL, NULL, napi_default, NULL},
+        {"wubiReturnStyle", NULL, JsWubiReturnStyle, NULL, NULL, NULL, napi_default, NULL},
+        {"setWubiAutoCommit", NULL, JsSetWubiAutoCommit, NULL, NULL, NULL, napi_default, NULL},
+        {"wubiAutoCommit", NULL, JsWubiAutoCommit, NULL, NULL, NULL, napi_default, NULL},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
     return exports;

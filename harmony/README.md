@@ -2,7 +2,7 @@
 
 > ## ⚠️ 先读这段
 >
-> **ArkTS（`ets/**` 那 5 个文件）一个字符都没有编译过** —— `import {
+> **ArkTS（`ets/**` 那 8 个文件）一个字符都没有编译过** —— `import {
 > InputMethodExtensionAbility } from '@kit.IMEKit'` 在普通 tsc 下就断，**连语法检查都做不到**。
 >
 > ⚠️ **2026-09-28 订正归因（原写作「本机没有 HarmonyOS SDK」，实测为假）**：
@@ -25,6 +25,16 @@
 > `ets/**` 全量 5 个文件（sha256 与仓库定稿逐文件相同）**零 parse 错**，且先跑了**两个正控**
 > 证明它有分辨力（原样输出 + 三个坑见 **§5e ⑥**）。措辞照旧卡死：**它只到解析层** ——
 > 无类型检查、无装饰器语义、连类型错都放过 ⇒ 本节第一句「一个字符都没有编译过」**仍然成立**。
+> **2026-10-14 补**：ets 从 5 个文件长到 8 个（`EmojiPad` / `InputModes` / `KeyPanels` 新增，
+> `pages/Index.ets` 重写），**用同一份探针重跑过**：`ets/**` 全量 8 个文件零 parse 错，
+> `checkedFiles` 里 8 个一个不少、`module language is ets`；正控（往 `KeyPanels.ets` 删一个 `}`）
+> 当场报 `@parsing-error` + `-Defects: 1`。**新加的负控**：把 `pages/Index.ets` 的命名导入
+> 改成指向不存在的导出（`MODE_NO_SUCH_MODE`）—— **0 defects**，即它**也不解析命名导入**
+> （与「不校验 `@kit.*` 说明符」是同一条：名字类错误它一条都拦不住）。
+> **2026-10-14 二补**：9 键「123」键与 `pages/Index.ets` 的数字键面分支改完后（见 §5f ⑤）
+> **又整跑了一轮**：同样 8 个文件逐文件 sha256 与仓库相同、正控照旧报 `@parsing-error`
+> (`-Defects: 1`) + 真树 `No defects found` + `errorFileCount: 0`；两轮日志段按字节偏移
+> 取（2336184→2357916 正控 / 2357916→2379629 真树）。**措辞仍卡在解析层**，一格没松。
 > **最小工程布局、两道墙（模块级 `build-profile.json5`、模块根下再一层 `src/`）、
 > 正控与负控，全写在 [`docs/install/harmony.md`](../docs/install/harmony.md) 的 §1.1**
 > —— **本行不复述那份清单**：它是一份实测的最小布局，抄到这里就多一份会漂的枚举。
@@ -58,7 +68,7 @@
 > `cabi.rs` 的**签名**逐条核过；`index.d.ts` 与 N-API 注册表**机械核对一致**（名字一一对应）；
 > 模式整数编码对着 `convert.rs` 核过。
 >
-> **但 `.ets` 那 5 个文件仍然是 0 行编译过，N-API 的注册与运行期语义仍全未验证。**
+> **但 `.ets` 那 8 个文件仍然是 0 行编译过，N-API 的注册与运行期语义仍全未验证。**
 > **全目录没有一处可以称为「完成」或「已实现」—— 上面那些是「C 面对得上」，
 > 不是「鸿蒙端能用」。**
 
@@ -139,16 +149,19 @@
 | `cpp/types/libopiime/index.d.ts` | `libopiime.so` 的 ArkTS 类型声明，与 bridge 的 `desc[]` **机械核对一致**（名字一一对应；两边都不写条数） |
 | `cpp/types/libopiime/oh-package.json5` | 把 `libopiime.so` 映射到上面的 `.d.ts` |
 | `ets/InputMethodExtensionAbility/InputMethodService.ets` | `InputMethodExtensionAbility` 入口。**故意只做转发**，零逻辑 |
-| `ets/InputMethodExtensionAbility/KeyboardController.ets` | 输入法会话唯一持有者：开面板、拿 `InputClient`、按键按 `action` 分派、状态推给 UI；表情数据的**缓存与去重**也在这（`emojiSymbols`/`emojiGroups`/`searchEmoji`） |
+| `ets/InputMethodExtensionAbility/KeyboardController.ets` | 输入法会话唯一持有者：开面板、拿 `InputClient`、按键按 `action` 分派、状态推给 UI；表情数据的**缓存与去重**也在这（`emojiSymbols`/`emojiGroups`/`searchEmoji`）；输入模式四个转发（`selectInputMode`/`toggleModePanel`/`closeModePanel`/`retype`，2026-10-14） |
 | `ets/InputMethodExtensionAbility/OpiEngine.ets` | C ABI 薄桥：枚举、**键码常量唯一定义处**、JSON 候选解码；表情数据三条（`emojiSymbols`/`emojiGroups`/`searchSymbols`）在文件末尾 |
 | `ets/InputMethodExtensionAbility/OpiPet.ets` | 项目宠物「小欧」的 ArkTS 复刻（键帽精灵，表情跟引擎状态走） |
-| `ets/InputMethodExtensionAbility/pages/Index.ets` | 键盘 UI 最小骨架：候选栏（候选带页内序号）+ preedit + 三行 QWERTY + 功能行；**Symbol 模式整片是表情页**（`EmojiPage`，2026-10-13） |
+| `ets/InputMethodExtensionAbility/InputModes.ets` | **输入模式那件事的数字面**（2026-10-14）：方案/双拼布局/五笔六键的出口包装 + 九项 `INPUT_MODES` 表 + 模块级模式状态机（`selectInputMode` 等）。数字真源逐条注在文件头 |
+| `ets/InputMethodExtensionAbility/KeyPanels.ets` | 9 键 / 大 9 键 / 14 键 / 笔画 四个键面 + 生僻字面板骨架 + 「输入模式」九宫格面板（2026-10-14）。与 Android 的三处差异（左列读数、底行、生僻字无数据）写在文件头 |
+| `ets/InputMethodExtensionAbility/EmojiPad.ets` | 表情页（Symbol 模式）—— **2026-10-14 从 `pages/Index.ets` 原样搬出**，只因那边贴着 500 行门禁；注释与行为一字未改 |
+| `ets/InputMethodExtensionAbility/pages/Index.ets` | 键盘 UI 最小骨架：候选栏（候选带页内序号 + ⌨ 输入模式入口）+ preedit + 按键面**分支**（**数字键面按语言模式**、26 键族 QWERTY / 9 键 / 14 键 / 笔画 / 生僻字 / 表情页，2026-10-14）+ 功能行 |
 | `module.json5` | `extensionAbilities` 配置**片段**（不是能直接用的完整 manifest） |
 | `resources/base/profile/input_method_config.json` | 输入法子类型配置 |
 
 **不写行数**：行数随 SPDX 头、注释增删而漂（本表曾普遍少 3 行），
-与本仓库「不写会漂的数字」的规矩一致。上表 12 个文件 + 本 README = `harmony/`
-共 13 个文件；**本目录能验的都列在下方「实测记录」里**（Rust 侧目标编译 / C 侧
+与本仓库「不写会漂的数字」的规矩一致。上表 15 个文件 + 本 README = `harmony/`
+共 16 个文件；**本目录能验的都列在下方「实测记录」里**（Rust 侧目标编译 / C 侧
 clang 与符号核对 / CMake 配置与真编译），**没列进去的一律是未验证**。
 
 ⚠️ **缺一个文件（有意不建）：`resources/base/profile/main_pages.json`。**
@@ -613,7 +626,8 @@ test result: FAILED. 13 passed; 1 failed        # 只红这一条，其余 13 �
 引擎侧同日长出的**表情页数据面**三条（`crates/opi-ffi/src/cabi_symbols.rs`，
 语义与 JNI 面的 `opijni_emoji_symbols` / `opijni_emoji_groups` / `opijni_search_symbols`
 逐条一致、共享 `api::` 的同一份实现）。本端接的是「分组条 + 网格 + 搜索框」那一页
-（`pages/Index.ets` 的 `EmojiPage`），**没有新路由、没有新面板** —— 走的是 `build()` 里
+（**2026-10-14 起是 `EmojiPad.ets` 这个组件**，原为 `pages/Index.ets` 的 `EmojiPage`），
+**没有新路由、没有新面板** —— 走的是 `build()` 里
 `this.mode === OpiMode.Symbol` 那个分支，与 `letterRows()` 换键行是**同一处判据**。
 
 | C 出口（`cabi_symbols.rs`） | 桥里 | ArkTS 包装 | 空语义 |
@@ -773,11 +787,55 @@ $ codelinter -f json -o /tmp/codelinter-final.json /tmp/harmony-probe/src/src/ma
 **仍未验证**：ETS 侧那几条新包装与整个表情页**一行都没编译过**（U21–U23）；
 表情**没有真的上屏过**；分组条**没有真的滚过**；`Set`/`Array.from` 那行是否被 ArkTS
 接受未知。**DevEco 上第一次构建的核对顺序**写在 `cpp/napi_bridge.c` 顶部与
-`pages/Index.ets` 的 `EmojiPage` 注释里（照第 1 步的既有套路：先编译、再按报错改名）。
+`EmojiPad.ets`（2026-10-14 从 `pages/Index.ets` 搬出）的注释里（照第 1 步的既有套路：
+先编译、再按报错改名）。
+
+### 5f. 输入模式接线（2026-10-14）—— **桥挂 16 条出口，UI 是九项面板**
+
+引擎侧**输入方案 / 双拼布局 / 五笔六键**这一族（`cabi_scheme.rs` + `cabi_wubi.rs`）
+本端一次接上：`cpp/opi_ffi.h` 加 16 条声明（**逐条抄 `macos/OpiFFI.h` 的同名同型**，
+不自造签名）、`cpp/napi_bridge.c` 加 16 个 `Js*` + 16 行 `desc[]`、
+`cpp/types/libopiime/index.d.ts` 加 16 条同名声明（**名字集合两边必须相等** ——
+§5b 那条 diff 命令当场跑过，见下）。ArkTS 侧：
+
+- `InputModes.ets`：出口包装 + **九项 `INPUT_MODES` 表**（逐条对齐 Android `InputMode.kt`：
+  拼音26键/英文26键/拼音9键/拼音14键/拼音大9键/笔画键盘/生僻字键盘/拼音双拼/五笔）+
+  模块级状态机（`selectInputMode` 换布局 + `setScheme` + 必要时切语言模式）；数字真源注在文件头。
+- `KeyPanels.ets`：9 键 / 大 9 键 / 14 键 / 笔画四个键面 + 生僻字面板骨架 + 九宫格模式面板。
+- `pages/Index.ets`：`build()` 按 `opiLayout` 分支挑键面；候选栏加「⌨」入口。
+
+⚠️ **如实记下的五条**（细节在各文件头部）：
+① **选模式不提交待选缓冲**（Android 会 `commitPendingBuffer`；本端没有「插入文本」通道 ⇒
+未确认的拼音是**丢掉**的）；② 9 键左列**没有候选读音**（那条出口 `opijni_candidate_readings`
+是 JNI 专属，**不在 C ABI 里** ⇒ 能力缺口，不是漏做）；③ **生僻字面板无数据**
+（`rare_index.tsv` 不在仓库）——只画骨架，**不编假内容**；④ 五笔六键**暂无调用方**
+（本端没有设置页），先接通是为了「设置页落地」变成纯 UI 工作。
+⑤ **「123」键只切语言模式、不动输入模式**（对齐 Android `ImeState.openNumber`：
+`switchMode(NUMBER)` + 换 view，**不碰 input mode**）——数字键面由 `opiMode` 画
+（`pages/Index.ets::build` 把数字分支排在**布局**分支前面），所以 9 键用户按完 123
+再退回来**还是 9 键**。⚠️ 别把它写成 `selectInputMode(拼音26键)`：那是真换输入模式
+（`setScheme` 清缓冲），用户回来时键面已被悄悄换掉。
+⚠️ **两张表（`stroke.opid` / `wubi86.opid`）不在仓库**：`loadStroke('')` / `loadWubi('')`
+传空串 = C ABI 的「返回 false 且引擎保持原样」⇒ **不崩、不假装有候选**，笔画/五笔方案下
+只是查不出字。要随包须走 rawfile → 沙箱 → 绝对路径四步（清单在 `InputModes.ets`）。
+
+**本机跑过的（原样输出）：**
+
+```
+$ diff <(grep -o '{"[a-zA-Z]*"' cpp/napi_bridge.c | tr -d '{"' | sort) \
+       <(grep -o '^export const [a-zA-Z]*' cpp/types/libopiime/index.d.ts | awk '{print $3}' | sort)
+IDENTICAL                      # 名字集合相等（两边都是 37 条；条数两边都不写，见 §5b）
+$ cargo test -p opi_ffi --test c_abi_contract harmony_header_is_consistent_use_site_subset -- --nocapture
+[契约] harmony/cpp/opi_ffi.h：38 条声明，全部与 cabi.rs 同型且都被桥调用（全集 67 条，有意子集）
+test result: ok. 1 passed; 0 failed                        # 14 passed 的全量输出见交付简报
+```
+
+**仍未验证**：九项面板**没有在真机上点过**、四个键面的排布**没有看过**、
+方案切换后引擎的候选**没有真的出过**；`checkedFiles` 只证到**解析层**（见头部两条补）。
 
 ### 6. 没验证的（**比上面长得多 —— 本节才是主体**）
 
-**ArkTS（`ets/**` 全部 5 个文件）：0 行编译过。**
+**ArkTS（`ets/**` 全部 8 个文件）：0 行编译过。**
 不只是「没测过」——**连类型都没过过编译器**。装饰器（`@Entry` `@Component` `@Prop`
 `@Watch` `@StorageLink` `@Builder`）、`@kit.IMEKit`、`@kit.ArkUI` 的 `display`、
 Canvas / `CanvasRenderingContext2D`、`JSON.parse(...) as string[]` 的断言，
@@ -787,6 +845,9 @@ Canvas / `CanvasRenderingContext2D`、`JSON.parse(...) as string[]` 的断言，
 > 过了 codelinter 的**解析器**（零 parse 错，且先跑过两个正控证明它有分辨力）。
 > 但**这仍然不是编译**：没类型检查、没装饰器语义、没 ArkTS 特有的约束
 > （它连类型错都放过）。所以本节标题的「0 行编译过」**不变**。
+>
+> **2026-10-14 补充**：文件数已到 8（见头部那条补），同一探针重跑后**仍是零 parse 错**，
+> 结论一格没松；另**新增的负控说明了它连命名导入都拦不住**（详见头部 2026-10-14 补）。
 
 > 本轮新接的三条（`toggleFullwidth` / `fullwidthState` / `toggleSymbol`）**同样落在这一段**：
 > `OpiEngine.ets` 里那三个包装函数**一行都没编译过**，`toggleSymbol` 返回的字符串
@@ -955,6 +1016,10 @@ ABI 目录名对应关系（`CMakeLists.txt` 靠 `libs/${OHOS_ARCH}/` 找）：
 > `Set`+`Array.from`）。**一条都没验证** —— 本机没有 ArkTS 编译器，
 > 但**解析层过了 codelinter**（它只证语法解析、不证类型，判据与退出码陷阱见开头那段
 > 2026-09-28 订正与 §5e 的原样输出）。
+>
+> **再补（2026-10-14，输入模式接线）**：又添 **U24–U25** 两条，同样「中」档，
+> 来源是新键面那两处写法（自定义组件当键帽 / 九宫格的两层嵌套 `ForEach`）。
+> **一条都没验证**；解析层同 10-13（8 个文件零 parse 错，原样输出见头部 10-14 补）。
 
 ### 极高：错了整个端起不来
 
@@ -993,21 +1058,23 @@ ABI 目录名对应关系（`CMakeLists.txt` 靠 `libs/${OHOS_ARCH}/` 找）：
 | U21 | 搜索框 `TextInput({ placeholder, text })` + `.onChange(v => …)`（2026-10-13 新增） | **组件名与这三个入参**；更要紧的是**IME 面板内能否聚焦**（面板自己就是输入法，系统没有第二个输入法可唤起）。 | 编译不过（好）；或**能显示、打不了字**（静默退化：只能点分组看）→ 备选 `Search({ value, placeholder })`，再退是面板字母键直接喂 `emojiQuery` |
 | U22 | 分组条 `Scroll(){…}.scrollable(ScrollDirection.Horizontal)`（2026-10-13 新增） | `scrollable` 与 `ScrollDirection` 的名字/取值。 | 编译不过，或分组条不滚；备选 `List(){…}.listDirection(Axis.Horizontal)`，再退裸 `Row`（9 组会横向溢出） |
 | U23 | `new Set<string>(数组)` + `Array.from(set)` 去重、`Array.prototype.slice` 切行（2026-10-13 新增） | ArkTS 严格模式对泛型构造与 `Array.from` 的限制（与 U20 的 `JSON.parse` 同一族）。 | 表情页去重/切行那两处编译不过；备选是手写 `has`/`add` 循环与下标循环 |
+| U24 | 自定义组件当键帽：`KeyBox`（`@Component export struct`，普通成员 `onTap: () => void` 随构造参数传入）、以及**在调用点**给自定义组件挂 `.layoutWeight(n)`（2026-10-14 新增） | 函数类型成员能否随构造参数传；`layoutWeight` 这类**属性修饰**能否作用于自定义组件（`OpiPet` 有 `.margin`/`.onClick` 的先例，但那是通用属性）。 | 编译不过；或键面布局塌成等分/挤成一行 —— 备选 = 传数字参 `weight`，由 `KeyBox` **内部**自己 `.layoutWeight(weight)` |
+| U25 | 九宫格模式面板的两层嵌套 `ForEach`（外层 `MODE_GRID` 的行、内层每行三个 chip）（2026-10-14 新增） | 嵌套 `ForEach` 在 ArkTS 严格模式下的可用性（表情页网格是**同构先例**，但那边行数组是**现算**的，这里是常量表）。 | 编译不过或只出一行；备选 = 手写 9 个 chip（多 20 行，逻辑不变） |
 
 ### 待 DevEco 确认：`@StorageLink` 的入参必须是字符串字面量
 
 | 我写的 | 不确定什么 | 错了的表现 |
 |---|-----------|-----------|
-| `@StorageLink('opiBuffer') buffer: string = ''` 等 7 条**内联字面量** | **规则是否真的只收字面量**。华为规格与一则同症状求助帖都说装饰器入参是编译期静态处理的、传常量（`@StorageLink(KEY_BUFFER)`）编译不过；但这两条都是**二手资料，本机无法验证**。 | 若规则其实更宽松：现在的写法**仍然合法**（字面量两种规则下都成立），只是把键名写了两份。 |
+| `@StorageLink('opiBuffer') buffer: string = ''` 等**内联字面量**（2026-10-14 起 `pages/Index.ets` 9 条 + `KeyPanels.ets` 3 处 `opiMode`） | **规则是否真的只收字面量**。华为规格与一则同症状求助帖都说装饰器入参是编译期静态处理的、传常量（`@StorageLink(KEY_BUFFER)`）编译不过；但这两条都是**二手资料，本机无法验证**。 | 若规则其实更宽松：现在的写法**仍然合法**（字面量两种规则下都成立），只是把键名写了两份。 |
 
 **为什么还是按这个改**：`KeyboardController.ets` 原本把 `KEY_*` 集中在一处、注释写着
 「集中在这里，避免两边写不一致的字符串」—— 而 `@StorageLink(KEY_BUFFER)` 恰恰是
 ArkTS **不许做**的事。内联字面量在「规则严」与「规则松」两种情况下都能编译，
-是唯一稳妥的写法；代价是**键名在两个文件里各有一份**：
+是唯一稳妥的写法；代价是**键名在用到它的每个文件里各有一份**（`pages/Index.ets`、`KeyPanels.ets`；写入侧常量在 `KeyboardController.ets`）：
 
 - 写入侧 `KeyboardController.publish()`：`AppStorage.setOrCreate(KEY_X, …)` —— 运行时调用，
   **不受限**，继续用常量（那才是真源）。
-- 读取侧 `pages/Index.ets` 的 7 个装饰器：只能字面量，**漏改不报错**。
+- 读取侧 `pages/Index.ets` / `KeyPanels.ets` 的装饰器：只能字面量，**漏改不报错**。
 
 漏改的症状是「面板起来了、按键也有反应，但候选栏 / preedit 永远不刷新」——
 **静默失败**，最难查的一类。所以核对只能靠人：
@@ -1028,7 +1095,7 @@ grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|op
   `Paint.hasGlyph`、iOS 是 `CTFontGetGlyphsForCharacters`，**鸿蒙侧本机没有 SDK，
   查不到对应物**（是 `@ohos.graphics.text` / 字体管理那几族里？没有把握）。
   按规矩**不编一个**：表情页**不做这个过滤**，代价（个别新码位画成空心框）如实写在
-  `Index.ets` 的 `EmojiPage` 注释与「已知缺口」第 3 条。⚠️ 补的时候**只判单码位** ——
+  `EmojiPad.ets`（原 `Index.ets` 的 `EmojiPage`）注释与「已知缺口」第 3 条。⚠️ 补的时候**只判单码位** ——
   多码位序列（国旗/家庭/键帽）会被误判成「没有」，把整类能显示的藏掉，比空心框更坏
   （Android `SymbolCatalog.canRenderGlyph` 为此写了 `codePointCount > 1 ||` 的短路）。
 - **把回车「交还给应用」的接口在鸿蒙叫什么。** 引擎在缓冲为空时按设计放行回车
@@ -1065,7 +1132,7 @@ grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|op
    >    「键盘往哪儿摆」（面板只有 0.42 屏高，见 `KeyboardController.PANEL_HEIGHT_RATIO`），**本轮没做**。
    > 3. **画不出的字形不过滤**：Android 用 `Paint.hasGlyph`、iOS 用
    >    `CTFontGetGlyphsForCharacters`，鸿蒙侧的对应 API **本机查不到、也没编**
-   >    （`Index.ets` 的 `EmojiPage` 里如实标着）⇒ 个别新码位（如 U+1FAEB）画成空心框。
+   >    （现 `EmojiPad.ets`、原 `Index.ets` 的 `EmojiPage` 里如实标着）⇒ 个别新码位（如 U+1FAEB）画成空心框。
    >    补的时候**只判单码位**，且**分组 `start`/`count` 要跟着重算** ——
    >    Android `SymbolCatalog.emojiGroups` 就是为此把下标按过滤后列表重算的。
    > 4. **网格不虚拟化**：`Scroll + Column + ForEach` 是**全量铺节点**，
