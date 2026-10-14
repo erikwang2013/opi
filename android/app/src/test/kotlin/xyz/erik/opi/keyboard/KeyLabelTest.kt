@@ -49,6 +49,8 @@ class KeyLabelTest {
     fun composingAnnouncementCountsCandidates() {
         assertEquals("拼音 nihao，5 个候选", composingAnnouncement("nihao", 5))
         assertEquals("拼音 nihao，无候选", composingAnnouncement("nihao", 0))
+        // 2026-10-14：五笔态那格放的是码串 —— 念成「编码」，别把码串说成拼音。
+        assertEquals("编码 wqvb，3 个候选", composingAnnouncement("wqvb", 3, label = "编码"))
     }
 
     /**

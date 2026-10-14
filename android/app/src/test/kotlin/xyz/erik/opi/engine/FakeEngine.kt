@@ -60,6 +60,15 @@ class FakeEngine : OpiEngineApi {
         return enterActionValue
     }
 
+    /** 编码提示（2026-10-14）：测试按需设；缺省空串。 */
+    var wubiNextKeysValue = ""
+    var wubiNextKeysCalls = 0
+
+    override fun wubiNextKeys(): String {
+        wubiNextKeysCalls++
+        return wubiNextKeysValue
+    }
+
     override fun select(index: Int): String {
         val r = selectResults[index] ?: ""
         if (r.isNotEmpty()) buf = ""

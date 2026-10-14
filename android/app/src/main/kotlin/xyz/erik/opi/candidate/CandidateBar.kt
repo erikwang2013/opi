@@ -95,17 +95,35 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
                     // 于是把「缓冲 + 候选数」并进这一个节点一起播报。
                     // 播报取**组合串**（读数优先；9 键读数空不回退数字 —— 可见格已是空，
                     // 念出键位数字既对不上屏幕又是「变成数字输入」同族，2026-10-11 一并收口）
+                    // 编码提示（五笔）也进这一条播报（见下面那格暗色小字）：读屏用户
+                    // 拿不到「还能接哪些键」就等于这条能力只对看得见的人开放。
                     contentDescription = composingAnnouncement(
                         controller.composingText(),
                         candidates.size,
-                    )
+                        label = if (controller.inputScheme == InputScheme.WUBI) "编码" else "拼音",
+                    ) + if (controller.wubiHint.isNotEmpty()) {
+                        "编码提示 ${controller.wubiHint.toCharArray().joinToString(" ")}"
+                    } else {
+                        ""
+                    }
                     liveRegion = LiveRegionMode.Polite
                 },
             fontSize = 20.sp,
             color = p.barBufferFg,
         )
+        // 编码提示（五笔，2026-10-14 接线）：缓冲右边挂一串「还能接哪些键」的暗色小字
+        // （搜狗五笔同款位置）。空串 = 非五笔态 / 无接续 ⇒ **不画**（画空 Text 会让
+        // 布局里多一格、也会让读屏多念一次空气）。
+        if (controller.wubiHint.isNotEmpty()) {
+            Text(
+                controller.wubiHint,
+                modifier = Modifier.padding(end = 6.dp),
+                fontSize = 13.sp,
+                color = p.barDimFg,
+            )
+        }
         Row(
-            // 候选整屏换新时滚动位置必须回起点，否则新一批的头几个候选留在视口外
+            // 候选整屏换新时滚动位置必须回到起点，否则新一批的头几个候选留在视口外
             // （看着像"这页只有 3 个词"）。两个触发点：翻页（页号变）、继续打字
             // （缓冲变 → 整批候选换掉）。
             modifier = Modifier.weight(1f).horizontalScroll(
@@ -216,9 +234,17 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
 internal fun barBufferText(scheme: InputScheme, buffer: String): String =
     if (scheme == InputScheme.NINE) "" else buffer
 
-/** 拼音缓冲 + 候选数的播报文案；无候选时明说「无候选」，别让读屏用户以为卡住了。 */
-internal fun composingAnnouncement(buffer: String, candidateCount: Int): String {
-    val head = if (buffer.isEmpty()) "" else "拼音 $buffer，"
+/** 缓冲 + 候选数的播报文案；无候选时明说「无候选」，别让读屏用户以为卡住了。
+ *
+ * `label` = 那一格缓冲**是什么**（2026-10-14 加参数）：拼音方案念「拼音」，
+ * 五笔念「编码」—— 五笔格子里放的是码串，念成拼音是假事实。
+ */
+internal fun composingAnnouncement(
+    buffer: String,
+    candidateCount: Int,
+    label: String = "拼音",
+): String {
+    val head = if (buffer.isEmpty()) "" else "$label $buffer，"
     return if (candidateCount == 0) "${head}无候选" else "$head$candidateCount 个候选"
 }
 

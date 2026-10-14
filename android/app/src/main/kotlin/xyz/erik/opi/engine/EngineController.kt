@@ -149,6 +149,10 @@ class EngineController(
     }
 
     // 候选翻页：引擎 candidates(limit) 无 offset，翻页纯客户端。
+    /** 编码提示（五笔候选栏显示剩余键；2026-10-14 接线）—— 由 [refresh] 计算。 */
+    var wubiHint by mutableStateOf("")
+        private set
+
     private var _candidatePage by mutableStateOf(0)
     private var lastQuery: String? = null // buffer 变化才重置页码（shift 等操作不重置）
 
@@ -173,6 +177,14 @@ class EngineController(
         jianpinEnabled = api.jianpinEnabled()
         fullwidth = api.fullwidthState() // 切模式会重置它 ⇒ 每次刷新都重读
         inputScheme = InputScheme.fromInt(api.scheme())
+        // 编码提示（2026-10-14 接线）：**只在五笔态、缓冲非空时**问引擎，且只在这里问
+        // 一次（引擎侧每次调用是全量重算，别在每帧渲染里调 —— 见接口文档）。
+        // 非五笔态恒空：省掉那 O(26×前缀查询)，也避免别的方案栏上挂一条永远为空的提示。
+        wubiHint = if (inputScheme == InputScheme.WUBI && buffer.isNotEmpty()) {
+            api.wubiNextKeys()
+        } else {
+            ""
+        }
         candidates = api.candidates(fetchLimit)?.toList() ?: emptyList() // JNI 可能返回 null
         // 读数（引擎出口已按读音去重保序）：与 candidates 同一次排名的副产物
         // （引擎侧同一对缓存），**必须紧跟 candidates 之后读**（同一读序契约，

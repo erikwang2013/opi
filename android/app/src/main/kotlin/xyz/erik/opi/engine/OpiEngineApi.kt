@@ -24,6 +24,11 @@ interface OpiEngineApi {
     /** 回车（缓冲非空时）该做什么：0=选首候选、1=清空、2=上屏原文（2026-10-14 接线；
      * 判据在引擎侧，见 `engine-core/src/engine_enter.rs`）。 */
     fun enterAction(): Int
+
+    /** 编码提示（2026-10-14 接线）：当前缓冲可接续的键，拼成串；非五笔态 / 无接续 → 空串。
+     * ⚠️ 引擎侧每次调用全量重算（O(26×前缀查询)）—— **只在缓冲变化时取一次**
+     * （[EngineController.refresh] 里），别在每帧渲染里调。 */
+    fun wubiNextKeys(): String
     fun switchMode(mode: Int)
     fun setShift(on: Boolean)
     fun inputSpace(): String

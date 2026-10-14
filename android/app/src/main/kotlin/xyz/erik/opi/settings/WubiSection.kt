@@ -35,8 +35,8 @@ import androidx.compose.ui.unit.dp
  * ⚠️ 两条如实写、不许写成「已生效」：
  * · **回车行为**：引擎侧判据已接线（`Engine::enter_action`，fcitx5 / Windows 已消费），
  *   **Android 的 JNI 出口尚未接** —— 文案如实写「等待接线」，不写「已生效」；
- * · **编码提示**：读侧出口（`wubiNextKeys`）已备，宿主 UI 未做 —— 本节不摆它
- *   （摆了就是点不动的开关，见 SettingsScreen 的既有原则）。
+ * · **编码提示**：Android 候选栏已接（2026-10-14，缓冲右边的暗色小字）—— 本节不摆开关
+ *   （摆一个「显示提示」的开关在设置页会让人以为默认是关的；它跟着五笔态自动出现）。
  */
 @Composable
 internal fun WubiSection(prefs: ImePreferences, toast: (String) -> Unit) {
@@ -170,9 +170,10 @@ internal fun WubiSection(prefs: ImePreferences, toast: (String) -> Unit) {
             )
         },
     )
-    // 读侧出口已备但宿主 UI 未做的那一项，如实提一句（不摆开关）。
+    // 编码提示（2026-10-14 接线）：Android 候选栏已把它画在缓冲右边（暗色小字），
+    // 无需开关 —— 这里只留一句「在哪里看」的指引。
     Text(
-        "编码提示（候选栏显示剩余码）本版未接：引擎侧读出口已备（wubiNextKeys），待宿主 UI。",
+        "编码提示（还能接哪些键）显示在候选栏缓冲右边（五笔态、打码时出现）。",
         style = MaterialTheme.typography.bodySmall,
         modifier = Modifier.padding(horizontal = 16.dp),
     )

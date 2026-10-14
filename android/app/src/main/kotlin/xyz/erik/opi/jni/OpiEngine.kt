@@ -121,7 +121,8 @@ object OpiEngine : OpiEngineApi, SymbolApi {
     override external fun setJianpin(on: Boolean)
 
     /**
-     * scheme() -> Int：输入方案读侧（0=全键盘 1=拼音9键 2=拼音14键 3=笔画 4=双拼）。
+     * scheme() -> Int：输入方案读侧（0=全键盘 1=拼音9键 2=拼音14键 3=笔画 4=双拼 5=五笔；
+     * 真源 `engine-core/src/scheme.rs` 的 `Scheme::code` —— 2026-10-14 补上漏写的 5）。
      * ⚠️ 未装载 → 0 是**哨兵**（同 [fuzzyEnabled] 一档），不是"用户选的就是全键盘"。
      */
     override external fun scheme(): Int
@@ -183,7 +184,7 @@ object OpiEngine : OpiEngineApi, SymbolApi {
      * ⚠️ 引擎侧每次调用全量重算（O(26×前缀查询)）—— **别在每帧渲染里调**，
      * 缓冲变化时取一次缓存住。
      */
-    external fun wubiNextKeys(): String
+    override external fun wubiNextKeys(): String
 
     /**
      * switchLanguage(mode: Int, scheme: Int)：**语言切换**（中↔英/中↔繁）—— 换模式与

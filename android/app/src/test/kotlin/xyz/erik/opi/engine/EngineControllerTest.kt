@@ -455,4 +455,31 @@ class EngineControllerTest {
         ctrl.backspace()
         assertTrue("backspace 后也要触发（退格到空时要收口组合区）", synced > afterInput)
     }
+
+    /** 编码提示（2026-10-14 接线）：只在五笔态 + 缓冲非空时问引擎，且每次刷新只问一次。 */
+    @Test
+    fun wubiHintOnlyInWubiSchemeWithBuffer() {
+        // 非五笔态：不问引擎（那 O(26×前缀查询) 白花），值恒空。
+        val pinyin = FakeEngine().apply { buf = "ni" }
+        val c1 = EngineController(pinyin)
+        assertEquals("", c1.wubiHint)
+        assertEquals(0, pinyin.wubiNextKeysCalls)
+
+        // 五笔 + 缓冲非空：读到提示。
+        val fake = FakeEngine().apply {
+            buf = "wqvb"
+            schemeValue = 5
+            wubiNextKeysValue = "asdf"
+        }
+        val c2 = EngineController(fake)
+        assertEquals("asdf", c2.wubiHint)
+
+        // 五笔 + 空缓冲：空串（没有「还能接什么」可言）。
+        val empty = FakeEngine().apply {
+            buf = ""
+            schemeValue = 5
+            wubiNextKeysValue = "asdf"
+        }
+        assertEquals("", EngineController(empty).wubiHint)
+    }
 }
