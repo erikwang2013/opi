@@ -1,10 +1,15 @@
 # OPI macOS 端（草案）
 
-> ## ⚠️ 草案 · 从未编译 · 未验证
+> ## ⚠️ 草案 · **CI 已真编译** · 从未上机运行
 >
-> **本目录的 Swift 代码一行都没有编译过。** 没有 macOS、没有 Xcode、没有 Apple SDK；
-> InputMethodKit / AppKit 是 Apple 独有框架，在 Linux 上 `import` 就断 —— 连语法检查
-> 都做不到。Info.plist 没有被任何 macOS 构建系统读过，也没有装进过任何系统的输入法列表。
+> **2026-10-15 订正（原来那句「一行都没有编译过」不成立）**：`apple.yml` 的 macOS job
+> 用 `swiftc macos/*.swift -typecheck` + 真编译链接（`scripts/apple/package-macos.sh`）
+> 把本目录全部 Swift 编了一遍 —— 这与 `ios/` 那边是同一天同一类订正。
+> ⚠️ 但**「编过」不等于「能用」**：**从未在 macOS 上运行过**，没有一个字节被 IMK 加载过，
+> Info.plist 也没进过任何系统的输入法列表。**改动后先推一次让 CI 编**，再看行为。
+>
+> 本机没有 macOS、没有 Xcode、没有 Apple SDK；InputMethodKit / AppKit 是 Apple 独有框架，
+> 在 Linux 上 `import` 就断 —— 编译发生在 **CI 的 macOS runner** 上，不在开发机。
 >
 > 所以本目录的交付物**不是「可用的 macOS 输入法」，而是「一份起点 + 一份精确契约」**。
 > 不要在任何地方把它写成「完成」「已实现」—— 本项目的 README 刚花了一整轮
@@ -733,7 +738,7 @@ TSF 是 `vk.rs` 的 `hotkey_should_act`，fcitx5 是 `opi_fcitx5.cpp` 的 `isRep
 
 ## 状态
 
-**草案。一行 Swift 都没有编译过，没有一个字节被 IMK 加载过。**
+**草案。Swift 在 CI 上编过（2026-10-15 订正），但从未运行过 —— 没有一个字节被 IMK 加载过。**
 上面「已验证」一节里的 `cargo check` 是这整个目录里唯一的真实证据，而它证明的是
 **Rust 侧**能编译，不是本目录能用。
 

@@ -1,10 +1,11 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-// ⚠️ 草案 · 从未编译 · 未验证
+// ⚠️ 草案 · **CI 已真编译**（apple.yml 的 iOS job，2026-10-15）· **从未上机运行**
 //
-// 本文件在 Linux 上编写，未经过任何 Swift 编译器。
-// UIKit 是 Apple 独有框架，本机 `import UIKit` 就会断。
+// 本文件在 Linux 上编写。**已过 `swiftc ios/*.swift`（-typecheck + -emit-library）** ——
+// 2026-10-15 那次全目录真编译；但从未在设备或模拟器上跑过：**行为仍未验证**。
+// （本机没有 UIKit —— 那次编译跑在 CI 的 macOS runner 上，不是这里。）
 //
 // 「一个键是什么」：键位的**数据类型与按钮**，不含布局与触摸分流。
 // 布局在 `KeyboardLayout.swift`（它才认得层、行、候选栏）。

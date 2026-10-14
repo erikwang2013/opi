@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-// ⚠️ 草案 · 从未编译 · 未验证
+// ⚠️ 草案 · **CI 已真编译**（apple.yml 的 iOS job，2026-10-15）· **从未上机运行**
 //
-// 本文件在 Linux 上编写，未经过任何 Swift 编译器 —— 一个字符都没有编译过。
+// 本文件在 Linux 上编写。**已过 `swiftc ios/*.swift`（-typecheck + -emit-library）** ——
+// 2026-10-15 那次全目录真编译（同一轮还当场抓出一处闭包里的 `continue`，见 RarePanel.swift）；
+// 但从未在设备或模拟器上跑过：**行为仍未验证**，别把「编过」读成「能用」。
 // UIKit 是 Apple 独有框架，本机 `import UIKit` 就会断。
 //
 // 输入模式**菜单**（2026-10-14）：九项模式的选择面板。参照实现是 Android

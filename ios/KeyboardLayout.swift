@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-// ⚠️ 草案 · 从未编译 · 未验证
+// ⚠️ 草案 · **CI 已真编译**（apple.yml 的 iOS job，2026-10-15）· **从未上机运行**
 //
-// 本文件在 Linux 上编写，未经过任何 Swift 编译器。
+// 本文件在 Linux 上编写。**已过 `swiftc ios/*.swift`（-typecheck + -emit-library）** ——
+// 2026-10-15 那次全目录真编译；但从未在设备或模拟器上跑过：**行为仍未验证**。
 // 目标**不是**生产级键盘外观 —— 那是在 Mac 上对着真机迭代出来的东西。
 // 目标是**结构正确的最小骨架**：候选栏 + 键位行 + 按下/抬起事件，
 // 让接手人拿到手就能跑起来看行为，而不是从零搭 UI。
