@@ -11,29 +11,24 @@ package xyz.erik.opi
 
 import android.os.Build
 import android.view.inputmethod.InputConnection
-import xyz.erik.opi.engine.composingText
 
 /**
- * 组合串进字段（2026-10-10 用户裁决「需要」）：打字期间输入框里能看到拼音
- * （搜狗式）——此前组合串只画在自家候选栏，字段里空空；用户以为没打进去。
- * 文本用**显示读数**（`reading`：9 键 = `ni'hao` 这类分词拼音；其余 = 原字母）。
- * 英文模式字母直传不经过缓冲 ⇒ 无组合串，正确。读数空时的回退见
- * [EngineController.composingText]（9 键不回退数字缓冲，2026-10-11 修）。
+ * 组合串收尾（**2026-10-15 用户裁决改判**：拼音不再进输入框 —— 它画在候选行上方
+ * 那一行里，见 `ime/ComposingBar.kt`。本条原先的语义「打字期间输入框里能看到拼音」
+ * 是 2026-10-10 的裁决，已被取代；`docs/install/android.md` 有订正留痕）。
  *
- * ⚠️ 缓冲空时**先 `setComposingText("")` 再 `finishComposingText`** —— 只 finish
- * 会把组合区里**最后那段文字落定留在字段里**（退格到空会剩半截拼音）。
+ * 现在这条只做一件事：**把可能残留的组合区收干净**（防御性 —— 正常路径下我们从不
+ * 往里写，`lastComposing` 恒空；但别的输入法切走留下的、或本端历史版本写进去的组合区
+ * 不该在提交后忽然落定成普通文本）。
+ * ⚠️ 收尾仍要**先 `setComposingText("")` 再 `finishComposingText`** —— 只 finish 会把
+ * 组合区里最后那段文字**落定留在字段里**（这是 2026-10-10 实测到的形态）。
  */
 internal fun OpiImeService.pushComposingText() {
     val ic = currentInputConnection ?: return
-    val text = engineController.composingText()
-    if (text.isEmpty()) {
-        ic.setComposingText("", 1)
-        ic.finishComposingText()
-        lastComposing = ""
-    } else {
-        ic.setComposingText(text, 1)
-        lastComposing = text
-    }
+    if (lastComposing.isEmpty()) return
+    ic.setComposingText("", 1)
+    ic.finishComposingText()
+    lastComposing = ""
 }
 
 /**

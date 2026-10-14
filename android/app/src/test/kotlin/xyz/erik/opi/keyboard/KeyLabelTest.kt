@@ -3,7 +3,6 @@
 
 package xyz.erik.opi.keyboard
 
-import xyz.erik.opi.candidate.barBufferText
 import xyz.erik.opi.candidate.composingAnnouncement
 import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.engine.InputScheme
@@ -58,15 +57,13 @@ class KeyLabelTest {
      * logo 图标，logo 图标前就不要显示数字了」）—— 别把「无候选时显示缓冲原文」
      * 加回来（曾被当作反馈修复，用户明确不要）。
      */
+    // ⚠️ 本条 2026-10-15 撤除：`barBufferText` 随「拼音不进字段、改画在候选行上方」
+    // （用户裁决）一并删除 —— 拼音行读的是 `EngineController.composingText()`，
+    // 那条的取值（9 键不落数字、读数优先）仍由 `EngineControllerComposingTest` 钉着。
     @Test
-    fun nineKeyBufferCellStaysEmpty() {
-        // 9 键：有候选 / 无候选 / 空缓冲 —— 三种都不显示数字串
-        assertEquals("", barBufferText(InputScheme.NINE, "64"))
-        assertEquals("", barBufferText(InputScheme.NINE, "99999"))
-        assertEquals("", barBufferText(InputScheme.NINE, ""))
-        // 其余方案（26/14/笔画）显示实际缓冲（字母串本来就是拼音）
-        assertEquals("ni", barBufferText(InputScheme.FULL, "ni"))
-        assertEquals("hh", barBufferText(InputScheme.STROKE, "hh"))
+    fun announcementOmitsTheBufferWhenEmpty() {
+        // 保号占位：9 键「不显示数字串」这条**没有**撤销，只是换了个出口 ——
+        // 现在由 `composingText()`（ComposingBar 读它）保证，断言在 ComposingTest。
         // 选字后 buffer 清空而候选仍在：不能播成「拼音 ，3 个候选」
         assertEquals("3 个候选", composingAnnouncement("", 3))
     }

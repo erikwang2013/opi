@@ -3,7 +3,6 @@
 
 package xyz.erik.opi.candidate
 
-import xyz.erik.opi.engine.composingText
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -23,18 +22,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.CustomAccessibilityAction
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
-import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xyz.erik.opi.engine.EngineController
-import xyz.erik.opi.engine.InputScheme
 import xyz.erik.opi.keyboard.LocalKeyboardPalette
 import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.pet.OpiPet
@@ -81,47 +76,9 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
             .background(p.barBg),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // 这格显示什么见 barBufferText 的文档（9 键恒空）。
-        // 语义节点恒在（读屏播报挂它，见下面语义块），隐藏时留空文本节点。
-        val bufferShown = barBufferText(controller.inputScheme, controller.buffer)
-        Text(
-            bufferShown,
-            modifier = Modifier
-                .padding(horizontal = 8.dp)
-                .semantics {
-                    // 播报候选变化只能挂在这里：读屏仅在「节点自身」语义变化时播报
-                    // （Compose issue 225780131 —— 只改 text 不触发，须同块给 contentDescription），
-                    // 而候选项是 clickable 子节点（自身合并语义），父节点合并不了它们。
-                    // 于是把「缓冲 + 候选数」并进这一个节点一起播报。
-                    // 播报取**组合串**（读数优先；9 键读数空不回退数字 —— 可见格已是空，
-                    // 念出键位数字既对不上屏幕又是「变成数字输入」同族，2026-10-11 一并收口）
-                    // 编码提示（五笔）也进这一条播报（见下面那格暗色小字）：读屏用户
-                    // 拿不到「还能接哪些键」就等于这条能力只对看得见的人开放。
-                    contentDescription = composingAnnouncement(
-                        controller.composingText(),
-                        candidates.size,
-                        label = if (controller.inputScheme == InputScheme.WUBI) "编码" else "拼音",
-                    ) + if (controller.wubiHint.isNotEmpty()) {
-                        "编码提示 ${controller.wubiHint.toCharArray().joinToString(" ")}"
-                    } else {
-                        ""
-                    }
-                    liveRegion = LiveRegionMode.Polite
-                },
-            fontSize = 20.sp,
-            color = p.barBufferFg,
-        )
-        // 编码提示（五笔，2026-10-14 接线）：缓冲右边挂一串「还能接哪些键」的暗色小字
-        // （搜狗五笔同款位置）。空串 = 非五笔态 / 无接续 ⇒ **不画**（画空 Text 会让
-        // 布局里多一格、也会让读屏多念一次空气）。
-        if (controller.wubiHint.isNotEmpty()) {
-            Text(
-                controller.wubiHint,
-                modifier = Modifier.padding(end = 6.dp),
-                fontSize = 13.sp,
-                color = p.barDimFg,
-            )
-        }
+        // ⚠️ 2026-10-15 用户裁决改判：拼音（缓冲/读数）与五笔编码提示**不再画在本栏**——
+        // 它们搬去了候选行**上方**的独立一行（`ime/ComposingBar.kt`，含读屏播报）。
+        // 本栏自此只画候选本身。撤掉的那格见 git 历史与 docs/install/android.md 的订正。
         Row(
             // 候选整屏换新时滚动位置必须回到起点，否则新一批的头几个候选留在视口外
             // （看着像"这页只有 3 个词"）。两个触发点：翻页（页号变）、继续打字
@@ -231,9 +188,6 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
  * 的修复，用户看过之后明确不要（数字串在候选区是噪音）。若又收到「无匹配时键盘像死了」，
  * 先与用户对反馈载体（键面/小欧/无匹配文案），别直接改这一格。
  */
-internal fun barBufferText(scheme: InputScheme, buffer: String): String =
-    if (scheme == InputScheme.NINE) "" else buffer
-
 /** 缓冲 + 候选数的播报文案；无候选时明说「无候选」，别让读屏用户以为卡住了。
  *
  * `label` = 那一格缓冲**是什么**（2026-10-14 加参数）：拼音方案念「拼音」，

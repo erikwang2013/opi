@@ -21,6 +21,7 @@ import androidx.lifecycle.LifecycleRegistry
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryOwner
 import xyz.erik.opi.candidate.CANDIDATE_BAR_HEIGHT_DP
+import xyz.erik.opi.ime.COMPOSING_BAR_HEIGHT_DP
 import xyz.erik.opi.engine.DictStore
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.engine.UserWordStore
@@ -167,7 +168,11 @@ class OpiImeService : InputMethodService() {
         val side = min(w, h)
         val keyArea = (side * KEY_AREA_RATIO).toInt() + (KEY_AREA_EXTRA_DP * density).toInt()
         val bar = (CANDIDATE_BAR_HEIGHT_DP * density).toInt()
-        return (keyArea + bar).coerceAtMost(h)
+        // 拼音行（2026-10-15）：它常驻在候选行上方，高度必须一起算进窗口 ——
+        // 不加这一项，键区会把它的高度吃回去（那正是「条件挂载 vs 常驻槽位」那条
+        // 实测教训的同族：槽位常驻就必须在窗口高度里兑现）。
+        val composing = (COMPOSING_BAR_HEIGHT_DP * density).toInt()
+        return (keyArea + bar + composing).coerceAtMost(h)
     }
 
     /**
