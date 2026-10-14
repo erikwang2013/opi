@@ -133,8 +133,57 @@ fn main() {
                 }
             }
         }
+        // 取键转储（2026-10-15 加）：`opi-tools dump-keys <file.opid>` →
+        // 每行 `字<TAB>键1,键2,…`（只列**单字**条目，键去重后字典序）。
+        // 用途：`scripts/gen_polyphone.py --dump <本命令的输出>` —— 多音字补读音表要
+        // 「词库里缺哪个读音」这个差集，而 `.opid` 是二进制、python 读不了；
+        // 放在本工具里是为了让那条生成链**可复现**（跑一次命令就能重生成表）。
+        Some("dump-keys") => {
+            let Some(path) = args.get(2) else {
+                errln!("usage: opi-tools dump-keys <file.opid>");
+                std::process::exit(2);
+            };
+            let bytes = match std::fs::read(path) {
+                Ok(b) => b,
+                Err(e) => {
+                    errln!("read {}: {e}", path);
+                    std::process::exit(1);
+                }
+            };
+            let d = match load_bytes(bytes) {
+                Ok(d) => d,
+                Err(e) => {
+                    errln!("load failed: {e:?}");
+                    std::process::exit(1);
+                }
+            };
+            // 字 → （键集合, 最大词频）。**词频列是给 gen_polyphone.py 用的**：
+            // 词库的词频是位置编码（十亿量级），Unihan 的词次（几千）不同量纲 ——
+            // 补读音的候选要按**该字在词库里的常用度**落位，拿这一列当量纲桥。
+            let mut rev: std::collections::BTreeMap<
+                String,
+                (std::collections::BTreeSet<String>, u32),
+            > = std::collections::BTreeMap::new();
+            d.visit_entries(&mut |key: &str, word: &str, f: u32| {
+                if word.chars().count() == 1 {
+                    let e = rev.entry(word.to_string()).or_default();
+                    e.0.insert(key.to_string());
+                    e.1 = e.1.max(f);
+                }
+            });
+            for (ch, (keys, freq)) in &rev {
+                outln!(
+                    "{ch}\t{}\t{freq}",
+                    keys.iter().cloned().collect::<Vec<_>>().join(",")
+                );
+            }
+            errln!(
+                "（单字 {} 个；本转储仅供 gen_polyphone.py 取差集）",
+                rev.len()
+            );
+        }
         _ => {
-            errln!("usage: opi-tools <compile|verify> ...");
+            errln!("usage: opi-tools <compile|verify|dump-keys> ...");
             errln!("       opi-tools -V | --version");
             std::process::exit(2);
         }

@@ -84,9 +84,44 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
             })
             .collect()
     };
+    let mut merged = scan(input);
+    // ── 多音字补读音（2026-10-15「单独打『么』没有候选」那一类）────────────────
+    // 9 键的缓冲是数字串，走 `digit_hits`（按音节建的 `hits` 查不到数字串）。
+    // 精确性按**键长相等**判 —— 与全键盘那条路同义（本文件头注的既有契约）；
+    // 表里只有词库真缺的条目 ⇒ 去重交给下面的 `seen`。
+    let input_len = input.len();
+    let dict_max = dict.max_freq(); // 量纲判据 + 缩放（见 `polyphone.rs`）
+    for (word, freq, plen) in crate::polyphone::digit_hits(input)
+        .iter()
+        .filter(|_| crate::polyphone::applies(dict_max))
+    {
+        let exact = *plen == input_len;
+        let user = learner.freq_of(word);
+        let freq = crate::polyphone::scaled_freq(*freq, dict_max);
+        merged.push((
+            Candidate {
+                text: (*word).to_string(),
+                kind: CandidateKind::Hanzi,
+                score: rank_score(freq, user, boost).saturating_add(if exact {
+                    exact_bonus
+                } else {
+                    0
+                }),
+            },
+            // 读音串不进这条出口（`readings` 是给左列的显示读数）：补读音的字没有
+            // 「逐条读数」可言，按**输入本身的键序**给它一条 —— 9 键左列显示的仍是
+            // 「还能接哪些键」那套语义，不是新造一个读音。
+            input.to_string(),
+            Some(Meta {
+                pinyin_len: *plen,
+                exact,
+                learned: user > 0,
+            }),
+        ));
+    }
     // ── 数字空间回退（2026-10-10 扩到 9 键）：整串无命中改扫最长音节对齐键前缀的整档
     // （判定唯一实现 `scheme::scheme_fallback_len`；命中态非空 ⇒ 一行不重，重扫深度 ≤ 1）。
-    let mut merged = scan(input);
+    // ⚠️ 判据在**补读音之后**算（与全键盘那条路同序）：补读音命中时 `merged` 非空 ⇒ 不回退。
     if merged.is_empty()
         && let Some(k) = crate::scheme::scheme_fallback_len(dict, input, scheme, pin)
     {

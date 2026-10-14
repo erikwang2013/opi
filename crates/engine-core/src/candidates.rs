@@ -168,6 +168,35 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
             0
         }),
     };
+    // ── 多音字补读音（2026-10-15 用户报障「单独打『么』候选词没有」）──────────────
+    // 词库缺的读音（`么` 没有 `mo`、`绿` 没有 `lu`…）在这里补上：条目**按精确匹配**算
+    // （它确实是该读音）并吃 `exact_bonus`，词频已由生成器换算到**词库量纲**
+    // （见 `polyphone.rs` 头注）。表里只有「词库真缺」的条目 ⇒ 去重交给下面的 `seen`。
+    // 模式门（2026-10-15）：只在**拼音（简体）模式**补 —— 表是按简体 luna 建的，
+    // 繁体模式查的是 trad 库、它自己有自己的读音表；把简体条目补进繁体候选是错的
+    // （实测：繁体 `yao` 的首位被补出来的 `麼`… 不，被补出来的简体条目抢走，
+    //  `ranking_quality::trad_ranking_quality` 当场红）。
+    let dict_max = dict.max_freq(); // 量纲判据 + 缩放（见 `polyphone.rs`）
+    let patch: Vec<(Candidate, Option<Meta>)> = crate::polyphone::hits(input)
+        .iter()
+        .filter(|_| mode == Mode::Pinyin && crate::polyphone::applies(dict_max))
+        .map(|(word, freq)| {
+            let user = learner.freq_of(word);
+            let freq = crate::polyphone::scaled_freq(*freq, dict_max);
+            (
+                Candidate {
+                    text: (*word).to_string(),
+                    kind: CandidateKind::Hanzi,
+                    score: rank_score(freq, user, boost).saturating_add(exact_bonus),
+                },
+                Some(Meta {
+                    pinyin_len: input_len,
+                    exact: true,
+                    learned: user > 0,
+                }),
+            )
+        })
+        .collect();
     // 前缀扩展层按静态词频截到 PREFIX_MATCH_CAP（精确层不截）；取舍见 dictionary.rs 同常量。
     //
     // 主查询候选**连同分档元数据**一起收集（2026-10-14）：条目一出词库，「拼音多长、
@@ -187,6 +216,7 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
             (hanzi(e, exact), Some(meta))
         })
         .collect();
+    merged.extend(patch);
     // 多音节整串无命中时按音节逐段补候选（segment 此前是死代码）：
     // nihao → [你][好] 逐字可选；单字母音节跳过避免噪音。
     // 每音节仅取 top 3：luna 繁体词库下全量并入会把生僻字顶进 top-8。

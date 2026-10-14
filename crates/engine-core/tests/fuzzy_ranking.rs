@@ -113,7 +113,12 @@ fn length_preserving_fuzzy_hit_never_wins_the_exact_slot() {
     d.insert("li", "裡", 3_998_714_089);
     d.insert("ni", "你", 3_999_128_899);
     let mut e = engine(d);
-    let got = cands(&mut e, "li");
+    // ⚠️ 2026-10-15：滤掉多音字补读音层（`polyphone.tsv`）为 `li` 加的字 —— 它们不属
+    // 于本夹具，会凭真库量级词频插到前面。本条钉的是**夹具这三个字**的次序。
+    let got: Vec<String> = cands(&mut e, "li")
+        .into_iter()
+        .filter(|t| matches!(t.as_str(), "裏" | "裡" | "你"))
+        .collect();
     assert_eq!(got[0], "裏", "「li」首位必须是精确匹配的「裏」：{got:?}");
     assert_eq!(got[1], "裡", "精确档内部仍按词频排：{got:?}");
     assert!(
@@ -150,11 +155,17 @@ fn fuzzy_tier_orders_by_frequency_not_by_key_length_coincidence() {
     d.insert("su", "速", 3_992_000_000);
     d.insert("suo", "所", 3_000_000_000);
     let mut e = engine(d);
-    let got = cands(&mut e, "shu");
+    // ⚠️ 2026-10-15：候选里现在可能混有**多音字补读音层**（`polyphone.tsv`）为 `shu`
+    // 补的字（如 `俞`）—— 它们走精确档、与模糊档的排序无关。本条只钉夹具这两个字的
+    // 相对次序（这正是它的意图），故先滤到夹具自己的字。
+    let got: Vec<String> = cands(&mut e, "shu")
+        .into_iter()
+        .filter(|t| t == "速" || t == "所")
+        .collect();
     assert_eq!(
         got,
         vec!["速", "所"],
-        "模糊档必须按真实词频排（键长巧合不得冒充精确）：{got:?}"
+        "模糊档必须按真实词频排（键长巧合不得冒充精确）"
     );
 }
 
@@ -173,7 +184,14 @@ fn fuzzy_only_appends_after_the_exact_candidates() {
         "zong", "zhong", "li", "ni", "shu", "nai", "fa", "hao", "xian", "zongguo",
     ] {
         let exact: HashSet<String> = probe.query_all(input).into_iter().map(|x| x.word).collect();
-        let got = cands(&mut e, input);
+        // ⚠️ 2026-10-15：滤掉**多音字补读音层**（`polyphone.tsv`）加进来的字 —— 它们
+        // 不属于本夹具（`probe` 不认识它们），但按设计吃精确加成、走精确档的位置。
+        // 本条钉的是「夹具的精确候选整体在前、模糊命中只追加」，把第三方的字算进来
+        // 等于换了断言对象。
+        let got: Vec<String> = cands(&mut e, input)
+            .into_iter()
+            .filter(|t| REAL_FREQ_CHARS.contains(&t.as_str()))
+            .collect();
         let flags: Vec<bool> = got.iter().map(|t| exact.contains(t)).collect();
         let k = flags.iter().position(|f| !f).unwrap_or(flags.len());
         assert!(
@@ -191,6 +209,13 @@ fn fuzzy_only_appends_after_the_exact_candidates() {
 
 /// 真实词频小词库（`data/raw/trad_hanzi.tsv`），覆盖 n↔l、f↔h、zh↔z、sh↔s、in↔ing
 /// 五种变体与它们的精确对手。两次调用返回同一份内容（一次给引擎，一次留作成员判定）。
+/// 夹具里的字（给 `*_ignoring_patched_entries` 那类断言用：补读音层会往候选里加
+/// 夹具不认识的字，见下一条用例的头注）。与 `real_freq_dict` 的第三列同源。
+const REAL_FREQ_CHARS: &[&str] = &[
+    "你", "裏", "裡", "里", "总", "中", "国", "中国", "书", "所", "来", "奶", "发", "哈", "好",
+    "现", "想", "心", "行", "送",
+];
+
 fn real_freq_dict() -> InMemoryDictionary {
     let mut d = InMemoryDictionary::new();
     for (py, w, f) in [
@@ -231,7 +256,12 @@ fn illegal_variant_is_never_queried() {
     d.insert("shong", "泄漏", 9_000_000);
     let mut e = engine(d);
     let got = cands(&mut e, "song");
-    assert_eq!(got, vec!["送"], "非法音节的变体被拿去查库了：{got:?}");
+    // 意图是「非法变体 `shong` 那条**泄漏**没被查出来」；`song` 这个音节还有多音字
+    // 补读音层（`polyphone.tsv`）补的字，与本条无关，别写成整份列表相等。
+    assert!(
+        got.contains(&"送".to_string()) && !got.contains(&"泄漏".to_string()),
+        "非法音节的变体被拿去查库了：{got:?}"
+    );
 }
 
 /// 上限在**引擎路径**上也成立：长输入不得让变体数爆掉。

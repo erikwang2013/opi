@@ -42,6 +42,7 @@ pub mod jianpin;
 pub mod keys;
 pub mod learner;
 pub mod pinyin;
+pub mod polyphone; // 多音字补读音纠偏层（2026-10-15，见文件头）
 pub mod punctuation;
 pub mod router;
 #[path = "router_edit_keys.rs"]
