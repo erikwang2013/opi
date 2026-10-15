@@ -28,6 +28,12 @@
 //!
 //! ⚠️ 单字体、不做**逐字**回退：本文件的槽位文本都是同一种字面（一对标点、en+26、
 //! 单字），按首码位问一次够用。将来若有混字面槽位，得按 run 拆开问，别直接塞进来。
+//!
+//! ## 整体缩放（2026-10-15 用户裁决）
+//!
+//! 「状态栏图标、文字在自己所在的按钮显示太大，缩小40％」⇒ 面内容整体 × [FACE_SCALE]
+//! （= 0.6，四周各留 20% 余量）。**上面那套「按墨迹取最大」的排版一行没改** —— 只是
+//! 内盒从「按钮本身」变成「按钮 × 0.6」，取最大/居中/不溢出的语义原样成立。
 
 package xyz.erik.opi.candidate
 
@@ -268,12 +274,32 @@ internal fun modeSlots(mode: String): List<GlyphSlot> = buildList {
 // ---------- 一个按钮的面 ----------
 
 /**
+ * 按钮面内容的**整体缩放**（用户 2026-10-15 裁决：「状态栏图标、文字在自己所在的按钮显示
+ * 太大，缩小40％」）—— 保留 60%、四周各留 20% 余量。
+ *
+ * 这是 2026-10-14「按按钮显示最大、不要溢出」之后的**再裁决**（用户看过填满的效果嫌大；
+ * 那套效果的人眼图由 StatusBarRenderProbeTest 落盘在 /tmp/opi-render-probe/）：**排版机制一字未改**
+ * （仍按墨迹取最大、居中、不溢出），只是内盒 = 按钮 × 本系数。所以：
+ *  · 字形（[layoutGlyphs]/[fitGlyphPx] 那一套）、三个自绘图标、小欧**全走这一处** ——
+ *    它们的内盒都是 [StatusBarButtonFace] 里算出来的同一个 `face`；
+ *  · ⚠️ 别在图标/字形里再各乘一遍：乘两处 = 两个真相源，改一处漏一处（那正是「图标比
+ *    文字小一截」这种只在人眼里存在的错）。
+ *  · ⚠️ 系数变了要同步 StatusBarRenderProbeTest 里按它算的期望（那边逐条标了「缩放
+ *    系数变了要同步这里」）。
+ */
+internal const val FACE_SCALE = 0.6f
+
+/**
  * 一枚按钮的**面**（图标或字形），画在 [box] 见方的盒里居中。BarButton（StatusBar.kt）
  * 只管悬停底/点击/拖动/semantics —— 面单独一支是为了让门禁能**离屏直接渲它**
  * （StatusBarRenderProbeTest：无窗、无进程、无 X）。
+ *
+ * [box] = **按钮那块盒**（BarButton 传的就是它）；面内容实际占的是居中的 `box ×
+ * FACE_SCALE`（2026-10-15 裁决）—— 缩小落在这里、且只落在这里，调用方不用自己乘。
  */
 @Composable
 internal fun StatusBarButtonFace(b: StatusBarButton, st: ImeState, mode: String, box: Dp) {
+    val face = box * FACE_SCALE // 唯一落点：下面所有分支都画进这块内盒
     when (b) {
         // 品牌标识兼拖动把手：设置页那只小欧缩到按钮里（2026-10-13 用户「logo 大点」）。
         // 配色随条底深浅切：浅底上用深底版那套（近白身 + 淡青描边）会糊进底色。
@@ -282,21 +308,22 @@ internal fun StatusBarButtonFace(b: StatusBarButton, st: ImeState, mode: String,
             OpiPet(
                 mood = PetMood.IDLE,
                 palette = if (palette.bg.luminance() < 0.5f) PetPalette.Dark else PetPalette.Default,
-                size = box,
+                size = face,
             )
         }
-        StatusBarButton.VK -> VkIcon(box)
-        StatusBarButton.FULLWIDTH -> MoonIcon(st.fullwidth, box)
-        StatusBarButton.SETTINGS -> SettingsIcon(box)
-        else -> ButtonGlyphs(buttonSlots(b, st, mode), box, LocalBarPalette.current.fg)
+        StatusBarButton.VK -> VkIcon(face)
+        StatusBarButton.FULLWIDTH -> MoonIcon(st.fullwidth, face)
+        StatusBarButton.SETTINGS -> SettingsIcon(face)
+        else -> ButtonGlyphs(buttonSlots(b, st, mode), face, LocalBarPalette.current.fg)
     }
 }
 
 // ---------- 自绘图标（2026-10-14 从 StatusBar.kt 搬来：尺寸改由调用方给，几何全按盒比例） ----------
 
 /**
- * 全半角按钮 = 月相（用户裁决②：满月 = 全角、半月 = 半角）。**填满按钮面**（用户
- * 2026-10-14「其他图标…显示最大」）⇒ 半径按盒算、描边收在盒内（不外溢）。
+ * 全半角按钮 = 月相（用户裁决②：满月 = 全角、半月 = 半角）。**填满给它的盒**（用户
+ * 2026-10-14「其他图标…显示最大」；盒自 2026-10-15 起 = 按钮 × [FACE_SCALE]，由
+ * [StatusBarButtonFace] 传入）⇒ 半径按盒算、描边收在盒内（不外溢）。
  * 半月 = 描边圆 + 右半实心（缺的半边露的是条自己的底 —— 窗不透明，不会透出背后的窗）。
  */
 @Composable
@@ -323,7 +350,8 @@ internal fun MoonIcon(fullwidth: Boolean, box: Dp) {
     }
 }
 
-/** 设置按钮 = 四小方块（用户裁决②：多字的「设」去掉，画图标）；2026-10-14 起填满按钮面。 */
+/** 设置按钮 = 四小方块（用户裁决②：多字的「设」去掉，画图标）；2026-10-14 起填满盒
+ *  （2026-10-15 起该盒 = 按钮 × [FACE_SCALE]）。 */
 @Composable
 internal fun SettingsIcon(box: Dp) {
     val fg = LocalBarPalette.current.fg
@@ -344,7 +372,8 @@ internal fun SettingsIcon(box: Dp) {
     }
 }
 
-/** 小键盘图标：一个键帽外框 + 六个键点；2026-10-14 起填满按钮面（几何全按盒比例）。 */
+/** 小键盘图标：一个键帽外框 + 六个键点；2026-10-14 起填满盒
+ *  （2026-10-15 起该盒 = 按钮 × [FACE_SCALE]），几何全按盒比例。 */
 @Composable
 internal fun VkIcon(box: Dp) {
     val fg = LocalBarPalette.current.fg

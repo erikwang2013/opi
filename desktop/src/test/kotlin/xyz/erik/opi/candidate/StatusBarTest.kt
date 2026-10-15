@@ -81,6 +81,17 @@ class StatusBarTest {
         assertEquals("MODE 该由档位 token 出字、不走 iconText", "", iconText(StatusBarButton.MODE, ImeState()))
     }
 
+    @Test
+    fun `the face scale is frozen at the 2026-10-15 ruling`() {
+        // 用户原话（2026-10-15）：「状态栏图标、文字在自己所在的按钮显示太大，缩小40％」
+        // ⇒ 保留 60% = 0.6。**钉成字面量**的理由：这个数是**用户裁决**，不是版面微调 ——
+        // 改它 = 改产品外观，得连着裁决一起改。落到哪儿见 BarGlyphs.kt 的 FACE_SCALE
+        // （唯一落点，图标/字形/小欧都吃它）。
+        // ⚠️ 改了要同步 StatusBarRenderProbeTest：那边的期望按 FACE_SCALE 现算（自适应，
+        // 断的是「缩放真落在渲染里」），**不是**在断这个数 —— 这个数的牙只有这一条。
+        assertEquals(0.6f, FACE_SCALE, 0f)
+    }
+
     // ---------- 模式按钮（2026-10-14 用户裁决「简繁后加模式切换按钮」）----------
 
     @Test
