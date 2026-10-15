@@ -45,7 +45,17 @@ fun QwertyKeyboard(
                             },
                         )
                     } else {
-                        KeyButton(ch, modifier = Modifier.weight(1f), onTap = { onKey(ch) })
+                        // ⇧ 激活（SINGLE/LOCK）时字母键面也大写（2026-10-15 用户报障
+                        // 「切换到英文，让英文字母大写的按钮，点击了，键盘还是显示小写，
+                        // 实际输出是大写」）。**只改显示**：onKey 送出去的仍是原字符，
+                        // 大小写由 shift 语义/引擎决定（KeyRouter.handleKey 的英文直传）。
+                        // 读屏名跟着键面走（"Q 键"）—— 与可见字母一致；⇧ 自身的状态
+                        // 另由它那枚键的 stateDescription 播报。
+                        KeyButton(
+                            if (shiftActive) ch.uppercase() else ch,
+                            modifier = Modifier.weight(1f),
+                            onTap = { onKey(ch) },
+                        )
                     }
                 }
             }

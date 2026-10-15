@@ -278,6 +278,9 @@ private fun KeyboardArea(
         ImeState.View.QWERTY -> {
             // 输入模式分发（生僻字是面板，已在上面分支）。
             val label = state.modeKeyLabel
+            // 9 键的模式键是**另一枚键**（只切简/繁，2026-10-15 用户裁决）：键面字
+            // 不走 [modeKeyLabel] 的三档循环。
+            val nineLabel = nineKeyModeLabelOf(controller.mode)
             when (state.inputMode) {
                 InputMode.PINYIN9, InputMode.BIG9 -> NineKeyKeyboard(
                     modifier = modifier,
@@ -285,12 +288,19 @@ private fun KeyboardArea(
                     onSpace = router::handleSpace,
                     onBackspace = router::handleBackspace,
                     onEnter = router::handleEnter,
-                    onModeSwitch = state::cycleMode,
+                    // 9 键的模式键**只切简/繁**（2026-10-15 用户裁决「简繁按钮就只切换
+                    // 简繁」）—— 不是 26/14/笔画那条中→繁→英循环（cycleMode 不动）。
+                    onModeSwitch = state::toggleTraditional,
                     onSymbol = state::openSymbolPage,
                     // 重输（2026-10-10 用户裁决：去分词键、加「重输」）：清掉当前组合重来；
-                    // 空缓冲是空操作（clear 幂等）。手动分词已撤——无匹配的分词匹配改由
-                    // 引擎自动回退承担（见 engine-seg）。
+                    // 空缓冲是空操作（clear 幂等）。
                     onRetype = controller::clear,
+                    // 分词键（2026-10-15 用户裁决放回主区域第一格）：缓冲非空才发 `'`
+                    // —— 空缓冲时它在引擎里是引号不是分词符（engine_punct.rs），
+                    // 所以宿主拦住；无匹配的中文分词匹配仍由引擎自动回退承担（engine-seg）。
+                    onSegment = {
+                        if (controller.buffer.isNotEmpty()) router.handleKey("'")
+                    },
                     // 数字键盘（2026-10-10 用户裁决：底行新增）——与 26 键的 123 同路。
                     onNumber = state::openNumber,
                     // 英文键盘：先按拼音上屏 pending、再切英文 26 键
@@ -308,7 +318,7 @@ private fun KeyboardArea(
                     },
                     pinnedReading = controller.pinnedReading,
                     scrollKey = controller.buffer,
-                    modeLabel = label,
+                    modeLabel = nineLabel,
                     big = state.inputMode == InputMode.BIG9,
                 )
                 InputMode.PINYIN14 -> FourteenKeyKeyboard(
@@ -368,3 +378,15 @@ internal fun modeKeyLabelOf(mode: EngineMode, lastChineseIsTrad: Boolean): Strin
     EngineMode.TRADITIONAL -> "英"
     else -> if (lastChineseIsTrad) "繁" else "中"
 }
+
+/**
+ * **9 键**底行模式键的键面字（2026-10-15 用户裁决「简繁按钮就只切换简繁」）。
+ * 与 [modeKeyLabelOf] 同一条语义 —— 键面 = **点它会切到哪** —— 只是把「英」那条腿
+ * 摘掉：9 键上它只在 中/繁 之间切（[ImeState.toggleTraditional]），进英文走底行那枚
+ * 独立的 [英文] 键。故：拼音态 →「繁」、繁体态 →「中」。
+ *
+ * 其余模式在 9 键上不出现（9 键只在 PINYIN9/BIG9 输入模式下渲染）；兜底给「繁」，
+ * 不返回空/不抛。纯函数，单测钉住（`KeyLabelTest`）。
+ */
+internal fun nineKeyModeLabelOf(mode: EngineMode): String =
+    if (mode == EngineMode.TRADITIONAL) "中" else "繁"

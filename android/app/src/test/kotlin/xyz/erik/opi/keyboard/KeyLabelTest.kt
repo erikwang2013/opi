@@ -7,6 +7,7 @@ import xyz.erik.opi.candidate.composingAnnouncement
 import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.engine.InputScheme
 import xyz.erik.opi.ime.modeKeyLabelOf
+import xyz.erik.opi.ime.nineKeyModeLabelOf
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -83,5 +84,17 @@ class KeyLabelTest {
         // 「英→回上次的中文方案」：上次是繁体就回繁体（键面同说实话）
         assertEquals("繁", modeKeyLabelOf(EngineMode.ENGLISH, lastChineseIsTrad = true))
         assertEquals("繁", modeKeyLabelOf(EngineMode.NUMBER, lastChineseIsTrad = true))
+    }
+
+    @Test
+    fun nineKeyModeKeyOnlyExpressesChineseAndTraditional() {
+        // 2026-10-15 用户裁决「简繁按钮就只切换简繁」：9 键上这枚键**不循环进英文**
+        // （进英文走底行那枚独立的 [英文] 键），故键面只在中/繁之间表达目标。
+        // 语义仍与 26 键同一条（写「点它会切到哪」），只是把「英」那条腿摘掉。
+        assertEquals("繁", nineKeyModeLabelOf(EngineMode.PINYIN))
+        assertEquals("中", nineKeyModeLabelOf(EngineMode.TRADITIONAL))
+        // 9 键上不出现的态（英文/数字）兜底给「繁」：不空、不炸
+        assertEquals("繁", nineKeyModeLabelOf(EngineMode.ENGLISH))
+        assertEquals("繁", nineKeyModeLabelOf(EngineMode.NUMBER))
     }
 }

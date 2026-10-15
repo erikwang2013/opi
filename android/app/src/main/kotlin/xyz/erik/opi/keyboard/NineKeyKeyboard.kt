@@ -37,13 +37,15 @@ import androidx.compose.ui.unit.sp
 /**
  * 9 键布局表（拼音 9 键 / 大 9 键共用；大 9 只差字号）。
  *
- * ⚠️ **发送的键值（[NineKey.key]）= 协议**：必须落在 engine-core `scheme.rs` 的
- * Nine 类表里（`'2'..'9'` 各映射三四个字母）。hint 是键面下的字母提示，且**必须
- * 正是该数字在 `scheme.rs` 里带的类** —— `NineKeyLayoutTest` 按类表交叉核对，
- * 两边任何一处改了都会红。
+ * ⚠️ **发送的键值（[NineKey.key]）= 协议**：
+ * · `'2'..'9'` 必须落在 engine-core `scheme.rs` 的 Nine 类表里（各映射三四个字母），
+ *   hint 是键面下的字母提示，且**必须正是该数字在 `scheme.rs` 里带的类** ——
+ *   `NineKeyLayoutTest` 按类表交叉核对，两边任何一处改了都会红；
+ * · `'` 是**音节边界分隔符**（`scheme.rs::matches_segmented`），不在类表里。
  *
- * `，` 键（发送 `,`）沿用引擎的标点表：中文模式下由标点层出「，」，与 26 键盘的
- * `,` 是**同一条路**（不是 UI 直提）。
+ * 标点键（发送 `,` 等）沿用引擎的标点表：中文模式下由标点层出「，」，与 26 键盘的
+ * `,` 是**同一条路**（不是 UI 直提）—— 主区域第一格 2026-10-15 换成了分词键，
+ * 标点只剩左列（[nineKeyStripPuncts]）。
  */
 internal data class NineKey(val label: String, val key: String, val hint: String = "")
 
@@ -60,8 +62,17 @@ internal val nineKeyStripPuncts: List<NineKey> = listOf(
     NineKey("！", "!"),
 )
 
+/** 分词键的发送键（音节边界分隔符 = 协议值，与 `scheme.rs` 的分隔符同一个字）：
+ * 布局表与点击分流共用，别各写一份字面量。 */
+internal const val SEGMENT_KEY = "'"
+
 internal val nineKeyRows: List<List<NineKey>> = listOf(
-    listOf(NineKey("，。?!", ","), NineKey("2", "2", "abc"), NineKey("3", "3", "def")),
+    // 主区域第一格 = **分词键**（2026-10-15 用户裁决「第一符号按钮改成分词按钮」，
+    // 换回 2026-10-09 的形态；此前这格是面「，。?!」、发半角逗号）：发送 `'` 往引擎
+    // 缓冲插音节边界（`xi|an` 这类强制分词，见 `scheme.rs::matches_segmented`）。
+    // ⚠️ **缓冲空时由宿主拦住**（ImeScreen 的 onSegment 守卫）—— 空缓冲的 `'` 在
+    // 引擎里是引号，不是分词符（`engine_punct.rs`）。
+    listOf(NineKey("分词", SEGMENT_KEY), NineKey("2", "2", "abc"), NineKey("3", "3", "def")),
     listOf(NineKey("4", "4", "ghi"), NineKey("5", "5", "jkl"), NineKey("6", "6", "mno")),
     listOf(NineKey("7", "7", "pqrs"), NineKey("8", "8", "tuv"), NineKey("9", "9", "wxyz")),
 )
@@ -77,11 +88,17 @@ fun NineKeyKeyboard(
     onSpace: () -> Unit,
     onBackspace: () -> Unit,
     onEnter: () -> Unit,
+    /** 底行模式键：9 键上**只切简/繁**（2026-10-15 用户裁决），宿主传
+     * [xyz.erik.opi.ime.ImeState.toggleTraditional]（不是 26 键的 cycleMode）。 */
     onModeSwitch: () -> Unit,
     onSymbol: () -> Unit,
+    /** 分词键（主区域第一格，搜狗同款）：往引擎缓冲插音节边界（`xi|an`）。
+     * **由宿主在缓冲空时拦住** —— 空缓冲点它没有边界可切，且空缓冲的 `'` 在引擎里
+     * 是引号（不是分词符）。 */
+    onSegment: () -> Unit,
     /** 重输键（2026-10-10 用户裁决「增加重输按钮，去掉分词按钮」）：清掉当前组合重来。
      * 缓冲空时是空操作（[xyz.erik.opi.engine.EngineController.clear] 本身幂等）。
-     * 手动分词键已撤 —— 无匹配时的分词匹配改由引擎自动回退承担。 */
+     * 手动分词键 2026-10-15 又放回主区域第一格（见上）。 */
     onRetype: () -> Unit,
     /** 数字键盘切换（2026-10-10 用户裁决：底行新增）：进数字面板（与 26 键的 123 同路）。 */
     onNumber: () -> Unit,
@@ -187,19 +204,19 @@ fun NineKeyKeyboard(
                             KeyBox(
                                 modifier = Modifier.weight(1f),
                                 description = nineKeySpoken(k),
-                                onTap = { onKey(k.key) },
+                                // 分词键（发 `'`）走 onSegment（宿主在空缓冲时拦住）；
+                                // 其余键照常走 onKey（数字 = 输入键）。
+                                onTap = { if (k.key == SEGMENT_KEY) onSegment() else onKey(k.key) },
                             ) {
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.Center,
                                 ) {
                                     if (k.hint.isEmpty()) {
-                                        // 无字母组的键：单行大字。**多标点键**（，。?!）字号
-                                        // 收一档 —— 四个字形在 1/3 宽的键里要放得下。
-                                        Text(
-                                            k.label,
-                                            fontSize = if (k.label.length > 1) (digitSize.value + 3).sp else letterSize,
-                                        )
+                                        // 无字母组的键（分词）：单行大字，与旁边键的
+                                        // 字母提示同号 —— 2026-10-15 起这格只有两个字，
+                                        // 原先为「，。?！」四个字形收一档的特例随之下线。
+                                        Text(k.label, fontSize = letterSize)
                                     } else {
                                         Text(k.hint, fontSize = letterSize)
                                         Text(
@@ -223,14 +240,20 @@ fun NineKeyKeyboard(
                 KeyButton("空格", modifier = Modifier.weight(1f).fillMaxWidth(), onTap = onSpace)
             }
         }
-        // 底行（2026-10-10 用户裁决）：[符][中/英] + **新增 [123] 数字键盘与 [英文] 键盘
+        // 底行（2026-10-10 用户裁决）：[符][中/繁] + **新增 [123] 数字键盘与 [英文] 键盘
         // 切换**，↵ 压尾。⌫/重输/空格 已移入右列。重输是 9 键专属（14/26/笔画无此行）。
         Row(modifier = Modifier.weight(1f).fillMaxSize()) {
             KeyButton("符", modifier = Modifier.weight(1f), onTap = onSymbol)
+            // 模式键在 9 键上**只切简/繁**（2026-10-15 用户裁决「简繁按钮就只切换简繁」；
+            // 进英文走右边那枚 [英文] 键）—— 键面仍是「中/繁」两个既有字（= 点它会
+            // 切到哪），但读屏不能沿用 spokenKeyName 对这两字的默认读法「中英切换」，
+            // 故覆写名字；状态用 14 键/笔画同一处 [modeStateDescription]（「繁体」等），
+            // 不为这枚键再造一套串。
             KeyButton(
                 modeLabel,
                 modifier = Modifier.weight(1f),
                 onTap = onModeSwitch,
+                description = "简繁切换",
                 stateDescription = modeStateDescription(modeLabel),
             )
             KeyButton("123", modifier = Modifier.weight(1f), onTap = onNumber)
@@ -243,8 +266,10 @@ fun NineKeyKeyboard(
 /** 9 键键位的读屏名：「数字 2，字母 a b c」—— 只念数字会丢掉「这键打什么」。 */
 internal fun nineKeySpoken(k: NineKey): String = when {
     k.hint.isNotEmpty() -> "数字 ${k.label}，字母 ${k.hint.toCharArray().joinToString(" ")}"
-    // 按**发送键**判逗号，不按键面：左上角的面是多标点「，。?!」（2026-10-09）
+    // 按**发送键**判，不按键面（多标点那代定的规矩，键面与语义不再一一对应）：
+    // `,` = 逗号（左列那枚）；`'` = 分词键（2026-10-15 起在主区域第一格，面「分词」）。
     k.key == "," -> "逗号"
+    k.key == "'" -> "分词"
     else -> spokenKeyName(k.label)
 }
 

@@ -242,6 +242,21 @@ class ImeState(
     fun switchToEnglishKeyboard() = selectInputMode(InputMode.ENGLISH26)
 
     /**
+     * 9 键底行模式键的动作（2026-10-15 用户裁决「简繁按钮就只切换简繁」）：
+     * **只切简/繁**（PINYIN ⇄ TRADITIONAL），不再循环进英文 —— 9 键进英文走底行那枚
+     * 独立的 [英文] 键（[switchToEnglishKeyboard]）。
+     *
+     * 走 [EngineController.switchLanguage]（与 [cycleMode] 的「中→繁」腿**同一条**）：
+     * 方案不动（9 键仍是 9 键）、缓冲保留（2026-10-09 裁决「拼音保留可继续使用」）。
+     * 键面字 = 点它会切到哪（[nineKeyModeLabelOf]，ImeScreen.kt）。
+     */
+    fun toggleTraditional() {
+        val next =
+            if (controller.mode == EngineMode.TRADITIONAL) EngineMode.PINYIN else EngineMode.TRADITIONAL
+        controller.switchLanguage(next, controller.inputScheme)
+    }
+
+    /**
      * 把 pending 缓冲**按拼音原样上屏**（2026-10-10 用户裁决，切英文专用）：
      * 文本取 [EngineController.pendingCommitText]（读数优先；26 键无候选回退原字母；
      * ⚠️ **不是** [EngineController.composingText] —— 那个带待编键的「·」显示记号

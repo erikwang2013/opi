@@ -39,6 +39,10 @@ fun KeyButton(
     onLongPress: (() -> Unit)? = null,
     highlighted: Boolean = false,
     stateDescription: String? = null,
+    /** 读屏名覆盖（默认 null = 按 [spokenKeyName] 从 label 推）。用于**同一键面字在不同
+     * 键盘上动作不同**的键：9 键的模式键只切简/繁（2026-10-15 用户裁决），而 label
+     * 「中/繁」在 [spokenKeyName] 里的默认读法是「中英切换」—— 会念错动作。 */
+    description: String? = null,
 ) {
     val palette = LocalKeyboardPalette.current
     val bg = if (highlighted) palette.keyHighlightBg else palette.keyBg
@@ -51,7 +55,7 @@ fun KeyButton(
             .combinedClickable(onClick = { onTap?.invoke() }, onLongClick = onLongPress)
             .semantics {
                 role = Role.Button
-                contentDescription = spokenKeyName(label)
+                contentDescription = description ?: spokenKeyName(label)
                 // 参数与接收者同名，必须 this. 限定
                 if (stateDescription != null) this.stateDescription = stateDescription
                 // pinyin 模式 ⇧ 是死键（onTap/onLongPress 皆 null）：别让读屏用户对着它双击
