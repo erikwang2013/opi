@@ -41,6 +41,14 @@ OpiString opi_fcitx5_select(size_t index);
 void opi_fcitx5_switch_mode(int32_t mode); // 0=Pinyin 1=English 2=Number 3=Symbol
 void opi_fcitx5_set_learner(bool on);       // 学习开关（addon 配置 → 引擎，字段见 opi_config.h）
 void opi_fcitx5_set_chinese_punct(bool on); // 中文标点开关（同上；与全角相互独立）
+// 生效中文标点**读侧**（2026-10-15，与 set_chinese_punct 配对但**不是同一个量**）：
+// true = 此刻按标点键出中文标点（中文类模式读设置值；英文/数字/符号恒 false）。
+// 状态栏 `punct=` 那一格读它 —— 显示要跟着模式联动（用户裁决「切换中英文的时候，
+// 标点符号也联动切换」；**行为本来就对**，缺的只是显示）。语义见
+// engine-core/src/engine_punct.rs 的 effective_chinese_punct。
+// **非**弱符号（与 toggle_fullwidth 同档）：出口与调用点同树同包落地，没有「声明早于
+// 落地」的窗口；真错配时链接期就报缺符号，不留加载期静默。
+bool opi_fcitx5_effective_chinese_punct();
 void opi_fcitx5_set_fuzzy(bool on);   // 模糊音开关（addon 配置 → 引擎，见 opi_config.h）
 // 模糊音逐对（2026-10-13）：组名串（UTF-8，逗号分隔，如 "zh/z,n/l"）。同样是弱符号。
 extern "C" void opi_fcitx5_set_fuzzy_pairs(const uint8_t *ptr,

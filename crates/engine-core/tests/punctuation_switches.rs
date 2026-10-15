@@ -249,6 +249,73 @@ fn non_chinese_fullwidth_is_mechanical_not_cjk() {
     assert_eq!(e.input_punct('1'), None);
 }
 
+// ---------- 生效值（**显示面**；2026-10-15 用户裁决「切换中英文的时候，标点符号也联动切换」） ----------
+//
+// `effective_chinese_punct` = 「此刻按标点键会不会出中文标点」。**行为本来就对**
+// （`punct_text` 一按模式分派），这一族是给**状态栏那一格**用的读侧：原先宿主读的是
+// 配置值 `ChinesePunct`（不随模式变），切英文后仍报 on、按钮还画「。，」。
+
+/// 中文类模式（拼音/繁体）：就是设置值本身 —— 设置项与触发键两个入口都跟。
+#[test]
+fn effective_chinese_punct_follows_setting_in_chinese_modes() {
+    for mode in [Mode::Pinyin, Mode::Traditional] {
+        let mut e = engine();
+        e.switch_mode(mode);
+        assert!(e.effective_chinese_punct(), "{mode:?} 默认开");
+        e.set_chinese_punct(false);
+        assert!(!e.effective_chinese_punct(), "{mode:?} 跟设置项");
+        e.toggle_chinese_punct();
+        assert!(e.effective_chinese_punct(), "{mode:?} 跟触发键（同一字段）");
+    }
+}
+
+/// **非中文模式恒 false**（英文/数字/符号）：那里没有中文标点表这一档，配置值再开
+/// 也不出中文标点 —— 状态栏因此切英文就翻成「.,」。也是「配置值不能当显示值」的实证。
+#[test]
+fn effective_chinese_punct_is_false_in_non_chinese_modes() {
+    for mode in [Mode::English, Mode::Number, Mode::Symbol] {
+        for cp in [false, true] {
+            let mut e = engine();
+            e.switch_mode(mode);
+            e.set_chinese_punct(cp);
+            assert!(
+                !e.effective_chinese_punct(),
+                "{mode:?} chinese_punct={cp} —— 非中文模式恒 false"
+            );
+        }
+    }
+}
+
+/// **与 `punct_text` 的模式分派逐字一致**（机械核对，不是复述那个布尔值）：
+/// `\` 只有中文标点表给 `、`（机械全角给的是 `＼`），故「`\` 出不出中文顿号」就是
+/// 「中文标点表这一档在不在」——逐模式 × 逐设置 × 逐全角档全跑一遍，两处判据必须同值
+/// （将来加了新模式，这格会红而不是静默漂）。
+#[test]
+fn effective_chinese_punct_matches_punct_text_dispatch() {
+    let modes = [
+        Mode::Pinyin,
+        Mode::Traditional,
+        Mode::English,
+        Mode::Number,
+        Mode::Symbol,
+    ];
+    for mode in modes {
+        for cp in [false, true] {
+            for fw in [false, true] {
+                let mut e = engine();
+                e.switch_mode(mode);
+                switches(&mut e, cp, fw);
+                let table_gives_cjk = e.input_punct('\\').as_deref() == Some("、");
+                assert_eq!(
+                    e.effective_chinese_punct(),
+                    table_gives_cjk,
+                    "{mode:?} chinese_punct={cp} fullwidth={fw} 的生效值与 punct_text 分派不一致"
+                );
+            }
+        }
+    }
+}
+
 // ---------- 全角宽档（字母/数字/空格；用户裁决 2026-10-12「字母、数字也要」） ----------
 
 /// `fullwidthize` —— 宿主**直传点**的唯一入口（英文/数字模式下字母数字是待上屏文本，

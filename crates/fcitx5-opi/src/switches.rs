@@ -38,6 +38,31 @@ pub unsafe extern "C" fn opi_fcitx5_set_chinese_punct(on: bool) {
     let _ = catch_unwind(AssertUnwindSafe(|| with_state(|s| s.set_chinese_punct(on))));
 }
 
+/// effectiveChinesePunct()：**生效的**中文标点状态（true = 此刻按标点键出中文标点）。
+/// 与 [`opi_fcitx5_set_chinese_punct`] **不是同一个量**：那个是设置值（不随模式变），
+/// 这个按模式分派后的生效值（中文类模式 = 设置值；英文/数字/符号恒 false）—— 判据
+/// 唯一在引擎（`Engine::effective_chinese_punct`，与 `punct_text` 同一条线），本层只转发。
+/// 状态栏 `punct=` 那一格读它（2026-10-15 用户裁决「切换中英文的时候，标点符号也
+/// 联动切换」的**显示**面落地；行为本来就对）。
+///
+/// 直接读 `CandidateState.engine`（crate 内可见）：与 [`opi_fcitx5_scheme`] 同一条
+/// 理由 —— 给本轨 façade 加方法会让 `candidate.rs` ↔ `tsf-opi/src/logic.rs` 的逐行
+/// 同构漂一格，不值得为一个出口动那个面。
+///
+/// 引擎未装载 → false（半角）：与 `opi_fcitx5_scheme()` 未装载给 0（全拼）同一个
+/// 缺省姿态 —— 空引擎下「半角」是最中性的读数，调用方不用区分这一格。
+/// # Safety
+///
+/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_effective_chinese_punct() -> bool {
+    ensure_panic_hook();
+    catch_unwind(AssertUnwindSafe(|| {
+        with_state(|s| s.engine.effective_chinese_punct()).unwrap_or(false)
+    }))
+    .unwrap_or(false)
+}
+
 /// setFuzzy(on)：模糊音开关（「属性设置」的旋钮之一）。
 /// 配置来源 = fcitx5 的 **原生 addon 配置**（`~/.config/fcitx5/conf/opi_fcitx5.conf`）：
 /// C++ 侧 `OpiConfig` 声明字段、`reloadConfig()`/`setConfig()` 里把它推到这里

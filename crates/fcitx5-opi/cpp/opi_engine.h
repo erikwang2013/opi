@@ -320,8 +320,8 @@ private:
     //   · lang  = 引擎模式 == English —— 与「中/英」状态项同一条判据（opi_mode.h 的
     //     update()）；zh 覆盖拼音/繁体/符号/数字四个「中文系」模式。
     //   · trad  = 引擎模式 == Traditional —— 与「简/繁」状态项同一条判据。
-    //   · punct = 配置面 ChinesePunct —— 与设置窗/配置工具读的是同一个值（引擎侧的
-    //     chinese_punct 只由 applyOpiSettings 从它推过去，两条不会漂）。
+    //   · punct = **生效值**（引擎直读口，2026-10-15 改）：中文类模式 = 配置面 ChinesePunct，
+    //     英文/数字/符号恒 off —— 配置值不随模式变，当显示值就是「切英文后还画 。，」。
     //   · fw    = opiFullwidthState_()（借道读侧，见那里）。
     //   · im    = 最近 IC 的当前输入法唯一名（Instance::currentInputMethod()，
     //     2026-10-10 追加）—— **唯一与 IC 有关的一格**，给桌面判「状态栏该不该
@@ -340,8 +340,8 @@ private:
         s += (mode == kModeEnglish) ? "en" : "zh";
         s += ";trad=";
         s += (mode == kModeTraditional) ? "on" : "off";
-        s += ";punct=";
-        s += settings_.chinesePunct.value() ? "on" : "off";
+        s += ";punct="; // 生效值、不是配置值（2026-10-15 改；理由见上面 punct 那一条）
+        s += opi_fcitx5_effective_chinese_punct() ? "on" : "off";
         s += ";fw=";
         s += opiFullwidthState_() ? "on" : "off";
         s += ";im=";

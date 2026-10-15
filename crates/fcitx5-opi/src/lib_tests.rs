@@ -198,6 +198,40 @@ fn shuangpin_layout_and_scheme_exports_land_on_the_engine() {
     assert_eq!(unsafe { opi_fcitx5_scheme() }, 0, "读侧该回全拼码 0");
 }
 
+/// 生效中文标点读侧（2026-10-15）：状态栏 `punct=` 那一格读的就是它。
+/// 中文类模式跟设置值、非中文模式恒 false —— 与 `punct_text` 同一条线
+/// （引擎侧逐模式真值在 engine-core 的 punctuation_switches.rs，这条验**出口**接对了）。
+#[test]
+fn effective_chinese_punct_export_follows_mode() {
+    let _g = serial_install();
+    unsafe { opi_fcitx5_set_chinese_punct(true) };
+    unsafe { opi_fcitx5_switch_mode(0) }; // Pinyin
+    assert!(
+        unsafe { opi_fcitx5_effective_chinese_punct() },
+        "拼音：跟设置（on）"
+    );
+    unsafe { opi_fcitx5_set_chinese_punct(false) };
+    assert!(
+        !unsafe { opi_fcitx5_effective_chinese_punct() },
+        "拼音：跟设置（off）—— 是读数不是常量"
+    );
+    unsafe { opi_fcitx5_set_chinese_punct(true) };
+    unsafe { opi_fcitx5_switch_mode(4) }; // Traditional
+    assert!(
+        unsafe { opi_fcitx5_effective_chinese_punct() },
+        "繁体同拼音档（设置仍为 on）"
+    );
+    for mode in [1, 2, 3] {
+        // English / Number / Symbol
+        unsafe { opi_fcitx5_switch_mode(mode) };
+        assert!(
+            !unsafe { opi_fcitx5_effective_chinese_punct() },
+            "模式 {mode}：恒 false（设置仍是 on —— 切中英文的显示联动就靠这条）"
+        );
+    }
+    unsafe { opi_fcitx5_switch_mode(0) }; // 还原：不把单例留在别的模式
+}
+
 /// 五笔旋钮族（2026-10-14，M4 第二波）：六个出口真调 + 真码表端到端。
 /// 这条是 Linux 端五笔的**唯一**程序化取证点（C++ 的 applyOpiSettings 走同一批出口）。
 #[test]

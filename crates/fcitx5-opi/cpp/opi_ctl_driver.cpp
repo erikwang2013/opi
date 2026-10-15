@@ -420,6 +420,8 @@ int main() {
     // 真 .so 在时 opiCtlSchemeRead() = 引擎实际方案（本段全程全拼 ⇒ 拼音档），
     // 符号缺失时它按全拼兜底 —— 两条在本段的取值相同（见 opi_ctl_mode.h）。
     check(opi_fcitx5_mode() == kModePinyin, "前置：拼音模式（§7c 收尾，全角随模式重置为 on）");
+    // punctExp = **配置值** = 中文态那一格的期望（§8/§8a）。英文态那格与它无关
+    // （生效值恒 off），见 §8b。
     std::string punctExp = "on";
     {
         OpiSettings readBack;
@@ -461,10 +463,20 @@ int main() {
     check(engine.handleCtlAction_("lang") == "ok" && opi_fcitx5_mode() == kModeEnglish,
           "lang 切英文");
     const std::string s3 = engine.ctlState_();
-    check(s3 == "lang=en;trad=off;punct=" + punctExp + ";fw=off;im=;mode=en26",
-          "lang=en 且全角随英文缺省变 off，mode 格 = en26（英文档 —— lang 与 mode "
-          "两格在英文态**同向**变）："
-              + q(s3));
+    // punct 格 = **生效值**（2026-10-15 改；原先直接读配置值 ChinesePunct）：英文模式
+    // 只有机械全角档、**没有中文标点表这一档** ⇒ 恒 off，与配置值 punctExp 无关。
+    check(s3 == "lang=en;trad=off;punct=off;fw=off;im=;mode=en26",
+          "lang=en 且全角随英文缺省变 off，**punct 格恒 off**（生效值；用户裁决 "
+          "2026-10-15「切换中英文时标点也联动」的显示面），mode 格 = en26（英文态 "
+          "lang 与 mode 同向变）：" + q(s3));
+    // 分辨力前提：配置值 on ⇒ 两态 punct 真不同值（s0 是 on、这格是 off）；配置值本来
+    // 就是 off 时两态同值 —— 如实 skip，不假装测到了联动（本 harness 下是 on）。
+    if (punctExp == "on") {
+        check(s0.find(";punct=on;") != std::string::npos,
+              "配置值 on 而英文态报 off —— 这一格跟的是**模式**不是配置值（改动本身）");
+    } else {
+        skip("conf 里 ChinesePunct=off ⇒ 两态 punct 同值，联动这一格本轮无分辨力");
+    }
 
     std::printf("-- 8c 只读性：连读同值 + 行为面证明（全角那一格是双翻面读的，见 opi_engine.h）--\n");
     const std::string a = engine.ctlState_();

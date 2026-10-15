@@ -90,6 +90,11 @@ using OpiCtlSearchHandler = std::function<std::string(const std::string &)>;
 // ---- State 的返回串：**冻结格式**（桌面状态栏每秒轮询它渲染图标：月亮盈亏 =
 // 全/半角，zh/en = 语言）----
 //     lang=zh|en;trad=on|off;punct=on|off;fw=on|off;im=<输入法唯一名，可为空>;mode=<档位 token>
+// punct 那一格是**生效值**（2026-10-15 改，取值域与键序一字未动）：中文类模式 =
+// 配置面 ChinesePunct，英文/数字/符号恒 off —— 引擎按模式分派（`engine_punct.rs`
+// 的 `effective_chinese_punct`）。此前读配置值 ⇒ 切英文后仍报 on，状态栏那个
+// 「。，」按钮看着像没联动（用户裁决「切换中英文的时候，标点符号也联动切换」；
+// 引擎**行为本来就对**，改的只是显示）。
 // 键序**固定**（桌面端按位置解析）；值全部来自**既有 getter**，不新造状态
 // （每一格的出处写在 opi_engine.h 的 stateLine_ 上）。改这个格式要三处同改：
 // 这里、opi-ctl.rs 的 check_state_shape、desktop 的解析处。
