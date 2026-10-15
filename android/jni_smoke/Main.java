@@ -155,15 +155,15 @@ public final class Main {
         check(OpiEngine.learnerEnabled(), "setLearner(true) 生效");
 
         // 「属性设置」的两个新开关（2026-10-08）：同样只做表面的读写回环。
-        check(OpiEngine.fuzzyEnabled(), "fuzzy 默认开启");
-        // 逐对掩码（2026-10-13）：**默认值必须在任何写操作之前读** —— `setFuzzy` 是
-        // 掩码的包装（false ≡ 0），先写再读「默认」读到的是刚写进去的值。这条断言
-        // 起草时排在 `setFuzzy(false)` 后面，红在 CI 的 jni_smoke（2026-10-14 修；
-        // M1a/M1c 那两次 CI 都挂在 rustup 下载上，这个 job 直到今天才第一次跑到）。
-        check(OpiEngine.fuzzyPairs() == 0xFF, "fuzzyPairs 默认全开（0xFF）");
+        // ⚠️ 2026-10-15 前提翻转（用户裁决「默认关闭模糊音」，引擎 + 四端一起翻）：缺省由
+        // 「开/全开」改为「关/0」，下面两条随之改判（此前红在 CI 的 rust job，不是回归）；写
+        // 路径改为**先开再关**（对已是关的缺省写 false 无分辨力）；缺省仍须在任何写之前读。
+        check(!OpiEngine.fuzzyEnabled(), "fuzzy 缺省关（2026-10-15 裁决）");
+        check(OpiEngine.fuzzyPairs() == 0, "fuzzyPairs 缺省 0（2026-10-15 裁决）");
+        OpiEngine.setFuzzy(true);
+        check(OpiEngine.fuzzyEnabled() && OpiEngine.fuzzyPairs() == 0xFF, "setFuzzy(true)：开 + 全开（0xFF）");
         OpiEngine.setFuzzy(false);
-        check(!OpiEngine.fuzzyEnabled(), "setFuzzy(false) 生效");
-        check(OpiEngine.fuzzyPairs() == 0, "setFuzzy(false) 是掩码包装：全关 = 0");
+        check(!OpiEngine.fuzzyEnabled() && OpiEngine.fuzzyPairs() == 0, "setFuzzy(false)：关 + 全关（0）");
         OpiEngine.setFuzzyPairs(0x41);
         check(OpiEngine.fuzzyPairs() == 0x41, "setFuzzyPairs(0x41) 原样读回");
         OpiEngine.setFuzzyPairs(0x141);
