@@ -63,9 +63,28 @@ fn chinese_halfwidth_passes_everything_through() {
     e.set_chinese_punct(false);
     e.toggle_fullwidth();
     assert!(!e.fullwidth() && !e.chinese_punct());
-    for c in [',', '.', '\\', '[', '"', '\''] {
+    // `'/'` 2026-10-15 进表（用户裁决「斜杠问号键在中文下，点击默认中文顿号」）——
+    // 两位开关都关时它同样必须直通，别只在「表关」时漏了它。
+    for c in [',', '.', '\\', '/', '[', '"', '\''] {
         assert_eq!(e.input_punct(c), None, "半角态 {c:?} 不该映射");
     }
+}
+
+/// **斜杠在中文标点档出顿号**（2026-10-15 用户裁决）。同时钉住「问号键」那一半：
+/// `?` 一直就是 `？`（表里原有），两条都是移动端数字/标点层上的键。
+#[test]
+fn slash_maps_to_dunhao_and_question_mark_to_fullwidth() {
+    let mut e = engine();
+    assert!(e.chinese_punct(), "拼音默认开中文标点");
+    assert_eq!(e.input_punct('/').as_deref(), Some("、"));
+    assert_eq!(e.input_punct('?').as_deref(), Some("？"));
+    // 关掉中文标点：两条都直通（全角那档不管它们 —— 表里没有 `/`/`?` 的全角兜底对照见
+    // `chinese_punct_and_fullwidth_are_independent` 的四组合真值表）。
+    e.set_chinese_punct(false);
+    e.toggle_fullwidth();
+    assert!(!e.fullwidth());
+    assert_eq!(e.input_punct('/'), None);
+    assert_eq!(e.input_punct('?'), None);
 }
 
 // ---------- 中文标点 / 全角：两个独立开关（用户裁决 2026-09-28） ----------
