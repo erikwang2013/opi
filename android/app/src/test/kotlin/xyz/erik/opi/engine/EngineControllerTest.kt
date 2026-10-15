@@ -95,12 +95,14 @@ class EngineControllerTest {
     }
 
     @Test
-    fun shiftTapCyclesOffAndSingle() {
+    fun shiftTapTogglesCapsLock() {
+        // ⚠️ 2026-10-15 前提翻转（用户裁决「点击了就要锁定大写，再次点击取消大写」）：
+        // 单击由 OFF⇄SINGLE 改为 **OFF⇄LOCK**；单次大写挪到长按（见下一条）。
         val fake = FakeEngine()
         val ctrl = EngineController(fake)
         assertEquals(ShiftState.OFF, ctrl.shiftState)
         ctrl.shiftTap()
-        assertEquals(ShiftState.SINGLE, ctrl.shiftState)
+        assertEquals(ShiftState.LOCK, ctrl.shiftState)
         assertEquals(true, fake.shiftCalls.last())
         ctrl.shiftTap()
         assertEquals(ShiftState.OFF, ctrl.shiftState)
@@ -108,12 +110,15 @@ class EngineControllerTest {
     }
 
     @Test
-    fun shiftLongPressLocksAndTapTurnsOff() {
+    fun shiftLongPressGivesSingleWhichConsumes() {
+        // 同一次改判的另一半：长按 = 单次大写（SINGLE），点一次 = 锁定又取消。
         val fake = FakeEngine()
         val ctrl = EngineController(fake)
         ctrl.shiftLongPress()
-        assertEquals(ShiftState.LOCK, ctrl.shiftState)
+        assertEquals(ShiftState.SINGLE, ctrl.shiftState)
         assertEquals(true, fake.shiftCalls.last())
+        ctrl.shiftTap() // 再点 = 锁定（不是「取消」：当前态是 SINGLE，不是 LOCK）
+        assertEquals(ShiftState.LOCK, ctrl.shiftState)
         ctrl.shiftTap()
         assertEquals(ShiftState.OFF, ctrl.shiftState)
         assertEquals(false, fake.shiftCalls.last())
@@ -123,12 +128,12 @@ class EngineControllerTest {
     fun consumeSingleShiftResetsOnlySingle() {
         val fake = FakeEngine()
         val ctrl = EngineController(fake)
-        ctrl.shiftTap()
+        ctrl.shiftLongPress() // SINGLE（2026-10-15 起由长按给，不再是单击）
         ctrl.consumeSingleShift()
         assertEquals(ShiftState.OFF, ctrl.shiftState)
         assertEquals(false, fake.shiftCalls.last())
         // lock 不受 consume 影响
-        ctrl.shiftLongPress()
+        ctrl.shiftTap()
         val n = fake.shiftCalls.size
         ctrl.consumeSingleShift()
         assertEquals(ShiftState.LOCK, ctrl.shiftState)
@@ -137,11 +142,12 @@ class EngineControllerTest {
 
     @Test
     fun switchModeClearsLockedShiftSoItCannotLeakAcrossModes() {
-        // 中→繁→英 后长按 ⇧ 锁定，点「中」/「繁」离开：状态必须复位，否则再切回 English
-        // 时 ⇧ 仍高亮锁定、字母全大写（shiftVisible 只是隐藏按钮，清不掉状态）。
+        // 中→繁→英 后**点** ⇧ 锁定（2026-10-15 起单击=锁定），点「中」/「繁」离开：状态
+        // 必须复位，否则再切回 English 时 ⇧ 仍高亮锁定、字母全大写（shiftVisible 只是
+        // 隐藏按钮，清不掉状态）。
         val fake = FakeEngine().apply { mode = EngineMode.ENGLISH.value }
         val ctrl = EngineController(fake)
-        ctrl.shiftLongPress()
+        ctrl.shiftTap()
         assertEquals(ShiftState.LOCK, ctrl.shiftState)
 
         ctrl.switchMode(EngineMode.PINYIN)
@@ -154,7 +160,7 @@ class EngineControllerTest {
     fun switchModeClearsSingleShiftToo() {
         val fake = FakeEngine().apply { mode = EngineMode.ENGLISH.value }
         val ctrl = EngineController(fake)
-        ctrl.shiftTap()
+        ctrl.shiftLongPress() // SINGLE（2026-10-15 起由长按给）
         assertEquals(ShiftState.SINGLE, ctrl.shiftState)
 
         ctrl.switchMode(EngineMode.TRADITIONAL)

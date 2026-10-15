@@ -47,10 +47,11 @@ class KeyRouterTest {
 
     @Test
     fun englishShiftSingleUppercasesThenConsumes() {
+        // ⚠️ 2026-10-15：单次大写改由**长按**给（单击改成锁定/取消，用户裁决）。
         val fake = FakeEngine().apply { mode = EngineMode.ENGLISH.value }
         val ch = Channel()
         val (ctrl, r) = router(fake, ch)
-        ctrl.shiftTap()
+        ctrl.shiftLongPress()
         r.handleKey("a")
         r.handleKey("b")
         assertEquals(listOf("A", "b"), ch.commits)
@@ -59,10 +60,11 @@ class KeyRouterTest {
 
     @Test
     fun englishShiftLockKeepsUppercase() {
+        // ⚠️ 2026-10-15：锁定改由**单击**给（同一条裁决）。
         val fake = FakeEngine().apply { mode = EngineMode.ENGLISH.value }
         val ch = Channel()
         val (ctrl, r) = router(fake, ch)
-        ctrl.shiftLongPress()
+        ctrl.shiftTap()
         r.handleKey("a")
         r.handleKey("b")
         assertEquals(listOf("A", "B"), ch.commits)
@@ -81,7 +83,7 @@ class KeyRouterTest {
         }
         val ch = Channel()
         val (ctrl, r) = router(fake, ch)
-        ctrl.shiftTap()
+        ctrl.shiftLongPress() // 单次大写（2026-10-15 起长按给）
         r.handleKey("a")
         assertEquals(emptyList<String>(), fake.inputCalls)
         assertEquals(listOf("A"), ch.commits)

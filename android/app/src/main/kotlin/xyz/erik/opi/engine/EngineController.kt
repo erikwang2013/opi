@@ -380,19 +380,28 @@ class EngineController(
 
     // ---- ⇧ 状态机 ----
 
+    /**
+     * ⇧ **单击 = 锁定大写；再点一次取消**（2026-10-15 用户裁决「切换到英文，让英文字母
+     * 大写的按钮，点击了，就要锁定大写，再次点击取消大写」——对 2026-10-10「点 = 单次、
+     * 长按 = 锁定」那条的改判）。
+     *
+     * 三态里「单次大写」（SINGLE）没被砍掉，挪到 [shiftLongPress]（换手势，不丢能力）——
+     * `consumeSingleShift` 与字母键面的大写显示都按状态走，两处不用改。
+     */
     fun shiftTap() {
-        if (shiftState == ShiftState.OFF) {
-            shiftState = ShiftState.SINGLE
-            api.setShift(true)
-        } else {
+        if (shiftState == ShiftState.LOCK) {
             shiftState = ShiftState.OFF
             api.setShift(false)
+        } else {
+            shiftState = ShiftState.LOCK
+            api.setShift(true)
         }
         // shift 不影响 buffer/candidates，仅通知 UI（也不重置候选页码）
     }
 
+    /** ⇧ 长按 = **单次大写**（SINGLE）：下一个字母大写后由 [consumeSingleShift] 复位。 */
     fun shiftLongPress() {
-        shiftState = ShiftState.LOCK
+        shiftState = ShiftState.SINGLE
         api.setShift(true)
     }
 

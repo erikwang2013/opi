@@ -157,7 +157,7 @@ class ImeStateTest {
         // 锁定的 ⇧ 不得跨输入目标残留：换输入框/换 app 后再开键盘仍全大写
         val fake = FakeEngine().apply { mode = EngineMode.ENGLISH.value }
         val state = newState(fake)
-        state.controller.shiftLongPress()
+        state.controller.shiftTap() // 单击 = 锁定（2026-10-15 用户裁决）
         assertEquals(ShiftState.LOCK, state.controller.shiftState)
 
         state.onEditorChanged()

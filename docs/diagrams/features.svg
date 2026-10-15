@@ -43,7 +43,7 @@
       <rect x="486" y="112" width="208" height="106" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
       <text x="590" y="138" text-anchor="middle" font-size="15" font-weight="700" fill="#22272E">英文</text>
       <text x="590" y="156" text-anchor="middle" font-size="10" font-weight="700" fill="#2E8B80">mode 1</text>
-      <text x="590" y="180" text-anchor="middle" font-size="10.5" fill="#6B7671">⇧ 决定单次大写</text>
+      <text x="590" y="180" text-anchor="middle" font-size="10.5" fill="#6B7671">⇧ 单击锁定 / 长按单次</text>
       <text x="590" y="196" text-anchor="middle" font-size="10.5" fill="#6B7671">缓冲为空时不过引擎</text>
       <text x="590" y="212" text-anchor="middle" font-size="10.5" fill="#6B7671">直传上屏，零延迟</text>
     </g>
