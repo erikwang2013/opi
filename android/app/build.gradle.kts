@@ -44,6 +44,12 @@ android {
         }
     }
 
+    // 「关于」一节要读 BuildConfig.VERSION_NAME —— AGP 8.0 起 buildConfig 默认**不生成**，
+    // 不显式打开就是编译期找不到符号。
+    buildFeatures {
+        buildConfig = true
+    }
+
     buildTypes {
         release {
             // 本环境无 flutter_embedding_release 工件，只构建 debug；

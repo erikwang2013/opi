@@ -337,6 +337,10 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
 
             // 五笔（2026-10-14，M4 第二波）：六键（方案/风格/混输进入方式/个数/回车/自动上屏）。
             WubiSection(prefs, ::toast)
+
+            // 关于（2026-10-15，用户裁决「移动端：增加关于按钮」）：与词库/五笔两节同一套路
+            // —— 单独文件 + 这一行调用（见 AboutSection.kt）。
+            AboutSection(::toast)
             HorizontalDivider()
             Text(
                 text = "注：学习/词库作用于本应用内嵌引擎实例；设置页与输入法共享同一引擎（Rust 静态单例）。",
