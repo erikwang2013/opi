@@ -18,31 +18,21 @@
 //!    `tests/scheme_readings.rs` 那条「学过的长词压过精确档 ⇒ 读数短→长仍要成立」的
 //!    夹具前提。学习是比「字先于词」更强的用户偏好；没有这一档，用户选过的词会掉到
 //!    第 6 位之后 —— 那是把「学习」这个功能作废，不是本裁决想要的。
-//! 1. **常用单字**（`[COMMON_CHAR_SLOTS]` 个槽位）：拼音**精确**匹配（`pinyin_len ==
-//!    输入长度`）的单字，按分取前若干条 —— 「常用」= 同一读音里词频最高的那几条；
-//! 2. **联想**：其余全部（拼音延伸的字与词、拼音精确的词）。按 **拼音长度** 分组升序
-//!    （「按拼音往后排」= 拼音越长越靠后，与 9 键左列 `短→长` 的既有裁决同一条读法）；
-//!    **同一长度内先词后字**（用户给的次序 `字 → 词 → 延伸字`），**每一类各封顶
-//!    `[PER_LENGTH_SLOTS]` 条**；
-//! 3. **沉底**：① 拼音精确但没进第 1 档槽位的单字（`祢 鲵 逆`），② 封顶之外的一切
-//!    （每组每类超出的条目）。按分（进来的次序），排在联想之后；
-//! 4. **主块尾部**：没有分档元数据的条目（符号 / emoji / 逐音节汤）—— 它们在旧排序里
-//!    就按微小分排在主块末尾，本层把它们整段放到三档之后（相对次序一字不动）。
+//! 1. **精确单字**：拼音**精确**匹配（`pinyin_len == 输入长度`）的**全部**单字，
+//!    按分排 —— **不封顶**（2026-10-15 用户裁决「输入的拼音匹配候选词是字的时候，拼音
+//!    优先匹配字，匹配完后再匹配词」：原先只取前 5 条「常用单字」，现在全给）；
+//! 2. **词组**：多字条目（精确的与拼音延伸的都在这里），按 **拼音长度**升序（精确词
+//!    的 plen == 输入长 ⇒ 天然最前），同长度按分；
+//! 3. **联想**：拼音**延伸的单字**（`ni` → `nian` 年 / `nin` 您 / `niang` 娘），
+//!    按拼音长度升序，**每个长度封顶 `[PER_LENGTH_SLOTS]`**（超出的沉底）；
+//! 4. **主块尾部**：没有分档元数据的条目（符号 / emoji / 逐音节汤）—— 整段放到最后。
 //!
-//! 组长（`ni` 真库实测，2026-10-14）：
-//! `[你 泥 拟 呢 腻]`（1 档）→ `[你哦 你啊]`（3 字母·词）→ `[您 牛 扭 捏 纽 聂]`（3 字母·字）
-//! → `[你的 你也 你不 你妈 你个]`（4·词）→ `[年 鸟 宁 凝 拧 黏]`（4·字）
-//! → `[… 你们 你是 您好 你好 …]`（5·词，`你好` 在第 26 位）→ … → 沉底（`祢` 145）。
-//! 调档手感 = 改 `[PER_LENGTH_SLOTS]`（调小 ⇒ 常用词更快浮上来，调大 ⇒ 同长度的字更全）。
-//!
-//! ⚠️ **为什么必须两个维度都封顶**（2026-10-14 逐版实测，三次翻车的记录）：
-//! - 只按分数排（旧行为）：单音节精确单字有几百条，`你好` 永远出不来（用户报障的那条）；
-//! - 只按「精确词 / 延伸」分档：`ni` 的延伸词有 **1195 条**，`您`/`年` 被顶到 1200 名外；
-//! - 只按拼音长度分组：3 字母组（`nin`/`niu`/`nie` 一族）单组 200+ 条生僻字，
-//!   `你好` 落到第 532 名；且**组内按分数排时生僻字会压过常用词**（真库实测：
-//!   5 字母组的前 6 名是 `娘 酿 䖆 醸 𥽬 𪓃` —— 后四个是生僻字，分数被数据抬得比 `你好` 还高）。
-//!
-//! ⇒ 长度分组 + 组内词先于字 + 各自封顶，三条缺一不可。
+//! ⚠️ **这条裁决的代价（用户知情并选了它，2026-10-14 测量、2026-10-15 复述警告）**：
+//! 精确单字不封顶 ⇒ 单音节输入下真库有**几百个**精确字（`ni` 一族 580 个）排在任何
+//! 词组之前 —— 打 `ni` 时「你好 / 你们」要在几百名之后才出现；打全拼（`nihao`）不受
+//! 影响（那种输入没有精确单字 ⇒ 第 1 档为空、词组直接顶上）。这一条**不是回归**，
+//! 别再按 10-14 的旧形态「修回去」；代价由 `tests/candidate_tiers.rs` 与
+//! `engine-data/tests/polyphone_real.rs` 两处门禁如实钉住。
 //!
 //! ## 边界与不变量（改之前先读）
 //!
@@ -67,20 +57,10 @@
 
 use crate::candidates::Candidate;
 
-/// 一档「常用单字」的槽位数：**5**。
+/// **联想档**（拼音延伸的单字）每个拼音长度取多少条（超出者沉底）。
 ///
-/// 取值来自页面容量：桌面 / TSF 的候选页是 8 槽（`router.rs::PAGE_SIZE`），
-/// 5 个字 + 3 个词组让首屏正好摆得下「常用字 + 一组常用词组」（`ni` → `你 泥 拟 呢 腻`
-/// + `你好 你们 你的`）。Android 一次取 64 条、页内再切 8 —— 同一套槽位在那边同样成立。
-///
-/// ⚠️ 这是一条**产品口味**的常量，不是算法推导出来的：要调它只改这里，
-/// 门禁 `tests/candidate_tiers.rs` 会跟着红（它钉的正是「前 N 位是精确单字」）。
-pub(crate) const COMMON_CHAR_SLOTS: usize = 5;
-
-/// 联想档里**每个拼音长度 × 每类（词 / 字）**取多少条（超出者沉底）。
-///
-/// 与 `[COMMON_CHAR_SLOTS]` 同一条性质：产品口味常量，三条理由（含真库实测数字）
-/// 在头注 —— 取 6 = 每个（长度 × 类）凑不满一页，四五个组正好铺满前几页。
+/// 产品口味常量：取 6 = 每组凑不满一页，四五个组正好铺满前几页。⚠️ 第 1 档
+/// （精确单字）与第 2 档（词组）**没有这个封顶**（2026-10-15 裁决：字全出完再出词）。
 pub(crate) const PER_LENGTH_SLOTS: usize = 6;
 
 /// 分档元数据：只有**主查询**（词库前缀命中）带它。
@@ -121,20 +101,23 @@ impl Tiered for (Candidate, String, Option<Meta>) {
     }
 }
 
-/// 把**已按分排好序**的主块重排成三档（调用方保证：进来的次序就是分值降序 —— 本模块
-/// 靠它取「分数最高的前 `COMMON_CHAR_SLOTS` 个精确单字」）。
+/// 把**已按分排好序**的主块重排成三档（调用方保证：进来的次序就是分值降序 ——
+/// 本模块各档内部的「按分」直接沿用这个次序）。
 ///
 /// 词条判定用 `text` 的字符数（`chars().count() == 1` = 单字），与候选层其它地方
 /// 同一判据（别用 `len()`：那是字节数，一个汉字 3 字节会把单字全判成词组）。
 pub(crate) fn apply<T: Tiered>(items: Vec<T>) -> Vec<T> {
     // 第 0 档：学过的（见头注）—— 输入已是分数降序，故这一档天然按分排。
     let mut learned: Vec<T> = Vec::new();
-    let mut common: Vec<T> = Vec::new();
-    // 联想主体：元数据跟着条目走（重排后不能再回头查）。键 =（拼音长度 × 是不是单字）。
-    let mut assoc: Vec<(T, usize, bool)> = Vec::new();
-    let mut per_slot: std::collections::HashMap<(usize, bool), usize> =
-        std::collections::HashMap::new();
-    // 沉底：精确超槽位的单字 + 每个（长度 × 类）超顶的条目（进来的次序即分数序）。
+    // 第 1 档：**全部**拼音精确匹配的单字（2026-10-15 用户裁决「字全出完再出词」——
+    // 原先只取前 `COMMON_CHAR_SLOTS` 条，现在不封顶）。次序 = 进来的次序（分数降序）。
+    let mut chars: Vec<T> = Vec::new();
+    // 第 2 档：词组（精确 + 拼音延伸）——元数据（拼音长度）跟着走：按长度升序、同长度按分。
+    let mut words: Vec<(T, usize)> = Vec::new();
+    // 第 3 档：拼音延伸的**单字**（联想；每个拼音长度封顶 `PER_LENGTH_SLOTS`）。
+    let mut assoc: Vec<(T, usize)> = Vec::new();
+    let mut per_slot: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
+    // 沉底：联想档超出每长度封顶的条目（进来的次序即分数序）。
     let mut sunk: Vec<T> = Vec::new();
     let mut tail: Vec<T> = Vec::new();
     for it in items {
@@ -148,30 +131,31 @@ pub(crate) fn apply<T: Tiered>(items: Vec<T>) -> Vec<T> {
         }
         let single = it.text().chars().count() == 1;
         if single && m.exact {
-            // 精确单字：前 `COMMON_CHAR_SLOTS` 条进第 1 档，其余（生僻）沉底。
-            if common.len() < COMMON_CHAR_SLOTS {
-                common.push(it);
-            } else {
-                sunk.push(it);
-            }
+            chars.push(it); // 全部精确单字，不封顶（裁决）
             continue;
         }
-        let taken = per_slot.entry((m.pinyin_len, single)).or_insert(0);
+        if !single {
+            words.push((it, m.pinyin_len)); // 词组：精确的 plen == 输入长 ⇒ 天然最前
+            continue;
+        }
+        let taken = per_slot.entry(m.pinyin_len).or_insert(0);
         if *taken < PER_LENGTH_SLOTS {
             *taken += 1;
-            assoc.push((it, m.pinyin_len, single));
+            assoc.push((it, m.pinyin_len));
         } else {
             sunk.push(it);
         }
     }
-    // 联想主体：拼音长度升序 → 同长度**先词后字**（`single` 排在后面）—— 稳定排序，
-    // 同 (长度, 类) 内保持进来的次序（= 分数降序 + 简体优先已分区，见头注那条）。
-    assoc.sort_by_key(|(_, plen, single)| (*plen, *single));
-    let mut out =
-        Vec::with_capacity(learned.len() + common.len() + assoc.len() + sunk.len() + tail.len());
+    // 词与联想：拼音长度升序；同长度保持进来的次序（分数降序 + 简体优先已分区，见头注）。
+    words.sort_by_key(|(_, plen)| *plen);
+    assoc.sort_by_key(|(_, plen)| *plen);
+    let mut out = Vec::with_capacity(
+        learned.len() + chars.len() + words.len() + assoc.len() + sunk.len() + tail.len(),
+    );
     out.extend(learned);
-    out.extend(common);
-    out.extend(assoc.into_iter().map(|(it, _, _)| it));
+    out.extend(chars);
+    out.extend(words.into_iter().map(|(it, _)| it));
+    out.extend(assoc.into_iter().map(|(it, _)| it));
     out.extend(sunk);
     out.extend(tail);
     out

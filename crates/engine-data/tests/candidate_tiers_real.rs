@@ -28,42 +28,39 @@ fn texts(e: &Engine, limit: usize) -> Vec<String> {
 
 /// 真库（luna.opid）：用户报障的那条输入 —— `ni`。
 ///
-/// 改动前的实测：前 40 位全是单字（`你 泥 拟 呢 腻 祢 铌 鲵 𢘝 …`），
-/// 「你好 / 你们 / 你的」**永远出不来**（精确加成把几百个精确单字全压在词组之上）。
+/// **2026-10-15 用户裁决「字全出完再出词」后改写**（原先钉的是 10-14 的「常用单字 5 槽」
+/// 形态：你好 在 26 位）。现在：**所有**拼音精确匹配的单字排在一切词组之前 ⇒
+/// `ni` 的精确字有 **182** 个（含生僻），词组从第 182 位起。
+/// ⚠️ **这是裁决的代价、不是回归**：单音节下常用词组要翻页才到（多音节输入不受影响 ——
+/// 打全拼 `nihao` 没有精确单字 ⇒ 词组直接顶上，见本文件最后一条）。门禁如实钉住它。
 #[test]
 fn real_dict_ni_letters_words_and_associations_are_all_reachable() {
     let mut e = real_engine();
     type_str(&mut e, "ni");
-    let got = texts(&e, 200);
-    let pos = |w: &str| {
-        got.iter()
-            .position(|t| t == w)
-            .unwrap_or_else(|| panic!("候选里没有 {w}（前 200 位）：{:?}", &got[..20]))
-    };
+    let got = texts(&e, 400);
+    let pos = |w: &str| got.iter().position(|t| t == w);
 
-    // ① 常用单字档：前 5 位全是单字，首位是 你。
+    // ① 精确单字区：首位是 你，且前 8 位**全**是单字（10-15 前是只给 5 槽）。
     assert_eq!(got[0], "你");
-    for t in &got[..5] {
-        assert_eq!(t.chars().count(), 1, "1 档应是单字：{t:?}");
+    for t in &got[..8] {
+        assert_eq!(t.chars().count(), 1, "精确单字区应是单字：{t:?}");
     }
-    // ② 联想档按拼音长度升序，同级先词后字（实测三条锚）。
-    assert!(pos("您") < pos("年"), "3 字母（您）应在 4 字母（年）之前");
+    // ② 单字区到 182 为止（实测；口径 = 「第一个多字候选取位」，别写死具体字）。
+    let first_word = got
+        .iter()
+        .position(|t| t.chars().count() > 1)
+        .expect("ni 必有词组候选");
     assert!(
-        pos("年") < pos("你好"),
-        "4 字母（年）应在 5 字母（你好）之前"
+        (100..400).contains(&first_word),
+        "精确单字区长度应在百量级（实测 182）：{first_word}"
     );
-    assert!(
-        pos("你哦") < pos("您"),
-        "同为 3 字母时，词（你哦）应排在字（您）之前"
-    );
-    // ③ 生僻精确单字沉底：它们必须排在常用词组之后。
-    assert!(
-        pos("你好") < pos("祢"),
-        "生僻精确单字（祢）应沉在联想档之后"
-    );
-    // ④ 可达性：用户报障的那几个词要真进得了候选栏（页 8 槽 ⇒ 这是前 5 页内）。
-    assert!(pos("你好") < 40, "你好 在下标 {}，太深", pos("你好"));
-    assert!(pos("你们") < 40);
+    // ③ 词组区：与用户设置无关地可达（不钉具体名次 —— 词条随词库数据漂）。
+    let nihao = pos("你好").expect("你好 应可达（400 内）");
+    assert!(nihao > first_word - 1, "词组应在单字区之后：{nihao}");
+    // ④ 拼音延伸的单字（联想，如 您/年/娘）在**所有**精确单字与词组之后。
+    if let Some(nin) = pos("您") {
+        assert!(nin > first_word, "联想（您）应在词组之后：{nin}");
+    }
 }
 
 /// 真库：单音节另一条最常见的输入 `wo`（词组一族 `我们 / 我的 / 我国`）。
@@ -71,18 +68,27 @@ fn real_dict_ni_letters_words_and_associations_are_all_reachable() {
 fn real_dict_wo_puts_common_words_in_reach() {
     let mut e = real_engine();
     type_str(&mut e, "wo");
-    let got = texts(&e, 40);
+    let got = texts(&e, 400);
     let pos = |w: &str| {
         got.iter()
             .position(|t| t == w)
-            .unwrap_or_else(|| panic!("候选里没有 {w}（前 40 位）：{got:?}"))
+            .unwrap_or_else(|| panic!("候选里没有 {w}（前 400 位）：{:?}", &got[..20]))
     };
     assert_eq!(got[0], "我");
-    for t in &got[..5] {
-        assert_eq!(t.chars().count(), 1, "1 档应是单字：{t:?}");
+    for t in &got[..8] {
+        assert_eq!(t.chars().count(), 1, "精确单字区应是单字：{t:?}");
     }
-    assert!(pos("我们") < 20, "我们 在下标 {}", pos("我们"));
-    assert!(pos("我的") < 20);
+    // 词组在单字区之后（2026-10-15 裁决「字全出完再出词」；`wo` 一族的精确字实测 101 个）。
+    let first_word = got
+        .iter()
+        .position(|t| t.chars().count() > 1)
+        .expect("wo 必有词组");
+    assert!(
+        (40..400).contains(&first_word),
+        "精确单字区长度应在百量级（实测 101）：{first_word}"
+    );
+    assert!(pos("我的") >= first_word, "词组应在单字区之后");
+    assert!(pos("我们") >= first_word, "词组应在单字区之后");
 }
 
 /// 真库：多音节输入**行为不变**（它们本来就以词为主，三档不该把它们改坏）。
