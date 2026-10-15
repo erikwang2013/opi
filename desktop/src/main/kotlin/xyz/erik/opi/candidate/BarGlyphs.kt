@@ -280,14 +280,25 @@ internal fun modeSlots(mode: String): List<GlyphSlot> = buildList {
  * 这是 2026-10-14「按按钮显示最大、不要溢出」之后的**再裁决**（用户看过填满的效果嫌大；
  * 那套效果的人眼图由 StatusBarRenderProbeTest 落盘在 /tmp/opi-render-probe/）：**排版机制一字未改**
  * （仍按墨迹取最大、居中、不溢出），只是内盒 = 按钮 × 本系数。所以：
- *  · 字形（[layoutGlyphs]/[fitGlyphPx] 那一套）、三个自绘图标、小欧**全走这一处** ——
+ *  · 字形（[layoutGlyphs]/[fitGlyphPx] 那一套）、三个自绘图标**全走这一处** ——
  *    它们的内盒都是 [StatusBarButtonFace] 里算出来的同一个 `face`；
+ *  · ⚠️ **小欧（LOGO）例外**：它是品牌标识，2026-10-15 二次裁决「logo 小了，按最大显示，
+ *    不要溢出」⇒ 不走本系数，走 [`PET_FIT`]（见那条常量）；
  *  · ⚠️ 别在图标/字形里再各乘一遍：乘两处 = 两个真相源，改一处漏一处（那正是「图标比
  *    文字小一截」这种只在人眼里存在的错）。
  *  · ⚠️ 系数变了要同步 StatusBarRenderProbeTest 里按它算的期望（那边逐条标了「缩放
  *    系数变了要同步这里」）。
  */
 internal const val FACE_SCALE = 0.6f
+
+/**
+ * **小欧（LOGO）的按最大系数** = 240/250（用户裁决 2026-10-15：「logo 小了，按最大显示，
+ * 不要溢出」）。为什么不直接写 1.0：小欧的画布是 **240 宽 × 250 高**（`shared/pet/OpiPet.kt`
+ * 的 `CANVAS_W/CANVAS_H`，内容竖向占满 236/240 个单位）⇒ `size = 按钮` 时**高**会伸出按钮
+ * 1.25dp（就是「溢出」）。按**高**收口：宽 = 按钮 × 240/250 ⇒ 高恰好 = 按钮，宽留 4% 余量。
+ * 它是本文件里**唯一**不走 [FACE_SCALE] 的面（只有这一处调用）。
+ */
+internal const val PET_FIT = 240f / 250f
 
 /**
  * 一枚按钮的**面**（图标或字形），画在 [box] 见方的盒里居中。BarButton（StatusBar.kt）
@@ -303,12 +314,14 @@ internal fun StatusBarButtonFace(b: StatusBarButton, st: ImeState, mode: String,
     when (b) {
         // 品牌标识兼拖动把手：设置页那只小欧缩到按钮里（2026-10-13 用户「logo 大点」）。
         // 配色随条底深浅切：浅底上用深底版那套（近白身 + 淡青描边）会糊进底色。
+        // ⚠️ 2026-10-15 用户裁决「logo 小了，按最大显示，不要溢出」⇒ 尺寸用 [PET_FIT]
+        // （= 按**高**收进按钮），**不走** `face`（那条 0.6 是给字形与图标的）。
         StatusBarButton.LOGO -> {
             val palette = LocalBarPalette.current
             OpiPet(
                 mood = PetMood.IDLE,
                 palette = if (palette.bg.luminance() < 0.5f) PetPalette.Dark else PetPalette.Default,
-                size = face,
+                size = box * PET_FIT,
             )
         }
         StatusBarButton.VK -> VkIcon(face)

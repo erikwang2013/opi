@@ -251,6 +251,22 @@ class StatusBarRenderProbeTest {
     }
 
     @Test
+    fun `logo is drawn near the full button`() {
+        // 2026-10-15 用户二次裁决：「logo 小了，按最大显示，不要溢出」—— 上一条（不溢出）
+        // 已经管住「不溢出」；本条钉**「大」**：小欧按**高**收进按钮（`BarGlyphs.PET_FIT`
+        // = 240/250，画布 240×250）⇒ 墨迹高该接近按钮边长。阈值 0.75 是**回归钉**不是
+        // 设计值：它把上一版（走 `FACE_SCALE`、实测墨迹 16×17）判红，给现在这版（实测
+        // 23×25）留 2px 余量 —— 谁再悄悄缩小，这条会响。
+        val (ink, _) = probe("logo-max") { face(StatusBarButton.LOGO) }
+        val side = (faceR - faceL).toFloat()
+        assertTrue(
+            "小欧该按按钮最大显示（PET_FIT 按高收口；实测墨迹 $ink，按钮 $side px）：" +
+                "墨迹高 ${ink.h} 应 ≥ 0.75×按钮",
+            ink.h >= side * 0.75f,
+        )
+    }
+
+    @Test
     fun `punct draws the period upper left and the comma lower right`() {
         // (b) 用户原话：「要句号在按钮中左上侧，逗号在右下侧」。两枚字形占两个**不相交**的
         // 象限槽（BarGlyphs 的 punctSlots：左上 + 右下），所以判据是四问：左上/右下**有**墨迹，
