@@ -208,11 +208,34 @@ object OpiIcons {
             }
         }.build()
     }
+
+    /** 关于入口（圆里一个 i）。圆与 [Palette] 的盘身同一套两段半圆闭合的写法。 */
+    val Info: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "OpiInfo",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f,
+        ).apply {
+            stroke(width = 1.8f) {
+                moveTo(12f, 3f)
+                arcToRelative(9f, 9f, 0f, true, true, 0f, 18f)
+                arcToRelative(9f, 9f, 0f, true, true, 0f, -18f)
+                close()
+                // i：一点 + 一竖（两段，别连成一竖 —— 那样就成了数字 1）
+                moveTo(12f, 7.6f)
+                lineTo(12f, 8.6f)
+                moveTo(12f, 11.6f)
+                lineTo(12f, 16.4f)
+            }
+        }.build()
+    }
 }
 
 /**
- * 建一条线稿路径（本文件四个图标的共同参数：只描边、不填充、圆头圆角）。
- * 抽出来只为四个图标参数一致 —— 不是为了复用花样。
+ * 建一条线稿路径（本文件各图标的共同参数：只描边、不填充、圆头圆角）。
+ * 抽出来只为参数一致 —— 不是为了复用花样。
  *
  * ⚠️ `fill = null` 是承重的，别"顺手补上颜色"：首版这里写的是
  * `fill = SolidColor(fill)`，于是**闭环子路径全被填成实心** —— 笑脸变实心圆饼、

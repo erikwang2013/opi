@@ -72,6 +72,8 @@ fun ImeToolbar(
     onOpenSkin: () -> Unit,
     onOpenInputMode: () -> Unit,
     onOpenKeyboardMode: () -> Unit,
+    /** 关于面板（2026-10-15 用户裁决「关于给移动端键盘功能区加个入口」）。 */
+    onOpenAbout: () -> Unit,
     /** 收起键盘（2026-10-10 用户裁决：功能按钮区最右侧加关闭键盘图标）——
      * 服务层注入 requestHideSelf。 */
     onCloseKeyboard: () -> Unit,
@@ -94,6 +96,8 @@ fun ImeToolbar(
             OpiIcons.KeyboardMode,
             "键盘模式${if (keyboardModes.anyOn) "，有开启项" else ""}",
         ) { onOpenKeyboardMode() }
+        // 关于（2026-10-15 用户裁决「功能区的入口」）：压在功能组最右、收起键盘之前。
+        ToolbarIcon(OpiIcons.Info, "关于") { onOpenAbout() }
         // 收起键盘压在**最右**（用户裁决「功能按钮区域最右侧」）：弹性空白把它推到头。
         // 图标 = 向下折角（2026-10-10 用户裁决「不要用 x」——✕ 是关闭语义）。
         Spacer(Modifier.weight(1f))

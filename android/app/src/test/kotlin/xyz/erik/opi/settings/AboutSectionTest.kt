@@ -50,4 +50,32 @@ class AboutSectionTest {
             .substringAfter("homepage:").trim()
         assertEquals("Android「关于」的项目地址必须与打包 homepage 同源", homepage, ABOUT_PROJECT_URL)
     }
+
+    /**
+     * **关于面板**（2026-10-15 用户裁决「关于给移动端键盘功能区加个入口」）。
+     *
+     * 两条会静默漂的：① 面板里**不许另抄一份文案/版本**（版本若写死，下次发布就成假话
+     * —— 与设置页那条同一个病）；② 工具条 → 面板这条**接线**（图标少一枚、分支名字打错，
+     * 单测都看不见，编译也照样过）。
+     */
+    @Test
+    fun aboutPanelReusesSourcesAndIsWiredToTheToolbar() {
+        val panel = File("src/main/kotlin/xyz/erik/opi/ime/AboutPanel.kt").readText()
+        assertTrue("面板必须读 BuildConfig.VERSION_NAME", panel.contains("BuildConfig.VERSION_NAME"))
+        assertNull(
+            "关于面板里不许出现写死的版本号：${Regex("""\d+\.\d+\.\d+""").find(panel)?.value}",
+            Regex("""\d+\.\d+\.\d+""").find(panel)?.value,
+        )
+        for (c in listOf("ABOUT_INTRO", "ABOUT_PROJECT_URL", "ABOUT_BLOG_URL")) {
+            assertTrue("面板必须复用设置侧常量 $c（文案单一来源）", panel.contains(c))
+        }
+        val toolbar = File("src/main/kotlin/xyz/erik/opi/ime/ImeToolbar.kt").readText()
+        assertTrue("工具条上要有「关于」入口", toolbar.contains("OpiIcons.Info, \"关于\""))
+        val screen = File("src/main/kotlin/xyz/erik/opi/ime/ImeScreen.kt").readText()
+        assertTrue("工具条回调要接到 state::openAbout", screen.contains("onOpenAbout = state::openAbout"))
+        assertTrue("View.ABOUT 要分发到 AboutPanel", screen.contains("ImeState.View.ABOUT -> AboutPanel("))
+        val state = File("src/main/kotlin/xyz/erik/opi/ime/ImeState.kt").readText()
+        assertTrue("ImeState 要有 openAbout()", state.contains("fun openAbout()"))
+        assertTrue("View 枚举要有 ABOUT", state.contains("SYMBOL_PAGE, ABOUT }"))
+    }
 }

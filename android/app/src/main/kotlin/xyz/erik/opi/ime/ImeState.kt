@@ -77,7 +77,7 @@ class ImeState(
     var commit: (String) -> Unit = {},
     private val debouncer: Debouncer = HandlerDebouncer(),
 ) {
-    enum class View { QWERTY, NUMBER, SYMBOL, RARE, SKIN, INPUT_MODE, KEYBOARD_MODE, SYMBOL_PAGE }
+    enum class View { QWERTY, NUMBER, SYMBOL, RARE, SKIN, INPUT_MODE, KEYBOARD_MODE, SYMBOL_PAGE, ABOUT }
 
     companion object {
         /** 搜索防抖窗口（对齐 flutter 250ms）。 */
@@ -337,6 +337,15 @@ class ImeState(
     fun openKeyboardMode() {
         resetSearch()
         view = View.KEYBOARD_MODE
+    }
+
+    /**
+     * 关于面板（工具条入口，2026-10-15 用户裁决「关于给移动端键盘功能区加个入口」）。
+     * 与皮肤面板同一条：只切视图、不碰引擎、无缓冲语义，中途关掉不丢正在打的缓冲。
+     */
+    fun openAbout() {
+        resetSearch()
+        view = View.ABOUT
     }
 
     // ---- 面板切换（开面板前提交 pending buffer） ----

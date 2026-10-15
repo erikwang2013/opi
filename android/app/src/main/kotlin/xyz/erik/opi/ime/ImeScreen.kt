@@ -133,6 +133,7 @@ fun ImeScreen(
                 onOpenSkin = state::openSkin,
                 onOpenInputMode = state::openInputMode,
                 onOpenKeyboardMode = state::openKeyboardMode,
+                onOpenAbout = state::openAbout,
                 onCloseKeyboard = onCloseKeyboard,
             )
             // ---- 键盘区：单手模式整体偏移 + 收窄（纯布局层）----
@@ -211,6 +212,11 @@ private fun KeyboardArea(
                 )
             },
             onUpdate = state::updateKeyboardModes,
+            onClose = state::backToLetters,
+            modifier = modifier,
+        )
+        // 关于面板（2026-10-15 用户裁决）：工具条入口直达，内容复用 settings 侧的常量。
+        ImeState.View.ABOUT -> AboutPanel(
             onClose = state::backToLetters,
             modifier = modifier,
         )
