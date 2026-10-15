@@ -9,6 +9,8 @@ import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -149,10 +151,17 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
         topBar = { TopAppBar(title = { Text("opi输入法 设置") }) },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
+        // ⚠️ 2026-10-15（v1.9.2 装机核验时发现，当时已发布）：这一页**从来不可滚动** ——
+        // 从建页起就没有 `verticalScroll`，内容比视口长时下半截被裁掉且**滑不动**
+        // （1080×2400@420dpi 实测：视口 862dp，页尾的 简拼/拼音方式/词库/五笔/**关于**
+        // 全部看不到，`adb shell input swipe`/`motionevent` 两种手势都不动；语义树里
+        // 也没有那些节点）。外面是 `Scaffold` 的 content 槽，加这一行即可；
+        // 门禁：`SettingsScrollableTest`（静态，钉住滚动修饰符在 Column 上）。
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
+                .padding(padding)
+                .verticalScroll(rememberScrollState()),
         ) {
             // 小欧报到：表情跟着「学习」开关走 —— 一眼看出引擎在不在记事，
             // 比读一行说明文字快。

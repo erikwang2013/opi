@@ -497,7 +497,18 @@ fcitx5 配置面**同名**，宣纸/朱砂与后五款的配色取 `scripts/gen_
 
 ### 4.6 设置页
 
-`settings/SettingsScreen.kt`，**七项**（2026-10-08 加了模糊音 / 简拼两个开关）：
+`settings/SettingsScreen.kt`。⚠️ **下表是 2026-10-08 的快照，此后设置页长成了「分节」形态**
+（学习 / 模糊音（逐对）/ 拼音纠错 / 简拼 / 拼音方式 / 词库 / 五笔 / 关于），来源是各节的
+`*Section.kt`（`DictSection` / `WubiSection` / `AboutSection`）—— 下面只逐条说明本表里的
+那几个开关，**不是**设置页的全集。
+
+⚠️ **2026-10-15 装机核验发现的真缺陷（v1.9.2 发布后当即修）**：这一页从建页起外层
+`Column` 就没有 `verticalScroll`，内容比视口长时下半截被**裁掉且滑不动**
+（1080×2400@420dpi 实测：视口 862dp，`简拼 / 拼音方式 / 词库 / 五笔 / 关于` 全部够不到，
+uiautomator 语义树里也没有那些节点 —— 用户报障「看不到关于」的机制就在这）。
+修法是外层 `Column` 加 `.verticalScroll(rememberScrollState())`；静态门禁
+`settings/SettingsScrollableTest` 钉住它，装机实测（`adb shell input swipe`，慢拖
+900–1200ms；快滑在本机模拟器上常被判不成拖动）能一路滑到页尾的「关于」。
 
 | 项 | 行为 |
 |---|---|
