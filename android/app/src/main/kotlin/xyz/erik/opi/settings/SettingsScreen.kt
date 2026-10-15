@@ -350,15 +350,6 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
                     .padding(16.dp),
                 textAlign = TextAlign.Start,
             )
-            // 版权行（2026-10-09 用户裁决「页面增加版权」）。
-            Text(
-                text = "© 2026 erik.xyz · MIT 许可",
-                fontSize = 12.sp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
-                textAlign = TextAlign.Center,
-            )
         }
     }
 

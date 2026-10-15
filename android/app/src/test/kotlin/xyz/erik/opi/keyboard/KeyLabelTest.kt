@@ -6,9 +6,10 @@ package xyz.erik.opi.keyboard
 import xyz.erik.opi.candidate.composingAnnouncement
 import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.engine.InputScheme
+import xyz.erik.opi.ime.jianFanModeKeyLabelOf
 import xyz.erik.opi.ime.modeKeyLabelOf
-import xyz.erik.opi.ime.nineKeyModeLabelOf
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -87,14 +88,42 @@ class KeyLabelTest {
     }
 
     @Test
-    fun nineKeyModeKeyOnlyExpressesChineseAndTraditional() {
-        // 2026-10-15 用户裁决「简繁按钮就只切换简繁」：9 键上这枚键**不循环进英文**
-        // （进英文走底行那枚独立的 [英文] 键），故键面只在中/繁之间表达目标。
+    fun modeKeyOnlyExpressesChineseAndTraditional() {
+        // 2026-10-15 用户裁决「简繁按钮就只切换简繁」，同日「统一成只切简繁」把 14 键与
+        // 笔画也归到这条：这三盘上这枚键**不循环进英文**（进英文走各自底行那枚独立的
+        // [英文] 键），故键面只在中/繁之间表达目标。
         // 语义仍与 26 键同一条（写「点它会切到哪」），只是把「英」那条腿摘掉。
-        assertEquals("繁", nineKeyModeLabelOf(EngineMode.PINYIN))
-        assertEquals("中", nineKeyModeLabelOf(EngineMode.TRADITIONAL))
-        // 9 键上不出现的态（英文/数字）兜底给「繁」：不空、不炸
-        assertEquals("繁", nineKeyModeLabelOf(EngineMode.ENGLISH))
-        assertEquals("繁", nineKeyModeLabelOf(EngineMode.NUMBER))
+        assertEquals("繁", jianFanModeKeyLabelOf(EngineMode.PINYIN))
+        assertEquals("中", jianFanModeKeyLabelOf(EngineMode.TRADITIONAL))
+        // 这三盘按 inputMode 分发、拿不到英文/数字态；兜底给「繁」：不空、不炸
+        assertEquals("繁", jianFanModeKeyLabelOf(EngineMode.ENGLISH))
+        assertEquals("繁", jianFanModeKeyLabelOf(EngineMode.NUMBER))
+    }
+
+    /**
+     * **接线的静态门禁**（2026-10-15 用户裁决「统一成只切简繁」）。
+     *
+     * 为什么必须静态：8 处 `when(state.inputMode)` 分支里谁接哪条 handler 是 Compose
+     * 层的**调用形状**，本仓 JVM 单测够不着（无 Robolectric）；而这条裁决的要害恰恰是
+     * 「三盘接同一条、26 键那条不许跟着改」——纯函数测（上一条）只看键面字，接线错了
+     * 它照样绿。先例：`ComposingPlacementTest` 的布局次序门禁。
+     *
+     * ⚠️ 按**调用形状**取，不按行号（行号随任何编辑漂）。
+     * ⚠️ 它证明的是「代码仍然这么写」，**不**证明真机上面板行为。
+     */
+    @Test
+    fun threeKeyboardsBindThePlainJianFanToggleAndKeepAnEnglishEntry() {
+        val rel = "src/main/kotlin/xyz/erik/opi/ime/ImeScreen.kt"
+        val p = java.nio.file.Paths.get(rel)
+        assertTrue("源文件不在了（搬家了？）：$rel", java.nio.file.Files.exists(p))
+        // ⚠️ readAllBytes 而不是 Files.readString（Java 11 API，本模块单测编译级别不可见）。
+        val src = String(java.nio.file.Files.readAllBytes(p), Charsets.UTF_8)
+        fun count(needle: String) = Regex(Regex.escape(needle)).findAll(src).count()
+        // 9 / 14 / 笔画 = 三处切简繁；26 键 + 搜索叠盘 = 两处仍是 cycleMode
+        assertEquals("切简繁的键应恰有三盘（9/14/笔画）", 3, count("onModeSwitch = state::toggleTraditional"))
+        assertEquals("26 键与搜索叠盘的 cycleMode 不许被带上", 2, count("onModeSwitch = state::cycleMode"))
+        // 英文入口：9/14/笔画三盘各一枚独立键（14 键与笔画原先没有，靠模式键循环 ——
+        // 摘掉那条腿后必须补上，否则英文在这两盘不可达）。
+        assertEquals("三盘各自的独立 [英文] 键", 3, count("onEnglish = state::switchToEnglishKeyboard"))
     }
 }

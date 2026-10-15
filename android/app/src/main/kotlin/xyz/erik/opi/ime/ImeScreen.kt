@@ -278,9 +278,10 @@ private fun KeyboardArea(
         ImeState.View.QWERTY -> {
             // 输入模式分发（生僻字是面板，已在上面分支）。
             val label = state.modeKeyLabel
-            // 9 键的模式键是**另一枚键**（只切简/繁，2026-10-15 用户裁决）：键面字
-            // 不走 [modeKeyLabel] 的三档循环。
-            val nineLabel = nineKeyModeLabelOf(controller.mode)
+            // 9 键 / 14 键 / 笔画 的模式键**只切简/繁**（2026-10-15 用户裁决，三盘统一）：
+            // 键面字不走 [modeKeyLabel] 的三档循环，改用 [jianFanModeKeyLabelOf]。
+            // 26 键仍走三档循环（它没有独立的英文键，cycleMode 那条腿不能摘）。
+            val jianFanLabel = jianFanModeKeyLabelOf(controller.mode)
             when (state.inputMode) {
                 InputMode.PINYIN9, InputMode.BIG9 -> NineKeyKeyboard(
                     modifier = modifier,
@@ -289,7 +290,8 @@ private fun KeyboardArea(
                     onBackspace = router::handleBackspace,
                     onEnter = router::handleEnter,
                     // 9 键的模式键**只切简/繁**（2026-10-15 用户裁决「简繁按钮就只切换
-                    // 简繁」）—— 不是 26/14/笔画那条中→繁→英循环（cycleMode 不动）。
+                    // 简繁」）—— 不是 26 键那条中→繁→英循环（cycleMode 只在 26 键与
+                    // 搜索叠盘上留着；14/笔画同日裁决后也归到本条）。
                     onModeSwitch = state::toggleTraditional,
                     onSymbol = state::openSymbolPage,
                     // 重输（2026-10-10 用户裁决：去分词键、加「重输」）：清掉当前组合重来；
@@ -318,7 +320,7 @@ private fun KeyboardArea(
                     },
                     pinnedReading = controller.pinnedReading,
                     scrollKey = controller.buffer,
-                    modeLabel = nineLabel,
+                    modeLabel = jianFanLabel,
                     big = state.inputMode == InputMode.BIG9,
                 )
                 InputMode.PINYIN14 -> FourteenKeyKeyboard(
@@ -327,9 +329,14 @@ private fun KeyboardArea(
                     onSpace = router::handleSpace,
                     onBackspace = router::handleBackspace,
                     onEnter = router::handleEnter,
-                    onModeSwitch = state::cycleMode,
+                    // 只切简/繁（2026-10-15 用户裁决，与 9 键统一）
+                    onModeSwitch = state::toggleTraditional,
                     onSymbol = state::openSymbolPage,
-                    modeLabel = label,
+                    // 英文入口必须独立留一枚（与 9 键同）：本盘原先靠模式键循环进英文，
+                    // 摘掉那条腿后不补这枚，英文在本盘**就不可达了**（2026-10-15 实测
+                    // 全仓只有 9 键与 cycleMode 两条进英文的路）。
+                    onEnglish = state::switchToEnglishKeyboard,
+                    modeLabel = jianFanLabel,
                 )
                 InputMode.STROKE -> StrokeKeyboard(
                     modifier = modifier,
@@ -337,10 +344,13 @@ private fun KeyboardArea(
                     onSpace = router::handleSpace,
                     onBackspace = router::handleBackspace,
                     onEnter = router::handleEnter,
-                    onModeSwitch = state::cycleMode,
+                    // 只切简/繁（2026-10-15 用户裁决，与 9 键统一）
+                    onModeSwitch = state::toggleTraditional,
                     onSymbol = state::openSymbolPage,
                     onRare = state::openRare,
-                    modeLabel = label,
+                    // 同上：14 键那枚 [英文] 的理由逐条适用（本盘原先也没有独立入口）
+                    onEnglish = state::switchToEnglishKeyboard,
+                    modeLabel = jianFanLabel,
                 )
                 // PINYIN26 / ENGLISH26 / RARE（RARE 走上面分支，这里只为穷尽）
                 else -> QwertyKeyboard(
@@ -380,13 +390,14 @@ internal fun modeKeyLabelOf(mode: EngineMode, lastChineseIsTrad: Boolean): Strin
 }
 
 /**
- * **9 键**底行模式键的键面字（2026-10-15 用户裁决「简繁按钮就只切换简繁」）。
+ * **9 键 / 14 键 / 笔画**底行模式键的键面字（2026-10-15 用户裁决「简繁按钮就只切换简繁」，
+ * 后两盘同日裁决「统一成只切简繁」）。
  * 与 [modeKeyLabelOf] 同一条语义 —— 键面 = **点它会切到哪** —— 只是把「英」那条腿
- * 摘掉：9 键上它只在 中/繁 之间切（[ImeState.toggleTraditional]），进英文走底行那枚
- * 独立的 [英文] 键。故：拼音态 →「繁」、繁体态 →「中」。
+ * 摘掉：这三盘上它只在 中/繁 之间切（[ImeState.toggleTraditional]），进英文走各自
+ * 底行那枚独立的 [英文] 键。故：拼音态 →「繁」、繁体态 →「中」。
  *
- * 其余模式在 9 键上不出现（9 键只在 PINYIN9/BIG9 输入模式下渲染）；兜底给「繁」，
- * 不返回空/不抛。纯函数，单测钉住（`KeyLabelTest`）。
+ * 兜底给「繁」：这三盘按 `state.inputMode` 分发，理论上只会拿到中文态；不返回空/不抛。
+ * 纯函数，单测钉住（`KeyLabelTest`）。
  */
-internal fun nineKeyModeLabelOf(mode: EngineMode): String =
+internal fun jianFanModeKeyLabelOf(mode: EngineMode): String =
     if (mode == EngineMode.TRADITIONAL) "中" else "繁"

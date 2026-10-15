@@ -57,6 +57,7 @@ fun FourteenKeyKeyboard(
     onEnter: () -> Unit,
     onModeSwitch: () -> Unit,
     onSymbol: () -> Unit,
+    onEnglish: () -> Unit,
     modeLabel: String = "中",
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -73,15 +74,21 @@ fun FourteenKeyKeyboard(
                 }
             }
         }
-        // 底行：[符] 在左、[中/英] 其次（与 9 键同序，2026-10-09）。
+        // 底行：[符] 在左、[简/繁] 其次（与 9 键同序，2026-10-09）。
+        // 2026-10-15 用户裁决「统一成只切简繁」⇒ 模式键不再循环进英文，
+        // 进英文靠右边那枚独立的 [英文] 键（9 键同款，缺了它英文在本盘就不可达）。
         Row(modifier = Modifier.weight(1f).fillMaxSize()) {
             KeyButton("符", modifier = Modifier.weight(1f), onTap = onSymbol)
             KeyButton(
                 modeLabel,
                 modifier = Modifier.weight(1f),
                 onTap = onModeSwitch,
+                // 键面「中/繁」在 spokenKeyName 里的默认读法是「中英切换」——本盘动作已
+                // 只是简繁，须覆写（与 9 键那枚同一条）。
+                description = "简繁切换",
                 stateDescription = modeStateDescription(modeLabel),
             )
+            KeyButton("英文", modifier = Modifier.weight(1f), onTap = onEnglish)
             KeyButton("空格", modifier = Modifier.weight(2f), onTap = onSpace)
             KeyButton("⌫", modifier = Modifier.weight(1f), onTap = onBackspace)
             KeyButton("↵", modifier = Modifier.weight(1f), onTap = onEnter)

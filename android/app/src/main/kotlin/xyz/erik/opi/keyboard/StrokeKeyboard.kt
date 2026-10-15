@@ -43,6 +43,7 @@ fun StrokeKeyboard(
     onModeSwitch: () -> Unit,
     onSymbol: () -> Unit,
     onRare: () -> Unit,
+    onEnglish: () -> Unit,
     modeLabel: String = "中",
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -71,12 +72,16 @@ fun StrokeKeyboard(
         }
         Row(modifier = Modifier.weight(1f).fillMaxSize()) {
             KeyButton("符", modifier = Modifier.weight(1f), onTap = onSymbol)
+            // 模式键只切简/繁（2026-10-15 用户裁决「统一成只切简繁」，与 9/14 键同）——
+            // 进英文靠右边那枚独立的 [英文] 键（缺了它英文在本盘就不可达）。
             KeyButton(
                 modeLabel,
                 modifier = Modifier.weight(1f),
                 onTap = onModeSwitch,
+                description = "简繁切换",
                 stateDescription = modeStateDescription(modeLabel),
             )
+            KeyButton("英文", modifier = Modifier.weight(1f), onTap = onEnglish)
             KeyButton("生僻字", modifier = Modifier.weight(1.4f), onTap = onRare)
             KeyButton("空格", modifier = Modifier.weight(2f), onTap = onSpace)
             KeyButton("⌫", modifier = Modifier.weight(1f), onTap = onBackspace)

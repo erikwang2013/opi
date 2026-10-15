@@ -235,20 +235,22 @@ class ImeState(
     }
 
     /**
-     * 「英文」键盘按钮（9 键底行；2026-10-10 新增）：**先按拼音上屏 pending、再切英文 26 键**。
+     * 「英文」键盘按钮（9 键底行；2026-10-10 新增；2026-10-15 起 14 键与笔画底行也各有一枚）：
+     * **先按拼音上屏 pending、再切英文 26 键**。
      * 语义单一来源 = [selectInputMode] 的英文档（2026-10-10 深夜裁决统一：面板的
      * 「英文26键」也走同一条——三处英文入口共用 [commitPendingAsPinyin]）。落盘照旧。
      */
     fun switchToEnglishKeyboard() = selectInputMode(InputMode.ENGLISH26)
 
     /**
-     * 9 键底行模式键的动作（2026-10-15 用户裁决「简繁按钮就只切换简繁」）：
-     * **只切简/繁**（PINYIN ⇄ TRADITIONAL），不再循环进英文 —— 9 键进英文走底行那枚
-     * 独立的 [英文] 键（[switchToEnglishKeyboard]）。
+     * 9 键 / 14 键 / 笔画 底行模式键的动作（2026-10-15 用户裁决「简繁按钮就只切换简繁」，
+     * 同日「统一成只切简繁」把 14 键与笔画也归到这条）：**只切简/繁**
+     * （PINYIN ⇄ TRADITIONAL），不再循环进英文 —— 这三盘进英文走各自底行那枚独立的
+     * [英文] 键（[switchToEnglishKeyboard]）。
      *
      * 走 [EngineController.switchLanguage]（与 [cycleMode] 的「中→繁」腿**同一条**）：
      * 方案不动（9 键仍是 9 键）、缓冲保留（2026-10-09 裁决「拼音保留可继续使用」）。
-     * 键面字 = 点它会切到哪（[nineKeyModeLabelOf]，ImeScreen.kt）。
+     * 键面字 = 点它会切到哪（[jianFanModeKeyLabelOf]，ImeScreen.kt）。
      */
     fun toggleTraditional() {
         val next =

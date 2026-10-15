@@ -29,6 +29,8 @@ import xyz.erik.opi.BuildConfig
  * · 版本 —— `android/app/build.gradle.kts` 的 `versionName`，经 `BuildConfig.VERSION_NAME`
  *   读到（**不写死字面量**，理由见 [AboutSectionTest] 的头注）；
  * · 版权 —— README「📄 许可证」段 + 各源文件 SPDX 头的 `2026 erik.xyz`；
+ *   2026-10-15 用户裁决「合并：只留关于节」⇒ 设置页尾那行独立的版权行（2026-10-09
+ *   裁决加的）已删，**版权只在本节出现**；这里是它唯一的落点。
  * · 项目地址 —— `scripts/nfpm.yaml` 的 `homepage`（README 里**没有**仓库地址）；
  * · 博客地址 —— 用户 2026-10-15 给的原话（`https://erik.xyz`）。
  *

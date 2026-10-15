@@ -88,7 +88,7 @@
 
 #### 3. 词库是「活」的，也有门禁守着
 - **多源整合（2026-10-11，用户裁决「主流开源词库去重整合」）**：rime-ice（雾凇）base+ext、rime-essay、chinese-xinhua 成语/歇后语、THUOCL 专业术语，加品牌/新词/注音三张人工表，去重后并入 `luna.opid`（9.6 万条 → 90 万条量级、33MB；首字母查询靠前缀层 top-N 截断保住延迟，实测与取舍见 `data/raw/LICENSES.md`）。⚠️ 合并产物因此**整体按 GPL-3.0 分发**（数据层；源码仍 MIT）
-- **简繁双库**：`luna.opid`（简体）+ `trad.opid`（繁体），两者都随包安装；繁体库缺失/损坏自动回退简体库。**入口**：Android / iOS 用键盘上的模式轮转键（`ImeScreen.kt` / `KeyboardViewController.swift`）；**fcitx5（Linux）2026-10-09 起有 `Ctrl+Shift+F`**（随包装 `trad.opid`，见 `docs/install/linux.md` §5.3）；macOS / Windows / 鸿蒙仍只有拼音⇄英文、拼音⇄符号（`Ctrl+'`、`tsf-opi/src/vk.rs` 的 `mode_hotkey`）——**还没有繁体入口**。引擎与数据侧的繁体能力本身是完整的
+- **简繁双库**：`luna.opid`（简体）+ `trad.opid`（繁体），两者都随包安装；繁体库缺失/损坏自动回退简体库。**入口**：Android 上 26 键用模式轮转键、9/14/笔画三盘用底行的简繁键（`ImeScreen.kt`）/ iOS 用键盘上的模式轮转键（`KeyboardViewController.swift`）；**fcitx5（Linux）2026-10-09 起有 `Ctrl+Shift+F`**（随包装 `trad.opid`，见 `docs/install/linux.md` §5.3）；macOS / Windows / 鸿蒙仍只有拼音⇄英文、拼音⇄符号（`Ctrl+'`、`tsf-opi/src/vk.rs` 的 `mode_hotkey`）——**还没有繁体入口**。引擎与数据侧的繁体能力本身是完整的
 - **单字全覆盖门禁**：GB2312 全量单字逐一断言有候选（`trad_coverage` 集成测试，字数判据写在测试里）。改词库若撞坏覆盖度，CI 直接红
 - **词库坏了绝不崩输入法**：装载策略各端统一 —— **坏路径一律返回 `Err`，不静默回退**（`engine-data/src/dictionary.rs` 的 `load_or_fallback` 注释写明此前的静默回退是有意删除的：UI 会误以为完整词库已加载）；只有**未提供路径**（含空串）时才用内置回退词库（`data/raw/fallback.tsv`，条数以该文件行数为准）。是否再从 `Err` 兜底由调用方决定：Android 的 `EngineLoader` 接住后用内置词库重试（`EngineLoader.kt` 的 `fallback()`），fcitx5 / TSF 上抛（`fcitx5-opi/src/lib.rs` / `tsf-opi/src/tsf.rs` 的装载调用点）
 - **词库分发通路**：Android 走 assets → filesDir（`EngineLoader.kt`）、fcitx5 走 XDG 数据目录且由 CMake 安装（`fcitx5-opi/cpp/CMakeLists.txt`）、Windows 走 `OPI_DICT_PATH` 环境变量 → DLL 同目录 → `%LOCALAPPDATA%\opi` → 内置回退（`tsf-opi/src/dict_path.rs`）。⚠️ **Windows 侧仍无打包步骤**，故开箱即用仍是内置回退词库 —— 通路已备、拷贝动作没有
