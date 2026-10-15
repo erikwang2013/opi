@@ -27,7 +27,8 @@ class SettingsTest {
 
     @Test
     fun `defaults are all on`() {
-        // 默认值 = 引擎既有行为。空文件/没配过 ⇒ 全开（不是全关！）。
+        // 默认值 = 产品缺省（2026-10-15 用户裁决「默认关闭模糊音、开启拼音纠错、简拼」；
+        // 其余仍全开）。空文件/没配过 ⇒ 取这组缺省（不是全关）。
         assertEquals(OpSettings(), OpSettings.fromIni(""))
         assertEquals(OpSettings(), OpSettings.fromIni("# 只有注释\n\n"))
     }
@@ -38,7 +39,8 @@ class SettingsTest {
         // 钉整行而不是 contains("Learn")：改名/改大小写/改空格都该在这里红。
         val ini = OpSettings().toIni()
         for (line in listOf(
-            "Learn=True", "ChinesePunct=True", "Fuzzy=True", "Jianpin=True",
+            // 模糊音缺省**关**（2026-10-15 用户裁决）：整行契约跟着翻。
+            "Learn=True", "ChinesePunct=True", "Fuzzy=False", "Jianpin=True",
             "ShiftToggle=True", "Skin=不改动", "CandidateFont=中",
         )) {
             assertTrue("缺少键行：$line\n$ini", ini.contains("$line\n"))
@@ -131,7 +133,8 @@ class SettingsTest {
     @Test
     fun `garbage value falls back to default`() {
         val s = OpSettings.fromIni("Fuzzy=maybe\nJianpin=\n")
-        assertTrue(s.fuzzy)
+        // 坏值/空值 ⇒ 回落到**缺省**。模糊音的缺省 2026-10-15 起是 false（用户裁决）。
+        assertFalse(s.fuzzy)
         assertTrue(s.jianpin)
     }
 
@@ -255,8 +258,10 @@ class SettingsTest {
         assertEquals(once, mergeIni(once, OpSettings()))
         assertFalse("保存后文件末尾多出空行：\n$once", once.endsWith("\n\n"))
         // 空行在**中间**照旧逐字保留（只有「表示结尾」的那一个空段被吸收）。
-        val kept = mergeIni("Learn=True\n\nFuzzy=True\n", OpSettings())
-        assertTrue(kept, kept.contains("Learn=True\n\nFuzzy=True\n"))
+        // ⚠️ 夹具里用 `Fuzzy=False`（= 新缺省，2026-10-15 裁决）—— 合并会把 Fuzzy 那行
+        // 改写成设置值，用 True 的话这条会在「值被改写」上红，而它要量的是**空行保留**。
+        val kept = mergeIni("Learn=True\n\nFuzzy=False\n", OpSettings())
+        assertTrue(kept, kept.contains("Learn=True\n\nFuzzy=False\n"))
     }
 
     @Test

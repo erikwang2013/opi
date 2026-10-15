@@ -126,7 +126,8 @@ impl Engine {
             fullwidth: Mode::default().default_fullwidth(),
             chinese_punct: true,
             quotes: Quotes::default(),
-            fuzzy: crate::fuzzy::FUZZY_ALL,
+            // 模糊音**缺省关**（2026-10-15 用户裁决；逐对掩码 0 = 全关）。
+            fuzzy: 0,
             correction: true,
             shuangpin_layout: 0,
             jianpin: true,

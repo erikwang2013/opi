@@ -248,8 +248,9 @@ fn apply_settings_lands_all_four_switches() {
     let mut s = crate::logic::TsfLogic::with_dict(Box::new(InMemoryDictionary::new()));
     assert_eq!(
         s.switches(),
-        (true, true, true, true),
-        "默认全开 = 引擎既有行为"
+        (true, true, false, true),
+        "缺省 = (学习 on, 中文标点 on, 模糊音 **off**, 简拼 on) —— 模糊音那条是 2026-10-15
+         用户裁决「默认关闭模糊音、开启拼音纠错、简拼」；其余仍是引擎既有缺省"
     );
     let off = Settings {
         learn: false,
@@ -263,8 +264,8 @@ fn apply_settings_lands_all_four_switches() {
     s.apply_settings(Settings::default(), std::path::Path::new(""));
     assert_eq!(
         s.switches(),
-        (true, true, true, true),
-        "回默认也要落上（不是一次性的）"
+        (true, true, false, true),
+        "回默认也要落上（不是一次性的；模糊音缺省 off）"
     );
 }
 

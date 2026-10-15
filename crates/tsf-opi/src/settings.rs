@@ -73,7 +73,8 @@ impl Default for Settings {
         Self {
             learn: true,
             chinese_punct: true,
-            fuzzy: true,
+            // 缺省 false = 关（2026-10-15 用户裁决「默认关闭模糊音、开启拼音纠错、简拼」）。
+            fuzzy: false,
             fuzzy_pairs: String::new(), // 空 = 未设置（回落到 fuzzy 布尔）
             jianpin: true,
             correction: true,

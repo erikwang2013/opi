@@ -113,8 +113,10 @@ fn length_preserving_fuzzy_hit_never_wins_the_exact_slot() {
     d.insert("li", "裡", 3_998_714_089);
     d.insert("ni", "你", 3_999_128_899);
     let mut e = engine(d);
+    // ⚠️ 2026-10-15（二）：模糊音**缺省关**（用户裁决）⇒ 本条前提要显式开。
+    e.set_fuzzy(true);
     // ⚠️ 2026-10-15：滤掉多音字补读音层（`polyphone.tsv`）为 `li` 加的字 —— 它们不属
-    // 于本夹具，会凭真库量级词频插到前面。本条钉的是**夹具这三个字**的次序。
+    // 于本夹具。本条钉的是**夹具这三个字**的次序。
     let got: Vec<String> = cands(&mut e, "li")
         .into_iter()
         .filter(|t| matches!(t.as_str(), "裏" | "裡" | "你"))

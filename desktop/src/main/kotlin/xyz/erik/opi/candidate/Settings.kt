@@ -53,7 +53,8 @@ import java.nio.file.Paths
 data class OpSettings(
     val learn: Boolean = true,
     val chinesePunct: Boolean = true,
-    val fuzzy: Boolean = true,
+    // 缺省 false = 关（2026-10-15 用户裁决「默认关闭模糊音」）。
+    val fuzzy: Boolean = false,
     /**
      * 模糊音**逐对**列表（2026-10-13 用户裁决「可多选类似 z=zh」）：
      * 逗号分隔组名，名字表 = [FUZZY_PAIR_NAMES]（顺序即引擎位序，见那个常量）。
@@ -164,7 +165,9 @@ data class OpSettings(
             return OpSettings(
                 learn = bool("Learn", true),
                 chinesePunct = bool("ChinesePunct", true),
-                fuzzy = bool("Fuzzy", true),
+                // 缺键回落 **false**（2026-10-15 用户裁决「默认关闭模糊音」）；
+                // 与 [OpSettings.fuzzy] 的数据类缺省、引擎 `Engine` 初值（掩码 0）三处同步。
+                fuzzy = bool("Fuzzy", false),
                 fuzzyPairs = map["FuzzyPairs"] ?: "",
                 jianpin = bool("Jianpin", true),
                 correction = bool("Correction", true),

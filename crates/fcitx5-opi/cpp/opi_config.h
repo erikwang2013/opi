@@ -97,7 +97,8 @@ FCITX_CONFIGURATION(
     OpiSettings,
     fcitx::Option<bool> learn{this, "Learn", "学习（记住选过的词）", true};
     fcitx::Option<bool> chinesePunct{this, "ChinesePunct", "中文标点（，。、与成对引号）", true};
-    fcitx::Option<bool> fuzzy{this, "Fuzzy", "模糊音（z/zh、n/l…）", true};
+    // 缺省 false = 关（2026-10-15 用户裁决「默认关闭模糊音」；引擎侧 `Engine` 的初值同步为 0）。
+    fcitx::Option<bool> fuzzy{this, "Fuzzy", "模糊音（z/zh、n/l…）", false};
     // 逐对多选（2026-10-13 用户裁决「可多选类似 z=zh」）：逗号分隔组名，名字表见
     // 引擎的 `fuzzy::pair_names`（zh/z,ch/c,sh/s,an/ang,en/eng,in/ing,n/l,f/h）。
     // **空 = 未设置 ⇒ 回落到上面的总开关**（老配置行为一字不变）；非空 ⇒ 以列表为准。

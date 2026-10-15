@@ -59,11 +59,14 @@ fn cands(e: &mut Engine, input: &str) -> Vec<String> {
 }
 
 #[test]
-fn defaults_are_both_on() {
-    // 既有行为不许被这两个开关改掉：新装的引擎两个都开。
+fn defaults_follow_the_2026_10_15_ruling() {
+    // 用户裁决（2026-10-15）：「默认关闭模糊音、开启拼音纠错、简拼」。
+    // ⚠️ 本条原为 `defaults_are_both_on`（模糊也默认开）—— 裁决改判后**改的是产品的
+    // 缺省**，开关本身的能力一字未动（下面各条仍在测「关掉就一条不剩」）。
     let e = engine();
-    assert!(e.fuzzy_enabled());
-    assert!(e.jianpin_enabled());
+    assert!(!e.fuzzy_enabled(), "模糊音缺省关");
+    assert!(e.jianpin_enabled(), "简拼缺省开");
+    assert!(e.correction_enabled(), "纠错缺省开");
 }
 
 #[test]
@@ -74,9 +77,12 @@ fn fuzzy_off_kills_the_variant_only_word() {
     // 各自的开关**，先关纠错做隔离 —— 否则「关掉某开关必须一条不剩」的断言
     // 会被纠错档供词（这是 2026-10-13 加纠错后当场红出来的，红得正确）。
     e.set_correction(false);
+    // 2026-10-15 起模糊**缺省关** ⇒ 这条先显式开（本条测的是「关掉它必须一条不剩」，
+    // 前提取自开关而不是缺省）。
+    e.set_fuzzy(true);
     assert!(
         cands(&mut e, "zongguo").contains(&"中国".to_string()),
-        "默认（模糊开）：zongguo 应当经整串变体 zhongguo 拿到「中国」"
+        "显式开模糊：zongguo 应当经整串变体 zhongguo 拿到「中国」"
     );
     e.set_fuzzy(false);
     assert!(
@@ -128,6 +134,7 @@ fn switches_are_independent() {
     // 简拼关、模糊开
     let mut e = engine();
     e.set_correction(false); // 隔离（见本文件纠错注）
+    e.set_fuzzy(true); // 2026-10-15 起缺省关 ⇒ 显式开（本条前提）
     e.set_jianpin(false);
     assert!(cands(&mut e, "nh").is_empty(), "简拼关 ⇒ nh 空");
     assert!(
@@ -201,7 +208,10 @@ fn mask_contract_is_eight_bits() {
     // 引擎侧类型就是 u8（8 位 = 8 组）；「int 入参的超范围钳制」在 FFI 层
     // （`setFuzzyPairs(i32)` 的钳制与它的门禁见 jni/c_abi 契约测试）。
     let mut e = engine();
-    assert_eq!(e.fuzzy_pairs(), FUZZY_ALL, "缺省 = 全开（既有行为）");
+    // 缺省 = 0（2026-10-15 裁决「默认关闭模糊音」）；全开掩码仍是 8 位契约本身。
+    assert_eq!(e.fuzzy_pairs(), 0, "缺省 = 全关（2026-10-15 裁决）");
+    e.set_fuzzy_pairs(FUZZY_ALL);
+    assert_eq!(e.fuzzy_pairs(), FUZZY_ALL, "写全开仍按位原样存读");
     e.set_fuzzy_pairs(0xFE);
     assert_eq!(e.fuzzy_pairs(), 0xFE, "掩码按位原样存读");
 }

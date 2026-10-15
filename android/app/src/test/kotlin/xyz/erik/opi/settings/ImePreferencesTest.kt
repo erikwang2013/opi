@@ -33,7 +33,9 @@ class ImePreferencesTest {
         assertEquals(InputMode.PINYIN9, p.inputMode)
         assertEquals(KeyboardModes(), p.keyboardModes)
         assertEquals(true, p.learn)
-        assertEquals(true, p.fuzzy)
+        // 模糊音缺省**关**（2026-10-15 用户裁决「默认关闭模糊音、开启拼音纠错、简拼」；
+        // 引擎侧 `Engine` 初值同步为 0）。
+        assertEquals(false, p.fuzzy)
         assertEquals(true, p.jianpin)
         assertEquals(SkinOption.FOLLOW, p.skin)
     }

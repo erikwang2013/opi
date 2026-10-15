@@ -93,7 +93,8 @@ class ImePreferences(private val store: PrefStore) {
         set(v) = store.put(KEY_LEARN, v)
 
     var fuzzy: Boolean
-        get() = store.getBoolean(KEY_FUZZY, true)
+        // 缺省 false = 关（2026-10-15 用户裁决「默认关闭模糊音」）；纠错/简拼仍缺省开。
+        get() = store.getBoolean(KEY_FUZZY, false)
         set(v) = store.put(KEY_FUZZY, v)
 
     var jianpin: Boolean
