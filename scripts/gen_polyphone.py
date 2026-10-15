@@ -138,9 +138,19 @@ def main() -> int:
         for r in sorted(rs):
             if r in known:
                 continue  # 词库已经能打出来 ⇒ 不是缺口，不收
-            # 落位词频：优先用**词库侧**该字的最大词频（同量纲，见 dump-keys 的注释），
-            # 词库不认识这个字（罕见）才退 Unihan 词次。
-            rows.append((ch, r, dict_freq.get(ch, pinlu.get(ch, {}).get(r, top))))
+            # 落位词频 = **该字在词库里的最大词频 × 该读音的语料份额**：
+            #   份额 = kHanyuPinlu 里这个读音的词次 ÷ 该字最大词次（缺证据 ⇒ 0）。
+            # 为什么不是「该字最大词频」整份给：那会让**冷读音**按整字的常用度落位 ——
+            # 实测踩过：`儿/ní`（儿 的罕读）凭 儿 的常用度排到 `ni` 候选第 2，压住 `你`。
+            # 份额制下：`儿/ní` 份额 0 ⇒ 沉到精确字组尾部（页 20 之后，实际看不见）；
+            # 有证据的读音（如 `行/háng` 这类带 kHanyuPinlu 的）则按真实份额落位。
+            # `么/mó`、`绿/lù` 同样是 0 ⇒ 落在各自音节的精确字组尾部 —— **可达**（翻页能找到），
+            # 不再像补这条之前那样「一个字都打不出来」。
+            share_num = pinlu.get(ch, {}).get(r, 0)
+            share_den = top  # 该字最大词次（0 = 该字无语料证据）
+            base = dict_freq.get(ch, 0)
+            freq = base * share_num // share_den if share_den else 0
+            rows.append((ch, r, freq))
     rows.sort(key=lambda t: (t[1], t[0]))  # 读音 → 字（与查表方向同序）
 
     # 参考量纲：词库里**所有单字条目**的最大词频 —— 表里的词频就是按它写的。
@@ -157,7 +167,7 @@ def main() -> int:
         # 静默退化成「不适用」（2026-10-15 实测踩过：补读音整层不生效）。
         f.write(f"# dict_max {dict_max}\n")
         f.write("#↑ 表内词频的参考量纲 = 取键转储里单字最大词频（引擎按活跃词库缩放）\n")
-        f.write("# 列：字\t读音\t词频（词库同量纲：该字在词库里的最大词频；词库无此字才退 Unihan 词次）\n")
+        f.write("# 列：字\t读音\t词频（词库同量纲：该字的词库最大词频 × 该读音的语料份额；缺证据 = 0）\n")
         for ch, r, freq in rows:
             f.write(f"{ch}\t{r}\t{freq}\n")
     print(f"写出 {out}：{len(rows)} 行（字 {len({c for c, _, _ in rows})} 个）")
