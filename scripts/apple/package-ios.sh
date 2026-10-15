@@ -82,8 +82,15 @@ for spec in "ios-arm64:aarch64-apple-ios:iphoneos" "ios-sim:aarch64-apple-ios-si
   staticlib="$PWD/$rustlib/libopi_ffi.a"
   common=(-import-objc-header ios/OpiFFI.h -module-name "$MODULE" -sdk "$sdk" -target "$target")
   swiftc "${common[@]}" -typecheck ios/*.swift
+  # ⚠️ 2026-10-16 加的 `-force_load`：拉成员不再依赖归档索引按符号查找，把静态库整棵链进来。
+  # 背景：iOS job 在 c639167 / 075a382 两连红，**签名逐字相同**（framework 里 `_opi_load`
+  # 没有定义、链接本身不报错），而同一镜像跑旧提交（ae9c49a）是绿的（树相关、两次复现）。
+  # 本地逐字节解析过归档：`__.SYMDEF` 在、索引里 `_opi_load` 在、定义成员在 —— 怀疑点落在
+  # 「索引/查找→拉成员」这条路上（也可能是对象层，见下面这行注释的判据）。
+  # 判据：若加 force_load 后**转绿** ⇒ 问题在索引/查找路径；若**同样红** ⇒ 在对象/ld64 层，
+  # 把这条留不留另行裁决（它本身只增不减正确链接的成员）。
   swiftc "${common[@]}" -O -emit-library ios/*.swift -o "$fw/$FMWK" \
-    -Xlinker "$staticlib" \
+    -Xlinker -force_load -Xlinker "$staticlib" \
     -Xlinker -install_name -Xlinker "@rpath/$FMWK.framework/$FMWK"
   # framework 的 Info.plist：`xcodebuild -create-xcframework` 只收**像 framework** 的目录，
   # 缺 plist / PackageType 不是 FMWK 会被拒。键值照 Xcode 的模板写。
