@@ -44,7 +44,8 @@ impl Engine {
         } else {
             // 缓冲用 composer 的原文（不是 `buffer()` —— 浏览态那个会返回标题，
             // 虽然浏览态的选中根本走不到这里，别把「走不到」当默认）。
-            let buffer = &self.composer.session().buffer;
+            // **克隆**：9/14 键那一臂要临时换缓冲做探针（`&mut self`），不能同时借着它。
+            let buffer = self.composer.session().buffer.clone();
             match self.scheme() {
                 // 双拼不支持「切一半」：解码只在**整串**能解析时才出候选（DFS 要求
                 // 到达键尾），选中即整段消耗 —— 回退臂给 None（走 commit_buffer）。
@@ -53,20 +54,14 @@ impl Engine {
                 // 收尾层若还按音节去切就是两层判据不同源 —— 整段消耗，与候选层一致。
                 Scheme::Shuangpin | Scheme::Wubi => None,
                 Scheme::Full | Scheme::Stroke => {
-                    segment_fallback(self.active_dict(), buffer, self.fuzzy, self.correction)
+                    segment_fallback(self.active_dict(), &buffer, self.fuzzy, self.correction)
                         .map(|fb| fb.suffix)
                         .filter(|suffix| !suffix.is_empty())
                 }
-                // 9/14 键：数字空间回退 —— 只消耗前缀的**键**，尾部键留缓冲接着编。
+                // 9/14 键：数字空间回退 —— 只消耗前缀的**键**，尾部键留缓冲接着编
+                // （尾巴长且整段读不出来时不留，见 [`Self::digit_tail_to_keep`]）。
                 // 字节切片安全：缓冲只收 ASCII（composer::input_key 的门）。
-                Scheme::Nine | Scheme::Fourteen => scheme_fallback_len(
-                    self.active_dict(),
-                    buffer,
-                    self.scheme(),
-                    self.active_pin(),
-                )
-                .map(|k| buffer[k..].to_string())
-                .filter(|suffix| !suffix.is_empty()),
+                Scheme::Nine | Scheme::Fourteen => self.digit_tail_to_keep(&buffer),
             }
         };
         match fallback {
@@ -77,5 +72,38 @@ impl Engine {
                 self.composer.commit_buffer();
             }
         }
+    }
+
+    /// 9/14 键回退的尾巴**该不该留**（用户裁决 2026-10-15，折中口径）。
+    ///
+    /// - **1–2 键：照旧留**（不探）。那是「下一音节刚起头」的主场景 —— `644269` 选完
+    ///   留 `9` 接着打下一个音，真词库里 `bugaoml` 的尾巴 `ml` 也靠这条活
+    ///   （`crates/opi-tools/tests/m2_integration.rs` 钉着）。两键以内**不押在词库覆盖上**。
+    /// - **≥3 键：自己出得来候选才留**，否则整段清空。
+    ///
+    /// ⚠️ 报障（用户原话「确认第一个候选词后，再次输入其他拼音无反应，候选词显示无匹」）：
+    /// 9 键连按同一个键能按出 `6444444` 这类长串 → 回退只吃前缀 `64` → 尾巴 `44444`
+    /// 是一段**整读不出来的死串**，而它在 9 键上**看不见**（拼音行按读数显示，读数空就
+    /// 留空 —— 2026-10-11 裁决「不落数字」仍在）⇒ 之后每一次按键都喂给它，看着就是
+    /// 「输入无反应」。判据用**候选层自己**回答（把缓冲临时换成尾巴问一遍
+    /// `candidates()`）—— 数字串结构上分不出「还在打的下一音节」与「乱按出来的垃圾」，
+    /// 长度分档 + 候选探测合起来才是这次裁决的口径。代价 = 一次候选计算（只在长尾巴被
+    /// 选中时发生，与这条路上已有的几次词库前缀查询同档）。
+    /// 26 键/笔画不走这里：它们的尾巴是**可见的**预编辑文本，留着不影响判断。
+    fn digit_tail_to_keep(&mut self, buffer: &str) -> Option<String> {
+        let suffix =
+            scheme_fallback_len(self.active_dict(), buffer, self.scheme(), self.active_pin())
+                .map(|k| buffer[k..].to_string())
+                .filter(|suffix| !suffix.is_empty())?;
+        if suffix.chars().count() < 3 {
+            return Some(suffix); // 短尾巴：照旧留（见头注两条理由）
+        }
+        // 探针：`commit_keep_suffix` 是薄壳（换缓冲、无别的副作用），问完换回来再收尾；
+        // 钉读音按缓冲自证（`active_pin`），探针期间自然不生效。
+        let saved = self.composer.session().buffer.clone();
+        self.composer.commit_keep_suffix(&suffix);
+        let matchable = !self.candidates(1).is_empty();
+        self.composer.commit_keep_suffix(&saved);
+        matchable.then_some(suffix)
     }
 }

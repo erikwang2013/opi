@@ -24,6 +24,12 @@
 //! `scheme::scheme_fallback_len`（复用 `Scheme::matches` 的按键类与 `pinyin::segment`
 //! 分段源 —— 与 9 键读数链同一套，不另起一套）；14 键走同一判定自然覆盖（`bugaom`）。
 //!
+//! ⚠️ **2026-10-15 收口（用户报障「确认候选后再打字没反应、候选栏无匹配」）**：9/14 键的
+//! 尾巴**≥3 键且自己出不来候选时不留**（1–2 键照旧留 —— 「下一音节刚起头」的主场景）。
+//! 理由与判据见 `Engine::digit_tail_to_keep`：数字尾巴在 9 键上**看不见**（拼音行按读数
+//! 显示、读数空就留空），一段整读不出来的长尾巴 = 用户无从察觉的死局。
+//! 26 键不吃这条：它的尾巴是**可见的**预编辑文本。
+//!
 //! ⚠️ **空格键有意例外**（两条回退腿同一条代码）：`Engine::input_space` 是「整段上屏」
 //! （无候选才提交原始缓冲的逃生口）——回退态下它提交首候选并**整段清空**，不收后缀
 //! （钉子：tests/adversarial_input.rs 的「提交过就必须清空缓冲」；另有
@@ -269,6 +275,76 @@ fn fourteen_key_covers_the_same_fallback() {
     );
     assert_eq!(e14.select(0), "你好");
     assert_eq!(e14.buffer(), "m", "尾部键留在缓冲里接着编");
+}
+
+/// **长垃圾尾巴不留**（2026-10-15 用户报障的回归门禁；口径 = 用户裁决的折中版）。
+///
+/// 现场：9 键连按同一个键按出长串 → 回退只吃前缀 → 尾巴 ≥3 键且**整段读不出来**，
+/// 而它在 9 键上**看不见**（拼音行按读数显示、读数空就留空）⇒ 用户看到「无匹配」、
+/// 之后打什么都像没反应。判据与两条理由见 `Engine::digit_tail_to_keep`。
+#[test]
+fn dead_long_digit_tail_is_dropped_whole() {
+    let mut e = engine(false);
+    e.set_scheme(Scheme::Nine);
+    // `64` = ni（整档有命中）+ `444` = `hi` 之后再凑不成段 ⇒ 三键死尾巴
+    type_str(&mut e, "64444");
+    let cands = texts(&e, 8);
+    assert_eq!(
+        cands.first().map(String::as_str),
+        Some("你"),
+        "回退档 = 前缀 `64`（ni）的整档（首位是 你，长词按今天的分档排在后面）"
+    );
+    assert_eq!(e.select(0), "你");
+    assert_eq!(
+        e.buffer(),
+        "",
+        "长死尾巴不许留：选中后整段清空（留它就复现「再打别的拼音没反应」）"
+    );
+    type_str(&mut e, "64");
+    assert!(
+        texts(&e, 8).contains(&"你".to_string()),
+        "清空之后接着打必须是活的"
+    );
+}
+
+/// 长尾巴的**反面**：≥3 键但**自己读得出来**（`226` = bao）⇒ 照旧留着接着编。
+/// 与上一条配对 —— 少了它，「清死尾巴」很容易被写成「凡长尾巴一律清」。
+#[test]
+fn live_digit_tail_is_still_kept() {
+    let mut e = engine(false);
+    e.set_scheme(Scheme::Nine);
+    // nihao（`64426`，5 键）+ `226`（= bao，夹具里有「包」）—— 别写成 `644269`：
+    // 那是「ni + hao」的分段写法，多出来的 `9` 会把尾巴变成 `9226`。
+    type_str(&mut e, "64426226");
+    let cands = texts(&e, 8);
+    assert!(
+        cands.contains(&"你好".to_string()),
+        "前缀档仍是 nihao 一族：{cands:?}"
+    );
+    assert_eq!(e.select(0), "你好");
+    assert_eq!(
+        e.buffer(),
+        "226",
+        "尾巴自己读得出来（bao → 包）⇒ 留着接着编"
+    );
+    assert!(
+        texts(&e, 8).contains(&"包".to_string()),
+        "留下的尾巴必须能出候选"
+    );
+}
+
+/// 短尾巴（1–2 键）**不探**、照旧留：那是「下一音节刚起头」的主场景，判定不许押在
+/// 词库覆盖上（真库里 `bugaoml` 的 `ml` 就靠这条 —— `crates/opi-tools/tests/
+/// m2_integration.rs::scheme_fallback_on_real_luna_dictionary` 钉着）。
+#[test]
+fn short_digit_tail_is_kept_without_probing() {
+    let mut e = engine(false);
+    e.set_scheme(Scheme::Nine);
+    // nihao（`64426`）+ `44`（两键：夹具里「44」读得出 hi 但 hi 无词条 ——
+    // 若探针管到两键，这条尾巴就会被清）
+    type_str(&mut e, "6442644");
+    let _ = e.select(0);
+    assert_eq!(e.buffer(), "44", "两键尾巴不探、照旧留");
 }
 
 /// 边界沿用：单键/垃圾串维持死（没有「音节对齐且查得到」的见证者）；`'` 是用户
