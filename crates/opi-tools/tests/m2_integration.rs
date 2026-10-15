@@ -178,12 +178,33 @@ fn scheme_fallback_on_real_luna_dictionary() {
     hit.set_scheme(Scheme::Nine);
     type_str(&mut hit, "837452");
     type_str(&mut nine, "8374529");
+    // ⚠️ **2026-10-15 改判（宽松兜底档）**：这两条的旧口径是「回退档与命中态**逐条相同**」
+    // —— 现在**尾巴本身也会出候选**（尾键 `9` 按首字母 `w` 起音），故九键那边多出一截
+    // w 一族的字/词。判据改成：**前缀那一截逐条相同**（锚定档在前），多出来的只能是尾巴的
+    // 字母一族；读数 = 命中态读数 + 尾字母。
+    // ⚠️ 顺序有讲究：读数缓存由 `candidates()` 写（`engine.rs` 那一处），**先各取一次候选**
+    // 再读 `display_buffer`。原来这条断言排在取候选之前 —— 两边读到的都是**空缓存**，
+    // `"" == ""` 恒真（2026-10-15 顺手发现的空转断言，改判时一并修）。
+    let (n_all, h_all) = (texts(&nine), texts(&hit));
+    assert_eq!(
+        hit.display_buffer(),
+        "te'si'la",
+        "命中态读数 = 首条候选（特斯拉）的拼音"
+    );
     assert_eq!(
         nine.display_buffer(),
-        hit.display_buffer(),
-        "读数照旧是首条候选的拼音（回退不把左列打空）"
+        "te'si'la'w",
+        "读数 = 命中态读数 + 尾字母（分词器把尾字母切成独立一段）"
     );
-    assert_eq!(texts(&nine), texts(&hit), "回退档 = 命中态整档，逐条相同");
+    assert_eq!(
+        n_all[..h_all.len()],
+        h_all[..],
+        "前缀那一截逐条相同（尾档只往后追加）"
+    );
+    assert!(
+        n_all.len() > h_all.len(),
+        "尾巴该补出 w 一族的候选：{n_all:?}"
+    );
     assert_eq!(nine.select(0), "特斯拉");
     assert_eq!(nine.buffer(), "9", "只消耗前缀键：尾部键留下接着编");
     // 接着编：`9` + `6` = 下一个音的键 → 与另开一台直打 `96` 逐条相同
@@ -215,14 +236,47 @@ fn scheme_fallback_on_real_luna_dictionary() {
     type_str(&mut full, "bugaom");
     assert_eq!(full.select(0), "不好吗");
     assert_eq!(full.buffer(), "", "命中态不丢尾：缓冲整段被消耗");
-    // 垃圾串维持死；空格**不上屏也不清缓冲**（9 键专属：缓冲是按键编码，提交原文 =
-    // 把数字打进字段 —— 2026-10-11 用户报障；与符号模式「关键字留在预编辑里」同理由）。
+    // ⚠️ **2026-10-15 改判（宽松兜底档）**：`55` 不再是死串 —— 尾巴 `55` 整段按
+    // **末键上最前的字母** `j` 起音（用户裁决「没匹配的用按钮上最前的开始匹配字、词」），
+    // 于是「有候选」那条腿接管：空格 = 提交首候选 + 清缓冲。
+    // **判据没丢、只是换了构造**：「9 键无候选时，空格不上屏也不清缓冲」现在只剩含 `'`
+    // 或无类键的输入能造出来（夹具版见
+    // `crates/engine-core/tests/nine_tail_guess.rs::tier_is_off_for_fourteen_key_separator_and_classless_keys`）。
     // 14/26 键的「打英文」逃生口仍是「提交原文」，见证者在 `segment_fallback.rs` /
-    // 本文件 133 行（`zxcvb`）。
-    let mut dead = luna();
-    dead.set_scheme(Scheme::Nine);
-    type_str(&mut dead, "55");
-    assert!(texts(&dead).is_empty(), "`55` 没有音节对齐的见证者，维持死");
-    assert_eq!(dead.input_key(' '), "", "9 键无候选：空格不上屏任何文本");
-    assert_eq!(dead.buffer(), "55", "也不清缓冲：退格改一键还能重来");
+    // 本文件上面的 `zxcvb`。
+    let mut junk = luna();
+    junk.set_scheme(Scheme::Nine);
+    type_str(&mut junk, "55");
+    let got = texts(&junk);
+    assert!(!got.is_empty(), "宽松兜底档：`55` 按末键首字母 `j` 出字");
+    assert!(
+        got.iter().take(3).all(|t| t.chars().count() == 1),
+        "前段出的是**字**（报障要的「字、词」里那半）：{got:?}"
+    );
+    assert!(
+        junk.display_buffer().ends_with('j'),
+        "拼音行把尾巴显示出来（尾字母）：{}",
+        junk.display_buffer()
+    );
+    assert!(!junk.select(0).is_empty(), "选中首候选有文本");
+    assert_eq!(junk.buffer(), "", "选中即清缓冲（既有语义）");
+    // 报障那一串（真库）：前缀档照旧 + 尾巴出字，且读数带上尾字母
+    let mut ni = luna();
+    ni.set_scheme(Scheme::Nine);
+    type_str(&mut ni, "6444444");
+    let tail_texts = texts(&ni);
+    assert_eq!(
+        tail_texts.first().map(String::as_str),
+        Some("你"),
+        "前缀档照旧（`64` = ni 一族）：{tail_texts:?}"
+    );
+    assert!(
+        tail_texts.len() > 3,
+        "尾巴还该补出 g 一族的字/词：{tail_texts:?}"
+    );
+    assert!(
+        ni.display_buffer().ends_with("'g"),
+        "拼音行 = 前缀首条读音 + 尾字母：{}",
+        ni.display_buffer()
+    );
 }

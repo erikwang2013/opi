@@ -92,11 +92,15 @@ fn digit_select_fetches_candidate_table_once() {
 
 /// 9 键回退腿的记账（2026-10-10 扩 9 键；与上一条同一件事的另一条腿）：本夹具走
 /// `Dictionary` 的**默认**按键类实现（全表 `visit_entries`，生产实现是区间枚举，
-/// 见 loader）—— **零 query**；命中态 1 扫。回退态（2026-10-11 改）：判定拆成
+/// 见 loader）—— 主档**零 query**；命中态 1 扫。回退态（2026-10-11 改）：判定拆成
 /// 「存在性 + 见证者」两步，故一次抓取 = 主扫(1) + 存在性(1) + 见证者 l 探测
 /// （本夹具的第一个 l 即中，1）+ 前缀重扫(1) = **4 扫**；点击 = 一次抓取 + 一次
 /// 收尾判定（存在性 + 见证者 = 2 扫），判定是同一个纯函数的重算
-/// （engine_segment.rs）—— 不多抓、零 query 这两条不变。
+/// （engine_segment.rs）—— 不多抓这条不变。
+/// ⚠️ **2026-10-15 改判（宽松兜底档）**：`q` 从 **0 变 1** —— 尾巴 `9` 的首字母 `w`
+/// 走一次前缀查询（`query_prefix_top` 默认实现经 `query_all` 落回 `query`）。统计口径
+/// 「零 query」只对**严格档**成立；本档每次抓取固定 ≤ 1 次（前段 1，后段同字母复用，
+/// 见 `candidates_scheme::tail_guess_hits`）。
 #[test]
 fn nine_key_fallback_accounting_is_bounded_scans_and_zero_queries() {
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -133,8 +137,8 @@ fn nine_key_fallback_accounting_is_bounded_scans_and_zero_queries() {
     let one_fetch = v.load(Ordering::Relaxed);
     assert_eq!(
         (one_fetch, q.load(Ordering::Relaxed)),
-        (4, 0),
-        "回退态一次抓取 = 主扫 + 存在性 + 见证者首探 + 前缀重扫，零 query"
+        (4, 1),
+        "回退态一次抓取 = 主扫 + 存在性 + 见证者首探 + 前缀重扫 + 尾字母 1 次（宽松兜底档）"
     );
     v.store(0, Ordering::Relaxed);
     assert_eq!(r.select(0), "你好");

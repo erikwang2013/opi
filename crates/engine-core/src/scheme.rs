@@ -156,6 +156,17 @@ impl Scheme {
         }
     }
 
+    /// 这个按键上**最前的字母**（= 键面第一字母：9 键 `'4'` → `'g'`；14 键首字母 == 键自身）。
+    ///
+    /// 唯一用途：宽松兜底档把读不出来的按键当「音节起头」时用它（用户裁决 2026-10-15
+    /// 「没匹配的用按钮上最前的开始匹配字、词」；落点在
+    /// [`crate::candidates_scheme::rank_and_pick_scheme`] 的尾档）。取不到类（`'0'`/`'1'`/
+    /// 字母）⇒ `None`，调用方据此**整档不启用**（与 [`Self::matches`]「取不到类即不匹配」
+    /// 同姿态）。
+    pub fn key_leading_letter(self, ch: char) -> Option<char> {
+        self.key_class(ch).and_then(|c| c.first()).copied()
+    }
+
     /// 前缀语义匹配：`pinyin` 的前 `input.len()` 个字母逐个落在 `input` 按键的类里。
     ///
     /// `Full`/`Stroke`/`Wubi` 退化成正前缀（`starts_with`）—— 生产路径不会用它们走
@@ -393,6 +404,25 @@ mod tests {
             "x 不是 14 键的键（属 z 键的类）"
         );
         assert_eq!(Scheme::Fourteen.key_class('2'), None);
+    }
+
+    #[test]
+    fn key_leading_letter_is_the_first_of_the_class() {
+        // 宽松兜底档（用户裁决 2026-10-15）只认这一个来源 —— 表动的字母就是它出的字母。
+        assert_eq!(Scheme::Nine.key_leading_letter('2'), Some('a'));
+        assert_eq!(Scheme::Nine.key_leading_letter('4'), Some('g'));
+        assert_eq!(Scheme::Nine.key_leading_letter('7'), Some('p'));
+        assert_eq!(Scheme::Nine.key_leading_letter('9'), Some('w'));
+        // 取不到类 ⇒ None（调用方据此整档不启用）
+        assert_eq!(Scheme::Nine.key_leading_letter('0'), None);
+        assert_eq!(Scheme::Nine.key_leading_letter('1'), None);
+        assert_eq!(Scheme::Nine.key_leading_letter('a'), None);
+        // 14 键：键类首字母 == 键自身（退化成字面前缀，故 14 键本版不启用本档）
+        assert_eq!(Scheme::Fourteen.key_leading_letter('b'), Some('b'));
+        assert_eq!(Scheme::Fourteen.key_leading_letter('q'), Some('q'));
+        // 非键方案恒 None
+        assert_eq!(Scheme::Full.key_leading_letter('a'), None);
+        assert_eq!(Scheme::Wubi.key_leading_letter('a'), None);
     }
 
     #[test]

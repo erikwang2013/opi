@@ -365,8 +365,9 @@ impl Engine {
                         self.user_boost,
                         self.scheme(),
                         self.active_pin(),
-                        // 简体优先：**只简体模式**开（繁体模式用的是繁体数据，那边繁体在前）
+                        // 简体优先：只简体模式开（繁体数据繁体在前）；`true` = 宽松兜底档（9 键）
                         s.mode == Mode::Pinyin,
+                        true,
                     );
                     // 读数随每次取候选刷新（逐条、已分词），**并与当时的缓冲绑存**
                     // （见 display_buffer：缓冲一变这对就作废，不许把旧缓冲的读数报给新状态）。

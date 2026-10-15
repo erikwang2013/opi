@@ -98,12 +98,25 @@ impl Engine {
         if suffix.chars().count() < 3 {
             return Some(suffix); // 短尾巴：照旧留（见头注两条理由）
         }
-        // 探针：`commit_keep_suffix` 是薄壳（换缓冲、无别的副作用），问完换回来再收尾；
-        // 钉读音按缓冲自证（`active_pin`），探针期间自然不生效。
-        let saved = self.composer.session().buffer.clone();
-        self.composer.commit_keep_suffix(&suffix);
-        let matchable = !self.candidates(1).is_empty();
-        self.composer.commit_keep_suffix(&saved);
+        // 探针：**只看严格档**（`tail_guess = false`）—— 宽松兜底档（2026-10-15 同日裁决，
+        // 见 `candidates_scheme::tail_guess`）会让任意尾巴都「出得来候选」，拿 `Engine::candidates`
+        // 去问就把本条裁决悄悄废掉（那条尾巴会永远留着）。判据必须是「严格档有没有候选」：
+        // 一条只有宽松档能读的尾巴仍然算死尾巴，整段清空。
+        // 顺带不碰 `scheme_readings`（`Engine::candidates` 会写那份缓存，这里直接调下层）。
+        let mode = self.mode();
+        let matchable = !crate::candidates::rank_and_pick_scheme(
+            self.active_dict(),
+            &self.learner,
+            &suffix,
+            1,
+            self.user_boost,
+            self.scheme(),
+            self.active_pin(),
+            mode == Mode::Pinyin,
+            false, // 宽松兜底档：**关**（本探针问的就是严格档）
+        )
+        .0
+        .is_empty();
         matchable.then_some(suffix)
     }
 }
