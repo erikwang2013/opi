@@ -193,6 +193,7 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
                     pinyin_len: input_len,
                     exact: true,
                     learned: user > 0,
+                    tail: false,
                 }),
             )
         })
@@ -212,6 +213,7 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
                 exact,
                 // 学过的一律排在三档之前（第 0 档）—— 见 `candidates_tiers.rs` 头注。
                 learned: learner.freq_of(&e.word) > 0,
+                tail: false,
             };
             (hanzi(e, exact), Some(meta))
         })

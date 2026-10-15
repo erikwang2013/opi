@@ -73,6 +73,7 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
                     exact,
                     // 同全键盘：学过的排第 0 档（见 `candidates_tiers.rs` 头注）。
                     learned: learner.freq_of(&e.word) > 0,
+                    tail: false,
                 };
                 let score = rank_score(e.freq, learner.freq_of(&e.word), boost)
                     .saturating_add(if exact { exact_bonus } else { 0 });
@@ -120,6 +121,7 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
                 pinyin_len: *plen,
                 exact,
                 learned: user > 0,
+                tail: false,
             }),
         ));
     }
@@ -200,6 +202,18 @@ const TAIL_KEY_CHARS_MAX: usize = 8;
 /// 每次字母前缀查询的取回上限（兜底档不追求穷尽；与 26 键那条路的 `PREFIX_MATCH_CAP` 同量级）。
 const TAIL_LETTER_CAP: usize = 256;
 
+/// 宽松兜底档产物的元数据：`tail = true` 让它落进「词组之后、联想单字之前」那一档
+/// （见 `Meta::tail` 的注记 —— 用户裁决 2026-10-16，实测判据在那边）。`pinyin_len` 按
+/// 「一个字母的读音」记 1（本档不看它，只是别留个 0 冒充长度）。
+fn tail_meta() -> Meta {
+    Meta {
+        pinyin_len: 1,
+        exact: false,
+        learned: false,
+        tail: true,
+    }
+}
+
 /// 三元组别名（与 `scan` 的产物同形）——直写会踩 clippy 的 `type_complexity`（同
 /// `polyphone::DigitHit` 的先例）。
 type TailHit = (Candidate, String, Option<Meta>);
@@ -213,9 +227,10 @@ type TailHit = (Candidate, String, Option<Meta>);
 /// 2. **后段**（逐键起音）：尾巴里每个键各取首字母出单字（每键 ≤ [`TAIL_PER_KEY_CHARS`]、
 ///    总 ≤ [`TAIL_KEY_CHARS_MAX`]）；**同字母只查一次**（连按同一个键是报障现场的常态）。
 ///
-/// 产物 `Meta = None` + 中间那格（读音）留空：`None` 让分档整段落到主块尾部；读音由调用方
-/// 在**产出非空**时统一改写成「前缀首条读音 + 尾字母」（见 `rank_and_pick_scheme` 那段），
-/// 本函数不自己造读数。一律不吃 `exact_bonus` —— 同「变体命中一律 exact=false」的硬纪律。
+/// 产物带 `tail_meta()`（`tail = true` ⇒ 分档插在词组之后、联想单字之前，见 `Meta::tail`）；
+/// 中间那格（读音）留空 —— 由调用方在**产出非空**时统一改写成「前缀首条读音 + 尾字母」
+/// （见 `rank_and_pick_scheme` 那段），本函数不自己造读数。一律不吃 `exact_bonus`
+/// —— 同「变体命中一律 exact=false」的硬纪律。
 ///
 /// 任一键取不到类（`0`/`1`/字母混进缓冲）⇒ 空（整档不启用，与 `Scheme::matches` 同姿态）。
 /// `seen` 与既有候选共用一份（前段字/前段词/后段字之间也不重复）。
@@ -283,7 +298,7 @@ fn tail_guess_hits<D: Dictionary + ?Sized>(
             continue;
         }
         *slot += 1;
-        out.push((c, String::new(), None));
+        out.push((c, String::new(), Some(tail_meta())));
     }
     // 后段（逐键起音）：每个键各取首字母、从同一个池里继续取字（每键 ≤ TAIL_PER_KEY_CHARS、
     // 总 ≤ TAIL_KEY_CHARS_MAX）；`seen` 保证与前段不重。
@@ -302,7 +317,7 @@ fn tail_guess_hits<D: Dictionary + ?Sized>(
             }
             taken += 1;
             per_key_total += 1;
-            out.push((c, String::new(), None));
+            out.push((c, String::new(), Some(tail_meta())));
         }
     }
     out

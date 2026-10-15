@@ -63,7 +63,7 @@ use crate::candidates::Candidate;
 /// （精确单字）与第 2 档（词组）**没有这个封顶**（2026-10-15 裁决：字全出完再出词）。
 pub(crate) const PER_LENGTH_SLOTS: usize = 6;
 
-/// 分档元数据：只有**主查询**（词库前缀命中）带它。
+/// 分档元数据：只有**主查询**（词库前缀命中）与**9 键宽松兜底档**带它。
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Meta {
     /// 词条拼音键的长度（`Entry::pinyin_len`）。分档用它判「精确」与联想的先后。
@@ -73,6 +73,15 @@ pub(crate) struct Meta {
     pub exact: bool,
     /// 用户词频 > 0（选过）—— 见头注第 0 档。
     pub learned: bool,
+    /// **9 键宽松兜底档**的产物（判据见 `candidates_scheme::tail_guess_hits`）。分档把它
+    /// 排在**词组之后、联想单字之前**（用户裁决 2026-10-16：严格解读永远优先）。
+    /// 报障串 `6444444` 真库实测：严格族 2418 条（精确单字 386）⇒ 尾巴排「词组之前」
+    /// 也要第 386 位、排「词组之后」第 1634 位 —— Android 只抓 64 条（翻页纯客户端），
+    /// 两种位置在那条串上都看不见；排到一切严格候选之前虽能看见，但会把 `你`/`迷航`
+    /// 这类首选顶下去（实测 `6444444` 首候选变「个」、`64426444` 的「迷航」掉到第 9），
+    /// 故不做。相对 075a382 的位置（联想+沉底之后）本档位仍提前了「联想」那一段。
+    /// 26 键那条路恒 `false`。
+    pub tail: bool,
 }
 
 /// 分档排序需要的最小视图。两个实现对应两条排名路各自的附加数据形态：
@@ -114,6 +123,9 @@ pub(crate) fn apply<T: Tiered>(items: Vec<T>) -> Vec<T> {
     let mut chars: Vec<T> = Vec::new();
     // 第 2 档：词组（精确 + 拼音延伸）——元数据（拼音长度）跟着走：按长度升序、同长度按分。
     let mut words: Vec<(T, usize)> = Vec::new();
+    // 第 2.5 档：**9 键宽松兜底档**的产物（`meta.tail`，见 `Meta::tail`）：排在词组之后、
+    // 联想单字之前 —— 顺序按进来的次序（本档自己那套 字→词→字 已由产出方排好）。
+    let mut pending: Vec<T> = Vec::new();
     // 第 3 档：拼音延伸的**单字**（联想；每个拼音长度封顶 `PER_LENGTH_SLOTS`）。
     let mut assoc: Vec<(T, usize)> = Vec::new();
     let mut per_slot: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
@@ -125,6 +137,10 @@ pub(crate) fn apply<T: Tiered>(items: Vec<T>) -> Vec<T> {
             tail.push(it);
             continue;
         };
+        if m.tail {
+            pending.push(it);
+            continue;
+        }
         if m.learned {
             learned.push(it);
             continue;
@@ -150,11 +166,18 @@ pub(crate) fn apply<T: Tiered>(items: Vec<T>) -> Vec<T> {
     words.sort_by_key(|(_, plen)| *plen);
     assoc.sort_by_key(|(_, plen)| *plen);
     let mut out = Vec::with_capacity(
-        learned.len() + chars.len() + words.len() + assoc.len() + sunk.len() + tail.len(),
+        learned.len()
+            + chars.len()
+            + words.len()
+            + pending.len()
+            + assoc.len()
+            + sunk.len()
+            + tail.len(),
     );
     out.extend(learned);
     out.extend(chars);
     out.extend(words.into_iter().map(|(it, _)| it));
+    out.extend(pending);
     out.extend(assoc.into_iter().map(|(it, _)| it));
     out.extend(sunk);
     out.extend(tail);

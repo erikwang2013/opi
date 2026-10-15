@@ -13,6 +13,7 @@
 //! 不静默跳过。
 
 use engine_core::Engine;
+use engine_core::Scheme;
 use engine_core::composer::Mode;
 use engine_core::symbols::SymbolEngine;
 
@@ -99,6 +100,41 @@ fn real_dict_multi_syllable_still_leads_with_the_word() {
     let got = texts(&e, 8);
     assert_eq!(got[0], "你好", "{got:?}");
     assert_eq!(got[1], "拟好", "精确同音词仍在第二位（按分）：{got:?}");
+}
+
+/// 真库：**9 键宽松兜底档的位置**（用户裁决 2026-10-16）—— 尾巴候选让位给严格解读：
+/// 排在**词组之后、联想单字之前**；`你` 仍是首位（尾巴不许顶掉报障串的首选）。
+///
+/// 报障串 `6444444` = `64`（ni/mi 一族）+ 尾巴 `44444`（g 一族）。实测（2026-10-16）：
+/// 严格族 2418 条（精确单字 386 + 词组/联想），尾巴 12 条在第 1634 位、联想紧随其后；
+/// 位置随词库与打分漂 ⇒ **只钉相对次序**。
+#[test]
+fn real_dict_nine_key_tail_sits_between_words_and_associations() {
+    let mut e = real_engine();
+    e.set_scheme(Scheme::Nine);
+    type_str(&mut e, "6444444");
+    let got = texts(&e, 4096);
+    let pos = |w: &str| {
+        got.iter()
+            .position(|t| t == w)
+            .unwrap_or_else(|| panic!("候选里没有 {w}：{:?}", &got[..20]))
+    };
+    // ① 尾巴不许顶掉严格解读的首选（2026-10-16 裁决的核心理由）。
+    assert_eq!(got[0], "你", "{:?}", &got[..20]);
+    // ② 尾巴在词组之后（你好 是词组的头几条）。
+    assert!(
+        pos("个") > pos("你好"),
+        "尾巴应在词组之后：个@{} 你好@{}",
+        pos("个"),
+        pos("你好")
+    );
+    // ③ 尾巴在联想单字之前（您 = nin，拼音延伸 3 字母 ⇒ 联想档）。
+    assert!(
+        pos("个") < pos("您"),
+        "尾巴应在联想之前：个@{} 您@{}",
+        pos("个"),
+        pos("您")
+    );
 }
 
 /// 真库引擎（入库资产 `android/app/src/main/assets/luna.opid`）。
