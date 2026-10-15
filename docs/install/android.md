@@ -110,6 +110,20 @@ cd android                      # 必须。仓库根、desktop/ 的 gradlew 都�
 ./gradlew clean                 # 根 build.gradle.kts 里注册的 Delete 任务
 ```
 
+**发布口径的产物落点 = 仓库根的 `dist/`**（与 Linux 侧 `build-packages.sh` 同一条约定，
+见 `docs/install/linux.md` 的「打包（`.deb` / `.rpm`）」一节）：`assembleRelease` 只是把它打在 gradle 的
+`app/build/outputs/apk/release/app-release.apk`，**要自己再拷一份**进 `dist/`，
+并按发布命名规范改名 —— 三件资产的名字形状一致，`gh release upload` 才不会传错：
+
+```bash
+cp android/app/build/outputs/apk/release/app-release.apk \
+   dist/opi_<版本>_android-release.apk        # 例：dist/opi_1.9.3_android-release.apk
+```
+
+⚠️ 2026-10-15 补：这条此前只存在于发版人的手上，v1.9.2/v1.9.3 两次都是**手工**拷的
+（`dist/` 里只有 deb/rpm，用户点名才发现）。APK 的 versionCode/versionName 用
+`aapt2 dump badging … | grep ^package` 核（`aapt2` 在 `$ANDROID_HOME/build-tools/<ver>/`）。
+
 【实测】`./gradlew testDebugUnitTest` → `BUILD SUCCESSFUL`，EXIT=0。**它不需要 Dart、也不需要 `.so`**：
 
 - 任务图里**没有** cargokit 那条（`./gradlew testDebugUnitTest --dry-run` → EXIT=0，`grep -c cargokit` 为 **0**）。对照：`./gradlew assembleRelease --dry-run` 的任务图里**有** `:rust_builder:android:cargokitCargoBuildOpi_ffiRelease`（`grep -c cargokit` 为 1）。
