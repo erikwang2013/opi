@@ -77,6 +77,26 @@ class SymbolCategoriesTest {
     }
 
     /**
+     * 2026-10-17 用户裁决：「％、＃、＄、＠、\、/、｛、｝、[、]、＝、＋、｜等等类似常用的，
+     * 往前面两页放，不常见不常用的就往后面放」。**前两页（前 16 = 8×2）逐位钉死**。
+     *
+     * 两页 = 16 的依据：桌面两端符号浏览页每页 8（`router.rs` 的 `PAGE_SIZE`；安卓是 8 列
+     * 网格，首屏即覆盖前 16+）。钉**逐位**而不只钉成员集合：用户要的是「放前面」，
+     * 成员断言分辨不出「在但排到第 5 页」—— 那正是这条改动要防的失败形态。
+     */
+    @Test
+    fun commonCategoryFrontTwoPagesFollowTheUserRuling() {
+        val f = File("src/main/assets/symbol_categories.tsv")
+        val common = SymbolCategories.parse(f.readText()).first { it.label == "常用" }
+        val want = listOf(
+            "，", "。", "、",
+            "％", "＃", "＄", "＠", "＼",
+            "／", "｛", "｝", "［", "］", "＝", "＋", "｜",
+        )
+        assertEquals("常用前两页（8×2）逐位不符", want, common.symbols.take(16))
+    }
+
+    /**
      * 2026-10-16 用户追加裁决（同日晚）：「加上数学、物理、化学符号，可以参考主流输入法的……
      * 类似 ％ ｛ ｝ [ ] 等等这些符号，不要重复」：常用补**全角标点族**（半角形在英文/中文
      * 类目里，不重复——这里要的是全角码位）与**物理/化学符号**。
