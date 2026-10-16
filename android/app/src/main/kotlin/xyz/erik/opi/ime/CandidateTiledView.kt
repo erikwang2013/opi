@@ -93,10 +93,6 @@ fun CandidateTiledView(
                             used += cell.units
                             TiledCell(
                                 text = cands.getOrElse(cell.index) { "" },
-                                // 序号 = **全列表**下标（平铺不分页序；与折叠行的页内
-                                // 序号两套并存，同一条候选在两个视图里可能数不同 ——
-                                // 折叠行的数要有「按数字选词」语义，这里只作序号）。
-                                ordinal = cell.index + 1,
                                 onTap = {
                                     router.handleCandidateAbsolute(cell.index)
                                     state.collapseIfNoCandidates()
@@ -133,11 +129,14 @@ fun CandidateTiledView(
     }
 }
 
-/** 平铺的一格：序号小字 + 候选大字（与折叠行同一「数字 + 文本」形态）。 */
+/**
+ * 平铺的一格：只画候选大字。
+ * 2026-10-17 随折叠行同步去掉「序号小字」（用户裁决「移动端候选词不要前面的数字」，
+ * 见 CandidateBar 顶注）—— 两个视图要还是同一形态，去掉也得一起去。
+ */
 @Composable
 private fun TiledCell(
     text: String,
-    ordinal: Int,
     onTap: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -151,24 +150,16 @@ private fun TiledCell(
             .clickable(onClick = onTap)
             .semantics {
                 role = Role.Button
-                contentDescription = "第 $ordinal 项 $text"
+                contentDescription = text
             },
         contentAlignment = Alignment.Center,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "$ordinal.",
-                fontSize = 13.sp,
-                color = p.barBufferFg,
-                modifier = Modifier.padding(end = 3.dp),
-            )
-            Text(
-                text,
-                fontSize = 22.sp,
-                color = p.keyFg,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+        Text(
+            text,
+            fontSize = 22.sp,
+            color = p.keyFg,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }

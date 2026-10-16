@@ -94,24 +94,18 @@ fun CandidateBar(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             for ((i, c) in candidates.withIndex()) {
-                // 可见序号 = **页内**下标 + 1（翻页后从 1 重数）。两条理由：
-                //   · 与数字选词的语义同源 —— 引擎里数字键选的是**页内索引**
-                //     （`composer.rs` 的数字键约定），写成全列表下标就与「按 3 选本页第 3 个」对不上；
-                //   · 与 Windows 候选窗同款（`CandidateWindow.kt` 的 `"$index."`，同样是页内）。
-                // ⚠️ 播报用的 `n` 与可见序号是**同一个值**（`"$n."`）—— 不许一处页内、一处全列表。
-                // （2026-10-09：曾整串去掉过一版 —— 用户澄清「候选词前的数字还要的，
-                //  多出来的是 9 键那串键位数字」，故恢复。）
-                val n = i + 1
+                // **候选前不显示序号**（2026-10-17 用户裁决「移动端候选词不要前面的数字」）。
+                // 演变：2026-10-09 曾两度翻面（去 → 用户澄清「数字还要的」恢复 → 今再去）——
+                // 今次是终态，别再按旧注释加回来。理由：手机端字母盘没有数字行，序号没有
+                // 「按数字选词」的对应动作（那是桌面两端键盘与数字行同义的语义，**桌面保留**：
+                // CandidateWindow.kt / linux 候选窗照旧带序号）。读屏播报同步去掉「第 N 项」——
+                // 「看得见什么就念什么」的旧纪律仍然成立，只是看得见的东西变了。
                 Row(
                     // clickable 必须在 padding 之前：反过来的话热区只覆盖文字本身
                     // （20sp 高 ≈ 24dp），远小于候选栏 44dp，边距区域点了没反应。
                     modifier = Modifier
                         .semantics {
-                            // ⚠️ 反转记录：此处原为**全列表**下标（`indexBase + i + 1`），理由是
-                            // 「翻页后仍唯一」。可见序号立起来之后那条理由不再成立 —— 同一项会出现
-                            // 两个数（看得见的是 3、念出来的是 11），两者只能留一个：留下的必须与
-                            // 看得见的一致。而「唯一」本身没丢：同一屏只渲染当前页，页内下标在本屏唯一。
-                            contentDescription = "第 $n 项 $c"
+                            contentDescription = c
                             // 长按删词是不可发现的交互：读屏至少要有一条能念出来的动作。
                             // 不往 contentDescription 里塞「长按可删除自造词」——候选每次刷新
                             // 8 条都念一遍太吵，而且对词典词（删不掉）是假承诺；
@@ -133,7 +127,6 @@ fun CandidateBar(
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("$n.", fontSize = 13.sp, color = p.barBufferFg, modifier = Modifier.padding(end = 3.dp))
                     Text(c, fontSize = 22.sp, color = p.keyFg)
                 }
             }
