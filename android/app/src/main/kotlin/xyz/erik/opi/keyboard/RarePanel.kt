@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * 生僻字键盘（对齐搜狗：**选部首 → 选笔画数 → 挑字**的浏览式查法）。
+ * 生僻字键盘（对齐主流输入法：**选部首 → 选笔画数 → 挑字**的浏览式查法）。
  *
  * 数据来自 [RareIndex]（Unihan 部首 + 总笔画数索引，覆盖扩展区），**不经过引擎**：
  * 面板直接提交字形（`onCommit`）。索引由调用方在**首次打开时**读资产并缓存

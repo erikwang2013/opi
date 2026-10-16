@@ -218,4 +218,53 @@ class DictsTest {
 
     private fun namesIn(dir: java.nio.file.Path): List<String> =
         Files.newDirectoryStream(dir).use { ds -> ds.map { it.fileName.toString() }.sorted() }
+
+    // ---- 内置词库**首启种子**（2026-10-16，康熙字典「全发」）----
+    // 与 Android `DictStore.seedBundled` / fcitx5 `opiSeedBundledDict` 语义一字不差：
+    // 种一次（标记门控）、用户删过的不复活、已有同名文件认账不覆盖、源缺不种也不打标记。
+
+    private fun seedStream(s: String = "丂\tkao\t4000\n") =
+        java.io.ByteArrayInputStream(s.toByteArray())
+
+    @Test
+    fun `seedBundledDict copies once and marks seeded`() {
+        val dir = Files.createTempDirectory("opi-seed")
+        var opens = 0
+        val open = { opens++; seedStream() as java.io.InputStream }
+        assertTrue("首次应种下", seedBundledDict("kangxi", dir, open))
+        assertEquals("丂\tkao\t4000\n", Files.readString(dir.resolve("kangxi.tsv")))
+        assertEquals(1, opens)
+        assertFalse("第二次不种（标记在）", seedBundledDict("kangxi", dir, open))
+        assertEquals("源不重复读", 1, opens)
+    }
+
+    @Test
+    fun `seedBundledDict never resurrects a deleted dict`() {
+        val dir = Files.createTempDirectory("opi-seed")
+        assertTrue(seedBundledDict("kangxi", dir) { seedStream() })
+        Files.delete(dir.resolve("kangxi.tsv")) // 用户在词库页删了
+        assertFalse("删过的不许复活", seedBundledDict("kangxi", dir) { seedStream() })
+        assertFalse(Files.exists(dir.resolve("kangxi.tsv")))
+    }
+
+    @Test
+    fun `seedBundledDict keeps an existing file untouched`() {
+        val dir = Files.createTempDirectory("opi-seed")
+        Files.writeString(dir.resolve("kangxi.tsv"), "用户自己的\n")
+        var opens = 0
+        assertFalse("已有同名文件：认账、不覆盖", seedBundledDict("kangxi", dir) { opens++; seedStream() })
+        assertEquals("用户文件原样", "用户自己的\n", Files.readString(dir.resolve("kangxi.tsv")))
+        assertEquals("不读源", 0, opens)
+        assertFalse("且已打标记：下次也不种", seedBundledDict("kangxi", dir) { opens++; seedStream() })
+        assertEquals(0, opens)
+    }
+
+    @Test
+    fun `seedBundledDict missing source is a noop without marking`() {
+        val dir = Files.createTempDirectory("opi-seed")
+        assertFalse("源缺（资源没打进包）：不种", seedBundledDict("kangxi", dir) { null })
+        assertFalse("标记不许建 —— 下次还有机会", Files.exists(dir.resolve(".seeded-kangxi")))
+        assertTrue("源回来了就种得下", seedBundledDict("kangxi", dir) { seedStream() })
+        assertTrue(Files.isRegularFile(dir.resolve("kangxi.tsv")))
+    }
 }

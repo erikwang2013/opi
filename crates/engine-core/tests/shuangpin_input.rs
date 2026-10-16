@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! 双拼**端到端**门禁（2026-10-13 用户裁决「搜狗同款全套」）：经 `Engine::candidates`
+//! 双拼**端到端**门禁（2026-10-13 用户裁决「主流同款全套」）：经 `Engine::candidates`
 //! 走完整链路（键序 → 解码 → 标准全拼管线 → 分档），不是只测解码函数。
 //!
 //! 每套布局打**那套自己的键**（键位表见 `shuangpin_tables.rs`，抽查的值与 libime

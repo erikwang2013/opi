@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! 双拼方案名字表的**锁步门禁**（2026-10-14，搜狗式设置面 M2）：
+//! 双拼方案名字表的**锁步门禁**（2026-10-14，主流式设置面 M2）：
 //! Android 的 `SHUANGPIN_LAYOUTS_ANDROID`（设置页下拉与名字→下标换算的名字源）必须与
 //! 引擎 `crates/engine-core/src/shuangpin_tables.rs`（**生成物**）的 `SHUANGPIN_TABLES`
 //! 表序**同序同名** —— 顺序即 FFI 下标（`setShuangpinLayout(i)` 的口径），漂一头的表现是
@@ -32,7 +32,7 @@ class ShuangpinLayoutsLockstepTest {
     @Test
     fun androidLayoutNamesMatchTheEngineOrder() {
         val names = engineNames()
-        assertEquals("六套生成表该都在（搜狗同款全套）", 6, names.size)
+        assertEquals("六套生成表该都在（主流同款全套）", 6, names.size)
         assertEquals("Android 名字表必须与引擎同序同名（序 = FFI 下标）", names, SHUANGPIN_LAYOUTS_ANDROID)
     }
 

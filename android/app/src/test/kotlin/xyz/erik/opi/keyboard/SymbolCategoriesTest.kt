@@ -55,4 +55,47 @@ class SymbolCategoriesTest {
             assertTrue("缺符号 $s", s in all)
         }
     }
+
+    /**
+     * 2026-10-16 用户裁决「符号中常用要加上数学符号」：**常用类目**必须含这批常用数学符号
+     * （原有的 × ÷ ± ≈ ≠ ≤ ≥ √ ∞ π 之上再补的一组）。这批字面是「面板上真用得到」的
+     * 确认集合 —— 与生成器 `scripts/gen_symbol_categories.py` 的「常用」清单同步。
+     */
+    @Test
+    fun commonCategoryCarriesTheMathSymbols() {
+        val f = File("src/main/assets/symbol_categories.tsv")
+        val common = SymbolCategories.parse(f.readText()).first { it.label == "常用" }
+        val math = listOf(
+            "×", "÷", "±", "≈", "≠", "≤", "≥", "√", "∞", "π",
+            "∵", "∴", "∝", "≌", "≡", "≢", "≅", "∼", "≪", "≫",
+            "∠", "⊥", "∥", "⌒", "∈", "∉", "∋", "⊂", "⊃", "⊆",
+            "⊇", "∪", "∩", "∅", "∀", "∃", "⊕", "⊗", "∫", "∬",
+            "∮", "∑", "∏", "∂", "∇", "∆", "′", "″",
+        )
+        val missing = math.filter { it !in common.symbols }
+        assertTrue("常用类目缺数学符号：$missing", missing.isEmpty())
+    }
+
+    /**
+     * 2026-10-16 用户追加裁决（同日晚）：「加上数学、物理、化学符号，可以参考主流输入法的……
+     * 类似 ％ ｛ ｝ [ ] 等等这些符号，不要重复」：常用补**全角标点族**（半角形在英文/中文
+     * 类目里，不重复——这里要的是全角码位）与**物理/化学符号**。
+     */
+    @Test
+    fun commonCategoryCarriesPhysicsChemistryAndFullwidthSymbols() {
+        val f = File("src/main/assets/symbol_categories.tsv")
+        val common = SymbolCategories.parse(f.readText()).first { it.label == "常用" }
+        val more = listOf(
+            // 全角标点族（主流输入法常用同款；与英文/中文类目的半角形是**不同码位**）
+            "％", "＃", "＆", "＠", "＊", "／", "＼",
+            "｛", "｝", "［", "］", "〔", "〕", "＜", "＞", "＝", "＋", "－", "＿", "＾", "｜",
+            "「", "」", "『", "』",
+            // 物理（欧姆/微/埃/华氏度）
+            "Ω", "µ", "Å", "℉",
+            // 化学（可逆反应）
+            "⇌",
+        )
+        val missing = more.filter { it !in common.symbols }
+        assertTrue("常用类目缺物理/化学/全角符号：$missing", missing.isEmpty())
+    }
 }

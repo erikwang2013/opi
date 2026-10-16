@@ -12,7 +12,7 @@
 //     （缺省 $HOME/.config/...），键是 `Theme=` 与 `DarkTheme=`
 //     （本机该文件就是 Theme=deepin-light / DarkTheme=deepin-dark / UseDarkTheme=True）。
 //   · ⚠️ 这是**框架级**设置：面板对所有输入法只有一份主题，换了 OPI 皮肤，
-//     搜狗等其它输入法的候选面板也跟着变。用户选单里的「不改动」即不介入。
+//     其它输入法的候选面板也跟着变。用户选单里的「不改动」即不介入。
 //
 // 两段式（为可测性拆开）：
 //   opiPatchClassicuiTheme(theme)  纯文件操作，返回写没写成功 —— 面板驱动直接测它；

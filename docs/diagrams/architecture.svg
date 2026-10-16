@@ -8,7 +8,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 852" width="1180" height="852"
      role="img" aria-labelledby="archTitle archDesc">
   <title id="archTitle">OPI 架构设计</title>
-  <desc id="archDesc">五层架构：客户端层（已验证三端 Android/Linux/Windows；草案两端 Apple 两平台 iOS·macOS 与鸿蒙 HarmonyOS，三处代码均未经编译）、出口层（三个薄壳 opi-ffi 双 ABI、fcitx5-opi、tsf-opi；C 出口由 Apple 与鸿蒙草案复用）、引擎层（engine-core 核心模块 + Engine 门面，另有候选扩展档 jianpin.rs/fuzzy.rs 与平台中立键路由 router.rs/keys.rs）、数据层（engine-data 的 .opid 格式/校验/mmap/回退 + 用户词落盘）、构建管线（opi-tools 编译与校验）。依赖自下而上。</desc>
+  <desc id="archDesc">五层架构：客户端层（已验证三端 Android/Linux/Windows；Apple 两平台（iOS·macOS）已在 CI 真编译（未签名）、鸿蒙 HarmonyOS 草案未经编译）、出口层（三个薄壳 opi-ffi 双 ABI、fcitx5-opi、tsf-opi；C 出口由 Apple 与鸿蒙草案复用）、引擎层（engine-core 核心模块 + Engine 门面，另有候选扩展档 jianpin.rs/fuzzy.rs 与平台中立键路由 router.rs/keys.rs）、数据层（engine-data 的 .opid 格式/校验/mmap/回退 + 用户词落盘）、构建管线（opi-tools 编译与校验）。依赖自下而上。</desc>
 
   <defs>
     <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -159,7 +159,7 @@
     <rect x="30" y="636" width="1120" height="100" rx="14" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
     <rect x="46" y="624" width="112" height="24" rx="12" fill="#2E8B80"/>
     <text x="102" y="641" text-anchor="middle" font-size="12.5" font-weight="700" fill="#FFFFFF">数据层</text>
-    <text x="170" y="641" font-size="11.5" fill="#8A948F">engine-data —— 词库的 .opid 格式、校验与 mmap 装载；文件 IO（用户词落盘）在这一层，engine-core 保持零 IO</text>
+    <text x="170" y="641" font-size="11.5" fill="#8A948F">engine-data —— 词库的 .opid 格式、校验与 mmap 装载、导入词库 *.tsv 解析；文件 IO（用户词落盘）在这一层，engine-core 保持零 IO</text>
 
     <g>
       <rect x="30" y="658" width="262" height="62" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
@@ -179,7 +179,7 @@
     <g>
       <rect x="888" y="658" width="262" height="62" rx="10" fill="#FAF6F5" stroke="#EBD8D4" stroke-width="1.5"/>
       <text x="904" y="681" font-size="13" font-weight="700" fill="#22272E">dictionary</text>
-      <text x="904" y="701" font-size="10.5" fill="#D9553F">损坏 / 缺失 → 回退内置 35 词，绝不崩溃</text>
+      <text x="904" y="701" font-size="10.5" fill="#D9553F">主库 + 导入层叠加 · 损坏/缺失回退内置 35 词</text>
     </g>
 
     <!-- 层间箭头：数据 ← 构建管线 -->
@@ -207,7 +207,7 @@
       <path d="M680 819 L708 819"/>
     </g>
     <text x="742" y="799" text-anchor="middle" font-size="9.5" fill="#6B7671">校验和 / 顺序 / 覆盖率</text>
-    <text x="1000" y="823" text-anchor="middle" font-size="10.5" fill="#6B7671">scripts/gen_luna_dict.py · gen_trad_dict.py</text>
+    <text x="1000" y="823" text-anchor="middle" font-size="10.5" fill="#6B7671">scripts/gen_luna_dict.py · gen_trad_dict.py · gen_kangxi_dict.py</text>
 
   </g>
 </svg>

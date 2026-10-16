@@ -186,7 +186,7 @@ enum ModeKeyTables {
             // 键面字 = **点它会切到哪**（2026-10-12 晚裁决，见 KeyboardViewController 的
             // modeKeyLabel 注释），不是写死的 "中/英"。
             // 长按 = 打开输入模式面板（2026-10-14）：Android 从工具条进，iOS 没有工具条，
-            // 长按模式键是**同一件事的 iOS 说法**（搜狗在 iOS 上也是长按中/英出菜单）。
+            // 长按模式键是**同一件事的 iOS 说法**（主流输入法在 iOS 上也是长按中/英出菜单）。
             KeySpec(modeLabel, function: .cycleMode, longPressFunction: .showModes),
             KeySpec("空格", keyval: OpiKey.space, fallback: .text(" "), widthUnits: 5),
             KeySpec("回车", keyval: OpiKey.ret, fallback: .text("\n"), widthUnits: 1.6),
@@ -245,7 +245,7 @@ enum ModeKeyTables {
         // ⚠️ 本端每键**单一字号**（Android 是「字母大、数字小」两级）—— 见 README。
         let letterSize: CGFloat = big ? 30 : 21
 
-        // ---- 左列：标点（搜狗同款一列）----
+        // ---- 左列：标点（主流同款一列）----
         // 发送键都取引擎中文标点表（punctuation.rs 的 CHINESE_PUNCT）**已有的键**：
         // `,`→，`.`→。`\`→、`?`→？`!`→！ —— 与 26 键的 `,` 是**同一条路**
         // （不是 UI 直提）。

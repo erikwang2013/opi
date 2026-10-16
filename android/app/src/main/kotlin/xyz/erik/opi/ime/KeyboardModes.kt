@@ -4,7 +4,7 @@
 package xyz.erik.opi.ime
 
 /**
- * 「键盘模式」（2026-10-09，对齐搜狗移动端）。**纯界面状态**（除繁体外）：
+ * 「键盘模式」（2026-10-09，对齐主流移动输入法）。**纯界面状态**（除繁体外）：
  * 繁体是**引擎模式**（EngineMode.TRADITIONAL），不在这里存 —— 菜单里的
  * 「繁体模式」项直接读/写 [xyz.erik.opi.engine.EngineController] 的 mode。
  *

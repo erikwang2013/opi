@@ -185,6 +185,11 @@ cargo build --release -p tsf_opi --target x86_64-pc-windows-msvc
 - 四个候选全败 → 内置回退词库，**服务照常创建**（源码明写：服务创建不出来会让用户看到"输入法整个不在"，比词库小更糟）。
 - 第 2 级取的是**本 DLL 的目录**，不是宿主 EXE 的路径、也不是当前工作目录（`com_server::own_module_path` 用 `GetModuleHandleExW` 的 `FROM_ADDRESS` 反查自己的模块）。
 
+**桌面窗的「词库」页与导入词库（2026-10-14 / 2026-10-16）**：Windows 的 Compose 设置窗
+（与 TSF DLL 同一个 MSI 分发）有「词库」页，管 `%LOCALAPPDATA%\opi\dicts\*.tsv`
+（导入 / 启停 / 删除）——与上面第 3 级同一条目录约定；**康熙字典随包**，开窗时
+首启种子一次（之后照常启停，删过不复活）。生效时机 = **下次激活**（TSF 在引擎装载时读该目录）。
+
 **词库文件从哪来？**
 
 `luna.opid` **不在 git 里**（`data/generated/.gitignore` 忽略它，只放行 `fallback.opid` 与 `trad.opid`）。
@@ -501,7 +506,7 @@ TSF 侧**没有在线刷新通道**：`tsf.rs` 的 `Activate` 会重读一次这
 `{"type":"reload"}` 消息即可即时生效 —— 要同时改线协议两侧（`candidate_io.rs` 与
 `desktop/.../Protocol.kt`），**本轮没做**。
 
-⚠️ **2026-10-12 布局改过**（用户裁决「布局和功能参考搜狗输入法」）：设置窗从单列长滚动
+⚠️ **2026-10-12 布局改过**（用户裁决「布局和功能参考主流输入法」）：设置窗从单列长滚动
 改成**左分类导航 + 右内容 + 底部状态行**（与 Linux 同一份代码，`SettingsWindow.kt`）。
 Windows 上只出**常用 / 状态栏 / 符号与表情 / 关于**四页 —— **按键**（`ShiftToggle`）与
 **外观**（`Skin` 是 fcitx5 主题）两页不出：`crates/tsf-opi/src/settings.rs` 的读侧不认

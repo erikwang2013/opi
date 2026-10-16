@@ -7,7 +7,7 @@ import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.engine.InputScheme
 
 /**
- * 「输入模式」= 键盘布局 × 引擎方案 × 语言模式的组合（2026-10-09，对齐搜狗移动端）。
+ * 「输入模式」= 键盘布局 × 引擎方案 × 语言模式的组合（2026-10-09，对齐主流移动输入法）。
  *
  * ⚠️ 三根轴分清楚，别混：
  *   · [InputScheme]（引擎）：按键 → 字母类（9 键 / 14 键 / 笔画 / 全键盘）；
@@ -47,7 +47,7 @@ enum class InputMode(
     WUBI(InputScheme.WUBI, EngineMode.PINYIN),
     ;
 
-    /** 菜单里的名字（与搜狗同款措辞）。 */
+    /** 菜单里的名字（与主流同款措辞）。 */
     val label: String
         get() = when (this) {
             PINYIN26 -> "拼音26键"

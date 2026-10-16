@@ -217,6 +217,11 @@ internal fun importDict(src: Path, dir: Path): Path {
     return dst
 }
 
+/** 资源锚点：classpath 根下的 `/kangxi.tsv` 靠一个**类**的 classloader 取
+ *（别拿 `DictsPage::class` —— 它是函数不是类，编译不过）。词库种子的读取
+ *（SettingsWindow 启动时）就用它。 */
+internal object DictsResources
+
 /** 删一个词库（UI 侧先弹确认框，与「清除用户词库」同一条惯例）。返回是否真删了。 */
 internal fun deleteDict(dir: Path, name: String): Boolean =
     try {
@@ -224,6 +229,39 @@ internal fun deleteDict(dir: Path, name: String): Boolean =
     } catch (_: Exception) {
         false
     }
+
+/**
+ * 内置词库**首启种子**（2026-10-16，康熙字典「全发」）：把随包资源里的词库拷进目录
+ * **一次** —— 之后它就是普通导入词库。与 Android `DictStore.seedBundled`、fcitx5
+ * `opiSeedBundledDict` **语义一字不差**：标记 `.seeded-<name>` 门控（用户删过的不
+ * 复活，与 [deleteDict] 对偶）；已有同名文件认账、不覆盖、打标记；[open] 返回 null
+ * （资源没打进包）⇒ 不种**也不打标记**（下次进页还有机会）。返回 = 本次是否真的种下。
+ */
+internal fun seedBundledDict(name: String, dir: Path, open: () -> java.io.InputStream?): Boolean {
+    val marker = dir.resolve(".seeded-$name")
+    if (Files.exists(marker)) return false
+    // 打不上标记只影响「下次还判一遍」，不拦种（种下的文件本身就是幂等判据的一部分）
+    val mark = { try { Files.createFile(marker) } catch (_: Exception) { /* 见上 */ } }
+    try {
+        Files.createDirectories(dir)
+    } catch (_: Exception) {
+        return false
+    }
+    val target = dir.resolve("$name.tsv")
+    if (Files.exists(target)) {
+        mark()
+        return false
+    }
+    val src = open() ?: return false
+    return try {
+        src.use { ins -> Files.copy(ins, target) }
+        mark()
+        true
+    } catch (_: Exception) {
+        try { Files.deleteIfExists(target) } catch (_: Exception) { /* 列表照列、用户可删 */ }
+        false
+    }
+}
 
 /** 解析停用名单：逗号切、去空白、丢空段（容错与 `fuzzyPairSet` 同调）。空串 = 空集。 */
 internal fun parseDisabledDicts(v: String): Set<String> =

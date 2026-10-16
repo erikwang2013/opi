@@ -213,7 +213,7 @@ fn full_scheme_digits_still_select_through_router() {
 
 // ---- 显示用缓冲（2026-10-09：9 键左侧要显示「拼音读数」）----
 
-/// 9 键的引擎缓冲是数字串；**显示层**要的是首条候选的拼音（搜狗 9 键候选栏左侧
+/// 9 键的引擎缓冲是数字串；**显示层**要的是首条候选的拼音（主流输入法 9 键候选栏左侧
 /// 那格「输入时显示的拼音」）。FFI 的 buffer 出口读 `display_buffer`。
 #[test]
 fn nine_key_display_buffer_is_the_top_candidate_pinyin() {
@@ -231,7 +231,7 @@ fn nine_key_display_buffer_is_the_top_candidate_pinyin() {
     assert_eq!(
         e.display_buffer(),
         "ni'hao",
-        "读数带分词（搜狗「显示分词」同款）"
+        "读数带分词（主流输入法「显示分词」同款）"
     );
 
     // 乱按（`999`）：**2026-10-15 起有候选**（宽松兜底档 —— 尾巴的键上首字母 `w` 起音，
@@ -276,7 +276,7 @@ fn display_buffer_is_raw_outside_nine() {
     assert_eq!(e14.display_buffer(), e14.buffer());
 }
 
-// ---- 分词键（`'`，2026-10-09 搜狗式「就在这里断」）----
+// ---- 分词键（`'`，2026-10-09 主流式「就在这里断」）----
 
 /// 分词把候选**约束到音节边界**上：`64'26` = ni|an ⇒ 命中 nian、不命中 nihao；
 /// 不带分词时两者都能前缀匹配；断点不对齐（`644'26`，断在 nih 后）谁都不匹配。

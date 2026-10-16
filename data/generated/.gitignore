@@ -5,4 +5,6 @@
 # 因为 android 资产另有它的部署副本（android/app/src/main/assets/）；wubi 暂无部署副本。
 !wubi86.opid
 !wubi98.opid
+# kangxi（2026-10-16）：康熙字典适配词库，生成器 scripts/gen_kangxi_dict.py。
+!kangxi.opid
 !.gitignore

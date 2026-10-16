@@ -57,7 +57,7 @@ FCITX_CONFIG_ENUM_NAME_WITH_I18N(OpiSkin, N_("不改动"), N_("浅色"), N_("深
                                  N_("柠檬"), N_("晚霞"), N_("星光"), N_("紫藤"),
                                  N_("松林"));
 
-// 双拼布局（2026-10-13 用户裁决「搜狗同款全套」）。
+// 双拼布局（2026-10-13 用户裁决「主流同款全套」）。
 // ⚠️ 与皮肤同一条：**字面值就是这里的字符串**（unmarshallOption 按字面匹配），
 // 顺序 = 枚举序 = i18n 宏名字序 = 引擎 `shuangpin_tables.rs` 的 `SHUANGPIN_TABLES`
 // 表序（applyOpiSettings 传的是 `static_cast<int>` 下标，那个表序就是下标口径）。
@@ -165,6 +165,16 @@ inline void applyOpiSettings(const OpiSettings &settings) {
     // 但两条都只改运行期状态；分开写只为可读）。
     if (opi_fcitx5_set_scheme != nullptr) {
         opi_fcitx5_set_scheme(static_cast<int32_t>(*settings.pinyinMethod));
+    }
+    // 内置词库首启种子（2026-10-16，康熙字典「全发」）：**必须在 opiDictsSync 之前**
+    // ——种子先落进目录，这一趟扫描才看得见它。落点与 symbol_categories 同一条查找路
+    //（Type::Data + opi/）；老包没装那份 ⇒ locate 空 ⇒ 空操作。
+    {
+        const auto bundled = fcitx::StandardPath::global().locate(
+            fcitx::StandardPath::Type::Data, "opi/kangxi.tsv");
+        if (!bundled.empty()) {
+            opiSeedBundledDict(bundled);
+        }
     }
     // 导入词库（DisabledDicts）：名单是配置值，推给引擎的口就在本函数 —— 与上面那些
     // 旋钮一字不差。⚠️ 本函数**还会重扫词库目录并逐条导入**（零状态的代价与理由见

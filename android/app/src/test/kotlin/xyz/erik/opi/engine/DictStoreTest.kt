@@ -343,4 +343,57 @@ class DictStoreTest {
         val json = """[{"name":"a\"b","count":1,"enabled":true,"system":false}]"""
         assertEquals("a\"b", DictStore.parseList(json).single().name)
     }
+
+    // ---- 内置词库**首启种子**（2026-10-16，康熙字典「全发」）----
+    // 随包的内置词库拷进词库目录**一次**，它随后就是一份普通导入词库
+    //（词库页可见、可停用、可删除）。标记文件保证「只种一次」。
+
+    private fun seedSrc(content: String = "丂\tkao\t4000\n") =
+        ByteArrayInputStream(content.toByteArray()) as java.io.InputStream
+
+    @Test
+    fun seedBundledCopiesOnceAndMarksSeeded() {
+        val dir = tmp.newFolder()
+        val store = DictStore(dir, FakeDictApi())
+        var opens = 0
+        val open = { opens++; seedSrc() }
+        assertTrue("首次应种下", store.seedBundled("kangxi", open))
+        assertEquals("丂\tkao\t4000\n", File(dir, "kangxi.tsv").readText())
+        assertEquals(1, opens)
+        assertFalse("第二次不种（标记在）", store.seedBundled("kangxi", open))
+        assertEquals("源不重复读", 1, opens)
+    }
+
+    @Test
+    fun seedBundledNeverResurrectsADeletedDict() {
+        val dir = tmp.newFolder()
+        val store = DictStore(dir, FakeDictApi())
+        assertTrue(store.seedBundled("kangxi") { seedSrc() })
+        File(dir, "kangxi.tsv").delete() // 用户在词库页删了
+        assertFalse("删过的不许复活（与 remove 的「文件那一半」语义对偶）", store.seedBundled("kangxi") { seedSrc() })
+        assertFalse(File(dir, "kangxi.tsv").exists())
+    }
+
+    @Test
+    fun seedBundledKeepsAnExistingUserFileUntouched() {
+        val dir = tmp.newFolder()
+        val store = DictStore(dir, FakeDictApi())
+        File(dir, "kangxi.tsv").writeText("用户自己的\n")
+        var opens = 0
+        assertFalse("已有同名文件：认账、不覆盖", store.seedBundled("kangxi") { opens++; seedSrc() })
+        assertEquals("用户文件原样", "用户自己的\n", File(dir, "kangxi.tsv").readText())
+        assertEquals("不读源", 0, opens)
+        assertFalse("且已打标记：升级用户场景下次也不种", store.seedBundled("kangxi") { opens++; seedSrc() })
+        assertEquals(0, opens)
+    }
+
+    @Test
+    fun seedBundledMissingSourceIsANoopWithoutMarking() {
+        val dir = tmp.newFolder()
+        val store = DictStore(dir, FakeDictApi())
+        assertFalse("源缺（资产缺）：不种", store.seedBundled("kangxi") { null })
+        assertFalse("标记不许建 —— 下次启动还有机会", File(dir, ".seeded-kangxi").exists())
+        assertTrue("源回来了就种得下", store.seedBundled("kangxi") { seedSrc() })
+        assertTrue(File(dir, "kangxi.tsv").isFile)
+    }
 }

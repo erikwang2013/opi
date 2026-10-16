@@ -47,7 +47,20 @@ internal fun DictSection(prefs: ImePreferences, toast: (String) -> Unit) {
     // 启动装载：目录里每个 *.tsv 进引擎，停用名单装载后重放。放本节而不是 Activity：
     // 失败提示就显示在下面，不必再往外传一层（跑在组合线程上，与既有各装载同一档）。
     var report by remember {
-        mutableStateOf(store.loadAll(DictStore.parseDisabled(prefs.disabledDicts)))
+        mutableStateOf(
+            run {
+                // 内置词库首启种子（2026-10-16）：与服务启动同一句——首次进词库页
+                // 先把随包的康熙词库种进目录（标记门控；删过的不复活），再装载。
+                store.seedBundled("kangxi") {
+                    try {
+                        context.assets.open("kangxi.tsv")
+                    } catch (e: IOException) {
+                        null
+                    }
+                }
+                store.loadAll(DictStore.parseDisabled(prefs.disabledDicts))
+            },
+        )
     }
     var entries by remember { mutableStateOf(store.list()) }
     var confirmDelete by remember { mutableStateOf<String?>(null) }

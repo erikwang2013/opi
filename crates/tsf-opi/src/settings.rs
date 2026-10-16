@@ -86,7 +86,7 @@ impl Default for Settings {
             wubi_mixed_entry: String::new(), // 空 = 未设置（直接字母）
             wubi_candidate_limit: 0,         // 0/负 = 未设置（引擎缺省 5）
             wubi_return: String::new(),      // 空 = 未设置（清空）
-            wubi_auto_commit: true,          // 缺省开（对齐搜狗）
+            wubi_auto_commit: true,          // 缺省开（对齐主流输入法）
         }
     }
 }

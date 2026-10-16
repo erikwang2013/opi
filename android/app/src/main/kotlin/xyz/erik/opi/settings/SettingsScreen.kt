@@ -292,7 +292,7 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
             // SHUANGPIN_LAYOUTS_ANDROID（锁步门禁 ShuangpinLayoutsLockstepTest）。
             ListItem(
                 headlineContent = { Text("双拼布局") },
-                supportingContent = { Text("拼音方式选「拼音双拼」时生效（搜狗同款六套）") },
+                supportingContent = { Text("拼音方式选「拼音双拼」时生效（主流同款六套）") },
                 trailingContent = {
                     TextButton(onClick = { showLayoutDialog = true }) { Text(shuangpinLayout) }
                 },

@@ -340,4 +340,23 @@ class KeyRouterTest {
         assertEquals(listOf("a"), ch.commits)
         assertEquals("英文直提不许推组合串（会把保留的拼音复活）", 0, ch.syncCount)
     }
+
+    /**
+     * 平铺候选视图按**全局下标**选词（2026-10-16 裁决的平铺态）：折叠行走
+     * [KeyRouter.handleCandidate]（页内下标 + pageSize 换算），平铺态不分页序、
+     * 直接吃 `controller.candidates` 全量列表 ⇒ 这是**按绝对下标**那条入口。
+     */
+    @Test
+    fun tiledViewSelectsByAbsoluteIndex() {
+        val fake = FakeEngine().apply {
+            cands = arrayOf("一", "二", "三")
+            selectResults[2] = "三"
+        }
+        val ch = Channel()
+        val (ctrl, r) = router(fake, ch)
+        r.handleCandidateAbsolute(2)
+        assertEquals(listOf("三"), ch.commits)
+        assertEquals(1, ch.syncCount)
+        assertTrue(ctrl.buffer.isEmpty())
+    }
 }

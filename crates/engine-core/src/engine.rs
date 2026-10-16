@@ -34,7 +34,7 @@ pub struct Engine {
     pub(crate) wubi_mixed_entry: WubiMixedEntry,
     /// 五笔候选个数档位（引擎侧截断；默认/上限见 engine_wubi.rs 的常量）。
     pub(crate) wubi_candidate_limit: usize,
-    /// 四码唯一自动上屏的总闸（默认 `true` = 对齐搜狗缺省；判据见 engine_wubi.rs）。
+    /// 四码唯一自动上屏的总闸（默认 `true` = 对齐主流输入法缺省；判据见 engine_wubi.rs）。
     pub(crate) wubi_auto_commit: bool,
     /// 五笔回车键行为（设置位）。**消费判据在 `engine_enter.rs`**（`Engine::enter_action`，
     /// 2026-10-14 接线）：router / fcitx5 / TSF 三处回车都问它；Android 待其 JNI 出口。

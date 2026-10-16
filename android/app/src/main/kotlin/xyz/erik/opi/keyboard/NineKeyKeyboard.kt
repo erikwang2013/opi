@@ -3,12 +3,10 @@
 
 package xyz.erik.opi.keyboard
 
-import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -17,10 +15,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,9 +24,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -50,7 +43,7 @@ import androidx.compose.ui.unit.sp
 internal data class NineKey(val label: String, val key: String, val hint: String = "")
 
 /**
- * **左侧一列**的默认内容 = 标点列（搜狗同款：空闲时一列标点，输入时整列换成拼音）。
+ * **左侧一列**的默认内容 = 标点列（主流同款：空闲时一列标点，输入时整列换成拼音）。
  * 发送键都取引擎中文标点表（punctuation.rs 的 CHINESE_PUNCT）**已有的键**：
  * `,`→，`.`→。`\`→、`?`→？`!`→！ —— 上层不用另造标点通路。
  */
@@ -78,7 +71,7 @@ internal val nineKeyRows: List<List<NineKey>> = listOf(
 )
 
 /**
- * 拼音 9 键（T9）。[big] = 大 9 键（同布局放大键面，对齐搜狗「拼音大9键」）。
+ * 拼音 9 键（T9）。[big] = 大 9 键（同布局放大键面，对齐主流输入法「拼音大9键」）。
  * 数字键在此方案下**是输入键**（引擎 Nine 方案收进缓冲），不需要任何数字选词 UI。
  */
 @Composable
@@ -92,7 +85,7 @@ fun NineKeyKeyboard(
      * [xyz.erik.opi.ime.ImeState.toggleTraditional]（不是 26 键的 cycleMode）。 */
     onModeSwitch: () -> Unit,
     onSymbol: () -> Unit,
-    /** 分词键（主区域第一格，搜狗同款）：往引擎缓冲插音节边界（`xi|an`）。
+    /** 分词键（主区域第一格，主流同款）：往引擎缓冲插音节边界（`xi|an`）。
      * **由宿主在缓冲空时拦住** —— 空缓冲点它没有边界可切，且空缓冲的 `'` 在引擎里
      * 是引号（不是分词符）。 */
     onSegment: () -> Unit,
@@ -118,13 +111,13 @@ fun NineKeyKeyboard(
     modeLabel: String = "中",
     big: Boolean = false,
 ) {
-    // 键面按搜狗排：**字母为主、数字缩小到下面**（2026-10-09 用户裁决「现在的
+    // 键面按主流输入法排：**字母为主、数字缩小到下面**（2026-10-09 用户裁决「现在的
     // 排版太不适应」）。此前是反的（数字 22sp、字母 11sp）—— 人们认键靠字母。
     val letterSize = if (big) 30.sp else 21.sp
     val digitSize = if (big) 15.sp else 12.sp
     Column(modifier = modifier.fillMaxSize()) {
         Row(modifier = Modifier.weight(3f).fillMaxSize()) {
-            // ---- 左侧一列（2026-10-09，搜狗 9 键同款）----
+            // ---- 左侧一列（2026-10-09，主流输入法 9 键同款）----
             // 空闲 = 一列标点（可点，走引擎标点表）；输入时**整列换成候选拼音读数**
             // （一个读音一行、已去重：你好→ni'hao；2026-10-09 用户裁决「一列多个、
             // 可滑动查看后面候选/下一页」；2026-10-12 用户裁决「左列去重」）——
@@ -133,56 +126,18 @@ fun NineKeyKeyboard(
             // 右列要与它同宽，见下）。
             Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
                 if (readings.isNotEmpty()) {
-                    BoxWithConstraints(
-                        modifier = Modifier.fillMaxSize().semantics {
-                            // 念前几条就够（全量可能几十条）；逐条与候选的对应靠候选
-                            // 自己的语义节点，这里只报「读数列有货」。
-                            contentDescription = "候选拼音 " + readings.take(4).joinToString("、") +
-                                if (readings.size > 4) "等" else ""
-                        },
-                    ) {
-                        // 与标点列同一节奏：五格；多出来的候选（第 6 条起）滑动看。
-                        val cell = maxHeight / nineKeyStripPuncts.size
-                        Column(
-                            // 新一批读数（缓冲变了）整列回顶部 —— 否则继续输入后视口
-                            // 停在旧位置，与「当前读音」对不上（scrollKey 由宿主给缓冲）。
-                            modifier = Modifier.fillMaxSize()
-                                .verticalScroll(remember(scrollKey) { ScrollState(0) }),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            for ((i, r) in readings.withIndex()) {
-                                val pinned = r == pinnedReading && pinnedReading.isNotEmpty()
-                                Box(
-                                    // 点一行拼音 = **钉住该读音**（2026-10-09 用户裁决
-                                    // 「选择后候选词跟着拼音变化，不要直接确认」）：
-                                    // 候选收窄到读音恰等的条目、不上屏；同一行再点 = 解除
-                                    // （2026-10-16 裁决：恰等 —— 读音更长的词组/联想都不进）。
-                                    modifier = Modifier.fillMaxWidth().height(cell)
-                                        .clickable { onPickReading(i) }
-                                        .semantics {
-                                            role = Role.Button
-                                            contentDescription = "第 ${i + 1} 项拼音 $r" +
-                                                if (pinned) "，已选中，点击取消" else "，点击只看这一读音"
-                                        },
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Text(
-                                        r,
-                                        fontSize = 15.sp,
-                                        color = if (pinned) {
-                                            LocalKeyboardPalette.current.accent
-                                        } else {
-                                            LocalKeyboardPalette.current.barDimFg
-                                        },
-                                        fontWeight = if (pinned) FontWeight.Bold else FontWeight.Normal,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        textAlign = TextAlign.Center,
-                                    )
-                                }
-                            }
-                        }
-                    }
+                    // 读数态的整块在 CandidateReadingColumn（2026-10-16 抽出：平铺候选
+                    // 视图要求同语义的第二处）。抽出的口径：点击=钉读音、读屏串、滚动
+                    // 复位、封顶格数都逐字同构 —— 别在本文件里再抄一份。
+                    CandidateReadingColumn(
+                        readings = readings,
+                        pinnedReading = pinnedReading,
+                        onPick = onPickReading,
+                        scrollKey = scrollKey,
+                        cells = nineKeyStripPuncts.size,
+                        fontSize = 15.sp,
+                        modifier = Modifier.fillMaxSize(),
+                    )
                 } else {
                     Column(modifier = Modifier.fillMaxSize()) {
                         for (k in nineKeyStripPuncts) {

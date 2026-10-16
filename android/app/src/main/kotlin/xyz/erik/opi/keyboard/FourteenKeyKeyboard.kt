@@ -19,7 +19,7 @@ import androidx.compose.ui.Modifier
  * （或单字母键的单个字母）。`FourteenKeyLayoutTest` 与 `scheme.rs` 的类表逐格交叉
  * 核对；改这张表 = 改协议，四端一起改。
  *
- * 布局（对齐搜狗「拼音14键」的常见摆法）：`qw er ty ui op / as df gh jk l / zx cv bn m`，
+ * 布局（对齐主流输入法「拼音14键」的常见摆法）：`qw er ty ui op / as df gh jk l / zx cv bn m`，
  * `l` 与 `m` 为单字母键。
  */
 internal data class FourteenKey(val label: String, val key: String)

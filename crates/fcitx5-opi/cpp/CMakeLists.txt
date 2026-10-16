@@ -194,6 +194,29 @@ if(NOT EXISTS "${OPI_SYMBOL_CATEGORIES}")
 endif()
 message(STATUS "OPI 符号类目源: ${OPI_SYMBOL_CATEGORIES}")
 
+# 康熙字典词库（2026-10-16，「全发」的 Linux 面）：随包安装进 share/opi/，fcitx5 侧
+# 首启种子（opi_dicts.h 的 opiSeedBundledDict）把它拷进用户词库目录一次 —— 之后
+# 就是普通导入词库。真源 = scripts/gen_kangxi_dict.py 的双输出（同符号类目那条纪律）。
+# 缺了同样 FATAL：不装的后果是「全发」在这一端**静默不发生**（用户词库页永远没有它）。
+set(OPI_KANGXI_TSV "" CACHE FILEPATH
+    "kangxi.tsv 源文件。缺省取 crates/fcitx5-opi/data/ 的入库副本")
+if(NOT OPI_KANGXI_TSV)
+    foreach(_kx_cand
+            "${CMAKE_CURRENT_SOURCE_DIR}/../data/kangxi.tsv"
+            "${CMAKE_CURRENT_SOURCE_DIR}/../../../android/app/src/main/assets/kangxi.tsv")
+        if(NOT OPI_KANGXI_TSV AND EXISTS "${_kx_cand}")
+            set(OPI_KANGXI_TSV "${_kx_cand}")
+        endif()
+    endforeach()
+endif()
+if(NOT EXISTS "${OPI_KANGXI_TSV}")
+    message(FATAL_ERROR
+        "找不到康熙字典词库源: '${OPI_KANGXI_TSV}'\n"
+        "生成一份：python3 scripts/gen_kangxi_dict.py（双写入库路径）\n"
+        "或用 -DOPI_KANGXI_TSV=/path/to/kangxi.tsv 指一个已有文件。")
+endif()
+message(STATUS "OPI 康熙字典词库源: ${OPI_KANGXI_TSV}")
+
 # ---- addon .so 的落点 ----
 #
 # FCITX_INSTALL_ADDONDIR 是 fcitx5 自己给的变量，但它跟着 CMAKE_INSTALL_PREFIX
@@ -463,3 +486,9 @@ install(FILES "${OPI_WUBI98_OPID}"
 install(FILES "${OPI_SYMBOL_CATEGORIES}"
               DESTINATION "${CMAKE_INSTALL_DATADIR}/opi"
               RENAME symbol_categories.tsv)
+
+# 康熙字典词库（2026-10-16）：落点与 lookups 同一条路（Type::Data + opi/kangxi.tsv）
+# —— fcitx5 侧首启种子从这儿取源（opi_config.h 的 applyOpiSettings locate 它）。
+install(FILES "${OPI_KANGXI_TSV}"
+              DESTINATION "${CMAKE_INSTALL_DATADIR}/opi"
+              RENAME kangxi.tsv)

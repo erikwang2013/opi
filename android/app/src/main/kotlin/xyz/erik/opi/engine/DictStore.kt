@@ -5,6 +5,7 @@ package xyz.erik.opi.engine
 
 import android.content.Context
 import java.io.File
+import java.io.IOException
 import java.io.InputStream
 import java.util.LinkedHashSet
 import xyz.erik.opi.jni.OpiEngine
@@ -66,6 +67,37 @@ class DictStore(private val dir: File, private val api: DictApi) {
         File(dir, "$name$EXT").delete()
         File(dir, "$name$EXT.bak").delete()
         return ok
+    }
+
+    /**
+     * 内置词库**首启种子**（2026-10-16，康熙字典「全发」）：把随包的内置词库拷进词库
+     * 目录**一次** —— 它随后就是一份普通导入词库（词库页可见、可停用、可删除）。
+     *
+     * **只种一次**（标记文件 `.seeded-<name>` 在则永不再种）：用户删过的不许复活 ——
+     * 与 [remove] 的「文件那一半」语义**对偶**（那边删文件防「下次启动装回来」，
+     * 这边不能反过来把它塞回去）。目录里已有同名文件（升级用户/手导过）⇒ 认账、
+     * 不覆盖、打标记。源读不到（资产缺）⇒ 不种**也不打标记**（下次启动还有机会）。
+     * 返回值 = 本次调用是否真的种下（供调用方记日志）。
+     */
+    fun seedBundled(name: String, open: () -> InputStream?): Boolean {
+        val marker = File(dir, ".seeded-$name")
+        if (marker.exists()) return false
+        val target = File(dir, "$name$EXT")
+        if (!dir.isDirectory && !dir.mkdirs()) return false
+        if (target.exists()) {
+            marker.createNewFile()
+            return false
+        }
+        val src = open() ?: return false
+        return try {
+            // 流拷（同 importTsv 的纪律：整份读进内存是 OOM 的配方）
+            src.use { ins -> target.outputStream().use { ins.copyTo(it) } }
+            marker.createNewFile()
+            true
+        } catch (e: IOException) {
+            target.delete() // 半截文件不留（同 importTsv 的坏文件纪律）
+            false
+        }
     }
 
     /**

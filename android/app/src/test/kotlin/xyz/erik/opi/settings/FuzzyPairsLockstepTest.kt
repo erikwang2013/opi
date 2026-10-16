@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! 模糊音名字表的**锁步门禁**（2026-10-13，搜狗式设置面 M1a）：
+//! 模糊音名字表的**锁步门禁**（2026-10-13，主流式设置面 M1a）：
 //! Android 的 `FUZZY_PAIRS_ANDROID`（设置页多选与掩码解析的名字源）必须与引擎
 //! `crates/engine-core/src/fuzzy.rs` 的 `FUZZY_PAIRS` **同序同名** —— 顺序即掩码位序
 //! （`fuzzyMaskOf` 的判据），漂一头的表现是「勾了 A 实际开了 B」，且两端都不会报错。

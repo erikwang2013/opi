@@ -128,4 +128,14 @@ class KeyRouter(
         val text = controller.selectFromPage(indexInPage)
         if (text.isNotEmpty()) commitAndResync(text)
     }
+
+    /**
+     * 平铺候选视图的选词：**全局下标**（该视图不分页序，直接吃 `controller.candidates`
+     * 的全量列表 —— 见 `CandidateTiledView` 的接线）。折叠行那条 [handleCandidate]
+     * 是页内下标 + pageSize 换算，两条别混。
+     */
+    fun handleCandidateAbsolute(index: Int) {
+        val text = controller.select(index)
+        if (text.isNotEmpty()) commitAndResync(text)
+    }
 }

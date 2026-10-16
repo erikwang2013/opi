@@ -31,40 +31,6 @@ class HandlerDebouncer : Debouncer {
 }
 
 /**
- * 输入连接暂不可用时的延迟重试（OpiImeService.commitWithRetry 的排程部分）。
- *
- * 投递与撤销必须落在**同一处**，所以调度器由字段持有：原先两边都现取
- * `window.window.decorView`，而 IME 窗口在旋转/配置变化时会被整棵重建
- * （见 OpiImeService.setInputView 的长注释）—— 撤销时取到的 decorView 已经不是
- * 投递时那个，`removeCallbacks` 撤不掉挂在旧 root 上的 action，50ms 后它照样执行，
- * 把上一次的候选写进了**新的**编辑框。字段持有的 Handler 不随窗口重建而改变。
- */
-class PendingCommit(
-    private val debouncer: Debouncer = HandlerDebouncer(),
-) {
-    private var cancel: (() -> Unit)? = null
-
-    /** 排一次重试；已有排队中的先撤（两次重试叠加 = 同一个词被提交两遍）。 */
-    fun schedule(retry: () -> Unit) {
-        cancel()
-        cancel = debouncer.schedule(RETRY_MS) {
-            cancel = null
-            retry()
-        }
-    }
-
-    fun cancel() {
-        cancel?.invoke()
-        cancel = null
-    }
-
-    companion object {
-        /** 重试延迟：给窗口拿到 IC 的时间，短到用户察觉不到。 */
-        const val RETRY_MS = 50L
-    }
-}
-
-/**
  * 面板状态机（对齐 flutter ime_main.dart _ImeScreenState）：
  * - pending buffer 提交：开面板前有候选选第一个提交，无候选清掉（防面板往返残留噪音）
  * - 符号搜索 250ms 防抖：searchText 实时、searchQuery 防抖后生效（驱动结果）
@@ -77,7 +43,7 @@ class ImeState(
     var commit: (String) -> Unit = {},
     private val debouncer: Debouncer = HandlerDebouncer(),
 ) {
-    enum class View { QWERTY, NUMBER, SYMBOL, RARE, SKIN, INPUT_MODE, KEYBOARD_MODE, SYMBOL_PAGE, ABOUT }
+    enum class View { QWERTY, NUMBER, SYMBOL, RARE, SKIN, INPUT_MODE, KEYBOARD_MODE, SYMBOL_PAGE, ABOUT, CANDIDATES_TILED }
 
     companion object {
         /** 搜索防抖窗口（对齐 flutter 250ms）。 */
@@ -143,7 +109,7 @@ class ImeState(
 
     /**
      * 密码类字段自动切英文（2026-10-10 用户报障「弹框里没法输入」的第二来源）：
-     * Wi-Fi 密码/登录框要的是英文数字**直出**，拼音候选在这儿帮倒忙——搜狗同场景
+     * Wi-Fi 密码/登录框要的是英文数字**直出**，拼音候选在这儿帮倒忙——主流输入法同场景
      * 自动切英文，我们照做。**临时且不落盘**（与 [selectInputMode] 的区别：那条是
      * 用户的明确选择、要 persist 这条是场景适配、离开字段即还原）。
      * 已经在英文（用户自己切的）⇒ 空操作，也不记状态（leave 才不会乱还原）。
@@ -395,6 +361,31 @@ class ImeState(
         resetSearch()
         view = View.QWERTY
         restoreLetterMode()
+    }
+
+    // ---- 平铺候选视图（2026-10-16 裁决：左右翻页改「替换键盘平铺」+ 上下滑翻页；
+    // 视图实现 CandidateTiledView、状态机 ImeStateTiledTest）----
+
+    /** 折叠行右端 ⌄ 进入：占满「候选｜工具条」共用格与键盘区（竖向滑动翻页）。 */
+    fun expandCandidates() {
+        view = View.CANDIDATES_TILED
+    }
+
+    /** 平铺视图「返回」：回键盘，**不动引擎、不清缓冲**（还要接着选就接着打）。 */
+    fun collapseCandidates() {
+        if (view == View.CANDIDATES_TILED) view = View.QWERTY
+    }
+
+    /** 「候选｜工具条」共用格的**单一判据**（英文提示条 / 缓冲非空 / 有候选）：
+     * ImeScreen 用它选画候选还是工具条，平铺自动收拢用同一支。 */
+    val candidatesShowable: Boolean
+        get() = controller.mode == EngineMode.ENGLISH ||
+            controller.buffer.isNotEmpty() ||
+            controller.candidates.isNotEmpty()
+
+    /** 平铺里候选用尽（选词 / ⌫ 退到空）→ 自动收拢，否则键盘回不来。 */
+    fun collapseIfNoCandidates() {
+        if (!candidatesShowable) collapseCandidates()
     }
 
     /** 仅关闭搜索叠盘（对齐 flutter _closeSearch：失焦但保留输入）。 */

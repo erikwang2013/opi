@@ -266,7 +266,7 @@ class SettingsTest {
 
     @Test
     fun `tabs follow the platform's real knobs`() {
-        // 2026-10-12（用户裁决「布局和功能参考搜狗输入法」）：左导航的页集合是纯函数，
+        // 2026-10-12（用户裁决「布局和功能参考主流输入法」）：左导航的页集合是纯函数，
         // 按平台过滤 —— 少了这个判据，Windows 上会出两页点不动的开关。
         assertEquals(
             listOf(

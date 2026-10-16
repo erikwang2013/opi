@@ -63,7 +63,7 @@ pub unsafe extern "system" fn opijni_set_jianpin(_env: JEnv, _class: sys::jclass
 }
 
 /// correctionEnabled() -> boolean：拼音纠错读侧（2026-10-13；写侧见 `setCorrection`）。
-/// 未装载 → false（哨兵语义同族；真缺省是 true —— 对齐搜狗，见引擎侧 Default）。
+/// 未装载 → false（哨兵语义同族；真缺省是 true —— 对齐主流输入法，见引擎侧 Default）。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_correction_enabled(
     _env: JEnv,

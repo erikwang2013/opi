@@ -80,7 +80,7 @@
       <text x="68" y="386">整串无命中 → 退逐音节补候选（每节 top 3）</text>
       <text x="68" y="406">单字母仅并入 emoji，挡掉符号关键字噪音</text>
       <text x="68" y="426">模糊 / 简拼两档接在精确档之后，档空即主结果</text>
-      <text x="68" y="446">每屏 8 项候选 + 翻页；精确层不限量，前缀层按词频 top-N 截断</text>
+      <text x="68" y="446">每屏 8 项；9 键 ⌄ 平铺态竖向翻页；精确层翻页不限量</text>
     </g>
 
     <!-- 2 用户学习 -->
@@ -105,8 +105,8 @@
       <text x="830" y="366">FNV-1a64 逐字节校验，顺序/偏移不合法即拒载</text>
       <text x="830" y="386">mmap 只读映射，整库不入堆 · 按需转出</text>
       <text x="830" y="406">装载失败 → 内置 35 词回退，绝不因词库崩溃</text>
-      <text x="830" y="426">简体 luna / 繁体 trad / 回退 fallback 三库</text>
-      <text x="830" y="446">英文词源 en_words.tsv 仅入库为数据，未接候选</text>
+      <text x="830" y="426">内置库：luna · trad · wubi · stroke · fallback</text>
+      <text x="830" y="446">导入词库契约 *.tsv：康熙字典随包 + 首启种子</text>
     </g>
 
     <!-- 行 B -->
@@ -116,7 +116,7 @@
     <text x="52" y="502" font-size="15" font-weight="700" fill="#22272E">符号与表情</text>
     <g fill="#2E8B80"><circle cx="57" cy="523" r="2.6"/><circle cx="57" cy="543" r="2.6"/><circle cx="57" cy="563" r="2.6"/><circle cx="57" cy="583" r="2.6"/><circle cx="57" cy="603" r="2.6"/></g>
     <g font-size="10.5" fill="#4A5551">
-      <text x="68" y="527">符号大全：22 类目目录（常用置顶）</text>
+      <text x="68" y="527">符号大全：22 类目（常用置顶，数理化齐）</text>
       <text x="68" y="547">类目内浏览 + 关键字搜索双通道</text>
       <text x="68" y="567">emoji 与拼音候选同栏合并排序</text>
       <text x="68" y="587">emoji 覆盖面随 symbols.tsv 重生成（gen_symbols.py）</text>
@@ -143,7 +143,7 @@
     <g font-size="10.5" fill="#4A5551">
       <text x="830" y="527">同一 Rust 引擎，各端共享同一套输入语义</text>
       <text x="830" y="547">各端原生 UI：Compose / fcitx5 / TSF / UIKit / IMK / ArkTS</text>
-      <text x="830" y="567">其中 Apple / 鸿蒙仍未编译（草案）</text>
+      <text x="830" y="567">Apple 已在 CI 真编译（未签名）；鸿蒙草案</text>
       <text x="830" y="587">核心零平台依赖，可在任意目标上单测</text>
       <text x="830" y="607">模式整数与 ABI 约定跨端一致（0..4）</text>
     </g>

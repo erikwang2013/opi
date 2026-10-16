@@ -5,8 +5,8 @@
 //!
 //! 源：fcitx/libime `src/libime/pinyin/shuangpindata.h`，pin commit
 //! `171edcf137001e8eb8274f53ec010058cda70b09`（装配语义见同仓 `shuangpinprofile.cpp`：零声母标记与
-//! 单字符韵母自动补表都逐条镜像）。覆盖**搜狗同款**六套（自然码/微软/小鹤/
-//! 智能ABC/紫光/拼音加加）；libime 另有中文之星与 GB，不在搜狗列表内，未收。
+//! 单字符韵母自动补表都逐条镜像）。覆盖**主流同款**六套（自然码/微软/小鹤/
+//! 智能ABC/紫光/拼音加加）；libime 另有中文之星与 GB（不在那六套之列），未收。
 //!
 //! 结构：`initials` = 声母键（只有 zh/ch/sh 需要列表，单字母声母即字母自身）；
 //! `finals` = 韵母键（含自动补齐的 a/e/i/o/u/v）；`zero` = 零声母标记，

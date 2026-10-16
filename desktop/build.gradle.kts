@@ -97,6 +97,27 @@ val copyEmojiData by tasks.registering(Copy::class) {
 }
 sourceSets["main"].resources.srcDir(copyEmojiData)
 
+// 康熙字典词库（2026-10-16，「全发」的桌面面）：词库页首启种子把它放进词库目录一次
+//（见 Dicts.kt 的 seedBundledDict）。真源 = `data/raw/kangxi.tsv`
+//（`scripts/gen_kangxi_dict.py` 生成；Android/包/desktop 三处消费同一份产物）。
+// 与 copyEmojiData 同一条纪律：构建期原样拷，盘上没有可漂的第二份；源缺**响亮地死**。
+val copyKangxiDict by tasks.registering(Copy::class) {
+    val src = file("../data/raw/kangxi.tsv")
+    doFirst {
+        check(src.isFile) {
+            "找不到康熙字典词库源: ${src.path}\n" +
+                "生成一份：python3 scripts/gen_kangxi_dict.py"
+        }
+    }
+    from(src)
+    into(layout.buildDirectory.dir("generated/opiResources"))
+}
+// ⚠️ 同一个资源目录**不能注册两次** srcDir（上面 copyEmojiData 已注册过它）——
+// 2026-10-16 实测：再 `srcDir(copyKangxiDict)` 会让 processResources 报
+// 「Entry kangxi.tsv is a duplicate」（目录里的每个文件都会被扫两遍）。
+// 接线改为 dependsOn：文件进同一个处理过的目录、目录只扫一次。
+tasks.named("processResources") { dependsOn(copyKangxiDict) }
+
 // 共享源码：小欧的 Compose 绘制只有一份（shared/pet），与 android/app 同一份几何
 // （candidate_io.rs 的线协议注释也是同样的「改协议须同步两处」约定）。
 sourceSets["main"].kotlin.srcDir("../shared/pet")
@@ -268,7 +289,7 @@ tasks.register("injectSettingsDesktopEntry") {
         apps.listFiles { f: File -> f.name.endsWith(".desktop") }
             ?.filter { it.name != "opi-settings.desktop" }?.forEach { it.delete() }
         // Name = 「opi输入法」（2026-10-09 用户裁决：所有端安装后显示名统一为它）。
-        // 菜单入口与 Deepin 上搜狗的「搜狗输入法」条目同款：点开就是设置窗。
+        // 菜单入口与 Deepin 上其它输入法的菜单条目同款：点开就是设置窗。
         File(apps, "opi-settings.desktop").writeText(
             """
             [Desktop Entry]

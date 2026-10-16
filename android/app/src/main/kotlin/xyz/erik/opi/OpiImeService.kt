@@ -20,7 +20,6 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryOwner
-import xyz.erik.opi.candidate.CANDIDATE_BAR_HEIGHT_DP
 import xyz.erik.opi.ime.COMPOSING_BAR_HEIGHT_DP
 import xyz.erik.opi.engine.DictStore
 import xyz.erik.opi.engine.EngineController
@@ -36,6 +35,7 @@ import xyz.erik.opi.keyboard.SymbolCatalog
 import xyz.erik.opi.keyboard.RareIndex
 import xyz.erik.opi.settings.ImePreferences
 import java.io.File
+import java.io.IOException
 import kotlin.math.min
 
 // 编辑器信息的两条纯判定（isPasswordEditor / enterDecision）已拆到 EditorInfoRules.kt
@@ -134,9 +134,9 @@ class OpiImeService : InputMethodService() {
          * 的是**系统导航栏 inset**（本机实测 129px，decorFitsSystemWindows 自动下的 padding），
          * 与这个常量无关，所以这里不需要再留"安全区"。
          * 它现在的身份就是「键区加高」，按 dp 取实测等效值。
-         * 2026-10-09 用户裁决「整体布局 UI 太小，没有搜狗输入法移动端显示大」：
+         * 2026-10-09 用户裁决「整体布局 UI 太小，没有主流输入法移动端显示大」：
          * 64 → 76dp（连同比率 0.42 → 0.48），本机 1080×2400 实测键盘总高
-         * **736px → 843px**（占屏 30.7% → 35.1%，往搜狗/GBoard 的 40% 量级靠）；
+         * **736px → 843px**（占屏 30.7% → 35.1%，往主流输入法/GBoard 的 40% 量级靠）；
          * 键行 ≈91px → ≈106px、字母字号 18 → 21sp（见 NineKeyKeyboard/KeyButton）。
          * 裸像素在 density 1.0 上是 199dp、3.5 上是 57dp，差 3.5 倍。
          */
@@ -167,12 +167,17 @@ class OpiImeService : InputMethodService() {
         // 基数取短边，再钳制在可用窗口高度内。
         val side = min(w, h)
         val keyArea = (side * KEY_AREA_RATIO).toInt() + (KEY_AREA_EXTRA_DP * density).toInt()
-        val bar = (CANDIDATE_BAR_HEIGHT_DP * density).toInt()
         // 拼音行（2026-10-15）：它常驻在候选行上方，高度必须一起算进窗口 ——
         // 不加这一项，键区会把它的高度吃回去（那正是「条件挂载 vs 常驻槽位」那条
         // 实测教训的同族：槽位常驻就必须在窗口高度里兑现）。
+        //
+        // 2026-10-16 裁决「候选词在功能按钮区域显示（替换掉功能区域）」：候选栏与工具条
+        // 合并成**一格**（ImeScreen 的共用槽位，高 = 工具条那条 44dp）。原公式里的
+        // `bar`（候选行 42dp）随之下线；而工具条那 44dp **本来就在 keyArea 比例块内**
+        // （旧账：keyArea = 键行 + 工具条），共用格顶替的正是工具条的位置 ⇒ 公式
+        // 只剩 keyArea + composing，键高与旧版**逐像素相同**、窗口净少原候选行 42dp。
         val composing = (COMPOSING_BAR_HEIGHT_DP * density).toInt()
-        return (keyArea + bar + composing).coerceAtMost(h)
+        return (keyArea + composing).coerceAtMost(h)
     }
 
     /**
@@ -233,7 +238,19 @@ class OpiImeService : InputMethodService() {
         // 词库目录装载（2026-10-14，M3）：目录里每个 *.tsv 进引擎，**停用名单在装载后重放**
         // —— 引擎里导入层是内存态，同名重导入会置回启用（`api/dict.rs` 裁决 2 把重放
         // 划给宿主）。单个失败不挡启动，只记一条日志（设置页「词库」节会把失败的显示出来）。
-        val dictReport = DictStore.from(this).loadAll(DictStore.parseDisabled(prefs.disabledDicts))
+        // 内置词库首启种子（2026-10-16，康熙字典「全发」）：首启把 assets/kangxi.tsv 种进
+        // 词库目录**一次**（标记门控；用户删过的不复活 —— 见 DictStore.seedBundled）。
+        val dictStore = DictStore.from(this)
+        val seeded = dictStore.seedBundled("kangxi") {
+            try {
+                assets.open("kangxi.tsv")
+            } catch (e: IOException) {
+                Log.w(TAG, "内置词库资产缺失：$e")
+                null
+            }
+        }
+        if (seeded) Log.i(TAG, "已种下内置词库 kangxi.tsv")
+        val dictReport = dictStore.loadAll(DictStore.parseDisabled(prefs.disabledDicts))
         if (dictReport.failed.isNotEmpty()) {
             Log.w(TAG, "词库装载失败 ${dictReport.failed.size} 个：${dictReport.failed.joinToString("、")}")
         }
@@ -331,7 +348,7 @@ class OpiImeService : InputMethodService() {
         // P6：硬编码 SEND 会把"搜索"键发成发送；读目标应用声明的 action。
         // 2026-10-10 用户报障「换行无效」——判据改为 [enterDecision]（多行编辑器惯例
         // IME_FLAG_NO_ENTER_ACTION 优先于 action 位：真实世界不少应用两样都设，旧逻辑
-        // 会把它们的回车发成 action 而不是换行；搜狗/AOSP 均先看这个 flag）。
+        // 会把它们的回车发成 action 而不是换行；主流输入法/AOSP 均先看这个 flag）。
         val opts = currentInputEditorInfo?.imeOptions ?: 0
         val decision = enterDecision(opts)
         Log.i(TAG, "performEnter opts=$opts -> $decision")
@@ -356,7 +373,7 @@ class OpiImeService : InputMethodService() {
             // 取消组合串（不提交，避免半截拼音泄入新编辑器）
             engineController.clear()
             // 密码类字段自动临时英文（2026-10-10 用户报障「弹框里没法输入」的第二来源；
-            // 搜狗同场景自动切英文）。普通编辑器则还原上一处密码场的临时切换。
+            // 主流输入法同场景自动切英文）。普通编辑器则还原上一处密码场的临时切换。
             val pw = info != null && isPasswordEditor(info.inputType)
             Log.i(TAG, "onStartInput: inputType=${info?.inputType} password=$pw")
             if (pw) {
@@ -428,7 +445,7 @@ class OpiImeService : InputMethodService() {
      * 返回 false、onCreateInputView 永不调用（键盘空壳）。但无条件 true 还有另一面：
      * 弹框 / 无编辑器的窗口抢焦时，系统想让键盘收起，我们仍把它亮着，留下
      * 「**键盘可见、触摸全无反应**」的中间态（2026-10-10 用户报障「其他 app 有弹框就
-     * 没法输入，搜狗就可以」——搜狗走系统默认判定，从不进这个状态）。
+     * 没法输入，主流输入法就可以」——它们走系统默认判定，从不进这个状态）。
      *
      * 改法：当前编辑器接受文本（inputType 类 ≠ TYPE_NULL）且输入连接在 ⇒ true
      * （模拟器/硬键盘场景由这半保住）；其余一律 false 交回系统 —— 弹框抢焦、

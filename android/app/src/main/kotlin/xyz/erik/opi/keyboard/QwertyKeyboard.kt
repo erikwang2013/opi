@@ -61,7 +61,7 @@ fun QwertyKeyboard(
             }
         }
         // 底行与 9/14/笔画同一套顺序：面板键在左（这里符号经数字面板进入）、
-        // [中/英] 其次（2026-10-09 按搜狗排）。
+        // [中/英] 其次（2026-10-09 按主流输入法排）。
         Row(modifier = Modifier.weight(1f).fillMaxSize()) {
             // 123 不挂长按：长按 500ms 吞 tap，导致面板打不开（符号经数字面板进入）
             KeyButton("123", modifier = Modifier.weight(1f), onTap = onNumber)

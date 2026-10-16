@@ -9,12 +9,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -36,25 +35,32 @@ import xyz.erik.opi.pet.OpiPet
 import xyz.erik.opi.pet.petMood
 
 /**
- * 候选栏高度（dp）。OpiImeService 把它算进 IME 窗口高度、ImeScreen 用它预留位置：
- * 三处必须一致，所以只在这里定义一次。
- */
-const val CANDIDATE_BAR_HEIGHT_DP = 42
-
-/**
- * 候选栏：拼音缓冲 + 每屏 8 候选，点击选择、长按删自造词；页数>1 时显示 ‹ n/m › 翻页。
+ * 候选栏：拼音缓冲 + 每屏 8 候选，点击选择、长按删自造词。
  * 无状态：数据与翻页状态均在 EngineController（单一状态源）。
  * 两个回调都是**页内下标**（同 EngineController.selectFromPage）。
+ *
+ * 2026-10-16 裁决「候选词在功能按钮区域显示（替换掉功能区域）」：本栏画在
+ * 「候选｜工具条」**共用一格**里（`ime/ImeScreen.kt`，格高 = 工具条那条常量）——
+ * 自身不再定高（fillMaxHeight 由调用方给的槽决定）。
+ * 同裁决「左右按钮换成 v 的图标……上下滑动翻页」：‹ n/m › 整段下线，右端只留一枚 ⌄
+ * （[onExpand] 进 `CandidateTiledView` 平铺视图），翻页全部改到平铺态里上下滑。
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress: (Int) -> Unit) {
+fun CandidateBar(
+    controller: EngineController,
+    onTap: (Int) -> Unit,
+    onLongPress: (Int) -> Unit,
+    /** 右端 ⌄：进平铺候选视图（[xyz.erik.opi.ime.ImeState.expandCandidates]）。 */
+    onExpand: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     // 配色走键盘色板（表情条/候选栏与键面同一套「暗光/长辈」换肤，见 Palette.kt）
     val p = LocalKeyboardPalette.current
     // english 模式：候选栏退化为模式条，切换中/英有明确区域反馈
     if (controller.mode == EngineMode.ENGLISH) {
         Row(
-            modifier = Modifier.fillMaxWidth().height(CANDIDATE_BAR_HEIGHT_DP.dp)
+            modifier = modifier.fillMaxWidth().fillMaxHeight()
                 .background(p.barBg),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -69,10 +75,9 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
         }
         return
     }
-    val pageCount = controller.candidatePageCount
     val candidates = controller.pageCandidates
     Row(
-        modifier = Modifier.fillMaxWidth().height(CANDIDATE_BAR_HEIGHT_DP.dp)
+        modifier = modifier.fillMaxWidth().fillMaxHeight()
             .background(p.barBg),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -80,11 +85,11 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
         // 它们搬去了候选行**上方**的独立一行（`ime/ComposingBar.kt`，含读屏播报）。
         // 本栏自此只画候选本身。撤掉的那格见 git 历史与 docs/install/android.md 的订正。
         Row(
-            // 候选整屏换新时滚动位置必须回到起点，否则新一批的头几个候选留在视口外
-            // （看着像"这页只有 3 个词"）。两个触发点：翻页（页号变）、继续打字
-            // （缓冲变 → 整批候选换掉）。
+            // 候选整批换新时滚动位置必须回到起点，否则新一批的头几个候选留在视口外
+            // （看着像"这页只有 3 个词"）。触发点：继续打字（缓冲变）、钉/解读音
+            // （候选整批换）。翻页触发点随 2026-10-16 裁决（‹ n/m › 下线）一并撤掉。
             modifier = Modifier.weight(1f).horizontalScroll(
-                remember(controller.buffer, controller.candidatePage) { ScrollState(0) },
+                remember(controller.buffer, controller.pinnedReading) { ScrollState(0) },
             ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -157,20 +162,12 @@ fun CandidateBar(controller: EngineController, onTap: (Int) -> Unit, onLongPress
                 }
             }
         }
-        if (pageCount > 1) {
-            IconButton(onClick = controller::prevPage) {
-                Icon(Icons.Filled.KeyboardArrowLeft, contentDescription = "上一页")
-            }
-            Text(
-                "${controller.candidatePage + 1}/$pageCount",
-                // "1/3" 读屏会念成「三分之一」之类，说明白是页码
-                modifier = Modifier.semantics {
-                    contentDescription = "第 ${controller.candidatePage + 1} 页，共 $pageCount 页"
-                },
-                fontSize = 13.sp,
-            )
-            IconButton(onClick = controller::nextPage) {
-                Icon(Icons.Filled.KeyboardArrowRight, contentDescription = "下一页")
+        // 右端 ⌄（2026-10-16 裁决「左右按钮换成 v 的图标」）：展开 = 键盘区换成平铺候选
+        // （`CandidateTiledView`）。「无匹配」那态（有缓冲没候选）不给入口 —— 展开一个
+        // 空网格没有意义。
+        if (candidates.isNotEmpty()) {
+            IconButton(onClick = onExpand) {
+                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "展开候选")
             }
         }
     }

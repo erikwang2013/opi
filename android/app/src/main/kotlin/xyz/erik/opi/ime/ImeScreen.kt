@@ -18,7 +18,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import xyz.erik.opi.candidate.CANDIDATE_BAR_HEIGHT_DP
 import xyz.erik.opi.candidate.CandidateBar
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.engine.EngineMode
@@ -42,7 +41,7 @@ import xyz.erik.opi.pet.petMood
 /**
  * IME 面板根：工具条（图标入口）+ 候选栏 + 键盘；数字/符号/生僻字面板。
  *
- * 2026-10-09 起按 **输入模式 × 键盘模式** 组合渲染（对齐搜狗移动端）：
+ * 2026-10-09 起按 **输入模式 × 键盘模式** 组合渲染（对齐主流移动输入法）：
  *   · 输入模式决定画哪套键面（26/9/14/大9/笔画）+ 引擎 scheme（[ImeState.selectInputMode]）；
  *   · 键盘模式是外观/窗口层（暗光/长辈换色板、单手偏移、悬浮/游戏改窗口，见
  *     [KeyboardModes] 的注释）。
@@ -89,70 +88,81 @@ fun ImeScreen(
             // ---- 拼音行（2026-10-15 用户裁决「移动端的拼音在候选词上方显示，不要在
             // 输入框里」）：槽位常驻（空时不铺底色），画的是 `composingText()`
             // （9 键 = 分词读数 `ni'hao`、其余方案 = 原字母）+ 五笔编码提示。
-            // 读屏播报也挂在这一行（原先挂在候选栏的缓冲首格，那格已随裁决撤掉）。----
-            if (state.view == ImeState.View.QWERTY || state.view == ImeState.View.RARE) {
+            // 读屏播报也挂在这一行（原先挂在候选栏的缓冲首格，那格已随裁决撤掉）。
+            // 平铺候选视图也保留它（参考图 2 的拼音就在最顶上）。----
+            if (state.view == ImeState.View.QWERTY || state.view == ImeState.View.RARE ||
+                state.view == ImeState.View.CANDIDATES_TILED
+            ) {
                 ComposingBar(controller)
             }
-            // ---- 候选栏槽位（**在工具条上面**：2026-10-09 用户裁决「功能按钮和候选词
-            // 位置上下一列调换位置」——搜狗移动端就是候选行在上、功能行在下）----
-            // 位置**固定预留** CANDIDATE_BAR_HEIGHT_DP：它出现/消失极其频繁（打第一个
-            // 字母出现、选词后消失），条件挂载等于让键区在"有没有栏"之间伸缩 —— 本机
-            // 实测键高 117px ↔ 89px、整块键盘下沉 116px。槽位常驻、高度只由
-            // OpiImeService.keyboardHeight 决定；**空槽不铺底色**（根列透明，见上）。
-            if (state.view == ImeState.View.QWERTY || state.view == ImeState.View.RARE) {
+            if (state.view == ImeState.View.CANDIDATES_TILED) {
+                // ---- 平铺候选视图（2026-10-16 裁决「替换键盘平铺出来」）----
+                // 它占满「共用格 + 键盘区」的整块（拼音行以下全给网格与两侧列）。
+                CandidateTiledView(
+                    state,
+                    controller,
+                    router,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                )
+            } else {
+                // ---- 候选｜工具条**共用一格**（2026-10-16 用户裁决「候选词在功能按钮
+                // 区域显示（替换掉功能区域）」）----
+                // 原先是两行（候选栏一行 + 工具条一行），现一格两用：输入中有候选
+                // （含英文提示条、含「无匹配」）画候选、否则画工具条。判据**单一来源** =
+                // [ImeState.candidatesShowable]（平铺态的自动收拢用同一支）。格位常驻
+                // （工具条那条 44dp）—— 「槽位常驻、条件挂载会让键区伸缩」那条 2026-10-09
+                // 实测教训继续成立；窗口里少掉的正是原候选行那一行（见
+                // OpiImeService.keyboardHeight 的新账）。
                 Box(
-                    modifier = Modifier.fillMaxWidth().height(CANDIDATE_BAR_HEIGHT_DP.dp),
+                    modifier = Modifier.fillMaxWidth().height(IME_TOOLBAR_HEIGHT_DP.dp),
                     contentAlignment = Alignment.CenterStart,
                 ) {
-                    if (state.view == ImeState.View.RARE) {
-                        // 生僻字面板是浏览式查字：候选槽停用（保持空槽以免键区伸缩）。
-                    } else if (controller.mode == EngineMode.ENGLISH ||
-                        controller.buffer.isNotEmpty() ||
-                        controller.candidates.isNotEmpty()
-                    ) {
+                    if (state.view == ImeState.View.QWERTY && state.candidatesShowable) {
                         // 长按候选 = 删除该自造词（下标语义同点击：页内下标）
                         CandidateBar(
                             controller = controller,
                             onTap = router::handleCandidate,
                             onLongPress = controller::removeUserWord,
+                            onExpand = state::expandCandidates,
+                        )
+                    } else {
+                        // ---- 工具条：图标入口（小欧 logo + 表情 / 皮肤 / 输入模式 / 键盘模式）----
+                        ImeToolbar(
+                            currentMode = state.inputMode,
+                            keyboardModes = modes,
+                            petMood = petMood(
+                                buffer = controller.buffer,
+                                candidateCount = controller.candidates.size,
+                                learnerEnabled = controller.learnerEnabled,
+                                dictionaryDegraded = controller.dictionaryDegraded,
+                            ),
+                            onOpenEmoji = state::openEmoji,
+                            onOpenSkin = state::openSkin,
+                            onOpenInputMode = state::openInputMode,
+                            onOpenKeyboardMode = state::openKeyboardMode,
+                            onOpenAbout = state::openAbout,
+                            onCloseKeyboard = onCloseKeyboard,
                         )
                     }
                 }
-            }
-            // ---- 工具条：图标入口（小欧 logo + 表情 / 皮肤 / 输入模式 / 键盘模式）----
-            ImeToolbar(
-                currentMode = state.inputMode,
-                keyboardModes = modes,
-                petMood = petMood(
-                    buffer = controller.buffer,
-                    candidateCount = controller.candidates.size,
-                    learnerEnabled = controller.learnerEnabled,
-                    dictionaryDegraded = controller.dictionaryDegraded,
-                ),
-                onOpenEmoji = state::openEmoji,
-                onOpenSkin = state::openSkin,
-                onOpenInputMode = state::openInputMode,
-                onOpenKeyboardMode = state::openKeyboardMode,
-                onOpenAbout = state::openAbout,
-                onCloseKeyboard = onCloseKeyboard,
-            )
-            // ---- 键盘区：单手模式整体偏移 + 收窄（纯布局层）----
-            // 键区自己刷底色（根列已透明）：键与键之间的缝是这一层 —— 换深色皮肤时
-            // 不刷会露出窗口底色（2026-10-09「整体统一」那条的落点）。
-            val keyArea = Modifier.weight(1f).fillMaxWidth().background(palette.barBg).let {
-                when (modes.oneHand) {
-                    KeyboardModes.OneHand.OFF -> it
-                    KeyboardModes.OneHand.LEFT -> it.fillMaxWidth(0.76f)
-                    KeyboardModes.OneHand.RIGHT -> it.fillMaxWidth(0.76f)
+                // ---- 键盘区：单手模式整体偏移 + 收窄（纯布局层）----
+                // 键区自己刷底色（根列已透明）：键与键之间的缝是这一层 —— 换深色皮肤时
+                // 不刷会露出窗口底色（2026-10-09「整体统一」那条的落点）。
+                val keyArea = Modifier.weight(1f).fillMaxWidth().background(palette.barBg).let {
+                    when (modes.oneHand) {
+                        KeyboardModes.OneHand.OFF -> it
+                        KeyboardModes.OneHand.LEFT -> it.fillMaxWidth(0.76f)
+                        KeyboardModes.OneHand.RIGHT -> it.fillMaxWidth(0.76f)
+                    }
                 }
-            }
-            Row(modifier = keyArea) {
-                if (modes.oneHand == KeyboardModes.OneHand.RIGHT) {
-                    Box(modifier = Modifier.weight(0.24f)) // 右侧单手：左边留空
-                }
-                KeyboardArea(state, controller, router, catalog, rareIndex, symbolCategories, modifier = Modifier.weight(1f))
-                if (modes.oneHand == KeyboardModes.OneHand.LEFT) {
-                    Box(modifier = Modifier.weight(0.24f)) // 左侧单手：右边留空
+                Row(modifier = keyArea) {
+                    if (modes.oneHand == KeyboardModes.OneHand.RIGHT) {
+                        Box(modifier = Modifier.weight(0.24f)) // 右侧单手：左边留空
+                    }
+                    KeyboardArea(state, controller, router, catalog, rareIndex, symbolCategories, modifier = Modifier.weight(1f))
+                    if (modes.oneHand == KeyboardModes.OneHand.LEFT) {
+                        Box(modifier = Modifier.weight(0.24f)) // 左侧单手：右边留空
+                    }
                 }
             }
         }
@@ -172,6 +182,9 @@ private fun KeyboardArea(
 ) {
     val shiftVisible = controller.mode == EngineMode.ENGLISH
     when (state.view) {
+        // 平铺候选视图（2026-10-16 裁决）：顶层已分流（它连「共用格」一起占，根本
+        // 不进键区）—— 本分支只为 when 穷尽，正常到不了。
+        ImeState.View.CANDIDATES_TILED -> Box(modifier = modifier)
         ImeState.View.RARE -> RarePanel(
             index = rareIndex(),
             onCommit = router::commitText,
@@ -314,7 +327,7 @@ private fun KeyboardArea(
                     // 英文键盘：先按拼音上屏 pending、再切英文 26 键
                     //（2026-10-10 用户裁决「切英文默认是拼音，不要是候选词」）。
                     onEnglish = state::switchToEnglishKeyboard,
-                    // 左侧一列：**只有读得到拼音时才替换**（搜狗同款，2026-10-09
+                    // 左侧一列：**只有读得到拼音时才替换**（主流同款，2026-10-09
                     // 用户裁决「不输入、回退、确定，就重置到初始化的一列」）——
                     // 读数空（没候选/已提交/退空）就回到标点列；不回退显示数字串
                     // （那是上一版的自作主张，用户明确不要）。

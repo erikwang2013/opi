@@ -151,7 +151,7 @@ inline std::function<int32_t(int32_t)> &opiSymbolBrowseHook() {
 // ---- Shift 轻按切换中英文 + 中/英状态项（2026-10-09）----
 //
 // 用户裁决（原话「你这不能用shift键切换英文」）：**轻按**左/右 Shift 在
-// 中文 ⇄ 英文间切换，与搜狗一致。实现走引擎既有的 English 模式
+// 中文 ⇄ 英文间切换，与主流输入法一致。实现走引擎既有的 English 模式
 // （input_method.rs 的 `Mode::English`：空缓冲下字母直传上屏）。
 //
 // 「轻按」判定 = 按下后、抬起前**没有别的键按下**，且按住时长不超过
@@ -166,7 +166,7 @@ inline std::function<int32_t(int32_t)> &opiSymbolBrowseHook() {
 //     配置工具的「附加组件 → OPI」里。
 // ⚠️ 副作用（如实记）：本机制不消费 Shift，未拦截时 Shift 的事件照旧直通客户端
 //   （与 core 的 modifier-only 热键一致）。Shift+点击 这类**没有中间按键**的组合
-//   仍会被判成轻按 —— 与搜狗的行为相同，用户的习惯预期如此。
+//   仍会被判成轻按 —— 与主流输入法的行为相同，用户的习惯预期如此。
 class OpiShiftToggle {
 public:
     explicit OpiShiftToggle(fcitx::Instance *instance) : instance_(instance) {
@@ -363,7 +363,7 @@ private:
 //
 //   Ctrl+' (FcitxKey_apostrophe) → 英文 ⇄ 拼音（B0）
 //   Ctrl+\ (FcitxKey_backslash)  → 符号 ⇄ 拼音（B5）
-//   Ctrl+Shift+F (FcitxKey_F)    → 简体 ⇄ 繁体（2026-10-09；键位沿用搜狗惯例）
+//   Ctrl+Shift+F (FcitxKey_F)    → 简体 ⇄ 繁体（2026-10-09；键位沿用主流输入法惯例）
 // 三个键都**来回切**，不是单向进入：只能进不能出等于换个地方卡住。
 // 不用 Ctrl+. ：那是 punctuation 模块的系统级占用（addon/punctuation.conf，
 // Category=Module）；不用 ` ：拼音生态里那是 quickphrase。
@@ -428,7 +428,7 @@ inline bool handleModeHotkey(fcitx::KeyEvent &keyEvent, OpiShiftToggle &shift,
     // —— **含 Z 的零命中**；/usr/share/fcitx5/addon/*.conf 与用户 conf 里也搜不到。
     // ⚠️ 但它与**生态**冲突：编辑器/IDE 的 Ctrl+Shift+Z = 重做（与 Ctrl+Y 同位），
     // 中文态下会被本插件吃掉，用户按重做没反应。lead 2026-10-10 裁决**维持**这个
-    // 键（搜狗 PC 的「符号大全」就是它，属用户预期），冲突如实记在
+    // 键（主流输入法 PC 的「符号大全」就是它，属用户预期），冲突如实记在
     // docs/install/linux.md 与交付说明里。备选（真要换时从这里挑）：
     // Ctrl+Shift+J（终端里是换行，冲突面更小）、Alt+Shift+Z、双击 Shift。
     // 用**切换**语义（不是只能进）：只能进不能出等于换个地方卡住，与上面三个热键同一条。

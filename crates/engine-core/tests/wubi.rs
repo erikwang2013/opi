@@ -170,7 +170,7 @@ fn auto_commit_is_off_in_mixed_style() {
 #[test]
 fn auto_commit_can_be_switched_off() {
     let mut e = engine();
-    assert!(e.wubi_auto_commit(), "默认开（对齐搜狗缺省）");
+    assert!(e.wubi_auto_commit(), "默认开（对齐主流输入法缺省）");
     e.set_wubi_auto_commit(false);
     type_str(&mut e, "abc");
     assert_eq!(e.input_key('d'), "", "关掉后四码唯一也不自动");

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! **双拼**的引擎侧一半（2026-10-13 用户裁决「搜狗同款全套」）：布局设置 + 候选分支。
+//! **双拼**的引擎侧一半（2026-10-13 用户裁决「主流同款全套」）：布局设置 + 候选分支。
 //! 独立成文件是 500 行门禁（`engine.rs` 加完这两块后 536 行越线，见
 //! `engine_segment.rs` / `engine_symbol_browse.rs` 同一套先例）。
 //!

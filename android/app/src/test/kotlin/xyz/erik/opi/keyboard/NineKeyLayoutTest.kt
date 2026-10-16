@@ -67,7 +67,7 @@ class NineKeyLayoutTest {
         // 左列（空闲时）的标点：发送键必须落在 engine-core `punctuation.rs` 的
         // CHINESE_PUNCT 表里（`,.\? !` 都有条目）—— 上层不另造标点通路。
         assertEquals(
-            "键面与顺序（搜狗左列风格）",
+            "键面与顺序（主流输入法左列风格）",
             listOf("，", "。", "、", "？", "！"),
             nineKeyStripPuncts.map { it.label },
         )

@@ -147,7 +147,7 @@ fn apply_settings_prefers_the_pairs_list() {
     assert_eq!(s.engine.fuzzy_pairs(), 0, "无列表 + 布尔关 → 全关");
 }
 
-/// 拼音纠错（2026-10-13）：键 `Correction`，缺省开（对齐搜狗）。
+/// 拼音纠错（2026-10-13）：键 `Correction`，缺省开（对齐主流输入法）。
 #[test]
 fn parses_correction_switch() {
     assert!(parse("").correction, "缺省开");

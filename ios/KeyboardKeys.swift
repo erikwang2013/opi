@@ -56,7 +56,7 @@ enum KeyboardFunctionKey {
     ///
     /// Android 从工具条的「输入模式」按钮进（`ImeToolbar` 的 `InputModePanel`）；
     /// iOS 没有工具条，入口是**长按模式键**（中/繁/英 那个键，各键面都有它）——
-    /// 与搜狗 iOS 版的习惯一致。所以本 case 的实际发射者是 `onLongPress`，
+    /// 与主流输入法 iOS 版的习惯一致。所以本 case 的实际发射者是 `onLongPress`，
     /// 不是某颗键的按下。
     case showModes
     /// 打开**生僻字面板**（2026-10-14）。入口是笔画键盘功能行的「生僻字」键

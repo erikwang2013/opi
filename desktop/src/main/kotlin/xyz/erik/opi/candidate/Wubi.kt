@@ -149,7 +149,7 @@ internal val WUBI_MIXED_ENTRY_NAMES = listOf("直接字母", "z键")
  */
 internal val WUBI_RETURN_NAMES = listOf("清空", "上屏原文")
 
-/** 候选个数档位（3..9：下限 3 是产品档位 —— 1–2 个候选不成档，与搜狗同量级）。 */
+/** 候选个数档位（3..9：下限 3 是产品档位 —— 1–2 个候选不成档，与主流输入法同量级）。 */
 internal val WUBI_CANDIDATE_LIMIT_CHOICES = (3..9).toList()
 
 /**

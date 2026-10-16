@@ -4,11 +4,11 @@
 //! 「属性设置」窗口（Compose 自绘；配色沿用项目色 —— 宣纸白底、青、朱砂）。
 //!
 //! **布局 = 左分类导航 + 右内容 + 底部状态行**（2026-10-12 用户裁决「设置页面布局和
-//! 功能参考搜狗输入法」；此前是单列长滚动）。页集合见 [SettingsTab]：每页的内容在
+//! 功能参考主流输入法」；此前是单列长滚动）。页集合见 [SettingsTab]：每页的内容在
 //! SettingsPages.kt，**只列引擎真的支持的开关**。
 //!
 //! 交互模型不变：**改一下就落盘 + 通知 IME**（不像桌面软件那样要再点「确定」）——
-//! 参照对象正是搜狗那类输入的属性设置：开关拨完即生效，底部只如实显示结果。
+//! 参照对象正是主流输入法那类输入的属性设置：开关拨完即生效，底部只如实显示结果。
 //! Linux 走 `ReloadAddonConfig`（即那条实测有效的路，`fcitx5-remote -r` **不是**，
 //! 见 Settings.kt 的 notifyFcitxReload）；Windows 只落盘、下次激活生效。
 //!
@@ -69,11 +69,11 @@ internal val Muted = Color(0xFF6B7671) // 次级文字
 internal val Teal = Color(0xFF2E8B80) // 青（开关选中）
 internal val Hairline = Color(0xFFE3E8E6) // 分隔线
 
-// 导航列底色/选中态：比宣纸白略深一档，选中 = 白底 + 青色左条（搜狗那类设置页的做法）。
+// 导航列底色/选中态：比宣纸白略深一档，选中 = 白底 + 青色左条（主流输入法那类设置页的做法）。
 private val NavBg = Color(0xFFF1F3F1)
 private val NavSelBg = Color(0xFFFBFAF6)
 
-/** 一页：导航项。**顺序 = 展示序**（与搜狗一致的排法：常用在前、关于在最后）。 */
+/** 一页：导航项。**顺序 = 展示序**（与主流输入法一致的排法：常用在前、关于在最后）。 */
 internal enum class SettingsTab(val label: String) {
     COMMON("常用"),
     KEYS("按键"),
@@ -169,6 +169,15 @@ fun SettingsWindow() {
         // 拉条进程 = fork/exec（还带一次锁文件探测）：挪到 IO，规矩与状态栏那边一致
         // —— 别在组合线程上碰进程与文件（2026-10-13 EDT 取证轮）。
         withContext(Dispatchers.IO) { ensureStatusBarRunning(s.statusbar) }?.let { status = it }
+        // 内置词库首启种子（2026-10-16，康熙字典「全发」）：开窗一次把随包词库种进
+        // 词库目录（标记门控；删过的不复活 —— 与 Android DictStore.seedBundled、fcitx5
+        // opiSeedBundledDict 语义一字不差）。放**窗口启动**而不是词库页里：页面保持
+        // 「只读目录、不写目录」的姿态（离屏探针直接渲页，页面里种会让它的空态不再空）。
+        withContext(Dispatchers.IO) {
+            seedBundledDict("kangxi", dictsDir()) {
+                DictsResources::class.java.getResourceAsStream("/kangxi.tsv")
+            }
+        }
     }
 
     val scope = rememberCoroutineScope()
@@ -271,7 +280,7 @@ private fun NavColumn(selected: SettingsTab, onSelect: (SettingsTab) -> Unit) {
                     .padding(start = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // 青色左条：选中标记（比整行反色轻，与搜狗那类设置页一致）
+                // 青色左条：选中标记（比整行反色轻，与主流输入法那类设置页一致）
                 Box(
                     Modifier.width(3.dp).height(20.dp)
                         .background(if (on) Teal else Color.Transparent),

@@ -40,7 +40,7 @@ internal sealed interface EnterDecision {
  * 回车决策（2026-10-10 用户报障「换行无效」的订正）：
  * **IME_FLAG_NO_ENTER_ACTION 优先于 action 位** —— 多行编辑器惯例上两样都设
  * （NO_ENTER_ACTION + 一个残留的 action），旧逻辑只看 action 会把它们的回车发成
- * 动作而不是换行；搜狗/AOSP 的判法都是先看这个 flag。纯函数，边界由单测钉。
+ * 动作而不是换行；主流输入法/AOSP 的判法都是先看这个 flag。纯函数，边界由单测钉。
  */
 internal fun enterDecision(imeOptions: Int): EnterDecision {
     val action = imeOptions and EditorInfo.IME_MASK_ACTION

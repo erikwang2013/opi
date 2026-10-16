@@ -76,6 +76,12 @@ class AboutSectionTest {
         assertTrue("View.ABOUT 要分发到 AboutPanel", screen.contains("ImeState.View.ABOUT -> AboutPanel("))
         val state = File("src/main/kotlin/xyz/erik/opi/ime/ImeState.kt").readText()
         assertTrue("ImeState 要有 openAbout()", state.contains("fun openAbout()"))
-        assertTrue("View 枚举要有 ABOUT", state.contains("SYMBOL_PAGE, ABOUT }"))
+        // 枚举成员**解析出来查**，别钉整行字面串：2026-10-16 加 CANDIDATES_TILED 时
+        // 那种「SYMBOL_PAGE, ABOUT }」的整串断言红过一次 —— 它测的是源码文本，不是
+        // 「ABOUT 在不在」这个行为（同本仓文本门禁的老坑）。
+        val viewMembers = Regex("""enum class View \{([^}]*)\}""")
+            .find(state)?.groupValues?.get(1)
+            ?: error("ImeState.kt 里找不到 View 枚举")
+        assertTrue("View 枚举要有 ABOUT（成员：$viewMembers）", viewMembers.contains("ABOUT"))
     }
 }

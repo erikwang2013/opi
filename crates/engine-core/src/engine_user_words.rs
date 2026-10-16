@@ -45,7 +45,7 @@ impl Engine {
         self.fuzzy != 0
     }
 
-    /// 拼音纠错开关（2026-10-13 用户裁决「混合参与排序」）。默认开（对齐搜狗）。
+    /// 拼音纠错开关（2026-10-13 用户裁决「混合参与排序」）。默认开（对齐主流输入法）。
     pub fn set_correction(&mut self, on: bool) {
         self.correction = on;
     }

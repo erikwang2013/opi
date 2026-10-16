@@ -65,7 +65,7 @@
 | Rust | 根 `Cargo.toml` 的 `[workspace.package] rust-version`（当前声明 `1.88`）。**这是声明**，实际下限由 CI 的 `msrv` job 量出来 | `Cargo.toml` · `.github/workflows/ci.yml` |
 | Rust target | 三个都要装：`aarch64-unknown-linux-ohos`（arm64-v8a）、`armv7-unknown-linux-ohos`、`x86_64-unknown-linux-ohos` | `harmony/README.md`「构建集成」；它们**不在**默认安装里，必须先 `rustup target add` |
 | CMake | `harmony/cpp/CMakeLists.txt` 里写的是 `cmake_minimum_required(VERSION 3.4.1)`。在 cmake ≥3.31 是**弃用警告**，在 **CMake 4.0+ 是硬错误** | 本机 cmake 3.31.4 观察到的警告见 `harmony/README.md` 实测记录 §4b。**起来第一件事**就是把它抬到 3.10+ |
-| 词库 | **现在不需要**：本端走 `opi_load('')` = 引擎**内置回退词库**（`engine-data/src/dictionary.rs` 的 `fallback_dict`）。完整词库 `data/generated/luna.opid` 的通路**尚未接线**（rawfile → 沙箱绝对路径，见「已知限制」G2） | `KeyboardController.ets` 的 `ensureDictionary()` |
+| 词库 | **现在不需要**：本端走 `opi_load('')` = 引擎**内置回退词库**（`engine-data/src/dictionary.rs` 的 `fallback_dict`）。完整词库 `data/generated/luna.opid` 的通路**尚未接线**（rawfile → 沙箱绝对路径，见「已知限制」G2）；**导入词库与康熙字典同属这条未接线通路**（本端不发） | `KeyboardController.ets` 的 `ensureDictionary()` |
 | 设备 | 真机或模拟器。**输入法不会自动生效**，必须在系统设置里手动启用 | `harmony/README.md` 的 P1（检索）|
 | 宿主 App | 输入法扩展**不能独立安装**，要在一个 DevEco 应用工程里 | 与 Apple 两端同一形态（未核实，凭记忆）|
 | 工程文件 | 仓库里**没有** `build-profile.json5`、没有工程级 `oh-package.json5`、没有 `hvigorfile.ts` —— 工程要在 DevEco 里新建 | 判据：`find harmony/ -name 'build-profile.json5'` 零命中。**能跑通 `codelinter` 的最小布局见 §1.1** —— 比这三份还多两处（模块根下的 `build-profile.json5`、`src/main/module.json5`） |
