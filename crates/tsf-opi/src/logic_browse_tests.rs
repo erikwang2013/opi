@@ -82,12 +82,17 @@ fn category_labels_are_uncommittable_through_keys() {
     // 越界数字（本页没有第 9 项时）也**吞掉不直通**（浏览是模态）
     assert!(s.enter_symbol_browse());
     assert_eq!(s.input_key('1' as u32, 0), KeyOutcome::CompositionChanged); // 进二级
-    for _ in 0..9 {
-        s.input_key('=' as u32, 0); // 常用 78 个符号：页 9 = 第 73..78 项（6 条）
+    // 翻到**末页**：`=` 界内钳制（同 `-` 的首页钳制，见 minus_and_equal 那条），
+    // 多按几次必落在末页。⚠️ 别再写死「常用 N 个符号 ⇒ 末页 M 条」—— 2026-10-16
+    // 常用补数理化（78→146）当场把钉死的 6 按成 8，本断言改为**性质**：
+    // 「一页至多 8 条 + 末页按 9 必被吞」两条与数据条数无关（与 fcitx5 轨逐行同构）。
+    for _ in 0..40 {
+        s.input_key('=' as u32, 0);
     }
-    assert_eq!(s.candidates().len(), 6, "末页只剩 6 条");
+    let last = s.candidates().len();
+    assert!(last <= 8, "末页至多 8 条（实 {last}）");
     assert_eq!(
-        s.input_key('7' as u32, 0),
+        s.input_key('9' as u32, 0),
         KeyOutcome::CompositionChanged,
         "越界数字吞掉（不 Unhandled）"
     );
