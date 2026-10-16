@@ -315,6 +315,30 @@ https://github.com/erikwang2013/opi/actions/runs/37934999798 ）**：
 - **没有** `tsf_opi.dll`（那是另一个 job 在另一台机器上编的，两个 artifact 互不相干）；
 - **没有** `luna.opid`，也不做任何注册/环境变量动作（§2.4 的判断不变）。
 
+**拿下来之后要过一遍后处理（2026-10-17 加）**：CI 出的 `.msi` 只带 jpackage 的默认行为，
+而用户裁决了两条它做不了的（「安装的时候中断正在运行的应用，安装后启动」）：
+
+```bash
+# 在 debian:12 容器里跑（本机没有 msitools；同 scripts/build-packages.sh 的用法）
+docker run --rm -v "$PWD:/w" -w /w debian:12 \
+  sh -c 'apt-get update -qq && apt-get install -y -qq msitools >/dev/null \
+         && scripts/postprocess-windows-msi.sh dist/opi-candidates-<版本>.msi'
+```
+
+`scripts/postprocess-windows-msi.sh`（文件头有全部设计理由与「能证明/不能证明」）做两件事：
+执行序列 797 加一条 `"taskkill" /f /t /im opi-candidates.exe`（引号是 WixQuietExec 的硬要求；
+排在 `RemoveExistingProducts@798`
+**之前** —— 否则运行中的旧实例会走「改名+重启后删」那条路，装完还活着）；ExitDialog 的
+WixUI 自带复选框（默认勾选、文案 `Launch opi-candidates`）在 Finish 时经 `WixCA` 的
+`WixShellExec` 拉起新装的启动器。脚本自带前置断言（槽位空、基线行在）、幂等护栏与
+**读回 + 全表 diff** 完整性检查，任一不满足即不落产物。
+
+**这条改动的证据档位**（照实）：表级形状在本地可复核（读回断言全绿 + 除四张表外全库
+逐字节未变 + `msiextract` 两个包解出的 193 个文件 `diff -rq` 全同）；入口点
+`WixShellExec` / `WixQuietExec` 的存在取自 WiX3 源码 def（`wixca.def`，wix311rtm 同版）。
+**「在真 Windows 上装一遍」仍然一次都没有**（§6.1 #12）—— 杀没杀掉、启没启起来、
+复选框出不出现，都还没人见过。
+
 **这个 artifact 明确不保证什么**（别读成「Windows 端能用了」）：
 
 - DLL **没有被注册**（§3.1 的 `regsvr32` 仍要手工跑），也**从未被任何宿主加载过**；
@@ -610,13 +634,14 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | 9 | `Ctrl+'` / `Ctrl+\` / `Shift+Space` 在 Windows 上有没有被别的软件占用 | §4.1 |
 | 10 | 语言栏按钮（`langbar.rs`）的运行期行为：`AddItem` 成不成、`GetIcon` 有没有被调、图标画没画出来 —— 只有 §1.2 那条 `cargo check` 看过它（"挑条目 + 校验 RT_ICON 形态"那半在 `langbar_icon.rs`，有主机单测） | §2.1、`crates/tsf-opi/src/langbar.rs` 头注释 |
 | 11 | **「属性设置」的生效时机**：设置窗落盘后要等下一次 `Activate` —— 本机无法验证（`Activate` 由 TSF 调）。读取/容错/落点那半在 `settings.rs`，有主机单测 | §4.4、`crates/tsf-opi/src/settings.rs` |
+| 12 | **安装器两条新行为（关停运行中实例 / 装后自启，2026-10-17 加）**：表级已改好并可本地复核（§2.5 的后处理脚本 + 读回证据），但**没有在真 Windows 上装过一次** —— taskkill 真杀没杀掉、WixShellExec 真启没启起来、ExitDialog 复选框出不出现，全是【未验证】 | §2.5、`scripts/postprocess-windows-msi.sh` |
 
 ### 6.2 代码里已知的缺口（读源码得出，不是待办猜测）
 
 | # | 缺口 | 依据 | 影响 |
 |---|---|---|---|
 | 1 | **没有打包步骤**：`luna.opid` 与 DLL 不会被放到一起 | §2.4 | 开箱只有内置回退词库 |
-| 2 | **没有人拉起候选窗进程**（未变）；~~候选窗也没有 Windows 安装包~~ **【订正 2026-10-09】** 安装包有了（§2.5 的 `opi-desktop-msi-*` artifact），但它在 Release 之外、90 天过期，而且**仍然没人拉起它** | §4.3 #1、§2.5 | 候选窗看不到（打字仍可用） |
+| 2 | **没有人拉起候选窗进程**；~~候选窗也没有 Windows 安装包~~ **【订正 2026-10-09】** 安装包有了（§2.5 的 `opi-desktop-msi-*` artifact），但它在 Release 之外、90 天过期。**【订正 2026-10-17】** 后处理后的 `.msi` 里「装完点 Finish 自启」已接线（§2.5）—— 但**这条线本身未在真机验证**，且 v1.9.6 及以前的 Release 资产都是**未后处理**的旧包 | §4.3 #1、§2.5 | 候选窗看不到（打字仍可用），直到有人装上后处理的包并勾选 Finish |
 | 3 | **点选延迟到下一个键事件才插入** | `state.rs` 模块头、`tsf.rs::drain_pending` | 点了不敲键 = 字不出现 |
 | 4 | `OnSetFocus` 空实现（drain 的天然落点没接） | `tsf.rs` 的 `OnSetFocus` | 同上，放大了 #3 |
 | 5 | 点选后换文档 → 插到上一个文档 | `tsf.rs::drain_pending` 注释 | 边缘场景 |
