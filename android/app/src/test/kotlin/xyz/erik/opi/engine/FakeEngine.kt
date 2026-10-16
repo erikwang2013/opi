@@ -111,7 +111,7 @@ class FakeEngine : OpiEngineApi {
     var candReadings: Array<String>? = null
     override fun candidateReadings(): Array<String>? = candReadings
 
-    /** 钉读音（真引擎：候选收窄到该读音一族；空串 = 解除）。 */
+    /** 钉读音（真引擎：候选收窄到**读音恰等**的条目；空串 = 解除）。 */
     val pinCalls = mutableListOf<String>()
     override fun pinReading(reading: String) {
         pinCalls += reading

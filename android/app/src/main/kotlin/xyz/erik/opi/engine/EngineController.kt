@@ -78,7 +78,7 @@ class EngineController(
     var candidateReadings by mutableStateOf<List<String>>(emptyList())
         private set
 
-    /** 钉读音（9 键左列点一行拼音；空串 = 未钉）。候选列表收窄到该读音一族、**不上屏**。 */
+    /** 钉读音（9 键左列点一行拼音；空串 = 未钉）。候选收窄到**读音恰等**的条目、**不上屏**。 */
     var pinnedReading by mutableStateOf("")
         private set
 
@@ -271,7 +271,9 @@ class EngineController(
 
     /**
      * 钉/解钉一个读音（空串 = 解除）。2026-10-09 用户裁决：9 键左列点一行拼音，
-     * **不确认**，候选列表收窄到该读音一族。缓冲一变自动解除（[refresh] 的看守）。
+     * **不确认**，候选列表收窄到该读音。缓冲一变自动解除（[refresh] 的看守）。
+     * 过滤是**读音恰等**（2026-10-16 裁决「选择的是字」）：读音更长的词与延伸读音的
+     * 字都不进（引擎侧四处过滤同语义，注在 `dictionary.rs::scheme_entries_scan`）。
      */
     fun pinReading(reading: String) {
         api.pinReading(reading)

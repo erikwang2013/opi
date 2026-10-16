@@ -321,7 +321,8 @@ private fun KeyboardArea(
                     readings = controller.candidateReadings,
                     onPickReading = { i ->
                         // 点拼音行 = **钉读音**（2026-10-09 用户裁决「不要直接确认」）：
-                        // 候选收窄到该读音一族、不上屏；同一行再点 = 解除。
+                        // 候选收窄到读数恰等的条目、不上屏；同一行再点 = 解除。
+                        // 「恰等」是 2026-10-16 裁决（此前是「以它开头」，联想词组会漏进来）。
                         controller.candidateReadings.getOrNull(i)?.let(controller::togglePinnedReading)
                     },
                     pinnedReading = controller.pinnedReading,

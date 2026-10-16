@@ -40,8 +40,13 @@ pub fn scheme_entries_scan<D: Dictionary + ?Sized>(
         if !scheme.matches(input, py) {
             return;
         }
+        // 钉读音 = **读音恰等**（2026-10-16 用户裁决「左侧选择拼音的字了，就不要联想词组了，
+        // 选择的是字」）。此前是 `starts_with`（以钉住读音开头）—— 读音更长的词与延伸读音的
+        // 字都跟着进列表；真库实测钉 `me` 第 12 条起出「美俄/每个」、钉 `ni'hao` 第 3 条起
+        // 出「你好啊」，门禁在 `tests/scheme_readings.rs` 与 `engine-data/tests/pin_reading_real.rs`。
+        // ⚠️ 四处过滤（本扫描两处 + `MmapDictionary` 两处）必须同语义。
         if let Some(p) = pin
-            && !py.starts_with(p)
+            && py != p
         {
             return;
         }
@@ -83,8 +88,9 @@ pub fn scheme_find_scan<D: Dictionary + ?Sized>(
         if found.is_some() || !scheme.matches(input, py) {
             return;
         }
+        // 钉读音 = 读音恰等（同 `scheme_entries_scan` 的过滤，改一处必同改另一处）。
         if let Some(p) = pin
-            && !py.starts_with(p)
+            && py != p
         {
             return;
         }
@@ -146,6 +152,9 @@ pub trait Dictionary: Send + Sync {
     /// 按键类匹配（9/14 键）的整档：**精确匹配（键字节长 == 输入键数）全量 + 其余匹配里
     /// 静态词频最高的至多 n 条**（与 [`Self::query_prefix_top`] 同一条取舍）；每条带拼音串
     /// （9 键左列逐条读数要用）。顺序不保证。
+    ///
+    /// `pin` = 钉读音（9 键左列点一行拼音）：只保留拼音**恰等于**它的条目（2026-10-16
+    /// 用户裁决，见 `scheme_entries_scan` 的注）—— `None` = 不钉。
     ///
     /// 语义与逐条 [`Scheme::matches`] + pin 过滤**等价**（`'` 分词输入也在内 —— 覆写把它
     /// 交给 [`scheme_entries_scan`]）。默认实现 = 全表扫描（替身词库的量级无所谓）；

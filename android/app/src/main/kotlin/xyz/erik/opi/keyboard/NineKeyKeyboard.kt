@@ -109,7 +109,7 @@ fun NineKeyKeyboard(
      * 只出一行，引擎出口已去重，2026-10-12 用户裁决「左列去重」）。
      * 空列表 = 没在输入/无候选，左列显示标点）。 */
     readings: List<String> = emptyList(),
-    /** 点第 i 行拼音 = 钉该读音（**不确认**，候选收窄到一族；见 onPickReading 的注释）。 */
+    /** 点第 i 行拼音 = 钉该读音（**不确认**，候选收窄到**读音恰等**的条目；见 onPickReading 的注释）。 */
     onPickReading: (Int) -> Unit = {},
     /** 当前钉住的读音（空串 = 未钉；命中的行高亮强调色）。 */
     pinnedReading: String = "",
@@ -155,7 +155,8 @@ fun NineKeyKeyboard(
                                 Box(
                                     // 点一行拼音 = **钉住该读音**（2026-10-09 用户裁决
                                     // 「选择后候选词跟着拼音变化，不要直接确认」）：
-                                    // 候选列表收窄到该读音一族、不上屏；同一行再点 = 解除。
+                                    // 候选收窄到读音恰等的条目、不上屏；同一行再点 = 解除
+                                    // （2026-10-16 裁决：恰等 —— 读音更长的词组/联想都不进）。
                                     modifier = Modifier.fillMaxWidth().height(cell)
                                         .clickable { onPickReading(i) }
                                         .semantics {

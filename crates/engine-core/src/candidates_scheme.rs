@@ -63,7 +63,8 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
         let input_len = input.len();
         // 按键类匹配走 `Dictionary::scheme_entries`（区间枚举 + 静态词频 top-N 截断）——
         // 2026-10-11 移动端实测：此前是全表逐条 `matches`，936k 条下单键 268ms（桌面
-        // release），手机端每键秒级。pin 过滤（左列点一行拼音）语义在实现里同义保留。
+        // release），手机端每键秒级。pin 过滤（左列点一行拼音）= **读音恰等**，
+        // 2026-10-16 裁决；语义与 `dictionary.rs::scheme_entries_scan` 同源。
         dict.scheme_entries(input, scheme, pin, SCHEME_MATCH_CAP)
             .into_iter()
             .map(|(e, pinyin)| {
@@ -96,10 +97,19 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
     // 表里只有词库真缺的条目 ⇒ 去重交给下面的 `seen`。
     let input_len = input.len();
     let dict_max = dict.max_freq(); // 量纲判据 + 缩放（见 `polyphone.rs`）
+    // 钉读音时补读音条目的放行名单：**缺的读音恰是钉住那个**才进（`hits(pin)` 的成员，
+    // 2026-10-16 裁决「读音恰等」的一部分）—— 钉 `me` 时 `那`（缺的读音是 ne）出局、
+    // `幺/末`（缺的读音恰是 me）保留，都靠这条。多音节钉（如 `ni'hao`）不在表里 ⇒ 全不出。
+    let pin_hits = pin.map(crate::polyphone::hits);
     for (word, freq, plen) in crate::polyphone::digit_hits(input)
         .iter()
         .filter(|_| crate::polyphone::applies(dict_max))
     {
+        if let Some(hits) = pin_hits
+            && !hits.iter().any(|(ch, _)| ch == word)
+        {
+            continue;
+        }
         let exact = *plen == input_len;
         let user = learner.freq_of(word);
         let freq = crate::polyphone::scaled_freq(*freq, dict_max);
@@ -116,7 +126,9 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
             // 读音串不进这条出口（`readings` 是给左列的显示读数）：补读音的字没有
             // 「逐条读数」可言，按**输入本身的键序**给它一条 —— 9 键左列显示的仍是
             // 「还能接哪些键」那套语义，不是新造一个读音。
-            input.to_string(),
+            // **钉住时除外**：放行名单已保证它们的读音就是钉住那个 ⇒ 报钉住读音
+            // （照旧写输入键序的话，钉住后左列会多出一行「63」这种数字串）。
+            pin.unwrap_or(input).to_string(),
             Some(Meta {
                 pinyin_len: *plen,
                 exact,

@@ -170,8 +170,8 @@ fn readings_are_sorted_short_to_long_and_stable() {
     assert_eq!(readings.len(), 4, "四条读音各出一行：{readings:?}");
 }
 
-/// 钉读音（9 键左列点一行拼音）：候选**收窄**到该读音一族、**不上屏**；解除回全量；
-/// 缓冲一变自动作废（配对语义：同一缓冲内有效）。
+/// 钉读音（9 键左列点一行拼音）：候选**收窄**到**读音恰等**的条目（2026-10-16 裁决，
+/// 见下一条）、**不上屏**；解除回全量；缓冲一变自动作废（配对语义：同一缓冲内有效）。
 #[test]
 fn pinned_reading_narrows_candidates_without_committing() {
     let mut e = engine();
@@ -204,5 +204,32 @@ fn pinned_reading_narrows_candidates_without_committing() {
         resurrected,
         vec!["你好".to_string()],
         "配对语义：同缓冲内钉仍在"
+    );
+}
+
+/// 钉读音 = 只出**读音恰等**的条目（2026-10-16 用户裁决）。
+///
+/// 裁决原文：「输入拼音后，左侧选择拼音的字了，就不要联想词组了，选择的是字」。
+/// 此前语义是「拼音以钉住读音**开头**」⇒ 钉 `ni` 时 `你好`（读音 ni+hao）也跟着进列表；
+/// 真库实测可见的泄漏（全量门禁在 `engine-data/tests/pin_reading_real.rs`）：
+/// 钉 `me` 第 12 条起出「美俄/每个」、钉 `ni'hao` 第 3 条起出「你好啊/你好吗」。
+/// 本夹具钉住「恰等」本身：`ni` 只留 你/尼（读音恰为 ni），`你好`（读音更长）不出。
+#[test]
+fn pinned_reading_keeps_only_entries_reading_exactly_that() {
+    let mut e = engine();
+    e.set_scheme(Scheme::Nine);
+    type_str(&mut e, "64"); // 你/尼（ni，恰等）与 你好（nihao，读音更长）都命中
+    let all: Vec<String> = e.candidates(8).into_iter().map(|c| c.text).collect();
+    assert!(
+        all.contains(&"你好".to_string()),
+        "前置：未钉时 你好 可达（{all:?}）"
+    );
+
+    e.set_pinned_reading(Some("ni".into()));
+    let pinned: Vec<String> = e.candidates(8).into_iter().map(|c| c.text).collect();
+    assert_eq!(
+        pinned,
+        vec!["你".to_string(), "尼".to_string()],
+        "钉 ni 只剩读音恰为 ni 的条目（你好 的读音 ni'hao ≠ ni，不出）：{pinned:?}"
     );
 }

@@ -144,9 +144,9 @@ impl Dictionary for MmapDictionary {
         out
     }
 
-    /// 按键类匹配（9/14 键）的整档，见 trait 文档。实现 = `scheme_ranges` 区间枚举 +
-    /// 与 `query_prefix_top` 相同的「exact 全量 + 非 exact top-n」取舍；`'` 分词输入
-    /// 交给全表回退实现（matches_segmented 按段长比，前缀区间表达不了）。
+    /// 按键类匹配（9/14 键）的整档，见 trait 文档（pin = **读音恰等**，2026-10-16 裁决）。
+    /// 实现 = `scheme_ranges` 区间枚举 + 与 `query_prefix_top` 相同的「exact 全量 + 非
+    /// exact top-n」取舍；`'` 分词输入交回退实现（matches_segmented 按段长比）。
     fn scheme_entries(
         &self,
         input: &str,
@@ -166,7 +166,7 @@ impl Dictionary for MmapDictionary {
             for i in lo..hi {
                 let (po, pl, _, _, freq) = self.record(data, i);
                 if let Some(p) = pin
-                    && !data[ps + po..ps + po + pl].starts_with(p.as_bytes())
+                    && &data[ps + po..ps + po + pl] != p.as_bytes()
                 {
                     continue;
                 }
@@ -207,7 +207,7 @@ impl Dictionary for MmapDictionary {
         out
     }
 
-    /// 按键类匹配的存在性/见证者查询，见 trait 文档（区间枚举 + 早停；`'` 交回退实现）。
+    /// 按键类匹配的存在性/见证者查询，见 trait 文档（pin 同 `scheme_entries`；区间枚举+早停；`'` 交回退）。
     fn scheme_find(
         &self,
         input: &str,
@@ -227,7 +227,7 @@ impl Dictionary for MmapDictionary {
                 let pinyin = std::str::from_utf8(&data[ps + po..ps + po + pl])
                     .expect("validate 已校验 UTF-8");
                 if let Some(p) = pin
-                    && !pinyin.starts_with(p)
+                    && pinyin != p
                 {
                     continue;
                 }

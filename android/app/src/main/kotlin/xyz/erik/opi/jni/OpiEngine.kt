@@ -209,8 +209,8 @@ object OpiEngine : OpiEngineApi, SymbolApi {
 
     /**
      * pinReading(reading: String)：**钉读音**（空串 = 解除）—— 9 键左列点一行拼音后
-     * **不确认**，候选收窄到该读音一族（2026-10-09 用户裁决「不要直接确认」）。
-     * 缓冲一变自动作废。调用方重读 candidates/读数。
+     * **不确认**，候选收窄到**读音恰等**的条目（2026-10-09 用户裁决「不要直接确认」；
+     * 2026-10-16 裁决收紧为恰等）。缓冲一变自动作废。调用方重读 candidates/读数。
      */
     override external fun pinReading(reading: String)
 
