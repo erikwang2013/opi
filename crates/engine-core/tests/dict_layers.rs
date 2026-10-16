@@ -106,34 +106,45 @@ fn disable_and_replace_drop_the_layer() {
     assert_eq!(e.extra_dicts(), vec![("乙表".to_string(), 1)]);
 }
 
-/// 同 (拼音, 词) 与系统库重复时取**最大**词频 —— 两个方向各一条：
-/// 导入层更低频不压下去、更高频要顶上来。变异成「取最小」⇒ 本测试必红。
+/// 同 (拼音, 词) 与系统库重复时取**最大**词频 —— 变异成「取最小」⇒ 本测试必红。
+///
+/// 2026-10-17「抢位」加成是**广覆盖**（重复项也抬，见 `boosted_import_freq` 头注
+/// 的蘒实证：只抬独有条目时它出不了手机抓取窗），所以本测试用**两组导入词频**
+/// 对比同一词：取 max 时高表那轮分更高；取 min 时两轮都退回 base 的原词频、
+/// 分相同（红）。另补「加成后绝不低过纯内置」与「更高频重复顶上来」两支。
 #[test]
 fn duplicate_word_takes_max_freq() {
-    let base = &[("hao", "好", 5000), ("hao", "号", 50)];
-    let mut control = engine(base);
-    type_keys(&mut control, "hao");
-    let plain = control.candidates(8);
+    // base_max = 5_000_000 ⇒ 加成带 ≈ [4.96e6, 5e6)：顶上的 好 永远压过加成
+    // （严格低于顶），非顶的 号 会被抬进带内 —— 两个方向都能观察。
+    let base = &[("hao", "好", 5_000_000), ("hao", "号", 50)];
+    let mut plain = engine(base);
+    type_keys(&mut plain, "hao");
+    let p = plain.candidates(8);
 
-    let mut e = engine(base);
-    // 同词重复：好 是「导入层更低」（5000 必须保留），号 是「导入层更高」（9999 必须生效）。
-    e.set_extra_dicts(vec![(
-        "对比表".into(),
-        dict(&[("hao", "好", 300), ("hao", "号", 9999)]),
-    )]);
-    type_keys(&mut e, "hao");
-    let merged = e.candidates(8);
+    let run = |freq: u32| {
+        let mut e = engine(base);
+        e.set_extra_dicts(vec![(
+            "对比表".into(),
+            dict(&[("hao", "好", freq), ("hao", "号", freq)]),
+        )]);
+        type_keys(&mut e, "hao");
+        e.candidates(8)
+    };
+    let low = run(300);
+    let high = run(30_000);
 
-    // boost 两库相同：全局最大词频 5000 vs 9999，都 < USER_BOOST/2 ⇒ 同为下限档。
-    assert_eq!(
-        score_of(&merged, "好"),
-        score_of(&plain, "好"),
-        "取最大词频 ⇒ 导入层的低频重复不得把系统库的 5000 压成 300"
+    assert!(
+        score_of(&high, "号") > score_of(&low, "号"),
+        "取最大：导入 30_000 的轮次必须比导入 300 的轮次分高（取 min 会相等）"
+    );
+    assert!(
+        score_of(&low, "号") > score_of(&p, "号"),
+        "抢位广覆盖 ⇒ 加成后的重复词高于纯内置（绝不低过）"
     );
     assert_eq!(
-        score_of(&merged, "号"),
-        score_of(&plain, "号") + (9999 - 50),
-        "取最大词频 ⇒ 导入层的高频重复必须顶上来"
+        score_of(&low, "好"),
+        score_of(&p, "好"),
+        "量纲顶上的条目照旧在其上：加成严格低于顶 ⇒ max 保持原值"
     );
 }
 
@@ -191,10 +202,16 @@ fn trad_mode_does_not_see_import_layer() {
     );
 }
 
-/// `user_boost` 随导入层**重算**：导入一个词频高到抬 boost 的词后，
-/// 「一次选词仍能压过全部静态词」的不变量必须保持。
-/// 变异：`Engine::set_extra_dicts` 去掉 `recompute_user_boost()` ⇒ 本测试必红
-/// （boost 留在 USER_BOOST=1e5，学习词 1×1e5 压不过 3e9 的静态词）。
+/// `user_boost` 随导入层**重算**：`set_extra_dicts` 必须调 `recompute_user_boost`
+/// —— boost 档 = max(USER_BOOST, **全库**最大原始词频×2)，导入层的数据词频也在
+/// 「全库」里。
+///
+/// ⚠️ 2026-10-17 抢位机制落地后**场景语义已变**（测试随之重写，别照旧注释理解）：
+/// 导入数据写多大都被夹在「顶 − 0.8%」带里（`boosted_import_freq`）——「导入高频词
+/// 占首位」在新机制下**不再成立**（顶上的条目不可逾越，这是特性不是回归）。
+/// 留下的判据是 boost 的**档位**：学一次后目标词的分必须 ≥ 2×全库最大原始词频
+/// （= 2×3e9）。变异：`set_extra_dicts` 去掉 `recompute_user_boost()` ⇒ boost 留在
+/// 构造期档位 ⇒ 分掉回 1e5 档 ⇒ 本测试红。
 #[test]
 fn import_high_freq_word_recomputes_user_boost() {
     // learner_enabled = true：本测试要的正是「学一次」这条路径。
@@ -210,7 +227,14 @@ fn import_high_freq_word_recomputes_user_boost() {
     )]);
     type_keys(&mut e, "hao");
     let before = e.candidates(8);
-    assert_eq!(before[0].text, "壕", "学习前：导入层的高频词就是首位");
+    assert_eq!(
+        before[0].text, "好",
+        "新机制：导入数据词频被夹紧，压不过量纲顶上的条目"
+    );
+    assert!(
+        before.iter().any(|c| c.text == "壕"),
+        "导入条目仍须在候选表里（只是不占首位）"
+    );
 
     let at = before
         .iter()
@@ -220,9 +244,10 @@ fn import_high_freq_word_recomputes_user_boost() {
 
     type_keys(&mut e, "hao");
     let after = e.candidates(8);
-    assert_eq!(
-        after[0].text, "好",
-        "导入高频词把 boost 抬到 2×3e9 后，一次选词仍要压过全部静态词"
+    assert_eq!(after[0].text, "好", "学过的词仍居首");
+    assert!(
+        score_of(&after, "好") >= 6_000_000_000,
+        "user_boost 档位 = 2×全库最大原始词频（含导入层 3e9）——去掉 recompute 会掉回 1e5 档"
     );
 }
 
@@ -315,5 +340,125 @@ fn layer_merge_cost_is_reported() {
         "[dict_layers] candidates('zh', 30k base) 中位数：无层 {ma:.3}ms / 层命中 {mb:.3}ms（{:.2}×）/ 层冷 {mc:.3}ms（{:.2}×）",
         mb / ma,
         mc / ma
+    );
+}
+
+/// 2026-10-17 用户裁决「是词库就要抢位」：导入层条目获得机制性加成 ——
+/// 同读音下压过「内置普通候选」，但压不过站在**量纲顶**的内置高频头
+/// （加成锚 = 主库最大静态词频：导入条目落在「顶 − 0.8% .. 顶 − 1」的窄带里
+/// —— 完整代数见 `boosted_import_freq`；重复项的抬升在 `duplicate_word_takes_max_freq`）。
+///
+/// 数据侧不再需要写大词频（康熙的 3.98e9 hack 在本裁决后回退成真实小词频）；
+/// 这里用 50 这种「真实小词频」当被测量。
+#[test]
+fn import_entries_take_rank_above_ordinary_builtin() {
+    // 内置：一个高频头（40_000 = 本夹具的量纲顶，代表「压不过的那类」）
+    // 与一个低频尾巴（5_000，代表「普通候选」）。
+    let base = &[("mou", "谋", 40_000), ("mou", "眸", 5_000)];
+    let mut plain = engine(base);
+    type_keys(&mut plain, "mou");
+    let before = plain.candidates(8);
+    assert!(
+        score_of(&before, "谋") > score_of(&before, "眸"),
+        "前置：无导入层时 谋 > 眸"
+    );
+
+    let mut e = engine(base);
+    e.set_extra_dicts(vec![("方言表".into(), dict(&[("mou", "冇", 50)]))]);
+    type_keys(&mut e, "mou");
+    let after = e.candidates(8);
+
+    assert!(
+        after.iter().any(|c| c.text == "冇"),
+        "导入层独有条目必须出候选：{after:?}"
+    );
+    assert!(
+        score_of(&after, "冇") > score_of(&after, "眸"),
+        "抢位：导入条目（数据词频仅 50）必须压过内置的低频尾巴 眸"
+    );
+    assert!(
+        score_of(&after, "谋") > score_of(&after, "冇"),
+        "边界：「内置高频头」仍在导入条目之上（可压过的是普通候选，不是全部）"
+    );
+}
+
+/// 抢位的**上界**：学过的词（用户档）永远在导入层之上 —— 包括导入数据里
+/// 写了大词频的条目（数据不能把用户档挤下去；与 `user_boost` 重算同一条不变式）。
+#[test]
+fn learned_words_still_beat_import_layer() {
+    let mut e = Engine::with_dictionaries(
+        Box::new(dict(&[("mou", "谋", 40_000)])),
+        None,
+        no_symbols(),
+        true, // learner_enabled
+    );
+    e.set_extra_dicts(vec![(
+        "大词频表".into(),
+        // 数据写 1e7（超过任何合理静态词频档）—— 加成+夹紧之后仍不得越过用户档。
+        dict(&[("mou", "冇", 10_000_000)]),
+    )]);
+    type_keys(&mut e, "mou");
+    let before = e.candidates(8);
+    let at = before
+        .iter()
+        .position(|c| c.text == "谋")
+        .expect("谋 在候选表里");
+    assert_eq!(e.select(at), "谋");
+
+    type_keys(&mut e, "mou");
+    let after = e.candidates(8);
+    assert_eq!(
+        after[0].text, "谋",
+        "学过一次后，无论导入数据写多大词频，用户档仍在最前：{after:?}"
+    );
+}
+
+/// 2026-10-17 用户裁决「如果响应时间超过 50ms 就优先使用自带词库」：
+/// 预算用尽 ⇒ **本轮只出内置结果**（导入层部分整体丢弃），下次查询重新再试
+/// （不粘滞）。用 ZERO 预算做**确定性**判据 —— 不靠机器快慢。
+#[test]
+fn import_scan_over_budget_falls_back_to_builtin_only() {
+    let base = &[("mou", "谋", 40_000)];
+    let mut e = engine(base);
+    e.set_extra_dicts(vec![("方言表".into(), dict(&[("mou", "冇", 50)]))]);
+
+    // 正常预算：导入条目在场（前置，证明探针有效）。
+    type_keys(&mut e, "mou");
+    assert!(
+        e.candidates(8).iter().any(|c| c.text == "冇"),
+        "前置：正常预算下导入条目在场"
+    );
+
+    // 零预算：必触发兜底 —— 结果与「无导入层」逐条同分同序。
+    e.set_import_scan_budget(Some(std::time::Duration::ZERO));
+    e.clear();
+    let mut plain = engine(base);
+    type_keys(&mut plain, "mou");
+    type_keys(&mut e, "mou");
+    let fell_back = e.candidates(8);
+    let baseline = plain.candidates(8);
+    assert!(
+        fell_back.iter().all(|c| c.text != "冇"),
+        "超预算 ⇒ 本轮不出导入层结果：{fell_back:?}"
+    );
+    assert_eq!(
+        fell_back
+            .iter()
+            .map(|c| (&c.text, c.score))
+            .collect::<Vec<_>>(),
+        baseline
+            .iter()
+            .map(|c| (&c.text, c.score))
+            .collect::<Vec<_>>(),
+        "兜底结果必须与纯内置逐条同分同序"
+    );
+
+    // 不粘滞：预算恢复后下一轮立即重新参与。
+    e.set_import_scan_budget(None);
+    e.clear();
+    type_keys(&mut e, "mou");
+    assert!(
+        e.candidates(8).iter().any(|c| c.text == "冇"),
+        "不粘滞：预算恢复后导入层立即回到候选里"
     );
 }

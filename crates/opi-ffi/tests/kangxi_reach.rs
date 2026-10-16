@@ -53,7 +53,7 @@ fn rare_kangxi_chars_land_within_the_mobile_fetch_window() {
     let count = unsafe { opi_import_dict(u.as_ptr(), len) };
     assert!(count >= 20_000, "kangxi 导入条数 {count}（应 ≥ 2 万）");
 
-    for (py, target) in [("xin", "馫"), ("qiu", "蘒")] {
+    for (py, target, heads) in [("xin", "馫", ["心", "新"]), ("qiu", "蘒", ["求", "球"])] {
         for c in py.chars() {
             let (u, len) = call(std::path::Path::new(&c.to_string()));
             opi_input_key_patched(u.as_ptr(), len);
@@ -64,6 +64,31 @@ fn rare_kangxi_chars_land_within_the_mobile_fetch_window() {
             got.contains(&format!("\"{target}\"")),
             "打 {py} 应在手机抓取窗（前 64）内出「{target}」—— 实得前 120 字符：{:?}",
             got.chars().take(120).collect::<String>()
+        );
+        // 2026-10-17「抢位加成」后的对照面：**常用字头不受影响** —— 机制加成只给
+        // 导入层独有条目（≤0.875×boost），主库自己的高分条目扫描不到它们。
+        // 前 16 内必须找到这些头（阈值按实测取并留余量；这是旧「3.98e9 数据 hack」
+        // 注释里点名的代价面 —— 回退数据后由本断言接手看住）。
+        let top16: Vec<String> = got
+            .trim_start_matches('[')
+            .split(',')
+            .take(16)
+            .map(|t| t.trim_matches(['"', ']', ' ']).to_string())
+            .collect();
+        for h in heads {
+            assert!(
+                top16.iter().any(|t| t == h),
+                "打 {py}：常用字头「{h}」必须在前 16 —— 实得：{top16:?}"
+            );
+        }
+        // 证据：把前 20 打出来（跑的时候看得见 馫/蘒 落在哪一段）。
+        println!(
+            "[{py}] 前 20：{:?}",
+            top16.iter().take(20).collect::<Vec<_>>()
+        );
+        println!(
+            "[{py}] 馫/蘒 在窗口内 ✓（完整前 64 长度 {} 字符）",
+            got.len()
         );
         unsafe { opi_clear() };
     }
