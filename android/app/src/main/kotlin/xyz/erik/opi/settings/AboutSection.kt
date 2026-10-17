@@ -39,8 +39,8 @@ import xyz.erik.opi.BuildConfig
  * 并把「读不到」如实写出来，不编一个引擎版本。
  */
 internal const val ABOUT_INTRO =
-    "一款回归本质、人人可用的多端输入法。" +
-        "Open People Input 是一款开放、纯粹、跨端的输入法，" +
+    "小欧输入法（opi）是一款回归本质、人人可用的多端输入法。" +
+        "Open People Input 开放、纯粹、跨端，" +
         "致力于为每一位用户提供不被干扰、不被窥探、不被绑架的输入体验。"
 
 /** 项目地址（同 `scripts/nfpm.yaml` 的 `homepage`；锁步门禁 `AboutSectionTest`）。 */
@@ -73,6 +73,12 @@ internal fun AboutSection(toast: (String) -> Unit) {
         headlineContent = { Text("版权") },
         supportingContent = {
             Text("© 2026 erik.xyz · 代码按 MIT 许可（全文见仓库 LICENSE）；词库数据与代码分开授权")
+        },
+    )
+    ListItem(
+        headlineContent = { Text("表情数据") },
+        supportingContent = {
+            Text("Emoji 取自 OpenMoji（CC BY-SA 4.0）；颜文字取自 rime_kaomoji_dict（MIT）")
         },
     )
     LinkItem("项目地址", ABOUT_PROJECT_URL, toast)

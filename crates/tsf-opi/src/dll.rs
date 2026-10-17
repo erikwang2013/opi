@@ -34,7 +34,7 @@ pub const GUID_PROFILE: &str = "A31A137C-1404-42F2-B82C-4E63F15DEFD6";
 pub const LANGID_ZH_CN: u16 = 0x0804;
 
 /// 服务显示名（注册表默认值 + 语言栏里显示的名字）。
-pub const DISPLAY_NAME: &str = "opi输入法";
+pub const DISPLAY_NAME: &str = "小欧输入法";
 
 /// `HKCR\CLSID\{...}` 键路径。注册表里的 CLSID 子键名**带**花括号，
 /// 而 `CLSID_TEXT_SERVICE` 与 `GUID::try_from` 用的都是不带括号的形式 ——

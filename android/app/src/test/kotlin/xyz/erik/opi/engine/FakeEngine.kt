@@ -34,21 +34,31 @@ class FakeEngine : OpiEngineApi {
     /** 键 → 引擎要上屏的文本（真引擎：标点键有文本、字母/数字键没有）。 */
     var inputResults = mutableMapOf<String, String>()
 
+    /** 引擎侧 ⇧（真引擎 composer 英文模式按它决定大小写；single 由调用方消费）。 */
+    var shiftOn = false
+
     override fun inputKey(ch: String): String {
         inputCalls += ch
         val out = inputResults[ch] ?: ""
-        if (out.isEmpty()) buf += ch else buf = ""
+        if (out.isEmpty()) {
+            val text = if (shiftOn && ch.length == 1 && ch[0].isLetter()) ch.uppercase() else ch
+            buf += text
+        } else {
+            buf = ""
+        }
         return out
     }
 
     override fun backspace() {
         backspaceCalls++
         if (buf.isNotEmpty()) buf = buf.dropLast(1)
+        if (buf.isEmpty()) carriedFrom = null
     }
 
     override fun clear() {
         clearCalls++
         buf = ""
+        carriedFrom = null
     }
 
     /** 回车判据（2026-10-14）：测试按需设 0/1/2 —— 缺省 0 = 既有行为（选首候选）。 */
@@ -82,6 +92,7 @@ class FakeEngine : OpiEngineApi {
 
     override fun setShift(on: Boolean) {
         shiftCalls += on
+        shiftOn = on
     }
 
     override fun inputSpace(): String {
@@ -99,10 +110,22 @@ class FakeEngine : OpiEngineApi {
 
     override fun buffer(): String = buf
 
+    /** 携带标记（真引擎：`Engine::buffer_is_carried`；语义逐条镜像）。 */
+    var carriedFrom: EngineMode? = null
+    override fun bufferIsCarried(): Boolean = carriedFrom != null
+
     /** 语言切换（真引擎：换模式+方案但保留缓冲）。记调用便于断言「没走清缓冲那条路」。 */
     val switchLanguageCalls = mutableListOf<Pair<Int, Int>>()
     override fun switchLanguage(mode: Int, scheme: Int) {
         switchLanguageCalls += mode to scheme
+        val old = EngineMode.fromInt(this.mode)
+        val next = EngineMode.fromInt(mode)
+        carriedFrom = when {
+            buf.isEmpty() -> null
+            carriedFrom == next -> null
+            carriedFrom == null && next != old -> old
+            else -> carriedFrom
+        }
         this.mode = mode
         schemeValue = scheme
     }

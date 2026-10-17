@@ -11,7 +11,7 @@
 
 SKINS = {
     "light": {
-        "title": "opi输入法 浅色",
+        "title": "小欧输入法 浅色",
         "desc": "白底 + 朱砂高亮",
         "bg": "#FFFFFF",
         "border": "#00000022",
@@ -22,7 +22,7 @@ SKINS = {
         "sep": "#D8D8D8",
     },
     "dark": {
-        "title": "opi输入法 深色",
+        "title": "小欧输入法 深色",
         "desc": "深底 + 浅朱砂高亮",
         "bg": "#1F1F1F",
         "border": "#FFFFFF22",
@@ -33,7 +33,7 @@ SKINS = {
         "sep": "#4A4A4A",
     },
     "paper": {
-        "title": "opi输入法 宣纸",
+        "title": "小欧输入法 宣纸",
         "desc": "米色底 + 茶褐高亮",
         "bg": "#F5EFE1",
         "border": "#3D322222",
@@ -44,7 +44,7 @@ SKINS = {
         "sep": "#D8CDB4",
     },
     "cinnabar": {
-        "title": "opi输入法 朱砂",
+        "title": "小欧输入法 朱砂",
         "desc": "朱砂底 + 米白文字",
         "bg": "#B3272D",
         "border": "#00000033",
@@ -59,7 +59,7 @@ SKINS = {
     # 一处不错位（SettingsTest 的 `skin names stay in lockstep` 现读现比）。
     # 每款 text×bg ≥ 4.5、accent×bg ≥ 3（--check 不测这个，值定稿时用 WCAG 手核过）。
     "fresh": {
-        "title": "opi输入法 清爽",
+        "title": "小欧输入法 清爽",
         "desc": "浅青绿底 + 墨绿文字",
         "bg": "#E6F5EE",
         "border": "#16332B22",
@@ -70,7 +70,7 @@ SKINS = {
         "sep": "#B9D8CB",
     },
     "azure": {
-        "title": "opi输入法 湛蓝",
+        "title": "小欧输入法 湛蓝",
         "desc": "深天蓝底 + 月白文字",
         "bg": "#3A679E",
         "border": "#00000033",
@@ -81,7 +81,7 @@ SKINS = {
         "sep": "#6E96C4",
     },
     "lemon": {
-        "title": "opi输入法 柠檬",
+        "title": "小欧输入法 柠檬",
         "desc": "柠檬黄底 + 深橄榄文字",
         "bg": "#FBEE7E",
         "border": "#3A300022",
@@ -92,7 +92,7 @@ SKINS = {
         "sep": "#D1C462",
     },
     "sunset": {
-        "title": "opi输入法 晚霞",
+        "title": "小欧输入法 晚霞",
         "desc": "暖橙粉底 + 深赭文字",
         "bg": "#F7C79C",
         "border": "#4A231722",
@@ -103,7 +103,7 @@ SKINS = {
         "sep": "#D1A37F",
     },
     "starlight": {
-        "title": "opi输入法 星光",
+        "title": "小欧输入法 星光",
         "desc": "靛蓝夜空底 + 星金高亮",
         "bg": "#1B2138",
         "border": "#FFFFFF1F",
@@ -118,7 +118,7 @@ SKINS = {
     #   松林 H156/L17 —— 与清爽同色相族的**深色版**（清爽 L93，明度差 76）：不是重复而是对照。
     # 两款 text×bg 10.3/10.2、accent×bg 5.1/6.9（≥4.5 / ≥3，与本表其余款同一档；--check 不测）。
     "wisteria": {
-        "title": "opi输入法 紫藤",
+        "title": "小欧输入法 紫藤",
         "desc": "淡紫底 + 藤紫高亮",
         "bg": "#EDE7FB",
         "border": "#3A2A6322",
@@ -129,7 +129,7 @@ SKINS = {
         "sep": "#CFC4EC",
     },
     "pine": {
-        "title": "opi输入法 松林",
+        "title": "小欧输入法 松林",
         "desc": "松林绿底 + 浅苔文字",
         "bg": "#1E3A2F",
         "border": "#FFFFFF1F",

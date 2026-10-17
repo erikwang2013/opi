@@ -95,17 +95,11 @@ class OpiImeService : InputMethodService() {
         }
     }
 
-    /** 符号页类目（`assets/symbol_categories.tsv`，生成物入库）。同 rareIndex：懒读、
-     * 损坏 → 空列表（页面显示「没有类目数据」而不是崩 IME）。 */
-    private val symbolCategories: List<xyz.erik.opi.keyboard.SymbolCategories.Category> by lazy {
-        try {
-            assets.open("symbol_categories.tsv").bufferedReader()
-                .use { xyz.erik.opi.keyboard.SymbolCategories.parse(it.readText()) }
-        } catch (e: Exception) {
-            Log.w(TAG, "symbol_categories.tsv 读取失败，符号页将为空: $e")
-            emptyList()
-        }
-    }
+    /** 符号页类目（`symbol_categories.tsv`）。懒读；损坏 → 空列表，见 `ImeAssetData`。 */
+    private val symbolCategories by lazy { loadSymbolCategories(assets) }
+
+    /** 颜文字分类（`kaomoji.tsv`）。懒读；缺失/损坏 → 空列表，见 `ImeAssetData`。 */
+    private val kaomojiCategories by lazy { loadKaomojiCategories(assets) }
 
     // Compose 需要 ViewTreeLifecycleOwner（IME Service 无 Activity 生命周期）。
     // 最小实现：lifecycleRegistry 手动推进（CREATED→RESUMED→STARTED→DESTROYED）。
@@ -288,6 +282,7 @@ class OpiImeService : InputMethodService() {
                 imeState, engineController, keyRouter, symbolCatalog,
                 rareIndex = { rareIndex },
                 symbolCategories = { symbolCategories },
+                kaomojiCategories = { kaomojiCategories },
                 // 工具栏最右「收起键盘」（2026-10-10 用户裁决）：收回系统键盘。
                 onCloseKeyboard = { requestHideSelf(0) },
             )

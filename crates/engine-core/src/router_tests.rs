@@ -189,7 +189,7 @@ fn arrow_keys_pass_through_press_and_release() {
     assert_eq!(s.buffer(), "hao");
 }
 
-// ---- 英文模式直传（镜像 handleKey） ----
+// ---- 英文模式：字母入缓冲 + 单词联想（2026-10-18 起不再空缓冲直传） ----
 fn english_state() -> KeyRouter {
     let mut s = state();
     s.switch_mode(Mode::English);
@@ -197,79 +197,74 @@ fn english_state() -> KeyRouter {
 }
 
 #[test]
-fn english_empty_buffer_lowercase_passes_through() {
+fn english_letter_enters_engine_buffer() {
     let mut s = english_state();
-    assert_eq!(s.key_event('a' as u32, 0), KeyAction::Input("a".into()));
-    assert_eq!(s.buffer(), "");
+    assert_eq!(s.key_event('a' as u32, 0), KeyAction::EngineHandled);
+    assert_eq!(s.buffer(), "a", "字母进缓冲，候选来自前缀词");
+    assert!(!s.candidates().is_empty(), "英文缓冲应有单词联想候选");
 }
 
 #[test]
-fn english_empty_buffer_single_shift_commits_upper_and_consumes() {
+fn english_single_shift_capitalizes_and_consumes() {
     let mut s = english_state();
     s.shift_tap(); // Off → Single
-    assert_eq!(s.key_event('a' as u32, 0), KeyAction::Input("A".into()));
-    // single 已消费：下个字母小写
-    assert_eq!(s.key_event('b' as u32, 0), KeyAction::Input("b".into()));
-    assert_eq!(s.shift_state(), ShiftState::Off);
-    assert_eq!(s.buffer(), "");
+    assert_eq!(s.key_event('a' as u32, 0), KeyAction::EngineHandled);
+    assert_eq!(s.buffer(), "A", "single 态首个字母大写");
+    // 候选显示保留首字母大写（词库规范小写词形）
+    assert_eq!(s.candidates()[0], "And", "a 前缀最高频词是 and");
+    assert_eq!(s.shift_state(), ShiftState::Off, "single 用掉即复位");
+    // 下个字母小写
+    assert_eq!(s.key_event('b' as u32, 0), KeyAction::EngineHandled);
+    assert_eq!(s.buffer(), "Ab");
 }
 
 #[test]
-fn english_empty_buffer_lock_keeps_uppercase() {
+fn english_lock_keeps_uppercase() {
     let mut s = english_state();
     s.shift_long_press(); // Lock
-    assert_eq!(s.key_event('a' as u32, 0), KeyAction::Input("A".into()));
+    assert_eq!(s.key_event('a' as u32, 0), KeyAction::EngineHandled);
+    assert_eq!(s.buffer(), "A");
     // Lock 不被消费
-    assert_eq!(s.key_event('b' as u32, 0), KeyAction::Input("B".into()));
+    assert_eq!(s.key_event('b' as u32, 0), KeyAction::EngineHandled);
+    assert_eq!(s.buffer(), "AB");
     assert_eq!(s.shift_state(), ShiftState::Lock);
-    assert_eq!(s.buffer(), "");
 }
 
 #[test]
-fn english_empty_buffer_physical_shift_codepoint_passes_upper() {
-    // 平台已应用物理 shift：键值为 'A' + SHIFT 位，仍直传且消费 single
+fn english_physical_shift_codepoint_keeps_upper() {
+    // 平台已应用物理 shift：键值为 'A' + SHIFT 位，入缓冲仍是 'A' 且消费 single
     let mut s = english_state();
     s.shift_tap();
     assert_eq!(
         s.key_event('A' as u32, KEY_STATE_SHIFT),
-        KeyAction::Input("A".into())
+        KeyAction::EngineHandled
     );
+    assert_eq!(s.buffer(), "A");
     assert_eq!(s.shift_state(), ShiftState::Off);
 }
 
 #[test]
-fn english_letters_always_direct_commit_buffer_stays_empty() {
-    // 镜像 KeyRouter.handleKey：英文模式空缓冲每次直传，缓冲永远为空，
-    // 故字母永不入引擎缓冲（与 Android 行为一致）
+fn english_letters_accumulate_and_punctuation_commits_first_candidate() {
     let mut s = english_state();
-    assert_eq!(s.key_event('a' as u32, 0), KeyAction::Input("a".into()));
-    assert_eq!(s.key_event('b' as u32, 0), KeyAction::Input("b".into()));
+    assert_eq!(s.key_event('a' as u32, 0), KeyAction::EngineHandled);
+    assert_eq!(s.key_event('b' as u32, 0), KeyAction::EngineHandled);
+    assert_eq!(s.buffer(), "ab");
+    // 缓冲非空时标点先按空格语义收尾（有候选提首候选），标点排在后面
+    let first = s.candidates()[0].clone();
+    assert_eq!(
+        s.key_event(',' as u32, 0),
+        KeyAction::Input(format!("{first},"))
+    );
     assert_eq!(s.buffer(), "");
-    // 符号直传
+}
+
+#[test]
+fn english_empty_buffer_digit_and_punctuation_still_direct() {
+    // 空缓冲没有候选可言：数字与未映射标点沿用旧的直传语义
+    let mut s = english_state();
+    assert_eq!(s.key_event('1' as u32, 0), KeyAction::Input("1".into()));
     assert_eq!(s.key_event(',' as u32, 0), KeyAction::Input(",".into()));
-}
-
-#[test]
-fn english_nonempty_buffer_letter_goes_to_engine() {
-    // 防御路径：仅当缓冲意外非空（如经 engine 直入）时才入引擎，
-    // 镜像 KeyRouter 的 else 分支
-    let mut s = english_state();
-    s.engine_mut().input_key('x'); // 绕过路由器直入引擎缓冲
-    assert_eq!(s.buffer(), "x");
-    assert_eq!(s.key_event('b' as u32, 0), KeyAction::EngineHandled);
-    assert_eq!(s.buffer(), "xb");
-    // 缓冲非空时符号直通
-    assert_eq!(s.key_event(',' as u32, 0), KeyAction::PassThrough);
-}
-
-#[test]
-fn english_nonempty_buffer_shift_uppercases_in_engine() {
-    // 引擎 shift 打开时，非空缓冲路径由 composer 大写（镜像同一分支）
-    let mut s = english_state();
-    s.engine_mut().input_key('x');
-    s.shift_tap();
-    assert_eq!(s.key_event('b' as u32, 0), KeyAction::EngineHandled);
-    assert_eq!(s.buffer(), "xB");
+    assert_eq!(s.buffer(), "");
 }
 
 // ---- ⇧ 状态机（镜像 EngineController.shiftTap） ----
@@ -311,8 +306,8 @@ fn shift_long_press_locks() {
 #[test]
 fn switch_mode_clears_frontend_shift_lock() {
     // 与 Android EngineController.resetShift 同源：切模式须清**前端** ⇧ 状态。
-    // 英文模式空缓冲直传的大小写由 ShiftState 决定（不查 composer 的 shift），
-    // 故 Lock 残留时切回英文仍全大写 —— 引擎侧清了不足以覆盖这条。
+    // 引擎侧的 composer.shift 由 `switch_mode` 清掉，但前端状态机是另一份 ——
+    // Lock 残留会让状态栏与下一次 ⇧ 的行为错位（引擎已半角、UI 仍显示锁定）。
     let mut s = english_state();
     s.key_event(KEY_SHIFT, KEY_STATE_LONG_PRESSED);
     assert_eq!(s.shift_state(), ShiftState::Lock, "前置：长按已锁定");
@@ -451,14 +446,15 @@ fn non_ascii_keyval_passes_through() {
 }
 
 #[test]
-fn mode_switch_clears_buffer_then_english_direct() {
-    // 拼音输入后切英文：缓冲清空，英文空缓冲直传
+fn mode_switch_clears_buffer_then_english_letter_buffers() {
+    // 拼音输入后切英文：缓冲清空，随后英文字母从空缓冲重新进引擎
     let mut s = pinyin_state();
     s.key_event('a' as u32, 0);
     assert_eq!(s.buffer(), "a");
     s.switch_mode(Mode::English);
     assert_eq!(s.buffer(), "");
-    assert_eq!(s.key_event('a' as u32, 0), KeyAction::Input("a".into()));
+    assert_eq!(s.key_event('a' as u32, 0), KeyAction::EngineHandled);
+    assert_eq!(s.buffer(), "a");
 }
 
 // ---- 可打印字符的抬起不得二次入引擎（回归：拼音缓冲翻倍 / 英文重复提交） ----
@@ -478,13 +474,14 @@ fn printable_release_does_not_refeed_pinyin_buffer() {
 }
 
 #[test]
-fn printable_release_does_not_double_commit_english() {
+fn printable_release_does_not_double_feed_english() {
     let mut s = english_state();
-    // 英文空缓冲直传：按下提交一次
-    assert_eq!(s.key_event('a' as u32, 0), KeyAction::Input("a".into()));
-    // 抬起不得再提交一次（否则 "a" → "aa"）
+    // 英文缓冲：按下进一个字母
+    assert_eq!(s.key_event('a' as u32, 0), KeyAction::EngineHandled);
+    // 抬起不得再进一次（否则 "a" → "aa"）
     assert_eq!(
         s.key_event('a' as u32, KEY_STATE_RELEASED),
         KeyAction::EngineHandled
     );
+    assert_eq!(s.buffer(), "a", "两键按下+抬起后应为一个 a");
 }

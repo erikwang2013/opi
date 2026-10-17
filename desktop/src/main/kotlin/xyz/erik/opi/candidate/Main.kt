@@ -121,7 +121,7 @@ fun main(args: Array<String>) = application {
         Window(
             onCloseRequest = ::exitApplication,
             state = rememberWindowState(width = 800.dp, height = 560.dp),
-            title = "opi输入法 设置",
+            title = "小欧输入法 设置",
             icon = OpiPetWindowIcon, // 窗口/任务栏图标 = 小欧（PetIcon.kt）
         ) {
             SettingsWindow()
@@ -142,7 +142,7 @@ fun main(args: Array<String>) = application {
         alwaysOnTop = true,
         resizable = false,
         focusable = false,
-        title = "opi输入法 候选窗",
+        title = "小欧输入法 候选窗",
         icon = OpiPetWindowIcon, // 窗口/任务栏图标 = 小欧（PetIcon.kt）
     ) {
         // 位置跟随（position 消息；缺省固定默认位置）。

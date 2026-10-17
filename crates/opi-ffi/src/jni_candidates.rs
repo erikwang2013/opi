@@ -63,6 +63,16 @@ pub unsafe extern "system" fn opijni_buffer(env: JEnv, _class: sys::jclass) -> j
     unsafe { jni_util::rust_to_jstring(env, &out) }
 }
 
+/// bufferIsCarried() -> Boolean。缓冲是否由**别的模式**带过来（`switchLanguage`
+/// 保留缓冲时打标；清空/提交/回到来处即清）。未装载 → false。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_buffer_is_carried(
+    _env: JEnv,
+    _class: sys::jclass,
+) -> sys::jboolean {
+    guard(|| api::with_engine(|e| e.buffer_is_carried()).unwrap_or_default())
+}
+
 /// displayBuffer() -> String。显示用拼音读数（与 `buffer()` **两个出口**，见 `api::display_buffer`）。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_display_buffer(env: JEnv, _class: sys::jclass) -> jstring {

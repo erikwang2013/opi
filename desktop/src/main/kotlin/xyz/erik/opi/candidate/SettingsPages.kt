@@ -182,7 +182,7 @@ internal fun AppearancePage(s: OpSettings, apply: (OpSettings) -> Unit) {
     Spacer(Modifier.height(7.dp))
     Text(
         "皮肤是 fcitx5 的全局主题（对所有输入法生效）；选一款即时换。" +
-            "「不改动」= OPI 不介入主题。",
+            "「不改动」= 小欧不介入主题。",
         fontSize = 12.sp, color = Muted,
     )
     SectionTitle("候选字号")
@@ -219,7 +219,7 @@ internal fun StatusBarPage(s: OpSettings, apply: (OpSettings) -> Unit, status: (
     SettingRow(
         "显示状态栏悬浮条",
         "关掉整条隐藏（进程还在跑，拨回来就出现）；隐藏后就点不到条上的设置了，" +
-            "要回来用应用菜单里的「opi输入法」再进本页",
+            "要回来用应用菜单里的「小欧输入法」再进本页",
         !s.statusbar.hidden,
     ) {
         val next = s.copy(statusbar = s.statusbar.copy(hidden = !it))
@@ -278,6 +278,8 @@ internal fun SymbolsPage(onOpenSymbols: () -> Unit, onOpenEmoji: () -> Unit) {
 @Composable
 internal fun AboutPage(status: String) {
     Spacer(Modifier.height(6.dp))
+    Text("小欧输入法（opi）· 多端输入法", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Ink)
+    Spacer(Modifier.height(4.dp))
     Text(status, fontSize = 12.sp, color = Muted)
     Spacer(Modifier.height(10.dp))
     // 一句话说明「为什么只有这几页」——主流输入法那套有十几页，我们引擎现在只有这几个真旋钮；
@@ -293,6 +295,11 @@ internal fun AboutPage(status: String) {
         // 版权行（2026-10-09 用户裁决「页面增加版权」）。
         Text("© 2026 erik.xyz", fontSize = 12.sp, color = Muted)
     }
+    Spacer(Modifier.height(6.dp))
+    Text(
+        "表情数据 OpenMoji（CC BY-SA 4.0）· 颜文字 rime_kaomoji_dict（MIT）",
+        fontSize = 12.sp, color = Muted,
+    )
 }
 
 // ---------- 皮肤选择器（2026-10-09：可视卡，替掉纯文字清单）----------

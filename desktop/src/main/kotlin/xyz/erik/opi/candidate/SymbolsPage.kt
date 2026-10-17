@@ -33,13 +33,13 @@ import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -61,6 +61,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
@@ -93,7 +94,7 @@ private const val STRIP_W = 96
 
 /** 居中的一行灰字占位（加载中/整类摘空/真没数据三态共用，措辞由调用方给全）。 */
 @Composable
-private fun CenteredHint(text: String, modifier: Modifier) {
+internal fun CenteredHint(text: String, modifier: Modifier) {
     Box(modifier, contentAlignment = Alignment.Center) { Text(text, fontSize = 14.sp, color = SymDim) }
 }
 
@@ -116,10 +117,14 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
     // 开窗读一次（同 Android「面板第一次打开时读资产」）；窗口重开才会重读。
     val categories = remember { loadSymbolCategories() }
     val emoji = remember { loadEmojiData() }
+    // 颜文字与表情同在表情页：懒读一次，资源缺失 → 空列表（子页显示空态）。
+    val kaomoji = remember { loadKaomojiData() }
     // 表情搜索的「像不像表情」判据（见 searchView）：用**未过滤**的 emoji 表建集；判据同
     // Android 的 `isEmoji`（那边用过滤后的列表，差只在本机画不出的条目，随后 canRender 同摘）。
     val emojiSet = remember(emoji) { emoji.entries.toHashSet() }
     var selected by remember { mutableStateOf(if (initialEmoji) TAB_EMOJI else 0) }
+    // 表情页子页（Emoji / 颜文字）：与 Android 的 `EmojiSubTab` 同名同义。
+    var emojiSub by remember { mutableStateOf(EmojiSubTab.Emoji) }
     var notice by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(notice) {
         if (notice != null) {
@@ -134,9 +139,13 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
     // 本窗能不能拿系统键盘焦点（默认不能 —— 见 Window 的 focusable 注释）。只由搜索框的
     // 焦点驱动：点进搜索框才需要打字，点选符号时交还。
     var typing by remember { mutableStateOf(false) }
-    LaunchedEffect(query) {
+    val onEmoji = selected == TAB_EMOJI
+    // 颜文字子页的搜索是**本地子串匹配**（数据在进程里，与 Android 同一条）；不需要
+    // 走一次 `opi-ctl search`。引擎搜索只服务符号页与 Emoji 子页。
+    val kaomojiSearch = onEmoji && emojiSub == EmojiSubTab.Kaomoji
+    LaunchedEffect(query, kaomojiSearch) {
         val q = query.trim()
-        if (q.isEmpty()) {
+        if (q.isEmpty() || kaomojiSearch) {
             search = null
             return@LaunchedEffect
         }
@@ -151,7 +160,6 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
         height = WIN_H.dp,
         position = remember { symbolPosition() },
     )
-    val onEmoji = selected == TAB_EMOJI
     Window(
         onCloseRequest = onClose,
         state = windowState,
@@ -163,7 +171,7 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
         // 就成了本窗）。**搜索要打字**（键入事件来自 AWT 窗口，窗口没拿到系统焦点就一个字
         // 打不进），所以按需开：搜索框拿到焦点 ⇒ [typing]，点选符号时交还（见 pick）。
         focusable = typing,
-        title = if (onEmoji) "opi输入法 表情" else "opi输入法 符号大全",
+        title = if (onEmoji) "小欧输入法 表情" else "小欧输入法 符号大全",
         icon = OpiPetWindowIcon, // 窗口/任务栏图标 = 小欧（PetIcon.kt）
     ) {
         // ⚠️ 这两个 local 必须读在**窗内容里**：`LocalFocusManager` 无默认值、只有 Window
@@ -191,30 +199,49 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
             }
         }
         Column(Modifier.fillMaxSize().background(SymBg)) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 6.dp, top = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    if (onEmoji) "表情" else "符号大全",
-                    fontSize = 15.sp, fontWeight = FontWeight.Bold, color = SymFg,
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    if (onEmoji) "点表情上屏；左右滑动翻页，点分类条跳组" else "点符号上屏；左右滑动翻页",
-                    fontSize = 11.sp, color = SymDim,
-                )
-                Spacer(Modifier.weight(1f))
-                // 搜索框进标题行（本行本来就是「标题 + 提示 + 关闭」的自绘条）：不新开一行，
-                // 页面高度与两页的内容区一点不动（布局纪律：现有类别条/网格结构不改）。
-                SymbolSearchField(
+            if (onEmoji) {
+                // 与 Android `EmojiPanel` 同一套布局：`[← 返回] [Emoji | 颜文字] [搜索框]`。
+                // 桌面窗无系统标题栏 ⇒ 最右保留 ✕（本窗自己的页级关闭入口）。
+                EmojiTopBar(
+                    sub = emojiSub,
+                    onSub = { emojiSub = it },
+                    onBack = {
+                        // 返回 = 回符号页（本窗的另一页）；同时退出搜索态 ——
+                        // 否则符号页会停在上一个关键词的结果上。
+                        selected = 0
+                        query = ""
+                    },
                     query = query,
                     onQuery = { query = it },
                     onFocusChanged = { typing = it },
-                    modifier = Modifier.width(220.dp),
+                    onClose = onClose,
                 )
-                Spacer(Modifier.width(8.dp))
-                CloseButton(onClose)
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 6.dp, top = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "符号大全",
+                        fontSize = 15.sp, fontWeight = FontWeight.Bold, color = SymFg,
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        "点符号上屏；左右滑动翻页",
+                        fontSize = 11.sp, color = SymDim,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    // 搜索框进标题行（本行本来就是「标题 + 提示 + 关闭」的自绘条）：不新开一行，
+                    // 页面高度与两页的内容区一点不动（布局纪律：现有类别条/网格结构不改）。
+                    SymbolSearchField(
+                        query = query,
+                        onQuery = { query = it },
+                        onFocusChanged = { typing = it },
+                        modifier = Modifier.width(220.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    CloseButton(onClose)
+                }
             }
             // 固定高的提示行：失败提示出现/消失不该让整页跳。
             Box(Modifier.fillMaxWidth().height(18.dp).padding(horizontal = 14.dp), contentAlignment = Alignment.CenterStart) {
@@ -238,19 +265,42 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
                     }
                 }
                 if (query.isNotBlank()) {
-                    SearchResultPane(
-                        searchView(search, onEmoji, emojiSet),
-                        emoji = onEmoji,
-                        emptyText = if (onEmoji) "没有匹配的表情" else "没有匹配的符号",
+                    when {
+                        // 符号页：引擎搜索（原样）。
+                        !onEmoji -> SearchResultPane(
+                            searchView(search, emojiTab = false, emojiSet),
+                            emoji = false,
+                            emptyText = "没有匹配的符号",
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            onPick = ::pick,
+                        )
+                        // Emoji 子页：引擎搜索 + 「像不像表情」筛选（原样）。
+                        emojiSub == EmojiSubTab.Emoji -> SearchResultPane(
+                            searchView(search, emojiTab = true, emojiSet),
+                            emoji = true,
+                            emptyText = "没有匹配的表情",
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            onPick = ::pick,
+                        )
+                        // 颜文字子页：本地子串匹配（与 Android `KaomojiCategories.flatten`
+                        // 那条搜索同义；数据在进程里，不占一次 CLI 往返）。
+                        else -> KaomojiSearchPane(
+                            kaomoji,
+                            query,
+                            Modifier.weight(1f).fillMaxHeight(),
+                            ::pick,
+                        )
+                    }
+                } else if (onEmoji) {
+                    // 「自有」12 格不依赖 emoji 表，所以字形过滤落地前也照常出网格 ——
+                    // 不再用「正在检查字形…」把整页挡住（宠物格是立即可用的）。
+                    EmojiPane(
+                        data = emojiShown,
+                        sub = emojiSub,
+                        kaomoji = kaomoji,
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                         onPick = ::pick,
                     )
-                } else if (onEmoji) {
-                    // 同符号页那条诚实占位：表非空而过滤结果空 = 后台还在查（deferredFilter），
-                    // 不是「没有表情数据」—— 后者是 EmojiPane 对真空表的原话。
-                    val filtering = emoji.entries.isNotEmpty() && emojiShown.entries.isEmpty()
-                    if (filtering) CenteredHint("正在检查字形…", Modifier.weight(1f).fillMaxHeight())
-                    else EmojiPane(emojiShown, Modifier.weight(1f).fillMaxHeight(), ::pick)
                 } else {
                     val cat = catsShown.getOrNull(selected)
                     if (cat == null) {
@@ -273,9 +323,13 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
                         }
                     }
                 }
-                // 换类目 = 回浏览态：清掉关键词（否则点完类目，网格仍是上一个关键词的结果，
-                // 而右竖条的高亮已经跳到新类目了）。
-                CategoryStrip(catsShown, selected, onEmoji) { selected = it; query = "" }
+                // 右竖条只属于符号页；表情页的分类条在**底部**（见 EmojiPage.kt 的
+                // CategoryBar），页面由顶部的「← 返回」切回符号页。
+                if (!onEmoji) {
+                    // 换类目 = 回浏览态：清掉关键词（否则点完类目，网格仍是上一个关键词的
+                    // 结果，而右竖条的高亮已经跳到新类目了）。
+                    CategoryStrip(catsShown, selected, emojiSelected = false) { selected = it; query = "" }
+                }
             }
         }
     }
@@ -283,23 +337,6 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
 
 /** 右竖条的「表情」项 = 特殊下标（`.tsv` 类目从 0 起）。 */
 private const val TAB_EMOJI = -1
-
-/** ✕ 关闭（自绘窗没有系统标题栏，关闭入口得自己给）。 */
-@Composable
-private fun CloseButton(onClose: () -> Unit) {
-    val interaction = remember { MutableInteractionSource() }
-    val hovered by interaction.collectIsHoveredAsState()
-    Box(
-        modifier = Modifier
-            .size(26.dp)
-            .background(if (hovered) SymHover else Color.Transparent)
-            .clickable(interactionSource = interaction, indication = null, onClick = onClose)
-            .semantics { contentDescription = "关闭符号页" },
-        contentAlignment = Alignment.Center,
-    ) {
-        Text("✕", fontSize = 13.sp, color = SymFg)
-    }
-}
 
 /**
  * 一页符号网格：12 列 × 6 行（`PAGE_SIZE/COLUMNS`）。单字符 20sp、多字符 token（网络
@@ -309,31 +346,64 @@ private fun CloseButton(onClose: () -> Unit) {
  * 表情页改用**单档大字**（组内还会有 👨👩👧 这种多码位序列，统一 22sp 最稳）。
  */
 @Composable
-internal fun SymbolGridPage(all: List<String>, page: Int, emoji: Boolean = false, onPick: (String) -> Unit) {
-    val start = page * SymbolCategories.PAGE_SIZE
-    val cells = all.subList(start, minOf(start + SymbolCategories.PAGE_SIZE, all.size))
-    val cols = SymbolCategories.COLUMNS
+internal fun SymbolGridPage(
+    all: List<String>,
+    page: Int,
+    emoji: Boolean = false,
+    columns: Int = SymbolCategories.COLUMNS,
+    rows: Int = 6,
+    fontSize: TextUnit? = null,
+    onPick: (String) -> Unit,
+) {
+    val pageSize = columns * rows
+    PagedGrid(columns = columns, rows = rows, pageStart = page * pageSize, total = all.size) { i ->
+        val s = all[i]
+        SymbolCell(s, Modifier.weight(1f), emoji, fontSize) { onPick(s) }
+    }
+}
+
+/**
+ * 分页网格的**排布**（一格一个 `weight(1f)`；末页补空格子/空行保持高度稳定）。
+ *
+ * [cell] 是 `RowScope` 里的格子：实现方自己挂 `Modifier.weight(1f)` 并负责内容
+ * （文本符号 / 小欧）。`PagedGrid` 只管行列与补空。
+ */
+@Composable
+internal fun PagedGrid(
+    columns: Int,
+    rows: Int,
+    pageStart: Int,
+    total: Int,
+    cell: @Composable RowScope.(Int) -> Unit,
+) {
+    val pageSize = columns * rows
+    val end = minOf(pageStart + pageSize, total).coerceAtLeast(pageStart)
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 2.dp)) {
-        for (rowStart in cells.indices step cols) {
+        var rowStart = pageStart
+        while (rowStart < end) {
+            val rowEnd = minOf(rowStart + columns, end)
             Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                for (i in rowStart until minOf(rowStart + cols, cells.size)) {
-                    val s = cells[i]
-                    SymbolCell(s, Modifier.weight(1f), emoji) { onPick(s) }
-                }
-                for (i in minOf(rowStart + cols, cells.size) until rowStart + cols) {
-                    Box(Modifier.weight(1f))
-                }
+                for (i in rowStart until rowEnd) cell(i)
+                for (i in rowEnd until rowStart + columns) Box(Modifier.weight(1f))
             }
+            rowStart += columns
         }
-        // 末页不足 6 行时补空行（高度稳定）
-        for (r in (cells.size + cols - 1) / cols until SymbolCategories.PAGE_SIZE / cols) {
+        // 末页不足 rows 行时补空行（高度稳定）
+        val usedRows = (end - pageStart + columns - 1) / columns
+        for (r in usedRows until rows) {
             Row(modifier = Modifier.weight(1f).fillMaxWidth()) {}
         }
     }
 }
 
 @Composable
-private fun SymbolCell(sym: String, modifier: Modifier, emoji: Boolean, onPick: () -> Unit) {
+internal fun SymbolCell(
+    sym: String,
+    modifier: Modifier,
+    emoji: Boolean,
+    fontSize: TextUnit? = null,
+    onPick: () -> Unit,
+) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     Box(
@@ -347,7 +417,7 @@ private fun SymbolCell(sym: String, modifier: Modifier, emoji: Boolean, onPick: 
     ) {
         Text(
             sym,
-            fontSize = when {
+            fontSize = fontSize ?: when {
                 emoji -> 22.sp
                 sym.length > 1 -> 13.sp
                 else -> 20.sp

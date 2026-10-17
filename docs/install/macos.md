@@ -278,8 +278,8 @@ cp luna.opid ~/Library/Application\ Support/opi/luna.opid
 ```
 
 4. 打开 **系统设置 → 键盘 → 文本输入 → 输入法 → 编辑… → +**，在「中文（简体）」
-   或「其他」下找到 **opi输入法** 加入（也可勾选「在菜单栏中显示输入法菜单」）。
-5. 切到 opi输入法，在文本编辑器里敲 `h a o 空格`。
+   或「其他」下找到 **小欧输入法** 加入（也可勾选「在菜单栏中显示输入法菜单」）。
+5. 切到 小欧输入法，在文本编辑器里敲 `h a o 空格`。
 
 排障：
 
@@ -301,7 +301,7 @@ cp luna.opid ~/Library/Application\ Support/opi/luna.opid
 
 1. **进程在跑**（`pgrep OpiInputMethod`）⇒ IMKServer 起来了。
    —— 注意这一条**不证明按键能进来**（连接名/控制器类错时，进程照样活着）。
-2. **系统设置里能添加并切到「opi输入法」** ⇒ `Info.plist` 的键对了、控制器类实例化得出来。
+2. **系统设置里能添加并切到「小欧输入法」** ⇒ `Info.plist` 的键对了、控制器类实例化得出来。
 3. **敲 `h` `a` `o` `空格` ⇒ 提交「好」**（`macos/README.md`「在 Mac 上第一件要做的事」第 4 步）。
    这条**逐字对齐 fcitx5 轨的实测表**（`crates/fcitx5-opi/cpp/README.md`「状态」一节：
    `h`/`a`/`o`/`SPACE` 的 action 是 1/1/1/2，提交 `好`）。

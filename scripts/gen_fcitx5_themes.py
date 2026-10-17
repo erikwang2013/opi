@@ -51,7 +51,7 @@ THEME_CONF = """# OPI 皮肤 —— 由 scripts/gen_fcitx5_themes.py 生成，�
 Name={title}
 Version=1
 Author=OPI
-Description=opi输入法 {desc}
+Description=小欧输入法 {desc}
 ScaleWithDPI=True
 
 [InputPanel]

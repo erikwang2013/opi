@@ -156,7 +156,10 @@ fn english_mode_commits_shifted() {
     // shift 是粘滞态（Task 5 语义），打完大写后手动释放
     e.set_shift(false);
     e.input_key('i');
-    assert_eq!(e.input_key(' '), "Hi");
+    // 用无联想候选的串：有候选时空格会提首候选（2026-10-18 英文单词联想），
+    // 本条只钉 ⇧ 的大小写语义。
+    e.input_key('x');
+    assert_eq!(e.input_key(' '), "Hix");
 }
 
 #[test]

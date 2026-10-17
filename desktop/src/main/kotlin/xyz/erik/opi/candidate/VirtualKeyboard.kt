@@ -179,7 +179,7 @@ fun VirtualKeyboardWindow(onClose: () -> Unit, onSymbols: () -> String?) {
         alwaysOnTop = true,
         resizable = false,
         focusable = false, // 承重：见文件头 ⚠️
-        title = "opi输入法 虚拟键盘",
+        title = "小欧输入法 虚拟键盘",
         icon = OpiPetWindowIcon, // 窗口/任务栏图标 = 小欧（PetIcon.kt）
     ) {
         // 不进任务栏（同状态栏，用户没点名、属同族顺手）：X11 属性直写，见 SkipTaskbar.kt。

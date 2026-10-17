@@ -1,15 +1,16 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! 小欧六形态的**离屏渲染门禁**（2026-10-17 移动端顶部宠物条裁决：笑、欢乐、哭、
-//! 沮丧、惊恐、愤怒 —— 「要是动态的、有色彩感」）。
+//! 小欧十二形态的**离屏渲染门禁**（2026-10-17 六形态 + 2026-10-18 追加撒娇、卖萌、
+//! 讨好、敲打、捂脸、吐舌头 —— 移动端顶部宠物条，「动态的、有色彩感」）。
 //!
 //! 判据分三层，都是像素级的：
 //! 1. **每张脸都画出来了**（墨迹非空）—— 空表 = 小欧没画，不能靠「不溢出」那种
 //!    恒真式混过去；
-//! 2. **六张脸互不相同**（两两像素差）—— 防止某个分支漏接、哭/沮丧/惊恐画成同一张；
-//! 3. **有色**：哭有蓝眼泪、愤怒有红标记、欢乐有粉腮红 —— 用户要的「有色彩感」若
-//!    只在背景不在小欧本体上，或点缀色被漏画，这里会红。
+//! 2. **十二张脸互不相同**（两两像素差）—— 防止某个分支漏接、两张脸画成同一张；
+//! 3. **有色**：哭有蓝眼泪、愤怒有红标记、欢乐有粉腮红、撒娇有粉爱心、卖萌有金星、
+//!    讨好有薄荷菱形、敲打有琥珀动作线、捂脸有赭红腮、吐舌有粉舌头 —— 用户要的
+//!    「有色彩感」若只在背景不在小欧本体上，或点缀色被漏画，这里会红。
 //!
 //! PNG 落在 `/tmp/opi-render-probe/pet-*.png`，人眼可直接看（同 StatusBarRenderProbeTest
 //! 的界：证「这些像素画得出来」，不证真机窗里的样子）。没有一条断言依赖本机字体 ——
@@ -38,7 +39,7 @@ class OpiPetFormsRenderProbeTest {
 
     private val outDir = File("/tmp/opi-render-probe")
 
-    /** 六形态与用户点名的次序一一对应（只用于出图/报错名，规格在 PetStripTest）。 */
+    /** 十二形态与用户点名的次序一一对应（只用于出图/报错名，规格在 PetStripTest）。 */
     private val forms = listOf(
         "smile" to PetMood.IDLE,
         "joy" to PetMood.WAITING,
@@ -46,6 +47,12 @@ class OpiPetFormsRenderProbeTest {
         "dejected" to PetMood.PUZZLED,
         "terrified" to PetMood.TERRIFIED,
         "angry" to PetMood.ANGRY,
+        "coquettish" to PetMood.COQUETTISH,
+        "cute" to PetMood.CUTE,
+        "pleasing" to PetMood.PLEASING,
+        "knocking" to PetMood.KNOCKING,
+        "face-palm" to PetMood.FACE_PALM,
+        "tongue-out" to PetMood.TONGUE_OUT,
     )
 
     private fun render(name: String, mood: PetMood): BufferedImage {
@@ -115,15 +122,15 @@ class OpiPetFormsRenderProbeTest {
     }
 
     @Test
-    fun `all six forms are drawn and visibly different`() {
+    fun `all twelve forms are drawn and visibly different`() {
         val rendered = forms.associate { (name, mood) -> name to render(name, mood) }
         val inks = rendered.mapValues { (_, img) -> inkCount(img) }
-        println("小欧六形态墨迹像素：$inks")
+        println("小欧十二形态墨迹像素：$inks")
         for ((name, ink) in inks) {
             // 正控：小欧总要占一块（240px 宽、约 236 高，墨迹几千像素起步）。
             assertTrue("$name 该画出小欧（墨迹 $ink 像素，不能是空表）", ink > 3000)
         }
-        // 两两不同：六张脸必须真是六张脸（漏接分支会画成同一张）。
+        // 两两不同：十二张脸必须真是十二张脸（漏接分支会画成同一张）。
         val names = rendered.keys.toList()
         for (i in names.indices) for (j in i + 1 until names.size) {
             val d = diffCount(rendered.getValue(names[i]), rendered.getValue(names[j]))
@@ -151,5 +158,37 @@ class OpiPetFormsRenderProbeTest {
         assertTrue("哭该有蓝色眼泪（蓝像素 $blue）", blue > 30)
         assertTrue("愤怒该有红色怒气/腮红（红像素 $red）", red > 30)
         assertTrue("欢乐该有粉色腮红（粉像素 $pink）", pink > 30)
+    }
+
+    @Test
+    fun `the six new forms carry their colors`() {
+        val coquettish = render("coquettish", PetMood.COQUETTISH)
+        val cute = render("cute", PetMood.CUTE)
+        val pleasing = render("pleasing", PetMood.PLEASING)
+        val knocking = render("knocking", PetMood.KNOCKING)
+        val facePalm = render("face-palm", PetMood.FACE_PALM)
+        val tongueOut = render("tongue-out", PetMood.TONGUE_OUT)
+        // 撒娇：玫瑰粉爱心（红 > 绿、蓝）。
+        val rose = colorCount(coquettish) { r, g, b -> r > g + 50 && r > b + 30 }
+        // 卖萌：金色星星（红、绿都明显高于蓝）。
+        val gold = colorCount(cute) { r, g, b -> r > b + 60 && g > b + 40 }
+        // 讨好：薄荷色菱形（绿明显高于红、蓝）。
+        val mint = colorCount(pleasing) { r, g, b -> g > r + 30 && g > b + 15 }
+        // 敲打：琥珀色动作线（红高于绿，绿高于蓝）。
+        val amber = colorCount(knocking) { r, g, b -> r > g + 40 && g > b + 40 }
+        // 捂脸：赭红腮红（红高于绿、蓝）。
+        val palm = colorCount(facePalm) { r, g, b -> r > g + 35 && r > b + 40 }
+        // 吐舌头：粉红舌头（红高于绿、蓝）。
+        val tongue = colorCount(tongueOut) { r, g, b -> r > g + 60 && r > b + 50 }
+        println(
+            "新形态情绪色像素：撒娇-玫瑰 $rose / 卖萌-金 $gold / 讨好-薄荷 $mint / " +
+                "敲打-琥珀 $amber / 捂脸-赭红 $palm / 吐舌-粉 $tongue",
+        )
+        assertTrue("撒娇该有粉色爱心（玫瑰像素 $rose）", rose > 30)
+        assertTrue("卖萌该有金色星星（金像素 $gold）", gold > 30)
+        assertTrue("讨好该有薄荷色菱形（薄荷像素 $mint）", mint > 30)
+        assertTrue("敲打该有琥珀色动作线（琥珀像素 $amber）", amber > 30)
+        assertTrue("捂脸该有赭红腮红（赭红像素 $palm）", palm > 30)
+        assertTrue("吐舌头该有粉色舌头（粉像素 $tongue）", tongue > 30)
     }
 }

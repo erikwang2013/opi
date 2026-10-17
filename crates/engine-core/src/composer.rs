@@ -16,14 +16,19 @@ pub enum Mode {
 }
 
 impl Mode {
-    /// 数字键在这几个模式下是**选词键**（页内索引）：缓冲里是待检索的关键字/音节，
-    /// 候选栏正是用户想要的。英文/数字模式不选词（缓冲里是原文，数字该进文档）。
+    /// 数字键在这几个模式下是**选词键**（页内索引）：缓冲里是待检索的关键字/音节/前缀，
+    /// 候选栏正是用户想要的。英文（2026-10-18 起）也算：英文缓冲有单词联想候选；
+    /// 无候选时 `digit_select` 的既有判据照样直传，数字该进文档时仍进文档。
+    /// 数字模式不选词（缓冲里是原文，数字该进文档）。
     ///
     /// 定义在 `Mode` 上而不是三轨各写一份 `matches!`：那三份列表逐字重复、必漂；
     /// 且 `state.mode()` 比 `self.mode()` 长一字符就顶破 rustfmt 的宏参数宽度上限，
     /// 会逼其中一轨单独折行 —— 同构的源码形状跟着破掉。
     pub fn digit_selects_candidates(self) -> bool {
-        matches!(self, Mode::Pinyin | Mode::Traditional | Mode::Symbol)
+        matches!(
+            self,
+            Mode::Pinyin | Mode::Traditional | Mode::Symbol | Mode::English
+        )
     }
 
     /// 进入该模式时**全角开关**的默认值：中文模式自动全角（用户裁决 2026-09-27
@@ -69,6 +74,11 @@ pub struct Composer {
     /// 「一次输入会话」的快照（模式与缓冲），方案是**设备级偏好**（换键盘布局），
     /// 生命周期不同 —— 放进快照会让所有 `Session { .. }` 字面量都要跟着改。
     scheme: crate::scheme::Scheme,
+    /// 缓冲是**从哪个模式带过来的**（`switch_mode_keep_buffer` 打标；None = 缓冲属于
+    /// 当前模式，或缓冲为空）。用户裁决 2026-10-09「中文输入时切英文，拼音保留可继续
+    /// 使用」⇒ 保留的串不属于新模式的语义：英文不能把它当前缀匹配、拼音也不能把英文词
+    /// 当拼音。回到来处（中→英→中）即清标，缓冲又归它自己。
+    carried_from: Option<Mode>,
 }
 
 impl Composer {
@@ -76,6 +86,7 @@ impl Composer {
         Composer {
             session: Session::default(),
             scheme: crate::scheme::Scheme::default(),
+            carried_from: None,
         }
     }
 
@@ -117,8 +128,8 @@ impl Composer {
             }
             Mode::English => {
                 // 与 Pinyin 同一上限：缓冲是 UI 的 preedit 来源，无上限则可无限增长。
-                // Android 侧英文模式空缓冲直传、不进引擎，故当前不可达；但这是引擎
-                // 的公开契约，其它前端（fcitx5/tsf）不该依赖调用方自觉。
+                // 2026-10-18 起英文缓冲是**单词联想的前缀**（`EnglishWords::candidates`）：
+                // 路由层每个字母都送进来，不再有「空缓冲直传」的旁路。
                 if self.session.buffer.chars().count() >= MAX_BUFFER {
                     Ignored
                 } else if ch.is_ascii_alphabetic() {
@@ -166,11 +177,15 @@ impl Composer {
 
     pub fn backspace(&mut self) -> Session {
         self.session.buffer.pop();
+        if self.session.buffer.is_empty() {
+            self.carried_from = None;
+        }
         self.session.clone()
     }
 
     pub fn clear(&mut self) -> Session {
         self.session.buffer.clear();
+        self.carried_from = None;
         self.session.clone()
     }
 
@@ -185,20 +200,34 @@ impl Composer {
         self.session.mode = mode;
         self.session.buffer.clear();
         self.session.shift = false;
+        self.carried_from = None;
         self.session.clone()
     }
 
     /// 换模式但**保留缓冲**（语言切换专用；判据与理由见 `Engine::switch_language`）：
     /// 与 [`Self::switch_mode`] 只差不清缓冲，shift 照常复位。
+    ///
+    /// 携带标记（见 [`Self::carried_from`]）：空缓冲 ⇒ 无标；**回到缓冲的来处** ⇒
+    /// 清标（中→英→中，拼音又归自己）；否则记下旧模式。已经带标时保留原始来处
+    /// （第三跳不把来处改成中间模式）。
     pub fn switch_mode_keep_buffer(&mut self, mode: Mode) -> Session {
+        let old = self.session.mode;
         self.session.mode = mode;
         self.session.shift = false;
+        self.carried_from = if self.session.buffer.is_empty() || self.carried_from == Some(mode) {
+            None
+        } else if self.carried_from.is_none() && mode != old {
+            Some(old)
+        } else {
+            self.carried_from
+        };
         self.session.clone()
     }
 
     /// 提交当前缓冲（不记录学习，由 Engine 层处理）。
     pub fn commit_buffer(&mut self) -> Session {
         self.session.buffer.clear();
+        self.carried_from = None;
         self.session.clone()
     }
 
@@ -210,11 +239,19 @@ impl Composer {
     pub fn commit_keep_suffix(&mut self, suffix: &str) -> Session {
         self.session.buffer.clear();
         self.session.buffer.push_str(suffix);
+        if suffix.is_empty() {
+            self.carried_from = None;
+        }
         self.session.clone()
     }
 
     pub fn session(&self) -> &Session {
         &self.session
+    }
+
+    /// 携带标记：`Some(origin)` = 缓冲是在 `origin` 模式里打的（见字段注释）。
+    pub(crate) fn carried_from(&self) -> Option<Mode> {
+        self.carried_from
     }
 }
 

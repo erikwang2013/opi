@@ -48,13 +48,13 @@ class SkipTaskbarTest {
 
     @Test
     fun `window matching requires the title and our pid when present`() {
-        assertTrue(windowMatches("opi输入法 状态栏", 4242L, 4242L, "opi输入法 状态栏"))
+        assertTrue(windowMatches("小欧输入法 状态栏", 4242L, 4242L, "小欧输入法 状态栏"))
         // pid 属性还没写上 ⇒ 只认标题（找不到的代价是「条目还在」，不是错杀）
-        assertTrue(windowMatches("opi输入法 状态栏", null, 4242L, "opi输入法 状态栏"))
+        assertTrue(windowMatches("小欧输入法 状态栏", null, 4242L, "小欧输入法 状态栏"))
         // 别的进程的同名窗不能认（认错 = 把别人窗口从任务栏里摘了）
-        assertFalse(windowMatches("opi输入法 状态栏", 111L, 4242L, "opi输入法 状态栏"))
+        assertFalse(windowMatches("小欧输入法 状态栏", 111L, 4242L, "小欧输入法 状态栏"))
         // 同进程的另一条窗（虚拟键盘 vs 状态栏）不能认错
-        assertFalse(windowMatches("opi输入法 虚拟键盘", 4242L, 4242L, "opi输入法 状态栏"))
-        assertFalse(windowMatches(null, 4242L, 4242L, "opi输入法 状态栏"))
+        assertFalse(windowMatches("小欧输入法 虚拟键盘", 4242L, 4242L, "小欧输入法 状态栏"))
+        assertFalse(windowMatches(null, 4242L, 4242L, "小欧输入法 状态栏"))
     }
 }

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! engine-core：OPI 输入法纯逻辑内核（M1 全拼）。
+//! engine-core：小欧输入法纯逻辑内核（M1 全拼）。
 //! 模块文件在 Task 1 以空占位创建，各任务逐个填充；re-export 随类型就位时添加。
 
 pub mod bytes;
@@ -42,6 +42,7 @@ mod engine_symbol_browse_impl; // 符号浏览一族（500 行门禁拆出，见
 mod engine_user_words_impl; // 用户词与开关一族（500 行门禁拆出，见文件头）
 #[path = "engine_wubi.rs"]
 mod engine_wubi_impl; // 五笔一族：风格/候选个数/自动上屏/编码提示/回车设置位（500 行门禁拆出，见文件头）
+mod english_words; // 英文单词联想（数据 include_str! 嵌入，2026-10-18）
 pub mod fuzzy;
 pub mod jianpin;
 pub mod keys;

@@ -175,8 +175,9 @@ impl KeyRouter {
     /// 切换模式：**离开** English 才清前端 ⇧（判据与 Android `EngineController.switchMode`
     /// 的 `if (m != ENGLISH) resetShift()` 逐字一致）。
     ///
-    /// 前端 ⇧ 三态与引擎侧是两份状态，引擎清了不够 —— 英文空缓冲直传的大小写由
-    /// `ShiftState` 决定，Lock 残留会让再次进入 English 后打出的全是大写。
+    /// 前端 ⇧ 三态与引擎侧是两份状态，引擎清了不够 —— 英文模式下 single 的消费与
+    /// Lock 的持续大写由本层状态机配合引擎 shift 一起表达，Lock 残留会让再次进入
+    /// English 后打出的全是大写（状态栏也会显示错的 ⇧）。
     /// C ABI 的 `opi_switch_mode` 必须走本方法（而不是直接打引擎），否则 Apple 侧
     /// 就有这个 bug。
     pub fn switch_mode(&mut self, mode: Mode) {
@@ -269,7 +270,9 @@ impl KeyRouter {
     ///
     /// 路由表（两轨逐字同构，见模块头注释）：
     /// - Ctrl/Alt/⌘ 组合：直通（系统快捷键，不拦截）。
-    /// - 英文模式空缓冲：字母直传；⇧ 非 OFF → 转大写并消费 single。
+    /// - 英文模式（2026-10-18 起）：**字母一律入引擎缓冲**（候选 = 单词联想前缀，
+    ///   大小写由 composer 按引擎 ⇧ 决定，single 用掉即复位）；数字有候选时选词；
+    ///   缓冲空时其余可打印字符直传；缓冲非空时标点先收尾再插入。
     /// - 其余情况字母/撇号入引擎缓冲。
     /// - 空格：缓冲非空 → 引擎提交；空缓冲 → 直传 " "。
     /// - 回车：缓冲非空 → 提交首候选；空缓冲 → 直通。
@@ -415,22 +418,40 @@ impl KeyRouter {
                 }
             }
             Mode::English => {
-                if self.buffer().is_empty() {
-                    // 直传路径：shift 非 OFF → 转大写并消费 single（镜像 `handleKey`）；
-                    // 全角开 ⇒ 出全角字母（用户裁决 2026-10-12「字母、数字也要」）——
-                    // 映射与开关唯一在引擎（`fullwidthize`），本层只调它。
+                // 携带缓冲（中→英保留的拼音）：保持旧直传 —— 字母进文档、缓冲原样
+                // 留着切回中文继续用（用户裁决 2026-10-09）；英文自己的缓冲才喂引擎
+                // 做前缀匹配。⇧/全角语义与旧空缓冲直传同一条（直传绕过引擎）。
+                if self.engine.buffer_is_carried() {
                     let text = if self.shift_state() != ShiftState::Off {
                         self.consume_single_shift();
                         c.to_ascii_uppercase().to_string()
                     } else {
                         c.to_string()
                     };
-                    KeyAction::Input(self.engine.fullwidthize(&text))
-                } else if c.is_ascii_alphabetic() {
-                    // 缓冲非空：字母入引擎（composer 按引擎 shift 决定大小写）
+                    return KeyAction::Input(self.engine.fullwidthize(&text));
+                }
+                if c.is_ascii_alphabetic() {
+                    // 2026-10-18：字母**一律**进引擎缓冲（候选 = 以缓冲为前缀的单词）。
+                    // 大小写由 composer 按**引擎** ⇧ 决定；前端 single 态一个字母后复位
+                    // （lock 不受影响）—— 两态仍各记各的，消费语义与旧直传路径一致。
                     let out = self.engine.input_key(c);
+                    self.consume_single_shift();
                     self.reset_page_if_buffer_changed();
                     commit_or_handled(out)
+                } else if c.is_ascii_digit() && !self.buffer().is_empty() {
+                    // 有候选 ⇒ 页内选词；无候选 ⇒ `digit_select` 自己直传（数字进文档）。
+                    self.digit_select(c)
+                } else if self.buffer().is_empty() {
+                    // 空缓冲：沿用旧的直传语义（数字/未映射标点原样交给调用方；
+                    // 全角开时仍由引擎唯一映射，用户裁决 2026-10-12「字母、数字也要」）。
+                    KeyAction::Input(self.engine.fullwidthize(&c.to_string()))
+                } else if c.is_ascii_punctuation() {
+                    // 缓冲非空：先按空格语义收尾（有候选提首候选、无候选提原文），
+                    // 标点排在后面 —— 否则报文会拼在残留组合串后面。命中标点表的
+                    // 那些在 `input_punct` 里已走同一条收尾（上层先问它），这里只剩未映射的。
+                    let out = self.engine.input_space();
+                    self.reset_page_if_buffer_changed();
+                    KeyAction::Input(out + &c.to_string())
                 } else {
                     KeyAction::PassThrough
                 }

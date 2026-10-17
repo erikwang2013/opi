@@ -15,15 +15,16 @@
     primary #2E8B80  青（结构描边，可随主题变色）
     shade   #1E6B63  深青（眼睛 / 刻字）
     accent  #D9553F  朱砂（声调天线，仅此一处）
-    blush   #F5A6B4  桃粉（笑脸腮红；六形态的其余点缀色见 opi-pet-forms.svg）
+    blush   #F5A6B4  桃粉（笑脸腮红；其余形态的点缀色见 opi-pet-forms.svg）
 
-  六种表情（2026-10-17）：笑 / 欢乐 / 哭 / 沮丧 / 惊恐 / 愤怒。本图是**笑**的静态基准；
-  其余五张与逐形态的动效、底色见 docs/opi-pet-forms.svg 与 shared/pet/OpiPet.kt。
+  十二种表情（2026-10-17 六种 + 2026-10-18 追加六种）：笑 / 欢乐 / 哭 / 沮丧 /
+  惊恐 / 愤怒 / 撒娇 / 卖萌 / 讨好 / 敲打 / 捂脸 / 吐舌头。本图是**笑**的静态基准；
+  其余十一张与逐形态的动效、底色见 docs/opi-pet-forms.svg 与 shared/pet/OpiPet.kt。
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 250" width="240" height="250"
      role="img" aria-labelledby="petTitle petDesc">
   <title id="petTitle">OPI 项目宠物：键帽精灵「小欧」</title>
-  <desc id="petDesc">一枚白色键帽形状的小精灵，正面有笑脸（笑，带桃粉腮红），嘴是字母 O；头顶是拼音声调符号天线；侧壁刻着 OPI；底部有按键涟漪。同一只小欧还有六种表情（笑、欢乐、哭、沮丧、惊恐、愤怒），见 docs/opi-pet-forms.svg。</desc>
+  <desc id="petDesc">一枚白色键帽形状的小精灵，正面有笑脸（笑，带桃粉腮红），嘴是字母 O；头顶是拼音声调符号天线；侧壁刻着 OPI；底部有按键涟漪。同一只小欧还有十二种表情（笑、欢乐、哭、沮丧、惊恐、愤怒、撒娇、卖萌、讨好、敲打、捂脸、吐舌头），见 docs/opi-pet-forms.svg。</desc>
 
   <style>
     /* 眨眼 + 天线轻晃：渐进增强，不支持时静态呈现。 */
@@ -82,7 +83,7 @@
   <rect x="52" y="46" width="136" height="104" rx="20"
         fill="url(#opi-plate)" stroke="#2E8B80" stroke-width="5"/>
 
-  <!-- 腮红：笑脸的色彩（六形态的共同语言，见 opi-pet-forms.svg） -->
+  <!-- 腮红：笑脸的色彩（十二形态的共同语言，见 opi-pet-forms.svg） -->
   <ellipse cx="77" cy="117.5" rx="11" ry="5.5" fill="#F5A6B4" opacity="0.38"/>
   <ellipse cx="163" cy="117.5" rx="11" ry="5.5" fill="#F5A6B4" opacity="0.38"/>
 

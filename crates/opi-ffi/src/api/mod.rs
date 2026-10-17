@@ -255,6 +255,12 @@ impl Api {
         self.router.engine().buffer().to_string()
     }
 
+    /// 缓冲是否由别的模式带过来（`switchLanguage` 保留缓冲时打标；见
+    /// `Engine::buffer_is_carried`）。Android 英文分支的直传判据。
+    pub fn buffer_is_carried(&self) -> bool {
+        self.router.engine().buffer_is_carried()
+    }
+
     /// 9 键方案的**拼音读数**（显示用；见 `Engine::display_buffer`，带分词：
     /// `ni'hao`）。非 9 键与 [`Self::buffer`] 逐字节相同。
     ///

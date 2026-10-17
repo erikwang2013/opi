@@ -56,6 +56,21 @@ export enum PetMood {
   Terrified = 6,
   /** 愤怒（顶部宠物条：愤怒） */
   Angry = 7,
+  // 2026-10-18 追加（同样只能加在末尾，与 shared/pet/OpiPet.kt 逐值镜像）：
+  // 移动端顶部宠物条十二形态轮播的后六枚表情能力。petMood 不产出它们，鸿蒙端
+  // 也还没有用到 —— 先按跨端契约把序号占住，将来要用时按 Compose 版补绘制。
+  /** 撒娇 */
+  Coquettish = 8,
+  /** 卖萌 */
+  Cute = 9,
+  /** 讨好 */
+  Pleasing = 10,
+  /** 敲打 */
+  Knocking = 11,
+  /** 捂脸 */
+  FacePalm = 12,
+  /** 吐舌头 */
+  TongueOut = 13,
 }
 
 /**

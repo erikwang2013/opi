@@ -64,50 +64,6 @@ fn cabi_key_event_digit_selects_page_relative() {
     unsafe { opi_clear() };
 }
 
-/// 英文模式：空缓冲直传（action=2 + 该字符）；⇧ Lock 大写；抬起不二次提交。
-#[test]
-fn cabi_key_event_english_pass_through_and_shift() {
-    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
-    load_any();
-    unsafe { opi_switch_mode(1) };
-    let (a, t) = key_event('a' as u32, 0);
-    assert_eq!((a, t.as_str()), (2, "a"), "英文空缓冲直传：提交该字符");
-    assert_eq!(read(unsafe { opi_buffer() }), "", "直传路径不进缓冲");
-    let (a, _) = key_event('a' as u32, KEY_STATE_RELEASED);
-    assert_eq!(a, 1, "抬起不得二次提交（否则 a → aa）");
-
-    let (a, _) = key_event(KEY_SHIFT, KEY_STATE_LONG_PRESSED);
-    assert_eq!(a, 1, "⇧ 长按被消费");
-    let (a, t) = key_event('a' as u32, 0);
-    assert_eq!((a, t.as_str()), (2, "A"), "Lock 下转大写");
-
-    unsafe { opi_switch_mode(0) };
-    let (a, t) = key_event('a' as u32, 0);
-    assert_eq!((a, t.as_str()), (1, ""), "拼音模式下字母进缓冲");
-    unsafe { opi_clear() };
-}
-
-/// ⇧ Lock 不得跨模式残留：`opi_switch_mode` 必须清**前端** ⇧ 状态。
-/// 直传路径的大小写由前端三态决定（不查 composer 的 shift），引擎侧清了不够 ——
-/// 漏了这条，Apple 侧「⇧ 长按 → 切拼音 → 切回英文」后打出的全是大写。
-/// 对标两轨的 switch_mode_clears_frontend_shift_lock。
-#[test]
-fn cabi_key_event_switch_mode_clears_frontend_shift_lock() {
-    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
-    load_any();
-    unsafe { opi_switch_mode(1) };
-    key_event(KEY_SHIFT, KEY_STATE_LONG_PRESSED); // Lock
-    unsafe { opi_switch_mode(0) }; // 离开 English → 清前端 ⇧
-    unsafe { opi_switch_mode(1) }; // 回到 English
-    let (a, t) = key_event('a' as u32, 0);
-    assert_eq!(
-        (a, t.as_str()),
-        (2, "a"),
-        "Lock 不得跨模式残留（否则全大写）"
-    );
-    unsafe { opi_switch_mode(0) };
-}
-
 /// 可打印字符不得被特殊键抢走码位：'.'=0x2E / '!'=0x21 / '"'=0x22 与
 /// TSF 轨的 VK_DELETE / VK_PRIOR / VK_NEXT 同值（那里真出过 bug：拼音缓冲非空时
 /// 敲 '.' 走退格分支删掉拼音字母）。Apple 侧走 Unicode 码点。
@@ -197,33 +153,6 @@ fn cabi_key_event_page_aligns_across_raw_abi_exports() {
         "页码必须已归零：选到第 9 个说明 raw 出口没对齐页码"
     );
     unsafe { opi_clear() };
-}
-
-/// `opi_shift_state` 出口：0=OFF 1=SINGLE 2=LOCK。**前端**状态 —— Swift 的 ⇧ 高亮
-/// 只能从这里读（英文直传路径的大小写由三态决定，引擎侧 shift 位看不出来；
-/// 没有出口 UI 只能猜，且永远错）。
-#[test]
-fn cabi_shift_state_reflects_frontend_three_states() {
-    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
-    load_any();
-    unsafe { opi_switch_mode(1) }; // English：大小写由前端三态决定
-    assert_eq!(unsafe { opi_shift_state() }, 0, "初始 OFF");
-    key_event(KEY_SHIFT, 0); // tap
-    assert_eq!(unsafe { opi_shift_state() }, 1, "tap → SINGLE");
-    let (_, t) = key_event('a' as u32, 0);
-    assert_eq!(t, "A", "前置：SINGLE 下直传转大写");
-    assert_eq!(unsafe { opi_shift_state() }, 0, "单次大写后自动复位");
-    key_event(KEY_SHIFT, 0);
-    key_event(KEY_SHIFT, KEY_STATE_LONG_PRESSED); // 长按 → LOCK
-    assert_eq!(unsafe { opi_shift_state() }, 2, "长按 → LOCK");
-    key_event('a' as u32, 0);
-    assert_eq!(unsafe { opi_shift_state() }, 2, "LOCK 不因一次输入复位");
-    unsafe { opi_switch_mode(0) }; // 离开 English → 清前端 ⇧
-    assert_eq!(
-        unsafe { opi_shift_state() },
-        0,
-        "切走必须清（否则回到英文全大写）"
-    );
 }
 
 /// `opi_page` 出口：候选栏本地页码必须与引擎一致（自己维护的话，末页被钳制时

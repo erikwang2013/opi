@@ -292,7 +292,7 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
         resizable = false,
         // 不抢焦点：点状态栏不该把用户正在打字的窗口的焦点夺走（与候选窗同一条理由）。
         focusable = false,
-        title = "opi输入法 状态栏",
+        title = "小欧输入法 状态栏",
         // 任务栏/窗口列表图标 = 小欧（与设置页那只同一套形状，见 PetIcon.kt）。
         icon = OpiPetWindowIcon,
     ) {
@@ -328,7 +328,7 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
             onCloseRequest = { settingsOpen = false },
             // 与 `--settings` 模式同一个尺寸（800×560，2026-10-12 左导航布局起）
             state = rememberWindowState(width = 800.dp, height = 560.dp),
-            title = "opi输入法 设置",
+            title = "小欧输入法 设置",
             icon = OpiPetWindowIcon,
         ) {
             SettingsWindow() // 与 `--settings` 模式同一个主体（那份自带落盘 + 通知）

@@ -165,64 +165,74 @@ fn tab_and_esc_unhandled() {
 }
 // ---- 英文模式直传（镜像 handleKey） ----
 #[test]
-fn english_empty_buffer_lowercase_commits() {
+fn english_empty_buffer_lowercase_enters_engine() {
+    // 2026-10-18 单词联想：空缓冲不再直传 —— 字母入缓冲、候选 = 前缀匹配。
     let mut s = english_state();
-    assert_eq!(s.input_key('a' as u32, 0), KeyOutcome::Commit("a".into()));
-    assert_eq!(s.buffer(), "");
+    assert_eq!(s.input_key('a' as u32, 0), KeyOutcome::CompositionChanged);
+    assert_eq!(s.buffer(), "a");
+    assert!(!s.engine.candidates(8).is_empty(), "英文缓冲应有前缀候选");
 }
 #[test]
-fn english_empty_buffer_single_shift_commits_upper_and_consumes() {
+fn english_empty_buffer_single_shift_buffers_upper_and_consumes() {
     let mut s = english_state();
     s.shift_tap(); // Off → Single
-    assert_eq!(s.input_key('a' as u32, 0), KeyOutcome::Commit("A".into()));
+    assert_eq!(s.input_key('a' as u32, 0), KeyOutcome::CompositionChanged);
     // single 已消费：下个字母小写
-    assert_eq!(s.input_key('b' as u32, 0), KeyOutcome::Commit("b".into()));
+    assert_eq!(s.input_key('b' as u32, 0), KeyOutcome::CompositionChanged);
+    assert_eq!(s.buffer(), "Ab");
     assert_eq!(s.shift_state(), ShiftState::Off);
-    assert_eq!(s.buffer(), "");
 }
 #[test]
 fn english_empty_buffer_lock_keeps_uppercase() {
     let mut s = english_state();
     s.shift_long_press(); // Lock
-    assert_eq!(s.input_key('a' as u32, 0), KeyOutcome::Commit("A".into()));
+    assert_eq!(s.input_key('a' as u32, 0), KeyOutcome::CompositionChanged);
     // Lock 不被消费
-    assert_eq!(s.input_key('b' as u32, 0), KeyOutcome::Commit("B".into()));
+    assert_eq!(s.input_key('b' as u32, 0), KeyOutcome::CompositionChanged);
+    assert_eq!(s.buffer(), "AB");
     assert_eq!(s.shift_state(), ShiftState::Lock);
-    assert_eq!(s.buffer(), "");
 }
 #[test]
-fn english_empty_buffer_physical_shift_keysym_commits_upper() {
-    // 大写键值 + SHIFT 位，仍直传且消费 single
+fn english_empty_buffer_physical_shift_keysym_buffers_upper() {
+    // 大写键值 + SHIFT 位：composer 按引擎 shift 大写
     let mut s = english_state();
     s.shift_tap();
     assert_eq!(
         s.input_key('A' as u32, KEY_STATE_SHIFT),
-        KeyOutcome::Commit("A".into())
+        KeyOutcome::CompositionChanged
     );
+    assert_eq!(s.buffer(), "A");
     assert_eq!(s.shift_state(), ShiftState::Off);
 }
 #[test]
-fn english_letters_always_direct_commit_buffer_stays_empty() {
-    // 镜像 KeyRouter.handleKey：英文模式空缓冲每次直传，缓冲永远为空，
-    // 故字母永不入引擎缓冲（与 Android 行为一致）
+fn english_letters_fill_buffer_and_match() {
+    // 英文自己的缓冲：字母进引擎、候选随前缀更新（与 Android 同一条语义）。
     let mut s = english_state();
-    assert_eq!(s.input_key('a' as u32, 0), KeyOutcome::Commit("a".into()));
-    assert_eq!(s.input_key('b' as u32, 0), KeyOutcome::Commit("b".into()));
+    assert_eq!(s.input_key('a' as u32, 0), KeyOutcome::CompositionChanged);
+    assert_eq!(s.input_key('b' as u32, 0), KeyOutcome::CompositionChanged);
+    assert_eq!(s.buffer(), "ab");
+    // 缓冲非空：标点先按空格语义收尾，标点排在后面（与 KeyRouter 同构）。
+    let mut s = english_state();
+    for c in ['z', 'z', 'z', 'q'] {
+        s.input_key(c as u32, 0);
+    }
+    assert!(s.engine.candidates(8).is_empty());
+    assert_eq!(
+        s.input_key(',' as u32, 0),
+        KeyOutcome::Commit("zzzq,".into())
+    );
     assert_eq!(s.buffer(), "");
-    // 符号直传
-    assert_eq!(s.input_key(',' as u32, 0), KeyOutcome::Commit(",".into()));
 }
 #[test]
 fn english_nonempty_buffer_letter_goes_to_engine() {
-    // 防御路径：仅当缓冲意外非空（如经 engine 直入）时才入引擎，
-    // 镜像 KeyRouter 的 else 分支
+    // 英文自己的缓冲（含经 engine 直入的）继续匹配，字母不被直传。
     let mut s = english_state();
     s.engine.input_key('x'); // 绕过路由器直入引擎缓冲
     assert_eq!(s.buffer(), "x");
     assert_eq!(s.input_key('b' as u32, 0), KeyOutcome::CompositionChanged);
     assert_eq!(s.buffer(), "xb");
-    // 缓冲非空时符号交应用
-    assert_eq!(s.input_key(',' as u32, 0), KeyOutcome::Unhandled);
+    // 缓冲非空：未命中标点表的符号先收尾缓冲、再插入标点
+    assert_eq!(s.input_key(',' as u32, 0), KeyOutcome::Commit("xb,".into()));
 }
 #[test]
 fn english_nonempty_buffer_shift_uppercases_in_engine() {
@@ -432,14 +442,15 @@ fn non_ascii_keyval_unhandled() {
     assert_eq!(s.buffer(), "");
 }
 #[test]
-fn mode_switch_clears_buffer_then_english_direct() {
-    // 拼音输入后切英文：缓冲清空，英文空缓冲直传
+fn mode_switch_clears_buffer_then_english_buffers() {
+    // 拼音输入后切英文（switch_mode 清缓冲）：英文从空缓冲起步、字母进引擎
     let mut s = pinyin_state();
     s.input_key('a' as u32, 0);
     assert_eq!(s.buffer(), "a");
     s.switch_mode(Mode::English);
     assert_eq!(s.buffer(), "");
-    assert_eq!(s.input_key('a' as u32, 0), KeyOutcome::Commit("a".into()));
+    assert_eq!(s.input_key('a' as u32, 0), KeyOutcome::CompositionChanged);
+    assert_eq!(s.buffer(), "a");
 }
 
 // ---- 可打印字符的抬起不得二次入引擎（回归：拼音缓冲翻倍 / 英文重复提交） ----
@@ -460,13 +471,15 @@ fn printable_release_does_not_refeed_pinyin_buffer() {
 }
 
 #[test]
-fn printable_release_does_not_double_commit_english() {
+fn printable_release_does_not_refeed_english_buffer() {
     let mut s = english_state();
-    // 英文空缓冲直传：按下提交一次
-    assert_eq!(s.input_key('a' as u32, 0), KeyOutcome::Commit("a".into()));
-    // 抬起不得再提交一次（否则 "a" → "aa"）
+    // 英文缓冲：按下进引擎一次
+    assert_eq!(s.input_key('a' as u32, 0), KeyOutcome::CompositionChanged);
+    assert_eq!(s.buffer(), "a");
+    // 抬起不得再入引擎一次（否则 "a" → "aa"）
     assert_eq!(
         s.input_key('a' as u32, KEY_STATE_RELEASED),
         KeyOutcome::Consumed
     );
+    assert_eq!(s.buffer(), "a");
 }

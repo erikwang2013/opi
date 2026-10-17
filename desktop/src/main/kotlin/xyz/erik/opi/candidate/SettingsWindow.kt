@@ -267,7 +267,7 @@ private fun NavColumn(selected: SettingsTab, onSelect: (SettingsTab) -> Unit) {
             OpiPet(mood = PetMood.IDLE, size = 44.dp) // 起侧壁刻 OPI
             Spacer(Modifier.width(8.dp))
             Column {
-                Text("OPI", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Ink)
+                Text("小欧", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Ink)
                 Text("属性设置", fontSize = 11.sp, color = Muted)
             }
         }

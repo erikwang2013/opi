@@ -160,8 +160,21 @@ fn english_punctuation_is_halfwidth_until_the_toggle_is_on() {
     // 「引擎不产文本、宿主自己插入」的表达），拿它当「字符丢了」会读错。
     let (action, text) = route('1');
     assert_eq!((action, text.as_str()), (2, "１"), "全角开着数字也宽");
-    let (action, text) = route('a');
-    assert_eq!((action, text.as_str()), (2, "ａ"), "全角开着字母也宽");
+    // 字母自 2026-10-18 起进缓冲（单词联想），全角在**提交点**生效 —— 空缓冲的
+    // 字母不再直传，故用无候选串 + 空格提交来量宽化。
+    for c in ['q', 'q', 'q', 'q'] {
+        assert_eq!(
+            route(c),
+            (1, String::new()),
+            "字母进缓冲：已处理、无提交文本"
+        );
+    }
+    let (action, text) = route(' ');
+    assert_eq!(
+        (action, text.as_str()),
+        (2, "ｑｑｑｑ"),
+        "全角开着：无候选提交原文也宽"
+    );
 }
 
 // ---------- 中文标点那一档 ----------

@@ -282,4 +282,28 @@ class EngineLoaderTest {
         assertFalse(ok)
         assertEquals(listOf("/data/stroke.opid"), api.calls)
     }
+
+    /**
+     * luna 只装一次（用户报障「打开输入法 app，再到其他 app 输入无反应」）：
+     * 设置页与 IME 同进程共享 Rust 单例，第二次 `OpiEngine.load` 会把 9/14 键方案
+     * 重置成全键盘 —— 必须跳过；失败（回退内置）则不置位，留给下次重试。
+     */
+    @Test
+    fun lunaLoadGateSkipsSecondInstallAfterSuccess() {
+        val gate = EngineLoader.LunaLoadGate()
+        var calls = 0
+        assertTrue(gate.run { calls++; true })
+        assertTrue(gate.run { calls++; false })
+        assertEquals(1, calls)
+    }
+
+    @Test
+    fun lunaLoadGateRetriesAfterFailureThenCachesSuccess() {
+        val gate = EngineLoader.LunaLoadGate()
+        var calls = 0
+        assertFalse(gate.run { calls++; false })
+        assertTrue(gate.run { calls++; true })
+        assertTrue(gate.run { calls++; false })
+        assertEquals(2, calls)
+    }
 }

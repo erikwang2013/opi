@@ -61,6 +61,14 @@ class EngineController(
         private set
 
     /**
+     * 缓冲是否由**别的模式**带过来（引擎真值，随 [refresh] 重读）：`switchLanguage`
+     * 保留缓冲时打标，清空/提交/回到来处即清。英文分支的直传判据（见 KeyRouter）：
+     * 携带缓冲保持旧直传，空缓冲或英文自己的缓冲进引擎。
+     */
+    var bufferCarried by mutableStateOf(false)
+        private set
+
+    /**
      * 显示用的拼音读数（9 键方案的左列 + 读屏播报用它；见 [OpiEngineApi.displayBuffer]）。
      * **只给显示**：判「缓冲有没有东西」一律用 [buffer]（[buffer] 是数字串，不能当空判据）。
      */
@@ -167,6 +175,7 @@ class EngineController(
     /** 引擎状态回读；buffer 变化重置候选页码，候选数缩水时钳制页码。 */
     fun refresh() {
         buffer = api.buffer()
+        bufferCarried = api.bufferIsCarried()
         // 钉读音的缓冲看守：缓冲一走到别处即解除。引擎侧同样按缓冲配对校验（双保险），
         // 但**不带这层的话「变了又变回」会让旧钉复活**（退格再打同一串）—— 见
         // engine-core 的 `pinned_reading` 字段注释，那条边界就靠这里收。

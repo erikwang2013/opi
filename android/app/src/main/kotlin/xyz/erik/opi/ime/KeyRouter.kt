@@ -31,9 +31,10 @@ class KeyRouter(
      * 提交后立刻重推：字段变成「**已上屏词 + 剩余拼音**（继续匹配）」；下一拍的
      * `dropComposing` 删的就恰好是这条组合串本身 —— 长度天然对齐，不再错位。
      *
-     * ⚠️ 只在**引擎驱动**的提交点调用：英文/数字直提不推 —— 那两条路缓冲可能是
-     * 「切英文时保留的中文拼音」（`handleKey` 英文分支的裁决），推出去会把它复活成
-     * 预编辑；有单测钉住（`englishDirectPathNeverResyncs`）。
+     * ⚠️ 只在**引擎驱动**的提交点调用：数字直提与英文**携带缓冲**的直传不推 ——
+     * 后者缓冲是「切英文时保留的中文拼音」（`handleKey` 英文分支的裁决），推出去会
+     * 把它复活成预编辑；有单测钉住（`englishDirectPathNeverResyncs`）。英文自己的
+     * 缓冲走引擎，提交点照常收尾。
      */
     private fun commitAndResync(text: String) {
         commit(text)
@@ -53,21 +54,26 @@ class KeyRouter(
      * 出文本（中文模式 `,` → `，`、半角 → 原样交回），丢弃返回值就等于吞键。
      */
     fun handleKey(ch: String) {
-        // 英文模式**一律直传**（2026-10-09 二期）：语言切换不再清/提交缓冲 ⇒ 英文模式下
-        // 缓冲可能**被保留**着（用户裁决「中文输入的时候切换英文，拼音保留可继续使用」）。
-        // 那种状态里字母必须照打字面英文直传，绝不进引擎缓冲 —— 否则英文打不进去、
-        // 全喂给了保留的旧拼音。保留的拼音等切回中文继续用（见 ImeState.cycleMode）。
-        // 此前只在缓冲空时直传，非空走引擎（旧防御路径）；判据随语言切换语义一起改了。
         if (controller.mode == EngineMode.ENGLISH) {
-            // ⇧ 直传大写：直传路径绕过引擎，需本侧转大写；全角由本侧宽化
-            // （2026-10-12 用户裁决「字母、数字也要」——直传绕过引擎，规则只能镜像，
-            // 语义源见 EngineController.fullwidthize 的头注）。
-            if (controller.shiftState != ShiftState.OFF) {
-                commit(controller.fullwidthize(ch.uppercase()))
-                controller.consumeSingleShift()
-            } else {
-                commit(controller.fullwidthize(ch))
+            // 携带缓冲（中→英保留的拼音，2026-10-09 用户裁决「拼音保留可继续使用」）：
+            // 保持旧直传 —— 字母进文档、缓冲原样留着切回中文继续用；绝不喂给英文
+            // 前缀匹配（否则 `a` 会拼成 `nia`，英文打不出来、拼音也被毁掉）。
+            // ⇧ 直传大写、全角由本侧宽化（直传绕过引擎，规则只能镜像，语义源见
+            // EngineController.fullwidthize 的头注）。
+            if (controller.bufferCarried) {
+                if (controller.shiftState != ShiftState.OFF) {
+                    commit(controller.fullwidthize(ch.uppercase()))
+                    controller.consumeSingleShift()
+                } else {
+                    commit(controller.fullwidthize(ch))
+                }
+                return
             }
+            // 空缓冲/英文自己的缓冲：进引擎 —— 字母入缓冲、候选 = 前缀匹配的最高频
+            // 词（2026-10-18 单词联想；空缓冲不再直传）。⇧ 的 single 用掉即复位。
+            val text = controller.input(ch)
+            if (ch.length == 1 && ch[0].isLetter()) controller.consumeSingleShift()
+            if (text.isNotEmpty()) commitAndResync(text)
             return
         }
         // 数字面板（Number 模式）：**数字点一下立即上屏**（2026-10-10 用户报障

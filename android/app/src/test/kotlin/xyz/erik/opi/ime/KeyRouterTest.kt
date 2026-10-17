@@ -35,14 +35,28 @@ class KeyRouterTest {
     }
 
     @Test
-    fun englishEmptyBufferLetterPassesThrough() {
+    fun englishEmptyBufferLetterEntersEngine() {
+        // 2026-10-18 单词联想：空缓冲不再直传 —— 字母进引擎缓冲、候选 = 前缀匹配。
         val fake = FakeEngine().apply { mode = EngineMode.ENGLISH.value }
         val ch = Channel()
         val (ctrl, r) = router(fake, ch)
         r.handleKey("a")
-        assertEquals(listOf("a"), ch.commits)
-        assertTrue(fake.inputCalls.isEmpty())
-        assertEquals("", ctrl.buffer)
+        assertEquals(listOf("a"), fake.inputCalls)
+        assertTrue("引擎缓冲不再是空直传", ch.commits.isEmpty())
+        assertEquals("a", ctrl.buffer)
+    }
+
+    @Test
+    fun englishOwnBufferKeepsMatching() {
+        val fake = FakeEngine().apply { mode = EngineMode.ENGLISH.value }
+        val ch = Channel()
+        val (ctrl, r) = router(fake, ch)
+        r.handleKey("h")
+        r.handleKey("e")
+        r.handleKey("l")
+        assertEquals(listOf("h", "e", "l"), fake.inputCalls)
+        assertEquals("hel", ctrl.buffer)
+        assertTrue(ch.commits.isEmpty())
     }
 
     @Test
@@ -54,7 +68,7 @@ class KeyRouterTest {
         ctrl.shiftLongPress()
         r.handleKey("a")
         r.handleKey("b")
-        assertEquals(listOf("A", "b"), ch.commits)
+        assertEquals("Ab", ctrl.buffer)
         assertEquals(xyz.erik.opi.engine.ShiftState.OFF, ctrl.shiftState)
     }
 
@@ -67,19 +81,20 @@ class KeyRouterTest {
         ctrl.shiftTap()
         r.handleKey("a")
         r.handleKey("b")
-        assertEquals(listOf("A", "B"), ch.commits)
+        assertEquals("AB", ctrl.buffer)
         assertEquals(xyz.erik.opi.engine.ShiftState.LOCK, ctrl.shiftState)
     }
 
     @Test
-    fun englishAlwaysDirectCommitsEvenWithAPreservedBuffer() {
-        // 2026-10-09 二期：语言切换**保留缓冲** ⇒「英文模式 + 缓冲非空」是个正常状态
-        // （保留着的中文拼音，见 ImeState.cycleMode 的注释）。字母必须照英文直传
-        // （shift SINGLE → 大写并消费），**绝不进引擎** —— 旧防御路径（非空走引擎）
-        // 随这条语义一起退役，否则英文打不进去、全喂给保留的旧拼音。
+    fun englishCarriedBufferDirectCommitsWithoutTouchingIt() {
+        // 2026-10-09 裁决：语言切换**保留缓冲** ⇒「英文模式 + 携带缓冲」是个正常状态
+        // （保留着的中文拼音，见 ImeState.cycleMode）。字母必须照英文直传
+        // （shift SINGLE → 大写并消费），**绝不进引擎** —— 否则 `a` 会拼成 `nia`，
+        // 英文打不出来、保留的拼音也被毁掉。
         val fake = FakeEngine().apply {
             mode = EngineMode.ENGLISH.value
             buf = "w" // 保留中的拼音
+            carriedFrom = EngineMode.PINYIN
         }
         val ch = Channel()
         val (ctrl, r) = router(fake, ch)
@@ -333,12 +348,17 @@ class KeyRouterTest {
      */
     @Test
     fun englishDirectPathNeverResyncs() {
-        val fake = FakeEngine().apply { mode = EngineMode.ENGLISH.value; buf = "ni" }
+        val fake = FakeEngine().apply {
+            mode = EngineMode.ENGLISH.value
+            buf = "ni"
+            carriedFrom = EngineMode.PINYIN
+        }
         val ch = Channel()
         val (_, r) = router(fake, ch)
         r.handleKey("a")
         assertEquals(listOf("a"), ch.commits)
         assertEquals("英文直提不许推组合串（会把保留的拼音复活）", 0, ch.syncCount)
+        assertEquals("ni", fake.buf)
     }
 
     /**

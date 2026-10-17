@@ -35,6 +35,10 @@ interface OpiEngineApi {
     fun candidates(limit: Int): Array<String>?
     fun buffer(): String
 
+    /** 缓冲是否由**别的模式**带过来（语言切换保留缓冲时打标；清空/提交/回到来处即清）。
+     * 英文分支的直传判据：携带缓冲直传、空缓冲或英文自己的缓冲进引擎（见 KeyRouter）。 */
+    fun bufferIsCarried(): Boolean
+
     /** 候选拼音读数（**按读音去重保序**，2026-10-12 用户裁决「左列去重」；
      * 与最近一次 [candidates] 同源同一次排名；9 键左列用）。
      * 非 9/14 键方案、或缓冲已变 ⇒ 空。调用顺序：先 [candidates]。 */

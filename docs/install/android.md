@@ -253,7 +253,7 @@ adb shell dumpsys package xyz.erik.opi | grep -E 'versionCode|versionName'  # �
 
 ### 4.1 启用输入法
 
-图形路径：**系统设置 → 系统 → 语言和输入法 → 屏幕键盘 → 管理键盘 → 勾选「opi输入法」**，再在「当前键盘」里切过去。路径随 ROM 措辞不同（本项目 `AndroidManifest.xml` 里**一条 `uses-permission` 都没有**，所以不会有权限弹窗挡路）。
+图形路径：**系统设置 → 系统 → 语言和输入法 → 屏幕键盘 → 管理键盘 → 勾选「小欧输入法」**，再在「当前键盘」里切过去。路径随 ROM 措辞不同（本项目 `AndroidManifest.xml` 里**一条 `uses-permission` 都没有**，所以不会有权限弹窗挡路）。
 
 命令行路径（【实测】，命令原样可用）：
 
@@ -284,7 +284,7 @@ adb shell ime set    xyz.erik.opi/.OpiImeService      # 切为当前输入法
 **入口是两级**：字母盘底部功能行的 `123` → 数字面板，数字面板底部功能行的 `?123`（`ABC` 右边那个）→ 符号面板。
 
 - 数字面板：键位是 Gboard 风格 —— `1``2``3` / `4``5``6` / `7``8``9` 三行，加一行标点 `,` `0` `.`（`keyboard/NumberPad.kt` 的 `numberRows`）。数字**直提**（点一下立即上屏，2026-10-10 修复「点了没反应」），`,` 与 `.` 走**引擎的标点表**（不是 UI 直提），所以中文标点开关在这里同样生效；**全角开时数字与标点都出全角**（数字在直提点宽化，见下「全角」段）。底部功能行最左 `ABC` 切回字母。
-- 符号面板：顶部 `ABC`（回字母）/ `123`（回数字）+ 一个**搜索框**；下面三个 Tab：**常用 / 表情 / 全部**（`keyboard/SymbolPanel.kt`，标签表在同文件的 `SymbolTab` 分支里）。
+- 符号面板：顶部 `ABC`（回字母）/ `123`（回数字）+ 一个**搜索框**；下面两个 Tab：**常用 / 全部**（`keyboard/SymbolPanel.kt` 的 `SymbolPageTab`）。表情不占符号页 Tab —— 所有表情入口都走独立的 `EmojiPanel`（见下「表情页」）。
 - 搜索：占位文字是「搜索（拼音/英文）」。点搜索框会**在面板下方叠一层字母盘**（IME 窗口内没有系统键盘，所以要自带一个）；输入有 250ms 防抖（`ImeState.SEARCH_DEBOUNCE_MS`）。**这层叠盘的高度是 96dp** —— `ImeScreen.kt` 里有一段长注释说明它为什么不是 176dp（高 density 机型上会把结果区挤成 0dp），**且注明「本机无设备，此改动未实测」**。
 - 开任何面板之前，未提交的拼音会**先提交**（有候选选第一个；纯乱码缓冲如 `abc` 清掉）；数字面板的缓冲本身就是待上屏文本，原样提交（`ImeState.commitPendingBuffer`）。
   ⚠️ 例外：**切到英文**（循环腿/底行[英文]/面板英文26键）按**拼音原样上屏**，不挑候选
@@ -353,11 +353,11 @@ IME 窗口列布局）**最左是小欧（logo）**，其后才是入口图标 �
 
 | 图标 | 入口 |
 |---|---|
-| 笑脸 | **表情**：直接进符号面板的「表情」Tab（`ImeState.openEmoji`） |
+| 笑脸 | **表情**：直接进独立表情页 `keyboard/EmojiPanel.kt`（`ImeState.openEmoji` → `SymbolTab.Emoji` 入口标记） |
 | 调色板 | **皮肤**面板：十张预览卡（见下「皮肤」段；2026-10-09 加，2026-10-10 扩到十款） |
 | 键盘 | **输入模式**面板：七选一（见下表）。2026-10-09 起与皮肤同一形态的**面板**（占键区、右上角关闭），不再用 DropdownMenu 弹框（用户裁决「做成像选择皮肤的功能」）；选中即换并自动收尾回键面/生僻字面板 |
 | 滑杆 | **键盘模式**面板：繁体 / 单手（关/左/右）/ 悬浮 / 游戏 / 暗光 / 长辈。同上为面板形态；**点选项不关面板**（常要连开两三个），✓ 随开关实时更新，暗光这类换肤当场生效 |
-| 圆圈 i | **关于**面板（2026-10-15 用户裁决「关于给移动端键盘功能区加个入口」）：简介 / 版本（`BuildConfig.VERSION_NAME`）/ 版权 / 项目地址 / 博客地址，两条地址可点（`ACTION_VIEW`；IME 是 Service，起 Activity 必须 `NEW_TASK`）。文案与设置页那一节**同一份常量**（`settings/AboutSection.kt` 的 `ABOUT_INTRO` / `ABOUT_PROJECT_URL` / `ABOUT_BLOG_URL`），面板里一字不自编；面板**自己可滚动**（键区矮，内容比它高）。门禁 `AboutSectionTest.aboutPanelReusesSourcesAndIsWiredToTheToolbar` |
+| 圆圈 i | **关于**面板（2026-10-15 用户裁决「关于给移动端键盘功能区加个入口」）：简介 / 版本（`BuildConfig.VERSION_NAME`）/ 版权 / 表情数据（OpenMoji CC BY-SA 4.0、颜文字 MIT）/ 项目地址 / 博客地址，两条地址可点（`ACTION_VIEW`；IME 是 Service，起 Activity 必须 `NEW_TASK`）。文案与设置页那一节**同一份常量**（`settings/AboutSection.kt` 的 `ABOUT_INTRO` / `ABOUT_PROJECT_URL` / `ABOUT_BLOG_URL`），面板里一字不自编；面板**自己可滚动**（键区矮，内容比它高）。门禁 `AboutSectionTest.aboutPanelReusesSourcesAndIsWiredToTheToolbar` |
 
 （2026-10-13 用户裁决「移动端功能区不需要全角、半角切换功能」：本表原「月相（满/半）
 → 全角 ⇄ 半角」一行已移除，图标与入口一并撤掉 —— **引擎能力保留**，见下文「全角」段。）
@@ -382,25 +382,36 @@ IME 窗口列布局）**最左是小欧（logo）**，其后才是入口图标 �
   照旧，只是用户不能再手动切）。无持久设置项（它有模式默认值、切模式重置，与「中文标点」
   那种用户偏好不同档）。
 
-**表情页的内容（2026-10-09 换源）**：`emojiSymbols()` 现在给的是 UTS#51
-`emoji-test.txt` 的**完全限定条目全量**（3963 条，官方分组序：笑脸→人物→动物→…→旗帜），
-由 `scripts/gen_symbols.py` 生成为 `data/raw/emoji.tsv` 编译期嵌入。换源前取的是
-「符号表 ∩ emoji 集」，实测缺国旗（区域指示符未成对）、🀄🅰️🈁（整段没收）、
-❤️（无 VS16 形，显示成单色字形）、全部 ZWJ 序列（家庭/彩虹旗）。⚠️ symbols.tsv 的
+**表情页的内容（2026-10-18 起来自 OpenMoji）**：`emojiSymbols()` 给的是
+`data/raw/emoji.tsv`（由 `scripts/gen_emoji_kaomoji.py` 从 OpenMoji 裁剪、产物入库、
+编译期嵌入；数据来源与 SHA-256 钉在脚本头）。裁剪口径见脚本头注：`flags` /
+`component` / `extras-*` 整组不要，肤色变体与含 ZWJ 的组合序列不要，其余按子类设
+上限 —— 目标是常见表情，不是全量；组名写在第 3 列（`EMOJI_GROUP_CN`：笑脸→人物→
+动物→植物→食物→旅行→活动→物品→符号），引擎按**连续段**切组。⚠️ symbols.tsv 的
 emoji 列**不动** —— 它管单键候选反馈（搜索路），与浏览路是两条（见 `symbols.rs`
 的 `builtin_emoji_texts` 注释）。
 
-**表情页的工具条是两套**（2026-10-12 用户裁决；工具条「表情」入口直达，符键入口
-仍是符号面板那套 —— ABC/123/搜索框 + 常用/表情/全部）：
-- **浏览态** `[← 返回][分类条][🔍 搜索]`：返回 = 关面板回键盘；分类条**可横滑**，
-  点一项把网格 `scrollToItem(组.start)`，高亮 = 网格**当前首个可见项**所属的组
-  （滚动时跟着走）。分类 = UTS#51 的**官方 9 组**（笑脸/人物/动物/食物/旅行/活动/
-  物品/符号/旗帜），组名由生成器写进 `emoji.tsv` 第 3 列（`EMOJI_GROUP_CN` 的中文
-  标签；组件组全是 `component` 状态、被「只收完全限定」滤掉），经 `emojiGroups()`
-  （JNI，JSON `[{name,start,count}]`）带出；`start` 与 `emojiSymbols()` 下标对齐，
-  由 `emoji_coverage.rs` 的连续覆盖门禁钉住。
-- **搜索态** `[← 返回][搜索框]` + 面板下方**叠一层字母盘**（既有机制：输入框一聚焦
-  就叠；IME 窗口里没有系统键盘）。返回 = 退回浏览态并清查询（网格回全量）。
+**表情页的布局**（2026-10-18 用户参考布局：顶部 Tab、中间网格、**底部**分类条；
+所有表情入口直达本页；符号面板只有 常用/全部，不再保留旧表情网格）：
+- **顶部** `[← 返回][Emoji | 颜文字][🔍 搜索]`（`keyboard/EmojiPanel.kt` 的
+  `EmojiTopBar`）：Emoji / 颜文字两个子页；返回 = 搜索态退回浏览态并清查询，
+  浏览态关闭面板回键盘。**搜索态**变 `[← 返回][搜索框]` + 面板下方**叠一层字母盘**
+  （既有机制：输入框一聚焦就叠；IME 窗口里没有系统键盘），防抖仍由 `ImeState` 管。
+- **底部**一条**可横滑**的分类条（`EmojiPanel.kt` 的 `CategoryBar`）：点一项把网格
+  `scrollToItem(组.start)`，高亮 = 网格**当前首个可见项**所属的组（滚动时跟着走，
+  与 Emoji 页共用 `SymbolCatalog.groupIndexOf`）。
+  - **Emoji** 分类 = `自有` + 引擎 `emojiGroups()`。组名来自生成器写进 `emoji.tsv`
+    第 3 列的中文标签（`EMOJI_GROUP_CN`），经 `emojiGroups()`（JNI，JSON
+    `[{name,start,count}]`）带出；`start` 与 `emojiSymbols()` 下标对齐，由
+    `emoji_coverage.rs` 的连续覆盖门禁钉住。
+    **`自有` = 小欧形象**（`keyboard/PetEmoji.kt`）：网格里用 `OpiPet` 画
+    `PetMood.entries` 中有映射的宠物形态，点击提交的是**对应的 Unicode emoji**
+    （如「笑」提交 😄）—— IME 只能上屏字符，宠物在这里是选择器，不是可上屏内容。
+    小欧形态排在网格最前，引擎各组的 `start` 相应后移。
+  - **颜文字** 分类 = `assets/kaomoji.tsv` 的第二列（`颜文字<TAB>分类`；解析在
+    `keyboard/KaomojiCategories.kt`：坏行跳过、同名分类并进第一处，`start` 是拼平后
+    的累计下标）。资产由数据侧生成入库；缺失/损坏 ⇒ 空列表 + 「没有颜文字数据」
+    空态（不崩 IME，同符号页的「没有类目数据」）。
 - **渲染前保序去重**（同日用户裁决「表情存在重复的，去重」）：`filter`/浏览列表在
   进网格前各过一道 `distinct()` —— 数据/引擎/搜索三层都已各自去重，这是最后一道。
 - **渲染前过一道字形可用性**（2026-10-12 晚用户报障「有个表情显示是长方形框」）：
@@ -608,6 +619,12 @@ IME 服务在 `EngineLoader.load` 之后把三个值推给引擎（`prefs.applyE
 ### 5.1 词库到底装进去没有 —— 两级证据
 
 词库通路是：**APK 里的 `assets/*.opid` → 解压到 `filesDir/` → `OpiEngine.load(path)`**，编排在 `jni/EngineLoader.kt` 的 `load(context)`（`OpiImeService.onCreateInputView` 与 `SettingsActivity.onCreate` 各调一次）。
+
+⚠️ **luna 每进程只 install 一次**（`EngineLoader.LunaLoadGate`，2026-10-18）：设置页与
+IME 同进程共享 Rust 单例，重复 `OpiEngine.load` 会把 IME 正在用的输入方案/模式/开关
+重置成默认值 —— 用户报障「打开输入法 App，再到其他 App 输入无反应」的根因就在这
+（典型：9/14 键被重置成全键盘，按键不再出候选）。trad/stroke/五笔码表仍在每次调用时
+重挂（它们只挂词典，不重置主引擎），所以设置页改码表方案仍会生效。
 
 另有**导入词库层**（2026-10-14 M3）：`filesDir/dicts/*.tsv` 由 `engine/DictStore.kt` 逐个
 `importDict`（`OpiImeService` 启动时装载、停用名单装载后重放），设置页「词库」一节管理

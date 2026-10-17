@@ -2,6 +2,8 @@
 
 # Open People Input (OPI)
 
+中文名**小欧**（也是项目宠物名），英文名 **opi**；输入法以**小欧输入法**为准（opi 输入法也可）。
+
 ## 一款回归本质、人人可用的多端输入法
 
 > **想装到自己机器上？** 各端安装教程在 **[`docs/install/`](docs/install/README.md)**
@@ -26,9 +28,9 @@
 | **侧壁刻字 = OPI** | 键帽的字符位，也正是项目名 |
 | **底部涟漪** | 按键落下后只在本机扩散的余波 —— 不外传 |
 
-形象见 [`docs/opi-pet.svg`](docs/opi-pet.svg)（纯手写 SVG，无外部依赖，可任意缩放）；六种表情（笑 / 欢乐 / 哭 / 沮丧 / 惊恐 / 愤怒）见 [`docs/opi-pet-forms.svg`](docs/opi-pet-forms.svg)。它已经住进了代码里：
+形象见 [`docs/opi-pet.svg`](docs/opi-pet.svg)（纯手写 SVG，无外部依赖，可任意缩放）；十二种表情（笑 / 欢乐 / 哭 / 沮丧 / 惊恐 / 愤怒 / 撒娇 / 卖萌 / 讨好 / 敲打 / 捂脸 / 吐舌头）见 [`docs/opi-pet-forms.svg`](docs/opi-pet-forms.svg)。它已经住进了代码里：
 
-- **Android**：设置页的表情跟着引擎状态走（待命 / 等选 / 困惑 / 睡着 / 降级）；候选栏待命位、「无匹配」与符号搜索空结果三处空态；默认页顶栏空闲槽位的**六形态宠物条**（笑 / 欢乐 / 哭 / 沮丧 / 惊恐 / 愤怒，动态轮播 + 情绪色）；**启动图标**是自适应矢量前景 + 5 档 PNG 回退
+- **Android**：设置页的表情跟着引擎状态走（待命 / 等选 / 困惑 / 睡着 / 降级）；候选栏待命位、「无匹配」与符号搜索空结果三处空态；默认页顶栏空闲槽位的**十二形态宠物条**（笑 / 欢乐 / 哭 / 沮丧 / 惊恐 / 愤怒 / 撒娇 / 卖萌 / 讨好 / 敲打 / 捂脸 / 吐舌头，动态轮播 + 情绪色）；**启动图标**是自适应矢量前景 + 5 档 PNG 回退
 - **Windows**：候选窗空态摊手；发行包（`.deb` / `.msi`）的应用图标；**语言栏按钮**（TSF；只在语言栏开着时可见）
 - **鸿蒙**：候选栏里的小欧，它自己就是「记不记词」的开关；应用/子类型图标
 - **macOS**：输入源菜单图标（`macos/opi.tiff`）——⚠️ 本目录是从未编译的草案，图标只在 Mac 上才看得见
@@ -98,6 +100,7 @@
 - 引擎只做一件事：五模式（拼音 / 繁体 / 英文 / 数字 / 符号）的按键状态机 + 简拼 / 模糊拼音 + 候选排序 + 本地学习。没有皮肤商城，没有弹窗，没有 AI 助手
 - **简拼**（纯缩写输入，`nh` → 你好、`zg` → 中国）：引擎侧**默认开、有独立开关**（`Engine::set_jianpin`，与模糊音同源；开关是 2026-10-08 补的）—— **三端都能关**：Android 设置页、Linux（fcitx5 附加组件配置 / 桌面设置窗写同一份 conf）、Windows（设置窗写 `settings.ini`，TSF 激活时读）。触发条件、展开规则与上限都在 `engine-core/src/jianpin.rs` 的头注释里，门禁是 `tests/jianpin_ranking.rs`
 - **候选层：精确匹配不设上限，前缀层按词频截断**：`FETCH_LIMIT` 与 `Engine::select` 内部那道截断都已拆掉，三处同值（`engine-core/src/router.rs` · `fcitx5-opi/src/candidate.rs` · `tsf-opi/src/logic.rs`，且互相之间有等值断言）；**前缀扩展层**（打一半的输入）自 2026-10-11 起按静态词频取 top-N（26 键 9216 / 9·14 键 2048，`dictionary.rs` 的两个常量，缘由与实测见 [`docs/performance.md`](docs/performance.md)）。⚠️ **两台宿主机仍是旧上限**：Android（`EngineController.kt` 的 `fetchLimit`）与 macOS（`InputController.swift` 的 `candidates(limit:)`）—— 两者都够不到引擎侧的分页出口；iOS 与鸿蒙走 `candidatesPage()`，从不由前端给 limit
+- **表情与颜文字（2026-10-18）**：表情面板换成 OpenMoji 常用表情（687 条、9 类：笑脸/人物/动物/植物/食物/旅行/活动/物品/符号），分类条首项「自有」是小欧的 12 种形态（点选提交对应 Unicode emoji）；新增 390 条颜文字（7 类：开心/难过/生气/惊讶/害羞/动作/其他）。Android 与桌面同一套布局（顶部 Emoji/颜文字、底部可横滑分类条），数据与许可见 [`data/raw/LICENSES.md`](data/raw/LICENSES.md)，生成器 `scripts/gen_emoji_kaomoji.py`
 - **逐字确认（2026-10-17 用户裁决）**：整串有词组精确匹配时词组在最前、选中一次上屏；无精确匹配（打一半的前缀扩展词不算）则先出第一个字的整档（所有读音的字），确认一个字后它**留在候选区**（拼音行显示「中guo」），依次确认到最后一段才**整串进输入框**；缓冲空时 ⌫ 回滚上一个已确认的字。语义在引擎（`Engine::pending_text` / `commit_buffer_after_select`），四端同一条路；门禁 `tests/segment_commit.rs`
 - **两处「机制已备」的接线现状**：其一，**中文标点与全角是两个独立开关**（引擎侧 `chinese_punct` 与 `fullwidth` 各自独立，门禁 `tests/punctuation_switches.rs`；`set_chinese_punct` / `toggle_chinese_punct` 与双 ABI 出口都在）—— **Linux 桌面已接**（状态栏 `。，`/`🌕` 按钮、设置窗「中文标点」、fcitx5 附加组件配置 —— 都落到这两个开关），Windows 侧 TSF 从 `settings.ini` 读同组值；**Android 工具条月相按钮已撤**（2026-10-12 加、2026-10-13 用户裁决「移动端功能区不需要全角、半角切换功能」移除 —— 能力保留：全角仍随模式默认值自动生效，字母/数字的直传点宽化（`Engine::fullwidthize`）不动），**Apple / 鸿蒙仍无 UI 入口**（两端 `toggleFullwidth` 只有 JNI 冒烟表一个调用方）。**键位不在引擎层** —— `engine_punct.rs` 的注释只给桌面两轨**建议**了暂定的 `Ctrl+/`，未定稿、两轨都还没实现，理由与实测见该注释。其二，**Rust 侧的学习落盘**（`engine-data/src/user_words.rs`，原子写）**全仓零调用方**：Android 的持久化走它自己的 Kotlin `UserWordStore.kt`，fcitx5 / TSF 学完照旧丢
 - 排序有一条反直觉的设计 —— **不能把 limit 下推到词典查询**（学过的低频词可能反超截断线外的词）。这类细节才是本项目较真的地方，见下方「功能设计」
@@ -113,7 +116,7 @@
 | **Apple 两平台**：iOS · macOS | **仅有草案**（`ios/` · `macos/`）| **硬约束：两端都需要 macOS + Xcode 才能编译，本仓库的验证环境（Linux）无法编译、链接或运行它们，连 Swift 语法检查都做不到**（UIKit / InputMethodKit 是 Apple 独有框架）。两个目录里的 Swift **一行都没有被编译过**，是「起点 + 契约」而不是可用实现。已就绪的只有平台中立的 **C ABI**（`crates/opi-ffi`），且它**已实测能为 Apple 三个目标编译**（`cargo check --target aarch64-apple-ios / aarch64-apple-ios-sim / aarch64-apple-darwin` 均通过，已进 CI；还能产出 arm64 静态库 `libopi_ffi.a` 且导出符号无缺失）。**任何 Apple 端代码在被 Mac 上的编译器看过之前，都不应被当作已实现** —— 本项目已有两次教训：fcitx5 的 C++ 与 Windows 的 TSF 都是「写完了、读起来像完成」，实测却发现从未被编译过（前者 7 处 API 误写，后者文本插入根本没写） |
 | **多端云同步 / 端到端加密** | **不做**（用户裁决 2026-09-28） | 无加密库、无 HTTP 客户端：跨 `crates/` `android/` `desktop/` 的 `*.rs` / `*.toml` / `*.kt` 里，`reqwest` / `ureq` / `hyper` / `openssl` / `rustls` / `chacha` / `argon2` / `aes-gcm` / `https://` 逐个零命中。带 `sync` 的命中全是 Rust 同步原语与 TSF 标志（`std::sync`、`TF_ES_SYNC`、`trad_assets_in_sync`），与云同步无关。**注**：学习词库导出 JSON 里确有 `version` 字段，但那是**导出格式**的版本协商（`learner.rs` 的 `import_json` 拒收 `version != 1`），与云同步无关 |
 | **更多输入方案**：双拼 · 五笔 · 仓颉 · 注音 · 自定义输入规则 | 双拼（2026-10-13，六套布局）与五笔（2026-10-14，86/98）已落地；其余待做 | `Mode` 的成员仍是拼音 / 繁体 / 英文 / 数字 / 符号（`composer.rs`）；**按键布局**另有独立轴 `Scheme`（`scheme.rs`：全键盘 / 拼音9键 / 拼音14键 / 笔画 / 双拼 / 五笔 —— 匹配走按键类展开）；双拼与五笔在 Android / 桌面 / fcitx5 / TSF 均已接线（iOS / 鸿蒙仍是草案，见各自 README）；仓颉 / 注音 / 自定义规则仍未做 |
-| **英文联想** | **仅数据** | `docs/superpowers/specs/2026-08-12-opi-ime-design.md` 的「V1 不做」那条写明「V1 仅做单词联想」—— 承诺过、此前没兑现。词源 `data/raw/en_words.tsv` 现已入库（来源、许可证 CC-BY 3.0 与上游 pin 见 `data/raw/LICENSES.md`，**该表同时是署名载体**）；**候选逻辑仍未接线** —— `candidates.rs` 对英文 / 数字模式直接返回空表 |
+| **英文联想** | **已接线（2026-10-18）** | 英文模式前缀匹配 `data/raw/en_words.tsv`（10000 条常用词，Google Books Ngrams v3，CC-BY 3.0；**不是牛津原版** —— OUP 数据本仓无授权，换数据只需替换 TSV）。候选按词频降序，空格提交首候选、无匹配提交原文；四端共用同一引擎语义，门禁 `tests/english_words.rs` |
 | **无障碍**：读屏软件 | 部分（仅 Android） | Android 键盘已接基础读屏语义：候选变化自动播报（`liveRegion`）、每个按键有可读名称（不再读字形「⇧」「⌫」）、⇧ 的锁定 / 单次大写状态可读。**其余平台（Windows / Linux / iOS）未接入** |
 | **语音输入 · 扫描输入** | 未开始 | 零命中 |
 | **少数民族语言与方言**：藏文 · 维文 · 蒙文 · 粤语 · 吴语 | 未开始 | 零命中 |
@@ -252,7 +255,7 @@ data/                          # 词库数据
 docs/                          # 宠物、图与设计文档
   install/                     #   各端安装教程（android / linux / windows / ios / macos / harmony）
   opi-pet.svg                  #   项目宠物「小欧」
-  opi-pet-forms.svg            #   六种表情（笑 / 欢乐 / 哭 / 沮丧 / 惊恐 / 愤怒）
+  opi-pet-forms.svg            #   十二种表情（笑 / 欢乐 / 哭 / 沮丧 / 惊恐 / 愤怒 / 撒娇 / 卖萌 / 讨好 / 敲打 / 捂脸 / 吐舌头）
   social-preview.svg · .en.svg #   中英双语社交预览图（同名 .png 供 GitHub Settings → Social preview 上传）
   diagrams/                    #   架构设计 · 功能设计 · 生命周期
   superpowers/                 #   specs（设计规格）+ plans（实施计划）
@@ -294,7 +297,7 @@ V1 里程碑进度：
 ### 📄 许可证
 
 - **代码**：MIT，全文见 [`LICENSE`](LICENSE)。源码文件头带机器可读的 **SPDX 标识**（`SPDX-FileCopyrightText: 2026 erik.xyz` + `SPDX-License-Identifier: MIT`），Rust 侧另有 `Cargo.toml` 的 `[workspace.package] license = "MIT"` 规范声明
-- **词库数据**：**与代码分开授权** —— `data/raw/*.tsv` 及由其编译出的 `.opid` **不适用 MIT**，各自按上游许可证；**`luna.opid` 因并入 rime-ice（GPL-3.0-only，2026-10-11）而整体按 GPL-3.0 分发**（含随产物提供上游数据的义务），其余来源：rime-luna-pinyin / terra / stroke 为 LGPL-3.0、rime-pinyin-simp 为 Apache-2.0、chinese-xinhua 与 THUOCL 为 MIT、符号与 Unihan 系为 Unicode License、英文联想词源为 CC-BY 3.0（**该许可证要求署名** —— `LICENSES.md` 的对应行即署名载体，分发含该数据的产品时须一并保留），逐条来源、许可证与上游 pin 见 [`data/raw/LICENSES.md`](data/raw/LICENSES.md)；提交词表改动前请读 [`CONTRIBUTING.md`](CONTRIBUTING.md) 的许可证一节
+- **词库数据**：**与代码分开授权** —— `data/raw/*.tsv` 及由其编译出的 `.opid` **不适用 MIT**，各自按上游许可证；**`luna.opid` 因并入 rime-ice（GPL-3.0-only，2026-10-11）而整体按 GPL-3.0 分发**（含随产物提供上游数据的义务），其余来源：rime-luna-pinyin / terra / stroke 为 LGPL-3.0、rime-pinyin-simp 为 Apache-2.0、chinese-xinhua 与 THUOCL 为 MIT、符号与 Unihan 系为 Unicode License、英文联想词源为 CC-BY 3.0（**该许可证要求署名** —— `LICENSES.md` 的对应行即署名载体，分发含该数据的产品时须一并保留），逐条来源、许可证与上游 pin 见 [`data/raw/LICENSES.md`](data/raw/LICENSES.md)；OpenMoji 表情按 CC BY-SA 4.0（署名 OpenMoji 项目及贡献者）、颜文字按 MIT（Copyright (c) 2023 aoguai）。提交词表改动前请读 [`CONTRIBUTING.md`](CONTRIBUTING.md) 的许可证一节
 
 ---
 

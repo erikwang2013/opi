@@ -325,7 +325,7 @@ def main():
 
     def commits_by_im():
         """按 CurrentIM 信号把 CommitString 分桶：{'pinyin': [...], 'opi': [...]}。
-        CurrentIM 的 payload 形如 ['opi输入法', 'opi', 'zh_CN']，第二项是唯一名，
+        CurrentIM 的 payload 形如 ['小欧输入法', 'opi', 'zh_CN']，第二项是唯一名，
         用它分流（显示名里没有 'pinyin' 子串；匹配的是第二项的 'opi'/'pinyin'/
         'keyboard-us' 唯一名，与显示名怎么改无关）。"""
         out = {}

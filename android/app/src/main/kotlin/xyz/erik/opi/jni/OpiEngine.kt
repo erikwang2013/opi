@@ -216,6 +216,9 @@ object OpiEngine : OpiEngineApi, SymbolApi {
 
     override external fun buffer(): String
 
+    /** bufferIsCarried() -> Boolean：缓冲是否由别的模式带过来（语言切换保留缓冲时打标）。 */
+    override external fun bufferIsCarried(): Boolean
+
     /**
      * displayBuffer() -> String：**显示用**的拼音读数（9 键方案下是带分词的读音
      * `ni'hao`；其余方案与 [buffer] 相同）。

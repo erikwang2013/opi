@@ -195,30 +195,63 @@ object EngineLoader {
         }
     }
 
+    /**
+     * luna 是否已在本进程装好（以及当时的结果）。
+     *
+     * **不能重复 `OpiEngine.load`**：设置页与 IME 服务同进程、共用 Rust 单例，
+     * `install` 会连**输入方案 / 模式 / 开关 / trad/stroke/wubi 挂载**一起重置。
+     * 用户报障「打开输入法 app，再到其他 app 输入无反应」＝设置页（launcher）
+     * 把 IME 正在用的 9 键/14 键方案重置成默认全键盘，返回后按键不出候选。
+     * 因此 luna 只装一次；trad/stroke/wubi 仍每次重挂（它们不重置主引擎）。
+     */
+    internal class LunaLoadGate {
+        private var done = false
+        private var result = false
+
+        /** 成功一次后固定返回 true 且不再调用 [block]；失败不置位，下次重试。 */
+        @Synchronized
+        fun run(block: () -> Boolean): Boolean {
+            if (done) return result
+            val r = block()
+            if (r) {
+                done = true
+                result = true
+            }
+            return r
+        }
+    }
+
+    private val lunaGate = LunaLoadGate()
+
     /** 生产入口：assets/luna.opid → filesDir/luna.opid → OpiEngine。 */
+    @Synchronized
     fun load(context: Context): Boolean {
         val target = File(context.filesDir, FILE_NAME)
-        val result = loadAsset(
-            fileOps = object : FileOps {
-                override fun assetLength(): Long? = try {
-                    context.assets.openFd(ASSET_NAME).use { it.length }
-                } catch (e: IOException) {
-                    null // gzip 压缩资产 openFd 不可用 → 视为需要重拷，走完整读取
-                }
+        // 已装好 ⇒ 跳过 install（保留方案/模式/开关）；失败（回退内置）不置位，
+        // 下次调用继续尝试，与旧的「每次视图创建都重试」语义一致。
+        val result = lunaGate.run {
+            loadAsset(
+                fileOps = object : FileOps {
+                    override fun assetLength(): Long? = try {
+                        context.assets.openFd(ASSET_NAME).use { it.length }
+                    } catch (e: IOException) {
+                        null // gzip 压缩资产 openFd 不可用 → 视为需要重拷，走完整读取
+                    }
 
-                override fun readAsset(): ByteArray =
-                    context.assets.open(ASSET_NAME).use { it.readBytes() }
+                    override fun readAsset(): ByteArray =
+                        context.assets.open(ASSET_NAME).use { it.readBytes() }
 
-                override fun existingSize(): Long? =
-                    if (target.exists()) target.length() else null
+                    override fun existingSize(): Long? =
+                        if (target.exists()) target.length() else null
 
-                override fun write(bytes: ByteArray) {
-                    target.writeBytes(bytes)
-                }
-            },
-            api = LoadApi { OpiEngine.load(it) },
-            targetPath = target.absolutePath,
-        )
+                    override fun write(bytes: ByteArray) {
+                        target.writeBytes(bytes)
+                    }
+                },
+                api = LoadApi { OpiEngine.load(it) },
+                targetPath = target.absolutePath,
+            )
+        }
         if (result) Log.i(TAG, "luna loaded (${target.length()} bytes)")
         else Log.w(TAG, "luna load failed, engine on builtin fallback dict")
 

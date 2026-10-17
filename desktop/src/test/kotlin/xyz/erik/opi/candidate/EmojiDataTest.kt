@@ -13,6 +13,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import xyz.erik.opi.pet.PetEmojiMap
 import kotlin.math.ceil
 
 class EmojiDataTest {
@@ -68,11 +69,15 @@ class EmojiDataTest {
         // 构建期拷贝的产物（data/raw/emoji.tsv → resources/emoji.tsv）。读不到 = 构建接线断。
         val d = loadEmojiData()
         assertTrue("emoji.tsv 资源没在 classpath 上（copyEmojiData 断了吗）", d.entries.isNotEmpty())
-        assertTrue("条目太少（实得 ${d.entries.size}）—— 表被截断？", d.entries.size >= 3900)
-        // 组名与顺序**钉死**（与引擎 emoji_coverage.rs 的同一串 —— 9 组：官方 10 组里
-        // Component 整组被「只收完全限定」滤掉）。名字漂了就是生成器/数据出了事。
+        assertTrue(
+            "条目数 ${d.entries.size} 不在 400–700 —— 表被截断或筛选失控？",
+            d.entries.size in 400..700,
+        )
+        // 组名与顺序**钉死**（与引擎 emoji_coverage.rs 的同一串 —— 9 组：OpenMoji
+        // 常用子集，动物里的 plant-* 单列成「植物」，不再有旗帜组）。名字漂了
+        // 就是生成器/数据出了事。
         assertEquals(
-            listOf("笑脸", "人物", "动物", "食物", "旅行", "活动", "物品", "符号", "旗帜"),
+            listOf("笑脸", "人物", "动物", "植物", "食物", "旅行", "活动", "物品", "符号"),
             d.groups.map { it.label },
         )
 
@@ -164,5 +169,69 @@ class EmojiDataTest {
         }
         assertEquals(f.entries.size, f.groups.sumOf { it.count })
         assertTrue("末组越界", f.groups.last().start + f.groups.last().count <= f.entries.size)
+    }
+
+    // ---------- 表情页布局（2026-10-18：自有 + 底部分类条） ----------
+
+    /**
+     * 分类条 = 「自有」+ 数据分组；数据组的 `start` 相对表情列表，前插小欧后整体后移。
+     * 口径与 Android `PetEmoji.categories` 逐条同义（那边也这么移）。
+     */
+    @Test
+    fun `own group is prepended and every data start shifts by the own count`() {
+        val engine = listOf(
+            EmojiData.Group("笑脸", 0, 3),
+            EmojiData.Group("人物", 3, 2),
+        )
+        val groups = EmojiData.withOwnGroup(engine, ownCount = 12)
+        assertEquals(
+            listOf(
+                EmojiData.Group(EmojiData.OWN_GROUP, 0, 12),
+                EmojiData.Group("笑脸", 12, 3),
+                EmojiData.Group("人物", 15, 2),
+            ),
+            groups,
+        )
+        assertEquals("自有组名与 Android 同字", "自有", EmojiData.OWN_GROUP)
+        assertEquals("自有格数 = 十二形态", 12, PetEmojiMap.forms.size)
+    }
+
+    /** 高亮反推：网格第 i 项落在哪个组（自有之后第一格 = 笑脸组）。 */
+    @Test
+    fun `group index includes the own group boundaries`() {
+        val groups = EmojiData.withOwnGroup(
+            listOf(EmojiData.Group("笑脸", 0, 3), EmojiData.Group("人物", 3, 2)),
+            ownCount = 12,
+        )
+        assertEquals(0, EmojiData.groupIndexOf(groups, 0))
+        assertEquals(0, EmojiData.groupIndexOf(groups, 11))
+        assertEquals(1, EmojiData.groupIndexOf(groups, 12))
+        assertEquals(1, EmojiData.groupIndexOf(groups, 14))
+        assertEquals(2, EmojiData.groupIndexOf(groups, 15))
+        assertEquals("空表 → 不亮", -1, EmojiData.groupIndexOf(emptyList(), 0))
+    }
+
+    /** 颜文字页每页 36 项（6×6）：页大小是参数，别写死 72。 */
+    @Test
+    fun `page of group respects a custom page size`() {
+        assertEquals(0, EmojiData.pageOfGroup(EmojiData.Group("g", 35, 1), 36))
+        assertEquals(1, EmojiData.pageOfGroup(EmojiData.Group("g", 36, 1), 36))
+        assertEquals(2, EmojiData.pageOfGroup(EmojiData.Group("g", 72, 1), 36))
+        assertEquals("默认页大小仍是 12×6", 1, EmojiData.pageOfGroup(EmojiData.Group("g", 72, 1)))
+    }
+
+    /** Emoji 子页的格序：12 个自有形态在前，数据表原序在后（分页按下标切）。 */
+    @Test
+    fun `emoji cells put the own forms before the data table`() {
+        val cells = emojiCells(listOf("😀", "🐶"))
+        assertEquals(PetEmojiMap.forms.size + 2, cells.size)
+        assertEquals(
+            PetEmojiMap.forms.map { EmojiCell.Pet(it) },
+            cells.take(PetEmojiMap.forms.size),
+        )
+        assertEquals(
+            listOf(EmojiCell.Text("😀"), EmojiCell.Text("🐶")),
+            cells.drop(PetEmojiMap.forms.size),
+        )
     }
 }

@@ -52,8 +52,8 @@ use crate::jni_switches::{
 // buffer / displayBuffer）：同一手续（2026-10-09：加 candidateReadings 后本文件
 // 越 500 行）。同样只为注册表能引用到它们。
 use crate::jni_candidates::{
-    opijni_buffer, opijni_candidate_readings, opijni_candidates, opijni_display_buffer,
-    opijni_pending_text, opijni_pin_reading,
+    opijni_buffer, opijni_buffer_is_carried, opijni_candidate_readings, opijni_candidates,
+    opijni_display_buffer, opijni_pending_text, opijni_pin_reading,
 };
 /// inputKey(ch: String) -> String。永不 panic。单字符外（空/多字符/非 ASCII）返回空串。
 #[unsafe(no_mangle)]
@@ -370,6 +370,11 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _reserved: *mut c
                     jni_str!("pendingText"),
                     jni_str!("()Ljava/lang/String;"),
                     opijni_pending_text as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("bufferIsCarried"),
+                    jni_str!("()Z"),
+                    opijni_buffer_is_carried as *mut c_void,
                 ),
                 NativeMethod::from_raw_parts(
                     jni_str!("mode"),

@@ -374,6 +374,9 @@ fn cabi_import_user_words_invalid_json_is_negative_and_atomic() {
 // （`#[path]` 引入，同一测试二进制，共用 SERIAL）以守住 <500 行。
 #[path = "cabi/key_event.rs"]
 mod key_event_tests;
+// 英文模式用例（2026-10-18 拆出：key_event.rs 越过 500 行门禁）。
+#[path = "cabi/key_event_english.rs"]
+mod key_event_english_tests;
 
 #[test]
 fn cabi_load_trad_routes_traditional_mode() {

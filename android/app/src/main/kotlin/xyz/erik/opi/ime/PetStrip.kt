@@ -49,9 +49,10 @@ import kotlin.math.sin
  * 有色彩感」）。
  *
  * 位置 = 拼音行那条 38dp 槽位**空闲时**的内容（输入中仍是拼音行 —— 共用槽位不变）。
- * 六形态按用户点名的次序轮播（[PET_STRIP_FORMS]），每个停留 [PET_FORM_HOLD_MS] 后
+ * 十二形态按用户点名的次序轮播（[PET_STRIP_FORMS]），每个停留 [PET_FORM_HOLD_MS] 后
  * 淡入下一形态；小欧本体另有随情绪变化的动效（笑轻晃 / 欢乐蹦跳 / 哭发抖 / 沮丧
- * 低头摆 / 惊恐急颤 / 愤怒横抖），条底洗色与粒子跟着当前形态换色。
+ * 低头摆 / 惊恐急颤 / 愤怒横抖 / 撒娇轻摇 / 卖萌弹跳 / 讨好点头 / 敲打快敲 /
+ * 捂脸摇头 / 吐舌晃动），条底洗色与粒子跟着当前形态换色。
  *
  * 纯装饰：读屏跳过（`clearAndSetSemantics`）。条底走键盘皮肤（`barBg`），情绪色只做
  * 低透明叠加 —— 深色皮肤下不会变成一块亮斑。
@@ -156,6 +157,32 @@ fun PetStrip(modifier: Modifier = Modifier) {
                         translationX = (sin(a * 18f) * 1.9f).dp.toPx()
                         rotationZ = sin(a * 15f) * 0.9f
                     }
+                    PetMood.COQUETTISH -> {
+                        translationX = (sin(a * 0.7f) * 0.8f).dp.toPx()
+                        rotationZ = sin(a * 0.7f) * 1.8f
+                    }
+                    PetMood.CUTE -> {
+                        val hop = abs(sin(a))
+                        translationY = (-hop * 1.8f).dp.toPx()
+                        rotationZ = sin(a) * 2f
+                    }
+                    PetMood.PLEASING -> {
+                        // 点头：只向下沉，不左右晃。
+                        translationY = (abs(sin(a)) * 1.2f).dp.toPx()
+                    }
+                    PetMood.KNOCKING -> {
+                        // 敲打：高频小顿挫。
+                        translationY = (-abs(sin(a * 14f)) * 1.4f).dp.toPx()
+                        rotationZ = sin(a * 14f) * 0.6f
+                    }
+                    PetMood.FACE_PALM -> {
+                        translationX = (sin(a * 6f) * 0.9f).dp.toPx()
+                        rotationZ = sin(a * 6f) * 1.2f
+                    }
+                    PetMood.TONGUE_OUT -> {
+                        translationY = (sin(a * 2.2f) * 0.6f).dp.toPx()
+                        rotationZ = sin(a * 2.2f) * 1.6f
+                    }
                     else -> Unit
                 }
             },
@@ -172,7 +199,7 @@ fun PetStrip(modifier: Modifier = Modifier) {
     }
 }
 
-/** 六形态每个停留时长（ms）与淡入时长（ms）。 */
+/** 每个形态的停留时长（ms）与淡入时长（ms）；十二形态共用同一节奏。 */
 internal const val PET_FORM_HOLD_MS = 2800L
 internal const val PET_FORM_FADE_MS = 420
 
@@ -183,9 +210,10 @@ private const val PET_PHASE_MS = 2400
 private val PET_SIZE = 32.dp
 
 /**
- * 顶部宠物条六形态轮播次序 —— **用户点名的次序**（2026-10-17）：笑、欢乐、哭、沮丧、
- * 惊恐、愤怒。前三枚与 [xyz.erik.opi.pet.petMood] 的状态脸同源（笑 = 待命、欢乐 =
- * 等选、沮丧 = 无匹配），后三枚是专为六形态追加的表情（见 PetMood 的枚举注释）。
+ * 顶部宠物条十二形态轮播次序 —— **用户点名的次序**（2026-10-17 前六枚 + 2026-10-18
+ * 后六枚）：笑、欢乐、哭、沮丧、惊恐、愤怒、撒娇、卖萌、讨好、敲打、捂脸、吐舌头。
+ * 前三枚与 [xyz.erik.opi.pet.petMood] 的状态脸同源（笑 = 待命、欢乐 = 等选、沮丧 =
+ * 无匹配），其余是专为宠物条追加的表情（见 PetMood 的枚举注释）。
  */
 internal val PET_STRIP_FORMS: List<PetMood> = listOf(
     PetMood.IDLE, // 笑
@@ -194,6 +222,12 @@ internal val PET_STRIP_FORMS: List<PetMood> = listOf(
     PetMood.PUZZLED, // 沮丧
     PetMood.TERRIFIED, // 惊恐
     PetMood.ANGRY, // 愤怒
+    PetMood.COQUETTISH, // 撒娇
+    PetMood.CUTE, // 卖萌
+    PetMood.PLEASING, // 讨好
+    PetMood.KNOCKING, // 敲打
+    PetMood.FACE_PALM, // 捂脸
+    PetMood.TONGUE_OUT, // 吐舌头
 )
 
 /** 轮播下标 → 形态；任意整数都安全落回同一圈（负数取模修正）。 */
@@ -212,6 +246,12 @@ private fun lookOf(mood: PetMood): FormLook = when (mood) {
     PetMood.PUZZLED -> FormLook(Color(0xFFD7DDE9), Color(0xFF8797B4)) // 霾灰
     PetMood.TERRIFIED -> FormLook(Color(0xFFE0D0F7), Color(0xFF8A6DC8)) // 惊紫
     PetMood.ANGRY -> FormLook(Color(0xFFFFC6AE), Color(0xFFDD5334)) // 怒红
+    PetMood.COQUETTISH -> FormLook(Color(0xFFFFC9DC), Color(0xFFF2638F)) // 玫瑰
+    PetMood.CUTE -> FormLook(Color(0xFFFFE9B8), Color(0xFFF2B84B)) // 暖金
+    PetMood.PLEASING -> FormLook(Color(0xFFC9F0E2), Color(0xFF5FBF9F)) // 薄荷
+    PetMood.KNOCKING -> FormLook(Color(0xFFFFE0B8), Color(0xFFE8912F)) // 琥珀
+    PetMood.FACE_PALM -> FormLook(Color(0xFFFFD3C6), Color(0xFFE06A4E)) // 赭红
+    PetMood.TONGUE_OUT -> FormLook(Color(0xFFFFC9E0), Color(0xFFEF5D8F)) // 桃粉
     else -> FormLook(Color(0xFFFFE7A8), Color(0xFFF0B34E))
 }
 
@@ -229,6 +269,9 @@ private fun DrawScope.drawPetParticles(mood: PetMood, phase: Float, accent: Colo
             PetMood.WAITING -> sin(tau * phase + i * 1.7f) * 3f
             PetMood.TERRIFIED -> sin(tau * phase * 9f + i) * 1.8f
             PetMood.ANGRY -> sin(tau * phase * 11f + i) * 1.2f
+            PetMood.CUTE -> sin(tau * phase * 2f + i * 1.7f) * 2.5f
+            PetMood.COQUETTISH -> sin(tau * phase * 0.8f + i) * 2f
+            PetMood.KNOCKING -> sin(tau * phase * 13f + i) * 1.4f
             else -> 0f
         }
         val x = size.width * (0.05f + seed * 0.9f) + sway.dp.toPx()

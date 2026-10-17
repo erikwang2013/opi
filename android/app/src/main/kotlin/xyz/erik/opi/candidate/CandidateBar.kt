@@ -57,8 +57,9 @@ fun CandidateBar(
 ) {
     // 配色走键盘色板（表情条/候选栏与键面同一套「暗光/长辈」换肤，见 Palette.kt）
     val p = LocalKeyboardPalette.current
-    // english 模式：候选栏退化为模式条，切换中/英有明确区域反馈
-    if (controller.mode == EngineMode.ENGLISH) {
+    // english 模式：**有候选时照常画候选**（2026-10-18 单词联想）；无候选
+    // （含切英文时保留的拼音缓冲——它不参与英文匹配）退化为模式条，保留中/英反馈。
+    if (controller.mode == EngineMode.ENGLISH && controller.candidates.isEmpty()) {
         Row(
             modifier = modifier.fillMaxWidth().fillMaxHeight()
                 .background(p.barBg),

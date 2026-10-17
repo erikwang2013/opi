@@ -349,12 +349,12 @@ fn emoji_groups_index_the_full_emoji_list() {
         "分组 count 之和应等于全量条数（有条目不属于任何组 = 面板上够不到）"
     );
 
-    // 换源时点名的缺口（见 `api::emoji_symbol_texts` 头注）：多码位序列必须在。
-    // 任一含 >1 个 Unicode 标量的条目即可证明全量不是「只存单码点」的旧集合
-    // （旗帜 = 两个 regional indicator，ZWJ 家庭更多）。
+    // 数据里仍有多码位序列（VS16 形 ❤️/⚽️、键帽 1️⃣ —— 见 `api::emoji_symbol_texts`
+    // 头注）。任一含 >1 个 Unicode 标量的条目即可证明表不是「只存单码点」的旧集合；
+    // 2026-10-18 换源后旗帜/ZWJ 组合已排除，别再用它们当例子。
     assert!(
         syms.iter().any(|s| s.chars().count() > 1),
-        "全量里应含多码位序列条目（旗帜/ZWJ 家庭）"
+        "表里应含多码位序列条目（VS16/键帽）"
     );
 }
 

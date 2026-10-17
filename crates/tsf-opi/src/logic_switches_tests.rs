@@ -162,7 +162,10 @@ fn non_chinese_fullwidth_is_mechanical_not_cjk() {
     // 与「标点档只管标点」的分档是两回事：判据是**这个字符在这模式下是不是待上屏文本**
     // （英文/数字模式是；拼音模式是输入码，绝不宽 —— 见 engine-core 的
     // punctuation::ascii_fullwidth 头注）。映射与开关唯一在引擎 `Engine::fullwidthize`。
-    assert_eq!(s.input_key('a' as u32, 0), KeyOutcome::Commit("ａ".into()));
+    // 字母自 2026-10-18 起进缓冲（单词联想），全角在**提交点**生效（空格/选词）。
+    assert_eq!(s.input_key('a' as u32, 0), KeyOutcome::CompositionChanged);
+    assert_eq!(s.buffer(), "a");
+    s.engine.clear();
     assert_eq!(s.input_key('1' as u32, 0), KeyOutcome::Commit("１".into()));
     // 空格**不宽化**（有意，别顺手补）：全角在拼音模式默认开，宽空格会把「中文模式按
     // 一下空格」换成 U+3000 —— 见 `Engine::fullwidthize` 头注。

@@ -148,7 +148,7 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("opi输入法 设置") }) },
+        topBar = { TopAppBar(title = { Text("小欧输入法 设置") }) },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         // ⚠️ 2026-10-15（v1.9.2 装机核验时发现，当时已发布）：这一页**从来不可滚动** ——

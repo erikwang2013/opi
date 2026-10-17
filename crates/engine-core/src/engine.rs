@@ -204,9 +204,12 @@ impl Engine {
         }
     }
 
-    /// 空格键：拼音/繁体/符号模式选中首候选；英文/数字模式提交缓冲。
+    /// 空格键：拼音/繁体/符号/**英文**模式选中首候选；数字模式提交缓冲。
     ///
-    /// 无候选时的行为**有意分叉**：拼音/繁体提交原始缓冲（这是「打英文」的逃生口），
+    /// 英文（2026-10-18）：有候选 ⇒ 首候选上屏；无候选 ⇒ 原始缓冲 —— 后者是
+    /// 「英文打原文」的逃生口（任意英文词都能打出来）。
+    ///
+    /// 无候选时的行为**有意分叉**：拼音/繁体/英文提交原始缓冲（这是「打英文」的逃生口），
     /// 符号模式什么都不提交 —— 缓冲里是关键字（`dunx`），不是要上屏的文本。
     /// **9 键走符号模式那条**：缓冲是数字（按键编码），提交原文 = 把数字打进字段
     /// （2026-10-11 用户报障「9 键没匹配的时候会变成数字输入」）；14/26 键缓冲是
@@ -252,9 +255,25 @@ impl Engine {
                     self.select_from(&cands, 0)
                 }
             }
+            // 英文（2026-10-18）：有候选 ⇒ 首候选（`select_from` 已清缓冲并收尾
+            // 逐字态）；无候选 ⇒ 原始缓冲（英文打原文的逃生口）。两条都宽化 ——
+            // 与各端**直传点**的 `fullwidthize` 同一条规则与同一个开关
+            // （用户裁决 2026-10-12）。
+            Mode::English => {
+                let buffer = self.composer.session().buffer.clone();
+                let cands = self.candidates(DEFAULT_TOP_N);
+                let text = if cands.is_empty() {
+                    self.composer.commit_buffer();
+                    buffer
+                } else {
+                    self.select_from(&cands, 0)
+                };
+                let mut out = self.take_pending_text();
+                out.push_str(&self.fullwidthize(&text));
+                out
+            }
             _ => {
-                // 英文/数字：缓冲即待上屏文本 ⇒ 全角开时一并宽化（与各端**直传点**的
-                // `fullwidthize` 同一条规则与同一个开关 —— 用户裁决 2026-10-12）。
+                // 数字：缓冲即待上屏文本 ⇒ 全角开时一并宽化（同上一条规则）。
                 let buffer = self.composer.session().buffer.clone();
                 self.composer.commit_buffer();
                 let mut out = self.take_pending_text(); // 逐字态：一并冲刷（2026-10-17）
@@ -375,6 +394,13 @@ impl Engine {
         self.composer.session().mode
     }
 
+    /// 缓冲是否由**别的模式**带过来（[`Self::switch_language`] 保留缓冲时打标；缓冲
+    /// 清空 / 提交 / 回到来处即清）。宿主英文分支的判据：携带缓冲保持旧直传，空缓冲或
+    /// 英文自己的缓冲才进引擎匹配（见 `router.rs` 与两轨 English 分支）。
+    pub fn buffer_is_carried(&self) -> bool {
+        self.composer.carried_from().is_some()
+    }
+
     /// **语言切换**（中↔英 / 中↔繁，2026-10-09 用户裁决「中文输入的时候切换英文，
     /// 拼音保留可继续使用」）：换模式与方案，但**保留缓冲** —— 与 [`Self::switch_mode`] /
     /// [`Self::set_scheme`] 的区别只有这一步。
@@ -441,7 +467,15 @@ impl Engine {
                         if full != text {
                             self.learner.record_selection(&full);
                         }
-                        full
+                        // 英文候选的提交（空格/数字选词/回车/面板点击）与各端**直传点**
+                        // 同一条全角规则：直传是宿主调 `fullwidthize`，候选提交在引擎，
+                        // 只能在这里宽化。非 ASCII 恒等（`café` 的 é 不动），中文/符号
+                        // 模式不受影响；学习记的仍是规范词形（上面那行）。
+                        if self.composer.session().mode == Mode::English {
+                            self.fullwidthize(&full)
+                        } else {
+                            full
+                        }
                     }
                     None => String::new(),
                 }

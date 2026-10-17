@@ -145,6 +145,8 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
             })
             .collect();
     }
+    // 英文单词联想的候选不走本函数（Engine::candidates 在进排名前就分派给
+    // `english_words`，见 engine_candidates.rs）；这里保持「拼音类之外无候选」。
     if !matches!(mode, Mode::Pinyin | Mode::Traditional) {
         return Vec::new();
     }

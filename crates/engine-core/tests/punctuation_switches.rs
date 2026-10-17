@@ -366,15 +366,17 @@ fn pinyin_composition_letters_are_never_widened() {
     assert_eq!(e.buffer(), "ni");
 }
 
-/// 英文模式的**引擎内**提交路径也宽化：缓冲非空时字母入引擎、空格提交缓冲 ——
-/// 与两轨直传点同一条规则（`input_space` 的 `_` 分支调 `fullwidthize`）。
+/// 英文模式的**引擎内**提交路径也宽化：空格提交（无候选时的原始缓冲）走
+/// `fullwidthize` —— 与两轨直传点同一条规则（`input_space` 的英文分支）。
 #[test]
 fn english_mode_buffer_commit_widens_too() {
     let mut e = engine();
     e.switch_mode(Mode::English);
     e.toggle_fullwidth();
-    e.input_key('h'); // 缓冲非空 ⇒ 进引擎（宿主直传点是另一条，两轨各有用例）
-    e.input_key('i');
-    assert_eq!(e.input_space(), "ｈｉ", "空格提交缓冲：全角");
+    // 无前缀词的缓冲：走「英文打原文」的逃生口（有候选时提首候选，另有用例）。
+    for c in ['h', 'i', 'q'] {
+        e.input_key(c);
+    }
+    assert_eq!(e.input_space(), "ｈｉｑ", "空格提交原始缓冲：全角");
     assert_eq!(e.buffer(), "", "提交后缓冲清空");
 }

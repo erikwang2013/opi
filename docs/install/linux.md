@@ -437,7 +437,7 @@ fcitx5-remote -s opi
 > **找不到 OPI？** 先看下面两条，别先怀疑包：
 >
 > 1. **按语言过滤被藏起来了** —— 那个「只显示当前语言」的过滤项是常见嫌疑。
->    本插件把这条输入法声明的语言写成 `zh_CN`、中文界面下的名字是「opi输入法」
+>    本插件把这条输入法声明的语言写成 `zh_CN`、中文界面下的名字是「小欧输入法」
 >    （候选列表里显示 `Name[zh_CN]`，加进组之后显示 `Label`）—— **【推断：读
 >    `crates/fcitx5-opi/data/inputmethod/opi.conf` 的 `Name` / `Name[zh_CN]` / `Label` /
 >    `LangCode`，没有在本机 GUI 上看过】**。所以过滤项停在中文以外的语言时，它会被藏起来。
@@ -661,7 +661,7 @@ DisabledDicts=      # 停用的导入词库（逗号分隔；留空 = 全部启�
 - 状态栏悬浮条自 2026-10-12 起**也随这张皮肤换色**（自绘窗要吃同一份色板，见 §4.8）。
 - 「不改动」= OPI 不介入（默认）。选皮肤只在**值发生变化**时才写文件：fcitx5 每次启动
   不会拿旧值把用户后来改的主题顶回去。
-- **图形化的选法**（2026-10-09 起）：设置窗（§4.7，菜单「opi输入法」或状态栏「设」）
+- **图形化的选法**（2026-10-09 起）：设置窗（§4.7，菜单「小欧输入法」或状态栏「设」）
   有「外观」一节 —— 十张**预览卡**（底色 + 样字 + 强调条，FlowRow 两行），点击即换。
   颜色取自 `scripts/gen_fcitx5_themes.py` 的 SKINS 色板（逐值对应，由 SettingsTest
   的 `skin previews match the theme generator` 现读现比），与配置面 `Skin=` 的十个
@@ -682,7 +682,7 @@ Linux 上 = `--settings` 的设置窗（无参数启动也是它）。**v1.6.0 �
 （`.deb`/`.rpm` 一手装齐 —— `scripts/build-packages.sh` 的 `OPI_DESKTOP_DEB`；包体因此从
 ~1.7MB 到 ~48MB，jpackage 自带 JRE，这是裁决时摆过的数）。
 
-- **系统菜单里有入口**：`/usr/share/applications/opi-settings.desktop`（`Name=opi输入法`，
+- **系统菜单里有入口**：`/usr/share/applications/opi-settings.desktop`（`Name=小欧输入法`，
   点开即设置窗）—— 2026-10-09 晚用户裁决「设置功能要在外层可以设置」，由打包后注入
   生成（理由与核对法见 `desktop/build.gradle.kts` 文件尾）。另有两条直启路：
   `opi-candidates --settings`（装出来在 `/opt/opi-candidates/bin/opi-candidates`；
@@ -749,13 +749,24 @@ Linux 上 = `--settings` 的设置窗（无参数启动也是它）。**v1.6.0 �
   **`opi-ctl insert <文本>`**（D-Bus → 插件的 `ic->commitString`）—— 只要 fcitx5 里有
   **焦点输入框**就能上屏，与进程拓扑无关；没有焦点时窗里显示失败原因（原样透传 CLI 的
   短语）。⚠️ 类目名不再自带序号（面板层才加「1.」）。
-  - **表情页**（同窗首个竖条项，2026-10-12 加）：官方 UTS#51 分组（**9 组** —— 官方
-    10 组里 Component 整组被「只收完全限定」滤掉），组条点击跳组、左右滑动翻页、
-    点击上屏（同一条 `opi-ctl insert`）。数据 = `data/raw/emoji.tsv`（与引擎
-    `builtin_emoji_texts()` 同一份表），**构建期原样拷进程序资源**（`desktop/build.gradle.kts`
-    的 `copyEmojiData`，按 classpath 读）—— 桌面是 JVM 进程拿不到引擎里 `include_str!`
-    的那份；不另做第二份入库副本（每次构建都从真源复制，没有可漂的两份）。
-    从设置窗进 = 「符号与表情」页的「表情」按钮（开窗即落这一页）。
+  - **表情页**（2026-10-18 起布局与 Android `keyboard/EmojiPanel.kt` 统一；入口仍是
+    右竖条首项「表情」，或设置窗「符号与表情」页的「表情」按钮 —— 后者开窗即落这一页）。
+    顶栏 `[← 返回] [Emoji | 颜文字] [搜索框]`（返回 = 回符号页并清搜索），内容区网格 +
+    **底部**可横滑分类条（`EmojiPage.kt` 的 `EmojiTopBar` / `EmojiPane` / `CategoryBar`）。
+    - **Emoji 子页**：分类条 = `自有` + 官方 UTS#51 分组（**9 组** —— 官方 10 组里
+      Component 整组被「只收完全限定」滤掉）。`自有` = 小欧十二形态（12×6 网格首格起
+      画 `OpiPet`，点击提交对应 Unicode emoji）；映射在 `shared/pet/PetEmojiMap.kt`，
+      **两端编译同一份**（Android 的 `PetEmoji` 只是它的薄转发）。分类条点一下滚到该组
+      首项所在页，高亮随当前页首项所属组自动跟随（`EmojiData.groupIndexOf` /
+      `pageOfGroup`）。数据 = `data/raw/emoji.tsv`（与引擎 `builtin_emoji_texts()` 同一份
+      表），**构建期原样拷进程序资源**（`desktop/build.gradle.kts` 的 `copyEmojiData`，
+      按 classpath 读）。
+    - **颜文字子页**：分类 = `data/raw/kaomoji.tsv` 第二列的 7 组（开心/难过/生气/惊讶/
+      害羞/动作/其他，解析见 `KaomojiData.kt`），6×6 网格分页；搜索为本地子串匹配
+      （不占一次 `opi-ctl search`）。数据同样在构建期拷进资源（`copyKaomojiData`）。
+      两页点击都走同一条 `opi-ctl insert` 上屏。
+    - 桌面是 JVM 进程拿不到引擎里 `include_str!` 的那份；不另做第二份入库副本
+      （每次构建都从真源复制，没有可漂的两份）。
 - **`Ctrl+Shift+Z` / `opi-ctl symbols` = fcitx5 原生候选面板**（键盘流，不动鼠标）：
 
 - 走 fcitx5 **原生候选面板**：一级 22 类目（`1.常用` … `22.藏文`），数字进类目；

@@ -270,9 +270,9 @@ test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out     
 - `resources/base/element/string.json` —— `input_method_config.json` 的 `label` 引用了
   `subtype_pinyin_label` / `subtype_english_label` / `subtype_number_label` 三个 key，
   缺了会让 profile 解析失败，**可能表现为输入法直接不出现在系统列表里**。
-  推荐值（2026-10-09 起全端显示名统一为「opi输入法」）：三个子键盘写
-  `opi输入法 拼音` / `opi输入法 英文` / `opi输入法 数字`；module.json5 的
-  `MainAbility_label` 写 `opi输入法`。
+  推荐值（2026-10-09 起全端显示名统一为「小欧输入法」）：三个子键盘写
+  `小欧输入法 拼音` / `小欧输入法 英文` / `小欧输入法 数字`；module.json5 的
+  `MainAbility_label` 写 `小欧输入法`。
 
 ### 3.3 四处名字必须一致（不一致的表现是**静默** `import` 得到 `undefined`）
 
@@ -391,7 +391,7 @@ HAP 里只装这一个原生库 —— 这也是选静态库而不是 `cdylib` �
 ### 5.2 启用输入法
 
 1. **用户必须在系统「设置」里手动启用**（P1）—— 装完不会自动生效，输入法也不会自己弹窗。
-2. 到任意输入框，用系统输入法的切换入口（键盘上的地球/切换键，或状态栏）切到「opi输入法」。
+2. 到任意输入框，用系统输入法的切换入口（键盘上的地球/切换键，或状态栏）切到「小欧输入法」。
 3. 主应用侧若想主动拉起「选择输入法」弹框：`inputMethod.getSetting().showOptionalInputMethods()`
    （P7。旧接口 `displayOptionalInputMethod` 自 API 9 废弃）。
    ⚠️ 这是**主应用侧**的设置入口，**不是输入法扩展里调的**；P8 另记了它的跨用户限制
@@ -483,7 +483,7 @@ opi_load(NULL,0) = true
 
 ### 6.3 真机冒烟（只能上设备）
 
-1. **设置里能看到「opi输入法」** ⇒ 清单与打包对了。此时还不能说明任何代码能跑。
+1. **设置里能看到「小欧输入法」** ⇒ 清单与打包对了。此时还不能说明任何代码能跑。
 2. **打 `n` `i` ⇒ 候选栏出现「1. 你」**（候选前带页内序号，与 Android / Windows 候选窗同款；
    ⚠️ 端上字母盘没有数字行 ⇒ 那是**排名**展示，不是「可以按数字选」）⇒ 「引擎 + 词库 + C ABI + N-API 桥 + ArkTS UI」整条链路的
    第一个可见成功点。**失败时对照 6.2**：本机同一套导出是出字的 ⇒ 问题在**桥/UI 层**，不在引擎。

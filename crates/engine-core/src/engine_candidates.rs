@@ -28,9 +28,25 @@ impl Engine {
             return self.symbol_browse.candidates(limit);
         }
         let s = self.composer.session();
+        // 英文单词联想（2026-10-18）：缓冲是字母串、数据内嵌在 engine-core，不走主词库。
+        // `candidates(limit)` 的 limit 由宿主决定（路由层 FETCH_LIMIT = 不设上限），
+        // 排序只对命中项做（见 english_words.rs）。
+        if s.mode == Mode::English {
+            // 携带缓冲（中→英保留的拼音）不是英文前缀：不出候选 —— 空格按「无候选」
+            // 提交原文、数字直传，与旧直传语义一致。
+            if self.composer.carried_from().is_some() {
+                return Vec::new();
+            }
+            return crate::english_words::candidates(&s.buffer, limit);
+        }
         // 输入方案分流（2026-10-09）：只在「会打拼音缓冲」的两个模式下有意义
         // （English/Number/Symbol 的缓冲不是拼音串）。
         if matches!(s.mode, Mode::Pinyin | Mode::Traditional) {
+            // 英→中保留的英文词不是拼音：不出拼音候选（2026-10-09 裁决的另一半）——
+            // 否则 "he" 会被当拼音匹配出「和」。空格按既有「无候选」语义提交原文。
+            if self.composer.carried_from() == Some(Mode::English) {
+                return Vec::new();
+            }
             match self.scheme() {
                 // 9/14 键：按键类展开 —— 前缀查询表达不了（数字串不是任何拼音键的
                 // 前缀），走全量遍历 + 类匹配（candidates::rank_and_pick_scheme）。

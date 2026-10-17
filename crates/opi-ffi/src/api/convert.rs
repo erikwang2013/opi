@@ -52,14 +52,12 @@ pub fn search_symbol_texts(api: &Api, keyword: &str) -> Vec<String> {
         .collect()
 }
 
-/// 表情面板「表情」页的**浏览全量**：`data/raw/emoji.tsv`（UTS#51 `emoji-test.txt` 的
-/// 完全限定条目，3963 条，含旗帜/家庭/键帽等多码位序列），**按官方分组序**。
+/// 表情面板「表情」页的**浏览**表：`data/raw/emoji.tsv`（OpenMoji 常用子集，
+/// 687 条，9 组，含植物；排除旗帜/肤色变体/ZWJ 组合），**按面板分类序**。
 ///
-/// 上一版取的是「符号表里 `emoji` 标志为真的条目」（symbols.tsv 的 emoji 列）。
-/// 2026-10-09 用户裁决「表情中常用主流 emoji 不全」后换源 —— 那一路是**搜索**用的
-/// 集合（生成器有意不收麻将/带圈等低码位块，见 gen_symbols.py），浏览要全：
-/// 换源前查实缺 1F000–1F1FF / 1F200–1F2FF 整段（🀄🃏🅰️🈁 与全部国旗）、
-/// 无任何 VS16 序形（❤ 显示成单色字形）、全部 ZWJ 序列。
+/// 上一版取的是 UTS#51 `emoji-test.txt` 的完全限定全量（3963 条）。2026-10-18
+/// 起改为 OpenMoji 常用子集 —— 浏览页要常用而非全量，筛选规则与源 pin 见
+/// `scripts/gen_emoji_kaomoji.py` 头注。
 /// ⚠️ symbols.tsv 的 emoji 列**不动**：单键候选反馈（`search_emoji`）仍走它。
 ///
 /// 与 [`crate::api::Api`] 无关（纯静态数据）—— 参数去掉后调用点是 jni.rs 一处。

@@ -11,5 +11,5 @@
   "name": "libopiime.so",
   "types": "./index.d.ts",
   "version": "1.0.0",
-  "description": "OPI 输入法引擎的 N-API 桥（Rust C ABI 的薄壳）"
+  "description": "小欧输入法引擎的 N-API 桥（Rust C ABI 的薄壳）"
 }

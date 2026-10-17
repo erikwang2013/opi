@@ -160,20 +160,21 @@ impl SymbolEngine {
             .expect("符号数据表损坏（生成时已校验，损坏即仓库损坏）")
     }
 
-    /// 表情**浏览**全量：`data/raw/emoji.tsv`（scripts/gen_symbols.py 从 UTS#51
-    /// `emoji-test.txt` 生成，编译期嵌入，运行期无 IO）。
+    /// 表情**浏览**表：`data/raw/emoji.tsv`（`scripts/gen_emoji_kaomoji.py` 从
+    /// OpenMoji 生成的**常用子集**，编译期嵌入，运行期无 IO）。
     ///
     /// ⚠️ 与表内 `SymbolEntry.emoji` 标志**是两条路，别合并**：
     ///
     /// - 标志（symbols.tsv 的 emoji 列）管**搜索**：单键反馈经 `search_emoji`
     ///   并入候选，受「命中按码位升序」的平局规则约束，故生成器**有意**不收
     ///   麻将/带圈等低码位块（见 gen_symbols.py 的说明）。
-    /// - 本表管**浏览**：面板「表情」页要**全**（含旗帜/家庭/键帽等多码位序列，
-    ///   共 3963 条完全限定条目）且按 UTS#51 官方分组序（文件序）排。
+    /// - 本表管**浏览**：面板「表情」页的常用集合（687 条，9 组；排除旗帜、
+    ///   肤色变体与 ZWJ 组合）。2026-10-18 从 UTS#51 全量（3963 条）换成
+    ///   OpenMoji 常用子集 —— 全量里大量组合序列字体覆盖/格宽参差，浏览页要的是
+    ///   常用表情；筛选规则与源 pin 见生成器头注。
     ///
-    /// 用户裁决来由：「表情中常用主流 emoji 不全」（2026-10-09）。
-    ///
-    /// 返回顺序 = 文件序 = 官方分组序（笑脸 → 人物 → 动物 → 食物 → … → 旗帜）。
+    /// 返回顺序 = 文件序 = 面板分类序（笑脸 → 人物 → 动物 → 植物 → 食物 →
+    /// 旅行 → 活动 → 物品 → 符号）。
     /// 名字列（第 2 列）暂无人消费，留在表里备查。
     pub fn builtin_emoji_texts() -> Vec<&'static str> {
         const EMOJI_TSV: &str = include_str!("../../../data/raw/emoji.tsv");
@@ -189,8 +190,8 @@ impl SymbolEngine {
     /// 表情**分类条**的分组（2026-10-12 用户裁决「中间是表情分类」）：按 `emoji.tsv`
     /// 第 3 列（中文组名）**顺序**切出 `(组名, 起始下标, 条数)`。
     ///
-    /// - 顺序 = 文件序 = UTS#51 官方组序（笑脸在前、旗帜在后）；组名的中文标签由生成器
-    ///   按 `EMOJI_GROUP_CN` 写进产物（翻译不在引擎层）。
+    /// - 顺序 = 文件序 = 面板分类序（笑脸在前、符号在后）；组名的中文标签由生成器
+    ///   按 `EMOJI_ORDER` 写进产物（翻译不在引擎层）。
     /// - `start` 与 [`Self::builtin_emoji_texts`] 的下标对齐 —— 面板点分类条就是
     ///   `grid.scrollToItem(start)`（引擎不替 UI 分页，只给锚点）。
     /// - 缺第 3 列直接 panic（同 `builtin()` 的姿态：产物损坏 = 仓库损坏，**响亮地**死；
@@ -207,7 +208,7 @@ impl SymbolEngine {
             }
             let group = cols
                 .nth(1)
-                .expect("emoji.tsv 缺第 3 列（组名）—— 重跑 scripts/gen_symbols.py");
+                .expect("emoji.tsv 缺第 3 列（组名）—— 重跑 scripts/gen_emoji_kaomoji.py");
             match out.last_mut() {
                 Some((g, _, n)) if *g == group => *n += 1,
                 _ => out.push((group, idx, 1)),

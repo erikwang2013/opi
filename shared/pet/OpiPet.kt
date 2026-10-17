@@ -36,7 +36,8 @@ import androidx.compose.ui.unit.dp
  * 坐标沿用 SVG 的 240x250 设计空间，按目标尺寸等比缩放 —— 改宠物只需同步
  * docs/opi-pet.svg 与这里的常量，二者共享同一套几何。
  *
- * 六种表情（笑 / 欢乐 / 哭 / 沮丧 / 惊恐 / 愤怒）的设计对照见 docs/opi-pet-forms.svg；
+ * 十二种表情（笑 / 欢乐 / 哭 / 沮丧 / 惊恐 / 愤怒 / 撒娇 / 卖萌 / 讨好 / 敲打 /
+ * 捂脸 / 吐舌头）的设计对照见 docs/opi-pet-forms.svg；
  * **表情的活真源是本文件**（静态基准仍是 docs/opi-pet.svg）。
  */
 
@@ -44,12 +45,40 @@ import androidx.compose.ui.unit.dp
  * 宠物情绪。前五枚由输入状态推导（[petMood]），不自己维护状态。
  *
  * 枚举顺序是跨端契约（鸿蒙端逐值镜像），新成员只能加在末尾 —— 2026-10-17 追加的
- * [CRYING] / [TERRIFIED] / [ANGRY] 就是按这条规矩落在末尾的。
+ * [CRYING] / [TERRIFIED] / [ANGRY]、2026-10-18 追加的六枚表情都是按这条规矩落在末尾的。
  *
- * 后三枚**不由 [petMood] 产出**：它们不对应引擎状态，是移动端顶部宠物条六形态轮播的
- * 表情能力（笑 / 欢乐 / 哭 / 沮丧 / 惊恐 / 愤怒，见 `android/.../ime/PetStrip.kt`）。
+ * 后九枚**不由 [petMood] 产出**：它们不对应引擎状态，是移动端顶部宠物条十二形态轮播的
+ * 表情能力（笑 / 欢乐 / 哭 / 沮丧 / 惊恐 / 愤怒 / 撒娇 / 卖萌 / 讨好 / 敲打 / 捂脸 /
+ * 吐舌头，见 `android/.../ime/PetStrip.kt`）。
  */
-enum class PetMood { IDLE, WAITING, PUZZLED, SLEEPY, DEGRADED, CRYING, TERRIFIED, ANGRY }
+enum class PetMood {
+    IDLE,
+    WAITING,
+    PUZZLED,
+    SLEEPY,
+    DEGRADED,
+    CRYING,
+    TERRIFIED,
+    ANGRY,
+
+    /** 撒娇：眨眼 + 爱心。 */
+    COQUETTISH,
+
+    /** 卖萌：水汪汪大眼 + 金色星星。 */
+    CUTE,
+
+    /** 讨好：上抬的瞳孔 + 薄荷色小菱形。 */
+    PLEASING,
+
+    /** 敲打：专注眯眼 + 琥珀色动作线。 */
+    KNOCKING,
+
+    /** 捂脸：一只手盖住右脸。 */
+    FACE_PALM,
+
+    /** 吐舌头：眨眼 + 粉色舌头。 */
+    TONGUE_OUT,
+}
 
 /**
  * 由当前输入状态推导情绪（纯函数，无 Android 依赖，JVM 单测覆盖）。
@@ -115,13 +144,6 @@ data class PetPalette(
 /** 设计空间（与 SVG viewBox 相同）。 */
 private const val CANVAS_W = 240f
 private const val CANVAS_H = 250f
-
-/** 六形态的情绪点缀色（2026-10-17）：腮红（笑 / 欢乐）、泪（哭）、冷汗（惊恐）、怒红。 */
-private val SMILE_PINK = Color(0xFFF5A6B4)
-private val JOY_PINK = Color(0xFFF27D9D)
-private val TEAR_BLUE = Color(0xFF4E97E6)
-private val SWEAT_BLUE = Color(0xFF6FB2F0)
-private val ANGER_RED = Color(0xFFDD5138)
 
 /**
  * 画一只小欧。
@@ -192,8 +214,6 @@ private fun DrawScope.drawPet(
     val waiting = mood == PetMood.WAITING
     val broken = mood == PetMood.DEGRADED
     val crying = mood == PetMood.CRYING
-    val terrified = mood == PetMood.TERRIFIED
-    val angry = mood == PetMood.ANGRY
 
     // 情绪底色（2026-10-17 六形态）：键帽正面按情绪带一层极淡的色。配下面的腮红 /
     // 眼泪 / 冷汗 / 怒气符号，把「有色彩感」落在小欧本体上，而不只是条底背景。
@@ -205,6 +225,12 @@ private fun DrawScope.drawPet(
         PetMood.PUZZLED -> Color(0xFFF2F3F7)
         PetMood.TERRIFIED -> Color(0xFFF2ECFC)
         PetMood.ANGRY -> Color(0xFFFFF0E9)
+        PetMood.COQUETTISH -> Color(0xFFFFF0F5)
+        PetMood.CUTE -> Color(0xFFFFF9E8)
+        PetMood.PLEASING -> Color(0xFFEFFAF5)
+        PetMood.KNOCKING -> Color(0xFFFFF4E6)
+        PetMood.FACE_PALM -> Color(0xFFFFF0EE)
+        PetMood.TONGUE_OUT -> Color(0xFFFFF0F6)
         else -> plate
     }
 
@@ -268,6 +294,7 @@ private fun DrawScope.drawPet(
                 sleepy -> 24f
                 crying -> 30f
                 puzzled -> 10f
+                mood == PetMood.COQUETTISH -> -8f
                 else -> 0f
             },
             pivot = Offset(120f * u, 48f * u),
@@ -347,142 +374,5 @@ private fun DrawScope.drawPet(
         style = Stroke(stroke),
     )
 
-    // 眼睛（六形态）：睡着闭线、哭是挤紧的「><」、惊恐瞪圆、愤怒细眼配倒八字眉、
-    // 欢乐弯弯笑眼、其余圆眼（沮丧左右不一样大）。
-    when {
-        sleepy -> {
-            for (cx in listOf(93f, 147f)) {
-                drawLine(
-                    shade,
-                    Offset((cx - 10f) * u, 96f * u),
-                    Offset((cx + 10f) * u, 96f * u),
-                    strokeWidth = stroke,
-                    cap = StrokeCap.Round,
-                )
-            }
-        }
-        crying -> {
-            for (dir in listOf(-1f, 1f)) {
-                // 左眼 =「>」、右眼 =「<」：眼角朝脸中挤紧。
-                val outer = (120f + dir * 36f) * u
-                val tip = (120f + dir * 20f) * u
-                drawLine(shade, Offset(outer, 87f * u), Offset(tip, 95f * u), strokeWidth = stroke, cap = StrokeCap.Round)
-                drawLine(shade, Offset(outer, 103f * u), Offset(tip, 95f * u), strokeWidth = stroke, cap = StrokeCap.Round)
-            }
-        }
-        terrified -> {
-            // 瞪圆：描边大眼圈 + 小瞳孔。
-            for (cx in listOf(93f, 147f)) {
-                drawCircle(shade, 13f * u, Offset(cx * u, 95f * u), style = Stroke(4.5f * u))
-                drawCircle(shade, 5.5f * u, Offset(cx * u, 95f * u))
-            }
-        }
-        angry -> {
-            drawCircle(shade, 9f * u, Offset(93f * u, 97f * u))
-            drawCircle(shade, 9f * u, Offset(147f * u, 97f * u))
-            // 倒八字眉：外高内低。
-            drawLine(shade, Offset(80f * u, 78f * u), Offset(102f * u, 88f * u), strokeWidth = stroke, cap = StrokeCap.Round)
-            drawLine(shade, Offset(160f * u, 78f * u), Offset(138f * u, 88f * u), strokeWidth = stroke, cap = StrokeCap.Round)
-        }
-        waiting -> {
-            // 欢乐：闭眼笑弧 ∩。
-            for (cx in listOf(93f, 147f)) {
-                drawArc(
-                    color = shade,
-                    startAngle = 200f,
-                    sweepAngle = 140f,
-                    useCenter = false,
-                    topLeft = Offset((cx - 10f) * u, 88f * u),
-                    size = Size(20f * u, 14f * u),
-                    style = Stroke(stroke, cap = StrokeCap.Round),
-                )
-            }
-        }
-        else -> {
-            val leftR = if (puzzled) 8f else 11f
-            val rightR = if (puzzled) 12f else leftR
-            drawCircle(shade, leftR * u, Offset(93f * u, 95f * u))
-            drawCircle(shade, rightR * u, Offset(147f * u, 95f * u))
-            if (!puzzled) {
-                drawCircle(face, 3.6f * u, Offset(89.2f * u, 91.2f * u))
-                drawCircle(face, 3.6f * u, Offset(143.2f * u, 91.2f * u))
-            }
-        }
-    }
-
-    // 沮丧：八字愁眉（内端高、外端低），把「困惑」的歪眼读成垂头丧气。
-    if (puzzled) {
-        drawLine(shade, Offset(84f * u, 84f * u), Offset(102f * u, 77f * u), strokeWidth = 4f * u, cap = StrokeCap.Round)
-        drawLine(shade, Offset(156f * u, 84f * u), Offset(138f * u, 77f * u), strokeWidth = 4f * u, cap = StrokeCap.Round)
-    }
-
-    // 腮红（笑 / 欢乐 / 愤怒）：桃粉与怒红 —— 六形态的「色彩」之一。
-    val blush = when {
-        angry -> ANGER_RED
-        waiting -> JOY_PINK
-        mood == PetMood.IDLE -> SMILE_PINK
-        else -> null
-    }
-    if (blush != null) {
-        val alpha = if (angry) 0.30f else 0.38f
-        drawOval(blush.copy(alpha = alpha), topLeft = Offset(66f * u, 112f * u), size = Size(22f * u, 11f * u))
-        drawOval(blush.copy(alpha = alpha), topLeft = Offset(152f * u, 112f * u), size = Size(22f * u, 11f * u))
-    }
-
-    // 哭：外眼角下方蓝色泪珠 + 泪痕。
-    if (crying) {
-        for (dir in listOf(-1f, 1f)) {
-            val x = (120f + dir * 36f) * u
-            drawCircle(TEAR_BLUE, 3.2f * u, Offset(x, 108f * u))
-            drawOval(
-                TEAR_BLUE.copy(alpha = 0.9f),
-                topLeft = Offset(x - 2.2f * u, 114f * u),
-                size = Size(4.4f * u, 10f * u),
-            )
-        }
-    }
-
-    // 惊恐：右额角一滴冷汗（泪滴形 + 高光）。
-    if (terrified) {
-        val drop = Path().apply {
-            moveTo(174f * u, 52f * u)
-            cubicTo(182f * u, 61f * u, 182f * u, 72f * u, 174f * u, 72f * u)
-            cubicTo(166f * u, 72f * u, 166f * u, 61f * u, 174f * u, 52f * u)
-            close()
-        }
-        drawPath(drop, SWEAT_BLUE)
-        drawCircle(Color.White.copy(alpha = 0.85f), 1.4f * u, Offset(171f * u, 64f * u))
-    }
-
-    // 愤怒：右额角的红色怒气符号（两笔交叉，「💢」的简写）。
-    if (angry) {
-        val cx = 170f * u
-        val cy = 60f * u
-        drawLine(ANGER_RED, Offset(cx - 8f * u, cy - 8f * u), Offset(cx + 8f * u, cy + 8f * u), strokeWidth = 4.5f * u, cap = StrokeCap.Round)
-        drawLine(ANGER_RED, Offset(cx + 8f * u, cy - 8f * u), Offset(cx - 8f * u, cy + 8f * u), strokeWidth = 4.5f * u, cap = StrokeCap.Round)
-    }
-
-    // 嘴：圆环 = 字母 O（品牌）。情绪只改大小与位置：哭竖着张大、惊恐收小、
-    // 愤怒压扁、沮丧缩小偏下；笑与欢乐保持原 O。
-    val mouthRx = when {
-        terrified -> 6f
-        puzzled -> 7f
-        crying -> 8.5f
-        angry -> 8f
-        else -> 12f
-    }
-    val mouthRy = when {
-        terrified -> 8f
-        puzzled -> 6f
-        crying -> 11f
-        angry -> 6f
-        else -> 10f
-    }
-    val mouthCy = if (puzzled || angry) 130f else 128f
-    drawOval(
-        color = shade,
-        topLeft = Offset((120f - mouthRx) * u, (mouthCy - mouthRy) * u),
-        size = Size(mouthRx * 2f * u, mouthRy * 2f * u),
-        style = Stroke(stroke),
-    )
+    drawPetFace(mood, u, stroke, face, plate, primary, shade)
 }

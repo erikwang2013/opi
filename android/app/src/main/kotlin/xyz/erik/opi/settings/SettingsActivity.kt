@@ -11,7 +11,8 @@ import xyz.erik.opi.jni.EngineLoader
 /**
  * 设置页宿主（A5）：launcher 入口（manifest 直接声明本类为 launcher，无 MainActivity）。
  * 启动即编排 luna 资产加载（幂等：size 校验重拷；失败回退内置词库）——
- * 与 IME 侧共享 Rust 静态单例。再次 install 会重置会话但导回用户词。
+ * 与 IME 侧共享 Rust 静态单例。`EngineLoader` 保证 luna 每进程只 install 一次：
+ * 重复 install 会重置 IME 正在用的输入方案/模式（用户报障「打开设置后输入无反应」）。
  */
 class SettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

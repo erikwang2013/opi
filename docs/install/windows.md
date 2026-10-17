@@ -402,7 +402,7 @@ regsvr32 /u "C:\path\to\tsf_opi.dll"
 
 | 键 | 值 |
 |---|---|
-| `HKCR\CLSID\{<CLSID_TEXT_SERVICE>}` | 默认值 = `DISPLAY_NAME`（"opi输入法"） |
+| `HKCR\CLSID\{<CLSID_TEXT_SERVICE>}` | 默认值 = `DISPLAY_NAME`（"小欧输入法"） |
 | `HKCR\CLSID\{<CLSID_TEXT_SERVICE>}\InprocServer32` | 默认值 = DLL 全路径；`ThreadingModel` = `"Apartment"` |
 
 `CLSID_TEXT_SERVICE` 与 `GUID_PROFILE` 的字面值在 `crates/tsf-opi/src/dll.rs`（**去那里读，别从这里抄**）。
@@ -424,7 +424,7 @@ regsvr32 /u "C:\path\to\tsf_opi.dll"
 这一语言的键盘列表里：
 
 1. 确认系统已装「中文(简体，中国)」语言。
-2. 设置 → 时间和语言 → 语言和区域 → 中文(简体，中国) 的「语言选项」→「键盘」→ 添加键盘 → 应能看到 **opi输入法**。
+2. 设置 → 时间和语言 → 语言和区域 → 中文(简体，中国) 的「语言选项」→「键盘」→ 添加键盘 → 应能看到 **小欧输入法**。
 3. 用 `Win` + `Space` 轮换输入法。
 
 **【未验证】**：以上三步没有任何人在 Windows 上走过；"出现在哪个列表里""要不要重启"都没有实测。
@@ -542,9 +542,15 @@ TSF 侧**没有在线刷新通道**：`tsf.rs` 的 `Activate` 会重读一次这
 Windows 上只出**常用 / 状态栏 / 符号与表情 / 关于**四页 —— **按键**（`ShiftToggle`）与
 **外观**（`Skin` 是 fcitx5 主题）两页不出：`crates/tsf-opi/src/settings.rs` 的读侧不认
 这两个键（「宁可少一页，不做点不动的开关」；过滤是纯函数 `settingsTabs`，有单测钉）。
-「符号与表情」页那两个按钮在 Windows 上**打开会失败并如实显示原因** —— 符号页上屏要
-命名管道，而管道被候选窗进程持有（单实例），设置窗进程送不出去（`desktopSymbolCommit`
-的 Windows 分支）。上面那段 `settings.ini` 的四个键不受影响（照旧四个）。
+「符号与表情」页那两个按钮打开的是与 Linux 同一份代码的窗（`SymbolsPage.kt` 的
+`SymbolWindow`，表情页在 `EmojiPage.kt`）：页面能看能翻，但**点选上屏会失败并如实
+显示原因** —— 上屏要命名管道，而管道被候选窗进程持有（单实例），设置窗进程送不出去
+（`desktopSymbolCommit` 的 Windows 分支）。表情页布局与 Android `keyboard/EmojiPanel.kt`
+统一：顶栏 `[← 返回] [Emoji | 颜文字] [搜索框]` + 底部可横滑分类条；Emoji = `自有`
+（十二形态，映射在 `shared/pet/PetEmojiMap.kt`，Android 也编译同一份）+ 9 个 OpenMoji
+分组，颜文字 = `data/raw/kaomoji.tsv` 的 7 组（`copyEmojiData` / `copyKaomojiData`
+在构建期把两份表拷进程序资源，见 `desktop/build.gradle.kts`）。上面那段
+`settings.ini` 的四个键不受影响（照旧四个）。
 
 **「属性」入口已接线**（2026-10-08）：服务对象实现了 `ITfFunction` + `ITfFnConfigure`
 （`tsf.rs`），`Show()` 会拉起设置窗（`configure.rs`：从 **DLL 同目录** →

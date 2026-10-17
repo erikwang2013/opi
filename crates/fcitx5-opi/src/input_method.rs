@@ -334,10 +334,10 @@ fn handle_printable(state: &mut CandidateState, c: char) -> KeyAction {
             }
         }
         Mode::English => {
-            if state.buffer().is_empty() {
-                // 直传路径：shift 非 OFF → 转大写并消费 single（镜像 `handleKey`）；
-                // 全角开 ⇒ 出全角字母（用户裁决 2026-10-12「字母、数字也要」）——
-                // 映射与开关唯一在引擎（`fullwidthize`），本层只调它。
+            // 携带缓冲（中→英保留的拼音）：保持旧直传 —— 字母进客户端、缓冲原样
+            // 留着切回中文继续用（用户裁决 2026-10-09）；英文自己的缓冲才喂引擎
+            // 做前缀匹配。⇧/全角语义与旧空缓冲直传同一条（直传绕过引擎）。
+            if state.engine.buffer_is_carried() {
                 let text = if state.shift_state() != ShiftState::Off {
                     state.consume_single_shift();
                     c.to_ascii_uppercase().to_string()
@@ -346,8 +346,20 @@ fn handle_printable(state: &mut CandidateState, c: char) -> KeyAction {
                 };
                 KeyAction::Input(state.fullwidthize(&text))
             } else if c.is_ascii_alphabetic() {
-                // 缓冲非空：字母入引擎（composer 按引擎 shift 决定大小写）
-                commit_or_handled(state.input_key(c))
+                // 空缓冲/英文自己的缓冲：字母入引擎（2026-10-18 单词联想，空缓冲不再
+                // 直传）；composer 按引擎 shift 决定大小写，single 用掉即复位。
+                let out = state.input_key(c);
+                state.consume_single_shift();
+                commit_or_handled(out)
+            } else if c.is_ascii_digit() && !state.buffer().is_empty() {
+                // 英文缓冲有候选 ⇒ 页内选词；无候选 ⇒ `digit_select` 自己直传。
+                digit_select(state, c)
+            } else if state.buffer().is_empty() {
+                // 空缓冲的非字母可打印键：旧直传（数字/标点原样进客户端，全角照旧）。
+                KeyAction::Input(state.fullwidthize(&c.to_string()))
+            } else if c.is_ascii_punctuation() {
+                // 缓冲非空：先按空格语义收尾，标点排在后面（与 `KeyRouter` 同构）。
+                commit_or_handled(state.input_space() + &c.to_string())
             } else {
                 KeyAction::PassThrough
             }
@@ -416,6 +428,9 @@ fn commit_or_handled(out: String) -> KeyAction {
 #[cfg(test)]
 #[path = "input_method_browse_tests.rs"]
 mod browse_tests;
+#[cfg(test)]
+#[path = "input_method_carried_tests.rs"]
+mod carried_tests;
 #[cfg(test)]
 #[path = "input_method_enter_tests.rs"]
 mod enter_tests;

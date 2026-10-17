@@ -317,7 +317,7 @@ internal fun pickTsvFile(): Path? {
             val parent = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().activeWindow
             val fc = JFileChooser()
             fc.dialogTitle = "选择词库文件（*.tsv）"
-            fc.fileFilter = FileNameExtensionFilter("OPI 词库 (*.tsv)", "tsv")
+            fc.fileFilter = FileNameExtensionFilter("小欧词库 (*.tsv)", "tsv")
             if (fc.showOpenDialog(parent) == JFileChooser.APPROVE_OPTION) picked = fc.selectedFile
         }
         picked?.toPath()

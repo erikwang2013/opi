@@ -430,7 +430,7 @@ FCITX5_HEADERS=/tmp/fcitx5-hdr/root/usr/include/Fcitx5 \
 `FCITX_ADDON_DIRS`，在私有 dbus 会话里起 `fcitx5 --ui=testui` 实测：
 
 - `Loaded addon opi_fcitx5`（addon 加载成功）
-- `AvailableInputMethods()` 里出现 `('opi', 'opi输入法', ..., 'zh_CN', ...)`
+- `AvailableInputMethods()` 里出现 `('opi', '小欧输入法', ..., 'zh_CN', ...)`
   （输入法条目注册成功）
 - 把词库换成 6 字节垃圾时，日志出现上面那行装载失败告警
 
@@ -465,7 +465,7 @@ SPACE -> CommitString: 你
 > keyboard-us），而 **`SetCurrentIM("opi")` 在 opi 不属于该组时静默无效** ——
 > 不报错、不切换、CurrentIM 信号也不发，看上去就像「插件坏了」。
 > profile 的组里加上 opi（用独立的 `XDG_CONFIG_HOME`，**没有碰用户真实
-> 配置**）后，`CurrentIM` 变成 `['opi输入法','opi','zh_CN']`，按键立刻进引擎。
+> 配置**）后，`CurrentIM` 变成 `['小欧输入法','opi','zh_CN']`，按键立刻进引擎。
 >
 > 另一条同类陷阱：**面板去哪儿由能力位决定，而且是两条独立通道**（整个面板看
 > `ClientSideInputPanel`(1<<39)，内联预编辑看 `Preedit`(1<<1)）。实测对照（同一串

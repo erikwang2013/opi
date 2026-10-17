@@ -25,6 +25,7 @@ final class OpiEngine {
     static native String[] candidateReadings();
     static native void pinReading(String reading);
     static native String buffer();
+    static native boolean bufferIsCarried();
     static native String displayBuffer();
     static native String pendingText();
     static native int mode();
@@ -72,7 +73,6 @@ final class OpiEngine {
     static native boolean setDictEnabled(String name, boolean on);
     static native boolean removeDict(String name);
 }
-
 public final class Main {
     static int failures = 0;
 

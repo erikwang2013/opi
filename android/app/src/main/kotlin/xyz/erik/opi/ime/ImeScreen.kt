@@ -60,6 +60,8 @@ fun ImeScreen(
     rareIndex: () -> Map<Int, Map<Int, List<String>>> = { emptyMap() },
     /** 符号页类目（懒读资产）：只在真正打开符号页时才取。 */
     symbolCategories: () -> List<xyz.erik.opi.keyboard.SymbolCategories.Category> = { emptyList() },
+    /** 颜文字分类（懒读 `assets/kaomoji.tsv`）：只在表情页挂载时才取。 */
+    kaomojiCategories: () -> List<xyz.erik.opi.keyboard.KaomojiCategories.Category> = { emptyList() },
     /** 收起键盘（工具栏最右图标）：服务层注入 requestHideSelf；默认空 = JVM 测试不感知。 */
     onCloseKeyboard: () -> Unit = {},
 ) {
@@ -172,7 +174,16 @@ fun ImeScreen(
                     if (modes.oneHand == KeyboardModes.OneHand.RIGHT) {
                         Box(modifier = Modifier.weight(0.24f)) // 右侧单手：左边留空
                     }
-                    KeyboardArea(state, controller, router, catalog, rareIndex, symbolCategories, modifier = Modifier.weight(1f))
+                    KeyboardArea(
+                        state,
+                        controller,
+                        router,
+                        catalog,
+                        rareIndex,
+                        symbolCategories,
+                        kaomojiCategories,
+                        modifier = Modifier.weight(1f),
+                    )
                     if (modes.oneHand == KeyboardModes.OneHand.LEFT) {
                         Box(modifier = Modifier.weight(0.24f)) // 左侧单手：右边留空
                     }
@@ -191,6 +202,7 @@ private fun KeyboardArea(
     catalog: SymbolCatalog,
     rareIndex: () -> Map<Int, Map<Int, List<String>>>,
     symbolCategories: () -> List<xyz.erik.opi.keyboard.SymbolCategories.Category>,
+    kaomojiCategories: () -> List<xyz.erik.opi.keyboard.KaomojiCategories.Category>,
     modifier: Modifier = Modifier,
 ) {
     val shiftVisible = controller.mode == EngineMode.ENGLISH
@@ -271,6 +283,7 @@ private fun KeyboardArea(
                     onClose = state::backToLetters,
                     onBackToNumber = state::openNumber,
                     initialTab = state.symbolInitialTab,
+                    kaomojiCategories = kaomojiCategories,
                 )
             }
             if (state.searchActive) {
