@@ -478,7 +478,6 @@ class OpiImeService : InputMethodService() {
         Log.i(TAG, "onWindowHidden")
         // 2026-10-17 裁决：隐藏即重置到默认界面（覆盖返回键/收起键/切应用；不碰引擎缓冲）。
         imeState.resetToDefaultView()
-        imeState.recalibrateSeason() // 四季花纹按最新本地日期重校准（同日裁决）
         lifecycleOwner.registry.currentState = Lifecycle.State.STARTED
     }
 

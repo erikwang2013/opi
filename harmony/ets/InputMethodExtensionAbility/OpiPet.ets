@@ -10,9 +10,10 @@
 //
 // **几何与表情的真源不是本文件**，而是：
 //   * docs/opi-pet.svg          —— 静态基准（240×250 设计空间、锚点、配色释义）
+//   * docs/opi-pet-forms.svg    —— 六种表情的设计对照（笑/欢乐/哭/沮丧/惊恐/愤怒，2026-10-17）
 //   * shared/pet/OpiPet.kt      —— 带情绪的 Compose 版（坐标已按情绪分化，本文件照抄它）
 //   * android/app/src/test/kotlin/xyz/erik/opi/pet/OpiPetMoodTest.kt —— petMood 的规格
-// 改小欧请同时改这三处 + 本文件；**不要在鸿蒙端另发明一只小欧**。
+// 改小欧请同时改这几处 + 本文件；**不要在鸿蒙端另发明一只小欧**。
 // 三者共享同一套几何：viewBox 240×250，所有坐标乘以缩放 u = 目标宽度 / 240。
 //
 // Compose → ArkUI Canvas 的**已知差异**（别当成 bug 去「修」）：
@@ -46,6 +47,15 @@ export enum PetMood {
   Sleepy = 3,
   /** 引擎降级：词库没装上，跑在内置词库上（天线折断） */
   Degraded = 4,
+  // 2026-10-17 追加（只能加在末尾，与 shared/pet/OpiPet.kt 逐值镜像）：
+  // 移动端顶部宠物条六形态轮播的表情能力。petMood 不产出这三枚，鸿蒙端也还没有
+  // 用到它们 —— 先按跨端契约把序号占住，将来要用时按 Compose 版补绘制。
+  /** 哭（顶部宠物条：哭） */
+  Crying = 5,
+  /** 惊恐（顶部宠物条：惊恐） */
+  Terrified = 6,
+  /** 愤怒（顶部宠物条：愤怒） */
+  Angry = 7,
 }
 
 /**

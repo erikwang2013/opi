@@ -26,9 +26,9 @@ It looks like a single key on a keyboard, because that is what an input method o
 | **Side legend = OPI** | The legend position on a keycap, and the project's name |
 | **Ripples below** | The afterglow of a keypress, spreading only on this machine — it never leaves |
 
-See [`docs/opi-pet.svg`](docs/opi-pet.svg) for the full figure (hand-written SVG, no external dependencies, scales to any size). It already lives inside the codebase:
+See [`docs/opi-pet.svg`](docs/opi-pet.svg) for the full figure (hand-written SVG, no external dependencies, scales to any size); the six expressions (smile / joy / cry / dejected / terrified / angry) are in [`docs/opi-pet-forms.svg`](docs/opi-pet-forms.svg). It already lives inside the codebase:
 
-- **Android**: the settings-page expression tracks engine state (idle / waiting / puzzled / asleep / degraded); three empty states — the candidate bar's idle slot, "no match", and an empty symbol search; and the **launcher icon**, an adaptive vector foreground with five PNG fallbacks
+- **Android**: the settings-page expression tracks engine state (idle / waiting / puzzled / asleep / degraded); three empty states — the candidate bar's idle slot, "no match", and an empty symbol search; the **six-form pet strip** in the default page's top slot (smile / joy / cry / dejected / terrified / angry, animated with mood colours); and the **launcher icon**, an adaptive vector foreground with five PNG fallbacks
 - **Windows**: Opi shrugs in the candidate window's empty state; the shipped `.deb` / `.msi` app icon; and a **language-bar button** (TSF; visible only while the language bar is on)
 - **HarmonyOS**: the pet in the candidate bar — it is itself the "remember my words" switch; plus the app/subtype icon
 - **macOS**: the input-source menu icon (`macos/opi.tiff`) — ⚠️ that directory is a never-compiled draft, and the icon is only visible on a Mac
@@ -254,6 +254,7 @@ data/                          # dictionary data
 docs/                          # pet, diagrams and design docs
   install/                     #   per-platform install guides (android / linux / windows / ios / macos / harmony)
   opi-pet.svg                  #   the project pet, Opi
+  opi-pet-forms.svg            #   six expressions (smile / joy / cry / dejected / terrified / angry)
   social-preview.svg · .en.svg #   bilingual social-preview image (each has a .png twin for GitHub Settings → Social preview)
   diagrams/                    #   architecture · features · lifecycle
   superpowers/                 #   specs (design) + plans (implementation)

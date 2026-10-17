@@ -101,12 +101,6 @@ class ImeState(
      */
     var persist: () -> Unit = {}
 
-    /** 四季花纹当前季节（2026-10-17 裁决）：空闲槽位画 SeasonBand；隐藏/关闭时重校准。 */
-    var season by mutableStateOf(currentSeason())
-        private set
-
-    fun recalibrateSeason() = run { season = currentSeason() }
-
     /** 上次的中文侧输入模式（9 键 ↔ 英文 往返时恢复用）。初始同偏好默认（9 键）。 */
     private var lastChineseMode = InputMode.PINYIN9
 

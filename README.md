@@ -26,9 +26,9 @@
 | **侧壁刻字 = OPI** | 键帽的字符位，也正是项目名 |
 | **底部涟漪** | 按键落下后只在本机扩散的余波 —— 不外传 |
 
-形象见 [`docs/opi-pet.svg`](docs/opi-pet.svg)（纯手写 SVG，无外部依赖，可任意缩放）。它已经住进了代码里：
+形象见 [`docs/opi-pet.svg`](docs/opi-pet.svg)（纯手写 SVG，无外部依赖，可任意缩放）；六种表情（笑 / 欢乐 / 哭 / 沮丧 / 惊恐 / 愤怒）见 [`docs/opi-pet-forms.svg`](docs/opi-pet-forms.svg)。它已经住进了代码里：
 
-- **Android**：设置页的表情跟着引擎状态走（待命 / 等选 / 困惑 / 睡着 / 降级）；候选栏待命位、「无匹配」与符号搜索空结果三处空态；**启动图标**是自适应矢量前景 + 5 档 PNG 回退
+- **Android**：设置页的表情跟着引擎状态走（待命 / 等选 / 困惑 / 睡着 / 降级）；候选栏待命位、「无匹配」与符号搜索空结果三处空态；默认页顶栏空闲槽位的**六形态宠物条**（笑 / 欢乐 / 哭 / 沮丧 / 惊恐 / 愤怒，动态轮播 + 情绪色）；**启动图标**是自适应矢量前景 + 5 档 PNG 回退
 - **Windows**：候选窗空态摊手；发行包（`.deb` / `.msi`）的应用图标；**语言栏按钮**（TSF；只在语言栏开着时可见）
 - **鸿蒙**：候选栏里的小欧，它自己就是「记不记词」的开关；应用/子类型图标
 - **macOS**：输入源菜单图标（`macos/opi.tiff`）——⚠️ 本目录是从未编译的草案，图标只在 Mac 上才看得见
@@ -254,6 +254,7 @@ data/                          # 词库数据
 docs/                          # 宠物、图与设计文档
   install/                     #   各端安装教程（android / linux / windows / ios / macos / harmony）
   opi-pet.svg                  #   项目宠物「小欧」
+  opi-pet-forms.svg            #   六种表情（笑 / 欢乐 / 哭 / 沮丧 / 惊恐 / 愤怒）
   social-preview.svg · .en.svg #   中英双语社交预览图（同名 .png 供 GitHub Settings → Social preview 上传）
   diagrams/                    #   架构设计 · 功能设计 · 生命周期
   superpowers/                 #   specs（设计规格）+ plans（实施计划）

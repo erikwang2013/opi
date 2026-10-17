@@ -99,11 +99,11 @@ fun ImeScreen(
             if (state.view == ImeState.View.QWERTY || state.view == ImeState.View.RARE ||
                 state.view == ImeState.View.CANDIDATES_TILED
             ) {
-                // 顶部共用槽位（2026-10-17 裁决）：输入中画拼音行、空闲画**四季花纹
-                // 边框**（随本地日期换季的凸起纹样；记录短语那条已按同日裁决撤掉）。
+                // 顶部共用槽位（2026-10-17 裁决）：输入中画拼音行、空闲画**小欧宠物条**
+                // （六形态轮播：笑/欢乐/哭/沮丧/惊恐/愤怒；四季花纹那条已按同日裁决撤除）。
                 // 同一 38dp 槽位两种内容 —— 与「候选|工具条共用一格」同一套哲学。
                 if (controller.composingText().isEmpty() && controller.wubiHint.isEmpty()) {
-                    SeasonBand(season = state.season)
+                    PetStrip()
                 } else {
                     ComposingBar(controller)
                 }
