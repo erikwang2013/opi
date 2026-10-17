@@ -341,3 +341,67 @@ fn router_symbol_mode_inserts_punctuation() {
     assert_eq!(r.key_event(',' as u32, 0), KeyAction::Input(",".into()));
     assert_eq!(r.buffer(), "", "标点不是关键字，不进缓冲");
 }
+
+// ---------- 数字串后的句号（2026-10-17 用户裁决，桌面端报障） ----------
+
+/// 「键盘输入数字的时候……数字后面点击 . 键默认只能是 .」：数字**紧邻**的句号键出
+/// ASCII `.`（不被中文标点表、也不被全角兜底改字形）；不紧邻时照旧走标点表。
+///
+/// 判据放引擎层：每端路由的可打印分支都先问 [`Engine::input_punct`]（fcitx5/TSF/
+/// 平台中立路由同序）——桌面端数字直通后，引擎只剩这一个观测点，四端同一条路。
+#[test]
+fn period_after_digits_stays_ascii() {
+    let mut e = engine();
+    // 数字走同一条可打印门（router 的顺序：先 punct、再模式分派）。
+    assert_eq!(e.input_punct('1'), None, "数字不进标点表");
+    assert_eq!(e.input_punct('2'), None);
+    assert_eq!(
+        e.input_punct('.').as_deref(),
+        Some("."),
+        "数字紧邻的句号必须是 ASCII `.`（不是 。、也不是全角 ．）"
+    );
+    // 句号之后已不在「数字后面」：回到中文句号。
+    assert_eq!(e.input_punct('.').as_deref(), Some("。"));
+}
+
+/// 紧邻关系由**最近一次可打印输入**决定：字母、空格都会打断它。
+#[test]
+fn period_after_non_digit_stays_chinese() {
+    let mut e = engine();
+    assert_eq!(
+        e.input_punct('.').as_deref(),
+        Some("。"),
+        "无前文：中文句号"
+    );
+
+    let mut e = engine();
+    assert_eq!(e.input_punct('1'), None);
+    assert_eq!(e.input_punct('a'), None, "字母不进标点表");
+    assert_eq!(
+        e.input_punct('.').as_deref(),
+        Some("。"),
+        "字母打断数字上下文"
+    );
+
+    let mut e = engine();
+    assert_eq!(e.input_punct('1'), None);
+    e.input_space();
+    assert_eq!(
+        e.input_punct('.').as_deref(),
+        Some("。"),
+        "空格收尾后不再是数字上下文"
+    );
+}
+
+/// 9 键：数字是**输入码**（缓冲非空）—— 不是「数字输入」，句号仍出中文。
+#[test]
+fn period_with_nine_key_code_buffer_stays_chinese() {
+    let mut e = engine();
+    e.set_scheme(engine_core::scheme::Scheme::Nine);
+    typed(&mut e, "2"); // 9 键码进缓冲
+    assert_eq!(
+        e.input_punct('.').as_deref(),
+        Some("。"),
+        "缓冲非空（输入码）时数字上下文规则不生效"
+    );
+}

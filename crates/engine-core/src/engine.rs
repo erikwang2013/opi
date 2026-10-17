@@ -80,6 +80,11 @@ pub struct Engine {
     /// 切模式重置一个没有 per-mode 含义的偏好是错的（切到英文再切回来，
     /// 用户关掉的表会自己打开）。默认 `true` = 保持既有行为。
     pub(crate) chinese_punct: bool,
+    /// 最近一次可打印输入是不是数字（[`Self::input_punct`] 维护）：数字**紧邻**的
+    /// 句号键出 ASCII `.`（2026-10-17 用户裁决，桌面端报障「键盘输入数字的时候……
+    /// 数字后面点击 . 键默认只能是 .」）。空格/退格/清空/选词/切模式都清掉它 ——
+    /// 「数字后面」只认紧邻；9 键输入码不算（缓冲非空守卫见 `input_punct`）。
+    pub(crate) after_digit: bool,
     /// 成对引号的交替状态（复位时机见 [`Quotes`]）。
     pub(crate) quotes: Quotes,
     /// 模糊音开关（「属性设置」可改；排序层的门控见 `candidates::RankOptions`）。
@@ -124,6 +129,7 @@ impl Engine {
             pinned_reading: None,
             fullwidth: Mode::default().default_fullwidth(),
             chinese_punct: true,
+            after_digit: false,
             quotes: Quotes::default(),
             // 模糊音**缺省关**（2026-10-15 用户裁决；逐对掩码 0 = 全关）。
             fuzzy: 0,
@@ -201,6 +207,7 @@ impl Engine {
     /// 字母，逃生口语义仍成立，不动。
     pub fn input_space(&mut self) -> String {
         self.leave_symbol_browse_if_needed(); // 直调引擎的出口（C ABI）也走同一条（契约 ②）
+        self.after_digit = false; // 空格收尾 = 数字上下文结束（见字段注释）
         match self.composer.session().mode {
             Mode::Pinyin | Mode::Traditional => {
                 let buffer = self.composer.session().buffer.clone();
@@ -242,11 +249,13 @@ impl Engine {
 
     pub fn backspace(&mut self) {
         self.leave_symbol_browse_if_needed(); // 同 input_space（契约 ②；宿主路由是主路，这里是兜底）
+        self.after_digit = false; // 退格 = 数字上下文结束
         self.composer.backspace();
     }
 
     pub fn clear(&mut self) {
         self.symbol_browse.exit(); // 清会话 = 退出浏览（数据留着；面板随 buffer 空收起）
+        self.after_digit = false; // 清会话 = 数字上下文结束
         self.composer.clear();
     }
 
@@ -255,6 +264,7 @@ impl Engine {
     ///
     /// **`chinese_punct` 不在此列**：它是用户偏好而非模式默认值（理由见字段注释）。
     pub fn switch_mode(&mut self, mode: Mode) {
+        self.after_digit = false; // 切模式 = 数字上下文结束
         self.fullwidth = mode.default_fullwidth();
         self.quotes.reset();
         self.composer.switch_mode(mode);
@@ -362,6 +372,7 @@ impl Engine {
     /// 唯一区别是不重算候选表 —— 数字选词在 `digit_select` 里已经抓过一次，
     /// 再排一遍整表是纯浪费。`Engine::select` 保留原签名（C 出口的全局索引用它）。
     pub fn select_from(&mut self, cands: &[Candidate], index: usize) -> String {
+        self.after_digit = false; // 选词/面板点击 = 数字上下文结束
         // 浏览态：select = 激活浏览项（类目下钻返回空串 / 符号上屏并回一级），不是提交候选。
         // 面板点击与数字键因此同一条，且任何路径都提交不出类目名（见 engine_symbol_browse.rs 头）。
         if self.symbol_browse.is_active() {

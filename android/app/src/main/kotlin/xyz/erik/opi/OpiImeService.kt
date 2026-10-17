@@ -387,8 +387,10 @@ class OpiImeService : InputMethodService() {
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
         Log.i(TAG, "onFinishInputView")
-        // 普通 hide（返回键/同一编辑器重开）也会走到本方法，此时 finishingInput=false；
-        // 只在真正结束输入（销毁/停用）时重置，避免收起键盘误清 SYMBOL 面板状态。
+        // 普通 hide（返回键/同一编辑器重开）也会走到本方法，此时 finishingInput=false。
+        // 这里只管「真正结束输入」那档（清缓冲/清 ⇧/回 qwerty）；普通 hide 的
+        // **视图重置**归 onWindowHidden（2026-10-17 裁决：隐藏整块键盘就重置到默认界面
+        // —— 早先「避免收起键盘误清 SYMBOL 面板状态」的取舍已被该裁决推翻）。
         if (finishingInput) {
             // 同 onStartInput：结束输入时排队中的重试同样不能再落到下一个编辑器
             cancelPendingCommit()
@@ -474,6 +476,9 @@ class OpiImeService : InputMethodService() {
     override fun onWindowHidden() {
         super.onWindowHidden()
         Log.i(TAG, "onWindowHidden")
+        // 2026-10-17 裁决：整块键盘被隐藏即重置到默认界面（再打开就是默认键盘）。
+        // onWindowHidden 覆盖一切隐藏路径（返回键、收起键、切应用），且不碰引擎缓冲。
+        imeState.resetToDefaultView()
         lifecycleOwner.registry.currentState = Lifecycle.State.STARTED
     }
 

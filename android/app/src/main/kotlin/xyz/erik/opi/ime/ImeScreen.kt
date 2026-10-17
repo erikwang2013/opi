@@ -82,9 +82,14 @@ fun ImeScreen(
         LocalKeyboardPalette provides palette,
         LocalDensity provides density,
     ) {
-        // 根列**透明**：候选槽空着时就是空的（2026-10-09 用户裁决「候选词没词的时候
-        // 不显示背景」）—— 底色分片给：工具条、候选栏各自画，键区由下面 keyArea 那块刷。
-        Column(modifier = Modifier.fillMaxSize()) {
+        // 根列**铺工具条底色**（2026-10-17 用户裁决「红线区域内输入法的其他界面都覆盖了，
+        // 只有默认界面没有，默认界面也要全覆盖」）：拼音行空槽（38dp）此前透明 ⇒ 窗口
+        // 露白，与工具条之间出现一条白色空带；其他视图（皮肤/符号/关于…）整窗 panelBg
+        // 铺满所以覆盖得住。这里给根列工具条色 —— 空槽与工具条连成一片，视觉上就是
+        // 工具条向上延伸（布局/高度一个字没动）。2026-10-09 那条「候选词没词的时候不
+        // 显示背景」管的是**候选槽**（现在候选槽与工具条共用一格、恒有内容），不冲突；
+        // 各分片仍照旧给自己铺底（工具条 toolbarBg、候选栏 barBg、键区 barBg）。
+        Column(modifier = Modifier.fillMaxSize().background(palette.toolbarBg)) {
             // ---- 拼音行（2026-10-15 用户裁决「移动端的拼音在候选词上方显示，不要在
             // 输入框里」）：槽位常驻（空时不铺底色），画的是 `composingText()`
             // （9 键 = 分词读数 `ni'hao`、其余方案 = 原字母）+ 五笔编码提示。

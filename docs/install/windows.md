@@ -512,7 +512,7 @@ regsvr32 /u "C:\path\to\tsf_opi.dll"
 
 ```ini
 Learn=True          # 学习（记住选过的词）
-ChinesePunct=True   # 中文标点（，。、与成对引号）
+ChinesePunct=True   # 中文标点（，。、与成对引号）；数字紧邻的 `.` 例外，恒出 ASCII `.`（2026-10-17 裁决）
 Fuzzy=True          # 模糊音（z/zh、n/l…）
 Jianpin=True        # 简拼（声母缩写，nh → 你好）
 ```

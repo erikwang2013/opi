@@ -41,6 +41,24 @@ class ImeStateTest {
         debounce: FakeDebouncer = FakeDebouncer(),
     ) = ImeState(EngineController(fake), commit = { commits += it }, debouncer = debounce)
 
+    // ---- 隐藏整块键盘 ⇒ 重置到默认界面（2026-10-17 裁决「再打开就默认界面」） ----
+
+    @Test
+    fun hideKeyboardResetsViewSearchAndModeToDefaults() {
+        val fake = FakeEngine()
+        val state = newState(fake)
+        state.openNumber()
+        state.updateSearchText("面板里搜一半的字")
+        assertEquals(ImeState.View.NUMBER, state.view)
+        assertEquals(EngineMode.NUMBER.value, fake.mode)
+
+        state.resetToDefaultView()
+
+        assertEquals("隐藏即回默认界面", ImeState.View.QWERTY, state.view)
+        assertEquals("搜索窗内容不能带回来", "", state.searchText)
+        assertEquals("数字面板的引擎模式必须回字母", EngineMode.PINYIN.value, fake.mode)
+    }
+
     // ---- pending buffer 提交（开面板前：有候选选第一个，无候选清掉） ----
 
     @Test

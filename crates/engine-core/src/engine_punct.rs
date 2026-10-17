@@ -25,6 +25,16 @@ impl Engine {
     pub fn input_punct(&mut self, ch: char) -> Option<String> {
         // 浏览态：同 input_key —— 先退出浏览恢复真缓冲，再按正常流程处理（契约 ②）。
         self.leave_symbol_browse_if_needed();
+        // 数字**紧邻**的句号出 ASCII `.`（2026-10-17 用户裁决，桌面端报障「数字后面
+        // 点击 . 键默认只能是 .」）：每端路由的可打印分支都先问本函数 ⇒ 这里记
+        // 「上一次可打印输入是不是数字」是四端共用的唯一观测点（桌面数字直通后，
+        // 引擎只剩这一处能看到它）。缓冲为空才算数 —— 9 键方案里数字是**输入码**
+        // （进缓冲），那时的 `.` 仍是中文句号。规则先于两道开关：中英标点/全角都
+        // 不越过它（用户原话「只能是 .」）。
+        let after_digit = std::mem::replace(&mut self.after_digit, ch.is_ascii_digit());
+        if ch == '.' && after_digit && self.buffer().is_empty() {
+            return Some(".".to_string());
+        }
         let text = self.punct_text(ch)?;
         // 缓冲非空：先走与空格**同一条**收尾（有候选提首候选、无候选提原文），
         // 否则 `ni,` 上屏成 `，你` —— 标点抢在待提交的拼音前面。

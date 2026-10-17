@@ -292,6 +292,13 @@ adb shell ime set    xyz.erik.opi/.OpiImeService      # 切为当前输入法
 
 ### 4.4 候选区：共用格 · 折叠行 ⌄ · 平铺态（2026-10-16 改版）
 
+- **默认界面全覆盖**（2026-10-17 用户裁决「红线区域内的界面其他视图都覆盖了，只有默认
+  界面没有」）：根列铺 `toolbarBg` —— 拼音行空槽（38dp）此前透明会让窗口顶部露一条白带，
+  现在与工具条连成一片（布局/高度一字未动；其余视图本来就是整窗 `panelBg` 铺满）。
+- **整块键盘隐藏即重置**（2026-10-17 用户裁决「隐藏整个键盘的时候，就重置到默认界面，
+  再打开就默认界面」）：`onWindowHidden → ImeState.resetToDefaultView()`（回 QWERTY、
+  清搜索、面板模式回字母；**不动**引擎缓冲与学习 —— 那归 `onEditorChanged`（真正结束
+  输入）管）。门禁 `ImeStateTest.hideKeyboardResetsViewSearchAndModeToDefaults`。
 - **候选与工具条共用一格**（2026-10-16 用户裁决「输入拼音后的候选词在功能按钮区域显示
   （替换掉功能区域）」）：输入中（有候选 / 有缓冲 / 英文态）那一格画候选、其余时候画工具条；
   判据**单一来源** = `ImeState.candidatesShowable`。格位常驻（高 = `IME_TOOLBAR_HEIGHT_DP`）——

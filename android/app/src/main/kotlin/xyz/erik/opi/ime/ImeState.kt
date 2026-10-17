@@ -434,6 +434,16 @@ class ImeState(
         searchActive = focused
     }
 
+    /** 整块键盘被隐藏时的重置（2026-10-17 用户裁决「隐藏整个键盘的时候，就重置到
+     * 默认界面，再打开就默认界面」）：回默认视图 + 清搜索 + 面板模式回字母。
+     * **不动**引擎缓冲与学习 —— 那是 `onEditorChanged`（真正结束输入）的事。 */
+    fun resetToDefaultView() {
+        resetSearch()
+        view = View.QWERTY
+        // 数字/符号面板期间会切引擎模式；隐藏后重开必须是正常的字母盘
+        restoreLetterMode()
+    }
+
     /** 输入目标切换/输入视图结束：清搜索、清 ⇧、回 qwerty。 */
     fun onEditorChanged() {
         resetSearch()
