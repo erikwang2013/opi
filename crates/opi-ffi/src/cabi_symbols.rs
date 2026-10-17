@@ -37,10 +37,11 @@ pub unsafe extern "C" fn opi_search_symbols(ptr: *const u16, len: usize) -> OpiS
     texts_to_json(texts)
 }
 
-/// emojiSymbols() -> JSON 文本数组。表情面板**浏览全量**（官方分组序，含旗帜/家庭等
-/// 多码位序列；真源 `api::emoji_symbol_texts`，与 JNI 面 `opijni_emoji_symbols` 同源）。
+/// emojiSymbols() -> JSON 文本数组。表情面板**浏览表**（OpenMoji 常用子集、面板分组序，
+/// 不含旗帜/肤色变体/ZWJ 组合；真源 `api::emoji_symbol_texts`，与 JNI 面
+/// `opijni_emoji_symbols` 同源）。
 /// ⚠️ **不经引擎单例**：编译期静态表，引擎未装载（`opi_load` 返回 false）时上面几条都
-/// 退化成 `[]`/空串，本出口**照样返回全量** —— 冷启动第一帧就能画（这条由
+/// 退化成 `[]`/空串，本出口**照样返回全表** —— 冷启动第一帧就能画（这条由
 /// `tests/cabi_unloaded.rs` 的 `emoji_groups_index_the_full_emoji_list` 钉住）。
 /// `opi_emoji_groups()` 的 `start`/`count` 即本数组下标。
 #[unsafe(no_mangle)]

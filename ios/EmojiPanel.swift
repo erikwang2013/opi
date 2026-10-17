@@ -345,7 +345,7 @@ final class EmojiPanel: UIView {
         // 字形过滤用 SymbolPanel 那一份判据（**只判单码位**，多码位一律放行）——
         // 探针字体也是它的那一颗，别在本文件另造（见 SymbolPanel.probeFont 的注释）。
         //
-        // ⚠️ 未编译：每条都调一次 `CTFontCreateWithName`（在 canRender 里）。3963 条
+        // ⚠️ 未编译：每条都调一次 `CTFontCreateWithName`（在 canRender 里）。687 条
         // 一次性跑，Mac 上量一下开面板的耗时；若肉眼可见卡，把 CTFont 提到循环外
         // （要改 canRender 的签名，**别**在这里抄一份判定逻辑）。
         var aliveUpTo = [Int](repeating: 0, count: rawList.count + 1)

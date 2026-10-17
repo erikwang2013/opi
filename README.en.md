@@ -261,7 +261,7 @@ docs/                          # pet, diagrams and design docs
   superpowers/                 #   specs (design) + plans (implementation)
   release-claim-corrections.md #   release-claim corrections (tag annotations cannot be edited, so the measured wording lands here)
   weixinpay.png · alipay.png   #   donation QR codes (referenced in the footer)
-scripts/                       # dictionary generation: gen_luna_dict.py · gen_trad_dict.py · gen_symbols.py
+scripts/                       # dictionary/emoji generation: gen_luna_dict.py · gen_trad_dict.py · gen_symbols.py · gen_emoji_kaomoji.py
                                #   (+ symbol_keywords.py, the hand-written keyword table) · gen_en_dict.py · hanzi_freq.py
                                # distribution packaging: build-packages.sh (.deb / .rpm) + nfpm.yaml
                                #   (nfpm.yaml only moves the staging tree into a package — it **does not declare locations**)

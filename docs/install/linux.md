@@ -753,8 +753,8 @@ Linux 上 = `--settings` 的设置窗（无参数启动也是它）。**v1.6.0 �
     右竖条首项「表情」，或设置窗「符号与表情」页的「表情」按钮 —— 后者开窗即落这一页）。
     顶栏 `[← 返回] [Emoji | 颜文字] [搜索框]`（返回 = 回符号页并清搜索），内容区网格 +
     **底部**可横滑分类条（`EmojiPage.kt` 的 `EmojiTopBar` / `EmojiPane` / `CategoryBar`）。
-    - **Emoji 子页**：分类条 = `自有` + 官方 UTS#51 分组（**9 组** —— 官方 10 组里
-      Component 整组被「只收完全限定」滤掉）。`自有` = 小欧十二形态（12×6 网格首格起
+    - **Emoji 子页**：分类条 = `自有` + OpenMoji 常用分组（**9 组**，旗帜/组件/肤色
+      变体与 ZWJ 组合已排除；筛选规则见 `scripts/gen_emoji_kaomoji.py`）。`自有` = 小欧十二形态（12×6 网格首格起
       画 `OpiPet`，点击提交对应 Unicode emoji）；映射在 `shared/pet/PetEmojiMap.kt`，
       **两端编译同一份**（Android 的 `PetEmoji` 只是它的薄转发）。分类条点一下滚到该组
       首项所在页，高亮随当前页首项所属组自动跟随（`EmojiData.groupIndexOf` /

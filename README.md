@@ -261,7 +261,7 @@ docs/                          # 宠物、图与设计文档
   superpowers/                 #   specs（设计规格）+ plans（实施计划）
   release-claim-corrections.md #   发布声明订正（tag 注释推出去改不了，实测到的正确说法落这里）
   weixinpay.png · alipay.png   #   赞赏码（页脚引用）
-scripts/                       # 词库生成：gen_luna_dict.py · gen_trad_dict.py · gen_symbols.py
+scripts/                       # 词库/表情生成：gen_luna_dict.py · gen_trad_dict.py · gen_symbols.py · gen_emoji_kaomoji.py
                                #   （+ symbol_keywords.py 手写关键字表）· gen_en_dict.py · hanzi_freq.py
                                # 发行版打包：build-packages.sh（.deb / .rpm）+ nfpm.yaml
                                #   （nfpm.yaml 只负责把暂存树搬进包，**落点不在这里声明**）

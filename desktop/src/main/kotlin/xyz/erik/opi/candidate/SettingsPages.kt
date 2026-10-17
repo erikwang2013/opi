@@ -259,7 +259,7 @@ internal fun SymbolsPage(onOpenSymbols: () -> Unit, onOpenEmoji: () -> Unit) {
     SectionTitle("表情")
     ActionRow(
         "打开表情页",
-        "官方分组（笑脸/人物/动物/…/旗帜）；点分类条跳组，点表情上屏",
+        "OpenMoji 常用分组（笑脸/人物/动物/植物/…/符号）；点分类条跳组，点表情上屏",
     ) { onOpenEmoji() }
     Spacer(Modifier.height(8.dp))
     Text(

@@ -112,7 +112,7 @@ struct OpiSymbolBlock: Decodable {
 /// `opi_emoji_groups()` 的 JSON 元素：`[{name,start,count}]`。
 ///
 /// `start` 是 `emojiSymbols()` 数组里的下标（点分类 = 网格滚到该下标）；`name` 是
-/// **官方中文组名**（笑脸/人物/…/旗帜，引擎侧 `emoji.tsv` 第 3 列，翻译不在本层）。
+/// **中文组名**（笑脸/人物/…/符号，引擎侧 `emoji.tsv` 第 3 列，翻译不在本层）。
 /// ⚠️ serde 输出是**字典序**（`{"count","name","start"}`，未开 preserve_order）——
 /// Android 因此不能用「按书写顺序」的正则；本层走 JSONDecoder 按**键名**解码，
 /// 没有顺序假设（别照抄那边的正则写法）。
@@ -449,7 +449,7 @@ final class OpiEngine {
         return out
     }
 
-    /// 表情**浏览全量**（JSON 文本数组，官方分组序，含旗帜/家庭/键帽等多码位序列）。
+    /// 表情**浏览表**（JSON 文本数组，OpenMoji 常用子集，面板分组序；不含旗帜/ZWJ 组合）。
     /// ⚠️ 与上面三条**不同**：本出口与 `emojiGroups()` **不经引擎单例** —— 编译期静态表，
     /// `opi_load` 失败时它们照样返回全量（冷启动第一帧就能画）。所以本层**不把空结果
     /// 当成「词库没装上」**；「空结果不缓存」的纪律照旧（本来也不缓存）。

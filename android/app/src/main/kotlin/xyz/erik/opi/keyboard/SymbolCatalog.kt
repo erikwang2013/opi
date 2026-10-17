@@ -10,7 +10,7 @@ import xyz.erik.opi.jni.OpiEngine
 interface SymbolApi {
     fun searchSymbols(keyword: String): Array<String>?
 
-    /** 表情**浏览**全量（官方分组序，含多码位序列）；与 symbols.tsv 的 emoji 列
+    /** 表情**浏览**表（OpenMoji 常用子集，面板分组序）；与 symbols.tsv 的 emoji 列
      * 是两条路 —— 那是搜索、这是浏览（详见引擎侧 `api::emoji_symbol_texts`）。 */
     fun emojiSymbols(): Array<String>?
 
@@ -70,13 +70,14 @@ class SymbolCatalog(
     }
 
     /**
-     * 表情页 = 引擎的**浏览全量**（`emojiSymbols()`，官方分组序：笑脸在前、旗帜在后），
+     * 表情页 = 引擎的**浏览表**（`emojiSymbols()`，OpenMoji 常用子集，面板分组序：笑脸在前、符号在后），
      * **不再从 `all` 里过滤**。
      *
      * 2026-10-09 换源（用户裁决「表情中常用主流 emoji 不全」）：旧写法取
      * 「符号表 ∩ emoji 集」—— 符号表有意不收麻将/带圈等低码位块（见 gen_symbols.py），
      * 于是国旗、🀄、❤️（VS16 形）、ZWJ 家庭这些一律进不了表情页。浏览要「全」，
-     * 集合就不该由符号表决定；引擎的表本身来自 UTS#51 `emoji-test.txt`。
+     * 集合就不该由符号表决定；引擎的表本身来自 OpenMoji 常用子集
+     * （筛选规则与源 pin 见 `scripts/gen_emoji_kaomoji.py`）。
      * **不能用 `by lazy`** —— 它只算一次，首次若全空就永久空。
      */
     val emoji: List<String> get() = emojiData.first

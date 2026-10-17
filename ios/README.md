@@ -1074,7 +1074,7 @@ OpiString opi_select_page(uint32_t k);  /* 当前页第 k 个；越界/未装载
    `KeyboardViewController.runEmojiSearch` 里**唯一一处真正的调用**
    （`engine.searchSymbols(keyword: q)`）。**符号面板本身仍只用 common 块**
    （`commonSymbols()`），「非 common 块的条目在符号面板上够不到」这条**没变**；
-   表情是**另开的一条数据通路**（`opi_emoji_symbols()`，全 3963 条），
+   表情是**另开的一条数据通路**（`opi_emoji_symbols()`，OpenMoji 常用子集 687 条），
    不是把符号面板补全了。
 2. **块 id 的类型在两端不一样。** Rust 侧是 `BlockId(pub u16)`（0..=65535），
    C ABI 的 `opi_symbols_in_block(int16_t)` 收**有符号** 16 位 —— 只能对齐到
@@ -1139,7 +1139,7 @@ OpiString opi_select_page(uint32_t k);  /* 当前页第 k 个；越界/未装载
 
 `SymbolPanel.canRender` 的守卫原先是 `guard text.unicodeScalars.count > 1 else { return true }`
 —— **判反了**（`b55e3b5` 引入，与它自己上一行的注释相反）。两头都错：单码位（正是
-U+1FAEB 那种要判的）从不被过滤，多码位（旗帜/家庭/键帽）反倒被拿去问「整串连字有没有
+U+1FAEB 那种要判的）从不被过滤，多码位（VS16 形/键帽）反倒被拿去问「整串连字有没有
 字形」→ 误判成没有 → 把整类藏掉。已订正为 `== 1`，与 Android 的
 `codePointCount > 1 || hasGlyph` 逐字对齐。**未编译过**，Mac 上第一件事是核实它。
 

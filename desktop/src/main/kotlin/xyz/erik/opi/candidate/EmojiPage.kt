@@ -69,7 +69,7 @@ import xyz.erik.opi.pet.OpiPet
 import xyz.erik.opi.pet.PetEmojiMap
 import xyz.erik.opi.pet.PetPalette
 
-/** 表情表：全量顺序 + 官方分组（`start`/`count` 与条目下标对齐，组序 = 文件序）。 */
+/** 表情表：OpenMoji 常用子集顺序 + 面板分组（`start`/`count` 与条目下标对齐，组序 = 文件序）。 */
 object EmojiData {
     data class Group(val label: String, val start: Int, val count: Int)
 
