@@ -185,7 +185,12 @@ stage="$out/pkgroot"
 mkdir -p "$stage/Library/Input Methods"
 cp -R "$APP" "$stage/Library/Input Methods/"
 pkg="$out/opi-inputmethod-$version-unsigned.pkg"
+# 装前停旧进程（2026-10-17 用户报障「装完还是旧版本」的 macOS 版）：脚本随包编入，
+# 装/升级时由 installer 以 root 跑 preinstall（见 macos/scripts/preinstall 头注）。
+# 构建期给一条语法门禁 —— 脚本坏在 pkgbuild 里只会得到一条晦涩的警告。
+sh -n macos/scripts/preinstall || { echo "!! macos/scripts/preinstall 语法错" >&2; exit 1; }
 pkgbuild --root "$stage" --identifier "$BUNDLE_ID.pkg" --version "$version" \
+  --scripts macos/scripts \
   --install-location / "$pkg"
 rm -rf "$stage"
 # pkg 里「有没有东西」要真读一遍：pkgbuild 对空 root **不报错**，会产出一个

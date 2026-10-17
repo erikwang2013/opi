@@ -199,7 +199,7 @@ gh run download <run-id> -n "opi-apple-rust-v$(bash scripts/apple/version.sh)"  
 
 | 产物名（版本号 = `Cargo.toml` 的 `[workspace.package] version`，唯一取法在 `scripts/apple/version.sh`） | 内容 |
 |---|---|
-| `opi-macos-ime-v<版本>` | `OpiInputMethod.app`（**通用** arm64+x86_64、ad-hoc 签名、内含 `Contents/Frameworks/libopi_ffi.dylib` 与 `Resources/opi.tiff`）· `opi-inputmethod-<版本>-unsigned.pkg`（装到 `/Library/Input Methods/`）· `opi-inputmethod-<版本>-unsigned.zip`（用户级安装用） |
+| `opi-macos-ime-v<版本>` | `OpiInputMethod.app`（**通用** arm64+x86_64、ad-hoc 签名、内含 `Contents/Frameworks/libopi_ffi.dylib` 与 `Resources/opi.tiff`）· `opi-inputmethod-<版本>-unsigned.pkg`（装到 `/Library/Input Methods/`；2026-10-17 起 pkgbuild 带 `--scripts macos/scripts`：**装/升级前自动 killall 旧 IME 进程**，构建期有 `sh -n` 语法门禁；**未在真 macOS 上装过**）· `opi-inputmethod-<版本>-unsigned.zip`（用户级安装用） |
 | `opi-apple-rust-v<版本>`（rust job） | `macos/libopi_ffi.dylib` 与 `macos/libopi_ffi.a`（都是**通用**库）· `headers/OpiFFI.h` · `opi_ffi.xcframework`（iOS 用） |
 
 **这次 run 真实证明了什么**（run 37935240583，证据都在 job 日志里，可复核）：
@@ -266,6 +266,10 @@ mkdir -p ~/Library/Input\ Methods
 cp -R OpiInputMethod.app ~/Library/Input\ Methods/
 
 # 2) 若旧版本正在跑，先杀掉（否则系统仍在用旧二进制；改完必须重来这一步）
+#    ⚠️ 只有 **zip/cp 这条用户级安装路**要手做：pkg 安装路自 2026-10-17 起由
+#    macos/scripts/preinstall 自动完成（pkgbuild --scripts 随包编入；装/升级前
+#    killall 旧 IME 进程 —— 与 Linux 的 deb/rpm 维护脚本、Windows MSI 的 taskkill
+#    同一条语义）。杀掉之后由 imklaunchagent 按需拉起，下一次输入就是新版。
 killall OpiInputMethod 2>/dev/null || true
 
 # 3) 词库（可选；不放则用内置回退库，候选质量会明显下降）

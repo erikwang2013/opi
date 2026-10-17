@@ -16,6 +16,16 @@
 #     CMakeLists 只装 fcitx5 侧的胶水与数据，opi-ctl 由 build-packages.sh 里的
 #     cargo 现编；cargo 装不了 /usr/bin，落点只能在这里声明，一处。
 
+# 维护脚本（2026-10-17 用户裁决「安装的时候中断正在运行的应用，安装后启动」的
+# Linux 等价物 —— Windows MSI 那套由 postprocess-windows-msi.sh 的 taskkill +
+# WixShellExec 承担）。deb 与 rpm 共用这三份（nfpm 分别装成 preinst/postinst/
+# prerm 与 %pre/%post/%preun）。理由与边界写在各自的文件头。
+# 路径相对**本文件所在目录**（nfpm 按配置文件目录解析）。
+scripts:
+  preinstall: packaging/preinstall.sh
+  postinstall: packaging/postinstall.sh
+  preremove: packaging/preremove.sh
+
 name: opi
 arch: ${PKG_ARCH}
 platform: linux

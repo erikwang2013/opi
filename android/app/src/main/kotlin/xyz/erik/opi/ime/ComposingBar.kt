@@ -4,7 +4,13 @@
 package xyz.erik.opi.ime
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -12,7 +18,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -85,6 +94,58 @@ fun ComposingBar(controller: EngineController, modifier: Modifier = Modifier) {
         // 也会让读屏多念一次空气）。
         if (hint.isNotEmpty()) {
             Text(hint, fontSize = 13.sp, color = p.barDimFg)
+        }
+    }
+}
+
+/**
+ * 顶部快捷条（2026-10-17 用户裁决「那你觉得放什么，默认顶部好空」）：与拼音行**共用**
+ * 那条 38dp 槽位 —— 输入中画 [ComposingBar]，空闲画本行。条目来自 [QuickPhrases]
+ * （最近上屏的词/短语，种子是内置常用语）；**点一下直接上屏、长按删除**。
+ * 底色与拼音行同一条 `barBg`（有内容才有带 —— 与候选槽的同一条纪律）。
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun QuickPhraseBar(
+    phrases: List<String>,
+    onTap: (String) -> Unit,
+    onRemove: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val p = LocalKeyboardPalette.current
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(COMPOSING_BAR_HEIGHT_DP.dp)
+            .background(p.barBg)
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        phrases.forEach { text ->
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(p.keyBg)
+                    .combinedClickable(
+                        onClick = { onTap(text) },
+                        onLongClick = { onRemove(text) },
+                    )
+                    .padding(horizontal = 10.dp, vertical = 3.dp)
+                    .semantics {
+                        contentDescription = text
+                        // 长按删除不可发现：读屏至少给一条能念出来的动作（同候选栏那条纪律）。
+                        customActions = listOf(
+                            CustomAccessibilityAction("从快捷条删除") {
+                                onRemove(text)
+                                true
+                            },
+                        )
+                    },
+            ) {
+                Text(text, fontSize = 13.sp, color = p.keyFg)
+            }
         }
     }
 }

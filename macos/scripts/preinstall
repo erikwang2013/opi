@@ -1,0 +1,29 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 erik.xyz
+# SPDX-License-Identifier: MIT
+#
+# pkg 的 preinstall（装/升级**之前**跑）：停掉正在运行的旧 OpiInputMethod。
+#
+# 2026-10-17 用户报障「装完设置里还是旧版本」的 macOS 等价物：安装包只替换磁盘上的
+# .app，**已经在跑的 IME 进程继续跑旧代码**。Linux 端由 deb/rpm 的
+# scripts/packaging/preinstall.sh 承担，Windows 端由 postprocess-windows-msi.sh 的
+# taskkill 承担；这里是 macOS 那一格。
+#
+# 「装后启动」在 macOS 上是**系统代劳**：输入法进程由 imklaunchagent 按需拉起 ——
+# 杀掉之后，下一次输入/切换输入法时系统启动的就是新装进 /Library/Input Methods 的
+# 新版本，不需要这里显式 open。
+#
+# ⚠️ 证据档位：本脚本随 pkg 编进安装包（scripts/apple/package-macos.sh 的 pkgbuild
+# --scripts，构建期有 `sh -n` 语法门禁），但**从未在真 macOS 上装过**——与 macos/
+# 其余部分的现状一致（见 macos/README.md 的「未验证」清单）。
+set -u
+
+killall OpiInputMethod 2>/dev/null || true
+i=0
+while pgrep -q OpiInputMethod 2>/dev/null && [ "$i" -lt 20 ]; do
+    sleep 0.1
+    i=$((i + 1))
+done
+killall -9 OpiInputMethod 2>/dev/null || true
+
+exit 0

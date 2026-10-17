@@ -265,6 +265,7 @@ class OpiImeService : InputMethodService() {
             window?.window?.let { applyKeyboardWindow(it) }
         }
         imeState.restore(prefs.inputMode, prefs.keyboardModes, prefs.skin)
+        prefs.bindQuickPhrases(imeState) // 快捷条（2026-10-17）：恢复 + 变更落盘
         val view = ComposeView(this)
         // 生命周期接线：置 CREATED（onWindowShown→RESUMED、onWindowHidden→STARTED、
         // onDestroy→DESTROYED），Compose 侧 remember/LaunchedEffect 依赖它。
@@ -274,7 +275,7 @@ class OpiImeService : InputMethodService() {
         lifecycleOwner.registry.currentState = Lifecycle.State.CREATED
         keyRouter = KeyRouter(
             controller = engineController,
-            commit = ::commitWithRetry,
+            commit = { t -> imeState.quickPhrases.record(t); commitWithRetry(t) }, // 快捷条取样
             deleteBackward = ::deleteBackward,
             performEnter = ::performEnter,
             // 提交后重推组合串（2026-10-13「确认后把所有内容替换」的修法，
@@ -282,7 +283,7 @@ class OpiImeService : InputMethodService() {
             syncComposing = { pushComposingText() },
         )
         // IME 提交通道在视图创建时注入（构造期无 this 引用；面板打开提交 pending buffer 用）
-        imeState.commit = ::commitWithRetry
+        imeState.commit = { t -> imeState.quickPhrases.record(t); commitWithRetry(t) } // 取样同上
         view.setContent {
             ImeScreen(
                 imeState, engineController, keyRouter, symbolCatalog,
@@ -476,8 +477,7 @@ class OpiImeService : InputMethodService() {
     override fun onWindowHidden() {
         super.onWindowHidden()
         Log.i(TAG, "onWindowHidden")
-        // 2026-10-17 裁决：整块键盘被隐藏即重置到默认界面（再打开就是默认键盘）。
-        // onWindowHidden 覆盖一切隐藏路径（返回键、收起键、切应用），且不碰引擎缓冲。
+        // 2026-10-17 裁决：隐藏即重置到默认界面（覆盖返回键/收起键/切应用；不碰引擎缓冲）。
         imeState.resetToDefaultView()
         lifecycleOwner.registry.currentState = Lifecycle.State.STARTED
     }

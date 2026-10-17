@@ -244,6 +244,22 @@ sudo apt-get -f install                        # Debian 系缺依赖时补
 **故意**的：把「装上了但静默不工作」换成一次显式拒绝。`nfpm.yaml` 里为此专门写了按格式
 分开的版本约束，读那段注释能看到理由。
 
+**装/升级/卸载时的进程处理（2026-10-17 起，随下一个版本发布）**：包内带维护脚本
+（`scripts/packaging/*.sh`，debian 的 `preinst/postinst/prerm`、rpm 的 `%pre/%post/%preun`）：
+
+- **装/升级前**（preinst）：停掉正在跑的 `opi-candidates`（先 TERM、3 秒后 KILL）——
+  dpkg/rpm 只换磁盘文件，**开着的旧窗口/状态栏会继续显示旧版本**（2026-10-17 用户报障
+  「装完设置里还是旧版本」的来源）；同时把当时的实例参数记到 `/run/opi-install.state`；
+- **装/升级成功后**（postinst）：按记录**以桌面用户**（`runuser -u $SUDO_USER`）把实例
+  按原参数拉回来；**没有 `SUDO_USER`**（软件中心类 GUI 安装）则跳过并说明 —— 设置窗
+  手动开一次即是新版；状态栏由会话 autostart 下次登录带回。已知边界：以 root 脚本的
+  环境变量拉起状态栏可能失败（进程直接退出、无副作用），待真机验证；
+- **卸载前**（prerm）：同样先停实例（否则出现「卸了还在跑」）。
+
+Windows 的 `.msi` 有等价物（`scripts/postprocess-windows-msi.sh` 的 taskkill +
+ExitDialog 自启）。**v1.9.8 及更早的 Linux 包没有这些脚本** —— 升级到带脚本的版本之前，
+手工 `pkill opi-candidates` 再重开即可看到新版本。
+
 卸载就是标准的 `dpkg -r opi` / `rpm -e opi`。**本插件自己不写任何用户状态**（学习结果
 目前不落盘，见 §7），所以 `~/.config/fcitx5` / `~/.local/share/fcitx5` 下不会有本插件
 留下的东西要手清 —— 那里若还有内容，属于 fcitx5 自身或别的 addon。

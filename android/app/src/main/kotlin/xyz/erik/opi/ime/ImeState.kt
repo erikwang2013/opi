@@ -101,6 +101,9 @@ class ImeState(
      */
     var persist: () -> Unit = {}
 
+    /** 顶部快捷条（2026-10-17 裁决「默认顶部好空」）：空闲时占拼音槽位的常用语。 */
+    val quickPhrases = QuickPhrases(QuickPhrases.DEFAULT)
+
     /** 上次的中文侧输入模式（9 键 ↔ 英文 往返时恢复用）。初始同偏好默认（9 键）。 */
     private var lastChineseMode = InputMode.PINYIN9
 
