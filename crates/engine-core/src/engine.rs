@@ -85,6 +85,11 @@ pub struct Engine {
     /// 数字后面点击 . 键默认只能是 .」）。空格/退格/清空/选词/切模式都清掉它 ——
     /// 「数字后面」只认紧邻；9 键输入码不算（缓冲非空守卫见 `input_punct`）。
     pub(crate) after_digit: bool,
+    /// 逐字确认的**已确认片段**（2026-10-17 用户裁决「确认一个字，依然在候选栏……
+    /// 直到最后的字匹配确认后，才是最后确认到输入框」）：(被消耗的拼音, 确认的文本)。
+    /// 非空 = 逐字态 —— 后续确认继续叠；**最后一次把缓冲吃完时整串一次性返回**。
+    /// 由 `engine_segment.rs::commit_buffer_after_select` 维护；⌫ 在缓冲空时回滚一段。
+    pub(crate) pending_segments: Vec<(String, String)>,
     /// 成对引号的交替状态（复位时机见 [`Quotes`]）。
     pub(crate) quotes: Quotes,
     /// 模糊音开关（「属性设置」可改；排序层的门控见 `candidates::RankOptions`）。
@@ -130,6 +135,7 @@ impl Engine {
             fullwidth: Mode::default().default_fullwidth(),
             chinese_punct: true,
             after_digit: false,
+            pending_segments: Vec::new(),
             quotes: Quotes::default(),
             // 模糊音**缺省关**（2026-10-15 用户裁决；逐对掩码 0 = 全关）。
             fuzzy: 0,
@@ -219,11 +225,20 @@ impl Engine {
                         return String::new();
                     }
                     self.composer.commit_buffer();
-                    buffer
+                    // 逐字态：已确认片段跟缓冲一起提交（2026-10-17）
+                    let mut out = self.take_pending_text();
+                    out.push_str(&buffer);
+                    out
                 } else {
                     let text = self.select_from(&cands, 0);
                     self.composer.commit_buffer(); // 空格 = 整段上屏：不留回退后缀（钉：adversarial_input.rs）
-                    text
+                    // 逐字确认（2026-10-17）与「空格 = 整段上屏」的交界：回退态下那次
+                    // select 会**延迟**（把片段攒进 pending）—— 空格在这里把它冲刷出来，
+                    // 返回完整文本（老语义：空格提交首候选、整段清空；钉子：
+                    // tests/segment_fallback.rs 的两条 space_flushes）。
+                    let mut out = self.take_pending_text();
+                    out.push_str(&text);
+                    out
                 }
             }
             // 符号模式：候选就是符号（缓冲是关键字）。无候选 → 空串，路由层据此回
@@ -242,7 +257,9 @@ impl Engine {
                 // `fullwidthize` 同一条规则与同一个开关 —— 用户裁决 2026-10-12）。
                 let buffer = self.composer.session().buffer.clone();
                 self.composer.commit_buffer();
-                self.fullwidthize(&buffer)
+                let mut out = self.take_pending_text(); // 逐字态：一并冲刷（2026-10-17）
+                out.push_str(&self.fullwidthize(&buffer));
+                out
             }
         }
     }
@@ -250,12 +267,21 @@ impl Engine {
     pub fn backspace(&mut self) {
         self.leave_symbol_browse_if_needed(); // 同 input_space（契约 ②；宿主路由是主路，这里是兜底）
         self.after_digit = false; // 退格 = 数字上下文结束
+        // 逐字态（2026-10-17）：缓冲空了再按 ⌫ ⇒ **撤销最后一个已确认的字**，它的拼音
+        // 回到缓冲接着编（不越过已提交的正文 —— 缓冲非空时 ⌫ 只退缓冲，见下面注释）。
+        if self.composer.session().buffer.is_empty()
+            && let Some((pinyin, _text)) = self.pending_segments.pop()
+        {
+            self.composer.commit_keep_suffix(&pinyin); // 缓冲 := 该段拼音
+            return;
+        }
         self.composer.backspace();
     }
 
     pub fn clear(&mut self) {
         self.symbol_browse.exit(); // 清会话 = 退出浏览（数据留着；面板随 buffer 空收起）
         self.after_digit = false; // 清会话 = 数字上下文结束
+        self.pending_segments.clear(); // 逐字态一并清（2026-10-17）
         self.composer.clear();
     }
 
@@ -265,6 +291,9 @@ impl Engine {
     /// **`chinese_punct` 不在此列**：它是用户偏好而非模式默认值（理由见字段注释）。
     pub fn switch_mode(&mut self, mode: Mode) {
         self.after_digit = false; // 切模式 = 数字上下文结束
+        // 逐字态清空（2026-10-17）：宿主切换前会先 commitPendingBuffer（走 input_space
+        // 冲刷），能走到这里的只有直调引擎的换模式口 —— 旧模式的拼音不该跨模式复活。
+        self.pending_segments.clear();
         self.fullwidth = mode.default_fullwidth();
         self.quotes.reset();
         self.composer.switch_mode(mode);
@@ -317,6 +346,20 @@ impl Engine {
 
     pub fn set_shift(&mut self, on: bool) {
         self.composer.set_shift(on);
+    }
+
+    /// 已确认但**尚未提交**的逐字片段（2026-10-17 裁决；显示走 `display_buffer`
+    /// 与各端预编辑）。最终提交时随最后一段一起返回给宿主。
+    pub fn pending_text(&self) -> String {
+        self.pending_segments
+            .iter()
+            .map(|(_, t)| t.as_str())
+            .collect()
+    }
+
+    /// 取走并拼接全部已确认片段（内部：`input_space` 收尾用）。
+    fn take_pending_text(&mut self) -> String {
+        self.pending_segments.drain(..).map(|(_, t)| t).collect()
     }
 
     pub fn buffer(&self) -> &str {
@@ -382,7 +425,9 @@ impl Engine {
             Some(c) => {
                 let text = c.text.clone();
                 self.learner.record_selection(&text);
-                self.commit_buffer_after_select(); // 分词回退态只消耗前缀（engine_segment.rs）
+                // 分词回退态只消耗前缀；**逐字态返回 None = 本轮不提交**（engine_segment.rs，
+                // 2026-10-17「确认一个字，依然在候选栏」）。
+                let commit = self.commit_buffer_after_select(&text);
                 // 符号模式一次一符号（用户裁决 2026-09-27）：提交后回拼音，不跨键保持
                 // ——下一次击键就是拼音，不需要先手动切回。放这一层是因为候选提交的收尾
                 // 只此一处：四端（fcitx5 / TSF / Android / Apple）自动一致，
@@ -390,7 +435,16 @@ impl Engine {
                 if self.composer.session().mode == Mode::Symbol {
                     self.switch_mode(Mode::Pinyin);
                 }
-                text
+                match commit {
+                    Some(full) => {
+                        // 逐字态收尾：整串也记一次 —— 下一次整词候选因此能顶上来。
+                        if full != text {
+                            self.learner.record_selection(&full);
+                        }
+                        full
+                    }
+                    None => String::new(),
+                }
             }
             None => String::new(),
         }

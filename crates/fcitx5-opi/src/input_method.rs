@@ -225,7 +225,7 @@ pub fn handle_key(state: &mut CandidateState, keyval: u32, states: u32) -> KeyAc
 
 /// 退格：缓冲非空 → 引擎删（引擎按码点删）；空缓冲 → 直通客户端。
 fn handle_backspace(state: &mut CandidateState) -> KeyAction {
-    if state.buffer().is_empty() {
+    if !state.has_composing() {
         KeyAction::PassThrough
     } else {
         state.backspace();
@@ -235,7 +235,7 @@ fn handle_backspace(state: &mut CandidateState) -> KeyAction {
 
 /// 空格：缓冲非空 → 引擎提交；空缓冲 → 直传 " "（镜像 `handleSpace`）。
 fn handle_space(state: &mut CandidateState) -> KeyAction {
-    if state.buffer().is_empty() {
+    if !state.has_composing() {
         // 空格**不宽化**（有意）：全角在拼音模式默认开，宽它会把这个高频动作换成
         // U+3000 —— 见 `Engine::fullwidthize` 头注的「空格不宽化」。
         KeyAction::Input(" ".to_string())
@@ -248,8 +248,11 @@ fn handle_space(state: &mut CandidateState) -> KeyAction {
 /// 设置位 —— 选首候选 / 清空 / 上屏原文；判据的单一实现在 `engine_enter.rs`）；
 /// 空缓冲 → 直通客户端（镜像 `handleEnter`）。
 fn handle_enter(state: &mut CandidateState) -> KeyAction {
-    if state.buffer().is_empty() {
+    if !state.has_composing() {
         KeyAction::PassThrough
+    } else if state.buffer().is_empty() {
+        // 逐字态收尾（2026-10-17）：片段还在候选区，回车 = 提交它们（同空格）。
+        commit_or_handled(state.input_space())
     } else {
         match state.engine.enter_action() {
             EnterAction::SelectFirst => commit_or_handled(state.select(0)),
@@ -378,11 +381,12 @@ fn digit_select(state: &mut CandidateState, c: char) -> KeyAction {
         };
         // 与 `select` 同一套换算与收尾，只是复用上面那次抓取
         let text = state.select_from(&fetched, idx as usize);
-        // 空串 = 页内没这一项（或无候选）→ 不消费，交客户端处理
-        if text.is_empty() {
+        // 空串且**没攒下逐字片段** = 页内没这一项（或无候选）→ 不消费，交客户端；
+        // 逐字确认（2026-10-17）的延迟提交同样是「选中了」—— 数字键必须被消费。
+        if text.is_empty() && state.engine.pending_text().is_empty() {
             KeyAction::PassThrough
         } else {
-            KeyAction::Input(text)
+            commit_or_handled(text)
         }
     } else {
         KeyAction::PassThrough

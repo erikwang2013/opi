@@ -131,6 +131,12 @@ class FakeEngine : OpiEngineApi {
     override fun displayBuffer(): String =
         displayBuf ?: (if (readingModel != null) cachedReading else buf)
 
+    /** 已确认的逐字片段（2026-10-17）：真引擎里它已前置进 displayBuffer；
+     *  假引擎分开存，测试按需设（「·」覆盖率换算要用它的长度）。 */
+    var pending = ""
+
+    override fun pendingText(): String = pending
+
     override fun mode(): Int = mode
 
     override fun learnerEnabled(): Boolean = learnerOn

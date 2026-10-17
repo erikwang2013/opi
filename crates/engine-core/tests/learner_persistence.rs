@@ -214,9 +214,16 @@ fn disabled_learner_still_loads_user_file() {
         "豪",
         "关掉学习不得影响用户词表载入（否则用户关一次开关，词库就没了）"
     );
-    // 但新选词不记录
+    // 但新选词不记录。注意直接选**当前候选**：别再 type_hao 一遍 —— 缓冲会变
+    // 「haohao」（多音节），按 2026-10-17 的逐字确认语义那次选中是延迟提交，
+    // 与本测试要测的「学习开关」无关（旧夹具两次打字只是历史写法）。
     let before = off.export_user_words();
-    select_word(&mut off, "号");
+    let idx = off
+        .candidates(8)
+        .iter()
+        .position(|c| c.text == "号")
+        .expect("候选里没有 号");
+    assert_eq!(off.select(idx), "号");
     assert_eq!(off.export_user_words(), before, "关闭学习后选词不得入库");
 }
 

@@ -227,6 +227,8 @@ object OpiEngine : OpiEngineApi, SymbolApi {
      */
     override external fun displayBuffer(): String
 
+    override external fun pendingText(): String
+
     override external fun mode(): Int
 
     /** searchSymbols(keyword: String) -> String[]。JNI 可能返回 null。 */

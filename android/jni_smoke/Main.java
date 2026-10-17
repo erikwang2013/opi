@@ -6,7 +6,6 @@
 //   java -Dopi.so=/path/to/libopi_ffi.so -cp /tmp/smoke-out xyz.erik.opi.jni.Main [/path/to/luna.opid]
 // 成功打印 SMOKE-OK；失败打印 FAIL: <原因> 并退出码 1。
 package xyz.erik.opi.jni;
-
 final class OpiEngine {
     static native boolean load(String path);
     static native String inputKey(String ch);
@@ -27,6 +26,7 @@ final class OpiEngine {
     static native void pinReading(String reading);
     static native String buffer();
     static native String displayBuffer();
+    static native String pendingText();
     static native int mode();
     static native String[] searchSymbols(String keyword);
     static native String[] emojiSymbols();

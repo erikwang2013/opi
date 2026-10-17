@@ -114,7 +114,9 @@ void refreshingPanelFor(fcitx::InputContext *ic) {
         panel.reset();
     } else {
         fcitx::Text preedit(buffer);
-        // 光标在预编辑串末尾（按字节；拼音缓冲是 ASCII，字节序即字符序）。
+        // 光标在预编辑串末尾（按字节）。2026-10-17 起缓冲可能带**逐字确认的汉字**
+        // （display_buffer 前置 pending，UTF-8 多字节）—— 这里的 size() 是字节长度，
+        // 与各引擎 setCursor(串字节长) 的惯例一致（光标落在末尾）。
         preedit.setCursor(static_cast<int>(buffer.size()));
         panel.setPreedit(preedit);
         // clientPreedit 是**另一条通道**，不是面板 preedit 的别名：

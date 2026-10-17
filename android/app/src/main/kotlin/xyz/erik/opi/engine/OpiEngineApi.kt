@@ -48,6 +48,9 @@ interface OpiEngineApi {
     /** 显示用的拼音读数（9 键 = 带分词的 `ni'hao`；其余方案与 [buffer] 相同）。
      * **行为判定不许用它** —— 用 [buffer]（理由见 OpiEngine.displayBuffer）。 */
     fun displayBuffer(): String
+
+    /** 已确认但尚未提交的逐字片段（2026-10-17 逐字确认；显示串里已含，这里要长度）。 */
+    fun pendingText(): String
     fun mode(): Int
 
     /** 删除一个用户词（连同频次）；非用户词/不存在无副作用。 */

@@ -263,6 +263,11 @@ impl Api {
     /// 分支）—— 9 键无候选时读数恰为空串 ⇒ 回退走了 `deleteBackward()`（删的是
     /// **编辑器里的文字**，引擎缓冲里的数字没退），连着打字看不出任何变化 ⇒
     /// 用户报「键盘没反应」。显示是显示，判定是判定。
+    /// 已确认但尚未提交的逐字片段（2026-10-17 逐字确认；安卓点号换算与显示用）。
+    pub fn pending_text(&self) -> String {
+        self.router.engine().pending_text()
+    }
+
     pub fn display_buffer(&self) -> String {
         self.router.engine().display_buffer()
     }

@@ -118,6 +118,12 @@ impl KeyRouter {
         self.refresh_snapshot();
     }
 
+    /// 已确认未提交的逐字片段（2026-10-17 逐字确认）：空格冲刷 = 片段 + 原文的
+    /// 复合提交，路由不变式据此识别那种提交（`router_invariants.rs`）。
+    pub fn pending_text(&self) -> String {
+        self.engine().pending_text()
+    }
+
     pub fn buffer(&self) -> String {
         self.engine.buffer().to_string()
     }

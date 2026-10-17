@@ -69,3 +69,11 @@ pub unsafe extern "system" fn opijni_display_buffer(env: JEnv, _class: sys::jcla
     let out = guard(|| api::with_engine(|e| e.display_buffer()).unwrap_or_default());
     unsafe { jni_util::rust_to_jstring(env, &out) }
 }
+
+/// 已确认的逐字片段（2026-10-17 逐字确认）：显示串里已含它（display_buffer 前置），
+/// 安卓另需**长度**来修正 9 键「·」待编标记的覆盖率换算。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_pending_text(env: JEnv, _class: sys::jclass) -> jstring {
+    let out = guard(|| api::with_engine(|e| e.pending_text()).unwrap_or_default());
+    unsafe { jni_util::rust_to_jstring(env, &out) }
+}

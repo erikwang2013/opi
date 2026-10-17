@@ -8,7 +8,10 @@
 //!    一个音节 —— 三者全成立才回退；
 //! 2. **候选**：从最长的音节对齐前缀往短试，第一个「每段都是完整音节 + 词库有命中」的
 //!    前缀胜出，候选换成**它**的整档（递归走同一条精确/模糊/简拼分档，不另起一套排序）；
-//! 3. **选中**：提交该候选文本、缓冲**只消耗那个前缀**、剩下的后缀留着接着编
+//! 3. **选中**：~~提交该候选文本~~ **【订正 2026-10-17】** 逐字确认落地后，回退态的
+//!    选中是**延迟提交**（`Enum`：本轮 `select` 返回空串、文本进 `pending_text()`
+//!    留在候选区；最后一字确认才整串提交 —— 见 tests/segment_commit.rs 与本文件的
+//!    逐条更新）。缓冲**只消耗那个前缀**、剩下的后缀留着接着编
 //!    （`nihaob` 选「你好」→ 缓冲变 `b`）；提交文本/学习/清缓冲的收尾仍是 `select_from`
 //!    那一处（四端自动一致）；
 //! 4. **读数**：26 键回退态下 `display_buffer()` 仍是**用户打的整串**（预编辑不缩水）、
@@ -99,7 +102,9 @@ fn no_match_falls_back_to_longest_prefix_and_keeps_the_suffix() {
         vec!["你好", "你好啊", "利好"],
         "回退档 = 最长前缀 `nihao` 的整档"
     );
-    assert_eq!(e.select(0), "你好");
+    // 2026-10-17 逐字确认：回退态选中 = 延迟提交（片段留在候选区）
+    assert_eq!(e.select(0), "", "回退态选中延迟提交");
+    assert_eq!(e.pending_text(), "你好");
     assert_eq!(e.buffer(), "b", "只消耗前缀：剩下的后缀留在缓冲里接着编");
     // 接着编：`b` + `ao` = `bao` → 包（后缀是真缓冲，不是摆设）
     type_str(&mut e, "ao");
@@ -115,10 +120,9 @@ fn digit_key_keeps_the_suffix_too() {
     for c in "nihaob".chars() {
         r.key_event(c as u32, 0);
     }
-    assert_eq!(
-        r.key_event('1' as u32, 0),
-        KeyAction::Input("你好".to_string())
-    );
+    // 2026-10-17 逐字确认：回退态的数字选词同样延迟（不提交，片段留在候选区）
+    assert_eq!(r.key_event('1' as u32, 0), KeyAction::EngineHandled);
+    assert_eq!(r.pending_text(), "你好");
     assert_eq!(r.buffer(), "b", "数字选词同样只消耗前缀");
 }
 
@@ -144,7 +148,12 @@ fn readings_stay_consistent_in_fallback_state() {
         "26 键没有逐条读音出口（9/14 专用），回退不改变这一点"
     );
     e.select(0);
-    assert_eq!(e.display_buffer(), "b", "选中后读数随缓冲走到后缀");
+    // 2026-10-17 逐字确认：显示串前缀已确认的字（片段 + 剩余缓冲）
+    assert_eq!(
+        e.display_buffer(),
+        "你好b",
+        "选中后显示 = 已确认片段 + 后缀"
+    );
     assert!(e.candidate_readings().is_empty());
 }
 
@@ -256,7 +265,8 @@ fn nine_key_drops_the_incomplete_tail_and_keeps_it_in_the_buffer() {
         "ni'hao",
         "9 键读数照旧是首条候选的拼音（回退不把左列打空）"
     );
-    assert_eq!(nine.select(0), "你好");
+    assert_eq!(nine.select(0), "", "回退态选中延迟提交（2026-10-17）");
+    assert_eq!(nine.pending_text(), "你好");
     assert_eq!(nine.buffer(), "9", "只消耗前缀的键：尾部键留下接着编");
 }
 
@@ -273,7 +283,8 @@ fn fourteen_key_covers_the_same_fallback() {
         vec!["你好", "你好啊", "利好"],
         "14 键同一条回退：bugao（nihao 的键）+ 尾 m"
     );
-    assert_eq!(e14.select(0), "你好");
+    assert_eq!(e14.select(0), "", "回退态选中延迟提交（2026-10-17）");
+    assert_eq!(e14.pending_text(), "你好");
     assert_eq!(e14.buffer(), "m", "尾部键留在缓冲里接着编");
 }
 
@@ -321,7 +332,8 @@ fn live_digit_tail_is_still_kept() {
         cands.contains(&"你好".to_string()),
         "前缀档仍是 nihao 一族：{cands:?}"
     );
-    assert_eq!(e.select(0), "你好");
+    assert_eq!(e.select(0), "", "回退态选中延迟提交（2026-10-17）");
+    assert_eq!(e.pending_text(), "你好");
     assert_eq!(
         e.buffer(),
         "226",

@@ -342,7 +342,8 @@ pub unsafe extern "C" fn opi_fcitx5_candidates(limit: usize) -> OpString {
 pub unsafe extern "C" fn opi_fcitx5_buffer() -> OpString {
     ensure_panic_hook();
     let out = catch_unwind(AssertUnwindSafe(|| {
-        with_state(|s| s.buffer()).unwrap_or_default()
+        // 2026-10-17：显示串（已确认逐字片段 + 真缓冲）—— 预编辑读这里。
+        with_state(|s| s.display_buffer()).unwrap_or_default()
     }))
     .unwrap_or_default();
     OpString::from_utf8(&out)

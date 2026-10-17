@@ -101,8 +101,11 @@ class ImeState(
      */
     var persist: () -> Unit = {}
 
-    /** 顶部快捷条（2026-10-17 裁决「默认顶部好空」）：空闲时占拼音槽位的常用语。 */
-    val quickPhrases = QuickPhrases(QuickPhrases.DEFAULT)
+    /** 四季花纹当前季节（2026-10-17 裁决）：空闲槽位画 SeasonBand；隐藏/关闭时重校准。 */
+    var season by mutableStateOf(currentSeason())
+        private set
+
+    fun recalibrateSeason() = run { season = currentSeason() }
 
     /** 上次的中文侧输入模式（9 键 ↔ 英文 往返时恢复用）。初始同偏好默认（9 键）。 */
     private var lastChineseMode = InputMode.PINYIN9
@@ -468,7 +471,9 @@ class ImeState(
 
     /** 打开面板前提交 pending 拼音：有候选选第一个提交；无候选的乱码缓冲（如 abc）清掉。 */
     private fun commitPendingBuffer() {
-        if (controller.buffer.isEmpty()) return
+        // 逐字态（2026-10-17）：缓冲可能已空、但还有片段停在候选区 —— 一并收尾，
+        // 否则开面板切模式会把它们静默清掉（engine.switch_mode 清 pending）。
+        if (controller.buffer.isEmpty() && controller.pendingText.isEmpty()) return
         // 数字模式的缓冲**就是要上屏的文本本身**（引擎 Number 模式：数字进缓冲、收尾时
         // 原样提交）。走下面的「有候选选第一个」会落进「无候选就清掉」那支 —— 数字串
         // 没有候选，等于把用户刚打的 123 吃掉。inputSpace 是引擎里 Number 的那条收尾。
@@ -478,11 +483,18 @@ class ImeState(
             return
         }
         if (controller.candidates.isEmpty()) {
+            if (controller.pendingText.isNotEmpty()) {
+                // 只有逐字片段（缓冲已空）：先把片段上屏，再清残留。
+                val text = controller.inputSpace()
+                if (text.isNotEmpty()) commit(text)
+            }
             controller.clear()
             return
         }
         val text = controller.select(0)
         if (text.isNotEmpty()) commit(text)
-        else controller.clear() // select 返回空（引擎异常）：清掉 buffer 不留残留
+        // 逐字态下 select 返回空串 = **延迟提交**（片段留在候选区），不许清；
+        // 真正的引擎异常（无片段）才清残留。
+        else if (controller.pendingText.isEmpty()) controller.clear()
     }
 }

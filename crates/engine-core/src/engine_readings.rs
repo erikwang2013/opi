@@ -25,6 +25,9 @@ impl Engine {
     /// 缓冲也不是拼音，一律回本体）。FFI 的 buffer 出口读这里 —— 别的端没有 9 键
     /// 方案，读到的与原值逐字节相同。
     pub fn display_buffer(&self) -> String {
+        // 逐字确认态（2026-10-17）：已确认的字**留在候选区** —— 显示串以它们打头
+        // （「中guo」），四端预编辑/拼音行都读这一份。
+        let mut out = self.pending_text();
         if matches!(self.mode(), Mode::Pinyin | Mode::Traditional)
             && matches!(self.scheme(), Scheme::Nine | Scheme::Shuangpin)
         {
@@ -33,12 +36,13 @@ impl Engine {
             let cached = self.scheme_readings.borrow();
             // 缓冲变了（提交/退格/清空）而读数还是旧缓冲那一次算的 ⇒ 作废，报空串 ——
             // 界面按「读不到拼音」处理（左列回标点列）。下次 candidates() 会按新缓冲重算。
-            if cached.0 != self.buffer() {
-                return String::new();
+            if cached.0 == self.buffer() {
+                out.push_str(cached.1.first().map(String::as_str).unwrap_or_default());
             }
-            return cached.1.first().cloned().unwrap_or_default();
+            return out;
         }
-        self.buffer().to_string()
+        out.push_str(self.buffer());
+        out
     }
 
     /// 候选拼音读数（已分词），**去重 + 按长度短→长**（2026-10-12 晚用户裁决

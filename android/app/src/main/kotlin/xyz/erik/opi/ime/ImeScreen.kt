@@ -99,15 +99,11 @@ fun ImeScreen(
             if (state.view == ImeState.View.QWERTY || state.view == ImeState.View.RARE ||
                 state.view == ImeState.View.CANDIDATES_TILED
             ) {
-                // 顶部共用槽位（2026-10-17 裁决「默认顶部好空」）：输入中画拼音行、
-                // 空闲画快捷条（最近上屏的词/短语；点=上屏、长按=删除）。同一 38dp
-                // 槽位两种内容 —— 与「候选|工具条共用一格」同一套哲学；高度不变。
+                // 顶部共用槽位（2026-10-17 裁决）：输入中画拼音行、空闲画**四季花纹
+                // 边框**（随本地日期换季的凸起纹样；记录短语那条已按同日裁决撤掉）。
+                // 同一 38dp 槽位两种内容 —— 与「候选|工具条共用一格」同一套哲学。
                 if (controller.composingText().isEmpty() && controller.wubiHint.isEmpty()) {
-                    QuickPhraseBar(
-                        phrases = state.quickPhrases.items,
-                        onTap = router::commitText,
-                        onRemove = state.quickPhrases::remove,
-                    )
+                    SeasonBand(season = state.season)
                 } else {
                     ComposingBar(controller)
                 }

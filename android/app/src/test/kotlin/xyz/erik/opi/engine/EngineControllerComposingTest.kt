@@ -39,6 +39,27 @@ class EngineControllerComposingTest {
     }
 
     @Test
+    fun confirmedCharsDoNotInflateTheNineKeyDotCount() {
+        // 逐字确认（2026-10-17）：已确认的字已前置进读数（displayBuffer 带 pending），
+        // 但它们的键位**已被消耗**（不在缓冲里）——「·」覆盖率换算要减掉它们，
+        // 否则点号按字数少算（1 个已确认字 = 少 1 个点，待编反馈就是假的）。
+        val fake = FakeEngine().apply {
+            schemeValue = InputScheme.NINE.value
+            buf = "66666" // 5 键待编尾巴
+            displayBuf = "中mo'mo" // 已确认「中」+ 覆盖 4 键的读数
+            pending = "中"
+        }
+        val ctrl = EngineController(fake)
+        assertEquals("中mo'mo·", ctrl.composingText())
+        // 对照：同样的读数形态但不带已确认字 —— 历史行为不变
+        fake.displayBuf = "mo'mo"
+        fake.pending = ""
+        fake.buf = "6666"
+        ctrl.refresh()
+        assertEquals("mo'mo", ctrl.composingText())
+    }
+
+    @Test
     fun composingTextMarksKeysNotCoveredByTheReading() {
         // 9 键点候选确认后残留的尾巴（用户报障的核心形态）：读数只覆盖「最长可匹配
         // 前缀」，没被覆盖的键以前完全不显示 ⇒ 再按新键时读数与候选一字不变。

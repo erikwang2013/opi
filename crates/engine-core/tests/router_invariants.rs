@@ -353,6 +353,7 @@ fn paging_invariants_under_random_keys() {
         let mut r = router_with(20);
         for k in &keys {
             let buffer_before = r.buffer();
+            let pending_before = r.pending_text();
             let page_before = r.page();
             let cands_before = r.candidates();
             let global_first = reachable(&r).first().cloned();
@@ -370,7 +371,19 @@ fn paging_invariants_under_random_keys() {
                     let hit = t == " "
                         || Some(&t) == global_first.as_ref()
                         || cands_before.contains(&t)
-                        || (cands_before.is_empty() && t == buffer_before);
+                        || (cands_before.is_empty() && t == buffer_before)
+                        // 逐字态空格收尾（2026-10-17）：片段 + 原文的复合提交
+                        // 逐字态（2026-10-17）：片段与某个候选的**复合提交** ——
+                        // 选词（片段+该候选）或空格收尾（片段+原文/首候选）。
+                        || (!pending_before.is_empty()
+                            && (t == format!("{pending_before}{buffer_before}")
+                                // 选词：片段 + 某候选；空格：片段 + **全量首位**
+                                || cands_before
+                                    .iter()
+                                    .any(|c| t == format!("{pending_before}{c}"))
+                                || global_first
+                                    .as_ref()
+                                    .is_some_and(|g| t == format!("{pending_before}{g}"))));
                     // 这里曾有一条「数字越页」豁免，随 `digit_beyond_page_must_not_commit_hidden_candidate`
                     // 一起修掉了：页内越界的数字现在直通，走不到本分支。
                     prop_assert!(hit,

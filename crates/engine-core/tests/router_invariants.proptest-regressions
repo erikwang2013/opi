@@ -4,4 +4,4 @@
 #
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
-cc 362ecdaa34d8d0f0ec17cc428f5b041b29167276c2783c7f0d90a58becbef3ac # shrinks to keys = [104, 57]
+cc 7319610e2c5017e7201687b5b425cf728d3d35c3c6dfd1089ac8623d92a3a6d2 # shrinks to keys = [104, 97, 104, 49, 49]

@@ -48,11 +48,13 @@ impl KeyRouter {
             };
             // 与 `select` 同一套换算与收尾，只是复用上面那次抓取
             let text = self.select_from(&fetched, idx as usize);
-            // 空串 = 页内没这一项（或无候选）→ 不消费，交客户端处理
-            if text.is_empty() {
+            // 空串且**没攒下逐字片段** = 页内没这一项（或无候选）→ 不消费，交客户端；
+            // 逐字确认（2026-10-17）的延迟提交同样是「选中了」（文本进了候选区）——
+            // 数字键必须被消费，否则它还会漏进输入框。
+            if text.is_empty() && self.pending_text().is_empty() {
                 KeyAction::PassThrough
             } else {
-                KeyAction::Input(text)
+                super::commit_or_handled(text)
             }
         } else {
             KeyAction::PassThrough

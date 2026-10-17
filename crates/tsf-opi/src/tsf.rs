@@ -91,7 +91,7 @@ pub trait TsfSink: Send + Sync {
 /// 症状是"切了模式/点了候选，窗口还显示旧内容"。
 pub(crate) fn push_state(sink: &dyn TsfSink, logic: &TsfLogic) {
     sink.on_composition_changed(
-        &logic.buffer(),
+        &logic.display_buffer(), // 2026-10-17：候选窗显示带已确认的逐字片段
         &logic.candidates(),
         logic.page(),
         logic.page_count(),

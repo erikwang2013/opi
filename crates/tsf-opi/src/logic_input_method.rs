@@ -249,7 +249,7 @@ impl TsfLogic {
 
     /// 退格：缓冲非空 → 引擎删（引擎按码点删）；空缓冲 → 交应用。
     fn handle_backspace(&mut self) -> KeyOutcome {
-        if self.buffer().is_empty() {
+        if !self.has_composing() {
             KeyOutcome::Unhandled
         } else {
             self.backspace();
@@ -259,7 +259,7 @@ impl TsfLogic {
 
     /// 空格：缓冲非空 → 引擎提交；空缓冲 → 提交 " "（镜像 `handleSpace`）。
     fn handle_space(&mut self) -> KeyOutcome {
-        if self.buffer().is_empty() {
+        if !self.has_composing() {
             // 空格**不宽化**（有意）：全角在拼音模式默认开，宽它会把这个高频动作换成
             // U+3000 —— 见 `Engine::fullwidthize` 头注的「空格不宽化」。
             KeyOutcome::Commit(" ".to_string())
@@ -272,8 +272,11 @@ impl TsfLogic {
     /// 设置位 —— 选首候选 / 清空 / 上屏原文；判据的单一实现在 `engine_enter.rs`）；
     /// 空缓冲 → 交应用（镜像 `handleEnter`）。
     fn handle_enter(&mut self) -> KeyOutcome {
-        if self.buffer().is_empty() {
+        if !self.has_composing() {
             KeyOutcome::Unhandled
+        } else if self.buffer().is_empty() {
+            // 逐字态收尾（2026-10-17）：片段还在候选区，回车 = 提交它们（同空格）。
+            commit_or_changed(self.input_space())
         } else {
             match self.engine.enter_action() {
                 EnterAction::SelectFirst => commit_or_changed(self.select(0)),
@@ -402,11 +405,12 @@ impl TsfLogic {
             };
             // 与 `select` 同一套换算与收尾，只是复用上面那次抓取
             let text = self.select_from(&fetched, idx as usize);
-            // 空串 = 页内没这一项（或无候选）→ 不消费，交客户端处理
-            if text.is_empty() {
+            // 空串且**没攒下逐字片段** = 页内没这一项（或无候选）→ 不消费，交客户端；
+            // 逐字确认（2026-10-17）的延迟提交同样是「选中了」—— 数字键必须被消费。
+            if text.is_empty() && self.engine.pending_text().is_empty() {
                 KeyOutcome::Unhandled
             } else {
-                KeyOutcome::Commit(text)
+                commit_or_changed(text)
             }
         } else {
             KeyOutcome::Unhandled

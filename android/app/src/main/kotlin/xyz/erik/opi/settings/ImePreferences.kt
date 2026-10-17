@@ -65,24 +65,6 @@ class ImePreferences(private val store: PrefStore) {
             ?: InputMode.PINYIN9
         set(v) = store.put(KEY_INPUT_MODE, v.name)
 
-    /**
-     * 快捷条条目（2026-10-17；`QuickPhrases.SEP` 分隔）。未存过 → 内置常用语；
-     * **存过空串 = 用户清空过**（不回种子 —— 与「删过不复活」同一条纪律）。
-     * 损坏值原样返回，由 `QuickPhrases.sanitize` 清洗。
-     */
-    /** 快捷条与 ImeState 的接线（服务构造期调一次）：恢复上次条目 + 变更即落盘。 */
-    fun bindQuickPhrases(state: xyz.erik.opi.ime.ImeState) {
-        state.quickPhrases.replaceWith(recentPhrases)
-        state.quickPhrases.onChanged = { recentPhrases = it }
-    }
-
-    var recentPhrases: List<String>
-        get() = store.getString(KEY_QUICK_PHRASES)
-            ?.split(xyz.erik.opi.ime.QuickPhrases.SEP)
-            ?.filter { it.isNotEmpty() }
-            ?: xyz.erik.opi.ime.QuickPhrases.DEFAULT
-        set(v) = store.put(KEY_QUICK_PHRASES, v.joinToString(xyz.erik.opi.ime.QuickPhrases.SEP))
-
     var keyboardModes: KeyboardModes
         get() = KeyboardModes(
             floating = store.getBoolean(KEY_FLOATING, false),
@@ -252,7 +234,6 @@ class ImePreferences(private val store: PrefStore) {
         const val KEY_WUBI_RETURN = "wubi_return"
         const val KEY_WUBI_AUTO_COMMIT = "wubi_auto_commit"
         const val KEY_DISABLED_DICTS = "dicts_disabled"
-        const val KEY_QUICK_PHRASES = "quick_phrases"
 
         fun from(context: Context): ImePreferences = ImePreferences(AndroidPrefStore(context))
     }

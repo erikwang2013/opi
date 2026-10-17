@@ -28,8 +28,15 @@ use crate::engine::Engine;
 use crate::scheme::{Scheme, scheme_fallback_len};
 
 impl Engine {
-    /// 候选选中后的缓冲收尾：**回退态只消耗前缀**，后缀留在缓冲里接着编；
-    /// 其余情况照旧整段清空（[`crate::composer::Composer::commit_buffer`]）。
+    /// 候选选中后的缓冲收尾（2026-10-17 起带**逐字确认/延迟提交**）：
+    /// **回退态只消耗前缀**，后缀留在缓冲里接着编 —— 且这一轮的选中文本**不提交**
+    /// （返回 `None`，存进 `pending_segments` 留在候选区显示）；
+    /// 其余情况整段清空并返回**待提交的整串**（已确认片段 + 本轮文本）。
+    ///
+    /// 用户裁决（2026-10-17）：「输入一个词组，匹配到的在最前面；到没有匹配，就要先
+    /// 匹配前面的第一个字……确认一个字，依然在候选栏；然后依次匹配后面的字，直到最后
+    /// 的字匹配确认后，才是最后确认到输入框。可参考搜狗输入法。」
+    /// 门禁：`tests/segment_commit.rs`。
     ///
     /// 调用点在 `Engine::select_from` 的命中分支（**唯一**的收尾处，四端自动一致）。
     /// 三条边界与候选层逐字同源：方案只在全键盘/笔画（分词回退）与 9/14 键
@@ -38,7 +45,7 @@ impl Engine {
     /// 同一个，两侧必同结论（见 `scheme_fallback_len` 的判据 3）。笔画方案带笔画词典
     /// 时 `segment_fallback` 恒 `None`（笔画串的段不可能是完整音节），故这里用
     /// `active_dict()` 与候选层的键差无关紧要。
-    pub(crate) fn commit_buffer_after_select(&mut self) {
+    pub(crate) fn commit_buffer_after_select(&mut self, selected: &str) -> Option<String> {
         let fallback = if !matches!(self.mode(), Mode::Pinyin | Mode::Traditional) {
             None
         } else {
@@ -66,10 +73,20 @@ impl Engine {
         };
         match fallback {
             Some(suffix) => {
+                // 逐字态（2026-10-17）：被消耗的前缀（拼音）与确认文本一起入栈，
+                // 缓冲只剩后缀 —— **本轮不提交**（None），显示由 display_buffer 带上。
+                let buffer = self.composer.session().buffer.clone();
+                let consumed = buffer[..buffer.len() - suffix.len()].to_string();
+                self.pending_segments.push((consumed, selected.to_string()));
                 self.composer.commit_keep_suffix(&suffix);
+                None
             }
             None => {
                 self.composer.commit_buffer();
+                // 收尾：已确认片段 + 本轮文本 = 一次性进输入框的整串。
+                let mut out: String = self.pending_segments.drain(..).map(|(_, t)| t).collect();
+                out.push_str(selected);
+                Some(out)
             }
         }
     }

@@ -76,6 +76,10 @@ class EngineController(
      * 名次）—— 9 键左列用（2026-10-09 用户裁决「一列多个、可滑动查看」；
      * 2026-10-12 用户裁决「左列去重」，去重发生在引擎出口）。 */
     var candidateReadings by mutableStateOf<List<String>>(emptyList())
+
+    /** 已确认但未提交的逐字片段（2026-10-17）：显示串里已含（displayBuffer 前置），
+     *  这属性只给「·」待编标记的覆盖率换算用（见 composingText.kt 的 pendingKeyMark）。 */
+    var pendingText by mutableStateOf("")
         private set
 
     /** 钉读音（9 键左列点一行拼音；空串 = 未钉）。候选收窄到**读音恰等**的条目、**不上屏**。 */
@@ -201,6 +205,7 @@ class EngineController(
         // 先读会拿到空串或上一条缓冲的旧值：2026-10-09 用户报障「确定候选词后左列
         // 不恢复标点」的 Kotlin 侧根因。**别把这个赋值挪回前面**（有单测钉次序）。
         reading = api.displayBuffer()
+        pendingText = api.pendingText()
         // 组合串同步点（必须最后）：服务层在此把「字段里的组合串」推给输入框。
         onBufferSynced()
     }

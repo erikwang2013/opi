@@ -65,7 +65,9 @@ internal fun EngineController.pendingCommitText(): String {
 private fun EngineController.pendingKeyMark(): String {
         if (inputScheme != InputScheme.NINE && inputScheme != InputScheme.FOURTEEN) return ""
         if (reading.isEmpty()) return ""
-        val covered = reading.count { it != '\'' }
+        // 已确认的逐字片段（2026-10-17）已前置进 reading，但它的键位**已被消耗**
+        // （不在 buffer 里）—— 覆盖率换算要先把它减掉，否则点号会按字数少算。
+        val covered = (reading.count { it != '\'' } - pendingText.length).coerceAtLeast(0)
         val pending = buffer.length - covered
         return if (pending > 0) "·".repeat(pending) else ""
     }

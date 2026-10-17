@@ -141,7 +141,9 @@ fn nine_key_fallback_accounting_is_bounded_scans_and_zero_queries() {
         "回退态一次抓取 = 主扫 + 存在性 + 见证者首探 + 前缀重扫 + 尾字母 1 次（宽松兜底档）"
     );
     v.store(0, Ordering::Relaxed);
-    assert_eq!(r.select(0), "你好");
+    // 逐字确认（2026-10-17）：回退态选中 = **延迟提交**（本轮不返回文本；
+    // 片段留在候选区，最后一字确认时才整串进输入框 —— tests/segment_commit.rs）。
+    assert_eq!(r.select(0), "", "回退态选中延迟提交");
     assert_eq!(
         v.load(Ordering::Relaxed),
         one_fetch + 2,

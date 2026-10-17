@@ -86,7 +86,7 @@ class KeyRouter(
     }
 
     fun handleSpace() {
-        if (controller.buffer.isNotEmpty()) {
+        if (controller.buffer.isNotEmpty() || controller.pendingText.isNotEmpty()) {
             val text = controller.inputSpace()
             if (text.isNotEmpty()) commitAndResync(text)
         } else {
@@ -97,13 +97,19 @@ class KeyRouter(
     }
 
     fun handleBackspace() {
-        if (controller.buffer.isNotEmpty()) controller.backspace()
+        if (controller.buffer.isNotEmpty() || controller.pendingText.isNotEmpty()) controller.backspace()
         else deleteBackward()
     }
 
     fun handleEnter() {
-        if (controller.buffer.isEmpty()) {
+        if (controller.buffer.isEmpty() && controller.pendingText.isEmpty()) {
             performEnter()
+            return
+        }
+        if (controller.buffer.isEmpty()) {
+            // 逐字态收尾（2026-10-17）：片段还在候选区 —— 回车 = 提交它们（同空格）。
+            val text = controller.inputSpace()
+            if (text.isNotEmpty()) commitAndResync(text)
             return
         }
         // 判据在引擎（2026-10-14 接线）：五笔读「回车行为」设置位 —— 1=清空、2=上屏原文

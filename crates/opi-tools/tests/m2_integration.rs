@@ -102,8 +102,10 @@ fn segment_fallback_on_real_luna_dictionary() {
     assert_eq!(eng.buffer(), "tament", "预编辑仍是整串");
     let got = texts(&eng);
     assert_eq!(got[0], "他们", "{got:?}");
-    // 选中只消耗前缀 —— 旧语义（逐音节汤）在这里会把整个缓冲清掉
-    assert_eq!(eng.select(0), "他们");
+    // 选中只消耗前缀 —— 旧语义（逐音节汤）在这里会把整个缓冲清掉。
+    // 2026-10-17 逐字确认：回退态选中**延迟提交**（本轮不返回文本，片段留在候选区）。
+    assert_eq!(eng.select(0), "", "回退态选中延迟提交");
+    assert_eq!(eng.pending_text(), "他们", "确认的字留在候选区");
     assert_eq!(eng.buffer(), "t", "后缀留在缓冲里接着编");
     for ch in "ao".chars() {
         eng.input_key(ch);
@@ -205,7 +207,8 @@ fn scheme_fallback_on_real_luna_dictionary() {
         n_all.len() > h_all.len(),
         "尾巴该补出 w 一族的候选：{n_all:?}"
     );
-    assert_eq!(nine.select(0), "特斯拉");
+    assert_eq!(nine.select(0), "", "回退态选中延迟提交（2026-10-17）");
+    assert_eq!(nine.pending_text(), "特斯拉", "确认的字留在候选区");
     assert_eq!(nine.buffer(), "9", "只消耗前缀键：尾部键留下接着编");
     // 接着编：`9` + `6` = 下一个音的键 → 与另开一台直打 `96` 逐条相同
     type_str(&mut nine, "6");
@@ -227,7 +230,8 @@ fn scheme_fallback_on_real_luna_dictionary() {
         texts(&hit14),
         "14 键回退档 = 前缀 `bugao` 的整档，逐条相同"
     );
-    assert_eq!(fourteen.select(0), "不好");
+    assert_eq!(fourteen.select(0), "", "回退态选中延迟提交（2026-10-17）");
+    assert_eq!(fourteen.pending_text(), "不好", "确认的字留在候选区");
     assert_eq!(fourteen.buffer(), "ml", "两个尾部键都留下");
     // 14 键对照：打满到 `bugaom` **不是**回退态（真库里 7 字母的 buhaoma/nihaoma 命中，
     // 整串前缀语义）—— 选中后缓冲清空，证明没走「丢尾」那条腿

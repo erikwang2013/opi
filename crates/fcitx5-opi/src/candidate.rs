@@ -120,6 +120,21 @@ impl CandidateState {
         self.refresh_snapshot();
     }
 
+    /// 有**待处理的输入** = 真缓冲或已确认的逐字片段非空（2026-10-17 逐字确认）：
+    /// 路由的 ⌫/空格/回车分流都用它 —— 逐字态下缓冲可能已空，但片段还没进输入框。
+    pub fn has_composing(&self) -> bool {
+        !self.engine.buffer().is_empty() || !self.engine.pending_text().is_empty()
+    }
+
+    /// 候选窗/预编辑**显示用**：已确认的逐字片段 + 真缓冲（2026-10-17 逐字确认）。
+    /// `buffer()` 保持真缓冲语义不动（两轨的大量门禁钉着它；配对：tsf-opi logic.rs
+    /// 的同名方法，逐行同构）。
+    pub fn display_buffer(&self) -> String {
+        let mut out = self.engine.pending_text();
+        out.push_str(&self.buffer());
+        out
+    }
+
     pub fn buffer(&self) -> String {
         self.engine.buffer().to_string()
     }
