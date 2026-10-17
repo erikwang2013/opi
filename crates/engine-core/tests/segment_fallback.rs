@@ -4,26 +4,26 @@
 //! **分词回退**（2026-10-10 用户裁决「输入拼音无匹配时要分词匹配」）的引擎级语义门禁。
 //!
 //! 语义定案（本文件逐条钉住）：
-//! 1. **触发**：整串直接命中为空、整串模糊命中也为空（「更具体的匹配优先」）、缓冲不止
-//!    一个音节 —— 三者全成立才回退；
-//! 2. **候选**：从最长的音节对齐前缀往短试，第一个「每段都是完整音节 + 词库有命中」的
-//!    前缀胜出，候选换成**它**的整档（递归走同一条精确/模糊/简拼分档，不另起一套排序）；
+//! 1. **触发**：整串**精确**命中为空（前缀扩展不算）、整串模糊/纠错精确命中也为空
+//!    （「更具体的匹配优先」）、缓冲不止一个音节 —— 三者全成立才回退；
+//! 2. **候选**：取**第一个音节**（第一个字；它必须是完整音节且词库有命中），候选换成
+//!    **它**的整档（递归走同一条精确/模糊/简拼分档，不另起一套排序）；
 //! 3. **选中**：~~提交该候选文本~~ **【订正 2026-10-17】** 逐字确认落地后，回退态的
 //!    选中是**延迟提交**（`Enum`：本轮 `select` 返回空串、文本进 `pending_text()`
 //!    留在候选区；最后一字确认才整串提交 —— 见 tests/segment_commit.rs 与本文件的
-//!    逐条更新）。缓冲**只消耗那个前缀**、剩下的后缀留着接着编
-//!    （`nihaob` 选「你好」→ 缓冲变 `b`）；提交文本/学习/清缓冲的收尾仍是 `select_from`
+//!    逐条更新）。缓冲**只消耗第一个字**、剩下的后缀留着接着编
+//!    （`nihaob` 选「你」→ 缓冲变 `haob`，再选「好」→ `b`）；提交文本/学习/清缓冲的收尾仍是 `select_from`
 //!    那一处（四端自动一致）；
 //! 4. **读数**：26 键回退态下 `display_buffer()` 仍是**用户打的整串**（预编辑不缩水）、
 //!    `candidate_readings()` 仍是空（那是 9/14 键专用）；9 键回退态下读数照旧是
-//!    「首条候选的拼音」（`644269` → `ni'hao`，左列不因回退而空白）；
+//!    「第一个字的读音」（可带尾巴字母，`644269` → `ni'w`，左列不因回退而空白）；
 //! 5. **边界**：单音节无匹配维持原「无匹配」；前缀也无候选维持原「无匹配」；
 //!    垃圾串维持死（26 键：段不是完整音节 `qqq`/`zxcvb`；9/14 键：没有音节对齐的
 //!    见证者）—— 「打英文」的逃生口不动。
 //!
-//! **9/14 键是同一语义的数字空间版**（2026-10-10 裁决「回退扩到 9 键」）：按键串无命中
-//! 时丢掉尾部凑不满音节的键，候选换成最长「音节对齐且查得到」键前缀的整档、选中只消耗
-//! 前缀的键（`64426`→`644269` = nihao + 下一音节首键，用户报障的现场）。判定唯一实现在
+//! **9/14 键是同一语义的数字空间版**（2026-10-10 裁决「回退扩到 9 键」）：按键串无精确
+//! 命中时丢掉尾部凑不满音节的键，候选换成**第一个音节**（最长单音节见证者）的整档、
+//! 选中只消耗第一个字的键（`64426`→`644269` = ni + hao + 下一音节首键）。判定唯一实现在
 //! `scheme::scheme_fallback_len`（复用 `Scheme::matches` 的按键类与 `pinyin::segment`
 //! 分段源 —— 与 9 键读数链同一套，不另起一套）；14 键走同一判定自然覆盖（`bugaom`）。
 //!
@@ -89,27 +89,45 @@ fn texts(e: &Engine, limit: usize) -> Vec<String> {
     e.candidates(limit).into_iter().map(|c| c.text).collect()
 }
 
-/// 规则 1–3 的主用例（用户给的那条）：`nihaob` 整串无命中 ⇒ 候选 = 最长前缀 `nihao`
-/// 的整档；选中「你好」只消耗前缀，缓冲留 `b` 接着编。
+/// 规则 1–3 的主用例（用户给的那条）：`nihaob` 整串无精确命中 ⇒ 候选 = **第一个字**
+/// `ni` 的整档；选中「你」只消耗第一个字，缓冲留 `haob` 接着编；再选「好」、最后
+/// 「包」确认后才整串提交。
 #[test]
-fn no_match_falls_back_to_longest_prefix_and_keeps_the_suffix() {
+fn no_match_falls_back_to_first_char_and_keeps_the_suffix() {
     let mut e = engine(false);
     type_str(&mut e, "nihaob");
     assert_eq!(e.buffer(), "nihaob", "预编辑必须还是用户打的整串");
     let cands = texts(&e, 8);
-    assert_eq!(
-        cands,
-        vec!["你好", "你好啊", "利好"],
-        "回退档 = 最长前缀 `nihao` 的整档"
+    assert!(
+        cands.contains(&"你".to_string()) && cands.contains(&"尼".to_string()),
+        "第一字 ni 的所有读音的字：{cands:?}"
     );
+    assert_eq!(cands[0], "你", "第一字的首候选在前：{cands:?}");
     // 2026-10-17 逐字确认：回退态选中 = 延迟提交（片段留在候选区）
     assert_eq!(e.select(0), "", "回退态选中延迟提交");
+    assert_eq!(e.pending_text(), "你");
+    assert_eq!(
+        e.buffer(),
+        "haob",
+        "只消耗第一个字：剩下的后缀留在缓冲里接着编"
+    );
+    // 下一个字 hao：同一套逐字确认
+    let cands = texts(&e, 8);
+    let at = cands
+        .iter()
+        .position(|c| c == "好")
+        .unwrap_or_else(|| panic!("下一个字 hao 的整档里应有「好」：{cands:?}"));
+    assert_eq!(e.select(at), "", "第二个字也延迟提交");
     assert_eq!(e.pending_text(), "你好");
-    assert_eq!(e.buffer(), "b", "只消耗前缀：剩下的后缀留在缓冲里接着编");
-    // 接着编：`b` + `ao` = `bao` → 包（后缀是真缓冲，不是摆设）
+    assert_eq!(e.buffer(), "b");
+    // 最后一段 b + ao = bao -> 包；确认后整串一次性提交
     type_str(&mut e, "ao");
     assert_eq!(e.buffer(), "bao");
-    assert_eq!(texts(&e, 8), vec!["包"]);
+    let at = texts(&e, 8)
+        .iter()
+        .position(|c| c == "包")
+        .expect("尾巴 bao 应出「包」");
+    assert_eq!(e.select(at), "你好包", "最后一个字确认后整串提交");
 }
 
 /// 同一条经**数字选词**（路由层）：`digit_select` 抓自己那份候选表选中，收尾与点击同一处。
@@ -122,17 +140,18 @@ fn digit_key_keeps_the_suffix_too() {
     }
     // 2026-10-17 逐字确认：回退态的数字选词同样延迟（不提交，片段留在候选区）
     assert_eq!(r.key_event('1' as u32, 0), KeyAction::EngineHandled);
-    assert_eq!(r.pending_text(), "你好");
-    assert_eq!(r.buffer(), "b", "数字选词同样只消耗前缀");
+    assert_eq!(r.pending_text(), "你");
+    assert_eq!(r.buffer(), "haob", "数字选词同样只消耗第一个字");
 }
 
 /// 规则 3 的**例外**（有意）：空格 = 整段上屏 —— 提交首候选、缓冲整段清空。
-/// 与 `tests/adversarial_input.rs`「提交过就必须清空缓冲」的钉子同源。
+/// 与 `tests/adversarial_input.rs`「提交过就必须清空缓冲」的钉子同源。首候选现在
+/// 是第一个字的「你」（逐字确认语义），不是整词「你好」。
 #[test]
 fn space_flushes_the_whole_buffer_even_in_fallback_state() {
     let mut e = engine(false);
     type_str(&mut e, "nihaob");
-    assert_eq!(e.input_key(' '), "你好", "空格提交首候选");
+    assert_eq!(e.input_key(' '), "你", "空格提交首候选（第一个字）");
     assert_eq!(e.buffer(), "", "空格是整段上屏，不留回退后缀");
 }
 
@@ -151,7 +170,7 @@ fn readings_stay_consistent_in_fallback_state() {
     // 2026-10-17 逐字确认：显示串前缀已确认的字（片段 + 剩余缓冲）
     assert_eq!(
         e.display_buffer(),
-        "你好b",
+        "你haob",
         "选中后显示 = 已确认片段 + 后缀"
     );
     assert!(e.candidate_readings().is_empty());
@@ -210,7 +229,7 @@ fn whole_input_fuzzy_hit_suppresses_the_fallback() {
     let mut plain = engine(false);
     type_str(&mut plain, "zongguo");
     let plain_texts = texts(&plain, 8);
-    assert_eq!(plain_texts[0], "总", "无模糊命中 ⇒ 回退到最长前缀");
+    assert_eq!(plain_texts[0], "总", "无模糊命中 ⇒ 回退到第一个字 zong");
     assert!(
         !plain_texts.contains(&"国".to_string()),
         "回退档只含前缀 `zong` 一族（`guo` 是留着接着编的后缀）：{plain_texts:?}"
@@ -226,27 +245,27 @@ fn whole_input_fuzzy_hit_suppresses_the_fallback() {
 }
 
 /// `'`（分词键）不挡回退：词库键不含分隔符，整串直接查询本是空的 ——
-/// 前缀串取各段拼接，`ni'hao` 出的是「你好」一族（旧行为是逐音节汤：你/尼/好/号）。
+/// 第一个字 `ni` 出「你/尼」的整档；界上的分隔符归前段，后缀从 `hao` 开始。
 #[test]
 fn separator_input_joins_segments_for_the_prefix() {
     let mut e = engine(false);
     type_str(&mut e, "ni'hao");
     assert_eq!(e.buffer(), "ni'hao");
     let cands = texts(&e, 8);
-    assert_eq!(cands[0], "你好", "拼接后的整串才是用户的本意：{cands:?}");
+    assert_eq!(cands[0], "你", "第一个字 ni 的首候选：{cands:?}");
     assert!(
         !cands.contains(&"号".to_string()),
-        "逐音节汤不应再出现：{cands:?}"
+        "后缀 hao 不在第一个字的档里：{cands:?}"
     );
-    // 前缀覆盖整个缓冲（`'` 不算字符）⇒ 选中后缓冲清空
-    assert_eq!(e.select(0), "你好");
-    assert_eq!(e.buffer(), "");
+    assert_eq!(e.select(0), "", "逐字确认：选中延迟提交");
+    assert_eq!(e.pending_text(), "你");
+    assert_eq!(e.buffer(), "hao", "界上的分隔符归前段，后缀是 hao");
 }
 
 /// 9 键数字空间回退（用户报障的现场：`64426`→`644269` = nihao + 下一音节首键 `9`）：
-/// 整串无命中 ⇒ 丢掉尾部凑不满音节的键，候选换成最长音节对齐键前缀 `64426`（nihao）
-/// 的整档；选中只消耗前缀的键，尾部键留在缓冲里接着编。判定复用 9 键既有 machinery
-/// （`Scheme::matches` 的按键类 + `boundary_aligned`/`pinyin::segment` 分段源）。
+/// 整串无精确命中 ⇒ 候选换成**第一个音节** `64`（ni）的整档；选中只消耗第一个字的键，
+/// 尾部键留在缓冲里接着编。判定复用 9 键既有 machinery（`Scheme::matches` 的按键类 +
+/// `boundary_aligned`/`pinyin::segment` 分段源）。
 #[test]
 fn nine_key_drops_the_incomplete_tail_and_keeps_it_in_the_buffer() {
     let mut nine = engine(false);
@@ -255,37 +274,45 @@ fn nine_key_drops_the_incomplete_tail_and_keeps_it_in_the_buffer() {
     assert_eq!(texts(&nine, 8)[0], "你好", "前置：命中态照旧（按键类展开）");
     type_str(&mut nine, "9");
     assert_eq!(nine.buffer(), "644269", "预编辑仍是用户打的整串");
+    let cands = texts(&nine, 8);
     assert_eq!(
-        texts(&nine, 8),
-        vec!["你好", "你好啊", "利好"],
-        "回退档 = 键前缀 64426 的整档"
+        cands[0], "你",
+        "回退档 = 第一个音节 64（ni）的整档：{cands:?}"
     );
-    assert_eq!(
-        nine.display_buffer(),
-        "ni'hao",
-        "9 键读数照旧是首条候选的拼音（回退不把左列打空）"
+    assert!(
+        cands.iter().any(|c| c == "尼"),
+        "第一个字的所有读音的字都在：{cands:?}"
+    );
+    assert!(
+        nine.display_buffer().starts_with("ni"),
+        "9 键读数跟着第一个字的档（回退不把左列打空）：{}",
+        nine.display_buffer()
     );
     assert_eq!(nine.select(0), "", "回退态选中延迟提交（2026-10-17）");
-    assert_eq!(nine.pending_text(), "你好");
-    assert_eq!(nine.buffer(), "9", "只消耗前缀的键：尾部键留下接着编");
+    assert_eq!(nine.pending_text(), "你");
+    assert_eq!(
+        nine.buffer(),
+        "4269",
+        "只消耗第一个字的键：尾部键留下接着编"
+    );
 }
 
 /// 14 键同问的答案（2026-10-10 裁决「14 键若同机制自然适用」）：能 —— `bugaom` =
-/// bugao（= nihao 的键）+ 尾部 `m`（凑不满音节），同一个 `scheme_fallback_len` 给出
-/// k=5，候选 = nihao 整档、缓冲留 `m`，不需要第二套实现。
+/// `bu`（= ni 的键）+ 尾部 `gaom`，同一个 `scheme_fallback_len` 给出第一个音节，
+/// 候选 = ni 整档、缓冲留 `gaom`，不需要第二套实现。
 #[test]
 fn fourteen_key_covers_the_same_fallback() {
     let mut e14 = engine(false);
     e14.set_scheme(Scheme::Fourteen);
     type_str(&mut e14, "bugaom");
-    assert_eq!(
-        texts(&e14, 8),
-        vec!["你好", "你好啊", "利好"],
-        "14 键同一条回退：bugao（nihao 的键）+ 尾 m"
-    );
-    assert_eq!(e14.select(0), "", "回退态选中延迟提交（2026-10-17）");
-    assert_eq!(e14.pending_text(), "你好");
-    assert_eq!(e14.buffer(), "m", "尾部键留在缓冲里接着编");
+    let cands = texts(&e14, 8);
+    let at = cands
+        .iter()
+        .position(|c| c == "你")
+        .unwrap_or_else(|| panic!("14 键回退到第一个音节 ni 的整档：{cands:?}"));
+    assert_eq!(e14.select(at), "", "回退态选中延迟提交（2026-10-17）");
+    assert_eq!(e14.pending_text(), "你");
+    assert_eq!(e14.buffer(), "gaom", "尾部键留在缓冲里接着编");
 }
 
 /// **长垃圾尾巴不留**（2026-10-15 用户报障的回归门禁；口径 = 用户裁决的折中版）。
@@ -329,18 +356,19 @@ fn live_digit_tail_is_still_kept() {
     type_str(&mut e, "64426226");
     let cands = texts(&e, 8);
     assert!(
-        cands.contains(&"你好".to_string()),
-        "前缀档仍是 nihao 一族：{cands:?}"
+        cands.contains(&"你".to_string()),
+        "回退档 = 第一个音节 ni 的整档：{cands:?}"
     );
-    assert_eq!(e.select(0), "", "回退态选中延迟提交（2026-10-17）");
-    assert_eq!(e.pending_text(), "你好");
+    let at = cands.iter().position(|c| c == "你").unwrap();
+    assert_eq!(e.select(at), "", "回退态选中延迟提交（2026-10-17）");
+    assert_eq!(e.pending_text(), "你");
     assert_eq!(
         e.buffer(),
-        "226",
-        "尾巴自己读得出来（bao → 包）⇒ 留着接着编"
+        "426226",
+        "尾巴自己读得出来（hao+bao）⇒ 留着接着编"
     );
     assert!(
-        texts(&e, 8).contains(&"包".to_string()),
+        texts(&e, 8).contains(&"好".to_string()),
         "留下的尾巴必须能出候选"
     );
 }
@@ -352,9 +380,9 @@ fn live_digit_tail_is_still_kept() {
 fn short_digit_tail_is_kept_without_probing() {
     let mut e = engine(false);
     e.set_scheme(Scheme::Nine);
-    // nihao（`64426`）+ `44`（两键：夹具里「44」读得出 hi 但 hi 无词条 ——
+    // `64`（ni）+ `44`（两键：夹具里「44」读得出 hi 但 hi 无词条 ——
     // 若探针管到两键，这条尾巴就会被清）
-    type_str(&mut e, "6442644");
+    type_str(&mut e, "6444");
     let _ = e.select(0);
     assert_eq!(e.buffer(), "44", "两键尾巴不探、照旧留");
 }
@@ -396,7 +424,7 @@ fn nine_key_space_flushes_the_whole_buffer_too() {
     let mut nine = engine(false);
     nine.set_scheme(Scheme::Nine);
     type_str(&mut nine, "644269");
-    assert_eq!(nine.input_key(' '), "你好", "空格提交首候选");
+    assert_eq!(nine.input_key(' '), "你", "空格提交首候选（第一个字）");
     assert_eq!(nine.buffer(), "", "空格是整段上屏：尾部键不留");
 }
 

@@ -20,6 +20,9 @@ use crate::scheme::Scheme;
 
 impl Engine {
     pub fn candidates(&self, limit: usize) -> Vec<Candidate> {
+        // 每键一份的导入层预算（2026-10-18）：主查询 / 模糊 / 纠错 / 简拼 / 逐音节 /
+        // 分词回退共享同一截止，超时整层丢弃；guard 在本方法返回时恢复（不粘滞）。
+        let _budget = self.dict.begin_query_budget();
         // 浏览态：候选 = 浏览器当前层（类目 / 该类目的符号）；分页照旧归宿主（skip/take）。
         if self.symbol_browse.is_active() {
             return self.symbol_browse.candidates(limit);

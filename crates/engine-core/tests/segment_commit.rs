@@ -8,7 +8,8 @@
 //!
 //! 语义（四端同一条路，引擎单点）：
 //! · 整串有词组匹配 ⇒ 词组候选在最前（既有档位秩序不动），选中 = **一次提交整词**；
-//! · 整串无匹配 ⇒ 分词回退档出**最长可匹配前缀**的字（即「第一个字的所有读音的字」）；
+//! · 整串无精确匹配 ⇒ 分词回退档出**第一个字**的整档（所有读音的字；更长的前缀词
+//!   不算整串匹配）；
 //!   确认一个字 ⇒ 它**留在候选区**（`pending_text()` / `display_buffer()` 可见），
 //!   缓冲区只剩后缀接着编 —— **不提交到输入框**；
 //! · 依次确认，直到最后一次选择把后缀吃完 ⇒ **整串一次性提交**；
@@ -154,4 +155,34 @@ fn clear_and_mode_switch_drop_pending() {
         "",
         "切模式清待确认区（宿主会先 commitPendingBuffer）"
     );
+}
+
+/// 2026-10-18 用户报障「逐字确认没效果」的根因回归：整串没有**精确**词，但词库里有
+/// 更长的词以它为前缀（前缀扩展命中）时，回退档曾被 `merged.is_empty()` 一类「有候选
+/// 就不接管」判据挡掉 —— 用户看到的是「中国人」，不是第一个字「中/钟」的整档。
+/// 判据必须是「没有精确整串命中」，不是「候选池为空」。
+#[test]
+fn prefix_extension_does_not_suppress_per_char_fallback() {
+    let mut e = Engine::new(
+        Box::new(dict(&[
+            ("zhongguoren", "中国人", 900),
+            ("zhong", "中", 900),
+            ("zhong", "钟", 500),
+        ])),
+        SymbolEngine::new(Vec::new(), Vec::new()),
+        true,
+    );
+    typed(&mut e, "zhongguo");
+    let cands = e.candidates(16);
+    assert!(
+        cands.iter().any(|c| c.text == "中") && cands.iter().any(|c| c.text == "钟"),
+        "应回退到第一个字 zhong 的整档（所有读音的字）：{cands:?}"
+    );
+    assert_eq!(
+        cands[0].text, "中",
+        "第一个字的精确单字应排在更长的前缀词之前：{cands:?}"
+    );
+    assert_eq!(pick(&mut e, "中"), "", "中间确认不得提交到输入框");
+    assert_eq!(e.pending_text(), "中", "确认的字留在候选区");
+    assert_eq!(e.buffer(), "guo", "缓冲只剩后缀接着编");
 }

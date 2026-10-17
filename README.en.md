@@ -10,7 +10,7 @@
 > group** — a fresh install is not enabled automatically, and without it OPI shows up in the list
 > while typing does nothing. Steps: [`docs/install/linux.md`](docs/install/linux.md) §4.
 
-<img src="docs/opi-pet.svg" width="168" align="right" alt="OPI's project pet: Opi the keycap sprite">
+![OPI's project pet: Opi the keycap sprite](docs/opi-pet.svg)
 
 ### 🐾 Meet Opi
 
@@ -36,8 +36,6 @@ See [`docs/opi-pet.svg`](docs/opi-pet.svg) for the full figure (hand-written SVG
 - **The `opi-tools` CLI**: prints a character-art Opi on a successful compile or verify (single-width characters only, so it never misaligns in a CJK terminal), and `--version` carries it too
 
 Both Compose frontends (Android and the Windows candidate window) share a single [`shared/pet/OpiPet.kt`](shared/pet/OpiPet.kt). Not sharing UI code across platforms is a principle of this project — but the pet is one drawing, and two copies of the same geometry inevitably drift apart.
-
-<br clear="right">
 
 ### 📖 Origin Story
 
@@ -100,7 +98,7 @@ The name says it all:
 - The engine does one thing: a key state machine for five modes (Pinyin / Traditional / English / Number / Symbol) plus jianpin / fuzzy pinyin, candidate ranking, and local learning. No skin shop, no pop-ups, no AI assistant
 - **Jianpin** (abbreviation-only input: `nh` → 你好, `zg` → 中国): **on by default, with its own switch** on the engine side (`Engine::set_jianpin`, same origin as fuzzy pinyin; the switch arrived 2026-10-08) — **all three shipped ends can turn it off**: the Android settings page, Linux (the fcitx5 addon config / the desktop settings window writes that same conf) and Windows (the settings window writes `settings.ini`, read by TSF on Activate). The trigger condition, the expansion rules and the cap all live in the header comment of `engine-core/src/jianpin.rs`, and the gate is `tests/jianpin_ranking.rs`
 - **Exact matches have no cap; the prefix layer truncates by frequency**: the `FETCH_LIMIT` truncation and the one inside `Engine::select` are both gone, and the three copies agree (`engine-core/src/router.rs` · `fcitx5-opi/src/candidate.rs` · `tsf-opi/src/logic.rs`, with equality assertions between them); since 2026-10-11 the **prefix-expansion layer** (half-typed input) keeps a static-frequency top-N (9216 for the 26-key board / 2048 for 9- and 14-key, the two constants in `dictionary.rs` — rationale and measurements in [`docs/performance.md`](docs/performance.md)). ⚠️ **Two hosts still use the old cap**: Android (`EngineController.kt`'s `fetchLimit`) and macOS (`InputController.swift`'s `candidates(limit:)`) — neither can reach the engine-side paging exports; iOS and HarmonyOS go through `candidatesPage()` and never pass a limit from the front end
-- **Character-by-character confirmation (user ruling 2026-10-17)**: when the whole input matches a phrase it ranks first and one selection commits it; otherwise the candidates first cover the leading character's full reading set — a confirmed character **stays in the candidate area** (the pinyin row shows "中guo"), and the whole string is committed only after the final segment is confirmed; with an empty buffer, ⌫ undoes the last confirmed character. The semantics live in the engine (`Engine::pending_text` / `commit_buffer_after_select`) and all four ends share them; gate: `tests/segment_commit.rs`
+- **Character-by-character confirmation (user ruling 2026-10-17)**: when the whole input exactly matches a phrase it ranks first and one selection commits it; otherwise (a longer word that merely starts with the input does not count) the candidates first cover the leading character's full reading set — a confirmed character **stays in the candidate area** (the pinyin row shows "中guo"), and the whole string is committed only after the final segment is confirmed; with an empty buffer, ⌫ undoes the last confirmed character. The semantics live in the engine (`Engine::pending_text` / `commit_buffer_after_select`) and all four ends share them; gate: `tests/segment_commit.rs`
 - **Where two ready mechanisms stand on wiring**: first, **Chinese punctuation and fullwidth are two independent switches** (engine-side `chinese_punct` and `fullwidth` are separate, gate `tests/punctuation_switches.rs`; `set_chinese_punct` / `toggle_chinese_punct` and both ABI exports exist) — **wired on the Linux desktop** (status-bar `。，` / `🌕` buttons, the settings window's "Chinese punctuation", the fcitx5 addon config — all landing on these two switches), while TSF on Windows reads the same values from `settings.ini`; **Android's toolbar moon button was removed** (added 2026-10-12, removed 2026-10-13 by the user's ruling "the mobile function row does not need a full-width/half-width toggle" — the capability stays: fullwidth still applies automatically from each mode's default, and the letters/digits passthrough widening (`Engine::fullwidthize`) is untouched), while **Apple / HarmonyOS still have no UI entry point** (their `toggleFullwidth` still has only the JNI smoke table as its caller). **The key binding is not in the engine layer** — the comment in `engine_punct.rs` only *suggests* a tentative `Ctrl+/` for the two desktop tracks; it is not finalised and neither track implements it yet (that comment holds the reasoning and the measurements). Second, **persisting what was learned on the Rust side** (`engine-data/src/user_words.rs`, atomic write) still has **zero callers in the whole repo**: Android persists through its own Kotlin `UserWordStore.kt`, while fcitx5 and TSF still drop it after every lesson
 - Ranking has one counter-intuitive rule — **`limit` must not be pushed down into the dictionary query** (a learned low-frequency word can overtake one outside the cut-off). Details like this are where this project is fussy — see "Feature Design" below
 
@@ -135,7 +133,7 @@ Everything below is either part of the vision or a direction that has been **dec
 
 ### 🧭 Architecture
 
-<img src="docs/diagrams/architecture.svg" alt="OPI architecture: client, export, engine, data and build-pipeline layers" width="100%">
+![OPI architecture: client, export, engine, data and build-pipeline layers](docs/diagrams/architecture.svg)
 
 **Five layers, dependencies pointing only downwards.** The lower the layer, the more stable; the higher, the closer to the user:
 
@@ -149,7 +147,7 @@ Everything below is either part of the vision or a direction that has been **dec
 
 ### 🧩 Feature Design
 
-<img src="docs/diagrams/features.svg" alt="OPI feature design: five input modes and six feature domains" width="100%">
+![OPI feature design: five input modes and six feature domains](docs/diagrams/features.svg)
 
 **Five input modes** are decided by the `Composer` state machine using a mode integer (the `Mode` enum's discriminant — **take the actual values from `enum Mode` in `composer.rs`** — and identical across the three language-crossing exports JNI / C ABI / fcitx5):
 
@@ -171,7 +169,7 @@ where `boost` **scales dynamically** with the dictionary's maximum frequency (`U
 
 ### 🔄 Lifecycle
 
-<img src="docs/diagrams/lifecycle.svg" alt="OPI lifecycle: dictionary loading and the keystroke cycle" width="100%">
+![OPI lifecycle: dictionary loading and the keystroke cycle](docs/diagrams/lifecycle.svg)
 
 Two independent lifelines with a single intersection — **being installed into the process singleton**.
 
@@ -312,4 +310,4 @@ V1 milestone progress:
 
 | WeChat rewards | Alipay rewards |
 |---|---|
-| <img src="docs/weixinpay.png" width="130" height="130" alt="WeChat rewards QR code"> | <img src="docs/alipay.png" width="130" height="130" alt="Alipay rewards QR code"> |
+| ![WeChat rewards QR code](docs/weixinpay.png) | ![Alipay rewards QR code](docs/alipay.png) |

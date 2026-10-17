@@ -10,7 +10,8 @@
 //! ```text
 //! 管道名：\\.\pipe\opi-candidates（单实例，字节流模式，'\n' 分帧，UTF-8）
 //! 角色：候选窗（CMP desktop/）为 SERVER 监听管道；TSF 插件进程为 CLIENT，
-//!       窗口启动后连接（窗口不在 → 客户端退避重试，不报错）。
+//!       窗口启动后连接（窗口不在 → 本次发送放弃、下一条再试，不报错；
+//!       读线程有自己的重连循环）。
 //!
 //! TSF(CLIENT) → 候选窗(SERVER)：
 //!   show      {"type":"show","buffer":"ni","candidates":["你","尼",...],
@@ -39,8 +40,10 @@
 //! 回调接缝，生产实现是 `SharedAction`（B1 接线：select → `TsfLogic::select` →
 //! 插进文档；翻页 → `next_page`/`prev_page`）。
 //!
-//! 连接语义（骨架）：惰性连接 + 静默退避重试（不阻塞 TSF 按键线程太久）；
-//! 写失败即断开、下次发送时重连；读线程阻塞读回复并分帧解析。
+//! 连接语义：惰性连接；**窗口未启动时本次发送直接放弃、不睡眠**（下一条 show
+//! 再试，2026-10-18 性能审计：旧行为在按键线程 4×50ms 空等 200ms）；写失败即断开、
+//! 下次发送时重连；读线程阻塞读回复并分帧解析（它自己的重连循环才使用
+//! `RETRY_SLEEP_MS`，不在按键线程上）。
 //! 生命周期：`CandidateClient` 的 Drop 关句柄 + 停读线程（否则句柄/线程/回调
 //! 陪宿主进程跑到结束）；分帧残留有 1 MiB 上限（见 `MAX_PENDING`）。
 //! 已知简化（验收可加固）：句柄替换与读线程的竞态以“仅清除仍指向自身句柄”
@@ -54,7 +57,7 @@ use std::thread;
 use std::time::Duration;
 
 use engine_core::composer::Mode;
-use windows::Win32::Foundation::{CloseHandle, ERROR_FILE_NOT_FOUND, ERROR_PIPE_BUSY, HANDLE};
+use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::Storage::FileSystem::{
     CreateFileW, FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_SHARE_MODE, FILE_SHARE_READ,
     FILE_SHARE_WRITE, OPEN_EXISTING, ReadFile, WriteFile,
@@ -74,9 +77,7 @@ unsafe impl Sync for PipeHandle {}
 
 /// 候选窗管道名（窗口侧 = desktop/ 的 JNA 服务器端，两侧保持一致）。
 const PIPE_NAME: PCWSTR = w!(r"\\.\pipe\opi-candidates");
-/// 每次发送前最多重试连接次数（窗口未启动时退避，避免阻塞按键线程）。
-const CONNECT_RETRIES: u32 = 4;
-/// ERROR_PIPE_BUSY / 窗口未启动时的重试间隔。
+/// 读线程重连间隔（窗口未启动/忙）。
 const RETRY_SLEEP_MS: u64 = 50;
 /// 读线程缓冲区（单条消息远小于此；字节流模式按 '\n' 分帧）。
 const READ_BUF: usize = 4096;
@@ -166,35 +167,31 @@ impl CandidateClient {
 
     // ---------- 内部：连接 / 发送 / 读线程 ----------
 
-    /// 尝试连接（窗口未启动/忙 → 退避重试；其他错误放弃）。
+    /// 尝试连接（**单次，不睡眠**）。
+    ///
+    /// 2026-10-18 性能审计：旧实现在**按键线程**上对 `ERROR_FILE_NOT_FOUND` 做
+    /// 4×50ms 退避 —— 而「候选窗没启动」正是默认状态（全仓没有拉起候选窗的代码），
+    /// 于是每键白白阻塞 200ms，直接击穿 50ms 键反馈预算。窗口不会在 200ms 内出现；
+    /// 本次放弃，下一次 show 自然再试（状态每次全量重发，丢一次连接不丢状态）。
+    /// 读线程有自己的重连循环（`spawn_reader` 的 `RETRY_SLEEP_MS`），不受影响。
     fn connect() -> Option<PipeHandle> {
-        for _ in 0..CONNECT_RETRIES {
-            match unsafe {
-                CreateFileW(
-                    PIPE_NAME,
-                    FILE_GENERIC_READ.0 | FILE_GENERIC_WRITE.0,
-                    FILE_SHARE_MODE(FILE_SHARE_READ.0 | FILE_SHARE_WRITE.0),
-                    None,
-                    OPEN_EXISTING,
-                    Default::default(),
-                    None,
-                )
-            } {
-                Ok(h) => return Some(PipeHandle(h)),
-                Err(e) => {
-                    // e.code() 为 HRESULT（i32），与 WIN32_ERROR（u32）比较需转 i32。
-                    let code = e.code().0;
-                    if code != ERROR_FILE_NOT_FOUND.0 as i32 && code != ERROR_PIPE_BUSY.0 as i32 {
-                        return None; // 不可重试的错误：放弃本次
-                    }
-                    thread::sleep(Duration::from_millis(RETRY_SLEEP_MS));
-                }
-            }
+        match unsafe {
+            CreateFileW(
+                PIPE_NAME,
+                FILE_GENERIC_READ.0 | FILE_GENERIC_WRITE.0,
+                FILE_SHARE_MODE(FILE_SHARE_READ.0 | FILE_SHARE_WRITE.0),
+                None,
+                OPEN_EXISTING,
+                Default::default(),
+                None,
+            )
+        } {
+            Ok(h) => Some(PipeHandle(h)),
+            Err(_) => None, // 未启动/忙/不可重试：本次放弃
         }
-        None
     }
 
-    /// 发送一条完整消息（自动补 '\n'）。连接失败 → 静默重试；写失败 → 断开待重连。
+    /// 发送一条完整消息（自动补 '\n'）。连接失败 → 本次放弃（不睡眠）；写失败 → 断开待重连。
     fn send_json(&self, json: &str) {
         let bytes = [json.as_bytes(), b"\n"].concat();
         let mut conn = match self.conn.lock() {

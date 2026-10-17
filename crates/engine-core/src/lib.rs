@@ -16,7 +16,10 @@ mod candidates_segment_impl; // 分词回退一族（2026-10-14 从 candidates.r
 mod candidates_tiers_impl; // 候选三档（常用单字/词组/联想，2026-10-14 用户裁决；500 行门禁拆出）
 pub mod composer;
 pub mod correction;
+mod dict_budget; // 导入层每键查询预算（2026-10-18 性能审计）
+mod dict_index; // 导入层命中索引 / 抢位加成 / rest 截断
 mod dict_layers; // 导入词库的合并层（M3 2b）：Engine 主库槽位的具体类型，字段私有故模块不公开
+mod dict_layers_visit; // 导入层的 visit_entries（500 行门禁拆出，2026-10-18）
 pub mod dictionary;
 pub mod engine;
 #[path = "engine_candidates.rs"]

@@ -10,7 +10,7 @@
 > 启用，不做这步输入法列表里看得到它、打字什么都不会发生。
 > 逐条命令见 [`docs/install/linux.md`](docs/install/linux.md) 的 §4。
 
-<img src="docs/opi-pet.svg" width="168" align="right" alt="OPI 项目宠物：键帽精灵「小欧」">
+![OPI 项目宠物：键帽精灵「小欧」](docs/opi-pet.svg)
 
 ### 🐾 认识小欧
 
@@ -36,8 +36,6 @@
 - **`opi-tools` 命令行**：编译与校验成功时打印字符版小欧（只用单宽度字符，CJK 终端不错位），`--version` 也带上它
 
 两个 Compose 前端（Android 与 Windows 候选窗）共用同一份 [`shared/pet/OpiPet.kt`](shared/pet/OpiPet.kt)。各端 UI 不共享代码是这项目的原则，但宠物是一张图 —— 重复一份几何，两边迟早会长得不一样。
-
-<br clear="right">
 
 ### 📖 项目缘起
 
@@ -100,7 +98,7 @@
 - 引擎只做一件事：五模式（拼音 / 繁体 / 英文 / 数字 / 符号）的按键状态机 + 简拼 / 模糊拼音 + 候选排序 + 本地学习。没有皮肤商城，没有弹窗，没有 AI 助手
 - **简拼**（纯缩写输入，`nh` → 你好、`zg` → 中国）：引擎侧**默认开、有独立开关**（`Engine::set_jianpin`，与模糊音同源；开关是 2026-10-08 补的）—— **三端都能关**：Android 设置页、Linux（fcitx5 附加组件配置 / 桌面设置窗写同一份 conf）、Windows（设置窗写 `settings.ini`，TSF 激活时读）。触发条件、展开规则与上限都在 `engine-core/src/jianpin.rs` 的头注释里，门禁是 `tests/jianpin_ranking.rs`
 - **候选层：精确匹配不设上限，前缀层按词频截断**：`FETCH_LIMIT` 与 `Engine::select` 内部那道截断都已拆掉，三处同值（`engine-core/src/router.rs` · `fcitx5-opi/src/candidate.rs` · `tsf-opi/src/logic.rs`，且互相之间有等值断言）；**前缀扩展层**（打一半的输入）自 2026-10-11 起按静态词频取 top-N（26 键 9216 / 9·14 键 2048，`dictionary.rs` 的两个常量，缘由与实测见 [`docs/performance.md`](docs/performance.md)）。⚠️ **两台宿主机仍是旧上限**：Android（`EngineController.kt` 的 `fetchLimit`）与 macOS（`InputController.swift` 的 `candidates(limit:)`）—— 两者都够不到引擎侧的分页出口；iOS 与鸿蒙走 `candidatesPage()`，从不由前端给 limit
-- **逐字确认（2026-10-17 用户裁决）**：整串有词组匹配时词组在最前、选中一次上屏；无匹配则先出第一个字的整档（所有读音的字），确认一个字后它**留在候选区**（拼音行显示「中guo」），依次确认到最后一段才**整串进输入框**；缓冲空时 ⌫ 回滚上一个已确认的字。语义在引擎（`Engine::pending_text` / `commit_buffer_after_select`），四端同一条路；门禁 `tests/segment_commit.rs`
+- **逐字确认（2026-10-17 用户裁决）**：整串有词组精确匹配时词组在最前、选中一次上屏；无精确匹配（打一半的前缀扩展词不算）则先出第一个字的整档（所有读音的字），确认一个字后它**留在候选区**（拼音行显示「中guo」），依次确认到最后一段才**整串进输入框**；缓冲空时 ⌫ 回滚上一个已确认的字。语义在引擎（`Engine::pending_text` / `commit_buffer_after_select`），四端同一条路；门禁 `tests/segment_commit.rs`
 - **两处「机制已备」的接线现状**：其一，**中文标点与全角是两个独立开关**（引擎侧 `chinese_punct` 与 `fullwidth` 各自独立，门禁 `tests/punctuation_switches.rs`；`set_chinese_punct` / `toggle_chinese_punct` 与双 ABI 出口都在）—— **Linux 桌面已接**（状态栏 `。，`/`🌕` 按钮、设置窗「中文标点」、fcitx5 附加组件配置 —— 都落到这两个开关），Windows 侧 TSF 从 `settings.ini` 读同组值；**Android 工具条月相按钮已撤**（2026-10-12 加、2026-10-13 用户裁决「移动端功能区不需要全角、半角切换功能」移除 —— 能力保留：全角仍随模式默认值自动生效，字母/数字的直传点宽化（`Engine::fullwidthize`）不动），**Apple / 鸿蒙仍无 UI 入口**（两端 `toggleFullwidth` 只有 JNI 冒烟表一个调用方）。**键位不在引擎层** —— `engine_punct.rs` 的注释只给桌面两轨**建议**了暂定的 `Ctrl+/`，未定稿、两轨都还没实现，理由与实测见该注释。其二，**Rust 侧的学习落盘**（`engine-data/src/user_words.rs`，原子写）**全仓零调用方**：Android 的持久化走它自己的 Kotlin `UserWordStore.kt`，fcitx5 / TSF 学完照旧丢
 - 排序有一条反直觉的设计 —— **不能把 limit 下推到词典查询**（学过的低频词可能反超截断线外的词）。这类细节才是本项目较真的地方，见下方「功能设计」
 
@@ -135,7 +133,7 @@
 
 ### 🧭 架构设计
 
-<img src="docs/diagrams/architecture.svg" alt="OPI 架构设计：客户端层、出口层、引擎层、数据层、构建管线" width="100%">
+![OPI 架构设计：客户端层、出口层、引擎层、数据层、构建管线](docs/diagrams/architecture.svg)
 
 **五层，依赖只向下走。** 越往下越稳定，越往上越接近用户：
 
@@ -149,7 +147,7 @@
 
 ### 🧩 功能设计
 
-<img src="docs/diagrams/features.svg" alt="OPI 功能设计：五种输入模式与六大功能域" width="100%">
+![OPI 功能设计：五种输入模式与六大功能域](docs/diagrams/features.svg)
 
 **五种输入模式**由 `Composer` 状态机按模式整数（即 `Mode` 枚举的判别值，**具体取值以 `composer.rs` 的 `enum Mode` 为准**；三个跨语言出口 JNI / C ABI / fcitx5 取值一致）判定每个按键的去留：
 
@@ -171,7 +169,7 @@ score = 静态词频 + 用户词频 × boost
 
 ### 🔄 生命周期
 
-<img src="docs/diagrams/lifecycle.svg" alt="OPI 生命周期：词库装载生命周期与击键生命周期" width="100%">
+![OPI 生命周期：词库装载生命周期与击键生命周期](docs/diagrams/lifecycle.svg)
 
 两条独立的生命线，只有一个交点 —— **装进进程单例**。
 
@@ -312,4 +310,4 @@ V1 里程碑进度：
 
 | 微信赞赏 | 支付宝赞赏 |
 |---|---|
-| <img src="docs/weixinpay.png" width="130" height="130" alt="微信赞赏码"> | <img src="docs/alipay.png" width="130" height="130" alt="支付宝赞赏码"> |
+| ![微信赞赏码](docs/weixinpay.png) | ![支付宝赞赏码](docs/alipay.png) |

@@ -137,13 +137,19 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
             }),
         ));
     }
-    // ── 数字空间回退（2026-10-10 扩到 9 键）：整串无命中改扫最长音节对齐键前缀的整档
-    // （判定唯一实现 `scheme::scheme_fallback_len`；命中态非空 ⇒ 一行不重，重扫深度 ≤ 1）。
-    // ⚠️ 判据在**补读音之后**算（与全键盘那条路同姿态）：补读音命中时 `merged` 非空 ⇒ 不回退。
+    // ── 数字空间回退（2026-10-10 扩到 9 键）：整串**没有精确命中**时改扫第一个音节
+    // （第一个字）的整档（判定唯一实现 `scheme::scheme_fallback_len`；命中态非空 ⇒
+    // 一行不重，重扫深度 ≤ 1）。
+    // ⚠️ 判据在**补读音之后**算（与全键盘那条路同姿态）：`Meta.exact` 只对精确条目
+    // 为真 —— **前缀扩展不算**（2026-10-18 用户报障：`64426` 命中 `nihao...` 长词时
+    // `merged` 非空，旧判据 `merged.is_empty()` 把逐字确认挡住了）。
     // `tail` = 严格档**读不出来**的那一段余键（宽松兜底档的输入，见 `tail_guess`）：
-    // 整串严格命中 ⇒ 空串（本档一行不做）；回退吃了前缀 ⇒ 余键；连回退都没落点 ⇒ 整串。
+    // 整串精确命中 ⇒ 空串（本档一行不做）；回退吃了第一个音节 ⇒ 余键；连回退都没落点 ⇒ 整串。
+    let exact_hit = merged
+        .iter()
+        .any(|(_, _, meta)| meta.as_ref().is_some_and(|m| m.exact));
     let mut tail: &str = "";
-    if merged.is_empty() {
+    if !exact_hit {
         match crate::scheme::scheme_fallback_len(dict, input, scheme, pin) {
             Some(k) => {
                 merged = scan(&input[..k]);

@@ -42,7 +42,7 @@ use windows::core::{
 use crate::dll::{DISPLAY_NAME, DllLock};
 use crate::logic::{
     KEY_STATE_ALT, KEY_STATE_CAPS_LOCK, KEY_STATE_CTRL, KEY_STATE_RELEASED, KEY_STATE_REPEAT,
-    KEY_STATE_SHIFT, KeyOutcome, TsfLogic,
+    KEY_STATE_SHIFT, KeyOutcome, PAGE_SIZE, TsfLogic,
 };
 use crate::settings;
 use crate::state::TsfSharedState;
@@ -90,11 +90,22 @@ pub trait TsfSink: Send + Sync {
 /// 见 candidate_io.rs 的 `SharedAction::refresh`）共用 —— 两处各写一遍必然漂移，
 /// 症状是"切了模式/点了候选，窗口还显示旧内容"。
 pub(crate) fn push_state(sink: &dyn TsfSink, logic: &TsfLogic) {
+    // 一次抓取出页内候选 + 页数（2026-10-18）：此前 candidates()/page_count()
+    // 各抓一次 ⇒ 每键整份排序两遍（单字母 release 3.9–6.3ms ⇒ 白花 4–6ms）。
+    // 这里复用 `fetched` 的同一次快照，逐字同 `TsfLogic::candidates`/`page_count`。
+    let fetched = logic.fetched();
+    let candidates: Vec<String> = fetched
+        .iter()
+        .skip(logic.page() * PAGE_SIZE)
+        .take(PAGE_SIZE)
+        .map(|c| c.text.clone())
+        .collect();
+    let page_count = fetched.len().div_ceil(PAGE_SIZE);
     sink.on_composition_changed(
         &logic.display_buffer(), // 2026-10-17：候选窗显示带已确认的逐字片段
-        &logic.candidates(),
+        &candidates,
         logic.page(),
-        logic.page_count(),
+        page_count,
         logic.mode(),
     );
 }

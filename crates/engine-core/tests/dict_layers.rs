@@ -462,3 +462,25 @@ fn import_scan_over_budget_falls_back_to_builtin_only() {
         "不粘滞：预算恢复后导入层立即回到候选里"
     );
 }
+
+/// 9/14 键的导入路径也必须共享同一条预算（2026-10-18 性能审计：旧实现只给
+/// `extra_index` 加截止，`scheme_entries` 全表扫没有检查点）。9 键输入 "64" = ni。
+#[test]
+fn nine_key_scheme_honours_import_budget() {
+    let base = &[("ni", "你", 10_000)];
+    let mut e = engine(base);
+    e.set_scheme(engine_core::scheme::Scheme::Nine);
+    e.set_extra_dicts(vec![("方言表".into(), dict(&[("ni", "尼", 50)]))]);
+    type_keys(&mut e, "64");
+    assert!(
+        e.candidates(8).iter().any(|c| c.text == "尼"),
+        "前置：正常预算下 9 键候选能看到导入条目"
+    );
+    e.set_import_scan_budget(Some(std::time::Duration::ZERO));
+    e.clear();
+    type_keys(&mut e, "64");
+    assert!(
+        e.candidates(8).iter().all(|c| c.text != "尼"),
+        "9 键 scheme 路径超预算也必须整层丢弃导入"
+    );
+}

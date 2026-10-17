@@ -212,6 +212,21 @@ impl InMemoryDictionary {
         self.max_freq = self.max_freq.max(freq);
         self.trie.insert(pinyin, word, freq);
     }
+
+    /// 可停止的前缀遍历（导入层预算扫描用；语义同 `query_all(prefix)`，但流式、
+    /// 不排序、逐条可停）。返回 false = 被回调停。
+    pub(crate) fn for_each_prefix_until(
+        &self,
+        prefix: &str,
+        f: &mut dyn FnMut(&str, &str, u32) -> bool,
+    ) -> bool {
+        self.trie.for_each_prefix_until(prefix, f)
+    }
+
+    /// 可停止的全量遍历（9/14 键 scheme 扫描用）。
+    pub(crate) fn for_each_entry_until(&self, f: &mut dyn FnMut(&str, &str, u32) -> bool) -> bool {
+        self.trie.for_each_until(f)
+    }
 }
 
 impl Dictionary for InMemoryDictionary {

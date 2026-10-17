@@ -74,7 +74,9 @@ pub fn demote_traditional_by<T>(
         return;
     }
     // 稳定排序 + 元组键：只在（档位, 简繁）上分组，组内保持**原名次**（= 既有分数序）。
-    items.sort_by_key(|it| (score_of(it) <= exact_floor, contains_trad_only(text_of(it))));
+    // cached_key：`contains_trad_only` 是扫字符 + 二分表的活，按项算一次即可
+    // （sort_by_key 每次比较重算，O(n log n) 次；2026-10-18 性能审计）。
+    items.sort_by_cached_key(|it| (score_of(it) <= exact_floor, contains_trad_only(text_of(it))));
 }
 
 /// [`demote_traditional_by`] 的候选版（符号页那类单层调用）。

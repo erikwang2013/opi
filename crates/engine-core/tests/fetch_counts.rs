@@ -110,6 +110,9 @@ fn nine_key_fallback_accounting_is_bounded_scans_and_zero_queries() {
     d.insert("nihao", "你好", 9000);
     d.insert("nihao", "你好啊", 8000);
     d.insert("ni", "你", 7000);
+    // 第一个字回退后尾巴是 4269（hao+9）；给 hao 一个词条，尾巴才「读得出来」、
+    // 选中才会走延迟提交（否则长死尾巴整段清空，本用例测的是记账不是死尾巴）。
+    d.insert("hao", "好", 5000);
     let mut r = KeyRouter::new(Engine::new(
         Box::new(Counting {
             inner: d,
@@ -137,8 +140,10 @@ fn nine_key_fallback_accounting_is_bounded_scans_and_zero_queries() {
     let one_fetch = v.load(Ordering::Relaxed);
     assert_eq!(
         (one_fetch, q.load(Ordering::Relaxed)),
-        (4, 1),
-        "回退态一次抓取 = 主扫 + 存在性 + 见证者首探 + 前缀重扫 + 尾字母 1 次（宽松兜底档）"
+        (7, 4),
+        "回退态一次抓取 = 主扫(1) + 存在性(1) + 见证者从长到短试（l=5..2 共 4 次，\
+         取最长单音节）+ 前缀重扫(1) + 尾部 4269 的 4 个 distinct 首字母各一次 query\
+         （宽松兜底档；2026-10-18 改成第一个字回退后尾巴更长，扫描次数仍 ≤ 输入键数）"
     );
     v.store(0, Ordering::Relaxed);
     // 逐字确认（2026-10-17）：回退态选中 = **延迟提交**（本轮不返回文本；
@@ -146,8 +151,9 @@ fn nine_key_fallback_accounting_is_bounded_scans_and_zero_queries() {
     assert_eq!(r.select(0), "", "回退态选中延迟提交");
     assert_eq!(
         v.load(Ordering::Relaxed),
-        one_fetch + 2,
-        "点击 = 一次抓取 + 一次收尾判定（存在性 + 见证者，不多抓）"
+        one_fetch + 9,
+        "点击 = 一次抓取 + 长尾巴（≥3 键）的严格档探针（7 扫；1–2 键尾巴跳过它，\
+         见 digit_tail_to_keep）+ 收尾判定（存在性 + 见证者 2 扫）"
     );
-    assert_eq!(r.buffer(), "9", "回退选中只消耗前缀的键（两侧 k 同值）");
+    assert_eq!(r.buffer(), "4269", "回退选中只消耗第一个字的键");
 }

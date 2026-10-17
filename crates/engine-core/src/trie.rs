@@ -100,6 +100,36 @@ impl Trie {
         walk(&self.root, &mut prefix, f);
     }
 
+    /// 前缀遍历（**可停止**）：`f(pinyin, word, freq)` 返回 false 立即停止。
+    ///
+    /// 与 [`Self::query_prefix`] 同语义（前缀匹配），但**不物化、不排序** —— 供导入层
+    /// 的预算扫描逐条检查截止（`dict_layers::extra_index`，2026-10-18）。返回
+    /// true = 走完；false = 被回调停（调用方须把本轮导入层整体丢弃）。
+    pub fn for_each_prefix_until(
+        &self,
+        prefix: &str,
+        f: &mut dyn FnMut(&str, &str, u32) -> bool,
+    ) -> bool {
+        if prefix.is_empty() {
+            return true;
+        }
+        let mut node = &self.root;
+        for c in prefix.chars() {
+            match node.children.get(&c) {
+                Some(n) => node = n,
+                None => return true,
+            }
+        }
+        let mut py = prefix.to_string();
+        walk_until(node, &mut py, f)
+    }
+
+    /// 全量遍历（**可停止**），顺序同 [`Self::for_each`]。供 9/14 键的导入层扫描用。
+    pub fn for_each_until(&self, f: &mut dyn FnMut(&str, &str, u32) -> bool) -> bool {
+        let mut prefix = String::new();
+        walk_until(&self.root, &mut prefix, f)
+    }
+
     pub fn len(&self) -> usize {
         self.len
     }
@@ -107,6 +137,28 @@ impl Trie {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+}
+
+/// 与 [`Trie::for_each`] 同序的可停止遍历；任一回调返回 false 即逐层向上停。
+fn walk_until(
+    node: &Node,
+    prefix: &mut String,
+    f: &mut dyn FnMut(&str, &str, u32) -> bool,
+) -> bool {
+    for (word, freq) in &node.entries {
+        if !f(prefix, word, *freq) {
+            return false;
+        }
+    }
+    for (c, child) in &node.children {
+        prefix.push(*c);
+        let keep = walk_until(child, prefix, f);
+        prefix.pop();
+        if !keep {
+            return false;
+        }
+    }
+    true
 }
 
 /// 深度（= 已走拼音的字节数）随递归下传，作为条目的 `pinyin_len`。

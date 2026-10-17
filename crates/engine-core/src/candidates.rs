@@ -275,19 +275,28 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
     // 混在 fuzzy 里时的语义一致（`nihap` 纠出「你好」后不许再被 `niha` 的整档接管）。
     let wide_hits = !fuzzy.is_empty() || !corr.is_empty();
     // ── 分词回退（2026-10-10 用户裁决「输入拼音无匹配时要分词匹配」）────────────
-    // 整串直接命中为空、整串模糊命中也为空时，候选换成**最长可匹配前缀**的整档
+    // 整串**没有精确命中**、整串模糊命中也为空时，候选换成**第一个音节**的整档
     // （递归调本函数：精确/模糊/简拼/符号的分档规则全是同一条，不另起一套排序），
     // 并**取代**下面的逐音节汤 —— 汤是「逐字可选」（你/好），回退是「先把这个词打出来」
     // （`nihaob` → 你好一族）。选中后缓冲留剩下的后缀接着编（收尾见 engine_segment.rs）。
     //
+    // ⚠️ 判据是「没有**精确**整串命中」，**不是**「候选池为空」（2026-10-18 用户
+    // 报障「逐字确认没效果」）：前缀扩展层会把「比输入更长的词」也算成候选
+    // （`zhongguor` 命中 `zhongguoren`），旧判据 `merged.is_empty()` 因此把它挡在
+    // 回退之外，用户只看到「中国人」，永远进不了第一个字的整档。`Meta.exact` 只对
+    // 主查询/多音字补丁的精确条目为真 —— 用它判。
+    //
     // 判定的唯一实现在 `segment_fallback`（收尾层调的是同一个函数，**不另存状态**：
     // 结论由缓冲自证，不依赖「先取候选、再选中」的调用次序 —— 与 scheme_readings
-    // 同一条纪律）。`!wide_hits` = 边界「整串模糊命中优先」：`zongguo` 有中国档时
-    // 不许被 `zong` 的整档接管。
+    // 同一条纪律）。「模糊/纠错精确命中优先」的边界也在 `segment_fallback` 内部
+    // （`has_exact`；前缀扩展不算）—— 这里**不再**用 `wide_hits` 拦：它只表示
+    // 模糊/纠错候选池非空，前缀扩展也会把它点亮，正是 2026-10-18 报障的另一半。
+    let exact_hit = merged
+        .iter()
+        .any(|(_, meta)| meta.as_ref().is_some_and(|m| m.exact));
     let mut seg_used = false;
-    if merged.is_empty()
+    if !exact_hit
         && input.chars().count() > 1
-        && !wide_hits
         && opts.segment_fallback
         && let Some(fb) = segment_fallback(dict, input, opts.fuzzy, opts.correction)
     {

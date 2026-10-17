@@ -211,9 +211,12 @@ android/app/src/main/assets/luna.opid
 与插件通信（协议镜像两份：`crates/tsf-opi/src/candidate_io.rs` 与
 `desktop/src/main/kotlin/xyz/erik/opi/candidate/Main.kt` 的模块头注释）。
 
-- **不开它也能打字**：`CandidateClient::connect` 连不上时静默退避重试、本次发送放弃，
-  降级为 no-op（**【推断】**，见 `candidate_io.rs` 的 `connect` / `send_json`）。
-  用户看到的是"没有候选窗"，不是"输入法坏了"。
+- **不开它也能打字**：`CandidateClient::connect` 连不上时**单次尝试、本次发送放弃、不睡眠**
+  （2026-10-18 性能审计：旧实现在按键线程上 4×50ms 退避，候选窗未启动时每键白卡 200ms；
+  现在下一条 show 自然再试，窗口状态每次全量重发），降级为 no-op（**【推断】**，
+  见 `candidate_io.rs` 的 `connect` / `send_json`）。用户看到的是"没有候选窗"，
+  不是"输入法坏了"。`WriteFile` 仍无超时（候选窗假死时理论上可阻塞按键线程，
+  异步写线程是后续项）。
 - 打包格式**当前只声明了 Deb**：`desktop/build.gradle.kts` 的
   `nativeDistributions { targetFormats(TargetFormat.Deb) }`，同一处的注释写着
   「Windows .msi 为验收阶段（Windows 主机上构建）」。
@@ -499,7 +502,7 @@ regsvr32 /u "C:\path\to\tsf_opi.dll"
    这是源码写明的**有意代价**（`state.rs` 模块头：「已知代价：插入延迟到下一次按键，
    换来零跨线程 COM 调用」），不是 bug —— 但用户会当成 bug，文档里必须写。
    顺带：`tsf.rs` 的 `OnSetFocus` 是空实现（`Ok(())`），**是 drain 的天然落点，没接**。
-3. **逐字确认（2026-10-17）**：整串无词组匹配时，点选先「确认一个字」——它留在候选窗
+3. **逐字确认（2026-10-17）**：整串无词组精确匹配时（前缀扩展不算），点选先「确认一个字」——它留在候选窗
    的缓冲显示里（管线协议 `show.buffer` 现在带「中guo」这类片段，`TsfLogic::display_buffer`），
    最后一段确认才一次提交整串；点中间的字不会立刻插入，这是语义不是缺口（引擎级，
    门禁 `tests/segment_commit.rs`）。

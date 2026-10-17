@@ -26,6 +26,16 @@ pub(crate) struct SegmentFallback {
     pub suffix: String,
 }
 
+/// 词库 `query_all` 是**前缀**语义（`InMemoryDictionary`/`MmapDictionary` 的 `query`
+/// 都按前缀返回）；判「整串有没有命中」必须再按 `pinyin_len == key.len()` 过一遍 ——
+/// 否则更长的词以输入为前缀时会被当成「整串命中」，把逐字确认整条挡掉
+/// （2026-10-18 用户报障的根因：`zhongguo` 命中 `zhongguoren`）。
+fn has_exact<D: Dictionary + ?Sized>(dict: &D, key: &str) -> bool {
+    dict.query_all(key)
+        .iter()
+        .any(|e| e.pinyin_len == key.len())
+}
+
 /// 分词回退的**唯一判定**（2026-10-10 用户裁决「输入拼音无匹配时要分词匹配」）：
 /// 给定缓冲，返回「候选该出哪一段、选完缓冲剩什么」。
 ///
@@ -37,10 +47,12 @@ pub(crate) struct SegmentFallback {
 /// 判据（全成立才回退；**先算不查库的两条**，收尾层每次选中都要过一次它）：
 /// 1. 缓冲不止一个字符 —— 空/单字符维持既有「无匹配」；
 /// 2. 切分出来**至少两段** —— 单音节没有「分词」可言（边界：单音节无匹配维持原样）；
-/// 3. **整串直接命中为空** —— 有命中 = 更具体的档，不回退；
-/// 4. **整串模糊命中为空**（`fuzzy_enabled` 关掉时这条不问）—— 整串变体是整串替换、
+/// 3. **整串精确命中为空** —— 有精确命中 = 更具体的档，不回退；**前缀扩展不算**
+///    （`has_exact` 只认 `pinyin_len == key.len()`）；
+/// 4. **整串模糊/纠错精确命中为空**（开关关掉时这条不问）—— 整串变体是整串替换、
 ///    比前缀更具体：`zongguo` 有「中国」档时不许被 `zong` 的整档接管；
-///    然后从**最长**的音节对齐前缀往短试，第一个「每段都是完整音节 + 词库有命中」的胜出。
+///    然后取**第一个音节**（用户裁决「先匹配前面的第一个字」）—— 它必须是完整音节
+///    且词库有命中；整档候选 = 这个音节的所有读音的字（精确单字在前）。
 ///
 /// 「完整音节」是**门槛**（用户裁决的边界）：`qqq` / `zxcvb` 这类打错串切出来的段不是
 /// 完整音节 ⇒ 不回退 ⇒ 维持无候选（「打英文」的逃生口靠它，
@@ -65,51 +77,44 @@ pub(crate) fn segment_fallback<D: Dictionary + ?Sized>(
     if segs.len() < 2 {
         return None;
     }
-    if !dict.query_all(input).is_empty() {
+    if has_exact(dict, input) {
         return None;
     }
     if fuzzy_enabled != 0
         && fuzzy::input_variants(input, fuzzy_enabled)
             .iter()
-            .any(|v| !dict.query_all(v).is_empty())
+            .any(|v| has_exact(dict, v))
     {
         return None;
     }
-    // 同类第四条：整串**纠错**命中同样比前缀回退更具体（2026-10-13）。
+    // 同类第四条：整串**纠错**精确命中同样比前缀回退更具体（2026-10-13）。
     if correction_enabled
         && correction::input_corrections(input)
             .iter()
-            .any(|v| !dict.query_all(v).is_empty())
+            .any(|v| has_exact(dict, v))
     {
         return None;
     }
-    // 各段在拼接串里的累计字符数：`prefix_len[k-1]` = 前 k 段拼起来的长度，
-    // 用来在**原文**里定位后缀从哪开始。
-    let mut prefix_len = Vec::with_capacity(segs.len());
-    let mut total = 0usize;
-    for s in &segs {
-        total += s.chars().count();
-        prefix_len.push(total);
+    // 用户裁决（2026-10-17 / 2026-10-18 再次确认）：**先匹配前面的第一个字**。
+    // 只取第一个音节，不再从最长前缀往回试 —— 后者在「更长的词以整串为前缀」时
+    // 会把整串又当成一次匹配（候选仍是那个长词，逐字确认永远进不去，用户
+    // 2026-10-18 报障的现场）。第一个音节不是完整音节 / 词库无命中 ⇒ 不回退，
+    // 交给候选层的逐音节汤或维持无匹配。
+    let first = &segs[0];
+    if !is_syllable(first) || dict.query_all(first).is_empty() {
+        return None;
     }
-    for k in (1..=segs.len()).rev() {
-        if !segs[..k].iter().all(|s| is_syllable(s)) {
-            continue;
-        }
-        let prefix: String = segs[..k].concat();
-        if !dict.query_all(&prefix).is_empty() {
-            return Some(SegmentFallback {
-                suffix: raw_suffix(input, prefix_len[k - 1]),
-                prefix,
-            });
-        }
-    }
-    None
+    Some(SegmentFallback {
+        prefix: first.clone(),
+        suffix: raw_suffix(input, first.chars().count()),
+    })
 }
 
-/// 缓冲原文里「前 `consumed` 个非分隔符字符」之后的剩余（其间的 `'` 原样保留）：
+/// 缓冲原文里「前 `consumed` 个非分隔符字符」之后的剩余：
 /// `("nihaob", 5)` → `"b"`、`("ni'hao", 5)` → `""`、`("ni'hao'x", 5)` → `"'x"`。
 /// 前缀串是去 `'` 的拼接，故按「数够 `consumed` 个非 `'` 字符」定位 ——
-/// 分隔符归**前段**（它标记的正是这个边界）。
+/// 界上的分隔符归**前段**（它标记的正是这个边界），返回前跳过它们；
+/// 后续段之间的分隔符原样保留（`("ni'hao'x", 2)` → `"hao'x"`）。
 fn raw_suffix(input: &str, consumed: usize) -> String {
     let mut seen = 0usize;
     for (i, ch) in input.chars().enumerate() {
@@ -117,7 +122,8 @@ fn raw_suffix(input: &str, consumed: usize) -> String {
             seen += 1;
         }
         if seen == consumed {
-            return input.chars().skip(i + 1).collect();
+            let rest: String = input.chars().skip(i + 1).collect();
+            return rest.trim_start_matches('\'').to_string();
         }
     }
     String::new()

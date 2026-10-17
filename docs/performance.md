@@ -23,11 +23,61 @@
 | 条 | 落点 | 判据（机器红/绿） |
 |---|---|---|
 | **抢位加成** | `boosted_import_freq`：导入层命中的条目（**广覆盖**，重复项取 `max(主库原频, 加成值)`）获得 `min(数据, 顶/128) + (顶 − 顶/128)`（顶 = 主库最大静态词频） | 严格低于顶、压过顶带以下的普通候选、恒不越过用户档（`tests/dict_layers.rs` 三条 + C-ABI 两条；变异自检＝加成改恒等 ⇒ 点名红） |
-| **超时兜底** | `IMPORT_SCAN_BUDGET = 40ms`（按键反馈总账 50ms，留 10ms 给内置查询与候选装配）；按层检查、超时**整体丢弃**导入层结果、**不粘滞**（下次查询重新计时） | 零预算 ⇒ 候选与纯内置逐条同分同序（`import_scan_over_budget_falls_back_to_builtin_only`；变异＝去掉截止 ⇒ 红） |
+| **超时兜底（2026-10-18 重构）** | `dict_budget`：**每键一份**预算（总账 50ms、初始导入上限 40ms），`Engine::candidates` 入口建立、所有查询家族共享；base 查询之后按「总账 − 15ms 后处理 − 已耗时」**动态收紧**；trie 可停止遍历，扫描逐条可抢占（每 64 条）；9/14 键 `scheme_entries` / `scheme_find` 同样受截止。超时 ⇒ 导入层**整体丢弃**、回纯内置、不粘滞 | 零预算 ⇒ 与纯内置逐条同分同序（`import_scan_over_budget_falls_back_to_builtin_only`、`nine_key_scheme_honours_import_budget`） |
+| **命中上限（2026-10-18）** | 导入层 exact / rest 命中**各自**截到 2048（`IMPORT_HIT_CAP`）；单次扫描命中超过 5 万条（`IMPORT_SCAN_HIT_LIMIT`）直接整层丢弃 —— 病态大层在几毫秒内回退，不把预算耗在无底扫描上 | 超限与超时同语义（整层丢弃）；可见窗口 8/64，2048 / 5 万远大于它 |
 
-粒度如实记：截止检查**按层**（每层词库开始前一次）—— 单层自身的 prefix 物化
-不可抢占，单层成本由该层规模决定。端到端可达（含「常用字头不受影响」「方言词字
-同表可达」）另有 C-ABI 门禁：`opi-ffi/tests/kangxi_reach.rs`、`dialect_reach.rs`。
+粒度如实记：扫描已**逐条可抢占**（每 64 条查一次截止），单层不再「层内不可中断」；
+base 查询 + 候选装配的耗时通过动态截止计入总账。端到端可达（含「常用字头不受影响」
+「方言词字同表可达」）另有 C-ABI 门禁：`opi-ffi/tests/kangxi_reach.rs`、
+`dialect_reach.rs`。
+
+## 2026-10-18 全链性能审计与修复
+
+四路只读审计（引擎 / Android / 桌面 / release 实测）的落地项与实测。**机器为 8 核
+共享机，loadavg 12–19、I/O wait 明显；绝对 p95 对负载敏感，同进程 BASE/BIG 差值更可信。**
+
+**引擎导入层**（`dict_budget.rs` 每键共享预算 + 动态收紧、可抢占扫描、exact/rest
+2048 截断、5 万命中硬上限；门禁见 `tests/dict_layers.rs`）：
+
+| 场景（release，100 轮或注明） | 修复前 p50/p95/max | 修复后 p50/p95/max |
+|---|---|---|
+| 26 键 · 10 万行导入 · `ni`（2.5 万命中，40 轮） | 44.31/57.04/60.23 | **23.84/28.22/31.29** |
+| 26 键 · 10 万行导入 · `qiu`（1.25 万 exact） | 34.86/41.82/49.31 | **23.97/29.36/31.51** |
+| 26 键 · 10 万行导入 · `nihao` | 13.96/16.53/19.51 | **5.74/8.18/10.59** |
+| 9 键 · 10 万行导入 · `64`（2.5 万命中，100 轮） | 未测（旧实现无截止） | **34.15/43.72/49.00** |
+| 9 键 · 10 万行导入 · `64426`（100 轮） | 未测 | **9.95/13.06/19.25** |
+| 单层 40 万命中 · `a`（修复前 6 轮 / 修复后 20 轮） | **656/681，且不回退** | **36.02/46.08/46.08，回退纯内置** |
+
+- zero-budget 兜底：26 键 `ni`/`nihao`/`qiu` 与 9 键 `64426` 的候选序列与纯内置
+  **逐条同分同序**（断言 PASS）；不粘滞。
+- 对照：BASE（无导入）同轮 `ni` 11.79/14.52/17.31；BIG−BASE p50 差约 +12ms（修复前
+  +31ms）。高负载轮（load 35+ / I/O wait 40%）BASE 自身 p95 可到 35ms，BIG p95
+  会重新越线 —— 那是基础查询的成本，不是导入层回归（同进程差值稳定）。
+- **TSF（Windows）**：候选窗未启动时按键线程旧为 4×50ms=200ms 空等，现改为**单次
+  尝试、不睡眠**（下一条 show 再试）；`push_state` 每键两次全量排序（`candidates` +
+  `page_count`）改为一次 `fetched` 同时出页内候选与页数。**Windows 宿主未实测**
+  （本机无 Windows；静态 + 控制流算术证据）。`WriteFile` 无超时仍是后续项。
+- **Android（只审计，未改代码）**：每键约 12 次 JNI（其中 6 个标量读取可拆）、
+  `candidateReadings` 全量 `segment`、`exportJson` 在主线程、启动词库 IO 在主线程；
+  `PetStrip` 不会全屏重组，但每帧新建 Brush/Path，隐藏时很可能仍在跑。见下方剩余项。
+- **证据边界**：引擎数为本机 release、真实 luna + 自造导入库；Android/Windows 宿主层
+  未真机实测；导入库规模是合成极端（10 万/40 万行），真实用户导入通常更小。
+
+**剩余优化 / 扩展（未落地，按收益/风险）**：
+1. Android `refresh` 拆轻/重（去 6 个标量 JNI）；`candidateReadings` 惰性化；折叠态
+   只取 8 条（平铺再取 64）。
+2. `PetStrip` 隐藏暂停（`LocalLifecycleOwner` + RESUMED 门控）、`drawWithCache` 复用
+   Brush/Path、降帧/减粒子（观感需真机确认）。
+3. `UserWordStore.exportJson` 移后台执行器；`EngineLoader` / `DictStore` 启动 IO
+   异步化 + loading 态（首次显示 ANR 风险）。
+4. 单次 JNI 快照（buffer+candidates+readings+display+pending）；排序移出主线程
+   （收益最大、复杂度最高，需压力测试）。
+5. C ABI / `KeyRouter` 候选缓存：Harmony 每键 `pageCount` + `candidatesPage` 双排；
+   TSF / fcitx5 已改为单抓。
+6. TSF 异步写线程（彻底消除 `WriteFile` 无超时的按键线程阻塞）。
+7. `learner.freq_of` 去重（主查询 / 9 键 scheme 各重复一次，≤18k/键）；`scheme_readings`
+   惰性 / 按页；`candidates.rs` 的 `seen` 去 clone。
+8. 空闲机复跑绝对 p95；把「基础查询 + 排序」也纳入总账（宽前缀 base 贵的场景）。
 
 ## 引擎侧实测（2026-10-11）
 
