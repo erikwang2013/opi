@@ -20,11 +20,14 @@
 # Linux 等价物 —— Windows MSI 那套由 postprocess-windows-msi.sh 的 taskkill +
 # WixShellExec 承担）。deb 与 rpm 共用这三份（nfpm 分别装成 preinst/postinst/
 # prerm 与 %pre/%post/%preun）。理由与边界写在各自的文件头。
-# 路径相对**本文件所在目录**（nfpm 按配置文件目录解析）。
+# ⚠️ 路径按 **CWD** 解析（不是配置文件目录）—— 实测：config 在 scripts/ 下、cwd 在
+# 仓库根时，`packaging/x.sh` 会去 `<cwd>/packaging/` 找而报 no such file。
+# build-packages.sh 在仓库根调 nfpm（脚本开头 cd "$REPO_ROOT"），所以这里写
+# 相对仓库根的路径；改这个脚本的调用姿势时先回来核对这四行。
 scripts:
-  preinstall: packaging/preinstall.sh
-  postinstall: packaging/postinstall.sh
-  preremove: packaging/preremove.sh
+  preinstall: scripts/packaging/preinstall.sh
+  postinstall: scripts/packaging/postinstall.sh
+  preremove: scripts/packaging/preremove.sh
 
 name: opi
 arch: ${PKG_ARCH}
