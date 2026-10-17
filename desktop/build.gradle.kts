@@ -47,7 +47,7 @@ kotlin {
 // jpackage 的包版本与设置窗标题栏都从这里取。**此前设置窗里写死过一份**
 // （"1.4.0"），到 1.6.0 就成了摆在用户眼前的假话 —— 两处写死是漂移的充分条件，
 // 生成一个常量是把它压成一处的最短路径（同 android 侧 versionName 的单一来源约定）。
-val opiAppVersion = "1.9.12"
+val opiAppVersion = "1.10.0"
 
 val generateOpiVersionSource by tasks.registering {
     val outDir = layout.buildDirectory.dir("generated/sources/opiVersion/kotlin")
@@ -76,8 +76,9 @@ kotlin.sourceSets["main"].kotlin.srcDir(generateOpiVersionSource)
 
 // ---------- 表情数据（2026-10-12）----------
 //
-// 桌面符号页的「表情」页要**全量** emoji —— 与引擎 `builtin_emoji_texts()` 同一份表。
-// 真源 = `data/raw/emoji.tsv`（`scripts/gen_symbols.py` 生成；引擎侧 `include_str!`
+// 桌面符号页的「表情」页要**整表** emoji（常用子集，桌面侧不再筛）—— 与引擎
+// `builtin_emoji_texts()` 同一份表。
+// 真源 = `data/raw/emoji.tsv`（`scripts/gen_emoji_kaomoji.py` 生成；引擎侧 `include_str!`
 // 编进 .so，桌面是 JVM 进程读不到那一份）⇒ **构建期原样拷进资源**。
 // ⚠️ 这不是「第二份入库副本」：复制发生在每次构建，盘上没有可漂的第二份（对照
 // `crates/fcitx5-opi/data/symbol_categories.tsv` 那种真·双输出 —— 那个要 CI 逐字节比，
@@ -89,13 +90,34 @@ val copyEmojiData by tasks.registering(Copy::class) {
     doFirst {
         check(src.isFile) {
             "找不到表情数据源: ${src.path}\n" +
-                "生成一份：python3 scripts/gen_symbols.py（写入 data/raw/emoji.tsv）"
+                "生成一份：python3 scripts/gen_emoji_kaomoji.py（写入 data/raw/emoji.tsv）"
         }
     }
     from(src)
     into(layout.buildDirectory.dir("generated/opiResources"))
 }
 sourceSets["main"].resources.srcDir(copyEmojiData)
+
+// ---------- 颜文字数据（2026-10-18）----------
+//
+// 桌面表情页的「颜文字」子页与 Android 同一份数据：真源 = `data/raw/kaomoji.tsv`
+// （`scripts/gen_emoji_kaomoji.py` 生成；Android 另有一份 assets 副本）。同 copyEmojiData
+// 的纪律：**构建期原样拷进资源**、盘上没有可漂的第二份；源文件不在 = 响亮地死。
+// ⚠️ 与 copyEmojiData 写同一个输出目录 ⇒ **不能再注册一次 srcDir**（processResources
+// 会把目录里每个文件扫两遍，报 duplicate entry；2026-10-16 copyKangxiDict 实测过）。
+// 接线用 dependsOn，文件进同一个目录、目录只扫一次。
+val copyKaomojiData by tasks.registering(Copy::class) {
+    val src = file("../data/raw/kaomoji.tsv")
+    doFirst {
+        check(src.isFile) {
+            "找不到颜文字数据源: ${src.path}\n" +
+                "生成一份：python3 scripts/gen_emoji_kaomoji.py（写入 data/raw/kaomoji.tsv）"
+        }
+    }
+    from(src)
+    into(layout.buildDirectory.dir("generated/opiResources"))
+}
+tasks.named("processResources") { dependsOn(copyKaomojiData) }
 
 // 康熙字典词库（2026-10-16，「全发」的桌面面）：词库页首启种子把它放进词库目录一次
 //（见 Dicts.kt 的 seedBundledDict）。真源 = `data/raw/kangxi.tsv`
@@ -174,7 +196,7 @@ compose.desktop {
             // 本地化文件决定：jpackage 内置的 en-us 那份写死 Codepage 1252（Windows
             // Installer 不支持 65001/UTF-8），于是任何中文/全角字符都让 light.exe 以
             // **LGHT0311** 退出。2026-10-09 在 windows runner 上实测到了：描述原文案
-            // 「opi输入法 候选窗（TSF 插件经 named pipe 通信）」→ 退出码 311，而 Gradle
+            // 「小欧输入法 候选窗（TSF 插件经 named pipe 通信）」→ 退出码 311，而 Gradle
             // 只转述「Exit code: 1」，真报错在
             // desktop/build/compose/logs/packageMsi/*.txt 里（windows.yml 有一条守卫
             // 会在这些值被改回非 ASCII 时直接红，省掉「light.exe 311 是什么」）。
@@ -184,8 +206,8 @@ compose.desktop {
             // 代价：.deb 的 Description 跟着一起变英文 —— CMP 的 DSL 只有**一处**
             // description，没有按平台分设的接口（javap 核过：AbstractDistributions 全局
             // 一处；WindowsPlatformSettings 上没有）。
-            description = "OPI IME candidate window (TSF plugin over a named pipe)"
-            vendor = "OPI"
+            description = "opi IME candidate window (TSF plugin over a named pipe)"
+            vendor = "opi"
 
             // 应用图标 = 项目宠物「小欧」，与 Android 启动图标、候选窗里摊手的那个是同一张图
             // （几何真源 docs/opi-pet.svg）。不挂的话装出来是 CMP 的 Kotlin 默认图标。
@@ -288,14 +310,14 @@ tasks.register("injectSettingsDesktopEntry") {
         // 两份入口 = 菜单里两条，且那条不带 --settings。
         apps.listFiles { f: File -> f.name.endsWith(".desktop") }
             ?.filter { it.name != "opi-settings.desktop" }?.forEach { it.delete() }
-        // Name = 「opi输入法」（2026-10-09 用户裁决：所有端安装后显示名统一为它）。
+        // Name = 「小欧输入法」（2026-10-09 用户裁决：所有端安装后显示名统一为它）。
         // 菜单入口与 Deepin 上其它输入法的菜单条目同款：点开就是设置窗。
         File(apps, "opi-settings.desktop").writeText(
             """
             [Desktop Entry]
             Type=Application
-            Name=opi输入法
-            Comment=opi输入法 —— 学习 / 中文标点 / 模糊音 / 简拼 / Shift 切换中英文 / 皮肤
+            Name=小欧输入法
+            Comment=小欧输入法 —— 学习 / 中文标点 / 模糊音 / 简拼 / Shift 切换中英文 / 皮肤
             Comment[en]=opi IME — learning, punctuation, fuzzy pinyin, jianpin, shift toggle, skins
             Exec=$installedBin --settings
             Icon=$installedIcon
@@ -316,8 +338,8 @@ tasks.register("injectSettingsDesktopEntry") {
             """
             [Desktop Entry]
             Type=Application
-            Name=opi输入法 状态栏
-            Comment=opi输入法悬浮状态栏（软键盘 / 符号 / 简繁 / 标点 / 中英 / 全半 / 设置）
+            Name=小欧输入法 状态栏
+            Comment=小欧输入法悬浮状态栏（软键盘 / 符号 / 简繁 / 标点 / 中英 / 全半 / 设置）
             Exec=$installedBin --statusbar
             Icon=$installedIcon
             Terminal=false
