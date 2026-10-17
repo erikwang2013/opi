@@ -227,25 +227,24 @@ public final class Main {
         }
         check(hasHeart, "searchSymbols(he) 命中 ♥");
 
-        // emojiSymbols（2026-10-09 换源）：**浏览全量** —— UTS#51 emoji-test.txt 的
-        // 完全限定条目（官方分组序，含旗帜/家庭/键帽等多码位序列），**不再是
-        // 「符号表 ∩ emoji 集」的子集**。旧断言两条都是老契约：♥(U+2665) 只在符号表里
-        // （新表收的是带 VS16 的 ❤️）；「⊆ searchSymbols("")」也不再成立 —— 浏览路与
-        // 搜索路是两张表（symbols.tsv 的 emoji 列管单键候选反馈，见 symbols.rs 的
-        // builtin_emoji_texts 注释）。
+        // emojiSymbols（2026-10-18 换源）：**OpenMoji 常用子集** —— 687 条、9 组，
+        // 排除旗帜/肤色变体/ZWJ 组合（筛选规则与源 pin 见 scripts/gen_emoji_kaomoji.py）。
+        // 浏览路与搜索路仍是两张表（symbols.tsv 的 emoji 列管单键候选反馈，见
+        // symbols.rs 的 builtin_emoji_texts 注释）。
         String[] emojis = OpiEngine.emojiSymbols();
         int emojiCount = emojis == null ? 0 : emojis.length;
         // 条数钉死（与 engine-core/tests/emoji_coverage.rs 同一个数）：上游/生成器/宿主
         // 哪一边漂了这里先红。改上游版本时两处（+ 生成器自检）一起改。
-        check(emojiCount == 3963, "emojiSymbols 条数应为 3963（实得 " + emojiCount + "）");
+        check(emojiCount == 687, "emojiSymbols 条数应为 687（实得 " + emojiCount + "）");
         java.util.Set<String> emojiSet = new java.util.HashSet<>();
         if (emojis != null) {
             java.util.Collections.addAll(emojiSet, emojis);
         }
         check(emojiSet.size() == emojiCount, "emojiSymbols 不得有重复");
-        check(emojiCount > 0 && "😀".equals(emojis[0]), "首条 = 官方分组序的 grinning face");
+        check(emojiCount > 0 && "😀".equals(emojis[0]), "首条 = 面板分类序的 grinning face");
         check(emojiSet.contains("😀"), "emojiSymbols 必须含 😀");
-        check(emojiSet.contains("🇨🇳"), "emojiSymbols 必须含国旗序列 🇨🇳（区域指示符成对）");
+        check(emojiSet.contains("😂"), "emojiSymbols 必须含常用表情 😂");
+        check(!emojiSet.contains("🇨🇳"), "emojiSymbols 不得含旗帜（常用子集已排除）");
         check(emojiSet.contains("❤️"), "emojiSymbols 必须含 VS16 形 ❤️（旧表只有裸 ♥）");
         check(!emojiSet.contains("🞀"), "emojiSymbols 不得含非 emoji 的 🞀(U+1F780)");
 
