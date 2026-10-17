@@ -112,8 +112,8 @@
     <g>
       <rect x="240" y="404" width="196" height="96" rx="10" fill="#FFFFFF" stroke="#B9D9D4" stroke-width="1.5"/>
       <text x="338" y="432" text-anchor="middle" font-size="12.5" font-weight="700" fill="#22272E">② KeyRouter 分流</text>
-      <text x="338" y="455" text-anchor="middle" font-size="9.5" fill="#6B7671">缓冲空 → 直传上屏</text>
-      <text x="338" y="471" text-anchor="middle" font-size="9.5" fill="#6B7671">缓冲非空 → 进引擎</text>
+      <text x="338" y="455" text-anchor="middle" font-size="9.5" fill="#6B7671">字母入引擎缓冲</text>
+      <text x="338" y="471" text-anchor="middle" font-size="9.5" fill="#6B7671">数字 / 标点按模式直传</text>
     </g>
     <g>
       <rect x="450" y="404" width="196" height="96" rx="10" fill="#FFFFFF" stroke="#B9D9D4" stroke-width="1.5"/>

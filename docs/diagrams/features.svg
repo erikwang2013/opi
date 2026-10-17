@@ -44,8 +44,8 @@
       <text x="590" y="138" text-anchor="middle" font-size="15" font-weight="700" fill="#22272E">英文</text>
       <text x="590" y="156" text-anchor="middle" font-size="10" font-weight="700" fill="#2E8B80">mode 1</text>
       <text x="590" y="180" text-anchor="middle" font-size="10.5" fill="#6B7671">⇧ 单击锁定 / 长按单次</text>
-      <text x="590" y="196" text-anchor="middle" font-size="10.5" fill="#6B7671">缓冲为空时不过引擎</text>
-      <text x="590" y="212" text-anchor="middle" font-size="10.5" fill="#6B7671">直传上屏，零延迟</text>
+      <text x="590" y="196" text-anchor="middle" font-size="10.5" fill="#6B7671">字母入缓冲，前缀匹配常用词</text>
+      <text x="590" y="212" text-anchor="middle" font-size="10.5" fill="#6B7671">空格提交首候选 / 原文</text>
     </g>
     <g>
       <rect x="714" y="112" width="208" height="106" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
@@ -119,7 +119,7 @@
       <text x="68" y="527">符号大全：22 类目（常用置顶，数理化齐）</text>
       <text x="68" y="547">类目内浏览 + 关键字搜索双通道</text>
       <text x="68" y="567">emoji 与拼音候选同栏合并排序</text>
-      <text x="68" y="587">emoji 覆盖面随 symbols.tsv 重生成（gen_symbols.py）</text>
+      <text x="68" y="587">OpenMoji 常用表情 + 颜文字（gen_emoji_kaomoji.py）</text>
       <text x="68" y="607">搜索 250ms 防抖，开面板先提交 pending 拼音</text>
     </g>
 
