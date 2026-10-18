@@ -315,3 +315,13 @@ V1 里程碑进度：
 | 微信赞赏 | 支付宝赞赏 |
 |---|---|
 | ![微信赞赏码](docs/weixinpay.png) | ![支付宝赞赏码](docs/alipay.png) |
+
+<!-- assets-license:start -->
+## 视觉资产授权 / Visual Assets License
+
+小欧形象、自有表情（`shared/pet/stickers/*.png`）、生成的 emoji 字体（`shared/pet/emoji-font/`）、
+应用图标与文档展示图是**专有资产，不是开源内容**：商业使用需取得书面授权；
+个人非商业用途可随未修改的官方发行版原样使用。代码仍为 MIT；
+OpenMoji（CC BY-SA 4.0）与颜文字（MIT）按各自上游许可。
+详见 [ASSETS-LICENSE.md](ASSETS-LICENSE.md)。
+<!-- assets-license:end -->

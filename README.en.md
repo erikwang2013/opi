@@ -315,3 +315,13 @@ V1 milestone progress:
 | WeChat rewards | Alipay rewards |
 |---|---|
 | ![WeChat rewards QR code](docs/weixinpay.png) | ![Alipay rewards QR code](docs/alipay.png) |
+
+<!-- assets-license:start -->
+## Visual Assets License
+
+The Opi pet, its stickers (`shared/pet/stickers/*.png`), the generated emoji font
+(`shared/pet/emoji-font/`), app icons and documentation artwork are **proprietary assets,
+not open source**: commercial use requires written authorization; personal non-commercial
+use of unmodified official releases is allowed. Code stays MIT; OpenMoji (CC BY-SA 4.0)
+and kaomoji (MIT) keep their upstream licenses. See [ASSETS-LICENSE.md](ASSETS-LICENSE.md).
+<!-- assets-license:end -->
