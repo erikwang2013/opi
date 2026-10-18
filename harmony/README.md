@@ -2,7 +2,7 @@
 
 > ## ⚠️ 先读这段
 >
-> **ArkTS（`ets/**` 那 8 个文件）一个字符都没有编译过** —— `import {
+> **ArkTS（`ets/**` 那 9 个文件）一个字符都没有编译过** —— `import {
 > InputMethodExtensionAbility } from '@kit.IMEKit'` 在普通 tsc 下就断，**连语法检查都做不到**。
 >
 > ⚠️ **2026-09-28 订正归因（原写作「本机没有 HarmonyOS SDK」，实测为假）**：
@@ -35,6 +35,13 @@
 > **又整跑了一轮**：同样 8 个文件逐文件 sha256 与仓库相同、正控照旧报 `@parsing-error`
 > (`-Defects: 1`) + 真树 `No defects found` + `errorFileCount: 0`；两轮日志段按字节偏移
 > 取（2336184→2357916 正控 / 2357916→2379629 真树）。**措辞仍卡在解析层**，一格没松。
+> **2026-10-18 补**：`ets/**` 从 8 个文件长到 9 个 —— 新增机械生成的 `KaomojiData.ets`
+> （颜文字 7 类 / 390 条，源 `data/raw/kaomoji.tsv`），`EmojiPad.ets` 重写为 Android
+> 2026-10-18 布局（顶部 Emoji/颜文字 Tab、底部横滑分类条、自有/颜文字）。同一份探针
+> 重跑：9 个文件 `checkedFiles` 一个不少、`module language is ets`、`errorFileCount: 0`；
+> 探针里的 9 个文件与仓库逐文件 sha256 相同。正控：往探针副本的 `EmojiPad.ets` 头塞
+> `const brokenSyntax: = ;` → `@parsing-error`（1:20）+ `-Defects: 1` / `errorFileCount: 1`。
+> **仍然只到解析层**：无类型检查、无装饰器语义；`OpiPet.ets` 的 9 个形态绘制缺口见「已知缺口」14。
 > **最小工程布局、两道墙（模块级 `build-profile.json5`、模块根下再一层 `src/`）、
 > 正控与负控，全写在 [`docs/install/harmony.md`](../docs/install/harmony.md) 的 §1.1**
 > —— **本行不复述那份清单**：它是一份实测的最小布局，抄到这里就多一份会漂的枚举。
@@ -68,7 +75,7 @@
 > `cabi.rs` 的**签名**逐条核过；`index.d.ts` 与 N-API 注册表**机械核对一致**（名字一一对应）；
 > 模式整数编码对着 `convert.rs` 核过。
 >
-> **但 `.ets` 那 8 个文件仍然是 0 行编译过，N-API 的注册与运行期语义仍全未验证。**
+> **但 `.ets` 那 9 个文件仍然是 0 行编译过，N-API 的注册与运行期语义仍全未验证。**
 > **全目录没有一处可以称为「完成」或「已实现」—— 上面那些是「C 面对得上」，
 > 不是「鸿蒙端能用」。**
 
@@ -130,6 +137,10 @@
   Symbol 模式换成了**表情页**（分组条 + 网格 + 搜索框，见下方 §5e），
   但**符号面板本身仍是缺的**（`opi_symbol_blocks` / `opi_symbols_in_block`
   未桥，原来那 29 个 ASCII 符号也不再一键可达）。原文不改，留痕。
+  ⚠️ **2026-10-18 更新**：表情页已改成 Android 同布局 —— 顶部
+  `[‹ 返回][Emoji | 颜文字][🔍]`、**底部**可横滑分类条、`自有` + 引擎分组 +
+  内嵌颜文字数据（见 §5e 的 10-18 注）。上面「分组条 + 网格 + 搜索框」
+  那句描述的是旧版，已被取代。
 ```
 
 **不要跳过第 1 步去「顺手重构一下分层」。** 这份代码的分层是按
@@ -154,14 +165,15 @@
 | `ets/InputMethodExtensionAbility/OpiPet.ets` | 项目宠物「小欧」的 ArkTS 复刻（键帽精灵，表情跟引擎状态走） |
 | `ets/InputMethodExtensionAbility/InputModes.ets` | **输入模式那件事的数字面**（2026-10-14）：方案/双拼布局/五笔六键的出口包装 + 九项 `INPUT_MODES` 表 + 模块级模式状态机（`selectInputMode` 等）。数字真源逐条注在文件头 |
 | `ets/InputMethodExtensionAbility/KeyPanels.ets` | 9 键 / 大 9 键 / 14 键 / 笔画 四个键面 + 生僻字面板骨架 + 「输入模式」九宫格面板（2026-10-14）。与 Android 的三处差异（左列读数、底行、生僻字无数据）写在文件头 |
-| `ets/InputMethodExtensionAbility/EmojiPad.ets` | 表情页（Symbol 模式）—— **2026-10-14 从 `pages/Index.ets` 原样搬出**，只因那边贴着 500 行门禁；注释与行为一字未改 |
+| `ets/InputMethodExtensionAbility/EmojiPad.ets` | 表情页（Symbol 模式）。2026-10-18 重写为与 Android `EmojiPanel.kt` 同布局：顶部 `[‹ 返回] [Emoji \| 颜文字] [🔍]`、网格、**底部**可横滑分类条；Emoji 分类 = `自有`（12 形态 → Unicode emoji）+ 引擎 `emojiGroups()`，颜文字分类来自 `KaomojiData.ets` |
+| `ets/InputMethodExtensionAbility/KaomojiData.ets` | **机械生成**的颜文字数据（7 类 / 390 条，源 `data/raw/kaomoji.tsv`；解析/分类口径同 Android `KaomojiCategories.parse`）。**别手改** |
 | `ets/InputMethodExtensionAbility/pages/Index.ets` | 键盘 UI 最小骨架：候选栏（候选带页内序号 + ⌨ 输入模式入口）+ preedit + 按键面**分支**（**数字键面按语言模式**、26 键族 QWERTY / 9 键 / 14 键 / 笔画 / 生僻字 / 表情页，2026-10-14）+ 功能行 |
 | `module.json5` | `extensionAbilities` 配置**片段**（不是能直接用的完整 manifest） |
 | `resources/base/profile/input_method_config.json` | 输入法子类型配置 |
 
 **不写行数**：行数随 SPDX 头、注释增删而漂（本表曾普遍少 3 行），
-与本仓库「不写会漂的数字」的规矩一致。上表 15 个文件 + 本 README = `harmony/`
-共 16 个文件；**本目录能验的都列在下方「实测记录」里**（Rust 侧目标编译 / C 侧
+与本仓库「不写会漂的数字」的规矩一致。上表 16 个文件 + 本 README + 未列进表的
+`resources/base/media/icon.png` = `harmony/` 共 18 个文件；**本目录能验的都列在下方「实测记录」里**（Rust 侧目标编译 / C 侧
 clang 与符号核对 / CMake 配置与真编译），**没列进去的一律是未验证**。
 
 ⚠️ **缺一个文件（有意不建）：`resources/base/profile/main_pages.json`。**
@@ -644,6 +656,14 @@ test result: FAILED. 13 passed; 1 failed        # 只红这一条，其余 13 �
 `emojiSymbols()` 求交（`KeyboardController.searchEmoji`）—— 与 Android
 `SymbolPanel` 的 `results.filter(catalog::isEmoji)` 是同一件事、同一层。
 
+> **2026-10-18 布局更新**：本节开头写的「分组条 + 网格 + 搜索框」是 2026-10-13 的旧版。
+> 现 `EmojiPad.ets` 与 Android `EmojiPanel.kt` 的 2026-10-18 布局对齐：顶部
+> `[‹ 返回][Emoji | 颜文字][🔍]`，网格下方**一条可横滑分类条**；Emoji 分类 =
+> `自有` + `emojiGroups()`，颜文字来自新增的 `KaomojiData.ets`（7 类 390 条，机械生成）。
+> 分类点击采取**切片**而不是 `scrollToItem`（网格只画当前组），所以高亮 = 当前组；
+> 这是本机查不到 `Scroller` API 时的取舍，不是 Android 的滚动语义。搜索出口、去重、
+> 「无匹配」宠物仍沿用本节下文。
+
 **本机跑过的（原样输出）：**
 
 ```
@@ -835,7 +855,7 @@ test result: ok. 1 passed; 0 failed                        # 14 passed 的全量
 
 ### 6. 没验证的（**比上面长得多 —— 本节才是主体**）
 
-**ArkTS（`ets/**` 全部 8 个文件）：0 行编译过。**
+**ArkTS（`ets/**` 全部文件）：0 行编译过。**
 不只是「没测过」——**连类型都没过过编译器**。装饰器（`@Entry` `@Component` `@Prop`
 `@Watch` `@StorageLink` `@Builder`）、`@kit.IMEKit`、`@kit.ArkUI` 的 `display`、
 Canvas / `CanvasRenderingContext2D`、`JSON.parse(...) as string[]` 的断言，
@@ -1141,6 +1161,11 @@ grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|op
    >    **只能**做 `List`/`Grid`/`Swiper` 的直接子节点（**塞不进 `Scroll`/`Column`**）——
    >    所以这不是「加一行」，是换容器。骨架本轮**没写**（写一个没编译过的
    >    `IDataSource` 只会再欠一笔）。
+   >
+   > **2026-10-18 补**：布局已换成 Android 版（顶部 Tab + 底部横滑分类条），
+   > 缺口 ②③④ 原样保留（搜索输入通道未解决、无字形过滤、网格不虚拟化）。
+   > 颜文字走内嵌 `KaomojiData.ets`，不依赖引擎；`自有` 的 12 个形态映射逐条等于
+   > `shared/pet/PetEmojiMap.kt`，但绘制缺口见第 14 条。
 4. **无用户词持久化**（`opi_import_user_words` / `opi_export_user_words` /
    `opi_clear_user_words` / `opi_remove_user_word` 未桥接）。
 5. **无繁体切换入口**（`opi_load_trad` 未桥接；`OpiMode.Traditional` 有枚举
@@ -1235,6 +1260,13 @@ grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|op
     切回半角 ASCII —— 与第 11 条末尾那句「`。` 在鸿蒙端出不来」**不是同一件事**
     （那是拼音键盘上没有标点键，引擎侧无关）。要接就按 §5 那条 `comm` 取今天的清单，
     别照本行抄。
+
+14. **`OpiPet.ets` 只画了 5 种形态**（2026-10-18 发现）。枚举 14 个值齐全、跨端序号一致，
+    但 `draw()` 只对 Sleepy / Puzzled / Waiting / Degraded 分化；表情页「自有」里的
+    Crying / Terrified / Angry / Coquettish / Cute / Pleasing / Knocking / FacePalm /
+    TongueOut 九个**全部落回 Idle 外观**（点击提交的 emoji 仍正确）。
+    真源是 `shared/pet/OpiPet.kt` 的 `drawPet` / `drawPetFace`；补齐要按它逐形态移植，
+    本轮没做（本轮只改表情页与数据，不动宠物绘制；若另一路正在补，以那边为准）。
 
 > 另有一处**不是缺口、是刻意取舍**，写在这里免得有人当 bug 修：
 > `OpiEngine.ets` 与 `opi_ffi.h` 都**没有** `KEY_UP/DOWN/LEFT/RIGHT`

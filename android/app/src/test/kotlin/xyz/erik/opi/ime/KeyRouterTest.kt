@@ -379,4 +379,68 @@ class KeyRouterTest {
         assertEquals(1, ch.syncCount)
         assertTrue(ctrl.buffer.isEmpty())
     }
+
+    // ---- 切 English 时前端 ⇧ 必须重推给引擎（四端同一条语义） ----
+
+    @Test
+    fun switchModeToEnglishReappliesSingleShift() {
+        // 拼音里长按 ⇧（SINGLE）再切 English：JNI 切换清了引擎 shift，前端三态要重推，
+        // 否则高亮着却打出小写。
+        val fake = FakeEngine()
+        val ch = Channel()
+        val (ctrl, r) = router(fake, ch)
+        ctrl.shiftLongPress()
+        assertEquals(xyz.erik.opi.engine.ShiftState.SINGLE, ctrl.shiftState)
+
+        ctrl.switchMode(EngineMode.ENGLISH)
+        r.handleKey("a")
+
+        assertEquals("A", ctrl.buffer)
+        assertEquals(xyz.erik.opi.engine.ShiftState.OFF, ctrl.shiftState)
+        assertEquals(false, fake.shiftOn)
+    }
+
+    @Test
+    fun switchModeToEnglishReappliesLockShift() {
+        val fake = FakeEngine()
+        val ch = Channel()
+        val (ctrl, r) = router(fake, ch)
+        ctrl.shiftTap() // 单击 = LOCK
+        assertEquals(xyz.erik.opi.engine.ShiftState.LOCK, ctrl.shiftState)
+
+        ctrl.switchMode(EngineMode.ENGLISH)
+        r.handleKey("a")
+        r.handleKey("b")
+
+        assertEquals("AB", ctrl.buffer)
+        assertEquals(xyz.erik.opi.engine.ShiftState.LOCK, ctrl.shiftState)
+        assertEquals(true, fake.shiftOn)
+    }
+
+    @Test
+    fun switchLanguageToEnglishReappliesSingleShiftOnEmptyBuffer() {
+        val fake = FakeEngine()
+        val ch = Channel()
+        val (ctrl, r) = router(fake, ch)
+        ctrl.shiftLongPress()
+        ctrl.switchLanguage(EngineMode.ENGLISH, InputScheme.FULL)
+        r.handleKey("a")
+        assertEquals("A", ctrl.buffer)
+        assertEquals(xyz.erik.opi.engine.ShiftState.OFF, ctrl.shiftState)
+    }
+
+    @Test
+    fun switchLanguageToEnglishKeepsShiftForCarriedBuffer() {
+        // 携带拼音缓冲：字母直传不经引擎，前端大写照旧；single 用掉即复位。
+        val fake = FakeEngine().apply { buf = "ni" }
+        val ch = Channel()
+        val (ctrl, r) = router(fake, ch)
+        ctrl.shiftLongPress()
+        ctrl.switchLanguage(EngineMode.ENGLISH, InputScheme.FULL)
+        assertTrue(ctrl.bufferCarried)
+        r.handleKey("a")
+        assertEquals(listOf("A"), ch.commits)
+        assertEquals("ni", fake.buf)
+        assertEquals(xyz.erik.opi.engine.ShiftState.OFF, ctrl.shiftState)
+    }
 }

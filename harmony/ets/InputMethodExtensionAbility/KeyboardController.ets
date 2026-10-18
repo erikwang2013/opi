@@ -304,19 +304,14 @@ export class KeyboardController {
   /**
    * 切模式（中/英/数字/符号）。切之前会清空缓冲，避免带着半截拼音换键盘。
    *
-   * ⚠️ `setShift(false)` 打的是**引擎侧** shift 位，**不动前端的 ⇧ 三态**
-   * （`cabi.rs` 的 `opi_set_shift` → `router.set_shift` 只写引擎位）。
-   * 所以这一行**不是**「切模式清 ⇧」—— 真正清三态的是引擎自己：
-   * `KeyRouter::switch_mode` 在**离开 English** 时把三态置 `Off`
-   * （判据与 Android `EngineController.switchMode` 的 `if (m != ENGLISH)` 逐字一致）。
-   * 留在这一行的作用只是保证「切进 English 时引擎位不与前端三态打架」。
-   * **别把它当成三态重置去依赖**：从拼音（⇧ 已点亮）切进英文时，
-   * 三态**按设计保留**，于是第一个字母大写 —— 那是 ⇧ Single 的正常行为，不是 bug。
+   * ⇧ 与引擎 shift 的同步归 `KeyRouter::switch_mode`（单一来源）：**离开** English
+   * 清前端三态；**进入** English 时前端三态是唯一真值 —— SINGLE/LOCK 重推给引擎，
+   * 首个字母大写、single 用掉即复位（四端同一条语义）。
+   * ⚠️ 别在这里再 `setShift(false)`：那会把切换刚重推的引擎位又清掉（首个字母变小写）。
    */
   switchMode(m: OpiMode): void {
     OpiEngine.clear();
     OpiEngine.switchMode(m);
-    OpiEngine.setShift(false);
     this.publish();
   }
 

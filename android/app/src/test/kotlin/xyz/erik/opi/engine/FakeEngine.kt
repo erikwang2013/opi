@@ -88,6 +88,7 @@ class FakeEngine : OpiEngineApi {
     override fun switchMode(mode: Int) {
         switchCalls += mode
         this.mode = mode
+        shiftOn = false // 真引擎：composer.switch_mode 清 shift（前端三态要重推）
     }
 
     override fun setShift(on: Boolean) {
@@ -128,6 +129,7 @@ class FakeEngine : OpiEngineApi {
         }
         this.mode = mode
         schemeValue = scheme
+        shiftOn = false // 真引擎：switch_mode_keep_buffer 同样清 shift
     }
 
     /** 候选拼音读数（真引擎：与最近一次 candidates() 同源；出口已按读音去重保序）。 */

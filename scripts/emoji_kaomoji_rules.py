@@ -81,7 +81,7 @@ EMOJI_MUST_HAVE = {
     # 人物 / 手势
     "waving hand", "thumbs up", "thumbs down", "ok hand", "victory hand",
     "folded hands", "clapping hands", "raising hands", "flexed biceps",
-    "handshake", "eyes", "people hugging",
+    "handshake", "eyes", "people hugging", "person facepalming",
     # 动物 / 植物
     "dog face", "cat face", "mouse face", "hamster", "rabbit face", "fox",
     "bear", "panda", "koala", "tiger face", "lion", "cow face", "pig face",
@@ -108,7 +108,7 @@ EMOJI_MUST_HAVE = {
     "mobile phone", "laptop", "keyboard", "desktop computer", "camera",
     "light bulb", "key", "locked", "books", "pencil", "memo", "calendar",
     "alarm clock", "money bag", "credit card", "glasses", "t-shirt",
-    "jeans", "running shoe", "crown", "ring",
+    "jeans", "running shoe", "crown", "ring", "hammer",
     # 符号
     "red heart", "broken heart", "hundred points", "check mark button",
     "cross mark", "red exclamation mark", "red question mark", "right arrow",

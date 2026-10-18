@@ -222,3 +222,25 @@ fn symbol_mode_has_no_punctuation_mapping() {
         "全角开关在符号模式不生效"
     );
 }
+
+// ---------- 模式切换 × ⇧ ----------
+
+/// 拼音里按 ⇧（SINGLE/LOCK）再切 English：引擎 shift 刚被 `switch_mode` 清掉，
+/// 前端三态必须重推 —— 否则高亮着却打出小写（四端同一条语义）。
+#[test]
+fn switch_to_english_reapplies_shift_state() {
+    let mut s = punct_state();
+    s.shift_tap(); // SINGLE
+    s.switch_mode(Mode::English);
+    assert_eq!(handle_key(&mut s, 'a' as u32, 0), KeyAction::EngineHandled);
+    assert_eq!(s.buffer(), "A", "SINGLE 重推：首个字母大写");
+    assert_eq!(s.shift_state(), ShiftState::Off, "single 用掉即复位");
+
+    let mut s = punct_state();
+    s.shift_long_press(); // LOCK
+    s.switch_mode(Mode::English);
+    handle_key(&mut s, 'a' as u32, 0);
+    handle_key(&mut s, 'b' as u32, 0);
+    assert_eq!(s.buffer(), "AB", "LOCK 重推且持续");
+    assert_eq!(s.shift_state(), ShiftState::Lock);
+}

@@ -3,34 +3,44 @@
 
 // ⚠️ 草案 · **CI 已真编译**（apple.yml 的 iOS job，2026-10-15）· **从未上机运行**
 //
-// 本文件在 Linux 上编写。**已过 `swiftc ios/*.swift`（-typecheck + -emit-library）** ——
-// 2026-10-15 那次全目录真编译（同一轮还当场抓出一处闭包里的 `continue`，见 RarePanel.swift）；
+// 本文件在 Linux 上编写。2026-10-15 那次 `swiftc ios/*.swift` 全目录真编译过；
 // 但从未在设备或模拟器上跑过：**行为仍未验证**，别把「编过」读成「能用」。
-// 见 ios/README.md「在 Mac 上第一件要做的事」：先让它编译过，再谈功能。
+// ⚠️ **2026-10-18 的布局改写尚未经过任何编译**（本机没有 swiftc）——
+// 待 CI apple.yml 的 iOS job；见 ios/README.md。
 //
-// 表情页：引擎表情表的**展示层**（顶部分类条 + 竖向滚动网格 + 搜索框）。
+// 表情页：引擎表情表 + 颜文字表的**展示层**（顶部 Emoji/颜文字 Tab + 网格 + 底部横滑分类条）。
 //
-// 姿态与 `SymbolPanel.swift` **相同**：只画与发射点击，**不上屏、不碰引擎** ——
-// 数据由控制器塞进来（`showBrowse` / `showResults`），点中的表情经 `onPick` 回控制器，
+// 布局与 Android `keyboard/EmojiPanel.kt`、桌面 `candidate/EmojiPage.kt`（2026-10-18）对齐：
+//
+// ```
+// [‹ 返回]   [Emoji | 颜文字]   [🔍]
+// ┌────────────── 网格 ──────────────┐
+// └──── 可横滑的分类条（底部一条）────┘
+// ```
+//
+// - **Emoji** 分类 = `自有` + 引擎 `emojiGroups()`（与 Android `PetEmoji.categories` 同构：
+//   引擎的 `start` 整体后移 `PetEmojiTable.forms.count`）。`自有` 的 12 个形态在 iOS 上
+//   **没有小欧矢量绘制**，网格里用 emoji 字形 + 小标签表达，点击提交该 emoji
+//   （映射见 `PetEmojiTable.swift`，与 `shared/pet/PetEmojiMap.kt` 同源）。
+// - **颜文字** 分类 = `KaomojiData.categories`（生成自 `data/raw/kaomoji.tsv`，
+//   口径同 Android `KaomojiCategories`）。
+// - 分类条点一下 = 网格滚到该组首项所在行；高亮由网格的 `onScroll` 按
+//   「首个可见项」反推（同 Android `groupIndexOf`）。
+//
+// 姿态与 `SymbolPanel.swift` 相同：只画与发射点击，**不上屏、不碰引擎** ——
+// 数据由控制器塞进来（`showBrowse` / `showResults`），点中的条目经 `onPick` 回控制器，
 // 由它走既有的 `insert(...)`（同符号键的 `.commitText` 通路，**不过引擎**：引擎的标点表
 // 会把字符改写成中文标点/全角，而用户在表情页点的就是要那个字符）。
 //
-// 对齐 Android `SymbolPanel.kt` 的表情页（2026-10-12 用户裁决的两套工具条）：
-//   浏览态 `[‹ 返回][分类条][🔍]`；搜索态 `[‹ 返回][搜索框]`。
-// 分类条点一项 = 网格滚到该组 `start`（`OpiEmojiGroup.start`，下标对齐 `OpiEngine.emojiSymbols()`）。
-//
 // 本层**故意没做**（Android 有、这里没接，别当成漏了）：
-//   1. 「最近使用」一行（Android `recents`）—— 要跨面板状态，本骨架的符号面板也没有；
-//   2. 分类条的**滚动跟随高亮**（Android 用 `firstVisibleItemIndex`）—— 要接
-//      `UIScrollViewDelegate`，先只做「点分类跳过去」这一半；
-//   3. 空结果的小欧宠物（Android `OpiPet`）—— iOS 侧根本没有宠物这个组件。
+//   1. 「最近使用」一行（Android `recents`）—— 要跨面板状态，本骨架的符号面板也没有。
 
 import UIKit
 
 /// 表情页。只负责画与发射点击，**不上屏、不碰引擎**。
 final class EmojiPanel: UIView {
 
-    /// 点中一个表情。上屏由控制器做（它才知道 textDocumentProxy）。
+    /// 点中一个表情/颜文字。上屏由控制器做（它才知道 textDocumentProxy）。
     var onPick: ((String) -> Void)?
     /// 浏览态点「返回」= 离开表情页回字母层（同 Android `onClose` → `backToLetters`）。
     var onBack: (() -> Void)?
@@ -40,30 +50,33 @@ final class EmojiPanel: UIView {
 
     // MARK: - 布局常量（与 SymbolPanel 对表）
     //
-    // ⚠️ 未编译：全部数值都是拍的（同 SymbolPanel），真机上按手感调。
+    // ⚠️ 未编译：数值都是拍的（同 SymbolPanel），真机上按手感调。
 
-    /// 每行几个。与 `SymbolPanel.perRow` 同一个数（Android 是 `GridCells.Fixed(8)`）。
-    private static let perRow = 8
-    /// 行高。滚动视图里的行**必须**有明确高度（容器 `.fillEqually` 在滚动视图里
-    /// 会退化成 0 高，见 `SymbolPanel.init` 那条注释）。
-    private static let rowHeight: CGFloat = 40
-    /// 网格行间距。与 `SymbolPanel` 的 `stack.spacing = 6` 是**同一个数**（那边是字面量）——
-    /// 本文件要用它两次（行间距 + `scrollToGroup` 的偏移换算），所以提成常量。
-    private static let gridSpacing: CGFloat = 6
-    /// 顶部工具条高度。与 `KeyboardLayout` 候选栏的 40 同值（iOS 侧既有数值）。
+    /// Emoji 每行几个（Android `GridCells.Fixed(8)`）。
+    private static let emojiColumns = 8
+    /// 颜文字比单个 emoji 宽得多：3 列 + 允许缩字，少截成省略号（Android 同）。
+    private static let kaomojiColumns = 3
+    /// 顶部工具条 / 底部分类条高度。与 `KeyboardLayout` 候选栏的 40 同值。
     private static let barHeight: CGFloat = 40
-    /// 空网格与空搜索两句话。文案对齐 Android（`SymbolPanel.kt` 的「无匹配」）。
-    private static let notReady = "（表情库未就绪）"
+    /// 空颜文字 / 空搜索两句话（文案对齐 Android）。
+    private static let noKaomoji = "没有颜文字数据"
     private static let noMatch = "无匹配"
+
+    /// 表情页的两个子页（2026-10-18 用户参考布局：顶部 Emoji / 颜文字）。
+    private enum SubTab { case emoji, kaomoji }
 
     // MARK: - 视图
 
     private let topBar = UIStackView()
+    private let tabs = UIStackView()
     private let groupScroll = UIScrollView()
     private let groupStack = UIStackView()
-    private let gridScroll = UIScrollView()
-    private let gridStack = UIStackView()
+    private let grid = EmojiGridView()
     private let searchField = UITextField()
+
+    /// 网格底边的两种约束：分类条可见时止于它，搜索态（或没有分类）时贴底。
+    private var gridBottomToBar: NSLayoutConstraint!
+    private var gridBottomToBottom: NSLayoutConstraint!
 
     /// 为什么是 `lazy`：`BarButton` 的 `onTap` 是**逃逸**闭包且要捕获 `self`，
     /// 存属性初始化时 `self` 还没就绪 —— `lazy` 是让「引用 self 的属性初始化」合法的
@@ -74,17 +87,29 @@ final class EmojiPanel: UIView {
     private lazy var searchButton = BarButton(title: "🔍") { [weak self] in
         self?.searchTapped()
     }
+    private lazy var emojiTab = BarButton(title: "Emoji") { [weak self] in
+        self?.switchSub(.emoji)
+    }
+    private lazy var kaomojiTab = BarButton(title: "颜文字") { [weak self] in
+        self?.switchSub(.kaomoji)
+    }
 
     // MARK: - 状态（全部由 showBrowse/showResults 塞进来）
 
-    /// 浏览全量（**已过滤字形**）。搜索框为空时网格回落到它 —— 对齐 Android
-    /// `searchQuery.isEmpty()` 时显示浏览内容（不是「搜索结果为空」）。
+    /// 当前子页。进浏览态（`showBrowse`）一律回 Emoji —— 与 Android 的 `remember` 同义：
+    /// 面板重新打开时不该停在上次的颜文字页。
+    private var sub: SubTab = .emoji
+    /// 浏览全量（**已过滤字形**，不含 `自有` 那 12 格）。搜索框为空时网格回落到它。
     private var browseList: [String] = []
-    /// 引擎口径的表情集（同一份已过滤列表的集合形态）：搜索结果拿它过一遍
-    /// `isEmoji`（Android `SymbolCatalog.isEmoji` 同款）。
+    /// 引擎口径的表情集（同一份已过滤列表的集合形态）：搜索结果拿它过一遍。
     private var emojiSet: Set<String> = []
-    /// 重算过 `start`/`count` 的分类条。
+    /// 引擎分类（**已按过滤后下标重算**，尚未加 `自有` 的偏移）。
+    private var emojiGroups: [OpiEmojiGroup] = []
+    /// 当前分类条（Emoji = `自有` + 引擎组；颜文字 = 数据分类）。
     private var groups: [OpiEmojiGroup] = []
+    /// 分类条按钮（与 `groups` 同序；滚动时就地换样式，不重建）。
+    private var groupButtons: [BarButton] = []
+    private var selectedGroup = -1
     /// 工具条现在画哪一套（浏览 / 搜索）。**只**影响工具条与「返回」的去向。
     private var isSearching = false
 
@@ -93,23 +118,34 @@ final class EmojiPanel: UIView {
 
         topBar.axis = .horizontal
         topBar.spacing = 6
+        topBar.alignment = .center
         topBar.translatesAutoresizingMaskIntoConstraints = false
+
+        tabs.axis = .horizontal
+        tabs.spacing = 2
+        tabs.distribution = .fillEqually
+        tabs.translatesAutoresizingMaskIntoConstraints = false
+        tabs.addArrangedSubview(emojiTab)
+        tabs.addArrangedSubview(kaomojiTab)
 
         groupScroll.showsHorizontalScrollIndicator = false
         groupScroll.translatesAutoresizingMaskIntoConstraints = false
         groupStack.axis = .horizontal
-        groupStack.spacing = 5
+        groupStack.spacing = 8
         groupStack.translatesAutoresizingMaskIntoConstraints = false
         groupScroll.addSubview(groupStack)
 
-        gridScroll.showsVerticalScrollIndicator = true
-        gridScroll.translatesAutoresizingMaskIntoConstraints = false
-        gridStack.axis = .vertical
-        gridStack.spacing = Self.gridSpacing
-        gridStack.translatesAutoresizingMaskIntoConstraints = false
-        gridScroll.addSubview(gridStack)
+        grid.translatesAutoresizingMaskIntoConstraints = false
+        grid.onPick = { [weak self] text in
+            self?.onPick?(text)
+        }
+        // 滚动时反推高亮（搜索态没有分类条，跳过）。
+        grid.onScroll = { [weak self] in
+            guard let self, !self.isSearching else { return }
+            self.updateCategoryHighlight()
+        }
 
-        searchField.placeholder = "搜索（拼音/英文）" // 同 Android 的占位文案
+        searchField.placeholder = "搜索（拼音/英文）"
         searchField.font = .systemFont(ofSize: 14)
         searchField.borderStyle = .roundedRect
         searchField.autocorrectionType = .no
@@ -117,35 +153,39 @@ final class EmojiPanel: UIView {
         searchField.returnKeyType = .search
         searchField.addTarget(self, action: #selector(searchChanged), for: .editingChanged)
 
-        // ⚠️ 未编译：不钉 hugging 的话，工具条里「谁拉伸」是歧义的 ——
-        // 分类条/搜索框要吃掉中间的空档，两侧按钮各自按内容宽。
+        // 不钉 hugging 的话，工具条里「谁拉伸」是歧义的 —— 中间的子页切换/搜索框
+        // 吃掉空档，两侧按钮各自按内容宽。
         backButton.setContentHuggingPriority(.required, for: .horizontal)
         searchButton.setContentHuggingPriority(.required, for: .horizontal)
-        groupScroll.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        tabs.setContentHuggingPriority(.defaultLow, for: .horizontal)
         searchField.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         addSubview(topBar)
-        addSubview(gridScroll)
+        addSubview(grid)
+        addSubview(groupScroll)
 
-        // ⚠️ 未编译：滚动视图的约束写法与 `SymbolPanel` 逐条同构（竖向：contentLayoutGuide
-        // 定内容、宽度钉 frameLayoutGuide 防横向滚动）；分类条是候选栏那套的**横向**版本
-        // （那里钉的是高度）。Mac 上确认一遍。
+        gridBottomToBar = grid.bottomAnchor.constraint(
+            equalTo: groupScroll.topAnchor, constant: -4
+        )
+        gridBottomToBottom = grid.bottomAnchor.constraint(equalTo: bottomAnchor)
+
+        // 滚动视图的约束写法与 `SymbolPanel` 逐条同构；
+        // 分类条是候选栏那套的**横向**版本（那里钉的是高度）。
         NSLayoutConstraint.activate([
             topBar.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 3),
             topBar.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -3),
             topBar.topAnchor.constraint(equalTo: topAnchor),
             topBar.heightAnchor.constraint(equalToConstant: Self.barHeight),
 
-            gridScroll.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 3),
-            gridScroll.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -3),
-            gridScroll.topAnchor.constraint(equalTo: topBar.bottomAnchor, constant: 4),
-            gridScroll.bottomAnchor.constraint(equalTo: bottomAnchor),
+            grid.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 3),
+            grid.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -3),
+            grid.topAnchor.constraint(equalTo: topBar.bottomAnchor, constant: 4),
+            gridBottomToBottom,
 
-            gridStack.leadingAnchor.constraint(equalTo: gridScroll.contentLayoutGuide.leadingAnchor),
-            gridStack.trailingAnchor.constraint(equalTo: gridScroll.contentLayoutGuide.trailingAnchor),
-            gridStack.topAnchor.constraint(equalTo: gridScroll.contentLayoutGuide.topAnchor),
-            gridStack.bottomAnchor.constraint(equalTo: gridScroll.contentLayoutGuide.bottomAnchor),
-            gridStack.widthAnchor.constraint(equalTo: gridScroll.frameLayoutGuide.widthAnchor),
+            groupScroll.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 3),
+            groupScroll.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -3),
+            groupScroll.bottomAnchor.constraint(equalTo: bottomAnchor),
+            groupScroll.heightAnchor.constraint(equalToConstant: Self.barHeight),
 
             groupStack.leadingAnchor.constraint(equalTo: groupScroll.contentLayoutGuide.leadingAnchor),
             groupStack.trailingAnchor.constraint(equalTo: groupScroll.contentLayoutGuide.trailingAnchor),
@@ -154,7 +194,10 @@ final class EmojiPanel: UIView {
             groupStack.heightAnchor.constraint(equalTo: groupScroll.frameLayoutGuide.heightAnchor),
         ])
 
+        styleTabs()
         setSearching(false) // 建完就把浏览态那一套装上（此时 groups 还空，分类条是空的）
+        rebuildGroupBar()
+        showBrowseGrid()
     }
 
     @available(*, unavailable)
@@ -167,13 +210,15 @@ final class EmojiPanel: UIView {
     /// 两个参数都是引擎的**原始**输出：字形过滤与分类下标重算都在本层做（`filterAndRegroup`），
     /// 与 Android 把过滤放在 `SymbolCatalog`、面板只管画同一分工 —— 控制器一行判据都不留。
     ///
-    /// 进浏览态**一律重置搜索态**：与 Android `openEmoji()` 里那次 `resetSearch()` 对齐，
-    /// 否则「上次搜到一半退出」会带着查询词再进来。
+    /// 进浏览态**一律重置搜索态与子页**：与 Android `openEmoji()` 里那次 `resetSearch()` 对齐，
+    /// 否则「上次搜到一半退出」会带着查询词/颜文字页再进来。
     func showBrowse(_ rawList: [String], groups raw: [OpiEmojiGroup]) {
         let (list, regrouped) = Self.filterAndRegroup(rawList, groups: raw)
         browseList = list
         emojiSet = Set(list)
-        groups = regrouped
+        emojiGroups = regrouped
+        sub = .emoji
+        styleTabs()
         setSearching(false)
         rebuildGroupBar()
         showBrowseGrid()
@@ -189,78 +234,155 @@ final class EmojiPanel: UIView {
             showBrowseGrid()
             return
         }
-        // 保序去重（用户裁决 2026-10-12「表情存在重复的，去重」；Android 是最后一道
-        // `distinct()` —— 上游三层各自去重过，屏幕上一格一样的东西仍不该再出现）。
+        // 保序去重（用户裁决 2026-10-12「表情存在重复的，去重」）。
         var seen = Set<String>()
-        let deduped = results.filter { seen.insert($0).inserted }
-        // 只留引擎口径的表情（Android `results.filter(catalog::isEmoji)`）。
-        // ⚠️ `emojiSet` 是**已过滤字形**的那一份，所以「本机画不出的」在这里也被摘掉。
-        let shown = deduped.filter { emojiSet.contains($0) }
-        rebuildGrid(shown, empty: Self.noMatch)
+        switch sub {
+        case .emoji:
+            // 只留引擎口径的表情（Android `results.filter(catalog::isEmoji)`）。
+            // ⚠️ `emojiSet` 是**已过滤字形**的那一份，所以「本机画不出的」在这里也被摘掉。
+            let shown = results
+                .filter { seen.insert($0).inserted }
+                .filter { emojiSet.contains($0) }
+            grid.showTexts(shown, columns: Self.emojiColumns, empty: Self.noMatch, shrink: false)
+        case .kaomoji:
+            // 颜文字是**本地子串匹配**（同 Android `KaomojiCategories.flatten(...).filter`）。
+            // 控制器仍会先打一次引擎搜索（它不知道当前子页），结果在这里被丢弃 ——
+            // 为省一次低频 FFI 调用不值得给控制器新增一条「当前子页」查询。
+            let shown = KaomojiData.all
+                .filter { $0.range(of: query, options: .caseInsensitive) != nil }
+                .filter { seen.insert($0).inserted }
+            grid.showTexts(
+                shown, columns: Self.kaomojiColumns, empty: Self.noMatch, shrink: true
+            )
+        }
+        updateCategoryHighlight()
     }
 
     /// 画浏览网格（**不碰工具条**）：搜索态里查询被清空、以及正常浏览都用它。
     private func showBrowseGrid() {
-        rebuildGrid(browseList, empty: Self.notReady)
-    }
-
-    // MARK: - 网格
-
-    private func rebuildGrid(_ texts: [String], empty: String) {
-        gridStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        guard !texts.isEmpty else {
-            // 空列表**不休假成空白**：浏览态多半是「引擎还没就绪」，留白会让用户以为
-            // 键盘坏了（同 `SymbolPanel.setSymbols` 的理由）；搜索态则是「真的没搜到」。
-            gridStack.addArrangedSubview(BarButton(title: empty) {})
-            return
+        switch sub {
+        case .emoji:
+            grid.showEmoji(
+                pets: PetEmojiTable.forms, emojis: browseList, columns: Self.emojiColumns
+            )
+        case .kaomoji:
+            grid.showTexts(
+                KaomojiData.all, columns: Self.kaomojiColumns,
+                empty: Self.noKaomoji, shrink: true
+            )
         }
-        for start in stride(from: 0, to: texts.count, by: Self.perRow) {
-            let end = min(start + Self.perRow, texts.count)
-            let row = makeRow(Array(texts[start..<end]))
-            row.heightAnchor.constraint(equalToConstant: Self.rowHeight).isActive = true
-            gridStack.addArrangedSubview(row)
-        }
-        // 换了一批就把滚动位置收回顶部 —— 否则上一批的偏移会留着，面板看起来像
-        // 「打开就是空的」（内容其实在视口上方）。同 `SymbolPanel.setSymbols`。
-        gridScroll.setContentOffset(.zero, animated: false)
-    }
-
-    private func makeRow(_ texts: [String]) -> UIStackView {
-        let row = UIStackView()
-        row.axis = .horizontal
-        row.spacing = 5
-        row.distribution = .fillEqually
-        for t in texts {
-            row.addArrangedSubview(BarButton(title: t) { [weak self] in
-                self?.onPick?(t)
-            })
-        }
-        return row
-    }
-
-    /// 网格滚到第 `start` 条所在的行（分类条点一下的去向）。
-    ///
-    /// 偏移 = 行号 × (行高 + 行距)：行高是显式约束、行距是 `gridStack.spacing`，
-    /// 两者都不由内容决定，所以这个换算与真实布局一致（不像内容自适应那样会漂）。
-    private func scrollToGroup(start: Int) {
-        let row = start / Self.perRow
-        let y = CGFloat(row) * (Self.rowHeight + Self.gridSpacing)
-        gridScroll.setContentOffset(CGPoint(x: 0, y: y), animated: true)
+        updateCategoryHighlight()
     }
 
     // MARK: - 分类条
 
+    /// 当前子页的分类条（Emoji 的引擎组整体后移 `自有` 的格数）。
+    private func groupsFor(_ sub: SubTab) -> [OpiEmojiGroup] {
+        switch sub {
+        case .emoji:
+            let own = PetEmojiTable.forms.count
+            let ownGroup = OpiEmojiGroup(name: "自有", start: 0, count: own)
+            return [ownGroup] + emojiGroups.map {
+                OpiEmojiGroup(name: $0.name, start: $0.start + own, count: $0.count)
+            }
+        case .kaomoji:
+            return KaomojiData.categories.map {
+                OpiEmojiGroup(name: $0.label, start: $0.start, count: $0.items.count)
+            }
+        }
+    }
+
     private func rebuildGroupBar() {
+        groups = groupsFor(sub)
+        groupButtons = groups.map { g in
+            BarButton(title: g.name) { [weak self] in
+                self?.grid.scrollTo(start: g.start)
+            }
+        }
         groupStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        for g in groups {
-            groupStack.addArrangedSubview(BarButton(title: g.name) { [weak self] in
-                self?.scrollToGroup(start: g.start)
-            })
+        for b in groupButtons {
+            groupStack.addArrangedSubview(b)
         }
         groupScroll.setContentOffset(.zero, animated: false)
+        selectedGroup = -1
+        updateCategoryHighlight()
+        updateBarVisibility()
+    }
+
+    /// 分类条只在浏览态且**有分类**时出现；它藏起来时网格要吃掉这一条的高度。
+    private func updateBarVisibility() {
+        let visible = !isSearching && !groups.isEmpty
+        groupScroll.isHidden = !visible
+        // 先撤旧约束再上新约束：两条同时 active 的那一瞬间是互相矛盾的底边。
+        if visible {
+            gridBottomToBottom.isActive = false
+            gridBottomToBar.isActive = true
+        } else {
+            gridBottomToBar.isActive = false
+            gridBottomToBottom.isActive = true
+        }
+    }
+
+    /// 网格下标 → 分类条要亮第几项（同 Android `SymbolCatalog.groupIndexOf`）。
+    /// 分组连续覆盖全表（引擎门禁保证），取「最后一个 start ≤ index 的组」即可。
+    private static func groupIndexOf(_ groups: [OpiEmojiGroup], _ index: Int) -> Int {
+        var found = -1
+        for (i, g) in groups.enumerated() where g.start <= index {
+            found = i
+        }
+        return found
+    }
+
+    private func updateCategoryHighlight() {
+        guard !groups.isEmpty else { return }
+        let index = Self.groupIndexOf(groups, grid.firstVisibleItemIndex())
+        guard index != selectedGroup else { return }
+        selectedGroup = index
+        for (i, b) in groupButtons.enumerated() {
+            styleCategory(b, selected: i == index)
+        }
+    }
+
+    private func styleCategory(_ b: BarButton, selected: Bool) {
+        b.titleLabel?.font = .systemFont(ofSize: 13, weight: selected ? .bold : .regular)
+        b.setTitleColor(selected ? .systemBlue : .label, for: .normal)
+        // 选中 = 药丸底（同 Android 的 keyBg 底 + accent 字）。
+        b.backgroundColor = selected ? .secondarySystemBackground : .clear
+        b.layer.cornerRadius = 8
+        let name = b.title(for: .normal) ?? ""
+        b.accessibilityLabel = "分类 \(name)" + (selected ? "，已选中" : "")
+        if selected {
+            b.accessibilityTraits.insert(.selected)
+        } else {
+            b.accessibilityTraits.remove(.selected)
+        }
     }
 
     // MARK: - 两套工具条（Android `EmojiTopBar` 的两个状态）
+
+    private func switchSub(_ new: SubTab) {
+        guard new != sub else { return }
+        sub = new
+        styleTabs()
+        rebuildGroupBar()
+        showBrowseGrid()
+    }
+
+    private func styleTabs() {
+        styleTab(emojiTab, title: "Emoji", selected: sub == .emoji)
+        styleTab(kaomojiTab, title: "颜文字", selected: sub == .kaomoji)
+    }
+
+    private func styleTab(_ b: BarButton, title: String, selected: Bool) {
+        b.titleLabel?.font = .systemFont(ofSize: 15, weight: selected ? .bold : .regular)
+        b.setTitleColor(selected ? .systemBlue : .secondaryLabel, for: .normal)
+        b.accessibilityLabel = title + (selected ? "，已选中" : "")
+        if selected {
+            b.accessibilityTraits.insert(.selected)
+        } else {
+            b.accessibilityTraits.remove(.selected)
+        }
+    }
 
     @objc private func searchChanged() {
         onSearch?(searchField.text ?? "")
@@ -291,12 +413,12 @@ final class EmojiPanel: UIView {
     /// 装上工具条的那一套。**故意没有 `guard on != isSearching else { return }`**
     /// —— 别加回去：`init` 里第一次就是 `setSearching(false)`，而 `isSearching` 初值
     /// 也是 `false`，一个提前返回会让工具条**一条子视图都装不上**（面板顶部全空）。
-    /// 「状态没变就不重装」这点开销不值得换一个只在首帧现形的 bug。
     private func setSearching(_ on: Bool) {
         isSearching = on
         // 先清空再按顺序装 —— 换的是整套工具条（返回键两边都在，所以要重装）。
         topBar.arrangedSubviews.forEach { $0.removeFromSuperview() }
         topBar.addArrangedSubview(backButton)
+        backButton.accessibilityLabel = on ? "返回表情" : "关闭表情页"
         if on {
             topBar.addArrangedSubview(searchField)
             // ⚠️⚠️ **未编译 + 未验证的关键一跳**：键盘扩展里 `becomeFirstResponder()`
@@ -316,13 +438,15 @@ final class EmojiPanel: UIView {
             //      —— 这比没有搜索更坏。
             searchField.becomeFirstResponder()
         } else {
-            topBar.addArrangedSubview(groupScroll)
+            topBar.addArrangedSubview(tabs)
             topBar.addArrangedSubview(searchButton)
+            searchButton.accessibilityLabel = "搜索"
             // 退出搜索就清词：不清的话下次进来网格会停在旧查询的过滤结果上
             // （Android `back()` 里那句 `onSearchText("")` 同款理由）。
             searchField.text = ""
             searchField.resignFirstResponder()
         }
+        updateBarVisibility()
     }
 
     // MARK: - 过滤 + 分类下标重算（纯函数，一处算清）
@@ -330,7 +454,7 @@ final class EmojiPanel: UIView {
     /// 把引擎的**原始**表情表与原始分类条，变成「本机能画的列表 + 与之对齐的分类条」。
     ///
     /// 两步必须**一起**做，所以合成一个函数：分类条的下标是**过滤后**列表里的下标
-    /// （过滤会摘掉若干条，原下标会整体偏前）—— 点分类是 `scrollToGroup(组.start)`，
+    /// （过滤会摘掉若干条，原下标会整体偏前）—— 点分类是 `scrollTo(start:)`，
     /// 不重算就会滚错组。分成两个函数就给了「只调其中一个」的机会，那是静默错位。
     ///
     /// 逐条对齐 Android `SymbolCatalog.emojiGroups`（前缀存活表）：

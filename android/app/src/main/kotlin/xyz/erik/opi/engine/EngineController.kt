@@ -257,8 +257,7 @@ class EngineController(
 
     fun switchMode(m: EngineMode) {
         api.switchMode(m.value)
-        // ⇧ 只在 English 有意义：离开必须清，否则 LOCK/SINGLE 残留，切回 English 时字母全大写
-        if (m != EngineMode.ENGLISH) resetShift()
+        syncShiftAfterModeSwitch(m)
         refresh()
     }
 
@@ -279,8 +278,22 @@ class EngineController(
      */
     fun switchLanguage(mode: EngineMode, scheme: InputScheme) {
         api.switchLanguage(mode.value, scheme.value)
-        if (mode != EngineMode.ENGLISH) resetShift()
+        syncShiftAfterModeSwitch(mode)
         refresh()
+    }
+
+    /**
+     * 切换后的 ⇧ 收尾（两条切换路共用，四端同一条语义）：
+     * - **离开** English：清前端三态，否则 LOCK/SINGLE 残留，切回 English 时字母全大写；
+     * - **进入** English：JNI 切换刚把引擎 shift 清掉，而前端 SINGLE/LOCK 还在 ——
+     *   必须重推给引擎，否则高亮着却打出小写。单次态仍由 [consumeSingleShift] 消费。
+     */
+    private fun syncShiftAfterModeSwitch(m: EngineMode) {
+        if (m != EngineMode.ENGLISH) {
+            resetShift()
+        } else if (shiftState != ShiftState.OFF) {
+            api.setShift(true)
+        }
     }
 
     /**

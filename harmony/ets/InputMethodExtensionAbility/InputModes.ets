@@ -239,10 +239,10 @@ export function selectInputMode(i: number): void {
     lastPlainIndex = i;
     setScheme(m.scheme); // 清缓冲（引擎侧）⇒ 调用方随后要重读 buffer/候选/页码
     if ((OpiEngine.mode() as number) !== (m.mode as number)) {
-      // 与 KeyboardController.switchMode 同一份语义：切模式 + 清掉**引擎侧** shift 位。
+      // 与 KeyboardController.switchMode 同一份语义：切模式。⇧/引擎 shift 的同步归
+      // KeyRouter::switch_mode（进入 English 重推前端三态；别在此 setShift(false)）。
       // （缓冲不必再清一次：引擎的 switch_mode 自己就清。）
       OpiEngine.switchMode(m.mode);
-      OpiEngine.setShift(false);
     }
   }
   currentIndex = i;

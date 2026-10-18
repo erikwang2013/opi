@@ -263,8 +263,12 @@ impl TsfLogic {
         // `if (m != ENGLISH) resetShift()` 逐字一致：**离开** English 才清。
         // 前端 ⇧ 三态与引擎侧是两份状态，引擎清了不够 —— 英文空缓冲直传的大小写由
         // ShiftState 决定，Lock 残留会让再次进入 English 后打出的全是大写。
+        // **进入** English 反过来：引擎 shift 刚被清，前端 SINGLE/LOCK 必须重推，
+        // 否则高亮着却打出小写。配对：fcitx5-opi/src/candidate.rs 的同名方法。
         if mode != Mode::English {
             self.shift_state = ShiftState::Off;
+        } else if self.shift_state != ShiftState::Off {
+            self.set_shift(true);
         }
         self.reset_page_if_buffer_changed();
     }

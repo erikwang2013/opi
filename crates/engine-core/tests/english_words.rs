@@ -16,7 +16,7 @@
 use engine_core::candidates::CandidateKind;
 use engine_core::dictionary::InMemoryDictionary;
 use engine_core::keys::{KEY_BACK_SPACE, KEY_RETURN};
-use engine_core::router::{KeyAction, KeyRouter};
+use engine_core::router::{KeyAction, KeyRouter, ShiftState};
 use engine_core::scheme::Scheme;
 use engine_core::symbols::SymbolEngine;
 use engine_core::{Engine, Mode};
@@ -246,6 +246,52 @@ fn carried_buffer_direct_pass_keeps_fullwidth() {
     r.engine_mut().toggle_fullwidth();
     assert_eq!(r.key_event('a' as u32, 0), KeyAction::Input("ａ".into()));
     assert_eq!(r.buffer(), "ni");
+}
+
+/// 切到 English 时前端 ⇧ 三态必须重推给引擎：`switch_mode`/`switch_language` 会清
+/// 引擎 shift（跨模式粘滞态的既有理由），而前端 SINGLE/LOCK 还在 —— 不重推则首个
+/// 字母小写、前端仍高亮（四端同一条语义）。
+#[test]
+fn switch_mode_to_english_reapplies_single_shift() {
+    let mut r = KeyRouter::new(engine());
+    r.shift_tap(); // SINGLE
+    r.switch_mode(Mode::English);
+    assert_eq!(r.key_event('a' as u32, 0), KeyAction::EngineHandled);
+    assert_eq!(r.buffer(), "A", "SINGLE 重推给引擎：首个字母大写");
+    assert_eq!(r.shift_state(), ShiftState::Off, "single 用掉即复位");
+}
+
+#[test]
+fn switch_mode_to_english_reapplies_lock_shift() {
+    let mut r = KeyRouter::new(engine());
+    r.shift_long_press(); // LOCK
+    r.switch_mode(Mode::English);
+    assert_eq!(r.key_event('a' as u32, 0), KeyAction::EngineHandled);
+    assert_eq!(r.key_event('b' as u32, 0), KeyAction::EngineHandled);
+    assert_eq!(r.buffer(), "AB", "LOCK 重推且持续");
+    assert_eq!(r.shift_state(), ShiftState::Lock);
+}
+
+#[test]
+fn switch_language_to_english_reapplies_single_shift() {
+    let mut r = KeyRouter::new(engine());
+    r.shift_tap();
+    r.switch_language(Mode::English, Scheme::Full);
+    assert_eq!(r.key_event('a' as u32, 0), KeyAction::EngineHandled);
+    assert_eq!(r.buffer(), "A");
+    assert_eq!(r.shift_state(), ShiftState::Off);
+}
+
+/// 携带拼音缓冲：字母直传（不经引擎 shift），前端大写照旧，single 用掉即复位。
+#[test]
+fn carried_buffer_switch_language_keeps_shift_uppercase() {
+    let mut r = KeyRouter::new(pinyin_engine());
+    router_type(&mut r, "ni");
+    r.shift_tap(); // SINGLE
+    r.switch_language(Mode::English, Scheme::Full);
+    assert_eq!(r.key_event('a' as u32, 0), KeyAction::Input("A".into()));
+    assert_eq!(r.buffer(), "ni", "携带缓冲原样保留");
+    assert_eq!(r.shift_state(), ShiftState::Off);
 }
 
 /// 英文**自己的**缓冲照常匹配（与携带缓冲的分界）。

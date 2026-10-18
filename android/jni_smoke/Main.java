@@ -227,7 +227,7 @@ public final class Main {
         }
         check(hasHeart, "searchSymbols(he) 命中 ♥");
 
-        // emojiSymbols（2026-10-18 换源）：**OpenMoji 常用子集** —— 687 条、9 组，
+        // emojiSymbols（2026-10-18 换源）：**OpenMoji 常用子集** —— 689 条、9 组，
         // 排除旗帜/肤色变体/ZWJ 组合（筛选规则与源 pin 见 scripts/gen_emoji_kaomoji.py）。
         // 浏览路与搜索路仍是两张表（symbols.tsv 的 emoji 列管单键候选反馈，见
         // symbols.rs 的 builtin_emoji_texts 注释）。
@@ -235,7 +235,7 @@ public final class Main {
         int emojiCount = emojis == null ? 0 : emojis.length;
         // 条数钉死（与 engine-core/tests/emoji_coverage.rs 同一个数）：上游/生成器/宿主
         // 哪一边漂了这里先红。改上游版本时两处（+ 生成器自检）一起改。
-        check(emojiCount == 687, "emojiSymbols 条数应为 687（实得 " + emojiCount + "）");
+        check(emojiCount == 689, "emojiSymbols 条数应为 689（实得 " + emojiCount + "）");
         java.util.Set<String> emojiSet = new java.util.HashSet<>();
         if (emojis != null) {
             java.util.Collections.addAll(emojiSet, emojis);

@@ -53,7 +53,7 @@ pub fn search_symbol_texts(api: &Api, keyword: &str) -> Vec<String> {
 }
 
 /// 表情面板「表情」页的**浏览**表：`data/raw/emoji.tsv`（OpenMoji 常用子集，
-/// 687 条，9 组，含植物；排除旗帜/肤色变体/ZWJ 组合），**按面板分类序**。
+/// 689 条，9 组，含植物；排除旗帜/肤色变体/ZWJ 组合），**按面板分类序**。
 ///
 /// 上一版取的是 UTS#51 `emoji-test.txt` 的完全限定全量（3963 条）。2026-10-18
 /// 起改为 OpenMoji 常用子集 —— 浏览页要常用而非全量，筛选规则与源 pin 见

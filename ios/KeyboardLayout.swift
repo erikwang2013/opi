@@ -106,8 +106,8 @@ final class KeyboardLayout: UIView {
     /// （按权重分行）本来就不是一套，混在一起只会互相牵制。网格画法在 `SymbolPanel.swift`。
     private let symbolPanel = SymbolPanel()
     /// 表情层（2026-10-13）。与 `symbolPanel` **同位置、三者互斥显示**（字母行/符号/表情），
-    /// 数据与画法都在 `EmojiPanel.swift`（那边有理由：分类条/搜索/字形过滤是表情页自己的事），
-    /// 本层只管摆位置 + 转发点击与搜索词。
+    /// 数据与画法都在 `EmojiPanel.swift` + `EmojiGridView.swift`（那边有理由：工具条、
+    /// 分类条、搜索、字形过滤与网格渲染是表情页自己的事），本层只管摆位置 + 转发点击与搜索词。
     private let emojiPanel = EmojiPanel()
     /// 输入模式菜单（2026-10-14）。与上面两个面板**同位置、互斥显示**（四个里只亮一个），
     /// 摆法与转发理由同上；画法与选项在 `InputModePanel.swift`。
@@ -470,8 +470,8 @@ final class KeyboardLayout: UIView {
 }
 
 /// 候选栏/翻页栏/符号面板/表情面板上的小按钮。
-/// 不是 `private`：`SymbolPanel.swift` 与 `EmojiPanel.swift` 都用它
-/// （同一文件里才 private 的那种小类型，拆成两个文件后必须放开可见性）。
+/// 不是 `private`：`SymbolPanel.swift`、`EmojiPanel.swift` 与 `EmojiGridView.swift` 都用它
+/// （同一文件里才 private 的那种小类型，拆成多个文件后必须放开可见性）。
 final class BarButton: UIButton {
     private let onTap: () -> Void
     init(title: String, onTap: @escaping () -> Void) {

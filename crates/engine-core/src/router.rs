@@ -173,7 +173,8 @@ impl KeyRouter {
     }
 
     /// 切换模式：**离开** English 才清前端 ⇧（判据与 Android `EngineController.switchMode`
-    /// 的 `if (m != ENGLISH) resetShift()` 逐字一致）。
+    /// 的 `if (m != ENGLISH) resetShift()` 逐字一致）；**进入** English 时反过来把前端
+    /// 三态重推给引擎 —— 引擎侧 shift 刚被清掉，不重推则 SINGLE/LOCK 高亮着却打出小写。
     ///
     /// 前端 ⇧ 三态与引擎侧是两份状态，引擎清了不够 —— 英文模式下 single 的消费与
     /// Lock 的持续大写由本层状态机配合引擎 shift 一起表达，Lock 残留会让再次进入
@@ -184,6 +185,8 @@ impl KeyRouter {
         self.engine.switch_mode(mode);
         if mode != Mode::English {
             self.shift_state = ShiftState::Off;
+        } else if self.shift_state != ShiftState::Off {
+            self.set_shift(true);
         }
         self.reset_page_if_buffer_changed();
     }
@@ -195,6 +198,8 @@ impl KeyRouter {
         self.engine.switch_language(mode, scheme);
         if mode != Mode::English {
             self.shift_state = ShiftState::Off;
+        } else if self.shift_state != ShiftState::Off {
+            self.set_shift(true);
         }
         self.reset_page_if_buffer_changed();
     }

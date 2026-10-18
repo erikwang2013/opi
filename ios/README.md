@@ -9,6 +9,10 @@
 > ⚠️ 但**「编过」不等于「能用」**：这些代码**从未在设备或模拟器上运行过**，
 > 行为、布局、面板点击链全部未验证。**不要把这里当成「iOS 端已完成」。**
 >
+> **2026-10-18 追加**：表情页布局改写（`EmojiPanel.swift` 重写 + `EmojiGridView.swift` /
+> `KaomojiData.swift` / `PetEmojiTable.swift`）**尚未经过 CI**；下一次 apple.yml 才是它的首编。
+> 在那之前，上面那句「整目录 Swift 编过」只对 2026-10-15 的树成立。
+>
 > 本目录的代码是在 Linux 上写的：本机没有 macOS、没有 Xcode、没有 Apple SDK，
 > `import UIKit` 就断 —— 编译发生在 **CI 的 macOS runner** 上，不在开发机。
 > 改完 Swift **先推一次让 CI 编**，再谈别的（本地读不出来的错，编译器一秒钟就报）。
@@ -81,7 +85,10 @@
 | `InputModePanel.swift` | 输入模式**菜单**（2026-10-14）：九项 chip，选中即换。摆位在 `KeyboardLayout`，语义在 `applyInputMode` |
 | `RarePanel.swift` | 生僻字面板（2026-10-14）：`RareIndex`（TSV 解析）+ 部首→笔画→字三级状态机，提交直提。⚠️ 索引文件本仓 iOS 侧**不存在**（见该文件头注与下面新节） |
 | `SymbolPanel.swift` | 符号层的网格（竖向滚动）。数据来自 `OpiEngine.commonSymbols()`，点击直提。另含 `canRender`（字形判定，表情层共用） |
-| `EmojiPanel.swift` | 表情页（2026-10-13）：分类条 + 网格 + 搜索框两态工具条。数据来自 `OpiEngine.emojiSymbols()`/`emojiGroups()`，点击直提 |
+| `EmojiPanel.swift` | 表情页（2026-10-18 改为 Android 同布局）：顶部 `[‹ 返回][Emoji \| 颜文字][🔍]` + 底部分类条 + 两套工具条。数据来自 `OpiEngine.emojiSymbols()`/`emojiGroups()` 与内嵌颜文字，点击直提。⚠️ 这次改写**未编译** |
+| `EmojiGridView.swift` | 表情页的网格（2026-10-18）：固定列数、显式行高、`自有` 12 格 + 文本格；滚动位置回调给面板反推分类高亮。从 `EmojiPanel` 拆出（500 行门禁） |
+| `KaomojiData.swift` | 颜文字数据（2026-10-18，**生成文件**）：390 条 / 7 类，源 `data/raw/kaomoji.tsv`，头部写了生成命令。Swift 常量，**不走 bundle 资源** |
+| `PetEmojiTable.swift` | 「自有」12 形态的 label + emoji（2026-10-18），与 `shared/pet/PetEmojiMap.kt` 同源。iOS 无小欧矢量绘制，网格里用 emoji 选择器表达 |
 | `KeyboardViewController.swift` | `UIInputViewController` 入口：生命周期、词库装载（含 2026-10-14 加的 `loadBundledDictionaries()`）、**软键盘**路由、`textDocumentProxy`，外加外接键盘的两个入口 `pressesBegan/pressesEnded`（逻辑在下一行那个文件） |
 | `KeyboardHardware.swift` | **外接键盘那一路**：`UIKey`/`UIPress` → 引擎键码、修饰位，以及**引擎之前**判掉的三个热键（`Ctrl+'` / `Ctrl+\` / `Shift+Space`）。不含触摸与布局 |
 | `Info.plist` | 键盘扩展的 `NSExtension` 配置（**键名未核对**） |
@@ -1074,7 +1081,7 @@ OpiString opi_select_page(uint32_t k);  /* 当前页第 k 个；越界/未装载
    `KeyboardViewController.runEmojiSearch` 里**唯一一处真正的调用**
    （`engine.searchSymbols(keyword: q)`）。**符号面板本身仍只用 common 块**
    （`commonSymbols()`），「非 common 块的条目在符号面板上够不到」这条**没变**；
-   表情是**另开的一条数据通路**（`opi_emoji_symbols()`，OpenMoji 常用子集 687 条），
+   表情是**另开的一条数据通路**（`opi_emoji_symbols()`，OpenMoji 常用子集 689 条），
    不是把符号面板补全了。
 2. **块 id 的类型在两端不一样。** Rust 侧是 `BlockId(pub u16)`（0..=65535），
    C ABI 的 `opi_symbols_in_block(int16_t)` 收**有符号** 16 位 —— 只能对齐到
@@ -1096,19 +1103,24 @@ OpiString opi_select_page(uint32_t k);  /* 当前页第 k 个；越界/未装载
 
 ---
 
-## 表情页（2026-10-13 加，**已写，未编译**）
+## 表情页（2026-10-13 加，2026-10-18 改为 Android 同布局，**本轮未编译**）
 
-> ⚠️ 本节与上面几节同一个前提：**Swift 一行都没编译过**。下面每一条都是
-> 「文本级一致」或「抄自哪份实现」，不是「跑过」。
+> ⚠️ 2026-10-13 那版在 2026-10-15 的 CI `apple.yml` iOS job 里**真编译过**（从未上机运行）。
+> **2026-10-18 的布局改写（`EmojiPanel.swift` 重写 + 三个新文件）尚未经过任何编译**：
+> 本机没有 swiftc，待下一次 CI apple.yml。下面每一条都只是「文本级一致」或
+> 「抄自哪份实现」，不是「跑过」。
 
 ### 加了什么
 
 | 层 | 新增 | Android 侧的对应物（证据） |
 |---|---|---|
 | 桥 | `OpiEngine.emojiSymbols()` / `emojiGroups()` + `struct OpiEmojiGroup` | `SymbolApi.emojiSymbols()` / `emojiGroups()`（`SymbolCatalog.kt`） |
-| UI | `EmojiPanel.swift`（分类条 + 网格 + 两态工具条）+ 键盘第四层 `Layer.emoji` | `SymbolPanel.kt` 的 `EmojiTopBar` / 表情 Tab |
+| UI | `EmojiPanel.swift`（顶部 `[‹ 返回][Emoji \| 颜文字][🔍]` + 底部横滑分类条 + 两套工具条）+ 键盘第四层 `Layer.emoji` | `EmojiPanel.kt` 的 `EmojiTopBar` / `CategoryBar` |
+| 网格 | `EmojiGridView.swift`（固定列数、行高 40、`自有` 12 格 + 文本格、滚动位置回调）；从 `EmojiPanel` 按 500 行门禁拆出 | `SymbolGrid` / `LazyVerticalGrid`（8 列 / 颜文字 3 列） |
+| 颜文字 | `KaomojiData.swift`（**生成**自 `data/raw/kaomoji.tsv`：390 条 / 7 类；Swift 常量，**不走 bundle 资源**） | `KaomojiCategories.kt`（解析口径逐条一致） |
+| 自有 | `PetEmojiTable.swift`（12 形态的 label + emoji，与 `shared/pet/PetEmojiMap.kt` 同源）。iOS **无小欧矢量绘制**，用 emoji 选择器表达 | `PetEmojiMap` + `OpiPet` |
 | 入口 | 数字层功能行 `😊`（紧挨 `#+=`，`KeyboardFunctionKey.showEmoji`） | 工具栏的表情入口（`SymbolTab.Emoji`；iOS 只加了这一个入口） |
-| 搜索 | 控制器 250ms 防抖 + trim（`runEmojiSearch`） | `ImeState.SEARCH_DEBOUNCE_MS` / `updateSearchText` |
+| 搜索 | 控制器 250ms 防抖 + trim（`runEmojiSearch`）；颜文字子页在面板内本地子串匹配 | `ImeState.SEARCH_DEBOUNCE_MS` / `KaomojiCategories.flatten(...).filter` |
 | 字形过滤 | `SymbolPanel.canRender` + `EmojiPanel.filterAndRegroup`（前缀存活表） | `SymbolCatalog.canRenderGlyph` / `emojiGroups` 的 `aliveUpTo` |
 
 ### 三条契约（照 Android 逐条核过）
@@ -1120,7 +1132,7 @@ OpiString opi_select_page(uint32_t k);  /* 当前页第 k 个；越界/未装载
    这也是全 ABI **仅有的**两个「未装载不退化」的查询出口，别照抄这个姿态去改别的出口。
 2. **字形过滤与分类下标必须一起重算**（`EmojiPanel.filterAndRegroup` 一个函数同时返回
    两者）。`start` 是**过滤后**列表里的下标：过滤会摘掉若干条，原下标整体偏前 ——
-   点分类是 `scrollToGroup(组.start)`，不重算就滚错组，而屏幕上看不出「这是错的」。
+   点分类是 `grid.scrollTo(start:)`，不重算就滚错组，而屏幕上看不出「这是错的」。
    两件事分成两个函数就给了「只调其中一个」的机会，那是静默错位。
    表拿不到时**原样返回不重算**（硬算会把所有 `start` 压成 0，比不显示分类更坏）。
 
@@ -1129,13 +1141,34 @@ OpiString opi_select_page(uint32_t k);  /* 当前页第 k 个；越界/未装载
    `emoji_groups_cover_the_table_contiguously`，C ABI 侧
    `crates/opi-ffi/tests/cabi_unloaded.rs` 的 `emoji_groups_index_the_full_emoji_list`
    （后者还钉了「Σcount == 全量条数」与「多码位序列必须在」）。**改分组语义前先看这两条**：
-   `scrollToGroup` 的偏移是 `start / perRow × (行高 + 行距)`，空洞会让某个分类滚进别的组，
+   `EmojiGridView.scrollTo(start:)` 的偏移是 `start / columns × (行高 + 行距)`，空洞会让某个分类滚进别的组，
    而屏幕上看不出这是错的。
 3. **空查询 = 回浏览内容，不是「搜到 0 条」**（Android 的内容分支是
    `searchActive && searchQuery.isNotEmpty()`）。所以进搜索态不发 FFI、空查询也不发
    ——`searchSymbols("")` 返回**全部**条目，发了是白捞全表。
 
-### 一处订正（**这轮动的唯一既有代码**）
+### 2026-10-18 布局对齐（与 Android/桌面同日版）
+
+- **顶部**只剩三件：`‹ 返回`、`Emoji | 颜文字` 两个 Tab、`🔍`；点搜索后换成
+  `[‹ 返回][搜索框]`（同 `EmojiTopBar` 的两态）。分类条从顶部挪到**底部**，
+  横滑放不下就滚（`groupScroll`）。
+- **分类条 ↔ 网格双向**：点分类 → `grid.scrollTo(start:)` 滚到该组首项所在行；
+  网格滚动 → `scrollViewDidScroll` → `onScroll` → `groupIndexOf(firstVisibleItemIndex)`
+  反推高亮（取最后一个 `start <= index` 的组，同 `SymbolCatalog.groupIndexOf`）。
+- **`自有`**：12 个形态排在表情网格最前，引擎分组的 `start` 整体后移 12
+  （同 `PetEmoji.categories`）。iOS 没有小欧矢量绘制，格子里画 emoji 字形 + 小标签，
+  点击提交该 emoji；映射表 `PetEmojiTable.swift` 与 `shared/pet/PetEmojiMap.kt` 同源，
+  SLEEPY / DEGRADED 不映射（它们是输入状态，不是可挑形态）。
+- **颜文字**：数据由 `data/raw/kaomoji.tsv` 机械生成成 Swift 常量 `KaomojiData.rows`，
+  **不假设 tsv 能进 bundle**（本仓没有 Xcode 工程，资源没有落点）。解析函数对照
+  `KaomojiCategories.parse`：首次出现序合并、跳过空行/坏行、`start` 累加。
+  tsv 改了要重跑 `KaomojiData.swift` 头部的生成命令。
+- **搜索**：Emoji 子页仍走引擎 `searchSymbols` + `filterAndRegroup`；颜文字子页在
+  `KaomojiData.all` 上本地子串过滤（忽略大小写、保序去重），因为引擎搜索只认表情。
+  控制器对两个子页都发了那次引擎搜索 —— 颜文字时是一次低频、无用的 FFI 调用，
+  没为它加分支。
+
+### 一处订正（**2026-10-13 轮动的唯一既有代码**）
 
 `SymbolPanel.canRender` 的守卫原先是 `guard text.unicodeScalars.count > 1 else { return true }`
 —— **判反了**（`b55e3b5` 引入，与它自己上一行的注释相反）。两头都错：单码位（正是
@@ -1145,11 +1178,17 @@ U+1FAEB 那种要判的）从不被过滤，多码位（VS16 形/键帽）反倒
 
 ### 未做 / 未知数（如实记）
 
+- **2026-10-18 的改写未编译、未上机**：本机无 swiftc，待 CI apple.yml 的 iOS job。
+  `EmojiGridView` 的「滚动偏移 ↔ 首个可见项」换算依赖显式行高 40 + 行距 6
+  （不是内容自适应）；行高、列数（8 / 3）都是照 Android 抄的数，真机手感未验。
+- **`KaomojiData.swift` 是生成物**：`data/raw/kaomoji.tsv` 改了就要重跑头部命令，
+  否则 Swift 常量与 Android 会悄悄分叉（两面没有自动对比的门禁）。
 - **搜索框在扩展里能不能输入，本机无法验证。** iOS 键盘扩展不能唤起系统键盘，
   Android 靠「IME 窗口内 TextField + 面板下方叠字母盘」解决，iOS 没有可直抄的等价机制。
   三种走向与处置写在 `EmojiPanel.setSearching` 的注释里（弹得出 → 就这样；不弹 →
   Gboard 式自喂，要动层机制；都不行 → 删掉 🔍 键，别留点了没反应的按钮）。
-- Android 有而这里**故意没做**：最近使用一行、分类条的滚动跟随高亮、空结果的小欧宠物。
+- Android 有而这里**故意没做**：最近使用一行；空结果的小欧宠物插画（iOS 无矢量绘制，
+  「自有」一律用 emoji 选择器代替）。分类条的滚动跟随高亮**这轮已做**。
 - **符号面板的入口是死胡同**（进去后只有 `#+=` 那层没有回头路）—— 这是**既有缺口**，
   本轮没修，表情页自己带了返回键（`onBack` → `.showLetters`）。
 
