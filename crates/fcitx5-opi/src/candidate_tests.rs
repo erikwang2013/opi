@@ -5,11 +5,12 @@
 use super::*;
 use engine_core::dictionary::InMemoryDictionary;
 
-/// 20 个 "hao" 词条 → 确定性的 3 页候选（20 / 8 = 2.5 → 3 页）。
+/// 20 个 "qwx" 词条 → 确定性的 3 页候选（20 / 8 = 2.5 → 3 页）。
+/// 键选 qwx：不是拼音、也不撞符号/emoji 关键字（emoji 输入匹配会往文本候选**之后**追加）。
 fn state() -> CandidateState {
     let mut d = InMemoryDictionary::new();
     for i in 0..20 {
-        d.insert("hao", &format!("词{i:02}"), (5000 - i) as u32);
+        d.insert("qwx", &format!("词{i:02}"), (5000 - i) as u32);
     }
     let symbols = engine_core::symbols::SymbolEngine::builtin();
     let mut s = CandidateState {
@@ -40,10 +41,10 @@ fn load_fallback_and_bad_path() {
 #[test]
 fn eight_candidates_per_page_and_page_count() {
     let mut s = state();
-    s.input_key('h');
-    s.input_key('a');
-    s.input_key('o');
-    assert_eq!(s.buffer(), "hao");
+    s.input_key('q');
+    s.input_key('w');
+    s.input_key('x');
+    assert_eq!(s.buffer(), "qwx");
     assert_eq!(s.candidates().len(), PAGE_SIZE);
     assert_eq!(s.page_count(), 3);
     assert_eq!(s.candidates()[0], "词00");
@@ -53,7 +54,7 @@ fn eight_candidates_per_page_and_page_count() {
 #[test]
 fn paging_clamps_both_ends() {
     let mut s = state();
-    for c in ['h', 'a', 'o'] {
+    for c in ['q', 'w', 'x'] {
         s.input_key(c);
     }
     // 首页 prev 钳制
@@ -72,7 +73,7 @@ fn paging_clamps_both_ends() {
 #[test]
 fn select_is_page_relative_and_commits() {
     let mut s = state();
-    for c in ['h', 'a', 'o'] {
+    for c in ['q', 'w', 'x'] {
         s.input_key(c);
     }
     s.next_page(); // 第 2 页（global 8..16）
@@ -85,21 +86,21 @@ fn select_is_page_relative_and_commits() {
 #[test]
 fn select_out_of_range_returns_empty() {
     let mut s = state();
-    for c in ['h', 'a', 'o'] {
+    for c in ['q', 'w', 'x'] {
         s.input_key(c);
     }
     s.set_page(2); // 第 3 页仅 4 个候选（16..19）
     assert_eq!(s.select(7), "");
 }
 
-/// 20 条 "hao" 候选、缓冲已置好的状态 —— 提交成功会清缓冲，故每个断言各建一个
-/// （同 `engine-core/tests/select_index_bounds.rs` 的 `router_with(20)` + `type_hao`）。
-/// 符号表取**空表**：候选恰为 20 条（20 = 8+8+4，「末页 4 项」这类前提才确定）——
-/// 上面 `state()` 用的是内建符号表，`hao` 会多出 2 条符号候选（实测 22 条）。
-fn hao_state() -> CandidateState {
+/// 20 条 "qwx" 候选、缓冲已置好的状态 —— 提交成功会清缓冲，故每个断言各建一个
+/// （同 `engine-core/tests/select_index_bounds.rs` 的 `router_with(20)` + `type_key`）。
+/// 符号表取**空表**：候选恰为 20 条（20 = 8+8+4，「末页 4 项」这类前提才确定）；
+/// 键选 qwx 同时也避开 emoji 输入匹配的关键字（那些会追加在文本候选之后）。
+fn key_state() -> CandidateState {
     let mut d = InMemoryDictionary::new();
     for i in 0..20 {
-        d.insert("hao", &format!("词{i:02}"), (5000 - i) as u32);
+        d.insert("qwx", &format!("词{i:02}"), (5000 - i) as u32);
     }
     let symbols = engine_core::symbols::SymbolEngine::new(Vec::new(), Vec::new());
     let mut s = CandidateState {
@@ -110,7 +111,7 @@ fn hao_state() -> CandidateState {
         last_printable: None,
         dicts: Default::default(),
     };
-    for c in ['h', 'a', 'o'] {
+    for c in ['q', 'w', 'x'] {
         s.engine.input_key(c);
     }
     s.refresh_snapshot();
@@ -127,9 +128,9 @@ fn hao_state() -> CandidateState {
 #[test]
 fn select_beyond_page_returns_empty() {
     // 页内正常项不受影响（先钉住不误伤）
-    let mut s = hao_state();
+    let mut s = key_state();
     assert_eq!(s.select(0), "词00", "第 0 页首位");
-    let mut s = hao_state();
+    let mut s = key_state();
     assert_eq!(
         s.select(PAGE_SIZE - 1),
         "词07",
@@ -137,7 +138,7 @@ fn select_beyond_page_returns_empty() {
     );
 
     // 页内越界 k=8：全量列表里第 8 项**存在**（就是旧实现提交的那一条）
-    let mut s = hao_state();
+    let mut s = key_state();
     assert_eq!(s.page(), 0);
     assert_eq!(s.candidates().len(), PAGE_SIZE, "前置：第 0 页是满页 8 条");
     let full: Vec<String> = s.fetched().into_iter().map(|c| c.text).collect();
@@ -151,37 +152,37 @@ fn select_beyond_page_returns_empty() {
         "页内没有第 9 项 → 空串；实际提交了 {:?}（次页首条，用户看不见）",
         full[PAGE_SIZE]
     );
-    assert_eq!(s.buffer(), "hao", "越界不得提交 ⇒ 缓冲不变");
+    assert_eq!(s.buffer(), "qwx", "越界不得提交 ⇒ 缓冲不变");
     assert_eq!(s.page(), 0, "越界不得改页码");
 
     // 第 1 页同样：k=8 → 全局 16（第 2 页首条）也存在，必须空串
-    let mut s = hao_state();
+    let mut s = key_state();
     s.set_page(1);
     assert_eq!(s.select(PAGE_SIZE), "", "第 1 页的页内越界同样必须空串");
-    assert_eq!(s.buffer(), "hao");
+    assert_eq!(s.buffer(), "qwx");
     // 而第 1 页的页内合法项照旧
-    let mut s = hao_state();
+    let mut s = key_state();
     s.set_page(1);
     assert_eq!(s.select(0), "词08", "第 1 页首位 = 全量第 8 项");
-    let mut s = hao_state();
+    let mut s = key_state();
     s.set_page(1);
     assert_eq!(s.select(PAGE_SIZE - 1), "词15", "第 1 页末位");
 
     // 末页只有 4 项（20 = 8+8+4）：k=3 合法、k=4 页内越界（此处全量也越界）
-    let mut s = hao_state();
+    let mut s = key_state();
     s.set_page(2);
     assert_eq!(s.candidates().len(), 4, "前置：末页不满");
     assert_eq!(s.select(3), "词19", "末页最后一项");
-    let mut s = hao_state();
+    let mut s = key_state();
     s.set_page(2);
     assert_eq!(s.select(4), "", "末页第 5 项（页内越界）");
-    assert_eq!(s.buffer(), "hao");
+    assert_eq!(s.buffer(), "qwx");
 }
 
 #[test]
 fn set_shift_clamps_page() {
     let mut s = state();
-    for c in ['h', 'a', 'o'] {
+    for c in ['q', 'w', 'x'] {
         s.input_key(c);
     }
     s.set_page(2); // 末页（3 页候选）
@@ -197,27 +198,27 @@ fn set_shift_clamps_page() {
 #[test]
 fn buffer_change_resets_page() {
     let mut s = state();
-    for c in ['h', 'a', 'o'] {
+    for c in ['q', 'w', 'x'] {
         s.input_key(c);
     }
     s.next_page();
     assert_eq!(s.page(), 1);
     // 继续输入（buffer 变化）→ 页码归零
     s.input_key('x');
-    assert_eq!(s.buffer(), "haox");
+    assert_eq!(s.buffer(), "qwxx");
     assert_eq!(s.page(), 0);
 }
 
 #[test]
 fn backspace_and_clear_reset_page() {
     let mut s = state();
-    for c in ['h', 'a', 'o'] {
+    for c in ['q', 'w', 'x'] {
         s.input_key(c);
     }
     s.next_page();
     s.backspace(); // buffer 变化 → 归零
     assert_eq!(s.page(), 0);
-    s.input_key('o');
+    s.input_key('x');
     s.next_page();
     s.clear(); // buffer 清空 → 归零
     assert_eq!(s.page(), 0);
@@ -287,8 +288,10 @@ fn digit_select_fetches_candidate_table_once() {
     use std::sync::atomic::Ordering;
     let n = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let mut d = InMemoryDictionary::new();
+    // 键用合法音节 seng（不是 qwx）：非法键会触发一次性的分词/纠错分析，
+    // 首抓与第二次抓的词库查询数就不可比了（本用例量的是「抓几次表」）。
     for i in 0..20 {
-        d.insert("hao", &format!("词{i:02}"), (5000 - i) as u32);
+        d.insert("seng", &format!("词{i:02}"), (5000 - i) as u32);
     }
     let mut s = CandidateState {
         engine: Engine::new(
@@ -307,7 +310,7 @@ fn digit_select_fetches_candidate_table_once() {
     };
     s.refresh_snapshot();
     s.switch_mode(Mode::Pinyin);
-    for c in ['h', 'a', 'o'] {
+    for c in ['s', 'e', 'n', 'g'] {
         handle_key(&mut s, c as u32, 0);
     }
     // 基准：读一次当前页候选表要查几次词库（= 一次全量抓取）

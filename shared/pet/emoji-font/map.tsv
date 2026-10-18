@@ -1,0 +1,13 @@
+mood	codepoint	file	label_zh	shortcode
+IDLE	U+E000	idle.png	笑	:opi_smile:
+WAITING	U+E001	waiting.png	欢乐	:opi_joy:
+PUZZLED	U+E002	puzzled.png	沮丧	:opi_sad:
+CRYING	U+E003	crying.png	哭	:opi_cry:
+TERRIFIED	U+E004	terrified.png	惊恐	:opi_scream:
+ANGRY	U+E005	angry.png	愤怒	:opi_angry:
+COQUETTISH	U+E006	coquettish.png	撒娇	:opi_plead:
+CUTE	U+E007	cute.png	卖萌	:opi_wink:
+PLEASING	U+E008	pleasing.png	讨好	:opi_pray:
+KNOCKING	U+E009	knocking.png	敲打	:opi_hammer:
+FACE_PALM	U+E00A	face-palm.png	捂脸	:opi_facepalm:
+TONGUE_OUT	U+E00B	tongue-out.png	吐舌头	:opi_tongue:

@@ -190,6 +190,68 @@ class UserWordStoreTest : UserWordStoreTestBase() {
         assertTrue(deb.lastDelayMs in 1000..2000)
     }
 
+    // ---- 进程退出前的强制落盘（APK 覆盖安装） ----
+
+    @Test
+    fun flushPendingWritesWithoutWaitingForTheDebounce() {
+        val f = target()
+        val engine = FakeEngine().apply { export = """{"ni":3}""" }
+        val deb = FakeDebouncer()
+        val s = store(f, engine, deb)
+        s.load()
+        s.scheduleSave()
+        assertEquals(0, engine.exportCalls) // 还在防抖窗口里
+
+        s.flushPending()
+
+        assertEquals(1, engine.exportCalls) // 取消防抖，立刻导出并落盘
+        assertEquals("""{"ni":3}""", f.readText())
+        deb.fire() // 已被取消的回调不得再写一次
+        assertEquals(1, engine.exportCalls)
+    }
+
+    @Test
+    fun flushPendingBeforeLoadDoesNotWrite() {
+        // 未 load 时引擎里没有导入过文件，导出的会是空表 —— 写回等于清空用户词
+        val f = target()
+        val engine = FakeEngine()
+        val s = store(f, engine)
+        s.scheduleSave()
+
+        s.flushPending()
+
+        assertEquals(0, engine.exportCalls)
+        assertFalse(f.exists())
+    }
+
+    @Test
+    fun flushPendingWithNoPendingSaveDoesNothing() {
+        // 覆盖安装可能发生在没有选词的时候：不要凭空多写一次盘
+        val f = target()
+        val engine = FakeEngine()
+        val s = store(f, engine)
+        s.load()
+
+        s.flushPending()
+
+        assertEquals(0, engine.exportCalls)
+        assertFalse(f.exists())
+    }
+
+    @Test
+    fun flushAllReachesLoadedStoresWithoutTheServiceHoldingThem() {
+        // 接收器不知道 IME/设置页各自持有哪个 store —— 走进程级注册表统一 flush
+        val f = target()
+        val engine = FakeEngine().apply { export = """{"ni":3}""" }
+        val s = store(f, engine)
+        s.load()
+        s.scheduleSave()
+
+        UserWordStore.flushAll()
+
+        assertEquals("""{"ni":3}""", f.readText())
+    }
+
     @Test
     fun saveIsAtomicAndLeavesNoTmpBehind() {
         val f = target().apply { writeText("old") }

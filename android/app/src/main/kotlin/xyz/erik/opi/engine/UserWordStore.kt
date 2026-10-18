@@ -7,6 +7,8 @@ import xyz.erik.opi.ime.Debouncer
 import java.io.File
 import java.io.FileOutputStream
 import java.io.Reader
+import java.util.Collections
+import java.util.WeakHashMap
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
@@ -144,6 +146,21 @@ class UserWordStore(
             if (text.length > limit) null else text
 
         private const val READ_CHUNK_CHARS = 8192
+
+        /**
+         * 本进程里装载过的实例（弱引用：设置页 Activity 重建不会把它们永久留住）。
+         *
+         * 覆盖安装的接收器不持有服务实例，也不需要知道用户词在谁手里 —— 直接让所有
+         * 活着的 store 把防抖中的保存落盘（见 [flushAll]）。
+         */
+        private val live =
+            Collections.synchronizedMap(WeakHashMap<UserWordStore, Unit>())
+
+        /** APK 覆盖、进程退出前调用：所有已装载实例立即落盘。主线程（同 [flushPending]）。 */
+        fun flushAll() {
+            val stores = synchronized(live) { live.keys.toList() }
+            stores.forEach { it.flushPending() }
+        }
     }
 
     private var pending: (() -> Unit)? = null
@@ -166,6 +183,7 @@ class UserWordStore(
     fun load() {
         if (loaded) return
         loaded = true
+        live[this] = Unit // 之后进程若被覆盖安装的接收器结束，防抖中的保存由 flushAll 兜底
         sweepResidue()
         val json = try {
             file.readText()
@@ -239,6 +257,21 @@ class UserWordStore(
             pending = null
             saveSoon()
         }
+    }
+
+    /**
+     * 立即落盘防抖窗口里的那次保存。给「进程即将退出」用（APK 覆盖安装，
+     * 见 `PackageReplacedReceiver`）：防抖回调随进程一起消失，等不到 1.5 秒。
+     *
+     * 未 [load] 过则不写：此时引擎里没有导入过文件，导出结果是空表，写回等于把
+     * 用户词清空。没有 pending 时也不写：在途写盘已经排在 io 队列里了。
+     * 与 [scheduleSave] 一样只在主线程调用（exportJson 与其它引擎调用同线程）。
+     */
+    fun flushPending() {
+        if (!loaded || pending == null) return
+        pending?.invoke() // 取消防抖回调（返回的是 cancel）
+        pending = null
+        saveSoon()
     }
 
     private fun saveSoon() {

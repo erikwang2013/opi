@@ -18,11 +18,11 @@ use super::*;
 use crate::candidate::{CandidateState, ShiftState};
 use engine_core::dictionary::InMemoryDictionary;
 
-/// 20 个 "hao" 词条 + 引擎：确定性的 3 页候选（同 input_method_tests.rs 的夹具）。
+/// 20 个 "qwx" 词条 + 引擎：确定性的 3 页候选（同 input_method_tests.rs 的夹具；键避开符号/emoji 关键字）。
 fn page_state() -> CandidateState {
     let mut d = InMemoryDictionary::new();
     for i in 0..20 {
-        d.insert("hao", &format!("词{i:02}"), (5000 - i) as u32);
+        d.insert("qwx", &format!("词{i:02}"), (5000 - i) as u32);
     }
     let mut s = CandidateState {
         engine: engine_core::Engine::new(
@@ -50,7 +50,7 @@ fn typed(s: &mut CandidateState, word: &str) {
 #[test]
 fn minus_and_equal_page_while_composing() {
     let mut s = page_state();
-    typed(&mut s, "hao");
+    typed(&mut s, "qwx");
     assert_eq!(handle_key(&mut s, '=' as u32, 0), KeyAction::EngineHandled);
     assert_eq!(s.page(), 1, "'=' 下一页");
     assert_eq!(handle_key(&mut s, '=' as u32, 0), KeyAction::EngineHandled);
@@ -61,7 +61,7 @@ fn minus_and_equal_page_while_composing() {
     handle_key(&mut s, '-' as u32, 0);
     assert_eq!(handle_key(&mut s, '-' as u32, 0), KeyAction::EngineHandled); // 钳制
     assert_eq!(s.page(), 0);
-    assert_eq!(s.buffer(), "hao", "翻页不动缓冲");
+    assert_eq!(s.buffer(), "qwx", "翻页不动缓冲");
 }
 
 /// 抬起与按下同判：按下被消费（翻页），抬起也必须消费 ——
@@ -69,7 +69,7 @@ fn minus_and_equal_page_while_composing() {
 #[test]
 fn minus_and_equal_release_consumed_after_consumed_press() {
     let mut s = page_state();
-    typed(&mut s, "hao");
+    typed(&mut s, "qwx");
     handle_key(&mut s, '=' as u32, 0);
     assert_eq!(
         handle_key(&mut s, '=' as u32, KEY_STATE_RELEASED),

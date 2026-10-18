@@ -25,6 +25,16 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+        <!-- APK 覆盖安装后结束旧进程，让新代码/新 .so 生效（见 PackageReplacedReceiver）。
+             exported=false 仍能收到系统广播（android:exported 对 receiver 的定义：
+             非导出只收系统、本应用与同 UID 的消息）。 -->
+        <receiver
+            android:name=".PackageReplacedReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+            </intent-filter>
+        </receiver>
         <service
             android:name=".OpiImeService"
             android:label="小欧输入法"

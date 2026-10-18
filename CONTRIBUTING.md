@@ -41,6 +41,7 @@ cd desktop && ./gradlew package             # Windows 候选窗（Compose Deskto
 ### 许可证合规（必读）
 
 - **本仓库代码**：MIT（见 [`LICENSE`](LICENSE)）。
+- **视觉资产**：小欧形象/贴纸、应用图标、文档与 README 展示图等是**项目专有资产（不是开源内容）**，商业使用需书面授权，个人非商业可随未修改的官方发行版原样使用；见 [`ASSETS-LICENSE.md`](ASSETS-LICENSE.md)。第三方数据许可不受影响。
 - **词库数据**：按上游许可证**单独声明**，**不是 MIT**。当前上游含 **LGPL-3.0**（rime-luna-pinyin / rime-terra-pinyin / rime-stroke）、**Apache-2.0**（rime-pinyin-simp）、**GPL-3.0-only**（rime-ice，2026-10-11 起并入 `luna.opid`）、**MIT**（chinese-xinhua · THUOCL · 本项目自撰的人工表 brand_terms / new_words / reading_overrides / surnames / slang）、**Unicode License**（Unihan）与 **CC-BY 3.0**（英文联想词源）。逐条来源与许可证见 [`data/raw/LICENSES.md`](data/raw/LICENSES.md)。
 
 因此：

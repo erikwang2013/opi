@@ -21,6 +21,7 @@ mod dict_index; // 导入层命中索引 / 抢位加成 / rest 截断
 mod dict_layers; // 导入词库的合并层（M3 2b）：Engine 主库槽位的具体类型，字段私有故模块不公开
 mod dict_layers_visit; // 导入层的 visit_entries（500 行门禁拆出，2026-10-18）
 pub mod dictionary;
+mod emoji_keywords; // 输入即得表情（数据 include_str! 嵌入，2026-10-18）
 pub mod engine;
 #[path = "engine_candidates.rs"]
 mod engine_candidates_impl; // 主候选装配一族（2026-10-16 从 engine.rs 拆出，见文件头）

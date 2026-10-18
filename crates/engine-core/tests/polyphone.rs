@@ -8,8 +8,19 @@
 //! 补的条目按精确匹配算、参与候选三档、去重不重复。
 
 use engine_core::Engine;
+use engine_core::candidates::CandidateKind;
 use engine_core::dictionary::InMemoryDictionary;
 use engine_core::symbols::SymbolEngine;
+
+/// 本文件钉的是**词库/补读音**候选：emoji 输入匹配（2026-10-18）是另一层，
+/// 追加在文本候选之后、会填满 limit 的空位 —— 它不参与这里「一个字都不多加」的判据。
+fn text_texts(e: &Engine, limit: usize) -> Vec<String> {
+    e.candidates(limit)
+        .into_iter()
+        .filter(|c| c.kind != CandidateKind::Emoji)
+        .map(|c| c.text)
+        .collect()
+}
 
 /// 量纲锚点：纠偏层的表是按**真实词库量纲**建的（十亿量级），本层只对同档词库生效
 /// （`polyphone::applies`）。夹具要测层本身，就得把词库的量纲垫到那一档 ——
@@ -60,7 +71,11 @@ fn small_scale_dictionaries_are_left_alone() {
     for c in "mo".chars() {
         e.input_key(c);
     }
-    assert_eq!(texts(&e, 8), vec!["模"], "小量纲库里一个补读音都不该出现");
+    assert_eq!(
+        text_texts(&e, 8),
+        vec!["模"],
+        "小量纲库里一个补读音都不该出现"
+    );
 }
 
 /// 词库有别的同音字时，补的条目**与它们同档、按词频排**（不另开一档、也不沉底）。
@@ -106,5 +121,5 @@ fn readings_absent_from_the_table_add_nothing() {
     for c in "hao".chars() {
         e.input_key(c);
     }
-    assert_eq!(texts(&e, 8), vec!["好"]);
+    assert_eq!(text_texts(&e, 8), vec!["好"]);
 }

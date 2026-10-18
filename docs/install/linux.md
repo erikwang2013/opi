@@ -244,17 +244,37 @@ sudo apt-get -f install                        # Debian 系缺依赖时补
 **故意**的：把「装上了但静默不工作」换成一次显式拒绝。`nfpm.yaml` 里为此专门写了按格式
 分开的版本约束，读那段注释能看到理由。
 
-**装/升级/卸载时的进程处理（2026-10-17 起，随下一个版本发布）**：包内带维护脚本
-（`scripts/packaging/*.sh`，debian 的 `preinst/postinst/prerm`、rpm 的 `%pre/%post/%preun`）：
+**装/升级/卸载时的进程处理（2026-10-17 起，随下一个版本发布；fcitx5 部分 2026-10-18 起）**：
+包内带维护脚本（`scripts/packaging/*.sh`，debian 的 `preinst/postinst/prerm`、rpm 的
+`%pre/%post/%preun`）：
 
 - **装/升级前**（preinst）：停掉正在跑的 `opi-candidates`（先 TERM、3 秒后 KILL）——
   dpkg/rpm 只换磁盘文件，**开着的旧窗口/状态栏会继续显示旧版本**（2026-10-17 用户报障
   「装完设置里还是旧版本」的来源）；同时把当时的实例参数记到 `/run/opi-install.state`；
-- **装/升级成功后**（postinst）：按记录**以桌面用户**（`runuser -u $SUDO_USER`）把实例
-  按原参数拉回来；**没有 `SUDO_USER`**（软件中心类 GUI 安装）则跳过并说明 —— 设置窗
-  手动开一次即是新版；状态栏由会话 autostart 下次登录带回。已知边界：以 root 脚本的
-  环境变量拉起状态栏可能失败（进程直接退出、无副作用），待真机验证；
-- **卸载前**（prerm）：同样先停实例（否则出现「卸了还在跑」）。
+- **装/升级前**（同上，fcitx5）：插件 `.so` 是**动态库**，被 fcitx5 进程加载后换包不会
+  换掉它 —— 「覆盖安装后还要重启才生效」（2026-10-18 用户报障）就是它。preinst 会停掉
+  **安装者自己的** fcitx5，并把该进程的会话环境记到 `/run/opi-install.fcitx5`；
+  postinst 用**同一份环境、以桌面用户身份**执行 `fcitx5 -d --replace` 拉回来。
+  **只有同时满足下面全部条件才会动**（任何一条不满足 ⇒ 只记一行日志、不阻断安装）：
+  1. 安装走的是 `sudo`（有 `SUDO_USER` 且不是 root）；
+  2. `/proc/<pid>/status` 里的 uid 就是 `SUDO_USER` 的 uid（**别人的 fcitx5 不碰**，
+     僵尸进程也不算 —— 本机实测有 14 个 `[fcitx5] <defunct>`）；
+  3. 该进程环境里同时有 `HOME`、`DBUS_SESSION_BUS_ADDRESS`，以及 `DISPLAY` 或
+     `WAYLAND_DISPLAY` 至少一个（无显示环境 / CI 容器 / 纯 TTY 一律跳过）。
+  状态文件是**块格式**（一个空行 = 一条记录，一条记录 = 一个被停掉的实例）：
+  `pid=` / `user=` / `uid=` 加白名单环境行（`HOME` `DISPLAY` `WAYLAND_DISPLAY`
+  `DBUS_SESSION_BUS_ADDRESS` `XAUTHORITY` `XDG_RUNTIME_DIR` `XDG_CONFIG_HOME`
+  `XDG_DATA_HOME` `LANG` `LC_ALL`，只写非空项）。postinstall 读完即删。
+  ⚠️ **停止到重启之间正在输入会被打断**（通常几秒）；重启失败时不会把安装回滚，
+  下次登录 fcitx5 由会话 autostart 拉起，自然恢复；
+- **装/升级成功后**（postinst）：先起 fcitx5，再按记录**以桌面用户**
+  （`runuser -u $SUDO_USER`）把 `opi-candidates` 按原参数拉回来（状态栏经 D-Bus 找
+  fcitx5，所以顺序不能反）；**没有 `SUDO_USER`**（软件中心类 GUI 安装）则两者都跳过并
+  说明 —— 设置窗手动开一次即是新版；状态栏由会话 autostart 下次登录带回。已知边界：
+  以 root 脚本的环境变量拉起状态栏可能失败（进程直接退出、无副作用），待真机验证；
+- **卸载前**（prerm）：同样先停实例（否则出现「卸了还在跑」）。⚠️ **卸载不会重启
+  fcitx5** —— 插件已从磁盘删掉，但正在跑的 fcitx5 仍持有旧映射，直到下次重启/登录才
+  消失；这一步目前没有自动化（本轮只处理安装/升级）。
 
 Windows 的 `.msi` 有等价物（`scripts/postprocess-windows-msi.sh` 的 taskkill +
 ExitDialog 自启）。**v1.9.8 及更早的 Linux 包没有这些脚本** —— 升级到带脚本的版本之前，
@@ -270,12 +290,22 @@ ExitDialog 自启）。**v1.9.8 及更早的 Linux 包没有这些脚本** —�
 
 ### 4.1 装完必须重启 fcitx5
 
+> **2026-10-18 起（随下一个版本发布）：升级包时通常不需要手动做这一步了。**
+> `.deb`/`.rpm` 的 preinst/postinst 会在**满足条件**时自动停掉并重启安装者的 fcitx5
+> （条件、状态文件与失败回退见 §3.1）。仍需要手动执行下面这条的情况：源码安装、
+> 没有 `SUDO_USER` 的安装（软件中心 / pkexec）、以及自动重启失败时 —— 安装日志里会
+> 写「下次登录自然恢复」。
+>
+> ⚠️ 自动重启**打断正在进行的输入**：停止到拉起之间（通常几秒）所有输入法都用不了；
+> 它不是热重载。
+
 ```bash
 fcitx5 -r -d      # -r = replace，重启守护进程
 ```
 
 `fcitx5 --help` 里 `-r, --replace` 的含义就是「替换正在跑的那个实例」——这条是实测过的
-（`fcitx5 --help` 的输出），也是本文唯一敢写进步骤的写法。
+（`fcitx5 --help` 的输出），也是本文唯一敢写进步骤的写法。包脚本自动重启用的也是
+`fcitx5 -d --replace`（同一语义）。
 
 ⚠️ 「能不能不重启、只重载一下配置」**本文没有验过**（见 §8），所以没写。装完没反应的
 第一件事就是老老实实 `-r` 一次，别先怀疑插件。
@@ -952,6 +982,10 @@ LGPL-3.0 的 rime-luna-pinyin 与 Apache-2.0 的 rime-pinyin-simp 数据编译�
 - **繁体词库坏时静默回退简体**（§5.3 的可选增强语义 —— 只有一行 stderr，
   用户侧表现为「繁体模式打出来还是简体」）。
 - **中文标点 / 全角没有键位**（§4.4）。
+- **自动重启 fcitx5 有条件**：只有 `sudo` 安装且能读到该进程的显示环境/会话总线时才会
+  做；软件中心 / pkexec 类安装不自动重启，下次登录恢复（§3.1）。
+- **卸载不重启 fcitx5**：正在跑的实例继续持有已删除的插件映射，直到下次重启/登录
+  （§3.1 最后一条）。
 - **学习结果不落盘**：`fcitx5-opi` 学完照旧丢（Rust 侧的学习落盘
   `engine-data/src/user_words.rs` 全仓零调用方）。
 - **无障碍未接入**：读屏软件支持只有 Android 有（`README.md` 的平台状态表）。
@@ -969,6 +1003,7 @@ LGPL-3.0 的 rime-luna-pinyin 与 Apache-2.0 的 rime-pinyin-simp 数据编译�
 | **`fcitx5-remote -r` 能否替代 `fcitx5 -r -d`**（§4.1 的用途）【未验证】 | 本文只写实测过的那条。**已实测的是另一个用途**：改完 profile 之后只做 `fcitx5-remote -r`，加载次数仍是 **0**（§4.2）—— 那是「改配置后重载」，与「装完让 addon 加载」不是同一个问题，别把这条结论搬过去 |
 | **`Ctrl+Shift_L` 那个切换热键** | 实测的 harness 里合成事件到不了 core 的热键匹配（同一条 dbus 通路**能**把引擎级热键送到，所以指向 harness 限制，不指向桌面）。**不能据此说它坏了** |
 | **真登出 / 再登录**（§4.1 的替代做法） | 只跑过 `fcitx5 -d` / `fcitx5 -r -d`；真会话的登出登录没人跑过 |
+| **包脚本自动停/重启 fcitx5 的真机验证**（§3.1）【未验证】 | 逻辑有合成 `/proc` 单测（`scripts/packaging/test-restart-fcitx5.sh`），但**没有在真桌面会话里装一次包**跑过：`runuser` 拉起的 fcitx5 是否真的接管会话、输入是否恢复，没有人验证。本机跑这步会打断输入，留到发布候选时做 |
 
 ## 9. 发行版矩阵
 

@@ -4,11 +4,11 @@
 use super::*;
 use engine_core::dictionary::InMemoryDictionary;
 
-/// 20 个 "hao" 词条 + 引擎：确定性的 3 页候选。
+/// 20 个 "qwx" 词条 + 引擎：确定性的 3 页候选（键避开符号/emoji 关键字）。
 fn state() -> TsfLogic {
     let mut d = InMemoryDictionary::new();
     for i in 0..20 {
-        d.insert("hao", &format!("词{i:02}"), (5000 - i) as u32);
+        d.insert("qwx", &format!("词{i:02}"), (5000 - i) as u32);
     }
     let symbols = engine_core::symbols::SymbolEngine::builtin();
     let mut s = TsfLogic {
@@ -56,7 +56,7 @@ fn pinyin_uppercase_keysym_lowercased_into_buffer() {
 #[test]
 fn space_with_buffer_commits_top_candidate() {
     let mut s = pinyin_state();
-    for c in ['h', 'a', 'o'] {
+    for c in ['q', 'w', 'x'] {
         s.input_key(c as u32, 0);
     }
     assert_eq!(s.input_key(KEY_SPACE, 0), KeyOutcome::Commit("词00".into()));
@@ -72,7 +72,7 @@ fn space_with_empty_buffer_commits_space() {
 #[test]
 fn enter_with_buffer_selects_first_candidate() {
     let mut s = pinyin_state();
-    for c in ['h', 'a', 'o'] {
+    for c in ['q', 'w', 'x'] {
         s.input_key(c as u32, 0);
     }
     assert_eq!(
@@ -156,12 +156,12 @@ fn delete_mirrors_backspace() {
 #[test]
 fn tab_and_esc_unhandled() {
     let mut s = pinyin_state();
-    for c in ['h', 'a', 'o'] {
+    for c in ['q', 'w', 'x'] {
         s.input_key(c as u32, 0);
     }
     assert_eq!(s.input_key(KEY_TAB, 0), KeyOutcome::Unhandled);
     assert_eq!(s.input_key(KEY_ESCAPE, 0), KeyOutcome::Unhandled);
-    assert_eq!(s.buffer(), "hao"); // 缓冲未被吞
+    assert_eq!(s.buffer(), "qwx"); // 缓冲未被吞
 }
 // ---- 英文模式直传（镜像 handleKey） ----
 #[test]
@@ -297,7 +297,7 @@ fn switch_mode_clears_frontend_shift_lock() {
 #[test]
 fn digit_selects_candidate_page_relative() {
     let mut s = pinyin_state();
-    for c in ['h', 'a', 'o'] {
+    for c in ['q', 'w', 'x'] {
         s.input_key(c as u32, 0);
     }
     // '2' → 页内索引 1
@@ -310,7 +310,7 @@ fn digit_selects_candidate_page_relative() {
 #[test]
 fn digit_one_selects_first_candidate() {
     let mut s = pinyin_state();
-    for c in ['h', 'a', 'o'] {
+    for c in ['q', 'w', 'x'] {
         s.input_key(c as u32, 0);
     }
     // '1' → 页内索引 0，选中首候选
@@ -323,7 +323,7 @@ fn digit_one_selects_first_candidate() {
 #[test]
 fn digit_out_of_range_unhandled() {
     let mut s = pinyin_state();
-    for c in ['h', 'a', 'o'] {
+    for c in ['q', 'w', 'x'] {
         s.input_key(c as u32, 0);
     }
     s.next_page();
@@ -339,14 +339,14 @@ fn digit_out_of_range_unhandled() {
 #[test]
 fn digit_beyond_page_unhandled() {
     let mut s = pinyin_state();
-    for c in ['h', 'a', 'o'] {
+    for c in ['q', 'w', 'x'] {
         s.input_key(c as u32, 0);
     }
     assert_eq!(s.candidates().len(), 8, "前置：首页满页");
     assert_eq!(s.page_count(), 3);
     // '9' → 页内索引 8 越界 → 交应用（不得提交 词08 = 次页首选）
     assert_eq!(s.input_key('9' as u32, 0), KeyOutcome::Unhandled);
-    assert_eq!(s.buffer(), "hao", "不消费时不得动缓冲");
+    assert_eq!(s.buffer(), "qwx", "不消费时不得动缓冲");
     assert_eq!(s.page(), 0, "不消费时不得改页码");
 }
 #[test]
@@ -361,7 +361,7 @@ fn digit_without_candidates_unhandled() {
 #[test]
 fn page_keys_navigate() {
     let mut s = pinyin_state();
-    for c in ['h', 'a', 'o'] {
+    for c in ['q', 'w', 'x'] {
         s.input_key(c as u32, 0);
     }
     assert_eq!(
@@ -384,7 +384,7 @@ fn page_keys_navigate() {
 #[test]
 fn page_key_release_consumed() {
     let mut s = pinyin_state();
-    for c in ['h', 'a', 'o'] {
+    for c in ['q', 'w', 'x'] {
         s.input_key(c as u32, 0);
     }
     // 释放事件：不翻页、不触发候选窗刷新

@@ -48,12 +48,12 @@ use super::*;
 use engine_core::dictionary::InMemoryDictionary;
 use engine_core::symbols::SymbolEngine;
 
-/// `n` 条 "hao" 词条（词频严格递减 → 顺序确定），符号表取**空表**：
-/// 候选集恰为 `n` 条，符号/emoji 一条都不混进来（与 `router_invariants.rs` 同法）。
+/// `n` 条 "qwx" 词条（词频严格递减 → 顺序确定），符号表取**空表**：
+/// 候选集恰为 `n` 条 —— 键 qwx 不撞符号/emoji 输入匹配的关键字（与 `router_invariants.rs` 同法）。
 fn state_n(n: usize) -> TsfLogic {
     let mut d = InMemoryDictionary::new();
     for i in 0..n {
-        d.insert("hao", &format!("词{i:03}"), (n - i) as u32);
+        d.insert("qwx", &format!("词{i:03}"), (n - i) as u32);
     }
     let symbols = SymbolEngine::new(Vec::new(), Vec::new());
     let mut s = TsfLogic {
@@ -73,7 +73,7 @@ fn paging_reaches_past_any_64_era_ceiling() {
     const N: usize = 300; // 独立字面量：越过 64 时代的任何上限
     const PER_PAGE: usize = 8; // 独立字面量：Android 候选栏 + `router.rs` 注释双重记载
     let mut s = state_n(N);
-    for c in ['h', 'a', 'o'] {
+    for c in ['q', 'w', 'x'] {
         s.engine.input_key(c);
     }
     assert_eq!(

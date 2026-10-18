@@ -23,11 +23,11 @@ use engine_core::router::{FETCH_LIMIT, KeyAction, KeyRouter, PAGE_SIZE, ShiftSta
 use engine_core::symbols::SymbolEngine;
 use proptest::prelude::*;
 
-/// n 条 "hao" 词条（词频严格递减 → 顺序确定），符号表用空表。
+/// n 条 "qwx" 词条（词频严格递减 → 顺序确定），符号表用空表。
 fn router_with(n: usize) -> KeyRouter {
     let mut d = InMemoryDictionary::new();
     for i in 0..n {
-        d.insert("hao", &format!("词{i:03}"), (n - i) as u32);
+        d.insert("qwx", &format!("词{i:03}"), (n - i) as u32);
     }
     let mut r = KeyRouter::new(Engine::new(
         Box::new(d),
@@ -38,8 +38,8 @@ fn router_with(n: usize) -> KeyRouter {
     r
 }
 
-fn type_hao(r: &mut KeyRouter) {
-    for c in ['h', 'a', 'o'] {
+fn type_key(r: &mut KeyRouter) {
+    for c in ['q', 'w', 'x'] {
         r.key_event(c as u32, 0);
     }
 }
@@ -71,7 +71,7 @@ fn all_pages(r: &mut KeyRouter) -> Vec<Vec<String>> {
 fn page_count_is_ceiling_and_last_page_matches_remainder() {
     for n in [0usize, 1, 7, 8, 9, 15, 16, 17, 23, 24, 63, 64, 65, 100, 200] {
         let mut r = router_with(n);
-        type_hao(&mut r);
+        type_key(&mut r);
         let want = reachable(&r);
         // 曾经写作 `n.min(FETCH_LIMIT)` —— FETCH_LIMIT 不再截断后 clippy 判定该 min
         // 是 no-op（`-D warnings` 下必须去掉），去掉正好把断言**收紧**成「一条不漏」。
@@ -108,7 +108,7 @@ fn page_count_is_ceiling_and_last_page_matches_remainder() {
 fn pages_partition_reachable_candidates_in_order() {
     for n in [0usize, 1, 8, 9, 20, 64] {
         let mut r = router_with(n);
-        type_hao(&mut r);
+        type_key(&mut r);
         let want = reachable(&r);
         let got: Vec<String> = all_pages(&mut r).into_iter().flatten().collect();
         assert_eq!(got, want, "n={n}: 分页与全量列表不一致");
@@ -125,7 +125,7 @@ fn pages_partition_reachable_candidates_in_order() {
 fn paging_reaches_every_candidate_the_engine_ranks() {
     const N: usize = 300; // 独立期望值，不随 FETCH_LIMIT 缩放
     let mut r = router_with(N);
-    type_hao(&mut r);
+    type_key(&mut r);
     assert_eq!(
         r.page_count(),
         N.div_ceil(PAGE_SIZE),
@@ -143,7 +143,7 @@ fn paging_reaches_every_candidate_the_engine_ranks() {
 #[test]
 fn page_down_clamps_and_page_up_floors_at_zero() {
     let mut r = router_with(20);
-    type_hao(&mut r);
+    type_key(&mut r);
     for _ in 0..50 {
         r.key_event(KEY_PAGE_DOWN, 0);
     }
@@ -160,7 +160,7 @@ fn page_down_clamps_and_page_up_floors_at_zero() {
 #[test]
 fn empty_candidate_set_survives_paging_and_digits() {
     let mut r = router_with(0);
-    type_hao(&mut r); // "hao" 无词条 → 0 候选
+    type_key(&mut r); // "qwx" 无词条 → 0 候选
     assert_eq!(r.page_count(), 0);
     assert!(r.candidates().is_empty());
     assert_eq!(r.key_event(KEY_PAGE_DOWN, 0), KeyAction::EngineHandled);
@@ -170,7 +170,7 @@ fn empty_candidate_set_survives_paging_and_digits() {
     assert_eq!(r.candidates().len(), 0);
     // 选词越界：不得消费、不得动缓冲
     assert_eq!(r.key_event('1' as u32, 0), KeyAction::PassThrough);
-    assert_eq!(r.buffer(), "hao");
+    assert_eq!(r.buffer(), "qwx");
 }
 
 /// 页内下标 → 全局下标的换算，在**每一页每一项**上都要对齐。
@@ -178,13 +178,13 @@ fn empty_candidate_set_survives_paging_and_digits() {
 #[test]
 fn digit_select_matches_page_listing_every_index() {
     let mut r = router_with(20);
-    type_hao(&mut r);
+    type_key(&mut r);
     let pages = all_pages(&mut r);
     assert_eq!(pages.len(), 3);
     for (p, page) in pages.iter().enumerate() {
         for (i, want) in page.iter().enumerate() {
             let mut r = router_with(20);
-            type_hao(&mut r);
+            type_key(&mut r);
             for _ in 0..p {
                 r.key_event(KEY_PAGE_DOWN, 0);
             }
@@ -200,14 +200,14 @@ fn digit_select_matches_page_listing_every_index() {
         }
         // 页内越界（该项不存在）→ 直通，且不得改缓冲/页码
         let mut r = router_with(20);
-        type_hao(&mut r);
+        type_key(&mut r);
         for _ in 0..p {
             r.key_event(KEY_PAGE_DOWN, 0);
         }
         if page.len() < PAGE_SIZE {
             let digit = char::from_digit((page.len() + 1) as u32, 10).unwrap();
             assert_eq!(r.key_event(digit as u32, 0), KeyAction::PassThrough);
-            assert_eq!(r.buffer(), "hao");
+            assert_eq!(r.buffer(), "qwx");
             assert_eq!(r.page(), p);
         }
     }
@@ -217,14 +217,14 @@ fn digit_select_matches_page_listing_every_index() {
 #[test]
 fn enter_commits_current_page_first_candidate() {
     let mut r = router_with(20);
-    type_hao(&mut r);
+    type_key(&mut r);
     assert_eq!(
         r.key_event(KEY_RETURN, 0),
         KeyAction::Input("词000".into()),
         "首页回车 = 首页首位"
     );
     let mut r = router_with(20);
-    type_hao(&mut r);
+    type_key(&mut r);
     r.key_event(KEY_PAGE_DOWN, 0);
     assert_eq!(
         r.key_event(KEY_RETURN, 0),
@@ -236,7 +236,7 @@ fn enter_commits_current_page_first_candidate() {
 
 /// 回归（原缺陷）：数字选词的「越界」判据曾是**全量候选列表**，不是**当前页**。
 ///
-/// 最小复现：输入 `hao`（20 条候选 → 第 0 页显示 `词000..词007`），按 `9`。
+/// 最小复现：输入 `qwx`（20 条候选 → 第 0 页显示 `词000..词007`），按 `9`。
 /// 期望：页内没有第 9 项 → 直通，交客户端输入数字 `9`（与末页的既有行为一致，
 /// 见 `digit_out_of_range_passes_through`：那里 '9' 在末页确实是直通的）。
 /// 实际：`digit_select` 只看 `select(8)` 的返回值空不空，而 `select` 的「越界」
@@ -252,7 +252,7 @@ fn enter_commits_current_page_first_candidate() {
 #[test]
 fn digit_beyond_page_must_not_commit_hidden_candidate() {
     let mut r = router_with(20);
-    type_hao(&mut r);
+    type_key(&mut r);
     assert_eq!(r.page(), 0);
     assert_eq!(r.page_count(), 3);
     assert_eq!(r.candidates().len(), PAGE_SIZE, "前置：第 0 页是满页 8 条");
@@ -262,7 +262,7 @@ fn digit_beyond_page_must_not_commit_hidden_candidate() {
         "页内没有第 9 项，'9' 必须直通；实际提交了 {:?}（次页首条）",
         KeyAction::Input("词008".into())
     );
-    assert_eq!(r.buffer(), "hao", "'9' 直通时不得动缓冲");
+    assert_eq!(r.buffer(), "qwx", "'9' 直通时不得动缓冲");
 }
 
 // 第二个选词入口（`KeyRouter::select`，C ABI `opi_select_page`）与 `Engine::select` 的
@@ -286,7 +286,7 @@ fn page_tracks_buffer_changes() {
     ];
     for (what, keys) in cases {
         let mut r = router_with(20);
-        type_hao(&mut r);
+        type_key(&mut r);
         r.key_event(KEY_PAGE_DOWN, 0);
         assert_eq!(r.page(), 1, "{what}: 前置翻页失败");
         let before = r.buffer();
@@ -306,7 +306,7 @@ fn page_tracks_buffer_changes() {
 
     // 切模式清缓冲 ⇒ 页码归零
     let mut r = router_with(20);
-    type_hao(&mut r);
+    type_key(&mut r);
     r.key_event(KEY_PAGE_DOWN, 0);
     assert_eq!(r.page(), 1);
     r.switch_mode(Mode::English);
@@ -318,7 +318,7 @@ fn page_tracks_buffer_changes() {
 #[test]
 fn shift_keeps_page_in_range() {
     let mut r = router_with(20);
-    type_hao(&mut r);
+    type_key(&mut r);
     r.key_event(KEY_PAGE_DOWN, 0);
     assert_eq!(r.page(), 1);
     r.shift_tap();

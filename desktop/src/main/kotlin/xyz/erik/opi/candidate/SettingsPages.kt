@@ -291,13 +291,13 @@ internal fun AboutPage(status: String) {
     )
     Spacer(Modifier.height(10.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("MIT 许可 · 开源", fontSize = 12.sp, color = Muted)
+        Text("代码 MIT 许可 · 开源", fontSize = 12.sp, color = Muted)
         // 版权行（2026-10-09 用户裁决「页面增加版权」）。
         Text("© 2026 erik.xyz", fontSize = 12.sp, color = Muted)
     }
     Spacer(Modifier.height(6.dp))
     Text(
-        "表情数据 OpenMoji（CC BY-SA 4.0）· 颜文字 rime_kaomoji_dict（MIT）· 小欧贴纸项目自绘（MIT）",
+        "表情数据 OpenMoji（CC BY-SA 4.0）· 颜文字 rime_kaomoji_dict（MIT）· 小欧贴纸/图标为项目专有资产，商业使用需授权",
         fontSize = 12.sp, color = Muted,
     )
 }

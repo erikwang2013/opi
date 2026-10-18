@@ -25,11 +25,11 @@ use engine_core::keys::KEY_PAGE_DOWN;
 use engine_core::router::{FETCH_LIMIT, KeyRouter, PAGE_SIZE};
 use engine_core::symbols::SymbolEngine;
 
-/// n 条 "hao" 词条（词频严格递减 → 顺序确定），符号表用空表。
+/// n 条 "qwx" 词条（词频严格递减 → 顺序确定），符号表用空表。
 fn router_with(n: usize) -> KeyRouter {
     let mut d = InMemoryDictionary::new();
     for i in 0..n {
-        d.insert("hao", &format!("词{i:03}"), (n - i) as u32);
+        d.insert("qwx", &format!("词{i:03}"), (n - i) as u32);
     }
     let mut r = KeyRouter::new(Engine::new(
         Box::new(d),
@@ -40,8 +40,8 @@ fn router_with(n: usize) -> KeyRouter {
     r
 }
 
-fn type_hao(r: &mut KeyRouter) {
-    for c in ['h', 'a', 'o'] {
+fn type_key(r: &mut KeyRouter) {
+    for c in ['q', 'w', 'x'] {
         r.key_event(c as u32, 0);
     }
 }
@@ -69,10 +69,10 @@ fn reachable(r: &KeyRouter) -> Vec<String> {
 fn select_beyond_page_must_not_commit_hidden_candidate() {
     // 页内正常项不受影响（先钉住不误伤）
     let mut r = router_with(20);
-    type_hao(&mut r);
+    type_key(&mut r);
     assert_eq!(r.select(0), "词000", "第 0 页首位");
     let mut r = router_with(20);
-    type_hao(&mut r);
+    type_key(&mut r);
     assert_eq!(
         r.select(PAGE_SIZE - 1),
         "词007",
@@ -81,7 +81,7 @@ fn select_beyond_page_must_not_commit_hidden_candidate() {
 
     // 页内越界 k=8：全量列表里第 8 项**存在**（就是旧实现提交的那一条）
     let mut r = router_with(20);
-    type_hao(&mut r);
+    type_key(&mut r);
     assert_eq!(r.page(), 0);
     assert_eq!(r.candidates().len(), PAGE_SIZE, "前置：第 0 页是满页 8 条");
     let full = reachable(&r);
@@ -95,35 +95,35 @@ fn select_beyond_page_must_not_commit_hidden_candidate() {
         "页内没有第 9 项 → 空串；实际提交了 {:?}（次页首条，用户看不见）",
         full[PAGE_SIZE]
     );
-    assert_eq!(r.buffer(), "hao", "越界不得提交 ⇒ 缓冲不变");
+    assert_eq!(r.buffer(), "qwx", "越界不得提交 ⇒ 缓冲不变");
     assert_eq!(r.page(), 0, "越界不得改页码");
 
     // 第 1 页同样：k=8 → 全局 16（第 2 页首条）也存在，必须空串
     r.key_event(KEY_PAGE_DOWN, 0);
     assert_eq!(r.page(), 1);
     assert_eq!(r.select(PAGE_SIZE), "", "第 1 页的页内越界同样必须空串");
-    assert_eq!(r.buffer(), "hao");
+    assert_eq!(r.buffer(), "qwx");
     // 而第 1 页的页内合法项照旧
     assert_eq!(r.select(0), "词008", "第 1 页首位 = 全量第 8 项");
     let mut r = router_with(20);
-    type_hao(&mut r);
+    type_key(&mut r);
     r.key_event(KEY_PAGE_DOWN, 0);
     assert_eq!(r.select(PAGE_SIZE - 1), "词015", "第 1 页末位");
 
     // 末页只有 4 项（20 = 8+8+4）：k=3 合法、k=4 页内越界（此处全量也越界）
     let mut r = router_with(20);
-    type_hao(&mut r);
+    type_key(&mut r);
     r.key_event(KEY_PAGE_DOWN, 0);
     r.key_event(KEY_PAGE_DOWN, 0);
     assert_eq!(r.page(), 2);
     assert_eq!(r.candidates().len(), 4, "前置：末页不满");
     assert_eq!(r.select(3), "词019", "末页最后一项");
     let mut r = router_with(20);
-    type_hao(&mut r);
+    type_key(&mut r);
     r.key_event(KEY_PAGE_DOWN, 0);
     r.key_event(KEY_PAGE_DOWN, 0);
     assert_eq!(r.select(4), "", "末页第 5 项（页内越界）");
-    assert_eq!(r.buffer(), "hao");
+    assert_eq!(r.buffer(), "qwx");
 }
 
 /// `Engine::select(index)`（全局下标：JNI / `opi_select` 走它）与
@@ -142,7 +142,7 @@ fn select_beyond_page_must_not_commit_hidden_candidate() {
 fn engine_select_index_space_agrees_with_unlimited_list() {
     let n = 600;
     let mut probe = router_with(n);
-    type_hao(&mut probe);
+    type_key(&mut probe);
     let full = reachable(&probe);
     assert!(
         full.len() > 512,
@@ -152,7 +152,7 @@ fn engine_select_index_space_agrees_with_unlimited_list() {
     assert_eq!(full.len(), n, "前置：全量抓取拿到全部 {n} 条");
     for i in [0usize, 7, 511, 512, 513, 599] {
         let mut r = router_with(n);
-        type_hao(&mut r);
+        type_key(&mut r);
         assert_eq!(
             r.engine_mut().select(i),
             full[i],
@@ -161,7 +161,7 @@ fn engine_select_index_space_agrees_with_unlimited_list() {
     }
     // 真·越界仍必须是空串（下标空间放开不等于无条件接受）
     let mut r = router_with(n);
-    type_hao(&mut r);
+    type_key(&mut r);
     assert_eq!(r.engine_mut().select(n), "", "第 {n} 项不存在 → 空串");
     assert_eq!(r.engine_mut().select(usize::MAX), "", "极大下标 → 空串");
 }

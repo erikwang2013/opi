@@ -247,6 +247,46 @@ adb shell dumpsys package xyz.erik.opi | grep -E 'versionCode|versionName'  # �
 
 覆盖安装要求**签名相同**。debug 包的签名来自本机调试密钥库（§2.3，本机在 `~/.config/.android/debug.keystore`）：换一台机器、或清了 HOME/XDG 目录重新生成密钥库之后，同一个 APK 会变成「不同签名的同一个包」，覆盖安装失败（`INSTALL_FAILED_UPDATE_INCOMPATIBLE`）。解法只有先 `adb uninstall xyz.erik.opi`（**会连 `filesDir` 里的词库副本与用户词表一起删掉**）。
 
+### 3.4 覆盖安装后的自动重载（2026-10-18）
+
+**行为**（`PackageReplacedReceiver` + manifest 里 `exported="false"` 的 `MY_PACKAGE_REPLACED` 接收器）：
+
+1. 覆盖安装完成、系统投递 `ACTION_MY_PACKAGE_REPLACED` 后，接收器让本进程所有已装载
+   的用户词 store 把防抖窗口里的保存立即落盘（`UserWordStore.flushAll` →
+   `UserWordStore.flushPending`）。**未装载过用户词时什么都不写** —— 那时引擎里没有
+   导入过文件，导出的是空表，写回等于清空用户词。
+2. 延迟 `UserWordStore.SAVE_DEBOUNCE_MS + 500ms`（写作时为 2 秒）后调用
+   `Process.killProcess(Process.myPid())` 结束进程。旧进程里已 `System.loadLibrary`
+   的 `.so` **无法卸载** —— 清 `inputViewCache` 或重载词库换的只是数据，跑的还是旧
+   机器码；所以能证明有效的最小方案只能是结束进程。
+3. 系统下次需要键盘时（点输入框，或当前输入框重新请求输入法）以新 APK 重新绑定
+   `OpiImeService`，新进程装载新代码与新 `.so`。
+
+**不需要用户操作的情况**：覆盖安装时系统自己杀掉了旧进程（常见路径）—— 接收器在新
+进程里跑一遍、额外结束一次空进程，无副作用；下次弹键盘就是新版。
+
+**仍需用户操作 / 做不到的情况**（如实列出）：
+
+- **首次从「还不含本接收器」的旧版本升上来**：旧 APK 里没有这个类，若旧进程恰好被
+  系统保留，这一次兜不住（切一次输入法或重启手机即可）。之后的版本升级才有兜底。
+- **系统不投递或延迟投递 `MY_PACKAGE_REPLACED`**：部分 OEM 的后台/自启动策略会拦
+  隐式广播，表现就是回到旧行为（要手动重启）。【未验证】具体 ROM 名单 —— 本机只有
+  x86_64 模拟器，**不声称所有机器都会自动重启**。
+- **更新发生在正在打字时**：未上屏的组合串（拼音缓冲）会随进程消失；已提交的文字、
+  已落盘的用户词与偏好不受影响。键盘可能短暂消失，点一下输入框（或等系统重绑）即可
+  回来 —— 重绑时机随 ROM 不同，慢的机型需要手动点一次。
+
+**核对一次更新是否真的生效**：
+
+```bash
+adb logcat -s PackageReplaced:I OpiImeService:I   # 覆盖安装后应有 MY_PACKAGE_REPLACED 一行
+adb shell pidof xyz.erik.opi                      # 安装前后的 pid 应当变化
+```
+
+【未验证】本机没跑过「覆盖安装 → 自动 kill → 键盘自动回来」的完整链路。接收器判定、
+落盘时机由 JVM 单测钉住（`PackageReplacedConfigTest`、`UserWordStoreTest` 的
+`flush*` 用例），**系统侧的重绑行为只有在真机上才能确认**。
+
 ---
 
 ## 4. 使用
@@ -737,6 +777,7 @@ adb shell settings get secure enabled_input_methods         # 已启用的输入
 | 4 | 横屏下键区占屏高（注释称 57%→68%，未在真横屏机上验） | `OpiImeService.keyboardHeight` 的注释 |
 | 5 | 真机（`arm64-v8a` / `armeabi-v7a`）上的任何行为 | §1.2 本机只有 x86_64 模拟器 |
 | 6 | 候选翻页上限（§6.1）的真实影响面 | §6.1 |
+| 7 | 覆盖安装后的自动重载全链路（kill 后系统是否/何时重绑 IME；OEM 是否投递 `MY_PACKAGE_REPLACED`） | §3.4，只有 JVM 配置面门禁 |
 
 ### 6.3 仓库里正在漂的数字（别照抄）
 

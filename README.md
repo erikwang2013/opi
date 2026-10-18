@@ -101,6 +101,7 @@
 - **简拼**（纯缩写输入，`nh` → 你好、`zg` → 中国）：引擎侧**默认开、有独立开关**（`Engine::set_jianpin`，与模糊音同源；开关是 2026-10-08 补的）—— **三端都能关**：Android 设置页、Linux（fcitx5 附加组件配置 / 桌面设置窗写同一份 conf）、Windows（设置窗写 `settings.ini`，TSF 激活时读）。触发条件、展开规则与上限都在 `engine-core/src/jianpin.rs` 的头注释里，门禁是 `tests/jianpin_ranking.rs`
 - **候选层：精确匹配不设上限，前缀层按词频截断**：`FETCH_LIMIT` 与 `Engine::select` 内部那道截断都已拆掉，三处同值（`engine-core/src/router.rs` · `fcitx5-opi/src/candidate.rs` · `tsf-opi/src/logic.rs`，且互相之间有等值断言）；**前缀扩展层**（打一半的输入）自 2026-10-11 起按静态词频取 top-N（26 键 9216 / 9·14 键 2048，`dictionary.rs` 的两个常量，缘由与实测见 [`docs/performance.md`](docs/performance.md)）。⚠️ **两台宿主机仍是旧上限**：Android（`EngineController.kt` 的 `fetchLimit`）与 macOS（`InputController.swift` 的 `candidates(limit:)`）—— 两者都够不到引擎侧的分页出口；iOS 与鸿蒙走 `candidatesPage()`，从不由前端给 limit
 - **表情与颜文字（2026-10-18）**：表情面板换成 OpenMoji 常用表情（689 条、9 类：笑脸/人物/动物/植物/食物/旅行/活动/物品/符号）；**「自有」是独立顶级子页**（不与 Emoji/笑脸同组），12 个小欧形态以 PNG 贴纸呈现——Android 点选经 `InputConnection.commitContent` 插入图片（编辑器不接受富内容时回退独立文本标签 `[小欧·笑]`，绝不提交笑脸 emoji），桌面/iOS/鸿蒙因宿主限制复制图片到剪贴板并提示粘贴；新增 390 条颜文字（7 类）。贴纸源 `shared/pet/stickers/`、数据与许可见 [`data/raw/LICENSES.md`](data/raw/LICENSES.md)，生成器 `scripts/gen_emoji_kaomoji.py` / `scripts/gen_pet_stickers.py`
+- **输入即得表情（2026-10-18）**：拼音/英文缓冲（≥2 字母）命中常用表情关键字时，把 emoji **追加在文本候选之后**（`data/raw/emoji_keywords.tsv` 295 条；`weixiao`→😊、`smile`→😄；不挤掉文本首候选、9/14 键数字缓冲本轮不匹配）。另提供 12 形态的**彩色字体** `shared/pet/emoji-font/opi-emoji.ttf`（PUA U+E000–E00B，SVG + CBDT 双色表，family「Opi Emoji」）与**短码** `:opi_smile:` 等——字体需安装并在应用里选用才显示，短码仅 Slack/Mattermost 类客户端渲染；普通输入框仍以图片插入/文本标签为准。字体与短码是项目专有资产，见 [`ASSETS-LICENSE.md`](ASSETS-LICENSE.md)
 - **逐字确认（2026-10-17 用户裁决）**：整串有词组精确匹配时词组在最前、选中一次上屏；无精确匹配（打一半的前缀扩展词不算）则先出第一个字的整档（所有读音的字），确认一个字后它**留在候选区**（拼音行显示「中guo」），依次确认到最后一段才**整串进输入框**；缓冲空时 ⌫ 回滚上一个已确认的字。语义在引擎（`Engine::pending_text` / `commit_buffer_after_select`），四端同一条路；门禁 `tests/segment_commit.rs`
 - **两处「机制已备」的接线现状**：其一，**中文标点与全角是两个独立开关**（引擎侧 `chinese_punct` 与 `fullwidth` 各自独立，门禁 `tests/punctuation_switches.rs`；`set_chinese_punct` / `toggle_chinese_punct` 与双 ABI 出口都在）—— **Linux 桌面已接**（状态栏 `。，`/`🌕` 按钮、设置窗「中文标点」、fcitx5 附加组件配置 —— 都落到这两个开关），Windows 侧 TSF 从 `settings.ini` 读同组值；**Android 工具条月相按钮已撤**（2026-10-12 加、2026-10-13 用户裁决「移动端功能区不需要全角、半角切换功能」移除 —— 能力保留：全角仍随模式默认值自动生效，字母/数字的直传点宽化（`Engine::fullwidthize`）不动），**Apple / 鸿蒙仍无 UI 入口**（两端 `toggleFullwidth` 只有 JNI 冒烟表一个调用方）。**键位不在引擎层** —— `engine_punct.rs` 的注释只给桌面两轨**建议**了暂定的 `Ctrl+/`，未定稿、两轨都还没实现，理由与实测见该注释。其二，**Rust 侧的学习落盘**（`engine-data/src/user_words.rs`，原子写）**全仓零调用方**：Android 的持久化走它自己的 Kotlin `UserWordStore.kt`，fcitx5 / TSF 学完照旧丢
 - 排序有一条反直觉的设计 —— **不能把 limit 下推到词典查询**（学过的低频词可能反超截断线外的词）。这类细节才是本项目较真的地方，见下方「功能设计」
@@ -261,7 +262,7 @@ docs/                          # 宠物、图与设计文档
   superpowers/                 #   specs（设计规格）+ plans（实施计划）
   release-claim-corrections.md #   发布声明订正（tag 注释推出去改不了，实测到的正确说法落这里）
   weixinpay.png · alipay.png   #   赞赏码（页脚引用）
-scripts/                       # 词库/表情生成：gen_luna_dict.py · gen_trad_dict.py · gen_symbols.py · gen_emoji_kaomoji.py · gen_pet_stickers.py
+scripts/                       # 词库/表情生成：gen_luna_dict.py · gen_trad_dict.py · gen_symbols.py · gen_emoji_kaomoji.py · gen_pet_stickers.py · gen_emoji_keywords.py · gen_pet_emoji_font.py
                                #   （+ symbol_keywords.py 手写关键字表）· gen_en_dict.py · hanzi_freq.py
                                # 发行版打包：build-packages.sh（.deb / .rpm）+ nfpm.yaml
                                #   （nfpm.yaml 只负责把暂存树搬进包，**落点不在这里声明**）
@@ -297,7 +298,7 @@ V1 里程碑进度：
 ### 📄 许可证
 
 - **代码**：MIT，全文见 [`LICENSE`](LICENSE)。源码文件头带机器可读的 **SPDX 标识**（`SPDX-FileCopyrightText: 2026 erik.xyz` + `SPDX-License-Identifier: MIT`），Rust 侧另有 `Cargo.toml` 的 `[workspace.package] license = "MIT"` 规范声明
-- **词库数据**：**与代码分开授权** —— `data/raw/*.tsv` 及由其编译出的 `.opid` **不适用 MIT**，各自按上游许可证；**`luna.opid` 因并入 rime-ice（GPL-3.0-only，2026-10-11）而整体按 GPL-3.0 分发**（含随产物提供上游数据的义务），其余来源：rime-luna-pinyin / terra / stroke 为 LGPL-3.0、rime-pinyin-simp 为 Apache-2.0、chinese-xinhua 与 THUOCL 为 MIT、符号与 Unihan 系为 Unicode License、英文联想词源为 CC-BY 3.0（**该许可证要求署名** —— `LICENSES.md` 的对应行即署名载体，分发含该数据的产品时须一并保留），逐条来源、许可证与上游 pin 见 [`data/raw/LICENSES.md`](data/raw/LICENSES.md)；OpenMoji 表情按 CC BY-SA 4.0（署名 OpenMoji 项目及贡献者）、颜文字按 MIT（Copyright (c) 2023 aoguai）；小欧贴纸 PNG 为项目自绘（MIT）。提交词表改动前请读 [`CONTRIBUTING.md`](CONTRIBUTING.md) 的许可证一节
+- **词库数据**：**与代码分开授权** —— `data/raw/*.tsv` 及由其编译出的 `.opid` **不适用 MIT**，各自按上游许可证；**`luna.opid` 因并入 rime-ice（GPL-3.0-only，2026-10-11）而整体按 GPL-3.0 分发**（含随产物提供上游数据的义务），其余来源：rime-luna-pinyin / terra / stroke 为 LGPL-3.0、rime-pinyin-simp 为 Apache-2.0、chinese-xinhua 与 THUOCL 为 MIT、符号与 Unihan 系为 Unicode License、英文联想词源为 CC-BY 3.0（**该许可证要求署名** —— `LICENSES.md` 的对应行即署名载体，分发含该数据的产品时须一并保留），逐条来源、许可证与上游 pin 见 [`data/raw/LICENSES.md`](data/raw/LICENSES.md)；OpenMoji 表情按 CC BY-SA 4.0（署名 OpenMoji 项目及贡献者）、颜文字按 MIT（Copyright (c) 2023 aoguai）；小欧贴纸、应用图标与文档展示图等**自绘视觉资产为项目专有资产（不是开源内容）**：版权归项目作者，商业使用需书面授权，个人非商业可随未修改的官方发行版原样使用，详见 [`ASSETS-LICENSE.md`](ASSETS-LICENSE.md)。提交词表改动前请读 [`CONTRIBUTING.md`](CONTRIBUTING.md) 的许可证一节
 
 ---
 

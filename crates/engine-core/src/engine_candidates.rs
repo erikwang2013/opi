@@ -37,7 +37,11 @@ impl Engine {
             if self.composer.carried_from().is_some() {
                 return Vec::new();
             }
-            return crate::english_words::candidates(&s.buffer, limit);
+            // emoji 输入匹配（2026-10-18）：追加在英文词之后、受 limit 约束 ——
+            // 单词候选填满时一个也不进，`hello` 这类词的首位不受影响。
+            let mut cands = crate::english_words::candidates(&s.buffer, limit);
+            crate::emoji_keywords::append_to(&mut cands, &s.buffer, limit);
+            return cands;
         }
         // 输入方案分流（2026-10-09）：只在「会打拼音缓冲」的两个模式下有意义
         // （English/Number/Symbol 的缓冲不是拼音串）。
@@ -127,7 +131,7 @@ impl Engine {
         // 五笔同族（2026-10-14）：无码表时也落本支，三档同关 + **分词回退也关**
         // （码串没有音节，理由见 engine_wubi.rs 头）—— `plain` 是这两条路的共同判据。
         let plain = matches!(self.scheme(), Scheme::Stroke | Scheme::Wubi);
-        rank_and_pick_with(
+        let mut cands = rank_and_pick_with(
             self.active_dict(),
             &self.symbols,
             &self.learner,
@@ -145,6 +149,15 @@ impl Engine {
                 // 拼音**那条路（Scheme::Full），`plain` 为假 ⇒ 分档生效（2026-10-14 裁决）。
                 tiers: !plain,
             },
-        )
+        );
+        // 输入即得表情（2026-10-18）：只对**26 键拼音/繁体**这条路追加（`plain` 的
+        // 笔画/五笔是编码串、Symbol 模式只出符号，都不该按拼音关键字猜表情）。
+        // 位置固定在文本候选之后 ⇒ 受 limit 约束、绝不顶掉文本首候选。
+        // ⚠️ 边界：9/14 键与双拼在上面各自 return，**本轮不覆盖**（数字/编码缓冲
+        // 不是关键字前缀；要覆盖得先解码成拼音，见 tests/emoji_match.rs 文件头）。
+        if !plain && matches!(s.mode, Mode::Pinyin | Mode::Traditional) {
+            crate::emoji_keywords::append_to(&mut cands, &s.buffer, limit);
+        }
+        cands
     }
 }

@@ -318,8 +318,9 @@ https://github.com/erikwang2013/opi/actions/runs/37934999798 ）**：
 - **没有** `tsf_opi.dll`（那是另一个 job 在另一台机器上编的，两个 artifact 互不相干）；
 - **没有** `luna.opid`，也不做任何注册/环境变量动作（§2.4 的判断不变）。
 
-**拿下来之后要过一遍后处理（2026-10-17 加）**：CI 出的 `.msi` 只带 jpackage 的默认行为，
-而用户裁决了两条它做不了的（「安装的时候中断正在运行的应用，安装后启动」）：
+**拿下来之后要过一遍后处理（2026-10-17 / 2026-10-18 加）**：CI 出的 `.msi` 只带 jpackage
+的默认行为，而用户裁决了三条它做不了的（「安装的时候中断正在运行的应用，安装后启动」，
+以及「覆盖安装新版本后还要重启才生效」）：
 
 ```bash
 # 在 debian:12 容器里跑（本机没有 msitools；同 scripts/build-packages.sh 的用法）
@@ -328,19 +329,55 @@ docker run --rm -v "$PWD:/w" -w /w debian:12 \
          && scripts/postprocess-windows-msi.sh dist/opi-candidates-<版本>.msi'
 ```
 
-`scripts/postprocess-windows-msi.sh`（文件头有全部设计理由与「能证明/不能证明」）做两件事：
-执行序列 797 加一条 `"taskkill" /f /t /im opi-candidates.exe`（引号是 WixQuietExec 的硬要求；
-排在 `RemoveExistingProducts@798`
-**之前** —— 否则运行中的旧实例会走「改名+重启后删」那条路，装完还活着）；ExitDialog 的
-WixUI 自带复选框（默认勾选、文案 `Launch opi-candidates`）在 Finish 时经 `WixCA` 的
-`WixShellExec` 拉起新装的启动器。脚本自带前置断言（槽位空、基线行在）、幂等护栏与
+`scripts/postprocess-windows-msi.sh`（文件头有全部设计理由与「能证明/不能证明」）做三件事：
+
+1. 执行序列 797 加一条 `"taskkill" /f /t /im opi-candidates.exe`（引号是 WixQuietExec 的
+   硬要求；排在 `RemoveExistingProducts@798` **之前** —— 否则运行中的旧实例会走
+   「改名+重启后删」那条路，装完还活着）。
+2. ExitDialog 的 WixUI 自带复选框（默认勾选）在 Finish 时经 `WixCA` 的 `WixShellExec`
+   拉起新装的启动器。
+3. **同一个复选框**（Ordering=2，晚于自启、早于 EndDialog）经 `WixCA` 的 `WixSilentExec`
+   （Type 65 = DLL + ignore-return）执行 `"taskkill" /f /im explorer.exe`，让 Explorer
+   重启。**只杀不 `start`**：该 CA 从提权的 msiexec 里跑，提权上下文启动的 explorer 会
+   以管理员令牌成为 shell（UAC 旁路，安全风险）；shell 由 Winlogon 的
+   `AutoRestartShell`（默认 1）以**用户自己的完整性级别**拉回。
+   `WixSilentExec` 用自己的 `WixSilentExecCmdLine` 属性 —— 不复用 797 的
+   `WixQuietExecCmdLine`（同一属性两条命令会互相踩）。
+
+复选框文案因此变成 `Launch opi-candidates and restart Explorer`，完成页还有一行说明
+（`WIXUI_EXITDIALOGOPTIONALTEXT`）：Explorer 会重启以重新加载输入法，其它已打开的应用
+要各自重启才换到新版本。脚本自带前置断言（槽位空、基线行在）、幂等护栏（重复运行直接
+退出 0；**旧版脚本处理过的产物会被明确拒绝**，须在原始 artifact 上重跑）与
 **读回 + 全表 diff** 完整性检查，任一不满足即不落产物。
 
+**升级后哪些进程会重载、哪些不会**（全部【未验证】：本机没有 Windows）：
+
+| 对象 | 会发生什么 |
+|---|---|
+| 新启动的进程 | 加载磁盘上的新 DLL（前提：DLL 确由本次安装替换） |
+| Explorer / shell / 语言栏 | 勾选复选框点 Finish → explorer 被结束 → Winlogon 自动重启 → 重新加载 |
+| 已打开的其它应用（Office / 浏览器 / 编辑器…） | **仍持旧 DLL**，直到各自关闭重开 |
+| 候选窗进程 | 装前被 797 结束、装后经 `WixShellExec` 拉起（2026-10-17 的两条，未变） |
+
+- **静默 / 基本 UI 安装**（`msiexec /qn`、`/qb`）不出现 ExitDialog ⇒ **不会重启 Explorer**。
+  需要手动：`taskkill /f /im explorer.exe`（等 Winlogon 拉回），或注销/重启。
+- **用户取消勾选** ⇒ 自启与 Explorer 重启都不发生（两个动作共用这一个复选框）。
+- **失败回退**：动作在 InstallFinalize 之后执行、且带 ignore-return ⇒ 失败不回滚安装。
+  若 `AutoRestartShell=0`（非默认值），shell 不会自动回来 —— 任务管理器 → 文件 →
+  运行新任务 → `explorer.exe`；安装本身不受影响。
+- **首次安装也会重启一次**（复选框默认勾选）：此时没有旧 DLL 要换，是同一开关的副作用。
+- **多会话机器**：`taskkill /im explorer.exe` 会命中所有可访问会话的 explorer。本机无法
+  验证多会话行为；这是已知代价而不是静默行为（完成页复选框文案写明了会重启 Explorer）。
+- ⚠️ **本仓当前这个 MSI 不含 `tsf_opi.dll`**（§2.5 上面已列；本机对 File 表实测零命中）。
+  ⇒ 只有当 DLL 由其它步骤部署/替换时，Explorer 重启才和 TSF 版本有关；否则它只是刷新
+  shell。脚本运行时会把这一点打印成提示（**不阻断**注入）。
+
 **这条改动的证据档位**（照实）：表级形状在本地可复核（读回断言全绿 + 除四张表外全库
-逐字节未变 + `msiextract` 两个包解出的 193 个文件 `diff -rq` 全同）；入口点
-`WixShellExec` / `WixQuietExec` 的存在取自 WiX3 源码 def（`wixca.def`，wix311rtm 同版）。
-**「在真 Windows 上装一遍」仍然一次都没有**（§6.1 #12）—— 杀没杀掉、启没启起来、
-复选框出不出现，都还没人见过。
+逐字节未变 + `msiextract` 两个包解出的 193 个文件 `diff -rq` 全同）；三个入口点在**这份
+MSI 自己的** `Binary.WixCA`（3.11.2.4516）里实测存在（容器内 `objdump -p` 读导出表：
+`WixShellExec` / `WixQuietExec` / `WixSilentExec`；`strings -el` 读到
+`WixSilentExecCmdLine`）。**「在真 Windows 上装一遍」仍然一次都没有**（§6.1 #12）——
+杀没杀掉、启没启起来、复选框出不出现、Explorer 有没有被 Winlogon 拉回，都还没人见过。
 
 **这个 artifact 明确不保证什么**（别读成「Windows 端能用了」）：
 
@@ -648,7 +685,7 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | 9 | `Ctrl+'` / `Ctrl+\` / `Shift+Space` 在 Windows 上有没有被别的软件占用 | §4.1 |
 | 10 | 语言栏按钮（`langbar.rs`）的运行期行为：`AddItem` 成不成、`GetIcon` 有没有被调、图标画没画出来 —— 只有 §1.2 那条 `cargo check` 看过它（"挑条目 + 校验 RT_ICON 形态"那半在 `langbar_icon.rs`，有主机单测） | §2.1、`crates/tsf-opi/src/langbar.rs` 头注释 |
 | 11 | **「属性设置」的生效时机**：设置窗落盘后要等下一次 `Activate` —— 本机无法验证（`Activate` 由 TSF 调）。读取/容错/落点那半在 `settings.rs`，有主机单测 | §4.4、`crates/tsf-opi/src/settings.rs` |
-| 12 | **安装器两条新行为（关停运行中实例 / 装后自启，2026-10-17 加）**：表级已改好并可本地复核（§2.5 的后处理脚本 + 读回证据），但**没有在真 Windows 上装过一次** —— taskkill 真杀没杀掉、WixShellExec 真启没启起来、ExitDialog 复选框出不出现，全是【未验证】 | §2.5、`scripts/postprocess-windows-msi.sh` |
+| 12 | **安装器三条新行为（关停运行中实例 / 装后自启 / 装完重启 Explorer，2026-10-17 / 2026-10-18 加）**：表级已改好并可本地复核（§2.5 的后处理脚本 + 读回证据），但**没有在真 Windows 上装过一次** —— taskkill 真杀没杀掉、WixShellExec 真启没启起来、ExitDialog 复选框出不出现、Explorer 是否被结束并由 Winlogon 拉回（依赖 `AutoRestartShell` 默认 1），全是【未验证】 | §2.5、`scripts/postprocess-windows-msi.sh` |
 
 ### 6.2 代码里已知的缺口（读源码得出，不是待办猜测）
 

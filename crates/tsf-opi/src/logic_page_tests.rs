@@ -14,11 +14,11 @@
 use super::*;
 use engine_core::dictionary::InMemoryDictionary;
 
-/// 20 个 "hao" 词条 + 引擎：确定性的 3 页候选（同 logic_tests.rs 的夹具）。
+/// 20 个 "qwx" 词条 + 引擎：确定性的 3 页候选（同 logic_tests.rs 的夹具；键避开符号/emoji 关键字）。
 fn page_state() -> TsfLogic {
     let mut d = InMemoryDictionary::new();
     for i in 0..20 {
-        d.insert("hao", &format!("词{i:02}"), (5000 - i) as u32);
+        d.insert("qwx", &format!("词{i:02}"), (5000 - i) as u32);
     }
     let mut s = TsfLogic {
         engine: engine_core::Engine::new(
@@ -46,7 +46,7 @@ fn typed(s: &mut TsfLogic, word: &str) {
 #[test]
 fn minus_and_equal_page_while_composing() {
     let mut s = page_state();
-    typed(&mut s, "hao");
+    typed(&mut s, "qwx");
     assert_eq!(s.input_key('=' as u32, 0), KeyOutcome::CompositionChanged);
     assert_eq!(s.page(), 1, "'=' 下一页");
     assert_eq!(s.input_key('=' as u32, 0), KeyOutcome::CompositionChanged);
@@ -57,7 +57,7 @@ fn minus_and_equal_page_while_composing() {
     s.input_key('-' as u32, 0);
     assert_eq!(s.input_key('-' as u32, 0), KeyOutcome::CompositionChanged); // 钳制
     assert_eq!(s.page(), 0);
-    assert_eq!(s.buffer(), "hao", "翻页不动缓冲");
+    assert_eq!(s.buffer(), "qwx", "翻页不动缓冲");
 }
 
 /// 抬起与按下同判：按下被消费（翻页），抬起也必须消费 ——
@@ -65,7 +65,7 @@ fn minus_and_equal_page_while_composing() {
 #[test]
 fn minus_and_equal_release_consumed_after_consumed_press() {
     let mut s = page_state();
-    typed(&mut s, "hao");
+    typed(&mut s, "qwx");
     s.input_key('=' as u32, 0);
     assert_eq!(
         s.input_key('=' as u32, KEY_STATE_RELEASED),
