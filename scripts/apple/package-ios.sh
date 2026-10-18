@@ -119,28 +119,35 @@ done
 # 「链接过了」不等于「符号都齐了」：本仓库的教训是只有 `ldd -r` 才看得见未定义符号
 # （`nm -u` 是同一件事在 Mach-O 上的做法）。iOS 上未定义符号默认是硬错，这条是补刀。
 fwbin="$out/ios-arm64/$FMWK.framework/$FMWK"
+# 三份输出**先落到变量再 grep**：`nm | grep -q` / `nm | head` 在 `pipefail` 下会因
+# grep/head 提前退出、nm 收到 SIGPIPE 而把「符号明明在」判成失败（2026-10-18 实测：
+# 符号数增长后 iOS job 连续两次红在 `LLVM ERROR: Broken pipe`，报错却指向未定义符号）。
+nm_g=$(nm -g "$fwbin" 2>&1 || true)
+nm_g_defined=$(nm -gU "$fwbin" 2>&1 || true)
+nm_u=$(nm -u "$fwbin" 2>&1 || true)
+otool_l=$(otool -L "$fwbin" 2>&1 || true)
 # 失败时要能一眼看出是「没链进去」还是「链的是 dylib」，所以三条证据一起打。
 # （首轮那条「没有定义 _opi_load」就是靠后面的 otool 才定性成动态链接的 —— 这次直接给。）
 dump_evidence() {
   echo "-- file：" >&2; file "$fwbin" >&2
-  echo "-- nm -g（已定义的外部符号，前 40 行）：" >&2; nm -g "$fwbin" | head -40 >&2
-  echo "-- nm -u（未定义符号）：" >&2; nm -u "$fwbin" | head -40 >&2
-  echo "-- otool -L（动态依赖）：" >&2; otool -L "$fwbin" >&2
+  echo "-- nm -g（已定义的外部符号，前 40 行）：" >&2; printf '%s\n' "$nm_g" | head -40 >&2
+  echo "-- nm -u（未定义符号）：" >&2; printf '%s\n' "$nm_u" | head -40 >&2
+  echo "-- otool -L（动态依赖）：" >&2; printf '%s\n' "$otool_l" >&2
 }
 for sym in _opi_load _opi_key_event _opi_ffi_free_string _opi_candidates_page; do
-  nm -gU "$fwbin" | grep -q "$sym\$" || {
+  printf '%s\n' "$nm_g_defined" | grep -q "$sym\$" || {
     echo "!! $FMWK 里没有定义 $sym —— Rust 静态库没链进去（链接线/crate-type 变了？）" >&2
     dump_evidence; exit 1
   }
 done
-if nm -u "$fwbin" | grep -q '_opi_'; then
+if printf '%s\n' "$nm_u" | grep -q '_opi_'; then
   echo "!! $FMWK 里有未定义的 opi_ 符号 —— 链接不完整：" >&2
-  nm -u "$fwbin" | grep '_opi_' >&2
+  printf '%s\n' "$nm_u" | grep '_opi_' >&2
   dump_evidence; exit 1
 fi
 # 静态库应当是**静态**链进去的：出现动态依赖就说明链接线变成了 `-l`（ld64 会优先挑
 # 同目录的 .dylib）（iOS 上带第三方 dylib 的扩展装不上，而且那种链接会静默「成功」）。
-if otool -L "$fwbin" | grep -q 'libopi_ffi'; then
+if printf '%s\n' "$otool_l" | grep -q 'libopi_ffi'; then
   echo "!! $FMWK 动态依赖了 libopi_ffi —— 应为按路径直链 .a：" >&2
   dump_evidence; exit 1
 fi
