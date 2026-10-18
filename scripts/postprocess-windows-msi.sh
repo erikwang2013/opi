@@ -61,6 +61,12 @@ set -euo pipefail
 
 IN="${1:?用法: scripts/postprocess-windows-msi.sh <输入.msi> [输出.msi]}"
 OUT="${2:-$IN}"
+# 转绝对路径：下面会 cd 进临时目录跑 msiinfo —— `msiinfo export Binary` 会把
+# Binary/、Icon/ 目录解到**当前目录**（2026-10-19 实测，在仓库根留下 root 所有的
+# 提取物）。cd 到 WORK 后，这些临时目录跟着 trap 一起清掉。
+IN="$(cd "$(dirname "$IN")" && pwd)/$(basename "$IN")"
+OUT_DIR="$(cd "$(dirname "$OUT")" && pwd)"
+OUT="$OUT_DIR/$(basename "$OUT")"
 
 for tool in msiinfo msibuild; do
     command -v "$tool" >/dev/null || {
@@ -72,6 +78,7 @@ done
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/opi-msi-post.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
+cd "$WORK"
 
 # 先复制一份来操作，成功后才写 OUT —— 中途失败既不碰原文件，也不在 OUT 留下
 # 一个「看起来像处理过」的副本（2026-10-18：旧版会先 cp 到 OUT，拒绝旧产物时
