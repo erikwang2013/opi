@@ -187,6 +187,9 @@ fn every_ascii_keyval_behaves_identically_in_every_mode() {
         let mut t = TsfLogic::load(Some(LUNA)).expect("装载");
         f.switch_mode(mode);
         t.switch_mode(mode);
+        if mode == Mode::English {
+            f.set_english_pro(true); // 对照的是专业模式的旧语义（2026-10-19）
+        }
         for keyval in 0x00u32..=0x7f {
             // 0x20 是**唯一**一个两轨键空间合法重叠的值：fcitx5 的 `KEY_SPACE` 就是
             // 可打印段的 0x20（keysym 原值），TSF 的是 `SPECIAL_BASE|0x20=0x10020`。

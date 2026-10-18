@@ -25,6 +25,7 @@
 
 #include "opi_config.h"   // 「属性设置」：OpiSettings + read/apply/save
 #include "opi_ctl.h"      // opi-ctl 接收侧（D-Bus 对象 + 注册；spike 结论在那边）
+#include "opi_ctl_englishpro.h" // opi-ctl `englishpro` 动词/状态位
 #include "opi_ctl_mode.h" // opi-ctl `mode` 动词（模式循环；500 行门禁拆出）
 #include "opi_mode.h"     // 模式热键（Ctrl+' / Ctrl+\ / Ctrl+Shift+Z）+ Shift 轻按切换 + 状态项
 #include "opi_rust_ffi.h"
@@ -69,7 +70,6 @@ public:
         // activate() 再试一次并在那里作诊断（见 ensureCtlService_）。
         ensureCtlService_(false);
     }
-
     // ---- 「属性设置」：fcitx5 的 addon 配置（字段与落点见 opi_config.h）----
     // 改完 `fcitx5-remote -r` 走 reloadConfig；配置工具直接改走 setConfig；
     // 两者都立刻 apply 到引擎（不必重启输入法）。
@@ -85,7 +85,6 @@ public:
         applyOpiSkin(*settings_.skin, lastSkin_, instance_);
     }
     void save() override { saveOpiSettings(settings_); }
-
     // 状态区三项（中/英、简/繁、设）随激活挂上去（见 opi_mode.h 的 attach；
     // 该组在下次 activate 前由 core 自动清空，不必自己去重）。
     void activate(const fcitx::InputMethodEntry & /*entry*/,
@@ -98,10 +97,8 @@ public:
         // 无 IC 时状态栏按钮也不存在，所以「服务恰好在这时才有」不构成缺口。
         ensureCtlService_(true);
     }
-
     void keyEvent(const fcitx::InputMethodEntry &entry,
                   fcitx::KeyEvent &keyEvent) override;
-
     // ---- 切走 / 切英文：先退浏览，再按 W1 提交（按模式分叉：拼音/繁体缓冲原文、
     //      符号模式不上关键字）；焦点移出 / 重置：静默清空 ----
     //
@@ -225,11 +222,7 @@ public:
             // 2026-10-10 裁决）。与 Shift 轻按共用 toggle（含 W1 直接确认与状态项刷新）。
             shiftToggle_.toggle(ic);
         } else if (action == "englishpro") {
-            // 英文普通/专业（2026-10-19）：普通 en26 直出字母，专业才查词库。
-            if (opi_fcitx5_toggle_english_pro == nullptr) {
-                return "err:4:英文专业入口未接线（插件版本过旧），本次动作无效";
-            }
-            opi_fcitx5_toggle_english_pro();
+            if (!opiCtlToggleEnglishPro()) return "err:4:英文专业入口未接线（插件版本过旧）";
             refreshingPanelFor(ic);
         } else if (action == "mode") {
             // 模式循环（用户裁决 2026-10-14；实现、派生与五笔插入点都在
@@ -364,9 +357,7 @@ private:
         // 档位 token（2026-10-14 追加，**行尾**：旧前端按位置读前面几段，不看末格）。
         // 派生与 `opi-ctl mode` 同一份 —— opi_ctl_mode.h 的 opiCtlStateModeToken。
         s += opiCtlStateModeToken(mode);
-        // 英文专业态（2026-10-19，追加在 **mode 之后**）：on = 词库联想，off = 普通直出。
-        s += ";enpro=";
-        s += (opi_fcitx5_english_pro != nullptr && opi_fcitx5_english_pro()) ? "on" : "off";
+        s += opiCtlEnglishProField();
         return s;
     }
 

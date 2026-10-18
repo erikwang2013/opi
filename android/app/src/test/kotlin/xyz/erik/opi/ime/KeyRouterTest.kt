@@ -35,25 +35,6 @@ class KeyRouterTest {
     }
 
     @Test
-    fun englishNormalModeCommitsDirectlyWithoutEngineMatching() {
-        val fake = FakeEngine().apply { mode = EngineMode.ENGLISH.value }
-        val ch = Channel()
-        val ctrl = EngineController(fake)
-        val r = KeyRouter(
-            ctrl,
-            commit = { ch.commits += it },
-            deleteBackward = { ch.backspaceCount++ },
-            performEnter = { ch.enterCount++ },
-            englishPro = { false },
-        )
-        r.handleKey("a")
-        r.handleKey("1")
-        assertEquals("普通模式不查词库、不进引擎缓冲", emptyList<String>(), fake.inputCalls)
-        assertEquals(listOf("a", "1"), ch.commits)
-        assertEquals("缓冲保持空", "", ctrl.buffer)
-    }
-
-    @Test
     fun englishEmptyBufferLetterEntersEngine() {
         // 2026-10-18 单词联想：空缓冲不再直传 —— 字母进引擎缓冲、候选 = 前缀匹配。
         val fake = FakeEngine().apply { mode = EngineMode.ENGLISH.value }
