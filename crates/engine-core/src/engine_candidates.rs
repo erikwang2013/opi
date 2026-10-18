@@ -13,7 +13,9 @@
 //! `correction` / `jianpin` / `scheme_readings`）；尚未 `pub(crate)` 的按 `engine_punct.rs`
 //! 的先例升级（拆分裂的代价，别再为此往 engine.rs 塞回方法）。
 
-use crate::candidates::{Candidate, RankOptions, rank_and_pick_scheme, rank_and_pick_with};
+use crate::candidates::{
+    Candidate, CandidateKind, RankOptions, rank_and_pick_scheme, rank_and_pick_with,
+};
 use crate::composer::Mode;
 use crate::engine::Engine;
 use crate::scheme::Scheme;
@@ -37,9 +39,27 @@ impl Engine {
             if self.composer.carried_from().is_some() {
                 return Vec::new();
             }
+            // 单字母原文候选（2026-10-19）：缓冲恰为一个 ASCII 字母时，把用户输入的
+            // 字母本身（保留大小写）放在首位；它占 1 个名额，词库只用 limit-1。
+            // 词库里的同形词（`a` / `I`）按大小写不敏感去重，同一字母只出现一次。
+            let single =
+                limit > 0 && s.buffer.len() == 1 && s.buffer.as_bytes()[0].is_ascii_alphabetic();
+            let mut cands = crate::english_words::candidates(&s.buffer, limit);
+            if single {
+                cands.retain(|c| !c.text.eq_ignore_ascii_case(s.buffer.as_str()));
+                cands.truncate(limit - 1);
+                cands.insert(
+                    0,
+                    Candidate {
+                        text: s.buffer.clone(),
+                        kind: CandidateKind::English,
+                        // 与词频不同量纲：原文必须排在所有联想词之前。
+                        score: u64::MAX,
+                    },
+                );
+            }
             // emoji 输入匹配（2026-10-18）：追加在英文词之后、受 limit 约束 ——
             // 单词候选填满时一个也不进，`hello` 这类词的首位不受影响。
-            let mut cands = crate::english_words::candidates(&s.buffer, limit);
             crate::emoji_keywords::append_to(&mut cands, &s.buffer, limit);
             return cands;
         }

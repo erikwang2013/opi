@@ -86,6 +86,53 @@ class KeyRouterTest {
     }
 
     @Test
+    fun englishOwnBufferDigitCommitsDirectlyNotToEngine() {
+        // 2026-10-19 英文键盘顶部数字行：英文自有缓冲时 0-9 **直接上屏**，
+        // 不许喂引擎（引擎的英文数字是选词键，会把数字吞成候选选择）。
+        val fake = FakeEngine().apply {
+            mode = EngineMode.ENGLISH.value
+            buf = "h"
+        }
+        val ch = Channel()
+        val (ctrl, r) = router(fake, ch)
+        r.handleKey("1")
+        assertEquals(listOf("1"), ch.commits)
+        assertTrue("数字不许进英文引擎", fake.inputCalls.isEmpty())
+        assertEquals("英文缓冲保持", "h", ctrl.buffer)
+        assertEquals("直提不重推组合串", 0, ch.syncCount)
+    }
+
+    @Test
+    fun englishOwnBufferDigitFollowsFullwidthRule() {
+        val fake = FakeEngine().apply {
+            mode = EngineMode.ENGLISH.value
+            buf = "a"
+        }
+        val ch = Channel()
+        val (ctrl, r) = router(fake, ch)
+        ctrl.toggleFullwidth()
+        r.handleKey("2")
+        assertEquals(listOf("２"), ch.commits)
+        assertEquals("a", ctrl.buffer)
+    }
+
+    @Test
+    fun englishCarriedBufferDigitStillDirectPasses() {
+        // 携带缓冲的中→英路径语义不变：数字照旧直传，缓冲原样保留。
+        val fake = FakeEngine().apply {
+            mode = EngineMode.ENGLISH.value
+            buf = "ni"
+            carriedFrom = EngineMode.PINYIN
+        }
+        val ch = Channel()
+        val (_, r) = router(fake, ch)
+        r.handleKey("3")
+        assertEquals(listOf("3"), ch.commits)
+        assertTrue(fake.inputCalls.isEmpty())
+        assertEquals("ni", fake.buf)
+    }
+
+    @Test
     fun englishCarriedBufferDirectCommitsWithoutTouchingIt() {
         // 2026-10-09 裁决：语言切换**保留缓冲** ⇒「英文模式 + 携带缓冲」是个正常状态
         // （保留着的中文拼音，见 ImeState.cycleMode）。字母必须照英文直传

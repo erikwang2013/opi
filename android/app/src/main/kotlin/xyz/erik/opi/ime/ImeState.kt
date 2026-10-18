@@ -164,11 +164,11 @@ class ImeState(
      * 中→繁只切**引擎模式**（方案不动，9 键仍是 9 键）；英那条会换到全键盘方案
      * （9 键上打英文没有候选路）；英→中回**上次的中文方案**。
      *
-     * **二期（同日晚）：三条腿全部保留缓冲** —— 用户裁决「中文输入的时候切换英文，
-     * 拼音保留可继续使用」。走 [EngineController.switchLanguage]（引擎侧换模式/方案
-     * 但不清缓冲），不再 commit pending；英文模式下字母照常直传（见 KeyRouter），
-     * 保留的拼音切回中文后继续打/接着选。⚠️ 「输入模式」面板那条（[selectInputMode]）
-     * 仍先 commit 再换 —— 那是明确换布局的动作，判据不同，别顺手统一。
+     * 缓冲语义：中→繁、繁→英**保留缓冲**（2026-10-09 用户裁决「中文输入的时候切换
+     * 英文，拼音保留可继续使用」）；英→中改为**输入重置**（2026-10-19 用户裁决）——
+     * 切换前清掉英文缓冲、**不提交**英文原文，切完候选为空（不显示「无匹配」）。
+     * ⚠️ 「输入模式」面板那条（[selectInputMode]）仍先 commit 再换 —— 那是明确
+     * 换布局的动作，判据不同，别顺手统一。
      */
     /**
      * 26 键底行模式键的**键面字 = 点它会切到哪**（用户裁决 2026-10-12 晚：
@@ -196,7 +196,13 @@ class ImeState(
                 commitPendingAsPinyin()
                 switchLanguageKeepingBuffer(InputMode.ENGLISH26)
             }
-            else -> switchLanguageKeepingBuffer(lastChineseMode)
+            // 英→中（2026-10-19 用户裁决「输入重置」）：先清英文缓冲再切，**不提交**
+            // —— 英文原文不落进编辑器；缓冲空 ⇒ 切完候选为空、不显示「无匹配」。
+            // 判据显式限定 English：符号搜索叠盘也接本键，那条路径语义不变。
+            else -> {
+                if (controller.mode == EngineMode.ENGLISH) controller.clear()
+                switchLanguageKeepingBuffer(lastChineseMode)
+            }
         }
     }
 
@@ -240,10 +246,11 @@ class ImeState(
     }
 
     /**
-     * 语言切换（中↔英）：换方案 + 模式，但**不提交、不清**缓冲（[cycleMode] 的两条腿）。
+     * 语言切换（中↔英）：换方案 + 模式，但**不提交、不清**缓冲。
      * 与 [selectInputMode] 的区别：那条是「输入模式」面板的明确换布局 —— 先 commit
      * pending 再换；这条服从 2026-10-09 裁决「中文输入的时候切换英文，拼音保留可继续
-     * 使用」，缓冲原样留在引擎里，切回中文接着打/接着选。
+     * 使用」，缓冲原样留在引擎里。⚠️ 英→中那条腿在调用前已先 [EngineController.clear]
+     * （2026-10-19 输入重置），见 [cycleMode]。
      */
     private fun switchLanguageKeepingBuffer(m: InputMode) {
         inputMode = m

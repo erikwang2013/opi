@@ -24,10 +24,12 @@ fun QwertyKeyboard(
     onNumber: (() -> Unit)? = null,
     shiftState: ShiftState? = null,
     modeLabel: String = "中",
+    /** 字母行上方加一行 0-9（英文 26 键；搜索叠盘等其它场景保持关闭）。 */
+    showNumberRow: Boolean = false,
 ) {
     val shiftActive = shiftState != null && shiftState != ShiftState.OFF
     Column(modifier = modifier.fillMaxSize()) {
-        for (row in rows) {
+        for (row in qwertyRows(showNumberRow)) {
             Row(modifier = Modifier.weight(1f).fillMaxSize()) {
                 for (ch in row) {
                     if (ch == SHIFT_LABEL) {
@@ -90,4 +92,10 @@ private val rows = listOf(
     listOf("a", "s", "d", "f", "g", "h", "j", "k", "l"),
     listOf("⇧", "z", "x", "c", "v", "b", "n", "m"),
 )
+private val numberRow = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0")
+
+/** 实际渲染的键位行（数字行在字母行上方）。JVM 单测直接核这张表。 */
+internal fun qwertyRows(showNumberRow: Boolean): List<List<String>> =
+    if (showNumberRow) listOf(numberRow) + rows else rows
+
 private const val SHIFT_LABEL = "⇧"

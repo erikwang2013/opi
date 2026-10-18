@@ -25,9 +25,10 @@ class ImeStateModeKeyTest {
 
     @Test
     fun cycleModeKeepsSchemeAndRestoresLastChinese() {
-        // 2026-10-09 二期起三条腿全走 switchLanguage（换模式/方案但**保留缓冲**，
-        // 用户裁决「切英文，拼音保留可继续使用」）——不再 commit、不再走清缓冲的
-        // switchMode/switchScheme。本用例钉「谁变到哪」；「没提交、没清」的判据在
+        // 中→繁、繁→英走 switchLanguage（换模式/方案但**保留缓冲**，用户裁决
+        // 「切英文，拼音保留可继续使用」）——不走清缓冲的 switchMode/switchScheme。
+        // 英→中反而是**输入重置**（2026-10-19：先 clear 再切，不提交；见
+        // ImeStateEnglishSwitchTest）。本用例钉「谁变到哪」；「没提交」的判据在
         // cycleModeToTraditionalKeepsBufferAndToEnglishCommitsPinyin。
         // ⚠️ 本条钉的是**26/14/笔画盘**那条循环（2026-10-15 起 9 键不再走它，
         // 见本文件末条 nineKeyModeKeyOnlyTogglesTraditional）。
@@ -92,7 +93,7 @@ class ImeStateModeKeyTest {
             EngineMode.ENGLISH.value to InputScheme.FULL.value,
             fake.switchLanguageCalls.last(),
         )
-        state.cycleMode() // 英→中：回上次的中文方案（全新默认态即 9 键）
+        state.cycleMode() // 英→中：回上次的中文方案（全新默认态即 9 键；缓冲已清）
         assertEquals(
             EngineMode.PINYIN.value to InputScheme.NINE.value,
             fake.switchLanguageCalls.last(),

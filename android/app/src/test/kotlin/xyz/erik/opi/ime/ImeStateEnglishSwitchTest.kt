@@ -111,6 +111,30 @@ class ImeStateEnglishSwitchTest {
     }
 
     @Test
+    fun cycleFromEnglishToChineseResetsBufferWithoutCommitting() {
+        // 2026-10-19 用户裁决「输入重置」：英→中在切换前清空英文缓冲，**不提交**
+        // 英文原文/候选；切完候选为空，不显示「无匹配」。
+        val fake = FakeEngine().apply {
+            mode = EngineMode.ENGLISH.value
+            buf = "hel"
+            cands = arrayOf("help")
+        }
+        val state = newState(fake)
+        state.cycleMode()
+        assertTrue("英→中不许提交英文原文或候选：$commits", commits.isEmpty())
+        assertEquals("切换前清空英文缓冲", "", fake.buf)
+        assertEquals(1, fake.clearCalls)
+        assertEquals(EngineMode.PINYIN, state.controller.mode)
+        assertEquals(InputMode.PINYIN9, state.inputMode)
+        assertTrue("切完候选为空", state.controller.candidates.isEmpty())
+        assertTrue("候选区不显示「无匹配」", !state.candidatesShowable)
+        assertEquals(
+            EngineMode.PINYIN.value to InputScheme.NINE.value,
+            fake.switchLanguageCalls.last(),
+        )
+    }
+
+    @Test
     fun switchToEnglishKeyboardWithEmptyBufferCommitsNothing() {
         val state = newState(FakeEngine())
         state.switchToEnglishKeyboard()

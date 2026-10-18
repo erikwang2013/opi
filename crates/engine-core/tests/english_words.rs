@@ -87,6 +87,76 @@ fn limit_caps_candidates() {
 }
 
 #[test]
+fn single_letter_puts_input_first_then_words() {
+    let mut e = english_state();
+    typed(&mut e, "h");
+    let got = e.candidates(8);
+    assert_eq!(got[0].text, "h", "单字母缓冲的首项必须是输入原文");
+    assert_eq!(got.len(), 8, "原文占 1 个名额，其余由词库补满");
+    assert!(got.iter().all(|c| c.kind == CandidateKind::English));
+    assert!(
+        got[1..]
+            .iter()
+            .all(|c| c.text.to_lowercase().starts_with('h')),
+        "原文之后仍是既有的前缀匹配词：{got:?}"
+    );
+}
+
+#[test]
+fn single_letter_preserves_case() {
+    let mut e = english_state();
+    typed(&mut e, "H");
+    assert_eq!(e.candidates(4)[0].text, "H", "原文候选保留用户输入的大小写");
+}
+
+#[test]
+fn single_letter_dedupes_dictionary_entry() {
+    // a / I 本身就是词库词条：原文候选与词条同形时只留一条（大小写不敏感）。
+    for input in ["a", "i", "I"] {
+        let mut e = english_state();
+        typed(&mut e, input);
+        let got = e.candidates(usize::MAX);
+        let same = got
+            .iter()
+            .filter(|c| c.text.eq_ignore_ascii_case(input))
+            .count();
+        assert_eq!(same, 1, "{input}: 同形字母只许一条，实得 {got:?}");
+        assert_eq!(got[0].text, input, "{input}: 原文仍占首位");
+    }
+}
+
+#[test]
+fn single_letter_limit_counts_the_raw_letter() {
+    let mut e = english_state();
+    typed(&mut e, "a");
+    let got = e.candidates(1);
+    assert_eq!(got.len(), 1, "limit=1 时只留原文");
+    assert_eq!(got[0].text, "a");
+
+    let got = e.candidates(3);
+    assert_eq!(got.len(), 3, "原文占 1 个名额 + 2 个词");
+    assert_eq!(got[0].text, "a");
+}
+
+#[test]
+fn multi_letter_buffer_has_no_raw_prefix_candidate() {
+    // 多字母保持现状：候选全是词库词，不前置原文缓冲。
+    let mut e = english_state();
+    typed(&mut e, "hel");
+    assert!(
+        e.candidates(8).iter().all(|c| c.text != "hel"),
+        "多字母缓冲不前置原文"
+    );
+}
+
+#[test]
+fn space_on_single_letter_commits_the_letter_itself() {
+    let mut e = english_state();
+    typed(&mut e, "q");
+    assert_eq!(e.input_space(), "q", "首候选是原文 ⇒ 空格上屏原文");
+}
+
+#[test]
 fn matching_is_case_insensitive_and_shift_capitalizes_display() {
     // 首字母大写（shift 语义）⇒ 规范小写词形首字母跟着大写；匹配按小写做。
     let mut e = english_state();

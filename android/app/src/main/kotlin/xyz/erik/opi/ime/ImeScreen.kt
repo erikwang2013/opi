@@ -418,6 +418,8 @@ private fun KeyboardArea(
                     onShiftLongPress = if (shiftVisible) controller::shiftLongPress else null,
                     shiftState = if (shiftVisible) controller.shiftState else ShiftState.OFF,
                     modeLabel = label,
+                    // 英文 26 键顶部数字行（2026-10-19）；搜索叠盘保持关闭。
+                    showNumberRow = controller.mode == EngineMode.ENGLISH,
                 )
             }
         }

@@ -210,8 +210,9 @@ fn english_single_shift_capitalizes_and_consumes() {
     s.shift_tap(); // Off → Single
     assert_eq!(s.key_event('a' as u32, 0), KeyAction::EngineHandled);
     assert_eq!(s.buffer(), "A", "single 态首个字母大写");
-    // 候选显示保留首字母大写（词库规范小写词形）
-    assert_eq!(s.candidates()[0], "And", "a 前缀最高频词是 and");
+    // 单字母原文占首位（2026-10-19）；联想词仍保留首字母大写（词库规范小写词形）
+    assert_eq!(s.candidates()[0], "A", "单字母缓冲首候选是输入原文");
+    assert_eq!(s.candidates()[1], "And", "a 前缀最高频词是 and");
     assert_eq!(s.shift_state(), ShiftState::Off, "single 用掉即复位");
     // 下个字母小写
     assert_eq!(s.key_event('b' as u32, 0), KeyAction::EngineHandled);

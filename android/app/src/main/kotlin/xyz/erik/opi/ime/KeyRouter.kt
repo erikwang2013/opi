@@ -69,6 +69,13 @@ class KeyRouter(
                 }
                 return
             }
+            // 英文自有缓冲 + 数字（2026-10-19 英文键盘顶部数字行）：**直接上屏**，
+            // 不喂引擎 —— 引擎的英文数字是「选词键」，会把 0-9 吞成候选选择。
+            // 全角规则与其它直传点一致。携带缓冲的数字走上一条（语义不变）。
+            if (ch.length == 1 && ch[0].isDigit()) {
+                commit(controller.fullwidthize(ch))
+                return
+            }
             // 空缓冲/英文自己的缓冲：进引擎 —— 字母入缓冲、候选 = 前缀匹配的最高频
             // 词（2026-10-18 单词联想；空缓冲不再直传）。⇧ 的 single 用掉即复位。
             val text = controller.input(ch)

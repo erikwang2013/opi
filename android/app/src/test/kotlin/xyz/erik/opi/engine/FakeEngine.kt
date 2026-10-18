@@ -59,6 +59,7 @@ class FakeEngine : OpiEngineApi {
         clearCalls++
         buf = ""
         carriedFrom = null
+        cands = null // 真引擎的候选由缓冲派生：清缓冲 ⇒ 候选空
     }
 
     /** 回车判据（2026-10-14）：测试按需设 0/1/2 —— 缺省 0 = 既有行为（选首候选）。 */
