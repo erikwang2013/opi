@@ -18,6 +18,8 @@ class KeyRouter(
     private val deleteBackward: () -> Unit,
     private val performEnter: () -> Unit,
     private val syncComposing: () -> Unit = {},
+    /** 英文专业模式（默认 true = 保持既有调用方/测试的前缀联想行为；生产注入 [ImeState.englishPro]）。 */
+    private val englishPro: () -> Boolean = { true },
 ) {
     /**
      * 引擎驱动的提交收尾：提交后**重新推一次组合串**（服务侧 = pushComposingText）。
@@ -61,6 +63,17 @@ class KeyRouter(
             // ⇧ 直传大写、全角由本侧宽化（直传绕过引擎，规则只能镜像，语义源见
             // EngineController.fullwidthize 的头注）。
             if (controller.bufferCarried) {
+                if (controller.shiftState != ShiftState.OFF) {
+                    commit(controller.fullwidthize(ch.uppercase()))
+                    controller.consumeSingleShift()
+                } else {
+                    commit(controller.fullwidthize(ch))
+                }
+                return
+            }
+            // 普通模式（2026-10-19，默认）：字母/数字都直出，**不进引擎、不做单词
+            // 匹配**；⇧ 语义与携带缓冲直传一致。专业模式才走下面的词库前缀联想。
+            if (!englishPro()) {
                 if (controller.shiftState != ShiftState.OFF) {
                     commit(controller.fullwidthize(ch.uppercase()))
                     controller.consumeSingleShift()

@@ -8,6 +8,7 @@ import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.engine.FakeEngine
 import xyz.erik.opi.engine.InputScheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -72,6 +73,21 @@ class ImeStateEnglishSwitchTest {
         assertEquals("已在英文：不记状态也不切换", callsBefore, fake.switchLanguageCalls.size)
         state.leaveTransientEnglish()
         assertEquals("没进过就不许把英文还原成中文", InputMode.ENGLISH26, state.inputMode)
+    }
+
+    // ---- 英文普通/专业（2026-10-19）----
+
+    @Test
+    fun englishProDefaultsToNormalAndTogglePersists() {
+        var persisted = 0
+        val state = newState().apply { persist = { persisted++ } }
+        assertFalse("默认普通模式", state.englishPro)
+        state.toggleEnglishPro()
+        assertTrue(state.englishPro)
+        assertEquals(1, persisted)
+        state.toggleEnglishPro()
+        assertFalse(state.englishPro)
+        assertEquals(2, persisted)
     }
 
     // ---- 切英文 = 拼音上屏（2026-10-10 用户裁决「默认是拼音，不要是候选词」）----

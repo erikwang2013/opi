@@ -101,6 +101,14 @@ class ImePreferences(private val store: PrefStore) {
         get() = store.getBoolean(KEY_JIANPIN, true)
         set(v) = store.put(KEY_JIANPIN, v)
 
+    /**
+     * 英文**专业模式**（2026-10-19 用户裁决）：键面 `pro`，默认 false = 普通模式
+     * 字母直出、不做单词匹配；true = 启用 `en_words.tsv` 前缀联想与候选栏。
+     */
+    var englishPro: Boolean
+        get() = store.getBoolean(KEY_ENGLISH_PRO, false)
+        set(v) = store.put(KEY_ENGLISH_PRO, v)
+
     /** 拼音纠错（2026-10-13；缺省开）。 */
     var correction: Boolean
         get() = store.getBoolean(KEY_CORRECTION, true)
@@ -224,6 +232,7 @@ class ImePreferences(private val store: PrefStore) {
         const val KEY_FUZZY = "engine_fuzzy"
         const val KEY_FUZZY_PAIRS = "engine_fuzzy_pairs"
         const val KEY_JIANPIN = "engine_jianpin"
+        const val KEY_ENGLISH_PRO = "english_pro"
         const val KEY_CORRECTION = "engine_correction"
         const val KEY_SHUANGPIN_LAYOUT = "engine_shuangpin_layout"
         // 五笔六键（2026-10-14，M4 第二波）

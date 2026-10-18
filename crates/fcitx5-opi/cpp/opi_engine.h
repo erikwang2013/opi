@@ -224,6 +224,13 @@ public:
             // IM 的激活开关，会让状态栏文案不同步、且之后 OPI 热键全部失效 ——
             // 2026-10-10 裁决）。与 Shift 轻按共用 toggle（含 W1 直接确认与状态项刷新）。
             shiftToggle_.toggle(ic);
+        } else if (action == "englishpro") {
+            // 英文普通/专业（2026-10-19）：普通 en26 直出字母，专业才查词库。
+            if (opi_fcitx5_toggle_english_pro == nullptr) {
+                return "err:4:英文专业入口未接线（插件版本过旧），本次动作无效";
+            }
+            opi_fcitx5_toggle_english_pro();
+            refreshingPanelFor(ic);
         } else if (action == "mode") {
             // 模式循环（用户裁决 2026-10-14；实现、派生与五笔插入点都在
             // opi_ctl_mode.h 的 opiCtlCycleMode —— 本文件 500 行门禁）。与 lang
@@ -357,6 +364,9 @@ private:
         // 档位 token（2026-10-14 追加，**行尾**：旧前端按位置读前面几段，不看末格）。
         // 派生与 `opi-ctl mode` 同一份 —— opi_ctl_mode.h 的 opiCtlStateModeToken。
         s += opiCtlStateModeToken(mode);
+        // 英文专业态（2026-10-19，追加在 **mode 之后**）：on = 词库联想，off = 普通直出。
+        s += ";enpro=";
+        s += (opi_fcitx5_english_pro != nullptr && opi_fcitx5_english_pro()) ? "on" : "off";
         return s;
     }
 

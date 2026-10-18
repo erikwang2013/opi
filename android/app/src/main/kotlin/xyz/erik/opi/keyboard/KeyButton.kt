@@ -43,6 +43,8 @@ fun KeyButton(
      * 键盘上动作不同**的键：9 键的模式键只切简/繁（2026-10-15 用户裁决），而 label
      * 「中/繁」在 [spokenKeyName] 里的默认读法是「中英切换」—— 会念错动作。 */
     description: String? = null,
+    /** 键面字号（默认 21sp；英文 26 键用更大字号）。 */
+    fontSize: androidx.compose.ui.unit.TextUnit = 21.sp,
 ) {
     val palette = LocalKeyboardPalette.current
     val bg = if (highlighted) palette.keyHighlightBg else palette.keyBg
@@ -64,7 +66,7 @@ fun KeyButton(
             .fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, fontSize = 21.sp, maxLines = 1, color = fg)
+        Text(label, fontSize = fontSize, maxLines = 1, color = fg)
     }
 }
 

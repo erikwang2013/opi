@@ -8,6 +8,9 @@
 # 测试钩子，这里指向合成树。本机桌面正跑着 fcitx5 与 opi-candidates（ps 可见），
 # 用真 /proc 跑的测试会把它们杀掉 —— 所以这组用例只认合成树。
 #
+# 2026-10-19：fcitx5 自动重启默认关闭（OPI_RESTART_FCITX5 未设）；本 harness 测的是
+# **旧 opt-in 路径**，所以下面显式 export OPI_RESTART_FCITX5=1。
+#
 # 覆盖：
 #   1. 三个包脚本 sh -n；
 #   2. 无 SUDO_USER ⇒ 不停任何 fcitx5、不写状态；
@@ -18,6 +21,7 @@
 #
 # 用法：sh scripts/packaging/test-restart-fcitx5.sh   （非 root 可跑）
 set -u
+export OPI_RESTART_FCITX5=1
 
 # 被测试脚本在 root 下会忽略测试钩子（改用真 /proc、真 /run）——那会把本机正在跑的
 # fcitx5 当成夹具杀掉。必须用普通用户跑。

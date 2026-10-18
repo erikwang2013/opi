@@ -229,6 +229,7 @@ internal fun ButtonGlyphs(slots: List<GlyphSlot>, box: Dp, color: Color) {
  */
 internal fun buttonSlots(b: StatusBarButton, st: ImeState, mode: String): List<GlyphSlot> = when (b) {
     StatusBarButton.PUNCT -> punctSlots(st)
+    StatusBarButton.ENPRO -> enproSlots()
     StatusBarButton.MODE -> modeSlots(mode)
     else -> listOf(GlyphSlot(iconText(b, st)))
 }
@@ -245,6 +246,15 @@ internal fun punctSlots(st: ImeState): List<GlyphSlot> {
         GlyphSlot(pair.substring(1, 2), left = 0.5f, top = 0.5f, right = 1f, bottom = 1f),
     )
 }
+
+/**
+ * 英文专业键（2026-10-19）：`en` 在左上、`pro` 在右下，两槽对角摆放；
+ * 高亮态由状态栏按钮背景表达（`proActive` 从 `opi-ctl state` 的 enpro= 读）。
+ */
+internal fun enproSlots(): List<GlyphSlot> = listOf(
+    GlyphSlot("en", left = 0f, top = 0f, right = 0.55f, bottom = 0.55f),
+    GlyphSlot("pro", left = 0.45f, top = 0.45f, right = 1f, bottom = 1f),
+)
 
 /**
  * 模式按钮（用户 2026-10-14 裁决：简繁之后增加，缩写「拼」「五」「en 右下角 26」）。

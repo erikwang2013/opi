@@ -115,7 +115,13 @@ if [ -s "$STATE" ]; then
     echo "opi: 已停止运行中的 opi-candidates（升级完成后按记录自动拉起）"
 fi
 
-# ---- fcitx5（2026-10-18）----
+# ---- fcitx5（2026-10-18，2026-10-19 默认关闭）----
+#
+# 用户报障：结束并重启 fcitx5 后 Linux 整个键盘没了。安装脚本只应处理**应用进程**
+# （opi-candidates）；fcitx5 是用户桌面的输入框架，动它风险远大于收益。从此默认
+# 不再停 fcitx5：新 .so 在用户下次登录/手动重启 fcitx5 后生效。
+# 仍保留旧的记录/重启实现，供显式 opt-in：OPI_RESTART_FCITX5=1。打包脚本不设该变量。
+if [ "${OPI_RESTART_FCITX5:-0}" = "1" ]; then
 
 # 上一次安装若没走完（postinst 没跑到），状态会留在 /run；先清掉，避免拿陈旧记录
 # 去重启别人的会话。
@@ -185,5 +191,7 @@ if [ -n "$uid" ]; then
         echo "opi: 已停止 $stopped 个 fcitx5 实例（安装完成后按原会话环境重启；正在输入会被打断）"
     fi
 fi
+
+fi  # OPI_RESTART_FCITX5
 
 exit 0

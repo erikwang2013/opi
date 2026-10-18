@@ -63,6 +63,7 @@ fn state_n(n: usize) -> CandidateState {
         shift_state: ShiftState::Off,
         last_printable: None,
         dicts: Default::default(),
+        english_pro: true,
     };
     s.refresh_snapshot();
     s

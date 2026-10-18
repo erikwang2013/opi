@@ -20,6 +20,7 @@ fn state() -> CandidateState {
         shift_state: ShiftState::Off,
         last_printable: None,
         dicts: Default::default(),
+        english_pro: true,
     };
     s.refresh_snapshot();
     s
@@ -110,6 +111,7 @@ fn key_state() -> CandidateState {
         shift_state: ShiftState::Off,
         last_printable: None,
         dicts: Default::default(),
+        english_pro: true,
     };
     for c in ['q', 'w', 'x'] {
         s.engine.input_key(c);
@@ -307,6 +309,7 @@ fn digit_select_fetches_candidate_table_once() {
         shift_state: ShiftState::Off,
         last_printable: None,
         dicts: Default::default(),
+        english_pro: true,
     };
     s.refresh_snapshot();
     s.switch_mode(Mode::Pinyin);

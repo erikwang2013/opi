@@ -16,6 +16,7 @@ import androidx.core.view.inputmethod.InputConnectionCompat
 import androidx.core.view.inputmethod.InputContentInfoCompat
 import xyz.erik.opi.ime.PendingCommit
 import xyz.erik.opi.keyboard.PetEmoji
+import xyz.erik.opi.pet.PetEmojiMap
 import xyz.erik.opi.pet.PetMood
 import xyz.erik.opi.pet.PetStickerAssets
 import java.io.File
@@ -27,8 +28,9 @@ private const val TAG = "OpiPetSticker"
  * 「自有」宠物形态 = **插入图片**，不提交任何 Unicode 文本（2026-10-18 用户裁决）。
  *
  * 图片走 `InputConnection.commitContent`，格式优先级（2026-10-19）：**GIF → PNG →
- * 独立文本标签** `[小欧·笑]`（绝不退回笑脸 emoji）。GIF 是同一张 PNG 的轻微
- * 弹跳/缩放动画，见 `shared/pet/stickers-gif/`。
+ * 映射的 Unicode emoji**（2026-10-19 用户报障「确认到输入框就不是表情了」：
+ * 图片通道常被宿主拒绝，最后退回 `PetEmojiMap.emojiFor`，不再上屏中文标签）。
+ * GIF 是同一张 PNG 的轻微弹跳/缩放动画，见 `shared/pet/stickers-gif/`。
  * IC 为空时与文本提交同一套延迟重试（[PendingCommit.RETRY_MS]），仍拿不到就放弃并记日志。
  */
 internal fun OpiImeService.commitPetSticker(mood: PetMood) {
@@ -121,8 +123,14 @@ private fun OpiImeService.petStickerFile(assetPath: String, name: String): File?
  */
 private fun OpiImeService.commitPetStickerTextFallback(ic: InputConnection, mood: PetMood) {
     dropComposing(ic)
-    ic.commitText("[小欧·${PetEmoji.label(mood)}]", 1)
-    toast("当前应用不支持插入图片，已用文字标签")
+    val emoji = PetEmojiMap.emojiFor(mood)
+    if (emoji != null) {
+        ic.commitText(emoji, 1)
+        toast("当前应用不支持插入图片，已插入近似 emoji")
+    } else {
+        ic.commitText("[小欧·${PetEmoji.label(mood)}]", 1)
+        toast("当前应用不支持插入图片，已用文字标签")
+    }
 }
 
 private fun OpiImeService.toast(text: String) {

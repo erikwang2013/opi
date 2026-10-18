@@ -397,6 +397,7 @@ internal fun iconText(b: StatusBarButton, st: ImeState): String = when (b) {
     // MODE 不从这里出字：它的面由**档位 token** 驱动（[modeFace]/[modeCorner]，面在
     // BarGlyphs.kt 的 modeSlots）—— 本函数的入参里没有档位，给不出正确字面。
     StatusBarButton.MODE -> ""
+    StatusBarButton.ENPRO -> "" // 两行 en/pro 由 enproSlots 画，不走单字 iconText
     StatusBarButton.FULLWIDTH, StatusBarButton.SETTINGS,
     StatusBarButton.VK, StatusBarButton.LOGO -> "" // 这四个画图标，不出字
 }

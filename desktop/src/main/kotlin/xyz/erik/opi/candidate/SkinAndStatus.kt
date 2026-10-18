@@ -92,6 +92,9 @@ enum class StatusBarButton(val label: String, val hint: String) {
     // ⚠️ 通路是 opi-ctl lang，不是 fcitx5-remote -t（后者停用整个 fcitx5，
     // 2026-10-10 中午用户踩过；事故留痕见 Actions.kt 头部与 StatusBarTest 的映射钉）。
     LANG("中英文切换", "与 Shift 轻按同一条通路（opi-ctl lang）"),
+    // 英文普通/专业（2026-10-19）：en 在左上、pro 在右下；只有专业模式查词库。
+    // 与 MODE 一样没有 ini 常驻键（恒在 Linux 条上，设置窗不出开关）。
+    ENPRO("英文专业", "英文26键：普通只输出字母 ⇄ 专业查单词库（opi-ctl englishpro）"),
     PUNCT("中英标点", "中英文标点切换（调 opi-ctl）"),
     TRAD("简繁转换", "简 ⇄ 繁（调 opi-ctl）"),
     // 模式（2026-10-14 用户裁决，原话：「状态栏在简繁按钮后增加模式切换按钮，默认拼音，
@@ -122,6 +125,7 @@ fun StatusBarSettings.resident(b: StatusBarButton): Boolean = when (b) {
     StatusBarButton.FULLWIDTH -> fullwidth
     StatusBarButton.SETTINGS -> settings
     StatusBarButton.MODE -> true
+    StatusBarButton.ENPRO -> true
 }
 
 /**
@@ -139,6 +143,7 @@ fun StatusBarSettings.with(b: StatusBarButton, on: Boolean): StatusBarSettings =
     StatusBarButton.FULLWIDTH -> copy(fullwidth = on)
     StatusBarButton.SETTINGS -> copy(settings = on)
     StatusBarButton.MODE -> this
+    StatusBarButton.ENPRO -> this
 }
 
 /**
@@ -158,7 +163,7 @@ fun StatusBarSettings.with(b: StatusBarButton, on: Boolean): StatusBarSettings =
  * 的 MODE 支要**一并删**（两处都是「没有开关」这一个前提的下游，别只删一处）。
  */
 internal fun statusButtonWired(b: StatusBarButton, windows: Boolean): Boolean = when {
-    b == StatusBarButton.MODE -> false
+    b == StatusBarButton.MODE || b == StatusBarButton.ENPRO -> false
     !windows -> true
     else -> b == StatusBarButton.VK || b == StatusBarButton.SYMBOLS ||
         b == StatusBarButton.LOGO || b == StatusBarButton.SETTINGS
@@ -175,7 +180,8 @@ internal fun statusButtonWired(b: StatusBarButton, windows: Boolean): Boolean = 
 fun visibleStatusButtons(sb: StatusBarSettings, windows: Boolean): List<StatusBarButton> {
     if (sb.hidden) return emptyList()
     return StatusBarButton.entries.filter {
-        if (it == StatusBarButton.MODE) !windows else sb.resident(it) && statusButtonWired(it, windows)
+        if (it == StatusBarButton.MODE || it == StatusBarButton.ENPRO) !windows
+        else sb.resident(it) && statusButtonWired(it, windows)
     }
 }
 

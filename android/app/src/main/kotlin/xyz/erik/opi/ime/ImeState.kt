@@ -80,6 +80,10 @@ class ImeState(
     var inputMode by mutableStateOf(InputMode.PINYIN9)
         private set
 
+    /** 英文专业模式（默认 false = 普通直出；true = 词库联想；键面 `pro`）。 */
+    var englishPro by mutableStateOf(false)
+        internal set
+
     /** 键盘模式（悬浮/游戏/单手/暗光/长辈）。繁体不在这里 —— 它在引擎 mode 上。 */
     var keyboardModes by mutableStateOf(KeyboardModes())
         private set
@@ -160,17 +164,6 @@ class ImeState(
     }
 
     /**
-     * 「中/繁/英」一键循环（既有键位，2026-10-09 起与方案/布局接线对齐）：
-     * 中→繁只切**引擎模式**（方案不动，9 键仍是 9 键）；英那条会换到全键盘方案
-     * （9 键上打英文没有候选路）；英→中回**上次的中文方案**。
-     *
-     * 缓冲语义：中→繁、繁→英**保留缓冲**（2026-10-09 用户裁决「中文输入的时候切换
-     * 英文，拼音保留可继续使用」）；英→中改为**输入重置**（2026-10-19 用户裁决）——
-     * 切换前清掉英文缓冲、**不提交**英文原文，切完候选为空（不显示「无匹配」）。
-     * ⚠️ 「输入模式」面板那条（[selectInputMode]）仍先 commit 再换 —— 那是明确
-     * 换布局的动作，判据不同，别顺手统一。
-     */
-    /**
      * 26 键底行模式键的**键面字 = 点它会切到哪**（用户裁决 2026-10-12 晚：
      * 「点击英文按钮切换到英文键盘，这时为何在英文键盘还显示英的按钮，点击了是中文键盘，
      * 按钮是中才对」）。与 9 键底行「英文」键**同一条语义** —— 键面写字面目标（那是动作），
@@ -184,6 +177,11 @@ class ImeState(
             lastChineseMode.engineMode == EngineMode.TRADITIONAL,
         )
 
+    /**
+     * 中/繁/英循环：中→繁只切引擎模式；繁→英先按拼音上屏 pending；英→中**重置**
+     * （清英文缓冲、不提交，切完候选为空，2026-10-19）。中→繁、繁→英保留缓冲。
+     * ⚠️ 「输入模式」面板仍先 commit 再换（明确换布局），别顺手统一。
+     */
     fun cycleMode() {
         when (controller.mode) {
             EngineMode.PINYIN ->
@@ -353,9 +351,10 @@ class ImeState(
      * 引擎是权威，UI 的 [inputMode]/[keyboardModes] 由服务从偏好装载后经
      * [selectInputMode] 推一遍（引擎装载成功才调，见 OpiImeService）。
      */
-    fun restore(inputMode: InputMode, modes: KeyboardModes, skin: SkinOption = SkinOption.FOLLOW) {
+    fun restore(inputMode: InputMode, modes: KeyboardModes, skin: SkinOption = SkinOption.FOLLOW, englishPro: Boolean = false) {
         keyboardModes = modes
         this.skin = skin
+        this.englishPro = englishPro
         selectInputMode(inputMode)
     }
 

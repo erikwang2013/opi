@@ -94,6 +94,8 @@ fn key_event_english_letter_buffers_and_switch_clears() {
     let _g = serial_install();
     // 切英文：字母进引擎缓冲（2026-10-18 单词联想），不再直传提交
     unsafe { opi_fcitx5_switch_mode(1) };
+    // 2026-10-19：en26 默认普通（直出），本用例测专业模式的词库联想。
+    unsafe { opi_fcitx5_toggle_english_pro() };
     let r = unsafe { opi_fcitx5_key_event(97, 0) };
     assert_eq!(r.action, 1); // EngineHandled
     assert_eq!(with_state(|s| s.buffer()), Some("a".to_string()));
@@ -128,6 +130,7 @@ fn key_event_ctrl_passes_through_and_shift_consumed() {
     assert_eq!(r.action, 0);
     // 切英文后再按 shift（无修饰）→ EngineHandled（切模式清引擎 ⇧，故再按一次）
     unsafe { opi_fcitx5_switch_mode(1) };
+    unsafe { opi_fcitx5_toggle_english_pro() }; // 专业模式：字母入缓冲
     let r = unsafe { opi_fcitx5_key_event(0xffe1, 0) };
     assert_eq!(r.action, 1);
     // 英文空缓冲 + single shift → 字母进缓冲、大写且消费（2026-10-18 起走引擎）

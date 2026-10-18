@@ -79,7 +79,14 @@ const IFACE: &str = "org.fcitx.Fcitx5.Opi1";
 // 冻结的动作集（顺序即 usage 里印的顺序）。state 不在其中 —— 它不改状态，
 // 走的是另一条协议（见文件头），单独分派。**mode 也不在其中**（2026-10-14）：
 // 它改状态，但成功应答是状态 token 而不是 "ok"，与 insert 一样单独分派。
-const ACTIONS: [&str; 5] = ["symbols", "trad", "punct", "fullwidth", "lang"];
+const ACTIONS: [&str; 6] = [
+    "symbols",
+    "trad",
+    "punct",
+    "fullwidth",
+    "lang",
+    "englishpro",
+];
 
 fn main() {
     std::process::exit(run());
@@ -142,7 +149,7 @@ fn run() -> i32 {
 
 fn usage() {
     eprintln!(
-        "usage: opi-ctl symbols|trad|punct|fullwidth|lang|mode [insert <文本>] | state | search <关键词>"
+        "usage: opi-ctl symbols|trad|punct|fullwidth|lang|englishpro|mode [insert <文本>] | state | search <关键词>"
     );
 }
 
@@ -293,19 +300,22 @@ fn check_search_shape(reply: &str) -> Result<(), String> {
 /// 照样判 5（「插件与本工具版本对不上」的如实分类）；对**缺这一格**的容错在桌面
 /// 解析侧（Actions.kt 的 [ImeState.mode] 回落「拼音」），不在这一层。
 fn check_state_shape(line: &str) -> Result<(), String> {
-    const FIELDS: [(&str, Option<&[&str]>); 6] = [
+    const FIELDS: [(&str, Option<&[&str]>); 7] = [
         ("lang", Some(&["zh", "en"])),
         ("trad", Some(&["on", "off"])),
         ("punct", Some(&["on", "off"])),
         ("fw", Some(&["on", "off"])),
         ("im", None),
         ("mode", Some(MODE_TOKENS.as_slice())),
+        ("enpro", Some(&["on", "off"])),
     ];
     let parts: Vec<&str> = line.split(';').collect();
-    if parts.len() != FIELDS.len() {
-        return Err(format!("应为 {} 段，实际 {} 段", FIELDS.len(), parts.len()));
+    // enpro 是 2026-10-19 追加在 mode 之后的可选末段：老插件 6 段仍可读
+    // （桌面按 off 处理），新插件 7 段必须形状正确。
+    if !(6..=FIELDS.len()).contains(&parts.len()) {
+        return Err(format!("应为 6 或 7 段，实际 {} 段", parts.len()));
     }
-    for (i, (key, domain)) in FIELDS.iter().enumerate() {
+    for (i, (key, domain)) in FIELDS.iter().take(parts.len()).enumerate() {
         let prefix = format!("{key}=");
         let Some(val) = parts[i].strip_prefix(prefix.as_str()) else {
             return Err(format!(

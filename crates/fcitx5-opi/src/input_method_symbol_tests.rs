@@ -32,6 +32,7 @@ fn symbol_state() -> CandidateState {
         shift_state: ShiftState::Off,
         last_printable: None,
         dicts: Default::default(),
+        english_pro: true,
     };
     s.switch_mode(Mode::Symbol);
     s

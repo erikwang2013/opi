@@ -6,7 +6,12 @@ package xyz.erik.opi.keyboard
 import android.content.res.AssetManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
+import android.graphics.drawable.AnimatedImageDrawable
+import android.graphics.drawable.Drawable
+import android.os.Build
 import android.util.Log
+import android.widget.ImageView
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -29,6 +34,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -62,16 +68,24 @@ internal fun PetStickerPanel(onPick: (PetMood) -> Unit) {
         PetFontAssets.preload(assets)?.associate { it.mood to it.label }.orEmpty()
     }
     val loaded = remember { mutableStateMapOf<PetMood, ImageBitmap>() }
+    // 自有页优先显示**动图**（2026-10-19 用户裁决「用 gif 贴纸来显示」）；API < 28
+    // 或 GIF 缺失时回退静态 PNG + 共享动效。
+    val gifs = remember { mutableStateMapOf<PetMood, Drawable>() }
     // 面板自身也用共享相位做轻微动效（不引 Coil/ImageDecoder；点击提交的才是 GIF）。
     val phase = rememberPetMotionPhase()
     // 解码放 IO：12 张 PNG 若在首帧同步解，打开自有页会卡一下。
     LaunchedEffect(Unit) {
-        val images = withContext(Dispatchers.IO) {
+        val decoded = withContext(Dispatchers.IO) {
             forms.mapNotNull { f ->
-                decodeSticker(assets, PetEmoji.assetPath(f.mood))?.let { f.mood to it.asImageBitmap() }
+                val gif = decodeGif(assets, PetEmoji.gifAssetPath(f.mood))
+                val png = decodeSticker(assets, PetEmoji.assetPath(f.mood))?.asImageBitmap()
+                if (gif != null || png != null) Triple(f.mood, gif, png) else null
             }
         }
-        for ((mood, image) in images) loaded[mood] = image
+        for ((mood, gif, png) in decoded) {
+            if (gif != null) gifs[mood] = gif
+            if (png != null) loaded[mood] = png
+        }
     }
     if (forms.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -94,8 +108,18 @@ internal fun PetStickerPanel(onPick: (PetMood) -> Unit) {
                     },
                 contentAlignment = Alignment.Center,
             ) {
+                val gif = gifs[form.mood]
                 val image = loaded[form.mood]
-                if (image != null) {
+                if (gif != null) {
+                    AndroidView(
+                        factory = { ctx -> ImageView(ctx).apply { scaleType = ImageView.ScaleType.FIT_CENTER } },
+                        update = { view ->
+                            view.setImageDrawable(gif)
+                            (gif as? AnimatedImageDrawable)?.start()
+                        },
+                        modifier = Modifier.size(40.dp).petMotion(form.mood, phase),
+                    )
+                } else if (image != null) {
                     Image(
                         bitmap = image,
                         contentDescription = null, // 读屏走格子 Box 的语义
@@ -107,6 +131,17 @@ internal fun PetStickerPanel(onPick: (PetMood) -> Unit) {
                 }
             }
         }
+    }
+}
+
+/** 解码动画 GIF（API 28+）；低版本/缺资产返回 null，调用方退回 PNG/矢量。 */
+private fun decodeGif(assets: AssetManager, path: String): Drawable? {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return null
+    return try {
+        ImageDecoder.decodeDrawable(ImageDecoder.createSource(assets, path))
+    } catch (e: Exception) {
+        Log.w("OpiPetSticker", "pet gif missing/unreadable: $path", e)
+        null
     }
 }
 

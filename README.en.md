@@ -159,7 +159,7 @@ Everything below is either part of the vision or a direction that has been **dec
 |---|---|
 | **Pinyin** (default) | Lowercase letters and the `'` separator enter the buffer (buffer cap: `MAX_BUFFER` in `composer.rs`); queries the main dictionary |
 | **Traditional** | Behaves exactly like Pinyin but routes to the `trad` dictionary; falls back to the simplified one if `trad` is missing |
-| **English** | `⇧` taps lock uppercase (tap again to release), long-press for one-shot; letters feed prefix association, and a single-letter buffer puts the typed letter first (case preserved); only a carried buffer commits directly; the English keyboard has a top 0-9 row (digits commit directly) |
+| **English** | `⇧` taps lock uppercase (tap again to release), long-press for one-shot; the bottom `pro` key toggles normal/pro: **normal (default) commits letters directly with no word matching**, pro feeds the prefix dictionary (a single-letter buffer puts the typed letter first, case preserved); only a carried buffer commits directly; the English keyboard has a top 0-9 row (digits commit directly) |
 | **Number** | Digits only; space / enter commits |
 | **Symbol** | The buffer accepts nothing; the symbol panel commits directly. Pending pinyin is committed before the panel opens, leaving no residue |
 

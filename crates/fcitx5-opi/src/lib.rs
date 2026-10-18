@@ -367,6 +367,37 @@ pub unsafe extern "C" fn opi_fcitx5_mode() -> i32 {
 /// **键位不在本层**（与 `toggle_symbol`/`toggle_fullwidth` 同一条：引擎只出语义）：
 /// 键位在插件侧 `cpp/opi_fcitx5.cpp` 的 `handleFullwidthHotkey`（Shift+Space）。
 /// 本函数是 C++ 触达引擎的那条缝 —— 没有它，C++ 侧没有任何办法翻这个开关。
+/// englishPro() -> bool：英文专业模式当前值（2026-10-19）。
+/// # Safety
+///
+/// 无外部内存参数；共享单例由内部 Mutex 保护。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_english_pro() -> bool {
+    ensure_panic_hook();
+    catch_unwind(AssertUnwindSafe(|| {
+        with_state(|s| s.english_pro()).unwrap_or(false)
+    }))
+    .unwrap_or(false)
+}
+
+/// toggleEnglishPro() -> bool：普通 ⇄ 专业，返回切换后的值。
+/// # Safety
+///
+/// 无外部内存参数；共享单例由内部 Mutex 保护。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_toggle_english_pro() -> bool {
+    ensure_panic_hook();
+    catch_unwind(AssertUnwindSafe(|| {
+        with_state(|s| {
+            let on = !s.english_pro();
+            s.set_english_pro(on);
+            on
+        })
+        .unwrap_or(false)
+    }))
+    .unwrap_or(false)
+}
+
 /// # Safety
 ///
 /// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。

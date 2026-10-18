@@ -25,13 +25,14 @@ class StatusBarTest {
         // 2026-10-10 早先裁决「8 按钮全上」被**同日中午**的用户裁决收窄：软键盘默认关
         // （要用的在设置里自己开；已有配置里的显式值照旧）。其余仍默认常驻 ——
         // 「全关」会让老用户升级后条上什么都不剩。
-        // 2026-10-14 起多一枚**恒常驻**的模式按钮（见 `the mode button has no switch`）：
-        // 默认条上 8 枚 = 9 枚里去掉软键盘。
+        // 2026-10-14 起多一枚**恒常驻**的模式按钮（见 `the mode button has no switch`）；
+        // 2026-10-19 再加恒常驻的英文专业键 ENPRO：
+        // 默认条上 9 枚 = 10 枚里去掉软键盘。
         assertEquals(
             StatusBarButton.entries.filter { it != StatusBarButton.VK },
             visibleStatusButtons(StatusBarSettings(), windows = false),
         )
-        assertEquals(8, visibleStatusButtons(StatusBarSettings(), windows = false).size)
+        assertEquals(9, visibleStatusButtons(StatusBarSettings(), windows = false).size)
         assertFalse("软键盘默认必须是关（2026-10-10 中午裁决）", StatusBarSettings().vk)
         assertFalse("缺键的旧配置读出来也得是关（fromIni 的回落别写成 true）", OpSettings.fromIni("").statusbar.vk)
     }
@@ -48,7 +49,7 @@ class StatusBarTest {
         // —— 当时图标映射先改对、枚举序没跟着换，这条照样全绿；图标语义归
         // `frozen icon literals` 那条管。两处配套，只改一处时对面的钉要跟着动。
         assertEquals(
-            listOf("logo", "中英文切换", "中英标点", "简繁转换", "模式", "全半角", "软键盘", "符号大全", "设置"),
+            listOf("logo", "中英文切换", "英文专业", "中英标点", "简繁转换", "模式", "全半角", "软键盘", "符号大全", "设置"),
             StatusBarButton.entries.map { it.label },
         )
     }
@@ -79,6 +80,8 @@ class StatusBarTest {
         // MODE 也不出字：它的面由**档位 token** 驱动（modeFace/modeCorner），而 iconText
         // 的入参里根本没有档位 —— 在 iconText 里给它写字面就是把「当前档」写死成常量。
         assertEquals("MODE 该由档位 token 出字、不走 iconText", "", iconText(StatusBarButton.MODE, ImeState()))
+        // ENPRO 同样不出单字：en/pro 两个槽由 enproSlots 画。
+        assertEquals("ENPRO 该由 enproSlots 出字", "", iconText(StatusBarButton.ENPRO, ImeState()))
     }
 
     @Test
@@ -114,11 +117,17 @@ class StatusBarTest {
         // 要隐藏整条走 master 开关（它本来就是给用户的那条路，见 StatusBarPage 的文案）。
         val allOff = StatusBarButton.entries.filter { it != StatusBarButton.MODE }
             .fold(StatusBarSettings()) { sb, b -> sb.with(b, false) }
-        assertEquals(listOf(StatusBarButton.MODE), visibleStatusButtons(allOff, windows = false))
+        // 全关后还剩两枚恒常驻：英文专业键（2026-10-19）+ 模式。
+        assertEquals(
+            listOf(StatusBarButton.ENPRO, StatusBarButton.MODE),
+            visibleStatusButtons(allOff, windows = false),
+        )
         // Windows：整条与 Linux 同款，但模式按钮不在（上面那条的对照组）
         val winOn = StatusBarButton.entries.fold(StatusBarSettings(vk = true)) { sb, b -> sb.with(b, true) }
         assertFalse("Windows 条上不该有 MODE", StatusBarButton.MODE in visibleStatusButtons(winOn, windows = true))
         assertTrue("Linux 条上该有 MODE", StatusBarButton.MODE in visibleStatusButtons(winOn, windows = false))
+        assertFalse("Windows 没有 opi-ctl englishpro ⇒ 也不上 ENPRO", StatusBarButton.ENPRO in visibleStatusButtons(winOn, windows = true))
+        assertTrue("Linux 条上该有 ENPRO", StatusBarButton.ENPRO in visibleStatusButtons(winOn, windows = false))
     }
 
     @Test
@@ -203,7 +212,7 @@ class StatusBarTest {
         // 「关 VK」是空操作，那条分支就测不到了）。
         // MODE 不在这一组里：它没有开关（关不掉、也关不着）—— 见
         // `the mode button has no switch and stays on the bar`。
-        val switchable = StatusBarButton.entries.filter { it != StatusBarButton.MODE }
+        val switchable = StatusBarButton.entries.filter { it != StatusBarButton.MODE && it != StatusBarButton.ENPRO }
         val allOn = StatusBarButton.entries.fold(StatusBarSettings()) { sb, b -> sb.with(b, true) }
         for (b in switchable) {
             assertEquals(
@@ -216,13 +225,17 @@ class StatusBarTest {
 
     @Test
     fun `turning a button back on restores it`() {
-        // 八枚开关全关 ⇒ 条上只剩恒常驻的 MODE（全空那条老路已被 2026-10-14 的模式按钮
-        // 顶掉，要整条隐藏走 master 开关）—— 再把简繁拨回来，它该出现在 MODE 前面。
-        val off = StatusBarButton.entries.filter { it != StatusBarButton.MODE }
+        // 可开关的按钮全关 ⇒ 条上只剩两枚恒常驻（ENPRO 2026-10-19 + MODE）；再把简繁
+        // 拨回来，它按枚举序出现在 MODE 前面、ENPRO 后面。
+        val off = StatusBarButton.entries
+            .filter { it != StatusBarButton.MODE && it != StatusBarButton.ENPRO }
             .fold(StatusBarSettings()) { sb, b -> sb.with(b, false) }
-        assertEquals(listOf(StatusBarButton.MODE), visibleStatusButtons(off, windows = false))
         assertEquals(
-            listOf(StatusBarButton.TRAD, StatusBarButton.MODE),
+            listOf(StatusBarButton.ENPRO, StatusBarButton.MODE),
+            visibleStatusButtons(off, windows = false),
+        )
+        assertEquals(
+            listOf(StatusBarButton.ENPRO, StatusBarButton.TRAD, StatusBarButton.MODE),
             visibleStatusButtons(off.with(StatusBarButton.TRAD, true), windows = false),
         )
     }

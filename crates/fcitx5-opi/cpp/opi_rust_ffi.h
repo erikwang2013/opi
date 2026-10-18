@@ -75,6 +75,9 @@ extern "C" void opi_fcitx5_set_wubi_auto_commit(bool on) __attribute__((weak));
 // opi-ctl 的 `mode` 动作派生态 token（pinyin/en26）靠它 —— 调用点见 opi_ctl_mode.h。
 // 同样是弱符号（落地前按全拼 0 处理，读侧缺省与 `opi_fcitx5_mode()` 未装载给 0 同姿态）。
 extern "C" int32_t opi_fcitx5_scheme() __attribute__((weak));
+// 英文专业模式（2026-10-19）：读/切普通⇄专业；弱符号，老 .so 上静默跳过。
+extern "C" bool opi_fcitx5_english_pro() __attribute__((weak));
+extern "C" bool opi_fcitx5_toggle_english_pro() __attribute__((weak));
 bool opi_fcitx5_toggle_fullwidth();        // 返回切换后的状态（true = 全角）
 void opi_fcitx5_set_shift(bool on);
 OpiString opi_fcitx5_input_space();

@@ -111,7 +111,7 @@ if [ -z "$user" ] || [ "$user" = root ]; then
 fi
 
 # ---- 1) fcitx5（块格式：空行 = 一条记录结束）----
-if [ -s "$FSTATE" ]; then
+if [ -s "$FSTATE" ] && [ "${OPI_RESTART_FCITX5:-0}" = "1" ]; then
     f_pid=""; f_user=""; f_uid=""; f_home=""
     f_display=""; f_wayland=""; f_dbus=""; f_xauth=""
     f_runtime=""; f_cfg=""; f_data=""; f_lang=""; f_lcall=""

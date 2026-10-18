@@ -415,7 +415,7 @@ int main() {
     // 前置：§7c 收尾把模式切回拼音，而 switch_mode 顺带把全角重置为**模式缺省**
     // （Mode::default_fullwidth：拼音/繁体 on，英文/符号 off）⇒ 开局是 fw=on；
     // §7d 把标点配置翻回原值、§7d-2 的写盘失败臂回滚后也没动它（落盘值 = 内存值，
-    // 两条不会漂）。state 读的就是这六处既有状态，出处对照 opi_engine.h 的 stateLine_。
+    // 两条不会漂）。state 读的就是这七处既有状态（enpro 2026-10-19 追加），出处对照 opi_engine.h 的 stateLine_。
     // mode 那一格（2026-10-14 追加，行尾）在本驱动**有真值**：方案读口是弱符号，
     // 真 .so 在时 opiCtlSchemeRead() = 引擎实际方案（本段全程全拼 ⇒ 拼音档），
     // 符号缺失时它按全拼兜底 —— 两条在本段的取值相同（见 opi_ctl_mode.h）。
@@ -429,7 +429,7 @@ int main() {
         punctExp = *readBack.chinesePunct ? "on" : "off";
     }
     const std::string s0 = engine.ctlState_();
-    check(s0 == "lang=zh;trad=off;punct=" + punctExp + ";fw=on;im=;mode=pinyin",
+    check(s0 == "lang=zh;trad=off;punct=" + punctExp + ";fw=on;im=;mode=pinyin;enpro=off",
           "冻结格式整行（键序固定 lang;trad;punct;fw;im;mode，桌面按位置解析）："
               + q(s0));
     // im 那一格在**本驱动恒为空串**：instance_ 是 nullptr ⇒ glue 直接接空串
@@ -448,7 +448,7 @@ int main() {
     check(engine.handleCtlAction_("trad") == "ok" && opi_fcitx5_mode() == kModeTraditional,
           "trad（翻面走动作路径，state 只是读它）");
     const std::string s1 = engine.ctlState_();
-    check(s1 == "lang=zh;trad=on;punct=" + punctExp + ";fw=on;im=;mode=pinyin",
+    check(s1 == "lang=zh;trad=on;punct=" + punctExp + ";fw=on;im=;mode=pinyin;enpro=off",
           "lang/punct/fw/im 四段逐字不变，trad 翻 on，**mode 段原地不动**（繁体是"
           "面外态 ⇒ 收成 pinyin：读法仍是拼音，简繁由 trad 格自述。2026-10-14 改判，"
           "见 opi_ctl_mode.h 的 opiCtlStateModeToken）："

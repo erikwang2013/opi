@@ -168,10 +168,17 @@ fn insert_action_carries_the_text_through_the_trigger_slot() {
     }
 }
 
-/// 五个冻结动作都能原样走到总线上（动作名不许在客户端被改写成别的）。
+/// 冻结动作都能原样走到总线上（动作名不许在客户端被改写成别的）。
 #[test]
 fn all_frozen_actions_pass_through() {
-    for action in ["symbols", "trad", "punct", "fullwidth", "lang"] {
+    for action in [
+        "symbols",
+        "trad",
+        "punct",
+        "fullwidth",
+        "lang",
+        "englishpro",
+    ] {
         let dir = fake(REPLY_TO_STDOUT, OK_REPLY);
         let (code, _, stderr) = run_ctl(&dir, &[action]);
         assert_eq!(code, 0, "{action}: stderr={stderr}");
@@ -298,6 +305,7 @@ fn state_values_pass_through_both_ways() {
         "lang=en;trad=on;punct=off;fw=off;im=keyboard-us;mode=en26",
         "lang=zh;trad=off;punct=on;fw=on;im=;mode=pinyin",
         "lang=zh;trad=off;punct=on;fw=on;im=;mode=wubi", // 预放行的未来档
+        "lang=en;trad=off;punct=off;fw=off;im=opi;mode=en26;enpro=on", // 2026-10-19 专业态
     ] {
         let dir = fake(REPLY_TO_STDOUT, &reply_of(line));
         let (code, stdout, stderr) = run_ctl(&dir, &["state"]);

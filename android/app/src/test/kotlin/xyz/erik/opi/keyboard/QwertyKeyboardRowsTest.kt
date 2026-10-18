@@ -17,6 +17,16 @@ class QwertyKeyboardRowsTest {
     }
 
     @Test
+    fun englishLayoutPutsEnterOnTheShiftRowAtTheFarRight() {
+        val rows = qwertyRows(showNumberRow = true, englishLayout = true)
+        assertEquals(4, rows.size)
+        assertEquals("⇧", rows[3].first())
+        assertEquals("↵", rows[3].last())
+        assertEquals("z", rows[3][1])
+        assertEquals("m", rows[3][rows[3].size - 2])
+    }
+
+    @Test
     fun numberRowSitsAboveTheLetterRows() {
         val withRow = qwertyRows(showNumberRow = true)
         assertEquals(4, withRow.size)

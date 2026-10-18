@@ -59,16 +59,12 @@ class PetStickerConfigTest {
     }
 
     @Test
-    fun unsupportedEditorFallsBackToTextTagNotClipboardImage() {
+    fun unsupportedEditorFallsBackToUnicodeEmojiNotClipboardImage() {
         val commit = src("src/main/kotlin/xyz/erik/opi/PetStickerCommit.kt")
-        assertTrue(
-            "回退必须上屏独立文本标签 [小欧·标签]",
-            commit.contains("\"[小欧·\${PetEmoji.label(mood)}]\""),
-        )
-        assertTrue("回退 toast 文案缺失", commit.contains("当前应用不支持插入图片，已用文字标签"))
+        assertTrue("回退必须走宠物 emoji 映射", commit.contains("PetEmojiMap.emojiFor(mood)"))
+        assertTrue("回退 toast 文案缺失", commit.contains("已插入近似 emoji"))
         assertFalse("不得回退到剪贴板图片", commit.contains("ClipboardManager"))
         assertFalse("不得回退到 clipboard URI", commit.contains("newUri"))
-        assertFalse("不得回退到笑脸 emoji", commit.contains("😊") || commit.contains("😄"))
     }
 
     @Test

@@ -256,10 +256,11 @@ class OpiImeService : InputMethodService() {
             prefs.inputMode = imeState.inputMode
             prefs.keyboardModes = imeState.keyboardModes
             prefs.skin = imeState.skin
+            prefs.englishPro = imeState.englishPro
             // 键盘模式里悬浮/游戏改的是**窗口**，改完立刻重排（不等系统下一次 configure）
             window?.window?.let { applyKeyboardWindow(it) }
         }
-        imeState.restore(prefs.inputMode, prefs.keyboardModes, prefs.skin)
+        imeState.restore(prefs.inputMode, prefs.keyboardModes, prefs.skin, prefs.englishPro)
         val view = ComposeView(this)
         // 生命周期接线：置 CREATED（onWindowShown→RESUMED、onWindowHidden→STARTED、
         // onDestroy→DESTROYED），Compose 侧 remember/LaunchedEffect 依赖它。
@@ -275,6 +276,7 @@ class OpiImeService : InputMethodService() {
             // 提交后重推组合串（2026-10-13「确认后把所有内容替换」的修法，
             // 语义与理由见 KeyRouter.commitAndResync 的头注）。
             syncComposing = { pushComposingText() },
+            englishPro = { imeState.englishPro },
         )
         // IME 提交通道在视图创建时注入（构造期无 this 引用；面板打开提交 pending buffer 用）
         imeState.commit = ::commitWithRetry

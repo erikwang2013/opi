@@ -58,6 +58,8 @@ pub struct CandidateState {
     pub(crate) last_printable: Option<(u32, bool)>,
     /// 导入词库层（2026-10-14，M3）。状态与语义见 `dict_layer.rs` 头注。
     pub(crate) dicts: DictLayer,
+    /// 英文专业模式（2026-10-19）：false = en26 只直出字母（默认），true = 词库联想。
+    pub(crate) english_pro: bool,
 }
 
 impl CandidateState {
@@ -103,6 +105,7 @@ impl CandidateState {
             shift_state: ShiftState::Off,
             last_printable: None,
             dicts: DictLayer::default(),
+            english_pro: false,
         };
         s.refresh_snapshot();
         Ok(s)
@@ -141,6 +144,21 @@ impl CandidateState {
 
     pub fn mode(&self) -> Mode {
         self.engine.mode()
+    }
+
+    /// 英文专业模式（2026-10-19）：false = en26 只直出字母、不查词库；true = 前缀联想。
+    pub fn english_pro(&self) -> bool {
+        self.english_pro
+    }
+
+    /// 普通 ⇄ 专业：切换时清掉引擎缓冲/候选（旧串语义不同），并刷新页码快照。
+    /// 调用方负责刷新 fcitx5 面板（见 `opi_engine.h` 的 englishpro 动作）。
+    pub fn set_english_pro(&mut self, on: bool) {
+        if self.english_pro == on {
+            return;
+        }
+        self.english_pro = on;
+        self.clear();
     }
 
     /// 全角开关的读侧（直传点判据；语义与 `Engine::fullwidth` 同）。

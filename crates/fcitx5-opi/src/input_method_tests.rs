@@ -18,6 +18,7 @@ fn state() -> CandidateState {
         shift_state: ShiftState::Off,
         last_printable: None,
         dicts: Default::default(),
+        english_pro: true,
     };
     s.buffer_snapshot = s.engine.buffer().to_string();
     s
@@ -183,6 +184,19 @@ fn english_empty_buffer_lowercase_enters_engine() {
     assert_eq!(s.buffer(), "a");
     assert!(!s.engine.candidates(8).is_empty(), "英文缓冲应有前缀候选");
 }
+#[test]
+fn english_normal_mode_commits_letters_directly() {
+    // 2026-10-19 用户裁决：en26 默认普通，只输出字母，不查词库；pro 才联想。
+    let mut s = english_state();
+    s.set_english_pro(false);
+    assert_eq!(
+        handle_key(&mut s, 'a' as u32, 0),
+        KeyAction::Input("a".into())
+    );
+    assert_eq!(s.buffer(), "", "普通模式不建缓冲");
+    assert!(s.engine.candidates(8).is_empty(), "普通模式无候选");
+}
+
 #[test]
 fn english_empty_buffer_single_shift_buffers_upper_and_consumes() {
     let mut s = english_state();

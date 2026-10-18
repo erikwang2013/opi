@@ -420,6 +420,12 @@ private fun KeyboardArea(
                     modeLabel = label,
                     // 英文 26 键顶部数字行（2026-10-19）；搜索叠盘保持关闭。
                     showNumberRow = controller.mode == EngineMode.ENGLISH,
+                    // 英文 26 键底行 123 → pro（普通/专业切换，2026-10-19）。
+                    showProKey = controller.mode == EngineMode.ENGLISH,
+                    proActive = state.englishPro,
+                    onProToggle = state::toggleEnglishPro,
+                    // 英文底行 `!?#`：进符号页（英文符号在符号页 ASCII 分类）。
+                    onSymbol = state::openSymbolPage,
                 )
             }
         }

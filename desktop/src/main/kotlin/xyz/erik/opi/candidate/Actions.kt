@@ -51,6 +51,7 @@ fun statusActionCommand(b: StatusBarButton): List<String>? = when (b) {
     // 中文打不出来（lead 真机实测指纹：点两次后 `fcitx5-remote` 报 2）。正确动作是契约
     // 里的 `opi-ctl lang`；有映射回归钉（StatusBarTest）。别改回去。
     StatusBarButton.LANG -> listOf("opi-ctl", "lang")
+    StatusBarButton.ENPRO -> listOf("opi-ctl", "englishpro")
     // MODE 也不出命令：它走 [cycleMode]（进程内一次 `opi-ctl mode` 循环，返回新档位
     // token），与这张「按钮 → 命令行」的表不是一件事（分派见 StatusBar.dispatch）。
     StatusBarButton.MODE -> null
@@ -264,6 +265,8 @@ data class ImeState(
      * 消费方）—— 见类头 [mode] 段。
      */
     val mode: String = "",
+    /** 英文专业模式（`enpro=` 位，2026-10-19 追加）：缺键 = false（普通）。 */
+    val englishPro: Boolean = false,
 )
 
 /**
@@ -292,6 +295,7 @@ fun parseImeState(line: String?): ImeState {
             // 交给界面画档位。也不把整行判坏（老插件没这一格，硬判 = 把「版本旧」变成
             // 状态栏可见的失败）。
             "mode" -> st.copy(mode = if (v in MODE_TOKENS) v else "")
+            "enpro" -> if (on != null) st.copy(englishPro = on) else st
             else -> st // 以后多出来的键：忽略
         }
     }
