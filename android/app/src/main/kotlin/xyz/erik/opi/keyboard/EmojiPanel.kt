@@ -51,28 +51,29 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
-import xyz.erik.opi.pet.OpiPet
-
-/** 表情页的两个子页（2026-10-18 用户参考布局：顶部 Emoji / 颜文字）。 */
-private enum class EmojiSubTab { Emoji, Kaomoji }
+import xyz.erik.opi.pet.PetMood
 
 /**
  * 表情页（工具条「表情」入口）。布局按用户参考图：
  *
  * ```
- * [← 返回]   [Emoji | 颜文字]   [🔍]
+ * [← 返回]   [自有 | Emoji | 颜文字]   [🔍]
  * ┌────────────── 网格 ──────────────┐
  * └──── 可横滑的分类条（底部一条）────┘
  * ```
  *
- * - **Emoji** 分类 = `自有` + 引擎 `emojiGroups()`（组名来自 OpenMoji 数据，不写死）。
- *   `自有` = 小欧形象：网格里画 [OpiPet]，点击提交**对应的 Unicode emoji**
- *   （映射见 [PetEmoji]）。
- * - **颜文字** 分类 = `assets/kaomoji.tsv` 第二列（解析见 [KaomojiCategories]）。
- * - 分类条点一下把网格滚到该组首项（`scrollToItem(start)`）；高亮 = 网格当前首个
+ * - **自有**（2026-10-18 用户裁决的独立顶级分类）：12 个小欧形态（PNG 表情图），
+ *   点击**插入图片**（[onPickPet]，见 `OpiImeService.commitPetSticker`；编辑器不支持时
+ *   回退文本标签 `[小欧·笑]`）；不进 Emoji 分类条，也不进最近使用。
+ * - **Emoji**：引擎 `emojiGroups()` 的 9 组（组名来自 OpenMoji 数据，不写死），
+ *   分类条与网格一一对齐（`start` 直接是 `catalog.emoji` 下标）。
+ * - **颜文字**：`assets/kaomoji.tsv` 第二列（解析见 [KaomojiCategories]）。
+ * - 默认进 **Emoji**（工具条入口 [xyz.erik.opi.keyboard.SymbolTab.Emoji] 的既有行为）；
+ *   分类条点一下把网格滚到该组首项（`scrollToItem(start)`）；高亮 = 网格当前首个
  *   可见项所属的组（滚动时跟着走）。两页共用 [SymbolCatalog.groupIndexOf] 这一套。
  * - 搜索态保持既有两套工具条的裁决：`[← 返回][搜索框]`，框一聚焦宿主就在面板下方
  *   叠字母盘（焦点事件走 `onSearchFocus`）；防抖在 ImeState。返回 = 清查询回浏览态。
+ *   自有是纯图片页（没有可搜的文本），不给 🔍。
  */
 @Composable
 internal fun EmojiPanel(
@@ -84,6 +85,7 @@ internal fun EmojiPanel(
     onSearchText: (String) -> Unit,
     onSearchFocus: (Boolean) -> Unit,
     onCommit: (String) -> Unit,
+    onPickPet: (PetMood) -> Unit,
     onClose: () -> Unit,
 ) {
     var sub by remember { mutableStateOf(EmojiSubTab.Emoji) }
@@ -125,6 +127,8 @@ internal fun EmojiPanel(
         Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             if (searching && searchQuery.isNotEmpty()) {
                 val shown = when (sub) {
+                    // 自有页没有 🔍 入口；这里只是 when 穷尽（真到不了）。
+                    EmojiSubTab.Pet -> emptyList()
                     EmojiSubTab.Emoji -> remember(searchQuery) {
                         catalog.search(searchQuery).filter(catalog::isEmoji).distinct()
                     }
@@ -147,18 +151,14 @@ internal fun EmojiPanel(
                 }
             } else {
                 when (sub) {
+                    EmojiSubTab.Pet -> PetStickerPanel(onPickPet)
                     EmojiSubTab.Emoji -> EmojiBrowse(catalog, emojiGrid, onCommit)
                     EmojiSubTab.Kaomoji -> KaomojiBrowse(kaomoji, kaomojiGrid, onCommit)
                 }
             }
         }
         if (!searching) {
-            val groups = when (sub) {
-                EmojiSubTab.Emoji -> PetEmoji.categories(catalog.emojiGroups)
-                EmojiSubTab.Kaomoji -> kaomoji.map {
-                    SymbolCatalog.EmojiGroup(it.label, it.start, it.items.size)
-                }
-            }
+            val groups = emojiCategoryGroups(sub, catalog.emojiGroups, kaomoji)
             if (groups.isNotEmpty()) {
                 CategoryBar(
                     groups = groups,
@@ -170,7 +170,7 @@ internal fun EmojiPanel(
 }
 
 /**
- * 浏览态工具条 `[← 返回][Emoji | 颜文字][🔍]`；搜索态 `[← 返回][搜索框]`。
+ * 浏览态工具条 `[← 返回][自有 | Emoji | 颜文字][🔍]`；搜索态 `[← 返回][搜索框]`。
  *
  * ⚠️ 搜索框**不常驻**：它是「点 🔍 才出现」的那一态（2026-10-12 用户裁决的两套工具条）。
  */
@@ -226,7 +226,7 @@ private fun EmojiTopBar(
                 for (t in EmojiSubTab.entries) {
                     val on = t == sub
                     Text(
-                        text = if (t == EmojiSubTab.Emoji) "Emoji" else "颜文字",
+                        text = t.label,
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
                             .selectable(selected = on, role = Role.Tab, onClick = { onSub(t) })
@@ -237,17 +237,19 @@ private fun EmojiTopBar(
                     )
                 }
             }
-            IconButton(onClick = onStartSearch) {
-                Icon(OpiIcons.Search, contentDescription = "搜索", tint = p.toolbarFg)
+            // 自有只有图片，没有可搜索的文本 —— 给了 🔍 也只会落到「无匹配」。
+            if (sub != EmojiSubTab.Pet) {
+                IconButton(onClick = onStartSearch) {
+                    Icon(OpiIcons.Search, contentDescription = "搜索", tint = p.toolbarFg)
+                }
             }
         }
     }
 }
 
-/** Emoji 子页：最近使用 + 网格（前 [PetEmoji.forms] 格是「自有」小欧，其后是引擎表情表）。 */
+/** Emoji 子页：最近使用 + 引擎表情网格（**不含自有**，自有是独立子页）。 */
 @Composable
 private fun EmojiBrowse(catalog: SymbolCatalog, grid: LazyGridState, onCommit: (String) -> Unit) {
-    val forms = PetEmoji.forms
     val emojis = catalog.emoji
     Column(modifier = Modifier.fillMaxSize()) {
         if (catalog.recents.isNotEmpty()) RecentsRow(catalog.recents, onCommit)
@@ -257,26 +259,7 @@ private fun EmojiBrowse(catalog: SymbolCatalog, grid: LazyGridState, onCommit: (
                 state = grid,
                 modifier = Modifier.fillMaxSize(),
             ) {
-                items(forms.size + emojis.size) { i ->
-                    if (i < forms.size) {
-                        val f = forms[i]
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(2.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .clickable { onCommit(f.emoji) }
-                                .semantics {
-                                    contentDescription = "小欧${f.label}，提交 ${f.emoji}"
-                                },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            OpiPet(mood = f.mood, size = 26.dp)
-                        }
-                    } else {
-                        SymbolCell(emojis[i - forms.size], onCommit)
-                    }
-                }
+                items(emojis.size) { SymbolCell(emojis[it], onCommit) }
             }
         }
     }

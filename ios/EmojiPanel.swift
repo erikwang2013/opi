@@ -8,27 +8,30 @@
 // ⚠️ **2026-10-18 的布局改写尚未经过任何编译**（本机没有 swiftc）——
 // 待 CI apple.yml 的 iOS job；见 ios/README.md。
 //
-// 表情页：引擎表情表 + 颜文字表的**展示层**（顶部 Emoji/颜文字 Tab + 网格 + 底部横滑分类条）。
+// 表情页：自有贴纸 + 引擎表情表 + 颜文字表的**展示层**
+// （顶部 自有/Emoji/颜文字 Tab + 网格 + 底部横滑分类条）。
 //
 // 布局与 Android `keyboard/EmojiPanel.kt`、桌面 `candidate/EmojiPage.kt`（2026-10-18）对齐：
 //
 // ```
-// [‹ 返回]   [Emoji | 颜文字]   [🔍]
+// [‹ 返回]   [自有 | Emoji | 颜文字]   [🔍]
 // ┌────────────── 网格 ──────────────┐
 // └──── 可横滑的分类条（底部一条）────┘
 // ```
 //
-// - **Emoji** 分类 = `自有` + 引擎 `emojiGroups()`（与 Android `PetEmoji.categories` 同构：
-//   引擎的 `start` 整体后移 `PetEmojiTable.forms.count`）。`自有` 的 12 个形态在 iOS 上
-//   **没有小欧矢量绘制**，网格里用 emoji 字形 + 小标签表达，点击提交该 emoji
-//   （映射见 `PetEmojiTable.swift`，与 `shared/pet/PetEmojiMap.kt` 同源）。
-// - **颜文字** 分类 = `KaomojiData.categories`（生成自 `data/raw/kaomoji.tsv`，
+// - **自有** = 独立顶级分类（2026-10-18 用户裁决），4 列网格画 `PetStickerImages`
+//   内嵌的小欧 PNG；点击**复制图片到系统剪贴板**（`PetStickerClipboard`）并弹键盘内
+//   提示，**不提交任何文本**、不混入 Emoji 的 recents/搜索。
+//   iOS 键盘扩展没有往宿主文本框插图片的接口，剪贴板是唯一通路（见 README 已知缺口）。
+//   自有页没有分类条，也没有 🔍（搜索只覆盖 Emoji/颜文字）。
+// - **Emoji** = 只用引擎 `emojiGroups()`（9 组，**不再加 `自有` 偏移**）。
+// - **颜文字** = `KaomojiData.categories`（生成自 `data/raw/kaomoji.tsv`，
 //   口径同 Android `KaomojiCategories`）。
 // - 分类条点一下 = 网格滚到该组首项所在行；高亮由网格的 `onScroll` 按
 //   「首个可见项」反推（同 Android `groupIndexOf`）。
 //
 // 姿态与 `SymbolPanel.swift` 相同：只画与发射点击，**不上屏、不碰引擎** ——
-// 数据由控制器塞进来（`showBrowse` / `showResults`），点中的条目经 `onPick` 回控制器，
+// 数据由控制器塞进来（`showBrowse` / `showResults`），点中的文本条目经 `onPick` 回控制器，
 // 由它走既有的 `insert(...)`（同符号键的 `.commitText` 通路，**不过引擎**：引擎的标点表
 // 会把字符改写成中文标点/全角，而用户在表情页点的就是要那个字符）。
 //
@@ -54,6 +57,8 @@ final class EmojiPanel: UIView {
 
     /// Emoji 每行几个（Android `GridCells.Fixed(8)`）。
     private static let emojiColumns = 8
+    /// 「自有」贴纸每行 4 个（12 形态 = 3 行；用户裁决的独立 4 列网格）。
+    private static let petColumns = 4
     /// 颜文字比单个 emoji 宽得多：3 列 + 允许缩字，少截成省略号（Android 同）。
     private static let kaomojiColumns = 3
     /// 顶部工具条 / 底部分类条高度。与 `KeyboardLayout` 候选栏的 40 同值。
@@ -62,8 +67,8 @@ final class EmojiPanel: UIView {
     private static let noKaomoji = "没有颜文字数据"
     private static let noMatch = "无匹配"
 
-    /// 表情页的两个子页（2026-10-18 用户参考布局：顶部 Emoji / 颜文字）。
-    private enum SubTab { case emoji, kaomoji }
+    /// 表情页的三个子页（2026-10-18 用户裁决：自有是独立顶级分类）。
+    private enum SubTab { case pet, emoji, kaomoji }
 
     // MARK: - 视图
 
@@ -73,6 +78,8 @@ final class EmojiPanel: UIView {
     private let groupStack = UIStackView()
     private let grid = EmojiGridView()
     private let searchField = UITextField()
+    /// 复制贴纸后的键盘内提示（系统对写剪贴板没有任何反馈）。
+    private let toast = ToastLabel()
 
     /// 网格底边的两种约束：分类条可见时止于它，搜索态（或没有分类）时贴底。
     private var gridBottomToBar: NSLayoutConstraint!
@@ -86,6 +93,9 @@ final class EmojiPanel: UIView {
     }
     private lazy var searchButton = BarButton(title: "🔍") { [weak self] in
         self?.searchTapped()
+    }
+    private lazy var petTab = BarButton(title: "自有") { [weak self] in
+        self?.switchSub(.pet)
     }
     private lazy var emojiTab = BarButton(title: "Emoji") { [weak self] in
         self?.switchSub(.emoji)
@@ -125,6 +135,7 @@ final class EmojiPanel: UIView {
         tabs.spacing = 2
         tabs.distribution = .fillEqually
         tabs.translatesAutoresizingMaskIntoConstraints = false
+        tabs.addArrangedSubview(petTab)
         tabs.addArrangedSubview(emojiTab)
         tabs.addArrangedSubview(kaomojiTab)
 
@@ -138,6 +149,10 @@ final class EmojiPanel: UIView {
         grid.translatesAutoresizingMaskIntoConstraints = false
         grid.onPick = { [weak self] text in
             self?.onPick?(text)
+        }
+        // 自有贴纸：复制图片，**不**经 onPick（那条是文本上屏）。
+        grid.onSticker = { [weak self] form in
+            self?.copySticker(form)
         }
         // 滚动时反推高亮（搜索态没有分类条，跳过）。
         grid.onScroll = { [weak self] in
@@ -163,6 +178,7 @@ final class EmojiPanel: UIView {
         addSubview(topBar)
         addSubview(grid)
         addSubview(groupScroll)
+        addSubview(toast)
 
         gridBottomToBar = grid.bottomAnchor.constraint(
             equalTo: groupScroll.topAnchor, constant: -4
@@ -192,6 +208,12 @@ final class EmojiPanel: UIView {
             groupStack.topAnchor.constraint(equalTo: groupScroll.contentLayoutGuide.topAnchor),
             groupStack.bottomAnchor.constraint(equalTo: groupScroll.contentLayoutGuide.bottomAnchor),
             groupStack.heightAnchor.constraint(equalTo: groupScroll.frameLayoutGuide.heightAnchor),
+
+            // 提示浮在网格底部上方，不参与布局（进出只改 alpha/isHidden）。
+            toast.centerXAnchor.constraint(equalTo: centerXAnchor),
+            toast.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -Self.barHeight - 8),
+            toast.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 12),
+            toast.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -12),
         ])
 
         styleTabs()
@@ -207,13 +229,13 @@ final class EmojiPanel: UIView {
 
     /// 载入**浏览全量**（`OpiEngine.emojiSymbols()`）+ 分类条（`OpiEngine.emojiGroups()`）。
     ///
-    /// 两个参数都是引擎的**原始**输出：字形过滤与分类下标重算都在本层做（`filterAndRegroup`），
+    /// 两个参数都是引擎的**原始**输出：字形过滤与分类下标重算都在本层做（`EmojiFilter`），
     /// 与 Android 把过滤放在 `SymbolCatalog`、面板只管画同一分工 —— 控制器一行判据都不留。
     ///
     /// 进浏览态**一律重置搜索态与子页**：与 Android `openEmoji()` 里那次 `resetSearch()` 对齐，
     /// 否则「上次搜到一半退出」会带着查询词/颜文字页再进来。
     func showBrowse(_ rawList: [String], groups raw: [OpiEmojiGroup]) {
-        let (list, regrouped) = Self.filterAndRegroup(rawList, groups: raw)
+        let (list, regrouped) = EmojiFilter.filterAndRegroup(rawList, groups: raw)
         browseList = list
         emojiSet = Set(list)
         emojiGroups = regrouped
@@ -237,6 +259,11 @@ final class EmojiPanel: UIView {
         // 保序去重（用户裁决 2026-10-12「表情存在重复的，去重」）。
         var seen = Set<String>()
         switch sub {
+        case .pet:
+            // 自有没有搜索（🔍 不在这一页）；走到这里只可能是切换子页前挂着的
+            // 旧防抖回来了 —— 直接画浏览网格，别把「无匹配」扣在贴纸头上。
+            showBrowseGrid()
+            return
         case .emoji:
             // 只留引擎口径的表情（Android `results.filter(catalog::isEmoji)`）。
             // ⚠️ `emojiSet` 是**已过滤字形**的那一份，所以「本机画不出的」在这里也被摘掉。
@@ -261,10 +288,10 @@ final class EmojiPanel: UIView {
     /// 画浏览网格（**不碰工具条**）：搜索态里查询被清空、以及正常浏览都用它。
     private func showBrowseGrid() {
         switch sub {
+        case .pet:
+            grid.showStickers(PetEmojiTable.forms, columns: Self.petColumns)
         case .emoji:
-            grid.showEmoji(
-                pets: PetEmojiTable.forms, emojis: browseList, columns: Self.emojiColumns
-            )
+            grid.showEmoji(browseList, columns: Self.emojiColumns)
         case .kaomoji:
             grid.showTexts(
                 KaomojiData.all, columns: Self.kaomojiColumns,
@@ -276,15 +303,13 @@ final class EmojiPanel: UIView {
 
     // MARK: - 分类条
 
-    /// 当前子页的分类条（Emoji 的引擎组整体后移 `自有` 的格数）。
+    /// 当前子页的分类条（自有没有分类条；Emoji 只用引擎组，**不再加偏移**）。
     private func groupsFor(_ sub: SubTab) -> [OpiEmojiGroup] {
         switch sub {
+        case .pet:
+            return []
         case .emoji:
-            let own = PetEmojiTable.forms.count
-            let ownGroup = OpiEmojiGroup(name: "自有", start: 0, count: own)
-            return [ownGroup] + emojiGroups.map {
-                OpiEmojiGroup(name: $0.name, start: $0.start + own, count: $0.count)
-            }
+            return emojiGroups
         case .kaomoji:
             return KaomojiData.categories.map {
                 OpiEmojiGroup(name: $0.label, start: $0.start, count: $0.items.count)
@@ -362,13 +387,18 @@ final class EmojiPanel: UIView {
 
     private func switchSub(_ new: SubTab) {
         guard new != sub else { return }
+        let wasSearching = isSearching
         sub = new
         styleTabs()
+        // 重装工具条：自有页没有 🔍，其余页有；从搜索态里切过来时顺手退出搜索。
+        setSearching(false)
+        if wasSearching { onSearch?("") }
         rebuildGroupBar()
         showBrowseGrid()
     }
 
     private func styleTabs() {
+        styleTab(petTab, title: "自有", selected: sub == .pet)
         styleTab(emojiTab, title: "Emoji", selected: sub == .emoji)
         styleTab(kaomojiTab, title: "颜文字", selected: sub == .kaomoji)
     }
@@ -439,8 +469,11 @@ final class EmojiPanel: UIView {
             searchField.becomeFirstResponder()
         } else {
             topBar.addArrangedSubview(tabs)
-            topBar.addArrangedSubview(searchButton)
-            searchButton.accessibilityLabel = "搜索"
+            // 自有子页没有可搜的文本：不画 🔍（别留一个点了没反应的按钮）。
+            if sub != .pet {
+                topBar.addArrangedSubview(searchButton)
+                searchButton.accessibilityLabel = "搜索"
+            }
             // 退出搜索就清词：不清的话下次进来网格会停在旧查询的过滤结果上
             // （Android `back()` 里那句 `onSearchText("")` 同款理由）。
             searchField.text = ""
@@ -449,49 +482,16 @@ final class EmojiPanel: UIView {
         updateBarVisibility()
     }
 
-    // MARK: - 过滤 + 分类下标重算（纯函数，一处算清）
+    // MARK: - 自有贴纸（剪贴板回退）
 
-    /// 把引擎的**原始**表情表与原始分类条，变成「本机能画的列表 + 与之对齐的分类条」。
-    ///
-    /// 两步必须**一起**做，所以合成一个函数：分类条的下标是**过滤后**列表里的下标
-    /// （过滤会摘掉若干条，原下标会整体偏前）—— 点分类是 `scrollTo(start:)`，
-    /// 不重算就会滚错组。分成两个函数就给了「只调其中一个」的机会，那是静默错位。
-    ///
-    /// 逐条对齐 Android `SymbolCatalog.emojiGroups`（前缀存活表）：
-    /// `aliveUpTo[i]` = 原始表 `[0, i)` 里有多少条通过了 `canRender`；组的 `start`/`count`
-    /// **一起**重算（`count` 是分类条读屏文案，不跟着减就会把摘掉的条数也报进去）。
-    ///
-    /// ⚠️ 表拿不到（未装载 / 没取到）⇒ **原样返回，不重算**：没有列表就没有「过滤后下标」
-    /// 可言，硬算会把所有组的 `start` 压成 0（那比不显示分类更坏）。同 Android。
-    static func filterAndRegroup(
-        _ rawList: [String], groups raw: [OpiEmojiGroup]
-    ) -> (list: [String], groups: [OpiEmojiGroup]) {
-        // 字形过滤用 SymbolPanel 那一份判据（**只判单码位**，多码位一律放行）——
-        // 探针字体也是它的那一颗，别在本文件另造（见 SymbolPanel.probeFont 的注释）。
-        //
-        // ⚠️ 未编译：每条都调一次 `CTFontCreateWithName`（在 canRender 里）。687 条
-        // 一次性跑，Mac 上量一下开面板的耗时；若肉眼可见卡，把 CTFont 提到循环外
-        // （要改 canRender 的签名，**别**在这里抄一份判定逻辑）。
-        var aliveUpTo = [Int](repeating: 0, count: rawList.count + 1)
-        var alive = 0
-        var list: [String] = []
-        list.reserveCapacity(rawList.count)
-        for i in rawList.indices {
-            aliveUpTo[i] = alive
-            if SymbolPanel.canRender(rawList[i], font: SymbolPanel.probeFont) {
-                alive += 1
-                list.append(rawList[i])
-            }
+    /// 点一格自有贴纸：复制图片到系统剪贴板 + 键盘内可见提示。**不走 `onPick`** ——
+    /// 键盘扩展没有往宿主文本框插图片的接口，剪贴板是唯一通路（README 已知缺口）。
+    private func copySticker(_ form: PetEmojiTable.Form) {
+        guard PetStickerClipboard.copy(form) else {
+            // 内嵌数据缺了这张图：说出来，别让用户点了个没反应的格子。
+            toast.show("贴纸缺失：\(form.sticker).png")
+            return
         }
-        aliveUpTo[rawList.count] = alive
-        guard !rawList.isEmpty else { return (list, raw) }
-        let groups = raw.map { g -> OpiEmojiGroup in
-            let from = min(max(g.start, 0), rawList.count)
-            let to = min(max(g.start + g.count, 0), rawList.count)
-            return OpiEmojiGroup(
-                name: g.name, start: aliveUpTo[from], count: aliveUpTo[to] - aliveUpTo[from]
-            )
-        }
-        return (list, groups)
+        toast.show("已复制，去粘贴")
     }
 }

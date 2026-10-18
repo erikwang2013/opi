@@ -92,8 +92,9 @@ luna 繁体成语段退役（2026-09-27，同一任务的后半）：
   `data/raw/extra_phrases.tsv`（批量段：rime-ice base/ext、rime-essay、
   chinese-xinhua 成语/歇后语、THUOCL）。两份 extra 由 `scripts/gen_extra_phrases.py`
   生成（层序与去重见该脚本头注释）。本脚本只做三件事：按三段序拼接、复核 order 列
-  严格递减、报重合数。freq 仍由位置统一编码（`FMAX - idx*spacing`），不读 tsv 里的
-  order 数值。⚠️ 单字层与 simp 段自身的相对序不动，但 simp 段整体顺延人工段的
+  严格递减、跨层去重并报计数。去重键 = (词形, 连写拼音)，保留先出现者（单字 > 人工 >
+  simp > 批量）——与 compile「同键取 max freq」同向，但真正删行，最终 TSV 断言无重复。
+  freq 仍由位置统一编码（`FMAX - idx*spacing`），不读 tsv 里的 order 数值。⚠️ 单字层与 simp 段自身的相对序不动，但 simp 段整体顺延人工段的
   行数（835 行量级）—— 既有排序门禁（13 处首位钉等）已扫描过与人工表零撞键。
   ⚠️ 该产物是复合数据、含 GPL-3.0-only 的 rime-ice ⇒ 并入后的 luna.opid 按 GPL-3.0
   分发（源码仍 MIT），逐源声明见 `data/raw/LICENSES.md`。
@@ -408,9 +409,32 @@ def main() -> None:
             promoted.append((w, k, o))
     manual = promoted
     extra = held + extra
-    simp_keys = {(w, "".join(t)) for w, t, _ in simp_phrases}
-    extra_overlap = sum(1 for w, t, _ in extra if (w, t[0]) in simp_keys)
+    # 跨层去重（2026-10-18）：姓氏/流行语两张人工表接在批量段尾，同一 (词,连写键)
+    # 可能在单字层/人工段/simp 段已存在 ⇒ 保留先出现者（单字 > 人工 > simp > 批量）。
+    # 批量段内部已由 gen_extra_phrases 按 (key, word) 去重，这里仍统一过一遍并计数。
+    seen = set(ordered)
+    dropped = {"manual": 0, "simp": 0, "extra": 0}
+
+    def dedup_layer(layer, key_of, tag):
+        kept = []
+        for row in layer:
+            pair = (row[0], key_of(row))
+            if pair in seen:
+                dropped[tag] += 1
+            else:
+                seen.add(pair)
+                kept.append(row)
+        return kept
+
+    manual = dedup_layer(manual, lambda r: r[1][0], "manual")
+    simp_phrases = dedup_layer(simp_phrases, lambda r: "".join(r[1]), "simp")
+    extra = dedup_layer(extra, lambda r: r[1][0], "extra")
     all_phrases = manual + simp_phrases + extra
+    if len(seen) != len(ordered) + len(all_phrases):
+        raise RuntimeError(
+            "跨层去重记账不符：seen=%d != 单字 %d + 词组 %d"
+            % (len(seen), len(ordered), len(all_phrases))
+        )
 
     n = len(ordered) + len(all_phrases)
     assert n < FMAX, "行数超过 FMAX，spacing 归零"
@@ -427,8 +451,9 @@ def main() -> None:
           f"二级 {sum(1 for c in chs if c in second)}, 其余 {len(chs) - sum(1 for c in chs if c in first + second)})", file=sys.stderr)
     print(f"有词次单字: {sum(1 for c in chs if c in kph)}", file=sys.stderr)
     print(f"词组: {len(all_phrases)}（人工 {len(manual)} + 内置 simp {len(simp_phrases)} "
-          f"+ 外部批量 {len(extra)}；批量段与 simp 的 (词,拼音) 重合 {extra_overlap}，"
-          f"交 compile 取 max freq）", file=sys.stderr)
+          f"+ 外部批量 {len(extra)}；跨层去重丢弃 人工 {dropped['manual']} / simp "
+          f"{dropped['simp']} / 批量 {dropped['extra']}；最终重复行 0，已断言）",
+          file=sys.stderr)
     print(
         f"词组语料读音证据: 救回被 0% 丢掉的 {corpus_unfiltered} 条 + 新增表外读音 "
         f"{corpus_added} 条 = +{corpus_unfiltered + corpus_added} 条；"

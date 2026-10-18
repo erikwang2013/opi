@@ -45,8 +45,9 @@ import kotlin.math.min
 class OpiImeService : InputMethodService() {
     private var inputViewCache: View? = null
 
-    /** 提交重试的排程与撤销（字段持有的主线程 Handler，不随 IME 窗口重建而改变）。 */
-    private val pendingCommit = PendingCommit()
+    /** 提交重试的排程与撤销（字段持有的主线程 Handler，不随 IME 窗口重建而改变）。
+     * internal：图片通道（PetStickerCommit.kt 的扩展函数）共用同一套重试/撤销。 */
+    internal val pendingCommit = PendingCommit()
 
     /**
      * 用户词落盘。`by lazy` 是必需的：Service 的字段初始化早于 `attachBaseContext`，
@@ -283,6 +284,8 @@ class OpiImeService : InputMethodService() {
                 rareIndex = { rareIndex },
                 symbolCategories = { symbolCategories },
                 kaomojiCategories = { kaomojiCategories },
+                // 「自有」宠物形态 = 插入 PNG 图片（文本通道之外，见 PetStickerCommit.kt）。
+                onPickPet = { commitPetSticker(it) },
                 // 工具栏最右「收起键盘」（2026-10-10 用户裁决）：收回系统键盘。
                 onCloseKeyboard = { requestHideSelf(0) },
             )

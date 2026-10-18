@@ -74,6 +74,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import xyz.erik.opi.pet.OpiPetWindowIcon
+import xyz.erik.opi.pet.PetEmojiMap
 
 // ---------- 窗口 ----------
 
@@ -123,9 +124,11 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
     // Android 的 `isEmoji`（那边用过滤后的列表，差只在本机画不出的条目，随后 canRender 同摘）。
     val emojiSet = remember(emoji) { emoji.entries.toHashSet() }
     var selected by remember { mutableStateOf(if (initialEmoji) TAB_EMOJI else 0) }
-    // 表情页子页（Emoji / 颜文字）：与 Android 的 `EmojiSubTab` 同名同义。
+    // 表情页子页（自有 / Emoji / 颜文字）：与 Android 的 `EmojiSubTab` 同名同义。
     var emojiSub by remember { mutableStateOf(EmojiSubTab.Emoji) }
+    // 提示行同时服务两种语义：文本上屏失败（红）与自有表情复制成功（强调色）。
     var notice by remember { mutableStateOf<String?>(null) }
+    var noticeIsError by remember { mutableStateOf(false) }
     LaunchedEffect(notice) {
         if (notice != null) {
             delay(3500)
@@ -140,12 +143,12 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
     // 焦点驱动：点进搜索框才需要打字，点选符号时交还。
     var typing by remember { mutableStateOf(false) }
     val onEmoji = selected == TAB_EMOJI
-    // 颜文字子页的搜索是**本地子串匹配**（数据在进程里，与 Android 同一条）；不需要
-    // 走一次 `opi-ctl search`。引擎搜索只服务符号页与 Emoji 子页。
-    val kaomojiSearch = onEmoji && emojiSub == EmojiSubTab.Kaomoji
-    LaunchedEffect(query, kaomojiSearch) {
+    // 自有/颜文字子页的搜索是**本地子串匹配**（数据在进程里，与 Android 同一条）；不
+    // 需要走一次 `opi-ctl search`。引擎搜索只服务符号页与 Emoji 子页。
+    val localSearch = onEmoji && emojiSub != EmojiSubTab.Emoji
+    LaunchedEffect(query, localSearch) {
         val q = query.trim()
-        if (q.isEmpty() || kaomojiSearch) {
+        if (q.isEmpty() || localSearch) {
             search = null
             return@LaunchedEffect
         }
@@ -245,7 +248,9 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
             }
             // 固定高的提示行：失败提示出现/消失不该让整页跳。
             Box(Modifier.fillMaxWidth().height(18.dp).padding(horizontal = 14.dp), contentAlignment = Alignment.CenterStart) {
-                notice?.let { Text(it, fontSize = 11.sp, color = SymErr, maxLines = 1) }
+                notice?.let {
+                    Text(it, fontSize = 11.sp, color = if (noticeIsError) SymErr else SymAccent, maxLines = 1)
+                }
             }
             Row(Modifier.weight(1f).fillMaxWidth()) {
                 fun pick(sym: String) {
@@ -261,7 +266,25 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
                     scope.launch {
                         var waited = 0
                         while (window.isFocused && waited < 300) { delay(20); waited += 20 }
-                        withContext(Dispatchers.IO) { pickLock.withLock { onCommit(sym) } }?.let { notice = it }
+                        withContext(Dispatchers.IO) { pickLock.withLock { onCommit(sym) } }?.let {
+                            noticeIsError = true
+                            notice = it
+                        }
+                    }
+                }
+                // 自有格的出口 = 图片剪贴板（不是文本上屏）：桌面没有 TSF/管道图片插入面。
+                // 同 pick 的纪律：先交还键盘焦点（用户接着要 Ctrl+V，目标得拿到焦点）。
+                fun copySticker(form: PetEmojiMap.Form) {
+                    focus.clearFocus()
+                    scope.launch {
+                        var waited = 0
+                        while (window.isFocused && waited < 300) { delay(20); waited += 20 }
+                        // 读 PNG + 写系统剪贴板都可能阻塞：挪出组合线程（同 onCommit 那条）。
+                        val r = withContext(Dispatchers.IO) {
+                            pickLock.withLock { copyPetSticker(form, SystemImageClipboard) }
+                        }
+                        noticeIsError = !r.ok
+                        notice = r.notice
                     }
                 }
                 if (query.isNotBlank()) {
@@ -273,6 +296,12 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
                             emptyText = "没有匹配的符号",
                             modifier = Modifier.weight(1f).fillMaxHeight(),
                             onPick = ::pick,
+                        )
+                        // 自有子页：本地标签子串匹配（12 个形态，不占 CLI 往返）。
+                        emojiSub == EmojiSubTab.Own -> PetStickerPage(
+                            petStickerSearch(query),
+                            Modifier.weight(1f).fillMaxHeight(),
+                            ::copySticker,
                         )
                         // Emoji 子页：引擎搜索 + 「像不像表情」筛选（原样）。
                         emojiSub == EmojiSubTab.Emoji -> SearchResultPane(
@@ -292,14 +321,13 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
                         )
                     }
                 } else if (onEmoji) {
-                    // 「自有」12 格不依赖 emoji 表，所以字形过滤落地前也照常出网格 ——
-                    // 不再用「正在检查字形…」把整页挡住（宠物格是立即可用的）。
                     EmojiPane(
                         data = emojiShown,
                         sub = emojiSub,
                         kaomoji = kaomoji,
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                         onPick = ::pick,
+                        onCopy = ::copySticker,
                     )
                 } else {
                     val cat = catsShown.getOrNull(selected)

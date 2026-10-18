@@ -16,14 +16,18 @@ import UIKit
 /// 表情/颜文字网格。
 final class EmojiGridView: UIView, UIScrollViewDelegate {
 
-    /// 点中一格（提交什么由面板/控制器决定）。
+    /// 点中一格文本（emoji / 颜文字；提交什么由面板/控制器决定）。
     var onPick: ((String) -> Void)?
+    /// 点中一格「自有」贴纸（面板负责复制图片，网格不碰剪贴板）。
+    var onSticker: ((PetEmojiTable.Form) -> Void)?
     /// 滚动位置变了（分类条高亮跟着反推）。
     var onScroll: (() -> Void)?
 
     /// 行高。滚动视图里的行**必须**有明确高度（容器 `.fillEqually` 在滚动视图里
     /// 会退化成 0 高，见 `SymbolPanel.init` 那条注释）。
     static let rowHeight: CGFloat = 40
+    /// 贴纸行高：44 图 + 标签（自有子页 4 列，格子比 emoji 大）。
+    static let stickerRowHeight: CGFloat = 64
     /// 行间距。与 `SymbolPanel` 的 `stack.spacing = 6` 是同一个数。
     static let gridSpacing: CGFloat = 6
 
@@ -31,6 +35,8 @@ final class EmojiGridView: UIView, UIScrollViewDelegate {
     private let stack = UIStackView()
     private var itemCount = 0
     private var columns = 8
+    /// 当前网格的行高（贴纸 / 文本两套；`scrollTo` 与高亮反推都用它）。
+    private var rowHeight: CGFloat = EmojiGridView.rowHeight
 
     init() {
         super.init(frame: .zero)
@@ -62,35 +68,49 @@ final class EmojiGridView: UIView, UIScrollViewDelegate {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used: 布局全代码构建") }
 
-    /// Emoji 子页：`自有`（emoji 字形 + 小标签）在前，其后是引擎表情表。
-    func showEmoji(pets: [PetEmojiTable.Form], emojis: [String], columns: Int) {
+    /// 「自有」子页：4 列网格，格子里是**真实小欧 PNG**（`PetStickerImages` 内嵌）。
+    /// 点击只发 `onSticker`（面板负责复制图片），不经过 `onPick`、不上屏。
+    func showStickers(_ forms: [PetEmojiTable.Form], columns: Int) {
         self.columns = columns
-        let total = pets.count + emojis.count
-        itemCount = total
+        rowHeight = Self.stickerRowHeight
+        itemCount = forms.count
         reset()
-        guard total > 0 else {
-            // 空列表**不休假成空白**（同 SymbolPanel 的理由）；正常不会走到，
-            // 因为 `自有` 恒有 12 格。
+        guard !forms.isEmpty else {
+            addEmpty("（贴纸未内嵌）")
+            return
+        }
+        for start in stride(from: 0, to: forms.count, by: columns) {
+            let end = min(start + columns, forms.count)
+            let row = makeRow()
+            for form in forms[start..<end] {
+                row.addArrangedSubview(StickerCell(form: form) { [weak self] in
+                    self?.onSticker?(form)
+                })
+            }
+            padRow(row, filled: end - start, columns: columns)
+            stack.addArrangedSubview(row)
+        }
+        scroll.setContentOffset(.zero, animated: false)
+    }
+
+    /// Emoji 子页：只画引擎表情表（`自有` 已是独立子页，不再混进来）。
+    func showEmoji(_ emojis: [String], columns: Int) {
+        self.columns = columns
+        rowHeight = Self.rowHeight
+        itemCount = emojis.count
+        reset()
+        guard !emojis.isEmpty else {
+            // 空列表**不休假成空白**（同 SymbolPanel 的理由）。
             addEmpty("（表情库未就绪）")
             return
         }
-        for start in stride(from: 0, to: total, by: columns) {
-            let end = min(start + columns, total)
+        for start in stride(from: 0, to: emojis.count, by: columns) {
+            let end = min(start + columns, emojis.count)
             let row = makeRow()
-            for i in start..<end {
-                if i < pets.count {
-                    let form = pets[i]
-                    row.addArrangedSubview(
-                        PetEmojiCell(label: form.label, emoji: form.emoji) { [weak self] in
-                            self?.onPick?(form.emoji)
-                        }
-                    )
-                } else {
-                    let text = emojis[i - pets.count]
-                    row.addArrangedSubview(BarButton(title: text) { [weak self] in
-                        self?.onPick?(text)
-                    })
-                }
+            for text in emojis[start..<end] {
+                row.addArrangedSubview(BarButton(title: text) { [weak self] in
+                    self?.onPick?(text)
+                })
             }
             padRow(row, filled: end - start, columns: columns)
             stack.addArrangedSubview(row)
@@ -103,6 +123,7 @@ final class EmojiGridView: UIView, UIScrollViewDelegate {
     /// 纯文本网格（颜文字 / 搜索结果）。
     func showTexts(_ texts: [String], columns: Int, empty: String, shrink: Bool) {
         self.columns = columns
+        rowHeight = Self.rowHeight
         itemCount = texts.count
         reset()
         guard !texts.isEmpty else {
@@ -135,14 +156,14 @@ final class EmojiGridView: UIView, UIScrollViewDelegate {
     /// 两者都不由内容决定，所以这个换算与真实布局一致（不像内容自适应那样会漂）。
     func scrollTo(start: Int) {
         let row = start / columns
-        let y = CGFloat(row) * (Self.rowHeight + Self.gridSpacing)
+        let y = CGFloat(row) * (rowHeight + Self.gridSpacing)
         scroll.setContentOffset(CGPoint(x: 0, y: y), animated: true)
     }
 
     /// 首个可见项的下标（分类条高亮反推的输入）。滚动偏移是显式行高 + 行距拼的，可逆。
     func firstVisibleItemIndex() -> Int {
         guard itemCount > 0 else { return 0 }
-        let stride = Self.rowHeight + Self.gridSpacing
+        let stride = rowHeight + Self.gridSpacing
         let row = Int(max(0, scroll.contentOffset.y) / stride)
         return min(row * columns, itemCount - 1)
     }
@@ -160,7 +181,7 @@ final class EmojiGridView: UIView, UIScrollViewDelegate {
         row.axis = .horizontal
         row.spacing = 5
         row.distribution = .fillEqually
-        row.heightAnchor.constraint(equalToConstant: Self.rowHeight).isActive = true
+        row.heightAnchor.constraint(equalToConstant: rowHeight).isActive = true
         return row
     }
 
@@ -178,40 +199,41 @@ final class EmojiGridView: UIView, UIScrollViewDelegate {
     }
 }
 
-/// 「自有」一格：emoji 字形 + 小标签（例：😊 笑）。
+/// 「自有」一格：小欧 PNG + 小标签（例：[图] 笑）。
 ///
-/// iOS 草案**没有小欧矢量绘制**（见 `PetEmojiTable.swift` 头注），所以这里用
-/// **emoji 选择器**表达；点击提交的是映射到的 emoji，不是这格画的东西。
-private final class PetEmojiCell: UIButton {
+/// 图片来自 `PetStickerImages`（内嵌的 12 张透明底 PNG，源 `shared/pet/stickers/`）。
+/// 点击只把这一格报给面板（面板复制图片到剪贴板），**不提交任何文本**。
+private final class StickerCell: UIButton {
     private let onTap: () -> Void
 
-    init(label: String, emoji: String, onTap: @escaping () -> Void) {
+    init(form: PetEmojiTable.Form, onTap: @escaping () -> Void) {
         self.onTap = onTap
         super.init(frame: .zero)
-        let glyph = UILabel()
-        glyph.text = emoji
-        glyph.font = .systemFont(ofSize: 20)
-        glyph.textAlignment = .center
+        let imageView = UIImageView(image: PetStickerImages.image(named: form.sticker))
+        imageView.contentMode = .scaleAspectFit
+        imageView.isUserInteractionEnabled = false
+        // 12 张图都内嵌在 `PetStickerImages`；缺失时只露标签（不静默画成 emoji 字形）。
         let caption = UILabel()
-        caption.text = label
+        caption.text = form.label
         caption.font = .systemFont(ofSize: 9)
         caption.textColor = .secondaryLabel
         caption.textAlignment = .center
-        let stack = UIStackView(arrangedSubviews: [glyph, caption])
+        let stack = UIStackView(arrangedSubviews: [imageView, caption])
         stack.axis = .vertical
-        stack.alignment = .fill
+        stack.alignment = .center
         stack.spacing = 0
         stack.isUserInteractionEnabled = false
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         NSLayoutConstraint.activate([
+            imageView.widthAnchor.constraint(equalToConstant: 44),
+            imageView.heightAnchor.constraint(equalToConstant: 44),
             stack.centerXAnchor.constraint(equalTo: centerXAnchor),
             stack.centerYAnchor.constraint(equalTo: centerYAnchor),
             stack.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor),
             stack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
         ])
-        // 读屏文案同 Android `EmojiBrowse` 的 contentDescription。
-        accessibilityLabel = "小欧\(label)，提交 \(emoji)"
+        accessibilityLabel = "小欧\(form.label)，复制图片到剪贴板"
         addTarget(self, action: #selector(tapped), for: .touchUpInside)
     }
 

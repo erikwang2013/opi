@@ -38,6 +38,7 @@ import xyz.erik.opi.keyboard.SymbolCatalog
 import xyz.erik.opi.keyboard.SymbolPage
 import xyz.erik.opi.keyboard.SymbolPanel
 import xyz.erik.opi.pet.petMood
+import xyz.erik.opi.pet.PetMood
 
 /**
  * IME 面板根：工具条（图标入口）+ 候选栏 + 键盘；数字/符号/生僻字面板。
@@ -62,6 +63,8 @@ fun ImeScreen(
     symbolCategories: () -> List<xyz.erik.opi.keyboard.SymbolCategories.Category> = { emptyList() },
     /** 颜文字分类（懒读 `assets/kaomoji.tsv`）：只在表情页挂载时才取。 */
     kaomojiCategories: () -> List<xyz.erik.opi.keyboard.KaomojiCategories.Category> = { emptyList() },
+    /** 点「自有」宠物形态：服务层注入图片插入（commitPetSticker）；默认空 = JVM 测试不感知。 */
+    onPickPet: (PetMood) -> Unit = {},
     /** 收起键盘（工具栏最右图标）：服务层注入 requestHideSelf；默认空 = JVM 测试不感知。 */
     onCloseKeyboard: () -> Unit = {},
 ) {
@@ -182,6 +185,7 @@ fun ImeScreen(
                         rareIndex,
                         symbolCategories,
                         kaomojiCategories,
+                        onPickPet,
                         modifier = Modifier.weight(1f),
                     )
                     if (modes.oneHand == KeyboardModes.OneHand.LEFT) {
@@ -203,6 +207,7 @@ private fun KeyboardArea(
     rareIndex: () -> Map<Int, Map<Int, List<String>>>,
     symbolCategories: () -> List<xyz.erik.opi.keyboard.SymbolCategories.Category>,
     kaomojiCategories: () -> List<xyz.erik.opi.keyboard.KaomojiCategories.Category>,
+    onPickPet: (PetMood) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val shiftVisible = controller.mode == EngineMode.ENGLISH
@@ -280,6 +285,7 @@ private fun KeyboardArea(
                     onSearchText = state::updateSearchText,
                     onSearchFocus = state::onSearchFocus,
                     onCommit = router::commitText,
+                    onPickPet = onPickPet,
                     onClose = state::backToLetters,
                     onBackToNumber = state::openNumber,
                     initialTab = state.symbolInitialTab,

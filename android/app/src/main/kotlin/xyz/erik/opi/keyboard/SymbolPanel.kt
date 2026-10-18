@@ -58,8 +58,9 @@ private enum class SymbolPageTab { Common, All }
  * 防抖在 ImeState（250ms），本组件只按 searchQuery 出结果。
  *
  * 表情入口（`initialTab == SymbolTab.Emoji`）走独立一页 [EmojiPanel]：顶部
- * `[← 返回][Emoji | 颜文字][🔍]` + 中间网格 + **底部**可横滑分类条（2026-10-18
- * 用户参考布局）。符号页只有 常用/全部 两个 Tab，不再保留旧表情网格。
+ * `[← 返回][自有 | Emoji | 颜文字][🔍]` + 中间网格 + **底部**可横滑分类条
+ * （2026-10-18 用户裁决：自有独立成顶级子页、点击插入图片）。符号页只有
+ * 常用/全部 两个 Tab，不再保留旧表情网格。
  */
 @Composable
 fun SymbolPanel(
@@ -70,6 +71,8 @@ fun SymbolPanel(
     onSearchText: (String) -> Unit,
     onSearchFocus: (Boolean) -> Unit,
     onCommit: (String) -> Unit,
+    /** 点「自有」宠物形态：走图片插入通道，不经过 [onCommit]（文本）与最近使用。 */
+    onPickPet: (PetMood) -> Unit,
     onClose: () -> Unit,
     onBackToNumber: () -> Unit,
     /** 起始 Tab：普通入口=常用，工具条的表情图标直达 [SymbolTab.Emoji]。 */
@@ -92,6 +95,7 @@ fun SymbolPanel(
             onSearchText = onSearchText,
             onSearchFocus = onSearchFocus,
             onCommit = { commit(it) },
+            onPickPet = onPickPet,
             onClose = onClose,
         )
     } else {

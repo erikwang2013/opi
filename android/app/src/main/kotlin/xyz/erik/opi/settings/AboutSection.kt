@@ -78,7 +78,7 @@ internal fun AboutSection(toast: (String) -> Unit) {
     ListItem(
         headlineContent = { Text("表情数据") },
         supportingContent = {
-            Text("Emoji 取自 OpenMoji（CC BY-SA 4.0）；颜文字取自 rime_kaomoji_dict（MIT）")
+            Text("Emoji 取自 OpenMoji（CC BY-SA 4.0）；颜文字取自 rime_kaomoji_dict（MIT）；小欧贴纸为项目自绘（MIT）")
         },
     )
     LinkItem("项目地址", ABOUT_PROJECT_URL, toast)

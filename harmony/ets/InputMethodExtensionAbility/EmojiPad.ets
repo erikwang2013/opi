@@ -8,71 +8,44 @@
 //
 // 表情页（Symbol 模式），2026-10-18 重写为与 Android `keyboard/EmojiPanel.kt` 同布局：
 //
-//   [‹ 返回]   [Emoji | 颜文字]   [🔍]
+//   [‹ 返回]   [自有 | Emoji | 颜文字]   [🔍]
 //   ┌────────────── 网格 ──────────────┐
 //   └──── 可横滑的分类条（底部一条）────┘
 //
-// · **Emoji** 分类 = `自有` + 引擎 `emojiGroups()`。`自有` 画 [OpiPet] 的 12 个形态，
-//   点击提交**对应的 Unicode emoji**（映射逐条等于 shared/pet/PetEmojiMap.kt）。
+// · **自有** = 独立顶级分类（用户裁决）：4 列网格画 `PetStickerImages.ets` 内嵌的
+//   12 张小欧 PNG；点击**复制图片到系统剪贴板**（`PetStickerClipboard.ets`）
+//   并弹 toast，**不提交任何文本**。自有页没有分类条、也没有 🔍。
+// · **Emoji** 分类 = **只用**引擎 `emojiGroups()`（9 组，不再加 `自有` 偏移）。
 // · **颜文字** 分类 = `KaomojiData.ets` 的 7 类（从 data/raw/kaomoji.tsv 机械生成；
 //   解析/分类口径同 Android `KaomojiCategories`）。
 // · 分类点击 = **切片**到该组首项（本端不做 `Scroller` 滚动：网格只画当前组，
 //   与旧版分组条同一取舍；见 README 缺口 3）。因此高亮恒为「当前组」。
 // · 搜索态保持既有两套工具条：`[‹ 返回][搜索框]`；返回 = 清查询回浏览态。
+//   搜索只覆盖 Emoji / 颜文字（自有是图片，没有可搜文本）。
 //   ⚠️ 搜索框的输入通道仍未解决（README 缺口 3 ②）：面板自己就是输入法，
 //   `TextInput` 聚焦时没有第二个输入法可唤起 —— 真机上大概率「能显示、不能打字」。
 //
 // ⚠️ 网格仍是 `Scroll + Column + ForEach`（全量铺节点，不虚拟化），理由与代价见
 // README 缺口 3 ④。**未做画不出的字形过滤**（缺口 3 ③）。
-//
-// 2026-10-14 从 pages/Index.ets 搬出的那版只剩「搜索框 + 顶部分组条 + 网格」；
-// 2026-10-18 起本文件与 Android 对齐：子页 Tab、底部横滑分类条、自有/颜文字。
 
 import { KeyboardController } from './KeyboardController';
 import { EmojiGroup, OpiMode } from './OpiEngine';
 import { OpiPet, PetMood } from './OpiPet';
 import { nextMode } from './InputModes';
 import { KAOMOJI_CATEGORIES } from './KaomojiData';
+import {
+  PET_STICKER_FORMS, PetStickerForm, stickerBase64, stickerDataUri,
+} from './PetStickerImages';
+import { copyStickerToClipboard } from './PetStickerClipboard';
 
-/** 每行几个表情/宠物。与 Android `EmojiPanel` 的 8 列同值（两端要一致改）。 */
+/** 每行几个表情。与 Android `EmojiPanel` 的 8 列同值（两端要一致改）。 */
 const EMOJI_PER_ROW: number = 8;
+/** 自有贴纸独立 4 列网格（12 形态 = 3 行）。 */
+const STICKER_PER_ROW: number = 4;
+/** 贴纸显示尺寸（vp）。 */
+const STICKER_SIZE: number = 56;
 /** 颜文字比单个 emoji 宽：3 列 + 小字号，少截断（Android 同款）。 */
 const KAOMOJI_PER_ROW: number = 3;
-/** 网格里的小欧尺寸（vp）。与 Android `EmojiPanel` 的 26.dp 同值。 */
-const PET_SIZE: number = 26;
-
-/**
- * 「自有」形态：宠物形态 → 点击提交的 Unicode emoji。
- *
- * **逐条镜像 shared/pet/PetEmojiMap.kt**（顺序 = PetMood 枚举序；SLEEPY / DEGRADED
- * 是输入状态、不是表情，映射有意不含）。改这里必须同步改共享映射。
- */
-class PetForm {
-  mood: PetMood;
-  label: string;
-  emoji: string;
-
-  constructor(mood: PetMood, label: string, emoji: string) {
-    this.mood = mood;
-    this.label = label;
-    this.emoji = emoji;
-  }
-}
-
-const PET_FORMS: PetForm[] = [
-  new PetForm(PetMood.Idle, '笑', '😊'),
-  new PetForm(PetMood.Waiting, '欢乐', '😄'),
-  new PetForm(PetMood.Puzzled, '沮丧', '😞'),
-  new PetForm(PetMood.Crying, '哭', '😭'),
-  new PetForm(PetMood.Terrified, '惊恐', '😱'),
-  new PetForm(PetMood.Angry, '愤怒', '😠'),
-  new PetForm(PetMood.Coquettish, '撒娇', '🥺'),
-  new PetForm(PetMood.Cute, '卖萌', '😜'),
-  new PetForm(PetMood.Pleasing, '讨好', '🙏'),
-  new PetForm(PetMood.Knocking, '敲打', '🔨'),
-  new PetForm(PetMood.FacePalm, '捂脸', '🤦'),
-  new PetForm(PetMood.TongueOut, '吐舌头', '😛'),
-];
 
 @Component
 export struct EmojiPad {
@@ -81,9 +54,9 @@ export struct EmojiPad {
   @State emojiQuery: string = '';
   /** 是否处于「点 🔍 才出现」的搜索工具条（同 Android 的 `searchWanted`）。 */
   @State searching: boolean = false;
-  /** 子页：0 = Emoji，1 = 颜文字。 */
-  @State subTab: number = 0;
-  /** Emoji 分类下标：0 = 自有，1..n = 引擎组（引擎组下标 + 1）。 */
+  /** 子页：0 = 自有，1 = Emoji，2 = 颜文字（默认 Emoji，保持改写前的行为）。 */
+  @State subTab: number = 1;
+  /** Emoji 分类下标（引擎组下标，0 起；0 不再是「自有」）。 */
   @State emojiGroup: number = 0;
   /** 颜文字分类下标（KAOMOJI_CATEGORIES 下标）。 */
   @State kaomojiGroup: number = 0;
@@ -101,11 +74,14 @@ export struct EmojiPad {
       if (this.searching && this.emojiQuery.length > 0) {
         this.SearchGrid()
       } else if (this.subTab === 0) {
+        this.StickerBrowse()
+      } else if (this.subTab === 1) {
         this.EmojiBrowse()
       } else {
         this.KaomojiBrowse()
       }
-      if (!this.searching) {
+      // 自有是图片网格：没有分类条（它只有一页 12 格）。
+      if (!this.searching && this.subTab !== 0) {
         this.CategoryBar()
       }
     }
@@ -115,7 +91,8 @@ export struct EmojiPad {
   // ------------------------------------------------------------ 顶部工具条
 
   /**
-   * 浏览态 `[‹ 返回][Emoji | 颜文字][🔍]`；搜索态 `[‹ 返回][搜索框]`。
+   * 浏览态 `[‹ 返回][自有 | Emoji | 颜文字][🔍]`；搜索态 `[‹ 返回][搜索框]`。
+   * 自有是图片页：没有分类条，也不画 🔍（见 `build`）。
    *
    * ⚠️ 搜索框**不常驻**：它是「点 🔍 才出现」的那一态（与 Android 2026-10-12
    * 裁决的两套工具条同构）。
@@ -134,24 +111,33 @@ export struct EmojiPad {
       } else {
         // 子页切换：选中态同时用底色 + 字色表达（同旧版分组条）。
         Row() {
-          Text('Emoji')
+          Text('自有')
             .fontSize(15).fontColor(this.subTab === 0 ? '#FFFFFF' : '#1E6B63')
             .backgroundColor(this.subTab === 0 ? '#2E8B80' : '#FFFFFF')
             .borderRadius(6).padding({ left: 14, right: 14, top: 5, bottom: 5 })
             .margin({ left: 3, right: 3 })
-            .onClick(() => { this.subTab = 0; })
-          Text('颜文字')
+            .onClick(() => { this.selectSub(0); })
+          Text('Emoji')
             .fontSize(15).fontColor(this.subTab === 1 ? '#FFFFFF' : '#1E6B63')
             .backgroundColor(this.subTab === 1 ? '#2E8B80' : '#FFFFFF')
             .borderRadius(6).padding({ left: 14, right: 14, top: 5, bottom: 5 })
             .margin({ left: 3, right: 3 })
-            .onClick(() => { this.subTab = 1; })
+            .onClick(() => { this.selectSub(1); })
+          Text('颜文字')
+            .fontSize(15).fontColor(this.subTab === 2 ? '#FFFFFF' : '#1E6B63')
+            .backgroundColor(this.subTab === 2 ? '#2E8B80' : '#FFFFFF')
+            .borderRadius(6).padding({ left: 14, right: 14, top: 5, bottom: 5 })
+            .margin({ left: 3, right: 3 })
+            .onClick(() => { this.selectSub(2); })
         }
         .layoutWeight(1).justifyContent(FlexAlign.Center)
 
-        Text('🔍')
-          .fontSize(18).padding({ left: 10, right: 14 })
-          .onClick(() => { this.searching = true; })
+        // 自有是图片，没有可搜文本：这一页不画 🔍（别留点了没反应的按钮）。
+        if (this.subTab !== 0) {
+          Text('🔍')
+            .fontSize(18).padding({ left: 10, right: 14 })
+            .onClick(() => { this.searching = true; })
+        }
       }
     }
     .width('100%').height(44).backgroundColor('#FFFFFF')
@@ -159,18 +145,45 @@ export struct EmojiPad {
 
   // ------------------------------------------------------------ 网格
 
-  /** Emoji 子页：`自有` 画宠物；其余组切引擎表情表；分组拿不到时整表兜底。 */
+  /** 自有子页：4 列网格，画真实的 12 张小欧 PNG；点击复制图片（不上屏）。 */
+  @Builder
+  StickerBrowse() {
+    Scroll() {
+      Column() {
+        ForEach(this.stickerRows(), (row: PetStickerForm[], rowIndex: number) => {
+          Row() {
+            ForEach(row, (f: PetStickerForm, col: number) => {
+              Column() {
+                Image(stickerDataUri(f.sticker))
+                  .width(STICKER_SIZE).height(STICKER_SIZE)
+                  .objectFit(ImageFit.Contain)
+                Text(f.label).fontSize(10).fontColor('#1E6B63').margin({ top: 2 })
+              }
+              .layoutWeight(1).height(78).justifyContent(FlexAlign.Center)
+              .onClick(() => {
+                // 剪贴板回退：IME Kit 没有往宿主输入框插图片的接口（见 README 缺口）。
+                copyStickerToClipboard(stickerBase64(f.sticker), f.label);
+              })
+            }, (f: PetStickerForm, col: number) => `${col}-${f.sticker}`)
+            this.Blanks(STICKER_PER_ROW - row.length)
+          }
+          .width('100%').margin({ top: rowIndex === 0 ? 6 : 2 })
+        }, (row: PetStickerForm[], rowIndex: number) => `sticker-${rowIndex}`)
+      }
+      .width('100%')
+    }
+    .layoutWeight(1).width('100%')
+  }
+
+  /** Emoji 子页：引擎表情表当前组；分组拿不到时整表兜底。 */
   @Builder
   EmojiBrowse() {
     Scroll() {
       Column() {
-        if (this.selectedEmojiGroup() === 0 || this.ctrl.emojiGroups().length === 0) {
-          this.PetRows()
-        }
         if (this.ctrl.emojiSymbols().length === 0) {
           // 表情表**不经引擎单例**，正常冷启动第一帧就有；走到这里是模块/数据真没起来。
           Text('表情库未就绪').fontSize(14).fontColor('#9AA7A4').margin({ top: 12 })
-        } else if (this.selectedEmojiGroup() > 0 || this.ctrl.emojiGroups().length === 0) {
+        } else {
           this.EmojiRows()
         }
       }
@@ -217,27 +230,6 @@ export struct EmojiPad {
 
   // ------------------------------------------------------------ 行渲染
 
-  /** 自有：12 个宠物形态（枚举序），每行 EMOJI_PER_ROW 格。 */
-  @Builder
-  PetRows() {
-    ForEach(this.petRows(), (row: PetForm[], rowIndex: number) => {
-      Row() {
-        ForEach(row, (f: PetForm, col: number) => {
-          Column() {
-            OpiPet({ mood: f.mood, size: PET_SIZE, dark: false, forceLegend: false })
-          }
-          .layoutWeight(1).height(38).justifyContent(FlexAlign.Center)
-          .onClick(() => {
-            // 直提：表情页点的是什么就出什么，不过引擎的标点表（Android 同款）。
-            this.ctrl.tapEmoji(f.emoji);
-          })
-        }, (f: PetForm, col: number) => `${col}-${f.label}`)
-        this.Blanks(EMOJI_PER_ROW - row.length)
-      }
-      .width('100%').margin({ top: rowIndex === 0 ? 4 : 2 })
-    }, (row: PetForm[], rowIndex: number) => `pet-${rowIndex}`)
-  }
-
   /** 引擎表情表当前组的行。 */
   @Builder
   EmojiRows() {
@@ -277,10 +269,10 @@ export struct EmojiPad {
       Row() {
         ForEach(row, (s: string, col: number) => {
           Text(s)
-            .fontSize(this.subTab === 0 ? 20 : 14).layoutWeight(1).textAlign(TextAlign.Center)
+            .fontSize(this.subTab === 1 ? 20 : 14).layoutWeight(1).textAlign(TextAlign.Center)
             .onClick(() => { this.ctrl.tapEmoji(s); })
         }, (s: string, col: number) => `${col}-${s}`)
-        this.Blanks((this.subTab === 0 ? EMOJI_PER_ROW : KAOMOJI_PER_ROW) - row.length)
+        this.Blanks((this.subTab === 1 ? EMOJI_PER_ROW : KAOMOJI_PER_ROW) - row.length)
       }
       .width('100%').margin({ top: rowIndex === 0 ? 4 : 2 })
     }, (row: string[], rowIndex: number) => `search-${rowIndex}`)
@@ -347,7 +339,7 @@ export struct EmojiPad {
       this.searchRows = [];
       return;
     }
-    if (this.subTab === 0) {
+    if (this.subTab === 1) {
       // `searchEmoji` 已与表情集求交（同 Android `filter(catalog::isEmoji)`）。
       this.searchRows = this.chunk(this.dedup(this.ctrl.searchEmoji(q)), EMOJI_PER_ROW);
     } else {
@@ -355,9 +347,13 @@ export struct EmojiPad {
     }
   }
 
-  /** 当前 Emoji 分类下标（夹紧：引擎重载后组数变少时不越界）。 */
+  /** 当前 Emoji 分类下标（夹紧：引擎重载后组数变少时不越界；0 起，无「自有」偏移）。 */
   private selectedEmojiGroup(): number {
-    return Math.min(this.emojiGroup, this.ctrl.emojiGroups().length);
+    const n: number = this.ctrl.emojiGroups().length;
+    if (n === 0) {
+      return 0;
+    }
+    return Math.max(0, Math.min(this.emojiGroup, n - 1));
   }
 
   /** 当前颜文字分类下标（夹紧同上）。 */
@@ -365,11 +361,10 @@ export struct EmojiPad {
     return Math.min(this.kaomojiGroup, KAOMOJI_CATEGORIES.length - 1);
   }
 
-  /** 分类条的名称：Emoji = 自有 + 引擎组；颜文字 = 内嵌数据的类名。 */
+  /** 分类条的名称：Emoji = 引擎的 9 组（不含「自有」）；颜文字 = 内嵌数据的类名。 */
   private categoryNames(): string[] {
     const out: string[] = [];
-    if (this.subTab === 0) {
-      out.push('自有');
+    if (this.subTab === 1) {
       const groups: EmojiGroup[] = this.ctrl.emojiGroups();
       for (let i = 0; i < groups.length; i++) {
         out.push(groups[i].name);
@@ -384,14 +379,14 @@ export struct EmojiPad {
 
   /** 分类条当前高亮（与 [categoryNames] 的下标同一坐标系）。 */
   private selectedCategory(): number {
-    if (this.subTab === 0) {
+    if (this.subTab === 1) {
       return this.selectedEmojiGroup();
     }
     return this.selectedKaomojiGroup();
   }
 
   private selectCategory(i: number): void {
-    if (this.subTab === 0) {
+    if (this.subTab === 1) {
       this.emojiGroup = i;
     } else {
       this.kaomojiGroup = i;
@@ -410,9 +405,8 @@ export struct EmojiPad {
     if (groups.length === 0) {
       list = all;
     } else {
-      // selectedEmojiGroup() 是 1-based（0 = 自有），这里换算成引擎组下标。
-      const gi: number = Math.min(Math.max(this.selectedEmojiGroup() - 1, 0), groups.length - 1);
-      const g: EmojiGroup = groups[gi];
+      // 子页已删「自有」，下标就是引擎组下标（0 起）。
+      const g: EmojiGroup = groups[this.selectedEmojiGroup()];
       list = all.slice(g.start, g.start + g.count);
     }
     return this.chunk(this.dedup(list), EMOJI_PER_ROW);
@@ -444,11 +438,22 @@ export struct EmojiPad {
     return out;
   }
 
-  /** 12 个宠物形态切片成二维（ForEach 只铺一维）。 */
-  private petRows(): PetForm[][] {
-    const out: PetForm[][] = [];
-    for (let i = 0; i < PET_FORMS.length; i += EMOJI_PER_ROW) {
-      out.push(PET_FORMS.slice(i, i + EMOJI_PER_ROW));
+  /** 切子页：离开搜索态（搜索只属于 Emoji/颜文字）；切换后网格按新子页重画。 */
+  private selectSub(i: number): void {
+    if (i === this.subTab) {
+      return;
+    }
+    this.subTab = i;
+    this.searching = false;
+    this.emojiQuery = '';
+    this.searchRows = [];
+  }
+
+  /** 12 个自有贴纸切片成二维（ForEach 只铺一维；4 列 = 3 行）。 */
+  private stickerRows(): PetStickerForm[][] {
+    const out: PetStickerForm[][] = [];
+    for (let i = 0; i < PET_STICKER_FORMS.length; i += STICKER_PER_ROW) {
+      out.push(PET_STICKER_FORMS.slice(i, i + STICKER_PER_ROW));
     }
     return out;
   }

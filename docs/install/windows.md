@@ -546,11 +546,12 @@ Windows 上只出**常用 / 状态栏 / 符号与表情 / 关于**四页 —— 
 `SymbolWindow`，表情页在 `EmojiPage.kt`）：页面能看能翻，但**点选上屏会失败并如实
 显示原因** —— 上屏要命名管道，而管道被候选窗进程持有（单实例），设置窗进程送不出去
 （`desktopSymbolCommit` 的 Windows 分支）。表情页布局与 Android `keyboard/EmojiPanel.kt`
-统一：顶栏 `[← 返回] [Emoji | 颜文字] [搜索框]` + 底部可横滑分类条；Emoji = `自有`
-（十二形态，映射在 `shared/pet/PetEmojiMap.kt`，Android 也编译同一份）+ 9 个 OpenMoji
-分组，颜文字 = `data/raw/kaomoji.tsv` 的 7 组（`copyEmojiData` / `copyKaomojiData`
-在构建期把两份表拷进程序资源，见 `desktop/build.gradle.kts`）。上面那段
-`settings.ini` 的四个键不受影响（照旧四个）。
+统一：顶栏 `[← 返回] [自有 | Emoji | 颜文字] [搜索框]`；**自有**是独立子页，4 列网格
+显示 `shared/pet/stickers/` 的 12 张小欧 PNG，点击 = 复制图片到系统剪贴板（不经过
+命名管道、不提交文本），因此**在设置窗里也能用**；Emoji = 9 个 OpenMoji 分组（不再
+含自有），颜文字 = `data/raw/kaomoji.tsv` 的 7 组（`copyEmojiData` /
+`copyKaomojiData` / `copyPetStickers` 在构建期把数据与 PNG 拷进程序资源，见
+`desktop/build.gradle.kts`）。上面那段 `settings.ini` 的四个键不受影响（照旧四个）。
 
 **「属性」入口已接线**（2026-10-08）：服务对象实现了 `ITfFunction` + `ITfFnConfigure`
 （`tsf.rs`），`Show()` 会拉起设置窗（`configure.rs`：从 **DLL 同目录** →

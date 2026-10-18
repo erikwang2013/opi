@@ -17,6 +17,7 @@
 | symbols.tsv（符号条目；**条数与 emoji 条数以生成器每次打印的为准，别写死数字**） | 同上（UnicodeData.txt 逐码位字符名 + **emoji-data.txt 的 `Emoji` 属性**判 emoji 列，2026-09-28 起） | Unicode License（同上，不新增来源、不新增许可证） | 同生成器产出。**emoji 列 = UTS#51 `Emoji` 属性**（含 BMP 区的 ☺♥⌚⭐），不再是「非 BMP」代理指标 —— 判据与复算命令见 scripts/gen_symbols.py 头与 crates/engine-core/tests/symbol_coverage.rs 的 `UTS51_EMOJI` 快照。**消费侧是编译期读取**：engine-core/src/symbols.rs `builtin()` 用 `include_str!("../../../data/raw/symbols.tsv")` 嵌入，故路径固定在 data/raw/ 而非 data/generated/（后者只放 .opid 二进制）；改目录必须两处同改，否则编不过 |
 | en_words.tsv（英文联想，10000 条，2026-09-28 加） | https://github.com/orgtre/google-books-ngram-frequency（Google Books Ngrams v3 英文 1-gram 的清洗产物） | **CC-BY 3.0** | 英文模式单词联想的数据源 —— spec §1「V1 仅做单词联想」承诺过、仓库此前没兑现（`candidates.rs` 对非拼音模式 `return Vec::new()`）。由 scripts/gen_en_dict.py 生成，`word\tpinyin\tfreq` 三列与 trad_hanzi.tsv 同形（第二列是 ASCII 小写查询键，多数与词形相同）。**候选逻辑 2026-10-18 已接线**（`engine-core/src/english_words.rs`，`include_str!` 嵌入；不是牛津原版 —— OUP 数据无授权）。CC-BY 要求署名 + 保留许可声明：**本表就是署名载体**，分发含本数据的产品时须一并保留 |
 | brand_terms.tsv / new_words.tsv / reading_overrides.tsv（人工表，2026-10-11 加） | OPI 项目人工撰写（生成器只做机械校验：音节合法性按 `pinyin.rs` 的 SYLLABLES 全切分、长度/字面/繁形过滤） | MIT | 品牌白名单（609 条）、网络用语/新词（391 条，含 2020–2023 时期词汇）与词级注音覆盖表（422 条，拼音人工写死）。⚠️ 覆盖表另有对上游真值的自动复核：词在 base/ext 出现时其读音必须是上游读音之一（实测揪出 8 条笔误/选读错误，见生成器 stderr 与本节下「外部词库并入」）。由 `scripts/gen_extra_phrases.py` 合并进 extra_manual.tsv |
+| surnames.tsv / slang.tsv（人工表，2026-10-18 加） | 百家姓：传统《百家姓》字表（公有领域）+ 项目人工标注姓氏读音；网络流行语：项目自撰（参考 2015–2026 公开网络用法，未复制第三方词表） | MIT | 姓氏 508 条（单姓 446 + 复姓 62；频次档 12000/9000）、流行语 597 条（档 6000/4000）。拼音**逐条人工写**（多音字取姓氏读音/实际读法：单 shan、解 xie、仇 qiu、区 ou、查 zha、朴 piao、乐 yue、覃 qin、尉迟 yuchi、万俟 moqi、澹台 tantai、长孙 zhangsun 等），生成器按 `pinyin.rs` 的 SYLLABLES 全切分校验；ASCII 字面键（yyds、栓Q、City不City、i人、打call、嗑CP）是引擎精确字面匹配例外。两表接在 extra_phrases.tsv **批量段尾**（不进 extra_manual 前置段，避免压过同键常用词），放置理由与校验见 `scripts/manual_tables.py` 头注 |
 | extra_manual.tsv / extra_phrases.tsv（生成物，2026-10-11 加） | 复合来源（逐源见「外部词库并入（2026-10-11）」节） | **合并产物按 GPL-3.0 分发**（含 GPL-3.0-only 的 rime-ice 层）；源码（生成器）仍 MIT | 词组三段序的前置段与批量段，由 `scripts/gen_extra_phrases.py` 生成、`gen_luna_dict.py` 并入 luna.opid。行数/体积**以生成器每次打印的为准**，别写死数字 |
 | GPL-3.0.txt（2026-10-11 加） | https://www.gnu.org/licenses/gpl-3.0.txt （与 Debian `/usr/share/common-licenses/GPL-3` 逐字节同文，双源 sha256 核过） | GPL-3.0 全文 | 随 .deb/.rpm 分发（`scripts/nfpm.yaml` 装进 `/usr/share/doc/opi/`）—— 合并产物按 GPL-3.0 分发时的许可文本义务 |
 | wubi86.tsv（2026-10-14 加） | https://github.com/rime/rime-wubi @ commit `152a0d3f3efe40cae216d1e3b338242446848d07`（wubi86.dict.yaml） | **LGPL-3.0**（按 rime 仓声明；上游链路的残留不一致见下「五笔码表」节） | 五笔 86 码表（极点码表转 rime 格式）。由 scripts/gen_wubi_dict.py **钉 commit** 拉取后把 rime 四列转成仓内三列（`词\t码\t频次`；第 4 列 stem 丢弃），编译为 `data/generated/wubi86.opid`（入库）。weight 直接作词频（最大 4.25e9 < u32::MAX；引擎侧 u64 比较，无溢出）。**条数以生成器每次打印的为准，别写死数字** |
@@ -24,6 +25,7 @@
 | kangxi.tsv（康熙字典词库，2026-10-16 加） | npm 包 `shunshi-kangxi-core@0.1.1`（Shunshi.AI，https://github.com/shunshi-ai/kangxi-mcp；tarball SHA-256 **钉在生成器里**，不可变包） | **MIT**（须随分发保留版权声明：Copyright (c) Shunshi.AI） | 康熙字典全字头（20794 字）的**读音**提取：`字\t读音\t词频`（词频是低位常数 4000，非上游数据），由 scripts/gen_kangxi_dict.py 生成 —— 读音规范化（去调、ü=v、lue/nue→lve/nve 归一）后过 `pinyin.rs::SYLLABLES`，多音字**全部读音**展开（多音字如 乄 = shī/mē 两条）；条数以生成器每次打印的为准，别写死数字。编译产物 `data/generated/kangxi.opid`（入库）。四端经**导入词库契约**分发（随包 TSV + 首启种子一次；见生成器头注）。**只提取读音**；部首/笔画/五行/释义/康熙原文等字段未用（留档备用） |
 | emoji.tsv（表情面板浏览表，2026-10-18 重写） | https://github.com/hfg-gmuend/openmoji （OpenMoji `main` 分支；2026-10-18 取得的 `data/openmoji.json`，4565 条，sha256 `b3a07c1c41b6b500423d01fb91c5d41e9c9337a53d217af20a3539d7df8438e4`） | **CC BY-SA 4.0**（须署名；改动作品与衍生数据按相同许可分发） | 表情面板的**常用**表情子集（400–700 条；**条数以 `scripts/gen_emoji_kaomoji.py` 每次打印的为准，别写死数字**）：`text\<TAB\>name\<TAB\>中文组名`（无表头），组序 笑脸→人物→动物→植物→食物→旅行→活动→物品→符号；排除 `flags`/`component`/`extras-*` 整组、`skintone` 非空的肤色变体、含 ZWJ 的组合序列与生僻子类。`name` 取 OpenMoji `annotation` 小写。由 `scripts/gen_emoji_kaomoji.py` 生成（源 SHA-256 钉在脚本里；离线不重跑）。**本表是 OpenMoji 的改动作品（adapted from OpenMoji, © OpenMoji 项目及其贡献者），按 CC BY-SA 4.0 分发**；许可全文 https://creativecommons.org/licenses/by-sa/4.0/ |
 | kaomoji.tsv（颜文字表，2026-10-18 加） | https://github.com/aoguai/rime_kaomoji_dict @ commit `2f10ddca83f4cd87f41672442d27943f733b488f`（`data/` 下 5 份素材：A_kaomoji_dict / custom_phrase_dict / lmeee_dict / sougou_dict / Temreg_dict） | **MIT**（Copyright (c) 2023 aoguai；分发时保留版权与许可声明） | 颜文字常用子集（200–400 条；**条数以生成器每次打印的为准，别写死数字**）：`text\<TAB\>中文分类`（无表头），分类 开心/难过/生气/惊讶/害羞/动作/其他；保留原文（不插入空格、不把特殊空格转成普通空格），剥掉行首/行尾标签与中文描述后按文本去重，按源优先序 lmeee→sougou→A→custom→Temreg 取到每类上限。由 `scripts/gen_emoji_kaomoji.py` 生成（5 份源各钉 SHA-256）；`data/raw/kaomoji.tsv` 与 `android/app/src/main/assets/kaomoji.tsv` 为同一次运行的逐字节副本。许可全文见上游仓库 LICENSE（commit 同上） |
+| shared/pet/stickers/*.png（小欧表情贴纸，2026-10-18 加） | OPI 项目自绘：由 `shared/pet` 的 Compose 绘制（`OpiPet` 十二形态）生成，**不是第三方 emoji/贴纸资产** | **MIT**（项目源码与自绘资产） | 「自有」表情页插入的 12 张 280×280 透明底 PNG；生成器 `scripts/gen_pet_stickers.py`（桌面渲染入口 `OpiPetStickerRenderTest`），文件名契约 `PetStickerAssets.stickerFile`。构建期分别拷进 Android assets `pet/` 与桌面 resources `/pet/`；iOS/鸿蒙内嵌 base64 由同一批 PNG 生成。**不含任何 Unicode emoji 上屏** |
 
 ## 英文联想词源（2026-09-28）
 
@@ -304,6 +306,9 @@ phrase-pinyin-data（63% 汉典抓取 + 21% CEDICT，剥离后仍脏）。
   人工前置的理由是实测反例：`威信`（simp 层权重 3.71e9）会把批量段里的「微信」压到第 3。
   simp 段自身相对序不变（整体顺延人工段行数）；13 处首位钉与 m2/cabi 硬位置均已
   扫描过与人工表零撞键（测试 `crates/opi-tools/tests/phrase_quality.rs`）。
+  姓氏/流行语（2026-10-18）接在 extra_phrases **队尾**、不进前置人工段：流行语要求
+  不压同键常用词（实测 dazi 有 大字/打字、eren 有 恶人、shangtou 有 伤透/上头），
+  单姓键若进人工段还会污染 top_keys 把品牌词误降级。
 - **人工段降级规则**（2026-10-11，第二版）：人工词是某条**高频短词**的延续时
   （中国邮政←中国、打工人←打工、腾讯视频←腾讯），移出人工段、放批量段队首。
   来由是 `zongguo`（「中国」的模糊输入）实测：人工段的 中国邮政/中国黄金
@@ -315,7 +320,9 @@ phrase-pinyin-data（63% 汉典抓取 + 21% CEDICT，剥离后仍脏）。
   同键无竞争者的降级条目（打工人/显眼包/特斯拉）仍是该键首位。
 - 层内键（只影响同键先后）：base = 权重>1 先、`-权重,len,word`（6.2 万条权重=1 沉底）；
   ext = `len,word`；essay = freq>0 先、`-freq,len,word`；成语/歇后语 = `len,word`；
-  术语 = `-DF,word`；人工表 = 文件序。**不做跨源词频校准**（候选竞争只在同键发生）。
+  术语 = `-DF,word`；品牌/新词 = 文件序；姓氏/流行语 = `-freq,len,word`。
+  **不做跨源词频校准**（候选竞争只在同键发生；两表频次列只是层内档位，真实频率
+  由 gen_luna_dict 按行位置编码）。
 - **繁形判据（2026-10-11 升级）**：`OpenCC TSCharacters（剔除自靶行）∪ 旧 Unihan 判据`，
   两者共用 GB2312 门。来由与边界：Unihan 的 kSimplifiedVariant **不是繁→简表**
   （線→[缐]、喫/遊/錄 没有），单用它会漏 essay 层 **7,644 条**繁体词形（字频榜前 30
@@ -329,7 +336,8 @@ phrase-pinyin-data（63% 汉典抓取 + 21% CEDICT，剥离后仍脏）。
   语境），打对了的键不受影响，猜错的表现为「该词在该拼音下查不到」。
 - 音节校验读单源：解析 `crates/engine-core/src/pinyin.rs` 的 SYLLABLES（断言 410）
   做全切分，不复制音节表（跨语言镜像常量会静默漂）。长度上限：批量 ≤6 字、成语 ≤8、
-  人工表 ≤12、歇后语 ≤24；全源 ≥2 字（单字层不动）。歇后语整条为词（含 `——`），
+  人工表 ≤12、歇后语 ≤24；全源 ≥2 字（单字层不动；姓氏/流行语例外：允许单字，
+  如姓氏 单、流行语 润）。歇后语整条为词（含 `——`），
   键只由 CJK 字生成 —— 如实记：**档案价值为主**（长句极少被整条打）。
 
 ### 逐层实测（**以生成器每次打印的 stderr 为准**，下表是 2026-10-11 快照）
@@ -352,6 +360,11 @@ kmandarin 16,559 / override 5 / **suppressed 141,729**（注音层的词已在�
 降级规则并入批量段队首 ⇒ **743 + 48,078 + 886,623 = 935,444 词组** + 48,263 单字行
 = 983,707 行 → compile 去重后 **936,310 条目 / 33,274,020 字节**，`verify` load
 96.1ms（旧库 15.6ms；一次性、随文件线性）。
+
+> **2026-10-18 增补**：并入姓氏/流行语两表（原始 484 + 597 条，经本层与跨层去重后
+> 净新增 191 条）后，当前条目数看 `opi-tools verify` 的 `entries:`，字节数看
+> `stat -c %s`；去重计数看生成器 stderr。上面的表格与合计是 2026-10-11 快照，
+> 保留作历史对照。
 
 ### 单字母前缀性能（头号风险，已解决）
 

@@ -2,7 +2,7 @@
 
 > ## ⚠️ 先读这段
 >
-> **ArkTS（`ets/**` 那 9 个文件）一个字符都没有编译过** —— `import {
+> **ArkTS（`ets/**` 那 11 个文件）一个字符都没有编译过** —— `import {
 > InputMethodExtensionAbility } from '@kit.IMEKit'` 在普通 tsc 下就断，**连语法检查都做不到**。
 >
 > ⚠️ **2026-09-28 订正归因（原写作「本机没有 HarmonyOS SDK」，实测为假）**：
@@ -42,6 +42,15 @@
 > 探针里的 9 个文件与仓库逐文件 sha256 相同。正控：往探针副本的 `EmojiPad.ets` 头塞
 > `const brokenSyntax: = ;` → `@parsing-error`（1:20）+ `-Defects: 1` / `errorFileCount: 1`。
 > **仍然只到解析层**：无类型检查、无装饰器语义；`OpiPet.ets` 的 9 个形态绘制缺口见「已知缺口」14。
+> **2026-10-18 二补**：`ets/**` 再从 9 个长到 11 个 —— 新增「自有」贴纸两件
+> `PetStickerImages.ets`（12 张 280×280 PNG 的 base64 内嵌，生成物）与
+> `PetStickerClipboard.ets`（base64 → `PixelMap` → 系统剪贴板）。同一份探针重跑
+> （base64 已填好的那一版）：11 个文件 `checkedFiles` 一个不少、`module language is ets`、
+> `errorFileCount: 0`，探针与仓库逐文件 sha256 相同。正控：往探针副本的
+> `PetStickerImages.ets` 头塞 `const brokenSyntax: = ;` → `@parsing-error`（1:20）+
+> `-Defects: 1` / `errorFileCount: 1`，随后恢复并 `cmp` 复核。
+> **仍然只到解析层** —— base64 只是字符串字面量：图片能否被 `Image(dataUri)` 画出、
+> `pasteboard` 的签名对不对，这条命令一概不知道（见「已知缺口」15）。
 > **最小工程布局、两道墙（模块级 `build-profile.json5`、模块根下再一层 `src/`）、
 > 正控与负控，全写在 [`docs/install/harmony.md`](../docs/install/harmony.md) 的 §1.1**
 > —— **本行不复述那份清单**：它是一份实测的最小布局，抄到这里就多一份会漂的枚举。
@@ -75,7 +84,7 @@
 > `cabi.rs` 的**签名**逐条核过；`index.d.ts` 与 N-API 注册表**机械核对一致**（名字一一对应）；
 > 模式整数编码对着 `convert.rs` 核过。
 >
-> **但 `.ets` 那 9 个文件仍然是 0 行编译过，N-API 的注册与运行期语义仍全未验证。**
+> **但 `.ets` 那 11 个文件仍然是 0 行编译过，N-API 的注册与运行期语义仍全未验证。**
 > **全目录没有一处可以称为「完成」或「已实现」—— 上面那些是「C 面对得上」，
 > 不是「鸿蒙端能用」。**
 
@@ -138,9 +147,10 @@
   但**符号面板本身仍是缺的**（`opi_symbol_blocks` / `opi_symbols_in_block`
   未桥，原来那 29 个 ASCII 符号也不再一键可达）。原文不改，留痕。
   ⚠️ **2026-10-18 更新**：表情页已改成 Android 同布局 —— 顶部
-  `[‹ 返回][Emoji | 颜文字][🔍]`、**底部**可横滑分类条、`自有` + 引擎分组 +
-  内嵌颜文字数据（见 §5e 的 10-18 注）。上面「分组条 + 网格 + 搜索框」
-  那句描述的是旧版，已被取代。
+  `[‹ 返回][自有 | Emoji | 颜文字][🔍]`、**底部**可横滑分类条、Emoji = 引擎
+  9 组、自有 = 12 张内嵌 PNG（点击复制图片到剪贴板，不插入文本）、内嵌颜文字
+  数据（见 §5e 的 10-18 注）。上面「分组条 + 网格 + 搜索框」那句描述的是旧版，
+  已被取代。
 ```
 
 **不要跳过第 1 步去「顺手重构一下分层」。** 这份代码的分层是按
@@ -165,15 +175,17 @@
 | `ets/InputMethodExtensionAbility/OpiPet.ets` | 项目宠物「小欧」的 ArkTS 复刻（键帽精灵，表情跟引擎状态走） |
 | `ets/InputMethodExtensionAbility/InputModes.ets` | **输入模式那件事的数字面**（2026-10-14）：方案/双拼布局/五笔六键的出口包装 + 九项 `INPUT_MODES` 表 + 模块级模式状态机（`selectInputMode` 等）。数字真源逐条注在文件头 |
 | `ets/InputMethodExtensionAbility/KeyPanels.ets` | 9 键 / 大 9 键 / 14 键 / 笔画 四个键面 + 生僻字面板骨架 + 「输入模式」九宫格面板（2026-10-14）。与 Android 的三处差异（左列读数、底行、生僻字无数据）写在文件头 |
-| `ets/InputMethodExtensionAbility/EmojiPad.ets` | 表情页（Symbol 模式）。2026-10-18 重写为与 Android `EmojiPanel.kt` 同布局：顶部 `[‹ 返回] [Emoji \| 颜文字] [🔍]`、网格、**底部**可横滑分类条；Emoji 分类 = `自有`（12 形态 → Unicode emoji）+ 引擎 `emojiGroups()`，颜文字分类来自 `KaomojiData.ets` |
+| `ets/InputMethodExtensionAbility/EmojiPad.ets` | 表情页（Symbol 模式）。2026-10-18 重写为与 Android `EmojiPanel.kt` 同布局：顶部 `[‹ 返回] [自有 \| Emoji \| 颜文字] [🔍]`、网格、**底部**可横滑分类条；Emoji 子页 = 引擎 9 组（**不再含「自有」偏移**），自有子页 = 4 列 PNG 网格（点击复制图片），颜文字分类来自 `KaomojiData.ets` |
+| `ets/InputMethodExtensionAbility/PetStickerImages.ets` | 自有 12 张**小欧贴纸 PNG**（280×280，base64 内嵌）+ 标签/文件名映射（顺序 = `PetEmojiMap.kt`，文件名 = `PetStickerAssets.kt`）。生成物，**别手改**；base64 由 `scripts/gen_pet_stickers.py` 的产物再编码 |
+| `ets/InputMethodExtensionAbility/PetStickerClipboard.ets` | 自有贴纸的落点：base64 → `PixelMap` → 系统剪贴板 + `promptAction` toast。**剪贴板回退**（IME Kit 不能往宿主输入框插图片），**不提交任何文本**。⚠️ API 全部未编译/未上机 |
 | `ets/InputMethodExtensionAbility/KaomojiData.ets` | **机械生成**的颜文字数据（7 类 / 390 条，源 `data/raw/kaomoji.tsv`；解析/分类口径同 Android `KaomojiCategories.parse`）。**别手改** |
 | `ets/InputMethodExtensionAbility/pages/Index.ets` | 键盘 UI 最小骨架：候选栏（候选带页内序号 + ⌨ 输入模式入口）+ preedit + 按键面**分支**（**数字键面按语言模式**、26 键族 QWERTY / 9 键 / 14 键 / 笔画 / 生僻字 / 表情页，2026-10-14）+ 功能行 |
 | `module.json5` | `extensionAbilities` 配置**片段**（不是能直接用的完整 manifest） |
 | `resources/base/profile/input_method_config.json` | 输入法子类型配置 |
 
 **不写行数**：行数随 SPDX 头、注释增删而漂（本表曾普遍少 3 行），
-与本仓库「不写会漂的数字」的规矩一致。上表 16 个文件 + 本 README + 未列进表的
-`resources/base/media/icon.png` = `harmony/` 共 18 个文件；**本目录能验的都列在下方「实测记录」里**（Rust 侧目标编译 / C 侧
+与本仓库「不写会漂的数字」的规矩一致。上表 18 个文件 + 本 README + 未列进表的
+`resources/base/media/icon.png` = `harmony/` 共 20 个文件；**本目录能验的都列在下方「实测记录」里**（Rust 侧目标编译 / C 侧
 clang 与符号核对 / CMake 配置与真编译），**没列进去的一律是未验证**。
 
 ⚠️ **缺一个文件（有意不建）：`resources/base/profile/main_pages.json`。**
@@ -658,11 +670,15 @@ test result: FAILED. 13 passed; 1 failed        # 只红这一条，其余 13 �
 
 > **2026-10-18 布局更新**：本节开头写的「分组条 + 网格 + 搜索框」是 2026-10-13 的旧版。
 > 现 `EmojiPad.ets` 与 Android `EmojiPanel.kt` 的 2026-10-18 布局对齐：顶部
-> `[‹ 返回][Emoji | 颜文字][🔍]`，网格下方**一条可横滑分类条**；Emoji 分类 =
-> `自有` + `emojiGroups()`，颜文字来自新增的 `KaomojiData.ets`（7 类 390 条，机械生成）。
+> `[‹ 返回][自有 | Emoji | 颜文字][🔍]`，网格下方**一条可横滑分类条**。
+> **`自有` 是独立顶级子页**（用户裁决，不再混进 Emoji 分类）：4 列网格画
+> `PetStickerImages.ets` 内嵌的 12 张真实小欧 PNG；点击**复制图片到系统剪贴板**
+> （`PetStickerClipboard.ets`）+ toast，**不提交任何文本**，该子页没有分类条也没有 🔍。
+> **Emoji 子页只用引擎 `emojiGroups()` 的 9 组**（删掉了旧版的「自有」分类与整体偏移）；
+> 颜文字来自 `KaomojiData.ets`（7 类 390 条，机械生成）。
 > 分类点击采取**切片**而不是 `scrollToItem`（网格只画当前组），所以高亮 = 当前组；
 > 这是本机查不到 `Scroller` API 时的取舍，不是 Android 的滚动语义。搜索出口、去重、
-> 「无匹配」宠物仍沿用本节下文。
+> 「无匹配」宠物仍沿用本节下文，搜索只覆盖 Emoji / 颜文字。
 
 **本机跑过的（原样输出）：**
 
@@ -1040,6 +1056,11 @@ ABI 目录名对应关系（`CMakeLists.txt` 靠 `libs/${OHOS_ARCH}/` 找）：
 > **再补（2026-10-14，输入模式接线）**：又添 **U24–U25** 两条，同样「中」档，
 > 来源是新键面那两处写法（自定义组件当键帽 / 九宫格的两层嵌套 `ForEach`）。
 > **一条都没验证**；解析层同 10-13（8 个文件零 parse 错，原样输出见头部 10-14 补）。
+>
+> **再补（2026-10-18，自有贴纸）**：又添 **U26** 一条（「中」档：错了自有页不出图
+> 或复制不到剪贴板，键盘其余部分可用）。来源是 `PetStickerImages.ets` 与
+> `PetStickerClipboard.ets` 的五处新写法。**一条都没验证** —— 本机没有 ArkTS 编译器
+> 与鸿蒙设备；解析层由 codelinter 复跑（见头部 10-18 补 / 二补）。
 
 ### 极高：错了整个端起不来
 
@@ -1080,6 +1101,7 @@ ABI 目录名对应关系（`CMakeLists.txt` 靠 `libs/${OHOS_ARCH}/` 找）：
 | U23 | `new Set<string>(数组)` + `Array.from(set)` 去重、`Array.prototype.slice` 切行（2026-10-13 新增） | ArkTS 严格模式对泛型构造与 `Array.from` 的限制（与 U20 的 `JSON.parse` 同一族）。 | 表情页去重/切行那两处编译不过；备选是手写 `has`/`add` 循环与下标循环 |
 | U24 | 自定义组件当键帽：`KeyBox`（`@Component export struct`，普通成员 `onTap: () => void` 随构造参数传入）、以及**在调用点**给自定义组件挂 `.layoutWeight(n)`（2026-10-14 新增） | 函数类型成员能否随构造参数传；`layoutWeight` 这类**属性修饰**能否作用于自定义组件（`OpiPet` 有 `.margin`/`.onClick` 的先例，但那是通用属性）。 | 编译不过；或键面布局塌成等分/挤成一行 —— 备选 = 传数字参 `weight`，由 `KeyBox` **内部**自己 `.layoutWeight(weight)` |
 | U25 | 九宫格模式面板的两层嵌套 `ForEach`（外层 `MODE_GRID` 的行、内层每行三个 chip）（2026-10-14 新增） | 嵌套 `ForEach` 在 ArkTS 严格模式下的可用性（表情页网格是**同构先例**，但那边行数组是**现算**的，这里是常量表）。 | 编译不过或只出一行；备选 = 手写 9 个 chip（多 20 行，逻辑不变） |
+| U26 | `Image('data:image/png;base64,…')` 直接画内嵌 PNG；`util.Base64Helper().decodeSync`、`image.createImageSource(ArrayBuffer).createPixelMap()`、`pasteboard.createData(pasteboard.MIMETYPE_PIXELMAP, pixelMap)` + `getSystemPasteboard().setData`、`promptAction.showToast`（2026-10-18 新增） | 五处 API 的名字/签名全凭 d.ts 记忆；`Image` 是否接受 base64 data URI、`decodeSync` 返回 `Uint8Array` 还是 `ArrayBuffer`、`createData` 是否直接收 `PixelMap`、IME 扩展里 toast/剪贴板是否受前台/权限限制。 | 自有页 PNG 画成空框；或 toast 正常但宿主**粘贴不到图**（剪贴板写失败，`.catch` 有 console 日志）。渲染备选 = 先解码成 `PixelMap` 再 `Image(pixelMap)` |
 
 ### 待 DevEco 确认：`@StorageLink` 的入参必须是字符串字面量
 
@@ -1162,10 +1184,11 @@ grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|op
    >    所以这不是「加一行」，是换容器。骨架本轮**没写**（写一个没编译过的
    >    `IDataSource` 只会再欠一笔）。
    >
-   > **2026-10-18 补**：布局已换成 Android 版（顶部 Tab + 底部横滑分类条），
+   > **2026-10-18 补**：布局已换成 Android 版（顶部三 Tab + 底部横滑分类条），
    > 缺口 ②③④ 原样保留（搜索输入通道未解决、无字形过滤、网格不虚拟化）。
-   > 颜文字走内嵌 `KaomojiData.ets`，不依赖引擎；`自有` 的 12 个形态映射逐条等于
-   > `shared/pet/PetEmojiMap.kt`，但绘制缺口见第 14 条。
+   > 颜文字走内嵌 `KaomojiData.ets`，不依赖引擎；`自有` 是独立子页，画 12 张真实
+   > 小欧 PNG（标签/文件名映射逐条等于 `shared/pet/PetEmojiMap.kt`），点击走
+   > **剪贴板回退**（见第 15 条），不再画 `OpiPet` 也不提交 emoji 文本。
 4. **无用户词持久化**（`opi_import_user_words` / `opi_export_user_words` /
    `opi_clear_user_words` / `opi_remove_user_word` 未桥接）。
 5. **无繁体切换入口**（`opi_load_trad` 未桥接；`OpiMode.Traditional` 有枚举
@@ -1262,11 +1285,21 @@ grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|op
     别照本行抄。
 
 14. **`OpiPet.ets` 只画了 5 种形态**（2026-10-18 发现）。枚举 14 个值齐全、跨端序号一致，
-    但 `draw()` 只对 Sleepy / Puzzled / Waiting / Degraded 分化；表情页「自有」里的
-    Crying / Terrified / Angry / Coquettish / Cute / Pleasing / Knocking / FacePalm /
-    TongueOut 九个**全部落回 Idle 外观**（点击提交的 emoji 仍正确）。
-    真源是 `shared/pet/OpiPet.kt` 的 `drawPet` / `drawPetFace`；补齐要按它逐形态移植，
-    本轮没做（本轮只改表情页与数据，不动宠物绘制；若另一路正在补，以那边为准）。
+    但 `draw()` 只对 Sleepy / Puzzled / Waiting / Degraded 分化；其余形态**全部落回
+    Idle 外观**。真源是 `shared/pet/OpiPet.kt` 的 `drawPet` / `drawPetFace`；补齐要按它
+    逐形态移植，本轮没做（本轮只改表情页与数据，不动宠物绘制；若另一路正在补，以那边为准）。
+
+    > **2026-10-18 补**：表情页「自有」已改用 `PetStickerImages.ets` 内嵌的 12 张 PNG
+    > （真源 = 桌面同一套 Compose 绘制的渲染产物），**不再依赖 `OpiPet.ets` 的绘制**；
+    > 本缺口现在只剩搜索「无匹配」那一处宠物插画（Puzzled，恰好是已分化的 5 种之一）。
+
+15. **「自有」贴纸只能复制到剪贴板，不能直接插入宿主输入框**（2026-10-18）。
+    IME Kit 的 `insertText` 只接受字符串，没有插入图片的接口 —— 这是平台能力边界，
+    不是本端漏做。实际行为：点一格 = 把 PNG 写进系统剪贴板（base64 → `PixelMap` →
+    `pasteboard`）+ toast「已复制，去粘贴」，**不提交任何文本**；用户回宿主 App 自己粘贴。
+    ⚠️ 整条链路（`PetStickerClipboard.ets`）与 `Image(dataUri)` 的 base64 渲染
+    **均未编译、未上机**；剪贴板在 IME 扩展里是否受前台/权限限制也未验证 ——
+    真机失败时按该文件头注的顺序排查（先 `setData` 的 `.catch`，再 `Image`）。
 
 > 另有一处**不是缺口、是刻意取舍**，写在这里免得有人当 bug 修：
 > `OpiEngine.ets` 与 `opi_ffi.h` 都**没有** `KEY_UP/DOWN/LEFT/RIGHT`

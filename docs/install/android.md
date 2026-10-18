@@ -393,25 +393,27 @@ emoji 列**不动** —— 它管单键候选反馈（搜索路），与浏览�
 
 **表情页的布局**（2026-10-18 用户参考布局：顶部 Tab、中间网格、**底部**分类条；
 所有表情入口直达本页；符号面板只有 常用/全部，不再保留旧表情网格）：
-- **顶部** `[← 返回][Emoji | 颜文字][🔍 搜索]`（`keyboard/EmojiPanel.kt` 的
-  `EmojiTopBar`）：Emoji / 颜文字两个子页；返回 = 搜索态退回浏览态并清查询，
-  浏览态关闭面板回键盘。**搜索态**变 `[← 返回][搜索框]` + 面板下方**叠一层字母盘**
-  （既有机制：输入框一聚焦就叠；IME 窗口里没有系统键盘），防抖仍由 `ImeState` 管。
-- **底部**一条**可横滑**的分类条（`EmojiPanel.kt` 的 `CategoryBar`）：点一项把网格
-  `scrollToItem(组.start)`，高亮 = 网格**当前首个可见项**所属的组（滚动时跟着走，
-  与 Emoji 页共用 `SymbolCatalog.groupIndexOf`）。
-  - **Emoji** 分类 = `自有` + 引擎 `emojiGroups()`。组名来自生成器写进 `emoji.tsv`
-    第 3 列的中文标签（`EMOJI_GROUP_CN`），经 `emojiGroups()`（JNI，JSON
-    `[{name,start,count}]`）带出；`start` 与 `emojiSymbols()` 下标对齐，由
-    `emoji_coverage.rs` 的连续覆盖门禁钉住。
-    **`自有` = 小欧形象**（`keyboard/PetEmoji.kt`）：网格里用 `OpiPet` 画
-    `PetMood.entries` 中有映射的宠物形态，点击提交的是**对应的 Unicode emoji**
-    （如「笑」提交 😄）—— IME 只能上屏字符，宠物在这里是选择器，不是可上屏内容。
-    小欧形态排在网格最前，引擎各组的 `start` 相应后移。
-  - **颜文字** 分类 = `assets/kaomoji.tsv` 的第二列（`颜文字<TAB>分类`；解析在
-    `keyboard/KaomojiCategories.kt`：坏行跳过、同名分类并进第一处，`start` 是拼平后
-    的累计下标）。资产由数据侧生成入库；缺失/损坏 ⇒ 空列表 + 「没有颜文字数据」
-    空态（不崩 IME，同符号页的「没有类目数据」）。
+- **顶部** `[← 返回][自有 | Emoji | 颜文字][🔍 搜索]`（`keyboard/EmojiPanel.kt` 的
+  `EmojiTopBar`）：三个子页；返回 = 搜索态退回浏览态并清查询，浏览态关闭面板回键盘。
+  自有页只有图片，**没有分类条也没有搜索**；搜索态仍变 `[← 返回][搜索框]` +
+  面板下方**叠一层字母盘**（既有机制；防抖在 `ImeState`）。
+- **自有（独立顶级子页，2026-10-18 用户裁决）**：12 个小欧形态（贴纸源
+  `shared/pet/stickers/` → APK assets `pet/`，文件名契约 `PetStickerAssets`）以
+  6 列网格画 PNG（`keyboard/PetStickerPanel.kt`）。点一格 ⇒
+  `OpiImeService.commitPetSticker`：PNG 拷到 `cacheDir/pet/`，经 `FileProvider`
+  （authority `${applicationId}.fileprovider`，`res/xml/file_paths.xml` 只开
+  `cacheDir/pet`）构造 `InputContentInfoCompat`，用
+  `InputConnectionCompat.commitContent` 插入**图片**。编辑器不接受富内容时回退
+  **独立文本标签** `[小欧·笑]`（绝不提交 😊/😄）并 toast 说明。自有不进 Emoji
+  分类条、也不进 Emoji 的最近使用。
+- **Emoji 子页**：底部一条**可横滑**的分类条（`EmojiPanel.kt` 的 `CategoryBar`），
+  内容 = 引擎 `emojiGroups()` 的 **9 组**（不再含自有或任何偏移）；点组
+  `scrollToItem(start)`，高亮 = 网格当前首个可见项所属组（`SymbolCatalog.groupIndexOf`）。
+  组名/组序来自 `data/raw/emoji.tsv`（OpenMoji 689 条），`start` 与
+  `emojiSymbols()` 下标对齐，由 `emoji_coverage.rs` 连续覆盖门禁钉住。
+- **颜文字子页**：分类 = `assets/kaomoji.tsv` 的第二列（390 条/7 类；解析在
+  `keyboard/KaomojiCategories.kt`：坏行跳过、同名分类并进第一处，`start` 是拼平后
+  的累计下标）；缺失/损坏 ⇒ 空列表 + 「没有颜文字数据」空态（不崩 IME）。
 - **渲染前保序去重**（同日用户裁决「表情存在重复的，去重」）：`filter`/浏览列表在
   进网格前各过一道 `distinct()` —— 数据/引擎/搜索三层都已各自去重，这是最后一道。
 - **渲染前过一道字形可用性**（2026-10-12 晚用户报障「有个表情显示是长方形框」）：

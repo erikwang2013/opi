@@ -4,11 +4,12 @@
 //! 符号页的「表情」页（2026-10-12 用户裁决：设置与大页面都要能选符号、表情）。
 //!
 //! 2026-10-18 起布局与 Android 的 `keyboard/EmojiPanel.kt` 对齐：
-//! 顶部 `[← 返回] [Emoji | 颜文字] [搜索框]` + 中间网格 + **底部**可横滑分类条。
+//! 顶部 `[← 返回] [自有 | Emoji | 颜文字] [搜索框]` + 中间网格 + **底部**可横滑分类条。
 //!
-//! - **Emoji** 分类 = `自有` + `emoji.tsv` 的连续同名段（组名/组序来自数据，不写死）。
-//!   `自有` = 小欧的 [PetEmojiMap.forms]（与 Android 同一份映射），网格里画
-//!   [OpiPet]，点击提交对应 Unicode emoji。
+//! - **自有** 分类 = 小欧的 [PetEmojiMap.forms]（与 Android 同一份映射），独立子页、
+//!   4 列网格显示 12 张 PNG；点击 = 复制图片到剪贴板（见 `PetStickerPage.kt`）。
+//!   用户裁决（2026-10-18）：自有是**独立顶级分类**，不再混进 Emoji 的分类条/网格。
+//! - **Emoji** 分类 = `emoji.tsv` 的连续同名段（组名/组序来自数据，不写死）。
 //! - **颜文字** 分类 = `kaomoji.tsv` 第二列（解析见 [KaomojiData]），6×6 网格。
 //! - 分类条点一下把分页器滚到该组首项所在页；高亮 = 当前页首项所属的组
 //!   （[EmojiData.groupIndexOf]），滑动翻页时自动跟随。
@@ -65,9 +66,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
-import xyz.erik.opi.pet.OpiPet
 import xyz.erik.opi.pet.PetEmojiMap
-import xyz.erik.opi.pet.PetPalette
 
 /** 表情表：OpenMoji 常用子集顺序 + 面板分组（`start`/`count` 与条目下标对齐，组序 = 文件序）。 */
 object EmojiData {
@@ -77,9 +76,6 @@ object EmojiData {
 
     /** 空表：字形过滤没落地前（见 `deferredFilter`）与「全表被摘空」共用这一份。 */
     val Empty = Data(emptyList(), emptyList())
-
-    /** 「自有」分类的组名（前端分类条第一格，与 Android `PetEmoji.categories` 同字）。 */
-    const val OWN_GROUP = "自有"
 
     /** 解析 `emoji.tsv`。连续同名段 = 一组（口径同引擎 `builtin_emoji_groups`）。 */
     fun parse(text: String): Data {
@@ -116,13 +112,6 @@ object EmojiData {
      */
     fun groupIndexOf(groups: List<Group>, itemIndex: Int): Int =
         groups.indexOfLast { it.start <= itemIndex }
-
-    /**
-     * 分类条 = 「自有」+ 数据分组。数据的 `start` 是相对**表情列表**的下标，而网格里
-     * 表情前面还排着 [PetEmojiMap.forms] ⇒ 各组整体后移 [ownCount]。
-     */
-    fun withOwnGroup(groups: List<Group>, ownCount: Int = PetEmojiMap.forms.size): List<Group> =
-        listOf(Group(OWN_GROUP, 0, ownCount)) + groups.map { it.copy(start = it.start + ownCount) }
 
     /**
      * 按「本机画不画得出」过滤条目，并**重算分组条的 `start`/`count`**（2026-10-13，
@@ -173,24 +162,12 @@ fun loadEmojiData(): EmojiData.Data {
     return EmojiData.parse(text)
 }
 
-/** 表情页的两个子页（2026-10-18 用户参考布局：顶部 Emoji / 颜文字）。 */
-enum class EmojiSubTab { Emoji, Kaomoji }
-
-/**
- * 网格里的一格：`自有` 的宠物形态（画 [OpiPet]、提交 emoji）或一条文本
- * （emoji / 颜文字）。
- *
- * 做成 sealed 而不是「前 N 格特判」：分页切片、组下标、搜索都按同一份列表算，
- * 前插 12 格宠物不会让任何一处的下标换算变成两套。
- */
-sealed interface EmojiCell {
-    data class Pet(val form: PetEmojiMap.Form) : EmojiCell
-    data class Text(val text: String) : EmojiCell
+/** 表情页的三个子页（2026-10-18 用户裁决：自有是独立顶级分类）。 */
+enum class EmojiSubTab(val label: String) {
+    Own("自有"),
+    Emoji("Emoji"),
+    Kaomoji("颜文字"),
 }
-
-/** Emoji 子页的格序：`自有`（枚举序）在前，其后是数据表原序。 */
-fun emojiCells(entries: List<String>): List<EmojiCell> =
-    PetEmojiMap.forms.map { EmojiCell.Pet(it) } + entries.map { EmojiCell.Text(it) }
 
 /** 颜文字网格列数 × 行数（6×6=36/页）：颜文字比单个 emoji 宽得多，12 列会截成省略号。 */
 internal const val KAOMOJI_COLUMNS = 6
@@ -210,31 +187,33 @@ internal fun EmojiPane(
     kaomoji: List<KaomojiData.Category>,
     modifier: Modifier = Modifier,
     onPick: (String) -> Unit,
+    onCopy: (PetEmojiMap.Form) -> Unit,
 ) {
     when (sub) {
+        EmojiSubTab.Own -> PetStickerPage(PetEmojiMap.forms, modifier, onCopy)
         EmojiSubTab.Emoji -> EmojiBrowse(data, modifier, onPick)
         EmojiSubTab.Kaomoji -> KaomojiBrowse(kaomoji, modifier, onPick)
     }
 }
 
-/** Emoji 子页：`自有` + 表情表，12×6 分页 + 底部分类条。 */
+/** Emoji 子页：表情表，12×6 分页 + 底部分类条（不再含「自有」）。 */
 @Composable
 private fun EmojiBrowse(data: EmojiData.Data, modifier: Modifier, onPick: (String) -> Unit) {
-    val cells = remember(data.entries) { emojiCells(data.entries) }
+    if (data.entries.isEmpty()) {
+        // 表情表被摘空 / 资源缺失：分页器不能拿 0 页数（未定义用法）。
+        CenteredHint("没有表情数据", modifier)
+        return
+    }
     // 字形过滤在后台落地时 `entries` 从 0 变成全量（见 SymbolWindow 的 deferredFilter）：
-    // `rememberPagerState { pages }` 的页数 lambda 是首次组合时捕获的 ⇒ 必须按条数重建，
-    // 否则分页器永远只认「自有那 1 页」。
-    key(cells.size) {
-        val pages = (cells.size + SymbolCategories.PAGE_SIZE - 1) / SymbolCategories.PAGE_SIZE
+    // `rememberPagerState { pages }` 的页数 lambda 是首次组合时捕获的 ⇒ 必须按条数重建。
+    key(data.entries.size) {
+        val pages = (data.entries.size + SymbolCategories.PAGE_SIZE - 1) / SymbolCategories.PAGE_SIZE
         val pager = rememberPagerState { pages }
-        val groups = remember(data.groups) {
-            EmojiData.withOwnGroup(data.groups, PetEmojiMap.forms.size)
-        }
         Column(modifier.fillMaxHeight()) {
             HorizontalPager(state = pager, modifier = Modifier.weight(1f).fillMaxWidth()) { page ->
-                EmojiGridPage(cells, page, onPick)
+                SymbolGridPage(data.entries, page, emoji = true, onPick = onPick)
             }
-            CategoryBar(groups, pager, SymbolCategories.PAGE_SIZE)
+            CategoryBar(data.groups, pager, SymbolCategories.PAGE_SIZE)
         }
     }
 }
@@ -272,41 +251,6 @@ private fun KaomojiBrowse(
             }
             CategoryBar(groups, pager, KAOMOJI_PAGE_SIZE)
         }
-    }
-}
-
-/** 一页 Emoji 网格（12×6）：`自有` 画小欧，其余画文本。 */
-@Composable
-private fun EmojiGridPage(cells: List<EmojiCell>, page: Int, onPick: (String) -> Unit) {
-    PagedGrid(
-        columns = SymbolCategories.COLUMNS,
-        rows = 6,
-        pageStart = page * SymbolCategories.PAGE_SIZE,
-        total = cells.size,
-    ) { i ->
-        when (val c = cells[i]) {
-            is EmojiCell.Pet -> PetCell(c.form, Modifier.weight(1f), onPick)
-            is EmojiCell.Text -> SymbolCell(c.text, Modifier.weight(1f), emoji = true, onPick = { onPick(c.text) })
-        }
-    }
-}
-
-/** 「自有」一格：小欧本体是选择器，点击提交映射到的 emoji。 */
-@Composable
-private fun PetCell(form: PetEmojiMap.Form, modifier: Modifier, onPick: (String) -> Unit) {
-    val interaction = remember { MutableInteractionSource() }
-    val hovered by interaction.collectIsHoveredAsState()
-    Box(
-        modifier = modifier
-            .fillMaxHeight()
-            .padding(1.dp)
-            .background(if (hovered) SymHover else Color.Transparent)
-            .clickable(interactionSource = interaction, indication = null) { onPick(form.emoji) }
-            .semantics { contentDescription = "小欧${form.label}，提交 ${form.emoji}" },
-        contentAlignment = Alignment.Center,
-    ) {
-        // 窗底是 #2D2D2D：深色窗必须用 Dark 调色板，否则青色描边糊进背景。
-        OpiPet(mood = form.mood, palette = PetPalette.Dark, size = 30.dp)
     }
 }
 
@@ -429,16 +373,14 @@ internal fun EmojiTopBar(
             for (t in EmojiSubTab.entries) {
                 val on = t == sub
                 Text(
-                    if (t == EmojiSubTab.Emoji) "Emoji" else "颜文字",
+                    t.label,
                     modifier = Modifier
                         .padding(horizontal = 2.dp)
                         .clip(RoundedCornerShape(6.dp))
                         .background(if (on) SymHover else Color.Transparent)
                         .clickable { onSub(t) }
                         .semantics {
-                            contentDescription =
-                                (if (t == EmojiSubTab.Emoji) "Emoji" else "颜文字") +
-                                    (if (on) "，已选中" else "")
+                            contentDescription = t.label + if (on) "，已选中" else ""
                         }
                         .padding(horizontal = 14.dp, vertical = 5.dp),
                     fontSize = 14.sp,

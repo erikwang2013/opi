@@ -297,7 +297,7 @@ internal fun AboutPage(status: String) {
     }
     Spacer(Modifier.height(6.dp))
     Text(
-        "表情数据 OpenMoji（CC BY-SA 4.0）· 颜文字 rime_kaomoji_dict（MIT）",
+        "表情数据 OpenMoji（CC BY-SA 4.0）· 颜文字 rime_kaomoji_dict（MIT）· 小欧贴纸项目自绘（MIT）",
         fontSize = 12.sp, color = Muted,
     )
 }

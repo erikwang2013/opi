@@ -25,7 +25,8 @@ phrase-pinyin-data（汉典抓取 + CEDICT）。
 
 ## 关键设计（改之前先读）
 
-- **层序 = 优先级**：品牌 → 新词 → base → ext → essay → 成语 → 术语 → 歇后语；整段
+- **层序 = 优先级**：品牌 → 新词 → base → ext → essay → 成语 → 术语 → 歇后语 →
+  姓氏 → 流行语；整段
   由 gen_luna_dict 追加在**既有单字层与既有 simp 词组之后** ⇒ 既有排序门禁（13 个
   首位钉 / ranking_quality 三档 / m2 硬位置）零位移。
 - **层内排序**（只影响同拼音键内先后）：base = 权重>1 先、再 -权重,len,word（权重=1
@@ -46,7 +47,8 @@ phrase-pinyin-data（汉典抓取 + CEDICT）。
 
 产物两份（均 `word\tpinyin\torder`，order 严格递减 = 文件序）：
 - `data/raw/extra_manual.tsv` —— 品牌 + 新词两张人工表（千条量级：609 + 391）；
-- `data/raw/extra_phrases.tsv` —— 其余批量层。
+- `data/raw/extra_phrases.tsv` —— 其余批量层（队尾另有姓氏/流行语两张人工表，
+  见 scripts/manual_tables.py 的放置理由）。
 gen_luna_dict 把它们分别排在既有 simp 词组**之前**与**之后**（三段序：
 人工 → simp → 批量）—— 人工表前置是为了品牌词在同键上压过既有常用词
 （实测：`威信` 在 simp 层权重 3.71e9，微信在批量段 3.61e9 会被压到第 3）。
@@ -66,6 +68,7 @@ from extra_sources import (parse_essay, parse_ice, parse_idiom, parse_manual,
 from gen_trad_dict import write_atomic
 from hanzi_freq import (gb2312_levels, is_cjk, load_khanyupinlu, load_kmandarin,
                         load_variants, normalize, trad_only, unihan_member)
+from manual_tables import parse_slang, parse_surnames, prep_curated
 
 ROOT = Path(__file__).resolve().parent.parent
 EXTRA_TSV = ROOT / "data" / "raw" / "extra_phrases.tsv"
@@ -413,6 +416,12 @@ def main() -> None:
         lanes.append(("术语-" + name, "thu", prep_thu(thu_rows[name], cnt[name])))
     cnt["歇后语"] = Counter()
     lanes.append(("歇后语", "annot", prep_annot(xie_rows, XIE_MAX_LEN, cnt["歇后语"])))
+    cnt["姓氏"] = Counter()
+    lanes.append(("姓氏", "curated", prep_curated(
+        parse_surnames(), MANUAL_MAX_LEN, syls, is_trad, False, key_ok, cnt["姓氏"])))
+    cnt["流行语"] = Counter()
+    lanes.append(("流行语", "curated", prep_curated(
+        parse_slang(), MANUAL_MAX_LEN, syls, is_trad, True, key_ok, cnt["流行语"])))
 
     # 有拼音层（manual/ice）：其 word 集合 → 抑制被注音层（annot/thu）的同词条目
     primary = set()
@@ -431,6 +440,8 @@ def main() -> None:
         for e in items:
             if kind == "manual":
                 word, key = e  # 音节合法性已在 prep_manual 校验
+            elif kind == "curated":
+                word, key = e[0], e[1]  # 音节已在 prep_curated 校验
             elif kind == "ice":
                 word, key = e[0], e[1]
             else:  # annot / thu：无拼音源 → 先抑制、再注音

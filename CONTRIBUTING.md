@@ -41,7 +41,7 @@ cd desktop && ./gradlew package             # Windows 候选窗（Compose Deskto
 ### 许可证合规（必读）
 
 - **本仓库代码**：MIT（见 [`LICENSE`](LICENSE)）。
-- **词库数据**：按上游许可证**单独声明**，**不是 MIT**。当前上游含 **LGPL-3.0**（rime-luna-pinyin / rime-terra-pinyin / rime-stroke）、**Apache-2.0**（rime-pinyin-simp）、**GPL-3.0-only**（rime-ice，2026-10-11 起并入 `luna.opid`）、**MIT**（chinese-xinhua · THUOCL · 本项目自撰的人工表 brand_terms / new_words / reading_overrides）、**Unicode License**（Unihan）与 **CC-BY 3.0**（英文联想词源）。逐条来源与许可证见 [`data/raw/LICENSES.md`](data/raw/LICENSES.md)。
+- **词库数据**：按上游许可证**单独声明**，**不是 MIT**。当前上游含 **LGPL-3.0**（rime-luna-pinyin / rime-terra-pinyin / rime-stroke）、**Apache-2.0**（rime-pinyin-simp）、**GPL-3.0-only**（rime-ice，2026-10-11 起并入 `luna.opid`）、**MIT**（chinese-xinhua · THUOCL · 本项目自撰的人工表 brand_terms / new_words / reading_overrides / surnames / slang）、**Unicode License**（Unihan）与 **CC-BY 3.0**（英文联想词源）。逐条来源与许可证见 [`data/raw/LICENSES.md`](data/raw/LICENSES.md)。
 
 因此：
 
@@ -57,7 +57,7 @@ cd desktop && ./gradlew package             # Windows 候选窗（Compose Deskto
 #    繁体：python3 scripts/gen_trad_dict.py          （需网络，自行拉取 Unihan + terra 上游）
 #    简体外部层：python3 scripts/gen_extra_phrases.py（需网络；生成 data/raw/extra_phrases.tsv，
 #                gen_luna_dict 会自动读它 —— 只改 brand_terms / new_words / reading_overrides
-#                三张人工表时也要重跑它）
+#                / surnames / slang 这些人工表时也要重跑它）
 #    简体：python3 scripts/gen_luna_dict.py <luna_pinyin.dict.yaml> > /tmp/luna_merged.tsv
 
 # 2. 合并并编译成 .opid（compile 一次只吃一个输入，繁体是两份 TSV 拼接后编译）

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider 暴露范围：只开 cacheDir/pet（自有表情 PNG 的落点，见 PetStickerCommit.kt）。
+     name="pet" 对应提交时授权的那一类 URI；授权本身由 INPUT_CONTENT_GRANT_READ_URI_PERMISSION 完成。 -->
+<paths>
+    <cache-path name="pet" path="pet/" />
+</paths>
