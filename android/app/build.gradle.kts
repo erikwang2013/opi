@@ -86,6 +86,13 @@ android.sourceSets.getByName("main").assets.srcDir(
 // srcDir 只是声明目录，不带任务依赖；资产合并前必须先跑完拷贝。
 tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }
     .configureEach { dependsOn(copyPetStickers) }
+// 所有 lint 变体都读 assets（AGP 9 实测 assembleRelease 依次红在
+// generateReleaseLintVitalReportModel、lintVitalAnalyzeRelease；逐个点名只会在下一个
+// 变体再红，所以按名字含 "Lint" 一次覆盖）。
+// ⚠️ 任务名是 `lintVitalAnalyzeRelease`（小写 l），匹配必须忽略大小写；按 "Lint"
+// 精确匹配会漏掉它，下一次 `assembleRelease` 仍红。
+tasks.matching { it.name.contains("Lint", ignoreCase = true) }
+    .configureEach { dependsOn(copyPetStickers) }
 
 kotlin {
     compilerOptions {
