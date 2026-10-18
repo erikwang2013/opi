@@ -31,7 +31,7 @@
 | Mac + Xcode | 必须有。**仓库没有声明最低 Xcode 版本**，也没有声明 iOS 部署目标 —— 以 Xcode 新建工程时的模板默认值为准 | 未核实：仓库里没有任何 deployment target / Xcode 版本的声明 |
 | Rust | `Cargo.toml` 的 `[workspace.package] rust-version`（当前声明 1.88）。**这是声明**，实际下限是 CI 里那个 MSRV 执行点量出来的 | `Cargo.toml` · `.github/workflows/ci.yml` |
 | Rust target | `aarch64-apple-ios`（真机 arm64）、`aarch64-apple-ios-sim`（Apple Silicon 模拟器）。Intel Mac 的模拟器才需要 `x86_64-apple-ios` | CI 只跑前两个 + 两个 darwin 目标 |
-| 词库 | `data/generated/luna.opid`（必需）、`data/generated/trad.opid`（可选，缺了繁体模式回退简体库）。`fallback.opid` **不用**打进包 —— 内置回退库已编译进二进制 | `ios/README.md`「词库文件」 |
+| 词库 | `data/generated/luna.opid`（必需，937,780 条）、`data/generated/trad.opid`（可选，缺了繁体模式回退简体库；139,355 条，2026-10-18 起含现代繁体词与康熙差集）。`fallback.opid` **不用**打进包 —— 内置回退库已编译进二进制 | `ios/README.md`「词库文件」 |
 | 宿主 App | 键盘扩展**不能独立安装**，必须内嵌在一个 App 的 `PlugIns/` 里 | 这条很确定 |
 | 工程文件 | **仓库里没有 `.xcodeproj`、没有 `Package.swift`、没有 `module.modulemap`** —— 工程要在 Mac 上用 Xcode 新建 | `macos/README.md` 解释了为什么故意不手写 `project.pbxproj` |
 

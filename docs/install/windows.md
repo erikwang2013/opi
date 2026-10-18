@@ -254,9 +254,9 @@ android/app/src/main/assets/luna.opid
 
 ⇒ 本文的 §3、§4 里凡是涉及 `luna.opid` 的步骤，**都是手工动作**。
 
-> **【补充 2026-10-09】** §2.5 的自动打包**没有**改变这一段：它产出的两个 artifact 里
-> **都不含** `luna.opid`，也不会把词库放到 DLL 旁边（工作流里没有任何拷贝动作）。
-> 词库通路照旧走 §2.2 的四级查找 + 手工送货。
+> **【补充 2026-10-09 / 订正 2026-10-18】** §2.5 的自动打包**没有**改变这一段：MSI 现在
+> 带 `tsf_opi.dll`，但**仍不含** `luna.opid`，也不会把词库放到 DLL 旁边（工作流里没有
+> 任何词库拷贝动作）。词库通路照旧走 §2.2 的四级查找 + 手工送货。
 
 ### 2.5 自动打包（GitHub Actions，2026-10-09 起）
 
@@ -266,7 +266,7 @@ android/app/src/main/assets/luna.opid
 
 | artifact | 内容 | 2026-10-09 那次 run 的实测体积 |
 |---|---|---|
-| `opi-tsf-dll-v<版本>` | `tsf_opi.dll`（zip 里就这一个文件） | DLL 本体 778,240 B；上传的 zip 331,390 B |
+| `opi-tsf-dll-v<版本>` | `tsf_opi.dll`（zip 里就这一个文件；**仅供 desktop-msi job 下载打包，不再作为用户入口发布**） | DLL 本体 778,240 B；上传的 zip 331,390 B |
 | `opi-desktop-msi-v<版本>` | `opi-candidates-<版本>.msi`（zip 里就这一个文件） | 上传的 zip 58,683,236 B（58 MB 量级，主要是 jlink 出来的 JRE） |
 
 名字里的版本来自 `Cargo.toml` 的 `[workspace.package] version`（本仓六 crate 共用的单一来源），
@@ -315,8 +315,11 @@ https://github.com/erikwang2013/opi/actions/runs/37934999798 ）**：
 **没有**开箱验证过）：
 
 - 候选窗应用本体（`desktop/` 编出的 jar）+ **jlink 出来的 JRE 运行时**（58 MB 主要在这）+ 图标；
-- **没有** `tsf_opi.dll`（那是另一个 job 在另一台机器上编的，两个 artifact 互不相干）；
-- **没有** `luna.opid`，也不做任何注册/环境变量动作（§2.4 的判断不变）。
+- **`tsf_opi.dll`**（2026-10-18 起）：`desktop-msi` job 先下载 `tsf-dll` job 的产物，经
+  `OPI_TSF_DLL` 挂进 jpackage 的 `--input`，落在 `INSTALLDIR\app\`。单独发布的 DLL
+  artifact 从此**不再是用户入口**（用户裁决「DLL 不要单独发布，用户不会用」）；
+- **`launch-and-restart.cmd`**：完成页复选框拉起的脚本（启动候选窗 + 重启 Explorer）；
+- **没有** `luna.opid`，也不设置词库环境变量（§2.4 的判断不变）。
 
 **拿下来之后要过一遍后处理（2026-10-17 / 2026-10-18 加）**：CI 出的 `.msi` 只带 jpackage
 的默认行为，而用户裁决了三条它做不了的（「安装的时候中断正在运行的应用，安装后启动」，
@@ -334,30 +337,33 @@ docker run --rm -v "$PWD:/w" -w /w debian:12 \
 1. 执行序列 797 加一条 `"taskkill" /f /t /im opi-candidates.exe`（引号是 WixQuietExec 的
    硬要求；排在 `RemoveExistingProducts@798` **之前** —— 否则运行中的旧实例会走
    「改名+重启后删」那条路，装完还活着）。
-2. ExitDialog 的 WixUI 自带复选框（默认勾选）在 Finish 时经 `WixCA` 的 `WixShellExec`
-   拉起新装的启动器。
-3. **同一个复选框**（Ordering=2，晚于自启、早于 EndDialog）经 `WixCA` 的 `WixSilentExec`
-   （Type 65 = DLL + ignore-return）执行 `"taskkill" /f /im explorer.exe`，让 Explorer
-   重启。**只杀不 `start`**：该 CA 从提权的 msiexec 里跑，提权上下文启动的 explorer 会
-   以管理员令牌成为 shell（UAC 旁路，安全风险）；shell 由 Winlogon 的
-   `AutoRestartShell`（默认 1）以**用户自己的完整性级别**拉回。
+2. 执行序列 5900（InstallFiles 之后、InstallFinalize 之前）经 `WixCA` 的 `WixSilentExec`
+   （Type 65）执行 `"regsvr32" /s "[INSTALLDIR]app\tsf_opi.dll"`，注册随 MSI 安装的
+   TSF COM 服务器。条件 `NOT REMOVE`：安装/修复执行，卸载不执行。
    `WixSilentExec` 用自己的 `WixSilentExecCmdLine` 属性 —— 不复用 797 的
    `WixQuietExecCmdLine`（同一属性两条命令会互相踩）。
+3. ExitDialog 的 WixUI 自带复选框（默认勾选）在 Finish 时经 `WixCA` 的 `WixShellExec`
+   拉起 `launch-and-restart.cmd`：以**登录用户**身份启动候选窗，然后
+   `taskkill /f /im explorer.exe`。**只杀不 `start`**：从提权的 msiexec 里
+   `start explorer.exe` 会得到管理员令牌的 shell（UAC 旁路）；shell 由 Winlogon 的
+   `AutoRestartShell`（默认 1）以**用户自己的完整性级别**拉回。
 
 复选框文案因此变成 `Launch opi-candidates and restart Explorer`，完成页还有一行说明
 （`WIXUI_EXITDIALOGOPTIONALTEXT`）：Explorer 会重启以重新加载输入法，其它已打开的应用
 要各自重启才换到新版本。脚本自带前置断言（槽位空、基线行在）、幂等护栏（重复运行直接
 退出 0；**旧版脚本处理过的产物会被明确拒绝**，须在原始 artifact 上重跑）与
-**读回 + 全表 diff** 完整性检查，任一不满足即不落产物。
+**读回 + 全表 diff** 完整性检查，任一不满足即不落产物。**旧 CI artifact 不含 DLL/脚本**：
+脚本会打印提示并跳过注册（回退为直接启动 exe），不会假装注册成功。
 
 **升级后哪些进程会重载、哪些不会**（全部【未验证】：本机没有 Windows）：
 
 | 对象 | 会发生什么 |
 |---|---|
-| 新启动的进程 | 加载磁盘上的新 DLL（前提：DLL 确由本次安装替换） |
-| Explorer / shell / 语言栏 | 勾选复选框点 Finish → explorer 被结束 → Winlogon 自动重启 → 重新加载 |
+| 新启动的进程 | 加载磁盘上的新 DLL（MSI 的 File 表已含 `tsf_opi.dll`） |
+| Explorer / shell / 语言栏 | 勾选复选框点 Finish → 脚本结束 explorer → Winlogon 自动重启 → 重新加载 |
 | 已打开的其它应用（Office / 浏览器 / 编辑器…） | **仍持旧 DLL**，直到各自关闭重开 |
-| 候选窗进程 | 装前被 797 结束、装后经 `WixShellExec` 拉起（2026-10-17 的两条，未变） |
+| 候选窗进程 | 装前被 797 结束、装后由完成页脚本拉起 |
+| COM 注册 | `OpRegisterTsf@5900` 调 `regsvr32 /s` 注册 per-machine；卸载不清注册（见 §6.1） |
 
 - **静默 / 基本 UI 安装**（`msiexec /qn`、`/qb`）不出现 ExitDialog ⇒ **不会重启 Explorer**。
   需要手动：`taskkill /f /im explorer.exe`（等 Winlogon 拉回），或注销/重启。
@@ -368,20 +374,23 @@ docker run --rm -v "$PWD:/w" -w /w debian:12 \
 - **首次安装也会重启一次**（复选框默认勾选）：此时没有旧 DLL 要换，是同一开关的副作用。
 - **多会话机器**：`taskkill /im explorer.exe` 会命中所有可访问会话的 explorer。本机无法
   验证多会话行为；这是已知代价而不是静默行为（完成页复选框文案写明了会重启 Explorer）。
-- ⚠️ **本仓当前这个 MSI 不含 `tsf_opi.dll`**（§2.5 上面已列；本机对 File 表实测零命中）。
-  ⇒ 只有当 DLL 由其它步骤部署/替换时，Explorer 重启才和 TSF 版本有关；否则它只是刷新
-  shell。脚本运行时会把这一点打印成提示（**不阻断**注入）。
+- ✅ **2026-10-18 起 MSI 含 `tsf_opi.dll`**：File 表由 CI 的 `desktop-msi` job 在打包时
+  写入（`OPI_TSF_DLL` → jpackage `--input`），后处理只负责注册动作与完成页脚本。
+- ⚠️ **注册路径按 jpackage app-image 布局推定为 `INSTALLDIR\app\tsf_opi.dll`**
+  （Linux 同名布局是 `lib/app/`）；Windows 真机上装一次前，这个路径没有被实际执行过。
 
-**这条改动的证据档位**（照实）：表级形状在本地可复核（读回断言全绿 + 除四张表外全库
-逐字节未变 + `msiextract` 两个包解出的 193 个文件 `diff -rq` 全同）；三个入口点在**这份
-MSI 自己的** `Binary.WixCA`（3.11.2.4516）里实测存在（容器内 `objdump -p` 读导出表：
-`WixShellExec` / `WixQuietExec` / `WixSilentExec`；`strings -el` 读到
-`WixSilentExecCmdLine`）。**「在真 Windows 上装一遍」仍然一次都没有**（§6.1 #12）——
-杀没杀掉、启没启起来、复选框出不出现、Explorer 有没有被 Winlogon 拉回，都还没人见过。
+**这条改动的证据档位**（照实）：表级形状在本地可复核（读回断言全绿 + 除 Property /
+CustomAction / InstallExecuteSequence / ControlEvent 四张表外全库逐字节未变）；
+三个入口点在**这份 MSI 自己的** `Binary.WixCA`（3.11.2.4516）里实测存在（容器内
+`objdump -p` 读导出表：`WixShellExec` / `WixQuietExec` / `WixSilentExec`；`strings -el`
+读到 `WixSilentExecCmdLine`）。DLL 是否真的随包落到 `INSTALLDIR\app\`、`regsvr32` 是否
+真的注册成功，只能在 Windows 真机上装一次来验。**「在真 Windows 上装一遍」仍然一次都没有**
+（§6.1 #12）—— 杀没杀掉、注册没注册、启没启起来、脚本有没有重启 Explorer，都还没人见过。
 
 **这个 artifact 明确不保证什么**（别读成「Windows 端能用了」）：
 
-- DLL **没有被注册**（§3.1 的 `regsvr32` 仍要手工跑），也**从未被任何宿主加载过**；
+- DLL **在本机只验证到「随 jpackage app-image 落位」**（Linux 同布局）；Windows 真机上的
+  `regsvr32` 与宿主加载**从未发生**（§3.1 仍保留手工注册命令作为核对/回退）；
 - 「文本插入真的落进文档」**从未验证**（§5.3、§6.1 #5）；
 - .msi **未签名**：装的时候 Windows 会有来源警告（SmartScreen），这是现状不是故障；
 - Windows 上**没有人装过、跑过**这两个产物 —— §6 里所有【未验证】条目都不因这次打包而消失。
@@ -403,6 +412,12 @@ Culture 不能是 en-us），需要连 jpackage 选的 locale 一起换 —— e
 ## 3. 安装与注册
 
 ### 3.1 注册命令
+
+> **2026-10-18 起**：安装 v1.13.0+ 的 MSI 会自动执行 `regsvr32 /s`（后处理脚本的
+> `OpRegisterTsf`，序列 5900），**用户不再需要手工注册**。本节保留为核对/回退路径：
+> 想确认注册结果、或从旧版单独 DLL 迁移时，仍可按下面的命令手工跑一次。
+> 注意 `regsvr32` 写的是**当时 DLL 的全路径**；MSI 装在 `INSTALLDIR\app\tsf_opi.dll`，
+> 手工注册时请指向那个路径。
 
 **【未验证】**（本机无 Windows，下面每一条都没有跑过）。
 
@@ -675,7 +690,7 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | # | 事项 | 落点 |
 |---|---|---|
 | 1 | 链接：需要 MSVC 导入库 | §1.2 实测卡在 `link.exe` |
-| 2 | ~~`tsf_opi.dll` 从未被链接出来过，导出表从未被检视~~ **【已消除 2026-10-09】** 已在 windows runner 上真链接、导出表实测四个 COM 入口（名字未装饰，§2.5）；**仍未被 `regsvr32` 或任何宿主加载过** —— 「链接/导出表」与「能用」是两格 | §1.2、§2.5 |
+| 2 | ~~`tsf_opi.dll` 从未被链接出来过，导出表从未被检视~~ **【已消除 2026-10-09】** 已在 windows runner 上真链接、导出表实测四个 COM 入口（名字未装饰，§2.5）。**【订正 2026-10-18】** DLL 已随 MSI 进入 File 表，安装序列会跑 `regsvr32`；但**真机上的注册结果、宿主加载**仍从未发生 —— 「包里有/表里有」与「能用」是两格 | §1.2、§2.5 |
 | 3 | `DllRegisterServer` / `DllUnregisterServer` 的注册效果、管理员判定 | §3.1 |
 | 4 | TSF 能否认出这个 TIP、键盘列表里出不出现 | §3.3 |
 | 5 | 按键回调、composition、文本插入的**全部运行期行为** | §5.3 |
@@ -685,13 +700,13 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | 9 | `Ctrl+'` / `Ctrl+\` / `Shift+Space` 在 Windows 上有没有被别的软件占用 | §4.1 |
 | 10 | 语言栏按钮（`langbar.rs`）的运行期行为：`AddItem` 成不成、`GetIcon` 有没有被调、图标画没画出来 —— 只有 §1.2 那条 `cargo check` 看过它（"挑条目 + 校验 RT_ICON 形态"那半在 `langbar_icon.rs`，有主机单测） | §2.1、`crates/tsf-opi/src/langbar.rs` 头注释 |
 | 11 | **「属性设置」的生效时机**：设置窗落盘后要等下一次 `Activate` —— 本机无法验证（`Activate` 由 TSF 调）。读取/容错/落点那半在 `settings.rs`，有主机单测 | §4.4、`crates/tsf-opi/src/settings.rs` |
-| 12 | **安装器三条新行为（关停运行中实例 / 装后自启 / 装完重启 Explorer，2026-10-17 / 2026-10-18 加）**：表级已改好并可本地复核（§2.5 的后处理脚本 + 读回证据），但**没有在真 Windows 上装过一次** —— taskkill 真杀没杀掉、WixShellExec 真启没启起来、ExitDialog 复选框出不出现、Explorer 是否被结束并由 Winlogon 拉回（依赖 `AutoRestartShell` 默认 1），全是【未验证】 | §2.5、`scripts/postprocess-windows-msi.sh` |
+| 12 | **安装器四条新行为（关停运行中实例 / 注册 TSF DLL / 装后自启 / 重启 Explorer，2026-10-17 / 2026-10-18 加）**：表级已改好并可本地复核（§2.5 的后处理脚本 + 读回证据），但**没有在真 Windows 上装过一次** —— taskkill 真杀没杀掉、`regsvr32` 真注册没成功、WixShellExec 真启没启起来、ExitDialog 复选框出不出现、脚本是否结束 Explorer 并由 Winlogon 拉回（依赖 `AutoRestartShell` 默认 1），全是【未验证】 | §2.5、`scripts/postprocess-windows-msi.sh` |
 
 ### 6.2 代码里已知的缺口（读源码得出，不是待办猜测）
 
 | # | 缺口 | 依据 | 影响 |
 |---|---|---|---|
-| 1 | **没有打包步骤**：`luna.opid` 与 DLL 不会被放到一起 | §2.4 | 开箱只有内置回退词库 |
+| 1 | **词库仍没有打包步骤**：MSI 已带 DLL（2026-10-18），但 `luna.opid` 仍不会被放到 DLL 旁边 | §2.4 | 开箱只有内置回退词库 |
 | 2 | **没有人拉起候选窗进程**；~~候选窗也没有 Windows 安装包~~ **【订正 2026-10-09】** 安装包有了（§2.5 的 `opi-desktop-msi-*` artifact），但它在 Release 之外、90 天过期。**【订正 2026-10-17】** 后处理后的 `.msi` 里「装完点 Finish 自启」已接线（§2.5）—— 但**这条线本身未在真机验证**，且 v1.9.6 及以前的 Release 资产都是**未后处理**的旧包 | §4.3 #1、§2.5 | 候选窗看不到（打字仍可用），直到有人装上后处理的包并勾选 Finish |
 | 3 | **点选延迟到下一个键事件才插入** | `state.rs` 模块头、`tsf.rs::drain_pending` | 点了不敲键 = 字不出现 |
 | 4 | `OnSetFocus` 空实现（drain 的天然落点没接） | `tsf.rs` 的 `OnSetFocus` | 同上，放大了 #3 |
@@ -715,7 +730,7 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 「仓库无安装文档」此前是审计记录在案的共同拦路项之一 —— 本文件是它的第一部分，
 但**只覆盖 Windows 一路，且未经验证**。
 
-> **【订正 2026-10-09】** 「没有可下载产物」有了半步例外：**Actions 的 artifact 里有了**
-> （§2.5：`opi-tsf-dll-*` 与 `opi-desktop-msi-*`，默认 90 天过期），但 **Release 仍然不带
-> Windows 包** —— 与 `packages.yml` 那条「发版产物归人管」的约定一致（workflow 只上传 artifact，
-> 不碰 release）。「本文档…未经验证」的性质**不变**：产物能编出来 ≠ 装上能用。
+> **【订正 2026-10-18】** Release 从 v1.11.0 起带 `opi-<版本>_windows-desktop.msi`；
+> **从 v1.13.0 起 MSI 内含 `tsf_opi.dll` 并自动注册**，不再单独发布 DLL 资产
+> （用户裁决「DLL 不要单独发布，用户不会用」）。旧版本仍可在 Release 里找到单独的 DLL，
+> 但那是历史产物。「本文档…未经验证」的性质**不变**：产物能编出来 ≠ 装上能用。

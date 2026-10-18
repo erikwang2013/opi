@@ -47,7 +47,7 @@ kotlin {
 // jpackage 的包版本与设置窗标题栏都从这里取。**此前设置窗里写死过一份**
 // （"1.4.0"），到 1.6.0 就成了摆在用户眼前的假话 —— 两处写死是漂移的充分条件，
 // 生成一个常量是把它压成一处的最短路径（同 android 侧 versionName 的单一来源约定）。
-val opiAppVersion = "1.12.0"
+val opiAppVersion = "1.13.0"
 
 val generateOpiVersionSource by tasks.registering {
     val outDir = layout.buildDirectory.dir("generated/sources/opiVersion/kotlin")
@@ -118,6 +118,30 @@ val copyKaomojiData by tasks.registering(Copy::class) {
     into(layout.buildDirectory.dir("generated/opiResources"))
 }
 tasks.named("processResources") { dependsOn(copyKaomojiData) }
+
+// ---------- Windows TSF DLL：随 MSI 一起装（2026-10-18 用户裁决）----------
+//
+// 用户原话「DLL 不要单独发布，用户不会用」：DLL 是真正的 Windows 输入法 COM 组件，
+// 单独挂一个 .dll 资产等于让用户自己 regsvr32 —— 他们不会。这里把它挂进 jpackage 的
+// `--input` 文件集合，随应用镜像进入 MSI 的 File 表；再由
+// `scripts/postprocess-windows-msi.sh` 注入 `regsvr32` 注册动作与完成页脚本。
+//
+// Windows CI 在 `packageMsi` 前下载 TSF DLL artifact 并把路径放进 OPI_TSF_DLL；
+// Linux 打 Deb 时该变量不存在 ⇒ files 集合不变，不会把 DLL/脚本带进 Deb。
+val tsfDll = providers.environmentVariable("OPI_TSF_DLL")
+// jpackage 的 `--input` 是 CMP 自己暂存的 libs 目录（会清空重填），所以不能往里
+// 手写文件；把 DLL 挂到 JPackage 任务的 `files` 集合，CMP 会与 jar 一起暂存并
+// 打进应用镜像。Windows CI 在 packageMsi 前设 OPI_TSF_DLL；Linux 构建不设。
+tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask>()
+    .configureEach {
+        if (tsfDll.isPresent) {
+            val src = file(tsfDll.get())
+            check(src.isFile) { "OPI_TSF_DLL 指向的文件不存在：${src.path}" }
+            // 完成页复选框拉起这个脚本：启动候选窗 + 重启 Explorer（重新加载 TSF DLL）。
+            // 只在这个分支挂入 ⇒ Linux Deb 不会带 Windows 脚本。
+            files.from(src, file("windows/launch-and-restart.cmd"))
+        }
+    }
 
 // 康熙字典词库（2026-10-16，「全发」的桌面面）：词库页首启种子把它放进词库目录一次
 //（见 Dicts.kt 的 seedBundledDict）。真源 = `data/raw/kangxi.tsv`

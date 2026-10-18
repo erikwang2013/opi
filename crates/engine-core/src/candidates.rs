@@ -5,7 +5,7 @@ use crate::candidates_tiers_impl as tiers;
 use crate::candidates_tiers_impl::Meta;
 use crate::composer::Mode;
 use crate::correction;
-use crate::dictionary::{Dictionary, PREFIX_MATCH_CAP};
+use crate::dictionary::Dictionary;
 use crate::fuzzy;
 use crate::jianpin;
 use crate::learner::Learner;
@@ -151,6 +151,7 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
         return Vec::new();
     }
     let input_len = input.len();
+    let prefix_cap = crate::dictionary::prefix_cap(learner.has_user_words(), limit);
     // 精确等长匹配加成 = boost/2。boost = max(USER_BOOST, 词典最大静态词频×2)
     // （见 Engine::with_dictionaries），故 boost/2 ≥ 最大静态词频 —— 任何精确匹配（哪怕
     // freq=0）都排在任何前缀扩展之前：输入 xian 不再由 xiang 的「想」占首位。
@@ -200,13 +201,11 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
             )
         })
         .collect();
-    // 前缀扩展层按静态词频截到 PREFIX_MATCH_CAP（精确层不截）；取舍见 dictionary.rs 同常量。
-    //
     // 主查询候选**连同分档元数据**一起收集（2026-10-14）：条目一出词库，「拼音多长、
     // 是不是精确」就丢了 —— 排完序再想分档就分不出来。其余档（模糊/简拼/纠错/逐音节汤/
     // 符号）不带元数据，分档时落「主块尾部」，相对次序一字不动。
     let mut merged: Vec<(Candidate, Option<Meta>)> = dict
-        .query_prefix_top(input, PREFIX_MATCH_CAP)
+        .query_prefix_top(input, prefix_cap)
         .into_iter()
         .map(|e| {
             let exact = e.pinyin_len == input_len;
@@ -259,7 +258,7 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
             .iter()
             // 同样走上限：变体是全串替换，`ni` 的变体 `li` 会命中 3 万余条 ——
             // 全量物化与主层同一量级的开销（实测 17.9ms，2026-10-11）。
-            .flat_map(|v| dict.query_prefix_top(v, PREFIX_MATCH_CAP))
+            .flat_map(|v| dict.query_prefix_top(v, prefix_cap))
             .map(|e| hanzi(e, false))
             .collect()
     } else {
@@ -317,7 +316,7 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
                 continue;
             }
             let mut syl_cands: Vec<Candidate> = dict
-                .query_prefix_top(&syl, PREFIX_MATCH_CAP)
+                .query_prefix_top(&syl, prefix_cap)
                 .into_iter()
                 .map(|e| {
                     // 精确性按**音节**判（该路径下"输入"就是音节），与主路径同一条规则。
@@ -366,7 +365,7 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
                     .iter()
                     .take(8)
                     .filter(|v| *v != &syl)
-                    .flat_map(|v| dict.query_prefix_top(v, PREFIX_MATCH_CAP))
+                    .flat_map(|v| dict.query_prefix_top(v, prefix_cap))
                     .map(|e| hanzi(e, false))
                     .collect();
                 syl_fuzzy.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));

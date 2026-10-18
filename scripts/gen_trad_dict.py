@@ -7,6 +7,8 @@
 产物（UTF-8，word\tpinyin\tfreq 三列）：
   data/raw/trad_hanzi.tsv     GB2312 一二级全量 6763 字 + terra 单字 + 其余 Unihan 单字
   data/raw/trad_phrases.tsv   人工常用词组 + terra 繁体词组
+  （现代词层 `trad_modern.tsv` 与康熙差集 `kangxi_trad.tsv` 由另两个生成器产出，
+   编译时四份 TSV 一起 cat 给 opi-tools；本脚本不覆盖它们 —— 见 CONTRIBUTING）
 
 词频（统一常用度排序，spec 2026-08-15 验收偏差 #4）：
   freq = FMAX - idx * (FMAX // N)，idx 为排序键排完后的行序。排序键（同拼音前缀组内）：

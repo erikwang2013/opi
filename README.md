@@ -88,11 +88,11 @@
 
 #### 3. 词库是「活」的，也有门禁守着
 - **多源整合（2026-10-11，用户裁决「主流开源词库去重整合」）**：rime-ice（雾凇）base+ext、rime-essay、chinese-xinhua 成语/歇后语、THUOCL 专业术语，加品牌/新词/注音/姓氏/流行语五张人工表，去重后并入 `luna.opid`（9.6 万条 → 90 万条量级、33MB；首字母查询靠前缀层 top-N 截断保住延迟，实测与取舍见 `data/raw/LICENSES.md`）。⚠️ 合并产物因此**整体按 GPL-3.0 分发**（数据层；源码仍 MIT）
-- **简繁双库**：`luna.opid`（简体）+ `trad.opid`（繁体），两者都随包安装；繁体库缺失/损坏自动回退简体库。**入口**：Android 上 26 键用模式轮转键、9/14/笔画三盘用底行的简繁键（`ImeScreen.kt`）/ iOS 用键盘上的模式轮转键（`KeyboardViewController.swift`）；**fcitx5（Linux）2026-10-09 起有 `Ctrl+Shift+F`**（随包装 `trad.opid`，见 `docs/install/linux.md` §5.3）；macOS / Windows / 鸿蒙仍只有拼音⇄英文、拼音⇄符号（`Ctrl+'`、`tsf-opi/src/vk.rs` 的 `mode_hotkey`）——**还没有繁体入口**。引擎与数据侧的繁体能力本身是完整的
+- **简繁双库**：`luna.opid`（简体）+ `trad.opid`（繁体），两者都随包安装；繁体库缺失/损坏自动回退简体库。**入口**：Android 上 26 键用模式轮转键、9/14/笔画三盘用底行的简繁键（`ImeScreen.kt`）/ iOS 用键盘上的模式轮转键（`KeyboardViewController.swift`）；**fcitx5（Linux）2026-10-09 起有 `Ctrl+Shift+F`**（随包装 `trad.opid`，见 `docs/install/linux.md` §5.3）；macOS / Windows / 鸿蒙仍只有拼音⇄英文、拼音⇄符号（`Ctrl+'`、`tsf-opi/src/vk.rs` 的 `mode_hotkey`）——**还没有繁体入口**。引擎与数据侧的繁体能力本身是完整的。**2026-10-18**：`trad.opid` 新增 `trad_modern.tsv`（约 4.2 万现代常用词，OpenCC 词组级简→繁）与康熙差集 622 条，条目 96,429 → 139,355；`luna.opid` 也补入康熙差集 1,279 条（条目 937,780）
 - **单字全覆盖门禁**：GB2312 全量单字逐一断言有候选（`trad_coverage` 集成测试，字数判据写在测试里）。改词库若撞坏覆盖度，CI 直接红
 - **词库坏了绝不崩输入法**：装载策略各端统一 —— **坏路径一律返回 `Err`，不静默回退**（`engine-data/src/dictionary.rs` 的 `load_or_fallback` 注释写明此前的静默回退是有意删除的：UI 会误以为完整词库已加载）；只有**未提供路径**（含空串）时才用内置回退词库（`data/raw/fallback.tsv`，条数以该文件行数为准）。是否再从 `Err` 兜底由调用方决定：Android 的 `EngineLoader` 接住后用内置词库重试（`EngineLoader.kt` 的 `fallback()`），fcitx5 / TSF 上抛（`fcitx5-opi/src/lib.rs` / `tsf-opi/src/tsf.rs` 的装载调用点）
-- **词库分发通路**：Android 走 assets → filesDir（`EngineLoader.kt`）、fcitx5 走 XDG 数据目录且由 CMake 安装（`fcitx5-opi/cpp/CMakeLists.txt`）、Windows 走 `OPI_DICT_PATH` 环境变量 → DLL 同目录 → `%LOCALAPPDATA%\opi` → 内置回退（`tsf-opi/src/dict_path.rs`）。⚠️ **Windows 侧仍无打包步骤**，故开箱即用仍是内置回退词库 —— 通路已备、拷贝动作没有
-- **导入词库与康熙字典（2026-10-14 / 2026-10-16）**：四端同一份**导入词库契约** —— `*.tsv`（`词<TAB>拼音<TAB>频次`）放进词库目录即被装载、可启停（Android `filesDir/dicts` · 桌面窗/TSF `%LOCALAPPDATA%\opi\dicts` · fcitx5 `$XDG_DATA_HOME/opi/dicts`）。**康熙字典词库**（`shunshi-kangxi-core`，MIT，20794 字全读音）随包分发、各端**首启种子一次**（删过不复活）；数据链 `scripts/gen_kangxi_dict.py`，取读口径与边界见 `data/raw/LICENSES.md`
+- **词库分发通路**：Android 走 assets → filesDir（`EngineLoader.kt`）、fcitx5 走 XDG 数据目录且由 CMake 安装（`fcitx5-opi/cpp/CMakeLists.txt`）、Windows 走 `OPI_DICT_PATH` 环境变量 → DLL 同目录 → `%LOCALAPPDATA%\opi` → 内置回退（`tsf-opi/src/dict_path.rs`）。⚠️ **Windows 侧 MSI 自 2026-10-18 起随包安装并注册 TSF DLL**（`tsf_opi.dll` 不再单独发布），但仍不打包 `luna.opid` ⇒ 开箱即用仍是内置回退词库 —— 词库通路已备、拷贝动作没有
+- **导入词库与康熙字典（2026-10-14 / 2026-10-16）**：四端同一份**导入词库契约** —— `*.tsv`（`词<TAB>拼音<TAB>频次`）放进词库目录即被装载、可启停（Android `filesDir/dicts` · 桌面窗/TSF `%LOCALAPPDATA%\opi\dicts` · fcitx5 `$XDG_DATA_HOME/opi/dicts`）。**康熙字典词库**（`shunshi-kangxi-core`，MIT，20794 字全读音）随包分发、各端**首启种子一次**（删过不复活）；数据链 `scripts/gen_kangxi_dict.py`，取读口径与边界见 `data/raw/LICENSES.md`。**2026-10-18 起**康熙里默认库还没有的 (字,读音) 也并进 `luna.opid`（1,279 条）与 `trad.opid`（622 条），因此即使导入词库被删/未导入、或走没有导入通道的端，康熙字仍能在输入时匹配
 - **Linux 侧已能打成发行版包**：`scripts/build-packages.sh` + `scripts/nfpm.yaml` 把 `cmake --install` 的暂存树原样搬进 `.deb` / `.rpm`（两个 `.so`、两个 conf、`luna.opid` 与两份许可证文本 —— **包内清单用 `dpkg-deb -c` / `rpm -qlp` 现场核，别照抄这句**），`.github/workflows/packages.yml` **手动触发**（`gh workflow run packages.yml --ref <tag 或分支>`，或 Actions 页面 → Packages → Run workflow）；产物在该次 run 的 artifact `opi-packages` 里，**只有填了 tag 输入项才会附到 release 上**。**运行时门槛是 fcitx5 5.0**：声明在 `crates/fcitx5-opi/data/addon/opi_fcitx5.conf` 的 `[Addon/Dependencies]`（写高了 addon 整个不加载，用户拿到一个「选得到、一个字都不出」的输入法，日志里还没有 opi 的报错），CI 在 debian:12 容器里带阳性 / 现行值 / 阴性三臂对照守着它。⚠️ 这条打包通路**只到「产物打得出来、包内清单与暂存树对得上」为止** —— 没有任何门禁真的 `dpkg -i` / `rpm -i` 过它；CI 验的是**同一棵暂存树**（`cmake --install` + `cp`），不是包本身
 - **词库共建**：源数据是纯文本 `data/raw/*.tsv`，提交 / 审核 / 合并走 PR。流程与**许可证要求**见 [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
@@ -262,7 +262,7 @@ docs/                          # 宠物、图与设计文档
   superpowers/                 #   specs（设计规格）+ plans（实施计划）
   release-claim-corrections.md #   发布声明订正（tag 注释推出去改不了，实测到的正确说法落这里）
   weixinpay.png · alipay.png   #   赞赏码（页脚引用）
-scripts/                       # 词库/表情生成：gen_luna_dict.py · gen_trad_dict.py · gen_symbols.py · gen_emoji_kaomoji.py · gen_pet_stickers.py · gen_emoji_keywords.py · gen_pet_emoji_font.py
+scripts/                       # 词库/表情生成：gen_luna_dict.py · gen_trad_dict.py · gen_trad_modern.py · gen_kangxi_extra.py · gen_symbols.py · gen_emoji_kaomoji.py · gen_pet_stickers.py · gen_emoji_keywords.py · gen_pet_emoji_font.py
                                #   （+ symbol_keywords.py 手写关键字表）· gen_en_dict.py · hanzi_freq.py
                                # 发行版打包：build-packages.sh（.deb / .rpm）+ nfpm.yaml
                                #   （nfpm.yaml 只负责把暂存树搬进包，**落点不在这里声明**）
@@ -289,7 +289,7 @@ V1 里程碑进度：
 - [x] **M6a Android 原生重构**：opi-ffi 双 ABI（JNI + C）替换 frb；Compose 原生 IME + 键盘/候选栏/面板/设置页；删除 flutter/
 - [x] **简繁双词库**（spec §8 未给它 M6 编号，独立成项）：`Mode::Traditional` + 双词典路由 + `trad.opid` + GB2312 单字全覆盖门禁
 - [~] **M6b Linux fcitx5 插件**：Rust 逻辑与单测完成；**C++ 胶水此前从未被编译器看过**，现已补上 CMake 编译 + 安装通路（`crates/fcitx5-opi/cpp/CMakeLists.txt`）、CI 的 fcitx5 job（编译 + 安装落点断言 + debian:12 容器里带三臂对照真加载）与 `.deb` / `.rpm` 打包（`scripts/build-packages.sh`）—— **待在目标平台实机验收；包也从未被 `dpkg -i` / `rpm -i` 过**
-- [~] **M6c Windows TSF 插件 + CMP 候选窗**：Rust 逻辑、候选窗线协议、词库分发通路与 Compose Desktop 候选窗完成 —— COM 服务端按目标平台门控，**且 Windows 侧仓库里没有打包步骤**（词库开箱仍是内置回退那几十条词），待在 Windows 上验收
+- [~] **M6c Windows TSF 插件 + CMP 候选窗**：Rust 逻辑、候选窗线协议、词库分发通路与 Compose Desktop 候选窗完成 —— COM 服务端按目标平台门控；**MSI 打包自 2026-10-18 起已接线**（DLL 随包、安装时 `regsvr32`、完成页脚本重启 Explorer），但**词库仍不入包**（开箱仍是内置回退那几十条词），待在 Windows 上验收
 - [ ] **M7 iOS / macOS**：C ABI 已就绪，且**已实测能为 Apple 目标编译**（`cargo check` 的 Apple 目标全过，清单见 `.github/workflows/ci.yml`；能产出 arm64 静态库 `libopi_ffi.a`，导出符号无缺失 —— 数量以 `crates/opi-ffi/src/cabi.rs` 的导出为准）；`ios/` 与 `macos/` 下的 Swift 草案**从未被编译器看过** —— 需在 Mac 上先让编译通过，再谈功能
 
 > 里程碑编号以 `docs/superpowers/specs/2026-08-14-opi-multi-platform-design.md` §8 与 M6 实施计划为准

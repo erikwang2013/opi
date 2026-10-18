@@ -85,6 +85,12 @@ impl Learner {
         self.enabled
     }
 
+    /// 是否已有学习词。排序层据此决定前缀扩展要不要留满 `PREFIX_MATCH_CAP`：
+    /// 没有学习词时 boost 不会把池外的低静态词提上来，前 `limit` 条只需静态 top-N。
+    pub(crate) fn has_user_words(&self) -> bool {
+        !self.user_freq.is_empty()
+    }
+
     pub fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
         self.bump_revision();

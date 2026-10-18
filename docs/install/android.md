@@ -87,11 +87,11 @@ adb devices             → emulator-5554  device（x86_64，ro.build.version.sd
 | 资产 | 内容 | 生成器 |
 |---|---|---|
 | `luna.opid` | 简体词库 | `scripts/gen_luna_dict.py`（经 `opi-tools compile`） |
-| `trad.opid` | 繁体词库 | `scripts/gen_trad_dict.py` |
+| `trad.opid` | 繁体词库（139,355 条；2026-10-18 起含 `trad_modern.tsv` 现代词 42,304 条与康熙差集 622 条） | `scripts/gen_trad_dict.py` + `gen_trad_modern.py` + `gen_kangxi_extra.py` |
 | `stroke.opid` | 笔画词典（2026-10-09：笔画键盘 / 生僻字按笔画查字） | `scripts/gen_stroke_dict.py` |
 | `rare_index.tsv` | 部首+总笔画索引（生僻字面板） | `scripts/gen_rare_index.py` |
 | `wubi86.opid` / `wubi98.opid` | 五笔码表两张（2026-10-14，M4；**按方案二选一装载**，见 `EngineLoader.load` 尾段） | `scripts/gen_wubi_dict.py` |
-| `kangxi.tsv` | 康熙字典词库（2026-10-16；**首启种进词库目录一次** —— 之后就是普通导入词库，词库页可停用/删除，删过不再复活） | `scripts/gen_kangxi_dict.py` |
+| `kangxi.tsv` | 康熙字典词库（2026-10-16；**首启种进词库目录一次** —— 之后就是普通导入词库，词库页可停用/删除，删过不再复活）。2026-10-18 起默认库里缺的康熙 (字,读音) 也已并进 `luna.opid` / `trad.opid`（删掉导入词库后仍可打） | `scripts/gen_kangxi_dict.py` + `gen_kangxi_extra.py` |
 
 授权逐条记在 `data/raw/LICENSES.md`（stroke 为 LGPL-3.0、rare 为 Unicode License、
 五笔 86 为 LGPL-3.0（与 luna 同族）/ 98 为 Unlicense、kangxi 为 MIT）。
@@ -672,6 +672,8 @@ IME 同进程共享 Rust 单例，重复 `OpiEngine.load` 会把 IME 正在用�
 `importDict`（`OpiImeService` 启动时装载、停用名单装载后重放），设置页「词库」一节管理
 （可启停/删除）。**康熙字典随包**（`assets/kangxi.tsv`）：首次启动**种进该目录一次**
 （`DictStore.seedBundled`，标记 `.seeded-kangxi`；之后它就是普通导入词库 —— 删过不复活）。
+**2026-10-18 起**康熙中默认库还没有的 (字,读音) 也并进了 `luna.opid` / `trad.opid`
+（分别 1,279 / 622 条），所以删除或停用 `kangxi.tsv` 不会让这些字重新打不出。
 
 **第一级：看日志（最省事）**
 

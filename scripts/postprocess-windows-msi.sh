@@ -2,40 +2,30 @@
 # SPDX-FileCopyrightText: 2026 erik.xyz
 # SPDX-License-Identifier: MIT
 #
-# 给 windows runner 出的桌面应用 .msi 做三件 jpackage 做不了的事（2026-10-17 用户裁决
-# 「增加安装的时候中断正在运行的应用，安装后启动」；2026-10-18 用户裁决「覆盖安装新版本后
-# 还要重启才生效」）：
+# 给 windows runner 出的 .msi 做 jpackage 做不了的事（2026-10-17 用户裁决
+# 「增加安装的时候中断正在运行的应用，安装后启动」；2026-10-18 用户裁决
+# 「覆盖安装新版本后还要重启才生效」+「DLL 不要单独发布，用户不会用」）：
 #
 #   1. **装前杀进程**：执行序列 797（在 RemoveExistingProducts@798 之前）跑
-#      `taskkill /f /t /im <应用名>.exe`。为什么必须是 797：jpackage 的 MSI 把
-#      旧产品移除排在 CostInitialize 之前，正在运行的旧实例会让 RemoveFiles 走
-#      「改名 + 重启后删除」那条路 —— 装完旧进程还活着，与「装完自启」叠成两个实例。
-#      排在移除之前杀掉，整套升级就干净。
-#   2. **装后自启**：ExitDialog 的 OptionalCheckBox（WixUI 自带、本 MSI 里控件与
-#      CheckBox 表行都在）默认勾选，点 Finish 时 DoAction WixShellExec 拉起新装的
-#      启动器。WixShellExec 是 impersonate 的 ShellExecute ⇒ 以**登录用户**（非提权）
-#      身份启动 —— 这正是 per-machine 安装下想要的。
-#   3. **装完重启 Explorer**：ExitDialog 的同一个复选框在 Finish 时再发一条 DoAction
-#      （Ordering=2，晚于现有自启），经 WixCA 的 `WixSilentExec`（Type 65 = DLL +
-#      continue-on-error）跑 `"taskkill" /f /im explorer.exe`。
-#      · **只杀、不 `start explorer.exe`**：本 CA 从提权的 msiexec 里跑，提权上下文
-#        起的 explorer 会以管理员令牌成为 shell（UAC 旁路，安全风险）。Explorer 由
-#        Winlogon 的 `AutoRestartShell`（默认 1）在**用户自己的完整性级别**上拉回来。
-#      · AutoRestartShell=0 的机器上 shell 不会自己回来（手动 Task Manager →
-#        Run new task → explorer.exe）；安装本身不受影响（见 docs/install/windows.md）。
-#      · 没有 `start` 就不需要 `cmd /c`：命令保持 WixCA 的「引号开头」硬要求，与 797
-#        的 taskkill 同一形状。`taskkill /im` 命中所有可访问会话语义上的 explorer.exe
-#        （多会话机器的行为本机无法验证，文档里如实写）。
-#      · **只挂在 ExitDialog Finish**：静默/基本 UI 安装不走这个对话框 ⇒ 不会静默杀
-#        shell；用户取消勾选也就不动作。条件与自启共用一句（NOT Installed ⇒ 首次安装
-#        与大版本升级；修复/卸载时该控件本来就被 WixUI 隐藏）。首次安装也会重启一次
-#        —— 那时没有旧 DLL 要换，只是同一个复选框带来的副作用，文档里写明。
-#      · 用 WixSilentExec 而不是复用 WixQuietExec：后者只认 `WixQuietExecCmdLine`，
-#        而那条属性已被 797 的装前 taskkill 占用（同属性两条命令会互相踩）。
-#        `WixSilentExec` 与 `WixSilentExecCmdLine` 在这份 MSI 的 Binary.WixCA
-#        （3.11.2.4516）导出表/宽字符串里实测存在（容器内 objdump + strings 读的）。
-#      · ⚠️ 本 MSI **不含 tsf_opi.dll**（File 表实测；本文件下方会打印提示）。
-#        这动作只有在 DLL 由其它步骤部署/替换时才对 TSF 版本有意义；否则只是刷新 shell。
+#      `taskkill /f /t /im <应用名>.exe`。旧实例会让 RemoveFiles 走「改名 + 重启后
+#      删除」，装完旧进程还活着，与「装后自启」叠成两个实例。
+#   2. **装后注册 TSF DLL**：DLL 已由 Gradle 挂进 jpackage `--input`、随 MSI 落
+#      在 `INSTALLDIR\app\tsf_opi.dll`（Windows CI 把 tsf-dll artifact 传给
+#      `OPI_TSF_DLL`）。执行序列 5900（InstallFiles 之后、InstallFinalize 之前）经
+#      WixCA 的 `WixSilentExec` 跑 `"regsvr32" /s "[INSTALLDIR]app\tsf_opi.dll"`；
+#      条件 `NOT REMOVE`（安装/修复跑，卸载不跑）。旧 artifact 不含 DLL 时跳过本步
+#      并打印提示。
+#   3. **完成页自启 + 重启 Explorer**：ExitDialog 的 OptionalCheckBox 默认勾选，
+#      点 Finish 时 WixShellExec 拉起包装内的 `launch-and-restart.cmd`（Gradle 随
+#      DLL 一起打进 app 目录）。脚本以**登录用户**身份启动候选窗，然后只
+#      `taskkill /f /im explorer.exe` —— 从提权 msiexec 里 `start explorer.exe` 会
+#      得到提权 shell（UAC 旁路），故意不写；Explorer 由 Winlogon 的
+#      AutoRestartShell（默认 1）以用户完整性级别拉回。AutoRestartShell=0 时 shell
+#      不会自己回来（任务管理器手动启动；安装本身不受影响）。
+#      · 脚本只在 Finish 触发：静默/基本 UI 不杀 shell；取消勾选则既不启动也不重启。
+#      · 没有脚本的旧 artifact 回退为直接启动 `<应用>.exe`（不重启 Explorer）。
+#      · 两条 WixCA 命令用不同属性（797 的 WixQuietExecCmdLine / 注册的
+#        WixSilentExecCmdLine）—— 同一属性两条命令会互相踩。
 #
 # 为什么走 msitools 后处理而不是 jpackage 选项：CMP 1.11.1 的 AbstractJPackageTask
 # **没有** --resource-dir 的口子（javap 实证：只有自用的 jpackageResources Provider，
@@ -45,13 +35,15 @@
 # 本机无法执行的 PowerShell（WindowsInstaller COM）可信得多。
 #
 # ⚠️ **本脚本能证明什么、不能证明什么**（照实写）：
-#   · 能证明：表被正确改到目标形状（读回断言 + 全表 diff 只差这四张）；
+#   · 能证明：表被正确改到目标形状（读回断言 + 全表 diff 只差这几张）；
 #     Binary.WixCA 真导出 WixShellExec/WixQuietExec/WixSilentExec（objdump 读的导出表）；
 #     cab 未被破坏。
-#   · 不能证明：**在真 Windows 上装一遍的行为**。杀进程/自启/复选框/Explorer 真被
-#     结束并由 Winlogon 拉回，都需要在 Windows 主机上装一次来验 —— 本仓此前从未在
-#     真机装过这个 MSI（docs/install/windows.md 有记）。「AutoRestartShell 默认 1」
-#     出自 Microsoft 文档，不是本机实测。别把表级证据当行为级证据用。
+#   · 不能证明：**在真 Windows 上装一遍的行为**。杀进程/regsvr32/自启/脚本杀 Explorer
+#     都需要在 Windows 主机上装一次来验 —— 本仓从未在真机装过这个 MSI
+#     （docs/install/windows.md 有记）。「AutoRestartShell 默认 1」出自 Microsoft
+#     文档，不是本机实测。注册路径 `INSTALLDIR\app\tsf_opi.dll` 按 jpackage app-image
+#     布局（Linux 同名布局为 `lib/app/`）推定，Windows 侧待真机核。别把表级证据当
+#     行为级证据用。
 #
 # 依赖：msitools（msiinfo / msibuild / msiextract 在 PATH 上）。
 # 本机没有 msitools，用 debian:12 容器跑（同 scripts/build-packages.sh 的用法）：
@@ -61,9 +53,9 @@
 #
 # 用法：scripts/postprocess-windows-msi.sh <输入.msi> [输出.msi]
 #   省略输出 = 原地改（先写临时文件再原子替换）。
-# 幂等：重复运行会被前置检查挡下（OpRestartExplorer 已在 ⇒ 报「已处理过」退出 0）。
-#   **旧版**脚本（2026-10-17，只有前两个动作）的产物会被明确拒绝（退出 1）——
-#   在原始 CI artifact 上重跑，别在半成品上追加。
+# 幂等：重复运行会被前置检查挡下（OpRegisterTsf 已在 ⇒ 报「已处理过」退出 0）。
+#   **旧版**脚本（2026-10-17/18，只有杀进程/自启/Explorer）的产物会被明确拒绝
+#   （退出 1）—— 在原始 CI artifact 上重跑，别在半成品上追加。
 
 set -euo pipefail
 
@@ -107,17 +99,17 @@ BIN_T="$(export_clean_t Binary)"
 
 grep -q "^ProductName	" <<<"$PROPS" || { echo "!! Property 表里没有 ProductName，不是 MSI？" >&2; exit 1; }
 grep -q "^WIXUI_INSTALLDIR	" <<<"$PROPS" || { echo "!! 不是 WixUI_InstallDir 的 MSI（前提变了，先读脚本头再改）" >&2; exit 1; }
-# 幂等：三个动作都在 ⇒ 直接退出 0（产物原样输出）。
-if grep -q "^OpRestartExplorer	" <<<"$CA_T"; then
-    echo "已处理过（OpRestartExplorer 已在 CustomAction 表）—— 什么都不做，退出 0"
+# 幂等：注册动作已在 ⇒ 直接退出 0（产物原样输出）。
+if grep -q "^OpRegisterTsf	" <<<"$CA_T"; then
+    echo "已处理过（OpRegisterTsf 已在 CustomAction 表）—— 什么都不做，退出 0"
     [ "$IN" = "$OUT" ] || cp "$WORK/out.msi" "$OUT"
     exit 0
 fi
-# 迁移护栏：旧版脚本（2026-10-17）的产物只有前两个动作。**别在它上面半途追加** ——
-# 797 槽已被占，前置断言会红；即使绕过也会得到半新半旧的表。指回原始 artifact。
-if grep -q "^WixQuietExecCmdLine	" <<<"$PROPS"; then
-    echo "!! 这个 MSI 是**旧版**脚本处理过的产物（有 WixQuietExecCmdLine，无 OpRestartExplorer）" >&2
-    echo "   旧产物缺 Explorer 重启动作；请在**未处理**的 CI artifact 上重跑本脚本。" >&2
+# 迁移护栏：旧版脚本（2026-10-17/18）的产物只有杀进程/自启/Explorer 重启。
+# **别在它上面半途追加** —— 797 槽已被占，前置断言会红；即使绕过也会得到半新半旧的表。
+if grep -q "^WixQuietExecCmdLine	" <<<"$PROPS" || grep -q "^OpRestartExplorer	" <<<"$CA_T"; then
+    echo "!! 这个 MSI 已被旧版脚本处理过（WixQuietExecCmdLine/OpRestartExplorer 在表里）" >&2
+    echo "   请在**未处理**的 CI artifact 上重跑本脚本。" >&2
     exit 1
 fi
 
@@ -131,29 +123,51 @@ FILEKEY="$(awk -F'\t' -v exe="$EXE" '
     NR>3 { n=split($3, a, "|"); if (a[n]==exe || a[1]==exe) print $1 }' <<<"$FILE_T")"
 [ -n "$FILEKEY" ] || { echo "!! File 表里找不到 $EXE —— 启动器名变了？" >&2; exit 1; }
 [ "$(wc -l <<<"$FILEKEY")" -eq 1 ] || { echo "!! $EXE 在 File 表里有多行：$FILEKEY" >&2; exit 1; }
-echo "产品=$PRODUCT 启动器=$EXE File键=$FILEKEY"
 
-# 如实提示（不阻断）：当前 CI artifact 只含桌面应用，**不含 tsf_opi.dll**
-# （docs/install/windows.md §2.5）。没有 DLL 时，重启 Explorer 只刷新 shell，
-# 不会让 TSF 换版本 —— 那个 DLL 是另一个 artifact，需另行部署/注册。
-if grep -qi 'tsf_opi\.dll' <<<"$FILE_T"; then
-    echo "File 表含 tsf_opi.dll —— Explorer 重启会参与 TSF DLL 的重新装载"
+# TSF DLL / 完成页脚本（2026-10-18 用户裁决「DLL 不要单独发布」）：
+# jpackage `--input` 里的普通文件落在 `INSTALLDIR\app\`（Link 同 app 镜像布局）。
+# 两者都按 File 表发现，键每次构建都变，不能写死。
+file_key_by_name() { # $1 = 目标长文件名
+    awk -F'\t' -v want="$1" '
+        NR>3 { n=split($3, a, "|"); if (a[n]==want || a[1]==want) print $1 }' <<<"$FILE_T"
+}
+DLL_KEY="$(file_key_by_name 'tsf_opi.dll')"
+SCRIPT_KEY="$(file_key_by_name 'launch-and-restart.cmd')"
+if [ -n "$DLL_KEY" ] && [ "$(wc -l <<<"$DLL_KEY")" -ne 1 ]; then
+    echo "!! tsf_opi.dll 在 File 表里有多行：$DLL_KEY" >&2
+    exit 1
+fi
+if [ -n "$SCRIPT_KEY" ] && [ "$(wc -l <<<"$SCRIPT_KEY")" -ne 1 ]; then
+    echo "!! launch-and-restart.cmd 在 File 表里有多行：$SCRIPT_KEY" >&2
+    exit 1
+fi
+echo "产品=$PRODUCT 启动器=$EXE File键=$FILEKEY"
+if [ -n "$DLL_KEY" ]; then
+    echo "TSF DLL 在包内（File 键 $DLL_KEY）—— 将注入 regsvr32 注册动作"
 else
-    echo "⚠️  File 表里没有 tsf_opi.dll：本 MSI 不含 TSF DLL（§2.5）。"
-    echo "    仍注入 Explorer 重启（用户裁决），但它不会让 TSF 换版本；DLL 需另行部署。"
+    echo "⚠️  File 表里没有 tsf_opi.dll：本 MSI 不含 TSF DLL；跳过注册动作（旧产物/本地测试）"
+fi
+if [ -n "$SCRIPT_KEY" ]; then
+    echo "完成页脚本在包内（File 键 $SCRIPT_KEY）—— 复选框将启动候选窗并重启 Explorer"
+else
+    echo "⚠️  没有 launch-and-restart.cmd：完成页复选框只启动候选窗（旧产物行为）"
 fi
 
-# 基线断言：WixCA 二进制在位（下面三个动作都挂在它上面）。
+# 基线断言：WixCA 二进制在位（下面的动作都挂在它上面）。
 grep -q "^WixCA	" <<<"$BIN_T" || { echo "!! 没有 WixCA 二进制（WixUtilExtension 没进来？）" >&2; exit 1; }
 
 # 基线断言：我们要落的坑位与名字都空着。这几条防的是「换了个 MSI 还照改」——
 # 比如 jpackage 改了标准动作编号，797 被占，静默叠号是灾难性的（两条同号行为未定义）。
 grep -qE "^[^\t]+\t[^\t]*\t797$" <<<"$IES" \
     && { echo "!! 序列 797 已被占用，槽位假设失效（读脚本头注释再改号）" >&2; exit 1; }
-grep -qE "^(OpKillRunning|OpLaunchApp|OpRestartExplorer)\t" <<<"$CA_T" \
+grep -qE "^(OpKillRunning|OpLaunchApp|OpRegisterTsf)\t" <<<"$CA_T" \
     && { echo "!! 动作名已存在（改过一半的产物？）—— 拒改" >&2; exit 1; }
 grep -q "^WixSilentExecCmdLine	" <<<"$PROPS" \
     && { echo "!! WixSilentExecCmdLine 已存在（改过一半的产物？）—— 拒改" >&2; exit 1; }
+if [ -n "$DLL_KEY" ]; then
+    grep -qE "^[^\t]+\t[^\t]*\t5900$" <<<"$IES" \
+        && { echo "!! 序列 5900 已被占用，槽位假设失效（读脚本头注释再改号）" >&2; exit 1; }
+fi
 grep -qP "^RemoveExistingProducts\t[^\t]*\t798$" <<<"$IES" \
     || { echo "!! RemoveExistingProducts 不在 798（jpackage 模板变了）—— 读脚本头注释再改" >&2; exit 1; }
 grep -qP "^ExitDialog\tFinish\tEndDialog\t" <<<"$CE_T" \
@@ -196,22 +210,27 @@ edit_table InstallExecuteSequence "OpKillRunning		797"
 #    （本机无 Windows，读不到实际渲染）。
 edit_table Property "WIXUI_EXITDIALOGOPTIONALCHECKBOX	1"
 edit_table Property "WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT	Launch ${PRODUCT} and restart Explorer"
-edit_table Property "WixShellExecTarget	[#${FILEKEY}]"
+# 完成页脚本负责「启动候选窗 + 重启 Explorer」；没有脚本的旧产物仍直接启动 exe。
+# 只杀不启：从提权的 msiexec 里 `start explorer.exe` 会得到提权 shell（UAC 旁路），
+# 脚本只 taskkill，由 Winlogon 的 AutoRestartShell 以用户令牌拉回。
+LAUNCH_KEY="${SCRIPT_KEY:-$FILEKEY}"
+edit_table Property "WixShellExecTarget	[#${LAUNCH_KEY}]"
 edit_table CustomAction "OpLaunchApp	1	WixCA	WixShellExec"
 # Ordering=1 < EndDialog 的 999 ⇒ DoAction 先于关对话框发布（与 WiX 官方
 # LaunchApplication 配方同数）。条件用官配，别自创。
 edit_table ControlEvent "ExitDialog	Finish	DoAction	OpLaunchApp	WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed	1"
 
-# 3) 装完重启 Explorer（同一复选框；Ordering=2 ⇒ 在自启之后、EndDialog(999) 之前）。
-#    只杀不启：Winlogon 的 AutoRestartShell（默认 1）会用用户令牌把 shell 拉回来；
-#    从提权的 msiexec 里 `start explorer.exe` 会得到提权 shell（UAC 旁路）—— 故意不写。
-#    用 WixSilentExec 是为了不跟 797 的 WixQuietExecCmdLine 抢同一条属性。
-edit_table Property "WixSilentExecCmdLine	\"taskkill\" /f /im explorer.exe"
-edit_table CustomAction "OpRestartExplorer	65	WixCA	WixSilentExec"
-# 完成页上的显式说明（WixUI 的 OptionalText 控件；属性为空时该控件隐藏）。
-# 只看得到、不能单独勾选 —— 与重启动作共用上面那一个复选框。
-edit_table Property "WIXUI_EXITDIALOGOPTIONALTEXT	Checking the box restarts Explorer so Windows reloads the input method. Other open apps keep the old version until restarted."
-edit_table ControlEvent "ExitDialog	Finish	DoAction	OpRestartExplorer	WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed	2"
+# 3) 注册 TSF DLL（2026-10-18「DLL 不要单独发布」）。
+#    装在 `INSTALLDIR\app\tsf_opi.dll`（jpackage `--input` 普通文件的落点，见脚本头）；
+#    `regsvr32 /s` 以提权 msiexec 身份注册 per-machine COM。WixSilentExec 与 797 的
+#    WixQuietExecCmdLine 分开两条属性 —— 同一属性两条命令会互相踩。
+#    条件 NOT REMOVE：安装/修复执行，卸载不执行（卸载产物会缺文件）。
+if [ -n "$DLL_KEY" ]; then
+    edit_table Property "WixSilentExecCmdLine	\"regsvr32\" /s \"[INSTALLDIR]app\\tsf_opi.dll\""
+    edit_table CustomAction "OpRegisterTsf	65	WixCA	WixSilentExec"
+    edit_table InstallExecuteSequence "OpRegisterTsf	NOT REMOVE	5900"
+    edit_table Property "WIXUI_EXITDIALOGOPTIONALTEXT	Checking the box restarts Explorer so Windows reloads the input method. Other open apps keep the old version until restarted."
+fi
 
 # ---------- 读回断言：表真的到了目标形状 ----------
 fail=0
@@ -229,14 +248,19 @@ check "杀进程动作（797）"        '^OpKillRunning\t\t797$'                
 check "杀进程 CA（WixQuietExec）" '^OpKillRunning\t65\tWixCA\tWixQuietExec' "$(export_clean_t CustomAction)"
 check "杀进程命令行"             "^WixQuietExecCmdLine\t\"taskkill\" /f /t /im ${EXE}$"     "$(export_clean_t Property)"
 check "自启 CA（WixShellExec）"  '^OpLaunchApp\t1\tWixCA\tWixShellExec' "$(export_clean_t CustomAction)"
-check "自启目标"                 "^WixShellExecTarget\t\[#${FILEKEY}\]$"                     "$(export_clean_t Property)"
+check "自启目标"                 "^WixShellExecTarget\t\[#${LAUNCH_KEY}\]$"                 "$(export_clean_t Property)"
 check "复选框默认勾选"           '^WIXUI_EXITDIALOGOPTIONALCHECKBOX\t1$'                    "$(export_clean_t Property)"
 check "复选框文案"               "^WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT\tLaunch ${PRODUCT} and restart Explorer$" "$(export_clean_t Property)"
 check "Finish 发布自启"          '^ExitDialog\tFinish\tDoAction\tOpLaunchApp\t'             "$(export_clean_t ControlEvent)"
-check "重启 Explorer CA（WixSilentExec）" '^OpRestartExplorer\t65\tWixCA\tWixSilentExec'      "$(export_clean_t CustomAction)"
-check "重启 Explorer 命令行"     '^WixSilentExecCmdLine\t"taskkill" /f /im explorer.exe$'   "$(export_clean_t Property)"
-check "完成页提示文案"           '^WIXUI_EXITDIALOGOPTIONALTEXT\tChecking the box restarts Explorer' "$(export_clean_t Property)"
-check "Finish 发布重启（Ordering=2）" '^ExitDialog\tFinish\tDoAction\tOpRestartExplorer\tWIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed\t2' "$(export_clean_t ControlEvent)"
+if [ -n "$DLL_KEY" ]; then
+    check "注册 TSF CA（WixSilentExec）" '^OpRegisterTsf\t65\tWixCA\tWixSilentExec'          "$(export_clean_t CustomAction)"
+    check "注册命令行"               '^WixSilentExecCmdLine\t"regsvr32" /s "\[INSTALLDIR\]app\\tsf_opi.dll"$' "$(export_clean_t Property)"
+    check "注册时机（5900 / NOT REMOVE）" '^OpRegisterTsf\tNOT REMOVE\t5900$'                "$(export_clean_t InstallExecuteSequence)"
+    check "完成页提示文案"           '^WIXUI_EXITDIALOGOPTIONALTEXT\tChecking the box restarts Explorer' "$(export_clean_t Property)"
+fi
+if [ -n "$SCRIPT_KEY" ]; then
+    check "完成页脚本在包内"         "^${SCRIPT_KEY}	"                                      "$(export_clean_t File)"
+fi
 [ "$fail" -eq 0 ] || { echo "!! 读回断言失败，产物不落" >&2; exit 1; }
 
 # ---------- 完整性：除这四张表外全库不许有变化 ----------

@@ -207,7 +207,7 @@
       <path d="M680 819 L708 819"/>
     </g>
     <text x="742" y="799" text-anchor="middle" font-size="9.5" fill="#6B7671">校验和 / 顺序 / 覆盖率</text>
-    <text x="1000" y="823" text-anchor="middle" font-size="10.5" fill="#6B7671">scripts/gen_luna_dict.py · gen_trad_dict.py · gen_kangxi_dict.py</text>
+    <text x="1000" y="823" text-anchor="middle" font-size="10.5" fill="#6B7671">scripts/gen_luna_dict.py · gen_trad_dict.py · gen_trad_modern.py · gen_kangxi_dict.py/extra</text>
 
   </g>
 </svg>

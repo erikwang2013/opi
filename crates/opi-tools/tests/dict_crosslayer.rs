@@ -336,6 +336,14 @@ const RAW_TRAD_PHRASES: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../data/raw/trad_phrases.tsv"
 );
+const RAW_TRAD_MODERN: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../data/raw/trad_modern.tsv"
+);
+const RAW_KANGXI_TRAD: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../data/raw/kangxi_trad.tsv"
+);
 const OPID_FALLBACK: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../data/generated/fallback.opid"
@@ -367,16 +375,19 @@ fn committed_dictionaries_match_their_sources() {
          `opi-tools compile data/raw/fallback.tsv data/generated/fallback.opid` 重编并提交"
     );
 
-    // 繁体：CONTRIBUTING 的配方是 `cat trad_hanzi.tsv trad_phrases.tsv`，
-    // 直接拼接、中间不插换行 —— 所以先证明 hanzi 以换行结尾，否则 `cat`
-    // 会把最后一行汉字和第一行短语粘成一行（那一行多半列数不符 → 静默丢弃）。
+    // 繁体：CONTRIBUTING 的配方是 `cat trad_hanzi.tsv trad_phrases.tsv
+    // trad_modern.tsv kangxi_trad.tsv`，直接拼接、中间不插换行 —— 所以先证明
+    // hanzi 以换行结尾，否则 `cat` 会把最后一行汉字和第一行短语粘成一行
+    // （那一行多半列数不符 → 静默丢弃）。
     let hanzi = std::fs::read_to_string(RAW_TRAD_HANZI).expect("读 trad_hanzi.tsv");
     let phrases = std::fs::read_to_string(RAW_TRAD_PHRASES).expect("读 trad_phrases.tsv");
+    let modern = std::fs::read_to_string(RAW_TRAD_MODERN).expect("读 trad_modern.tsv");
+    let kangxi = std::fs::read_to_string(RAW_KANGXI_TRAD).expect("读 kangxi_trad.tsv");
     assert!(
         hanzi.ends_with('\n'),
         "trad_hanzi.tsv 末尾没有换行 —— `cat` 拼接会把两行粘起来（配方见 CONTRIBUTING.md）"
     );
-    let merged = format!("{hanzi}{phrases}");
+    let merged = format!("{hanzi}{phrases}{modern}{kangxi}");
     let rebuilt = serialize(&compile(parse_dict(&merged)));
     let committed = std::fs::read(OPID_TRAD).expect("读 trad.opid");
     assert!(
@@ -386,7 +397,7 @@ fn committed_dictionaries_match_their_sources() {
     );
     assert_eq!(
         rebuilt, committed,
-        "trad.opid 与两份 raw TSV 现编结果不一致：改了源就用 CONTRIBUTING 的 \
+        "trad.opid 与四份 raw TSV 现编结果不一致：改了源就用 CONTRIBUTING 的 \
          `cat` + `opi-tools compile` 重编，并同步 android/app/src/main/assets/trad.opid"
     );
 }
@@ -403,7 +414,13 @@ fn committed_dictionaries_match_their_sources() {
 /// 这条立刻红（而 `verify`、`compile`、引擎装载全都照常成功）。
 #[test]
 fn no_source_line_is_silently_dropped() {
-    for path in [RAW_FALLBACK, RAW_TRAD_HANZI, RAW_TRAD_PHRASES] {
+    for path in [
+        RAW_FALLBACK,
+        RAW_TRAD_HANZI,
+        RAW_TRAD_PHRASES,
+        RAW_TRAD_MODERN,
+        RAW_KANGXI_TRAD,
+    ] {
         let text = std::fs::read_to_string(path).expect("读 raw TSV");
         // 文档写明的跳过：空行、`#` 注释、front-matter（`-` 开头）。其余都该留下来。
         let expected = text

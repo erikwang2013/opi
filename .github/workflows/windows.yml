@@ -12,10 +12,10 @@ name: Windows 打包
 #     包必须在 Windows 上打（同 packages.yml 里 deb 钉 ubuntu-22.04 的那条理由，方向相反）。
 #
 # ⚠️ 边界（**别把「打包绿了」读成「Windows 端能用」**）：
-#   本 workflow 只证明「这两个产物能在 Windows 上被编出来、DLL 的导出表长这样、能下载」。
-#   它**不**注册、**不**安装、**不**运行任何东西。CLSID 注册、TSF 能不能认出这个 TIP、
-#   文本插入有没有真的落进文档 —— 全部仍是【未验证】。缺口清单见
-#   docs/install/windows.md 的 §6.1（从未验过的事）与 §6.2（读源码得出的缺口）。
+#   本 workflow 只证明「这两个产物能在 Windows 上被编出来、DLL 的导出表长这样、MSI 里
+#   带上了 DLL 和完成页脚本」。它**不**安装、**不**运行任何东西；安装期的
+#   `regsvr32` / Explorer 重启只在后处理脚本里做了**表级**注入，仍需真机装一次验证。
+#   缺口清单见 docs/install/windows.md 的 §6.1（从未验过的事）与 §6.2（读源码得出的缺口）。
 #   本 workflow 也**不**打包 `luna.opid`：词库分发通路一条没动（§2.4 的判断仍然成立 ——
 #   仍然没有任何步骤把词库和 DLL 放到一起）。
 #
@@ -128,9 +128,18 @@ jobs:
   desktop-msi:
     name: 桌面应用 .msi（windows-latest，jpackage）
     runs-on: windows-latest
-    needs: version
+    # 2026-10-18 用户裁决「DLL 不要单独发布」：MSI 必须在打包时就把 TSF DLL
+    # 挂进 jpackage 的 `--input`，否则用户拿到一个只能装候选窗、不能打字的包。
+    needs: [version, tsf-dll]
     steps:
       - uses: actions/checkout@v4
+
+      # tsf-dll job 的产物（同一次 run，无需 release）。放进工作区，下面用
+      # OPI_TSF_DLL 指给 desktop/build.gradle.kts 的 JPackage files 集合。
+      - uses: actions/download-artifact@v4
+        with:
+          name: opi-tsf-dll-v${{ needs.version.outputs.version }}
+          path: tsf-dll
 
       # 前置守卫：description/vendor/packageName 会被 jpackage 写进 MSI **数据库**，而数据库
       # 代码页是 WiX 本地化文件里的 1252（Windows Installer 不支持 65001/UTF-8）。这些值里
@@ -172,6 +181,10 @@ jobs:
       - name: ./gradlew.bat packageMsi
         run: ./gradlew.bat packageMsi --no-daemon
         working-directory: desktop
+        env:
+          # Gradle 把 DLL 挂进 JPackage files → jpackage --input → MSI 的 File 表；
+          # scripts/postprocess-windows-msi.sh 再注入 regsvr32 注册与完成页脚本。
+          OPI_TSF_DLL: ${{ github.workspace }}\tsf-dll\tsf_opi.dll
 
       # jpackage 是 Gradle 起的外部进程，**它的话不在 Gradle 的输出里** —— 失败时
       # Gradle 只报「Exit code: 1」+ 两行日志文件路径，真原因（light.exe/candle.exe 说什么、

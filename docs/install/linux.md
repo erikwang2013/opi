@@ -191,10 +191,10 @@ sudo cmake --install build-fcitx5
 | `/usr/share/fcitx5/addon/opi_fcitx5.conf` | addon 元数据 + 门槛 | `Type::PkgData + "addon/…"` |
 | `/usr/share/fcitx5/inputmethod/opi.conf` | 输入法条目 | `Type::PkgData + "inputmethod/…"` |
 | `/usr/share/opi/luna.opid` | 简体词库 | `Type::Data + "opi/luna.opid"` |
-| `/usr/share/opi/trad.opid` | 繁体词库（2026-10-09 起） | `Type::Data + "opi/trad.opid"` |
+| `/usr/share/opi/trad.opid` | 繁体词库（2026-10-09 起；2026-10-18 起 139,355 条，含现代词层与康熙差集） | `Type::Data + "opi/trad.opid"` |
 | `/usr/share/opi/symbol_categories.tsv` | 符号大全类目数据（22 类目；与 Android 资产同源同字节） | `Type::Data + "opi/symbol_categories.tsv"` |
 | `/usr/share/opi/wubi86.opid` | 五笔 86 码表（2026-10-14 起；LGPL-3.0，与 luna 同族） | `Type::Data + "opi/wubi86.opid"` |
-| `/usr/share/opi/kangxi.tsv` | 康熙字典词库（2026-10-16 起；MIT；**首次配置生效时种进词库目录一次**，之后走 DisabledDicts 那套导入契约） | `Type::Data + "opi/kangxi.tsv"`（首启种子的源） |
+| `/usr/share/opi/kangxi.tsv` | 康熙字典词库（2026-10-16 起；MIT；**首次配置生效时种进词库目录一次**，之后走 DisabledDicts 那套导入契约）。2026-10-18 起缺的 (字,读音) 也已并入 `luna.opid`/`trad.opid`（删导入词库后仍可打） | `Type::Data + "opi/kangxi.tsv"`（首启种子的源） |
 | `/usr/share/opi/wubi98.opid` | 五笔 98 码表（2026-10-14 起；Unlicense 公共领域） | `Type::Data + "opi/wubi98.opid"` |
 | `/usr/bin/opi-ctl` | 状态栏按钮的 CLI（D-Bus 打到插件，见 §4.8） | 状态栏悬浮条（按名字在 PATH 找） |
 | `/etc/xdg/autostart/opi-statusbar.desktop` | 状态栏悬浮条随会话自启（2026-10-10 起） | XDG autostart |
@@ -939,9 +939,11 @@ android 部署副本：五笔是桌面/Windows 的主场）；生成：`python3 
 - **可选增强语义**：trad 装坏了/缺失时**不报错**，Traditional 模式回退 luna
   （表现为「切了繁体、打出来还是简体」——那正是「回退」而不是「没装」的形态；
   引擎侧只有一行 stderr）。luna 坏才是硬错误（整个插件没词库）。
-- 数据来源与授权：Unicode Unihan + rime-terra-pinyin（LGPL-3.0），生成器是
-  `scripts/gen_trad_dict.py`（**不是** `gen_luna_dict.py`）——逐条见
-  `data/raw/LICENSES.md`。
+- 数据来源与授权：Unicode Unihan + rime-terra-pinyin（LGPL-3.0）；2026-10-18 起还含
+  `trad_modern.tsv`（pinyin_simp Apache-2.0 + OpenCC s2t，现代常用词）与
+  `kangxi_trad.tsv`（MIT 康熙差集）。生成器是 `scripts/gen_trad_dict.py` +
+  `gen_trad_modern.py` + `gen_kangxi_extra.py`（**不是** `gen_luna_dict.py`）——
+  逐条见 `data/raw/LICENSES.md`；trad.opid 整体仍按 LGPL-3.0 分发。
 - 落点门禁：`opi_locate_check` 的第 4 个参数 + `ci.yml` 的「查找常量没漂」grep
   两条都盯着它（与 luna 同规格）。
 - **简体优先**（2026-10-13 用户裁决：「所有端切换简体就用简体数据，切换繁体就用繁体
@@ -964,8 +966,9 @@ android 部署副本：五笔是桌面/Windows 的主场）；生成：`python3 
 
 代码是 MIT，但**这个包同时分发词库数据，而数据与代码分开授权**（`luna.opid` 由
 LGPL-3.0 的 rime-luna-pinyin 与 Apache-2.0 的 rime-pinyin-simp 数据编译而来；
-`trad.opid` 由 Unicode Unihan 与 LGPL-3.0 的 rime-terra-pinyin 编译而来 ——
-逐条来源见 `data/raw/LICENSES.md`）。
+`trad.opid` 由 Unicode Unihan、LGPL-3.0 的 rime-terra-pinyin、Apache-2.0 的
+rime-pinyin-simp/OpenCC 转换表与 MIT 的康熙差集编译而来 —— 逐条来源见
+`data/raw/LICENSES.md`）。
 `scripts/nfpm.yaml` 因此显式把两个文件装进 `/usr/share/doc/opi/`：
 
 - `LICENSE`（代码，MIT）

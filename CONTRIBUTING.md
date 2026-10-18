@@ -42,7 +42,7 @@ cd desktop && ./gradlew package             # Windows 候选窗（Compose Deskto
 
 - **本仓库代码**：MIT（见 [`LICENSE`](LICENSE)）。
 - **视觉资产**：小欧形象/贴纸、应用图标、文档与 README 展示图等是**项目专有资产（不是开源内容）**，商业使用需书面授权，个人非商业可随未修改的官方发行版原样使用；见 [`ASSETS-LICENSE.md`](ASSETS-LICENSE.md)。第三方数据许可不受影响。
-- **词库数据**：按上游许可证**单独声明**，**不是 MIT**。当前上游含 **LGPL-3.0**（rime-luna-pinyin / rime-terra-pinyin / rime-stroke）、**Apache-2.0**（rime-pinyin-simp）、**GPL-3.0-only**（rime-ice，2026-10-11 起并入 `luna.opid`）、**MIT**（chinese-xinhua · THUOCL · 本项目自撰的人工表 brand_terms / new_words / reading_overrides / surnames / slang）、**Unicode License**（Unihan）与 **CC-BY 3.0**（英文联想词源）。逐条来源与许可证见 [`data/raw/LICENSES.md`](data/raw/LICENSES.md)。
+- **词库数据**：按上游许可证**单独声明**，**不是 MIT**。当前上游含 **LGPL-3.0**（rime-luna-pinyin / rime-terra-pinyin / rime-stroke）、**Apache-2.0**（rime-pinyin-simp）、**GPL-3.0-only**（rime-ice，2026-10-11 起并入 `luna.opid`）、**MIT**（chinese-xinhua · THUOCL · 本项目自撰的人工表 brand_terms / new_words / reading_overrides / surnames / slang · 康熙字典 shunshi-kangxi-core）、**Apache-2.0**（OpenCC 的 TSPhrases/TSCharacters，繁体现代词层的转换表）、**Unicode License**（Unihan）与 **CC-BY 3.0**（英文联想词源）。逐条来源与许可证见 [`data/raw/LICENSES.md`](data/raw/LICENSES.md)。
 
 因此：
 
@@ -56,14 +56,25 @@ cd desktop && ./gradlew package             # Windows 候选窗（Compose Deskto
 ```bash
 # 1. 改源数据 —— 只改 data/raw/*.tsv（或改 scripts/ 下的生成脚本后重新生成）
 #    繁体：python3 scripts/gen_trad_dict.py          （需网络，自行拉取 Unihan + terra 上游）
+#    繁体现代词：python3 scripts/gen_trad_modern.py （需 OpenCC CLI；从入库 luna.opid
+#                取前 10 万高频词组做词组级 s2t，生成 data/raw/trad_modern.tsv）
+#    康熙补充：python3 scripts/gen_kangxi_extra.py [--luna <合并前的 luna.opid>]
+#                （离线；只补 trad/luna 还没有的 (字,读音)，生成
+#                data/raw/kangxi_{trad,luna}.tsv。部署副本已含差集时必须给基线，
+#                否则 luna 差集会算成 0 条）
 #    简体外部层：python3 scripts/gen_extra_phrases.py（需网络；生成 data/raw/extra_phrases.tsv，
 #                gen_luna_dict 会自动读它 —— 只改 brand_terms / new_words / reading_overrides
 #                / surnames / slang 这些人工表时也要重跑它）
 #    简体：python3 scripts/gen_luna_dict.py <luna_pinyin.dict.yaml> > /tmp/luna_merged.tsv
 
-# 2. 合并并编译成 .opid（compile 一次只吃一个输入，繁体是两份 TSV 拼接后编译）
-cat data/raw/trad_hanzi.tsv data/raw/trad_phrases.tsv > /tmp/trad_merged.tsv
+# 2. 合并并编译成 .opid（compile 一次只吃一个输入；繁体是四份 TSV 拼接后编译）
+cat data/raw/trad_hanzi.tsv data/raw/trad_phrases.tsv \
+    data/raw/trad_modern.tsv data/raw/kangxi_trad.tsv > /tmp/trad_merged.tsv
 cargo run -p opi-tools -- compile /tmp/trad_merged.tsv  data/generated/trad.opid
+# luna：gen_luna_dict 的 stdout 是基线；先编成临时 opid，再与康熙差集合并
+# （也可对已有部署副本幂等重跑：python3 scripts/merge_luna_kangxi.py > /tmp/luna_merged.tsv）
+cargo run -p opi-tools -- compile /tmp/luna_merged.tsv /tmp/luna_base.opid
+python3 scripts/merge_luna_kangxi.py --luna /tmp/luna_base.opid > /tmp/luna_merged.tsv
 cargo run -p opi-tools -- compile /tmp/luna_merged.tsv  data/generated/luna.opid
 cargo run -p opi-tools -- compile data/raw/fallback.tsv data/generated/fallback.opid
 

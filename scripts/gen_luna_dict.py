@@ -102,6 +102,8 @@ luna 繁体成语段退役（2026-09-27，同一任务的后半）：
 用法（需要网络，下载 Unihan.zip + pinyin_simp.dict.yaml）：
   python3 scripts/gen_luna_dict.py <luna_pinyin.dict.yaml> > /tmp/luna_merged.tsv
 产物不入库（luna.opid 本身 gitignore）；部署副本 android/app/src/main/assets/luna.opid。
+2026-10-18 起康熙差集（`data/raw/kangxi_luna.tsv`，由 gen_kangxi_extra.py 生成）要在
+本脚本输出**之后**用 scripts/merge_luna_kangxi.py 合并再 compile（见 CONTRIBUTING）。
 """
 import hashlib
 import sys
