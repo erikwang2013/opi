@@ -36,8 +36,8 @@ android {
         targetSdk = 34
         // 与发布 tag 对齐（此前 9 个 tag 期间 versionCode 一直是 1、versionName 一直是
         // "1.0.0"：APK 既无法被识别，也无法覆盖安装升级）。
-        versionCode = 58
-        versionName = "1.10.1"
+        versionCode = 59
+        versionName = "1.11.0"
         ndk {
             // 与 rust_builder cargokit targets 对齐（plugin.gradle 固定三 ABI）。
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
@@ -58,6 +58,34 @@ android {
         }
     }
 }
+
+// ---------- 小欧表情贴纸（2026-10-18）----------
+//
+// 「自有」表情页点形态插入的图片（不是 Unicode 笑脸）。真源 =
+// `shared/pet/stickers/*.png`（`scripts/gen_pet_stickers.py` 从 Compose 绘制直出透明底），
+// 构建期原样拷进 assets/pet —— 盘上没有第二份入库副本（同 desktop 的 copyPetStickers）。
+// 运行期 asset 路径 = `pet/` + PetStickerAssets.stickerFile(mood)。
+// 源缺**响亮地死**：少装贴纸只会表现成「点形态没反应」，没人会去查构建配置。
+val copyPetStickers by tasks.registering(Copy::class) {
+    val src = layout.projectDirectory.dir("../../shared/pet/stickers")
+    doFirst {
+        check(src.asFile.isDirectory) {
+            "找不到小欧表情贴纸: ${src.asFile.path}\n" +
+                "生成一份：python3 scripts/gen_pet_stickers.py"
+        }
+    }
+    from(src)
+    into(layout.buildDirectory.dir("generated/opiAssets/pet"))
+}
+// assets 根指向 `generated/opiAssets`（其下是 pet/），运行期路径才是 pet/<file>.png。
+// ⚠️ 必须 `.get().asFile`：AGP 9 的 SourceSet API 拒绝 Provider（报「cannot add Provider
+// instances」），任务依赖由下一行显式 dependsOn 承担（不靠 Provider 自动推断）。
+android.sourceSets.getByName("main").assets.srcDir(
+    layout.buildDirectory.dir("generated/opiAssets").get().asFile,
+)
+// srcDir 只是声明目录，不带任务依赖；资产合并前必须先跑完拷贝。
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }
+    .configureEach { dependsOn(copyPetStickers) }
 
 kotlin {
     compilerOptions {

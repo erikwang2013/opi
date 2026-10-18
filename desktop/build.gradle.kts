@@ -47,7 +47,7 @@ kotlin {
 // jpackage 的包版本与设置窗标题栏都从这里取。**此前设置窗里写死过一份**
 // （"1.4.0"），到 1.6.0 就成了摆在用户眼前的假话 —— 两处写死是漂移的充分条件，
 // 生成一个常量是把它压成一处的最短路径（同 android 侧 versionName 的单一来源约定）。
-val opiAppVersion = "1.10.1"
+val opiAppVersion = "1.11.0"
 
 val generateOpiVersionSource by tasks.registering {
     val outDir = layout.buildDirectory.dir("generated/sources/opiVersion/kotlin")
@@ -139,6 +139,28 @@ val copyKangxiDict by tasks.registering(Copy::class) {
 // 「Entry kangxi.tsv is a duplicate」（目录里的每个文件都会被扫两遍）。
 // 接线改为 dependsOn：文件进同一个处理过的目录、目录只扫一次。
 tasks.named("processResources") { dependsOn(copyKangxiDict) }
+
+// ---------- 小欧表情贴纸（2026-10-18）----------
+//
+// 「自有」表情页点形态要插入**图片**（不是 Unicode 笑脸）。真源 =
+// `shared/pet/stickers/*.png`，由 `scripts/gen_pet_stickers.py` 从 `shared/pet` 的
+// Compose 绘制直出（透明底）；Android 侧同一份源拷进 assets（见 app/build.gradle.kts）。
+// 同 copyEmojiData 的纪律：构建期原样拷进资源、盘上没有可漂的第二份；源缺**响亮地死**。
+// ⚠️ 与 copyEmojiData 共用输出目录 ⇒ **只 dependsOn、不再注册 srcDir**（重复注册同一个
+// 目录会让 processResources 把每个文件扫两遍、报 duplicate entry，2026-10-16 实测过）。
+// 运行期按 classpath 读 `/pet/<file>.png`（文件名的唯一真源 = PetStickerAssets）。
+val copyPetStickers by tasks.registering(Copy::class) {
+    val src = file("../shared/pet/stickers")
+    doFirst {
+        check(src.isDirectory) {
+            "找不到小欧表情贴纸: ${src.path}\n" +
+                "生成一份：python3 scripts/gen_pet_stickers.py"
+        }
+    }
+    from(src)
+    into(layout.buildDirectory.dir("generated/opiResources/pet"))
+}
+tasks.named("processResources") { dependsOn(copyPetStickers) }
 
 // 共享源码：小欧的 Compose 绘制只有一份（shared/pet），与 android/app 同一份几何
 // （candidate_io.rs 的线协议注释也是同样的「改协议须同步两处」约定）。
