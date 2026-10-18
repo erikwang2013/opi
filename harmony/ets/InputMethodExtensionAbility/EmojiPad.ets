@@ -13,8 +13,9 @@
 //   └──── 可横滑的分类条（底部一条）────┘
 //
 // · **自有** = 独立顶级分类（用户裁决）：4 列网格画 `PetStickerImages.ets` 内嵌的
-//   12 张小欧 PNG；点击**复制图片到系统剪贴板**（`PetStickerClipboard.ets`）
-//   并弹 toast，**不提交任何文本**。自有页没有分类条、也没有 🔍。
+//   12 张小欧 GIF（缺失自动退回 PNG）；点击**复制图片到系统剪贴板**
+//   （`PetStickerClipboard.ets`，GIF 优先、PNG 兜底）并弹 toast，**不提交任何文本**。
+//   自有页没有分类条、也没有 🔍。
 // · **Emoji** 分类 = **只用**引擎 `emojiGroups()`（9 组，不再加 `自有` 偏移）。
 // · **颜文字** 分类 = `KaomojiData.ets` 的 7 类（从 data/raw/kaomoji.tsv 机械生成；
 //   解析/分类口径同 Android `KaomojiCategories`）。
@@ -35,6 +36,7 @@ import { nextMode } from './InputModes';
 import { KAOMOJI_CATEGORIES } from './KaomojiData';
 import {
   PET_STICKER_FORMS, PetStickerForm, stickerBase64, stickerDataUri,
+  stickerGifBase64, stickerGifDataUri,
 } from './PetStickerImages';
 import { copyStickerToClipboard } from './PetStickerClipboard';
 
@@ -145,7 +147,7 @@ export struct EmojiPad {
 
   // ------------------------------------------------------------ 网格
 
-  /** 自有子页：4 列网格，画真实的 12 张小欧 PNG；点击复制图片（不上屏）。 */
+  /** 自有子页：4 列网格，画真实的 12 张小欧动图；点击复制图片（不上屏）。 */
   @Builder
   StickerBrowse() {
     Scroll() {
@@ -154,7 +156,7 @@ export struct EmojiPad {
           Row() {
             ForEach(row, (f: PetStickerForm, col: number) => {
               Column() {
-                Image(stickerDataUri(f.sticker))
+                Image(stickerGifDataUri(f.sticker))
                   .width(STICKER_SIZE).height(STICKER_SIZE)
                   .objectFit(ImageFit.Contain)
                 Text(f.label).fontSize(10).fontColor('#1E6B63').margin({ top: 2 })
@@ -162,7 +164,10 @@ export struct EmojiPad {
               .layoutWeight(1).height(78).justifyContent(FlexAlign.Center)
               .onClick(() => {
                 // 剪贴板回退：IME Kit 没有往宿主输入框插图片的接口（见 README 缺口）。
-                copyStickerToClipboard(stickerBase64(f.sticker), f.label);
+                // GIF 优先；写入失败时 Clipboard helper 自动退回 PNG。
+                copyStickerToClipboard(
+                  stickerGifBase64(f.sticker), stickerBase64(f.sticker), f.label
+                );
               })
             }, (f: PetStickerForm, col: number) => `${col}-${f.sticker}`)
             this.Blanks(STICKER_PER_ROW - row.length)

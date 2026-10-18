@@ -264,7 +264,7 @@ private fun NavColumn(selected: SettingsTab, onSelect: (SettingsTab) -> Unit) {
             modifier = Modifier.fillMaxWidth().padding(start = 14.dp, top = 14.dp, end = 10.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            OpiPet(mood = PetMood.IDLE, size = 44.dp) // 起侧壁刻 OPI
+            OpiPet(mood = PetMood.IDLE, size = 44.dp, animate = true) // 起侧壁刻 OPI；设置页常驻动效
             Spacer(Modifier.width(8.dp))
             Column {
                 Text("小欧", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Ink)

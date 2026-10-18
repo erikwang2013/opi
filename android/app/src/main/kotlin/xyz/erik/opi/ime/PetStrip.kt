@@ -5,10 +5,6 @@ package xyz.erik.opi.ime
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -30,7 +26,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
@@ -39,8 +34,9 @@ import xyz.erik.opi.keyboard.LocalKeyboardPalette
 import xyz.erik.opi.pet.OpiPet
 import xyz.erik.opi.pet.PetMood
 import xyz.erik.opi.pet.PetPalette
+import xyz.erik.opi.pet.petMotion
+import xyz.erik.opi.pet.rememberPetMotionPhase
 import kotlin.math.PI
-import kotlin.math.abs
 import kotlin.math.sin
 
 /**
@@ -82,15 +78,9 @@ fun PetStrip(modifier: Modifier = Modifier) {
     )
     val dark = p.barBg.luminance() < 0.5f
     val petPalette = if (dark) PetPalette.Dark else PetPalette.Default
-    // 相位 0..1 无限循环：各形态按不同倍频取用（见下面的 graphicsLayer），
+    // 相位 0..1 无限循环：各形态按不同倍频取用（见 shared/pet/PetMotion.kt），
     // 只在绘制层读它 —— 不触发重组。
-    val transition = rememberInfiniteTransition(label = "petStrip")
-    val phase by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(PET_PHASE_MS, easing = LinearEasing)),
-        label = "petPhase",
-    )
+    val phase = rememberPetMotionPhase()
 
     Box(
         modifier = modifier
@@ -123,69 +113,12 @@ fun PetStrip(modifier: Modifier = Modifier) {
                 radius = glow,
                 center = Offset(size.width / 2f, size.height * 0.62f),
             )
-            drawPetParticles(current, phase, accent)
+            drawPetParticles(current, phase.value, accent)
         }
         // 小欧本体：整只做情绪动效，脸用 Crossfade 换（两帧叠化，不闪断）。
+        // 动效公式抽在 shared/pet/PetMotion.kt，与桌面设置页/贴纸格共用。
         Box(
-            modifier = Modifier.graphicsLayer {
-                val a = phase * 2f * PI.toFloat()
-                when (current) {
-                    PetMood.IDLE -> {
-                        translationY = (sin(a) * 1.1f).dp.toPx()
-                        rotationZ = sin(a * 0.5f) * 1.1f
-                    }
-                    PetMood.WAITING -> {
-                        val hop = abs(sin(a))
-                        translationY = (-hop * 2.4f).dp.toPx()
-                        scaleX = 1f + hop * 0.03f
-                        scaleY = 1f - hop * 0.03f
-                    }
-                    PetMood.CRYING -> {
-                        translationX = (sin(a * 10f) * 0.5f).dp.toPx()
-                        rotationZ = sin(a * 5f) * 1.4f
-                        translationY = 1.dp.toPx()
-                    }
-                    PetMood.PUZZLED -> {
-                        translationY = (1f + sin(a) * 0.7f).dp.toPx()
-                        rotationZ = sin(a * 0.5f) * 2.2f
-                    }
-                    PetMood.TERRIFIED -> {
-                        translationX = (sin(a * 16f) * 1.1f).dp.toPx()
-                        rotationZ = sin(a * 11f) * 1.1f
-                    }
-                    PetMood.ANGRY -> {
-                        translationX = (sin(a * 18f) * 1.9f).dp.toPx()
-                        rotationZ = sin(a * 15f) * 0.9f
-                    }
-                    PetMood.COQUETTISH -> {
-                        translationX = (sin(a * 0.7f) * 0.8f).dp.toPx()
-                        rotationZ = sin(a * 0.7f) * 1.8f
-                    }
-                    PetMood.CUTE -> {
-                        val hop = abs(sin(a))
-                        translationY = (-hop * 1.8f).dp.toPx()
-                        rotationZ = sin(a) * 2f
-                    }
-                    PetMood.PLEASING -> {
-                        // 点头：只向下沉，不左右晃。
-                        translationY = (abs(sin(a)) * 1.2f).dp.toPx()
-                    }
-                    PetMood.KNOCKING -> {
-                        // 敲打：高频小顿挫。
-                        translationY = (-abs(sin(a * 14f)) * 1.4f).dp.toPx()
-                        rotationZ = sin(a * 14f) * 0.6f
-                    }
-                    PetMood.FACE_PALM -> {
-                        translationX = (sin(a * 6f) * 0.9f).dp.toPx()
-                        rotationZ = sin(a * 6f) * 1.2f
-                    }
-                    PetMood.TONGUE_OUT -> {
-                        translationY = (sin(a * 2.2f) * 0.6f).dp.toPx()
-                        rotationZ = sin(a * 2.2f) * 1.6f
-                    }
-                    else -> Unit
-                }
-            },
+            modifier = Modifier.petMotion(current, phase),
             contentAlignment = Alignment.Center,
         ) {
             Crossfade(
@@ -202,9 +135,6 @@ fun PetStrip(modifier: Modifier = Modifier) {
 /** 每个形态的停留时长（ms）与淡入时长（ms）；十二形态共用同一节奏。 */
 internal const val PET_FORM_HOLD_MS = 2800L
 internal const val PET_FORM_FADE_MS = 420
-
-/** 动效相位周期（ms）：相位 0..1 循环，各形态按不同倍频取用。 */
-private const val PET_PHASE_MS = 2400
 
 /** 小欧在条里的宽度（高按 240:250 推导 ≈ 33.3dp，上下各留 ~2dp 给动效）。 */
 private val PET_SIZE = 32.dp

@@ -163,6 +163,9 @@ private const val CANVAS_H = 250f
  * @param size 键帽宽度（高度按 240:250 自动推导）。
  * @param showLegend 是否在侧壁刻 OPI —— 小于 64dp 时刻字只剩几像素高，会糊成
  *   一团脏点，默认按尺寸自动关闭（候选栏里的小欧就不带刻字）。
+ * @param animate 是否套用 [petMotion] 情绪动效（桌面设置页/贴纸格）。默认 `false`：
+ *   贴纸渲染入口与结果稳定无关的场景必须保持静态（`gen_pet_stickers.py` 的 PNG
+ *   直接来自这里的静态绘制）。
  */
 @Composable
 fun OpiPet(
@@ -171,9 +174,12 @@ fun OpiPet(
     palette: PetPalette = PetPalette.Default,
     size: Dp = 72.dp,
     showLegend: Boolean = size >= 64.dp,
+    animate: Boolean = false,
 ) {
     val measurer = rememberTextMeasurer()
-    Canvas(modifier.size(width = size, height = size * CANVAS_H / CANVAS_W)) {
+    val phase = if (animate) rememberPetMotionPhase() else null
+    val motion = if (phase != null) Modifier.petMotion(mood, phase) else Modifier
+    Canvas(modifier.size(width = size, height = size * CANVAS_H / CANVAS_W).then(motion)) {
         drawOpiPet(mood, palette, showLegend, measurer)
     }
 }

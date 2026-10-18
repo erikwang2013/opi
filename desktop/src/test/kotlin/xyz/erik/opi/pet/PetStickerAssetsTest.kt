@@ -37,6 +37,7 @@ class PetStickerAssetsTest {
         )
         for ((mood, file) in expected) {
             assertEquals(file, PetStickerAssets.stickerFile(mood))
+            assertEquals(file.removeSuffix(".png") + ".gif", PetStickerAssets.gifFile(mood))
         }
     }
 }

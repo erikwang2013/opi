@@ -59,25 +59,36 @@ android {
     }
 }
 
-// ---------- 小欧表情贴纸（2026-10-18）----------
+// ---------- 小欧表情贴纸 / GIF / 字体（2026-10-18，2026-10-19 扩）----------
 //
 // 「自有」表情页点形态插入的图片（不是 Unicode 笑脸）。真源 =
-// `shared/pet/stickers/*.png`（`scripts/gen_pet_stickers.py` 从 Compose 绘制直出透明底），
-// 构建期原样拷进 assets/pet —— 盘上没有第二份入库副本（同 desktop 的 copyPetStickers）。
-// 运行期 asset 路径 = `pet/` + PetStickerAssets.stickerFile(mood)。
+// `shared/pet/stickers/*.png` 与 `shared/pet/stickers-gif/*.gif`
+// （`scripts/gen_pet_stickers.py` 从 Compose 绘制直出透明底），构建期原样拷进
+// assets/pet、assets/pet-gif —— 盘上没有第二份入库副本（同 desktop）。
+// `shared/pet/emoji-font/` 的 TTF/TSV 进 assets/pet-font（Android 侧可
+// `Typeface.createFromAsset` 或按 TSV 解析；见 PetFontAssets.kt）。
+// 运行期 asset 路径 = `pet/` / `pet-gif/` / `pet-font/` + 文件名。
 // 源缺**响亮地死**：少装贴纸只会表现成「点形态没反应」，没人会去查构建配置。
 val copyPetStickers by tasks.registering(Copy::class) {
-    val src = layout.projectDirectory.dir("../../shared/pet/stickers")
+    val pngSrc = layout.projectDirectory.dir("../../shared/pet/stickers")
+    val gifSrc = layout.projectDirectory.dir("../../shared/pet/stickers-gif")
+    val fontSrc = layout.projectDirectory.dir("../../shared/pet/emoji-font")
     doFirst {
-        check(src.asFile.isDirectory) {
-            "找不到小欧表情贴纸: ${src.asFile.path}\n" +
-                "生成一份：python3 scripts/gen_pet_stickers.py"
+        check(pngSrc.asFile.isDirectory && gifSrc.asFile.isDirectory && fontSrc.asFile.isDirectory) {
+            "找不到小欧表情资产：\n  ${pngSrc.asFile.path}\n  ${gifSrc.asFile.path}\n  " +
+                "${fontSrc.asFile.path}\n生成一份：python3 scripts/gen_pet_stickers.py " +
+                "&& python3 scripts/gen_pet_emoji_font.py"
         }
     }
-    from(src)
-    into(layout.buildDirectory.dir("generated/opiAssets/pet"))
+    from(pngSrc) { into("pet") }
+    from(gifSrc) { include("*.gif"); into("pet-gif") }
+    from(fontSrc) {
+        include("opi-emoji.ttf", "map.tsv", "shortcodes.tsv")
+        into("pet-font")
+    }
+    into(layout.buildDirectory.dir("generated/opiAssets"))
 }
-// assets 根指向 `generated/opiAssets`（其下是 pet/），运行期路径才是 pet/<file>.png。
+// assets 根指向 `generated/opiAssets`（其下是 pet/ 等），运行期路径才是 pet/<file>.png。
 // ⚠️ 必须 `.get().asFile`：AGP 9 的 SourceSet API 拒绝 Provider（报「cannot add Provider
 // instances」），任务依赖由下一行显式 dependsOn 承担（不靠 Provider 自动推断）。
 android.sourceSets.getByName("main").assets.srcDir(

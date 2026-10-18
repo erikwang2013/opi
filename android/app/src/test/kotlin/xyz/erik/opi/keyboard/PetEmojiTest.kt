@@ -58,6 +58,7 @@ class PetEmojiTest {
         assertEquals("12 个文件名必须互不相同", 12, files.toSet().size)
         for (f in PetEmoji.forms) {
             assertEquals("pet/" + PetStickerAssets.stickerFile(f.mood), PetEmoji.assetPath(f.mood))
+            assertEquals("pet-gif/" + PetStickerAssets.gifFile(f.mood), PetEmoji.gifAssetPath(f.mood))
         }
     }
 }

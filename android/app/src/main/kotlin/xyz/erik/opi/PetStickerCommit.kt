@@ -26,8 +26,9 @@ private const val TAG = "OpiPetSticker"
 /**
  * 「自有」宠物形态 = **插入图片**，不提交任何 Unicode 文本（2026-10-18 用户裁决）。
  *
- * 图片走 `InputConnection.commitContent`；编辑器不接受（含 API < 25）时上屏
- * **独立文本标签** `[小欧·笑]` 并 toast —— 绝不退回笑脸 emoji（用户裁决）。
+ * 图片走 `InputConnection.commitContent`，格式优先级（2026-10-19）：**GIF → PNG →
+ * 独立文本标签** `[小欧·笑]`（绝不退回笑脸 emoji）。GIF 是同一张 PNG 的轻微
+ * 弹跳/缩放动画，见 `shared/pet/stickers-gif/`。
  * IC 为空时与文本提交同一套延迟重试（[PendingCommit.RETRY_MS]），仍拿不到就放弃并记日志。
  */
 internal fun OpiImeService.commitPetSticker(mood: PetMood) {
@@ -48,19 +49,36 @@ internal fun OpiImeService.commitPetSticker(mood: PetMood) {
 }
 
 private fun OpiImeService.commitPetStickerTo(ic: InputConnection, mood: PetMood) {
-    val file = petStickerFile(mood) ?: return
+    // 优先动图（2026-10-19），编辑器不收 GIF 再退回 PNG，最后才是文本标签。
+    val gif = petStickerFile(PetEmoji.gifAssetPath(mood), PetStickerAssets.gifFile(mood))
+    val png = petStickerFile(PetEmoji.assetPath(mood), PetStickerAssets.stickerFile(mood))
+    if (gif == null && png == null) {
+        toast("小欧表情暂不可用")
+        return
+    }
     dropComposing(ic)
+    if (gif != null && commitPetStickerImage(ic, gif, "image/gif")) return
+    if (png != null && commitPetStickerImage(ic, png, "image/png")) return
+    Log.w(TAG, "editor rejected image/gif and image/png, fallback to text tag: ${mood.name}")
+    commitPetStickerTextFallback(ic, mood)
+}
+
+/** 把一张图通过 commitContent 交给编辑器；FileProvider/编辑器失败都只返回 false。 */
+private fun OpiImeService.commitPetStickerImage(
+    ic: InputConnection,
+    file: File,
+    mime: String,
+): Boolean {
     val uri = try {
         FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
     } catch (e: IllegalArgumentException) {
-        // file_paths.xml 与 cacheDir/pet 对不上（配置错误）—— 不让 IME 崩，同样走文本标签。
-        Log.w(TAG, "FileProvider 配置错误，回退文本标签：$e")
-        commitPetStickerTextFallback(ic, mood)
-        return
+        // file_paths.xml 与 cacheDir/pet 对不上（配置错误）—— 不让 IME 崩，交给下一档回退。
+        Log.w(TAG, "FileProvider 配置错误，跳过 $mime：$e")
+        return false
     }
     val info = InputContentInfoCompat(
         uri,
-        ClipDescription("小欧表情", arrayOf("image/png")),
+        ClipDescription("小欧表情", arrayOf(mime)),
         null,
     )
     // currentInputEditorInfo 正常非空；旧 API 的兼容路径会读它，空 EditorInfo 只会让它返回 false。
@@ -72,28 +90,26 @@ private fun OpiImeService.commitPetStickerTo(ic: InputConnection, mood: PetMood)
         null,
     )
     if (ok) {
-        Log.i(TAG, "pet sticker inserted: ${file.name}")
-        return
+        Log.i(TAG, "pet sticker inserted: ${file.name} ($mime)")
+    } else {
+        Log.w(TAG, "editor rejected $mime: ${file.name}")
     }
-    Log.w(TAG, "editor rejected image/png, fallback to text tag: ${file.name}")
-    commitPetStickerTextFallback(ic, mood)
+    return ok
 }
 
 /**
- * assets/pet → cacheDir/pet（存在且非空则跳过，供 FileProvider 暴露读权限）。
+ * assets 路径 → cacheDir/pet（存在且非空则跳过，供 FileProvider 暴露读权限）。
  * 0 字节 = 上次拷贝被中断留下的残骸；`exists()` 为真但图是坏的，必须重拷。
- * 缺资产时 toast 并返回 null。
+ * 缺资产返回 null（GIF 缺失是可回退的情况，由调用方决定是否 toast）。
  */
-private fun OpiImeService.petStickerFile(mood: PetMood): File? {
-    val path = PetEmoji.assetPath(mood)
-    val file = File(File(cacheDir, "pet").apply { mkdirs() }, PetStickerAssets.stickerFile(mood))
+private fun OpiImeService.petStickerFile(assetPath: String, name: String): File? {
+    val file = File(File(cacheDir, "pet").apply { mkdirs() }, name)
     if (file.length() > 0) return file
     return try {
-        assets.open(path).use { input -> file.outputStream().use { input.copyTo(it) } }
+        assets.open(assetPath).use { input -> file.outputStream().use { input.copyTo(it) } }
         file
     } catch (e: IOException) {
-        Log.w(TAG, "pet sticker asset missing: $path", e)
-        toast("小欧表情暂不可用")
+        Log.w(TAG, "pet sticker asset missing: $assetPath", e)
         null
     }
 }

@@ -1,30 +1,11 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-// ⚠️ 草案 · **未编译**（2026-10-18 新增；本机没有 Swift 工具链，CI `apple.yml` 的 iOS job 会真编译）
+// **生成文件 —— 别手改。** 源：shared/pet/stickers/*.png
+// 重新生成：python3 scripts/gen_pet_stickers.py
 //
-// **生成文件 —— 别手改。**
-//
-// 「自有」表情的 12 张**小欧贴纸 PNG**（280×280、透明底），以 base64 内嵌。
-//
-// 源：`shared/pet/stickers/<file>.png`，由 `scripts/gen_pet_stickers.py` 从
-// `shared/pet/OpiPet.kt` 十二形态的同一套 Compose 绘制直出（不是第二套几何）。
-// 文件名契约 = `shared/pet/PetStickerAssets.kt`（`PetMood.name` 小写、下划线换连字符）；
-// 标签与顺序 = `PetEmojiTable.swift`（逐条等于 `shared/pet/PetEmojiMap.kt`，排除
-// SLEEPY / DEGRADED 两个输入状态）。
-//
-// 内嵌方式：每张图一条单行 base64 字符串，用时 `Data(base64Encoded:)` →
-// `UIImage(data:)`。不用 asset catalog：键盘扩展与宿主 App 的资源拷贝链路在草案里
-// 还没接（见 `ios/README.md` 已知缺口），常量内嵌与 `KaomojiData.swift` 同一种交付
-// 形态，构建期零 IO，也不用改 Xcode 工程文件（CI 直接 `swiftc ios/*.swift`）。
-//
-// 重新生成（仓库根执行；输出即下面 `base64` 的字面量）：
-//
-//   python3 - <<'PY'
-//   import base64, pathlib
-//   for n in "idle waiting puzzled crying terrified angry coquettish cute pleasing knocking face-palm tongue-out".split():
-//       print(f'        "{n}": "{base64.b64encode(pathlib.Path("shared/pet/stickers", n + ".png").read_bytes()).decode()}",')
-//   PY
+// 「自有」表情的 12 张小欧贴纸 PNG（280×280、透明底）以 base64 内嵌。本仓没有
+// Xcode 工程，资源没有落点，常量内嵌与 KaomojiData.swift 是同一种交付形态。
 
 import UIKit
 

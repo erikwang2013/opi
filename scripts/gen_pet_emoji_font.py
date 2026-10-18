@@ -50,6 +50,8 @@ from fontTools.ttLib.tables.DefaultTable import DefaultTable
 from fontTools.ttLib.tables.S_V_G_ import SVGDocument
 from PIL import Image
 
+from pet_emoji_font_mirrors import platform_outputs
+
 ROOT = Path(__file__).resolve().parent.parent
 STICKERS = ROOT / "shared" / "pet" / "stickers"
 PET_KT = ROOT / "shared" / "pet" / "OpiPet.kt"
@@ -387,26 +389,37 @@ def build_outputs() -> dict[str, bytes]:
 
 def main() -> None:
     outputs = build_outputs()
+    platform = platform_outputs(outputs)
     check_only = "--check" in sys.argv[1:]
     if check_only:
         stale = []
         for name, data in outputs.items():
             path = OUT_DIR / name
             if not path.is_file() or path.read_bytes() != data:
-                stale.append(name)
+                stale.append(str(path.relative_to(ROOT)))
+        for path, data in platform.items():
+            if not path.is_file() or path.read_bytes() != data:
+                stale.append(str(path.relative_to(ROOT)))
         if stale:
             fail(
                 "committed output is missing or stale: "
                 + ", ".join(stale)
                 + f" (run python3 {Path(__file__).relative_to(ROOT)})"
             )
-        print(f"OK: {len(outputs[FONT_FILE])} byte font and tables match sources")
+        print(
+            f"OK: {len(outputs[FONT_FILE])} byte font, tables and "
+            f"{len(platform)} platform mirror files match sources"
+        )
         return
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     for name, data in outputs.items():
         (OUT_DIR / name).write_bytes(data)
         print(f"wrote {OUT_DIR.relative_to(ROOT) / name} ({len(data)} bytes)")
+    for path, data in platform.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        print(f"wrote {path.relative_to(ROOT)} ({len(data)} bytes)")
 
 
 if __name__ == "__main__":

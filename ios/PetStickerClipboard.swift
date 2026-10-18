@@ -9,6 +9,10 @@
 // 没有往宿主文本框插图片的接口（`UIPasteboard` 是唯一的跨应用图片通道）。所以点一格
 // = 复制 + 键盘内可见提示，用户回宿主 App 自己粘贴。
 //
+// 2026-10-19：优先写 `com.compuserve.gif`（`PetStickerGifs` 内嵌的 10 帧动画），同时
+// 附 `public.png` 首帧；粘贴方不收 GIF 时仍能取到静态图。没有 GIF 时才退回
+// `UIPasteboard.general.image`。
+//
 // ⚠️ 未验证：无「完全访问」（本草案 `RequestsOpenAccess=false`）时，**写**剪贴板按
 // 文档不需要完全访问（**读**才需要）；真机上第一次验的时候先看这一步，失败会表现为
 // 「提示出了但粘贴不到图」。
@@ -23,7 +27,13 @@ enum PetStickerClipboard {
     @discardableResult
     static func copy(_ form: PetEmojiTable.Form) -> Bool {
         guard let image = PetStickerImages.image(named: form.sticker) else { return false }
-        UIPasteboard.general.image = image
+        if let gif = PetStickerGifs.data(named: form.sticker) {
+            var item: [String: Any] = ["com.compuserve.gif": gif]
+            if let png = image.pngData() { item["public.png"] = png }
+            UIPasteboard.general.setItems([item])
+        } else {
+            UIPasteboard.general.image = image
+        }
         // 触觉只是锦上添花；扩展里被忽略也不影响复制本身。
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         UIAccessibility.post(

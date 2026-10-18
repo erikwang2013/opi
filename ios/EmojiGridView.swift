@@ -199,20 +199,23 @@ final class EmojiGridView: UIView, UIScrollViewDelegate {
     }
 }
 
-/// 「自有」一格：小欧 PNG + 小标签（例：[图] 笑）。
+/// 「自有」一格：小欧动画 + 小标签（例：[图] 笑）。
 ///
-/// 图片来自 `PetStickerImages`（内嵌的 12 张透明底 PNG，源 `shared/pet/stickers/`）。
-/// 点击只把这一格报给面板（面板复制图片到剪贴板），**不提交任何文本**。
+/// 图片优先来自 `PetStickerGifs`（内嵌的 12 张透明底 GIF，源
+/// `shared/pet/stickers-gif/`）；GIF 缺失时退回 `PetStickerImages` 的静态 PNG。
+/// 点击只把这一格报给面板（面板复制到剪贴板），**不提交任何文本**。
 private final class StickerCell: UIButton {
     private let onTap: () -> Void
 
     init(form: PetEmojiTable.Form, onTap: @escaping () -> Void) {
         self.onTap = onTap
         super.init(frame: .zero)
-        let imageView = UIImageView(image: PetStickerImages.image(named: form.sticker))
+        let animated = PetStickerGifs.animatedImage(named: form.sticker)
+        let imageView = UIImageView(image: animated ?? PetStickerImages.image(named: form.sticker))
         imageView.contentMode = .scaleAspectFit
         imageView.isUserInteractionEnabled = false
-        // 12 张图都内嵌在 `PetStickerImages`；缺失时只露标签（不静默画成 emoji 字形）。
+        // 12 张图都内嵌在 `PetStickerGifs` / `PetStickerImages`；缺失时只露标签
+        //（不静默画成 emoji 字形）。
         let caption = UILabel()
         caption.text = form.label
         caption.font = .systemFont(ofSize: 9)

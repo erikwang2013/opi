@@ -7,8 +7,8 @@
 
 以下资产（含其任意尺寸、格式与修改版）适用本许可：
 
-- **小欧形象与自有表情**：`shared/pet/stickers/*.png`，以及 `shared/pet/` 中小欧形象的视觉设计（外观、配色、形态）及其生成的位图/字体产物。⚠️ `shared/pet/*.kt` 的**绘制代码仍为 MIT**；本许可只约束视觉设计与生成产物，不改变代码许可。
-- **生成的 emoji 字体**：由上述项目自绘形象生成的字体文件，如 `shared/pet/emoji-font/`（`opi-emoji.ttf` 等），以及随发行版提供的其它 `.ttf` / `.otf` 字体产物
+- **小欧形象与自有表情**：`shared/pet/stickers/*.png`、`shared/pet/stickers-gif/*.gif`，以及 `shared/pet/` 中小欧形象的视觉设计（外观、配色、形态）及其生成的位图/动画/字体产物（含各端构建期拷贝与内嵌副本，如 `ios/PetStickerGifs.swift`、`harmony/.../PetStickerImages.ets`）。⚠️ `shared/pet/*.kt` 的**绘制代码仍为 MIT**；本许可只约束视觉设计与生成产物，不改变代码许可。
+- **生成的 emoji 字体**：由上述项目自绘形象生成的字体与映射文件，如 `shared/pet/emoji-font/`（`opi-emoji.ttf`、`map.tsv`、`shortcodes.tsv` 等），以及随发行版提供的其它 `.ttf` / `.otf` 字体产物与内嵌副本（如 `ios/PetEmojiFont.swift`、`harmony/resources/base/rawfile/pet-font/`；`harmony/.../PetEmojiFont.ets` 内嵌两份 TSV）
 - **应用图标**：Android `android/app/src/main/res/mipmap-*/ic_launcher*`、`mipmap-anydpi-v26/ic_launcher*.xml`、`drawable/ic_launcher_foreground.xml`；Windows `desktop/icons/opi-pet.ico`、`desktop/icons/opi-pet.png`、`crates/tsf-opi/assets/opi-langbar.ico`；macOS `macos/opi.tiff`；HarmonyOS `harmony/resources/base/media/icon.png`；以及 iOS / HarmonyOS / Windows / macOS 安装包中同一形象的应用图标
 - **文档与 README 展示图**：`docs/opi-pet.svg`、`docs/opi-pet-forms.svg`、`docs/diagrams/*.svg`、`docs/social-preview*`，以及 `docs/` 下其它项目展示图和 README 中引用的展示图（赞赏码 `docs/alipay.png`、`docs/weixinpay.png` 除外）
 - **随项目分发的其它自绘界面素材**：例如 fcitx5 皮肤中的 `crates/fcitx5-opi/data/themes/opi-*/panel.png`、`prev.png`、`next.png`

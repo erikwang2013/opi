@@ -32,4 +32,7 @@ object PetEmoji {
      * （桌面 classpath 与 Android assets 同名同规则）；这里只补 assets 的 `pet/` 前缀。
      */
     fun assetPath(mood: PetMood): String = "pet/" + PetStickerAssets.stickerFile(mood)
+
+    /** 动画 GIF 的 assets 路径（构建期 `pet-gif/`；缺失时提交退回 PNG）。 */
+    fun gifAssetPath(mood: PetMood): String = "pet-gif/" + PetStickerAssets.gifFile(mood)
 }

@@ -20,4 +20,11 @@ object PetStickerAssets {
     /** 情绪 → 贴纸文件名（纯函数，Android/桌面共用）。 */
     fun stickerFile(mood: PetMood): String =
         mood.name.lowercase().replace('_', '-') + ".png"
+
+    /**
+     * 情绪 → 动画 GIF 文件名。源 = `shared/pet/stickers-gif/`（同一张 PNG 的轻微
+     * 弹跳/缩放/摆动，`scripts/gen_pet_stickers.py` 生成）；与 PNG 同基名。
+     */
+    fun gifFile(mood: PetMood): String =
+        mood.name.lowercase().replace('_', '-') + ".gif"
 }

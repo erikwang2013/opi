@@ -59,6 +59,10 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        // 内嵌字体（`PetEmojiFont`）在进程内注册一次，family "Opi Emoji" 才能被
+        // CoreText 选中。⚠️ 当前 TTF 只有 SVG/CBDT，CoreText 很可能不渲染色表；
+        // 注册失败/字形空白不影响面板贴纸（走 GIF/PNG）。
+        _ = PetEmojiFont.register()
         loadDictionaries()
         // 可选增强（笔画 / 五笔码表）在同一刻装：引擎刚就绪，正是「文件 → 引擎」的落点
         // （对齐 Android：`EngineLoader.load(context)` 里 luna → trad → stroke → wubi

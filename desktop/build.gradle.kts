@@ -174,15 +174,22 @@ tasks.named("processResources") { dependsOn(copyKangxiDict) }
 // 目录会让 processResources 把每个文件扫两遍、报 duplicate entry，2026-10-16 实测过）。
 // 运行期按 classpath 读 `/pet/<file>.png`（文件名的唯一真源 = PetStickerAssets）。
 val copyPetStickers by tasks.registering(Copy::class) {
-    val src = file("../shared/pet/stickers")
+    val pngSrc = file("../shared/pet/stickers")
+    val gifSrc = file("../shared/pet/stickers-gif")
+    val fontSrc = file("../shared/pet/emoji-font")
     doFirst {
-        check(src.isDirectory) {
-            "找不到小欧表情贴纸: ${src.path}\n" +
-                "生成一份：python3 scripts/gen_pet_stickers.py"
+        check(pngSrc.isDirectory && gifSrc.isDirectory && fontSrc.isDirectory) {
+            "找不到小欧表情资产：\n  ${pngSrc.path}\n  ${gifSrc.path}\n  ${fontSrc.path}\n" +
+                "生成一份：python3 scripts/gen_pet_stickers.py && python3 scripts/gen_pet_emoji_font.py"
         }
     }
-    from(src)
-    into(layout.buildDirectory.dir("generated/opiResources/pet"))
+    from(pngSrc) { into("pet") }
+    from(gifSrc) { include("*.gif"); into("pet-gif") }
+    from(fontSrc) {
+        include("opi-emoji.ttf", "map.tsv", "shortcodes.tsv")
+        into("pet-font")
+    }
+    into(layout.buildDirectory.dir("generated/opiResources"))
 }
 tasks.named("processResources") { dependsOn(copyPetStickers) }
 

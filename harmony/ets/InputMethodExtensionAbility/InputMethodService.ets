@@ -14,6 +14,7 @@
 import { InputMethodExtensionAbility } from '@kit.IMEKit';
 import { Want } from '@kit.AbilityKit';
 import { KeyboardController } from './KeyboardController';
+import { registerPetEmojiFont } from './PetEmojiFont';
 
 export default class InputMethodService extends InputMethodExtensionAbility {
   /**
@@ -23,6 +24,9 @@ export default class InputMethodService extends InputMethodExtensionAbility {
    * 所以里面必须幂等 —— KeyboardController.init() 自身有 started 挡重入。
    */
   onCreate(want: Want): void {
+    // 内嵌 "Opi Emoji" 字体（rawfile/pet-font/opi-emoji.ttf）。未注册成功不影响
+    // 贴纸面板：面板走 GIF，字体只是 PUA 码位的可选渲染路径。
+    registerPetEmojiFont();
     KeyboardController.getInstance().init(this.context);
   }
 

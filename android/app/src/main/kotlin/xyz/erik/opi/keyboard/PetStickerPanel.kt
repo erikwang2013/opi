@@ -36,7 +36,10 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import xyz.erik.opi.pet.OpiPet
+import xyz.erik.opi.pet.PetFontAssets
 import xyz.erik.opi.pet.PetMood
+import xyz.erik.opi.pet.petMotion
+import xyz.erik.opi.pet.rememberPetMotionPhase
 import java.io.IOException
 
 /** 解码目标边长（px）：格子画 40dp，density 2.75 下约 110px，128 足够且省 12 张图的内存。 */
@@ -45,15 +48,22 @@ private const val PET_STICKER_MAX_PX = 128
 /**
  * 「自有」子页：12 个小欧形态（PNG 表情图，asset 路径见 [PetEmoji.assetPath]）。
  *
- * 点击走 [onPick]（图片插入通道），**不经过**文本提交与最近使用 —— 自有与 Emoji
- * 是独立顶级分类（2026-10-18 用户裁决）。资产缺失时退回矢量 [OpiPet] 占位，
- * 面板不出现空白格；真点击时服务侧会 toast「暂不可用」。
+ * 点击走 [onPick]（GIF → PNG 的图片插入通道），**不经过**文本提交与最近使用 ——
+ * 自有与 Emoji 是独立顶级分类（2026-10-18 用户裁决）。格子里是静态 PNG + 共享
+ * 相位动效（点击插入的是 GIF；Android 侧不引 Coil/ImageDecoder）。资产缺失时退回
+ * 矢量 [OpiPet] 占位，面板不出现空白格；真点击时服务侧会 toast「暂不可用」。
  */
 @Composable
 internal fun PetStickerPanel(onPick: (PetMood) -> Unit) {
     val forms = remember { PetEmoji.forms }
     val assets = LocalContext.current.assets
+    // 内置 map.tsv 是形态标签的真源（PetEmojiMap 是兜底；两张表由生成器互校）。
+    val labels = remember(assets) {
+        PetFontAssets.preload(assets)?.associate { it.mood to it.label }.orEmpty()
+    }
     val loaded = remember { mutableStateMapOf<PetMood, ImageBitmap>() }
+    // 面板自身也用共享相位做轻微动效（不引 Coil/ImageDecoder；点击提交的才是 GIF）。
+    val phase = rememberPetMotionPhase()
     // 解码放 IO：12 张 PNG 若在首帧同步解，打开自有页会卡一下。
     LaunchedEffect(Unit) {
         val images = withContext(Dispatchers.IO) {
@@ -78,7 +88,10 @@ internal fun PetStickerPanel(onPick: (PetMood) -> Unit) {
                     .padding(4.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .clickable { onPick(form.mood) }
-                    .semantics { contentDescription = "小欧${form.label}，插入图片表情" },
+                    .semantics {
+                        val label = labels[form.mood.name] ?: form.label
+                        contentDescription = "小欧$label，插入图片表情"
+                    },
                 contentAlignment = Alignment.Center,
             ) {
                 val image = loaded[form.mood]
@@ -86,7 +99,7 @@ internal fun PetStickerPanel(onPick: (PetMood) -> Unit) {
                     Image(
                         bitmap = image,
                         contentDescription = null, // 读屏走格子 Box 的语义
-                        modifier = Modifier.size(40.dp),
+                        modifier = Modifier.size(40.dp).petMotion(form.mood, phase),
                         contentScale = ContentScale.Fit,
                     )
                 } else {
