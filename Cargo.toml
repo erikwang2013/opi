@@ -7,7 +7,7 @@ members = ["crates/engine-core", "crates/engine-data", "crates/opi-tools", "crat
 # 写一次漂一次，现值以本行下面的 `version` 为准）
 # 此前 tag 已到 v1.0.8 而 crate 仍写死 0.1.0，`opi-tools --version` 无从报告真实版本。
 [workspace.package]
-version = "1.12.0"
+version = "1.13.0"
 edition = "2024"
 # MSRV：edition 2024 只要求 1.85，真正卡住下界的是 let-chain（1.88 才稳定）。
 # ⚠️ 别信「全仓只有一处」—— 编译在第一个失败处就停，下游客到不了，
