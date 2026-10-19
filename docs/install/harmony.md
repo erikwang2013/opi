@@ -78,7 +78,7 @@ harmony/                          # 工程根（hvigorw 在这个目录里跑）
 ├── oh-package.json5
 ├── hvigor/hvigor-config.json5
 ├── AppScope/
-│   ├── app.json5                 # bundleName xyz.erik.opi, versionName 1.16.0
+│   ├── app.json5                 # bundleName xyz.erik.opi, versionName 1.16.1
 │   └── resources/base/{element/string.json, media/app_icon.png}
 └── entry/
     ├── build-profile.json5       # externalNativeOptions → src/main/cpp/CMakeLists.txt, abiFilters arm64-v8a

@@ -1,4 +1,4 @@
-/* OPI static site — section layouts. */
+/* opi static site — section layouts. */
 
 /* ---------- Hero ---------- */
 .hero { overflow: hidden; }
@@ -229,6 +229,9 @@
 
 /* ---------- Download ---------- */
 .download { padding-top: clamp(84px, 9vh, 120px); padding-bottom: 0; justify-content: flex-start; }
+.download-notice { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; margin: 16px 0 18px; padding: 12px 16px; border: 1px solid rgba(217, 85, 63, .26); border-left: 3px solid var(--accent); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; background: rgba(217, 85, 63, .06); color: var(--ink-soft); font-size: .78rem; line-height: 1.7; }
+.download-notice strong { color: var(--accent); font-size: .7rem; letter-spacing: .05em; }
+.download-notice p { margin: 0; }
 .download-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(10px, 1.3vw, 16px); }
 .download-card {
   position: relative;

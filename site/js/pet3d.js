@@ -1,4 +1,4 @@
-/* OPI hero — a quiet three.js scene around the keycap sprite. */
+/* opi hero — a quiet three.js scene around the keycap sprite. */
 import * as THREE from '../vendor/three.module.min.js';
 
 const canvas = document.getElementById('pet-stage');

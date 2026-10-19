@@ -169,7 +169,7 @@ class StatusBarTest {
     @Test
     fun `mode slots split the face without overlapping`() {
         // 摆法：无角标 ⇒ 单槽占满整块面；en26 ⇒ 「en」居中 + 「26」占右下，两槽**按分数
-        // 就不相交**（en 的底 0.60 ≤ 角标顶 0.72）—— 这一条是**与字体无关**的保证（像素
+        // 就不相交**（en 的底 0.66 ≤ 角标顶 0.69）—— 这一条是**与字体无关**的保证（像素
         // 判据在 KeycapRenderTest，量的是键帽内真画出来的墨迹）。
         assertEquals(listOf("拼"), modeSlots("pinyin").map { it.text })
         assertEquals(listOf("五"), modeSlots("wubi").map { it.text })
@@ -180,9 +180,9 @@ class StatusBarTest {
         assertTrue("en 槽的底 ≤ 角标槽的顶（不然两字会叠在一起）", en.bottom <= corner.top)
         assertTrue("角标槽的左边 ≤ en 槽的右边（同一条：槽必须不相交）", corner.left <= en.right)
         assertTrue("角标该在右下角", corner.left >= 0.5f && corner.top >= 0.5f)
-        // 2026-10-19 键帽设计图：en 不再占满宽度（0.22..0.65 × 0.32..0.60）；角标在其右下。
-        assertEquals(listOf(0.22f, 0.32f, 0.65f, 0.60f), listOf(en.left, en.top, en.right, en.bottom))
-        assertEquals(listOf(0.56f, 0.72f, 0.90f, 0.93f), listOf(corner.left, corner.top, corner.right, corner.bottom))
+        // 2026-10-20 用户裁决：en 放大到与其他键名同宽（0.10..0.74 × 0.20..0.66）；角标在右下。
+        assertEquals(listOf(0.10f, 0.20f, 0.74f, 0.66f), listOf(en.left, en.top, en.right, en.bottom))
+        assertEquals(listOf(0.55f, 0.69f, 0.93f, 0.94f), listOf(corner.left, corner.top, corner.right, corner.bottom))
     }
 
     @Test

@@ -248,15 +248,16 @@ internal fun punctSlots(st: ImeState): List<GlyphSlot> {
 }
 
 /**
- * 键帽里的主字槽（2026-10-19 从设计图量得）：`en` 墨迹宽约 40%、垂直中心约 46%。
- * 槽位是**键帽边长**的 0..1；四周留余量，[layoutGlyphs] 按墨迹取最大也不会贴边。
+ * 键帽里的主字槽（2026-10-20 用户报障后放大）：`en` 要和状态栏其他键名一样大，
+ * 墨迹宽约 64% 键帽宽、高约 46%，中心约 (0.42, 0.43)。槽位是**键帽边长**的 0..1；
+ * 四周留余量，[layoutGlyphs] 按墨迹取最大也不会贴边；底边与角标槽留出 0.03 的间隙。
  */
 private fun keycapMainSlot(text: String) =
-    GlyphSlot(text, left = 0.22f, top = 0.32f, right = 0.65f, bottom = 0.60f)
+    GlyphSlot(text, left = 0.10f, top = 0.20f, right = 0.74f, bottom = 0.66f)
 
-/** 键帽右下角标槽（设计图：宽约 29%、居中于 ~0.73/0.83）。最后一槽 = 角标色。 */
+/** 键帽右下角标槽（2026-10-20 放大到清楚可读）：宽约 38%、高约 25%，中心 ~ (0.74, 0.815)。 */
 private fun keycapCornerSlot(text: String) =
-    GlyphSlot(text, left = 0.56f, top = 0.72f, right = 0.90f, bottom = 0.93f)
+    GlyphSlot(text, left = 0.55f, top = 0.69f, right = 0.93f, bottom = 0.94f)
 
 /**
  * 英文专业键（2026-10-19 设计图）：`en` 居中、`pro` 右下角，槽位见 [keycapMainSlot] /

@@ -174,14 +174,14 @@ class KeycapRenderTest {
     @Test
     fun `keycap glyphs keep the design proportions`() {
         // 扫描带留出比槽更大的范围（纵向放大要能露出来），同时避开 1dp 描边与圆角弧：
-        // · en：x 0.10..0.80、y 0.25..0.68（槽 0.32..0.60）；
-        // · 角标：x 0.45..0.93、y 0.68..0.93（右下圆角弧的内沿从 y≈0.94 起进入 x≤0.93）。
+        // · en：x 0.10..0.80、y 0.16..0.68（槽 0.20..0.66，2026-10-20 放大后）；
+        // · 角标：x 0.45..0.93、y 0.67..0.95（槽 0.69..0.94）。
         for ((name, b, mode) in cases) {
             val img = probe("geom-$name") { face(b, mode) }
             val colsAll = origin + (cap * 0.10f).toInt()..origin + (cap * 0.80f).toInt()
-            val enRows = origin + (cap * 0.25f).toInt()..origin + (cap * 0.68f).toInt()
+            val enRows = origin + (cap * 0.16f).toInt()..origin + (cap * 0.68f).toInt()
             val cornerCols = origin + (cap * 0.45f).toInt()..origin + (cap * 0.93f).toInt()
-            val cornerRows = origin + (cap * 0.68f).toInt()..origin + (cap * 0.93f).toInt()
+            val cornerRows = origin + (cap * 0.67f).toInt()..origin + (cap * 0.95f).toInt()
             val en = inkIn(img, colsAll, enRows)
             val corner = inkIn(img, cornerCols, cornerRows)
             assertTrue("$name 的 en 该有墨迹（扫描带 $en）", !en.empty)
@@ -200,16 +200,21 @@ class KeycapRenderTest {
                     "${"%.3f".format(cornerW)}×${"%.3f".format(cornerH)} 中心 " +
                     "(${"%.3f".format(cornerCx)}, ${"%.3f".format(cornerCy)})",
             )
-            assertTrue("$name en 宽 $enW 应 ≤ 0.50 键帽宽（槽放大到填满键帽会在这里红）", enW <= 0.50f)
-            assertTrue("$name en 高 $enH 应 ≤ 0.35 键帽高（设计 ~0.215）", enH <= 0.35f)
-            assertTrue("$name 角标宽 $cornerW 应 ≤ 0.35 键帽宽（设计 ~0.29、槽 0.34）", cornerW <= 0.35f)
-            assertTrue("$name 角标高 $cornerH 应 ≤ 0.25 键帽高（槽 0.21）", cornerH <= 0.25f)
-            // 1× 下角标仍 ≥6px 宽（旧的「角落还读得出两个数字」产品下限）。
-            assertTrue("$name 角标在 1× 下该 ≥ 6px（实测 ${"%.1f".format(cornerW * 26f)}px）", cornerW * 26f >= 6f)
-            assertTrue("$name en 水平中心 $enCx 应 ≈ 0.44", abs(enCx - 0.44f) <= 0.05f)
-            assertTrue("$name en 垂直中心 $enCy 应 ≈ 0.46（不是上半区）", abs(enCy - 0.46f) <= 0.05f)
-            assertTrue("$name 角标水平中心 $cornerCx 应 ≈ 0.73（右下）", abs(cornerCx - 0.73f) <= 0.05f)
-            assertTrue("$name 角标垂直中心 $cornerCy 应 ≈ 0.83（右下）", abs(cornerCy - 0.83f) <= 0.05f)
+            // 2026-10-20 用户裁决：en 放大到和其他键名一样大；26/pro 右下角清晰可见。
+            assertTrue("$name en 宽 $enW 应 ≥ 0.55 键帽宽（旧的小字会被这里拦住）", enW >= 0.55f)
+            assertTrue("$name en 宽 $enW 应 ≤ 0.72 键帽宽（不能压到描边）", enW <= 0.72f)
+            assertTrue("$name en 高 $enH 应 ≥ 0.30 键帽高（放大后的产品下限；en 的字面本身偏扁）", enH >= 0.30f)
+            assertTrue("$name en 高 $enH 应 ≤ 0.52 键帽高（不能压到角标）", enH <= 0.52f)
+            assertTrue("$name 角标宽 $cornerW 应 ≥ 0.30 键帽宽（放大到清楚可读）", cornerW >= 0.30f)
+            assertTrue("$name 角标宽 $cornerW 应 ≤ 0.42 键帽宽（右下角框内）", cornerW <= 0.42f)
+            assertTrue("$name 角标高 $cornerH 应 ≥ 0.20 键帽高（清楚可读）", cornerH >= 0.20f)
+            assertTrue("$name 角标高 $cornerH 应 ≤ 0.30 键帽高（不贴底）", cornerH <= 0.30f)
+            // 1× 下角标仍 ≥8px 宽（2026-10-20 放大后的产品下限）。
+            assertTrue("$name 角标在 1× 下该 ≥ 8px（实测 ${"%.1f".format(cornerW * 26f)}px）", cornerW * 26f >= 8f)
+            assertTrue("$name en 水平中心 $enCx 应 ≈ 0.42", abs(enCx - 0.42f) <= 0.05f)
+            assertTrue("$name en 垂直中心 $enCy 应 ≈ 0.43", abs(enCy - 0.43f) <= 0.05f)
+            assertTrue("$name 角标水平中心 $cornerCx 应 ≈ 0.74（右下）", abs(cornerCx - 0.74f) <= 0.05f)
+            assertTrue("$name 角标垂直中心 $cornerCy 应 ≈ 0.82（右下）", abs(cornerCy - 0.82f) <= 0.05f)
         }
     }
 
@@ -258,15 +263,17 @@ class KeycapRenderTest {
             assertTrue("$name 150% 描边该是 $stroke（实测通道差 $strokeInk）", strokeInk <= 24)
             // 扫描带与 100% 用例同源（按键帽比例），只把原点/边长换成 150% 的。
             val enCols = (originPx + capPx * 0.10f).toInt()..(originPx + capPx * 0.80f).toInt()
-            val enRows = (originPx + capPx * 0.25f).toInt()..(originPx + capPx * 0.68f).toInt()
+            val enRows = (originPx + capPx * 0.16f).toInt()..(originPx + capPx * 0.68f).toInt()
             val cornerCols = (originPx + capPx * 0.45f).toInt()..(originPx + capPx * 0.93f).toInt()
-            val cornerRows = (originPx + capPx * 0.68f).toInt()..(originPx + capPx * 0.93f).toInt()
+            val cornerRows = (originPx + capPx * 0.67f).toInt()..(originPx + capPx * 0.95f).toInt()
             val en = inkIn(img, enCols, enRows)
             val corner = inkIn(img, cornerCols, cornerRows)
             assertTrue("$name 150% 的 en 该有墨迹（扫描带 $en）", !en.empty)
             assertTrue("$name 150% 的角标该有墨迹（扫描带 $corner）", !corner.empty)
-            assertTrue("$name 150% en 宽 ${en.w / capPx} 应 ≤ 0.50 键帽宽", en.w / capPx <= 0.50f)
-            assertTrue("$name 150% 角标宽 ${corner.w / capPx} 应 ≤ 0.35 键帽宽", corner.w / capPx <= 0.35f)
+            assertTrue("$name 150% en 宽 ${en.w / capPx} 应 ≥ 0.55 键帽宽", en.w / capPx >= 0.55f)
+            assertTrue("$name 150% en 宽 ${en.w / capPx} 应 ≤ 0.72 键帽宽", en.w / capPx <= 0.72f)
+            assertTrue("$name 150% 角标宽 ${corner.w / capPx} 应 ≥ 0.30 键帽宽", corner.w / capPx >= 0.30f)
+            assertTrue("$name 150% 角标宽 ${corner.w / capPx} 应 ≤ 0.42 键帽宽", corner.w / capPx <= 0.42f)
             assertTrue(
                 "$name 150% 主字该是 $main",
                 closest(img, enCols, enRows, main) <= 24,

@@ -1,4 +1,4 @@
-/* OPI static site — navigation, reveal, pet-form dialog. No framework. */
+/* opi static site — navigation, reveal, pet-form dialog. No framework. */
 (() => {
   'use strict';
 

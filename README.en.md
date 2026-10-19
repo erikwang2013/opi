@@ -14,6 +14,8 @@ The Chinese name is **小欧** (also the project pet's name); the English name i
 
 > **Website**: [`site/index.html`](site/index.html) — a scroll-snap tour of OPI, feature iterations, release log, and per-platform downloads.
 >
+> **Verification scope**: hardware and cost are limited, so only **Android / Windows / Linux** are currently verified; the other clients have code adaptations but are untested.
+>
 
 ![OPI's project pet: Opi the keycap sprite](docs/opi-pet.svg)
 <img src="docs/site-preview.png" alt="OPI website: an input method that goes back to the basics" width="760">
@@ -283,7 +285,7 @@ LICENSE · CONTRIBUTING.md      # MIT full text · contribution guide (incl. dic
 
 ### 📅 Project Status
 
-> **Current stage: v1.16.0 (2026-10-20): six native clients and the static website; Apple / HarmonyOS are unsigned artifacts, and the Windows install path is still being verified**
+> **Current stage: v1.16.1 (2026-10-20): six native clients and the static website; Apple / HarmonyOS are unsigned artifacts, and the Windows install path is still being verified**
 
 V1 milestone progress:
 

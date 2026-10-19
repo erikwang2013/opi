@@ -14,6 +14,8 @@
 
 > **官网 / Website**：[`site/index.html`](site/index.html) —— 翻屏式项目介绍、功能迭代、版本日志与各端下载。
 >
+> **验证范围**：受硬件资源与成本限制，目前仅验证 **Android / Windows / Linux** 三端；其它端已完成代码适配，尚未测试验证。
+>
 
 ![OPI 项目宠物：键帽精灵「小欧」](docs/opi-pet.svg)
 <img src="docs/site-preview.png" alt="OPI 官网首页：把输入，还给输入本身" width="760">
@@ -283,7 +285,7 @@ LICENSE · CONTRIBUTING.md      # MIT 全文 · 贡献指南（含词库许可�
 
 ### 📅 项目状态
 
-> **当前阶段：v1.16.0（2026-10-20）：六端原生客户端与静态官网；Apple / 鸿蒙为 unsigned 产物，Windows 安装链路仍在验证**
+> **当前阶段：v1.16.1（2026-10-20）：六端原生客户端与静态官网；Apple / 鸿蒙为 unsigned 产物，Windows 安装链路仍在验证**
 
 V1 里程碑进度：
 

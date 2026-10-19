@@ -1,4 +1,4 @@
-/* OPI static site — responsive breakpoints. */
+/* opi static site — responsive breakpoints. */
 
 @media (min-width: 901px) {
   /* Narrow copy columns need a smaller display size than the wide feature headings. */
@@ -102,6 +102,7 @@
   .os-meta { font-size: .56rem; }
   .os-note { font-size: .64rem; }
   .os-cta { font-size: .68rem; }
+  .download-notice { font-size: .72rem; }
   .download-foot { font-size: .66rem; }
   .site-footer { padding-top: 30px; }
   .footer-main { flex-direction: column; gap: 18px; }

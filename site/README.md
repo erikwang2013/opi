@@ -1,4 +1,4 @@
-# OPI 静态站点
+# opi 静态站点
 
 项目介绍 / 功能迭代 / 版本日志 / 应用下载的静态单页。无前端框架，翻屏使用原生
 CSS scroll-snap；首屏的 three.js 场景只画小欧与粒子环，离屏暂停。
@@ -25,7 +25,7 @@ site/
   js/pet3d.js           three.js：宠物纹理 + 光环 + 粒子 + 指针视差
   vendor/               three.js 0.170.0（module 版，随站点分发）
   assets/pet/           小欧 PNG / SVG、十二形态 GIF+PNG
-  assets/social-preview.png  Open Graph 预览图
+  assets/social-preview.png  Open Graph 预览图（1280×640，小欧主题）
 ```
 
 ## 性能预算
@@ -47,7 +47,7 @@ GitHub Pages 均可）。页面内没有构建步骤，也没有服务端依赖�
 
 - `site/README.md` 的链接若部署在子路径（如 `/opi/`），保持相对路径即可。
 - 统计脚本由 busuanzi 提供；广告拦截器或离线环境会把它拦掉，页面其余部分不受影响。
-- 版本号在 `index.html`（hero 的 `v1.16.0`）与发布页链接里是手写的，发版时同步。
+- 版本号在 `index.html`（hero 的 `v1.16.1`）与发布页链接里是手写的，发版时同步。
 
 ## 素材授权
 
