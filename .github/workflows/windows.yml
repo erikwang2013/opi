@@ -309,8 +309,9 @@ jobs:
           # CustomAction 导出尾列可能为空（行尾 tab），故用 \t*$ 锚定；关键是
           # 后缀 64 不能被省的 $ 吃掉 —— `WixSilentExec` 是 WixSilentExec64 的前缀。
           grep -qP '^OpRegisterTsf\t1\tWixCA\tWixSilentExec64\t*$' <<<"$ca" || { echo "::error::注册 CA 不是 OpRegisterTsf(Type 1)/WixSilentExec64（Type 65 会吞失败）"; fail=1; }
-          grep -qP '^WixSilentExec64CmdLine\t"\[System64Folder\]regsvr32\.exe" /s "\[INSTALLDIR\]app\\tsf_opi\.dll"$' <<<"$props" || { echo "::error::WixSilentExec64CmdLine 不是 64 位 regsvr32 全路径命令行"; fail=1; }
+          grep -qP '^OpRegisterTsf\.SetProperty\t51\tWixSilentExec64CmdLine\t"\[System64Folder\]regsvr32\.exe" /s "\[INSTALLDIR\]app\\tsf_opi\.dll"\t*$' <<<"$ca" || { echo "::error::缺少 Type 51 注册命令行设置动作（Property 值不会被格式化）"; fail=1; }
           grep -qP '^OPI_POSTPROCESSED\t' <<<"$props" || { echo "::error::Property 表里没有后处理标记 OPI_POSTPROCESSED"; fail=1; }
+          grep -qP '^OpRegisterTsf\.SetProperty\tNOT REMOVE\t5890$' <<<"$ies" || { echo "::error::注册命令行设置动作不在序列 5890（NOT REMOVE）"; fail=1; }
           grep -qP '^OpRegisterTsf\tNOT REMOVE\t5900$' <<<"$ies" || { echo "::error::注册动作不在序列 5900（NOT REMOVE）"; fail=1; }
           grep -qP '^INSTALLDIR\tProgramFiles64Folder\topi$' <<<"$dir" || { echo "::error::INSTALLDIR 的默认目录不是 opi"; fail=1; }
           # 位宽独立断言：随包 WixCA 必须是 32 位（PE32 i386）——这正是必须用

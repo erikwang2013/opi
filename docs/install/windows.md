@@ -404,12 +404,14 @@ docker run --rm -v "$PWD:/w" -w /w debian:12 \
 2. 执行序列 797 加一条 `"taskkill" /f /t /im opi-candidates.exe`（引号是 WixQuietExec 的
    硬要求；排在 `RemoveExistingProducts@798` **之前** —— 否则运行中的旧实例会走
    「改名+重启后删」那条路，装完还活着）。
-3. 执行序列 5900（InstallFiles 之后、InstallFinalize 之前）经 `WixCA` 的
-   **`WixSilentExec64`**（**Type 1，Return=check**；不是 65）执行
+3. 执行序列 5890 先用 **Type 51（属性设置）** 动作把格式化后的命令行写进
+   `WixSilentExec64CmdLine`；5900（InstallFiles 之后、InstallFinalize 之前）再由
+   `WixCA` 的 **`WixSilentExec64`**（**Type 1，Return=check**；不是 65）执行
    `"[System64Folder]regsvr32.exe" /s "[INSTALLDIR]app\tsf_opi.dll"`，注册随 MSI 安装的 TSF COM 服务器。
-   **2026-10-20 订正**：CI 的 Server Core 容器里裸 `"regsvr32"` 让 `QuietExec64`
-   返回 `0x80070003`（`ERROR_PATH_NOT_FOUND`），于是 `OpRegisterTsf` 失败、安装回滚、
-   安装目录为空；改成 `[System64Folder]` 全路径（64 位 `System32`）后重测。
+   **2026-10-20 订正（CI Server Core 实测）**：Property 表的 Value **不会**被 MSI
+   格式化；直接把 `[INSTALLDIR]`/`[System64Folder]` 写进 Property 会让 `QuietExec64`
+   拿到字面量并返回 `0x80070003`，`OpRegisterTsf` 失败、安装回滚、安装目录为空。
+   Type 51 动作的 Target 列才会格式化，且 5890 必须先于 5900。
    **必须用 64 位变体**（2026-10-19 复审 blocker）：随包的 `Binary.WixCA` 是
    **PE32 i386**（216,496 B），裸 `WixSilentExec` 在 WOW64 里解析到 SysWOW64 的 32 位
    `regsvr32`，加载不了 x86-64 的 `tsf_opi.dll`。`WixSilentExec64` 配 `WixSilentExec64CmdLine`，
