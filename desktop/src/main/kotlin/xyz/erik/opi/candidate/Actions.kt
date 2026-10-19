@@ -4,7 +4,7 @@
 //! 状态栏按钮的**外部命令**部分：把点击变成一条命令，并把失败如实报回来。
 //!
 //! 契约（2026-10-10 冻结，Linux 侧由另一条轨实现，本侧**只调用**）：
-//! **`opi-ctl <action>`**，action ∈ `symbols|trad|punct|fullwidth|lang|mode`；`opi-ctl` 在
+//! **`opi-ctl <action>`**，action ∈ `symbols|trad|punct|fullwidth|lang|englishpro|mode`；`opi-ctl` 在
 //! `/usr/bin/opi-ctl`（PATH 上，按名调）。`mode`（2026-10-14 加）是**唯一**成功应答
 //! 不是 "ok" 的动作：它回新状态 token（见 [cycleMode]），别按「回 ok 才成功」读它。
 //!
@@ -15,7 +15,7 @@
 //! 就摆在状态栏 LANG 按钮下面；想「顺手」改回去之前先看 StatusBarTest 的映射回归钉。
 //!
 //! 状态通道（2026-10-10 深夜冻结）：**`opi-ctl state`** → 一行
-//! `lang=zh|en;trad=on|off;punct=on|off;fw=on|off[;im=<uniqueName>][;mode=<档位>]`
+//! `lang=zh|en;trad=on|off;punct=on|off;fw=on|off[;im=<uniqueName>][;mode=<档位>][;enpro=on|off]`
 //! （rc 0 成功；通道不通 rc≠0 且无输出）—— 状态栏的实时图标读它（[readImeState]）。
 //! `im` = 当前输入法（2026-10-10 下午用户裁决「切到其他输入法时状态栏消失」的数据位，
 //! glue 侧在途追加；缺键/空串 = 未知，语义见 [ImeState.im] 与 StatusBar.kt 的 [barVisible]）。
@@ -267,6 +267,12 @@ data class ImeState(
     val mode: String = "",
     /** 英文专业模式（`enpro=` 位，2026-10-19 追加）：缺键 = false（普通）。 */
     val englishPro: Boolean = false,
+    /**
+     * `enpro=` 位**在不在**（2026-10-19）：缺键 = 本机加载的还是老插件 ⇒ `englishpro`
+     * 动作会被服务端回 err:5「未知动作」。与 [englishPro] 的值分开记 —— 缺键不是
+     * 「普通模式」，是「这个能力还没有」；状态栏据此提示重启而不是弹裸错误。
+     */
+    val englishProKnown: Boolean = false,
 )
 
 /**
@@ -295,7 +301,7 @@ fun parseImeState(line: String?): ImeState {
             // 交给界面画档位。也不把整行判坏（老插件没这一格，硬判 = 把「版本旧」变成
             // 状态栏可见的失败）。
             "mode" -> st.copy(mode = if (v in MODE_TOKENS) v else "")
-            "enpro" -> if (on != null) st.copy(englishPro = on) else st
+            "enpro" -> if (on != null) st.copy(englishPro = on, englishProKnown = true) else st
             else -> st // 以后多出来的键：忽略
         }
     }
@@ -311,6 +317,19 @@ fun parseImeState(line: String?): ImeState {
 fun readImeState(): ImeState = when (val r = runCapture(listOf("opi-ctl", "state"), 1500)) {
     is RunResult.Exit -> if (r.code == 0) parseImeState(r.firstLine) else ImeState()
     RunResult.Timeout, is RunResult.Failed -> ImeState()
+}
+
+/**
+ * 英文专业键（en/pro）的**生效范围**（2026-10-19 用户裁决）：只控制英文是否查单词库，
+ * 且只在英文输入法下有效。返回 null = 放行；非 null = 给用户看的原因，**不发动作**。
+ *
+ * 老插件（state 行没有 `enpro=` 位）也在这里挡住：动作会回 err:5「未知动作」，
+ * 与其把裸错误弹给用户，不如直接告诉他重启输入法加载新插件。
+ */
+internal fun enproBlockReason(st: ImeState): String? = when {
+    !st.englishProKnown -> "英文专业键暂不可用：请重启输入法（fcitx5）后重试"
+    st.zh -> "英文专业键只在英文输入法下有效"
+    else -> null
 }
 
 // ---------- 动作 + 补读 ----------

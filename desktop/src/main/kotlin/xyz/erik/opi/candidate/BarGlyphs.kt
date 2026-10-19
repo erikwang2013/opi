@@ -249,7 +249,7 @@ internal fun punctSlots(st: ImeState): List<GlyphSlot> {
 
 /**
  * 英文专业键（2026-10-19）：`en` 在左上、`pro` 在右下，两槽对角摆放；
- * 高亮态由状态栏按钮背景表达（`proActive` 从 `opi-ctl state` 的 enpro= 读）。
+ * 高亮态由状态栏按钮背景表达（StatusBar.kt 的 BarButton 按 `ImeState.englishPro` 常亮）。
  */
 internal fun enproSlots(): List<GlyphSlot> = listOf(
     GlyphSlot("en", left = 0f, top = 0f, right = 0.55f, bottom = 0.55f),

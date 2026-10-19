@@ -48,12 +48,12 @@ internal fun nextSkin(skin: SkinOption): SkinOption =
     SkinOption.entries[(skin.ordinal + 1) % SkinOption.entries.size]
 
 /**
- * 状态栏（悬浮条）设置：master 隐藏 + 8 个按钮的常驻开关（未常驻 = 不显示）。
+ * 状态栏（悬浮条）设置：master 隐藏 + 9 个按钮的常驻开关（未常驻 = 不显示）。
  * 默认 = master 不隐藏，其余按钮常驻，**软键盘除外**：2026-10-10 早先裁决「8 按钮
  * 全上」被**同日中午**的用户裁决收窄 —— 软键盘默认关（键盘窗不是人人要，要用的
  * 在设置里自己开）；配置文件里的显式值照旧优先（读侧 [OpSettings.fromIni]）。
  *
- * **9 枚按钮里这里只放 8 个开关**：2026-10-14 加的模式按钮（[StatusBarButton.MODE]）
+ * **10 枚按钮里这里只放 9 个开关**：2026-10-14 加的模式按钮（[StatusBarButton.MODE]）
  * 没有开关、恒常驻，所以它既没有字段也没有 ini 键 —— 别按「漏了一个」把它补上
  * （补它要先加 `StatusBarMode=` 键，见 [statusButtonWired] 的 MODE 段）。
  */
@@ -64,6 +64,9 @@ data class StatusBarSettings(
     val trad: Boolean = true,
     val punct: Boolean = true,
     val lang: Boolean = true,
+    // 英文专业键（2026-10-19 用户裁决「设置增加是否隐藏控制」）：默认常驻，
+    // 与其他 opi-ctl 动作一样只在 Linux 上可用（见 statusButtonWired）。
+    val enpro: Boolean = true,
     val logo: Boolean = true,
     val fullwidth: Boolean = true,
     val settings: Boolean = true,
@@ -93,8 +96,8 @@ enum class StatusBarButton(val label: String, val hint: String) {
     // 2026-10-10 中午用户踩过；事故留痕见 Actions.kt 头部与 StatusBarTest 的映射钉）。
     LANG("中英文切换", "与 Shift 轻按同一条通路（opi-ctl lang）"),
     // 英文普通/专业（2026-10-19）：en 在左上、pro 在右下；只有专业模式查词库。
-    // 与 MODE 一样没有 ini 常驻键（恒在 Linux 条上，设置窗不出开关）。
-    ENPRO("英文专业", "英文26键：普通只输出字母 ⇄ 专业查单词库（opi-ctl englishpro）"),
+    // 受 `StatusBarEnPro` 常驻开关控制（默认开、设置窗可隐藏）；点击只在英文输入法下生效。
+    ENPRO("英文专业", "英文26键：普通只输出字母 ⇄ 专业查单词库（仅英文输入法；opi-ctl englishpro）"),
     PUNCT("中英标点", "中英文标点切换（调 opi-ctl）"),
     TRAD("简繁转换", "简 ⇄ 繁（调 opi-ctl）"),
     // 模式（2026-10-14 用户裁决，原话：「状态栏在简繁按钮后增加模式切换按钮，默认拼音，
@@ -124,8 +127,8 @@ fun StatusBarSettings.resident(b: StatusBarButton): Boolean = when (b) {
     StatusBarButton.LOGO -> logo
     StatusBarButton.FULLWIDTH -> fullwidth
     StatusBarButton.SETTINGS -> settings
+    StatusBarButton.ENPRO -> enpro
     StatusBarButton.MODE -> true
-    StatusBarButton.ENPRO -> true
 }
 
 /**
@@ -142,16 +145,16 @@ fun StatusBarSettings.with(b: StatusBarButton, on: Boolean): StatusBarSettings =
     StatusBarButton.LOGO -> copy(logo = on)
     StatusBarButton.FULLWIDTH -> copy(fullwidth = on)
     StatusBarButton.SETTINGS -> copy(settings = on)
+    StatusBarButton.ENPRO -> copy(enpro = on)
     StatusBarButton.MODE -> this
-    StatusBarButton.ENPRO -> this
 }
 
 /**
  * 该按钮在**本平台**有没有动作、以及**设置窗该不该给它一行开关**（SettingsPages.kt
  * 拿它当过滤器，两处共用一份判定，各判一次必然漂移 —— 见那里的注释）。
  *
- * Windows 上 `opi-ctl` 不存在（那**四个**动作 trad/punct/fullwidth/lang 是 Linux
- * 侧的；symbols 自 2026-10-12 起两端都开符号页窗、不是命令）—— 没有动作的按钮不上条、
+ * Windows 上 `opi-ctl` 不存在（trad/punct/fullwidth/lang/englishpro 这**五个**动作是
+ * Linux 侧的；symbols 自 2026-10-12 起两端都开符号页窗、不是命令）—— 没有动作的按钮不上条、
  * 也不在设置窗出开关（「宁可少一页，不做点不动的开关」，见 SettingsWindow.kt 的既有原则）。
  *
  * ⚠️ MODE 只该管住**一头**（2026-10-14，别照前几枚的形状「修正」它）：它**没有常驻
@@ -163,7 +166,7 @@ fun StatusBarSettings.with(b: StatusBarButton, on: Boolean): StatusBarSettings =
  * 的 MODE 支要**一并删**（两处都是「没有开关」这一个前提的下游，别只删一处）。
  */
 internal fun statusButtonWired(b: StatusBarButton, windows: Boolean): Boolean = when {
-    b == StatusBarButton.MODE || b == StatusBarButton.ENPRO -> false
+    b == StatusBarButton.MODE -> false
     !windows -> true
     else -> b == StatusBarButton.VK || b == StatusBarButton.SYMBOLS ||
         b == StatusBarButton.LOGO || b == StatusBarButton.SETTINGS
@@ -180,7 +183,7 @@ internal fun statusButtonWired(b: StatusBarButton, windows: Boolean): Boolean = 
 fun visibleStatusButtons(sb: StatusBarSettings, windows: Boolean): List<StatusBarButton> {
     if (sb.hidden) return emptyList()
     return StatusBarButton.entries.filter {
-        if (it == StatusBarButton.MODE || it == StatusBarButton.ENPRO) !windows
+        if (it == StatusBarButton.MODE) !windows
         else sb.resident(it) && statusButtonWired(it, windows)
     }
 }

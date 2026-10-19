@@ -26,7 +26,7 @@ class StatusBarTest {
         // （要用的在设置里自己开；已有配置里的显式值照旧）。其余仍默认常驻 ——
         // 「全关」会让老用户升级后条上什么都不剩。
         // 2026-10-14 起多一枚**恒常驻**的模式按钮（见 `the mode button has no switch`）；
-        // 2026-10-19 再加恒常驻的英文专业键 ENPRO：
+        // 2026-10-19 再加默认常驻的英文专业键 ENPRO：
         // 默认条上 9 枚 = 10 枚里去掉软键盘。
         assertEquals(
             StatusBarButton.entries.filter { it != StatusBarButton.VK },
@@ -112,14 +112,13 @@ class StatusBarTest {
         )
         assertFalse("设置窗不该给 MODE 出行", statusButtonWired(StatusBarButton.MODE, windows = false))
         assertFalse("Windows 上没有 opi-ctl mode ⇒ 也不该出行", statusButtonWired(StatusBarButton.MODE, windows = true))
-        // 全关（八枚开关逐个关掉）之后条上只剩 MODE —— 「恒常驻」的直接后果。
+        // 全关（九枚开关逐个关掉）之后条上只剩 MODE —— 「恒常驻」的直接后果。
         // ⚠️ 顺带作废一条老路：「按钮全关 ⇒ 条隐藏」现在到不了了（条至少剩 MODE 一枚），
         // 要隐藏整条走 master 开关（它本来就是给用户的那条路，见 StatusBarPage 的文案）。
         val allOff = StatusBarButton.entries.filter { it != StatusBarButton.MODE }
             .fold(StatusBarSettings()) { sb, b -> sb.with(b, false) }
-        // 全关后还剩两枚恒常驻：英文专业键（2026-10-19）+ 模式。
         assertEquals(
-            listOf(StatusBarButton.ENPRO, StatusBarButton.MODE),
+            listOf(StatusBarButton.MODE),
             visibleStatusButtons(allOff, windows = false),
         )
         // Windows：整条与 Linux 同款，但模式按钮不在（上面那条的对照组）
@@ -207,12 +206,12 @@ class StatusBarTest {
 
     @Test
     fun `each button can be turned off alone`() {
-        // 覆盖 resident ⇄ with 的八对分支：任一对写错（比如 VK 那行复制成 SYMBOLS），
+        // 覆盖 resident ⇄ with 的九对分支：任一对写错（比如 VK 那行复制成 SYMBOLS），
         // 这条就在那个按钮上红。基线取**全开**（默认里 VK 已是关，拿默认当基线的话
         // 「关 VK」是空操作，那条分支就测不到了）。
         // MODE 不在这一组里：它没有开关（关不掉、也关不着）—— 见
         // `the mode button has no switch and stays on the bar`。
-        val switchable = StatusBarButton.entries.filter { it != StatusBarButton.MODE && it != StatusBarButton.ENPRO }
+        val switchable = StatusBarButton.entries.filter { it != StatusBarButton.MODE }
         val allOn = StatusBarButton.entries.fold(StatusBarSettings()) { sb, b -> sb.with(b, true) }
         for (b in switchable) {
             assertEquals(
@@ -225,17 +224,17 @@ class StatusBarTest {
 
     @Test
     fun `turning a button back on restores it`() {
-        // 可开关的按钮全关 ⇒ 条上只剩两枚恒常驻（ENPRO 2026-10-19 + MODE）；再把简繁
-        // 拨回来，它按枚举序出现在 MODE 前面、ENPRO 后面。
+        // 可开关的按钮全关 ⇒ 条上只剩恒常驻的 MODE；再把简繁拨回来，它按枚举序
+        // 出现在 MODE 前面。
         val off = StatusBarButton.entries
-            .filter { it != StatusBarButton.MODE && it != StatusBarButton.ENPRO }
+            .filter { it != StatusBarButton.MODE }
             .fold(StatusBarSettings()) { sb, b -> sb.with(b, false) }
         assertEquals(
-            listOf(StatusBarButton.ENPRO, StatusBarButton.MODE),
+            listOf(StatusBarButton.MODE),
             visibleStatusButtons(off, windows = false),
         )
         assertEquals(
-            listOf(StatusBarButton.ENPRO, StatusBarButton.TRAD, StatusBarButton.MODE),
+            listOf(StatusBarButton.TRAD, StatusBarButton.MODE),
             visibleStatusButtons(off.with(StatusBarButton.TRAD, true), windows = false),
         )
     }
@@ -253,7 +252,7 @@ class StatusBarTest {
 
     @Test
     fun `windows only keeps buttons that have an action there`() {
-        // Windows 上没有 opi-ctl（那四个动作 trad/punct/fullwidth/lang 是
+        // Windows 上没有 opi-ctl（trad/punct/fullwidth/lang/englishpro 都是
         // Linux 侧的），没动作的按钮不上条 ——「宁可少一页，不做点不动的开关」。
         // 显式开 VK：这条测的是「按有无动作过滤」，别被默认值变更（VK 默认关）牵连。
         // 期望值按**枚举序**（VK 现在排 SYMBOLS 前面，见枚举头的验收订正）。
@@ -263,11 +262,11 @@ class StatusBarTest {
             listOf(StatusBarButton.LOGO, StatusBarButton.VK, StatusBarButton.SYMBOLS, StatusBarButton.SETTINGS),
             visibleStatusButtons(StatusBarSettings(vk = true), windows = true),
         )
-        // 设置窗的开关行用同一个判定（两处同源）：Linux = 除 MODE 外的 8 枚（MODE 没有
+        // 设置窗的开关行用同一个判定（两处同源）：Linux = 除 MODE 外的 9 枚（MODE 没有
         // 开关、不出行）；Windows = 那 4 枚。（条上比这多一枚 MODE —— 它的「上不上条」
         // 归 visibleStatusButtons 单独判，见 `the mode button has no switch`。）
         assertEquals(4, StatusBarButton.entries.count { statusButtonWired(it, windows = true) })
-        assertEquals(8, StatusBarButton.entries.count { statusButtonWired(it, windows = false) })
+        assertEquals(9, StatusBarButton.entries.count { statusButtonWired(it, windows = false) })
     }
 
     @Test

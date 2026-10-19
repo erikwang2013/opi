@@ -251,6 +251,15 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
                 val next = cycleMode()
                 if (next.isEmpty()) report("模式切换失败：opi-ctl 无应答或应答不认得") else mode = next
             }
+            // 英文专业键（2026-10-19 用户裁决）：只控制英文是否查单词库，且只在英文
+            // 输入法下有效。现场重读 state（不拿 1s 轮询的旧值）—— 刚切中/英就点它
+            // 也不会误判；老插件的 state 没有 enpro= 位，会得到「重启 fcitx5」的提示，
+            // 而不是把 err:5「未知动作」原样弹给用户。
+            StatusBarButton.ENPRO -> {
+                val why = enproBlockReason(readImeState())
+                if (why != null) report(why)
+                else report(statusActionCommand(b)?.let { runExternal(it) })
+            }
             else -> report(statusActionCommand(b)?.let { runExternal(it) })
         }
     }
@@ -365,10 +374,13 @@ private fun BarButton(
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     val palette = LocalBarPalette.current
+    // 英文专业键常亮（2026-10-19）：否则切了 pro 看不出任何变化。用既有 hover 色，
+    // 不新造颜色/角色（见 SkinPalette.kt 的角色映射）。
+    val active = b == StatusBarButton.ENPRO && st.englishPro
     Box(
         modifier = Modifier
             .size(BTN.dp)
-            .background(if (hovered) palette.hover else Color.Transparent)
+            .background(if (hovered || active) palette.hover else Color.Transparent)
             .clickable(interactionSource = interaction, indication = null) { onClick(b) }
             .then(if (b == StatusBarButton.LOGO) dragToMove(windowState) else Modifier)
             .semantics { contentDescription = b.label },

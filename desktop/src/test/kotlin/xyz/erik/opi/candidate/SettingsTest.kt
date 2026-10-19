@@ -176,19 +176,19 @@ class SettingsTest {
         assertEquals("C:\\Users\\u\\AppData\\Local", p.parent.parent.toString())
     }
 
-    // ---------- 状态栏九个键（2026-10-10 加）----------
+    // ---------- 状态栏十个键（2026-10-10 加；2026-10-19 加 StatusBarEnPro）----------
 
     @Test
     fun `statusbar round trip keeps every switch`() {
         val s = OpSettings(
-            statusbar = StatusBarSettings(hidden = true, vk = false, symbols = false, fullwidth = false),
+            statusbar = StatusBarSettings(hidden = true, vk = false, symbols = false, fullwidth = false, enpro = false),
         )
         assertEquals(s, OpSettings.fromIni(s.toIni()))
     }
 
     @Test
     fun `statusbar key names are pinned`() {
-        // 与上面四个开关同一条纪律：**钉整行**。这九个键只有本窗读写（两端 IME 的读侧
+        // 与上面四个开关同一条纪律：**钉整行**。这十个键只有本窗读写（两端 IME 的读侧
         // 都不认识它们，见 Settings.kt 文件头），所以没有第二处能替这里发现改名。
         val ini = OpSettings(
             statusbar = StatusBarSettings(hidden = true, vk = false, trad = false),
@@ -197,6 +197,7 @@ class SettingsTest {
             "StatusBarHidden=True", "StatusBarVk=False", "StatusBarSymbols=True",
             "StatusBarTrad=False", "StatusBarPunct=True", "StatusBarLang=True",
             "StatusBarLogo=True", "StatusBarFullwidth=True", "StatusBarSettings=True",
+            "StatusBarEnPro=True",
         )) {
             assertTrue("缺少状态栏键行：$line\n$ini", ini.contains("$line\n"))
         }
@@ -204,7 +205,7 @@ class SettingsTest {
 
     @Test
     fun `config without statusbar keys gets the decided defaults`() {
-        // 1.7.5 及更早写的配置文件没有这九个键 ⇒ 默认「不隐藏 + 除软键盘外全常驻」
+        // 1.7.5 及更早写的配置文件没有这十个键 ⇒ 默认「不隐藏 + 除软键盘外全常驻」
         // （2026-10-10 中午裁决收窄：软键盘默认关），而不是全关 —— 全关会让老用户
         // 升级后条上什么都不剩。比对**整个** StatusBarSettings()：fromIni 的回落值
         // 与数据类默认漂了一处就会红在这里。
