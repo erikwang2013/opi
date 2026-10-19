@@ -406,7 +406,10 @@ docker run --rm -v "$PWD:/w" -w /w debian:12 \
    「改名+重启后删」那条路，装完还活着）。
 3. 执行序列 5900（InstallFiles 之后、InstallFinalize 之前）经 `WixCA` 的
    **`WixSilentExec64`**（**Type 1，Return=check**；不是 65）执行
-   `"regsvr32" /s "[INSTALLDIR]app\tsf_opi.dll"`，注册随 MSI 安装的 TSF COM 服务器。
+   `"[System64Folder]regsvr32.exe" /s "[INSTALLDIR]app\tsf_opi.dll"`，注册随 MSI 安装的 TSF COM 服务器。
+   **2026-10-20 订正**：CI 的 Server Core 容器里裸 `"regsvr32"` 让 `QuietExec64`
+   返回 `0x80070003`（`ERROR_PATH_NOT_FOUND`），于是 `OpRegisterTsf` 失败、安装回滚、
+   安装目录为空；改成 `[System64Folder]` 全路径（64 位 `System32`）后重测。
    **必须用 64 位变体**（2026-10-19 复审 blocker）：随包的 `Binary.WixCA` 是
    **PE32 i386**（216,496 B），裸 `WixSilentExec` 在 WOW64 里解析到 SysWOW64 的 32 位
    `regsvr32`，加载不了 x86-64 的 `tsf_opi.dll`。`WixSilentExec64` 配 `WixSilentExec64CmdLine`，

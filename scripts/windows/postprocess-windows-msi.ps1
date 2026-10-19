@@ -40,7 +40,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $MarkerKey = 'OPI_POSTPROCESSED'
-$MarkerValue = '2026-10-19-r3'
+$MarkerValue = '2026-10-20-r1'
 
 function Sql-Quote([string]$Value) {
     return "'" + $Value.Replace("'", "''") + "'"
@@ -245,10 +245,11 @@ try {
 
     if ($dllKeys.Count -eq 1) {
         # 必须用 64 位变体：WixCA 是 PE32 i386，裸 WixSilentExec 会调 SysWOW64 的
-        # 32 位 regsvr32，加载不了 x64 DLL。
+        # 32 位 regsvr32，加载不了 x64 DLL。regsvr32 还要用 [System64Folder] 全路径：
+        # 裸 "regsvr32" 在 Server Core 容器里让 QuietExec64 返回 0x80070003。
         Invoke-MsiSql $db ('INSERT INTO `Property` (`Property`,`Value`) VALUES (' +
             (Sql-Quote 'WixSilentExec64CmdLine') + ',' +
-            (Sql-Quote '"regsvr32" /s "[INSTALLDIR]app\tsf_opi.dll"') + ')')
+            (Sql-Quote '"[System64Folder]regsvr32.exe" /s "[INSTALLDIR]app\tsf_opi.dll"') + ')')
         Invoke-MsiSql $db ('INSERT INTO `CustomAction` (`Action`,`Type`,`Source`,`Target`) VALUES (' +
             (Sql-Quote 'OpRegisterTsf') + ',1,' + (Sql-Quote 'WixCA') + ',' +
             (Sql-Quote 'WixSilentExec64') + ')')
@@ -285,7 +286,7 @@ try {
         Assert-Value $db 'SELECT `Target` FROM `CustomAction` WHERE `Action`=''OpRegisterTsf''' `
             'WixSilentExec64' 'register CA target=WixSilentExec64'
         Assert-Value $db ('SELECT `Value` FROM `Property` WHERE `Property`=' + (Sql-Quote 'WixSilentExec64CmdLine')) `
-            '"regsvr32" /s "[INSTALLDIR]app\tsf_opi.dll"' 'register command line (64-bit)'
+            '"[System64Folder]regsvr32.exe" /s "[INSTALLDIR]app\tsf_opi.dll"' 'register command line (64-bit full path)'
         Assert-Value $db 'SELECT `Condition` FROM `InstallExecuteSequence` WHERE `Action`=''OpRegisterTsf''' `
             'NOT REMOVE' 'register condition'
         Assert-Value $db 'SELECT `Sequence` FROM `InstallExecuteSequence` WHERE `Action`=''OpRegisterTsf''' `

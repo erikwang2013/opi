@@ -24,7 +24,7 @@
 #   2. **装后注册 TSF DLL**：DLL 已由 Gradle 挂进 jpackage `--input`、随 MSI 落
 #      在 `INSTALLDIR\app\tsf_opi.dll`（Windows CI 把 tsf-dll artifact 传给
 #      `OPI_TSF_DLL`）。执行序列 5900（InstallFiles 之后、InstallFinalize 之前）经
-#      WixCA 的 `WixSilentExec64` 跑 `"regsvr32" /s "[INSTALLDIR]app\tsf_opi.dll"`；
+#      WixCA 的 `WixSilentExec64` 跑 `"[System64Folder]regsvr32.exe" /s "[INSTALLDIR]app\tsf_opi.dll"`；
 #      条件 `NOT REMOVE`（安装/修复跑，卸载不跑）。旧 artifact 不含 DLL 时跳过本步
 #      并打印提示。
 #      · **必须用 64 位变体**（2026-10-19 复审 blocker）：WixCA 本身是 PE32 i386，
@@ -107,7 +107,7 @@ done
 # 而不是靠 OpRegisterTsf 等动作的蛛丝马迹 —— 不含 TSF DLL 的旧/测试产物会跳过
 # 注册，重跑时旧判据既不正确定诊、也不幂等。形状/行为变了就换 MARKER_VALUE。
 MARKER_KEY="OPI_POSTPROCESSED"
-MARKER_VALUE="2026-10-19-r3"
+MARKER_VALUE="2026-10-20-r1"
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/opi-msi-post.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
@@ -322,7 +322,9 @@ edit_table ControlEvent "ExitDialog	Finish	DoAction	OpLaunchApp	WIXUI_EXITDIALOG
 #    regsvr32，加载不了 x64 DLL。
 #    条件 NOT REMOVE：安装/修复执行，卸载不执行（卸载产物会缺文件）。
 if [ -n "$DLL_KEY" ]; then
-    edit_table Property "WixSilentExec64CmdLine	\"regsvr32\" /s \"[INSTALLDIR]app\\tsf_opi.dll\""
+    # 2026-10-20：用 [System64Folder] 全路径。CI Server Core 容器里裸 "regsvr32"
+    # 让 QuietExec64 返回 0x80070003（ERROR_PATH_NOT_FOUND），安装回滚、目录为空。
+    edit_table Property "WixSilentExec64CmdLine	\"[System64Folder]regsvr32.exe\" /s \"[INSTALLDIR]app\\tsf_opi.dll\""
     # Type 1（不是 65）：regsvr32 失败要让安装失败/回滚，不能被 Continue 位吞掉。
     edit_table CustomAction "OpRegisterTsf	1	WixCA	WixSilentExec64"
     edit_table InstallExecuteSequence "OpRegisterTsf	NOT REMOVE	5900"
@@ -354,7 +356,7 @@ check "Finish 发布自启"          '^ExitDialog\tFinish\tDoAction\tOpLaunchApp
 if [ -n "$DLL_KEY" ]; then
     # 尾列空 ⇒ 行尾是 tab：用 \t*$ 锚定，既排除 WixSilentExec 前缀误匹配又容忍空列。
     check "注册 TSF CA（WixSilentExec64 / Return=check）" '^OpRegisterTsf\t1\tWixCA\tWixSilentExec64\t*$' "$(export_clean_t CustomAction)"
-    check "注册命令行（64 位变体）"   '^WixSilentExec64CmdLine\t"regsvr32" /s "\[INSTALLDIR\]app\\tsf_opi.dll"$' "$(export_clean_t Property)"
+    check "注册命令行（64 位全路径）" '^WixSilentExec64CmdLine\t"\[System64Folder\]regsvr32.exe" /s "\[INSTALLDIR\]app\\tsf_opi.dll"$' "$(export_clean_t Property)"
     check "注册时机（5900 / NOT REMOVE）" '^OpRegisterTsf\tNOT REMOVE\t5900$'                "$(export_clean_t InstallExecuteSequence)"
     check "完成页提示文案"           '^WIXUI_EXITDIALOGOPTIONALTEXT\tChecking the box restarts Explorer' "$(export_clean_t Property)"
 fi

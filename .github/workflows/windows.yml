@@ -366,8 +366,8 @@ jobs:
         run: docker pull mcr.microsoft.com/windows/servercore:ltsc2022
 
       # 两次独立容器：一次显式 INSTALLDIR，一次用 MSI 默认目录（C:\Program Files\opi）。
-      # cmd 里的 `&` 保证 msiexec 失败后仍会执行 dir/reg query；`exit 0` 让 docker
-      # 返回 0，失败信息留在 msiexec 日志里而不是让 job 变成没有日志的红。
+      # cmd 里的 `&` 保证 msiexec 失败后仍会执行 dir/where/reg query；`exit 0` 让 docker
+      # 返回 0，失败信息留在日志里而不是让 job 变成没有日志的红。
       - name: 安装冒烟（容器内，日志落到工作区）
         shell: pwsh
         run: |
@@ -378,16 +378,28 @@ jobs:
           $work = $PWD.Path
           $image = 'mcr.microsoft.com/windows/servercore:ltsc2022'
 
-          $custom = "msiexec /i C:\work\msi\$name /qn /l*v C:\work\install-custom.log INSTALLDIR=C:\opi-test & dir C:\opi-test > C:\work\dir-custom.txt & reg query HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall /s /f opi > C:\work\reg-custom.txt & exit 0"
+          $custom = "msiexec /i C:\work\msi\$name /qn /l*v C:\work\install-custom.log INSTALLDIR=C:\opi-test & dir C:\opi-test > C:\work\dir-custom.txt & where /r C:\opi-test opi-candidates.exe > C:\work\exe-custom.txt 2>&1 & reg query HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall /s /f opi > C:\work\reg-custom.txt & exit 0"
           docker run --rm --isolation=process -v "${work}:C:\work" $image cmd /c $custom
 
-          $default = "msiexec /i C:\work\msi\$name /qn /l*v C:\work\install-default.log & dir `"C:\Program Files\opi`" > C:\work\dir-default.txt & reg query HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall /s /f opi > C:\work\reg-default.txt & exit 0"
+          $default = "msiexec /i C:\work\msi\$name /qn /l*v C:\work\install-default.log & dir `"C:\Program Files\opi`" > C:\work\dir-default.txt & where /r `"C:\Program Files\opi`" opi-candidates.exe > C:\work\exe-default.txt 2>&1 & reg query HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall /s /f opi > C:\work\reg-default.txt & exit 0"
           docker run --rm --isolation=process -v "${work}:C:\work" $image cmd /c $default
 
-          # 原生命令非零退出不会自动让 pwsh 步红；用日志文件存在性断言「msiexec 真跑了」。
-          # msiexec 自身失败仍会留下 /l*v 日志 —— 那是要保留的信息，不在这里判红。
+          # 日志存在只证 msiexec 启动；必须断言「安装状态=0」且能在目标目录里找到启动器，
+          # 否则「返回成功但目录为空」会再次静默通过。失败时日志仍由下面的 always() 上传。
           foreach ($f in 'install-custom.log', 'install-default.log') {
             if (-not (Test-Path $f)) { throw "缺少 $f（docker run 失败或 msiexec 没启动）" }
+          }
+          foreach ($pair in @(
+            @('install-custom.log', 'exe-custom.txt'),
+            @('install-default.log', 'exe-default.txt')
+          )) {
+            $log = Get-Content -Raw -Encoding Unicode $pair[0]
+            if ($log -notmatch 'Installation success or error status:\s*0') {
+              throw "$($pair[0]) 安装失败（见日志末段 Installation success or error status）"
+            }
+            if (-not (Select-String -Path $pair[1] -Pattern 'opi-candidates\.exe' -Quiet)) {
+              throw "$($pair[1]) 里找不到 opi-candidates.exe：安装目录为空"
+            }
           }
 
       - name: 上传安装日志（无论成败）
@@ -401,6 +413,8 @@ jobs:
             install-default.log
             dir-custom.txt
             dir-default.txt
+            exe-custom.txt
+            exe-default.txt
             reg-custom.txt
             reg-default.txt
 
