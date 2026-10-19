@@ -131,10 +131,11 @@ final class KeyboardViewController: UIInputViewController {
     /// （`ASSET_NAME_STROKE` = `stroke.opid`、`ASSET_NAME_WUBI86` = `wubi86.opid`），
     /// 源文件是 `data/generated/*.opid` 的生成物。
     ///
-    /// ⚠️ **本仓 iOS 侧没有任何构建步骤把这些文件拷进扩展 bundle**（Xcode 工程还没进仓）——
-    /// 所以这条路现在的真实状态是「找不到文件 → 记日志 → 该方案没有候选、**不崩**」。
-    /// 要让它真能用：把 `data/generated/stroke.opid` 与 `wubi86.opid` 加进 Xcode target 的
-    /// Copy Bundle Resources，**文件名一个字都别改**（改了这里就找不到，而且没有报错）。
+    /// 2026-10-20 起，`scripts/apple/package-ios.sh` 会把 `luna.opid` / `trad.opid` /
+    /// `stroke.opid` / `wubi86.opid` 从 `android/app/src/main/assets/` 拷进 appex 根目录
+    /// （`Bundle.main` 就是扩展自己），所以 iOS 的 unsigned IPA 里这些方案有码表。
+    /// 用 Xcode 集成时同样要把这几个文件加进扩展 target 的 Copy Bundle Resources，
+    /// **文件名一个字都别改**（改了这里就找不到，而且没有报错）。
     ///
     /// 三条失败语义与 Android `EngineLoader.loadStrokeAsset/loadWubiAsset` 相同：
     /// 缺文件 / 装载返回 false → **只降级**（那一个方案回退普通路径），不动 luna 与 trad。

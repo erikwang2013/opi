@@ -21,6 +21,12 @@
 > 资源**；CoreText 对 SVG/CBDT 色表的支持很可能缺失（见下方表情页一节）。这三处同样
 > **未过 CI、未上机**。
 >
+> **2026-10-20 追加**：新增最小宿主 App `HostApp/OpiApp.swift`（键盘扩展不能独立安装）；
+> `scripts/apple/package-ios.sh` 现在会组装 `Opi.app`（内嵌 `PlugIns/OpiKeyboard.appex`、
+> `luna/trad/stroke/wubi86` 词库与宠物图标），并产出
+> `opi-ios-keyboard-<版本>-unsigned.ipa`。它仍是**未签名** IPA：iOS 不会直接安装，
+> 需用 Sideloadly / AltStore 以用户自己的 Apple ID 重签；**签名后的真机运行仍未验证**。
+>
 > 本目录的代码是在 Linux 上写的：本机没有 macOS、没有 Xcode、没有 Apple SDK，
 > `import UIKit` 就断 —— 编译发生在 **CI 的 macOS runner** 上，不在开发机。
 > 改完 Swift **先推一次让 CI 编**，再谈别的（本地读不出来的错，编译器一秒钟就报）。
@@ -104,6 +110,7 @@
 | `PetStickerClipboard.swift` | 「自有」贴纸的落点（2026-10-19 改）：优先 `UIPasteboard.setItems` 写 `com.compuserve.gif` + `public.png`，无 GIF 才 `UIPasteboard.general.image`；触觉/读屏公告 + 面板内 `ToastLabel`。**剪贴板回退**（iOS 键盘扩展不能往宿主输入框插图片），不提交文本。⚠️ **未编译** |
 | `KeyboardViewController.swift` | `UIInputViewController` 入口：生命周期、词库装载（含 2026-10-14 加的 `loadBundledDictionaries()`）、**软键盘**路由、`textDocumentProxy`，外加外接键盘的两个入口 `pressesBegan/pressesEnded`（逻辑在下一行那个文件） |
 | `KeyboardHardware.swift` | **外接键盘那一路**：`UIKey`/`UIPress` → 引擎键码、修饰位，以及**引擎之前**判掉的三个热键（`Ctrl+'` / `Ctrl+\` / `Shift+Space`）。不含触摸与布局 |
+| `HostApp/OpiApp.swift` | 最小宿主 App（2026-10-20）：承载键盘扩展、显示启用步骤。`package-ios.sh` 用 `swiftc` 直编，无 storyboard；⚠️ 未上机 |
 | `Info.plist` | 键盘扩展的 `NSExtension` 配置（**键名未核对**） |
 | `README.md` | 本文件 |
 
@@ -736,7 +743,8 @@ xcodebuild -create-xcframework \
    扩展不能自己把自己启用（无法引导、无法弹窗）。
    （不确定：宿主 App 是否必须先被打开过一次才会出现在列表里 —— 我记的是「是」。）
 2. **必须有宿主 App**：键盘扩展不能独立安装，必须内嵌在一个 App 的
-   `PlugIns/` 里。（这条我很确定。）
+   `PlugIns/` 里。（这条我很确定。）2026-10-20 起仓库提供最小宿主
+   `HostApp/OpiApp.swift`，`package-ios.sh` 会把它与扩展一起装进 IPA。
 3. **第三方键盘在密码框里默认不可用**，系统会强制用内置键盘。
    （不确定：`IsASCIICapable` 是否会影响这个行为 —— 我记的是「不影响，
    安全输入框一律用系统键盘」。）

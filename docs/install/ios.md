@@ -32,8 +32,8 @@
 | Rust | `Cargo.toml` 的 `[workspace.package] rust-version`（当前声明 1.88）。**这是声明**，实际下限是 CI 里那个 MSRV 执行点量出来的 | `Cargo.toml` · `.github/workflows/ci.yml` |
 | Rust target | `aarch64-apple-ios`（真机 arm64）、`aarch64-apple-ios-sim`（Apple Silicon 模拟器）。Intel Mac 的模拟器才需要 `x86_64-apple-ios` | CI 只跑前两个 + 两个 darwin 目标 |
 | 词库 | `data/generated/luna.opid`（必需，937,780 条）、`data/generated/trad.opid`（可选，缺了繁体模式回退简体库；139,355 条，2026-10-18 起含现代繁体词与康熙差集）。`fallback.opid` **不用**打进包 —— 内置回退库已编译进二进制 | `ios/README.md`「词库文件」 |
-| 宿主 App | 键盘扩展**不能独立安装**，必须内嵌在一个 App 的 `PlugIns/` 里 | 这条很确定 |
-| 工程文件 | **仓库里没有 `.xcodeproj`、没有 `Package.swift`、没有 `module.modulemap`** —— 工程要在 Mac 上用 Xcode 新建 | `macos/README.md` 解释了为什么故意不手写 `project.pbxproj` |
+| 宿主 App | 键盘扩展**不能独立安装**，必须内嵌在一个 App 的 `PlugIns/` 里。仓库现在提供最小宿主 App：`ios/HostApp/OpiApp.swift`（无 storyboard），由 `package-ios.sh` 用 `swiftc` 直接编成 `Opi.app` | 这条很确定；2026-10-20 起 CI 会产出 `Payload/Opi.app` 的 unsigned IPA |
+| 工程文件 | **仓库里没有 `.xcodeproj`、没有 `Package.swift`、没有 `module.modulemap`** —— 用 Xcode 集成要在 Mac 上新建工程；CI 打包走 `package-ios.sh` 的 `swiftc` 直编路线 | `macos/README.md` 解释了为什么故意不手写 `project.pbxproj` |
 
 ```bash
 rustup target add aarch64-apple-ios aarch64-apple-ios-sim
@@ -181,11 +181,11 @@ plutil -lint ios/Info.plist      # 只能在 Mac 上跑
 
 ---
 
-## 4.5 CI 自动打包产物（未签名 —— **装不上真机**，是证据与集成起点）
+## 4.5 CI 自动打包产物（unsigned IPA —— 需重签后安装）
 
 `.github/workflows/apple.yml`（macos-latest，三个 job：`rust` / `macos` / `ios`）每次运行都把
 `ios/` 的 Swift 真过一遍编译器（`swiftc -typecheck` → 真编 → 与 Rust 静态库链接），
-产物挂在**该次 run 的 Artifacts** 里。取法：
+并组装宿主 App + 扩展、产出 **unsigned IPA**。产物挂在**该次 run 的 Artifacts** 里。取法：
 
 ```bash
 gh run list --workflow apple.yml                    # 找 run id（或网页 Actions 页）
@@ -194,26 +194,41 @@ gh run download <run-id> -n "opi-ios-keyboard-v$(bash scripts/apple/version.sh)"
 
 | 产物名（版本号 = `Cargo.toml` 的 `[workspace.package] version`，唯一取法在 `scripts/apple/version.sh`） | 内容 |
 |---|---|
-| `opi-ios-keyboard-v<版本>` | `OPIKeyboard.xcframework`（真机 arm64 + 模拟器 arm64，Rust **静态**链进去）· `KeyboardExtension-Info.plist`（占位符已展开成字面值）· `OpiKeyboard.appex/`（未签名的扩展目录 + 可执行）· 同名 zip（上面几样打一包）· 外加生成用的 `ios-arm64/`、`ios-sim/` 两个**中间** framework 目录（集成时用 xcframework，不用它们） |
+| `opi-ios-keyboard-v<版本>` | `opi-ios-keyboard-<版本>-unsigned.ipa`（`Payload/Opi.app`，内含 `Opi` 可执行、内嵌 `PlugIns/OpiKeyboard.appex`、`luna/trad/stroke/wubi86` 词库、宠物图标）· `OPIKeyboard.xcframework`（Xcode 集成用）· `KeyboardExtension-Info.plist`（占位符已展开成字面值）。脚本在本地还会生成同内容的 `*-unsigned.zip`，但 CI artifact 不再套一层 zip |
 | `opi-apple-rust-v<版本>`（rust job） | `opi_ffi.xcframework`（同上的静态库版）+ `headers/OpiFFI.h` + macOS 用的通用库 |
 
-**这次 run 真实证明了什么**（run 37935240583，证据都在 job 日志里，可复核）：
+**IPA 的目录结构**（CI 会逐条校验）：
 
-- `ios/` 6 个 `.swift` 过 `swiftc -typecheck` + 真编译（device 与模拟器两个 SDK 各一遍）；
+```
+Payload/Opi.app/
+  Opi                         # 宿主 App 可执行（ios/HostApp/OpiApp.swift）
+  Info.plist                  # CFBundleIdentifier = xyz.erik.opi
+  AppIcon60x60@2x.png …
+  PlugIns/OpiKeyboard.appex/
+    OPIKeyboard               # 扩展可执行（入口 _NSExtensionMain）
+    Info.plist                # CFBundleIdentifier = xyz.erik.opi.keyboard
+    luna.opid trad.opid stroke.opid wubi86.opid
+```
+
+**这次 run 真实证明了什么**（历史证据 run 37935240583，以及 2026-10-20 起的 IPA 结构校验）：
+
+- `ios/` 的 Swift 过 `swiftc -typecheck` + 真编译（device 与模拟器两个 SDK 各一遍）；
 - framework 的 `nm -gU` 里有 `_opi_load` 等导出、`nm -u` 里**没有**未定义的 `opi_` 符号
   ⇒ Rust 静态库**真的链进去了**（不是「链接命令没报错」就算）；
 - `otool -L` 里**没有** `libopi_ffi` ⇒ 是静态链接（iOS 扩展带第三方 dylib 装不上）；
 - `xcodebuild -create-xcframework` 成功；扩展可执行（`.appex`）也链出来了
-  （入口 `_NSExtensionMain`，链接期实测可过）。
+  （入口 `_NSExtensionMain`，链接期实测可过）；
+- IPA 里 `Payload/Opi.app/Opi`、`PlugIns/OpiKeyboard.appex/OPIKeyboard`、`luna.opid`
+  都在，宿主/扩展 plist 通过 `plutil -lint`，扩展 bundle id 以宿主 id 为前缀。
 
 **它不能做什么（现状，别读成「降级」）**：
 
-- **装不上任何真机**：产物未签名（仓库没有 Apple 证书、不连签名服务），且键盘扩展
-  **必须**内嵌在宿主 App 的 `PlugIns/` 里 —— 仓库里没有宿主 App。
-  这份产物的用途就是两件：**编译/链接通过的证据** + **做宿主 App 时的集成起点**
-  （xcframework 拖进 Xcode 即可链接）。
+- **不能直接安装**：仓库没有 Apple 签名证书，IPA 是**未签名**的。iOS 不会接受未签名包；
+  需用 Sideloadly / AltStore 等工具以用户自己的 Apple ID 重签后再装（免费账号签的
+  App 7 天过期，付费开发者账号 1 年）。想产出可直接安装/上架的签名 IPA，需要 Apple
+  Developer 证书 + provisioning profile，并给 CI 配签名步骤 —— 当前没有。
 - **运行时 0 验证**：键盘在系统里出不出现、按键进不进引擎、候选栏有没有字、上屏对不对
-  —— 全部未测（§6 的五步一步都没走）。**编译过 ≠ 能用。**
+  —— 全部未测（§6 的五步一步都没走）。**编译过、打包结构对 ≠ 能用。**
 - 模拟器只有 arm64 切片：Intel Mac 的模拟器要 `x86_64-apple-ios`，本工作流没构建
   （要加就是 `scripts/apple/package-ios.sh` 里 `for spec` 多一行，没有别的机关）。
 - Artifact 默认 90 天过期、随每次 run 重出 —— 它是 **CI 证据**，不是发布渠道。
@@ -230,12 +245,29 @@ gh run download <run-id> -n "opi-ios-keyboard-v$(bash scripts/apple/version.sh)"
 
 ## 5. 安装与启用（真机）
 
+有两条路：用 Sideloadly/AltStore 重签 CI 的 unsigned IPA，或用 Xcode 自己签。
+
+### 5.1 用 unsigned IPA（需要重签工具）
+
+1. 下载 CI 产物里的 `opi-ios-keyboard-<版本>-unsigned.ipa`。
+2. 在电脑上用 [Sideloadly](https://sideloadly.io/) 或 AltStore 打开它，登录你自己的
+   Apple ID，让工具重签并安装到 iPhone/iPad。工具会同时重签宿主 App 和内嵌的
+   `OpiKeyboard.appex`；不要只签宿主、漏掉扩展。
+3. 首次安装后若被系统拦（未受信任的开发者），到
+   **设置 → 通用 → VPN 与设备管理** 里信任你的开发者证书。
+4. 真机上：**设置 → 通用 → 键盘 → 键盘 → 添加新键盘 → 第三方键盘 → 小欧输入法**。
+   扩展**不能自己把自己启用**（无法引导、无法弹窗），这一步只能用户手动做。
+5. 打开任意文本框，长按地球键切到 OPI。
+6. **密码框里第三方键盘默认不可用**，系统会强制用内置键盘 —— 这是系统行为，不是缺陷。
+
+⚠️ unsigned IPA **不能**用 AirDrop / Finder / `ideviceinstaller` 直接装 —— 那些工具不做重签。
+免费 Apple ID 签出的 App 每 7 天要重签一次；付费开发者账号是 1 年。
+
+### 5.2 用 Xcode
+
 1. 用 Xcode 把**宿主 App** 跑到真机上 —— 扩展随宿主 App 一起装进 `PlugIns/`。
    （模拟器对第三方键盘的支持不可靠，**未核实**，建议直接用真机。）
-2. 真机上：**设置 → 通用 → 键盘 → 键盘 → 添加新键盘 → 第三方键盘 → 小欧输入法**。
-   扩展**不能自己把自己启用**（无法引导、无法弹窗），这一步只能用户手动做。
-3. 打开任意文本框，长按地球键切到 OPI。
-4. **密码框里第三方键盘默认不可用**，系统会强制用内置键盘 —— 这是系统行为，不是缺陷。
+2. 之后同 §5.1 的第 4–6 步。
 
 排障顺序（从最可能到最不可能）：
 

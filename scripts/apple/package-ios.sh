@@ -2,25 +2,32 @@
 # SPDX-FileCopyrightText: 2026 erik.xyz
 # SPDX-License-Identifier: MIT
 #
-# 把 `ios/` 的 Swift + Rust 静态库组装成键盘扩展产物（**未签名**）：
+# 把 `ios/` 的 Swift + Rust 静态库组装成宿主 App + 键盘扩展，并打成 **unsigned IPA**：
 #
 #   dist/apple/ios/OPIKeyboard.xcframework                 （device arm64 + simulator arm64，**保证有**）
 #   dist/apple/ios/KeyboardExtension-Info.plist            （占位符已展开的扩展 plist，集成起点）
-#   dist/apple/ios/OpiKeyboard.appex/                      （尽力而为：真扩展可执行，见第 5 节）
-#   dist/apple/ios/opi-ios-keyboard-<版本>-unsigned.zip    （上面全部）
+#   dist/apple/ios/OpiKeyboard.appex/                      （真扩展可执行，入口 _NSExtensionMain）
+#   dist/apple/ios/Opi.app/                               （宿主 App，内嵌 PlugIns/OpiKeyboard.appex + 词库）
+#   dist/apple/ios/opi-ios-keyboard-<版本>-unsigned.ipa    （Payload/Opi.app 的 IPA，**未签名**）
+#   dist/apple/ios/opi-ios-keyboard-<版本>-unsigned.zip    （xcframework + 扩展 plist + IPA）
 #
 # 用法（仓库根目录）：
 #   scripts/apple/package-ios.sh <版本号> [产物目录]
 #   版本号用 scripts/apple/version.sh 取（CI 里就是这么调的）。
 #
-# ===== ⚠️ 未签名 = **不能装真机** =====
+# ===== ⚠️ 未签名 IPA = 需要重签才能安装 =====
 #
-# 本产物的定位是「**可编译 + 可下载**」的证据与集成起点，**不是**可用安装包：
-#   · 装真机要 Apple 开发者账号签名（仓库没有证书，也不连签名服务）；
-#   · 键盘扩展还**必须**内嵌在一个宿主 App 里（Apple 规定扩展不能独立安装）——
-#     仓库里没有宿主 App，故产物里没有.
-#   · 因此这里能给出的最强结论是：`ios/` 那批 Swift 能过编译器、能链接上 Rust 静态库，
-#     且链接后**没有未定义的 opi_ 符号**。运行时行为（键盘起来之后的事）**未验证**。
+# 键盘扩展**不能**独立安装（Apple 强制要求内嵌在宿主 App 的 `PlugIns/` 里），
+# 所以本脚本用 `ios/HostApp/OpiApp.swift` 编出一个最小宿主 App 来承载它。
+# 但仓库没有 Apple 签名证书，因此：
+#   · 生成的 `.ipa` 是**未签名**的；iOS 不会直接安装，需用 Sideloadly / AltStore
+#     等工具以用户自己的 Apple ID 重签后再装（免费账号 7 天，付费开发者账号 1 年）；
+#   · 想产出可直接安装/上架的签名 IPA，需要 Apple Developer 证书 + provisioning
+#     profile，并在脚本/CI 里加签名步骤 —— 当前没有，也不假装有；
+#   · 运行时行为（键盘在系统里出现、按键进引擎、候选上屏）**仍未验证**。
+#
+# 本脚本能证明的是：Swift 过编译器、链接上 Rust 静态库、无未定义 opi_ 符号，
+# 且宿主 App / appex / IPA 的目录结构与 plist 自洽。
 #
 # ===== 前置：Rust 侧 iOS 静态库（本脚本**不**编 Rust，只读它的产物）=====
 #
@@ -44,10 +51,11 @@ MODULE="OPIKeyboard"                  # Swift 模块名
 # 部署目标：仓库**没有**声明 iOS 最低版本。15.0 覆盖键盘扩展用到的全部 API
 # （`UIPress.key` 只要 13.4，取 15.0 留余量）。本脚本的选择，不是仓库约定。
 IOS_MIN="15.0"
-# 扩展的 bundle id：真实发布时它**必须**以宿主 App 的 id 为前缀（Apple 强制）。
-# 仓库没有宿主 App，这里用 `xyz.erik.opi.keyboard` 占位；做宿主时按
-# `<宿主 id>.keyboard` 改（改一处：这里）。
-KB_BUNDLE_ID="xyz.erik.opi.keyboard"
+# 宿主 App 与扩展的 bundle id。扩展 id **必须**以宿主 id 为前缀（Apple 强制），
+# 所以这里由 HOST_BUNDLE_ID 派生，别分别手写两个容易漂的常量。
+HOST_APP="Opi"
+HOST_BUNDLE_ID="xyz.erik.opi"
+KB_BUNDLE_ID="$HOST_BUNDLE_ID.keyboard"
 
 rm -rf "$out"
 mkdir -p "$out"
@@ -167,6 +175,10 @@ kb="$out/KeyboardExtension-Info.plist"
 plutil -replace CFBundleExecutable -string "$FMWK" "$kb"
 plutil -replace CFBundleIdentifier -string "$KB_BUNDLE_ID" "$kb"
 plutil -replace CFBundleName -string "$FMWK" "$kb"
+# 宿主与扩展的版本号必须一致；CFBundleVersion 允许点分整数串。
+plutil -replace CFBundleShortVersionString -string "$version" "$kb"
+plutil -replace CFBundleVersion -string "$version" "$kb"
+plutil -replace MinimumOSVersion -string "$IOS_MIN" "$kb"
 plutil -replace NSExtension.NSExtensionPrincipalClass -string "KeyboardViewController" "$kb"
 plutil -lint "$kb" >/dev/null
 # 判据落在**值**上（与 macOS 侧同一条理由）：`plutil -p` 只吐键值，注释里的 `$(` 例子不算。
@@ -177,11 +189,11 @@ if grep -q '\$(' <<<"$kb_dump"; then
   grep '\$(' <<<"$kb_dump" >&2; exit 1
 fi
 
-# ---- 5) 尽力而为：真 .appex 可执行（入口 _NSExtensionMain）----
+# ---- 5) 扩展可执行（入口 _NSExtensionMain）----
 #
-# framework **保证有**；这一段是加分项。扩展二进制必须由链接器入口 `_NSExtensionMain`
-# 起头（Xcode 生成的链接行就是这么写的），而手写这条链接行**从未被验证过**。
-# 失败不影响上面的产物，但**必须响** —— 原样打印链接器的话，别读成「appex 也做出来了」。
+# IPA 必须有扩展可执行，所以这一步**不再是可选项**：链接失败就退出（framework 与
+# xcframework 已落盘，仍可供排查/集成）。扩展二进制必须由链接器入口 `_NSExtensionMain`
+# 起头（Xcode 生成的链接行就是这么写的）；这条手写链接行已在 CI 上实测通过。
 if swiftc -parse-as-library -emit-executable ios/*.swift -o "$out/.appex-bin" \
      -import-objc-header ios/OpiFFI.h -module-name "$MODULE" \
      -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" -target "arm64-apple-ios$IOS_MIN" \
@@ -196,22 +208,93 @@ if swiftc -parse-as-library -emit-executable ios/*.swift -o "$out/.appex-bin" \
   # 在 macOS 的 /bin/bash（3.2）下会把 `（` 吞进变量名 → `appex…: unbound variable`
   # （首轮实测就是这么红的：run 37934619550，链接都过了、死在最后一行 echo 上）。
   # 本地 bash 5 复现不出来 —— 别用「本机跑过」当这条的判据。
-  echo "appex 可执行链接成功：${appex}（**未签名**，装不上真机）"
+  echo "appex 可执行链接成功：${appex}（**未签名**）"
 else
-  echo "!! .appex 可执行**未产出**（链接器原文见上）。本产物里只有 framework/xcframework。"
-  echo "   这不是静默降级：上面那几行链接器输出就是原因，appex-link.log 也在产物里。"
+  echo "!! .appex 可执行**未产出**（链接器原文见上），无法组装 IPA。" >&2
+  echo "   framework/xcframework 仍在 $out，appex-link.log 也在，供排查。" >&2
+  exit 1
 fi
 
-# ---- 6) zip ----
+# ---- 6) 宿主 App + unsigned IPA ----
+# 键盘扩展不能独立安装：Apple 要求内嵌在宿主 App 的 PlugIns/ 里。
+# 宿主源码是 ios/HostApp/OpiApp.swift，用 swiftc 直接编，不依赖 .xcodeproj。
+app="$out/$HOST_APP.app"
+hostbin="$app/$HOST_APP"
+mkdir -p "$app/PlugIns"
+cp -R "$appex" "$app/PlugIns/OpiKeyboard.appex"
+# 词库放进**扩展**的 bundle（扩展里 Bundle.main 指向 appex，不是宿主 App）。
+# 取已入库的 Android 部署副本：CI checkout 里一定有；data/generated/luna.opid 被 gitignore。
+for dict in luna trad stroke wubi86; do
+  src="android/app/src/main/assets/$dict.opid"
+  [ -f "$src" ] || { echo "!! 缺少词库 $src；不能产出可用 IPA" >&2; exit 1; }
+  cp "$src" "$app/PlugIns/OpiKeyboard.appex/$dict.opid"
+done
+# 图标用项目宠物图标；sips 生成 iOS 需要的尺寸（AppIcon60x60@2x/@3x、AppIcon76x76@2x）。
+icon="desktop/icons/opi-pet.png"
+[ -f "$icon" ] || { echo "!! 缺少图标 $icon" >&2; exit 1; }
+sips -z 120 120 "$icon" --out "$app/AppIcon60x60@2x.png" >/dev/null
+sips -z 180 180 "$icon" --out "$app/AppIcon60x60@3x.png" >/dev/null
+sips -z 152 152 "$icon" --out "$app/AppIcon76x76@2x.png" >/dev/null
+
+cat > "$app/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key><string>zh_CN</string>
+	<key>CFBundleDisplayName</key><string>小欧输入法</string>
+	<key>CFBundleExecutable</key><string>$HOST_APP</string>
+	<key>CFBundleIdentifier</key><string>$HOST_BUNDLE_ID</string>
+	<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+	<key>CFBundleName</key><string>$HOST_APP</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleShortVersionString</key><string>$version</string>
+	<key>CFBundleVersion</key><string>$version</string>
+	<key>CFBundleSupportedPlatforms</key><array><string>iPhoneOS</string></array>
+	<key>MinimumOSVersion</key><string>$IOS_MIN</string>
+	<key>DTPlatformName</key><string>iphoneos</string>
+	<key>UILaunchScreen</key><dict/>
+	<key>UIRequiredDeviceCapabilities</key><array><string>arm64</string></array>
+	<key>UISupportedInterfaceOrientations</key>
+	<array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationPortraitUpsideDown</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
+	<key>CFBundleIcons</key>
+	<dict><key>CFBundlePrimaryIcon</key><dict><key>CFBundleIconFiles</key><array><string>AppIcon60x60</string></array></dict></dict>
+	<key>CFBundleIcons~ipad</key>
+	<dict><key>CFBundlePrimaryIcon</key><dict><key>CFBundleIconFiles</key><array><string>AppIcon76x76</string></array></dict></dict>
+</dict>
+</plist>
+PLIST
+plutil -lint "$app/Info.plist" >/dev/null
+
+swiftc -parse-as-library -emit-executable ios/HostApp/OpiApp.swift \
+  -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" \
+  -target "arm64-apple-ios$IOS_MIN" -O -o "$hostbin"
+chmod +x "$hostbin"
+
+# IPA 就是 zip(Payload/Opi.app)。未签名，需重签后安装。
+ipa="$out/opi-ios-keyboard-$version-unsigned.ipa"
+mkdir -p "$out/Payload"
+rm -rf "$out/Payload/$HOST_APP.app"
+cp -R "$app" "$out/Payload/$HOST_APP.app"
+( cd "$out" && zip -q -r -y "$(basename "$ipa")" Payload )
+rm -rf "$out/Payload"
+[ -f "$ipa" ] || { echo "!! IPA 未产出" >&2; exit 1; }
+echo "IPA（未签名，需重签后安装）：$ipa"
+
+# ---- 7) zip ----
 # 只列**明确成员**（不用 `zip -r .`）：那样会把中间产物一起卷进去，也会把 zip 自己套进来。
-members=("$FMWK.xcframework" "KeyboardExtension-Info.plist")
-if [ -d "$out/OpiKeyboard.appex" ]; then members+=("OpiKeyboard.appex"); fi
+# appex 已包含在 IPA 里，不再重复放进外层 zip。
+members=("$FMWK.xcframework" "KeyboardExtension-Info.plist" "$(basename "$ipa")")
 zip="$out/opi-ios-keyboard-$version-unsigned.zip"
 ( cd "$out" && zip -q -r "$(basename "$zip")" "${members[@]}" )
 
-echo "---- iOS 产物（未签名，**不能装真机**；可编译 + 可下载的证据与集成起点）----"
+echo "---- iOS 产物（unsigned IPA / xcframework；未上机验证）----"
 echo "  $out/$FMWK.xcframework"
 echo "  $kb"
-if [ -d "$out/OpiKeyboard.appex" ]; then echo "  $out/OpiKeyboard.appex（未签名扩展目录）"; fi
+echo "  $appex（未签名扩展目录）"
+echo "  $app（宿主 App）"
+echo "  $ipa"
 echo "  $zip"
 echo "  版本：${version}（取自 Cargo.toml）"

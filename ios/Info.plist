@@ -35,6 +35,14 @@
     <string>1.15.1</string>
     <key>CFBundleVersion</key>
     <string>1</string>
+    <!-- 手写 bundle 没有 Xcode 的构建设置注入，这两个键要显式写；
+         package-ios.sh 会把 MinimumOSVersion 覆盖成脚本里的 IOS_MIN。 -->
+    <key>CFBundleSupportedPlatforms</key>
+    <array>
+        <string>iPhoneOS</string>
+    </array>
+    <key>MinimumOSVersion</key>
+    <string>15.0</string>
     <key>NSExtension</key>
     <dict>
         <!--
