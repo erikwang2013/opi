@@ -35,8 +35,12 @@
 //! 它们在「装了字体的机器」上都画得出，所以「面什么都不画」这种坏法不会假绿。
 //!
 //! ⚠️ 它证的是「这些像素画得出来」，**不证**「窗开起来长这样」（同 SymbolRenderProbeTest
-//! 的界：窗的位置/焦点/真机字体渲染都不在这里）。PNG 落在 `/tmp/opi-render-probe/`，
+//! 的界：窗的位置/焦点/真机字体渲染都不在这里）。PNG 落在 `build/opi-render-probe/`，
 //! 人眼可直接看。
+//!
+//! **2026-10-19（按设计图加 enpro/en26 键帽）**：键帽是固定白底 + 固定设计色，白底在白
+//! 背景上量不出来 ⇒ 那两例改在**黑底**上 3× 渲染（黑底是夹具，不是产品色），采样白底/
+//! 描边/文字色。其余用例仍是白底 1×。
 
 package xyz.erik.opi.candidate
 
@@ -65,7 +69,7 @@ import kotlin.math.ceil
 
 class StatusBarRenderProbeTest {
 
-    private val outDir = File("/tmp/opi-render-probe")
+    private val outDir = File("build/opi-render-probe")
 
     /** 按钮盒四周在画布上留的余量（px，密度 1f）：溢出会落在这一圈里被量到，不再被裁掉。 */
     private val probePad = 5
@@ -140,14 +144,20 @@ class StatusBarRenderProbeTest {
 
     /**
      * 把一个 composable（面/旧面）画进画布中心（**与 BarButton 同一摆法**：30dp 的按钮盒
-     * 居中），落一张 PNG 到 `/tmp/opi-render-probe/statusbar-*.png` 供人眼看，
-     * 返回全画布的墨迹框与图。
+     * 居中），落一张 PNG 到 `build/opi-render-probe/statusbar-*.png` 供人眼看，
+     * 返回全画布的墨迹框与图。[bg] / [density] 默认白底 1×；键帽用例传黑底 3×。
      */
-    private fun probe(name: String, content: @Composable () -> Unit): Pair<Ink, BufferedImage> {
-        val scene = ImageComposeScene(width = canvas, height = canvas, density = Density(1f)) {
+    private fun probe(
+        name: String,
+        bg: Color = Color.White,
+        density: Float = 1f,
+        content: @Composable () -> Unit,
+    ): Pair<Ink, BufferedImage> {
+        val px = ((BTN + 2 * probePad) * density).toInt()
+        val scene = ImageComposeScene(width = px, height = px, density = Density(density)) {
             CompositionLocalProvider(LocalBarPalette provides probeColors) {
                 Box(
-                    Modifier.fillMaxSize().background(probeColors.bg),
+                    Modifier.fillMaxSize().background(bg),
                     contentAlignment = Alignment.Center,
                 ) { content() }
             }
@@ -199,6 +209,7 @@ class StatusBarRenderProbeTest {
             FaceCase("punct-zh", StatusBarButton.PUNCT, ImeState(punct = true)),
             FaceCase("punct-en", StatusBarButton.PUNCT, ImeState(punct = false)),
             FaceCase("symbols", StatusBarButton.SYMBOLS),
+            FaceCase("enpro", StatusBarButton.ENPRO),
             FaceCase("trad-fan", StatusBarButton.TRAD, ImeState(trad = true)),
             FaceCase("trad-jian", StatusBarButton.TRAD, ImeState(trad = false)),
             FaceCase("lang-en", StatusBarButton.LANG, ImeState(zh = false)),
@@ -303,26 +314,12 @@ class StatusBarRenderProbeTest {
     }
 
     @Test
-    fun `mode en26 hangs the corner badge at the bottom right`() {
-        // 用户原话：「en图标，其中en右下角加26」。槽位是「en」占上部 + 「26」占右下
-        // （BarGlyphs 的 modeSlots，两槽按 0.55 分界、**不相交**）。像素判据同标点那条
-        // （三个格子量的都是**面内盒** = 按钮 × FACE_SCALE，[cell] 已按它映射）：
-        // 上带与右下格**有**墨迹、左下格**没有** —— 最后一问才是「26 在右下角」的判据
-        // （角标要是画到左下、或 en 画满整块面，左下格就有墨迹）。
+    fun `mode en26 uses en plus a corner badge and other modes have no corner`() {
+        // 2026-10-19 键帽改版：en26 的像素几何（白底、比例、位置、设计色）在
+        // KeycapRenderTest 里按**键帽内盒**量 —— 键帽不走 FACE_SCALE，本文件基于
+        // [cell] 的旧四象限口径对它已不成立。这里只守 token 表：en26 = en + 26。
         val slots = modeSlots("en26").map { it.text }
         assertEquals("en26 该是「en」+ 角标「26」两块", listOf("en", "26"), slots)
-        val (ink, img) = probe("mode-en26") { face(StatusBarButton.MODE, mode = "en26") }
-        assertTrue("en26 的两枚都是 ASCII（任何装了字体的机器都有）⇒ 面必须有墨迹", !ink.empty)
-        val (topCols, topRows) = cell(0f, 1f, 0f, 0.55f)
-        val (brCols, brRows) = cell(0.55f, 1f, 0.55f, 1f)
-        val (blCols, blRows) = cell(0f, 0.55f, 0.55f, 1f)
-        val top = inkIn(img, topCols, topRows)
-        val br = inkIn(img, brCols, brRows)
-        val bl = inkIn(img, blCols, blRows)
-        println("en26：「en」带=$top 右下角=$br 左下格=$bl（面 $ink）")
-        assertTrue("上带该有「en」", !top.empty)
-        assertTrue("右下角该有角标「26」", !br.empty)
-        assertTrue("左下格该是空的（墨迹 $bl）—— 有东西就是角标没落在右下角", bl.empty)
         // 无角标的两档：整块面给一个字（同一个 token 表驱动，别只测 en26）
         for (m in listOf("pinyin", "wubi")) {
             val (i2, _) = probe("mode-$m") { face(StatusBarButton.MODE, mode = m) }
@@ -363,10 +360,7 @@ class StatusBarRenderProbeTest {
             abs(newAscii.h - expectH) <= 2,
         )
         // 算出来的字号（px，密度 1f）：每个槽位都按墨迹取最大。12.sp 的旧面 = 12px。
-        // 名单里**没有角标「26」**：它占的是内盒右下角那一小块槽（0.45 × 内盒 = 8.1px 见方），
-        // 字号被自己的槽顶住（缩放前 13.5px 槽实测 12.3px；× FACE_SCALE 后的值见下面打印）
-        // —— 「≥ 2× 旧的 12px」这条规则只对**主字形**成立，角标按「塞进槽里且不溢出」判
-        // （像素那条用例）。角标单独量、单独打印。
+        // en / en26 不在这张表里：键帽面不走 FACE_SCALE，真墨迹宽高由 KeycapRenderTest 量。
         // ⚠️ 量的是**面内盒**（按钮 × FACE_SCALE，2026-10-15 裁决）—— 拿按钮去量就不是
         // 产品里画的那一支了。缩放系数变了要同步这里（含下面的阈值 24 × FACE_SCALE）。
         fun fitIn(text: String, fracW: Float = 1f, fracH: Float = 1f) =
@@ -378,9 +372,7 @@ class StatusBarRenderProbeTest {
             "trad「繁」" to fitIn("繁"),
             "lang「中」" to fitIn("中"),
             "mode「拼」" to fitIn("拼"),
-            "mode-en「en」" to fitIn("en", fracH = 0.55f),
         )
-        val badge = fitIn("26", fracW = 0.45f, fracH = 0.45f)
         // 「≥ 2× 旧的 12px」是 2026-10-14 立的（那轮把面从 12sp 顶到按盒取最大）；
         // 2026-10-15 用户裁决「缩小40％」⇒ 面内容整体 × FACE_SCALE，这条同比例收紧：
         // 阈值 = 24 × FACE_SCALE = 14.4px（= 缩放后仍比旧的 12px 大 1.2 倍）。
@@ -388,18 +380,12 @@ class StatusBarRenderProbeTest {
         val minPx = 24f * FACE_SCALE
         println(
             "按盒取最大的字号（px，旧面 = 12.sp = 12px；盒 = 按钮 × $FACE_SCALE）：\n" +
-                sized.joinToString("\n") { "  ${it.first} = ${"%.1f".format(it.second)}px" } +
-                "\n  mode-26「26」（角标，槽 ${"%.1f".format(BTN * FACE_SCALE * 0.45f)}px） = " +
-                "${"%.1f".format(badge)}px",
+                sized.joinToString("\n") { "  ${it.first} = ${"%.1f".format(it.second)}px" },
         )
         // ASCII 的两条无条件断（任何字体都有这两个字形）；汉字/Ω 走发现式（CI 没有 CJK 字体）
         assertTrue(
             "「.」的字号该 ≥ 24 × $FACE_SCALE = ${"%.1f".format(minPx)}px（实测 ${sized[0].second}）",
             sized[0].second >= minPx,
-        )
-        assertTrue(
-            "「en」的字号该 ≥ 24 × $FACE_SCALE = ${"%.1f".format(minPx)}px（实测 ${sized[5].second}）",
-            sized[5].second >= minPx,
         )
         for ((name, px) in sized) {
             val glyph = name.substringAfter('「').substringBefore('」')
@@ -413,11 +399,6 @@ class StatusBarRenderProbeTest {
                 println("  $name 本机缺字形（量到的是排版盒退路的 ${"%.1f".format(px)}px，不是墨迹）")
             }
         }
-        // 角标：比旧面（12px）小是**设计**（用户要的是「右下角加 26」的小角标），但也不该
-        // 缩到看不清 —— 6px 是「角落里还读得出两个数字」的下限（本机实测：缩放前 12.3px，
-        // 2026-10-15 乘 FACE_SCALE 后见上面打印的值）。⚠️ 这条**不随 FACE_SCALE 折算**：
-        // 它断的是「还看得见」这条产品下限，不是「按盒取最大」的比例。
-        assertTrue("角标「26」的字号不该缩到 ${"%.1f".format(badge)}px（< 6px 就只是个墨点了）", badge >= 6f)
         // 汉字那条的**墨迹**对比（本机有 CJK 字体时才有意义）：旧面「。，」@12sp vs 新面。
         val pair = punctSlots(ImeState(punct = true)).map { it.text }
         if (pair.all(GlyphCoverage::canRender)) {
@@ -431,4 +412,5 @@ class StatusBarRenderProbeTest {
             )
         }
     }
+
 }

@@ -139,7 +139,17 @@ tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageT
             check(src.isFile) { "OPI_TSF_DLL 指向的文件不存在：${src.path}" }
             // 完成页复选框拉起这个脚本：启动候选窗 + 重启 Explorer（重新加载 TSF DLL）。
             // 只在这个分支挂入 ⇒ Linux Deb 不会带 Windows 脚本。
-            files.from(src, file("windows/launch-and-restart.cmd"))
+            // 字体也在这里挂一份**普通文件**（不是仅 jar 里的 `pet-font/` 资源）：
+            // 脚本把它复制到 `%LOCALAPPDATA%\Microsoft\Windows\Fonts` 并写 HKCU，
+            // 供需要按家族名 `Opi Emoji` 选择字体的 Windows 宿主使用。
+            val emojiFont = file("../shared/pet/emoji-font/opi-emoji.ttf")
+            check(emojiFont.isFile) { "找不到 PUA 字体：${emojiFont.path}" }
+            files.from(
+                src,
+                file("windows/launch-and-restart.cmd"),
+                file("windows/install-emoji-font.ps1"),
+                emojiFont,
+            )
         }
     }
 

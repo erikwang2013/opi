@@ -443,13 +443,14 @@ emoji 列**不动** —— 它管单键候选反馈（搜索路），与浏览�
   面板下方**叠一层字母盘**（既有机制；防抖在 `ImeState`）。
 - **自有（独立顶级子页，2026-10-18 用户裁决）**：12 个小欧形态（贴纸源
   `shared/pet/stickers/` → APK assets `pet/`，文件名契约 `PetStickerAssets`）以
-  6 列网格画 PNG（`keyboard/PetStickerPanel.kt`）。点一格 ⇒
-  `OpiImeService.commitPetSticker`：PNG 拷到 `cacheDir/pet/`，经 `FileProvider`
-  （authority `${applicationId}.fileprovider`，`res/xml/file_paths.xml` 只开
-  `cacheDir/pet`）构造 `InputContentInfoCompat`，用
-  `InputConnectionCompat.commitContent` 插入**图片**。编辑器不接受富内容时回退
-  **`PetEmojiMap` 的近似 Unicode emoji**（2026-10-19 用户报障「确认到输入框就不是表情」）并
-  toast 说明；仍有映射缺失时才落到独立文本标签 `[小欧·笑]`。自有不进 Emoji
+  6 列网格播 GIF（API 28+ 走 `ImageDecoder`，API 21–27 走 `Movie` 兜底；静态 PNG/
+  矢量为缺图兜底；`keyboard/PetStickerPanel.kt`）。点一格 ⇒
+  `OpiImeService.commitPetSticker`：GIF（其次 PNG）拷到 `cacheDir/pet/`，经
+  `FileProvider`（authority `${applicationId}.fileprovider`，`res/xml/file_paths.xml`
+  只开 `cacheDir/pet`）构造 `InputContentInfoCompat`，用
+  `InputConnectionCompat.commitContent` 插入**图片**（GIF 优先）。编辑器两种图片都不
+  接受时回退**带「小欧·」前缀的可区分文本标签**（如 `[小欧·笑]`），**不再插入
+  Unicode emoji**（2026-10-19 用户裁决）。自有不进 Emoji
   分类条、也不进 Emoji 的最近使用。
 - **Emoji 子页**：底部一条**可横滑**的分类条（`EmojiPanel.kt` 的 `CategoryBar`），
   内容 = 引擎 `emojiGroups()` 的 **9 组**（不再含自有或任何偏移）；点组
@@ -658,6 +659,21 @@ IME 服务在 `EngineLoader.load` 之后把三个值推给引擎（`prefs.applyE
 设置页**先推后读**（设置页可能先于 IME 启动，不推一遍会读到引擎默认值而不是存过的）。
 至此四端都已落盘（Linux = fcitx5 addon 配置、Windows = `settings.ini`、桌面设置窗 =
 同一个文件）。
+
+**自有表情 PUA（2026-10-19，默认关）**：设置页「自有表情用字体字符（PUA）」开关，
+落盘键 `pet_pua_emoji`（`ImePreferences`，缺省 `false`）。打开后点自有表情不再走
+GIF/PNG 图片通道，而是用 `InputConnection.commitText` 上屏 PUA 字体字符
+（U+E000–U+E00B；码位真源 = `shared/pet/emoji-font/map.tsv`，共享解析
+`PetEmojiFont.puaFor`，不按枚举偏移猜码位；实现见 `PetStickerCommit.kt` 的
+`commitPetStickerTo`）。`map.tsv` 缺失/坏掉时回退图片通道；图片通道失败时的默认
+回退仍是 `[小欧·笑]` 这样的文本标签，与该开关无关。
+
+⚠️ **平台限制（默认关的原因）**：`opi-emoji.ttf` 只打进 APK 的
+`assets/pet-font/`，Android 不会把它注册为系统字体，其他应用也读不到本 APK 的
+assets ⇒ 上屏的 PUA 字符在其他应用里**无法显示成小欧字形**（通常是方框）。所以
+Android 上建议保持关闭，用默认的图片/标签；需要 PUA 字形请用桌面 Linux（字体装进
+系统字体目录，见 `linux.md` §4.8）。Windows 桌面没有 TSF 插入面，PUA 走文本剪贴板 +
+粘贴提示（见 `windows.md`）。
 
 ---
 

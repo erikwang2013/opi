@@ -9,17 +9,25 @@
 # install() 决定，而它被 opi_locate_check 对着**真 fcitx5 库**验过（问真库
 # 「loadDictionary() 会去哪找」，再与 cmake --install 的落点比）。打包侧再抄一份
 # 路径 = 造一个会漂的第二真源 —— 那正是本项目反复栽过的那类问题。
-# 暂存树那条是唯一**从 CMake 树来**的 contents；另有三条例外，都不是 CMake 落点的
+# 暂存树那条是唯一**从 CMake 树来**的 contents；另有几条例外，都不是 CMake 落点的
 # 第二真源：
 #   · LICENSE / LICENSE.md：授权文本，原本就不在 CMake 树里（见各自的注释）；
 #   · ${PKG_CTL_BIN} → /usr/bin/opi-ctl：Rust 侧编的 CLI，**不属于 CMake 树** ——
 #     CMakeLists 只装 fcitx5 侧的胶水与数据，opi-ctl 由 build-packages.sh 里的
 #     cargo 现编；cargo 装不了 /usr/bin，落点只能在这里声明，一处。
+#   · restart-fcitx5.sh → /usr/libexec/opi/：维护脚本的 helper，不是 CMake 产物；
+#     为什么非得进包见维护脚本那段注释。
+#   · opi-emoji.ttf → /usr/share/fonts/truetype/opi/：PUA 表情字体，属于系统字体，
+#     不是 fcitx5 的运行数据 —— CMake 的安装面是插件/词库，别在 CMakeLists 里再装
+#     一份（两处 = 第二真源）。
 
 # 维护脚本（2026-10-17 用户裁决「安装的时候中断正在运行的应用，安装后启动」的
 # Linux 等价物 —— Windows MSI 那套由 postprocess-windows-msi.sh 的 taskkill +
 # WixShellExec 承担）。deb 与 rpm 共用这三份（nfpm 分别装成 preinst/postinst/
 # prerm 与 %pre/%post/%preun）。理由与边界写在各自的文件头。
+# ⚠️ nfpm 的 scripts: 是**单文件嵌入**：postinstall 运行时读不到同目录的
+# restart-fcitx5.sh ⇒ 那份 helper 必须按下面的 contents 显式装进包。
+# 改 helper 路径时，postinstall.sh 里的 /usr/libexec/opi/ 也要一起改。
 # ⚠️ 路径按 **CWD** 解析（不是配置文件目录）—— 实测：config 在 scripts/ 下、cwd 在
 # 仓库根时，`packaging/x.sh` 会去 `<cwd>/packaging/` 找而报 no such file。
 # build-packages.sh 在仓库根调 nfpm（脚本开头 cd "$REPO_ROOT"），所以这里写
@@ -46,7 +54,8 @@ license: MIT
 description: |
   小欧输入法 —— fcitx5 插件（含简体词库）
   模糊拼音 · 简拼 · 中文标点 · 全角半角 · 符号面板。
-  安装后重启 fcitx5 并在「输入法」里添加 小欧输入法 即可使用。
+  安装/升级后自动热重启 fcitx5（OPI_NO_RESTART_FCITX5=1 可关闭），
+  并在「输入法」里添加 小欧输入法 即可使用。
 
 depends:
   - fcitx5
@@ -102,6 +111,20 @@ contents:
     dst: /usr/bin/opi-ctl
     file_info:
       mode: 0755
+  # fcitx5 热重启 helper。**必须进包**：postinst 由 nfpm 单文件嵌入，不能 source
+  # 同目录的脚本（见上面维护脚本那段注释）。postinstall.sh 里写死
+  # /usr/libexec/opi/restart-fcitx5.sh，两处路径同步改。
+  - src: scripts/packaging/restart-fcitx5.sh
+    dst: /usr/libexec/opi/restart-fcitx5.sh
+    file_info:
+      mode: 0755
+  # Opi Emoji（PUA U+E000–E00B，family「Opi Emoji」）：供应用用系统字体渲染 PUA
+  # 字符。**只由 nfpm 声明**（见上面异常清单）；postinst 安装后会刷 fc-cache。
+  # 字体不是可执行文件，0644 显式写，别押在工具缺省上。
+  - src: shared/pet/emoji-font/opi-emoji.ttf
+    dst: /usr/share/fonts/truetype/opi/opi-emoji.ttf
+    file_info:
+      mode: 0644
   # ⚠️ 许可证文本**必须随包分发**：luna.opid 由 LGPL-3.0（rime-luna-pinyin）、
   # Apache-2.0（rime-pinyin-simp）、GPL-3.0-only（rime-ice，2026-10-11 起）等
   # 数据编译而来，各自要求在分发物中保留许可与署名；GPL-3.0 还要求随分发物

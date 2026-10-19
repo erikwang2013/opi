@@ -12,9 +12,11 @@ name: Windows 打包
 #     包必须在 Windows 上打（同 packages.yml 里 deb 钉 ubuntu-22.04 的那条理由，方向相反）。
 #
 # ⚠️ 边界（**别把「打包绿了」读成「Windows 端能用」**）：
-#   本 workflow 只证明「这两个产物能在 Windows 上被编出来、DLL 的导出表长这样、MSI 里
-#   带上了 DLL 和完成页脚本」。它**不**安装、**不**运行任何东西；安装期的
-#   `regsvr32` / Explorer 重启只在后处理脚本里做了**表级**注入，仍需真机装一次验证。
+#   本 workflow 证明「这两个产物能在 Windows 上被编出来、DLL 的导入/导出表长这样、
+#   MSI 里带上了 DLL 和完成页脚本，且后处理注入了注册动作与安装目录」。它**不**安装、
+#   **不**运行任何东西；安装期的 `regsvr32` / Explorer 重启只在 `msi-postprocess` job
+#   里做了**表级**注入，仍需真机装一次验证（2026-10-19 用户在真机装的是**未后处理**的
+#   发布包，键盘不显示；后处理后的产物尚未被装过）。
 #   缺口清单见 docs/install/windows.md 的 §6.1（从未验过的事）与 §6.2（读源码得出的缺口）。
 #   本 workflow 也**不**打包 `luna.opid`：词库分发通路一条没动（§2.4 的判断仍然成立 ——
 #   仍然没有任何步骤把词库和 DLL 放到一起）。
@@ -31,6 +33,9 @@ on:
     paths:
       - 'crates/tsf-opi/**'
       - 'desktop/**'
+      - 'shared/pet/emoji-font/**'
+      - 'scripts/postprocess-windows-msi.sh'
+      - 'scripts/windows/**'
       - '.github/workflows/windows.yml'
 
 permissions:
@@ -88,14 +93,25 @@ jobs:
       # 同一条约定：不加 --locked，测的就不是锁定那份依赖）。锁文件漂了会在这一步响的红。
       # lto=true（根的 [profile.release]）在这里是**真做**的 —— 这是本仓第一次在
       # Windows 目标上跑完整 release 链接。
-      - name: cargo build --release -p tsf_opi（真链接出 DLL）
+      #
+      # +crt-static（2026-10-19）：MSI 不会安装 VC++ 运行时（jpackage 的 runtime\bin
+      # 在包内但不在 DLL 旁的 app\，也不进 PATH）。动态 CRT 的 DLL 在这类机器上
+      # regsvr32 会以 0x8007007E（找不到模块）失败。静态 CRT 后导入表不再有
+      # VCRUNTIME140/MSVCP140/ucrtbase/api-ms-win-crt* —— 下一条门禁会核。
+      - name: cargo build --release -p tsf_opi（真链接出 DLL，静态 CRT）
+        env:
+          RUSTFLAGS: -C target-feature=+crt-static
         run: cargo build --release --locked -p tsf_opi --target x86_64-pc-windows-msvc
 
       # 「编出来了」与「这个 DLL 里真有 COM 入口」是两件事：导出名漏一个（或名字被
       # 装饰），宿主看到的就是「导出不存在」——regsvr32 报找不到入口点，产物外观毫无异样。
       # 所以这里真读一次导出表，四个入口缺一个就红。它同时是 §6.1 第 2 条
       # （「导出表从未被检视」）的执行点。
-      - name: 导出表取证（四个 COM 入口在不在）
+      #
+      # 同一步再读一次导入表（/dependents）：动态依赖 VC++/UCRT 运行时（VCRUNTIME140/
+      # MSVCP140/ucrtbase/api-ms-win-crt*）就红。正向证据 = 静态 CRT 后这些名字都不出现；
+      # 空输出/非零退出也算失败。
+      - name: 导出表 + 导入表取证（COM 入口 + 静态 CRT）
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -116,6 +132,17 @@ jobs:
             if (-not ($out | Select-String -SimpleMatch $sym -Quiet)) { throw "导出表里没有 $sym" }
           }
           Write-Host "四个 COM 导出都在（名字未被装饰）"
+
+          # 导入表门禁（2026-10-19）：MSI 不装 VC++ 运行时，动态 CRT 会让 regsvr32
+          # 以 0x8007007E 失败。+crt-static 的正向证据就是这些名字不在导入表里。
+          # api-ms-win-crt-* 也要查：ucrtbase 重定向后的转发 DLL 同样是动态 CRT 的一部分
+          # （2026-10-19 reviewer m2）。注意别误伤 api-ms-win-core-*（系统 DLL，静态 CRT 也有）。
+          $deps = & $dumpbin.FullName /nologo /dependents $dll
+          if ($LASTEXITCODE -ne 0) { throw "dumpbin /dependents 失败（退出码 $LASTEXITCODE）" }
+          $deps
+          $bad = $deps | Select-String -Pattern 'VCRUNTIME140|MSVCP140|ucrtbase|api-ms-win-crt'
+          if ($bad) { throw "DLL 动态依赖 VC++/UCRT 运行时（未装运行时的机器上 regsvr32 会失败）：`n$bad" }
+          Write-Host "导入表无 VCRUNTIME140/MSVCP140/ucrtbase/api-ms-win-crt（静态 CRT）"
 
       # if-no-files-found: error —— 默认只 warn，而「绿了但没产物」正是本仓反复栽过的
       # 那种假绿（比红更坏：拿到手才发现空）。
@@ -206,11 +233,90 @@ jobs:
             Get-Content $argsFile
           } else { Write-Host "没有 $argsFile" }
 
+      # 原始 jpackage 产物：**不含** regsvr32 注册动作，也不是用户入口（2026-10-19
+      # 用户真机报障的根因正是把这一份当成了发布包）。后处理在下面的 msi-postprocess
+      # job 里做；只有它上传的 opi-desktop-msi-v<版本> 才是用户入口。
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opi-desktop-msi-raw-v${{ needs.version.outputs.version }}
+          if-no-files-found: error
+          path: desktop/build/compose/binaries/main/msi/*.msi
+
+  # ---- MSI 后处理（Linux runner，msitools 表级注入）----
+  #
+  # 2026-10-19 起这是**必需**步骤：jpackage 的原始 MSI 不注册 TSF DLL，装完键盘
+  # 不出现（用户在真机上撞到过）。scripts/postprocess-windows-msi.sh 注入：
+  #   · Directory：INSTALLDIR 默认目录 opi-candidates → opi（C:\Program Files\opi）
+  #   · 序列 797 杀旧进程、5900 regsvr32 注册 DLL、完成页自启 + 重启 Explorer
+  #   · 注册必须走 `WixSilentExec64`（配 `WixSilentExec64CmdLine`）：随包的
+  #     Binary.WixCA 是 PE32 i386，32 位变体会在 WOW64 里调 SysWOW64 的 regsvr32，
+  #     加载不了 x86-64 的 tsf_opi.dll（2026-10-19 复审 blocker）。OpLaunchApp 仍用
+  #     WixShellExec —— WixCA 没有 64 位 shell 变体（32 位 ShellExecute 可拉起 .cmd）。
+  # 脚本自带读回断言与全表 diff，任一不满足即不落产物。
+  msi-postprocess:
+    name: MSI 后处理 + 表级验证（ubuntu-latest，msitools）
+    runs-on: ubuntu-latest
+    needs: [version, desktop-msi]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: opi-desktop-msi-raw-v${{ needs.version.outputs.version }}
+          path: msi-raw
+
+      - name: 安装 msitools 并跑 scripts/postprocess-windows-msi.sh
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq msitools >/dev/null
+          shopt -s nullglob
+          raw=(msi-raw/*.msi)
+          [ "${#raw[@]}" -eq 1 ] || { echo "::error::raw artifact 里应有且只有一个 .msi，实际 ${#raw[@]} 个"; exit 1; }
+          mkdir -p msi-processed
+          scripts/postprocess-windows-msi.sh "${raw[0]}" "msi-processed/$(basename "${raw[0]}")"
+
+      # 脚本内部已有读回断言；这里再在 job 层独立读一遍四张表 —— 脚本被改坏/被绕过
+      # 时仍然会红。⚠️ 先落变量再 grep：`msiinfo | grep -q` 在 pipefail 下会因 grep
+      # 早退（SIGPIPE 141）随机假红；.idt 是 CRLF，先 tr -d '\r'。
+      # 注册 CA 的类型必须是 1（Return=check）：65 带 Continue 位会把 regsvr32 的失败
+      # 吞成「安装成功、键盘不出现」（2026-10-19 reviewer M2）。二进制位宽也要独立
+      # 断言：只查导出名/表形状不能证明 WixCA 的 machine 与注入的 64 位变体匹配。
+      - name: 表级验证（64 位注册 CA / WixCA PE machine / 5900 / INSTALLDIR=opi）
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          msis=(msi-processed/*.msi)
+          [ "${#msis[@]}" -eq 1 ] || { echo "::error::处理后应有且只有一个 .msi"; exit 1; }
+          MSI="${msis[0]}"
+          props="$(msiinfo export "$MSI" Property | tr -d '\r')"
+          ca="$(msiinfo export "$MSI" CustomAction | tr -d '\r')"
+          ies="$(msiinfo export "$MSI" InstallExecuteSequence | tr -d '\r')"
+          dir="$(msiinfo export "$MSI" Directory | tr -d '\r')"
+
+          fail=0
+          # CustomAction 导出尾列可能为空（行尾 tab），故用 \t*$ 锚定；关键是
+          # 后缀 64 不能被省的 $ 吃掉 —— `WixSilentExec` 是 WixSilentExec64 的前缀。
+          grep -qP '^OpRegisterTsf\t1\tWixCA\tWixSilentExec64\t*$' <<<"$ca" || { echo "::error::注册 CA 不是 OpRegisterTsf(Type 1)/WixSilentExec64（Type 65 会吞失败）"; fail=1; }
+          grep -qP '^WixSilentExec64CmdLine\t"regsvr32" /s "\[INSTALLDIR\]app\\tsf_opi\.dll"$' <<<"$props" || { echo "::error::WixSilentExec64CmdLine 不是 64 位 regsvr32 命令行"; fail=1; }
+          grep -qP '^OPI_POSTPROCESSED\t' <<<"$props" || { echo "::error::Property 表里没有后处理标记 OPI_POSTPROCESSED"; fail=1; }
+          grep -qP '^OpRegisterTsf\tNOT REMOVE\t5900$' <<<"$ies" || { echo "::error::注册动作不在序列 5900（NOT REMOVE）"; fail=1; }
+          grep -qP '^INSTALLDIR\tProgramFiles64Folder\topi$' <<<"$dir" || { echo "::error::INSTALLDIR 的默认目录不是 opi"; fail=1; }
+          # 位宽独立断言：随包 WixCA 必须是 32 位（PE32 i386）——这正是必须用
+          # WixSilentExec64 的原因；同时确认该二进制真的导出 64 位入口。
+          msiinfo extract "$MSI" Binary.WixCA > /tmp/WixCA.dll
+          objdump -f /tmp/WixCA.dll | grep -q 'pei-i386' || { echo "::error::Binary.WixCA 不是 PE32 i386（WixCA 形状变了，重新核对 64 位变体）"; fail=1; }
+          objdump -p /tmp/WixCA.dll | grep -qP '^\s*\[[^]]+\]\s+WixSilentExec64$' || { echo "::error::Binary.WixCA 没有 WixSilentExec64 导出"; fail=1; }
+          [ "$fail" -eq 0 ] || exit 1
+          echo "表级验证通过：OpRegisterTsf(Type 1)/WixSilentExec64(regsvr32) / 5900 / INSTALLDIR=opi / WixCA=PE32-i386 / OPI_POSTPROCESSED"
+
       - uses: actions/upload-artifact@v4
         with:
           name: opi-desktop-msi-v${{ needs.version.outputs.version }}
           if-no-files-found: error
-          path: desktop/build/compose/binaries/main/msi/*.msi
+          path: msi-processed/*.msi
 
   # ---- 只报不进卡的 clippy（Windows 目标）----
   #

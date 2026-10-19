@@ -248,37 +248,40 @@ internal fun punctSlots(st: ImeState): List<GlyphSlot> {
 }
 
 /**
- * 英文专业键（2026-10-19）：`en` 在左上、`pro` 在右下，两槽对角摆放；
- * 高亮态由状态栏按钮背景表达（StatusBar.kt 的 BarButton 按 `ImeState.englishPro` 常亮）。
+ * 键帽里的主字槽（2026-10-19 从设计图量得）：`en` 墨迹宽约 40%、垂直中心约 46%。
+ * 槽位是**键帽边长**的 0..1；四周留余量，[layoutGlyphs] 按墨迹取最大也不会贴边。
  */
-internal fun enproSlots(): List<GlyphSlot> = listOf(
-    GlyphSlot("en", left = 0f, top = 0f, right = 0.55f, bottom = 0.55f),
-    GlyphSlot("pro", left = 0.45f, top = 0.45f, right = 1f, bottom = 1f),
-)
+private fun keycapMainSlot(text: String) =
+    GlyphSlot(text, left = 0.22f, top = 0.32f, right = 0.65f, bottom = 0.60f)
+
+/** 键帽右下角标槽（设计图：宽约 29%、居中于 ~0.73/0.83）。最后一槽 = 角标色。 */
+private fun keycapCornerSlot(text: String) =
+    GlyphSlot(text, left = 0.56f, top = 0.72f, right = 0.90f, bottom = 0.93f)
+
+/**
+ * 英文专业键（2026-10-19 设计图）：`en` 居中、`pro` 右下角，槽位见 [keycapMainSlot] /
+ * [keycapCornerSlot]。高亮态由状态栏按钮背景表达（StatusBar.kt 的 BarButton 按
+ * `ImeState.englishPro` 常亮）。
+ */
+internal fun enproSlots(): List<GlyphSlot> = listOf(keycapMainSlot("en"), keycapCornerSlot("pro"))
 
 /**
  * 模式按钮（用户 2026-10-14 裁决：简繁之后增加，缩写「拼」「五」「en 右下角 26」）。
  * · 无角标态（拼音/五笔）：单字占满整块面；
- * · en26：「en」占上部 +「26」占右下角 —— 两槽**按分数就不相交**（同一个 0.55 分界，
- *   en 槽底 = 角标槽顶），所以「en 的字不会压到 26 上」是**与字体无关**的结构保证，
- *   不是「这个字体恰好没压上」。⚠️ 别把 en 的槽底调过 0.55（早先写成 0.58 = 两槽重叠
- *   0.03 面高，压不压上全看字体的墨迹比例 —— 门禁量的是结果，那种写法门禁会飘）。
+ * · en26：与 enpro 键帽共用同一套主字/角标槽（[keycapMainSlot]/[keycapCornerSlot]），
+ *   两槽**按分数就不相交**，不靠字体是否恰好没压上。
  * 字面来自 [modeFace] / [modeCorner]（档位 token → 缩写/角标，唯一源在 SkinAndStatus.kt）；
  * 五笔本批只到「按 token 出字」这一层：切换是 Actions.kt 的事（引擎侧还没有五笔方案，
  * 见 lead 裁决），加一档 = 在 [modeFace] 加一行。
  */
 internal fun modeSlots(mode: String): List<GlyphSlot> = buildList {
     val corner = modeCorner(mode)
-    add(
-        GlyphSlot(
-            text = modeFace(mode),
-            left = 0f,
-            top = 0f,
-            right = 1f,
-            bottom = if (corner == null) 1f else 0.55f,
-        ),
-    )
-    if (corner != null) add(GlyphSlot(corner, left = 0.55f, top = 0.55f, right = 1f, bottom = 1f))
+    if (corner == null) {
+        add(GlyphSlot(modeFace(mode), left = 0f, top = 0f, right = 1f, bottom = 1f))
+    } else {
+        add(keycapMainSlot(modeFace(mode)))
+        add(keycapCornerSlot(corner))
+    }
 }
 
 // ---------- 一个按钮的面 ----------
@@ -288,12 +291,14 @@ internal fun modeSlots(mode: String): List<GlyphSlot> = buildList {
  * 太大，缩小40％」）—— 保留 60%、四周各留 20% 余量。
  *
  * 这是 2026-10-14「按按钮显示最大、不要溢出」之后的**再裁决**（用户看过填满的效果嫌大；
- * 那套效果的人眼图由 StatusBarRenderProbeTest 落盘在 /tmp/opi-render-probe/）：**排版机制一字未改**
+ * 那套效果的人眼图由 StatusBarRenderProbeTest 落盘在 build/opi-render-probe/）：**排版机制一字未改**
  * （仍按墨迹取最大、居中、不溢出），只是内盒 = 按钮 × 本系数。所以：
  *  · 字形（[layoutGlyphs]/[fitGlyphPx] 那一套）、三个自绘图标**全走这一处** ——
  *    它们的内盒都是 [StatusBarButtonFace] 里算出来的同一个 `face`；
  *  · ⚠️ **小欧（LOGO）例外**：它是品牌标识，2026-10-15 二次裁决「logo 小了，按最大显示，
  *    不要溢出」⇒ 不走本系数，走 [`PET_FIT`]（见那条常量）；
+ *  · ⚠️ **英文专业/en26 键帽例外**：2026-10-19 设计图量取的是「30dp 按钮内 26dp 键帽」，
+ *    按按钮的固定比例画（见 KeycapFace.kt），不走本系数；
  *  · ⚠️ 别在图标/字形里再各乘一遍：乘两处 = 两个真相源，改一处漏一处（那正是「图标比
  *    文字小一截」这种只在人眼里存在的错）。
  *  · ⚠️ 系数变了要同步 StatusBarRenderProbeTest 里按它算的期望（那边逐条标了「缩放
@@ -306,7 +311,7 @@ internal const val FACE_SCALE = 0.6f
  * 不要溢出」）。为什么不直接写 1.0：小欧的画布是 **240 宽 × 250 高**（`shared/pet/OpiPet.kt`
  * 的 `CANVAS_W/CANVAS_H`，内容竖向占满 236/240 个单位）⇒ `size = 按钮` 时**高**会伸出按钮
  * 1.25dp（就是「溢出」）。按**高**收口：宽 = 按钮 × 240/250 ⇒ 高恰好 = 按钮，宽留 4% 余量。
- * 它是本文件里**唯一**不走 [FACE_SCALE] 的面（只有这一处调用）。
+ * LOGO 用它；另一个不走 [FACE_SCALE] 的例外是英文专业/en26 键帽（见上）。
  */
 internal const val PET_FIT = 240f / 250f
 
@@ -337,6 +342,26 @@ internal fun StatusBarButtonFace(b: StatusBarButton, st: ImeState, mode: String,
         StatusBarButton.VK -> VkIcon(face)
         StatusBarButton.FULLWIDTH -> MoonIcon(st.fullwidth, face)
         StatusBarButton.SETTINGS -> SettingsIcon(face)
+        // 英文专业键 = 白底圆角键帽（2026-10-19 设计图）：en 居中、pro 右下。
+        StatusBarButton.ENPRO -> KeycapFace(
+            slots = enproSlots(),
+            mainColor = KEYCAP_ENPRO_MAIN,
+            cornerColor = KEYCAP_ENPRO_CORNER,
+            strokeColor = KEYCAP_ENPRO_STROKE,
+            box = box,
+        )
+        // 只有「当前面 = en+26」的 MODE 才套蓝色键帽；拼音/五笔保持原字形面。
+        StatusBarButton.MODE -> if (mode == "en26") {
+            KeycapFace(
+                slots = modeSlots(mode),
+                mainColor = KEYCAP_EN26_BLUE,
+                cornerColor = KEYCAP_EN26_BLUE,
+                strokeColor = KEYCAP_EN26_BLUE,
+                box = box,
+            )
+        } else {
+            ButtonGlyphs(buttonSlots(b, st, mode), face, LocalBarPalette.current.fg)
+        }
         else -> ButtonGlyphs(buttonSlots(b, st, mode), face, LocalBarPalette.current.fg)
     }
 }

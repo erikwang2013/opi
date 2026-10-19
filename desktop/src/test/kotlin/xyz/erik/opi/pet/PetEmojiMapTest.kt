@@ -4,8 +4,11 @@
 //! 共享「自有」映射的门禁（shared/pet/PetEmojiMap.kt，2026-10-18）。
 //!
 //! 桌面表情页与 Android `keyboard/PetEmoji.kt` 引用同一份表 ⇒ 这里钉的是**两端的**
-//! 契约：十二形态一个不少、emoji 逐条是用户点名的那枚、顺序 = PetMood 枚举序。
+//! 契约：十二形态一个不少、标签带「小欧·」前缀且唯一、顺序 = PetMood 枚举序。
 //! SLEEPY / DEGRADED 不进「自有」（它们是输入状态，不是可挑的表情形态）。
+//!
+//! `emoji` 字段与 `emojiFor` API 保留：生成器（`gen_pet_emoji_font.py` 的三元组正则）
+//! 仍读它；**插入路径不用它**（图片通道失败时上屏 `[小欧·笑]` 文本标签）。
 
 package xyz.erik.opi.pet
 
@@ -30,6 +33,19 @@ class PetEmojiMapTest {
         assertEquals("🔨", PetEmojiMap.emojiFor(PetMood.KNOCKING))
         assertEquals("🤦", PetEmojiMap.emojiFor(PetMood.FACE_PALM))
         assertEquals("😛", PetEmojiMap.emojiFor(PetMood.TONGUE_OUT))
+    }
+
+    @Test
+    fun `labels carry the xiao ou prefix and are unique`() {
+        // 2026-10-19 用户裁决：自有表情名称加「小欧·」前缀，不与内置 emoji 重名
+        // （面板读屏、搜索、桌面表情页共用同一份标签）。
+        val labels = PetEmojiMap.forms.map { it.label }
+        assertEquals(12, labels.toSet().size)
+        for (label in labels) {
+            assertTrue("标签必须以 小欧· 开头（实际：$label）", label.startsWith("小欧·"))
+            assertTrue("标签不能只有前缀（实际：$label）", label.length > "小欧·".length)
+        }
+        assertEquals("小欧·笑", PetEmojiMap.forms.first().label)
     }
 
     @Test

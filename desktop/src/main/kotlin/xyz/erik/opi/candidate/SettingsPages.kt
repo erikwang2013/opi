@@ -77,6 +77,13 @@ internal fun CommonPage(s: OpSettings, apply: (OpSettings) -> Unit) {
         "声母缩写：nh → 你好、zg → 中国",
         s.jianpin,
     ) { apply(s.copy(jianpin = it)) }
+    // 自有表情 PUA（2026-10-19，缺省关）：开 = 点小欧表情上屏字体字符。目标应用没装
+    // 小欧表情字体时字符会显示成方框 —— 这句就是开关的代价，必须跟着开关一起出现。
+    SettingRow(
+        "自有表情用字体字符（PUA）",
+        "开：点小欧表情上屏字体字符；目标应用没装小欧表情字体时显示为方框。关（默认）：插入图片",
+        s.puaEmoji,
+    ) { apply(s.copy(puaEmoji = it)) }
     SettingRow(
         "拼音纠错",
         "相邻键错按 / 多打 / 少打一个字母也能出候选（如 nihap → nihao）；配置键名 Correction",

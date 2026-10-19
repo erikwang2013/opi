@@ -41,7 +41,7 @@ export function copyStickerToClipboard(
     const bytes: Uint8Array = new util.Base64Helper().decodeSync(gifBase64);
     const data: pasteboard.PasteData = pasteboard.createData('image/gif', bytes.buffer);
     pasteboard.getSystemPasteboard().setData(data).then(() => {
-      toast(`已复制小欧${label}动图，去粘贴`);
+      toast(`已复制${label}动图，去粘贴`);
     }).catch((err: BusinessError) => {
       console.warn(`[opi] GIF 剪贴板失败，退回 PNG：${err.code}`);
       copyStickerPng(pngBase64, label);
@@ -64,7 +64,7 @@ function copyStickerPng(pngBase64: string, label: string): void {
       const data: pasteboard.PasteData =
         pasteboard.createData(pasteboard.MIMETYPE_PIXELMAP, pixel);
       pasteboard.getSystemPasteboard().setData(data).then(() => {
-        toast(`已复制小欧${label}贴纸，去粘贴`);
+        toast(`已复制${label}贴纸，去粘贴`);
       }).catch((err: BusinessError) => {
         console.error(`[opi] 贴纸写入剪贴板失败：${err.code}`);
         toast('复制失败：剪贴板不可用');

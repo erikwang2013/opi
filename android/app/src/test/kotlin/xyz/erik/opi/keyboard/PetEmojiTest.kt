@@ -41,11 +41,25 @@ class PetEmojiTest {
         }
     }
 
-    /** 图片插不进去时上屏 `[小欧·标签]`；标签必须取共享映射的中文名。 */
+    /** 图片插不进去时上屏 `[小欧·标签]`；标签本身已带前缀，取共享映射的那一份。 */
     @Test
     fun labelLookupMatchesFormLabels() {
-        assertEquals("笑", PetEmoji.label(PetMood.IDLE))
+        assertEquals("小欧·笑", PetEmoji.label(PetMood.IDLE))
         for (f in PetEmoji.forms) assertEquals(f.label, PetEmoji.label(f.mood))
+    }
+
+    /**
+     * 2026-10-19 用户裁决：名称统一加「小欧·」前缀，且 12 个标签互不重名
+     * （面板读屏/搜索/桌面表情页共用这一份；内置 emoji 的名字不会带这个前缀）。
+     */
+    @Test
+    fun labelsCarryTheXiaoOuPrefixAndAreUnique() {
+        val labels = PetEmoji.forms.map { it.label }
+        assertEquals("12 个标签必须互不相同", 12, labels.toSet().size)
+        for (label in labels) {
+            assertTrue("标签必须以 小欧· 开头（实际：$label）", label.startsWith("小欧·"))
+            assertTrue("标签不能只有前缀（实际：$label）", label.length > "小欧·".length)
+        }
     }
 
     /** 资产契约：小写 + 下划线换连字符；assets 路径只多一个 `pet/` 前缀。 */

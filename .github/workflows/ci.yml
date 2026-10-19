@@ -724,3 +724,26 @@ jobs:
           echo "== 通过：fcitx5 $corever 上加载了、且那道门槛确实在起作用"
           echo "== 通过：这份胶水是在本容器里对 5.0 头真编的、装上去后被 fcitx5 $corever 真加载了，ldd -r 干净"
           '
+
+  packaging-scripts:
+    name: 安装脚本 — 热重启/升级/卸载回归
+    runs-on: ubuntu-latest
+    # 容器用例要在 debian:12 内 apt 装 fcitx5/dbus，慢网络下留足余量。
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # 主测试的私有 dbus 用例要真 fcitx5 + dbus-run-session；busctl 由 systemd 提供。
+      - name: 装 fcitx5 / dbus
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fcitx5 dbus
+
+      # 两个容器用例先检查 debian:12 镜像，缺了会显式 skip。这里预拉让它们真跑；
+      # 拉取失败就让 job 红，而不是留一个「全 skip 的全绿」。
+      - name: 预拉 debian:12（dpkg 升级 / root 路径容器用例）
+        run: docker pull debian:12
+
+      # 缺 fcitx5/docker/镜像时脚本会打印 "skip - …"；skip 是可见的，不是通过。
+      - name: 跑安装脚本回归
+        run: sh scripts/packaging/test-restart-fcitx5.sh

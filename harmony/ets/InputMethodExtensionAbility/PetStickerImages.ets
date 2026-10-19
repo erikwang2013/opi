@@ -25,18 +25,18 @@ export class PetStickerForm {
 
 /** 12 个形态（顺序 = PetEmojiMap.forms；文件 = PetStickerAssets.stickerFile）。 */
 export const PET_STICKER_FORMS: PetStickerForm[] = [
-  new PetStickerForm('笑', 'idle'),
-  new PetStickerForm('欢乐', 'waiting'),
-  new PetStickerForm('沮丧', 'puzzled'),
-  new PetStickerForm('哭', 'crying'),
-  new PetStickerForm('惊恐', 'terrified'),
-  new PetStickerForm('愤怒', 'angry'),
-  new PetStickerForm('撒娇', 'coquettish'),
-  new PetStickerForm('卖萌', 'cute'),
-  new PetStickerForm('讨好', 'pleasing'),
-  new PetStickerForm('敲打', 'knocking'),
-  new PetStickerForm('捂脸', 'face-palm'),
-  new PetStickerForm('吐舌头', 'tongue-out'),
+  new PetStickerForm('小欧·笑', 'idle'),
+  new PetStickerForm('小欧·欢乐', 'waiting'),
+  new PetStickerForm('小欧·沮丧', 'puzzled'),
+  new PetStickerForm('小欧·哭', 'crying'),
+  new PetStickerForm('小欧·惊恐', 'terrified'),
+  new PetStickerForm('小欧·愤怒', 'angry'),
+  new PetStickerForm('小欧·撒娇', 'coquettish'),
+  new PetStickerForm('小欧·卖萌', 'cute'),
+  new PetStickerForm('小欧·讨好', 'pleasing'),
+  new PetStickerForm('小欧·敲打', 'knocking'),
+  new PetStickerForm('小欧·捂脸', 'face-palm'),
+  new PetStickerForm('小欧·吐舌头', 'tongue-out'),
 ];
 
 /** 文件名 → PNG base64。 */

@@ -48,8 +48,10 @@ class StatusBarTest {
         // ⚠️ 边界（验收时发生过的错）：这条只锁**顺序**，锁不住「哪枚图标在哪个键上」
         // —— 当时图标映射先改对、枚举序没跟着换，这条照样全绿；图标语义归
         // `frozen icon literals` 那条管。两处配套，只改一处时对面的钉要跟着动。
+        // **2026-10-19 用户裁决把英文专业移到简繁之后**（旧位置在标点之前，已废止；
+        // 见 EnProTest 头部的时间线）。位置 = 枚举序，没有第二处。
         assertEquals(
-            listOf("logo", "中英文切换", "英文专业", "中英标点", "简繁转换", "模式", "全半角", "软键盘", "符号大全", "设置"),
+            listOf("logo", "中英文切换", "中英标点", "简繁转换", "英文专业", "模式", "全半角", "软键盘", "符号大全", "设置"),
             StatusBarButton.entries.map { it.label },
         )
     }
@@ -89,7 +91,8 @@ class StatusBarTest {
         // 用户原话（2026-10-15）：「状态栏图标、文字在自己所在的按钮显示太大，缩小40％」
         // ⇒ 保留 60% = 0.6。**钉成字面量**的理由：这个数是**用户裁决**，不是版面微调 ——
         // 改它 = 改产品外观，得连着裁决一起改。落到哪儿见 BarGlyphs.kt 的 FACE_SCALE
-        // （唯一落点，图标/字形/小欧都吃它）。
+        // （唯一落点，图标/字形/小欧都吃它；2026-10-19 的 enpro/en26 键帽按设计图
+        // 的 26/30 比例画，是明列的例外）。
         // ⚠️ 改了要同步 StatusBarRenderProbeTest：那边的期望按 FACE_SCALE 现算（自适应，
         // 断的是「缩放真落在渲染里」），**不是**在断这个数 —— 这个数的牙只有这一条。
         assertEquals(0.6f, FACE_SCALE, 0f)
@@ -165,9 +168,9 @@ class StatusBarTest {
 
     @Test
     fun `mode slots split the face without overlapping`() {
-        // 摆法：无角标 ⇒ 单槽占满整块面；en26 ⇒ 「en」占上部 + 「26」占右下，两槽**按分数
-        // 就不相交**（0.55 分界）—— 这一条是**与字体无关**的保证（像素那条在
-        // StatusBarRenderProbeTest，量的是真画出来的墨迹）。
+        // 摆法：无角标 ⇒ 单槽占满整块面；en26 ⇒ 「en」居中 + 「26」占右下，两槽**按分数
+        // 就不相交**（en 的底 0.60 ≤ 角标顶 0.72）—— 这一条是**与字体无关**的保证（像素
+        // 判据在 KeycapRenderTest，量的是键帽内真画出来的墨迹）。
         assertEquals(listOf("拼"), modeSlots("pinyin").map { it.text })
         assertEquals(listOf("五"), modeSlots("wubi").map { it.text })
         assertEquals(listOf("en", "26"), modeSlots("en26").map { it.text })
@@ -177,7 +180,9 @@ class StatusBarTest {
         assertTrue("en 槽的底 ≤ 角标槽的顶（不然两字会叠在一起）", en.bottom <= corner.top)
         assertTrue("角标槽的左边 ≤ en 槽的右边（同一条：槽必须不相交）", corner.left <= en.right)
         assertTrue("角标该在右下角", corner.left >= 0.5f && corner.top >= 0.5f)
-        assertTrue("en 该占满宽度（不然它没「最大」）", en.left == 0f && en.right == 1f)
+        // 2026-10-19 键帽设计图：en 不再占满宽度（0.22..0.65 × 0.32..0.60）；角标在其右下。
+        assertEquals(listOf(0.22f, 0.32f, 0.65f, 0.60f), listOf(en.left, en.top, en.right, en.bottom))
+        assertEquals(listOf(0.56f, 0.72f, 0.90f, 0.93f), listOf(corner.left, corner.top, corner.right, corner.bottom))
     }
 
     @Test

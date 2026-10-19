@@ -67,6 +67,12 @@ data class OpSettings(
     /** 拼音纠错（2026-10-13 用户裁决「混合参与排序」；键 `Correction`）。 */
     val correction: Boolean = true,
     /**
+     * 自有表情用字体字符（PUA，2026-10-19；键 `PetPua`）：true = 点小欧表情上屏
+     * `map.tsv` 的 PUA 字符（U+E000…），false（缺省）= 既有图片通道。目标应用没装
+     * 小欧表情字体时 PUA 会显示成方框。
+     */
+    val puaEmoji: Boolean = false,
+    /**
      * 双拼布局（2026-10-13；键 `ShuangpinLayout`）：**方案名**（[SHUANGPIN_LAYOUT_NAMES]
      * 之一，与 fcitx5 的枚举字面值、TSF/Android 的偏好同名同表）。只在引擎方案 =
      * 双拼时参与解码，其余方案下写它无害。缺键/认不得 → 表首（自然码）。
@@ -114,6 +120,8 @@ data class OpSettings(
         appendLine("FuzzyPairs=$fuzzyPairs")
         appendLine("Jianpin=${boolText(jianpin)}")
         appendLine("Correction=${boolText(correction)}")
+        // 自有表情 PUA（2026-10-19）：表情页点选时读；不分平台地写全（同一份文件格式）。
+        appendLine("PetPua=${boolText(puaEmoji)}")
         appendLine("ShuangpinLayout=$shuangpinLayout")
         appendLine("PinyinMethod=$pinyinMethod")
         // Shift 轻按切换中英文（Linux 读侧 = opi_config.h 的 ShiftToggle；Windows 读侧
@@ -172,6 +180,7 @@ data class OpSettings(
                 fuzzyPairs = map["FuzzyPairs"] ?: "",
                 jianpin = bool("Jianpin", true),
                 correction = bool("Correction", true),
+                puaEmoji = bool("PetPua", false),
                 shuangpinLayout = map["ShuangpinLayout"]
                     ?.takeIf { it in SHUANGPIN_LAYOUT_NAMES }
                     ?: SHUANGPIN_LAYOUT_NAMES.first(),
@@ -279,6 +288,7 @@ fun mergeIni(existing: String, s: OpSettings): String {
         "FuzzyPairs" to s.fuzzyPairs,
         "Jianpin" to boolText(s.jianpin),
         "Correction" to boolText(s.correction),
+        "PetPua" to boolText(s.puaEmoji),
         "ShuangpinLayout" to s.shuangpinLayout,
         "PinyinMethod" to s.pinyinMethod,
         "ShiftToggle" to boolText(s.shiftToggle),

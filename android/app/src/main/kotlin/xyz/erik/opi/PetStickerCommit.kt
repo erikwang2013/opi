@@ -16,9 +16,11 @@ import androidx.core.view.inputmethod.InputConnectionCompat
 import androidx.core.view.inputmethod.InputContentInfoCompat
 import xyz.erik.opi.ime.PendingCommit
 import xyz.erik.opi.keyboard.PetEmoji
-import xyz.erik.opi.pet.PetEmojiMap
+import xyz.erik.opi.pet.PetFontAssets
+import xyz.erik.opi.pet.PetEmojiFont
 import xyz.erik.opi.pet.PetMood
 import xyz.erik.opi.pet.PetStickerAssets
+import xyz.erik.opi.settings.ImePreferences
 import java.io.File
 import java.io.IOException
 
@@ -26,11 +28,12 @@ private const val TAG = "OpiPetSticker"
 
 /**
  * 「自有」宠物形态 = **插入图片**，不提交任何 Unicode 文本（2026-10-18 用户裁决）。
+ * 例外：用户显式打开 PUA 开关时上屏字体字符（2026-10-19，见 [commitPetStickerTo]）。
  *
  * 图片走 `InputConnection.commitContent`，格式优先级（2026-10-19）：**GIF → PNG →
- * 映射的 Unicode emoji**（2026-10-19 用户报障「确认到输入框就不是表情了」：
- * 图片通道常被宿主拒绝，最后退回 `PetEmojiMap.emojiFor`，不再上屏中文标签）。
- * GIF 是同一张 PNG 的轻微弹跳/缩放动画，见 `shared/pet/stickers-gif/`。
+ * 文本标签**。图片通道被宿主拒绝时上屏 `[小欧·笑]` 这样的独立标签，**不再退回
+ * Unicode emoji**（2026-10-19 用户裁决：emoji 与自有表情分不清）。GIF 是同一张
+ * PNG 的轻微弹跳/缩放动画，见 `shared/pet/stickers-gif/`。
  * IC 为空时与文本提交同一套延迟重试（[PendingCommit.RETRY_MS]），仍拿不到就放弃并记日志。
  */
 internal fun OpiImeService.commitPetSticker(mood: PetMood) {
@@ -51,6 +54,17 @@ internal fun OpiImeService.commitPetSticker(mood: PetMood) {
 }
 
 private fun OpiImeService.commitPetStickerTo(ic: InputConnection, mood: PetMood) {
+    // PUA 开关（2026-10-19，缺省关）：上屏 map.tsv 的字体字符。表缺失时回退图片通道 ——
+    // 一个坏资产不该让开关变成「点了没反应」。
+    if (ImePreferences.from(this).puaEmoji) {
+        val pua = PetFontAssets.preload(assets)?.let { PetEmojiFont.puaFor(it, mood) }
+        if (pua != null) {
+            dropComposing(ic)
+            ic.commitText(pua, 1)
+            return
+        }
+        Log.w(TAG, "PUA 已开但 map.tsv 不可用，回退图片通道: ${mood.name}")
+    }
     // 优先动图（2026-10-19），编辑器不收 GIF 再退回 PNG，最后才是文本标签。
     val gif = petStickerFile(PetEmoji.gifAssetPath(mood), PetStickerAssets.gifFile(mood))
     val png = petStickerFile(PetEmoji.assetPath(mood), PetStickerAssets.stickerFile(mood))
@@ -117,20 +131,16 @@ private fun OpiImeService.petStickerFile(assetPath: String, name: String): File?
 }
 
 /**
- * 编辑器不支持插入图片时的回退：上屏**独立文本标签** `[小欧·笑]`，绝不退回笑脸 emoji。
+ * 编辑器不支持插入图片时的回退：上屏**独立文本标签** `[小欧·笑]`，绝不退回笑脸 emoji
+ * （2026-10-19 用户裁决：emoji 和自有表情在输入框里分不清）。
  *
  * 不走剪贴板图片：FileProvider 的读权限授不到任意粘贴方，会出现「提示已复制却粘不出来」。
  */
 private fun OpiImeService.commitPetStickerTextFallback(ic: InputConnection, mood: PetMood) {
     dropComposing(ic)
-    val emoji = PetEmojiMap.emojiFor(mood)
-    if (emoji != null) {
-        ic.commitText(emoji, 1)
-        toast("当前应用不支持插入图片，已插入近似 emoji")
-    } else {
-        ic.commitText("[小欧·${PetEmoji.label(mood)}]", 1)
-        toast("当前应用不支持插入图片，已用文字标签")
-    }
+    // 标签本身已带「小欧·」前缀（PetEmojiMap 是唯一源），这里只加方括号。
+    ic.commitText("[${PetEmoji.label(mood)}]", 1)
+    toast("当前应用不支持插入图片，已用文字标签")
 }
 
 private fun OpiImeService.toast(text: String) {

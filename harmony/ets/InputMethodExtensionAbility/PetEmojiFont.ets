@@ -22,31 +22,31 @@ export interface PetFontGlyph {
 }
 
 const MAP_TSV: string = `mood	codepoint	file	label_zh	shortcode
-IDLE	U+E000	idle.png	笑	:opi_smile:
-WAITING	U+E001	waiting.png	欢乐	:opi_joy:
-PUZZLED	U+E002	puzzled.png	沮丧	:opi_sad:
-CRYING	U+E003	crying.png	哭	:opi_cry:
-TERRIFIED	U+E004	terrified.png	惊恐	:opi_scream:
-ANGRY	U+E005	angry.png	愤怒	:opi_angry:
-COQUETTISH	U+E006	coquettish.png	撒娇	:opi_plead:
-CUTE	U+E007	cute.png	卖萌	:opi_wink:
-PLEASING	U+E008	pleasing.png	讨好	:opi_pray:
-KNOCKING	U+E009	knocking.png	敲打	:opi_hammer:
-FACE_PALM	U+E00A	face-palm.png	捂脸	:opi_facepalm:
-TONGUE_OUT	U+E00B	tongue-out.png	吐舌头	:opi_tongue:`;
+IDLE	U+E000	idle.png	小欧·笑	:opi_smile:
+WAITING	U+E001	waiting.png	小欧·欢乐	:opi_joy:
+PUZZLED	U+E002	puzzled.png	小欧·沮丧	:opi_sad:
+CRYING	U+E003	crying.png	小欧·哭	:opi_cry:
+TERRIFIED	U+E004	terrified.png	小欧·惊恐	:opi_scream:
+ANGRY	U+E005	angry.png	小欧·愤怒	:opi_angry:
+COQUETTISH	U+E006	coquettish.png	小欧·撒娇	:opi_plead:
+CUTE	U+E007	cute.png	小欧·卖萌	:opi_wink:
+PLEASING	U+E008	pleasing.png	小欧·讨好	:opi_pray:
+KNOCKING	U+E009	knocking.png	小欧·敲打	:opi_hammer:
+FACE_PALM	U+E00A	face-palm.png	小欧·捂脸	:opi_facepalm:
+TONGUE_OUT	U+E00B	tongue-out.png	小欧·吐舌头	:opi_tongue:`;
 const SHORTCODES_TSV: string = `shortcode	file	label_zh
-:opi_smile:	idle.png	笑
-:opi_joy:	waiting.png	欢乐
-:opi_sad:	puzzled.png	沮丧
-:opi_cry:	crying.png	哭
-:opi_scream:	terrified.png	惊恐
-:opi_angry:	angry.png	愤怒
-:opi_plead:	coquettish.png	撒娇
-:opi_wink:	cute.png	卖萌
-:opi_pray:	pleasing.png	讨好
-:opi_hammer:	knocking.png	敲打
-:opi_facepalm:	face-palm.png	捂脸
-:opi_tongue:	tongue-out.png	吐舌头`;
+:opi_smile:	idle.png	小欧·笑
+:opi_joy:	waiting.png	小欧·欢乐
+:opi_sad:	puzzled.png	小欧·沮丧
+:opi_cry:	crying.png	小欧·哭
+:opi_scream:	terrified.png	小欧·惊恐
+:opi_angry:	angry.png	小欧·愤怒
+:opi_plead:	coquettish.png	小欧·撒娇
+:opi_wink:	cute.png	小欧·卖萌
+:opi_pray:	pleasing.png	小欧·讨好
+:opi_hammer:	knocking.png	小欧·敲打
+:opi_facepalm:	face-palm.png	小欧·捂脸
+:opi_tongue:	tongue-out.png	小欧·吐舌头`;
 
 /** map.tsv → 12 条（表头/列数不对返回空数组）。 */
 export function petFontGlyphs(): PetFontGlyph[] {

@@ -20,10 +20,10 @@
 //! 埋在代码里。
 //!
 //! 条上按钮（从左到右 = [StatusBarButton] 的枚举序）：小欧 / 中英 / 。，标点(双态) /
-//! 简繁 / **模式** / 月相全半角 / 软键盘 / Ω符号大全 / 设置。前八枚 2026-10-10
-//! **最终冻结**；**模式**是 2026-10-14 用户裁决加的第 5 位（原话「在简繁按钮后增加
-//! 模式切换按钮」= 插在简繁与月相之间）——枚举序即显示序，见 SkinAndStatus.kt 的
-//! [StatusBarButton] 头注释。
+//! 简繁 / **英文专业** / **模式** / 月相全半角 / 软键盘 / Ω符号大全 / 设置。前八枚
+//! 2026-10-10 **最终冻结**；**模式**是 2026-10-14 用户裁决加的（原话「在简繁按钮后
+//! 增加模式切换按钮」）；**英文专业**2026-10-19 用户裁决移到简繁之后（旧位置在标点
+//! 之前，已废止）——枚举序即显示序，见 SkinAndStatus.kt 的 [StatusBarButton] 头注释。
 //! logo = 品牌标识兼拖动把手（第 1 位），**单击换下一款皮肤**（2026-10-13 用户裁决
 //! 「点击 logo 的颜色变化」；取代早先「单击打开设置」③ —— 设置仍走右侧「设置」钮）。
 //!
@@ -375,7 +375,8 @@ private fun BarButton(
     val hovered by interaction.collectIsHoveredAsState()
     val palette = LocalBarPalette.current
     // 英文专业键常亮（2026-10-19）：否则切了 pro 看不出任何变化。用既有 hover 色，
-    // 不新造颜色/角色（见 SkinPalette.kt 的角色映射）。
+    // 不新造颜色/角色（见 SkinPalette.kt 的角色映射）。键帽本身是固定白底（设计图），
+    // 这一圈 hover 只露在键帽外缘 —— 激活态仍可见，且不染色键帽。
     val active = b == StatusBarButton.ENPRO && st.englishPro
     Box(
         modifier = Modifier
