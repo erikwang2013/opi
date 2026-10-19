@@ -71,7 +71,7 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
     var fuzzyPairs by remember { mutableStateOf(prefs.fuzzyPairs) }
     var correction by remember { mutableStateOf(prefs.correction) }
     var jianpin by remember { mutableStateOf(prefs.jianpin) }
-    var puaEmoji by remember { mutableStateOf(prefs.puaEmoji) }
+    var showOwn by remember { mutableStateOf(prefs.showOwn) }
     var confirmClear by remember { mutableStateOf(false) }
     // 双拼布局（2026-10-13）：存**名字**（[SHUANGPIN_LAYOUTS_ANDROID] 之一）。
     var shuangpinLayout by remember { mutableStateOf(prefs.shuangpinLayout) }
@@ -288,20 +288,17 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
                 },
             )
             HorizontalDivider()
-            // 自有表情 PUA（2026-10-19，缺省关）：开 = 上屏字体字符而非图片。
-            // ⚠️ Android 的其他应用读不到本 APK 的 assets 字体 ⇒ 必然显示方框；
-            // 说明文字必须把这个代价说死，别让用户以为能显示贴纸字形。
+            // 自有表情（2026-10-20 用户裁决：保留小欧原图贴纸，缺省隐藏）。
+            // 打开后表情页才出现「自有」分类；插入仍是 GIF/PNG → 文字标签。
             ListItem(
-                headlineContent = { Text("自有表情用字体字符（PUA）") },
-                supportingContent = {
-                    Text("Android 其他应用无法加载该字体，PUA 会显示为方框；建议保持关闭，使用标签/图片")
-                },
+                headlineContent = { Text("表情中显示自有") },
+                supportingContent = { Text("在表情页显示小欧贴纸分类（默认隐藏）") },
                 trailingContent = {
                     Switch(
-                        checked = puaEmoji,
+                        checked = showOwn,
                         onCheckedChange = { v ->
-                            puaEmoji = v
-                            prefs.puaEmoji = v
+                            showOwn = v
+                            prefs.showOwn = v
                         },
                     )
                 },

@@ -20,7 +20,7 @@
 |---|---|---|
 | **Linux**（fcitx5 插件） | 想在自己桌面上真用起来。**目前唯一有 CI 在真 fcitx5 上验过「装完会不会被加载」**的一端，并产出 `.deb` / `.rpm` | [`linux.md`](linux.md) |
 | **Android**（原生 IME） | 有 Android SDK + NDK 和一台设备 / 模拟器。正文多数条目是【实测】；早前「`assembleDebug` 本机失败（缺 Dart SDK）」已订正（2026-10-11）——debug/release 均可构建，**分发口径是 `assembleRelease`**（debug 的 Rust 未优化，见该篇 §2.3） | [`android.md`](android.md) |
-| **Windows**（TSF 插件） | 想在 Windows 上趟这一端。CI 已构建 MSI 并做表级校验；**容器安装冒烟仍在核对 TSF 注册链路（2026-10-20）**，真机安装仍未验收 | [`windows.md`](windows.md) |
+| **Windows**（TSF 插件） | 想在 Windows 上趟这一端。CI 已构建用户入口 **EXE 安装器** `opi-<版本>-setup.exe`（默认装到 `C:\Program Files\opi`，TSF 注册失败不回滚），并用容器做静默安装/卸载冒烟；后处理 MSI 仅为内部证据。**真机安装仍未验收** | [`windows.md`](windows.md) |
 | **iOS**（键盘扩展） | 有 macOS + Xcode、想接着往下做。CI 已真编译 Swift，并产出**宿主 App + unsigned IPA**；签名与真机运行未验证 | [`ios.md`](ios.md) |
 | **macOS**（InputMethodKit） | 需要 macOS + Xcode。CI 已真编译 Swift 并产出 unsigned pkg/app；签名、公证与真机运行未验证 | [`macos.md`](macos.md) |
 | **鸿蒙**（ArkTS + N-API） | 想接着做鸿蒙端。工程脚手架已补齐，可跑 `hvigorw assembleHap` 并产出 **unsigned HAP**；签名与真机未验证 | [`harmony.md`](harmony.md) |

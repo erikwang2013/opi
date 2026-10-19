@@ -9,19 +9,19 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Android 侧对共享字体映射解析器的门禁。
+ * Android 侧对共享表解析器的门禁。
  *
  * `AssetManager` 读 assets 需要真机/Robolectric（本模块没有），JVM 侧直接解析
- * 生成器产物，钉住「12 个形态、码位连续、与 [PetEmojiMap] 同序」；运行时
- * [xyz.erik.opi.pet.PetFontAssets] 只负责把同一份字节从 assets 读出来。
+ * 生成器产物，钉住「12 个形态、稳定码位 ID 连续、与 [PetEmojiMap] 同序」；运行时
+ * [PetEmojiTables] 只负责把同一份字节从 assets 读出来。
  */
-class PetEmojiFontTest {
+class PetEmojiTableTest {
 
     private val dir = File("../../shared/pet/emoji-font")
 
     @Test
     fun `generated map matches the shared forms`() {
-        val glyphs = PetEmojiFont.parseMap(File(dir, PetEmojiFont.MAP_FILE).readText())
+        val glyphs = PetEmojiTable.parseMap(File(dir, PetEmojiTable.MAP_FILE).readText())
         assertEquals(12, glyphs.size)
         assertEquals(PetEmojiMap.forms.map { it.mood.name }, glyphs.map { it.mood })
         assertEquals(PetEmojiMap.forms.map { it.label }, glyphs.map { it.label })
@@ -31,16 +31,14 @@ class PetEmojiFontTest {
 
     @Test
     fun `generated shortcodes agree with the map`() {
-        val map = PetEmojiFont.parseMap(File(dir, PetEmojiFont.MAP_FILE).readText())
-        val shorts = PetEmojiFont.parseShortcodes(File(dir, PetEmojiFont.SHORTCODES_FILE).readText())
+        val map = PetEmojiTable.parseMap(File(dir, PetEmojiTable.MAP_FILE).readText())
+        val shorts = PetEmojiTable.parseShortcodes(File(dir, PetEmojiTable.SHORTCODES_FILE).readText())
         assertEquals(map.map { it.shortcode }, shorts.map { it.shortcode })
         assertEquals(map.map { it.file }, shorts.map { it.file })
     }
 
     @Test
-    fun `font and animated gifs exist next to the tables`() {
-        val font = File(dir, PetEmojiFont.FONT_FILE)
-        assertTrue("缺字体生成物", font.length() > 10_000)
+    fun `sticker gifs exist next to the tables`() {
         val gifDir = File(dir.parentFile, "stickers-gif")
         for (form in PetEmojiMap.forms) {
             val gif = File(gifDir, PetStickerAssets.gifFile(form.mood))

@@ -40,7 +40,7 @@
       <a href="#download">下载</a>
     </nav>
     <div class="header-actions">
-      <a class="header-link" href="https://erik.xyz" target="_blank" rel="noopener">erik.xyz<span aria-hidden="true"> ↗</span></a>
+      <a class="header-link" href="https://opi.erik.xyz" target="_blank" rel="noopener">opi.erik.xyz<span aria-hidden="true"> ↗</span></a>
       <a class="header-github" href="https://github.com/erikwang2013/opi" target="_blank" rel="noopener" aria-label="GitHub 仓库">GitHub</a>
     </div>
   </header>
@@ -53,7 +53,7 @@
           <h1 id="hero-title"><span class="line">把输入，</span><span class="line"><em>还给输入本身。</em></span></h1>
           <p class="lede">小欧输入法：一份 <strong>Rust</strong> 引擎，六端原生。<br>离线、无广告、可审计 —— 只把字打对。</p>
           <div class="hero-actions">
-            <a class="btn btn-primary" href="#download">下载最新版 <span class="btn-meta">v1.16.1</span></a>
+            <a class="btn btn-primary" href="#download">下载最新版 <span class="btn-meta">v1.17.0</span></a>
             <a class="btn btn-ghost" href="#about">认识小欧 <span aria-hidden="true">↓</span></a>
           </div>
           <ul class="hero-facts" aria-label="项目关键词">
@@ -83,12 +83,13 @@
           <p class="body-lg">小欧是 opi 的项目宠物，也是一枚<strong>键帽精灵</strong>。它长得就是键盘上的一颗键 —— 因为输入法本该如此，不必是别的东西。</p>
           <p class="body">身体是键帽，嘴是字母 <strong>O</strong>（Open），头顶是拼音声调 <strong>ˉ</strong>，侧壁刻着 <strong>opi</strong>，底部涟漪只在本机扩散。<br>这些不是装饰，是项目对「输入」这件事的态度。</p>
           <blockquote>始于不满，成于热爱。<cite>—— opi 项目缘起</cite></blockquote>
+          <a class="text-link" href="https://opi.erik.xyz" target="_blank" rel="noopener">访问项目主页 opi.erik.xyz <span aria-hidden="true">↗</span></a>
           <a class="text-link" href="assets/pet/opi-pet.svg" target="_blank" rel="noopener">看小欧的原始矢量稿 <span aria-hidden="true">↗</span></a>
         </div>
         <div class="about-art reveal">
           <div class="pet-halo"></div>
           <img class="about-pet" src="assets/pet/opi-pet.svg" width="240" height="250" alt="小欧：一枚白色键帽形状的精灵，正面有笑脸，头顶有拼音声调天线">
-          <div class="about-caption"><span>小欧 / Opi</span><span>键帽精灵 · KEYCAP SPRITE</span></div>
+          <div class="about-caption"><span>小欧 / opi</span><span>键帽精灵 · KEYCAP SPRITE</span></div>
         </div>
       </div>
       <div class="container pet-facts">
@@ -261,15 +262,23 @@
         <div class="releases-copy reveal">
           <p class="eyebrow">05 / 版本日志</p>
           <h2 id="releases-title">每一次提交，<br><em>都留下可查的记录。</em></h2>
-          <p class="body">版本号采用 <code>v主.次.修订</code> 格式，当前版本 <strong>v1.16.1</strong>。发布说明写在 tag 注释与 GitHub Release 里；下面是最近的版本，完整记录在仓库。</p>
+          <p class="body">版本号采用 <code>v主.次.修订</code> 格式，当前版本 <strong>v1.17.0</strong>。发布说明写在 tag 注释与 GitHub Release 里；下面是最近的版本，完整记录在仓库。</p>
           <a class="btn btn-ghost" href="https://github.com/erikwang2013/opi/releases" target="_blank" rel="noopener">全部版本 <span aria-hidden="true">↗</span></a>
         </div>
         <ol class="release-list reveal">
           <li class="release-item latest">
-            <a href="https://github.com/erikwang2013/opi/releases/tag/v1.16.1" target="_blank" rel="noopener">
-              <span class="release-version">v1.16.1 <b>最新</b></span>
+            <a href="https://github.com/erikwang2013/opi/releases/tag/v1.17.0" target="_blank" rel="noopener">
+              <span class="release-version">v1.17.0 <b>最新</b></span>
               <span class="release-date">2026.10.20</span>
-              <span class="release-note">官网文案与品牌小写；社交预览图更新</span>
+              <span class="release-note">主页入口、自有表情开关、浅色图标与 Windows EXE</span>
+              <span class="release-arrow" aria-hidden="true">↗</span>
+            </a>
+          </li>
+          <li class="release-item">
+            <a href="https://github.com/erikwang2013/opi/releases/tag/v1.16.1" target="_blank" rel="noopener">
+              <span class="release-version">v1.16.1</span>
+              <span class="release-date">2026.10.20</span>
+              <span class="release-note">安装热重启、状态栏键帽、站点收口</span>
               <span class="release-arrow" aria-hidden="true">↗</span>
             </a>
           </li>
@@ -355,51 +364,53 @@
           <p>硬件资源和成本有限，仅验证 Android、Windows、Linux 端；其它端已完成代码适配，尚未测试验证。</p>
         </div>
         <div class="download-grid">
-          <a class="download-card reveal" href="https://github.com/erikwang2013/opi/releases/latest" target="_blank" rel="noopener" data-os="linux">
+          <div class="download-card reveal" data-os="linux">
             <span class="os-mark">Lx</span>
             <span class="os-name">Linux</span>
             <span class="os-meta">fcitx5 插件 · .deb / .rpm</span>
-            <span class="os-cta">在 Release 获取 <span aria-hidden="true">↗</span></span>
-          </a>
-          <a class="download-card reveal" href="https://github.com/erikwang2013/opi/releases/latest" target="_blank" rel="noopener" data-os="windows">
+            <span class="os-note">Debian / Ubuntu 用 .deb；Fedora / openSUSE 用 .rpm</span>
+            <a class="os-cta" href="download/opi_1.17.0_amd64.deb" download>下载 .deb <span aria-hidden="true">↓</span></a>
+            <a class="os-cta" href="download/opi-1.17.0-1.x86_64.rpm" download>下载 .rpm <span aria-hidden="true">↓</span></a>
+          </div>
+          <a class="download-card reveal" href="download/opi-1.17.0-setup.exe" download data-os="windows">
             <span class="os-mark">Wn</span>
             <span class="os-name">Windows</span>
-            <span class="os-meta">TSF 插件 · .msi x64</span>
+            <span class="os-meta">TSF 插件 · .exe x64</span>
             <span class="os-note">Windows 10 / 11；Win7 / 8 不支持</span>
-            <span class="os-cta">在 Release 获取 <span aria-hidden="true">↗</span></span>
+            <span class="os-cta">下载安装包 <span aria-hidden="true">↓</span></span>
           </a>
-          <a class="download-card reveal" href="https://github.com/erikwang2013/opi/releases/latest" target="_blank" rel="noopener" data-os="android">
+          <a class="download-card reveal" href="download/opi_1.17.0_android-release.apk" download data-os="android">
             <span class="os-mark">An</span>
             <span class="os-name">Android</span>
             <span class="os-meta">原生 IME · .apk</span>
             <span class="os-note">Android 5.1+ · arm64 / armv7 / x86_64</span>
-            <span class="os-cta">在 Release 获取 <span aria-hidden="true">↗</span></span>
+            <span class="os-cta">下载 APK <span aria-hidden="true">↓</span></span>
           </a>
-          <a class="download-card reveal" href="https://github.com/erikwang2013/opi/releases/latest" target="_blank" rel="noopener" data-os="macos">
+          <a class="download-card reveal" href="download/opi-inputmethod-1.17.0-unsigned.pkg" download data-os="macos">
             <span class="os-mark">Mc</span>
             <span class="os-name">macOS</span>
             <span class="os-meta">InputMethodKit · .pkg</span>
             <span class="os-note">unsigned 草案 · 需要 Xcode / 签名</span>
-            <span class="os-cta">在 Release 获取 <span aria-hidden="true">↗</span></span>
+            <span class="os-cta">下载 PKG <span aria-hidden="true">↓</span></span>
           </a>
-          <a class="download-card reveal" href="https://github.com/erikwang2013/opi/releases/latest" target="_blank" rel="noopener" data-os="ios">
+          <a class="download-card reveal" href="download/opi-ios-keyboard-1.17.0-unsigned.ipa" download data-os="ios">
             <span class="os-mark">iS</span>
             <span class="os-name">iOS</span>
             <span class="os-meta">键盘扩展 · .ipa</span>
             <span class="os-note">unsigned IPA · 用 Sideloadly / AltStore 重签</span>
-            <span class="os-cta">在 Release 获取 <span aria-hidden="true">↗</span></span>
+            <span class="os-cta">下载 IPA <span aria-hidden="true">↓</span></span>
           </a>
-          <a class="download-card reveal" href="https://github.com/erikwang2013/opi/releases/latest" target="_blank" rel="noopener" data-os="harmony">
+          <a class="download-card reveal" href="download/opi-harmony-1.17.0-unsigned.hap" download data-os="harmony">
             <span class="os-mark">Hm</span>
             <span class="os-name">HarmonyOS</span>
             <span class="os-meta">ArkTS + N-API · .hap</span>
             <span class="os-note">unsigned HAP · 需要签名与真机验证</span>
-            <span class="os-cta">在 Release 获取 <span aria-hidden="true">↗</span></span>
+            <span class="os-cta">下载 HAP <span aria-hidden="true">↓</span></span>
           </a>
         </div>
         <div class="download-foot reveal">
-          <p>没有适合你的包？直接读 <a href="https://github.com/erikwang2013/opi/releases" target="_blank" rel="noopener">全部 Release</a>。</p>
-          <p class="download-hint">提示：本仓库是私有仓库时，Release 下载需要先登录 GitHub；公开镜像请以 <a href="https://erik.xyz" target="_blank" rel="noopener">erik.xyz</a> 的说明为准。</p>
+          <p>文件直接放在本站的 <code>download/</code> 目录，不跳转 GitHub。安装说明见发行说明。</p>
+          <p class="download-hint">下载目录的版本与文件名和 <code>dist/</code> 保持一致；页面版本 v1.17.0。</p>
         </div>
 
         <footer class="site-footer" aria-label="页脚">
@@ -413,6 +424,7 @@
               <a href="#forms">十二形态</a>
               <a href="#releases">版本日志</a>
               <a href="https://github.com/erikwang2013/opi" target="_blank" rel="noopener">GitHub</a>
+              <a href="https://opi.erik.xyz" target="_blank" rel="noopener">opi.erik.xyz ↗</a>
               <a href="https://erik.xyz" target="_blank" rel="noopener">erik.xyz ↗</a>
             </nav>
           </div>
@@ -449,6 +461,10 @@
       </div>
     </div>
   </dialog>
+
+  <button class="back-to-top" type="button" aria-label="返回顶部">
+    <img src="assets/pet/opi-pet.png" width="48" height="48" alt="">
+  </button>
 
   <svg class="svg-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
     <symbol id="i-engine" viewBox="0 0 24 24"><path d="M12 3 3 7.5 12 12l9-4.5L12 3Z"/><path d="m3 12 9 4.5 9-4.5M3 16.5 12 21l9-4.5"/></symbol>

@@ -66,7 +66,7 @@ class AboutSectionTest {
             "关于面板里不许出现写死的版本号：${Regex("""\d+\.\d+\.\d+""").find(panel)?.value}",
             Regex("""\d+\.\d+\.\d+""").find(panel)?.value,
         )
-        for (c in listOf("ABOUT_INTRO", "ABOUT_PROJECT_URL", "ABOUT_BLOG_URL")) {
+        for (c in listOf("ABOUT_INTRO", "ABOUT_HOME_URL", "ABOUT_PROJECT_URL", "ABOUT_BLOG_URL")) {
             assertTrue("面板必须复用设置侧常量 $c（文案单一来源）", panel.contains(c))
         }
         val toolbar = File("src/main/kotlin/xyz/erik/opi/ime/ImeToolbar.kt").readText()

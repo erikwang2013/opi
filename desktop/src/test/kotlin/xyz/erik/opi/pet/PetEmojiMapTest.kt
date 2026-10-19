@@ -7,7 +7,7 @@
 //! 契约：十二形态一个不少、标签带「小欧·」前缀且唯一、顺序 = PetMood 枚举序。
 //! SLEEPY / DEGRADED 不进「自有」（它们是输入状态，不是可挑的表情形态）。
 //!
-//! `emoji` 字段与 `emojiFor` API 保留：生成器（`gen_pet_emoji_font.py` 的三元组正则）
+//! `emoji` 字段与 `emojiFor` API 保留：生成器（`gen_pet_emoji_table.py` 的三元组正则）
 //! 仍读它；**插入路径不用它**（图片通道失败时上屏 `[小欧·笑]` 文本标签）。
 
 package xyz.erik.opi.pet

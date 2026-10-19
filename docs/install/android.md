@@ -660,20 +660,15 @@ IME 服务在 `EngineLoader.load` 之后把三个值推给引擎（`prefs.applyE
 至此四端都已落盘（Linux = fcitx5 addon 配置、Windows = `settings.ini`、桌面设置窗 =
 同一个文件）。
 
-**自有表情 PUA（2026-10-19，默认关）**：设置页「自有表情用字体字符（PUA）」开关，
-落盘键 `pet_pua_emoji`（`ImePreferences`，缺省 `false`）。打开后点自有表情不再走
-GIF/PNG 图片通道，而是用 `InputConnection.commitText` 上屏 PUA 字体字符
-（U+E000–U+E00B；码位真源 = `shared/pet/emoji-font/map.tsv`，共享解析
-`PetEmojiFont.puaFor`，不按枚举偏移猜码位；实现见 `PetStickerCommit.kt` 的
-`commitPetStickerTo`）。`map.tsv` 缺失/坏掉时回退图片通道；图片通道失败时的默认
-回退仍是 `[小欧·笑]` 这样的文本标签，与该开关无关。
+**表情中显示自有（2026-10-20 用户裁决，默认关）**：设置页「表情中显示自有」开关，
+落盘键 `pet_show_own`（`ImePreferences`，缺省 `false` = 隐藏）。关闭时表情页顶栏
+只有 Emoji / 颜文字，不出现「自有」子页；打开后才出现小欧贴纸分类。点选仍走
+GIF → PNG → `[小欧·笑]` 文本标签的既有图片通道（`PetStickerCommit.kt`），
+**不插入任何 PUA 文本**。
 
-⚠️ **平台限制（默认关的原因）**：`opi-emoji.ttf` 只打进 APK 的
-`assets/pet-font/`，Android 不会把它注册为系统字体，其他应用也读不到本 APK 的
-assets ⇒ 上屏的 PUA 字符在其他应用里**无法显示成小欧字形**（通常是方框）。所以
-Android 上建议保持关闭，用默认的图片/标签；需要 PUA 字形请用桌面 Linux（字体装进
-系统字体目录，见 `linux.md` §4.8）。Windows 桌面没有 TSF 插入面，PUA 走文本剪贴板 +
-粘贴提示（见 `windows.md`）。
+`shared/pet/emoji-font/map.tsv` 里的 U+E000–U+E00B 只是 12 个形态的**稳定内部 ID**
+（跨端标签/短码表的索引），不随包提供字体，也不会上屏。旧的
+「自有表情用字体字符（PUA）」开关与 `opi-emoji.ttf` 已于 2026-10-20 删除。
 
 ---
 

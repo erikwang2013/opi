@@ -5,8 +5,7 @@
 # deb postinst / rpm %post：安装/升级成功后
 #   1) 调 restart-fcitx5.sh 热重启 fcitx5（D-Bus Controller1.Restart）；换 .so 只能
 #      靠进程级重载 —— `fcitx5-remote -r` / ReloadAddonConfig 只重读配置（实测假绿）；
-#   2) 刷新 Opi Emoji 字体缓存（PUA 表情，需系统 fontconfig 找得到）；
-#   3) 把 preinstall 停掉的 opi-candidates 按原参数拉起。
+#   2) 把 preinstall 停掉的 opi-candidates 按原参数拉起。
 # 顺序：先 fcitx5 再状态栏 —— 状态栏经 D-Bus 找 fcitx5，反过来起会白起。
 #
 # helper 为什么在 /usr/libexec：nfpm 的 scripts: 每一项都是**单文件嵌入**，同目录的
@@ -31,12 +30,10 @@ if [ "$(id -u)" -eq 0 ]; then
     PROC_ROOT=/proc
     STATE_DIR=/run
     AUTOSTART_FILE=/etc/xdg/autostart/opi-statusbar.desktop
-    FONT_DIR=/usr/share/fonts/truetype/opi
 else
     PROC_ROOT="${OPI_PROC_ROOT:-/proc}"
     STATE_DIR="${OPI_STATE_DIR:-/run}"
     AUTOSTART_FILE="${OPI_AUTOSTART_FILE:-/etc/xdg/autostart/opi-statusbar.desktop}"
-    FONT_DIR="${OPI_FONT_DIR:-/usr/share/fonts/truetype/opi}"
 fi
 STATE="$STATE_DIR/opi-install.state"
 
@@ -65,17 +62,7 @@ else
     echo "opi: 找不到 fcitx5 热重启脚本（$HELPER）—— 跳过；请手动重启 fcitx5 或重新登录"
 fi
 
-# ---- 2) Opi Emoji 字体缓存（PUA）----
-# 字体由 nfpm 装到 /usr/share/fonts/truetype/opi；fontconfig 要重建缓存才能按
-# family/PUA 找到它。fc-cache 在最小系统上可能不存在；失败只记日志，不改 exit 0。
-if command -v fc-cache >/dev/null 2>&1; then
-    fc-cache -f "$FONT_DIR" >/dev/null 2>&1 \
-        || echo "opi: fc-cache -f $FONT_DIR 失败 —— Opi Emoji 字体可能需重新登录后才能使用"
-else
-    echo "opi: 未找到 fc-cache —— 跳过 Opi Emoji 字体缓存刷新（字体文件已安装）"
-fi
-
-# ---- 3) opi-candidates（原有逻辑）----
+# ---- 2) opi-candidates（原有逻辑）----
 user="${SUDO_USER:-}"
 [ "$user" = root ] && user=""
 

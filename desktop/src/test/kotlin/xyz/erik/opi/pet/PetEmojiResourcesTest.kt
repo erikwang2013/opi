@@ -11,29 +11,21 @@ import org.junit.Test
 /**
  * 桌面 classpath 的 `pet-font/` 接线 + 共享 TSV 解析器。
  *
- * 钉三件事：构建期 `copyPetStickers` 真把三份文件拷进来；`map.tsv` 的 12 行与
+ * 钉三件事：构建期 `copyPetStickers` 真把两份表拷进来；`map.tsv` 的 12 行与
  * [PetEmojiMap] 的形态/标签/文件一一对应；解析器对坏表头/坏码位/重复行会响亮地死。
+ * 目录里**没有**字体文件（2026-10-20 用户裁决删除字体通道）。
  */
-class PetFontResourcesTest {
+class PetEmojiResourcesTest {
 
     @Test
-    fun `three font files are on the classpath`() {
-        assertNotNull("classpath 缺 /pet-font/map.tsv", PetFontResources.map())
-        assertNotNull("classpath 缺 /pet-font/shortcodes.tsv", PetFontResources.shortcodes())
-        val font = PetFontResources.fontBytes()
-        assertNotNull("classpath 缺 /pet-font/opi-emoji.ttf", font)
-        assertTrue("TTF 太小", font!!.size > 10_000)
-        // sfnt version：TrueType 0x00010000 或 'OTTO' / 'true'。
-        val sfnt = font.copyOfRange(0, 4)
-        val recognized = sfnt.contentEquals(byteArrayOf(0, 1, 0, 0)) ||
-            sfnt.contentEquals("OTTO".toByteArray(Charsets.US_ASCII)) ||
-            sfnt.contentEquals("true".toByteArray(Charsets.US_ASCII))
-        assertTrue("不是可识别的 sfnt 字体", recognized)
+    fun `both tables are on the classpath`() {
+        assertNotNull("classpath 缺 /pet-font/map.tsv", PetEmojiResources.map())
+        assertNotNull("classpath 缺 /pet-font/shortcodes.tsv", PetEmojiResources.shortcodes())
     }
 
     @Test
     fun `map rows match the shared form contract`() {
-        val glyphs = PetFontResources.map()!!
+        val glyphs = PetEmojiResources.map()!!
         assertEquals("12 个可挑形态", 12, glyphs.size)
         assertEquals(PetEmojiMap.forms.size, glyphs.size)
         for ((glyph, form) in glyphs.zip(PetEmojiMap.forms)) {
@@ -41,14 +33,14 @@ class PetFontResourcesTest {
             assertEquals(PetStickerAssets.stickerFile(form.mood), glyph.file)
             assertEquals(form.label, glyph.label)
         }
-        // 码位按枚举序从 U+E000 连续分配（字体生成器的分配契约）。
+        // 码位按枚举序从 U+E000 连续分配：只是**稳定内部 ID**，绝不插入输入框。
         assertEquals((0..11).map { 0xE000 + it }, glyphs.map { it.codepoint })
     }
 
     @Test
     fun `shortcodes agree with the map`() {
-        val map = PetFontResources.map()!!
-        val shorts = PetFontResources.shortcodes()!!
+        val map = PetEmojiResources.map()!!
+        val shorts = PetEmojiResources.shortcodes()!!
         assertEquals(12, shorts.size)
         assertEquals(map.map { it.shortcode }, shorts.map { it.shortcode })
         assertEquals(map.map { it.file }, shorts.map { it.file })
@@ -66,7 +58,7 @@ class PetFontResourcesTest {
             "$mapHeader\nIDLE\tU+E000\tidle.png\t笑\t:opi_smile:\nWAITING\tU+E000\ttwo.png\t二\t:opi_two:",
         )
         for (tsv in mapCases) {
-            assertTrue("坏 map 表应抛异常：$tsv", runCatching { PetEmojiFont.parseMap(tsv) }.isFailure)
+            assertTrue("坏 map 表应抛异常：$tsv", runCatching { PetEmojiTable.parseMap(tsv) }.isFailure)
         }
 
         val shortHeader = "shortcode\tfile\tlabel_zh"
@@ -78,7 +70,7 @@ class PetFontResourcesTest {
         for (tsv in shortCases) {
             assertTrue(
                 "坏 shortcodes 表应抛异常：$tsv",
-                runCatching { PetEmojiFont.parseShortcodes(tsv) }.isFailure,
+                runCatching { PetEmojiTable.parseShortcodes(tsv) }.isFailure,
             )
         }
     }

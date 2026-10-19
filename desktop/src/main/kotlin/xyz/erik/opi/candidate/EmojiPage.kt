@@ -169,6 +169,13 @@ enum class EmojiSubTab(val label: String) {
     Kaomoji("颜文字"),
 }
 
+/**
+ * 顶栏实际显示的子页：`showOwn` 缺省 false ⇒「自有」整个隐藏（2026-10-20 用户裁决）；
+ * 设置页「表情中显示自有」打开后才加入。
+ */
+internal fun emojiSubTabs(showOwn: Boolean): List<EmojiSubTab> =
+    EmojiSubTab.entries.filter { it != EmojiSubTab.Own || showOwn }
+
 /** 颜文字网格列数 × 行数（6×6=36/页）：颜文字比单个 emoji 宽得多，12 列会截成省略号。 */
 internal const val KAOMOJI_COLUMNS = 6
 internal const val KAOMOJI_ROWS = 6
@@ -333,7 +340,8 @@ internal fun CloseButton(onClose: () -> Unit) {
 }
 
 /**
- * 表情页顶栏（与 Android `EmojiPanel` 的同一套布局）：`[← 返回] [Emoji | 颜文字] [搜索框]`。
+ * 表情页顶栏（与 Android `EmojiPanel` 的同一套布局）：`[← 返回] [子页…] [搜索框]`。
+ * 「自有」只在设置开关打开时出现在 [tabs] 里（缺省只有 Emoji | 颜文字）。
  *
  * 桌面窗无系统标题栏 ⇒ 最右保留 ✕（本窗自己的页级关闭入口）。搜索沿用桌面现有语义：
  * 输入框常驻（点进去即 `typing`，窗按需获焦）、防抖后走 `opi-ctl search`；颜文字子页
@@ -342,6 +350,7 @@ internal fun CloseButton(onClose: () -> Unit) {
 @Composable
 internal fun EmojiTopBar(
     sub: EmojiSubTab,
+    tabs: List<EmojiSubTab>,
     onSub: (EmojiSubTab) -> Unit,
     onBack: () -> Unit,
     query: String,
@@ -370,7 +379,7 @@ internal fun EmojiTopBar(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            for (t in EmojiSubTab.entries) {
+            for (t in tabs) {
                 val on = t == sub
                 Text(
                     t.label,

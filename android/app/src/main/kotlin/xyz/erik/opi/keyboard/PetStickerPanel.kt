@@ -47,7 +47,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import xyz.erik.opi.pet.OpiPet
-import xyz.erik.opi.pet.PetFontAssets
+import xyz.erik.opi.pet.PetEmojiTables
 import xyz.erik.opi.pet.PetMood
 import xyz.erik.opi.pet.petMotion
 import xyz.erik.opi.pet.rememberPetMotionPhase
@@ -70,7 +70,7 @@ internal fun PetStickerPanel(onPick: (PetMood) -> Unit) {
     val assets = LocalContext.current.assets
     // 内置 map.tsv 是形态标签的真源（PetEmojiMap 是兜底；两张表由生成器互校）。
     val labels = remember(assets) {
-        PetFontAssets.preload(assets)?.associate { it.mood to it.label }.orEmpty()
+        PetEmojiTables.map(assets)?.associate { it.mood to it.label }.orEmpty()
     }
     val loaded = remember { mutableStateMapOf<PetMood, ImageBitmap>() }
     // 自有页优先显示**动图**（2026-10-19 用户裁决「用 gif 贴纸来显示」）：API 28+

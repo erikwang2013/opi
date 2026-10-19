@@ -2,19 +2,19 @@
 <!--
   项目宠物「小欧」自适应启动图标（API 26+）。
   前景是纯 VectorDrawable：不引入任何 PNG 密度桶，任意尺寸都清晰。
-  **背景层透明**（2026-10-09 用户裁决「应用图标就不要加绿色背景，不要背景，直接
-  放 logo」）—— 此前是 colors.xml 的 ic_launcher_background 纯色（#2E8B80）。
-  `@android:color/transparent` 是平台资源，无生成期输入；圆形孪生
-  ic_launcher_round.xml 由 scripts/gen_pet_icons.py 生成，两处必须同为透明。
+  **背景层是纸白 `@color/ic_launcher_background`**（#FBFAF6；2026-10-20 用户裁决
+  「所有端安装后默认的图标底色是浅色，不要黑色」—— 取代 2026-10-09 的透明底裁决；
+  透明底在深色启动器上读成黑底）。圆形孪生 ic_launcher_round.xml 由
+  scripts/gen_pet_icons.py 生成，两处必须同为纸白。
 
   API 21–25（minSdk=21）看不到自适应图标，落回 mipmap-*/ic_launcher.png。
   这 5 个桶 = 本文件前景 drawable/ic_launcher_foreground.xml 的**中央 72dp 可见区**
-  按各自密度栅格化而成（同样透明底）—— 形象与本文件一致，不是另一套图形。
+  按各自密度栅格化而成（同样纸白底）—— 形象与本文件一致，不是另一套图形。
   ⚠️ 改这个前景矢量（几何/配色）就要重出这 5 个 PNG（`python3 scripts/gen_pet_icons.py`），
   否则两套形象又会分叉：2026-09-28 之前它们一直是脚手架带来的 **Flutter 默认图标**
   （蓝色 F），与上面这句「两者同为键帽精灵形象」相反 —— 旧设备用户看到的是 Flutter logo。
 -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@android:color/transparent"/>
+    <background android:drawable="@color/ic_launcher_background"/>
     <foreground android:drawable="@drawable/ic_launcher_foreground"/>
 </adaptive-icon>

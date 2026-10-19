@@ -46,10 +46,6 @@ BIN="$TMP/bin"
 BIN_FAIL="$TMP/bin-fail"
 mkdir -p "$PROC" "$STATEDIR" "$RUN" "$BIN" "$BIN_FAIL"
 BUSLOG="$TMP/busctl.log"
-FONTDIR="$TMP/fonts/opi"
-mkdir -p "$FONTDIR"
-cp "$HERE/../../shared/pet/emoji-font/opi-emoji.ttf" "$FONTDIR/"
-REAL_FC_CACHE="$(command -v fc-cache 2>/dev/null || true)"
 
 # ---- 夹具 ----
 # 假 busctl：记录「总线环境 + 参数」并按 $TMP/bus-mode 模拟 Restart 的几种结局：
@@ -121,17 +117,6 @@ chmod +x "$BIN/fcitx5"
     echo 'exit 0'
 } > "$BIN/runuser"
 chmod +x "$BIN/runuser"
-
-# 假 fc-cache：只记录调用（postinstall 的字体缓存分支）；真实 fc-cache 的幂等性
-# 在下面单独用 REAL_FC_CACHE 跑，避免把用户缓存当判据。
-if [ -n "$REAL_FC_CACHE" ]; then
-    {
-        echo '#!/bin/sh'
-        echo "printf '%s\\n' \"\$*\" >> '$TMP/fc-cache.log'"
-        echo 'exit 0'
-    } > "$BIN/fc-cache"
-    chmod +x "$BIN/fc-cache"
-fi
 
 fresh_proc() { rm -rf "$PROC"; mkdir -p "$PROC"; }
 # 标准会话总线夹具：$RUN_ROOT/<uid>/bus（生产是 socket，测试用普通文件）

@@ -18,6 +18,15 @@
 > 2026-10-09 起多了**「能被构建出来」**这一档：DLL 与 .msi 会在 GitHub 的 windows runner 上
 > 真编出来（§2.5）。**「装上」「跑起来」仍然一次都没有** —— 别把 §2.5 读成验收通过。
 >
+> **【订正 2026-10-20】** Windows 的**包名 / 启动器 / 安装器一律叫 `opi`**（不再叫
+> `opi-candidates`），默认安装目录 `C:\Program Files\opi`。用户入口改为 CI 打出的
+> **EXE 安装器** `opi-<版本>-setup.exe`（Inno Setup，job `desktop-exe`，§2.5）：
+> TSF 注册在文件落盘后执行 64 位 `regsvr32 /s`，**只记录退出码，失败不回滚安装**。
+> 后处理 MSI 降为**内部证据**（artifact 现名 `opi-msi-internal-v<版本>`），它的注册
+> 动作仍是 Type 1、失败会回滚整包 —— 这正是 Server Core 上「根本装不上」的旧形状。
+> EXE 的容器内静默安装/卸载冒烟步骤已加进 workflow（`windows-exe-install-test`），
+> 但**本轮尚未在 CI 跑过，也仍无真机验证**。
+>
 > 每一条都带证据档位：
 >
 > | 标记 | 含义 |
@@ -276,22 +285,26 @@ android/app/src/main/assets/luna.opid
 
 `.github/workflows/windows.yml` —— 构建 job 在 windows runner 上跑，后处理 job
 （`msi-postprocess`，2026-10-19 起）在 `ubuntu-latest` 上用 msitools 跑，
-容器安装冒烟 job（`windows-install-test`，2026-10-20 新增）在 `windows-latest` 上跑。
+容器安装冒烟 job（`windows-install-test`）在 `windows-latest` 上跑。
+**2026-10-20 起**用户入口改由 `desktop-exe`（windows-latest，Inno Setup）构建，
+另有 `windows-exe-install-test` 在 Server Core 容器里静默安装/卸载那个 EXE。
 **订正 2026-10-19**：不再写「`ci.yml` 一个字没动」—— `ci.yml` 已有独立的
 `packaging-scripts` job（2026-10 起，跑 Linux 安装脚本回归），但它不碰 Windows 构建；
 `packages.yml` 未动。它覆盖 §1.2 那张表里本机打 ❌ 的几格：
 **DLL 真链接（静态 CRT）、导出/导入表检视、`.msi` 产出、表级后处理（注册动作/安装目录）、
-容器内 `msiexec` 冒烟日志**。后处理 job 只做表级注入；`windows-install-test` 只在
-Windows Server Core 容器里安装并抓日志，**不**等于真机验证 —— 容器通常缺语言栏/TSF，
-`OpRegisterTsf` 失败/回滚会如实留在日志里。「表里注入了」与「Windows 端能用」仍是
-两件事（§6）。
+容器内 `msiexec` 冒烟日志、EXE 产出、EXE 静默安装/卸载冒烟**。后处理 job 只做表级注入；
+两个容器冒烟 job 都**不**等于真机验证 —— 容器通常缺语言栏/TSF。
+MSI 的 `OpRegisterTsf` 失败/回滚会如实留在日志里；EXE 的注册失败只记日志、安装照常成功。
+「表里注入了」与「Windows 端能用」仍是两件事（§6）。
 
 | artifact | 内容 | 实测体积（来源 / 单位 / 日期） |
 |---|---|---|
-| `opi-tsf-dll-v<版本>` | `tsf_opi.dll`（zip 里就这一个文件；**仅供 desktop-msi job 下载打包，不再作为用户入口发布**） | DLL 本体 778,240 B、上传 zip 331,390 B（2026-10-09 run，旧构建） |
+| `opi-tsf-dll-v<版本>` | `tsf_opi.dll`（zip 里就这一个文件；**仅供 desktop-msi / desktop-exe job 下载打包，不再作为用户入口发布**） | DLL 本体 778,240 B、上传 zip 331,390 B（2026-10-09 run，旧构建） |
+| `opi-windows-exe-v<版本>` | **用户入口**：`opi-<版本>-setup.exe`（Inno Setup，`desktop-exe` job 产出）。内含 jpackage app image（`opi.exe` + `app\tsf_opi.dll` + jlinked JRE），默认装到 `C:\Program Files\opi`；装完用 64 位 `regsvr32 /s` 注册 TSF，**失败只记日志、不回滚** | 每次 CI 重新生成（本机没有 Inno/Windows，体积未复核） |
 | `opi-desktop-msi-raw-v<版本>` | jpackage **原始** `.msi`（zip 里一个文件）。**仅内部中间物**（YAML 注释标 internal）：没有注册动作，只供 `msi-postprocess` 下载；后处理成功后由该 job 删除，**正常 run 的最终 artifacts 里不应出现** | 上传的 **zip** 58,683,236 B（2026-10-09 run）；**未压缩 MSI** 62,034,236 B（2026-10-19 本机核对的 v1.15.1 发布资产）。两者不是同一次构建，别混比 |
-| `opi-desktop-msi-v<版本>` | **后处理后的** `opi-candidates-<版本>.msi`（zip 里一个文件）。**这才是用户入口**（`msi-postprocess` job 产出） | **未压缩 MSI** 62,443,008 B（2026-10-19 本机由上一行的 v1.15.1 raw 处理得到；+408,772 B）。CI 上传的是 zip，别再拿这个数当 zip 体积 |
-| `opi-install-logs-v<版本>` | `windows-install-test` 在 Windows Server Core 容器里跑 `msiexec` 的日志与目录/注册表输出（`install-custom.log` / `install-default.log` / `dir-*.txt` / `reg-*.txt`）。容器缺语言栏/TSF，失败/回滚会如实留在日志里 | 每次 run 新生成 |
+| `opi-msi-internal-v<版本>` | **后处理后的** `opi-<版本>.msi`（zip 里一个文件）。**内部证据，不是用户入口**（`msi-postprocess` job 产出；注册 CA 是 Type 1，失败会回滚） | **未压缩 MSI** 62,443,008 B（2026-10-19 本机由上一行的 v1.15.1 raw 处理得到；+408,772 B）。CI 上传的是 zip，别再拿这个数当 zip 体积 |
+| `opi-msi-install-logs-v<版本>` | `windows-install-test` 在 Windows Server Core 容器里跑 `msiexec` 的日志与目录/注册表输出（`install-custom.log` / `install-default.log` / `dir-*.txt` / `reg-*.txt`）。容器缺语言栏/TSF，失败/回滚会如实留在日志里 | 每次 run 新生成 |
+| `opi-exe-install-logs-v<版本>` | `windows-exe-install-test` 的静默安装/卸载日志与断言输出（`install-exe.log` / `uninstall-exe.log` / `*-exit.txt` / `*-removed.txt`）。`regsvr32` 退出码在 `install-exe.log` 里，非 0 不判红 | 每次 run 新生成 |
 
 名字里的版本来自 `Cargo.toml` 的 `[workspace.package] version`（本仓六 crate 共用的单一来源），
 并与 `desktop/build.gradle.kts` 的 `opiAppVersion`（= jpackage 的 `packageVersion`）**比对**：
@@ -302,17 +315,54 @@ Windows Server Core 容器里安装并抓日志，**不**等于真机验证 —�
 
 ```bash
 gh run list   --workflow=windows.yml                 # 找最近一次成功的 run
-gh run download <run-id> -n opi-tsf-dll-v<版本>      # 或 -n opi-desktop-msi-v<版本>
+gh run download <run-id> -n opi-windows-exe-v<版本>  # 用户入口：opi-<版本>-setup.exe
+gh run download <run-id> -n opi-tsf-dll-v<版本>      # 只有开发者要单独用 DLL 时
 ```
 
 ⚠️ **正常 run 的最终 artifacts 里不应出现 `-raw-`**：raw 只是
 `desktop-msi → msi-postprocess` 的 job 间中间物，后处理成功后自动删除。若还能看到它，
 说明后处理 job 失败（raw 保留用于排障，也不要安装）。用户唯一入口是
-`opi-desktop-msi-v<版本>`。
+`opi-windows-exe-v<版本>`；`opi-msi-internal-v<版本>` 只是内部证据，不要发给用户。
+
+**EXE 安装器（2026-10-20 起用户入口）**：脚本是 `scripts/windows/opi.iss`，
+输入是 `createDistributable` 产出的 app image（`desktop\build\compose\binaries\main\app\opi`）：
+
+```powershell
+cd desktop
+$env:OPI_TSF_DLL = (Resolve-Path ..\target\x86_64-pc-windows-msvc\release\tsf_opi.dll).Path
+.\gradlew.bat createDistributable --no-daemon
+cd ..
+& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
+  /DAppVersion=<版本> `
+  /DAppImageDir="desktop\build\compose\binaries\main\app\opi" `
+  /DOutputDir="dist\windows-exe" `
+  scripts\windows\opi.iss
+```
+
+静默安装 / 卸载（`windows-exe-install-test` 用的就是这两条）：
+
+```bat
+opi-<版本>-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+C:\Program Files\opi\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+```
+
+- 默认目录 `C:\Program Files\opi`（`DefaultDirName={autopf}\opi`，可 `/DIR=` 覆盖）；
+  安装前会 `taskkill /f /t /im opi.exe` 关掉运行中的旧实例（升级用，失败不拦）。
+- 文件落盘后 `[Code]` 调 **64 位** `C:\Windows\System32\regsvr32.exe /s
+  "{app}\app\tsf_opi.dll"`；结果只写日志
+  `opi: regsvr32 /s tsf_opi.dll exit code <n>`，**非 0 也不回滚**。卸载时先
+  `regsvr32 /s /u` 再删文件（同样 best-effort）。
+- 快捷方式：开始菜单「opi settings」= `opi.exe --settings`；桌面图标在安装时可选。
+  完成页可勾选拉起 `launch-and-restart.cmd`（启动候选窗 + 重启 Explorer），静默安装跳过。
+- 冒烟（`windows-exe-install-test`）：在干净的 Server Core 容器里静默装到
+  `C:\opi-test`，断言 `opi.exe` 与 `app\tsf_opi.dll` 存在、安装退出码 0、日志里**有**
+  `regsvr32` 退出码（0 或非 0 均可），再静默卸载并断言 `opi.exe` 消失。「注册成功」
+  本身仍要真机验证（容器没有语言栏/TSF）。
 
 或在 Actions 页面（仓库 → Actions → Windows 打包）点进某次 run 下载。
 **触发**：手动 dispatch，或 push 到默认分支且改动落在 `crates/tsf-opi/**` / `desktop/**` /
-`scripts/postprocess-windows-msi.sh` / `.github/workflows/windows.yml`。⚠️ 本仓约定 workflow
+`scripts/postprocess-windows-msi.sh` / `scripts/windows/**` / `.github/workflows/windows.yml`。
+⚠️ 本仓约定 workflow
 要**先存在于默认分支**才能在 Actions 页面手动 dispatch —— 合并前它只能被分支 push 触发。
 
 **那次 run 里真发生的事（【CI 实测】：`windows-latest`，run 37934999798，全绿；
@@ -355,17 +405,8 @@ https://github.com/erikwang2013/opi/actions/runs/37934999798 ）**：
   安装目录是 `C:\Program Files\opi`）。单独发布的 DLL artifact 从此**不再是用户入口**
   （用户裁决「DLL 不要单独发布，用户不会用」）；
 - **`launch-and-restart.cmd`**：完成页复选框拉起的脚本（启动候选窗 + 重启 Explorer）；
-- **PUA 字体 `opi-emoji.ttf` + `install-emoji-font.ps1`**（2026-10-19 加）：字体真源是
-  `shared/pet/emoji-font/opi-emoji.ttf`，`desktop/build.gradle.kts` 在
-  `OPI_TSF_DLL` 分支把它作为**普通文件**挂进 jpackage（同时仍以
-  `pet-font/opi-emoji.ttf` 进 jar classpath）。MSI 里的落点是
-  `INSTALLDIR\app\opi-emoji.ttf`；完成页脚本以登录用户身份把它复制到
-  `%LOCALAPPDATA%\Microsoft\Windows\Fonts\opi-emoji.ttf`，写
-  `HKCU\Software\Microsoft\Windows NT\CurrentVersion\Fonts` 的
-  `Opi Emoji (TrueType)`，并广播 `WM_FONTCHANGE`。⚠️ 只有勾选 Finish 才执行；
-  `msiexec /qn` 不装字体。字体含 **CBDT/CBLC + SVG** 两套彩色表、**没有
-  COLR/CPAL** ⇒ Windows 10 原生 DirectWrite 宿主是否渲染未经真机验证；应用自身
-  走 Compose/Skia 的 classpath 字体，不依赖系统安装；
+- ~~PUA 字体 `opi-emoji.ttf` + `install-emoji-font.ps1`~~：2026-10-20 用户裁决删除
+  字体通道，MSI 不再包含这两份文件；自有表情只在候选窗内复制图片；
 - **没有** `luna.opid`，也不设置词库环境变量（§2.4 的判断不变）。
 
 **图标（2026-10-19 实测于 v1.15.1 raw MSI）**：`Property` 表
@@ -398,10 +439,11 @@ docker run --rm -v "$PWD:/w" -w /w debian:12 \
 `scripts/postprocess-windows-msi.sh`（文件头有全部设计理由与「能证明/不能证明」）做四件事：
 
 1. **安装目录**：`Directory` 表 `INSTALLDIR` 行的 DefaultDir 从 jpackage 的
-   `...|opi-candidates` 改为 `opi` ⇒ 默认装到 `C:\Program Files\opi`。只改这一行，
-   其余行原样整表导回；`packageName` 不动（TSF 的 `settings_exe` 依赖
-   `opi-candidates.exe`）。
-2. 执行序列 797 加一条 `"taskkill" /f /t /im opi-candidates.exe`（引号是 WixQuietExec 的
+   `...|opi-candidates`（2026-10-20 起 Windows 的 `packageName=opi`，原始行是
+   `opi` 或 `short|opi`）改为 `opi` ⇒ 默认装到 `C:\Program Files\opi`。只改这一行，
+   其余行原样整表导回；启动器名（`EXE`）由 MSI 的 `ProductName` 推出，现在是
+   `opi.exe`。
+2. 执行序列 797 加一条 `"taskkill" /f /t /im opi.exe`（引号是 WixQuietExec 的
    硬要求；排在 `RemoveExistingProducts@798` **之前** —— 否则运行中的旧实例会走
    「改名+重启后删」那条路，装完还活着）。
 3. 执行序列 5890 先用 **Type 51（属性设置）** 动作把格式化后的命令行写进
@@ -429,7 +471,7 @@ docker run --rm -v "$PWD:/w" -w /w debian:12 \
    `start explorer.exe` 会得到管理员令牌的 shell（UAC 旁路）；shell 由 Winlogon 的
    `AutoRestartShell`（默认 1）以**用户自己的完整性级别**拉回。
 
-复选框文案因此变成 `Launch opi-candidates and restart Explorer`，完成页还有一行说明
+复选框文案因此变成 `Launch opi and restart Explorer`（由 `ProductName` 生成），完成页还有一行说明
 （`WIXUI_EXITDIALOGOPTIONALTEXT`）：Explorer 会重启以重新加载输入法，其它已打开的应用
 要各自重启才换到新版本。脚本自带前置断言（槽位空、基线行在）、**显式后处理标记**
 （Property `OPI_POSTPROCESSED=<形状版本>`：带同一标记的重跑直接退出 0 —— 含**不含
@@ -445,7 +487,8 @@ docker run --rm -v "$PWD:/w" -w /w debian:12 \
 标记），表级动作齐全；原始 jpackage 产物未动。但包内 DLL 是**旧构建（动态 CRT）**，
 导入表里有 `VCRUNTIME140.dll` 与 `api-ms-win-crt-*` ⇒ 只能在**装过 VC++ 运行时**的机器上
 注册成功；desktop jar 也是修复前的构建。**不要把它当可安装交付物发布或拿去验收**；
-需要真机验证请用 CI 的 `opi-desktop-msi-v<版本>`（静态 CRT、含本轮修复）。
+需要真机验证请用 CI 的 `opi-windows-exe-v<版本>`（用户入口；静态 CRT、含本轮修复）；
+要复核 MSI 表形状则用 `opi-msi-internal-v<版本>`（内部证据）。
 
 **本地静态 CRT CAB 重打包：已撤回，不是交付物（2026-10-19 晚）**。曾用 Linux
 `gcab` 重打 `Data.cab`、替换 File 键
@@ -453,16 +496,16 @@ docker run --rm -v "$PWD:/w" -w /w debian:12 \
 `dist/opi-1.15.1_windows-desktop-processed-static.msi`。它只做过 `msiextract` /
 表级读回（195 个文件、DLL 哈希与导入表、四个导出、幂等），**从未被 `msiexec`
 实际安装过**；Linux `gcab` 产出的 cab 不满足「可交付」的证据档位，故撤回该文件与
-把它当测试包的用法。需要静态 CRT 的真机包，只能从 CI 的 `opi-desktop-msi-v<版本>`
-或 §2.6 的 Windows 本机构建取得。
+把它当测试包的用法。需要静态 CRT 的真机包，只能从 CI 的 `opi-windows-exe-v<版本>`
+（用户入口）或 §2.6 的 Windows 本机构建取得；MSI 路线用 `opi-msi-internal-v<版本>`。
 
 **本地 `processed` 包只作表级证据**：`dist/opi-1.15.1_windows-desktop-processed.msi`
 （若本机还保留）是用修订后脚本处理 v1.15.1 raw 得到的，用来复核 `INSTALLDIR=opi`、
 Type 1 的 `OpRegisterTsf@5900`、`WixSilentExec64` 与 `OPI_POSTPROCESSED` 标记。它的
 **desktop jar 与 DLL 仍是旧构建**，不含 2026-10-19 之后的源码改动，也**没有**本轮新增的
 注册修复（`RegisterProfile` 判存在、`EnableLanguageProfileByDefault`、删除旧
-`AddLanguageProfile`）与新增的 `opi-emoji.ttf` / `install-emoji-font.ps1` ——
-**不要拿它验收界面、输入法列表或字体，也不要发布**。需要新界面/新注册逻辑时，
+`AddLanguageProfile`）——
+**不要拿它验收界面或输入法列表，也不要发布**。需要新界面/新注册逻辑时，
 必须重新构建（§2.6）。
 
 **升级后哪些进程会重载、哪些不会**（全部【未验证】：本机没有 Windows）：
@@ -526,12 +569,13 @@ CI 的 `msi-postprocess` job 现在独立断言这两点（PE machine 必须是 
 想在 Windows 上要中文文案：自带 `MsiInstallerStrings_*.wxl` 走 `--resource-dir`（那份的
 Culture 不能是 en-us），需要连 jpackage 选的 locale 一起换 —— en-US 的 runner 上做不到。
 
-### 2.6 在 Windows 本机从零打包（2026-10-19）
+### 2.6 在 Windows 本机从零打包（2026-10-19，2026-10-20 起 EXE 优先）
 
-> **结论先说**：`.msi` **只能在 Windows 上用 jpackage 打**。Linux 上的
-> `cargo xwin build` 只能验证 TSF DLL 的交叉链接；Linux 没有可用的 jpackage MSI
-> 目标，也不要用 Linux `gcab` 重打 CAB 当交付物（§2.5 已撤回）。
-> Gradle/jpackage 产出的 MSI 仍**必须**过后处理（§2.5），否则不会注册 TSF。
+> **结论先说**：用户入口是 **EXE 安装器**，由 jpackage app image +
+> **Inno Setup 6** 打包（下面的「EXE 路线」）。jpackage 的 `.msi` **只能在 Windows
+> 上打**，且**必须**过后处理（§2.5）才会注册 TSF；2026-10-20 起它只是内部证据，
+> 不要发给用户。Linux 上的 `cargo xwin build` 只能验证 TSF DLL 的交叉链接；
+> 也不要用 Linux `gcab` 重打 CAB 当交付物（§2.5 已撤回）。
 
 **前提（Windows 10/11 x64）**：
 
@@ -539,6 +583,8 @@ Culture 不能是 en-us），需要连 jpackage 选的 locale 一起换 —— e
 - **Visual Studio Build Tools**，勾选「使用 C++ 的桌面开发」（MSVC x64 + Windows SDK）
   以及 `dumpbin`；
 - **Rust stable MSVC** toolchain（`rustup default stable-x86_64-pc-windows-msvc`）；
+- **Inno Setup 6**（`ISCC.exe`，默认在 `C:\Program Files (x86)\Inno Setup 6\`）——
+  只有打 EXE 需要；
 - **WiX 3.11 不用预装**：Compose Multiplatform 在 `packageMsi` 时自己下载
   `wix311-binaries.zip`（日志里能看到 `downloadWix` / `unzipWix`）；
 - 打包机需要能访问 Maven/Gradle 与 WiX 下载源；离线环境请先预热 Gradle/WiX 缓存。
@@ -566,7 +612,26 @@ dumpbin /exports target\x86_64-pc-windows-msvc\release\tsf_opi.dll
 > `advapi32` / `api-ms-win-core-synch-l1-2-0` / `bcryptprimitives` / `combase` /
 > `kernel32` / `ntdll` / `ole32` / `oleaut32` / `user32`，四个 COM 导出齐全。
 
-**第 2 步：打 desktop MSI**
+**EXE 路线（用户入口，2026-10-20 起）**
+
+同一个 `OPI_TSF_DLL` 先打 app image，再用 Inno Setup 编译：
+
+```powershell
+$env:OPI_TSF_DLL = (Resolve-Path target\x86_64-pc-windows-msvc\release\tsf_opi.dll).Path
+cd desktop
+.\gradlew.bat createDistributable --no-daemon
+cd ..
+& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
+  /DAppVersion=<版本> `
+  /DAppImageDir="desktop\build\compose\binaries\main\app\opi" `
+  /DOutputDir="dist\windows-exe" `
+  scripts\windows\opi.iss
+```
+
+产物是 `dist\windows-exe\opi-<版本>-setup.exe`；静默安装、TSF 注册（best-effort）
+与卸载语义见 §2.5。下面的第 2–4 步只适用于 **MSI 内部证据路线**。
+
+**第 2 步：打 desktop MSI（内部证据）**
 
 ```powershell
 cd desktop
@@ -575,10 +640,10 @@ $env:OPI_TSF_DLL = (Resolve-Path ..\target\x86_64-pc-windows-msvc\release\tsf_op
 ```
 
 `OPI_TSF_DLL` 必须在 `packageMsi` 前设置：`desktop/build.gradle.kts` 只在
-该变量存在时把 DLL、`launch-and-restart.cmd`、`install-emoji-font.ps1` 和
-`opi-emoji.ttf` 挂进 jpackage 的 `--input`。产物通常在
-`desktop\build\compose\binaries\main\msi\opi-candidates-<版本>.msi`
-（CMP 版本可能改路径，先 `Get-ChildItem -Recurse -Filter *.msi` 确认）。
+该变量存在时把 DLL 与 `launch-and-restart.cmd` 挂进 jpackage 的 `--input`。产物通常在
+`desktop\build\compose\binaries\main\msi\opi-<版本>.msi`
+（Windows 主机上 `packageName=opi`；CMP 版本可能改路径，先
+`Get-ChildItem -Recurse -Filter *.msi` 确认）。
 
 **第 3 步：后处理（必需）**
 
@@ -589,7 +654,7 @@ $env:OPI_TSF_DLL = (Resolve-Path ..\target\x86_64-pc-windows-msvc\release\tsf_op
 # 回到仓库根目录（第 2 步 cd 进了 desktop）；以管理员身份运行 64 位 PowerShell
 cd ..
 powershell -ExecutionPolicy Bypass -File scripts\windows\postprocess-windows-msi.ps1 `
-  -InputMsi desktop\build\compose\binaries\main\msi\opi-candidates-<版本>.msi `
+  -InputMsi desktop\build\compose\binaries\main\msi\opi-<版本>.msi `
   -OutputMsi dist\opi-<版本>_windows-desktop-processed.msi
 ```
 
@@ -601,15 +666,17 @@ powershell -ExecutionPolicy Bypass -File scripts\windows\postprocess-windows-msi
 
 **已验证路径（CI/WSL）**：在 WSL/Debian 里装 `msitools` 后跑
 `scripts/postprocess-windows-msi.sh`（命令见 §2.5）；CI 的
-`opi-desktop-msi-v<版本>` 就是这条路产出的。两条路的表形状相同，bash 脚本有
+`opi-msi-internal-v<版本>`（内部证据）就是这条路产出的。两条路的表形状相同，bash 脚本有
 全表 diff + cab 抽样解包；PowerShell 脚本只做读回，没有全表 diff。
 
-**第 4 步：安装验收**
+**第 4 步：安装验收（MSI 路线；EXE 路线的注册语义见 §2.5）**
 
 1. **先卸载旧包**（尤其是 v1.15.1 及更早的 raw MSI）：设置 → 应用 → 已安装的应用，
    或 `msiexec /x <旧包>`。旧包默认在 `C:\Program Files\opi-candidates`；新包默认
-   在 `C:\Program Files\opi`。旧包不会自动清理 `HKLM\SOFTWARE\Microsoft\CTF`
-   下的注册残留（§6.1 #13），如遇异常先按 #13 手工清理。
+   在 `C:\Program Files\opi`。**旧 MSI 与新的 EXE 安装器身份不同（MSI ProductCode
+   vs Inno `AppId`），彼此不会自动升级** —— 装 EXE 前先卸掉旧 MSI。旧包不会自动
+   清理 `HKLM\SOFTWARE\Microsoft\CTF` 下的注册残留（§6.1 #13），如遇异常先按 #13
+   手工清理。
    **Win10 二次安装/覆盖升级必须验证**：装完后把同一个包再装一次（或覆盖升级到
    更高版本），确认安装不回滚、`OpRegisterTsf` 仍成功、输入法不重复也不消失。
    注册代码对已存在 profile 跳过重复写、对机器级默认启用失败做 HKLM 回读容错，
@@ -637,7 +704,7 @@ powershell -ExecutionPolicy Bypass -File scripts\windows\postprocess-windows-msi
      -InstallDir "C:\Program Files\opi" -InstallLog .\install.log
    ```
    它检查 `HKCR\...\InprocServer32`、`HKLM`/`HKCU` 的 CTF profile 与 `Enable`、
-   `Get-WinUserLanguageList` 的 `InputMethodTips`、字体注册和安装日志里的
+   `Get-WinUserLanguageList` 的 `InputMethodTips` 和安装日志里的
    `OpRegisterTsf`；退出码 0 = 必需项全过，1 = 有失败项。
 
 **账户上下文（静默/企业部署必读）**：
@@ -650,26 +717,18 @@ powershell -ExecutionPolicy Bypass -File scripts\windows\postprocess-windows-msi
   HKCU，对目标用户无效；这条路径**依赖 HKLM 默认启用位**。已登录的目标用户若仍看不到，
   注销/重新登录，或到 设置 → 语言 手动添加一次键盘。诊断脚本会打印当前账户
   （含是否 SYSTEM）以及 HKLM/HKCU 的 `Enable`。
-- **字体仍按用户装**：`install-emoji-font.ps1` 写运行者的 HKCU +
-  `%LOCALAPPDATA%\Microsoft\Windows\Fonts`；SYSTEM 部署下需目标用户手工运行
-  `INSTALLDIR\app\install-emoji-font.ps1`。
 - 上述 HKLM 默认位在 Win10 上的实际效果**未在真机验证**。需要立即生效时，目标用户
   仍可自己跑一次 `regsvr32 /s "C:\Program Files\opi\app\tsf_opi.dll"`（写该用户 HKCU）。
 
-**图标与字体落点（本轮）**：
+**图标落点（本轮）**：
 
-- MSI 产品图标（`ARPPRODUCTICON`）与 `opi-candidates.exe` 图标：
-  `desktop/icons/opi-pet.ico`（实测方法见 §2.5 的「图标」段）；
-- PUA 字体源文件：`shared/pet/emoji-font/opi-emoji.ttf`；
-- MSI 内落点：`INSTALLDIR\app\opi-emoji.ttf`（另有 jar 内
-  `pet-font/opi-emoji.ttf` 供应用 classpath 直接加载）；
-- 装机后（用户勾选 Finish）：`%LOCALAPPDATA%\Microsoft\Windows\Fonts\opi-emoji.ttf`
-  + `HKCU\Software\Microsoft\Windows NT\CurrentVersion\Fonts`。静默安装不会执行，
-  需要时手工运行 `INSTALLDIR\app\install-emoji-font.ps1`。
+- MSI 产品图标（`ARPPRODUCTICON`）与 `opi.exe` 图标：
+  `desktop/icons/opi-pet.ico`（实测方法见 §2.5 的「图标」段）。EXE 安装器沿用
+  同一份 app image，快捷方式图标也来自它。
 
 > **必须新构建，旧包不会变**：2026-10-19 用户在真机装的三个 MSI
 > （本地 `processed-static`、本地 `processed`、CI `opi-desktop-msi`）里的
-> **desktop jar 都是旧构建**；本轮改的是源码（TSF 注册、界面、字体接线），
+> **desktop jar 都是旧构建**；本轮改的是源码（TSF 注册、界面），
 > 这些包不会因为仓库源码变了而改变。要验证本轮改动，必须按本节重新
 > `packageMsi` 并重新后处理；旧包只能用来证明旧行为。
 
@@ -681,11 +740,14 @@ powershell -ExecutionPolicy Bypass -File scripts\windows\postprocess-windows-msi
 
 > **2026-10-18 起（2026-10-19 收紧）**：**后处理过的** MSI 会自动执行 `regsvr32 /s`
 > （后处理脚本的 `OpRegisterTsf`，序列 5900），**用户不再需要手工注册**。
-> ⚠️ Release 里 v1.15.1 及更早的 Windows MSI 是**未后处理**的原始产物（不注册）；
-> 2026-10-19 起 CI 的 `opi-desktop-msi-v<版本>` artifact 才是处理过的版本。
+> ⚠️ Release 里 v1.15.1 及更早的 Windows MSI 是**未后处理**的原始产物（不注册）。
+> **【订正 2026-10-20】** 用户入口改为 EXE 安装器：装完由 Inno `[Code]` 自动跑
+> 64 位 `regsvr32 /s "{app}\app\tsf_opi.dll"`，退出码只进安装日志、失败**不回滚**
+> 安装（§2.5）。后处理 MSI 仍会自动注册（Type 1，失败回滚），但只作内部证据，
+> artifact 现名 `opi-msi-internal-v<版本>`。
 > 本节保留为核对/回退路径：想确认注册结果、或从旧版单独 DLL 迁移时，仍可按下面的
-> 命令手工跑一次。注意 `regsvr32` 写的是**当时 DLL 的全路径**；后处理后的 MSI
-> 默认装在 `C:\Program Files\opi\app\tsf_opi.dll`（2026-10-19 起；此前是
+> 命令手工跑一次。注意 `regsvr32` 写的是**当时 DLL 的全路径**；EXE 与后处理后的 MSI
+> 都默认装在 `C:\Program Files\opi\app\tsf_opi.dll`（2026-10-19 起；此前是
 > `C:\Program Files\opi-candidates\app\`），手工注册时请指向实际路径。
 
 **【未验证】**（本机无 Windows，下面每一条都没有跑过）。
@@ -782,7 +844,7 @@ HKCU 写失败是系统性权限问题时安装不会红，只是当前用户少
 3. 用 `Win` + `Space` 轮换输入法。
 
 **【未验证】**：以上三步没有任何人在 Windows 上走过；"出现在哪个列表里""要不要重启"都没有实测。
-列表里没有时，先跑 §2.6 第 5 步的 `scripts/windows/diagnose-tsf.ps1`：它会打印
+列表里没有时，先跑 §2.6 第 4 步的 `scripts/windows/diagnose-tsf.ps1`：它会打印
 `Get-WinUserLanguageList` 的 `InputMethodTips`、HKLM/HKCU 的 CTF profile 与
 `Enable`，以及安装日志里的 `OpRegisterTsf`。
 
@@ -884,8 +946,8 @@ Jianpin=True        # 简拼（声母缩写，nh → 你好）
 **设置窗**：与候选窗是**同一个可执行文件**（`desktop/` 的 Compose 应用）：
 
 ```
-opi-candidates.exe --settings     # 设置窗
-opi-candidates.exe                # 候选窗（无参数；TSF 走命名管道驱动它）
+opi.exe --settings     # 设置窗（开始菜单「opi settings」也是这条）
+opi.exe                # 候选窗（无参数；TSF 走命名管道驱动它）
 ```
 
 设置窗保存后**只落盘**。⚠️ **生效时机 = 输入法下一次激活**（切到别的程序再切回来）——
@@ -908,17 +970,22 @@ Windows 上只出**常用 / 状态栏 / 符号与表情 / 关于**四页 —— 
 命名管道、不提交文本），因此**在设置窗里也能用**；Emoji = 9 个 OpenMoji 分组（不再
 含自有），颜文字 = `data/raw/kaomoji.tsv` 的 7 组（`copyEmojiData` /
 `copyKaomojiData` / `copyPetStickers` 在构建期把数据与 PNG 拷进程序资源，见
-`desktop/build.gradle.kts`）。上面那段 `settings.ini` 的四个键不受影响（照旧四个）。
+`desktop/build.gradle.kts`）。
+设置窗另有「表情中显示自有」（`settings.ini` 键 `ShowOwn`，缺省 **False**，仅候选窗/
+设置窗读取，TSF 不读）：关闭时顶栏只有 Emoji / 颜文字，打开后才有「自有」子页。
+上面那段 `settings.ini` 的四个 TSF 键不受影响。
 
 **「属性」入口已接线**（2026-10-08）：服务对象实现了 `ITfFunction` + `ITfFnConfigure`
 （`tsf.rs`），`Show()` 会拉起设置窗（`configure.rs`：从 **DLL 同目录** →
-`%LOCALAPPDATA%\opi\` 逐候选找 `opi-candidates.exe`，都找不到就**什么都不弹**）。
+**INSTALLDIR**（DLL 目录的上一级，即 `C:\Program Files\opi`）→
+`%LOCALAPPDATA%\opi\` 逐候选找 `opi.exe`，都找不到就**什么都不弹**）。
 控制面板那一页取它的办法是 `CoCreateInstance(CLSID, IID_ITfFnConfigure)`（MSDN 的
 `ITfFnConfigure` 页面）——⚠️ **本机只验到 `cargo check`**，真机上「属性」按钮会不会出现、
 点了起不起得来，都要在 Windows 上看（§6.1 有这一条）。
 
-⚠️ 仍然缺的：**Windows 没有打包**（§2.4）—— 设置窗没有安装包，`opi-candidates.exe`
-要用户自己放到上面那两个候选位置之一，「属性」才拉得起来。
+**2026-10-20 起 Windows 有安装包**（§2.5）：EXE 安装器把 `opi.exe` 放在
+`C:\Program Files\opi`，并在开始菜单建「opi settings」入口；「属性」从 DLL 目录的
+上一级找到的就是它。设置窗本身是否能在真机拉起仍是【未验证】。
 
 ---
 
@@ -960,27 +1027,31 @@ Windows 上只出**常用 / 状态栏 / 符号与表情 / 关于**四页 —— 
 
 ### 5.2 注册成没成（真机验证清单）
 
-**【未验证】** —— **本机（Linux）没有在真机桌面 Windows 上装过任何后处理产物**；
-CI 的 `windows-install-test` 只做容器冒烟并抓日志（§2.5），不是真机验证。
-2026-10-19 用户真机报障（v1.15.1，未后处理包：有进程、键盘不显示）是本轮修复的
-**直接证据**；但「后处理后的包能不能注册成功」仍要装一次才知道。装完后按顺序核：
+**【未验证】** —— **本机（Linux）没有在真机桌面 Windows 上装过任何会注册的包**；
+CI 的 `windows-install-test`（MSI）与 `windows-exe-install-test`（EXE）只做容器冒烟
+并抓日志（§2.5），不是真机验证。2026-10-19 用户真机报障（v1.15.1，未后处理包：
+有进程、键盘不显示）是本轮修复的**直接证据**；但「注册能不能成功」仍要装一次才知道。
+装完后按顺序核：
 
 > ⚠️ **先处理旧包**：如果机器上已经装过 v1.15.1 的**原始** MSI（默认在
-> `C:\Program Files\opi-candidates`），请先卸载它再装后处理包。新版把默认目录改成
-> `C:\Program Files\opi`，而 jpackage 没有显式设置 `--win-upgrade-uuid`；两者并存/
-> 升级的行为未在真机验证过，同版本号也可能被 Windows Installer 当成维护/修复而不是
-> 新安装。卸载旧包不会删除 `%LOCALAPPDATA%\opi` 里的用户数据。
+> `C:\Program Files\opi-candidates`），请先卸载它再装新包。新 EXE 默认装到
+> `C:\Program Files\opi`，且与旧 MSI 的安装器身份不同（Inno `AppId` vs MSI
+> ProductCode），**不会自动升级旧 MSI**。卸载旧包不会删除 `%LOCALAPPDATA%\opi`
+> 里的用户数据。覆盖安装/二次安装（EXE 与 MSI 各自）都仍无真机证据。
 
 > ⚠️ **Win10 二次安装/覆盖升级必须单独验证**（2026-10-19 复审要求）：在同一台机器上
-> 把**同一个后处理包再装一次**（或覆盖升级到更高版本），确认 `OpRegisterTsf` 仍成功、
-> 安装不回滚、语言列表里输入法不重复也不消失。注册代码已避免重复写已存在的 profile、
-> `EnableLanguageProfileByDefault` 失败时回读 HKLM `Enable` 容错、HKCU 改为 best-effort，
-> 但**这些路径都没有真机证据**（本仓库只在 Linux 上验证）。若二次安装失败，先看
-> `install.log` 里 `OpRegisterTsf` 前后的错误码。
+> 把**同一个包再装一次**（或覆盖升级到更高版本），确认注册仍成功、安装不回滚、
+> 语言列表里输入法不重复也不消失。EXE 路线重装会先 `taskkill /f /t /im opi.exe`
+> （失败只记日志）；MSI 路线看 `OpRegisterTsf`。注册代码已避免重复写已存在的
+> profile、`EnableLanguageProfileByDefault` 失败时回读 HKLM `Enable` 容错、HKCU
+> 改为 best-effort，但**这些路径都没有真机证据**（本仓库只在 Linux 上验证）。
+> 若二次安装失败，先看安装日志里注册动作前后的错误码。
 
-0. **一次性诊断（推荐先跑）**：装完运行 §2.6 第 5 步的
-   `scripts/windows/diagnose-tsf.ps1 -InstallLog .\install.log`。它只读，退出码
-   0/1 直接说明必需项是否齐全；下面几项是它的手工版本。
+0. **一次性诊断（推荐先跑）**：装完运行 §2.6 第 4 步的
+   `scripts/windows/diagnose-tsf.ps1 -InstallLog .\install.log`（EXE 传入 `/LOG=`
+   指定的那份日志；脚本同时识别 MSI 的 `OpRegisterTsf` 与 EXE 的
+   `opi: regsvr32` 行）。它只读，退出码 0/1 直接说明必需项是否齐全；下面几项是它的
+   手工版本。
 1. **COM 注册键**（管理员 cmd / PowerShell）：
    ```bat
    reg query "HKCR\CLSID\{98C51858-590B-404D-8915-21EB44250062}\InprocServer32"
@@ -999,11 +1070,14 @@ CI 的 `windows-install-test` 只做容器冒烟并抓日志（§2.5），不是
    `GUID_PROFILE`）、`Enable=1`（当前用户）与键盘类别
    （`GUID_TFCAT_TIP_KEYBOARD`）的条目。**只有 HKLM 而没有 HKCU 的 `Enable`**
    是 2026-10-19 之前那版注册的典型状态：profile 存在但用户列表不显示。
-3. **`regsvr32` 本身成功**：安装时它由 `WixSilentExec64`（`/s` 静默）执行，完成页看不到
-   输出。注册 CA 是 **Type 1（Return=check）** ⇒ 注册失败会让**安装失败并回滚**，
-   不是「装成功、键盘不出现」。排障看安装日志（`msiexec /i <包> /l*v install.log`）里
-   `OpRegisterTsf` 与 regsvr32 的返回码；也可在装完后手工跑一次
-   `regsvr32 "C:\Program Files\opi\app\tsf_opi.dll"`（应弹成功框）。
+3. **`regsvr32` 本身成功**：
+   - **EXE 用户入口**：Inno `[Code]` 在文件落盘后静默执行 64 位 `regsvr32 /s`，
+     退出码写在安装日志的 `opi: regsvr32 /s tsf_opi.dll exit code <n>` 一行
+     （静默安装用 `/LOG=` 指定日志）。**非 0 不回滚安装** —— 键盘不出现时先看这一行，
+     需要时手工再跑一次 `regsvr32 "C:\Program Files\opi\app\tsf_opi.dll"`。
+   - **MSI 内部证据**：由 `WixSilentExec64` 执行；注册 CA 是 **Type 1（Return=check）**
+     ⇒ 失败会让**安装失败并回滚**。排障看 `msiexec /i <包> /l*v install.log` 里
+     `OpRegisterTsf` 与 regsvr32 的返回码。
    ⚠️ 旧构建（如 v1.15.1 包内 DLL）动态依赖 `VCRUNTIME140.dll`：没装 VC++ 运行时的
    机器上这一步会以 `0x8007007E` 失败 —— 新 CI 产物已改静态 CRT（§2.5 第 1 条）。
 4. **键盘列表出现「小欧输入法」**：§3.3 的第 1–3 步（中文(简体，中国) → 语言选项 →
@@ -1092,7 +1166,12 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 > `processed-static`、本地 `processed`、CI `opi-desktop-msi`）里的 **desktop jar
 > 都是旧构建**，且 `registration::register`（当时还在 `com_server.rs`）都还是修复前的版本。本轮对 TSF 注册
 > （`RegisterProfile` 判存在 + `EnableLanguageProfile` + `EnableLanguageProfileByDefault`）、
-> 64 位 `WixSilentExec64` 后处理、界面、PUA 字体接线的改动，**不会**出现在这些旧包里。
+> 64 位 `WixSilentExec64` 后处理、界面的改动，**不会**出现在这些旧包里。
 > 要验证本轮改动，
 > 必须按 §2.6 重新 `packageMsi` 并重新后处理；旧包只能证明旧行为。
 > `processed-static`（Linux `gcab` 重打 CAB）已撤回，不再是交付物。
+>
+> **【订正 2026-10-20】** 用户入口从后处理 MSI 改为 **EXE 安装器**
+> `opi-windows-exe-v<版本>` → `opi-<版本>-setup.exe`（Inno Setup；TSF 注册
+> best-effort、失败不回滚）。后处理 MSI 保留为内部证据，artifact 改名
+> `opi-msi-internal-v<版本>`；它与旧 MSI 一样**不应**作为发布资产发给用户。

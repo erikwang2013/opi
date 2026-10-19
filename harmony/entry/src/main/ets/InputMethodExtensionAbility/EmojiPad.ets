@@ -48,6 +48,8 @@ const STICKER_PER_ROW: number = 4;
 const STICKER_SIZE: number = 56;
 /** 颜文字比单个 emoji 宽：3 列 + 小字号，少截断（Android 同款）。 */
 const KAOMOJI_PER_ROW: number = 3;
+/** 是否显示「自有」：鸿蒙无设置页，缺省隐藏（Android/桌面有开关）；要显示改 true 并重编。 */
+const SHOW_OWN: boolean = false;
 
 @Component
 export struct EmojiPad {
@@ -113,12 +115,14 @@ export struct EmojiPad {
       } else {
         // 子页切换：选中态同时用底色 + 字色表达（同旧版分组条）。
         Row() {
-          Text('自有')
-            .fontSize(15).fontColor(this.subTab === 0 ? '#FFFFFF' : '#1E6B63')
-            .backgroundColor(this.subTab === 0 ? '#2E8B80' : '#FFFFFF')
-            .borderRadius(6).padding({ left: 14, right: 14, top: 5, bottom: 5 })
-            .margin({ left: 3, right: 3 })
-            .onClick(() => { this.selectSub(0); })
+          if (SHOW_OWN) {
+            Text('自有')
+              .fontSize(15).fontColor(this.subTab === 0 ? '#FFFFFF' : '#1E6B63')
+              .backgroundColor(this.subTab === 0 ? '#2E8B80' : '#FFFFFF')
+              .borderRadius(6).padding({ left: 14, right: 14, top: 5, bottom: 5 })
+              .margin({ left: 3, right: 3 })
+              .onClick(() => { this.selectSub(0); })
+          }
           Text('Emoji')
             .fontSize(15).fontColor(this.subTab === 1 ? '#FFFFFF' : '#1E6B63')
             .backgroundColor(this.subTab === 1 ? '#2E8B80' : '#FFFFFF')
@@ -445,7 +449,7 @@ export struct EmojiPad {
 
   /** 切子页：离开搜索态（搜索只属于 Emoji/颜文字）；切换后网格按新子页重画。 */
   private selectSub(i: number): void {
-    if (i === this.subTab) {
+    if (i === this.subTab || (i === 0 && !SHOW_OWN)) {
       return;
     }
     this.subTab = i;

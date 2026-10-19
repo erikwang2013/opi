@@ -7,17 +7,21 @@ name: Windows 打包
 #     ci.yml 里那条 `cargo check -p tsf_opi --target x86_64-pc-windows-msvc` 只到类型检查
 #     （check 与 build 的差别逐条列在 docs/install/windows.md §1.2：链接、导出表、DLL 本体
 #     三样都在 check 之外）。
-#   · 桌面应用（desktop/，设置窗/候选窗）的 `.msi` 由 jpackage 产出，而 jpackage
-#     **不能交叉打包**：它会把**构建机上那个 JDK** 的运行时 jlink 进包 —— 所以 Windows
-#     包必须在 Windows 上打（同 packages.yml 里 deb 钉 ubuntu-22.04 的那条理由，方向相反）。
+#   · 桌面应用（desktop/，设置窗/候选窗）的 app image / `.msi` 由 jpackage 产出，
+#     而 jpackage **不能交叉打包**：它会把**构建机上那个 JDK** 的运行时 jlink 进包 ——
+#     所以 Windows 包必须在 Windows 上打（同 packages.yml 里 deb 钉 ubuntu-22.04 的
+#     那条理由，方向相反）。EXE 安装器 = jpackage app image + Inno Setup 编译。
 #
 # ⚠️ 边界（**别把「打包绿了」读成「Windows 端能用」**）：
-#   本 workflow 证明「这两个产物能在 Windows 上被编出来、DLL 的导入/导出表长这样、
-#   MSI 里带上了 DLL 和完成页脚本，且后处理注入了注册动作与安装目录」。
-#   `windows-install-test` 会在 Windows Server Core 容器里真跑一次 `msiexec` 并上传日志，
-#   但容器没有真机的语言栏/TSF 环境：`OpRegisterTsf` 失败/回滚会如实留在日志里，
+#   本 workflow 证明「这些产物能在 Windows 上被编出来、DLL 的导入/导出表长这样、
+#   安装器里带上了 DLL，且安装时执行注册、安装目录是 opi」。
+#   **用户入口是 `opi-<版本>-setup.exe`（Inno Setup）**（2026-10-20 用户裁决：
+#   MSI 在 Windows Server Core 里因注册失败会整包装不上）。EXE 安装器把 regsvr32
+#   放在 [Code] 里，**注册失败只记日志、不回滚安装**。
+#   `windows-exe-install-test` 会在 Windows Server Core 容器里真跑一次静默安装/卸载；
+#   但容器没有真机的语言栏/TSF 环境，注册可能失败 —— 那正是日志要记录的，
 #   这**不**等于真机装过。`regsvr32` / Explorer 重启的真实行为仍需真机验证
-#   （2026-10-19 用户在真机装的是**未后处理**的发布包，键盘不显示；后处理后的产物
+#   （2026-10-19 用户在真机装的是**未后处理**的 MSI，键盘不显示；EXE 安装器
 #   尚未被真机装过）。
 #   缺口清单见 docs/install/windows.md 的 §6.1（从未验过的事）与 §6.2（读源码得出的缺口）。
 #   本 workflow 也**不**打包 `luna.opid`：词库分发通路一条没动（§2.4 的判断仍然成立 ——
@@ -238,15 +242,104 @@ jobs:
       # 原始 jpackage 产物：**不含** regsvr32 注册动作，也不是用户入口（2026-10-19
       # 用户真机报障的根因正是把这一份当成了发布包）。它是 msi-postprocess 的**内部
       # 中间物**：后处理成功后由该 job 用 gh api 删除，正常 run 的最终 artifacts 里
-      # 不应出现。只有 opi-desktop-msi-v<版本> 才是用户入口。raw 若残留（后处理失败）
-      # 只用于排障，不要安装。
+      # 不应出现。MSI 自 2026-10-20 起只是**内部证据**；用户入口是 desktop-exe job
+      # 产出的 `opi-<版本>-setup.exe`。raw 若残留（后处理失败）只用于排障，不要安装。
       - uses: actions/upload-artifact@v4
         with:
           name: opi-desktop-msi-raw-v${{ needs.version.outputs.version }}
           if-no-files-found: error
           path: desktop/build/compose/binaries/main/msi/*.msi
 
+  # ---- 用户入口：EXE 安装器（2026-10-20）----
+  #
+  # jpackage 的 MSI 在 Server Core 里因 TSF 注册失败会整包回滚（用户原话「根本无法
+  # 安装」）。这里改用 jpackage 的 app image（同一份应用 + jlinked JRE + TSF DLL）
+  # 交给 Inno Setup，注册放在 [Code] 的 ssPostInstall：**失败只写日志，不回滚安装**。
+  # 产物名固定 `opi-<版本>-setup.exe`，默认装到 `C:\Program Files\opi`。
+  desktop-exe:
+    name: 用户入口 EXE 安装器（windows-latest，Inno Setup）
+    runs-on: windows-latest
+    needs: [version, tsf-dll]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: opi-tsf-dll-v${{ needs.version.outputs.version }}
+          path: tsf-dll
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # app image 与 MSI 用同一套 jpackage 配置；Windows 主机上 packageName=opi
+      # ⇒ 产物目录与启动器都叫 opi。Inno 以这个目录为唯一输入。
+      - name: ./gradlew.bat createDistributable（app image）
+        run: ./gradlew.bat createDistributable --no-daemon
+        working-directory: desktop
+        env:
+          OPI_TSF_DLL: ${{ github.workspace }}\tsf-dll\tsf_opi.dll
+
+      - name: 断言 app image 布局（opi.exe + app\tsf_opi.dll）
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = 'desktop/build/compose/binaries/main/app'
+          $dirs = @(Get-ChildItem $root -Directory -ErrorAction SilentlyContinue)
+          if ($dirs.Count -ne 1) {
+            throw "$root 下应只有一个 app image，实际 $($dirs.Count) 个：$($dirs.Name -join ', ')"
+          }
+          $app = $dirs[0].FullName
+          if ((Split-Path $app -Leaf) -ne 'opi') {
+            throw "app image 名不是 opi（是 $(Split-Path $app -Leaf)）—— Windows packageName 没生效"
+          }
+          foreach ($f in 'opi.exe', 'app\tsf_opi.dll') {
+            if (-not (Test-Path (Join-Path $app $f))) { throw "app image 缺 $f" }
+          }
+          "OPI_APP_IMAGE=$app" >> $env:GITHUB_ENV
+          Get-ChildItem $app | Select-Object Name, Length
+
+      - name: 用 Inno Setup 编译 opi-<版本>-setup.exe
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # 只认 Inno Setup 6（脚本用了 {autopf} / runascurrentuser / modern wizard）；
+          # runner 镜像通常预装，缺了就用 choco 装。
+          $iscc = @(
+            'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
+            'C:\Program Files\Inno Setup 6\ISCC.exe'
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) {
+            choco install innosetup -y --no-progress
+            $iscc = @(
+              'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
+              'C:\Program Files\Inno Setup 6\ISCC.exe'
+            ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          }
+          if (-not $iscc) { throw '找不到 Inno Setup 6 的 ISCC.exe（choco install innosetup 也没装上）' }
+
+          $out = Join-Path $PWD 'dist\windows-exe'
+          New-Item -ItemType Directory -Force $out | Out-Null
+          & $iscc "/DAppVersion=${{ needs.version.outputs.version }}" "/DAppImageDir=$env:OPI_APP_IMAGE" "/DOutputDir=$out" 'scripts\windows\opi.iss'
+          if ($LASTEXITCODE -ne 0) { throw "ISCC 失败：退出码 $LASTEXITCODE" }
+
+          $setup = Join-Path $out "opi-${{ needs.version.outputs.version }}-setup.exe"
+          if (-not (Test-Path $setup)) { throw "没产出 $setup" }
+          Get-Item $setup | Format-List Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opi-windows-exe-v${{ needs.version.outputs.version }}
+          if-no-files-found: error
+          path: dist/windows-exe/*.exe
+
   # ---- MSI 后处理（Linux runner，msitools 表级注入）----
+  #
+  # 2026-10-20 起 MSI 只是**内部证据**（用户入口是 desktop-exe 的 EXE 安装器）。
+  # 这条流水线保留的原因：表级注入/读回是 TSF 注册形状的独立证据，且本地/企业
+  # 仍可能用 MSI。⚠️ MSI 的注册 CA 仍是 Type 1（失败回滚），在 Server Core 上
+  # 会整包装不上 —— 那是 MSI 的已知形状，不是 EXE 安装器的行为。
   #
   # 2026-10-19 起这是**必需**步骤：jpackage 的原始 MSI 不注册 TSF DLL，装完键盘
   # 不出现（用户在真机上撞到过）。scripts/postprocess-windows-msi.sh 注入：
@@ -322,9 +415,10 @@ jobs:
           [ "$fail" -eq 0 ] || exit 1
           echo "表级验证通过：OpRegisterTsf(Type 1)/WixSilentExec64(regsvr32) / 5900 / INSTALLDIR=opi / WixCA=PE32-i386 / OPI_POSTPROCESSED"
 
+      # 内部证据，不是用户入口：名字里写死 internal，避免再被当成发布包。
       - uses: actions/upload-artifact@v4
         with:
-          name: opi-desktop-msi-v${{ needs.version.outputs.version }}
+          name: opi-msi-internal-v${{ needs.version.outputs.version }}
           if-no-files-found: error
           path: msi-processed/*.msi
 
@@ -346,20 +440,23 @@ jobs:
           gh api -X DELETE "repos/$REPO/actions/artifacts/$id"
           echo "已删除内部中间物 $ARTIFACT_NAME（id=$id）"
 
-  # ---- Windows 容器安装冒烟（2026-10-20 新增）----
+  # ---- MSI 容器安装冒烟（内部证据；2026-10-20 起不阻断）----
   #
   # 只证明「msiexec 能在干净的 Windows Server Core 里跑完并留下日志」，**不**证明
-  # 真机可用：容器没有语言栏/TSF 环境，`OpRegisterTsf` 很可能失败并回滚（Type 1
-  # Return=check），这正是要如实保留在日志里的信息。日志无论成败都上传。
+  # 真机可用：容器没有语言栏/TSF 环境，`OpRegisterTsf` 会失败并回滚（Type 1
+  # Return=check），这就是 MSI 在 Server Core 上「根本装不上」的形状。日志无论成败
+  # 都上传；**用户入口是 EXE 安装器**（desktop-exe / windows-exe-install-test），
+  # 所以这个已知会红的 job 用 continue-on-error，不阻断发布。
   windows-install-test:
-    name: 容器安装冒烟（windows-latest，msiexec 日志）
+    name: MSI 容器安装冒烟（内部证据，不阻断）
     runs-on: windows-latest
     needs: [version, msi-postprocess]
+    continue-on-error: true
     timeout-minutes: 60 # ltsc2022 镜像约 5 GB，给足拉取时间
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: opi-desktop-msi-v${{ needs.version.outputs.version }}
+          name: opi-msi-internal-v${{ needs.version.outputs.version }}
           path: msi
 
       - name: docker pull windows/servercore:ltsc2022
@@ -379,10 +476,10 @@ jobs:
           $work = $PWD.Path
           $image = 'mcr.microsoft.com/windows/servercore:ltsc2022'
 
-          $custom = "msiexec /i C:\work\msi\$name /qn /l*v C:\work\install-custom.log INSTALLDIR=C:\opi-test & dir C:\opi-test > C:\work\dir-custom.txt & where /r C:\opi-test opi-candidates.exe > C:\work\exe-custom.txt 2>&1 & reg query HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall /s /f opi > C:\work\reg-custom.txt & exit 0"
+          $custom = "msiexec /i C:\work\msi\$name /qn /l*v C:\work\install-custom.log INSTALLDIR=C:\opi-test & dir C:\opi-test > C:\work\dir-custom.txt & where /r C:\opi-test opi.exe > C:\work\exe-custom.txt 2>&1 & reg query HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall /s /f opi > C:\work\reg-custom.txt & exit 0"
           docker run --rm --isolation=process -v "${work}:C:\work" $image cmd /c $custom
 
-          $default = "msiexec /i C:\work\msi\$name /qn /l*v C:\work\install-default.log & dir `"C:\Program Files\opi`" > C:\work\dir-default.txt & where /r `"C:\Program Files\opi`" opi-candidates.exe > C:\work\exe-default.txt 2>&1 & reg query HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall /s /f opi > C:\work\reg-default.txt & exit 0"
+          $default = "msiexec /i C:\work\msi\$name /qn /l*v C:\work\install-default.log & dir `"C:\Program Files\opi`" > C:\work\dir-default.txt & where /r `"C:\Program Files\opi`" opi.exe > C:\work\exe-default.txt 2>&1 & reg query HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall /s /f opi > C:\work\reg-default.txt & exit 0"
           docker run --rm --isolation=process -v "${work}:C:\work" $image cmd /c $default
 
           # 日志存在只证 msiexec 启动；必须断言「安装状态=0」且能在目标目录里找到启动器，
@@ -398,8 +495,8 @@ jobs:
             if ($log -notmatch 'Installation success or error status:\s*0') {
               throw "$($pair[0]) 安装失败（见日志末段 Installation success or error status）"
             }
-            if (-not (Select-String -Path $pair[1] -Pattern 'opi-candidates\.exe' -Quiet)) {
-              throw "$($pair[1]) 里找不到 opi-candidates.exe：安装目录为空"
+            if (-not (Select-String -Path $pair[1] -Pattern 'opi\.exe' -Quiet)) {
+              throw "$($pair[1]) 里找不到 opi.exe：安装目录为空"
             }
           }
 
@@ -407,7 +504,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: opi-install-logs-v${{ needs.version.outputs.version }}
+          name: opi-msi-install-logs-v${{ needs.version.outputs.version }}
           if-no-files-found: warn
           path: |
             install-custom.log
@@ -418,6 +515,100 @@ jobs:
             exe-default.txt
             reg-custom.txt
             reg-default.txt
+
+  # ---- EXE 安装器静默安装冒烟（用户入口；2026-10-20）----
+  #
+  # 在干净的 Windows Server Core 里跑用户真正会拿到的那个 EXE：
+  #   · 静默安装到 C:\opi-test（默认目录是 C:\Program Files\opi，这里显式给 /DIR）
+  #   · 断言 opi.exe 与 app\tsf_opi.dll 真的落盘
+  #   · 断言安装退出码 = 0，且日志里**记录了** regsvr32 的退出码（0 或非 0 都不判红：
+  #     Server Core 没有语言栏/TSF，注册失败是已知环境限制；安装本身不许因此回滚）
+  #   · 静默卸载后再断言 opi.exe 已删除
+  # 失败时日志全部上传。
+  windows-exe-install-test:
+    name: EXE 静默安装/卸载冒烟（windows-latest，Server Core 容器）
+    runs-on: windows-latest
+    needs: [version, desktop-exe]
+    timeout-minutes: 60 # ltsc2022 镜像约 5 GB，给足拉取时间
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: opi-windows-exe-v${{ needs.version.outputs.version }}
+          path: exe
+
+      - name: docker pull windows/servercore:ltsc2022
+        shell: pwsh
+        run: docker pull mcr.microsoft.com/windows/servercore:ltsc2022
+
+      - name: 容器内静默安装 → 断言文件 → 静默卸载
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Get-ChildItem exe/*.exe | Select-Object -First 1
+          if (-not $setup) { throw '没有下载到 EXE 安装器' }
+          $name = $setup.Name
+          $work = $PWD.Path
+          $image = 'mcr.microsoft.com/windows/servercore:ltsc2022'
+
+          # 逐行展开 cmd：%ERRORLEVEL% 在 .cmd 里按行取，不会像 cmd /c 一行式
+          # 那样在解析期就被展开。前半段无论安装成败都要留下退出码与文件证据。
+          $script = @"
+          @echo off
+          "C:\work\exe\$name" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=C:\opi-test /LOG=C:\work\install-exe.log
+          echo %ERRORLEVEL% > C:\work\install-exit.txt
+          if exist C:\opi-test\opi.exe (echo PRESENT > C:\work\install-opi.txt) else (echo ABSENT > C:\work\install-opi.txt)
+          if exist C:\opi-test\app\tsf_opi.dll (echo PRESENT > C:\work\install-dll.txt) else (echo ABSENT > C:\work\install-dll.txt)
+          if exist C:\opi-test\unins000.exe (
+            start "" /wait C:\opi-test\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=C:\work\uninstall-exe.log
+            echo %ERRORLEVEL% > C:\work\uninstall-exit.txt
+          )
+          ping -n 16 127.0.0.1 >nul
+          if exist C:\opi-test\opi.exe (echo PRESENT > C:\work\uninstall-removed.txt) else (echo ABSENT > C:\work\uninstall-removed.txt)
+          exit /b 0
+          "@
+          Set-Content -Path (Join-Path $work 'exe-smoke.cmd') -Value $script -Encoding ascii
+          docker run --rm --isolation=process -v "${work}:C:\work" $image cmd /c C:\work\exe-smoke.cmd
+
+          foreach ($f in 'install-exe.log', 'install-exit.txt', 'install-opi.txt', 'install-dll.txt') {
+            if (-not (Test-Path $f)) { throw "缺少 $f（docker run 失败或安装器没启动）" }
+          }
+          $exitCode = (Get-Content install-exit.txt -Raw).Trim()
+          if ($exitCode -ne '0') { throw "EXE 安装退出码 $exitCode（见 install-exe.log）" }
+          if ((Get-Content install-opi.txt -Raw).Trim() -ne 'PRESENT') { throw '安装目录里没有 opi.exe' }
+          if ((Get-Content install-dll.txt -Raw).Trim() -ne 'PRESENT') { throw '安装目录里没有 app\tsf_opi.dll' }
+
+          # 注册结果必须被**记录**；0 与非 0 都接受（后者是 Server Core 的已知限制，
+          # 安装不许因此回滚 —— 这正是 EXE 安装器与旧 MSI 的关键区别）。
+          $log = Get-Content install-exe.log -Raw
+          if ($log -notmatch 'opi: regsvr32') {
+            # Inno 的日志编码随版本/系统而变（ANSI/UTF-8/UTF-16），UTF-16 兜底重读
+            $log = Get-Content install-exe.log -Raw -Encoding Unicode
+          }
+          $m = [regex]::Match($log, 'opi: regsvr32 /s tsf_opi\.dll exit code (-?\d+)')
+          if (-not $m.Success) { throw '安装日志里没有 regsvr32 结果记录' }
+          Write-Host "regsvr32 退出码: $($m.Groups[1].Value)（0=注册成功；非 0 在 Server Core 上可接受）"
+
+          if (-not (Test-Path 'uninstall-exit.txt')) { throw '没有执行卸载（缺 unins000.exe 或卸载器没启动）' }
+          $uninstallCode = (Get-Content uninstall-exit.txt -Raw).Trim()
+          if ($uninstallCode -ne '0') { throw "卸载退出码 $uninstallCode（见 uninstall-exe.log）" }
+          if ((Get-Content uninstall-removed.txt -Raw).Trim() -ne 'ABSENT') { throw '卸载后 opi.exe 仍在' }
+          Write-Host 'EXE 安装/卸载冒烟通过'
+
+      - name: 上传安装日志（无论成败）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opi-exe-install-logs-v${{ needs.version.outputs.version }}
+          if-no-files-found: warn
+          path: |
+            install-exe.log
+            uninstall-exe.log
+            install-exit.txt
+            uninstall-exit.txt
+            install-opi.txt
+            install-dll.txt
+            uninstall-removed.txt
+            exe-smoke.cmd
 
   # ---- 只报不进卡的 clippy（Windows 目标）----
   #

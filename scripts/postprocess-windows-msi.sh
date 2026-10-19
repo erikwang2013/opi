@@ -16,8 +16,10 @@
 #   0. **安装目录**（2026-10-19 用户裁决「Windows 安装目录以 opi 为基础目录」）：
 #      Directory 表 `INSTALLDIR` 行的 DefaultDir 由 jpackage 的 `...|opi-candidates`
 #      改为 `opi` ⇒ 默认装到 `C:\Program Files\opi`。注册动作里的 `[INSTALLDIR]`
-#      随之解析到新路径。packageName 不改（TSF 的 settings_exe 依赖
-#      `opi-candidates.exe`）。
+#      随之解析到新路径。
+#      **2026-10-20**：Windows 的 packageName 也改成 `opi` 了（`desktop/build.gradle.kts`
+#      按构建主机分叉；Linux deb 仍叫 opi-candidates），所以 jpackage 原始行现在就是
+#      `...|opi`。本步保留为幂等断言/兜底；TSF 的 settings_exe 同步改成 `opi.exe`。
 #   1. **装前杀进程**：执行序列 797（在 RemoveExistingProducts@798 之前）跑
 #      `taskkill /f /t /im <应用名>.exe`。旧实例会让 RemoveFiles 走「改名 + 重启后
 #      删除」，装完旧进程还活着，与「装后自启」叠成两个实例。
@@ -143,18 +145,18 @@ DIR_T="$(export_clean_t Directory)"
 grep -q "^ProductName	" <<<"$PROPS" || { echo "!! Property 表里没有 ProductName，不是 MSI？" >&2; exit 1; }
 grep -q "^WIXUI_INSTALLDIR	" <<<"$PROPS" || { echo "!! 不是 WixUI_InstallDir 的 MSI（前提变了，先读脚本头再改）" >&2; exit 1; }
 
-# 安装目录基线（2026-10-19）：INSTALLDIR 行必须存在且是 jpackage 的原始形态
-# （`短名|opi-candidates`）或已被本脚本改成 `opi`（幂等重跑）。别的形态 ⇒ 前提变了，
-# 当场红而不是静默装到别处。
+# 安装目录基线（2026-10-19；2026-10-20 包名改为 opi）：INSTALLDIR 行必须存在且是
+# jpackage 的原始形态（`短名|opi`）或已被本脚本改成 `opi`（幂等重跑）。别的形态 ⇒
+# 前提变了，当场红而不是静默装到别处。
 DIR_ROW="$(awk -F'\t' '$1=="INSTALLDIR"{print}' <<<"$DIR_T")"
 [ -n "$DIR_ROW" ] || { echo "!! Directory 表里没有 INSTALLDIR 行（jpackage 模板变了）" >&2; exit 1; }
 [ "$(wc -l <<<"$DIR_ROW")" -eq 1 ] || { echo "!! Directory 表里 INSTALLDIR 有多行，不敢改" >&2; exit 1; }
 DIR_DEFAULT="$(cut -f3 <<<"$DIR_ROW")"
 case "$DIR_DEFAULT" in
     opi) ;;
-    *'|opi-candidates') echo "安装目录：INSTALLDIR 当前默认名是 opi-candidates，将改为 opi" ;;
-    *) echo "!! INSTALLDIR 的 DefaultDir 是「$DIR_DEFAULT」，不是预期的「…|opi-candidates」或「opi」" >&2
-       echo "   jpackage 模板变了 —— 先读脚本头再改。" >&2; exit 1 ;;
+    *'|opi') echo "安装目录：INSTALLDIR 当前默认名是 opi（jpackage 短名形态），将改为 opi" ;;
+    *) echo "!! INSTALLDIR 的 DefaultDir 是「$DIR_DEFAULT」，不是预期的「…|opi」或「opi」" >&2
+       echo "   jpackage 模板/包名变了 —— 先读脚本头再改。" >&2; exit 1 ;;
 esac
 
 # 幂等（m3）：先看显式标记。标记在 ⇒ 本脚本的当前形状版本，直接退出 0。

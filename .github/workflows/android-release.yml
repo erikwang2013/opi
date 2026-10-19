@@ -2,7 +2,7 @@ name: Android Release APK
 
 # 只出 APK artifact，不附到 release（发包/签名是另一条线）。
 # 触发路径按**真实构建输入**列：android/（含 rust_builder/cargokit）、shared/pet
-# （构建期拷进 assets 的贴纸/GIF/字体，srcDir 见 android/app/build.gradle.kts）、
+# （构建期拷进 assets 的贴纸/GIF/映射表，srcDir 见 android/app/build.gradle.kts）、
 # crates/（libopi_ffi.so）、Cargo.toml/lock。data/ 是生成期输入，产物已入库，
 # 不进本 workflow —— 版本号/词库变了会同时改 android/ 或 assets，仍会触发。
 on:

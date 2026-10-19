@@ -9,7 +9,7 @@ package xyz.erik.opi.pet
  * **两端共用这一份**（Android 的 `keyboard/PetEmoji.kt` 与桌面的表情页）。标签带
  * 「小欧·」前缀（2026-10-19 用户裁决）：自有表情的读屏、搜索与面板文字不能和内置
  * emoji 重名；图片通道失败时上屏的也是这个标签（`[小欧·笑]`），**不再回退 emoji**。
- * [Form.emoji] 只为 `scripts/gen_pet_emoji_font.py` 的三元组正则保留，插入路径不用它。
+ * [Form.emoji] 只为 `scripts/gen_pet_emoji_table.py` 的三元组正则保留，插入路径不用它。
  *
  * 枚举顺序 = [PetMood.entries] 的枚举序（跨端契约，新形态只能加在末尾）；
  * [PetMood.SLEEPY] / [PetMood.DEGRADED] **有意不映射** —— 它们是输入状态

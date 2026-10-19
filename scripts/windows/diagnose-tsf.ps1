@@ -6,8 +6,8 @@
 .DESCRIPTION
   Read-only. Checks the COM in-proc server, the CTF TIP language profile,
   the HKLM machine-wide default-enable bit, per-user enable state, the
-  installed language/input-method list, the bundled font, and (optionally) the
-  MSI verbose log around OpRegisterTsf.
+  installed language/input-method list, and (optionally) the install log —
+  the MSI's OpRegisterTsf or the EXE installer's `opi: regsvr32` line.
 
   Run in an elevated 64-bit PowerShell for complete HKLM visibility:
     powershell -ExecutionPolicy Bypass -File .\diagnose-tsf.ps1 `
@@ -198,41 +198,30 @@ try {
     Warn 'Get-WinUserLanguageList failed' $_.Exception.Message
 }
 
-Section 'Optional PUA font'
-$fontPath = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Fonts\opi-emoji.ttf'
-$fontRegPath = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Fonts'
-$fontReg = $null
-try {
-    $fontReg = (Get-ItemProperty -LiteralPath $fontRegPath -ErrorAction Stop).'Opi Emoji (TrueType)'
-} catch { }
-if ((Test-Path -LiteralPath $fontPath -PathType Leaf) -or $fontReg) {
-    Write-Host ("  font file: {0}" -f $fontPath)
-    Write-Host ("  HKCU Fonts value: [{0}]" -f $fontReg)
-    Check 'Per-user Opi Emoji font registered' $true
-} else {
-    Warn 'Per-user Opi Emoji font not installed' 'The app still loads pet-font/opi-emoji.ttf from its classpath; other hosts will not see the family.'
-}
-
-Section 'MSI install log (OpRegisterTsf)'
+Section 'Install log (MSI OpRegisterTsf / EXE regsvr32)'
 if (-not $InstallLog) {
-    foreach ($candidate in @((Join-Path (Get-Location) 'install.log'), (Join-Path $env:TEMP 'install.log'))) {
+    foreach ($candidate in @(
+        (Join-Path (Get-Location) 'install.log'),
+        (Join-Path (Get-Location) 'install-exe.log'),
+        (Join-Path $env:TEMP 'install.log')
+    )) {
         if (Test-Path -LiteralPath $candidate -PathType Leaf) { $InstallLog = $candidate; break }
     }
 }
 if ($InstallLog -and (Test-Path -LiteralPath $InstallLog -PathType Leaf)) {
     Write-Host ("  log: {0}" -f $InstallLog)
     $hits = @(Select-String -LiteralPath $InstallLog `
-        -Pattern 'OpRegisterTsf|WixSilentExec64|DllRegisterServer|Return value 3|Installation failed|Error 1721' `
+        -Pattern 'OpRegisterTsf|WixSilentExec64|opi: regsvr32|DllRegisterServer|Return value 3|Installation failed|Error 1721' `
         -ErrorAction SilentlyContinue)
     if ($hits.Count -eq 0) {
-        Warn 'No OpRegisterTsf / registration lines in the log' 'Re-run: msiexec /i <msi> /l*v install.log'
+        Warn 'No registration lines in the log' 'Re-run with a log: msiexec /i <msi> /l*v install.log, or opi-<version>-setup.exe /LOG=install-exe.log'
     } else {
         $hits | Select-Object -First 40 | ForEach-Object { Write-Host ("         {0}" -f $_.Line.Trim()) }
     }
     $bad = @($hits | Where-Object { $_.Line -match 'Return value 3|Installation failed|Error 1721' })
     Check 'No fatal MSI/registration error in the log' ($bad.Count -eq 0)
 } else {
-    Warn 'No install.log supplied or found' 'Use: msiexec /i <msi> /l*v install.log, then -InstallLog .\install.log'
+    Warn 'No install log supplied or found' 'Use: msiexec /i <msi> /l*v install.log, or opi-<version>-setup.exe /LOG=install-exe.log, then -InstallLog <file>'
 }
 
 Section 'Result'

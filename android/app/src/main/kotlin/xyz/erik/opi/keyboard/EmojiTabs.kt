@@ -14,6 +14,13 @@ internal enum class EmojiSubTab(val label: String) {
 }
 
 /**
+ * 顶栏实际显示的子页：`showOwn` 缺省 false ⇒ 「自有」整个隐藏（2026-10-20 用户裁决）。
+ * 设置页的「表情中显示自有」打开后才加入。
+ */
+internal fun emojiSubTabs(showOwn: Boolean): List<EmojiSubTab> =
+    EmojiSubTab.entries.filter { it != EmojiSubTab.Pet || showOwn }
+
+/**
  * 底部分类条的内容（纯函数，JVM 单测钉住）。
  *
  * - 自有：单段，无分类条 —— **不把「自有」塞进 Emoji 分类条**（用户裁决的独立性）；

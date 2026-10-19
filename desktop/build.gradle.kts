@@ -47,7 +47,7 @@ kotlin {
 // jpackage 的包版本与设置窗标题栏都从这里取。**此前设置窗里写死过一份**
 // （"1.4.0"），到 1.6.0 就成了摆在用户眼前的假话 —— 两处写死是漂移的充分条件，
 // 生成一个常量是把它压成一处的最短路径（同 android 侧 versionName 的单一来源约定）。
-val opiAppVersion = "1.16.1"
+val opiAppVersion = "1.17.0"
 
 val generateOpiVersionSource by tasks.registering {
     val outDir = layout.buildDirectory.dir("generated/sources/opiVersion/kotlin")
@@ -119,16 +119,20 @@ val copyKaomojiData by tasks.registering(Copy::class) {
 }
 tasks.named("processResources") { dependsOn(copyKaomojiData) }
 
-// ---------- Windows TSF DLL：随 MSI 一起装（2026-10-18 用户裁决）----------
+// ---------- Windows TSF DLL：随安装器一起装（2026-10-18 用户裁决）----------
 //
 // 用户原话「DLL 不要单独发布，用户不会用」：DLL 是真正的 Windows 输入法 COM 组件，
 // 单独挂一个 .dll 资产等于让用户自己 regsvr32 —— 他们不会。这里把它挂进 jpackage 的
-// `--input` 文件集合，随应用镜像进入 MSI 的 File 表；再由
-// `scripts/postprocess-windows-msi.sh` 注入 `regsvr32` 注册动作与完成页脚本。
+// `--input` 文件集合，随应用镜像进入 MSI / EXE 安装包；MSI 的注册动作由
+// `scripts/postprocess-windows-msi.sh` 注入，EXE 由 `scripts/windows/opi.iss` 的
+// `[Code]` 在文件落盘后执行。
 //
-// Windows CI 在 `packageMsi` 前下载 TSF DLL artifact 并把路径放进 OPI_TSF_DLL；
+// Windows CI 在 `packageMsi` / `createDistributable` 前下载 TSF DLL artifact 并把路径放进 OPI_TSF_DLL；
 // Linux 打 Deb 时该变量不存在 ⇒ files 集合不变，不会把 DLL/脚本带进 Deb。
 val tsfDll = providers.environmentVariable("OPI_TSF_DLL")
+// Windows 主机判定：jpackage 不能交叉打包（见 windows.yml 头注释），所以
+// 「Windows 产物叫 opi、Linux 产物仍叫 opi-candidates」只能在这里按主机分叉。
+val isWindowsHost = System.getProperty("os.name").lowercase().contains("windows")
 // jpackage 的 `--input` 是 CMP 自己暂存的 libs 目录（会清空重填），所以不能往里
 // 手写文件；把 DLL 挂到 JPackage 任务的 `files` 集合，CMP 会与 jar 一起暂存并
 // 打进应用镜像。Windows CI 在 packageMsi 前设 OPI_TSF_DLL；Linux 构建不设。
@@ -139,16 +143,10 @@ tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageT
             check(src.isFile) { "OPI_TSF_DLL 指向的文件不存在：${src.path}" }
             // 完成页复选框拉起这个脚本：启动候选窗 + 重启 Explorer（重新加载 TSF DLL）。
             // 只在这个分支挂入 ⇒ Linux Deb 不会带 Windows 脚本。
-            // 字体也在这里挂一份**普通文件**（不是仅 jar 里的 `pet-font/` 资源）：
-            // 脚本把它复制到 `%LOCALAPPDATA%\Microsoft\Windows\Fonts` 并写 HKCU，
-            // 供需要按家族名 `Opi Emoji` 选择字体的 Windows 宿主使用。
-            val emojiFont = file("../shared/pet/emoji-font/opi-emoji.ttf")
-            check(emojiFont.isFile) { "找不到 PUA 字体：${emojiFont.path}" }
+            // 2026-10-20：项目不再随包发布 PUA 字体（见 shared/pet/emoji-font/README.md）。
             files.from(
                 src,
                 file("windows/launch-and-restart.cmd"),
-                file("windows/install-emoji-font.ps1"),
-                emojiFont,
             )
         }
     }
@@ -190,13 +188,13 @@ val copyPetStickers by tasks.registering(Copy::class) {
     doFirst {
         check(pngSrc.isDirectory && gifSrc.isDirectory && fontSrc.isDirectory) {
             "找不到小欧表情资产：\n  ${pngSrc.path}\n  ${gifSrc.path}\n  ${fontSrc.path}\n" +
-                "生成一份：python3 scripts/gen_pet_stickers.py && python3 scripts/gen_pet_emoji_font.py"
+                "生成一份：python3 scripts/gen_pet_stickers.py && python3 scripts/gen_pet_emoji_table.py"
         }
     }
     from(pngSrc) { into("pet") }
     from(gifSrc) { include("*.gif"); into("pet-gif") }
     from(fontSrc) {
-        include("opi-emoji.ttf", "map.tsv", "shortcodes.tsv")
+        include("map.tsv", "shortcodes.tsv")
         into("pet-font")
     }
     into(layout.buildDirectory.dir("generated/opiResources"))
@@ -250,7 +248,13 @@ compose.desktop {
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb,
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi,
             )
-            packageName = "opi-candidates"
+            // 2026-10-20 用户裁决：Windows 的包/安装器/启动器一律叫 opi（不再叫
+            // opi-candidates），默认装到 `C:\Program Files\opi`。Linux 的 deb 仍叫
+            // opi-candidates（packages.yml / 打包脚本 / 文档依赖 /opt/opi-candidates）。
+            // 按**构建主机**分叉而不是按 targetFormat：jpackage 不能交叉打包
+            // （见 windows.yml 头注释），一台机器只会打自己那端的产物；按 targetFormat
+            // 覆盖会与 CMP 在 afterEvaluate 里回填 packageName 的时机打架（实测被盖回）。
+            packageName = if (isWindowsHost) "opi" else "opi-candidates"
             // 与发布 tag 对齐（同 android/app/build.gradle.kts 的 versionName）；
             // 值来自文件上方的 opiAppVersion 单一来源。
             packageVersion = opiAppVersion
@@ -359,14 +363,13 @@ tasks.register("injectSettingsDesktopEntry") {
             ?: error("包里没有 /opt/*/bin/* 启动器")
         val installedBin = "/opt/" + bin.toRelativeString(File(root, "opt"))
         // Icon **不再**指 jpackage 那份 /opt/*/lib/*.png（栅格图：同一只小欧，却是
-        // 构建产物、没进 git）。改指 hicolor 里的矢量口径 docs/opi-pet.svg —— 由
-        // crates/fcitx5-opi/cpp/CMakeLists.txt 的
-        //   install(FILES docs/opi-pet.svg DESTINATION .../icons/hicolor/scalable/apps)
-        // 装到 /usr/share/icons/hicolor/scalable/apps/opi-pet.svg，packages.yml 的
+        // 构建产物、没进 git）。改指 hicolor 里的浅底矢量口径 docs/opi-pet-app.svg —— 由
+        // crates/fcitx5-opi/cpp/CMakeLists.txt 把 docs/opi-pet-app.svg
+        // 装到 /usr/share/icons/hicolor/scalable/apps/opi-pet-app.svg，packages.yml 的
         // 合并步把它并进主包 ⇒ 装完必在（2026-10-10 lead 核过；发布物是合并后的
         // 主包，desktop 的 .deb 单独装时这份不在）。用户裁决同日：菜单/桌面入口的
         // 图标也要是 logo。窗口图标（Painter）在那边是另一份，见 PetIcon.kt。
-        val installedIcon = "/usr/share/icons/hicolor/scalable/apps/opi-pet.svg"
+        val installedIcon = "/usr/share/icons/hicolor/scalable/apps/opi-pet-app.svg"
 
         val apps = File(root, "usr/share/applications").apply { mkdirs() }
         // 若 jpackage 自己那份也在（同一 --name，如 opi-candidates.desktop），删掉：

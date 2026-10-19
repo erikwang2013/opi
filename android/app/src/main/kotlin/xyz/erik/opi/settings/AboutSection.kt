@@ -49,6 +49,9 @@ internal const val ABOUT_PROJECT_URL = "https://github.com/erikwang2013/opi"
 /** 博客地址（用户 2026-10-15 给定）。 */
 internal const val ABOUT_BLOG_URL = "https://erik.xyz"
 
+/** 官网主页（用户 2026-10-20 给定）。 */
+internal const val ABOUT_HOME_URL = "https://opi.erik.xyz"
+
 @Composable
 internal fun AboutSection(toast: (String) -> Unit) {
     HorizontalDivider()
@@ -81,6 +84,7 @@ internal fun AboutSection(toast: (String) -> Unit) {
             Text("Emoji 取自 OpenMoji（CC BY-SA 4.0）；颜文字取自 rime_kaomoji_dict（MIT）；小欧贴纸/图标为项目专有资产，商业使用需授权")
         },
     )
+    LinkItem("主页地址", ABOUT_HOME_URL, toast)
     LinkItem("项目地址", ABOUT_PROJECT_URL, toast)
     LinkItem("博客地址", ABOUT_BLOG_URL, toast)
 }

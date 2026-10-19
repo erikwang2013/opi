@@ -34,6 +34,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -77,13 +78,12 @@ internal fun CommonPage(s: OpSettings, apply: (OpSettings) -> Unit) {
         "声母缩写：nh → 你好、zg → 中国",
         s.jianpin,
     ) { apply(s.copy(jianpin = it)) }
-    // 自有表情 PUA（2026-10-19，缺省关）：开 = 点小欧表情上屏字体字符。目标应用没装
-    // 小欧表情字体时字符会显示成方框 —— 这句就是开关的代价，必须跟着开关一起出现。
+    // 表情页「自有」（2026-10-20，缺省关）：开 = 表情页顶栏出现小欧贴纸子页。
     SettingRow(
-        "自有表情用字体字符（PUA）",
-        "开：点小欧表情上屏字体字符；目标应用没装小欧表情字体时显示为方框。关（默认）：插入图片",
-        s.puaEmoji,
-    ) { apply(s.copy(puaEmoji = it)) }
+        "表情中显示自有",
+        "在表情页显示小欧贴纸分类（默认隐藏）；点选仍复制 GIF/PNG 图片",
+        s.showOwn,
+    ) { apply(s.copy(showOwn = it)) }
     SettingRow(
         "拼音纠错",
         "相邻键错按 / 多打 / 少打一个字母也能出候选（如 nihap → nihao）；配置键名 Correction",
@@ -302,10 +302,20 @@ internal fun SymbolsPage(onOpenSymbols: () -> Unit, onOpenEmoji: () -> Unit) {
 
 @Composable
 internal fun AboutPage(status: String) {
+    val uriHandler = LocalUriHandler.current
     Spacer(Modifier.height(6.dp))
     Text("小欧输入法（opi）· 多端输入法", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Ink)
     Spacer(Modifier.height(4.dp))
     Text(status, fontSize = 12.sp, color = Muted)
+    Spacer(Modifier.height(8.dp))
+    Text(
+        "主页：https://opi.erik.xyz",
+        fontSize = 12.sp,
+        color = SymAccent,
+        modifier = Modifier.clickable {
+            runCatching { uriHandler.openUri("https://opi.erik.xyz") }
+        },
+    )
     Spacer(Modifier.height(10.dp))
     // 一句话说明「为什么只有这几页」——主流输入法那套有十几页，我们引擎现在只有这几个真旋钮；
     // 把引擎没有的开关摆上来就是假承诺（宁可少一页，不做点不动的开关）。

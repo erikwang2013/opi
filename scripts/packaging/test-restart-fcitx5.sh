@@ -20,8 +20,7 @@
 #   4. preremove：升级（deb upgrade / rpm 1）不停实例，卸载才停；
 #   5. preinstall：停 opi-candidates、写状态；不再动 fcitx5、不写旧状态文件；
 #   6. postinstall：先调 helper 再拉起 opi-candidates；无 SUDO_USER 也热重启；
-#      关闭开关生效；helper 失败不阻断；字体缓存分支调用 fc-cache（真实 fc-cache
-#      在同一字体目录连跑两次，幂等）；
+#      关闭开关生效；helper 失败不阻断；
 #   7. 真实私有 dbus（dbus-run-session + fcitx5 --ui=testui）：
 #      Restart 返回后唯一名变化、日志出现 Unloading/Loaded addon、服务仍存活；
 #   8. 可选（独立脚本 test-restart-fcitx5-dpkg.sh）：真实 dpkg 旧→新迁移兜底 +
@@ -245,11 +244,10 @@ fresh_proc
 fresh_bus
 mk_fx5 800030 "$MYUID" S "unix:path=$RUN/$MYUID/bus" "$RUN/$MYUID"
 reset_bus
-: > "$TMP/fc-cache.log"
 rm -f "$TMP/runuser.argv"
 printf '%s --statusbar\n' "$TMP/opi-candidates" > "$STATEDIR/opi-install.state"
 SUDO_USER="$ME" OPI_PROC_ROOT="$PROC" OPI_RUN_ROOT="$RUN" OPI_STATE_DIR="$STATEDIR" \
-    OPI_FONT_DIR="$FONTDIR" OPI_WAIT_TICKS=5 PATH="$BIN:$PATH" \
+    OPI_WAIT_TICKS=5 PATH="$BIN:$PATH" \
     sh "$POST" > "$TMP/post.out" 2>&1
 check "postinstall exit 0" [ "$?" -eq 0 ]
 check "postinstall 调了 helper 热重启" grep -q 'Controller1 Restart' "$BUSLOG"
@@ -258,21 +256,6 @@ check "postinstall 拉起 opi-candidates" grep -Fqx -- "--statusbar" "$TMP/runus
 check "postinstall runuser 用 -u <user> --" \
     sh -c "[ \"\$(sed -n '1,3p' '$TMP/runuser.argv' | tr '\n' ' ')\" = '-u $ME -- ' ]"
 check "postinstall 删掉状态" [ ! -e "$STATEDIR/opi-install.state" ]
-if [ -n "$REAL_FC_CACHE" ]; then
-    check "postinstall 调了 fc-cache -f 字体目录" \
-        grep -Fq -- "-f $FONTDIR" "$TMP/fc-cache.log"
-    check "postinstall 无 fc-cache 失败日志" sh -c "! grep -q 'fc-cache' '$TMP/post.out'"
-    check "真实 fc-cache 刷字体目录（第一次）" "$REAL_FC_CACHE" -f "$FONTDIR"
-    check "真实 fc-cache 第二次仍成功（幂等）" "$REAL_FC_CACHE" -f "$FONTDIR"
-    if command -v fc-scan >/dev/null 2>&1; then
-        check "fc-scan 读出 family「Opi Emoji」" \
-            sh -c "fc-scan --format '%{family}' '$FONTDIR/opi-emoji.ttf' | grep -q 'Opi Emoji'"
-    else
-        echo "skip - fc-scan 用例（本机没有 fc-scan）"
-    fi
-else
-    echo "skip - fc-cache 用例（本机没有 fc-cache）"
-fi
 
 # 无 SUDO_USER：postinstall 仍调 helper（本测试非 root，helper 走「普通用户 = 自己」的
 # 分支；生产里 root 的 SUDO_USER/PKEXEC_UID/扫 /run/user 发现路径**未被本测试覆盖**）；
@@ -281,7 +264,7 @@ reset_bus
 rm -f "$TMP/runuser.argv"
 printf '%s --statusbar\n' "$TMP/opi-candidates" > "$STATEDIR/opi-install.state"
 env -u SUDO_USER OPI_PROC_ROOT="$PROC" OPI_RUN_ROOT="$RUN" OPI_STATE_DIR="$STATEDIR" \
-    OPI_FONT_DIR="$FONTDIR" OPI_WAIT_TICKS=5 PATH="$BIN:$PATH" \
+    OPI_WAIT_TICKS=5 PATH="$BIN:$PATH" \
     sh "$POST" > "$TMP/post-nouser.out" 2>&1
 check "无 SUDO_USER postinstall exit 0" [ "$?" -eq 0 ]
 check "无 SUDO_USER 仍热重启 fcitx5" grep -q 'Controller1 Restart' "$BUSLOG"
@@ -294,7 +277,7 @@ reset_bus
 rm -f "$TMP/runuser.argv"
 printf '%s --statusbar\n' "$TMP/opi-candidates" > "$STATEDIR/opi-install.state"
 OPI_NO_RESTART_FCITX5=1 SUDO_USER="$ME" OPI_PROC_ROOT="$PROC" OPI_RUN_ROOT="$RUN" \
-    OPI_STATE_DIR="$STATEDIR" OPI_FONT_DIR="$FONTDIR" PATH="$BIN:$PATH" \
+    OPI_STATE_DIR="$STATEDIR" PATH="$BIN:$PATH" \
     sh "$POST" > "$TMP/post-off.out" 2>&1
 check "关闭开关 postinstall exit 0" [ "$?" -eq 0 ]
 check "关闭开关不调 D-Bus" [ ! -s "$BUSLOG" ]
@@ -305,7 +288,7 @@ reset_bus
 rm -f "$TMP/runuser.argv"
 printf '%s --statusbar\n' "$TMP/opi-candidates" > "$STATEDIR/opi-install.state"
 SUDO_USER="$ME" OPI_PROC_ROOT="$PROC" OPI_RUN_ROOT="$RUN" OPI_STATE_DIR="$STATEDIR" \
-    OPI_FONT_DIR="$FONTDIR" PATH="$BIN_FAIL:$BIN:$PATH" \
+    PATH="$BIN_FAIL:$BIN:$PATH" \
     sh "$POST" > "$TMP/post-fail.out" 2>&1
 check "helper 失败 postinstall exit 0" [ "$?" -eq 0 ]
 check "helper 失败仍拉起实例" grep -Fqx -- "--statusbar" "$TMP/runuser.argv"
@@ -316,7 +299,7 @@ AUTOSTART="$TMP/opi-statusbar.desktop"
 printf '[Desktop Entry]\nExec=%s --statusbar\n' "$TMP/opi-candidates" > "$AUTOSTART"
 migrate() { reset_bus; env -u OPI_NO_RESTART_FCITX5 OPI_PROC_ROOT="$PROC" OPI_RUN_ROOT="$RUN" \
     OPI_STATE_DIR="$STATEDIR" OPI_WAIT_TICKS=5 \
-    OPI_AUTOSTART_FILE="$AUTOSTART" OPI_FONT_DIR="$FONTDIR" PATH="$BIN:$PATH" "$@"; }
+    OPI_AUTOSTART_FILE="$AUTOSTART" PATH="$BIN:$PATH" "$@"; }
 rm -f "$TMP/runuser.argv"; : > "$STATEDIR/opi-install.state"
 SUDO_USER="$ME" migrate sh "$POST" configure 1.15.1 > "$TMP/migrate.out" 2>&1
 check "旧版升级迁移 exit 0" [ "$?" -eq 0 ]

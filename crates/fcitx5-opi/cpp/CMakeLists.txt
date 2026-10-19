@@ -399,6 +399,12 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../data/inputmethod/opi.conf"
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../../docs/opi-pet.svg"
               DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps")
 
+# 菜单/桌面入口另装一份**纸白底**应用图标（2026-10-20 用户裁决）：同一只小欧 +
+# 底色，几何仍来自 docs/opi-pet.svg（生成物 docs/opi-pet-app.svg，--check 对账）。
+# 上面那份保持透明：输入法列表图标是服务图标；.desktop 按绝对路径引用本文件。
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../../docs/opi-pet-app.svg"
+              DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps")
+
 # 皮肤（候选面板主题）：classicui 从 StandardPath::Type::PkgData + "themes/" 找，
 # 即 <prefix>/share/fcitx5/themes/<目录名>（本机实装位置 —— /usr/share/fcitx5/
 # themes/{default,default-dark,deepin-light,deepin-dark} —— 就是这么装的）。

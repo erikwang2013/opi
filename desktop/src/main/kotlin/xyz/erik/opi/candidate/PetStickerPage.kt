@@ -7,9 +7,8 @@
 //! 所以这里走**剪贴板回退**：点一格 = 把 `shared/pet/stickers-gif/<mood>.gif` 的原始
 //! 字节优先放进系统剪贴板（GIF 通道），同时保留 PNG 的 [BufferedImage] 兜底；粘贴方
 //! 不支持 GIF 时仍能拿到 PNG。窗内提示「可 Ctrl+V 粘贴」。
-//! 默认**绝不**走 `opi-ctl insert` 文本通道（那是文字上屏，粘不出图）；唯一例外是
-//! 用户显式打开 PUA 开关（[OpSettings.puaEmoji]）—— 那时上屏的本来就是字体字符，
-//! 不是图（见 [pickPetSticker]）。
+//! **绝不**走 `opi-ctl insert` 文本通道（那是文字上屏，粘不出图）；2026-10-20 用户
+//! 裁决后也不再有任何字体字符通道 —— 图片剪贴板是唯一出口。
 //!
 //! 面板里**播真 GIF**（2026-10-19 用户裁决）：Compose 的 Image 不播 GIF，用 [GifFrames]
 //! （ImageIO 解析帧与 delay）按时间取帧；GIF 缺失/坏图的那格退回 PNG + 共享相位动效。
@@ -38,7 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import xyz.erik.opi.pet.PetFontResources
+import xyz.erik.opi.pet.PetEmojiResources
 import xyz.erik.opi.pet.petMotion
 import xyz.erik.opi.pet.rememberPetMotionPhase
 import androidx.compose.ui.Alignment
@@ -51,7 +50,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import xyz.erik.opi.pet.PetEmojiFont
 import xyz.erik.opi.pet.PetEmojiMap
 import xyz.erik.opi.pet.PetMood
 import xyz.erik.opi.pet.PetStickerAssets
@@ -111,25 +109,6 @@ val SystemImageClipboard = ImageClipboard { image, gif ->
     }
 }
 
-/** PUA 字符的文本出口。测试注入假实现；生产用 [SystemTextClipboard]。 */
-fun interface TextClipboard {
-    /** 返回 false = 系统剪贴板不可用（headless / 被别的进程占住）。 */
-    fun copy(text: String): Boolean
-}
-
-/** AWT 系统剪贴板：纯文本（Windows 上没有 TSF 插入面时的唯一通道）。 */
-val SystemTextClipboard = TextClipboard { text ->
-    try {
-        java.awt.Toolkit.getDefaultToolkit().systemClipboard
-            .setContents(java.awt.datatransfer.StringSelection(text), null)
-        true
-    } catch (e: IllegalStateException) {
-        false
-    } catch (e: java.awt.HeadlessException) {
-        false
-    }
-}
-
 /** 从 classpath 读 `/pet/<file>.png`；缺文件 / 解不出 → null（页面显示缺图占位）。 */
 internal fun loadPetSticker(file: String): BufferedImage? =
     PetStickerAssets::class.java.getResourceAsStream("/pet/$file")?.use { ImageIO.read(it) }
@@ -164,62 +143,13 @@ internal fun copyPetSticker(
 }
 
 /**
- * PUA 文本的出口（纯函数，平台由 [windows] 定）：Linux 走 [commit]（生产 =
- * [desktopSymbolCommit] → `opi-ctl insert`）；Windows 没有 TSF 插入面 ⇒ 复制字符到
- * 剪贴板并提示粘贴。返回给用户看的提示 + 成败。
- */
-internal fun puaStickerResult(
-    label: String,
-    pua: String,
-    windows: Boolean,
-    commit: (String) -> String?,
-    clipboard: TextClipboard,
-): StickerCopyResult {
-    if (windows) {
-        return if (clipboard.copy(pua)) {
-            StickerCopyResult("「$label」字体字符已复制，可 Ctrl+V 粘贴", true)
-        } else {
-            StickerCopyResult("复制失败：系统剪贴板不可用", false)
-        }
-    }
-    return commit(pua)?.let { StickerCopyResult(it, false) }
-        ?: StickerCopyResult("「$label」字体字符已上屏", true)
-}
-
-/**
- * 自有格的点击语义（[SymbolsPage.kt] 的唯一出口）：[OpSettings.puaEmoji] 开**且**
- * 能从 `map.tsv` 解析出码位 ⇒ PUA 文本；否则走既有图片剪贴板。表缺失时回退图片
- * 通道 —— 一个坏资产不该让开关变成「点了没反应」。
- */
-internal fun pickPetSticker(
-    form: PetEmojiMap.Form,
-    settings: () -> OpSettings = ::loadSettings,
-    puaOf: (PetMood) -> String? = { mood ->
-        PetFontResources.map()?.let { PetEmojiFont.puaFor(it, mood) }
-    },
-    windows: Boolean = isWindows(),
-    commit: (String) -> String? = ::desktopSymbolCommit,
-    textClipboard: TextClipboard = SystemTextClipboard,
-    clipboard: ImageClipboard = SystemImageClipboard,
-    load: (String) -> BufferedImage? = ::loadPetSticker,
-    loadGif: (String) -> ByteArray? = ::loadPetStickerGif,
-): StickerCopyResult {
-    val pua = if (settings().puaEmoji) puaOf(form.mood) else null
-    return if (pua != null) {
-        puaStickerResult(form.label, pua, windows, commit, textClipboard)
-    } else {
-        copyPetSticker(form, clipboard, load, loadGif)
-    }
-}
-
-/**
  * 自有子页的本地搜索（12 个形态的标签/内置短码子串；与颜文字搜索同一条「数据在
  * 进程里」的路）。短码来自 classpath 的 `pet-font/shortcodes.tsv`。
  */
 internal fun petStickerSearch(query: String): List<PetEmojiMap.Form> {
     val q = query.trim()
     if (q.isEmpty()) return PetEmojiMap.forms
-    val byShortcode = PetFontResources.shortcodes()
+    val byShortcode = PetEmojiResources.shortcodes()
         ?.filter { it.shortcode.contains(q, ignoreCase = true) }
         ?.map { it.file }
         ?.toSet()
@@ -258,7 +188,7 @@ internal fun PetStickerPage(
         }
     }
     // 内置 map.tsv 是形态标签的真源；读不到才用 PetEmojiMap 的标签。
-    val labels = remember { PetFontResources.map()?.associate { it.mood to it.label }.orEmpty() }
+    val labels = remember { PetEmojiResources.map()?.associate { it.mood to it.label }.orEmpty() }
     val phase = rememberPetMotionPhase()
     // GIF 的公共时钟：50ms 一拍（GIF 本身 90ms/帧），按真实时间取帧才不会越播越慢。
     // 全是单帧/解码失败时不起时钟，省掉整页空转重排。

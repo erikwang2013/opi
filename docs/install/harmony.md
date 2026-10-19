@@ -78,7 +78,7 @@ harmony/                          # 工程根（hvigorw 在这个目录里跑）
 ├── oh-package.json5
 ├── hvigor/hvigor-config.json5
 ├── AppScope/
-│   ├── app.json5                 # bundleName xyz.erik.opi, versionName 1.16.1
+│   ├── app.json5                 # bundleName xyz.erik.opi, versionName 1.17.0
 │   └── resources/base/{element/string.json, media/app_icon.png}
 └── entry/
     ├── build-profile.json5       # externalNativeOptions → src/main/cpp/CMakeLists.txt, abiFilters arm64-v8a
@@ -124,12 +124,14 @@ cd harmony
 （随源码变化，不是契约；release 的 `module.json` 里 `debug:false` / `buildMode:"release"`）；
 `unzip -l` 内容（release 13 项；debug 多一个 `ets/sourceMaps.map`）：
 
+> **2026-10-20 订正**：表情字体方案已删除（`pet-font/` 三份副本与 `PetEmojiFont.ets`），
+> 下表按当时实测保留；删除后 release 预期 12 项，**未重新打包实测**。
+
 ```
 module.json
 resources.index
 libs/arm64-v8a/libopiime.so        # N-API 桥 + Rust 静态库，aarch64，已 strip
 libs/arm64-v8a/libc++_shared.so
-resources/rawfile/pet-font/{shortcodes.tsv,opi-emoji.ttf,map.tsv}
 resources/base/profile/{input_method_config.json,main_pages.json}
 resources/base/media/{app_icon.png,icon.png}
 ets/modules.abc

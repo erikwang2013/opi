@@ -126,6 +126,10 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
     var selected by remember { mutableStateOf(if (initialEmoji) TAB_EMOJI else 0) }
     // 表情页子页（自有 / Emoji / 颜文字）：与 Android 的 `EmojiSubTab` 同名同义。
     var emojiSub by remember { mutableStateOf(EmojiSubTab.Emoji) }
+    // 「自有」是否出现在顶栏（2026-10-20，缺省隐藏）：开窗读一次；设置窗保存后
+    // 重开表情窗才生效（与「开窗读一次资产」同一条，不做在线热更）。
+    val showOwn = remember { loadSettings().showOwn }
+    val emojiTabs = remember(showOwn) { emojiSubTabs(showOwn) }
     // 提示行同时服务两种语义：文本上屏失败（红）与自有表情复制成功（强调色）。
     var notice by remember { mutableStateOf<String?>(null) }
     var noticeIsError by remember { mutableStateOf(false) }
@@ -207,6 +211,7 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
                 // 桌面窗无系统标题栏 ⇒ 最右保留 ✕（本窗自己的页级关闭入口）。
                 EmojiTopBar(
                     sub = emojiSub,
+                    tabs = emojiTabs,
                     onSub = { emojiSub = it },
                     onBack = {
                         // 返回 = 回符号页（本窗的另一页）；同时退出搜索态 ——
@@ -272,8 +277,7 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
                         }
                     }
                 }
-                // 自有格的出口由 [pickPetSticker] 分流：默认图片剪贴板（桌面没有 TSF/
-                // 管道图片插入面）；PUA 开关打开时改上屏字体字符（见 PetStickerPage.kt）。
+                // 自有格的唯一出口 = 图片剪贴板（桌面没有 TSF/管道图片插入面）。
                 // 同 pick 的纪律：先交还键盘焦点（用户接着要 Ctrl+V，目标得拿到焦点）。
                 fun copySticker(form: PetEmojiMap.Form) {
                     focus.clearFocus()
@@ -282,7 +286,7 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
                         while (window.isFocused && waited < 300) { delay(20); waited += 20 }
                         // 读 PNG/配置 + 写系统剪贴板都可能阻塞：挪出组合线程（同 onCommit 那条）。
                         val r = withContext(Dispatchers.IO) {
-                            pickLock.withLock { pickPetSticker(form, commit = onCommit) }
+                            pickLock.withLock { copyPetSticker(form, SystemImageClipboard) }
                         }
                         noticeIsError = !r.ok
                         notice = r.notice

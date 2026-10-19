@@ -70,6 +70,9 @@ final class EmojiPanel: UIView {
     /// 表情页的三个子页（2026-10-18 用户裁决：自有是独立顶级分类）。
     private enum SubTab { case pet, emoji, kaomoji }
 
+    /// 「自有」是否显示：iOS 无设置页，缺省隐藏（Android/桌面有开关）；要显示改这里并重编。
+    private static let showOwn = false
+
     // MARK: - 视图
 
     private let topBar = UIStackView()
@@ -115,7 +118,7 @@ final class EmojiPanel: UIView {
     private var emojiSet: Set<String> = []
     /// 引擎分类（**已按过滤后下标重算**，尚未加 `自有` 的偏移）。
     private var emojiGroups: [OpiEmojiGroup] = []
-    /// 当前分类条（Emoji = `自有` + 引擎组；颜文字 = 数据分类）。
+    /// 当前分类条（Emoji = 引擎组；自有页无分类条；颜文字 = 数据分类）。
     private var groups: [OpiEmojiGroup] = []
     /// 分类条按钮（与 `groups` 同序；滚动时就地换样式，不重建）。
     private var groupButtons: [BarButton] = []
@@ -135,7 +138,7 @@ final class EmojiPanel: UIView {
         tabs.spacing = 2
         tabs.distribution = .fillEqually
         tabs.translatesAutoresizingMaskIntoConstraints = false
-        tabs.addArrangedSubview(petTab)
+        if Self.showOwn { tabs.addArrangedSubview(petTab) }
         tabs.addArrangedSubview(emojiTab)
         tabs.addArrangedSubview(kaomojiTab)
 

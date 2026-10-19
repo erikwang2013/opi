@@ -197,7 +197,6 @@ sudo cmake --install build-fcitx5
 | `/usr/share/opi/kangxi.tsv` | 康熙字典词库（2026-10-16 起；MIT；**首次配置生效时种进词库目录一次**，之后走 DisabledDicts 那套导入契约）。2026-10-18 起缺的 (字,读音) 也已并入 `luna.opid`/`trad.opid`（删导入词库后仍可打） | `Type::Data + "opi/kangxi.tsv"`（首启种子的源） |
 | `/usr/share/opi/wubi98.opid` | 五笔 98 码表（2026-10-14 起；Unlicense 公共领域） | `Type::Data + "opi/wubi98.opid"` |
 | `/usr/bin/opi-ctl` | 状态栏按钮的 CLI（D-Bus 打到插件，见 §4.8） | 状态栏悬浮条（按名字在 PATH 找） |
-| `/usr/share/fonts/truetype/opi/opi-emoji.ttf` | Opi Emoji PUA 字体（U+E000–E00B，family「Opi Emoji」；2026-10-19 起） | fontconfig / 支持彩色字体的应用（§4.8 的 PUA 开关） |
 | `/etc/xdg/autostart/opi-statusbar.desktop` | 状态栏悬浮条随会话自启（2026-10-10 起） | XDG autostart |
 | `/usr/share/doc/opi/LICENSE` + `LICENSES.md` | 许可证文本 | 人（授权要求，见 §6） |
 
@@ -271,9 +270,6 @@ sudo apt-get -f install                        # Debian 系缺依赖时补
   `sudo OPI_NO_RESTART_FCITX5=1 dpkg -i dist/opi_<版本>_<架构>.deb`
   （apt 同理：`sudo OPI_NO_RESTART_FCITX5=1 apt-get install ./dist/opi_<版本>_<架构>.deb`）。
   ⚠️ 热重启会打断**正在进行的输入**（候选/预编辑状态丢失），但输入法本身随即恢复。
-- **装/升级成功后**（postinst，字体缓存）：Opi Emoji 字体由 nfpm 装到
-  `/usr/share/fonts/truetype/opi/opi-emoji.ttf`，postinst 对该目录跑
-  `fc-cache -f`；没有 `fc-cache` 或刷新失败只记日志，不阻断安装。
 - **装/升级成功后**（postinst，应用进程）：按记录**以桌面用户**
   （`runuser -u $SUDO_USER`）把 `opi-candidates` 按原参数拉回来。**从旧包升级且记录
   为空**时（旧 prerm 已先杀进程），按 `/etc/xdg/autostart/opi-statusbar.desktop` 的
@@ -802,25 +798,17 @@ Linux 上 = `--settings` 的设置窗（无参数启动也是它）。**v1.6.0 �
   短语）。⚠️ 类目名不再自带序号（面板层才加「1.」）。
   - **表情页**（2026-10-18 起布局与 Android `keyboard/EmojiPanel.kt` 统一；入口仍是
     右竖条首项「表情」，或设置窗「符号与表情」页的「表情」按钮 —— 后者开窗即落这一页）。
-    顶栏 `[← 返回] [自有 | Emoji | 颜文字] [搜索框]`（返回 = 回符号页并清搜索），内容区网格
+    顶栏 `[← 返回] [子页…] [搜索框]`（返回 = 回符号页并清搜索），内容区网格
     （`EmojiPage.kt` 的 `EmojiTopBar` / `EmojiPane`）。
-    - **自有（独立顶级子页）**：4 列网格画 `shared/pet/stickers/` 的 12 张小欧 PNG
-      （构建期拷进 resources `/pet/`，`copyPetStickers`）。桌面宿主不能往客户端输入框
-      插图片：点击 = **复制 GIF（优先）/ PNG（兜底）到系统剪贴板** + 窗内提示「小欧表情已复制，
-      可 Ctrl+V 粘贴」（`PetStickerPage.kt`），**不走 `opi-ctl insert` 文本通道**。
-      自有页没有分类条、没有搜索，也不进 Emoji 的最近使用。
-    - **PUA 字体字符（可选，2026-10-19）**：设置窗「符号与表情」→「自有表情用字体
-      字符（PUA）」默认**关**；打开后点小欧表情改走 `opi-ctl insert` 上屏 PUA 字符
-      （U+E000–U+E00B，映射见 `shared/pet/emoji-font/map.tsv`），不再复制图片。
-      Linux 包把 `opi-emoji.ttf` 装进 `/usr/share/fonts/truetype/opi/` 并在 postinst
-      跑 `fc-cache -f`；支持 fontconfig 回退的应用才能把 PUA 画成彩色小欧。字体缺失
-      或应用不认 SVG/CBDT 色表时显示方框/单色 —— 这是开关默认关的原因。手动刷新：
-      `fc-cache -f /usr/share/fonts/truetype/opi`，仍不生效则重新登录。
-      **平台限制**：Android 的字体只在 APK 内（`assets/pet-font/`），不会成为系统
-      字体，别家应用收到 PUA 仍按自己的字体显示；Windows 的 MSI 在完成页以登录用户
-      把字体复制到 `%LOCALAPPDATA%\Microsoft\Windows\Fonts` 并写 HKCU（静默安装不执行；
-      Win10 DirectWrite 对 CBDT/SVG 色表的渲染未验证，详见 windows.md §2.6）。
-      两端的默认路径仍是图片/可区分文本标签，不依赖字体。
+    - **自有（独立顶级子页，2026-10-20 起默认隐藏）**：设置窗「常规」→
+      「表情中显示自有」缺省**关**；关闭时顶栏只有 Emoji / 颜文字。打开后出现 4 列
+      网格，画 `shared/pet/stickers/` 的 12 张小欧 PNG（构建期拷进 resources `/pet/`，
+      `copyPetStickers`）。桌面宿主不能往客户端输入框插图片：点击 = **复制 GIF（优先）/
+      PNG（兜底）到系统剪贴板** + 窗内提示「小欧表情已复制，可 Ctrl+V 粘贴」
+      （`PetStickerPage.kt`），**不走 `opi-ctl insert` 文本通道**。自有页没有分类条、
+      没有搜索，也不进 Emoji 的最近使用。
+    - PUA 字体字符通道与 `opi-emoji.ttf` 已于 2026-10-20 删除；`map.tsv` 的
+      U+E000–E00B 只作为 12 个形态的稳定内部 ID 保留，不上屏。
     - **Emoji 子页**：分类条 = 引擎 OpenMoji 常用分组（**9 组**，旗帜/组件/肤色变体与
       ZWJ 组合已排除；筛选规则见 `scripts/gen_emoji_kaomoji.py`），**不再含「自有」**。
       分类条点一下滚到该组首项所在页，高亮随当前页首项所属组自动跟随

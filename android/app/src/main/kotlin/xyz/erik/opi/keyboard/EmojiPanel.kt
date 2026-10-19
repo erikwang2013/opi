@@ -41,6 +41,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -52,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import xyz.erik.opi.pet.PetMood
+import xyz.erik.opi.settings.ImePreferences
 
 /**
  * 表情页（工具条「表情」入口）。布局按用户参考图：
@@ -88,6 +90,10 @@ internal fun EmojiPanel(
     onPickPet: (PetMood) -> Unit,
     onClose: () -> Unit,
 ) {
+    // 「自有」是否出现由设置页开关决定（缺省隐藏）；面板打开时读一次即可。
+    val context = LocalContext.current
+    val showOwn = remember { ImePreferences.from(context).showOwn }
+    val tabs = remember(showOwn) { emojiSubTabs(showOwn) }
     var sub by remember { mutableStateOf(EmojiSubTab.Emoji) }
     // 本地点 🔍 的意图（渲染哪一套工具条）；真焦点仍由 onSearchFocus 上报（叠盘靠它）。
     var searchWanted by remember { mutableStateOf(false) }
@@ -115,6 +121,7 @@ internal fun EmojiPanel(
     Column(modifier = Modifier.fillMaxSize()) {
         EmojiTopBar(
             sub = sub,
+            tabs = tabs,
             onSub = { sub = it },
             searching = searching,
             searchText = searchText,
@@ -177,6 +184,7 @@ internal fun EmojiPanel(
 @Composable
 private fun EmojiTopBar(
     sub: EmojiSubTab,
+    tabs: List<EmojiSubTab>,
     onSub: (EmojiSubTab) -> Unit,
     searching: Boolean,
     searchText: String,
@@ -223,7 +231,7 @@ private fun EmojiTopBar(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                for (t in EmojiSubTab.entries) {
+                for (t in tabs) {
                     val on = t == sub
                     Text(
                         text = t.label,

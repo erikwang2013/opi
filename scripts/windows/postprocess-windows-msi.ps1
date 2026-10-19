@@ -145,7 +145,9 @@ try {
     $exe = $product + '.exe'
     $dirDefault = Get-MsiScalar $db ('SELECT `DefaultDir` FROM `Directory` WHERE `Directory`=' + (Sql-Quote 'INSTALLDIR'))
     if (-not $dirDefault) { throw 'Directory table has no INSTALLDIR row' }
-    if ($dirDefault -notmatch '(\||^)opi-candidates$' -and $dirDefault -ne 'opi') {
+    # 2026-10-20: Windows packageName is now `opi`, so jpackage's raw value is
+    # `opi` or `short|opi`; `opi-candidates` is no longer accepted.
+    if ($dirDefault -notmatch '(\||^)opi$' -and $dirDefault -ne 'opi') {
         throw "unexpected INSTALLDIR DefaultDir: $dirDefault"
     }
 
@@ -180,8 +182,6 @@ try {
     $fileKey = $exeKeys[0]
     $dllKeys = @(Get-FileKey $fileRows 'tsf_opi.dll')
     $scriptKeys = @(Get-FileKey $fileRows 'launch-and-restart.cmd')
-    $fontKeys = @(Get-FileKey $fileRows 'opi-emoji.ttf')
-    $fontScriptKeys = @(Get-FileKey $fileRows 'install-emoji-font.ps1')
     if ($dllKeys.Count -gt 1) { throw 'tsf_opi.dll has multiple File rows' }
     if ($scriptKeys.Count -gt 1) { throw 'launch-and-restart.cmd has multiple File rows' }
 
@@ -190,8 +190,6 @@ try {
     else { Write-Host 'WARNING: tsf_opi.dll is absent; install will not register TSF' }
     if ($scriptKeys.Count -eq 1) { Write-Host 'Finish launcher script is present' }
     else { Write-Host 'WARNING: launch-and-restart.cmd is absent; Finish only starts the app' }
-    if ($fontKeys.Count -ne 1) { Write-Host 'WARNING: opi-emoji.ttf is absent; per-user font install will be skipped' }
-    if ($fontScriptKeys.Count -ne 1) { Write-Host 'WARNING: install-emoji-font.ps1 is absent; font install will fail harmlessly' }
 
     # ---------- baseline slots / WixCA ----------
     if (-not (Get-MsiScalar $db ('SELECT `Name` FROM `Binary` WHERE `Name`=' + (Sql-Quote 'WixCA')))) {

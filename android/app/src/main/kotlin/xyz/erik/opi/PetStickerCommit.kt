@@ -16,11 +16,8 @@ import androidx.core.view.inputmethod.InputConnectionCompat
 import androidx.core.view.inputmethod.InputContentInfoCompat
 import xyz.erik.opi.ime.PendingCommit
 import xyz.erik.opi.keyboard.PetEmoji
-import xyz.erik.opi.pet.PetFontAssets
-import xyz.erik.opi.pet.PetEmojiFont
 import xyz.erik.opi.pet.PetMood
 import xyz.erik.opi.pet.PetStickerAssets
-import xyz.erik.opi.settings.ImePreferences
 import java.io.File
 import java.io.IOException
 
@@ -28,7 +25,6 @@ private const val TAG = "OpiPetSticker"
 
 /**
  * 「自有」宠物形态 = **插入图片**，不提交任何 Unicode 文本（2026-10-18 用户裁决）。
- * 例外：用户显式打开 PUA 开关时上屏字体字符（2026-10-19，见 [commitPetStickerTo]）。
  *
  * 图片走 `InputConnection.commitContent`，格式优先级（2026-10-19）：**GIF → PNG →
  * 文本标签**。图片通道被宿主拒绝时上屏 `[小欧·笑]` 这样的独立标签，**不再退回
@@ -54,17 +50,6 @@ internal fun OpiImeService.commitPetSticker(mood: PetMood) {
 }
 
 private fun OpiImeService.commitPetStickerTo(ic: InputConnection, mood: PetMood) {
-    // PUA 开关（2026-10-19，缺省关）：上屏 map.tsv 的字体字符。表缺失时回退图片通道 ——
-    // 一个坏资产不该让开关变成「点了没反应」。
-    if (ImePreferences.from(this).puaEmoji) {
-        val pua = PetFontAssets.preload(assets)?.let { PetEmojiFont.puaFor(it, mood) }
-        if (pua != null) {
-            dropComposing(ic)
-            ic.commitText(pua, 1)
-            return
-        }
-        Log.w(TAG, "PUA 已开但 map.tsv 不可用，回退图片通道: ${mood.name}")
-    }
     // 优先动图（2026-10-19），编辑器不收 GIF 再退回 PNG，最后才是文本标签。
     val gif = petStickerFile(PetEmoji.gifAssetPath(mood), PetStickerAssets.gifFile(mood))
     val png = petStickerFile(PetEmoji.assetPath(mood), PetStickerAssets.stickerFile(mood))

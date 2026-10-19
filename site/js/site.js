@@ -14,6 +14,7 @@
 
   const header = $('.site-header');
   const progress = $('.scroll-progress span');
+  const toTop = $('.back-to-top');
   const sections = $$('main > section[id]');
   const navLinks = $$('.site-nav a[href^="#"]');
   const dots = $$('.section-dots a');
@@ -48,6 +49,7 @@
     const max = Math.max(1, doc.scrollHeight - window.innerHeight);
     if (progress) progress.style.transform = `scaleX(${Math.min(1, y / max)})`;
     if (header) header.classList.toggle('is-scrolled', y > 12);
+    if (toTop) toTop.classList.toggle('is-visible', y > window.innerHeight * 0.8);
 
     if (!offsets.length) measure();
     const probe = y + window.innerHeight * 0.38;
@@ -63,6 +65,10 @@
     scheduled = true;
     window.requestAnimationFrame(update);
   };
+
+  toTop?.addEventListener('click', () => {
+    window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+  });
 
   window.addEventListener('scroll', requestUpdate, { passive: true });
   window.addEventListener('resize', () => { measure(); requestUpdate(); }, { passive: true });

@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 erik.xyz
 # SPDX-License-Identifier: MIT
-"""宠物「小欧」**小图标**产物生成器。
+"""宠物「小欧」图标产物生成器。
 
-覆盖全部「几何必须是 R4 而不是全图」的图标位（各端一处，理由都是尺度）：
+覆盖全部图标位：
 
   1. Android 旧版启动图标（API 21–25 的 mipmap-*/ic_launcher.png，方/圆各 5 桶）
      + API 26+ 的圆形自适应 XML（`mipmap-anydpi-v26/ic_launcher_round.xml`）
-  2. 鸿蒙：`harmony/entry/src/main/resources/base/media/icon.png`（512²，输入法子类型图标 ——
-     `input_method_config.json` 三个 subtype 的 `$media:icon` 指向它）
-  3. macOS：`macos/opi.tiff`（32×32 @144dpi = 16pt@2x，`Info.plist` 的
+  2. 鸿蒙应用图标 `harmony/AppScope/resources/base/media/app_icon.png`（`app.json5`
+     的 `$media:app_icon`）与输入法子类型图标
+     `harmony/entry/src/main/resources/base/media/icon.png`（512²，`input_method_config.json`
+     三个 subtype 的 `$media:icon` 指向它）
+  3. 桌面应用图标 `desktop/icons/opi-pet.png`（256²）与 `opi-pet.ico`
+     （16/32/48/64/128/256）—— Windows EXE/MSI、Linux jpackage、macOS .app、
+     iOS 宿主 App（`scripts/apple/package-ios.sh` 用 sips 从 PNG 缩）
+  4. Linux 菜单/桌面入口的矢量图标 `docs/opi-pet-app.svg`（hicolor scalable）
+  5. macOS：`macos/opi.tiff`（32×32 @144dpi = 16pt@2x，`Info.plist` 的
      `tsInputMethodIconFileKey` 指向它）
-  4. Windows：`crates/tsf-opi/assets/opi-langbar.ico`（16+32）—— 由
+  6. Windows：`crates/tsf-opi/assets/opi-langbar.ico`（16+32）—— 由
      `crates/tsf-opi/src/langbar_icon.rs` 以 `include_bytes!` 嵌进 DLL，
      运行期造 HICON 给语言栏按钮（见该文件头注释的两条格式约定）
 
@@ -20,13 +26,22 @@
 默认图标**，注释却写着「两者同为键帽精灵形象」，一直没人看得见）。所以生成逻辑进仓库，
 并带 `--check` 让「漂了」变成一条会红的命令。
 
-**几何来源**：只读 R4（`android/.../drawable/ic_launcher_foreground.xml`），
-把它**机械转成 SVG**（`android:pathData` 本就是 SVG path 语法；`android:viewportWidth/
-Height` 定 viewBox），**不新写几何、不改 R4**。
-**四端一律不铺底色**（2026-10-09 用户裁决「应用图标就不要加绿色背景，直接放 logo」）：
-Android 那套此前铺过 R6 的纯色（#2E8B80），已撤 —— 自适应背景层改透明、旧版位图
-改透明底；macOS 的输入源图标走模板渲染（只看 alpha，加底色 = 一块实心方块）、
-鸿蒙那条是子类型图标（列表里一枚小徽标）、Windows 语言栏同理，本来就无底色。
+**几何来源**：
+  · Android 位图、鸿蒙两张、macOS/Windows 模板只读 R4
+    （`android/.../drawable/ic_launcher_foreground.xml`），把它**机械转成 SVG**
+    （`android:pathData` 本就是 SVG path 语法；`android:viewportWidth/Height` 定
+    viewBox），**不新写几何、不改 R4**。
+  · 桌面 PNG/ICO 与 Linux 菜单矢量从完整设计稿 `docs/opi-pet.svg` 取景：只加一层
+    纸白背景矩形、把 viewBox 改成方形 `-5 0 250 250`，宠物几何一个数不改。
+
+**底色**（2026-10-20 用户裁决「所有端安装后默认的图标底色是浅色，不要黑色」）：
+**应用/启动图标一律铺项目纸白 `PET_PAPER`（#FBFAF6）**。2026-10-09 的「应用图标
+就不要加绿色背景，直接放 logo」被本条取代（透明底在深色启动器/任务栏上会读成黑
+底）。**两个模板/服务图标仍必须透明**，铺底会坏：
+  · `macos/opi.tiff` —— InputMethodKit 输入源图标按模板渲染，只看 alpha；
+  · `crates/tsf-opi/assets/opi-langbar.ico` —— 语言栏按钮直接贴 HICON。
+fcitx5 的输入法图标 `docs/opi-pet.svg` 也保持透明（服务图标）；菜单/桌面入口改用
+本脚本生成的 `docs/opi-pet-app.svg`（同一只小欧 + 纸白底）。
 
 **可见区**：自适应图标渲染时把 108×108 画布裁到正中 72×72 再放大到图标尺寸，所以
 Android 旧版位图要铺满的正是那 72×72。**其余三端再裁一步**：R4 的 72 窗口自带约 15%
@@ -40,7 +55,7 @@ Android 旧版位图要铺满的正是那 72×72。**其余三端再裁一步**�
 1.87（对照数，不是本脚本的行为）。详见 R4 的注释。
 
 用法：
-    python3 scripts/gen_pet_icons.py            # 重出全部产物（14 个）
+    python3 scripts/gen_pet_icons.py            # 重出全部产物（18 个）
     python3 scripts/gen_pet_icons.py --check    # 只比对，不写；不一致则退出码 1
 """
 # ponytail: 依赖 rsvg-convert + PIL，与本仓既有 gen_*.py 同档（都是本机脚本，不是 CI 依赖）
@@ -59,8 +74,17 @@ RES = ROOT / "android/app/src/main/res"
 FOREGROUND = RES / "drawable/ic_launcher_foreground.xml"
 AND = "{http://schemas.android.com/apk/res/android}"
 HARMONY_ICON = ROOT / "harmony/entry/src/main/resources/base/media/icon.png"
+HARMONY_APP_ICON = ROOT / "harmony/AppScope/resources/base/media/app_icon.png"
+DOCS_PET = ROOT / "docs/opi-pet.svg"
+APP_SVG = ROOT / "docs/opi-pet-app.svg"
+DESKTOP_PNG = ROOT / "desktop/icons/opi-pet.png"
+DESKTOP_ICO = ROOT / "desktop/icons/opi-pet.ico"
 MACOS_TIFF = ROOT / "macos/opi.tiff"
 TSF_ICO = ROOT / "crates/tsf-opi/assets/opi-langbar.ico"
+
+# 应用图标底色 = 项目宣纸白（docs/opi-pet.svg 的 ground）。
+PET_PAPER = "#FBFAF6"
+PET_PAPER_RGBA = tuple(int(PET_PAPER[i:i + 2], 16) for i in (1, 3, 5)) + (255,)
 
 # 密度桶 → 边长（px）。安卓约定的 48dp 基准 × 各桶倍率。
 BUCKETS = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
@@ -92,10 +116,11 @@ def adaptive_xml() -> str:
     return f"""<?xml version="1.0" encoding="utf-8"?>
 <!--
   项目宠物「小欧」自适应启动图标（API 26+）的**圆形**孪生，供 manifest 的
-  android:roundIcon 使用 —— 图形与 ic_launcher.xml 完全相同（同一前景 + 透明背景），
+  android:roundIcon 使用 —— 图形与 ic_launcher.xml 完全相同（同一前景 + 纸白背景），
   圆形由系统遮罩给出，所以这里**不需要**任何几何改动。
-  **背景层是透明的**（2026-10-09 用户裁决「不要背景，直接放 logo」）—— 不出这个
-  决定之前它是 R6 的纯色；`@android:color/transparent` 是平台资源，没有生成期输入。
+  **背景层是纸白 `@color/ic_launcher_background`**（#FBFAF6；2026-10-20 用户裁决
+  「所有端安装后默认的图标底色是浅色，不要黑色」—— 取代 2026-10-09 的透明底裁决；
+  透明底在深色启动器上读成黑底）。
   这是**生成物**：改 R4 前景后跑 `python3 scripts/gen_pet_icons.py` 重出。
 
   API 25（roundIcon 正是这一版引入的）用不了自适应图标，落回
@@ -103,7 +128,7 @@ def adaptive_xml() -> str:
   API 24 及以下不读 roundIcon，走 android:icon 的方形那套。
 -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@android:color/transparent"/>
+    <background android:drawable="@color/ic_launcher_background"/>
     <foreground android:drawable="@drawable/{FOREGROUND.stem}"/>
 </adaptive-icon>
 """
@@ -111,7 +136,10 @@ def adaptive_xml() -> str:
 
 def foreground_svg(size: int, mask_radius: float | None = None, crop: bool = True,
                    plate: bool = True) -> str:
-    """R4 → SVG。属性名映射而已，坐标一个数不改。`plate=False` = 不铺底色矩形。"""
+    """R4 → SVG。属性名映射而已，坐标一个数不改。
+
+    `plate=True` 铺一层纸白矩形（应用图标）；模板/服务图标传 `False` 保持透明。
+    """
     root = ET.parse(FOREGROUND).getroot()
     if not root.tag.endswith("vector"):
         raise SystemExit(f"{FOREGROUND} 不是 <vector>（{root.tag}）")
@@ -132,8 +160,9 @@ def foreground_svg(size: int, mask_radius: float | None = None, crop: bool = Tru
         clip,
     ]
     if plate:
-        # 自适应图标那层纯色 background：旧版位图里得自己铺满（PNG 没有 background 层）
-        out.append(f'  <rect x="0" y="0" width="{vw}" height="{vh}" fill="{background_color()}"/>\n')
+        # 自适应图标那层纯色 background：旧版位图里得自己铺满（PNG 没有 background 层）。
+        # 圆形的矩形四角随后被 clipPath 裁掉，圆外仍是透明。
+        out.append(f'  <rect x="0" y="0" width="{vw}" height="{vh}" fill="{PET_PAPER}"/>\n')
 
     def emit(node, depth: int) -> None:
         pad = "  " * depth
@@ -187,16 +216,48 @@ def foreground_svg(size: int, mask_radius: float | None = None, crop: bool = Tru
     return "".join(out) + "</svg>\n"
 
 
-def raster(size: int, mask_radius: float | None = None, plate: bool = True) -> Image.Image:
-    """栅格化。rsvg-convert 由矢量直出（不靠放大位图），返回 RGBA 图。"""
+def raster_svg(svg_text: str, size: int) -> Image.Image:
+    """栅格化一段 SVG。rsvg-convert 由矢量直出（不靠放大位图），返回 RGBA 图。"""
     with tempfile.TemporaryDirectory() as td:
         svg, png = Path(td) / "i.svg", Path(td) / "i.png"
-        svg.write_text(foreground_svg(size, mask_radius, plate=plate), encoding="utf-8")
+        svg.write_text(svg_text, encoding="utf-8")
         subprocess.run(
             ["rsvg-convert", "-w", str(size), "-h", str(size), str(svg), "-o", str(png)],
             check=True,
         )
         return Image.open(png).convert("RGBA")
+
+
+def raster(size: int, mask_radius: float | None = None, plate: bool = True) -> Image.Image:
+    """R4 栅格化（`plate` 语义见 [foreground_svg]）。"""
+    return raster_svg(foreground_svg(size, mask_radius, plate=plate), size)
+
+
+def app_svg() -> str:
+    """`docs/opi-pet.svg` + 纸白底 + 方形取景（生成物，别手改）。
+
+    只改两处：viewBox 从 240×250 变 `-5 0 250 250`（宠物满高、左右各留 5 单位，
+    与旧桌面 PNG 的取景等价），以及在图形最前面插一层底色矩形。宠物几何一个数不改。
+    """
+    svg = DOCS_PET.read_text(encoding="utf-8")
+    view = 'viewBox="0 0 240 250" width="240" height="250"'
+    anchor = "  <!-- 落地投影 -->"
+    xml_head = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    if svg.count(view) != 1 or svg.count(anchor) != 1 or svg.count(xml_head) != 1:
+        raise SystemExit("docs/opi-pet.svg 的取景/锚点变了 —— 更新 app_svg()")
+    svg = svg.replace(view, 'viewBox="-5 0 250 250" width="250" height="250"', 1)
+    svg = svg.replace(
+        anchor,
+        f'  <!-- 应用图标底色（2026-10-20 用户裁决：浅色，不要黑色） -->\n'
+        f'  <rect x="-5" y="0" width="250" height="250" fill="{PET_PAPER}"/>\n\n' + anchor,
+        1,
+    )
+    return svg.replace(
+        xml_head,
+        xml_head + "<!-- 生成物：python3 scripts/gen_pet_icons.py（源头 docs/opi-pet.svg） "
+                   "—— 别手改 -->\n",
+        1,
+    )
 
 
 def png_bytes(img: Image.Image, mode: str = "RGBA") -> bytes:
@@ -207,14 +268,20 @@ def png_bytes(img: Image.Image, mode: str = "RGBA") -> bytes:
 
 
 def render(size: int, mask_radius: float | None = None) -> bytes:
-    """Android 旧版桶：**不铺底色**、一律带 alpha（2026-10-09 用户裁决「应用图标
-    就不要加绿色背景，直接放 logo」）。方形四个角与圆形圈外全是透明；此前方形
-    是 RGB（底色铺满）、圆形靠 alpha 裁角。"""
-    return png_bytes(raster(size, mask_radius, plate=False), "RGBA")
+    """Android 旧版桶：铺满纸白底（2026-10-20 用户裁决「底色是浅色，不要黑色」）。
+
+    方形版四角也是纸白；圆形版圆外保持透明（系统圆遮罩之外不该有底色，否则
+    方形 PNG 的角会在圆形启动器里露出来）。
+    """
+    return png_bytes(raster(size, mask_radius, plate=True), "RGBA")
 
 
-def square_mark(size: int) -> Image.Image:
-    """R4 艺术 → 裁到内容 bbox → 等比放进带 PAD_RATIO 留白的正方画布（透明底）。"""
+def square_mark(size: int, plate: bool = False) -> Image.Image:
+    """R4 艺术 → 裁到内容 bbox → 等比放进带 PAD_RATIO 留白的正方画布。
+
+    `plate=True` 用于应用图标（纸白底）；默认透明，供 macOS 模板 / Windows
+    语言栏这两个服务图标使用。
+    """
     # 先在 4× 目标尺寸上裁（裁剪 bbox 与缩放都在高分辨率下做，32px 也不糊）。
     img = raster(max(size, 128) * 4, plate=False)
     bbox = img.split()[3].getbbox()  # 以 **alpha** 为准（RGB 通道在透明区无意义）
@@ -224,7 +291,7 @@ def square_mark(size: int) -> Image.Image:
     inner = size * (1 - 2 * PAD_RATIO)
     k = inner / max(img.width, img.height)
     img = img.resize((max(1, round(img.width * k)), max(1, round(img.height * k))), Image.LANCZOS)
-    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    canvas = Image.new("RGBA", (size, size), PET_PAPER_RGBA if plate else (0, 0, 0, 0))
     canvas.alpha_composite(img, ((size - img.width) // 2, (size - img.height) // 2))
     return canvas
 
@@ -297,18 +364,27 @@ def ico_bytes(img: Image.Image, sizes: list[int]) -> bytes:
 
 
 def artifacts() -> list[tuple[Path, bytes]]:
-    """全部生成物：Android（10 PNG + 1 XML）+ 鸿蒙 + macOS + Windows 各一件。"""
+    """全部生成物（18 个）：Android 11 + 鸿蒙 2 + 桌面 3 + macOS/Windows 模板 2。"""
     out = [
         (RES / f"mipmap-{bucket}/{name}.png", render(size, radius))
         for name, radius in VARIANTS.items()
         for bucket, size in BUCKETS.items()
     ]
     out.append((RES / "mipmap-anydpi-v26/ic_launcher_round.xml", adaptive_xml().encode()))
-    # 鸿蒙：512² 子类型/应用图标（透明底，见文件头）。
-    out.append((HARMONY_ICON, png_bytes(square_mark(512))))
-    # macOS：16pt@2x 输入源图标。模板渲染只看 alpha ⇒ 原样带色渲染即可。
+    # 鸿蒙：应用图标与输入法子类型图标同图同底（纸白）。
+    out.append((HARMONY_APP_ICON, png_bytes(square_mark(512, plate=True))))
+    out.append((HARMONY_ICON, png_bytes(square_mark(512, plate=True))))
+    # 桌面：Windows EXE/MSI（ico）、Linux jpackage / macOS .app / iOS 宿主（png）。
+    # PNG 存 RGB（无 alpha）—— iOS 应用图标不接受透明通道。ICO 各档直接从 1042² 缩，
+    # 免得 128 以下先经 256 再缩一遍。
+    desktop = raster_svg(app_svg(), 1042)
+    out.append((DESKTOP_PNG, png_bytes(desktop.resize((256, 256), Image.LANCZOS), "RGB")))
+    out.append((DESKTOP_ICO, ico_bytes(desktop, sizes=[16, 32, 48, 64, 128, 256])))
+    # Linux 菜单/桌面入口的矢量应用图标（hicolor scalable）。
+    out.append((APP_SVG, app_svg().encode()))
+    # macOS：16pt@2x 输入源模板 —— 只按 alpha 着色，必须透明。
     out.append((MACOS_TIFF, tiff_bytes(square_mark(32), dpi=144)))
-    # Windows：语言栏按钮的 HICON 源（16 = SM_CXSMICON，32 = 高 DPI 兜底）。
+    # Windows：语言栏按钮的 HICON 源（16 = SM_CXSMICON，32 = 高 DPI 兜底）—— 必须透明。
     out.append((TSF_ICO, ico_bytes(square_mark(32), sizes=[16, 32])))
     return out
 
@@ -321,7 +397,7 @@ def main() -> int:
         if check:
             old = target.read_bytes() if target.exists() else b""
             if old != new:
-                bad.append(f"{rel} 与 R4 不一致（重出会变）")
+                bad.append(f"{rel} 与源矢量不一致（重出会变）")
             continue
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(new)
@@ -332,7 +408,7 @@ def main() -> int:
             for b in bad:
                 print("  " + b)
             return 1
-        print(f"{len(artifacts())} 个产物与 R4 一致")
+        print(f"{len(artifacts())} 个产物与源矢量一致")
     return 0
 
 

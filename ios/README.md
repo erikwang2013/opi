@@ -27,6 +27,10 @@
 > `opi-ios-keyboard-<版本>-unsigned.ipa`。它仍是**未签名** IPA：iOS 不会直接安装，
 > 需用 Sideloadly / AltStore 以用户自己的 Apple ID 重签；**签名后的真机运行仍未验证**。
 >
+> **同日（用户裁决）**：删除 `PetEmojiFont.swift` 与全部 PUA 字体路径，自有贴纸仍用原
+> GIF/PNG + 「小欧·」标签兜底；iOS 没有设置页，`EmojiPanel.showOwn = false` 让
+> **「自有」子页缺省隐藏**（要显示改这一个常量并重编）。
+>
 > 本目录的代码是在 Linux 上写的：本机没有 macOS、没有 Xcode、没有 Apple SDK，
 > `import UIKit` 就断 —— 编译发生在 **CI 的 macOS runner** 上，不在开发机。
 > 改完 Swift **先推一次让 CI 编**，再谈别的（本地读不出来的错，编译器一秒钟就报）。
@@ -99,14 +103,13 @@
 | `InputModePanel.swift` | 输入模式**菜单**（2026-10-14）：九项 chip，选中即换。摆位在 `KeyboardLayout`，语义在 `applyInputMode` |
 | `RarePanel.swift` | 生僻字面板（2026-10-14）：`RareIndex`（TSV 解析）+ 部首→笔画→字三级状态机，提交直提。⚠️ 索引文件本仓 iOS 侧**不存在**（见该文件头注与下面新节） |
 | `SymbolPanel.swift` | 符号层的网格（竖向滚动）。数据来自 `OpiEngine.commonSymbols()`，点击直提。另含 `canRender`（字形判定，表情层共用） |
-| `EmojiPanel.swift` | 表情页（2026-10-18 改为 Android 同布局）：顶部 `[‹ 返回][自有 \| Emoji \| 颜文字][🔍]` + 底部分类条 + 两套工具条。Emoji 数据来自 `OpiEngine.emojiSymbols()`/`emojiGroups()`，自有 = 4 列贴纸网格（点击复制图片），颜文字来自内嵌数据。⚠️ 这次改写**未编译** |
+| `EmojiPanel.swift` | 表情页（2026-10-18 改为 Android 同布局）：顶部 `[‹ 返回][自有 \| Emoji \| 颜文字][🔍]` + 底部分类条 + 两套工具条。Emoji 数据来自 `OpiEngine.emojiSymbols()`/`emojiGroups()`，自有 = 4 列贴纸网格（点击复制图片），颜文字来自内嵌数据。**2026-10-20 起「自有」缺省隐藏**（`showOwn = false`；无设置页）。⚠️ 这次改写**未编译** |
 | `EmojiGridView.swift` | 表情页的网格（2026-10-18）：固定列数、显式行高、贴纸格 / 文本格两套；滚动位置回调给面板反推分类高亮。从 `EmojiPanel` 拆出（500 行门禁） |
 | `EmojiFilter.swift` | 引擎表情表 → 「本机能画的列表 + 对齐的分类条」纯函数（2026-10-18 从 `EmojiPanel` 拆出，500 行门禁）。过滤与 `start`/`count` 重算必须同一函数 |
 | `KaomojiData.swift` | 颜文字数据（2026-10-18，**生成文件**）：390 条 / 7 类，源 `data/raw/kaomoji.tsv`，头部写了生成命令。Swift 常量，**不走 bundle 资源** |
 | `PetEmojiTable.swift` | 「自有」12 形态的 label + 贴纸文件名（2026-10-18），与 `shared/pet/PetEmojiMap.kt` 的标签、`PetStickerAssets.kt` 的文件名逐条对应。**不含 emoji 字形**（自有不再提交文本） |
 | `PetStickerImages.swift` | 「自有」12 张**小欧 PNG**（280×280，透明底）的 base64 内嵌 + `UIImage(data:)` 解码（2026-10-18）。**生成文件**，源 `shared/pet/stickers/*.png`，头部写了生成命令。⚠️ **未编译** |
 | `PetStickerGifs.swift` | 「自有」12 张**小欧动画 GIF**（200×200、10 帧、透明底）的 base64 内嵌 + `CGImageSource` 解码为 `UIImage.animatedImage`（2026-10-19）。**生成文件**，源 `shared/pet/stickers-gif/`。⚠️ **未编译** |
-| `PetEmojiFont.swift` | `opi-emoji.ttf` / `map.tsv` / `shortcodes.tsv` 的内嵌副本 + PUA 映射解析 + `CTFontManagerRegisterGraphicsFont` 注册（2026-10-19）。**生成文件**，源 `shared/pet/emoji-font/`。⚠️ **未编译**；CoreText 很可能不渲染 SVG/CBDT 色表 |
 | `PetStickerClipboard.swift` | 「自有」贴纸的落点（2026-10-19 改）：优先 `UIPasteboard.setItems` 写 `com.compuserve.gif` + `public.png`，无 GIF 才 `UIPasteboard.general.image`；触觉/读屏公告 + 面板内 `ToastLabel`。**剪贴板回退**（iOS 键盘扩展不能往宿主输入框插图片），不提交文本。⚠️ **未编译** |
 | `KeyboardViewController.swift` | `UIInputViewController` 入口：生命周期、词库装载（含 2026-10-14 加的 `loadBundledDictionaries()`）、**软键盘**路由、`textDocumentProxy`，外加外接键盘的两个入口 `pressesBegan/pressesEnded`（逻辑在下一行那个文件） |
 | `KeyboardHardware.swift` | **外接键盘那一路**：`UIKey`/`UIPress` → 引擎键码、修饰位，以及**引擎之前**判掉的三个热键（`Ctrl+'` / `Ctrl+\` / `Shift+Space`）。不含触摸与布局 |
@@ -1124,7 +1127,7 @@ OpiString opi_select_page(uint32_t k);  /* 当前页第 k 个；越界/未装载
 
 ---
 
-## 表情页（2026-10-13 加，2026-10-18 改为 Android 同布局，2026-10-19 动图/字体，**本轮未编译**）
+## 表情页（2026-10-13 加，2026-10-18 改为 Android 同布局，2026-10-19 动图，2026-10-20 删字体/缺省隐藏自有，**本轮未编译**）
 
 > ⚠️ 2026-10-13 那版在 2026-10-15 的 CI `apple.yml` iOS job 里**真编译过**（从未上机运行）。
 > **2026-10-18 的布局改写（`EmojiPanel.swift` 重写 + `EmojiGridView` / `KaomojiData` /
@@ -1132,6 +1135,8 @@ OpiString opi_select_page(uint32_t k);  /* 当前页第 k 个；越界/未装载
 > `EmojiFilter`）尚未经过任何编译**：本机没有 swiftc，待下一次 CI apple.yml。
 > **2026-10-19 又加** `PetStickerGifs.swift` / `PetEmojiFont.swift` 两个生成物并改了
 > `EmojiGridView` / `KeyboardViewController`，同样未过 CI。
+> **2026-10-20**：`PetEmojiFont.swift` 已删除（PUA 字体方案取消），并新增缺省隐藏的
+> `showOwn`；这两处同样未过 CI。
 > 下面每一条都只是「文本级一致」或「抄自哪份实现」，不是「跑过」。
 
 ### 加了什么
@@ -1143,7 +1148,6 @@ OpiString opi_select_page(uint32_t k);  /* 当前页第 k 个；越界/未装载
 | 网格 | `EmojiGridView.swift`（固定列数、文本行高 40 / 贴纸行高 64、滚动位置回调）；从 `EmojiPanel` 按 500 行门禁拆出 | `SymbolGrid` / `LazyVerticalGrid`（8 列 / 颜文字 3 列 / 自有 4 列） |
 | 颜文字 | `KaomojiData.swift`（**生成**自 `data/raw/kaomoji.tsv`：390 条 / 7 类；Swift 常量，**不走 bundle 资源**） | `KaomojiCategories.kt`（解析口径逐条一致） |
 | 自有 | `PetStickerGifs.swift`（**生成**：12 张 200×200 十帧动画 GIF 的 base64，源 `shared/pet/stickers-gif/`，缺失退回 `PetStickerImages.swift` 的 PNG）+ `PetEmojiTable.swift`（label + 文件名）+ `PetStickerClipboard.swift`（GIF/PNG 复制 + 面板内 toast）。点击**只复制到剪贴板，不提交文本** | `PetStickerAssets.kt`（文件名契约）/ `PetEmojiMap.kt`（标签与顺序）/ 桌面 `Painter` 渲染产物 |
-| 字体 | `PetEmojiFont.swift`（**生成**：TTF + 两份 TSV 内嵌，`viewDidLoad` 调 `register()`；无 Xcode 工程故不用 `UIAppFonts`）。⚠️ CoreText 很可能不支持 SVG/CBDT 色表，PUA 字形可能空白；面板不依赖它 | `shared/pet/emoji-font/` / `PetEmojiFont.kt`（共享解析器）/ Android `PetFontAssets.kt` |
 | 入口 | 数字层功能行 `😊`（紧挨 `#+=`，`KeyboardFunctionKey.showEmoji`） | 工具栏的表情入口（`SymbolTab.Emoji`；iOS 只加了这一个入口） |
 | 搜索 | 控制器 250ms 防抖 + trim（`runEmojiSearch`）；颜文字子页在面板内本地子串匹配；自有子页无搜索 | `ImeState.SEARCH_DEBOUNCE_MS` / `KaomojiCategories.flatten(...).filter` |
 | 字形过滤 | `SymbolPanel.canRender` + `EmojiFilter.filterAndRegroup`（前缀存活表） | `SymbolCatalog.canRenderGlyph` / `emojiGroups` 的 `aliveUpTo` |
@@ -1193,10 +1197,9 @@ OpiString opi_select_page(uint32_t k);  /* 当前页第 k 个；越界/未装载
   但本草案 `Info.plist` 的 `RequestsOpenAccess=false`，真机第一次要专门验证这一步；
   失败的表现是「toast 出了、宿主里粘不到图或只得到静态图」。触觉反馈在扩展里可能被
   系统忽略，可见提示不依赖它。
-- **字体**：`PetEmojiFont.swift` 内嵌 TTF 与两份 TSV，`KeyboardViewController.viewDidLoad`
-  调 `PetEmojiFont.register()`；没有 Xcode 工程 ⇒ 没有 `UIAppFonts`/bundle 资源落点。
-  当前 TTF 只有 SVG + CBDT/CBLC，CoreText 常见的是 `sbix`/`COLR`，**很可能注册成功但
-  PUA 字形空白**；这是渲染器限制，面板贴纸不受影响。
+- **「自有」缺省隐藏**：`EmojiPanel.showOwn = false`，顶栏不建「自有」子页；
+  iOS 没有设置页（Android/桌面各有「表情中显示自有」开关），要显示改这个常量并重编。
+  点选贴纸的行为不变：只复制 GIF/PNG 到剪贴板，不提交文本。
 - **颜文字**：数据由 `data/raw/kaomoji.tsv` 机械生成成 Swift 常量 `KaomojiData.rows`，
   **不假设 tsv 能进 bundle**（本仓没有 Xcode 工程，资源没有落点）。解析函数对照
   `KaomojiCategories.parse`：首次出现序合并、跳过空行/坏行、`start` 累加。
@@ -1226,8 +1229,6 @@ U+1FAEB 那种要判的）从不被过滤，多码位（VS16 形/键帽）反倒
   `shared/pet/stickers*/` 变了就要重跑生成器（`scripts/gen_pet_stickers.py` 会同时重写
   两份 Swift），否则 iOS 画的是旧图（没有自动对比门禁）。解码失败时 `StickerCell` 只露
   标签、`PetStickerClipboard.copy` 返回 false → toast「贴纸缺失」——不会静默画成 emoji 字形。
-- **`PetEmojiFont.swift` 也是生成物**（`scripts/gen_pet_emoji_font.py`）：TTF/TSV 变了要
-  重跑；没有自动对比门禁，但生成器的 `--check` 会逐字节比。CoreText 色表支持见上。
 - **`KaomojiData.swift` 是生成物**：`data/raw/kaomoji.tsv` 改了就要重跑头部命令，
   否则 Swift 常量与 Android 会悄悄分叉（两面没有自动对比的门禁）。
 - **搜索框在扩展里能不能输入，本机无法验证。** iOS 键盘扩展不能唤起系统键盘，
