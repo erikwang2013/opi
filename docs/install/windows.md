@@ -24,8 +24,9 @@
 > TSF 注册在文件落盘后执行 64 位 `regsvr32 /s`，**只记录退出码，失败不回滚安装**。
 > 后处理 MSI 降为**内部证据**（artifact 现名 `opi-msi-internal-v<版本>`），它的注册
 > 动作仍是 Type 1、失败会回滚整包 —— 这正是 Server Core 上「根本装不上」的旧形状。
-> EXE 的容器内静默安装/卸载冒烟步骤已加进 workflow（`windows-exe-install-test`），
-> 但**本轮尚未在 CI 跑过，也仍无真机验证**。
+> EXE 的容器内静默安装/卸载冒烟已在 2026-10-20 的 v1.17.0 run 跑绿
+> （`windows-exe-install-test`：安装/卸载退出码均为 0，`regsvr32` 退出码 0），
+> 但**仍无真机语言栏/打字验证**。
 >
 > 每一条都带证据档位：
 >
@@ -300,7 +301,7 @@ MSI 的 `OpRegisterTsf` 失败/回滚会如实留在日志里；EXE 的注册失
 | artifact | 内容 | 实测体积（来源 / 单位 / 日期） |
 |---|---|---|
 | `opi-tsf-dll-v<版本>` | `tsf_opi.dll`（zip 里就这一个文件；**仅供 desktop-msi / desktop-exe job 下载打包，不再作为用户入口发布**） | DLL 本体 778,240 B、上传 zip 331,390 B（2026-10-09 run，旧构建） |
-| `opi-windows-exe-v<版本>` | **用户入口**：`opi-<版本>-setup.exe`（Inno Setup，`desktop-exe` job 产出）。内含 jpackage app image（`opi.exe` + `app\tsf_opi.dll` + jlinked JRE），默认装到 `C:\Program Files\opi`；装完用 64 位 `regsvr32 /s` 注册 TSF，**失败只记日志、不回滚** | 每次 CI 重新生成（本机没有 Inno/Windows，体积未复核） |
+| `opi-windows-exe-v<版本>` | **用户入口**：`opi-<版本>-setup.exe`（Inno Setup，`desktop-exe` job 产出）。内含 jpackage app image（`opi.exe` + `app\tsf_opi.dll` + jlinked JRE），默认装到 `C:\Program Files\opi`；装完用 64 位 `regsvr32 /s` 注册 TSF，**失败只记日志、不回滚** | 49,119,340 B（2026-10-20 v1.17.0 run 的 artifact） |
 | `opi-desktop-msi-raw-v<版本>` | jpackage **原始** `.msi`（zip 里一个文件）。**仅内部中间物**（YAML 注释标 internal）：没有注册动作，只供 `msi-postprocess` 下载；后处理成功后由该 job 删除，**正常 run 的最终 artifacts 里不应出现** | 上传的 **zip** 58,683,236 B（2026-10-09 run）；**未压缩 MSI** 62,034,236 B（2026-10-19 本机核对的 v1.15.1 发布资产）。两者不是同一次构建，别混比 |
 | `opi-msi-internal-v<版本>` | **后处理后的** `opi-<版本>.msi`（zip 里一个文件）。**内部证据，不是用户入口**（`msi-postprocess` job 产出；注册 CA 是 Type 1，失败会回滚） | **未压缩 MSI** 62,443,008 B（2026-10-19 本机由上一行的 v1.15.1 raw 处理得到；+408,772 B）。CI 上传的是 zip，别再拿这个数当 zip 体积 |
 | `opi-msi-install-logs-v<版本>` | `windows-install-test` 在 Windows Server Core 容器里跑 `msiexec` 的日志与目录/注册表输出（`install-custom.log` / `install-default.log` / `dir-*.txt` / `reg-*.txt`）。容器缺语言栏/TSF，失败/回滚会如实留在日志里 | 每次 run 新生成 |
