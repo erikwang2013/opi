@@ -70,7 +70,25 @@ data class StatusBarSettings(
     val logo: Boolean = true,
     val fullwidth: Boolean = true,
     val settings: Boolean = true,
+    /**
+     * 全部条上键的**统一缩放**（2026-10-19 用户裁决；键 `StatusBarScale`）：整数百分比
+     * 75–150，缺省 100。BTN/GAP/PAD/BAR_H/条窗宽高/键帽/图标/字形全从这一系数派生
+     * （见 StatusBar.kt 的 [barMetrics]）—— 别另存第二份尺寸。
+     */
+    val scale: Int = STATUS_BAR_SCALE_DEFAULT,
 )
+
+/** 统一缩放的合法区间与缺省（百分比）。解析（Settings.kt）与绘制（StatusBar.kt）共用。 */
+internal const val STATUS_BAR_SCALE_MIN = 75
+internal const val STATUS_BAR_SCALE_MAX = 150
+internal const val STATUS_BAR_SCALE_DEFAULT = 100
+
+/** 手改坏/别的版本写来的越界值收进合法区间；正常路径原样返回。 */
+internal fun statusBarScalePercent(v: Int): Int =
+    v.coerceIn(STATUS_BAR_SCALE_MIN, STATUS_BAR_SCALE_MAX)
+
+/** 设置页的档位（都落在合法区间内）；存的是百分比整数，不是档位下标。 */
+internal val STATUS_BAR_SCALE_CHOICES = listOf(75, 90, 100, 110, 125, 150)
 
 /**
  * 状态栏按钮。**枚举顺序 = 条上从左到右的展示顺序**（用户 2026-10-10 **最终冻结**：

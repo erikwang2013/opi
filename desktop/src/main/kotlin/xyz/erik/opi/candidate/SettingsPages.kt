@@ -238,6 +238,24 @@ internal fun StatusBarPage(s: OpSettings, apply: (OpSettings) -> Unit, status: (
             withContext(Dispatchers.IO) { ensureStatusBarRunning(next.statusbar) }?.let(status)
         }
     }
+    SectionTitle("键大小")
+    Text(
+        "当前 ${s.statusbar.scale}%。统一调整条上所有按钮（含 en/pro、en26 键帽）及其间距，" +
+            "基准 30dp；配置键名 StatusBarScale。" +
+            "状态栏是独立进程、每秒轮询配置 ⇒ 改完通常 1–2 秒内按新尺寸重排，不用重启。",
+        fontSize = 12.sp, color = Muted,
+    )
+    Spacer(Modifier.height(8.dp))
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        for (p in STATUS_BAR_SCALE_CHOICES) {
+            LayoutChip("$p%", p == s.statusbar.scale) {
+                apply(s.copy(statusbar = s.statusbar.copy(scale = statusBarScalePercent(p))))
+            }
+        }
+    }
     SectionTitle("条上按钮（常驻）")
     // 只列有动作的按钮 —— 与条上同一份判定（statusButtonWired），两处各判一次必然漂移。
     for (b in StatusBarButton.entries.filter { statusButtonWired(it, isWindows()) }) {

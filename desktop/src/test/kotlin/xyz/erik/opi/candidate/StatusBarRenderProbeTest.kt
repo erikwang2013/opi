@@ -143,17 +143,18 @@ class StatusBarRenderProbeTest {
     ) to inside(innerL + y0 * faceSide, innerL + y1 * faceSide)
 
     /**
-     * 把一个 composable（面/旧面）画进画布中心（**与 BarButton 同一摆法**：30dp 的按钮盒
-     * 居中），落一张 PNG 到 `build/opi-render-probe/statusbar-*.png` 供人眼看，
+     * 把一个 composable（面/旧面）画进画布中心（**与 BarButton 同一摆法**：[boxDp] 的按钮盒
+     * 居中，缺省 100% = 30dp），落一张 PNG 到 `build/opi-render-probe/statusbar-*.png` 供人眼看，
      * 返回全画布的墨迹框与图。[bg] / [density] 默认白底 1×；键帽用例传黑底 3×。
      */
     private fun probe(
         name: String,
         bg: Color = Color.White,
         density: Float = 1f,
+        boxDp: Int = BTN,
         content: @Composable () -> Unit,
     ): Pair<Ink, BufferedImage> {
-        val px = ((BTN + 2 * probePad) * density).toInt()
+        val px = ((boxDp + 2 * probePad) * density).toInt()
         val scene = ImageComposeScene(width = px, height = px, density = Density(density)) {
             CompositionLocalProvider(LocalBarPalette provides probeColors) {
                 Box(
@@ -176,10 +177,15 @@ class StatusBarRenderProbeTest {
         return inkIn(img, 0..img.width - 1, 0..img.height - 1) to img
     }
 
-    /** 一枚按钮的面（与状态栏里的调用逐字同参：盒 = 按钮本身）。 */
+    /** 一枚按钮的面（与状态栏里的调用逐字同参：盒 = 按钮本身；[box] 缺省 100%）。 */
     @Composable
-    private fun face(b: StatusBarButton, st: ImeState = ImeState(), mode: String = MODE_DEFAULT) {
-        StatusBarButtonFace(b, st, mode, BTN.dp)
+    private fun face(
+        b: StatusBarButton,
+        st: ImeState = ImeState(),
+        mode: String = MODE_DEFAULT,
+        box: Int = BTN,
+    ) {
+        StatusBarButtonFace(b, st, mode, box.dp)
     }
 
     /** 旧面（2026-10-14 之前）：`Text(iconText, fontSize = 12.sp)` —— 只用来当**基线**量。 */
@@ -411,6 +417,43 @@ class StatusBarRenderProbeTest {
                 newZh.h >= 2 * FACE_SCALE * oldZh.h,
             )
         }
+    }
+
+    @Test
+    fun `face follows the scaled button box without spilling`() {
+        // 2026-10-19 统一缩放（StatusBarScale）：150% ⇒ 按钮盒 45dp、面内容内盒 27dp。
+        // 面只认调用方给的那**一个** box —— 与 BarButton 给 enpro/en26 和普通键传同一个
+        // `BarMetrics.button` 是同一条契约；键帽在这块盒里仍按 26/30 画（KeycapRenderTest
+        // 另有 150% 用例）。这里同时覆盖自绘图标与键帽面（文字用例在 100% 那几条）。
+        val box = (BTN * 1.5f).toInt() // 45
+        val l = probePad
+        val r = l + box // 不含
+        val canvasSide = box + 2 * probePad
+        for (c in listOf(
+            FaceCase("punct-en-150", StatusBarButton.PUNCT, ImeState(punct = false)),
+            FaceCase("vk-150", StatusBarButton.VK),
+            FaceCase("enpro-150", StatusBarButton.ENPRO),
+        )) {
+            val (ink, img) = probe(c.name, boxDp = box) { face(c.b, c.st, c.mode, box) }
+            assertTrue("${c.name} 150% 该有墨迹：$ink", !ink.empty)
+            // 不溢出仍是**按钮盒**（用户 2026-10-14 的口径），画布四周留有 [probePad]。
+            val spill = listOf(
+                inkIn(img, 0..l - 1, 0..canvasSide - 1),
+                inkIn(img, r..canvasSide - 1, 0..canvasSide - 1),
+                inkIn(img, l..r - 1, 0..l - 1),
+                inkIn(img, l..r - 1, r..canvasSide - 1),
+            ).filter { !it.empty }
+            assertTrue("${c.name} 溢出 ${box}dp 按钮盒（墨迹 $ink；溢出的四带 $spill）", spill.isEmpty())
+        }
+        // 「按盒取最大」随盒等比：标点面墨迹高 ≈ 盒 × FACE_SCALE（与 100% 那条同一口径）。
+        val (punct, _) = probe("punct-en-150-ink", boxDp = box) {
+            face(StatusBarButton.PUNCT, ImeState(punct = false), box = box)
+        }
+        val expectH = (box * FACE_SCALE).toInt()
+        assertTrue(
+            "标点面在 150% 下墨迹高该 ≈ $box × $FACE_SCALE = ${expectH}px（实测 ${punct.h}）",
+            abs(punct.h - expectH) <= 2,
+        )
     }
 
 }

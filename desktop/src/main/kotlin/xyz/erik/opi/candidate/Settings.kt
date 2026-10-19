@@ -24,7 +24,7 @@
 //! ⚠️ 布尔写 **`True`/`False`**（fcitx5 的 ini 就是这个拼法；读侧大小写不敏感，
 //! 所以手改成 `true` 也能读，但**写回去统一成全大写首字母**，别两种混着出现）。
 //!
-//! ⚠️ `StatusBar*` 十个键（2026-10-10 加；2026-10-19 加 `StatusBarEnPro`）**只有本窗读写**：两端 IME 读侧都不认识
+//! ⚠️ `StatusBar*` 十一个键（2026-10-10 加；2026-10-19 加 `StatusBarEnPro`/`StatusBarScale`）**只有本窗读写**：两端 IME 读侧都不认识
 //! 它们（未知键会被忽略，向前兼容）；但 Linux 侧它们仍写在同一份 fcitx5 addon 配置
 //! 里 —— 用 fcitx5 配置工具保存时这些键**是否被保存方抹掉**本侧无法保证（上游行为，
 //! 本机未取证）。若真发生，表现是「状态栏设置被重置」，不是启动失败。
@@ -140,7 +140,7 @@ data class OpSettings(
         appendLine("DisabledDicts=$disabledDicts")
         // 五笔六键（2026-10-14）：整段 append（值口径与 mergeIni 的 managed() 同一份）。
         append(wubi.toIniLines())
-        // 状态栏十个键：只有本窗读写（见文件头 ⚠️）。同样不分平台地写全，
+        // 状态栏十一个键：只有本窗读写（见文件头 ⚠️）。同样不分平台地写全，
         // 「同一份文件格式」是这里的既有纪律。
         appendLine("StatusBarHidden=${boolText(statusbar.hidden)}")
         appendLine("StatusBarVk=${boolText(statusbar.vk)}")
@@ -152,6 +152,8 @@ data class OpSettings(
         appendLine("StatusBarLogo=${boolText(statusbar.logo)}")
         appendLine("StatusBarFullwidth=${boolText(statusbar.fullwidth)}")
         appendLine("StatusBarSettings=${boolText(statusbar.settings)}")
+        // 统一键大小（2026-10-19）：整数百分比，状态栏进程 1s 轮询后自行重排。
+        appendLine("StatusBarScale=${statusbar.scale}")
     }
 
     companion object {
@@ -209,6 +211,9 @@ data class OpSettings(
                     logo = bool("StatusBarLogo", true),
                     fullwidth = bool("StatusBarFullwidth", true),
                     settings = bool("StatusBarSettings", true),
+                    // 缺键/坏值回落 100%，越界值收紧（与数据类缺省同一常量）。
+                    scale = map["StatusBarScale"]?.toIntOrNull()
+                        ?.let(::statusBarScalePercent) ?: STATUS_BAR_SCALE_DEFAULT,
                 ),
             )
         }
@@ -272,7 +277,7 @@ internal fun OpSettings.toggleFuzzyPair(name: String): OpSettings {
 }
 
 /**
- * 把 [s] 管理的键（本窗列出的全部：各开关 + 名字键 + 状态栏九个）合进 [existing]，
+ * 把 [s] 管理的键（本窗列出的全部：各开关 + 名字键 + `StatusBar*` 键）合进 [existing]，
  * **其它行原样保留**
  * （见文件头第 3 条 ⚠️）。
  *
@@ -309,6 +314,7 @@ fun mergeIni(existing: String, s: OpSettings): String {
         "StatusBarLogo" to boolText(s.statusbar.logo),
         "StatusBarFullwidth" to boolText(s.statusbar.fullwidth),
         "StatusBarSettings" to boolText(s.statusbar.settings),
+        "StatusBarScale" to s.statusbar.scale.toString(),
     ).apply {
         // 五笔六键（2026-10-14）：整族并进管理键表 —— `putAll` 而不是逐键列一遍，
         // 防两处各写一份（值口径与 toIniLines 同一份，见 WubiSettings.managed()）。

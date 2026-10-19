@@ -50,9 +50,14 @@ class KeycapRenderTest {
         line = Color.Black, accent = Color.Black,
     )
 
-    /** 把一枚键帽面画进 40dp×[d] 的画布中心，落 PNG，返回图。 */
-    private fun probe(name: String, bg: Color = Color.White, content: @Composable () -> Unit): BufferedImage {
-        val side = (BTN + 2 * 5) * d
+    /** 把一枚键帽面画进 ([boxDp] + 10dp)×[d] 的画布中心，落 PNG，返回图。 */
+    private fun probe(
+        name: String,
+        bg: Color = Color.White,
+        boxDp: Int = BTN,
+        content: @Composable () -> Unit,
+    ): BufferedImage {
+        val side = (boxDp + 2 * 5) * d
         val scene = ImageComposeScene(width = side, height = side, density = Density(d.toFloat())) {
             CompositionLocalProvider(LocalBarPalette provides probeColors) {
                 Box(Modifier.fillMaxSize().background(bg), contentAlignment = Alignment.Center) { content() }
@@ -71,8 +76,8 @@ class KeycapRenderTest {
     }
 
     @Composable
-    private fun face(b: StatusBarButton, mode: String = MODE_DEFAULT) {
-        StatusBarButtonFace(b, ImeState(), mode, BTN.dp)
+    private fun face(b: StatusBarButton, mode: String = MODE_DEFAULT, box: Int = BTN) {
+        StatusBarButtonFace(b, ImeState(), mode, box.dp)
     }
 
     /** 两个 RGB 的最大通道差（[Color] 的 0..1 分量四舍五入回 8 bit）。 */
@@ -205,6 +210,71 @@ class KeycapRenderTest {
             assertTrue("$name en 垂直中心 $enCy 应 ≈ 0.46（不是上半区）", abs(enCy - 0.46f) <= 0.05f)
             assertTrue("$name 角标水平中心 $cornerCx 应 ≈ 0.73（右下）", abs(cornerCx - 0.73f) <= 0.05f)
             assertTrue("$name 角标垂直中心 $cornerCy 应 ≈ 0.83（右下）", abs(cornerCy - 0.83f) <= 0.05f)
+        }
+    }
+
+    @Test
+    fun `keycap scales with the button box and keeps the design ratios`() {
+        // 2026-10-19 统一缩放（StatusBarScale）：150% ⇒ 45dp 按钮盒；键帽仍按 26/30 × box
+        // 画、en/角标比例不变（100% 那两条是同一套判据），且像素真的画出来（非黑底）。
+        val box = (BTN * 1.5f).toInt() // 45
+        val capPx = box * 26f / 30f * d
+        val originPx = 5 * d + (box * d - capPx) / 2f
+        fun lit(argb: Int) = maxOf((argb shr 16) and 0xFF, (argb shr 8) and 0xFF, argb and 0xFF) > 40
+        for ((name, b, mode) in cases) {
+            val img = probe("scale-$name", bg = Color.Black, boxDp = box) { face(b, mode, box) }
+            // 非黑像素的 bbox = 键帽外沿（白底 + 描边 + 字），宽高应 ≈ box × 26/30。
+            var l = Int.MAX_VALUE
+            var t = Int.MAX_VALUE
+            var r = -1
+            var bt = -1
+            for (y in 0 until img.height) for (x in 0 until img.width) {
+                if (lit(img.getRGB(x, y))) {
+                    if (x < l) l = x
+                    if (x > r) r = x
+                    if (y < t) t = y
+                    if (y > bt) bt = y
+                }
+            }
+            assertTrue(
+                "$name 150% 键帽宽 ${r - l + 1}px 应 ≈ 26/30 × ${box}dp = ${capPx.toInt()}px",
+                abs((r - l + 1) - capPx.toInt()) <= 2,
+            )
+            assertTrue(
+                "$name 150% 键帽高 ${bt - t + 1}px 应 ≈ 26/30 × ${box}dp = ${capPx.toInt()}px",
+                abs((bt - t + 1) - capPx.toInt()) <= 2,
+            )
+            val enPro = b == StatusBarButton.ENPRO
+            val stroke = if (enPro) KEYCAP_ENPRO_STROKE else KEYCAP_EN26_BLUE
+            val main = if (enPro) KEYCAP_ENPRO_MAIN else KEYCAP_EN26_BLUE
+            val cornerColor = if (enPro) KEYCAP_ENPRO_CORNER else KEYCAP_EN26_BLUE
+            val fillX = (originPx + capPx * 0.10f).toInt()
+            val fillY = (originPx + capPx * 0.85f).toInt()
+            assertTrue("$name 150% 键帽内该是纯白底", colorDiff(img.getRGB(fillX, fillY), Color.White) <= 8)
+            val strokeInk = colorDiff(
+                img.getRGB(originPx.toInt() + 1, (originPx + capPx * 0.85f).toInt()),
+                stroke,
+            )
+            assertTrue("$name 150% 描边该是 $stroke（实测通道差 $strokeInk）", strokeInk <= 24)
+            // 扫描带与 100% 用例同源（按键帽比例），只把原点/边长换成 150% 的。
+            val enCols = (originPx + capPx * 0.10f).toInt()..(originPx + capPx * 0.80f).toInt()
+            val enRows = (originPx + capPx * 0.25f).toInt()..(originPx + capPx * 0.68f).toInt()
+            val cornerCols = (originPx + capPx * 0.45f).toInt()..(originPx + capPx * 0.93f).toInt()
+            val cornerRows = (originPx + capPx * 0.68f).toInt()..(originPx + capPx * 0.93f).toInt()
+            val en = inkIn(img, enCols, enRows)
+            val corner = inkIn(img, cornerCols, cornerRows)
+            assertTrue("$name 150% 的 en 该有墨迹（扫描带 $en）", !en.empty)
+            assertTrue("$name 150% 的角标该有墨迹（扫描带 $corner）", !corner.empty)
+            assertTrue("$name 150% en 宽 ${en.w / capPx} 应 ≤ 0.50 键帽宽", en.w / capPx <= 0.50f)
+            assertTrue("$name 150% 角标宽 ${corner.w / capPx} 应 ≤ 0.35 键帽宽", corner.w / capPx <= 0.35f)
+            assertTrue(
+                "$name 150% 主字该是 $main",
+                closest(img, enCols, enRows, main) <= 24,
+            )
+            assertTrue(
+                "$name 150% 右下角标该是 $cornerColor",
+                closest(img, cornerCols, cornerRows, cornerColor) <= 24,
+            )
         }
     }
 }

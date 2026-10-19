@@ -176,12 +176,15 @@ class SettingsTest {
         assertEquals("C:\\Users\\u\\AppData\\Local", p.parent.parent.toString())
     }
 
-    // ---------- 状态栏十个键（2026-10-10 加；2026-10-19 加 StatusBarEnPro）----------
+    // ---------- 状态栏十一个键（2026-10-10 加；2026-10-19 加 StatusBarEnPro/Scale）----------
 
     @Test
     fun `statusbar round trip keeps every switch`() {
         val s = OpSettings(
-            statusbar = StatusBarSettings(hidden = true, vk = false, symbols = false, fullwidth = false, enpro = false),
+            statusbar = StatusBarSettings(
+                hidden = true, vk = false, symbols = false, fullwidth = false,
+                enpro = false, scale = 125,
+            ),
         )
         assertEquals(s, OpSettings.fromIni(s.toIni()))
     }
@@ -197,7 +200,7 @@ class SettingsTest {
             "StatusBarHidden=True", "StatusBarVk=False", "StatusBarSymbols=True",
             "StatusBarTrad=False", "StatusBarPunct=True", "StatusBarLang=True",
             "StatusBarLogo=True", "StatusBarFullwidth=True", "StatusBarSettings=True",
-            "StatusBarEnPro=True",
+            "StatusBarEnPro=True", "StatusBarScale=100",
         )) {
             assertTrue("缺少状态栏键行：$line\n$ini", ini.contains("$line\n"))
         }

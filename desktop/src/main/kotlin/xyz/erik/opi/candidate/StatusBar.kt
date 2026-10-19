@@ -35,8 +35,8 @@
 //! **面上的字/图标一律「按按钮取最大且不溢出」**（2026-10-14 用户裁决，原话与实现
 //! 见 BarGlyphs.kt 文件头）；**2026-10-15 用户再裁决「显示太大，缩小40％」** ⇒ 面内容
 //! 整体 × `FACE_SCALE`（0.6，落点唯一：StatusBarButtonFace 里那个 `face` 盒；本文件
-//! 传的仍是 30dp 的按钮盒，不用自己乘）—— 面（字形排版、三个图标、每按钮的槽位表）
-//! 整体在 BarGlyphs.kt，本文件只管条、按钮框、动作与轮询。
+//! 传的仍是按钮盒 —— 100% = 30dp，其余按 `StatusBarScale` 等比，见 [BarMetrics]）—— 面
+//! （字形排版、三个图标、每按钮的槽位表）整体在 BarGlyphs.kt，本文件只管条、按钮框、动作与轮询。
 //!
 //! **状态实时可见**（2026-10-10 深夜裁决）：简/繁、中/英、月相随输入法真实状态翻转。
 //! 状态 = `opi-ctl state`（契约见 Actions.kt），1s 轮询 + **每次按钮动作返回后立刻
@@ -85,6 +85,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -107,14 +108,30 @@ import xyz.erik.opi.pet.OpiPetWindowIcon
 // 全是写死的深色常量，条从没读过皮肤）。同步靠本文件既有的 1s 配置轮询，自动。
 // 「不改动」= SkinPalette.KeepColors（= 上述那五个常量原值，行为一字不变）。
 
-internal const val BTN = 30 // 按钮边长
+internal const val BTN = 30 // 100% 时的按钮边长
 private const val GAP = 4
 private const val PAD = 6
 private const val BAR_H = 42
 
-/** 条宽随按钮数变（隐藏的按钮不占位）。纯函数，单测钉住。 */
-internal fun statusBarWidthDp(buttonCount: Int): Int =
-    PAD * 2 + BTN * buttonCount + GAP * (buttonCount - 1).coerceAtLeast(0)
+/**
+ * 状态栏的**唯一尺寸表**（2026-10-19 用户裁决「统一调整所有状态栏键大小」）：
+ * 按钮、间距、内边距、条高全乘 [StatusBarSettings.scale] 同一系数。100% 时逐项等于
+ * BTN/GAP/PAD/BAR_H；enpro/en26 与其他键共用这里同一个 [button] 盒（键帽再按 26/30
+ * 画在盒内，见 KeycapFace.kt）。别在调用点各自乘 —— 第二份尺寸就是漂移口。
+ */
+internal data class BarMetrics(val button: Dp, val gap: Dp, val pad: Dp, val height: Dp)
+
+/** [scale] 先经 [statusBarScalePercent] 收口（越界值按边界算）。纯函数。 */
+internal fun barMetrics(scale: Int): BarMetrics {
+    val k = statusBarScalePercent(scale) / 100f
+    return BarMetrics((BTN * k).dp, (GAP * k).dp, (PAD * k).dp, (BAR_H * k).dp)
+}
+
+/** 条宽随按钮数变（隐藏的按钮不占位）。[scale] 与 [barMetrics] 同一系数。纯函数，单测钉住。 */
+internal fun statusBarWidthDp(buttonCount: Int, scale: Int = STATUS_BAR_SCALE_DEFAULT): Float {
+    val k = statusBarScalePercent(scale) / 100f
+    return (PAD * 2 + BTN * buttonCount + GAP * (buttonCount - 1).coerceAtLeast(0)) * k
+}
 
 /**
  * 纯函数：条该不该显示（[StatusBarApp] 的 visible 用它）。
@@ -188,14 +205,18 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
     }
 
     val buttons = visibleStatusButtons(s.statusbar, isWindows())
-    val width = statusBarWidthDp(buttons.size)
+    val metrics = barMetrics(s.statusbar.scale)
+    val width = statusBarWidthDp(buttons.size, s.statusbar.scale)
     val windowState = rememberWindowState(
         width = width.dp,
-        height = BAR_H.dp,
-        position = remember { barPosition(width) },
+        height = metrics.height,
+        position = remember { barPosition(width.toInt()) },
     )
-    // 按钮增删（设置窗里拨的开关）→ 条跟着变宽。位置**不动**：拖过就保住用户放的地方。
-    LaunchedEffect(buttons.size) { windowState.size = DpSize(statusBarWidthDp(buttons.size).dp, BAR_H.dp) }
+    // 按钮增删（设置窗里拨的开关）与统一缩放（StatusBarScale）→ 条跟着变。位置**不动**：
+    // 拖过就保住用户放的地方。设置窗可能是另一进程 ⇒ 这里等 1s 轮询把新值送来。
+    LaunchedEffect(buttons.size, s.statusbar.scale) {
+        windowState.size = DpSize(statusBarWidthDp(buttons.size, s.statusbar.scale).dp, metrics.height)
+    }
 
     /** 失败必须看得见：写进条上的提示，也打一行到 stdout（自启动进程的日志在 journal 里）。 */
     fun report(msg: String?) {
@@ -315,11 +336,11 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
             Box(Modifier.fillMaxSize().background(palette.bg).border(1.dp, palette.line)) {
                 if (notice == null) {
                     Row(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = PAD.dp),
+                        modifier = Modifier.fillMaxSize().padding(horizontal = metrics.pad),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(GAP.dp),
+                        horizontalArrangement = Arrangement.spacedBy(metrics.gap),
                     ) {
-                        for (b in buttons) BarButton(b, imeState, mode, windowState, ::onButton)
+                        for (b in buttons) BarButton(b, imeState, mode, metrics, windowState, ::onButton)
                     }
                 } else {
                     // 提示期间**替掉**按钮列（而不是盖在上面）：否则按钮还在下面接着点击，
@@ -354,20 +375,24 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
 // ---------- 一个按钮 ----------
 
 /**
- * 一枚按钮：30dp 的框 + 悬停底 + 点击（LOGO 另挂拖动）。**面**（图标/字形）在
- * [StatusBarButtonFace]（BarGlyphs.kt）—— 分开是为了让门禁能离屏直接渲那一支。
+ * 一枚按钮：[BarMetrics.button] 见方的框 + 悬停底 + 点击（LOGO 另挂拖动）。**面**
+ * （图标/字形）在 [StatusBarButtonFace]（BarGlyphs.kt）—— 分开是为了让门禁能离屏直接渲那一支。
  *
- * 传进去的就是**这块 30dp 的按钮本身**：用户 2026-10-14 的「根据按钮显示最大」按的是
- * 按钮这块盒，字号由 BarGlyphs 按墨迹取满（见其文件头）。别在这里再垫留白 —— 垫掉多少、
- * 字就小多少（曾经的 26dp「面盒」就是这么把 logo 从 30 缩回 26 的）。**缩到 60% 那条
- * 2026-10-15 的缩放不在这里**：它是面内部的事（`FACE_SCALE`，BarGlyphs.kt），在这边
- * 再乘一次就是乘两遍。
+ * 传进去的就是**这块按钮本身**（100% = 30dp，其余尺寸按 `StatusBarScale` 等比）：
+ * 用户 2026-10-14 的「根据按钮显示最大」按的是按钮这块盒，字号由 BarGlyphs 按墨迹取满
+ * （见其文件头）。别在这里再垫留白 —— 垫掉多少、字就小多少（曾经的 26dp「面盒」就是
+ * 这么把 logo 从 30 缩回 26 的）。**缩到 60% 那条 2026-10-15 的缩放不在这里**：它是面
+ * 内部的事（`FACE_SCALE`，BarGlyphs.kt），在这边再乘一次就是乘两遍。
+ *
+ * enpro/en26 与普通键**始终收同一个 [BarMetrics.button]**：键帽只是在这块盒里按
+ * 26/30 画（KeycapFace.kt），没有自己的尺寸来源。
  */
 @Composable
 private fun BarButton(
     b: StatusBarButton,
     st: ImeState,
     mode: String,
+    metrics: BarMetrics,
     windowState: WindowState,
     onClick: (StatusBarButton) -> Unit,
 ) {
@@ -380,14 +405,14 @@ private fun BarButton(
     val active = b == StatusBarButton.ENPRO && st.englishPro
     Box(
         modifier = Modifier
-            .size(BTN.dp)
+            .size(metrics.button)
             .background(if (hovered || active) palette.hover else Color.Transparent)
             .clickable(interactionSource = interaction, indication = null) { onClick(b) }
             .then(if (b == StatusBarButton.LOGO) dragToMove(windowState) else Modifier)
             .semantics { contentDescription = b.label },
         contentAlignment = Alignment.Center,
     ) {
-        StatusBarButtonFace(b, st, mode, BTN.dp)
+        StatusBarButtonFace(b, st, mode, metrics.button)
     }
 }
 
