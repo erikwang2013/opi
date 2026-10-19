@@ -48,6 +48,12 @@
 | 词库文件 | `luna.opid`，**可选但强烈建议** —— 不给就只有内置回退词库（见 §2.2） | `crates/tsf-opi/src/dict_path.rs` |
 | 候选窗运行时 | JVM（只有要显示候选窗时才需要） | `desktop/` 是 Compose Desktop / JVM 工程 |
 
+> **Win7 / Win8 / 8.1 不支持（2026-10-19 用户裁决：仅文档标注）**：当前
+> `tsf_opi.dll` 导入 `api-ms-win-core-synch-l1-2-0`（Win8+）与 `bcryptprimitives`
+> （Rust 1.88 std 的 Win10 路径）；候选窗是 JDK 21/Temurin/jpackage + Compose
+> Desktop 1.11，官方目标 Win10/11。要在 Win7/8 上运行须另建 legacy 轨道
+> （Rust ≤1.77 + windows_7/8 + 老 TSF 注册 + 原生候选窗 + 独立安装包），不在本仓库范围。
+
 ### 1.2 `cargo check` 与 `cargo build` 的区别 —— 这条最容易读错
 
 `crates/tsf-opi/src/` 下**四个模块整个在 `#[cfg(target_os = "windows")]` 里**
@@ -1030,6 +1036,7 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | 11 | **「属性设置」的生效时机**：设置窗落盘后要等下一次 `Activate` —— 本机无法验证（`Activate` 由 TSF 调）。读取/容错/落点那半在 `settings.rs`，有主机单测 | §4.4、`crates/tsf-opi/src/settings.rs` |
 | 12 | **安装器四条新行为（改安装目录 / 关停运行中实例 / 注册 TSF DLL / 装后自启 + 重启 Explorer，2026-10-17 / 10-18 / 10-19 加）**：表级已改好并可本地复核（§2.5 的后处理脚本 + 读回证据）。**2026-10-19 用户在真机装过的是「未后处理」的 v1.15.1 发布包**（有进程、键盘不显示）—— 这证明了「不跑后处理 = 不注册 = 键盘不出现」。**【订正 2026-10-19 复审】后处理后的三份包**（本地 `processed-static`、本地 `processed`、CI `opi-desktop-msi`）**仍无输入法的根因已定位**：注入的是 32 位 `WixSilentExec`，而随包 `Binary.WixCA` 是 PE32 i386 ⇒ WOW64 调 SysWOW64 的 32 位 `regsvr32`，加载不了 x86-64 DLL。脚本/CI 已改为 `WixSilentExec64` + `WixSilentExec64CmdLine` 并加 PE machine 断言，注册逻辑改为显式判存在 + HKLM 默认启用。但这三份包的 desktop jar 与 DLL 仍是本轮修复前的构建，所以「修复后的包」仍未被装过：taskkill 真杀没杀掉、`regsvr32` 真注册没成功、WixShellExec 真启没启起来、ExitDialog 复选框出不出现、脚本是否结束 Explorer 并由 Winlogon 拉回（依赖 `AutoRestartShell` 默认 1），仍是【未验证】 | §2.5、`scripts/postprocess-windows-msi.sh` |
 | 13 | **卸载不清理 TSF 注册（2026-10-19 reviewer m4 记录，有意未做）**：`OpRegisterTsf` 的条件是 `NOT REMOVE` ⇒ 卸载**不执行** `regsvr32 /s /u`；`HKCR\CLSID\{98C51858-590B-404D-8915-21EB44250062}\InprocServer32` 与 `HKLM\SOFTWARE\Microsoft\CTF` 下由 `DllRegisterServer` 写入的条目会**残留并指向已删除的 DLL**。未加卸载动作的原因：`WixSilentExec64` 只有**一个**命令属性 `WixSilentExec64CmdLine`，安装/卸载两条命令会互相覆盖；手写 `RemoveRegistryKey` 又需精确复制官方 API 写入的键，未在真机取证。重装到同一路径会重新覆盖注册；彻底清理 = 卸载前手工 `regsvr32 /s /u <dll>`，已卸载则手工删上述键 | `scripts/postprocess-windows-msi.sh`、§2.5 | 卸载后注册残留；卸载本身的文件删除不受影响 |
+| 14 | **Win7 / Win8 / 8.1 不支持（2026-10-19 用户裁决：仅文档标注）**：DLL 的 API set/Rust std 与候选窗的 JDK 21/Compose 下限都在 Win10/11；Win7/8 需另建 legacy 轨道 | §1.1 的说明 | 在 Win7/8 上安装/运行不保证；不在本仓库范围 |
 
 ### 6.2 代码里已知的缺口（读源码得出，不是待办猜测）
 

@@ -289,7 +289,7 @@ V1 里程碑进度：
 - [x] **M6a Android 原生重构**：opi-ffi 双 ABI（JNI + C）替换 frb；Compose 原生 IME + 键盘/候选栏/面板/设置页；删除 flutter/
 - [x] **简繁双词库**（spec §8 未给它 M6 编号，独立成项）：`Mode::Traditional` + 双词典路由 + `trad.opid` + GB2312 单字全覆盖门禁
 - [~] **M6b Linux fcitx5 插件**：Rust 逻辑与单测完成；**C++ 胶水此前从未被编译器看过**，现已补上 CMake 编译 + 安装通路（`crates/fcitx5-opi/cpp/CMakeLists.txt`）、CI 的 fcitx5 job（编译 + 安装落点断言 + debian:12 容器里带三臂对照真加载）与 `.deb` / `.rpm` 打包（`scripts/build-packages.sh`）—— **待在目标平台实机验收；包也从未被 `dpkg -i` / `rpm -i` 过**
-- [~] **M6c Windows TSF 插件 + CMP 候选窗**：Rust 逻辑、候选窗线协议、词库分发通路与 Compose Desktop 候选窗完成 —— COM 服务端按目标平台门控；**MSI 打包自 2026-10-18 起已接线**（DLL 随包；`regsvr32` 后处理自 2026-10-19 起接入 CI；完成页脚本重启 Explorer），但**词库仍不入包**（开箱仍是内置回退那几十条词），待在 Windows 上验收
+- [~] **M6c Windows TSF 插件 + CMP 候选窗**：Rust 逻辑、候选窗线协议、词库分发通路与 Compose Desktop 候选窗完成 —— COM 服务端按目标平台门控；**MSI 打包自 2026-10-18 起已接线**（DLL 随包；`regsvr32` 后处理自 2026-10-19 起接入 CI；完成页脚本重启 Explorer），但**词库仍不入包**（开箱仍是内置回退那几十条词），待在 Windows 上验收（仅支持 Windows 10/11 x64；Win7/8/8.1 不支持）
 - [ ] **M7 iOS / macOS**：C ABI 已就绪，且**已实测能为 Apple 目标编译**（`cargo check` 的 Apple 目标全过，清单见 `.github/workflows/ci.yml`；能产出 arm64 静态库 `libopi_ffi.a`，导出符号无缺失 —— 数量以 `crates/opi-ffi/src/cabi.rs` 的导出为准）；`ios/` 与 `macos/` 下的 Swift 草案**从未被编译器看过** —— 需在 Mac 上先让编译通过，再谈功能
 
 > 里程碑编号以 `docs/superpowers/specs/2026-08-14-opi-multi-platform-design.md` §8 与 M6 实施计划为准
