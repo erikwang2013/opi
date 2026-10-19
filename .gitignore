@@ -23,6 +23,17 @@ __pycache__/
 # 构建目录会让 CMake 的编译器探测产物被 500 行门禁扫到），所以这里不需要它的条目。
 dist/
 
+# HarmonyOS 构建产物与本地工具缓存（可再生产物，不入库）。
+# Rust 静态库 libopi_ffi.a 由 CI/本地用 cargo 生成后拷贝到这里（见 workflow）。
+harmony/.hvigor/
+harmony/oh_modules/
+harmony/entry/oh_modules/
+harmony/entry/build/
+harmony/entry/.cxx/
+harmony/entry/src/main/cpp/libs/
+harmony/local.properties
+harmony/.idea/
+
 # packages.yml 里 desktop-deb job 产物的**中转目录**（CI 里是 download-artifact 的
 # path，本地复刻打包流程时同样要放一份）；纯暂存，不入库。
 desktop-deb/

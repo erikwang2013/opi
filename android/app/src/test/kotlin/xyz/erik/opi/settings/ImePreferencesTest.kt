@@ -37,6 +37,8 @@ class ImePreferencesTest {
         // 引擎侧 `Engine` 初值同步为 0）。
         assertEquals(false, p.fuzzy)
         assertEquals(true, p.jianpin)
+        // 自有表情 PUA 缺省关（默认仍插图片；2026-10-19）。
+        assertEquals(false, p.puaEmoji)
         assertEquals(SkinOption.FOLLOW, p.skin)
     }
 
@@ -52,6 +54,7 @@ class ImePreferencesTest {
         p.learn = false
         p.fuzzy = false
         p.jianpin = true
+        p.puaEmoji = true
         p.skin = SkinOption.PAPER
         val q = ImePreferences(store)
         assertEquals(InputMode.PINYIN14, q.inputMode)
@@ -62,6 +65,7 @@ class ImePreferencesTest {
         assertEquals(false, q.learn)
         assertEquals(false, q.fuzzy)
         assertEquals(true, q.jianpin)
+        assertEquals(true, q.puaEmoji)
         assertEquals(SkinOption.PAPER, q.skin)
     }
 

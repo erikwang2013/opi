@@ -1,0 +1,15 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
+{
+  "name": "entry",
+  "version": "1.16.0",
+  "description": "小欧输入法输入法扩展",
+  "main": "",
+  "author": "erik",
+  "license": "MIT",
+  "dependencies": {
+    // N-API 桥的 ArkTS 类型面；名字必须与 import 'libopiime.so' 逐字符一致。
+    "libopiime.so": "file:./src/main/cpp/types/libopiime"
+  }
+}

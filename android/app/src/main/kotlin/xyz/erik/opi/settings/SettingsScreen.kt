@@ -71,6 +71,7 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
     var fuzzyPairs by remember { mutableStateOf(prefs.fuzzyPairs) }
     var correction by remember { mutableStateOf(prefs.correction) }
     var jianpin by remember { mutableStateOf(prefs.jianpin) }
+    var puaEmoji by remember { mutableStateOf(prefs.puaEmoji) }
     var confirmClear by remember { mutableStateOf(false) }
     // 双拼布局（2026-10-13）：存**名字**（[SHUANGPIN_LAYOUTS_ANDROID] 之一）。
     var shuangpinLayout by remember { mutableStateOf(prefs.shuangpinLayout) }
@@ -282,6 +283,25 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
                             jianpin = v
                             OpiEngine.setJianpin(v)
                             prefs.jianpin = v
+                        },
+                    )
+                },
+            )
+            HorizontalDivider()
+            // 自有表情 PUA（2026-10-19，缺省关）：开 = 上屏字体字符而非图片。
+            // ⚠️ Android 的其他应用读不到本 APK 的 assets 字体 ⇒ 必然显示方框；
+            // 说明文字必须把这个代价说死，别让用户以为能显示贴纸字形。
+            ListItem(
+                headlineContent = { Text("自有表情用字体字符（PUA）") },
+                supportingContent = {
+                    Text("Android 其他应用无法加载该字体，PUA 会显示为方框；建议保持关闭，使用标签/图片")
+                },
+                trailingContent = {
+                    Switch(
+                        checked = puaEmoji,
+                        onCheckedChange = { v ->
+                            puaEmoji = v
+                            prefs.puaEmoji = v
                         },
                     )
                 },

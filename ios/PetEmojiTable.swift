@@ -28,17 +28,17 @@ enum PetEmojiTable {
 
     /// 网格里的形态列表（顺序 = `PetEmojiMap.forms`）。
     static let forms: [Form] = [
-        Form(label: "笑", sticker: "idle"),
-        Form(label: "欢乐", sticker: "waiting"),
-        Form(label: "沮丧", sticker: "puzzled"),
-        Form(label: "哭", sticker: "crying"),
-        Form(label: "惊恐", sticker: "terrified"),
-        Form(label: "愤怒", sticker: "angry"),
-        Form(label: "撒娇", sticker: "coquettish"),
-        Form(label: "卖萌", sticker: "cute"),
-        Form(label: "讨好", sticker: "pleasing"),
-        Form(label: "敲打", sticker: "knocking"),
-        Form(label: "捂脸", sticker: "face-palm"),
-        Form(label: "吐舌头", sticker: "tongue-out"),
+        Form(label: "小欧·笑", sticker: "idle"),
+        Form(label: "小欧·欢乐", sticker: "waiting"),
+        Form(label: "小欧·沮丧", sticker: "puzzled"),
+        Form(label: "小欧·哭", sticker: "crying"),
+        Form(label: "小欧·惊恐", sticker: "terrified"),
+        Form(label: "小欧·愤怒", sticker: "angry"),
+        Form(label: "小欧·撒娇", sticker: "coquettish"),
+        Form(label: "小欧·卖萌", sticker: "cute"),
+        Form(label: "小欧·讨好", sticker: "pleasing"),
+        Form(label: "小欧·敲打", sticker: "knocking"),
+        Form(label: "小欧·捂脸", sticker: "face-palm"),
+        Form(label: "小欧·吐舌头", sticker: "tongue-out"),
     ]
 }

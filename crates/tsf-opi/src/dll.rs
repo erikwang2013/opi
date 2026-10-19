@@ -14,9 +14,10 @@
 //! - COM 在进程内定位本服务：`HKCR\CLSID\{CLSID}\InprocServer32`
 //!   默认值 = DLL 全路径，`ThreadingModel` = `Apartment`（TSF 文本服务是 STA 对象）。
 //! - TSF 自己的注册（语言 profile、类别）**不手写注册表**，改调官方 API：
-//!   `ITfInputProcessorProfiles::Register` / `AddLanguageProfile`、
-//!   `ITfCategoryMgr::RegisterCategory`（调用点见 `com_server.rs`）——
-//!   让 TSF 自己写自己的键，就不存在"我记错键名"这一整类失败。
+//!   `ITfInputProcessorProfiles::Register` / `EnableLanguageProfile(ByDefault)`、
+//!   `ITfInputProcessorProfileMgr::RegisterProfile`、`ITfCategoryMgr::RegisterCategory`
+//!   （调用点见 `registration.rs`）—— 让 TSF 自己写自己的键，就不存在
+//!   "我记错键名"这一整类失败。
 
 use core::sync::atomic::{AtomicIsize, Ordering};
 

@@ -147,7 +147,7 @@ jobs:
           if-no-files-found: error
 
   ios:
-    name: iOS — Swift 真编译 + framework/xcframework（未签名）
+    name: iOS — Swift 真编译 + 宿主 App/unsigned IPA
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -166,11 +166,32 @@ jobs:
           cargo build --release -p opi_ffi --target aarch64-apple-ios
           cargo build --release -p opi_ffi --target aarch64-apple-ios-sim
 
-      - name: 编译扩展 + 组装 framework/xcframework
+      - name: 编译扩展 + 宿主 App + 组装 unsigned IPA
         run: bash scripts/apple/package-ios.sh "${{ steps.ver.outputs.v }}"
+
+      - name: 验证 IPA 结构（未签名）
+        run: |
+          set -euo pipefail
+          ipa="$(ls dist/apple/ios/*.ipa)"
+          unzip -l "$ipa" > /tmp/opi-ipa-list.txt
+          cat /tmp/opi-ipa-list.txt
+          grep -q 'Payload/Opi.app/Opi' /tmp/opi-ipa-list.txt
+          grep -q 'Payload/Opi.app/PlugIns/OpiKeyboard.appex/OPIKeyboard' /tmp/opi-ipa-list.txt
+          grep -q 'Payload/Opi.app/PlugIns/OpiKeyboard.appex/luna.opid' /tmp/opi-ipa-list.txt
+          plutil -lint dist/apple/ios/Opi.app/Info.plist
+          plutil -lint dist/apple/ios/Opi.app/PlugIns/OpiKeyboard.appex/Info.plist
+          host_id="$(plutil -extract CFBundleIdentifier raw dist/apple/ios/Opi.app/Info.plist)"
+          kb_id="$(plutil -extract CFBundleIdentifier raw dist/apple/ios/Opi.app/PlugIns/OpiKeyboard.appex/Info.plist)"
+          case "$kb_id" in "$host_id".*) ;; *) echo "扩展 id 不以宿主 id 为前缀: $kb_id / $host_id" >&2; exit 1;; esac
+          echo "IPA 结构自洽：${ipa}（未签名，需重签后安装）"
 
       - uses: actions/upload-artifact@v4
         with:
           name: opi-ios-keyboard-v${{ steps.ver.outputs.v }}
-          path: dist/apple/ios
+          # 直接给 IPA + xcframework，不再套一层 zip（artifact 本身就是 zip）。
+          # package-ios.sh 仍会在 dist 里生成本地用的 `*-unsigned.zip`，只是不上传。
+          path: |
+            dist/apple/ios/*.ipa
+            dist/apple/ios/OPIKeyboard.xcframework
+            dist/apple/ios/KeyboardExtension-Info.plist
           if-no-files-found: error

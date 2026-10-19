@@ -272,16 +272,17 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
                         }
                     }
                 }
-                // 自有格的出口 = 图片剪贴板（不是文本上屏）：桌面没有 TSF/管道图片插入面。
+                // 自有格的出口由 [pickPetSticker] 分流：默认图片剪贴板（桌面没有 TSF/
+                // 管道图片插入面）；PUA 开关打开时改上屏字体字符（见 PetStickerPage.kt）。
                 // 同 pick 的纪律：先交还键盘焦点（用户接着要 Ctrl+V，目标得拿到焦点）。
                 fun copySticker(form: PetEmojiMap.Form) {
                     focus.clearFocus()
                     scope.launch {
                         var waited = 0
                         while (window.isFocused && waited < 300) { delay(20); waited += 20 }
-                        // 读 PNG + 写系统剪贴板都可能阻塞：挪出组合线程（同 onCommit 那条）。
+                        // 读 PNG/配置 + 写系统剪贴板都可能阻塞：挪出组合线程（同 onCommit 那条）。
                         val r = withContext(Dispatchers.IO) {
-                            pickLock.withLock { copyPetSticker(form, SystemImageClipboard) }
+                            pickLock.withLock { pickPetSticker(form, commit = onCommit) }
                         }
                         noticeIsError = !r.ok
                         notice = r.notice

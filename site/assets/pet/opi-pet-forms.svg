@@ -1,0 +1,331 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 erik.xyz | SPDX-License-Identifier: MIT -->
+<!--
+  OPI 项目宠物「小欧」· 十二种表情（2026-10-17 六种 + 2026-10-18 追加六种）
+
+  用途：移动端默认页顶部「宠物条」十二形态轮播（笑 → 欢乐 → 哭 → 沮丧 → 惊恐 →
+  愤怒 → 撒娇 → 卖萌 → 讨好 → 敲打 → 捂脸 → 吐舌头）的设计对照图。十二格与
+  docs/opi-pet.svg **完全同一套几何**（240×250 设计空间，逐格平移），只改眼睛 /
+  嘴 / 天线角度 / 情绪点缀色。
+
+  真源分工（改表情时三处一起看）：
+    · shared/pet/OpiPet.kt           —— 表情的**活真源**（Compose 绘制，含动效与情绪底色）
+    · docs/opi-pet.svg              —— 静态基准（键帽几何、锚点、基础配色）
+    · harmony/.../OpiPet.ets        —— 鸿蒙枚举镜像（表情只占序号，未绘制）
+  本图是设计对照，不驱动任何端；别把它当成第三份几何去拷贝。
+
+  基础配色沿用 docs/opi-pet.svg；情绪点缀色：
+    smile    #F5A6B4  笑 / 欢乐的腮红
+    joy      #F27D9D  欢乐更饱和的桃粉腮红
+    tear     #4E97E6  哭的眼泪
+    sweat    #6FB2F0  惊恐的冷汗
+    anger    #DD5138  愤怒的怒气符号与红腮
+    coquette #F46F9B  撒娇的爱心
+    cute     #F2B84B  卖萌的金色星星
+    pleasing #5FBF9F  讨好的薄荷菱形
+    knock    #E8A13C  敲打的动作线
+    palm     #E06A4E  捂脸的赭红腮
+    tongue   #EF5D8F  吐舌头的舌头
+-->
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     viewBox="0 0 800 1240" width="800" height="1240"
+     role="img" aria-labelledby="formsTitle formsDesc">
+  <title id="formsTitle">OPI 项目宠物「小欧」的十二种表情</title>
+  <desc id="formsDesc">十二格：笑、欢乐、哭、沮丧、惊恐、愤怒、撒娇、卖萌、讨好、敲打、
+    捂脸、吐舌头。每格都是同一枚键帽精灵，眼睛、嘴、天线与情绪点缀色不同；用于移动端
+    顶部宠物条的十二形态轮播。</desc>
+
+  <defs>
+    <linearGradient id="forms-skirt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E9F3F1"/>
+      <stop offset="1" stop-color="#D8E9E6"/>
+    </linearGradient>
+
+    <!-- 十二格共用的身体：投影、涟漪、手臂、键帽侧壁、OPI 刻字（不含天线/正面/表情）。 -->
+    <g id="forms-back">
+      <ellipse cx="120" cy="206" rx="72" ry="8" fill="#22272E" opacity="0.08"/>
+      <g stroke="#2E8B80" fill="none" stroke-linecap="round">
+        <path d="M74 214 Q120 228 166 214" stroke-width="4" opacity="0.5"/>
+        <path d="M92 226 Q120 236 148 226" stroke-width="4" opacity="0.28"/>
+      </g>
+      <g stroke-linecap="round" fill="none">
+        <path d="M62 118 L36 128" stroke="#2E8B80" stroke-width="17"/>
+        <path d="M62 118 L36 128" stroke="#FFFDF8" stroke-width="7"/>
+        <path d="M178 118 L204 128" stroke="#2E8B80" stroke-width="17"/>
+        <path d="M178 118 L204 128" stroke="#FFFDF8" stroke-width="7"/>
+      </g>
+      <path d="M54 140 L44 184 Q42 202 62 202 L178 202 Q198 202 196 184 L186 140 Z"
+            fill="url(#forms-skirt)" stroke="#2E8B80" stroke-width="5" stroke-linejoin="round"/>
+      <text x="120" y="187" text-anchor="middle" fill="#1E6B63"
+            font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace"
+            font-size="21" font-weight="700" letter-spacing="4.5">OPI</text>
+    </g>
+
+    <!-- 天线：拼音声调 ˉ。默认一份、欢乐（竖起）一份；沮丧/哭/撒娇用 rotate 摆角度。 -->
+    <g id="forms-antenna">
+      <path d="M120 52 L120 28" stroke="#2E8B80" stroke-width="5" stroke-linecap="round"/>
+      <path d="M103 20 L137 20" stroke="#D9553F" stroke-width="7" stroke-linecap="round"/>
+    </g>
+    <g id="forms-antenna-up">
+      <path d="M120 52 L120 24" stroke="#2E8B80" stroke-width="5" stroke-linecap="round"/>
+      <path d="M103 14 L137 14" stroke="#D9553F" stroke-width="7" stroke-linecap="round"/>
+    </g>
+  </defs>
+
+  <g font-family="'Noto Sans CJK SC', 'Source Han Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif">
+
+    <!-- 1 笑（SMILE）：圆眼 + 字母 O 嘴 + 桃粉腮红。 -->
+    <g transform="translate(20,20)">
+      <use href="#forms-back" xlink:href="#forms-back"/>
+      <use href="#forms-antenna" xlink:href="#forms-antenna"/>
+      <rect x="52" y="46" width="136" height="104" rx="20"
+            fill="#FFFAF0" stroke="#2E8B80" stroke-width="5"/>
+      <ellipse cx="77" cy="117.5" rx="11" ry="5.5" fill="#F5A6B4" opacity="0.38"/>
+      <ellipse cx="163" cy="117.5" rx="11" ry="5.5" fill="#F5A6B4" opacity="0.38"/>
+      <circle cx="93" cy="95" r="11" fill="#1E6B63"/>
+      <circle cx="147" cy="95" r="11" fill="#1E6B63"/>
+      <circle cx="89.2" cy="91.2" r="3.6" fill="#FFFAF0"/>
+      <circle cx="143.2" cy="91.2" r="3.6" fill="#FFFAF0"/>
+      <ellipse cx="120" cy="128" rx="12" ry="10" fill="none" stroke="#1E6B63" stroke-width="5"/>
+    </g>
+    <text x="140" y="296" text-anchor="middle" font-size="17" font-weight="700"
+          fill="#1E6B63">笑 · SMILE</text>
+
+    <!-- 2 欢乐（JOY）：闭眼笑弧 + 竖起的声调 + 更饱和的桃粉腮红。 -->
+    <g transform="translate(280,20)">
+      <use href="#forms-back" xlink:href="#forms-back"/>
+      <use href="#forms-antenna-up" xlink:href="#forms-antenna-up"/>
+      <rect x="52" y="46" width="136" height="104" rx="20"
+            fill="#FFF2F4" stroke="#2E8B80" stroke-width="5"/>
+      <ellipse cx="77" cy="117.5" rx="11" ry="5.5" fill="#F27D9D" opacity="0.38"/>
+      <ellipse cx="163" cy="117.5" rx="11" ry="5.5" fill="#F27D9D" opacity="0.38"/>
+      <g stroke="#1E6B63" stroke-width="5" fill="none" stroke-linecap="round">
+        <path d="M83.6 92.6 A 10 7 0 0 1 102.4 92.6"/>
+        <path d="M137.6 92.6 A 10 7 0 0 1 156.4 92.6"/>
+      </g>
+      <ellipse cx="120" cy="128" rx="12" ry="10" fill="none" stroke="#1E6B63" stroke-width="5"/>
+    </g>
+    <text x="400" y="296" text-anchor="middle" font-size="17" font-weight="700"
+          fill="#1E6B63">欢乐 · JOY</text>
+
+    <!-- 3 哭（CRY）：挤紧的 >< 眼 + 竖着张开的 O + 蓝色泪珠；天线垂 30°。 -->
+    <g transform="translate(540,20)">
+      <use href="#forms-back" xlink:href="#forms-back"/>
+      <g transform="rotate(30 120 48)">
+        <use href="#forms-antenna" xlink:href="#forms-antenna"/>
+      </g>
+      <rect x="52" y="46" width="136" height="104" rx="20"
+            fill="#EEF6FF" stroke="#2E8B80" stroke-width="5"/>
+      <g stroke="#1E6B63" stroke-width="5" fill="none" stroke-linecap="round">
+        <path d="M84 87 L100 95 M84 103 L100 95"/>
+        <path d="M156 87 L140 95 M156 103 L140 95"/>
+      </g>
+      <g fill="#4E97E6">
+        <circle cx="84" cy="108" r="3.2"/>
+        <ellipse cx="84" cy="119" rx="2.2" ry="5" opacity="0.9"/>
+        <circle cx="156" cy="108" r="3.2"/>
+        <ellipse cx="156" cy="119" rx="2.2" ry="5" opacity="0.9"/>
+      </g>
+      <ellipse cx="120" cy="128" rx="8.5" ry="11" fill="none" stroke="#1E6B63" stroke-width="5"/>
+    </g>
+    <text x="660" y="296" text-anchor="middle" font-size="17" font-weight="700"
+          fill="#1E6B63">哭 · CRY</text>
+
+    <!-- 4 沮丧（DEJECTED）：八字愁眉 + 大小眼 + 缩小的 O；天线垂 10°。 -->
+    <g transform="translate(20,330)">
+      <use href="#forms-back" xlink:href="#forms-back"/>
+      <g transform="rotate(10 120 48)">
+        <use href="#forms-antenna" xlink:href="#forms-antenna"/>
+      </g>
+      <rect x="52" y="46" width="136" height="104" rx="20"
+            fill="#F2F3F7" stroke="#2E8B80" stroke-width="5"/>
+      <g stroke="#1E6B63" stroke-width="4" fill="none" stroke-linecap="round">
+        <path d="M84 84 L102 77"/>
+        <path d="M156 84 L138 77"/>
+      </g>
+      <circle cx="93" cy="95" r="8" fill="#1E6B63"/>
+      <circle cx="147" cy="95" r="12" fill="#1E6B63"/>
+      <ellipse cx="120" cy="130" rx="7" ry="6" fill="none" stroke="#1E6B63" stroke-width="5"/>
+    </g>
+    <text x="140" y="606" text-anchor="middle" font-size="17" font-weight="700"
+          fill="#1E6B63">沮丧 · DEJECTED</text>
+
+    <!-- 5 惊恐（TERRIFIED）：瞪圆的眼睛 + 小瞳孔 + 小 O + 紫色冷汗。 -->
+    <g transform="translate(280,330)">
+      <use href="#forms-back" xlink:href="#forms-back"/>
+      <use href="#forms-antenna" xlink:href="#forms-antenna"/>
+      <rect x="52" y="46" width="136" height="104" rx="20"
+            fill="#F2ECFC" stroke="#2E8B80" stroke-width="5"/>
+      <g fill="none" stroke="#1E6B63" stroke-width="4.5">
+        <circle cx="93" cy="95" r="13"/>
+        <circle cx="147" cy="95" r="13"/>
+      </g>
+      <circle cx="93" cy="95" r="5.5" fill="#1E6B63"/>
+      <circle cx="147" cy="95" r="5.5" fill="#1E6B63"/>
+      <path d="M174 52 C182 61 182 72 174 72 C166 72 166 61 174 52 Z" fill="#6FB2F0"/>
+      <circle cx="171" cy="64" r="1.4" fill="#FFFFFF" opacity="0.85"/>
+      <ellipse cx="120" cy="128" rx="6" ry="8" fill="none" stroke="#1E6B63" stroke-width="5"/>
+    </g>
+    <text x="400" y="606" text-anchor="middle" font-size="17" font-weight="700"
+          fill="#1E6B63">惊恐 · TERRIFIED</text>
+
+    <!-- 6 愤怒（ANGRY）：倒八字眉 + 细眼 + 压扁的 O + 红色怒气符号与红腮。 -->
+    <g transform="translate(540,330)">
+      <use href="#forms-back" xlink:href="#forms-back"/>
+      <use href="#forms-antenna" xlink:href="#forms-antenna"/>
+      <rect x="52" y="46" width="136" height="104" rx="20"
+            fill="#FFF0E9" stroke="#2E8B80" stroke-width="5"/>
+      <ellipse cx="77" cy="117.5" rx="11" ry="5.5" fill="#DD5138" opacity="0.30"/>
+      <ellipse cx="163" cy="117.5" rx="11" ry="5.5" fill="#DD5138" opacity="0.30"/>
+      <circle cx="93" cy="97" r="9" fill="#1E6B63"/>
+      <circle cx="147" cy="97" r="9" fill="#1E6B63"/>
+      <g stroke="#1E6B63" stroke-width="5" fill="none" stroke-linecap="round">
+        <path d="M80 78 L102 88"/>
+        <path d="M160 78 L138 88"/>
+      </g>
+      <g stroke="#DD5138" stroke-width="4.5" fill="none" stroke-linecap="round">
+        <path d="M162 52 L178 68"/>
+        <path d="M178 52 L162 68"/>
+      </g>
+      <ellipse cx="120" cy="130" rx="8" ry="6" fill="none" stroke="#1E6B63" stroke-width="5"/>
+    </g>
+    <text x="660" y="606" text-anchor="middle" font-size="17" font-weight="700"
+          fill="#1E6B63">愤怒 · ANGRY</text>
+
+    <!-- 7 撒娇（COQUETTISH）：左眼眨眼 + 圆睁的右眼 + 桃粉爱心；天线歪 8°。 -->
+    <g transform="translate(20,640)">
+      <use href="#forms-back" xlink:href="#forms-back"/>
+      <g transform="rotate(-8 120 48)">
+        <use href="#forms-antenna" xlink:href="#forms-antenna"/>
+      </g>
+      <rect x="52" y="46" width="136" height="104" rx="20"
+            fill="#FFF0F5" stroke="#2E8B80" stroke-width="5"/>
+      <ellipse cx="77" cy="117.5" rx="11" ry="5.5" fill="#F46F9B" opacity="0.38"/>
+      <ellipse cx="163" cy="117.5" rx="11" ry="5.5" fill="#F46F9B" opacity="0.38"/>
+      <path d="M83.6 92.6 A 10 7 0 0 1 102.4 92.6" fill="none"
+            stroke="#1E6B63" stroke-width="5" stroke-linecap="round"/>
+      <circle cx="147" cy="95" r="11" fill="#1E6B63"/>
+      <circle cx="143.2" cy="91.2" r="3.6" fill="#FFF0F5"/>
+      <path d="M166 73 C152 63 156 52 166 59 C176 52 180 63 166 73 Z" fill="#F46F9B"/>
+      <circle cx="184" cy="50" r="3" fill="#F46F9B" opacity="0.75"/>
+      <ellipse cx="120" cy="128" rx="8" ry="8" fill="none" stroke="#1E6B63" stroke-width="5"/>
+    </g>
+    <text x="140" y="916" text-anchor="middle" font-size="17" font-weight="700"
+          fill="#1E6B63">撒娇 · COQUETTISH</text>
+
+    <!-- 8 卖萌（CUTE）：水汪汪的大圆眼（大高光）+ 金色四角星 + 桃粉腮红。 -->
+    <g transform="translate(280,640)">
+      <use href="#forms-back" xlink:href="#forms-back"/>
+      <use href="#forms-antenna" xlink:href="#forms-antenna"/>
+      <rect x="52" y="46" width="136" height="104" rx="20"
+            fill="#FFF9E8" stroke="#2E8B80" stroke-width="5"/>
+      <ellipse cx="77" cy="117.5" rx="11" ry="5.5" fill="#F5A6B4" opacity="0.38"/>
+      <ellipse cx="163" cy="117.5" rx="11" ry="5.5" fill="#F5A6B4" opacity="0.38"/>
+      <circle cx="93" cy="95" r="12" fill="#1E6B63"/>
+      <circle cx="147" cy="95" r="12" fill="#1E6B63"/>
+      <circle cx="89" cy="90.5" r="5" fill="#FFF9E8"/>
+      <circle cx="143" cy="90.5" r="5" fill="#FFF9E8"/>
+      <circle cx="96.5" cy="100" r="1.8" fill="#FFF9E8"/>
+      <circle cx="150.5" cy="100" r="1.8" fill="#FFF9E8"/>
+      <g fill="#F2B84B">
+        <path d="M170 52 Q171.76 58.24 178 60 Q171.76 61.76 170 68 Q168.24 61.76 162 60 Q168.24 58.24 170 52 Z"/>
+        <path d="M70 60 Q71.32 64.68 76 66 Q71.32 67.32 70 72 Q68.68 67.32 64 66 Q68.68 64.68 70 60 Z"/>
+        <path d="M182 82 Q182.88 85.12 186 86 Q182.88 86.88 182 90 Q181.12 86.88 178 86 Q181.12 85.12 182 82 Z"/>
+      </g>
+      <ellipse cx="120" cy="128" rx="11" ry="9" fill="none" stroke="#1E6B63" stroke-width="5"/>
+    </g>
+    <text x="400" y="916" text-anchor="middle" font-size="17" font-weight="700"
+          fill="#1E6B63">卖萌 · CUTE</text>
+
+    <!-- 9 讨好（PLEASING）：白眼球 + 上抬的瞳孔 + 薄荷色小菱形。 -->
+    <g transform="translate(540,640)">
+      <use href="#forms-back" xlink:href="#forms-back"/>
+      <use href="#forms-antenna" xlink:href="#forms-antenna"/>
+      <rect x="52" y="46" width="136" height="104" rx="20"
+            fill="#EFFAF5" stroke="#2E8B80" stroke-width="5"/>
+      <ellipse cx="77" cy="117.5" rx="11" ry="5.5" fill="#5FBF9F" opacity="0.38"/>
+      <ellipse cx="163" cy="117.5" rx="11" ry="5.5" fill="#5FBF9F" opacity="0.38"/>
+      <circle cx="93" cy="95" r="12" fill="#FFFFFF"/>
+      <circle cx="147" cy="95" r="12" fill="#FFFFFF"/>
+      <circle cx="93" cy="93" r="8.5" fill="#1E6B63"/>
+      <circle cx="147" cy="93" r="8.5" fill="#1E6B63"/>
+      <circle cx="90" cy="89.5" r="3" fill="#FFFFFF" opacity="0.9"/>
+      <circle cx="144" cy="89.5" r="3" fill="#FFFFFF" opacity="0.9"/>
+      <g fill="#5FBF9F">
+        <path d="M170 57 L175 62 L170 67 L165 62 Z"/>
+        <path d="M70 58 L74 62 L70 66 L66 62 Z"/>
+      </g>
+      <ellipse cx="120" cy="128" rx="8" ry="7" fill="none" stroke="#1E6B63" stroke-width="5"/>
+    </g>
+    <text x="660" y="916" text-anchor="middle" font-size="17" font-weight="700"
+          fill="#1E6B63">讨好 · PLEASING</text>
+
+    <!-- 10 敲打（KNOCKING）：专注眯眼 + 琥珀色动作线与十字星 + 压扁的 O。 -->
+    <g transform="translate(20,950)">
+      <use href="#forms-back" xlink:href="#forms-back"/>
+      <use href="#forms-antenna" xlink:href="#forms-antenna"/>
+      <rect x="52" y="46" width="136" height="104" rx="20"
+            fill="#FFF4E6" stroke="#2E8B80" stroke-width="5"/>
+      <ellipse cx="77" cy="117.5" rx="11" ry="5.5" fill="#E8A13C" opacity="0.38"/>
+      <ellipse cx="163" cy="117.5" rx="11" ry="5.5" fill="#E8A13C" opacity="0.38"/>
+      <g stroke="#1E6B63" stroke-width="5" fill="none" stroke-linecap="round">
+        <path d="M82 96 L102 92"/>
+        <path d="M138 92 L158 96"/>
+      </g>
+      <g stroke="#E8A13C" stroke-width="3.5" fill="none" stroke-linecap="round">
+        <path d="M198 70 L214 70"/>
+        <path d="M198 82 L214 82"/>
+        <path d="M198 94 L214 94"/>
+        <path d="M207 100 L207 112"/>
+        <path d="M201 106 L213 106"/>
+      </g>
+      <ellipse cx="120" cy="130" rx="9" ry="6" fill="none" stroke="#1E6B63" stroke-width="5"/>
+    </g>
+    <text x="140" y="1226" text-anchor="middle" font-size="17" font-weight="700"
+          fill="#1E6B63">敲打 · KNOCKING</text>
+
+    <!-- 11 捂脸（FACE PALM）：手掌最后画，盖住右半张脸与半张嘴；只露挤紧的左眼。 -->
+    <g transform="translate(280,950)">
+      <use href="#forms-back" xlink:href="#forms-back"/>
+      <use href="#forms-antenna" xlink:href="#forms-antenna"/>
+      <rect x="52" y="46" width="136" height="104" rx="20"
+            fill="#FFF0EE" stroke="#2E8B80" stroke-width="5"/>
+      <ellipse cx="77" cy="117.5" rx="11" ry="5.5" fill="#E06A4E" opacity="0.38"/>
+      <ellipse cx="163" cy="117.5" rx="11" ry="5.5" fill="#E06A4E" opacity="0.38"/>
+      <g stroke="#1E6B63" stroke-width="5" fill="none" stroke-linecap="round">
+        <path d="M83 87 L100 95 M83 103 L100 95"/>
+      </g>
+      <ellipse cx="120" cy="128" rx="7" ry="8" fill="none" stroke="#1E6B63" stroke-width="5"/>
+      <path d="M124 146 L124 82 Q124 64 144 64 L172 64 Q186 64 186 82 L186 132
+               Q186 148 168 148 L142 148 Q124 148 124 146 Z"
+            fill="#FFF0EE" stroke="#2E8B80" stroke-width="5" stroke-linejoin="round"/>
+      <g stroke="#2E8B80" stroke-width="2.5" opacity="0.55" stroke-linecap="round">
+        <path d="M142 68 L142 98"/>
+        <path d="M156 68 L156 98"/>
+        <path d="M170 68 L170 98"/>
+      </g>
+    </g>
+    <text x="400" y="1226" text-anchor="middle" font-size="17" font-weight="700"
+          fill="#1E6B63">捂脸 · FACE PALM</text>
+
+    <!-- 12 吐舌头（TONGUE OUT）：圆睁左眼 + 眨眼右眼 + 粉色舌头从 O 嘴下探出。 -->
+    <g transform="translate(540,950)">
+      <use href="#forms-back" xlink:href="#forms-back"/>
+      <use href="#forms-antenna" xlink:href="#forms-antenna"/>
+      <rect x="52" y="46" width="136" height="104" rx="20"
+            fill="#FFF0F6" stroke="#2E8B80" stroke-width="5"/>
+      <ellipse cx="77" cy="117.5" rx="11" ry="5.5" fill="#EF5D8F" opacity="0.38"/>
+      <ellipse cx="163" cy="117.5" rx="11" ry="5.5" fill="#EF5D8F" opacity="0.38"/>
+      <circle cx="93" cy="95" r="11" fill="#1E6B63"/>
+      <circle cx="89.2" cy="91.2" r="3.6" fill="#FFF0F6"/>
+      <path d="M137.6 92.6 A 10 7 0 0 1 156.4 92.6" fill="none"
+            stroke="#1E6B63" stroke-width="5" stroke-linecap="round"/>
+      <ellipse cx="120" cy="141.5" rx="8" ry="7.5" fill="#EF5D8F"/>
+      <path d="M120 138 L120 146" stroke="#1E6B63" stroke-width="2"
+            opacity="0.6" stroke-linecap="round"/>
+      <ellipse cx="120" cy="128" rx="10" ry="9" fill="none" stroke="#1E6B63" stroke-width="5"/>
+    </g>
+    <text x="660" y="1226" text-anchor="middle" font-size="17" font-weight="700"
+          fill="#1E6B63">吐舌头 · TONGUE OUT</text>
+  </g>
+</svg>

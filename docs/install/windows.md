@@ -7,7 +7,14 @@
 >
 > **Windows 是三个"有端代码"的平台（Android / Linux / Windows，见 `README.md`）里唯一
 > 没人装过、没人跑过的一端。本文是一份操作步骤，不是一份验证过的配方。**
-> （另外三个平台 iOS / macOS / 鸿蒙只有草案，更早一步 —— 它们的代码连编译器都没过。）
+> （iOS / macOS / 鸿蒙已由 CI 或本机工具链真编译并产出 unsigned 产物；它们仍未真机验收。）
+>
+> **【订正 2026-10-19】** 用户已在真 Windows 上装过 Release 的 v1.15.1 MSI：应用进程能起，
+> **但输入法键盘不出现**。根因用该 MSI 的表级证据钉死 —— 那是 **jpackage 原始产物**，
+> `CustomAction`/`InstallExecuteSequence` 里没有任何注册动作，安装时**从未执行
+> `regsvr32`**（TSF 的 COM/类别/语言 profile 全未注册）。本轮已把后处理接入 CI
+> （§2.5 的 `msi-postprocess` job），并把安装目录改为 `C:\Program Files\opi`。
+> **后处理后的包仍然没人装过** —— 下面所有【未验证】条目不因此消失。
 > 2026-10-09 起多了**「能被构建出来」**这一档：DLL 与 .msi 会在 GitHub 的 windows runner 上
 > 真编出来（§2.5）。**「装上」「跑起来」仍然一次都没有** —— 别把 §2.5 读成验收通过。
 >
@@ -40,6 +47,12 @@
 | Rust | `rustup target add x86_64-pc-windows-msvc` | 目标不是默认安装的 |
 | 词库文件 | `luna.opid`，**可选但强烈建议** —— 不给就只有内置回退词库（见 §2.2） | `crates/tsf-opi/src/dict_path.rs` |
 | 候选窗运行时 | JVM（只有要显示候选窗时才需要） | `desktop/` 是 Compose Desktop / JVM 工程 |
+
+> **Win7 / Win8 / 8.1 不支持（2026-10-19 用户裁决：仅文档标注）**：当前
+> `tsf_opi.dll` 导入 `api-ms-win-core-synch-l1-2-0`（Win8+）与 `bcryptprimitives`
+> （Rust 1.88 std 的 Win10 路径）；候选窗是 JDK 21/Temurin/jpackage + Compose
+> Desktop 1.11，官方目标 Win10/11。要在 Win7/8 上运行须另建 legacy 轨道
+> （Rust ≤1.77 + windows_7/8 + 老 TSF 注册 + 原生候选窗 + 独立安装包），不在本仓库范围。
 
 ### 1.2 `cargo check` 与 `cargo build` 的区别 —— 这条最容易读错
 
@@ -127,8 +140,9 @@ grep -n 'tsf_opi' .github/workflows/ci.yml
 ⇒ **不链接、无产物**。另有一步 `dtolnay/rust-toolchain` 的 `targets:` 把这个目标预装进 runner
 （同处还列着四个 Apple 目标），那是**安装**不是**构建**。
 
-> **【订正 2026-10-09】** 上面这两段说的是 `ci.yml` —— 它至今仍然成立（`ci.yml` 一个字没动，
-> 那条 `cargo check` 仍是它唯一碰 Windows 目标的编译步骤，仍**只到类型检查**）。
+> **【订正 2026-10-09 / 措辞订正 2026-10-19】** 上面这两段说的是 `ci.yml` 的 Windows
+> 相关部分 —— 它至今仍然成立（那条 `cargo check` 仍是它唯一碰 Windows 目标的编译步骤，
+> 仍**只到类型检查**；`ci.yml` 后来新增的 `packaging-scripts` job 只跑 Linux 安装脚本）。
 > 但仓库现在多了一份**只在 windows runner 上跑**的 `.github/workflows/windows.yml`：
 > 它做的正是上表里打 ❌ 的那几格 —— `cargo build --release`（**真链接**）→ `tsf_opi.dll` →
 > `dumpbin /exports` 读导出表。命令与实测输出见 §2.5。
@@ -260,14 +274,24 @@ android/app/src/main/assets/luna.opid
 
 ### 2.5 自动打包（GitHub Actions，2026-10-09 起）
 
-`.github/workflows/windows.yml` —— **只在 windows runner 上跑**（`ci.yml` / `packages.yml`
-一个字没动）。它做的正是 §1.2 那张表里本机打 ❌ 的几格：**DLL 真链接、导出表检视、`.msi` 产出**。
-它**不**注册、**不**安装、**不**运行任何东西 —— 「能编出来」与「Windows 端能用」是两件事（§6）。
+`.github/workflows/windows.yml` —— 构建 job 在 windows runner 上跑，后处理 job
+（`msi-postprocess`，2026-10-19 起）在 `ubuntu-latest` 上用 msitools 跑，
+容器安装冒烟 job（`windows-install-test`，2026-10-20 新增）在 `windows-latest` 上跑。
+**订正 2026-10-19**：不再写「`ci.yml` 一个字没动」—— `ci.yml` 已有独立的
+`packaging-scripts` job（2026-10 起，跑 Linux 安装脚本回归），但它不碰 Windows 构建；
+`packages.yml` 未动。它覆盖 §1.2 那张表里本机打 ❌ 的几格：
+**DLL 真链接（静态 CRT）、导出/导入表检视、`.msi` 产出、表级后处理（注册动作/安装目录）、
+容器内 `msiexec` 冒烟日志**。后处理 job 只做表级注入；`windows-install-test` 只在
+Windows Server Core 容器里安装并抓日志，**不**等于真机验证 —— 容器通常缺语言栏/TSF，
+`OpRegisterTsf` 失败/回滚会如实留在日志里。「表里注入了」与「Windows 端能用」仍是
+两件事（§6）。
 
-| artifact | 内容 | 2026-10-09 那次 run 的实测体积 |
+| artifact | 内容 | 实测体积（来源 / 单位 / 日期） |
 |---|---|---|
-| `opi-tsf-dll-v<版本>` | `tsf_opi.dll`（zip 里就这一个文件；**仅供 desktop-msi job 下载打包，不再作为用户入口发布**） | DLL 本体 778,240 B；上传的 zip 331,390 B |
-| `opi-desktop-msi-v<版本>` | `opi-candidates-<版本>.msi`（zip 里就这一个文件） | 上传的 zip 58,683,236 B（58 MB 量级，主要是 jlink 出来的 JRE） |
+| `opi-tsf-dll-v<版本>` | `tsf_opi.dll`（zip 里就这一个文件；**仅供 desktop-msi job 下载打包，不再作为用户入口发布**） | DLL 本体 778,240 B、上传 zip 331,390 B（2026-10-09 run，旧构建） |
+| `opi-desktop-msi-raw-v<版本>` | jpackage **原始** `.msi`（zip 里一个文件）。**仅内部中间物**（YAML 注释标 internal）：没有注册动作，只供 `msi-postprocess` 下载；后处理成功后由该 job 删除，**正常 run 的最终 artifacts 里不应出现** | 上传的 **zip** 58,683,236 B（2026-10-09 run）；**未压缩 MSI** 62,034,236 B（2026-10-19 本机核对的 v1.15.1 发布资产）。两者不是同一次构建，别混比 |
+| `opi-desktop-msi-v<版本>` | **后处理后的** `opi-candidates-<版本>.msi`（zip 里一个文件）。**这才是用户入口**（`msi-postprocess` job 产出） | **未压缩 MSI** 62,443,008 B（2026-10-19 本机由上一行的 v1.15.1 raw 处理得到；+408,772 B）。CI 上传的是 zip，别再拿这个数当 zip 体积 |
+| `opi-install-logs-v<版本>` | `windows-install-test` 在 Windows Server Core 容器里跑 `msiexec` 的日志与目录/注册表输出（`install-custom.log` / `install-default.log` / `dir-*.txt` / `reg-*.txt`）。容器缺语言栏/TSF，失败/回滚会如实留在日志里 | 每次 run 新生成 |
 
 名字里的版本来自 `Cargo.toml` 的 `[workspace.package] version`（本仓六 crate 共用的单一来源），
 并与 `desktop/build.gradle.kts` 的 `opiAppVersion`（= jpackage 的 `packageVersion`）**比对**：
@@ -281,10 +305,15 @@ gh run list   --workflow=windows.yml                 # 找最近一次成功的 
 gh run download <run-id> -n opi-tsf-dll-v<版本>      # 或 -n opi-desktop-msi-v<版本>
 ```
 
+⚠️ **正常 run 的最终 artifacts 里不应出现 `-raw-`**：raw 只是
+`desktop-msi → msi-postprocess` 的 job 间中间物，后处理成功后自动删除。若还能看到它，
+说明后处理 job 失败（raw 保留用于排障，也不要安装）。用户唯一入口是
+`opi-desktop-msi-v<版本>`。
+
 或在 Actions 页面（仓库 → Actions → Windows 打包）点进某次 run 下载。
 **触发**：手动 dispatch，或 push 到默认分支且改动落在 `crates/tsf-opi/**` / `desktop/**` /
-`.github/workflows/windows.yml`。⚠️ 本仓约定 workflow 要**先存在于默认分支**才能在 Actions
-页面手动 dispatch —— 合并前它只能被分支 push 触发。
+`scripts/postprocess-windows-msi.sh` / `.github/workflows/windows.yml`。⚠️ 本仓约定 workflow
+要**先存在于默认分支**才能在 Actions 页面手动 dispatch —— 合并前它只能被分支 push 触发。
 
 **那次 run 里真发生的事（【CI 实测】：`windows-latest`，run 37934999798，全绿；
 https://github.com/erikwang2013/opi/actions/runs/37934999798 ）**：
@@ -293,6 +322,12 @@ https://github.com/erikwang2013/opi/actions/runs/37934999798 ）**：
    **本仓第一次在 Windows 目标上跑完整 release 链接**，产出 `tsf_opi.dll`。
    链接器给 4 条 `LNK4104`（"export of symbol 'Dll…' should be PRIVATE"）：那是 cdylib 导出
    这四个 COM 入口的常态建议，不是错 —— 下一条的导出表就是「它没挡住导出」的证明。
+   **2026-10-19 起加 `RUSTFLAGS=-C target-feature=+crt-static`**：MSI 不安装 VC++ 运行时
+   （jpackage 的 `runtime\bin` 在包内但不在 DLL 旁的 `app\`，也不进 PATH），动态 CRT 的
+   DLL 在没装 VC++ 的机器上会让 `regsvr32` 以 `0x8007007E`（找不到模块）失败。静态链接后
+   导入表里不再出现 `VCRUNTIME140.dll` / `MSVCP140.dll` / `ucrtbase.dll` /
+   `api-ms-win-crt-*.dll` —— 紧接着的 `/dependents` 门禁只要出现其中任一模式就红
+   （2026-10-19 reviewer m2 扩了后两类；`api-ms-win-core-*` 是系统 DLL，不在判据里）。
 2. `dumpbin /exports` 读导出表（**§6.1 第 2 条的消除证据**）：
 
    ```
@@ -316,33 +351,79 @@ https://github.com/erikwang2013/opi/actions/runs/37934999798 ）**：
 
 - 候选窗应用本体（`desktop/` 编出的 jar）+ **jlink 出来的 JRE 运行时**（58 MB 主要在这）+ 图标；
 - **`tsf_opi.dll`**（2026-10-18 起）：`desktop-msi` job 先下载 `tsf-dll` job 的产物，经
-  `OPI_TSF_DLL` 挂进 jpackage 的 `--input`，落在 `INSTALLDIR\app\`。单独发布的 DLL
-  artifact 从此**不再是用户入口**（用户裁决「DLL 不要单独发布，用户不会用」）；
+  `OPI_TSF_DLL` 挂进 jpackage 的 `--input`，落在 `INSTALLDIR\app\`（后处理后的默认
+  安装目录是 `C:\Program Files\opi`）。单独发布的 DLL artifact 从此**不再是用户入口**
+  （用户裁决「DLL 不要单独发布，用户不会用」）；
 - **`launch-and-restart.cmd`**：完成页复选框拉起的脚本（启动候选窗 + 重启 Explorer）；
+- **PUA 字体 `opi-emoji.ttf` + `install-emoji-font.ps1`**（2026-10-19 加）：字体真源是
+  `shared/pet/emoji-font/opi-emoji.ttf`，`desktop/build.gradle.kts` 在
+  `OPI_TSF_DLL` 分支把它作为**普通文件**挂进 jpackage（同时仍以
+  `pet-font/opi-emoji.ttf` 进 jar classpath）。MSI 里的落点是
+  `INSTALLDIR\app\opi-emoji.ttf`；完成页脚本以登录用户身份把它复制到
+  `%LOCALAPPDATA%\Microsoft\Windows\Fonts\opi-emoji.ttf`，写
+  `HKCU\Software\Microsoft\Windows NT\CurrentVersion\Fonts` 的
+  `Opi Emoji (TrueType)`，并广播 `WM_FONTCHANGE`。⚠️ 只有勾选 Finish 才执行；
+  `msiexec /qn` 不装字体。字体含 **CBDT/CBLC + SVG** 两套彩色表、**没有
+  COLR/CPAL** ⇒ Windows 10 原生 DirectWrite 宿主是否渲染未经真机验证；应用自身
+  走 Compose/Skia 的 classpath 字体，不依赖系统安装；
 - **没有** `luna.opid`，也不设置词库环境变量（§2.4 的判断不变）。
 
-**拿下来之后要过一遍后处理（2026-10-17 / 2026-10-18 加）**：CI 出的 `.msi` 只带 jpackage
-的默认行为，而用户裁决了三条它做不了的（「安装的时候中断正在运行的应用，安装后启动」，
-以及「覆盖安装新版本后还要重启才生效」）：
+**图标（2026-10-19 实测于 v1.15.1 raw MSI）**：`Property` 表
+`ARPPRODUCTICON=JpARPPRODUCTICON`，`Icon` 表同名行指向 `Icon.JpARPPRODUCTICON`
+流；该流是 798,720 B 的启动器 PE（与包内 `opi-candidates.exe` 同尺寸），
+`wrestool` 从中取出 6 个尺寸（256/128/64/48/32/16），逐帧 PNG 的 SHA-256 与
+`desktop/icons/opi-pet.ico` **完全相同**。启动器 exe 自身的 icon 资源也与该 ICO
+逐帧相同。⇒ MSI 产品图标与 launcher 图标都是 `desktop/icons/opi-pet.ico`（小欧
+头像），不是 Java 默认图标。新构建沿用同一 `windows { iconFile.set(...) }`，但
+**新产物仍应重做一次同样的逐帧比对**（构建工具可能换版本）。
+
+**后处理（2026-10-17 / 10-18 加，2026-10-19 起由 CI 自动执行）**：CI 出的 `.msi` 只带
+jpackage 的默认行为，而用户裁决了它做不了的四件事（「安装的时候中断正在运行的应用，
+安装后启动」「覆盖安装新版本后还要重启才生效」「安装目录以 opi 为基础目录」）：
+
+> **2026-10-19 的教训**：在 `msi-postprocess` job 出现之前，后处理只是文档里的**手工**
+> 步骤，实际发布出去的正是 jpackage 原始 MSI —— 用户在真机装 v1.15.1 后键盘不显示，
+> 根因就是**从未执行 `regsvr32`**。现在它是 CI 的必需步骤（`needs: [version, desktop-msi]`），
+> 该 job 在 `ubuntu-latest` 上装 `msitools` 并跑脚本，再独立读一遍表做断言。
+
+**本地重新处理旧 artifact / 排障**仍可用同一条容器命令（不覆盖输入时给第二个参数）：
 
 ```bash
 # 在 debian:12 容器里跑（本机没有 msitools；同 scripts/build-packages.sh 的用法）
 docker run --rm -v "$PWD:/w" -w /w debian:12 \
   sh -c 'apt-get update -qq && apt-get install -y -qq msitools >/dev/null \
-         && scripts/postprocess-windows-msi.sh dist/opi-candidates-<版本>.msi'
+         && scripts/postprocess-windows-msi.sh in.msi out.msi'
 ```
 
-`scripts/postprocess-windows-msi.sh`（文件头有全部设计理由与「能证明/不能证明」）做三件事：
+`scripts/postprocess-windows-msi.sh`（文件头有全部设计理由与「能证明/不能证明」）做四件事：
 
-1. 执行序列 797 加一条 `"taskkill" /f /t /im opi-candidates.exe`（引号是 WixQuietExec 的
+1. **安装目录**：`Directory` 表 `INSTALLDIR` 行的 DefaultDir 从 jpackage 的
+   `...|opi-candidates` 改为 `opi` ⇒ 默认装到 `C:\Program Files\opi`。只改这一行，
+   其余行原样整表导回；`packageName` 不动（TSF 的 `settings_exe` 依赖
+   `opi-candidates.exe`）。
+2. 执行序列 797 加一条 `"taskkill" /f /t /im opi-candidates.exe`（引号是 WixQuietExec 的
    硬要求；排在 `RemoveExistingProducts@798` **之前** —— 否则运行中的旧实例会走
    「改名+重启后删」那条路，装完还活着）。
-2. 执行序列 5900（InstallFiles 之后、InstallFinalize 之前）经 `WixCA` 的 `WixSilentExec`
-   （Type 65）执行 `"regsvr32" /s "[INSTALLDIR]app\tsf_opi.dll"`，注册随 MSI 安装的
-   TSF COM 服务器。条件 `NOT REMOVE`：安装/修复执行，卸载不执行。
-   `WixSilentExec` 用自己的 `WixSilentExecCmdLine` 属性 —— 不复用 797 的
+3. 执行序列 5890 先用 **Type 51（属性设置）** 动作把格式化后的命令行写进
+   `WixSilentExec64CmdLine`；5900（InstallFiles 之后、InstallFinalize 之前）再由
+   `WixCA` 的 **`WixSilentExec64`**（**Type 1，Return=check**；不是 65）执行
+   `"[System64Folder]regsvr32.exe" /s "[INSTALLDIR]app\tsf_opi.dll"`，注册随 MSI 安装的 TSF COM 服务器。
+   **2026-10-20 订正（CI Server Core 实测）**：Property 表的 Value **不会**被 MSI
+   格式化；直接把 `[INSTALLDIR]`/`[System64Folder]` 写进 Property 会让 `QuietExec64`
+   拿到字面量并返回 `0x80070003`，`OpRegisterTsf` 失败、安装回滚、安装目录为空。
+   Type 51 动作的 Target 列才会格式化，且 5890 必须先于 5900。
+   **必须用 64 位变体**（2026-10-19 复审 blocker）：随包的 `Binary.WixCA` 是
+   **PE32 i386**（216,496 B），裸 `WixSilentExec` 在 WOW64 里解析到 SysWOW64 的 32 位
+   `regsvr32`，加载不了 x86-64 的 `tsf_opi.dll`。`WixSilentExec64` 配 `WixSilentExec64CmdLine`，
+   命令与 `regsvr32` 都走 64 位。**注册失败会让安装本身失败并回滚**（Type 65 的
+   Continue 位会把失败吞成「装成功、键盘不出现」，2026-10-19 reviewer M2）；排障看
+   `msiexec /i <包> /l*v install.log` 里的 `OpRegisterTsf`。条件 `NOT REMOVE`：安装/修复执行，
+   卸载不执行（卸载不清理注册的后果见 §6.1 #13）。
+   `WixSilentExec64` 用自己的 `WixSilentExec64CmdLine` 属性 —— 不复用 797 的
    `WixQuietExecCmdLine`（同一属性两条命令会互相踩）。
-3. ExitDialog 的 WixUI 自带复选框（默认勾选）在 Finish 时经 `WixCA` 的 `WixShellExec`
+   `WixCA` **没有** `WixShellExec64`（导出表实证），所以第 4 条的完成页自启仍是 32 位
+   `WixShellExec`；32 位 ShellExecute 同样能拉起 `.cmd`。
+4. ExitDialog 的 WixUI 自带复选框（默认勾选）在 Finish 时经 `WixCA` 的 `WixShellExec`
    拉起 `launch-and-restart.cmd`：以**登录用户**身份启动候选窗，然后
    `taskkill /f /im explorer.exe`。**只杀不 `start`**：从提权的 msiexec 里
    `start explorer.exe` 会得到管理员令牌的 shell（UAC 旁路）；shell 由 Winlogon 的
@@ -350,10 +431,39 @@ docker run --rm -v "$PWD:/w" -w /w debian:12 \
 
 复选框文案因此变成 `Launch opi-candidates and restart Explorer`，完成页还有一行说明
 （`WIXUI_EXITDIALOGOPTIONALTEXT`）：Explorer 会重启以重新加载输入法，其它已打开的应用
-要各自重启才换到新版本。脚本自带前置断言（槽位空、基线行在）、幂等护栏（重复运行直接
-退出 0；**旧版脚本处理过的产物会被明确拒绝**，须在原始 artifact 上重跑）与
-**读回 + 全表 diff** 完整性检查，任一不满足即不落产物。**旧 CI artifact 不含 DLL/脚本**：
-脚本会打印提示并跳过注册（回退为直接启动 exe），不会假装注册成功。
+要各自重启才换到新版本。脚本自带前置断言（槽位空、基线行在）、**显式后处理标记**
+（Property `OPI_POSTPROCESSED=<形状版本>`：带同一标记的重跑直接退出 0 —— 含**不含
+`tsf_opi.dll`** 的旧/测试产物，它们会跳过注册但同样算已处理，2026-10-19 reviewer m3）、
+迁移护栏（无标记的旧产物一律拒绝，须在原始 artifact 上重跑，不会静默追加）与
+**读回 + 全表 diff** 完整性检查（含 `INSTALLDIR=opi`），任一不满足即不落产物。
+**旧 CI artifact 不含 DLL/脚本**：脚本会打印提示并跳过注册（回退为直接启动 exe），
+不会假装注册成功；这样的产物同样带标记，重复处理是幂等的。
+
+**本地已处理的 v1.15.1 MSI：仅供表级复核，不可发布**。
+`dist/opi-1.15.1_windows-desktop-processed.msi` 是本机用修订后的脚本处理出来的
+（2026-10-19：注册 CA 为 Type 1/`WixSilentExec64`、带 `OPI_POSTPROCESSED=2026-10-19-r3`
+标记），表级动作齐全；原始 jpackage 产物未动。但包内 DLL 是**旧构建（动态 CRT）**，
+导入表里有 `VCRUNTIME140.dll` 与 `api-ms-win-crt-*` ⇒ 只能在**装过 VC++ 运行时**的机器上
+注册成功；desktop jar 也是修复前的构建。**不要把它当可安装交付物发布或拿去验收**；
+需要真机验证请用 CI 的 `opi-desktop-msi-v<版本>`（静态 CRT、含本轮修复）。
+
+**本地静态 CRT CAB 重打包：已撤回，不是交付物（2026-10-19 晚）**。曾用 Linux
+`gcab` 重打 `Data.cab`、替换 File 键
+`filedfd5da438ec03d8391aeff2429bdad72` 并重跑后处理，产出过
+`dist/opi-1.15.1_windows-desktop-processed-static.msi`。它只做过 `msiextract` /
+表级读回（195 个文件、DLL 哈希与导入表、四个导出、幂等），**从未被 `msiexec`
+实际安装过**；Linux `gcab` 产出的 cab 不满足「可交付」的证据档位，故撤回该文件与
+把它当测试包的用法。需要静态 CRT 的真机包，只能从 CI 的 `opi-desktop-msi-v<版本>`
+或 §2.6 的 Windows 本机构建取得。
+
+**本地 `processed` 包只作表级证据**：`dist/opi-1.15.1_windows-desktop-processed.msi`
+（若本机还保留）是用修订后脚本处理 v1.15.1 raw 得到的，用来复核 `INSTALLDIR=opi`、
+Type 1 的 `OpRegisterTsf@5900`、`WixSilentExec64` 与 `OPI_POSTPROCESSED` 标记。它的
+**desktop jar 与 DLL 仍是旧构建**，不含 2026-10-19 之后的源码改动，也**没有**本轮新增的
+注册修复（`RegisterProfile` 判存在、`EnableLanguageProfileByDefault`、删除旧
+`AddLanguageProfile`）与新增的 `opi-emoji.ttf` / `install-emoji-font.ps1` ——
+**不要拿它验收界面、输入法列表或字体，也不要发布**。需要新界面/新注册逻辑时，
+必须重新构建（§2.6）。
 
 **升级后哪些进程会重载、哪些不会**（全部【未验证】：本机没有 Windows）：
 
@@ -363,12 +473,14 @@ docker run --rm -v "$PWD:/w" -w /w debian:12 \
 | Explorer / shell / 语言栏 | 勾选复选框点 Finish → 脚本结束 explorer → Winlogon 自动重启 → 重新加载 |
 | 已打开的其它应用（Office / 浏览器 / 编辑器…） | **仍持旧 DLL**，直到各自关闭重开 |
 | 候选窗进程 | 装前被 797 结束、装后由完成页脚本拉起 |
-| COM 注册 | `OpRegisterTsf@5900` 调 `regsvr32 /s` 注册 per-machine；卸载不清注册（见 §6.1） |
+| COM 注册 | `OpRegisterTsf@5900` 经 `WixSilentExec64` 调 64 位 `regsvr32 /s` 注册 per-machine（Type 1：失败则安装失败/回滚）；卸载**不清注册**（`NOT REMOVE` ⇒ 不跑 `regsvr32 /u`，`HKCR`/`HKLM\SOFTWARE\Microsoft\CTF` 残留指向已删 DLL 的条目，见 §6.1 #13） |
 
 - **静默 / 基本 UI 安装**（`msiexec /qn`、`/qb`）不出现 ExitDialog ⇒ **不会重启 Explorer**。
   需要手动：`taskkill /f /im explorer.exe`（等 Winlogon 拉回），或注销/重启。
 - **用户取消勾选** ⇒ 自启与 Explorer 重启都不发生（两个动作共用这一个复选框）。
-- **失败回退**：动作在 InstallFinalize 之后执行、且带 ignore-return ⇒ 失败不回滚安装。
+- **失败回退**：注册（`OpRegisterTsf@5900`，Type 1）**失败会让安装失败并回滚**（有意：
+  宁可响亮失败，也不留「装成功、键盘不出现」的半注册状态）。完成页的启动/重启 Explorer
+  （`OpLaunchApp`，完成页 Finish 时触发、在 InstallFinalize 之后）失败则不影响安装结果。
   若 `AutoRestartShell=0`（非默认值），shell 不会自动回来 —— 任务管理器 → 文件 →
   运行新任务 → `explorer.exe`；安装本身不受影响。
 - **首次安装也会重启一次**（复选框默认勾选）：此时没有旧 DLL 要换，是同一开关的副作用。
@@ -377,14 +489,21 @@ docker run --rm -v "$PWD:/w" -w /w debian:12 \
 - ✅ **2026-10-18 起 MSI 含 `tsf_opi.dll`**：File 表由 CI 的 `desktop-msi` job 在打包时
   写入（`OPI_TSF_DLL` → jpackage `--input`），后处理只负责注册动作与完成页脚本。
 - ⚠️ **注册路径按 jpackage app-image 布局推定为 `INSTALLDIR\app\tsf_opi.dll`**
-  （Linux 同名布局是 `lib/app/`）；Windows 真机上装一次前，这个路径没有被实际执行过。
+  （Linux 同名布局是 `lib/app/`），后处理默认 `INSTALLDIR` = `C:\Program Files\opi`；
+  Windows 真机上装一次前，这个路径没有被实际执行过。
 
 **这条改动的证据档位**（照实）：表级形状在本地可复核（读回断言全绿 + 除 Property /
-CustomAction / InstallExecuteSequence / ControlEvent 四张表外全库逐字节未变）；
-三个入口点在**这份 MSI 自己的** `Binary.WixCA`（3.11.2.4516）里实测存在（容器内
-`objdump -p` 读导出表：`WixShellExec` / `WixQuietExec` / `WixSilentExec`；`strings -el`
-读到 `WixSilentExecCmdLine`）。DLL 是否真的随包落到 `INSTALLDIR\app\`、`regsvr32` 是否
-真的注册成功，只能在 Windows 真机上装一次来验。**「在真 Windows 上装一遍」仍然一次都没有**
+CustomAction / InstallExecuteSequence / ControlEvent / Directory 五张表外全库逐字节未变；
+⚠️ 这是**表结构**证据 —— `msiinfo tables` 不列 `_Streams`/cab，脚本另做 `msiextract`
+**抽样解包**（能解出启动器与 DLL），不是 cab 逐字节比较，2026-10-19 reviewer m1）；
+四个入口点在**这份 MSI 自己的** `Binary.WixCA`（3.11.2.4516）里实测存在（容器内
+`objdump -p` 读导出表：`WixShellExec` / `WixQuietExec` / `WixSilentExec` /
+`WixSilentExec64`；`strings -el` 读到 `WixSilentExec64CmdLine`）。同一二进制的
+**PE machine 也是实测的**：`objdump -f` 报 `pei-i386`（PE32 i386，216,496 B）——
+这正是注入必须用 `WixSilentExec64` 的原因（32 位 CA 会调 SysWOW64 的 regsvr32）。
+CI 的 `msi-postprocess` job 现在独立断言这两点（PE machine 必须是 i386 + 导出表必须有
+`WixSilentExec64`），不再只查表形状。DLL 是否真的随包落到 `INSTALLDIR\app\`、
+`regsvr32` 是否真的注册成功，只能在 Windows 真机上装一次来验。**「在真 Windows 上装一遍」仍然一次都没有**
 （§6.1 #12）—— 杀没杀掉、注册没注册、启没启起来、脚本有没有重启 Explorer，都还没人见过。
 
 **这个 artifact 明确不保证什么**（别读成「Windows 端能用了」）：
@@ -407,17 +526,167 @@ CustomAction / InstallExecuteSequence / ControlEvent 四张表外全库逐字节
 想在 Windows 上要中文文案：自带 `MsiInstallerStrings_*.wxl` 走 `--resource-dir`（那份的
 Culture 不能是 en-us），需要连 jpackage 选的 locale 一起换 —— en-US 的 runner 上做不到。
 
+### 2.6 在 Windows 本机从零打包（2026-10-19）
+
+> **结论先说**：`.msi` **只能在 Windows 上用 jpackage 打**。Linux 上的
+> `cargo xwin build` 只能验证 TSF DLL 的交叉链接；Linux 没有可用的 jpackage MSI
+> 目标，也不要用 Linux `gcab` 重打 CAB 当交付物（§2.5 已撤回）。
+> Gradle/jpackage 产出的 MSI 仍**必须**过后处理（§2.5），否则不会注册 TSF。
+
+**前提（Windows 10/11 x64）**：
+
+- **JDK 21**（Temurin；`JAVA_HOME` 指向它），Gradle 用仓库自带的 `gradlew.bat`；
+- **Visual Studio Build Tools**，勾选「使用 C++ 的桌面开发」（MSVC x64 + Windows SDK）
+  以及 `dumpbin`；
+- **Rust stable MSVC** toolchain（`rustup default stable-x86_64-pc-windows-msvc`）；
+- **WiX 3.11 不用预装**：Compose Multiplatform 在 `packageMsi` 时自己下载
+  `wix311-binaries.zip`（日志里能看到 `downloadWix` / `unzipWix`）；
+- 打包机需要能访问 Maven/Gradle 与 WiX 下载源；离线环境请先预热 Gradle/WiX 缓存。
+
+**第 1 步：编译静态 CRT 的 TSF DLL**
+
+```powershell
+$env:RUSTFLAGS = '-C target-feature=+crt-static'
+cargo build --release --locked -p tsf_opi --target x86_64-pc-windows-msvc
+```
+
+检查导入表与导出表（**这一步不能省**：MSI 不装 VC++ 运行时，动态 CRT 会让
+`regsvr32` 以 `0x8007007E` 失败）：
+
+```powershell
+dumpbin /dependents target\x86_64-pc-windows-msvc\release\tsf_opi.dll
+# 不能出现 VCRUNTIME140 / MSVCP140 / ucrtbase / api-ms-win-crt-*
+dumpbin /exports target\x86_64-pc-windows-msvc\release\tsf_opi.dll
+# 必须看到 DllCanUnloadNow / DllGetClassObject / DllRegisterServer / DllUnregisterServer
+```
+
+> 本机（Linux）的等价验证命令是
+> `RUSTFLAGS='-C target-feature=+crt-static' cargo xwin build --release --locked -p tsf_opi --target x86_64-pc-windows-msvc`。
+> 2026-10-19 实测：普通构建成功；静态构建也成功，导入表只剩
+> `advapi32` / `api-ms-win-core-synch-l1-2-0` / `bcryptprimitives` / `combase` /
+> `kernel32` / `ntdll` / `ole32` / `oleaut32` / `user32`，四个 COM 导出齐全。
+
+**第 2 步：打 desktop MSI**
+
+```powershell
+cd desktop
+$env:OPI_TSF_DLL = (Resolve-Path ..\target\x86_64-pc-windows-msvc\release\tsf_opi.dll).Path
+.\gradlew.bat packageMsi --no-daemon
+```
+
+`OPI_TSF_DLL` 必须在 `packageMsi` 前设置：`desktop/build.gradle.kts` 只在
+该变量存在时把 DLL、`launch-and-restart.cmd`、`install-emoji-font.ps1` 和
+`opi-emoji.ttf` 挂进 jpackage 的 `--input`。产物通常在
+`desktop\build\compose\binaries\main\msi\opi-candidates-<版本>.msi`
+（CMP 版本可能改路径，先 `Get-ChildItem -Recurse -Filter *.msi` 确认）。
+
+**第 3 步：后处理（必需）**
+
+**首选：Windows 原生 PowerShell**（本仓库 2026-10-19 新增，使用系统自带的
+`WindowsInstaller.Installer` COM，不依赖 msitools/WSL）：
+
+```powershell
+# 回到仓库根目录（第 2 步 cd 进了 desktop）；以管理员身份运行 64 位 PowerShell
+cd ..
+powershell -ExecutionPolicy Bypass -File scripts\windows\postprocess-windows-msi.ps1 `
+  -InputMsi desktop\build\compose\binaries\main\msi\opi-candidates-<版本>.msi `
+  -OutputMsi dist\opi-<版本>_windows-desktop-processed.msi
+```
+
+它做与 `scripts/postprocess-windows-msi.sh` 相同的五张表修改（`INSTALLDIR=opi`、
+797 杀进程、5900 Type 1 `regsvr32`、Finish 自启、`OPI_POSTPROCESSED` 标记），
+并在 `Commit` 前做表级读回。⚠️ **该脚本尚未在真 Windows 主机上执行过**
+（仓库的验证环境是 Linux），所以它是「本机打包的便捷路径」，不是已验证交付路径；
+失败时不要退回原始 MSI 发布，改用下面这条路。
+
+**已验证路径（CI/WSL）**：在 WSL/Debian 里装 `msitools` 后跑
+`scripts/postprocess-windows-msi.sh`（命令见 §2.5）；CI 的
+`opi-desktop-msi-v<版本>` 就是这条路产出的。两条路的表形状相同，bash 脚本有
+全表 diff + cab 抽样解包；PowerShell 脚本只做读回，没有全表 diff。
+
+**第 4 步：安装验收**
+
+1. **先卸载旧包**（尤其是 v1.15.1 及更早的 raw MSI）：设置 → 应用 → 已安装的应用，
+   或 `msiexec /x <旧包>`。旧包默认在 `C:\Program Files\opi-candidates`；新包默认
+   在 `C:\Program Files\opi`。旧包不会自动清理 `HKLM\SOFTWARE\Microsoft\CTF`
+   下的注册残留（§6.1 #13），如遇异常先按 #13 手工清理。
+   **Win10 二次安装/覆盖升级必须验证**：装完后把同一个包再装一次（或覆盖升级到
+   更高版本），确认安装不回滚、`OpRegisterTsf` 仍成功、输入法不重复也不消失。
+   注册代码对已存在 profile 跳过重复写、对机器级默认启用失败做 HKLM 回读容错，
+   但这些容错路径没有真机证据；详见 §5.2。
+2. **带日志安装**：
+   ```powershell
+   msiexec /i "dist\opi-<版本>_windows-desktop-processed.msi" /l*v install.log
+   ```
+   注册 CA 是 Type 1：失败会回滚安装。日志里搜 `OpRegisterTsf`、`WixSilentExec64`、
+   `DllRegisterServer`。
+3. **注册表核对**（管理员 64 位）：
+   ```powershell
+   reg query "HKCR\CLSID\{98C51858-590B-404D-8915-21EB44250062}\InprocServer32"
+   reg query "HKLM\SOFTWARE\Microsoft\CTF\TIP\{98C51858-590B-404D-8915-21EB44250062}" /s
+   ```
+   `InprocServer32` 默认值应为 `C:\Program Files\opi\app\tsf_opi.dll`，
+   `ThreadingModel=Apartment`；CTF 下应出现语言 profile
+   `{A31A137C-1404-42F2-B82C-4E63F15DEFD6}` 和键盘类别。
+4. **语言列表**：设置 → 时间和语言 → 语言和区域 → 中文(简体，中国) → 语言选项 →
+   键盘 → 添加键盘，应出现「小欧输入法」；或 `Win`+`Space` 轮换。`Get-WinUserLanguageList`
+   的 `InputMethodTips` 里应出现 `0804:{CLSID}{PROFILE}`。
+5. **失败时先跑诊断脚本**（只读）：
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts\windows\diagnose-tsf.ps1 `
+     -InstallDir "C:\Program Files\opi" -InstallLog .\install.log
+   ```
+   它检查 `HKCR\...\InprocServer32`、`HKLM`/`HKCU` 的 CTF profile 与 `Enable`、
+   `Get-WinUserLanguageList` 的 `InputMethodTips`、字体注册和安装日志里的
+   `OpRegisterTsf`；退出码 0 = 必需项全过，1 = 有失败项。
+
+**账户上下文（静默/企业部署必读）**：
+
+- **交互式安装（推荐）**：MSI 以提权的管理员账户运行，`EnableLanguageProfile` 写的是
+  **该账户**的 HKCU；用同一账户登录时立即生效。若安装账户 ≠ 日常账户，目标用户由
+  `EnableLanguageProfileByDefault(TRUE)` 写下的 **HKLM 机器级默认启用位**覆盖
+  （2026-10-19 新增）。
+- **SYSTEM / Intune / SCCM 静默部署**：`EnableLanguageProfile` 写的是 SYSTEM 的
+  HKCU，对目标用户无效；这条路径**依赖 HKLM 默认启用位**。已登录的目标用户若仍看不到，
+  注销/重新登录，或到 设置 → 语言 手动添加一次键盘。诊断脚本会打印当前账户
+  （含是否 SYSTEM）以及 HKLM/HKCU 的 `Enable`。
+- **字体仍按用户装**：`install-emoji-font.ps1` 写运行者的 HKCU +
+  `%LOCALAPPDATA%\Microsoft\Windows\Fonts`；SYSTEM 部署下需目标用户手工运行
+  `INSTALLDIR\app\install-emoji-font.ps1`。
+- 上述 HKLM 默认位在 Win10 上的实际效果**未在真机验证**。需要立即生效时，目标用户
+  仍可自己跑一次 `regsvr32 /s "C:\Program Files\opi\app\tsf_opi.dll"`（写该用户 HKCU）。
+
+**图标与字体落点（本轮）**：
+
+- MSI 产品图标（`ARPPRODUCTICON`）与 `opi-candidates.exe` 图标：
+  `desktop/icons/opi-pet.ico`（实测方法见 §2.5 的「图标」段）；
+- PUA 字体源文件：`shared/pet/emoji-font/opi-emoji.ttf`；
+- MSI 内落点：`INSTALLDIR\app\opi-emoji.ttf`（另有 jar 内
+  `pet-font/opi-emoji.ttf` 供应用 classpath 直接加载）；
+- 装机后（用户勾选 Finish）：`%LOCALAPPDATA%\Microsoft\Windows\Fonts\opi-emoji.ttf`
+  + `HKCU\Software\Microsoft\Windows NT\CurrentVersion\Fonts`。静默安装不会执行，
+  需要时手工运行 `INSTALLDIR\app\install-emoji-font.ps1`。
+
+> **必须新构建，旧包不会变**：2026-10-19 用户在真机装的三个 MSI
+> （本地 `processed-static`、本地 `processed`、CI `opi-desktop-msi`）里的
+> **desktop jar 都是旧构建**；本轮改的是源码（TSF 注册、界面、字体接线），
+> 这些包不会因为仓库源码变了而改变。要验证本轮改动，必须按本节重新
+> `packageMsi` 并重新后处理；旧包只能用来证明旧行为。
+
 ---
 
 ## 3. 安装与注册
 
 ### 3.1 注册命令
 
-> **2026-10-18 起**：安装 v1.13.0+ 的 MSI 会自动执行 `regsvr32 /s`（后处理脚本的
-> `OpRegisterTsf`，序列 5900），**用户不再需要手工注册**。本节保留为核对/回退路径：
-> 想确认注册结果、或从旧版单独 DLL 迁移时，仍可按下面的命令手工跑一次。
-> 注意 `regsvr32` 写的是**当时 DLL 的全路径**；MSI 装在 `INSTALLDIR\app\tsf_opi.dll`，
-> 手工注册时请指向那个路径。
+> **2026-10-18 起（2026-10-19 收紧）**：**后处理过的** MSI 会自动执行 `regsvr32 /s`
+> （后处理脚本的 `OpRegisterTsf`，序列 5900），**用户不再需要手工注册**。
+> ⚠️ Release 里 v1.15.1 及更早的 Windows MSI 是**未后处理**的原始产物（不注册）；
+> 2026-10-19 起 CI 的 `opi-desktop-msi-v<版本>` artifact 才是处理过的版本。
+> 本节保留为核对/回退路径：想确认注册结果、或从旧版单独 DLL 迁移时，仍可按下面的
+> 命令手工跑一次。注意 `regsvr32` 写的是**当时 DLL 的全路径**；后处理后的 MSI
+> 默认装在 `C:\Program Files\opi\app\tsf_opi.dll`（2026-10-19 起；此前是
+> `C:\Program Files\opi-candidates\app\`），手工注册时请指向实际路径。
 
 **【未验证】**（本机无 Windows，下面每一条都没有跑过）。
 
@@ -427,7 +696,7 @@ Culture 不能是 en-us），需要连 jpackage 选的 locale 一起换 —— e
 regsvr32 "C:\path\to\tsf_opi.dll"
 ```
 
-注销（与注册逆序：先摘 TSF 侧，再删 COM 键，见 `com_server::unregister`）：
+注销（与注册逆序：先摘 TSF 侧，再删 COM 键，见 `registration::unregister`）：
 
 ```bat
 regsvr32 /u "C:\path\to\tsf_opi.dll"
@@ -449,7 +718,8 @@ regsvr32 /u "C:\path\to\tsf_opi.dll"
 
 分两半，**只有第一半是我们手写的**：
 
-**① COM 侧（手写注册表）** —— 依据在 `com_server::register`，键名由 `dll::clsid_key` /
+**① COM 侧（手写注册表）** —— 依据在 `registration::register`（2026-10-19 从
+`com_server.rs` 拆出，守住单文件 500 行），键名由 `dll::clsid_key` /
 `dll::inproc_server_key` 拼：
 
 | 键 | 值 |
@@ -460,26 +730,61 @@ regsvr32 /u "C:\path\to\tsf_opi.dll"
 `CLSID_TEXT_SERVICE` 与 `GUID_PROFILE` 的字面值在 `crates/tsf-opi/src/dll.rs`（**去那里读，别从这里抄**）。
 `ThreadingModel` 必须非空 —— 源码注释解释了：缺它时进程内服务器会被 COM 隐式当成 Apartment，而"隐式"正是出问题的来源。
 
-**② TSF 侧（调官方 API，让 TSF 自己写自己的键）** —— `com_server::register` 里调用：
+**② TSF 侧（调官方 API，让 TSF 自己写自己的键）** —— `registration::register` 里调用：
 
-- `ITfInputProcessorProfiles::Register` + `AddLanguageProfile`（`LANGID_ZH_CN` = 0x0804 · 中文简体）
-- `ITfCategoryMgr::RegisterCategory`，类别 = `GUID_TFCAT_TIP_KEYBOARD`（"键盘输入法"）
+- `ITfInputProcessorProfiles::Register`；
+- `ITfInputProcessorProfileMgr::RegisterProfile`（Vista+ 的新接口；从同一个
+  `CLSID_TF_InputProcessorProfiles` coclass 取），`bEnabledByDefault=TRUE`，
+  `LANGID_ZH_CN` = 0x0804 · 中文简体。**注册前先用 `GetProfile` 判存在**：
+  已存在就跳过 `Register` + `RegisterProfile`，二次安装/覆盖升级不重写 profile
+  （`EnableLanguageProfileByDefault` 仍调用，失败时按下一项回读容错）；
+  ⚠️ 它的 `dwFlags` 只收 `TF_RP_*`；`TF_IPPMF_ENABLEPROFILE` 是
+  `ActivateProfile` 的标志，**不能**混用；
+- `ITfInputProcessorProfiles::EnableLanguageProfileByDefault(..., TRUE)`：写 **HKLM**
+  的机器级默认启用位（需管理员）。交互式安装还有下面的 HKCU 位；SYSTEM / Intune /
+  GPO 部署没有目标用户的 HKCU，这一位是目标用户之后仍能看到输入法的保险。
+  接口文档只列 S_OK / E_FAIL，profile 已存在时重复调用可能返回失败；失败时回读
+  `HKLM\SOFTWARE\Microsoft\CTF\TIP\{<CLSID>}\LanguageProfile\0x0804\{<GUID_PROFILE>}\Enable`，
+  已是 `1` 则容忍，否则把错误抛出、让安装回滚；
+- `ITfInputProcessorProfiles::EnableLanguageProfile(..., TRUE)`：写**当前用户**的启用位
+  （`HKCU\Software\Microsoft\CTF\TIP\...\Enable`）。只写 HKLM 的 profile 不够，
+  Windows 10 的输入法列表按用户启用状态过滤（2026-10-19 真机「键盘不显示」的
+  根因之一）。机器级默认启用已成功后，这一步是 **best-effort**：HKCU 写失败
+  不让整个安装回滚（SYSTEM / 异常 HKCU），仍用 `IsEnabledLanguageProfile` 复核；
+- `ITfCategoryMgr::RegisterCategory`，类别 = `GUID_TFCAT_TIP_KEYBOARD`（"键盘输入法"）。
+  **调用前用 `EnumItemsInCategory` 枚举**，已有本 CLSID 就跳过。
 
-源码明写这是**有意不手写**的：「让 TSF 自己写自己的键，就不存在'我把键名/键路径记错了'
-这一整类失败」。⇒ **本文不列 TSF 那几个键的路径，因为源码有意不依赖它们。**
+**幂等（2026-10-19 复审改写）**：旧接口 `AddLanguageProfile` / `RemoveLanguageProfile`
+已删除 —— 目标 Windows 10 走 Vista+ 的 `RegisterProfile` 正路，两者叠加会在**首次安装**
+时就写重复 profile。`TF_E_ALREADY_EXISTS`（0x80040506，保留键冲突）**不是**通用的
+「profile 已存在」，不能靠吞它实现幂等；profile 与类别都改为**先查询、存在就跳过**。
+`ok_if_already_exists` 现在只为旧接口 `ITfInputProcessorProfiles::Register` 保留，
+Type 1 的注册 CA 对其它错误失败并回滚。源码明写这是**有意不手写**的：
+「让 TSF 自己写自己的键，就不存在'我把键名/键路径记错了'这一整类失败」。
+⇒ **本文不把 TSF 的键路径当实现依据**；§5.2 的诊断脚本只是把注册结果读出来核对。
+
+**容错范围与代价**：跳过已存在的 profile、`EnableLanguageProfileByDefault` 失败时
+回读 HKLM `Enable=1` 容错、HKCU 失败不报错 —— 三者都把「重复/异常状态」当正常路径。
+代价是可能掩盖两类真实失败：profile 已存在但旧值需要刷新时（如显示名变化）不会更新；
+HKCU 写失败是系统性权限问题时安装不会红，只是当前用户少一个启用位。取舍是
+「二次安装/覆盖升级不能因重复写而回滚整个安装」优先于「每次刷新所有位」；
+对应真机验证见 §2.6 第 4 步与 §5.2。
 
 ### 3.3 切到它
 
 **【未验证】**（TSF 的注册行为本机无法验证）。
 
-因为 `AddLanguageProfile` 用的 `LANGID` 是 zh-CN，预期它会出现在**中文（简体，中国）**
-这一语言的键盘列表里：
+因为注册用的 `LANGID` 是 zh-CN，预期它会出现在**中文（简体，中国）**这一语言的
+键盘列表里（`RegisterProfile` 写 profile，`EnableLanguageProfile` 写当前用户的启用位）：
 
 1. 确认系统已装「中文(简体，中国)」语言。
 2. 设置 → 时间和语言 → 语言和区域 → 中文(简体，中国) 的「语言选项」→「键盘」→ 添加键盘 → 应能看到 **小欧输入法**。
 3. 用 `Win` + `Space` 轮换输入法。
 
 **【未验证】**：以上三步没有任何人在 Windows 上走过；"出现在哪个列表里""要不要重启"都没有实测。
+列表里没有时，先跑 §2.6 第 5 步的 `scripts/windows/diagnose-tsf.ps1`：它会打印
+`Get-WinUserLanguageList` 的 `InputMethodTips`、HKLM/HKCU 的 CTF profile 与
+`Enable`，以及安装日志里的 `OpRegisterTsf`。
 
 ---
 
@@ -653,19 +958,59 @@ Windows 上只出**常用 / 状态栏 / 符号与表情 / 关于**四页 —— 
    跑的是 `dict_path_tests.rs` 里对**四级顺序与各级失败语义**的断言（平台中立、纯函数）。
    它证明**顺序对**，不证明**目标机上的文件在**。
 
-### 5.2 注册成没成
+### 5.2 注册成没成（真机验证清单）
 
-**【未验证】**（本机无 Windows）。可查的点：
+**【未验证】** —— **本机（Linux）没有在真机桌面 Windows 上装过任何后处理产物**；
+CI 的 `windows-install-test` 只做容器冒烟并抓日志（§2.5），不是真机验证。
+2026-10-19 用户真机报障（v1.15.1，未后处理包：有进程、键盘不显示）是本轮修复的
+**直接证据**；但「后处理后的包能不能注册成功」仍要装一次才知道。装完后按顺序核：
 
-```bat
-reg query "HKCR\CLSID\{<CLSID_TEXT_SERVICE>}\InprocServer32"
-```
+> ⚠️ **先处理旧包**：如果机器上已经装过 v1.15.1 的**原始** MSI（默认在
+> `C:\Program Files\opi-candidates`），请先卸载它再装后处理包。新版把默认目录改成
+> `C:\Program Files\opi`，而 jpackage 没有显式设置 `--win-upgrade-uuid`；两者并存/
+> 升级的行为未在真机验证过，同版本号也可能被 Windows Installer 当成维护/修复而不是
+> 新安装。卸载旧包不会删除 `%LOCALAPPDATA%\opi` 里的用户数据。
 
-`<CLSID_TEXT_SERVICE>` 的值去 `crates/tsf-opi/src/dll.rs` 取（`clsid_key` 会给它补花括号）。
-默认值应等于 DLL 全路径、`ThreadingModel` 应为 `Apartment`。
+> ⚠️ **Win10 二次安装/覆盖升级必须单独验证**（2026-10-19 复审要求）：在同一台机器上
+> 把**同一个后处理包再装一次**（或覆盖升级到更高版本），确认 `OpRegisterTsf` 仍成功、
+> 安装不回滚、语言列表里输入法不重复也不消失。注册代码已避免重复写已存在的 profile、
+> `EnableLanguageProfileByDefault` 失败时回读 HKLM `Enable` 容错、HKCU 改为 best-effort，
+> 但**这些路径都没有真机证据**（本仓库只在 Linux 上验证）。若二次安装失败，先看
+> `install.log` 里 `OpRegisterTsf` 前后的错误码。
+
+0. **一次性诊断（推荐先跑）**：装完运行 §2.6 第 5 步的
+   `scripts/windows/diagnose-tsf.ps1 -InstallLog .\install.log`。它只读，退出码
+   0/1 直接说明必需项是否齐全；下面几项是它的手工版本。
+1. **COM 注册键**（管理员 cmd / PowerShell）：
+   ```bat
+   reg query "HKCR\CLSID\{98C51858-590B-404D-8915-21EB44250062}\InprocServer32"
+   ```
+   默认值应为 `<安装目录>\app\tsf_opi.dll`（后处理后的默认安装目录是
+   `C:\Program Files\opi`；若安装时改过目录，以实际为准），`ThreadingModel` 应为
+   `Apartment`。CLSID 来自 `crates/tsf-opi/src/dll.rs` 的 `CLSID_TEXT_SERVICE`
+   （`clsid_key` 会补花括号）。
+2. **TSF 侧注册**（由 `ITfInputProcessorProfiles` / `ITfInputProcessorProfileMgr` /
+   `ITfCategoryMgr` 官方 API 写入，源码有意不手写键路径，见 §3.2）：
+   ```bat
+   reg query "HKLM\SOFTWARE\Microsoft\CTF\TIP\{98C51858-590B-404D-8915-21EB44250062}" /s
+   reg query "HKCU\SOFTWARE\Microsoft\CTF\TIP\{98C51858-590B-404D-8915-21EB44250062}" /s
+   ```
+   应能看到语言 profile（GUID `{A31A137C-1404-42F2-B82C-4E63F15DEFD6}`，
+   `GUID_PROFILE`）、`Enable=1`（当前用户）与键盘类别
+   （`GUID_TFCAT_TIP_KEYBOARD`）的条目。**只有 HKLM 而没有 HKCU 的 `Enable`**
+   是 2026-10-19 之前那版注册的典型状态：profile 存在但用户列表不显示。
+3. **`regsvr32` 本身成功**：安装时它由 `WixSilentExec64`（`/s` 静默）执行，完成页看不到
+   输出。注册 CA 是 **Type 1（Return=check）** ⇒ 注册失败会让**安装失败并回滚**，
+   不是「装成功、键盘不出现」。排障看安装日志（`msiexec /i <包> /l*v install.log`）里
+   `OpRegisterTsf` 与 regsvr32 的返回码；也可在装完后手工跑一次
+   `regsvr32 "C:\Program Files\opi\app\tsf_opi.dll"`（应弹成功框）。
+   ⚠️ 旧构建（如 v1.15.1 包内 DLL）动态依赖 `VCRUNTIME140.dll`：没装 VC++ 运行时的
+   机器上这一步会以 `0x8007007E` 失败 —— 新 CI 产物已改静态 CRT（§2.5 第 1 条）。
+4. **键盘列表出现「小欧输入法」**：§3.3 的第 1–3 步（中文(简体，中国) → 语言选项 →
+   键盘），或 `Win`+`Space` 轮换。**这是端到端判据**：前三步都对但列表里没有，说明
+   TSF profile 没注册上，回看第 2、3 步。
 
 TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 源码有意如此（见 §3.2）。
-可观察的替代：§3.3 的键盘列表里出没出现。
 
 ### 5.3 能不能打字
 
@@ -692,7 +1037,7 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | 1 | 链接：需要 MSVC 导入库 | §1.2 实测卡在 `link.exe` |
 | 2 | ~~`tsf_opi.dll` 从未被链接出来过，导出表从未被检视~~ **【已消除 2026-10-09】** 已在 windows runner 上真链接、导出表实测四个 COM 入口（名字未装饰，§2.5）。**【订正 2026-10-18】** DLL 已随 MSI 进入 File 表，安装序列会跑 `regsvr32`；但**真机上的注册结果、宿主加载**仍从未发生 —— 「包里有/表里有」与「能用」是两格 | §1.2、§2.5 |
 | 3 | `DllRegisterServer` / `DllUnregisterServer` 的注册效果、管理员判定 | §3.1 |
-| 4 | TSF 能否认出这个 TIP、键盘列表里出不出现 | §3.3 |
+| 4 | TSF 能否认出这个 TIP、键盘列表里出不出现。**【订正 2026-10-19 复审】** `register()` 已补 `ITfInputProcessorProfileMgr::RegisterProfile`（判存在 + `bEnabledByDefault=TRUE`）、`ITfInputProcessorProfiles::EnableLanguageProfile` 与 `EnableLanguageProfileByDefault`；后处理改用 64 位 `WixSilentExec64`。但仍未在真 Windows 上装过修复后的包，所以「能出现在列表」仍属未验证 | §3.2、§3.3 |
 | 5 | 按键回调、composition、文本插入的**全部运行期行为** | §5.3 |
 | 6 | 候选窗与插件的命名管道连通（含 `\\.\pipe\opi-candidates` 单实例语义） | §4.3 |
 | 7 | 四个 `cfg(windows)` 模块**没有任何测试** —— 只有 §1.2 那条 `cargo check` 看过它们 | §1.2 |
@@ -700,14 +1045,16 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | 9 | `Ctrl+'` / `Ctrl+\` / `Shift+Space` 在 Windows 上有没有被别的软件占用 | §4.1 |
 | 10 | 语言栏按钮（`langbar.rs`）的运行期行为：`AddItem` 成不成、`GetIcon` 有没有被调、图标画没画出来 —— 只有 §1.2 那条 `cargo check` 看过它（"挑条目 + 校验 RT_ICON 形态"那半在 `langbar_icon.rs`，有主机单测） | §2.1、`crates/tsf-opi/src/langbar.rs` 头注释 |
 | 11 | **「属性设置」的生效时机**：设置窗落盘后要等下一次 `Activate` —— 本机无法验证（`Activate` 由 TSF 调）。读取/容错/落点那半在 `settings.rs`，有主机单测 | §4.4、`crates/tsf-opi/src/settings.rs` |
-| 12 | **安装器四条新行为（关停运行中实例 / 注册 TSF DLL / 装后自启 / 重启 Explorer，2026-10-17 / 2026-10-18 加）**：表级已改好并可本地复核（§2.5 的后处理脚本 + 读回证据），但**没有在真 Windows 上装过一次** —— taskkill 真杀没杀掉、`regsvr32` 真注册没成功、WixShellExec 真启没启起来、ExitDialog 复选框出不出现、脚本是否结束 Explorer 并由 Winlogon 拉回（依赖 `AutoRestartShell` 默认 1），全是【未验证】 | §2.5、`scripts/postprocess-windows-msi.sh` |
+| 12 | **安装器四条新行为（改安装目录 / 关停运行中实例 / 注册 TSF DLL / 装后自启 + 重启 Explorer，2026-10-17 / 10-18 / 10-19 加）**：表级已改好并可本地复核（§2.5 的后处理脚本 + 读回证据）。**2026-10-19 用户在真机装过的是「未后处理」的 v1.15.1 发布包**（有进程、键盘不显示）—— 这证明了「不跑后处理 = 不注册 = 键盘不出现」。**【订正 2026-10-19 复审】后处理后的三份包**（本地 `processed-static`、本地 `processed`、CI `opi-desktop-msi`）**仍无输入法的根因已定位**：注入的是 32 位 `WixSilentExec`，而随包 `Binary.WixCA` 是 PE32 i386 ⇒ WOW64 调 SysWOW64 的 32 位 `regsvr32`，加载不了 x86-64 DLL。脚本/CI 已改为 `WixSilentExec64` + `WixSilentExec64CmdLine` 并加 PE machine 断言，注册逻辑改为显式判存在 + HKLM 默认启用。但这三份包的 desktop jar 与 DLL 仍是本轮修复前的构建，所以「修复后的包」仍未被**真机**装过（CI 容器冒烟只抓日志，§2.5）：taskkill 真杀没杀掉、`regsvr32` 真注册没成功、WixShellExec 真启没启起来、ExitDialog 复选框出不出现、脚本是否结束 Explorer 并由 Winlogon 拉回（依赖 `AutoRestartShell` 默认 1），仍是【未验证】 | §2.5、`scripts/postprocess-windows-msi.sh` |
+| 13 | **卸载不清理 TSF 注册（2026-10-19 reviewer m4 记录，有意未做）**：`OpRegisterTsf` 的条件是 `NOT REMOVE` ⇒ 卸载**不执行** `regsvr32 /s /u`；`HKCR\CLSID\{98C51858-590B-404D-8915-21EB44250062}\InprocServer32` 与 `HKLM\SOFTWARE\Microsoft\CTF` 下由 `DllRegisterServer` 写入的条目会**残留并指向已删除的 DLL**。未加卸载动作的原因：`WixSilentExec64` 只有**一个**命令属性 `WixSilentExec64CmdLine`，安装/卸载两条命令会互相覆盖；手写 `RemoveRegistryKey` 又需精确复制官方 API 写入的键，未在真机取证。重装到同一路径会重新覆盖注册；彻底清理 = 卸载前手工 `regsvr32 /s /u <dll>`，已卸载则手工删上述键 | `scripts/postprocess-windows-msi.sh`、§2.5 | 卸载后注册残留；卸载本身的文件删除不受影响 |
+| 14 | **Win7 / Win8 / 8.1 不支持（2026-10-19 用户裁决：仅文档标注）**：DLL 的 API set/Rust std 与候选窗的 JDK 21/Compose 下限都在 Win10/11；Win7/8 需另建 legacy 轨道 | §1.1 的说明 | 在 Win7/8 上安装/运行不保证；不在本仓库范围 |
 
 ### 6.2 代码里已知的缺口（读源码得出，不是待办猜测）
 
 | # | 缺口 | 依据 | 影响 |
 |---|---|---|---|
 | 1 | **词库仍没有打包步骤**：MSI 已带 DLL（2026-10-18），但 `luna.opid` 仍不会被放到 DLL 旁边 | §2.4 | 开箱只有内置回退词库 |
-| 2 | **没有人拉起候选窗进程**；~~候选窗也没有 Windows 安装包~~ **【订正 2026-10-09】** 安装包有了（§2.5 的 `opi-desktop-msi-*` artifact），但它在 Release 之外、90 天过期。**【订正 2026-10-17】** 后处理后的 `.msi` 里「装完点 Finish 自启」已接线（§2.5）—— 但**这条线本身未在真机验证**，且 v1.9.6 及以前的 Release 资产都是**未后处理**的旧包 | §4.3 #1、§2.5 | 候选窗看不到（打字仍可用），直到有人装上后处理的包并勾选 Finish |
+| 2 | **没有人拉起候选窗进程**；~~候选窗也没有 Windows 安装包~~ **【订正 2026-10-09】** 安装包有了（§2.5 的 `opi-desktop-msi-*` artifact），但它在 Release 之外、90 天过期。**【订正 2026-10-17】** 后处理后的 `.msi` 里「装完点 Finish 自启」已接线（§2.5）—— 但**这条线本身未在真机验证**。**【订正 2026-10-19】** 经 v1.15.1 实物 MSI 核实：到 v1.15.1 为止的 **Release 资产全部是未后处理**的原始包（无注册动作；用户真机报障即此） | §4.3 #1、§2.5 | 候选窗看不到（打字仍可用），直到有人装上后处理的包并勾选 Finish |
 | 3 | **点选延迟到下一个键事件才插入** | `state.rs` 模块头、`tsf.rs::drain_pending` | 点了不敲键 = 字不出现 |
 | 4 | `OnSetFocus` 空实现（drain 的天然落点没接） | `tsf.rs` 的 `OnSetFocus` | 同上，放大了 #3 |
 | 5 | 点选后换文档 → 插到上一个文档 | `tsf.rs::drain_pending` 注释 | 边缘场景 |
@@ -731,6 +1078,21 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 但**只覆盖 Windows 一路，且未经验证**。
 
 > **【订正 2026-10-18】** Release 从 v1.11.0 起带 `opi-<版本>_windows-desktop.msi`；
-> **从 v1.13.0 起 MSI 内含 `tsf_opi.dll` 并自动注册**，不再单独发布 DLL 资产
+> **从 v1.13.0 起 MSI 内含 `tsf_opi.dll`**，不再单独发布 DLL 资产
 > （用户裁决「DLL 不要单独发布，用户不会用」）。旧版本仍可在 Release 里找到单独的 DLL，
 > 但那是历史产物。「本文档…未经验证」的性质**不变**：产物能编出来 ≠ 装上能用。
+>
+> **【订正 2026-10-19】** 上一条的「自动注册」**在当时并不成立**：Release 里 v1.15.1
+> 及更早的 MSI 是 jpackage 原始产物，**没有**注册动作（发布流程从未跑后处理脚本）。
+> 用户在真机装 v1.15.1 后键盘不显示，原因就在这里。即日起 CI 的
+> `opi-desktop-msi-v<版本>` artifact 是后处理过的；**Release 资产也必须取这一份**
+> （raw 中间物已自动删除；自行拿 jpackage 产物安装会重现「有进程、键盘不显示」）。
+>
+> **【追加 2026-10-19 晚】** 用户在真机装过的三个 MSI（本地
+> `processed-static`、本地 `processed`、CI `opi-desktop-msi`）里的 **desktop jar
+> 都是旧构建**，且 `registration::register`（当时还在 `com_server.rs`）都还是修复前的版本。本轮对 TSF 注册
+> （`RegisterProfile` 判存在 + `EnableLanguageProfile` + `EnableLanguageProfileByDefault`）、
+> 64 位 `WixSilentExec64` 后处理、界面、PUA 字体接线的改动，**不会**出现在这些旧包里。
+> 要验证本轮改动，
+> 必须按 §2.6 重新 `packageMsi` 并重新后处理；旧包只能证明旧行为。
+> `processed-static`（Linux `gcab` 重打 CAB）已撤回，不再是交付物。

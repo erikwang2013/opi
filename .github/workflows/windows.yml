@@ -12,9 +12,13 @@ name: Windows 打包
 #     包必须在 Windows 上打（同 packages.yml 里 deb 钉 ubuntu-22.04 的那条理由，方向相反）。
 #
 # ⚠️ 边界（**别把「打包绿了」读成「Windows 端能用」**）：
-#   本 workflow 只证明「这两个产物能在 Windows 上被编出来、DLL 的导出表长这样、MSI 里
-#   带上了 DLL 和完成页脚本」。它**不**安装、**不**运行任何东西；安装期的
-#   `regsvr32` / Explorer 重启只在后处理脚本里做了**表级**注入，仍需真机装一次验证。
+#   本 workflow 证明「这两个产物能在 Windows 上被编出来、DLL 的导入/导出表长这样、
+#   MSI 里带上了 DLL 和完成页脚本，且后处理注入了注册动作与安装目录」。
+#   `windows-install-test` 会在 Windows Server Core 容器里真跑一次 `msiexec` 并上传日志，
+#   但容器没有真机的语言栏/TSF 环境：`OpRegisterTsf` 失败/回滚会如实留在日志里，
+#   这**不**等于真机装过。`regsvr32` / Explorer 重启的真实行为仍需真机验证
+#   （2026-10-19 用户在真机装的是**未后处理**的发布包，键盘不显示；后处理后的产物
+#   尚未被真机装过）。
 #   缺口清单见 docs/install/windows.md 的 §6.1（从未验过的事）与 §6.2（读源码得出的缺口）。
 #   本 workflow 也**不**打包 `luna.opid`：词库分发通路一条没动（§2.4 的判断仍然成立 ——
 #   仍然没有任何步骤把词库和 DLL 放到一起）。
@@ -31,6 +35,9 @@ on:
     paths:
       - 'crates/tsf-opi/**'
       - 'desktop/**'
+      - 'shared/pet/emoji-font/**'
+      - 'scripts/postprocess-windows-msi.sh'
+      - 'scripts/windows/**'
       - '.github/workflows/windows.yml'
 
 permissions:
@@ -88,14 +95,25 @@ jobs:
       # 同一条约定：不加 --locked，测的就不是锁定那份依赖）。锁文件漂了会在这一步响的红。
       # lto=true（根的 [profile.release]）在这里是**真做**的 —— 这是本仓第一次在
       # Windows 目标上跑完整 release 链接。
-      - name: cargo build --release -p tsf_opi（真链接出 DLL）
+      #
+      # +crt-static（2026-10-19）：MSI 不会安装 VC++ 运行时（jpackage 的 runtime\bin
+      # 在包内但不在 DLL 旁的 app\，也不进 PATH）。动态 CRT 的 DLL 在这类机器上
+      # regsvr32 会以 0x8007007E（找不到模块）失败。静态 CRT 后导入表不再有
+      # VCRUNTIME140/MSVCP140/ucrtbase/api-ms-win-crt* —— 下一条门禁会核。
+      - name: cargo build --release -p tsf_opi（真链接出 DLL，静态 CRT）
+        env:
+          RUSTFLAGS: -C target-feature=+crt-static
         run: cargo build --release --locked -p tsf_opi --target x86_64-pc-windows-msvc
 
       # 「编出来了」与「这个 DLL 里真有 COM 入口」是两件事：导出名漏一个（或名字被
       # 装饰），宿主看到的就是「导出不存在」——regsvr32 报找不到入口点，产物外观毫无异样。
       # 所以这里真读一次导出表，四个入口缺一个就红。它同时是 §6.1 第 2 条
       # （「导出表从未被检视」）的执行点。
-      - name: 导出表取证（四个 COM 入口在不在）
+      #
+      # 同一步再读一次导入表（/dependents）：动态依赖 VC++/UCRT 运行时（VCRUNTIME140/
+      # MSVCP140/ucrtbase/api-ms-win-crt*）就红。正向证据 = 静态 CRT 后这些名字都不出现；
+      # 空输出/非零退出也算失败。
+      - name: 导出表 + 导入表取证（COM 入口 + 静态 CRT）
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -116,6 +134,17 @@ jobs:
             if (-not ($out | Select-String -SimpleMatch $sym -Quiet)) { throw "导出表里没有 $sym" }
           }
           Write-Host "四个 COM 导出都在（名字未被装饰）"
+
+          # 导入表门禁（2026-10-19）：MSI 不装 VC++ 运行时，动态 CRT 会让 regsvr32
+          # 以 0x8007007E 失败。+crt-static 的正向证据就是这些名字不在导入表里。
+          # api-ms-win-crt-* 也要查：ucrtbase 重定向后的转发 DLL 同样是动态 CRT 的一部分
+          # （2026-10-19 reviewer m2）。注意别误伤 api-ms-win-core-*（系统 DLL，静态 CRT 也有）。
+          $deps = & $dumpbin.FullName /nologo /dependents $dll
+          if ($LASTEXITCODE -ne 0) { throw "dumpbin /dependents 失败（退出码 $LASTEXITCODE）" }
+          $deps
+          $bad = $deps | Select-String -Pattern 'VCRUNTIME140|MSVCP140|ucrtbase|api-ms-win-crt'
+          if ($bad) { throw "DLL 动态依赖 VC++/UCRT 运行时（未装运行时的机器上 regsvr32 会失败）：`n$bad" }
+          Write-Host "导入表无 VCRUNTIME140/MSVCP140/ucrtbase/api-ms-win-crt（静态 CRT）"
 
       # if-no-files-found: error —— 默认只 warn，而「绿了但没产物」正是本仓反复栽过的
       # 那种假绿（比红更坏：拿到手才发现空）。
@@ -206,11 +235,189 @@ jobs:
             Get-Content $argsFile
           } else { Write-Host "没有 $argsFile" }
 
+      # 原始 jpackage 产物：**不含** regsvr32 注册动作，也不是用户入口（2026-10-19
+      # 用户真机报障的根因正是把这一份当成了发布包）。它是 msi-postprocess 的**内部
+      # 中间物**：后处理成功后由该 job 用 gh api 删除，正常 run 的最终 artifacts 里
+      # 不应出现。只有 opi-desktop-msi-v<版本> 才是用户入口。raw 若残留（后处理失败）
+      # 只用于排障，不要安装。
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opi-desktop-msi-raw-v${{ needs.version.outputs.version }}
+          if-no-files-found: error
+          path: desktop/build/compose/binaries/main/msi/*.msi
+
+  # ---- MSI 后处理（Linux runner，msitools 表级注入）----
+  #
+  # 2026-10-19 起这是**必需**步骤：jpackage 的原始 MSI 不注册 TSF DLL，装完键盘
+  # 不出现（用户在真机上撞到过）。scripts/postprocess-windows-msi.sh 注入：
+  #   · Directory：INSTALLDIR 默认目录 opi-candidates → opi（C:\Program Files\opi）
+  #   · 序列 797 杀旧进程、5900 regsvr32 注册 DLL、完成页自启 + 重启 Explorer
+  #   · 注册必须走 `WixSilentExec64`（配 `WixSilentExec64CmdLine`）：随包的
+  #     Binary.WixCA 是 PE32 i386，32 位变体会在 WOW64 里调 SysWOW64 的 regsvr32，
+  #     加载不了 x86-64 的 tsf_opi.dll（2026-10-19 复审 blocker）。OpLaunchApp 仍用
+  #     WixShellExec —— WixCA 没有 64 位 shell 变体（32 位 ShellExecute 可拉起 .cmd）。
+  # 脚本自带读回断言与全表 diff，任一不满足即不落产物。
+  msi-postprocess:
+    name: MSI 后处理 + 表级验证（ubuntu-latest，msitools）
+    runs-on: ubuntu-latest
+    needs: [version, desktop-msi]
+    # 删除 raw artifact 需要 actions: write；job 级 permissions 会覆盖顶层，
+    # 所以 contents: read 必须一起写（checkout 要用）。
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: opi-desktop-msi-raw-v${{ needs.version.outputs.version }}
+          path: msi-raw
+
+      - name: 安装 msitools 并跑 scripts/postprocess-windows-msi.sh
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq msitools >/dev/null
+          shopt -s nullglob
+          raw=(msi-raw/*.msi)
+          [ "${#raw[@]}" -eq 1 ] || { echo "::error::raw artifact 里应有且只有一个 .msi，实际 ${#raw[@]} 个"; exit 1; }
+          mkdir -p msi-processed
+          scripts/postprocess-windows-msi.sh "${raw[0]}" "msi-processed/$(basename "${raw[0]}")"
+
+      # 脚本内部已有读回断言；这里再在 job 层独立读一遍四张表 —— 脚本被改坏/被绕过
+      # 时仍然会红。⚠️ 先落变量再 grep：`msiinfo | grep -q` 在 pipefail 下会因 grep
+      # 早退（SIGPIPE 141）随机假红；.idt 是 CRLF，先 tr -d '\r'。
+      # 注册 CA 的类型必须是 1（Return=check）：65 带 Continue 位会把 regsvr32 的失败
+      # 吞成「安装成功、键盘不出现」（2026-10-19 reviewer M2）。二进制位宽也要独立
+      # 断言：只查导出名/表形状不能证明 WixCA 的 machine 与注入的 64 位变体匹配。
+      - name: 表级验证（64 位注册 CA / WixCA PE machine / 5900 / INSTALLDIR=opi）
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          msis=(msi-processed/*.msi)
+          [ "${#msis[@]}" -eq 1 ] || { echo "::error::处理后应有且只有一个 .msi"; exit 1; }
+          MSI="${msis[0]}"
+          props="$(msiinfo export "$MSI" Property | tr -d '\r')"
+          ca="$(msiinfo export "$MSI" CustomAction | tr -d '\r')"
+          ies="$(msiinfo export "$MSI" InstallExecuteSequence | tr -d '\r')"
+          dir="$(msiinfo export "$MSI" Directory | tr -d '\r')"
+
+          fail=0
+          # CustomAction 导出尾列可能为空（行尾 tab），故用 \t*$ 锚定；关键是
+          # 后缀 64 不能被省的 $ 吃掉 —— `WixSilentExec` 是 WixSilentExec64 的前缀。
+          grep -qP '^OpRegisterTsf\t1\tWixCA\tWixSilentExec64\t*$' <<<"$ca" || { echo "::error::注册 CA 不是 OpRegisterTsf(Type 1)/WixSilentExec64（Type 65 会吞失败）"; fail=1; }
+          grep -qP '^OpRegisterTsf\.SetProperty\t51\tWixSilentExec64CmdLine\t"\[System64Folder\]regsvr32\.exe" /s "\[INSTALLDIR\]app\\tsf_opi\.dll"\t*$' <<<"$ca" || { echo "::error::缺少 Type 51 注册命令行设置动作（Property 值不会被格式化）"; fail=1; }
+          grep -qP '^OPI_POSTPROCESSED\t' <<<"$props" || { echo "::error::Property 表里没有后处理标记 OPI_POSTPROCESSED"; fail=1; }
+          grep -qP '^OpRegisterTsf\.SetProperty\tNOT REMOVE\t5890$' <<<"$ies" || { echo "::error::注册命令行设置动作不在序列 5890（NOT REMOVE）"; fail=1; }
+          grep -qP '^OpRegisterTsf\tNOT REMOVE\t5900$' <<<"$ies" || { echo "::error::注册动作不在序列 5900（NOT REMOVE）"; fail=1; }
+          grep -qP '^INSTALLDIR\tProgramFiles64Folder\topi$' <<<"$dir" || { echo "::error::INSTALLDIR 的默认目录不是 opi"; fail=1; }
+          # 位宽独立断言：随包 WixCA 必须是 32 位（PE32 i386）——这正是必须用
+          # WixSilentExec64 的原因；同时确认该二进制真的导出 64 位入口。
+          msiinfo extract "$MSI" Binary.WixCA > /tmp/WixCA.dll
+          objdump -f /tmp/WixCA.dll | grep -q 'pei-i386' || { echo "::error::Binary.WixCA 不是 PE32 i386（WixCA 形状变了，重新核对 64 位变体）"; fail=1; }
+          objdump -p /tmp/WixCA.dll | grep -qP '^\s*\[[^]]+\]\s+WixSilentExec64$' || { echo "::error::Binary.WixCA 没有 WixSilentExec64 导出"; fail=1; }
+          [ "$fail" -eq 0 ] || exit 1
+          echo "表级验证通过：OpRegisterTsf(Type 1)/WixSilentExec64(regsvr32) / 5900 / INSTALLDIR=opi / WixCA=PE32-i386 / OPI_POSTPROCESSED"
+
       - uses: actions/upload-artifact@v4
         with:
           name: opi-desktop-msi-v${{ needs.version.outputs.version }}
           if-no-files-found: error
-          path: desktop/build/compose/binaries/main/msi/*.msi
+          path: msi-processed/*.msi
+
+      # raw 只是 job 间中间物：processed 上传成功后立刻删除，run 的最终 artifacts
+      # 里只剩用户入口。删除失败会让 job 红（raw 会残留并可见）—— 宁可红也不要
+      # 悄悄把中间物留在最终 artifacts 里。
+      - name: 删除内部中间物 raw MSI artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          ARTIFACT_NAME: opi-desktop-msi-raw-v${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          id="$(gh api --paginate "repos/$REPO/actions/runs/$RUN_ID/artifacts?per_page=100" \
+            --jq ".artifacts[] | select(.name == \"$ARTIFACT_NAME\") | .id")"
+          [ -n "$id" ] || { echo "::error::找不到 raw artifact $ARTIFACT_NAME"; exit 1; }
+          gh api -X DELETE "repos/$REPO/actions/artifacts/$id"
+          echo "已删除内部中间物 $ARTIFACT_NAME（id=$id）"
+
+  # ---- Windows 容器安装冒烟（2026-10-20 新增）----
+  #
+  # 只证明「msiexec 能在干净的 Windows Server Core 里跑完并留下日志」，**不**证明
+  # 真机可用：容器没有语言栏/TSF 环境，`OpRegisterTsf` 很可能失败并回滚（Type 1
+  # Return=check），这正是要如实保留在日志里的信息。日志无论成败都上传。
+  windows-install-test:
+    name: 容器安装冒烟（windows-latest，msiexec 日志）
+    runs-on: windows-latest
+    needs: [version, msi-postprocess]
+    timeout-minutes: 60 # ltsc2022 镜像约 5 GB，给足拉取时间
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: opi-desktop-msi-v${{ needs.version.outputs.version }}
+          path: msi
+
+      - name: docker pull windows/servercore:ltsc2022
+        shell: pwsh
+        run: docker pull mcr.microsoft.com/windows/servercore:ltsc2022
+
+      # 两次独立容器：一次显式 INSTALLDIR，一次用 MSI 默认目录（C:\Program Files\opi）。
+      # cmd 里的 `&` 保证 msiexec 失败后仍会执行 dir/where/reg query；`exit 0` 让 docker
+      # 返回 0，失败信息留在日志里而不是让 job 变成没有日志的红。
+      - name: 安装冒烟（容器内，日志落到工作区）
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $msi = Get-ChildItem msi/*.msi | Select-Object -First 1
+          if (-not $msi) { throw '没有下载到 processed MSI' }
+          $name = $msi.Name
+          $work = $PWD.Path
+          $image = 'mcr.microsoft.com/windows/servercore:ltsc2022'
+
+          $custom = "msiexec /i C:\work\msi\$name /qn /l*v C:\work\install-custom.log INSTALLDIR=C:\opi-test & dir C:\opi-test > C:\work\dir-custom.txt & where /r C:\opi-test opi-candidates.exe > C:\work\exe-custom.txt 2>&1 & reg query HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall /s /f opi > C:\work\reg-custom.txt & exit 0"
+          docker run --rm --isolation=process -v "${work}:C:\work" $image cmd /c $custom
+
+          $default = "msiexec /i C:\work\msi\$name /qn /l*v C:\work\install-default.log & dir `"C:\Program Files\opi`" > C:\work\dir-default.txt & where /r `"C:\Program Files\opi`" opi-candidates.exe > C:\work\exe-default.txt 2>&1 & reg query HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall /s /f opi > C:\work\reg-default.txt & exit 0"
+          docker run --rm --isolation=process -v "${work}:C:\work" $image cmd /c $default
+
+          # 日志存在只证 msiexec 启动；必须断言「安装状态=0」且能在目标目录里找到启动器，
+          # 否则「返回成功但目录为空」会再次静默通过。失败时日志仍由下面的 always() 上传。
+          foreach ($f in 'install-custom.log', 'install-default.log') {
+            if (-not (Test-Path $f)) { throw "缺少 $f（docker run 失败或 msiexec 没启动）" }
+          }
+          foreach ($pair in @(
+            @('install-custom.log', 'exe-custom.txt'),
+            @('install-default.log', 'exe-default.txt')
+          )) {
+            $log = Get-Content -Raw -Encoding Unicode $pair[0]
+            if ($log -notmatch 'Installation success or error status:\s*0') {
+              throw "$($pair[0]) 安装失败（见日志末段 Installation success or error status）"
+            }
+            if (-not (Select-String -Path $pair[1] -Pattern 'opi-candidates\.exe' -Quiet)) {
+              throw "$($pair[1]) 里找不到 opi-candidates.exe：安装目录为空"
+            }
+          }
+
+      - name: 上传安装日志（无论成败）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opi-install-logs-v${{ needs.version.outputs.version }}
+          if-no-files-found: warn
+          path: |
+            install-custom.log
+            install-default.log
+            dir-custom.txt
+            dir-default.txt
+            exe-custom.txt
+            exe-default.txt
+            reg-custom.txt
+            reg-default.txt
 
   # ---- 只报不进卡的 clippy（Windows 目标）----
   #

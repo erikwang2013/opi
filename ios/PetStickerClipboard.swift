@@ -37,7 +37,7 @@ enum PetStickerClipboard {
         // 触觉只是锦上添花；扩展里被忽略也不影响复制本身。
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         UIAccessibility.post(
-            notification: .announcement, argument: "已复制小欧\(form.label)贴纸，去粘贴"
+            notification: .announcement, argument: "已复制\(form.label)贴纸，去粘贴"
         )
         return true
     }

@@ -17,6 +17,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
+import androidx.compose.ui.graphics.toPixelMap
 import org.junit.Test
 import xyz.erik.opi.pet.PetEmojiMap
 import xyz.erik.opi.pet.PetMood
@@ -47,8 +48,10 @@ class PetStickerPageTest {
 
     @Test
     fun `label search filters own forms locally`() {
-        assertEquals(listOf("笑"), petStickerSearch("笑").map { it.label })
-        assertEquals(listOf("哭"), petStickerSearch("哭").map { it.label })
+        // 2026-10-19 起标签带「小欧·」前缀（与内置 emoji 区分）；子串搜索仍按标签匹配。
+        assertEquals(listOf("小欧·笑"), petStickerSearch("笑").map { it.label })
+        assertEquals(listOf("小欧·哭"), petStickerSearch("哭").map { it.label })
+        assertEquals(12, petStickerSearch("小欧·").size)
         assertTrue(petStickerSearch("没有这个形态").isEmpty())
     }
 
@@ -132,5 +135,39 @@ class PetStickerPageTest {
                 bytes!!.size > 6 && String(bytes, 0, 6, Charsets.US_ASCII) == "GIF89a",
             )
         }
+    }
+
+    /**
+     * 面板播放的帧来自真 GIF（2026-10-19 用户裁决「要显示真 GIF 动图」）：
+     * 多帧、每帧 delay > 0、相邻帧内容不同 —— 三件事缺一就会「看着像静态图」。
+     */
+    @Test
+    fun `gif decoding yields moving frames with positive delays`() {
+        val bytes = loadPetStickerGif(PetStickerAssets.gifFile(PetMood.IDLE))
+        assertNotNull("classpath 缺 idle.gif", bytes)
+        val gif = decodeGifFrames(bytes!!)
+        assertNotNull("idle.gif 应能解出帧", gif)
+        assertTrue("应解出多帧（实际 ${gif!!.frames.size}）", gif.frames.size > 1)
+        assertEquals("帧与 delay 一一对应", gif.frames.size, gif.delaysMs.size)
+        assertTrue("每帧 delay 必须 > 0：${gif.delaysMs}", gif.delaysMs.all { it > 0 })
+        // 帧降到 ~128px，别把 200×200 的原图整批留在内存里。
+        assertTrue("帧应降到 ≤ $GIF_FRAME_MAX_PX", gif.frames.all { it.width <= GIF_FRAME_MAX_PX && it.height <= GIF_FRAME_MAX_PX })
+
+        val a = gif.frames[0].toPixelMap()
+        val b = gif.frames[1].toPixelMap()
+        var differs = false
+        outer@ for (y in 0 until minOf(a.height, b.height)) {
+            for (x in 0 until minOf(a.width, b.width)) {
+                if (a[x, y] != b[x, y]) {
+                    differs = true
+                    break@outer
+                }
+            }
+        }
+        assertTrue("相邻两帧应有不同像素（GIF 得真的在动）", differs)
+        // 时间轴：0 = 第一帧；一整轮后回到原点。
+        assertEquals(0, gif.indexAt(0))
+        assertEquals(0, gif.indexAt(gif.totalMs.toLong()))
+        assertTrue("最后一帧之前应落在有效下标", gif.indexAt(gif.totalMs.toLong() - 1) in gif.frames.indices)
     }
 }

@@ -4,17 +4,39 @@
 #
 # 给 windows runner 出的 .msi 做 jpackage 做不了的事（2026-10-17 用户裁决
 # 「增加安装的时候中断正在运行的应用，安装后启动」；2026-10-18 用户裁决
-# 「覆盖安装新版本后还要重启才生效」+「DLL 不要单独发布，用户不会用」）：
+# 「覆盖安装新版本后还要重启才生效」+「DLL 不要单独发布，用户不会用」；
+# 2026-10-19 用户真机报障「装完有进程、键盘不显示」）：
 #
+# ⚠️ **2026-10-19 的根因**：发布出去的是 **jpackage 原始产物** —— Property 表没有
+# WixSilentExec64CmdLine、CustomAction/InstallExecuteSequence 里没有注册动作，
+# 安装时**从未执行 regsvr32**，TSF 的 COM/类别/语言 profile 全未注册 ⇒ 键盘不出现；
+# 桌面应用文件照装、进程照起。自此本脚本是 CI 的**必需**步骤
+# （.github/workflows/windows.yml 的 msi-postprocess job），不是可选手工动作。
+#
+#   0. **安装目录**（2026-10-19 用户裁决「Windows 安装目录以 opi 为基础目录」）：
+#      Directory 表 `INSTALLDIR` 行的 DefaultDir 由 jpackage 的 `...|opi-candidates`
+#      改为 `opi` ⇒ 默认装到 `C:\Program Files\opi`。注册动作里的 `[INSTALLDIR]`
+#      随之解析到新路径。packageName 不改（TSF 的 settings_exe 依赖
+#      `opi-candidates.exe`）。
 #   1. **装前杀进程**：执行序列 797（在 RemoveExistingProducts@798 之前）跑
 #      `taskkill /f /t /im <应用名>.exe`。旧实例会让 RemoveFiles 走「改名 + 重启后
 #      删除」，装完旧进程还活着，与「装后自启」叠成两个实例。
 #   2. **装后注册 TSF DLL**：DLL 已由 Gradle 挂进 jpackage `--input`、随 MSI 落
 #      在 `INSTALLDIR\app\tsf_opi.dll`（Windows CI 把 tsf-dll artifact 传给
 #      `OPI_TSF_DLL`）。执行序列 5900（InstallFiles 之后、InstallFinalize 之前）经
-#      WixCA 的 `WixSilentExec` 跑 `"regsvr32" /s "[INSTALLDIR]app\tsf_opi.dll"`；
+#      5890 先用 Type 51 属性设置动作把**格式化后的**命令写进
+#      `WixSilentExec64CmdLine`（Property 表的值不会被 MSI 格式化！），5900 再由
+#      WixCA 的 `WixSilentExec64` 跑 `"[System64Folder]regsvr32.exe" /s "[INSTALLDIR]app\tsf_opi.dll"`；
 #      条件 `NOT REMOVE`（安装/修复跑，卸载不跑）。旧 artifact 不含 DLL 时跳过本步
 #      并打印提示。
+#      · **必须用 64 位变体**（2026-10-19 复审 blocker）：WixCA 本身是 PE32 i386，
+#        裸 `WixSilentExec` 在 WOW64 里解析到 SysWOW64 的 32 位 regsvr32，加载不了
+#        x86-64 的 tsf_opi.dll。`WixSilentExec64` 配 `WixSilentExec64CmdLine`，
+#        命令与 regsvr32 都是 64 位。
+#      · **CA 类型是 1（DLL，Return=check），不是 65**（2026-10-19 reviewer 裁决）：
+#        65 = 1 + 0x40（Continue）—— msiexec 会把失败当成功，`regsvr32` 失败时仍是
+#        「装成功、键盘不出现」。类型 1 让注册失败直接**回滚安装**并留日志，宁可响亮
+#        失败也不留半注册状态。`OpKillRunning` 保持 65（没有旧进程不该让安装失败）。
 #   3. **完成页自启 + 重启 Explorer**：ExitDialog 的 OptionalCheckBox 默认勾选，
 #      点 Finish 时 WixShellExec 拉起包装内的 `launch-and-restart.cmd`（Gradle 随
 #      DLL 一起打进 app 目录）。脚本以**登录用户**身份启动候选窗，然后只
@@ -25,7 +47,9 @@
 #      · 脚本只在 Finish 触发：静默/基本 UI 不杀 shell；取消勾选则既不启动也不重启。
 #      · 没有脚本的旧 artifact 回退为直接启动 `<应用>.exe`（不重启 Explorer）。
 #      · 两条 WixCA 命令用不同属性（797 的 WixQuietExecCmdLine / 注册的
-#        WixSilentExecCmdLine）—— 同一属性两条命令会互相踩。
+#        WixSilentExec64CmdLine）—— 同一属性两条命令会互相踩。
+#      · `OpLaunchApp` 用 32 位 `WixShellExec`：WixCA 没有 `WixShellExec64` 导出
+#        （导出表实证）；32 位 ShellExecute 同样能拉起 `.cmd`。
 #
 # 为什么走 msitools 后处理而不是 jpackage 选项：CMP 1.11.1 的 AbstractJPackageTask
 # **没有** --resource-dir 的口子（javap 实证：只有自用的 jpackageResources Provider，
@@ -36,14 +60,17 @@
 #
 # ⚠️ **本脚本能证明什么、不能证明什么**（照实写）：
 #   · 能证明：表被正确改到目标形状（读回断言 + 全表 diff 只差这几张）；
-#     Binary.WixCA 真导出 WixShellExec/WixQuietExec/WixSilentExec（objdump 读的导出表）；
-#     cab 未被破坏。
+#     Binary.WixCA 是 PE32 i386，真导出 WixShellExec/WixQuietExec/WixSilentExec/
+#     WixSilentExec64（objdump 读的导出表）；
+#     cab **抽样可解包**（m1：msiinfo tables 不列 `_Streams`，全表 diff 覆盖不到 cab，
+#     故只验「msiextract 能解出启动器/DLL 且非空」，不是 cab 逐字节比较）。
 #   · 不能证明：**在真 Windows 上装一遍的行为**。杀进程/regsvr32/自启/脚本杀 Explorer
-#     都需要在 Windows 主机上装一次来验 —— 本仓从未在真机装过这个 MSI
-#     （docs/install/windows.md 有记）。「AutoRestartShell 默认 1」出自 Microsoft
-#     文档，不是本机实测。注册路径 `INSTALLDIR\app\tsf_opi.dll` 按 jpackage app-image
-#     布局（Linux 同名布局为 `lib/app/`）推定，Windows 侧待真机核。别把表级证据当
-#     行为级证据用。
+#     都需要在 Windows 主机上装一次来验。2026-10-19 真机装过的三份包（本地
+#     processed-static / processed、CI opi-desktop-msi）都含后处理动作，仍无输入法；
+#     但它们包内的 desktop jar 与 DLL 都是**修复前构建**，所以「修复后的包」仍未装过。
+#     「AutoRestartShell 默认 1」出自 Microsoft 文档，不是本机实测。注册路径
+#     `INSTALLDIR\app\tsf_opi.dll` 按 jpackage app-image 布局（Linux 同名布局为
+#     `lib/app/`）推定，Windows 侧待真机核。别把表级证据当行为级证据用。
 #
 # 依赖：msitools（msiinfo / msibuild / msiextract 在 PATH 上）。
 # 本机没有 msitools，用 debian:12 容器跑（同 scripts/build-packages.sh 的用法）：
@@ -53,9 +80,11 @@
 #
 # 用法：scripts/postprocess-windows-msi.sh <输入.msi> [输出.msi]
 #   省略输出 = 原地改（先写临时文件再原子替换）。
-# 幂等：重复运行会被前置检查挡下（OpRegisterTsf 已在 ⇒ 报「已处理过」退出 0）。
-#   **旧版**脚本（2026-10-17/18，只有杀进程/自启/Explorer）的产物会被明确拒绝
-#   （退出 1）—— 在原始 CI artifact 上重跑，别在半成品上追加。
+# 幂等（m3）：产物带显式 Property `OPI_POSTPROCESSED=<形状版本>`；重跑见到同一
+#   标记就原样输出并退出 0（含**不含 tsf_opi.dll** 的旧/测试产物 —— 它们跳过注册
+#   动作，但同样已被处理）。无标记的旧产物一律退出 1：更早的（2026-10-17/18）
+#   只有杀进程/自启/Explorer；较早的 2026-10-19 版有 OpRegisterTsf 但没有标记
+#   （CA 可能仍是 Type 65）—— 在**未处理**的 CI artifact 上重跑，别在半成品上追加。
 
 set -euo pipefail
 
@@ -68,13 +97,19 @@ IN="$(cd "$(dirname "$IN")" && pwd)/$(basename "$IN")"
 OUT_DIR="$(cd "$(dirname "$OUT")" && pwd)"
 OUT="$OUT_DIR/$(basename "$OUT")"
 
-for tool in msiinfo msibuild; do
+for tool in msiinfo msibuild msiextract; do
     command -v "$tool" >/dev/null || {
         echo "!! 缺 $tool —— 本脚本要在有 msitools 的环境里跑（debian:12 容器，见文件头）" >&2
         exit 1
     }
 done
 [ -f "$IN" ] || { echo "!! 输入不存在：$IN" >&2; exit 1; }
+
+# 后处理标记（2026-10-19 reviewer m3）：用显式 Property 判「本脚本处理过」，
+# 而不是靠 OpRegisterTsf 等动作的蛛丝马迹 —— 不含 TSF DLL 的旧/测试产物会跳过
+# 注册，重跑时旧判据既不正确定诊、也不幂等。形状/行为变了就换 MARKER_VALUE。
+MARKER_KEY="OPI_POSTPROCESSED"
+MARKER_VALUE="2026-10-20-r2"
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/opi-msi-post.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
@@ -103,20 +138,56 @@ IES="$(export_clean_t InstallExecuteSequence)"
 CA_T="$(export_clean_t CustomAction)"
 CE_T="$(export_clean_t ControlEvent)"
 BIN_T="$(export_clean_t Binary)"
+DIR_T="$(export_clean_t Directory)"
 
 grep -q "^ProductName	" <<<"$PROPS" || { echo "!! Property 表里没有 ProductName，不是 MSI？" >&2; exit 1; }
 grep -q "^WIXUI_INSTALLDIR	" <<<"$PROPS" || { echo "!! 不是 WixUI_InstallDir 的 MSI（前提变了，先读脚本头再改）" >&2; exit 1; }
-# 幂等：注册动作已在 ⇒ 直接退出 0（产物原样输出）。
-if grep -q "^OpRegisterTsf	" <<<"$CA_T"; then
-    echo "已处理过（OpRegisterTsf 已在 CustomAction 表）—— 什么都不做，退出 0"
+
+# 安装目录基线（2026-10-19）：INSTALLDIR 行必须存在且是 jpackage 的原始形态
+# （`短名|opi-candidates`）或已被本脚本改成 `opi`（幂等重跑）。别的形态 ⇒ 前提变了，
+# 当场红而不是静默装到别处。
+DIR_ROW="$(awk -F'\t' '$1=="INSTALLDIR"{print}' <<<"$DIR_T")"
+[ -n "$DIR_ROW" ] || { echo "!! Directory 表里没有 INSTALLDIR 行（jpackage 模板变了）" >&2; exit 1; }
+[ "$(wc -l <<<"$DIR_ROW")" -eq 1 ] || { echo "!! Directory 表里 INSTALLDIR 有多行，不敢改" >&2; exit 1; }
+DIR_DEFAULT="$(cut -f3 <<<"$DIR_ROW")"
+case "$DIR_DEFAULT" in
+    opi) ;;
+    *'|opi-candidates') echo "安装目录：INSTALLDIR 当前默认名是 opi-candidates，将改为 opi" ;;
+    *) echo "!! INSTALLDIR 的 DefaultDir 是「$DIR_DEFAULT」，不是预期的「…|opi-candidates」或「opi」" >&2
+       echo "   jpackage 模板变了 —— 先读脚本头再改。" >&2; exit 1 ;;
+esac
+
+# 幂等（m3）：先看显式标记。标记在 ⇒ 本脚本的当前形状版本，直接退出 0。
+# 这条不受「包里有没有 tsf_opi.dll」影响：无 DLL 的旧/测试产物跳过注册，
+# 但也已被本脚本处理过，重跑必须幂等输出成功。
+MARKER="$(awk -F'\t' -v k="$MARKER_KEY" '$1==k{print $2}' <<<"$PROPS")"
+if [ -n "$MARKER" ]; then
+    if [ "$MARKER" != "$MARKER_VALUE" ]; then
+        echo "!! $MARKER_KEY=$MARKER，不是本脚本（$MARKER_VALUE）的产物 —— 无法判断表形状版本" >&2
+        echo "   请从未处理的 CI artifact 重跑。" >&2
+        exit 1
+    fi
+    if [ "$DIR_DEFAULT" != "opi" ]; then
+        echo "!! $MARKER_KEY=$MARKER 但 INSTALLDIR 不是 opi（当前「$DIR_DEFAULT」）—— 表被改过？" >&2
+        echo "   请从未处理的 CI artifact 重跑。" >&2
+        exit 1
+    fi
+    echo "已处理过（$MARKER_KEY=$MARKER）—— 什么都不做，退出 0"
     [ "$IN" = "$OUT" ] || cp "$WORK/out.msi" "$OUT"
     exit 0
 fi
-# 迁移护栏：旧版脚本（2026-10-17/18）的产物只有杀进程/自启/Explorer 重启。
-# **别在它上面半途追加** —— 797 槽已被占，前置断言会红；即使绕过也会得到半新半旧的表。
+# 无标记但注册动作在：2026-10-19 早期脚本的产物（当时还没有标记，CA 可能仍是
+# Type 65 = 注册失败被吞）。不能自动升级，明确拒绝并指向原始 artifact。
+if grep -q "^OpRegisterTsf	" <<<"$CA_T"; then
+    echo "!! 这个 MSI 已被较早的 2026-10-19 脚本处理过（OpRegisterTsf 在，但没有 $MARKER_KEY 标记）" >&2
+    echo "   该产物可能是 Type 65；请从未处理的 CI artifact 重跑本脚本。" >&2
+    exit 1
+fi
+# 迁移护栏：更早的脚本（2026-10-17/18）产物只剩杀进程/自启，没有标记。
+# **别在它上面半途追加** —— 797 槽已被占，前置断言会红；即使绕过也是半新半旧的表。
 if grep -q "^WixQuietExecCmdLine	" <<<"$PROPS" || grep -q "^OpRestartExplorer	" <<<"$CA_T"; then
-    echo "!! 这个 MSI 已被旧版脚本处理过（WixQuietExecCmdLine/OpRestartExplorer 在表里）" >&2
-    echo "   请在**未处理**的 CI artifact 上重跑本脚本。" >&2
+    echo "!! 这个 MSI 已被处理过，但没有 $MARKER_KEY 标记（旧版脚本或早期产物）" >&2
+    echo "   无从判断表形状版本（无 DLL 时连 OpRegisterTsf 都没有）；请在**未处理**的 CI artifact 上重跑。" >&2
     exit 1
 fi
 
@@ -169,8 +240,8 @@ grep -qE "^[^\t]+\t[^\t]*\t797$" <<<"$IES" \
     && { echo "!! 序列 797 已被占用，槽位假设失效（读脚本头注释再改号）" >&2; exit 1; }
 grep -qE "^(OpKillRunning|OpLaunchApp|OpRegisterTsf)\t" <<<"$CA_T" \
     && { echo "!! 动作名已存在（改过一半的产物？）—— 拒改" >&2; exit 1; }
-grep -q "^WixSilentExecCmdLine	" <<<"$PROPS" \
-    && { echo "!! WixSilentExecCmdLine 已存在（改过一半的产物？）—— 拒改" >&2; exit 1; }
+grep -q "^WixSilentExec64CmdLine	" <<<"$PROPS" \
+    && { echo "!! WixSilentExec64CmdLine 已存在（改过一半的产物？）—— 拒改" >&2; exit 1; }
 if [ -n "$DLL_KEY" ]; then
     grep -qE "^[^\t]+\t[^\t]*\t5900$" <<<"$IES" \
         && { echo "!! 序列 5900 已被占用，槽位假设失效（读脚本头注释再改号）" >&2; exit 1; }
@@ -198,6 +269,24 @@ edit_table() { # $1=表名 $2=要追加的行（可多行，字面 TAB 分隔）
     msibuild "$M" -i "$after" >/dev/null || { echo "!! 写 $table 失败" >&2; exit 1; }
     echo "  修改表：$table（追加 $(wc -l <<<"$rows") 行，列数 $ncols）"
 }
+
+# 0) 安装目录 → C:\Program Files\opi（2026-10-19 用户裁决）。
+#    DefaultDir 的 `短名|长名` 格式里，`opi` 本身是合法短名（≤8 字符、无空格），
+#    故直接写 `opi`。只改 INSTALLDIR 这一行，其余行原样整表导回；统一 CRLF。
+edit_install_dir() {
+    local before="$WORK/Directory.before" clean="$WORK/Directory.clean" after="$WORK/Directory.after"
+    export_t Directory >"$before"
+    tr -d '\r' <"$before" >"$clean"
+    awk -F'\t' -v OFS='\t' '$1=="INSTALLDIR"{$3="opi"} {print}' "$clean" \
+        | sed 's/$/\r/' >"$after"
+    msibuild "$M" -i "$after" >/dev/null || { echo "!! 写 Directory 失败" >&2; exit 1; }
+    echo "  修改表：Directory（INSTALLDIR 的 DefaultDir → opi）"
+}
+edit_install_dir
+
+# 后处理标记（m3）：所有改动都只在 WORK 副本上做，最后成功才落盘，所以这里先写
+# 标记也不会在失败时留下「已处理」的 OUT；标记让重跑有显式判据。
+edit_table Property "${MARKER_KEY}	${MARKER_VALUE}"
 
 # 1) 杀进程（执行序列 797，WixQuietExec 立即执行形态读 WixQuietExecCmdLine）。
 #    ⚠️ 两个格式要求都读自 wix311rtm 源码（qtexecca.cpp），别按直觉改：
@@ -229,12 +318,20 @@ edit_table ControlEvent "ExitDialog	Finish	DoAction	OpLaunchApp	WIXUI_EXITDIALOG
 
 # 3) 注册 TSF DLL（2026-10-18「DLL 不要单独发布」）。
 #    装在 `INSTALLDIR\app\tsf_opi.dll`（jpackage `--input` 普通文件的落点，见脚本头）；
-#    `regsvr32 /s` 以提权 msiexec 身份注册 per-machine COM。WixSilentExec 与 797 的
+#    `regsvr32 /s` 以提权 msiexec 身份注册 per-machine COM。`WixSilentExec64` 与 797 的
 #    WixQuietExecCmdLine 分开两条属性 —— 同一属性两条命令会互相踩。
+#    64 位变体不可换成 32 位：WixCA 是 PE32 i386，裸 WixSilentExec 会调 SysWOW64 的
+#    regsvr32，加载不了 x64 DLL。
 #    条件 NOT REMOVE：安装/修复执行，卸载不执行（卸载产物会缺文件）。
 if [ -n "$DLL_KEY" ]; then
-    edit_table Property "WixSilentExecCmdLine	\"regsvr32\" /s \"[INSTALLDIR]app\\tsf_opi.dll\""
-    edit_table CustomAction "OpRegisterTsf	65	WixCA	WixSilentExec"
+    # 2026-10-20（CI Server Core 实测 0x80070003）：Property 表的 Value **不会**被 MSI
+    # 格式化，`[INSTALLDIR]`/`[System64Folder]` 会原样传给 QuietExec64，CreateProcess
+    # 找不到可执行文件 ⇒ 安装回滚、目录为空。正确做法是 Type 51（属性设置）动作：
+    # Target 列会被 MSI 格式化，在 5890 把命令行写进 WixSilentExec64CmdLine。
+    edit_table CustomAction "OpRegisterTsf.SetProperty	51	WixSilentExec64CmdLine	\"[System64Folder]regsvr32.exe\" /s \"[INSTALLDIR]app\\tsf_opi.dll\""
+    edit_table InstallExecuteSequence "OpRegisterTsf.SetProperty	NOT REMOVE	5890"
+    # Type 1（不是 65）：regsvr32 失败要让安装失败/回滚，不能被 Continue 位吞掉。
+    edit_table CustomAction "OpRegisterTsf	1	WixCA	WixSilentExec64"
     edit_table InstallExecuteSequence "OpRegisterTsf	NOT REMOVE	5900"
     edit_table Property "WIXUI_EXITDIALOGOPTIONALTEXT	Checking the box restarts Explorer so Windows reloads the input method. Other open apps keep the old version until restarted."
 fi
@@ -250,6 +347,8 @@ check() { # $1=描述 $2=grep 模式 $3=表内容（不是表名 —— 同上�
     fi
 }
 echo "读回："
+check "后处理标记"                "^${MARKER_KEY}\t${MARKER_VALUE}$"                        "$(export_clean_t Property)"
+check "安装目录（INSTALLDIR=opi）" '^INSTALLDIR\tProgramFiles64Folder\topi$'                 "$(export_clean_t Directory)"
 check "杀进程动作（797）"        '^OpKillRunning\t\t797$'                                  "$(export_clean_t InstallExecuteSequence)"
 # 尾列空 ⇒ 导出行的行尾是 tab（+未知 CRLF），锚 $ 会失配；只锚行首段。
 check "杀进程 CA（WixQuietExec）" '^OpKillRunning\t65\tWixCA\tWixQuietExec' "$(export_clean_t CustomAction)"
@@ -260,8 +359,10 @@ check "复选框默认勾选"           '^WIXUI_EXITDIALOGOPTIONALCHECKBOX\t1$' 
 check "复选框文案"               "^WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT\tLaunch ${PRODUCT} and restart Explorer$" "$(export_clean_t Property)"
 check "Finish 发布自启"          '^ExitDialog\tFinish\tDoAction\tOpLaunchApp\t'             "$(export_clean_t ControlEvent)"
 if [ -n "$DLL_KEY" ]; then
-    check "注册 TSF CA（WixSilentExec）" '^OpRegisterTsf\t65\tWixCA\tWixSilentExec'          "$(export_clean_t CustomAction)"
-    check "注册命令行"               '^WixSilentExecCmdLine\t"regsvr32" /s "\[INSTALLDIR\]app\\tsf_opi.dll"$' "$(export_clean_t Property)"
+    # 尾列空 ⇒ 行尾是 tab：用 \t*$ 锚定，既排除 WixSilentExec 前缀误匹配又容忍空列。
+    check "注册 TSF CA（WixSilentExec64 / Return=check）" '^OpRegisterTsf\t1\tWixCA\tWixSilentExec64\t*$' "$(export_clean_t CustomAction)"
+    check "注册命令行设置动作（Type 51 / 格式化）" '^OpRegisterTsf\.SetProperty\t51\tWixSilentExec64CmdLine\t"\[System64Folder\]regsvr32\.exe" /s "\[INSTALLDIR\]app\\tsf_opi\.dll"\t*$' "$(export_clean_t CustomAction)"
+    check "注册命令行设置时机（5890 / NOT REMOVE）" '^OpRegisterTsf\.SetProperty\tNOT REMOVE\t5890$' "$(export_clean_t InstallExecuteSequence)"
     check "注册时机（5900 / NOT REMOVE）" '^OpRegisterTsf\tNOT REMOVE\t5900$'                "$(export_clean_t InstallExecuteSequence)"
     check "完成页提示文案"           '^WIXUI_EXITDIALOGOPTIONALTEXT\tChecking the box restarts Explorer' "$(export_clean_t Property)"
 fi
@@ -270,12 +371,12 @@ if [ -n "$SCRIPT_KEY" ]; then
 fi
 [ "$fail" -eq 0 ] || { echo "!! 读回断言失败，产物不落" >&2; exit 1; }
 
-# ---------- 完整性：除这四张表外全库不许有变化 ----------
-# （等价于「msiextract 全解还能出来」的更强版本：逐表逐字节比，
-#  任何意外表变更/丢失都会在这里红。）
+# ---------- 完整性：除这五张表外全库不许有变化 ----------
+# 逐表逐字节比，任何意外表变更/丢失都会在这里红。⚠️ msiinfo tables **不列**
+# `_Streams`（cab 在它里面），所以这一段只覆盖表结构；cab 另做抽样解包（见下）。
 echo "完整性（全表 diff）："
 for t in $(msiinfo tables "$IN" 2>/dev/null); do
-    case "$t" in Property|CustomAction|InstallExecuteSequence|ControlEvent) continue ;; esac
+    case "$t" in Property|CustomAction|InstallExecuteSequence|ControlEvent|Directory) continue ;; esac
     if ! diff -q <(msiinfo export "$IN" "$t" 2>/dev/null) <(export_t "$t") >/dev/null; then
         echo "!! 表 $t 出现了非预期变化" >&2
         fail=1
@@ -283,6 +384,23 @@ for t in $(msiinfo tables "$IN" 2>/dev/null); do
 done
 [ "$fail" -eq 0 ] || { echo "!! 完整性失败，产物不落" >&2; exit 1; }
 echo "  ✓ 其余表逐字节未变"
+
+# cab 抽样（m1）：msiextract 能解出 = cab 至少可读；不能证明每个流逐字节未变。
+echo "cab 抽样解包："
+EXTRACT="$WORK/extract"
+mkdir -p "$EXTRACT"
+msiextract -C "$EXTRACT" "$M" >/dev/null 2>&1 \
+    || { echo "!! msiextract 解包失败（cab 可能损坏）" >&2; exit 1; }
+EXE_PATH="$(find "$EXTRACT" -type f -name "$EXE" -print -quit)"
+[ -n "$EXE_PATH" ] && [ -s "$EXE_PATH" ] \
+    || { echo "!! 抽样解包里没有非空的 $EXE" >&2; exit 1; }
+if [ -n "$DLL_KEY" ]; then
+    DLL_PATH="$(find "$EXTRACT" -type f -name 'tsf_opi.dll' -print -quit)"
+    [ -n "$DLL_PATH" ] && [ -s "$DLL_PATH" ] \
+        || { echo "!! 抽样解包里没有非空的 tsf_opi.dll" >&2; exit 1; }
+fi
+EXTRACTED="$(find "$EXTRACT" -type f | wc -l)"
+echo "  ✓ 解出 $EXTRACTED 个文件（含 $EXE${DLL_KEY:+ / tsf_opi.dll}）"
 
 # ---------- 落盘（原地改走原子替换）----------
 if [ "$IN" = "$OUT" ]; then

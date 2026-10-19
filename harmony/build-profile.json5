@@ -1,0 +1,35 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
+// 工程级构建配置。SDK 版本与本机 Command Line Tools 5.1.1.820 对齐：
+// HarmonyOS 5.1.1，apiVersion 19（见 sdk/default/sdk-pkg.json）。
+{
+  "app": {
+    // 不配签名 ⇒ assembleHap 产出 unsigned HAP。安装到设备前必须另配签名。
+    "signingConfigs": [],
+    "products": [
+      {
+        "name": "default",
+        "compatibleSdkVersion": "5.1.1(19)",
+        "targetSdkVersion": "5.1.1(19)",
+        "runtimeOS": "HarmonyOS"
+      }
+    ],
+    "buildModeSet": [
+      { "name": "debug" },
+      { "name": "release" }
+    ]
+  },
+  "modules": [
+    {
+      "name": "entry",
+      "srcPath": "./entry",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": ["default"]
+        }
+      ]
+    }
+  ]
+}

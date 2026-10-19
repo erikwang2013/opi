@@ -9,9 +9,9 @@
 //! 它证明**这些 API 名与签名与 windows crate 0.62 相符**（fcitx5 轨那 7 处 API
 //! 误写就是没人编译过才长期存活），不证明注册能成、更不证明能打字。
 //!
-//! 【注册写什么】见 `register()` 的两段注释：COM 那一段手写注册表（全文件唯一
-//! 手写的部分），TSF 那一段调官方 API 让 TSF 自己写。CLSID/GUID 字面量与键路径
-//! 拼法都在 `dll.rs`，并有主机单测钉住（`dll_tests.rs`）。
+//! 【注册写什么】见 `registration.rs` 的 `register()`：COM 那一段手写注册表
+//! （全模块唯一手写的部分），TSF 那一段调官方 API 让 TSF 自己写。CLSID/GUID
+//! 字面量与键路径拼法都在 `dll.rs`，并有主机单测钉住（`dll_tests.rs`）。
 
 use core::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -19,33 +19,19 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use windows::Win32::Foundation::{
-    CLASS_E_CLASSNOTAVAILABLE, CLASS_E_NOAGGREGATION, E_FAIL, E_POINTER, ERROR_SUCCESS, HMODULE,
-    S_FALSE, S_OK, WIN32_ERROR,
+    CLASS_E_CLASSNOTAVAILABLE, CLASS_E_NOAGGREGATION, E_FAIL, E_POINTER, HMODULE, S_FALSE, S_OK,
 };
-use windows::Win32::System::Com::{
-    CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
-    CoUninitialize, IClassFactory, IClassFactory_Impl,
-};
+use windows::Win32::System::Com::{IClassFactory, IClassFactory_Impl};
 use windows::Win32::System::LibraryLoader::{
     GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
     GetModuleFileNameW, GetModuleHandleExW,
-};
-use windows::Win32::System::Registry::{
-    HKEY, HKEY_CLASSES_ROOT, KEY_WRITE, REG_OPTION_NON_VOLATILE, REG_SZ, RegCloseKey,
-    RegCreateKeyExW, RegDeleteTreeW, RegSetValueExW,
-};
-use windows::Win32::UI::TextServices::{
-    CLSID_TF_CategoryMgr, CLSID_TF_InputProcessorProfiles, GUID_TFCAT_TIP_KEYBOARD, ITfCategoryMgr,
-    ITfInputProcessorProfiles,
 };
 use windows::core::{BOOL, GUID, HRESULT, IUnknown, Interface, PCWSTR, Ref, Result, implement};
 
 use crate::candidate_io::{CandidateAction, CandidateSink, SharedAction};
 use crate::dict_path;
-use crate::dll::{
-    CLSID_TEXT_SERVICE, DISPLAY_NAME, DllLock, GUID_PROFILE, LANGID_ZH_CN, clsid_key,
-    dll_can_unload, inproc_server_key,
-};
+use crate::dll::{CLSID_TEXT_SERVICE, DllLock, dll_can_unload};
+use crate::registration::{register, unregister};
 use crate::settings;
 use crate::state::{EngineShared, TsfSharedState};
 use crate::tsf::{TsfSink, TsfTextService, ensure_panic_hook};
@@ -73,84 +59,6 @@ fn com_exit(f: impl FnOnce() -> Result<()>) -> HRESULT {
 /// 字面量（编译得过、单测会红），此处返回 E_FAIL 而不是猜一个。
 pub(crate) fn parse_guid(s: &str) -> Result<GUID> {
     GUID::try_from(s).map_err(|_| E_FAIL.into())
-}
-
-/// `WIN32_ERROR`（注册表 API 的返回）→ `Result`：0 = `ERROR_SUCCESS`。
-/// windows 0.62 里 `WIN32_ERROR` 是 newtype 且**没有** `ok()`（那是 `BOOL` /
-/// `HRESULT` 才有的），故自己比 0，再用 `HRESULT::from_win32` 换算错误码。
-fn win32_ok(err: WIN32_ERROR) -> Result<()> {
-    if err == ERROR_SUCCESS {
-        Ok(())
-    } else {
-        Err(windows::core::Error::from_hresult(HRESULT::from_win32(
-            err.0,
-        )))
-    }
-}
-
-/// 已打开的注册表键；`Drop` 里 `RegCloseKey`。
-/// 与 COM 引用计数同一类问题：漏关就是句柄泄漏。这里的句柄只活在一次 regsvr32
-/// 调用内，RAII 保证比"记得在每个出口关一次"可靠。
-struct RegKey(HKEY);
-
-impl Drop for RegKey {
-    fn drop(&mut self) {
-        // SAFETY: self.0 由 RegCreateKeyExW 成功返回，且未被别处关闭。
-        // 返回值（WIN32_ERROR）是 must_use 但这里无处置可言：键已经在关，
-        // 关不掉也没有"再关一次"以外的补救。
-        let _ = unsafe { RegCloseKey(self.0) };
-    }
-}
-
-/// 创建（或打开已存在的）注册表键。
-fn create_key(root: HKEY, subkey: &str) -> Result<RegKey> {
-    let wide: Vec<u16> = subkey.encode_utf16().chain([0]).collect();
-    let mut hkey = HKEY(core::ptr::null_mut());
-    // SAFETY: wide 是 NUL 结尾的 UTF-16，在本次调用期间存活；hkey 是有效的输出
-    // 位置；lpclass/lpsecurityattributes/lpdwdisposition 传 None 即 NULL，
-    // 是文档允许的。
-    let err = unsafe {
-        RegCreateKeyExW(
-            root,
-            PCWSTR(wide.as_ptr()),
-            None,
-            PCWSTR::null(),
-            REG_OPTION_NON_VOLATILE,
-            KEY_WRITE, // = KEY_CREATE_SUB_KEY | KEY_SET_VALUE，够建子键和写值
-            None,
-            &mut hkey,
-            None,
-        )
-    };
-    win32_ok(err)?;
-    Ok(RegKey(hkey))
-}
-
-/// 写一个 REG_SZ 值。`name` 为 `None` → 写键的**默认值**。
-fn set_string(hkey: HKEY, name: Option<&str>, value: &str) -> Result<()> {
-    let name_wide: Vec<u16> = name.unwrap_or("").encode_utf16().chain([0]).collect();
-    // REG_SZ 的字节长度**含**结尾 NUL —— 注册表里存的就是带 NUL 的那一份。
-    let value_wide: Vec<u16> = value.encode_utf16().chain([0]).collect();
-    let name_ptr = if name.is_some() {
-        PCWSTR(name_wide.as_ptr())
-    } else {
-        PCWSTR::null() // NULL = 默认值
-    };
-    // SAFETY: name_ptr 指向本次活动、NUL 结尾的 UTF-16（或 NULL）；lpdata 的字节
-    // 切片与 value_wide 同生命周期，cbdata 按**字节**数传（不是元素数）。
-    let err = unsafe {
-        RegSetValueExW(
-            hkey,
-            name_ptr,
-            None,
-            REG_SZ,
-            Some(core::slice::from_raw_parts(
-                value_wide.as_ptr().cast::<u8>(),
-                value_wide.len() * size_of::<u16>(),
-            )),
-        )
-    };
-    win32_ok(err)
 }
 
 // ---------- 类工厂 ----------
@@ -325,33 +233,6 @@ pub extern "system" fn DllUnregisterServer() -> HRESULT {
     com_exit(unregister)
 }
 
-/// 本线程的 COM 初始化守卫。
-///
-/// `CoCreateInstance` 在未初始化的线程上返回 `CO_E_NOTINITIALIZED`
-/// （0x800401F0），而 regsvr32 未必替我们初始化。两种返回要分开看：
-/// `S_OK` = 这次是我们初始化的 → 退出时必须 `CoUninitialize`；
-/// `S_FALSE` / `RPC_E_CHANGED_MODE` = 本来就初始化过 —— COM 已可用，
-/// 而**不能再**调 `CoUninitialize`（那会抵消掉别人的初始化计数）。
-struct ComGuard(bool);
-
-impl ComGuard {
-    fn new() -> Self {
-        // SAFETY: 在未初始化的线程上调 CoInitializeEx 合法；pvReserved 必须为 NULL
-        // （传 None），这是文档要求。
-        let hr = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
-        Self(hr == S_OK)
-    }
-}
-
-impl Drop for ComGuard {
-    fn drop(&mut self) {
-        if self.0 {
-            // SAFETY: 仅当上面返回 S_OK（本线程的初始化归我们一次）时配对调用。
-            unsafe { CoUninitialize() }
-        }
-    }
-}
-
 /// 本 DLL 的全路径 —— 写进 `InprocServer32` 默认值的那一份。
 ///
 /// **不能用 `GetModuleFileNameW(None, …)`**：那返回的是**宿主 EXE** 的路径
@@ -391,90 +272,4 @@ pub(crate) fn own_module_path() -> Result<String> {
 fn dll_dir() -> Option<PathBuf> {
     let p = own_module_path().ok()?;
     Path::new(&p).parent().map(Path::to_path_buf)
-}
-
-/// Rust `&str` → NUL 结尾的 UTF-16（Win32 的 W 系 API 要的形态）。
-fn wide_z(s: &str) -> Vec<u16> {
-    s.encode_utf16().chain([0]).collect()
-}
-
-fn register() -> Result<()> {
-    let _com = ComGuard::new(); // CoCreateInstance 前必须有
-    let clsid = parse_guid(CLSID_TEXT_SERVICE)?;
-    let profile = parse_guid(GUID_PROFILE)?;
-    let dll_path = own_module_path()?;
-
-    // ① COM 注册（本文件里**唯一**手写的注册表部分）。
-    //    依据：进程内 COM 服务器的标准注册 ——
-    //      HKCR\CLSID\{CLSID}                 默认值 = 服务显示名
-    //      HKCR\CLSID\{CLSID}\InprocServer32  默认值 = DLL 全路径
-    //                                         ThreadingModel = "Apartment"
-    //    ThreadingModel 必须非空：TSF 从 UI 线程调用我们的 vtable，而本对象不是
-    //    自由线程对象（内部是 Mutex + COM 接口，按 STA 使用）。缺这个值时进程内
-    //    服务器会被 COM 隐式当成 Apartment（旧行为），而"隐式"正是出问题的来源。
-    let hkey = create_key(HKEY_CLASSES_ROOT, &clsid_key(CLSID_TEXT_SERVICE))?;
-    set_string(hkey.0, None, DISPLAY_NAME)?;
-    let hkey_inproc = create_key(HKEY_CLASSES_ROOT, &inproc_server_key(CLSID_TEXT_SERVICE))?;
-    set_string(hkey_inproc.0, None, &dll_path)?;
-    set_string(hkey_inproc.0, Some("ThreadingModel"), "Apartment")?;
-
-    // ② TSF 侧的注册：**不手写** `HKLM\SOFTWARE\Microsoft\CTF\...`，改调 TSF 官方
-    //    API 让它自己写（ITfInputProcessorProfiles::Register / AddLanguageProfile、
-    //    ITfCategoryMgr::RegisterCategory）—— "我把键名/键路径记错了"这一整类失败
-    //    就不存在了。两个 CLSID_TF_* 与类别 GUID 都取自 windows crate 的常量
-    //    （不是手抄的 GUID 字面量）。
-    // SAFETY: 每个调用都在活动 COM 套间内（ComGuard）；栈上值的生命周期覆盖调用。
-    unsafe {
-        let profiles: ITfInputProcessorProfiles = CoCreateInstance(
-            &CLSID_TF_InputProcessorProfiles,
-            None::<&IUnknown>,
-            CLSCTX_INPROC_SERVER,
-        )?;
-        profiles.Register(&clsid)?;
-        // 描述串按**计数**传（TSF 全线计数串），不要结尾 NUL；空切片 = 无自定义图标。
-        let desc: Vec<u16> = DISPLAY_NAME.encode_utf16().collect();
-        profiles.AddLanguageProfile(&clsid, LANGID_ZH_CN, &profile, &desc, &[], 0)?;
-
-        let cats: ITfCategoryMgr = CoCreateInstance(
-            &CLSID_TF_CategoryMgr,
-            None::<&IUnknown>,
-            CLSCTX_INPROC_SERVER,
-        )?;
-        // 类别 = "键盘输入法"。三个参数分别是：本服务 CLSID、类别 GUID、
-        // 该类目下的条目 GUID —— 单一服务时条目就是自己。
-        cats.RegisterCategory(&clsid, &GUID_TFCAT_TIP_KEYBOARD, &clsid)?;
-    }
-    Ok(())
-}
-
-fn unregister() -> Result<()> {
-    let _com = ComGuard::new();
-    let clsid = parse_guid(CLSID_TEXT_SERVICE)?;
-    let profile = parse_guid(GUID_PROFILE)?;
-
-    // 逆序：先摘 TSF 侧（TSF 找不到 profile 就不会再激活我们），再删 COM 键。
-    // 反过来的话，中间态是"COM 键没了但 TSF 还认为有个服务" → 宿主激活时报错。
-    // SAFETY: 同 register；两侧都是"尽力而为"的删除，失败即返回，不做清扫。
-    unsafe {
-        if let Ok(cats) = CoCreateInstance::<_, ITfCategoryMgr>(
-            &CLSID_TF_CategoryMgr,
-            None::<&IUnknown>,
-            CLSCTX_INPROC_SERVER,
-        ) {
-            cats.UnregisterCategory(&clsid, &GUID_TFCAT_TIP_KEYBOARD, &clsid)?;
-        }
-        if let Ok(profiles) = CoCreateInstance::<_, ITfInputProcessorProfiles>(
-            &CLSID_TF_InputProcessorProfiles,
-            None::<&IUnknown>,
-            CLSCTX_INPROC_SERVER,
-        ) {
-            profiles.RemoveLanguageProfile(&clsid, LANGID_ZH_CN, &profile)?;
-            profiles.Unregister(&clsid)?;
-        }
-    }
-    // RegDeleteTree 连子键一起删（InprocServer32 是子键，只删父键会失败）。
-    // 失败不报错：本来就不存在（没注册过就 /u）不是错误。
-    let key = wide_z(&clsid_key(CLSID_TEXT_SERVICE));
-    let _ = unsafe { RegDeleteTreeW(HKEY_CLASSES_ROOT, PCWSTR(key.as_ptr())) };
-    Ok(())
 }

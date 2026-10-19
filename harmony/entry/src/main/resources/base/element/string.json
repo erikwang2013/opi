@@ -1,0 +1,28 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "小欧输入法"
+    },
+    {
+      "name": "MainAbility_label",
+      "value": "小欧输入法"
+    },
+    {
+      "name": "extension_ability_descriptor",
+      "value": "小欧输入法输入法扩展"
+    },
+    {
+      "name": "subtype_pinyin_label",
+      "value": "小欧拼音"
+    },
+    {
+      "name": "subtype_english_label",
+      "value": "小欧英文"
+    },
+    {
+      "name": "subtype_number_label",
+      "value": "小欧数字"
+    }
+  ]
+}

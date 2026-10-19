@@ -236,7 +236,7 @@ private final class StickerCell: UIButton {
             stack.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor),
             stack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
         ])
-        accessibilityLabel = "小欧\(form.label)，复制图片到剪贴板"
+        accessibilityLabel = "\(form.label)，复制图片到剪贴板"
         addTarget(self, action: #selector(tapped), for: .touchUpInside)
     }
 

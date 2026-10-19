@@ -197,6 +197,7 @@ sudo cmake --install build-fcitx5
 | `/usr/share/opi/kangxi.tsv` | 康熙字典词库（2026-10-16 起；MIT；**首次配置生效时种进词库目录一次**，之后走 DisabledDicts 那套导入契约）。2026-10-18 起缺的 (字,读音) 也已并入 `luna.opid`/`trad.opid`（删导入词库后仍可打） | `Type::Data + "opi/kangxi.tsv"`（首启种子的源） |
 | `/usr/share/opi/wubi98.opid` | 五笔 98 码表（2026-10-14 起；Unlicense 公共领域） | `Type::Data + "opi/wubi98.opid"` |
 | `/usr/bin/opi-ctl` | 状态栏按钮的 CLI（D-Bus 打到插件，见 §4.8） | 状态栏悬浮条（按名字在 PATH 找） |
+| `/usr/share/fonts/truetype/opi/opi-emoji.ttf` | Opi Emoji PUA 字体（U+E000–E00B，family「Opi Emoji」；2026-10-19 起） | fontconfig / 支持彩色字体的应用（§4.8 的 PUA 开关） |
 | `/etc/xdg/autostart/opi-statusbar.desktop` | 状态栏悬浮条随会话自启（2026-10-10 起） | XDG autostart |
 | `/usr/share/doc/opi/LICENSE` + `LICENSES.md` | 许可证文本 | 人（授权要求，见 §6） |
 
@@ -244,25 +245,46 @@ sudo apt-get -f install                        # Debian 系缺依赖时补
 **故意**的：把「装上了但静默不工作」换成一次显式拒绝。`nfpm.yaml` 里为此专门写了按格式
 分开的版本约束，读那段注释能看到理由。
 
-**装/升级/卸载时的进程处理（2026-10-17 起；fcitx5 部分 2026-10-18 加入、2026-10-19 默认关闭）**：
+**装/升级/卸载时的进程处理（2026-10-17 起；2026-10-19 起安装/升级后自动热重启 fcitx5）**：
 包内带维护脚本（`scripts/packaging/*.sh`，debian 的 `preinst/postinst/prerm`、rpm 的
 `%pre/%post/%preun`）：
 
 - **装/升级前**（preinst）：停掉正在跑的 `opi-candidates`（先 TERM、3 秒后 KILL）——
   dpkg/rpm 只换磁盘文件，**开着的旧窗口/状态栏会继续显示旧版本**（2026-10-17 用户报障
-  「装完设置里还是旧版本」的来源）；同时把当时的实例参数记到 `/run/opi-install.state`；
-- **装/升级前**（同上，fcitx5）：**2026-10-19 起默认不再停 / 重启 fcitx5**。用户报障
-  「安装结束/重启后 Linux 整个键盘没了」——fcitx5 是桌面输入框架，安装脚本只应处理
-  **应用进程**（`opi-candidates`）。因此 preinst 不再写 `/run/opi-install.fcitx5`、
-  不再 kill 安装者的 fcitx5；新 `.so` 在用户**下次登录或手动 `fcitx5 -r -d`** 后生效。
-  旧的记录/`runuser` 重启实现保留为显式 opt-in（`OPI_RESTART_FCITX5=1`，打包默认不设），
-  供确实需要无人值守升级的部署自行权衡；启用时才会停掉安装者自己的 fcitx5 并按会话
-  环境拉回，条件与状态格式见 `scripts/packaging/preinstall.sh` 头注释。
-- **装/升级成功后**（postinst）：按记录**以桌面用户**
-  （`runuser -u $SUDO_USER`）把 `opi-candidates` 按原参数拉回来；fcitx5 默认不动；**没有 `SUDO_USER`**（软件中心类 GUI 安装）则两者都跳过并
-  说明 —— 设置窗手动开一次即是新版；状态栏由会话 autostart 下次登录带回。已知边界：
-  以 root 脚本的环境变量拉起状态栏可能失败（进程直接退出、无副作用），待真机验证；
-- **卸载前**（prerm）：同样先停实例（否则出现「卸了还在跑」）。⚠️ **卸载不会重启
+  「装完设置里还是旧版本」的来源）；同时把当时的实例参数记到 `/run/opi-install.state`。
+  这个阶段**不动 fcitx5**（安装前杀输入框架曾造成用户「整个键盘消失」）。
+- **装/升级成功后**（postinst，fcitx5）：调包内的 `restart-fcitx5.sh`，通过 D-Bus
+  `org.fcitx.Fcitx.Controller1.Restart` **热重启** fcitx5 —— 它在同一会话/总线里卸载并
+  重新加载全部 addon，磁盘上的新 `.so` 因此生效（本机私有 dbus + 真 fcitx5 实测日志：
+  `Unloading addon …` → `Loaded addon …`，服务随后照常应答；实测是**自重启**：旧 pid
+  消失、新 pid 接管同一个总线名，会话环境保留 —— 别拿「pid 没变」当成功判据）。
+  **不是** `fcitx5-remote -r`
+  （只重读配置、不换 `.so`，实测假绿），也**不再**用会先杀进程的 `fcitx5 -d --replace`。
+  用户发现顺序：`SUDO_USER` → `PKEXEC_UID` / `DOAS_USER` → 扫 `/run/user/*/bus`；
+  只有确认该用户真有活着的 fcitx5 进程、**且其会话总线上已有 `org.fcitx.Fcitx5`
+  所有者**才调用（否则 D-Bus 激活文件会拉起一个缺会话环境的新实例）。预检用
+  `GetNameOwner` 取唯一名（`:1.N`），Restart 直接打在该唯一名上 —— 预检到调用之间
+  fcitx5 恰好退出时只会调用失败，不会触发激活。没有 fcitx5、
+  确定不了用户或调用失败时**只记一行日志、安装照常成功**；这时新 `.so` 在下次登录或
+  手动重启 fcitx5 后生效。机制与边界写在 `scripts/packaging/restart-fcitx5.sh` 头注释。
+  应急关闭：安装时设 `OPI_NO_RESTART_FCITX5=1`，例如
+  `sudo OPI_NO_RESTART_FCITX5=1 dpkg -i dist/opi_<版本>_<架构>.deb`
+  （apt 同理：`sudo OPI_NO_RESTART_FCITX5=1 apt-get install ./dist/opi_<版本>_<架构>.deb`）。
+  ⚠️ 热重启会打断**正在进行的输入**（候选/预编辑状态丢失），但输入法本身随即恢复。
+- **装/升级成功后**（postinst，字体缓存）：Opi Emoji 字体由 nfpm 装到
+  `/usr/share/fonts/truetype/opi/opi-emoji.ttf`，postinst 对该目录跑
+  `fc-cache -f`；没有 `fc-cache` 或刷新失败只记日志，不阻断安装。
+- **装/升级成功后**（postinst，应用进程）：按记录**以桌面用户**
+  （`runuser -u $SUDO_USER`）把 `opi-candidates` 按原参数拉回来。**从旧包升级且记录
+  为空**时（旧 prerm 已先杀进程），按 `/etc/xdg/autostart/opi-statusbar.desktop` 的
+  `Exec=` 补拉一次状态栏 —— 仅升级生效，首次安装不替用户启动；rpm 旧 `%preun` 的
+  时序边界见 §7。**没有 `SUDO_USER`**（软件中心类 GUI 安装）则跳过实例拉起并说明 ——
+  设置窗手动开一次即是新版；状态栏由会话 autostart 下次登录带回。已知边界：以 root
+  脚本的环境变量拉起状态栏可能失败（进程直接退出、无副作用），待真机验证。fcitx5
+  的热重启**不依赖 `SUDO_USER`**：GUI 安装没有它时会扫 `/run/user/*/bus`。
+- **卸载前**（prerm）：停实例（否则出现「卸了还在跑」）。**升级时 prerm 直接跳过**
+  （deb 的 `prerm upgrade` 跑在 preinst 之前，这里若杀进程，preinst 就记录不到、
+  postinst 也无从拉起 —— 升级的停+记统一由 preinst 做）。⚠️ **卸载不会重启
   fcitx5** —— 插件已从磁盘删掉，但正在跑的 fcitx5 仍持有旧映射，直到下次重启/登录才
   消失；这一步目前没有自动化（本轮只处理安装/升级）。
 
@@ -278,28 +300,33 @@ ExitDialog 自启）。**v1.9.8 及更早的 Linux 包没有这些脚本** —�
 
 ## 4. 使用
 
-### 4.1 装完必须重启 fcitx5
+### 4.1 装完/升级后 fcitx5 会自动热重启（手动重启仅兜底）
 
-> **2026-10-19 起：安装/升级默认不再重启 fcitx5**（用户报障自动重启导致整个键盘
-> 消失；脚本只处理 `opi-candidates` 应用进程）。新插件 `.so` 需要手动重启 fcitx5
-> 或下次登录后生效。若部署显式设置 `OPI_RESTART_FCITX5=1`，才恢复旧的自动重启路径
-> （会打断输入，条件与回退见 §3.1）。
+包安装（`.deb` / `.rpm`）的 postinst 会通过 D-Bus `Controller1.Restart` **热重启**
+fcitx5：在同一会话/总线里卸载并重新加载全部 addon，新插件 `.so` 立即生效（过程与
+用户发现规则见 §3.1）。**源码安装**（§2.2 的 `cmake --install`）没有维护脚本，仍需
+手动重启：
 
 ```bash
 fcitx5 -r -d      # -r = replace，重启守护进程
 ```
 
 `fcitx5 --help` 里 `-r, --replace` 的含义就是「替换正在跑的那个实例」——这条是实测过的
-（`fcitx5 --help` 的输出），也是本文唯一敢写进步骤的写法。包脚本自动重启用的也是
-`fcitx5 -d --replace`（同一语义）。
+（`fcitx5 --help` 的输出），也是源码安装唯一敢写进步骤的写法。
 
-⚠️ 「能不能不重启、只重载一下配置」**本文没有验过**（见 §8），所以没写。装完没反应的
-第一件事就是老老实实 `-r` 一次，别先怀疑插件。
+⚠️ **`fcitx5-remote -r` 不能替代重启**：它走 D-Bus `ReloadConfig`，只让守护进程重读
+配置、**不重新加载 `.so`**（实测：换插件文件后调用它，加载次数仍是 0）。同理
+`ReloadAddonConfig` 只重读某个 addon 的配置，也不换 `.so`。装完/升级后插件没反应，
+别在这两条上浪费时间。
 
-⚠️ **`-r` 会先杀掉正在跑的那个实例。** 万一新的没起来，你面对的是**所有输入法都不
-可用**（看着像「我的输入法被删了」，其实包和配置一个字没动 —— §10 最后一行）。兜底：
+⚠️ **手动 `-r` 会先杀掉正在跑的那个实例。** 万一新的没起来，你面对的是**所有输入法都
+不可用**（看着像「我的输入法被删了」，其实包和配置一个字没动 —— §10 最后一行）。兜底：
 **登出再登入**，登录时 fcitx5 由 `/etc/xdg/autostart/org.fcitx.Fcitx5.desktop` 拉起，
 环境是齐的。
+
+> 自动热重启失败（无 fcitx5、发现不了用户、D-Bus 调用失败）时脚本只记日志、不阻断
+> 安装；这时也按上面两条兜底。第一次安装仍要 §4.2 把 OPI 加进输入法组 —— 热重启只
+> 负责让新 `.so` 被加载，不负责启用输入法。
 
 ### 4.2 把 OPI 加进输入法组（**不做这步，打字什么都不会发生**）
 
@@ -731,8 +758,10 @@ Linux 上 = `--settings` 的设置窗（无参数启动也是它）。**v1.6.0 �
   设置。2026-10-19 新增**英文专业键 en/pro**（en 在左上、pro 在右下，`opi-ctl englishpro`）：
   **en26 默认普通、只输出字母**；只有 `pro` 态才查单词库（`en_words.tsv`）。该键
   **只在英文输入法下生效**：中文模式下点击只提示一句、不发动作；设置窗「状态栏」
-  一节有它的常驻开关（`StatusBarEnPro`，默认开）。**升级后需重启 fcitx5**（或下次
-  登录）加载新插件，否则旧 `.so` 不认 `englishpro`，条上会提示重启而不是弹裸错误。
+  一节有它的常驻开关（`StatusBarEnPro`，默认开）。**升级后新插件需要被加载**：
+  包升级的 postinst 会自动热重启 fcitx5（§3.1）；若被 `OPI_NO_RESTART_FCITX5=1`
+  关闭或重启失败，则手动重启（或下次登录）。否则旧 `.so` 不认 `englishpro`，
+  条上会提示重启而不是弹裸错误。
   **中/英、简/繁、月相、标点双态随真实状态翻转**（数据源 = `opi-ctl state`，见下；
   读不到 ⇒ 中性缺省 中/简/半月/。，，不清整行）。
   ⚠️ 两处被改过两轮、**别"顺手规范化"**的字面（回归钉：StatusBarTest 的 frozen icon
@@ -780,6 +809,18 @@ Linux 上 = `--settings` 的设置窗（无参数启动也是它）。**v1.6.0 �
       插图片：点击 = **复制 GIF（优先）/ PNG（兜底）到系统剪贴板** + 窗内提示「小欧表情已复制，
       可 Ctrl+V 粘贴」（`PetStickerPage.kt`），**不走 `opi-ctl insert` 文本通道**。
       自有页没有分类条、没有搜索，也不进 Emoji 的最近使用。
+    - **PUA 字体字符（可选，2026-10-19）**：设置窗「符号与表情」→「自有表情用字体
+      字符（PUA）」默认**关**；打开后点小欧表情改走 `opi-ctl insert` 上屏 PUA 字符
+      （U+E000–U+E00B，映射见 `shared/pet/emoji-font/map.tsv`），不再复制图片。
+      Linux 包把 `opi-emoji.ttf` 装进 `/usr/share/fonts/truetype/opi/` 并在 postinst
+      跑 `fc-cache -f`；支持 fontconfig 回退的应用才能把 PUA 画成彩色小欧。字体缺失
+      或应用不认 SVG/CBDT 色表时显示方框/单色 —— 这是开关默认关的原因。手动刷新：
+      `fc-cache -f /usr/share/fonts/truetype/opi`，仍不生效则重新登录。
+      **平台限制**：Android 的字体只在 APK 内（`assets/pet-font/`），不会成为系统
+      字体，别家应用收到 PUA 仍按自己的字体显示；Windows 的 MSI 在完成页以登录用户
+      把字体复制到 `%LOCALAPPDATA%\Microsoft\Windows\Fonts` 并写 HKCU（静默安装不执行；
+      Win10 DirectWrite 对 CBDT/SVG 色表的渲染未验证，详见 windows.md §2.6）。
+      两端的默认路径仍是图片/可区分文本标签，不依赖字体。
     - **Emoji 子页**：分类条 = 引擎 OpenMoji 常用分组（**9 组**，旗帜/组件/肤色变体与
       ZWJ 组合已排除；筛选规则见 `scripts/gen_emoji_kaomoji.py`），**不再含「自有」**。
       分类条点一下滚到该组首项所在页，高亮随当前页首项所属组自动跟随
@@ -978,8 +1019,24 @@ rime-pinyin-simp/OpenCC 转换表与 MIT 的康熙差集编译而来 —— 逐�
 - **繁体词库坏时静默回退简体**（§5.3 的可选增强语义 —— 只有一行 stderr，
   用户侧表现为「繁体模式打出来还是简体」）。
 - **中文标点 / 全角没有键位**（§4.4）。
-- **fcitx5 默认不自动重启**（2026-10-19）：安装脚本只停/拉起 `opi-candidates`；
-  插件新版本在下次登录或手动 `fcitx5 -r -d` 后生效。`OPI_RESTART_FCITX5=1` 才启用旧路径。
+- **确定不了用户/会话时无法自动热重启**（2026-10-19）：GUI 安装没有 `SUDO_USER`
+  且扫不到 `/run/user/*/bus`（headless、异常会话）时只会记日志；热重启调用失败同理。
+  新 `.so` 在下次登录或手动重启 fcitx5 后生效。`OPI_NO_RESTART_FCITX5=1` 可主动关闭。
+- **关闭开关只能从环境变量传**（2026-10-19）：`OPI_NO_RESTART_FCITX5=1` 只在装包
+  进程的环境里生效；图形软件中心 / PackageKit 安装没有传环境变量的入口，那些渠道
+  目前关不掉热重启（热重启失败本身只记日志、不阻断安装）。
+- **多用户机器只重启发起安装者的 fcitx5**（2026-10-19）：有 `SUDO_USER` 时 helper
+  只针对该用户；其他已登录用户正在跑的 fcitx5 不会重载新插件，需各用户自行重启或
+  重新登录。
+- **从旧版升级时只有状态栏会尝试恢复**（2026-10-19）：旧包的 prerm 在 preinst 之前
+  杀掉 `opi-candidates`，新 postinst 没有 state 可依；本版仅在**升级且 state 为空**
+  时按 `/etc/xdg/autostart/opi-statusbar.desktop` 的 `Exec=` 补拉一次**状态栏**
+  （原先开着的是设置/候选窗时不会恢复）。deb 已用**真 dpkg** 验过这条（1.15.1
+  旧式 prerm → 本版，实例以 `testuser` 存活）；**没有 `SUDO_USER`**（软件中心类
+  GUI 安装）时跳过并记日志，需重新登录或手动启动。rpm 的旧 `%preun` 在新 `%post`
+  **之后**执行，会把补拉的实例再次杀掉 —— 从旧版 rpm 升级后需重新登录或手动启动
+  状态栏。新版互升两种格式都不再有这个问题（`preremove.sh` 升级时不再停进程，
+  停 + 记统一由 `preinstall.sh` 做）。
 - **卸载不重启 fcitx5**：正在跑的实例继续持有已删除的插件映射，直到下次重启/登录
   （§3.1 最后一条）。
 - **学习结果不落盘**：`fcitx5-opi` 学完照旧丢（Rust 侧的学习落盘
@@ -999,7 +1056,7 @@ rime-pinyin-simp/OpenCC 转换表与 MIT 的康熙差集编译而来 —— 逐�
 | **`fcitx5-remote -r` 能否替代 `fcitx5 -r -d`**（§4.1 的用途）【未验证】 | 本文只写实测过的那条。**已实测的是另一个用途**：改完 profile 之后只做 `fcitx5-remote -r`，加载次数仍是 **0**（§4.2）—— 那是「改配置后重载」，与「装完让 addon 加载」不是同一个问题，别把这条结论搬过去 |
 | **`Ctrl+Shift_L` 那个切换热键** | 实测的 harness 里合成事件到不了 core 的热键匹配（同一条 dbus 通路**能**把引擎级热键送到，所以指向 harness 限制，不指向桌面）。**不能据此说它坏了** |
 | **真登出 / 再登录**（§4.1 的替代做法） | 只跑过 `fcitx5 -d` / `fcitx5 -r -d`；真会话的登出登录没人跑过 |
-| **包脚本自动停/重启 fcitx5 的真机验证**（旧 opt-in 路径）【未验证，默认已关闭】 | `OPI_RESTART_FCITX5=1` 时才有合成 `/proc` 单测（`scripts/packaging/test-restart-fcitx5.sh`）；从未在真桌面会话装包验证，且用户报障该路径会导致键盘消失，故 2026-10-19 起默认关闭 |
+| **包脚本热重启 fcitx5 的真桌面验证**【部分实测】 | 机制本身在**私有 dbus 会话 + 真 fcitx5** 里验过（`scripts/packaging/test-restart-fcitx5.sh`：Restart 返回 0、`Unloading addon` / `Loaded addon`、服务存活）。**root 生产路径**在 debian:12 容器里实际跑过（`test-restart-fcitx5-root.sh`：`SUDO_USER=testuser` + 真 `/proc` + 该用户私有总线 + fcitx5 **5.0.21**；日志同上，`Unloading 0→17` / `Loaded 17→34`，服务存活）。容器无 `CAP_SYS_PTRACE`，读不到该用户 `/proc/<pid>/environ`，因此走 `/run/user/<uid>/bus` 标准兜底；`PKEXEC_UID` / `DOAS_USER` / 无 `SUDO_USER` 扫 `/run/user` 三个分支仍只有静态审查（5.0.14/5.0.21 源码均注册了该无参方法）。旧→新迁移兜底也用**真 dpkg** 在 debian:12 容器里跑过（`test-restart-fcitx5-dpkg.sh`：1.15.1 旧式 prerm 先杀 → state 为空 → 新 postinst 按自启项以 `testuser` 补拉；新→新升级与卸载同脚本覆盖）；**rpm 的旧→新时序没有容器实测**（见 §7）。**没有在真桌面会话的装包流程里跑过** |
 
 ## 9. 发行版矩阵
 

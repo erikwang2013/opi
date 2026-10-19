@@ -59,10 +59,17 @@ class PetStickerConfigTest {
     }
 
     @Test
-    fun unsupportedEditorFallsBackToUnicodeEmojiNotClipboardImage() {
+    fun unsupportedEditorFallsBackToTextTagNotEmojiOrClipboardImage() {
+        // 2026-10-19 用户裁决：图片通道失败后**不得**再插入 Unicode emoji ——
+        // 输入框里必须能区分「自有表情」= 带小欧前缀的文本标签。
         val commit = src("src/main/kotlin/xyz/erik/opi/PetStickerCommit.kt")
-        assertTrue("回退必须走宠物 emoji 映射", commit.contains("PetEmojiMap.emojiFor(mood)"))
-        assertTrue("回退 toast 文案缺失", commit.contains("已插入近似 emoji"))
+        assertFalse("不得再回退到 Unicode emoji", commit.contains("PetEmojiMap.emojiFor"))
+        assertTrue(
+            "回退必须上屏 [小欧·标签]（标签本身已带前缀）",
+            commit.contains("[\${PetEmoji.label(mood)}]"),
+        )
+        assertTrue("回退 toast 文案缺失", commit.contains("已用文字标签"))
+        assertFalse("旧的 emoji 回退文案不得残留", commit.contains("近似 emoji"))
         assertFalse("不得回退到剪贴板图片", commit.contains("ClipboardManager"))
         assertFalse("不得回退到 clipboard URI", commit.contains("newUri"))
     }

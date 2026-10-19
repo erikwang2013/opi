@@ -1,9 +1,24 @@
-# OPI 鸿蒙（HarmonyOS）端 —— **草案，从未编译，未验证**
+# OPI 鸿蒙（HarmonyOS）端 —— **unsigned HAP 已构建，真机未验证**
+
+> ## ✅ 2026-10-19 订正：**已能真构建（unsigned HAP）**
+>
+> 本文标题与下文「从未编译」是历史记录。`harmony/` 现在是完整 hvigor 工程，
+> 本机 Command Line Tools 5.1.1.820 / API 19 上 `hvigorw assembleHap` **成功**，
+> 产出 `entry/build/default/outputs/default/entry-default-unsigned.hap`
+> （本机实测 debug 约 6.6 MB、release 约 6.4 MB；含 `libs/arm64-v8a/libopiime.so`）。
+>
+> 源码路径已迁移：`harmony/{ets,resources,cpp,module.json5}` →
+> `harmony/entry/src/main/{ets,resources,cpp,module.json5}`；`pages/Index.ets`
+> 移到 `ets/pages/Index.ets`（页面路径相对 `ets/` 根）。新旧对照、构建命令、
+> 首轮 9 类错误与修复、签名/CI/未验证清单见 **`docs/install/harmony.md` §0**。
+>
+> ⚠️ 边界：**能构建 ≠ 能安装 ≠ 能用**。没有签名材料、没有设备；
+> 真机安装/运行一条证据都没有。下文「最不确定的 API」仍然有效。
 
 > ## ⚠️ 先读这段
 >
-> **ArkTS（`ets/**` 那 12 个文件）一个字符都没有编译过** —— `import {
-> InputMethodExtensionAbility } from '@kit.IMEKit'` 在普通 tsc 下就断，**连语法检查都做不到**。
+> **ArkTS（`entry/src/main/ets/**`）已随 hvigor 工程真编译并打进 unsigned HAP**；
+> 但真机安装、输入法列表与运行行为仍未验证。下面这段「一个字符都没有编译过」是历史记录。
 >
 > ⚠️ **2026-09-28 订正归因（原写作「本机没有 HarmonyOS SDK」，实测为假）**：
 > **本机是有鸿蒙工具链的** —— `/home/component/command-line-tools/` 下装着

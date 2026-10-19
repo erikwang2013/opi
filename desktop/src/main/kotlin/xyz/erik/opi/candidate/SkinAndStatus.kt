@@ -70,7 +70,25 @@ data class StatusBarSettings(
     val logo: Boolean = true,
     val fullwidth: Boolean = true,
     val settings: Boolean = true,
+    /**
+     * 全部条上键的**统一缩放**（2026-10-19 用户裁决；键 `StatusBarScale`）：整数百分比
+     * 75–150，缺省 100。BTN/GAP/PAD/BAR_H/条窗宽高/键帽/图标/字形全从这一系数派生
+     * （见 StatusBar.kt 的 [barMetrics]）—— 别另存第二份尺寸。
+     */
+    val scale: Int = STATUS_BAR_SCALE_DEFAULT,
 )
+
+/** 统一缩放的合法区间与缺省（百分比）。解析（Settings.kt）与绘制（StatusBar.kt）共用。 */
+internal const val STATUS_BAR_SCALE_MIN = 75
+internal const val STATUS_BAR_SCALE_MAX = 150
+internal const val STATUS_BAR_SCALE_DEFAULT = 100
+
+/** 手改坏/别的版本写来的越界值收进合法区间；正常路径原样返回。 */
+internal fun statusBarScalePercent(v: Int): Int =
+    v.coerceIn(STATUS_BAR_SCALE_MIN, STATUS_BAR_SCALE_MAX)
+
+/** 设置页的档位（都落在合法区间内）；存的是百分比整数，不是档位下标。 */
+internal val STATUS_BAR_SCALE_CHOICES = listOf(75, 90, 100, 110, 125, 150)
 
 /**
  * 状态栏按钮。**枚举顺序 = 条上从左到右的展示顺序**（用户 2026-10-10 **最终冻结**：
@@ -80,12 +98,14 @@ data class StatusBarSettings(
  * 枚举序漏跟，用户真机截图（`[小欧][英][Ω][简][🌓][。，][⊞]`）抓到后同日把
  * SYMBOLS/PUNCT 两键对调。
  *
- * **2026-10-14 增第 5 位 MODE**（用户裁决「状态栏在简繁按钮后增加模式切换按钮」）：
- * 插在 TRAD 与 FULLWIDTH 之间，即「简繁之后、月相之前」——**枚举序 = 显示序**，
- * 所以这一枚的位置就写在这个枚举里，没有第二处（StatusBarTest 的
- * `button order is the display order` 按 label 逐位钉住）。它与其余八枚的两点不同：
- * 没有常驻开关（恒在 Linux 条上，见 [visibleStatusButtons]）、面由**档位 token**
- * 驱动而不是 [ImeState]（见 [modeFace]）。
+ * **2026-10-14 增 MODE**（用户裁决「状态栏在简繁按钮后增加模式切换按钮」）：
+ * 插在 TRAD 与 FULLWIDTH 之间 ——**枚举序 = 显示序**，所以这一枚的位置就写在这个
+ * 枚举里，没有第二处（StatusBarTest 的 `button order is the display order` 按 label
+ * 逐位钉住）。它与其余按钮的两点不同：没有常驻开关（恒在 Linux 条上，见
+ * [visibleStatusButtons]）、面由**档位 token** 驱动而不是 [ImeState]（见 [modeFace]）。
+ *
+ * **2026-10-19 移 ENPRO**（用户裁决「enpro 键移到简繁键后面」）：从 LANG/PUNCT 之间
+ * 挪到 TRAD 之后、MODE 之前。旧裁决（「放在标点符号键前面」）已被覆盖，别按旧位置改回。
  *
  * `label` 兼作设置窗的开关名与状态栏的可访问性描述；条上的**图标**另有一套
  * （见 StatusBar.kt 的 iconText 与 BarGlyphs.kt 的各面）。
@@ -95,18 +115,20 @@ enum class StatusBarButton(val label: String, val hint: String) {
     // ⚠️ 通路是 opi-ctl lang，不是 fcitx5-remote -t（后者停用整个 fcitx5，
     // 2026-10-10 中午用户踩过；事故留痕见 Actions.kt 头部与 StatusBarTest 的映射钉）。
     LANG("中英文切换", "与 Shift 轻按同一条通路（opi-ctl lang）"),
-    // 英文普通/专业（2026-10-19）：en 在左上、pro 在右下；只有专业模式查词库。
-    // 受 `StatusBarEnPro` 常驻开关控制（默认开、设置窗可隐藏）；点击只在英文输入法下生效。
-    ENPRO("英文专业", "英文26键：普通只输出字母 ⇄ 专业查单词库（仅英文输入法；opi-ctl englishpro）"),
     PUNCT("中英标点", "中英文标点切换（调 opi-ctl）"),
     TRAD("简繁转换", "简 ⇄ 繁（调 opi-ctl）"),
+    // 英文普通/专业（2026-10-19）：白底圆角键帽里 en 居中、pro 在右下角；只有专业模式
+    // 查词库。受 `StatusBarEnPro` 常驻开关控制（默认开、设置窗可隐藏）；点击只在英文
+    // 输入法下生效。2026-10-19 用户裁决把它移到简繁之后（见枚举头）。
+    ENPRO("英文专业", "英文26键：普通只输出字母 ⇄ 专业查单词库（仅英文输入法；opi-ctl englishpro）"),
     // 模式（2026-10-14 用户裁决，原话：「状态栏在简繁按钮后增加模式切换按钮，默认拼音，
     // 可切换五笔、英文26键，按钮缩写：拼、五、en图标，其中en右下角加26」）——
     // **恒常驻**：它没有 `StatusBarMode=` 这个 ini 键（本批不动 Settings.kt 的读写表），
     // 所以既不出现在设置窗（见 [statusButtonWired] 的 MODE 支），也不走 resident。
     // 面 = 档位 token 驱动（pinyin「拼」/ en26「en」+ 右下角标「26」/ wubi「五」，见
     // [modeFace]/[modeCorner]），摆法见 BarGlyphs.kt 的 modeSlots；token 取值域由
-    // opi-ctl 侧钉死（pinyin/en26/wubi）。
+    // opi-ctl 侧钉死（pinyin/en26/wubi）。en26 面同样套白底键帽（BarGlyphs 的
+    // StatusBarButtonFace），其余档位保持原样。
     MODE("模式", "拼音 ⇄ 英文26键循环一次（五笔待引擎侧落地）；失败保持原档并报一句"),
     FULLWIDTH("全半角", "全角 ⇄ 半角（调 opi-ctl）"),
     VK("软键盘", "虚拟键盘窗：按键注入系统（会照常流经输入法）"),

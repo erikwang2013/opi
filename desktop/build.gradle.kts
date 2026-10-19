@@ -47,7 +47,7 @@ kotlin {
 // jpackage 的包版本与设置窗标题栏都从这里取。**此前设置窗里写死过一份**
 // （"1.4.0"），到 1.6.0 就成了摆在用户眼前的假话 —— 两处写死是漂移的充分条件，
 // 生成一个常量是把它压成一处的最短路径（同 android 侧 versionName 的单一来源约定）。
-val opiAppVersion = "1.15.1"
+val opiAppVersion = "1.16.0"
 
 val generateOpiVersionSource by tasks.registering {
     val outDir = layout.buildDirectory.dir("generated/sources/opiVersion/kotlin")
@@ -139,7 +139,17 @@ tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageT
             check(src.isFile) { "OPI_TSF_DLL 指向的文件不存在：${src.path}" }
             // 完成页复选框拉起这个脚本：启动候选窗 + 重启 Explorer（重新加载 TSF DLL）。
             // 只在这个分支挂入 ⇒ Linux Deb 不会带 Windows 脚本。
-            files.from(src, file("windows/launch-and-restart.cmd"))
+            // 字体也在这里挂一份**普通文件**（不是仅 jar 里的 `pet-font/` 资源）：
+            // 脚本把它复制到 `%LOCALAPPDATA%\Microsoft\Windows\Fonts` 并写 HKCU，
+            // 供需要按家族名 `Opi Emoji` 选择字体的 Windows 宿主使用。
+            val emojiFont = file("../shared/pet/emoji-font/opi-emoji.ttf")
+            check(emojiFont.isFile) { "找不到 PUA 字体：${emojiFont.path}" }
+            files.from(
+                src,
+                file("windows/launch-and-restart.cmd"),
+                file("windows/install-emoji-font.ps1"),
+                emojiFont,
+            )
         }
     }
 

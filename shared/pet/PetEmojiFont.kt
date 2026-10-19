@@ -70,6 +70,13 @@ object PetEmojiFont {
         return codes
     }
 
+    /**
+     * 形态 → PUA 字符。码位**只认 `map.tsv`**（[glyphs] = [parseMap] 的结果），
+     * 不按 PetMood 枚举偏移推算 —— 表里换了码位这里就跟着换。找不到该形态返回 null。
+     */
+    fun puaFor(glyphs: List<Glyph>, mood: PetMood): String? =
+        glyphs.firstOrNull { it.mood == mood.name }?.let { String(Character.toChars(it.codepoint)) }
+
     private fun table(tsv: String, header: String, columns: Int): List<List<String>> {
         val lines = tsv.removeSuffix("\r\n").removeSuffix("\n").split('\n')
         require(lines.isNotEmpty() && lines[0] == header) {

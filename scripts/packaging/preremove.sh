@@ -7,13 +7,28 @@
 # 用户看到的是「卸了还在跑」）。
 set -u
 
+# 升级时**不停**：deb 的 prerm upgrade 跑在 preinst 之前，这里杀了进程，preinst
+# 就记录不到 cmdline，postinst 便无从拉起 —— 状态栏会消失到下次登录。停 + 记
+# 统一由 preinst 做（rpm 的 %pre 同样在新文件落盘前跑）。卸载仍走下面的停止逻辑。
+case "${1:-}" in
+    upgrade|1) exit 0 ;;
+esac
+
+# 测试钩子（scripts/packaging/test-restart-fcitx5.sh）：指向假 /proc。**只有非 root
+# 才认**：生产里维护脚本恒为 root（dpkg/rpm），此时固定 /proc。
+if [ "$(id -u)" -eq 0 ]; then
+    PROC_ROOT=/proc
+else
+    PROC_ROOT="${OPI_PROC_ROOT:-/proc}"
+fi
+
 # 找所有 comm == opi-candidates 的 pid。**不用 pgrep/pkill**：procps 在最小
 # 系统上不保证存在（Debian 容器实测没有）；/proc 扫描零依赖，rpm/deb 通吃。
 opi_pids() {
-    for d in /proc/[0-9]*; do
+    for d in "$PROC_ROOT"/[0-9]*; do
         [ -r "$d/comm" ] || continue
         if [ "$(cat "$d/comm" 2>/dev/null)" = "opi-candidates" ]; then
-            echo "${d#/proc/}"
+            echo "${d##*/}"
         fi
     done
 }

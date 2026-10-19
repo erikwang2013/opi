@@ -1,0 +1,123 @@
+name: Android Release APK
+
+# 只出 APK artifact，不附到 release（发包/签名是另一条线）。
+# 触发路径按**真实构建输入**列：android/（含 rust_builder/cargokit）、shared/pet
+# （构建期拷进 assets 的贴纸/GIF/字体，srcDir 见 android/app/build.gradle.kts）、
+# crates/（libopi_ffi.so）、Cargo.toml/lock。data/ 是生成期输入，产物已入库，
+# 不进本 workflow —— 版本号/词库变了会同时改 android/ 或 assets，仍会触发。
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - 'shared/**'
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/android-release.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  android-release:
+    name: Android — release APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 与 ci.yml 的 android job 同一 JDK（AGP 9 / Gradle 9.1 需要 17+）。
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # cargokit 按 android-arm64/android-arm/android-x64 固定三个平台编译
+      # （rust_builder/cargokit/gradle/plugin.gradle）。
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      # cargokit 的 run_build_tool.sh 自己跑 `dart pub get`，所以只需装 Dart SDK。
+      - uses: dart-lang/setup-dart@v1
+
+      # runner 预装 SDK，但 NDK 版本未必对；版本号必须与
+      # android/app/build.gradle.kts 和 rust_builder/android/build.gradle 一致。
+      - name: 安装 NDK 27.0.12077973 并导出 SDK 环境
+        run: |
+          set -e
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}"
+          sdkmanager="$sdk/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$sdkmanager" ]; then
+            sdkmanager="$(find "$sdk/cmdline-tools" -maxdepth 3 -name sdkmanager -type f | sort -V | tail -1)"
+          fi
+          test -x "$sdkmanager" || { echo "::error::找不到 sdkmanager（ANDROID_HOME=$sdk）"; exit 1; }
+
+          # 这里故意不设 pipefail：sdkmanager 先退出会让 yes 吃 SIGPIPE，
+          # 137/141 会被误判成失败；要的是 sdkmanager 自己的退出码。
+          yes | "$sdkmanager" --licenses > /dev/null
+          "$sdkmanager" "ndk;27.0.12077973"
+
+          echo "ANDROID_HOME=$sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$sdk/ndk/27.0.12077973" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$sdk/ndk/27.0.12077973" >> "$GITHUB_ENV"
+          echo "NDK: $sdk/ndk/27.0.12077973"
+
+      # 与 windows.yml 的 version job 同理：artifact 名用 Cargo.toml 的版本，
+      # 所以必须先证明它与 APK 里真实的 versionName 一致，否则名字会撒谎。
+      - name: 版本一致性（Cargo.toml ↔ Android versionName）
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          ver="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
+          [ -n "$ver" ] || { echo "::error::Cargo.toml 里取不到 version"; exit 1; }
+          av="$(sed -n 's/^ *versionName = "\(.*\)"/\1/p' android/app/build.gradle.kts)"
+          [ -n "$av" ] || { echo "::error::android/app/build.gradle.kts 里取不到 versionName"; exit 1; }
+          [ "$ver" = "$av" ] || {
+            echo "::error::版本号漂了：Cargo.toml=$ver，Android versionName=$av —— 两处要一起动"
+            exit 1
+          }
+          echo "版本 $ver（Cargo.toml 与 Android versionName 一致）"
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+
+      # release 目前用 debug 签名（见 android/app/build.gradle.kts），产物可安装但不上市。
+      - name: ./gradlew assembleRelease
+        run: ./gradlew assembleRelease --no-daemon
+        working-directory: android
+
+      # 核对 APK 里的真实 versionName 与三个 ABI，再按发布命名拷进 dist/。
+      - name: 产物核对并按发布名归档
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          apk=android/app/build/outputs/apk/release/app-release.apk
+          [ -f "$apk" ] || { echo "::error::assembleRelease 成功但没有 $apk"; exit 1; }
+          mkdir -p dist
+          out="dist/opi_${VERSION}_android-release.apk"
+          cp "$apk" "$out"
+
+          aapt2="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt2 -type f | sort -V | tail -1)"
+          [ -n "$aapt2" ] || { echo "::error::找不到 aapt2"; exit 1; }
+          badging="$("$aapt2" dump badging "$out")"
+          grep -E "^(package|minSdkVersion|targetSdkVersion|native-code)" <<<"$badging"
+          grep -qF "versionName='${VERSION}'" <<<"$badging"
+
+          entries="$(unzip -Z1 "$out")"
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            grep -qF "lib/$abi/libopi_ffi.so" <<<"$entries" || {
+              echo "::error::APK 缺 $abi 的 libopi_ffi.so"
+              exit 1
+            }
+          done
+          ls -l "$out"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opi-android-release-v${{ steps.version.outputs.version }}
+          path: dist/opi_*_android-release.apk
+          if-no-files-found: error

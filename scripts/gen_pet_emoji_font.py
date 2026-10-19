@@ -56,6 +56,7 @@ ROOT = Path(__file__).resolve().parent.parent
 STICKERS = ROOT / "shared" / "pet" / "stickers"
 PET_KT = ROOT / "shared" / "pet" / "OpiPet.kt"
 MAP_KT = ROOT / "shared" / "pet" / "PetEmojiMap.kt"
+IOS_TABLE = ROOT / "ios" / "PetEmojiTable.swift"
 OUT_DIR = ROOT / "shared" / "pet" / "emoji-font"
 
 FONT_FILE = "opi-emoji.ttf"
@@ -364,6 +365,17 @@ def verify(font_bytes: bytes, forms: list[Form], svg_pngs: list[bytes], pngs: li
             fail(f"CBDT metrics wrong for {form.mood}")
 
 
+def verify_ios_table(forms: list[Form]) -> None:
+    """PetEmojiTable.swift 是手抄的第二份；生成器不写它，但 --check 要比标签与文件名。"""
+    entries = re.findall(
+        r'Form\(label:\s*"([^"]+)",\s*sticker:\s*"([^"]+)"\)',
+        read_text(IOS_TABLE),
+    )
+    expected = [(form.label, form.file.removesuffix(".png")) for form in forms]
+    if entries != expected:
+        fail(f"{IOS_TABLE.relative_to(ROOT)} is stale: expected {expected}, found {entries}")
+
+
 def build_outputs() -> dict[str, bytes]:
     forms = load_forms()
     svg_pngs = [(STICKERS / form.file).read_bytes() for form in forms]
@@ -406,6 +418,7 @@ def main() -> None:
                 + ", ".join(stale)
                 + f" (run python3 {Path(__file__).relative_to(ROOT)})"
             )
+        verify_ios_table(load_forms())
         print(
             f"OK: {len(outputs[FONT_FILE])} byte font, tables and "
             f"{len(platform)} platform mirror files match sources"

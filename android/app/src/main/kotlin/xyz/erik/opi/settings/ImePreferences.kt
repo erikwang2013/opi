@@ -115,6 +115,15 @@ class ImePreferences(private val store: PrefStore) {
         set(v) = store.put(KEY_CORRECTION, v)
 
     /**
+     * 自有表情用字体字符（PUA，2026-10-19；缺省 false = 既有图片通道）。
+     * true 时点小欧表情上屏 `map.tsv` 的 PUA 字符；目标应用没装小欧表情字体时
+     * 会显示成方框 —— 所以它是显式 opt-in。
+     */
+    var puaEmoji: Boolean
+        get() = store.getBoolean(KEY_PUA_EMOJI, false)
+        set(v) = store.put(KEY_PUA_EMOJI, v)
+
+    /**
      * 模糊音**逐对**列表（2026-10-13 用户裁决「可多选类似 z=zh」）：
      * 逗号分隔组名（[FUZZY_PAIRS_ANDROID] 的条目）。**空串 = 未设置 ⇒ 回落
      * [fuzzy] 布尔**（老装机行为一字不变）；非空 ⇒ 以列表为准。
@@ -234,6 +243,7 @@ class ImePreferences(private val store: PrefStore) {
         const val KEY_JIANPIN = "engine_jianpin"
         const val KEY_ENGLISH_PRO = "english_pro"
         const val KEY_CORRECTION = "engine_correction"
+        const val KEY_PUA_EMOJI = "pet_pua_emoji"
         const val KEY_SHUANGPIN_LAYOUT = "engine_shuangpin_layout"
         // 五笔六键（2026-10-14，M4 第二波）
         const val KEY_WUBI_PLAN = "wubi_plan"

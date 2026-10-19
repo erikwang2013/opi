@@ -1,0 +1,9 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
+{
+  "modelVersion": "5.0.0",
+  "description": "小欧输入法 HarmonyOS 端",
+  "dependencies": {},
+  "devDependencies": {}
+}

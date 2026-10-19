@@ -41,6 +41,11 @@ pub mod tsf;
 #[cfg(target_os = "windows")]
 pub mod com_server;
 
+/// Windows 目标专属：`regsvr32` 的注册/注销表（COM 键 + TSF profile）。
+/// 从 `com_server.rs` 拆出只为守住 500 行；验证边界同 `com_server`。
+#[cfg(target_os = "windows")]
+mod registration;
+
 /// Win32 VK → 引擎键码的映射判定（纯函数，无 windows 类型 → 主机可编译可单测）。
 /// `tsf.rs` 是 `#[cfg(target_os = "windows")]`：判定若留在那边，Linux 门禁就永远
 /// 覆盖不到（本项目的开发/验收主机是 Linux）。

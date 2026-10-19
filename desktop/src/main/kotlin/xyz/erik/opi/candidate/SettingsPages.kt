@@ -77,6 +77,13 @@ internal fun CommonPage(s: OpSettings, apply: (OpSettings) -> Unit) {
         "声母缩写：nh → 你好、zg → 中国",
         s.jianpin,
     ) { apply(s.copy(jianpin = it)) }
+    // 自有表情 PUA（2026-10-19，缺省关）：开 = 点小欧表情上屏字体字符。目标应用没装
+    // 小欧表情字体时字符会显示成方框 —— 这句就是开关的代价，必须跟着开关一起出现。
+    SettingRow(
+        "自有表情用字体字符（PUA）",
+        "开：点小欧表情上屏字体字符；目标应用没装小欧表情字体时显示为方框。关（默认）：插入图片",
+        s.puaEmoji,
+    ) { apply(s.copy(puaEmoji = it)) }
     SettingRow(
         "拼音纠错",
         "相邻键错按 / 多打 / 少打一个字母也能出候选（如 nihap → nihao）；配置键名 Correction",
@@ -229,6 +236,24 @@ internal fun StatusBarPage(s: OpSettings, apply: (OpSettings) -> Unit, status: (
         // 与设置窗首次拉起那条同规矩；开关本身已即时可见（apply 先写 s）。
         scope.launch {
             withContext(Dispatchers.IO) { ensureStatusBarRunning(next.statusbar) }?.let(status)
+        }
+    }
+    SectionTitle("键大小")
+    Text(
+        "当前 ${s.statusbar.scale}%。统一调整条上所有按钮（含 en/pro、en26 键帽）及其间距，" +
+            "基准 30dp；配置键名 StatusBarScale。" +
+            "状态栏是独立进程、每秒轮询配置 ⇒ 改完通常 1–2 秒内按新尺寸重排，不用重启。",
+        fontSize = 12.sp, color = Muted,
+    )
+    Spacer(Modifier.height(8.dp))
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        for (p in STATUS_BAR_SCALE_CHOICES) {
+            LayoutChip("$p%", p == s.statusbar.scale) {
+                apply(s.copy(statusbar = s.statusbar.copy(scale = statusBarScalePercent(p))))
+            }
         }
     }
     SectionTitle("条上按钮（常驻）")

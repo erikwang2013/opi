@@ -25,7 +25,7 @@ object PetEmoji {
     val forms: List<PetEmojiMap.Form> get() = PetEmojiMap.forms
 
     /** 中文标签（图片插不进去时上屏 `[小欧·笑]` 用）。 */
-    fun label(mood: PetMood): String = forms.firstOrNull { it.mood == mood }?.label ?: "表情"
+    fun label(mood: PetMood): String = forms.firstOrNull { it.mood == mood }?.label ?: "小欧·表情"
 
     /**
      * APK assets 内的路径。文件名契约只留一份：共享的 [PetStickerAssets.stickerFile]
