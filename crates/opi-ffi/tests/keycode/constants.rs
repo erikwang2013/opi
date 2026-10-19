@@ -56,10 +56,13 @@ pub struct Surface {
 // ---------- 五个对账方的路径 ----------
 
 pub const KEYS_RS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../engine-core/src/keys.rs");
-pub const HARMONY_C: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../harmony/cpp/opi_ffi.h");
+pub const HARMONY_C: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../harmony/entry/src/main/cpp/opi_ffi.h"
+);
 pub const HARMONY_ETS: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../harmony/ets/InputMethodExtensionAbility/OpiEngine.ets"
+    "/../../harmony/entry/src/main/ets/InputMethodExtensionAbility/OpiEngine.ets"
 );
 pub const IOS_SWIFT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../ios/OpiEngine.swift");
 pub const MACOS_SWIFT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../macos/OpiEngine.swift");

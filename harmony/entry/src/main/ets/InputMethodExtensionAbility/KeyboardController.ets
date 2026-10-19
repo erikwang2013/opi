@@ -22,29 +22,13 @@ import * as OpiEngine from './OpiEngine';
 import { EmojiGroup, KeyResult, OpiAction, OpiMode, OpiShift } from './OpiEngine';
 // 输入模式：只做转发 + publish —— 状态机/九项表/数字真源都在 InputModes.ets，本文件不重编一份。
 import * as InputModes from './InputModes';
+import {
+  KEY_BUFFER, KEY_CANDIDATES, KEY_PAGE, KEY_PAGE_COUNT, KEY_MODE, KEY_SHIFT, KEY_LEARNER,
+  KEY_MODE_INDEX, KEY_PANEL
+} from './KeyboardAppStorage';
 
 /** 键盘占屏高的比例。凭感觉定的，真机上要按候选栏行数调。 */
 const PANEL_HEIGHT_RATIO: number = 0.42;
-
-/**
- * AppStorage 键名 —— **写入侧**（下面的 `publish()`）用的唯一真源。
- *
- * ⚠️ 读取侧（`pages/Index.ets` 9 条、`KeyPanels.ets` 3 处 `opiMode`）**用不了这些常量**：
- * @StorageLink 的入参必须是字符串字面量（ArkTS 编译期静态处理），写
- * `@StorageLink(KEY_BUFFER)` 编译不过。所以那些地方内联了字面量，**各有一份**，
- * 改这里必须同步改那边 —— 核对命令与症状写在 Index.ets 装饰器旁的注释里。
- * **不要再试图「统一成常量」**：那正是 ArkTS 禁止的写法。
- */
-export const KEY_BUFFER: string = 'opiBuffer';
-export const KEY_CANDIDATES: string = 'opiCandidates';
-export const KEY_PAGE: string = 'opiPage';
-export const KEY_PAGE_COUNT: string = 'opiPageCount';
-export const KEY_MODE: string = 'opiMode';
-export const KEY_SHIFT: string = 'opiShift';
-export const KEY_LEARNER: string = 'opiLearner';
-/** 当前输入模式下标（InputModes 的 INPUT_MODES 下标，**不是**引擎方案码）+ 面板开关（1/0）。 */
-export const KEY_MODE_INDEX: string = 'opiLayout';
-export const KEY_PANEL: string = 'opiPanel';
 
 export class KeyboardController {
   private static instance: KeyboardController = new KeyboardController();

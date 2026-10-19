@@ -13,7 +13,7 @@
 
 iOS/鸿蒙没有可挂资源的构建工程，沿用既有的 **base64 常量内嵌**交付形态：
 本脚本同时重写 `ios/PetStickerImages.swift`、`ios/PetStickerGifs.swift` 与
-`harmony/ets/InputMethodExtensionAbility/PetStickerImages.ets`。别手改这些产物。
+`harmony/entry/src/main/ets/InputMethodExtensionAbility/PetStickerImages.ets`。别手改这些产物。
 
 文件名契约 = `PetStickerAssets.stickerFile`（Android/桌面共用）：
 `PetMood.name` 小写、下划线换连字符 + `.png` / `.gif`。构建期 desktop/android 的
@@ -54,7 +54,7 @@ PET_KT = ROOT / "shared/pet/OpiPet.kt"
 MAP_KT = ROOT / "shared/pet/PetEmojiMap.kt"
 IOS_IMAGES = ROOT / "ios/PetStickerImages.swift"
 IOS_GIFS = ROOT / "ios/PetStickerGifs.swift"
-HARMONY_IMAGES = ROOT / "harmony/ets/InputMethodExtensionAbility/PetStickerImages.ets"
+HARMONY_IMAGES = ROOT / "harmony/entry/src/main/ets/InputMethodExtensionAbility/PetStickerImages.ets"
 
 
 def gif_name(png_file: str) -> str:

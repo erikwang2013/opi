@@ -22,7 +22,7 @@
 //! 三份头文件的关系（**有意设计，别改**）：
 //!   * `macos/OpiFFI.h`  —— 唯一一份全量声明（本文件对它要求**集合相等**）。
 //!   * `ios/OpiFFI.h`    —— 纯转发头，自己**不声明**任何函数（只 `#include`）。
-//!   * `harmony/cpp/opi_ffi.h` —— **use-site 子集**：只声明 N-API 桥真正调用的出口。
+//!   * `harmony/entry/src/main/cpp/opi_ffi.h` —— **use-site 子集**：只声明 N-API 桥真正调用的出口。
 //!     对它是「每条都对 + 全都被用到」，**不是**「等于全集」。
 
 #[path = "c_abi/checker.rs"]
@@ -320,18 +320,18 @@ fn harmony_header_is_consistent_use_site_subset() {
             .any(|(i, _)| bridge[i + name.len()..].trim_start().starts_with('('));
         if !hit {
             diffs.push(format!(
-                "`{name}` 在 harmony/cpp/opi_ffi.h 里声明了，但 napi_bridge.c 从未调用"
+                "`{name}` 在 harmony/entry/src/main/cpp/opi_ffi.h 里声明了，但 napi_bridge.c 从未调用"
             ));
         }
     }
 
     assert!(
         diffs.is_empty(),
-        "harmony/cpp/opi_ffi.h 与 cabi.rs / napi_bridge.c 不一致：\n  {}",
+        "harmony/entry/src/main/cpp/opi_ffi.h 与 cabi.rs / napi_bridge.c 不一致：\n  {}",
         report(diffs)
     );
     println!(
-        "[契约] harmony/cpp/opi_ffi.h：{} 条声明，全部与 cabi.rs 同型且都被桥调用（全集 {} 条，有意子集）",
+        "[契约] harmony/entry/src/main/cpp/opi_ffi.h：{} 条声明，全部与 cabi.rs 同型且都被桥调用（全集 {} 条，有意子集）",
         decls.len(),
         full.len()
     );

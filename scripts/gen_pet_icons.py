@@ -7,7 +7,7 @@
 
   1. Android 旧版启动图标（API 21–25 的 mipmap-*/ic_launcher.png，方/圆各 5 桶）
      + API 26+ 的圆形自适应 XML（`mipmap-anydpi-v26/ic_launcher_round.xml`）
-  2. 鸿蒙：`harmony/resources/base/media/icon.png`（512²，输入法子类型图标 ——
+  2. 鸿蒙：`harmony/entry/src/main/resources/base/media/icon.png`（512²，输入法子类型图标 ——
      `input_method_config.json` 三个 subtype 的 `$media:icon` 指向它）
   3. macOS：`macos/opi.tiff`（32×32 @144dpi = 16pt@2x，`Info.plist` 的
      `tsInputMethodIconFileKey` 指向它）
@@ -58,7 +58,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RES = ROOT / "android/app/src/main/res"
 FOREGROUND = RES / "drawable/ic_launcher_foreground.xml"
 AND = "{http://schemas.android.com/apk/res/android}"
-HARMONY_ICON = ROOT / "harmony/resources/base/media/icon.png"
+HARMONY_ICON = ROOT / "harmony/entry/src/main/resources/base/media/icon.png"
 MACOS_TIFF = ROOT / "macos/opi.tiff"
 TSF_ICO = ROOT / "crates/tsf-opi/assets/opi-langbar.ico"
 

@@ -385,10 +385,13 @@ pub const CABI_SWITCHES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/cabi_s
 pub const CABI_SYMBOLS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/cabi_symbols.rs");
 pub const MACOS_H: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../macos/OpiFFI.h");
 pub const IOS_H: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../ios/OpiFFI.h");
-pub const HARMONY_H: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../harmony/cpp/opi_ffi.h");
+pub const HARMONY_H: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../harmony/entry/src/main/cpp/opi_ffi.h"
+);
 pub const HARMONY_BRIDGE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../harmony/cpp/napi_bridge.c"
+    "/../../harmony/entry/src/main/cpp/napi_bridge.c"
 );
 
 pub fn read(p: &str) -> String {

@@ -166,7 +166,7 @@ fn no_source_file_exceeds_500_lines() {
         "crates/engine-core/src/keys.rs",
         "crates/opi-ffi/src/cabi.rs",
         "crates/fcitx5-opi/cpp/opi_json.h",
-        "harmony/cpp/opi_ffi.h",
+        "harmony/entry/src/main/cpp/opi_ffi.h",
         "ios/OpiEngine.swift",
         "macos/OpiEngine.swift",
         "shared/pet/OpiPet.kt",
