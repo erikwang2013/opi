@@ -773,8 +773,8 @@ Linux 上 = `--settings` 的设置窗（无参数启动也是它）。**v1.6.0 �
     （`EmojiPage.kt` 的 `EmojiTopBar` / `EmojiPane`）。
     - **自有（独立顶级子页）**：4 列网格画 `shared/pet/stickers/` 的 12 张小欧 PNG
       （构建期拷进 resources `/pet/`，`copyPetStickers`）。桌面宿主不能往客户端输入框
-      插图片：点击 = **复制 PNG 到系统剪贴板** + 窗内提示「小欧表情已复制，可 Ctrl+V
-      粘贴」（`PetStickerPage.kt`），**不走 `opi-ctl insert` 文本通道**、绝不提交笑脸 emoji。
+      插图片：点击 = **复制 GIF（优先）/ PNG（兜底）到系统剪贴板** + 窗内提示「小欧表情已复制，
+      可 Ctrl+V 粘贴」（`PetStickerPage.kt`），**不走 `opi-ctl insert` 文本通道**。
       自有页没有分类条、没有搜索，也不进 Emoji 的最近使用。
     - **Emoji 子页**：分类条 = 引擎 OpenMoji 常用分组（**9 组**，旗帜/组件/肤色变体与
       ZWJ 组合已排除；筛选规则见 `scripts/gen_emoji_kaomoji.py`），**不再含「自有」**。

@@ -318,7 +318,7 @@ adb shell ime set    xyz.erik.opi/.OpiImeService      # 切为当前输入法
 - 空格：有缓冲 = 选第一个候选；无缓冲 = 直接上屏一个空格（`KeyRouter.handleSpace`）。
 - 回车：有缓冲 = 选第一个候选；无缓冲 = 读目标应用声明的 action，**action 位为 0 时提交换行**（`OpiImeService.performEnter`，不硬编码 SEND）。
 - 退格：有缓冲 = 退引擎的拼音；无缓冲 = 删编辑框里的字（按**码点**删，emoji 不拆半，`OpiImeService.deleteBackward`）。
-- 英文模式：字母进引擎做单词前缀联想（2026-10-18 起；单字母缓冲的首候选 = 输入原文，保留大小写）；只有**携带缓冲**（中→英保留的拼音）时字母直传（`KeyRouter.handleKey`）。
+- 英文模式：**默认普通** = 字母直出（`KeyRouter` 不进引擎）；点 `pro` 切专业后才进引擎做单词前缀联想（2026-10-18 起；单字母缓冲的首候选 = 输入原文，保留大小写）。只有**携带缓冲**（中→英保留的拼音）时字母直传。
 - **英文 26 键顶部有 0-9 数字行**（2026-10-19，`QwertyKeyboard.showNumberRow`；只在主键盘英文模式显示，搜索叠盘与中文模式不显示）。数字**直接上屏**（`KeyRouter.handleKey` 的英文分支；全角规则同其它直传点），不进引擎的英文数字选词。
 - **英文底行布局（2026-10-19）**：`!?#`（进符号页，英文符号在 ASCII 分类）→ `pro`（普通/专业）→ 空格 → 中/英切换 → ⌫；**回车与大写锁定同一行，回车在最右**（第 3 行 `⇧ z…m ↵`），底行不再放回车。原 [123] 位置改为 `pro`（数字已由顶部 0-9 覆盖；符号/数字面板仍从中文键盘进入）。**默认普通** = 字母直出、不查 `en_words.tsv`、无候选；点 `pro` 切到专业 = 现有前缀联想/候选。切换清空英文缓冲并落盘（`ImePreferences.englishPro`），键面高亮表示专业态；`KeyRouter` 的 `englishPro` 判据只在英文模式生效。
 
@@ -448,7 +448,8 @@ emoji 列**不动** —— 它管单键候选反馈（搜索路），与浏览�
   （authority `${applicationId}.fileprovider`，`res/xml/file_paths.xml` 只开
   `cacheDir/pet`）构造 `InputContentInfoCompat`，用
   `InputConnectionCompat.commitContent` 插入**图片**。编辑器不接受富内容时回退
-  **独立文本标签** `[小欧·笑]`（绝不提交 😊/😄）并 toast 说明。自有不进 Emoji
+  **`PetEmojiMap` 的近似 Unicode emoji**（2026-10-19 用户报障「确认到输入框就不是表情」）并
+  toast 说明；仍有映射缺失时才落到独立文本标签 `[小欧·笑]`。自有不进 Emoji
   分类条、也不进 Emoji 的最近使用。
 - **Emoji 子页**：底部一条**可横滑**的分类条（`EmojiPanel.kt` 的 `CategoryBar`），
   内容 = 引擎 `emojiGroups()` 的 **9 组**（不再含自有或任何偏移）；点组

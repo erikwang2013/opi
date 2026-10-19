@@ -119,7 +119,7 @@
       <text x="68" y="527">符号大全：22 类目（常用置顶，数理化齐）</text>
       <text x="68" y="547">类目内浏览 + 关键字搜索双通道</text>
       <text x="68" y="567">emoji 与拼音候选同栏合并排序</text>
-      <text x="68" y="587">OpenMoji 表情 · 颜文字 · 自有贴纸 PNG</text>
+      <text x="68" y="587">OpenMoji 表情 · 颜文字 · 自有贴纸 PNG/GIF</text>
       <text x="68" y="607">搜索 250ms 防抖，开面板先提交 pending 拼音</text>
     </g>
 
