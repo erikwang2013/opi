@@ -180,11 +180,13 @@ jobs:
       # 原文案带中文就挂在这；Gradle 只报「Exit code: 1」，真原因藏在下面那条诊断步骤打的
       # jpackage 日志里）。把判据前置，红的时候一眼知道改哪，不用先学会读 light.exe。
       # sed 取值的锚点与上面 version job 取 opiAppVersion 同一手法。
-      - name: 检查 description/vendor/packageName 是纯 ASCII（否则 MSI 必挂 LGHT0311）
+      # 2026-10-20：packageName 不再是字面量（按构建主机分叉，Windows 分支固定 "opi"），
+      # 不再进这道解析；它的两个取值本身都是纯 ASCII。
+      - name: 检查 description/vendor 是纯 ASCII（否则 MSI 必挂 LGHT0311）
         shell: bash
         run: |
           set -euo pipefail
-          for key in description vendor packageName; do
+          for key in description vendor; do
             val="$(sed -n "s/^ *${key} = \"\(.*\)\"/\1/p" desktop/build.gradle.kts)"
             [ -n "$val" ] || { echo "::error::从 desktop/build.gradle.kts 取不到 ${key}"; exit 1; }
             if printf '%s' "$val" | LC_ALL=C grep -q '[^ -~]'; then
