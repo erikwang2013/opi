@@ -13,10 +13,12 @@ name: Windows 打包
 #
 # ⚠️ 边界（**别把「打包绿了」读成「Windows 端能用」**）：
 #   本 workflow 证明「这两个产物能在 Windows 上被编出来、DLL 的导入/导出表长这样、
-#   MSI 里带上了 DLL 和完成页脚本，且后处理注入了注册动作与安装目录」。它**不**安装、
-#   **不**运行任何东西；安装期的 `regsvr32` / Explorer 重启只在 `msi-postprocess` job
-#   里做了**表级**注入，仍需真机装一次验证（2026-10-19 用户在真机装的是**未后处理**的
-#   发布包，键盘不显示；后处理后的产物尚未被装过）。
+#   MSI 里带上了 DLL 和完成页脚本，且后处理注入了注册动作与安装目录」。
+#   `windows-install-test` 会在 Windows Server Core 容器里真跑一次 `msiexec` 并上传日志，
+#   但容器没有真机的语言栏/TSF 环境：`OpRegisterTsf` 失败/回滚会如实留在日志里，
+#   这**不**等于真机装过。`regsvr32` / Explorer 重启的真实行为仍需真机验证
+#   （2026-10-19 用户在真机装的是**未后处理**的发布包，键盘不显示；后处理后的产物
+#   尚未被真机装过）。
 #   缺口清单见 docs/install/windows.md 的 §6.1（从未验过的事）与 §6.2（读源码得出的缺口）。
 #   本 workflow 也**不**打包 `luna.opid`：词库分发通路一条没动（§2.4 的判断仍然成立 ——
 #   仍然没有任何步骤把词库和 DLL 放到一起）。
@@ -234,8 +236,10 @@ jobs:
           } else { Write-Host "没有 $argsFile" }
 
       # 原始 jpackage 产物：**不含** regsvr32 注册动作，也不是用户入口（2026-10-19
-      # 用户真机报障的根因正是把这一份当成了发布包）。后处理在下面的 msi-postprocess
-      # job 里做；只有它上传的 opi-desktop-msi-v<版本> 才是用户入口。
+      # 用户真机报障的根因正是把这一份当成了发布包）。它是 msi-postprocess 的**内部
+      # 中间物**：后处理成功后由该 job 用 gh api 删除，正常 run 的最终 artifacts 里
+      # 不应出现。只有 opi-desktop-msi-v<版本> 才是用户入口。raw 若残留（后处理失败）
+      # 只用于排障，不要安装。
       - uses: actions/upload-artifact@v4
         with:
           name: opi-desktop-msi-raw-v${{ needs.version.outputs.version }}
@@ -257,6 +261,11 @@ jobs:
     name: MSI 后处理 + 表级验证（ubuntu-latest，msitools）
     runs-on: ubuntu-latest
     needs: [version, desktop-msi]
+    # 删除 raw artifact 需要 actions: write；job 级 permissions 会覆盖顶层，
+    # 所以 contents: read 必须一起写（checkout 要用）。
+    permissions:
+      actions: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -317,6 +326,83 @@ jobs:
           name: opi-desktop-msi-v${{ needs.version.outputs.version }}
           if-no-files-found: error
           path: msi-processed/*.msi
+
+      # raw 只是 job 间中间物：processed 上传成功后立刻删除，run 的最终 artifacts
+      # 里只剩用户入口。删除失败会让 job 红（raw 会残留并可见）—— 宁可红也不要
+      # 悄悄把中间物留在最终 artifacts 里。
+      - name: 删除内部中间物 raw MSI artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          ARTIFACT_NAME: opi-desktop-msi-raw-v${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          id="$(gh api --paginate "repos/$REPO/actions/runs/$RUN_ID/artifacts?per_page=100" \
+            --jq ".artifacts[] | select(.name == \"$ARTIFACT_NAME\") | .id")"
+          [ -n "$id" ] || { echo "::error::找不到 raw artifact $ARTIFACT_NAME"; exit 1; }
+          gh api -X DELETE "repos/$REPO/actions/artifacts/$id"
+          echo "已删除内部中间物 $ARTIFACT_NAME（id=$id）"
+
+  # ---- Windows 容器安装冒烟（2026-10-20 新增）----
+  #
+  # 只证明「msiexec 能在干净的 Windows Server Core 里跑完并留下日志」，**不**证明
+  # 真机可用：容器没有语言栏/TSF 环境，`OpRegisterTsf` 很可能失败并回滚（Type 1
+  # Return=check），这正是要如实保留在日志里的信息。日志无论成败都上传。
+  windows-install-test:
+    name: 容器安装冒烟（windows-latest，msiexec 日志）
+    runs-on: windows-latest
+    needs: [version, msi-postprocess]
+    timeout-minutes: 60 # ltsc2022 镜像约 5 GB，给足拉取时间
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: opi-desktop-msi-v${{ needs.version.outputs.version }}
+          path: msi
+
+      - name: docker pull windows/servercore:ltsc2022
+        shell: pwsh
+        run: docker pull mcr.microsoft.com/windows/servercore:ltsc2022
+
+      # 两次独立容器：一次显式 INSTALLDIR，一次用 MSI 默认目录（C:\Program Files\opi）。
+      # cmd 里的 `&` 保证 msiexec 失败后仍会执行 dir/reg query；`exit 0` 让 docker
+      # 返回 0，失败信息留在 msiexec 日志里而不是让 job 变成没有日志的红。
+      - name: 安装冒烟（容器内，日志落到工作区）
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $msi = Get-ChildItem msi/*.msi | Select-Object -First 1
+          if (-not $msi) { throw '没有下载到 processed MSI' }
+          $name = $msi.Name
+          $work = $PWD.Path
+          $image = 'mcr.microsoft.com/windows/servercore:ltsc2022'
+
+          $custom = "msiexec /i C:\work\msi\$name /qn /l*v C:\work\install-custom.log INSTALLDIR=C:\opi-test & dir C:\opi-test > C:\work\dir-custom.txt & reg query HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall /s /f opi > C:\work\reg-custom.txt & exit 0"
+          docker run --rm --isolation=process -v "${work}:C:\work" $image cmd /c $custom
+
+          $default = "msiexec /i C:\work\msi\$name /qn /l*v C:\work\install-default.log & dir `"C:\Program Files\opi`" > C:\work\dir-default.txt & reg query HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall /s /f opi > C:\work\reg-default.txt & exit 0"
+          docker run --rm --isolation=process -v "${work}:C:\work" $image cmd /c $default
+
+          # 原生命令非零退出不会自动让 pwsh 步红；用日志文件存在性断言「msiexec 真跑了」。
+          # msiexec 自身失败仍会留下 /l*v 日志 —— 那是要保留的信息，不在这里判红。
+          foreach ($f in 'install-custom.log', 'install-default.log') {
+            if (-not (Test-Path $f)) { throw "缺少 $f（docker run 失败或 msiexec 没启动）" }
+          }
+
+      - name: 上传安装日志（无论成败）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opi-install-logs-v${{ needs.version.outputs.version }}
+          if-no-files-found: warn
+          path: |
+            install-custom.log
+            install-default.log
+            dir-custom.txt
+            dir-default.txt
+            reg-custom.txt
+            reg-default.txt
 
   # ---- 只报不进卡的 clippy（Windows 目标）----
   #

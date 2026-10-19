@@ -275,19 +275,23 @@ android/app/src/main/assets/luna.opid
 ### 2.5 自动打包（GitHub Actions，2026-10-09 起）
 
 `.github/workflows/windows.yml` —— 构建 job 在 windows runner 上跑，后处理 job
-（`msi-postprocess`，2026-10-19 起）在 `ubuntu-latest` 上用 msitools 跑。
+（`msi-postprocess`，2026-10-19 起）在 `ubuntu-latest` 上用 msitools 跑，
+容器安装冒烟 job（`windows-install-test`，2026-10-20 新增）在 `windows-latest` 上跑。
 **订正 2026-10-19**：不再写「`ci.yml` 一个字没动」—— `ci.yml` 已有独立的
 `packaging-scripts` job（2026-10 起，跑 Linux 安装脚本回归），但它不碰 Windows 构建；
 `packages.yml` 未动。它覆盖 §1.2 那张表里本机打 ❌ 的几格：
-**DLL 真链接（静态 CRT）、导出/导入表检视、`.msi` 产出、表级后处理（注册动作/安装目录）**。
-它**不**安装、**不**实际执行 `regsvr32`/`taskkill` —— 「表里注入了」与「Windows 端能用」
-是两件事（§6）。
+**DLL 真链接（静态 CRT）、导出/导入表检视、`.msi` 产出、表级后处理（注册动作/安装目录）、
+容器内 `msiexec` 冒烟日志**。后处理 job 只做表级注入；`windows-install-test` 只在
+Windows Server Core 容器里安装并抓日志，**不**等于真机验证 —— 容器通常缺语言栏/TSF，
+`OpRegisterTsf` 失败/回滚会如实留在日志里。「表里注入了」与「Windows 端能用」仍是
+两件事（§6）。
 
 | artifact | 内容 | 实测体积（来源 / 单位 / 日期） |
 |---|---|---|
 | `opi-tsf-dll-v<版本>` | `tsf_opi.dll`（zip 里就这一个文件；**仅供 desktop-msi job 下载打包，不再作为用户入口发布**） | DLL 本体 778,240 B、上传 zip 331,390 B（2026-10-09 run，旧构建） |
-| `opi-desktop-msi-raw-v<版本>` | jpackage **原始** `.msi`（zip 里一个文件）。**未后处理，不是用户入口** —— 没有注册动作，装完键盘不出现 | 上传的 **zip** 58,683,236 B（2026-10-09 run）；**未压缩 MSI** 62,034,236 B（2026-10-19 本机核对的 v1.15.1 发布资产）。两者不是同一次构建，别混比 |
+| `opi-desktop-msi-raw-v<版本>` | jpackage **原始** `.msi`（zip 里一个文件）。**仅内部中间物**（YAML 注释标 internal）：没有注册动作，只供 `msi-postprocess` 下载；后处理成功后由该 job 删除，**正常 run 的最终 artifacts 里不应出现** | 上传的 **zip** 58,683,236 B（2026-10-09 run）；**未压缩 MSI** 62,034,236 B（2026-10-19 本机核对的 v1.15.1 发布资产）。两者不是同一次构建，别混比 |
 | `opi-desktop-msi-v<版本>` | **后处理后的** `opi-candidates-<版本>.msi`（zip 里一个文件）。**这才是用户入口**（`msi-postprocess` job 产出） | **未压缩 MSI** 62,443,008 B（2026-10-19 本机由上一行的 v1.15.1 raw 处理得到；+408,772 B）。CI 上传的是 zip，别再拿这个数当 zip 体积 |
+| `opi-install-logs-v<版本>` | `windows-install-test` 在 Windows Server Core 容器里跑 `msiexec` 的日志与目录/注册表输出（`install-custom.log` / `install-default.log` / `dir-*.txt` / `reg-*.txt`）。容器缺语言栏/TSF，失败/回滚会如实留在日志里 | 每次 run 新生成 |
 
 名字里的版本来自 `Cargo.toml` 的 `[workspace.package] version`（本仓六 crate 共用的单一来源），
 并与 `desktop/build.gradle.kts` 的 `opiAppVersion`（= jpackage 的 `packageVersion`）**比对**：
@@ -301,9 +305,10 @@ gh run list   --workflow=windows.yml                 # 找最近一次成功的 
 gh run download <run-id> -n opi-tsf-dll-v<版本>      # 或 -n opi-desktop-msi-v<版本>
 ```
 
-⚠️ **别下载 `-raw-` 那一份装**：它是 jpackage 原始产物，没有注册动作
-（2026-10-19 用户真机报障的就是这种包）。只有 `opi-desktop-msi-v<版本>` 是
-`msi-postprocess` job 处理过、可直接安装的版本。
+⚠️ **正常 run 的最终 artifacts 里不应出现 `-raw-`**：raw 只是
+`desktop-msi → msi-postprocess` 的 job 间中间物，后处理成功后自动删除。若还能看到它，
+说明后处理 job 失败（raw 保留用于排障，也不要安装）。用户唯一入口是
+`opi-desktop-msi-v<版本>`。
 
 或在 Actions 页面（仓库 → Actions → Windows 打包）点进某次 run 下载。
 **触发**：手动 dispatch，或 push 到默认分支且改动落在 `crates/tsf-opi/**` / `desktop/**` /
@@ -950,7 +955,8 @@ Windows 上只出**常用 / 状态栏 / 符号与表情 / 关于**四页 —— 
 
 ### 5.2 注册成没成（真机验证清单）
 
-**【未验证】** —— **本机（Linux）没有在真 Windows 上装过任何后处理产物**。
+**【未验证】** —— **本机（Linux）没有在真机桌面 Windows 上装过任何后处理产物**；
+CI 的 `windows-install-test` 只做容器冒烟并抓日志（§2.5），不是真机验证。
 2026-10-19 用户真机报障（v1.15.1，未后处理包：有进程、键盘不显示）是本轮修复的
 **直接证据**；但「后处理后的包能不能注册成功」仍要装一次才知道。装完后按顺序核：
 
@@ -1034,7 +1040,7 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | 9 | `Ctrl+'` / `Ctrl+\` / `Shift+Space` 在 Windows 上有没有被别的软件占用 | §4.1 |
 | 10 | 语言栏按钮（`langbar.rs`）的运行期行为：`AddItem` 成不成、`GetIcon` 有没有被调、图标画没画出来 —— 只有 §1.2 那条 `cargo check` 看过它（"挑条目 + 校验 RT_ICON 形态"那半在 `langbar_icon.rs`，有主机单测） | §2.1、`crates/tsf-opi/src/langbar.rs` 头注释 |
 | 11 | **「属性设置」的生效时机**：设置窗落盘后要等下一次 `Activate` —— 本机无法验证（`Activate` 由 TSF 调）。读取/容错/落点那半在 `settings.rs`，有主机单测 | §4.4、`crates/tsf-opi/src/settings.rs` |
-| 12 | **安装器四条新行为（改安装目录 / 关停运行中实例 / 注册 TSF DLL / 装后自启 + 重启 Explorer，2026-10-17 / 10-18 / 10-19 加）**：表级已改好并可本地复核（§2.5 的后处理脚本 + 读回证据）。**2026-10-19 用户在真机装过的是「未后处理」的 v1.15.1 发布包**（有进程、键盘不显示）—— 这证明了「不跑后处理 = 不注册 = 键盘不出现」。**【订正 2026-10-19 复审】后处理后的三份包**（本地 `processed-static`、本地 `processed`、CI `opi-desktop-msi`）**仍无输入法的根因已定位**：注入的是 32 位 `WixSilentExec`，而随包 `Binary.WixCA` 是 PE32 i386 ⇒ WOW64 调 SysWOW64 的 32 位 `regsvr32`，加载不了 x86-64 DLL。脚本/CI 已改为 `WixSilentExec64` + `WixSilentExec64CmdLine` 并加 PE machine 断言，注册逻辑改为显式判存在 + HKLM 默认启用。但这三份包的 desktop jar 与 DLL 仍是本轮修复前的构建，所以「修复后的包」仍未被装过：taskkill 真杀没杀掉、`regsvr32` 真注册没成功、WixShellExec 真启没启起来、ExitDialog 复选框出不出现、脚本是否结束 Explorer 并由 Winlogon 拉回（依赖 `AutoRestartShell` 默认 1），仍是【未验证】 | §2.5、`scripts/postprocess-windows-msi.sh` |
+| 12 | **安装器四条新行为（改安装目录 / 关停运行中实例 / 注册 TSF DLL / 装后自启 + 重启 Explorer，2026-10-17 / 10-18 / 10-19 加）**：表级已改好并可本地复核（§2.5 的后处理脚本 + 读回证据）。**2026-10-19 用户在真机装过的是「未后处理」的 v1.15.1 发布包**（有进程、键盘不显示）—— 这证明了「不跑后处理 = 不注册 = 键盘不出现」。**【订正 2026-10-19 复审】后处理后的三份包**（本地 `processed-static`、本地 `processed`、CI `opi-desktop-msi`）**仍无输入法的根因已定位**：注入的是 32 位 `WixSilentExec`，而随包 `Binary.WixCA` 是 PE32 i386 ⇒ WOW64 调 SysWOW64 的 32 位 `regsvr32`，加载不了 x86-64 DLL。脚本/CI 已改为 `WixSilentExec64` + `WixSilentExec64CmdLine` 并加 PE machine 断言，注册逻辑改为显式判存在 + HKLM 默认启用。但这三份包的 desktop jar 与 DLL 仍是本轮修复前的构建，所以「修复后的包」仍未被**真机**装过（CI 容器冒烟只抓日志，§2.5）：taskkill 真杀没杀掉、`regsvr32` 真注册没成功、WixShellExec 真启没启起来、ExitDialog 复选框出不出现、脚本是否结束 Explorer 并由 Winlogon 拉回（依赖 `AutoRestartShell` 默认 1），仍是【未验证】 | §2.5、`scripts/postprocess-windows-msi.sh` |
 | 13 | **卸载不清理 TSF 注册（2026-10-19 reviewer m4 记录，有意未做）**：`OpRegisterTsf` 的条件是 `NOT REMOVE` ⇒ 卸载**不执行** `regsvr32 /s /u`；`HKCR\CLSID\{98C51858-590B-404D-8915-21EB44250062}\InprocServer32` 与 `HKLM\SOFTWARE\Microsoft\CTF` 下由 `DllRegisterServer` 写入的条目会**残留并指向已删除的 DLL**。未加卸载动作的原因：`WixSilentExec64` 只有**一个**命令属性 `WixSilentExec64CmdLine`，安装/卸载两条命令会互相覆盖；手写 `RemoveRegistryKey` 又需精确复制官方 API 写入的键，未在真机取证。重装到同一路径会重新覆盖注册；彻底清理 = 卸载前手工 `regsvr32 /s /u <dll>`，已卸载则手工删上述键 | `scripts/postprocess-windows-msi.sh`、§2.5 | 卸载后注册残留；卸载本身的文件删除不受影响 |
 | 14 | **Win7 / Win8 / 8.1 不支持（2026-10-19 用户裁决：仅文档标注）**：DLL 的 API set/Rust std 与候选窗的 JDK 21/Compose 下限都在 Win10/11；Win7/8 需另建 legacy 轨道 | §1.1 的说明 | 在 Win7/8 上安装/运行不保证；不在本仓库范围 |
 
@@ -1075,7 +1081,7 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 > 及更早的 MSI 是 jpackage 原始产物，**没有**注册动作（发布流程从未跑后处理脚本）。
 > 用户在真机装 v1.15.1 后键盘不显示，原因就在这里。即日起 CI 的
 > `opi-desktop-msi-v<版本>` artifact 是后处理过的；**Release 资产也必须取这一份**
-> （下载 `-raw-` 或直接拿 jpackage 产物都会重现「有进程、键盘不显示」）。
+> （raw 中间物已自动删除；自行拿 jpackage 产物安装会重现「有进程、键盘不显示」）。
 >
 > **【追加 2026-10-19 晚】** 用户在真机装过的三个 MSI（本地
 > `processed-static`、本地 `processed`、CI `opi-desktop-msi`）里的 **desktop jar
