@@ -183,7 +183,7 @@ jobs:
           host_id="$(plutil -extract CFBundleIdentifier raw dist/apple/ios/Opi.app/Info.plist)"
           kb_id="$(plutil -extract CFBundleIdentifier raw dist/apple/ios/Opi.app/PlugIns/OpiKeyboard.appex/Info.plist)"
           case "$kb_id" in "$host_id".*) ;; *) echo "扩展 id 不以宿主 id 为前缀: $kb_id / $host_id" >&2; exit 1;; esac
-          echo "IPA 结构自洽：$ipa（未签名，需重签后安装）"
+          echo "IPA 结构自洽：${ipa}（未签名，需重签后安装）"
 
       - uses: actions/upload-artifact@v4
         with:
