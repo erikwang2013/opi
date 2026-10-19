@@ -1,0 +1,87 @@
+name: HarmonyOS
+
+# 为什么是 self-hosted：
+# GitHub-hosted ubuntu 上没有 HarmonyOS Command Line Tools / SDK，也没有可靠的
+# 非交互获取方式（Huawei 下载站需要登录并接受许可）。因此本 workflow 跑在
+# 已装好工具链的自托管 runner 上，标签：[self-hosted, linux, harmony]。
+# 工具链根目录可用仓库变量 HARMONY_CLI_HOME 覆盖（默认见下方 env）。
+#
+# 本 workflow 只产出 **unsigned HAP**。安装到设备前必须另行签名（见
+# docs/install/harmony.md 的「签名」一节）。未注入任何签名 secret。
+
+on:
+  push:
+    paths:
+      - 'harmony/**'
+      - 'crates/**'
+      - 'shared/**'
+      - '.github/workflows/harmony.yml'
+  pull_request:
+    paths:
+      - 'harmony/**'
+      - 'crates/**'
+      - 'shared/**'
+      - '.github/workflows/harmony.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: harmony-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  HARMONY_CLI_HOME: ${{ vars.HARMONY_CLI_HOME || '/home/component/command-line-tools' }}
+  CARGO_TERM_COLOR: always
+
+jobs:
+  hap:
+    name: assembleHap (unsigned)
+    runs-on: [self-hosted, linux, harmony]
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify toolchain
+        run: |
+          set -euo pipefail
+          test -x "$HARMONY_CLI_HOME/bin/hvigorw" || { echo "hvigorw not found under $HARMONY_CLI_HOME"; exit 1; }
+          test -d "$HARMONY_CLI_HOME/sdk/default/openharmony" || { echo "SDK not found under $HARMONY_CLI_HOME"; exit 1; }
+          "$HARMONY_CLI_HOME/bin/hvigorw" --version
+          grep -q '"apiVersion": "19"' "$HARMONY_CLI_HOME/sdk/default/openharmony/ets/oh-uni-package.json"
+          command -v cargo
+          command -v rustup
+
+      - name: Add HarmonyOS Rust target
+        run: rustup target add aarch64-unknown-linux-ohos
+
+      - name: Build Rust engine (arm64-v8a)
+        run: |
+          set -euo pipefail
+          export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_OHOS_LINKER="$HARMONY_CLI_HOME/sdk/default/openharmony/native/llvm/bin/aarch64-unknown-linux-ohos-clang"
+          cargo build -p opi_ffi --release --target aarch64-unknown-linux-ohos
+          mkdir -p harmony/entry/src/main/cpp/libs/arm64-v8a
+          cp target/aarch64-unknown-linux-ohos/release/libopi_ffi.a harmony/entry/src/main/cpp/libs/arm64-v8a/libopi_ffi.a
+          ls -l harmony/entry/src/main/cpp/libs/arm64-v8a/libopi_ffi.a
+
+      - name: Build HAP
+        run: |
+          set -euo pipefail
+          cd harmony
+          "$HARMONY_CLI_HOME/bin/hvigorw" clean --no-daemon
+          "$HARMONY_CLI_HOME/bin/hvigorw" assembleHap -p buildMode=release --no-daemon
+          HAP=entry/build/default/outputs/default/entry-default-unsigned.hap
+          test -s "$HAP" || { echo "HAP missing or empty: $HAP"; exit 1; }
+          ls -l "$HAP"
+          unzip -l "$HAP"
+          unzip -l "$HAP" | grep -q 'libs/arm64-v8a/libopiime.so' || { echo "HAP is missing libopiime.so"; exit 1; }
+
+      - name: Upload unsigned HAP
+        uses: actions/upload-artifact@v4
+        with:
+          name: opi-harmony-unsigned
+          path: harmony/entry/build/default/outputs/default/entry-default-unsigned.hap
+          if-no-files-found: error
+          retention-days: 14

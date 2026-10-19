@@ -147,8 +147,8 @@ const TAU: number = Math.PI * 2;
 export struct OpiPet {
   /** 情绪。变化时重画。 */
   @Prop @Watch('onVisualChange') mood: PetMood = PetMood.Idle;
-  /** 键帽宽度（vp）。高度按 240:250 自动推导。 */
-  @Prop @Watch('onVisualChange') size: number = 72;
+  /** 键帽宽度（vp）。高度按 240:250 自动推导。名字不能叫 size —— 与 CustomComponent 的 size() 属性撞名。 */
+  @Prop @Watch('onVisualChange') petSize: number = 72;
   /** 深色底传 true。 */
   @Prop @Watch('onVisualChange') dark: boolean = false;
   /** 强制刻 OPI。默认 false = 按尺寸自动（≥64vp 才刻，小于此时刻字只剩几像素高、糊成脏点）。 */
@@ -160,8 +160,8 @@ export struct OpiPet {
 
   build() {
     Canvas(this.ctx)
-      .width(this.size)
-      .height(this.size * CANVAS_H / CANVAS_W)
+      .width(this.petSize)
+      .height(this.petSize * CANVAS_H / CANVAS_W)
       .onReady(() => {
         this.ready = true;
         this.draw();
@@ -180,7 +180,7 @@ export struct OpiPet {
 
   private draw(): void {
     const ctx = this.ctx;
-    const u: number = this.size / CANVAS_W; // 设计单位 → vp
+    const u: number = this.petSize / CANVAS_W; // 设计单位 → vp
     const p: PetPalette = this.dark ? PetPalette.dark() : PetPalette.default();
     const sleepy: boolean = this.mood === PetMood.Sleepy;
     const puzzled: boolean = this.mood === PetMood.Puzzled;
@@ -188,7 +188,7 @@ export struct OpiPet {
     const broken: boolean = this.mood === PetMood.Degraded;
     const stroke: number = 5 * u;
 
-    ctx.clearRect(0, 0, this.size, this.size * CANVAS_H / CANVAS_W);
+    ctx.clearRect(0, 0, this.petSize, this.petSize * CANVAS_H / CANVAS_W);
 
     // 落地投影（SVG: ellipse cx=120 cy=206 rx=72 ry=8, opacity .08）
     ctx.fillStyle = 'rgba(34,39,46,0.08)';
@@ -295,7 +295,7 @@ export struct OpiPet {
     ctx.fill();
     ctx.stroke();
 
-    const legend: boolean = this.forceLegend || this.size >= 64;
+    const legend: boolean = this.forceLegend || this.petSize >= 64;
     if (legend) {
       this.drawLegend(u, p.shade);
     }

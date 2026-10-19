@@ -16,6 +16,7 @@
 // UI（pages/Index.ets）**不认识引擎**，只调本类的方法 + 读 AppStorage。
 
 import { inputMethodEngine, InputMethodExtensionContext } from '@kit.IMEKit';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { display } from '@kit.ArkUI';
 import * as OpiEngine from './OpiEngine';
 import { EmojiGroup, KeyResult, OpiAction, OpiMode, OpiShift } from './OpiEngine';
@@ -59,6 +60,28 @@ export class KeyboardController {
   private started: boolean = false;
   private dictLoaded: boolean = false;
 
+  // off() 需要**同一个函数引用**才能真的退订（'inputStop' 的 SDK 签名甚至不给省略 callback）。
+  private onInputStartCallback: (kbController: inputMethodEngine.KeyboardController,
+    inputClient: inputMethodEngine.InputClient) => void =
+    (kbController: inputMethodEngine.KeyboardController,
+      inputClient: inputMethodEngine.InputClient): void => {
+      this.kbController = kbController;
+      this.client = inputClient;
+      this.ensureDictionary();
+      // 新会话：上一轮可能死在半路，先把引擎缓冲清干净，
+      // 否则会带着上次的拼音进新输入框（「输入法错乱」的常见来源）。
+      OpiEngine.clear();
+      this.publish();
+    };
+
+  private onInputStopCallback: () => void = (): void => {
+    // InputClient 随会话失效，必须丢引用；引擎侧缓冲也要清。
+    OpiEngine.clear();
+    this.client = null;
+    this.kbController = null;
+    this.publish();
+  };
+
   // -------------------------------------------------------------- 生命周期
 
   /**
@@ -86,41 +109,37 @@ export class KeyboardController {
       flag: inputMethodEngine.PanelFlag.FLG_FIXED,
     };
 
-    const panel = ability.createPanel(ctx, info);
-    panel.resize(d.width, panelH);
-    panel.moveTo(0, d.height - panelH);
-    // 路径是**相对 src/main/ets 的页面路径，不带 .ets 后缀**，且该页必须在
-    // resources/base/profile/main_pages.json 里注册过 —— 两处任一处写错，
-    // 表现是「面板起来了但是白的」。
-    panel.setUiContent('pages/Index');
-    this.panel = panel;
-
-    ability.on('inputStart', (kbController: inputMethodEngine.KeyboardController,
-      inputClient: inputMethodEngine.InputClient) => {
-      this.kbController = kbController;
-      this.client = inputClient;
-      this.ensureDictionary();
-      // 新会话：上一轮可能死在半路，先把引擎缓冲清干净，
-      // 否则会带着上次的拼音进新输入框（「输入法错乱」的常见来源）。
-      OpiEngine.clear();
-      this.publish();
+    // API 19 的 createPanel 只有异步形态（callback / Promise），没有同步返回值。
+    // 用 callback 形态保持 init() 的同步签名（onCreate 不等 Promise）。
+    ability.createPanel(ctx, info, (err: BusinessError, panel: inputMethodEngine.Panel) => {
+      if (err) {
+        console.error(`[opi] createPanel 失败: ${err.message}`);
+        return;
+      }
+      panel.resize(d.width, panelH);
+      panel.moveTo(0, d.height - panelH);
+      // 路径是**相对 src/main/ets 的页面路径，不带 .ets 后缀**，且该页必须在
+      // resources/base/profile/main_pages.json 里注册过 —— 两处任一处写错，
+      // 表现是「面板起来了但是白的」。
+      panel.setUiContent('pages/Index');
+      this.panel = panel;
     });
 
-    ability.on('inputStop', () => {
-      // InputClient 随会话失效，必须丢引用；引擎侧缓冲也要清。
-      OpiEngine.clear();
-      this.client = null;
-      this.kbController = null;
-      this.publish();
-    });
+    ability.on('inputStart', this.onInputStartCallback);
+    ability.on('inputStop', this.onInputStopCallback);
   }
 
   release(): void {
     const ability = inputMethodEngine.getInputMethodAbility();
-    ability.off('inputStart');
-    ability.off('inputStop');
+    ability.off('inputStart', this.onInputStartCallback);
+    ability.off('inputStop', this.onInputStopCallback);
     if (this.panel !== null) {
-      this.panel.destroyPanel();
+      // destroyPanel 挂在 InputMethodAbility 上（不是 Panel 上），且是异步的。
+      ability.destroyPanel(this.panel, (err: BusinessError) => {
+        if (err) {
+          console.error(`[opi] destroyPanel 失败: ${err.message}`);
+        }
+      });
       // 注意：只置空引用，不等 GC —— 面板是系统资源，必须显式 destroy。
       this.panel = null;
     }
@@ -470,14 +489,11 @@ export class KeyboardController {
    * 用户判为「没输入进去」。iOS 端的对应物是 marked text（见 `ios/KeyboardViewController.swift`
    * 的 `syncMarkedText`），鸿蒙这边就是这一对调用。
    *
-   * ⚠️⚠️ **API 名与签名待 DevEco 确认**（本机是 Linux：没有 SDK、没有编译器，
-   * 这一整包 ets 从来没被编译过 —— 见 harmony/README.md 第 1 步「大概率要修一堆
-   * API 名字与签名」）。按社区资料，`inputMethodEngine.InputClient` 的预上屏一族是：
-   *   · `setPreviewText(text, offset)` —— offset 是**光标位置**（本端取缓冲长度）
-   *   · 备选签名：`setPreviewTextWithRange(text, { start, end })`
-   *   · 收尾：`finishTextPreview()`（有的版本叫 `clearPreviewText()`）
-   * 任一处名字对不上 ⇒ **第一次 DevEco 构建在本函数报错** —— 那正是预期内的，
-   * 照 SDK 的 d.ts 改名即可，别把整段删了（删了 = 退回「输入框里看不见拼音」）。
+   * API 19 的 d.ts 实测签名（2026-10-19 真编译后）：
+   *   · `setPreviewTextSync(text, range: Range)` —— range 是**要替换的编辑框区间**，
+   *     不是光标偏移量；本端用 `{ start: 0, end: 0 }`（光标处插入/更新）
+   *   · `finishTextPreviewSync()` —— 缓冲清空时收尾
+   * ⚠️ `{0,0}` 的语义只按 d.ts 选过，**没有真机证据**；见 docs/install/harmony.md §0.6。
    */
   private syncPreviewText(): void {
     if (this.client === null) {
@@ -485,9 +501,13 @@ export class KeyboardController {
     }
     const buf: string = OpiEngine.buffer();
     if (buf.length === 0) {
-      this.client.finishTextPreview();
+      this.client.finishTextPreviewSync();
       return;
     }
-    this.client.setPreviewText(buf, buf.length);
+    // API 19 的 setPreviewText 收 Range（要替换的编辑框区间），不是光标偏移量。
+    // 用 [0,0] 表示「在光标处插入 / 更新预上屏」。
+    // shortcut: Range 的确切语义只在 d.ts 上核对过，未在真机验证；见 docs/install/harmony.md。
+    const range: inputMethodEngine.Range = { start: 0, end: 0 };
+    this.client.setPreviewTextSync(buf, range);
   }
 }

@@ -218,7 +218,7 @@ export struct EmojiPad {
   SearchGrid() {
     if (this.searchRows.length === 0) {
       Row() {
-        OpiPet({ mood: PetMood.Puzzled, size: 30, dark: false, forceLegend: false })
+        OpiPet({ mood: PetMood.Puzzled, petSize: 30, dark: false, forceLegend: false })
         Text('无匹配').fontSize(14).fontColor('#9AA7A4').margin({ left: 8 })
       }
       .width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)

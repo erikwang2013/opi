@@ -1,0 +1,40 @@
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+
+// 完整 module.json5（2026-10-19 由 harmony/module.json5 的片段补全为可构建工程）。
+// 原片段里的两处不确定项仍按当时的选择保留：
+//   · metadata name 用 "ohos.extension.input_method"（点号版）
+//   · srcEntry（新写法，非 srcEntrance）
+// 真机若出现「能选输入法但子类型不出现」，先按 SDK 模板核对这两处。
+{
+  "module": {
+    "name": "entry",
+    "type": "entry",
+    "description": "$string:module_desc",
+    "mainElement": "InputMethodService",
+    "deviceTypes": [
+      "phone",
+      "tablet",
+      "2in1"
+    ],
+    "deliveryWithInstall": true,
+    "installationFree": false,
+    "pages": "$profile:main_pages",
+    "extensionAbilities": [
+      {
+        "srcEntry": "./ets/InputMethodExtensionAbility/InputMethodService.ets",
+        "name": "InputMethodService",
+        "label": "$string:MainAbility_label",
+        "description": "$string:extension_ability_descriptor",
+        "type": "inputMethod",
+        "exported": true,
+        "metadata": [
+          {
+            "name": "ohos.extension.input_method",
+            "resource": "$profile:input_method_config"
+          }
+        ]
+      }
+    ]
+  }
+}

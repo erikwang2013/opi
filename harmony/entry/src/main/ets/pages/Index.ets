@@ -18,15 +18,15 @@
 //    且与 KeyboardController 的 panel.setUiContent('pages/Index') 字符串一致。
 //    任一处对不上 → 面板起来了但是一片白。
 
-import { KeyboardController } from '../KeyboardController';
-import { OpiMode, OpiShift } from '../OpiEngine';
-import { OpiPet, PetMood, petMood } from '../OpiPet';
+import { KeyboardController } from '../InputMethodExtensionAbility/KeyboardController';
+import { OpiMode, OpiShift } from '../InputMethodExtensionAbility/OpiEngine';
+import { OpiPet, PetMood, petMood } from '../InputMethodExtensionAbility/OpiPet';
 import {
   MODE_BIG9, MODE_PINYIN9, MODE_PINYIN14, MODE_RARE, MODE_SHUANGPIN, MODE_STROKE, MODE_WUBI,
   modeLabel, nextMode
-} from '../InputModes';
-import { EmojiPad } from '../EmojiPad';
-import { FourteenKeyPanel, InputModePanel, NineKeyPanel, RarePanel, StrokeKeyPanel } from '../KeyPanels';
+} from '../InputMethodExtensionAbility/InputModes';
+import { EmojiPad } from '../InputMethodExtensionAbility/EmojiPad';
+import { FourteenKeyPanel, InputModePanel, NineKeyPanel, RarePanel, StrokeKeyPanel } from '../InputMethodExtensionAbility/KeyPanels';
 
 /** QWERTY 三行。数字模式用下面的 NUM_ROW_* 顶上；Symbol 模式**不是键行**，是表情页。 */
 const ROW_1: string[] = ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'];
@@ -172,7 +172,7 @@ struct Index {
   CandidateBar() {
     Row() {
       // 小欧站在候选栏最左边。没有候选时它就在这儿待命/发愣/睡觉。
-      OpiPet({ mood: this.mood(), size: PET_SIZE_IN_BAR, dark: this.isDark(), forceLegend: false })
+      OpiPet({ mood: this.mood(), petSize: PET_SIZE_IN_BAR, dark: this.isDark(), forceLegend: false })
         .margin({ left: 6, right: 6 })
         // 点一下小欧 = 学习开关取反（关掉它就去睡觉，这也是一条设置入口）
         .onClick(() => {

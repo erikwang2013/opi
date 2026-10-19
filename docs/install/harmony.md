@@ -1,5 +1,17 @@
 # 鸿蒙（HarmonyOS）端 —— 构建 / 打包 / 安装 / 验证
 
+> ## ✅ 2026-10-19 订正：**工程已可构建（unsigned HAP）**
+>
+> `harmony/` 现在是完整的 hvigor 工程（工程根 = `harmony/`，模块 = `harmony/entry/`）。
+> 本机 Command Line Tools 5.1.1.820 / API 19 上实测 `hvigorw assembleHap` **成功**，
+> 产出 **unsigned HAP**（`entry-default-unsigned.hap`；debug 约 6.6 MB，release 约 6.4 MB）。
+> 源码已迁到 `harmony/entry/src/main/{ets,resources,cpp}`；**下文出现的旧路径
+> （`harmony/ets/**`、`harmony/cpp/**`、`harmony/resources/**`）都是历史记录**，
+> 新旧对照表见 **§0**。
+>
+> ⚠️ 边界不变：**能构建 ≠ 能安装 ≠ 能用**。本机无设备，签名与真机安装/运行
+> **未验证**。构建命令、首错与修复、HAP 内容、签名前置、CI runner 要求在 §0。
+
 > ## 这份文档的性质：**起点与契约，不是可用实现**
 >
 > 教程里的每一步要分清**三层**，它们的状态差得很远：
@@ -52,6 +64,132 @@
 > ⚠️ 本文引用 `harmony/README.md` 用的是它的小节编号（§1–§5d 指**「实测记录」那一节内的**编号）。
 > **编号会随那份文档增删而漂** —— 对不上时按小节标题里的关键词找
 > （如「Rust 侧为鸿蒙目标编译」「`CMakeLists.txt` + 真编译」「导出符号」），别按号数找。
+
+---
+
+## 0. 可构建工程（2026-10-19 本机实测）
+
+### 0.1 工程布局
+
+```
+harmony/                          # 工程根（hvigorw 在这个目录里跑）
+├── build-profile.json5           # products.default：compatible/target 5.1.1(19)，runtimeOS HarmonyOS
+├── hvigorfile.ts                 # appTasks
+├── oh-package.json5
+├── hvigor/hvigor-config.json5
+├── AppScope/
+│   ├── app.json5                 # bundleName xyz.erik.opi, versionName 1.15.1
+│   └── resources/base/{element/string.json, media/app_icon.png}
+└── entry/
+    ├── build-profile.json5       # externalNativeOptions → src/main/cpp/CMakeLists.txt, abiFilters arm64-v8a
+    ├── hvigorfile.ts             # hapTasks
+    ├── oh-package.json5          # 本地依赖 "libopiime.so" → src/main/cpp/types/libopiime
+    └── src/main/
+        ├── module.json5          # extensionAbilities[].type = "inputMethod"
+        ├── ets/                  # 原 harmony/ets
+        ├── resources/            # 原 harmony/resources（rawfile 上移了一层，见 0.3 首错）
+        └── cpp/                  # 原 harmony/cpp；libs/arm64-v8a/libopi_ffi.a 由 cargo 生成，不入库
+```
+
+| 旧路径（下文历史记录里仍在用） | 新路径 |
+|---|---|
+| `harmony/ets/**` | `harmony/entry/src/main/ets/**` |
+| `harmony/resources/**` | `harmony/entry/src/main/resources/**` |
+| `harmony/cpp/**` | `harmony/entry/src/main/cpp/**` |
+| `harmony/module.json5` | `harmony/entry/src/main/module.json5`（已由片段补全为完整文件） |
+| `ets/InputMethodExtensionAbility/pages/Index.ets` | `ets/pages/Index.ets`（页面路径必须相对 `ets/` 根） |
+
+SDK 版本**只声明本机装得上的那一个**：`compatibleSdkVersion` / `targetSdkVersion` =
+`"5.1.1(19)"`，`runtimeOS: "HarmonyOS"`。签名配置**故意留空**（`signingConfigs: []`）。
+
+### 0.2 真构建命令与产物
+
+```bash
+# 1) Rust 静态库（arm64-v8a）。链接器用 SDK 自带的 OHOS clang。
+export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_OHOS_LINKER=/home/component/command-line-tools/sdk/default/openharmony/native/llvm/bin/aarch64-unknown-linux-ohos-clang
+cargo build -p opi_ffi --release --target aarch64-unknown-linux-ohos
+mkdir -p harmony/entry/src/main/cpp/libs/arm64-v8a
+cp target/aarch64-unknown-linux-ohos/release/libopi_ffi.a harmony/entry/src/main/cpp/libs/arm64-v8a/
+
+# 2) HAP（默认 debug；发行用 release）
+cd harmony
+/home/component/command-line-tools/bin/hvigorw assembleHap --no-daemon
+# 或：/home/component/command-line-tools/bin/hvigorw assembleHap -p buildMode=release --no-daemon
+```
+
+产物：`harmony/entry/build/default/outputs/default/entry-default-unsigned.hap`
+（两种模式同一路径，后一次构建会覆盖前一次；构建输出目录已进 `.gitignore`）。
+
+本机实测（2026-10-19）：debug 约 6.6 MB、release 约 6.4 MB
+（随源码变化，不是契约；release 的 `module.json` 里 `debug:false` / `buildMode:"release"`）；
+`unzip -l` 内容（release 13 项；debug 多一个 `ets/sourceMaps.map`）：
+
+```
+module.json
+resources.index
+libs/arm64-v8a/libopiime.so        # N-API 桥 + Rust 静态库，aarch64，已 strip
+libs/arm64-v8a/libc++_shared.so
+resources/rawfile/pet-font/{shortcodes.tsv,opi-emoji.ttf,map.tsv}
+resources/base/profile/{input_method_config.json,main_pages.json}
+resources/base/media/{app_icon.png,icon.png}
+ets/modules.abc
+pack.info
+```
+
+`libopiime.so` 的 `readelf -d` 显示 `NEEDED` 只有 `libace_napi.z.so`、`libhilog_ndk.z.so`、`libc.so`；
+`nm -D` 里 `napi_module_register` 是未定义符号（运行时由 N-API 解析）—— 链接层通过，
+**不证明运行期注册成功**。
+
+⚠️ `abiFilters` 目前只有 **arm64-v8a**（同时 Rust 也只编了 `aarch64-unknown-linux-ohos`）：
+x86_64 模拟器不会加载这个 `.so`。要跑模拟器需另编 `x86_64-unknown-linux-ohos` 并加 abi。
+
+### 0.3 首轮真编译撞到的错误（按出现顺序）
+
+| # | 报错 | 修复 |
+|---|---|---|
+| 1 | `Invalid resource directory name 'rawfile', it should be one of ["element","media","profile"]` | `resources/base/rawfile` → `resources/rawfile` |
+| 2 | `page '…/ets/pages/Index.ets' does not exist` | 页面移到 `ets/pages/Index.ets`（main_pages 的路径相对 `ets/` 根）；同步改 7 条相对导入 |
+| 3 | `Property 'resize'/'moveTo'/'setUiContent' does not exist on type 'Promise<Panel>'` | API 19 的 `createPanel` 只有异步形态；改用 callback 形态（保持 `init()` 同步） |
+| 4 | `Property 'destroyPanel' does not exist on type 'Panel'` | 改为 `ability.destroyPanel(panel, cb)` |
+| 5 | `'"inputStop"' is not assignable to '"keyboardShow" \| "keyboardHide"'` | `off('inputStop')` **必须**传 callback；把两个监听器存成字段，on/off 用同一引用 |
+| 6 | `Argument of type 'number' is not assignable to parameter of type 'Range'` | `setPreviewText(text, offset)` → `setPreviewTextSync(text, { start: 0, end: 0 })` |
+| 7 | `Property 'size' … not assignable to … 'CustomComponent'` | `OpiPet` 的 `size` 属性与基类 `size()` 撞名 → 改名 `petSize`（两处调用点同步） |
+| 8 | `arkts-no-any-unknown`（N-API 返回值） | 显式标注本地接口 `RawKeyEvent { action: number; text: string }` |
+| 9 | CMake `3.4.1` 弃用警告 | `cmake_minimum_required(VERSION 3.10)` |
+
+剩余 WARN（不阻断构建）：N-API 模块「not verified」（API 19 的正常提示）、
+`font.registerFont` 与 `promptAction.showToast` deprecated。
+
+### 0.4 签名与安装前置（**未验证**）
+
+- 本仓库与 CI 都**不提供签名材料**；产物是 `entry-default-unsigned.hap`，
+  **unsigned HAP 不能直接安装**。
+- 安装前需要：Huawei 开发者证书（`.cer`）+ 私钥（`.p12`）+ 匹配 bundleName
+  `xyz.erik.opi` 的 profile（`.p7b`），然后在工程级 `build-profile.json5` 的
+  `signingConfigs` 里登记，并给 product 加 `signingConfig`。
+- 输入法扩展（`type: "inputMethod"`）是否需要系统签名/特权，**未核实**；
+  `module.json5` 里 metadata 用点号版 `ohos.extension.input_method`，也**未上真机**。
+- 本机没有设备/模拟器（`hdc list targets` 曾为空），所以「装上去、能选、能打字」
+  **一条都没有证据**。
+
+### 0.5 CI（`.github/workflows/harmony.yml`）
+
+- **self-hosted**：`runs-on: [self-hosted, linux, harmony]`。GitHub-hosted runner
+  拿不到 Command Line Tools/SDK（Huawei 下载站需登录并接受许可），不要假设 hosted 有。
+- runner 需要：上述 Command Line Tools（默认 `/home/component/command-line-tools`，
+  可用仓库变量 `HARMONY_CLI_HOME` 覆盖）、Rust + rustup、`aarch64-unknown-linux-ohos` target。
+- 流程：校验工具链/SDK → `rustup target add` → `cargo build … --target aarch64-unknown-linux-ohos`
+  → 拷 `libopi_ffi.a` → `hvigorw assembleHap -p buildMode=release --no-daemon` → 上传
+  `opi-harmony-unsigned` artifact（`if-no-files-found: error`）。
+- 产物仍是 unsigned；签名材料未接入 secrets（没有证书可验，不写一段未测的签名流程）。
+
+### 0.6 本轮**未验证**清单
+
+1. 签名、安装到真机/模拟器、系统输入法列表中出现「小欧输入法」。
+2. 面板实际显示（`panel.setUiContent('pages/Index')` 与 `main_pages.json` 已对齐，但没上过屏）。
+3. `setPreviewTextSync` 的 `Range { start: 0, end: 0 }` 语义（只按 d.ts 选的，未上真机）。
+4. `input_method_config.json` 的 `mode: "lower"` 与 metadata 点号写法。
+5. CI workflow 本身**尚未在注册好的 self-hosted runner 上跑过**（本机只验证了同样的命令）。
 
 ---
 

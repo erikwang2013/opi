@@ -35,6 +35,12 @@ export enum OpiAction {
   Commit = 2,
 }
 
+/** N-API 模块在 ArkTS 侧是动态的；显式收窄返回值，避免 arkts-no-any-unknown。 */
+interface RawKeyEvent {
+  action: number;
+  text: string;
+}
+
 /** **前端** ⇧ 三态。⇧ 的高亮（尤其 Lock）只能读这个，引擎侧 shift 位看不出三态。 */
 export enum OpiShift {
   Off = 0,
@@ -317,7 +323,7 @@ export function toggleSymbol(): string {
  * @param states 修饰位（STATE_* 常量），按下的字符大小写靠它
  */
 export function keyEvent(keyval: number, states: number): KeyResult {
-  const r = opiime.keyEvent(keyval, states);
+  const r: RawKeyEvent = opiime.keyEvent(keyval, states);
   return new KeyResult(toAction(r.action), r.text);
 }
 

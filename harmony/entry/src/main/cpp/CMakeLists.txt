@@ -1,10 +1,9 @@
 # SPDX-FileCopyrightText: 2026 erik.xyz
 # SPDX-License-Identifier: MIT
 
-# ⚠️ 草案 · 从未编译 · 未验证
-#
-# 本文件在 Linux 上编写，**从未被 CMake 配置过、从未参与任何构建**。
-# 本机没有 OHOS SDK / DevEco，`cmake` 跑都没跑过（连语法都没验）。
+# ✅ 2026-10-19 实测：本文件已由 hvigor 调用 CMake/Ninja 真编译，产物进 HAP。
+# 下面是历史注记：原写作「从未被 CMake 配置过、本机没有 OHOS SDK」——本机现在有
+# Command Line Tools 5.1.1.820 / API 19，且 assembleHap 已成功。
 #
 # 这份 CMakeLists 的位置对应 DevEco 工程里的 entry/src/main/cpp/CMakeLists.txt。
 # 还要在 entry/build-profile.json5 里登记，否则**CMake 根本不会被调用**，
@@ -20,7 +19,8 @@
 # ---- 名字一致性（四处必须相同，见 napi_bridge.c 顶部）----
 #   target 名 opiime  ⇄  nm_modname "opiime"  ⇄  libopiime.so  ⇄  import 'libopiime.so'
 
-cmake_minimum_required(VERSION 3.4.1)
+# 3.10：3.4.1 在 CMake 3.31 是弃用警告、4.x 是硬错误（2026-10-19 构建时实测警告）。
+cmake_minimum_required(VERSION 3.10)
 project(opiime)
 
 set(CMAKE_C_STANDARD 11)
