@@ -2,8 +2,8 @@
   "app": {
     "bundleName": "xyz.erik.opi",
     "vendor": "erik",
-    "versionCode": 11501,
-    "versionName": "1.15.1",
+    "versionCode": 11600,
+    "versionName": "1.16.0",
     "icon": "$media:app_icon",
     "label": "$string:app_name"
   }

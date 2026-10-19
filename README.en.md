@@ -12,7 +12,11 @@ The Chinese name is **小欧** (also the project pet's name); the English name i
 > install is not enabled automatically, and without it OPI shows up in the list
 > while typing does nothing. Steps: [`docs/install/linux.md`](docs/install/linux.md) §4.
 
+> **Website**: [`site/index.html`](site/index.html) — a scroll-snap tour of OPI, feature iterations, release log, and per-platform downloads.
+>
+
 ![OPI's project pet: Opi the keycap sprite](docs/opi-pet.svg)
+<img src="docs/site-preview.png" alt="OPI website: an input method that goes back to the basics" width="760">
 
 ### 🐾 Meet Opi
 
@@ -112,9 +116,9 @@ Everything below is either part of the vision or a direction that has been **dec
 
 | Direction | Status | How we checked |
 |---|---|---|
-| **More platforms**: Web (incl. mini-apps) | Not started | grep for these platform names across the code and build scripts: zero hits (none in `docs/` either — only this README mentions them) |
-| **HarmonyOS** | **Drafts only** (`harmony/`) | **What blocks it is not the SDK — it is the absence of project scaffolding in the repository.** This machine **has** the HarmonyOS command-line toolchain installed (`codelinter` / `hvigor` / `ohpm` plus the SDK); what is missing is the project scaffolding (the project-level `build-profile.json5`, `hvigorfile.ts` and the module-level `build-profile.json5` — **the criterion and the full list are in [`harmony/README.md`](harmony/README.md)**), so `codelinter` **refuses to process it** with "path is incorrect … under the project path", rather than "this machine has no SDK". The ArkTS under `harmony/` (`InputMethodExtensionAbility` and friends) **has never been through a compiler, nor through a checker** — it is a starting point plus a contract. **Measured**: drop `harmony/ets` unchanged into a project whose scaffolding is complete and `codelinter` **genuinely parses it** (inject a syntax error and it reports `@parsing-error`) ⇒ **with the scaffolding added, ArkTS can be statically checked on Linux**; **anything further — building via `hvigorw` — was not verified this round**. What is also ready and measurable is the **Rust side**: the C ABI compiles for HarmonyOS targets (`cargo check --target aarch64-unknown-linux-ohos`, see the README in that directory) |
-| **The two Apple platforms**: iOS · macOS | **Drafts only** (`ios/` · `macos/`) | **Hard constraint: both need macOS + Xcode to compile, and this repo's verification environment (Linux) cannot compile, link or run them — not even a Swift syntax check** (UIKit / InputMethodKit are Apple-only frameworks). The Swift in both directories **has never been through a compiler**; it is a starting point plus a contract, not a usable implementation. The only thing ready is the platform-neutral **C ABI** (`crates/opi-ffi`), and it **has been measured to compile for three Apple targets** (`cargo check --target aarch64-apple-ios / aarch64-apple-ios-sim / aarch64-apple-darwin` all pass, now in CI; it also produces an arm64 static library `libopi_ffi.a` with no missing exported symbols). **No Apple-side code should be treated as implemented until a compiler on a Mac has seen it** — this project has been burned twice already: the fcitx5 C++ and the Windows TSF both *read* as finished, yet testing showed neither had ever been compiled (the former had 7 wrong API calls, the latter never inserted text at all) |
+| **More platforms**: Web (incl. mini-apps) | Not started | This means a Web **input method**; the repo now has a static website under [`site/`](site/index.html), but it is not a browser IME — the browser IME remains unstarted |
+| **HarmonyOS** | **Buildable (unsigned)** (`harmony/`) | Project scaffolding is in place (`build-profile.json5` / `hvigorfile.ts` / module config); the local HarmonyOS CLI + SDK runs `hvigorw assembleHap`, and an unsigned HAP (containing `libopiime.so`) has been produced. CI uses the self-hosted `harmony.yml`. **Signing, installation and the real-device IME list remain unverified**; the Rust C ABI compiles for HarmonyOS targets. |
+| **The two Apple platforms**: iOS · macOS | **CI-compiled + unsigned artifacts** (`ios/` · `macos/`) | `apple.yml` compiles the Swift on a macOS runner; iOS produces a host app + unsigned IPA (`Payload/Opi.app` plus the keyboard `.appex`), macOS produces an unsigned pkg/app. **Signing, notarization, real-device runs and IME enablement remain unverified**; the C ABI passes `cargo check` for the three Apple targets and its static-library exports have been checked. |
 | **Multi-device sync / end-to-end encryption** | **Not doing** (user decision 2026-09-28) | No encryption library, no HTTP client: across `crates/` `android/` `desktop/` (`*.rs` / `*.toml` / `*.kt`), `reqwest` / `ureq` / `hyper` / `openssl` / `rustls` / `chacha` / `argon2` / `aes-gcm` / `https://` each return zero hits. Every `sync` hit is a Rust synchronisation primitive or a TSF flag (`std::sync`, `TF_ES_SYNC`, `trad_assets_in_sync`) — unrelated to cloud sync. **Note**: the exported learning-dictionary JSON does carry a `version` field, but that is version negotiation for the **export format** (`learner.rs`'s `import_json` rejects `version != 1`) and has nothing to do with cloud sync |
 | **More input schemes**: shuangpin · wubi · Cangjie · Bopomofo · custom rules | Shuangpin (2026-10-13, six layouts) and wubi (2026-10-14, 86/98) landed; the rest not done | `Mode`'s variants are still Pinyin / Traditional / English / Number / Symbol (`composer.rs`); **key layout** is now a separate axis, `Scheme` (`scheme.rs`: full / pinyin-9key / pinyin-14key / stroke / shuangpin / wubi — matched by key-class expansion). Shuangpin and wubi are wired on Android / desktop / fcitx5 / TSF (iOS and HarmonyOS remain drafts, see their READMEs); Cangjie / Bopomofo / custom rules are still not done |
 | **English word association** | **Wired (2026-10-18; normal by default, pro matches since 2026-10-19)** | **Normal mode commits letters directly**; only `pro` prefix-matches `data/raw/en_words.tsv` (10,000 common words, Google Books Ngrams v3, CC-BY 3.0; **not the original Oxford list** — OUP data is not licensed here, and swapping the TSV swaps the source). Candidates are frequency-ordered; for a single-letter buffer the **typed letter itself comes first** (case preserved, deduplicated against dictionary entries); space commits the first candidate, or the raw buffer when nothing matches; all four ends share the engine semantics, gate: `tests/english_words.rs` |
@@ -130,7 +134,7 @@ Everything below is either part of the vision or a direction that has been **dec
 | **Core engine** | Pure Rust multi-crate workspace (`engine-core` / `engine-data` / `opi-tools`); **`engine-core` alone has no IO and no platform dependencies**, `engine-data` does the file mapping and byte parsing, and `opi-tools` is the compile CLI |
 | **Export layer** | `opi-ffi` dual ABI (JNI + C) · `fcitx5-opi` (cdylib) · `tsf-opi` (cdylib COM server) — each holds one in-process engine singleton |
 | **Client UI** | Native per platform, no cross-platform framework: Jetpack Compose on Android; a C++ AddonInstance calling Rust on Linux; TSF COM plus a Compose Desktop candidate window on Windows (NDJSON over a named pipe) |
-| **Platform integration** | Android (InputMethodService), Linux (fcitx5), Windows (TSF), **iOS / macOS (drafts only — compiling them needs macOS + Xcode) · HarmonyOS (drafts only — the toolchain is right here on this machine; what is missing is the repository's project scaffolding, see the Roadmap)** |
+| **Platform integration** | Android (InputMethodService), Linux (fcitx5), Windows (TSF), iOS / macOS (CI-compiled + unsigned artifacts), HarmonyOS (scaffolding + unsigned HAP); real-device runs and signing for Apple / HarmonyOS remain unverified |
 | **Data sync** | **Not doing** (user decision 2026-09-28): originally planned as end-to-end encryption + self-hosted support; we have decided **not to offer cloud sync and not to have accounts** — your data stays on your machine |
 | **Versioning** | Single source of truth: `[workspace.package] version` in the root `Cargo.toml`, shared by every workspace member (the list is that file's `members`); Android `versionName` and desktop `packageVersion` align to it, and releases are tagged with the same number |
 | **MSRV** | **1.88**, written as `[workspace.package] rust-version` in the root `Cargo.toml` (where the floor came from and how it was measured is in that file's comment). ⚠️ That is a **declaration**, and on its own it leaks in both directions (code using newer syntax while the declaration lags / the declaration being lowered) — the enforcement point is CI's `msrv` job, which **derives** the toolchain from that key and runs `cargo check --workspace --all-targets --locked` |
@@ -241,10 +245,11 @@ android/                       # Android IME (Kotlin + Jetpack Compose)
   rust_builder/                #   standalone cargokit: compiles crates/opi-ffi → three-ABI .so
   jni_smoke/                   #   JNI connectivity smoke test
 desktop/                       # candidate window + settings window (Compose Desktop / JVM; one binary, two modes)
-ios/                           # iOS keyboard extension — ⚠️ draft, not a line of Swift ever compiled (see README inside)
-macos/                         # macOS input method (InputMethodKit) — ⚠️ same as above
-harmony/                       # HarmonyOS input method (ArkTS + N-API native module) — ⚠️ draft, not a line of
-                               #   ArkTS ever seen by the toolchain; ⚠️ but the **reason differs from the two above**: missing project scaffolding, not a missing SDK
+site/                          # static website (scroll-snap / responsive / three.js; see site/README.md)
+ios/                           # iOS keyboard extension — CI-compiled; host app + unsigned IPA produced, not device-tested (see README inside)
+macos/                         # macOS input method (InputMethodKit) — CI-compiled; unsigned pkg/app, not device-tested
+harmony/                       # HarmonyOS input method (ArkTS + N-API) — scaffolding complete, unsigned HAP produced
+                               #   signing / installation / real-device IME list remain unverified; built by self-hosted harmony.yml
 shared/                        # Kotlin sources shared across clients
   pet/OpiPet.kt                #   the Compose drawing of Opi (one copy, used by Android and desktop)
 data/                          # dictionary data
@@ -278,7 +283,7 @@ LICENSE · CONTRIBUTING.md      # MIT full text · contribution guide (incl. dic
 
 ### 📅 Project Status
 
-> **Current stage: M6 multi-platform native (2026-08): the Android path is complete and Flutter is deleted; the Linux and Windows paths await acceptance on their target platforms**
+> **Current stage: v1.16.0 (2026-10-20): six native clients and the static website; Apple / HarmonyOS are unsigned artifacts, and the Windows install path is still being verified**
 
 V1 milestone progress:
 
@@ -290,7 +295,7 @@ V1 milestone progress:
 - [x] **Simplified/Traditional dual dictionary** (no M6 number assigned in spec §8, listed separately): `Mode::Traditional` + dual-dictionary routing + `trad.opid` + a GB2312 single-character coverage gate
 - [~] **M6b Linux fcitx5 plugin**: Rust logic and unit tests done; **the C++ glue had never been seen by a compiler**, and now has a CMake build + install path (`crates/fcitx5-opi/cpp/CMakeLists.txt`), a CI `fcitx5` job (compile + install-location assertions + a real load in a debian:12 container with three-arm controls) and `.deb` / `.rpm` packaging (`scripts/build-packages.sh`) — **awaiting acceptance on a real desktop; and no package has ever been `dpkg -i` / `rpm -i`'d**
 - [~] **M6c Windows TSF plugin + CMP candidate window**: Rust logic, candidate-window wire protocol, dictionary distribution path and the Compose Desktop window done — the COM server is target-gated; **MSI packaging has been wired since 2026-10-18** (DLL bundled; `regsvr32` post-processing reached CI on 2026-10-19; Finish script restarts Explorer), but **the dictionary is still not in the package** (out of the box it is still the built-in fallback of a few dozen words), awaiting acceptance on Windows (Windows 10/11 x64 only; Win7/8/8.1 unsupported)
-- [ ] **M7 iOS / macOS**: the C ABI is ready, and **has been measured to compile for Apple targets** (`cargo check` passes for the Apple targets listed in `.github/workflows/ci.yml`; it produces an arm64 static library `libopi_ffi.a` with no missing exported symbols — for the count, take the exports in `crates/opi-ffi/src/cabi.rs`); the Swift drafts under `ios/` and `macos/` **have never been seen by a compiler** — get them compiling on a Mac first, then talk about features
+- [~] **M7 iOS / macOS**: the C ABI is ready; `apple.yml` now compiles the Swift, iOS produces a host app + unsigned IPA, and macOS produces an unsigned pkg/app; **signing, real-device runs and IME enablement remain unverified**.
 
 > Milestone numbering follows `docs/superpowers/specs/2026-08-14-opi-multi-platform-design.md` §8 and the M6 plan
 > (M6a=Android / M6b=fcitx5 / M6c=TSF+candidate window).

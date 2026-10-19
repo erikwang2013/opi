@@ -20,7 +20,7 @@
 > |---|---|---|
 > | Rust 侧 C ABI（`crates/opi-ffi`） | **已实测**：能为鸿蒙三个目标编译、能产出 `libopi_ffi.a` | 见「第 1 步」，本机可复现 |
 > | N-API 桥（`harmony/cpp/napi_bridge.c` + `opi_ffi.h`） | **过了本机 clang 的语法/类型检查**（对着 node 的真 N-API 头），**但从未链接、从未运行**；用的是**宿主 clang，不是 OHOS NDK** | 见「第 1 步」与「验证」 |
-> | ArkTS（`harmony/ets/**`，**8 个文件** —— 2026-10-14 输入模式接线后由 5 增到 8） | **一行都没有被编译过，也没有被检查过**（只被**解析**过一遍，见 §1.1） | ⚠️ **拦路的不是 SDK 缺失，是仓库缺工程脚手架** —— 见下 |
+> | ArkTS（`harmony/entry/src/main/ets/**`） | **已能真构建**：`hvigorw assembleHap` 产出 unsigned HAP（2026-10-19 实测）；真机安装/运行未验证 | 工程脚手架与构建记录见 §0；签名与真机清单见文末 |
 >
 > ### ⚠️ 归因订正（2026-09-28 实测）：**本机是有鸿蒙工具链的**
 >
@@ -78,7 +78,7 @@ harmony/                          # 工程根（hvigorw 在这个目录里跑）
 ├── oh-package.json5
 ├── hvigor/hvigor-config.json5
 ├── AppScope/
-│   ├── app.json5                 # bundleName xyz.erik.opi, versionName 1.15.1
+│   ├── app.json5                 # bundleName xyz.erik.opi, versionName 1.16.0
 │   └── resources/base/{element/string.json, media/app_icon.png}
 └── entry/
     ├── build-profile.json5       # externalNativeOptions → src/main/cpp/CMakeLists.txt, abiFilters arm64-v8a

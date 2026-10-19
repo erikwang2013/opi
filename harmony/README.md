@@ -1,4 +1,4 @@
-# OPI 鸿蒙（HarmonyOS）端 —— **草案，从未编译，未验证**
+# OPI 鸿蒙（HarmonyOS）端 —— **unsigned HAP 已构建，真机未验证**
 
 > ## ✅ 2026-10-19 订正：**已能真构建（unsigned HAP）**
 >
@@ -17,8 +17,8 @@
 
 > ## ⚠️ 先读这段
 >
-> **ArkTS（`ets/**` 那 12 个文件）一个字符都没有编译过** —— `import {
-> InputMethodExtensionAbility } from '@kit.IMEKit'` 在普通 tsc 下就断，**连语法检查都做不到**。
+> **ArkTS（`entry/src/main/ets/**`）已随 hvigor 工程真编译并打进 unsigned HAP**；
+> 但真机安装、输入法列表与运行行为仍未验证。下面这段「一个字符都没有编译过」是历史记录。
 >
 > ⚠️ **2026-09-28 订正归因（原写作「本机没有 HarmonyOS SDK」，实测为假）**：
 > **本机是有鸿蒙工具链的** —— `/home/component/command-line-tools/` 下装着
