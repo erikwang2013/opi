@@ -165,6 +165,7 @@
   let memoryObserver = null;
   let memoryRevealTimer = 0;
   let memoryRevealQueue = [];
+  let memoryLastReveal = 0;
   let memoryPreviousFocus = null;
   let memoryPaused = false;
 
@@ -262,6 +263,10 @@
 
   const revealMemoryNext = () => {
     memoryRevealTimer = 0;
+    if (memoryPaused) {
+      memoryRevealTimer = window.setTimeout(revealMemoryNext, 250);
+      return;
+    }
     const next = memoryRevealQueue.shift();
     if (next) {
       if (next.classList.contains('memory-item')) {
@@ -272,15 +277,23 @@
         next.classList.add('is-in');
       }
       delete next.dataset.memoryQueued;
+      memoryLastReveal = performance.now();
     }
-    if (memoryRevealQueue.length) memoryRevealTimer = window.setTimeout(revealMemoryNext, 180);
+    if (memoryRevealQueue.length) {
+      const wait = Math.max(0, 1100 - (performance.now() - memoryLastReveal));
+      memoryRevealTimer = window.setTimeout(revealMemoryNext, wait);
+    }
   };
 
   const queueMemoryReveal = (el) => {
     if (!el || el.classList.contains('is-in') || el.dataset.memoryQueued) return;
     el.dataset.memoryQueued = '1';
     memoryRevealQueue.push(el);
-    if (!memoryRevealTimer && memoryRevealQueue.length === 1) revealMemoryNext();
+    const wait = Math.max(0, 1100 - (performance.now() - memoryLastReveal));
+    if (!memoryRevealTimer) {
+      if (wait === 0) revealMemoryNext();
+      else memoryRevealTimer = window.setTimeout(revealMemoryNext, wait);
+    }
   };
 
   const buildMemoryIntro = () => {
@@ -351,6 +364,7 @@
     if (!memoryTimeline || !memoryViewport || !memoryProgress) return;
     stopMemory();
     resetMemoryItems();
+    memoryLastReveal = 0;
     memoryViewport.scrollTop = memoryViewport.scrollHeight;
     memoryProgressNow();
     if (reduceMotion) {
