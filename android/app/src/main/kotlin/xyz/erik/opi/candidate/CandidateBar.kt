@@ -26,7 +26,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
@@ -35,7 +34,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import xyz.erik.opi.keyboard.OpiIcons
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.keyboard.LocalKeyboardPalette
 import xyz.erik.opi.engine.EngineMode
@@ -65,8 +63,6 @@ fun CandidateBar(
     inEnglish: Boolean,
     /** 隐藏「中」：与中/繁/英循环的英→中同一条腿。 */
     onSwitchToChinese: () -> Unit,
-    /** 最右「收起键盘」：与工具条最右同一个动作。 */
-    onCloseKeyboard: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // 配色走键盘色板（表情条/候选栏与键面同一套「暗光/长辈」换肤，见 Palette.kt）
@@ -89,7 +85,6 @@ fun CandidateBar(
             Text("字母直接上屏", fontSize = 13.sp, color = p.barDimFg)
             Spacer(Modifier.weight(1f))
             if (inEnglish) ChineseHiddenButton(onSwitchToChinese)
-            HideKeyboardButton(onCloseKeyboard, p.toolbarFg)
         }
         return
     }
@@ -182,7 +177,6 @@ fun CandidateBar(
             }
         }
         if (inEnglish) ChineseHiddenButton(onSwitchToChinese)
-        HideKeyboardButton(onCloseKeyboard, p.toolbarFg)
     }
 }
 
@@ -206,14 +200,6 @@ private fun ChineseHiddenButton(onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Text("中", fontSize = 13.sp, color = p.toolbarFg.copy(alpha = 0.35f))
-    }
-}
-
-/** 候选栏最右「收起键盘」：与工具条最右同一个动作（中文/英文候选态都保留出口）。 */
-@Composable
-private fun HideKeyboardButton(onClick: () -> Unit, tint: Color) {
-    IconButton(onClick = onClick) {
-        Icon(OpiIcons.KeyboardHide, contentDescription = "收起键盘", tint = tint)
     }
 }
 

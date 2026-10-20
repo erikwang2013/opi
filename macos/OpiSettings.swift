@@ -46,6 +46,33 @@ enum OpiPinyinMethod: Int, CaseIterable {
     }
 }
 
+/// 六种输入方案。rawValue = C ABI `opi_set_scheme` 的整数（`scheme.rs::Scheme::code`）。
+/// ⚠️ 顺序**不是**声明序：1/2/3 是移动端 9/14/笔画，4 才是双拼，5 是五笔。
+enum OpiScheme: Int32, CaseIterable {
+    case full = 0
+    case nine = 1
+    case fourteen = 2
+    case stroke = 3
+    case shuangpin = 4
+    case wubi = 5
+
+    var title: String {
+        switch self {
+        case .full: return "全拼"
+        case .nine: return "拼音9键"
+        case .fourteen: return "拼音14键"
+        case .stroke: return "笔画"
+        case .shuangpin: return "双拼"
+        case .wubi: return "五笔"
+        }
+    }
+
+    /// 拼音方式持久化只覆盖全拼/双拼；其余走 `SchemeCode`。
+    var isPinyin: Bool { self == .full || self == .shuangpin }
+
+    static func from(code: Int32) -> OpiScheme { OpiScheme(rawValue: code) ?? .full }
+}
+
 /// 双拼布局的**展示名**（下标 = `opi_set_shuangpin_layout` 的入参）。
 ///
 /// ⚠️ 这是本文件唯一一份名表镜像：C ABI 只有下标读写口，没有名字出口
@@ -99,9 +126,35 @@ extension OpiEngine {
     // 差异在 Rust 侧，本层不补动作；设置窗改完由下一次按键自然刷新。
     func schemeCode() -> Int32 { opi_scheme() }
     func setScheme(code: Int32) { opi_set_scheme(code) }
+    func currentScheme() -> OpiScheme { OpiScheme.from(code: schemeCode()) }
 
     func shuangpinLayout() -> Int { Int(opi_shuangpin_layout()) }
     func setShuangpinLayout(_ index: Int) { opi_set_shuangpin_layout(Int32(clamping: index)) }
+
+    // 五笔旋钮（0=纯五笔/直接字母/清空，1=混输/z键/上屏原文；个数钳 1..9）。
+    func wubiStyle() -> Int { Int(opi_wubi_style()) }
+    func setWubiStyle(_ v: Int) { opi_set_wubi_style(Int32(clamping: v)) }
+    func wubiMixedEntry() -> Int { Int(opi_wubi_mixed_entry()) }
+    func setWubiMixedEntry(_ v: Int) { opi_set_wubi_mixed_entry(Int32(clamping: v)) }
+    func wubiCandidateLimit() -> Int { Int(opi_wubi_candidate_limit()) }
+    func setWubiCandidateLimit(_ v: Int) { opi_set_wubi_candidate_limit(Int32(clamping: v)) }
+    func wubiReturnStyle() -> Int { Int(opi_wubi_return_style()) }
+    func setWubiReturnStyle(_ v: Int) { opi_set_wubi_return_style(Int32(clamping: v)) }
+    func wubiAutoCommit() -> Bool { opi_wubi_auto_commit() }
+    func setWubiAutoCommit(_ on: Bool) { opi_set_wubi_auto_commit(on) }
+    /// 编码提示（缓冲变化时取一次；内部是全量重算，别每帧调）。
+    func wubiNextKeys() -> String { take(opi_wubi_next_keys()) }
+
+    // 用户词：JSON 导出/导入原样交给引擎，本层不解析格式。
+    func clearUserWords() { opi_clear_user_words() }
+    func removeUserWord(_ text: String) {
+        withUTF16(text) { opi_remove_user_word($0, $1) }
+    }
+    /// 返回导入条数；-1 = 非法 JSON / 版本不符 / 词表过大 / 未装载。
+    func importUserWords(json: String) -> Int32 {
+        withUTF16(json) { opi_import_user_words($0, $1) }
+    }
+    func exportUserWords() -> String { take(opi_export_user_words()) }
 
     // 导入词库（M3）。系统词典不接受启停，判据看 `OpiDictEntry.system`。
     func dictList() -> [OpiDictEntry] {
@@ -155,14 +208,44 @@ enum OpiSettingsStore {
                 .filter { !$0.isEmpty })
         }
 
-        if let code = defaults.object(forKey: "PinyinMethod") as? Int,
-           code == OpiPinyinMethod.full.rawValue || code == OpiPinyinMethod.shuangpin.rawValue {
+        // 后存的 SchemeCode 优先（9/14/笔画/五笔）；否则回全拼/双拼。
+        if let raw = defaults.object(forKey: "SchemeCode") as? Int,
+           let scheme = OpiScheme(rawValue: Int32(clamping: raw)), !scheme.isPinyin {
+            engine.setScheme(code: scheme.rawValue)
+        } else if let code = defaults.object(forKey: "PinyinMethod") as? Int,
+                  code == OpiPinyinMethod.full.rawValue || code == OpiPinyinMethod.shuangpin.rawValue {
             engine.setScheme(code: OpiPinyinMethod(rawValue: code)!.schemeCode)
         }
         if let layout = defaults.object(forKey: "ShuangpinLayout") as? Int,
            OpiShuangpinLayout.names.indices.contains(layout) {
             engine.setShuangpinLayout(layout)
         }
+
+        if let v = defaults.object(forKey: "WubiStyle") as? Int { engine.setWubiStyle(v) }
+        if let v = defaults.object(forKey: "WubiMixedEntry") as? Int { engine.setWubiMixedEntry(v) }
+        if let v = defaults.object(forKey: "WubiCandidateLimit") as? Int {
+            engine.setWubiCandidateLimit(v)
+        }
+        if let v = defaults.object(forKey: "WubiReturn") as? Int { engine.setWubiReturnStyle(v) }
+        persistedBool("WubiAutoCommit") { engine.setWubiAutoCommit($0) }
+    }
+
+    /// 切方案并落盘（设置页/状态栏共用；不要在两处各写一份键名）。
+    static func applyScheme(_ scheme: OpiScheme) {
+        OpiEngine.shared.setScheme(code: scheme.rawValue)
+        if scheme.isPinyin {
+            set("PinyinMethod", scheme == .shuangpin
+                ? OpiPinyinMethod.shuangpin.rawValue : OpiPinyinMethod.full.rawValue)
+            remove("SchemeCode")
+        } else {
+            set("SchemeCode", Int(scheme.rawValue))
+        }
+    }
+
+    /// 自绘贴纸页的可见性（Linux `ShowOwn`，默认关）。
+    static var showOwn: Bool {
+        get { bool("ShowOwn", default: false) }
+        set { set("ShowOwn", newValue) }
     }
 
     static func bool(_ key: String, default fallback: Bool) -> Bool {

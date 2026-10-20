@@ -9,8 +9,13 @@
 // UIKit 是 Apple 独有框架，本机 `import UIKit` 就会断。
 //
 // 输入模式**菜单**（2026-10-14）：九项模式的选择面板。参照实现是 Android
-// `ime/ImeToolbar.kt` 的 `InputModePanel`（表头「输入模式 / 选中即换」+ 一排 chip），
-// 抄语义与次序，不抄 Compose 语法。
+// `ime/ImeToolbar.kt` 的 `InputModePanel`（表头「输入模式 / 选中即换」+ 可滚动的
+// chip 区），抄语义与次序，不抄 Compose 语法。
+//
+// 2026-10-21 用户报障「输入模式页面错乱」后重排：**固定 3 列网格 + 整页竖向滚动**
+// （窄屏/横屏/长辈字号下都不裁字），选中样式改成 Android `PanelChip` 同款
+// （键底色 + 强调色描边 + 粗体 + 行尾 ✓），色值全部走当前色板、不再写系统色。
+// 表头沿用 `KeyboardPanelHeader`：返回箭头单独一行（2026-10-21 用户裁决）。
 //
 // 与 `SymbolPanel` / `EmojiPanel` 同一个面板惯用法（**别再发明第三套**）：
 // 一个 UIView 子类 + 回调解包，摆在 `KeyboardLayout` 里与 `rowsStack` **同位置、
@@ -40,37 +45,61 @@ final class InputModePanel: UIView {
     /// 每行几个 chip（9 项 → 3 行）。
     private static let perRow = 3
     private static let chipHeight: CGFloat = 40
+    private static let margin: CGFloat = 8
 
-    private let titleLabel = UILabel()
-    private let backButton = BarButton(title: "‹ 返回") {}
-    private let gridStack = UIStackView()
+    private let header = KeyboardPanelHeader(title: "输入模式", hint: "选中即换")
+    private let scroll = UIScrollView()
+    private let rows = UIStackView()
     /// 九颗 chip（建一次；`show(current:)` 只改选中样式 —— 9 个静态项不值得重建）。
     private var chips: [InputMode: BarButton] = [:]
+    private var current: InputMode = .pinyin26
+    private var palette: KeyboardPalette = .light
 
     init() {
         super.init(frame: .zero)
-        // 表头：Android 是「输入模式」+ 副标题「选中即换」两行；本端并成一行。
-        titleLabel.text = "输入模式 · 选中即换"
-        titleLabel.font = .systemFont(ofSize: 14)
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        backButton.addTarget(self, action: #selector(tappedBack), for: .touchUpInside)
-        gridStack.axis = .vertical
-        gridStack.spacing = 6
-        gridStack.translatesAutoresizingMaskIntoConstraints = false
+        backgroundColor = .light.panelBg
+        // 表头统一为「返回箭头单独一行 + 标题/提示下一行」（2026-10-21 用户裁决）。
+        header.onBack = { [weak self] in self?.onClose?() }
 
-        addSubview(titleLabel)
-        addSubview(backButton)
-        addSubview(gridStack)
+        // 滚动容器：横屏（键区只有 ~150pt 高）时 3 行 chip 放不下，必须能滚。
+        // `delaysContentTouches = false` 让点击立刻落到 chip 上（默认值会把单击
+        // 压到 150ms 的 pan 判定之后，连续点选会显得「慢/没响应」）。
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        scroll.alwaysBounceVertical = false
+        scroll.showsVerticalScrollIndicator = true
+        scroll.delaysContentTouches = false
+
+        rows.axis = .vertical
+        rows.spacing = 6
+        rows.translatesAutoresizingMaskIntoConstraints = false
+        scroll.addSubview(rows)
+
+        for v in [header, scroll] {
+            v.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(v)
+        }
         NSLayoutConstraint.activate([
-            backButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
-            backButton.topAnchor.constraint(equalTo: topAnchor, constant: 4),
-            titleLabel.leadingAnchor.constraint(equalTo: backButton.trailingAnchor, constant: 8),
-            titleLabel.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
-            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -8),
-            // 表头高 40：与面包屑行（`RarePanel`）同一节奏。
-            gridStack.topAnchor.constraint(equalTo: backButton.bottomAnchor, constant: 4),
-            gridStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 3),
-            gridStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -3),
+            header.leadingAnchor.constraint(equalTo: leadingAnchor),
+            header.trailingAnchor.constraint(equalTo: trailingAnchor),
+            header.topAnchor.constraint(equalTo: topAnchor),
+            scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
+            scroll.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 4),
+            scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
+
+            rows.leadingAnchor.constraint(
+                equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: Self.margin
+            ),
+            rows.trailingAnchor.constraint(
+                equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -Self.margin
+            ),
+            rows.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor),
+            rows.bottomAnchor.constraint(
+                equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -4
+            ),
+            rows.widthAnchor.constraint(
+                equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -2 * Self.margin
+            ),
         ])
         buildChips()
     }
@@ -85,20 +114,25 @@ final class InputModePanel: UIView {
             let end = min(start + Self.perRow, all.count)
             let row = UIStackView()
             row.axis = .horizontal
-            row.spacing = 5
+            row.spacing = 6
             row.distribution = .fillEqually
+            row.heightAnchor.constraint(equalToConstant: Self.chipHeight).isActive = true
             for mode in all[start..<end] {
                 let chip = BarButton(title: mode.label) { [weak self] in
                     self?.onSelect?(mode)
                 }
-                // 模式名最长 5 字（「拼音大9键」「生僻字键盘」）；BarButton 默认 18pt
-                // 会在 1/3 宽里挤成省略号 —— 收到 15。
-                chip.titleLabel?.font = .systemFont(ofSize: 15)
+                chip.titleLabel?.adjustsFontSizeToFitWidth = true
+                chip.titleLabel?.minimumScaleFactor = 0.7
+                chip.titleLabel?.lineBreakMode = .byClipping
+                // BarButton 默认 18pt + 左右各 8 的内边距，在 1/3 宽（320pt 屏约
+                // 95pt）里会把「生僻字键盘」+ ✓ 挤成省略号；收到 14pt + 4 内边距。
+                chip.contentEdgeInsets = UIEdgeInsets(top: 4, left: 4, bottom: 4, right: 4)
+                chip.layer.cornerRadius = 8
+                chip.clipsToBounds = true
                 chips[mode] = chip
                 row.addArrangedSubview(chip)
             }
-            row.heightAnchor.constraint(equalToConstant: Self.chipHeight).isActive = true
-            gridStack.addArrangedSubview(row)
+            rows.addArrangedSubview(row)
         }
     }
 
@@ -106,12 +140,29 @@ final class InputModePanel: UIView {
     /// `layout.inputMode` 传进来（别在这里自己问引擎 —— 引擎只有 scheme+mode，
     /// 反推不出大 9 键与生僻字这两种面板态，见 `InputMode.kt` 的同一条注释）。
     func show(current: InputMode) {
+        self.current = current
         for (mode, chip) in chips {
             let selected = (mode == current)
-            chip.backgroundColor = selected ? .systemBlue : .secondarySystemBackground
-            chip.setTitleColor(selected ? .white : .label, for: .normal)
+            chip.setTitle(selected ? "\(mode.label) ✓" : mode.label, for: .normal)
+            chip.titleLabel?.font = .systemFont(
+                ofSize: 14, weight: selected ? .bold : .regular
+            )
+            chip.setTitleColor(selected ? palette.accent : palette.panelFg, for: .normal)
+            chip.backgroundColor = palette.keyBg
+            chip.layer.borderWidth = selected ? 2 : 1
+            chip.layer.borderColor = (selected
+                ? palette.accent
+                : palette.barDimFg.withAlphaComponent(0.35)).cgColor
+            chip.accessibilityTraits = selected ? [.button, .selected] : .button
+            chip.accessibilityLabel = "输入模式 \(mode.label)" + (selected ? "，已选中" : "")
         }
     }
 
-    @objc private func tappedBack() { onClose?() }
+    func applyTheme(_ p: KeyboardPalette) {
+        palette = p
+        backgroundColor = p.panelBg
+        header.applyTheme(p)
+        // 色板换了要把 chip 的边框/字色重刷一遍（`show` 是唯一的样式入口）。
+        show(current: current)
+    }
 }

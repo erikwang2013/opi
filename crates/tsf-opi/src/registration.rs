@@ -249,6 +249,18 @@ fn register_category(cats: &ITfCategoryMgr, category: &GUID, clsid: &GUID) -> Re
     unsafe { cats.RegisterCategory(clsid, category, clsid) }
 }
 
+/// `RegisterProfile` 的图标 = 安装目录根的 `opi.exe`（DLL 在 `{app}\app`）。
+/// 空 = 找不到/不是常规布局 —— 与改动前一样不写图标。
+fn profile_icon_path(dll_path: &str) -> Vec<u16> {
+    let dll = std::path::Path::new(dll_path);
+    dll.parent()
+        .and_then(|app| app.parent())
+        .map(|root| root.join("opi.exe"))
+        .filter(|exe| exe.is_file())
+        .map(|exe| exe.to_string_lossy().encode_utf16().collect())
+        .unwrap_or_default()
+}
+
 pub(crate) fn register() -> Result<()> {
     let _com = ComGuard::new(); // CoCreateInstance 前必须有
     let clsid = parse_guid(CLSID_TEXT_SERVICE)?;
@@ -285,6 +297,10 @@ pub(crate) fn register() -> Result<()> {
         )?;
         // 描述串按**计数**传（TSF 全线计数串），不要结尾 NUL；空切片 = 无自定义图标。
         let desc: Vec<u16> = DISPLAY_NAME.encode_utf16().collect();
+        // 2026-10-21：Windows 任务栏输入指示器此前显示「简」——profile 的 icon 传的是
+        // 空切片。指向同目录上一级的 opi.exe（jpackage 应用图标 = 项目宠物），让
+        // 输入法列表/输入指示器拿到宠物图标。路径不存在时退回空切片（保持旧行为）。
+        let icon = profile_icon_path(&dll_path);
 
         // 新接口：ITfInputProcessorProfileMgr::RegisterProfile（Vista+ 的 profile
         //    注册正路，与 ITfInputProcessorProfiles 是**同一个 coclass** 的两个接口）。
@@ -313,7 +329,7 @@ pub(crate) fn register() -> Result<()> {
                 LANGID_ZH_CN,
                 &profile,
                 &desc,
-                &[],
+                &icon,
                 0,
                 HKL::default(),
                 0,

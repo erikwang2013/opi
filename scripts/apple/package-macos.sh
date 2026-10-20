@@ -146,6 +146,21 @@ cp desktop/icons/opi-pet.icns "$APP/Contents/Resources/opi-pet.icns"
 # 符号面板类目表（22 类）：与 Linux `/usr/share/opi/`、Windows 启动器旁同一份
 # 真源文件。Swift 按 `Bundle.main.url(forResource:"symbol_categories")` 读它。
 cp crates/fcitx5-opi/data/symbol_categories.tsv "$APP/Contents/Resources/symbol_categories.tsv"
+# 表情/颜文字（`OpiEmojiData.loadEmoji/loadKaomoji`）与贴纸映射/资源。
+# 与 Android 的 `assets/`、Linux 的共享数据同一份真源；缺文件时面板如实为空。
+cp data/raw/emoji.tsv "$APP/Contents/Resources/emoji.tsv"
+cp data/raw/kaomoji.tsv "$APP/Contents/Resources/kaomoji.tsv"
+cp shared/pet/emoji-font/map.tsv "$APP/Contents/Resources/pet-map.tsv"
+mkdir -p "$APP/Contents/Resources/pet/stickers" \
+         "$APP/Contents/Resources/pet/stickers-gif"
+cp shared/pet/stickers/*.png "$APP/Contents/Resources/pet/stickers/"
+cp shared/pet/stickers-gif/*.gif "$APP/Contents/Resources/pet/stickers-gif/"
+# 词库：主库/繁体/笔画/五笔。`OpiEngine.resourceDictionaryPath` 优先用户目录，
+# 否则读 `Resources/dicts/`。与 Android assets 同一份格式，不要再生成第二份。
+mkdir -p "$APP/Contents/Resources/dicts"
+for dict in luna trad stroke wubi86; do
+  cp "android/app/src/main/assets/$dict.opid" "$APP/Contents/Resources/dicts/$dict.opid"
+done
 
 # ---- 4) 签名（ad-hoc）----
 # 顺序：先签里面那份 dylib，再签外层 bundle。反过来的话外层签名封的是**旧**哈希，
@@ -212,6 +227,14 @@ grep -q 'OpiInputMethod.app/Contents/Info.plist' "$out/.payload.txt" || {
 grep -q 'OpiInputMethod.app/Contents/Resources/symbol_categories.tsv' "$out/.payload.txt" || {
   echo "!! .pkg 的 payload 里没有 symbol_categories.tsv（符号面板会退化成引擎常用块）" >&2
   cat "$out/.payload.txt" >&2; exit 1; }
+# 表情/贴纸/码表同理：少一个 = 对应面板/方案静默变空，装完才发现。
+for res in "emoji.tsv" "kaomoji.tsv" "pet-map.tsv" \
+           "pet/stickers/idle.png" "pet/stickers-gif/idle.gif" \
+           "dicts/luna.opid" "dicts/trad.opid" "dicts/stroke.opid" "dicts/wubi86.opid"; do
+  grep -q "OpiInputMethod.app/Contents/Resources/$res" "$out/.payload.txt" || {
+    echo "!! .pkg 的 payload 里没有 Resources/$res" >&2
+    cat "$out/.payload.txt" >&2; exit 1; }
+done
 rm -f "$out/.payload.txt"
 
 # ---- 7) .zip（不想走 pkg 的人用；保留 .app 的结构与符号链接）----

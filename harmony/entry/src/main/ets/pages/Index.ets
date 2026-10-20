@@ -12,6 +12,7 @@ import { MODE_BIG9, MODE_PINYIN9, MODE_PINYIN14, MODE_STROKE } from '../InputMet
 import { PanelView } from '../InputMethodExtensionAbility/KeyboardModes';
 import { Palette, paletteFor } from '../InputMethodExtensionAbility/Palette';
 import { TopBar } from '../InputMethodExtensionAbility/TopBar';
+import { CandidateTiled } from '../InputMethodExtensionAbility/CandidateTiled';
 import { QwertyPad } from '../InputMethodExtensionAbility/QwertyPad';
 import { EmojiPad } from '../InputMethodExtensionAbility/EmojiPad';
 import {
@@ -33,6 +34,7 @@ struct Index {
   @StorageLink('opiSkin') skin: number = 0;
   @StorageLink('opiDark') dark: number = 0;
   @StorageLink('opiElder') elder: number = 0;
+  @StorageLink('opiTiled') tiled: number = 0;
 
   private pal(): Palette {
     return paletteFor(this.skin, this.dark === 1, this.elder === 1);
@@ -41,20 +43,26 @@ struct Index {
   build() {
     Column() {
       TopBar()
-      Row() {
-        if (this.oneHand === 2) {
-          this.SideBlank()
+      if (this.tiled === 1 && this.view === 0) {
+        // 平铺候选：占满拼音行以下的整块（含单手模式的留白区 —— Android 平铺也在
+        // 单手 Row 之外，是整窗宽度）。
+        CandidateTiled()
+      } else {
+        Row() {
+          if (this.oneHand === 2) {
+            this.SideBlank()
+          }
+          Column() {
+            this.Content()
+          }
+          .layoutWeight(this.oneHand === 0 ? 1 : 0.76)
+          .height('100%')
+          if (this.oneHand === 1) {
+            this.SideBlank()
+          }
         }
-        Column() {
-          this.Content()
-        }
-        .layoutWeight(this.oneHand === 0 ? 1 : 0.76)
-        .height('100%')
-        if (this.oneHand === 1) {
-          this.SideBlank()
-        }
+        .width('100%').layoutWeight(1).backgroundColor(this.pal().barBg)
       }
-      .width('100%').layoutWeight(1).backgroundColor(this.pal().barBg)
     }
     .width('100%').height('100%').backgroundColor(this.pal().panelBg)
   }

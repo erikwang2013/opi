@@ -52,6 +52,16 @@ extension KeyboardLayout {
         candidateBar.addSubview(chineseButton)
         candidateScroll.addSubview(candidateStack)
 
+        // 「中」键隐藏时不能留 26pt 空位（用户要求候选栏占满整条）。两条互斥的
+        // trailing 约束由 `showChineseButton(_:)` 切换 —— `isHidden` 本身不会
+        // 撤销手写约束，原实现因此在中文候选栏右端留了一条空白。
+        nextToChinese = next.trailingAnchor.constraint(
+            equalTo: chineseButton.leadingAnchor, constant: -2
+        )
+        nextToBar = next.trailingAnchor.constraint(
+            equalTo: candidateBar.trailingAnchor, constant: -4
+        )
+
         // ⚠️ 未编译：以下约束按常见写法写，Mac 上大概率要调数值/优先级。
         NSLayoutConstraint.activate([
             candidateBar.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -68,7 +78,6 @@ extension KeyboardLayout {
             chineseButton.widthAnchor.constraint(equalToConstant: 26),
             chineseButton.heightAnchor.constraint(equalToConstant: 26),
 
-            next.trailingAnchor.constraint(equalTo: chineseButton.leadingAnchor, constant: -2),
             next.centerYAnchor.constraint(equalTo: candidateScroll.centerYAnchor),
             next.widthAnchor.constraint(equalToConstant: 28),
 
@@ -83,6 +92,21 @@ extension KeyboardLayout {
             candidateStack.bottomAnchor.constraint(equalTo: candidateScroll.contentLayoutGuide.bottomAnchor),
             candidateStack.heightAnchor.constraint(equalTo: candidateScroll.frameLayoutGuide.heightAnchor),
         ])
+        // 初始中文态：只有 next→bar 这条生效。
+        nextToBar?.isActive = true
+    }
+
+    /// 显示/隐藏候选栏右侧的低存在感「中」键。隐藏时把「›」直接贴到栏尾，
+    /// 不留空位（`isHidden` 不会撤销约束，必须显式换约束）。
+    func showChineseButton(_ show: Bool) {
+        chineseButton.isHidden = !show
+        if show {
+            nextToBar?.isActive = false
+            nextToChinese?.isActive = true
+        } else {
+            nextToChinese?.isActive = false
+            nextToBar?.isActive = true
+        }
     }
 
     private func makeBarButton(_ title: String, onTap: @escaping () -> Void) -> UIButton {
@@ -91,8 +115,9 @@ extension KeyboardLayout {
         return b
     }
 
-    /// 隐藏「中」键：复用中/繁/英循环的 `.cycleMode`（英文档 = 清缓冲 + 回拼音，
-    /// 与 Android 隐藏键走 `cycleMode()` 的英→中腿同义），不新造委托方法。
+    /// 隐藏「中」键：复用中/繁/英循环的 `.cycleMode`。英文档由控制器走
+    /// `applyInputMode(lastChineseInputMode)`（清缓冲 + 回上次中文方案，与 Android
+    /// 隐藏键的英→中腿同义），不新造委托方法。
     @objc private func tapChinese() {
         delegate?.keyboardLayout(self, didTapFunction: .cycleMode)
     }

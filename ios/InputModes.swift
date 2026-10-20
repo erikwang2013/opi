@@ -429,6 +429,7 @@ extension KeyboardViewController {
         // 记下选择：键面按它画，菜单高亮也按它。面板式在收起后仍保持高亮
         // （Android 的 chip 同样保持），底下的键面回落 26 键（`RARE.scheme == FULL`）。
         layout.setInputMode(mode)
+        if mode != .english26 && !mode.panel { lastChineseInputMode = mode }
         if mode.panel {
             layout.setLayer(.rare)
             return

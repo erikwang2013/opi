@@ -6,7 +6,8 @@
 // 自有 = 12 张内嵌小欧贴纸（点按复制 PNG/PixelMap 图片，不上屏；GIF 仅在 PNG 缺失时用）；
 // Emoji 用引擎分组；颜文字用内嵌 7 类。
 // 分类点击只切片当前组（不做 Scroller）；搜索只覆盖 Emoji/颜文字。
-// shortcut: 搜索框没有第二输入法可唤起（README 缺口 3②），网格未虚拟化（缺口 3④）。
+// 搜索态贴底叠 96vp 字母盘（SearchPad）—— IME 面板里的 TextInput 唤不起第二个输入法。
+// shortcut: 网格未虚拟化（数据量小，暂不虚拟化）。
 
 import { KeyboardController } from './KeyboardController';
 import { EmojiGroup } from './OpiEngine';
@@ -14,22 +15,13 @@ import { OpiPet, PetMood } from './OpiPet';
 import { emojiGroups, emojiSymbols, searchEmoji } from './EmojiData';
 import { Palette, paletteFor } from './Palette';
 import { KAOMOJI_CATEGORIES } from './KaomojiData';
-import {
-  PET_STICKER_FORMS, PetStickerForm, stickerBase64, stickerDataUri,
-  stickerGifBase64, stickerGifDataUri,
-} from './PetStickerImages';
-import { copyStickerToClipboard } from './PetStickerClipboard';
+import { SearchPad } from './SearchPad';
+import { StickerGrid } from './StickerGrid';
 
 /** 每行几个表情。与 Android `EmojiPanel` 的 8 列同值（两端要一致改）。 */
 const EMOJI_PER_ROW: number = 8;
-/** 自有贴纸独立 4 列网格（12 形态 = 3 行）。 */
-const STICKER_PER_ROW: number = 4;
-/** 贴纸显示尺寸（vp）。 */
-const STICKER_SIZE: number = 56;
 /** 颜文字比单个 emoji 宽：3 列 + 小字号，少截断（Android 同款）。 */
 const KAOMOJI_PER_ROW: number = 3;
-/** 是否显示「自有」：鸿蒙无设置页，缺省隐藏（Android/桌面有开关）；要显示改 true 并重编。 */
-const SHOW_OWN: boolean = false;
 
 @Component
 export struct EmojiPad {
@@ -49,11 +41,26 @@ export struct EmojiPad {
    * `searchEmoji` 每次都会打引擎（控制器不缓存中间结果），build 里多处读会重复解码。
    */
   @State searchRows: string[][] = [];
+  /** 搜索叠盘是否展开（Android：搜索框焦点联动；本端用点框/↵ 显式开关）。 */
+  @State searchPadShown: boolean = false;
+  /** 设置页「表情页显示自有」开关（Android ImePreferences.showOwn）。 */
+  @StorageLink('opiShowOwn') @Watch('onShowOwnChanged') showOwn: number = 0;
   @StorageLink('opiSkin') skin: number = 0;
   @StorageLink('opiDark') dark: number = 0;
   @StorageLink('opiElder') elder: number = 0;
 
   private ctrl: KeyboardController = KeyboardController.getInstance();
+
+  aboutToAppear(): void {
+    this.onShowOwnChanged();
+  }
+
+  /** 关掉「自有」时正停在该子页 → 回 Emoji（同 Android tabs 里没有该项）。 */
+  onShowOwnChanged(): void {
+    if (this.subTab === 0 && this.showOwn !== 1) {
+      this.subTab = 1;
+    }
+  }
 
   private pal(): Palette {
     return paletteFor(this.skin, this.dark === 1, this.elder === 1);
@@ -65,7 +72,7 @@ export struct EmojiPad {
       if (this.searching && this.emojiQuery.length > 0) {
         this.SearchGrid()
       } else if (this.subTab === 0) {
-        this.StickerBrowse()
+        StickerGrid()
       } else if (this.subTab === 1) {
         this.EmojiBrowse()
       } else {
@@ -74,6 +81,23 @@ export struct EmojiPad {
       // 自有是图片网格：没有分类条（它只有一页 12 格）。
       if (!this.searching && this.subTab !== 0) {
         this.CategoryBar()
+      }
+      // 96vp 搜索叠盘（Android ImeScreen 同款）：面板内容压缩，盘固定贴底。
+      if (this.searching && this.searchPadShown) {
+        SearchPad({
+          onKey: (ch: string) => {
+            this.updateSearch(this.emojiQuery + ch);
+          },
+          onBackspace: () => {
+            this.updateSearch(this.emojiQuery.length > 0 ? this.emojiQuery.slice(0, -1) : '');
+          },
+          onSpace: () => {
+            this.updateSearch(this.emojiQuery + ' ');
+          },
+          onEnter: () => {
+            this.searchPadShown = false;
+          }
+        }).height(96).width('100%')
       }
     }
     .width('100%').backgroundColor(this.pal().panelBg)
@@ -96,32 +120,23 @@ export struct EmojiPad {
         .onClick(() => { this.back(); })
 
       if (this.searching) {
-        TextInput({ placeholder: '搜索（拼音/英文）', text: this.emojiQuery })
-          .layoutWeight(1).height(34).fontSize(14).margin({ right: 8 })
-          .onChange((v: string) => { this.updateSearch(v); })
+        // 点一下 = 展开/收起下方搜索叠盘（本端没有第二个输入法可唤起）。
+        Text(this.emojiQuery.length === 0 ? '搜索（拼音/英文）' : this.emojiQuery)
+          .layoutWeight(1).height(34).fontSize(14)
+          .fontColor(this.emojiQuery.length === 0 ? this.pal().dimFg : this.pal().panelFg)
+          .backgroundColor(this.pal().keyBg).borderRadius(6)
+          .padding({ left: 10, right: 10 }).margin({ right: 8 })
+          .onClick(() => {
+            this.searchPadShown = !this.searchPadShown;
+          })
       } else {
         // 子页切换：选中态同时用底色 + 字色表达（同旧版分组条）。
         Row() {
-          if (SHOW_OWN) {
-            Text('自有')
-              .fontSize(15).fontColor(this.subTab === 0 ? this.pal().highlightFg : this.pal().dimFg)
-              .backgroundColor(this.subTab === 0 ? this.pal().highlightBg : this.pal().panelBg)
-              .borderRadius(6).padding({ left: 14, right: 14, top: 5, bottom: 5 })
-              .margin({ left: 3, right: 3 })
-              .onClick(() => { this.selectSub(0); })
+          if (this.showOwn === 1) {
+            this.Tab('自有', 0)
           }
-          Text('Emoji')
-            .fontSize(15).fontColor(this.subTab === 1 ? this.pal().highlightFg : this.pal().dimFg)
-            .backgroundColor(this.subTab === 1 ? this.pal().highlightBg : this.pal().panelBg)
-            .borderRadius(6).padding({ left: 14, right: 14, top: 5, bottom: 5 })
-            .margin({ left: 3, right: 3 })
-            .onClick(() => { this.selectSub(1); })
-          Text('颜文字')
-            .fontSize(15).fontColor(this.subTab === 2 ? this.pal().highlightFg : this.pal().dimFg)
-            .backgroundColor(this.subTab === 2 ? this.pal().highlightBg : this.pal().panelBg)
-            .borderRadius(6).padding({ left: 14, right: 14, top: 5, bottom: 5 })
-            .margin({ left: 3, right: 3 })
-            .onClick(() => { this.selectSub(2); })
+          this.Tab('Emoji', 1)
+          this.Tab('颜文字', 2)
         }
         .layoutWeight(1).justifyContent(FlexAlign.Center)
 
@@ -129,47 +144,28 @@ export struct EmojiPad {
         if (this.subTab !== 0) {
           Text('🔍')
             .fontSize(18).padding({ left: 10, right: 14 })
-            .onClick(() => { this.searching = true; })
+            .onClick(() => {
+              this.searching = true;
+              this.searchPadShown = true;
+            })
         }
       }
     }
     .width('100%').height(44).backgroundColor(this.pal().panelBg)
   }
 
-  // ------------------------------------------------------------ 网格
-
-  /** 自有子页：4 列网格，画真实的 12 张小欧动图；点击复制图片（不上屏）。 */
   @Builder
-  StickerBrowse() {
-    Scroll() {
-      Column() {
-        ForEach(this.stickerRows(), (row: PetStickerForm[], rowIndex: number) => {
-          Row() {
-            ForEach(row, (f: PetStickerForm, col: number) => {
-              Column() {
-                Image(stickerGifDataUri(f.sticker))
-                  .width(STICKER_SIZE).height(STICKER_SIZE)
-                  .objectFit(ImageFit.Contain)
-                Text(f.label).fontSize(10).fontColor(this.pal().panelFg).margin({ top: 2 })
-              }
-              .layoutWeight(1).height(78).justifyContent(FlexAlign.Center)
-              .onClick(() => {
-                // 剪贴板回退：IME Kit 没有往宿主输入框插图片的接口（见 README 缺口）。
-                // PNG/PixelMap 优先（宿主最认）；PNG 缺失时 Clipboard helper 才用 GIF。
-                copyStickerToClipboard(
-                  stickerGifBase64(f.sticker), stickerBase64(f.sticker), f.label
-                );
-              })
-            }, (f: PetStickerForm, col: number) => `${col}-${f.sticker}`)
-            this.Blanks(STICKER_PER_ROW - row.length)
-          }
-          .width('100%').margin({ top: rowIndex === 0 ? 6 : 2 })
-        }, (row: PetStickerForm[], rowIndex: number) => `sticker-${rowIndex}`)
-      }
-      .width('100%')
-    }
-    .layoutWeight(1).width('100%')
+  Tab(label: string, i: number) {
+    Text(label)
+      .fontSize(15)
+      .fontColor(this.subTab === i ? this.pal().highlightFg : this.pal().dimFg)
+      .backgroundColor(this.subTab === i ? this.pal().highlightBg : this.pal().panelBg)
+      .borderRadius(6).padding({ left: 14, right: 14, top: 5, bottom: 5 })
+      .margin({ left: 3, right: 3 })
+      .onClick(() => { this.selectSub(i); })
   }
+
+  // ------------------------------------------------------------ 网格
 
   /** Emoji 子页：引擎表情表当前组；分组拿不到时整表兜底。 */
   @Builder
@@ -239,7 +235,7 @@ export struct EmojiPad {
         this.Blanks(EMOJI_PER_ROW - row.length)
       }
       .width('100%').margin({ top: rowIndex === 0 ? 4 : 2 })
-    }, (row: string[], rowIndex: number) => `emoji-${rowIndex}`)
+    }, (row: string[], rowIndex: number) => `emoji-${rowIndex}-${row.join('')}`)
   }
 
   /** 颜文字当前分类的行（3 列 + 14 号字）。 */
@@ -255,7 +251,7 @@ export struct EmojiPad {
         this.Blanks(KAOMOJI_PER_ROW - row.length)
       }
       .width('100%').margin({ top: rowIndex === 0 ? 4 : 2 })
-    }, (row: string[], rowIndex: number) => `kaomoji-${rowIndex}`)
+    }, (row: string[], rowIndex: number) => `kaomoji-${rowIndex}-${row.join('')}`)
   }
 
   /** 搜索结果的行：Emoji 8 列 / 20 号字，颜文字 3 列 / 14 号字（Android 同款）。 */
@@ -271,7 +267,7 @@ export struct EmojiPad {
         this.Blanks((this.subTab === 1 ? EMOJI_PER_ROW : KAOMOJI_PER_ROW) - row.length)
       }
       .width('100%').margin({ top: rowIndex === 0 ? 4 : 2 })
-    }, (row: string[], rowIndex: number) => `search-${rowIndex}`)
+    }, (row: string[], rowIndex: number) => `search-${rowIndex}-${row.join('')}`)
   }
 
   /** 补齐末行空格，避免最后一行的格子被 `layoutWeight` 拉伸成整行（同 Android 网格）。 */
@@ -316,6 +312,7 @@ export struct EmojiPad {
   private back(): void {
     if (this.searching) {
       this.searching = false;
+      this.searchPadShown = false;
       this.emojiQuery = '';
       this.searchRows = [];
       return;
@@ -431,22 +428,14 @@ export struct EmojiPad {
 
   /** 切子页：离开搜索态（搜索只属于 Emoji/颜文字）；切换后网格按新子页重画。 */
   private selectSub(i: number): void {
-    if (i === this.subTab || (i === 0 && !SHOW_OWN)) {
+    if (i === this.subTab || (i === 0 && this.showOwn !== 1)) {
       return;
     }
     this.subTab = i;
     this.searching = false;
+    this.searchPadShown = false;
     this.emojiQuery = '';
     this.searchRows = [];
-  }
-
-  /** 12 个自有贴纸切片成二维（ForEach 只铺一维；4 列 = 3 行）。 */
-  private stickerRows(): PetStickerForm[][] {
-    const out: PetStickerForm[][] = [];
-    for (let i = 0; i < PET_STICKER_FORMS.length; i += STICKER_PER_ROW) {
-      out.push(PET_STICKER_FORMS.slice(i, i + STICKER_PER_ROW));
-    }
-    return out;
   }
 
   private chunk(list: string[], perRow: number): string[][] {

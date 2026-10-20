@@ -388,6 +388,9 @@ C:\Program Files\opi\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
   "{app}\app\tsf_opi.dll"`；结果只写日志
   `opi: regsvr32 /s tsf_opi.dll exit code <n>`，**非 0 也不回滚**。卸载时先结束
   `opi.exe`、再 `regsvr32 /s /u`、再删文件（同样 best-effort）。
+- **任务栏输入指示器图标（2026-10-21）**：`RegisterProfile` 的 icon 指向安装目录根的
+  `opi.exe`（jpackage 宠物图标），不再传空图标；升级安装会先 `regsvr32 /u` 旧 DLL 再
+  注册新 DLL，以便已存在的 profile 也换上新图标。真机上的任务栏显示仍待验证。
 - **卸载（2026-10-21）**：`CurUninstallStepChanged(usUninstall)` 在 Inno 删文件前
   先 `taskkill /f /t /im opi.exe`（候选窗 / 设置窗 / 状态栏都是同一个 `opi.exe`；
   **本树没有 Windows 服务**），随后清 HKLM64/HKCU Run 下的 `opi` / `opi-statusbar`

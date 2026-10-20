@@ -42,13 +42,22 @@ final class KeyboardViewController: UIInputViewController {
     /// 为什么非要显示：`opi_load` 返回 false 时，Rust 侧所有出口都会退化成
     /// 空操作（引擎单例保持为空）。不显示的话表现就是「键盘毫无反应」，
     /// 与 fcitx5 轨「词库损坏时插件静默全失效」是同一个坑。
-    private var dictionaryLoaded = false
+    /// internal：装载实现搬到 `KeyboardDictionaryLoader.swift`（本文件压 500 行门禁）。
+    var dictionaryLoaded = false
 
     /// 皮肤与键盘模式（2026-10-20）：启动时从扩展自己的 UserDefaults 读，
     /// 切换后即写回（Android `ImePreferences` 的等价物，但没有设置 App）。
     /// internal：`KeyboardTheme.swift` 里的 `applyTheme` 扩展要读。
     var skin: SkinOption = .follow
     var modes = KeyboardModes()
+    /// 引擎开关（学习/模糊音/简拼/纠错/中文标点/双拼布局/自己表情）。
+    /// 只在本文件用；设置面板拿到的永远是 `layout.setEngineSettings` 的快照。
+    private var settings = KeyboardSettings()
+    /// 设置面板 → 皮肤/键盘模式/关于 的返回目标：从设置进入的子面板，返回回设置，
+    /// 再返回才回字母层（二级导航，不把用户直接弹回键盘）。
+    private var settingsReturn = false
+    /// 最近一次中文键面（英→中时恢复它；Android `cycleMode` 的「回上次中文方案」）。
+    var lastChineseInputMode: InputMode = .pinyin26
 
     /// 表情搜索的防抖表（对齐 Android `ImeState.SEARCH_DEBOUNCE_MS = 250`：
     /// 每敲一个字就查一次全表是白费的，手停下才查）。
@@ -85,8 +94,14 @@ final class KeyboardViewController: UIInputViewController {
         // 沿用引擎当前方案（与 Android 的差异记在 README）。
         skin = KeyboardPreferences.skin
         modes = KeyboardPreferences.modes
+        settings = KeyboardPreferences.settings
         layout.setSkin(skin)
         layout.setKeyboardModes(modes, traditional: engine.mode() == .traditional)
+        // 引擎开关必须在装载词库**之后**推（未装载时写侧是空操作），且要在
+        // 第一次 refresh 之前 —— 否则首屏候选按旧开关算。
+        engine.applySettings(settings)
+        layout.setEngineSettings(settings, fuzzyPairNames: engine.fuzzyPairNames())
+        layout.emojiPanel.setShowOwn(settings.showOwn)
         applyTheme()
         // 键面字要跟真实模式一致：装载后引擎可能是任何模式（同一进程里另一个
         // 键盘实例切过模式也会留在这里 —— 引擎单例是进程级的）。
@@ -102,75 +117,33 @@ final class KeyboardViewController: UIInputViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         guard heightConstraint == nil else { return }
-        // ⚠️ 未编译：键盘高度必须由扩展自己给。264 这个值是拍的，
-        // 真机上要按候选栏 + 4 行的实际高度算（或让 layout 用 intrinsicContentSize）。
+        // 键盘高度必须由扩展自己给。portrait 264 / landscape 200：横屏时屏幕
+        // 纵向只有 ~320pt，264 会把宿主输入框挤没；键区仍够放 4 行 + 候选栏。
         // priority 用 defaultHigh：避免与系统在旋转/分屏时的约束冲突。
-        let h = view.heightAnchor.constraint(equalToConstant: 264)
+        let h = view.heightAnchor.constraint(equalToConstant: preferredKeyboardHeight)
         h.priority = .defaultHigh
         h.isActive = true
         heightConstraint = h
     }
 
-    /// 装载词库。
-    ///
-    /// 词库文件来自**扩展自己的 bundle**（不是宿主 App、不是 App Group）——
-    /// 与 Android 把 luna.opid / trad.opid 放进 assets 同一思路。
-    /// 文件从哪来见 ios/README.md「构建集成」。
-    private func loadDictionaries() {
-        if let p = Bundle.main.path(forResource: "luna", ofType: "opid") {
-            dictionaryLoaded = engine.load(path: p)
-        } else {
-            // 没打包词库文件 → 退化用编译进二进制的内置回退词库
-            // （opi_load 对空路径的语义）。可用但候选很少，UI 上要提示。
-            dictionaryLoaded = engine.load(path: "")
-        }
-        // 繁体库可选：失败**不是**错误 —— 繁体模式会回退简体库（Rust 侧语义）。
-        if let t = Bundle.main.path(forResource: "trad", ofType: "opid") {
-            engine.loadTrad(path: t)
-        }
-        if !dictionaryLoaded {
-            // 不静默。候选栏里会显示「词库未装载」。
-            NSLog("[OPI] 词库装载失败 —— 引擎将退化为空操作")
-        }
+    /// 旋转后由系统重排触发；只改常数，**不**新建约束（新建会叠加冲突）。
+    override func viewWillLayoutSubviews() {
+        super.viewWillLayoutSubviews()
+        guard let h = heightConstraint else { return }
+        let target = preferredKeyboardHeight
+        if abs(h.constant - target) > 0.5 { h.constant = target }
     }
 
-    /// 可选增强词库：笔画与五笔（2026-10-14）。
-    ///
-    /// 文件名与 Android `EngineLoader` 的常量**逐字对齐**
-    /// （`ASSET_NAME_STROKE` = `stroke.opid`、`ASSET_NAME_WUBI86` = `wubi86.opid`），
-    /// 源文件是 `data/generated/*.opid` 的生成物。
-    ///
-    /// 2026-10-20 起，`scripts/apple/package-ios.sh` 会把 `luna.opid` / `trad.opid` /
-    /// `stroke.opid` / `wubi86.opid` 从 `android/app/src/main/assets/` 拷进 appex 根目录
-    /// （`Bundle.main` 就是扩展自己），所以 iOS 的 unsigned IPA 里这些方案有码表。
-    /// 用 Xcode 集成时同样要把这几个文件加进扩展 target 的 Copy Bundle Resources，
-    /// **文件名一个字都别改**（改了这里就找不到，而且没有报错）。
-    ///
-    /// 三条失败语义与 Android `EngineLoader.loadStrokeAsset/loadWubiAsset` 相同：
-    /// 缺文件 / 装载返回 false → **只降级**（那一个方案回退普通路径），不动 luna 与 trad。
-    private func loadBundledDictionaries() {
-        if let p = Bundle.main.path(forResource: "stroke", ofType: "opid") {
-            if !engine.loadStroke(path: p) {
-                NSLog("[OPI] stroke.opid 装载失败 —— 笔画键盘回退普通路径（无候选）")
-            }
-        } else {
-            NSLog("[OPI] bundle 里没有 stroke.opid —— 笔画键盘无候选（见 ios/README.md）")
-        }
-        // 五笔码表：**只装一张**（86/98 的码空间重叠、权重不可比，两张同时进引擎 =
-        // 两套体系打架；Android `EngineLoader` 与 fcitx5 的 `opi_wubi.h` 同一条裁决）。
-        // 本端**没有偏好存储** ⇒ 恒装 86（Android 的缺省也是 86）；要支持 98 得先有
-        // 设置界面，且那时是「二选一装一张」，不是两张都装。
-        if let p = Bundle.main.path(forResource: "wubi86", ofType: "opid") {
-            if !engine.loadWubi(path: p) {
-                NSLog("[OPI] wubi86.opid 装载失败 —— 五笔回退普通路径（无候选）")
-            }
-        } else {
-            NSLog("[OPI] bundle 里没有 wubi86.opid —— 五笔无候选（见 ios/README.md）")
-        }
-        // ⚠️ 装完**不换方案**（`opi_load_wubi` / `opi_load_stroke` 的契约：装载只管码表）：
-        // 要用它们得用户从输入模式菜单选「五笔」/「笔画键盘」——那时 `applyInputMode`
-        // 才会 `setScheme`。所以「装了没换成方案」不是 bug，是这两条出口的分工。
+    private var preferredKeyboardHeight: CGFloat {
+        // 不能拿 `view.bounds` 判横竖：键盘 view 的宽度是屏宽、高度正是本约束
+        // 给的 264 —— 320pt 竖屏会被误判成「宽 > 高」的横屏。看屏幕窗口。
+        let screen = view.window?.windowScene?.screen
+        let size = screen?.bounds.size ?? UIScreen.main.bounds.size
+        return size.width > size.height ? 200 : 264
     }
+
+    // 词库装载已搬到 `KeyboardDictionaryLoader.swift`（2026-10-21：本文件压 500 行门禁）。
+    // `loadDictionaries()` / `loadBundledDictionaries()` 仍是控制器的方法，见那边。
 
     // MARK: - 刷新 UI
 
@@ -341,12 +314,23 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
     func keyboardLayout(_ layout: KeyboardLayout, didTapFunction name: KeyboardFunctionKey) {
         switch name {
         case .showLetters:
+            // 从设置进入的子面板（皮肤/键盘模式/关于）先回设置，再回字母层。
+            if settingsReturn {
+                let wasSettings = (layout.keyLayer == .settings)
+                settingsReturn = false
+                if !wasSettings {
+                    layout.setLayer(.settings)
+                    return
+                }
+            }
             layout.setLayer(.letters)
         case .showNumbers:
+            settingsReturn = false
             layout.setLayer(.numbers)
         case .showSymbols:
             // 符号数据**现取**，不缓存：空结果是「没拿到」而不是「真的没有」，
             // 缓存空会让面板从此永远空（Android `SymbolCatalog` 踩过这个坑）。
+            settingsReturn = false
             layout.setSymbols(engine.commonSymbols())
             layout.setLayer(.symbols)
         case .showEmoji:
@@ -357,20 +341,24 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             // `emoji_groups_index_the_full_emoji_list` 两处写明，并点名「别照抄它们的
             // 姿态去改别的出口」）。所以这里**不看 `dictionaryLoaded`**、面板也不会
             // 显示「词库未装载」—— 表情本来就不依赖词库。
+            settingsReturn = false
             layout.setEmojiBrowse(engine.emojiSymbols(), groups: engine.emojiGroups())
             layout.setLayer(.emoji)
         case .showModes:
             // 输入模式菜单（2026-10-14）：**只是切层** —— 菜单里的选项本身不动引擎，
             // 换方案/换键面在用户选中后走 `applyInputMode`（`InputModes.swift`）。
+            settingsReturn = false
             layout.setLayer(.modes)
         case .showRare:
             // 生僻字面板（2026-10-14）：同上，只是切层。**数据不在这里取** ——
             // 索引是 `rare_index.tsv`（不是引擎出口），面板自己在首次打开时读，
             // 见 `RarePanel.show()`。这与符号/表情两层「控制器现取引擎数据」不同，
             // 差别的原因就是数据来源不同（引擎 vs bundle 文件）。
+            settingsReturn = false
             layout.setLayer(.rare)
         case .showSkin:
             // 皮肤面板（2026-10-20）：与 Android 工具条入口同义。选中不关面板。
+            settingsReturn = (layout.keyLayer == .settings)
             layout.setSkin(skin)
             layout.setLayer(.skins)
         case .selectSkin(let newSkin):
@@ -379,6 +367,7 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             layout.setSkin(newSkin)
             applyTheme()
         case .showKeyboardModes:
+            settingsReturn = (layout.keyLayer == .settings)
             layout.setKeyboardModes(modes, traditional: engine.mode() == .traditional)
             layout.setLayer(.keyboardModes)
         case .updateKeyboardModes(let newModes):
@@ -391,7 +380,22 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
         case .toggleTraditional:
             toggleTraditional()
         case .showAbout:
+            settingsReturn = (layout.keyLayer == .settings)
             layout.setLayer(.about)
+        case .showSettings:
+            // 每次都重取一份引擎组名（装载可能刚完成/失败），保证逐组 chip 与引擎同步。
+            settingsReturn = true
+            layout.setEngineSettings(settings, fuzzyPairNames: engine.fuzzyPairNames())
+            layout.setLayer(.settings)
+        case .updateSettings(let newSettings):
+            settings = newSettings
+            KeyboardPreferences.settings = newSettings
+            // 立即推给引擎（Android 设置页同姿态：没有「保存」按钮）。
+            engine.applySettings(newSettings)
+            layout.setEngineSettings(newSettings, fuzzyPairNames: engine.fuzzyPairNames())
+            layout.emojiPanel.setShowOwn(newSettings.showOwn)
+            // 模糊音/简拼/纠错会改变当前缓冲的候选，重拉一次。
+            refresh()
         case .closeKeyboard:
             // 工具条最右的收起键（Android 同位置）。
             dismissKeyboard()
@@ -412,9 +416,20 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
         case .selectInputMode(let mode):
             // 菜单选中一项。语义（换方案 + 换模式 + 换键面 + 清缓冲的取舍）全在
             // `applyInputMode` 里，那里也写明了与 Android 的**能力缺口**。
+            settingsReturn = false
             applyInputMode(mode)
         case .cycleMode:
-            cycleMode()
+            // 非中文（英文/数字/符号）→ 中文：走 applyInputMode 而不是只 switchMode
+            // —— 后者不会同步 layout.inputMode，英文键盘上点「中」/模式键会看起来没反应
+            // （2026-10-21）。判据与 Android `cycleMode` 的 else 档同：不在中/繁就回
+            // 上次中文方案；中→繁→英两跳交给 `cycleMode()`。
+            if engine.mode() != .pinyin && engine.mode() != .traditional {
+                // 非中文态回到键面：设置面板若开着，这条路径也会关掉它。
+                settingsReturn = false
+                applyInputMode(lastChineseInputMode)
+            } else {
+                cycleMode()
+            }
         case .nextInputMode:
             // 地球键：交给系统切到下一个输入法（Apple 要求自定义键盘自己提供）。
             advanceToNextInputMode()
@@ -456,8 +471,7 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
     }
 
     /// 模式三态循环与模式键键面字（2026-10-20 移到 `KeyboardTheme.swift`；
-    /// 本文件压 500 行门禁）。调用点见 `KeyboardLayout` 的 `.cycleMode` 与
-    /// `KeyboardHardware` 的 `Ctrl+'`。
+    /// 本文件压 500 行门禁）。调用点见本文件的 `.cycleMode` 分支与 `updateModeLabel()`。
 }
 
 // MARK: - 宿主文本变化

@@ -12,13 +12,9 @@ import { promptAction } from '@kit.ArkUI';
 import { pasteboard } from '@kit.BasicServicesKit';
 import { KeyboardController } from './KeyboardController';
 import { OpiMode } from './OpiEngine';
-import { INPUT_MODES, currentModeIndex } from './InputModes';
-import {
-  ONE_HAND_LEFT, ONE_HAND_OFF, ONE_HAND_RIGHT,
-  darkEnabled, elderEnabled, floatingEnabled, gameEnabled,
-  oneHandValue, skinValue,
-} from './KeyboardModes';
-import { Palette, SKINS, paletteFor } from './Palette';
+import { INPUT_MODES, InputMode, currentModeIndex } from './InputModes';
+import { ONE_HAND_LEFT, ONE_HAND_OFF, ONE_HAND_RIGHT, darkEnabled, elderEnabled } from './KeyboardModes';
+import { Palette, SKINS, Skin, paletteFor } from './Palette';
 
 const ABOUT_INTRO: string =
   '小欧输入法（opi）是一款回归本质、人人可用的多端输入法。' +
@@ -27,8 +23,6 @@ const ABOUT_INTRO: string =
 const ABOUT_HOME_URL: string = 'https://opi.erik.xyz';
 const ABOUT_PROJECT_URL: string = 'https://github.com/erikwang2013/opi';
 const ABOUT_BLOG_URL: string = 'https://erik.xyz';
-
-const MODE_GRID: number[][] = [[0, 1, 2], [3, 4, 5], [6, 7, 8]];
 
 // ---------------------------------------------------------------- 零件
 
@@ -48,20 +42,23 @@ export struct PanelHeader {
   }
 
   build() {
-    Row() {
-      Text('‹ 返回')
-        .fontSize(14).fontColor(this.pal().accent).padding({ left: 12, right: 8 })
-        .onClick(this.onClose)
-      Text(this.title)
-        .fontSize(15).fontColor(this.pal().panelFg).fontWeight(FontWeight.Bold)
-      Text(this.hint)
-        .fontSize(11).fontColor(this.pal().dimFg).layoutWeight(1)
-        .padding({ left: 8 }).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      Text('收起')
-        .fontSize(13).fontColor(this.pal().accent).padding({ left: 8, right: 12 })
-        .onClick(this.onClose)
+    Column() {
+      // 2026-10-21 用户裁决：返回箭头单独一行，标题/提示下一行（对齐 Android）。
+      Row() {
+        SymbolGlyph($r('sys.symbol.arrow_left'))
+          .fontSize(20).fontColor([this.pal().toolbarFg]).accessibilityText('返回')
+          .padding({ left: 14, right: 10, top: 4, bottom: 4 })
+          .onClick(this.onClose)
+      }.width('100%').height(28)
+      Row() {
+        Text(this.title)
+          .fontSize(15).fontColor(this.pal().panelFg).fontWeight(FontWeight.Bold)
+        Text(this.hint)
+          .fontSize(11).fontColor(this.pal().dimFg).layoutWeight(1)
+          .padding({ left: 8 }).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+      }.width('100%').height(24).padding({ left: 10 })
     }
-    .width('100%').height(42).backgroundColor(this.pal().toolbarBg)
+    .width('100%').height(54).backgroundColor(this.pal().panelBg)
   }
 }
 
@@ -129,7 +126,8 @@ struct SkinCard {
         .fontColor(this.selected ? SKINS[this.index].palette.accent : SKINS[this.index].palette.panelFg)
         .fontWeight(this.selected ? FontWeight.Bold : FontWeight.Normal)
     }
-    .layoutWeight(1).height(84).justifyContent(FlexAlign.Center)
+    .width(60).height(84).justifyContent(FlexAlign.Center)
+    .margin({ left: 5, right: 5 })
     .onClick(this.onTap)
   }
 }
@@ -156,25 +154,18 @@ export struct SkinPanel {
         }
       })
       Scroll() {
-        Column() {
-          ForEach([0, 1, 2], (row: number) => {
-            Row() {
-              ForEach([0, 1, 2, 3], (col: number) => {
-                if (row * 4 + col < SKINS.length) {
-                  SkinCard({
-                    index: row * 4 + col,
-                    selected: row * 4 + col === this.skin,
-                    onTap: () => {
-                      this.ctrl.selectSkin(row * 4 + col);
-                    }
-                  })
-                } else {
-                  Text('').layoutWeight(1)
-                }
-              }, (col: number) => `skin-${row}-${col}`)
-            }.width('100%')
-          }, (row: number) => `skin-row-${row}`)
-        }.width('100%').padding({ left: 8, right: 8 })
+        // Flex 折行（Android FlowRow）：窄屏/长辈字号下都折行，不裁剪。
+        Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start }) {
+          ForEach(SKINS, (s: Skin, i: number) => {
+            SkinCard({
+              index: i,
+              selected: i === this.skin,
+              onTap: () => {
+                this.ctrl.selectSkin(i);
+              }
+            })
+          }, (s: Skin, i: number) => `skin-${i}`)
+        }.width('100%').padding({ left: 8, right: 8, top: 4, bottom: 8 })
       }.layoutWeight(1).width('100%')
     }
     .width('100%').height('100%').backgroundColor(this.pal().panelBg)
@@ -189,6 +180,10 @@ export struct KeyboardModePanel {
   @StorageLink('opiSkin') skin: number = 0;
   @StorageLink('opiDark') dark: number = 0;
   @StorageLink('opiElder') elder: number = 0;
+  @StorageLink('opiOneHand') oneHand: number = 0;
+  @StorageLink('opiFloat') floating: number = 0;
+  @StorageLink('opiGame') game: number = 0;
+  @StorageLink('opiShowOwn') showOwn: number = 0;
   private ctrl: KeyboardController = KeyboardController.getInstance();
 
   private pal(): Palette {
@@ -204,63 +199,62 @@ export struct KeyboardModePanel {
         }
       })
       Scroll() {
-        Column() {
-          Row() {
-            ModeChip({
-              label: '繁体模式', selected: this.mode === (OpiMode.Traditional as number),
-              onTap: () => {
-                this.ctrl.toggleTraditional();
-              }
-            })
-          }.width('100%')
-          Row() {
-            ModeChip({
-              label: '单手：关', selected: oneHandValue() === ONE_HAND_OFF,
-              onTap: () => {
-                this.ctrl.setOneHand(ONE_HAND_OFF);
-              }
-            })
-            ModeChip({
-              label: '单手：左', selected: oneHandValue() === ONE_HAND_LEFT,
-              onTap: () => {
-                this.ctrl.setOneHand(ONE_HAND_LEFT);
-              }
-            })
-            ModeChip({
-              label: '单手：右', selected: oneHandValue() === ONE_HAND_RIGHT,
-              onTap: () => {
-                this.ctrl.setOneHand(ONE_HAND_RIGHT);
-              }
-            })
-          }.width('100%')
-          Row() {
-            ModeChip({
-              label: '悬浮模式', selected: floatingEnabled(),
-              onTap: () => {
-                this.ctrl.toggleFloating();
-              }
-            })
-            ModeChip({
-              label: '游戏模式', selected: gameEnabled(),
-              onTap: () => {
-                this.ctrl.toggleGame();
-              }
-            })
-          }.width('100%')
-          Row() {
-            ModeChip({
-              label: '暗光模式', selected: darkEnabled(),
-              onTap: () => {
-                this.ctrl.toggleDark();
-              }
-            })
-            ModeChip({
-              label: '长辈模式', selected: elderEnabled(),
-              onTap: () => {
-                this.ctrl.toggleElder();
-              }
-            })
-          }.width('100%')
+        // Flex 折行（Android FlowRow + 可滚动）：窄屏/长辈字号不裁项。
+        Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start }) {
+          ModeChip({
+            label: '繁体模式', selected: this.mode === (OpiMode.Traditional as number),
+            onTap: () => {
+              this.ctrl.toggleTraditional();
+            }
+          })
+          ModeChip({
+            label: '单手模式：关', selected: this.oneHand === ONE_HAND_OFF,
+            onTap: () => {
+              this.ctrl.setOneHand(ONE_HAND_OFF);
+            }
+          })
+          ModeChip({
+            label: '单手模式：左手', selected: this.oneHand === ONE_HAND_LEFT,
+            onTap: () => {
+              this.ctrl.setOneHand(ONE_HAND_LEFT);
+            }
+          })
+          ModeChip({
+            label: '单手模式：右手', selected: this.oneHand === ONE_HAND_RIGHT,
+            onTap: () => {
+              this.ctrl.setOneHand(ONE_HAND_RIGHT);
+            }
+          })
+          ModeChip({
+            label: '悬浮模式', selected: this.floating === 1,
+            onTap: () => {
+              this.ctrl.toggleFloating();
+            }
+          })
+          ModeChip({
+            label: '游戏模式', selected: this.game === 1,
+            onTap: () => {
+              this.ctrl.toggleGame();
+            }
+          })
+          ModeChip({
+            label: '暗光模式', selected: darkEnabled(),
+            onTap: () => {
+              this.ctrl.toggleDark();
+            }
+          })
+          ModeChip({
+            label: '长辈模式', selected: elderEnabled(),
+            onTap: () => {
+              this.ctrl.toggleElder();
+            }
+          })
+          ModeChip({
+            label: '表情页显示自有', selected: this.showOwn === 1,
+            onTap: () => {
+              this.ctrl.toggleShowOwn();
+            }
+          })
         }.width('100%').padding({ left: 8, right: 8, top: 4, bottom: 8 })
       }.layoutWeight(1).width('100%')
     }
@@ -389,22 +383,23 @@ export struct InputModePanel {
           this.ctrl.closePanel();
         }
       })
-      ForEach(MODE_GRID, (gridRow: number[], gridIndex: number) => {
-        Row() {
-          ForEach(gridRow, (i: number) => {
-            Text(INPUT_MODES[i].label)
+      Scroll() {
+        // Flex 折行 + 可滚动（Android FlowRow）：320vp 窄屏与长辈字号下都不裁项。
+        Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start }) {
+          ForEach(INPUT_MODES, (m: InputMode, i: number) => {
+            Text(m.label)
               .fontSize(this.elder === 1 ? 17 : 14)
               .fontColor(i === currentModeIndex() ? this.pal().highlightFg : this.pal().panelFg)
               .backgroundColor(i === currentModeIndex() ? this.pal().highlightBg : this.pal().keyBg)
-              .borderRadius(6).layoutWeight(1).textAlign(TextAlign.Center)
-              .padding({ top: 10, bottom: 10 })
+              .borderRadius(6).textAlign(TextAlign.Center)
+              .padding({ left: 16, right: 16, top: 10, bottom: 10 })
               .margin({ left: 4, right: 4, top: 5 })
               .onClick(() => {
                 this.ctrl.selectInputMode(i);
               })
-          }, (i: number) => `im-${i}`)
-        }.width('100%').justifyContent(FlexAlign.Center)
-      }, (gridRow: number[], gridIndex: number) => `img-${gridIndex}`)
+          }, (m: InputMode, i: number) => `im-${i}`)
+        }.width('100%').padding({ left: 8, right: 8, bottom: 8 })
+      }.layoutWeight(1).width('100%')
     }
     .width('100%').height('100%').backgroundColor(this.pal().panelBg)
   }

@@ -1,6 +1,6 @@
 # OPI macOS 端（草案）
 
-> ## ⚠️ 草案 · **CI 已真编译（含 2026-10-20 的 7 文件）** · 从未上机运行
+> ## ⚠️ 草案 · **CI 编过 2026-10-20 批** · **2026-10-21 批未编译** · 从未上机运行
 >
 > **2026-10-15 订正（原来那句「一行都没有编译过」不成立）**：`apple.yml` 的 macOS job
 > 用 `swiftc macos/*.swift -typecheck` + 真编译链接（`scripts/apple/package-macos.sh`）
@@ -13,6 +13,15 @@
 > 由 CI 的 `swiftc macos/*.swift` 真编过；原文「尚未编译（Apple CI 本轮不可用）」已不成立。
 > 本机跑过的仍只有 `bash -n`、`sh -n` 与 500 行门禁。别把下面「已补」读成
 > 「已在 Mac 上验证」——**仍未上机**。
+>
+> **2026-10-21（Linux 对齐批，尚未编译）**：新增悬浮状态栏（`OpiStatusBar.swift`）、
+> 自绘虚拟键盘（`OpiKeyboardPanel.swift`）、表情/颜文字/贴纸面板
+> （`OpiEmojiPanel.swift` + `OpiEmojiData.swift`）、皮肤/配色（`OpiTheme.swift`）、
+> 设置窗拆成外壳 + 两页文件（`OpiSettingsPages.swift` / `OpiSettingsDicts.swift`），
+> 并改了 `main.swift`、`OpiEngine.swift`、`OpiMenu.swift`、`InputController.swift` 与
+> 打包脚本。**这批代码在本机没有 Swift 编译器，尚未经过任何 `swiftc`** ——
+> 必须先推 CI 让 `swiftc macos/*.swift -typecheck` 编过，再谈上机。下文「已补」
+> 一律只表示「代码已写」，不表示「编译过」或「能用」。
 >
 > 本机没有 macOS、没有 Xcode、没有 Apple SDK；InputMethodKit / AppKit 是 Apple 独有框架，
 > 在 Linux 上 `import` 就断 —— 编译发生在 **CI 的 macOS runner** 上，不在开发机。
@@ -33,19 +42,27 @@
 | 文件 | 内容 |
 |---|---|
 | `OpiFFI.h` | C ABI 声明面（**数量以 `crates/opi-ffi/tests/c_abi_contract.rs` 的门禁为准，别抄数字**），逐条对照 `crates/opi-ffi/src/cabi.rs` 抄写；`ios/OpiFFI.h` 是指向本文件的转发头。曾经落后 3 个（`opi_toggle_fullwidth` / `opi_fullwidth_state` / `opi_toggle_symbol`），**2026-09-27 已补齐**，见「全角 / 符号开关的出口」一节；本文件归 `ffi-contract`，别的分身不改 |
-| `OpiEngine.swift` | C ABI 桥：`OpiString` 的持有/释放、键码/状态位常量、词库装载与回退（含可选 `trad.opid` 与 `dicts/*.tsv` 重放）、当前页候选/页内选词、符号库三个出口 |
-| `InputController.swift` | `IMKInputController` 子类：NSEvent → `opi_key_event` 入参、提交文本、preedit、候选窗、输入法菜单分派、跨窗口上屏 |
-| `OpiMenu.swift` | 输入法菜单（Linux 状态栏的等价入口）+ `OpiClientHub`（最近客户端弱引用） |
+| `OpiEngine.swift` | C ABI 桥：`OpiString` 的持有/释放、键码/状态位常量、词库装载与回退（含 `luna`/`trad`/`stroke`/`wubi86` 与 `dicts/*.tsv` 重放）、当前页候选/页内选词、符号库三个出口、用户词导入导出 |
+| `InputController.swift` | `IMKInputController` 子类：NSEvent → `opi_key_event` 入参、提交文本、preedit、候选窗、输入法菜单分派、跨窗口上屏、虚拟键盘键注入、激活/失活驱动状态栏 |
+| `OpiMenu.swift` | 输入法菜单（与悬浮状态栏同步的入口）+ `OpiClientHub`（最近客户端弱引用） |
+| `OpiStatusBar.swift` | 悬浮状态栏：LOGO/中英/标点/简繁/ENPRO/模式/全角/软键盘/符号/设置；仅 opi 输入源激活时显示 |
+| `OpiBarIcons.swift` | 状态栏图标面：月相（全/半角）、键盘、四格设置、句号/逗号对角、en+26 / en+pro 键帽槽位 |
+| `OpiKeyboardPanel.swift` | 自绘虚拟键盘：26/9/14/笔画 + 数字面板；点击直接喂引擎，不注入系统按键 |
 | `OpiSymbolPanel.swift` | 符号面板：22 类竖条 + 12×6 网格 + 搜索 + 翻页 |
-| `OpiSettings.swift` | 设置项/词库/双拼布局的引擎读写面 + UserDefaults 落盘 |
-| `OpiSettingsWindow.swift` | 设置窗：常用 / 按键 / 符号与表情 / 词库 / 关于 |
+| `OpiEmojiPanel.swift` / `OpiEmojiData.swift` | 表情 / 颜文字 / 贴纸面板与随包 TSV 装载；贴纸走剪贴板（PNG+GIF） |
+| `OpiTheme.swift` | 12 款皮肤、暗光/长辈、状态栏几何、自绘按钮与共用视图 |
+| `OpiSettings.swift` | 设置项/词库/双拼布局/五笔旋钮/用户词的引擎读写面 + UserDefaults 落盘 |
+| `OpiSettingsWindow.swift` | 设置窗外壳（8 页导航 + 滚动内容区 + 通用控件） |
+| `OpiSettingsPages.swift` | 常用 / 按键 / 外观 / 状态栏 / 符号与表情页 |
+| `OpiSettingsDicts.swift` | 词库 / 五笔 / 关于页 |
 | `main.swift` | `IMKServer` 启动（无 nib） |
 | `Info.plist` | 输入法组件声明 |
 | `README.md` | 本文件 |
 
 **没有 Xcode 工程文件（`.xcodeproj`）是有意的**：手写一个从未被 Xcode 打开过的
 `project.pbxproj` 会是第三件「没被工具看过的产物」，而且它比 Swift 更难人工核对。
-工程请在 Mac 上由 Xcode 新建，然后把本目录的 7 个 Swift 源文件与 Info.plist 加进去。
+工程请在 Mac 上由 Xcode 新建，然后把本目录的 `macos/*.swift` 全部源文件与
+Info.plist 加进去（文件数以目录为准，不在这里抄数字）。
 
 ## 已验证 / 未验证
 
@@ -531,17 +548,35 @@ NSMenuItem 直接用，字典则按 `kIMKCommandMenuItemName` 取项。**哪条�
 `UserDefaults.standard`（键名见上表）。两者都只在静态层面核对过，没有在 Mac 上
 读/写过。
 
+2026-10-21 起随包资源增加（`scripts/apple/package-macos.sh` 第 3 节拷入，
+`.pkg` payload 逐项门禁）：
+
+| 资源 | 用途 |
+|---|---|
+| `emoji.tsv` / `kaomoji.tsv` | 表情（中文分组）/ 颜文字（分类） |
+| `pet-map.tsv` | 贴纸的 `file / label_zh / shortcode` 映射 |
+| `pet/stickers/*.png`、`pet/stickers-gif/*.gif` | 贴纸源文件；`idle.png` 同时是状态栏 LOGO |
+| `dicts/luna.opid`、`trad.opid`、`stroke.opid`、`wubi86.opid` | 主/繁体/笔画/五笔码表（与 Android assets 同一份文件） |
+
+缺任何一个文件时代码路径都应「如实为空 / 记日志」，而不是假装有数据；但**这条
+只在源码里成立，尚未在装好的 .pkg 上核过**。
+
 ## 已知缺口（不是 bug，是还没做）
 
-- **G2 模式入口（2026-10-20 已补，CI 已编译、未上机）**：现在有输入法菜单（`OpiMenu.swift`）
-  与热键两条入口 ——
-  * 菜单：英文模式 / 繁体模式 / 中文标点 / 全角 / 输入方案（全拼·双拼）/ 符号面板 / 设置；
+- **G2 模式入口（2026-10-20 已补；2026-10-21 扩到六方案与状态栏，未编译、未上机）**：
+  现在有输入法菜单（`OpiMenu.swift`）、悬浮状态栏与热键三条入口 ——
+  * 菜单：英文模式 / 繁体模式 / 中文标点 / 全角 / 软键盘 / 输入方案（全拼·双拼·9·14·
+    笔画·五笔）/ 皮肤 / 符号面板 / 表情与贴纸 / 设置；
+  * 状态栏 MODE：拼音 → 五笔 → 英文 26 键循环（五笔码表未装载时提示并停在原档）；
   * 热键：`Ctrl+'` 英⇄拼、`Ctrl+\` 拼音⇄符号、`Shift+Space` 全角、
     `Ctrl+Shift+F` 简繁（与 `opi_mode.h` 的 `opiToggleTraditional` 同判）、
     `Ctrl+Shift+Z` 打开符号面板（与 Linux 的符号画廊同语义）。
   引擎切换仍走 `opi_switch_mode`，不绕过 `router.rs` 的 `switch_mode`。
-  仍未接：中→繁→英三态循环（iOS 的 `cycleMode()`）、数字/符号模式按钮、英文专业
-  （ENPRO，fcitx5 控制面专有，C ABI 无出口）。
+  仍未接：中→繁→英三态循环（iOS 的 `cycleMode()`）、独立的数字/符号模式按钮
+  （符号模式走 `Ctrl+\`，数字模式 2 由虚拟键盘的 123 进入）、英文专业
+  （ENPRO，fcitx5 控制面专有，C ABI 无出口）、Shift 轻按切中英
+  （Linux 的 `ShiftToggle`；IMK 要在 `recognizedEvents` 申领 `flagsChanged` 才收得到，
+  且 iTerm/VS Code 这类宿主不申领 —— 本批未接，设置「按键」页已如实标注）。
 - **G3 候选分页（2026-10-20 已补，CI 已编译、未上机）**：`refresh()` 改喂
   `opi_candidates_page()`，`candidateSelected` 改调 `opi_select_page(k)`（页内索引），
   不再使用全局 `opi_candidates(limit:64)` / `opi_select(index)`，也不再自己算
@@ -550,46 +585,98 @@ NSMenuItem 直接用，字典则按 `kIMKCommandMenuItemName` 取项。**哪条�
 - **G4 无测试、无 CI 工程文件、Swift 已由 CI 编过**：`macos/` 里**本机跑过的只有头文件** ——
   `OpiFFI.h` 的 clang 语法检查与「导出名取地址」那个 TU（2026-09-27 起能过）。
   `swiftc` 只在 CI 的 macOS runner 上跑过；**2026-10-20 这批新增/改动已由
-  run 39425977787 编过**。本机只跑了 `bash -n`、`sh -n`、500 行门禁。
-  下一步可执行验证是「装进系统跑最小冒烟」。
-- **G5 宠物「小欧」未接（有意）**：几何真源是 `docs/opi-pet.svg`；Android 与 Windows
-  候选窗共用 `shared/pet/OpiPet.kt` 这一份实现。macOS 候选窗仍是系统面板
-  `IMKCandidates`，**画不进去** —— 要摆小欧得先换成自绘 `NSPanel`。
-  真要接时**别**新写一份 CoreGraphics 几何：同一张图的第三份拷贝必然漂移。
-- **G6 符号面板（2026-10-20 已补，CI 已编译、未上机）**：`OpiSymbolPanel.swift` 按 Linux
-  `SymbolsPage.kt` 的布局实现：左侧 22 类竖条、右侧 12×6=72/页网格、搜索框、翻页；
-  数据是**随包**的 `crates/fcitx5-opi/data/symbol_categories.tsv`（打包脚本拷进
-  `Contents/Resources/`，并在 `.pkg` payload 里钉了一条存在性门禁），读不到才回退
+  run 39425977787 编过**；**2026-10-21 的 Linux 对齐批尚未经过任何 `swiftc`**。
+  本机只跑了 `bash -n`、`sh -n`、500 行门禁。
+  下一步可执行验证是「先让 CI 编过本批，再装进系统跑最小冒烟」。
+- **G5 宠物「小欧」在候选窗里仍未接（有意）**：几何真源是 `docs/opi-pet.svg`；
+  Android 与 Windows 候选窗共用 `shared/pet/OpiPet.kt` 这一份实现。macOS 候选窗仍是
+  系统面板 `IMKCandidates`，**画不进去** —— 要摆小欧得先换成自绘 `NSPanel`。
+  2026-10-21 只把 `idle.png` 用作**状态栏 LOGO**（可点它循环皮肤），以及贴纸页的
+  PNG/GIF；这不等于候选窗宠物已接。真要接时**别**新写一份 CoreGraphics 几何：
+  同一张图的第三份拷贝必然漂移。
+- **G6 符号/表情面板（2026-10-20 / 2026-10-21，未上机）**：`OpiSymbolPanel.swift` 按
+  Linux `SymbolsPage.kt` 的布局实现：左侧 22 类竖条、右侧 12×6=72/页网格、搜索框、
+  翻页；数据是**随包**的 `crates/fcitx5-opi/data/symbol_categories.tsv`，读不到才回退
   引擎 `opi_symbol_blocks()` 的 6 个 common 块（会打日志，不假装 22 类都在）。
   字形过滤沿用 iOS 的 CoreText 单码位判定。上屏绕过引擎中文标点映射，直接
-  `insertText`；面板保持打开。仍未接：表情页（引擎有 `opi_emoji_*` 出口，没有 UI）、
-  贴纸/剪贴板。
-- **G7 状态栏是菜单，不是常驻条**：InputMethodKit 没有 Linux 那种悬浮状态栏，
-  `OpiMenu.swift` 用输入法菜单承载同组入口。皮肤、LOGO、虚拟键盘（VK）与
-  ENPRO 因此没有等价物；外观/状态栏两个设置页也未画空壳。
+  `insertText`；面板保持打开。
+  表情页（`OpiEmojiPanel.swift`）：表情 12×6、颜文字 6×6、贴纸 4×3；中文分组/搜索；
+  贴纸页由 `ShowOwn`（默认关）控制。贴纸**不直接上屏**：把 PNG+TIFF 与 GIF 原文件
+  写进 `NSPasteboard`，提示按 ⌘V 粘贴（IMK 只能插文本，不合成系统按键）。
+  仍缺：表情/贴纸不能像 Android 那样直接进候选窗；面板控件样式只做到「随皮肤涂底」，
+  不是逐像素复刻。
+- **G7 状态栏与虚拟键盘（2026-10-21 已写、未编译、未上机）**：悬浮状态栏是
+  `OpiStatusBar.swift` 的自绘 `NSPanel`，按钮顺序/字面/几何按 Linux：LOGO/中英/标点/
+  简繁/ENPRO/模式/全角/软键盘/符号/设置，底边居中 +128，缩放 75–150%；只在
+  `activateServer` 之后显示、`deactivateServer` 立即收起。菜单与状态栏改同一份
+  `OpiBarSettings` 并互相刷新。
+  明确不可用：**ENPRO**（fcitx5 的 englishpro 控制面，C ABI 与 IMK 都没有对应出口）
+  —— 按钮照位置显示但禁用并给提示，设置里可隐藏，**不伪造功能**。
+  虚拟键盘（`OpiKeyboardPanel.swift`）是自绘非激活面板，点键直接把键值喂引擎
+  （不注入系统键、不需辅助功能授权、不抢焦点）；有 26/9/14/笔画四档与 9 键的 123
+  数字面板。平台限制：空缓冲时 ⌫ 只能删输入缓冲，不能删宿主文档字符；空缓冲回车
+  提交 `\n`，不会触发宿主默认按钮。系统候选窗（`IMKCandidates`）不接受皮肤/字号，
+  所以外观页的皮肤只作用于 OPI 自绘面板。
 
-### 属性设置 / 词库（2026-10-20 已接，CI 已编译、未上机）
+### 属性设置 / 词库（2026-10-20 起；2026-10-21 扩到 8 页，未编译、未上机）
 
 `OpiSettings.swift` 只做 Swift 值 ↔ C ABI 转发；默认值、越界钳制、模糊音名表都仍由
-Rust 侧决定。`OpiSettingsWindow.swift` 的页面：
+Rust 侧决定。设置窗拆成三个文件（外壳 + 两批页面），每文件 <500 行。页签顺序与
+Linux 同一份：
 
 | 页 | 内容 | 落盘键（UserDefaults，逐字沿用 Linux） |
 |---|---|---|
-| 常用 | 学习、中文标点、模糊音总开关 + 8 组逐对、简拼、纠错、全拼/双拼、双拼布局 | `Learn` `ChinesePunct` `Fuzzy` `FuzzyPairs` `Jianpin` `Correction` `PinyinMethod` `ShuangpinLayout` |
-| 按键 | 只读快捷键表 | — |
-| 符号与表情 | 类目数、打开符号面板；表情页未接 | — |
-| 词库 | 系统词典状态、导入 `.tsv`、启停/删除导入层 | `DisabledDicts`（逗号分隔；空 = 全启用） |
-| 关于 | 版本、未签名提示与主页/项目/博客外链（2026-10-20 补外链） | — |
+| 常用 | 学习、中文标点、模糊音总开关 + 逐对、简拼、纠错、输入方案（全拼/双拼/9/14/笔画/五笔）、双拼布局 | `Learn` `ChinesePunct` `Fuzzy` `FuzzyPairs` `Jianpin` `Correction` `PinyinMethod` `SchemeCode` `ShuangpinLayout` |
+| 按键 | 只读快捷键表；打开虚拟键盘；IMK 限制说明 | — |
+| 外观 | 12 皮肤、五色预览、暗光/长辈、状态栏预览 | `Skin` `DarkMode` `ElderMode` |
+| 状态栏 | master 开关、逐按钮常驻（MODE 恒常驻）、ENPRO 说明、缩放档位 | `StatusBarHidden` `StatusBarVk` `StatusBarSymbols` `StatusBarTrad` `StatusBarPunct` `StatusBarLang` `StatusBarEnPro` `StatusBarLogo` `StatusBarFullwidth` `StatusBarSettings` `StatusBarScale` |
+| 符号与表情 | 类目/表情计数、打开两个面板、`ShowOwn` 贴纸页开关 | `ShowOwn` |
+| 词库 | 系统词典状态、导入 `.tsv`、启停/删除导入层；用户词导出/导入/清空/删单词 | `DisabledDicts`（逗号分隔；空 = 全启用） |
+| 五笔 | 风格、混入方式、候选个数、回车行为、唯一候选自动上屏、切到五笔 | `WubiStyle` `WubiMixedEntry` `WubiCandidateLimit` `WubiReturn` `WubiAutoCommit` |
+| 关于 | 版本、未签名提示、主页/项目/博客外链、对照与限制摘要 | — |
 
-* 启动顺序（`main.swift`）：`opi_load` → 可选 `trad.opid` → `applyPersisted()` →
-  重放 `dicts/*.tsv`（按停用名单关层）。导入是**复制**到
-  `~/Library/Application Support/opi/dicts/`，同名自动 `-2` 后缀，不覆盖；
-  删除会同时删目录里的文件（有确认框）。
+* 启动顺序（`main.swift`）：`opi_load` → 可选 `trad.opid` → 可选 `stroke.opid` /
+  `wubi86.opid` → `applyPersisted()` → 重放 `dicts/*.tsv`（按停用名单关层）。
+  导入是**复制**到 `~/Library/Application Support/opi/dicts/`，同名自动 `-2` 后缀，
+  不覆盖；删除会同时删目录里的文件（有确认框）。
 * 模糊音逐对勾选会写 `FuzzyPairs` 并覆盖总开关；勾总开关会清掉 `FuzzyPairs`，
   与 Linux「空 = 回落布尔」的合同一致。
-* 未画空壳的页：**外观**（皮肤引擎不存在）、**状态栏**（没有常驻条，入口在菜单）、
-  **五笔**（ABI 有 `opi_load_wubi`/五笔旋钮，本轮未随包也未接设置页）。
+* 只在代码层成立、未上机验证的差异：系统候选窗 `IMKCandidates` 不接受皮肤/字号，
+  所以皮肤/暗光/长辈只作用于自绘面板；设置窗本身保持 macOS 外观；`ShowOwn` 的
+  贴纸页是剪贴板而不是直接上屏。
 * ⚠️ **别新造开关、别改语义**：真源是 `engine-core` 的 setter 与各自的 C ABI 出口。
+
+## Linux → macOS 对照（2026-10-21，代码已写、未编译、未上机）
+
+参考实现是 `desktop/src/main/kotlin/xyz/erik/opi/candidate/`（`StatusBar.kt` /
+`BarGlyphs.kt` / `SkinAndStatus.kt` / `SettingsWindow.kt` / `SettingsPages.kt` /
+`SymbolsPage.kt` / `VirtualKeyboard.kt`）。macOS 侧**不搬** Linux 的 X11/TSF 注入：
+能用 IMK/C ABI 表达的才接，表达不了的明确禁用并写明原因。
+
+| Linux | macOS 实现 | 状态 |
+|---|---|---|
+| 悬浮状态栏（LOGO/中英/标点/简繁/ENPRO/模式/全角/VK/符号/设置，底边居中 +128，75–150%） | `OpiStatusBar.swift` 无边框 `.nonactivatingPanel`，几何/按钮序/字面照抄；仅 `activateServer` 后显示 | 已写，未编译、未上机 |
+| LOGO = 小欧贴纸，单击循环皮肤 | 状态栏按钮用 `Resources/pet/stickers/idle.png`；找不到退回「欧」字 | 已写；皮肤循环走 `OpiTheme.cycleSkin` |
+| 中英 / 标点 / 简繁 | 直接调引擎模式与 `opi_toggle_chinese_punct` | 已写 |
+| 标点按钮句号左上、逗号右下 | `OpiBarIcons.punctPair` 在象限内按步进取最大 | 已写；字形测量用 AppKit 步进盒，不是 Skia 墨迹盒 |
+| 全角月相 / VK 键帽 / 四格设置 | `OpiBarIcons` 用 NSBezierPath/CGContext 按同一套比例画 | 已写；非像素级复刻 |
+| 模式「拼/五/en+26」 | 拼音/五笔为单字，英文为 en+26 键帽槽位图 | 已写 |
+| ENPRO（englishpro） | **不可用**：C ABI 与 IMK 都没有控制面 | 按钮照位置显示但禁用、tooltip 说明；设置里可隐藏 |
+| 皮肤 12 款 | `OpiTheme.swift` 逐值镜像 Linux 色板 | 只作用于 OPI 自绘面板（状态栏/键盘/表情）；系统候选窗不换肤 |
+| 暗光 / 长辈 | `DarkMode` / `ElderMode`（Android/Harmony 同源） | 已写；Linux 无此两项 |
+| 设置窗 8 页 | `OpiSettingsWindow` + `OpiSettingsPages` + `OpiSettingsDicts` | 常用/按键/外观/状态栏/符号与表情/词库/五笔/关于 |
+| 符号页 22 类、12×6、搜索 | `OpiSymbolPanel.swift`（2026-10-20 已有） | 已由 CI 编过；未上机 |
+| 表情/颜文字/贴纸 | `OpiEmojiPanel.swift` + `OpiEmojiData.swift`，12×6 / 6×6 / 4×3，中文分组与搜索 | 已写；贴纸写剪贴板（PNG+GIF），不注入 ⌘V |
+| 软键盘 26/9/14/笔画 + 数字 | `OpiKeyboardPanel.swift` 自绘非激活面板，点键直接喂引擎 | 已写；不注入系统键、不影响硬件输入 |
+| 空缓冲 ⌫ / 回车 | IMK 无「删宿主文本」出口 | 限制：⌫ 只删输入缓冲；回车提交 `\n`，不触发宿主默认按钮 |
+| 候选窗宠物/皮肤/字号 | `IMKCandidates` 由系统画 | 未接（G5）；字号/皮肤不可设 |
+| 图标资源 | `macos/opi.tiff`（输入源模板）、`desktop/icons/opi-pet.icns`（应用图标）、`idle.png`（状态栏/菜单/关于） | 打包脚本逐项拷贝并钉 `.pkg` payload |
+| 词库 | `luna`/`trad`/`stroke`/`wubi86` 随包；用户目录覆盖优先 | 已写；导入 TSV 与用户词 JSON 仍走现有 C ABI |
+| 菜单 | `OpiMenu.swift` 与状态栏读同一份 `OpiBarSettings`/引擎状态 | 两条入口同步；菜单不是第二份真相 |
+
+**明确不可用（系统原因）**：ENPRO 控制面；系统候选窗的皮肤/字号/宠物；软键盘对宿主
+文档的删除与「回车触发默认按钮」；贴纸直接上屏（只能剪贴板）。这些在设置页与本节都
+如实标出，没有用假按钮或假状态糊过去。
 
 ## 与 Rust 侧的契约（键码 / 状态位）
 
@@ -632,10 +719,10 @@ Rust 侧决定。`OpiSettingsWindow.swift` 的页面：
 |---|---|---|---|---|---|---|
 | `Engine::toggle_symbol()` | ✓ `opi_toggle_symbol` | ✓ | ✓ 已接键 | ✗ | ✗ | ✗ |
 | `Engine::toggle_fullwidth()` | ✓ `opi_toggle_fullwidth` | ✓ | ✓ 已接键 | ✗ | ✓ | ✓ 已接键 |
-| （读侧）`fullwidth_state()` | ✓ `opi_fullwidth_state` | ✓ | 包装已写、**无 UI 读** | ✗ | — | — |
+| （读侧）`fullwidth_state()` | ✓ `opi_fullwidth_state` | ✓ | ✓ 状态栏月相与菜单勾选现读（2026-10-21） | ✗ | — | — |
 
-⚠️ 最后一行的「无 UI 读」与 `shiftState()` 是**同一种状态**：出口有了、Swift 包装有了、
-UI 没读 —— 所以也仍然**没有会漂移的镜像**（本仓反复被坑的那个形状）。
+⚠️ `fullwidth_state()` 是**读侧出口**：2026-10-21 起状态栏月相与菜单勾选直接读它，
+Swift 侧**不缓存全角状态** —— 仍然**没有会漂移的镜像**（本仓反复被坑的那个形状）。
 **故意不引「声明面」这一列的数字**：它随每次扩容变，以 `c_abi_contract` 门禁为准。
 
 > ⚠️ **2026-09-27 更晚订正**：`OpiFFI.h` 已补齐到 **31/31**（同日，`ffi-contract` 补的），
@@ -721,12 +808,14 @@ TSF 是 `vk.rs` 的 `hotkey_should_act`，fcitx5 是 `opi_fcitx5.cpp` 的 `isRep
 
 ## 状态
 
-**草案。Swift 已在 CI 上编过（2026-10-15 旧版；2026-10-20 的符号面板 / 菜单 /
-设置窗 / 设置桥 / 词库持久化由 run 39425977787 编过）。全部从未运行过 ——
-没有一个字节被 IMK 加载过。** 上面「已验证」一节里的 `cargo check` 是这整个目录里
-唯一的本机实证，而它证明的是 **Rust 侧**能编译，不是本目录能用。
+**草案。2026-10-20 及更早的 Swift 已在 CI 上编过（最近一次：run 39425977787）；
+2026-10-21 的 Linux 对齐批（状态栏/虚拟键盘/表情贴纸/主题/设置拆分/打包资源）
+尚未经过任何 `swiftc` —— 必须先推 CI 编译。全部从未运行过 —— 没有一个字节被 IMK
+加载过。** 上面「已验证」一节里的 `cargo check` 是这整个目录里唯一的本机实证，
+而它证明的是 **Rust 侧**能编译，不是本目录能用。
 
-下一步（按顺序）：~~在 Mac/CI 上编译链接~~（已完成）→ 最小冒烟（`h a o 空格` → 「好」）→
-开一次菜单与符号面板（先验 `LSBackgroundOnly` 下窗口能否出现）→ 设置窗改一个开关
-并重启看是否生效 → 逐个消掉「最不确定的 API」清单 → 再谈表情/皮肤/宠物。
-**顺序不能反。**
+下一步（按顺序）：让 CI 编过 2026-10-21 这批（`swiftc macos/*.swift -typecheck`）→
+按编译错误修 → 最小冒烟（`h a o 空格` → 「好」）→ 开一次菜单、状态栏与符号/表情面板
+（先验 `LSBackgroundOnly` 下窗口能否出现）→ 点一遍状态栏十个按钮（ENPRO 应当只给
+提示）→ 设置窗改一个开关并重启看是否生效 → 逐个消掉「最不确定的 API」清单 →
+再谈候选窗宠物/皮肤。**顺序不能反。**

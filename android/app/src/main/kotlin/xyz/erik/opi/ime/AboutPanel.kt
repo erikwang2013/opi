@@ -19,8 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,7 +35,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xyz.erik.opi.BuildConfig
 import xyz.erik.opi.keyboard.LocalKeyboardPalette
-import xyz.erik.opi.keyboard.OpiIcons
 import xyz.erik.opi.settings.ABOUT_BLOG_URL
 import xyz.erik.opi.settings.ABOUT_HOME_URL
 import xyz.erik.opi.settings.ABOUT_INTRO
@@ -62,15 +59,7 @@ fun AboutPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
     // 这里就把话写在面板里，别静默）。
     var note by remember { mutableStateOf("") }
     Column(modifier = modifier.fillMaxSize().background(p.panelBg)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 2.dp, end = 10.dp, top = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onClose) {
-                Icon(OpiIcons.ArrowBack, contentDescription = "返回", tint = p.toolbarFg)
-            }
-            Text("关于", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = p.panelFg)
-        }
+        PanelHeader("关于", "", onClose)
         Column(
             modifier = Modifier.fillMaxWidth().weight(1f)
                 .verticalScroll(rememberScrollState())

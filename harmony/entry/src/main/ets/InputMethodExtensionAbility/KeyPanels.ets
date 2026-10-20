@@ -15,7 +15,7 @@ import { MODE_ENGLISH26, traditionalModeLabel } from './InputModes';
 import { OpiMode } from './OpiEngine';
 import { Palette, paletteFor } from './Palette';
 
-class NineKey {
+export class NineKey {
   label: string;
   key: string;
   hint: string = '';
@@ -27,8 +27,8 @@ class NineKey {
   }
 }
 
-/** 左列：空闲时的标点列（键值都取引擎中文标点表已有的键）。 */
-const NINE_STRIP: NineKey[] = [
+/** 左列：空闲时的标点列（键值都取引擎中文标点表已有的键；平铺候选左列复用）。 */
+export const NINE_STRIP: NineKey[] = [
   new NineKey('，', ','),
   new NineKey('。', '.'),
   new NineKey('、', '\\'),
@@ -36,8 +36,13 @@ const NINE_STRIP: NineKey[] = [
   new NineKey('！', '!'),
 ];
 
+/**
+ * 9 键主区域第一格 = **分词键**（Android 2026-10-15 裁决）。
+ * 发送 `'`（协议值 = `scheme.rs::matches_segmented` 的音节边界分隔符）；
+ * **空缓冲由 KeyboardController.tapSegment 拦住** —— 空缓冲的 `'` 是引号，不是分词符。
+ */
 const NINE_ROWS: NineKey[][] = [
-  [new NineKey('，。?!', ','), new NineKey('2', '2', 'abc'), new NineKey('3', '3', 'def')],
+  [new NineKey('分词', '\''), new NineKey('2', '2', 'abc'), new NineKey('3', '3', 'def')],
   [new NineKey('4', '4', 'ghi'), new NineKey('5', '5', 'jkl'), new NineKey('6', '6', 'mno')],
   [new NineKey('7', '7', 'pqrs'), new NineKey('8', '8', 'tuv'), new NineKey('9', '9', 'wxyz')],
 ];
@@ -134,6 +139,15 @@ export struct NineKeyPanel {
     return this.big ? 15 : 12;
   }
 
+  /** 主区域第一格是分词键（发送 `'`），其余是 9 键数字类键。 */
+  private tapNineKey(k: NineKey): void {
+    if (k.key === '\'') {
+      this.ctrl.tapSegment();
+      return;
+    }
+    this.ctrl.tapChar(k.key);
+  }
+
   build() {
     Column() {
       Row() {
@@ -156,7 +170,7 @@ export struct NineKeyPanel {
                 KeyBox({
                   label: k.label, sub: k.hint, mainSize: this.mainSize(), subSize: this.subSize(),
                   onTap: () => {
-                    this.ctrl.tapChar(k.key);
+                    this.tapNineKey(k);
                   }
                 }).layoutWeight(1)
               }, (k: NineKey) => k.key)

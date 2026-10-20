@@ -203,6 +203,41 @@ export function selectPage(index: number): string {
 }
 
 /**
+ * 全量候选前 limit 条（平铺视图用 64，同 Android EngineController.fetchLimit）。
+ * 解码失败 → 空数组（同 candidatesPage：宁可少显示，也不让键盘崩）。
+ */
+export function candidates(limit: number): string[] {
+  const raw: string = opiime.candidates(limit);
+  if (raw.length === 0) {
+    return [];
+  }
+  try {
+    return JSON.parse(raw) as string[];
+  } catch (e) {
+    return [];
+  }
+}
+
+/**
+ * 提交**全局**第 index 个候选（`candidates()` 数组下标）。
+ * ⚠️ 与 `selectPage` 的**页内**下标不是一回事：平铺视图按自己排版分页，
+ * 页面里的格子下标必须换算回全局下标再进来，别混用。
+ */
+export function selectGlobal(index: number): string {
+  return opiime.select(index);
+}
+
+/** 装载繁体词库（可选增强）：失败不触碰已装 luna；繁体模式回退查简库。 */
+export function loadTradDictionary(path: string): boolean {
+  return opiime.loadTrad(path);
+}
+
+/** 长按删词（词不存在/空串 → 无操作）。删完要重查候选才能看到效果。 */
+export function removeUserWord(text: string): void {
+  opiime.removeUserWord(text);
+}
+
+/**
  * 当前候选页 / 总页数。
  * **必须读这两个出口、不要自己数页** —— PageDown 到末页时路由会把页码钳到
  * 最后一页，本地计数超过末页就会与引擎漂移（高亮的页 ≠ 实际选词所在的页）。

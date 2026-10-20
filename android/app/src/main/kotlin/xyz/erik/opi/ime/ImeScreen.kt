@@ -135,7 +135,6 @@ fun ImeScreen(
                             onExpand = state::expandCandidates,
                             inEnglish = controller.mode == EngineMode.ENGLISH,
                             onSwitchToChinese = state::cycleMode,
-                            onCloseKeyboard = onCloseKeyboard,
                         )
                     } else {
                         // ---- 工具条：中文空闲 / 英文空闲 / 面板视图都显示 ----

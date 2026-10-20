@@ -46,6 +46,18 @@ final class OpiClientHub {
     func commit(_ text: String) {
         controller?.commitFromOutside(text)
     }
+
+    /// 自绘虚拟键盘的键 → 引擎（不合成系统按键，见 InputController.virtualKey）。
+    @discardableResult
+    func virtualKey(keyval: UInt32, states: UInt32) -> Bool {
+        controller?.virtualKey(keyval: keyval, states: states) ?? false
+    }
+
+    /// 菜单/状态栏/设置页改状态后的统一刷新点：preedit/候选 + 状态栏标题。
+    func refreshState() {
+        controller?.refreshFromOutside()
+        OpiStatusBar.shared.refresh()
+    }
 }
 
 // ---------- 菜单 ----------
@@ -55,11 +67,21 @@ enum OpiMenuTag: Int {
     case toggleTraditional
     case toggleChinesePunct
     case toggleFullwidth
+    case toggleStatusBar
+    case toggleVirtualKeyboard
     case schemeFull
     case schemeShuangpin
+    case schemeNine
+    case schemeFourteen
+    case schemeStroke
+    case schemeWubi
     case symbolPanel
+    case emojiPanel
     case settings
+    case statusBarSettings
     case about
+    /// 皮肤项占 `skinBase ..< skinBase + OpiSkin.allCases.count`。
+    case skinBase = 100
 }
 
 enum OpiMenu {
@@ -67,6 +89,7 @@ enum OpiMenu {
     static func build(engine: OpiEngine, target: OpiInputController) -> NSMenu {
         let menu = NSMenu(title: "OPI")
         menu.autoenablesItems = false
+        let bar = OpiBarSettings.load()
 
         menu.addItem(item("英文模式", target: target, tag: .toggleEnglish,
                           on: engine.mode() == .english))
@@ -77,31 +100,80 @@ enum OpiMenu {
                           on: engine.chinesePunctEnabled()))
         menu.addItem(item("全角字符", target: target, tag: .toggleFullwidth,
                           on: engine.fullwidthState()))
+        menu.addItem(item("软键盘", target: target, tag: .toggleVirtualKeyboard,
+                          on: OpiKeyboardPanel.shared.isVisible))
+        menu.addItem(item("显示状态栏", target: target, tag: .toggleStatusBar,
+                          on: !bar.hidden))
 
-        // MODE：Linux 桌面的方案芯片只出全拼/双拼（9/14 键/笔画是移动端方案）。
+        // MODE：六种方案与引擎 `Scheme::code` 同序；笔画/五笔没装码表时禁用并注明。
         let scheme = NSMenuItem(title: "输入方案", action: nil, keyEquivalent: "")
         let sub = NSMenu(title: "输入方案")
         sub.autoenablesItems = false
-        sub.addItem(item("全拼", target: target, tag: .schemeFull,
-                         on: engine.schemeCode() == OpiPinyinMethod.full.schemeCode))
-        sub.addItem(item("双拼", target: target, tag: .schemeShuangpin,
-                         on: engine.schemeCode() == OpiPinyinMethod.shuangpin.schemeCode))
+        let current = engine.schemeCode()
+        let choices: [(String, OpiMenuTag, OpiScheme)] = [
+            ("全拼", .schemeFull, .full),
+            ("双拼", .schemeShuangpin, .shuangpin),
+            ("拼音9键", .schemeNine, .nine),
+            ("拼音14键", .schemeFourteen, .fourteen),
+            ("笔画", .schemeStroke, .stroke),
+            ("五笔", .schemeWubi, .wubi),
+        ]
+        for (title, tag, value) in choices {
+            let ok = engine.isSchemeAvailable(value)
+            let it = item(title, target: target, tag: tag, on: current == value.rawValue,
+                          enabled: ok)
+            if !ok { it.toolTip = "\(value.title)词典未装载" }
+            sub.addItem(it)
+        }
         scheme.submenu = sub
         menu.addItem(scheme)
+
+        // 皮肤：与状态栏 LOGO 单击循环是同一份枚举/同一份落盘键。
+        let skin = NSMenuItem(title: "皮肤", action: nil, keyEquivalent: "")
+        let skinMenu = NSMenu(title: "皮肤")
+        skinMenu.autoenablesItems = false
+        for (index, value) in OpiSkin.allCases.enumerated() {
+            let it = item(value.title, target: target,
+                          tag: OpiMenuTag.skinBase.rawValue + index,
+                          on: OpiTheme.skin == value)
+            skinMenu.addItem(it)
+        }
+        skin.submenu = skinMenu
+        menu.addItem(skin)
 
         menu.addItem(.separator())
         // 快捷键只写在标题里，不设 keyEquivalent：IMK 的 handle(_:client:) 已经
         // 截获这些组合，菜单再注册一份会造成「菜单开着时按一次执行两次」。
         menu.addItem(item("符号面板…  ⌃⇧Z", target: target, tag: .symbolPanel))
+        menu.addItem(item("表情与贴纸…", target: target, tag: .emojiPanel))
+        menu.addItem(item("状态栏设置…", target: target, tag: .statusBarSettings))
         menu.addItem(item("设置…", target: target, tag: .settings))
         menu.addItem(.separator())
-        menu.addItem(item("关于 OPI", target: target, tag: .about))
+        let about = item("关于 OPI", target: target, tag: .about)
+        // 菜单也带上项目宠物（与状态栏 LOGO、窗口「关于」页同一份 idle.png）。
+        about.image = petImage()
+        menu.addItem(about)
         return menu
     }
 
+    /// 菜单图标（16pt）。资源随包：`Resources/pet/stickers/idle.png`。
+    private static func petImage() -> NSImage? {
+        guard let url = Bundle.main.url(forResource: "idle", withExtension: "png",
+                                        subdirectory: "pet/stickers"),
+              let image = NSImage(contentsOf: url) else { return nil }
+        image.size = NSSize(width: 16, height: 16)
+        return image
+    }
+
     /// 分派菜单动作。`controller` 用来在模式变化后刷新 preedit/候选。
-    static func perform(tag: Int, controller: OpiInputController) {
-        guard let tag = OpiMenuTag(rawValue: tag) else { return }
+    static func perform(tag rawTag: Int, controller: OpiInputController) {
+        let base = OpiMenuTag.skinBase.rawValue
+        if rawTag >= base, rawTag < base + OpiSkin.allCases.count {
+            OpiTheme.skin = OpiSkin.allCases[rawTag - base]
+            OpiTheme.notifyChanged()
+            return
+        }
+        guard let tag = OpiMenuTag(rawValue: rawTag) else { return }
         let engine = OpiEngine.shared
         switch tag {
         case .toggleEnglish:
@@ -117,33 +189,62 @@ enum OpiMenu {
             engine.toggleChinesePunct()
         case .toggleFullwidth:
             engine.toggleFullwidth()
+        case .toggleStatusBar:
+            OpiStatusBar.shared.toggleHidden()
+        case .toggleVirtualKeyboard:
+            OpiKeyboardPanel.shared.toggle()
         case .schemeFull:
-            engine.setScheme(code: OpiPinyinMethod.full.schemeCode)
-            OpiSettingsStore.set("PinyinMethod", OpiPinyinMethod.full.rawValue)
+            OpiSettingsStore.applyScheme(.full)
             controller.refreshFromOutside()
         case .schemeShuangpin:
-            engine.setScheme(code: OpiPinyinMethod.shuangpin.schemeCode)
-            OpiSettingsStore.set("PinyinMethod", OpiPinyinMethod.shuangpin.rawValue)
+            OpiSettingsStore.applyScheme(.shuangpin)
+            controller.refreshFromOutside()
+        case .schemeNine:
+            OpiSettingsStore.applyScheme(.nine)
+            controller.refreshFromOutside()
+        case .schemeFourteen:
+            OpiSettingsStore.applyScheme(.fourteen)
+            controller.refreshFromOutside()
+        case .schemeStroke:
+            OpiSettingsStore.applyScheme(.stroke)
+            controller.refreshFromOutside()
+        case .schemeWubi:
+            OpiSettingsStore.applyScheme(.wubi)
             controller.refreshFromOutside()
         case .symbolPanel:
             OpiSymbolPanel.shared.show()
+        case .emojiPanel:
+            OpiEmojiPanel.shared.show()
         case .settings:
             OpiSettingsWindow.shared.show()
+        case .statusBarSettings:
+            OpiSettingsWindow.shared.show(page: .statusbar)
         case .about:
             OpiSettingsWindow.shared.show(page: .about)
+        case .skinBase:
+            break
         }
+        OpiStatusBar.shared.refresh()
     }
 
     private static func item(_ title: String, target: OpiInputController,
-                             tag: OpiMenuTag, on: Bool = false) -> NSMenuItem {
+                             tag: OpiMenuTag, on: Bool = false,
+                             enabled: Bool = true) -> NSMenuItem {
+        item(title, target: target, tag: tag.rawValue, on: on, enabled: enabled)
+    }
+
+    private static func item(_ title: String, target: OpiInputController,
+                             tag: Int, on: Bool = false,
+                             enabled: Bool = true) -> NSMenuItem {
         // target 明确指向控制器：action 直接落到 menuCommand(_:)，不赌 IMK 的
         // responder 链。doCommand 的覆写仍保留（部分 IMK 版本会把菜单动作转成它）。
         let it = NSMenuItem(title: title,
                             action: #selector(OpiInputController.menuCommand(_:)),
                             keyEquivalent: "")
         it.target = target
-        it.tag = tag.rawValue
+        it.tag = tag
         it.state = on ? .on : .off
+        it.isEnabled = enabled
         return it
     }
 }

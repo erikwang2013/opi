@@ -192,14 +192,38 @@ final class OpiEngine {
         return base.appendingPathComponent("opi")
     }
 
-    /// 主词库默认路径：~/Library/Application Support/opi/luna.opid
-    static var defaultDictionaryPath: String {
-        dataDirectory.appendingPathComponent("luna.opid").path
+    /// 主词库默认路径。用户目录里的同名文件优先（可热换词库），否则用
+    /// `Contents/Resources/dicts/` 里打包的那份。两者都没有时返回用户路径 ——
+    /// `loadDictionary` 会按「文件不存在」记日志并回退内置词库。
+    static var defaultDictionaryPath: String { resourceDictionaryPath("luna") }
+
+    /// 词库路径：`~/Library/Application Support/opi/<name>.opid` 覆盖包内 `dicts/<name>.opid`。
+    static func resourceDictionaryPath(_ name: String) -> String {
+        let user = dataDirectory.appendingPathComponent("\(name).opid")
+        if FileManager.default.fileExists(atPath: user.path) { return user.path }
+        if let bundled = Bundle.main.url(forResource: name, withExtension: "opid",
+                                         subdirectory: "dicts") {
+            return bundled.path
+        }
+        return user.path
     }
 
     /// 导入词库目录（`*.tsv`，文件名去扩展名 = 引擎里的词库名）。
     /// 对齐 Linux `$XDG_DATA_HOME/opi/dicts` 与 Windows `%LOCALAPPDATA%\opi\dicts`。
     static var dictsDirectory: URL { dataDirectory.appendingPathComponent("dicts") }
+
+    /// 可选词典装载结果。C ABI 没有「某方案可用吗」的读侧，这里如实记下
+    /// `opi_load_stroke` / `opi_load_wubi` 的返回值，供菜单/键盘禁用不可用方案。
+    private(set) var strokeLoaded = false
+    private(set) var wubiLoaded = false
+
+    func isSchemeAvailable(_ scheme: OpiScheme) -> Bool {
+        switch scheme {
+        case .stroke: return strokeLoaded
+        case .wubi: return wubiLoaded
+        default: return true
+        }
+    }
 
     /// 启动时把 `dicts/` 下每个 `.tsv` 导入成一个额外层；停用名单按名字关掉。
     /// 坏文件记日志跳过（不让一个坏词库挡住其余）；目录不存在 = 没有导入词库。
@@ -220,15 +244,44 @@ final class OpiEngine {
         }
     }
 
-    /// 繁体词库（可选）：同目录 `trad.opid`。Linux 由包装到 `/usr/share/opi/`；
-    /// macOS 没有安装器放它，用户手工放才生效。缺文件时**不调** `opi_load_trad`，
-    /// 保持主词库状态（坏路径返回 false 是契约，但没必要制造一次失败日志）。
+    /// 繁体词库（可选）：包内 `dicts/trad.opid` 或用户目录覆盖。
+    /// 缺文件时**不调** `opi_load_trad`，保持主词库状态（坏路径返回 false 是契约，
+    /// 但没必要制造一次失败日志）。
     func loadOptionalTradDictionary() {
-        let path = OpiEngine.dataDirectory.appendingPathComponent("trad.opid").path
+        let path = OpiEngine.resourceDictionaryPath("trad")
         guard FileManager.default.fileExists(atPath: path) else { return }
         if !withUTF16(path, { opi_load_trad($0, $1) }) {
             NSLog("opi: 繁体词库 %@ 装载失败 —— 繁体模式回退简体库", path)
         }
+    }
+
+    /// 笔画词典（`Scheme::Stroke` 换的是词典，不是键映射）。失败后笔画方案仍可切，
+    /// 但没有候选 —— 键盘/设置页按 `isSchemeAvailable(.stroke)` 如实提示。
+    @discardableResult
+    func loadOptionalStrokeDictionary() -> Bool {
+        let path = OpiEngine.resourceDictionaryPath("stroke")
+        guard FileManager.default.fileExists(atPath: path) else {
+            NSLog("opi: 未找到笔画词典 %@ —— 笔画方案无候选", path)
+            strokeLoaded = false
+            return false
+        }
+        strokeLoaded = withUTF16(path, { opi_load_stroke($0, $1) })
+        if !strokeLoaded { NSLog("opi: 笔画词典 %@ 装载失败", path) }
+        return strokeLoaded
+    }
+
+    /// 五笔码表（wubi86）。装载**不换方案**：要用五笔还得 `opi_set_scheme(5)`。
+    @discardableResult
+    func loadOptionalWubiDictionary() -> Bool {
+        let path = OpiEngine.resourceDictionaryPath("wubi86")
+        guard FileManager.default.fileExists(atPath: path) else {
+            NSLog("opi: 未找到五笔码表 %@ —— 五笔方案无候选", path)
+            wubiLoaded = false
+            return false
+        }
+        wubiLoaded = withUTF16(path, { opi_load_wubi($0, $1) })
+        if !wubiLoaded { NSLog("opi: 五笔码表 %@ 装载失败", path) }
+        return wubiLoaded
     }
 
     /// 装载词库。**返回值必须接** —— 这是 fcitx5 轨修过的一个静默失效：

@@ -31,3 +31,9 @@ export const KEY_ONE_HAND: string = 'opiOneHand';
 export const KEY_FLOAT: string = 'opiFloat';
 export const KEY_GAME: string = 'opiGame';
 export const KEY_PRO: string = 'opiPro';
+/** 表情页「自有」分类开关（随包偏好，缺省隐藏）。 */
+export const KEY_SHOW_OWN: string = 'opiShowOwn';
+/** 平铺候选视图（临时）：true 时候选栏收起、键区换成 CandidateTiled。 */
+export const KEY_TILED: string = 'opiTiled';
+/** 平铺视图用的**全量**候选（前 64 条；普通候选栏仍读 opiCandidates 当前页）。 */
+export const KEY_ALL_CANDIDATES: string = 'opiAllCandidates';

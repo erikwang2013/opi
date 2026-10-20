@@ -79,6 +79,10 @@ void opi_ffi_free_string(OpiString s);
 /// **返回值必须接**：false 时所有 opi_* 出口都会退化成空操作。
 bool opi_load(const uint16_t *path, size_t len);
 
+/// 装载繁体词库 trad.opid（**可选增强**）：空/坏路径/引擎未加载 → false。
+/// 失败时繁体模式回退查简体库，**不触碰已装的 luna**（同 android EngineLoader）。
+bool opi_load_trad(const uint16_t *path, size_t len);
+
 // ---- 输入方案 / 词表（2026-10-14 加：鸿蒙「输入模式」面板 —— 九项菜单里六项要真换方案）----
 //
 // 方案整数码的真源是 `crates/engine-core/src/scheme.rs` 的 `Scheme::code()`：
@@ -146,6 +150,20 @@ OpiString opi_select_page(uint32_t index);
 /// 显示当前页必须用本出口，不要拿全量候选自己按 8 切（同上，页大小是引擎侧常量）。
 OpiString opi_candidates_page(void);
 
+// ---- 平铺候选（2026-10-21 加：Android CANDIDATES_TILED 的同一份数据）----
+//
+// 平铺视图自己按「字宽单元」排版分页（Android TilePack），**不能**复用当前页出口：
+// 引擎的一页 8 条与平铺一页的格数不是同一个数量。UI 只负责排版，取数与选词仍走引擎。
+
+/// JSON 文本数组：**全量候选的前 `limit` 条**（已排序；未装载 → `[]`）。
+/// 平铺视图用 `limit = 64`（同 Android EngineController.fetchLimit）。
+/// ⚠️ 本出口**不改变**页码；选词时要用返回数组里的**全局下标**调 `opi_select`。
+OpiString opi_candidates(size_t limit);
+
+/// 提交**全局**第 `index` 个候选（0 起，即 `opi_candidates` 数组的下标）。
+/// 越界/无候选 → 空串（不改状态）。平铺视图专用；普通候选栏仍用页内 `opi_select_page`。
+OpiString opi_select(size_t index);
+
 // ---- 符号 / 表情（2026-10-13 加：鸿蒙表情页的搜索框 + 网格；桥侧 Js* 调用见 cpp/napi_bridge.c）----
 //
 // ⚠️ 本文件**故意不抄** opi_symbol_blocks / opi_symbols_in_block —— 鸿蒙侧没有调用方，
@@ -196,6 +214,10 @@ void opi_set_shift(bool on);
 
 bool opi_learner_enabled(void);
 void opi_set_learner(bool enabled);
+
+/// 长按删词：从用户词表删除 `text`（不存在/空/null → 无操作，JSON 不变）。
+/// 读侧用户词导出未桥接，删完只能重查候选确认。
+void opi_remove_user_word(const uint16_t *text, size_t len);
 
 // ---- 全角 / 符号开关（三条一套，读侧 + 两个写侧）----
 //

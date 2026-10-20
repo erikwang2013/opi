@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,6 +35,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xyz.erik.opi.keyboard.LocalKeyboardPalette
@@ -128,25 +130,32 @@ private fun ChineseHiddenButton(onClick: () -> Unit) {
 
 @Composable
 private fun ToolbarIcon(icon: ImageVector, description: String, onClick: () -> Unit) {
-    IconButton(onClick = onClick) {
+    IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
         Icon(icon, contentDescription = description, tint = LocalKeyboardPalette.current.toolbarFg)
     }
 }
 
-/** 面板头（输入模式/键盘模式共用：左上返回箭头 + 标题 + 提示）。 */
+/** 面板头（皮肤/输入模式/键盘模式/关于共用）：返回箭头**单独一行**，标题/提示下一行。 */
 @Composable
-private fun PanelHeader(title: String, hint: String, onBack: () -> Unit) {
+internal fun PanelHeader(title: String, hint: String, onBack: () -> Unit) {
     val p = LocalKeyboardPalette.current
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 2.dp, end = 10.dp, top = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(onClick = onBack) {
+    Column(modifier = Modifier.fillMaxWidth().padding(start = 2.dp, end = 10.dp, top = 2.dp)) {
+        IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
             Icon(OpiIcons.ArrowBack, contentDescription = "返回", tint = p.toolbarFg)
         }
-        Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = p.panelFg)
-        Spacer(Modifier.width(10.dp))
-        Text(hint, fontSize = 11.sp, color = p.barDimFg)
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 8.dp, bottom = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = p.panelFg)
+            if (hint.isNotEmpty()) {
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    hint, modifier = Modifier.weight(1f), fontSize = 11.sp, color = p.barDimFg,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
 }
 

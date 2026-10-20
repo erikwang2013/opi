@@ -4,14 +4,15 @@
 // 「键盘模式」与面板视图的模块级状态（对齐 Android `ime/KeyboardModes.kt` + `ImeState.View`）。
 //
 // 与 InputModes.ets 同一条取舍：放模块级，面板重建（系统改窗口尺寸会重建 UI）不丢。
-// ⚠️ 进程重启即丢 —— 鸿蒙端**没有持久化**（Android 用 PrefStore；鸿蒙要接
-// `@ohos.data.preferences` 才能记住，本轮未做，见 docs/install/harmony.md）。
+// 2026-10-21 起**持久化**（SettingsStore，对齐 Android PrefStore）：每个 setter 直接
+// 落盘，`restore()` 在扩展 init 时把存过的值装回来。平铺候选是临时视图状态，不存。
 //
 // 繁体不在本文件：那是**引擎模式**（OpiMode.Traditional），UI 只读 AppStorage 的
 // `opiMode`。悬浮/游戏落到 IME 窗口（KeyboardController.applyPanelWindow），
 // 单手是纯布局层，暗光/长辈是色板 + 字号。
 
 import { OpiMode } from './OpiEngine';
+import * as SettingsStore from './SettingsStore';
 
 /** 面板视图（整片盖住键面）。0 = 键面。 */
 export enum PanelView {
@@ -36,50 +37,106 @@ let oneHand: number = ONE_HAND_OFF;
 let floatingOn: boolean = false;
 let gameOn: boolean = false;
 let englishProOn: boolean = false;
+/** 表情页「自有」分类（Android ImePreferences.showOwn；缺省隐藏）。 */
+let showOwnOn: boolean = false;
+/** 平铺候选视图（Android ImeState.View.CANDIDATES_TILED；临时状态，不落盘）。 */
+let tiledOn: boolean = false;
 /** 进表情页前的引擎模式（表情是 Symbol 模式，返回时切回）。 */
 let emojiReturnMode: OpiMode = OpiMode.Pinyin;
 
+/** 从偏好恢复（扩展 init 时一次；没存过的项保持现缺省）。 */
+export function restore(s: SettingsStore.ImeSettings): void {
+  if (s.skin >= 0 && s.skin < 12) { skinIndex = s.skin; }
+  darkOn = s.dark;
+  elderOn = s.elder;
+  if (s.oneHand >= ONE_HAND_OFF && s.oneHand <= ONE_HAND_RIGHT) { oneHand = s.oneHand; }
+  floatingOn = s.floating;
+  gameOn = s.game;
+  englishProOn = s.englishPro;
+  showOwnOn = s.showOwn;
+}
+
 export function panelView(): number { return view; }
 
-export function openPanel(v: PanelView): void { view = v as number; }
+/** 开面板 = 离开平铺视图（Android：打开别的 View 就不会回到 CANDIDATES_TILED）。 */
+export function openPanel(v: PanelView): void {
+  view = v as number;
+  tiledOn = false;
+}
 
 export function closePanel(): void { view = PanelView.None as number; }
 
 export function togglePanel(v: PanelView): void {
   view = view === (v as number) ? (PanelView.None as number) : (v as number);
+  tiledOn = false;
 }
 
 export function skinValue(): number { return skinIndex; }
 export function setSkinValue(i: number): void {
   if (i >= 0 && i < 12) {
     skinIndex = i;
+    SettingsStore.saveSkin(i);
   }
 }
 
 export function darkEnabled(): boolean { return darkOn; }
-export function toggleDark(): void { darkOn = !darkOn; }
+export function toggleDark(): void {
+  darkOn = !darkOn;
+  SettingsStore.saveBool(SettingsStore.BOOL_DARK, darkOn);
+}
 
 export function elderEnabled(): boolean { return elderOn; }
-export function toggleElder(): void { elderOn = !elderOn; }
+export function toggleElder(): void {
+  elderOn = !elderOn;
+  SettingsStore.saveBool(SettingsStore.BOOL_ELDER, elderOn);
+}
 
 export function oneHandValue(): number { return oneHand; }
 export function setOneHandValue(v: number): void {
   if (v >= ONE_HAND_OFF && v <= ONE_HAND_RIGHT) {
     oneHand = v;
+    SettingsStore.saveOneHand(v);
   }
 }
 
 export function floatingEnabled(): boolean { return floatingOn; }
-export function toggleFloating(): void { floatingOn = !floatingOn; }
+export function toggleFloating(): void {
+  floatingOn = !floatingOn;
+  SettingsStore.saveBool(SettingsStore.BOOL_FLOATING, floatingOn);
+}
 
 export function gameEnabled(): boolean { return gameOn; }
-export function toggleGame(): void { gameOn = !gameOn; }
+export function toggleGame(): void {
+  gameOn = !gameOn;
+  SettingsStore.saveBool(SettingsStore.BOOL_GAME, gameOn);
+}
 
 export function englishProEnabled(): boolean { return englishProOn; }
-export function toggleEnglishPro(): void { englishProOn = !englishProOn; }
+export function toggleEnglishPro(): void {
+  englishProOn = !englishProOn;
+  SettingsStore.saveBool(SettingsStore.BOOL_ENGLISH_PRO, englishProOn);
+}
 
-/** 离开英文时关掉 pro（Android `leaveEnglishProFor` 的同一裁决）。 */
-export function leaveEnglishPro(): void { englishProOn = false; }
+/** 离开英文时关掉 pro（Android `leaveEnglishProFor` 的同一裁决；同样落盘）。 */
+export function leaveEnglishPro(): void {
+  if (!englishProOn) {
+    return;
+  }
+  englishProOn = false;
+  SettingsStore.saveBool(SettingsStore.BOOL_ENGLISH_PRO, false);
+}
+
+/** 表情页「自有」分类开关（Android ImePreferences.showOwn）。 */
+export function showOwnEnabled(): boolean { return showOwnOn; }
+export function toggleShowOwn(): void {
+  showOwnOn = !showOwnOn;
+  SettingsStore.saveBool(SettingsStore.BOOL_SHOW_OWN, showOwnOn);
+}
+
+/** 平铺候选：展开 / 收起（返回不动引擎、不清缓冲，Android collapseCandidates 同款）。 */
+export function tiledEnabled(): boolean { return tiledOn; }
+export function expandTiled(): void { tiledOn = true; }
+export function collapseTiled(): void { tiledOn = false; }
 
 export function setEmojiReturn(m: OpiMode): void { emojiReturnMode = m; }
 

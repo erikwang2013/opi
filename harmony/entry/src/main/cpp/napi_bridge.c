@@ -412,6 +412,14 @@ static napi_value JsWubiReturnStyle(napi_env env, napi_callback_info info) { (vo
 static napi_value JsSetWubiAutoCommit(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); bool on = false; if (n >= 1) { (void)napi_get_value_bool(env, a[0], &on); } opi_set_wubi_auto_commit(on); return ret_undefined(env); }
 static napi_value JsWubiAutoCommit(napi_env env, napi_callback_info info) { (void)info; napi_value out = NULL; napi_get_boolean(env, opi_wubi_auto_commit(), &out); return out; }
 
+// ---- 平铺候选 / 繁体词库 / 长按删词（2026-10-21：对齐 Android CANDIDATES_TILED）----
+// 同样压成一行图 500 行门禁。语义见 opi_ffi.h 同名声明：candidates 取全局前 limit 条、
+// select 收**全局**下标（与页内 selectPage 不同）；removeUserWord 无返回（不存在即无操作）。
+static napi_value JsLoadTrad(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); size_t len = 0; char16_t *p = (n >= 1) ? js_to_utf16(env, a[0], &len) : NULL; bool ok = opi_load_trad((const uint16_t *)p, len); free(p); napi_value out = NULL; napi_get_boolean(env, ok, &out); return out; }
+static napi_value JsCandidates(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); uint32_t limit = 0; if (n >= 1) { (void)napi_get_value_uint32(env, a[0], &limit); } return take_string(env, opi_candidates((size_t)limit)); }
+static napi_value JsSelect(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); uint32_t index = 0; if (n >= 1) { (void)napi_get_value_uint32(env, a[0], &index); } return take_string(env, opi_select((size_t)index)); }
+static napi_value JsRemoveUserWord(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); size_t len = 0; char16_t *p = (n >= 1) ? js_to_utf16(env, a[0], &len) : NULL; opi_remove_user_word((const uint16_t *)p, len); free(p); return ret_undefined(env); }
+
 // ============================================================================
 // 模块注册
 // ============================================================================
@@ -423,6 +431,8 @@ static napi_value OpiImeInit(napi_env env, napi_value exports) {
         {"keyEvent", NULL, JsKeyEvent, NULL, NULL, NULL, napi_default, NULL},
         {"selectPage", NULL, JsSelectPage, NULL, NULL, NULL, napi_default, NULL},
         {"candidatesPage", NULL, JsCandidatesPage, NULL, NULL, NULL, napi_default, NULL},
+        {"candidates", NULL, JsCandidates, NULL, NULL, NULL, napi_default, NULL},
+        {"select", NULL, JsSelect, NULL, NULL, NULL, napi_default, NULL},
         {"buffer", NULL, JsBuffer, NULL, NULL, NULL, napi_default, NULL},
         {"page", NULL, JsPage, NULL, NULL, NULL, napi_default, NULL},
         {"pageCount", NULL, JsPageCount, NULL, NULL, NULL, napi_default, NULL},
@@ -433,12 +443,14 @@ static napi_value OpiImeInit(napi_env env, napi_value exports) {
         {"setShift", NULL, JsSetShift, NULL, NULL, NULL, napi_default, NULL},
         {"learnerEnabled", NULL, JsLearnerEnabled, NULL, NULL, NULL, napi_default, NULL},
         {"setLearner", NULL, JsSetLearner, NULL, NULL, NULL, napi_default, NULL},
+        {"removeUserWord", NULL, JsRemoveUserWord, NULL, NULL, NULL, napi_default, NULL},
         {"toggleFullwidth", NULL, JsToggleFullwidth, NULL, NULL, NULL, napi_default, NULL},
         {"fullwidthState", NULL, JsFullwidthState, NULL, NULL, NULL, napi_default, NULL},
         {"toggleSymbol", NULL, JsToggleSymbol, NULL, NULL, NULL, napi_default, NULL},
         {"emojiSymbols", NULL, JsEmojiSymbols, NULL, NULL, NULL, napi_default, NULL},
         {"emojiGroups", NULL, JsEmojiGroups, NULL, NULL, NULL, napi_default, NULL},
         {"searchSymbols", NULL, JsSearchSymbols, NULL, NULL, NULL, napi_default, NULL},
+        {"loadTrad", NULL, JsLoadTrad, NULL, NULL, NULL, napi_default, NULL},
         {"loadStroke", NULL, JsLoadStroke, NULL, NULL, NULL, napi_default, NULL},
         {"loadWubi", NULL, JsLoadWubi, NULL, NULL, NULL, napi_default, NULL},
         {"setScheme", NULL, JsSetScheme, NULL, NULL, NULL, napi_default, NULL},

@@ -90,9 +90,10 @@ extension OpiEngine {
     /// 「双拼布局」节。未装载 → 0。
     ///
     /// ⚠️ **名称表不在本层**：C ABI 与 JNI **都没有**「布局名」出口（名字表在
-    /// Android `ImePreferences.kt` 与桌面设置页各有一份，且有锁步门禁）——
-    /// iOS 这边**没有**设置界面，所以本层只包读数/写数，不造第三份名字表。
-    /// 将来做设置界面时，名字表要跟着门禁走，别手抄一串中文。
+    /// Android `ImePreferences.kt` 与桌面设置页各有一份，且有锁步门禁）。
+    /// iOS 设置面板（2026-10-21）的名字表在 `KeyboardTheme.swift` 的
+    /// `SHUANGPIN_LAYOUT_NAMES`，顺序必须与 Android/桌面锁步；本层只包
+    /// 读数/写数，不在这里再抄一份。
     func shuangpinLayout() -> Int { Int(opi_shuangpin_layout()) }
 
     /// 设双拼布局下标（`opi_set_shuangpin_layout`，**收 Int**）。

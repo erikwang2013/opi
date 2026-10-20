@@ -63,6 +63,8 @@ final class KeyboardLayout: UIView {
         case keyboardModes
         /// 关于面板（2026-10-20）。
         case about
+        /// 设置面板（2026-10-21）：Android 设置页的可用子集，齿轮入口。
+        case settings
     }
 
     weak var delegate: KeyboardLayoutDelegate?
@@ -140,12 +142,18 @@ final class KeyboardLayout: UIView {
     let skinPanel = SkinPanel()
     let keyboardModePanel = KeyboardModePanel()
     let aboutPanel = AboutPanel()
+    /// 设置面板（2026-10-21，齿轮入口）。引擎开关 + 外观/键盘模式跳转。
+    let settingsPanel = SettingsPanel()
 
     /// 当前皮肤 / 键盘模式（控制器从 `KeyboardPreferences` 读入并同步）。
     var skin: SkinOption = .follow
     var keyboardModes = KeyboardModes()
     /// 繁体是引擎模式；面板只负责显示与上报，这里存一份供重建 chip。
     var traditional = false
+    /// 设置面板的引擎开关快照（控制器从 `KeyboardPreferences` 读入，面板改动回传）。
+    var settings = KeyboardSettings()
+    /// 引擎给的模糊音组名（设置面板逐组 chip 的唯一名源，`opi_fuzzy_pair_names`）。
+    var fuzzyPairNames: [String] = []
     /// 当前色板与字号倍数（`applyTheme` 设置，重建键位时要重新刷到新按钮上）。
     var palette: KeyboardPalette = .light
     var fontScale: CGFloat = 1
@@ -157,6 +165,10 @@ final class KeyboardLayout: UIView {
     var keyAreaWidth: NSLayoutConstraint?
     var keyAreaLeading: NSLayoutConstraint?
     var keyAreaTrailing: NSLayoutConstraint?
+    /// 候选栏「›」的右侧锚：显示「中」时接它左边，隐藏时直接接栏尾
+    /// （两条约束由 `KeyboardCandidateBar.swift` 的 `showChineseButton(_:)` 切换）。
+    var nextToChinese: NSLayoutConstraint?
+    var nextToBar: NSLayoutConstraint?
 
     init() {
         super.init(frame: .zero)
@@ -218,6 +230,7 @@ final class KeyboardLayout: UIView {
         let isSkins = (keyLayer == .skins)
         let isKeyboardModes = (keyLayer == .keyboardModes)
         let isAbout = (keyLayer == .about)
+        let isSettings = (keyLayer == .settings)
         rowsStack.isHidden = isPanelLayer
         symbolPanel.isHidden = !isSymbols
         emojiPanel.isHidden = !isEmoji
@@ -226,13 +239,18 @@ final class KeyboardLayout: UIView {
         skinPanel.isHidden = !isSkins
         keyboardModePanel.isHidden = !isKeyboardModes
         aboutPanel.isHidden = !isAbout
+        settingsPanel.isHidden = !isSettings
         if isModes { modePanel.show(current: inputMode) }
         if isRare { rarePanel.show() }
         if isSkins { skinPanel.show(current: skin) }
         if isKeyboardModes {
             keyboardModePanel.show(traditional: traditional, modes: keyboardModes)
         }
+        if isSettings {
+            settingsPanel.show(settings: settings, modes: keyboardModes, fuzzyNames: fuzzyPairNames)
+        }
         updateTopBarVisibility()
+        applyOneHand(keyboardModes.oneHand)
         guard !isPanelLayer else { return }
         rowsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         // 字母层按**当前输入模式**画（9 键/14 键/笔画各有自己的表）；数字层所有模式共用。
@@ -374,7 +392,7 @@ final class KeyboardLayout: UIView {
     /// 只在英文键盘出现。它必须先于下面的早退更新 —— Number/Symbol 的键面字也是「中」，
     /// 只比字面会把它们一起显示出来。
     func setModeLabel(_ label: String, english: Bool) {
-        chineseButton.isHidden = !english
+        showChineseButton(english)
         guard label != modeLabel else { return }
         modeLabel = label
         // 键面字只在重建行时才读，所以这里必须重建（代价是几行按钮重建，
@@ -387,7 +405,18 @@ final class KeyboardLayout: UIView {
     var isPanelLayer: Bool {
         switch keyLayer {
         case .letters, .numbers: return false
-        case .symbols, .emoji, .modes, .rare, .skins, .keyboardModes, .about: return true
+        case .symbols, .emoji, .modes, .rare, .skins, .keyboardModes, .about, .settings:
+            return true
+        }
+    }
+
+    /// 同步设置面板的数据（控制器在启动、打开设置、面板改动回传后调）。
+    /// 面板可见时立即重画；不可见时只存快照，等 `rebuildKeys` 打开时再用。
+    func setEngineSettings(_ s: KeyboardSettings, fuzzyPairNames names: [String]) {
+        settings = s
+        fuzzyPairNames = names
+        if keyLayer == .settings {
+            settingsPanel.show(settings: s, modes: keyboardModes, fuzzyNames: names)
         }
     }
 }

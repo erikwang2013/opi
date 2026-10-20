@@ -4,7 +4,7 @@
 // 面板装配（2026-10-20 从 `KeyboardLayout.swift` 机械搬出 + 新增三面板）。
 // 拆出的理由与 `KeyboardCandidateBar.swift` 相同：主文件压 500 行门禁。
 //
-// 七个面板（符号/表情/输入模式/生僻字/皮肤/键盘模式/关于）**同位置、互斥显示**，
+// 八个面板（符号/表情/输入模式/生僻字/皮肤/键盘模式/关于/设置）**同位置、互斥显示**，
 // 都占满键区；顶部 44pt 槽位在面板态恒为工具条（Android 同）。本文件只管摆位与
 // 回调接线，数据与画法留在各面板自己的文件里。
 //
@@ -30,6 +30,7 @@ extension KeyboardLayout {
         toolbar.onOpenInputMode = { [weak self] in self?.tap(.showModes) }
         toolbar.onOpenKeyboardMode = { [weak self] in self?.tap(.showKeyboardModes) }
         toolbar.onOpenAbout = { [weak self] in self?.tap(.showAbout) }
+        toolbar.onOpenSettings = { [weak self] in self?.tap(.showSettings) }
         toolbar.onCloseKeyboard = { [weak self] in self?.tap(.closeKeyboard) }
         toolbar.onSwitchToChinese = { [weak self] in self?.tap(.cycleMode) }
     }
@@ -48,6 +49,7 @@ extension KeyboardLayout {
         buildSkinPanel()
         buildKeyboardModePanel()
         buildAboutPanel()
+        buildSettingsPanel()
     }
 
     /// 面板与键位行同位置（占满键区）。`rebuildKeys` 负责谁亮谁灭。
@@ -117,6 +119,18 @@ extension KeyboardLayout {
         addPanel(aboutPanel)
     }
 
+    /// 设置（2026-10-21）：引擎开关立即回传控制器；皮肤/键盘模式/关于用跳转，
+    /// 不重复画一套（三块面板各有自己的状态与返回路径）。
+    private func buildSettingsPanel() {
+        settingsPanel.onClose = { [weak self] in self?.tap(.showLetters) }
+        settingsPanel.onChange = { [weak self] s in self?.tap(.updateSettings(s)) }
+        settingsPanel.onUpdateModes = { [weak self] m in self?.tap(.updateKeyboardModes(m)) }
+        settingsPanel.onOpenSkin = { [weak self] in self?.tap(.showSkin) }
+        settingsPanel.onOpenKeyboardModes = { [weak self] in self?.tap(.showKeyboardModes) }
+        settingsPanel.onOpenAbout = { [weak self] in self?.tap(.showAbout) }
+        addPanel(settingsPanel)
+    }
+
     // MARK: - 顶部槽位 / 皮肤 / 单手
 
     /// 顶部 44pt 槽位：候选栏替换工具条的条件与 Android `ImeScreen` 同一句
@@ -134,7 +148,7 @@ extension KeyboardLayout {
         candidateBar.isHidden = !showCandidates
         toolbar.isHidden = showCandidates
         toolbar.setEnglish(english)
-        chineseButton.isHidden = !(english && showCandidates)
+        showChineseButton(english && showCandidates)
     }
 
     func setSkin(_ s: SkinOption) {
@@ -148,6 +162,7 @@ extension KeyboardLayout {
         if keyLayer == .keyboardModes {
             keyboardModePanel.show(traditional: traditional, modes: m)
         }
+        if keyLayer == .settings { settingsPanel.updateModes(m) }
     }
 
     /// 换肤 + 长辈字号 + 单手布局。控制器在启动、切皮肤、切键盘模式后调。
@@ -164,13 +179,16 @@ extension KeyboardLayout {
         skinPanel.applyTheme(p)
         keyboardModePanel.applyTheme(p)
         aboutPanel.applyTheme(p)
+        modePanel.applyTheme(p)
+        settingsPanel.applyTheme(p)
         // 四个旧面板只统一底色；内部控件仍用系统色（README 记为已知差异）。
         symbolPanel.backgroundColor = p.panelBg
         emojiPanel.backgroundColor = p.panelBg
         modePanel.backgroundColor = p.panelBg
         rarePanel.backgroundColor = p.panelBg
         chineseButton.setTitleColor(p.barDimFg.withAlphaComponent(0.6), for: .normal)
-        applyKeyTheme()
+        // 面板态下键位行是隐藏的：别为一次换肤递归走几十个不可见的 KeyButton。
+        if !isPanelLayer { applyKeyTheme() }
         applyOneHand(keyboardModes.oneHand)
     }
 
@@ -180,7 +198,9 @@ extension KeyboardLayout {
         keyAreaLeading?.isActive = false
         keyAreaTrailing?.isActive = false
         keyAreaWidth?.isActive = false
-        switch hand {
+        // 面板（皮肤/输入模式/键盘模式/关于…）占满整块键区；单手只收窄**键面**。
+        // 此前 panel 层也被收窄 → 单手开启后页面错乱（2026-10-21 用户报障）。
+        switch isPanelLayer ? .off : hand {
         case .off:
             keyAreaLeading?.isActive = true
             keyAreaTrailing?.isActive = true

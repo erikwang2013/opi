@@ -29,11 +29,7 @@ struct OpiSymbolCategory {
     let symbols: [String]
 }
 
-/// 便于两个面板共用：AppKit 默认坐标系原点在左下，手工 frame 布局按「从上往下」
-/// 排更接近读文档的顺序，故内容视图翻成左上原点。
-final class OpiFlippedView: NSView {
-    override var isFlipped: Bool { true }
-}
+// OpiFlippedView 定义在 OpiTheme.swift（状态栏/键盘/表情面板共用一份）。
 
 // ---------- 面板 ----------
 
@@ -104,6 +100,11 @@ final class OpiSymbolPanel: NSObject, NSTextFieldDelegate, NSSearchFieldDelegate
         title.frame = NSRect(x: 14, y: 10, width: 180, height: 22)
         title.font = .boldSystemFont(ofSize: 16)
         root.addSubview(title)
+
+        let emoji = NSButton(title: "表情与贴纸…", target: self, action: #selector(openEmoji))
+        emoji.frame = NSRect(x: 200, y: 8, width: 120, height: 26)
+        emoji.bezelStyle = .rounded
+        root.addSubview(emoji)
 
         let search = NSSearchField(frame: NSRect(x: Self.panelW - 234, y: 8, width: 220, height: 26))
         search.placeholderString = "搜索符号"
@@ -245,6 +246,10 @@ final class OpiSymbolPanel: NSObject, NSTextFieldDelegate, NSSearchFieldDelegate
     @objc private func pick(_ sender: NSButton) {
         guard pageSymbols.indices.contains(sender.tag) else { return }
         OpiClientHub.shared.commit(pageSymbols[sender.tag])
+    }
+
+    @objc private func openEmoji() {
+        OpiEmojiPanel.shared.show()
     }
 
     @objc private func prevPage() {

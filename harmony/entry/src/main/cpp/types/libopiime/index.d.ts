@@ -47,6 +47,12 @@ export const selectPage: (index: number) => string;
 /** JSON 文本数组：**当前页**候选。未装载 → `[]`。 */
 export const candidatesPage: () => string;
 
+/** JSON 文本数组：**全量前 limit 条**（平铺视图用 64，同 Android fetchLimit）。 */
+export const candidates: (limit: number) => string;
+
+/** 提交**全局**第 index 个候选（`candidates` 数组下标）。越界 → 空串。 */
+export const select: (index: number) => string;
+
 /** 当前拼音缓冲（preedit 来源）。 */
 export const buffer: () => string;
 
@@ -74,6 +80,9 @@ export const setShift: (on: boolean) => void;
 /** 学习开关。关掉 = 不记词，小欧睡着。 */
 export const learnerEnabled: () => boolean;
 export const setLearner: (on: boolean) => void;
+
+/** 长按删词：从用户词表删除该词（不存在/空串 → 无操作）。 */
+export const removeUserWord: (text: string) => void;
 
 /**
  * 切换全角，返回**切换后的新状态**（UI 直接拿去刷高亮）。
@@ -122,6 +131,9 @@ export const searchSymbols: (keyword: string) => string;
 // ---- 输入方案 / 五笔（2026-10-14：喂「输入模式」面板）----
 // 语义/哨兵/副作用与 cpp/opi_ffi.h 的同名声明、cpp/napi_bridge.c 的同名 Js* 一致。
 // ⚠️ 读侧在引擎未装载时回 0/false 是**哨兵** ⇒ UI 当前档位要自己存，别拿读侧当初始值。
+
+/** 装载繁体词典（trad.opid，可选增强）。失败不触碰已装的 luna；走繁体时回退简库。 */
+export const loadTrad: (path?: string) => boolean;
 
 /** 装载笔画词典（stroke.opid）。空/坏路径 → false（不假装有候选）。 */
 export const loadStroke: (path?: string) => boolean;

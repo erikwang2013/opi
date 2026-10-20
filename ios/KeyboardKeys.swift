@@ -97,6 +97,12 @@ enum KeyboardFunctionKey {
     /// 模式该做的事），而用户在符号面板上点的 `,` 就是要 `,`。
     /// Android 的 `SymbolPanel` 同样绕过引擎直提（`router::commitText`）。
     case commitText(String)
+    /// 打开**设置面板**（2026-10-21，工具条齿轮）。Android 是独立设置 Activity；
+    /// iOS 扩展不能可靠拉起宿主，故用键盘内面板承载可用子集。
+    case showSettings
+    /// 设置面板改了引擎开关（学习/模糊音/简拼/纠错/中文标点/双拼布局/五笔/表情页）。
+    /// 控制器负责持久化 + 立即推给引擎（与 Android 设置页「改了即生效」同姿态）。
+    case updateSettings(KeyboardSettings)
 }
 
 /// 键盘布局上的一个键。

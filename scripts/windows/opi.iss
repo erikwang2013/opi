@@ -249,7 +249,12 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssInstall then
+  begin
     KillRunningApp();
+    // 升级时先把旧 profile 摘掉：RegisterProfile 不会更新已存在 profile 的图标，
+    // 新图标（opi.exe 宠物）只有重新注册才会写进任务栏输入指示器。
+    UnregisterTsf();
+  end;
   if CurStep = ssPostInstall then
     RegisterTsf();
 end;

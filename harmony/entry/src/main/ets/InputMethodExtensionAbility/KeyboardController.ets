@@ -1,14 +1,11 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
-
 // 已过 API 19 的 hvigor CompileArkTS（2026-10-20）· 真机未验证
-//
 // 输入法会话的唯一持有者：面板窗口 / InputClient / 引擎路由 / AppStorage 推送。
 // UI（pages/Index.ets）不认识引擎，只调本类的方法 + 读 AppStorage。
 
 import { inputMethodEngine, InputMethodExtensionContext } from '@kit.IMEKit';
 import { BusinessError } from '@kit.BasicServicesKit';
-import { display } from '@kit.ArkUI';
 import * as OpiEngine from './OpiEngine';
 import { KeyResult, OpiAction, OpiMode, OpiShift } from './OpiEngine';
 import * as DictionaryAssets from './DictionaryAssets';
@@ -17,17 +14,9 @@ import * as InputModes from './InputModes';
 import * as KeyboardModes from './KeyboardModes';
 import { PanelView } from './KeyboardModes';
 import * as RawAssets from './RawAssets';
-import {
-  KEY_BUFFER, KEY_CANDIDATES, KEY_PAGE, KEY_PAGE_COUNT, KEY_MODE, KEY_SHIFT, KEY_LEARNER,
-  KEY_MODE_INDEX, KEY_VIEW, KEY_SKIN, KEY_DARK, KEY_ELDER, KEY_ONE_HAND, KEY_FLOAT, KEY_GAME, KEY_PRO
-} from './KeyboardAppStorage';
-
-/** 键盘占屏高的比例。凭感觉定的，真机上要按候选栏行数调。 */
-const PANEL_HEIGHT_RATIO: number = 0.42;
-/** 悬浮/游戏窗口宽度比例（Android OpiImeService 同值）。 */
-const FLOATING_WIDTH_RATIO: number = 0.86;
-/** 游戏模式再压到常规高度的这个比例（Android 同值）。 */
-const GAME_HEIGHT_RATIO: number = 0.72;
+import * as ScreenLayout from './ScreenLayout';
+import * as SettingsStore from './SettingsStore';
+import { publishState } from './StatePublish';
 
 export class KeyboardController {
   private static instance: KeyboardController = new KeyboardController();
@@ -42,9 +31,10 @@ export class KeyboardController {
   private kbController: inputMethodEngine.KeyboardController | null = null;
   private started: boolean = false;
   private dictLoaded: boolean = false;
-  // 面板窗口的基准尺寸（px）；悬浮/游戏/单手切换时重算。
-  private screenW: number = 0;
-  private screenH: number = 0;
+  /** 面板窗口的基准尺寸（px，随旋转/折叠刷新）；悬浮/游戏切换时用同一份重算。 */
+  private metrics: ScreenLayout.ScreenMetrics = new ScreenLayout.ScreenMetrics();
+  /** 偏好里的学习开关，等词库装载后再推给引擎（引擎未装载时写侧会被丢）。 */
+  private pendingLearner: boolean = true;
 
   // off() 需要**同一个函数引用**才能真的退订（'inputStop' 的 SDK 签名甚至不给省略 callback）。
   private onInputStartCallback: (kbController: inputMethodEngine.KeyboardController,
@@ -53,13 +43,20 @@ export class KeyboardController {
       inputClient: inputMethodEngine.InputClient): void => {
       this.kbController = kbController;
       this.client = inputClient;
+      // 无会话期间可能转过屏/折叠过：新会话先重读尺寸再 resize。
+      this.metrics = ScreenLayout.currentMetrics();
       this.ensureDictionary();
       this.applyPanelWindow();
-      // 新会话：上一轮可能死在半路，先把引擎缓冲清干净，
-      // 否则会带着上次的拼音进新输入框（「输入法错乱」的常见来源）。
+      // 新会话：上一轮可能死在半路，先清引擎缓冲，否则会带着上次的拼音进新输入框。
       OpiEngine.clear();
       this.publish();
     };
+
+  /** 旋转 / 折叠 / 分屏：重读短边尺寸，按同一公式重算窗口。 */
+  private onDisplayChangeCallback: (displayId: number) => void = (displayId: number): void => {
+    this.metrics = ScreenLayout.currentMetrics();
+    this.applyPanelWindow();
+  };
 
   private onInputStopCallback: () => void = (): void => {
     // InputClient 随会话失效，必须丢引用；引擎侧缓冲也要清。
@@ -80,13 +77,17 @@ export class KeyboardController {
     this.ctx = ctx;
     RawAssets.bindResourceManager(ctx.resourceManager);
 
+    // 偏好先于一切：模块级键盘模式/输入模式在 init 时装回来（词库装载后再推给引擎）。
+    SettingsStore.init(ctx);
+    const saved: SettingsStore.ImeSettings = SettingsStore.load();
+    KeyboardModes.restore(saved);
+    InputModes.restore(saved.inputModeIndex, saved.lastChineseIndex);
+    this.pendingLearner = saved.learn;
+
     const ability = inputMethodEngine.getInputMethodAbility();
 
-    // 面板尺寸：屏宽 × 屏高的比例。display 拿到的单位是 px，不是 vp ——
-    // 真机上如果键盘高度明显不对，先查这里需不需要 vp2px 换算（见 README）。
-    const d = display.getDefaultDisplaySync();
-    this.screenW = d.width;
-    this.screenH = d.height;
+    this.metrics = ScreenLayout.currentMetrics();
+    ScreenLayout.watchDisplay(this.onDisplayChangeCallback);
     const info: inputMethodEngine.PanelInfo = {
       type: inputMethodEngine.PanelType.SOFT_KEYBOARD,
       flag: inputMethodEngine.PanelFlag.FLG_FIXED,
@@ -101,9 +102,7 @@ export class KeyboardController {
       }
       this.panel = panel;
       this.applyPanelWindow();
-      // 路径是**相对 src/main/ets 的页面路径，不带 .ets 后缀**，且该页必须在
-      // resources/base/profile/main_pages.json 里注册过 —— 两处任一处写错，
-      // 表现是「面板起来了但是白的」。
+      // 路径相对 src/main/ets、不带 .ets，且须在 main_pages.json 注册；错一处 = 白屏。
       panel.setUiContent('pages/Index');
     });
 
@@ -115,6 +114,7 @@ export class KeyboardController {
     const ability = inputMethodEngine.getInputMethodAbility();
     ability.off('inputStart', this.onInputStartCallback);
     ability.off('inputStop', this.onInputStopCallback);
+    ScreenLayout.unwatchDisplay(this.onDisplayChangeCallback);
     if (this.panel !== null) {
       // destroyPanel 挂在 InputMethodAbility 上（不是 Panel 上），且是异步的。
       ability.destroyPanel(this.panel, (err: BusinessError) => {
@@ -122,8 +122,7 @@ export class KeyboardController {
           console.error(`[opi] destroyPanel 失败: ${err.message}`);
         }
       });
-      // 注意：只置空引用，不等 GC —— 面板是系统资源，必须显式 destroy。
-      this.panel = null;
+      this.panel = null; // 面板是系统资源，必须显式 destroy，不能只等 GC。
     }
     this.client = null;
     this.kbController = null;
@@ -146,18 +145,26 @@ export class KeyboardController {
     if (this.ctx === null) {
       console.error('[opi] 无扩展上下文，词库回退内置库');
       OpiEngine.loadDictionary('');
-      return;
+    } else {
+      const files: DictionaryAssets.DictionaryFiles =
+        DictionaryAssets.syncDictionaries(this.ctx.resourceManager, this.ctx.filesDir);
+      let ok: boolean = files.luna.length > 0 && OpiEngine.loadDictionary(files.luna);
+      if (!ok) {
+        // 引擎契约：坏路径 → false 且引擎保持为空；不回退就一个字都不出。
+        console.error('[opi] 完整词库不可用，回退内置词库');
+        ok = OpiEngine.loadDictionary('');
+      }
+      this.dictDegraded = !(ok && files.luna.length > 0);
+      // 繁体是**可选增强**（Android EngineLoader 同一条）：失败不碰已装的 luna，
+      // 繁体模式回退查简库 —— 所以不参与 degraded 判定。
+      if (files.trad.length > 0 && !OpiEngine.loadTradDictionary(files.trad)) {
+        console.warn('[opi] trad.opid 未装载：繁体模式回退简体词库');
+      }
+      InputModes.loadOptionalTables(files.stroke, files.wubi);
     }
-    const files: DictionaryAssets.DictionaryFiles =
-      DictionaryAssets.syncDictionaries(this.ctx.resourceManager, this.ctx.filesDir);
-    let ok: boolean = files.luna.length > 0 && OpiEngine.loadDictionary(files.luna);
-    if (!ok) {
-      // 引擎契约：坏路径 → false 且引擎保持为空；不回退就一个字都不出。
-      console.error('[opi] 完整词库不可用，回退内置词库');
-      ok = OpiEngine.loadDictionary('');
-    }
-    this.dictDegraded = !(ok && files.luna.length > 0);
-    InputModes.loadOptionalTables(files.stroke, files.wubi);
+    // 引擎就绪后才推：学习开关 + 持久化的输入档位（scheme/mode）。
+    OpiEngine.setLearner(this.pendingLearner);
+    InputModes.applyCurrentMode();
   }
 
   // -------------------------------------------------------------- 文本上屏
@@ -216,6 +223,17 @@ export class KeyboardController {
     this.pressKey(OpiEngine.charKeyval(ch), this.shiftStates());
   }
 
+  /**
+   * 9 键「分词」键：缓冲非空时插音节边界 `'`（`xi|an`），空缓冲**拦住** ——
+   * 空缓冲的 `'` 在引擎里是引号而不是分词符（Android ImeScreen onSegment 同款守卫）。
+   */
+  tapSegment(): void {
+    if (OpiEngine.buffer().length === 0) {
+      return;
+    }
+    this.tapChar('\'');
+  }
+
   /** 空格 —— 是**可打印段**的 0x20，走路由（缓冲非空时提交候选）。 */
   tapSpace(): void {
     this.pressKey(OpiEngine.KEY_SPACE, this.shiftStates());
@@ -258,6 +276,31 @@ export class KeyboardController {
     this.publish();
   }
 
+  /** 平铺候选：**全局**下标（`opiAllCandidates` 数组下标），走 opi_select。 */
+  tapTiledCandidate(index: number): void {
+    const text: string = OpiEngine.selectGlobal(index);
+    this.insertText(text);
+    this.publish();
+  }
+
+  /** 长按候选 = 从用户词表删词（Android CandidateBar onLongPress 同款；不存在则无操作）。 */
+  removeCandidateWord(text: string): void {
+    OpiEngine.removeUserWord(text);
+    this.publish();
+  }
+
+  /** 候选栏 ⌄：展开平铺视图（只在有候选时由 UI 提供入口）。 */
+  expandTiled(): void {
+    KeyboardModes.expandTiled();
+    this.publish();
+  }
+
+  /** 平铺「返回」：回键盘，**不动引擎、不清缓冲**。 */
+  collapseTiled(): void {
+    KeyboardModes.collapseTiled();
+    this.publish();
+  }
+
   /**
    * 切模式（中/英/数字/符号）。切之前会清空缓冲，避免带着半截拼音换键盘。
    *
@@ -275,9 +318,11 @@ export class KeyboardController {
     this.publish();
   }
 
-  /** 点小欧：学习开关取反。关掉 = 不记词 = 它睡着。 */
+  /** 点小欧：学习开关取反（落盘，Android ImePreferences.learn）；关掉 = 它睡着。 */
   toggleLearner(): void {
-    OpiEngine.setLearner(!OpiEngine.learnerEnabled());
+    const on: boolean = !OpiEngine.learnerEnabled();
+    OpiEngine.setLearner(on);
+    SettingsStore.saveBool(SettingsStore.BOOL_LEARN, on);
     this.publish();
   }
 
@@ -312,21 +357,18 @@ export class KeyboardController {
 
   // -------------------------------------------------------------- 工具条 / 面板（2026-10-20）
 
-  /** 面板窗口：常规全宽贴底；悬浮/游戏收窄居中，游戏再压高度（Android OpiImeService 同值）。 */
+  /** 面板窗口：高度按 Android 公式（ScreenLayout）；悬浮/游戏收窄居中，游戏再压高度。 */
   private applyPanelWindow(): void {
-    if (this.panel === null || this.screenW === 0) {
+    if (this.panel === null) {
       return;
     }
-    let w: number = this.screenW;
-    let h: number = Math.floor(this.screenH * PANEL_HEIGHT_RATIO);
-    if (KeyboardModes.gameEnabled()) {
-      h = Math.floor(h * GAME_HEIGHT_RATIO);
+    const r: ScreenLayout.PanelRect = ScreenLayout.panelRect(this.metrics,
+      KeyboardModes.gameEnabled(), KeyboardModes.floatingEnabled());
+    if (r.w <= 0 || r.h <= 0) {
+      return;
     }
-    if (KeyboardModes.floatingEnabled() || KeyboardModes.gameEnabled()) {
-      w = Math.floor(this.screenW * FLOATING_WIDTH_RATIO);
-    }
-    this.panel.resize(w, h);
-    this.panel.moveTo(Math.floor((this.screenW - w) / 2), this.screenH - h);
+    this.panel.resize(r.w, r.h);
+    this.panel.moveTo(r.x, r.y);
   }
 
   togglePanel(v: PanelView): void {
@@ -412,6 +454,12 @@ export class KeyboardController {
     this.publish();
   }
 
+  /** 表情页「自有」分类开关（Android ImePreferences.showOwn）。 */
+  toggleShowOwn(): void {
+    KeyboardModes.toggleShowOwn();
+    this.publish();
+  }
+
   /** 9/14/笔画底行：只切简繁（Android 2026-10-15 裁决）。 */
   toggleTraditional(): void {
     this.switchMode(OpiEngine.mode() === OpiMode.Traditional ? OpiMode.Pinyin : OpiMode.Traditional);
@@ -442,47 +490,10 @@ export class KeyboardController {
   // -------------------------------------------------------------- 状态推送
 
   /**
-   * 把引擎状态推给 UI。
-   * UI 不直接调引擎 —— 单一数据流向，省得两边各自缓存、各自漂移。
+   * 把引擎状态推给 UI（实现在 StatePublish：AppStorage 契约 + 平铺自动收拢 +
+   * preview text）。UI 不直接调引擎 —— 单一数据流向。
    */
   publish(): void {
-    AppStorage.setOrCreate<string>(KEY_BUFFER, OpiEngine.buffer());
-    AppStorage.setOrCreate<string[]>(KEY_CANDIDATES, OpiEngine.candidatesPage());
-    AppStorage.setOrCreate<number>(KEY_PAGE, OpiEngine.page());
-    AppStorage.setOrCreate<number>(KEY_PAGE_COUNT, OpiEngine.pageCount());
-    AppStorage.setOrCreate<number>(KEY_MODE, OpiEngine.mode() as number);
-    AppStorage.setOrCreate<number>(KEY_SHIFT, OpiEngine.shiftState() as number);
-    AppStorage.setOrCreate<number>(KEY_LEARNER, OpiEngine.learnerEnabled() ? 1 : 0);
-    // 这两条不来自引擎（模块级状态机）：未装载时读侧回 0/false 是哨兵，别拿它当 UI 档位。
-    AppStorage.setOrCreate<number>(KEY_MODE_INDEX, InputModes.currentModeIndex());
-    AppStorage.setOrCreate<number>(KEY_VIEW, KeyboardModes.panelView());
-    AppStorage.setOrCreate<number>(KEY_SKIN, KeyboardModes.skinValue());
-    AppStorage.setOrCreate<number>(KEY_DARK, KeyboardModes.darkEnabled() ? 1 : 0);
-    AppStorage.setOrCreate<number>(KEY_ELDER, KeyboardModes.elderEnabled() ? 1 : 0);
-    AppStorage.setOrCreate<number>(KEY_ONE_HAND, KeyboardModes.oneHandValue());
-    AppStorage.setOrCreate<number>(KEY_FLOAT, KeyboardModes.floatingEnabled() ? 1 : 0);
-    AppStorage.setOrCreate<number>(KEY_GAME, KeyboardModes.gameEnabled() ? 1 : 0);
-    AppStorage.setOrCreate<number>(KEY_PRO, KeyboardModes.englishProEnabled() ? 1 : 0);
-    this.syncPreviewText();
-  }
-
-  /**
-   * 组合串推进宿主输入框（preview text）。`{0,0}` 只按 API 19 d.ts 选过，
-   * 无真机证据；见 docs/install/harmony.md §0.6。
-   */
-  private syncPreviewText(): void {
-    if (this.client === null) {
-      return;
-    }
-    const buf: string = OpiEngine.buffer();
-    if (buf.length === 0) {
-      this.client.finishTextPreviewSync();
-      return;
-    }
-    // API 19 的 setPreviewText 收 Range（要替换的编辑框区间），不是光标偏移量。
-    // 用 [0,0] 表示「在光标处插入 / 更新预上屏」。
-    // shortcut: Range 的确切语义只在 d.ts 上核对过，未在真机验证；见 docs/install/harmony.md。
-    const range: inputMethodEngine.Range = { start: 0, end: 0 };
-    this.client.setPreviewTextSync(buf, range);
+    publishState(this.client);
   }
 }

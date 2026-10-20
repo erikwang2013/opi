@@ -39,7 +39,16 @@ export struct QwertyPad {
   }
 
   private keySize(): number {
-    return this.elder === 1 ? 21 : 18;
+    // Android 26 键 keyFont = 21sp（英文 23sp）；长辈模式加 3。
+    return this.elder === 1 ? (this.isEnglish() ? 26 : 24) : (this.isEnglish() ? 23 : 21);
+  }
+
+  /** Android 英文盘：数字行压矮（0.7），字母行加高（1.05），功能行 0.95。 */
+  private rowWeight(rowIndex: number): number {
+    if (!this.isEnglish()) {
+      return 1;
+    }
+    return rowIndex === 0 ? 0.7 : 1.05;
   }
 
   private shiftActive(): boolean {
@@ -58,8 +67,8 @@ export struct QwertyPad {
     if (this.isEnglish()) {
       return [NUMBER_ROW, ROW_1, ROW_2, ENGLISH_ROW_3];
     }
-    // 中文 ⇧ 不显示（Android QwertyKeyboard 的 onShift 默认 null）。
-    return [ROW_1, ROW_2, ROW_3.slice(1)];
+    // 中文 ⇧ 显示但禁用（Android QwertyKeyboard 传 null onShift 的同款形态）。
+    return [ROW_1, ROW_2, ROW_3];
   }
 
   build() {
@@ -79,7 +88,11 @@ export struct QwertyPad {
         Row() {
           ForEach(row, (ch: string) => {
             if (ch === '⇧') {
-              this.ShiftKey()
+              if (this.isEnglish()) {
+                this.ShiftKey()
+              } else {
+                this.DisabledShift()
+              }
             } else if (ch === '↵') {
               this.Key('↵', () => {
                 this.ctrl.tapEnter();
@@ -92,7 +105,7 @@ export struct QwertyPad {
             }
           }, (ch: string) => `${rowIndex}-${ch}`)
         }
-        .width('100%').layoutWeight(1)
+        .width('100%').layoutWeight(this.rowWeight(rowIndex))
       }, (row: string[], rowIndex: number) => `q-${rowIndex}`)
 
       this.FunctionRow()
@@ -113,7 +126,7 @@ export struct QwertyPad {
         }, 1, this.pro === 1)
         this.Key('空格', () => {
           this.ctrl.tapSpace();
-        }, 4)
+        }, 3)
         this.Key(cycleModeLabel(this.mode), () => {
           this.ctrl.cycleMode();
         }, 1)
@@ -130,7 +143,7 @@ export struct QwertyPad {
         }, 1)
         this.Key('空格', () => {
           this.ctrl.tapSpace();
-        }, 4)
+        }, 3)
         this.Key('⌫', () => {
           this.ctrl.tapBackspace();
         }, 1)
@@ -139,7 +152,7 @@ export struct QwertyPad {
         }, 1)
       }
     }
-    .width('100%').layoutWeight(1).margin({ top: 2, bottom: 2 })
+    .width('100%').layoutWeight(this.isEnglish() ? 0.95 : 1).margin({ top: 2, bottom: 2 })
   }
 
   // ------------------------------------------------------------ 数字面板
@@ -193,6 +206,21 @@ export struct QwertyPad {
       .height('100%')
       .margin({ left: 2, right: 2 })
       .onClick(action)
+  }
+
+  /** 中文盘上的 ⇧：占位但禁用（Android 传 null onShift 的同款外观）。 */
+  @Builder
+  DisabledShift() {
+    Button('⇧')
+      .fontSize(this.keySize())
+      .fontColor(this.pal().dimFg)
+      .backgroundColor(this.pal().keyBg)
+      .borderRadius(6)
+      .layoutWeight(1)
+      .height('100%')
+      .margin({ left: 2, right: 2 })
+      .enabled(false)
+      .opacity(0.45)
   }
 
   @Builder

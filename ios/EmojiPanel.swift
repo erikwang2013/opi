@@ -1,15 +1,9 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-// ⚠️ 草案 · **CI 已真编译**（apple.yml 的 iOS job，2026-10-15）· **从未上机运行**
+// ⚠️ 草案：2026-10-15 CI 编译过；10-18 布局与 10-21 `showOwn` 改动未编译、未上机。
 //
-// 本文件在 Linux 上编写。2026-10-15 那次 `swiftc ios/*.swift` 全目录真编译过；
-// 但从未在设备或模拟器上跑过：**行为仍未验证**，别把「编过」读成「能用」。
-// ⚠️ **2026-10-18 的布局改写尚未经过任何编译**（本机没有 swiftc）——
-// 待 CI apple.yml 的 iOS job；见 ios/README.md。
-//
-// 表情页：自有贴纸 + 引擎表情表 + 颜文字表的**展示层**
-// （顶部 自有/Emoji/颜文字 Tab + 网格 + 底部横滑分类条）。
+// 表情页：自有贴纸 + 引擎表情表 + 颜文字表的**展示层**（顶部 Tab + 网格 + 底部横滑分类条）。
 //
 // 布局与 Android `keyboard/EmojiPanel.kt`、桌面 `candidate/EmojiPage.kt`（2026-10-18）对齐：
 //
@@ -35,8 +29,7 @@
 // 由它走既有的 `insert(...)`（同符号键的 `.commitText` 通路，**不过引擎**：引擎的标点表
 // 会把字符改写成中文标点/全角，而用户在表情页点的就是要那个字符）。
 //
-// 本层**故意没做**（Android 有、这里没接，别当成漏了）：
-//   1. 「最近使用」一行（Android `recents`）—— 要跨面板状态，本骨架的符号面板也没有。
+// 本层**故意没做**：Android 的「最近使用」一行（要跨面板状态，符号面板也没有）。
 
 import UIKit
 
@@ -51,9 +44,7 @@ final class EmojiPanel: UIView {
     /// 「searchText 实时、searchQuery 防抖后生效」同一分工（那边防抖在 `ImeState`）。
     var onSearch: ((String) -> Void)?
 
-    // MARK: - 布局常量（与 SymbolPanel 对表）
-    //
-    // ⚠️ 未编译：数值都是拍的（同 SymbolPanel），真机上按手感调。
+    // MARK: - 布局常量（与 SymbolPanel 对表；数值未上机校准）
 
     /// Emoji 每行几个（Android `GridCells.Fixed(8)`）。
     private static let emojiColumns = 8
@@ -70,8 +61,9 @@ final class EmojiPanel: UIView {
     /// 表情页的三个子页（2026-10-18 用户裁决：自有是独立顶级分类）。
     private enum SubTab { case pet, emoji, kaomoji }
 
-    /// 「自有」是否显示：iOS 无设置页，缺省隐藏（Android/桌面有开关）；要显示改这里并重编。
-    private static let showOwn = false
+    /// 「自有」是否显示（Android `showOwn`，缺省隐藏）。2026-10-21 起由设置面板
+    /// 的开关驱动（`setShowOwn(_:)`），不再需要改代码重编。
+    private var showOwn = false
 
     // MARK: - 视图
 
@@ -138,7 +130,7 @@ final class EmojiPanel: UIView {
         tabs.spacing = 2
         tabs.distribution = .fillEqually
         tabs.translatesAutoresizingMaskIntoConstraints = false
-        if Self.showOwn { tabs.addArrangedSubview(petTab) }
+        if showOwn { tabs.addArrangedSubview(petTab) }
         tabs.addArrangedSubview(emojiTab)
         tabs.addArrangedSubview(kaomojiTab)
 
@@ -275,9 +267,8 @@ final class EmojiPanel: UIView {
                 .filter { emojiSet.contains($0) }
             grid.showTexts(shown, columns: Self.emojiColumns, empty: Self.noMatch, shrink: false)
         case .kaomoji:
-            // 颜文字是**本地子串匹配**（同 Android `KaomojiCategories.flatten(...).filter`）。
-            // 控制器仍会先打一次引擎搜索（它不知道当前子页），结果在这里被丢弃 ——
-            // 为省一次低频 FFI 调用不值得给控制器新增一条「当前子页」查询。
+            // 颜文字是本地子串匹配（同 Android）；控制器先打的那次引擎搜索在这里
+            // 丢弃 —— 为省一次低频 FFI 调用不值得新增「当前子页」查询。
             let shown = KaomojiData.all
                 .filter { $0.range(of: query, options: .caseInsensitive) != nil }
                 .filter { seen.insert($0).inserted }
@@ -401,9 +392,30 @@ final class EmojiPanel: UIView {
     }
 
     private func styleTabs() {
-        styleTab(petTab, title: "自有", selected: sub == .pet)
+        if showOwn { styleTab(petTab, title: "自有", selected: sub == .pet) }
         styleTab(emojiTab, title: "Emoji", selected: sub == .emoji)
         styleTab(kaomojiTab, title: "颜文字", selected: sub == .kaomoji)
+    }
+
+    /// 设置面板的「表情页显示自有贴纸」开关（Android `showOwn`）。
+    /// 关掉时若正停在自有页，回 Emoji 页（分类条/网格一起重排）。
+    func setShowOwn(_ on: Bool) {
+        guard on != showOwn else { return }
+        showOwn = on
+        if on {
+            if !tabs.arrangedSubviews.contains(petTab) {
+                tabs.insertArrangedSubview(petTab, at: 0)
+            }
+        } else {
+            petTab.removeFromSuperview()
+            if sub == .pet {
+                sub = .emoji
+                setSearching(false)
+                rebuildGroupBar()
+                showBrowseGrid()
+            }
+        }
+        styleTabs()
     }
 
     private func styleTab(_ b: BarButton, title: String, selected: Bool) {
@@ -433,10 +445,8 @@ final class EmojiPanel: UIView {
         if isSearching {
             setSearching(false)
             showBrowseGrid()
-            // ⚠️ 必须补报一次空查询：控制器那边可能还挂着一张**防抖表**（用户打完字
-            // 250ms 内就按了返回）。不报的话那张表到点会带着**旧查询**回来，
-            // 把过滤结果画进浏览态（网格停在过滤结果上，且没有任何提示）。
-            // Android 的 `back()` 正是这么做的（`onSearchText("")` → `cancelDebounce`）。
+            // 必须补报空查询：控制器挂着的防抖表到点会带旧查询回来，把过滤结果
+            // 画进浏览态（Android `back()` 同款）。
             onSearch?("")
         } else {
             onBack?()
@@ -454,21 +464,10 @@ final class EmojiPanel: UIView {
         backButton.accessibilityLabel = on ? "返回表情" : "关闭表情页"
         if on {
             topBar.addArrangedSubview(searchField)
-            // ⚠️⚠️ **未编译 + 未验证的关键一跳**：键盘扩展里 `becomeFirstResponder()`
-            // 能不能让这个输入框真的收到键盘输入，是本文件最大的未知数 ——
-            // 扩展**不能**唤起系统键盘（iOS 只允许宿主 App 的输入框唤起），而 Android
-            // 是靠 IME 窗口内的 TextField + 在面板下方**叠一层字母盘**（焦点事件走
-            // `onSearchFocus` → 宿主叠盘）解决的，iOS 没有等价机制可直接抄。
-            //
-            // Mac 上按顺序验，**三条路都试完再决定留不留这个键**：
-            //   ① 直接跑：能弹出系统键盘（或接硬件键盘能输进去）→ 就这样；
-            //   ② 不弹：退回 **Gboard 式自喂** —— 搜索态仍由本键盘画字母盘，把击键
-            //      自己喂进 `searchField`（`insertText` 或直接拼 `text` 后再发 `onSearch`）。
-            //      这是 Android 那套叠盘的 iOS 等价物，但要动 `KeyboardLayout` 的层机制
-            //      （搜索态得多一层字母盘），**本骨架没做** —— 没真机结论前别先写；
-            //   ③ 都不行：把 🔍 键连同 `searchField` 一起删掉（搜索的数据面
-            //      `OpiEngine.searchSymbols` 留着不动），**别留一个点了没反应的按钮**
-            //      —— 这比没有搜索更坏。
+            // 未验证的关键一跳：扩展里 `becomeFirstResponder()` 能否真收到键入。
+            // 若真机不弹键盘，两条后路：② 搜索态自画字母盘把击键喂进 searchField
+            // （要改 KeyboardLayout 的层机制）；③ 连 🔍 与 searchField 一起删掉，
+            // 不留点了没反应的按钮。详见 README。
             searchField.becomeFirstResponder()
         } else {
             topBar.addArrangedSubview(tabs)

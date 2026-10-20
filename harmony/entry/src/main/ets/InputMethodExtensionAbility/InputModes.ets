@@ -31,6 +31,7 @@ import opiime from 'libopiime.so';
 import * as OpiEngine from './OpiEngine';
 import { OpiMode } from './OpiEngine';
 import { leaveEnglishPro } from './KeyboardModes';
+import * as SettingsStore from './SettingsStore';
 
 /** 输入方案。数值就是 C ABI 的整数码（= `Scheme::code()`），不是本地枚举序号。 */
 export enum OpiScheme {
@@ -190,13 +191,39 @@ export const MODE_WUBI: number = 8;
 // 状态放在**模块级**（不是 Index 的 @State、也不是 KeyboardController 的字段）：
 //   · 面板可被系统重建（面板尺寸变化会重建 UI）⇒ @State 会丢；
 //   · 五个键面 + 面板都要读写它 ⇒ 放模块里就不用给每个组件传回调。
-// ⚠️ 进程重启即丢（与引擎自身的方案状态一样，本端**没有持久化**）—— 这不比引擎该有
-// 的持久化更差，但别把它读成「记住了用户的选择」。
+// 2026-10-21 起持久化（SettingsStore）：选中即落盘，扩展 init 时 restore() 装回来。
+// 缺省仍是**拼音9键**（Android 2026-10-11 用户裁决「移动端默认初始 9 键」）。
 
-let currentIndex: number = MODE_PINYIN26;
+let currentIndex: number = MODE_PINYIN9;
 /** 上次选中过的**中文**键位（对齐 Android `ImeState.lastChineseMode`）：英文键盘
- *  右上角隐藏「中」键切回它；初始 = 拼音26键。 */
-let lastChineseIndex: number = MODE_PINYIN26;
+ *  右上角隐藏「中」键切回它；初始 = 拼音9键（Android 同款）。 */
+let lastChineseIndex: number = MODE_PINYIN9;
+
+/**
+ * 从偏好恢复（扩展 init 时一次，**在词库装载前**）：只写模块状态，不碰引擎。
+ * 词库装好后由 `applyCurrentMode()` 把方案/语言推给引擎。
+ */
+export function restore(inputIndex: number, lastChinese: number): void {
+  if (inputIndex >= 0 && inputIndex < INPUT_MODES.length) {
+    currentIndex = inputIndex;
+  }
+  if (lastChinese >= 0 && lastChinese < INPUT_MODES.length
+    && INPUT_MODES[lastChinese].mode === (OpiMode.Pinyin as number)) {
+    lastChineseIndex = lastChinese;
+  }
+}
+
+/** 把当前档位推给引擎（词库装载后调一次；不落盘）。 */
+export function applyCurrentMode(): void {
+  const m: InputMode = INPUT_MODES[currentIndex];
+  if (m.panel) {
+    return;
+  }
+  setScheme(m.scheme);
+  if ((OpiEngine.mode() as number) !== (m.mode as number)) {
+    OpiEngine.switchMode(m.mode);
+  }
+}
 
 /** 当前模式下标。 */
 export function currentModeIndex(): number {
@@ -233,6 +260,7 @@ export function selectInputMode(i: number): void {
   // 英文不在中文侧：只有 Pinyin 档（含 9/14/大9/笔画/双拼/五笔）才更新回切目标。
   if (m.mode === (OpiMode.Pinyin as number)) {
     lastChineseIndex = i;
+    SettingsStore.saveLastChinese(i);
   }
   setScheme(m.scheme); // 清缓冲（引擎侧）⇒ 调用方随后要重读 buffer/候选/页码
   if ((OpiEngine.mode() as number) !== (m.mode as number)) {
@@ -242,6 +270,7 @@ export function selectInputMode(i: number): void {
     OpiEngine.switchMode(m.mode);
   }
   currentIndex = i;
+  SettingsStore.saveInputMode(i);
 }
 
 /**

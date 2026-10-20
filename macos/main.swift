@@ -51,6 +51,10 @@ OpiCandidateWindow.shared.configure(server: server)
 OpiEngine.shared.loadDictionary()
 // 可选繁体库（同目录 trad.opid；缺文件就保持简体回退）。
 OpiEngine.shared.loadOptionalTradDictionary()
+// 可选笔画/五笔码表（Resources/dicts/ 或用户目录；缺文件只记日志）。
+// 装载**不切换方案**：当前方案仍由 `applyPersisted()` 决定。
+OpiEngine.shared.loadOptionalStrokeDictionary()
+OpiEngine.shared.loadOptionalWubiDictionary()
 // 用户设置的套用必须**在词库之后**：opi_load 之后引擎才是可写状态。
 OpiSettingsStore.applyPersisted()
 // 导入词库（dicts/*.tsv）按停用名单重放；坏文件只记日志，不挡启动。

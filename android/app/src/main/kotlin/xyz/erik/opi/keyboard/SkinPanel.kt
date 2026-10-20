@@ -6,6 +6,8 @@ package xyz.erik.opi.keyboard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,9 +21,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import xyz.erik.opi.ime.PanelHeader
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,28 +56,19 @@ fun SkinPanel(
 ) {
     val p = LocalKeyboardPalette.current
     Column(modifier = modifier.fillMaxSize().background(p.panelBg)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 2.dp, end = 10.dp, top = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        PanelHeader("皮肤", "选中即换；「不改动」= 跟随暗光/长辈这些模式", onClose)
+        // FlowRow 不用 Row：窄屏折行；外层可滚（返回箭头独占一行后高度增加）。
+        Column(
+            modifier = Modifier.fillMaxWidth().weight(1f)
+                .verticalScroll(rememberScrollState()).padding(horizontal = 12.dp),
         ) {
-            IconButton(onClick = onClose) {
-                Icon(OpiIcons.ArrowBack, contentDescription = "返回", tint = p.toolbarFg)
-            }
-            Text("皮肤", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = p.panelFg)
-            Spacer(Modifier.width(10.dp))
-            Text(
-                "选中即换；「不改动」= 跟随暗光/长辈这些模式",
-                fontSize = 11.sp,
-                color = p.barDimFg,
-            )
-        }
-        // FlowRow 不用 Row：窄屏（<360dp）五张卡排不下时**折行**，不裁掉最后一张。
-        FlowRow(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            for (skin in SkinOption.entries) {
-                SkinCard(skin, skin == selected) { onSelect(skin) }
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                for (skin in SkinOption.entries) {
+                    SkinCard(skin, skin == selected) { onSelect(skin) }
+                }
             }
         }
     }

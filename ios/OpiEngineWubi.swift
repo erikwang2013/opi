@@ -20,10 +20,10 @@
 //   * **读侧在引擎未装载时返回哨兵**（枚举 → 0、bool → false），与「用户选的就是
 //     那个值」**不可区分** —— 所以别拿读侧当「引擎现状」的判据。
 //
-// ⚠️ 本族**没有任何 iOS 入口**（2026-10-14 现状）：iOS 侧还没有设置界面，
-// 加进来是为了「出口面先齐」（Android 的五个旋钮在设置页的「五笔」节里）。
-// 谁先做 iOS 设置页，谁就把这些接到 UI 上 —— 但也**别忘**：五笔方案要能用，
-// 除了旋钮还得 `loadWubi(path:)` + `setScheme(.wubi)`（头注：装载**不**换方案）。
+// 2026-10-21 起这些旋钮已接到键盘内设置面板（`WubiSettingsSection.swift`，
+// 工具条齿轮 →「五笔（86 码表）」节），持久化在 `KeyboardPreferences.settings`。
+// 但**别忘**：五笔方案要能用，除了旋钮还得 `loadWubi(path:)` + `setScheme(.wubi)`
+// （头注：装载**不**换方案；iOS 只在 `loadBundledDictionaries()` 里装 86 表）。
 
 import Foundation
 
@@ -69,7 +69,8 @@ extension OpiEngine {
     /// —— **iOS 走的正是这条**）、fcitx5、TSF 已接；Android `KeyRouter.handleEnter`
     /// 实读**仍是**写死的 `select(0)`（未接）。⇒ 本值在 iOS 上**确实**决定回车行为
     /// （前提：当前 scheme 为五笔）。缺省档 = 清空（Sogou 语义）：装了五笔表、选了
-    /// 五笔模式之后，打一半按回车**不上屏、直接清掉** —— 本端没有设置界面，改不了这一档。
+    /// 五笔模式之后，打一半按回车**不上屏、直接清掉** —— 2026-10-21 起可在
+    /// 设置面板「五笔（86 码表）→ 回车行为」里改成「上屏原文」。
     func wubiReturnStyle() -> Int32 { opi_wubi_return_style() }
 
     /// 设回车风格（值域 0..=1）。**越界忽略**，同 `setWubiStyle`。

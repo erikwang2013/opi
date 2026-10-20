@@ -220,7 +220,10 @@ final class OpiInputController: IMKInputController {
             //   * ⚠️ autorepeat **绝不能放行**给下面的 `keyEvent`：`Shift+Space` 的
             //     SHIFT 不在 `router.rs` 的直通掩码里，放行会被当成**普通空格 = 选首候选**
             //     —— 那比「反复切全角」更坏。四轨同判（`vk.rs` / `opi_fcitx5.cpp` 同轮加）。
-            if event.type == .keyDown, !event.isARepeat { performHotkey(hot, sender: sender) }
+            if event.type == .keyDown, !event.isARepeat {
+                performHotkey(hot, sender: sender)
+                OpiStatusBar.shared.refresh()
+            }
             return true
         }
         guard let (keyval, states) = wire(event) else { return false }
@@ -352,6 +355,43 @@ final class OpiInputController: IMKInputController {
     /// 菜单改模式后刷新 preedit/候选（没有 NSEvent sender，用 Hub 的客户端）。
     func refreshFromOutside() { refresh(OpiClientHub.shared.client) }
 
+    /// 自绘虚拟键盘的唯一入口：把一次「按下」直接喂给引擎，**不合成系统按键**，
+    /// 所以不需要辅助功能授权、也不会把焦点从宿主应用抢走。返回 false = 这一键
+    /// 在引擎未处理时没有可用的 IMK 兜底（目前只有空缓冲的退格 —— IMK 没有
+    /// 「删除宿主文本」的出口，这是平台限制，面板据此提示）。
+    @discardableResult
+    func virtualKey(keyval: UInt32, states: UInt32) -> Bool {
+        let sender: Any?
+        if let stored = OpiClientHub.shared.client { sender = stored } else { sender = client() }
+        guard sender != nil else { return false }
+        let result = engine.keyEvent(keyval: keyval, states: states)
+        switch result.action {
+        case OpiAction.commit:
+            commit(result.text, to: sender)
+            refresh(sender)
+            return true
+        case OpiAction.handled:
+            refresh(sender)
+            return true
+        default:
+            // 引擎放行（空缓冲的空格/回车/字母在英文模式下常走这里）：
+            // 软键盘必须仍能出字，否则「点了没反应」。
+            if keyval == OpiKeySpace.space {
+                commit(" ", to: sender)
+                return true
+            }
+            if keyval == OpiKeySpace.ret {
+                commit("\n", to: sender)
+                return true
+            }
+            if keyval < OpiKeySpace.specialBase, let scalar = Unicode.Scalar(keyval) {
+                commit(String(Character(scalar)), to: sender)
+                return true
+            }
+            return false // 空缓冲退格：宿主文本删不了（平台限制，见 README）
+        }
+    }
+
     /// 符号面板上屏。面板保持打开，可连续点选。
     func commitFromOutside(_ text: String) {
         guard !text.isEmpty else { return }
@@ -370,6 +410,8 @@ final class OpiInputController: IMKInputController {
         engine.clear()
         lastMarked = ""
         lastCandidates = []
+        // 状态栏只在 opi 输入源激活时出现（用户 2026-10-21 要求）。
+        OpiStatusBar.shared.setActive(true)
     }
 
     /// 失焦 = fcitx5 轨的 `InputMethodEngine::reset()`：清引擎缓冲，
@@ -379,6 +421,8 @@ final class OpiInputController: IMKInputController {
         lastMarked = ""
         lastCandidates = []
         OpiCandidateWindow.shared.hide()
+        OpiKeyboardPanel.shared.hide()
+        OpiStatusBar.shared.setActive(false)
         super.deactivateServer(sender)
     }
 }

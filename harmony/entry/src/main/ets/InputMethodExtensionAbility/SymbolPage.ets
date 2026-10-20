@@ -6,11 +6,10 @@
 // 两张表都**不经过引擎**：数据来自 rawfile TSV（SymbolData.ets 解析），点格子直接
 // `insertText`。Android 同款（RARE/SYMBOL_PAGE 视图不碰引擎 scheme/mode）。
 //
-// 与 Android 的已知差异：符号页翻页用页头 ‹ › 而不是左右滑动 —— ArkUI 的
-// Swiper/手势在本机无 SDK 可验证，选可编译的按钮形态（见 docs/install/harmony.md）。
+// 翻页 = 左右滑动（Android HorizontalPager 同款；ArkUI Swiper）。页头只有标题/提示/
+// 关闭，没有返回箭头（Android SymbolPage 的紧凑头）。
 
 import { KeyboardController } from './KeyboardController';
-import { PanelHeader } from './Panels';
 import { Palette, paletteFor } from './Palette';
 import {
   SymbolCategory, radicalGlyph, rareChars, rareIndex, rareStrokeCounts, symbolCategories,
@@ -78,14 +77,19 @@ export struct SymbolPage {
     return Math.max(1, Math.ceil(cat.symbols.length / SYMBOL_PAGE_SIZE));
   }
 
-  /** 第 row 行、第 col 列在当前页的符号（空串 = 补位格）。 */
-  private symbolAt(row: number, col: number): string {
+  /** 第 pageNo 页、第 row 行、第 col 列的符号（空串 = 补位格）。 */
+  private symbolAt(pageNo: number, row: number, col: number): string {
     const cat: SymbolCategory | null = this.current();
     if (cat === null) {
       return '';
     }
-    const i: number = this.page * SYMBOL_PAGE_SIZE + row * SYMBOL_PER_ROW + col;
+    const i: number = pageNo * SYMBOL_PAGE_SIZE + row * SYMBOL_PER_ROW + col;
     return i < cat.symbols.length ? cat.symbols[i] : '';
+  }
+
+  /** 页下标数组（Swiper 的每个子页）。 */
+  private pages(): number[] {
+    return blanks(this.pageCount());
   }
 
   private selectCategory(i: number): void {
@@ -103,62 +107,61 @@ export struct SymbolPage {
 
   build() {
     Column() {
-      PanelHeader({
-        title: '符号',
-        hint: this.hint(),
-        onClose: () => {
-          this.ctrl.closePanel();
-        }
-      })
-      // 翻页条：Android 是左右滑动；本端用可编译的按钮形态（见文件头差异说明）。
+      // Android 的紧凑头：标题 + 提示 + 关闭（没有返回箭头那一行）。
       Row() {
-        Text('‹')
-          .fontSize(22).fontColor(this.page > 0 ? this.pal().accent : this.pal().dimFg)
-          .padding({ left: 12, right: 12, top: 2, bottom: 2 })
+        Text('符号')
+          .fontSize(15).fontWeight(FontWeight.Bold).fontColor(this.pal().panelFg)
+          .padding({ left: 14 })
+        Text(this.hint())
+          .fontSize(11).fontColor(this.pal().dimFg).layoutWeight(1)
+          .padding({ left: 10 }).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+        SymbolGlyph($r('sys.symbol.xmark'))
+          .fontSize(20).fontColor([this.pal().toolbarFg]).accessibilityText('关闭符号页')
+          .padding({ left: 8, right: 12, top: 4, bottom: 4 })
           .onClick(() => {
-            if (this.page > 0) {
-              this.page--;
-            }
+            this.ctrl.closePanel();
           })
-        Text(`${this.page + 1}/${Math.max(1, this.pageCount())}`)
-          .fontSize(12).fontColor(this.pal().dimFg).layoutWeight(1).textAlign(TextAlign.Center)
-        Text('›')
-          .fontSize(22).fontColor(this.page + 1 < this.pageCount() ? this.pal().accent : this.pal().dimFg)
-          .padding({ left: 12, right: 12, top: 2, bottom: 2 })
-          .onClick(() => {
-            if (this.page + 1 < this.pageCount()) {
-              this.page++;
-            }
-          })
-      }.width('100%').height(28).backgroundColor(this.pal().barBg)
+      }.width('100%').height(42).backgroundColor(this.pal().toolbarBg)
 
       if (this.current() === null) {
         Text('没有类目数据（symbol_categories.tsv 未随包）')
           .fontSize(14).fontColor(this.pal().dimFg).layoutWeight(1)
       } else {
-        Column() {
-          ForEach(rowsOfRange(0, SYMBOL_ROWS - 1, 1), (r: number[]) => {
-            Row() {
-              ForEach(blanks(SYMBOL_PER_ROW), (col: number) => {
-                Stack({ alignContent: Alignment.Center }) {
-                  Text(this.symbolAt(r[0], col))
-                    .fontSize(this.symbolAt(r[0], col).length > 1 ? 14 : (this.elder === 1 ? 26 : 22))
-                    .fontColor(this.pal().keyFg).maxLines(1)
-                    .textOverflow({ overflow: TextOverflow.Ellipsis })
-                }
-                .layoutWeight(1).height('100%').margin(2).borderRadius(6)
-                .backgroundColor(this.symbolAt(r[0], col).length === 0
-                  ? this.pal().panelBg : this.pal().keyBg)
-                .onClick(() => {
-                  const s: string = this.symbolAt(r[0], col);
-                  if (s.length > 0) {
-                    this.ctrl.commitText(s);
-                  }
-                })
-              }, (col: number) => `sym-${this.page}-${r[0]}-${col}`)
-            }.width('100%').layoutWeight(1)
-          }, (r: number[]) => `sym-row-${r[0]}-${this.page}`)
-        }.layoutWeight(1).width('100%').padding({ left: 4, right: 4, top: 4, bottom: 4 })
+        // 左右滑动翻页（Android HorizontalPager）；换类目回第 1 页。
+        Swiper() {
+          ForEach(this.pages(), (pageNo: number) => {
+            Column() {
+              ForEach(rowsOfRange(0, SYMBOL_ROWS - 1, 1), (r: number[]) => {
+                Row() {
+                  ForEach(blanks(SYMBOL_PER_ROW), (col: number) => {
+                    Stack({ alignContent: Alignment.Center }) {
+                      Text(this.symbolAt(pageNo, r[0], col))
+                        .fontSize(this.symbolAt(pageNo, r[0], col).length > 1 ? 14
+                          : (this.elder === 1 ? 26 : 22))
+                        .fontColor(this.pal().keyFg).maxLines(1)
+                        .textOverflow({ overflow: TextOverflow.Ellipsis })
+                    }
+                    .layoutWeight(1).height('100%').margin(2).borderRadius(6)
+                    .backgroundColor(this.symbolAt(pageNo, r[0], col).length === 0
+                      ? this.pal().panelBg : this.pal().keyBg)
+                    .onClick(() => {
+                      const s: string = this.symbolAt(pageNo, r[0], col);
+                      if (s.length > 0) {
+                        this.ctrl.commitText(s);
+                      }
+                    })
+                  }, (col: number) => `sym-${pageNo}-${r[0]}-${col}`)
+                }.width('100%').layoutWeight(1)
+              }, (r: number[]) => `sym-row-${pageNo}-${r[0]}`)
+            }.width('100%').height('100%').padding({ left: 4, right: 4, top: 4, bottom: 4 })
+          }, (pageNo: number) => `sym-page-${pageNo}-${this.selected}`)
+        }
+        .layoutWeight(1).width('100%')
+        .vertical(false).loop(false).indicator(false)
+        .index(this.page)
+        .onChange((index: number) => {
+          this.page = index;
+        })
       }
 
       // 底部分类条（22 项，可横滑；序号.名称 与 Android 一致）。
@@ -240,13 +243,17 @@ export struct RarePanel {
     Column() {
       // 生僻字自带页头：返回 = 逐级回退（部首 ← 笔画 ← 字），收起 = 直接退出。
       Row() {
-        Text('‹ 返回')
-          .fontSize(14).fontColor(this.pal().accent).padding({ left: 12, right: 8 })
-          .onClick(() => {
-            this.back();
-          })
+        // Android：只在有上一级（部首/笔画）时出现返回；根部只有「收起」。
+        if (this.radical !== 0) {
+          Text('‹ 返回')
+            .fontSize(14).fontColor(this.pal().accent).padding({ left: 12, right: 8 })
+            .onClick(() => {
+              this.back();
+            })
+        }
         Text(this.title())
           .fontSize(14).fontColor(this.pal().panelFg).layoutWeight(1).maxLines(1)
+          .padding({ left: 12 })
           .textOverflow({ overflow: TextOverflow.Ellipsis })
         Text('收起')
           .fontSize(13).fontColor(this.pal().accent).padding({ left: 8, right: 12 })
