@@ -118,8 +118,8 @@ final class KeyboardLayout: UIView {
     /// 摆法与转发理由同上；画法与选项在 `InputModePanel.swift`。
     private let modePanel = InputModePanel()
     /// 生僻字面板（2026-10-14）。同上；数据与三级状态机在 `RarePanel.swift`。
-    /// ⚠️ 索引文件（`rare_index.tsv`）本仓 iOS 侧**没有** —— 面板会显示可见提示，
-    /// 见那里的头注。
+    /// 索引文件（`rare_index.tsv`）由 `scripts/apple/package-ios.sh` 拷进 appex
+    /// （2026-10-20 起）；缺失时面板会显示可见提示，见那里的头注。
     private let rarePanel = RarePanel()
 
     init() {

@@ -14,14 +14,13 @@
 // （Compose 的 `LazyVerticalGrid` / `LazyRow` 在 UIKit 里没有对应物 —— 用
 // `SymbolPanel` 那套「竖向滚动 + 固定行高的横向 stack」画，见 `makeGrid`）。
 //
-// ⚠️ **数据文件本仓 iOS 侧不存在**（2026-10-14 实查）：Android 的索引是
-// `android/app/src/main/assets/rare_index.tsv`（102,999 行 / 1.1MB，由
-// `scripts/gen_rare_index.py` 从 Unihan 生成、**入库**）。本目录下**没有**这个文件，
-// **也没有**把它拷进扩展 bundle 的构建步骤 —— 所以这条路的现状是：
-// **UI 骨架完整、数据永远为空**，面板会显示「索引未打包」的可见提示。
-// 要让它真能用，得把那份 TSV 加进 Xcode target 的 Copy Bundle Resources
-// （名字必须是 `rare_index.tsv`，解析按 `<字><TAB>部首号<TAB>总笔画数>`）。
-// 本机不能验证「加进去之后能读到」—— 那是 Mac 上的事。
+// 数据文件：Android 的索引是 `android/app/src/main/assets/rare_index.tsv`
+// （102,999 行 / 1.1MB，由 `scripts/gen_rare_index.py` 从 Unihan 生成、**入库**）。
+// 2026-10-20 起 `scripts/apple/package-ios.sh` 会把它拷进扩展 bundle（与 .opid 词库同处），
+// 名字必须是 `rare_index.tsv`（解析按 `<字><TAB>部首号<TAB>总笔画数>`）。
+// 若源文件缺失，打包脚本会硬失败；面板侧仍保留「索引未打包」的可见提示做运行期兜底。
+// ⚠️ 本机不能验证「打包后真能读到」—— 那是 Mac / 真机上的事；走 Xcode 集成时
+// 仍须把 TSV 加进扩展 target 的 Copy Bundle Resources。
 
 import UIKit
 
@@ -81,7 +80,7 @@ enum RareIndex {
     /// 从**扩展自己的 bundle** 读索引（`Bundle.main` 在键盘扩展里就是扩展 bundle，
     /// 与 `loadDictionaries()` 取 luna.opid 同一条路）。
     ///
-    /// 返回 nil = **没打包**（本仓 iOS 侧的现状）/读不出来。调用方要把它画成
+    /// 返回 nil = **没打包**（构建漏拷）/读不出来。调用方要把它画成
     /// 可见的提示，不能留白（空白面板与「这个部首没字」分不出来）。
     ///
     /// ⚠️ 同步读 1.1MB（Android 也是首次打开时读、也缓存）：键盘扩展的主线程上
@@ -118,7 +117,7 @@ final class RarePanel: UIView {
 
     /// 索引。**失败也记成「已读过」**（`indexLoaded`）—— 与 `SymbolPanel` 的
     /// 「空结果不缓存」**方向相反**，别照抄那边：那边的空是**暂时**的（引擎还没装载），
-    /// 这里的空是**永久**的（bundle 里没有这个文件，进程活着的时候不会长出来）。
+    /// 这里的空是**永久**的（文件没进 bundle 时，进程活着的时候不会长出来）。
     private var index: [Int: [Int: [String]]] = [:]
     private var indexLoaded = false
     private var radical: Int?

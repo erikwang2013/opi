@@ -61,7 +61,7 @@ enum KeyboardFunctionKey {
     case showModes
     /// 打开**生僻字面板**（2026-10-14）。入口是笔画键盘功能行的「生僻字」键
     /// （对齐 Android `StrokeKeyboard` 的 `onRare`）——「笔画打不出来」的下一步就是它。
-    /// ⚠️ 面板数据（`rare_index.tsv`）本仓 iOS 侧**不存在**，见 `RarePanel.swift` 头注。
+    /// 面板数据（`rare_index.tsv`）由 `package-ios.sh` 打进 appex，见 `RarePanel.swift` 头注。
     case showRare
     /// 重输：清掉当前组合重来（2026-10-10 Android 用户裁决「增加重输按钮，
     /// 去掉分词按钮」）。9 键盘右列专属。缓冲空时是空操作（`clear()` 幂等）。

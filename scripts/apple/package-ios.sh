@@ -229,6 +229,11 @@ for dict in luna trad stroke wubi86; do
   [ -f "$src" ] || { echo "!! 缺少词库 $src；不能产出可用 IPA" >&2; exit 1; }
   cp "$src" "$app/PlugIns/OpiKeyboard.appex/$dict.opid"
 done
+# 生僻字索引（`RarePanel` 从扩展 bundle 读，文件名必须是 `rare_index.tsv`）。
+# 缺了面板只会显示「索引未打包」—— 那种 IPA 看着完整、功能残缺，所以这里硬失败。
+rare="android/app/src/main/assets/rare_index.tsv"
+[ -f "$rare" ] || { echo "!! 缺少生僻字索引 $rare；不能产出可用 IPA" >&2; exit 1; }
+cp "$rare" "$app/PlugIns/OpiKeyboard.appex/rare_index.tsv"
 # 图标用项目宠物图标；sips 生成 iOS 需要的尺寸（AppIcon60x60@2x/@3x、AppIcon76x76@2x）。
 icon="desktop/icons/opi-pet.png"
 [ -f "$icon" ] || { echo "!! 缺少图标 $icon" >&2; exit 1; }

@@ -178,6 +178,7 @@ jobs:
           grep -q 'Payload/Opi.app/Opi' /tmp/opi-ipa-list.txt
           grep -q 'Payload/Opi.app/PlugIns/OpiKeyboard.appex/OPIKeyboard' /tmp/opi-ipa-list.txt
           grep -q 'Payload/Opi.app/PlugIns/OpiKeyboard.appex/luna.opid' /tmp/opi-ipa-list.txt
+          grep -q 'Payload/Opi.app/PlugIns/OpiKeyboard.appex/rare_index.tsv' /tmp/opi-ipa-list.txt
           plutil -lint dist/apple/ios/Opi.app/Info.plist
           plutil -lint dist/apple/ios/Opi.app/PlugIns/OpiKeyboard.appex/Info.plist
           host_id="$(plutil -extract CFBundleIdentifier raw dist/apple/ios/Opi.app/Info.plist)"

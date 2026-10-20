@@ -23,7 +23,7 @@
 >
 > **2026-10-20 追加**：新增最小宿主 App `HostApp/OpiApp.swift`（键盘扩展不能独立安装）；
 > `scripts/apple/package-ios.sh` 现在会组装 `Opi.app`（内嵌 `PlugIns/OpiKeyboard.appex`、
-> `luna/trad/stroke/wubi86` 词库与宠物图标），并产出
+> `luna/trad/stroke/wubi86` 词库、`rare_index.tsv` 与宠物图标），并产出
 > `opi-ios-keyboard-<版本>-unsigned.ipa`。它仍是**未签名** IPA：iOS 不会直接安装，
 > 需用 Sideloadly / AltStore 以用户自己的 Apple ID 重签；**签名后的真机运行仍未验证**。
 >
@@ -101,7 +101,7 @@
 | `InputModes.swift` | 输入模式（2026-10-14）：九项枚举（`InputMode`）与三根轴的映射、各模式的**键位表**（26/9/14/笔画）、`applyInputMode`（控制器扩展）。**不含**视图装配 |
 | `ModeKeyRenderer.swift` | `[ModeRow]` → 视图树的**尺寸算式**（2026-10-14 从 `KeyboardLayout` 搬出）。含「列」形状（9 键的标点列/右功能列）与行高权重 |
 | `InputModePanel.swift` | 输入模式**菜单**（2026-10-14）：九项 chip，选中即换；2026-10-20 起左上角返回箭头（原右上角关闭已撤）。摆位在 `KeyboardLayout`，语义在 `applyInputMode` |
-| `RarePanel.swift` | 生僻字面板（2026-10-14）：`RareIndex`（TSV 解析）+ 部首→笔画→字三级状态机，提交直提。⚠️ 索引文件本仓 iOS 侧**不存在**（见该文件头注与下面新节） |
+| `RarePanel.swift` | 生僻字面板（2026-10-14）：`RareIndex`（TSV 解析）+ 部首→笔画→字三级状态机，提交直提。索引 `rare_index.tsv` 由 `package-ios.sh` 拷进 appex（2026-10-20 起；缺文件则打包硬失败） |
 | `SymbolPanel.swift` | 符号层的网格（竖向滚动）。数据来自 `OpiEngine.commonSymbols()`，点击直提。另含 `canRender`（字形判定，表情层共用） |
 | `EmojiPanel.swift` | 表情页（2026-10-18 改为 Android 同布局）：顶部 `[‹ 返回][自有 \| Emoji \| 颜文字][🔍]` + 底部分类条 + 两套工具条。Emoji 数据来自 `OpiEngine.emojiSymbols()`/`emojiGroups()`，自有 = 4 列贴纸网格（点击复制图片），颜文字来自内嵌数据。**2026-10-20 起「自有」缺省隐藏**（`showOwn = false`；无设置页）。⚠️ 这次改写**未编译** |
 | `EmojiGridView.swift` | 表情页的网格（2026-10-18）：固定列数、显式行高、贴纸格 / 文本格两套；滚动位置回调给面板反推分类高亮。从 `EmojiPanel` 拆出（500 行门禁） |
@@ -714,16 +714,19 @@ xcodebuild -create-xcframework \
 | `stroke.opid`（约 5.4 MB） | `data/generated/stroke.opid` | 否（2026-10-14 加：笔画键盘用；失败则该方案无候选） |
 | `wubi86.opid`（约 3.2 MB） | `data/generated/wubi86.opid` | 否（2026-10-14 加：五笔用；只装**一张**，86/98 二选一） |
 | `wubi98.opid` | `data/generated/wubi98.opid` | 否（本轮**没接** —— 本端没有偏好存储，恒装 86） |
-| `rare_index.tsv`（1.1 MB） | `android/app/src/main/assets/rare_index.tsv` | 否（2026-10-14：生僻字面板用；**本端没接**，面板显示「未打包」提示） |
+| `rare_index.tsv`（1.1 MB） | `android/app/src/main/assets/rare_index.tsv` | 是（2026-10-20 起 `package-ios.sh` 拷进 appex；缺文件则打包硬失败） |
 | `fallback.opid` | `data/generated/fallback.opid` | 不用放 —— 内置回退词库已编译进二进制 |
 
 `KeyboardViewController.loadDictionaries()` 用 `Bundle.main.path(forResource:ofType:)` 找；
 **扩展的 `Bundle.main` 是扩展自己**，不是宿主 App。找不到时退化为内置回退词库并提示。
 
-⚠️ **上面这些文件本仓 iOS 侧没有一条构建步骤把它们拷进扩展 bundle**（Xcode 工程还没进仓，
-`loadBundledDictionaries()` 是 2026-10-14 新加的，跑起来只会打 NSLog）。
-文件名必须与 `data/generated/` 下**逐字相同**（`stroke.opid` / `wubi86.opid` /
-`rare_index.tsv`）—— 改了名这里找不到，而且**没有任何报错**，只是「那个方案没有候选」。
+2026-10-20 起，unsigned IPA 这条路（`scripts/apple/package-ios.sh`）会把上面五个文件
+（`luna` / `trad` / `stroke` / `wubi86` / `rare_index`）从 `android/app/src/main/assets/`
+拷进 appex 根目录 —— 缺任何一个都会打包硬失败。**Xcode 工程集成这条路仍没有**构建步骤
+（工程还没进仓）；那时要手动把文件加进扩展 target 的 Copy Bundle Resources。
+文件名必须与源文件**逐字相同**（`stroke.opid` / `wubi86.opid` /
+`rare_index.tsv`）—— 改了名这里找不到：`.opid` 没有报错、只是「那个方案没有候选」，
+生僻字面板则显示「索引未打包」提示。
 三条失败语义与 Android `EngineLoader` 相同：缺文件 / 装载 false → 只降级那一个方案，
 不碰已装好的 luna/trad。
 
@@ -1263,7 +1266,7 @@ U+1FAEB 那种要判的）从不被过滤，多码位（VS16 形/键帽）反倒
 | 14 键（`qw er ty ui op / as df gh jk l / zx cv bn m`，发首字母） | `ModeKeyTables.fourteenKeyRows` | 已写 |
 | 大 9 键 | 同 9 键表，只差 `fontSize`（21→30） | 已写 |
 | 笔画（`一丨丿丶乙` → `h/s/p/n/z`） | `ModeKeyTables.strokeRows` | 已写 |
-| 生僻字面板（部首→笔画→字，8 列，直提） | `RarePanel.swift` | **UI 骨架完整、数据永远为空** —— see 缺口 |
+| 生僻字面板（部首→笔画→字，8 列，直提） | `RarePanel.swift` | 已写；`rare_index.tsv` 由 `package-ios.sh` 打包（2026-10-20），真机读取未验证 |
 | 选中模式的落地动作 | `InputModes.swift` 的 `applyInputMode` | 已写。**与 Android 有一处能力差异** —— see 缺口 |
 | 笔画 / 五笔码表装载 | `KeyboardViewController.loadBundledDictionaries()` | 已写。文件不在 bundle 里，现状只打 NSLog |
 | 方案族 / 五笔族包装 | `OpiEngineScheme.swift` / `OpiEngineWubi.swift` | 已写。**除 `setScheme`/`loadStroke`/`loadWubi` 外无调用方** |
@@ -1352,9 +1355,9 @@ iOS **没有**任何测试或注释断言候选次序 —— 实读 grep 的结�
 
 ### 未做 / 未知数（如实记）
 
-- **生僻字面板的数据**：`rare_index.tsv` 在 `android/app/src/main/assets/`，本目录下没有，
-  也没有构建步骤拷它 ⇒ 面板第一层就会显示「（生僻字索引未打包 · 见 ios/README.md）」。
-  要让它真能用：把那份 TSV 加进 Xcode target 的 Copy Bundle Resources，**名字别改**。
+- **生僻字面板的数据**：`rare_index.tsv` 在 `android/app/src/main/assets/`，2026-10-20 起
+  `package-ios.sh` 会把它拷进 appex（缺文件则打包失败）；面板能否在真机上读到**仍未验证**。
+  走 Xcode 集成时要把那份 TSV 加进扩展 target 的 Copy Bundle Resources，**名字别改**。
 - **五笔 98**：本端没有偏好存储，恒装 86（Android 缺省也是 86）；98 要先有设置界面。
 - **双拼布局 / 五笔五个旋钮**：只包了出口（`OpiEngineScheme`/`OpiEngineWubi`），**没有 UI**。
 - **`opi_wubi_next_keys()` 故意没包**：iOS 没有编码提示条，包一个没有调用方的出口
