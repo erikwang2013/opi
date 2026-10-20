@@ -196,8 +196,6 @@
 
 @media (max-width: 600px) {
   .memory-intro-pane { padding: 12px 14px; gap: 10px; }
-  .memory-intro-single img { width: 88px; height: 88px; }
-  .memory-intro-single p { font-size: .9rem; }
   .memory-intro-title { font-size: .9rem; }
   .memory-intro-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 6px; }
   .memory-intro-item img { width: 48px; height: 48px; }

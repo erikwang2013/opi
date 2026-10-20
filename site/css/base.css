@@ -323,9 +323,7 @@ body.memory-open { overflow: hidden; }
 .memory-intro::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle at 50% 44%, var(--intro-mood, #2E8B80), transparent 68%); opacity: .13; animation: memory-bg-breathe 4.4s ease-in-out infinite; }
 .memory-intro-pane { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; width: 100%; height: 100%; padding: 18px 22px; opacity: 0; visibility: hidden; transition: opacity .3s var(--ease), visibility .3s var(--ease); }
 .memory-intro-pane.is-active { opacity: 1; visibility: visible; }
-.memory-intro-single img { width: 112px; height: 112px; object-fit: contain; filter: drop-shadow(0 16px 22px rgba(20, 32, 29, .16)); }
-.memory-intro-single p { margin: 0; color: var(--primary-deep); font-size: 1rem; font-weight: 700; letter-spacing: .06em; }
-.memory-intro-single span, .memory-intro-all > span { color: var(--ink-faint); font-family: var(--font-mono); font-size: .62rem; letter-spacing: .08em; }
+.memory-intro-all > span { color: var(--ink-faint); font-family: var(--font-mono); font-size: .62rem; letter-spacing: .08em; }
 .memory-intro-all { gap: 14px; }
 .memory-intro-title { margin: 0; color: var(--primary-deep); font-size: 1rem; font-weight: 700; letter-spacing: .06em; }
 .memory-intro-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px 8px; width: 100%; max-width: 620px; }

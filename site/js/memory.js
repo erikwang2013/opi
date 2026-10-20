@@ -30,22 +30,21 @@
   };
 
   let memoryBuilt = false;
-  let memoryIntroSingle = null;
-  let memoryIntroSingleImg = null;
-  let memoryIntroSingleLabel = null;
-  let memoryIntroSingleCount = null;
   let memoryIntroAll = null;
   let memoryIntroGrid = null;
   let memoryIntroAllCount = null;
   let memoryRaf = 0;
   let memoryEndTimer = 0;
   let memoryIntroTimer = 0;
+  let memoryLoadTimer = 0;
   let memoryObserver = null;
   let memoryRevealTimer = 0;
   let memoryRevealQueue = [];
   let memoryLastReveal = 0;
   let memoryPreviousFocus = null;
   let memoryPaused = false;
+  const MEMORY_LOADING_MIN_MS = 2800;
+  const MEMORY_LOADING_MAX_MS = 4200;
 
   const markMemorySeen = () => {
     try { localStorage.setItem(memorySeenKey, '1'); } catch (_) { /* private mode */ }
@@ -95,16 +94,6 @@
 
   const buildMemoryIntro = () => {
     if (!memoryIntro || memoryIntro.children.length) return;
-    const single = document.createElement('div');
-    single.className = 'memory-intro-pane memory-intro-single';
-    const img = document.createElement('img');
-    img.width = 112;
-    img.height = 112;
-    img.alt = '';
-    const label = document.createElement('p');
-    const count = document.createElement('span');
-    single.append(img, label, count);
-
     const all = document.createElement('div');
     all.className = 'memory-intro-pane memory-intro-all';
     const title = document.createElement('p');
@@ -123,18 +112,14 @@
       petImg.width = 64;
       petImg.height = 64;
       petImg.alt = name;
-      petImg.loading = 'lazy';
+      petImg.loading = 'eager';
       petImg.decoding = 'async';
       const caption = document.createElement('figcaption');
       caption.textContent = name;
       item.append(petImg, caption);
       grid.append(item);
     });
-    memoryIntro.append(single, all);
-    memoryIntroSingle = single;
-    memoryIntroSingleImg = img;
-    memoryIntroSingleLabel = label;
-    memoryIntroSingleCount = count;
+    memoryIntro.append(all);
     memoryIntroAll = all;
     memoryIntroGrid = grid;
     memoryIntroAllCount = allCount;
@@ -152,6 +137,7 @@
     if (memoryRaf) cancelAnimationFrame(memoryRaf);
     if (memoryEndTimer) clearTimeout(memoryEndTimer);
     if (memoryIntroTimer) clearTimeout(memoryIntroTimer);
+    if (memoryLoadTimer) clearTimeout(memoryLoadTimer);
     if (memoryRevealTimer) clearTimeout(memoryRevealTimer);
     memoryObserver?.disconnect();
     memoryObserver = null;
@@ -159,10 +145,10 @@
     memoryRaf = 0;
     memoryEndTimer = 0;
     memoryIntroTimer = 0;
+    memoryLoadTimer = 0;
     memoryRevealTimer = 0;
     memoryIntro?.querySelectorAll('img').forEach((img) => img.getAnimations().forEach((a) => a.cancel()));
     memoryIntro?.classList.remove('is-showing');
-    memoryIntroSingle?.classList.remove('is-active');
     memoryIntroAll?.classList.remove('is-active');
   };
 
@@ -227,41 +213,47 @@
     return 'translate3d(0, 62vh, 0) scale(.16) rotate(80deg)';
   };
 
-  const startSinglePhase = () => {
-    memoryIntroSingle.classList.add('is-active');
-    let index = 0;
-    const show = () => {
-      const [file, label, mood] = memoryIntroForms[index];
-      memoryIntro.style.setProperty('--intro-mood', mood);
-      memoryIntroSingleImg.src = `assets/pet/forms/${file}`;
-      memoryIntroSingleImg.alt = label;
-      memoryIntroSingleLabel.textContent = label;
-      memoryIntroSingleCount.textContent = `${index + 1} / ${memoryIntroForms.length}`;
-      memoryIntroSingleImg.animate(
-        [{ transform: introEntry(index) },
-         { transform: 'scale(1.06) rotate(-3deg)', offset: .8 },
-         { transform: 'none' }],
-        { duration: 720, easing: 'cubic-bezier(.16,1,.3,1)' },
-      );
-      index += 1;
-      if (index < memoryIntroForms.length) {
-        memoryIntroTimer = window.setTimeout(show, 1800);
-      } else {
-        memoryIntroTimer = window.setTimeout(() => {
-          memoryIntroSingle.classList.remove('is-active');
-          startAllPhase();
-        }, 700);
-      }
-    };
-    show();
-  };
-
-  const startAllPhase = () => {
-    memoryIntroAll.classList.add('is-active');
+  const startMemoryIntro = () => {
+    if (!memoryIntro || reduceMotion) { playMemory(); return; }
+    buildMemoryIntro();
+    stopMemory();
+    const started = performance.now();
     const items = $$('.memory-intro-item', memoryIntroGrid);
+    const images = items.map((item) => $('img', item));
+    let loaded = 0;
+    let finished = false;
+    memoryIntro.classList.add('is-showing');
+    memoryIntroAll.classList.add('is-active');
+
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      if (memoryIntroTimer) clearTimeout(memoryIntroTimer);
+      if (memoryLoadTimer) clearTimeout(memoryLoadTimer);
+      memoryIntro.classList.remove('is-showing');
+      playMemory();
+    };
+    const checkLoaded = () => {
+      if (finished) return;
+      const elapsed = performance.now() - started;
+      if ((elapsed >= MEMORY_LOADING_MIN_MS && loaded >= images.length) ||
+          elapsed >= MEMORY_LOADING_MAX_MS) {
+        finish();
+        return;
+      }
+      memoryLoadTimer = window.setTimeout(checkLoaded, 120);
+    };
+    images.forEach((img) => {
+      const done = () => { loaded += 1; };
+      if (img.complete) done();
+      else { img.addEventListener('load', done, { once: true }); img.addEventListener('error', done, { once: true }); }
+    });
+    checkLoaded();
+
     items.forEach((item) => { item.style.opacity = '0'; item.classList.remove('is-current'); });
     let index = 0;
     const enter = () => {
+      if (finished) return;
       const item = items[index];
       memoryIntro.style.setProperty('--intro-mood', memoryIntroForms[index][2]);
       item.style.opacity = '1';
@@ -270,45 +262,33 @@
         { duration: 560, easing: 'cubic-bezier(.16,1,.3,1)' },
       );
       index += 1;
-      memoryIntroAllCount.textContent = `${index} / ${memoryIntroForms.length}`;
-      if (index < items.length) memoryIntroTimer = window.setTimeout(enter, 150);
-      else memoryIntroTimer = window.setTimeout(cycleMoods, 500);
+      memoryIntroAllCount.textContent = `加载中 · ${index} / ${memoryIntroForms.length}`;
+      if (index < items.length) memoryIntroTimer = window.setTimeout(enter, 130);
+      else cycleMoods();
     };
     const cycleMoods = () => {
+      if (finished) return;
       let active = 0;
       const next = () => {
+        if (finished) return;
         items.forEach((item, i) => item.classList.toggle('is-current', i === active));
         memoryIntro.style.setProperty('--intro-mood', memoryIntroForms[active][2]);
-        memoryIntroAllCount.textContent = `${active + 1} / ${memoryIntroForms.length}`;
-        active += 1;
-        if (active < items.length) {
-          memoryIntroTimer = window.setTimeout(next, 520);
-        } else {
-          memoryIntroTimer = window.setTimeout(() => {
-            memoryIntro.classList.remove('is-showing');
-            memoryIntroTimer = window.setTimeout(playMemory, 340);
-          }, 900);
-        }
+        active = (active + 1) % items.length;
+        memoryIntroTimer = window.setTimeout(next, 420);
       };
       next();
     };
     enter();
   };
 
-  const startMemoryIntro = () => {
-    if (!memoryIntro || reduceMotion) { playMemory(); return; }
-    buildMemoryIntro();
-    stopMemory();
-    memoryIntro.classList.add('is-showing');
-    startSinglePhase();
-  };
-
   const playMemory = () => {
     if (!memoryTimeline || !memoryViewport || !memoryProgress) return;
     stopMemory();
     resetMemoryItems();
-    memoryLastReveal = 0;
     memoryViewport.scrollTop = 0;
+    const firstItem = memoryTimeline.querySelector('.memory-item');
+    if (firstItem) firstItem.classList.add('is-in', 'is-current');
+    memoryLastReveal = performance.now();
     memoryProgressNow();
     if (reduceMotion) {
       $$('.memory-item, .memory-pet', memoryTimeline).forEach((el) => el.classList.add('is-in'));
