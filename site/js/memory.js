@@ -85,11 +85,11 @@
       version: $('.release-version', item)?.textContent?.trim() || '',
       date: $('.release-date', item)?.textContent?.trim() || '',
       note: $('.release-note', item)?.textContent?.trim() || '',
-    })).filter((row) => row.version).reverse(); // oldest → newest (top → bottom)
+    })).filter((row) => row.version); // newest → oldest (top → bottom), loading upward from v1.0.0
     const nodes = [];
     rows.forEach((row, index) => {
       const li = document.createElement('li');
-      li.className = 'memory-item' + (index === rows.length - 1 ? ' is-latest' : '');
+      li.className = 'memory-item' + (index === 0 ? ' is-latest' : '');
       const version = document.createElement('span');
       version.className = 'memory-version';
       version.textContent = row.version;
@@ -117,7 +117,8 @@
       }
     });
     memoryFormsEntry = buildFormsEntry();
-    memoryTimeline.replaceChildren(memoryFormsEntry, ...nodes);
+    nodes.push(memoryFormsEntry);
+    memoryTimeline.replaceChildren(...nodes);
   };
 
   const buildMemoryIntro = () => {
@@ -143,7 +144,7 @@
   const memoryProgressNow = () => {
     if (!memoryViewport || !memoryProgress) return;
     const max = Math.max(1, memoryViewport.scrollHeight - memoryViewport.clientHeight);
-    memoryProgress.style.transform = `scaleX(${Math.min(1, memoryViewport.scrollTop / max)})`;
+    memoryProgress.style.transform = `scaleX(${Math.min(1, 1 - memoryViewport.scrollTop / max)})`;
   };
 
   const stopMemory = () => {
@@ -201,7 +202,7 @@
       memoryLastReveal = performance.now();
     }
     if (memoryRevealQueue.length) {
-      const wait = Math.max(0, 1800 - (performance.now() - memoryLastReveal));
+      const wait = Math.max(0, 1500 - (performance.now() - memoryLastReveal));
       memoryRevealTimer = window.setTimeout(revealMemoryNext, wait);
     }
   };
@@ -209,7 +210,7 @@
   const queueMemoryReveal = (el) => {
     if (!el || el.classList.contains('is-in') || el.dataset.memoryQueued) return;
     el.dataset.memoryQueued = '1';
-    const wait = Math.max(0, 1800 - (performance.now() - memoryLastReveal));
+    const wait = Math.max(0, 1500 - (performance.now() - memoryLastReveal));
     memoryRevealQueue.push(el);
     if (!memoryRevealTimer) {
       if (wait === 0) revealMemoryNext();
@@ -262,7 +263,7 @@
     if (!memoryTimeline || !memoryViewport || !memoryProgress) return;
     stopMemory();
     resetMemoryItems();
-    memoryViewport.scrollTop = 0;
+    memoryViewport.scrollTop = memoryViewport.scrollHeight;
     if (memoryFormsEntry) memoryFormsEntry.classList.add('is-in');
     memoryLastReveal = performance.now();
     memoryProgressNow();
@@ -273,7 +274,7 @@
     if ('IntersectionObserver' in window) {
       memoryObserver = new IntersectionObserver((entries) => {
         entries.filter((entry) => entry.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
+          .sort((a, b) => b.boundingClientRect.top - a.boundingClientRect.top)
           .forEach((entry) => queueMemoryReveal(entry.target));
       }, { root: memoryViewport, rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
       $$('.memory-item, .memory-pet, .memory-forms-entry', memoryTimeline).forEach((el) => memoryObserver.observe(el));
@@ -282,8 +283,8 @@
     }
     const max = Math.max(0, memoryViewport.scrollHeight - memoryViewport.clientHeight);
     if (max <= 0) return;
-    const speed = max / 240000; // 约 4 分钟走完全程
-    let hold = 3000; // 到顶后先停留，让人看清十二种形态与 v1.0.0
+    const speed = max / 180000; // 约 3 分钟走完全程
+    let hold = 3000; // 从底部开始，先停留看清十二种形态与 v1.0.0
     let last = 0;
     const step = (now) => {
       if (!last) last = now;
@@ -293,8 +294,8 @@
         if (hold > 0) {
           hold = Math.max(0, hold - dt);
         } else {
-          memoryViewport.scrollTop = Math.min(max, memoryViewport.scrollTop + speed * dt);
-          if (memoryViewport.scrollTop >= max - 1) {
+          memoryViewport.scrollTop = Math.max(0, memoryViewport.scrollTop - speed * dt);
+          if (memoryViewport.scrollTop <= 1) {
             memoryProgressNow();
             memoryEndTimer = window.setTimeout(closeMemory, 1200);
             return;

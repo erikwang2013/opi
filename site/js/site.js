@@ -124,10 +124,10 @@
     });
   }
 
-  // History scroller starts at the newest release (top); scrolling down walks back in time.
+  // History scroller starts at the oldest release (bottom); scrolling up walks forward in time.
   const releaseScroll = $('.release-scroll');
   if (releaseScroll) {
-    window.requestAnimationFrame(() => { releaseScroll.scrollTop = 0; });
+    window.requestAnimationFrame(() => { releaseScroll.scrollTop = releaseScroll.scrollHeight; });
   }
 
   // Keep the active dot honest when arriving with a hash (e.g. /#download).
