@@ -235,7 +235,7 @@
 .release-version { font-family: var(--font-mono); font-size: .82rem; font-weight: 700; letter-spacing: -.02em; }
 .release-version b { margin-left: 4px; padding: 2px 5px; border-radius: 999px; background: var(--accent); color: #fff; font-family: var(--font-sans); font-size: .56rem; font-weight: 500; vertical-align: 2px; }
 .release-date { color: var(--ink-faint); font-family: var(--font-mono); font-size: .62rem; }
-.release-note { min-width: 0; overflow: hidden; color: var(--ink-soft); font-size: .78rem; text-overflow: ellipsis; white-space: nowrap; }
+.release-note { min-width: 0; overflow: hidden; color: var(--ink-soft); font-size: .78rem; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; }
 .release-arrow { color: var(--ink-faint); font-size: .82rem; transition: color .2s, transform .2s; }
 .release-item a:hover .release-arrow, .release-latest a:hover .release-arrow { color: var(--accent); transform: translate(2px, -2px); }
 .release-pet { display: flex; padding: 4px 0; pointer-events: none; }

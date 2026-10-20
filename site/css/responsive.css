@@ -178,3 +178,18 @@
   .forms-note { margin-top: 12px; }
   .feature-card { min-height: 178px; }
 }
+
+@media (max-width: 600px) {
+  .memory-overlay { padding: 10px; }
+  .memory-card { max-height: 92vh; border-radius: 16px; }
+  .memory-head { padding: 18px 18px 12px; }
+  .memory-head h2 { font-size: 1.65rem; }
+  .memory-head p { font-size: .76rem; }
+  .memory-viewport { height: 48vh; }
+  .memory-item { grid-template-columns: 5.2rem 4.2rem minmax(0, 1fr); gap: 7px; padding: 10px 16px; }
+  .memory-version { font-size: .7rem; }
+  .memory-note { font-size: .7rem; }
+  .memory-pet { padding: 4px 16px; }
+  .memory-pet img { width: 44px; height: 44px; }
+  .memory-foot { padding: 11px 16px 13px; gap: 10px; }
+}
