@@ -136,8 +136,7 @@
   const memoryTimeline = $('#memory-timeline');
   const memoryProgress = $('#memory-progress');
   const memoryIntro = $('#memory-intro');
-  const memoryIntroImg = $('#memory-intro-img');
-  const memoryIntroLabel = $('#memory-intro-label');
+  const memoryIntroGrid = $('#memory-intro-grid');
   const memoryIntroCount = $('#memory-intro-count');
   const memoryClose = memoryOverlay ? $('[data-memory-close]', memoryOverlay) : null;
   const memorySeenKey = 'opi-memory-seen-v1';
@@ -147,10 +146,12 @@
     'face-palm.gif', 'tongue-out.gif',
   ];
   const memoryIntroForms = [
-    ['idle.gif', '小欧·笑'], ['waiting.gif', '小欧·欢乐'], ['crying.gif', '小欧·哭'],
-    ['puzzled.gif', '小欧·沮丧'], ['terrified.gif', '小欧·惊恐'], ['angry.gif', '小欧·愤怒'],
-    ['coquettish.gif', '小欧·撒娇'], ['cute.gif', '小欧·卖萌'], ['pleasing.gif', '小欧·讨好'],
-    ['knocking.gif', '小欧·敲打'], ['face-palm.gif', '小欧·捂脸'], ['tongue-out.gif', '小欧·吐舌头'],
+    ['idle.gif', '小欧·笑', '#F5A6B4'], ['waiting.gif', '小欧·欢乐', '#F27D9D'],
+    ['crying.gif', '小欧·哭', '#4E97E6'], ['puzzled.gif', '小欧·沮丧', '#7E8C86'],
+    ['terrified.gif', '小欧·惊恐', '#6FB2F0'], ['angry.gif', '小欧·愤怒', '#DD5138'],
+    ['coquettish.gif', '小欧·撒娇', '#F46F9B'], ['cute.gif', '小欧·卖萌', '#F2B84B'],
+    ['pleasing.gif', '小欧·讨好', '#5FBF9F'], ['knocking.gif', '小欧·敲打', '#E8A13C'],
+    ['face-palm.gif', '小欧·捂脸', '#E06A4E'], ['tongue-out.gif', '小欧·吐舌头', '#EF5D8F'],
   ];
   // Warm the local GIF cache in idle time so the opening sequence never shows an empty box
   // without delaying the first paint.
@@ -236,7 +237,7 @@
     memoryEndTimer = 0;
     memoryIntroTimer = 0;
     memoryRevealTimer = 0;
-    memoryIntroImg?.getAnimations().forEach((animation) => animation.cancel());
+    memoryIntroGrid?.querySelectorAll('img').forEach((img) => img.getAnimations().forEach((animation) => animation.cancel()));
     memoryIntro?.classList.remove('is-showing');
   };
 
@@ -282,40 +283,65 @@
     if (!memoryRevealTimer && memoryRevealQueue.length === 1) revealMemoryNext();
   };
 
+  const buildMemoryIntro = () => {
+    if (!memoryIntroGrid || memoryIntroGrid.children.length) return;
+    const fragment = document.createDocumentFragment();
+    memoryIntroForms.forEach(([file, label, mood]) => {
+      const item = document.createElement('figure');
+      item.className = 'memory-intro-item';
+      item.style.setProperty('--mood', mood);
+      const img = document.createElement('img');
+      img.src = `assets/pet/forms/${file}`;
+      img.width = 64;
+      img.height = 64;
+      img.alt = label;
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      const caption = document.createElement('figcaption');
+      caption.textContent = label;
+      item.append(img, caption);
+      fragment.append(item);
+    });
+    memoryIntroGrid.append(fragment);
+  };
+
   const startMemoryIntro = () => {
-    if (!memoryIntro || !memoryIntroImg || !memoryIntroLabel || !memoryIntroCount || reduceMotion) {
+    if (!memoryIntro || !memoryIntroGrid || !memoryIntroCount || reduceMotion) {
       playMemory();
       return;
     }
+    buildMemoryIntro();
     stopMemory();
-    let index = 0;
     memoryIntro.classList.add('is-showing');
+    const items = $$('.memory-intro-item', memoryIntroGrid);
+    items.forEach((item) => { item.style.opacity = '0'; item.style.transform = 'none'; });
+    let index = 0;
     const show = () => {
-      const [file, label] = memoryIntroForms[index];
-      memoryIntroImg.src = `assets/pet/forms/${file}`;
-      memoryIntroLabel.textContent = label;
-      memoryIntroCount.textContent = `${index + 1} / ${memoryIntroForms.length}`;
+      const item = items[index];
+      const [, , mood] = memoryIntroForms[index];
+      memoryIntro.style.setProperty('--intro-mood', mood);
+      item.style.opacity = '1';
       const entry = index % 3;
       const from = entry === 0
-        ? 'translate3d(-72vw, 18vh, 0) scale(.12) rotate(-150deg)'
+        ? 'translate3d(-70vw, 18vh, 0) scale(.18) rotate(-150deg)'
         : entry === 1
-          ? 'translate3d(70vw, 34vh, 0) scale(.16) rotate(140deg)'
-          : 'translate3d(0, 68vh, 0) scale(.1) rotate(80deg)';
-      memoryIntroImg.animate(
-        [{ transform: from, opacity: 0 },
-         { opacity: 1, offset: .35 },
-         { transform: 'translate3d(0, 0, 0) scale(1.08) rotate(-3deg)', offset: .8 },
+          ? 'translate3d(70vw, 30vh, 0) scale(.2) rotate(140deg)'
+          : 'translate3d(0, 62vh, 0) scale(.16) rotate(80deg)';
+      item.animate(
+        [{ transform: from },
+         { transform: 'scale(1.12) rotate(-3deg)', offset: .76 },
          { transform: 'none' }],
         { duration: 720, easing: 'cubic-bezier(.16,1,.3,1)' },
       );
       index += 1;
-      if (index < memoryIntroForms.length) {
-        memoryIntroTimer = window.setTimeout(show, 1800);
+      memoryIntroCount.textContent = `${index} / ${memoryIntroForms.length}`;
+      if (index < items.length) {
+        memoryIntroTimer = window.setTimeout(show, 380);
       } else {
         memoryIntroTimer = window.setTimeout(() => {
           memoryIntro.classList.remove('is-showing');
           memoryIntroTimer = window.setTimeout(playMemory, 320);
-        }, 1200);
+        }, 2600);
       }
     };
     show();
