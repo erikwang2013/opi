@@ -55,10 +55,13 @@ internal fun pasteKeySequence(): List<VkEvent> = listOf(
  * 替用户按一次 Ctrl+V（自有表情：图片已在剪贴板里）。返回 null = 已递交；
  * 非 null = 给用户看的失败原因 —— 调用方据此提示「已复制，请手动粘贴」，不许报成功。
  *
- * 已知限制（与虚拟键盘同一条）：Wayland 原生窗口收不到 XTEST 注入；X11/XWayland
- * 下可用。注入器看不到目标窗口是否真的收到，按「递交成功」算成功。
+ * Wayland 会话直接不注入：原生窗口收不到 XTEST，而 `DISPLAY` 往往只是 XWayland ——
+ * 注入会「递交成功」却到不了目标，报「已粘贴」就是假成功。图已在剪贴板，手动一下即可。
  */
 fun injectPaste(): String? {
+    if (!isWindows() && !System.getenv("WAYLAND_DISPLAY").isNullOrEmpty()) {
+        return "Wayland 会话下按键注入可能到不了目标窗口"
+    }
     for ((i, ev) in pasteKeySequence().withIndex()) {
         val failure = injectKey(ev.key, down = ev.down)
         if (failure != null) {

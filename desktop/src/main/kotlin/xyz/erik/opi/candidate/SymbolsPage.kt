@@ -284,8 +284,7 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
                     scope.launch {
                         var waited = 0
                         while (window.isFocused && waited < 300) { delay(20); waited += 20 }
-                        // 焦点没交还就别注入（Ctrl+V 会落进本窗）；injectPaste 失败会变成
-                        // 「已复制，请手动粘贴」，不会假装成功。
+                        // 焦点没交还就别注入（Ctrl+V 会落进本窗）；失败会提示手动粘贴。
                         val stillFocused = window.isFocused
                         val r = withContext(Dispatchers.IO) {
                             pickLock.withLock {
