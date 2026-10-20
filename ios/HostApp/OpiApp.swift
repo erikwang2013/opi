@@ -63,13 +63,19 @@ final class HomeViewController: UIViewController {
         stack.translatesAutoresizingMaskIntoConstraints = false
         scroll.translatesAutoresizingMaskIntoConstraints = false
         scroll.alwaysBounceVertical = true
+        // 容器已钉在安全区上；别再让系统按安全区二次缩内容（横屏会左右错位）。
+        scroll.contentInsetAdjustmentBehavior = .never
         scroll.addSubview(stack)
         view.addSubview(scroll)
+        // 2026-10-21 用户报障「安装页点不动/内容不换行」：此前 stack 只钉了
+        // contentLayoutGuide 的左右，没有宽度上限，UILabel 的 intrinsic width 会把
+        // 内容撑到屏外（横屏/大字号更明显）。补一条「卡片区宽 = 可视宽 − 32」，
+        // 并把滚动容器钉在安全区上（刘海/横屏/导航栏都不再压内容）。
         NSLayoutConstraint.activate([
-            scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            scroll.topAnchor.constraint(equalTo: view.topAnchor),
-            scroll.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            scroll.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
+            scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scroll.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
             stack.leadingAnchor.constraint(
                 equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 16
             ),
@@ -81,6 +87,9 @@ final class HomeViewController: UIViewController {
             ),
             stack.bottomAnchor.constraint(
                 equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -24
+            ),
+            stack.widthAnchor.constraint(
+                equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -32
             ),
         ])
     }
@@ -186,6 +195,8 @@ final class HomeViewController: UIViewController {
         b.setTitle(title, for: .normal)
         b.titleLabel?.font = .preferredFont(forTextStyle: .headline)
         b.titleLabel?.adjustsFontForContentSizeCategory = true
+        b.titleLabel?.numberOfLines = 0
+        b.titleLabel?.textAlignment = .center
         b.backgroundColor = .systemBlue
         b.setTitleColor(.white, for: .normal)
         b.layer.cornerRadius = 10
@@ -205,6 +216,8 @@ final class HomeViewController: UIViewController {
         b.setTitle(raw, for: .normal)
         b.titleLabel?.font = .preferredFont(forTextStyle: .callout)
         b.titleLabel?.adjustsFontForContentSizeCategory = true
+        b.titleLabel?.numberOfLines = 0
+        b.titleLabel?.textAlignment = .left
         b.contentHorizontalAlignment = .leading
         b.addAction(UIAction { _ in
             guard let url = URL(string: raw) else { return }

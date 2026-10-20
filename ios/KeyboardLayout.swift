@@ -25,11 +25,9 @@ protocol KeyboardLayoutDelegate: AnyObject {
     func keyboardLayout(_ layout: KeyboardLayout, didPress spec: KeySpec, longPress: Bool)
     /// 抬起（touchUpInside/Outside/Cancel）。
     func keyboardLayout(_ layout: KeyboardLayout, didRelease spec: KeySpec)
-    /// 候选词被点选。index 是**页内**序号（0 起，当前页第几个）——
-    /// 调用方直接用 `OpiEngine.selectPage(_:)`，**不要**再换算成全局索引。
+    /// 候选词被点选。index 是**全局**下标（`opi_candidates(limit)` 的次序），
+    /// 调用方直接用 `OpiEngine.select(index:)`；本轮候选栏不再分页。
     func keyboardLayout(_ layout: KeyboardLayout, didSelectCandidateAt index: Int)
-    /// 翻页（-1 上一页 / +1 下一页）。走 opi_key_event 的 PAGE_UP/PAGE_DOWN 编码。
-    func keyboardLayout(_ layout: KeyboardLayout, didRequestPage delta: Int)
     /// 功能键按下。
     func keyboardLayout(_ layout: KeyboardLayout, didTapFunction name: KeyboardFunctionKey)
     /// 表情页搜索框的内容变了（**原始文本、未去空白**）。防抖与去空白在控制器里
@@ -65,6 +63,10 @@ final class KeyboardLayout: UIView {
         case about
         /// 设置面板（2026-10-21）：Android 设置页的可用子集，齿轮入口。
         case settings
+        /// 平铺候选（2026-10-21）：候选栏最右 ⌄ 打开，**盖住整个键盘**
+        /// （含顶部 44pt 槽位，Android `CandidateTiledView` 同义）。
+        /// 键位行藏起来、单手不再收窄。
+        case candidatesTiled
     }
 
     weak var delegate: KeyboardLayoutDelegate?
@@ -83,7 +85,7 @@ final class KeyboardLayout: UIView {
     /// 「生僻字」这两种态（它们不进引擎），这正是 Android `layoutFor()` 头注
     /// 写死的那件事。所以本层自己持有用户选过的模式，控制器在 `applyInputMode`
     /// 里同步 —— 与 `modeLabel` 同一条纪律：**键面的真源在 UI 侧，引擎的真源在引擎侧**。
-    private(set) var inputMode: InputMode = .pinyin26
+    private(set) var inputMode: InputMode = .pinyin9
 
     /// 模式键的键面字（中/繁/英）= **点它会切到哪**（2026-10-12 晚裁决；与 Android
     /// `modeKeyLabelOf` 同语义，各端按自己的循环给值）。由控制器在切模式后同步。
@@ -105,13 +107,19 @@ final class KeyboardLayout: UIView {
     // `KeyButton.longPressFired` 推状态：那只是防「长按后又补一次 tap」的去抖标志。
     // 详见 ios/README.md 的「缺的出口：已落地」一节。
 
-    // 三枚候选栏子视图是 **internal**：建栏在 KeyboardCandidateBar.swift 的扩展里
+    // 候选栏子视图是 **internal**：建栏在 KeyboardCandidateBar.swift 的扩展里
     // （2026-10-20 拆出，500 行门禁），Swift 的 private 只跨同文件扩展可见。
-    let candidateScroll = UIScrollView()
+    /// 固定槽位的候选行（2026-10-21：不再横向滚动）。
     let candidateStack = UIStackView()
     /// 英文模式右上角的隐藏「中」键（2026-10-20 用户裁决「低存在感，用于切回中文」）。
-    /// 它压在页翻键右侧；非英文模式隐藏。工具条在空闲态另有自己的一枚。
+    /// 它压在 ⌄ 左侧；非英文模式隐藏。工具条在空闲态另有自己的一枚。
     let chineseButton = UIButton(type: .system)
+    /// 候选栏最右 ⌄（2026-10-21）：打开平铺候选。用 `BarButton` 是为了跟候选槽位
+    /// 共用 `applyTheme`（换肤/长辈字号时不会漏掉这一枚）。
+    lazy var expandButton = BarButton(title: "⌄") { [weak self] in
+        guard let self else { return }
+        self.delegate?.keyboardLayout(self, didTapFunction: .showTiledCandidates)
+    }
     /// 顶部 44pt 槽位（2026-10-20）：候选栏与工具条二选一，**同位置互斥**。
     /// 对齐 Android `ImeScreen` 的 `[CandidateBar | ImeToolbar]` 槽 —— 空闲时是工具条，
     /// 有缓冲/候选时是候选栏。候选栏隐藏时仍占 44pt（键区锚在 `candidateBar.bottom`）。
@@ -144,6 +152,18 @@ final class KeyboardLayout: UIView {
     let aboutPanel = AboutPanel()
     /// 设置面板（2026-10-21，齿轮入口）。引擎开关 + 外观/键盘模式跳转。
     let settingsPanel = SettingsPanel()
+    /// 平铺候选（2026-10-21）。与面板同位置；内容由控制器每次 refresh 灌入。
+    let candidateTiledPanel = CandidateTiledPanel()
+    /// 9 键左列读数 / 英文 26 键左列候选词（2026-10-21，见 `CandidateColumns.swift`）。
+    let readingColumn = CandidateSideColumn(cells: 5, fontSize: 15)
+    let wordColumn = CandidateSideColumn(cells: 5, fontSize: 15)
+
+    /// 最近一次刷新拿到的候选/读数/钉住态（候选栏、左列、平铺三处共用一份快照）。
+    var candidateTexts: [String] = []
+    var candidateReadingTexts: [String] = []
+    var pinnedReading = ""
+    /// 读数/左列滚动复位键（拼音缓冲）。缓冲变了整列回顶部（Android `scrollKey`）。
+    var candidateResetKey = ""
 
     /// 当前皮肤 / 键盘模式（控制器从 `KeyboardPreferences` 读入并同步）。
     var skin: SkinOption = .follow
@@ -165,10 +185,14 @@ final class KeyboardLayout: UIView {
     var keyAreaWidth: NSLayoutConstraint?
     var keyAreaLeading: NSLayoutConstraint?
     var keyAreaTrailing: NSLayoutConstraint?
-    /// 候选栏「›」的右侧锚：显示「中」时接它左边，隐藏时直接接栏尾
-    /// （两条约束由 `KeyboardCandidateBar.swift` 的 `showChineseButton(_:)` 切换）。
-    var nextToChinese: NSLayoutConstraint?
-    var nextToBar: NSLayoutConstraint?
+    /// 键区顶锚：平常接候选栏下沿；平铺候选态改接键盘顶部，让平铺占满整个
+    /// 键盘（Android `CandidateTiledView` 同样盖住「候选｜工具条」那一格）。
+    var keyAreaTop: NSLayoutConstraint?
+    var keyAreaTopFull: NSLayoutConstraint?
+    /// 键位行左锚。英文 26 键左侧候选词列出现时，切换到词列右边
+    /// （两条互斥约束，见 `CandidateColumns.applySideColumns`）。
+    var rowsStackLeading: NSLayoutConstraint?
+    var rowsStackToWord: NSLayoutConstraint?
 
     init() {
         super.init(frame: .zero)
@@ -195,8 +219,12 @@ final class KeyboardLayout: UIView {
         keyAreaWidth = keyArea.widthAnchor.constraint(equalTo: widthAnchor, multiplier: 0.76)
         keyAreaLeading?.isActive = true
         keyAreaTrailing?.isActive = true
+        keyAreaTop = keyArea.topAnchor.constraint(
+            equalTo: candidateBar.bottomAnchor, constant: 4
+        )
+        keyAreaTop?.isActive = true
+        keyAreaTopFull = keyArea.topAnchor.constraint(equalTo: topAnchor)
         NSLayoutConstraint.activate([
-            keyArea.topAnchor.constraint(equalTo: candidateBar.bottomAnchor, constant: 4),
             keyArea.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
         ])
 
@@ -208,12 +236,15 @@ final class KeyboardLayout: UIView {
         rowsStack.distribution = .fill
         rowsStack.translatesAutoresizingMaskIntoConstraints = false
         keyArea.addSubview(rowsStack)
+        // 左锚单独存：英文 26 键的候选词列出现时改成接词列右边。
+        rowsStackLeading = rowsStack.leadingAnchor.constraint(equalTo: keyArea.leadingAnchor)
+        rowsStackLeading?.isActive = true
         NSLayoutConstraint.activate([
-            rowsStack.leadingAnchor.constraint(equalTo: keyArea.leadingAnchor),
             rowsStack.trailingAnchor.constraint(equalTo: keyArea.trailingAnchor),
             rowsStack.topAnchor.constraint(equalTo: keyArea.topAnchor),
             rowsStack.bottomAnchor.constraint(equalTo: keyArea.bottomAnchor),
         ])
+        buildSideColumns()
     }
 
     /// 重建键位行（切层/换模式时调用）。
@@ -231,6 +262,7 @@ final class KeyboardLayout: UIView {
         let isKeyboardModes = (keyLayer == .keyboardModes)
         let isAbout = (keyLayer == .about)
         let isSettings = (keyLayer == .settings)
+        let isTiled = (keyLayer == .candidatesTiled)
         rowsStack.isHidden = isPanelLayer
         symbolPanel.isHidden = !isSymbols
         emojiPanel.isHidden = !isEmoji
@@ -240,6 +272,8 @@ final class KeyboardLayout: UIView {
         keyboardModePanel.isHidden = !isKeyboardModes
         aboutPanel.isHidden = !isAbout
         settingsPanel.isHidden = !isSettings
+        candidateTiledPanel.isHidden = !isTiled
+        if isTiled { candidateTiledPanel.reloadIfNeeded() }
         if isModes { modePanel.show(current: inputMode) }
         if isRare { rarePanel.show() }
         if isSkins { skinPanel.show(current: skin) }
@@ -250,6 +284,7 @@ final class KeyboardLayout: UIView {
             settingsPanel.show(settings: settings, modes: keyboardModes, fuzzyNames: fuzzyPairNames)
         }
         updateTopBarVisibility()
+        applySideColumns()
         applyOneHand(keyboardModes.oneHand)
         guard !isPanelLayer else { return }
         rowsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
@@ -260,6 +295,9 @@ final class KeyboardLayout: UIView {
         ModeKeyRenderer.render(rows, into: rowsStack, gap: 5) { [weak self] b in
             self?.attach(b)
         }
+        // 行重建后读数浮层要重新贴到新的标点列上（旧列随 arrangedSubviews 一起没了）。
+        installReadingColumn()
+        applySideColumns()
         applyKeyTheme()
     }
 
@@ -343,22 +381,27 @@ final class KeyboardLayout: UIView {
 
     // MARK: - 外部刷新
 
-    /// 刷新候选栏。texts 是**当前页**的候选（来自 `opi_candidates_page()`）。
+    /// 刷新候选三处显示（栏 / 左列 / 平铺）。texts 是**全局**候选
+    /// （`opi_candidates(limit)`），下标与 `opi_select(index)` 同序。
     ///
-    /// 本方法**不需要页码**：回调传出去的是**页内**序号，页内换算由引擎做
-    /// （`opi_select_page`）。之前那句 `page * pageSize + i` 已删除 ——
-    /// 那是 `PAGE_SIZE` 在 UI 侧的第三份拷贝。
-    func updateCandidates(_ texts: [String]) {
-        candidateStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        guard !texts.isEmpty else { return }
-        for (i, t) in texts.enumerated() {
-            candidateStack.addArrangedSubview(
-                BarButton(title: t) { [weak self] in
-                    guard let self else { return }
-                    self.delegate?.keyboardLayout(self, didSelectCandidateAt: i)
-                }
-            )
-        }
+    /// readings 只在 9 键方案下非空（`opi_candidate_readings()`）；pinned 是 9 键
+    /// 左列的钉住读数；resetKey 通常是拼音缓冲，变了让左列回顶部。
+    func updateCandidates(
+        _ texts: [String],
+        readings: [String] = [],
+        pinned: String = "",
+        resetKey: String = ""
+    ) {
+        candidateTexts = texts
+        candidateReadingTexts = readings
+        pinnedReading = pinned
+        candidateResetKey = resetKey
+        updateCandidateBar(texts)
+        candidateTiledPanel.update(
+            candidates: texts, readings: readings, pinned: pinned, resetKey: resetKey
+        )
+        installReadingColumn()
+        applySideColumns()
     }
 
     /// 切换层。符号层的数据**不在这里取** —— 见 `setSymbols(_:)`。
@@ -400,12 +443,14 @@ final class KeyboardLayout: UIView {
         if !isPanelLayer { rebuildKeys() }
     }
 
-    /// 当前层是不是「占满键面的面板」（七个面板里的一层）——
-    /// 它们都不画键位行，`rowsStack` 该藏起来，顶部槽位恒为工具条（Android 同）。
+    /// 当前层是不是面板层（八个面板 + 平铺候选）——
+    /// 它们都不画键位行，`rowsStack` 该藏起来；面板顶部槽位是工具条，
+    /// 平铺候选则连顶部槽位一起盖住（Android 同）。
     var isPanelLayer: Bool {
         switch keyLayer {
         case .letters, .numbers: return false
-        case .symbols, .emoji, .modes, .rare, .skins, .keyboardModes, .about, .settings:
+        case .symbols, .emoji, .modes, .rare, .skins, .keyboardModes, .about, .settings,
+             .candidatesTiled:
             return true
         }
     }

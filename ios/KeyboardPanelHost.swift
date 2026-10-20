@@ -5,8 +5,9 @@
 // 拆出的理由与 `KeyboardCandidateBar.swift` 相同：主文件压 500 行门禁。
 //
 // 八个面板（符号/表情/输入模式/生僻字/皮肤/键盘模式/关于/设置）**同位置、互斥显示**，
-// 都占满键区；顶部 44pt 槽位在面板态恒为工具条（Android 同）。本文件只管摆位与
-// 回调接线，数据与画法留在各面板自己的文件里。
+// 都占满键区；顶部 44pt 槽位在面板态恒为工具条（Android 同）。平铺候选另占满
+// **整个键盘**（连顶部槽位一起盖住），见 `buildCandidateTiledPanel`。本文件只管
+// 摆位与回调接线，数据与画法留在各面板自己的文件里。
 //
 // ⚠️ 本机无 UIKit，只在 Apple CI 真编译；从未上机运行。
 
@@ -50,6 +51,24 @@ extension KeyboardLayout {
         buildKeyboardModePanel()
         buildAboutPanel()
         buildSettingsPanel()
+        buildCandidateTiledPanel()
+    }
+
+    /// 平铺候选（2026-10-21）：左列钉读音、中间选词、右列四个动作。
+    /// 全部转成控制器功能键 —— 本文件只管摆位与接线。
+    private func buildCandidateTiledPanel() {
+        candidateTiledPanel.onSelect = { [weak self] index in
+            guard let self else { return }
+            self.delegate?.keyboardLayout(self, didSelectCandidateAt: index)
+        }
+        candidateTiledPanel.onBack = { [weak self] in self?.tap(.hideTiledCandidates) }
+        candidateTiledPanel.onBackspace = { [weak self] in self?.tap(.tiledBackspace) }
+        candidateTiledPanel.onRetype = { [weak self] in self?.tap(.retype) }
+        candidateTiledPanel.onSpace = { [weak self] in self?.tap(.tiledSpace) }
+        candidateTiledPanel.onPinReading = { [weak self] reading in
+            self?.tap(.pinReading(reading))
+        }
+        addPanel(candidateTiledPanel)
     }
 
     /// 面板与键位行同位置（占满键区）。`rebuildKeys` 负责谁亮谁灭。
@@ -144,11 +163,16 @@ extension KeyboardLayout {
 
     /// `rebuildKeys` 与 `setTopBar` 共用一处可见性（别在两处各判一遍）。
     func updateTopBarVisibility() {
-        let showCandidates = wantsCandidateBar && !isPanelLayer
+        // 平铺候选盖住整个键盘（含顶部 44pt 槽位）—— 与 Android
+        // `CandidateTiledView` 一致；右列「返回」是平铺态唯一收拢入口。
+        let tiled = keyLayer == .candidatesTiled
+        let showCandidates = !tiled && wantsCandidateBar && !isPanelLayer
         candidateBar.isHidden = !showCandidates
-        toolbar.isHidden = showCandidates
+        toolbar.isHidden = tiled || showCandidates
         toolbar.setEnglish(english)
         showChineseButton(english && showCandidates)
+        // ⌄ 只在键面候选栏出现；平铺态用右列「返回」，不重复入口。
+        setExpandVisible(!candidateTexts.isEmpty && showCandidates)
     }
 
     func setSkin(_ s: SkinOption) {
@@ -187,7 +211,10 @@ extension KeyboardLayout {
         modePanel.backgroundColor = p.panelBg
         rarePanel.backgroundColor = p.panelBg
         chineseButton.setTitleColor(p.barDimFg.withAlphaComponent(0.6), for: .normal)
-        // 面板态下键位行是隐藏的：别为一次换肤递归走几十个不可见的 KeyButton。
+        readingColumn.applyTheme(p, fontScale: fontScale)
+        wordColumn.applyTheme(p, fontScale: fontScale)
+        candidateTiledPanel.applyTheme(p, fontScale: fontScale)
+        // 面板态下键位行与顶栏都隐藏：别为一次换肤递归走几十个不可见的 KeyButton。
         if !isPanelLayer { applyKeyTheme() }
         applyOneHand(keyboardModes.oneHand)
     }
@@ -198,6 +225,10 @@ extension KeyboardLayout {
         keyAreaLeading?.isActive = false
         keyAreaTrailing?.isActive = false
         keyAreaWidth?.isActive = false
+        // 平铺态键区顶到键盘顶部（顶部 44pt 槽位被平铺盖住）。
+        let fullHeight = keyLayer == .candidatesTiled
+        keyAreaTop?.isActive = !fullHeight
+        keyAreaTopFull?.isActive = fullHeight
         // 面板（皮肤/输入模式/键盘模式/关于…）占满整块键区；单手只收窄**键面**。
         // 此前 panel 层也被收窄 → 单手开启后页面错乱（2026-10-21 用户报障）。
         switch isPanelLayer ? .off : hand {
@@ -219,7 +250,7 @@ extension KeyboardLayout {
         for view in descendants(of: rowsStack) {
             (view as? KeyButton)?.applyTheme(palette, fontScale: fontScale)
         }
-        for view in descendants(of: candidateScroll) {
+        for view in descendants(of: candidateBar) {
             (view as? BarButton)?.applyTheme(palette, fontScale: fontScale)
         }
     }

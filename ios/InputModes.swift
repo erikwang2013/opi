@@ -247,10 +247,9 @@ enum ModeKeyTables {
 
     /// 拼音 9 键（T9）。主区 5 列（权重 3）+ 底行（权重 1）。
     ///
-    /// ⚠️ **左列在本端恒为标点列**（Android 输入时会整列换成拼音读数）：C ABI
-    /// **没有** `opi_candidate_readings` 出口（那是 JNI 独有的）⇒ 本端拿不到读数。
-    /// 这是**能力缺口**不是没写，见 ios/README.md 的缺口表。数字键在 9 键方案下
-    /// **是输入键**（引擎 Nine 方案收进缓冲），所以不需要任何数字选词 UI。
+    /// 左列**空闲时是标点列，输入中换成拼音读数**（2026-10-21 C ABI 新增
+    /// `opi_candidate_readings` 后补齐；浮层见 `CandidateColumns.swift`）。
+    /// 数字键在 9 键方案下**是输入键**（引擎 Nine 方案收进缓冲），所以不需要数字选词 UI。
     static func nineKeyRows(modeLabel: String, big: Bool) -> [ModeRow] {
         // 字号（Android：字母 21sp / 大 30sp；多标点键收一档）。
         // ⚠️ 本端每键**单一字号**（Android 是「字母大、数字小」两级）—— 见 README。
@@ -416,7 +415,7 @@ extension KeyboardViewController {
     /// `ImeState.selectInputMode` 会先把**未完成的缓冲提交出去**（英文走
     /// `commitPendingAsPinyin`、其余走 `commitPendingBuffer`），再换方案；
     /// 本端**做不到**：C ABI 里**没有**「待提交文本」出口、没有
-    /// `opi_candidate_readings`、没有 `opi_switch_language`（三条都只在 JNI 面上），
+    /// `opi_switch_language`（两条仍只在 JNI 面上；读数出口 2026-10-21 已补齐），
     /// 而 `opi_set_scheme` **自己会清缓冲**（Rust 语义）。于是：
     ///   * 换模式的净效果 = 打了一半的拼音**丢掉**（不崩、不静默错提交）；
     ///   * **绝不**改成「把缓冲当文本直提」—— 9 键的缓冲是**数字**，
@@ -429,7 +428,11 @@ extension KeyboardViewController {
         // 记下选择：键面按它画，菜单高亮也按它。面板式在收起后仍保持高亮
         // （Android 的 chip 同样保持），底下的键面回落 26 键（`RARE.scheme == FULL`）。
         layout.setInputMode(mode)
-        if mode != .english26 && !mode.panel { lastChineseInputMode = mode }
+        InputModePreference.inputMode = mode
+        if mode != .english26 && !mode.panel {
+            lastChineseInputMode = mode
+            InputModePreference.lastChinese = mode
+        }
         if mode.panel {
             layout.setLayer(.rare)
             return

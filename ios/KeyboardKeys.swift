@@ -84,6 +84,16 @@ enum KeyboardFunctionKey {
     /// 重输：清掉当前组合重来（2026-10-10 Android 用户裁决「增加重输按钮，
     /// 去掉分词按钮」）。9 键盘右列专属。缓冲空时是空操作（`clear()` 幂等）。
     case retype
+    /// 候选栏最右 ⌄：把键区换成平铺候选（2026-10-21，Android `CandidateTiledView` 同义）。
+    case showTiledCandidates
+    /// 平铺右列「返回」：无条件收拢回键面。
+    case hideTiledCandidates
+    /// 平铺右列 ⌫：走引擎退格，之后按候选余量决定是否收拢。
+    case tiledBackspace
+    /// 平铺右列空格：走引擎空格（中文态 = 选首候选）。
+    case tiledSpace
+    /// 9 键左列/平铺左列点一行读数：钉住该读音（不上屏）。
+    case pinReading(String)
     /// 选中一个输入模式（输入模式菜单的 chip 回调）。
     ///
     /// 走功能键而不是新加一个委托方法：菜单的「选中」与符号/表情面板的「点一个」

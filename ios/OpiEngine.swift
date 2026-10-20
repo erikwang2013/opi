@@ -276,7 +276,7 @@ final class OpiEngine {
     /// ⚠️ 未编译：JSON 解码路径按「Rust serde_json 输出 UTF-8 → Swift String →
     /// data(using:) → JSONDecoder」写。Mac 上若发现编码问题，这里是嫌疑点。
     /// 解析失败返回空数组（不抛）—— 键盘 UI 不该因为候选栏 JSON 坏了就整体挂掉。
-    private static func decodeTexts(_ json: String) -> [String] {
+    static func decodeTexts(_ json: String) -> [String] {
         guard !json.isEmpty, let data = json.data(using: .utf8) else { return [] }
         return (try? JSONDecoder().decode([String].self, from: data)) ?? []
     }

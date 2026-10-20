@@ -1,38 +1,36 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-// 顶部候选栏：左右翻页键 + 横向滚动的候选 + 最右的英文隐藏「中」键。
+// 顶部候选栏（2026-10-21 重写）：固定槽位 + 最右 ⌄，不再横向滚动/翻页。
 //
-// 2026-10-20 从 KeyboardLayout.swift 拆出（加隐藏「中」键后那边越过 500 行门禁；
-// 按职责拆：顶部栏 vs 键位/面板摆放）。三枚子视图是 KeyboardLayout 的属性，
-// 故那边去掉了 `private`（Swift 的 private 只跨同文件扩展可见）。
+// 用户裁决（2026-10-21）：候选栏「不再横向滚动或翻页；固定显示若干候选（溢出截断），
+// 最右是 v/⌄」。所以：
+//   · ‹ / › 两枚翻页键整段下线；
+//   · 候选槽位固定 5 个、等宽，超出的候选不画，长词由 `UIButton` 尾部截断；
+//   · 「中」仍在英文态显示（上一轮裁决，低存在感），⌄ 永远在最右。
+//
+// ⌄ 进平铺候选（`CandidateTiledPanel`），不在这里直接画网格。
 //
 // ⚠️ 未编译：本文件与其它 iOS 源文件一样只在 Apple CI 上真编译，本机无 UIKit。
 
 import UIKit
 
+/// 候选栏固定槽位数。5 是在 320pt 宽下仍能放下 5 个两字候选的经验值；
+/// 改这里只改「显示几个」，不改引擎候选数。
+private let candidateSlotCount = 5
+
 extension KeyboardLayout {
 
-    /// 建候选栏：页翻键走 `opi_key_event` 的 PAGE_UP/PAGE_DOWN（页码钳制在 router.rs）。
     func buildCandidateBar() {
         // 44pt = 工具条同高（Android `IME_TOOLBAR_HEIGHT_DP`）：两者共用一个槽位，
         // 高度不同会让键区在「空闲 ↔ 输入」之间上下跳。
         candidateBar.translatesAutoresizingMaskIntoConstraints = false
         addSubview(candidateBar)
-        candidateScroll.showsHorizontalScrollIndicator = false
-        candidateScroll.translatesAutoresizingMaskIntoConstraints = false
-        candidateStack.axis = .horizontal
-        candidateStack.spacing = 8
-        candidateStack.translatesAutoresizingMaskIntoConstraints = false
 
-        let prev = makeBarButton("‹") { [weak self] in
-            guard let self else { return }
-            self.delegate?.keyboardLayout(self, didRequestPage: -1)
-        }
-        let next = makeBarButton("›") { [weak self] in
-            guard let self else { return }
-            self.delegate?.keyboardLayout(self, didRequestPage: 1)
-        }
+        candidateStack.axis = .horizontal
+        candidateStack.spacing = 4
+        candidateStack.distribution = .fillEqually
+        candidateStack.translatesAutoresizingMaskIntoConstraints = false
 
         // 隐藏「中」键：小号低对比度，按下时系统高亮让它可见。
         chineseButton.setTitle("中", for: .normal)
@@ -46,21 +44,18 @@ extension KeyboardLayout {
         chineseButton.isHidden = true
         chineseButton.addTarget(self, action: #selector(tapChinese), for: .touchUpInside)
 
-        candidateBar.addSubview(prev)
-        candidateBar.addSubview(candidateScroll)
-        candidateBar.addSubview(next)
-        candidateBar.addSubview(chineseButton)
-        candidateScroll.addSubview(candidateStack)
+        expandButton.setTitle("⌄", for: .normal)
+        expandButton.accessibilityLabel = "展开候选"
+        expandButton.translatesAutoresizingMaskIntoConstraints = false
 
-        // 「中」键隐藏时不能留 26pt 空位（用户要求候选栏占满整条）。两条互斥的
-        // trailing 约束由 `showChineseButton(_:)` 切换 —— `isHidden` 本身不会
-        // 撤销手写约束，原实现因此在中文候选栏右端留了一条空白。
-        nextToChinese = next.trailingAnchor.constraint(
-            equalTo: chineseButton.leadingAnchor, constant: -2
-        )
-        nextToBar = next.trailingAnchor.constraint(
-            equalTo: candidateBar.trailingAnchor, constant: -4
-        )
+        let trailingStack = UIStackView(arrangedSubviews: [chineseButton, expandButton])
+        trailingStack.axis = .horizontal
+        trailingStack.alignment = .center
+        trailingStack.spacing = 2
+        trailingStack.translatesAutoresizingMaskIntoConstraints = false
+
+        candidateBar.addSubview(candidateStack)
+        candidateBar.addSubview(trailingStack)
 
         // ⚠️ 未编译：以下约束按常见写法写，Mac 上大概率要调数值/优先级。
         NSLayoutConstraint.activate([
@@ -69,50 +64,61 @@ extension KeyboardLayout {
             candidateBar.topAnchor.constraint(equalTo: topAnchor),
             candidateBar.heightAnchor.constraint(equalToConstant: 44),
 
-            prev.leadingAnchor.constraint(equalTo: candidateBar.leadingAnchor, constant: 4),
-            prev.centerYAnchor.constraint(equalTo: candidateScroll.centerYAnchor),
-            prev.widthAnchor.constraint(equalToConstant: 28),
+            candidateStack.leadingAnchor.constraint(equalTo: candidateBar.leadingAnchor, constant: 6),
+            candidateStack.trailingAnchor.constraint(
+                equalTo: trailingStack.leadingAnchor, constant: -4
+            ),
+            candidateStack.topAnchor.constraint(equalTo: candidateBar.topAnchor, constant: 2),
+            candidateStack.bottomAnchor.constraint(equalTo: candidateBar.bottomAnchor, constant: -2),
 
-            chineseButton.trailingAnchor.constraint(equalTo: candidateBar.trailingAnchor, constant: -4),
-            chineseButton.centerYAnchor.constraint(equalTo: candidateScroll.centerYAnchor),
+            trailingStack.trailingAnchor.constraint(
+                equalTo: candidateBar.trailingAnchor, constant: -4
+            ),
+            trailingStack.centerYAnchor.constraint(equalTo: candidateBar.centerYAnchor),
+        ])
+        // 隐藏项在 UIStackView 里会被压成 0：显式尺寸降到 defaultHigh，避免与
+        // stack 的折叠约束（required）冲突。「中」与 ⌄ 都会按模式/候选隐藏。
+        for c in [
             chineseButton.widthAnchor.constraint(equalToConstant: 26),
             chineseButton.heightAnchor.constraint(equalToConstant: 26),
-
-            next.centerYAnchor.constraint(equalTo: candidateScroll.centerYAnchor),
-            next.widthAnchor.constraint(equalToConstant: 28),
-
-            candidateScroll.leadingAnchor.constraint(equalTo: prev.trailingAnchor, constant: 4),
-            candidateScroll.trailingAnchor.constraint(equalTo: next.leadingAnchor, constant: -4),
-            candidateScroll.topAnchor.constraint(equalTo: candidateBar.topAnchor),
-            candidateScroll.heightAnchor.constraint(equalToConstant: 44),
-
-            candidateStack.leadingAnchor.constraint(equalTo: candidateScroll.contentLayoutGuide.leadingAnchor),
-            candidateStack.trailingAnchor.constraint(equalTo: candidateScroll.contentLayoutGuide.trailingAnchor),
-            candidateStack.topAnchor.constraint(equalTo: candidateScroll.contentLayoutGuide.topAnchor),
-            candidateStack.bottomAnchor.constraint(equalTo: candidateScroll.contentLayoutGuide.bottomAnchor),
-            candidateStack.heightAnchor.constraint(equalTo: candidateScroll.frameLayoutGuide.heightAnchor),
-        ])
-        // 初始中文态：只有 next→bar 这条生效。
-        nextToBar?.isActive = true
-    }
-
-    /// 显示/隐藏候选栏右侧的低存在感「中」键。隐藏时把「›」直接贴到栏尾，
-    /// 不留空位（`isHidden` 不会撤销约束，必须显式换约束）。
-    func showChineseButton(_ show: Bool) {
-        chineseButton.isHidden = !show
-        if show {
-            nextToBar?.isActive = false
-            nextToChinese?.isActive = true
-        } else {
-            nextToChinese?.isActive = false
-            nextToBar?.isActive = true
+            expandButton.widthAnchor.constraint(equalToConstant: 30),
+            expandButton.heightAnchor.constraint(equalToConstant: 30),
+        ] {
+            c.priority = .defaultHigh
+            c.isActive = true
         }
     }
 
-    private func makeBarButton(_ title: String, onTap: @escaping () -> Void) -> UIButton {
-        let b = BarButton(title: title, onTap: onTap)
-        b.translatesAutoresizingMaskIntoConstraints = false
-        return b
+    /// 候选栏重建。文本来自 `opi_candidates(limit)`，槽位固定、超出丢弃。
+    func updateCandidateBar(_ texts: [String]) {
+        candidateStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        for i in 0..<candidateSlotCount {
+            if i < texts.count {
+                let b = BarButton(title: texts[i]) { [weak self] in
+                    guard let self else { return }
+                    self.delegate?.keyboardLayout(self, didSelectCandidateAt: i)
+                }
+                b.titleLabel?.lineBreakMode = .byTruncatingTail
+                b.titleLabel?.numberOfLines = 1
+                b.contentEdgeInsets = UIEdgeInsets(top: 2, left: 2, bottom: 2, right: 2)
+                b.applyTheme(palette, fontScale: fontScale)
+                candidateStack.addArrangedSubview(b)
+            } else {
+                // 固定槽位：候选不足时留空，整条栏的格子宽度不随候选数跳。
+                candidateStack.addArrangedSubview(UIView())
+            }
+        }
+    }
+
+    /// 显示/隐藏候选栏右侧的低存在感「中」键。
+    /// `isHidden` 在 `UIStackView` 里会自动让出宽度，不再需要两套 trailing 约束。
+    func showChineseButton(_ show: Bool) {
+        chineseButton.isHidden = !show
+    }
+
+    /// ⌄：只在有候选且不在平铺态时出现（平铺态有右列「返回」）。
+    func setExpandVisible(_ show: Bool) {
+        expandButton.isHidden = !show
     }
 
     /// 隐藏「中」键：复用中/繁/英循环的 `.cycleMode`。英文档由控制器走

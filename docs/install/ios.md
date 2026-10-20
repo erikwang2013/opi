@@ -185,7 +185,9 @@ plutil -lint ios/Info.plist      # 只能在 Mac 上跑
 
 `.github/workflows/apple.yml`（macos-latest，三个 job：`rust` / `macos` / `ios`）每次运行都把
 `ios/` 的 Swift 真过一遍编译器（`swiftc -typecheck` → 真编 → 与 Rust 静态库链接），
-并组装宿主 App + 扩展、产出 **unsigned IPA**。产物挂在**该次 run 的 Artifacts** 里。取法：
+并组装宿主 App + 扩展、产出 **unsigned IPA**。iOS artifact 只上传这一个 IPA；
+xcframework/扩展目录/宿主 `.app`/临时 Payload 等中间产物只在脚本的临时构建目录里，退出时清理。
+产物挂在**该次 run 的 Artifacts** 里。取法：
 
 ```bash
 gh run list --workflow apple.yml                    # 找 run id（或网页 Actions 页）
@@ -194,7 +196,7 @@ gh run download <run-id> -n "opi-ios-keyboard-v$(bash scripts/apple/version.sh)"
 
 | 产物名（版本号 = `Cargo.toml` 的 `[workspace.package] version`，唯一取法在 `scripts/apple/version.sh`） | 内容 |
 |---|---|
-| `opi-ios-keyboard-v<版本>` | `opi-ios-keyboard-<版本>-unsigned.ipa`（`Payload/Opi.app`，内含 `Opi` 可执行、内嵌 `PlugIns/OpiKeyboard.appex`、`luna/trad/stroke/wubi86` 词库、宠物图标）· `OPIKeyboard.xcframework`（Xcode 集成用）· `KeyboardExtension-Info.plist`（占位符已展开成字面值）。脚本在本地还会生成同内容的 `*-unsigned.zip`，但 CI artifact 不再套一层 zip |
+| `opi-ios-keyboard-v<版本>` | `opi-ios-keyboard-<版本>-unsigned.ipa`（**唯一产物**；`Payload/Opi.app`，内含 `Opi` 可执行、内嵌 `PlugIns/OpiKeyboard.appex`、`luna/trad/stroke/wubi86` 词库、`rare_index.tsv` 与宠物图标）。xcframework/扩展目录/宿主 `.app`/临时 Payload 只在构建期存在，脚本退出时清掉 |
 | `opi-apple-rust-v<版本>`（rust job） | `opi_ffi.xcframework`（同上的静态库版）+ `headers/OpiFFI.h` + macOS 用的通用库 |
 
 **IPA 的目录结构**（CI 会逐条校验）：
@@ -207,7 +209,7 @@ Payload/Opi.app/
   PlugIns/OpiKeyboard.appex/
     OPIKeyboard               # 扩展可执行（入口 _NSExtensionMain）
     Info.plist                # CFBundleIdentifier = xyz.erik.opi.keyboard
-    luna.opid trad.opid stroke.opid wubi86.opid
+    luna.opid trad.opid stroke.opid wubi86.opid rare_index.tsv
 ```
 
 **这次 run 真实证明了什么**（历史证据 run 37935240583，以及 2026-10-20 起的 IPA 结构校验）：
@@ -216,8 +218,8 @@ Payload/Opi.app/
 - framework 的 `nm -gU` 里有 `_opi_load` 等导出、`nm -u` 里**没有**未定义的 `opi_` 符号
   ⇒ Rust 静态库**真的链进去了**（不是「链接命令没报错」就算）；
 - `otool -L` 里**没有** `libopi_ffi` ⇒ 是静态链接（iOS 扩展带第三方 dylib 装不上）；
-- `xcodebuild -create-xcframework` 成功；扩展可执行（`.appex`）也链出来了
-  （入口 `_NSExtensionMain`，链接期实测可过）；
+- `xcodebuild -create-xcframework` 成功（仅构建期校验，产物不随 IPA 发布）；
+  扩展可执行（`.appex`）也链出来了（入口 `_NSExtensionMain`，链接期实测可过）；
 - IPA 里 `Payload/Opi.app/Opi`、`PlugIns/OpiKeyboard.appex/OPIKeyboard`、`luna.opid`
   都在，宿主/扩展 plist 通过 `plutil -lint`，扩展 bundle id 以宿主 id 为前缀。
 

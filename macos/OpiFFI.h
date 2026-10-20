@@ -218,6 +218,12 @@ OpiString opi_input_space(void);
 /// 显示当前页请用下面的 `opi_candidates_page()`。
 OpiString opi_candidates(size_t limit);
 
+/// JSON 文本数组：9 键左列逐候选拼音读数（未装载 → `[]`）。
+OpiString opi_candidate_readings(void);
+
+/// 点 9 键左列读数；ptr/len 为 UTF-16，空串 = 取消钉住。
+void opi_pin_reading(const uint16_t *ptr, size_t len);
+
 /// JSON 文本数组：**当前页**的候选（已按引擎的 PAGE_SIZE 分页）。
 /// 引擎未装载 → `[]`。
 ///

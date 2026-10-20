@@ -44,6 +44,19 @@
 > 工具条/候选栏做 320–430pt 宽度适配。run `39486273199`（a62a3f3）Apple CI 已把当前
 > 全部 Swift 真编译通过；**仍未上机**，布局与点击链需真机验证。
 >
+> **2026-10-21 第二轮（候选/左列/默认模式）**：C ABI 已有 `opi_candidate_readings` /
+> `opi_pin_reading`。9 键左列在输入中显示候选读数（点行钉读音），英文 26 键左列显示
+> 候选词（点词上屏）；候选栏改为固定槽位 + 最右 `⌄`，平铺候选见
+> `CandidateTiledPanel.swift`；输入框不再显示 marked text；输入模式持久化、缺省 9 键
+> （`InputModePreference.swift`）。下方「无 `opi_candidate_readings`」「9 键左列恒标点」
+> 与「输入模式不持久化」只对 2026-10-21 之前成立。**本轮尚未推 CI 编译**。
+>
+> **2026-10-21 打包裁决（用户原话「所有都打包一起，不要有额外其他文件」）**：
+> `scripts/apple/package-ios.sh` 的 `dist/apple/ios/` 最终**只留一个** unsigned IPA
+> （宿主 App、扩展、`luna/trad/stroke/wubi86`、`rare_index.tsv`、图标全在包内）；
+> xcframework/扩展目录/宿主 `.app`/临时 Payload 只在构建期存在，退出时清理。
+> `apple.yml` 的 iOS artifact 也只上传 `*.ipa`。
+>
 > 本目录的代码是在 Linux 上写的：本机没有 macOS、没有 Xcode、没有 Apple SDK，
 > `import UIKit` 就断 —— 编译发生在 **CI 的 macOS runner** 上，不在开发机。
 > 改完 Swift **先推一次让 CI 编**，再谈别的（本地读不出来的错，编译器一秒钟就报）。

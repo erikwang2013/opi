@@ -345,6 +345,35 @@ pub unsafe extern "C" fn opi_candidates(limit: usize) -> OpiString {
     texts_to_json(texts)
 }
 
+/// candidateReadings() -> JSON 文本数组：9 键左列逐候选拼音读数（引擎未装载 → `[]`）。
+///
+/// 与 JNI `candidate_readings` 同源；只为 iOS/鸿蒙的左列提供 C ABI 入口。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_candidate_readings() -> OpiString {
+    let readings = catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.candidate_readings()).unwrap_or_default()
+    }))
+    .unwrap_or_default();
+    texts_to_json(readings)
+}
+
+/// pinReading(ptr, len)：点 9 键左列某条读数（空串 = 取消钉住）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_pin_reading(ptr: *const u16, len: usize) {
+    let reading = unsafe { read_utf16(ptr, len) };
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        if let Some(reading) = reading {
+            let _ = api::with_engine(|e| {
+                e.set_pinned_reading(if reading.is_empty() {
+                    None
+                } else {
+                    Some(reading)
+                })
+            });
+        }
+    }));
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_buffer() -> OpiString {
     let out = catch_unwind(AssertUnwindSafe(|| {

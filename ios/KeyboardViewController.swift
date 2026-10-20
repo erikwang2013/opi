@@ -34,8 +34,8 @@ final class KeyboardViewController: UIInputViewController {
     // **不要为了整洁把它们改回 `private`** —— 那会让 `KeyboardHardware.swift` 编译不过。
     let engine = OpiEngine()
     var layout: KeyboardLayout!
-    // 这里**没有** `page` 状态了：页码只在显示「第 N 页 / 共 M 页」时读一次
-    // `engine.page()`，选词走 `engine.selectPage(k)` 的页内索引 —— 都不需要本层持有。
+    // 这里**没有** `page` 状态：候选 UI（栏/左列/平铺）统一用 `opi_candidates(limit)`
+    // 的**全局**下标选词（`engine.select(index:)`），分页出口只剩旧调用方在用。
 
     /// 词库装载失败时置位 —— 用来在 UI 上显示可见的失败状态。
     ///
@@ -57,7 +57,11 @@ final class KeyboardViewController: UIInputViewController {
     /// 再返回才回字母层（二级导航，不把用户直接弹回键盘）。
     private var settingsReturn = false
     /// 最近一次中文键面（英→中时恢复它；Android `cycleMode` 的「回上次中文方案」）。
-    var lastChineseInputMode: InputMode = .pinyin26
+    var lastChineseInputMode: InputMode = .pinyin9
+    /// 9 键左列当前钉住的读音（空 = 未钉）。只作 UI 高亮/去抖，真源在引擎。
+    var pinnedReading = ""
+    /// 钉住时的拼音缓冲。缓冲一变先解钉（见 `KeyboardCandidates.refresh()`）。
+    var pinBuffer = ""
 
     /// 表情搜索的防抖表（对齐 Android `ImeState.SEARCH_DEBOUNCE_MS = 250`：
     /// 每敲一个字就查一次全表是白费的，手停下才查）。
@@ -90,8 +94,8 @@ final class KeyboardViewController: UIInputViewController {
             layout.topAnchor.constraint(equalTo: view.topAnchor),
             layout.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
-        // 皮肤/键盘模式从本扩展的偏好恢复（2026-10-20）；输入模式不持久化，
-        // 沿用引擎当前方案（与 Android 的差异记在 README）。
+        // 皮肤/键盘模式/输入模式都从本扩展的偏好恢复（输入模式 2026-10-21 起：
+        // 缺省 9 键，用户选过就按上次的来，对齐 Android `ImePreferences`）。
         skin = KeyboardPreferences.skin
         modes = KeyboardPreferences.modes
         settings = KeyboardPreferences.settings
@@ -103,10 +107,10 @@ final class KeyboardViewController: UIInputViewController {
         layout.setEngineSettings(settings, fuzzyPairNames: engine.fuzzyPairNames())
         layout.emojiPanel.setShowOwn(settings.showOwn)
         applyTheme()
-        // 键面字要跟真实模式一致：装载后引擎可能是任何模式（同一进程里另一个
-        // 键盘实例切过模式也会留在这里 —— 引擎单例是进程级的）。
-        updateModeLabel()
-        refresh()
+        // 恢复上次输入模式（缺省 9 键）：必须在首帧前把引擎方案与键面同步好。
+        // 引擎单例是进程级的，另一个键盘实例可能留下别的方案 —— 这里显式设一次。
+        lastChineseInputMode = InputModePreference.restoredLastChinese
+        applyInputMode(InputModePreference.restored)
     }
 
     /// 键盘高度约束。只建一次 —— `viewWillAppear` 会被多次调用
@@ -145,54 +149,7 @@ final class KeyboardViewController: UIInputViewController {
     // 词库装载已搬到 `KeyboardDictionaryLoader.swift`（2026-10-21：本文件压 500 行门禁）。
     // `loadDictionaries()` / `loadBundledDictionaries()` 仍是控制器的方法，见那边。
 
-    // MARK: - 刷新 UI
-
-    /// 拉一次引擎状态刷新候选栏。**在这条路径上不要做别的**（不查磁盘、不发请求）。
-    /// ⚠️ internal（见上方状态节的说明）：`KeyboardHardware.swift` 的热键路径要调它。
-    func refresh() {
-        guard dictionaryLoaded else {
-            layout.updateCandidates(["词库未装载"])
-            layout.setTopBar(candidatesVisible: true, english: false)
-            return
-        }
-        // 候选列表**读引擎**（引擎分好的当前页）。本层既不按 8 切片、也不算页码 ——
-        // 两处都曾是 PAGE_SIZE 的副本，现已分别由 opi_candidates_page / opi_select_page 消灭。
-        let texts = engine.candidatesPage()
-        layout.updateCandidates(texts)
-        // 顶部槽位：有缓冲/候选 → 候选栏；否则工具条（Android `ImeScreen` 同判）。
-        layout.setTopBar(
-            candidatesVisible: !texts.isEmpty || !engine.buffer().isEmpty,
-            english: engine.mode() == .english
-        )
-        syncMarkedText()
-    }
-
-    /// 组合串进字段 —— iOS 的原语是 **marked text**（`UITextDocumentProxy.setMarkedText`）。
-    ///
-    /// 功能与 Android 两条裁决同源（2026-10-10「打字期间输入框里能看到拼音」+
-    /// 2026-10-12 晚「待编的键必须看得见」）：此前本端**一个字都不进字段** ——
-    /// 打拼音时字段毫无动静，无匹时更是完全没反馈，与 Android 修之前是同一种病。
-    /// 本端缓冲就是字母（全键盘方案），原样标出去即可，不需要 Android 那套「·」记号。
-    ///
-    /// 收尾：缓冲空 ⇒ `unmarkText()`（组合区收干净，别把标记留成孤岛）；
-    /// 提交路径见 [insert]（先 unmark 再插，与 Android `dropComposing` 的次序同理由）。
-    /// ⚠️ internal：热键路径（`KeyboardHardware.swift`）也走 [refresh]。
-    ///
-    /// ⚠️ `unmarkText()` 是**无条件**调的：键盘扩展的 `textDocumentProxy` 上**没有**
-    /// `markedTextRange`（那是 `UITextInput` 的属性）—— 原写法 `if …markedTextRange != nil`
-    /// 在真机 Swift 编译期就是 error（2026-10-13 apple.yml 的 iOS job 两处实测）。
-    /// 语义上本就不需要那个守卫：`unmarkText()` = 解除**当前**标记，没有标记就无事可做。
-    func syncMarkedText() {
-        let buffer = engine.buffer()
-        guard !buffer.isEmpty else {
-            textDocumentProxy.unmarkText()
-            return
-        }
-        textDocumentProxy.setMarkedText(
-            buffer,
-            selectedRange: NSRange(location: (buffer as NSString).length, length: 0)
-        )
-    }
+    // 刷新 UI / marked text 已搬到 `KeyboardCandidates.swift`（2026-10-21，本文件压 500 行）。
 
     // MARK: - 文本提交
 
@@ -228,7 +185,7 @@ final class KeyboardViewController: UIInputViewController {
     ///   0 passThrough → 引擎不管，走平台 fallback（软键盘没有「交回系统」这条路）
     ///   1 handled     → 引擎消费了，只需刷新候选栏 / preedit
     ///   2 commit      → 有文本要上屏
-    private func route(keyval: UInt32, states: UInt32, fallback: KeyFallback) {
+    func route(keyval: UInt32, states: UInt32, fallback: KeyFallback) {
         // 词库没装上时引擎的所有出口都会退化成 PassThrough（空操作）。
         // 直接走 fallback 打字，至少键盘还能当个英文键盘用，且不静默。
         guard dictionaryLoaded else {
@@ -292,23 +249,9 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
     }
 
     func keyboardLayout(_ layout: KeyboardLayout, didSelectCandidateAt index: Int) {
-        // index 是**页内**序号（当前页第几个）。走 opi_select_page，页内换算归引擎 ——
-        // 所以这里**不出现** `page * pageSize` 这种算式，本层也不持有页大小常量。
-        // 越界返回空串，不会崩。
-        let text = engine.selectPage(index)
-        insert(text)
-        refresh()
-    }
-
-    func keyboardLayout(_ layout: KeyboardLayout, didRequestPage delta: Int) {
-        // 翻页走引擎（页码钳制在 router.rs 里），用 PAGE_UP / PAGE_DOWN 键码。
-        // 这比在 Swift 侧自己加减页码更对：页码真源在引擎，且空页会被钳住。
-        let keyval = delta < 0 ? OpiKey.pageUp : OpiKey.pageDown
-        if case .handled = engine.keyEvent(keyval: keyval, states: 0) {
-            // 引擎已翻页。**不本地加减 delta** —— 引擎会把页码钳在末页，本地累加就漂了。
-            // 直接重拉：候选列表由 opi_candidates_page 给，本层不持有页码状态。
-            refresh()
-        }
+        // index 是**全局**下标（`opi_candidates(limit)` 的次序），与 `opi_select` 同序。
+        // 候选栏/英文左列/平铺三处都传这一种下标，页内换算不再参与本轮候选 UI。
+        selectCandidate(at: index)
     }
 
     func keyboardLayout(_ layout: KeyboardLayout, didTapFunction name: KeyboardFunctionKey) {
@@ -324,6 +267,24 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
                 }
             }
             layout.setLayer(.letters)
+        case .showTiledCandidates:
+            // 候选栏最右 ⌄：整个键盘换成平铺候选（含顶部 44pt 槽位）。
+            settingsReturn = false
+            showTiledCandidates()
+        case .hideTiledCandidates:
+            // 平铺右列「返回」：无条件收拢。
+            layout.setLayer(.letters)
+        case .tiledBackspace:
+            // 与键盘右列 ⌫ 同一条引擎路；候选没了就自动回键面。
+            route(keyval: OpiKey.backspace, states: 0, fallback: .deleteBackward)
+            collapseTiledIfNeeded()
+        case .tiledSpace:
+            // 空格也走引擎（中文态 = 选首候选），不是直插空格。
+            route(keyval: OpiKey.space, states: 0, fallback: .text(" "))
+            collapseTiledIfNeeded()
+        case .pinReading(let reading):
+            // 9 键左列/平铺左列：钉读音，不上屏。
+            togglePinnedReading(reading)
         case .showNumbers:
             settingsReturn = false
             layout.setLayer(.numbers)
@@ -413,6 +374,8 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             // `clear()` 幂等（缓冲空时是空操作），所以不必先判空。
             engine.clear()
             refresh()
+            // 平铺态里重输后若候选已空，自动回键面（Android 同判）。
+            collapseTiledIfNeeded()
         case .selectInputMode(let mode):
             // 菜单选中一项。语义（换方案 + 换模式 + 换键面 + 清缓冲的取舍）全在
             // `applyInputMode` 里，那里也写明了与 Android 的**能力缺口**。

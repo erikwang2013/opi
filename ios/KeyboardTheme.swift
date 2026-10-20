@@ -305,8 +305,8 @@ enum KeyboardTheme {
 /// 但扩展自己的 UserDefaults 在 `RequestsOpenAccess=false` 下也能读写 ——
 /// 它只是扩展容器内的持久化，不涉及宿主数据。
 ///
-/// 持久化皮肤、键盘模式与设置面板里的引擎开关（2026-10-21）。**输入模式仍没有存**
-/// （启动时沿用引擎当前方案），与 Android 的「记住输入模式」是已知差异，见 README。
+/// 持久化皮肤、键盘模式与设置面板里的引擎开关（2026-10-21）。输入模式另见
+/// `InputModePreference.swift`（缺省 9 键、记住上次选择，对齐 Android `ImePreferences`）。
 enum KeyboardPreferences {
     private static let defaults = UserDefaults.standard
     private static let skinKey = "opi.skin"
@@ -465,6 +465,8 @@ extension KeyboardViewController {
             // 与 Android `switchLanguageKeepingBuffer(InputMode.ENGLISH26)` 同一条：
             // 键面/菜单高亮跟着引擎走，`lastChineseInputMode` 仍留着回程目标。
             layout.setInputMode(.english26)
+            // 这条腿不走 applyInputMode，持久化要在这里补（下次启动仍是英文 26 键）。
+            InputModePreference.inputMode = .english26
         default:
             // English / Number / Symbol 一律回拼音（与 Android 的 `else` 分支同义）。
             engine.switchMode(.pinyin)
