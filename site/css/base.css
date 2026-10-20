@@ -317,11 +317,11 @@ body.memory-open { overflow: hidden; }
 .memory-head .eyebrow { margin-bottom: 8px; }
 .memory-head h2 { margin-bottom: 8px; font-size: clamp(1.7rem, 3.4vw, 2.5rem); }
 .memory-head p { margin: 0; max-width: 38rem; color: var(--ink-soft); font-size: .82rem; line-height: 1.7; }
-.memory-viewport { position: relative; flex: 1; min-height: 0; height: min(52vh, 420px); overflow: hidden;
+.memory-viewport { position: relative; flex: 1; min-height: 0; height: min(52vh, 420px); overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent;
   -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 7%, #000 93%, transparent 100%);
   mask-image: linear-gradient(180deg, transparent 0, #000 7%, #000 93%, transparent 100%);
 }
-.memory-timeline { position: relative; margin: 0; padding: 10px 0; list-style: none; will-change: transform; }
+.memory-timeline { position: relative; margin: 0; padding: 6px 0 18px; list-style: none; }
 .memory-item { display: grid; grid-template-columns: 6.4rem 5rem minmax(0, 1fr); gap: 10px; align-items: baseline;
   padding: 11px 24px; border-bottom: 1px solid var(--line); }
 .memory-item.is-latest { background: rgba(46, 139, 128, .09); }

@@ -137,8 +137,9 @@
     'face-palm.gif', 'tongue-out.gif',
   ];
   let memoryBuilt = false;
-  let memoryAnimation = null;
-  let memoryProgressAnimation = null;
+  let memoryRaf = 0;
+  let memoryEndTimer = 0;
+  let memoryAutoHoldUntil = 0;
   let memoryPreviousFocus = null;
   let memoryPaused = false;
 
@@ -191,22 +192,19 @@
     memoryTimeline.replaceChildren(...nodes);
   };
 
-  const setMemoryPaused = (paused) => {
-    memoryPaused = paused;
-    if (paused) {
-      memoryAnimation?.pause();
-      memoryProgressAnimation?.pause();
-    } else {
-      memoryAnimation?.play();
-      memoryProgressAnimation?.play();
-    }
+  const setMemoryPaused = (paused) => { memoryPaused = paused; };
+
+  const memoryProgressNow = () => {
+    if (!memoryViewport || !memoryProgress) return;
+    const max = Math.max(1, memoryViewport.scrollHeight - memoryViewport.clientHeight);
+    memoryProgress.style.transform = `scaleX(${Math.min(1, memoryViewport.scrollTop / max)})`;
   };
 
   const stopMemory = () => {
-    memoryAnimation?.cancel();
-    memoryProgressAnimation?.cancel();
-    memoryAnimation = null;
-    memoryProgressAnimation = null;
+    if (memoryRaf) cancelAnimationFrame(memoryRaf);
+    if (memoryEndTimer) clearTimeout(memoryEndTimer);
+    memoryRaf = 0;
+    memoryEndTimer = 0;
   };
 
   const closeMemory = () => {
@@ -223,25 +221,30 @@
   const playMemory = () => {
     if (!memoryTimeline || !memoryViewport || !memoryProgress) return;
     stopMemory();
-    if (reduceMotion) {
-      memoryProgress.style.transform = 'scaleX(1)';
-      return;
-    }
-    const distance = Math.max(0, memoryTimeline.scrollHeight - memoryViewport.clientHeight + 36);
-    const duration = Math.max(36000, Math.min(60000, memoryTimeline.children.length * 650));
-    memoryTimeline.style.transform = 'translateY(0)';
-    memoryAnimation = memoryTimeline.animate(
-      [{ transform: 'translateY(0)' }, { transform: `translateY(-${distance}px)` }],
-      { duration, easing: 'linear', fill: 'forwards' },
-    );
-    memoryProgress.style.transform = 'scaleX(0)';
-    memoryProgressAnimation = memoryProgress.animate(
-      [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }],
-      { duration, easing: 'linear', fill: 'forwards' },
-    );
-    memoryAnimation.addEventListener('finish', () => {
-      if (memoryOverlay?.classList.contains('is-open')) window.setTimeout(closeMemory, 900);
-    }, { once: true });
+    memoryViewport.scrollTop = 0;
+    memoryProgressNow();
+    if (reduceMotion) return;
+    const max = Math.max(0, memoryViewport.scrollHeight - memoryViewport.clientHeight);
+    if (max <= 0) return;
+    // ~2 minutes for 76 versions; the wheel scrolls natively and pauses auto-advance.
+    const speed = max / 120000; // px per ms
+    let last = 0;
+    const step = (now) => {
+      if (!last) last = now;
+      const dt = Math.min(80, Math.max(0, now - last));
+      last = now;
+      if (!memoryPaused && now >= memoryAutoHoldUntil) {
+        memoryViewport.scrollTop = Math.min(max, memoryViewport.scrollTop + speed * dt);
+        if (memoryViewport.scrollTop >= max - 1) {
+          memoryProgressNow();
+          memoryEndTimer = window.setTimeout(closeMemory, 1200);
+          return;
+        }
+      }
+      memoryProgressNow();
+      memoryRaf = requestAnimationFrame(step);
+    };
+    memoryRaf = requestAnimationFrame(step);
   };
 
   const openMemory = () => {
@@ -250,6 +253,8 @@
     if (memoryOverlay.classList.contains('is-open')) return;
     memoryPreviousFocus = document.activeElement;
     memoryPaused = false;
+    memoryAutoHoldUntil = 0;
+    memoryViewport.scrollTop = 0;
     memoryOverlay.hidden = false;
     document.body.classList.add('memory-open');
     markMemorySeen();
@@ -269,6 +274,10 @@
     memoryViewport?.addEventListener('pointermove', () => { if (!memoryPaused) setMemoryPaused(true); });
     memoryViewport?.addEventListener('pointerleave', () => setMemoryPaused(false));
     memoryViewport?.addEventListener('click', () => setMemoryPaused(!memoryPaused));
+    memoryViewport?.addEventListener('wheel', () => {
+      memoryAutoHoldUntil = performance.now() + 8000;
+    }, { passive: true });
+    memoryViewport?.addEventListener('scroll', memoryProgressNow, { passive: true });
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') closeMemory();
     });
