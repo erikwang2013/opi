@@ -285,7 +285,7 @@ LICENSE · CONTRIBUTING.md      # MIT full text · contribution guide (incl. dic
 
 ### 📅 Project Status
 
-> **Current stage: v1.17.0 (2026-10-20): six native clients and the static website; Apple / HarmonyOS are unsigned artifacts, and the Windows install path is still being verified**
+> **Current stage: v1.17.1 (2026-10-20): six native clients and the static website; Apple / HarmonyOS are unsigned artifacts, and the Windows install path is still being verified**
 
 V1 milestone progress:
 

@@ -136,6 +136,9 @@ enum class StatusBarButton(val label: String, val hint: String) {
     SETTINGS("设置", "打开本设置窗"),
 }
 
+/** 按钮的悬停提示 = `label：hint`（唯一源是枚举；非空且含 label 由 StatusBarTooltipTest 钉住）。 */
+internal fun tooltipText(b: StatusBarButton): String = "${b.label}：${b.hint}"
+
 /**
  * 该按钮是否被设为常驻（用户开关）。MODE **恒常驻** —— 它没有自己的 ini 键
  * （见 [StatusBarButton.MODE] 头注释），恒真而不是「可拨但拨不动」。

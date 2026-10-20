@@ -238,13 +238,24 @@ wait "$SLEEP2" 2>/dev/null
 SLEEP2=""
 
 # ---- 7. postinstall：先热重启 fcitx5，再拉起 opi-candidates ----
-printf '#!/bin/sh\nexit 0\n' > "$TMP/opi-candidates"
+# 状态栏夹具：记录**自己**的环境（假 runuser 会真正 exec 它）。
+{
+    echo '#!/bin/sh'
+    echo "env > '$TMP/candidates.env'"
+    echo 'exit 0'
+} > "$TMP/opi-candidates"
 chmod +x "$TMP/opi-candidates"
+wait_candidates() { # 后台拉起，等它写出环境快照（最多 2s）
+    i=0
+    while [ ! -s "$TMP/candidates.env" ] && [ "$i" -lt 40 ]; do
+        sleep 0.05; i=$((i + 1))
+    done
+}
 fresh_proc
 fresh_bus
 mk_fx5 800030 "$MYUID" S "unix:path=$RUN/$MYUID/bus" "$RUN/$MYUID"
 reset_bus
-rm -f "$TMP/runuser.argv"
+rm -f "$TMP/runuser.argv" "$TMP/candidates.env"
 printf '%s --statusbar\n' "$TMP/opi-candidates" > "$STATEDIR/opi-install.state"
 SUDO_USER="$ME" OPI_PROC_ROOT="$PROC" OPI_RUN_ROOT="$RUN" OPI_STATE_DIR="$STATEDIR" \
     OPI_WAIT_TICKS=5 PATH="$BIN:$PATH" \
@@ -255,6 +266,11 @@ check "postinstall 先热重启（日志在）" grep -q '已热重启 fcitx5' "$
 check "postinstall 拉起 opi-candidates" grep -Fqx -- "--statusbar" "$TMP/runuser.argv"
 check "postinstall runuser 用 -u <user> --" \
     sh -c "[ \"\$(sed -n '1,3p' '$TMP/runuser.argv' | tr '\n' ' ')\" = '-u $ME -- ' ]"
+wait_candidates
+check "状态栏进程拿到 XDG_RUNTIME_DIR" \
+    grep -Fqx -- "XDG_RUNTIME_DIR=$RUN/$MYUID" "$TMP/candidates.env"
+check "状态栏进程拿到 DBUS_SESSION_BUS_ADDRESS" \
+    grep -Fqx -- "DBUS_SESSION_BUS_ADDRESS=unix:path=$RUN/$MYUID/bus" "$TMP/candidates.env"
 check "postinstall 删掉状态" [ ! -e "$STATEDIR/opi-install.state" ]
 
 # 无 SUDO_USER：postinstall 仍调 helper（本测试非 root，helper 走「普通用户 = 自己」的
@@ -300,10 +316,15 @@ printf '[Desktop Entry]\nExec=%s --statusbar\n' "$TMP/opi-candidates" > "$AUTOST
 migrate() { reset_bus; env -u OPI_NO_RESTART_FCITX5 OPI_PROC_ROOT="$PROC" OPI_RUN_ROOT="$RUN" \
     OPI_STATE_DIR="$STATEDIR" OPI_WAIT_TICKS=5 \
     OPI_AUTOSTART_FILE="$AUTOSTART" PATH="$BIN:$PATH" "$@"; }
-rm -f "$TMP/runuser.argv"; : > "$STATEDIR/opi-install.state"
+rm -f "$TMP/runuser.argv" "$TMP/candidates.env"; : > "$STATEDIR/opi-install.state"
 SUDO_USER="$ME" migrate sh "$POST" configure 1.15.1 > "$TMP/migrate.out" 2>&1
 check "旧版升级迁移 exit 0" [ "$?" -eq 0 ]
 check "旧版升级迁移拉起状态栏" grep -Fqx -- "--statusbar" "$TMP/runuser.argv"
+wait_candidates
+check "旧版升级迁移传 XDG_RUNTIME_DIR" \
+    grep -Fqx -- "XDG_RUNTIME_DIR=$RUN/$MYUID" "$TMP/candidates.env"
+check "旧版升级迁移传 DBUS_SESSION_BUS_ADDRESS" \
+    grep -Fqx -- "DBUS_SESSION_BUS_ADDRESS=unix:path=$RUN/$MYUID/bus" "$TMP/candidates.env"
 check "旧版升级迁移有日志" grep -q "从旧版升级" "$TMP/migrate.out"
 rm -f "$TMP/runuser.argv"; : > "$STATEDIR/opi-install.state"
 SUDO_USER="$ME" migrate sh "$POST" 2 > "$TMP/migrate-rpm.out" 2>&1

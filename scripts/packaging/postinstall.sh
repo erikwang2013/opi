@@ -18,9 +18,11 @@
 # 来源）。**没有 SUDO_USER**（商店/软件中心类 GUI 安装常如此）⇒ 跳过拉起并说明：
 #   · 设置窗本来就是用户手动开的，开一次就是新版本；
 #   · 状态栏有会话级 autostart（/etc/xdg/autostart），下次登录自然回来。
-#   已知边界（如实记）：如果升级前在跑的是**状态栏**，本次尽力拉起时环境变量
-#   （DISPLAY/XAUTHORITY）来自 root 脚本的继承值 —— 拉起失败只是进程直接退出
-#   （无窗口、无副作用），下次登录 autostart 仍会带回；真机验证待做。
+#   拉起时显式传会话总线环境（XDG_RUNTIME_DIR / DBUS_SESSION_BUS_ADDRESS，按目标
+#   用户 uid 推导）：装包脚本的环境里没有这两个变量，缺了状态栏就连不上 fcitx5
+#   （opi-ctl 报 UnknownObject）。已知边界（如实记）：如果升级前在跑的是**状态栏**，
+#   窗口环境（DISPLAY/XAUTHORITY）仍来自 root 脚本的继承值 —— 拉起失败只是进程
+#   直接退出（无窗口、无副作用），下次登录 autostart 仍会带回。
 #
 # 本脚本恒 exit 0：热重启与拉起失败都只记日志，不阻断安装。
 set -u
@@ -30,10 +32,12 @@ if [ "$(id -u)" -eq 0 ]; then
     PROC_ROOT=/proc
     STATE_DIR=/run
     AUTOSTART_FILE=/etc/xdg/autostart/opi-statusbar.desktop
+    RUN_ROOT=/run/user
 else
     PROC_ROOT="${OPI_PROC_ROOT:-/proc}"
     STATE_DIR="${OPI_STATE_DIR:-/run}"
     AUTOSTART_FILE="${OPI_AUTOSTART_FILE:-/etc/xdg/autostart/opi-statusbar.desktop}"
+    RUN_ROOT="${OPI_RUN_ROOT:-/run/user}"
 fi
 STATE="$STATE_DIR/opi-install.state"
 
@@ -82,7 +86,10 @@ if [ ! -s "$STATE" ]; then
                 set -- $exec_line
                 bin="$1"; shift
                 if [ -x "$bin" ]; then
-                    runuser -u "$user" -- "$bin" "$@" >/dev/null 2>&1 &
+                    uid="$(id -u "$user")"
+                    runuser -u "$user" -- env "XDG_RUNTIME_DIR=$RUN_ROOT/$uid" \
+                        "DBUS_SESSION_BUS_ADDRESS=unix:path=$RUN_ROOT/$uid/bus" \
+                        "$bin" "$@" >/dev/null 2>&1 &
                     echo "opi: 从旧版升级：已按状态栏自启项恢复（$user）"
                 else
                     echo "opi: 从旧版升级：状态栏程序不存在（$bin）—— 跳过自动恢复"
@@ -102,6 +109,7 @@ if [ -z "$user" ]; then
     exit 0
 fi
 
+uid="$(id -u "$user")"
 while IFS= read -r line; do
     # 拆成 arg0 + 参数（参数都是无空格的 flag；带空格的参数不支持，见 preinstall）
     # shellcheck disable=SC2086
@@ -110,7 +118,9 @@ while IFS= read -r line; do
     bin="$1"
     [ -x "$bin" ] || continue
     shift
-    runuser -u "$user" -- "$bin" "$@" >/dev/null 2>&1 &
+    runuser -u "$user" -- env "XDG_RUNTIME_DIR=$RUN_ROOT/$uid" \
+        "DBUS_SESSION_BUS_ADDRESS=unix:path=$RUN_ROOT/$uid/bus" \
+        "$bin" "$@" >/dev/null 2>&1 &
 done < "$STATE"
 
 rm -f "$STATE"

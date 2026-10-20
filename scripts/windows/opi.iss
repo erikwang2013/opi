@@ -16,7 +16,7 @@
 ; best-effort and can never roll back the install.
 ;
 ; Build (CI or local, on Windows; ISCC is the Inno Setup 6 compiler):
-;   ISCC.exe /DAppVersion=1.17.0 ^
+;   ISCC.exe /DAppVersion=1.17.1 ^
 ;            /DAppImageDir=C:\path\to\build\compose\binaries\main\app\opi ^
 ;            /DOutputDir=C:\path\to\dist scripts\windows\opi.iss
 ;
@@ -60,6 +60,9 @@ ArchitecturesInstallIn64BitMode=x64
 MinVersion=10.0
 OutputDir={#OutputDir}
 OutputBaseFilename=opi-{#AppVersion}-setup
+; Installer/uninstaller icon = project pet (same art as opi.exe). A relative
+; directive path resolves against this script's directory, hence two levels up.
+SetupIconFile=..\..\desktop\icons\opi-pet.ico
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern

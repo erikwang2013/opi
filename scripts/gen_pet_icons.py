@@ -11,9 +11,10 @@
      的 `$media:app_icon`）与输入法子类型图标
      `harmony/entry/src/main/resources/base/media/icon.png`（512²，`input_method_config.json`
      三个 subtype 的 `$media:icon` 指向它）
-  3. 桌面应用图标 `desktop/icons/opi-pet.png`（256²）与 `opi-pet.ico`
-     （16/32/48/64/128/256）—— Windows EXE/MSI、Linux jpackage、macOS .app、
-     iOS 宿主 App（`scripts/apple/package-ios.sh` 用 sips 从 PNG 缩）
+  3. 桌面应用图标 `desktop/icons/opi-pet.png`（256²）、`opi-pet.ico`
+     （16/32/48/64/128/256）与 `opi-pet.icns`（128/256/512/1024）—— Windows
+     EXE/MSI、Linux jpackage、macOS .app（`CFBundleIconFile`）、iOS 宿主 App
+     （`scripts/apple/package-ios.sh` 用 sips 从 PNG 缩）
   4. Linux 菜单/桌面入口的矢量图标 `docs/opi-pet-app.svg`（hicolor scalable）
   5. macOS：`macos/opi.tiff`（32×32 @144dpi = 16pt@2x，`Info.plist` 的
      `tsInputMethodIconFileKey` 指向它）
@@ -55,7 +56,7 @@ Android 旧版位图要铺满的正是那 72×72。**其余三端再裁一步**�
 1.87（对照数，不是本脚本的行为）。详见 R4 的注释。
 
 用法：
-    python3 scripts/gen_pet_icons.py            # 重出全部产物（18 个）
+    python3 scripts/gen_pet_icons.py            # 重出全部产物（19 个）
     python3 scripts/gen_pet_icons.py --check    # 只比对，不写；不一致则退出码 1
 """
 # ponytail: 依赖 rsvg-convert + PIL，与本仓既有 gen_*.py 同档（都是本机脚本，不是 CI 依赖）
@@ -79,6 +80,7 @@ DOCS_PET = ROOT / "docs/opi-pet.svg"
 APP_SVG = ROOT / "docs/opi-pet-app.svg"
 DESKTOP_PNG = ROOT / "desktop/icons/opi-pet.png"
 DESKTOP_ICO = ROOT / "desktop/icons/opi-pet.ico"
+DESKTOP_ICNS = ROOT / "desktop/icons/opi-pet.icns"
 MACOS_TIFF = ROOT / "macos/opi.tiff"
 TSF_ICO = ROOT / "crates/tsf-opi/assets/opi-langbar.ico"
 
@@ -363,8 +365,30 @@ def ico_bytes(img: Image.Image, sizes: list[int]) -> bytes:
     return data
 
 
+def icns_bytes(img: Image.Image) -> bytes:
+    """macOS 应用包图标（`CFBundleIconFile`）。ic07–ic10 = 128/256/512/1024 的
+    PNG 数据，10.7+ 直接可读，小尺寸由 Finder 缩；不用 icp4/icp5（那几档是裸 RGB，
+    不认 PNG）。"""
+    entries = []
+    for kind, size in (("ic07", 128), ("ic08", 256), ("ic09", 512), ("ic10", 1024)):
+        data = png_bytes(img.resize((size, size), Image.LANCZOS), "RGB")
+        entries.append(kind.encode() + struct.pack(">I", 8 + len(data)) + data)
+    out = b"icns" + struct.pack(">I", 8 + sum(map(len, entries))) + b"".join(entries)
+
+    # 自检：总长与每条长度自洽、每条都是 PNG —— 长度写错时 Finder 不显示图标且不报错。
+    off = 8
+    while off < len(out):
+        length = struct.unpack_from(">I", out, off + 4)[0]
+        if length < 16 or off + length > len(out) or out[off + 8:off + 16] != b"\x89PNG\r\n\x1a\n":
+            raise SystemExit(f"icns 条目在偏移 {off} 处不自洽（length={length}）")
+        off += length
+    if struct.unpack_from(">I", out, 4)[0] != len(out) or off != len(out):
+        raise SystemExit("icns 总长与条目长度不符")
+    return out
+
+
 def artifacts() -> list[tuple[Path, bytes]]:
-    """全部生成物（18 个）：Android 11 + 鸿蒙 2 + 桌面 3 + macOS/Windows 模板 2。"""
+    """全部生成物（19 个）：Android 11 + 鸿蒙 2 + 桌面 4 + macOS/Windows 模板 2。"""
     out = [
         (RES / f"mipmap-{bucket}/{name}.png", render(size, radius))
         for name, radius in VARIANTS.items()
@@ -374,12 +398,13 @@ def artifacts() -> list[tuple[Path, bytes]]:
     # 鸿蒙：应用图标与输入法子类型图标同图同底（纸白）。
     out.append((HARMONY_APP_ICON, png_bytes(square_mark(512, plate=True))))
     out.append((HARMONY_ICON, png_bytes(square_mark(512, plate=True))))
-    # 桌面：Windows EXE/MSI（ico）、Linux jpackage / macOS .app / iOS 宿主（png）。
+    # 桌面：Windows EXE/MSI（ico）、Linux jpackage / iOS 宿主（png）、macOS .app（icns）。
     # PNG 存 RGB（无 alpha）—— iOS 应用图标不接受透明通道。ICO 各档直接从 1042² 缩，
     # 免得 128 以下先经 256 再缩一遍。
     desktop = raster_svg(app_svg(), 1042)
     out.append((DESKTOP_PNG, png_bytes(desktop.resize((256, 256), Image.LANCZOS), "RGB")))
     out.append((DESKTOP_ICO, ico_bytes(desktop, sizes=[16, 32, 48, 64, 128, 256])))
+    out.append((DESKTOP_ICNS, icns_bytes(desktop)))
     # Linux 菜单/桌面入口的矢量应用图标（hicolor scalable）。
     out.append((APP_SVG, app_svg().encode()))
     # macOS：16pt@2x 输入源模板 —— 只按 alpha 着色，必须透明。

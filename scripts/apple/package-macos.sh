@@ -140,6 +140,9 @@ plist_ver="$(plutil -extract CFBundleShortVersionString raw "$plist")"
 cp "$dylib" "$APP/Contents/Frameworks/"
 # tsInputMethodIconFileKey 指向 opi.tiff —— 键在 plist 里，文件得在 Resources 里。
 cp macos/opi.tiff "$APP/Contents/Resources/opi.tiff"
+# 应用包图标（Finder 里看到的那张，浅底小欧），CFBundleIconFile 指向它；
+# 与上面那张必须保持透明的输入源模板图标是两码事。
+cp desktop/icons/opi-pet.icns "$APP/Contents/Resources/opi-pet.icns"
 
 # ---- 4) 签名（ad-hoc）----
 # 顺序：先签里面那份 dylib，再签外层 bundle。反过来的话外层签名封的是**旧**哈希，

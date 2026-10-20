@@ -5,13 +5,13 @@
 
 ```bash
 # 在仓库根目录执行（版本号按实际发布替换）
-cp dist/opi_1.17.0_amd64.deb \
-   dist/opi-1.17.0-1.x86_64.rpm \
-   dist/opi-1.17.0-setup.exe \
-   dist/opi_1.17.0_android-release.apk \
-   dist/opi-inputmethod-1.17.0-unsigned.pkg \
-   dist/opi-ios-keyboard-1.17.0-unsigned.ipa \
-   dist/opi-harmony-1.17.0-unsigned.hap \
+cp dist/opi_1.17.1_amd64.deb \
+   dist/opi-1.17.1-1.x86_64.rpm \
+   dist/opi-1.17.1-setup.exe \
+   dist/opi_1.17.1_android-release.apk \
+   dist/opi-inputmethod-1.17.1-unsigned.pkg \
+   dist/opi-ios-keyboard-1.17.1-unsigned.ipa \
+   dist/opi-harmony-1.17.1-unsigned.hap \
    site/download/
 ```
 

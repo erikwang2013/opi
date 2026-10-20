@@ -275,9 +275,13 @@ sudo apt-get -f install                        # Debian 系缺依赖时补
   为空**时（旧 prerm 已先杀进程），按 `/etc/xdg/autostart/opi-statusbar.desktop` 的
   `Exec=` 补拉一次状态栏 —— 仅升级生效，首次安装不替用户启动；rpm 旧 `%preun` 的
   时序边界见 §7。**没有 `SUDO_USER`**（软件中心类 GUI 安装）则跳过实例拉起并说明 ——
-  设置窗手动开一次即是新版；状态栏由会话 autostart 下次登录带回。已知边界：以 root
-  脚本的环境变量拉起状态栏可能失败（进程直接退出、无副作用），待真机验证。fcitx5
-  的热重启**不依赖 `SUDO_USER`**：GUI 安装没有它时会扫 `/run/user/*/bus`。
+  设置窗手动开一次即是新版；状态栏由会话 autostart 下次登录带回。拉起时按目标用户
+  uid 显式传 `XDG_RUNTIME_DIR=/run/user/<uid>` 与
+  `DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/<uid>/bus`：装包脚本里没有这两个变量，
+  缺了状态栏就连不上 fcitx5（`opi-ctl` 报 `UnknownObject: Unknown object '/opi'`）。
+  已知边界：窗口环境（DISPLAY/XAUTHORITY）仍继承自 root 脚本，拉起可能无窗口
+  （进程直接退出、无副作用），下次登录 autostart 会带回。fcitx5 的热重启**不依赖
+  `SUDO_USER`**：GUI 安装没有它时会扫 `/run/user/*/bus`。
 - **卸载前**（prerm）：停实例（否则出现「卸了还在跑」）。**升级时 prerm 直接跳过**
   （deb 的 `prerm upgrade` 跑在 preinst 之前，这里若杀进程，preinst 就记录不到、
   postinst 也无从拉起 —— 升级的停+记统一由 preinst 做）。⚠️ **卸载不会重启

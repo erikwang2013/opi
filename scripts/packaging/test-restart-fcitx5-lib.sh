@@ -110,11 +110,14 @@ exit 0
 EOF
 chmod +x "$BIN/fcitx5"
 
-# 假 runuser：记录 argv 后成功（只用于 postinstall 拉起 opi-candidates）
+# 假 runuser：记录 argv，并执行 `--` 之后的命令 —— postinstall 传的 `env` 赋值
+# 因此真正生效，状态栏夹具记录到的是自己的环境（而不是只证明 argv 里有几个词）。
 {
     echo '#!/bin/sh'
     echo "printf '%s\\n' \"\$@\" >> '$TMP/runuser.argv'"
-    echo 'exit 0'
+    echo 'while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done'
+    echo '[ "$#" -gt 0 ] && shift'
+    echo 'exec "$@"'
 } > "$BIN/runuser"
 chmod +x "$BIN/runuser"
 

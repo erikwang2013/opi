@@ -82,9 +82,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -309,6 +312,9 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
         }
     }
 
+    // 条隐藏时**连内容一起退出组合**：提示窗是独立 Window，只藏条窗不会带走它
+    // （悬停状态也可能收不到 Exit）⇒ 必须把按钮/提示从组合里摘掉。
+    val shown = barVisible(buttons, imeState.im)
     Window(
         // 无边框窗没有关闭入口；「隐藏」走设置里的 master 开关（进程留着，见 visible 一行）。
         onCloseRequest = {},
@@ -316,7 +322,7 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
         // master 隐藏 / 按钮全关 → 整条隐藏（进程继续轮询 ⇒ 设置里拨回来它就自己出现）；
         // 切到别的输入法（im 非空且 ≠ opi）也隐藏，切回来 1s 轮询让它自己出现 —— 判定
         // 全在 [barVisible]，四态单测钉住。
-        visible = barVisible(buttons, imeState.im),
+        visible = shown,
         undecorated = true,
         alwaysOnTop = true,
         resizable = false,
@@ -332,7 +338,7 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
         // 条随 `Skin=` 换装（≤1s，见文件头的同步说明）：根部 provide 一次，子
         // composable 读 LocalBarPalette —— 与 Android 侧 LocalKeyboardPalette 同套做法。
         val palette = skinColors(s.skin)
-        CompositionLocalProvider(LocalBarPalette provides palette) {
+        if (shown) CompositionLocalProvider(LocalBarPalette provides palette) {
             Box(Modifier.fillMaxSize().background(palette.bg).border(1.dp, palette.line)) {
                 if (notice == null) {
                     Row(
@@ -403,16 +409,24 @@ private fun BarButton(
     // 不新造颜色/角色（见 SkinPalette.kt 的角色映射）。键帽本身是固定白底（设计图），
     // 这一圈 hover 只露在键帽外缘 —— 激活态仍可见，且不染色键帽。
     val active = b == StatusBarButton.ENPRO && st.englishPro
+    var tip by remember { mutableStateOf(false) }
+    // 按钮在条窗内的像素矩形 —— 提示窗要靠它换算屏幕坐标。
+    var anchor by remember { mutableStateOf(Rect.Zero) }
+    // 悬停 400ms 出提示。提示必须是独立 Window：Compose 的 Popup 会被夹进 42dp 高的条窗
+    // （clippingEnabled=false 也救不了，xwininfo 实测无独立弹层），见 BarTooltip.kt。
+    LaunchedEffect(hovered) { tip = false; if (hovered) { delay(400); tip = true } }
     Box(
         modifier = Modifier
             .size(metrics.button)
             .background(if (hovered || active) palette.hover else Color.Transparent)
             .clickable(interactionSource = interaction, indication = null) { onClick(b) }
             .then(if (b == StatusBarButton.LOGO) dragToMove(windowState) else Modifier)
+            .onGloballyPositioned { anchor = it.boundsInWindow() }
             .semantics { contentDescription = b.label },
         contentAlignment = Alignment.Center,
     ) {
         StatusBarButtonFace(b, st, mode, metrics.button)
+        if (tip) BarTooltip(b, anchor, windowState.position, palette)
     }
 }
 
