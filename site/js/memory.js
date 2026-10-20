@@ -38,10 +38,10 @@
   let memoryRaf = 0;
   let memoryEndTimer = 0;
   let memoryIntroTimer = 0;
-  let memoryObserver = null;
-  let memoryRevealTimer = 0;
-  let memoryRevealQueue = [];
-  let memoryLastReveal = 0;
+  let memoryLoadQueue = [];
+  let memoryNextStepAt = 0;
+  let memoryScroll = null;
+  let memoryPausedAt = 0;
   let memoryPreviousFocus = null;
   let memoryPaused = false;
 
@@ -139,7 +139,29 @@
     memoryIntroCount = count;
   };
 
-  const setMemoryPaused = (paused) => { memoryPaused = paused; };
+  const setMemoryPaused = (paused) => {
+    if (paused === memoryPaused) return;
+    const now = performance.now();
+    if (paused) {
+      memoryPausedAt = now;
+    } else if (memoryPausedAt) {
+      const delta = now - memoryPausedAt;
+      memoryNextStepAt += delta;
+      if (memoryScroll) {
+        memoryScroll.from = memoryViewport.scrollTop;
+        memoryScroll.start = now;
+      }
+      memoryPausedAt = 0;
+    }
+    memoryPaused = paused;
+  };
+
+  // 手动滚轮/触摸时放弃当前自动滚动段，避免和用户抢滚动位置。
+  const interruptMemoryScroll = () => {
+    if (!memoryScroll) return;
+    memoryScroll = null;
+    memoryNextStepAt = Math.max(memoryNextStepAt, performance.now() + 400);
+  };
 
   const memoryProgressNow = () => {
     if (!memoryViewport || !memoryProgress) return;
@@ -159,26 +181,17 @@
     visible.filter((el) => el.classList.contains('memory-item')).pop()?.classList.add('is-current');
   };
 
-  // 已加载内容的最上沿：自动滚动不越过它，避免滚进还没加载的空白区。
-  const memoryLoadedTop = () => {
-    if (!memoryTimeline) return 0;
-    const loaded = $$('.memory-item.is-in, .memory-pet.is-in', memoryTimeline);
-    if (memoryFormsEntry?.classList.contains('is-in')) loaded.push(memoryFormsEntry);
-    return loaded.length ? Math.min(...loaded.map((el) => el.offsetTop)) : 0;
-  };
-
   const stopMemory = () => {
     if (memoryRaf) cancelAnimationFrame(memoryRaf);
     if (memoryEndTimer) clearTimeout(memoryEndTimer);
     if (memoryIntroTimer) clearTimeout(memoryIntroTimer);
-    if (memoryRevealTimer) clearTimeout(memoryRevealTimer);
-    memoryObserver?.disconnect();
-    memoryObserver = null;
-    memoryRevealQueue = [];
     memoryRaf = 0;
     memoryEndTimer = 0;
     memoryIntroTimer = 0;
-    memoryRevealTimer = 0;
+    memoryLoadQueue = [];
+    memoryScroll = null;
+    memoryNextStepAt = 0;
+    memoryPausedAt = 0;
     memoryIntro?.querySelectorAll('img').forEach((img) => img.getAnimations().forEach((a) => a.cancel()));
     memoryIntro?.classList.remove('is-showing');
     memoryIntroSingle?.classList.remove('is-active');
@@ -201,41 +214,6 @@
       el.classList.remove('is-in', 'is-current');
       delete el.dataset.memoryQueued;
     });
-  };
-
-  const revealMemoryNext = () => {
-    memoryRevealTimer = 0;
-    if (memoryPaused) {
-      memoryRevealTimer = window.setTimeout(revealMemoryNext, 250);
-      return;
-    }
-    const next = memoryRevealQueue.shift();
-    if (next) {
-      if (next.classList.contains('memory-item')) {
-        const current = memoryTimeline?.querySelector('.memory-item.is-current');
-        if (current && current !== next) current.classList.remove('is-current');
-        next.classList.add('is-in', 'is-current');
-      } else {
-        next.classList.add('is-in');
-      }
-      delete next.dataset.memoryQueued;
-      memoryLastReveal = performance.now();
-    }
-    if (memoryRevealQueue.length) {
-      const wait = Math.max(0, 1500 - (performance.now() - memoryLastReveal));
-      memoryRevealTimer = window.setTimeout(revealMemoryNext, wait);
-    }
-  };
-
-  const queueMemoryReveal = (el) => {
-    if (!el || el.classList.contains('is-in') || el.dataset.memoryQueued) return;
-    el.dataset.memoryQueued = '1';
-    const wait = Math.max(0, 1500 - (performance.now() - memoryLastReveal));
-    memoryRevealQueue.push(el);
-    if (!memoryRevealTimer) {
-      if (wait === 0) revealMemoryNext();
-      else memoryRevealTimer = window.setTimeout(revealMemoryNext, wait);
-    }
   };
 
   const introEntry = (index) => {
@@ -286,47 +264,45 @@
     memoryViewport.scrollTop = memoryViewport.scrollHeight;
     if (memoryFormsEntry) memoryFormsEntry.classList.add('is-in');
     primeMemoryWindow();
-    memoryLastReveal = performance.now();
     memoryProgressNow();
     if (reduceMotion) {
       $$('.memory-item, .memory-pet, .memory-forms-entry', memoryTimeline).forEach((el) => el.classList.add('is-in'));
       return;
     }
-    if ('IntersectionObserver' in window) {
-      memoryObserver = new IntersectionObserver((entries) => {
-        entries.filter((entry) => entry.isIntersecting)
-          .sort((a, b) => b.boundingClientRect.top - a.boundingClientRect.top)
-          .forEach((entry) => queueMemoryReveal(entry.target));
-      }, { root: memoryViewport, rootMargin: '220px 0px -8% 0px', threshold: 0.08 });
-      $$('.memory-item, .memory-pet, .memory-forms-entry', memoryTimeline).forEach((el) => memoryObserver.observe(el));
-    } else {
-      $$('.memory-item, .memory-pet, .memory-forms-entry', memoryTimeline).forEach((el) => el.classList.add('is-in'));
-    }
-    const max = Math.max(0, memoryViewport.scrollHeight - memoryViewport.clientHeight);
-    if (max <= 0) return;
-    const speed = max / 180000; // 约 3 分钟走完全程
-    let hold = 3000; // 从底部开始，先停留看清十二种形态与 v1.0.0
-    let last = 0;
+    memoryLoadQueue = $$('.memory-item, .memory-pet', memoryTimeline)
+      .filter((el) => !el.classList.contains('is-in'))
+      .reverse(); // bottom-up: load one history entry, then scroll to it
+    if (!memoryLoadQueue.length) return;
+    const stepMs = 1900;
+    memoryNextStepAt = performance.now() + 3000;
     const step = (now) => {
-      if (!last) last = now;
-      const dt = Math.min(80, Math.max(0, now - last));
-      last = now;
-      if (!memoryPaused) {
-        if (hold > 0) {
-          hold = Math.max(0, hold - dt);
+      if (memoryPaused) {
+        memoryRaf = requestAnimationFrame(step);
+        return;
+      }
+      if (!memoryScroll && memoryLoadQueue.length && now >= memoryNextStepAt) {
+        const next = memoryLoadQueue.shift();
+        if (next.classList.contains('memory-item')) {
+          memoryTimeline.querySelector('.memory-item.is-current')?.classList.remove('is-current');
+          next.classList.add('is-in', 'is-current');
         } else {
-          const loadedTop = memoryLoadedTop();
-          if (memoryViewport.scrollTop > loadedTop + 1) {
-            memoryViewport.scrollTop = Math.max(loadedTop, memoryViewport.scrollTop - speed * dt);
-          }
-          if (memoryViewport.scrollTop <= 1) {
-            memoryProgressNow();
-            memoryEndTimer = window.setTimeout(closeMemory, 1200);
-            return;
-          }
+          next.classList.add('is-in');
         }
+        const from = memoryViewport.scrollTop;
+        const target = Math.min(from, Math.max(0, next.offsetTop - 6));
+        memoryScroll = { from, to: target, start: now, duration: stepMs };
+        memoryNextStepAt = now + stepMs;
+      }
+      if (memoryScroll) {
+        const progress = Math.min(1, (now - memoryScroll.start) / memoryScroll.duration);
+        memoryViewport.scrollTop = memoryScroll.from + (memoryScroll.to - memoryScroll.from) * progress;
+        if (progress >= 1) memoryScroll = null;
       }
       memoryProgressNow();
+      if (!memoryLoadQueue.length && !memoryScroll) {
+        memoryEndTimer = window.setTimeout(closeMemory, 1600);
+        return;
+      }
       memoryRaf = requestAnimationFrame(step);
     };
     memoryRaf = requestAnimationFrame(step);
@@ -338,6 +314,7 @@
     if (memoryOverlay.classList.contains('is-open')) return;
     memoryPreviousFocus = document.activeElement;
     memoryPaused = false;
+    memoryPausedAt = 0;
     memoryOverlay.hidden = false;
     document.body.classList.add('memory-open');
     markMemorySeen();
@@ -357,6 +334,8 @@
     memoryViewport?.addEventListener('pointerenter', () => setMemoryPaused(true));
     memoryViewport?.addEventListener('pointerleave', () => setMemoryPaused(false));
     memoryViewport?.addEventListener('scroll', memoryProgressNow, { passive: true });
+    memoryViewport?.addEventListener('wheel', interruptMemoryScroll, { passive: true });
+    memoryViewport?.addEventListener('touchstart', interruptMemoryScroll, { passive: true });
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeMemory(); });
     let seen = false;
     try { seen = localStorage.getItem(memorySeenKey) === '1'; } catch (_) { /* private mode */ }
