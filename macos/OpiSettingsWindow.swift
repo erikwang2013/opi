@@ -254,9 +254,31 @@ final class OpiSettingsWindow: NSObject {
         label("OPI 小欧输入法", y: 8, size: 20, bold: true)
         label("macOS · InputMethodKit", y: 40, size: 13)
         label("版本 \(version)", y: 66, size: 12, color: .secondaryLabelColor)
-        label("草案构建：未签名、未公证、未在真机运行验证。", y: 106, size: 12, color: .systemOrange)
-        label("与 Linux 的已知差异：表情页、皮肤、悬浮状态栏未接；", y: 146, size: 11, color: .secondaryLabelColor)
-        label("状态栏入口以输入法菜单呈现。完整缺口表见 macos/README.md。", y: 162, size: 11, color: .secondaryLabelColor)
+        linkLabel("主页地址：https://opi.erik.xyz", url: "https://opi.erik.xyz", y: 96)
+        linkLabel("项目地址：https://github.com/erikwang2013/opi",
+                  url: "https://github.com/erikwang2013/opi", y: 118)
+        linkLabel("博客地址：https://erik.xyz", url: "https://erik.xyz", y: 140)
+        label("草案构建：未签名、未公证、未在真机运行验证。", y: 176, size: 12, color: .systemOrange)
+        label("与 Linux 的已知差异：表情页、皮肤、悬浮状态栏未接；", y: 212, size: 11, color: .secondaryLabelColor)
+        label("状态栏入口以输入法菜单呈现。完整缺口表见 macos/README.md。", y: 228, size: 11, color: .secondaryLabelColor)
+    }
+
+    /// 关于页的外链：无边框按钮，地址放在 toolTip 里，点击交给默认浏览器。
+    @discardableResult
+    private func linkLabel(_ title: String, url: String, y: CGFloat) -> NSButton {
+        let b = NSButton(title: title, target: self, action: #selector(openAboutLink(_:)))
+        b.frame = NSRect(x: 0, y: y, width: 400, height: 18)
+        b.isBordered = false
+        b.alignment = .left
+        b.contentTintColor = .linkColor
+        b.toolTip = url
+        host?.addSubview(b)
+        return b
+    }
+
+    @objc private func openAboutLink(_ sender: NSButton) {
+        guard let raw = sender.toolTip, let url = URL(string: raw) else { return }
+        NSWorkspace.shared.open(url)
     }
 
     // ---------- 控件助手 ----------
