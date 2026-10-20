@@ -287,7 +287,6 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
                         // 焦点没交还就别注入（Ctrl+V 会落进本窗）；injectPaste 失败会变成
                         // 「已复制，请手动粘贴」，不会假装成功。
                         val stillFocused = window.isFocused
-                        // 读 PNG/配置 + 写系统剪贴板都可能阻塞：挪出组合线程（同 onCommit 那条）。
                         val r = withContext(Dispatchers.IO) {
                             pickLock.withLock {
                                 copyPetSticker(form, SystemImageClipboard, paste = {

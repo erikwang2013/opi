@@ -31,8 +31,9 @@ class PetShowOwnTest {
     @Test
     fun `commit keeps the image path and never inserts pua text`() {
         val commit = src("src/main/kotlin/xyz/erik/opi/PetStickerCommit.kt")
-        assertTrue(commit.contains("commitPetStickerImage(ic, gif, \"image/gif\")"))
-        assertTrue(commit.contains("commitPetStickerImage(ic, png, \"image/png\")"))
+        assertTrue(commit.contains("petStickerImageOrder(gif, png)"))
+        assertTrue(commit.contains("commitPetStickerImage(ic, file, mime)"))
+        assertTrue("图片失败后必须尝试剪贴板", commit.contains("copyPetStickerToClipboard"))
         assertTrue(commit.contains("[\${PetEmoji.label(mood)}]"))
         // 码位只是内部 ID：输入框里不能出现 PUA 字符（文本回退只允许人读的
         // `[小欧·笑]` 标签，所以不断言「没有 commitText」）。

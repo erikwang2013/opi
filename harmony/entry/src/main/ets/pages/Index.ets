@@ -21,6 +21,7 @@
 import { KeyboardController } from '../InputMethodExtensionAbility/KeyboardController';
 import { OpiMode, OpiShift } from '../InputMethodExtensionAbility/OpiEngine';
 import { OpiPet, PetMood, petMood, petStripSelection } from '../InputMethodExtensionAbility/OpiPet';
+import { stickerDataUri } from '../InputMethodExtensionAbility/PetStickerImages';
 import {
   MODE_BIG9, MODE_PINYIN9, MODE_PINYIN14, MODE_RARE, MODE_SHUANGPIN, MODE_STROKE, MODE_WUBI,
   lastChineseModeIndex, modeLabel, nextMode
@@ -47,6 +48,24 @@ const PET_SIZE_IN_BAR: number = 30;
 
 /** 空闲宠物条重抽间隔（ms）：与 Android `PetStrip.kt` 的 PET_FORM_HOLD_MS 同值。 */
 const PET_FORM_HOLD_MS: number = 2800;
+
+/** PetMood → 贴纸文件名（顶部多形态用真实贴纸，避免 12 种形态画成同一张脸）。 */
+function petStickerName(mood: PetMood): string {
+  switch (mood) {
+    case PetMood.Waiting: return 'waiting';
+    case PetMood.Puzzled: return 'puzzled';
+    case PetMood.Crying: return 'crying';
+    case PetMood.Terrified: return 'terrified';
+    case PetMood.Angry: return 'angry';
+    case PetMood.Coquettish: return 'coquettish';
+    case PetMood.Cute: return 'cute';
+    case PetMood.Pleasing: return 'pleasing';
+    case PetMood.Knocking: return 'knocking';
+    case PetMood.FacePalm: return 'face-palm';
+    case PetMood.TongueOut: return 'tongue-out';
+    default: return 'idle';
+  }
+}
 
 @Entry
 @Component
@@ -219,7 +238,10 @@ struct Index {
         // 占满候选区；点任意一枚仍是「学习开关」（与单枚时的点击语义一致）。
         Row() {
           ForEach(this.petForms, (m: PetMood, index: number) => {
-            OpiPet({ mood: m, petSize: this.stripPetSize(), dark: this.isDark(), forceLegend: false })
+            Image(stickerDataUri(petStickerName(m)))
+              .width(this.stripPetSize())
+              .height(this.stripPetSize())
+              .objectFit(ImageFit.Contain)
               .margin({ left: 2, right: 2 })
           }, (m: PetMood, index: number) => `${index}-${m}`)
         }

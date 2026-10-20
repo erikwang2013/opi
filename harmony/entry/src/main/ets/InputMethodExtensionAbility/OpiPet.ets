@@ -49,10 +49,8 @@ export enum PetMood {
   Degraded = 4,
   // 2026-10-17 追加（只能加在末尾，与 shared/pet/OpiPet.kt 逐值镜像）：
   // 移动端顶部宠物条的表情能力。petMood 不产出这三枚。
-  // ⚠️ 2026-10-20 起 [PET_STRIP_FORMS] / [petStripSelection] 会抽到它们，但本文件的
-  // draw() **只区分 Idle/Waiting/Puzzled/Sleepy/Degraded 五种脸** —— 这八枚画出来
-  // 与 Idle 同貌，要真正做到「不同形态」得按 Compose 版补绘制（见 PetStrip.kt 的
-  // 十二形态与 shared/pet/OpiPet.kt）。
+  // 2026-10-20：顶部多形态条改用 `PetStickerImages` 的真实贴纸（Index.ets），
+  // 因此本文件 draw() 只画五种状态脸不影响「多形态互不相同」。
   /** 哭（顶部宠物条：哭） */
   Crying = 5,
   /** 惊恐（顶部宠物条：惊恐） */
@@ -60,7 +58,7 @@ export enum PetMood {
   /** 愤怒（顶部宠物条：愤怒） */
   Angry = 7,
   // 2026-10-18 追加（同样只能加在末尾，与 shared/pet/OpiPet.kt 逐值镜像）：
-  // 移动端顶部宠物条的后六枚表情能力。petMood 不产出它们（绘制缺口同上）。
+  // 移动端顶部宠物条的后六枚表情能力。petMood 不产出它们（顶部用贴纸图）。
   /** 撒娇 */
   Coquettish = 8,
   /** 卖萌 */
