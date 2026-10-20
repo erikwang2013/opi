@@ -196,7 +196,7 @@
   border-radius: 50%;
   opacity: .5;
 }
-.feature-card:hover { transform: translateY(-5px); border-color: rgba(46, 139, 128, .34); background: rgba(255, 255, 255, .9); }
+.feature-card:hover { transform: perspective(900px) translateY(-5px) rotateX(2.5deg); border-color: rgba(46, 139, 128, .34); background: rgba(255, 255, 255, .9); }
 .feature-card .icon { margin-bottom: 26px; color: var(--primary-deep); }
 .feature-num { position: absolute; right: 20px; top: 18px; color: var(--ink-faint); font-family: var(--font-mono); font-size: .64rem; letter-spacing: .08em; }
 .feature-card h3 { margin-bottom: 8px; font-size: 1.04rem; }
@@ -268,7 +268,7 @@
   transition: transform .25s var(--ease), background .25s var(--ease), border-color .25s var(--ease), box-shadow .25s var(--ease);
 }
 .download-card::after { content: ""; position: absolute; right: -22px; top: -42px; width: 118px; height: 118px; border: 1px solid var(--line); border-radius: 50%; opacity: .6; }
-.download-card:hover { transform: translateY(-5px); border-color: var(--primary); background: rgba(255, 255, 255, .94); box-shadow: 0 26px 50px -40px rgba(30, 107, 99, .55); }
+.download-card:hover { transform: perspective(900px) translateY(-5px) rotateX(2deg) rotateY(-1.5deg); border-color: var(--primary); background: rgba(255, 255, 255, .94); box-shadow: 0 26px 50px -40px rgba(30, 107, 99, .55); }
 .os-mark { display: grid; place-items: center; width: 34px; height: 34px; margin-bottom: 14px; padding: 3px; border-radius: 10px; background: var(--primary-soft); }
 .os-mark img { width: 100%; height: 100%; object-fit: contain; }
 .os-name { margin-bottom: 2px; font-size: 1rem; font-weight: 700; letter-spacing: -.02em; }
