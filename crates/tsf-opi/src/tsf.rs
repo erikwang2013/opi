@@ -84,13 +84,8 @@ pub trait TsfSink: Send + Sync {
         _mode: Mode,
     ) {
     }
-    /// 宿主失活（焦点离开该线程/切换应用）：释放候选窗连接。默认 no-op。
-    ///
-    /// 候选窗管道是**单实例**：每个加载了本 DLL 的宿主进程各有一个客户端，
-    /// 谁先 `show` 谁就占住那一个实例。不在 Deactivate 释放的话，第一个输入过的
-    /// 应用会把管道占到这个进程结束，其余应用永远连不上 —— 用户看到的就是
-    /// 「输入法只在桌面/某一个应用可用」。窗口侧在连接断开时自行隐藏并重建实例
-    /// （见 PipeServer.kt 的 serveLoop/finally），下次按键惰性重连。
+    /// 宿主失活：释放单实例候选窗管道。不释放则第一个输入过的应用占住连接，
+    /// 其余应用永远连不上（「只在桌面/单个应用可用」）；窗口侧断开后自隐藏并重建。
     fn disconnect(&self) {}
 }
 
@@ -98,9 +93,8 @@ pub trait TsfSink: Send + Sync {
 /// 见 candidate_io.rs 的 `SharedAction::refresh`）共用 —— 两处各写一遍必然漂移，
 /// 症状是"切了模式/点了候选，窗口还显示旧内容"。
 pub(crate) fn push_state(sink: &dyn TsfSink, logic: &TsfLogic) {
-    // 一次抓取出页内候选 + 页数（2026-10-18）：此前 candidates()/page_count()
-    // 各抓一次 ⇒ 每键整份排序两遍（单字母 release 3.9–6.3ms ⇒ 白花 4–6ms）。
-    // 这里复用 `fetched` 的同一次快照，逐字同 `TsfLogic::candidates`/`page_count`。
+    // 一次抓取候选+页数（2026-10-18）：此前各抓一次 ⇒ 每键整份排序两遍（白花 4–6ms）。
+    // 复用 `fetched` 的同一次快照，逐字同 `TsfLogic::candidates`/`page_count`。
     let fetched = logic.fetched();
     let candidates: Vec<String> = fetched
         .iter()
@@ -353,16 +347,13 @@ impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
         ensure_panic_hook();
         catch_unwind(AssertUnwindSafe(|| {
             // 骨架：仅清状态；验收补全点：UnadviseKeyEventSink + 释放 composition/候选窗。
-            // 语言栏按钮先摘（与 Activate 的 add 配对）：留着的条目持一份指向本 DLL
-            // 的 vtable，卸载后就是悬垂 —— 见 langbar.rs 的 remove。
+            // 语言栏按钮先摘（与 Activate 配对）：留着会持指向本 DLL 的 vtable —— 见 langbar::remove。
             if let Ok(mut slot) = self.langbar.lock()
                 && let Some((mgr, item)) = slot.take()
             {
                 crate::langbar::remove(&mgr, &item);
             }
-            // 释放单实例候选窗管道（理由见 TsfSink::disconnect）：焦点切走后
-            // 下一个应用才能连上。窗口在这一端看到 0 字节后自行隐藏并重建。
-            self.sink.disconnect();
+            self.sink.disconnect(); // 释放单实例管道，焦点切走后下一个应用才能连上。
             let mut tm = match self.thread_mgr.lock() {
                 Ok(g) => g,
                 Err(_) => return Ok(()), // 中毒锁：吞掉，避免经 COM vtable 泄漏 panic
