@@ -224,7 +224,42 @@ pub extern "system" fn DllCanUnloadNow() -> HRESULT {
 /// 宁可响亮地失败，也不要"注册成功但输入法不出现"。
 #[unsafe(no_mangle)]
 pub extern "system" fn DllRegisterServer() -> HRESULT {
-    com_exit(register)
+    // 固定路径的注册日志：`regsvr32 /s` 只给退出码，Inno 的安装日志又埋在
+    // %TEMP% 里 —— 键盘不出现时这是用户/诊断脚本唯一能直接读到的失败原因。
+    reset_register_log();
+    let result = guard(register);
+    if let Err(e) = &result {
+        log_register_failure("DllRegisterServer", e);
+    }
+    result.map_or_else(|e| e.code(), |()| S_OK)
+}
+
+/// 注册日志落点（`%ProgramData%\opi\tsf-register.log`）。
+fn register_log_path() -> std::path::PathBuf {
+    std::env::var_os("ProgramData")
+        .map_or_else(std::env::temp_dir, std::path::PathBuf::from)
+        .join("opi")
+        .join("tsf-register.log")
+}
+
+/// 记一行注册失败。**任何失败都不影响注册结果** —— 日志写不进去时静默放弃。
+/// 非致命步骤（图标回退、HKCU 启用位、能力类别）也用它，便于诊断脚本一并读回。
+pub(crate) fn log_register_failure(stage: &str, err: &windows::core::Error) {
+    let path = register_log_path();
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let line = format!("{stage}: HRESULT 0x{:08X}\r\n", err.code().0 as u32);
+    let _ = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
+}
+
+/// 每次注册前清掉上一轮的结果：过期的失败行比没有日志更误导。
+fn reset_register_log() {
+    let _ = std::fs::remove_file(register_log_path());
 }
 
 /// `DllUnregisterServer`：`regsvr32 /u opi_tsf.dll` 调它。与 `register` 逆序。

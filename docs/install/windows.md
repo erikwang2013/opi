@@ -390,7 +390,11 @@ C:\Program Files\opi\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
   `opi.exe`、再 `regsvr32 /s /u`、再删文件（同样 best-effort）。
 - **任务栏输入指示器图标（2026-10-21）**：`RegisterProfile` 的 icon 指向安装目录根的
   `opi.exe`（jpackage 宠物图标），不再传空图标；升级安装会先 `regsvr32 /u` 旧 DLL 再
-  注册新 DLL，以便已存在的 profile 也换上新图标。真机上的任务栏显示仍待验证。
+  注册新 DLL，以便已存在的 profile 也换上新图标。**图标失败不会拖垮注册**：带图标
+  调用失败时自动改用空图标重试，重试仍失败但 profile 已能读回也算成功——
+  2026-10-21 真机「装完仍只有英文」的强嫌疑就是图标让整个 `RegisterProfile` 返回
+  失败（CI 的 Server Core 冒烟当时 `regsvr32` 退出码为 0，未能复现，所以两层回退
+  都保留）。真机上的任务栏显示仍待验证。
 - **卸载（2026-10-21）**：`CurUninstallStepChanged(usUninstall)` 在 Inno 删文件前
   先 `taskkill /f /t /im opi.exe`（候选窗 / 设置窗 / 状态栏都是同一个 `opi.exe`；
   **本树没有 Windows 服务**），随后清 HKLM64/HKCU Run 下的 `opi` / `opi-statusbar`
@@ -436,11 +440,36 @@ C:\Program Files\opi\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
   第二道保险（`CloseApplications=no` 时无效果，防止将来有人改回去）。
 - 冒烟（`windows-exe-install-test`）：在干净的 Server Core 容器里静默装到
   `C:\opi-test`，断言 `opi.exe`、`app\tsf_opi.dll`、`app\luna.opid` 存在、安装退出码 0、
-  日志里**有** `regsvr32` 退出码（0 或非 0 均可），再静默卸载并断言 `opi.exe` 与
-  **整个 `C:\opi-test` 目录**都消失（容器没有 Explorer ⇒ DLL 未被锁定 ⇒ 走立即删除
-  路径；真机的 Explorer 锁定→改名移出路径仍未验证）。「注册成功」与「TSF 真加载了词库」仍要
-  真机验证（容器没有语言栏/TSF）。
-  ⚠️ 静默路径不执行完成页脚本，该脚本由 `ci.yml` 的静态门禁守护，不是 CI 跑过的。
+  日志里**有** `regsvr32` 退出码（0 或非 0 均可）；2026-10-21 起还断言
+  **HKLM CTF 语言 profile 键真的写入**、**`opi-statusbar` 的 HKLM Run 值存在**，再静默
+  卸载并断言 `opi.exe`、**整个 `C:\opi-test` 目录**以及上面两个注册表项都消失
+  （容器没有 Explorer ⇒ DLL 未被锁定 ⇒ 走立即删除路径；真机的 Explorer 锁定→改名
+  移出路径仍未验证）。**退出码 0 不是 profile 写入的证据** —— 这正是 2026-10-21
+  真机「装完仍只有英文」要区分的两件事。「TSF 真加载了词库」仍要真机验证。
+  ⚠️ 静默路径不执行完成页脚本，该脚本由 `ci.yml` 的静态门禁守护，不是 CI 跑过的；
+  静默安装也**不启动**状态栏进程（只有 Run 值），只能证明「下次登录会启动」。
+
+#### 安装后必做（2026-10-21 真机报障后补）
+
+装完**不会立刻**出现可用输入法，按顺序做这三步；缺任何一步的表现都是
+「输入只有英文、切换键没反应、状态栏不出现」：
+
+1. **注销或重启 Windows**。安装器只落文件并注册，TSF 宿主（Explorer/已打开的应用）
+   要重新加载 `tsf_opi.dll` 才会看到新输入法。完成页的复选框只拉起候选窗/状态栏，
+   **不重启 Explorer、也不重启电脑**（2026-10-20 白屏修复的代价）。
+2. **把输入法加进键盘列表**：设置 → 时间和语言 → 语言和区域 →
+   **中文(简体，中国)** → 语言选项 → 键盘 → 添加键盘 → **小欧输入法**。
+   系统里没有「中文(简体，中国)」语言时，先添加该语言。注册用的 LANGID 是 zh-CN，
+   所以它只出现在中文键盘列表里。
+3. 用 `Win` + `Space` 切到「小欧输入法」。**状态栏只在切到小欧后显示**
+   （`barVisible(..., requireActive=isWindows())` 读控制面的 `im=opi`）；还在英文/别的
+   输入法下时状态栏隐藏是预期行为，不是安装失败。
+
+**注册失败会当场可见（2026-10-21）**：交互安装时，`regsvr32` 非 0 或 HKLM 语言
+profile 键没写出来，完成前会弹窗（日志路径 + 重试指引）；静默安装只写日志。
+固定日志：`%ProgramData%\opi\tsf-register.log`（每次注册前清空；记录致命与降级步骤的
+HRESULT），与 Inno 安装日志里的 `opi: regsvr32 ... exit code <n>` 行配合看。
+`scripts/windows/diagnose-tsf.ps1` 会读这份日志。
 
 或在 Actions 页面（仓库 → Actions → Windows 打包）点进某次 run 下载。
 **触发**：手动 dispatch，或 push 到默认分支且改动落在 `crates/tsf-opi/**` / `desktop/**` /

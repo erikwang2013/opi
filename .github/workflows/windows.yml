@@ -554,6 +554,8 @@ jobs:
   #   · 断言 opi.exe、app\tsf_opi.dll 与 app\luna.opid 真的落盘
   #   · 断言安装退出码 = 0，且日志里**记录了** regsvr32 的退出码（0 或非 0 都不判红：
   #     Server Core 没有语言栏/TSF，注册失败是已知环境限制；安装本身不许因此回滚）
+  #   · 断言 HKLM CTF 语言 profile 键与 opi-statusbar 的 HKLM Run 值**真的写入**，
+  #     卸载后两者都**消失**（2026-10-21：退出码 0 不是 profile 写入的证据）
   #   · 静默卸载后再断言 opi.exe 已删除
   # 失败时日志全部上传。
   # ⚠️ CI 只跑静默路径，`[Run] ... skipifsilent` 的完成页自启脚本在这里**不会执行**；
@@ -592,6 +594,10 @@ jobs:
           if exist C:\opi-test\opi.exe (echo PRESENT > C:\work\install-opi.txt) else (echo ABSENT > C:\work\install-opi.txt)
           if exist C:\opi-test\app\tsf_opi.dll (echo PRESENT > C:\work\install-dll.txt) else (echo ABSENT > C:\work\install-dll.txt)
           if exist C:\opi-test\app\luna.opid (echo PRESENT > C:\work\install-luna.txt) else (echo ABSENT > C:\work\install-luna.txt)
+          reg query "HKLM\SOFTWARE\Microsoft\CTF\TIP\{98C51858-590B-404D-8915-21EB44250062}\LanguageProfile\0x00000804\{A31A137C-1404-42F2-B82C-4E63F15DEFD6}" >nul 2>&1
+          if errorlevel 1 (echo MISSING > C:\work\install-profile.txt) else (echo PRESENT > C:\work\install-profile.txt)
+          reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v opi-statusbar >nul 2>&1
+          if errorlevel 1 (echo MISSING > C:\work\install-run-statusbar.txt) else (echo PRESENT > C:\work\install-run-statusbar.txt)
           if exist C:\opi-test\unins000.exe (
             start "" /wait C:\opi-test\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=C:\work\uninstall-exe.log
             echo %ERRORLEVEL% > C:\work\uninstall-exit.txt
@@ -599,12 +605,16 @@ jobs:
           ping -n 16 127.0.0.1 >nul
           if exist C:\opi-test\opi.exe (echo PRESENT > C:\work\uninstall-removed.txt) else (echo ABSENT > C:\work\uninstall-removed.txt)
           if exist C:\opi-test (echo PRESENT > C:\work\uninstall-dir.txt) else (echo ABSENT > C:\work\uninstall-dir.txt)
+          reg query "HKLM\SOFTWARE\Microsoft\CTF\TIP\{98C51858-590B-404D-8915-21EB44250062}\LanguageProfile\0x00000804\{A31A137C-1404-42F2-B82C-4E63F15DEFD6}" >nul 2>&1
+          if errorlevel 1 (echo ABSENT > C:\work\uninstall-profile.txt) else (echo PRESENT > C:\work\uninstall-profile.txt)
+          reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v opi-statusbar >nul 2>&1
+          if errorlevel 1 (echo ABSENT > C:\work\uninstall-run-statusbar.txt) else (echo PRESENT > C:\work\uninstall-run-statusbar.txt)
           exit /b 0
           "@
           Set-Content -Path (Join-Path $work 'exe-smoke.cmd') -Value $script -Encoding ascii
           docker run --rm --isolation=process -v "${work}:C:\work" $image cmd /c C:\work\exe-smoke.cmd
 
-          foreach ($f in 'install-exe.log', 'install-exit.txt', 'install-opi.txt', 'install-dll.txt', 'install-luna.txt') {
+          foreach ($f in 'install-exe.log', 'install-exit.txt', 'install-opi.txt', 'install-dll.txt', 'install-luna.txt', 'install-profile.txt', 'install-run-statusbar.txt') {
             if (-not (Test-Path $f)) { throw "缺少 $f（docker run 失败或安装器没启动）" }
           }
           $exitCode = (Get-Content install-exit.txt -Raw).Trim()
@@ -624,6 +634,16 @@ jobs:
           if (-not $m.Success) { throw '安装日志里没有 regsvr32 结果记录' }
           Write-Host "regsvr32 退出码: $($m.Groups[1].Value)（0=注册成功；非 0 在 Server Core 上可接受）"
 
+          # 2026-10-21: 退出码 0 不等于 profile 写进去了。容器里直接读 CTF 键，
+          # 并检查状态栏的 HKLM Run 值（静默安装不启动进程，值存在 = 下次登录会启动）。
+          if ((Get-Content install-profile.txt -Raw).Trim() -ne 'PRESENT') {
+            throw '安装后没有 HKLM CTF 语言 profile 键（输入法不会出现在键盘列表）'
+          }
+          if ((Get-Content install-run-statusbar.txt -Raw).Trim() -ne 'PRESENT') {
+            throw '安装后缺少 HKLM Run 的 opi-statusbar 值（状态栏不会随登录启动）'
+          }
+          Write-Host 'CTF 语言 profile 与 opi-statusbar Run 值均已写入'
+
           if (-not (Test-Path 'uninstall-exit.txt')) { throw '没有执行卸载（缺 unins000.exe 或卸载器没启动）' }
           $uninstallCode = (Get-Content uninstall-exit.txt -Raw).Trim()
           if ($uninstallCode -ne '0') { throw "卸载退出码 $uninstallCode（见 uninstall-exe.log）" }
@@ -632,7 +652,11 @@ jobs:
           # 路径，整个安装目录都应消失。[UninstallDelete] filesandordirs 的直接回归。
           if (-not (Test-Path 'uninstall-dir.txt')) { throw '缺少 uninstall-dir.txt（卸载没跑完）' }
           if ((Get-Content uninstall-dir.txt -Raw).Trim() -ne 'ABSENT') { throw '卸载后安装目录 C:\opi-test 仍在' }
-          Write-Host 'EXE 安装/卸载冒烟通过'
+          foreach ($f in 'uninstall-profile.txt', 'uninstall-run-statusbar.txt') {
+            if (-not (Test-Path $f)) { throw "缺少 $f（卸载后的注册表检查没跑）" }
+            if ((Get-Content $f -Raw).Trim() -ne 'ABSENT') { throw "卸载后仍残留注册表项（见 $f）" }
+          }
+          Write-Host 'EXE 安装/卸载冒烟通过（注册、profile、Run 值均已写入并在卸载时清除）'
 
       - name: 上传安装日志（无论成败）
         if: always()
@@ -648,8 +672,12 @@ jobs:
             install-opi.txt
             install-dll.txt
             install-luna.txt
+            install-profile.txt
+            install-run-statusbar.txt
             uninstall-removed.txt
             uninstall-dir.txt
+            uninstall-profile.txt
+            uninstall-run-statusbar.txt
             exe-smoke.cmd
 
   # ---- 只报不进卡的 clippy（Windows 目标）----

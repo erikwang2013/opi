@@ -6,8 +6,9 @@
 .DESCRIPTION
   Read-only. Checks the COM in-proc server, the CTF TIP language profile,
   the HKLM machine-wide default-enable bit, per-user enable state, the
-  installed language/input-method list, and (optionally) the install log —
-  the MSI's OpRegisterTsf or the EXE installer's `opi: regsvr32` line.
+  installed language/input-method list, (optionally) the install log —
+  the MSI's OpRegisterTsf or the EXE installer's `opi: regsvr32` line — and
+  %ProgramData%\opi\tsf-register.log (fixed-path failures written by the DLL).
 
   Run in an elevated 64-bit PowerShell for complete HKLM visibility:
     powershell -ExecutionPolicy Bypass -File .\diagnose-tsf.ps1 `
@@ -234,6 +235,21 @@ if ($InstallLog -and (Test-Path -LiteralPath $InstallLog -PathType Leaf)) {
     Check 'No fatal MSI/registration error in the log' ($bad.Count -eq 0)
 } else {
     Warn 'No install log supplied or found' 'Use: msiexec /i <msi> /l*v install.log, or opi-<version>-setup.exe /LOG=install-exe.log, then -InstallLog <file>'
+}
+
+Section 'TSF registration log (%ProgramData%\opi\tsf-register.log)'
+# 2026-10-21: DllRegisterServer writes fatal + degraded steps here (regsvr32 /s only
+# yields an exit code, and Inno's install log lives under %TEMP%). A bare
+# "DllRegisterServer:" line means the profile/category registration did not finish.
+$tsfLog = Join-Path $env:ProgramData 'opi\tsf-register.log'
+if (Test-Path -LiteralPath $tsfLog -PathType Leaf) {
+    Write-Host ("  log: {0}" -f $tsfLog)
+    $lines = @(Get-Content -LiteralPath $tsfLog -ErrorAction SilentlyContinue)
+    $lines | Select-Object -First 20 | ForEach-Object { Write-Host ("         {0}" -f $_) }
+    $fatal = @($lines | Where-Object { $_ -match '^DllRegisterServer:|^RegisterCategory\(TIP_KEYBOARD\)' })
+    Check 'No fatal TSF registration error recorded' ($fatal.Count -eq 0)
+} else {
+    Write-Host '  no tsf-register.log (no recorded registration failure)'
 }
 
 Section 'Result'

@@ -1,4 +1,4 @@
-; SPDX-FileCopyrightText: 2026 erik.xyz
+﻿; SPDX-FileCopyrightText: 2026 erik.xyz
 ; SPDX-License-Identifier: MIT
 ;
 ; User-facing Windows installer for opi (2026-10-20).
@@ -139,13 +139,15 @@ Root: HKLM64; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType
 [Run]
 ; Finish page: start the candidate window only. It must NOT touch Explorer --
 ; the shell restart was the 2026-10-20 white-screen root cause. TSF picks up the
-; freshly registered DLL on the next sign-out/reboot (the finish page says so).
+; freshly registered DLL on the next sign-out/reboot, and the user must then add
+; 小欧输入法 under the Chinese (Simplified) keyboard list -- the description says
+; both, because "installed but still English" was the 2026-10-21 field report.
 ; runasoriginaluser, NOT runascurrentuser: Setup is elevated, so the current-user
 ; token is the admin token; a shell restarted with it is not the user's shell.
 ; (postinstall entries default to the original user, but state it explicitly --
 ; the earlier runascurrentuser here was one half of the white screen.)
 ; The .cmd keeps its historical name because the MSI postprocess looks it up.
-Filename: "{app}\app\launch-and-restart.cmd"; Description: "Launch opi (sign out or restart Windows to load the input method)"; Flags: postinstall nowait skipifsilent runasoriginaluser
+Filename: "{app}\app\launch-and-restart.cmd"; Description: "Launch opi (then sign out or restart Windows, and add/switch to 小欧输入法 in the Chinese (Simplified) keyboard list)"; Flags: postinstall nowait skipifsilent runasoriginaluser
 
 [Code]
 procedure KillRunningApp();
@@ -162,7 +164,7 @@ end;
 
 procedure RegisterTsf();
 var
-  DllPath: String;
+  DllPath, ProfileKey: String;
   ResultCode: Integer;
 begin
   DllPath := ExpandConstant('{app}\app\tsf_opi.dll');
@@ -174,10 +176,32 @@ begin
   // {sys} is the 64-bit System32 because ArchitecturesInstallIn64BitMode=x64.
   // A failure here is logged and never aborts the install: Server Core and
   // locked-down machines may refuse TSF registration, but the files must land.
-  if Exec(ExpandConstant('{sys}\regsvr32.exe'), '/s "' + DllPath + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
-    Log('opi: regsvr32 /s tsf_opi.dll exit code ' + IntToStr(ResultCode))
-  else
+  if not Exec(ExpandConstant('{sys}\regsvr32.exe'), '/s "' + DllPath + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+  begin
     Log('opi: regsvr32 could not be started; install continues');
+    Exit;
+  end;
+  Log('opi: regsvr32 /s tsf_opi.dll exit code ' + IntToStr(ResultCode));
+
+  // Exit code 0 is not the end-to-end criterion: the CTF language-profile key is
+  // what makes the IME show up in the keyboard list. Both failures must be
+  // visible to an interactive user -- the 2026-10-21 report was "installed, still
+  // English only, no status bar", with nothing on screen saying why.
+  ProfileKey := 'SOFTWARE\Microsoft\CTF\TIP\{98C51858-590B-404D-8915-21EB44250062}\LanguageProfile\0x00000804\{A31A137C-1404-42F2-B82C-4E63F15DEFD6}';
+  if (ResultCode = 0) and RegKeyExists(HKLM64, ProfileKey) then
+    Log('opi: TSF language profile present under HKLM\...\LanguageProfile\0x00000804')
+  else
+  begin
+    if ResultCode = 0 then
+      Log('opi: regsvr32 succeeded but the CTF profile key is missing: ' + ProfileKey)
+    else
+      Log('opi: TSF registration FAILED; details in %ProgramData%\opi\tsf-register.log');
+    if not WizardSilent then
+      MsgBox('小欧输入法注册失败（详见 %ProgramData%\opi\tsf-register.log）。' + #13#10 +
+        '安装文件已就位，但输入法不会出现在键盘列表里。' + #13#10 + #13#10 +
+        '请重启 Windows 后再运行一次安装程序；若仍失败，请把该日志发给开发者。',
+        mbError, MB_OK);
+  end;
 end;
 
 procedure UnregisterTsf();
@@ -249,14 +273,16 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssInstall then
-  begin
     KillRunningApp();
-    // 升级时先把旧 profile 摘掉：RegisterProfile 不会更新已存在 profile 的图标，
-    // 新图标（opi.exe 宠物）只有重新注册才会写进任务栏输入指示器。
-    UnregisterTsf();
-  end;
   if CurStep = ssPostInstall then
+  begin
+    // 升级时先摘旧 profile 再注册：RegisterProfile 不会更新已存在 profile 的图标，
+    // 新图标（opi.exe 宠物）只有重新注册才会写进任务栏输入指示器。
+    // 两步必须相邻（2026-10-21）：放在 ssInstall 会让「已卸载」状态跨越整个文件
+    // 复制阶段，任何中途失败都会留下「1.19 能用、升级后完全没输入法」的机器。
+    UnregisterTsf();
     RegisterTsf();
+  end;
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);

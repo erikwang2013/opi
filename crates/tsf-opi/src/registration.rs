@@ -13,9 +13,8 @@ use windows::Win32::System::Com::{
     CoUninitialize,
 };
 use windows::Win32::System::Registry::{
-    HKEY, HKEY_CLASSES_ROOT, HKEY_LOCAL_MACHINE, KEY_READ, KEY_WRITE, REG_DWORD,
-    REG_OPTION_NON_VOLATILE, REG_SZ, RegCloseKey, RegCreateKeyExW, RegDeleteTreeW, RegOpenKeyExW,
-    RegQueryValueExW, RegSetValueExW,
+    HKEY, HKEY_CLASSES_ROOT, KEY_WRITE, REG_OPTION_NON_VOLATILE, REG_SZ, RegCloseKey,
+    RegCreateKeyExW, RegDeleteTreeW, RegSetValueExW,
 };
 use windows::Win32::UI::Input::KeyboardAndMouse::HKL;
 use windows::Win32::UI::TextServices::{
@@ -108,44 +107,6 @@ fn set_string(hkey: HKEY, name: Option<&str>, value: &str) -> Result<()> {
         )
     };
     win32_ok(err)
-}
-
-/// 读一个 REG_DWORD；键/值不存在或类型不符一律 `None`。
-fn read_dword(root: HKEY, subkey: &str, name: &str) -> Option<u32> {
-    let sub = wide_z(subkey);
-    let mut hkey = HKEY(core::ptr::null_mut());
-    // SAFETY: sub 是 NUL 结尾 UTF-16；hkey 是有效的输出位置。
-    let err = unsafe { RegOpenKeyExW(root, PCWSTR(sub.as_ptr()), None, KEY_READ, &mut hkey) };
-    if err != ERROR_SUCCESS {
-        return None;
-    }
-    let key = RegKey(hkey);
-    let name = wide_z(name);
-    let mut data = 0u32;
-    let mut size = size_of::<u32>() as u32;
-    let mut value_type = REG_DWORD;
-    // SAFETY: data/size/type 都是有效的输出位置；保留参数传 None 即 NULL。
-    let err = unsafe {
-        RegQueryValueExW(
-            key.0,
-            PCWSTR(name.as_ptr()),
-            None,
-            Some(&mut value_type),
-            Some((&mut data as *mut u32).cast::<u8>()),
-            Some(&mut size),
-        )
-    };
-    (err == ERROR_SUCCESS && value_type == REG_DWORD && size == size_of::<u32>() as u32)
-        .then_some(data)
-}
-
-/// HKLM 的机器级默认启用位是否已是 1（`EnableLanguageProfileByDefault` 写的值）。
-/// 只在那个 API 报错时用来复核状态，避免把「已经启用」误判成安装失败。
-fn hklm_default_enabled() -> bool {
-    let subkey = format!(
-        "SOFTWARE\\Microsoft\\CTF\\TIP\\{{{CLSID_TEXT_SERVICE}}}\\LanguageProfile\\0x{LANGID_ZH_CN:08X}\\{{{GUID_PROFILE}}}"
-    );
-    read_dword(HKEY_LOCAL_MACHINE, &subkey, "Enable") == Some(1)
 }
 
 /// 本线程的 COM 初始化守卫。
@@ -324,7 +285,7 @@ pub(crate) fn register() -> Result<()> {
         // `profiles.Register` 同样只在首次注册时调用，重复安装不再碰旧接口。
         if !profile_exists(&profile_mgr, &clsid, &profile) {
             ok_if_already_exists(profiles.Register(&clsid))?;
-            profile_mgr.RegisterProfile(
+            if let Err(first) = profile_mgr.RegisterProfile(
                 &clsid,
                 LANGID_ZH_CN,
                 &profile,
@@ -335,7 +296,37 @@ pub(crate) fn register() -> Result<()> {
                 0,
                 true,
                 0,
-            )?;
+            ) {
+                // 图标路径在少数布局/权限下可能被 TSF 拒绝；图标不是输入能力，
+                // 绝不能因此让整个 profile 注册失败（否则表现为「只有英文、状态栏不出现」）。
+                if icon.is_empty() {
+                    return Err(first);
+                }
+                // 第一次失败可能已经把 profile 写进去了（只是图标没被接受）：
+                // 空图标重试若再失败，能读回 profile 就算成功。
+                if let Err(second) = profile_mgr.RegisterProfile(
+                    &clsid,
+                    LANGID_ZH_CN,
+                    &profile,
+                    &desc,
+                    &[],
+                    0,
+                    HKL::default(),
+                    0,
+                    true,
+                    0,
+                ) {
+                    if !profile_exists(&profile_mgr, &clsid, &profile) {
+                        return Err(second);
+                    }
+                    crate::com_server::log_register_failure(
+                        "RegisterProfile(icon fallback)",
+                        &second,
+                    );
+                } else {
+                    crate::com_server::log_register_failure("RegisterProfile(icon)", &first);
+                }
+            }
         }
         // 旧接口 AddLanguageProfile 已删除：RegisterProfile 是 Vista+ 的正式路径，
         // 目标 Windows 10 不需要它；两者叠加会在首次安装时就写重复 profile。
@@ -343,25 +334,20 @@ pub(crate) fn register() -> Result<()> {
         // HKLM 的「默认启用」位。交互式安装下面还会写当前用户的 HKCU 启用位；
         // SYSTEM / Intune / GPO 部署没有目标用户的 HKCU，这一位才是目标用户
         // 之后能在输入法列表里看到 OPI 的保险。已设置时是 no-op（成功）。
-        // 旧文档只列 S_OK/E_FAIL：报错时读回 HKLM 状态，已是 1 就仍算成功。
+        // 失败**不阻断**：profile 与类别注册必须写完（否则「装成功、键盘不出现」
+        // 连手工添加的机会都没有）；失败写进固定日志，由安装器/诊断脚本读回。
         if let Err(e) =
             profiles.EnableLanguageProfileByDefault(&clsid, LANGID_ZH_CN, &profile, true)
         {
-            if !hklm_default_enabled() {
-                return Err(e);
-            }
+            crate::com_server::log_register_failure("EnableLanguageProfileByDefault", &e);
         }
 
         // 当前用户的启用位（HKCU\Software\Microsoft\CTF\TIP\...\Enable）。
         //    只写 HKLM 的 profile 不够：Windows 10 的输入法列表按**用户**启用状态
         //    过滤，旧实现缺这一步 ⇒ 「装完有进程、键盘不显示」。
-        //    best-effort：机器级默认位已经写好（见上），SYSTEM/异常 HKCU 的失败
-        //    不应把整包安装打回滚。IsEnabled 复核保留，仅用于状态确认。
-        if profiles
-            .EnableLanguageProfile(&clsid, LANGID_ZH_CN, &profile, true)
-            .is_err()
-        {
-            let _ = profiles.IsEnabledLanguageProfile(&clsid, LANGID_ZH_CN, &profile);
+        //    best-effort：SYSTEM/异常 HKCU 的失败不应把整包安装打回滚，但必须可见。
+        if let Err(e) = profiles.EnableLanguageProfile(&clsid, LANGID_ZH_CN, &profile, true) {
+            crate::com_server::log_register_failure("EnableLanguageProfile", &e);
         }
 
         let cats: ITfCategoryMgr = CoCreateInstance(
@@ -380,13 +366,21 @@ pub(crate) fn register() -> Result<()> {
         // TF_IPP_CAPS_* 是这些类别的读回值（TF_INPUTPROCESSORPROFILE.dwFlags），
         // 不是 RegisterProfile 的 dwFlags（那里只收 TF_RP_*，见上面的注释）。
         // 依据：TSF 文档「Predefined Category Values」的 TIP Capability 类别。
+        // TIP_KEYBOARD 是「能不能打字」本身 —— 失败要报出来（regsvr32 非 0）。
+        if let Err(e) = register_category(&cats, &GUID_TFCAT_TIP_KEYBOARD, &clsid) {
+            crate::com_server::log_register_failure("RegisterCategory(TIP_KEYBOARD)", &e);
+            return Err(e);
+        }
+        // 三个能力类别只影响 UWP/托盘语言栏；缺了仍能打字，不能让注册整体失败
+        // （Windows 各版本对能力类别集的支持并不一致，失败只记录）。
         for category in [
-            GUID_TFCAT_TIP_KEYBOARD,
             GUID_TFCAT_TIPCAP_IMMERSIVESUPPORT,
             GUID_TFCAT_TIPCAP_UIELEMENTENABLED,
             GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT,
         ] {
-            register_category(&cats, &category, &clsid)?;
+            if let Err(e) = register_category(&cats, &category, &clsid) {
+                crate::com_server::log_register_failure("RegisterCategory(capability)", &e);
+            }
         }
     }
     Ok(())
