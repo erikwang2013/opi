@@ -3,8 +3,7 @@
 
 // 2026-10-18：自有表情改插入 PNG（用户裁决）。OpiImeService 已 494 行（500 行门禁），
 // 图片通道整体拆在这里 —— 扩展函数，读的仍是 service 的成员（同 ComposingText.kt 先例）。
-// 2026-10-20 用户裁决：commitContent 被宿主拒绝时加**剪贴板图片回退**（搜狗式：
-// 复制图片 + 提示长按粘贴），并同时上屏文字标签保证至少有一个可见结果。
+// 2026-10-20 用户裁决：commitContent 被宿主拒绝时加**剪贴板图片回退**（复制图片 + 提示长按粘贴），并同时上屏文字标签保证至少有一个可见结果。
 
 package xyz.erik.opi
 
@@ -95,7 +94,7 @@ private fun OpiImeService.commitPetStickerTo(ic: InputConnection, mood: PetMood)
     for ((mime, file) in images) {
         if (commitPetStickerImage(ic, file, mime)) return
     }
-    // 宿主不收 commitContent：剪贴板兜底（2026-10-20，搜狗式）。GIF 优先，与上面同序。
+    // 宿主不收 commitContent：剪贴板兜底（2026-10-20）。GIF 优先，与上面同序。
     val copied = copyPetStickerToClipboard(images.first().second)
     val outcome = petStickerOutcome(imageInserted = false, clipboardCopied = copied)
     Log.w(TAG, "editor rejected image commit, outcome=$outcome: ${mood.name}")

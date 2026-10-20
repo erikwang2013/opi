@@ -62,7 +62,7 @@ class PetStickerConfigTest {
     fun unsupportedEditorFallsBackToClipboardThenTextTag() {
         // 2026-10-19 用户裁决：图片通道失败后**不得**再插入 Unicode emoji ——
         // 输入框里必须能区分「自有表情」= 带小欧前缀的文本标签。
-        // 2026-10-20 用户裁决：commitContent 被拒后先试剪贴板图片（搜狗式），文字标签
+        // 2026-10-20 用户裁决：commitContent 被拒后先试剪贴板图片（复制图片 + 长按粘贴），文字标签
         // 也一并上屏 —— 剪贴板写不进去时它是唯一结果，写得进去时它是可见兜底。不许静默。
         val commit = src("src/main/kotlin/xyz/erik/opi/PetStickerCommit.kt")
         assertFalse("不得再回退到 Unicode emoji", commit.contains("PetEmojiMap.emojiFor"))
