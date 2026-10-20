@@ -189,7 +189,10 @@ extension KeyboardViewController {
             return
         }
         // 模式可能变了 → 键面必须跟着说实话（它同时是「当前是什么模式」的显示器）。
-        layout.setModeLabel(Self.modeKeyLabel(of: engine.mode()))
+        layout.setModeLabel(
+            Self.modeKeyLabel(of: engine.mode()),
+            english: engine.mode() == .english
+        )
         // ⚠️ 约定 1 说 `switchMode` / `toggleSymbol` 之后必须重读全角。本目录
         // **没有全角指示灯**（同 `shiftState()` 那条：出口有了、包装有了、UI 没读），
         // 所以当前没有陈旧值可清。**哪天真加了指示灯，重读就写在这里** ——

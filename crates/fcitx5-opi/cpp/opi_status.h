@@ -34,8 +34,8 @@ extern char **environ;
 // （不带参数）—— 兜底的意思诚实地说：至少能落到配置面，而不是点了没反应。
 inline const char *opiSettingsAppCandidate(int i) {
     static const char *cands[] = {
-        "/opt/opi-candidates/bin/opi-candidates", // 合并包（deb/rpm）的 jpackage 落点
-        "opi-candidates",                         // PATH（发行版打包/手动装）
+        "/opt/opi/bin/opi",                       // 合并包（deb/rpm）的 jpackage 落点
+        "opi",                                    // PATH（发行版打包/手动装）
         "fcitx5-configtool",                      // 兜底：至少到得了配置面
     };
     return (i >= 0 && i < 3) ? cands[i] : nullptr;
@@ -77,7 +77,7 @@ inline bool opiLaunchSettingsApp() {
         }
     }
     std::fprintf(stderr,
-                 "fcitx5-opi: 设置入口没有可执行文件（/opt/opi-candidates、PATH、"
+                 "fcitx5-opi: 设置入口没有可执行文件（/opt/opi、PATH、"
                  "fcitx5-configtool 都没找到）\n");
     return false;
 }

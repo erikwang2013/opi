@@ -145,25 +145,32 @@ cp android/app/build/outputs/apk/release/app-release.apk \
 
 ### 2.3 debug 与 release 的差别
 
-`android/app/build.gradle.kts` 的 `buildTypes.release` 只有一行配置，注释原文：
+**订正（2026-10-20）：release 不再用 debug 签名。** `android/app/build.gradle.kts` 里
+`buildTypes.release` 现在指向 `signingConfigs.release`，密钥库是仓库内自带的
+[`android/keystore/opi-community.jks`](../../android/keystore/README.md)
+（公开的 sideload 密钥，密码与警告见该 README）。固定它之后，任何机器、任何 CI run
+打出的 release APK 都是同一张证书，可以直接互相覆盖安装。
 
-> 本环境无 flutter_embedding_release 工件，只构建 debug；release 暂用 debug 签名保证可打包。
+以下三条是旧状态（release = debug 签名）的记录，第 3 条仍然有效：
 
-如实转述三点：
-
-1. **release 目前用 debug 签名**（`signingConfig = signingConfigs.getByName("debug")`）。后果：release APK 与 debug APK 同签名，能互相覆盖安装 —— 但**不能上任何商店**，也不能换成正式签名后覆盖安装（换签名必须先卸载，`INSTALL_FAILED_UPDATE_INCOMPATIBLE`）。
-2. 那条注释里的**理由措辞是 Flutter 时期的**（`android/` 下早已没有 flutter 目录，Flutter 方案随 M6a 原生重构作废，见 `docs/superpowers/plans/2026-08-12-opi-ime-android-m4.md` 头部的订正注记）。**「release 用 debug 签名」这个事实仍然有效 —— 读的是代码，不是那段理由。**
+1. ~~**release 用 debug 签名**~~（已订正，见上）。旧后果：release APK 与本机 debug APK
+   同签名，但 debug 签名来自每台机器各自生成的 `~/.android/debug.keystore` ——
+   **换机器、或 CI 每次新生成密钥库，证书都会变**，同一个包名的新旧 APK 无法覆盖安装
+   （`INSTALL_FAILED_UPDATE_INCOMPATIBLE`）。1.17.0 → 1.17.1 的用户实测正是这个现象。
+2. 那条注释里的**理由措辞是 Flutter 时期的**（`android/` 下早已没有 flutter 目录，Flutter 方案随 M6a 原生重构作废，见 `docs/superpowers/plans/2026-08-12-opi-ime-android-m4.md` 头部的订正注记）。
 3. **订正（2026-10-11）：release 变体已实测构建多次**（`BUILD SUCCESSFUL`，并实机安装运行），且成为 dist 的**分发口径** —— ⚠️ 关键差别：**`assembleDebug` 的 Rust 是 debug 编译**（cargokit 的 `builder.dart` 只在非 debug 时加 `--release`），同一按键实测 **46–239ms（debug） vs 23–83ms（release）**，3–20×。首次构建要拉 `lint-gradle` 工件，撞阿里云镜像 TLS 抖动**重试即可**。出处与完整实测表：[`docs/performance.md`](../performance.md)。
 
-debug 签名的证书是哪一张（本机实测）：
+release APK 的签名（可随时用下面的命令复核，CI 里也钉了这个指纹）：
 
 ```
-apksigner verify --print-certs app-debug.apk
-  → Signer #1 certificate DN: C=US, O=Android, CN=Android Debug
-    SHA-256: d9cb1b0c5794b7ee75144ab7876aec8c424fcdcba94ce32a48b366178ce5863a
+apksigner verify --print-certs android/app/build/outputs/apk/release/app-release.apk
+  → Signer #1 certificate DN: CN=opi community, O=opi, C=CN
+    SHA-256: 3fe2867ce790f5e472cf16381264eb69b2807c7e58256678a6cef70a3dcf00bf
 ```
 
-这张证书来自本机的调试密钥库。**本机它在 `~/.config/.android/debug.keystore`（XDG 路径），不在常见的 `~/.android/debug.keystore`** —— 【实测】后者不存在，前者别名 `androiddebugkey`，SHA-256 与上面 APK 的签名者逐位相同。**换机器/清 HOME 会换签名**，于是「覆盖安装」会失败，见 §3.3。
+`assembleDebug` 仍用本机 debug 密钥库（仅本地调试，**勿分发**）。本机它在
+`~/.config/.android/debug.keystore`（XDG 路径），不在常见的 `~/.android/debug.keystore`
+—— 【实测】后者不存在，前者别名 `androiddebugkey`。这部分只影响 debug 包。
 
 ### 2.4 【已订正】本机 `assembleDebug` 失败：缺 Dart SDK（2026-08-14 记录；今已满足）
 
@@ -245,7 +252,17 @@ adb shell dumpsys package xyz.erik.opi | grep -E 'versionCode|versionName'  # �
 
 ### 3.3 签名不一致会怎样
 
-覆盖安装要求**签名相同**。debug 包的签名来自本机调试密钥库（§2.3，本机在 `~/.config/.android/debug.keystore`）：换一台机器、或清了 HOME/XDG 目录重新生成密钥库之后，同一个 APK 会变成「不同签名的同一个包」，覆盖安装失败（`INSTALL_FAILED_UPDATE_INCOMPATIBLE`）。解法只有先 `adb uninstall xyz.erik.opi`（**会连 `filesDir` 里的词库副本与用户词表一起删掉**）。
+覆盖安装要求**签名相同**。自 1.18.0 起分发包统一用仓库内的社区签名密钥库
+（§2.3、[`android/keystore/README.md`](../../android/keystore/README.md)），
+之后所有版本证书相同，可直接覆盖升级。
+
+**从旧版切过来仍需卸载一次**：1.17.1 及更早的发布包是构建机各自的 debug 签名，
+与这张证书不同，Android 不允许「同包名、不同证书」覆盖安装
+（`INSTALL_FAILED_UPDATE_INCOMPATIBLE`）。用户必须先 `adb uninstall xyz.erik.opi`
+（**会连 `filesDir` 里的词库副本与用户词表一起删掉**），再装 1.18.0。
+这是签名机制的一次性代价，不是 bug：换任何签名密钥都一样。
+
+`assembleDebug` 出来的调试包仍用本机 debug 密钥库，**与分发包互不覆盖**，只用于本地调试。
 
 ### 3.4 覆盖安装后的自动重载（2026-10-18）
 

@@ -25,9 +25,11 @@ HELPER="$HERE/restart-fcitx5.sh"
 TMP="$(mktemp -d)"
 SLEEP1=""
 SLEEP2=""
+SLEEP_OLD=""
 cleanup() {
     [ -n "$SLEEP1" ] && kill "$SLEEP1" 2>/dev/null
     [ -n "$SLEEP2" ] && kill "$SLEEP2" 2>/dev/null
+    [ -n "$SLEEP_OLD" ] && kill "$SLEEP_OLD" 2>/dev/null
     rm -rf "$TMP"
 }
 trap cleanup EXIT

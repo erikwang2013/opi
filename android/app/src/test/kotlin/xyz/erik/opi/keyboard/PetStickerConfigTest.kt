@@ -59,19 +59,23 @@ class PetStickerConfigTest {
     }
 
     @Test
-    fun unsupportedEditorFallsBackToTextTagNotEmojiOrClipboardImage() {
+    fun unsupportedEditorFallsBackToClipboardThenTextTag() {
         // 2026-10-19 用户裁决：图片通道失败后**不得**再插入 Unicode emoji ——
         // 输入框里必须能区分「自有表情」= 带小欧前缀的文本标签。
+        // 2026-10-20 用户裁决：commitContent 被拒后先试剪贴板图片（搜狗式），
+        // 剪贴板也写不进去才回退文字标签。两条回退都必须有可见提示，不许静默。
         val commit = src("src/main/kotlin/xyz/erik/opi/PetStickerCommit.kt")
         assertFalse("不得再回退到 Unicode emoji", commit.contains("PetEmojiMap.emojiFor"))
         assertTrue(
-            "回退必须上屏 [小欧·标签]（标签本身已带前缀）",
+            "文字标签必须作为最后回退（标签本身已带前缀）",
             commit.contains("[\${PetEmoji.label(mood)}]"),
         )
-        assertTrue("回退 toast 文案缺失", commit.contains("已用文字标签"))
+        assertTrue("文字回退文案缺失", commit.contains("已用文字标签"))
         assertFalse("旧的 emoji 回退文案不得残留", commit.contains("近似 emoji"))
-        assertFalse("不得回退到剪贴板图片", commit.contains("ClipboardManager"))
-        assertFalse("不得回退到 clipboard URI", commit.contains("newUri"))
+        assertTrue("剪贴板图片回退缺失", commit.contains("ClipboardManager"))
+        assertTrue("剪贴板必须放 content URI", commit.contains("ClipData.newUri"))
+        assertTrue("粘贴方读权限必须显式授予", commit.contains("grantUriPermission"))
+        assertTrue("已复制提示必须教用户长按粘贴", commit.contains("长按"))
     }
 
     @Test

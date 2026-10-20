@@ -16,7 +16,7 @@
 ; best-effort and can never roll back the install.
 ;
 ; Build (CI or local, on Windows; ISCC is the Inno Setup 6 compiler):
-;   ISCC.exe /DAppVersion=1.17.1 ^
+;   ISCC.exe /DAppVersion=1.18.0 ^
 ;            /DAppImageDir=C:\path\to\build\compose\binaries\main\app\opi ^
 ;            /DOutputDir=C:\path\to\dist scripts\windows\opi.iss
 ;
@@ -59,7 +59,7 @@ ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
 MinVersion=10.0
 OutputDir={#OutputDir}
-OutputBaseFilename=opi-{#AppVersion}-setup
+OutputBaseFilename=opi-{#AppVersion}-windows-x64-setup
 ; Installer/uninstaller icon = project pet (same art as opi.exe). A relative
 ; directive path resolves against this script's directory, hence two levels up.
 SetupIconFile=..\..\desktop\icons\opi-pet.ico
@@ -89,6 +89,13 @@ Source: "{#AppImageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdir
 [Icons]
 Name: "{autoprograms}\opi settings"; Filename: "{app}\opi.exe"; Parameters: "--settings"; WorkingDir: "{app}"
 Name: "{autodesktop}\opi settings"; Filename: "{app}\opi.exe"; Parameters: "--settings"; WorkingDir: "{app}"; Tasks: desktopicon
+
+[Registry]
+; The TSF text service only inserts text; the candidate window is a separate
+; process. Without a login entry, a reboot leaves the input method with no
+; candidate UI. HKLM Run starts it (hidden until a show message arrives) for
+; every user; uninstall removes the value.
+Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "opi"; ValueData: """{app}\opi.exe"""; Flags: uninsdeletevalue
 
 [Run]
 ; Finish page: start the candidate window and restart Explorer so the freshly

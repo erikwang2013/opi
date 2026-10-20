@@ -29,7 +29,7 @@ import kotlin.concurrent.thread
 // ---------- 管道常量 ----------
 
 /** 管道名（与 Rust 侧 candidate_io.rs 的 PIPE_NAME 一致）。 */
-private const val PIPE_NAME = "\\\\.\\pipe\\opi-candidates"
+private const val PIPE_NAME = "\\\\.\\pipe\\opi"
 private const val PIPE_ACCESS_DUPLEX = 0x3
 /**
  * CreateNamedPipe 的 dwOpenMode 标志。**只约束本进程**：管道名已被别人占用时，
@@ -73,7 +73,7 @@ class PipeServer(private val model: CandidateModel) {
     private val connLock = Any()
 
     fun start() {
-        thread(isDaemon = true, name = "opi-candidates-pipe") { serveLoop() }
+        thread(isDaemon = true, name = "opi-pipe") { serveLoop() }
     }
 
     private fun serveLoop() {

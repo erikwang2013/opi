@@ -8,7 +8,7 @@
 //! 头注释互为镜像，改协议须同步两处）
 //!
 //! ```text
-//! 管道名：\\.\pipe\opi-candidates（单实例，字节流模式，'\n' 分帧，UTF-8）
+//! 管道名：\\.\pipe\opi（单实例，字节流模式，'\n' 分帧，UTF-8）
 //! 角色：候选窗（CMP desktop/）为 SERVER 监听管道；TSF 插件进程为 CLIENT，
 //!       窗口启动后连接（窗口不在 → 本次发送放弃、下一条再试，不报错；
 //!       读线程有自己的重连循环）。
@@ -76,7 +76,7 @@ unsafe impl Send for PipeHandle {}
 unsafe impl Sync for PipeHandle {}
 
 /// 候选窗管道名（窗口侧 = desktop/ 的 JNA 服务器端，两侧保持一致）。
-const PIPE_NAME: PCWSTR = w!(r"\\.\pipe\opi-candidates");
+const PIPE_NAME: PCWSTR = w!(r"\\.\pipe\opi");
 /// 读线程重连间隔（窗口未启动/忙）。
 const RETRY_SLEEP_MS: u64 = 50;
 /// 读线程缓冲区（单条消息远小于此；字节流模式按 '\n' 分帧）。

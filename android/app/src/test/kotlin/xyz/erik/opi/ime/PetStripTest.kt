@@ -4,17 +4,21 @@
 package xyz.erik.opi.ime
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import xyz.erik.opi.pet.PetMood
+import kotlin.random.Random
 
 /**
  * 顶部宠物条十二形态的规格（2026-10-17 用户裁决「改成项目宠物的多形态：
  * 笑、欢乐、哭、沮丧、惊恐、愤怒，要是动态的、有色彩感」；2026-10-18 追加
  * 撒娇、卖萌、讨好、敲打、捂脸、吐舌头）。
  *
- * 这里只钉**纯逻辑**（轮播次序 / 包裹）；「画出来好不好看、十二张脸是不是真的不一样」
- * 由离屏渲染探针 `desktop/src/test/.../OpiPetFormsRenderProbeTest.kt` 出 PNG 人眼核 +
- * 像素判据把住。
+ * 2026-10-20 用户裁决：单形态轮播改成**随机同时显示多个不同形态（不能重复），
+ * 数量 1..12** —— 本文件钉纯函数 [petStripSelection] 的三条契约。
+ * 「画出来好不好看、十二张脸是不是真的不一样」由离屏渲染探针
+ * `desktop/src/test/.../OpiPetFormsRenderProbeTest.kt` 出 PNG 人眼核 + 像素判据把住。
  */
 class PetStripTest {
 
@@ -43,17 +47,36 @@ class PetStripTest {
     }
 
     @Test
-    fun `cycle wraps in both directions`() {
-        assertEquals(PetMood.IDLE, petStripFormAt(0))
-        assertEquals(PetMood.ANGRY, petStripFormAt(5))
-        assertEquals(PetMood.COQUETTISH, petStripFormAt(6))
-        assertEquals(PetMood.TONGUE_OUT, petStripFormAt(11))
-        assertEquals(PetMood.IDLE, petStripFormAt(12))
-        assertEquals(PetMood.WAITING, petStripFormAt(13))
-        assertEquals(PetMood.PLEASING, petStripFormAt(20))
-        // 防御性包裹：轮播实现只加不减，但纯函数该自洽（负数不崩、落回同一圈）。
-        assertEquals(PetMood.TONGUE_OUT, petStripFormAt(-1))
-        assertEquals(PetMood.CUTE, petStripFormAt(-5))
+    fun `selection is 1 to all forms and never repeats`() {
+        val random = Random(42)
+        repeat(1_000) {
+            val picked = petStripSelection(random)
+            assertTrue(
+                "数量必须在 1..12：${picked.size}",
+                picked.size in 1..PET_STRIP_FORMS.size,
+            )
+            assertEquals("同一组里形态不能重复", picked.size, picked.distinct().size)
+            assertTrue("只能从十二形态里取", PET_STRIP_FORMS.containsAll(picked))
+        }
+    }
+
+    @Test
+    fun `fixed seed can fill all twelve forms`() {
+        // 「数量从 1 到全部占满」：固定种子下必有一次抽满 12 枚，且恰好覆盖全部形态。
+        val random = Random(20261020)
+        val full = generateSequence { petStripSelection(random) }
+            .take(1_000)
+            .firstOrNull { it.size == PET_STRIP_FORMS.size }
+        assertNotNull("固定种子下 1000 次抽取应至少出现一次全 12 形态", full)
+        assertEquals("全 12 时恰好覆盖全部形态", PET_STRIP_FORMS.toSet(), full!!.toSet())
+    }
+
+    @Test
+    fun `capacity clamps to the available forms`() {
+        assertEquals("下限 1", 1, petStripSelection(Random(1), capacity = 1).size)
+        assertEquals("0 也钳到 1", 1, petStripSelection(Random(1), capacity = 0).size)
+        val all = petStripSelection(Random(1), capacity = 99)
+        assertTrue("上限 = 12", all.size in 1..12)
     }
 
     @Test

@@ -5,7 +5,7 @@
 # deb postinst / rpm %post：安装/升级成功后
 #   1) 调 restart-fcitx5.sh 热重启 fcitx5（D-Bus Controller1.Restart）；换 .so 只能
 #      靠进程级重载 —— `fcitx5-remote -r` / ReloadAddonConfig 只重读配置（实测假绿）；
-#   2) 把 preinstall 停掉的 opi-candidates 按原参数拉起。
+#   2) 把 preinstall 停掉的 opi 按原参数拉起。
 # 顺序：先 fcitx5 再状态栏 —— 状态栏经 D-Bus 找 fcitx5，反过来起会白起。
 #
 # helper 为什么在 /usr/libexec：nfpm 的 scripts: 每一项都是**单文件嵌入**，同目录的
@@ -13,7 +13,7 @@
 # 源码树里直接跑本脚本（测试）时用同目录那份；只有非 root 才认环境变量覆盖，
 # 生产里维护脚本恒为 root，路径固定。
 #
-# opi-candidates 以**桌面用户**身份拉起：包脚本是 root，GUI 不能以 root 跑 ⇒ 用
+# opi 以**桌面用户**身份拉起：包脚本是 root，GUI 不能以 root 跑 ⇒ 用
 # `runuser -u`。桌面用户取 `SUDO_USER`（`sudo apt install` / `sudo dpkg -i` 的标准
 # 来源）。**没有 SUDO_USER**（商店/软件中心类 GUI 安装常如此）⇒ 跳过拉起并说明：
 #   · 设置窗本来就是用户手动开的，开一次就是新版本；
@@ -66,7 +66,7 @@ else
     echo "opi: 找不到 fcitx5 热重启脚本（$HELPER）—— 跳过；请手动重启 fcitx5 或重新登录"
 fi
 
-# ---- 2) opi-candidates（原有逻辑）----
+# ---- 2) opi（原有逻辑）----
 user="${SUDO_USER:-}"
 [ "$user" = root ] && user=""
 

@@ -231,7 +231,7 @@ android/app/src/main/assets/luna.opid
 
 ### 2.3 候选窗（`desktop/`）
 
-候选窗是**另一个进程**：Compose Desktop / JVM 应用，经命名管道 `\\.\pipe\opi-candidates`
+候选窗是**另一个进程**：Compose Desktop / JVM 应用，经命名管道 `\\.\pipe\opi`
 与插件通信（协议镜像两份：`crates/tsf-opi/src/candidate_io.rs` 与
 `desktop/src/main/kotlin/xyz/erik/opi/candidate/Main.kt` 的模块头注释）。
 
@@ -241,6 +241,14 @@ android/app/src/main/assets/luna.opid
   见 `candidate_io.rs` 的 `connect` / `send_json`）。用户看到的是"没有候选窗"，
   不是"输入法坏了"。`WriteFile` 仍无超时（候选窗假死时理论上可阻塞按键线程，
   异步写线程是后续项）。
+- **登录自启 ≠ 常驻渲染（2026-10-20）**：候选窗在首次 `show` 之前**不创建 AWT/Skiko
+  窗口**（`Main.kt` 的 `windowCreated`），所以刚登录、还没打字时进程只有一个阻塞在
+  命名管道上的线程。窗口创建后被隐藏时也不绘制：Skiko 0.144.6 的
+  `Direct3DRedrawer.frameDispatcher` 在 `SkiaLayer.isShowing()` 为 false 时直接跳过
+  `update`/`draw`，`FrameDispatcher` 由 `needRender` 按需调度（不是死循环）。
+  **【未验证】**：以上是 Linux 上反编译 0.144.6 jar 的静态证据，Windows 真机的
+  CPU 占用没有测量；高 CPU 的另一条已定位路径是旧安装脚本杀 Explorer 造成的
+  shell 重启循环（已移除，见 §2.5）。
 - 打包格式**当前只声明了 Deb**：`desktop/build.gradle.kts` 的
   `nativeDistributions { targetFormats(TargetFormat.Deb) }`，同一处的注释写着
   「Windows .msi 为验收阶段（Windows 主机上构建）」。
@@ -354,7 +362,18 @@ C:\Program Files\opi\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
   `opi: regsvr32 /s tsf_opi.dll exit code <n>`，**非 0 也不回滚**。卸载时先
   `regsvr32 /s /u` 再删文件（同样 best-effort）。
 - 快捷方式：开始菜单「opi settings」= `opi.exe --settings`；桌面图标在安装时可选。
-  完成页可勾选拉起 `launch-and-restart.cmd`（启动候选窗 + 重启 Explorer），静默安装跳过。
+- **登录自启（2026-10-20）**：`[Registry]` 写一条 **HKLM**
+  `SOFTWARE\Microsoft\Windows\CurrentVersion\Run` 值 `opi` = `"{app}\opi.exe"`，
+  `uninsdeletevalue` 在卸载时删除。TSF DLL 只是管道客户端，候选窗进程不在就没有
+  候选 UI；HKLM 与机器级 TSF 注册同一层级，且只有这一条（不是每用户一条）。
+- **完成页**：可勾选拉起 `launch-and-restart.cmd`。脚本先用 `tasklist` 查重
+  （已有 `opi.exe` 就不重复启动），再结束 Explorer 并最多探测约 3 秒；Explorer
+  没回来（`AutoRestartShell=0` 等）就 `start "%SystemRoot%\explorer.exe"` 以
+  **登录用户**令牌拉起（`[Run]` 的 `runascurrentuser`，不是提权 shell），因此不会
+  再留下白屏。旧脚本「只杀不启」在 `AutoRestartShell=0` 的机器上白屏，shell 反复
+  拉起/崩溃时表现为持续 CPU 占用；这条路径已移除。静默安装跳过完成页 ⇒ 自启仍由
+  HKLM Run 在下次登录生效。**【未验证】**：Explorer 重启与 `AutoRestartShell=0`
+  的回退都没有在真机跑过。
 - 冒烟（`windows-exe-install-test`）：在干净的 Server Core 容器里静默装到
   `C:\opi-test`，断言 `opi.exe` 与 `app\tsf_opi.dll` 存在、安装退出码 0、日志里**有**
   `regsvr32` 退出码（0 或非 0 均可），再静默卸载并断言 `opi.exe` 消失。「注册成功」
@@ -405,7 +424,8 @@ https://github.com/erikwang2013/opi/actions/runs/37934999798 ）**：
   `OPI_TSF_DLL` 挂进 jpackage 的 `--input`，落在 `INSTALLDIR\app\`（后处理后的默认
   安装目录是 `C:\Program Files\opi`）。单独发布的 DLL artifact 从此**不再是用户入口**
   （用户裁决「DLL 不要单独发布，用户不会用」）；
-- **`launch-and-restart.cmd`**：完成页复选框拉起的脚本（启动候选窗 + 重启 Explorer）；
+- **`launch-and-restart.cmd`**：完成页复选框拉起的脚本（`tasklist` 查重后启动候选窗，
+  再重启 Explorer 并在失败时自行拉起；2026-10-20 起不再留下白屏，见 §2.5）；
 - ~~PUA 字体 `opi-emoji.ttf` + `install-emoji-font.ps1`~~：2026-10-20 用户裁决删除
   字体通道，MSI 不再包含这两份文件；自有表情只在候选窗内复制图片；
 - **没有** `luna.opid`，也不设置词库环境变量（§2.4 的判断不变）。
@@ -471,6 +491,13 @@ docker run --rm -v "$PWD:/w" -w /w debian:12 \
    `taskkill /f /im explorer.exe`。**只杀不 `start`**：从提权的 msiexec 里
    `start explorer.exe` 会得到管理员令牌的 shell（UAC 旁路）；shell 由 Winlogon 的
    `AutoRestartShell`（默认 1）以**用户自己的完整性级别**拉回。
+
+   > **2026-10-20 订正**：`launch-and-restart.cmd` 已改为「`tasklist` 查重 →
+   > 杀 Explorer → 最多探测约 3 秒 → 仍无 shell 就 `start "%SystemRoot%\explorer.exe"`」。
+   > 上面「只杀不 start」描述的是旧脚本。新的 `start` 回退只在脚本**非提权**时安全：
+   > Inno 的 `[Run]` 用 `runascurrentuser`，成立；MSI 的 `WixShellExec` 路径若也执行
+   > 这份新脚本，必须先核对它拿到的令牌，否则可能拉起提权 Explorer。EXE 是用户入口，
+   > MSI 只是内部证据；这条 MSI 路径本轮没有真机验证。
 
 复选框文案因此变成 `Launch opi and restart Explorer`（由 `ProductName` 生成），完成页还有一行说明
 （`WIXUI_EXITDIALOGOPTIONALTEXT`）：Explorer 会重启以重新加载输入法，其它已打开的应用
@@ -548,7 +575,8 @@ CustomAction / InstallExecuteSequence / ControlEvent / Directory 五张表外全
 CI 的 `msi-postprocess` job 现在独立断言这两点（PE machine 必须是 i386 + 导出表必须有
 `WixSilentExec64`），不再只查表形状。DLL 是否真的随包落到 `INSTALLDIR\app\`、
 `regsvr32` 是否真的注册成功，只能在 Windows 真机上装一次来验。**「在真 Windows 上装一遍」仍然一次都没有**
-（§6.1 #12）—— 杀没杀掉、注册没注册、启没启起来、脚本有没有重启 Explorer，都还没人见过。
+（§6.1 #12）—— 杀没杀掉、注册没注册、启没启起来、脚本的新回退路径（等 Explorer /
+自行拉起）有没有生效，都还没人见过。
 
 **这个 artifact 明确不保证什么**（别读成「Windows 端能用了」）：
 
@@ -814,8 +842,16 @@ regsvr32 /u "C:\path\to\tsf_opi.dll"
   Windows 10 的输入法列表按用户启用状态过滤（2026-10-19 真机「键盘不显示」的
   根因之一）。机器级默认启用已成功后，这一步是 **best-effort**：HKCU 写失败
   不让整个安装回滚（SYSTEM / 异常 HKCU），仍用 `IsEnabledLanguageProfile` 复核；
-- `ITfCategoryMgr::RegisterCategory`，类别 = `GUID_TFCAT_TIP_KEYBOARD`（"键盘输入法"）。
+- `ITfCategoryMgr::RegisterCategory`：`GUID_TFCAT_TIP_KEYBOARD`（"键盘输入法"）+
+  Windows 8+ 的 TIP 能力类别 `GUID_TFCAT_TIPCAP_IMMERSIVESUPPORT`（UWP/沉浸式宿主）、
+  `GUID_TFCAT_TIPCAP_UIELEMENTENABLED`（TIP 自带候选 UI）、
+  `GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT`（系统托盘语言栏）。
   **调用前用 `EnumItemsInCategory` 枚举**，已有本 CLSID 就跳过。
+  只注册 `TIP_KEYBOARD` 时桌面应用能用、UWP/Store 应用会认为本 TIP 不支持它们 ——
+  即「只在桌面可用、其他应用不生效」的注册侧根因。能力标志 `TF_IPP_CAPS_*` 是这些
+  类别的读回值（`TF_INPUTPROCESSORPROFILE.dwFlags`），**不是** `RegisterProfile` 的
+  `dwFlags`（那里只收 `TF_RP_*`，见上一条）。**【未验证】**：本机只核到 windows crate
+  0.62 的常量与签名；注册结果要 Windows 真机读回（§5.2 的诊断脚本已列这四个类别）。
 
 **幂等（2026-10-19 复审改写）**：旧接口 `AddLanguageProfile` / `RemoveLanguageProfile`
 已删除 —— 目标 Windows 10 走 Vista+ 的 `RegisterProfile` 正路，两者叠加会在**首次安装**
@@ -910,11 +946,14 @@ HKCU 写失败是系统性权限问题时安装不会红，只是当前用户少
 
 **但缺口在这里（下面每条都是【推断】，本机无 Windows）：**
 
-1. **候选窗进程没人替你启动。** 全仓 `crates/` 里搜不到任何拉起 `desktop/` 进程的代码
-   （**【实测】**`grep -rn "CreateProcess\|ShellExecute" crates/` 零命中；
-   `opi-candidates` 在 `crates/` 里只出现在管道名本身）。加上 §2.3 那条
+1. ~~**候选窗进程没人替你启动。**~~ **【订正 2026-10-20】** 安装器已接线：Inno EXE 的
+   HKLM Run（登录自启，卸载删除，§2.5）+ 完成页 `launch-and-restart.cmd` 都会拉起候选窗。
+   下面「全仓 `crates/` 搜不到拉起代码」仍然成立，但那是**设计如此**：TSF DLL 只是
+   管道客户端，拉起窗口是安装器的职责。（原文：全仓 `crates/` 里搜不到任何拉起
+   `desktop/` 进程的代码 —— **【实测】**`grep -rn "CreateProcess\|ShellExecute" crates/`
+   零命中；`opi-candidates` 在 `crates/` 里只出现在管道名本身。加上 §2.3 那条
    （`gradlew package` 现在产出的是 Linux `.deb`），
-   ⇒ **今天在 Windows 上这条回程根本走不到**：窗口得用户自己起，而且没有 Windows 版安装包。
+   ⇒ ~~今天在 Windows 上这条回程根本走不到：窗口得用户自己起，而且没有 Windows 版安装包。~~）
 2. **点选不是立即插入，要等下一个键事件。** 点选只在读线程入队
    （`EngineShared::enqueue_select`），真正的插入在按键线程的 `drain_pending` 里执行
    —— 而 `drain_pending` 只在 `handle_key_inner` 开头被调用一次。
@@ -1129,7 +1168,7 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | # | 缺口 | 依据 | 影响 |
 |---|---|---|---|
 | 1 | **词库仍没有打包步骤**：MSI 已带 DLL（2026-10-18），但 `luna.opid` 仍不会被放到 DLL 旁边 | §2.4 | 开箱只有内置回退词库 |
-| 2 | **没有人拉起候选窗进程**；~~候选窗也没有 Windows 安装包~~ **【订正 2026-10-09】** 安装包有了（§2.5 的 `opi-desktop-msi-*` artifact），但它在 Release 之外、90 天过期。**【订正 2026-10-17】** 后处理后的 `.msi` 里「装完点 Finish 自启」已接线（§2.5）—— 但**这条线本身未在真机验证**。**【订正 2026-10-19】** 经 v1.15.1 实物 MSI 核实：到 v1.15.1 为止的 **Release 资产全部是未后处理**的原始包（无注册动作；用户真机报障即此） | §4.3 #1、§2.5 | 候选窗看不到（打字仍可用），直到有人装上后处理的包并勾选 Finish |
+| 2 | **没有人拉起候选窗进程**；~~候选窗也没有 Windows 安装包~~ **【订正 2026-10-09】** 安装包有了（§2.5 的 `opi-desktop-msi-*` artifact），但它在 Release 之外、90 天过期。**【订正 2026-10-17】** 后处理后的 `.msi` 里「装完点 Finish 自启」已接线（§2.5）—— 但**这条线本身未在真机验证**。**【订正 2026-10-19】** 经 v1.15.1 实物 MSI 核实：到 v1.15.1 为止的 **Release 资产全部是未后处理**的原始包（无注册动作；用户真机报障即此）。**【订正 2026-10-20】** EXE 用户入口已加登录自启（HKLM Run，卸载删除）+ 完成页拉起；未在真机验证 | §4.3 #1、§2.5 | 候选窗现在会自启（真机未验证）；打字链路不依赖它是否已起 |
 | 3 | **点选延迟到下一个键事件才插入** | `state.rs` 模块头、`tsf.rs::drain_pending` | 点了不敲键 = 字不出现 |
 | 4 | `OnSetFocus` 空实现（drain 的天然落点没接） | `tsf.rs` 的 `OnSetFocus` | 同上，放大了 #3 |
 | 5 | 点选后换文档 → 插到上一个文档 | `tsf.rs::drain_pending` 注释 | 边缘场景 |

@@ -194,6 +194,9 @@ export const MODE_WUBI: number = 8;
 
 let currentIndex: number = MODE_PINYIN26;
 let lastPlainIndex: number = MODE_PINYIN26;
+/** 上次选中过的**中文**键位（对齐 Android `ImeState.lastChineseMode`）：英文键盘
+ *  右上角隐藏「中」键切回它；初始 = 拼音26键。 */
+let lastChineseIndex: number = MODE_PINYIN26;
 let panelOpen: boolean = false;
 
 /** 当前模式下标。 */
@@ -237,6 +240,10 @@ export function selectInputMode(i: number): void {
   const m: InputMode = INPUT_MODES[i];
   if (!m.panel) {
     lastPlainIndex = i;
+    // 英文不在中文侧：只有 Pinyin 档（含 9/14/大9/笔画/双拼/五笔）才更新回切目标。
+    if (m.mode === (OpiMode.Pinyin as number)) {
+      lastChineseIndex = i;
+    }
     setScheme(m.scheme); // 清缓冲（引擎侧）⇒ 调用方随后要重读 buffer/候选/页码
     if ((OpiEngine.mode() as number) !== (m.mode as number)) {
       // 与 KeyboardController.switchMode 同一份语义：切模式。⇧/引擎 shift 的同步归
@@ -246,6 +253,15 @@ export function selectInputMode(i: number): void {
     }
   }
   currentIndex = i;
+}
+
+/**
+ * 英文键盘右上角隐藏「中」键的目标（2026-10-20）：上次选中的中文键位。
+ * 调用方走 `KeyboardController.selectInputMode(...)`（它负责 publish），语义与
+ * Android 隐藏键走 `cycleMode()` 的英→中腿同义（切之前清英文缓冲、不提交）。
+ */
+export function lastChineseModeIndex(): number {
+  return lastChineseIndex;
 }
 
 /**

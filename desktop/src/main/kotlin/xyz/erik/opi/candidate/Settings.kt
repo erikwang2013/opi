@@ -109,7 +109,7 @@ data class OpSettings(
 ) {
     /** 写成 ini。键名见文件头「三处逐字对应」。 */
     fun toIni(): String = buildString {
-        appendLine("# OPI 属性设置 —— 由 `opi-candidates --settings` 写入，手工改也认。")
+        appendLine("# OPI 属性设置 —— 由 `opi --settings` 写入，手工改也认。")
         // ⚠️ 别写「改完 fcitx5-remote -r 即时生效」—— 那条实测无效（见 notifyFcitxReload）。
         appendLine("# Linux：本文件就是 fcitx5 的 addon 配置；设置窗/配置工具保存即重载。")
         appendLine("# 布尔写 True/False；未知键会被两端的读侧忽略（向前兼容）。")

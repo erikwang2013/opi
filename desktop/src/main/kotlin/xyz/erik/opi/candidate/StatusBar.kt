@@ -4,7 +4,7 @@
 //! 状态栏悬浮条（2026-10-10 用户裁决①：自绘悬浮条，8 个按钮全上；软键盘是否
 //! 默认上条见 [StatusBarSettings] —— 2026-10-10 中午起默认关）。
 //!
-//! 进程形态：`opi-candidates --statusbar`（Linux 随包装进 `/etc/xdg/autostart/` 随会话
+//! 进程形态：`opi --statusbar`（Linux 随包装进 `/etc/xdg/autostart/` 随会话
 //! 自启；见 build.gradle.kts 的 injectSettingsDesktopEntry）。**独立进程**，与候选窗
 //! 进程无关 —— 这一条决定了两件事：
 //!  1. 设置、可见性靠**轮询配置文件**同步（见 [StatusBarApp] 的 1s 轮询）；

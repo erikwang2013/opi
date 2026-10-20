@@ -36,8 +36,8 @@ android {
         targetSdk = 34
         // 与发布 tag 对齐（此前 9 个 tag 期间 versionCode 一直是 1、versionName 一直是
         // "1.0.0"：APK 既无法被识别，也无法覆盖安装升级）。
-        versionCode = 68
-        versionName = "1.17.1"
+        versionCode = 69
+        versionName = "1.18.0"
         ndk {
             // 与 rust_builder cargokit targets 对齐（plugin.gradle 固定三 ABI）。
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
@@ -50,11 +50,25 @@ android {
         buildConfig = true
     }
 
+    // 分发签名 = 仓库内自带的社区签名密钥库（公开的 sideload 密钥，不是商店密钥；
+    // 密码与警告见 android/keystore/README.md）。固定它，跨机器/跨 CI 的 APK
+    // 才能互相覆盖安装 —— debug 签名来自每台机器各自的 ~/.android/debug.keystore，
+    // 每次 CI 重建都换一张证书。
+    signingConfigs {
+        create("release") {
+            storeFile = rootProject.file("keystore/opi-community.jks")
+            storePassword = "opi-community"
+            keyAlias = "opi-community"
+            keyPassword = "opi-community"
+            require(storeFile?.isFile == true) {
+                "缺少社区签名密钥库：$storeFile（见 android/keystore/README.md）"
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // 本环境无 flutter_embedding_release 工件，只构建 debug；
-            // release 暂用 debug 签名保证可打包。
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

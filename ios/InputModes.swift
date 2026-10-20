@@ -422,7 +422,10 @@ extension KeyboardViewController {
             // 白切一次就是白复位一次（Android 那边同样是「需要才切」）。
             engine.switchMode(mode.engineMode)
         }
-        layout.setModeLabel(Self.modeKeyLabel(of: engine.mode()))
+        layout.setModeLabel(
+            Self.modeKeyLabel(of: engine.mode()),
+            english: engine.mode() == .english
+        )
         layout.setLayer(.letters)       // 从菜单/面板回到键面
         refresh()
     }

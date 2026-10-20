@@ -27,14 +27,16 @@ cat > "$TMP/probe.sh" <<'PROBE'
 set -u
 id testuser >/dev/null 2>&1 || useradd -m testuser
 T=$(mktemp -d)
-pids() {
+pids_named() { # $1 = comm
     for d in /proc/[0-9]*; do
-        [ "$(cat "$d/comm" 2>/dev/null)" = opi-candidates ] || continue
+        [ "$(cat "$d/comm" 2>/dev/null)" = "$1" ] || continue
         st=$(awk '/^State:/{print substr($2,1,1); exit}' "$d/status" 2>/dev/null)
         [ "$st" = Z ] && continue
         echo "${d##*/}"
     done
 }
+pids() { pids_named opi; }
+pids_old() { pids_named opi-candidates; }
 control() {
     printf 'Package: opi-test\nVersion: %s\nArchitecture: all\nMaintainer: t <t@t>\nDescription: t\n' "$1" > "$2/DEBIAN/control"
 }
@@ -68,10 +70,10 @@ cp /repo/scripts/packaging/postinstall.sh "$T/v2/DEBIAN/postinst"
 cp /repo/scripts/packaging/preremove.sh "$T/v2/DEBIAN/prerm"
 cp /repo/scripts/packaging/restart-fcitx5.sh "$T/v2/usr/libexec/opi/restart-fcitx5.sh"
 chmod 755 "$T/v2/DEBIAN/"* "$T/v2/usr/libexec/opi/restart-fcitx5.sh"
-cp /bin/sleep "$T/v2/usr/bin/opi-candidates"
+cp /bin/sleep "$T/v2/usr/bin/opi"
 # 假二进制是 sleep，Exec 用合法间隔；字面量 `--statusbar` 的传参由主测试的假
 # runuser 断言（这里若写 --statusbar，sleep 会立即报参数错退出）。
-printf 'Exec=/usr/bin/opi-candidates 300\n' > "$T/v2/etc/xdg/autostart/opi-statusbar.desktop"
+printf 'Exec=/usr/bin/opi 300\n' > "$T/v2/etc/xdg/autostart/opi-statusbar.desktop"
 control 1.16.0 "$T/v2"
 dpkg-deb --build "$T/v2" "$T/v2.deb" >/dev/null || exit 1
 
@@ -80,7 +82,7 @@ dpkg -i "$T/v1.deb" >"$T/i1.log" 2>&1 || { echo "FAIL: 旧包装不上"; cat "$T
 # 用子 shell 双 fork 起旧实例：旧 prerm 杀掉它时父 shell 不会打 "Terminated" 噪声。
 ( runuser -u testuser -- /usr/bin/opi-candidates 300 >/dev/null 2>&1 & )
 sleep 0.5
-old=$(pids)
+old=$(pids_old)
 [ -n "$old" ] || { echo "FAIL: 旧包实例没起来"; exit 1; }
 SUDO_USER=testuser dpkg -i "$T/v2.deb" >"$T/i2.log" 2>&1 \
     || { echo "FAIL: 升级失败"; cat "$T/i2.log"; exit 1; }
@@ -90,12 +92,13 @@ while [ -z "$(pids)" ] && [ "$i" -lt 20 ]; do sleep 0.1; i=$((i + 1)); done
 np=$(pids)
 echo "before-upgrade pids=$old after-upgrade pids=$np"
 [ -n "$np" ] || { echo "FAIL: 升级后没有实例（迁移兜底没生效）"; fail=1; }
+[ -z "$(pids_old)" ] || { echo "FAIL: 升级后旧版进程还在"; fail=1; }
 for p in $np; do
     uid=$(awk '/^Uid:/{print $2; exit}' "/proc/$p/status" 2>/dev/null)
     cmd=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)
     echo "  pid=$p uid=${uid:-?} cmd=$cmd"
     [ "${uid:-0}" != 0 ] || { echo "FAIL: 实例以 root 运行"; fail=1; }
-    case "$cmd" in *opi-candidates*) ;; *) echo "FAIL: 不是自启项拉起的实例"; fail=1 ;; esac
+    case "$cmd" in "/usr/bin/opi "*) ;; *) echo "FAIL: 不是自启项拉起的新实例"; fail=1 ;; esac
 done
 grep -q '从旧版升级：已按状态栏自启项恢复' "$T/i2.log" \
     || { echo "FAIL: postinst 没走迁移兜底"; fail=1; }
@@ -110,7 +113,7 @@ echo "remove-log:  $(tr '\n' '|' < "$T/r.log")"
 
 # ---- 6b) 新 → 新：正常升级路径 ----
 dpkg -i "$T/v2.deb" >"$T/n1.log" 2>&1 || { echo "FAIL: 新包首次安装失败"; cat "$T/n1.log"; exit 1; }
-( runuser -u testuser -- /usr/bin/opi-candidates 300 >/dev/null 2>&1 & )
+( runuser -u testuser -- /usr/bin/opi 300 >/dev/null 2>&1 & )
 sleep 0.5
 [ -n "$(pids)" ] || { echo "FAIL: 新包实例没起来"; exit 1; }
 control 1.17.0 "$T/v2"

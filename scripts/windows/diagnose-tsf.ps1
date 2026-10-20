@@ -29,7 +29,15 @@ $script:fail = 0
 $Clsid = '{98C51858-590B-404D-8915-21EB44250062}'
 $ProfileGuid = '{A31A137C-1404-42F2-B82C-4E63F15DEFD6}'
 $LangId = '0x00000804'
-$KeyboardCategory = '{34745C63-B2F0-4784-8B67-5E12C8701A31}'
+# TSF categories (msctf.h / windows crate constants). TIPCAP_* are the Windows 8+
+# capabilities; a missing IMMERSIVESUPPORT is the documented reason a TIP is
+# offered to desktop apps but not to UWP/Store (immersive) hosts.
+$TipCategories = [ordered]@{
+    '{34745C63-B2F0-4784-8B67-5E12C8701A31}' = 'GUID_TFCAT_TIP_KEYBOARD'
+    '{13A016DF-560B-46CD-947A-4C3AF1E0E35D}' = 'GUID_TFCAT_TIPCAP_IMMERSIVESUPPORT'
+    '{49D2F9CF-1F5E-11D7-A6D3-00065B84435C}' = 'GUID_TFCAT_TIPCAP_UIELEMENTENABLED'
+    '{25504FB4-7BAB-4BC1-9C69-CF81890F0EF5}' = 'GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT'
+}
 
 function Section([string]$Title) {
     Write-Host ''
@@ -158,15 +166,19 @@ if ($userProfileKey) {
     }
 }
 
-Section 'Keyboard TIP category'
-$catPath = "$tipPath\Category\Category\$KeyboardCategory"
-$catKey = Get-Item -LiteralPath ("Registry::" + $catPath) -ErrorAction SilentlyContinue
-if ($catKey) {
-    Check 'GUID_TFCAT_TIP_KEYBOARD category present' $true $catPath
-} else {
-    Warn 'Category path not found at the documented nested location' $catPath
-    Write-Host '         The registry spelling varies; inspect the CTF dump below before treating this as a failure.'
+Section 'TIP categories'
+foreach ($guid in $TipCategories.Keys) {
+    $name = $TipCategories[$guid]
+    $catPath = "$tipPath\Category\Category\$guid"
+    if (Get-Item -LiteralPath ("Registry::" + $catPath) -ErrorAction SilentlyContinue) {
+        Write-Host ("  [OK]   {0}" -f $name)
+    } else {
+        Warn "$name category not found" $catPath
+    }
 }
+Write-Host '         The registry spelling varies; inspect the CTF dump below before treating a miss as a failure.'
+Write-Host '         Missing IMMERSIVESUPPORT = the TIP is not offered to UWP/Store apps.'
+Write-Host '         Missing UIELEMENTENABLED = the host may expect the system to draw candidates.'
 
 $ctfDump = @(& reg.exe query "HKLM\SOFTWARE\Microsoft\CTF" /s /f $Clsid 2>$null)
 if ($ctfDump.Count -gt 0) {

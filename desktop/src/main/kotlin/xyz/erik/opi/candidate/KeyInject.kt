@@ -38,6 +38,41 @@ import com.sun.jna.platform.win32.WinUser
 fun injectKey(key: VkKey, down: Boolean): String? =
     if (isWindows()) injectWindows(key, down) else injectX11(key, down)
 
+// ---------- 自有表情：Ctrl+V ----------
+
+private val VK_CTRL = VkKey("Ctrl", "Control_L", 0x11)
+private val VK_V = VkKey("V", "v", 0x56)
+
+/** 粘贴的事件序列（纯函数，JVM 测试钉键码与按下/抬起顺序）。 */
+internal fun pasteKeySequence(): List<VkEvent> = listOf(
+    VkEvent(VK_CTRL, true),
+    VkEvent(VK_V, true),
+    VkEvent(VK_V, false),
+    VkEvent(VK_CTRL, false),
+)
+
+/**
+ * 替用户按一次 Ctrl+V（自有表情：图片已在剪贴板里）。返回 null = 已递交；
+ * 非 null = 给用户看的失败原因 —— 调用方据此提示「已复制，请手动粘贴」，不许报成功。
+ *
+ * 已知限制（与虚拟键盘同一条）：Wayland 原生窗口收不到 XTEST 注入；X11/XWayland
+ * 下可用。注入器看不到目标窗口是否真的收到，按「递交成功」算成功。
+ */
+fun injectPaste(): String? {
+    for ((i, ev) in pasteKeySequence().withIndex()) {
+        val failure = injectKey(ev.key, down = ev.down)
+        if (failure != null) {
+            // 已经按下的修饰键必须抬起来，别把用户的 Ctrl 卡住（失败原因仍报首因）。
+            if (i > 0) {
+                injectKey(VK_CTRL, down = false)
+                injectKey(VK_V, down = false)
+            }
+            return failure
+        }
+    }
+    return null
+}
+
 // ---------- Linux/X11：XTEST ----------
 
 /**

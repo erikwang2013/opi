@@ -83,7 +83,7 @@ jobs:
           echo "版本 $ver（Cargo.toml 与 Android versionName 一致）"
           echo "version=$ver" >> "$GITHUB_OUTPUT"
 
-      # release 目前用 debug 签名（见 android/app/build.gradle.kts），产物可安装但不上市。
+      # release 用仓库内的社区签名密钥库（android/keystore/），产物可安装但不上市。
       - name: ./gradlew assembleRelease
         run: ./gradlew assembleRelease --no-daemon
         working-directory: android
@@ -98,7 +98,7 @@ jobs:
           apk=android/app/build/outputs/apk/release/app-release.apk
           [ -f "$apk" ] || { echo "::error::assembleRelease 成功但没有 $apk"; exit 1; }
           mkdir -p dist
-          out="dist/opi_${VERSION}_android-release.apk"
+          out="dist/opi-${VERSION}-android-universal.apk"
           cp "$apk" "$out"
 
           aapt2="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt2 -type f | sort -V | tail -1)"
@@ -106,6 +106,18 @@ jobs:
           badging="$("$aapt2" dump badging "$out")"
           grep -E "^(package|minSdkVersion|targetSdkVersion|native-code)" <<<"$badging"
           grep -qF "versionName='${VERSION}'" <<<"$badging"
+
+          # 签名必须是仓库内社区密钥库那张证书。落到 debug 签名照样构建成功、也照样
+          # 能装，只是用户永远无法覆盖升级 —— 所以在这里钉死指纹（值见
+          # android/keystore/README.md）。
+          apksigner="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner -type f | sort -V | tail -1)"
+          [ -n "$apksigner" ] || { echo "::error::找不到 apksigner"; exit 1; }
+          certs="$("$apksigner" verify --print-certs "$out")"
+          grep -qF "SHA-256 digest: 3fe2867ce790f5e472cf16381264eb69b2807c7e58256678a6cef70a3dcf00bf" <<<"$certs" || {
+            echo "::error::APK 签名不是社区密钥库的证书："
+            echo "$certs"
+            exit 1
+          }
 
           entries="$(unzip -Z1 "$out")"
           for abi in arm64-v8a armeabi-v7a x86_64; do
@@ -119,5 +131,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: opi-android-release-v${{ steps.version.outputs.version }}
-          path: dist/opi_*_android-release.apk
+          path: dist/opi-*-android-universal.apk
           if-no-files-found: error

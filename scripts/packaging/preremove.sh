@@ -22,14 +22,15 @@ else
     PROC_ROOT="${OPI_PROC_ROOT:-/proc}"
 fi
 
-# 找所有 comm == opi-candidates 的 pid。**不用 pgrep/pkill**：procps 在最小
+# 找当前实例（comm == opi）与 ≤1.17.x 的旧进程（opi-candidates）的 pid —— 卸载时
+# 两种都得停，不然旧进程会一直跑到下次登录。**不用 pgrep/pkill**：procps 在最小
 # 系统上不保证存在（Debian 容器实测没有）；/proc 扫描零依赖，rpm/deb 通吃。
 opi_pids() {
     for d in "$PROC_ROOT"/[0-9]*; do
         [ -r "$d/comm" ] || continue
-        if [ "$(cat "$d/comm" 2>/dev/null)" = "opi-candidates" ]; then
-            echo "${d##*/}"
-        fi
+        case "$(cat "$d/comm" 2>/dev/null)" in
+            opi|opi-candidates) echo "${d##*/}" ;;
+        esac
     done
 }
 
@@ -41,7 +42,7 @@ if [ -n "$(opi_pids)" ]; then
         i=$((i + 1))
     done
     for pid in $(opi_pids); do kill -KILL "$pid" 2>/dev/null || true; done
-    echo "opi: 已停止运行中的 opi-candidates（卸载中）"
+    echo "opi: 已停止运行中的 opi（卸载中）"
 fi
 
 exit 0

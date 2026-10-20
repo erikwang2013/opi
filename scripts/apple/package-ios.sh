@@ -8,8 +8,8 @@
 #   dist/apple/ios/KeyboardExtension-Info.plist            （占位符已展开的扩展 plist，集成起点）
 #   dist/apple/ios/OpiKeyboard.appex/                      （真扩展可执行，入口 _NSExtensionMain）
 #   dist/apple/ios/Opi.app/                               （宿主 App，内嵌 PlugIns/OpiKeyboard.appex + 词库）
-#   dist/apple/ios/opi-ios-keyboard-<版本>-unsigned.ipa    （Payload/Opi.app 的 IPA，**未签名**）
-#   dist/apple/ios/opi-ios-keyboard-<版本>-unsigned.zip    （xcframework + 扩展 plist + IPA）
+#   dist/apple/ios/opi-<版本>-ios-unsigned.ipa    （Payload/Opi.app 的 IPA，**未签名**）
+#   dist/apple/ios/opi-<版本>-ios-unsigned.zip    （xcframework + 扩展 plist + IPA）
 #
 # 用法（仓库根目录）：
 #   scripts/apple/package-ios.sh <版本号> [产物目录]
@@ -274,7 +274,7 @@ swiftc -parse-as-library -emit-executable ios/HostApp/OpiApp.swift \
 chmod +x "$hostbin"
 
 # IPA 就是 zip(Payload/Opi.app)。未签名，需重签后安装。
-ipa="$out/opi-ios-keyboard-$version-unsigned.ipa"
+ipa="$out/opi-$version-ios-unsigned.ipa"
 mkdir -p "$out/Payload"
 rm -rf "$out/Payload/$HOST_APP.app"
 cp -R "$app" "$out/Payload/$HOST_APP.app"
@@ -287,7 +287,7 @@ echo "IPA（未签名，需重签后安装）：$ipa"
 # 只列**明确成员**（不用 `zip -r .`）：那样会把中间产物一起卷进去，也会把 zip 自己套进来。
 # appex 已包含在 IPA 里，不再重复放进外层 zip。
 members=("$FMWK.xcframework" "KeyboardExtension-Info.plist" "$(basename "$ipa")")
-zip="$out/opi-ios-keyboard-$version-unsigned.zip"
+zip="$out/opi-$version-ios-unsigned.zip"
 ( cd "$out" && zip -q -r "$(basename "$zip")" "${members[@]}" )
 
 echo "---- iOS 产物（unsigned IPA / xcframework；未上机验证）----"

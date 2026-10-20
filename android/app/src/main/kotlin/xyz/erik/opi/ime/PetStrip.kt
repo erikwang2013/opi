@@ -8,14 +8,17 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -38,6 +41,7 @@ import xyz.erik.opi.pet.petMotion
 import xyz.erik.opi.pet.rememberPetMotionPhase
 import kotlin.math.PI
 import kotlin.math.sin
+import kotlin.random.Random
 
 /**
  * 顶部**宠物条**（2026-10-17 用户裁决：「默认页最上面的动态花纹不好看，移除，对应的
@@ -45,10 +49,10 @@ import kotlin.math.sin
  * 有色彩感」）。
  *
  * 位置 = 拼音行那条 38dp 槽位**空闲时**的内容（输入中仍是拼音行 —— 共用槽位不变）。
- * 十二形态按用户点名的次序轮播（[PET_STRIP_FORMS]），每个停留 [PET_FORM_HOLD_MS] 后
- * 淡入下一形态；小欧本体另有随情绪变化的动效（笑轻晃 / 欢乐蹦跳 / 哭发抖 / 沮丧
- * 低头摆 / 惊恐急颤 / 愤怒横抖 / 撒娇轻摇 / 卖萌弹跳 / 讨好点头 / 敲打快敲 /
- * 捂脸摇头 / 吐舌晃动），条底洗色与粒子跟着当前形态换色。
+ * 2026-10-20 用户裁决：不再单形态轮播，改成**每次进入/每轮换随机同时显示 1..12 个
+ * 互不重复的形态**（[petStripSelection]），数量多时按条宽整体缩小、不重叠不裁切；
+ * 小欧本体仍各有随情绪变化的动效（见 shared/pet/PetMotion.kt），条底洗色与粒子
+ * 跟当前这组的第一枚走。
  *
  * 纯装饰：读屏跳过（`clearAndSetSemantics`）。条底走键盘皮肤（`barBg`），情绪色只做
  * 低透明叠加 —— 深色皮肤下不会变成一块亮斑。
@@ -56,16 +60,15 @@ import kotlin.math.sin
 @Composable
 fun PetStrip(modifier: Modifier = Modifier) {
     val p = LocalKeyboardPalette.current
-    var current by remember { mutableStateOf(PET_STRIP_FORMS.first()) }
-    var step by remember { mutableIntStateOf(0) }
+    var forms by remember { mutableStateOf(petStripSelection(Random.Default)) }
     LaunchedEffect(Unit) {
         while (true) {
             delay(PET_FORM_HOLD_MS)
-            step += 1
-            current = petStripFormAt(step)
+            forms = petStripSelection(Random.Default)
         }
     }
-    val look = lookOf(current)
+    val lead = forms.first()
+    val look = lookOf(lead)
     val wash by animateColorAsState(
         targetValue = look.wash,
         animationSpec = tween(PET_FORM_FADE_MS),
@@ -82,7 +85,7 @@ fun PetStrip(modifier: Modifier = Modifier) {
     // 只在绘制层读它 —— 不触发重组。
     val phase = rememberPetMotionPhase()
 
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
             .height(COMPOSING_BAR_HEIGHT_DP.dp)
@@ -113,31 +116,48 @@ fun PetStrip(modifier: Modifier = Modifier) {
                 radius = glow,
                 center = Offset(size.width / 2f, size.height * 0.62f),
             )
-            drawPetParticles(current, phase.value, accent)
+            drawPetParticles(lead, phase.value, accent)
         }
-        // 小欧本体：整只做情绪动效，脸用 Crossfade 换（两帧叠化，不闪断）。
-        // 动效公式抽在 shared/pet/PetMotion.kt，与桌面设置页/贴纸格共用。
-        Box(
-            modifier = Modifier.petMotion(current, phase),
-            contentAlignment = Alignment.Center,
-        ) {
-            Crossfade(
-                targetState = current,
-                animationSpec = tween(PET_FORM_FADE_MS),
-                label = "petForm",
-            ) { mood ->
-                OpiPet(mood = mood, palette = petPalette, size = PET_SIZE)
+        // 一枚形态占一格：按条宽均分算尺寸，12 枚时自动缩小（最窄机型也 ≥ ~24dp）。
+        val gap = if (forms.size > 8) 2.dp else 4.dp
+        val petSize = minOf(
+            PET_SIZE,
+            (maxWidth - PET_ROW_PADDING * 2 - gap * (forms.size - 1)) / forms.size,
+        ).coerceAtLeast(1.dp)
+        // 整组一起淡入淡出（每个形态自己的动效由 petMotion 承担），不闪断。
+        Crossfade(
+            targetState = forms,
+            animationSpec = tween(PET_FORM_FADE_MS),
+            label = "petForms",
+        ) { moods ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = PET_ROW_PADDING),
+                horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                for (mood in moods) {
+                    Box(
+                        modifier = Modifier.petMotion(mood, phase),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        OpiPet(mood = mood, palette = petPalette, size = petSize)
+                    }
+                }
             }
         }
     }
 }
 
-/** 每个形态的停留时长（ms）与淡入时长（ms）；十二形态共用同一节奏。 */
+/** 每组形态的停留时长（ms）与淡入时长（ms）；随机重抽共用同一节奏。 */
 internal const val PET_FORM_HOLD_MS = 2800L
 internal const val PET_FORM_FADE_MS = 420
 
-/** 小欧在条里的宽度（高按 240:250 推导 ≈ 33.3dp，上下各留 ~2dp 给动效）。 */
+/** 小欧在条里的**最大**宽度（高按 240:250 推导 ≈ 33.3dp，上下各留 ~2dp 给动效）；
+ *  多枚并排时按条宽均分缩小。 */
 private val PET_SIZE = 32.dp
+
+/** 多枚并排时的左右内边距：与 [PET_SIZE] 一起保证 12 枚时不出条、不重叠。 */
+private val PET_ROW_PADDING = 4.dp
 
 /**
  * 顶部宠物条十二形态轮播次序 —— **用户点名的次序**（2026-10-17 前六枚 + 2026-10-18
@@ -160,10 +180,19 @@ internal val PET_STRIP_FORMS: List<PetMood> = listOf(
     PetMood.TONGUE_OUT, // 吐舌头
 )
 
-/** 轮播下标 → 形态；任意整数都安全落回同一圈（负数取模修正）。 */
-internal fun petStripFormAt(step: Int): PetMood {
-    val n = PET_STRIP_FORMS.size
-    return PET_STRIP_FORMS[((step % n) + n) % n]
+/**
+ * 宠物条的随机形态集合（2026-10-20 用户裁决「随机同时显示多个不同形态（不能重复），
+ * 数量从 1 到全部占满」）：随机抽 1..[capacity] 枚**互不重复**的形态，顺序也随机。
+ *
+ * [capacity] 是数量上限（默认 = 全部 12 形态）；越界钳到 1..12，纯函数不抛。
+ * 随机源由调用方注入 —— 生产用 `Random.Default`，单测用固定种子。
+ */
+internal fun petStripSelection(
+    random: Random,
+    capacity: Int = PET_STRIP_FORMS.size,
+): List<PetMood> {
+    val cap = capacity.coerceIn(1, PET_STRIP_FORMS.size)
+    return PET_STRIP_FORMS.shuffled(random).take(random.nextInt(1, cap + 1))
 }
 
 /** 每个形态的条底洗色与点缀色（情绪色只做低透明叠加，跟着皮肤走）。 */

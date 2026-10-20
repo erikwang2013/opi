@@ -154,6 +154,11 @@ fun ImeScreen(
                                 learnerEnabled = controller.learnerEnabled,
                                 dictionaryDegraded = controller.dictionaryDegraded,
                             ),
+                            // 英文键（引擎权威）：隐藏「中」键只在英文键盘出现；
+                            // 点击走中/繁/英循环的英→中腿（清英文缓冲、回上次中文方案，
+                            // 2026-10-19「输入重置」裁决）。
+                            inEnglish = controller.mode == EngineMode.ENGLISH,
+                            onSwitchToChinese = state::cycleMode,
                             onOpenEmoji = state::openEmoji,
                             onOpenSkin = state::openSkin,
                             onOpenInputMode = state::openInputMode,

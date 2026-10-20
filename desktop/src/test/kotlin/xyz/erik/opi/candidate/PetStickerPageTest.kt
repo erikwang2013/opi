@@ -63,24 +63,68 @@ class PetStickerPageTest {
         assertEquals(12, petStickerSearch(":opi_").size)
     }
 
-    /** 点击自有格的唯一出口 = 图片剪贴板；返回的提示里没有可上屏文本。 */
+    /** 点击自有格的出口 = 图片剪贴板 + Ctrl+V；返回的提示里没有可上屏文本。 */
     @Test
-    fun `clicking an own cell copies GIF and image instead of committing text`() {
+    fun `clicking an own cell copies GIF and image then pastes`() {
         val image = BufferedImage(2, 2, BufferedImage.TYPE_INT_ARGB)
         val gif = byteArrayOf(0x47, 0x49, 0x46)
         val copied = ArrayList<Pair<BufferedImage, ByteArray?>>()
         val clipboard = ImageClipboard { i, g -> copied += i to g; true }
+        var pasteCalls = 0
 
         val result = copyPetSticker(
             PetEmojiMap.forms.first(),
             clipboard,
             load = { image },
             loadGif = { gif },
+            paste = { pasteCalls++; null },
         )
 
-        assertEquals(StickerCopyResult("小欧表情已复制，可 Ctrl+V 粘贴", true), result)
+        assertEquals(StickerCopyResult("小欧表情已粘贴", true), result)
+        assertEquals("剪贴板写好后应注入一次粘贴", 1, pasteCalls)
         assertSame("剪贴板应拿到同一张图", image, copied.single().first)
         assertSame("剪贴板应拿到 GIF 字节", gif, copied.single().second)
+    }
+
+    /** 注入失败必须如实说「已复制，请手动粘贴」，且带上原因。 */
+    @Test
+    fun `failed paste reports manual paste instead of claiming success`() {
+        val result = copyPetSticker(
+            PetEmojiMap.forms.first(),
+            ImageClipboard { _, _ -> true },
+            load = { BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB) },
+            paste = { "连不上 X 显示" },
+        )
+        assertFalse("注入失败不能报成功", result.ok)
+        assertTrue("应说明已复制：${result.notice}", result.notice.contains("已复制"))
+        assertTrue("应让用户手动粘贴：${result.notice}", result.notice.contains("手动"))
+        assertTrue("应带注入失败原因：${result.notice}", result.notice.contains("连不上 X 显示"))
+    }
+
+    /** 剪贴板没写成时不该按键（粘贴只会粘到旧内容）。 */
+    @Test
+    fun `paste is not injected when the clipboard copy fails`() {
+        var pasteCalls = 0
+        val result = copyPetSticker(
+            PetEmojiMap.forms.first(),
+            ImageClipboard { _, _ -> false },
+            load = { BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB) },
+            paste = { pasteCalls++; null },
+        )
+        assertFalse(result.ok)
+        assertEquals("剪贴板失败后不得注入 Ctrl+V", 0, pasteCalls)
+    }
+
+    /** Ctrl+V 的两个平台标识与按下/抬起顺序（错一个 = 只打出 v 或什么都不发生）。 */
+    @Test
+    fun `paste sequence is ctrl down v down v up ctrl up`() {
+        val seq = pasteKeySequence()
+        assertEquals(listOf("Ctrl", "V", "V", "Ctrl"), seq.map { it.key.label })
+        assertEquals(listOf(true, true, false, false), seq.map { it.down })
+        assertEquals("Control_L", seq[0].key.keysym)
+        assertEquals(0x11, seq[0].key.vk)
+        assertEquals("v", seq[1].key.keysym)
+        assertEquals(0x56, seq[1].key.vk)
     }
 
     @Test
@@ -109,6 +153,7 @@ class PetStickerPageTest {
             ImageClipboard { _, gif -> copiedGif = gif; true },
             load = { BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB) },
             loadGif = { null },
+            paste = { null },
         )
         assertTrue(result.ok)
         assertNull(copiedGif)

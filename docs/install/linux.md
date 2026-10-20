@@ -248,7 +248,8 @@ sudo apt-get -f install                        # Debian 系缺依赖时补
 包内带维护脚本（`scripts/packaging/*.sh`，debian 的 `preinst/postinst/prerm`、rpm 的
 `%pre/%post/%preun`）：
 
-- **装/升级前**（preinst）：停掉正在跑的 `opi-candidates`（先 TERM、3 秒后 KILL）——
+- **装/升级前**（preinst）：停掉正在跑的 `opi`（先 TERM、3 秒后 KILL；从 ≤1.17.x
+  升级时旧进程名是 `opi-candidates`，同样停掉但不记录，走下面的自启项恢复）——
   dpkg/rpm 只换磁盘文件，**开着的旧窗口/状态栏会继续显示旧版本**（2026-10-17 用户报障
   「装完设置里还是旧版本」的来源）；同时把当时的实例参数记到 `/run/opi-install.state`。
   这个阶段**不动 fcitx5**（安装前杀输入框架曾造成用户「整个键盘消失」）。
@@ -271,8 +272,9 @@ sudo apt-get -f install                        # Debian 系缺依赖时补
   （apt 同理：`sudo OPI_NO_RESTART_FCITX5=1 apt-get install ./dist/opi_<版本>_<架构>.deb`）。
   ⚠️ 热重启会打断**正在进行的输入**（候选/预编辑状态丢失），但输入法本身随即恢复。
 - **装/升级成功后**（postinst，应用进程）：按记录**以桌面用户**
-  （`runuser -u $SUDO_USER`）把 `opi-candidates` 按原参数拉回来。**从旧包升级且记录
-  为空**时（旧 prerm 已先杀进程），按 `/etc/xdg/autostart/opi-statusbar.desktop` 的
+  （`runuser -u $SUDO_USER`）把 `opi` 按原参数拉回来。**从旧包升级且记录
+  为空**时（旧 prerm 已先杀进程，或 ≤1.17.x 的旧进程名由 preinst 只停不记），
+  按 `/etc/xdg/autostart/opi-statusbar.desktop` 的
   `Exec=` 补拉一次状态栏 —— 仅升级生效，首次安装不替用户启动；rpm 旧 `%preun` 的
   时序边界见 §7。**没有 `SUDO_USER`**（软件中心类 GUI 安装）则跳过实例拉起并说明 ——
   设置窗手动开一次即是新版；状态栏由会话 autostart 下次登录带回。拉起时按目标用户
@@ -661,8 +663,8 @@ DisabledDicts=      # 停用的导入词库（逗号分隔；留空 = 全部启�
 - 三项都挂在 fcitx5 的 `StatusGroup::InputMethod` 状态区，随输入法激活挂上。
 - 两个模式项的文案显示**当前**状态，且**互相同步**：从英文态点「简」会切进繁体，
   「中/英」项同时刷回「中」（`setOnModeChanged` 钩子，见 `opi_engine.h` 构造）。
-- `设` 的启动顺序：`/opt/opi-candidates/bin/opi-candidates --settings`（合并包落点）→
-  PATH 里的 `opi-candidates` → `fcitx5-configtool` 兜底（至少能到配置面）。
+- `设` 的启动顺序：`/opt/opi/bin/opi --settings`（合并包落点）→
+  PATH 里的 `opi` → `fcitx5-configtool` 兜底（至少能到配置面）。
   ⚠️ 如实记：它只保证**发起启动**（`posix_spawnp`），窗口有没有起来这里看不到；
   一个都找不到时往 stderr 打一行。
 
@@ -670,7 +672,7 @@ DisabledDicts=      # 停用的导入词库（逗号分隔；留空 = 全部启�
 
 1. 配置工具里那个齿轮（保存即生效）；2. 手改文件 + **`busctl --user call org.fcitx.Fcitx5
 /controller org.fcitx.Fcitx.Controller1 ReloadAddonConfig s opi_fcitx5`**；
-3. `opi-candidates --settings`（本仓库的 Compose 设置窗；它**保留未知键**合并写，
+3. `opi --settings`（本仓库的 Compose 设置窗；它**保留未知键**合并写，
 不会抹掉自己不认识的选项，保存后走的就是第 2 条那个调用）。
 
 > ⚠️ **订正（2026-10-09 实测）**：此前此处写的是「手改文件 + `fcitx5-remote -r`」——
@@ -728,7 +730,8 @@ Linux 上 = `--settings` 的设置窗（无参数启动也是它）。**v1.6.0 �
 - **系统菜单里有入口**：`/usr/share/applications/opi-settings.desktop`（`Name=小欧输入法`，
   点开即设置窗）—— 2026-10-09 晚用户裁决「设置功能要在外层可以设置」，由打包后注入
   生成（理由与核对法见 `desktop/build.gradle.kts` 文件尾）。另有两条直启路：
-  `opi-candidates --settings`（装出来在 `/opt/opi-candidates/bin/opi-candidates`；
+  `opi --settings`（装出来在 `/opt/opi/bin/opi`；v1.18.0 起落点由
+  `/opt/opi-candidates` 改到这里，升级由 preinst 停旧进程）；
   状态栏悬浮条是同一二进制的 `--statusbar` 模式，见 §4.8）、
   以及配置面的原生选项（§4.6）—— **两层都能设置**；状态栏还有第三个入口
   （「设」，见 §4.6）。
@@ -769,7 +772,7 @@ Linux 上 = `--settings` 的设置窗（无参数启动也是它）。**v1.6.0 �
   ② 「中英」按钮执行 `opi-ctl lang`（引擎英文模式）——**不是** `fcitx5-remote -t`
   （那是停用整个输入法：实测指纹 = `fcitx5-remote` 报 2、OPI 热键全失效、状态行不动）。
 - 自启：`/etc/xdg/autostart/opi-statusbar.desktop`（装包即生效，登录自动起）；
-  手动起：`/opt/opi-candidates/bin/opi-candidates --statusbar`。
+  手动起：`/opt/opi/bin/opi --statusbar`。
 - **跟随皮肤**（2026-10-12 用户报障「设置皮肤后状态栏皮肤没同步变化」的修复）：条按配置
   里的 `Skin=` 取色 —— 色板 `desktop/…/SkinPalette.kt`（五角色 ← §皮肤那节 SKINS 的
   `bg`/`text`/`hl_bg`/`sep`/`accent`，逐值由 SettingsTest 的 `skin palettes match the
@@ -1020,8 +1023,9 @@ rime-pinyin-simp/OpenCC 转换表与 MIT 的康熙差集编译而来 —— 逐�
 - **多用户机器只重启发起安装者的 fcitx5**（2026-10-19）：有 `SUDO_USER` 时 helper
   只针对该用户；其他已登录用户正在跑的 fcitx5 不会重载新插件，需各用户自行重启或
   重新登录。
-- **从旧版升级时只有状态栏会尝试恢复**（2026-10-19）：旧包的 prerm 在 preinst 之前
-  杀掉 `opi-candidates`，新 postinst 没有 state 可依；本版仅在**升级且 state 为空**
+- **从旧版升级时只有状态栏会尝试恢复**（2026-10-19）：旧包（≤1.15.x）的 prerm 在
+  preinst 之前杀掉 `opi-candidates`，或 ≤1.17.x 的旧进程名由新 preinst 只停不记 ——
+  两种情况新 postinst 都没有 state 可依；本版仅在**升级且 state 为空**
   时按 `/etc/xdg/autostart/opi-statusbar.desktop` 的 `Exec=` 补拉一次**状态栏**
   （原先开着的是设置/候选窗时不会恢复）。deb 已用**真 dpkg** 验过这条（1.15.1
   旧式 prerm → 本版，实例以 `testuser` 存活）；**没有 `SUDO_USER`**（软件中心类

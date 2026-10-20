@@ -4,9 +4,10 @@
 //! 「自有」表情子页（2026-10-18 用户裁决：自有是独立顶级分类，点小欧形态插入**图片**）。
 //!
 //! 桌面进程没有 TSF / 命名管道的图片插入面（Android 那样直接往输入框塞图做不到），
-//! 所以这里走**剪贴板回退**：点一格 = 把 `shared/pet/stickers-gif/<mood>.gif` 的原始
-//! 字节优先放进系统剪贴板（GIF 通道），同时保留 PNG 的 [BufferedImage] 兜底；粘贴方
-//! 不支持 GIF 时仍能拿到 PNG。窗内提示「可 Ctrl+V 粘贴」。
+//! 所以这里走**剪贴板 + 自动粘贴**（2026-10-20 用户裁决，对齐搜狗）：点一格 = 把
+//! `shared/pet/stickers-gif/<mood>.gif` 的原始字节优先放进系统剪贴板（GIF 通道），
+//! 同时保留 PNG 的 [BufferedImage] 兜底；粘贴方不支持 GIF 时仍能拿到 PNG。随后用
+//! [injectPaste] 往当前焦点应用发 Ctrl+V；注入失败就如实提示「已复制，请手动粘贴」。
 //! **绝不**走 `opi-ctl insert` 文本通道（那是文字上屏，粘不出图）；2026-10-20 用户
 //! 裁决后也不再有任何字体字符通道 —— 图片剪贴板是唯一出口。
 //!
@@ -121,24 +122,31 @@ internal fun loadPetStickerGif(file: String): ByteArray? =
 internal data class StickerCopyResult(val notice: String, val ok: Boolean)
 
 /**
- * 自有格的点击语义（UI 与测试共用这一支）：GIF + PNG 一起放剪贴板，**不返回任何文本**。
+ * 自有格的点击语义（UI 与测试共用这一支）：GIF + PNG 一起放剪贴板，再按一次 Ctrl+V，
+ * **不返回任何文本**。
  *
- * [load] / [loadGif] 可注入：测试不依赖真资产；生产缺省读 classpath。GIF 缺失或损坏
- * 只降级成 PNG，不算整体失败（PNG 仍是可用图）。
+ * [load] / [loadGif] / [paste] 可注入：测试不依赖真资产、不往真桌面打字。GIF 缺失或
+ * 损坏只降级成 PNG，不算整体失败（PNG 仍是可用图）。[paste] 返回 null = 已递交；
+ * 非 null = 给用户看的失败原因（此时**必须**提示手动粘贴，不能报「已粘贴」）。
  */
 internal fun copyPetSticker(
     form: PetEmojiMap.Form,
     clipboard: ImageClipboard,
     load: (String) -> BufferedImage? = ::loadPetSticker,
     loadGif: (String) -> ByteArray? = ::loadPetStickerGif,
+    paste: () -> String? = ::injectPaste,
 ): StickerCopyResult {
     val file = PetStickerAssets.stickerFile(form.mood)
     val image = load(file) ?: return StickerCopyResult("小欧表情图片缺失（/pet/$file）", false)
     val gif = loadGif(PetStickerAssets.gifFile(form.mood))
-    return if (clipboard.copy(image, gif)) {
-        StickerCopyResult("小欧表情已复制，可 Ctrl+V 粘贴", true)
+    if (!clipboard.copy(image, gif)) {
+        return StickerCopyResult("复制失败：系统剪贴板不可用", false)
+    }
+    val pasteFailure = paste()
+    return if (pasteFailure == null) {
+        StickerCopyResult("小欧表情已粘贴", true)
     } else {
-        StickerCopyResult("复制失败：系统剪贴板不可用", false)
+        StickerCopyResult("小欧表情已复制，请手动 Ctrl+V 粘贴：$pasteFailure", false)
     }
 }
 
@@ -236,7 +244,7 @@ private fun PetStickerCell(
             .background(if (hovered) SymHover else Color.Transparent)
             .clickable(interactionSource = interaction, indication = null) { onCopy(form) }
             // 标签本身已带「小欧·」前缀，读屏别再加一次。
-            .semantics { contentDescription = "$label，复制图片表情" },
+            .semantics { contentDescription = "$label，插入图片表情" },
         contentAlignment = Alignment.Center,
     ) {
         if (gifFrame != null) {

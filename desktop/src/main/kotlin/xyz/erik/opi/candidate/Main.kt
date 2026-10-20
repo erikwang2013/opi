@@ -7,7 +7,7 @@
 //! 头注释互为镜像，改协议须同步两处）
 //!
 //! ```text
-//! 管道名：\\.\pipe\opi-candidates（单实例，字节流模式，'\n' 分帧，UTF-8）
+//! 管道名：\\.\pipe\opi（单实例，字节流模式，'\n' 分帧，UTF-8）
 //! 角色：本窗口为 SERVER 监听管道；TSF 插件进程为 CLIENT（窗口启动后连接）。
 //!
 //! TSF(CLIENT) → 本窗(SERVER)：
@@ -133,29 +133,43 @@ fun main(args: Array<String>) = application {
     val server = remember { PipeServer(model).also { it.start() } }
     val windowState = rememberWindowState(width = 320.dp, height = 168.dp)
 
-    Window(
-        onCloseRequest = ::exitApplication,
-        state = windowState,
-        // 可见性跟随模型（初始隐藏，show 消息到达才显示）。
-        visible = model.visible,
-        undecorated = true,
-        alwaysOnTop = true,
-        resizable = false,
-        focusable = false,
-        title = "小欧输入法 候选窗",
-        icon = OpiPetWindowIcon, // 窗口/任务栏图标 = 小欧（PetIcon.kt）
-    ) {
-        // 位置跟随（position 消息；缺省固定默认位置）。
-        LaunchedEffect(model.x, model.y, model.visible) {
-            if (model.visible) {
-                windowState.position = WindowPosition(model.x.dp, model.y.dp)
+    // 登录自启后，进程可能整场都没有候选要显示。**首次 show 之前不建窗**：
+    // Window 一组合就会创建 AWT 窗口并初始化 Skiko/D3D 表面，而这份 GPU 资源
+    // 对「还没开始打字」的会话是纯成本。首次显示后窗口保留（隐藏时不绘制，
+    // 见 Skiko 0.144.6 Direct3DRedrawer.frameDispatcher 的 isShowing 分支），
+    // 后续 show 无重建延迟。
+    // 零窗口不会结束 application：isOpen 只由 exitApplication() 置 false
+    // （反编译 Application.desktop.kt 的 awaitApplication 确认）。
+    var windowCreated by remember { mutableStateOf(false) }
+    LaunchedEffect(model.visible) {
+        if (model.visible) windowCreated = true
+    }
+
+    if (windowCreated) {
+        Window(
+            onCloseRequest = ::exitApplication,
+            state = windowState,
+            // 可见性跟随模型（初始隐藏，show 消息到达才显示）。
+            visible = model.visible,
+            undecorated = true,
+            alwaysOnTop = true,
+            resizable = false,
+            focusable = false,
+            title = "小欧输入法 候选窗",
+            icon = OpiPetWindowIcon, // 窗口/任务栏图标 = 小欧（PetIcon.kt）
+        ) {
+            // 位置跟随（position 消息；缺省固定默认位置）。
+            LaunchedEffect(model.x, model.y, model.visible) {
+                if (model.visible) {
+                    windowState.position = WindowPosition(model.x.dp, model.y.dp)
+                }
             }
+            CandidatePanel(
+                model = model,
+                onSelect = server::sendSelect,
+                onNext = server::sendNextPage,
+                onPrev = server::sendPrevPage,
+            )
         }
-        CandidatePanel(
-            model = model,
-            onSelect = server::sendSelect,
-            onNext = server::sendNextPage,
-            onPrev = server::sendPrevPage,
-        )
     }
 }

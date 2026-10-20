@@ -18,8 +18,8 @@
 #   3. helper 重启后不回来：有界等待后按抓取的原会话环境重新拉起；Restart 调用
 #      本身失败也走同一恢复路径；仍有活进程/旧所有者仍在时绝不重复拉起；
 #   4. preremove：升级（deb upgrade / rpm 1）不停实例，卸载才停；
-#   5. preinstall：停 opi-candidates、写状态；不再动 fcitx5、不写旧状态文件；
-#   6. postinstall：先调 helper 再拉起 opi-candidates；无 SUDO_USER 也热重启；
+#   5. preinstall：停 opi（旧版 opi-candidates 只停不记）、写状态；不动 fcitx5；
+#   6. postinstall：先调 helper 再拉起 opi；无 SUDO_USER 也热重启；
 #      关闭开关生效；helper 失败不阻断；
 #   7. 真实私有 dbus（dbus-run-session + fcitx5 --ui=testui）：
 #      Restart 返回后唯一名变化、日志出现 Unloading/Loaded addon、服务仍存活；
@@ -198,53 +198,64 @@ check "Restart 未生效时有说明" grep -q "未生效" "$TMP/helper.out"
 fresh_proc
 sleep 300 & SLEEP1=$!
 mkdir -p "$PROC/$SLEEP1"
-printf 'opi-candidates\n' > "$PROC/$SLEEP1/comm"
+printf 'opi\n' > "$PROC/$SLEEP1/comm"
 OPI_PROC_ROOT="$PROC" sh "$PREUN" upgrade > "$TMP/preun.out" 2>&1
 check "preremove deb upgrade exit 0" [ "$?" -eq 0 ]
 check "preremove deb upgrade 不停实例" kill -0 "$SLEEP1"
 OPI_PROC_ROOT="$PROC" sh "$PREUN" 1 > "$TMP/preun.out" 2>&1
 check "preremove rpm 升级(1) 不停实例" kill -0 "$SLEEP1"
+# 旧版进程（opi-candidates）卸载时也得停
+sleep 300 & SLEEP2=$!
+mkdir -p "$PROC/$SLEEP2"; printf 'opi-candidates\n' > "$PROC/$SLEEP2/comm"
 OPI_PROC_ROOT="$PROC" sh "$PREUN" remove > "$TMP/preun.out" 2>&1
 check "preremove remove exit 0" [ "$?" -eq 0 ]
-check "preremove remove 有停止日志" grep -q "已停止运行中的 opi-candidates" "$TMP/preun.out"
+check "preremove remove 有停止日志" grep -q "已停止运行中的 opi" "$TMP/preun.out"
 wait "$SLEEP1" 2>/dev/null
 check "preremove remove 实例收到 SIGTERM" [ "$?" -eq 143 ]
+wait "$SLEEP2" 2>/dev/null; check "preremove remove 旧版进程也收到 SIGTERM" [ "$?" -eq 143 ]
 SLEEP1=""
+SLEEP2=""
 
-# ---- 6. preinstall：只停 opi-candidates，不碰 fcitx5 ----
+# ---- 6. preinstall：只停 opi，不碰 fcitx5 ----
 fresh_proc
 SLEEP1=""
 SLEEP2=""
+SLEEP_OLD=""
 sleep 300 & SLEEP1=$!
 sleep 300 & SLEEP2=$!
+sleep 300 & SLEEP_OLD=$!   # 旧版进程名，只停不记
 mkdir -p "$PROC/$SLEEP1"
-printf 'opi-candidates\n' > "$PROC/$SLEEP1/comm"
-printf '%s\0--statusbar\0' "$TMP/opi-candidates" > "$PROC/$SLEEP1/cmdline"
+printf 'opi\n' > "$PROC/$SLEEP1/comm"
+printf '%s\0--statusbar\0' "$TMP/opi" > "$PROC/$SLEEP1/cmdline"
+mkdir -p "$PROC/$SLEEP_OLD"; printf 'opi-candidates\n' > "$PROC/$SLEEP_OLD/comm"
+printf '%s\0--settings\0' "$TMP/opi-legacy" > "$PROC/$SLEEP_OLD/cmdline"
 mk_fx5 "$SLEEP2" "$MYUID" S "unix:path=/tmp/opi-bus-real" "/run/user/$MYUID"
 : > "$STATEDIR/opi-install.state"
 SUDO_USER="$ME" OPI_PROC_ROOT="$PROC" OPI_STATE_DIR="$STATEDIR" \
     sh "$PRE" > "$TMP/pre.out" 2>&1
 check "preinstall exit 0" [ "$?" -eq 0 ]
-check "preinstall 有停止日志" grep -q "已停止运行中的 opi-candidates" "$TMP/pre.out"
-check "preinstall 记录了 cmdline" grep -Fqx -- "$TMP/opi-candidates --statusbar " "$STATEDIR/opi-install.state"
+check "preinstall 有停止日志" grep -q "已停止运行中的 opi" "$TMP/pre.out"
+check "preinstall 记录了 cmdline" grep -Fqx -- "$TMP/opi --statusbar " "$STATEDIR/opi-install.state"
+check "preinstall 不记录旧版 cmdline" sh -c "! grep -q opi-legacy '$STATEDIR/opi-install.state'"
 check "preinstall 不写旧 fcitx5 状态" [ ! -e "$STATEDIR/opi-install.fcitx5" ]
 check "preinstall 日志不提 fcitx5" sh -c "! grep -q fcitx5 '$TMP/pre.out'"
 check "preinstall 参数里的 fcitx5 未被停" kill -0 "$SLEEP2"
 wait "$SLEEP1" 2>/dev/null
 check "被停实例收到 SIGTERM" [ "$?" -eq 143 ]
+wait "$SLEEP_OLD" 2>/dev/null; check "旧版实例也收到 SIGTERM" [ "$?" -eq 143 ]; SLEEP_OLD=""
 SLEEP1=""
 kill "$SLEEP2" 2>/dev/null
 wait "$SLEEP2" 2>/dev/null
 SLEEP2=""
 
-# ---- 7. postinstall：先热重启 fcitx5，再拉起 opi-candidates ----
+# ---- 7. postinstall：先热重启 fcitx5，再拉起 opi ----
 # 状态栏夹具：记录**自己**的环境（假 runuser 会真正 exec 它）。
 {
     echo '#!/bin/sh'
     echo "env > '$TMP/candidates.env'"
     echo 'exit 0'
-} > "$TMP/opi-candidates"
-chmod +x "$TMP/opi-candidates"
+} > "$TMP/opi"
+chmod +x "$TMP/opi"
 wait_candidates() { # 后台拉起，等它写出环境快照（最多 2s）
     i=0
     while [ ! -s "$TMP/candidates.env" ] && [ "$i" -lt 40 ]; do
@@ -256,14 +267,14 @@ fresh_bus
 mk_fx5 800030 "$MYUID" S "unix:path=$RUN/$MYUID/bus" "$RUN/$MYUID"
 reset_bus
 rm -f "$TMP/runuser.argv" "$TMP/candidates.env"
-printf '%s --statusbar\n' "$TMP/opi-candidates" > "$STATEDIR/opi-install.state"
+printf '%s --statusbar\n' "$TMP/opi" > "$STATEDIR/opi-install.state"
 SUDO_USER="$ME" OPI_PROC_ROOT="$PROC" OPI_RUN_ROOT="$RUN" OPI_STATE_DIR="$STATEDIR" \
     OPI_WAIT_TICKS=5 PATH="$BIN:$PATH" \
     sh "$POST" > "$TMP/post.out" 2>&1
 check "postinstall exit 0" [ "$?" -eq 0 ]
 check "postinstall 调了 helper 热重启" grep -q 'Controller1 Restart' "$BUSLOG"
 check "postinstall 先热重启（日志在）" grep -q '已热重启 fcitx5' "$TMP/post.out"
-check "postinstall 拉起 opi-candidates" grep -Fqx -- "--statusbar" "$TMP/runuser.argv"
+check "postinstall 拉起 opi" grep -Fqx -- "--statusbar" "$TMP/runuser.argv"
 check "postinstall runuser 用 -u <user> --" \
     sh -c "[ \"\$(sed -n '1,3p' '$TMP/runuser.argv' | tr '\n' ' ')\" = '-u $ME -- ' ]"
 wait_candidates
@@ -278,7 +289,7 @@ check "postinstall 删掉状态" [ ! -e "$STATEDIR/opi-install.state" ]
 # 实例不拉起
 reset_bus
 rm -f "$TMP/runuser.argv"
-printf '%s --statusbar\n' "$TMP/opi-candidates" > "$STATEDIR/opi-install.state"
+printf '%s --statusbar\n' "$TMP/opi" > "$STATEDIR/opi-install.state"
 env -u SUDO_USER OPI_PROC_ROOT="$PROC" OPI_RUN_ROOT="$RUN" OPI_STATE_DIR="$STATEDIR" \
     OPI_WAIT_TICKS=5 PATH="$BIN:$PATH" \
     sh "$POST" > "$TMP/post-nouser.out" 2>&1
@@ -288,10 +299,10 @@ check "无 SUDO_USER 不拉起实例" [ ! -e "$TMP/runuser.argv" ]
 check "无 SUDO_USER 有说明" grep -q "无 SUDO_USER" "$TMP/post-nouser.out"
 check "无 SUDO_USER 清状态" [ ! -e "$STATEDIR/opi-install.state" ]
 
-# 关闭开关：helper 不调 D-Bus，但 opi-candidates 照常拉起
+# 关闭开关：helper 不调 D-Bus，但 opi 照常拉起
 reset_bus
 rm -f "$TMP/runuser.argv"
-printf '%s --statusbar\n' "$TMP/opi-candidates" > "$STATEDIR/opi-install.state"
+printf '%s --statusbar\n' "$TMP/opi" > "$STATEDIR/opi-install.state"
 OPI_NO_RESTART_FCITX5=1 SUDO_USER="$ME" OPI_PROC_ROOT="$PROC" OPI_RUN_ROOT="$RUN" \
     OPI_STATE_DIR="$STATEDIR" PATH="$BIN:$PATH" \
     sh "$POST" > "$TMP/post-off.out" 2>&1
@@ -302,7 +313,7 @@ check "关闭开关仍拉起实例" grep -Fqx -- "--statusbar" "$TMP/runuser.arg
 # helper 失败：安装继续、实例照常拉起
 reset_bus
 rm -f "$TMP/runuser.argv"
-printf '%s --statusbar\n' "$TMP/opi-candidates" > "$STATEDIR/opi-install.state"
+printf '%s --statusbar\n' "$TMP/opi" > "$STATEDIR/opi-install.state"
 SUDO_USER="$ME" OPI_PROC_ROOT="$PROC" OPI_RUN_ROOT="$RUN" OPI_STATE_DIR="$STATEDIR" \
     PATH="$BIN_FAIL:$BIN:$PATH" \
     sh "$POST" > "$TMP/post-fail.out" 2>&1
@@ -312,7 +323,7 @@ check "helper 失败状态已清" [ ! -e "$STATEDIR/opi-install.state" ]
 
 # 旧包升级过渡：旧 prerm 已杀实例 ⇒ state 为空；仅升级时按状态栏自启项补拉
 AUTOSTART="$TMP/opi-statusbar.desktop"
-printf '[Desktop Entry]\nExec=%s --statusbar\n' "$TMP/opi-candidates" > "$AUTOSTART"
+printf '[Desktop Entry]\nExec=%s --statusbar\n' "$TMP/opi" > "$AUTOSTART"
 migrate() { reset_bus; env -u OPI_NO_RESTART_FCITX5 OPI_PROC_ROOT="$PROC" OPI_RUN_ROOT="$RUN" \
     OPI_STATE_DIR="$STATEDIR" OPI_WAIT_TICKS=5 \
     OPI_AUTOSTART_FILE="$AUTOSTART" PATH="$BIN:$PATH" "$@"; }

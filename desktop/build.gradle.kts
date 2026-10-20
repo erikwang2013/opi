@@ -47,7 +47,7 @@ kotlin {
 // jpackage 的包版本与设置窗标题栏都从这里取。**此前设置窗里写死过一份**
 // （"1.4.0"），到 1.6.0 就成了摆在用户眼前的假话 —— 两处写死是漂移的充分条件，
 // 生成一个常量是把它压成一处的最短路径（同 android 侧 versionName 的单一来源约定）。
-val opiAppVersion = "1.17.1"
+val opiAppVersion = "1.18.0"
 
 val generateOpiVersionSource by tasks.registering {
     val outDir = layout.buildDirectory.dir("generated/sources/opiVersion/kotlin")
@@ -130,9 +130,6 @@ tasks.named("processResources") { dependsOn(copyKaomojiData) }
 // Windows CI 在 `packageMsi` / `createDistributable` 前下载 TSF DLL artifact 并把路径放进 OPI_TSF_DLL；
 // Linux 打 Deb 时该变量不存在 ⇒ files 集合不变，不会把 DLL/脚本带进 Deb。
 val tsfDll = providers.environmentVariable("OPI_TSF_DLL")
-// Windows 主机判定：jpackage 不能交叉打包（见 windows.yml 头注释），所以
-// 「Windows 产物叫 opi、Linux 产物仍叫 opi-candidates」只能在这里按主机分叉。
-val isWindowsHost = System.getProperty("os.name").lowercase().contains("windows")
 // jpackage 的 `--input` 是 CMP 自己暂存的 libs 目录（会清空重填），所以不能往里
 // 手写文件；把 DLL 挂到 JPackage 任务的 `files` 集合，CMP 会与 jar 一起暂存并
 // 打进应用镜像。Windows CI 在 packageMsi 前设 OPI_TSF_DLL；Linux 构建不设。
@@ -248,13 +245,12 @@ compose.desktop {
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb,
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi,
             )
-            // 2026-10-20 用户裁决：Windows 的包/安装器/启动器一律叫 opi（不再叫
-            // opi-candidates），默认装到 `C:\Program Files\opi`。Linux 的 deb 仍叫
-            // opi-candidates（packages.yml / 打包脚本 / 文档依赖 /opt/opi-candidates）。
-            // 按**构建主机**分叉而不是按 targetFormat：jpackage 不能交叉打包
-            // （见 windows.yml 头注释），一台机器只会打自己那端的产物；按 targetFormat
-            // 覆盖会与 CMP 在 afterEvaluate 里回填 packageName 的时机打架（实测被盖回）。
-            packageName = if (isWindowsHost) "opi" else "opi-candidates"
+            // 2026-10-20 用户裁决：所有端的包/安装器/启动器一律叫 opi（不再叫
+            // opi-candidates）—— Windows 默认装到 `C:\Program Files\opi`，Linux 的
+            // deb/rpm 装到 `/opt/opi/bin/opi`（packages.yml / 打包脚本 / 文档同一落点）。
+            // 不按构建主机分叉：jpackage 不能交叉打包（见 windows.yml 头注释），
+            // 一台机器只会打自己那端的产物，同一个名字两边都成立。
+            packageName = "opi"
             // 与发布 tag 对齐（同 android/app/build.gradle.kts 的 versionName）；
             // 值来自文件上方的 opiAppVersion 单一来源。
             packageVersion = opiAppVersion
@@ -318,7 +314,7 @@ compose.desktop {
 // ---------- 「属性设置」的桌面入口（打包后注入）----------
 //
 // 为什么不交给 jpackage：`--linux-shortcut` 生成的 .desktop 用 `--name`
-// （opi-candidates）当 Name —— 菜单里显示成那样既不像输入法/设置程序、也叫不准；
+// （opi）当 Name —— 菜单里显示成那样既不像输入法/设置程序、也叫不准；
 // 而且它**没法给入口带参数**。jpackage 的 `--resource-dir` 换模板是更正统的路，
 // 但它要猜 jpackage 对模板文件的命名约定；这里选**打包后注入**：拆包 → 写一个
 // .desktop → 重算 md5sums → 打回去。每一步都能用 `dpkg-deb -c` 核对。
@@ -367,7 +363,7 @@ tasks.register("injectSettingsDesktopEntry") {
         val installedIcon = "/usr/share/icons/hicolor/scalable/apps/opi-pet-app.svg"
 
         val apps = File(root, "usr/share/applications").apply { mkdirs() }
-        // 若 jpackage 自己那份也在（同一 --name，如 opi-candidates.desktop），删掉：
+        // 若 jpackage 自己那份也在（同一 --name，如 opi.desktop），删掉：
         // 两份入口 = 菜单里两条，且那条不带 --settings。
         apps.listFiles { f: File -> f.name.endsWith(".desktop") }
             ?.filter { it.name != "opi-settings.desktop" }?.forEach { it.delete() }

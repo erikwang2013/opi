@@ -326,7 +326,7 @@ jobs:
           & $iscc "/DAppVersion=${{ needs.version.outputs.version }}" "/DAppImageDir=$env:OPI_APP_IMAGE" "/DOutputDir=$out" 'scripts\windows\opi.iss'
           if ($LASTEXITCODE -ne 0) { throw "ISCC 失败：退出码 $LASTEXITCODE" }
 
-          $setup = Join-Path $out "opi-${{ needs.version.outputs.version }}-setup.exe"
+          $setup = Join-Path $out "opi-${{ needs.version.outputs.version }}-windows-x64-setup.exe"
           if (-not (Test-Path $setup)) { throw "没产出 $setup" }
           Get-Item $setup | Format-List Name, Length
 

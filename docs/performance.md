@@ -144,7 +144,7 @@ boost 提上来）；**有学习词或 `limit == usize::MAX`** 时仍留满 9216
 1. **`assembleDebug` 的 Rust 是 debug 编译**（cargokit `builder.dart`：
    `if (!configuration.isDebug) '--release'`）——它比 release 慢 **3–20×**（实测同一
    按键 debug 46–239ms vs release 23–83ms）。**分发的 APK 必须是 `assembleRelease`**
-   （本仓 release 用 debug 签名，配置已在 `android/app/build.gradle.kts`）。
+   （本仓 release 用仓库内的社区签名密钥库，见 `android/keystore/README.md`）。
 2. **9/14 键曾全表逐条 `matches` 扫 936k 行**（单键 268ms 起）——现为按键类**区间枚举**
    （`Dictionary::scheme_entries`，排序表上每个字母前缀 = 连续区间）+ `SCHEME_MATCH_CAP
    = 2048` 截断。等价性门禁 `crates/opi-tools/tests/scheme_equivalence.rs` 看着语义。

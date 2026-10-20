@@ -19,9 +19,11 @@ use windows::Win32::System::Registry::{
 };
 use windows::Win32::UI::Input::KeyboardAndMouse::HKL;
 use windows::Win32::UI::TextServices::{
-    CLSID_TF_CategoryMgr, CLSID_TF_InputProcessorProfiles, GUID_TFCAT_TIP_KEYBOARD, ITfCategoryMgr,
-    ITfInputProcessorProfileMgr, ITfInputProcessorProfiles, TF_E_ALREADY_EXISTS,
-    TF_INPUTPROCESSORPROFILE, TF_PROFILETYPE_INPUTPROCESSOR,
+    CLSID_TF_CategoryMgr, CLSID_TF_InputProcessorProfiles, GUID_TFCAT_TIP_KEYBOARD,
+    GUID_TFCAT_TIPCAP_IMMERSIVESUPPORT, GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT,
+    GUID_TFCAT_TIPCAP_UIELEMENTENABLED, ITfCategoryMgr, ITfInputProcessorProfileMgr,
+    ITfInputProcessorProfiles, TF_E_ALREADY_EXISTS, TF_INPUTPROCESSORPROFILE,
+    TF_PROFILETYPE_INPUTPROCESSOR,
 };
 use windows::core::{GUID, HRESULT, IUnknown, PCWSTR, Result};
 
@@ -213,24 +215,38 @@ fn profile_exists(mgr: &ITfInputProcessorProfileMgr, clsid: &GUID, profile: &GUI
 
 /// 类别下是否已有本服务。`ITfCategoryMgr` 没有"查一项"的接口，只能枚举；
 /// `IEnumGUID::Next` 返回 S_FALSE 且 fetched=0 表示取完。
-fn category_has_service(cats: &ITfCategoryMgr, clsid: &GUID) -> Result<bool> {
+///
+/// 枚举本身失败（新类别尚无人注册时系统可能直接报错）按"没有"处理：升级安装
+/// 第一次加能力类别时它必然为空，不能让一次查询失败挡住后面的 RegisterCategory
+/// —— 真失败会在那里报出来。
+fn category_has_service(cats: &ITfCategoryMgr, category: &GUID, clsid: &GUID) -> Result<bool> {
     // SAFETY: 枚举器在活动 COM 套间内创建，仅在本函数内使用。
-    let items = unsafe { cats.EnumItemsInCategory(&GUID_TFCAT_TIP_KEYBOARD)? };
+    let items = match unsafe { cats.EnumItemsInCategory(category) } {
+        Ok(items) => items,
+        Err(_) => return Ok(false),
+    };
     loop {
         let mut item = [GUID::default(); 1];
         let mut fetched = 0u32;
         // SAFETY: item 是 1 元素输出缓冲；fetched 是有效的计数输出位置。
         let hr = unsafe { items.Next(&mut item, Some(&mut fetched)) };
-        if hr.is_err() {
-            return Err(hr.into());
-        }
-        if fetched == 0 {
+        if hr.is_err() || fetched == 0 {
             return Ok(false);
         }
         if item[0] == *clsid {
             return Ok(true);
         }
     }
+}
+
+/// 幂等注册一个类别条目：重复 `regsvr32` 不重复写。`RegisterCategory` 的重复
+/// 调用错误码不可依赖（同 `RegisterProfile`），所以先枚举再决定是否写。
+fn register_category(cats: &ITfCategoryMgr, category: &GUID, clsid: &GUID) -> Result<()> {
+    if category_has_service(cats, category, clsid)? {
+        return Ok(());
+    }
+    // SAFETY: 三个 REFGUID 都指向调用方栈上/常量值，生命周期覆盖调用。
+    unsafe { cats.RegisterCategory(clsid, category, clsid) }
 }
 
 pub(crate) fn register() -> Result<()> {
@@ -337,11 +353,24 @@ pub(crate) fn register() -> Result<()> {
             None::<&IUnknown>,
             CLSCTX_INPROC_SERVER,
         )?;
-        // 类别 = "键盘输入法"。三个参数分别是：本服务 CLSID、类别 GUID、
-        // 该类目下的条目 GUID —— 单一服务时条目就是自己。
-        // 同样先枚举判存在，避免依赖 RegisterCategory 的重复调用错误码。
-        if !category_has_service(&cats, &clsid)? {
-            cats.RegisterCategory(&clsid, &GUID_TFCAT_TIP_KEYBOARD, &clsid)?;
+        // 类别注册。三个参数分别是：本服务 CLSID、类别 GUID、该类目下的条目
+        // GUID —— 单一服务时条目就是自己。
+        //  · GUID_TFCAT_TIP_KEYBOARD：桌面（Win32）宿主靠它把本 TIP 列为键盘输入法。
+        //  · GUID_TFCAT_TIPCAP_IMMERSIVESUPPORT：可在 Store/沉浸式宿主（UWP）中运行。
+        //  · GUID_TFCAT_TIPCAP_UIELEMENTENABLED：TIP 自带候选 UI，系统不再代画。
+        //  · GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT：支持系统托盘语言栏。
+        // 只注册 TIP_KEYBOARD 时，桌面应用能用而 UWP/沉浸式宿主认为本 TIP 不支持
+        // 它们 —— 这正是「只在桌面可用、其他应用不生效」的注册侧根因。能力标志
+        // TF_IPP_CAPS_* 是这些类别的读回值（TF_INPUTPROCESSORPROFILE.dwFlags），
+        // 不是 RegisterProfile 的 dwFlags（那里只收 TF_RP_*，见上面的注释）。
+        // 依据：TSF 文档「Predefined Category Values」的 TIP Capability 类别。
+        for category in [
+            GUID_TFCAT_TIP_KEYBOARD,
+            GUID_TFCAT_TIPCAP_IMMERSIVESUPPORT,
+            GUID_TFCAT_TIPCAP_UIELEMENTENABLED,
+            GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT,
+        ] {
+            register_category(&cats, &category, &clsid)?;
         }
     }
     Ok(())
@@ -362,7 +391,14 @@ pub(crate) fn unregister() -> Result<()> {
             None::<&IUnknown>,
             CLSCTX_INPROC_SERVER,
         ) {
-            let _ = cats.UnregisterCategory(&clsid, &GUID_TFCAT_TIP_KEYBOARD, &clsid);
+            for category in [
+                GUID_TFCAT_TIP_KEYBOARD,
+                GUID_TFCAT_TIPCAP_IMMERSIVESUPPORT,
+                GUID_TFCAT_TIPCAP_UIELEMENTENABLED,
+                GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT,
+            ] {
+                let _ = cats.UnregisterCategory(&clsid, &category, &clsid);
+            }
         }
         if let Ok(profile_mgr) = CoCreateInstance::<_, ITfInputProcessorProfileMgr>(
             &CLSID_TF_InputProcessorProfiles,

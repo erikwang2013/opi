@@ -3,10 +3,16 @@
 
 // 2026-10-18：自有表情改插入 PNG（用户裁决）。OpiImeService 已 494 行（500 行门禁），
 // 图片通道整体拆在这里 —— 扩展函数，读的仍是 service 的成员（同 ComposingText.kt 先例）。
+// 2026-10-20 用户裁决：commitContent 被宿主拒绝时加**剪贴板图片回退**（搜狗式：
+// 复制图片 + 提示长按粘贴）；剪贴板都写不进去才回退文字标签。
 
 package xyz.erik.opi
 
+import android.content.ClipData
 import android.content.ClipDescription
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
 import android.util.Log
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
@@ -23,13 +29,41 @@ import java.io.IOException
 
 private const val TAG = "OpiPetSticker"
 
+/** 一次贴纸上屏的结局（纯决策，见 [petStickerOutcome]；JVM 测试钉住顺序）。 */
+internal enum class PetStickerOutcome { INSERTED, COPIED, TEXT_FALLBACK }
+
+/**
+ * 图片通道失败后的回退决策（纯函数）：图片插进去 > 图片复制到剪贴板 > 文字标签。
+ * 三者互斥；「已复制」绝不能被报成「已插入」。
+ */
+internal fun petStickerOutcome(imageInserted: Boolean, clipboardCopied: Boolean): PetStickerOutcome =
+    when {
+        imageInserted -> PetStickerOutcome.INSERTED
+        clipboardCopied -> PetStickerOutcome.COPIED
+        else -> PetStickerOutcome.TEXT_FALLBACK
+    }
+
+/** 各结局给用户看的话；[PetStickerOutcome.INSERTED] 不需要提示（图已经出现在输入框里）。 */
+internal fun petStickerNotice(outcome: PetStickerOutcome): String? = when (outcome) {
+    PetStickerOutcome.INSERTED -> null
+    PetStickerOutcome.COPIED -> "表情图片已复制，请在输入框长按选择「粘贴」"
+    PetStickerOutcome.TEXT_FALLBACK -> "当前应用不支持插入图片，已用文字标签"
+}
+
+/** 图片通道的尝试顺序：GIF → PNG（与提交/剪贴板顺序同一条，空 = 两张资产都缺）。 */
+internal fun petStickerImageOrder(gif: File?, png: File?): List<Pair<String, File>> =
+    listOfNotNull(gif?.let { "image/gif" to it }, png?.let { "image/png" to it })
+
 /**
  * 「自有」宠物形态 = **插入图片**，不提交任何 Unicode 文本（2026-10-18 用户裁决）。
  *
- * 图片走 `InputConnection.commitContent`，格式优先级（2026-10-19）：**GIF → PNG →
- * 文本标签**。图片通道被宿主拒绝时上屏 `[小欧·笑]` 这样的独立标签，**不再退回
- * Unicode emoji**（2026-10-19 用户裁决：emoji 与自有表情分不清）。GIF 是同一张
- * PNG 的轻微弹跳/缩放动画，见 `shared/pet/stickers-gif/`。
+ * 图片走 `InputConnection.commitContent`，格式优先级（2026-10-19）：**GIF → PNG**；
+ * 宿主两个都拒绝时（2026-10-20）把图放进系统剪贴板并提示长按粘贴，剪贴板也写不进去
+ * 才上屏 `[小欧·笑]` 这样的独立标签。**不再退回 Unicode emoji**（2026-10-19 用户
+ * 裁决：emoji 与自有表情分不清）。GIF 是同一张 PNG 的轻微弹跳/缩放动画，见
+ * `shared/pet/stickers-gif/`。
+ * 已知限制：剪贴板 URI 是否真能被目标 app 读到无法在 IME 侧观测 —— 提示文案让用户
+ * 长按粘贴；写剪贴板失败则走文字标签，不静默丢。
  * IC 为空时与文本提交同一套延迟重试（[PendingCommit.RETRY_MS]），仍拿不到就放弃并记日志。
  */
 internal fun OpiImeService.commitPetSticker(mood: PetMood) {
@@ -50,18 +84,49 @@ internal fun OpiImeService.commitPetSticker(mood: PetMood) {
 }
 
 private fun OpiImeService.commitPetStickerTo(ic: InputConnection, mood: PetMood) {
-    // 优先动图（2026-10-19），编辑器不收 GIF 再退回 PNG，最后才是文本标签。
+    // 优先动图（2026-10-19），编辑器不收 GIF 再退回 PNG。
     val gif = petStickerFile(PetEmoji.gifAssetPath(mood), PetStickerAssets.gifFile(mood))
     val png = petStickerFile(PetEmoji.assetPath(mood), PetStickerAssets.stickerFile(mood))
-    if (gif == null && png == null) {
+    val images = petStickerImageOrder(gif, png)
+    if (images.isEmpty()) {
         toast("小欧表情暂不可用")
         return
     }
     dropComposing(ic)
-    if (gif != null && commitPetStickerImage(ic, gif, "image/gif")) return
-    if (png != null && commitPetStickerImage(ic, png, "image/png")) return
-    Log.w(TAG, "editor rejected image/gif and image/png, fallback to text tag: ${mood.name}")
-    commitPetStickerTextFallback(ic, mood)
+    for ((mime, file) in images) {
+        if (commitPetStickerImage(ic, file, mime)) return
+    }
+    // 宿主不收 commitContent：剪贴板兜底（2026-10-20，搜狗式）。GIF 优先，与上面同序。
+    val copied = copyPetStickerToClipboard(images.first().second)
+    val outcome = petStickerOutcome(imageInserted = false, clipboardCopied = copied)
+    Log.w(TAG, "editor rejected image commit, outcome=$outcome: ${mood.name}")
+    if (outcome == PetStickerOutcome.TEXT_FALLBACK) {
+        commitPetStickerTextFallback(ic, mood)
+    }
+    petStickerNotice(outcome)?.let { toast(it) }
+}
+
+/**
+ * 图片放进系统剪贴板（`content://` URI）。返回 false = 剪贴板写不进去（无此服务/
+ * 被 OEM 限制/FileProvider 配置错），调用方回退文字标签。
+ *
+ * FileProvider 的 manifest 已开 `grantUriPermissions`；粘贴时系统会按需授予读权限，
+ * 这里再按当前编辑器包名显式授一次 —— 表情图不含隐私数据，多给一份读权限没有代价，
+ * 换来旧 OEM 上「已复制却粘不出」的窗口更小。
+ */
+private fun OpiImeService.copyPetStickerToClipboard(file: File): Boolean = try {
+    val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+    currentInputEditorInfo?.packageName
+        ?.takeIf { it.isNotEmpty() && it != packageName }
+        ?.let { grantUriPermission(it, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+    val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    cm.setPrimaryClip(ClipData.newUri(contentResolver, "小欧表情", uri))
+    Log.i(TAG, "pet sticker copied to clipboard: ${file.name}")
+    true
+} catch (e: Exception) {
+    // 回退路径不允许把 IME 带崩：任何失败都只是「这一档没成」。
+    Log.w(TAG, "pet sticker clipboard copy failed: $e")
+    false
 }
 
 /** 把一张图通过 commitContent 交给编辑器；FileProvider/编辑器失败都只返回 false。 */
@@ -116,16 +181,14 @@ private fun OpiImeService.petStickerFile(assetPath: String, name: String): File?
 }
 
 /**
- * 编辑器不支持插入图片时的回退：上屏**独立文本标签** `[小欧·笑]`，绝不退回笑脸 emoji
- * （2026-10-19 用户裁决：emoji 和自有表情在输入框里分不清）。
- *
- * 不走剪贴板图片：FileProvider 的读权限授不到任意粘贴方，会出现「提示已复制却粘不出来」。
+ * 图片与剪贴板都走不通时的回退：上屏**独立文本标签** `[小欧·笑]`，绝不退回笑脸 emoji
+ * （2026-10-19 用户裁决：emoji 和自有表情在输入框里分不清）。提示文案见
+ * [petStickerNotice] 的 TEXT_FALLBACK（单一口径，别在这里另写一句）。
  */
 private fun OpiImeService.commitPetStickerTextFallback(ic: InputConnection, mood: PetMood) {
     dropComposing(ic)
     // 标签本身已带「小欧·」前缀（PetEmojiMap 是唯一源），这里只加方括号。
     ic.commitText("[${PetEmoji.label(mood)}]", 1)
-    toast("当前应用不支持插入图片，已用文字标签")
 }
 
 private fun OpiImeService.toast(text: String) {

@@ -30,12 +30,12 @@
 #    `depends: fcitx5` 是**声明**而非推导，正确性靠 CI 在真发行版里装一次来验。
 #
 # 5. **可选的桌面应用合并**（环境变量 OPI_DESKTOP_DEB=<jpackage 的 .deb>）：
-#    设了就把 jpackage 打出的桌面应用（/opt/opi-candidates/**，自带 JRE）解进
+#    设了就把 jpackage 打出的桌面应用（/opt/opi/**，自带 JRE）解进
 #    暂存树，与插件装进**同一个**包 —— 用户裁决「和到一起安装」（2026-10-09）。
 #    代价如实记：包体 ~1.7MB → ~48MB（jpackage 自带运行时；这是那份裁决时摆过的
 #    数）；不设 = 只出插件包，脚本其余行为一字不变。
-#    对旧独立包 opi-candidates（≤1.5.0 时代的设置窗包）用 replaces+conflicts
-#    接管：不声明的话 dpkg 会因 /opt/opi-candidates/** 文件归属冲突**拒绝安装**。
+#    对旧独立包 opi-candidates（≤1.5.0 时代的设置窗包，装到 /opt/opi-candidates/**）
+#    用 replaces+conflicts 接管：不声明的话 dpkg 会因文件归属冲突**拒绝安装**。
 
 set -euo pipefail
 

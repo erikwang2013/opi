@@ -5,8 +5,8 @@
 # 把 `macos/` 的 Swift + Rust 通用库组装成**可装**的 macOS 输入法：
 #
 #   dist/apple/macos/OpiInputMethod.app                                  （ad-hoc 签名的 IME bundle）
-#   dist/apple/macos/opi-inputmethod-<版本>-unsigned.pkg                 （pkgbuild 出的安装包）
-#   dist/apple/macos/opi-inputmethod-<版本>-unsigned.zip                 （不想走 pkg 的人用这个）
+#   dist/apple/macos/opi-<版本>-macos-universal.pkg                 （pkgbuild 出的安装包）
+#   dist/apple/macos/opi-<版本>-macos-universal.zip                 （不想走 pkg 的人用这个）
 #
 # 用法（仓库根目录）：
 #   scripts/apple/package-macos.sh <版本号> [产物目录]
@@ -187,7 +187,7 @@ PY
 stage="$out/pkgroot"
 mkdir -p "$stage/Library/Input Methods"
 cp -R "$APP" "$stage/Library/Input Methods/"
-pkg="$out/opi-inputmethod-$version-unsigned.pkg"
+pkg="$out/opi-$version-macos-universal.pkg"
 # 装前停旧进程（2026-10-17 用户报障「装完还是旧版本」的 macOS 版）：脚本随包编入，
 # 装/升级时由 installer 以 root 跑 preinstall（见 macos/scripts/preinstall 头注）。
 # 构建期给一条语法门禁 —— 脚本坏在 pkgbuild 里只会得到一条晦涩的警告。
@@ -207,10 +207,10 @@ grep -q 'OpiInputMethod.app/Contents/Info.plist' "$out/.payload.txt" || {
 rm -f "$out/.payload.txt"
 
 # ---- 7) .zip（不想走 pkg 的人用；保留 .app 的结构与符号链接）----
-ditto -c -k --keepParent "$APP" "$out/opi-inputmethod-$version-unsigned.zip"
+ditto -c -k --keepParent "$APP" "$out/opi-$version-macos-universal.zip"
 
 echo "---- macOS 产物（未签名/未公证，开发用）----"
 echo "  $APP"
 echo "  $pkg"
-echo "  $out/opi-inputmethod-$version-unsigned.zip"
+echo "  $out/opi-$version-macos-universal.zip"
 echo "  版本：${version}（取自 $(basename "$root")/Cargo.toml）；Info.plist 记的是 $plist_ver"

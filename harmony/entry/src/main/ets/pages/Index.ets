@@ -20,10 +20,10 @@
 
 import { KeyboardController } from '../InputMethodExtensionAbility/KeyboardController';
 import { OpiMode, OpiShift } from '../InputMethodExtensionAbility/OpiEngine';
-import { OpiPet, PetMood, petMood } from '../InputMethodExtensionAbility/OpiPet';
+import { OpiPet, PetMood, petMood, petStripSelection } from '../InputMethodExtensionAbility/OpiPet';
 import {
   MODE_BIG9, MODE_PINYIN9, MODE_PINYIN14, MODE_RARE, MODE_SHUANGPIN, MODE_STROKE, MODE_WUBI,
-  modeLabel, nextMode
+  lastChineseModeIndex, modeLabel, nextMode
 } from '../InputMethodExtensionAbility/InputModes';
 import { EmojiPad } from '../InputMethodExtensionAbility/EmojiPad';
 import { FourteenKeyPanel, InputModePanel, NineKeyPanel, RarePanel, StrokeKeyPanel } from '../InputMethodExtensionAbility/KeyPanels';
@@ -44,6 +44,9 @@ const NUM_ROW_3: string[] = ['.', ',', '?', '!', '\'', '+', '=', '%'];
  * 的 `size = 30.dp`）—— 两端要一致改。
  */
 const PET_SIZE_IN_BAR: number = 30;
+
+/** 空闲宠物条重抽间隔（ms）：与 Android `PetStrip.kt` 的 PET_FORM_HOLD_MS 同值。 */
+const PET_FORM_HOLD_MS: number = 2800;
 
 @Entry
 @Component
@@ -80,8 +83,27 @@ struct Index {
   @StorageLink('opiLayout') layout: number = 0;
   /** 输入模式面板是否展开（1/0）。 */
   @StorageLink('opiPanel') panel: number = 0;
+  /**
+   * 空闲宠物条当前这组随机形态（2026-10-20 用户裁决）：1..12 枚**互不重复**，
+   * 每次进入/每 PET_FORM_HOLD_MS 重抽一次（纯函数与不变量见 OpiPet.ets）。
+   */
+  @State petForms: PetMood[] = petStripSelection(Math.random);
+  private petTimer: number = -1;
 
   private ctrl: KeyboardController = KeyboardController.getInstance();
+
+  aboutToAppear(): void {
+    this.petTimer = setInterval(() => {
+      this.petForms = petStripSelection(Math.random);
+    }, PET_FORM_HOLD_MS);
+  }
+
+  aboutToDisappear(): void {
+    if (this.petTimer !== -1) {
+      clearInterval(this.petTimer);
+      this.petTimer = -1;
+    }
+  }
 
   /**
    * 小欧的情绪：**由输入状态推导，本页不自己维护**（与 Android 端同一套规则，
@@ -100,6 +122,26 @@ struct Index {
   private isDark(): boolean {
     // 候选栏底色是浅色，所以用默认调色板。深色主题要读系统主题再返回 dark() —— 未做。
     return false;
+  }
+
+  /** 空闲（无缓冲、无候选）= 顶部显示多形态宠物条；输入中仍显示状态脸。 */
+  private idlePetStrip(): boolean {
+    return this.buffer.length === 0 && this.candidates.length === 0;
+  }
+
+  /**
+   * 多枚并排时的尺寸：12 枚缩到 22vp、7 枚起 24vp —— 与 Android 按条宽均分同一目的
+   * （全占满时不重叠、不越出候选栏）。候选栏宽 360vp 时 12×22 + 间距 ≈ 满宽。
+   */
+  private stripPetSize(): number {
+    const n: number = this.petForms.length;
+    if (n >= 10) {
+      return 22;
+    }
+    if (n >= 7) {
+      return 24;
+    }
+    return PET_SIZE_IN_BAR;
   }
 
   private letterRows(): string[][] {
@@ -171,43 +213,59 @@ struct Index {
   @Builder
   CandidateBar() {
     Row() {
-      // 小欧站在候选栏最左边。没有候选时它就在这儿待命/发愣/睡觉。
-      OpiPet({ mood: this.mood(), petSize: PET_SIZE_IN_BAR, dark: this.isDark(), forceLegend: false })
-        .margin({ left: 6, right: 6 })
-        // 点一下小欧 = 学习开关取反（关掉它就去睡觉，这也是一条设置入口）
+      if (this.idlePetStrip()) {
+        // 空闲 = 多形态宠物条（2026-10-20 用户裁决「随机同时显示多个不同形态
+        // （不能重复），数量从 1 到全部占满」）：随机 1..12 枚，按数量缩尺寸、
+        // 占满候选区；点任意一枚仍是「学习开关」（与单枚时的点击语义一致）。
+        Row() {
+          ForEach(this.petForms, (m: PetMood, index: number) => {
+            OpiPet({ mood: m, petSize: this.stripPetSize(), dark: this.isDark(), forceLegend: false })
+              .margin({ left: 2, right: 2 })
+          }, (m: PetMood, index: number) => `${index}-${m}`)
+        }
+        .layoutWeight(1)
+        .justifyContent(FlexAlign.SpaceEvenly)
         .onClick(() => {
           this.ctrl.toggleLearner();
         })
-
-      // 候选：横向铺开。空态给一句提示而不是留白 —— 别让用户以为键盘坏了。
-      if (this.candidates.length === 0) {
-        Text(this.emptyHint())
-          .fontSize(15)
-          .fontColor('#9AA7A4')
-          .layoutWeight(1)
       } else {
-        Row() {
-          ForEach(this.candidates, (item: string, index: number) => {
-            Row() {
-              // 可见序号 = **页内**下标 + 1（翻页后从 1 重数）：与 Android 候选栏、
-              // Windows 候选窗同款，也与数字选词的语义（页内索引）一致。
-              // ⚠️ 端上字母盘没有数字行 ⇒ 实际是**排名**展示：数字选词引擎支持、鸿蒙端按不到。
-              Text(`${index + 1}.`)
-                .fontSize(13)
-                .fontColor('#9AA7A4')
-                .margin({ right: 3 })
-              Text(item)
-                .fontSize(20)
-                .fontColor('#1E6B63')
-            }
-            .padding({ left: 10, right: 10 })
-            .onClick(() => {
-              // **页内索引** —— 换算交给引擎，别自己算 page * 8 + index。
-              this.ctrl.tapCandidate(index);
-            })
-          }, (item: string, index: number) => `${index}-${item}`)
+        // 输入中：状态脸站最左（待命/等选/发愣/睡着），候选照旧铺开。
+        OpiPet({ mood: this.mood(), petSize: PET_SIZE_IN_BAR, dark: this.isDark(), forceLegend: false })
+          .margin({ left: 6, right: 6 })
+          .onClick(() => {
+            this.ctrl.toggleLearner();
+          })
+
+        // 候选：横向铺开。空态给一句提示而不是留白 —— 别让用户以为键盘坏了。
+        if (this.candidates.length === 0) {
+          Text(this.emptyHint())
+            .fontSize(15)
+            .fontColor('#9AA7A4')
+            .layoutWeight(1)
+        } else {
+          Row() {
+            ForEach(this.candidates, (item: string, index: number) => {
+              Row() {
+                // 可见序号 = **页内**下标 + 1（翻页后从 1 重数）：与 Android 候选栏、
+                // Windows 候选窗同款，也与数字选词的语义（页内索引）一致。
+                // ⚠️ 端上字母盘没有数字行 ⇒ 实际是**排名**展示：数字选词引擎支持、鸿蒙端按不到。
+                Text(`${index + 1}.`)
+                  .fontSize(13)
+                  .fontColor('#9AA7A4')
+                  .margin({ right: 3 })
+                Text(item)
+                  .fontSize(20)
+                  .fontColor('#1E6B63')
+              }
+              .padding({ left: 10, right: 10 })
+              .onClick(() => {
+                // **页内索引** —— 换算交给引擎，别自己算 page * 8 + index。
+                this.ctrl.tapCandidate(index);
+              })
+            }, (item: string, index: number) => `${index}-${item}`)
+          }
+          .layoutWeight(1)
         }
-        .layoutWeight(1)
       }
 
       // 翻页。页码显示「当前/总数」，两个数都读引擎，不自己数。
@@ -247,6 +305,22 @@ struct Index {
         .onClick(() => {
           this.ctrl.toggleModePanel();
         })
+
+      // 英文模式右上角的隐藏「中」键（2026-10-20 用户裁决）：低存在感、只切回中文。
+      // 走 InputModes 的 lastChineseIndex（对齐 Android lastChineseMode）；其他模式不显示。
+      if (this.mode === (OpiMode.English as number)) {
+        Button('中')
+          .fontSize(13)
+          .fontColor('#9AA7A4')
+          .backgroundColor('#F2F5F4')
+          .height(26)
+          .padding({ left: 8, right: 8 })
+          .margin({ right: 8 })
+          .onClick(() => {
+            // selectInputMode 内部会 publish（切键位/方案会清缓冲，必须刷新）。
+            this.ctrl.selectInputMode(lastChineseModeIndex());
+          })
+      }
     }
     .height(46)
     .width('100%')

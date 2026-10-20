@@ -77,7 +77,10 @@ final class KeyboardViewController: UIInputViewController {
         ])
         // 键面字要跟真实模式一致：装载后引擎可能是任何模式（同一进程里另一个
         // 键盘实例切过模式也会留在这里 —— 引擎单例是进程级的）。
-        layout.setModeLabel(Self.modeKeyLabel(of: engine.mode()))
+        layout.setModeLabel(
+            Self.modeKeyLabel(of: engine.mode()),
+            english: engine.mode() == .english
+        )
         refresh()
     }
 
@@ -432,7 +435,10 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             // English / Number / Symbol 一律回拼音（与 Android 的 `else` 分支同义）。
             engine.switchMode(.pinyin)
         }
-        layout.setModeLabel(Self.modeKeyLabel(of: engine.mode()))
+        layout.setModeLabel(
+            Self.modeKeyLabel(of: engine.mode()),
+            english: engine.mode() == .english
+        )
         refresh()
     }
 

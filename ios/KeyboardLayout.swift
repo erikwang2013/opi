@@ -97,8 +97,13 @@ final class KeyboardLayout: UIView {
     // `KeyButton.longPressFired` 推状态：那只是防「长按后又补一次 tap」的去抖标志。
     // 详见 ios/README.md 的「缺的出口：已落地」一节。
 
-    private let candidateScroll = UIScrollView()
-    private let candidateStack = UIStackView()
+    // 三枚候选栏子视图是 **internal**：建栏在 KeyboardCandidateBar.swift 的扩展里
+    // （2026-10-20 拆出，500 行门禁），Swift 的 private 只跨同文件扩展可见。
+    let candidateScroll = UIScrollView()
+    let candidateStack = UIStackView()
+    /// 英文模式右上角的隐藏「中」键（2026-10-20 用户裁决「低存在感，用于切回中文」）。
+    /// iOS 没有工具条，候选栏就是顶部 —— 它压在页翻键右侧；非英文模式隐藏。
+    let chineseButton = UIButton(type: .system)
     private let rowsStack = UIStackView()
     /// 符号层**自带**一个可竖向滚动的容器（符号数不是常量：当前数据表里
     /// 「常用」= CJK 符号块 60 个，将来加 common 块只会更多）。
@@ -129,51 +134,6 @@ final class KeyboardLayout: UIView {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used: 布局全代码构建") }
-
-    private func buildCandidateBar() {
-        candidateScroll.showsHorizontalScrollIndicator = false
-        candidateScroll.translatesAutoresizingMaskIntoConstraints = false
-        candidateStack.axis = .horizontal
-        candidateStack.spacing = 8
-        candidateStack.translatesAutoresizingMaskIntoConstraints = false
-
-        // 翻页键走 opi_key_event 的 PAGE_UP/PAGE_DOWN（页码钳制在 router.rs 里）。
-        let prev = makeBarButton("‹") { [weak self] in
-            guard let self else { return }
-            self.delegate?.keyboardLayout(self, didRequestPage: -1)
-        }
-        let next = makeBarButton("›") { [weak self] in
-            guard let self else { return }
-            self.delegate?.keyboardLayout(self, didRequestPage: 1)
-        }
-
-        addSubview(prev)
-        addSubview(candidateScroll)
-        addSubview(next)
-        candidateScroll.addSubview(candidateStack)
-
-        // ⚠️ 未编译：以下约束按常见写法写，Mac 上大概率要调数值/优先级。
-        NSLayoutConstraint.activate([
-            prev.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
-            prev.centerYAnchor.constraint(equalTo: candidateScroll.centerYAnchor),
-            prev.widthAnchor.constraint(equalToConstant: 28),
-
-            next.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
-            next.centerYAnchor.constraint(equalTo: candidateScroll.centerYAnchor),
-            next.widthAnchor.constraint(equalToConstant: 28),
-
-            candidateScroll.leadingAnchor.constraint(equalTo: prev.trailingAnchor, constant: 4),
-            candidateScroll.trailingAnchor.constraint(equalTo: next.leadingAnchor, constant: -4),
-            candidateScroll.topAnchor.constraint(equalTo: topAnchor),
-            candidateScroll.heightAnchor.constraint(equalToConstant: 40),
-
-            candidateStack.leadingAnchor.constraint(equalTo: candidateScroll.contentLayoutGuide.leadingAnchor),
-            candidateStack.trailingAnchor.constraint(equalTo: candidateScroll.contentLayoutGuide.trailingAnchor),
-            candidateStack.topAnchor.constraint(equalTo: candidateScroll.contentLayoutGuide.topAnchor),
-            candidateStack.bottomAnchor.constraint(equalTo: candidateScroll.contentLayoutGuide.bottomAnchor),
-            candidateStack.heightAnchor.constraint(equalTo: candidateScroll.frameLayoutGuide.heightAnchor),
-        ])
-    }
 
     private func buildRows() {
         rowsStack.axis = .vertical
@@ -401,12 +361,6 @@ final class KeyboardLayout: UIView {
         delegate?.keyboardLayout(self, didRelease: sender.spec)
     }
 
-    private func makeBarButton(_ title: String, onTap: @escaping () -> Void) -> UIButton {
-        let b = BarButton(title: title, onTap: onTap)
-        b.translatesAutoresizingMaskIntoConstraints = false
-        return b
-    }
-
     // MARK: - 外部刷新
 
     /// 刷新候选栏。texts 是**当前页**的候选（来自 `opi_candidates_page()`）。
@@ -454,7 +408,11 @@ final class KeyboardLayout: UIView {
     }
 
     /// 同步模式键的键面字（中/繁/英）。控制器在切模式后调 —— 键面是模式的显示器。
-    func setModeLabel(_ label: String) {
+    /// [english] 是**引擎模式**的权威判定（`engine.mode() == .english`）：隐藏「中」键
+    /// 只在英文键盘出现。它必须先于下面的早退更新 —— Number/Symbol 的键面字也是「中」，
+    /// 只比字面会把它们一起显示出来。
+    func setModeLabel(_ label: String, english: Bool) {
+        chineseButton.isHidden = !english
         guard label != modeLabel else { return }
         modeLabel = label
         // 键面字只在重建行时才读，所以这里必须重建（代价是几行按钮重建，

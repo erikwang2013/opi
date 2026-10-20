@@ -48,8 +48,11 @@ export enum PetMood {
   /** 引擎降级：词库没装上，跑在内置词库上（天线折断） */
   Degraded = 4,
   // 2026-10-17 追加（只能加在末尾，与 shared/pet/OpiPet.kt 逐值镜像）：
-  // 移动端顶部宠物条六形态轮播的表情能力。petMood 不产出这三枚，鸿蒙端也还没有
-  // 用到它们 —— 先按跨端契约把序号占住，将来要用时按 Compose 版补绘制。
+  // 移动端顶部宠物条的表情能力。petMood 不产出这三枚。
+  // ⚠️ 2026-10-20 起 [PET_STRIP_FORMS] / [petStripSelection] 会抽到它们，但本文件的
+  // draw() **只区分 Idle/Waiting/Puzzled/Sleepy/Degraded 五种脸** —— 这八枚画出来
+  // 与 Idle 同貌，要真正做到「不同形态」得按 Compose 版补绘制（见 PetStrip.kt 的
+  // 十二形态与 shared/pet/OpiPet.kt）。
   /** 哭（顶部宠物条：哭） */
   Crying = 5,
   /** 惊恐（顶部宠物条：惊恐） */
@@ -57,8 +60,7 @@ export enum PetMood {
   /** 愤怒（顶部宠物条：愤怒） */
   Angry = 7,
   // 2026-10-18 追加（同样只能加在末尾，与 shared/pet/OpiPet.kt 逐值镜像）：
-  // 移动端顶部宠物条十二形态轮播的后六枚表情能力。petMood 不产出它们，鸿蒙端
-  // 也还没有用到 —— 先按跨端契约把序号占住，将来要用时按 Compose 版补绘制。
+  // 移动端顶部宠物条的后六枚表情能力。petMood 不产出它们（绘制缺口同上）。
   /** 撒娇 */
   Coquettish = 8,
   /** 卖萌 */
@@ -101,6 +103,52 @@ export function petMood(buffer: string, candidateCount: number, learnerEnabled: 
     return PetMood.Waiting;
   }
   return PetMood.Puzzled;
+}
+
+/**
+ * 顶部宠物条的十二形态次序 —— 与 Android `PetStrip.kt` 的 PET_STRIP_FORMS **逐值对应**
+ * （用户点名的次序：笑、欢乐、哭、沮丧、惊恐、愤怒、撒娇、卖萌、讨好、敲打、捂脸、
+ * 吐舌头）。前两枚之外的说法见 `shared/pet/OpiPet.kt` 的枚举注释。
+ */
+export const PET_STRIP_FORMS: PetMood[] = [
+  PetMood.Idle, // 笑
+  PetMood.Waiting, // 欢乐
+  PetMood.Crying, // 哭
+  PetMood.Puzzled, // 沮丧
+  PetMood.Terrified, // 惊恐
+  PetMood.Angry, // 愤怒
+  PetMood.Coquettish, // 撒娇
+  PetMood.Cute, // 卖萌
+  PetMood.Pleasing, // 讨好
+  PetMood.Knocking, // 敲打
+  PetMood.FacePalm, // 捂脸
+  PetMood.TongueOut, // 吐舌头
+];
+
+/**
+ * 随机抽 1..capacity 枚**互不重复**的形态（2026-10-20 用户裁决「随机同时显示多个
+ * 不同形态（不能重复），数量从 1 到全部占满」）—— Android `petStripSelection`
+ * （android/.../ime/PetStrip.kt）的同一条契约，那边有 JVM 单测。
+ *
+ * 本端没有可跑的测试环境，源码级自检三条（改算法时按这三条手核）：
+ *   · `count = 1 + floor(random()*cap)` ⇒ 1..cap，cap 钳在 1..12；
+ *   · 只做前 count 轮部分洗牌 ⇒ 下标两两不同，元素全取自有 12 项的 PET_STRIP_FORMS；
+ *   · `capacity` = 0 与 99 都落在 1..12（对应 Kotlin 侧 `capacity clamps` 用例）。
+ * [random] 是注入的 [0,1) 随机源：生产传 Math.random；核对时传一个定值序列，
+ * 例如恒 0.999 应得 12 枚、恒 0 应得 1 枚。
+ */
+export function petStripSelection(random: () => number,
+                                 capacity: number = PET_STRIP_FORMS.length): PetMood[] {
+  const cap: number = Math.max(1, Math.min(capacity, PET_STRIP_FORMS.length));
+  const count: number = 1 + Math.floor(random() * cap);
+  const pool: PetMood[] = PET_STRIP_FORMS.slice();
+  for (let i = 0; i < count; i++) {
+    const j: number = i + Math.floor(random() * (pool.length - i));
+    const t: PetMood = pool[i];
+    pool[i] = pool[j];
+    pool[j] = t;
+  }
+  return pool.slice(0, count);
 }
 
 /** 小欧的配色。字段与 PetPalette（OpiPet.kt）一一对应。 */
