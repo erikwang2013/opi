@@ -166,8 +166,9 @@ class OpiImeService : InputMethodService() {
         // 不加这一项，键区会把它的高度吃回去（那正是「条件挂载 vs 常驻槽位」那条
         // 实测教训的同族：槽位常驻就必须在窗口高度里兑现）。
         //
-        // 2026-10-20：工具条常驻，候选/拼音共用顶部信息行（COMPOSING_BAR_HEIGHT_DP）。
-        // keyArea 仍含工具条那 44dp，composing 这一项就是顶部信息行。
+        // 2026-10-16 裁决：候选栏与工具条合并成**一格**（ImeScreen 的共用槽位，
+        // 高 = 工具条那条 44dp）。英文空闲另有特判：否则英文恒走候选栏、工具条
+        // 永远不可见。keyArea 本就包含工具条那 44dp，公式仍是 keyArea + composing。
         val composing = (COMPOSING_BAR_HEIGHT_DP * density).toInt()
         return (keyArea + composing).coerceAtMost(h)
     }

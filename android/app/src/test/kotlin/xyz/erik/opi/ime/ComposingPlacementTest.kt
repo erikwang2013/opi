@@ -31,21 +31,22 @@ class ComposingPlacementTest {
         return String(Files.readAllBytes(p), Charsets.UTF_8)
     }
 
-    /** 候选行必须在工具条之前；有候选时拼音读数并入候选行，无候选时仍有 ComposingBar。 */
+    /** 拼音行必须在候选行之前；候选栏仍替换工具条，英文空闲是唯一特判。 */
     @Test
-    fun candidateRowCarriesComposingTextAboveThePermanentToolbar() {
-        val screen = moduleFile("src/main/kotlin/xyz/erik/opi/ime/ImeScreen.kt")
-        val candidates = screen.indexOf("CandidateBar(")
-        val toolbar = screen.indexOf("ImeToolbar(")
+    fun composingBarSitsAboveTheCandidateBar() {
+        val src = moduleFile("src/main/kotlin/xyz/erik/opi/ime/ImeScreen.kt")
+        val composing = src.indexOf("ComposingBar(controller)")
+        val candidates = src.indexOf("CandidateBar(")
         assertTrue(
-            "两个调用都要在：candidates=$candidates toolbar=$toolbar",
-            candidates >= 0 && toolbar >= 0,
+            "两个调用都要在（缺一个门禁就失明了）：composing=$composing candidates=$candidates",
+            composing >= 0 && candidates >= 0,
         )
-        assertTrue("候选行必须在工具条之前", candidates < toolbar)
-        assertTrue("无候选时仍要有 ComposingBar 路径", screen.contains("ComposingBar(controller)"))
-
-        val bar = moduleFile("src/main/kotlin/xyz/erik/opi/candidate/CandidateBar.kt")
-        assertTrue("候选行左端必须补回拼音读数", bar.contains("controller.composingText()"))
+        assertTrue("拼音行（$composing）必须在候选行（$candidates）之前", composing < candidates)
+        assertTrue("英文空闲必须绕过候选栏、显示工具条", src.contains("englishIdle"))
+        assertTrue(
+            "候选栏替换工具条的条件仍必须看 candidatesShowable",
+            src.contains("candidatesShowable && !englishIdle"),
+        )
     }
 
     /** 拼音**不再**写进输入框：`setComposingText` 只允许以空串出现（收残留用）。 */

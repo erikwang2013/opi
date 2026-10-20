@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -34,12 +33,10 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xyz.erik.opi.keyboard.OpiIcons
 import xyz.erik.opi.engine.EngineController
-import xyz.erik.opi.engine.composingText
 import xyz.erik.opi.keyboard.LocalKeyboardPalette
 import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.pet.OpiPet
@@ -64,7 +61,7 @@ fun CandidateBar(
     onLongPress: (Int) -> Unit,
     /** 右端 ⌄：进平铺候选视图（[xyz.erik.opi.ime.ImeState.expandCandidates]）。 */
     onExpand: () -> Unit,
-    /** 英文模式：在候选栏右端显示隐藏「中」键（英文模式恒走候选栏，不进工具条）。 */
+    /** 英文模式：在候选栏右端显示隐藏「中」键（英文有输入/候选时走本栏）。 */
     inEnglish: Boolean,
     /** 隐藏「中」：与中/繁/英循环的英→中同一条腿。 */
     onSwitchToChinese: () -> Unit,
@@ -97,24 +94,11 @@ fun CandidateBar(
         return
     }
     val candidates = controller.pageCandidates
-    val composing = if (controller.mode == EngineMode.ENGLISH) "" else controller.composingText()
     Row(
         modifier = modifier.fillMaxWidth().fillMaxHeight()
             .background(p.barBg),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // 2026-10-20：工具条始终显示，候选栏移到顶部信息行。中文候选在这里补回
-        // 拼音读数（原先的独立 ComposingBar 在有候选时不再占据一行）；英文不画。
-        if (composing.isNotEmpty()) {
-            Text(
-                text = composing,
-                modifier = Modifier.widthIn(max = 112.dp).padding(horizontal = 10.dp),
-                fontSize = 14.sp,
-                color = p.accent,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
         // ⚠️ 2026-10-15 用户裁决改判：拼音（缓冲/读数）与五笔编码提示**不再画在本栏**——
         // 它们搬去了候选行**上方**的独立一行（`ime/ComposingBar.kt`，含读屏播报）。
         // 本栏自此只画候选本身。撤掉的那格见 git 历史与 docs/install/android.md 的订正。
@@ -207,8 +191,8 @@ fun CandidateBar(
  * 中文」）。小号字 + 低透明度；按下时由 [clickable] 的默认水波纹给出可见反馈。
  * 触控区比字大一圈（padding 在 clickable 之内），不靠肉眼对准。
  *
- * 2026-10-20：英文模式恒走候选栏（[candidatesShowable] 对 ENGLISH 恒真），
- * 因此它必须放在本栏，而不是只藏在工具条里 —— 否则英文键盘右上角永远看不见。
+ * 2026-10-20：英文有输入/候选时走候选栏；英文**空闲**改走工具条（见 ImeScreen 的
+ * englishIdle 特判），所以两处都要提供这枚入口。
  */
 @Composable
 private fun ChineseHiddenButton(onClick: () -> Unit) {

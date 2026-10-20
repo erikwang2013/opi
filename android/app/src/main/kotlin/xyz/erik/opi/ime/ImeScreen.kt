@@ -101,55 +101,20 @@ fun ImeScreen(
             // （9 键 = 分词读数 `ni'hao`、其余方案 = 原字母）+ 五笔编码提示。
             // 读屏播报也挂在这一行（原先挂在候选栏的缓冲首格，那格已随裁决撤掉）。
             // 平铺候选视图也保留它（参考图 2 的拼音就在最顶上）。----
-            if (state.view == ImeState.View.QWERTY && state.candidatesShowable) {
-                // 候选行（2026-10-20 用户裁决「所有模式都显示工具条」）：候选不再顶掉
-                // 工具条，而是单独占顶部信息行；拼音/无匹配由 CandidateBar 左端补回。
-                Box(modifier = Modifier.fillMaxWidth().height(COMPOSING_BAR_HEIGHT_DP.dp)) {
-                    CandidateBar(
-                        controller = controller,
-                        onTap = router::handleCandidate,
-                        onLongPress = controller::removeUserWord,
-                        onExpand = state::expandCandidates,
-                        inEnglish = controller.mode == EngineMode.ENGLISH,
-                        onSwitchToChinese = state::cycleMode,
-                        onCloseKeyboard = onCloseKeyboard,
-                    )
-                }
-            } else if (state.view == ImeState.View.QWERTY || state.view == ImeState.View.RARE ||
+            val englishIdle = controller.mode == EngineMode.ENGLISH &&
+                controller.buffer.isEmpty() && controller.candidates.isEmpty()
+            if (state.view == ImeState.View.QWERTY || state.view == ImeState.View.RARE ||
                 state.view == ImeState.View.CANDIDATES_TILED
             ) {
-                // 空闲/无候选信息行：输入中画拼音行、空闲画**小欧宠物条**。
+                // 顶部共用槽位：输入中画拼音行、空闲画**小欧宠物条**。
                 if (controller.composingText().isEmpty() && controller.wubiHint.isEmpty()) {
                     PetStrip()
                 } else {
                     ComposingBar(controller)
                 }
             }
-            // ---- 工具条**常驻**（2026-10-20 用户裁决「所有模式都显示工具条」）----
-            // 候选行已在上面独立占一行；这里不再与候选互换。
-            Box(
-                modifier = Modifier.fillMaxWidth().height(IME_TOOLBAR_HEIGHT_DP.dp),
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                ImeToolbar(
-                    currentMode = state.inputMode,
-                    keyboardModes = modes,
-                    petMood = petMood(
-                        buffer = controller.buffer,
-                        candidateCount = controller.candidates.size,
-                        learnerEnabled = controller.learnerEnabled,
-                        dictionaryDegraded = controller.dictionaryDegraded,
-                    ),
-                    onOpenEmoji = state::openEmoji,
-                    onOpenSkin = state::openSkin,
-                    onOpenInputMode = state::openInputMode,
-                    onOpenKeyboardMode = state::openKeyboardMode,
-                    onOpenAbout = state::openAbout,
-                    onCloseKeyboard = onCloseKeyboard,
-                )
-            }
             if (state.view == ImeState.View.CANDIDATES_TILED) {
-                // 平铺候选视图（2026-10-16 裁决）：占满工具条以下的剩余空间。
+                // 平铺候选视图：占满拼音行以下的整块。
                 CandidateTiledView(
                     state,
                     controller,
@@ -157,6 +122,43 @@ fun ImeScreen(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                 )
             } else {
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(IME_TOOLBAR_HEIGHT_DP.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    if (state.view == ImeState.View.QWERTY && state.candidatesShowable && !englishIdle) {
+                        // 候选栏仍替换工具条；只有英文**空闲**（无缓冲、无候选）时显示工具条。
+                        CandidateBar(
+                            controller = controller,
+                            onTap = router::handleCandidate,
+                            onLongPress = controller::removeUserWord,
+                            onExpand = state::expandCandidates,
+                            inEnglish = controller.mode == EngineMode.ENGLISH,
+                            onSwitchToChinese = state::cycleMode,
+                            onCloseKeyboard = onCloseKeyboard,
+                        )
+                    } else {
+                        // ---- 工具条：中文空闲 / 英文空闲 / 面板视图都显示 ----
+                        ImeToolbar(
+                            currentMode = state.inputMode,
+                            keyboardModes = modes,
+                            petMood = petMood(
+                                buffer = controller.buffer,
+                                candidateCount = controller.candidates.size,
+                                learnerEnabled = controller.learnerEnabled,
+                                dictionaryDegraded = controller.dictionaryDegraded,
+                            ),
+                            inEnglish = controller.mode == EngineMode.ENGLISH,
+                            onSwitchToChinese = state::cycleMode,
+                            onOpenEmoji = state::openEmoji,
+                            onOpenSkin = state::openSkin,
+                            onOpenInputMode = state::openInputMode,
+                            onOpenKeyboardMode = state::openKeyboardMode,
+                            onOpenAbout = state::openAbout,
+                            onCloseKeyboard = onCloseKeyboard,
+                        )
+                    }
+                }
                 // ---- 键盘区：单手模式整体偏移 + 收窄（纯布局层）----
                 // 键区自己刷底色（根列已透明）：键与键之间的缝是这一层 —— 换深色皮肤时
                 // 不刷会露出窗口底色（2026-10-09「整体统一」那条的落点）。
