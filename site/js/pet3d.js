@@ -189,8 +189,12 @@ function resize() {
   if (reduceMotion) renderer.render(scene, camera);
 }
 
-const resizeObserver = new ResizeObserver(resize);
-resizeObserver.observe(canvas.parentElement || canvas);
+if ('ResizeObserver' in window) {
+  const resizeObserver = new ResizeObserver(resize);
+  resizeObserver.observe(canvas.parentElement || canvas);
+} else {
+  window.addEventListener('resize', resize, { passive: true });
+}
 resize();
 
 let heroVisible = true;

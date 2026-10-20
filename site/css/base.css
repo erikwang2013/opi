@@ -171,6 +171,7 @@ img { height: auto; }
   display: flex;
   flex-direction: column;
   justify-content: center;
+  min-height: 100vh;
   min-height: 100svh;
   padding: clamp(96px, 12vh, 148px) clamp(20px, 5.6vw, 80px) clamp(54px, 8vh, 92px);
   scroll-snap-align: start;

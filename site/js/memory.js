@@ -13,6 +13,9 @@
   const memoryClose = memoryOverlay ? $('[data-memory-close]', memoryOverlay) : null;
   const memoryPauseButton = memoryOverlay ? $('[data-memory-pause]', memoryOverlay) : null;
   const memorySeenKey = 'opi-memory-seen-v1';
+  const animExt = window.__opiWebp === false ? 'gif' : 'webp';
+  const animFile = (file) => file.replace(/\.(webp|gif)$/, `.${animExt}`);
+  const stillFile = (file) => file.replace(/\.(webp|gif)$/, '.png');
   const memoryPets = [
     'idle.webp', 'waiting.webp', 'crying.webp', 'puzzled.webp', 'terrified.webp',
     'angry.webp', 'coquettish.webp', 'cute.webp', 'pleasing.webp', 'knocking.webp',
@@ -62,7 +65,7 @@
       item.className = 'memory-forms-pet';
       item.style.setProperty('--mood', mood);
       const img = document.createElement('img');
-      img.src = `assets/pet/forms/${reduceMotion ? file.replace(/\.webp$/, '.png') : file}`;
+      img.src = `assets/pet/forms/${reduceMotion ? stillFile(file) : animFile(file)}`;
       img.width = 48;
       img.height = 48;
       img.alt = name;
@@ -107,7 +110,7 @@
         pet.setAttribute('aria-hidden', 'true');
         const img = document.createElement('img');
         const petFile = memoryPets[(index / 6 | 0) % memoryPets.length];
-        img.src = `assets/pet/forms/${reduceMotion ? petFile.replace(/\.webp$/, '.png') : petFile}`;
+        img.src = `assets/pet/forms/${reduceMotion ? stillFile(petFile) : animFile(petFile)}`;
         img.width = 54;
         img.height = 54;
         img.loading = 'lazy';
@@ -254,7 +257,7 @@
     const show = () => {
       const [file, label, mood] = memoryIntroForms[index];
       memoryIntro.style.setProperty('--intro-mood', mood);
-      memoryIntroImg.src = `assets/pet/forms/${file}`;
+      memoryIntroImg.src = `assets/pet/forms/${animFile(file)}`;
       memoryIntroImg.alt = label;
       memoryIntroLabel.textContent = label;
       memoryIntroCount.textContent = `${index + 1} / ${memoryIntroForms.length}`;
@@ -338,11 +341,11 @@
     memoryRaf = requestAnimationFrame(step);
   };
 
-  const openMemory = () => {
+  const openMemory = (trigger) => {
     if (!memoryOverlay) return;
     buildMemory();
     if (memoryOverlay.classList.contains('is-open')) return;
-    memoryPreviousFocus = document.activeElement;
+    memoryPreviousFocus = trigger || document.activeElement;
     memoryPaused = false;
     memoryHoverPaused = false;
     memoryUserPaused = false;
@@ -351,10 +354,10 @@
     memoryOverlay.hidden = false;
     document.body.classList.add('memory-open');
     markMemorySeen();
-    memoryClose?.focus?.({ preventScroll: true });
     window.requestAnimationFrame(() => {
       memoryOverlay.classList.add('is-open');
       startMemoryIntro();
+      memoryClose?.focus?.({ preventScroll: true });
     });
   };
 
@@ -363,7 +366,7 @@
     const warmMemory = () => buildMemory();
     if ('requestIdleCallback' in window) window.requestIdleCallback(warmMemory, { timeout: 900 });
     else window.setTimeout(warmMemory, 700);
-    $$('[data-memory-open]').forEach((button) => button.addEventListener('click', openMemory));
+    $$('[data-memory-open]').forEach((button) => button.addEventListener('click', () => openMemory(button)));
     memoryClose?.addEventListener('click', closeMemory);
     memoryPauseButton?.addEventListener('click', () => {
       memoryUserPaused = !memoryUserPaused;
@@ -371,6 +374,21 @@
       applyMemoryPause(memoryHoverPaused || memoryUserPaused);
     });
     memoryOverlay.addEventListener('click', (event) => { if (event.target === memoryOverlay) closeMemory(); });
+    memoryOverlay.addEventListener('keydown', (event) => {
+      if (event.key !== 'Tab') return;
+      const focusable = $$('button:not(:disabled), [href], [tabindex]:not([tabindex="-1"])', memoryOverlay)
+        .filter((el) => el.offsetParent !== null && getComputedStyle(el).visibility !== 'hidden');
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
     memoryViewport?.addEventListener('pointerenter', () => setMemoryPaused(true));
     memoryViewport?.addEventListener('pointerleave', () => setMemoryPaused(false));
     memoryViewport?.addEventListener('scroll', memoryProgressNow, { passive: true });

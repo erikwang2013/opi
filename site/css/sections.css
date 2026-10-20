@@ -331,8 +331,10 @@
 .footer-bottom a:hover { color: var(--primary-deep); }
 
 /* ---------- Dialog ---------- */
-.form-dialog { position: fixed; inset: 0; z-index: 82; width: min(520px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); margin: auto; padding: 0; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); color: var(--ink); box-shadow: 0 40px 100px -30px rgba(20, 32, 29, .45); animation: form-pop .18s var(--ease); }
-.form-backdrop { position: fixed; inset: 0; z-index: 81; background: rgba(20, 32, 29, .34); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); animation: form-fade .16s ease-out; }
+.form-dialog:not([open]) { display: none; }
+.form-dialog[open] { display: block; }
+.form-dialog { position: fixed; inset: 0; z-index: 82; width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); margin: auto; padding: 0; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); color: var(--ink); box-shadow: 0 40px 100px -30px rgba(20, 32, 29, .45); overscroll-behavior: contain; animation: form-pop .18s var(--ease); }
+.form-backdrop { position: fixed; inset: 0; z-index: 81; touch-action: none; background: rgba(20, 32, 29, .34); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); animation: form-fade .16s ease-out; }
 .form-backdrop[hidden] { display: none; }
 body.form-modal-open { overflow: hidden; }
 @keyframes form-fade { from { opacity: 0; } to { opacity: 1; } }

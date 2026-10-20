@@ -10,6 +10,23 @@
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // Synchronous WebP probe; older browsers fall back to the original GIFs.
+  const webpSupported = (() => {
+    try {
+      const probe = document.createElement('canvas');
+      probe.width = 1;
+      probe.height = 1;
+      return probe.toDataURL('image/webp').startsWith('data:image/webp');
+    } catch (_) {
+      return false;
+    }
+  })();
+  window.__opiWebp = webpSupported;
+  if (!webpSupported) {
+    $$('img[src$=".webp"]').forEach((img) => { img.src = img.src.replace(/\.webp$/, '.gif'); });
+    $$('[data-anim$=".webp"]').forEach((el) => { el.dataset.anim = el.dataset.anim.replace(/\.webp$/, '.gif'); });
+  }
+
   const year = $('#year');
   if (year) year.textContent = String(new Date().getFullYear());
 
@@ -100,6 +117,29 @@
     $$('img[data-still]').forEach((img) => { img.src = img.dataset.still; });
   }
 
+  // Keep the twelve form cards on static PNGs until their section is near; then play the WebP animation.
+  const formCards = $$('.form-card');
+  const setFormAnimation = (on) => {
+    formCards.forEach((card) => {
+      const img = card.querySelector('img');
+      if (!img) return;
+      const src = on ? card.dataset.anim : img.dataset.still;
+      if (src && img.getAttribute('src') !== src) img.src = src;
+    });
+  };
+  if (!reduceMotion) {
+    setFormAnimation(false);
+    const formsSection = $('#forms');
+    if (formsSection && 'IntersectionObserver' in window) {
+      const formObserver = new IntersectionObserver((entries) => {
+        setFormAnimation(entries.some((entry) => entry.isIntersecting));
+      }, { rootMargin: '300px 0px' });
+      formObserver.observe(formsSection);
+    } else {
+      setFormAnimation(true);
+    }
+  }
+
   // Pet-form dialog. A non-modal dialog plus our own backdrop keeps opening well under 50 ms.
   const dialog = $('#form-dialog');
   const dialogBackdrop = $('#form-backdrop');
@@ -107,10 +147,10 @@
   const dialogName = $('#dialog-name');
   const dialogNote = $('#dialog-note');
   let dialogPreviousFocus = null;
-
   const closeDialog = () => {
-    if (!dialog || !dialog.open) return;
-    dialog.close();
+    if (!dialog || !dialog.hasAttribute('open')) return;
+    if (typeof dialog.close === 'function') dialog.close();
+    else dialog.removeAttribute('open');
     if (dialogBackdrop) dialogBackdrop.hidden = true;
     document.body.classList.remove('form-modal-open');
     dialog.removeAttribute('aria-modal');
@@ -118,7 +158,7 @@
   };
 
   const openDialog = (card) => {
-    if (dialog.open) return;
+    if (dialog.hasAttribute('open')) return;
     const anim = card.dataset.anim;
     const still = card.querySelector('img')?.dataset.still;
     const next = reduceMotion && still ? still : (anim || still || '');
@@ -129,11 +169,12 @@
     if (dialogBackdrop) dialogBackdrop.hidden = false;
     document.body.classList.add('form-modal-open');
     dialog.setAttribute('aria-modal', 'true');
-    dialog.show();
+    if (typeof dialog.show === 'function') dialog.show();
+    else dialog.setAttribute('open', '');
     $('.dialog-close', dialog)?.focus?.({ preventScroll: true });
   };
 
-  if (dialog && typeof dialog.show === 'function') {
+  if (dialog) {
     $$('.form-card').forEach((card) => {
       card.addEventListener('click', () => openDialog(card));
     });
@@ -171,6 +212,7 @@
       releaseScroll.style.contentVisibility = 'visible';
       window.requestAnimationFrame(() => { releaseScroll.scrollTop = releaseScroll.scrollHeight; });
     };
+    releaseScroll.addEventListener('focus', toOldest, { once: true });
     const releasesSection = $('#releases');
     if (location.hash === '#releases') {
       toOldest();
