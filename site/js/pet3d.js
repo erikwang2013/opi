@@ -33,7 +33,7 @@ if (/swiftshader|llvmpipe|software/i.test(rendererName)) {
 }
 
 renderer.setClearColor(0x000000, 0);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isMobile ? 1.25 : 1.5));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
@@ -129,7 +129,7 @@ shadow.scale.set(3.2, 0.62, 1);
 shadow.position.set(0, -2.02, -0.4);
 root.add(shadow);
 
-const particleCount = isMobile ? 72 : 180;
+const particleCount = isMobile ? 64 : 140;
 const positions = new Float32Array(particleCount * 3);
 const colors = new Float32Array(particleCount * 3);
 const palette = [
@@ -214,6 +214,7 @@ const syncLoop = () => {
   }
 };
 
+let lastFrameAt = 0;
 function frame() {
   if (!running) return;
   window.requestAnimationFrame(frame);
@@ -221,6 +222,10 @@ function frame() {
     running = false;
     return;
   }
+  // Decorative scene: 30 fps leaves the main thread room for input/paint.
+  const now = performance.now();
+  if (now - lastFrameAt < 32) return;
+  lastFrameAt = now;
   const t = clock.getElapsedTime();
   current.x += (target.x - current.x) * 0.045;
   current.y += (target.y - current.y) * 0.045;

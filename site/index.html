@@ -23,6 +23,14 @@
 </head>
 <body>
   <a class="skip-link" href="#main">跳到正文</a>
+  <div class="ambient-3d" aria-hidden="true">
+    <i class="ambient-key key-a"></i>
+    <i class="ambient-key key-b"></i>
+    <i class="ambient-key key-c"></i>
+    <i class="ambient-ring ring-a"></i>
+    <i class="ambient-ring ring-b"></i>
+  </div>
+  <div class="boot-3d" aria-hidden="true"><img src="assets/pet/opi-pet.png" width="44" height="44" alt=""></div>
   <div class="scroll-progress" aria-hidden="true"><span></span></div>
 
   <header class="site-header" id="top">
@@ -39,7 +47,7 @@
       <a href="#download">下载</a>
     </nav>
     <div class="header-actions">
-      <a class="header-link" href="https://opi.erik.xyz" target="_blank" rel="noopener">opi.erik.xyz<span aria-hidden="true"> ↗</span></a>
+      <a class="header-link" href="https://erik.xyz" target="_blank" rel="noopener">艾瑞可erik<span aria-hidden="true"> ↗</span></a>
       <a class="header-github" href="https://github.com/erikwang2013/opi" target="_blank" rel="noopener" aria-label="GitHub 仓库">GitHub</a>
     </div>
   </header>
@@ -61,7 +69,7 @@
             <li><b>MIT</b><span>开源</span></li>
             <li><b>1</b><span>份引擎</span></li>
           </ul>
-          <p class="hero-byline">由 <a href="https://erik.xyz" target="_blank" rel="noopener">erik.xyz</a> 打造 · 持续迭代中</p>
+          <p class="hero-byline">由 <a href="https://erik.xyz" target="_blank" rel="noopener">艾瑞可erik</a> 打造 · 持续迭代中</p>
         </div>
         <div class="hero-art" aria-hidden="true">
           <canvas id="pet-stage"></canvas>
@@ -82,7 +90,6 @@
           <p class="body-lg">小欧是 opi 的项目宠物，也是一枚<strong>键帽精灵</strong>。它长得就是键盘上的一颗键 —— 因为输入法本该如此，不必是别的东西。</p>
           <p class="body">身体是键帽，嘴是字母 <strong>O</strong>（Open），头顶是拼音声调 <strong>ˉ</strong>，侧壁刻着 <strong>opi</strong>，底部涟漪只在本机扩散。<br>这些不是装饰，是项目对「输入」这件事的态度。</p>
           <blockquote>始于不满，成于热爱。<cite>—— opi 项目缘起</cite></blockquote>
-          <a class="text-link" href="https://opi.erik.xyz" target="_blank" rel="noopener">访问项目主页 opi.erik.xyz <span aria-hidden="true">↗</span></a>
           <a class="text-link" href="assets/pet/opi-pet.svg" target="_blank" rel="noopener">看小欧的原始矢量稿 <span aria-hidden="true">↗</span></a>
         </div>
         <div class="about-art reveal">
@@ -263,7 +270,6 @@
           <h2 id="releases-title">每一次提交，<br><em>都留下可查的记录。</em></h2>
           <p class="body">版本号采用 <code>v主.次.修订</code> 格式，当前版本 <strong>v1.18.0</strong>。发布说明写在 tag 注释与 GitHub Release 里；最新版本在右侧顶部，历史版本收进了可滚动窗口。</p>
           <div class="release-actions">
-            <a class="btn btn-ghost" href="https://github.com/erikwang2013/opi/releases" target="_blank" rel="noopener">全部版本 <span aria-hidden="true">↗</span></a>
             <button class="btn btn-ghost memory-trigger" type="button" data-memory-open>回忆 <span aria-hidden="true">↺</span></button>
           </div>
         </div>
@@ -329,21 +335,21 @@
         <h3 class="download-group-title reveal">主推平台 <span>已验证 · 推荐下载</span></h3>
         <div class="download-grid">
           <a class="download-card is-primary reveal" href="download/opi-1.18.0-android-universal.apk" download data-os="android">
-            <span class="os-mark">An</span>
+            <span class="os-mark"><img src="assets/pet/forms/idle.png" width="46" height="46" alt="" loading="lazy" decoding="async"></span>
             <span class="os-name">Android</span>
             <span class="os-meta">原生 IME · .apk</span>
             <span class="os-note">Android 5.1+ · arm64 / armv7 / x86_64</span>
             <span class="os-cta">下载 APK <span aria-hidden="true">↓</span></span>
           </a>
           <a class="download-card is-primary reveal" href="download/opi-1.18.0-windows-x64-setup.exe" download data-os="windows">
-            <span class="os-mark">Wn</span>
+            <span class="os-mark"><img src="assets/pet/forms/waiting.png" width="46" height="46" alt="" loading="lazy" decoding="async"></span>
             <span class="os-name">Windows</span>
             <span class="os-meta">TSF 插件 · .exe x64</span>
             <span class="os-note">Windows 10 / 11；Win7 / 8 不支持</span>
             <span class="os-cta">下载安装包 <span aria-hidden="true">↓</span></span>
           </a>
           <div class="download-card is-primary reveal" data-os="linux">
-            <span class="os-mark">Lx</span>
+            <span class="os-mark"><img src="assets/pet/forms/cute.png" width="46" height="46" alt="" loading="lazy" decoding="async"></span>
             <span class="os-name">Linux</span>
             <span class="os-meta">fcitx5 插件 · .deb / .rpm</span>
             <span class="os-note">Debian / Ubuntu 用 .deb；Fedora / openSUSE 用 .rpm</span>
@@ -355,7 +361,7 @@
         <div class="download-grid is-minor">
           <a class="download-card reveal" href="download/opi-1.18.0-macos-universal.pkg" download data-os="macos">
             <span class="beta-badge">内测</span>
-            <span class="os-mark">Mc</span>
+            <span class="os-mark"><img src="assets/pet/forms/coquettish.png" width="46" height="46" alt="" loading="lazy" decoding="async"></span>
             <span class="os-name">macOS</span>
             <span class="os-meta">InputMethodKit · .pkg</span>
             <span class="os-note">内测版本，约 7 天使用周期 · unsigned，需自行签名</span>
@@ -363,7 +369,7 @@
           </a>
           <a class="download-card reveal" href="download/opi-1.18.0-ios-unsigned.ipa" download data-os="ios">
             <span class="beta-badge">内测</span>
-            <span class="os-mark">iS</span>
+            <span class="os-mark"><img src="assets/pet/forms/pleasing.png" width="46" height="46" alt="" loading="lazy" decoding="async"></span>
             <span class="os-name">iOS</span>
             <span class="os-meta">键盘扩展 · .ipa</span>
             <span class="os-note">内测版本，约 7 天使用周期 · unsigned IPA，用 Sideloadly / AltStore 重签</span>
@@ -371,7 +377,7 @@
           </a>
           <a class="download-card reveal" href="download/opi-1.18.0-harmonyos-unsigned.hap" download data-os="harmony">
             <span class="beta-badge">内测</span>
-            <span class="os-mark">Hm</span>
+            <span class="os-mark"><img src="assets/pet/forms/knocking.png" width="46" height="46" alt="" loading="lazy" decoding="async"></span>
             <span class="os-name">HarmonyOS</span>
             <span class="os-meta">ArkTS + N-API · .hap</span>
             <span class="os-note">内测版本，约 7 天使用周期 · unsigned HAP，需签名与真机验证</span>
@@ -390,11 +396,11 @@
           </div>
           <div class="donate-qrs">
             <figure class="donate-qr">
-              <a href="assets/donate/weixinpay.png" target="_blank" rel="noopener"><img src="assets/donate/weixinpay.png" width="386" height="423" loading="lazy" decoding="async" alt="微信支付收款二维码"></a>
+              <button type="button" class="qr-open" data-qr-src="assets/donate/weixinpay.png" data-qr-label="微信支付收款二维码"><img src="assets/donate/weixinpay.png" width="386" height="423" loading="lazy" decoding="async" alt="微信支付收款二维码"></button>
               <figcaption>微信</figcaption>
             </figure>
             <figure class="donate-qr">
-              <a href="assets/donate/alipay.png" target="_blank" rel="noopener"><img src="assets/donate/alipay.png" width="412" height="450" loading="lazy" decoding="async" alt="支付宝收款二维码"></a>
+              <button type="button" class="qr-open" data-qr-src="assets/donate/alipay.png" data-qr-label="支付宝收款二维码"><img src="assets/donate/alipay.png" width="412" height="450" loading="lazy" decoding="async" alt="支付宝收款二维码"></button>
               <figcaption>支付宝</figcaption>
             </figure>
           </div>
@@ -411,14 +417,14 @@
               <a href="#forms">十二形态</a>
               <a href="#releases">版本日志</a>
               <a href="https://github.com/erikwang2013/opi" target="_blank" rel="noopener">GitHub</a>
-              <a href="https://opi.erik.xyz" target="_blank" rel="noopener">opi.erik.xyz ↗</a>
-              <a href="https://erik.xyz" target="_blank" rel="noopener">erik.xyz ↗</a>
+              <a href="https://erik.xyz" target="_blank" rel="noopener">艾瑞可erik ↗</a>
             </nav>
           </div>
           <div class="footer-info" id="busuanzi"><script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><span id="busuanzi_container_site_pv">本站总访问量 <b id="busuanzi_value_site_pv">0</b> 次 👀</span><span class="dot">·</span><span id="busuanzi_container_site_uv">访客数 <b id="busuanzi_value_site_uv">0</b> 人次 🧑‍🚀</span></div>
           <div class="footer-bottom">
-            <span>© <span id="year">2026</span> erik.xyz</span>
+            <span>© <span id="year">2026</span> 艾瑞可erik</span>
             <span>MIT License</span>
+            <span><a href="https://beian.miit.gov.cn" target="_blank" rel="noopener">粤ICP备2020136226号-5</a></span>
             <span>项目宠物与表情资产见 <a href="https://github.com/erikwang2013/opi/blob/main/ASSETS-LICENSE.md" target="_blank" rel="noopener">ASSETS-LICENSE</a></span>
           </div>
         </footer>
@@ -448,6 +454,12 @@
         <p class="dialog-hint">在输入法里点击这个形态，会插入对应 GIF 贴纸；不支持图片时回退为「小欧·」文本标签。</p>
       </div>
     </div>
+  </dialog>
+
+  <dialog class="qr-dialog" id="qr-dialog" aria-labelledby="qr-title">
+    <button class="dialog-close qr-close" type="button" aria-label="关闭">×</button>
+    <img id="qr-image" width="520" height="570" alt="">
+    <p id="qr-title">收款二维码</p>
   </dialog>
 
   <div class="memory-overlay" id="memory-overlay" hidden>

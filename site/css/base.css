@@ -59,6 +59,85 @@ body::before {
     linear-gradient(180deg, #fbfaf6 0%, #f7f4ec 58%, #fbfaf6 100%);
 }
 
+/* 3D 环境层：纯 CSS 3D（合成器动画，不占主线程），所有分节共用。 */
+.ambient-3d {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  perspective: 1000px;
+  perspective-origin: 50% 42%;
+}
+.ambient-3d i {
+  position: absolute;
+  display: block;
+  border: 1px solid rgba(46, 139, 128, .18);
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+.ambient-key {
+  width: 132px;
+  height: 132px;
+  border-radius: 18px;
+  box-shadow: 16px 16px 0 -7px rgba(46, 139, 128, .05), 16px 16px 0 -6px rgba(46, 139, 128, .13);
+  animation: ambient-key-a 17s ease-in-out infinite;
+}
+.ambient-key.key-a { left: 5%; top: 20%; }
+.ambient-key.key-b { right: 7%; top: 30%; width: 96px; height: 96px; border-color: rgba(217, 85, 63, .16); box-shadow: 12px 12px 0 -5px rgba(217, 85, 63, .05), 12px 12px 0 -4px rgba(217, 85, 63, .12); animation: ambient-key-b 21s ease-in-out infinite; }
+.ambient-key.key-c { left: 16%; bottom: 12%; width: 74px; height: 74px; border-color: rgba(78, 151, 230, .18); box-shadow: 10px 10px 0 -4px rgba(78, 151, 230, .12); animation: ambient-key-a 25s ease-in-out infinite reverse; }
+.ambient-ring {
+  width: 520px;
+  height: 520px;
+  border-radius: 50%;
+  border-color: rgba(46, 139, 128, .1);
+  animation: ambient-ring-a 28s linear infinite;
+}
+.ambient-ring.ring-a { left: -160px; bottom: -220px; }
+.ambient-ring.ring-b { right: -220px; top: -180px; width: 420px; height: 420px; border-color: rgba(245, 166, 180, .14); animation: ambient-ring-b 34s linear infinite; }
+main { position: relative; z-index: 1; }
+@keyframes ambient-key-a {
+  0%, 100% { transform: translate3d(0, 0, 0) rotateX(58deg) rotateZ(-16deg); }
+  50% { transform: translate3d(20px, -26px, 46px) rotateX(63deg) rotateZ(-6deg); }
+}
+@keyframes ambient-key-b {
+  0%, 100% { transform: translate3d(0, 0, 0) rotateX(62deg) rotateZ(24deg); }
+  50% { transform: translate3d(-18px, 22px, 30px) rotateX(55deg) rotateZ(12deg); }
+}
+@keyframes ambient-ring-a {
+  from { transform: rotateX(72deg) rotateZ(0deg); }
+  to { transform: rotateX(72deg) rotateZ(360deg); }
+}
+@keyframes ambient-ring-b {
+  from { transform: rotateX(68deg) rotateZ(360deg); }
+  to { transform: rotateX(68deg) rotateZ(0deg); }
+}
+
+/* 首屏加载模块：一枚在 3D 中翻转的小欧，加载完即淡出。 */
+.boot-3d {
+  position: fixed;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  z-index: 80;
+  width: 44px;
+  height: 44px;
+  perspective: 480px;
+  pointer-events: none;
+  transition: opacity .35s var(--ease), visibility .35s;
+}
+.boot-3d img {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 10px 14px rgba(20, 32, 29, .18));
+  animation: boot-flip 1.15s linear infinite;
+}
+html.is-ready .boot-3d { opacity: 0; visibility: hidden; }
+html.is-ready .boot-3d img { animation: none; }
+@keyframes boot-flip {
+  from { transform: rotateY(0deg); }
+  to { transform: rotateY(360deg); }
+}
+
 ::selection { background: rgba(46, 139, 128, .24); color: var(--ink); }
 
 a { color: inherit; text-decoration: none; }

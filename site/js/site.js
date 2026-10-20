@@ -140,6 +140,41 @@
     }
   }
 
+  // Donation QR: enlarge in place instead of opening a new tab.
+  const qrDialog = $('#qr-dialog');
+  const qrImage = $('#qr-image');
+  const qrTitle = $('#qr-title');
+  let qrPreviousFocus = null;
+  const closeQr = () => {
+    if (!qrDialog || !qrDialog.hasAttribute('open')) return;
+    if (typeof qrDialog.close === 'function') qrDialog.close();
+    else qrDialog.removeAttribute('open');
+    qrPreviousFocus?.focus?.({ preventScroll: true });
+  };
+  if (qrDialog) {
+    $$('.qr-open').forEach((button) => {
+      button.addEventListener('click', () => {
+        const src = button.dataset.qrSrc;
+        if (!src || !qrImage) return;
+        qrPreviousFocus = button;
+        qrImage.src = src;
+        qrImage.alt = button.dataset.qrLabel || '收款二维码';
+        if (qrTitle) qrTitle.textContent = button.dataset.qrLabel || '收款二维码';
+        if (typeof qrDialog.showModal === 'function') qrDialog.showModal();
+        else qrDialog.setAttribute('open', '');
+        $('.qr-close', qrDialog)?.focus?.({ preventScroll: true });
+      });
+    });
+    $('.qr-close', qrDialog)?.addEventListener('click', closeQr);
+    qrDialog.addEventListener('click', (event) => {
+      if (event.target === qrDialog) closeQr();
+    });
+    qrDialog.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      closeQr();
+    });
+  }
+
   // Pet-form dialog. A non-modal dialog plus our own backdrop keeps opening well under 50 ms.
   const dialog = $('#form-dialog');
   const dialogBackdrop = $('#form-backdrop');
@@ -269,18 +304,25 @@
       return false;
     }
   };
+  const canUse3d = () => !reduceMotion && !navigator.connection?.saveData
+    && !window.matchMedia('(max-width: 720px)').matches
+    && (navigator.hardwareConcurrency || 8) >= 4
+    && (navigator.deviceMemory || 8) > 2
+    && hasHardwareWebGL();
   const startPet3d = () => {
-    if (reduceMotion || navigator.connection?.saveData) return;
     // Phones get the lightweight CSS pet; 3D stays on larger screens and always yields to interaction.
-    if (window.matchMedia('(max-width: 720px)').matches) return;
-    if ((navigator.hardwareConcurrency || 8) < 4 || (navigator.deviceMemory || 8) <= 2) return;
     const hero = $('#hero');
-    if (!hero) return;
+    if (!hero || !canUse3d()) return;
     const rect = hero.getBoundingClientRect();
     if (rect.bottom <= 0 || rect.top >= viewportH) return;
-    if (!hasHardwareWebGL()) return;
     import(new URL('pet3d.js', scriptBase).href).catch(() => { /* static pet stays */ });
   };
   if ('requestIdleCallback' in window) window.requestIdleCallback(startPet3d, { timeout: 1800 });
   else window.setTimeout(startPet3d, 900);
+
+  // The 3D keycap loader fades as soon as the page is usable; never blocks content.
+  const markReady = () => doc.classList.add('is-ready');
+  if (document.readyState === 'complete') markReady();
+  else window.addEventListener('load', markReady, { once: true });
+  window.setTimeout(markReady, 2500);
 })();

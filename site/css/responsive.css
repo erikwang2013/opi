@@ -51,6 +51,7 @@
 
 @media (max-width: 720px) {
   html { scroll-snap-type: y proximity; }
+  .ambient-3d { display: none; }
   .panel { min-height: 100svh; padding: 92px 18px 42px; padding-top: calc(92px + env(safe-area-inset-top)); justify-content: center; }
   .site-header { padding: 10px 14px; padding: max(10px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 10px max(14px, env(safe-area-inset-left)); gap: 8px; -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(251, 250, 246, .96); }
   .brand img { width: 31px; height: 31px; }

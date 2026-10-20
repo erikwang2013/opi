@@ -1,7 +1,8 @@
 # opi 静态站点
 
 项目介绍 / 功能迭代 / 版本日志 / 应用下载的静态单页。无前端框架，翻屏使用原生
-CSS scroll-snap；首屏的 three.js 场景只画小欧与粒子环，离屏暂停。
+CSS scroll-snap；首屏的 three.js 场景只画小欧与粒子环，离屏暂停；其余分节共用一层
+纯 CSS 3D 键帽/光环环境，首屏加载时显示 3D 小欧加载模块。
 
 ## 本地预览
 
@@ -21,7 +22,7 @@ site/
   css/base.css          设计 token、壳层、按钮、页脚
   css/sections.css      hero / 小欧 / 十二形态 / 能力 / 迭代 / 版本 / 下载
   css/responsive.css    1120 / 900 / 720 / 460 四档断点
-  js/site.js            导航高亮、进度条、reveal、形态弹窗
+  js/site.js            导航高亮、进度条、reveal、形态弹窗、打赏二维码弹框
   js/pet3d.js           three.js：宠物纹理 + 光环 + 粒子 + 指针视差
   vendor/               three.js 0.170.0（module 版，随站点分发）
   assets/pet/           小欧 PNG / SVG、十二形态 WebP+PNG（GIF 原图保留）
@@ -36,16 +37,19 @@ site/
   （约 311 KB）；离开后切回静帧。系统开启「减少动态效果」时始终保持 PNG，
   不支持动图 WebP 的浏览器自动回退到原 GIF。
 - three.js 延迟到首屏空闲后再加载，且只在桌面、硬件 WebGL 可用且未开启 Save-Data 时加载；
-  手机与软件渲染（SwiftShader/llvmpipe）使用轻量 CSS 宠物。DPR 上限为桌面 1.5 / 移动 1.25。
+  手机与软件渲染（SwiftShader/llvmpipe）使用轻量 CSS 宠物。DPR 上限 1.25，首屏 3D 以 30 fps 运行。
 - three.js 在 hero 离屏、页面隐藏或「时光机」打开时完全停止帧循环，关闭后恢复。
+- 全站 3D 环境层与加载模块都走 CSS 3D（`transform` + 合成器），不额外创建 WebGL
+  上下文，也不占主线程帧循环；手机隐藏环境层以降功耗。打赏二维码用原生 `showModal()`
+  原地放大，Esc / 点遮罩 / 关闭键都可退出。
 - 版本列表用 `content-visibility` 延后离屏布局，并在进入附近时才定位到 v1.0.0；
   初始加载不再为 76 条历史版本付布局成本。
 - 形态弹窗使用 `dialog.show()` + 自定义遮罩与焦点循环，避免 `showModal()` 的
   一次数百毫秒级样式计算；打开后焦点回到原形态卡。
-- 交互处理只做一次 rAF 批处理并缓存滚动尺寸；本地无头 Chrome（软件 WebGL 回退）实测：
-  正常 CPU 下回忆打开约 3–5ms、形态弹窗约 3–6ms、返回顶部低于 2ms；
-  4× CPU 降速下回忆打开约 12–16ms、形态弹窗约 7–16ms、返回顶部低于 4ms，
-  均低于 50ms；正常 CPU 的加载与时光轴自动滚动没有 >50ms 长任务。
+- 交互处理只做一次 rAF 批处理并缓存滚动尺寸；本机无头 Chrome（ANGLE/Intel 硬件
+  WebGL）实测：点击处理函数 <1.5ms；空闲机器上事件总耗时（含合成帧）16–48ms，
+  系统繁忙或 4× CPU 降速时合成帧可能到 56–96ms。加载阶段 three.js 首次编译有一次
+  性长任务，不阻塞后续交互；CSS 3D 环境层不产生长任务。
   移动端首屏传输约 119 KB（此前约 1.03 MB），进入形态区时才加载动图。
   这不是发布门禁，实际值受设备与浏览器影响，发布前用 Lighthouse / DevTools Performance 复测。
 
