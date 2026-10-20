@@ -57,7 +57,7 @@ impl TsfLogic {
     }
 
     /// 学习开关（值来自 `%LOCALAPPDATA%\opi\settings.ini` 的 `Learn`；本端在
-    /// `Activate` 时重读一次 —— 没有在线刷新通道，见 settings.rs 模块头）。
+    /// `Activate` 与控制面 `reload` 时重读，见 settings.rs 模块头）。
     /// 配对：`fcitx5-opi/src/candidate.rs` 的同名方法（两轨同构，改一处必须改另一处）。
     pub fn set_learner(&mut self, on: bool) {
         self.engine.set_learner(on);

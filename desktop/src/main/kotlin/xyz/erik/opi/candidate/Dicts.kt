@@ -21,9 +21,9 @@
 //! · **导入 = 复制**；重名**自动加后缀**（`foo.tsv` → `foo-2.tsv` → …），**绝不覆盖**
 //!   —— 覆盖会静默毁掉用户可能改过的词库，加后缀可逆、可解释。选中的源文件本来就
 //!   在词库目录里（同一个文件）⇒ 不复制、原样认账（否则会多出一份自我拷贝）。
-//! · **停用名单空 = 全部启用**（键 `DisabledDicts`）。提示文案如实：名单由输入法在
-//!   **下次启动**时读（Windows 侧生效时机 = 下次激活）——本页只负责把名单写进配置，
-//!   在线生效不在本批。
+//! · **停用名单空 = 全部启用**（键 `DisabledDicts`）。本页保存后会请求输入法重读
+//!   （[reloadImeSettings]：Windows = 控制面 reload，Linux = 重载 addon）；输入法
+//!   没在跑时退回下次启动/激活。
 //!
 //! ⚠️ 名字含逗号/首尾空白的词库在 `DisabledDicts` 里**表达不了**（逗号是分隔符；空白
 //! 会被解析 trim 掉，写进去也永远不命中）—— 停用时**拒绝翻转 + 状态行明说**
@@ -370,11 +370,15 @@ internal fun DictsPage(
             val result = withContext(Dispatchers.IO) {
                 runCatching { importDict(picked, dir) }
             }
+            // 导入只加了文件、没改配置：单独请 IME 重扫词库目录（不等下一次保存）。
+            val live = result.getOrNull() != null &&
+                withContext(Dispatchers.IO) { reloadImeSettings() }
             status(
                 result.fold(
                     onSuccess = { dst ->
-                        if (isSameFile(picked, dst)) "该文件已在词库目录里：$dst"
+                        val what = if (isSameFile(picked, dst)) "该文件已在词库目录里：$dst"
                         else "已导入词库：$dst"
+                        what + if (live) "（已生效）" else "（输入法未运行，下次启动生效）"
                     },
                     onFailure = { "导入失败：${it.message ?: it}" },
                 ),
@@ -408,7 +412,7 @@ internal fun DictsPage(
             }
     }
     Text(
-        "停用名单由输入法在下次启动时读；Windows 上生效时机 = 下次激活。配置键名 DisabledDicts。",
+        "保存/导入后输入法立即重读（Windows = 控制面 reload；Linux = 重载 addon）；没在跑时下次启动生效。配置键名 DisabledDicts。",
         fontSize = 12.sp, color = Muted,
     )
 
@@ -427,6 +431,8 @@ internal fun DictsPage(
                         confirmDelete = null
                         scope.launch {
                             val ok = withContext(Dispatchers.IO) { deleteDict(dir, name) }
+                            // 删除同样只动目录：让 IME 立刻卸下这层（没人再引用它）。
+                            if (ok) withContext(Dispatchers.IO) { reloadImeSettings() }
                             status(if (ok) "已删除词库「$name」" else "词库目录里已经没有「$name」了")
                             refresh()
                         }

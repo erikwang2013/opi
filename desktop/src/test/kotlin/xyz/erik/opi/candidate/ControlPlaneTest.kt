@@ -88,6 +88,7 @@ class ControlPlaneTest {
         assertEquals("""{"action":"punct","op":"action"}""", controlActionRequest("punct"))
         assertEquals("""{"op":"search","query":"smile"}""", controlSearchRequest("smile"))
         assertEquals("""{"op":"commit","text":"😄"}""", controlCommitRequest("😄"))
+        assertEquals("""{"op":"reload"}""", controlReloadRequest())
         // 符号里有 `"`、`\`、换行：不转义会让 broker 整行解析失败（点了没反应）。
         assertEquals(
             """{"op":"commit","text":"\"\\\n"}""",
@@ -99,6 +100,7 @@ class ControlPlaneTest {
             controlActionRequest("mode"),
             controlSearchRequest("smile"),
             controlCommitRequest("\"\\\n"),
+            controlReloadRequest(),
         )) {
             assertTrue("broker 该认自己 client 的请求：$line", controlDispatch(line) is ControlDispatch.Forward)
         }
@@ -125,6 +127,8 @@ class ControlPlaneTest {
     @Test
     fun `state and every allowed action are forwarded`() {
         assertEquals("\"op\":\"state\"", forward("""{"op":"state"}""").opFields)
+        // 设置窗保存后的在线重读：无参数、固定 op。
+        assertEquals("\"op\":\"reload\"", forward("""{"op":"reload"}""").opFields)
         for (action in listOf("lang", "trad", "punct", "fullwidth", "englishpro", "mode")) {
             assertEquals(
                 "动作名/字段名抄错就会让 TSF 报未知动作：$action",

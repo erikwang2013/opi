@@ -425,10 +425,11 @@ impl CandidateAction for SharedAction {
     /// 由下一个按键事件落地——与点选同一条 W1 延迟语义。动作改了引擎态才刷新窗口。
     fn on_ctl(&self, request: &CtlRequest) -> Option<String> {
         let settings = crate::ctl::default_settings_path();
+        let dicts = crate::ctl::default_dicts_dir();
         let (reply, changed) = {
             let mut logic = self.engine.lock_logic()?;
-            let reply = crate::ctl::execute(&mut logic, &request.op, settings.as_deref());
-            let changed = matches!(&reply, Ok(CtlReply::Action { .. }));
+            let reply = crate::ctl::execute(&mut logic, &request.op, settings.as_deref(), &dicts);
+            let changed = matches!(&reply, Ok(CtlReply::Action { .. } | CtlReply::Reload));
             (reply, changed)
         };
         if let Ok(

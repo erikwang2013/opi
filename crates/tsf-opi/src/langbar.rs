@@ -29,8 +29,8 @@ use windows::Win32::Foundation::{E_INVALIDARG, E_POINTER, POINT, RECT};
 use windows::Win32::UI::TextServices::{
     ITfLangBarItem, ITfLangBarItem_Impl, ITfLangBarItemButton, ITfLangBarItemButton_Impl,
     ITfLangBarItemMgr, ITfLangBarItemSink, ITfMenu, ITfSource, ITfSource_Impl, ITfThreadMgr,
-    TF_LANGBARITEMINFO, TF_LBI_DESC_MAXLEN, TF_LBI_STYLE_BTN_BUTTON, TF_LBI_STYLE_SHOWNINTRAY,
-    TfLBIClick,
+    TF_LANGBARITEMINFO, TF_LBI_CLK_LEFT, TF_LBI_DESC_MAXLEN, TF_LBI_STYLE_BTN_BUTTON,
+    TF_LBI_STYLE_SHOWNINTRAY, TfLBIClick,
 };
 use windows::Win32::UI::WindowsAndMessaging::{CreateIconFromResourceEx, HICON, LR_DEFAULTCOLOR};
 use windows::core::{BOOL, GUID, IUnknown, Interface, Ref, Result, implement};
@@ -152,10 +152,15 @@ impl ITfLangBarItem_Impl for LangBarItem_Impl {
 // ---------- ITfLangBarItemButton ----------
 
 impl ITfLangBarItemButton_Impl for LangBarItem_Impl {
-    /// 点击目前**无动作** —— 不假装有功能（没有"设置页"可开；候选窗是独立进程，
-    /// 从这里拉起要新增管道协议，不在本轮）。语言栏会把它当普通按钮画。
-    fn OnClick(&self, _click: TfLBIClick, _pt: &POINT, _prcarea: *const RECT) -> Result<()> {
-        outlet(|| Ok(()))
+    /// 左键 = 打开设置窗（与 Linux 状态栏「设」同一条动作，也同 `ITfFnConfigure::Show`）。
+    /// 失败不弹 UI（设置 exe 找不到是常驻环境问题，弹框只会更烦）；右键留给语言栏菜单。
+    fn OnClick(&self, click: TfLBIClick, _pt: &POINT, _prcarea: *const RECT) -> Result<()> {
+        outlet(|| {
+            if click == TF_LBI_CLK_LEFT {
+                let _ = crate::configure::launch_settings();
+            }
+            Ok(())
+        })
     }
 
     fn InitMenu(&self, _pmenu: Ref<ITfMenu>) -> Result<()> {

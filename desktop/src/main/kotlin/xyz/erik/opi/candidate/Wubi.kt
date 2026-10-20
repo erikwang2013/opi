@@ -265,8 +265,8 @@ internal fun WubiPage(s: OpSettings, apply: (OpSettings) -> Unit) {
     Spacer(Modifier.height(10.dp))
     // 「编码提示」不摆：读侧出口（wubiNextKeys）四端都还没接线（见文件头）。
     Text(
-        "设置写入配置文件，输入法在下次启动（Windows = 下次激活）时读；" +
-            "Linux 轨（fcitx5）改完即时生效。码表随安装包分发（data/generated/ 的两张）。",
+        "设置保存后输入法立即重读（Windows = 控制面 reload；Linux = 重载 addon）；" +
+            "输入法没在跑时下次启动生效。码表随安装包分发（data/generated/ 的两张）。",
         fontSize = 12.sp, color = Muted,
     )
 }

@@ -307,9 +307,9 @@ impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
             // client id 是 RequestEditSession 的必需参数：不存下来，插入就没有
             // 合法的 tid 可用（这就是"两处 on_commit 丢弃文本"之外的第二道墙）。
             self.state.set_client_id(tid);
-            // 「属性设置」重读一次：本端没有在线刷新通道，**下一次激活就是生效时机**
-            // （设置窗保存后切走再切回来）。读不到 = 保持/回默认，见 settings.rs；
-            // 导入词库（`DisabledDicts` 名单 + 词库目录）在同一次里重装，见 extra_dicts.rs。
+            // 「属性设置」重读一次。在线重载走控制面 `CtlOp::Reload`（设置窗保存时），
+            // 这里是候选进程不在时的兜底（下一次激活生效）。读不到 = 保持/回默认，
+            // 见 settings.rs；导入词库在同一次里重装，见 extra_dicts.rs。
             if let Some(mut logic) = self.state.lock_logic() {
                 let lap = std::env::var_os("LOCALAPPDATA");
                 logic.apply_settings(

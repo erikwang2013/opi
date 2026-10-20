@@ -14,6 +14,7 @@
 //! {"action":"punct","id":8,"op":"action","type":"ctl"}
 //! {"id":9,"op":"search","query":"smile","type":"ctl"}
 //! {"id":10,"op":"commit","text":"😄","type":"ctl"}
+//! {"id":11,"op":"reload","type":"ctl"}                       // 设置窗保存后让 TSF 重读
 //! ```
 //! 应答（TSF → broker → 状态栏/设置，原样转发；键序 = serde_json 字典序）：
 //! ```text
@@ -22,6 +23,7 @@
 //! {"id":8,"ok":true,"token":"wubi","type":"ctl_result"}        // action=mode 的应答
 //! {"id":9,"ok":true,"texts":["😄",...],"type":"ctl_result"}
 //! {"id":10,"ok":true,"type":"ctl_result"}                      // 已入上屏队列
+//! {"id":11,"ok":true,"type":"ctl_result"}                      // 已重读设置/词库
 //! {"error":"未知动作：x","id":8,"ok":false,"type":"ctl_result"}
 //! ```
 //! `state` 的格式与 Linux `opi-ctl state` **逐字一致**（含行尾 `mode=`/`enpro=`），
@@ -55,6 +57,8 @@ pub enum CtlOp {
     Action(String),
     Search(String),
     Commit(String),
+    /// 重读 settings.ini + 词库目录（设置窗保存/导入词库后调用）。
+    Reload,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -73,6 +77,8 @@ pub enum CtlReply {
     },
     Texts(Vec<String>),
     Commit(String),
+    /// 设置/词库已重读（无载荷）。
+    Reload,
 }
 
 /// 解析一行请求。任何不合契约的行 → None（缺 id/op、类型错、超长）。
@@ -105,6 +111,7 @@ pub fn parse(line: &str) -> Option<CtlRequest> {
             }
             CtlOp::Commit(text.to_string())
         }
+        "reload" => CtlOp::Reload,
         _ => return None,
     };
     Some(CtlRequest { id, op })
@@ -153,17 +160,26 @@ fn on_off(v: bool) -> &'static str {
 
 /// 执行一个请求（**读线程**上、引擎锁内调用；不做 COM）。
 ///
-/// `settings_path` 只给 `punct` 用：先落盘、后改引擎（写失败不动引擎，镜像
-/// fcitx5 的「保存失败回滚」）。其余动作是会话内状态，不落配置。
+/// `settings_path` 给 `punct`（先落盘、后改引擎）与 `reload` 用；
+/// `dicts_dir` 只给 `reload` 用（与 `Activate` 同一条 `apply_settings`）。
+/// 其余动作是会话内状态，不落配置。
 pub fn execute(
     logic: &mut TsfLogic,
     op: &CtlOp,
     settings_path: Option<&Path>,
+    dicts_dir: &Path,
 ) -> Result<CtlReply, String> {
     match op {
         CtlOp::State => Ok(CtlReply::State(state_line(logic))),
         CtlOp::Search(q) => Ok(CtlReply::Texts(logic.search_symbol_texts(q))),
         CtlOp::Commit(text) => Ok(CtlReply::Commit(text.clone())),
+        // 与 Activate 完全同一条套用路径（设置 + 五笔表 + 导入词库）。
+        // 代价：若此刻正在组字，apply_settings 的 set_scheme 会清缓冲 —— 与激活时一致。
+        CtlOp::Reload => {
+            let path = settings_path.ok_or("设置文件路径不可用（LOCALAPPDATA 未设置）")?;
+            logic.apply_settings(crate::settings::load_file(path), dicts_dir);
+            Ok(CtlReply::Reload)
+        }
         CtlOp::Action(action) => match action.as_str() {
             // 中/英：与 Linux `lang` 同一语义（Shift 轻按）——只在**进英文**时提交
             // 待定拼音原文（W1），离开英文只切模式。⇧ 残留在进英文后清掉。
@@ -261,7 +277,7 @@ pub fn reply_json(id: u64, reply: Result<CtlReply, String>) -> String {
             }
         }
         Ok(CtlReply::Texts(texts)) => out["texts"] = json!(texts),
-        Ok(CtlReply::Commit(_)) => {}
+        Ok(CtlReply::Commit(_) | CtlReply::Reload) => {}
         Err(why) => out["error"] = Value::String(why),
     }
     out.to_string()
@@ -270,6 +286,11 @@ pub fn reply_json(id: u64, reply: Result<CtlReply, String>) -> String {
 /// 默认 settings.ini（与 `settings::load` 同一条路径推导）。
 pub fn default_settings_path() -> Option<PathBuf> {
     std::env::var_os("LOCALAPPDATA").map(|v| crate::settings::path_in(Some(v.as_os_str())))
+}
+
+/// 默认导入词库目录（与 `dict_path::dicts_dir` 同一条路径推导）。
+pub fn default_dicts_dir() -> PathBuf {
+    crate::dict_path::dicts_dir(std::env::var_os("LOCALAPPDATA").as_deref())
 }
 
 #[cfg(test)]

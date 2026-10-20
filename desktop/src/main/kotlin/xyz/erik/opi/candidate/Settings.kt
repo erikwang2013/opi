@@ -11,8 +11,8 @@
 //!   addon 的 `reloadConfig()` → 引擎。⚠️ `fcitx5-remote -r` **不干这事**（实测，见
 //!   [notifyFcitxReload] 的订正段）。
 //! · Windows：`%LOCALAPPDATA%\opi\settings.ini`（与 `crates/tsf-opi/src/dict_path.rs`
-//!   的候选目录同一处）。⚠️ **生效时机 = 输入法下一次激活**：TSF 侧没有在线刷新通道
-//!   （upgrade path 写在 `crates/tsf-opi/src/settings.rs` 的模块头）。
+//!   的候选目录同一处）。写完经控制面 `reload`（候选窗进程 broker）让 TSF 立即重读；
+//!   候选进程没起时退回下一次激活（读侧语义见 `crates/tsf-opi/src/settings.rs`）。
 //!
 //! ⚠️ **键名三处逐字对应**（改一处 = 老配置文件全部失效）：
 //!   本文件 ⇄ `crates/fcitx5-opi/cpp/opi_config.h`（Linux 读侧）⇄
@@ -135,7 +135,7 @@ data class OpSettings(
         // （与 StatusBar* 同一条：未知键忽略），写全只为文件格式不因平台分叉。
         appendLine("CandidateFont=$candidateFont")
         // 词库页的停用名单（2026-10-14）：逗号分隔的词库名，空 = 全部启用。
-        // 与其它键同一份文件；名单由 IME 侧在**下次启动**时读（Windows = 下次激活）。
+        // 与其它键同一份文件；保存后由 IME 侧重读（Windows = 控制面 reload）。
         appendLine("DisabledDicts=$disabledDicts")
         // 五笔六键（2026-10-14）：整段 append（值口径与 mergeIni 的 managed() 同一份）。
         append(wubi.toIniLines())
@@ -423,7 +423,7 @@ fun loadSettings(): OpSettings = try {
  * ⚠️ 失败**不抛**、返回 false 并让 UI 如实显示：fcitx5 没在跑（或没装）时
  * 文件照样该写下去（下次启动生效），这不该是个错误弹窗。
  *
- * Windows：只落盘。返回 false（「本次没生效」），UI 据此提示「重启输入法后生效」。
+ * Windows：落盘后经控制面 `reload` 让 TSF 重读；没连上返回 false，UI 提示下次激活生效。
  */
 fun saveSettings(s: OpSettings): Boolean {
     val p = settingsPath()
@@ -435,11 +435,16 @@ fun saveSettings(s: OpSettings): Boolean {
         ""
     }
     Files.writeString(p, if (existing.isBlank()) s.toIni() else mergeIni(existing, s))
-    if (isWindows()) {
-        return false
-    }
-    return notifyFcitxReload()
+    return reloadImeSettings()
 }
+
+/**
+ * 让正在运行的输入法重读配置与词库（设置保存 / 词库导入删除后调用）。
+ * false = 没连上（候选进程没起；文件已写好，下次激活仍生效）。
+ * Linux = ReloadAddonConfig；Windows = 控制面 reload（ControlPlane.kt）。
+ */
+internal fun reloadImeSettings(): Boolean =
+    if (isWindows()) controlReload() else notifyFcitxReload()
 
 /**
  * 保存结果的**用户可见**措辞 —— 与 [saveSettings] 的三个面一一对应。
@@ -447,6 +452,7 @@ fun saveSettings(s: OpSettings): Boolean {
  * 正是最容易被写错的一句。星号（`**…**`）一概不加：两处都是纯 Text，会原样显示。
  */
 internal fun saveStatusMessage(live: Boolean): String = when {
+    live && isWindows() -> "已保存；已通知输入法重载（立即生效）"
     live -> "已保存并通知 fcitx5 重载（立即生效）"
     isWindows() -> "已保存；Windows 侧在输入法下一次激活时生效"
     else -> "已保存到文件；但没能通知 fcitx5 重载（它没在跑？重启输入法后生效）"

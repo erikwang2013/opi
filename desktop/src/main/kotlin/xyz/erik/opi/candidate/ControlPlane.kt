@@ -12,7 +12,8 @@
 //! 状态栏/设置 --(本文件 client)--> \\.\pipe\opi-control --(PipeServer.requestCtl)-->
 //! \\.\pipe\opi --> TSF（crates/tsf-opi/src/ctl.rs 执行）--> 原路返回
 //! 请求：{"op":"state"} / {"action":"punct","op":"action"} /
-//!       {"op":"search","query":"smile"} / {"op":"commit","text":"😄"}
+//!       {"op":"search","query":"smile"} / {"op":"commit","text":"😄"} /
+//!       {"op":"reload"}（设置窗保存后让 TSF 重读 settings.ini + 词库）
 //! 应答：TSF 的 ctl_result 行，原样（{"id":1,"ok":true,"state":"..."}）
 //!       broker 自己的失败：{"error":"…","ok":false,"type":"ctl_result"}
 //! ```
@@ -100,6 +101,7 @@ internal fun controlSearchRequest(query: String): String =
     """{"op":"search","query":${jsonString(query)}}"""
 internal fun controlCommitRequest(text: String): String =
     """{"op":"commit","text":${jsonString(text)}}"""
+internal fun controlReloadRequest(): String = """{"op":"reload"}"""
 
 /** broker 的失败应答（与 TSF 的 ctl_result 同形状，调用方只有一条解析路）。 */
 internal fun controlErrorLabel(why: String): String =
@@ -147,6 +149,8 @@ internal fun controlDispatch(line: String): ControlDispatch {
             }
             ControlDispatch.Forward("\"op\":\"commit\",\"text\":${jsonString(text)}", ACTION_TIMEOUT_MS)
         }
+        // 无参数：路径由 TSF 按 LOCALAPPDATA 现推（请求方给不了别的路径）。
+        "reload" -> ControlDispatch.Forward("\"op\":\"reload\"", ACTION_TIMEOUT_MS)
         else -> ControlDispatch.Reject(controlErrorLabel("未知控制操作：$op"))
     }
 }
@@ -239,6 +243,13 @@ internal fun controlMode(): String {
     val reply = parseControlReply(controlCall(controlActionRequest("mode")))
     return reply?.takeIf { it.ok }?.token?.takeIf { it in MODE_TOKENS } ?: ""
 }
+
+/**
+ * 让 TSF 重读 settings.ini + 词库目录。true = 已重读；false = 没连上/被拒
+ * （文件已由调用方写好，下次激活仍会生效 —— 所以这里是布尔而不是错误文案）。
+ */
+internal fun controlReload(): Boolean =
+    parseControlReply(controlCall(controlReloadRequest()))?.ok == true
 
 // ---------- broker（候选窗进程内的服务端） ----------
 

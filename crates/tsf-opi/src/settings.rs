@@ -14,11 +14,9 @@
 //! 胶水里，本机（Linux）门禁就一条都覆盖不到，而它的失败面是**静默**的
 //! （开关不生效，用户以为改了）。
 //!
-//! 【生效时机，如实记】本端**没有在线刷新通道**：设置窗落盘后，值在下一次
-//! `ITfTextInputProcessor::Activate`（= 切到别的应用再切回来）时读进来生效。
-//! 升级路径：设置窗与候选窗是同一条命名管道的两端，加一条 `{"type":"reload"}`
-//! 消息即可即时生效 —— 那要同时改线协议两侧（`candidate_io.rs` 与
-//! `desktop/.../Protocol.kt`），本轮未做。
+//! 【生效时机】设置窗落盘后经候选管道的控制面 `{"op":"reload"}`（`ctl.rs` 的
+//! `CtlOp::Reload`）让 TSF 立即重读本文件与词库目录；候选进程没起（TSF 不在）时
+//! 退回下一次 `ITfTextInputProcessor::Activate`，两条路都走 [`parse`] 这一份语义。
 
 use std::ffi::OsStr;
 use std::path::PathBuf;
@@ -181,7 +179,13 @@ pub fn path_in(local_appdata: Option<&OsStr>) -> PathBuf {
 
 /// 读设置。**读不到 = 全默认**（不是错误：没配过就是没配过）。
 pub fn load(local_appdata: Option<&OsStr>) -> Settings {
-    match std::fs::read_to_string(path_in(local_appdata)) {
+    load_file(&path_in(local_appdata))
+}
+
+/// 从**任意路径**读（控制面 reload 用：路径由调用方给，测试可换临时文件）。
+/// 读不到同样 = 全默认（与 [`load`] 一字不差）。
+pub fn load_file(path: &std::path::Path) -> Settings {
+    match std::fs::read_to_string(path) {
         Ok(text) => parse(&text),
         Err(_) => Settings::default(),
     }

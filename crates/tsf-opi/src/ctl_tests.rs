@@ -25,7 +25,7 @@ fn english() -> TsfLogic {
 }
 
 fn act(s: &mut TsfLogic, name: &str) -> Result<CtlReply, String> {
-    execute(s, &CtlOp::Action(name.into()), None)
+    execute(s, &CtlOp::Action(name.into()), None, Path::new(""))
 }
 
 fn token(reply: &CtlReply) -> Option<&str> {
@@ -45,7 +45,7 @@ fn commit(reply: &CtlReply) -> Option<&str> {
 // ---- 协议解析 ----
 
 #[test]
-fn parses_the_four_ops() {
+fn parses_every_op() {
     let state_req = parse(r#"{"type":"ctl","id":7,"op":"state"}"#).unwrap();
     assert_eq!(state_req.id, 7);
     assert_eq!(state_req.op, CtlOp::State);
@@ -66,6 +66,10 @@ fn parses_the_four_ops() {
             .unwrap()
             .op,
         CtlOp::Commit("😄".into())
+    );
+    assert_eq!(
+        parse(r#"{"type":"ctl","id":11,"op":"reload"}"#).unwrap().op,
+        CtlOp::Reload
     );
 }
 
@@ -249,7 +253,13 @@ fn punct_persists_only_that_key_and_then_toggles_engine() {
     std::fs::write(&path, "Learn=False\nChinesePunct=true\nCorrection=0\n").unwrap();
     let mut s = state();
 
-    execute(&mut s, &CtlOp::Action("punct".into()), Some(&path)).unwrap();
+    execute(
+        &mut s,
+        &CtlOp::Action("punct".into()),
+        Some(&path),
+        Path::new(""),
+    )
+    .unwrap();
     assert!(!s.chinese_punct());
     let text = std::fs::read_to_string(&path).unwrap();
     assert!(text.contains("ChinesePunct=false\n"), "{text:?}");
@@ -259,7 +269,13 @@ fn punct_persists_only_that_key_and_then_toggles_engine() {
     );
     assert!(text.contains("Correction=0\n"), "{text:?}");
 
-    execute(&mut s, &CtlOp::Action("punct".into()), Some(&path)).unwrap();
+    execute(
+        &mut s,
+        &CtlOp::Action("punct".into()),
+        Some(&path),
+        Path::new(""),
+    )
+    .unwrap();
     assert!(s.chinese_punct());
     assert!(
         std::fs::read_to_string(&path)
@@ -275,7 +291,13 @@ fn punct_write_failure_leaves_engine_untouched() {
     let dir = temp_settings("fail");
     let dir = dir.parent().unwrap().to_path_buf();
     let mut s = state();
-    let err = execute(&mut s, &CtlOp::Action("punct".into()), Some(&dir)).unwrap_err();
+    let err = execute(
+        &mut s,
+        &CtlOp::Action("punct".into()),
+        Some(&dir),
+        Path::new(""),
+    )
+    .unwrap_err();
     assert!(err.contains("保存失败"), "{err}");
     assert!(s.chinese_punct(), "写失败必须回滚到原值");
     let _ = std::fs::remove_dir_all(&dir);
@@ -284,9 +306,45 @@ fn punct_write_failure_leaves_engine_untouched() {
 #[test]
 fn punct_without_settings_path_is_rejected() {
     let mut s = state();
-    let err = execute(&mut s, &CtlOp::Action("punct".into()), None).unwrap_err();
+    let err = execute(&mut s, &CtlOp::Action("punct".into()), None, Path::new("")).unwrap_err();
     assert!(err.contains("LOCALAPPDATA"), "{err}");
     assert!(s.chinese_punct());
+}
+
+// ---- 动作：reload（与 Activate 同一条 apply_settings） ----
+
+#[test]
+fn reload_rereads_settings_and_imported_dicts() {
+    let path = temp_settings("reload");
+    let dir = path.parent().unwrap().to_path_buf();
+    std::fs::write(&path, "ChinesePunct=False\nDisabledDicts=\n").unwrap();
+    std::fs::write(dir.join("smoke.tsv"), "测词\tce\t999999999\n").unwrap();
+    let mut s = state();
+    // 前置：重读前引擎里没有导入词（否则下面的断言没有分辨力）。
+    s.input_key('c' as u32, 0);
+    s.input_key('e' as u32, 0);
+    assert!(!s.candidates().iter().any(|w| w == "测词"));
+    s.clear();
+
+    assert_eq!(
+        execute(&mut s, &CtlOp::Reload, Some(&path), &dir).unwrap(),
+        CtlReply::Reload
+    );
+    assert!(!s.chinese_punct(), "settings.ini 必须被重读");
+    s.input_key('c' as u32, 0);
+    s.input_key('e' as u32, 0);
+    assert!(
+        s.candidates().iter().any(|w| w == "测词"),
+        "词库目录必须被重扫"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn reload_without_settings_path_is_rejected() {
+    let mut s = state();
+    let err = execute(&mut s, &CtlOp::Reload, None, Path::new("")).unwrap_err();
+    assert!(err.contains("LOCALAPPDATA"), "{err}");
 }
 
 // ---- 动作：search / commit / 未知 ----
@@ -294,12 +352,12 @@ fn punct_without_settings_path_is_rejected() {
 #[test]
 fn search_returns_matching_symbol_texts() {
     let mut s = state();
-    match execute(&mut s, &CtlOp::Search("smile".into()), None).unwrap() {
+    match execute(&mut s, &CtlOp::Search("smile".into()), None, Path::new("")).unwrap() {
         CtlReply::Texts(texts) => assert!(texts.iter().any(|t| t == "😄"), "{texts:?}"),
         other => panic!("{other:?}"),
     }
     assert_eq!(
-        execute(&mut s, &CtlOp::Search("qqqqq".into()), None).unwrap(),
+        execute(&mut s, &CtlOp::Search("qqqqq".into()), None, Path::new("")).unwrap(),
         CtlReply::Texts(vec![])
     );
 }
@@ -308,7 +366,7 @@ fn search_returns_matching_symbol_texts() {
 fn commit_is_echoed_for_the_caller_to_insert() {
     let mut s = state();
     assert_eq!(
-        execute(&mut s, &CtlOp::Commit("你好".into()), None).unwrap(),
+        execute(&mut s, &CtlOp::Commit("你好".into()), None, Path::new("")).unwrap(),
         CtlReply::Commit("你好".into())
     );
 }

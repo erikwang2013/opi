@@ -10,7 +10,8 @@
 //! 交互模型不变：**改一下就落盘 + 通知 IME**（不像桌面软件那样要再点「确定」）——
 //! 参照对象正是主流输入法那类输入的属性设置：开关拨完即生效，底部只如实显示结果。
 //! Linux 走 `ReloadAddonConfig`（即那条实测有效的路，`fcitx5-remote -r` **不是**，
-//! 见 Settings.kt 的 notifyFcitxReload）；Windows 只落盘、下次激活生效。
+//! 见 Settings.kt 的 notifyFcitxReload）；Windows 走控制面 `reload` 让 TSF 立即重读，
+//! 候选进程没起时退回下次激活。
 //!
 //! 本窗在**两个宿主**里都跑：`--settings` 模式（单独进程）与状态栏的「设置」按钮
 //! （状态栏进程内开一个窗，见 StatusBar.kt）—— 所以别在这里假设自己是整个应用。
