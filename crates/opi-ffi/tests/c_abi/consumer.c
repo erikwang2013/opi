@@ -144,6 +144,20 @@ int main(int argc, char **argv) {
     }
     opi_ffi_free_string(cands);
 
+    /* ---------- 9 键左列：读数 / 钉读音（2026-10-21 C ABI） ---------- */
+    printf("[4b] opi_candidate_readings / opi_pin_reading\n");
+    OpiString readings = opi_candidate_readings();
+    dump("  opi_candidate_readings()", readings);
+    CHECK(readings.ptr != NULL && readings.len >= 2 && readings.ptr[0] == '[',
+          "读数应是 JSON 数组（全键方案下可为 []）");
+    opi_ffi_free_string(readings);
+    const uint16_t pin[] = {'w', 'o'};
+    opi_pin_reading(pin, 2);  /* 钉住 wo：候选收窄到读音恰等 */
+    opi_pin_reading(NULL, 0); /* 空串 = 解除，不上屏、不崩 */
+    buf = opi_buffer();
+    CHECK(buf.len == 2, "钉/解钉读音不得改动拼音缓冲");
+    opi_ffi_free_string(buf);
+
     OpiString cpage = opi_candidates_page();
     dump("  opi_candidates_page()", cpage);
     CHECK(cpage.ptr != NULL && cpage.ptr[0] == '[', "当前页候选也应是 JSON 数组");
