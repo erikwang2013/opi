@@ -59,6 +59,10 @@ pub struct TsfLogic {
     pub(crate) buffer_snapshot: String,
     /// ⇧ 状态机（镜像 Android EngineController.shiftState）。
     pub(crate) shift_state: ShiftState,
+    /// 英文专业模式（2026-10-19，镜像 fcitx5 轨 `CandidateState::english_pro`）：
+    /// false = en26 字母直出、不查词库；true = 前缀联想。**会话内状态、不落配置**
+    /// （与 Linux 轨同一语义：每次插件/引擎启动都回 false）。
+    pub(crate) english_pro: bool,
     /// 上一次按下的分流结论：(键值, 是否放行)。抬起按同一结论回复，使「按下放行 →
     /// 抬起也放行」成立（见 input_key 的可打印分支与退格/回车分支：那两个按下分支
     /// 会把缓冲改空，抬起再判「当前」缓冲就不对称了）。
@@ -91,6 +95,7 @@ impl TsfLogic {
             page: 0,
             buffer_snapshot: String::new(),
             shift_state: ShiftState::Off,
+            english_pro: false,
             last_printable: None,
         };
         s.refresh_snapshot();
@@ -135,6 +140,22 @@ impl TsfLogic {
     /// 全角开关的读侧（直传点判据；语义与 `Engine::fullwidth` 同）。
     pub fn fullwidth(&self) -> bool {
         self.engine.fullwidth()
+    }
+
+    /// 清空 ⇧ 残留（状态栏 `lang`/`mode` 动作进英文前用）：与用户按 ⇧ 的「单次大写」
+    /// 不是一回事，切换动作不该把大写带进新档位。
+    pub fn reset_shift(&mut self) {
+        self.shift_state = ShiftState::Off;
+        self.set_shift(false);
+    }
+
+    /// 符号/表情搜索（设置页与状态栏符号页共用）：命中条目文本，保序。
+    pub fn search_symbol_texts(&self, keyword: &str) -> Vec<String> {
+        self.engine
+            .search_symbols(keyword)
+            .into_iter()
+            .map(|e| e.text)
+            .collect()
     }
 
     /// 全角化待上屏文本（宽档；见 `Engine::fullwidthize` 头注 —— 宿主直传点的唯一入口）。

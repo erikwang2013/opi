@@ -10,6 +10,8 @@ package xyz.erik.opi.candidate
 internal sealed interface JVal {
     data class JStr(val v: String) : JVal
     data class JNum(val v: Long) : JVal
+    /** 布尔（2026-10-20 加：控制面应答带 `"ok":true`）。此前协议里没有布尔，解析器只认字面 true/false。 */
+    data class JBool(val v: Boolean) : JVal
     data class JArr(val v: List<JVal>) : JVal
     data class JObj(val v: Map<String, JVal>) : JVal
 }
@@ -50,6 +52,13 @@ private class JParse(private val s: String) {
         while (i < s.length && s[i].isWhitespace()) i++
     }
 
+    /** 精确吃下一个字面量（`true`/`false`）；不是它 → null，不动游标。 */
+    private fun literal(text: String): Boolean? {
+        if (!s.startsWith(text, i)) return null
+        i += text.length
+        return true
+    }
+
 
     private fun parseValue(): JVal? {
         if (i >= s.length) return null
@@ -57,6 +66,8 @@ private class JParse(private val s: String) {
             '"' -> JVal.JStr(parseString() ?: return null)
             '{' -> nestedContainer { parseObject() }
             '[' -> nestedContainer { parseArray() }
+            't' -> literal("true")?.let { JVal.JBool(true) }
+            'f' -> literal("false")?.let { JVal.JBool(false) }
             else -> parseNumber()
         }
     }

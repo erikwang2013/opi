@@ -115,7 +115,7 @@ fun main(args: Array<String>) = application {
             exitProcess(0)
         }
         // 符号页/表情页的上屏：共用 desktopSymbolCommit（Actions.kt 的单点：Linux =
-        // `opi-ctl insert`、Windows = 如实失败）。设置窗开的那两个窗走同一条。
+        // `opi-ctl insert`、Windows = 控制面 `commit`）。设置窗开的那两个窗走同一条。
         StatusBarApp(symbolCommit = ::desktopSymbolCommit)
         return@application
     }
@@ -134,6 +134,8 @@ fun main(args: Array<String>) = application {
 
     val model = remember { CandidateModel() }
     val server = remember { PipeServer(model).also { it.start() } }
+    // 状态栏/设置进程的控制面 broker（ControlPlane.kt）：本进程是唯一连着 TSF 的一端。
+    remember { ControlServer(server).also { it.start() } }
     val windowState = rememberWindowState(width = 320.dp, height = 168.dp)
 
     // 登录自启后，进程可能整场都没有候选要显示。**首次 show 之前不建窗**：

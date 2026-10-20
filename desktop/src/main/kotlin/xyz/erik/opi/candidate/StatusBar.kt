@@ -10,14 +10,12 @@
 //!  1. 设置、可见性靠**轮询配置文件**同步（见 [StatusBarApp] 的 1s 轮询）；
 //!  2. 符号页的上屏**按平台两条路**（见 [StatusBarApp] 的 `symbolCommit` 参数与
 //!     SymbolsPage.kt 头注释）：Linux = `opi-ctl insert`（D-Bus → addon 提交，与进程
-//!     拓扑无关，2026-10-12 落地）；Windows = 命名管道的 `commit_text`，而管道被
-//!     **候选窗进程**持有（单实例）⇒ 本条进程里的符号页**只能如实失败**。lead 裁决
-//!     （2026-10-10）：不开第二条 UI→TSF 通路 —— 现状如实保留，TSF 接线落地时再定
-//!     UI 进程拓扑（候选窗/状态栏/符号页同进程是首选）。
+//!     拓扑无关）；Windows = 控制面 `\\.\pipe\opi-control` → 候选窗进程 broker →
+//!     TSF（ControlPlane.kt）。状态读与按钮动作同一条控制面。
 //!
-//! ⚠️ Windows：同构尽力，但**本轮没有拉起触发器**（lead 裁决「代码就绪、无拉起触发
-//! 器」）——`--statusbar` 在 Windows 上能跑，只是没有东西会去起它。写到这儿而不是
-//! 埋在代码里。
+//! ⚠️ Windows：代码已全部接线，但**没有拉起触发器** —— 状态栏进程的自启/卸载由
+//! 安装脚本负责（本轮未改 scripts/windows/opi.iss）。`--statusbar` 在 Windows 上
+//! 能跑，只是没有东西会去起它。写到这儿而不是埋在代码里。
 //!
 //! 条上按钮（从左到右 = [StatusBarButton] 的枚举序）：小欧 / 中英 / 。，标点(双态) /
 //! 简繁 / **英文专业** / **模式** / 月相全半角 / 软键盘 / Ω符号大全 / 设置。前八枚
@@ -165,8 +163,8 @@ private fun barPosition(widthDp: Int): WindowPosition {
  *
  * [symbolCommit] 由入口注入（形状与 [SymbolWindow] 的 `onCommit` 同款：null = 送上去了，
  * 非 null = **给用户看的**失败原因，原样透传）。两条通路见 Main.kt 的 symbolCommit：
- * Linux = `opi-ctl insert`（失败短语来自 runExternal，逐字有用）；Windows = 如实失败
- * —— **只有候选窗进程能上屏**（管道单实例，见文件头第 2 条）。
+ * Linux = `opi-ctl insert`（失败短语来自 runExternal，逐字有用）；Windows = 控制面
+ * `commit` → 候选窗进程 broker → TSF（ControlPlane.kt）。
  */
 @Composable
 fun StatusBarApp(symbolCommit: (String) -> String?) {
@@ -265,15 +263,15 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
             StatusBarButton.LOGO -> cycleSkin()
             StatusBarButton.SETTINGS -> settingsOpen = true
             StatusBarButton.SYMBOLS -> report(openSymbols())
-            // 模式：循环一次（「拼音→en26→（未来五笔）」，引擎侧与 token 派生见
-            // Actions.cycleMode）。返回**新档位 token**，当场换字（不等 1s 轮询：
-            // 模式不在 state 行里，轮询也读不回来）。
+            // 模式：循环一次（拼 → 五 → en26 → 拼，引擎侧与 token 派生见
+            // Actions.cycleMode）。返回**新档位 token**，当场换字（不等 1s 轮询；
+            // 轮询随后会由 state 的 mode= 位确认，见文件顶部 mode 变量）。
             // **空串 = 没切成**（通道不通/超时/应答异形）⇒ 保留原档 + 报一句 ——
             // Actions.cycleMode 的契约就是「token 或空串」，认不得的应答不许当档位
             // 画到条上（把空串写进 mode 的话面会退成默认「拼」，等于谎报切成了拼音）。
             StatusBarButton.MODE -> {
                 val next = cycleMode()
-                if (next.isEmpty()) report("模式切换失败：opi-ctl 无应答或应答不认得") else mode = next
+                if (next.isEmpty()) report("模式切换失败：输入法无应答或应答不认得") else mode = next
             }
             // 英文专业键（2026-10-19 用户裁决）：只控制英文是否查单词库，且只在英文
             // 输入法下有效。现场重读 state（不拿 1s 轮询的旧值）—— 刚切中/英就点它
@@ -281,10 +279,10 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
             // 而不是把 err:5「未知动作」原样弹给用户。
             StatusBarButton.ENPRO -> {
                 val why = enproBlockReason(readImeState())
-                if (why != null) report(why)
-                else report(statusActionCommand(b)?.let { runExternal(it) })
+                if (why != null) report(why) else report(runStatusAction(b))
             }
-            else -> report(statusActionCommand(b)?.let { runExternal(it) })
+            // Windows 走控制面（runStatusAction 内的平台分派），Linux 仍是 opi-ctl。
+            else -> report(runStatusAction(b))
         }
     }
 

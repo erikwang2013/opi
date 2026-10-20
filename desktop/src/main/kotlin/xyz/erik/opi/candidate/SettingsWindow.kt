@@ -16,8 +16,8 @@
 //! （状态栏进程内开一个窗，见 StatusBar.kt）—— 所以别在这里假设自己是整个应用。
 //!
 //! 本窗还会开**符号页/表情页**（「符号与表情」页那两个按钮）：那是同一个 SymbolWindow
-//! （见 SymbolsPage.kt），上屏走 desktopSymbolCommit —— **进程拓扑与状态栏那边一样**：
-//! Linux 靠 opi-ctl，Windows 只能如实失败（管道在候选窗进程手里）。
+//! （见 SymbolsPage.kt），上屏走 desktopSymbolCommit —— 与状态栏那边同一条：
+//! Linux 靠 opi-ctl，Windows 走控制面 → 候选窗进程 broker → TSF（ControlPlane.kt）。
 
 package xyz.erik.opi.candidate
 

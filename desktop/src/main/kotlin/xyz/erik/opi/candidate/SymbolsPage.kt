@@ -7,12 +7,10 @@
 //! （那边是键区内嵌面板，这里是独立窗）。
 //!
 //! 上屏通路**两条**，由入口注入的 `onCommit` 决定（见 Main.kt 的 symbolCommit）：
-//! · Windows = 命名管道的 `commit_text`（协议条目见 Main.kt 头注释；TSF 侧在插入点
-//!   插入，不动候选/composition）；管道单实例（PipeServer 的 MAX_INSTANCES=1）且有
-//!   **候选窗进程**持有 ⇒ ⚠️ 状态栏进程里的符号页**上不了屏**，会把失败如实显示。
-//!   lead 裁决（2026-10-10）：本轮**不开第二条 UI→TSF 通路**（TSF 插入面还没接线，
-//!   通了也到不了文档）；**TSF 接线落地时再定 UI 进程拓扑**（候选窗/状态栏/符号页同
-//!   进程是首选）。Windows 侧本轮没有拉起触发器（lead 裁决「代码就绪、无拉起触发器」）。
+//! · Windows = 控制面 `\\.\pipe\opi-control` → 候选窗进程 broker → TSF 的 `commit`
+//!   （ControlPlane.kt；TSF 在文档插入点插入，不动候选/composition）。状态栏/设置
+//!   进程都走这条，不再受「候选管道在候选窗进程手里」的限制；候选进程没起/TSF 没
+//!   连接时把失败如实显示。本轮的拉起触发器仍归安装脚本（未改）。
 //! · Linux = `opi-ctl insert <文本>`（D-Bus → addon 的 `ic->commitString`）—— 只要
 //!   fcitx5 里有**焦点输入框**就能上屏，与进程拓扑无关。
 //!

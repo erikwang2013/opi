@@ -24,6 +24,9 @@ import com.sun.jna.platform.win32.WinBase
 import com.sun.jna.platform.win32.WinNT
 import com.sun.jna.ptr.IntByReference
 import java.io.ByteArrayOutputStream
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
 
 // ---------- 管道常量 ----------
@@ -72,6 +75,11 @@ class PipeServer(private val model: CandidateModel) {
     /** 保护 [lastClientPipe]：句柄取用 + WriteFile 与「置 null + Disconnect + Close」互斥。 */
     private val connLock = Any()
 
+    /** 控制面请求的 id 源 + 等待表（TSF 按 id 回应，读线程在这里唤醒调用方）。 */
+    private val ctlId = AtomicLong(1)
+    private val ctlPending = HashMap<Long, CompletableFuture<String?>>()
+    private val ctlLock = Any()
+
     fun start() {
         thread(isDaemon = true, name = "opi-pipe") { serveLoop() }
     }
@@ -105,6 +113,7 @@ class PipeServer(private val model: CandidateModel) {
                 // 关闭入口，漏掉这一步就是一扇关不掉的窗，只能杀进程。
                 // 放 finally = 异常路径同样执行「隐藏 + 关句柄 + 重建」，不留残窗口。
                 model.visible = false
+                failPendingCtl() // TSF 断开：挂在等应答的控制请求立刻失败，别干等到超时
                 val h = pipe
                 if (h != null) {
                     // 取句柄/置空/Disconnect/Close 全在同一把锁下：CloseHandle 之后
@@ -233,6 +242,11 @@ class PipeServer(private val model: CandidateModel) {
                     (obj["x"] as? JVal.JNum)?.let { model.x = it.v.toInt() }
                     (obj["y"] as? JVal.JNum)?.let { model.y = it.v.toInt() }
                 }
+                // TSF 对控制请求的应答：按 id 唤醒 requestCtl 的调用方（ControlPlane.kt）。
+                "ctl_result" -> {
+                    val id = (obj["id"] as? JVal.JNum)?.v ?: return
+                    synchronized(ctlLock) { ctlPending.remove(id) }?.complete(line)
+                }
             }
         } catch (e: Throwable) {
             // 防御性兜底：单行解析/处理异常只丢弃该行，绝不杀死管道服务器线程。
@@ -253,6 +267,38 @@ class PipeServer(private val model: CandidateModel) {
      * 返回 false = 没送出去（TSF 未连接）；调用方（符号页）负责出可见反馈。
      */
     fun sendCommitText(text: String) = send(commitTextLine(text))
+
+    /**
+     * 控制请求：补 id/type 发到 TSF，等同一 id 的 ctl_result（[handleLine] 唤醒）。
+     * `opFields` 是已校验的 op 字段串（见 ControlPlane.ControlServer.handle）。
+     * 返回 TSF 的原始应答行；未连接/超时 → null（调用方转成可见失败）。
+     */
+    fun requestCtl(opFields: String, timeoutMs: Long): String? {
+        val id = ctlId.getAndIncrement()
+        val future = CompletableFuture<String?>()
+        synchronized(ctlLock) { ctlPending[id] = future }
+        if (!send("""{"id":$id,$opFields,"type":"ctl"}""")) {
+            synchronized(ctlLock) { ctlPending.remove(id) }
+            return null
+        }
+        return try {
+            future.get(timeoutMs, TimeUnit.MILLISECONDS)
+        } catch (_: Exception) {
+            null
+        } finally {
+            synchronized(ctlLock) { ctlPending.remove(id) }
+        }
+    }
+
+    /** 连接断开/重建时让所有等待者立刻拿到 null（而不是各自的超时）。 */
+    private fun failPendingCtl() {
+        val waiting = synchronized(ctlLock) {
+            val copy = ctlPending.values.toList()
+            ctlPending.clear()
+            copy
+        }
+        for (f in waiting) f.complete(null)
+    }
 
     /**
      * partial-write 循环（镜像 Rust 侧 candidate_io.rs）：写满或失败为止；失败返回 false。

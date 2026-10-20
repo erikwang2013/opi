@@ -36,6 +36,7 @@ fn state_with_candidates() -> TsfLogic {
         page: 0,
         buffer_snapshot: String::new(),
         shift_state: ShiftState::Off,
+        english_pro: true,
         last_printable: None,
     };
     s.refresh_snapshot();

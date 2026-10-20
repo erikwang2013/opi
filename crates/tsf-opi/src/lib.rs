@@ -13,6 +13,11 @@
 pub mod logic;
 mod logic_settings;
 
+/// 状态栏/设置 → TSF 的**控制面**语义（平台中立，`candidate_io.rs` 只在 Windows 调它）。
+/// 搬出来的理由同 `vk.rs`：协议解析/状态映射/动作分派错了是静默的（按钮无反应或假状态），
+/// 而真正的平台胶水只剩管道读写。
+pub mod ctl;
+
 /// DLL 服务器资料（CLSID/GUID · 注册表键路径 · 模块级对象计数）。
 /// 与 `vk.rs` 同样是**平台中立**的：`windows_core::GUID` 是无条件依赖，
 /// 主机可构造、可格式化、可单测 —— 而这些值错了的后果全是静默的（见 `dll.rs`）。

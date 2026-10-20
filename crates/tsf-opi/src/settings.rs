@@ -187,6 +187,43 @@ pub fn load(local_appdata: Option<&OsStr>) -> Settings {
     }
 }
 
+/// 只改 `ChinesePunct` 一个键（状态栏标点动作的落盘）。**保留其余行原样** ——
+/// 设置窗可能刚写过别的开关，这里不能整份重写成 Rust 侧的字段子集。
+///
+/// 顺序是「先写文件、后改引擎」：写失败 ⇒ 调用方不改引擎，等价于 fcitx5 的
+/// 「保存失败回滚内存」。tmp 名带 pid（固定名并发下会互相覆盖，见项目备忘）。
+pub fn set_chinese_punct(path: &std::path::Path, on: bool) -> std::io::Result<()> {
+    let text = std::fs::read_to_string(path).unwrap_or_default();
+    let mut out = String::with_capacity(text.len() + 24);
+    let mut replaced = false;
+    for line in text.lines() {
+        let key = line.split('#').next().unwrap_or("").trim();
+        let key = key.split('=').next().unwrap_or("").trim();
+        if key == "ChinesePunct" {
+            if !replaced {
+                out.push_str(&format!("ChinesePunct={on}\n"));
+                replaced = true;
+            }
+            continue; // 重复键一并收掉（保留第一次出现的位置）
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    if !replaced {
+        out.push_str(&format!("ChinesePunct={on}\n"));
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let tmp = path.with_extension(format!("tmp{}", std::process::id()));
+    std::fs::write(&tmp, out)?;
+    if let Err(e) = std::fs::rename(&tmp, path) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
+    Ok(())
+}
+
 // 单测独立成文件（`#[path]` 引入）以保持各文件 <500 行：settings_tests.rs
 #[cfg(test)]
 #[path = "settings_tests.rs"]

@@ -64,8 +64,8 @@ data class StatusBarSettings(
     val trad: Boolean = true,
     val punct: Boolean = true,
     val lang: Boolean = true,
-    // 英文专业键（2026-10-19 用户裁决「设置增加是否隐藏控制」）：默认常驻，
-    // 与其他 opi-ctl 动作一样只在 Linux 上可用（见 statusButtonWired）。
+    // 英文专业键（2026-10-19 用户裁决「设置增加是否隐藏控制」）：默认常驻；
+    // 两平台都可用（Windows 走控制面，见 statusButtonWired）。
     val enpro: Boolean = true,
     val logo: Boolean = true,
     val fullwidth: Boolean = true,
@@ -101,7 +101,7 @@ internal val STATUS_BAR_SCALE_CHOICES = listOf(75, 90, 100, 110, 125, 150)
  * **2026-10-14 增 MODE**（用户裁决「状态栏在简繁按钮后增加模式切换按钮」）：
  * 插在 TRAD 与 FULLWIDTH 之间 ——**枚举序 = 显示序**，所以这一枚的位置就写在这个
  * 枚举里，没有第二处（StatusBarTest 的 `button order is the display order` 按 label
- * 逐位钉住）。它与其余按钮的两点不同：没有常驻开关（恒在 Linux 条上，见
+ * 逐位钉住）。它与其余按钮的两点不同：没有常驻开关（恒在条上，见
  * [visibleStatusButtons]）、面由**档位 token** 驱动而不是 [ImeState]（见 [modeFace]）。
  *
  * **2026-10-19 移 ENPRO**（用户裁决「enpro 键移到简繁键后面」）：从 LANG/PUNCT 之间
@@ -129,7 +129,7 @@ enum class StatusBarButton(val label: String, val hint: String) {
     // [modeFace]/[modeCorner]），摆法见 BarGlyphs.kt 的 modeSlots；token 取值域由
     // opi-ctl 侧钉死（pinyin/en26/wubi）。en26 面同样套白底键帽（BarGlyphs 的
     // StatusBarButtonFace），其余档位保持原样。
-    MODE("模式", "拼音 ⇄ 英文26键循环一次（五笔待引擎侧落地）；失败保持原档并报一句"),
+    MODE("模式", "拼音 → 五笔 → 英文26键循环一次；失败保持原档并报一句"),
     FULLWIDTH("全半角", "全角 ⇄ 半角（调 opi-ctl）"),
     VK("软键盘", "虚拟键盘窗：按键注入系统（会照常流经输入法）"),
     SYMBOLS("符号大全", "符号页入口"),
@@ -175,42 +175,30 @@ fun StatusBarSettings.with(b: StatusBarButton, on: Boolean): StatusBarSettings =
 }
 
 /**
- * 该按钮在**本平台**有没有动作、以及**设置窗该不该给它一行开关**（SettingsPages.kt
- * 拿它当过滤器，两处共用一份判定，各判一次必然漂移 —— 见那里的注释）。
+ * 该按钮有没有动作、以及**设置窗该不该给它一行开关**（SettingsPages.kt 拿它当过滤器）。
  *
- * Windows 上 `opi-ctl` 不存在（trad/punct/fullwidth/lang/englishpro 这**五个**动作是
- * Linux 侧的；symbols 自 2026-10-12 起两端都开符号页窗、不是命令）—— 没有动作的按钮不上条、
- * 也不在设置窗出开关（「宁可少一页，不做点不动的开关」，见 SettingsWindow.kt 的既有原则）。
+ * 2026-10-20 起**两个平台动作面相同**：Windows 的 trad/punct/fullwidth/lang/
+ * englishpro/mode 走本机控制面（ControlPlane.kt → 候选窗进程 broker → TSF），
+ * 不再有「Windows 上没有 opi-ctl ⇒ 按钮不上条」的缺口。`windows` 参数保留只为
+ * 调用点形状稳定；真正的平台差异已经只剩动作的**实现**（`runStatusAction` 内分派）。
  *
- * ⚠️ MODE 只该管住**一头**（2026-10-14，别照前几枚的形状「修正」它）：它**没有常驻
- * 开关**（没有 `StatusBarMode=` ini 键），所以设置窗不出它那行 —— 出了就是拨了没反应的
- * 开关（拨掉后 1s 轮询把缺键读回默认 = 自己弹回来）。这里返回 false 说的正是这件事。
- * 条上有没有它**不归这里管**：[visibleStatusButtons] 单独判这一枚（按它自己的动作面，
- * 不是按这个开关面）。等 `StatusBarMode=` 键落地（Settings.kt 的读写表 + 本文件的
- * resident/with），把这一支删掉 —— 那时 MODE 归 resident 管，[visibleStatusButtons]
- * 的 MODE 支要**一并删**（两处都是「没有开关」这一个前提的下游，别只删一处）。
+ * ⚠️ MODE 仍返回 false，但理由换了：它**没有常驻开关**（没有 `StatusBarMode=` ini
+ * 键），所以设置窗不出它那行 —— 出了就是拨了没反应的开关（拨掉后 1s 轮询把缺键读回
+ * 默认 = 自己弹回来）。条上有没有它**不归这里管**：[visibleStatusButtons] 单独判。
  */
-internal fun statusButtonWired(b: StatusBarButton, windows: Boolean): Boolean = when {
-    b == StatusBarButton.MODE -> false
-    !windows -> true
-    else -> b == StatusBarButton.VK || b == StatusBarButton.SYMBOLS ||
-        b == StatusBarButton.LOGO || b == StatusBarButton.SETTINGS
-}
+internal fun statusButtonWired(b: StatusBarButton, @Suppress("UNUSED_PARAMETER") windows: Boolean): Boolean =
+    b != StatusBarButton.MODE
 
 /**
- * 纯函数：状态栏该显示哪些按钮（**master 隐藏优先**；未常驻不显示；Windows 过滤
- * 无动作项）。状态栏窗与设置窗共用这一份判定，两处各自算必然漂移。
+ * 纯函数：状态栏该显示哪些按钮（**master 隐藏优先**；未常驻不显示）。
+ * 状态栏窗与设置窗共用这一份判定，两处各自算必然漂移。
  *
- * MODE 单列一支（见 [statusButtonWired] 的 MODE 段）：它没有常驻开关 ⇒ 不走 resident，
- * 恒在 Linux 的条上；而它的动作（`opi-ctl mode`）只有 Linux 侧有 ⇒ Windows 照老规矩
- * 不上条（「没有动作的按钮不上条」，与 statusButtonWired 里那四枚同一条理由）。
+ * 2026-10-20 起 Windows 与 Linux 同一条：动作面已由控制面补齐（见
+ * [statusButtonWired]），不再按平台过滤。MODE 没有常驻开关 ⇒ 恒在条上。
  */
-fun visibleStatusButtons(sb: StatusBarSettings, windows: Boolean): List<StatusBarButton> {
+fun visibleStatusButtons(sb: StatusBarSettings, @Suppress("UNUSED_PARAMETER") windows: Boolean): List<StatusBarButton> {
     if (sb.hidden) return emptyList()
-    return StatusBarButton.entries.filter {
-        if (it == StatusBarButton.MODE) !windows
-        else sb.resident(it) && statusButtonWired(it, windows)
-    }
+    return StatusBarButton.entries.filter { it == StatusBarButton.MODE || sb.resident(it) && statusButtonWired(it, windows) }
 }
 
 // ---------- 模式按钮的档位（2026-10-14 用户裁决「简繁后加模式切换按钮」）----------

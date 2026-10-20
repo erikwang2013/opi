@@ -6,6 +6,8 @@ use engine_core::dictionary::InMemoryDictionary;
 
 /// 20 个 "qwx" 词条 + 引擎：确定性的 3 页候选（键避开符号/emoji 关键字）。
 fn state() -> TsfLogic {
+    // 本文件的英文路由用例按「专业模式」写（前缀联想）；普通模式的直出另见 ctl_tests。
+    // 默认值本身由 `english_pro: false` 的构造器钉住。
     let mut d = InMemoryDictionary::new();
     for i in 0..20 {
         d.insert("qwx", &format!("词{i:02}"), (5000 - i) as u32);
@@ -16,6 +18,7 @@ fn state() -> TsfLogic {
         page: 0,
         buffer_snapshot: String::new(),
         shift_state: ShiftState::Off,
+        english_pro: true,
         last_printable: None,
     };
     s.refresh_snapshot();

@@ -32,10 +32,37 @@ package xyz.erik.opi.candidate
 import java.util.concurrent.TimeUnit
 
 /**
+ * 按钮 → 控制面动作名（平台中立的部分）。Windows 走 [runStatusAction] 的
+ * `\\.\pipe\opi-control`（ControlPlane.kt）；Linux 把它翻成 `opi-ctl <动作>`。
+ * null = 这个按钮没有控制面动作（开窗/切键盘/换肤等由 StatusBar.dispatch 自己处理）。
+ */
+internal fun statusActionOp(b: StatusBarButton): String? = when (b) {
+    StatusBarButton.TRAD -> "trad"
+    StatusBarButton.PUNCT -> "punct"
+    StatusBarButton.FULLWIDTH -> "fullwidth"
+    StatusBarButton.LANG -> "lang"
+    StatusBarButton.ENPRO -> "englishpro"
+    // MODE 走 [cycleMode]（要读新 token），不在这张「动作名」表里。
+    StatusBarButton.MODE, StatusBarButton.SYMBOLS,
+    StatusBarButton.VK, StatusBarButton.LOGO, StatusBarButton.SETTINGS -> null
+}
+
+/**
+ * 跑一个状态栏动作（两个平台的**唯一**分派点）。返回 null = 成功；非 null = 给用户看的原因。
+ * Windows：控制面（TSF 动作）；Linux：`opi-ctl <动作>`（既有契约）。
+ */
+fun runStatusAction(b: StatusBarButton, timeoutMs: Long = 3000): String? {
+    val op = statusActionOp(b) ?: return null
+    if (isWindows()) return controlAction(op, timeoutMs)
+    val cmd = statusActionCommand(b) ?: return null
+    return runExternal(cmd, timeoutMs)
+}
+
+/**
  * 纯函数：按钮 → 要跑的命令；null = 本按钮不跑命令（另有动作：开窗/开关键盘/打开设置）。
  *
- * Windows 上没有 `opi-ctl` 也没有 fcitx5（那是 Linux 的输入法框架），所以调用方
- * 只在 Linux 上走这条路 —— 见 [statusButtonWired] 与 StatusBar.kt 的分派。
+ * Windows 上没有 `opi-ctl` 也没有 fcitx5（那是 Linux 的输入法框架），所以这条命令表
+ * 只在 Linux 上走 —— 分派见 [runStatusAction]（Windows 先转控制面动作名）。
  */
 fun statusActionCommand(b: StatusBarButton): List<String>? = when (b) {
     // SYMBOLS 2026-10-12 起**不再出命令**：用户裁决「点击后要是个大的页面，可以翻页
@@ -106,14 +133,15 @@ fun runExternal(cmd: List<String>, timeoutMs: Long = 3000): String? {
  *
  * · Linux：`opi-ctl insert <文本>`（D-Bus → addon 的 `ic->commitString`）—— 只要
  *   fcitx5 里有焦点输入框就能上屏，与进程拓扑无关；失败短语来自 [runExternal]，逐字有用。
- * · Windows：只能如实失败 —— 命名管道被**候选窗进程**持有（单实例）。lead 裁决
- *   （2026-10-10）：本轮不开第二条 UI→TSF 通路（TSF 插入面未接线）。见 SymbolsPage.kt 头注。
+ * · Windows：本机控制面 `\\.\pipe\opi-control` → 候选窗进程 broker → TSF
+ *   （ControlPlane.kt）。TSF 把文本排进上屏队列，由下一个按键事件落进文档（插入
+ *   延迟的既有语义，见 crates/tsf-opi/src/state.rs 的线程模型）。
  *
  * ⚠️ 两个宿主（状态栏、设置窗）**必须走这一条**：各写一份平台分支必然漂（此前
  * StatusBarApp 的调用方把 false 翻成写死的 Windows 解释，Linux 上的真实原因被顶掉了）。
  */
 fun desktopSymbolCommit(text: String): String? =
-    if (isWindows()) "上屏失败：没连上输入法（符号页要由候选窗进程上屏）"
+    if (isWindows()) controlCommit(text)
     else runExternal(listOf("opi-ctl", "insert", text))
 
 // ---------- 符号/表情搜索（2026-10-13） ----------
@@ -158,14 +186,13 @@ internal fun searchResult(code: Int, firstLine: String?): SymbolSearch {
  * 「搜索框空着」这种事报成错误。
  *
  * · Linux：`opi-ctl search <关键词>`（D-Bus `Search(string)` → 引擎 `search_symbols`）。
- * · Windows：只能如实失败，理由同 [desktopSymbolCommit] —— 引擎在候选窗进程里，
- *   本轮没接线（不是「暂不支持」的客气话，是那条通路真的不存在）。
+ * · Windows：控制面 search（候选窗进程 broker → TSF 的引擎）。
  *
  * 超时 3s：与状态栏动作同档。搜索是**打一个字发一次**（防抖在调用方），挂住不能等。
  */
 fun desktopSymbolSearch(query: String, timeoutMs: Long = 3000): SymbolSearch {
     if (query.isBlank()) return SymbolSearch.Hits(emptyList())
-    if (isWindows()) return SymbolSearch.Failed("Windows 上还没接搜索通道（引擎在候选窗进程里）")
+    if (isWindows()) return controlSearch(query)
     return when (val r = runCapture(listOf("opi-ctl", "search", query), timeoutMs)) {
         is RunResult.Exit -> searchResult(r.code, r.firstLine)
         RunResult.Timeout -> SymbolSearch.Failed("「opi-ctl search」超时（无响应 ${timeoutMs / 1000}s）")
@@ -178,10 +205,9 @@ fun desktopSymbolSearch(query: String, timeoutMs: Long = 3000): SymbolSearch {
 /**
  * `opi-ctl mode` 能回的模式 token —— 与 `crates/opi-tools/src/bin/opi-ctl.rs` 的
  * `check_mode_shape`、C++ 侧 `opi_ctl_mode.h` 的派生表**同一张枚举**（三处同改）。
- * `wubi` 引擎现在不会发（五笔未落地）：先收下是**前向兼容** —— 引擎侧加档时桌面
- * 不必跟着发版（同 CLI 侧那条放行）。
+ * 三档都可达（循环 = 拼音(全拼) → 五笔 → 英文26键 → 拼音）。
  */
-private val MODE_TOKENS = setOf("pinyin", "en26", "wubi")
+internal val MODE_TOKENS = setOf("pinyin", "en26", "wubi")
 
 /**
  * 一次 `opi-ctl mode` 的应答 → 新模式 token（纯函数）。**空串 = 失败/认不得**：
@@ -198,13 +224,12 @@ internal fun cycleModeToken(code: Int, firstLine: String?): String {
 }
 
 /**
- * 点一下模式按钮：`opi-ctl mode` 循环 **拼音(全拼) → 英文26键**（未来五笔）。
- * 返回**新模式 token**（`pinyin` / `en26`，未来 `wubi`）；**空串 = 没切成**
+ * 点一下模式按钮：循环 **拼音(全拼) → 五笔 → 英文26键 → 拼音**。
+ * 返回**新模式 token**（`pinyin` / `wubi` / `en26`）；**空串 = 没切成**
  * （通道不通/超时/应答异形）—— 此时显示保持原样，别把旧值当新档画。
  *
  * · Linux：`opi-ctl mode`（D-Bus Trigger → addon 的 `opiCtlCycleMode`，作用于当前 IC）。
- * · Windows：没有 opi-ctl，回空串（同 [desktopSymbolCommit] 的「如实失败」纪律 ——
- *   只是这条路的失败面是空串，没有给用户看的原因，见文件头的契约）。
+ * · Windows：控制面 `action=mode`（TSF 的 `ctl.rs` 同一条循环：拼→五→en26→拼）。
  * 超时 3s：与状态栏动作同档。
  *
  * ⚠️ 与 [StatusBarButton.LANG] 的 `opi-ctl lang` **不是一条路**（2026-10-14 裁决）：
@@ -212,7 +237,7 @@ internal fun cycleModeToken(code: Int, firstLine: String?): String {
  * 别把中英按钮改到这条路上（StatusBarTest 有映射回归钉）。
  */
 fun cycleMode(timeoutMs: Long = 3000): String {
-    if (isWindows()) return ""
+    if (isWindows()) return controlMode()
     return when (val r = runCapture(listOf("opi-ctl", "mode"), timeoutMs)) {
         is RunResult.Exit -> cycleModeToken(r.code, r.firstLine)
         RunResult.Timeout, is RunResult.Failed -> ""
@@ -314,9 +339,12 @@ fun parseImeState(line: String?): ImeState {
  *
  * 超时 1.5s：轮询节奏本来就是 1s，查询卡住时最多把它拖成 ~2.5s 一拍，而不是 4s+。
  */
-fun readImeState(): ImeState = when (val r = runCapture(listOf("opi-ctl", "state"), 1500)) {
-    is RunResult.Exit -> if (r.code == 0) parseImeState(r.firstLine) else ImeState()
-    RunResult.Timeout, is RunResult.Failed -> ImeState()
+fun readImeState(): ImeState {
+    if (isWindows()) return controlImeState() ?: ImeState()
+    return when (val r = runCapture(listOf("opi-ctl", "state"), 1500)) {
+        is RunResult.Exit -> if (r.code == 0) parseImeState(r.firstLine) else ImeState()
+        RunResult.Timeout, is RunResult.Failed -> ImeState()
+    }
 }
 
 /**
@@ -327,7 +355,7 @@ fun readImeState(): ImeState = when (val r = runCapture(listOf("opi-ctl", "state
  * 与其把裸错误弹给用户，不如直接告诉他重启输入法加载新插件。
  */
 internal fun enproBlockReason(st: ImeState): String? = when {
-    !st.englishProKnown -> "英文专业键暂不可用：请重启输入法（fcitx5）后重试"
+    !st.englishProKnown -> "英文专业键暂不可用：请重启输入法后重试"
     st.zh -> "英文专业键只在英文输入法下有效"
     else -> null
 }

@@ -37,7 +37,7 @@
 use std::collections::VecDeque;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 use windows::Win32::UI::TextServices::{
     ITfContext, ITfEditSession, ITfEditSession_Impl, ITfInsertAtSelection, TF_ES_READWRITE,
@@ -45,8 +45,10 @@ use windows::Win32::UI::TextServices::{
 };
 use windows::core::{Interface, Result, implement};
 
+use crate::candidate_io::CandidateAction;
+use crate::ctl::{CtlReply, CtlRequest};
 use crate::logic::TsfLogic;
-use crate::tsf::{E_FAIL, ensure_panic_hook};
+use crate::tsf::{E_FAIL, TsfSink, ensure_panic_hook, push_state};
 
 /// 队列上限。对端是**另一个进程**（候选窗）：不设上限的话它连发 select 就能
 /// 让宿主进程的内存一直涨。16 远超人手点击速度，超过即丢弃（读线程不阻塞）。
@@ -347,5 +349,100 @@ impl ITfEditSession_Impl for InsertTextSession_Impl {
             }
         }))
         .unwrap_or_else(|_| Err(E_FAIL.into()))
+    }
+}
+
+/// 候选窗回复的**生产实现**（B1 接线）：点选 → 交给按键线程执行（选词 → 插文档）；
+/// 翻页 → 引擎翻页（真源在引擎，窗口自己不存页码）；ctl → `ctl::execute`。
+///
+/// 两个引用为什么都得在这：
+/// - `engine`：本对象跑在 named pipe 的**读线程**上，只能持有 `Send` 的那一半
+///   （`EngineShared`）；`ITfContext` 在 `TsfSharedState` 里，读线程碰不到
+///   —— 跨线程用未 marshal 的 STA 接口指针是未定义的，故点选/上屏只入队；
+/// - `sink`：动作做完得让窗口**跟着变**（翻页后换页）。可
+///   `CandidateSink::new` 又要本回调当参数 —— 互相等待的死结，用一次性槽位
+///   （`OnceLock`）打破：先建本对象（槽位空着），再建 sink，最后回填。
+///   接线三步在 `com_server.rs`。
+///
+/// 【本机（Linux）无法验证】点选/ctl 上屏的真正执行点在按键线程（`tsf.rs` 的
+/// `drain_pending`），本机跑不了；代价是插入延迟到下一次按键。见 state.rs 模块头。
+pub struct SharedAction {
+    engine: Arc<EngineShared>,
+    sink: OnceLock<Arc<dyn TsfSink>>,
+}
+
+impl SharedAction {
+    pub fn new(engine: Arc<EngineShared>) -> Self {
+        Self {
+            engine,
+            sink: OnceLock::new(),
+        }
+    }
+
+    /// 回填 sink（`com_server.rs` 建好 `CandidateSink` 后立刻调，此后只读）。
+    /// 已填过 → Err：那只可能是重复初始化，覆盖会把正在用的一份换掉
+    /// （读线程可能正读着它）。返回 Err 让调用方看得见，不静默。
+    pub fn attach_sink(&self, sink: Arc<dyn TsfSink>) -> std::result::Result<(), ()> {
+        self.sink.set(sink).map_err(|_| ())
+    }
+
+    /// 动作改变了引擎状态 → 让候选窗跟上（翻页后换页）。sink 未回填 → 跳过：
+    /// 只有启动那一瞬，那时也还没窗口。
+    fn refresh(&self) {
+        let Some(sink) = self.sink.get() else { return };
+        let Some(logic) = self.engine.lock_logic() else {
+            return;
+        };
+        push_state(sink.as_ref(), &logic);
+    }
+}
+
+impl CandidateAction for SharedAction {
+    /// **读线程**上跑：只入队，不碰引擎也不走 COM（理由见类型头）。
+    /// 执行与随之而来的窗口刷新都在按键线程（`tsf.rs` 的 `drain_pending`）——
+    /// 这里刷是白刷：此刻引擎还没选词，缓冲一个字节都没变。
+    fn on_select(&self, index: usize) {
+        self.engine.enqueue_select(index);
+    }
+
+    fn on_next_page(&self) {
+        self.engine.next_page();
+        self.refresh();
+    }
+
+    fn on_prev_page(&self) {
+        self.engine.prev_page();
+        self.refresh();
+    }
+
+    /// 同 `on_select`：读线程只入队（COM 插入在按键线程执行，见模块头的线程模型）。
+    /// 执行后**不刷新窗口**：直插不动引擎状态，而符号页要留在屏幕上供连续点选。
+    fn on_commit_text(&self, text: &str) {
+        self.engine.enqueue_commit_text(text.to_string());
+    }
+
+    /// **读线程**上同步执行（只持引擎锁，不碰 COM）。上屏文本走既有队列，
+    /// 由下一个按键事件落地——与点选同一条 W1 延迟语义。动作改了引擎态才刷新窗口。
+    fn on_ctl(&self, request: &CtlRequest) -> Option<String> {
+        let settings = crate::ctl::default_settings_path();
+        let (reply, changed) = {
+            let mut logic = self.engine.lock_logic()?;
+            let reply = crate::ctl::execute(&mut logic, &request.op, settings.as_deref());
+            let changed = matches!(&reply, Ok(CtlReply::Action { .. }));
+            (reply, changed)
+        };
+        if let Ok(
+            CtlReply::Action {
+                commit: Some(text), ..
+            }
+            | CtlReply::Commit(text),
+        ) = &reply
+        {
+            self.engine.enqueue_commit_text(text.clone());
+        }
+        if changed {
+            self.refresh();
+        }
+        Some(crate::ctl::reply_json(request.id, reply))
     }
 }

@@ -12,6 +12,8 @@ crate-type = ["cdylib", "lib"]
 [dependencies]
 engine-core = { path = "../engine-core" }
 engine-data = { path = "../engine-data" }
+# 控制面（ctl.rs）是平台中立的，Linux 门禁也要解析/生成同一批 NDJSON 行。
+serde_json = "1"
 
 # C2：windows crate（0.62）仅 Windows 目标需要。E0 已验证 0.62.2 可解析；
 # 但 windows-future（windows 0.62 的无条件依赖）无法在 Linux 主机编译，
@@ -33,5 +35,3 @@ windows = { version = "0.62", default-features = false, features = [
 ] }
 # implement! 宏展开引用 `::windows_core::imp::…`，须为本 crate 直接依赖。
 windows-core = { version = "0.62", default-features = false }
-# C3：候选窗 NDJSON 消息序列化/解析（candidate_io.rs，Windows 目标专属）。
-serde_json = "1"

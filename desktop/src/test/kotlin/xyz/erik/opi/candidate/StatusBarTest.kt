@@ -105,8 +105,8 @@ class StatusBarTest {
         // 它和另外八枚有两处不同，两条都钉住：
         // ① **没有常驻开关**（没有 `StatusBarMode=` ini 键，本批不动 Settings.kt 的读写表）
         //    ⇒ 设置窗不出它那行（出了就是拨了没反应的开关），resident/with 也不该改得动它；
-        // ② 条上**一直在**（恒常驻），且 Windows 上没有（动作是 `opi-ctl mode`，只有 Linux
-        //    有 —— 与那四枚 opi-ctl 动作同一条理由：没有动作的按钮不上条）。
+        // ② 条上**一直在**（恒常驻）；2026-10-20 起两平台都有（Windows 走本机控制面，
+        //    见 ControlPlane.kt —— 原先「Windows 没有 opi-ctl mode」的缺口已补）。
         assertTrue("MODE 该恒常驻", StatusBarSettings().resident(StatusBarButton.MODE))
         assertEquals(
             "MODE 没有可写的键位：with 该原样返回（不是「假装改了」）",
@@ -114,7 +114,7 @@ class StatusBarTest {
             StatusBarSettings().with(StatusBarButton.MODE, false),
         )
         assertFalse("设置窗不该给 MODE 出行", statusButtonWired(StatusBarButton.MODE, windows = false))
-        assertFalse("Windows 上没有 opi-ctl mode ⇒ 也不该出行", statusButtonWired(StatusBarButton.MODE, windows = true))
+        assertFalse("MODE 没有常驻开关，两平台都不该出行", statusButtonWired(StatusBarButton.MODE, windows = true))
         // 全关（九枚开关逐个关掉）之后条上只剩 MODE —— 「恒常驻」的直接后果。
         // ⚠️ 顺带作废一条老路：「按钮全关 ⇒ 条隐藏」现在到不了了（条至少剩 MODE 一枚），
         // 要隐藏整条走 master 开关（它本来就是给用户的那条路，见 StatusBarPage 的文案）。
@@ -124,11 +124,11 @@ class StatusBarTest {
             listOf(StatusBarButton.MODE),
             visibleStatusButtons(allOff, windows = false),
         )
-        // Windows：整条与 Linux 同款，但模式按钮不在（上面那条的对照组）
+        // 两平台条面相同：MODE 恒在，ENPRO 由开关决定（显式开）
         val winOn = StatusBarButton.entries.fold(StatusBarSettings(vk = true)) { sb, b -> sb.with(b, true) }
-        assertFalse("Windows 条上不该有 MODE", StatusBarButton.MODE in visibleStatusButtons(winOn, windows = true))
+        assertTrue("Windows 条上该有 MODE（控制面已补）", StatusBarButton.MODE in visibleStatusButtons(winOn, windows = true))
         assertTrue("Linux 条上该有 MODE", StatusBarButton.MODE in visibleStatusButtons(winOn, windows = false))
-        assertFalse("Windows 没有 opi-ctl englishpro ⇒ 也不上 ENPRO", StatusBarButton.ENPRO in visibleStatusButtons(winOn, windows = true))
+        assertTrue("Windows 条上该有 ENPRO（控制面已补）", StatusBarButton.ENPRO in visibleStatusButtons(winOn, windows = true))
         assertTrue("Linux 条上该有 ENPRO", StatusBarButton.ENPRO in visibleStatusButtons(winOn, windows = false))
     }
 
@@ -256,21 +256,21 @@ class StatusBarTest {
     }
 
     @Test
-    fun `windows only keeps buttons that have an action there`() {
-        // Windows 上没有 opi-ctl（trad/punct/fullwidth/lang/englishpro 都是
-        // Linux 侧的），没动作的按钮不上条 ——「宁可少一页，不做点不动的开关」。
-        // 显式开 VK：这条测的是「按有无动作过滤」，别被默认值变更（VK 默认关）牵连。
+    fun `windows shows the same buttons as linux`() {
+        // 2026-10-20 控制面落地后两平台动作面相同：Windows 的 trad/punct/fullwidth/
+        // lang/englishpro/mode 走 ControlPlane.kt → 候选窗 broker → TSF，不再按平台过滤。
+        // 显式开 VK：这条测的是「哪些上条」，别被默认值变更（VK 默认关）牵连。
         // 期望值按**枚举序**（VK 现在排 SYMBOLS 前面，见枚举头的验收订正）。
-        // MODE 也不在（它的动作 `opi-ctl mode` 同样只有 Linux 有）—— 见
-        // `the mode button has no switch and stays on the bar` 的 Windows 那一对断言。
         assertEquals(
-            listOf(StatusBarButton.LOGO, StatusBarButton.VK, StatusBarButton.SYMBOLS, StatusBarButton.SETTINGS),
+            StatusBarButton.entries.toList(),
             visibleStatusButtons(StatusBarSettings(vk = true), windows = true),
         )
-        // 设置窗的开关行用同一个判定（两处同源）：Linux = 除 MODE 外的 9 枚（MODE 没有
-        // 开关、不出行）；Windows = 那 4 枚。（条上比这多一枚 MODE —— 它的「上不上条」
-        // 归 visibleStatusButtons 单独判，见 `the mode button has no switch`。）
-        assertEquals(4, StatusBarButton.entries.count { statusButtonWired(it, windows = true) })
+        assertEquals(
+            StatusBarButton.entries.toList(),
+            visibleStatusButtons(StatusBarSettings(vk = true), windows = false),
+        )
+        // 设置窗的开关行：两平台都是除 MODE 外的 9 枚（MODE 没有开关、不出行）。
+        assertEquals(9, StatusBarButton.entries.count { statusButtonWired(it, windows = true) })
         assertEquals(9, StatusBarButton.entries.count { statusButtonWired(it, windows = false) })
     }
 

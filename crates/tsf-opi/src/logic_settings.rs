@@ -63,6 +63,31 @@ impl TsfLogic {
         self.engine.set_learner(on);
     }
 
+    /// 中文标点**配置值**（不是按模式折算后的生效值 —— 设置/状态栏动作翻的是这个）。
+    pub fn chinese_punct(&self) -> bool {
+        self.engine.chinese_punct()
+    }
+
+    /// 当前拼音方案（模式 token 派生要用：全拼/五笔分属不同档）。
+    pub fn scheme(&self) -> engine_core::Scheme {
+        self.engine.scheme()
+    }
+
+    /// 英文专业模式（会话内，见 `logic.rs` 字段注释）。
+    pub fn english_pro(&self) -> bool {
+        self.english_pro
+    }
+
+    /// 普通 ⇄ 专业：切换时清掉引擎缓冲/候选（旧串语义不同）。配对：
+    /// fcitx5-opi `candidate.rs::set_english_pro`（两轨同构）。
+    pub fn set_english_pro(&mut self, on: bool) {
+        if self.english_pro == on {
+            return;
+        }
+        self.english_pro = on;
+        self.clear();
+    }
+
     /// 中文标点开关（值来自 settings.ini 的 `ChinesePunct`）。配对同上。
     pub fn set_chinese_punct(&mut self, on: bool) {
         self.engine.set_chinese_punct(on);

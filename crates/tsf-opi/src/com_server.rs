@@ -28,12 +28,12 @@ use windows::Win32::System::LibraryLoader::{
 };
 use windows::core::{BOOL, GUID, HRESULT, IUnknown, Interface, PCWSTR, Ref, Result, implement};
 
-use crate::candidate_io::{CandidateAction, CandidateSink, SharedAction};
+use crate::candidate_io::{CandidateAction, CandidateSink};
 use crate::dict_path;
 use crate::dll::{CLSID_TEXT_SERVICE, DllLock, dll_can_unload};
 use crate::registration::{register, unregister};
 use crate::settings;
-use crate::state::{EngineShared, TsfSharedState};
+use crate::state::{EngineShared, SharedAction, TsfSharedState};
 use crate::tsf::{TsfSink, TsfTextService, ensure_panic_hook};
 
 /// 每个 COM 出口（vtable 方法 + `Dll*` 导出）都要经过这里。

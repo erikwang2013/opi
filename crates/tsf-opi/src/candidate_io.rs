@@ -32,6 +32,15 @@
 //!             不经引擎选词 —— 缓冲/候选/学习都不动、也不通知 sink（多选不关窗，
 //!             发端是桌面自渲染的符号页）。文本排回按键线程执行，与 select 同一条
 //!             队列语义（见 state.rs 的线程模型）。
+//!
+//! 控制面（2026-10-20，状态栏/设置 → TSF）：候选窗进程把桌面请求原样转发进来，
+//! TSF 在同一条管道上应答。请求/应答的**语义**在 `ctl.rs`（平台中立、有单测），
+//! 这里只负责分帧与回写：
+//!   ctl        {"type":"ctl","id":7,"op":"state"} 等（见 ctl.rs 头）
+//!   ctl_result {"type":"ctl_result","id":7,"ok":true,"state":"..."}（按 id 关联）
+//! ctl 在读线程上**同步**执行（只动引擎锁，不碰 COM）；上屏文本入既有队列。
+//! 应答从读线程直接回写（`write_now`）：窗口侧读循环与读线程是两个线程，
+//! 同一句柄上的写由 conn 锁串行化。
 //! ```
 //!
 //! 本模块是纯胶水（镜像 tsf.rs 结构）：经 `TsfSink` 接缝（on_commit /
@@ -54,7 +63,7 @@
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -66,8 +75,7 @@ use windows::Win32::Storage::FileSystem::{
 };
 use windows::core::{PCWSTR, w};
 
-use crate::state::EngineShared;
-use crate::tsf::{TsfSink, push_state};
+use crate::tsf::TsfSink;
 
 /// 管道句柄的 Send+Sync 包装：windows-rs 的 HANDLE 是裸指针（非 Sync），
 /// 而读写跨线程使用（按键线程写 + 读线程阻塞读），此处显式承诺线程安全。
@@ -95,6 +103,11 @@ pub trait CandidateAction: Send + Sync {
     fn on_prev_page(&self) {}
     /// 候选窗要求**直接插入**一段文本（不经引擎选词；符号页多选，见协议头）。
     fn on_commit_text(&self, _text: &str) {}
+    /// 控制请求（状态/动作/搜索/直插）。返回**应答行**（不含 '\n'）；None = 未处理。
+    /// 读线程调用 —— 实现不得碰 COM（见 `SharedAction` 的实现）。
+    fn on_ctl(&self, _request: &crate::ctl::CtlRequest) -> Option<String> {
+        None
+    }
 }
 
 /// 断开连接：仅当 `handle` 仍是当前持有的那个才关句柄并清空 conn
@@ -210,18 +223,10 @@ impl CandidateClient {
                 None => return, // 窗口未启动：本次放弃，下次发送再试
             },
         };
-        let mut done = 0usize;
-        while done < bytes.len() {
-            let mut written = 0u32;
-            // 0.62 的 WriteFile 为切片签名，返回 Result；部分写需循环。
-            let ok = unsafe { WriteFile(handle.0, Some(&bytes[done..]), Some(&mut written), None) };
-            if ok.is_err() || written == 0 {
-                // 写失败（管道另一端关闭等）：断开，下次发送重连。
-                unsafe { CloseHandle(handle.0) }.ok();
-                *conn = None;
-                return;
-            }
-            done += written as usize;
+        if !write_all(handle, &bytes) {
+            // 写失败（管道另一端关闭等）：断开，下次发送重连。
+            unsafe { CloseHandle(handle.0) }.ok();
+            *conn = None;
         }
     }
 
@@ -292,10 +297,15 @@ impl CandidateClient {
                 while let Some(pos) = pending.iter().position(|&b| b == b'\n') {
                     let line: Vec<u8> = pending.drain(..pos).collect();
                     pending.drain(..1); // 去掉 '\n'
-                    // 回调（select/翻页 → 文档操作）是外部代码，panic 必须兜住：
+                    // 回调（select/翻页/ctl → 动作）是外部代码，panic 必须兜住：
                     // 线程一死，reader_started 已置位不会重启 → 回复永久失效。
-                    let _ =
-                        catch_unwind(AssertUnwindSafe(|| dispatch_line(&line, action.as_ref())));
+                    let response =
+                        catch_unwind(AssertUnwindSafe(|| dispatch_line(&line, action.as_ref())))
+                            .ok()
+                            .flatten();
+                    if let Some(reply) = response {
+                        write_now(&conn, &reply);
+                    }
                 }
             }
         });
@@ -314,11 +324,36 @@ impl Drop for CandidateClient {
     }
 }
 
-/// 解析一行回复并分发到 `CandidateAction`（未知 type 忽略）。
-fn dispatch_line(line: &[u8], action: &dyn CandidateAction) {
-    let Ok(v) = serde_json::from_slice::<serde_json::Value>(line) else {
+/// 写一段完整帧（调用方持有 conn 锁）。部分写循环（0.62 的 WriteFile 是切片签名）。
+fn write_all(handle: PipeHandle, bytes: &[u8]) -> bool {
+    let mut done = 0usize;
+    while done < bytes.len() {
+        let mut written = 0u32;
+        let ok = unsafe { WriteFile(handle.0, Some(&bytes[done..]), Some(&mut written), None) };
+        if ok.is_err() || written == 0 {
+            return false;
+        }
+        done += written as usize;
+    }
+    true
+}
+
+/// 读线程回写应答（不惰性连接：能收到请求说明连接已在）。写失败 → 断开待重连。
+fn write_now(conn: &Mutex<Option<PipeHandle>>, json: &str) {
+    let bytes = [json.as_bytes(), b"\n"].concat();
+    let Ok(mut guard) = conn.lock() else {
         return;
     };
+    let Some(handle) = *guard else { return };
+    if !write_all(handle, &bytes) {
+        unsafe { CloseHandle(handle.0) }.ok();
+        *guard = None;
+    }
+}
+
+/// 解析一行并分发到 `CandidateAction`（未知 type 忽略）。返回应答行 = ctl 请求。
+fn dispatch_line(line: &[u8], action: &dyn CandidateAction) -> Option<String> {
+    let v = serde_json::from_slice::<serde_json::Value>(line).ok()?;
     match v.get("type").and_then(|t| t.as_str()) {
         Some("select") => {
             if let Some(i) = v.get("index").and_then(|i| i.as_u64()) {
@@ -332,79 +367,17 @@ fn dispatch_line(line: &[u8], action: &dyn CandidateAction) {
                 action.on_commit_text(t);
             }
         }
+        Some("ctl") => {
+            let request = std::str::from_utf8(line).ok().and_then(crate::ctl::parse)?;
+            return action.on_ctl(&request);
+        }
         _ => {}
     }
+    None
 }
 
-/// 候选窗回复的**生产实现**（B1 接线）：点选 → 交给按键线程执行（选词 → 插文档）；
-/// 翻页 → 引擎翻页（真源在引擎，窗口自己不存页码）。
-///
-/// 两个引用为什么都得在这：
-/// - `engine`：本对象跑在 named pipe 的**读线程**上，只能持有 `Send` 的那一半
-///   （`EngineShared`）；`ITfContext` 在 `TsfSharedState` 里，读线程碰不到
-///   —— 跨线程用未 marshal 的 STA 接口指针是未定义的，故点选只入队；
-/// - `sink`：动作做完得让窗口**跟着变**（翻页后换页）。可
-///   `CandidateSink::new` 又要本回调当参数 —— 互相等待的死结，用一次性槽位
-///   （`OnceLock`）打破：先建本对象（槽位空着），再建 sink，最后回填。
-///   接线三步在 `com_server.rs`。
-///
-/// 【本机（Linux）无法验证】点选的真正执行点在按键线程（`tsf.rs` 的
-/// `drain_pending`），本机跑不了；代价是插入延迟到下一次按键。见 state.rs 模块头。
-pub struct SharedAction {
-    engine: Arc<EngineShared>,
-    sink: OnceLock<Arc<dyn TsfSink>>,
-}
-
-impl SharedAction {
-    pub fn new(engine: Arc<EngineShared>) -> Self {
-        Self {
-            engine,
-            sink: OnceLock::new(),
-        }
-    }
-
-    /// 回填 sink（`com_server.rs` 建好 `CandidateSink` 后立刻调，此后只读）。
-    /// 已填过 → Err：那只可能是重复初始化，覆盖会把正在用的一份换掉
-    /// （读线程可能正读着它）。返回 Err 让调用方看得见，不静默。
-    pub fn attach_sink(&self, sink: Arc<dyn TsfSink>) -> Result<(), ()> {
-        self.sink.set(sink).map_err(|_| ())
-    }
-
-    /// 动作改变了引擎状态 → 让候选窗跟上（翻页后换页）。sink 未回填 → 跳过：
-    /// 只有启动那一瞬，那时也还没窗口。
-    fn refresh(&self) {
-        let Some(sink) = self.sink.get() else { return };
-        let Some(logic) = self.engine.lock_logic() else {
-            return;
-        };
-        push_state(sink.as_ref(), &logic);
-    }
-}
-
-impl CandidateAction for SharedAction {
-    /// **读线程**上跑：只入队，不碰引擎也不走 COM（理由见类型头）。
-    /// 执行与随之而来的窗口刷新都在按键线程（`tsf.rs` 的 `drain_pending`）——
-    /// 这里刷是白刷：此刻引擎还没选词，缓冲一个字节都没变。
-    fn on_select(&self, index: usize) {
-        self.engine.enqueue_select(index);
-    }
-
-    fn on_next_page(&self) {
-        self.engine.next_page();
-        self.refresh();
-    }
-
-    fn on_prev_page(&self) {
-        self.engine.prev_page();
-        self.refresh();
-    }
-
-    /// 同 `on_select`：读线程只入队（COM 插入在按键线程执行，见 state.rs 的线程模型）。
-    /// 执行后**不刷新窗口**：直插不动引擎状态，而符号页要留在屏幕上供连续点选。
-    fn on_commit_text(&self, text: &str) {
-        self.engine.enqueue_commit_text(text.to_string());
-    }
-}
+/// 候选窗回复的生产实现见 `state.rs` 的 `SharedAction`（随 ctl 处理一起搬过去，
+/// 那里已有引擎/文档写入的线程模型；本文件只管管道与分帧）。
 
 /// 候选窗接缝的生产实现：把 composition 变化映射为 show/hide。
 pub struct CandidateSink {

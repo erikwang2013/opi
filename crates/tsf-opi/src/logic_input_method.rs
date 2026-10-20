@@ -369,6 +369,16 @@ impl TsfLogic {
                         c.to_string()
                     };
                     KeyOutcome::Commit(self.fullwidthize(&text))
+                } else if !self.english_pro() {
+                    // 普通模式（默认，镜像 fcitx5 轨）：所有键直出、不查词库、不进缓冲。
+                    // 只有状态栏 `en/pro` 键切到专业模式后才走下面的前缀联想。
+                    let text = if self.shift_state() != ShiftState::Off {
+                        self.consume_single_shift();
+                        c.to_ascii_uppercase().to_string()
+                    } else {
+                        c.to_string()
+                    };
+                    KeyOutcome::Commit(self.fullwidthize(&text))
                 } else if c.is_ascii_alphabetic() {
                     // 空缓冲/英文自己的缓冲：字母入引擎（2026-10-18 单词联想，空缓冲不再
                     // 直传）；composer 按引擎 shift 决定大小写，single 用掉即复位。

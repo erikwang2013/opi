@@ -264,7 +264,7 @@ internal fun StatusBarPage(s: OpSettings, apply: (OpSettings) -> Unit, status: (
         }
     }
     Text(
-        "这些开关存在配置文件里（Linux 就是 fcitx5 的 addon 配置）。" +
+        "这些开关存在配置文件里（Linux = fcitx5 addon 配置，Windows = settings.ini）。" +
             "⚠️ 用 fcitx5 自带配置工具改别的选项并保存时，这些键会不会被它清掉未经验证。",
         fontSize = 12.sp, color = Muted,
     )
@@ -275,7 +275,7 @@ internal fun StatusBarPage(s: OpSettings, apply: (OpSettings) -> Unit, status: (
 @Composable
 internal fun SymbolsPage(onOpenSymbols: () -> Unit, onOpenEmoji: () -> Unit) {
     // 打开的窗 = 状态栏「符号」按钮同一个 SymbolWindow（大页面、可翻页），只是入口在这里。
-    // 上屏通路也是同一条（desktopSymbolCommit：Linux = opi-ctl insert）。
+    // 上屏通路也是同一条（desktopSymbolCommit：Linux = opi-ctl insert、Windows = 控制面 commit）。
     SectionTitle("符号大全")
     ActionRow(
         "打开符号页",
@@ -288,7 +288,7 @@ internal fun SymbolsPage(onOpenSymbols: () -> Unit, onOpenEmoji: () -> Unit) {
     ) { onOpenEmoji() }
     Spacer(Modifier.height(8.dp))
     Text(
-        "上屏要求 fcitx5 里有焦点输入框（点一下要输入的地方再打开本页）；" +
+        "上屏要求当前应用里有焦点输入框（Linux 经 fcitx5，Windows 经 TSF）；" +
             "没有焦点时页面会把失败原因显示出来。",
         fontSize = 12.sp, color = Muted,
     )

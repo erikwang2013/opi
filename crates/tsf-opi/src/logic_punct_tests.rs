@@ -44,6 +44,7 @@ fn punct_state() -> TsfLogic {
         page: 0,
         buffer_snapshot: String::new(),
         shift_state: ShiftState::Off,
+        english_pro: true,
         last_printable: None,
     };
     s.switch_mode(Mode::Pinyin);
@@ -249,6 +250,7 @@ fn punctuation_flush_resets_page_to_first() {
         page: 0,
         buffer_snapshot: String::new(),
         shift_state: ShiftState::Off,
+        english_pro: true,
         last_printable: None,
     };
     s.switch_mode(Mode::Pinyin);

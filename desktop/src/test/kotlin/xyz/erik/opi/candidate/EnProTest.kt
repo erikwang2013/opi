@@ -51,9 +51,11 @@ class EnProTest {
         assertFalse(off.enpro)
         assertFalse(StatusBarButton.ENPRO in visibleStatusButtons(off, windows = false))
         assertTrue(StatusBarButton.ENPRO in visibleStatusButtons(off.with(StatusBarButton.ENPRO, true), windows = false))
-        // Windows 没有 opi-ctl englishpro ⇒ 不出开关也不上条（与其余 opi-ctl 动作同规）。
-        assertFalse(statusButtonWired(StatusBarButton.ENPRO, windows = true))
+        // 2026-10-20 起两平台同规：Windows 的 englishpro 走控制面（ControlPlane.kt），
+        // 有动作 ⇒ 出开关、也上条。
+        assertTrue(statusButtonWired(StatusBarButton.ENPRO, windows = true))
         assertTrue(statusButtonWired(StatusBarButton.ENPRO, windows = false))
-        assertFalse(StatusBarButton.ENPRO in visibleStatusButtons(StatusBarSettings(), windows = true))
+        assertTrue(StatusBarButton.ENPRO in visibleStatusButtons(StatusBarSettings(), windows = true))
+        assertFalse("关掉开关后两平台都该消失", StatusBarButton.ENPRO in visibleStatusButtons(off, windows = true))
     }
 }
