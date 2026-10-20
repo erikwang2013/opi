@@ -147,6 +147,26 @@
     memoryProgress.style.transform = `scaleX(${Math.min(1, 1 - memoryViewport.scrollTop / max)})`;
   };
 
+  // 先把当前窗口里已经出现的条目加载出来，之后滚动始终跟着已加载内容走。
+  const primeMemoryWindow = () => {
+    if (!memoryViewport) return;
+    const view = memoryViewport.getBoundingClientRect();
+    const visible = $$('.memory-item, .memory-pet', memoryTimeline).filter((el) => {
+      const rect = el.getBoundingClientRect();
+      return rect.bottom > view.top && rect.top < view.bottom;
+    });
+    visible.forEach((el) => el.classList.add('is-in'));
+    visible.filter((el) => el.classList.contains('memory-item')).pop()?.classList.add('is-current');
+  };
+
+  // 已加载内容的最上沿：自动滚动不越过它，避免滚进还没加载的空白区。
+  const memoryLoadedTop = () => {
+    if (!memoryTimeline) return 0;
+    const loaded = $$('.memory-item.is-in, .memory-pet.is-in', memoryTimeline);
+    if (memoryFormsEntry?.classList.contains('is-in')) loaded.push(memoryFormsEntry);
+    return loaded.length ? Math.min(...loaded.map((el) => el.offsetTop)) : 0;
+  };
+
   const stopMemory = () => {
     if (memoryRaf) cancelAnimationFrame(memoryRaf);
     if (memoryEndTimer) clearTimeout(memoryEndTimer);
@@ -265,6 +285,7 @@
     resetMemoryItems();
     memoryViewport.scrollTop = memoryViewport.scrollHeight;
     if (memoryFormsEntry) memoryFormsEntry.classList.add('is-in');
+    primeMemoryWindow();
     memoryLastReveal = performance.now();
     memoryProgressNow();
     if (reduceMotion) {
@@ -276,7 +297,7 @@
         entries.filter((entry) => entry.isIntersecting)
           .sort((a, b) => b.boundingClientRect.top - a.boundingClientRect.top)
           .forEach((entry) => queueMemoryReveal(entry.target));
-      }, { root: memoryViewport, rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
+      }, { root: memoryViewport, rootMargin: '220px 0px -8% 0px', threshold: 0.08 });
       $$('.memory-item, .memory-pet, .memory-forms-entry', memoryTimeline).forEach((el) => memoryObserver.observe(el));
     } else {
       $$('.memory-item, .memory-pet, .memory-forms-entry', memoryTimeline).forEach((el) => el.classList.add('is-in'));
@@ -294,7 +315,10 @@
         if (hold > 0) {
           hold = Math.max(0, hold - dt);
         } else {
-          memoryViewport.scrollTop = Math.max(0, memoryViewport.scrollTop - speed * dt);
+          const loadedTop = memoryLoadedTop();
+          if (memoryViewport.scrollTop > loadedTop + 1) {
+            memoryViewport.scrollTop = Math.max(loadedTop, memoryViewport.scrollTop - speed * dt);
+          }
           if (memoryViewport.scrollTop <= 1) {
             memoryProgressNow();
             memoryEndTimer = window.setTimeout(closeMemory, 1200);
