@@ -127,6 +127,9 @@ Name: "{autodesktop}\opi settings"; Filename: "{app}\opi.exe"; Parameters: "--se
 ; already makes plain HKLM use the native view; keep HKLM64 explicit so this
 ; entry cannot silently fall into Wow6432Node if the install mode changes.
 Root: HKLM64; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "opi"; ValueData: """{app}\opi.exe"""; Flags: uninsdeletevalue
+; Statusbar is a second process of the same opi.exe; the candidate process hosts the
+; control-plane broker it needs. Both Run values are required.
+Root: HKLM64; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "opi-statusbar"; ValueData: """{app}\opi.exe"" --statusbar"; Flags: uninsdeletevalue
 
 [Run]
 ; Finish page: start the candidate window only. It must NOT touch Explorer --
