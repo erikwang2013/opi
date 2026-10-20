@@ -7,7 +7,7 @@
 > | 层 | 状态 | 判据 |
 > |---|---|---|
 > | Rust 侧 C ABI（`crates/opi-ffi`） | **已实测**能为 iOS 目标编译、能产出 `libopi_ffi.a` | 见「产出 libopi_ffi.a」一节，本机可复现 |
-> | `ios/` 下的 Swift（6 个文件） | **2026-10-09 起：过了真编译器**（CI `apple.yml` 对 `ios/` 跑 `swiftc -typecheck` + 真编 + 与 Rust 静态库链接；run 37935240583）。但**运行时行为仍是 0 验证** | 本机仍是 Linux（`import UIKit` 就断），编译这一层由 CI 的 macos-latest 补上；见 §4.5 |
+> | `ios/` 下的 Swift（`ios/*.swift`，数量不写死） | **2026-10-09 起：过了真编译器**（CI `apple.yml` 对 `ios/*.swift` glob 跑 `swiftc -typecheck` + 真编 + 与 Rust 静态库链接；2026-10-20 的 run 39425977787 对当前全部文件绿）。但**运行时行为仍是 0 验证** | 本机仍是 Linux（`import UIKit` 就断），编译这一层由 CI 的 macos-latest 补上；见 §4.5 |
 >
 > **别把「Rust 侧能编」读成「iOS 端能用」。** 本项目已经被「没被编译器看过的代码」
 > 坑过两次，本目录的存在正是为了避免第三次：
@@ -125,9 +125,8 @@ xcodebuild -create-xcframework \
 与本目录的做**逐键比对**，而不是反过来。
 
 1. 新建 iOS App（宿主，名字随意）→ 再加一个 **Keyboard Extension** target。
-2. 把 `ios/` 下 **6 个 `.swift`** 加进**扩展** target：
-   `OpiEngine.swift` · `KeyboardKeys.swift` · `KeyboardLayout.swift` · `KeyboardHardware.swift` ·
-   `SymbolPanel.swift` · `KeyboardViewController.swift`。
+2. 把 `ios/` 下**全部** `.swift`（`ios/*.swift`，以 `ls` 为准）加进**扩展** target；
+   `ios/HostApp/OpiApp.swift` 归宿主 App，不进扩展。
    （`OpiFFI.h` **不是**编译单元，它是桥接头，见下一步。）
 3. 设置 `SWIFT_OBJC_BRIDGING_HEADER = ios/OpiFFI.h`。
    `ios/OpiFFI.h` 是**转发头**（`#include "../macos/OpiFFI.h"`），相对路径按**它自己所在目录**
@@ -311,7 +310,7 @@ Payload/Opi.app/
 
 | # | 限制 | 说明 |
 |---|---|---|
-| L1 | **符号面板只拿得到 common 块** | `KeyboardViewController` 调的是 `layout.setSymbols(engine.commonSymbols())`，而 `commonSymbols()` 只遍历 `opi_symbol_blocks()` —— 那个出口**只回 common 块**，当前数据表里只有 CJK 符号块是 common ⇒ **非 common 块里的条目（含 emoji）在 iOS 上够不到**。缺口在 UI 上**没有症状**（面板照样有内容，只是少）。`searchSymbols(keyword:)`（包装 `opi_search_symbols`）**存在但零调用者**。判据：`grep -rn 'searchSymbols' ios/ --include=*.swift` 只命中定义那一行。**别把「包装已写」读成「面板能拿到全部符号」。** |
+| L1 | **符号面板只拿得到 common 块** | `KeyboardViewController` 调的是 `layout.setSymbols(engine.commonSymbols())`，而 `commonSymbols()` 只遍历 `opi_symbol_blocks()` —— 那个出口**只回 common 块**，当前数据表里只有 CJK 符号块是 common ⇒ **非 common 块里的条目（含 emoji）在 iOS 上够不到**。缺口在 UI 上**没有症状**（面板照样有内容，只是少）。`searchSymbols(keyword:)`（包装 `opi_search_symbols`）现在只被**表情搜索**调用（`KeyboardViewController.runEmojiSearch`），符号面板本身仍只拿 common 块。**别把「表情能搜全表」读成「符号面板能拿到全部符号」。** |
 | L2 | **用户词不与宿主 App 同步** | 当前 `RequestsOpenAccess = true`（为贴纸剪贴板），但键盘仍只写扩展自己的容器；App 里做的词库管理看不到键盘攒的词。要同步还要显式接 App Group 共享容器。 |
 | L3 | **无障碍未接** | 每个键都没有 `accessibilityLabel`（⇧ / ⌫ / 回车 / 🌐 这类符号键尤其需要），VoiceOver 读不出来。已知缺口。 |
 | L4 | **键盘高度是拍的** | `viewWillAppear` 里写死 264pt（`priority = .defaultHigh`），**没按内容算、没处理旋转**。真机上要改。 |
@@ -328,9 +327,10 @@ Payload/Opi.app/
 
 **本目录的验证现状**（2026-10-09 更新，别读成已完成）：
 
-- `ios/` 下 **6 个 `.swift`**：没有 lint、没有单测；**编译**这一条 2026-10-09 起
-  由 CI 补上（`apple.yml`，run 37935240583：typecheck + 真编 + 静态链接 + `nm`
-  未定义符号检查，见 §4.5）。**运行时（装进系统之后）验证数依旧是 0。**
+- `ios/` 下**全部** `.swift`（`ios/*.swift`）：没有 lint、没有单测；**编译**这一条 2026-10-09 起
+  由 CI 补上（`apple.yml`，run 37935240583 编的是当时 6 个：typecheck + 真编 + 静态链接 +
+  `nm` 未定义符号检查；2026-10-20 run 39425977787 编过当前全部文件，见 §4.5）。
+  **运行时（装进系统之后）验证数依旧是 0。**
 - `ios/Info.plist`：本机只验过**格式**（`plistlib` 能解析）；CI 里也只得过
   `plutil -lint` / `plutil -replace`（同样是格式层，`-replace` 对不存在的键照样成功）。
   **键名与取值的语义全部凭记忆**。
@@ -345,7 +345,7 @@ Payload/Opi.app/
   只证「搬移没丢东西」，不证能编译。
 
 **真正过了工具的东西**（截至 2026-10-09）：Rust 侧 —— `cargo check` 的 iOS 目标
-（见「产出 `libopi_ffi.a`」）、含全部导出的 arm64 `.a`；**Swift 侧** —— `ios/` 全部
+（见「产出 `libopi_ffi.a`」）、含全部导出的 arm64 `.a`；**Swift 侧** —— 当时 `ios/` 的
 6 个 `.swift` 过了 typecheck + 真编 + 静态链接 + `nm` 无未定义符号
 （CI run 37935240583，见 §4.5）。**还没过任何工具的**：运行时行为 ——
 一段代码都没在 iOS 上真正跑过。

@@ -12,9 +12,9 @@
 > 输入法列表里看得到它、打字什么都不会发生（fcitx5 插件重载已由安装脚本自动完成）。
 > 逐条命令见 [`docs/install/linux.md`](docs/install/linux.md) 的 §4。
 
-> **官网 / Website**：[https://opi.erik.xyz](https://opi.erik.xyz)（源码：[`site/index.html`](site/index.html)）—— 翻屏式项目介绍、功能迭代、版本日志与各端下载。
+> **官网 / Website**：[https://opi.erik.xyz](https://opi.erik.xyz)（源码：[`site/index.html`](site/index.html)）—— 翻屏式项目介绍、3D 键帽环境与首访回忆时光轴、功能迭代、全量版本日志与各端下载（打赏二维码可原地点开，页脚含备案号）。
 >
-> **验证范围**：受硬件资源与成本限制，目前仅验证 **Android / Windows / Linux** 三端；其它端已完成代码适配，尚未测试验证。
+> **验证范围**：受硬件资源与成本限制，目前只有 **Android（模拟器）与 Linux（容器 / 本机）** 有运行验证；**Windows / iOS / macOS / 鸿蒙** 已有客户端代码或可构建产物，但均未在真机验收，签名也未验证。
 >
 
 ![OPI 项目宠物：键帽精灵「小欧」](docs/opi-pet.svg)
@@ -39,7 +39,7 @@
 - **Android**：设置页的表情跟着引擎状态走（待命 / 等选 / 困惑 / 睡着 / 降级）；候选栏待命位、「无匹配」与符号搜索空结果三处空态；默认页顶栏空闲槽位的**十二形态宠物条**（笑 / 欢乐 / 哭 / 沮丧 / 惊恐 / 愤怒 / 撒娇 / 卖萌 / 讨好 / 敲打 / 捂脸 / 吐舌头，动态轮播 + 情绪色）；**启动图标**是自适应矢量前景 + 5 档 PNG 回退
 - **Windows**：候选窗空态摊手；发行包（`.deb` / Windows EXE 安装器）的应用图标；**语言栏按钮**（TSF；只在语言栏开着时可见）
 - **鸿蒙**：候选栏里的小欧，它自己就是「记不记词」的开关；应用/子类型图标
-- **macOS**：输入源菜单图标（`macos/opi.tiff`）——⚠️ 本目录是从未编译的草案，图标只在 Mac 上才看得见
+- **macOS**：输入源菜单图标（`macos/opi.tiff`）——CI 已真编译（unsigned pkg/app），真机未验证；图标只在 Mac 上才看得见
 - **Linux（fcitx5）**：输入法条目在输入法列表与托盘里的图标
 - **`opi-tools` 命令行**：编译与校验成功时打印字符版小欧（只用单宽度字符，CJK 终端不错位），`--version` 也带上它
 
@@ -79,37 +79,38 @@
 > 本节只写**代码里已经跑得起来的东西**；尚未实现的愿景统一收到下方「🚧 未来规划」，逐条标注状态。此前的版本把两者混在一起、用陈述句写成现状，这里改了。
 
 #### 1. 引擎一份，各端原生
-**引擎只写一遍。** `engine-core` 是纯逻辑内核，无 IO、无平台依赖 —— **模块清单以 `crates/engine-core/src/lib.rs` 的 `pub mod` 声明为准**，惯常被点名的几块是 `Composer` 状态机 / `Pinyin` 音节切分 / `Trie` 码表 / `Candidates` 排序合并 / `Learner` 用户学习 / `Symbols` 符号表（**这是一份阅读导引，不是模块普查** —— 简拼 `jianpin`、模糊拼音 `fuzzy`、中文标点 `punctuation`、字节序 `bytes` 同在那一行 `pub mod` 里）。之上是唯一的 `Engine` 门面，UI 层只跟这个门面打交道。另有**平台中立的键路由层**（`router.rs` 的 `KeyRouter` + `keys.rs` 的键码表），供 Apple 与鸿蒙两端经 C ABI 使用 —— 放这里是因为它是纯逻辑；它是**路由层而非引擎模块**，语义以既有的 fcitx5 / TSF 两轨为准，不自创。出口层是三个薄壳（`opi-ffi` 双 ABI · `fcitx5-opi` · `tsf-opi`），每个进程持一个引擎单例。
+**引擎只写一遍。** `engine-core` 是纯逻辑内核，无 IO、无平台依赖 —— **模块清单以 `crates/engine-core/src/lib.rs` 的 `pub mod` 声明为准**，惯常被点名的几块是 `Composer` 状态机 / `Pinyin` 音节切分 / `Trie` 码表 / `Candidates` 排序合并 / `Learner` 用户学习 / `Symbols` 符号表（**这是一份阅读导引，不是模块普查** —— 简拼 `jianpin`、模糊拼音 `fuzzy`、中文标点 `punctuation`、字节序 `bytes` 同在那一行 `pub mod` 里）。之上是唯一的 `Engine` 门面，UI 层只跟这个门面打交道。另有**平台中立的键路由层**（`router.rs` 的 `KeyRouter` + `keys.rs` 的键码表），供 Apple 与鸿蒙两个客户端经 C ABI 使用 —— 放这里是因为它是纯逻辑；它是**路由层而非引擎模块**，语义以既有的 fcitx5 / TSF 两轨为准，不自创。出口层是三个薄壳（`opi-ffi` 双 ABI · `fcitx5-opi` · `tsf-opi`），每个进程持一个引擎单例。
 
-**有端代码的是 3 个**：Android（Compose 原生 IME）、Linux（fcitx5 插件）、Windows（TSF 插件 + Compose Desktop 候选窗 —— 后者是**独立的 UI 代码库**，经命名管道与 TSF 通信）。各端 UI 不共享代码，只共享输入语义。
+**六端都有客户端代码**：Android（Compose 原生 IME）、Linux（fcitx5 插件）、Windows（TSF 插件 + Compose Desktop 候选窗 —— 后者是**独立的 UI 代码库**，经命名管道与 TSF 通信）、iOS、macOS、鸿蒙。各端 UI 不共享代码，只共享输入语义；目前只有 Android（模拟器）与 Linux（容器 / 本机）有运行验证，Windows / iOS / macOS / 鸿蒙尚无真机证据（见下一段）。
 
-**Apple 两平台与鸿蒙目前只有草案，没有可用的端**——三个目录（[`ios/`](ios/)、[`macos/`](macos/)、[`harmony/`](harmony/)）里有 Swift 与 ArkTS 骨架。**2026-10-15 订正**：Swift 两边（`ios/` · `macos/`）**已由 CI 真编译**（`apple.yml` 的 iOS / macOS job 里 `swiftc … -typecheck` + 真链接，2026-10-15 起全绿，同日抓出一处真错）——「没有一行被编译器看过」这句对 Apple 已不成立；ArkTS **仍未被编译**（只到解析层）。⚠️ 但**三者拦路的原因不是同一个，别把它们绑成一句**：Apple 两端是**开发机不够**（本机无 macOS/Xcode/Apple SDK，编译发生在 CI 的 macOS runner 上）；鸿蒙是**仓库缺工程脚手架** —— 本机**装着**鸿蒙命令行工具链（`codelinter` / `hvigor` / `ohpm` 与 SDK），但 `harmony/` 不是一个鸿蒙工程（缺工程级 `build-profile.json5`、`hvigorfile.ts` 与模块级 `build-profile.json5` —— **判据与完整清单见 [`harmony/README.md`](harmony/README.md)，别照抄这一句**），`codelinter` 直接以「path is incorrect … under the project path」拒绝处理。**已实测：补齐脚手架后，同一份 ArkTS 会被真正解析**（把 `harmony/ets` 原样放进补齐脚手架的项目里，塞入一个语法错误，`codelinter` 如实报出 `@parsing-error`）。**已就绪的还有平台中立的 C ABI**（`crates/opi-ffi`，见 `tests/cabi_test.rs`）——它不属于任何一端，且**已实测能为 Apple 与鸿蒙的多个目标编译**。三者的硬约束与现状见「未来规划」。
+**Apple 两平台与鸿蒙都已有可构建的端，但都还没有真机验证**——三个目录（[`ios/`](ios/)、[`macos/`](macos/)、[`harmony/`](harmony/)）里的 Swift 与 ArkTS 早已不是空骨架。**2026-10-15 订正**：Swift 两边（`ios/` · `macos/`）**已由 CI 真编译**（`apple.yml` 的 iOS / macOS job 里 `swiftc … -typecheck` + 真链接，2026-10-15 起全绿，同日抓出一处真错），iOS 产出宿主 App + unsigned IPA、macOS 产出 unsigned pkg/app；**2026-10-19 订正**：`harmony/` 已是完整 hvigor 工程，本机鸿蒙命令行工具链可跑 `hvigorw assembleHap`，已产出 unsigned HAP（含 `libopiime.so`；`luna.opid` / `stroke.opid` / `wubi86.opid` 由 rawfile 首次启动拷进沙箱，经 C ABI 以绝对路径装载）。⚠️ **三者拦路的原因不是同一个，别把它们绑成一句**：Apple 两端是**开发机不够**（本机无 macOS/Xcode/Apple SDK，编译发生在 CI 的 macOS runner 上）；鸿蒙是**签名与真机证据为零**（没有签名材料与设备，安装、输入法列表与运行行为都未验证）。**已就绪的还有平台中立的 C ABI**（`crates/opi-ffi`，见 `tests/cabi_test.rs`）——它不属于任何一端，且**已实测能为 Apple 与鸿蒙的多个目标编译**。三者的硬约束与现状见「未来规划」。
 
 #### 2. 隐私优先，而且可以自己核对
 - **默认本地化**：输入数据只留在本机。引擎层与出口层的依赖表里**没有 HTTP 客户端**，没有遥测，没有广告 SDK
 - **零权限**：Android 的 `AndroidManifest.xml` 里**一条 `uses-permission` 都没有**
+- **iOS 的「完全访问」**：2026-10-20 起为自有贴纸写系统剪贴板而开启（`RequestsOpenAccess=true`，用户须在系统设置手动允许）；系统会显示隐私警告页。OPI 仍不联网，用户词仍只写扩展容器
 - **离线可用**：核心输入完全离线运行；`.opid` 词库走 `mmap` 只读映射，整库不读进堆（命中条目在查询时按需转出 —— `loader.rs` 的 `MmapDictionary::query` 每条命中 `.to_string()`、`candidates.rs` 的 `rank_and_pick` 再 `clone()` 一次，**不是零拷贝**）
 
 （多端云同步**已裁决不做**（用户裁决 2026-09-28），见「未来规划」——**当前仓库里没有任何同步或加密代码**。）
 
 #### 3. 词库是「活」的，也有门禁守着
 - **多源整合（2026-10-11，用户裁决「主流开源词库去重整合」）**：rime-ice（雾凇）base+ext、rime-essay、chinese-xinhua 成语/歇后语、THUOCL 专业术语，加品牌/新词/注音/姓氏/流行语五张人工表，去重后并入 `luna.opid`（9.6 万条 → 90 万条量级、33MB；首字母查询靠前缀层 top-N 截断保住延迟，实测与取舍见 `data/raw/LICENSES.md`）。⚠️ 合并产物因此**整体按 GPL-3.0 分发**（数据层；源码仍 MIT）
-- **简繁双库**：`luna.opid`（简体）+ `trad.opid`（繁体），两者都随包安装；繁体库缺失/损坏自动回退简体库。**入口**：Android 上 26 键用模式轮转键、9/14/笔画三盘用底行的简繁键（`ImeScreen.kt`）/ iOS 用键盘上的模式轮转键（`KeyboardViewController.swift`）；**fcitx5（Linux）2026-10-09 起有 `Ctrl+Shift+F`**（随包装 `trad.opid`，见 `docs/install/linux.md` §5.3）；macOS / Windows / 鸿蒙仍只有拼音⇄英文、拼音⇄符号（`Ctrl+'`、`tsf-opi/src/vk.rs` 的 `mode_hotkey`）——**还没有繁体入口**。引擎与数据侧的繁体能力本身是完整的。**2026-10-18**：`trad.opid` 新增 `trad_modern.tsv`（约 4.2 万现代常用词，OpenCC 词组级简→繁）与康熙差集 622 条，条目 96,429 → 139,355；`luna.opid` 也补入康熙差集 1,279 条（条目 937,780）
+- **简繁双库**：`luna.opid`（简体）+ `trad.opid`（繁体），按端随包分发（Windows 只随包简体、macOS 需手工放繁体，见下方词库分发通路）；繁体库缺失/损坏自动回退简体库。**入口**：Android 上 26 键用模式轮转键、9/14/笔画三盘用底行的简繁键（`ImeScreen.kt`）/ iOS 用键盘上的模式轮转键并随包 `trad.opid`（`KeyboardViewController.swift`）；**fcitx5（Linux）2026-10-09 起有 `Ctrl+Shift+F`**（随包装 `trad.opid`，见 `docs/install/linux.md` §5.3）；**macOS 2026-10-20 起有 `Ctrl+Shift+F` 与输入法菜单入口**（`trad.opid` 需用户手工放进数据目录才生效）；Windows / 鸿蒙虽已有切换繁体**模式**的动作（状态栏 / 26 键循环），但 TSF 只装一个词库、鸿蒙 `opi_load_trad` 未桥接 ⇒ 实际仍出简体——**这两端还没有可用的繁体入口**。引擎与数据侧的繁体能力本身是完整的。**2026-10-18**：`trad.opid` 新增 `trad_modern.tsv`（约 4.2 万现代常用词，OpenCC 词组级简→繁）与康熙差集 622 条，条目 96,429 → 139,355；`luna.opid` 也补入康熙差集 1,279 条（条目 937,780）
 - **单字全覆盖门禁**：GB2312 全量单字逐一断言有候选（`trad_coverage` 集成测试，字数判据写在测试里）。改词库若撞坏覆盖度，CI 直接红
-- **词库坏了绝不崩输入法**：装载策略各端统一 —— **坏路径一律返回 `Err`，不静默回退**（`engine-data/src/dictionary.rs` 的 `load_or_fallback` 注释写明此前的静默回退是有意删除的：UI 会误以为完整词库已加载）；只有**未提供路径**（含空串）时才用内置回退词库（`data/raw/fallback.tsv`，条数以该文件行数为准）。是否再从 `Err` 兜底由调用方决定：Android 的 `EngineLoader` 接住后用内置词库重试（`EngineLoader.kt` 的 `fallback()`），fcitx5 / TSF 上抛（`fcitx5-opi/src/lib.rs` / `tsf-opi/src/tsf.rs` 的装载调用点）
-- **词库分发通路**：Android 走 assets → filesDir（`EngineLoader.kt`）、fcitx5 走 XDG 数据目录且由 CMake 安装（`fcitx5-opi/cpp/CMakeLists.txt`）、Windows 走 `OPI_DICT_PATH` 环境变量 → DLL 同目录 → `%LOCALAPPDATA%\opi` → 内置回退（`tsf-opi/src/dict_path.rs`）。⚠️ **Windows 的用户入口自 2026-10-20 起是 EXE 安装器 `opi-<版本>-setup.exe`**（Inno Setup，内含 jpackage app image 与 `tsf_opi.dll`，默认装到 `C:\Program Files\opi`；TSF 注册失败只记日志、不回滚）。仍不打包 `luna.opid` ⇒ 开箱即用仍是内置回退词库 —— 词库通路已备、拷贝动作没有
+- **词库坏了绝不崩输入法**：装载策略各端统一 —— **坏路径一律返回 `Err`，不静默回退**（`engine-data/src/dictionary.rs` 的 `load_or_fallback` 注释写明此前的静默回退是有意删除的：UI 会误以为完整词库已加载）；只有**未提供路径**（含空串）时才用内置回退词库（`data/raw/fallback.tsv`，条数以该文件行数为准）。是否再从 `Err` 兜底由调用方决定：Android 的 `EngineLoader` 接住后用内置词库重试（`EngineLoader.kt` 的 `fallback()`），fcitx5 把 `Err` 上抛（`fcitx5-opi/src/lib.rs` 的装载调用点），TSF 在解析层逐候选回退、最差落到内置 35 词（`tsf-opi/src/dict_path.rs` 的 `load_dict`）
+- **词库分发通路**：Android 走 assets → filesDir（`EngineLoader.kt`）、fcitx5 走 XDG 数据目录且由 CMake 安装（`fcitx5-opi/cpp/CMakeLists.txt`）、Windows 走 `OPI_DICT_PATH` 环境变量 → DLL 同目录 → `%LOCALAPPDATA%\opi` → 内置回退（`tsf-opi/src/dict_path.rs`）。⚠️ **Windows 的用户入口自 2026-10-20 起是 EXE 安装器 `opi-<版本>-setup.exe`**（Inno Setup，内含 jpackage app image 与 `tsf_opi.dll`，默认装到 `C:\Program Files\opi`；TSF 注册失败只记日志、不回滚）。**2026-10-20 起 `luna.opid` 随包**（放在 app image 的 `app\` 目录、与 `tsf_opi.dll` 同目录，连同三份许可文本；CI 断言安装后的词库 SHA-256），开箱即用即走完整词库；`trad.opid` 仍未随包 —— Windows 侧只持一个词库（`dict_path.rs` 的头注释明写此缺口）
 - **导入词库与康熙字典（2026-10-14 / 2026-10-16）**：四端同一份**导入词库契约** —— `*.tsv`（`词<TAB>拼音<TAB>频次`）放进词库目录即被装载、可启停（Android `filesDir/dicts` · 桌面窗/TSF `%LOCALAPPDATA%\opi\dicts` · fcitx5 `$XDG_DATA_HOME/opi/dicts`）。**康熙字典词库**（`shunshi-kangxi-core`，MIT，20794 字全读音）随包分发、各端**首启种子一次**（删过不复活）；数据链 `scripts/gen_kangxi_dict.py`，取读口径与边界见 `data/raw/LICENSES.md`。**2026-10-18 起**康熙里默认库还没有的 (字,读音) 也并进 `luna.opid`（1,279 条）与 `trad.opid`（622 条），因此即使导入词库被删/未导入、或走没有导入通道的端，康熙字仍能在输入时匹配
 - **Linux 侧已能打成发行版包**：`scripts/build-packages.sh` + `scripts/nfpm.yaml` 把 `cmake --install` 的暂存树原样搬进 `.deb` / `.rpm`（两个 `.so`、两个 conf、`luna.opid` 与两份许可证文本 —— **包内清单用 `dpkg-deb -c` / `rpm -qlp` 现场核，别照抄这句**），`.github/workflows/packages.yml` **手动触发**（`gh workflow run packages.yml --ref <tag 或分支>`，或 Actions 页面 → Packages → Run workflow）；产物在该次 run 的 artifact `opi-packages` 里，**只有填了 tag 输入项才会附到 release 上**。**运行时门槛是 fcitx5 5.0**：声明在 `crates/fcitx5-opi/data/addon/opi_fcitx5.conf` 的 `[Addon/Dependencies]`（写高了 addon 整个不加载，用户拿到一个「选得到、一个字都不出」的输入法，日志里还没有 opi 的报错），CI 在 debian:12 容器里带阳性 / 现行值 / 阴性三臂对照守着它。⚠️ 这条打包通路**只到「产物打得出来、包内清单与暂存树对得上」为止** —— 没有任何门禁真的 `dpkg -i` / `rpm -i` 过它；CI 验的是**同一棵暂存树**（`cmake --install` + `cp`），不是包本身
 - **词库共建**：源数据是纯文本 `data/raw/*.tsv`，提交 / 审核 / 合并走 PR。流程与**许可证要求**见 [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 #### 4. 拒绝「功能膨胀」
 - 引擎只做一件事：五模式（拼音 / 繁体 / 英文 / 数字 / 符号）的按键状态机 + 简拼 / 模糊拼音 + 候选排序 + 本地学习。没有皮肤商城，没有弹窗，没有 AI 助手
-- **简拼**（纯缩写输入，`nh` → 你好、`zg` → 中国）：引擎侧**默认开、有独立开关**（`Engine::set_jianpin`，与模糊音同源；开关是 2026-10-08 补的）—— **三端都能关**：Android 设置页、Linux（fcitx5 附加组件配置 / 桌面设置窗写同一份 conf）、Windows（设置窗写 `settings.ini`，TSF 激活时读）。触发条件、展开规则与上限都在 `engine-core/src/jianpin.rs` 的头注释里，门禁是 `tests/jianpin_ranking.rs`
-- **候选层：精确匹配不设上限，前缀层按词频截断**：`FETCH_LIMIT` 与 `Engine::select` 内部那道截断都已拆掉，三处同值（`engine-core/src/router.rs` · `fcitx5-opi/src/candidate.rs` · `tsf-opi/src/logic.rs`，且互相之间有等值断言）；**前缀扩展层**（打一半的输入）自 2026-10-11 起按静态词频取 top-N（26 键 9216 / 9·14 键 2048，`dictionary.rs` 的两个常量，缘由与实测见 [`docs/performance.md`](docs/performance.md)）。⚠️ **两台宿主机仍是旧上限**：Android（`EngineController.kt` 的 `fetchLimit`）与 macOS（`InputController.swift` 的 `candidates(limit:)`）—— 两者都够不到引擎侧的分页出口；iOS 与鸿蒙走 `candidatesPage()`，从不由前端给 limit
-- **表情与颜文字（2026-10-18，2026-10-19 动图）**：表情面板换成 OpenMoji 常用表情（689 条、9 类：笑脸/人物/动物/植物/食物/旅行/活动/物品/符号）；**「自有」是独立顶级子页**（不与 Emoji/笑脸同组），12 个小欧形态以**动画 GIF** 贴纸呈现（静态 PNG 兜底）——Android 点选经 `InputConnection.commitContent` 依次尝试 GIF → PNG（编辑器都不接受时回退**带「小欧·」前缀的可区分文本标签**，如 `[小欧·笑]`，不再插入 Unicode emoji），桌面/iOS/鸿蒙因宿主限制复制图片到剪贴板（GIF 优先、PNG 兜底）并提示粘贴；新增 390 条颜文字（7 类）。贴纸源 `shared/pet/stickers/` 与 `shared/pet/stickers-gif/`、数据与许可见 [`data/raw/LICENSES.md`](data/raw/LICENSES.md)，生成器 `scripts/gen_emoji_kaomoji.py` / `scripts/gen_pet_stickers.py`
+- **简拼**（纯缩写输入，`nh` → 你好、`zg` → 中国）：引擎侧**默认开、有独立开关**（`Engine::set_jianpin`，与模糊音同源；开关是 2026-10-08 补的）—— **三端都能关**：Android 设置页、Linux（fcitx5 附加组件配置 / 桌面设置窗写同一份 conf）、Windows（设置窗写 `settings.ini`，经控制面 `reload` 立即重读；输入法未运行时下次激活生效）。触发条件、展开规则与上限都在 `engine-core/src/jianpin.rs` 的头注释里，门禁是 `tests/jianpin_ranking.rs`
+- **候选层：精确匹配不设上限，前缀层按词频截断**：`FETCH_LIMIT` 与 `Engine::select` 内部那道截断都已拆掉，三处同值（`engine-core/src/router.rs` · `fcitx5-opi/src/candidate.rs` · `tsf-opi/src/logic.rs`，且互相之间有等值断言）；**前缀扩展层**（打一半的输入）自 2026-10-11 起按静态词频取 top-N（26 键 9216 / 9·14 键 2048，`dictionary.rs` 的两个常量，缘由与实测见 [`docs/performance.md`](docs/performance.md)）。⚠️ **一台宿主机仍是旧上限**：Android（`EngineController.kt` 的 `fetchLimit`）够不到引擎侧的分页出口；macOS 自 2026-10-20 改走 `candidatesPage()` / `selectPage()`，iOS 与鸿蒙本来就走分页出口，从不由前端给 limit
+- **表情与颜文字（2026-10-18，2026-10-19 动图）**：表情面板换成 OpenMoji 常用表情（689 条、9 类：笑脸/人物/动物/植物/食物/旅行/活动/物品/符号）；**「自有」是独立顶级子页**（不与 Emoji/笑脸同组），12 个小欧形态以**动画 GIF** 贴纸呈现（静态 PNG 兜底）——Android 点选经 `InputConnection.commitContent` 依次尝试 **PNG → GIF**（PNG 是宿主最认的格式，GIF 是动图加分项；剪贴板兜底同序；编辑器都不接受时回退**带「小欧·」前缀的可区分文本标签**，如 `[小欧·笑]`，不再插入 Unicode emoji），桌面/iOS/鸿蒙因宿主限制把 **PNG + GIF 两份**复制到剪贴板并提示粘贴（粘贴方自选；iOS 写剪贴板的唯一通道需要「完全访问」，`Info.plist` 自 2026-10-20 起 `RequestsOpenAccess=true`，用户须在系统设置手动允许）；新增 390 条颜文字（7 类）。贴纸源 `shared/pet/stickers/` 与 `shared/pet/stickers-gif/`、数据与许可见 [`data/raw/LICENSES.md`](data/raw/LICENSES.md)，生成器 `scripts/gen_emoji_kaomoji.py` / `scripts/gen_pet_stickers.py`
 - **输入即得表情（2026-10-18，2026-10-19 内置）**：拼音/英文缓冲（≥2 字母）命中常用表情关键字时，把 emoji **追加在文本候选之后**（`data/raw/emoji_keywords.tsv` 295 条；`weixiao`→😊、`smile`→😄；不挤掉文本首候选、9/14 键数字缓冲本轮不匹配）。另提供 12 形态的**短码** `:opi_smile:` 等（`shared/pet/emoji-font/map.tsv` / `shortcodes.tsv`；短码仅 Slack/Mattermost 类客户端渲染）；普通输入框仍以原 GIF/PNG 贴纸插入、失败回退「小欧·」文本标签。PUA 彩色字体与「自有表情用字体字符」开关已于 2026-10-20 删除；「自有」分类由「表情中显示自有」开关控制（缺省隐藏）。映射表与短码是项目专有资产，见 [`ASSETS-LICENSE.md`](ASSETS-LICENSE.md)
 - **逐字确认（2026-10-17 用户裁决）**：整串有词组精确匹配时词组在最前、选中一次上屏；无精确匹配（打一半的前缀扩展词不算）则先出第一个字的整档（所有读音的字），确认一个字后它**留在候选区**（拼音行显示「中guo」），依次确认到最后一段才**整串进输入框**；缓冲空时 ⌫ 回滚上一个已确认的字。语义在引擎（`Engine::pending_text` / `commit_buffer_after_select`），四端同一条路；门禁 `tests/segment_commit.rs`
-- **两处「机制已备」的接线现状**：其一，**中文标点与全角是两个独立开关**（引擎侧 `chinese_punct` 与 `fullwidth` 各自独立，门禁 `tests/punctuation_switches.rs`；`set_chinese_punct` / `toggle_chinese_punct` 与双 ABI 出口都在）—— **Linux 桌面已接**（状态栏 `。，`/`🌕` 按钮、设置窗「中文标点」、fcitx5 附加组件配置 —— 都落到这两个开关），Windows 侧 TSF 从 `settings.ini` 读同组值；**Android 工具条月相按钮已撤**（2026-10-12 加、2026-10-13 用户裁决「移动端功能区不需要全角、半角切换功能」移除 —— 能力保留：全角仍随模式默认值自动生效，字母/数字的直传点宽化（`Engine::fullwidthize`）不动），**Apple / 鸿蒙仍无 UI 入口**（两端 `toggleFullwidth` 只有 JNI 冒烟表一个调用方）。**键位不在引擎层** —— `engine_punct.rs` 的注释只给桌面两轨**建议**了暂定的 `Ctrl+/`，未定稿、两轨都还没实现，理由与实测见该注释。其二，**Rust 侧的学习落盘**（`engine-data/src/user_words.rs`，原子写）**全仓零调用方**：Android 的持久化走它自己的 Kotlin `UserWordStore.kt`，fcitx5 / TSF 学完照旧丢
+- **两处「机制已备」的接线现状**：其一，**中文标点与全角是两个独立开关**（引擎侧 `chinese_punct` 与 `fullwidth` 各自独立，门禁 `tests/punctuation_switches.rs`；`set_chinese_punct` / `toggle_chinese_punct` 与双 ABI 出口都在）—— **桌面状态栏两平台都已接**（`。，`/`🌕` 按钮：Linux 走 `opi-ctl`、Windows 走本机控制面；设置窗「中文标点」与 fcitx5 附加组件配置都落到这两个开关，Windows TSF 从 `settings.ini` 读同组值并经控制面 `reload` 立即重读）；**Android 工具条月相按钮已撤**（2026-10-12 加、2026-10-13 用户裁决「移动端功能区不需要全角、半角切换功能」移除 —— 能力保留：全角仍随模式默认值自动生效，字母/数字的直传点宽化（`Engine::fullwidthize`）不动），**Apple / 鸿蒙仍无 UI 入口**（两端 `toggleFullwidth` 只有 JNI 冒烟表一个调用方）。**键位不在引擎层** —— `engine_punct.rs` 的注释只给桌面两轨**建议**了暂定的 `Ctrl+/`，未定稿、两轨都还没实现，理由与实测见该注释。其二，**Rust 侧的学习落盘**（`engine-data/src/user_words.rs`，原子写）**全仓零调用方**：Android 的持久化走它自己的 Kotlin `UserWordStore.kt`，fcitx5 / TSF 学完照旧丢
 - 排序有一条反直觉的设计 —— **不能把 limit 下推到词典查询**（学过的低频词可能反超截断线外的词）。这类细节才是本项目较真的地方，见下方「功能设计」
 
 ### 🚧 未来规划
@@ -119,8 +120,8 @@
 | 方向 | 状态 | 现状核对 |
 |---|---|---|
 | **更多平台**：Web（含小程序） | 未开始 | 这里指 Web **输入法**；仓库现在有静态官网 [`site/`](site/index.html)，但它不是 Web 输入法，浏览器端 IME 仍未开始 |
-| **鸿蒙 HarmonyOS** | **可构建（unsigned）**（`harmony/`）| 工程脚手架已补齐（`build-profile.json5` / `hvigorfile.ts` / 模块配置），本机鸿蒙命令行工具链 + SDK 可跑 `hvigorw assembleHap`；已产出 unsigned HAP（含 `libopiime.so`），CI 为自托管 `harmony.yml`。**签名、安装、真机输入法列表均未验证**；Rust 侧 C ABI 已能为鸿蒙目标编译。 |
-| **Apple 两平台**：iOS · macOS | **CI 已编译 + unsigned 产物**（`ios/` · `macos/`）| `apple.yml` 在 macOS runner 上真编译 Swift；iOS 产出宿主 App + unsigned IPA（`Payload/Opi.app` + 键盘 `.appex`），macOS 产出 unsigned pkg/app。**签名、公证、真机运行与输入法启用仍未验证**；C ABI 对 Apple 三个目标的 `cargo check` 通过，静态库导出符号已核对。 |
+| **鸿蒙 HarmonyOS** | **可构建（unsigned）**（`harmony/`）| 完整 hvigor 工程（`build-profile.json5` / `hvigorfile.ts` / 模块配置与构建脚本齐备），本机鸿蒙命令行工具链 + SDK 可跑 `hvigorw assembleHap`；已产出 unsigned HAP（含 `libopiime.so`；`luna` / `stroke` / `wubi86` 由 rawfile 首启拷进沙箱），工具条 / 皮肤 / 键盘模式 / 符号页 / 生僻字已对齐 Android，CI 为自托管 `harmony.yml`。**签名、安装、真机输入法列表与上述新面板均未上机验证**；Rust 侧 C ABI 已能为鸿蒙目标编译。 |
+| **Apple 两平台**：iOS · macOS | **CI 已编译 + unsigned 产物**（`ios/` · `macos/`）| `apple.yml` 在 macOS runner 上真编译 Swift；iOS 产出宿主 App + unsigned IPA（`Payload/Opi.app` + 键盘 `.appex`，键盘已补顶部槽位 / 工具条 / 皮肤 / 键盘模式 / 关于，自有贴纸经剪贴板且已开完全访问），macOS 产出 unsigned pkg/app（已补符号面板 / 输入法菜单 / 设置窗 / 候选分页）。**签名、公证、真机运行与输入法启用仍未验证**；C ABI 对 Apple 三个目标的 `cargo check` 通过，静态库导出符号已核对。 |
 | **多端云同步 / 端到端加密** | **不做**（用户裁决 2026-09-28） | 无加密库、无 HTTP 客户端：跨 `crates/` `android/` `desktop/` 的 `*.rs` / `*.toml` / `*.kt` 里，`reqwest` / `ureq` / `hyper` / `openssl` / `rustls` / `chacha` / `argon2` / `aes-gcm` / `https://` 逐个零命中。带 `sync` 的命中全是 Rust 同步原语与 TSF 标志（`std::sync`、`TF_ES_SYNC`、`trad_assets_in_sync`），与云同步无关。**注**：学习词库导出 JSON 里确有 `version` 字段，但那是**导出格式**的版本协商（`learner.rs` 的 `import_json` 拒收 `version != 1`），与云同步无关 |
 | **更多输入方案**：双拼 · 五笔 · 仓颉 · 注音 · 自定义输入规则 | 双拼（2026-10-13，六套布局）与五笔（2026-10-14，86/98）已落地；其余待做 | `Mode` 的成员仍是拼音 / 繁体 / 英文 / 数字 / 符号（`composer.rs`）；**按键布局**另有独立轴 `Scheme`（`scheme.rs`：全键盘 / 拼音9键 / 拼音14键 / 笔画 / 双拼 / 五笔 —— 匹配走按键类展开）；双拼与五笔在 Android / 桌面 / fcitx5 / TSF 均已接线（iOS / 鸿蒙仍是草案，见各自 README）；仓颉 / 注音 / 自定义规则仍未做 |
 | **英文联想** | **已接线（2026-10-18；2026-10-19 默认普通、pro 才匹配）** | **普通模式字母直出**；`pro` 专业模式才前缀匹配 `data/raw/en_words.tsv`（10000 条常用词，Google Books Ngrams v3，CC-BY 3.0；**不是牛津原版** —— OUP 数据本仓无授权，换数据只需替换 TSV）。候选按词频降序；单字母缓冲时**输入原文排首位**（保留大小写、与词条去重）；空格提交首候选、无匹配提交原文；四端共用同一引擎语义，门禁 `tests/english_words.rs` |
@@ -136,7 +137,7 @@
 | **核心引擎** | 纯 Rust 实现，多 crate workspace（`engine-core` / `engine-data` / `opi-tools`）；其中 **`engine-core` 无 IO、无平台依赖**，`engine-data` 负责文件映射与字节解析，`opi-tools` 是编译 CLI |
 | **出口层** | `opi-ffi` 双 ABI（JNI + C）· `fcitx5-opi`（cdylib）· `tsf-opi`（cdylib COM 服务器），均以进程内单例持引擎 |
 | **客户端 UI** | 各端原生，不引入跨端框架：Android 为 Jetpack Compose；Linux 为 C++ AddonInstance 调 Rust 逻辑；Windows 为 TSF COM + Compose Desktop 候选窗（命名管道 NDJSON 通信）|
-| **平台接入** | Android (InputMethodService)、Linux (fcitx5)、Windows (TSF)、iOS / macOS（CI 真编译 + unsigned 产物）、鸿蒙（工程脚手架 + unsigned HAP）；Apple / 鸿蒙的真机运行与签名仍未验证 |
+| **平台接入** | Android (InputMethodService)、Linux (fcitx5)、Windows (TSF)、iOS / macOS（CI 真编译 + unsigned 产物）、鸿蒙（完整 hvigor 工程 + unsigned HAP）；Windows / Apple / 鸿蒙的真机运行与签名仍未验证 |
 | **数据同步** | **不做**（用户裁决 2026-09-28）：原计划为端到端加密 + 自托管服务支持；现决定**不提供云同步、不设账号体系**，用户数据只在本机 |
 | **版本** | 单一版本源：根 `Cargo.toml` 的 `[workspace.package] version`，全部 workspace 成员（清单见同文件 `members`）共用；Android `versionName` 与 desktop `packageVersion` 向它对齐，发布 tag 取同一号 |
 | **MSRV** | **1.88**，写在根 `Cargo.toml` 的 `[workspace.package] rust-version`（下界的来源与实测见该文件注释）。⚠️ 这句是**声明**，光有它两个方向都漏（真用了更新的语法而声明没跟上 / 声明被下调）—— 执行点是 CI 的 `msrv` job：它**从那个键推导**工具链，跑 `cargo check --workspace --all-targets --locked` |
@@ -153,7 +154,7 @@
 - **数据层** —— `.opid` 二进制词库：定长头 + 定长条目表 + 双 blob + FNV-1a64 校验尾（各段长度以 `engine-data/src/format.rs` 的 `HEADER_LEN` / `ENTRY_LEN` 等常量为准，别抄数字）。装载走 `mmap` 只读映射，**整库不读进堆**；查询时每条命中的词都要转出一次 `String`（见 `loader.rs` 的 `MmapDictionary::query`），不是零拷贝。
 - **构建管线** —— `data/raw` 的 TSV 源数据经 `opi-tools` 编译成 `.opid`，再经 `verify` 做校验和 / 顺序两道校验，并由 `trad_coverage` 测试守住 GB2312 单字全覆盖，才入库。
 
-> **关键不变式：词库坏了绝不崩输入法。** 坏路径**不静默回退**（`engine-data/src/dictionary.rs` 的 `load_or_fallback` 注释有意如此），由调用方接住：Android 用内置回退词库重试，fcitx5 / TSF 把 `Err` 上抛 —— 只有内置词库自身损坏才是不可恢复的。
+> **关键不变式：词库坏了绝不崩输入法。** 坏路径**不静默回退**（`engine-data/src/dictionary.rs` 的 `load_or_fallback` 注释有意如此），由调用方接住：Android 用内置回退词库重试，fcitx5 把 `Err` 上抛，TSF 在解析层逐候选回退到内置词库 —— 只有内置词库自身损坏才是不可恢复的。
 
 ### 🧩 功能设计
 
@@ -165,7 +166,7 @@
 |---|---|
 | **拼音**（默认） | 小写字母与分隔符 `'` 进缓冲（缓冲上限见 `composer.rs` 的 `MAX_BUFFER`），查主词典出候选 |
 | **繁体** | 行为与拼音完全一致，只是路由到 `trad` 词典；trad 缺失则回退简体库 |
-| **英文** | `⇧` 单击锁定大写（再点取消）、长按单次大写；底行 `pro` 切换普通/专业：**普通（默认）字母直出、不做单词匹配**，专业才进引擎做前缀联想（单字母首候选是输入原文，保留大小写）；仅「携带缓冲」直传；英文键盘顶部有 0-9 数字行（数字直提） |
+| **英文** | `⇧` 单击锁定大写（再点取消）、长按单次大写；底行 `pro` 切换普通/专业：**普通（默认）字母直出、不做单词匹配**，专业才进引擎做前缀联想（单字母首候选是输入原文，保留大小写）；**离开英文去中文会自动关闭 pro**（2026-10-20 用户裁决）；仅「携带缓冲」直传；英文键盘顶部有 0-9 数字行（数字直提） |
 | **数字** | 仅数字进缓冲，空格 / 回车提交 |
 | **符号** | 缓冲不接受任何按键，由符号面板直传；开面板前先提交 pending 拼音，不留残影 |
 
@@ -239,19 +240,20 @@ crates/                        # Rust 工作区（crate 清单以根 Cargo.toml 
     cpp/CMakeLists.txt         #   **唯一的编译 + 安装通路**，落点由 opi_locate_check 探针与 CI 守着
   tsf-opi/                     # Windows TSF 插件：Rust 逻辑 + COM 服务器 + 候选窗线协议
     src/dict_path.rs           #   词库查找顺序：环境变量 → DLL 同目录 → %LOCALAPPDATA% → 内置回退
-    src/settings.rs            #   属性设置读侧（%LOCALAPPDATA%\opi\settings.ini，键名与设置窗逐字对应）
+    src/settings.rs            #   属性设置读侧（%LOCALAPPDATA%\opi\settings.ini，键名与设置窗逐字对应；控制面 reload 立即重读）
+    src/ctl.rs                 #   本机控制面：状态 / 动作 / 搜索 / 上屏 / reload（\\.\pipe\opi-control）
 android/                       # Android IME（Kotlin + Jetpack Compose）
   app/                         #   IME 服务 · 键盘 / 候选栏 / 面板 · 设置页（含用户词导入导出）· 宠物组件
     src/main/assets/           #   luna.opid（简体）· trad.opid（繁体）· stroke.opid（笔画）· rare_index.tsv（部首索引）
     src/main/res/              #   自适应启动图标（VectorDrawable，含小欧）
   rust_builder/                #   cargokit 独立版：编译 crates/opi-ffi → 三 ABI .so
   jni_smoke/                   #   JNI 连通性冒烟测试
-desktop/                       # Windows 候选窗（Compose Desktop / JVM，命名管道 NDJSON）
+desktop/                       # Windows 候选窗 / 状态栏 / 设置窗（Compose Desktop / JVM，命名管道 NDJSON；关于页含项目与博客地址）
 site/                          # 静态官网（翻屏 / 响应式 / three.js；见 site/README.md）
 ios/                           # iOS 键盘扩展 —— CI 真编译；宿主 App + unsigned IPA 已产出，真机未验证（见目录内 README）
-macos/                         # macOS 输入法（InputMethodKit）—— CI 已真编译；unsigned pkg/app，真机未验证
-harmony/                       # 鸿蒙输入法（ArkTS + N-API）—— 工程脚手架已补齐，已产出 unsigned HAP
-                               #   签名 / 安装 / 真机输入法列表仍未验证；构建用自托管 harmony.yml
+macos/                         # macOS 输入法（InputMethodKit）—— CI 已真编译；符号面板 / 输入法菜单 / 设置窗 / 候选分页；unsigned pkg/app，真机未验证
+harmony/                       # 鸿蒙输入法（ArkTS + N-API）—— 完整 hvigor 工程，已产出 unsigned HAP（内含 libopiime.so）
+                               #   词库从 rawfile 复制到沙箱；签名 / 安装 / 真机输入法列表仍未验证；构建用自托管 harmony.yml
 shared/                        # 跨端共享的 Kotlin 源码
   pet/OpiPet.kt                #   项目宠物「小欧」的 Compose 绘制（Android 与 desktop 共用一份）
 data/                          # 词库数据
@@ -270,7 +272,7 @@ docs/                          # 宠物、图与设计文档
   release-claim-corrections.md #   发布声明订正（tag 注释推出去改不了，实测到的正确说法落这里）
   weixinpay.png · alipay.png   #   赞赏码（页脚引用）
 scripts/                       # 词库/表情生成：gen_luna_dict.py · gen_trad_dict.py · gen_trad_modern.py · gen_kangxi_extra.py · gen_symbols.py · gen_emoji_kaomoji.py · gen_pet_stickers.py · gen_emoji_keywords.py · gen_pet_emoji_table.py
-                               #   （+ symbol_keywords.py 手写关键字表）· gen_en_dict.py · hanzi_freq.py
+                               #   （+ symbol_keywords.py 手写关键字表）· gen_en_dict.py · hanzi_freq.py · prepare_harmony_dicts.sh（鸿蒙 rawfile 词库预置）
                                # 发行版打包：build-packages.sh（.deb / .rpm）+ nfpm.yaml
                                #   （nfpm.yaml 只负责把暂存树搬进包，**落点不在这里声明**）
 .github/workflows/ci.yml       # CI：rust（fmt / cargo test / clippy / C 消费者 + JNI 冒烟 /
@@ -285,7 +287,7 @@ LICENSE · CONTRIBUTING.md      # MIT 全文 · 贡献指南（含词库许可�
 
 ### 📅 项目状态
 
-> **当前阶段：v1.18.0（2026-10-20）：六端原生客户端与静态官网；Apple / 鸿蒙为 unsigned 产物，Windows 安装链路仍在验证**
+> **当前阶段：v1.19.0（2026-10-20）：六端原生客户端与静态官网；Windows 词库随包、卸载清理、状态栏控制面与设置即时生效，Android 空闲工具条 / 英文候选栏与 iOS、macOS、鸿蒙功能对齐，贴纸 PNG 优先上屏与 iOS 完全访问，站点 3D / 赞赏二维码 / 备案改版；Apple 与鸿蒙仍为 unsigned 产物，签名与 Windows / iOS / 鸿蒙真机未验证**
 
 V1 里程碑进度：
 
@@ -296,8 +298,8 @@ V1 里程碑进度：
 - [x] **M6a Android 原生重构**：opi-ffi 双 ABI（JNI + C）替换 frb；Compose 原生 IME + 键盘/候选栏/面板/设置页；删除 flutter/
 - [x] **简繁双词库**（spec §8 未给它 M6 编号，独立成项）：`Mode::Traditional` + 双词典路由 + `trad.opid` + GB2312 单字全覆盖门禁
 - [~] **M6b Linux fcitx5 插件**：Rust 逻辑与单测完成；**C++ 胶水此前从未被编译器看过**，现已补上 CMake 编译 + 安装通路（`crates/fcitx5-opi/cpp/CMakeLists.txt`）、CI 的 fcitx5 job（编译 + 安装落点断言 + debian:12 容器里带三臂对照真加载）与 `.deb` / `.rpm` 打包（`scripts/build-packages.sh`）—— **待在目标平台实机验收；包也从未被 `dpkg -i` / `rpm -i` 过**
-- [~] **M6c Windows TSF 插件 + CMP 候选窗**：Rust 逻辑、候选窗线协议、词库分发通路与 Compose Desktop 候选窗完成 —— COM 服务端按目标平台门控；**Windows 打包自 2026-10-18 起已接线，2026-10-20 起用户入口改为 EXE 安装器 `opi-<版本>-setup.exe`**（DLL 随包；`regsvr32` 失败只记日志、不回滚；后处理 MSI 仅为内部证据），但**词库仍不入包**（开箱仍是内置回退那几十条词），待在 Windows 上验收（仅支持 Windows 10/11 x64；Win7/8/8.1 不支持）
-- [~] **M7 iOS / macOS**：C ABI 已就绪；CI 的 `apple.yml` 已真编译 Swift，iOS 产出宿主 App + unsigned IPA，macOS 产出 unsigned pkg/app；**签名、真机运行与输入法启用仍未验证**。
+- [~] **M6c Windows TSF 插件 + CMP 候选窗**：Rust 逻辑、候选窗线协议与 Compose Desktop 候选窗 / 状态栏 / 设置窗完成 —— COM 服务端按目标平台门控；**Windows 打包自 2026-10-18 起已接线，2026-10-20 起用户入口改为 EXE 安装器 `opi-<版本>-setup.exe`**（`luna.opid` 已随包放进 app 镜像 `app\`——开箱即用完整简体词库，三份许可证文本一并分发、CI 断言 SHA-256；白屏修复：启动器不再重启 Explorer；卸载会结束 `opi.exe`、删 `{app}`、清 Run 项与 `%TEMP%` 锁文件；状态栏登录自启并经 `\\.\pipe\opi-control` 控制面驱动 TSF，设置即时 `reload`）；**`trad.opid` 仍不随包**（Windows 只持有一本词典），待在 Windows 真机验收（仅支持 Windows 10/11 x64；Win7/8/8.1 不支持）
+- [~] **M7 iOS / macOS**：C ABI 已就绪；CI 的 `apple.yml` 已真编译 Swift，iOS 产出宿主 App + unsigned IPA（工具条 / 皮肤 / 键盘模式 / 关于页对齐 Android，贴纸写系统剪贴板需开启「完全访问」），macOS 产出 unsigned pkg/app（符号面板 / 输入法菜单 / 设置窗 / 候选分页）；**签名、真机运行与输入法启用仍未验证**。
 
 > 里程碑编号以 `docs/superpowers/specs/2026-08-14-opi-multi-platform-design.md` §8 与 M6 实施计划为准
 > （M6a=Android / M6b=fcitx5 / M6c=TSF+候选窗）。

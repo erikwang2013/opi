@@ -69,7 +69,8 @@
 > **2026-10-19 三补**：`ets/**` 从 11 个长到 12 个 —— 新增生成物
 > `PetEmojiFont.ets`（TTF/TSV 内嵌 + `font.registerFont`）与 `resources/base/rawfile/pet-font/`
 > 三份字体副本；`PetStickerImages.ets` 增补 12 张 GIF，`EmojiPad` / `PetStickerClipboard` /
-> `InputMethodService` 改成「GIF 优先、PNG 兜底 + 启动注册字体」。**这一轮的 12 个文件
+> `InputMethodService` 改成「GIF 优先、PNG 兜底 + 启动注册字体」（2026-10-20 起改为
+> **PNG 优先**，见文件清单）。**这一轮的 12 个文件
 > 尚未跑 codelinter**（上一轮的 11 个文件记录仍然成立），行为更未上机。
 > **2026-10-20 四补（用户裁决）**：删除 `PetEmojiFont.ets` 与 `rawfile/pet-font/` 三份字体副本，
 > 自有贴纸仍用原 GIF/PNG；`EmojiPad` 增加 `SHOW_OWN = false`，**「自有」子页缺省隐藏**
@@ -215,7 +216,7 @@
 | `ets/InputMethodExtensionAbility/KeyPanels.ets` | 9 键 / 大 9 键 / 14 键 / 笔画 四个键面 + 生僻字面板骨架 + 「输入模式」九宫格面板（2026-10-14）。与 Android 的三处差异（左列读数、底行、生僻字无数据）写在文件头 |
 | `ets/InputMethodExtensionAbility/EmojiPad.ets` | 表情页（Symbol 模式）。2026-10-18 重写为与 Android `EmojiPanel.kt` 同布局：顶部 `[‹ 返回] [自有 \| Emoji \| 颜文字] [🔍]`、网格、**底部**可横滑分类条；Emoji 子页 = 引擎 9 组（**不再含「自有」偏移**），自有子页 = 4 列 GIF 网格（2026-10-19，点击复制图片）。**2026-10-20 起「自有」缺省隐藏**（`SHOW_OWN = false`；无设置页） |
 | `ets/InputMethodExtensionAbility/PetStickerImages.ets` | 自有 12 张**小欧贴纸 PNG + 动画 GIF**（PNG 280×280 / GIF 200×200 十帧，base64 内嵌）+ 标签/文件名映射（顺序 = `PetEmojiMap.kt`，文件名 = `PetStickerAssets.kt`）。生成物，**别手改**；由 `scripts/gen_pet_stickers.py` 的产物再编码 |
-| `ets/InputMethodExtensionAbility/PetStickerClipboard.ets` | 自有贴纸的落点（2026-10-19 改）：GIF 字节 → `pasteboard.createData('image/gif', ArrayBuffer)`，失败退回 base64 → `PixelMap`；`promptAction` toast。**剪贴板回退**（IME Kit 不能往宿主输入框插图片），**不提交任何文本**。⚠️ API 全部未编译/未上机 |
+| `ets/InputMethodExtensionAbility/PetStickerClipboard.ets` | 自有贴纸的落点：PNG → `PixelMap` → `pasteboard.createData(MIMETYPE_PIXELMAP)`（2026-10-20 起 PNG 优先），PNG 缺失才走 GIF 字节 → `createData('image/gif', ArrayBuffer)`；`promptAction` toast。**剪贴板回退**（IME Kit 不能往宿主输入框插图片），**不提交任何文本**。⚠️ release 构建已编译，API 行为未上机 |
 | `ets/InputMethodExtensionAbility/KaomojiData.ets` | **机械生成**的颜文字数据（7 类 / 390 条，源 `data/raw/kaomoji.tsv`；解析/分类口径同 Android `KaomojiCategories.parse`）。**别手改** |
 | `ets/InputMethodExtensionAbility/pages/Index.ets` | 键盘 UI 最小骨架：候选栏（候选带页内序号 + ⌨ 输入模式入口）+ preedit + 按键面**分支**（**数字键面按语言模式**、26 键族 QWERTY / 9 键 / 14 键 / 笔画 / 生僻字 / 表情页，2026-10-14）+ 功能行 |
 | `module.json5` | `extensionAbilities` 配置**片段**（不是能直接用的完整 manifest） |
@@ -1403,7 +1404,7 @@ grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|op
     不是本端漏做。实际行为：点一格 = 把 PNG/PixelMap（2026-10-20 起优先；PNG 缺失
     才用 GIF）写进系统剪贴板（`pasteboard`）+ toast「已复制，去粘贴」，**不提交任何文本**；用户回
     宿主 App 自己粘贴。⚠️ 整条链路（`PetStickerClipboard.ets`）、`Image(dataUri)`
-    的 base64/GIF 渲染**均未编译、未上机**；
+    的 base64/GIF 渲染**行为均未上机**（release 构建已于 2026-10-20 通过）；
     剪贴板在 IME 扩展里是否受前台/权限限制也未验证 —— 真机失败时按该文件头注的顺序
     排查（先 `setData` 的 `.catch`，再 `Image`）。
 

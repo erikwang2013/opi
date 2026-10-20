@@ -160,5 +160,6 @@ boost 提上来）；**有学习词或 `limit == usize::MAX`** 时仍留满 9216
   `dumpsys gfxinfo`，但**必须跑英文直通基线**对照（见上表：模拟器帧数据无分辨力）。
 - **desktop fcitx5**：本机 harness（`fcitx5-local-verification-harness` 记忆）里的
   `opi_panel_driver` 时序；面板绘制归 fcitx5 classicui（非本仓）。
-- **TSF / Apple / 鸿蒙**：本机不可运行（无 Windows / 无 macOS / 鸿蒙缺脚手架）——
+- **TSF / Apple / 鸿蒙**：本机不可运行（无 Windows / 无 macOS / 鸿蒙无设备或模拟器；
+  鸿蒙工程与 release 构建 2026-10-20 已通，见 `docs/install/harmony.md` §8）——
   引擎层与上述同源可推断，**宿主层未验证**，如实记。

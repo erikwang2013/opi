@@ -31,6 +31,11 @@
 > GIF/PNG + 「小欧·」标签兜底；iOS 没有设置页，`EmojiPanel.showOwn = false` 让
 > **「自有」子页缺省隐藏**（要显示改这一个常量并重编）。
 >
+> **2026-10-20 订正（编译状态）**：`apple.yml` 的 iOS job 已在 run `39425977787`（739df45）
+> 用 `swiftc ios/*.swift` 把**当前全部 Swift** 编过（typecheck + 真编 + 静态链接），
+> 新增的工具条/皮肤/面板/宿主 App 都在内。上面 2026-10-18/19/20 各条里的「未过 CI」
+> 只对当时的树成立。**仍未上机运行**：行为、布局、点击链依旧零验证。
+>
 > 本目录的代码是在 Linux 上写的：本机没有 macOS、没有 Xcode、没有 Apple SDK，
 > `import UIKit` 就断 —— 编译发生在 **CI 的 macOS runner** 上，不在开发机。
 > 改完 Swift **先推一次让 CI 编**，再谈别的（本地读不出来的错，编译器一秒钟就报）。
@@ -97,9 +102,9 @@
 | `OpiEngineScheme.swift` | 方案族包装（2026-10-14）：`scheme()`/`setScheme`/`shuangpinLayout()`/`setShuangpinLayout`/`loadStroke`。拆出来是因为主文件顶在 500 行上；拆法照 Rust 的族边界（`cabi_scheme.rs`） |
 | `OpiEngineWubi.swift` | 五笔旋钮族包装（2026-10-14）：`loadWubi` + 五个旋钮（风格/混入/个数/回车/自动上屏）。同上，对应 `cabi_wubi.rs`。**本文件没有任何 iOS 调用方**（没有设置界面） |
 | `KeyboardKeys.swift` | 「一个键是什么」：`KeySpec` / `KeyFallback` / `KeyboardFunctionKey` / `KeyButton`。不含布局。2026-10-14 加了 `fontSize` / `longPressFunction` 两个字段；2026-10-20 加了 `.showSkin` / `.showKeyboardModes` / `.showAbout` / `.closeKeyboard` / `.toggleTraditional` / `.segment` 等功能键 case |
-| `KeyboardTheme.swift` | 皮肤与键盘模式（2026-10-20）：12 款皮肤、12 个色板角色（值逐字抄 Android `Palette.kt`）、优先级「长辈 > 暗光 > 皮肤」、长辈字号 1.18、`KeyboardPreferences`（UserDefaults）。另含控制器扩展 `applyTheme` / `openExternal` / `cycleMode` / `modeKeyLabel`。⚠️ 未编译 |
-| `KeyboardToolbar.swift` | 顶部工具条（2026-10-20）：表情 / 皮肤 / 输入模式 / 键盘模式 / 关于 / 隐藏「中」/ 收起键盘，图标次序对齐 Android `ImeToolbar.kt`。SF Symbols，缺符号时退文字。⚠️ 未编译 |
-| `KeyboardPanels.swift` | 工具条打开的四个面板（2026-10-20）：`SkinPanel`（12 卡 + 3×4 小键盘预览）、`KeyboardModePanel`（繁体 / 单手 / 悬浮 / 游戏 / 暗光 / 长辈）、`AboutPanel`（版本文案与外链）、`KeyboardPanelHeader`。⚠️ 未编译 |
+| `KeyboardTheme.swift` | 皮肤与键盘模式（2026-10-20）：12 款皮肤、12 个色板角色（值逐字抄 Android `Palette.kt`）、优先级「长辈 > 暗光 > 皮肤」、长辈字号 1.18、`KeyboardPreferences`（UserDefaults）。另含控制器扩展 `applyTheme` / `openExternal` / `cycleMode` / `modeKeyLabel`。（CI 已编译，未上机） |
+| `KeyboardToolbar.swift` | 顶部工具条（2026-10-20）：表情 / 皮肤 / 输入模式 / 键盘模式 / 关于 / 隐藏「中」/ 收起键盘，图标次序对齐 Android `ImeToolbar.kt`。SF Symbols，缺符号时退文字。（CI 已编译，未上机） |
+| `KeyboardPanels.swift` | 工具条打开的四个面板（2026-10-20）：`SkinPanel`（12 卡 + 3×4 小键盘预览）、`KeyboardModePanel`（繁体 / 单手 / 悬浮 / 游戏 / 暗光 / 长辈）、`AboutPanel`（版本文案与外链）、`KeyboardPanelHeader`。（CI 已编译，未上机） |
 | `KeyboardPanelHost.swift` | `KeyboardLayout` 的面板装配扩展（2026-10-20）：工具条回调、七个面板的摆位、顶部槽位切换（候选栏 ⇄ 工具条）、主题下发、单手宽度约束。从 `KeyboardLayout.swift` / `KeyboardViewController.swift` 拆出（500 行门禁） |
 | `KeyboardLayout.swift` | 键盘 UI 骨架的视图装配：候选栏（含翻页）+ 字母/数字层 + 触摸接线 + 外部刷新入口 + 面板摆位（2026-10-20 起摆位在 `KeyboardPanelHost.swift`，本文件只留视图与键位）。**不含**键位表与尺寸算式（见下两行） |
 | `InputModes.swift` | 输入模式（2026-10-14）：九项枚举（`InputMode`）与三根轴的映射、各模式的**键位表**（26/9/14/笔画）、`applyInputMode`（控制器扩展）。**不含**视图装配 |
@@ -107,14 +112,14 @@
 | `InputModePanel.swift` | 输入模式**菜单**（2026-10-14）：九项 chip，选中即换；2026-10-20 起左上角返回箭头（原右上角关闭已撤）。摆位在 `KeyboardLayout`，语义在 `applyInputMode` |
 | `RarePanel.swift` | 生僻字面板（2026-10-14）：`RareIndex`（TSV 解析）+ 部首→笔画→字三级状态机，提交直提。索引 `rare_index.tsv` 由 `package-ios.sh` 拷进 appex（2026-10-20 起；缺文件则打包硬失败） |
 | `SymbolPanel.swift` | 符号层的网格（竖向滚动）。数据来自 `OpiEngine.commonSymbols()`，点击直提。另含 `canRender`（字形判定，表情层共用） |
-| `EmojiPanel.swift` | 表情页（2026-10-18 改为 Android 同布局）：顶部 `[‹ 返回][自有 \| Emoji \| 颜文字][🔍]` + 底部分类条 + 两套工具条。Emoji 数据来自 `OpiEngine.emojiSymbols()`/`emojiGroups()`，自有 = 4 列贴纸网格（点击复制图片），颜文字来自内嵌数据。**2026-10-20 起「自有」缺省隐藏**（`showOwn = false`；无设置页）。⚠️ 这次改写**未编译** |
+| `EmojiPanel.swift` | 表情页（2026-10-18 改为 Android 同布局）：顶部 `[‹ 返回][自有 \| Emoji \| 颜文字][🔍]` + 底部分类条 + 两套工具条。Emoji 数据来自 `OpiEngine.emojiSymbols()`/`emojiGroups()`，自有 = 4 列贴纸网格（点击复制图片），颜文字来自内嵌数据。**2026-10-20 起「自有」缺省隐藏**（`showOwn = false`；无设置页）。（这次改写 CI 已编译，未上机） |
 | `EmojiGridView.swift` | 表情页的网格（2026-10-18）：固定列数、显式行高、贴纸格 / 文本格两套；滚动位置回调给面板反推分类高亮。从 `EmojiPanel` 拆出（500 行门禁） |
 | `EmojiFilter.swift` | 引擎表情表 → 「本机能画的列表 + 对齐的分类条」纯函数（2026-10-18 从 `EmojiPanel` 拆出，500 行门禁）。过滤与 `start`/`count` 重算必须同一函数 |
 | `KaomojiData.swift` | 颜文字数据（2026-10-18，**生成文件**）：390 条 / 7 类，源 `data/raw/kaomoji.tsv`，头部写了生成命令。Swift 常量，**不走 bundle 资源** |
 | `PetEmojiTable.swift` | 「自有」12 形态的 label + 贴纸文件名（2026-10-18），与 `shared/pet/PetEmojiMap.kt` 的标签、`PetStickerAssets.kt` 的文件名逐条对应。**不含 emoji 字形**（自有不再提交文本） |
-| `PetStickerImages.swift` | 「自有」12 张**小欧 PNG**（280×280，透明底）的 base64 内嵌 + `UIImage(data:)` 解码（2026-10-18）。**生成文件**，源 `shared/pet/stickers/*.png`，头部写了生成命令。⚠️ **未编译** |
-| `PetStickerGifs.swift` | 「自有」12 张**小欧动画 GIF**（200×200、10 帧、透明底）的 base64 内嵌 + `CGImageSource` 解码为 `UIImage.animatedImage`（2026-10-19）。**生成文件**，源 `shared/pet/stickers-gif/`。⚠️ **未编译** |
-| `PetStickerClipboard.swift` | 「自有」贴纸的落点（2026-10-19 改）：优先 `UIPasteboard.setItems` 写 `com.compuserve.gif` + `public.png`，无 GIF 才 `UIPasteboard.general.image`；触觉/读屏公告 + 面板内 `ToastLabel`。**剪贴板回退**（iOS 键盘扩展不能往宿主输入框插图片），不提交文本。⚠️ **未编译** |
+| `PetStickerImages.swift` | 「自有」12 张**小欧 PNG**（280×280，透明底）的 base64 内嵌 + `UIImage(data:)` 解码（2026-10-18）。**生成文件**，源 `shared/pet/stickers/*.png`，头部写了生成命令。（CI 已编译，未上机） |
+| `PetStickerGifs.swift` | 「自有」12 张**小欧动画 GIF**（200×200、10 帧、透明底）的 base64 内嵌 + `CGImageSource` 解码为 `UIImage.animatedImage`（2026-10-19）。**生成文件**，源 `shared/pet/stickers-gif/`。（CI 已编译，未上机） |
+| `PetStickerClipboard.swift` | 「自有」贴纸的落点（2026-10-19 改）：优先 `UIPasteboard.setItems` 写 `com.compuserve.gif` + `public.png`，无 GIF 才 `UIPasteboard.general.image`；触觉/读屏公告 + 面板内 `ToastLabel`。**剪贴板回退**（iOS 键盘扩展不能往宿主输入框插图片），不提交文本。（CI 已编译，未上机） |
 | `KeyboardViewController.swift` | `UIInputViewController` 入口：生命周期、词库装载（含 2026-10-14 加的 `loadBundledDictionaries()`）、**软键盘**路由、`textDocumentProxy`，外加外接键盘的两个入口 `pressesBegan/pressesEnded`（逻辑在下一行那个文件） |
 | `KeyboardHardware.swift` | **外接键盘那一路**：`UIKey`/`UIPress` → 引擎键码、修饰位，以及**引擎之前**判掉的三个热键（`Ctrl+'` / `Ctrl+\` / `Shift+Space`）。不含触摸与布局 |
 | `HostApp/OpiApp.swift` | 最小宿主 App（2026-10-20）：承载键盘扩展、显示启用步骤。`package-ios.sh` 用 `swiftc` 直编，无 storyboard；⚠️ 未上机 |
@@ -218,8 +223,8 @@
 * **输入模式不持久化**：本轮只存皮肤与键盘模式。
 * **C ABI 缺口仍在**：无 `opi_candidate_readings`（9 键左列恒标点，不换拼音读数）、
   无待提交文本出口（换模式丢缓冲）、无引擎版本出口。
-* **未验证**：本机无 UIKit/Apple SDK，**Swift 编译与真机行为都未验证**。
-  CI 的 `apple.yml` 会在 macOS 上编译全部 `ios/*.swift`，但没有任何运行时测试。
+* **未验证**：本机无 UIKit/Apple SDK，**真机行为未验证**；Swift 编译已由 CI 的
+  `apple.yml` 补齐（2026-10-20 run 39425977787 编过全部 `ios/*.swift`），但没有运行时测试。
 
 ---
 
@@ -458,7 +463,7 @@ Swift 特殊键 12 个，与 ASCII 段重叠: 无
 `cabi.rs` 里 `opi_switch_mode` 的注释写「0=Pinyin 1=English 2=Number 3=Symbol」，
 **漏了 4=Traditional**；实际收 4。以 `mode_from_int` 为准，别照那句注释写。
 
-#### 繁体模式的入口 —— **已写，未编译**
+#### 繁体模式的入口 —— **已写，CI 已编译、未上机**
 
 （**订正**：本节早先写的是「键盘 UI **没有**进入繁体模式的入口」。现在有了。）
 
@@ -476,9 +481,9 @@ else                   -> controller.switchMode(EngineMode.PINYIN)
 
 引擎侧**没有**为此加什么东西：`opi_switch_mode(4)` 本来就走得通，缺的只是 UI 入口。
 
-### 5. Swift 代码 —— **仍然零编译，只多了三项文本级检查**
+### 5. Swift 代码 —— **CI 已编译；本机只做文本级检查**
 
-**一行都没编译过。别问「有没有 bug」，问就是「不知道」。**
+**本机一行都编不了（没有 swiftc）；编译由 CI 的 macOS runner 补上。别问「有没有 bug」，问就是「不知道」—— 从未上机运行。**
 上面第 4 条只是「常量的**数值**抄对了」，与「代码能编译」是两件事。
 
 本机**确实没有**编译器（`which swiftc xcodebuild` → exit 1，两个都找不到）。
@@ -879,7 +884,7 @@ xcodebuild -create-xcframework \
   `.keyboardPageUp` `.keyboardPageDown` `.keyboardLeftShift` `.keyboardRightShift`
   `.keyboardUpArrow` `.keyboardDownArrow` `.keyboardLeftArrow` `.keyboardRightArrow`
   `.keyboardSpacebar`。
-  ⚠️ 这一条**只是文档核对，不是编译验证** —— 仍然没有编译器看过这个文件。
+  ⚠️ 这一条**只是文档核对，不是编译验证** —— 不过 CI 的 `swiftc ios/*.swift` 已编过本文件，名字若错会当场报编译错误。
   顺带：成员名写错属**编译错误**（不是静默失效），所以这类错在 Mac 上第一轮编译
   就会全部暴露，改起来不费时。
 - `UIKey.characters` / `UIKey.modifierFlags` 属性名（**仍未核对**）
@@ -1135,7 +1140,7 @@ OpiString opi_select_page(uint32_t k);  /* 当前页第 k 个；越界/未装载
 
 ---
 
-## 本轮补的功能面：符号面板（**已写，未编译**）
+## 本轮补的功能面：符号面板（**已写，CI 已编译、未上机**）
 
 ### 加了什么
 
@@ -1194,7 +1199,7 @@ OpiString opi_select_page(uint32_t k);  /* 当前页第 k 个；越界/未装载
 
 ---
 
-## 表情页（2026-10-13 加，2026-10-18 改为 Android 同布局，2026-10-19 动图，2026-10-20 删字体/缺省隐藏自有，**本轮未编译**）
+## 表情页（2026-10-13 加，2026-10-18 改为 Android 同布局，2026-10-19 动图，2026-10-20 删字体/缺省隐藏自有，**CI 已编译、未上机**）
 
 > ⚠️ 2026-10-13 那版在 2026-10-15 的 CI `apple.yml` iOS job 里**真编译过**（从未上机运行）。
 > **2026-10-18 的布局改写（`EmojiPanel.swift` 重写 + `EmojiGridView` / `KaomojiData` /
@@ -1204,6 +1209,8 @@ OpiString opi_select_page(uint32_t k);  /* 当前页第 k 个；越界/未装载
 > `EmojiGridView` / `KeyboardViewController`，同样未过 CI。
 > **2026-10-20**：`PetEmojiFont.swift` 已删除（PUA 字体方案取消），并新增缺省隐藏的
 > `showOwn`；这两处同样未过 CI。
+> **订正（2026-10-20）**：run `39425977787`（739df45）已把当时全部 `ios/*.swift`
+> （含上面这些改写与新增文件）真编过；以上「未过 CI」只描述各次提交当时的树状态。
 > 下面每一条都只是「文本级一致」或「抄自哪份实现」，不是「跑过」。
 
 ### 加了什么
@@ -1284,11 +1291,11 @@ OpiString opi_select_page(uint32_t k);  /* 当前页第 k 个；越界/未装载
 —— **判反了**（`b55e3b5` 引入，与它自己上一行的注释相反）。两头都错：单码位（正是
 U+1FAEB 那种要判的）从不被过滤，多码位（VS16 形/键帽）反倒被拿去问「整串连字有没有
 字形」→ 误判成没有 → 把整类藏掉。已订正为 `== 1`，与 Android 的
-`codePointCount > 1 || hasGlyph` 逐字对齐。**未编译过**，Mac 上第一件事是核实它。
+`codePointCount > 1 || hasGlyph` 逐字对齐。**CI 已编译**；真机行为仍待核实。
 
 ### 未做 / 未知数（如实记）
 
-- **2026-10-18 的改写未编译、未上机**：本机无 swiftc，待 CI apple.yml 的 iOS job。
+- **2026-10-18 的改写已由 CI 编译（run 39425977787），未上机**：本机仍无 swiftc。
   `EmojiGridView` 的「滚动偏移 ↔ 首个可见项」换算依赖显式行高（文本 40 / 贴纸 64）
   + 行距 6（不是内容自适应）；行高、列数（8 / 3 / 自有 4）都是照 Android 抄的数，
   真机手感未验。
@@ -1313,7 +1320,7 @@ U+1FAEB 那种要判的）从不被过滤，多码位（VS16 形/键帽）反倒
 
 ---
 
-## 输入模式（2026-10-14 加，**已写，未编译**）
+## 输入模式（2026-10-14 加，**已写，CI 已编译、未上机**）
 
 把键盘草案接到引擎**已有的**输入模式上：九项菜单 + 三套新键面 + 生僻字面板 + 两个可选词库。
 参照实现是 Android（`ime/InputMode.kt`、`keyboard/NineKeyKeyboard.kt`、`FourteenKeyKeyboard.kt`、
@@ -1469,7 +1476,7 @@ Rust 导出 = 31   头文件声明 = 31
 exit=0
 ```
 ⚠️ **上面这段是"声明面对齐"的证明，不是"Swift 能调"的证明** ——
-Swift 那边仍然一行都没编译过（见第 5 节），本机永远证明不了。
+Swift 编译已由 CI 补上（见第 5 节），但调用链真正跑起来本机永远证明不了。
 
 ⚠️ 头文件归 `ffi-contract`，**我全程没改它**。
 

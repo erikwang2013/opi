@@ -219,7 +219,9 @@ cargo build --release -p tsf_opi --target x86_64-pc-windows-msvc
 **桌面窗的「词库」页与导入词库（2026-10-14 / 2026-10-16）**：Windows 的 Compose 设置窗
 （与 TSF DLL 同一个 MSI 分发）有「词库」页，管 `%LOCALAPPDATA%\opi\dicts\*.tsv`
 （导入 / 启停 / 删除）——与上面第 3 级同一条目录约定；**康熙字典随包**，开窗时
-首启种子一次（之后照常启停，删过不复活）。生效时机 = **下次激活**（TSF 在引擎装载时读该目录）。
+首启种子一次（之后照常启停，删过不复活）。生效时机（2026-10-20 起）：保存/导入/删除后
+经控制面 `reload` 让 TSF **立即重读** `settings.ini` 与词库目录（与 `Activate` 同一条
+`apply_settings`）；输入法没在跑时才退化为「下次激活」生效。
 
 **词库文件从哪来？**
 
@@ -1047,11 +1049,10 @@ opi.exe --settings     # 设置窗（开始菜单「opi settings」也是这条�
 opi.exe                # 候选窗（无参数；TSF 走命名管道驱动它）
 ```
 
-设置窗保存后**只落盘**。⚠️ **生效时机 = 输入法下一次激活**（切到别的程序再切回来）——
-TSF 侧**没有在线刷新通道**：`tsf.rs` 的 `Activate` 会重读一次这个文件
-（`logic.apply_settings`）。升级路径：设置窗与候选窗是同一条命名管道的两端，加一条
-`{"type":"reload"}` 消息即可即时生效 —— 要同时改线协议两侧（`candidate_io.rs` 与
-`desktop/.../Protocol.kt`），**本轮没做**。
+设置窗保存后落盘，并经控制面 `{"op":"reload"}` 让 TSF **立即重读**（2026-10-20 起；
+与 `Activate` 同一条 `logic.apply_settings`，重读 `settings.ini` 与词库目录）。只有
+候选窗/TSF 没在跑时，才退化为「输入法下一次激活」生效。Linux 同一条保存路径走
+`ReloadAddonConfig`（见 `docs/install/linux.md` 的设置窗一节）。
 
 ⚠️ **2026-10-12 布局改过**（用户裁决「布局和功能参考主流输入法」）：设置窗从单列长滚动
 改成**左分类导航 + 右内容 + 底部状态行**（与 Linux 同一份代码，`SettingsWindow.kt`）。
@@ -1059,9 +1060,9 @@ Windows 上只出**常用 / 状态栏 / 符号与表情 / 关于**四页 —— 
 **外观**（`Skin` 是 fcitx5 主题）两页不出：`crates/tsf-opi/src/settings.rs` 的读侧不认
 这两个键（「宁可少一页，不做点不动的开关」；过滤是纯函数 `settingsTabs`，有单测钉）。
 「符号与表情」页那两个按钮打开的是与 Linux 同一份代码的窗（`SymbolsPage.kt` 的
-`SymbolWindow`，表情页在 `EmojiPage.kt`）：页面能看能翻，但**点选上屏会失败并如实
-显示原因** —— 上屏要命名管道，而管道被候选窗进程持有（单实例），设置窗进程送不出去
-（`desktopSymbolCommit` 的 Windows 分支）。表情页布局与 Android `keyboard/EmojiPanel.kt`
+`SymbolWindow`，表情页在 `EmojiPage.kt`）：页面能看能翻，点选上屏（2026-10-20 起）走
+控制面 `\\.\pipe\opi-control` → 候选窗进程 broker → TSF 的 `commit`；设置窗进程
+不再需要自己持有候选管道。表情页布局与 Android `keyboard/EmojiPanel.kt`
 统一：顶栏 `[← 返回] [自有 | Emoji | 颜文字] [搜索框]`；**自有**是独立子页，4 列网格
 显示 `shared/pet/stickers/` 的 12 张小欧 PNG，点击 = 复制图片到系统剪贴板（不经过
 命名管道、不提交文本），因此**在设置窗里也能用**；Emoji = 9 个 OpenMoji 分组（不再
@@ -1236,11 +1237,11 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | 9 | 模式键**丢弃未提交缓冲**（不先上屏） | `tsf.rs::toggle_mode` → `Engine::switch_mode`；`engine.rs::toggle_symbol` 注释 | 打到一半切模式 = 丢字 |
 | 10 | 候选窗单页显示上限 `MAX_CANDIDATES = 8` 与 Rust `logic::PAGE_SIZE` 同为 8，**但两者之间没有门禁**（Rust 那份有 `const` 断言绑 `engine-core`，Kotlin 那份只有一句注释说"一致"） | `CandidateWindow.kt` vs `logic.rs` | 若 `PAGE_SIZE` 改了，窗口会静默少显示最后一个候选 |
 | 11 | **模式热键不认键盘布局**：`vk::mode_hotkey` 比的是**裸 VK**（0xDE / 0xDC），即 US 布局上标着 `'` 与 `\` 的那两个物理键位；而字符键走的是布局感知的 `ToUnicodeEx`（`tsf.rs::to_engine_keycode`）。⇒ 非 US 布局（AZERTY / Dvorak）上，要按的是**那个位置**的键，不是键帽上的字符 | `vk.rs::mode_hotkey` 的 `VK_OEM_5` / `VK_OEM_7`；`tsf.rs::to_engine_keycode` | 非 US 布局用户会"按了没反应"（**未验证**：本机没有任何非 US 布局可测） |
-| 12 | 语言栏按钮**点击无动作**（有意：不假装有功能）；DLL **没有文件图标**（`.rc` / 资源编译器在本机与 CI 都不可验证 ⇒ 走 `include_bytes!`，代价就是缺这一块） | `langbar.rs` 的 `OnClick` 与模块头「为什么不用 .rc」 | 点击没反应是设计如此；资源管理器里 DLL 显示默认图标 |
+| 12 | 语言栏按钮**左键单击打开设置**（2026-10-20 起：`langbar.rs` 的 `OnClick` → `configure::launch_settings()`，与状态栏 LOGO/设置入口一致）；其它点击仍无动作（不假装有功能）。DLL **没有文件图标**（`.rc` / 资源编译器在本机与 CI 都不可验证 ⇒ 走 `include_bytes!`，代价就是缺这一块） | `langbar.rs` 的 `OnClick` 与模块头「为什么不用 .rc」 | 资源管理器里 DLL 显示默认图标 |
 | 13 | **`ITfFnConfigure` 只过 `cargo check`**：控制面板里那个「属性」按钮会不会出现、点了拉不拉得起设置窗，本机无法验证；拉起的候选路径判定有主机单测（`settings_exe.rs`），Win32 那一步没有 | §4.4、`crates/tsf-opi/src/configure.rs` | 真机上「属性」可能不出现/不响应 |
 | 14 | ~~**设置窗没有 Windows 安装包**~~ **【订正 2026-10-09】** 安装包有了：`desktop/build.gradle.kts` 的 `targetFormats` 加了 `Msi`（原来只列 `Deb`），`.github/workflows/windows.yml` 在 Windows 主机上真打 `.msi`（§2.5）。剩下的缺口：**不在 Release 里、未签名、artifact 90 天过期**，拿到手得自己去 Actions 取 | §4.4、§2.5 | 装完也不会自己出现（本表 #2：没人拉起它） |
 | 15 | **W1「切中→英直接确认」在 Windows 侧只有状态机**（2026-10-10；同日深夜语义改为**一律原文**——拼音/繁体上缓冲原文、符号模式的关键字只清不提交）：`switch_mode_confirmed` 与引擎 `confirm_pending` 已就位并有两轨配对测试 + 负对照，但 `tsf.rs::toggle_mode` 的调用点**有意未接线**（插入面未通电；接线 = 改调它 + 把返回值插入文档）⇒ 现状仍同 #9 | `logic.rs`、`logic_input_method.rs`、`tsf.rs::toggle_mode` | 行为与 #9 同：打到一半切模式丢字 |
-| 16 | **桌面三件套在 Windows 上「代码就绪、地基未通电」（2026-10-10）**：符号页能看能翻但**无上屏通路**（命名管道单实例被候选窗进程持有，状态栏进程发不出 `commit_text`）；状态栏 `--statusbar` **无拉起触发器**；符号数据未随 MSI 铺设 ⇒ 页面如实显示「没有类目数据」。单进程拓扑（候选窗/状态栏/符号页同进程）与 TSF 拉起命令都归「Windows 接线轮」 | `desktop/` 的 `SymbolsPage.kt`/`StatusBar.kt`/`Main.kt` 文件头注释 | Windows 用户看不到这些新面（不是挂了，是没通） |
+| 16 | **桌面三件套在 Windows 上已接控制面（2026-10-20），但符号数据仍未随包**：符号页点选经 `\\.\pipe\opi-control` broker 送 TSF `commit`；状态栏 `--statusbar` 由 **EXE 安装器**的 HKLM64 Run 值随登录自启（卸载时删），jpackage MSI 仍没有这条 Run 值；`symbol_categories.tsv` 仍未拷进 MSI/EXE 资源 ⇒ 页面如实显示「没有类目数据」 | `desktop/` 的 `SymbolsPage.kt`/`ControlPlane.kt`/`StatusBar.kt`、`scripts/windows/opi.iss` | EXE 装法能看到状态栏；符号数据仍缺 |
 | 17 | **虚拟键盘 Windows 路径（`SendInput`）只过编译**：本机无 Windows，运行期未验证；一并如实记：Linux 的 XTEST 注入与状态栏窗口**也未做 GUI 冒烟**（本机无 Xvfb，待真桌面时间窗）——逻辑层（键表物理键码、可见性组合、注入序列映射）已测 | `desktop/` 的 `VirtualKeyboard.kt`、`docs/install/linux.md` §4.8 | 未验证 ≠ 不可用，但也别当已验证 |
 
 ### 6.3 交付这件事本身

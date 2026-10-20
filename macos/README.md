@@ -1,6 +1,6 @@
 # OPI macOS 端（草案）
 
-> ## ⚠️ 草案 · **CI 曾真编译旧版** · 从未上机运行
+> ## ⚠️ 草案 · **CI 已真编译（含 2026-10-20 的 7 文件）** · 从未上机运行
 >
 > **2026-10-15 订正（原来那句「一行都没有编译过」不成立）**：`apple.yml` 的 macOS job
 > 用 `swiftc macos/*.swift -typecheck` + 真编译链接（`scripts/apple/package-macos.sh`）
@@ -9,9 +9,10 @@
 > Info.plist 也没进过任何系统的输入法列表。**改动后先推一次让 CI 编**，再看行为。
 >
 > **2026-10-20 补**：符号面板 / 输入法菜单 / 设置窗 / 设置桥 / 导入词库持久化是
-> **本轮新增、尚未编译**的一批（Apple CI 本轮不可用，本机也没有 Swift 工具链）。
-> 它们与旧文件一样只有**静态审阅**证据；本机跑过的只有 `bash -n`、`sh -n` 与
-> 500 行门禁。别把下面「已补」读成「已在 Mac 上验证」。
+> 本轮新增的一批。**订正（2026-10-20）**：这批已在 run `39425977787`（head 739df45）
+> 由 CI 的 `swiftc macos/*.swift` 真编过；原文「尚未编译（Apple CI 本轮不可用）」已不成立。
+> 本机跑过的仍只有 `bash -n`、`sh -n` 与 500 行门禁。别把下面「已补」读成
+> 「已在 Mac 上验证」——**仍未上机**。
 >
 > 本机没有 macOS、没有 Xcode、没有 Apple SDK；InputMethodKit / AppKit 是 Apple 独有框架，
 > 在 Linux 上 `import` 就断 —— 编译发生在 **CI 的 macOS runner** 上，不在开发机。
@@ -507,7 +508,7 @@ Mac 上很可能要改」的地方标出来了，接手人从这里开始最省�
 位（`1<<28`），所以 ⇧ 长按 = 单击。要接的话需要自己定入口（CapsLock 映射、或按住超时），
 不要靠猜补一个信号。
 
-### 12. 输入法菜单与 `doCommand`（2026-10-20，未编译）
+### 12. 输入法菜单与 `doCommand`（2026-10-20，CI 已编译、未上机）
 
 菜单由 `IMKInputController.menu()` 现建，菜单项 `target` 指向控制器、action 是
 `menuCommand(_:)`；同时覆写了 `doCommand(by:command:)`，按
@@ -532,7 +533,7 @@ NSMenuItem 直接用，字典则按 `kIMKCommandMenuItemName` 取项。**哪条�
 
 ## 已知缺口（不是 bug，是还没做）
 
-- **G2 模式入口（2026-10-20 已补，未编译）**：现在有输入法菜单（`OpiMenu.swift`）
+- **G2 模式入口（2026-10-20 已补，CI 已编译、未上机）**：现在有输入法菜单（`OpiMenu.swift`）
   与热键两条入口 ——
   * 菜单：英文模式 / 繁体模式 / 中文标点 / 全角 / 输入方案（全拼·双拼）/ 符号面板 / 设置；
   * 热键：`Ctrl+'` 英⇄拼、`Ctrl+\` 拼音⇄符号、`Shift+Space` 全角、
@@ -541,21 +542,21 @@ NSMenuItem 直接用，字典则按 `kIMKCommandMenuItemName` 取项。**哪条�
   引擎切换仍走 `opi_switch_mode`，不绕过 `router.rs` 的 `switch_mode`。
   仍未接：中→繁→英三态循环（iOS 的 `cycleMode()`）、数字/符号模式按钮、英文专业
   （ENPRO，fcitx5 控制面专有，C ABI 无出口）。
-- **G3 候选分页（2026-10-20 已补，未编译）**：`refresh()` 改喂
+- **G3 候选分页（2026-10-20 已补，CI 已编译、未上机）**：`refresh()` 改喂
   `opi_candidates_page()`，`candidateSelected` 改调 `opi_select_page(k)`（页内索引），
   不再使用全局 `opi_candidates(limit:64)` / `opi_select(index)`，也不再自己算
   `page*PAGE_SIZE+k`。`OpiEngine.swift` 里的旧包装已删除，避免再被误用。
   仍未做：候选窗内的「第 N / M 页」文字 —— `IMKCandidates` 没有页标签控制面。
-- **G4 无测试、无 CI 工程文件、Swift 旧版只被 CI 编过**：`macos/` 里**跑过的只有头文件** ——
+- **G4 无测试、无 CI 工程文件、Swift 已由 CI 编过**：`macos/` 里**本机跑过的只有头文件** ——
   `OpiFFI.h` 的 clang 语法检查与「导出名取地址」那个 TU（2026-09-27 起能过）。
-  `swiftc` 只在 CI 的 macOS runner 上跑过（2026-10-15 之前的版本）；**2026-10-20 这批
-  新增/改动没有被任何 Swift 编译器看过**。本机只跑了 `bash -n`、`sh -n`、500 行门禁。
-  第一条针对这批代码的可执行验证仍是「在 Mac 或 CI 上编译通过」。
+  `swiftc` 只在 CI 的 macOS runner 上跑过；**2026-10-20 这批新增/改动已由
+  run 39425977787 编过**。本机只跑了 `bash -n`、`sh -n`、500 行门禁。
+  下一步可执行验证是「装进系统跑最小冒烟」。
 - **G5 宠物「小欧」未接（有意）**：几何真源是 `docs/opi-pet.svg`；Android 与 Windows
   候选窗共用 `shared/pet/OpiPet.kt` 这一份实现。macOS 候选窗仍是系统面板
   `IMKCandidates`，**画不进去** —— 要摆小欧得先换成自绘 `NSPanel`。
   真要接时**别**新写一份 CoreGraphics 几何：同一张图的第三份拷贝必然漂移。
-- **G6 符号面板（2026-10-20 已补，未编译）**：`OpiSymbolPanel.swift` 按 Linux
+- **G6 符号面板（2026-10-20 已补，CI 已编译、未上机）**：`OpiSymbolPanel.swift` 按 Linux
   `SymbolsPage.kt` 的布局实现：左侧 22 类竖条、右侧 12×6=72/页网格、搜索框、翻页；
   数据是**随包**的 `crates/fcitx5-opi/data/symbol_categories.tsv`（打包脚本拷进
   `Contents/Resources/`，并在 `.pkg` payload 里钉了一条存在性门禁），读不到才回退
@@ -567,7 +568,7 @@ NSMenuItem 直接用，字典则按 `kIMKCommandMenuItemName` 取项。**哪条�
   `OpiMenu.swift` 用输入法菜单承载同组入口。皮肤、LOGO、虚拟键盘（VK）与
   ENPRO 因此没有等价物；外观/状态栏两个设置页也未画空壳。
 
-### 属性设置 / 词库（2026-10-20 已接，未编译）
+### 属性设置 / 词库（2026-10-20 已接，CI 已编译、未上机）
 
 `OpiSettings.swift` 只做 Swift 值 ↔ C ABI 转发；默认值、越界钳制、模糊音名表都仍由
 Rust 侧决定。`OpiSettingsWindow.swift` 的页面：
@@ -578,7 +579,7 @@ Rust 侧决定。`OpiSettingsWindow.swift` 的页面：
 | 按键 | 只读快捷键表 | — |
 | 符号与表情 | 类目数、打开符号面板；表情页未接 | — |
 | 词库 | 系统词典状态、导入 `.tsv`、启停/删除导入层 | `DisabledDicts`（逗号分隔；空 = 全启用） |
-| 关于 | 版本与未签名提示 | — |
+| 关于 | 版本、未签名提示与主页/项目/博客外链（2026-10-20 补外链） | — |
 
 * 启动顺序（`main.swift`）：`opi_load` → 可选 `trad.opid` → `applyPersisted()` →
   重放 `dicts/*.tsv`（按停用名单关层）。导入是**复制**到
@@ -720,12 +721,12 @@ TSF 是 `vk.rs` 的 `hotkey_should_act`，fcitx5 是 `opi_fcitx5.cpp` 的 `isRep
 
 ## 状态
 
-**草案。旧版 Swift 在 CI 上编过（2026-10-15 订正）；2026-10-20 新增的符号面板 /
-菜单 / 设置窗 / 设置桥 / 词库持久化尚未被任何 Swift 编译器看过。全部从未运行过 ——
+**草案。Swift 已在 CI 上编过（2026-10-15 旧版；2026-10-20 的符号面板 / 菜单 /
+设置窗 / 设置桥 / 词库持久化由 run 39425977787 编过）。全部从未运行过 ——
 没有一个字节被 IMK 加载过。** 上面「已验证」一节里的 `cargo check` 是这整个目录里
-唯一的真实证据，而它证明的是 **Rust 侧**能编译，不是本目录能用。
+唯一的本机实证，而它证明的是 **Rust 侧**能编译，不是本目录能用。
 
-下一步（按顺序）：在 Mac/CI 上编译链接 → 最小冒烟（`h a o 空格` → 「好」）→
+下一步（按顺序）：~~在 Mac/CI 上编译链接~~（已完成）→ 最小冒烟（`h a o 空格` → 「好」）→
 开一次菜单与符号面板（先验 `LSBackgroundOnly` 下窗口能否出现）→ 设置窗改一个开关
 并重启看是否生效 → 逐个消掉「最不确定的 API」清单 → 再谈表情/皮肤/宠物。
 **顺序不能反。**

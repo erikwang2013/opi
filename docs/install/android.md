@@ -393,7 +393,8 @@ adb shell ime set    xyz.erik.opi/.OpiImeService      # 切为当前输入法
   0-9 且数字**直接上屏**（不选词），桌面两端照旧带序号）。
   **右端一枚 ⌄**（2026-10-16 裁决「左右按钮换成 v 的图标」——原「‹ n/m › 左右翻页」整段下线）。
   **最右另有「收起键盘」⌄**，与工具条同一动作；英文态还多一枚低存在感隐藏「中」键
-  （2026-10-20：英文恒走候选栏，[`candidatesShowable`] 对英文恒真，放在工具条里永远不可见）。
+  （2026-10-20：英文有输入/候选时走候选栏，英文空闲改走工具条，候选栏与工具条两处
+  都提供这枚键）。
 - **平铺态**（点 ⌄，`ime/CandidateTiledView.kt`）：占满共用格 + 键盘区 —— 左列放大读音列
   （点行仍 = 钉读音；与键盘左列**同一块** `CandidateReadingColumn`）、中间候选**按词长平铺**
   （短词一行 4 个、长词一行 2 个；分页规则是纯函数 `TilePack.kt`）、右列 `返回 / ⌫ / 重输 / 空格`；
@@ -463,11 +464,12 @@ emoji 列**不动** —— 它管单键候选反馈（搜索路），与浏览�
   `shared/pet/stickers/` → APK assets `pet/`，文件名契约 `PetStickerAssets`）以
   6 列网格播 GIF（API 28+ 走 `ImageDecoder`，API 21–27 走 `Movie` 兜底；静态 PNG/
   矢量为缺图兜底；`keyboard/PetStickerPanel.kt`）。点一格 ⇒
-  `OpiImeService.commitPetSticker`：GIF（其次 PNG）拷到 `cacheDir/pet/`，经
+  `OpiImeService.commitPetSticker`：PNG（其次 GIF）拷到 `cacheDir/pet/`，经
   `FileProvider`（authority `${applicationId}.fileprovider`，`res/xml/file_paths.xml`
   只开 `cacheDir/pet`）构造 `InputContentInfoCompat`，用
-  `InputConnectionCompat.commitContent` 插入**图片**（GIF 优先）。编辑器两种图片都不
-  接受时回退**带「小欧·」前缀的可区分文本标签**（如 `[小欧·笑]`），**不再插入
+  `InputConnectionCompat.commitContent` 插入**图片**（2026-10-20 起 PNG 优先）。编辑器
+  两种图片都不接受时先把图（仍 PNG 优先）写进系统剪贴板并提示长按粘贴，**同时**上屏
+  **带「小欧·」前缀的可区分文本标签**（如 `[小欧·笑]`），**不再插入
   Unicode emoji**（2026-10-19 用户裁决）。自有不进 Emoji
   分类条、也不进 Emoji 的最近使用。
 - **Emoji 子页**：底部一条**可横滑**的分类条（`EmojiPanel.kt` 的 `CategoryBar`），
@@ -683,7 +685,8 @@ IME 服务在 `EngineLoader.load` 之后把三个值推给引擎（`prefs.applyE
 **表情中显示自有（2026-10-20 用户裁决，默认关）**：设置页「表情中显示自有」开关，
 落盘键 `pet_show_own`（`ImePreferences`，缺省 `false` = 隐藏）。关闭时表情页顶栏
 只有 Emoji / 颜文字，不出现「自有」子页；打开后才出现小欧贴纸分类。点选仍走
-GIF → PNG → `[小欧·笑]` 文本标签的既有图片通道（`PetStickerCommit.kt`），
+既有图片通道：PNG → GIF 插入，两种都被拒时剪贴板兜底并上屏 `[小欧·笑]`
+文本标签（`PetStickerCommit.kt`），
 **不插入任何 PUA 文本**。
 
 `shared/pet/emoji-font/map.tsv` 里的 U+E000–U+E00B 只是 12 个形态的**稳定内部 ID**
