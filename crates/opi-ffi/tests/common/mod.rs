@@ -181,10 +181,11 @@ pub fn run_script(events: &[Step]) {
             Step::Mode(m) => {
                 f.switch_mode(m);
                 t.switch_mode(m);
-                // 2026-10-19: fcitx en26 默认普通；本对照脚本比的是**专业模式**
-                // 的旧词库语义（TSF 仍走该语义）。
+                // 2026-10-19: 两轨 en26 默认普通（english_pro=false）；本对照脚本比的是
+                // **专业模式**的旧词库语义，两轨都显式打开。
                 if m == Mode::English {
                     f.set_english_pro(true);
+                    t.set_english_pro(true);
                 }
                 (None, None)
             }

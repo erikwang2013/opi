@@ -189,6 +189,7 @@ fn every_ascii_keyval_behaves_identically_in_every_mode() {
         t.switch_mode(mode);
         if mode == Mode::English {
             f.set_english_pro(true); // 对照的是专业模式的旧语义（2026-10-19）
+            t.set_english_pro(true);
         }
         for keyval in 0x00u32..=0x7f {
             // 0x20 是**唯一**一个两轨键空间合法重叠的值：fcitx5 的 `KEY_SPACE` 就是
