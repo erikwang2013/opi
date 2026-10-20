@@ -37,7 +37,7 @@ final class OpiFlippedView: NSView {
 
 // ---------- 面板 ----------
 
-final class OpiSymbolPanel: NSObject, NSTextFieldDelegate {
+final class OpiSymbolPanel: NSObject, NSTextFieldDelegate, NSSearchFieldDelegate {
     static let shared = OpiSymbolPanel()
 
     private static let pageSize = 72
