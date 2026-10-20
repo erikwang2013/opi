@@ -19,7 +19,7 @@
 > `harmony/entry/src/main/resources/rawfile/`（**复制品不入库**，见 `.gitignore`）。
 > 扩展首次启动时 `DictionaryAssets.ets` 把它们拷进 `ctx.filesDir`，再把**绝对路径**
 > 交给 `opi_load` / `opi_load_stroke` / `opi_load_wubi`；任一步失败才回退
-> `opi_load('')` 并置 DEGRADED（小欧画出来）。release HAP 因此变成 **48,058,777 B**，
+> `opi_load('')` 并置 DEGRADED（小欧画出来）。release HAP 因此变成 **47,867,119 B**（2026-10-20 对齐轮实测），
 > `unzip -l` **13 项**（清单已实测，见 §0.2）。
 > `trad.opid` 仍**不随包**：`opi_load_trad` 不在鸿蒙桥的 use-site 子集里（G2 / G5）。
 > **真机行为（含首次拷贝耗时）仍未验证。**
@@ -768,15 +768,23 @@ comm -23 \
 |---|---|---|
 | G1 | **子类型切换不换键盘** | 未监听 `inputMethodAbility.on('setSubtype')` ⇒ 切中/英/数字子类型，键盘不变（P4）。 |
 | G2 | ~~**词库是内置回退库**~~ **2026-10-20 已补** | 三张完整表随包（rawfile → `filesDir` → 绝对路径）；只有拷贝/装载失败时才退回 `opi_load('')` 并置 DEGRADED。**真机上的拷贝路径未验证**（见 0.6 第 6 条）。 |
-| G5 | **无繁体切换入口** | `opi_load_trad` **不在**鸿蒙桥的 use-site 子集里，所以 `trad.opid` **有意不随包**（装了也调不到）；`OpiMode.Traditional` 有枚举值但 UI 轮转进不去。补它要先加桥出口。 |
-| G3 | **无符号面板** | 能提交字面符号的 UI 不存在（`opi_search_symbols` 一族未桥接）。Symbol 模式只有一页硬编码符号。 |
+| G5 | **繁体：入口已有，词典未接** | 2026-10-20 起 26 键模式键是三态循环（中→繁→英→上次中文），9/14/笔画底行有「繁」键（只切简繁）。但 `opi_load_trad` 仍**不在**鸿蒙桥的 use-site 子集里，`trad.opid` **有意不随包** ⇒ 引擎 `Traditional` 回退到 luna 简体表，**输出仍是简体**。要真繁体：先加桥出口并随包 `trad.opid`。 |
+| G3 | **符号页已补；引擎分块出口仍未桥** | 符号页由 rawfile `symbol_categories.tsv` 驱动（8×4/页 + 页头 ‹ › 翻页 + 分类条，点格直接 `insertText`），生僻字面板由 `rare_index.tsv` 驱动（214 部首 → 笔画数 → 字表）。`opi_symbol_blocks` / `opi_symbols_in_block` 仍未桥，但本路径不依赖它们。与 Android 的差异：翻页是按钮不是左右滑；无「常用/全部」Tab。 |
 | G4 | **无用户词持久化** | `opi_import_user_words` / `opi_export_user_words` / `opi_clear_user_words` / `opi_remove_user_word` 未桥接。 |
-| G7 | **深色主题未接** | `OpiPet` 支持 `dark: true`，但 `Index.ets` 恒传 `false`（没读系统主题）⇒ 深色下候选栏仍是浅色。 |
+| G7 | **深色/长辈模式是手动开关，不跟系统** | 键盘模式面板里有「暗光模式」「长辈模式」两个 chip，作用于皮肤色板与字号；**没有**读系统主题，也**没有持久化**（进程重启回默认）。 |
 | G8 | **Android JNI 出口在鸿蒙目标下是死重量** | `jni.rs` 照编，要拆得改 `crates/**`，不在本轮边界内。 |
-| G9 | **⇧ 的 LOCK 态用户按不出来** | 进 Lock 的唯一入口是长按（`router.rs` 的 `shift_long_press`），而 `Index.ets` **没给 ⇧ 绑长按手势**。DevEco 上要做的是**一行**：绑长按 → `KeyboardController.tapShiftLongPress()`。 |
+| G9 | ~~**⇧ 的 LOCK 态用户按不出来**~~ **2026-10-20 已补** | 26 键 ⇧ 已绑 `LongPressGesture`（500 ms）→ `KeyboardController.tapShiftLongPress()`，OFF → SINGLE → LOCK 三态可走。**真机手势未验证**（本机无设备）。 |
 | G10 | **空缓冲下 ↵ 是死键** | 引擎返回 PassThrough（「这个回车归应用」），而 `handlePassThrough` 只接退格/Delete 与可打印段 ⇒ 什么都不发生。修它要 IME Kit 的「把按键交给应用」接口，**那个接口叫什么本机查不到**，所以只把缺口写在 `tapEnter` 的注释里，**没有凭记忆补一个 API 名**。 |
 | G12 | **全角/符号开关：能力到了桥，UI 没接** | `OpiEngine.toggleFullwidth()` / `fullwidthState()` / `toggleSymbol()` **从 ArkTS 可以调到**，但没有任何键绑 `toggleSymbol()`，`publish()` 推的七样里也**没有 fullwidth** ⇒ 用户看不出状态变了。做的时候回到 `opi_ffi.h` 里那四条契约，**特别是第 1 条**（只有 `opi_switch_mode` 与 `opi_toggle_symbol` 会改全角，后者最易漏）。 |
 | G13 | **无中文标点开关** | 中文标点表**默认开**，所以 `，` `。` 照常出得来（与 G3 说的「缺能提交符号的 UI」**不是同一件事**）；缺的是**关掉它 / 读它** —— 用户没有任何入口切回半角 ASCII。 |
+
+> **2026-10-20 对齐轮新增的差异**（平台取舍或未验证项，不是缺陷）：
+> 候选栏只有 `‹ ›` 翻页，**没有** Android 的平铺候选（C ABI 没有「取全部候选」出口）；
+> 符号页用页头按钮翻页而非左右滑动；关于页的链接只能**复制到剪贴板**（IME 扩展
+> `startAbility` 报 16000069，另发 toast 提示），不能直接开浏览器；皮肤 / 键盘模式 /
+> 单手 / 悬浮 / 游戏 / 暗光 / 长辈**都不持久化**，进程重启回默认；悬浮与游戏模式只调了
+> `Panel.resize` / `moveTo`（宽 86%，游戏高 72%），**真机窗口行为未验证**；单手模式键区
+> 76% 宽、TopBar 仍全宽；9 键左列没有 Android 的候选拼音读数（C ABI 无该出口）。
 
 > 另有一处**不是缺口、是刻意取舍**：`OpiEngine.ets` 与 `opi_ffi.h` 都**没有** `KEY_UP/DOWN/LEFT/RIGHT`
 > —— 软键盘没有方向键，路由对这四个键一律 PassThrough，抄了也没有分支可写。接物理键盘时再补。
@@ -789,8 +797,8 @@ comm -23 \
 > **2026-10-20 订正（只订正「编译」这一条，其余原样保留）**：本节写的
 > 「ArkTS：0 行编译过」「`harmony/` 不是工程」是 2026-09-28 的处境。
 > 2026-10-19 起 `harmony/` 是完整 hvigor 工程，`hvigorw assembleHap` 会真跑
-> **`CompileArkTS`**：2026-10-20 的 release 构建成功，`ets/modules.abc` 1,589,700 B
-> 进了 HAP（`ets/**` 共 12 个文件）。⇒ **「0 行编译过」已过期**，ArkTS 至少过了
+> **`CompileArkTS`**：2026-10-20 的 release 构建成功，`ets/modules.abc` 1,729,772 B
+> 进了 HAP（`ets/**` 共 22 个文件）。⇒ **「0 行编译过」已过期**，ArkTS 至少过了
 > 类型检查这一层。但它**仍不等于真机可用**：运行期 ArkUI/IME Kit 行为一条都没验证。
 > 下文「`harmony/` 不是工程」的归因也已过期（详见 §0）。
 

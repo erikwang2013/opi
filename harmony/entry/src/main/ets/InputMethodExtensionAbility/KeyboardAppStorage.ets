@@ -20,6 +20,14 @@ export const KEY_PAGE_COUNT: string = 'opiPageCount';
 export const KEY_MODE: string = 'opiMode';
 export const KEY_SHIFT: string = 'opiShift';
 export const KEY_LEARNER: string = 'opiLearner';
-/** 当前输入模式下标（InputModes 的 INPUT_MODES 下标，**不是**引擎方案码）+ 面板开关（1/0）。 */
+/** 当前输入模式下标（InputModes 的 INPUT_MODES 下标，**不是**引擎方案码）。 */
 export const KEY_MODE_INDEX: string = 'opiLayout';
-export const KEY_PANEL: string = 'opiPanel';
+/** 面板视图 / 皮肤 / 暗光 / 长辈 / 单手 / 悬浮 / 游戏 / 英文 pro（KeyboardModes 的模块级状态）。 */
+export const KEY_VIEW: string = 'opiView';
+export const KEY_SKIN: string = 'opiSkin';
+export const KEY_DARK: string = 'opiDark';
+export const KEY_ELDER: string = 'opiElder';
+export const KEY_ONE_HAND: string = 'opiOneHand';
+export const KEY_FLOAT: string = 'opiFloat';
+export const KEY_GAME: string = 'opiGame';
+export const KEY_PRO: string = 'opiPro';

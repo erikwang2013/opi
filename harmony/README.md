@@ -1240,6 +1240,13 @@ grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|op
    内置库现在只在拷贝/装载失败时兜底（并置 DEGRADED）。见「词库随包」。
 3. **无符号面板**（`opi_symbol_blocks` / `opi_symbols_in_block` 未桥接）。
 
+   > **2026-10-20 对齐轮**：符号页与生僻字面板已落地（`SymbolPage.ets` /
+   > `SymbolData.ets`，rawfile TSV 驱动：`symbol_categories.tsv` 22 类、8×4/页 +
+   > 页头 ‹ › 翻页；`rare_index.tsv` 214 部首 → 笔画数 → 字表）。
+   > 点格直接 `insertText`，不经过引擎。引擎那两条分块出口仍未桥，但本路径不依赖它们。
+   > 下面 2026-10-13 记录里的「29 个 ASCII 符号不可达」已由符号页补上；
+   > 搜索输入通道 / 字形过滤 / 网格虚拟化三条原样保留。
+
    > **2026-10-13 部分更新（表情页接线）**：`opi_search_symbols` **已桥**
    > （见 §5e）；Symbol 模式不再是一页硬编码符号，换成了**表情页**
    > （分组条 + 网格 + 搜索框）。**但「符号面板」这件事只做了一半** ——
@@ -1278,6 +1285,12 @@ grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|op
    但 UI 的轮转里进不去）。**2026-10-20 词库随包时仍然如此**：因为桥里没有这个出口，
    `trad.opid` **有意不随包**（装了也调不到）；在桥补上这个出口之前，鸿蒙端
    没有「切换整本繁体词典」的能力。要补先桥 `opi_load_trad`。
+
+   > **2026-10-20 对齐轮**：UI 入口已补 —— 26 键模式键是三态循环（中→繁→英→
+   > 上次中文），9/14/笔画底行「繁」键只切简繁。但 `opi_load_trad` 仍未桥、
+   > `trad.opid` 仍不随包 ⇒ 引擎 `Traditional` 回退 luna **简体**表，输出仍是简体。
+   > 上面「UI 的轮转里进不去」已过期；现在应读作「有入口、无繁体词典」。
+
 6. **未处理「抬手」事件**（`STATE_RELEASED`）。软键盘一次点击只送一次按下，
    对路由够用 —— 注意**⇧ 三态不会因此卡住**：`router.rs` 的 `handle_shift`
    明确忽略 released/repeat，⇧ 只认按下。（本节原先写的「要接物理键盘就得补抬手，
@@ -1288,6 +1301,9 @@ grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|op
    收不到 keyup，依赖键状态的控件会卡键。
 7. **深色主题未接**（`OpiPet` 支持 `dark: true`，但 `Index.ets` 恒传 `false`，
    没读系统主题）。
+
+   > **2026-10-20 对齐轮**：深色与长辈模式已接到键盘模式面板的两个 chip
+   > （改色板 / 字号），但仍是**手动开关** —— 不读系统主题，也不持久化。
 8. **Android JNI 出口在鸿蒙目标下是死重量**（约 9 MB 里的一部分），
    要拆得改 `crates/**`，不在本轮边界内。
 
@@ -1302,6 +1318,10 @@ grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|op
    但没绑手势**（理由写在 `Index.ets` 那个分支的注释里：ArkUI 的长按 API 本机
    无法查证，而 `KeyCap` 是字母键与整个功能行共用的 `@Builder`（5 个调用点），见 U18）。
    DevEco 上要做的是**一行**：⇧ 键绑长按 → `tapShiftLongPress()`。
+
+   > **2026-10-20 对齐轮已补**：26 键 ⇧ 绑了
+   > `LongPressGesture({ repeat: false, duration: 500 })` → `tapShiftLongPress()`
+   > （`QwertyPad.ets`）。真机手势未验证。
 
 10. **回车在「缓冲为空」时是死键**（本目录缺陷）。引擎在空缓冲时按设计返回
     **PassThrough**（「这个回车归应用」），而 `handlePassThrough` 只接退格/Delete

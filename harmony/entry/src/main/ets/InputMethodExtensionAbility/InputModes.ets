@@ -30,6 +30,7 @@
 import opiime from 'libopiime.so';
 import * as OpiEngine from './OpiEngine';
 import { OpiMode } from './OpiEngine';
+import { leaveEnglishPro } from './KeyboardModes';
 
 /** 输入方案。数值就是 C ABI 的整数码（= `Scheme::code()`），不是本地枚举序号。 */
 export enum OpiScheme {
@@ -193,34 +194,16 @@ export const MODE_WUBI: number = 8;
 // 的持久化更差，但别把它读成「记住了用户的选择」。
 
 let currentIndex: number = MODE_PINYIN26;
-let lastPlainIndex: number = MODE_PINYIN26;
 /** 上次选中过的**中文**键位（对齐 Android `ImeState.lastChineseMode`）：英文键盘
  *  右上角隐藏「中」键切回它；初始 = 拼音26键。 */
 let lastChineseIndex: number = MODE_PINYIN26;
-let panelOpen: boolean = false;
 
 /** 当前模式下标。 */
 export function currentModeIndex(): number {
   return currentIndex;
 }
 
-/** 上一个**非面板**模式的下标（生僻字面板的「返回」用）。 */
-export function previousPlainIndex(): number {
-  return lastPlainIndex;
-}
-
-/** 输入模式面板开着吗（1/0 —— 喂 AppStorage；Index.ets 用 @StorageLink 读）。 */
-export function modePanelShown(): number {
-  return panelOpen ? 1 : 0;
-}
-
-export function toggleModePanel(): void {
-  panelOpen = !panelOpen;
-}
-
-export function closeModePanel(): void {
-  panelOpen = false;
-}
+/** 面板视图的开关在 KeyboardModes.ets（与皮肤/键盘模式/关于同一套 state）。 */
 
 /**
  * 选一项输入模式：换布局 + 换引擎方案 + 必要时切语言模式。
@@ -238,19 +221,25 @@ export function selectInputMode(i: number): void {
     return;
   }
   const m: InputMode = INPUT_MODES[i];
-  if (!m.panel) {
-    lastPlainIndex = i;
-    // 英文不在中文侧：只有 Pinyin 档（含 9/14/大9/笔画/双拼/五笔）才更新回切目标。
-    if (m.mode === (OpiMode.Pinyin as number)) {
-      lastChineseIndex = i;
-    }
-    setScheme(m.scheme); // 清缓冲（引擎侧）⇒ 调用方随后要重读 buffer/候选/页码
-    if ((OpiEngine.mode() as number) !== (m.mode as number)) {
-      // 与 KeyboardController.switchMode 同一份语义：切模式。⇧/引擎 shift 的同步归
-      // KeyRouter::switch_mode（进入 English 重推前端三态；别在此 setShift(false)）。
-      // （缓冲不必再清一次：引擎的 switch_mode 自己就清。）
-      OpiEngine.switchMode(m.mode);
-    }
+  if (m.panel) {
+    // 生僻字是**面板视图**，不进引擎、也不改当前键位（Android 同一条）。
+    return;
+  }
+  // 离开英文去别的模式时关掉 pro（Android leaveEnglishProFor 的同一裁决）。
+  if ((OpiEngine.mode() as number) === (OpiMode.English as number)
+    && (m.mode as number) !== (OpiMode.English as number)) {
+    leaveEnglishPro();
+  }
+  // 英文不在中文侧：只有 Pinyin 档（含 9/14/大9/笔画/双拼/五笔）才更新回切目标。
+  if (m.mode === (OpiMode.Pinyin as number)) {
+    lastChineseIndex = i;
+  }
+  setScheme(m.scheme); // 清缓冲（引擎侧）⇒ 调用方随后要重读 buffer/候选/页码
+  if ((OpiEngine.mode() as number) !== (m.mode as number)) {
+    // 与 KeyboardController.switchMode 同一份语义：切模式。⇧/引擎 shift 的同步归
+    // KeyRouter::switch_mode（进入 English 重推前端三态；别在此 setShift(false)）。
+    // （缓冲不必再清一次：引擎的 switch_mode 自己就清。）
+    OpiEngine.switchMode(m.mode);
   }
   currentIndex = i;
 }
@@ -265,37 +254,23 @@ export function lastChineseModeIndex(): number {
 }
 
 /**
- * 模式键的键面字 = **点它会切到哪**（2026-10-12 与 Android 同步的裁决：用户实测
- * 「切到英文键盘后键面还写着英，点下去却是中文键盘，键面该是『中』才对」）。
- * 逐条对齐 `nextMode` 的四态循环：中→EN、EN→123、123→#+=、#+=→中；
- * 繁体档本端循环里到不了（`nextMode` 无该分支 ⇒ 落回拼音）⇒ 键面给「中」。
- * ⚠️ **别照抄 Android 的表**：那边是三态（中→繁→英→中），本端是四态。
+ * 26 键模式键的键面字 = **点它会切到哪**（Android `modeKeyLabelOf` 的三态循环）：
+ * 中→繁、繁→英、英→中。数字/符号态从 26 键进不去（数字走 123，符号走 ?123），
+ * 落到「中」是安全侧。
  */
-export function modeLabel(m: number): string {
+export function cycleModeLabel(m: number): string {
   if (m === (OpiMode.Pinyin as number)) {
-    return 'EN';
+    return '繁';
   }
-  if (m === (OpiMode.English as number)) {
-    return '123';
-  }
-  if (m === (OpiMode.Number as number)) {
-    return '#+=';
+  if (m === (OpiMode.Traditional as number)) {
+    return '英';
   }
   return '中';
 }
 
-/** 模式键的下一档（四态循环，与 [modeLabel] 同一张表）。 */
-export function nextMode(m: number): OpiMode {
-  if (m === (OpiMode.Pinyin as number)) {
-    return OpiMode.English;
-  }
-  if (m === (OpiMode.English as number)) {
-    return OpiMode.Number;
-  }
-  if (m === (OpiMode.Number as number)) {
-    return OpiMode.Symbol;
-  }
-  return OpiMode.Pinyin;
+/** 9/14/笔画底行的模式键：**只切简繁**（Android 2026-10-15 裁决），键面 = 点它会到哪。 */
+export function traditionalModeLabel(m: number): string {
+  return m === (OpiMode.Traditional as number) ? '中' : '繁';
 }
 
 /**

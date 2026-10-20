@@ -26,6 +26,7 @@
 //! | `data/generated/` `data/raw/` | 生成物与原始数据（`.tsv` 等） |
 //! | `android/app/src/main/assets/`（2026-10-09 加） | **随包分发的数据资产**：词库 `.opid`（二进制，本就按内容跳过）与部首索引 `.tsv`（文本 —— 正是它暴露了这条口径缺口）。与 `data/raw/` 同类，不是源码 |
 //! | `crates/fcitx5-opi/data/`（2026-10-16 加） | **随包分发的数据资产**（同 android assets 那条）：symbol_categories.tsv 与康熙词库 kangxi.tsv —— 后者 2 万行文本又暴露了同一缺口。数据不是源码 |
+//! | `harmony/entry/src/main/resources/rawfile/`（2026-10-20 加） | **随包分发的数据资产**（同 android assets 那条）：symbol_categories.tsv 与 rare_index.tsv（10 万行）由 `scripts/prepare_harmony_dicts.sh` 拷入。数据不是源码 |
 //! | `Cargo.lock`（按文件名） | cargo 生成并重写的锁文件（本仓 730 行），不是源码 —— 属于**按名字放行的两类**之一（另一类是下面的中间态） |
 //! | `*.tmp` / `*.tmp.*`（按文件名） | **原子写的中间态**：写完即 rename，正常只活毫秒级。本仓三处原子写用裸 `.tmp`（`engine-data/src/user_words.rs` 的 `TMP_SUFFIX`、`crates/fcitx5-opi/src/data_dir.rs:56`、`scripts/gen_*.py`），实测撞红的还有 `macos/README.md.tmp.<pid>.<rand>` 这一种。它**不是源码，是源码的中间态** —— 瞬时文件不该让门禁在并发树里周期性假红（那种红重跑就没有、不可复现，最容易被当成真回归查半天）。代价如实记：谁把一个超线的 `*.tmp` **永久**留在这儿，本门禁看不见 |
 //! | 非 UTF-8 文件 | 二进制（`.opid` `.so` `.a` `.class` `.deb` `ruvector.db` …）—— 按**内容**判，不列扩展名 |
@@ -62,6 +63,9 @@ fn path_is_excluded(rel: &str) -> bool {
         // 随包分发的**数据资产**（2026-10-16 加，同 android assets 一条的理由）：
         // 康熙词库 kangxi.tsv（2 万行）住在 fcitx5 的部署副本目录里。数据不是源码。
         || rel.starts_with("crates/fcitx5-opi/data/")
+        // 随包分发的数据资产（2026-10-20 加，同上一条）：鸿蒙 rawfile 里的
+        // symbol_categories.tsv / rare_index.tsv 由 prepare 脚本拷入，数据不是源码。
+        || rel.starts_with("harmony/entry/src/main/resources/rawfile/")
 }
 
 /// 生成物（按**文件名**，任何目录下都算）。`Cargo.lock` 是 cargo 生成并**重写**的锁文件

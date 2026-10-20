@@ -1,0 +1,3 @@
+# 构建期由 scripts/prepare_harmony_dicts.sh 从 Android assets 复制，复制品不入库。
+entry/src/main/resources/rawfile/*.opid
+entry/src/main/resources/rawfile/*.tsv

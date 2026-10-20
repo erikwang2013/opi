@@ -1,35 +1,33 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-// ⚠️ 已过 API 19 的 hvigor CompileArkTS（2026-10-20）· 真机未验证
+// 已过 API 19 的 hvigor CompileArkTS（2026-10-20）· 真机未验证
 //
-// 本文件在 Linux 上编写；编译过 ≠ 跑得起来。`@kit.IMEKit` 的
-// inputMethodEngine / InputMethodExtensionContext 在普通 tsc 下就断，
-// 所以这里每一个 IME Kit 调用都是**凭记忆写的**（见 README「最不确定的 API」）。
-//
-// 职责：**输入法会话的唯一持有者**。做四件事 ——
-//   1. 开软键盘面板（createPanel / resize / moveTo / setUiContent）；
-//   2. 收 inputStart / inputStop，拿住 InputClient；
-//   3. 把按键交给引擎，并按引擎的 action 决定「上屏 / 交还应用 / 什么都不做」；
-//   4. 把引擎状态推给 ArkUI（AppStorage），UI 只读状态、不碰引擎。
-//
-// UI（pages/Index.ets）**不认识引擎**，只调本类的方法 + 读 AppStorage。
+// 输入法会话的唯一持有者：面板窗口 / InputClient / 引擎路由 / AppStorage 推送。
+// UI（pages/Index.ets）不认识引擎，只调本类的方法 + 读 AppStorage。
 
 import { inputMethodEngine, InputMethodExtensionContext } from '@kit.IMEKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { display } from '@kit.ArkUI';
 import * as OpiEngine from './OpiEngine';
-import { EmojiGroup, KeyResult, OpiAction, OpiMode, OpiShift } from './OpiEngine';
+import { KeyResult, OpiAction, OpiMode, OpiShift } from './OpiEngine';
 import * as DictionaryAssets from './DictionaryAssets';
 // 输入模式：只做转发 + publish —— 状态机/九项表/数字真源都在 InputModes.ets，本文件不重编一份。
 import * as InputModes from './InputModes';
+import * as KeyboardModes from './KeyboardModes';
+import { PanelView } from './KeyboardModes';
+import * as RawAssets from './RawAssets';
 import {
   KEY_BUFFER, KEY_CANDIDATES, KEY_PAGE, KEY_PAGE_COUNT, KEY_MODE, KEY_SHIFT, KEY_LEARNER,
-  KEY_MODE_INDEX, KEY_PANEL
+  KEY_MODE_INDEX, KEY_VIEW, KEY_SKIN, KEY_DARK, KEY_ELDER, KEY_ONE_HAND, KEY_FLOAT, KEY_GAME, KEY_PRO
 } from './KeyboardAppStorage';
 
 /** 键盘占屏高的比例。凭感觉定的，真机上要按候选栏行数调。 */
 const PANEL_HEIGHT_RATIO: number = 0.42;
+/** 悬浮/游戏窗口宽度比例（Android OpiImeService 同值）。 */
+const FLOATING_WIDTH_RATIO: number = 0.86;
+/** 游戏模式再压到常规高度的这个比例（Android 同值）。 */
+const GAME_HEIGHT_RATIO: number = 0.72;
 
 export class KeyboardController {
   private static instance: KeyboardController = new KeyboardController();
@@ -44,6 +42,9 @@ export class KeyboardController {
   private kbController: inputMethodEngine.KeyboardController | null = null;
   private started: boolean = false;
   private dictLoaded: boolean = false;
+  // 面板窗口的基准尺寸（px）；悬浮/游戏/单手切换时重算。
+  private screenW: number = 0;
+  private screenH: number = 0;
 
   // off() 需要**同一个函数引用**才能真的退订（'inputStop' 的 SDK 签名甚至不给省略 callback）。
   private onInputStartCallback: (kbController: inputMethodEngine.KeyboardController,
@@ -53,6 +54,7 @@ export class KeyboardController {
       this.kbController = kbController;
       this.client = inputClient;
       this.ensureDictionary();
+      this.applyPanelWindow();
       // 新会话：上一轮可能死在半路，先把引擎缓冲清干净，
       // 否则会带着上次的拼音进新输入框（「输入法错乱」的常见来源）。
       OpiEngine.clear();
@@ -69,26 +71,22 @@ export class KeyboardController {
 
   // -------------------------------------------------------------- 生命周期
 
-  /**
-   * 由 InputMethodService.onCreate 调用一次。
-   *
-   * ⚠️ 这个实例会被系统按输入会话**反复创建与销毁**（输入法进程可被杀）。
-   * 所以这里只做「重新拉起」成本很低的事；词库装载有 dictLoaded 挡重入，
-   * 其余状态每次 inputStart 都重新读引擎。
-   */
+  /** InputMethodService.onCreate 调用；进程可能被反复拉起，靠 started 挡重入。 */
   init(ctx: InputMethodExtensionContext): void {
     if (this.started) {
       return;
     }
     this.started = true;
     this.ctx = ctx;
+    RawAssets.bindResourceManager(ctx.resourceManager);
 
     const ability = inputMethodEngine.getInputMethodAbility();
 
     // 面板尺寸：屏宽 × 屏高的比例。display 拿到的单位是 px，不是 vp ——
     // 真机上如果键盘高度明显不对，先查这里需不需要 vp2px 换算（见 README）。
     const d = display.getDefaultDisplaySync();
-    const panelH: number = Math.floor(d.height * PANEL_HEIGHT_RATIO);
+    this.screenW = d.width;
+    this.screenH = d.height;
     const info: inputMethodEngine.PanelInfo = {
       type: inputMethodEngine.PanelType.SOFT_KEYBOARD,
       flag: inputMethodEngine.PanelFlag.FLG_FIXED,
@@ -101,13 +99,12 @@ export class KeyboardController {
         console.error(`[opi] createPanel 失败: ${err.message}`);
         return;
       }
-      panel.resize(d.width, panelH);
-      panel.moveTo(0, d.height - panelH);
+      this.panel = panel;
+      this.applyPanelWindow();
       // 路径是**相对 src/main/ets 的页面路径，不带 .ets 后缀**，且该页必须在
       // resources/base/profile/main_pages.json 里注册过 —— 两处任一处写错，
       // 表现是「面板起来了但是白的」。
       panel.setUiContent('pages/Index');
-      this.panel = panel;
     });
 
     ability.on('inputStart', this.onInputStartCallback);
@@ -181,14 +178,7 @@ export class KeyboardController {
 
   // -------------------------------------------------------------- 按键
 
-  /**
-   * **所有按键的唯一入口。**
-   *
-   * action 的三条语义（这是 C ABI 的契约，别在这里改）：
-   *   2 Commit      → 把 text 上屏
-   *   1 Consumed    → 引擎吃掉了，**什么都不要做**（字已经进它内部了，还没上屏）
-   *   0 PassThrough → **引擎放行了，这一下归应用**（见 handlePassThrough）
-   */
+  /** 所有按键的唯一入口（action：2 上屏 / 1 引擎已吃 / 0 交还应用）。 */
   pressKey(keyval: number, states: number): void {
     const r: KeyResult = OpiEngine.keyEvent(keyval, states);
     if (r.action === OpiAction.Commit) {
@@ -199,14 +189,7 @@ export class KeyboardController {
     this.publish();
   }
 
-  /**
-   * 引擎放行的键 —— **这一下由应用承接**。
-   *
-   * ⚠️ 最容易写错的一条：退格。引擎在**缓冲为空**时故意放行退格，意思是
-   * 「我这儿没东西可删了，去删应用里已上屏的字」。如果这里无条件
-   * `deleteForward(1)`，就等于吞掉了引擎的裁决 —— 表现是「删不掉已经上屏的字」。
-   * 反过来，缓冲非空时引擎会返回 Consumed，根本不会走到这里。
-   */
+  /** 引擎放行的键 = 由应用承接。空缓冲的退格必须真的删应用里的字。 */
   private handlePassThrough(keyval: number): void {
     if (keyval === OpiEngine.KEY_BACK_SPACE || keyval === OpiEngine.KEY_DELETE) {
       this.deleteForward(1);
@@ -217,14 +200,19 @@ export class KeyboardController {
     if (keyval >= 0x20 && keyval <= 0xFFFF) {
       this.insertText(String.fromCharCode(keyval));
     }
-    // Tab / Esc / 方向键 / 翻页越界：软键盘上没有这些键，不处理。
-    // ⚠️ **回车也落到这里**（缓冲为空时引擎放行它），而上面两个分支都不接
-    //    `KEY_RETURN`（`0x1_000D` > 0xFFFF）—— 所以空缓冲下的 ↵ 是死键。
-    //    原因与替代做法写在 `tapEnter` 的注释里；查证到接口后在这里加分支。
+    // 空缓冲的 ↵ 也落到这里：KEY_RETURN > 0xFFFF，两个分支都不接 ⇒ 已知死键（见 tapEnter）。
   }
 
-  /** 面板上的字符键。 */
+  /** 面板上的字符键。英文 pro 关时直提（不经过引擎），其余走统一路由。 */
   tapChar(ch: string): void {
+    if (this.englishDirect()) {
+      this.insertText(OpiEngine.shiftState() === OpiShift.Off ? ch : ch.toUpperCase());
+      if (OpiEngine.shiftState() === OpiShift.Single) {
+        OpiEngine.keyEvent(OpiEngine.KEY_SHIFT, 0); // single 用掉即复位
+      }
+      this.publish();
+      return;
+    }
     this.pressKey(OpiEngine.charKeyval(ch), this.shiftStates());
   }
 
@@ -238,54 +226,19 @@ export class KeyboardController {
   }
 
   /**
-   * 回车。
-   *
-   * ✅ 缓冲非空时**是好的**：引擎返回 action=2 + 首候选，走 `insertText` 上屏。
-   *
-   * ⚠️ **缓冲为空时这个键是死的**（已知缺口，不是 bug —— 但也没人接）：
-   * 引擎在缓冲为空时返回 **PassThrough**（`router.rs` 的 `handle_enter`：
-   * 「空缓冲 → 直通」，意思是「这个回车归应用」），而 `handlePassThrough`
-   * 只认退格/Delete 与可打印段 —— `KEY_RETURN` = `0x1_000D` 大于 `0xFFFF`，
-   * 两个分支都不进，于是**什么都不发生**。用户按 ↵ 没反应。
-   *
-   * 为什么本文件没顺手补上：把回车交还给应用需要 IME Kit 的「送按键给应用」接口
-   * （Android 侧对应 `InputConnection.performEditorAction`，见
-   * `android/.../ime/KeyRouter.kt` 的 `performEnter`），而**那个接口在鸿蒙叫什么、
-   * 本机无法查证**（没有 SDK）。凭记忆写一个 API 名进来，正是本目录要被避免的
-   * 「没被编译器看过的代码」。
-   *
-   * 在 DevEco 上的做法：查到正确的接口后，在 `handlePassThrough` 里给
-   * `KEY_RETURN` 加一条分支，**不要**退化成 `insertText('\n')` 了事 ——
-   * 单行输入框里插换行符不等于提交（也可能被应用直接忽略），
-   * 表现是「按了 ↵ 什么都不发生」换个形式再来一次。
+   * 回车：缓冲非空时提交首候选；空缓冲是已知缺口（需 IME Kit 的「送键给应用」接口，
+   * 本机 SDK 未查证）。别退化成 insertText('\n')——单行框里不等于提交。
    */
   tapEnter(): void {
     this.pressKey(OpiEngine.KEY_RETURN, 0);
   }
 
-  /**
-   * ⇧ 单击。三态由**引擎**的状态机走，UI 不自己数。
-   *
-   * ⚠️ 单击只在 **OFF ↔ SINGLE** 之间来回（`router.rs` 的 `shift_tap`：
-   * `Off → Single`，其余一律回 `Off`）。**进不了 LOCK** —— 见 tapShiftLongPress。
-   * 本注释原先写的是「OFF→SINGLE→LOCK 由引擎的状态机走」，那句话是错的：
-   * 引擎能走三态，但第三态得靠**长按**那个入口，光按这个方法是到不了的。
-   */
+  /** ⇧ 单击：引擎三态只在 OFF ↔ SINGLE 间走；LOCK 只能长按（见 tapShiftLongPress）。 */
   tapShift(): void {
     this.pressKey(OpiEngine.KEY_SHIFT, 0);
   }
 
-  /**
-   * ⇧ 长按 → **LOCK**（持续大写）。⇧ 进 Lock 的唯一途径。
-   *
-   * 引擎侧对应 `router.rs` 的 `shift_long_press()`，判据是 states 里的
-   * `KEY_STATE_LONG_PRESSED` 位 —— 缺了这个位，`OpiShift.Lock` 就是永远到不了的
-   * 枚举值（UI 里有 `⇪` 分支、用户怎么按都出不来）。`OpiEngine.ets` 原先漏抄了
-   * 这个位，本轮补上。
-   *
-   * 传 states 时**不要**再带 STATE_REPEAT：`handle_shift` 把 released 与 repeat
-   * 一起忽略，带了这一下就白按了。
-   */
+  /** ⇧ 长按 → LOCK（持续大写）。states 带 LONG_PRESSED，别带 REPEAT（会被忽略）。 */
   tapShiftLongPress(): void {
     this.pressKey(OpiEngine.KEY_SHIFT, OpiEngine.STATE_LONG_PRESSED);
   }
@@ -314,6 +267,9 @@ export class KeyboardController {
    * ⚠️ 别在这里再 `setShift(false)`：那会把切换刚重推的引擎位又清掉（首个字母变小写）。
    */
   switchMode(m: OpiMode): void {
+    if (m !== OpiMode.English) {
+      KeyboardModes.leaveEnglishPro();
+    }
     OpiEngine.clear();
     OpiEngine.switchMode(m);
     this.publish();
@@ -332,19 +288,14 @@ export class KeyboardController {
    * ⚠️ 下面四条转发后都 `publish()`：`setScheme` 会清缓冲，不刷新就是「点了没反应」。
    */
   selectInputMode(index: number): void {
+    if (index === InputModes.MODE_RARE) {
+      // 生僻字是面板视图（不进引擎、不改键位）。
+      KeyboardModes.openPanel(PanelView.Rare);
+      this.publish();
+      return;
+    }
     InputModes.selectInputMode(index);
-    this.publish();
-  }
-
-  /** 候选栏的 ⌨：开/关九项面板。 */
-  toggleModePanel(): void {
-    InputModes.toggleModePanel();
-    this.publish();
-  }
-
-  /** 面板里的「关闭」。 */
-  closeModePanel(): void {
-    InputModes.closeModePanel();
+    KeyboardModes.closePanel(); // 选中即回键面（Android selectInputMode 同款）
     this.publish();
   }
 
@@ -359,90 +310,133 @@ export class KeyboardController {
     return OpiEngine.shiftState() === OpiShift.Off ? 0 : OpiEngine.STATE_SHIFT;
   }
 
-  // -------------------------------------------------------------- 表情页（2026-10-13）
+  // -------------------------------------------------------------- 工具条 / 面板（2026-10-20）
 
-  private emojiCache: string[] | null = null;
-  private emojiSetCache: Set<string> | null = null;
-  private emojiGroupsCache: EmojiGroup[] | null = null;
-
-  /**
-   * 表情浏览全量（官方分组序），懒取一次并缓存。
-   *
-   * ⚠️ **空结果不写进缓存** —— 与 Android `SymbolCatalog` 同一条纪律：空 = 「没拿到」，
-   * 不是「真的没有」；缓存了就会**永远空到下次重启**。（这条出口不经引擎单例，正常
-   * 冷启动第一帧就有；这里防的是模块没起来 / JSON 解码失败那一瞬。）
-   */
-  emojiSymbols(): string[] {
-    if (this.emojiCache === null) {
-      const list: string[] = OpiEngine.emojiSymbols();
-      if (list.length > 0) {
-        this.emojiCache = list;
-      }
-      return list;
+  /** 面板窗口：常规全宽贴底；悬浮/游戏收窄居中，游戏再压高度（Android OpiImeService 同值）。 */
+  private applyPanelWindow(): void {
+    if (this.panel === null || this.screenW === 0) {
+      return;
     }
-    return this.emojiCache;
+    let w: number = this.screenW;
+    let h: number = Math.floor(this.screenH * PANEL_HEIGHT_RATIO);
+    if (KeyboardModes.gameEnabled()) {
+      h = Math.floor(h * GAME_HEIGHT_RATIO);
+    }
+    if (KeyboardModes.floatingEnabled() || KeyboardModes.gameEnabled()) {
+      w = Math.floor(this.screenW * FLOATING_WIDTH_RATIO);
+    }
+    this.panel.resize(w, h);
+    this.panel.moveTo(Math.floor((this.screenW - w) / 2), this.screenH - h);
   }
 
-  /** 表情分组（分类条）。缓存纪律同 [emojiSymbols]。 */
-  emojiGroups(): EmojiGroup[] {
-    if (this.emojiGroupsCache === null) {
-      const groups: EmojiGroup[] = OpiEngine.emojiGroups();
-      if (groups.length > 0) {
-        this.emojiGroupsCache = groups;
-      }
-      return groups;
-    }
-    return this.emojiGroupsCache;
+  togglePanel(v: PanelView): void {
+    KeyboardModes.togglePanel(v);
+    this.publish();
   }
 
-  /**
-   * 表情页搜索：**引擎搜索 ∩ 表情集**。
-   *
-   * 求交的理由：`searchSymbols` 查的是**符号表**（含箭头、数学符号等非表情条目），
-   * 而这一页是表情页 —— 与 Android 的 `results.filter(catalog::isEmoji)` 同一件事。
-   * ⚠️ **每次输入都打一次引擎**（本端不缓存中间结果）：开销主要在 JSON 解码。真机上若
-   * 发现打字卡，照 Android 的做法**按 query 缓存**（那边是 `remember(searchQuery)`）。
-   */
-  searchEmoji(q: string): string[] {
-    const all: string[] = OpiEngine.searchSymbols(q);
-    if (all.length === 0) {
-      return [];
-    }
-    if (this.emojiSetCache === null) {
-      // ⚠️ 未编译：`Set<string>` 在 ArkTS 里的可用性（与 EmojiPad.ets 的 `Array.from` 同一族，
-      // 见 README 的 U23）；备选 = 每次线性扫表情全量（O(n) 换 O(1)，n≈4000，会明显变慢）。
-      const set: Set<string> = new Set<string>();
-      const emojis: string[] = this.emojiSymbols();
-      for (let i = 0; i < emojis.length; i++) {
-        set.add(emojis[i]);
-      }
-      // 表情集为空**不写缓存**（同上纪律：空 = 没拿到），下次重试。
-      if (set.size > 0) {
-        this.emojiSetCache = set;
-      }
-    }
-    if (this.emojiSetCache === null) {
-      // 表情集没拿到 ⇒ 交集为空。**别退化成「把非表情也搜出来」**。
-      return [];
-    }
-    const out: string[] = [];
-    for (let i = 0; i < all.length; i++) {
-      if (this.emojiSetCache.has(all[i])) {
-        out.push(all[i]);
-      }
-    }
-    return out;
+  closePanel(): void {
+    KeyboardModes.closePanel();
+    this.publish();
   }
 
-  /**
-   * 点一个表情：**直提**（`insertText`），**不过引擎** —— 与 Android
-   * （`ImeScreen.kt` 的 `onCommit = router::commitText`）同一条纪律：引擎的标点表会把
-   * `,` 改写成中文标点，而表情页点的是什么就该出什么。
-   * ⚠️ **整串送**（旗帜/家庭是多码位序列）：不要拆成按键走 `pressKey`，那既不是它认识的
-   * 样子，也会被当成多个键。
-   */
-  tapEmoji(text: string): void {
+  selectSkin(i: number): void {
+    KeyboardModes.setSkinValue(i);
+    this.publish();
+  }
+
+  toggleDark(): void { KeyboardModes.toggleDark(); this.publish(); }
+
+  toggleElder(): void { KeyboardModes.toggleElder(); this.publish(); }
+
+  setOneHand(v: number): void { KeyboardModes.setOneHandValue(v); this.publish(); }
+
+  toggleFloating(): void {
+    KeyboardModes.toggleFloating();
+    this.applyPanelWindow();
+    this.publish();
+  }
+
+  toggleGame(): void {
+    KeyboardModes.toggleGame();
+    this.applyPanelWindow();
+    this.publish();
+  }
+
+  /** 收起键盘（会话还在；下次 inputStart 仍是同一扩展）。 */
+  hideKeyboard(): void {
+    if (this.kbController === null) {
+      return;
+    }
+    this.kbController.hide().catch((err: BusinessError) => {
+      console.error(`[opi] 收起键盘失败: ${err.message}`);
+    });
+  }
+
+  /** 符号页（符/?123）与生僻字面板：面板视图，不碰引擎。 */
+  openSymbolPage(): void {
+    KeyboardModes.openPanel(PanelView.SymbolPage);
+    this.publish();
+  }
+
+  openRare(): void {
+    KeyboardModes.openPanel(PanelView.Rare);
+    this.publish();
+  }
+
+  /** 表情页：引擎 Symbol 模式；记住来路，返回时切回（Android 表情是视图，不换引擎模式）。 */
+  openEmoji(): void {
+    KeyboardModes.setEmojiReturn(OpiEngine.mode());
+    OpiEngine.clear();
+    OpiEngine.switchMode(OpiMode.Symbol);
+    KeyboardModes.closePanel();
+    this.publish();
+  }
+
+  exitEmoji(): void {
+    OpiEngine.clear();
+    OpiEngine.switchMode(KeyboardModes.emojiReturn());
+    this.publish();
+  }
+
+  /** 符号/生僻字/表情直提：整串送，不拆键（旗帜/家庭是多码位序列）。 */
+  commitText(text: string): void {
     this.insertText(text);
+  }
+
+  /** 英文 pro：关掉时清掉引擎里可能残留的缓冲（此后字母直接上屏）。 */
+  toggleEnglishPro(): void {
+    KeyboardModes.toggleEnglishPro();
+    if (!KeyboardModes.englishProEnabled()) {
+      OpiEngine.clear();
+    }
+    this.publish();
+  }
+
+  /** 9/14/笔画底行：只切简繁（Android 2026-10-15 裁决）。 */
+  toggleTraditional(): void {
+    this.switchMode(OpiEngine.mode() === OpiMode.Traditional ? OpiMode.Pinyin : OpiMode.Traditional);
+  }
+
+  /** 数字面板 ABC：回到上次的中文键位（不是固定的拼音26键）。 */
+  cycleToChinese(): void {
+    this.selectInputMode(InputModes.lastChineseModeIndex());
+  }
+
+  /** 26 键模式键：中→繁→英→上次中文（Android cycleMode 的次序）。 */
+  cycleMode(): void {
+    const m: OpiMode = OpiEngine.mode();
+    if (m === OpiMode.Pinyin) {
+      this.switchMode(OpiMode.Traditional);
+    } else if (m === OpiMode.Traditional) {
+      this.switchMode(OpiMode.English);
+    } else {
+      this.switchMode(InputModes.INPUT_MODES[InputModes.lastChineseModeIndex()].mode);
+    }
+  }
+
+  /** 英文 pro 关 = 字母直提（不经过引擎，Android 的直接输出档）。 */
+  private englishDirect(): boolean {
+    return OpiEngine.mode() === OpiMode.English && !KeyboardModes.englishProEnabled();
   }
 
   // -------------------------------------------------------------- 状态推送
@@ -461,24 +455,20 @@ export class KeyboardController {
     AppStorage.setOrCreate<number>(KEY_LEARNER, OpiEngine.learnerEnabled() ? 1 : 0);
     // 这两条不来自引擎（模块级状态机）：未装载时读侧回 0/false 是哨兵，别拿它当 UI 档位。
     AppStorage.setOrCreate<number>(KEY_MODE_INDEX, InputModes.currentModeIndex());
-    AppStorage.setOrCreate<number>(KEY_PANEL, InputModes.modePanelShown());
+    AppStorage.setOrCreate<number>(KEY_VIEW, KeyboardModes.panelView());
+    AppStorage.setOrCreate<number>(KEY_SKIN, KeyboardModes.skinValue());
+    AppStorage.setOrCreate<number>(KEY_DARK, KeyboardModes.darkEnabled() ? 1 : 0);
+    AppStorage.setOrCreate<number>(KEY_ELDER, KeyboardModes.elderEnabled() ? 1 : 0);
+    AppStorage.setOrCreate<number>(KEY_ONE_HAND, KeyboardModes.oneHandValue());
+    AppStorage.setOrCreate<number>(KEY_FLOAT, KeyboardModes.floatingEnabled() ? 1 : 0);
+    AppStorage.setOrCreate<number>(KEY_GAME, KeyboardModes.gameEnabled() ? 1 : 0);
+    AppStorage.setOrCreate<number>(KEY_PRO, KeyboardModes.englishProEnabled() ? 1 : 0);
     this.syncPreviewText();
   }
 
   /**
-   * 组合串推进**宿主输入框** —— 鸿蒙的原语是 **preview text**（预上屏）。
-   *
-   * 功能与 Android 同一条裁决（2026-10-10「打字期间输入框里能看到拼音」，以及
-   * 2026-10-12 晚「待编的键必须看得见」）：本端此前只在**自家面板**的 preedit 里
-   * 显示缓冲（`pages/Index.ets` 的 PreeditBar），宿主的输入框里一个字都没有 ——
-   * 用户判为「没输入进去」。iOS 端的对应物是 marked text（见 `ios/KeyboardViewController.swift`
-   * 的 `syncMarkedText`），鸿蒙这边就是这一对调用。
-   *
-   * API 19 的 d.ts 实测签名（2026-10-19 真编译后）：
-   *   · `setPreviewTextSync(text, range: Range)` —— range 是**要替换的编辑框区间**，
-   *     不是光标偏移量；本端用 `{ start: 0, end: 0 }`（光标处插入/更新）
-   *   · `finishTextPreviewSync()` —— 缓冲清空时收尾
-   * ⚠️ `{0,0}` 的语义只按 d.ts 选过，**没有真机证据**；见 docs/install/harmony.md §0.6。
+   * 组合串推进宿主输入框（preview text）。`{0,0}` 只按 API 19 d.ts 选过，
+   * 无真机证据；见 docs/install/harmony.md §0.6。
    */
   private syncPreviewText(): void {
     if (this.client === null) {

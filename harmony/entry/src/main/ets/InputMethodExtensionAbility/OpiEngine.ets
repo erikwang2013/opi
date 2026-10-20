@@ -340,7 +340,7 @@ export function charFromKeyval(keyval: number): string {
 // ---------------------------------------------------------------- 表情 / 符号数据面
 //
 // 2026-10-13 新增：喂键盘面板的表情页（Symbol 模式）。这几条**不是候选** —— 表情页
-// 点一格是**直接上屏**（`KeyboardController.tapEmoji`），不过引擎的标点表。
+// 点一格是**直接上屏**（`KeyboardController.commitText`），不过引擎的标点表。
 // 与 JNI 面（`jni_symbols.rs`）同名同源，都走 `api::` 的同一份实现（同一份引擎）。
 //
 // ⚠️ **未编译**：下面三条 `opiime.*` 是 N-API 注册表上新加的导出，**名字必须与

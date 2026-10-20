@@ -1,38 +1,18 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-// ⚠️ 草案 · 从未编译 · 未验证
-//
-// 本文件在 Linux 上编写，**未经过任何 ArkTS 编译器**。ArkUI 的 @Component / ForEach /
-// @State 在普通 tsc 下就断。
-//
-// 表情页（Symbol 模式），2026-10-18 重写为与 Android `keyboard/EmojiPanel.kt` 同布局：
-//
-//   [‹ 返回]   [自有 | Emoji | 颜文字]   [🔍]
-//   ┌────────────── 网格 ──────────────┐
-//   └──── 可横滑的分类条（底部一条）────┘
-//
-// · **自有** = 独立顶级分类（用户裁决）：4 列网格画 `PetStickerImages.ets` 内嵌的
-//   12 张小欧 GIF（缺失自动退回 PNG）；点击**复制图片到系统剪贴板**
-//   （`PetStickerClipboard.ets`，PNG/PixelMap 优先、GIF 兜底）并弹 toast，**不提交任何文本**。
-//   自有页没有分类条、也没有 🔍。
-// · **Emoji** 分类 = **只用**引擎 `emojiGroups()`（9 组，不再加 `自有` 偏移）。
-// · **颜文字** 分类 = `KaomojiData.ets` 的 7 类（从 data/raw/kaomoji.tsv 机械生成；
-//   解析/分类口径同 Android `KaomojiCategories`）。
-// · 分类点击 = **切片**到该组首项（本端不做 `Scroller` 滚动：网格只画当前组，
-//   与旧版分组条同一取舍；见 README 缺口 3）。因此高亮恒为「当前组」。
-// · 搜索态保持既有两套工具条：`[‹ 返回][搜索框]`；返回 = 清查询回浏览态。
-//   搜索只覆盖 Emoji / 颜文字（自有是图片，没有可搜文本）。
-//   ⚠️ 搜索框的输入通道仍未解决（README 缺口 3 ②）：面板自己就是输入法，
-//   `TextInput` 聚焦时没有第二个输入法可唤起 —— 真机上大概率「能显示、不能打字」。
-//
-// ⚠️ 网格仍是 `Scroll + Column + ForEach`（全量铺节点，不虚拟化），理由与代价见
-// README 缺口 3 ④。**未做画不出的字形过滤**（缺口 3 ③）。
+// 表情页（引擎 Symbol 模式；Android keyboard/EmojiPanel.kt 的镜像）。
+// 布局：[‹ 返回] [自有|Emoji|颜文字] [🔍] + 网格 + 底部分类条。
+// 自有 = 12 张内嵌小欧贴纸（点按复制 PNG/PixelMap 图片，不上屏；GIF 仅在 PNG 缺失时用）；
+// Emoji 用引擎分组；颜文字用内嵌 7 类。
+// 分类点击只切片当前组（不做 Scroller）；搜索只覆盖 Emoji/颜文字。
+// shortcut: 搜索框没有第二输入法可唤起（README 缺口 3②），网格未虚拟化（缺口 3④）。
 
 import { KeyboardController } from './KeyboardController';
-import { EmojiGroup, OpiMode } from './OpiEngine';
+import { EmojiGroup } from './OpiEngine';
 import { OpiPet, PetMood } from './OpiPet';
-import { nextMode } from './InputModes';
+import { emojiGroups, emojiSymbols, searchEmoji } from './EmojiData';
+import { Palette, paletteFor } from './Palette';
 import { KAOMOJI_CATEGORIES } from './KaomojiData';
 import {
   PET_STICKER_FORMS, PetStickerForm, stickerBase64, stickerDataUri,
@@ -69,8 +49,15 @@ export struct EmojiPad {
    * `searchEmoji` 每次都会打引擎（控制器不缓存中间结果），build 里多处读会重复解码。
    */
   @State searchRows: string[][] = [];
+  @StorageLink('opiSkin') skin: number = 0;
+  @StorageLink('opiDark') dark: number = 0;
+  @StorageLink('opiElder') elder: number = 0;
 
   private ctrl: KeyboardController = KeyboardController.getInstance();
+
+  private pal(): Palette {
+    return paletteFor(this.skin, this.dark === 1, this.elder === 1);
+  }
 
   build() {
     Column() {
@@ -89,7 +76,7 @@ export struct EmojiPad {
         this.CategoryBar()
       }
     }
-    .width('100%').backgroundColor('#FFFFFF')
+    .width('100%').backgroundColor(this.pal().panelBg)
   }
 
   // ------------------------------------------------------------ 顶部工具条
@@ -105,7 +92,7 @@ export struct EmojiPad {
   TopBar() {
     Row() {
       Text('‹ 返回')
-        .fontSize(15).fontColor('#1E6B63').padding({ left: 12, right: 10 })
+        .fontSize(15).fontColor(this.pal().toolbarFg).padding({ left: 12, right: 10 })
         .onClick(() => { this.back(); })
 
       if (this.searching) {
@@ -117,21 +104,21 @@ export struct EmojiPad {
         Row() {
           if (SHOW_OWN) {
             Text('自有')
-              .fontSize(15).fontColor(this.subTab === 0 ? '#FFFFFF' : '#1E6B63')
-              .backgroundColor(this.subTab === 0 ? '#2E8B80' : '#FFFFFF')
+              .fontSize(15).fontColor(this.subTab === 0 ? this.pal().highlightFg : this.pal().dimFg)
+              .backgroundColor(this.subTab === 0 ? this.pal().highlightBg : this.pal().panelBg)
               .borderRadius(6).padding({ left: 14, right: 14, top: 5, bottom: 5 })
               .margin({ left: 3, right: 3 })
               .onClick(() => { this.selectSub(0); })
           }
           Text('Emoji')
-            .fontSize(15).fontColor(this.subTab === 1 ? '#FFFFFF' : '#1E6B63')
-            .backgroundColor(this.subTab === 1 ? '#2E8B80' : '#FFFFFF')
+            .fontSize(15).fontColor(this.subTab === 1 ? this.pal().highlightFg : this.pal().dimFg)
+            .backgroundColor(this.subTab === 1 ? this.pal().highlightBg : this.pal().panelBg)
             .borderRadius(6).padding({ left: 14, right: 14, top: 5, bottom: 5 })
             .margin({ left: 3, right: 3 })
             .onClick(() => { this.selectSub(1); })
           Text('颜文字')
-            .fontSize(15).fontColor(this.subTab === 2 ? '#FFFFFF' : '#1E6B63')
-            .backgroundColor(this.subTab === 2 ? '#2E8B80' : '#FFFFFF')
+            .fontSize(15).fontColor(this.subTab === 2 ? this.pal().highlightFg : this.pal().dimFg)
+            .backgroundColor(this.subTab === 2 ? this.pal().highlightBg : this.pal().panelBg)
             .borderRadius(6).padding({ left: 14, right: 14, top: 5, bottom: 5 })
             .margin({ left: 3, right: 3 })
             .onClick(() => { this.selectSub(2); })
@@ -146,7 +133,7 @@ export struct EmojiPad {
         }
       }
     }
-    .width('100%').height(44).backgroundColor('#FFFFFF')
+    .width('100%').height(44).backgroundColor(this.pal().panelBg)
   }
 
   // ------------------------------------------------------------ 网格
@@ -163,7 +150,7 @@ export struct EmojiPad {
                 Image(stickerGifDataUri(f.sticker))
                   .width(STICKER_SIZE).height(STICKER_SIZE)
                   .objectFit(ImageFit.Contain)
-                Text(f.label).fontSize(10).fontColor('#1E6B63').margin({ top: 2 })
+                Text(f.label).fontSize(10).fontColor(this.pal().panelFg).margin({ top: 2 })
               }
               .layoutWeight(1).height(78).justifyContent(FlexAlign.Center)
               .onClick(() => {
@@ -189,9 +176,9 @@ export struct EmojiPad {
   EmojiBrowse() {
     Scroll() {
       Column() {
-        if (this.ctrl.emojiSymbols().length === 0) {
+        if (emojiSymbols().length === 0) {
           // 表情表**不经引擎单例**，正常冷启动第一帧就有；走到这里是模块/数据真没起来。
-          Text('表情库未就绪').fontSize(14).fontColor('#9AA7A4').margin({ top: 12 })
+          Text('表情库未就绪').fontSize(14).fontColor(this.pal().dimFg).margin({ top: 12 })
         } else {
           this.EmojiRows()
         }
@@ -205,7 +192,7 @@ export struct EmojiPad {
   @Builder
   KaomojiBrowse() {
     if (KAOMOJI_CATEGORIES.length === 0) {
-      Text('没有颜文字数据').fontSize(14).fontColor('#9AA7A4').margin({ top: 12 })
+      Text('没有颜文字数据').fontSize(14).fontColor(this.pal().dimFg).margin({ top: 12 })
     } else {
       Scroll() {
         Column() {
@@ -223,7 +210,7 @@ export struct EmojiPad {
     if (this.searchRows.length === 0) {
       Row() {
         OpiPet({ mood: PetMood.Puzzled, petSize: 30, dark: false, forceLegend: false })
-        Text('无匹配').fontSize(14).fontColor('#9AA7A4').margin({ left: 8 })
+        Text('无匹配').fontSize(14).fontColor(this.pal().dimFg).margin({ left: 8 })
       }
       .width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)
     } else {
@@ -247,7 +234,7 @@ export struct EmojiPad {
         ForEach(row, (e: string, col: number) => {
           Text(e)
             .fontSize(24).layoutWeight(1).textAlign(TextAlign.Center)
-            .onClick(() => { this.ctrl.tapEmoji(e); })
+            .onClick(() => { this.ctrl.commitText(e); })
         }, (e: string, col: number) => `${col}-${e}`)
         this.Blanks(EMOJI_PER_ROW - row.length)
       }
@@ -263,7 +250,7 @@ export struct EmojiPad {
         ForEach(row, (k: string, col: number) => {
           Text(k)
             .fontSize(14).layoutWeight(1).textAlign(TextAlign.Center)
-            .onClick(() => { this.ctrl.tapEmoji(k); })
+            .onClick(() => { this.ctrl.commitText(k); })
         }, (k: string, col: number) => `${col}-${k}`)
         this.Blanks(KAOMOJI_PER_ROW - row.length)
       }
@@ -279,7 +266,7 @@ export struct EmojiPad {
         ForEach(row, (s: string, col: number) => {
           Text(s)
             .fontSize(this.subTab === 1 ? 20 : 14).layoutWeight(1).textAlign(TextAlign.Center)
-            .onClick(() => { this.ctrl.tapEmoji(s); })
+            .onClick(() => { this.ctrl.commitText(s); })
         }, (s: string, col: number) => `${col}-${s}`)
         this.Blanks((this.subTab === 1 ? EMOJI_PER_ROW : KAOMOJI_PER_ROW) - row.length)
       }
@@ -311,8 +298,8 @@ export struct EmojiPad {
         ForEach(this.categoryNames(), (name: string, i: number) => {
           Text(name)
             .fontSize(14)
-            .fontColor(i === this.selectedCategory() ? '#FFFFFF' : '#1E6B63')
-            .backgroundColor(i === this.selectedCategory() ? '#2E8B80' : '#FFFFFF')
+            .fontColor(i === this.selectedCategory() ? this.pal().highlightFg : this.pal().panelFg)
+            .backgroundColor(i === this.selectedCategory() ? this.pal().highlightBg : this.pal().barBg)
             .borderRadius(8).padding({ left: 12, right: 12, top: 13, bottom: 13 })
             .margin({ left: 3, right: 3 })
             .onClick(() => { this.selectCategory(i); })
@@ -320,17 +307,12 @@ export struct EmojiPad {
       }
     }
     .scrollable(ScrollDirection.Horizontal)
-    .width('100%').height(52).backgroundColor('#FFFFFF')
+    .width('100%').height(52).backgroundColor(this.pal().barBg)
   }
 
   // ------------------------------------------------------------ 状态与数据
 
-  /**
-   * 返回：搜索态 → 清查询回浏览态；浏览态 → 退出符号模式。
-   *
-   * 本端没有 Android 的 `onClose`（表情页是 Symbol 模式整片换的），退出就是切模式；
-   * 用 `nextMode` 与功能行模式键**同一张表**（符号的下一档 = 拼音）。
-   */
+  /** 返回：搜索态 → 回浏览态；浏览态 → 切回进表情前的引擎模式。 */
   private back(): void {
     if (this.searching) {
       this.searching = false;
@@ -338,7 +320,7 @@ export struct EmojiPad {
       this.searchRows = [];
       return;
     }
-    this.ctrl.switchMode(nextMode(OpiMode.Symbol as number));
+    this.ctrl.exitEmoji();
   }
 
   /** 搜索词变化：更新查询并按子页重算结果（只算一次，见 [searchRows]）。 */
@@ -350,7 +332,7 @@ export struct EmojiPad {
     }
     if (this.subTab === 1) {
       // `searchEmoji` 已与表情集求交（同 Android `filter(catalog::isEmoji)`）。
-      this.searchRows = this.chunk(this.dedup(this.ctrl.searchEmoji(q)), EMOJI_PER_ROW);
+      this.searchRows = this.chunk(this.dedup(searchEmoji(q)), EMOJI_PER_ROW);
     } else {
       this.searchRows = this.chunk(this.searchKaomoji(q), KAOMOJI_PER_ROW);
     }
@@ -358,7 +340,7 @@ export struct EmojiPad {
 
   /** 当前 Emoji 分类下标（夹紧：引擎重载后组数变少时不越界；0 起，无「自有」偏移）。 */
   private selectedEmojiGroup(): number {
-    const n: number = this.ctrl.emojiGroups().length;
+    const n: number = emojiGroups().length;
     if (n === 0) {
       return 0;
     }
@@ -374,7 +356,7 @@ export struct EmojiPad {
   private categoryNames(): string[] {
     const out: string[] = [];
     if (this.subTab === 1) {
-      const groups: EmojiGroup[] = this.ctrl.emojiGroups();
+      const groups: EmojiGroup[] = emojiGroups();
       for (let i = 0; i < groups.length; i++) {
         out.push(groups[i].name);
       }
@@ -408,8 +390,8 @@ export struct EmojiPad {
    * （Android 同款裁决；上游已有零重复门禁，这里防将来哪层漏）。
    */
   private emojiRows(): string[][] {
-    const groups: EmojiGroup[] = this.ctrl.emojiGroups();
-    const all: string[] = this.ctrl.emojiSymbols();
+    const groups: EmojiGroup[] = emojiGroups();
+    const all: string[] = emojiSymbols();
     let list: string[];
     if (groups.length === 0) {
       list = all;
