@@ -66,6 +66,9 @@ jobs:
           cp target/aarch64-unknown-linux-ohos/release/libopi_ffi.a harmony/entry/src/main/cpp/libs/arm64-v8a/libopi_ffi.a
           ls -l harmony/entry/src/main/cpp/libs/arm64-v8a/libopi_ffi.a
 
+      - name: Prepare dictionary rawfiles
+        run: scripts/prepare_harmony_dicts.sh
+
       - name: Build HAP
         run: |
           set -euo pipefail
@@ -77,6 +80,9 @@ jobs:
           ls -l "$HAP"
           unzip -l "$HAP"
           unzip -l "$HAP" | grep -q 'libs/arm64-v8a/libopiime.so' || { echo "HAP is missing libopiime.so"; exit 1; }
+          for f in luna.opid stroke.opid wubi86.opid; do
+            unzip -l "$HAP" | grep -q "resources/rawfile/$f" || { echo "HAP is missing rawfile/$f"; exit 1; }
+          done
 
       - name: Upload unsigned HAP
         uses: actions/upload-artifact@v4

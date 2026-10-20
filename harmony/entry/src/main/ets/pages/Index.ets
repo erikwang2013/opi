@@ -124,15 +124,10 @@ struct Index {
   /**
    * 小欧的情绪：**由输入状态推导，本页不自己维护**（与 Android 端同一套规则，
    * 纯函数 petMood 在 OpiPet.ets，规格见 OpiPetMoodTest.kt）。
-   *
-   * ⚠️ **只传 3 参**，`dictionaryDegraded` 用默认 `false` —— 不是漏了，是**鸿蒙端拿不到
-   * 那个信号**：`KeyboardController.ensureDictionary()` 调的是 `OpiEngine.loadDictionary('')`，
-   * 空路径按设计就直达内置词库（鸿蒙的完整词库装载尚未实现），所以它的返回值恒为 true，
-   * 区分不出「装上了」与「回退了」。
-   * ⇒ **鸿蒙端永远画不出 DEGRADED**。等哪天完整词库装载落地，这里要跟着接上。
+   * `dictionaryDegraded` 由 KeyboardController 给（完整词库拷贝/装载失败时为 true）。
    */
   private mood(): PetMood {
-    return petMood(this.buffer, this.candidates.length, this.learner === 1);
+    return petMood(this.buffer, this.candidates.length, this.learner === 1, this.ctrl.dictionaryDegraded());
   }
 
   private isDark(): boolean {

@@ -299,29 +299,20 @@ export function nextMode(m: number): OpiMode {
 }
 
 /**
- * 「随包词表」的装载编排（笔画 / 五笔）。
+ * 「随包词表」的装载编排（笔画 / 五笔）。路径来自 DictionaryAssets 的沙箱副本；
+ * 空串 = 该表没随包或拷贝失败 ⇒ C ABI 语义是「**返回 false 且引擎保持原样**」
+ * （不崩、不假装有候选，对应方案下只是查不出字）。
  *
- * ⚠️ **传空串是**本轮的**实际状态**，不是占位符：`stroke.opid`(5.4MB)、
- * `wubi86.opid`/`wubi98.opid`、`rare_index.tsv` **都不在仓库里**（见 harmony/README.md
- * 的文件表），工程里也没建 rawfile 目录 —— 空/坏路径在 C ABI 的语义是
- * 「**返回 false 且引擎保持原样**」，所以：**不会崩、不假装有候选**，笔画/五笔方案下
- * 打字只是「查不出字」。这正是要它成立的降级，而不是被 try/catch 吞掉的假成功。
- *
- * 表随包之后要做的（**尚未实现**，本机没有 SDK，相关的 resourceManager/fileIo API
- * 名只能凭记忆写 —— 本目录的纪律是不写这种代码）：
- *   1. 把表放进工程的 `src/main/resources/rawfile/`（名字沿用 Android 的资产名）；
- *   2. 启动时用 resourceManager 读 rawfile、fileIo 写进沙箱（`ctx.filesDir`）；
- *   3. 把沙箱里的**绝对路径**传进来（rawfile 不是文件系统路径，直接传必失败）；
- *   4. 五笔按用户选的方案**只装一张**（86/98 二选一）。本轮固定 86：方案选择器
- *      （设置页）未落地，缺省与 Android 一致。
+ * 五笔**只装一张**：86/98 码空间重叠、权重不可比。本端无设置页 ⇒ 固定 86
+ * （缺省与 Android 一致）。
  */
-export function loadOptionalTables(): void {
-  const strokeOk: boolean = loadStroke('');
-  const wubiOk: boolean = loadWubi('');
+export function loadOptionalTables(strokePath: string, wubiPath: string): void {
+  const strokeOk: boolean = loadStroke(strokePath);
+  const wubiOk: boolean = loadWubi(wubiPath);
   if (!strokeOk) {
-    console.warn('[opi] stroke.opid 未随包：笔画方案将查不出字（引擎未装载该表）');
+    console.warn('[opi] stroke.opid 未装载：笔画方案将查不出字（引擎未装载该表）');
   }
   if (!wubiOk) {
-    console.warn('[opi] wubi86.opid 未随包：五笔方案将查不出字（引擎未装载该表）');
+    console.warn('[opi] wubi86.opid 未装载：五笔方案将查不出字（引擎未装载该表）');
   }
 }

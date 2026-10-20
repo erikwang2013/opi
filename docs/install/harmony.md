@@ -11,6 +11,18 @@
 >
 > ⚠️ 边界不变：**能构建 ≠ 能安装 ≠ 能用**。本机无设备，签名与真机安装/运行
 > **未验证**。构建命令、首错与修复、HAP 内容、签名前置、CI runner 要求在 §0。
+>
+> ### ✅ 2026-10-20 订正：**完整词库已随包**
+>
+> `luna.opid`（33.3 MB）、`stroke.opid`（5.4 MB）、`wubi86.opid`（3.2 MB）现在由
+> `scripts/prepare_harmony_dicts.sh` 在构建期从 `android/app/src/main/assets/` 复制进
+> `harmony/entry/src/main/resources/rawfile/`（**复制品不入库**，见 `.gitignore`）。
+> 扩展首次启动时 `DictionaryAssets.ets` 把它们拷进 `ctx.filesDir`，再把**绝对路径**
+> 交给 `opi_load` / `opi_load_stroke` / `opi_load_wubi`；任一步失败才回退
+> `opi_load('')` 并置 DEGRADED（小欧画出来）。release HAP 因此变成 **48,058,777 B**，
+> `unzip -l` **13 项**（清单已实测，见 §0.2）。
+> `trad.opid` 仍**不随包**：`opi_load_trad` 不在鸿蒙桥的 use-site 子集里（G2 / G5）。
+> **真机行为（含首次拷贝耗时）仍未验证。**
 
 > ## 这份文档的性质：**起点与契约，不是可用实现**
 >
@@ -88,6 +100,8 @@ harmony/                          # 工程根（hvigorw 在这个目录里跑）
         ├── module.json5          # extensionAbilities[].type = "inputMethod"
         ├── ets/                  # 原 harmony/ets
         ├── resources/            # 原 harmony/resources（rawfile 上移了一层，见 0.3 首错）
+        │   └── rawfile/          # **生成目录**：三张 .opid 由 scripts/prepare_harmony_dicts.sh
+        │                         # 构建期复制进来，被 .gitignore 挡住，不入库
         └── cpp/                  # 原 harmony/cpp；libs/arm64-v8a/libopi_ffi.a 由 cargo 生成，不入库
 ```
 
@@ -111,7 +125,10 @@ cargo build -p opi_ffi --release --target aarch64-unknown-linux-ohos
 mkdir -p harmony/entry/src/main/cpp/libs/arm64-v8a
 cp target/aarch64-unknown-linux-ohos/release/libopi_ffi.a harmony/entry/src/main/cpp/libs/arm64-v8a/
 
-# 2) HAP（默认 debug；发行用 release）
+# 2) 词库 rawfile（从 android/app/src/main/assets/ 复制三张 .opid；幂等，cmp 复核）
+scripts/prepare_harmony_dicts.sh
+
+# 3) HAP（默认 debug；发行用 release）
 cd harmony
 /home/component/command-line-tools/bin/hvigorw assembleHap --no-daemon
 # 或：/home/component/command-line-tools/bin/hvigorw assembleHap -p buildMode=release --no-daemon
@@ -124,19 +141,37 @@ cd harmony
 （随源码变化，不是契约；release 的 `module.json` 里 `debug:false` / `buildMode:"release"`）；
 `unzip -l` 内容（release 13 项；debug 多一个 `ets/sourceMaps.map`）：
 
-> **2026-10-20 订正**：表情字体方案已删除（`pet-font/` 三份副本与 `PetEmojiFont.ets`），
-> 下表按当时实测保留；删除后 release 预期 12 项，**未重新打包实测**。
-
-```
-module.json
-resources.index
-libs/arm64-v8a/libopiime.so        # N-API 桥 + Rust 静态库，aarch64，已 strip
-libs/arm64-v8a/libc++_shared.so
-resources/base/profile/{input_method_config.json,main_pages.json}
-resources/base/media/{app_icon.png,icon.png}
-ets/modules.abc
-pack.info
-```
+> **2026-10-20 实测定稿**：表情字体已删、三张词库随包，release 重新打包为
+> **48,058,777 B / 13 项**，`unzip -l` 原样如下（日期列略）：
+>
+> ```
+>     1166  module.json
+>      890  resources.index
+> 3221088  libs/arm64-v8a/libopiime.so        # N-API 桥 + Rust 静态库，aarch64，已 strip
+> 1262248  libs/arm64-v8a/libc++_shared.so
+> 33305708 resources/rawfile/luna.opid        # 2026-10-20 新增
+> 5439555  resources/rawfile/stroke.opid      # 2026-10-20 新增
+> 3157765  resources/rawfile/wubi86.opid      # 2026-10-20 新增
+>    2523  resources/base/profile/input_method_config.json
+>      23  resources/base/profile/main_pages.json
+>   37931  resources/base/media/app_icon.png
+>   37931  resources/base/media/icon.png
+> 1589700  ets/modules.abc
+>     559  pack.info
+> ```
+>
+> 下面这段是 2026-10-19 的旧清单（当时**无词库**），**保留作对照**：
+>
+> ```
+> module.json
+> resources.index
+> libs/arm64-v8a/libopiime.so        # N-API 桥 + Rust 静态库，aarch64，已 strip
+> libs/arm64-v8a/libc++_shared.so
+> resources/base/profile/{input_method_config.json,main_pages.json}
+> resources/base/media/{app_icon.png,icon.png}
+> ets/modules.abc
+> pack.info
+> ```
 
 `libopiime.so` 的 `readelf -d` 显示 `NEEDED` 只有 `libace_napi.z.so`、`libhilog_ndk.z.so`、`libc.so`；
 `nm -D` 里 `napi_module_register` 是未定义符号（运行时由 N-API 解析）—— 链接层通过，
@@ -181,8 +216,10 @@ x86_64 模拟器不会加载这个 `.so`。要跑模拟器需另编 `x86_64-unkn
 - runner 需要：上述 Command Line Tools（默认 `/home/component/command-line-tools`，
   可用仓库变量 `HARMONY_CLI_HOME` 覆盖）、Rust + rustup、`aarch64-unknown-linux-ohos` target。
 - 流程：校验工具链/SDK → `rustup target add` → `cargo build … --target aarch64-unknown-linux-ohos`
-  → 拷 `libopi_ffi.a` → `hvigorw assembleHap -p buildMode=release --no-daemon` → 上传
-  `opi-harmony-unsigned` artifact（`if-no-files-found: error`）。
+  → 拷 `libopi_ffi.a` → `scripts/prepare_harmony_dicts.sh` → `hvigorw assembleHap
+  -p buildMode=release --no-daemon` → `unzip -l` 断言 `libopiime.so` 与三张
+  `resources/rawfile/*.opid` 都在 → 上传 `opi-harmony-unsigned` artifact
+  （`if-no-files-found: error`）。
 - 产物仍是 unsigned；签名材料未接入 secrets（没有证书可验，不写一段未测的签名流程）。
 
 ### 0.6 本轮**未验证**清单
@@ -192,6 +229,9 @@ x86_64 模拟器不会加载这个 `.so`。要跑模拟器需另编 `x86_64-unkn
 3. `setPreviewTextSync` 的 `Range { start: 0, end: 0 }` 语义（只按 d.ts 选的，未上真机）。
 4. `input_method_config.json` 的 `mode: "lower"` 与 metadata 点号写法。
 5. CI workflow 本身**尚未在注册好的 self-hosted runner 上跑过**（本机只验证了同样的命令）。
+6. 词库随包只验证到「HAP 里的字节能被引擎装载」：`resourceManager.getRawFileContentSync`
+   → `fileIo` 写沙箱这条 ArkTS 路径**没上过设备**；首次 `inputStart` 同步拷贝约 42 MB
+   的停顿也**没量过**。
 
 ---
 
@@ -205,10 +245,10 @@ x86_64 模拟器不会加载这个 `.so`。要跑模拟器需另编 `x86_64-unkn
 | Rust | 根 `Cargo.toml` 的 `[workspace.package] rust-version`（当前声明 `1.88`）。**这是声明**，实际下限由 CI 的 `msrv` job 量出来 | `Cargo.toml` · `.github/workflows/ci.yml` |
 | Rust target | 三个都要装：`aarch64-unknown-linux-ohos`（arm64-v8a）、`armv7-unknown-linux-ohos`、`x86_64-unknown-linux-ohos` | `harmony/README.md`「构建集成」；它们**不在**默认安装里，必须先 `rustup target add` |
 | CMake | `harmony/cpp/CMakeLists.txt` 里写的是 `cmake_minimum_required(VERSION 3.4.1)`。在 cmake ≥3.31 是**弃用警告**，在 **CMake 4.0+ 是硬错误** | 本机 cmake 3.31.4 观察到的警告见 `harmony/README.md` 实测记录 §4b。**起来第一件事**就是把它抬到 3.10+ |
-| 词库 | **现在不需要**：本端走 `opi_load('')` = 引擎**内置回退词库**（`engine-data/src/dictionary.rs` 的 `fallback_dict`）。完整词库 `data/generated/luna.opid` 的通路**尚未接线**（rawfile → 沙箱绝对路径，见「已知限制」G2）；**导入词库与康熙字典同属这条未接线通路**（本端不发） | `KeyboardController.ets` 的 `ensureDictionary()` |
+| 词库 | **随包**：构建期 `scripts/prepare_harmony_dicts.sh` 把 `luna.opid` / `stroke.opid` / `wubi86.opid` 复制进 `entry/src/main/resources/rawfile/`（不入库）；运行时 `DictionaryAssets.ets` 拷进 `ctx.filesDir` 并把绝对路径交给 C ABI。拷贝/装载失败才退回内置库并置 DEGRADED。`trad.opid` 不随包（`opi_load_trad` 未桥，见 G5）；导入词库与康熙字典仍属未接线通路 | `scripts/prepare_harmony_dicts.sh` · `DictionaryAssets.ets` · `KeyboardController.ensureDictionary()` |
 | 设备 | 真机或模拟器。**输入法不会自动生效**，必须在系统设置里手动启用 | `harmony/README.md` 的 P1（检索）|
 | 宿主 App | 输入法扩展**不能独立安装**，要在一个 DevEco 应用工程里 | 与 Apple 两端同一形态（未核实，凭记忆）|
-| 工程文件 | 仓库里**没有** `build-profile.json5`、没有工程级 `oh-package.json5`、没有 `hvigorfile.ts` —— 工程要在 DevEco 里新建 | 判据：`find harmony/ -name 'build-profile.json5'` 零命中。**能跑通 `codelinter` 的最小布局见 §1.1** —— 比这三份还多两处（模块根下的 `build-profile.json5`、`src/main/module.json5`） |
+| 工程文件 | ~~仓库里**没有** `build-profile.json5` …~~ **2026-10-19 起已有完整工程**（工程根 + 模块级各一份、`oh-package.json5`、`hvigorfile.ts`，见 §0.1）；本行是历史记录 | 判据：`find harmony/ -name 'build-profile.json5'` 现为 2 处 |
 
 ```bash
 rustup target add aarch64-unknown-linux-ohos armv7-unknown-linux-ohos x86_64-unknown-linux-ohos
@@ -512,6 +552,10 @@ HAP 里只装这一个原生库 —— 这也是选静态库而不是 `cdylib` �
 ⚠️ 那三条 `target_link_options`（`--gc-sections` / `--allow-multiple-definition` / `-s`）
 被 GNU ld 接受，**但 OHOS 的 ld（lld）认不认没验** —— `CMakeLists.txt` 里原本就标了「凭记忆的兜底」。
 
+> **2026-10-20 体积大头变了**：release HAP 48 MB 里 **42 MB 是三张词库**
+> （`luna` 33.3 MB + `stroke` 5.4 MB + `wubi86` 3.2 MB），`.so` 只有 3.2 MB。
+> 再压缩要从词库下手，不是 strip。
+
 ---
 
 ## 5. 第 4 步：安装与启用
@@ -618,8 +662,12 @@ opi_load(NULL,0) = true
 | 空缓冲按回车 → `action=0`（PassThrough）| 引擎按设计把回车**交还应用** —— 而本端 `handlePassThrough` 不接 `KEY_RETURN`（>`0xFFFF`）⇒ **↵ 是死键**（「已知限制」G10）|
 
 > ⚠️ 上表的候选**内容**会随后端词库变：这里用的是回退词库（`data/generated/fallback.opid`，
-> 由 `data/raw/fallback.tsv` 生成，里面确实有「你」「好」）。真机上接完整词库后候选会更多，
-> **判据是「出现『你』」，不是「只有『你』」**。
+> 由 `data/raw/fallback.tsv` 生成，里面确实有「你」「好」）。
+> **2026-10-20 实测（C 探针直接读 HAP 里那三份 rawfile）**：完整 `luna.opid` 下
+> `ni` → `你/泥/拟/呢/腻/祢/铌/鲵`、`page_count = 1178`（不再是 5）；
+> `opi_load_stroke` / `opi_load_wubi` 均返回 1。所以真机上「完整词库生效」的判据是
+> **候选明显变多（1178 页）且「你」仍居首**；若只出回退那 5 页，说明拷贝或装载失败
+> （小欧会画 DEGRADED，可先看 `[opi]` 日志）。**判据仍是「出现『你』」，不是「只有『你』」**。
 
 ### 6.3 真机冒烟（只能上设备）
 
@@ -630,8 +678,9 @@ opi_load(NULL,0) = true
 3. **打 `h` `a` `o` 再按空格 ⇒ 上屏「好」**（跨端最小冒烟）。
    这条与 fcitx5 轨的实测表逐字一致：`crates/fcitx5-opi/cpp/README.md` 那张表里，
    **词库不存在（走内置回退）**那一行就是 `h`/`a`/`o`/`SPACE` → action 1/1/1/2、
-   `text=好` —— **本端现在走的正是这一行**（`loadDictionary('')`）。
+   `text=好` —— 2026-10-20 之前本端走的正是这一行（`loadDictionary('')`）。
    **同一个引擎，各端的最小可见成功必须一致**，不一致就是桥接层的问题。
+   （词库随包后本端应走完整词库那一路；「好」的提交行为不变。）
 4. **退格**：缓冲非空 ⇒ 删掉拼音字母；缓冲**空** ⇒ 删掉已上屏的字（这条走的正是 6.2 里那条
    PassThrough 通路，引擎放行、应用自己删 —— 写错成无条件 `deleteForward(1)` 的表现是「删不掉已上屏的字」）。
 5. **点候选栏最左边的小欧** ⇒ 学习开关取反，preedit 栏出现「不记词」。
@@ -718,9 +767,10 @@ comm -23 \
 | # | 限制 | 说明 |
 |---|---|---|
 | G1 | **子类型切换不换键盘** | 未监听 `inputMethodAbility.on('setSubtype')` ⇒ 切中/英/数字子类型，键盘不变（P4）。 |
-| G2 | **词库是内置回退库** | `loadDictionary('')`。完整词库要把 rawfile 拷进沙箱再传**绝对路径**（引擎要的是文件系统路径，不是资源 ID），步骤写在 `KeyboardController.ensureDictionary()` 的注释里。**候选少是这个词库的锅**，不是引擎。 |
+| G2 | ~~**词库是内置回退库**~~ **2026-10-20 已补** | 三张完整表随包（rawfile → `filesDir` → 绝对路径）；只有拷贝/装载失败时才退回 `opi_load('')` 并置 DEGRADED。**真机上的拷贝路径未验证**（见 0.6 第 6 条）。 |
+| G5 | **无繁体切换入口** | `opi_load_trad` **不在**鸿蒙桥的 use-site 子集里，所以 `trad.opid` **有意不随包**（装了也调不到）；`OpiMode.Traditional` 有枚举值但 UI 轮转进不去。补它要先加桥出口。 |
 | G3 | **无符号面板** | 能提交字面符号的 UI 不存在（`opi_search_symbols` 一族未桥接）。Symbol 模式只有一页硬编码符号。 |
-| G4/5 | **无用户词持久化 / 无繁体切换入口** | 对应出口未桥接；`OpiMode.Traditional` 有枚举值，但 UI 的模式轮转进不去。 |
+| G4 | **无用户词持久化** | `opi_import_user_words` / `opi_export_user_words` / `opi_clear_user_words` / `opi_remove_user_word` 未桥接。 |
 | G7 | **深色主题未接** | `OpiPet` 支持 `dark: true`，但 `Index.ets` 恒传 `false`（没读系统主题）⇒ 深色下候选栏仍是浅色。 |
 | G8 | **Android JNI 出口在鸿蒙目标下是死重量** | `jni.rs` 照编，要拆得改 `crates/**`，不在本轮边界内。 |
 | G9 | **⇧ 的 LOCK 态用户按不出来** | 进 Lock 的唯一入口是长按（`router.rs` 的 `shift_long_press`），而 `Index.ets` **没给 ⇧ 绑长按手势**。DevEco 上要做的是**一行**：绑长按 → `KeyboardController.tapShiftLongPress()`。 |
@@ -735,6 +785,14 @@ comm -23 \
 ---
 
 ## 8. 未验证清单（**主体**，照抄现状，别读成已完成）
+
+> **2026-10-20 订正（只订正「编译」这一条，其余原样保留）**：本节写的
+> 「ArkTS：0 行编译过」「`harmony/` 不是工程」是 2026-09-28 的处境。
+> 2026-10-19 起 `harmony/` 是完整 hvigor 工程，`hvigorw assembleHap` 会真跑
+> **`CompileArkTS`**：2026-10-20 的 release 构建成功，`ets/modules.abc` 1,589,700 B
+> 进了 HAP（`ets/**` 共 12 个文件）。⇒ **「0 行编译过」已过期**，ArkTS 至少过了
+> 类型检查这一层。但它**仍不等于真机可用**：运行期 ArkUI/IME Kit 行为一条都没验证。
+> 下文「`harmony/` 不是工程」的归因也已过期（详见 §0）。
 
 **ArkTS：0 行编译过。** `harmony/ets/**` 的 8 个文件**从未被编译**：
 （§1.1 那次只是**解析** —— 真 ArkTS 解析器读了这些文件、0 条语法错，但**导入不被校验**
@@ -788,6 +846,10 @@ comm -23 \
 ---
 
 ## 9. 下一步顺序（别跳）
+
+> **2026-10-20 状态**：下面第 1–3 步已完成（`harmony/` 是完整工程，`hvigorw
+> assembleHap` 已出 HAP，词库已随包）；**卡在第 4 步** —— 本机无设备，
+> 「装上去、启用、打 `ni`」仍未做。
 
 ```
 1. DevEco 建工程（New > Extension Ability > InputMethod），把 cpp/ 与 ets/ 搬进去

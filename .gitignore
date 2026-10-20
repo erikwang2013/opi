@@ -31,6 +31,9 @@ harmony/entry/oh_modules/
 harmony/entry/build/
 harmony/entry/.cxx/
 harmony/entry/src/main/cpp/libs/
+# HarmonyOS 随包词库：构建期由 scripts/prepare_harmony_dicts.sh 从
+# android/app/src/main/assets/ 复制到 rawfile，**复制品不入库**（大文件、可再生）。
+harmony/entry/src/main/resources/rawfile/*.opid
 harmony/local.properties
 harmony/.idea/
 

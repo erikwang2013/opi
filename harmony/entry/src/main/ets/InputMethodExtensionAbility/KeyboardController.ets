@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-// ⚠️ 草案 · 从未编译 · 未验证
+// ⚠️ 已过 API 19 的 hvigor CompileArkTS（2026-10-20）· 真机未验证
 //
-// 本文件在 Linux 上编写，**未经过任何 ArkTS 编译器**。`@kit.IMEKit` 的
+// 本文件在 Linux 上编写；编译过 ≠ 跑得起来。`@kit.IMEKit` 的
 // inputMethodEngine / InputMethodExtensionContext 在普通 tsc 下就断，
 // 所以这里每一个 IME Kit 调用都是**凭记忆写的**（见 README「最不确定的 API」）。
 //
@@ -20,6 +20,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { display } from '@kit.ArkUI';
 import * as OpiEngine from './OpiEngine';
 import { EmojiGroup, KeyResult, OpiAction, OpiMode, OpiShift } from './OpiEngine';
+import * as DictionaryAssets from './DictionaryAssets';
 // 输入模式：只做转发 + publish —— 状态机/九项表/数字真源都在 InputModes.ets，本文件不重编一份。
 import * as InputModes from './InputModes';
 import {
@@ -135,31 +136,31 @@ export class KeyboardController {
 
   // -------------------------------------------------------------- 词库
 
-  /**
-   * 装载词库。
-   *
-   * 现在传**空串 = 引擎内置回退词库** —— 这是有意的：让鸿蒙端第一次跑起来就
-   * 能出字，不必先搞定资源拷贝。内置库词量小，但「能打字」比「词多」优先。
-   *
-   * 换完整词库要做的（**尚未实现**，见 README「构建集成」）：
-   * rawfile 里的词库**不能直接把资源路径给引擎** —— 引擎要的是文件系统绝对路径。
-   * 得先用 resourceManager 读 rawfile、用 fileIo 写进沙箱目录（如
-   * `ctx.filesDir + '/opi_dict.bin'`），再把那个绝对路径传进来。
-   * 只写了一次（existsSync 挡重入）。
-   */
+  /** true = 正用内置回退库（拷贝失败或完整库装载失败）；UI 据此画 DEGRADED。 */
+  private dictDegraded: boolean = true;
+
+  dictionaryDegraded(): boolean { return this.dictDegraded; }
+
+  /** 装载词库（每进程一次）：rawfile 先由 DictionaryAssets 拷进 `ctx.filesDir`，再把绝对路径交给引擎。
+   * 任一步失败都回退内置库并置 degraded。 */
   private ensureDictionary(): void {
-    if (this.dictLoaded) {
+    if (this.dictLoaded) { return; }
+    this.dictLoaded = true;
+    if (this.ctx === null) {
+      console.error('[opi] 无扩展上下文，词库回退内置库');
+      OpiEngine.loadDictionary('');
       return;
     }
-    this.dictLoaded = true;
-    // 两个方案表（笔画/五笔）另算：本轮仓库里没有 ⇒ 传空串，C ABI 语义 = false 且引擎保持原样。
-    InputModes.loadOptionalTables();
-    const ok: boolean = OpiEngine.loadDictionary('');
+    const files: DictionaryAssets.DictionaryFiles =
+      DictionaryAssets.syncDictionaries(this.ctx.resourceManager, this.ctx.filesDir);
+    let ok: boolean = files.luna.length > 0 && OpiEngine.loadDictionary(files.luna);
     if (!ok) {
-      // 只记日志。**不要在这里抛** —— 抛出去整个键盘就起不来了，
-      // 而引擎未装载时所有出口都是安全的空操作，退化但不崩。
-      console.error('[opi] 词库装载失败：引擎将退化为空操作（键盘不出字）');
+      // 引擎契约：坏路径 → false 且引擎保持为空；不回退就一个字都不出。
+      console.error('[opi] 完整词库不可用，回退内置词库');
+      ok = OpiEngine.loadDictionary('');
     }
+    this.dictDegraded = !(ok && files.luna.length > 0);
+    InputModes.loadOptionalTables(files.stroke, files.wubi);
   }
 
   // -------------------------------------------------------------- 文本上屏

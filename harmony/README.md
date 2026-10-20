@@ -74,6 +74,17 @@
 > **2026-10-20 四补（用户裁决）**：删除 `PetEmojiFont.ets` 与 `rawfile/pet-font/` 三份字体副本，
 > 自有贴纸仍用原 GIF/PNG；`EmojiPad` 增加 `SHOW_OWN = false`，**「自有」子页缺省隐藏**
 > （鸿蒙没有设置页，要显示改这一个常量）。`ets/**` 回到 11 个文件，**未重跑 codelinter**。
+> **2026-10-20 五补（词库随包）**：新增 `DictionaryAssets.ets`（`ets/**` 共 12 个文件）——
+> 启动时把 rawfile 里的 `luna.opid` / `stroke.opid` / `wubi86.opid` 拷进
+> `ctx.filesDir`，再把**绝对路径**交给 C ABI；失败回退内置库并置 `dictionaryDegraded`
+> （小欧会画 DEGRADED）。rawfile 里的词库由 `scripts/prepare_harmony_dicts.sh` 在
+> 构建期从 `android/app/src/main/assets/` 复制，**复制品不入库**（见 `.gitignore`）。
+> 本机 `hvigorw assembleHap -p buildMode=release` **构建通过**，HAP（约 48 MB）含三张
+> 词库 + `libopiime.so` + `ets/modules.abc`；`codelinter` 报 0 defects。
+> `trad.opid` 仍未接（`opi_load_trad` 未进桥，见已知缺口 5），`wubi98.opid` 按
+> 「86/98 二选一」不随包。
+> **这一轮也是 `ets/**` 第一次被 hvigor 的 `CompileArkTS`（真 ArkTS 编译器）编过** ——
+> 下文「0 行编译过」是历史记录；真机行为仍全部未验证。
 > **最小工程布局、两道墙（模块级 `build-profile.json5`、模块根下再一层 `src/`）、
 > 正控与负控，全写在 [`docs/install/harmony.md`](../docs/install/harmony.md) 的 §1.1**
 > —— **本行不复述那份清单**：它是一份实测的最小布局，抄到这里就多一份会漂的枚举。
@@ -108,6 +119,8 @@
 > 模式整数编码对着 `convert.rs` 核过。
 >
 > **但 `.ets` 那 12 个文件仍然是 0 行编译过，N-API 的注册与运行期语义仍全未验证。**
+> **2026-10-20 订正**：`.ets` 已由 hvigor `CompileArkTS` 真编译通过（见头部五补）；
+> 这句话只剩「N-API 注册与运行期语义未验证」仍然成立。
 > **全目录没有一处可以称为「完成」或「已实现」—— 上面那些是「C 面对得上」，
 > 不是「鸿蒙端能用」。**
 
@@ -161,9 +174,10 @@
 第 4 步：在真机「设置」里启用这个输入法，然后把光标放进任意输入框
   → 到这一步才算「鸿蒙端能用」的第一天。
   → 第一件该验证的事：**打 `ni`，看候选栏出不出字**
-    （词库现在是内置回退库，见下方「已知缺口」，词少但够验证通路）。
+    （`ni` 的期望值是 `你` 居首、共 1178 页 —— 完整词库在 2026-10-20 已随包；
+    若启动时拷贝/装载失败会退回内置库，小欧画 DEGRADED，见下方「词库随包」）。
 
-第 5 步之后才是：补用户词持久化、补 rawfile 完整词库、
+第 5 步之后才是：补用户词持久化、（rawfile 完整词库已于 2026-10-20 补）、
   补子类型切换（setSubtype）、调键盘高度。
   ⚠️ **2026-10-13 订正**：上面原文里的「补符号面板」**只完成了一半** ——
   Symbol 模式换成了**表情页**（分组条 + 网格 + 搜索框，见下方 §5e），
@@ -197,6 +211,7 @@
 | `ets/InputMethodExtensionAbility/OpiEngine.ets` | C ABI 薄桥：枚举、**键码常量唯一定义处**、JSON 候选解码；表情数据三条（`emojiSymbols`/`emojiGroups`/`searchSymbols`）在文件末尾 |
 | `ets/InputMethodExtensionAbility/OpiPet.ets` | 项目宠物「小欧」的 ArkTS 复刻（键帽精灵，表情跟引擎状态走） |
 | `ets/InputMethodExtensionAbility/InputModes.ets` | **输入模式那件事的数字面**（2026-10-14）：方案/双拼布局/五笔六键的出口包装 + 九项 `INPUT_MODES` 表 + 模块级模式状态机（`selectInputMode` 等）。数字真源逐条注在文件头 |
+| `ets/InputMethodExtensionAbility/DictionaryAssets.ets` | **词库随包**（2026-10-20）：rawfile → `ctx.filesDir` 的幂等拷贝（大小校验），返回沙箱**绝对路径**。失败返回空串（并打 `[opi]` 错误日志），由 `KeyboardController` 回退内置库并置 degraded |
 | `ets/InputMethodExtensionAbility/KeyPanels.ets` | 9 键 / 大 9 键 / 14 键 / 笔画 四个键面 + 生僻字面板骨架 + 「输入模式」九宫格面板（2026-10-14）。与 Android 的三处差异（左列读数、底行、生僻字无数据）写在文件头 |
 | `ets/InputMethodExtensionAbility/EmojiPad.ets` | 表情页（Symbol 模式）。2026-10-18 重写为与 Android `EmojiPanel.kt` 同布局：顶部 `[‹ 返回] [自有 \| Emoji \| 颜文字] [🔍]`、网格、**底部**可横滑分类条；Emoji 子页 = 引擎 9 组（**不再含「自有」偏移**），自有子页 = 4 列 GIF 网格（2026-10-19，点击复制图片）。**2026-10-20 起「自有」缺省隐藏**（`SHOW_OWN = false`；无设置页） |
 | `ets/InputMethodExtensionAbility/PetStickerImages.ets` | 自有 12 张**小欧贴纸 PNG + 动画 GIF**（PNG 280×280 / GIF 200×200 十帧，base64 内嵌）+ 标签/文件名映射（顺序 = `PetEmojiMap.kt`，文件名 = `PetStickerAssets.kt`）。生成物，**别手改**；由 `scripts/gen_pet_stickers.py` 的产物再编码 |
@@ -876,9 +891,12 @@ $ codelinter -f json -o /tmp/codelinter-final.json /tmp/harmony-probe/src/src/ma
 （`pages/Index.ets::build` 把数字分支排在**布局**分支前面），所以 9 键用户按完 123
 再退回来**还是 9 键**。⚠️ 别把它写成 `selectInputMode(拼音26键)`：那是真换输入模式
 （`setScheme` 清缓冲），用户回来时键面已被悄悄换掉。
-⚠️ **两张表（`stroke.opid` / `wubi86.opid`）不在仓库**：`loadStroke('')` / `loadWubi('')`
-传空串 = C ABI 的「返回 false 且引擎保持原样」⇒ **不崩、不假装有候选**，笔画/五笔方案下
-只是查不出字。要随包须走 rawfile → 沙箱 → 绝对路径四步（清单在 `InputModes.ets`）。
+⚠️ **订正（2026-10-20）**：上面这句「两张表不在仓库」仍然成立（仓库里确实没有），
+但**已不再「查不出字」** —— `stroke.opid` / `wubi86.opid` 现在由构建期脚本放进
+rawfile、启动时拷进沙箱，`loadOptionalTables()` 拿绝对路径装载。仍传空串的
+唯一情形是拷贝失败，此时 C ABI 的「返回 false 且引擎保持原样」语义不变：
+**不崩、不假装有候选**。`wubi98.opid` 按「86/98 二选一」不随包。
+（原文保留：它描述的是 2026-10-20 之前的树。）
 
 **本机跑过的（原样输出）：**
 
@@ -897,6 +915,10 @@ test result: ok. 1 passed; 0 failed                        # 14 passed 的全量
 ### 6. 没验证的（**比上面长得多 —— 本节才是主体**）
 
 **ArkTS（`ets/**` 全部文件）：0 行编译过。**
+> **2026-10-20 订正**：这条已过期 —— release 构建的 `CompileArkTS` 成功，
+> `ets/modules.abc` 进了 HAP。下面这段描述的是 2026-10-20 之前；
+> **编译过 ≠ 真机可用**，运行期 ArkUI/IME Kit 行为仍全部未验证。
+
 不只是「没测过」——**连类型都没过过编译器**。装饰器（`@Entry` `@Component` `@Prop`
 `@Watch` `@StorageLink` `@Builder`）、`@kit.IMEKit`、`@kit.ArkUI` 的 `display`、
 Canvas / `CanvasRenderingContext2D`、`JSON.parse(...) as string[]` 的断言，
@@ -1019,7 +1041,40 @@ ABI 目录名对应关系（`CMakeLists.txt` 靠 `libs/${OHOS_ARCH}/` 找）：
 > 想去掉 JNI 那份得给 `jni.rs` 加 `#[cfg]` 门 —— 那要改 `crates/**`，不在本轮边界内，
 > 记在「已知缺口」。`CMakeLists.txt` 里已有 `-Wl,-s` 与 `--gc-sections` 兜着。
 
-### 建议进 CI（**本节只是建议，CI 文件本轮未改**）
+### 词库随包（2026-10-20）
+
+rawfile **不是文件系统路径**，而引擎只收绝对路径 ⇒ 三步：
+
+1. **构建期**：`scripts/prepare_harmony_dicts.sh` 从 `android/app/src/main/assets/`
+   复制 `luna.opid` / `stroke.opid` / `wubi86.opid` 到
+   `entry/src/main/resources/rawfile/`（脚本用 `cmp` 复核，复制品被 `.gitignore`
+   挡住，**不入库**）。CI 的 `harmony.yml` 在 `assembleHap` 前跑同一脚本，并在
+   `unzip -l` 里逐张断言三张表进了 HAP。
+2. **首次运行**：`DictionaryAssets.syncDictionaries()` 把 rawfile 读成
+   `Uint8Array`，写进 `ctx.filesDir`。**同一份已存在且 `statSync().size` 相等就跳过**；
+   每次读/写后都校验非空与字节数，任一步失败返回空串并打 `[opi]` 日志。
+3. **装载**：`KeyboardController.ensureDictionary()` 每进程只跑一次
+   （`dictLoaded` 挡板），把沙箱绝对路径交给 `opi_load`。**返回 false 就回退
+   `opi_load('')`**（引擎契约：坏路径 → false 且引擎保持为空，不回退就一个字都不出），
+   并置 `dictDegraded`；`Index.ets` 把它传给 `petMood()`，小欧画 DEGRADED。
+   `loadOptionalTables()` 只在启动时传 `stroke.opid` 与 `wubi86.opid` 两条路径 ——
+   五笔**只装一张表**（86 固定，没有设置页可切 98）。
+
+为什么不随包 `trad.opid`：`opi_load_trad` **不在**鸿蒙桥的 use-site 子集里
+（`opi_ffi.h` / `napi_bridge.c` 都没有），装了也没有出口可调用，见已知缺口 5。
+
+本机 release 产物实测：HAP **约 48 MB / 13 个文件**，含
+`resources/rawfile/{luna,stroke,wubi86}.opid`（33,305,708 / 5,439,555 / 3,157,765 B）、
+`libs/arm64-v8a/libopiime.so`（3,221,088 B）、`ets/modules.abc`（1,589,700 B）、
+`resources/base/profile/main_pages.json` 与 `input_method_config.json`。
+另用 C 探针直接链 `libopi_ffi.a` 读 HAP 里那三份文件：`ni` 在回退库下是
+`你`+8 个符号位（5 页），换完整 luna 后是 `你/泥/拟/呢/腻/祢/铌/鲵`（1178 页），
+`opi_load_stroke` / `opi_load_wubi` 均返回 1 —— 证明**随包的字节确实是有效词库**。
+
+> ⚠️ 首次 `inputStart` 的拷贝是**同步**的（三张表约 42 MB）：真机首字可能有可感停顿，
+> 之后命中的是 `statSync` 大小相等分支，不再复制。本轮无设备，未量。
+
+### 建议进 CI（**本节只是建议；`harmony.yml` 已按此接好，`ci.yml` 仍未改**）
 
 `.github/workflows/ci.yml` 里已有 TSF（Windows）与 Apple 两条同样思路的 job。
 鸿蒙可以照抄 Apple 那条的形状，加在它后面：
@@ -1178,9 +1233,11 @@ grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|op
 ## 已知缺口（**不是 bug，是还没做**）
 
 1. **未监听 `setSubtype`** → 切中/英子类型不会换键盘（P4）。
-2. **词库是内置回退库**（`loadDictionary('')`）。完整词库要先把 rawfile
+2. ~~**词库是内置回退库**（`loadDictionary('')`）。完整词库要先把 rawfile
    拷进沙箱再传绝对路径 —— 引擎要文件系统路径，不是资源 ID。
-   步骤写在 `KeyboardController.ensureDictionary()` 的注释里。
+   步骤写在 `KeyboardController.ensureDictionary()` 的注释里。~~
+   **2026-10-20 已补**：完整三张表随包，rawfile → `filesDir` → 绝对路径已接通；
+   内置库现在只在拷贝/装载失败时兜底（并置 DEGRADED）。见「词库随包」。
 3. **无符号面板**（`opi_symbol_blocks` / `opi_symbols_in_block` 未桥接）。
 
    > **2026-10-13 部分更新（表情页接线）**：`opi_search_symbols` **已桥**
@@ -1218,7 +1275,9 @@ grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|op
 4. **无用户词持久化**（`opi_import_user_words` / `opi_export_user_words` /
    `opi_clear_user_words` / `opi_remove_user_word` 未桥接）。
 5. **无繁体切换入口**（`opi_load_trad` 未桥接；`OpiMode.Traditional` 有枚举
-   但 UI 的轮转里进不去）。
+   但 UI 的轮转里进不去）。**2026-10-20 词库随包时仍然如此**：因为桥里没有这个出口，
+   `trad.opid` **有意不随包**（装了也调不到）；在桥补上这个出口之前，鸿蒙端
+   没有「切换整本繁体词典」的能力。要补先桥 `opi_load_trad`。
 6. **未处理「抬手」事件**（`STATE_RELEASED`）。软键盘一次点击只送一次按下，
    对路由够用 —— 注意**⇧ 三态不会因此卡住**：`router.rs` 的 `handle_shift`
    明确忽略 released/repeat，⇧ 只认按下。（本节原先写的「要接物理键盘就得补抬手，
