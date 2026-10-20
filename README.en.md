@@ -287,7 +287,7 @@ LICENSE · CONTRIBUTING.md      # MIT full text · contribution guide (incl. dic
 
 ### 📅 Project Status
 
-> **Current stage: v1.19.0 (2026-10-20): six native clients and a static website; Windows dictionaries ship with the package, uninstall cleanup, status-bar control plane and settings that take effect immediately, Android idle toolbar / English candidate bar aligned with iOS, macOS and HarmonyOS, PNG-first sticker clipboards on Android / desktop / HarmonyOS (iOS offers PNG+GIF) and iOS Full Access, and a site revamp with 3D, donation QR codes and ICP filing; Apple and HarmonyOS remain unsigned, and signing plus Windows / iOS / HarmonyOS real-device runs are unverified**
+> **Current stage: v1.20.0 (2026-10-21): iOS in-keyboard settings / pet / panel and English→Chinese fixes, HarmonyOS toolbar / skins / keyboard modes / tiled candidates / persisted settings aligned with Android, macOS status bar / 8-page settings / emoji and stickers / virtual keyboard aligned with Linux, Windows taskbar pet icon and reboot-free uninstall, and 320–430pt mobile sizing; Apple / HarmonyOS remain unsigned, with no device verification**
 
 V1 milestone progress:
 

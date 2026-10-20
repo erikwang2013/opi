@@ -7,7 +7,7 @@
 > | 层 | 状态 | 判据 |
 > |---|---|---|
 > | Rust 侧 C ABI（`crates/opi-ffi`） | **已实测**能为 iOS 目标编译、能产出 `libopi_ffi.a` | 见「产出 libopi_ffi.a」一节，本机可复现 |
-> | `ios/` 下的 Swift（`ios/*.swift`，数量不写死） | **2026-10-09 起：过了真编译器**（CI `apple.yml` 对 `ios/*.swift` glob 跑 `swiftc -typecheck` + 真编 + 与 Rust 静态库链接；2026-10-20 的 run 39425977787 对当前全部文件绿）。但**运行时行为仍是 0 验证** | 本机仍是 Linux（`import UIKit` 就断），编译这一层由 CI 的 macos-latest 补上；见 §4.5 |
+> | `ios/` 下的 Swift（`ios/*.swift`，数量不写死） | **2026-10-09 起：过了真编译器**（CI `apple.yml` 对 `ios/*.swift` glob 跑 `swiftc -typecheck` + 真编 + 与 Rust 静态库链接；2026-10-21 的 run 39486273199 对当前全部文件绿（含宿主 App 与键盘内设置面板））。但**运行时行为仍是 0 验证** | 本机仍是 Linux（`import UIKit` 就断），编译这一层由 CI 的 macos-latest 补上；见 §4.5 |
 >
 > **别把「Rust 侧能编」读成「iOS 端能用」。** 本项目已经被「没被编译器看过的代码」
 > 坑过两次，本目录的存在正是为了避免第三次：
