@@ -65,7 +65,7 @@ final class SettingsPanel: UIView {
 
     init() {
         super.init(frame: .zero)
-        backgroundColor = .light.panelBg
+        backgroundColor = KeyboardPalette.light.panelBg
         header.onBack = { [weak self] in self?.onClose?() }
         // 五笔节自己持一份副本；这里只挑五个五笔字段回写，别的开关不受影响。
         wubiSection.onChange = { [weak self] s in
