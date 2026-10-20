@@ -140,6 +140,7 @@
   let memoryAnimation = null;
   let memoryProgressAnimation = null;
   let memoryPreviousFocus = null;
+  let memoryPaused = false;
 
   const markMemorySeen = () => {
     try { localStorage.setItem(memorySeenKey, '1'); } catch (_) { /* private mode */ }
@@ -190,6 +191,17 @@
     memoryTimeline.replaceChildren(...nodes);
   };
 
+  const setMemoryPaused = (paused) => {
+    memoryPaused = paused;
+    if (paused) {
+      memoryAnimation?.pause();
+      memoryProgressAnimation?.pause();
+    } else {
+      memoryAnimation?.play();
+      memoryProgressAnimation?.play();
+    }
+  };
+
   const stopMemory = () => {
     memoryAnimation?.cancel();
     memoryProgressAnimation?.cancel();
@@ -216,7 +228,7 @@
       return;
     }
     const distance = Math.max(0, memoryTimeline.scrollHeight - memoryViewport.clientHeight + 36);
-    const duration = Math.max(9000, Math.min(18000, memoryTimeline.children.length * 170));
+    const duration = Math.max(36000, Math.min(60000, memoryTimeline.children.length * 650));
     memoryTimeline.style.transform = 'translateY(0)';
     memoryAnimation = memoryTimeline.animate(
       [{ transform: 'translateY(0)' }, { transform: `translateY(-${distance}px)` }],
@@ -237,6 +249,7 @@
     buildMemory();
     if (memoryOverlay.classList.contains('is-open')) return;
     memoryPreviousFocus = document.activeElement;
+    memoryPaused = false;
     memoryOverlay.hidden = false;
     document.body.classList.add('memory-open');
     markMemorySeen();
@@ -253,6 +266,9 @@
     memoryOverlay.addEventListener('click', (event) => {
       if (event.target === memoryOverlay) closeMemory();
     });
+    memoryViewport?.addEventListener('pointermove', () => { if (!memoryPaused) setMemoryPaused(true); });
+    memoryViewport?.addEventListener('pointerleave', () => setMemoryPaused(false));
+    memoryViewport?.addEventListener('click', () => setMemoryPaused(!memoryPaused));
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') closeMemory();
     });
