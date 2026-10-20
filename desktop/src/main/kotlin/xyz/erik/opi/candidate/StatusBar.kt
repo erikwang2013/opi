@@ -346,7 +346,7 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(metrics.gap),
                     ) {
-                        for (b in buttons) BarButton(b, imeState, mode, metrics, windowState, ::onButton)
+                        for (b in buttons) BarButton(b, imeState, mode, metrics, windowState, window, ::onButton)
                     }
                 } else {
                     // 提示期间**替掉**按钮列（而不是盖在上面）：否则按钮还在下面接着点击，
@@ -400,6 +400,7 @@ private fun BarButton(
     mode: String,
     metrics: BarMetrics,
     windowState: WindowState,
+    barWindow: java.awt.Window,
     onClick: (StatusBarButton) -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
@@ -426,7 +427,7 @@ private fun BarButton(
         contentAlignment = Alignment.Center,
     ) {
         StatusBarButtonFace(b, st, mode, metrics.button)
-        if (tip) BarTooltip(b, anchor, windowState.position, palette)
+        if (tip) BarTooltip(b, anchor, windowState.position, palette, barWindow)
     }
 }
 

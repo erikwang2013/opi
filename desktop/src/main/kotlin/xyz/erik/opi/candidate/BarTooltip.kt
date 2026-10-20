@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -29,13 +30,17 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberWindowState
+import java.awt.event.ComponentAdapter
+import java.awt.event.ComponentEvent
 
 /**
  * 在 [anchor]（按钮在条窗内的像素矩形）正上方开提示窗；[barPosition] 是条窗的屏幕位置（dp）。
  * 窗宽高按文字实测（最多 320dp 换行），不裁字、不盖住光标；focusable=false 不抢焦点。
  */
 @Composable
-internal fun BarTooltip(b: StatusBarButton, anchor: Rect, barPosition: WindowPosition, palette: SkinColors) {
+internal fun BarTooltip(
+    b: StatusBarButton, anchor: Rect, barPosition: WindowPosition, palette: SkinColors, barWindow: java.awt.Window,
+) {
     val text = tooltipText(b)
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
@@ -64,6 +69,15 @@ internal fun BarTooltip(b: StatusBarButton, anchor: Rect, barPosition: WindowPos
         focusable = false,
         title = "小欧输入法 提示",
     ) {
+        // 条窗一藏，Compose 就不再重组它的内容（悬停也收不到 Exit）⇒ 提示会变成孤儿浮窗。
+        // 直接听条窗的 AWT 隐藏事件，把自己一起收掉。
+        DisposableEffect(barWindow) {
+            val hide = object : ComponentAdapter() {
+                override fun componentHidden(e: ComponentEvent) { window.isVisible = false }
+            }
+            barWindow.addComponentListener(hide)
+            onDispose { barWindow.removeComponentListener(hide) }
+        }
         // 与条同一套摘除任务栏的逻辑（见 SkipTaskbar）；标题唯一，BFS 不会认错窗。
         LaunchedEffect(window) { SkipTaskbar.apply(window) }
         Box(
