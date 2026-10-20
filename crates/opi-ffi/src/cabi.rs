@@ -358,6 +358,9 @@ pub unsafe extern "C" fn opi_candidate_readings() -> OpiString {
 }
 
 /// pinReading(ptr, len)：点 9 键左列某条读数（空串 = 取消钉住）。
+///
+/// # Safety
+/// `ptr` 必须指向至少 `len` 个有效 `u16`；`ptr` 为 NULL 时 `len` 必须为 0。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_pin_reading(ptr: *const u16, len: usize) {
     let reading = unsafe { read_utf16(ptr, len) };

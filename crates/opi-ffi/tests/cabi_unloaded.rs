@@ -26,6 +26,7 @@ use opi_ffi::cabi::{
     OpiString,
     opi_backspace,
     opi_buffer,
+    opi_candidate_readings,
     opi_candidates,
     opi_candidates_page,
     opi_chinese_punct,
@@ -56,6 +57,7 @@ use opi_ffi::cabi::{
     opi_mode,
     opi_page,
     opi_page_count,
+    opi_pin_reading,
     opi_remove_dict,
     opi_remove_user_word,
     opi_scheme,
@@ -154,7 +156,12 @@ fn every_export_returns_a_sentinel_when_engine_is_not_loaded() {
             "表情分组未装载时也应有数据（不该是 `[]` 哨兵）"
         );
         assert_eq!(read(opi_candidates(8)), "[]");
+        assert_eq!(read(opi_candidate_readings()), "[]");
         assert_eq!(read(opi_candidates_page()), "[]");
+        // 钉读音在未装载时必须是无操作（不是 panic，也不是把引擎顺手建出来）。
+        let no_reading: [u16; 0] = [];
+        opi_pin_reading(no_reading.as_ptr(), 0);
+        assert_eq!(read(opi_buffer()), "");
         assert_eq!(read(opi_input_space()), "");
         let he = to_units("he");
         assert_eq!(read(opi_search_symbols(he.as_ptr(), he.len())), "[]");
