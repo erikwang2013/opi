@@ -9,9 +9,9 @@
 // 接口，跨应用图片通道只剩剪贴板。用户回宿主 App 自己粘贴 —— 面板上的 toast 必须说
 // 清楚这一点，别让用户以为已经上屏了。
 //
-// 2026-10-19：优先写 `image/gif`（`PetStickerGifs` 内嵌的 10 帧动画），失败再退回
-// PNG → PixelMap。GIF 分支的 `createData('image/gif', ArrayBuffer)` 是否被当前
-// API 版本接受**未验证**；真机静默失败时先看这里的 `.catch` 日志。
+// 2026-10-20：优先写 PNG → PixelMap（宿主普遍认），PNG 缺失时才试 `image/gif`。
+// GIF 分支的 `createData('image/gif', ArrayBuffer)` 是否被当前 API 版本接受
+// **未验证**；真机静默失败时先看这里的 `.catch` 日志。
 //
 // ⚠️ **全部未经编译/上机验证**。按 API 12–15 的 d.ts 记忆写的；最可能在
 // `createData` 的入参类型（PixelMap/ArrayBuffer 是否直接收）与 `decodeSync` 的
@@ -29,26 +29,30 @@ function toast(message: string): void {
   promptAction.showToast({ message: message, duration: 2000 });
 }
 
-/** GIF 写剪贴板；不支持/失败时落到 [copyStickerPng]。 */
+/** PNG/PixelMap 写剪贴板（宿主最认的格式）；PNG 缺失时才试 GIF。 */
 export function copyStickerToClipboard(
   gifBase64: string, pngBase64: string, label: string
 ): void {
-  if (gifBase64.length === 0) {
+  if (pngBase64.length > 0) {
     copyStickerPng(pngBase64, label);
+    return;
+  }
+  if (gifBase64.length === 0) {
+    toast(`贴纸缺失：${label}`);
     return;
   }
   try {
     const bytes: Uint8Array = new util.Base64Helper().decodeSync(gifBase64);
     const data: pasteboard.PasteData = pasteboard.createData('image/gif', bytes.buffer);
     pasteboard.getSystemPasteboard().setData(data).then(() => {
-      toast(`已复制${label}动图，去粘贴`);
+      toast(`已复制${label}贴纸，去粘贴`);
     }).catch((err: BusinessError) => {
-      console.warn(`[opi] GIF 剪贴板失败，退回 PNG：${err.code}`);
-      copyStickerPng(pngBase64, label);
+      console.error(`[opi] GIF 剪贴板失败：${err.code}`);
+      toast('复制失败：剪贴板不可用');
     });
   } catch (e) {
-    console.error(`[opi] GIF 数据无效，退回 PNG：${e}`);
-    copyStickerPng(pngBase64, label);
+    console.error(`[opi] GIF 数据无效：${e}`);
+    toast('贴纸数据损坏');
   }
 }
 

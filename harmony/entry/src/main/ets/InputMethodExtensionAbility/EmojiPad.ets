@@ -14,7 +14,7 @@
 //
 // · **自有** = 独立顶级分类（用户裁决）：4 列网格画 `PetStickerImages.ets` 内嵌的
 //   12 张小欧 GIF（缺失自动退回 PNG）；点击**复制图片到系统剪贴板**
-//   （`PetStickerClipboard.ets`，GIF 优先、PNG 兜底）并弹 toast，**不提交任何文本**。
+//   （`PetStickerClipboard.ets`，PNG/PixelMap 优先、GIF 兜底）并弹 toast，**不提交任何文本**。
 //   自有页没有分类条、也没有 🔍。
 // · **Emoji** 分类 = **只用**引擎 `emojiGroups()`（9 组，不再加 `自有` 偏移）。
 // · **颜文字** 分类 = `KaomojiData.ets` 的 7 类（从 data/raw/kaomoji.tsv 机械生成；
@@ -168,7 +168,7 @@ export struct EmojiPad {
               .layoutWeight(1).height(78).justifyContent(FlexAlign.Center)
               .onClick(() => {
                 // 剪贴板回退：IME Kit 没有往宿主输入框插图片的接口（见 README 缺口）。
-                // GIF 优先；写入失败时 Clipboard helper 自动退回 PNG。
+                // PNG/PixelMap 优先（宿主最认）；PNG 缺失时 Clipboard helper 才用 GIF。
                 copyStickerToClipboard(
                   stickerGifBase64(f.sticker), stickerBase64(f.sticker), f.label
                 );

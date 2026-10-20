@@ -22,10 +22,10 @@ class PetStickerCommitTest {
     private val png = File("idle.png")
 
     @Test
-    fun `image attempts go gif then png`() {
+    fun `image attempts go png then gif`() {
         val order = petStickerImageOrder(gif, png)
-        assertEquals(listOf("image/gif", "image/png"), order.map { it.first })
-        assertEquals(listOf(gif, png), order.map { it.second })
+        assertEquals(listOf("image/png", "image/gif"), order.map { it.first })
+        assertEquals(listOf(png, gif), order.map { it.second })
         assertEquals(listOf("image/png"), petStickerImageOrder(null, png).map { it.first })
         assertEquals(listOf("image/gif"), petStickerImageOrder(gif, null).map { it.first })
         assertTrue("两张资产都缺时不得尝试任何图片通道", petStickerImageOrder(null, null).isEmpty())

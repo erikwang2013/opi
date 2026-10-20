@@ -822,15 +822,14 @@ xcodebuild -create-xcframework \
 
 ### 完全访问（RequestsOpenAccess）与本项目「离线优先」的关系
 
-4. `RequestsOpenAccess = false`（**本草案选的就是这个**）时：
-   - 拿不到网络访问 —— OPI 不需要，无影响。
-   - 拿不到与宿主 App 共享的 App Group 容器 —— 意味着**用户词无法与宿主 App 同步**。
-   - 用户在设置里不会看到「完全访问」的隐私警告。
-5. `= true` 时才有网络 + 共享容器，代价是用户会看到一个明确的隐私警告页。
-   **这是产品决策**：若将来要做「App 内词库管理与键盘同步」，必须改成 true。
-6. 无完全访问时可能受限的还有：剪贴板读取、`UIDevice.playInputClick()`
-   按键音、`openURL`。（这几条我**都不确定**，需核对；「离线优先 + 无完全访问」
-   是可行组合，但上面这些边角要逐条试。）
+4. `RequestsOpenAccess = true`（**2026-10-20 用户裁决，本草案现在选这个**）：
+   - 自有贴纸要写 `UIPasteboard` 才能在宿主里粘贴；无完全访问时这一步会被系统拒绝。
+   - 同时得到网络访问与宿主共享 App Group 容器；OPI 仍不联网，用户词仍只写扩展容器。
+   - 用户会在设置里看到「完全访问」的隐私警告页，需手动允许 —— 不打开就只有文字输入。
+5. 若改回 `= false`：用户词无法与宿主 App 同步，且自有贴纸只能复制失败（提示会出，
+   宿主里没有图）。这是 iOS 的硬限制，不是回退逻辑能补的。
+6. 完全访问下仍需逐条核：`UIDevice.playInputClick()` 按键音、`openURL`；
+   剪贴板**读**也在完全访问放开后才可用（本项目只写不读）。
 
 ### 资源与运行时
 
@@ -1261,10 +1260,11 @@ OpiString opi_select_page(uint32_t k);  /* 当前页第 k 个；越界/未装载
   没有 IME API）。文件名/标签映射见 `PetEmojiTable.swift`：标签 = `PetEmojiMap.kt`、
   文件名 = `PetStickerAssets.kt`（SLEEPY / DEGRADED 不映射，它们是输入状态）。
 - **剪贴板回退的诚实边界**：GIF 走 `UIPasteboard.setItems` 的 `com.compuserve.gif`
-  口味，并同时附 `public.png`；按文档**写**剪贴板不需要「完全访问」（读才需要），
-  但本草案 `Info.plist` 的 `RequestsOpenAccess=false`，真机第一次要专门验证这一步；
-  失败的表现是「toast 出了、宿主里粘不到图或只得到静态图」。触觉反馈在扩展里可能被
-  系统忽略，可见提示不依赖它。
+  口味，并同时附 `public.png`；键盘扩展写剪贴板需要「完全访问」，因此
+  `Info.plist` 已改为 `RequestsOpenAccess=true`（2026-10-20），用户须在设置里手动
+  允许，否则提示会出、宿主里粘不到图。未开完全访问时无法自动补一个粘贴 —— iOS 没有
+  键盘扩展向宿主输入框插图片或触发粘贴的 API。触觉反馈在扩展里可能被系统忽略，
+  可见提示不依赖它。
 - **「自有」缺省隐藏**：`EmojiPanel.showOwn = false`，顶栏不建「自有」子页；
   iOS 没有设置页（Android/桌面各有「表情中显示自有」开关），要显示改这个常量并重编。
   点选贴纸的行为不变：只复制 GIF/PNG 到剪贴板，不提交文本。

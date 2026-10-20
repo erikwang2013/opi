@@ -5,8 +5,8 @@
 //!
 //! 桌面进程没有 TSF / 命名管道的图片插入面（Android 那样直接往输入框塞图做不到），
 //! 所以这里走**剪贴板 + 自动粘贴**（2026-10-20 用户裁决，对齐主流输入法）：点一格 = 把
-//! `shared/pet/stickers-gif/<mood>.gif` 的原始字节优先放进系统剪贴板（GIF 通道），
-//! 同时保留 PNG 的 [BufferedImage] 兜底；粘贴方不支持 GIF 时仍能拿到 PNG。随后用
+//! PNG 字节（`image/png`，GTK/Qt 应用最认）+ [BufferedImage] + GIF 原始字节一起放进
+//! 系统剪贴板；粘贴方按自己支持的 flavor 取。随后用
 //! [injectPaste] 往当前焦点应用发 Ctrl+V；注入失败就如实提示「已复制，请手动粘贴」。
 //! **绝不**走 `opi-ctl insert` 文本通道（那是文字上屏，粘不出图）；2026-10-20 用户
 //! 裁决后也不再有任何字体字符通道 —— 图片剪贴板是唯一出口。
@@ -80,22 +80,31 @@ fun interface ImageClipboard {
 /** GIF 的 AWT 剪贴板口味；粘贴方按 `image/gif` 取原始字节流。 */
 private val gifFlavor = DataFlavor("image/gif;class=java.io.InputStream")
 
-/** AWT 系统剪贴板：GIF 在前、PNG 在后（同一份数据带两个 flavor，由粘贴方挑）。 */
+/** PNG 的 AWT 口味：`imageFlavor` 在 X11 上是 `image/x-java-image`，GTK/Qt 应用不认。 */
+private val pngFlavor = DataFlavor("image/png;class=java.io.InputStream")
+
+/** AWT 系统剪贴板：PNG + GIF + imageFlavor，由粘贴方挑最合适的一份。 */
 val SystemImageClipboard = ImageClipboard { image, gif ->
-    val bytes = gif
+    val gifBytes = gif
     try {
+        val pngBytes = java.io.ByteArrayOutputStream().use {
+            ImageIO.write(image, "png", it)
+            it.toByteArray()
+        }
         java.awt.Toolkit.getDefaultToolkit().systemClipboard.setContents(
             object : Transferable {
                 override fun getTransferDataFlavors(): Array<DataFlavor> =
-                    if (bytes != null) arrayOf(gifFlavor, DataFlavor.imageFlavor)
-                    else arrayOf(DataFlavor.imageFlavor)
+                    if (gifBytes != null) arrayOf(pngFlavor, DataFlavor.imageFlavor, gifFlavor)
+                    else arrayOf(pngFlavor, DataFlavor.imageFlavor)
 
                 override fun isDataFlavorSupported(flavor: DataFlavor): Boolean =
-                    flavor == DataFlavor.imageFlavor || (bytes != null && flavor == gifFlavor)
+                    flavor == pngFlavor || flavor == DataFlavor.imageFlavor ||
+                        (gifBytes != null && flavor == gifFlavor)
 
                 override fun getTransferData(flavor: DataFlavor): Any = when {
+                    flavor == pngFlavor -> ByteArrayInputStream(pngBytes)
                     flavor == DataFlavor.imageFlavor -> image
-                    bytes != null && flavor == gifFlavor -> ByteArrayInputStream(bytes)
+                    gifBytes != null && flavor == gifFlavor -> ByteArrayInputStream(gifBytes)
                     else -> throw UnsupportedFlavorException(flavor)
                 }
             },

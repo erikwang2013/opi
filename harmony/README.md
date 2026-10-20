@@ -711,7 +711,7 @@ test result: FAILED. 13 passed; 1 failed        # 只红这一条，其余 13 �
 > `[‹ 返回][自有 | Emoji | 颜文字][🔍]`，网格下方**一条可横滑分类条**。
 > **`自有` 是独立顶级子页**（用户裁决，不再混进 Emoji 分类）：4 列网格画
 > `PetStickerImages.ets` 内嵌的 12 张真实小欧 GIF（2026-10-19；缺失退回 PNG）；
-> 点击**复制 GIF（附 PNG 兜底）到系统剪贴板**（`PetStickerClipboard.ets`）+ toast，
+> 点击**复制 PNG/PixelMap（GIF 仅在 PNG 缺失时用）到系统剪贴板**（`PetStickerClipboard.ets`）+ toast，
 > **不提交任何文本**，该子页没有分类条也没有 🔍。**2026-10-20 起该子页缺省隐藏**
 > （`EmojiPad.ets` 的 `SHOW_OWN = false`；鸿蒙无设置页，要显示改常量并重编）。
 > **Emoji 子页只用引擎 `emojiGroups()` 的 9 组**（删掉了旧版的「自有」分类与整体偏移）；
@@ -1380,8 +1380,8 @@ grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|op
 
 15. **「自有」贴纸只能复制到剪贴板，不能直接插入宿主输入框**（2026-10-18）。
     IME Kit 的 `insertText` 只接受字符串，没有插入图片的接口 —— 这是平台能力边界，
-    不是本端漏做。实际行为：点一格 = 把 GIF（2026-10-19 起优先；失败退回 PNG）写进
-    系统剪贴板（`pasteboard`）+ toast「已复制，去粘贴」，**不提交任何文本**；用户回
+    不是本端漏做。实际行为：点一格 = 把 PNG/PixelMap（2026-10-20 起优先；PNG 缺失
+    才用 GIF）写进系统剪贴板（`pasteboard`）+ toast「已复制，去粘贴」，**不提交任何文本**；用户回
     宿主 App 自己粘贴。⚠️ 整条链路（`PetStickerClipboard.ets`）、`Image(dataUri)`
     的 base64/GIF 渲染**均未编译、未上机**；
     剪贴板在 IME 扩展里是否受前台/权限限制也未验证 —— 真机失败时按该文件头注的顺序

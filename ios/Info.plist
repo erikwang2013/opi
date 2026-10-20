@@ -60,19 +60,13 @@
             <key>PrimaryLanguage</key>
             <string>zh-Hans</string>
             <!--
-              RequestsOpenAccess = false：**这是有意选的**，不是漏了。
-
-              true 才会得到：网络访问、与宿主 App 共享 App Group 容器。
-              OPI 是离线优先输入法 —— 不需要网络；用户词也只需要写在
-              扩展自己的容器里（UserDefaults 即可，无需共享）。
-
-              代价（见 ios/README.md「Apple 平台限制」）：关掉它之后
-              **用户词无法与宿主 App 同步**（App 里做的词库管理看不到键盘攒的词）。
-              若将来要共享用户词，必须改成 true，并且用户会在设置里看到
-              「完全访问权限」的警告页 —— 这是个产品决策，不是技术细节。
+              RequestsOpenAccess = true（2026-10-20 用户裁决）：自有贴纸的**唯一**
+              跨应用图片通道是 UIPasteboard；无完全访问时键盘扩展写不进剪贴板，
+              点「自有」只会出现提示、宿主里粘不到图。启用后系统会展示隐私警告页，
+              用户需在设置里手动允许；不打开就仍只有文字输入，这是 iOS 的限制。
             -->
             <key>RequestsOpenAccess</key>
-            <false/>
+            <true/>
         </dict>
         <key>NSExtensionPointIdentifier</key>
         <string>com.apple.keyboard-service</string>
