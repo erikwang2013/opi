@@ -2,14 +2,15 @@
 # SPDX-FileCopyrightText: 2026 erik.xyz
 # SPDX-License-Identifier: MIT
 #
-# 把 `ios/` 的 Swift + Rust 静态库组装成宿主 App + 键盘扩展，并打成 **unsigned IPA**：
+# 把 `ios/` 的 Swift + Rust 静态库组装成宿主 App + 键盘扩展，并打成 **unsigned IPA**。
+# 最终产物**只有一个**文件：
 #
-#   dist/apple/ios/OPIKeyboard.xcframework                 （device arm64 + simulator arm64，**保证有**）
-#   dist/apple/ios/KeyboardExtension-Info.plist            （占位符已展开的扩展 plist，集成起点）
-#   dist/apple/ios/OpiKeyboard.appex/                      （真扩展可执行，入口 _NSExtensionMain）
-#   dist/apple/ios/Opi.app/                               （宿主 App，内嵌 PlugIns/OpiKeyboard.appex + 词库）
-#   dist/apple/ios/opi-<版本>-ios-unsigned.ipa    （Payload/Opi.app 的 IPA，**未签名**）
-#   dist/apple/ios/opi-<版本>-ios-unsigned.zip    （xcframework + 扩展 plist + IPA）
+#   dist/apple/ios/opi-<版本>-ios-unsigned.ipa
+#       Payload/Opi.app，内含宿主 App、键盘扩展、luna/trad/stroke/wubi86 词库、
+#       rare_index.tsv 与图标。**未签名**。
+#
+# framework/xcframework、扩展目录、宿主 .app、临时 Payload 目录都只在本脚本的
+# 临时构建目录里存在，脚本退出时清掉 —— dist 里不放任何中间产物。
 #
 # 用法（仓库根目录）：
 #   scripts/apple/package-ios.sh <版本号> [产物目录]
@@ -58,7 +59,10 @@ HOST_BUNDLE_ID="xyz.erik.opi"
 KB_BUNDLE_ID="$HOST_BUNDLE_ID.keyboard"
 
 rm -rf "$out"
-mkdir -p "$out"
+
+# 中间产物全部落在临时目录；EXIT 时清掉，dist 最终只由末尾的 mv 放进来一个 IPA。
+build="$(mktemp -d "${TMPDIR:-/tmp}/opi-ios-build.XXXXXX")"
+trap 'rm -rf "$build"' EXIT
 
 # ---- 1) typecheck（两个平台各一遍）+ 真编成 framework ----
 #
@@ -85,7 +89,7 @@ for spec in "ios-arm64:aarch64-apple-ios:iphoneos" "ios-sim:aarch64-apple-ios-si
   # iOS 上带第三方 dylib 的扩展本就不能装，所以 .a 是唯一正确的输入。
   echo "== $rustt 的产物（注意同目录还有 .dylib，我们**不用**它）："
   ls -la "$rustlib" | grep -i 'libopi' || true
-  fw="$out/$plat/$FMWK.framework"
+  fw="$build/$plat/$FMWK.framework"
   mkdir -p "$fw"
   staticlib="$PWD/$rustlib/libopi_ffi.a"
   common=(-import-objc-header ios/OpiFFI.h -module-name "$MODULE" -sdk "$sdk" -target "$target")
@@ -126,7 +130,7 @@ done
 # ---- 2) 取证：真链上了、且**没有未定义的 opi_ 符号** ----
 # 「链接过了」不等于「符号都齐了」：本仓库的教训是只有 `ldd -r` 才看得见未定义符号
 # （`nm -u` 是同一件事在 Mach-O 上的做法）。iOS 上未定义符号默认是硬错，这条是补刀。
-fwbin="$out/ios-arm64/$FMWK.framework/$FMWK"
+fwbin="$build/ios-arm64/$FMWK.framework/$FMWK"
 # 三份输出**先落到变量再 grep**：`nm | grep -q` / `nm | head` 在 `pipefail` 下会因
 # grep/head 提前退出、nm 收到 SIGPIPE 而把「符号明明在」判成失败（2026-10-18 实测：
 # 符号数增长后 iOS job 连续两次红在 `LLVM ERROR: Broken pipe`，报错却指向未定义符号）。
@@ -162,16 +166,16 @@ fi
 
 # ---- 3) xcframework ----
 xcodebuild -create-xcframework \
-  -framework "$out/ios-arm64/$FMWK.framework" \
-  -framework "$out/ios-sim/$FMWK.framework" \
-  -output "$out/$FMWK.xcframework"
+  -framework "$build/ios-arm64/$FMWK.framework" \
+  -framework "$build/ios-sim/$FMWK.framework" \
+  -output "$build/$FMWK.xcframework"
 
-# ---- 4) 扩展的 Info.plist（展开占位符；集成起点）----
+# ---- 4) 扩展的 Info.plist（展开占位符，随后装进 appex）----
 # 展开规则与 macOS 侧同一条：`$(PRODUCT_MODULE_NAME).KeyboardViewController` 写成**裸名**，
 # 因为 `KeyboardViewController.swift` 上有 `@objc(KeyboardViewController)` ——
 # 运行时名就是裸名，`NSClassFromString` 查得到的只有它。⚠️ 运行期未验证（要真装进系统）。
-cp ios/Info.plist "$out/KeyboardExtension-Info.plist"
-kb="$out/KeyboardExtension-Info.plist"
+cp ios/Info.plist "$build/KeyboardExtension-Info.plist"
+kb="$build/KeyboardExtension-Info.plist"
 plutil -replace CFBundleExecutable -string "$FMWK" "$kb"
 plutil -replace CFBundleIdentifier -string "$KB_BUNDLE_ID" "$kb"
 plutil -replace CFBundleName -string "$FMWK" "$kb"
@@ -191,19 +195,19 @@ fi
 
 # ---- 5) 扩展可执行（入口 _NSExtensionMain）----
 #
-# IPA 必须有扩展可执行，所以这一步**不再是可选项**：链接失败就退出（framework 与
-# xcframework 已落盘，仍可供排查/集成）。扩展二进制必须由链接器入口 `_NSExtensionMain`
-# 起头（Xcode 生成的链接行就是这么写的）；这条手写链接行已在 CI 上实测通过。
-if swiftc -parse-as-library -emit-executable ios/*.swift -o "$out/.appex-bin" \
+# IPA 必须有扩展可执行，所以这一步**不再是可选项**：链接失败就退出。扩展二进制必须由
+# 链接器入口 `_NSExtensionMain` 起头（Xcode 生成的链接行就是这么写的）；这条手写链接行
+# 已在 CI 上实测通过。
+if swiftc -parse-as-library -emit-executable ios/*.swift -o "$build/.appex-bin" \
      -import-objc-header ios/OpiFFI.h -module-name "$MODULE" \
      -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" -target "arm64-apple-ios$IOS_MIN" \
      -Xlinker "$PWD/target/aarch64-apple-ios/release/libopi_ffi.a" \
-     -Xlinker -e -Xlinker _NSExtensionMain 2>&1 | tee "$out/appex-link.log"; then
-  appex="$out/OpiKeyboard.appex"
+     -Xlinker -e -Xlinker _NSExtensionMain 2>&1 | tee "$build/appex-link.log"; then
+  appex="$build/OpiKeyboard.appex"
   mkdir -p "$appex"
-  mv "$out/.appex-bin" "$appex/$FMWK"
+  mv "$build/.appex-bin" "$appex/$FMWK"
   cp "$kb" "$appex/Info.plist"
-  rm -f "$out/appex-link.log"
+  rm -f "$build/appex-link.log"
   # ⚠️ `${appex}` 的花括号**不能省**：`$appex（` 这种「变量后紧跟多字节字符」的写法
   # 在 macOS 的 /bin/bash（3.2）下会把 `（` 吞进变量名 → `appex…: unbound variable`
   # （首轮实测就是这么红的：run 37934619550，链接都过了、死在最后一行 echo 上）。
@@ -211,14 +215,14 @@ if swiftc -parse-as-library -emit-executable ios/*.swift -o "$out/.appex-bin" \
   echo "appex 可执行链接成功：${appex}（**未签名**）"
 else
   echo "!! .appex 可执行**未产出**（链接器原文见上），无法组装 IPA。" >&2
-  echo "   framework/xcframework 仍在 $out，appex-link.log 也在，供排查。" >&2
+  echo "   中间产物只在临时构建目录，脚本退出后清理。" >&2
   exit 1
 fi
 
 # ---- 6) 宿主 App + unsigned IPA ----
 # 键盘扩展不能独立安装：Apple 要求内嵌在宿主 App 的 PlugIns/ 里。
 # 宿主源码是 ios/HostApp/OpiApp.swift，用 swiftc 直接编，不依赖 .xcodeproj。
-app="$out/$HOST_APP.app"
+app="$build/$HOST_APP.app"
 hostbin="$app/$HOST_APP"
 mkdir -p "$app/PlugIns"
 cp -R "$appex" "$app/PlugIns/OpiKeyboard.appex"
@@ -279,27 +283,41 @@ swiftc -parse-as-library -emit-executable ios/HostApp/OpiApp.swift \
 chmod +x "$hostbin"
 
 # IPA 就是 zip(Payload/Opi.app)。未签名，需重签后安装。
-ipa="$out/opi-$version-ios-unsigned.ipa"
-mkdir -p "$out/Payload"
-rm -rf "$out/Payload/$HOST_APP.app"
-cp -R "$app" "$out/Payload/$HOST_APP.app"
-( cd "$out" && zip -q -r -y "$(basename "$ipa")" Payload )
-rm -rf "$out/Payload"
+ipa="$build/opi-$version-ios-unsigned.ipa"
+mkdir -p "$build/Payload"
+rm -rf "$build/Payload/$HOST_APP.app"
+cp -R "$app" "$build/Payload/$HOST_APP.app"
+( cd "$build" && zip -q -r -y "$(basename "$ipa")" Payload )
+rm -rf "$build/Payload"
 [ -f "$ipa" ] || { echo "!! IPA 未产出" >&2; exit 1; }
-echo "IPA（未签名，需重签后安装）：$ipa"
 
-# ---- 7) zip ----
-# 只列**明确成员**（不用 `zip -r .`）：那样会把中间产物一起卷进去，也会把 zip 自己套进来。
-# appex 已包含在 IPA 里，不再重复放进外层 zip。
-members=("$FMWK.xcframework" "KeyboardExtension-Info.plist" "$(basename "$ipa")")
-zip="$out/opi-$version-ios-unsigned.zip"
-( cd "$out" && zip -q -r "$(basename "$zip")" "${members[@]}" )
+# ---- 7) 最终产物自检：IPA 内容齐全，dist 里只有它 ----
+ipa_list="$(unzip -l "$ipa")"
+for member in \
+  "Payload/Opi.app/Opi" \
+  "Payload/Opi.app/PlugIns/OpiKeyboard.appex/OPIKeyboard" \
+  "Payload/Opi.app/PlugIns/OpiKeyboard.appex/luna.opid" \
+  "Payload/Opi.app/PlugIns/OpiKeyboard.appex/trad.opid" \
+  "Payload/Opi.app/PlugIns/OpiKeyboard.appex/stroke.opid" \
+  "Payload/Opi.app/PlugIns/OpiKeyboard.appex/wubi86.opid" \
+  "Payload/Opi.app/PlugIns/OpiKeyboard.appex/rare_index.tsv"; do
+  if ! grep -qF "$member" <<<"$ipa_list"; then
+    echo "!! IPA 缺少 $member" >&2
+    exit 1
+  fi
+done
 
-echo "---- iOS 产物（unsigned IPA / xcframework；未上机验证）----"
-echo "  $out/$FMWK.xcframework"
-echo "  $kb"
-echo "  ${appex}（未签名扩展目录）"
-echo "  ${app}（宿主 App）"
-echo "  $ipa"
-echo "  $zip"
+mkdir -p "$out"
+final_ipa="$out/$(basename "$ipa")"
+mv "$ipa" "$final_ipa"
+echo "IPA（未签名，需重签后安装）：$final_ipa"
+
+stray="$(find "$out" -mindepth 1 -maxdepth 1 ! -name '*.ipa' -print -quit)"
+if [ -n "$stray" ]; then
+  echo "!! dist 里有非 IPA 产物：$stray" >&2
+  exit 1
+fi
+
+echo "---- iOS 产物（unsigned IPA；未上机验证）----"
+echo "  $final_ipa（dist 仅此一个文件）"
 echo "  版本：${version}（取自 Cargo.toml）"

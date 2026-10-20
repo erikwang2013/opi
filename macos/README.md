@@ -339,6 +339,10 @@ Swift 看不见裸 C 符号，必须经一个头文件。两种接法，任选�
 
 ## 安装与启用
 
+> **CI / `scripts/apple/package-macos.sh` 的产物只有一个 `.pkg`**（内含完整 app；
+> `dist/apple/macos/` 里不剩 `.app`/`.zip`，2026-10-21 用户裁决）。下面的
+> `cp -R OpiInputMethod.app` 是**自己用 Xcode 构建**时的用户级安装法。
+>
 > 以下步骤**除了 `~/Library/Input Methods/` 这个路径**（Apple 的 TIS 文档明确：
 > 输入法包放 `~/Library/Input Methods/` 或 `/Library/Input Methods/`）**其余都是凭记忆写的，
 > 请在 Mac 上逐条核对**。macOS 各版本的「系统设置」面板改名/改路径很频繁。

@@ -11,8 +11,9 @@
 # Windows TSF 文本插入从未实现），所以这里把缺的那一步补上，并把产物发出来：
 #
 #   rust  job：四个 Apple 目标的 cdylib/staticlib → darwin 通用库 + iOS xcframework
-#   macos job：`macos/` 真编译 → IME bundle（ad-hoc 签名）→ .pkg / .zip
-#   ios   job：`ios/` 真编译 → framework/xcframework（**未签名**）
+#   macos job：`macos/` 真编译 → IME bundle（ad-hoc 签名）→ 只出一个 .pkg
+#              （.app / pkgroot 是构建中间物，打包脚本结尾清掉）
+#   ios   job：`ios/` 真编译 → 宿主 App + 键盘扩展 → unsigned IPA（**未签名**）
 #
 # ⚠️ 关于「未签名」：本仓库**没有** Apple 开发者证书，也不连任何签名服务，所以
 # 产物只能 ad-hoc 签名 —— **开发可用、不能分发**（Gatekeeper 会拦）。详见两个打包脚本
@@ -143,7 +144,8 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: opi-macos-ime-v${{ steps.ver.outputs.v }}
-          path: dist/apple/macos
+          # 用户 2026-10-21 裁决：macOS 只发一个可安装的 .pkg，不要 .app/.zip 等额外文件。
+          path: dist/apple/macos/*.pkg
           if-no-files-found: error
 
   ios:
@@ -175,24 +177,35 @@ jobs:
           ipa="$(ls dist/apple/ios/*.ipa)"
           unzip -l "$ipa" > /tmp/opi-ipa-list.txt
           cat /tmp/opi-ipa-list.txt
-          grep -q 'Payload/Opi.app/Opi' /tmp/opi-ipa-list.txt
-          grep -q 'Payload/Opi.app/PlugIns/OpiKeyboard.appex/OPIKeyboard' /tmp/opi-ipa-list.txt
-          grep -q 'Payload/Opi.app/PlugIns/OpiKeyboard.appex/luna.opid' /tmp/opi-ipa-list.txt
-          grep -q 'Payload/Opi.app/PlugIns/OpiKeyboard.appex/rare_index.tsv' /tmp/opi-ipa-list.txt
-          plutil -lint dist/apple/ios/Opi.app/Info.plist
-          plutil -lint dist/apple/ios/Opi.app/PlugIns/OpiKeyboard.appex/Info.plist
-          host_id="$(plutil -extract CFBundleIdentifier raw dist/apple/ios/Opi.app/Info.plist)"
-          kb_id="$(plutil -extract CFBundleIdentifier raw dist/apple/ios/Opi.app/PlugIns/OpiKeyboard.appex/Info.plist)"
+          for member in \
+            'Payload/Opi.app/Opi' \
+            'Payload/Opi.app/PlugIns/OpiKeyboard.appex/OPIKeyboard' \
+            'Payload/Opi.app/PlugIns/OpiKeyboard.appex/luna.opid' \
+            'Payload/Opi.app/PlugIns/OpiKeyboard.appex/trad.opid' \
+            'Payload/Opi.app/PlugIns/OpiKeyboard.appex/stroke.opid' \
+            'Payload/Opi.app/PlugIns/OpiKeyboard.appex/wubi86.opid' \
+            'Payload/Opi.app/PlugIns/OpiKeyboard.appex/rare_index.tsv'; do
+            grep -qF "$member" /tmp/opi-ipa-list.txt || {
+              echo "!! IPA 缺少 $member" >&2
+              exit 1
+            }
+          done
+          # 中间产物已由脚本清理，plist 校验从 IPA 内解出来做。
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          unzip -q "$ipa" -d "$tmp"
+          app="$tmp/Payload/Opi.app"
+          plutil -lint "$app/Info.plist"
+          plutil -lint "$app/PlugIns/OpiKeyboard.appex/Info.plist"
+          host_id="$(plutil -extract CFBundleIdentifier raw "$app/Info.plist")"
+          kb_id="$(plutil -extract CFBundleIdentifier raw "$app/PlugIns/OpiKeyboard.appex/Info.plist")"
           case "$kb_id" in "$host_id".*) ;; *) echo "扩展 id 不以宿主 id 为前缀: $kb_id / $host_id" >&2; exit 1;; esac
           echo "IPA 结构自洽：${ipa}（未签名，需重签后安装）"
 
       - uses: actions/upload-artifact@v4
         with:
           name: opi-ios-keyboard-v${{ steps.ver.outputs.v }}
-          # 直接给 IPA + xcframework，不再套一层 zip（artifact 本身就是 zip）。
-          # package-ios.sh 仍会在 dist 里生成本地用的 `*-unsigned.zip`，只是不上传。
-          path: |
-            dist/apple/ios/*.ipa
-            dist/apple/ios/OPIKeyboard.xcframework
-            dist/apple/ios/KeyboardExtension-Info.plist
+          # 用户 2026-10-21 裁决：iOS 只发一个可安装的 IPA，不要 xcframework/plist/zip。
+          # 中间产物由 package-ios.sh 在临时目录构建并在退出时清理。
+          path: dist/apple/ios/*.ipa
           if-no-files-found: error

@@ -4,9 +4,10 @@
 #
 # 把 `macos/` 的 Swift + Rust 通用库组装成**可装**的 macOS 输入法：
 #
-#   dist/apple/macos/OpiInputMethod.app                                  （ad-hoc 签名的 IME bundle）
-#   dist/apple/macos/opi-<版本>-macos-universal.pkg                 （pkgbuild 出的安装包）
-#   dist/apple/macos/opi-<版本>-macos-universal.zip                 （不想走 pkg 的人用这个）
+#   dist/apple/macos/opi-<版本>-macos-universal.pkg   （**唯一产物**：内含完整 .app）
+#
+# `.app` / pkgroot / payload 清单只是构建期中间物，结尾清掉（用户 2026-10-21 裁决：
+# macOS 端所有东西打进一个可安装包，不要额外文件）。
 #
 # 用法（仓库根目录）：
 #   scripts/apple/package-macos.sh <版本号> [产物目录]
@@ -16,7 +17,7 @@
 #
 # 本脚本**没有** Developer ID 证书可用（仓库不带 secrets，也不连任何签名服务），
 # 只做 **ad-hoc 签名**（`codesign --sign -`）。后果如实写在这里：
-#   · 本机装得上（`installer` 会警告「未签名」，要 `-allowUntrusted`，或对 .app 右键打开）
+#   · 本机装得上（`installer` 会警告「未签名」，要 `-allowUntrusted`）
 #   · **不能**发给别人 —— 别人机器上 Gatekeeper 直接拦（「已损坏，无法打开」多半就是这个）
 #   · 正式发布需要 Apple 开发者账号：Developer ID 证书 + `notarytool` 公证 + `stapler` 装订。
 #     三件都不在本脚本范围内，缺了它们产物**只在本机有效**。
@@ -201,7 +202,7 @@ PY
 
 # ---- 6) .pkg（未签名）----
 # 落点 /Library/Input Methods/：TIS 文档里输入法包的两个合法位置之一（另一个是用户级
-# ~/Library/Input Methods/，见 macos/README.md）；pkg 装系统级，用户级请用上面的 .zip。
+# ~/Library/Input Methods/，见 macos/README.md）；pkg 装系统级，用户级安装需自己构建 .app。
 stage="$out/pkgroot"
 mkdir -p "$stage/Library/Input Methods"
 cp -R "$APP" "$stage/Library/Input Methods/"
@@ -222,14 +223,17 @@ grep -q "OpiInputMethod.app/Contents/MacOS/$EXE" "$out/.payload.txt" || {
   cat "$out/.payload.txt" >&2; exit 1; }
 grep -q 'OpiInputMethod.app/Contents/Info.plist' "$out/.payload.txt" || {
   echo "!! .pkg 的 payload 里没有 Info.plist" >&2; cat "$out/.payload.txt" >&2; exit 1; }
-# 符号面板的资源漏拷 = 面板静默退化成 6 个引擎符号块（还照常能开）——
-# 所以这里钉最终 payload，而不只是钉打包前的 $APP。
-grep -q 'OpiInputMethod.app/Contents/Resources/symbol_categories.tsv' "$out/.payload.txt" || {
-  echo "!! .pkg 的 payload 里没有 symbol_categories.tsv（符号面板会退化成引擎常用块）" >&2
+grep -q 'OpiInputMethod.app/Contents/Frameworks/libopi_ffi.dylib' "$out/.payload.txt" || {
+  echo "!! .pkg 的 payload 里没有 Frameworks/libopi_ffi.dylib —— 装完 dyld 找不到库" >&2
   cat "$out/.payload.txt" >&2; exit 1; }
-# 表情/贴纸/码表同理：少一个 = 对应面板/方案静默变空，装完才发现。
-for res in "emoji.tsv" "kaomoji.tsv" "pet-map.tsv" \
-           "pet/stickers/idle.png" "pet/stickers-gif/idle.gif" \
+# 资源漏拷 = 对应面板/方案静默变空（还照常能开）—— 所以钉最终 payload，
+# 而不只是钉打包前的 $APP。贴纸按源目录逐个列，避免「只查 idle 一个」漏掉别的。
+sticker_res=()
+for f in shared/pet/stickers/*.png; do sticker_res+=("pet/stickers/${f##*/}"); done
+for f in shared/pet/stickers-gif/*.gif; do sticker_res+=("pet/stickers-gif/${f##*/}"); done
+for res in "symbol_categories.tsv" "opi.tiff" "opi-pet.icns" \
+           "emoji.tsv" "kaomoji.tsv" "pet-map.tsv" \
+           "${sticker_res[@]}" \
            "dicts/luna.opid" "dicts/trad.opid" "dicts/stroke.opid" "dicts/wubi86.opid"; do
   grep -q "OpiInputMethod.app/Contents/Resources/$res" "$out/.payload.txt" || {
     echo "!! .pkg 的 payload 里没有 Resources/$res" >&2
@@ -237,11 +241,17 @@ for res in "emoji.tsv" "kaomoji.tsv" "pet-map.tsv" \
 done
 rm -f "$out/.payload.txt"
 
-# ---- 7) .zip（不想走 pkg 的人用；保留 .app 的结构与符号链接）----
-ditto -c -k --keepParent "$APP" "$out/opi-$version-macos-universal.zip"
+# ---- 7) 收尾：dist 里只留这一个 .pkg ----
+# `.app` 是构建中间物（payload 已在 pkg 里）；不再产出 .zip。
+# 用户 2026-10-21 裁决：macOS 端所有东西打进一个可安装包，不要额外文件。
+rm -rf "$APP"
+stray="$(find "$out" -mindepth 1 -maxdepth 1 ! -name '*.pkg' -print -quit)"
+if [ -n "$stray" ]; then
+  echo "!! dist 里有非 PKG 产物：$stray" >&2
+  exit 1
+fi
 
-echo "---- macOS 产物（未签名/未公证，开发用）----"
-echo "  $APP"
+echo "---- macOS 产物（未签名/未公证，开发用；dist 只此一个）----"
 echo "  $pkg"
-echo "  $out/opi-$version-macos-universal.zip"
+echo "  内含 /Library/Input Methods/$EXE.app（Frameworks + Resources 全量）"
 echo "  版本：${version}（取自 $(basename "$root")/Cargo.toml）；Info.plist 记的是 $plist_ver"
