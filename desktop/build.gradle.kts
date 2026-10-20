@@ -128,7 +128,7 @@ tasks.named("processResources") { dependsOn(copyKaomojiData) }
 // `[Code]` 在文件落盘后执行。
 //
 // Windows CI 在 `packageMsi` / `createDistributable` 前下载 TSF DLL artifact 并把路径放进 OPI_TSF_DLL；
-// Linux 打 Deb 时该变量不存在 ⇒ files 集合不变，不会把 DLL/脚本带进 Deb。
+// Linux 打 Deb 时该变量不存在 ⇒ files 集合不变，不会把 DLL/脚本/词库带进 Deb。
 val tsfDll = providers.environmentVariable("OPI_TSF_DLL")
 // jpackage 的 `--input` 是 CMP 自己暂存的 libs 目录（会清空重填），所以不能往里
 // 手写文件；把 DLL 挂到 JPackage 任务的 `files` 集合，CMP 会与 jar 一起暂存并
@@ -138,12 +138,28 @@ tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageT
         if (tsfDll.isPresent) {
             val src = file(tsfDll.get())
             check(src.isFile) { "OPI_TSF_DLL 指向的文件不存在：${src.path}" }
-            // 完成页复选框拉起这个脚本：启动候选窗 + 重启 Explorer（重新加载 TSF DLL）。
+            // 完成页复选框拉起这个脚本：只启动候选窗，**不碰 Explorer**（2026-10-20 白屏后）。
             // 只在这个分支挂入 ⇒ Linux Deb 不会带 Windows 脚本。
             // 2026-10-20：项目不再随包发布 PUA 字体（见 shared/pet/emoji-font/README.md）。
+            //
+            // 词库（2026-10-20）：jpackage 把 `--input` 的普通文件放进 app image 的 `app\`，
+            // 即 `app\luna.opid` 与 `app\tsf_opi.dll` 同目录 —— 正是 `dict_path` 的第二候选。
+            // 真源 = 入库的 Android 分发副本（见 `crates/tsf-opi/src/dict_path.rs` 模块头）。
+            // 许可文本同批进包：`luna.opid` 由 LGPL/Apache-2.0/GPL-3.0-only 数据编译，
+            // 分发义务与 `scripts/nfpm.yaml` 那段相同（少了它们包在授权上不完整）。
+            val luna = file("../android/app/src/main/assets/luna.opid")
+            check(luna.isFile) { "找不到词库分发副本：${luna.path}" }
+            val licenses = listOf(
+                file("../LICENSE"),
+                file("../data/raw/LICENSES.md"),
+                file("../data/raw/GPL-3.0.txt"),
+            )
+            licenses.forEach { check(it.isFile) { "找不到许可文本：${it.path}" } }
             files.from(
                 src,
                 file("windows/launch-and-restart.cmd"),
+                luna,
+                *licenses.toTypedArray(),
             )
         }
     }

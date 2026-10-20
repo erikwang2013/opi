@@ -229,7 +229,7 @@ try {
         (Sql-Quote 'WIXUI_EXITDIALOGOPTIONALCHECKBOX') + ',' + (Sql-Quote '1') + ')')
     Invoke-MsiSql $db ('INSERT INTO `Property` (`Property`,`Value`) VALUES (' +
         (Sql-Quote 'WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT') + ',' +
-        (Sql-Quote ('Launch ' + $product + ' and restart Explorer')) + ')')
+        (Sql-Quote ('Launch ' + $product)) + ')')
     $launchKey = if ($scriptKeys.Count -eq 1) { $scriptKeys[0] } else { $fileKey }
     Invoke-MsiSql $db ('INSERT INTO `Property` (`Property`,`Value`) VALUES (' +
         (Sql-Quote 'WixShellExecTarget') + ',' + (Sql-Quote ('[#' + $launchKey + ']')) + ')')
@@ -260,7 +260,7 @@ try {
             (Sql-Quote 'OpRegisterTsf') + ',' + (Sql-Quote 'NOT REMOVE') + ',5900)')
         Invoke-MsiSql $db ('INSERT INTO `Property` (`Property`,`Value`) VALUES (' +
             (Sql-Quote 'WIXUI_EXITDIALOGOPTIONALTEXT') + ',' +
-            (Sql-Quote 'Checking the box restarts Explorer so Windows reloads the input method. Other open apps keep the old version until restarted.') + ')')
+            (Sql-Quote 'The input method loads on the next sign-out or restart. Other open apps keep the old version until restarted.') + ')')
     }
 
     # ---------- read-back (same shape as the bash script) ----------

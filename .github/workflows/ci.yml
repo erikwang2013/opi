@@ -733,6 +733,53 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 2026-10-20 白屏根因：完成页脚本结束 Explorer 后，靠「等待 + 回退启动」拉回；
+      # 等待对 loopback 立即返回，回退又可能与 Winlogon 抢或带错令牌，桌面会停在空白。
+      # 这条交互路径在 Windows CI 里**不可达**（`[Run]` 带 skipifsilent，冒烟用
+      # /VERYSILENT），所以只能靠静态门禁把它钉住。注释行不参与匹配。
+      - name: Windows 安装器静态门禁（不许结束/重启 Explorer）
+        run: |
+          set -euo pipefail
+          files=(
+            desktop/windows/launch-and-restart.cmd
+            scripts/windows/opi.iss
+            scripts/postprocess-windows-msi.sh
+            scripts/windows/postprocess-windows-msi.ps1
+          )
+          for f in "${files[@]}"; do
+            test -f "$f" || { echo "::error::缺少 $f"; exit 1; }
+          done
+          # 完成页脚本：只许启动 opi.exe，代码行里出现 shell/进程管理就红。
+          cmd_code=$(grep -viE '^[[:space:]]*(rem([[:space:]]|$)|::)' \
+            desktop/windows/launch-and-restart.cmd || true)
+          if grep -Eiq 'explorer|taskkill|tskill|stop-process|wmic' <<<"$cmd_code"; then
+            echo "::error::launch-and-restart.cmd 不得操作 Explorer 或结束进程（2026-10-20 白屏根因）"
+            grep -Ein 'explorer|taskkill|tskill|stop-process|wmic' <<<"$cmd_code" || true
+            exit 1
+          fi
+          # 安装器/后处理脚本：同一行同时出现「结束进程」与 Explorer 就红。
+          code=$(grep -hviE '^[[:space:]]*(#|;|//|rem([[:space:]]|$)|::)' "${files[@]}" || true)
+          if grep -Eiq '(taskkill|tskill|stop-process|wmic).*explorer|explorer.*(taskkill|tskill|stop-process|wmic)' <<<"$code"; then
+            echo "::error::安装器里出现了结束 Explorer 的代码（2026-10-20 白屏根因）"
+            grep -Ein 'explorer|taskkill|tskill|stop-process|wmic' <<<"$code" || true
+            exit 1
+          fi
+          # Setup 是提权的：runascurrentuser = 管理员令牌，拿它重启的 shell 不是
+          # 用户的桌面 shell。postinstall 的默认/显式写法都必须是 runasoriginaluser。
+          iss_code=$(grep -viE '^[[:space:]]*(;|//)' scripts/windows/opi.iss || true)
+          if grep -qi 'runascurrentuser' <<<"$iss_code"; then
+            echo "::error::opi.iss 不得使用 runascurrentuser（提权令牌，白屏根因之一）"
+            exit 1
+          fi
+          grep -Eq '^[[:space:]]*Filename:.*runasoriginaluser' scripts/windows/opi.iss || {
+            echo "::error::opi.iss 的 postinstall 启动必须以 runasoriginaluser 运行"; exit 1; }
+          # Restart Manager 会关掉加载了 tsf_opi.dll 的 Explorer；必须显式关闭它。
+          grep -Eq '^[[:space:]]*CloseApplications=no[[:space:]]*$' scripts/windows/opi.iss || {
+            echo "::error::opi.iss 必须显式 CloseApplications=no"; exit 1; }
+          grep -Eq '^[[:space:]]*RestartApplications=yes[[:space:]]*$' scripts/windows/opi.iss || {
+            echo "::error::opi.iss 必须 RestartApplications=yes（第二道保险）"; exit 1; }
+          echo "通过：完成页只以用户令牌启动 opi.exe，安装器不结束 Explorer"
+
       # 主测试的私有 dbus 用例要真 fcitx5 + dbus-run-session；busctl 由 systemd 提供。
       - name: 装 fcitx5 / dbus
         run: |

@@ -262,6 +262,8 @@ pub(crate) fn own_module_path() -> Result<String> {
 }
 
 /// 本 DLL 所在目录 —— 词库探测的第二候选（见 `dict_path::candidates`）。
+/// 安装包把 `app\luna.opid` 放在这里（`desktop/build.gradle.kts` 的 JPackage
+/// `files` 集合），所以装完即命中，不依赖环境变量或用户手工送货。
 ///
 /// 复用自己的模块路径：`own_module_path` 本来就要求"按地址反查"（不能拿宿主 EXE
 /// 的路径），而**不能**用当前工作目录 —— 宿主进程的 CWD 是用户当时在哪儿，

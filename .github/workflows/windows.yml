@@ -14,18 +14,26 @@ name: Windows 打包
 #
 # ⚠️ 边界（**别把「打包绿了」读成「Windows 端能用」**）：
 #   本 workflow 证明「这些产物能在 Windows 上被编出来、DLL 的导入/导出表长这样、
-#   安装器里带上了 DLL，且安装时执行注册、安装目录是 opi」。
+#   安装器里带上了 DLL 与词库，且安装时执行注册、安装目录是 opi」。
 #   **用户入口是 `opi-<版本>-setup.exe`（Inno Setup）**（2026-10-20 用户裁决：
 #   MSI 在 Windows Server Core 里因注册失败会整包装不上）。EXE 安装器把 regsvr32
 #   放在 [Code] 里，**注册失败只记日志、不回滚安装**。
 #   `windows-exe-install-test` 会在 Windows Server Core 容器里真跑一次静默安装/卸载；
 #   但容器没有真机的语言栏/TSF 环境，注册可能失败 —— 那正是日志要记录的，
-#   这**不**等于真机装过。`regsvr32` / Explorer 重启的真实行为仍需真机验证
+#   这**不**等于真机装过。`regsvr32` 与 TSF 真机装载仍需真机验证
 #   （2026-10-19 用户在真机装的是**未后处理**的 MSI，键盘不显示；EXE 安装器
 #   尚未被真机装过）。
+#   ⚠️ **交互路径无 CI 覆盖**：静默安装用 `/VERYSILENT`，而 `[Run]` 带
+#   `skipifsilent`，所以完成页自启脚本在 CI 里**从不执行**。2026-10-20 的白屏
+#   正是藏在这个盲区里（旧脚本会结束 Explorer）。现在脚本只启动 opi.exe，
+#   且 `opi.iss` 用 `CloseApplications=no`；`.github/workflows/ci.yml` 的
+#   `packaging-scripts` job 有静态门禁，防止 shell 重启命令回到安装器里。
 #   缺口清单见 docs/install/windows.md 的 §6.1（从未验过的事）与 §6.2（读源码得出的缺口）。
-#   本 workflow 也**不**打包 `luna.opid`：词库分发通路一条没动（§2.4 的判断仍然成立 ——
-#   仍然没有任何步骤把词库和 DLL 放到一起）。
+#   词库自 2026-10-20 起随包：`desktop/build.gradle.kts` 的 JPackage `files` 集合
+#   （`OPI_TSF_DLL` 分支）把入库副本 `android/app/src/main/assets/luna.opid` 放进
+#   app image 的 `app\`（与 DLL 同目录 ⇒ `dict_path` 第二候选），EXE 与内部 MSI 都携带；
+#   许可文本同批进包。本文件在 app image 布局与 EXE 安装冒烟两处断言它真的在。
+#   **「包里有」仍不等于「真机上 TSF 已加载」**（装载日志走 eprintln!，GUI 宿主看不见）。
 #
 # 触发方式（2026-10-09 定）：手动 dispatch + 默认分支 push（限下面 paths）。
 #   改动落在 Windows 侧代码上时就该重跑一次；产物只在本次 run 的 artifact 里，
@@ -39,6 +47,7 @@ on:
     paths:
       - 'crates/tsf-opi/**'
       - 'desktop/**'
+      - 'android/app/src/main/assets/luna.opid'
       - 'shared/pet/emoji-font/**'
       - 'scripts/postprocess-windows-msi.sh'
       - 'scripts/windows/**'
@@ -255,7 +264,7 @@ jobs:
   # ---- 用户入口：EXE 安装器（2026-10-20）----
   #
   # jpackage 的 MSI 在 Server Core 里因 TSF 注册失败会整包回滚（用户原话「根本无法
-  # 安装」）。这里改用 jpackage 的 app image（同一份应用 + jlinked JRE + TSF DLL）
+  # 安装」）。这里改用 jpackage 的 app image（同一份应用 + jlinked JRE + TSF DLL + luna.opid）
   # 交给 Inno Setup，注册放在 [Code] 的 ssPostInstall：**失败只写日志，不回滚安装**。
   # 产物名固定 `opi-<版本>-setup.exe`，默认装到 `C:\Program Files\opi`。
   desktop-exe:
@@ -283,7 +292,7 @@ jobs:
         env:
           OPI_TSF_DLL: ${{ github.workspace }}\tsf-dll\tsf_opi.dll
 
-      - name: 断言 app image 布局（opi.exe + app\tsf_opi.dll）
+      - name: 断言 app image 布局（opi.exe + app\tsf_opi.dll + app\luna.opid）
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -296,17 +305,22 @@ jobs:
           if ((Split-Path $app -Leaf) -ne 'opi') {
             throw "app image 名不是 opi（是 $(Split-Path $app -Leaf)）—— Windows packageName 没生效"
           }
-          foreach ($f in 'opi.exe', 'app\tsf_opi.dll') {
+          foreach ($f in 'opi.exe', 'app\tsf_opi.dll', 'app\luna.opid', 'app\LICENSE', 'app\LICENSES.md', 'app\GPL-3.0.txt') {
             if (-not (Test-Path (Join-Path $app $f))) { throw "app image 缺 $f" }
           }
+          # 身份核对：不是「有个叫 luna.opid 的东西」，而是「就是入库那份分发副本」。
+          $want = (Get-FileHash 'android/app/src/main/assets/luna.opid' -Algorithm SHA256).Hash
+          $got = (Get-FileHash (Join-Path $app 'app\luna.opid') -Algorithm SHA256).Hash
+          if ($got -ne $want) { throw "app image 里的 luna.opid 与入库副本不一致（$got != $want）" }
           "OPI_APP_IMAGE=$app" >> $env:GITHUB_ENV
           Get-ChildItem $app | Select-Object Name, Length
+          Get-ChildItem (Join-Path $app 'app') | Select-Object Name, Length
 
       - name: 用 Inno Setup 编译 opi-<版本>-setup.exe
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          # 只认 Inno Setup 6（脚本用了 {autopf} / runascurrentuser / modern wizard）；
+          # 只认 Inno Setup 6（脚本用了 {autopf} / runasoriginaluser / modern wizard）；
           # runner 镜像通常预装，缺了就用 choco 装。
           $iscc = @(
             'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
@@ -346,7 +360,8 @@ jobs:
   # 2026-10-19 起这是**必需**步骤：jpackage 的原始 MSI 不注册 TSF DLL，装完键盘
   # 不出现（用户在真机上撞到过）。scripts/postprocess-windows-msi.sh 注入：
   #   · Directory：INSTALLDIR 默认目录 opi-candidates → opi（C:\Program Files\opi）
-  #   · 序列 797 杀旧进程、5900 regsvr32 注册 DLL、完成页自启 + 重启 Explorer
+  #   · 序列 797 杀旧进程、5900 regsvr32 注册 DLL、完成页只自启候选窗
+  #     （2026-10-20 白屏后不再结束/重启 Explorer，详见 scripts/postprocess-windows-msi.sh）
   #   · 注册必须走 `WixSilentExec64`（配 `WixSilentExec64CmdLine`）：随包的
   #     Binary.WixCA 是 PE32 i386，32 位变体会在 WOW64 里调 SysWOW64 的 regsvr32，
   #     加载不了 x86-64 的 tsf_opi.dll（2026-10-19 复审 blocker）。OpLaunchApp 仍用
@@ -522,11 +537,13 @@ jobs:
   #
   # 在干净的 Windows Server Core 里跑用户真正会拿到的那个 EXE：
   #   · 静默安装到 C:\opi-test（默认目录是 C:\Program Files\opi，这里显式给 /DIR）
-  #   · 断言 opi.exe 与 app\tsf_opi.dll 真的落盘
+  #   · 断言 opi.exe、app\tsf_opi.dll 与 app\luna.opid 真的落盘
   #   · 断言安装退出码 = 0，且日志里**记录了** regsvr32 的退出码（0 或非 0 都不判红：
   #     Server Core 没有语言栏/TSF，注册失败是已知环境限制；安装本身不许因此回滚）
   #   · 静默卸载后再断言 opi.exe 已删除
   # 失败时日志全部上传。
+  # ⚠️ CI 只跑静默路径，`[Run] ... skipifsilent` 的完成页自启脚本在这里**不会执行**；
+  #    它的安全性由 ci.yml 的静态门禁守住，真机交互安装仍需人工验证。
   windows-exe-install-test:
     name: EXE 静默安装/卸载冒烟（windows-latest，Server Core 容器）
     runs-on: windows-latest
@@ -560,6 +577,7 @@ jobs:
           echo %ERRORLEVEL% > C:\work\install-exit.txt
           if exist C:\opi-test\opi.exe (echo PRESENT > C:\work\install-opi.txt) else (echo ABSENT > C:\work\install-opi.txt)
           if exist C:\opi-test\app\tsf_opi.dll (echo PRESENT > C:\work\install-dll.txt) else (echo ABSENT > C:\work\install-dll.txt)
+          if exist C:\opi-test\app\luna.opid (echo PRESENT > C:\work\install-luna.txt) else (echo ABSENT > C:\work\install-luna.txt)
           if exist C:\opi-test\unins000.exe (
             start "" /wait C:\opi-test\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=C:\work\uninstall-exe.log
             echo %ERRORLEVEL% > C:\work\uninstall-exit.txt
@@ -571,13 +589,14 @@ jobs:
           Set-Content -Path (Join-Path $work 'exe-smoke.cmd') -Value $script -Encoding ascii
           docker run --rm --isolation=process -v "${work}:C:\work" $image cmd /c C:\work\exe-smoke.cmd
 
-          foreach ($f in 'install-exe.log', 'install-exit.txt', 'install-opi.txt', 'install-dll.txt') {
+          foreach ($f in 'install-exe.log', 'install-exit.txt', 'install-opi.txt', 'install-dll.txt', 'install-luna.txt') {
             if (-not (Test-Path $f)) { throw "缺少 $f（docker run 失败或安装器没启动）" }
           }
           $exitCode = (Get-Content install-exit.txt -Raw).Trim()
           if ($exitCode -ne '0') { throw "EXE 安装退出码 $exitCode（见 install-exe.log）" }
           if ((Get-Content install-opi.txt -Raw).Trim() -ne 'PRESENT') { throw '安装目录里没有 opi.exe' }
           if ((Get-Content install-dll.txt -Raw).Trim() -ne 'PRESENT') { throw '安装目录里没有 app\tsf_opi.dll' }
+          if ((Get-Content install-luna.txt -Raw).Trim() -ne 'PRESENT') { throw '安装目录里没有 app\luna.opid（词库没随包）' }
 
           # 注册结果必须被**记录**；0 与非 0 都接受（后者是 Server Core 的已知限制，
           # 安装不许因此回滚 —— 这正是 EXE 安装器与旧 MSI 的关键区别）。
@@ -609,6 +628,7 @@ jobs:
             uninstall-exit.txt
             install-opi.txt
             install-dll.txt
+            install-luna.txt
             uninstall-removed.txt
             exe-smoke.cmd
 

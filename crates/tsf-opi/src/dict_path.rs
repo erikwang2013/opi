@@ -11,10 +11,10 @@
 //!
 //! 分发（**本仓库现状**，别把大文件塞进 git）：`luna.opid` 是本地重编产物，
 //! 被 `data/generated/.gitignore` 忽略；入库的是各平台的**分发副本**
-//! （`android/app/src/main/assets/luna.opid`）。Windows 侧同理：打包时把
-//! `data/generated/luna.opid` 拷到本 DLL 同目录，或让用户放到
-//! `%LOCALAPPDATA%\opi\luna.opid`（本模块的第三候选）。本仓库目前**没有**
-//! Windows 打包脚本，故没有任何构建期拷贝动作 —— 这两个候选就是全部通路。
+//! （`android/app/src/main/assets/luna.opid`）。Windows 侧的构建期拷贝在
+//! `desktop/build.gradle.kts` 的 JPackage `files` 集合（`OPI_TSF_DLL` 分支）：
+//! 该副本被放进 app image 的 `app\` 目录，与本 DLL 同目录 ⇒ 第二候选开箱命中。
+//! `%LOCALAPPDATA%\opi\luna.opid`（第三候选）仍是用户/安装器换词库的落点。
 //!
 //! 已知缺口（**未实现，不是 bug 隐藏**）：`trad.opid` 不在候选里 ——
 //! `TsfLogic` 只持一个词库（引擎层无简繁双库入口），繁体模式无从装载。

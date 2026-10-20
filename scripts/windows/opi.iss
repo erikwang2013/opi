@@ -7,6 +7,7 @@
 ; with OPI_TSF_DLL set. Layout on Windows:
 ;   <app-image>\opi.exe              launcher (candidate window / --settings)
 ;   <app-image>\app\tsf_opi.dll      TSF COM server (registered below)
+;   <app-image>\app\luna.opid        dictionary, loaded from the DLL's directory
 ;   <app-image>\app\*.jar, opi.exe's jars, runtime\ (jlinked JRE)
 ;
 ; Why Inno Setup instead of jpackage's own MSI: jpackage has no knob to run
@@ -67,8 +68,16 @@ Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\opi.exe
-CloseApplications=yes
-RestartApplications=no
+; 2026-10-20 white-screen fix: never let Setup close applications. tsf_opi.dll is
+; loaded inside explorer.exe while a TSF client is active, so Restart Manager
+; (CloseApplications=yes, the default) can close the shell during an upgrade.
+; With RestartApplications=no the shell stayed closed -> blank desktop. Here Setup
+; never closes anything; locked files are handled by the restartreplace flag in
+; [Files] (queued for replacement on the next restart).
+CloseApplications=no
+; Inert while CloseApplications=no; kept at yes as a second belt so re-enabling
+; Restart Manager later cannot recreate the white screen.
+RestartApplications=yes
 SetupLogging=yes
 
 [Languages]
@@ -84,7 +93,10 @@ Type: filesandordirs; Name: "{app}\app"
 Type: filesandordirs; Name: "{app}\runtime"
 
 [Files]
-Source: "{#AppImageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; restartreplace: on upgrade the old tsf_opi.dll may still be mapped in Explorer
+; or another TSF host. Instead of closing those processes (which caused the white
+; screen) Setup copies the new file and schedules the swap for the next restart.
+Source: "{#AppImageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs restartreplace
 
 [Icons]
 Name: "{autoprograms}\opi settings"; Filename: "{app}\opi.exe"; Parameters: "--settings"; WorkingDir: "{app}"
@@ -100,9 +112,15 @@ Name: "{autodesktop}\opi settings"; Filename: "{app}\opi.exe"; Parameters: "--se
 Root: HKLM64; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "opi"; ValueData: """{app}\opi.exe"""; Flags: uninsdeletevalue
 
 [Run]
-; Finish page: start the candidate window and restart Explorer so the freshly
-; registered TSF DLL is picked up. Runs as the logged-in user, not elevated.
-Filename: "{app}\app\launch-and-restart.cmd"; Description: "Launch opi and restart Explorer (loads the input method)"; Flags: postinstall nowait skipifsilent runascurrentuser
+; Finish page: start the candidate window only. It must NOT touch Explorer --
+; the shell restart was the 2026-10-20 white-screen root cause. TSF picks up the
+; freshly registered DLL on the next sign-out/reboot (the finish page says so).
+; runasoriginaluser, NOT runascurrentuser: Setup is elevated, so the current-user
+; token is the admin token; a shell restarted with it is not the user's shell.
+; (postinstall entries default to the original user, but state it explicitly --
+; the earlier runascurrentuser here was one half of the white screen.)
+; The .cmd keeps its historical name because the MSI postprocess looks it up.
+Filename: "{app}\app\launch-and-restart.cmd"; Description: "Launch opi (sign out or restart Windows to load the input method)"; Flags: postinstall nowait skipifsilent runasoriginaluser
 
 [Code]
 procedure KillRunningApp();
