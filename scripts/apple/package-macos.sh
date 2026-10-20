@@ -143,6 +143,9 @@ cp macos/opi.tiff "$APP/Contents/Resources/opi.tiff"
 # 应用包图标（Finder 里看到的那张，浅底小欧），CFBundleIconFile 指向它；
 # 与上面那张必须保持透明的输入源模板图标是两码事。
 cp desktop/icons/opi-pet.icns "$APP/Contents/Resources/opi-pet.icns"
+# 符号面板类目表（22 类）：与 Linux `/usr/share/opi/`、Windows 启动器旁同一份
+# 真源文件。Swift 按 `Bundle.main.url(forResource:"symbol_categories")` 读它。
+cp crates/fcitx5-opi/data/symbol_categories.tsv "$APP/Contents/Resources/symbol_categories.tsv"
 
 # ---- 4) 签名（ad-hoc）----
 # 顺序：先签里面那份 dylib，再签外层 bundle。反过来的话外层签名封的是**旧**哈希，
@@ -204,6 +207,11 @@ grep -q "OpiInputMethod.app/Contents/MacOS/$EXE" "$out/.payload.txt" || {
   cat "$out/.payload.txt" >&2; exit 1; }
 grep -q 'OpiInputMethod.app/Contents/Info.plist' "$out/.payload.txt" || {
   echo "!! .pkg 的 payload 里没有 Info.plist" >&2; cat "$out/.payload.txt" >&2; exit 1; }
+# 符号面板的资源漏拷 = 面板静默退化成 6 个引擎符号块（还照常能开）——
+# 所以这里钉最终 payload，而不只是钉打包前的 $APP。
+grep -q 'OpiInputMethod.app/Contents/Resources/symbol_categories.tsv' "$out/.payload.txt" || {
+  echo "!! .pkg 的 payload 里没有 symbol_categories.tsv（符号面板会退化成引擎常用块）" >&2
+  cat "$out/.payload.txt" >&2; exit 1; }
 rm -f "$out/.payload.txt"
 
 # ---- 7) .zip（不想走 pkg 的人用；保留 .app 的结构与符号链接）----

@@ -1,12 +1,17 @@
 # OPI macOS 端（草案）
 
-> ## ⚠️ 草案 · **CI 已真编译** · 从未上机运行
+> ## ⚠️ 草案 · **CI 曾真编译旧版** · 从未上机运行
 >
 > **2026-10-15 订正（原来那句「一行都没有编译过」不成立）**：`apple.yml` 的 macOS job
 > 用 `swiftc macos/*.swift -typecheck` + 真编译链接（`scripts/apple/package-macos.sh`）
 > 把本目录全部 Swift 编了一遍 —— 这与 `ios/` 那边是同一天同一类订正。
 > ⚠️ 但**「编过」不等于「能用」**：**从未在 macOS 上运行过**，没有一个字节被 IMK 加载过，
 > Info.plist 也没进过任何系统的输入法列表。**改动后先推一次让 CI 编**，再看行为。
+>
+> **2026-10-20 补**：符号面板 / 输入法菜单 / 设置窗 / 设置桥 / 导入词库持久化是
+> **本轮新增、尚未编译**的一批（Apple CI 本轮不可用，本机也没有 Swift 工具链）。
+> 它们与旧文件一样只有**静态审阅**证据；本机跑过的只有 `bash -n`、`sh -n` 与
+> 500 行门禁。别把下面「已补」读成「已在 Mac 上验证」。
 >
 > 本机没有 macOS、没有 Xcode、没有 Apple SDK；InputMethodKit / AppKit 是 Apple 独有框架，
 > 在 Linux 上 `import` 就断 —— 编译发生在 **CI 的 macOS runner** 上，不在开发机。
@@ -27,15 +32,19 @@
 | 文件 | 内容 |
 |---|---|
 | `OpiFFI.h` | C ABI 声明面（**数量以 `crates/opi-ffi/tests/c_abi_contract.rs` 的门禁为准，别抄数字**），逐条对照 `crates/opi-ffi/src/cabi.rs` 抄写；`ios/OpiFFI.h` 是指向本文件的转发头。曾经落后 3 个（`opi_toggle_fullwidth` / `opi_fullwidth_state` / `opi_toggle_symbol`），**2026-09-27 已补齐**，见「全角 / 符号开关的出口」一节；本文件归 `ffi-contract`，别的分身不改 |
-| `OpiEngine.swift` | C ABI 桥：`OpiString` 的持有/释放、键码/状态位常量、词库装载与回退、符号库三个出口（`symbolBlocks` / `symbolsInBlock` / `searchSymbols`） |
-| `InputController.swift` | `IMKInputController` 子类：NSEvent → `opi_key_event` 入参、提交文本、preedit、候选窗 |
+| `OpiEngine.swift` | C ABI 桥：`OpiString` 的持有/释放、键码/状态位常量、词库装载与回退（含可选 `trad.opid` 与 `dicts/*.tsv` 重放）、当前页候选/页内选词、符号库三个出口 |
+| `InputController.swift` | `IMKInputController` 子类：NSEvent → `opi_key_event` 入参、提交文本、preedit、候选窗、输入法菜单分派、跨窗口上屏 |
+| `OpiMenu.swift` | 输入法菜单（Linux 状态栏的等价入口）+ `OpiClientHub`（最近客户端弱引用） |
+| `OpiSymbolPanel.swift` | 符号面板：22 类竖条 + 12×6 网格 + 搜索 + 翻页 |
+| `OpiSettings.swift` | 设置项/词库/双拼布局的引擎读写面 + UserDefaults 落盘 |
+| `OpiSettingsWindow.swift` | 设置窗：常用 / 按键 / 符号与表情 / 词库 / 关于 |
 | `main.swift` | `IMKServer` 启动（无 nib） |
 | `Info.plist` | 输入法组件声明 |
 | `README.md` | 本文件 |
 
 **没有 Xcode 工程文件（`.xcodeproj`）是有意的**：手写一个从未被 Xcode 打开过的
 `project.pbxproj` 会是第三件「没被工具看过的产物」，而且它比 Swift 更难人工核对。
-工程请在 Mac 上由 Xcode 新建，然后把本目录的 4 个源文件与 Info.plist 加进去。
+工程请在 Mac 上由 Xcode 新建，然后把本目录的 7 个 Swift 源文件与 Info.plist 加进去。
 
 ## 已验证 / 未验证
 
@@ -253,7 +262,7 @@ error: linking with `cc` failed: exit status: 1
    那条不含测试目标，不受影响。
 2. **编静态库**（`staticlib` **已经加进** `crates/opi-ffi/Cargo.toml` 的 `crate-type`，
    不需要你再改 Cargo 配置，直接编即可 —— 见「构建集成」）。
-3. **建 Xcode 工程，把 4 个源文件与 Info.plist 加进去，只求 `xcodebuild` 通过** ——
+3. **建 Xcode 工程，把 7 个 Swift 源文件与 Info.plist 加进去，只求 `xcodebuild` 通过** ——
    **一行逻辑都不要改**。这一步会一次性暴露本目录里所有「凭记忆写的」API 用法
    （见下方「最不确定的 API」）。把编译错误当成这份草案的**待办清单**，而不是当成本目录
    作者写错了什么：那个清单的长度本身就是本目录可信度的度量。
@@ -498,115 +507,88 @@ Mac 上很可能要改」的地方标出来了，接手人从这里开始最省�
 位（`1<<28`），所以 ⇧ 长按 = 单击。要接的话需要自己定入口（CapsLock 映射、或按住超时），
 不要靠猜补一个信号。
 
+### 12. 输入法菜单与 `doCommand`（2026-10-20，未编译）
+
+菜单由 `IMKInputController.menu()` 现建，菜单项 `target` 指向控制器、action 是
+`menuCommand(_:)`；同时覆写了 `doCommand(by:command:)`，按
+`kIMKCommandMenuItemName` 取回 NSMenuItem 再按 `tag` 分派。Apple 文档说菜单动作的
+sender 是 **info 字典**（不是 NSMenuItem），所以 `menuCommand(_:)` 两种形状都接：
+NSMenuItem 直接用，字典则按 `kIMKCommandMenuItemName` 取项。**哪条路在真机生效仍未知**
+（直连 target/action vs IMK 的 doCommand）。若菜单项点了没反应，先在这里加日志。
+
+### 13. `LSBackgroundOnly` 进程里的 NSPanel（未验证）
+
+`Info.plist` 保持 `LSBackgroundOnly=true`（IMK 输入法的文档取值），符号面板与设置窗
+都是该进程里的 `NSPanel`。**能不能显示、非激活面板能否收键盘（搜索框）、
+`NSApp.activate` 有没有效，全部未经真机验证。** 若窗口不出现，先查这一条，
+不要先改菜单分派。
+
+### 14. 随包资源与 UserDefaults（未验证）
+
+符号类目由 `Bundle.main.url(forResource:"symbol_categories", withExtension:"tsv")`
+读取；打包脚本把它拷进 `Contents/Resources/`，并钉 `.pkg` payload。设置落盘用
+`UserDefaults.standard`（键名见上表）。两者都只在静态层面核对过，没有在 Mac 上
+读/写过。
+
 ## 已知缺口（不是 bug，是还没做）
 
-- **G2 模式切换没有入口**：`opi_switch_mode`（0=Pinyin 1=English 2=Number 3=Symbol
-  **4=Traditional**）
-  在 `OpiEngine.swift` 里有包装，但 macOS 端没有任何触发 UI（菜单项/热键都没有）。
-  Android 有模式按钮、fcitx5 轨没接。**iOS 侧本轮接了**（`ios/KeyboardViewController.swift`
-  的 `cycleMode()`：中→繁→英→中，前两跳先 `clear()`，逐字对齐 Android `toggleMode()`）；
-  macOS 侧**没有三态循环**（那需要 IMK 菜单项，是工程层的事），
-  但**有一个热键**：`Ctrl+'` 切英文/回拼音（`hotkey(_:)` 判在 `handle(_:client:)` 里，
-  与 `vk.rs` 的 `hotkey_target` 同判「来回切」）。**这两个入口不等价** ——
-  热键那条不走 `clear()`（它调的是 `opi_switch_mode`，`router.rs:166` 的 `switch_mode`
-  会顺手清前端 ⇧ 三态，**但仅在目标不是 English 时**：切到英文保留 ⇧ 是有意的，
-  英文模式下还得靠它打大写）。
-  **接的时候必须走 `opi_switch_mode`**，
-  不要直接打引擎：`router.rs` 的 `switch_mode` 会顺手清前端 ⇧ 三态，绕过它会让
-  ⇧ Lock 跨模式残留（英文模式下打出全大写）。
-
-  ⚠️ **可达性如实说清（2026-09-28 复核代码，不是转述）**：macOS 上那三个热键能到的模式
-  只有 pinyin / english / symbol —— **`Mode::Traditional`（4）在本端不可达**。判据两条：
-  ①`grep -n 'traditional' macos/InputController.swift` **零命中**；
-  ②`performHotkey` 里那处 `switchMode` 是 `engine.mode() == .english ? .pinyin : .english`
-  （只在两态间来回），而 `Ctrl+\` 走的是 `opi_toggle_symbol`（**Pinyin ⇄ Symbol 来回切**，
-  不是模式循环 —— 见下方「本草案因此怎么做」）。**引擎与导出都支持繁体，缺的只是入口**，
-  且与 iOS 的 `cycleMode()`（中→繁→英）**不对称** —— 别以为两端一样。
-- **G3 候选窗显示的是全局列表，不是 Rust 的当前页**：`InputController.swift` 现在把
-  `opi_candidates(limit)`（引擎级全局序，从第 0 条起、**不分页**）整份塞给候选窗；
-  而 `router.rs` 内部维护 `page` 与 `PAGE_SIZE = 8`，PageUp/PageDown 改的是它。
-  后果：翻页后数字键选中的候选与候选窗高亮的位置**可能不是同一个**。
-  ⚠️ **比上面那句更具体的一点（2026-09-28 复核）**：`InputController.swift` 的 `refresh()`
-  传的是**写死的 `limit: 64`**。它原有一句行尾注释「与 Rust 侧 FETCH_LIMIT 一致」，
-  **早已不成立**（`FETCH_LIMIT` 现在**不设上限**：`engine_core::router` 的同名常量，
-  `candidate.rs` / `logic.rs` 各有编译期断言绑着它），该注释**已于同日改写**为「这个 64
-  是本端独有，且走的正是被点名禁止的出口」。所以这个 64 既不是前端页大小、
-  也不是 Rust 的抓取上限，是个**无来源的第三份常量**。而 `cabi.rs` 的
-  `opi_candidates_page` 文档注释点名禁止的正是这条路径（原话：「前端显示当前页请用本出口、
-  **不要**拿 `opi_candidates()` 自己按 8 切」）。
-  **本轮只记不改**（Swift 一行都没编译过，现在改只会得到更厚的未编译代码）——
-  写在这里是为了让下次通读的人**别把它读成「已按契约接了」**。
-
-  这个洞有**两半**：显示侧拿的是全局列表，而 `opi_select(index)` 收的也是**全局**
-  索引 —— 面板点击于是要自己算 `page * PAGE_SIZE + k`，`PAGE_SIZE` 的第二份拷贝
-  正是从这半边冒出来的。**两半现在都堵上了**：
-
-  | 要什么 | 用哪个出口（已声明） |
-  |---|---|
-  | 当前页候选（页内序） | `opi_candidates_page()` → JSON |
-  | 点第 k 个候选（页内索引） | `opi_select_page(k)` → 权威提交文本 |
-  | 页码 / 总页数 | `opi_page()` / `opi_page_count()` |
-  | ⇧ 高亮（Single/Lock） | `opi_shift_state()` |
-
-  这五个都已在 `cabi.rs` 落地、在 `OpiFFI.h` 声明、在归档里数得到。
-  **但本目录还没有调用点**：按 team-lead 的要求，接调用点排在「Mac 上第一次编译
-  通过」之后 —— 现在接只会得到一份更厚的未编译代码。
-  接的时候两条禁令（都是 Rust 侧注释的原话）：**不要**拿 `opi_candidates()` 自己按 8
-  切（页大小是引擎侧常量，UI 抄一份＝改一次就静默错位）；**不要**算
-  `opi_page() * 8 + k` 再喂 `opi_select()`（`opi_select_page` 走的是 `Router::select`
-  那份唯一换算，与数字键选词、回车提交同源，绕过它等于留下第三份页大小）。
-  ⚠️ 一个曾经会咬人的状态问题已在本轮修掉：`api::select` / `input_space` / `clear`
-  原先绕路由直接打引擎、没走 `reset_page_if_buffer_changed`，会出现「选完词
-  `opi_page()==1` 而 `opi_page_count()==0`」→ UI 显示**第 2 页 / 共 0 页**
-  （`api/mod.rs:247/260/330`，已有断言钉住）。所以接的时候可以信任
-  `opi_page()` / `opi_page_count()` 是自洽的。
-- **G4 无测试、无 CI、无工程文件**：`macos/` 里**跑过的只有头文件** ——
-  `OpiFFI.h` 的 clang 语法检查与「导出名取地址」那个 TU（**它现在能过**：
-  2026-09-27 头文件补齐后，`cabi.rs` 的每个导出都在声明面里；
-  它一度编不过，正是这条检查的价值所在，见「已验证」的订正注记）。
-  **Swift 三个文件的验证数是 0**：没有编译、没有 lint、没有单测。
-  第一条针对 Swift 的可执行验证就是「在 Mac 上编译通过」（见「第一件要做的事」#3）。
+- **G2 模式入口（2026-10-20 已补，未编译）**：现在有输入法菜单（`OpiMenu.swift`）
+  与热键两条入口 ——
+  * 菜单：英文模式 / 繁体模式 / 中文标点 / 全角 / 输入方案（全拼·双拼）/ 符号面板 / 设置；
+  * 热键：`Ctrl+'` 英⇄拼、`Ctrl+\` 拼音⇄符号、`Shift+Space` 全角、
+    `Ctrl+Shift+F` 简繁（与 `opi_mode.h` 的 `opiToggleTraditional` 同判）、
+    `Ctrl+Shift+Z` 打开符号面板（与 Linux 的符号画廊同语义）。
+  引擎切换仍走 `opi_switch_mode`，不绕过 `router.rs` 的 `switch_mode`。
+  仍未接：中→繁→英三态循环（iOS 的 `cycleMode()`）、数字/符号模式按钮、英文专业
+  （ENPRO，fcitx5 控制面专有，C ABI 无出口）。
+- **G3 候选分页（2026-10-20 已补，未编译）**：`refresh()` 改喂
+  `opi_candidates_page()`，`candidateSelected` 改调 `opi_select_page(k)`（页内索引），
+  不再使用全局 `opi_candidates(limit:64)` / `opi_select(index)`，也不再自己算
+  `page*PAGE_SIZE+k`。`OpiEngine.swift` 里的旧包装已删除，避免再被误用。
+  仍未做：候选窗内的「第 N / M 页」文字 —— `IMKCandidates` 没有页标签控制面。
+- **G4 无测试、无 CI 工程文件、Swift 旧版只被 CI 编过**：`macos/` 里**跑过的只有头文件** ——
+  `OpiFFI.h` 的 clang 语法检查与「导出名取地址」那个 TU（2026-09-27 起能过）。
+  `swiftc` 只在 CI 的 macOS runner 上跑过（2026-10-15 之前的版本）；**2026-10-20 这批
+  新增/改动没有被任何 Swift 编译器看过**。本机只跑了 `bash -n`、`sh -n`、500 行门禁。
+  第一条针对这批代码的可执行验证仍是「在 Mac 或 CI 上编译通过」。
 - **G5 宠物「小欧」未接（有意）**：几何真源是 `docs/opi-pet.svg`；Android 与 Windows
-  候选窗共用 `shared/pet/OpiPet.kt` 这一份实现（本项目原则：各端 UI 不共享代码，
-  但宠物是一张图）。macOS 侧**故意没画**：候选窗用的是系统面板 `IMKCandidates`
-  （见「最不确定的 API 清单」#3，那个 `setCandidateData` 不生效的报告也在那里），
-  **画不进去** —— 要摆小欧得先换成自绘 `NSPanel`，那是对未编译代码做结构改动。
+  候选窗共用 `shared/pet/OpiPet.kt` 这一份实现。macOS 候选窗仍是系统面板
+  `IMKCandidates`，**画不进去** —— 要摆小欧得先换成自绘 `NSPanel`。
   真要接时**别**新写一份 CoreGraphics 几何：同一张图的第三份拷贝必然漂移。
-  顺序照旧 —— 先让 Swift 过编译器，再谈接。
-- **G6 符号库：包装有了，UI 没有**（本轮新增）。`OpiEngine.swift` 现在有
-  `symbolBlocks()` / `symbolsInBlock(id:)` / `searchSymbols(keyword:)`
-  （对应 `opi_symbol_blocks` / `opi_symbols_in_block` / `opi_search_symbols`），
-  但 **macOS 侧没有任何调用点** —— 没有符号面板。要接的话得先决定
-  「符号面板在 IMK 里长什么样」（候选窗是 `IMKCandidates`，摆不下网格，
-  见 G5 同一条理由）。iOS 侧的写法（`ios/SymbolPanel.swift`）可作参考，
-  但**别**把 UIKit 代码搬过来。
-  三条契约（与 iOS 侧同一份，写在这里免得各抄一遍）：
-  ①`opi_symbol_blocks()` **只回 common 块**，JSON 里的 `common` 字段在该出口上恒为
-  true（当前数据表只有 CJK 符号块是 common → 「常用」= 60 个）；
-  ②块 id 在 Rust 侧是 `u16`、在 C ABI 是 **`int16_t`**，只能对齐到 0..=32767 ——
-  按 `Int` 解码后**显式收窄**，直接解成 `Int16` 会在 id > 32767 时抛异常，
-  而本层对解析失败的处理是「返回空数组」，后果是面板整块空掉且**无日志**；
-  ③`opi_search_symbols("")` 返回**全部**条目，不是「没搜到」。
+- **G6 符号面板（2026-10-20 已补，未编译）**：`OpiSymbolPanel.swift` 按 Linux
+  `SymbolsPage.kt` 的布局实现：左侧 22 类竖条、右侧 12×6=72/页网格、搜索框、翻页；
+  数据是**随包**的 `crates/fcitx5-opi/data/symbol_categories.tsv`（打包脚本拷进
+  `Contents/Resources/`，并在 `.pkg` payload 里钉了一条存在性门禁），读不到才回退
+  引擎 `opi_symbol_blocks()` 的 6 个 common 块（会打日志，不假装 22 类都在）。
+  字形过滤沿用 iOS 的 CoreText 单码位判定。上屏绕过引擎中文标点映射，直接
+  `insertText`；面板保持打开。仍未接：表情页（引擎有 `opi_emoji_*` 出口，没有 UI）、
+  贴纸/剪贴板。
+- **G7 状态栏是菜单，不是常驻条**：InputMethodKit 没有 Linux 那种悬浮状态栏，
+  `OpiMenu.swift` 用输入法菜单承载同组入口。皮肤、LOGO、虚拟键盘（VK）与
+  ENPRO 因此没有等价物；外观/状态栏两个设置页也未画空壳。
 
-### 属性设置（**未接**）
+### 属性设置 / 词库（2026-10-20 已接，未编译）
 
-四个开关（学习 / 中文标点 / 模糊音 / 简拼）**引擎侧已支持**
-（`Engine::set_learner` / `set_chinese_punct` / `set_fuzzy` / `set_jianpin`，默认全开；
-门禁见 `crates/engine-core/tests/fuzzy_jianpin_switches.rs`），另两端各有配置面
-（Linux = fcitx5 addon 配置 `opi_config.h` + Compose 设置窗；Windows =
-`%LOCALAPPDATA%\opi\settings.ini` + 同一个设置窗）。
+`OpiSettings.swift` 只做 Swift 值 ↔ C ABI 转发；默认值、越界钳制、模糊音名表都仍由
+Rust 侧决定。`OpiSettingsWindow.swift` 的页面：
 
-**C ABI 出口已落地**（2026-10-08：`opi_fuzzy_enabled` / `opi_set_fuzzy` /
-`opi_jianpin_enabled` / `opi_set_jianpin`；学习与中文标点的四个出口更早就有。
-**2026-10-09 又加**：`opi_set_scheme` / `opi_scheme`（输入方案 0=全键盘 1=9键
-2=14键 3=笔画）与 `opi_load_stroke`（笔画词典）—— 移动端「输入模式」的引擎面，
-Android 已接线，Apple 两端的设计同样是**未接**）。
-本端缺的是三件：**设置界面**（各端自己的设置页 / 首选项窗）、**落盘**
-（iOS/macOS = `UserDefaults`，鸿蒙 = preferences）、**启动时把四个值套到引擎**
-（对照 `tsf-opi/src/logic.rs` 的 `apply_settings` 与 fcitx5 的 `opi_config.h` +
-`applyOpiSettings`）。
+| 页 | 内容 | 落盘键（UserDefaults，逐字沿用 Linux） |
+|---|---|---|
+| 常用 | 学习、中文标点、模糊音总开关 + 8 组逐对、简拼、纠错、全拼/双拼、双拼布局 | `Learn` `ChinesePunct` `Fuzzy` `FuzzyPairs` `Jianpin` `Correction` `PinyinMethod` `ShuangpinLayout` |
+| 按键 | 只读快捷键表 | — |
+| 符号与表情 | 类目数、打开符号面板；表情页未接 | — |
+| 词库 | 系统词典状态、导入 `.tsv`、启停/删除导入层 | `DisabledDicts`（逗号分隔；空 = 全启用） |
+| 关于 | 版本与未签名提示 | — |
 
-⚠️ **别新造第五个开关、别改语义**：真源是 `engine.rs` 的那四个 setter。
+* 启动顺序（`main.swift`）：`opi_load` → 可选 `trad.opid` → `applyPersisted()` →
+  重放 `dicts/*.tsv`（按停用名单关层）。导入是**复制**到
+  `~/Library/Application Support/opi/dicts/`，同名自动 `-2` 后缀，不覆盖；
+  删除会同时删目录里的文件（有确认框）。
+* 模糊音逐对勾选会写 `FuzzyPairs` 并覆盖总开关；勾总开关会清掉 `FuzzyPairs`，
+  与 Linux「空 = 回落布尔」的合同一致。
+* 未画空壳的页：**外观**（皮肤引擎不存在）、**状态栏**（没有常驻条，入口在菜单）、
+  **五笔**（ABI 有 `opi_load_wubi`/五笔旋钮，本轮未随包也未接设置页）。
+* ⚠️ **别新造开关、别改语义**：真源是 `engine-core` 的 setter 与各自的 C ABI 出口。
 
 ## 与 Rust 侧的契约（键码 / 状态位）
 
@@ -738,9 +720,12 @@ TSF 是 `vk.rs` 的 `hotkey_should_act`，fcitx5 是 `opi_fcitx5.cpp` 的 `isRep
 
 ## 状态
 
-**草案。Swift 在 CI 上编过（2026-10-15 订正），但从未运行过 —— 没有一个字节被 IMK 加载过。**
-上面「已验证」一节里的 `cargo check` 是这整个目录里唯一的真实证据，而它证明的是
-**Rust 侧**能编译，不是本目录能用。
+**草案。旧版 Swift 在 CI 上编过（2026-10-15 订正）；2026-10-20 新增的符号面板 /
+菜单 / 设置窗 / 设置桥 / 词库持久化尚未被任何 Swift 编译器看过。全部从未运行过 ——
+没有一个字节被 IMK 加载过。** 上面「已验证」一节里的 `cargo check` 是这整个目录里
+唯一的真实证据，而它证明的是 **Rust 侧**能编译，不是本目录能用。
 
-下一步（按顺序）：在 Mac 上编译链接 → 最小冒烟（`h a o 空格` → 「好」）→ 逐个消掉
-「最不确定的 API」清单 → 再谈功能。**顺序不能反。**
+下一步（按顺序）：在 Mac/CI 上编译链接 → 最小冒烟（`h a o 空格` → 「好」）→
+开一次菜单与符号面板（先验 `LSBackgroundOnly` 下窗口能否出现）→ 设置窗改一个开关
+并重启看是否生效 → 逐个消掉「最不确定的 API」清单 → 再谈表情/皮肤/宠物。
+**顺序不能反。**

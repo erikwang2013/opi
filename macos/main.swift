@@ -49,6 +49,12 @@ OpiCandidateWindow.shared.configure(server: server)
 // 失败会回退内置词库并打日志，不会让进程起不来 —— 输入法「装上了但不出字」
 // 比「起不来」难查得多，故这里只记日志，不退出。
 OpiEngine.shared.loadDictionary()
+// 可选繁体库（同目录 trad.opid；缺文件就保持简体回退）。
+OpiEngine.shared.loadOptionalTradDictionary()
+// 用户设置的套用必须**在词库之后**：opi_load 之后引擎才是可写状态。
+OpiSettingsStore.applyPersisted()
+// 导入词库（dicts/*.tsv）按停用名单重放；坏文件只记日志，不挡启动。
+OpiEngine.shared.loadImportedDicts(disabled: OpiSettingsStore.disabledDicts())
 
 // 后台常驻：本进程没有窗口，靠 run loop 收 IMK 事件。
 // ⚠️ 未验证：LSBackgroundOnly 下用 NSApplication.shared.run() 是否正确

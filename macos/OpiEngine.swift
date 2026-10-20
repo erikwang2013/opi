@@ -182,14 +182,53 @@ final class OpiEngine {
 
     private init() {}
 
-    /// 词库默认路径：~/Library/Application Support/opi/luna.opid
-    /// （镜像 fcitx5 轨的 $XDG_DATA_HOME/opi/luna.opid 与 Android 的
-    /// EngineLoader.FILE_NAME）。⚠️ 这条路径约定在 macOS 上未经核对。
-    static var defaultDictionaryPath: String {
+    /// 词库目录：~/Library/Application Support/opi
+    /// （镜像 fcitx5 轨的 $XDG_DATA_HOME/opi 与 Android 的 EngineLoader）。
+    /// ⚠️ 这条路径约定在 macOS 上未经核对。
+    static var dataDirectory: URL {
         let base = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSHomeDirectory())
-        return base.appendingPathComponent("opi/luna.opid").path
+        return base.appendingPathComponent("opi")
+    }
+
+    /// 主词库默认路径：~/Library/Application Support/opi/luna.opid
+    static var defaultDictionaryPath: String {
+        dataDirectory.appendingPathComponent("luna.opid").path
+    }
+
+    /// 导入词库目录（`*.tsv`，文件名去扩展名 = 引擎里的词库名）。
+    /// 对齐 Linux `$XDG_DATA_HOME/opi/dicts` 与 Windows `%LOCALAPPDATA%\opi\dicts`。
+    static var dictsDirectory: URL { dataDirectory.appendingPathComponent("dicts") }
+
+    /// 启动时把 `dicts/` 下每个 `.tsv` 导入成一个额外层；停用名单按名字关掉。
+    /// 坏文件记日志跳过（不让一个坏词库挡住其余）；目录不存在 = 没有导入词库。
+    func loadImportedDicts(disabled: Set<String>) {
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(at: OpiEngine.dictsDirectory,
+                                                      includingPropertiesForKeys: nil) else { return }
+        for url in files.sorted(by: { $0.lastPathComponent < $1.lastPathComponent })
+        where url.pathExtension.lowercased() == "tsv" {
+            let name = url.deletingPathExtension().lastPathComponent
+            let count = importDict(path: url.path)
+            guard count >= 0 else {
+                NSLog("opi: 词库 %@ 导入失败（读不到/格式坏），跳过", url.path)
+                continue
+            }
+            if disabled.contains(name) { _ = setDictEnabled(name, false) }
+            NSLog("opi: 导入词库 %@（%d 条，%@）", name, count, disabled.contains(name) ? "停用" : "启用")
+        }
+    }
+
+    /// 繁体词库（可选）：同目录 `trad.opid`。Linux 由包装到 `/usr/share/opi/`；
+    /// macOS 没有安装器放它，用户手工放才生效。缺文件时**不调** `opi_load_trad`，
+    /// 保持主词库状态（坏路径返回 false 是契约，但没必要制造一次失败日志）。
+    func loadOptionalTradDictionary() {
+        let path = OpiEngine.dataDirectory.appendingPathComponent("trad.opid").path
+        guard FileManager.default.fileExists(atPath: path) else { return }
+        if !withUTF16(path, { opi_load_trad($0, $1) }) {
+            NSLog("opi: 繁体词库 %@ 装载失败 —— 繁体模式回退简体库", path)
+        }
     }
 
     /// 装载词库。**返回值必须接** —— 这是 fcitx5 轨修过的一个静默失效：
@@ -223,10 +262,26 @@ final class OpiEngine {
 
     func buffer() -> String { take(opi_buffer()) }
 
-    func candidates(limit: Int = 64) -> [String] { takeTexts(opi_candidates(limit)) }
+    // ---------- 候选分页 ----------
+    //
+    // 显示与点选**必须**走引擎的当前页出口（`OpiFFI.h` 点名禁止拿
+    // `opi_candidates()` 自己按页大小切，也不许算 `page * PAGE_SIZE + k`）。
+    // 页大小、页码钳制、数字键选词三者同源在 `router.rs` 的 `Router::select`。
 
-    /// 全局索引选词（与 `candidates(limit:)` 的数组同序）。返回需提交的文本。
-    func select(index: Int) -> String { take(opi_select(index)) }
+    /// 当前页候选（页内序，与 `selectPage(_:)` 的索引空间同序）。
+    func candidatesPage() -> [String] { takeTexts(opi_candidates_page()) }
+
+    /// 当前页（0 起）。翻页到末页时由路由钳制。
+    func page() -> Int { Int(opi_page()) }
+
+    /// 总页数（无候选 → 0）。
+    func pageCount() -> Int { Int(opi_page_count()) }
+
+    /// 提交当前页第 `k` 个候选（页内索引）。越界/无候选 → 空串。
+    func selectPage(_ k: Int) -> String {
+        guard k >= 0, let index = UInt32(exactly: k) else { return "" }
+        return take(opi_select_page(index))
+    }
 
     func clear() { opi_clear() }
 
@@ -249,7 +304,7 @@ final class OpiEngine {
     /// 此处**不重抄** —— 这个仓库被「同一语义抄多份」坑过多次，Rust 侧与头文件才是真源。
     /// 只记两条 Swift 侧才有的：
     ///   * 它给**状态显示**用，**别**拿去推「这个键在全角下该出什么」（映射不是纯函数）。
-    ///   * 本目录**还没有全角指示**（菜单项也没有），所以暂时没有陈旧值可清。
+    ///   * 菜单的「全角字符」勾选每次都现读本出口（2026-10-20）；仍没有常驻状态栏。
     func fullwidthState() -> Bool { opi_fullwidth_state() }
 
     /// 符号面板开关：**Pinyin ⇄ Symbol 来回切**（不是「切到 Symbol」）。

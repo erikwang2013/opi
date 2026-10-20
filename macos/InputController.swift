@@ -28,7 +28,7 @@ final class OpiInputController: IMKInputController {
 
     /// 上次设进客户端的 marked text（= preedit），用来挡掉无谓的重复刷新。
     private var lastMarked = ""
-    /// 上次交给候选窗的候选（全局序，与 opi_select 的索引空间同序）。
+    /// 上次交给候选窗的候选（**当前页**，与 `selectPage(_:)` 的页内索引同序）。
     private var lastCandidates: [String] = []
 
     // ---------- 平台键 → 引擎键（本层唯一的映射表） ----------
@@ -105,7 +105,9 @@ final class OpiInputController: IMKInputController {
     private enum OpiHotkey {
         case toggleEnglish      // Ctrl + '
         case toggleSymbol       // Ctrl + \
+        case toggleTraditional  // Ctrl + Shift + F
         case toggleFullwidth    // Shift + Space
+        case symbolPanel        // Ctrl + Shift + Z
     }
 
     /// 与 `tsf-opi/src/vk.rs` 的 `mode_hotkey` / `fullwidth_hotkey`
@@ -129,6 +131,15 @@ final class OpiInputController: IMKInputController {
         // 拦的，抬起本来也会被那一层消费掉；本层在引擎**之前**，不自己认就会漏给应用。
         let chars = event.charactersIgnoringModifiers ?? ""
         if flags.contains(.control) {
+            // Linux 的 handleModeHotkey 同判（`opi_mode.h`）：Ctrl+Shift+F 简繁、
+            // Ctrl+Shift+Z 符号画廊。先判 Shift 组，避免 Ctrl+Shift+F 落进下面。
+            if flags.contains(.shift) {
+                switch chars.lowercased() {
+                case "f": return .toggleTraditional
+                case "z": return .symbolPanel
+                default: return nil
+                }
+            }
             switch chars {
             case "'": return .toggleEnglish
             case "\\": return .toggleSymbol
@@ -163,6 +174,14 @@ final class OpiInputController: IMKInputController {
             // 也不自己 `switchMode`** —— 判了就是第二份 `toggle_symbol` 语义。
             // ⚠️ 下一行是**调用**：读成「本支不调这个出口」是反的。
             commit(engine.toggleSymbol(), to: sender)
+        case .toggleTraditional:
+            // 与 `opi_mode.h` 的 opiToggleTraditional 同判：在繁体回拼音，否则进繁体。
+            engine.switchMode(engine.mode() == .traditional ? .pinyin : .traditional)
+        case .symbolPanel:
+            // 符号画廊是**纯 UI 面板**（不进引擎模式、不动缓冲），与 Linux 的
+            // Ctrl+Shift+Z 同语义；面板非激活，未提交的 preedit 留在宿主应用里。
+            OpiSymbolPanel.shared.show()
+            return
         case .toggleFullwidth:
             engine.toggleFullwidth()
             // ⚠️ **不刷候选面板**：这个开关只改**后续**的标点映射，不动缓冲也不动候选
@@ -184,6 +203,8 @@ final class OpiInputController: IMKInputController {
     /// 见 README「最不确定的 API」#1 末尾。
     override func handle(_ event: NSEvent, client sender: Any!) -> Bool {
         guard event.type == .keyDown || event.type == .keyUp else { return false }
+        // 面板/菜单上屏时没有这个 sender，记下最近客户端（弱引用，不强留宿主）。
+        if let client = sender { OpiClientHub.shared.focus(self, client: client as AnyObject) }
         // ⚠️ **热键必须在引擎之前判掉，不能落进下面的 `keyEvent`** ——
         // `router.rs` 的 `key_event` 直通分支（`router.rs:245`）对 `CTRL|ALT|META`
         // **在整个函数最前面就直通**，
@@ -261,11 +282,9 @@ final class OpiInputController: IMKInputController {
             lastMarked = buffer
         }
 
-        // ⚠️ 这个 64 是**本端独有**的上限，Rust 侧已无对应常量（`FETCH_LIMIT` 现为 `usize::MAX`，
-        // 两轨还各有编译期断言绑着它）。且 `opi_candidates()` 是**全局不分页**出口，`cabi.rs`
-        // 明写「前端显示当前页请用 `opi_candidates_page`，**不要**拿本出口自己按 8 切」——
-        // 本端走的正是被点名禁止的那条。现状与待办见 macos/README.md 的 G3。
-        let list = engine.candidates(limit: 64)
+        // 显示当前页用引擎的分页出口：页大小/页码/页内选词同源在 router.rs，
+        // 客户端不再抄 PAGE_SIZE（`OpiFFI.h` 明写禁止自己按页大小切）。
+        let list = engine.candidatesPage()
         if list != lastCandidates {
             lastCandidates = list
             OpiCandidateWindow.shared.update(list, visible: !buffer.isEmpty)
@@ -288,26 +307,66 @@ final class OpiInputController: IMKInputController {
         let text = candidateString?.string ?? ""
         guard let index = lastCandidates.firstIndex(of: text) else { return }
 
-        // 走引擎 select 让学习器记账 + 清缓冲；返回的文本才是权威提交内容。
-        // ⚠️ `index` 是 lastCandidates（opi_candidates 的引擎级**全局序**）的下标，
-        // 而 router.rs 内部的数字选词用的是**页内**索引（page*PAGE_SIZE+i）。
-        // 两者只在 page==0 时一致 —— 这是缺口 G3，见 README。
-        // 接法（等 Mac 上编译通过后做，别现在接）：候选窗改喂
-        // `opi_candidates_page()`（页内序），这里就改调 `opi_select_page(k)`（已声明）。
-        // **不要**算 `page * PAGE_SIZE + k` 去喂 `opi_select()` —— 那是在同一处再抄一份
-        // 页大小；Rust 侧 `opi_select_page` 的注释专门点了这件事。
-        let committed = engine.select(index: index)
+        // 走引擎的**页内**选词：lastCandidates 是 `opi_candidates_page()` 的当前页，
+        // 下标与 `opi_select_page(k)` 同序。绝不自己算 page*PAGE_SIZE+k（那是第三份
+        // 页大小，引擎改一次就静默选错候选）。
+        let committed = engine.selectPage(index)
         lastCandidates = []
         lastMarked = ""
         OpiCandidateWindow.shared.hide()
-        // ⚠️ 这里没有 handle(_:client:) 的 sender，客户端要自己取（README #4）。
-        commit(committed.isEmpty ? text : committed, to: client())
+        // 这里没有 handle(_:client:) 的 sender：优先用 Hub 记下的最近客户端。
+        if let stored = OpiClientHub.shared.client {
+            commit(committed.isEmpty ? text : committed, to: stored)
+        } else {
+            commit(committed.isEmpty ? text : committed, to: client())
+        }
+    }
+
+    // ---------- 输入法菜单 / 跨窗口上屏 ----------
+
+    /// 输入法菜单（macOS 没有常驻状态栏，这里是 Linux 状态栏的等价入口）。
+    override func menu() -> NSMenu! { OpiMenu.build(engine: engine, target: self) }
+
+    /// IMK 把菜单选择转成这个调用：info 字典带回被点的 NSMenuItem。
+    override func doCommand(by aSelector: Selector!, command infoDictionary: [AnyHashable: Any]!) {
+        if let item = infoDictionary?[kIMKCommandMenuItemName] as? NSMenuItem {
+            OpiMenu.perform(tag: item.tag, controller: self)
+            return
+        }
+        super.doCommand(by: aSelector, command: infoDictionary)
+    }
+
+    /// 直连兜底。Apple 文档：菜单动作的 sender 可能是 info 字典（不是 NSMenuItem），
+    /// 默认的 `doCommand` 就是拿它 `perform` 到 action 上 —— 两种形状都接。
+    @objc func menuCommand(_ sender: Any?) {
+        if let item = sender as? NSMenuItem {
+            OpiMenu.perform(tag: item.tag, controller: self)
+            return
+        }
+        if let info = sender as? [AnyHashable: Any],
+           let item = info[kIMKCommandMenuItemName] as? NSMenuItem {
+            OpiMenu.perform(tag: item.tag, controller: self)
+        }
+    }
+
+    /// 菜单改模式后刷新 preedit/候选（没有 NSEvent sender，用 Hub 的客户端）。
+    func refreshFromOutside() { refresh(OpiClientHub.shared.client) }
+
+    /// 符号面板上屏。面板保持打开，可连续点选。
+    func commitFromOutside(_ text: String) {
+        guard !text.isEmpty else { return }
+        if let stored = OpiClientHub.shared.client {
+            commit(text, to: stored)
+        } else {
+            commit(text, to: client())
+        }
     }
 
     // ---------- 生命周期 ----------
 
     override func activateServer(_ sender: Any!) {
         super.activateServer(sender)
+        if let client = sender { OpiClientHub.shared.focus(self, client: client as AnyObject) }
         engine.clear()
         lastMarked = ""
         lastCandidates = []

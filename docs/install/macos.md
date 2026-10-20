@@ -7,7 +7,7 @@
 > | 层 | 状态 | 判据 |
 > |---|---|---|
 > | Rust 侧 C ABI（`crates/opi-ffi`） | **已实测**能为 `aarch64-apple-darwin` 编译、能产出 `libopi_ffi.a`，且导出符号集合与 `cabi.rs` 完全一致 | 见「产出 `libopi_ffi.a`」，本机可复现 |
-> | `macos/` 下的 Swift（3 个文件） | **2026-10-09 起：过了真编译器**（CI `apple.yml` 对 `macos/` 跑 `swiftc -typecheck` + 真编 + 链接 + ad-hoc 签名打包；run 37935240583）。但**运行时行为仍是 0 验证** | 本机仍是 Linux（`import InputMethodKit` 就断），编译这一层由 CI 的 macos-latest 补上；见 §4.5 |
+> | `macos/` 下的 Swift（7 个文件） | **旧版 3 个文件**在 2026-10-09 过过真编译器（CI `apple.yml` 的 `swiftc -typecheck` + 真编 + 链接 + ad-hoc 签名打包；run 37935240583）。**2026-10-20 新增的 4 个**（`OpiMenu`/`OpiSymbolPanel`/`OpiSettings`/`OpiSettingsWindow`）**与改动过的 3 个都没有被任何 Swift 编译器看过**；运行时行为仍是 0 验证 | 本机仍是 Linux（`import InputMethodKit` 就断）；旧版编译由 CI 的 macos-latest 补上，本批尚未跑过；见 §4.5 |
 > | `macos/OpiFFI.h` | 过了 `clang -fsyntax-only`（C 与 C++ 两种模式）。⏳ 2026-10-09 起**也被链接过了**：swiftc 真编时把它当桥接头、并链上 Rust 库（CI `apple.yml`，run 37935240583，见 §4.5） | 「clang 说这堆声明自洽」与「ld 能把它们接到 Rust 的符号上」是两件事——后者 2026-10-09 由 CI 补上；**没被 Swift 调到的声明**仍只过了语法检查 |
 >
 > **别把「Rust 侧能编」读成「macOS 端能用」。** 本项目已经被「没被编译器看过的代码」
@@ -129,7 +129,8 @@ error: linking with `cc` failed: exit status: 1
 
 1. 新建 macOS App（**不是**命令行工具）：产物**必须**是 `OpiInputMethod.app` ——
    `main.swift` 靠 `Bundle.main` 取连接名与 bundle id，直接跑可执行文件会拿不到 bundle id。
-2. 加 3 个 Swift 文件：`OpiEngine.swift` · `InputController.swift` · `main.swift`。
+2. 加 7 个 Swift 文件：`OpiEngine.swift` · `InputController.swift` · `OpiMenu.swift` ·
+   `OpiSymbolPanel.swift` · `OpiSettings.swift` · `OpiSettingsWindow.swift` · `main.swift`。
    ⚠️ **`main.swift` 这个名字不能改** —— Swift 只允许名为 `main.swift` 的文件放顶层语句
    （`IMKServer(...)` / `NSApplication.shared.run()` 都在顶层）。
 3. 设置：
@@ -199,12 +200,13 @@ gh run download <run-id> -n "opi-apple-rust-v$(bash scripts/apple/version.sh)"  
 
 | 产物名（版本号 = `Cargo.toml` 的 `[workspace.package] version`，唯一取法在 `scripts/apple/version.sh`） | 内容 |
 |---|---|
-| `opi-macos-ime-v<版本>` | `OpiInputMethod.app`（**通用** arm64+x86_64、ad-hoc 签名、内含 `Contents/Frameworks/libopi_ffi.dylib` 与 `Resources/opi.tiff`）· `opi-inputmethod-<版本>-unsigned.pkg`（装到 `/Library/Input Methods/`；2026-10-17 起 pkgbuild 带 `--scripts macos/scripts`：**装/升级前自动 killall 旧 IME 进程**，构建期有 `sh -n` 语法门禁；**未在真 macOS 上装过**）· `opi-inputmethod-<版本>-unsigned.zip`（用户级安装用） |
+| `opi-macos-ime-v<版本>` | `OpiInputMethod.app`（**通用** arm64+x86_64、ad-hoc 签名、内含 `Contents/Frameworks/libopi_ffi.dylib`、`Resources/opi.tiff` 与 **`Resources/symbol_categories.tsv`**（符号面板的 22 类真源，2026-10-20 起随包））· `opi-<版本>-macos-universal.pkg`（装到 `/Library/Input Methods/`；2026-10-17 起 pkgbuild 带 `--scripts macos/scripts`：**装/升级前自动 killall 旧 IME 进程**，构建期有 `sh -n` 语法门禁；**未在真 macOS 上装过**）· `opi-<版本>-macos-universal.zip`（用户级安装用） |
 | `opi-apple-rust-v<版本>`（rust job） | `macos/libopi_ffi.dylib` 与 `macos/libopi_ffi.a`（都是**通用**库）· `headers/OpiFFI.h` · `opi_ffi.xcframework`（iOS 用） |
 
 **这次 run 真实证明了什么**（run 37935240583，证据都在 job 日志里，可复核）：
 
-- `macos/` 3 个 `.swift` 过 typecheck + 真编两个架构 + `lipo` 成通用可执行；
+- `macos/` **当时那 3 个** `.swift` 过 typecheck + 真编两个架构 + `lipo` 成通用可执行
+  （⚠️ 这是**旧版**的证据；2026-10-20 的 7 文件版本**没有跑过任何编译器**）；
 - `codesign --verify --deep --strict` 通过（原话：`valid on disk` /
   `satisfies its Designated Requirement`）；
 - app 对 `libopi_ffi` 的依赖名是 `@rpath/libopi_ffi.dylib`，且 app 里带
@@ -219,7 +221,7 @@ gh run download <run-id> -n "opi-apple-rust-v$(bash scripts/apple/version.sh)"  
 
 ```bash
 # 装法 A：pkg（系统级；未签名 ⇒ installer 会报未签名，需 -allowUntrusted，或对 .app 右键打开）
-sudo installer -pkg opi-inputmethod-<版本>-unsigned.pkg -target / -allowUntrusted
+sudo installer -pkg opi-<版本>-macos-universal.pkg -target / -allowUntrusted
 # 装法 B：用户级（不需要 sudo）——解压 zip，照 §5 的手工步骤复制到 ~/Library/Input Methods/
 ```
 
@@ -234,6 +236,10 @@ sudo installer -pkg opi-inputmethod-<版本>-unsigned.pkg -target / -allowUntrus
   本工作流范围内（仓库没有证书、不连签名服务）。
 - **运行时 0 验证**：系统输入法列表里出不出现、按键进不进引擎、preedit 显不显示、
   候选窗对不对 —— 全都没测（§6 一步没走）。**编译过 ≠ 能用。**
+- **2026-10-20 这批（7 文件）连编译都没过**：符号面板、输入法菜单、设置窗、
+  `UserDefaults` 持久化与词库重放全是静态改动。打包脚本新增了两条静态检查
+  （`bash -n`/`sh -n`、500 行门禁），并且把 `symbol_categories.tsv` 钉进了 `.pkg`
+  payload 断言；这些**只证明脚本语法与文件存在**，不证明 Swift 能编译或运行。
 - `InputMethodServerControllerClass` 定成**裸名** `OpiInputController`：依据是源码里的
   `@objc(OpiInputController)`（它把 ObjC 运行时名逐字定成裸名）。**运行期未验证** ——
   装上后若「能选、但完全无响应」，先按 §4 的表查这个键。
@@ -312,7 +318,7 @@ cp luna.opid ~/Library/Application\ Support/opi/luna.opid
    （`client.insertText(_:replacementRange:)`，**整条链路里最不确定的一处**：
    本目录用的是 `NSRange(location: NSNotFound, length: NSNotFound)`，
    而 Apple 论坛示例用 `length: 0` —— 这处差异必须实测）。
-5. 只有 1–4 都过之后，才谈功能（候选窗、模式切换入口、用户词管理 UI……）。
+5. 只有 1–4 都过之后，才验收已有功能（候选窗、菜单/热键、符号面板、设置与词库）。
 
 ---
 
@@ -323,12 +329,13 @@ cp luna.opid ~/Library/Application\ Support/opi/luna.opid
 
 | # | 限制 | 说明 |
 |---|---|---|
-| G2 | **繁体模式在本端不可达** | 引擎与导出都支持（`Mode::Traditional` = 4），缺的只是入口。判据：`grep -n 'traditional' macos/InputController.swift` 零命中；`performHotkey` 里那处 `switchMode` 只在 English ⇄ Pinyin 之间来回，`Ctrl+\` 走的是 `opi_toggle_symbol`（**Pinyin ⇄ Symbol 来回切**，不是模式循环）。**与 iOS 的 `cycleMode()`（中→繁→英）不对称 —— 别以为两端一样。** 另外 macOS 端**没有三态循环**（那需要 IMK 菜单项），但有一个热键 `Ctrl+'` 切英文/回拼音 |
-| G3 | **候选窗显示的是全局列表，不是 Rust 的当前页** | `InputController.swift` 的 `refresh()` 把 `opi_candidates(limit: 64)`（引擎级全局序、**不分页**）整份塞给候选窗，而 `router.rs` 内部维护 `page` 与 `PAGE_SIZE`。后果：翻页后数字键选中的候选与候选窗高亮的位置**可能不是同一个**。⚠️ 那个 `limit: 64` 是**本端独有的第三份常量**：既不是前端页大小、也不是 Rust 的抓取上限（`FETCH_LIMIT` 本身不设上限；前缀/按键类层 2026-10-11 起有 top-N 截断，见 docs/performance.md），而且它走的正是 `opi_candidates_page` 文档注释**点名禁止**的那条路径（原话：「前端显示当前页请用本出口、**不要**拿 `opi_candidates()` 自己按 8 切」）。**出口都已声明但本目录还没有调用点**：`opi_candidates_page` / `opi_select_page` / `opi_page` / `opi_page_count` / `opi_shift_state`。接的时候两条禁令：**不要**自己按 8 切；**不要**算 `opi_page() * 8 + k` 再喂 `opi_select()` |
-| G4 | **无测试、无 CI、无工程文件** | `macos/` 里跑过的只有头文件（`clang -fsyntax-only` + 「导出名取地址」那个 TU）。**Swift 三个文件的验证数是 0。** 第一条针对 Swift 的可执行验证就是「在 Mac 上编译通过」 |
+| G2 | **模式入口：已补（2026-10-20，未编译）** | `OpiMenu.swift` 的输入法菜单提供 英文模式 / 繁体模式 / 中文标点 / 全角 / 输入方案（全拼·双拼）/ 符号面板 / 设置；热键 `Ctrl+'`、`Ctrl+\`、`Shift+Space`、`Ctrl+Shift+F`（简繁）、`Ctrl+Shift+Z`（符号面板）。**仍未接**三态循环（iOS 的 `cycleMode()`）、数字/符号模式按钮、ENPRO（fcitx5 控制面专有，C ABI 无出口）。形态差异见 G7 |
+| G3 | **候选分页：已补（2026-10-20，未编译）** | `refresh()` 改喂 `opi_candidates_page()`，`candidateSelected` 调 `opi_select_page(k)`（页内索引）；不再用 `opi_candidates(limit: 64)` / `opi_select(index)`，也不再自己算 `page*PAGE_SIZE+k`。**未做**候选窗里的「第 N / M 页」文字 —— `IMKCandidates` 没有页标签控制面 |
+| G4 | **无测试、无工程文件；本批未编译** | `macos/` 里跑过的只有头文件（`clang -fsyntax-only` + 「导出名取地址」那个 TU）；旧版 3 个 Swift 由 CI 在 2026-10-15 前编过。**2026-10-20 新增/改动的 7 个文件没有被任何 Swift 编译器看过**，本机只跑了 `bash -n`、`sh -n` 与 500 行门禁。第一条针对这批代码的可执行验证仍是「在 Mac 或 CI 上编译通过」 |
 | G5 | **宠物「小欧」未接（有意）** | 候选窗用的是系统面板 `IMKCandidates`，**画不进去**。要摆小欧得先换成自绘 `NSPanel` —— 那是对未编译代码做结构改动。真要接时**别**新写一份 CoreGraphics 几何：几何真源是 `docs/opi-pet.svg`，同一张图的第三份拷贝必然漂移 |
-| G6 | **符号库：包装有了，UI 没有** | `OpiEngine.swift` 有 `symbolBlocks()` / `symbolsInBlock(id:)` / `searchSymbols(keyword:)`，但 macOS 侧**没有任何调用点** —— 没有符号面板（候选窗是 `IMKCandidates`，摆不下网格）。三条契约：①`opi_symbol_blocks()` **只回 common 块**；②块 id 在 Rust 侧是 `u16`、在 C ABI 是 **`int16_t`**，只能对齐到 0..=32767，直接解成 `Int16` 会在 id > 32767 时抛异常，而本层对解析失败的处理是「返回空数组」⇒ 面板整块空掉且**无日志**；③`opi_search_symbols("")` 返回**全部**条目，不是「没搜到」 |
-| L1 | **全角状态没有 UI 读** | `opi_fullwidth_state()` 出口有了、Swift 包装有了、**UI 没读**。所以也仍然没有会漂移的镜像。⚠️ 它**不是**在报错：「未装载」与「已装载且半角」共用 `false`，那时按键全部交系统，宿主拿到的本来就是半角 |
+| G6 | **符号面板：已补（2026-10-20，未编译）** | `OpiSymbolPanel.swift`：左侧 22 类竖条、右侧 12×6=72/页网格、搜索框、翻页；数据是随包的 `symbol_categories.tsv`（打包脚本拷进 `Resources/`，`.pkg` payload 有存在性门禁），读不到才回退引擎 `opi_symbol_blocks()` 的 6 个 common 块并打日志。字形过滤用 CoreText 单码位判定；上屏直接 `insertText`，面板保持打开。**未接**表情页（引擎有 `opi_emoji_*` 出口，没有 UI）、贴纸/剪贴板 |
+| G7 | **「状态栏」是菜单，不是常驻条** | InputMethodKit 没有 Linux 那种悬浮状态栏；`OpiMenu.swift` 用输入法菜单承载同组入口。皮肤、LOGO、虚拟键盘（VK）与 ENPRO 因此没有等价物；外观/状态栏两个设置页也没有画空壳 |
+| L1 | **全角状态只在菜单里读** | `OpiMenu` 的「全角字符」勾选读 `opi_fullwidth_state()`（2026-10-20），但**没有常驻状态栏**可显示。⚠️ 它**不是**在报错：「未装载」与「已装载且半角」共用 `false`，那时按键全部交系统，宿主拿到的本来就是半角 |
 | L2 | **⇧ 长按 → Lock 不可达** | `NSEvent` 没有长按信号（同 fcitx5 轨的已知边界）。本层**不合成** `LONG_PRESSED` 位，所以 ⇧ 长按 = 单击。要接得自己定入口，别靠猜补一个信号 |
 | L3 | **`keyUp` 大概率收不到** | `recognizedEvents:` 属于 `IMKStateSetting`，默认只返回 `NSKeyDownMask`；公开报告说即使加上 `NSKeyUpMask`，`NSKeyUp` **仍然**不会被投递给 `handleEvent:client:`（被指为 IMKit 已知问题）。**故本轮不动** `recognizedEvents`。影响：`RELEASED` 位收不到时，退格/回车的「按下放行、抬起也放行」对称性不成立，在依赖键状态的控件里可能表现为卡键 —— ⚠️ **但这个影响的前提本身也没被验证**（取决于 IMK 是否替我们转发了抬起）。代码里那个 `.keyUp` 分支很可能是死代码 |
 | L4 | **autorepeat 认领但不执行** | 按住 `Shift+Space` 稍久，`NSEvent` 会发重复 keyDown；让它们执行会**反复切全角**，而用户的语义是「一次切换」。也**不能**在判定函数里返回「不是热键」—— 那一颗键会漏给 `keyEvent`，而 `Shift+Space` 的 SHIFT 不在直通掩码里 ⇒ 被当成**普通空格 = 选首候选**，比反复切更坏。所以判定函数故意不过滤，由调用处 `!event.isARepeat` 决定 |
@@ -338,9 +345,11 @@ cp luna.opid ~/Library/Application\ Support/opi/luna.opid
 
 ## 8. 未验证清单（照抄现状，别读成已完成）
 
-- `macos/` 下 **3 个 `.swift`**（`OpiEngine.swift` / `InputController.swift` / `main.swift`）：
-  没有 lint、没有单测；**编译**这一条 2026-10-09 起由 CI 补上（`apple.yml`，
-  run 37935240583：typecheck + 真编 + 链接 + ad-hoc 签名，见 §4.5）。
+- `macos/` 下 **7 个 `.swift`**（`OpiEngine` / `InputController` / `OpiMenu` /
+  `OpiSymbolPanel` / `OpiSettings` / `OpiSettingsWindow` / `main`）：
+  没有 lint、没有单测。**旧版 3 个**在 2026-10-09 由 CI 编过（`apple.yml`，
+  run 37935240583：typecheck + 真编 + 链接 + ad-hoc 签名，见 §4.5）；
+  **2026-10-20 的 7 文件版本没有被任何 Swift 编译器看过，也没有跑过 `apple.yml`。**
   **运行时（装进系统之后）验证数依旧是 0。**
 - `macos/Info.plist`：**没有被任何 macOS 构建系统读过**，也没有装进过任何系统的输入法列表。
 - `macos/OpiFFI.h`：过了 `clang -fsyntax-only`（C 与 C++ 两种模式，`-Werror` 下 exit 0），
@@ -349,11 +358,15 @@ cp luna.opid ~/Library/Application\ Support/opi/luna.opid
   但「链接过」的分辨力有限：只有**被 Swift 代码实际调到**的声明过了 typecheck
   （参数/返回类型对得上了），没被调到的声明仍只有语法检查；而那个取地址 TU
   对**签名/类型是瞎的**（`&f` → `const void *` 对任何函数类型都成立）。
-- **「最不确定的 API 清单」共 10 条**，逐条都标了不确定点（提交文本、
-  `setMarkedText` 签名、`IMKCandidates` 构造与常量名、`candidateSelected` 怎么拿客户端、
-  启动与 run loop、`Info.plist` 键、`NSEvent.keyCode` 数值表、
-  `charactersIgnoringModifiers` 语义、修饰位与 keyUp、词库路径）。
-  接手人从这里开始最省时间。
+- **「最不确定的 API 清单」共 14 条**，逐条都标了不确定点（在旧 10 条之外，
+  2026-10-20 新增：输入法菜单与 `doCommand` 分派、`LSBackgroundOnly` 进程里的
+  `NSPanel`、随包资源与 `UserDefaults`）。旧 10 条是：提交文本、`setMarkedText` 签名、
+  `IMKCandidates` 构造与常量名、`candidateSelected` 怎么拿客户端、启动与 run loop、
+  `Info.plist` 键、`NSEvent.keyCode` 数值表、`charactersIgnoringModifiers` 语义、
+  修饰位与 keyUp、词库路径。接手人从这里开始最省时间。
+- **设置持久化与词库重放**（`UserDefaults` 键、`dicts/*.tsv` 启动重放、导入复制/
+  删除语义）只在源码里成立，**没有在 macOS 上跑过一次**；`~/.config` 与
+  `~/Library/Application Support` 的路径约定同样未核对。
 - `Info.plist` 的 `tsInputMethodCharacterRepertoireKey` 取值、`tsInputMethodIconFileKey`
   指向的文件、`~/Library/Application Support/opi/luna.opid` 这条约定 —— **全都没核对**。
 
@@ -364,10 +377,12 @@ cp luna.opid ~/Library/Application\ Support/opi/luna.opid
 ## 9. 下一步顺序（别跳）
 
 ```
-1. 编译链接通过（Xcode 建工程，把 API 报错当待办清单消掉）—— 一行逻辑都不要改
+1. 先在 Mac/CI 上编译链接通过（7 个文件，把 API 报错当待办清单消掉）—— 逻辑先别改
 2. 最小冒烟：装进 ~/Library/Input Methods/、添加输入源、h a o 空格 →「好」
-3. 逐个消掉「最不确定的 API 清单」那 10 条
-4. 只有 3 过了，才谈补功能（候选窗、模式入口、符号面板、宠物）
+3. 开一次输入法菜单与符号面板（先验 `LSBackgroundOnly` 下 NSPanel 能否出现）
+4. 设置窗改一个开关、重启看是否生效；导入一个词库看是否重放
+5. 逐个消掉「最不确定的 API 清单」那 14 条
+6. 只有 1–5 过了，才谈表情/皮肤/宠物
 ```
 
 **顺序不能反。** 在编译链接通过之前做的任何功能工作，都是在给一份可能整体重写的代码上加东西。
