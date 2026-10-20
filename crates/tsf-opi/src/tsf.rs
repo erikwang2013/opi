@@ -84,6 +84,14 @@ pub trait TsfSink: Send + Sync {
         _mode: Mode,
     ) {
     }
+    /// 宿主失活（焦点离开该线程/切换应用）：释放候选窗连接。默认 no-op。
+    ///
+    /// 候选窗管道是**单实例**：每个加载了本 DLL 的宿主进程各有一个客户端，
+    /// 谁先 `show` 谁就占住那一个实例。不在 Deactivate 释放的话，第一个输入过的
+    /// 应用会把管道占到这个进程结束，其余应用永远连不上 —— 用户看到的就是
+    /// 「输入法只在桌面/某一个应用可用」。窗口侧在连接断开时自行隐藏并重建实例
+    /// （见 PipeServer.kt 的 serveLoop/finally），下次按键惰性重连。
+    fn disconnect(&self) {}
 }
 
 /// 把当前引擎状态推给候选窗。服务对象（按键/切模式）与候选窗回调（点选后刷新，
@@ -352,6 +360,9 @@ impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
             {
                 crate::langbar::remove(&mgr, &item);
             }
+            // 释放单实例候选窗管道（理由见 TsfSink::disconnect）：焦点切走后
+            // 下一个应用才能连上。窗口在这一端看到 0 字节后自行隐藏并重建。
+            self.sink.disconnect();
             let mut tm = match self.thread_mgr.lock() {
                 Ok(g) => g,
                 Err(_) => return Ok(()), // 中毒锁：吞掉，避免经 COM vtable 泄漏 panic

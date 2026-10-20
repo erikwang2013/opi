@@ -9,6 +9,9 @@
 //! ```text
 //! 管道名：\\.\pipe\opi（单实例，字节流模式，'\n' 分帧，UTF-8）
 //! 角色：本窗口为 SERVER 监听管道；TSF 插件进程为 CLIENT（窗口启动后连接）。
+//! 单实例的共享方式：宿主失活（焦点切走/切换应用）时客户端主动断开
+//! （crates/tsf-opi/src/tsf.rs 的 Deactivate → TsfSink::disconnect），本侧
+//! serveLoop 的 finally 隐藏窗口并重建实例，下一个应用按键时再惰性连上。
 //!
 //! TSF(CLIENT) → 本窗(SERVER)：
 //!   show      {"type":"show","buffer":"ni","candidates":["你","尼",...],

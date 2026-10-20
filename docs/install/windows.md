@@ -241,6 +241,14 @@ android/app/src/main/assets/luna.opid
   见 `candidate_io.rs` 的 `connect` / `send_json`）。用户看到的是"没有候选窗"，
   不是"输入法坏了"。`WriteFile` 仍无超时（候选窗假死时理论上可阻塞按键线程，
   异步写线程是后续项）。
+- **单实例管道与「其他应用不生效」（2026-10-20）**：管道只有 1 个实例
+  （`PipeServer.kt` 的 `MAX_INSTANCES = 1`），而每个加载 TSF DLL 的宿主进程各有一个
+  `CandidateClient`；客户端只在 `show` 时惰性连接、且此前从不主动断开。于是**第一个
+  输入过的应用把实例占到进程结束**，其余应用的 `CreateFileW` 一直 `ERROR_PIPE_BUSY`，
+  `show` 被静默丢弃 —— 这是「输入法只在桌面/单个应用可用」的另一条源码级根因。
+  修复：`Deactivate` 调 `TsfSink::disconnect` 关句柄；窗口侧 `readLoop` 读到 0 字节后
+  在 `finally` 隐藏窗口并重建实例，下次按键再惰性重连。**【未验证】**：TSF 是否在
+  切换应用时如预期调用 `Deactivate`（规范如此，本机无 Windows 观测）。
 - **登录自启 ≠ 常驻渲染（2026-10-20）**：候选窗在首次 `show` 之前**不创建 AWT/Skiko
   窗口**（`Main.kt` 的 `windowCreated`），所以刚登录、还没打字时进程只有一个阻塞在
   命名管道上的线程。窗口创建后被隐藏时也不绘制：Skiko 0.144.6 的
@@ -362,12 +370,16 @@ C:\Program Files\opi\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
   `opi: regsvr32 /s tsf_opi.dll exit code <n>`，**非 0 也不回滚**。卸载时先
   `regsvr32 /s /u` 再删文件（同样 best-effort）。
 - 快捷方式：开始菜单「opi settings」= `opi.exe --settings`；桌面图标在安装时可选。
-- **登录自启（2026-10-20）**：`[Registry]` 写一条 **HKLM**
+- **登录自启（2026-10-20）**：`[Registry]` 写一条 **HKLM64**
   `SOFTWARE\Microsoft\Windows\CurrentVersion\Run` 值 `opi` = `"{app}\opi.exe"`，
-  `uninsdeletevalue` 在卸载时删除。TSF DLL 只是管道客户端，候选窗进程不在就没有
-  候选 UI；HKLM 与机器级 TSF 注册同一层级，且只有这一条（不是每用户一条）。
+  `uninsdeletevalue` 在卸载时删除。本脚本已声明 `ArchitecturesInstallIn64BitMode=x64`
+  （普通 `HKLM` 本来就会走原生视图）；这里仍显式写 `HKLM64`，是为了不依赖安装模式的
+  隐式行为 —— 将来改模式时不会静默落进 `Wow6432Node`（Explorer 只读原生视图）。
+  TSF DLL 只是管道客户端，候选窗进程不在就没有候选 UI；HKLM64 与机器级 TSF 注册
+  同一层级，且只有这一条（不是每用户一条）。
 - **完成页**：可勾选拉起 `launch-and-restart.cmd`。脚本先用 `tasklist` 查重
-  （已有 `opi.exe` 就不重复启动），再结束 Explorer 并最多探测约 3 秒；Explorer
+  （已有 `opi.exe` 就不重复启动），再结束 Explorer 并最多轮询 8 次 `tasklist`
+  （快速机通常在 1 秒内看到 shell，慢机也应在约 2 秒内进入回退）；Explorer
   没回来（`AutoRestartShell=0` 等）就 `start "%SystemRoot%\explorer.exe"` 以
   **登录用户**令牌拉起（`[Run]` 的 `runascurrentuser`，不是提权 shell），因此不会
   再留下白屏。旧脚本「只杀不启」在 `AutoRestartShell=0` 的机器上白屏，shell 反复
@@ -1153,7 +1165,7 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | 3 | `DllRegisterServer` / `DllUnregisterServer` 的注册效果、管理员判定 | §3.1 |
 | 4 | TSF 能否认出这个 TIP、键盘列表里出不出现。**【订正 2026-10-19 复审】** `register()` 已补 `ITfInputProcessorProfileMgr::RegisterProfile`（判存在 + `bEnabledByDefault=TRUE`）、`ITfInputProcessorProfiles::EnableLanguageProfile` 与 `EnableLanguageProfileByDefault`；后处理改用 64 位 `WixSilentExec64`。但仍未在真 Windows 上装过修复后的包，所以「能出现在列表」仍属未验证 | §3.2、§3.3 |
 | 5 | 按键回调、composition、文本插入的**全部运行期行为** | §5.3 |
-| 6 | 候选窗与插件的命名管道连通（含 `\\.\pipe\opi-candidates` 单实例语义） | §4.3 |
+| 6 | 候选窗与插件的命名管道连通（含 `\\.\pipe\opi` 单实例语义） | §4.3 |
 | 7 | 四个 `cfg(windows)` 模块**没有任何测试** —— 只有 §1.2 那条 `cargo check` 看过它们 | §1.2 |
 | 8 | 候选窗在 Windows 上的~~构建与~~**运行**：**构建已被 §2.5 覆盖**（.msi 真在 windows runner 上打出来了），**跑起来仍然一次都没有** | §2.3、§2.5 |
 | 9 | `Ctrl+'` / `Ctrl+\` / `Shift+Space` 在 Windows 上有没有被别的软件占用 | §4.1 |

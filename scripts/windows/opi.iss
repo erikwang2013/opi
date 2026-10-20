@@ -93,9 +93,11 @@ Name: "{autodesktop}\opi settings"; Filename: "{app}\opi.exe"; Parameters: "--se
 [Registry]
 ; The TSF text service only inserts text; the candidate window is a separate
 ; process. Without a login entry, a reboot leaves the input method with no
-; candidate UI. HKLM Run starts it (hidden until a show message arrives) for
-; every user; uninstall removes the value.
-Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "opi"; ValueData: """{app}\opi.exe"""; Flags: uninsdeletevalue
+; candidate UI. HKLM64 Run starts it (hidden until a show message arrives) for
+; every user; uninstall removes the value. ArchitecturesInstallIn64BitMode=x64
+; already makes plain HKLM use the native view; keep HKLM64 explicit so this
+; entry cannot silently fall into Wow6432Node if the install mode changes.
+Root: HKLM64; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "opi"; ValueData: """{app}\opi.exe"""; Flags: uninsdeletevalue
 
 [Run]
 ; Finish page: start the candidate window and restart Explorer so the freshly

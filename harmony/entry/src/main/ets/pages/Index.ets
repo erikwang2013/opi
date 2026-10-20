@@ -48,8 +48,6 @@ const PET_SIZE_IN_BAR: number = 30;
 
 /** 空闲宠物条重抽间隔（ms）：与 Android `PetStrip.kt` 的 PET_FORM_HOLD_MS 同值。 */
 const PET_FORM_HOLD_MS: number = 2800;
-
-/** PetMood → 贴纸文件名（顶部多形态用真实贴纸，避免 12 种形态画成同一张脸）。 */
 function petStickerName(mood: PetMood): string {
   switch (mood) {
     case PetMood.Waiting: return 'waiting';
@@ -66,7 +64,6 @@ function petStickerName(mood: PetMood): string {
     default: return 'idle';
   }
 }
-
 @Entry
 @Component
 struct Index {
@@ -149,13 +146,13 @@ struct Index {
   }
 
   /**
-   * 多枚并排时的尺寸：12 枚缩到 22vp、7 枚起 24vp —— 与 Android 按条宽均分同一目的
-   * （全占满时不重叠、不越出候选栏）。候选栏宽 360vp 时 12×22 + 间距 ≈ 满宽。
+   * 多枚并排时的尺寸：12 枚缩到 18vp、7 枚起 24vp —— 与 Android 按条宽均分同一目的
+   * （不重叠/不越界）。360vp 屏 12×(18+4) + 右侧 ⌨ 与英文「中」键 ≈ 347vp，留余量。
    */
   private stripPetSize(): number {
     const n: number = this.petForms.length;
     if (n >= 10) {
-      return 22;
+      return 18;
     }
     if (n >= 7) {
       return 24;

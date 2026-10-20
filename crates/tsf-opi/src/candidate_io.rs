@@ -43,7 +43,9 @@
 //! 连接语义：惰性连接；**窗口未启动时本次发送直接放弃、不睡眠**（下一条 show
 //! 再试，2026-10-18 性能审计：旧行为在按键线程 4×50ms 空等 200ms）；写失败即断开、
 //! 下次发送时重连；读线程阻塞读回复并分帧解析（它自己的重连循环才使用
-//! `RETRY_SLEEP_MS`，不在按键线程上）。
+//! `RETRY_SLEEP_MS`，不在按键线程上）。**宿主 Deactivate 时主动断开**
+//! （`TsfSink::disconnect`）：管道是单实例，每个宿主进程一个客户端，谁先 show
+//! 谁占住；不释放则其余应用永远连不上（「只在桌面/单个应用可用」）。
 //! 生命周期：`CandidateClient` 的 Drop 关句柄 + 停读线程（否则句柄/线程/回调
 //! 陪宿主进程跑到结束）；分帧残留有 1 MiB 上限（见 `MAX_PENDING`）。
 //! 已知简化（验收可加固）：句柄替换与读线程的竞态以“仅清除仍指向自身句柄”
@@ -223,6 +225,18 @@ impl CandidateClient {
         }
     }
 
+    /// 断开当前连接（宿主 Deactivate 时调用）：关句柄让读线程退出本轮，
+    /// 窗口服务端在 readLoop 的 finally 里隐藏并重建单实例管道。下次 show 惰性重连。
+    ///
+    /// 关闭方式与 `Drop` 相同（读线程可能正阻塞在 ReadFile 上，句柄一关即返回）；
+    /// 不在这里 sleep/等确认 —— Deactivate 跑在宿主的 UI 线程上。
+    pub fn disconnect(&self) {
+        if let Some(h) = self.conn.lock().ok().and_then(|mut g| g.take()) {
+            // SAFETY: 句柄由本对象持有，take 后 write/show 不会再使用它。
+            unsafe { CloseHandle(h.0) }.ok();
+        }
+    }
+
     /// 读线程（构造时启动一次）：阻塞读候选窗回复，'\n' 分帧解析，
     /// 回调 `CandidateAction`。连接失效 → 清句柄（仅当仍是本线程持有的那个），
     /// 下一轮退避重试 —— 骨架期容忍与写线程的句柄替换竞态。
@@ -295,10 +309,8 @@ impl Drop for CandidateClient {
     fn drop(&mut self) {
         self.reader_stop.store(true, Ordering::SeqCst);
         // 取走句柄（PipeHandle 是 Copy，take() 留 None）：关掉它同时让阻塞中的
-        // ReadFile 返回，读线程下一轮看到 stop 退出。
-        if let Some(h) = self.conn.lock().ok().and_then(|mut g| g.take()) {
-            unsafe { CloseHandle(h.0) }.ok();
-        }
+        // ReadFile 返回，读线程本轮醒来后看到 stop 退出。
+        self.disconnect();
     }
 }
 
@@ -428,6 +440,11 @@ impl TsfSink for CandidateSink {
             self.client
                 .show(buffer, candidates, page + 1, page_count, mode);
         }
+    }
+
+    /// 宿主失活：断开管道，把单实例让给下一个应用（见 TsfSink::disconnect）。
+    fn disconnect(&self) {
+        self.client.disconnect();
     }
 }
 

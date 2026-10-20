@@ -12,11 +12,14 @@ set /a opi_tries=0
 tasklist /nh /fi "imagename eq explorer.exe" 2>nul | find /i "explorer.exe" >nul
 if not errorlevel 1 goto opi_shell_ok
 set /a opi_tries+=1
-if %opi_tries% geq 15 goto opi_start_shell
+rem 8 tasklist polls: fast machines are back in well under 2 s; slow ones get the
+rem own-launch fallback. A longer wait only extends a white screen.
+if %opi_tries% geq 8 goto opi_start_shell
 ping -n 1 -w 200 127.0.0.1 >nul
 goto opi_wait_shell
 :opi_start_shell
-rem 3 s without a shell = AutoRestartShell is off (or Explorer is slow). Start it ourselves.
+rem No shell after the bounded poll (AutoRestartShell off, or Explorer crashed).
+rem Start it ourselves with the current (user) token; never leave a white screen.
 start "" "%SystemRoot%\explorer.exe"
 :opi_shell_ok
 exit /b 0
