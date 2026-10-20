@@ -57,7 +57,7 @@ final class InputModePanel: UIView {
 
     init() {
         super.init(frame: .zero)
-        backgroundColor = .light.panelBg
+        backgroundColor = KeyboardPalette.light.panelBg
         // 表头统一为「返回箭头单独一行 + 标题/提示下一行」（2026-10-21 用户裁决）。
         header.onBack = { [weak self] in self?.onClose?() }
 
