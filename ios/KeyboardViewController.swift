@@ -44,6 +44,12 @@ final class KeyboardViewController: UIInputViewController {
     /// 与 fcitx5 轨「词库损坏时插件静默全失效」是同一个坑。
     private var dictionaryLoaded = false
 
+    /// 皮肤与键盘模式（2026-10-20）：启动时从扩展自己的 UserDefaults 读，
+    /// 切换后即写回（Android `ImePreferences` 的等价物，但没有设置 App）。
+    /// internal：`KeyboardTheme.swift` 里的 `applyTheme` 扩展要读。
+    var skin: SkinOption = .follow
+    var modes = KeyboardModes()
+
     /// 表情搜索的防抖表（对齐 Android `ImeState.SEARCH_DEBOUNCE_MS = 250`：
     /// 每敲一个字就查一次全表是白费的，手停下才查）。
     ///
@@ -75,12 +81,16 @@ final class KeyboardViewController: UIInputViewController {
             layout.topAnchor.constraint(equalTo: view.topAnchor),
             layout.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
+        // 皮肤/键盘模式从本扩展的偏好恢复（2026-10-20）；输入模式不持久化，
+        // 沿用引擎当前方案（与 Android 的差异记在 README）。
+        skin = KeyboardPreferences.skin
+        modes = KeyboardPreferences.modes
+        layout.setSkin(skin)
+        layout.setKeyboardModes(modes, traditional: engine.mode() == .traditional)
+        applyTheme()
         // 键面字要跟真实模式一致：装载后引擎可能是任何模式（同一进程里另一个
         // 键盘实例切过模式也会留在这里 —— 引擎单例是进程级的）。
-        layout.setModeLabel(
-            Self.modeKeyLabel(of: engine.mode()),
-            english: engine.mode() == .english
-        )
+        updateModeLabel()
         refresh()
     }
 
@@ -169,11 +179,18 @@ final class KeyboardViewController: UIInputViewController {
     func refresh() {
         guard dictionaryLoaded else {
             layout.updateCandidates(["词库未装载"])
+            layout.setTopBar(candidatesVisible: true, english: false)
             return
         }
         // 候选列表**读引擎**（引擎分好的当前页）。本层既不按 8 切片、也不算页码 ——
         // 两处都曾是 PAGE_SIZE 的副本，现已分别由 opi_candidates_page / opi_select_page 消灭。
-        layout.updateCandidates(engine.candidatesPage())
+        let texts = engine.candidatesPage()
+        layout.updateCandidates(texts)
+        // 顶部槽位：有缓冲/候选 → 候选栏；否则工具条（Android `ImeScreen` 同判）。
+        layout.setTopBar(
+            candidatesVisible: !texts.isEmpty || !engine.buffer().isEmpty,
+            english: engine.mode() == .english
+        )
         syncMarkedText()
     }
 
@@ -352,6 +369,40 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             // 见 `RarePanel.show()`。这与符号/表情两层「控制器现取引擎数据」不同，
             // 差别的原因就是数据来源不同（引擎 vs bundle 文件）。
             layout.setLayer(.rare)
+        case .showSkin:
+            // 皮肤面板（2026-10-20）：与 Android 工具条入口同义。选中不关面板。
+            layout.setSkin(skin)
+            layout.setLayer(.skins)
+        case .selectSkin(let newSkin):
+            skin = newSkin
+            KeyboardPreferences.skin = newSkin
+            layout.setSkin(newSkin)
+            applyTheme()
+        case .showKeyboardModes:
+            layout.setKeyboardModes(modes, traditional: engine.mode() == .traditional)
+            layout.setLayer(.keyboardModes)
+        case .updateKeyboardModes(let newModes):
+            modes = newModes
+            KeyboardPreferences.modes = newModes
+            layout.setKeyboardModes(
+                newModes, traditional: engine.mode() == .traditional
+            )
+            applyTheme()
+        case .toggleTraditional:
+            toggleTraditional()
+        case .showAbout:
+            layout.setLayer(.about)
+        case .closeKeyboard:
+            // 工具条最右的收起键（Android 同位置）。
+            dismissKeyboard()
+        case .segment:
+            // 分词键：缓冲空时**不发**（空缓冲的 `'` 在引擎里是引号，不是分词符）。
+            guard !engine.buffer().isEmpty, let quote = "'".unicodeScalars.first else {
+                return
+            }
+            route(keyval: OpiKey.printable(quote), states: 0, fallback: .none)
+        case .openURL(let raw):
+            openExternal(raw)
         case .retype:
             // 重输（9 键右列）：清掉当前组合重来。**不提交** —— 这个键的语义就是
             // 「打错了重来」，直提缓冲会把 9 键的数字打进输入框。
@@ -404,57 +455,9 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
         layout.setEmojiResults(results, query: q)
     }
 
-    /// 模式三态循环：中 → 繁 → 英 → 中。
-    ///
-    /// **逐字对齐 Android `ImeScreen.kt` 的 `toggleMode()`**（含前两跳先 `clear()`）——
-    /// 离开拼音类模式前清掉打了一半的拼音，否则残留缓冲会被下一个空格/回车意外提交。
-    /// 本端不自创第三个模式的判定，理由见 `OpiMode.traditional` 的注释。
-    ///
-    /// ⚠️ 这里**没有**走「先提交未完成的缓冲」那条路，而且**原因不是「调不到」** ——
-    /// `opi_toggle_symbol` / `opi_toggle_fullwidth` / `opi_fullwidth_state` 三个出口
-    /// 头文件里**已经有了**（2026-09-28 实测 `cabi.rs` 31 ↔ `OpiFFI.h` 31、差集为空、签名不一致 0），
-    /// `KeyboardHardware.swift` 的热键路径正在调它们。真正的原因是**语义不同**：
-    /// `Engine::toggle_symbol` 是 **Pinyin ⇄ Symbol**（那是 `Ctrl+\` 那条热键），
-    /// 而本函数是**中→繁→英**三态循环 —— 拿它来切模式是把两个出口当成一个用。
-    /// 所以本函数照 Android `ImeScreen.kt` 的既有约定 `clear()`。
-    ///
-    /// ⚠️ **已裁决（2026-09-28，team-lead）：保持 `clear()`**，与 Android 的 `toggleMode()` 一致
-    /// —— 本仓的价值里有「四端一致」，单方面改成「提交」会造出一条**只有 Apple 两平台不同**的行为。
-    /// `toggle_symbol` 之所以要提交是因为**场景不同**：用户伸手去够符号时，那段拼音不该凭空消失；
-    /// 而模式轮转是**换一种输入方式**，用户预期就是丢掉重来。
-    /// **不要再问一遍，也不要顺手改成 `toggleSymbol()`** —— 那会连模式目标一起改掉。
-    private func cycleMode() {
-        switch engine.mode() {
-        case .pinyin:
-            engine.clear()
-            engine.switchMode(.traditional)
-        case .traditional:
-            engine.clear()
-            engine.switchMode(.english)
-        default:
-            // English / Number / Symbol 一律回拼音（与 Android 的 `else` 分支同义）。
-            engine.switchMode(.pinyin)
-        }
-        layout.setModeLabel(
-            Self.modeKeyLabel(of: engine.mode()),
-            english: engine.mode() == .english
-        )
-        refresh()
-    }
-
-    /// 模式键的键面字 = **点它会切到哪**（2026-10-12 晚与 Android 同步的裁决：
-    /// 用户实测「切到英文键盘后键面还写着英，点下去却是中文键盘，键面该是『中』才对」）。
-    /// 逐条对齐本端 [`cycleMode`] 的次序：中→繁、繁→英、英/数字/符号→中（本端 else 档
-    /// **恒回拼音**，与 Android 的「回上次中文方案」略有分叉 —— 键面按**各自**的循环给，
-    /// 别照抄另一端）。
-    /// ⚠️ internal（见上方状态节的说明）：`KeyboardHardware.swift` 的热键路径要调它。
-    static func modeKeyLabel(of mode: OpiMode) -> String {
-        switch mode {
-        case .pinyin: return "繁"
-        case .traditional: return "英"
-        default: return "中"
-        }
-    }
+    /// 模式三态循环与模式键键面字（2026-10-20 移到 `KeyboardTheme.swift`；
+    /// 本文件压 500 行门禁）。调用点见 `KeyboardLayout` 的 `.cycleMode` 与
+    /// `KeyboardHardware` 的 `Ctrl+'`。
 }
 
 // MARK: - 宿主文本变化

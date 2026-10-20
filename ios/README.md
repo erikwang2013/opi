@@ -96,8 +96,12 @@
 | `OpiEngine.swift` | C ABI 薄桥：`OpiString` 所有权、`opi_key_event` → Swift 枚举、JSON 候选解码、符号库三个出口、表情两出口（2026-10-13） |
 | `OpiEngineScheme.swift` | 方案族包装（2026-10-14）：`scheme()`/`setScheme`/`shuangpinLayout()`/`setShuangpinLayout`/`loadStroke`。拆出来是因为主文件顶在 500 行上；拆法照 Rust 的族边界（`cabi_scheme.rs`） |
 | `OpiEngineWubi.swift` | 五笔旋钮族包装（2026-10-14）：`loadWubi` + 五个旋钮（风格/混入/个数/回车/自动上屏）。同上，对应 `cabi_wubi.rs`。**本文件没有任何 iOS 调用方**（没有设置界面） |
-| `KeyboardKeys.swift` | 「一个键是什么」：`KeySpec` / `KeyFallback` / `KeyboardFunctionKey` / `KeyButton`。不含布局。2026-10-14 加了 `fontSize` / `longPressFunction` 两个字段与四个功能键 case |
-| `KeyboardLayout.swift` | 键盘 UI 骨架的视图装配：候选栏（含翻页）+ 字母/数字层 + 触摸接线 + 外部刷新入口 + 四个互斥面板的摆位。**不含**键位表与尺寸算式（见下两行） |
+| `KeyboardKeys.swift` | 「一个键是什么」：`KeySpec` / `KeyFallback` / `KeyboardFunctionKey` / `KeyButton`。不含布局。2026-10-14 加了 `fontSize` / `longPressFunction` 两个字段；2026-10-20 加了 `.showSkin` / `.showKeyboardModes` / `.showAbout` / `.closeKeyboard` / `.toggleTraditional` / `.segment` 等功能键 case |
+| `KeyboardTheme.swift` | 皮肤与键盘模式（2026-10-20）：12 款皮肤、12 个色板角色（值逐字抄 Android `Palette.kt`）、优先级「长辈 > 暗光 > 皮肤」、长辈字号 1.18、`KeyboardPreferences`（UserDefaults）。另含控制器扩展 `applyTheme` / `openExternal` / `cycleMode` / `modeKeyLabel`。⚠️ 未编译 |
+| `KeyboardToolbar.swift` | 顶部工具条（2026-10-20）：表情 / 皮肤 / 输入模式 / 键盘模式 / 关于 / 隐藏「中」/ 收起键盘，图标次序对齐 Android `ImeToolbar.kt`。SF Symbols，缺符号时退文字。⚠️ 未编译 |
+| `KeyboardPanels.swift` | 工具条打开的四个面板（2026-10-20）：`SkinPanel`（12 卡 + 3×4 小键盘预览）、`KeyboardModePanel`（繁体 / 单手 / 悬浮 / 游戏 / 暗光 / 长辈）、`AboutPanel`（版本文案与外链）、`KeyboardPanelHeader`。⚠️ 未编译 |
+| `KeyboardPanelHost.swift` | `KeyboardLayout` 的面板装配扩展（2026-10-20）：工具条回调、七个面板的摆位、顶部槽位切换（候选栏 ⇄ 工具条）、主题下发、单手宽度约束。从 `KeyboardLayout.swift` / `KeyboardViewController.swift` 拆出（500 行门禁） |
+| `KeyboardLayout.swift` | 键盘 UI 骨架的视图装配：候选栏（含翻页）+ 字母/数字层 + 触摸接线 + 外部刷新入口 + 面板摆位（2026-10-20 起摆位在 `KeyboardPanelHost.swift`，本文件只留视图与键位）。**不含**键位表与尺寸算式（见下两行） |
 | `InputModes.swift` | 输入模式（2026-10-14）：九项枚举（`InputMode`）与三根轴的映射、各模式的**键位表**（26/9/14/笔画）、`applyInputMode`（控制器扩展）。**不含**视图装配 |
 | `ModeKeyRenderer.swift` | `[ModeRow]` → 视图树的**尺寸算式**（2026-10-14 从 `KeyboardLayout` 搬出）。含「列」形状（9 键的标点列/右功能列）与行高权重 |
 | `InputModePanel.swift` | 输入模式**菜单**（2026-10-14）：九项 chip，选中即换；2026-10-20 起左上角返回箭头（原右上角关闭已撤）。摆位在 `KeyboardLayout`，语义在 `applyInputMode` |
@@ -155,6 +159,67 @@
 如实记：**这只证「我搬了」，不证「搬对了、能编译」。**
 行数实测（搬完）：`KeyboardLayout.swift` 492、`InputModes.swift` 427、`ModeKeyRenderer.swift` 85、
 `KeyboardViewController.swift` 469、`KeyboardKeys.swift` 170 —— 全部 < 500。
+
+---
+
+## 2026-10-20 对齐 Android：顶部槽位 / 工具条 / 皮肤 / 键盘模式 / 关于
+
+参照实现是当前 main 的 Android：`ime/ImeScreen.kt`（顶部槽位与键区）、
+`ime/ImeToolbar.kt`（图标次序与面板）、`keyboard/SkinPanel.kt`、
+`keyboard/Palette.kt`、`ime/AboutPanel.kt`、`settings/AboutSection.kt`。
+
+### 改了什么
+
+* **顶部 44pt 槽位**：候选栏与工具条同位置互斥。判据逐字对齐 Android：
+  `candidatesShowable && !englishIdle`（有缓冲或有候选）显示候选栏，否则显示工具条；
+  任何面板层恒显示工具条。键区锚在槽位下沿，切换时键位不跳。
+* **工具条**（`KeyboardToolbar.swift`）：表情 / 皮肤 / 输入模式 / 键盘模式 / 关于 /
+  隐藏「中」/ 收起键盘，次序对齐 `ImeToolbar.kt`。SF Symbols 缺失时退文字，不静默丢按钮。
+* **皮肤**（`KeyboardTheme.swift` + `KeyboardPanels.swift`）：12 款，色板 12 个角色
+  逐值抄 `Palette.kt`；选中不关面板（Android 同）。优先级「长辈 > 暗光 > 皮肤」。
+* **键盘模式**：繁体 / 单手关左右 / 暗光 / 长辈。单手只收窄键区到 0.76 并靠左/右
+  （顶部槽位不收窄，Android 同）；长辈字号 ×1.18。皮肤与这些开关写进扩展自己的
+  UserDefaults（没有设置 App，但重启键盘仍在）。
+* **关于**：简介、版权、表情数据、三个地址、版本文案逐字对齐 Android；
+  引擎没有版本出口，只报 `CFBundleShortVersionString`。
+* **输入模式对齐**：9 键主区第一格改「分词」（缓冲非空才发 `'`），底行
+  `[符][中/繁][123][英文][↵]`；14 键与笔画底行补「英文」独立入口（模式键只剩简繁后
+  否则不可达）；数字层去掉模式键（Android `NumberPad` 没有）。
+* **9/14/笔画模式键**：由三态循环改为 `.toggleTraditional`（只切简/繁）；
+  26 键保留中→繁→英→中。
+
+### 逐项对照
+
+| 用户可见项 | Android | iOS（本轮后） |
+|---|---|---|
+| 顶部空闲槽位 | 工具条 | 工具条 |
+| 有缓冲/候选 | 候选栏替换工具条 | 候选栏替换工具条 |
+| 面板打开时 | 工具条 | 工具条 |
+| 工具条入口 | 表情/皮肤/输入模式/键盘模式/关于/中/收起 | 同次序（中键仅英文空闲） |
+| 皮肤 | 12 款 + 样张，选中不关 | 12 款 + 样张，选中不关 |
+| 键盘模式 | 繁体/单手/悬浮/游戏/暗光/长辈 | 繁体/单手/暗光/长辈；悬浮、游戏为禁用项 |
+| 单手 | 键区 0.76 靠左/右 | 同 |
+| 长辈 | 字号 ×1.18 + 高对比 | 同 |
+| 关于 | 文案/地址/版权 | 同文案；地址先复制再尝试打开 |
+| 9/14/笔画模式键 | 只切简繁 | 同（C ABI 清缓冲，见下） |
+| 9 键第一格 | 分词 | 分词 |
+| 14/笔画英文入口 | 独立英文键 | 同 |
+| 输入模式记忆 | 有偏好存储 | **无**（每次启动沿用引擎当前方案） |
+
+### 已知差异与限制（不伪造）
+
+* **悬浮 / 游戏**：iOS 键盘扩展不能控制自己的窗口，面板里只放可见禁用项与说明。
+* **工具条缺口**：没有宠物条（Android 需要 `petMood` 那套引擎状态，iOS 无对应出口）；
+  表情入口在工具条与数字层，旧面板内部仍是系统色，只有底色跟随皮肤。
+* **关于外链**：先写剪贴板再 `extensionContext?.open`；扩展不保证允许开 URL，
+  打不开时至少地址已复制（面板内有同句提示）。
+* **切简繁会清缓冲**：C ABI 只有 `opi_switch_mode`（清缓冲），没有 Android
+  `switchLanguage` 的保缓冲出口 —— 打了一半的拼音会丢，不崩、不错提交。
+* **输入模式不持久化**：本轮只存皮肤与键盘模式。
+* **C ABI 缺口仍在**：无 `opi_candidate_readings`（9 键左列恒标点，不换拼音读数）、
+  无待提交文本出口（换模式丢缓冲）、无引擎版本出口。
+* **未验证**：本机无 UIKit/Apple SDK，**Swift 编译与真机行为都未验证**。
+  CI 的 `apple.yml` 会在 macOS 上编译全部 `ios/*.swift`，但没有任何运行时测试。
 
 ---
 

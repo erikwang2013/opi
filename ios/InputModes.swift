@@ -75,6 +75,15 @@ enum InputMode: Int, CaseIterable {
     /// 面板式（生僻字）：UI 层拦下，不进引擎。
     var panel: Bool { self == .rare }
 
+    /// 该键面的模式键是否**只切简/繁**（9 键 / 大 9 键 / 14 键 / 笔画）。
+    /// 26 键没有独立英文键，仍走中→繁→英三档循环（Android `ImeScreen` 同判）。
+    var usesJianFanModeKey: Bool {
+        switch self {
+        case .pinyin9, .big9, .pinyin14, .stroke: return true
+        default: return false
+        }
+    }
+
     /// 菜单里的名字（与 Android 逐字相同，别各端各叫）。
     var label: String {
         switch self {
@@ -205,7 +214,10 @@ enum ModeKeyTables {
     ///
     /// 这里没有「符号」键位表：符号来自引擎的符号库（`#+=` 切到 `.symbols` 层），
     /// 不再在 Swift 里另抄一份符号表 —— Android 同样只把符号交给引擎/面板。
-    static func numberRows(modeLabel: String) -> [ModeRow] {
+    /// 数字键面**没有模式键**（Android `NumberPad` 同样没有）：顶部槽位有工具条，
+    /// 模式切换在字母层的模式键上；少一个键也免了「数字层模式键的循环语义与
+    /// 9/14/笔画只切简繁不一致」的两套标签。
+    static func numberRows() -> [ModeRow] {
         let r1 = "1234567890".map { KeySpec.char($0) }
         let r2 = ["-", "/", ":", ";", "(", ")", "$", "&", "@", "\""].map { KeySpec.char(Character($0)) }
         let r3: [KeySpec] = [
@@ -223,7 +235,6 @@ enum ModeKeyTables {
             // （`SymbolTab.Emoji`，任何一层都能直达）；iOS 这一版先只加这一个入口 ——
             // 与上面「#+= → 符号」同级，别的地点（字母层功能行）保持原样。
             KeySpec("😊", function: .showEmoji),
-            KeySpec(modeLabel, function: .cycleMode, longPressFunction: .showModes),
             KeySpec("空格", keyval: OpiKey.space, fallback: .text(" "), widthUnits: 5),
             KeySpec("回车", keyval: OpiKey.ret, fallback: .text("\n"), widthUnits: 1.6),
         ]
@@ -258,8 +269,10 @@ enum ModeKeyTables {
         ]
         // ---- 中间三列 = Android 的 3×3 数字格按**列**取（行主序 → 列）----
         let col1 = [
-            // 左上角的多标点键：键面「，。?!」、发送 `,`（与标点列同一个键）。
-            punctSpec("，。?!", ",", fontSize: letterSize * 0.72),
+            // 主区域第一格 = **分词键**（Android 2026-10-15 用户裁决「第一符号按钮
+            // 改成分词按钮」）：往引擎缓冲插音节边界（`xi|an`，见 `scheme.rs`
+            // `matches_segmented`）。空缓冲由控制器拦住（空缓冲的 `'` 是引号）。
+            KeySpec("分词", function: .segment, fontSize: letterSize * 0.72),
             digitSpec("4", "ghi", letterSize),
             digitSpec("7", "pqrs", letterSize),
         ]
@@ -277,7 +290,7 @@ enum ModeKeyTables {
         let right = [
             KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward),
             // 重输 = 清掉当前组合重来（缓冲空时是空操作，engine.clear() 幂等）。
-            // 手动分词键已撤 —— 无匹配时的分词改由引擎自动回退承担。
+            // 分词键在主区第一格（见 col1），不在这一列。
             KeySpec("重输", function: .retype),
             KeySpec("空格", keyval: OpiKey.space, fallback: .text(" ")),
         ]
@@ -287,10 +300,10 @@ enum ModeKeyTables {
             ],
             heightUnits: 3
         )
-        // ---- 底行：[符][中/英][123][英文][↵] ----
+        // ---- 底行：[符][中/繁][123][英文][↵] ----
         let funcRow = ModeRow.plain([
             KeySpec("符", function: .showSymbols),
-            KeySpec(modeLabel, function: .cycleMode, longPressFunction: .showModes),
+            KeySpec(modeLabel, function: .toggleTraditional, longPressFunction: .showModes),
             KeySpec("123", function: .showNumbers),
             // 「英文」= 切到英文 26 键（与菜单里的「英文26键」**同一条路**：
             // 走 `.selectInputMode`，不是本地换层 —— 语义含「换方案 + 换模式」）。
@@ -311,10 +324,12 @@ enum ModeKeyTables {
         let r1 = [pairSpec("qw"), pairSpec("er"), pairSpec("ty"), pairSpec("ui"), pairSpec("op")]
         let r2 = [pairSpec("as"), pairSpec("df"), pairSpec("gh"), pairSpec("jk"), pairSpec("l")]
         let r3 = [pairSpec("zx"), pairSpec("cv"), pairSpec("bn"), pairSpec("m")]
-        // 底行：[符][中/英][空格(2)][⌫][↵]（与 9 键同序；重输是 9 键专属，14 键没有）。
+        // 底行：[符][中/繁][英文][空格(2)][⌫][↵]（Android 同序；重输是 9 键专属）。
+        // 「英文」是**独立入口**：模式键只切简/繁后，不补这枚英文在本盘就不可达。
         let funcRow: [KeySpec] = [
             KeySpec("符", function: .showSymbols),
-            KeySpec(modeLabel, function: .cycleMode, longPressFunction: .showModes),
+            KeySpec(modeLabel, function: .toggleTraditional, longPressFunction: .showModes),
+            KeySpec("英文", function: .selectInputMode(.english26)),
             KeySpec("空格", keyval: OpiKey.space, fallback: .text(" "), widthUnits: 2),
             KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward),
             KeySpec("↵", keyval: OpiKey.ret, fallback: .text("\n")),
@@ -338,11 +353,13 @@ enum ModeKeyTables {
             strokeSpec("丶", "n", "捺"),
             strokeSpec("乙", "z", "折"),
         ]
-        // 功能行含「生僻字」入口（找不到字时下一步就是它）：符 / 模式 / 生僻字(1.4) /
-        // 空格(2) / ⌫ / ↵。
+        // 功能行含「生僻字」入口（找不到字时下一步就是它）：符 / 模式 / 英文 /
+        // 生僻字(1.4) / 空格(2) / ⌫ / ↵（Android 同序；英文是模式键只切简繁后的
+        // 独立入口）。
         let funcRow: [KeySpec] = [
             KeySpec("符", function: .showSymbols),
-            KeySpec(modeLabel, function: .cycleMode, longPressFunction: .showModes),
+            KeySpec(modeLabel, function: .toggleTraditional, longPressFunction: .showModes),
+            KeySpec("英文", function: .selectInputMode(.english26)),
             KeySpec("生僻字", function: .showRare, widthUnits: 1.4),
             KeySpec("空格", keyval: OpiKey.space, fallback: .text(" "), widthUnits: 2),
             KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward),
@@ -422,11 +439,38 @@ extension KeyboardViewController {
             // 白切一次就是白复位一次（Android 那边同样是「需要才切」）。
             engine.switchMode(mode.engineMode)
         }
-        layout.setModeLabel(
-            Self.modeKeyLabel(of: engine.mode()),
-            english: engine.mode() == .english
-        )
+        // 键面字按**新键面**的语义给：9/14/笔画只切简繁（「中/繁」），26 键三档循环。
+        updateModeLabel()
         layout.setLayer(.letters)       // 从菜单/面板回到键面
         refresh()
+    }
+
+    /// 9 键 / 14 键 / 笔画的模式键：**只切简/繁**（Android `toggleTraditional` 同义）。
+    /// 键面字 = 点它会到哪（繁 → 中，其余 → 繁）。
+    ///
+    /// ⚠️ 与 Android 的已知差异：Android 走 `switchLanguage`（**保留缓冲**）；
+    /// C ABI 只有 `opi_switch_mode`（**清缓冲**，Rust `Composer::switch_mode` 语义），
+    /// 没有保缓冲的换语言出口。所以本端切简繁会丢掉打了一半的拼音（不崩、不错提交）。
+    func toggleTraditional() {
+        engine.switchMode(engine.mode() == .traditional ? .pinyin : .traditional)
+        updateModeLabel()
+        layout.setKeyboardModes(modes, traditional: engine.mode() == .traditional)
+        refresh()
+    }
+
+    /// 同步模式键的键面字（**按当前键面语义**）：
+    /// 9/14/笔画只切简繁 ⇒ 「中/繁」；26 键三档循环 ⇒ 「繁/英/中」。
+    /// ⚠️ internal：`KeyboardHardware.swift` 的热键路径也要调。
+    func updateModeLabel() {
+        let mode = engine.mode()
+        let label = layout.inputMode.usesJianFanModeKey
+            ? Self.jianFanModeKeyLabel(of: mode)
+            : Self.modeKeyLabel(of: mode)
+        layout.setModeLabel(label, english: mode == .english)
+    }
+
+    /// 简繁键的键面字（Android `jianFanModeKeyLabelOf` 逐字同）。
+    static func jianFanModeKeyLabel(of mode: OpiMode) -> String {
+        mode == .traditional ? "中" : "繁"
     }
 }

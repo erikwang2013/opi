@@ -15,6 +15,10 @@ extension KeyboardLayout {
 
     /// 建候选栏：页翻键走 `opi_key_event` 的 PAGE_UP/PAGE_DOWN（页码钳制在 router.rs）。
     func buildCandidateBar() {
+        // 44pt = 工具条同高（Android `IME_TOOLBAR_HEIGHT_DP`）：两者共用一个槽位，
+        // 高度不同会让键区在「空闲 ↔ 输入」之间上下跳。
+        candidateBar.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(candidateBar)
         candidateScroll.showsHorizontalScrollIndicator = false
         candidateScroll.translatesAutoresizingMaskIntoConstraints = false
         candidateStack.axis = .horizontal
@@ -42,19 +46,24 @@ extension KeyboardLayout {
         chineseButton.isHidden = true
         chineseButton.addTarget(self, action: #selector(tapChinese), for: .touchUpInside)
 
-        addSubview(prev)
-        addSubview(candidateScroll)
-        addSubview(next)
-        addSubview(chineseButton)
+        candidateBar.addSubview(prev)
+        candidateBar.addSubview(candidateScroll)
+        candidateBar.addSubview(next)
+        candidateBar.addSubview(chineseButton)
         candidateScroll.addSubview(candidateStack)
 
         // ⚠️ 未编译：以下约束按常见写法写，Mac 上大概率要调数值/优先级。
         NSLayoutConstraint.activate([
-            prev.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
+            candidateBar.leadingAnchor.constraint(equalTo: leadingAnchor),
+            candidateBar.trailingAnchor.constraint(equalTo: trailingAnchor),
+            candidateBar.topAnchor.constraint(equalTo: topAnchor),
+            candidateBar.heightAnchor.constraint(equalToConstant: 44),
+
+            prev.leadingAnchor.constraint(equalTo: candidateBar.leadingAnchor, constant: 4),
             prev.centerYAnchor.constraint(equalTo: candidateScroll.centerYAnchor),
             prev.widthAnchor.constraint(equalToConstant: 28),
 
-            chineseButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            chineseButton.trailingAnchor.constraint(equalTo: candidateBar.trailingAnchor, constant: -4),
             chineseButton.centerYAnchor.constraint(equalTo: candidateScroll.centerYAnchor),
             chineseButton.widthAnchor.constraint(equalToConstant: 26),
             chineseButton.heightAnchor.constraint(equalToConstant: 26),
@@ -65,8 +74,8 @@ extension KeyboardLayout {
 
             candidateScroll.leadingAnchor.constraint(equalTo: prev.trailingAnchor, constant: 4),
             candidateScroll.trailingAnchor.constraint(equalTo: next.leadingAnchor, constant: -4),
-            candidateScroll.topAnchor.constraint(equalTo: topAnchor),
-            candidateScroll.heightAnchor.constraint(equalToConstant: 40),
+            candidateScroll.topAnchor.constraint(equalTo: candidateBar.topAnchor),
+            candidateScroll.heightAnchor.constraint(equalToConstant: 44),
 
             candidateStack.leadingAnchor.constraint(equalTo: candidateScroll.contentLayoutGuide.leadingAnchor),
             candidateStack.trailingAnchor.constraint(equalTo: candidateScroll.contentLayoutGuide.trailingAnchor),

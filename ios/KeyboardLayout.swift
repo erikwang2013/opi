@@ -57,6 +57,12 @@ final class KeyboardLayout: UIView {
         case modes
         /// 生僻字面板（2026-10-14）：部首 → 笔画 → 字的浏览式查法，**不进引擎**。
         case rare
+        /// 皮肤面板（2026-10-20）：12 款色板，选中即换。
+        case skins
+        /// 键盘模式面板（2026-10-20）：繁体 / 单手 / 暗光 / 长辈（悬浮、游戏禁用）。
+        case keyboardModes
+        /// 关于面板（2026-10-20）。
+        case about
     }
 
     weak var delegate: KeyboardLayoutDelegate?
@@ -102,40 +108,86 @@ final class KeyboardLayout: UIView {
     let candidateScroll = UIScrollView()
     let candidateStack = UIStackView()
     /// 英文模式右上角的隐藏「中」键（2026-10-20 用户裁决「低存在感，用于切回中文」）。
-    /// iOS 没有工具条，候选栏就是顶部 —— 它压在页翻键右侧；非英文模式隐藏。
+    /// 它压在页翻键右侧；非英文模式隐藏。工具条在空闲态另有自己的一枚。
     let chineseButton = UIButton(type: .system)
-    private let rowsStack = UIStackView()
+    /// 顶部 44pt 槽位（2026-10-20）：候选栏与工具条二选一，**同位置互斥**。
+    /// 对齐 Android `ImeScreen` 的 `[CandidateBar | ImeToolbar]` 槽 —— 空闲时是工具条，
+    /// 有缓冲/候选时是候选栏。候选栏隐藏时仍占 44pt（键区锚在 `candidateBar.bottom`）。
+    let candidateBar = UIView()
+    let toolbar = KeyboardToolbar()
+    /// 键区容器：单手模式只收窄/偏移这一块（工具条与候选栏保持全宽，Android 同）。
+    let keyArea = UIView()
+
+    // 四个旧面板 + 三个新面板都是 internal：建栏/建面板在 `KeyboardPanelHost.swift`
+    // 的扩展里（500 行门禁），Swift 的 private 只跨同文件扩展可见。
+    let rowsStack = UIStackView()
     /// 符号层**自带**一个可竖向滚动的容器（符号数不是常量：当前数据表里
     /// 「常用」= CJK 符号块 60 个，将来加 common 块只会更多）。
     /// 与 `rowsStack` 同位置、互斥显示 —— 它的行高规则（固定行高 + 滚动）与键位行
     /// （按权重分行）本来就不是一套，混在一起只会互相牵制。网格画法在 `SymbolPanel.swift`。
-    private let symbolPanel = SymbolPanel()
+    let symbolPanel = SymbolPanel()
     /// 表情层（2026-10-13）。与 `symbolPanel` **同位置、三者互斥显示**（字母行/符号/表情），
     /// 数据与画法都在 `EmojiPanel.swift` + `EmojiGridView.swift`（那边有理由：工具条、
     /// 分类条、搜索、字形过滤与网格渲染是表情页自己的事），本层只管摆位置 + 转发点击与搜索词。
-    private let emojiPanel = EmojiPanel()
+    let emojiPanel = EmojiPanel()
     /// 输入模式菜单（2026-10-14）。与上面两个面板**同位置、互斥显示**（四个里只亮一个），
     /// 摆法与转发理由同上；画法与选项在 `InputModePanel.swift`。
-    private let modePanel = InputModePanel()
+    let modePanel = InputModePanel()
     /// 生僻字面板（2026-10-14）。同上；数据与三级状态机在 `RarePanel.swift`。
     /// 索引文件（`rare_index.tsv`）由 `scripts/apple/package-ios.sh` 拷进 appex
     /// （2026-10-20 起）；缺失时面板会显示可见提示，见那里的头注。
-    private let rarePanel = RarePanel()
+    let rarePanel = RarePanel()
+    let skinPanel = SkinPanel()
+    let keyboardModePanel = KeyboardModePanel()
+    let aboutPanel = AboutPanel()
+
+    /// 当前皮肤 / 键盘模式（控制器从 `KeyboardPreferences` 读入并同步）。
+    var skin: SkinOption = .follow
+    var keyboardModes = KeyboardModes()
+    /// 繁体是引擎模式；面板只负责显示与上报，这里存一份供重建 chip。
+    var traditional = false
+    /// 当前色板与字号倍数（`applyTheme` 设置，重建键位时要重新刷到新按钮上）。
+    var palette: KeyboardPalette = .light
+    var fontScale: CGFloat = 1
+    /// 顶部槽位的当前选择：true = 候选栏，false = 工具条。面板层恒为工具条。
+    /// （internal：`KeyboardPanelHost.swift` 的扩展要读写。）
+    var wantsCandidateBar = false
+    var english = false
+    /// 单手模式的约束（`buildRows` 里建，`applyOneHand` 切换）。
+    var keyAreaWidth: NSLayoutConstraint?
+    var keyAreaLeading: NSLayoutConstraint?
+    var keyAreaTrailing: NSLayoutConstraint?
 
     init() {
         super.init(frame: .zero)
         // ⚠️ 未编译：键盘扩展的**背景**推荐用 UIInputView(style: .keyboard) 承载，
-        // 它能拿到系统的毛玻璃/键盘外观，且随系统主题变化。本骨架用普通 UIView
-        // + systemBackground，Mac 上做外观时应换基类。
+        // 它能拿到系统的毛玻璃/键盘外观，且随系统主题变化。本骨架用普通 UIView。
         backgroundColor = .systemBackground
         buildCandidateBar()
+        buildToolbar()
         buildRows()
+        buildPanels()
+        rebuildKeys()
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used: 布局全代码构建") }
 
+    /// 键区容器 + 键位行。顶部槽位（候选栏/工具条，44pt）由两个子视图重叠占位；
+    /// 键区从槽位下沿开始，所以**候选栏隐藏时键位不会上移**（Android 同：槽位常驻）。
     private func buildRows() {
+        keyArea.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(keyArea)
+        keyAreaLeading = keyArea.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 3)
+        keyAreaTrailing = keyArea.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -3)
+        keyAreaWidth = keyArea.widthAnchor.constraint(equalTo: widthAnchor, multiplier: 0.76)
+        keyAreaLeading?.isActive = true
+        keyAreaTrailing?.isActive = true
+        NSLayoutConstraint.activate([
+            keyArea.topAnchor.constraint(equalTo: candidateBar.bottomAnchor, constant: 4),
+            keyArea.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
+        ])
+
         rowsStack.axis = .vertical
         rowsStack.spacing = 6
         // .fill（2026-10-14 由 .fillEqually 改）：行高现在由 `ModeKeyRenderer` 按
@@ -143,115 +195,13 @@ final class KeyboardLayout: UIView {
         // 「按容器高平分」表达不了权重。26 键/14 键/笔画的行权恒 1 ⇒ 结果与改前一致。
         rowsStack.distribution = .fill
         rowsStack.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(rowsStack)
+        keyArea.addSubview(rowsStack)
         NSLayoutConstraint.activate([
-            rowsStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 3),
-            rowsStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -3),
-            rowsStack.topAnchor.constraint(equalTo: candidateScroll.bottomAnchor, constant: 4),
-            rowsStack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
+            rowsStack.leadingAnchor.constraint(equalTo: keyArea.leadingAnchor),
+            rowsStack.trailingAnchor.constraint(equalTo: keyArea.trailingAnchor),
+            rowsStack.topAnchor.constraint(equalTo: keyArea.topAnchor),
+            rowsStack.bottomAnchor.constraint(equalTo: keyArea.bottomAnchor),
         ])
-        buildSymbolPanel()
-        buildEmojiPanel()
-        buildModePanel()
-        buildRarePanel()
-        rebuildKeys()
-    }
-
-    /// 符号层容器：竖向滚动 + 每行等宽按钮。与 `rowsStack` 同位置（互斥显示）。
-    ///
-    /// 画法在 `SymbolPanel`（那边用固定行高 —— 滚动视图的内容高度必须由子视图
-    /// 撑出来，而 `.fillEqually` 是「按容器高度平分」，在滚动视图里会退化成 0 高）。
-    /// 本层只摆位置 + 把面板的点击转发成 `.commitText`（直提，不过引擎）。
-    private func buildSymbolPanel() {
-        symbolPanel.translatesAutoresizingMaskIntoConstraints = false
-        symbolPanel.onPick = { [weak self] text in
-            guard let self else { return }
-            self.delegate?.keyboardLayout(self, didTapFunction: .commitText(text))
-        }
-        addSubview(symbolPanel)
-        NSLayoutConstraint.activate([
-            symbolPanel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 3),
-            symbolPanel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -3),
-            symbolPanel.topAnchor.constraint(equalTo: candidateScroll.bottomAnchor, constant: 4),
-            symbolPanel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
-        ])
-        symbolPanel.isHidden = true
-    }
-
-    /// 表情层容器（2026-10-13）。摆法与 `buildSymbolPanel` 逐条相同（同位置互斥），
-    /// 只是回调多两个：返回（回字母层，`onBack`）与搜索词（`onSearch`）。
-    ///
-    /// 三个回调的语义：
-    ///   `onPick`   → `.commitText`（直提，不过引擎 —— 同符号键，理由见 `commitText`）；
-    ///   `onBack`   → `.showLetters`（**复用既有功能键**，不为「退出表情页」新造机制）；
-    ///   `onSearch` → 新委托方法（去抖与查询都归控制器：那里才有 engine 与 Timer）。
-    private func buildEmojiPanel() {
-        emojiPanel.translatesAutoresizingMaskIntoConstraints = false
-        emojiPanel.onPick = { [weak self] text in
-            guard let self else { return }
-            self.delegate?.keyboardLayout(self, didTapFunction: .commitText(text))
-        }
-        emojiPanel.onBack = { [weak self] in
-            guard let self else { return }
-            self.delegate?.keyboardLayout(self, didTapFunction: .showLetters)
-        }
-        emojiPanel.onSearch = { [weak self] query in
-            guard let self else { return }
-            self.delegate?.keyboardLayout(self, didSearchEmoji: query)
-        }
-        addSubview(emojiPanel)
-        NSLayoutConstraint.activate([
-            emojiPanel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 3),
-            emojiPanel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -3),
-            emojiPanel.topAnchor.constraint(equalTo: candidateScroll.bottomAnchor, constant: 4),
-            emojiPanel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
-        ])
-        emojiPanel.isHidden = true
-    }
-
-    /// 输入模式菜单容器（2026-10-14）。摆法同符号面板（同位置互斥）。
-    /// ⚠️ 选中**不在这里**换引擎/换键面：那是控制器的事（`applyInputMode`）——
-    /// 面板只管报「用户点了哪一项」（`.selectInputMode` 带载荷的功能键，不新造委托方法）。
-    private func buildModePanel() {
-        modePanel.translatesAutoresizingMaskIntoConstraints = false
-        modePanel.onSelect = { [weak self] mode in
-            guard let self else { return }
-            self.delegate?.keyboardLayout(self, didTapFunction: .selectInputMode(mode))
-        }
-        modePanel.onClose = { [weak self] in
-            guard let self else { return }
-            self.delegate?.keyboardLayout(self, didTapFunction: .showLetters)
-        }
-        addSubview(modePanel)
-        NSLayoutConstraint.activate([
-            modePanel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 3),
-            modePanel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -3),
-            modePanel.topAnchor.constraint(equalTo: candidateScroll.bottomAnchor, constant: 4),
-            modePanel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
-        ])
-        modePanel.isHidden = true
-    }
-
-    /// 生僻字面板容器（2026-10-14）。摆法同上（同位置互斥）。
-    /// 提交是**直提**（`.commitText`，同符号/表情键的理由）；关闭回字母层。
-    private func buildRarePanel() {
-        rarePanel.translatesAutoresizingMaskIntoConstraints = false
-        rarePanel.onCommit = { [weak self] ch in
-            guard let self else { return }
-            self.delegate?.keyboardLayout(self, didTapFunction: .commitText(ch))
-        }
-        rarePanel.onClose = { [weak self] in
-            guard let self else { return }
-            self.delegate?.keyboardLayout(self, didTapFunction: .showLetters)
-        }
-        addSubview(rarePanel)
-        NSLayoutConstraint.activate([
-            rarePanel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 3),
-            rarePanel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -3),
-            rarePanel.topAnchor.constraint(equalTo: candidateScroll.bottomAnchor, constant: 4),
-            rarePanel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
-        ])
-        rarePanel.isHidden = true
     }
 
     /// 重建键位行（切层/换模式时调用）。
@@ -260,27 +210,39 @@ final class KeyboardLayout: UIView {
     /// 行/格/列的**尺寸算式**搬去了 `ModeKeyRenderer`，本函数只挑「画哪套表」并接线。
     private func rebuildKeys() {
         // 符号层/表情层的内容由控制器现取（`setSymbols` / `setEmojiBrowse`），
-        // 模式菜单与生僻字面板是**静态结构**，自己管自己的内容。
+        // 其余面板是**静态结构**，自己管自己的内容。
         let isSymbols = (keyLayer == .symbols)
         let isEmoji = (keyLayer == .emoji)
         let isModes = (keyLayer == .modes)
         let isRare = (keyLayer == .rare)
+        let isSkins = (keyLayer == .skins)
+        let isKeyboardModes = (keyLayer == .keyboardModes)
+        let isAbout = (keyLayer == .about)
         rowsStack.isHidden = isPanelLayer
         symbolPanel.isHidden = !isSymbols
         emojiPanel.isHidden = !isEmoji
         modePanel.isHidden = !isModes
         rarePanel.isHidden = !isRare
+        skinPanel.isHidden = !isSkins
+        keyboardModePanel.isHidden = !isKeyboardModes
+        aboutPanel.isHidden = !isAbout
         if isModes { modePanel.show(current: inputMode) }
         if isRare { rarePanel.show() }
+        if isSkins { skinPanel.show(current: skin) }
+        if isKeyboardModes {
+            keyboardModePanel.show(traditional: traditional, modes: keyboardModes)
+        }
+        updateTopBarVisibility()
         guard !isPanelLayer else { return }
         rowsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         // 字母层按**当前输入模式**画（9 键/14 键/笔画各有自己的表）；数字层所有模式共用。
         let rows = keyLayer == .letters
             ? ModeKeyTables.rows(for: inputMode, modeLabel: modeLabel)
-            : ModeKeyTables.numberRows(modeLabel: modeLabel)
+            : ModeKeyTables.numberRows()
         ModeKeyRenderer.render(rows, into: rowsStack, gap: 5) { [weak self] b in
             self?.attach(b)
         }
+        applyKeyTheme()
     }
 
     /// 换输入模式（键面按它重画；控制器在 `applyInputMode` 里同步）。
@@ -420,10 +382,13 @@ final class KeyboardLayout: UIView {
         if !isPanelLayer { rebuildKeys() }
     }
 
-    /// 当前层是不是「占满键面的面板」（四个面板里的一层）——
-    /// 它们都不画键位行，`rowsStack` 该藏起来。
-    private var isPanelLayer: Bool {
-        keyLayer == .symbols || keyLayer == .emoji || keyLayer == .modes || keyLayer == .rare
+    /// 当前层是不是「占满键面的面板」（七个面板里的一层）——
+    /// 它们都不画键位行，`rowsStack` 该藏起来，顶部槽位恒为工具条（Android 同）。
+    var isPanelLayer: Bool {
+        switch keyLayer {
+        case .letters, .numbers: return false
+        case .symbols, .emoji, .modes, .rare, .skins, .keyboardModes, .about: return true
+        }
     }
 }
 
@@ -446,6 +411,12 @@ final class BarButton: UIButton {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used") }
+
+    /// 换肤（候选栏的按钮由 `KeyboardLayout.applyTheme` 递归刷到）。
+    func applyTheme(_ p: KeyboardPalette, fontScale: CGFloat) {
+        setTitleColor(p.barBufferFg, for: .normal)
+        titleLabel?.font = .systemFont(ofSize: 18 * fontScale)
+    }
 
     @objc private func tapped() { onTap() }
 }

@@ -54,11 +54,29 @@ enum KeyboardFunctionKey {
     case nextInputMode
     /// 打开**输入模式菜单**（2026-10-14）。
     ///
-    /// Android 从工具条的「输入模式」按钮进（`ImeToolbar` 的 `InputModePanel`）；
-    /// iOS 没有工具条，入口是**长按模式键**（中/繁/英 那个键，各键面都有它）——
-    /// 与主流输入法 iOS 版的习惯一致。所以本 case 的实际发射者是 `onLongPress`，
-    /// 不是某颗键的按下。
+    /// 2026-10-20 起工具条也有「输入模式」图标（与 Android 同入口）；
+    /// 长按模式键这条捷径保留（主流 iOS 输入法的习惯）。
     case showModes
+    /// 打开皮肤面板（2026-10-20，工具条入口）。
+    case showSkin
+    /// 打开键盘模式面板（2026-10-20，工具条入口）。
+    case showKeyboardModes
+    /// 打开关于面板（2026-10-20，工具条入口）。
+    case showAbout
+    /// 收起键盘（工具条最右，Android `onCloseKeyboard` 同义）。
+    case closeKeyboard
+    /// 9 键 / 14 键 / 笔画底行的模式键：**只切简/繁**（与 Android `toggleTraditional`
+    /// 同语义）。26 键仍走 `.cycleMode`（它没有独立英文键）。
+    case toggleTraditional
+    /// 9 键主区第一格的「分词」键：缓冲非空时发送 `'`（音节边界）。
+    /// 空缓冲由控制器拦住 —— 空缓冲的 `'` 在引擎里是引号，不是分词符。
+    case segment
+    /// 皮肤面板选中一项。
+    case selectSkin(SkinOption)
+    /// 键盘模式面板改了开关（单手/暗光/长辈）。
+    case updateKeyboardModes(KeyboardModes)
+    /// 关于面板的外链（控制器复制 + 尝试打开）。
+    case openURL(String)
     /// 打开**生僻字面板**（2026-10-14）。入口是笔画键盘功能行的「生僻字」键
     /// （对齐 Android `StrokeKeyboard` 的 `onRare`）——「笔画打不出来」的下一步就是它。
     /// 面板数据（`rare_index.tsv`）由 `package-ios.sh` 打进 appex，见 `RarePanel.swift` 头注。
@@ -168,4 +186,11 @@ final class KeyButton: UIButton {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used: 布局全代码构建") }
+
+    /// 换肤 + 长辈字号（重建键位后由 `KeyboardLayout.applyKeyTheme` 逐键调）。
+    func applyTheme(_ p: KeyboardPalette, fontScale: CGFloat) {
+        setTitleColor(p.keyFg, for: .normal)
+        backgroundColor = p.keyBg
+        titleLabel?.font = .systemFont(ofSize: spec.fontSize * fontScale)
+    }
 }
