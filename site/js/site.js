@@ -124,6 +124,12 @@
     });
   }
 
+  // History scroller starts at the oldest release (bottom); scrolling up walks forward in time.
+  const releaseScroll = $('.release-scroll');
+  if (releaseScroll) {
+    window.requestAnimationFrame(() => { releaseScroll.scrollTop = releaseScroll.scrollHeight; });
+  }
+
   // History memory timeline: first visit auto-plays once; the "回忆" button replays it.
   const memoryOverlay = $('#memory-overlay');
   const memoryViewport = $('#memory-viewport');
@@ -146,8 +152,11 @@
     ['coquettish.gif', '小欧·撒娇'], ['cute.gif', '小欧·卖萌'], ['pleasing.gif', '小欧·讨好'],
     ['knocking.gif', '小欧·敲打'], ['face-palm.gif', '小欧·捂脸'], ['tongue-out.gif', '小欧·吐舌头'],
   ];
-  // Warm the local GIF/PNG cache so the opening sequence never shows an empty box.
-  memoryIntroForms.forEach(([file]) => { const img = new Image(); img.src = `assets/pet/forms/${file}`; });
+  // Warm the local GIF cache in idle time so the opening sequence never shows an empty box
+  // without delaying the first paint.
+  const preloadMemoryPets = () => {
+    memoryIntroForms.forEach(([file]) => { const img = new Image(); img.src = `assets/pet/forms/${file}`; });
+  };
   let memoryBuilt = false;
   let memoryRaf = 0;
   let memoryEndTimer = 0;
@@ -173,11 +182,11 @@
         date: $('.release-date', item)?.textContent?.trim() || '',
         note: $('.release-note', item)?.textContent?.trim() || '',
       };
-    }).filter((row) => row.version).reverse(); // oldest → newest
+    }).filter((row) => row.version); // newest → oldest (top → bottom)
     const nodes = [];
     rows.forEach((row, index) => {
       const li = document.createElement('li');
-      li.className = 'memory-item' + (index === rows.length - 1 ? ' is-latest' : '');
+      li.className = 'memory-item' + (index === 0 ? ' is-latest' : '');
       const version = document.createElement('span');
       version.className = 'memory-version';
       version.textContent = row.version;
@@ -212,7 +221,7 @@
   const memoryProgressNow = () => {
     if (!memoryViewport || !memoryProgress) return;
     const max = Math.max(1, memoryViewport.scrollHeight - memoryViewport.clientHeight);
-    memoryProgress.style.transform = `scaleX(${Math.min(1, memoryViewport.scrollTop / max)})`;
+    memoryProgress.style.transform = `scaleX(${Math.min(1, 1 - memoryViewport.scrollTop / max)})`;
   };
 
   const stopMemory = () => {
@@ -316,7 +325,7 @@
     if (!memoryTimeline || !memoryViewport || !memoryProgress) return;
     stopMemory();
     resetMemoryItems();
-    memoryViewport.scrollTop = 0;
+    memoryViewport.scrollTop = memoryViewport.scrollHeight;
     memoryProgressNow();
     if (reduceMotion) {
       $$('.memory-item, .memory-pet', memoryTimeline).forEach((el) => el.classList.add('is-in'));
@@ -324,7 +333,9 @@
     }
     if ('IntersectionObserver' in window) {
       memoryObserver = new IntersectionObserver((entries) => {
-        entries.forEach((entry) => { if (entry.isIntersecting) queueMemoryReveal(entry.target); });
+        entries.filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.boundingClientRect.top - a.boundingClientRect.top)
+          .forEach((entry) => queueMemoryReveal(entry.target));
       }, { root: memoryViewport, rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
       $$('.memory-item, .memory-pet', memoryTimeline).forEach((el) => memoryObserver.observe(el));
     } else {
@@ -340,8 +351,8 @@
       const dt = Math.min(80, Math.max(0, now - last));
       last = now;
       if (!memoryPaused) {
-        memoryViewport.scrollTop = Math.min(max, memoryViewport.scrollTop + speed * dt);
-        if (memoryViewport.scrollTop >= max - 1) {
+        memoryViewport.scrollTop = Math.max(0, memoryViewport.scrollTop - speed * dt);
+        if (memoryViewport.scrollTop <= 1) {
           memoryProgressNow();
           memoryEndTimer = window.setTimeout(closeMemory, 1200);
           return;
@@ -359,7 +370,7 @@
     if (memoryOverlay.classList.contains('is-open')) return;
     memoryPreviousFocus = document.activeElement;
     memoryPaused = false;
-    memoryViewport.scrollTop = 0;
+    memoryViewport.scrollTop = memoryViewport.scrollHeight;
     memoryOverlay.hidden = false;
     document.body.classList.add('memory-open');
     markMemorySeen();
@@ -371,6 +382,11 @@
   };
 
   if (memoryOverlay) {
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(preloadMemoryPets, { timeout: 1800 });
+    } else {
+      window.setTimeout(preloadMemoryPets, 600);
+    }
     $$('[data-memory-open]').forEach((button) => button.addEventListener('click', openMemory));
     memoryClose?.addEventListener('click', closeMemory);
     memoryOverlay.addEventListener('click', (event) => {
