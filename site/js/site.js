@@ -136,7 +136,8 @@
   const memoryTimeline = $('#memory-timeline');
   const memoryProgress = $('#memory-progress');
   const memoryIntro = $('#memory-intro');
-  const memoryIntroGrid = $('#memory-intro-grid');
+  const memoryIntroImg = $('#memory-intro-img');
+  const memoryIntroLabel = $('#memory-intro-label');
   const memoryIntroCount = $('#memory-intro-count');
   const memoryClose = memoryOverlay ? $('[data-memory-close]', memoryOverlay) : null;
   const memorySeenKey = 'opi-memory-seen-v1';
@@ -235,7 +236,7 @@
     memoryEndTimer = 0;
     memoryIntroTimer = 0;
     memoryRevealTimer = 0;
-    memoryIntroGrid?.querySelectorAll('img').forEach((img) => img.getAnimations().forEach((animation) => animation.cancel()));
+    memoryIntroImg?.getAnimations().forEach((animation) => animation.cancel());
     memoryIntro?.classList.remove('is-showing');
   };
 
@@ -281,64 +282,42 @@
     if (!memoryRevealTimer && memoryRevealQueue.length === 1) revealMemoryNext();
   };
 
-  const buildMemoryIntro = () => {
-    if (!memoryIntroGrid || memoryIntroGrid.children.length) return;
-    const fragment = document.createDocumentFragment();
-    memoryIntroForms.forEach(([file, label]) => {
-      const item = document.createElement('figure');
-      item.className = 'memory-intro-item';
-      const img = document.createElement('img');
-      img.src = `assets/pet/forms/${file}`;
-      img.width = 64;
-      img.height = 64;
-      img.alt = label;
-      img.loading = 'lazy';
-      img.decoding = 'async';
-      const caption = document.createElement('figcaption');
-      caption.textContent = label;
-      item.append(img, caption);
-      fragment.append(item);
-    });
-    memoryIntroGrid.append(fragment);
-  };
-
   const startMemoryIntro = () => {
-    if (!memoryIntro || !memoryIntroGrid || !memoryIntroCount || reduceMotion) {
+    if (!memoryIntro || !memoryIntroImg || !memoryIntroLabel || !memoryIntroCount || reduceMotion) {
       playMemory();
       return;
     }
-    buildMemoryIntro();
     stopMemory();
-    memoryIntro.classList.add('is-showing');
-    const items = $$('.memory-intro-item', memoryIntroGrid);
     let index = 0;
+    memoryIntro.classList.add('is-showing');
     const show = () => {
-      const item = items[index];
-      item.style.opacity = '1';
+      const [file, label] = memoryIntroForms[index];
+      memoryIntroImg.src = `assets/pet/forms/${file}`;
+      memoryIntroLabel.textContent = label;
+      memoryIntroCount.textContent = `${index + 1} / ${memoryIntroForms.length}`;
       const entry = index % 3;
       const from = entry === 0
-        ? 'translate3d(-70vw, 18vh, 0) scale(.18) rotate(-150deg)'
+        ? 'translate3d(-72vw, 18vh, 0) scale(.12) rotate(-150deg)'
         : entry === 1
-          ? 'translate3d(70vw, 30vh, 0) scale(.2) rotate(140deg)'
-          : 'translate3d(0, 62vh, 0) scale(.16) rotate(80deg)';
-      item.animate(
-        [{ transform: from },
-         { transform: 'scale(1.12) rotate(-3deg)', offset: .76 },
+          ? 'translate3d(70vw, 34vh, 0) scale(.16) rotate(140deg)'
+          : 'translate3d(0, 68vh, 0) scale(.1) rotate(80deg)';
+      memoryIntroImg.animate(
+        [{ transform: from, opacity: 0 },
+         { opacity: 1, offset: .35 },
+         { transform: 'translate3d(0, 0, 0) scale(1.08) rotate(-3deg)', offset: .8 },
          { transform: 'none' }],
         { duration: 720, easing: 'cubic-bezier(.16,1,.3,1)' },
       );
       index += 1;
-      memoryIntroCount.textContent = `${index} / ${memoryIntroForms.length}`;
-      if (index < items.length) {
-        memoryIntroTimer = window.setTimeout(show, 360);
+      if (index < memoryIntroForms.length) {
+        memoryIntroTimer = window.setTimeout(show, 1800);
       } else {
         memoryIntroTimer = window.setTimeout(() => {
           memoryIntro.classList.remove('is-showing');
           memoryIntroTimer = window.setTimeout(playMemory, 320);
-        }, 2400);
+        }, 1200);
       }
     };
-    items.forEach((item) => { item.style.opacity = '0'; item.style.transform = 'none'; });
     show();
   };
 
