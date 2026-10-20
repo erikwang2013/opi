@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -33,10 +34,12 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xyz.erik.opi.keyboard.OpiIcons
 import xyz.erik.opi.engine.EngineController
+import xyz.erik.opi.engine.composingText
 import xyz.erik.opi.keyboard.LocalKeyboardPalette
 import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.pet.OpiPet
@@ -94,11 +97,24 @@ fun CandidateBar(
         return
     }
     val candidates = controller.pageCandidates
+    val composing = if (controller.mode == EngineMode.ENGLISH) "" else controller.composingText()
     Row(
         modifier = modifier.fillMaxWidth().fillMaxHeight()
             .background(p.barBg),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // 2026-10-20：工具条始终显示，候选栏移到顶部信息行。中文候选在这里补回
+        // 拼音读数（原先的独立 ComposingBar 在有候选时不再占据一行）；英文不画。
+        if (composing.isNotEmpty()) {
+            Text(
+                text = composing,
+                modifier = Modifier.widthIn(max = 112.dp).padding(horizontal = 10.dp),
+                fontSize = 14.sp,
+                color = p.accent,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         // ⚠️ 2026-10-15 用户裁决改判：拼音（缓冲/读数）与五笔编码提示**不再画在本栏**——
         // 它们搬去了候选行**上方**的独立一行（`ime/ComposingBar.kt`，含读屏播报）。
         // 本栏自此只画候选本身。撤掉的那格见 git 历史与 docs/install/android.md 的订正。

@@ -28,7 +28,7 @@ import xyz.erik.opi.keyboard.LocalKeyboardPalette
  * 拼音行高度（dp）。与 [xyz.erik.opi.candidate.CANDIDATE_BAR_HEIGHT_DP] 同一条纪律：
  * 只在这里定义一次，`OpiImeService` 把它算进 IME 窗口高度、本行自己用它占位。
  */
-const val COMPOSING_BAR_HEIGHT_DP = 38
+const val COMPOSING_BAR_HEIGHT_DP = 44
 
 /**
  * **拼音行**（2026-10-15 用户裁决「移动端的拼音在候选词上方显示，不要在输入框里」）。

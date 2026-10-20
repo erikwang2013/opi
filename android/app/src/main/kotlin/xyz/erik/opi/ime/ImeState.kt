@@ -140,6 +140,7 @@ class ImeState(
      * 不动引擎的 scheme/mode —— 它是浏览式查字，不是输入方案。
      */
     fun selectInputMode(m: InputMode) {
+        leaveEnglishProFor(m.engineMode)
         // 切到英文 ⇒ pending **按拼音原样上屏**（2026-10-10 用户裁决「拼音输入的时候切换
         // 英文，就默认是拼音，不要是候选词」；与 [英文] 底行键、中繁→英循环腿同语义——
         // 三处共用 [commitPendingAsPinyin]）。其余模式照旧「有候选选首候选」：那是输入模式
@@ -222,8 +223,7 @@ class ImeState(
      * 键面字 = 点它会切到哪（[jianFanModeKeyLabelOf]，ImeScreen.kt）。
      */
     fun toggleTraditional() {
-        val next =
-            if (controller.mode == EngineMode.TRADITIONAL) EngineMode.PINYIN else EngineMode.TRADITIONAL
+        val next = if (controller.mode == EngineMode.TRADITIONAL) EngineMode.PINYIN else EngineMode.TRADITIONAL
         controller.switchLanguage(next, controller.inputScheme)
     }
 
@@ -250,6 +250,7 @@ class ImeState(
      * （2026-10-19 输入重置），见 [cycleMode]。
      */
     private fun switchLanguageKeepingBuffer(m: InputMode) {
+        leaveEnglishProFor(m.engineMode)
         inputMode = m
         if (m.engineMode == EngineMode.PINYIN || m.engineMode == EngineMode.TRADITIONAL) {
             lastChineseMode = m

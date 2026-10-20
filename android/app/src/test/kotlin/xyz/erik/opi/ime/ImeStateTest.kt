@@ -41,6 +41,25 @@ class ImeStateTest {
         debounce: FakeDebouncer = FakeDebouncer(),
     ) = ImeState(EngineController(fake), commit = { commits += it }, debouncer = debounce)
 
+    // ---- 英文 pro 离开英文即关闭（2026-10-20 用户裁决） ----
+
+    @Test
+    fun englishProTurnsOffWhenCyclingBackToChinese() {
+        val state = newState()
+        state.restore(InputMode.ENGLISH26, KeyboardModes(), SkinOption.FOLLOW, englishPro = true)
+        assertTrue(state.englishPro)
+        state.cycleMode() // 英 → 上次中文方案
+        assertFalse("切到中文后 pro 必须关闭", state.englishPro)
+    }
+
+    @Test
+    fun englishProTurnsOffWhenSelectingChineseMode() {
+        val state = newState()
+        state.restore(InputMode.ENGLISH26, KeyboardModes(), SkinOption.FOLLOW, englishPro = true)
+        state.selectInputMode(InputMode.PINYIN9)
+        assertFalse("输入模式面板切回中文也必须关闭 pro", state.englishPro)
+    }
+
     // ---- 隐藏整块键盘 ⇒ 重置到默认界面（2026-10-17 裁决「再打开就默认界面」） ----
 
     @Test

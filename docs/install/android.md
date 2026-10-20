@@ -383,11 +383,11 @@ adb shell ime set    xyz.erik.opi/.OpiImeService      # 切为当前输入法
   语义全在引擎（四端同一条路：`Engine::pending_text` / `display_buffer` /
   `commit_buffer_after_select`）；门禁 `tests/segment_commit.rs`（引擎）+ 9 键点号换算
   `EngineControllerComposingTest.confirmedCharsDoNotInflateTheNineKeyDotCount`。
-- **候选与工具条共用一格**（2026-10-16 用户裁决「输入拼音后的候选词在功能按钮区域显示
-  （替换掉功能区域）」）：输入中（有候选 / 有缓冲 / 英文态）那一格画候选、其余时候画工具条；
-  判据**单一来源** = `ImeState.candidatesShowable`。格位常驻（高 = `IME_TOOLBAR_HEIGHT_DP`）——
-  「槽位常驻、条件挂载会让键区伸缩」的 2026-10-09 实测教训继续成立；窗口高度里少掉的正是
-  原候选行那一行（`OpiImeService.keyboardHeight` 的新账，键高与改版前逐像素相同）。
+- **工具条常驻、候选行独立**（2026-10-20 用户裁决「所有模式都显示工具条」）：顶部信息行
+  （`COMPOSING_BAR_HEIGHT_DP`）在有候选/英文态时画候选，空闲时画拼音行或小欧宠物条；
+  工具条永远在其下方独立一行。中文候选的拼音读数并入候选行左端，无候选时仍有
+  `ComposingBar` 路径；判据仍是 `ImeState.candidatesShowable`。窗口高度以
+  `OpiImeService.keyboardHeight` 的 `keyArea + composing` 为准（信息行 44dp）。
 - **折叠行**（`candidate/CandidateBar.kt`）：候选大字横排、可横向滑动。**候选项前不显示序号**
   （2026-10-17 用户裁决「移动端候选词不要前面的数字」——2026-10-09 曾恢复过一版，今为终态；
   序号是「按数字选词」的语义，中文键盘没有数字行；英文 26 键自 2026-10-19 起顶部有
@@ -395,7 +395,7 @@ adb shell ime set    xyz.erik.opi/.OpiImeService      # 切为当前输入法
   **右端一枚 ⌄**（2026-10-16 裁决「左右按钮换成 v 的图标」——原「‹ n/m › 左右翻页」整段下线）。
   **最右另有「收起键盘」⌄**，与工具条同一动作；英文态还多一枚低存在感隐藏「中」键
   （2026-10-20：英文恒走候选栏，[`candidatesShowable`] 对英文恒真，放在工具条里永远不可见）。
-- **平铺态**（点 ⌄，`ime/CandidateTiledView.kt`）：占满共用格 + 键盘区 —— 左列放大读音列
+- **平铺态**（点 ⌄，`ime/CandidateTiledView.kt`）：占满工具条以下的键盘区 —— 左列放大读音列
   （点行仍 = 钉读音；与键盘左列**同一块** `CandidateReadingColumn`）、中间候选**按词长平铺**
   （短词一行 4 个、长词一行 2 个；分页规则是纯函数 `TilePack.kt`）、右列 `返回 / ⌫ / 重输 / 空格`；
   **上下滑动翻页**。收拢：`返回` = 回键盘不动缓冲；选词 / ⌫ 退到空**自动收拢**（否则键盘回不来）。
@@ -557,6 +557,7 @@ emoji 列**不动** —— 它管单键候选反馈（搜索路），与浏览�
   零损失；全角开时在直提点宽化（`EngineController.fullwidthize`）；`,`/`.` 仍走引擎
   （标点表 + 全角两档生效）。
 - 工具栏最右「收起键盘」图标 = **向下折角 ⌄**（不是 ✕；✕ 是关闭语义，归关面板/关页）。
+  **2026-10-20**：所有模式工具条常驻；英文 pro 开启后切到中文会自动关闭并落盘。
   候选态下同一「收起键盘」动作也放在候选栏最右（中文/英文候选都有），否则输入中它会跟着工具条一起消失。
   9 键的**符**键 2026-10-09 起进**符号页**（`keyboard/SymbolPage.kt`）：**底部横条** 22 类目
   （`序号.名称`，常用/中文/英文/网络/数字/角标/序号/音标/平假/片假/箭头/特殊/拼音/注音/

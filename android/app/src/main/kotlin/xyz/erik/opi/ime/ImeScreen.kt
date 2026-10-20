@@ -89,7 +89,7 @@ fun ImeScreen(
         LocalDensity provides density,
     ) {
         // 根列**铺工具条底色**（2026-10-17 用户裁决「红线区域内输入法的其他界面都覆盖了，
-        // 只有默认界面没有，默认界面也要全覆盖」）：拼音行空槽（38dp）此前透明 ⇒ 窗口
+        // 只有默认界面没有，默认界面也要全覆盖」）：顶部信息行槽此前透明 ⇒ 窗口
         // 露白，与工具条之间出现一条白色空带；其他视图（皮肤/符号/关于…）整窗 panelBg
         // 铺满所以覆盖得住。这里给根列工具条色 —— 空槽与工具条连成一片，视觉上就是
         // 工具条向上延伸（布局/高度一个字没动）。2026-10-09 那条「候选词没词的时候不
@@ -101,21 +101,55 @@ fun ImeScreen(
             // （9 键 = 分词读数 `ni'hao`、其余方案 = 原字母）+ 五笔编码提示。
             // 读屏播报也挂在这一行（原先挂在候选栏的缓冲首格，那格已随裁决撤掉）。
             // 平铺候选视图也保留它（参考图 2 的拼音就在最顶上）。----
-            if (state.view == ImeState.View.QWERTY || state.view == ImeState.View.RARE ||
+            if (state.view == ImeState.View.QWERTY && state.candidatesShowable) {
+                // 候选行（2026-10-20 用户裁决「所有模式都显示工具条」）：候选不再顶掉
+                // 工具条，而是单独占顶部信息行；拼音/无匹配由 CandidateBar 左端补回。
+                Box(modifier = Modifier.fillMaxWidth().height(COMPOSING_BAR_HEIGHT_DP.dp)) {
+                    CandidateBar(
+                        controller = controller,
+                        onTap = router::handleCandidate,
+                        onLongPress = controller::removeUserWord,
+                        onExpand = state::expandCandidates,
+                        inEnglish = controller.mode == EngineMode.ENGLISH,
+                        onSwitchToChinese = state::cycleMode,
+                        onCloseKeyboard = onCloseKeyboard,
+                    )
+                }
+            } else if (state.view == ImeState.View.QWERTY || state.view == ImeState.View.RARE ||
                 state.view == ImeState.View.CANDIDATES_TILED
             ) {
-                // 顶部共用槽位（2026-10-17 裁决）：输入中画拼音行、空闲画**小欧宠物条**
-                // （六形态轮播：笑/欢乐/哭/沮丧/惊恐/愤怒；四季花纹那条已按同日裁决撤除）。
-                // 同一 38dp 槽位两种内容 —— 与「候选|工具条共用一格」同一套哲学。
+                // 空闲/无候选信息行：输入中画拼音行、空闲画**小欧宠物条**。
                 if (controller.composingText().isEmpty() && controller.wubiHint.isEmpty()) {
                     PetStrip()
                 } else {
                     ComposingBar(controller)
                 }
             }
+            // ---- 工具条**常驻**（2026-10-20 用户裁决「所有模式都显示工具条」）----
+            // 候选行已在上面独立占一行；这里不再与候选互换。
+            Box(
+                modifier = Modifier.fillMaxWidth().height(IME_TOOLBAR_HEIGHT_DP.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                ImeToolbar(
+                    currentMode = state.inputMode,
+                    keyboardModes = modes,
+                    petMood = petMood(
+                        buffer = controller.buffer,
+                        candidateCount = controller.candidates.size,
+                        learnerEnabled = controller.learnerEnabled,
+                        dictionaryDegraded = controller.dictionaryDegraded,
+                    ),
+                    onOpenEmoji = state::openEmoji,
+                    onOpenSkin = state::openSkin,
+                    onOpenInputMode = state::openInputMode,
+                    onOpenKeyboardMode = state::openKeyboardMode,
+                    onOpenAbout = state::openAbout,
+                    onCloseKeyboard = onCloseKeyboard,
+                )
+            }
             if (state.view == ImeState.View.CANDIDATES_TILED) {
-                // ---- 平铺候选视图（2026-10-16 裁决「替换键盘平铺出来」）----
-                // 它占满「共用格 + 键盘区」的整块（拼音行以下全给网格与两侧列）。
+                // 平铺候选视图（2026-10-16 裁决）：占满工具条以下的剩余空间。
                 CandidateTiledView(
                     state,
                     controller,
@@ -123,49 +157,6 @@ fun ImeScreen(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                 )
             } else {
-                // ---- 候选｜工具条**共用一格**（2026-10-16 用户裁决「候选词在功能按钮
-                // 区域显示（替换掉功能区域）」）----
-                // 原先是两行（候选栏一行 + 工具条一行），现一格两用：输入中有候选
-                // （含英文提示条、含「无匹配」）画候选、否则画工具条。判据**单一来源** =
-                // [ImeState.candidatesShowable]（平铺态的自动收拢用同一支）。格位常驻
-                // （工具条那条 44dp）—— 「槽位常驻、条件挂载会让键区伸缩」那条 2026-10-09
-                // 实测教训继续成立；窗口里少掉的正是原候选行那一行（见
-                // OpiImeService.keyboardHeight 的新账）。
-                Box(
-                    modifier = Modifier.fillMaxWidth().height(IME_TOOLBAR_HEIGHT_DP.dp),
-                    contentAlignment = Alignment.CenterStart,
-                ) {
-                    if (state.view == ImeState.View.QWERTY && state.candidatesShowable) {
-                        // 长按候选 = 删除该自造词（下标语义同点击：页内下标）
-                        CandidateBar(
-                            controller = controller,
-                            onTap = router::handleCandidate,
-                            onLongPress = controller::removeUserWord,
-                            onExpand = state::expandCandidates,
-                            inEnglish = controller.mode == EngineMode.ENGLISH,
-                            onSwitchToChinese = state::cycleMode,
-                            onCloseKeyboard = onCloseKeyboard,
-                        )
-                    } else {
-                        // ---- 工具条：图标入口（小欧 logo + 表情 / 皮肤 / 输入模式 / 键盘模式）----
-                        ImeToolbar(
-                            currentMode = state.inputMode,
-                            keyboardModes = modes,
-                            petMood = petMood(
-                                buffer = controller.buffer,
-                                candidateCount = controller.candidates.size,
-                                learnerEnabled = controller.learnerEnabled,
-                                dictionaryDegraded = controller.dictionaryDegraded,
-                            ),
-                            onOpenEmoji = state::openEmoji,
-                            onOpenSkin = state::openSkin,
-                            onOpenInputMode = state::openInputMode,
-                            onOpenKeyboardMode = state::openKeyboardMode,
-                            onOpenAbout = state::openAbout,
-                            onCloseKeyboard = onCloseKeyboard,
-                        )
-                    }
-                }
                 // ---- 键盘区：单手模式整体偏移 + 收窄（纯布局层）----
                 // 键区自己刷底色（根列已透明）：键与键之间的缝是这一层 —— 换深色皮肤时
                 // 不刷会露出窗口底色（2026-10-09「整体统一」那条的落点）。
