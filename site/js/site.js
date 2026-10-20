@@ -306,16 +306,16 @@
          { opacity: 1, offset: .35 },
          { transform: 'translate3d(0, 0, 0) scale(1.08) rotate(-3deg)', offset: .8 },
          { transform: 'none' }],
-        { duration: 880, easing: 'cubic-bezier(.16,1,.3,1)' },
+        { duration: 720, easing: 'cubic-bezier(.16,1,.3,1)' },
       );
       index += 1;
       if (index < memoryIntroForms.length) {
-        memoryIntroTimer = window.setTimeout(show, 980);
+        memoryIntroTimer = window.setTimeout(show, 1600);
       } else {
         memoryIntroTimer = window.setTimeout(() => {
           memoryIntro.classList.remove('is-showing');
           memoryIntroTimer = window.setTimeout(playMemory, 280);
-        }, 760);
+        }, 1000);
       }
     };
     show();
