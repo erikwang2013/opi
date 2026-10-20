@@ -13,9 +13,10 @@
 //!     拓扑无关）；Windows = 控制面 `\\.\pipe\opi-control` → 候选窗进程 broker →
 //!     TSF（ControlPlane.kt）。状态读与按钮动作同一条控制面。
 //!
-//! ⚠️ Windows：代码已全部接线，但**没有拉起触发器** —— 状态栏进程的自启/卸载由
-//! 安装脚本负责（本轮未改 scripts/windows/opi.iss）。`--statusbar` 在 Windows 上
-//! 能跑，只是没有东西会去起它。写到这儿而不是埋在代码里。
+//! Windows：EXE 安装器/登录 Run 会拉起 `--statusbar`（scripts/windows/opi.iss），
+//! 但**只在 TSF 激活时显示**：控制面读不到状态（im 为空）就隐藏，切换回 opi 后
+//! 1s 轮询让它出现（2026-10-21 用户裁决「切换到这个输入法才显示」）。Linux 仍
+//! 保留「未知 ⇒ 维持可见」的旧语义，避免 fcitx5 旧 glue 缺 im= 时闪条。
 //!
 //! 条上按钮（从左到右 = [StatusBarButton] 的枚举序）：小欧 / 中英 / 。，标点(双态) /
 //! 简繁 / **英文专业** / **模式** / 月相全半角 / 软键盘 / Ω符号大全 / 设置。前八枚
@@ -140,15 +141,22 @@ internal fun statusBarWidthDp(buttonCount: Int, scale: Int = STATUS_BAR_SCALE_DE
  * 规则（2026-10-10 下午用户裁决「切到其他输入法时状态栏消失」）：
  * `enabled && (im 未知 || im == "opi")` ——
  * · [buttons] 空 = master 隐藏 / 按钮全关 ⇒ 恒隐藏（老规则，优先级最高，与 [im] 无关）；
- * · [im] 缺键/空串 = **未知** ⇒ 维持现状（可见），不闪 —— glue 的 `im=` 还没合时旧输出
- *   正好落这里，轮询读失败（中性缺省）也落这里；
+ * · [im] 缺键/空串 = **未知** ⇒ Linux 维持现状（可见）、Windows 隐藏（[requireActive]）——
+ *   glue 的 `im=` 还没合时旧输出正好落这里，轮询读失败（中性缺省）也落这里；
  * · [im] 非空且 ≠ "opi"（当前是别的输入法）⇒ 隐藏；切回 opi 由 1s 轮询让它自己出现。
+ * · Windows 的 [requireActive]：只有 `im == "opi"` 才显示；TSF 未连接时状态读不到，
+ *   状态栏进程虽随登录常驻但不可见（否则安装完就出现一条点哪都报错的条）。
  *
  * ⚠️ `"opi"` 是**跨轨字面**（glue 侧追加的 `im=` 值 = 本 addon 的 uniqueName）。对不上的
  * 表现是「opi 激活时条一直藏着」——响的错，不是静默错；但改它必须两侧一起改。
  */
-internal fun barVisible(buttons: List<StatusBarButton>, im: String): Boolean =
-    buttons.isNotEmpty() && (im.isEmpty() || im == "opi")
+internal fun barVisible(buttons: List<StatusBarButton>, im: String, requireActive: Boolean = false): Boolean {
+    if (buttons.isEmpty()) return false
+    // Windows 常驻状态栏仅在 TSF 激活（im=opi）时显示；未知状态隐藏，免得安装完就出现
+    // 一条点哪都报错的条。Linux 保留「未知 ⇒ 维持可见」（旧 glue 缺 im= 时不闪）。
+    if (requireActive) return im == "opi"
+    return im.isEmpty() || im == "opi"
+}
 
 /** 初始位置：屏幕底部居中、离下沿一截（别贴边，也别压任务栏）。 */
 private fun barPosition(widthDp: Int): WindowPosition {
@@ -312,7 +320,7 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
 
     // 条隐藏时**连内容一起退出组合**：提示窗是独立 Window，只藏条窗不会带走它
     // （悬停状态也可能收不到 Exit）⇒ 必须把按钮/提示从组合里摘掉。
-    val shown = barVisible(buttons, imeState.im)
+    val shown = barVisible(buttons, imeState.im, requireActive = isWindows())
     Window(
         // 无边框窗没有关闭入口；「隐藏」走设置里的 master 开关（进程留着，见 visible 一行）。
         onCloseRequest = {},

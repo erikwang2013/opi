@@ -99,7 +99,7 @@ fun main(args: Array<String>) = application {
     // 三个模式共用一个可执行文件（jpackage 只有一份 mainClass / 一个安装包 / 一套图标）：
     //   --settings        = 「属性设置」窗（两个平台都有）
     //   --statusbar       = 状态栏悬浮条（Linux 随会话自启，见 build.gradle.kts 的
-    //     /etc/xdg/autostart；Windows 侧**代码就绪，但本轮没有拉起触发器**）
+    //     /etc/xdg/autostart；Windows 由安装器/登录 Run 拉起，但仅在 TSF 激活时显示）
     //   无参数（Windows）  = 候选窗（TSF 经命名管道驱动；见本文件头部的线协议）
     //   无参数（Linux）    = 也进「属性设置」—— **这不是偷懒，是语义**：候选窗是
     //     TSF 的东西（命名管道两端都在 Windows），Linux 上这个应用**只有设置一个用途**，

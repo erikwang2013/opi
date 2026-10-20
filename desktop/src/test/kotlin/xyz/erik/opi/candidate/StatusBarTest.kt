@@ -435,8 +435,9 @@ class StatusBarTest {
         assertTrue(barVisible(buttons, im = "")) // 缺键 = 空串缺省（旧 glue / 读失败）
         assertTrue(barVisible(buttons, im = "opi")) // 本输入法
         assertFalse(barVisible(buttons, im = "pinyin")) // 别的输入法（fcitx5 内置拼音）
-        // 端到端串一下：整行 → 解析 → 判定（少一环的表现正是「切走了条还在」）
-        assertFalse(barVisible(buttons, parseImeState("lang=zh;trad=off;punct=on;fw=off;im=pinyin").im))
+        assertFalse(barVisible(buttons, im = "", requireActive = true)) // Windows 未连接 ⇒ 隐藏
+        assertTrue(barVisible(buttons, im = "opi", requireActive = true)); assertFalse(barVisible(buttons, im = "pinyin", requireActive = true))
+        assertFalse(barVisible(buttons, parseImeState("lang=zh;trad=off;punct=on;fw=off;im=pinyin").im)) // 整行→解析→判定
         assertTrue(barVisible(buttons, parseImeState("lang=zh;trad=off;punct=on;fw=off;im=opi").im))
     }
 

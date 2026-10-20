@@ -26,11 +26,12 @@
 ;       /DIR=C:\opi-test /LOG=C:\work\install-exe.log
 ;   C:\opi-test\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 ;
-; Uninstall (2026-10-20): there is NO Windows service in this tree. Candidate,
+; Uninstall (2026-10-21): there is NO Windows service in this tree. Candidate,
 ; settings and statusbar are all opi.exe, so usUninstall kills that image before
 ; file removal; [UninstallDelete] removes {app}; a tsf_opi.dll still mapped in
-; Explorer is scheduled for reboot deletion by uninsrestartdelete. Explorer is
-; never killed (that was the white-screen root cause).
+; Explorer is moved out of {app} by MoveLockedTsfDllOut into %TEMP%.
+; No reboot is requested. Explorer is never killed (that was the white-screen
+; root cause).
 
 #ifndef AppVersion
   #error AppVersion is required: /DAppVersion=<x.y.z>
@@ -70,6 +71,10 @@ OutputBaseFilename=opi-{#AppVersion}-windows-x64-setup
 ; Installer/uninstaller icon = project pet (same art as opi.exe). A relative
 ; directive path resolves against this script's directory, hence two levels up.
 SetupIconFile=..\..\desktop\icons\opi-pet.ico
+; 安装向导侧栏/左上角 = 项目宠物（2026-10-21 用户裁决「安装过程中界面显示项目宠物图」）。
+; Inno Setup 6 支持 PNG；240x459 是 164:314 的 1.46 倍，高分屏不糊。
+WizardImageFile=..\..\desktop\icons\opi-pet-wizard.png
+WizardSmallImageFile=..\..\desktop\icons\opi-pet-wizard-small.png
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
@@ -102,17 +107,17 @@ Type: filesandordirs; Name: "{app}\runtime"
 ; restartreplace: on upgrade the old tsf_opi.dll may still be mapped in Explorer
 ; or another TSF host. Instead of closing those processes (which caused the white
 ; screen) Setup copies the new file and schedules the swap for the next restart.
-; uninsrestartdelete: same rule on uninstall. If the DLL cannot be deleted because
-; Explorer has it mapped, the uninstaller uses MoveFileEx(MOVEFILE_DELAY_UNTIL_REBOOT)
-; and sets NeedRestart; Inno then shows the normal reboot prompt. A DLL that is not
-; loaded is deleted immediately and no prompt appears.
-Source: "{#AppImageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs restartreplace uninsrestartdelete
+; NO uninsrestartdelete (2026-10-21): that flag schedules a reboot when Explorer
+; still maps tsf_opi.dll, and the user saw an uninstall-triggered reboot. On
+; uninstall we instead move a locked DLL out of {app} (see MoveLockedTsfDllOut),
+; so {app} can be deleted immediately and no restart is requested.
+Source: "{#AppImageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs restartreplace
 
 [UninstallDelete]
 ; Remove everything under {app}, including files the uninstall log did not record
-; (logs, stale jars). A locked tsf_opi.dll is handled by uninsrestartdelete above;
-; its parent directories are retried and, if still non-empty now, scheduled for
-; deletion after reboot. Never kill Explorer to unlock the DLL.
+; (logs, stale jars). A locked tsf_opi.dll is moved out of {app} before this runs
+; (MoveLockedTsfDllOut); the directory is deleted now, without a reboot. Never
+; kill Explorer to unlock the DLL.
 Type: filesandordirs; Name: "{app}"
 
 [Icons]
@@ -216,6 +221,31 @@ begin
     Log('opi: could not remove statusbar lock ' + LockPath);
 end;
 
+procedure MoveLockedTsfDllOut();
+var
+  DllPath, TempPath: String;
+begin
+  DllPath := ExpandConstant('{app}\app\tsf_opi.dll');
+  if not FileExists(DllPath) then
+    Exit;
+  if DeleteFile(DllPath) then
+    Exit; // not locked: normal path
+  // Explorer/TSF host may still map the image. Windows refuses deletion but
+  // allows renaming it away; move it to %TEMP% so {app} can be removed now.
+  TempPath := GetEnv('TEMP');
+  if TempPath = '' then
+    TempPath := ExpandConstant('{tmp}');
+  TempPath := TempPath + '\opi-tsf-uninstall-' + GetUserNameString() + '.dll';
+  // A previous uninstall may have left the same name behind. Clearing it is
+  // best-effort; if it is still locked, RenameFile below fails and we log.
+  if FileExists(TempPath) then
+    DeleteFile(TempPath);
+  if RenameFile(DllPath, TempPath) then
+    Log('opi: moved locked TSF DLL to ' + TempPath)
+  else
+    Log('opi: could not move locked TSF DLL; uninstall continues without reboot');
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssInstall then
@@ -232,6 +262,7 @@ begin
     // statusbar); there is no Windows service to stop.
     KillRunningApp();
     UnregisterTsf();
+    MoveLockedTsfDllOut();
     CleanupStatusBarState();
   end;
 end;

@@ -11,6 +11,7 @@ rem
 rem The file name is historical (the MSI postprocess still looks it up by name).
 tasklist /nh /fi "imagename eq opi.exe" 2>nul | find /i "opi.exe" >nul
 if errorlevel 1 start "" "%~dp0..\opi.exe"
-rem Start the statusbar as a second process; its own lock makes duplicate starts harmless.
+rem Start the statusbar as a second process; it hides until TSF reports im=opi
+rem (see StatusBar.kt barVisible), so installing does not show a dead bar.
 start "" "%~dp0..\opi.exe" --statusbar
 exit /b 0

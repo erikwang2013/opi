@@ -68,6 +68,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: 安装器静态断言（宠物向导图 / 卸载不请求重启）
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f desktop/icons/opi-pet-wizard.png
+          test -f desktop/icons/opi-pet-wizard-small.png
+          grep -Fq 'WizardImageFile=..\..\desktop\icons\opi-pet-wizard.png' scripts/windows/opi.iss
+          grep -Fq 'WizardSmallImageFile=..\..\desktop\icons\opi-pet-wizard-small.png' scripts/windows/opi.iss
+          if grep -Eq 'Flags:.*uninsrestartdelete' scripts/windows/opi.iss; then
+            echo '::error::opi.iss 不得再用 uninsrestartdelete（卸载会请求重启）'
+            exit 1
+          fi
+          grep -Fq 'MoveLockedTsfDllOut();' scripts/windows/opi.iss
+
       - id: v
         shell: bash
         run: |

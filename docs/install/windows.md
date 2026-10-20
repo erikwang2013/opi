@@ -359,7 +359,9 @@ gh run download <run-id> -n opi-tsf-dll-v<版本>      # 只有开发者要单�
 `opi-windows-exe-v<版本>`；`opi-msi-internal-v<版本>` 只是内部证据，不要发给用户。
 
 **EXE 安装器（2026-10-20 起用户入口）**：脚本是 `scripts/windows/opi.iss`，
-输入是 `createDistributable` 产出的 app image（`desktop\build\compose\binaries\main\app\opi`）：
+输入是 `createDistributable` 产出的 app image（`desktop\build\compose\binaries\main\app\opi`）。
+安装向导的侧栏/小图使用 `desktop/icons/opi-pet-wizard.png` / `opi-pet-wizard-small.png`
+（Inno Setup 6 支持 PNG；2026-10-21 用户裁决「安装过程中界面显示项目宠物图」）：
 
 ```powershell
 cd desktop
@@ -386,18 +388,18 @@ C:\Program Files\opi\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
   "{app}\app\tsf_opi.dll"`；结果只写日志
   `opi: regsvr32 /s tsf_opi.dll exit code <n>`，**非 0 也不回滚**。卸载时先结束
   `opi.exe`、再 `regsvr32 /s /u`、再删文件（同样 best-effort）。
-- **卸载（2026-10-20）**：`CurUninstallStepChanged(usUninstall)` 在 Inno 删文件前
+- **卸载（2026-10-21）**：`CurUninstallStepChanged(usUninstall)` 在 Inno 删文件前
   先 `taskkill /f /t /im opi.exe`（候选窗 / 设置窗 / 状态栏都是同一个 `opi.exe`；
   **本树没有 Windows 服务**），随后清 HKLM64/HKCU Run 下的 `opi` / `opi-statusbar`
   值与 `%TEMP%\opi-statusbar-<用户>.lock`（状态栏单实例锁：进程被杀后文件仍在）。
-  `[UninstallDelete] filesandordirs "{app}"` 清整个安装目录。**不杀 Explorer**：
-  `tsf_opi.dll` 被 Explorer 加载时，`[Files]` 的 `uninsrestartdelete` 只把删不掉的
-  文件用 `MoveFileEx(..., MOVEFILE_DELAY_UNTIL_REBOOT)` 排到下次重启，并把因此
-  非空的父目录一起排到重启后删；Inno 自动置 `NeedRestart`，卸载结束前会弹
-  「是否重启」提示。⇒ **未占用文件立即删除**；**被占用的 DLL 及其残留目录只在
-  重启后消失**（重启前目录可能还在）。DLL 没被加载时全部立即删除且不提示重启。
-  `/VERYSILENT /NORESTART` 不弹提示也不重启，但日志会记录需要重启；EXE 容器冒烟
-  （无 Explorer）断言整个 `C:\opi-test` 立即消失，**真机的 Explorer 锁定路径仍未验证**。
+  `[UninstallDelete] filesandordirs "{app}"` 清整个安装目录。**不杀 Explorer，也不再
+  请求重启**：`tsf_opi.dll` 被 Explorer 加载时，`MoveLockedTsfDllOut` 先尝试删除，
+  失败则把它改名移到 `%TEMP%`（Windows 允许重命名已映射的映象），这样 `{app}`
+  可以立即删掉；不再使用 `uninsrestartdelete`，Inno 不会置 `NeedRestart` 或弹重启
+  提示。未占用时走普通删除。**代价**：极少数情况下连重命名都失败（例如跨卷/被独占
+  锁定），DLL 会留在原处、目录可能非空，但卸载过程不会重启电脑；日志会记录
+  `could not move locked TSF DLL`。EXE 容器冒烟（无 Explorer）断言整个
+  `C:\opi-test` 立即消失；真机的 Explorer 锁定路径仍需验证。
 - 快捷方式：开始菜单「opi settings」= `opi.exe --settings`；桌面图标在安装时可选。
 - **登录自启（2026-10-20）**：`[Registry]` 写一条 **HKLM64**
   `SOFTWARE\Microsoft\Windows\CurrentVersion\Run` 值 `opi` = `"{app}\opi.exe"`，
@@ -406,6 +408,10 @@ C:\Program Files\opi\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
   隐式行为 —— 将来改模式时不会静默落进 `Wow6432Node`（Explorer 只读原生视图）。
   TSF DLL 只是管道客户端，候选窗进程不在就没有候选 UI；HKLM64 与机器级 TSF 注册
   同一层级，且只有这一条（不是每用户一条）。
+- **状态栏只在切到 opi 时显示（2026-10-21）**：`--statusbar` 仍随登录/完成页启动，
+  但 `barVisible(..., requireActive = isWindows())` 要求控制面读到 `im=opi`；TSF
+  未连接/切换到别的输入法时读不到状态 ⇒ 条隐藏，避免安装完就出现一条点哪个键都报
+  「连不上输入法」的条。切回 opi 后 1s 轮询让它出现。
 - **完成页（2026-10-20 白屏修复后）**：可勾选拉起 `launch-and-restart.cmd`。脚本
   只用 `tasklist` 查重（已有 `opi.exe` 就不重复启动）并 `start` 候选窗，**不碰
   Explorer**。旧脚本会 `taskkill /f /im explorer.exe`，再用
@@ -1220,7 +1226,7 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | 12 | **安装器行为（改安装目录 / 关停运行中实例 / 注册 TSF DLL / 完成页只自启候选窗，2026-10-17 / 10-18 / 10-19 / 10-20）**：表级已改好并可本地复核（§2.5 的后处理脚本 + 读回证据）。**2026-10-19 用户在真机装过的是「未后处理」的 v1.15.1 发布包**（有进程、键盘不显示）—— 这证明了「不跑后处理 = 不注册 = 键盘不出现」。**【订正 2026-10-19 复审】后处理后的三份包**（本地 `processed-static`、本地 `processed`、CI `opi-desktop-msi`）**仍无输入法的根因已定位**：注入的是 32 位 `WixSilentExec`，而随包 `Binary.WixCA` 是 PE32 i386 ⇒ WOW64 调 SysWOW64 的 32 位 `regsvr32`，加载不了 x86-64 DLL。脚本/CI 已改为 `WixSilentExec64` + `WixSilentExec64CmdLine` 并加 PE machine 断言，注册逻辑改为显式判存在 + HKLM 默认启用。**【订正 2026-10-20】EXE 白屏后安装器不再结束/重启 Explorer**：`launch-and-restart.cmd` 只启动 `opi.exe`，`opi.iss` 改用 `runasoriginaluser` 并 `CloseApplications=no`（§2.5）。修复后的 EXE **仍未在真机交互路径装过**（CI 静默安装跳过 `[Run]`），所以 taskkill 真杀没杀掉、`regsvr32` 真注册没成功、WixShellExec 真启没启起来、ExitDialog 复选框出不出现，仍是【未验证】 | §2.5、`scripts/postprocess-windows-msi.sh`、`scripts/windows/opi.iss` |
 | 13 | **卸载不清理 TSF 注册（2026-10-19 reviewer m4 记录，有意未做）**：`OpRegisterTsf` 的条件是 `NOT REMOVE` ⇒ 卸载**不执行** `regsvr32 /s /u`；`HKCR\CLSID\{98C51858-590B-404D-8915-21EB44250062}\InprocServer32` 与 `HKLM\SOFTWARE\Microsoft\CTF` 下由 `DllRegisterServer` 写入的条目会**残留并指向已删除的 DLL**。未加卸载动作的原因：`WixSilentExec64` 只有**一个**命令属性 `WixSilentExec64CmdLine`，安装/卸载两条命令会互相覆盖；手写 `RemoveRegistryKey` 又需精确复制官方 API 写入的键，未在真机取证。重装到同一路径会重新覆盖注册；彻底清理 = 卸载前手工 `regsvr32 /s /u <dll>`，已卸载则手工删上述键 | `scripts/postprocess-windows-msi.sh`、§2.5 | 卸载后注册残留；卸载本身的文件删除不受影响 |
 | 14 | **Win7 / Win8 / 8.1 不支持（2026-10-19 用户裁决：仅文档标注）**：DLL 的 API set/Rust std 与候选窗的 JDK 21/Compose 下限都在 Win10/11；Win7/8 需另建 legacy 轨道 | §1.1 的说明 | 在 Win7/8 上安装/运行不保证；不在本仓库范围 |
-| 15 | **EXE 卸载的「重启后删除」路径未在真机验证（2026-10-20）**：容器冒烟只能证明没有 Explorer 时 `[UninstallDelete] filesandordirs {app}` 会把目录立即删干净；`tsf_opi.dll` 被 Explorer 映射时依赖 Inno `uninsrestartdelete` → `MoveFileEx(MOVEFILE_DELAY_UNTIL_REBOOT)` + `NeedRestart` 提示，**重启前 DLL 和因此非空的目录仍在**。另：状态栏锁清理只覆盖运行卸载器的那个用户的 `%TEMP%`（同机其他用户的残留锁文件不处理，无害）。本树没有 Windows 服务，卸载 kill 的就是 `opi.exe` 三种模式 | `scripts/windows/opi.iss`、§2.5 | 真机卸载可能要求重启；不重启则残留锁定的 DLL/空目录 |
+| 15 | **EXE 无重启卸载的锁定 DLL 路径未在真机验证（2026-10-21）**：容器冒烟只能证明没有 Explorer 时 `[UninstallDelete] filesandordirs {app}` 会把目录立即删干净；`tsf_opi.dll` 被 Explorer 映射时，`MoveLockedTsfDllOut` 尝试把它重命名移出 `{app}` 到 `%TEMP%`，**不再使用 `uninsrestartdelete`、不再请求重启**。若重命名也失败，DLL/目录可能残留，但卸载不会重启电脑；日志会记录。另：状态栏锁清理只覆盖运行卸载器的那个用户的 `%TEMP%`（同机其他用户的残留锁文件不处理，无害）。本树没有 Windows 服务，卸载 kill 的就是 `opi.exe` 三种模式 | `scripts/windows/opi.iss`、§2.5 | 真机 Explorer 锁定路径未验证；极端情况下残留 DLL/目录，但无重启 |
 
 ### 6.2 代码里已知的缺口（读源码得出，不是待办猜测）
 
@@ -1241,7 +1247,7 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | 13 | **`ITfFnConfigure` 只过 `cargo check`**：控制面板里那个「属性」按钮会不会出现、点了拉不拉得起设置窗，本机无法验证；拉起的候选路径判定有主机单测（`settings_exe.rs`），Win32 那一步没有 | §4.4、`crates/tsf-opi/src/configure.rs` | 真机上「属性」可能不出现/不响应 |
 | 14 | ~~**设置窗没有 Windows 安装包**~~ **【订正 2026-10-09】** 安装包有了：`desktop/build.gradle.kts` 的 `targetFormats` 加了 `Msi`（原来只列 `Deb`），`.github/workflows/windows.yml` 在 Windows 主机上真打 `.msi`（§2.5）。剩下的缺口：**不在 Release 里、未签名、artifact 90 天过期**，拿到手得自己去 Actions 取 | §4.4、§2.5 | 装完也不会自己出现（本表 #2：没人拉起它） |
 | 15 | **W1「切中→英直接确认」在 Windows 侧只有状态机**（2026-10-10；同日深夜语义改为**一律原文**——拼音/繁体上缓冲原文、符号模式的关键字只清不提交）：`switch_mode_confirmed` 与引擎 `confirm_pending` 已就位并有两轨配对测试 + 负对照，但 `tsf.rs::toggle_mode` 的调用点**有意未接线**（插入面未通电；接线 = 改调它 + 把返回值插入文档）⇒ 现状仍同 #9 | `logic.rs`、`logic_input_method.rs`、`tsf.rs::toggle_mode` | 行为与 #9 同：打到一半切模式丢字 |
-| 16 | **桌面三件套在 Windows 上已接控制面（2026-10-20），但符号数据仍未随包**：符号页点选经 `\\.\pipe\opi-control` broker 送 TSF `commit`；状态栏 `--statusbar` 由 **EXE 安装器**的 HKLM64 Run 值随登录自启（卸载时删），jpackage MSI 仍没有这条 Run 值；`symbol_categories.tsv` 仍未拷进 MSI/EXE 资源 ⇒ 页面如实显示「没有类目数据」 | `desktop/` 的 `SymbolsPage.kt`/`ControlPlane.kt`/`StatusBar.kt`、`scripts/windows/opi.iss` | EXE 装法能看到状态栏；符号数据仍缺 |
+| 16 | **桌面三件套在 Windows 上已接控制面（2026-10-20），但符号数据仍未随包**：符号页点选经 `\\.\pipe\opi-control` broker 送 TSF `commit`；状态栏 `--statusbar` 由 **EXE 安装器**的 HKLM64 Run 值随登录自启（卸载时删），jpackage MSI 仍没有这条 Run 值；`symbol_categories.tsv` 仍未拷进 MSI/EXE 资源 ⇒ 页面如实显示「没有类目数据」 | `desktop/` 的 `SymbolsPage.kt`/`ControlPlane.kt`/`StatusBar.kt`、`scripts/windows/opi.iss` | EXE 装法在切换为 opi 后能看到状态栏（未切换时隐藏）；符号数据仍缺 |
 | 17 | **虚拟键盘 Windows 路径（`SendInput`）只过编译**：本机无 Windows，运行期未验证；一并如实记：Linux 的 XTEST 注入与状态栏窗口**也未做 GUI 冒烟**（本机无 Xvfb，待真桌面时间窗）——逻辑层（键表物理键码、可见性组合、注入序列映射）已测 | `desktop/` 的 `VirtualKeyboard.kt`、`docs/install/linux.md` §4.8 | 未验证 ≠ 不可用，但也别当已验证 |
 
 ### 6.3 交付这件事本身
