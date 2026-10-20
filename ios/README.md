@@ -100,7 +100,7 @@
 | `KeyboardLayout.swift` | 键盘 UI 骨架的视图装配：候选栏（含翻页）+ 字母/数字层 + 触摸接线 + 外部刷新入口 + 四个互斥面板的摆位。**不含**键位表与尺寸算式（见下两行） |
 | `InputModes.swift` | 输入模式（2026-10-14）：九项枚举（`InputMode`）与三根轴的映射、各模式的**键位表**（26/9/14/笔画）、`applyInputMode`（控制器扩展）。**不含**视图装配 |
 | `ModeKeyRenderer.swift` | `[ModeRow]` → 视图树的**尺寸算式**（2026-10-14 从 `KeyboardLayout` 搬出）。含「列」形状（9 键的标点列/右功能列）与行高权重 |
-| `InputModePanel.swift` | 输入模式**菜单**（2026-10-14）：九项 chip，选中即换。摆位在 `KeyboardLayout`，语义在 `applyInputMode` |
+| `InputModePanel.swift` | 输入模式**菜单**（2026-10-14）：九项 chip，选中即换；2026-10-20 起左上角返回箭头（原右上角关闭已撤）。摆位在 `KeyboardLayout`，语义在 `applyInputMode` |
 | `RarePanel.swift` | 生僻字面板（2026-10-14）：`RareIndex`（TSV 解析）+ 部首→笔画→字三级状态机，提交直提。⚠️ 索引文件本仓 iOS 侧**不存在**（见该文件头注与下面新节） |
 | `SymbolPanel.swift` | 符号层的网格（竖向滚动）。数据来自 `OpiEngine.commonSymbols()`，点击直提。另含 `canRender`（字形判定，表情层共用） |
 | `EmojiPanel.swift` | 表情页（2026-10-18 改为 Android 同布局）：顶部 `[‹ 返回][自有 \| Emoji \| 颜文字][🔍]` + 底部分类条 + 两套工具条。Emoji 数据来自 `OpiEngine.emojiSymbols()`/`emojiGroups()`，自有 = 4 列贴纸网格（点击复制图片），颜文字来自内嵌数据。**2026-10-20 起「自有」缺省隐藏**（`showOwn = false`；无设置页）。⚠️ 这次改写**未编译** |

@@ -112,21 +112,20 @@ private fun ToolbarIcon(icon: ImageVector, description: String, onClick: () -> U
     }
 }
 
-/** 面板头（皮肤/输入模式/键盘模式共用同一形态：标题 + 提示 + 右上角关闭）。 */
+/** 面板头（输入模式/键盘模式共用：左上返回箭头 + 标题 + 提示）。 */
 @Composable
-private fun PanelHeader(title: String, hint: String, closeDesc: String, onClose: () -> Unit) {
+private fun PanelHeader(title: String, hint: String, onBack: () -> Unit) {
     val p = LocalKeyboardPalette.current
     Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 4.dp, top = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(start = 2.dp, end = 10.dp, top = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        IconButton(onClick = onBack) {
+            Icon(OpiIcons.ArrowBack, contentDescription = "返回", tint = p.toolbarFg)
+        }
         Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = p.panelFg)
         Spacer(Modifier.width(10.dp))
         Text(hint, fontSize = 11.sp, color = p.barDimFg)
-        Spacer(Modifier.weight(1f))
-        IconButton(onClick = onClose) {
-            Icon(OpiIcons.Close, contentDescription = closeDesc, tint = p.toolbarFg)
-        }
     }
 }
 
@@ -197,7 +196,7 @@ fun InputModePanel(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize().background(LocalKeyboardPalette.current.panelBg)) {
-        PanelHeader("输入模式", "选中即换", "关闭输入模式面板", onClose)
+        PanelHeader("输入模式", "选中即换", onClose)
         PanelChips {
             for (m in InputMode.entries) {
                 PanelChip(
@@ -227,7 +226,7 @@ fun KeyboardModePanel(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize().background(LocalKeyboardPalette.current.panelBg)) {
-        PanelHeader("键盘模式", "可连开多个；再点一下关", "关闭键盘模式面板", onClose)
+        PanelHeader("键盘模式", "可连开多个；再点一下关", onClose)
         PanelChips {
             // —— 繁体：引擎模式开关（与「中/繁/英」键同一条路） ——
             PanelChip(

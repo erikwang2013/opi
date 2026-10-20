@@ -418,7 +418,7 @@ IME 窗口列布局）**最左是小欧（logo）**，其后才是入口图标 �
 |---|---|
 | 笑脸 | **表情**：直接进独立表情页 `keyboard/EmojiPanel.kt`（`ImeState.openEmoji` → `SymbolTab.Emoji` 入口标记） |
 | 调色板 | **皮肤**面板：十张预览卡（见下「皮肤」段；2026-10-09 加，2026-10-10 扩到十款） |
-| 键盘 | **输入模式**面板：七选一（见下表）。2026-10-09 起与皮肤同一形态的**面板**（占键区、右上角关闭），不再用 DropdownMenu 弹框（用户裁决「做成像选择皮肤的功能」）；选中即换并自动收尾回键面/生僻字面板 |
+| 键盘 | **输入模式**面板：七选一（见下表）。2026-10-09 起与皮肤同一形态的**面板**（占键区、左上角返回箭头），不再用 DropdownMenu 弹框（用户裁决「做成像选择皮肤的功能」）；选中即换并自动收尾回键面/生僻字面板 |
 | 滑杆 | **键盘模式**面板：繁体 / 单手（关/左/右）/ 悬浮 / 游戏 / 暗光 / 长辈。同上为面板形态；**点选项不关面板**（常要连开两三个），✓ 随开关实时更新，暗光这类换肤当场生效 |
 | 圆圈 i | **关于**面板（2026-10-15 用户裁决「关于给移动端键盘功能区加个入口」）：简介 / 版本（`BuildConfig.VERSION_NAME`）/ 版权 / 表情数据（OpenMoji CC BY-SA 4.0、颜文字 MIT）/ 项目地址 / 博客地址，两条地址可点（`ACTION_VIEW`；IME 是 Service，起 Activity 必须 `NEW_TASK`）。文案与设置页那一节**同一份常量**（`settings/AboutSection.kt` 的 `ABOUT_INTRO` / `ABOUT_PROJECT_URL` / `ABOUT_BLOG_URL`），面板里一字不自编；面板**自己可滚动**（键区矮，内容比它高）。门禁 `AboutSectionTest.aboutPanelReusesSourcesAndIsWiredToTheToolbar` |
 

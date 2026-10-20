@@ -195,7 +195,7 @@ private fun EmojiTopBar(
     onStartSearch: () -> Unit,
 ) {
     val p = LocalKeyboardPalette.current
-    Row(modifier = Modifier.fillMaxWidth().height(48.dp)) {
+    Row(modifier = Modifier.fillMaxWidth().height(52.dp)) {
         IconButton(onClick = onBack) {
             Icon(
                 OpiIcons.ArrowBack,
@@ -233,16 +233,21 @@ private fun EmojiTopBar(
             ) {
                 for (t in tabs) {
                     val on = t == sub
-                    Text(
-                        text = t.label,
+                    Box(
                         modifier = Modifier
+                            .height(44.dp)
                             .clip(RoundedCornerShape(6.dp))
                             .selectable(selected = on, role = Role.Tab, onClick = { onSub(t) })
-                            .padding(horizontal = 14.dp, vertical = 6.dp),
-                        fontSize = 15.sp,
-                        fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
-                        color = if (on) p.accent else p.barDimFg,
-                    )
+                            .padding(horizontal = 12.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = t.label,
+                            fontSize = 15.sp,
+                            fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+                            color = if (on) p.accent else p.barDimFg,
+                        )
+                    }
                 }
             }
             // 自有只有图片，没有可搜索的文本 —— 给了 🔍 也只会落到「无匹配」。
@@ -303,28 +308,33 @@ private fun CategoryBar(groups: List<SymbolCatalog.EmojiGroup>, grid: LazyGridSt
     val scope = rememberCoroutineScope()
     val selected = SymbolCatalog.groupIndexOf(groups, grid.firstVisibleItemIndex)
     LazyRow(
-        modifier = Modifier.fillMaxWidth().height(44.dp).background(p.barBg),
+        modifier = Modifier.fillMaxWidth().height(52.dp).background(p.barBg),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         itemsIndexed(groups) { i, g ->
             val on = i == selected
-            Text(
-                text = g.name,
+            Box(
                 modifier = Modifier
-                    .padding(horizontal = 4.dp)
+                    .padding(horizontal = 3.dp)
+                    .height(44.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .background(if (on) p.keyBg else Color.Transparent)
                     .clickable { scope.launch { grid.scrollToItem(g.start) } }
-                    .padding(horizontal = 10.dp, vertical = 7.dp)
+                    .padding(horizontal = 12.dp)
                     .semantics {
                         role = Role.RadioButton
                         contentDescription = "分类 ${g.name}${if (on) "，已选中" else ""}"
                     },
-                fontSize = 13.sp,
-                fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
-                color = if (on) p.accent else p.panelFg,
-                maxLines = 1,
-            )
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = g.name,
+                    fontSize = 14.sp,
+                    fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+                    color = if (on) p.accent else p.panelFg,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }

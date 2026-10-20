@@ -34,7 +34,7 @@ final class InputModePanel: UIView {
     /// 收起与否不影响打字；本端面板**占掉整个键面**（与符号/表情面板同位置），
     /// 不收起用户就没法接着打字。这是有意的分歧，不是漏抄。
     var onSelect: ((InputMode) -> Void)?
-    /// 「关闭」→ 回字母层（由 `KeyboardLayout` 转成 `.showLetters`）。
+    /// 「返回」→ 回字母层（由 `KeyboardLayout` 转成 `.showLetters`）。
     var onClose: (() -> Void)?
 
     /// 每行几个 chip（9 项 → 3 行）。
@@ -42,7 +42,7 @@ final class InputModePanel: UIView {
     private static let chipHeight: CGFloat = 40
 
     private let titleLabel = UILabel()
-    private let closeButton = BarButton(title: "关闭") {}
+    private let backButton = BarButton(title: "‹ 返回") {}
     private let gridStack = UIStackView()
     /// 九颗 chip（建一次；`show(current:)` 只改选中样式 —— 9 个静态项不值得重建）。
     private var chips: [InputMode: BarButton] = [:]
@@ -53,21 +53,22 @@ final class InputModePanel: UIView {
         titleLabel.text = "输入模式 · 选中即换"
         titleLabel.font = .systemFont(ofSize: 14)
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        closeButton.addTarget(self, action: #selector(tappedClose), for: .touchUpInside)
+        backButton.addTarget(self, action: #selector(tappedBack), for: .touchUpInside)
         gridStack.axis = .vertical
         gridStack.spacing = 6
         gridStack.translatesAutoresizingMaskIntoConstraints = false
 
         addSubview(titleLabel)
-        addSubview(closeButton)
+        addSubview(backButton)
         addSubview(gridStack)
         NSLayoutConstraint.activate([
-            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
-            titleLabel.centerYAnchor.constraint(equalTo: closeButton.centerYAnchor),
-            closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
-            closeButton.topAnchor.constraint(equalTo: topAnchor, constant: 4),
+            backButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
+            backButton.topAnchor.constraint(equalTo: topAnchor, constant: 4),
+            titleLabel.leadingAnchor.constraint(equalTo: backButton.trailingAnchor, constant: 8),
+            titleLabel.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
+            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -8),
             // 表头高 40：与面包屑行（`RarePanel`）同一节奏。
-            gridStack.topAnchor.constraint(equalTo: closeButton.bottomAnchor, constant: 4),
+            gridStack.topAnchor.constraint(equalTo: backButton.bottomAnchor, constant: 4),
             gridStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 3),
             gridStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -3),
         ])
@@ -112,5 +113,5 @@ final class InputModePanel: UIView {
         }
     }
 
-    @objc private func tappedClose() { onClose?() }
+    @objc private func tappedBack() { onClose?() }
 }

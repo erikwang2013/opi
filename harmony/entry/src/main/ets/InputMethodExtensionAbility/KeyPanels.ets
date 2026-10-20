@@ -442,13 +442,13 @@ export struct InputModePanel {
   build() {
     Column() {
       Row() {
-        Text('输入模式')
-          .fontSize(15).fontColor('#1E6B63').layoutWeight(1).padding({ left: 10 })
-        Text('关闭')
+        Text('‹ 返回')
           .fontSize(14).fontColor('#2E8B80').padding({ left: 10, right: 10 })
           .onClick(() => {
             this.ctrl.closeModePanel();
           })
+        Text('输入模式')
+          .fontSize(15).fontColor('#1E6B63').layoutWeight(1).padding({ right: 10 })
       }.height(38).width('100%').backgroundColor('#E9F3F1')
 
       // 九枚选项，3×3 排（不用 Flex 换行 —— 本机查不到它的行为，而九项正好三行）。

@@ -51,7 +51,7 @@ import xyz.erik.opi.settings.ABOUT_PROJECT_URL
  * **复用同一份**（`ABOUT_INTRO` / `ABOUT_PROJECT_URL` / `ABOUT_BLOG_URL`，
  * 版本经 `BuildConfig.VERSION_NAME`）—— 面板里一个字的正文都不自编，改文案去改源头。
  *
- * 形态与皮肤/输入模式面板同一套（标题行 + 右上角关闭，[ImeState.backToLetters]）。
+ * 形态与皮肤/输入模式面板同一套（左上返回箭头 + 标题行，[ImeState.backToLetters]）。
  * 内容比键区高 ⇒ 本面板**自己可滚动**（与设置页那个滚动缺陷同族的坑，别省这一步）。
  */
 @Composable
@@ -63,14 +63,13 @@ fun AboutPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
     var note by remember { mutableStateOf("") }
     Column(modifier = modifier.fillMaxSize().background(p.panelBg)) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 4.dp, top = 4.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 2.dp, end = 10.dp, top = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("关于", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = p.panelFg)
-            Spacer(Modifier.weight(1f))
             IconButton(onClick = onClose) {
-                Icon(OpiIcons.Close, contentDescription = "关闭关于面板", tint = p.panelFg)
+                Icon(OpiIcons.ArrowBack, contentDescription = "返回", tint = p.toolbarFg)
             }
+            Text("关于", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = p.panelFg)
         }
         Column(
             modifier = Modifier.fillMaxWidth().weight(1f)

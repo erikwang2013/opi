@@ -62,7 +62,7 @@ final class EmojiPanel: UIView {
     /// 颜文字比单个 emoji 宽得多：3 列 + 允许缩字，少截成省略号（Android 同）。
     private static let kaomojiColumns = 3
     /// 顶部工具条 / 底部分类条高度。与 `KeyboardLayout` 候选栏的 40 同值。
-    private static let barHeight: CGFloat = 40
+    private static let barHeight: CGFloat = 48
     /// 空颜文字 / 空搜索两句话（文案对齐 Android）。
     private static let noKaomoji = "没有颜文字数据"
     private static let noMatch = "无匹配"
@@ -372,7 +372,7 @@ final class EmojiPanel: UIView {
     }
 
     private func styleCategory(_ b: BarButton, selected: Bool) {
-        b.titleLabel?.font = .systemFont(ofSize: 13, weight: selected ? .bold : .regular)
+        b.titleLabel?.font = .systemFont(ofSize: 14, weight: selected ? .bold : .regular)
         b.setTitleColor(selected ? .systemBlue : .label, for: .normal)
         // 选中 = 药丸底（同 Android 的 keyBg 底 + accent 字）。
         b.backgroundColor = selected ? .secondarySystemBackground : .clear

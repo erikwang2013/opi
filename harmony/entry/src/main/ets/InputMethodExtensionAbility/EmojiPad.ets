@@ -310,17 +310,17 @@ export struct EmojiPad {
       Row() {
         ForEach(this.categoryNames(), (name: string, i: number) => {
           Text(name)
-            .fontSize(13)
+            .fontSize(14)
             .fontColor(i === this.selectedCategory() ? '#FFFFFF' : '#1E6B63')
             .backgroundColor(i === this.selectedCategory() ? '#2E8B80' : '#FFFFFF')
-            .borderRadius(8).padding({ left: 10, right: 10, top: 6, bottom: 6 })
+            .borderRadius(8).padding({ left: 12, right: 12, top: 13, bottom: 13 })
             .margin({ left: 3, right: 3 })
             .onClick(() => { this.selectCategory(i); })
         }, (name: string, i: number) => `${i}-${name}`)
       }
     }
     .scrollable(ScrollDirection.Horizontal)
-    .width('100%').height(40).backgroundColor('#FFFFFF')
+    .width('100%').height(52).backgroundColor('#FFFFFF')
   }
 
   // ------------------------------------------------------------ 状态与数据

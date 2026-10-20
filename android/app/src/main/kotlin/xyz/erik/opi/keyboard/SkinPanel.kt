@@ -39,7 +39,7 @@ import androidx.compose.ui.unit.sp
  *
  * 形态对齐桌面设置窗的皮肤选择器与主流输入法的皮肤页：**五张预览卡**，点一张换一张 ——
  * 预览就是**小键盘样张**（底色 + 键面 + 一枚强调键），不是纯色块，也不是文字清单。
- * 面板**不自动关**：皮肤要连换着比才顺手；关闭走右上角，与生僻字面板同一条
+ * 面板**不自动关**：皮肤要连换着比才顺手；左上角返回箭头走
  * [xyz.erik.opi.ime.ImeState.backToLetters]。
  *
  * 配色真源是 [SkinOption.palette]（与 fcitx5 侧主题同一套设计语言）；本文件
@@ -56,9 +56,12 @@ fun SkinPanel(
     val p = LocalKeyboardPalette.current
     Column(modifier = modifier.fillMaxSize().background(p.panelBg)) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 4.dp, top = 4.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 2.dp, end = 10.dp, top = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            IconButton(onClick = onClose) {
+                Icon(OpiIcons.ArrowBack, contentDescription = "返回", tint = p.toolbarFg)
+            }
             Text("皮肤", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = p.panelFg)
             Spacer(Modifier.width(10.dp))
             Text(
@@ -66,10 +69,6 @@ fun SkinPanel(
                 fontSize = 11.sp,
                 color = p.barDimFg,
             )
-            Spacer(Modifier.weight(1f))
-            IconButton(onClick = onClose) {
-                Icon(OpiIcons.Close, contentDescription = "关闭皮肤面板", tint = p.toolbarFg)
-            }
         }
         // FlowRow 不用 Row：窄屏（<360dp）五张卡排不下时**折行**，不裁掉最后一张。
         FlowRow(
