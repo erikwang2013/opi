@@ -129,17 +129,29 @@
   const memoryViewport = $('#memory-viewport');
   const memoryTimeline = $('#memory-timeline');
   const memoryProgress = $('#memory-progress');
+  const memoryIntro = $('#memory-intro');
+  const memoryIntroImg = $('#memory-intro-img');
+  const memoryIntroLabel = $('#memory-intro-label');
+  const memoryIntroCount = $('#memory-intro-count');
   const memoryClose = memoryOverlay ? $('[data-memory-close]', memoryOverlay) : null;
   const memorySeenKey = 'opi-memory-seen-v1';
   const memoryPets = [
-    'idle.gif', 'waiting.png', 'crying.gif', 'puzzled.png', 'terrified.png',
-    'angry.png', 'coquettish.gif', 'cute.gif', 'pleasing.png', 'knocking.gif',
+    'idle.gif', 'waiting.gif', 'crying.gif', 'puzzled.gif', 'terrified.gif',
+    'angry.gif', 'coquettish.gif', 'cute.gif', 'pleasing.gif', 'knocking.gif',
     'face-palm.gif', 'tongue-out.gif',
   ];
+  const memoryIntroForms = [
+    ['idle.gif', '小欧·笑'], ['waiting.gif', '小欧·欢乐'], ['crying.gif', '小欧·哭'],
+    ['puzzled.gif', '小欧·沮丧'], ['terrified.gif', '小欧·惊恐'], ['angry.gif', '小欧·愤怒'],
+    ['coquettish.gif', '小欧·撒娇'], ['cute.gif', '小欧·卖萌'], ['pleasing.gif', '小欧·讨好'],
+    ['knocking.gif', '小欧·敲打'], ['face-palm.gif', '小欧·捂脸'], ['tongue-out.gif', '小欧·吐舌头'],
+  ];
+  // Warm the local GIF/PNG cache so the opening sequence never shows an empty box.
+  memoryIntroForms.forEach(([file]) => { const img = new Image(); img.src = `assets/pet/forms/${file}`; });
   let memoryBuilt = false;
   let memoryRaf = 0;
   let memoryEndTimer = 0;
-  let memoryAutoHoldUntil = 0;
+  let memoryIntroTimer = 0;
   let memoryPreviousFocus = null;
   let memoryPaused = false;
 
@@ -203,8 +215,12 @@
   const stopMemory = () => {
     if (memoryRaf) cancelAnimationFrame(memoryRaf);
     if (memoryEndTimer) clearTimeout(memoryEndTimer);
+    if (memoryIntroTimer) clearTimeout(memoryIntroTimer);
     memoryRaf = 0;
     memoryEndTimer = 0;
+    memoryIntroTimer = 0;
+    memoryIntroImg?.getAnimations().forEach((animation) => animation.cancel());
+    memoryIntro?.classList.remove('is-showing', 'is-pop');
   };
 
   const closeMemory = () => {
@@ -216,6 +232,38 @@
     window.setTimeout(() => {
       if (memoryOverlay && !memoryOverlay.classList.contains('is-open')) memoryOverlay.hidden = true;
     }, 240);
+  };
+
+  const startMemoryIntro = () => {
+    if (!memoryIntro || !memoryIntroImg || !memoryIntroLabel || !memoryIntroCount || reduceMotion) {
+      playMemory();
+      return;
+    }
+    stopMemory();
+    let index = 0;
+    memoryIntro.classList.add('is-showing');
+    const show = () => {
+      const [file, label] = memoryIntroForms[index];
+      memoryIntroImg.src = `assets/pet/forms/${file}`;
+      memoryIntroLabel.textContent = label;
+      memoryIntroCount.textContent = `${index + 1} / ${memoryIntroForms.length}`;
+      memoryIntroImg.animate(
+        [{ transform: 'scale(.78) rotate(-5deg)' },
+         { transform: 'scale(1.06) rotate(1deg)', offset: .72 },
+         { transform: 'none' }],
+        { duration: 360, easing: 'cubic-bezier(.22,1,.36,1)' },
+      );
+      index += 1;
+      if (index < memoryIntroForms.length) {
+        memoryIntroTimer = window.setTimeout(show, 620);
+      } else {
+        memoryIntroTimer = window.setTimeout(() => {
+          memoryIntro.classList.remove('is-showing');
+          memoryIntroTimer = window.setTimeout(playMemory, 280);
+        }, 760);
+      }
+    };
+    show();
   };
 
   const playMemory = () => {
@@ -233,7 +281,7 @@
       if (!last) last = now;
       const dt = Math.min(80, Math.max(0, now - last));
       last = now;
-      if (!memoryPaused && now >= memoryAutoHoldUntil) {
+      if (!memoryPaused) {
         memoryViewport.scrollTop = Math.min(max, memoryViewport.scrollTop + speed * dt);
         if (memoryViewport.scrollTop >= max - 1) {
           memoryProgressNow();
@@ -253,7 +301,6 @@
     if (memoryOverlay.classList.contains('is-open')) return;
     memoryPreviousFocus = document.activeElement;
     memoryPaused = false;
-    memoryAutoHoldUntil = 0;
     memoryViewport.scrollTop = 0;
     memoryOverlay.hidden = false;
     document.body.classList.add('memory-open');
@@ -261,7 +308,7 @@
     memoryClose?.focus?.({ preventScroll: true });
     window.requestAnimationFrame(() => {
       memoryOverlay.classList.add('is-open');
-      playMemory();
+      startMemoryIntro();
     });
   };
 
@@ -271,12 +318,8 @@
     memoryOverlay.addEventListener('click', (event) => {
       if (event.target === memoryOverlay) closeMemory();
     });
-    memoryViewport?.addEventListener('pointermove', () => { if (!memoryPaused) setMemoryPaused(true); });
+    memoryViewport?.addEventListener('pointerenter', () => setMemoryPaused(true));
     memoryViewport?.addEventListener('pointerleave', () => setMemoryPaused(false));
-    memoryViewport?.addEventListener('click', () => setMemoryPaused(!memoryPaused));
-    memoryViewport?.addEventListener('wheel', () => {
-      memoryAutoHoldUntil = performance.now() + 8000;
-    }, { passive: true });
     memoryViewport?.addEventListener('scroll', memoryProgressNow, { passive: true });
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') closeMemory();

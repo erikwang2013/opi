@@ -193,3 +193,8 @@
   .memory-pet img { width: 44px; height: 44px; }
   .memory-foot { padding: 11px 16px 13px; gap: 10px; }
 }
+
+@media (max-width: 600px) {
+  .memory-intro-stage img { width: 88px; height: 88px; }
+  .memory-intro-stage p { font-size: .9rem; }
+}
