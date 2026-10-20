@@ -287,7 +287,7 @@ LICENSE · CONTRIBUTING.md      # MIT 全文 · 贡献指南（含词库许可�
 
 ### 📅 项目状态
 
-> **当前阶段：v1.19.0（2026-10-20）：六端原生客户端与静态官网；Windows 词库随包、卸载清理、状态栏控制面与设置即时生效，Android 空闲工具条 / 英文候选栏与 iOS、macOS、鸿蒙功能对齐，贴纸 PNG 优先上屏与 iOS 完全访问，站点 3D / 赞赏二维码 / 备案改版；Apple 与鸿蒙仍为 unsigned 产物，签名与 Windows / iOS / 鸿蒙真机未验证**
+> **当前阶段：v1.19.0（2026-10-20）：六端原生客户端与静态官网；Windows 词库随包、卸载清理、状态栏控制面与设置即时生效，Android 空闲工具条 / 英文候选栏与 iOS、macOS、鸿蒙功能对齐，贴纸剪贴板（Android / 桌面 / 鸿蒙 PNG 优先，iOS 同时提供 PNG+GIF）与 iOS 完全访问，站点 3D / 赞赏二维码 / 备案改版；Apple 与鸿蒙仍为 unsigned 产物，签名与 Windows / iOS / 鸿蒙真机未验证**
 
 V1 里程碑进度：
 
