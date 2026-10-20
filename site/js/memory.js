@@ -30,24 +30,51 @@
   };
 
   let memoryBuilt = false;
-  let memoryIntroAll = null;
-  let memoryIntroGrid = null;
-  let memoryIntroAllCount = null;
+  let memoryIntroSingle = null;
+  let memoryIntroImg = null;
+  let memoryIntroLabel = null;
+  let memoryIntroCount = null;
+  let memoryFormsEntry = null;
   let memoryRaf = 0;
   let memoryEndTimer = 0;
   let memoryIntroTimer = 0;
-  let memoryLoadTimer = 0;
   let memoryObserver = null;
   let memoryRevealTimer = 0;
   let memoryRevealQueue = [];
   let memoryLastReveal = 0;
   let memoryPreviousFocus = null;
   let memoryPaused = false;
-  const MEMORY_LOADING_MIN_MS = 2800;
-  const MEMORY_LOADING_MAX_MS = 4200;
 
   const markMemorySeen = () => {
     try { localStorage.setItem(memorySeenKey, '1'); } catch (_) { /* private mode */ }
+  };
+
+  const buildFormsEntry = () => {
+    const entry = document.createElement('li');
+    entry.className = 'memory-forms-entry';
+    const title = document.createElement('p');
+    title.className = 'memory-forms-title';
+    title.textContent = '小欧的十二种形态 · 故事从这里开始';
+    const grid = document.createElement('div');
+    grid.className = 'memory-forms-grid';
+    memoryIntroForms.forEach(([file, name, mood]) => {
+      const item = document.createElement('figure');
+      item.className = 'memory-forms-pet';
+      item.style.setProperty('--mood', mood);
+      const img = document.createElement('img');
+      img.src = `assets/pet/forms/${file}`;
+      img.width = 48;
+      img.height = 48;
+      img.alt = name;
+      img.loading = 'eager';
+      img.decoding = 'async';
+      const caption = document.createElement('figcaption');
+      caption.textContent = name;
+      item.append(img, caption);
+      grid.append(item);
+    });
+    entry.append(title, grid);
+    return entry;
   };
 
   const buildMemory = () => {
@@ -58,11 +85,11 @@
       version: $('.release-version', item)?.textContent?.trim() || '',
       date: $('.release-date', item)?.textContent?.trim() || '',
       note: $('.release-note', item)?.textContent?.trim() || '',
-    })).filter((row) => row.version).reverse(); // oldest → newest (top → bottom)
+    })).filter((row) => row.version); // newest → oldest (top → bottom)
     const nodes = [];
     rows.forEach((row, index) => {
       const li = document.createElement('li');
-      li.className = 'memory-item' + (index === rows.length - 1 ? ' is-latest' : '');
+      li.className = 'memory-item' + (index === 0 ? ' is-latest' : '');
       const version = document.createElement('span');
       version.className = 'memory-version';
       version.textContent = row.version;
@@ -89,40 +116,27 @@
         nodes.push(pet);
       }
     });
+    memoryFormsEntry = buildFormsEntry();
+    nodes.push(memoryFormsEntry);
     memoryTimeline.replaceChildren(...nodes);
   };
 
   const buildMemoryIntro = () => {
     if (!memoryIntro || memoryIntro.children.length) return;
-    const all = document.createElement('div');
-    all.className = 'memory-intro-pane memory-intro-all';
-    const title = document.createElement('p');
-    title.className = 'memory-intro-title';
-    title.textContent = '小欧的十二种形态';
-    const grid = document.createElement('div');
-    grid.className = 'memory-intro-grid';
-    const allCount = document.createElement('span');
-    all.append(title, grid, allCount);
-    memoryIntroForms.forEach(([file, name, mood]) => {
-      const item = document.createElement('figure');
-      item.className = 'memory-intro-item';
-      item.style.setProperty('--mood', mood);
-      const petImg = document.createElement('img');
-      petImg.src = `assets/pet/forms/${file}`;
-      petImg.width = 64;
-      petImg.height = 64;
-      petImg.alt = name;
-      petImg.loading = 'eager';
-      petImg.decoding = 'async';
-      const caption = document.createElement('figcaption');
-      caption.textContent = name;
-      item.append(petImg, caption);
-      grid.append(item);
-    });
-    memoryIntro.append(all);
-    memoryIntroAll = all;
-    memoryIntroGrid = grid;
-    memoryIntroAllCount = allCount;
+    const single = document.createElement('div');
+    single.className = 'memory-intro-pane memory-intro-single';
+    const img = document.createElement('img');
+    img.width = 112;
+    img.height = 112;
+    img.alt = '';
+    const label = document.createElement('p');
+    const count = document.createElement('span');
+    single.append(img, label, count);
+    memoryIntro.append(single);
+    memoryIntroSingle = single;
+    memoryIntroImg = img;
+    memoryIntroLabel = label;
+    memoryIntroCount = count;
   };
 
   const setMemoryPaused = (paused) => { memoryPaused = paused; };
@@ -130,14 +144,13 @@
   const memoryProgressNow = () => {
     if (!memoryViewport || !memoryProgress) return;
     const max = Math.max(1, memoryViewport.scrollHeight - memoryViewport.clientHeight);
-    memoryProgress.style.transform = `scaleX(${Math.min(1, memoryViewport.scrollTop / max)})`;
+    memoryProgress.style.transform = `scaleX(${Math.min(1, 1 - memoryViewport.scrollTop / max)})`;
   };
 
   const stopMemory = () => {
     if (memoryRaf) cancelAnimationFrame(memoryRaf);
     if (memoryEndTimer) clearTimeout(memoryEndTimer);
     if (memoryIntroTimer) clearTimeout(memoryIntroTimer);
-    if (memoryLoadTimer) clearTimeout(memoryLoadTimer);
     if (memoryRevealTimer) clearTimeout(memoryRevealTimer);
     memoryObserver?.disconnect();
     memoryObserver = null;
@@ -145,11 +158,10 @@
     memoryRaf = 0;
     memoryEndTimer = 0;
     memoryIntroTimer = 0;
-    memoryLoadTimer = 0;
     memoryRevealTimer = 0;
     memoryIntro?.querySelectorAll('img').forEach((img) => img.getAnimations().forEach((a) => a.cancel()));
     memoryIntro?.classList.remove('is-showing');
-    memoryIntroAll?.classList.remove('is-active');
+    memoryIntroSingle?.classList.remove('is-active');
   };
 
   const closeMemory = () => {
@@ -165,7 +177,7 @@
 
   const resetMemoryItems = () => {
     if (!memoryTimeline) return;
-    $$('.memory-item, .memory-pet', memoryTimeline).forEach((el) => {
+    $$('.memory-item, .memory-pet, .memory-forms-entry', memoryTimeline).forEach((el) => {
       el.classList.remove('is-in', 'is-current');
       delete el.dataset.memoryQueued;
     });
@@ -217,105 +229,69 @@
     if (!memoryIntro || reduceMotion) { playMemory(); return; }
     buildMemoryIntro();
     stopMemory();
-    const started = performance.now();
-    const items = $$('.memory-intro-item', memoryIntroGrid);
-    const images = items.map((item) => $('img', item));
-    let loaded = 0;
-    let finished = false;
     memoryIntro.classList.add('is-showing');
-    memoryIntroAll.classList.add('is-active');
-
-    const finish = () => {
-      if (finished) return;
-      finished = true;
-      if (memoryIntroTimer) clearTimeout(memoryIntroTimer);
-      if (memoryLoadTimer) clearTimeout(memoryLoadTimer);
-      memoryIntro.classList.remove('is-showing');
-      playMemory();
-    };
-    const checkLoaded = () => {
-      if (finished) return;
-      const elapsed = performance.now() - started;
-      if ((elapsed >= MEMORY_LOADING_MIN_MS && loaded >= images.length) ||
-          elapsed >= MEMORY_LOADING_MAX_MS) {
-        finish();
-        return;
-      }
-      memoryLoadTimer = window.setTimeout(checkLoaded, 120);
-    };
-    images.forEach((img) => {
-      const done = () => { loaded += 1; };
-      if (img.complete) done();
-      else { img.addEventListener('load', done, { once: true }); img.addEventListener('error', done, { once: true }); }
-    });
-    checkLoaded();
-
-    items.forEach((item) => { item.style.opacity = '0'; item.classList.remove('is-current'); });
+    memoryIntroSingle.classList.add('is-active');
     let index = 0;
-    const enter = () => {
-      if (finished) return;
-      const item = items[index];
-      memoryIntro.style.setProperty('--intro-mood', memoryIntroForms[index][2]);
-      item.style.opacity = '1';
-      item.animate(
-        [{ transform: introEntry(index) }, { transform: 'scale(1.08) rotate(-2deg)', offset: .78 }, { transform: 'none' }],
-        { duration: 560, easing: 'cubic-bezier(.16,1,.3,1)' },
+    const show = () => {
+      const [file, label, mood] = memoryIntroForms[index];
+      memoryIntro.style.setProperty('--intro-mood', mood);
+      memoryIntroImg.src = `assets/pet/forms/${file}`;
+      memoryIntroImg.alt = label;
+      memoryIntroLabel.textContent = label;
+      memoryIntroCount.textContent = `${index + 1} / ${memoryIntroForms.length}`;
+      memoryIntroImg.animate(
+        [{ transform: introEntry(index) },
+         { transform: 'scale(1.06) rotate(-3deg)', offset: .8 },
+         { transform: 'none' }],
+        { duration: 720, easing: 'cubic-bezier(.16,1,.3,1)' },
       );
       index += 1;
-      memoryIntroAllCount.textContent = `加载中 · ${index} / ${memoryIntroForms.length}`;
-      if (index < items.length) memoryIntroTimer = window.setTimeout(enter, 130);
-      else cycleMoods();
+      if (index < memoryIntroForms.length) {
+        memoryIntroTimer = window.setTimeout(show, 1800);
+      } else {
+        memoryIntroTimer = window.setTimeout(() => {
+          memoryIntro.classList.remove('is-showing');
+          memoryIntroSingle.classList.remove('is-active');
+          memoryIntroTimer = window.setTimeout(playMemory, 300);
+        }, 900);
+      }
     };
-    const cycleMoods = () => {
-      if (finished) return;
-      let active = 0;
-      const next = () => {
-        if (finished) return;
-        items.forEach((item, i) => item.classList.toggle('is-current', i === active));
-        memoryIntro.style.setProperty('--intro-mood', memoryIntroForms[active][2]);
-        active = (active + 1) % items.length;
-        memoryIntroTimer = window.setTimeout(next, 420);
-      };
-      next();
-    };
-    enter();
+    show();
   };
 
   const playMemory = () => {
     if (!memoryTimeline || !memoryViewport || !memoryProgress) return;
     stopMemory();
     resetMemoryItems();
-    memoryViewport.scrollTop = 0;
-    const firstItem = memoryTimeline.querySelector('.memory-item');
-    if (firstItem) firstItem.classList.add('is-in', 'is-current');
+    memoryViewport.scrollTop = memoryViewport.scrollHeight;
+    if (memoryFormsEntry) memoryFormsEntry.classList.add('is-in');
     memoryLastReveal = performance.now();
     memoryProgressNow();
     if (reduceMotion) {
-      $$('.memory-item, .memory-pet', memoryTimeline).forEach((el) => el.classList.add('is-in'));
+      $$('.memory-item, .memory-pet, .memory-forms-entry', memoryTimeline).forEach((el) => el.classList.add('is-in'));
       return;
     }
     if ('IntersectionObserver' in window) {
       memoryObserver = new IntersectionObserver((entries) => {
         entries.filter((entry) => entry.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
+          .sort((a, b) => b.boundingClientRect.top - a.boundingClientRect.top)
           .forEach((entry) => queueMemoryReveal(entry.target));
-      }, { root: memoryViewport, rootMargin: '0px 0px -10% 0px', threshold: 0.08 });
-      $$('.memory-item, .memory-pet', memoryTimeline).forEach((el) => memoryObserver.observe(el));
+      }, { root: memoryViewport, rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
+      $$('.memory-item, .memory-pet, .memory-forms-entry', memoryTimeline).forEach((el) => memoryObserver.observe(el));
     } else {
-      $$('.memory-item, .memory-pet', memoryTimeline).forEach((el) => el.classList.add('is-in'));
+      $$('.memory-item, .memory-pet, .memory-forms-entry', memoryTimeline).forEach((el) => el.classList.add('is-in'));
     }
     const max = Math.max(0, memoryViewport.scrollHeight - memoryViewport.clientHeight);
     if (max <= 0) return;
-    const duration = 120000;
-    const speed = max / duration;
+    const speed = max / 120000;
     let last = 0;
     const step = (now) => {
       if (!last) last = now;
       const dt = Math.min(80, Math.max(0, now - last));
       last = now;
       if (!memoryPaused) {
-        memoryViewport.scrollTop = Math.min(max, memoryViewport.scrollTop + speed * dt);
-        if (memoryViewport.scrollTop >= max - 1) {
+        memoryViewport.scrollTop = Math.max(0, memoryViewport.scrollTop - speed * dt);
+        if (memoryViewport.scrollTop <= 1) {
           memoryProgressNow();
           memoryEndTimer = window.setTimeout(closeMemory, 1200);
           return;
