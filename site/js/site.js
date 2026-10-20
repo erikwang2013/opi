@@ -152,6 +152,9 @@
   let memoryRaf = 0;
   let memoryEndTimer = 0;
   let memoryIntroTimer = 0;
+  let memoryObserver = null;
+  let memoryRevealTimer = 0;
+  let memoryRevealQueue = [];
   let memoryPreviousFocus = null;
   let memoryPaused = false;
 
@@ -216,9 +219,14 @@
     if (memoryRaf) cancelAnimationFrame(memoryRaf);
     if (memoryEndTimer) clearTimeout(memoryEndTimer);
     if (memoryIntroTimer) clearTimeout(memoryIntroTimer);
+    if (memoryRevealTimer) clearTimeout(memoryRevealTimer);
+    memoryObserver?.disconnect();
+    memoryObserver = null;
+    memoryRevealQueue = [];
     memoryRaf = 0;
     memoryEndTimer = 0;
     memoryIntroTimer = 0;
+    memoryRevealTimer = 0;
     memoryIntroImg?.getAnimations().forEach((animation) => animation.cancel());
     memoryIntro?.classList.remove('is-showing', 'is-pop');
   };
@@ -234,6 +242,37 @@
     }, 240);
   };
 
+  const resetMemoryItems = () => {
+    if (!memoryTimeline) return;
+    $$('.memory-item, .memory-pet', memoryTimeline).forEach((el) => {
+      el.classList.remove('is-in', 'is-current');
+      delete el.dataset.memoryQueued;
+    });
+  };
+
+  const revealMemoryNext = () => {
+    memoryRevealTimer = 0;
+    const next = memoryRevealQueue.shift();
+    if (next) {
+      if (next.classList.contains('memory-item')) {
+        const current = memoryTimeline?.querySelector('.memory-item.is-current');
+        if (current && current !== next) current.classList.remove('is-current');
+        next.classList.add('is-in', 'is-current');
+      } else {
+        next.classList.add('is-in');
+      }
+      delete next.dataset.memoryQueued;
+    }
+    if (memoryRevealQueue.length) memoryRevealTimer = window.setTimeout(revealMemoryNext, 180);
+  };
+
+  const queueMemoryReveal = (el) => {
+    if (!el || el.classList.contains('is-in') || el.dataset.memoryQueued) return;
+    el.dataset.memoryQueued = '1';
+    memoryRevealQueue.push(el);
+    if (!memoryRevealTimer && memoryRevealQueue.length === 1) revealMemoryNext();
+  };
+
   const startMemoryIntro = () => {
     if (!memoryIntro || !memoryIntroImg || !memoryIntroLabel || !memoryIntroCount || reduceMotion) {
       playMemory();
@@ -247,15 +286,22 @@
       memoryIntroImg.src = `assets/pet/forms/${file}`;
       memoryIntroLabel.textContent = label;
       memoryIntroCount.textContent = `${index + 1} / ${memoryIntroForms.length}`;
+      const entry = index % 3;
+      const from = entry === 0
+        ? 'translate3d(-72vw, 18vh, 0) scale(.12) rotate(-150deg)'
+        : entry === 1
+          ? 'translate3d(70vw, 34vh, 0) scale(.16) rotate(140deg)'
+          : 'translate3d(0, 68vh, 0) scale(.1) rotate(80deg)';
       memoryIntroImg.animate(
-        [{ transform: 'scale(.78) rotate(-5deg)' },
-         { transform: 'scale(1.06) rotate(1deg)', offset: .72 },
+        [{ transform: from, opacity: 0 },
+         { opacity: 1, offset: .35 },
+         { transform: 'translate3d(0, 0, 0) scale(1.08) rotate(-3deg)', offset: .8 },
          { transform: 'none' }],
-        { duration: 360, easing: 'cubic-bezier(.22,1,.36,1)' },
+        { duration: 880, easing: 'cubic-bezier(.16,1,.3,1)' },
       );
       index += 1;
       if (index < memoryIntroForms.length) {
-        memoryIntroTimer = window.setTimeout(show, 620);
+        memoryIntroTimer = window.setTimeout(show, 980);
       } else {
         memoryIntroTimer = window.setTimeout(() => {
           memoryIntro.classList.remove('is-showing');
@@ -269,9 +315,21 @@
   const playMemory = () => {
     if (!memoryTimeline || !memoryViewport || !memoryProgress) return;
     stopMemory();
+    resetMemoryItems();
     memoryViewport.scrollTop = 0;
     memoryProgressNow();
-    if (reduceMotion) return;
+    if (reduceMotion) {
+      $$('.memory-item, .memory-pet', memoryTimeline).forEach((el) => el.classList.add('is-in'));
+      return;
+    }
+    if ('IntersectionObserver' in window) {
+      memoryObserver = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => { if (entry.isIntersecting) queueMemoryReveal(entry.target); });
+      }, { root: memoryViewport, rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
+      $$('.memory-item, .memory-pet', memoryTimeline).forEach((el) => memoryObserver.observe(el));
+    } else {
+      $$('.memory-item, .memory-pet', memoryTimeline).forEach((el) => el.classList.add('is-in'));
+    }
     const max = Math.max(0, memoryViewport.scrollHeight - memoryViewport.clientHeight);
     if (max <= 0) return;
     // ~2 minutes for 76 versions; the wheel scrolls natively and pauses auto-advance.
