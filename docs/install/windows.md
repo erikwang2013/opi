@@ -382,8 +382,20 @@ C:\Program Files\opi\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
   安装前会 `taskkill /f /t /im opi.exe` 关掉运行中的旧实例（升级用，失败不拦）。
 - 文件落盘后 `[Code]` 调 **64 位** `C:\Windows\System32\regsvr32.exe /s
   "{app}\app\tsf_opi.dll"`；结果只写日志
-  `opi: regsvr32 /s tsf_opi.dll exit code <n>`，**非 0 也不回滚**。卸载时先
-  `regsvr32 /s /u` 再删文件（同样 best-effort）。
+  `opi: regsvr32 /s tsf_opi.dll exit code <n>`，**非 0 也不回滚**。卸载时先结束
+  `opi.exe`、再 `regsvr32 /s /u`、再删文件（同样 best-effort）。
+- **卸载（2026-10-20）**：`CurUninstallStepChanged(usUninstall)` 在 Inno 删文件前
+  先 `taskkill /f /t /im opi.exe`（候选窗 / 设置窗 / 状态栏都是同一个 `opi.exe`；
+  **本树没有 Windows 服务**），随后清 HKLM64/HKCU Run 下的 `opi` / `opi-statusbar`
+  值与 `%TEMP%\opi-statusbar-<用户>.lock`（状态栏单实例锁：进程被杀后文件仍在）。
+  `[UninstallDelete] filesandordirs "{app}"` 清整个安装目录。**不杀 Explorer**：
+  `tsf_opi.dll` 被 Explorer 加载时，`[Files]` 的 `uninsrestartdelete` 只把删不掉的
+  文件用 `MoveFileEx(..., MOVEFILE_DELAY_UNTIL_REBOOT)` 排到下次重启，并把因此
+  非空的父目录一起排到重启后删；Inno 自动置 `NeedRestart`，卸载结束前会弹
+  「是否重启」提示。⇒ **未占用文件立即删除**；**被占用的 DLL 及其残留目录只在
+  重启后消失**（重启前目录可能还在）。DLL 没被加载时全部立即删除且不提示重启。
+  `/VERYSILENT /NORESTART` 不弹提示也不重启，但日志会记录需要重启；EXE 容器冒烟
+  （无 Explorer）断言整个 `C:\opi-test` 立即消失，**真机的 Explorer 锁定路径仍未验证**。
 - 快捷方式：开始菜单「opi settings」= `opi.exe --settings`；桌面图标在安装时可选。
 - **登录自启（2026-10-20）**：`[Registry]` 写一条 **HKLM64**
   `SOFTWARE\Microsoft\Windows\CurrentVersion\Run` 值 `opi` = `"{app}\opi.exe"`，
@@ -413,8 +425,10 @@ C:\Program Files\opi\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
   第二道保险（`CloseApplications=no` 时无效果，防止将来有人改回去）。
 - 冒烟（`windows-exe-install-test`）：在干净的 Server Core 容器里静默装到
   `C:\opi-test`，断言 `opi.exe`、`app\tsf_opi.dll`、`app\luna.opid` 存在、安装退出码 0、
-  日志里**有** `regsvr32` 退出码（0 或非 0 均可），再静默卸载并断言 `opi.exe` 消失。
-  「注册成功」与「TSF 真加载了词库」仍要真机验证（容器没有语言栏/TSF）。
+  日志里**有** `regsvr32` 退出码（0 或非 0 均可），再静默卸载并断言 `opi.exe` 与
+  **整个 `C:\opi-test` 目录**都消失（容器没有 Explorer ⇒ DLL 未被锁定 ⇒ 走立即删除
+  路径；真机的锁定→重启删除路径仍未验证）。「注册成功」与「TSF 真加载了词库」仍要
+  真机验证（容器没有语言栏/TSF）。
   ⚠️ 静默路径不执行完成页脚本，该脚本由 `ci.yml` 的静态门禁守护，不是 CI 跑过的。
 
 或在 Actions 页面（仓库 → Actions → Windows 打包）点进某次 run 下载。
@@ -1205,6 +1219,7 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | 12 | **安装器行为（改安装目录 / 关停运行中实例 / 注册 TSF DLL / 完成页只自启候选窗，2026-10-17 / 10-18 / 10-19 / 10-20）**：表级已改好并可本地复核（§2.5 的后处理脚本 + 读回证据）。**2026-10-19 用户在真机装过的是「未后处理」的 v1.15.1 发布包**（有进程、键盘不显示）—— 这证明了「不跑后处理 = 不注册 = 键盘不出现」。**【订正 2026-10-19 复审】后处理后的三份包**（本地 `processed-static`、本地 `processed`、CI `opi-desktop-msi`）**仍无输入法的根因已定位**：注入的是 32 位 `WixSilentExec`，而随包 `Binary.WixCA` 是 PE32 i386 ⇒ WOW64 调 SysWOW64 的 32 位 `regsvr32`，加载不了 x86-64 DLL。脚本/CI 已改为 `WixSilentExec64` + `WixSilentExec64CmdLine` 并加 PE machine 断言，注册逻辑改为显式判存在 + HKLM 默认启用。**【订正 2026-10-20】EXE 白屏后安装器不再结束/重启 Explorer**：`launch-and-restart.cmd` 只启动 `opi.exe`，`opi.iss` 改用 `runasoriginaluser` 并 `CloseApplications=no`（§2.5）。修复后的 EXE **仍未在真机交互路径装过**（CI 静默安装跳过 `[Run]`），所以 taskkill 真杀没杀掉、`regsvr32` 真注册没成功、WixShellExec 真启没启起来、ExitDialog 复选框出不出现，仍是【未验证】 | §2.5、`scripts/postprocess-windows-msi.sh`、`scripts/windows/opi.iss` |
 | 13 | **卸载不清理 TSF 注册（2026-10-19 reviewer m4 记录，有意未做）**：`OpRegisterTsf` 的条件是 `NOT REMOVE` ⇒ 卸载**不执行** `regsvr32 /s /u`；`HKCR\CLSID\{98C51858-590B-404D-8915-21EB44250062}\InprocServer32` 与 `HKLM\SOFTWARE\Microsoft\CTF` 下由 `DllRegisterServer` 写入的条目会**残留并指向已删除的 DLL**。未加卸载动作的原因：`WixSilentExec64` 只有**一个**命令属性 `WixSilentExec64CmdLine`，安装/卸载两条命令会互相覆盖；手写 `RemoveRegistryKey` 又需精确复制官方 API 写入的键，未在真机取证。重装到同一路径会重新覆盖注册；彻底清理 = 卸载前手工 `regsvr32 /s /u <dll>`，已卸载则手工删上述键 | `scripts/postprocess-windows-msi.sh`、§2.5 | 卸载后注册残留；卸载本身的文件删除不受影响 |
 | 14 | **Win7 / Win8 / 8.1 不支持（2026-10-19 用户裁决：仅文档标注）**：DLL 的 API set/Rust std 与候选窗的 JDK 21/Compose 下限都在 Win10/11；Win7/8 需另建 legacy 轨道 | §1.1 的说明 | 在 Win7/8 上安装/运行不保证；不在本仓库范围 |
+| 15 | **EXE 卸载的「重启后删除」路径未在真机验证（2026-10-20）**：容器冒烟只能证明没有 Explorer 时 `[UninstallDelete] filesandordirs {app}` 会把目录立即删干净；`tsf_opi.dll` 被 Explorer 映射时依赖 Inno `uninsrestartdelete` → `MoveFileEx(MOVEFILE_DELAY_UNTIL_REBOOT)` + `NeedRestart` 提示，**重启前 DLL 和因此非空的目录仍在**。另：状态栏锁清理只覆盖运行卸载器的那个用户的 `%TEMP%`（同机其他用户的残留锁文件不处理，无害）。本树没有 Windows 服务，卸载 kill 的就是 `opi.exe` 三种模式 | `scripts/windows/opi.iss`、§2.5 | 真机卸载可能要求重启；不重启则残留锁定的 DLL/空目录 |
 
 ### 6.2 代码里已知的缺口（读源码得出，不是待办猜测）
 

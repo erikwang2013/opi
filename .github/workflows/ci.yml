@@ -778,7 +778,32 @@ jobs:
             echo "::error::opi.iss 必须显式 CloseApplications=no"; exit 1; }
           grep -Eq '^[[:space:]]*RestartApplications=yes[[:space:]]*$' scripts/windows/opi.iss || {
             echo "::error::opi.iss 必须 RestartApplications=yes（第二道保险）"; exit 1; }
-          echo "通过：完成页只以用户令牌启动 opi.exe，安装器不结束 Explorer"
+          # 2026-10-20 卸载回归：卸载入口必须先杀掉所有 opi.exe 模式（候选/设置/
+          # 状态栏共用同一 image；本树没有 Windows 服务），再清 Run 值与状态栏锁。
+          # 锁定的 tsf_opi.dll 只能由 uninsrestartdelete 排到重启删，不许杀 Explorer。
+          uninst_block=$(awk '/procedure CurUninstallStepChanged/,/^end;[[:space:]]*$/' scripts/windows/opi.iss)
+          uninst_code=$(grep -viE '^[[:space:]]*//' <<<"$uninst_block" || true)
+          if grep -qi 'explorer' <<<"$uninst_code"; then
+            echo "::error::卸载路径不得操作 Explorer（锁定的 DLL 走重启删除）"
+            exit 1
+          fi
+          grep -q 'KillRunningApp();' <<<"$uninst_block" || {
+            echo "::error::卸载入口必须先 taskkill 所有 opi.exe（KillRunningApp）"; exit 1; }
+          grep -q 'CleanupStatusBarState();' <<<"$uninst_block" || {
+            echo "::error::卸载入口必须清 Run 值与状态栏锁（CleanupStatusBarState）"; exit 1; }
+          grep -Fq "/f /t /im opi.exe" <<<"$iss_code" || {
+            echo "::error::卸载 kill 必须是 /f /t /im opi.exe（覆盖全部模式）"; exit 1; }
+          grep -Fq 'Type: filesandordirs; Name: "{app}"' <<<"$iss_code" || {
+            echo "::error::卸载必须用 [UninstallDelete] filesandordirs 清 {app}"; exit 1; }
+          grep -Eq '^[[:space:]]*Source:.*Flags:.*uninsrestartdelete' <<<"$iss_code" || {
+            echo "::error::锁定的 tsf_opi.dll 必须用 uninsrestartdelete 排到重启删除"; exit 1; }
+          for hive in HKEY_LOCAL_MACHINE HKEY_CURRENT_USER; do
+            grep -Fq "RegDeleteValue($hive, RunKey, 'opi-statusbar')" <<<"$iss_code" || {
+              echo "::error::卸载必须清理 $hive 下将来的 opi-statusbar Run 值"; exit 1; }
+          done
+          grep -Fq 'DeleteFile(LockPath)' <<<"$iss_code" || {
+            echo "::error::卸载必须清理状态栏单实例锁文件"; exit 1; }
+          echo "通过：完成页只以用户令牌启动 opi.exe，安装器不结束 Explorer；卸载先杀 opi.exe 并排重启删锁定 DLL"
 
       # 主测试的私有 dbus 用例要真 fcitx5 + dbus-run-session；busctl 由 systemd 提供。
       - name: 装 fcitx5 / dbus

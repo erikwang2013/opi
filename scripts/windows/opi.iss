@@ -25,6 +25,12 @@
 ;   opi-<version>-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART ^
 ;       /DIR=C:\opi-test /LOG=C:\work\install-exe.log
 ;   C:\opi-test\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+;
+; Uninstall (2026-10-20): there is NO Windows service in this tree. Candidate,
+; settings and statusbar are all opi.exe, so usUninstall kills that image before
+; file removal; [UninstallDelete] removes {app}; a tsf_opi.dll still mapped in
+; Explorer is scheduled for reboot deletion by uninsrestartdelete. Explorer is
+; never killed (that was the white-screen root cause).
 
 #ifndef AppVersion
   #error AppVersion is required: /DAppVersion=<x.y.z>
@@ -96,7 +102,18 @@ Type: filesandordirs; Name: "{app}\runtime"
 ; restartreplace: on upgrade the old tsf_opi.dll may still be mapped in Explorer
 ; or another TSF host. Instead of closing those processes (which caused the white
 ; screen) Setup copies the new file and schedules the swap for the next restart.
-Source: "{#AppImageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs restartreplace
+; uninsrestartdelete: same rule on uninstall. If the DLL cannot be deleted because
+; Explorer has it mapped, the uninstaller uses MoveFileEx(MOVEFILE_DELAY_UNTIL_REBOOT)
+; and sets NeedRestart; Inno then shows the normal reboot prompt. A DLL that is not
+; loaded is deleted immediately and no prompt appears.
+Source: "{#AppImageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs restartreplace uninsrestartdelete
+
+[UninstallDelete]
+; Remove everything under {app}, including files the uninstall log did not record
+; (logs, stale jars). A locked tsf_opi.dll is handled by uninsrestartdelete above;
+; its parent directories are retried and, if still non-empty now, scheduled for
+; deletion after reboot. Never kill Explorer to unlock the DLL.
+Type: filesandordirs; Name: "{app}"
 
 [Icons]
 Name: "{autoprograms}\opi settings"; Filename: "{app}\opi.exe"; Parameters: "--settings"; WorkingDir: "{app}"
@@ -172,6 +189,30 @@ begin
     Log('opi: regsvr32 /u could not be started; uninstall continues');
 end;
 
+procedure CleanupStatusBarState();
+var
+  RunKey, LockBase, LockPath: String;
+begin
+  // This tree has NO Windows service: candidate, settings and statusbar are all
+  // opi.exe, killed by KillRunningApp above. Delete Run values defensively, so a
+  // future opi-statusbar autostart cannot survive an uninstall either. Plain
+  // HKEY_LOCAL_MACHINE is the native view in 64-bit install mode.
+  RunKey := 'Software\Microsoft\Windows\CurrentVersion\Run';
+  RegDeleteValue(HKEY_LOCAL_MACHINE, RunKey, 'opi');
+  RegDeleteValue(HKEY_LOCAL_MACHINE, RunKey, 'opi-statusbar');
+  RegDeleteValue(HKEY_CURRENT_USER, RunKey, 'opi');
+  RegDeleteValue(HKEY_CURRENT_USER, RunKey, 'opi-statusbar');
+
+  // StatusBarLock.kt puts its single-instance lock in XDG_RUNTIME_DIR or %TEMP%;
+  // killing the process releases the OS lock but leaves the file behind.
+  LockBase := GetEnv('XDG_RUNTIME_DIR');
+  if LockBase = '' then
+    LockBase := GetEnv('TEMP');
+  LockPath := LockBase + '\opi-statusbar-' + GetUserNameString() + '.lock';
+  if FileExists(LockPath) and (not DeleteFile(LockPath)) then
+    Log('opi: could not remove statusbar lock ' + LockPath);
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssInstall then
@@ -183,5 +224,11 @@ end;
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usUninstall then
+  begin
+    // Before Inno removes any file. /im covers every mode (candidate, settings,
+    // statusbar); there is no Windows service to stop.
+    KillRunningApp();
     UnregisterTsf();
+    CleanupStatusBarState();
+  end;
 end;

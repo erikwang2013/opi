@@ -584,6 +584,7 @@ jobs:
           )
           ping -n 16 127.0.0.1 >nul
           if exist C:\opi-test\opi.exe (echo PRESENT > C:\work\uninstall-removed.txt) else (echo ABSENT > C:\work\uninstall-removed.txt)
+          if exist C:\opi-test (echo PRESENT > C:\work\uninstall-dir.txt) else (echo ABSENT > C:\work\uninstall-dir.txt)
           exit /b 0
           "@
           Set-Content -Path (Join-Path $work 'exe-smoke.cmd') -Value $script -Encoding ascii
@@ -613,6 +614,10 @@ jobs:
           $uninstallCode = (Get-Content uninstall-exit.txt -Raw).Trim()
           if ($uninstallCode -ne '0') { throw "卸载退出码 $uninstallCode（见 uninstall-exe.log）" }
           if ((Get-Content uninstall-removed.txt -Raw).Trim() -ne 'ABSENT') { throw '卸载后 opi.exe 仍在' }
+          # 2026-10-20：容器里没有 Explorer，tsf_opi.dll 未被加载 ⇒ 卸载应走「立即可删」
+          # 路径，整个安装目录都应消失。[UninstallDelete] filesandordirs 的直接回归。
+          if (-not (Test-Path 'uninstall-dir.txt')) { throw '缺少 uninstall-dir.txt（卸载没跑完）' }
+          if ((Get-Content uninstall-dir.txt -Raw).Trim() -ne 'ABSENT') { throw '卸载后安装目录 C:\opi-test 仍在' }
           Write-Host 'EXE 安装/卸载冒烟通过'
 
       - name: 上传安装日志（无论成败）
@@ -630,6 +635,7 @@ jobs:
             install-dll.txt
             install-luna.txt
             uninstall-removed.txt
+            uninstall-dir.txt
             exe-smoke.cmd
 
   # ---- 只报不进卡的 clippy（Windows 目标）----
