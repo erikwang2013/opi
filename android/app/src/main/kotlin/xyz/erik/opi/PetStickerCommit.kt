@@ -4,7 +4,7 @@
 // 2026-10-18：自有表情改插入 PNG（用户裁决）。OpiImeService 已 494 行（500 行门禁），
 // 图片通道整体拆在这里 —— 扩展函数，读的仍是 service 的成员（同 ComposingText.kt 先例）。
 // 2026-10-20 用户裁决：commitContent 被宿主拒绝时加**剪贴板图片回退**（搜狗式：
-// 复制图片 + 提示长按粘贴）；剪贴板都写不进去才回退文字标签。
+// 复制图片 + 提示长按粘贴），并同时上屏文字标签保证至少有一个可见结果。
 
 package xyz.erik.opi
 
@@ -58,12 +58,11 @@ internal fun petStickerImageOrder(gif: File?, png: File?): List<Pair<String, Fil
  * 「自有」宠物形态 = **插入图片**，不提交任何 Unicode 文本（2026-10-18 用户裁决）。
  *
  * 图片走 `InputConnection.commitContent`，格式优先级（2026-10-19）：**GIF → PNG**；
- * 宿主两个都拒绝时（2026-10-20）把图放进系统剪贴板并提示长按粘贴，剪贴板也写不进去
- * 才上屏 `[小欧·笑]` 这样的独立标签。**不再退回 Unicode emoji**（2026-10-19 用户
- * 裁决：emoji 与自有表情分不清）。GIF 是同一张 PNG 的轻微弹跳/缩放动画，见
- * `shared/pet/stickers-gif/`。
- * 已知限制：剪贴板 URI 是否真能被目标 app 读到无法在 IME 侧观测 —— 提示文案让用户
- * 长按粘贴；写剪贴板失败则走文字标签，不静默丢。
+ * 宿主两个都拒绝时（2026-10-20）把图放进系统剪贴板并提示长按粘贴，**同时**上屏
+ * `[小欧·笑]` 这样的独立标签兜底 —— 目标 app 读不读得到 URI 在 IME 侧观测不到，
+ * 标签保证「至少有一个可见结果」，绝不静默。剪贴板也写不进去时只上屏标签。
+ * **不再退回 Unicode emoji**（2026-10-19 用户裁决：emoji 与自有表情分不清）。
+ * GIF 是同一张 PNG 的轻微弹跳/缩放动画，见 `shared/pet/stickers-gif/`。
  * IC 为空时与文本提交同一套延迟重试（[PendingCommit.RETRY_MS]），仍拿不到就放弃并记日志。
  */
 internal fun OpiImeService.commitPetSticker(mood: PetMood) {
@@ -100,9 +99,8 @@ private fun OpiImeService.commitPetStickerTo(ic: InputConnection, mood: PetMood)
     val copied = copyPetStickerToClipboard(images.first().second)
     val outcome = petStickerOutcome(imageInserted = false, clipboardCopied = copied)
     Log.w(TAG, "editor rejected image commit, outcome=$outcome: ${mood.name}")
-    if (outcome == PetStickerOutcome.TEXT_FALLBACK) {
-        commitPetStickerTextFallback(ic, mood)
-    }
+    // 剪贴板成功也上屏标签：目标 app 能否读 URI 观测不到，标签是「至少不静默」的兜底。
+    commitPetStickerTextFallback(ic, mood)
     petStickerNotice(outcome)?.let { toast(it) }
 }
 
@@ -181,9 +179,9 @@ private fun OpiImeService.petStickerFile(assetPath: String, name: String): File?
 }
 
 /**
- * 图片与剪贴板都走不通时的回退：上屏**独立文本标签** `[小欧·笑]`，绝不退回笑脸 emoji
- * （2026-10-19 用户裁决：emoji 和自有表情在输入框里分不清）。提示文案见
- * [petStickerNotice] 的 TEXT_FALLBACK（单一口径，别在这里另写一句）。
+ * commitContent 失败后的可见兜底：上屏**独立文本标签** `[小欧·笑]`，绝不退回笑脸 emoji
+ * （2026-10-19 用户裁决：emoji 和自有表情在输入框里分不清）。剪贴板成功时也调用它 ——
+ * 目标 app 能否读 URI 在 IME 侧观测不到；本函数不提示，文案见 [petStickerNotice]（单一口径）。
  */
 private fun OpiImeService.commitPetStickerTextFallback(ic: InputConnection, mood: PetMood) {
     dropComposing(ic)
