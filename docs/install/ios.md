@@ -168,8 +168,9 @@ xcodebuild -create-xcframework \
 | `NSExtensionAttributes` | `IsASCIICapable` / `PrefersRightToLeft` / `PrimaryLanguage` / `RequestsOpenAccess` | **四个键名全部凭记忆**，Mac 上以 Xcode 模板为准 |
 | 显示名 | `CFBundleDisplayName` = `小欧输入法` —— 设置里键盘列表显示的就是它 | —— |
 
-`RequestsOpenAccess = false` 是**有意选的**，不是漏了：OPI 是离线优先输入法，不需要网络；
-用户词也只需要写在扩展自己的容器里。代价见「已知限制」。
+`RequestsOpenAccess = true`（2026-10-20 起）：自有贴纸要写 `UIPasteboard` 才能被宿主粘贴，
+无完全访问时这一步会被系统拒绝；用户须在设置里手动允许，系统会展示隐私警告页。
+OPI 仍然不联网，用户词仍只写扩展自己的容器。
 
 **先做格式检查，再做逐键比对：**
 ```bash
@@ -311,7 +312,7 @@ Payload/Opi.app/
 | # | 限制 | 说明 |
 |---|---|---|
 | L1 | **符号面板只拿得到 common 块** | `KeyboardViewController` 调的是 `layout.setSymbols(engine.commonSymbols())`，而 `commonSymbols()` 只遍历 `opi_symbol_blocks()` —— 那个出口**只回 common 块**，当前数据表里只有 CJK 符号块是 common ⇒ **非 common 块里的条目（含 emoji）在 iOS 上够不到**。缺口在 UI 上**没有症状**（面板照样有内容，只是少）。`searchSymbols(keyword:)`（包装 `opi_search_symbols`）**存在但零调用者**。判据：`grep -rn 'searchSymbols' ios/ --include=*.swift` 只命中定义那一行。**别把「包装已写」读成「面板能拿到全部符号」。** |
-| L2 | **用户词不与宿主 App 同步** | `RequestsOpenAccess = false` ⇒ 拿不到 App Group 共享容器。App 里做的词库管理看不到键盘攒的词。要同步必须改成 `true`，且用户会在设置里看到「完全访问」隐私警告页 —— **这是产品决策，不是技术细节**。 |
+| L2 | **用户词不与宿主 App 同步** | 当前 `RequestsOpenAccess = true`（为贴纸剪贴板），但键盘仍只写扩展自己的容器；App 里做的词库管理看不到键盘攒的词。要同步还要显式接 App Group 共享容器。 |
 | L3 | **无障碍未接** | 每个键都没有 `accessibilityLabel`（⇧ / ⌫ / 回车 / 🌐 这类符号键尤其需要），VoiceOver 读不出来。已知缺口。 |
 | L4 | **键盘高度是拍的** | `viewWillAppear` 里写死 264pt（`priority = .defaultHigh`），**没按内容算、没处理旋转**。真机上要改。 |
 | L5 | **⇧ 三态高亮 UI 未接** | 出口（`opi_shift_state`）与 Swift 包装（`OpiEngine.shiftState()`）都已就绪，**UI 没读**。所以也仍然没有会漂移的镜像。 |
