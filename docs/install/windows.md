@@ -435,7 +435,7 @@ C:\Program Files\opi\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
   `C:\opi-test`，断言 `opi.exe`、`app\tsf_opi.dll`、`app\luna.opid` 存在、安装退出码 0、
   日志里**有** `regsvr32` 退出码（0 或非 0 均可），再静默卸载并断言 `opi.exe` 与
   **整个 `C:\opi-test` 目录**都消失（容器没有 Explorer ⇒ DLL 未被锁定 ⇒ 走立即删除
-  路径；真机的锁定→重启删除路径仍未验证）。「注册成功」与「TSF 真加载了词库」仍要
+  路径；真机的 Explorer 锁定→改名移出路径仍未验证）。「注册成功」与「TSF 真加载了词库」仍要
   真机验证（容器没有语言栏/TSF）。
   ⚠️ 静默路径不执行完成页脚本，该脚本由 `ci.yml` 的静态门禁守护，不是 CI 跑过的。
 
