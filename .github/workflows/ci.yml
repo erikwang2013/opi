@@ -780,11 +780,12 @@ jobs:
             echo "::error::opi.iss 必须 RestartApplications=yes（第二道保险）"; exit 1; }
           # 2026-10-20 卸载回归：卸载入口必须先杀掉所有 opi.exe 模式（候选/设置/
           # 状态栏共用同一 image；本树没有 Windows 服务），再清 Run 值与状态栏锁。
-          # 锁定的 tsf_opi.dll 只能由 uninsrestartdelete 排到重启删，不许杀 Explorer。
+          # 2026-10-21：锁定的 tsf_opi.dll 改为改名移到 %TEMP%，不再用
+          # uninsrestartdelete（它会请求重启）；不许杀 Explorer。
           uninst_block=$(awk '/procedure CurUninstallStepChanged/,/^end;[[:space:]]*$/' scripts/windows/opi.iss)
           uninst_code=$(grep -viE '^[[:space:]]*//' <<<"$uninst_block" || true)
           if grep -qi 'explorer' <<<"$uninst_code"; then
-            echo "::error::卸载路径不得操作 Explorer（锁定的 DLL 走重启删除）"
+            echo "::error::卸载路径不得操作 Explorer（锁定的 DLL 改名移出 {app}）"
             exit 1
           fi
           grep -q 'KillRunningApp();' <<<"$uninst_block" || {
@@ -795,8 +796,11 @@ jobs:
             echo "::error::卸载 kill 必须是 /f /t /im opi.exe（覆盖全部模式）"; exit 1; }
           grep -Fq 'Type: filesandordirs; Name: "{app}"' <<<"$iss_code" || {
             echo "::error::卸载必须用 [UninstallDelete] filesandordirs 清 {app}"; exit 1; }
-          grep -Eq '^[[:space:]]*Source:.*Flags:.*uninsrestartdelete' <<<"$iss_code" || {
-            echo "::error::锁定的 tsf_opi.dll 必须用 uninsrestartdelete 排到重启删除"; exit 1; }
+          if grep -Eq '^[[:space:]]*Source:.*Flags:.*uninsrestartdelete' <<<"$iss_code"; then
+            echo "::error::不得用 uninsrestartdelete（卸载会请求重启）"; exit 1
+          fi
+          grep -q 'MoveLockedTsfDllOut();' <<<"$uninst_block" || {
+            echo "::error::卸载入口必须把锁定的 tsf_opi.dll 改名移出 {app}"; exit 1; }
           for hive in HKEY_LOCAL_MACHINE HKEY_CURRENT_USER; do
             grep -Fq "RegDeleteValue($hive, RunKey, 'opi-statusbar')" <<<"$iss_code" || {
               echo "::error::卸载必须清理 $hive 下将来的 opi-statusbar Run 值"; exit 1; }
