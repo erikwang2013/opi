@@ -64,6 +64,7 @@ body::before {
 a { color: inherit; text-decoration: none; }
 button, input, textarea { font: inherit; }
 button { color: inherit; }
+button, .btn, .form-card, .download-card, .memory-intro-skip { touch-action: manipulation; }
 img, svg, canvas { display: block; max-width: 100%; }
 img { height: auto; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
@@ -322,6 +323,8 @@ body.memory-open { overflow: hidden; }
 .memory-intro.is-showing { opacity: 1; visibility: visible; }
 .memory-intro::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle at 50% 44%, var(--intro-mood, #2E8B80), transparent 68%); opacity: .13; animation: memory-bg-breathe 4.4s ease-in-out infinite; }
 .memory-intro-pane { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; width: 100%; height: 100%; padding: 18px 22px; opacity: 0; visibility: hidden; transition: opacity .3s var(--ease), visibility .3s var(--ease); }
+.memory-intro-skip { position: absolute; right: 16px; bottom: 14px; z-index: 3; pointer-events: auto; padding: 7px 12px; border: 1px solid var(--line-strong); border-radius: 999px; background: rgba(251, 250, 246, .92); color: var(--ink-soft); font-size: .66rem; cursor: pointer; }
+.memory-intro-skip:hover { border-color: var(--primary); color: var(--primary-deep); }
 .memory-intro-pane.is-active { opacity: 1; visibility: visible; }
 .memory-intro-single img { width: 112px; height: 112px; object-fit: contain; filter: drop-shadow(0 16px 22px rgba(20, 32, 29, .16)); }
 .memory-intro-single p { margin: 0; color: var(--primary-deep); font-size: 1rem; font-weight: 700; letter-spacing: .06em; }
@@ -357,9 +360,12 @@ body.memory-open { overflow: hidden; }
 .memory-pet img { width: 54px; height: 54px; object-fit: contain; opacity: .9; filter: drop-shadow(0 8px 10px rgba(20, 32, 29, .13)); }
 .memory-foot { display: flex; align-items: center; gap: 14px; padding: 14px 24px 16px; border-top: 1px solid var(--line); }
 .memory-hint { flex: 0 0 auto; color: var(--ink-faint); font-family: var(--font-mono); font-size: .58rem; letter-spacing: .04em; }
+.memory-overlay.is-paused .memory-hint::before { content: "暂停中 · "; color: var(--accent); }
 .memory-progress { flex: 1; height: 3px; overflow: hidden; border-radius: 99px; background: var(--paper-3); }
 .memory-progress span { display: block; width: 100%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--primary), var(--accent)); transform: scaleX(0); transform-origin: 0 50%; }
 .memory-foot .btn { flex: 0 0 auto; min-height: 38px; padding: 0 15px; font-size: .74rem; }
+.memory-pause:disabled { opacity: .45; cursor: default; }
+.memory-pause:disabled:hover { transform: none; }
 
 .svg-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
 .icon { width: 25px; height: 25px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }

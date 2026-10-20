@@ -52,7 +52,7 @@
 @media (max-width: 720px) {
   html { scroll-snap-type: y proximity; }
   .panel { min-height: 100svh; padding: 92px 18px 42px; justify-content: center; }
-  .site-header { padding: 10px 14px; gap: 8px; }
+  .site-header { padding: 10px 14px; gap: 8px; -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(251, 250, 246, .96); }
   .brand img { width: 31px; height: 31px; }
   .brand-copy strong { font-size: .9rem; }
   .site-nav { gap: 9px; overflow-x: auto; scrollbar-width: none; }
@@ -111,6 +111,9 @@
   .download-card.is-primary .os-cta { padding: 7px 12px; font-size: .72rem; }
   .download-grid.is-minor .download-card { min-height: 126px; padding: 12px; }
   .donate-qr img { width: 96px; }
+  .memory-overlay { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(20, 32, 29, .62); }
+  .form-backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .os-current { right: 12px; top: 12px; font-size: .52rem; }
   .os-mark { width: 28px; height: 28px; margin-bottom: 13px; font-size: .55rem; }
   .os-name { font-size: .9rem; }
   .os-meta { font-size: .56rem; }
@@ -170,6 +173,7 @@
   .dialog-body .eyebrow { justify-content: center; }
   .donate { padding: 14px; }
   .donate-qr img { width: 92px; }
+  .memory-hint { display: none; }
 }
 
 @media (max-height: 700px) and (min-width: 721px) {
@@ -202,4 +206,5 @@
   .memory-forms-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .memory-forms-pet img { width: 40px; height: 40px; }
   .memory-forms-pet figcaption { font-size: .52rem; }
+  .memory-intro-skip { right: 12px; bottom: 10px; padding: 6px 10px; font-size: .6rem; }
 }

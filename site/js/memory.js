@@ -11,24 +11,21 @@
   const memoryProgress = $('#memory-progress');
   const memoryIntro = $('#memory-intro');
   const memoryClose = memoryOverlay ? $('[data-memory-close]', memoryOverlay) : null;
+  const memoryPauseButton = memoryOverlay ? $('[data-memory-pause]', memoryOverlay) : null;
   const memorySeenKey = 'opi-memory-seen-v1';
   const memoryPets = [
-    'idle.gif', 'waiting.gif', 'crying.gif', 'puzzled.gif', 'terrified.gif',
-    'angry.gif', 'coquettish.gif', 'cute.gif', 'pleasing.gif', 'knocking.gif',
-    'face-palm.gif', 'tongue-out.gif',
+    'idle.webp', 'waiting.webp', 'crying.webp', 'puzzled.webp', 'terrified.webp',
+    'angry.webp', 'coquettish.webp', 'cute.webp', 'pleasing.webp', 'knocking.webp',
+    'face-palm.webp', 'tongue-out.webp',
   ];
   const memoryIntroForms = [
-    ['idle.gif', '小欧·笑', '#F5A6B4'], ['waiting.gif', '小欧·欢乐', '#F27D9D'],
-    ['crying.gif', '小欧·哭', '#4E97E6'], ['puzzled.gif', '小欧·沮丧', '#7E8C86'],
-    ['terrified.gif', '小欧·惊恐', '#6FB2F0'], ['angry.gif', '小欧·愤怒', '#DD5138'],
-    ['coquettish.gif', '小欧·撒娇', '#F46F9B'], ['cute.gif', '小欧·卖萌', '#F2B84B'],
-    ['pleasing.gif', '小欧·讨好', '#5FBF9F'], ['knocking.gif', '小欧·敲打', '#E8A13C'],
-    ['face-palm.gif', '小欧·捂脸', '#E06A4E'], ['tongue-out.gif', '小欧·吐舌头', '#EF5D8F'],
+    ['idle.webp', '小欧·笑', '#F5A6B4'], ['waiting.webp', '小欧·欢乐', '#F27D9D'],
+    ['crying.webp', '小欧·哭', '#4E97E6'], ['puzzled.webp', '小欧·沮丧', '#7E8C86'],
+    ['terrified.webp', '小欧·惊恐', '#6FB2F0'], ['angry.webp', '小欧·愤怒', '#DD5138'],
+    ['coquettish.webp', '小欧·撒娇', '#F46F9B'], ['cute.webp', '小欧·卖萌', '#F2B84B'],
+    ['pleasing.webp', '小欧·讨好', '#5FBF9F'], ['knocking.webp', '小欧·敲打', '#E8A13C'],
+    ['face-palm.webp', '小欧·捂脸', '#E06A4E'], ['tongue-out.webp', '小欧·吐舌头', '#EF5D8F'],
   ];
-  const preloadMemoryPets = () => {
-    memoryIntroForms.forEach(([file]) => { const img = new Image(); img.src = `assets/pet/forms/${file}`; });
-  };
-
   let memoryBuilt = false;
   let memoryIntroSingle = null;
   let memoryIntroImg = null;
@@ -42,8 +39,11 @@
   let memoryNextStepAt = 0;
   let memoryScroll = null;
   let memoryPausedAt = 0;
+  let memoryMaxScroll = 1;
   let memoryPreviousFocus = null;
   let memoryPaused = false;
+  let memoryHoverPaused = false;
+  let memoryUserPaused = false;
 
   const markMemorySeen = () => {
     try { localStorage.setItem(memorySeenKey, '1'); } catch (_) { /* private mode */ }
@@ -62,11 +62,11 @@
       item.className = 'memory-forms-pet';
       item.style.setProperty('--mood', mood);
       const img = document.createElement('img');
-      img.src = `assets/pet/forms/${file}`;
+      img.src = `assets/pet/forms/${reduceMotion ? file.replace(/\.webp$/, '.png') : file}`;
       img.width = 48;
       img.height = 48;
       img.alt = name;
-      img.loading = 'eager';
+      img.loading = 'lazy';
       img.decoding = 'async';
       const caption = document.createElement('figcaption');
       caption.textContent = name;
@@ -106,7 +106,8 @@
         pet.className = 'memory-pet' + (index % 12 === 9 ? ' is-right' : '');
         pet.setAttribute('aria-hidden', 'true');
         const img = document.createElement('img');
-        img.src = `assets/pet/forms/${memoryPets[(index / 6 | 0) % memoryPets.length]}`;
+        const petFile = memoryPets[(index / 6 | 0) % memoryPets.length];
+        img.src = `assets/pet/forms/${reduceMotion ? petFile.replace(/\.webp$/, '.png') : petFile}`;
         img.width = 54;
         img.height = 54;
         img.loading = 'lazy';
@@ -129,18 +130,25 @@
     img.width = 112;
     img.height = 112;
     img.alt = '';
+    img.decoding = 'async';
     const label = document.createElement('p');
     const count = document.createElement('span');
     single.append(img, label, count);
-    memoryIntro.append(single);
+    const skip = document.createElement('button');
+    skip.type = 'button';
+    skip.className = 'memory-intro-skip';
+    skip.textContent = '跳过 · 直接看版本';
+    skip.addEventListener('click', () => playMemory());
+    memoryIntro.append(single, skip);
     memoryIntroSingle = single;
     memoryIntroImg = img;
     memoryIntroLabel = label;
     memoryIntroCount = count;
   };
 
-  const setMemoryPaused = (paused) => {
+  const applyMemoryPause = (paused) => {
     if (paused === memoryPaused) return;
+    memoryOverlay?.classList.toggle('is-paused', paused);
     const now = performance.now();
     if (paused) {
       memoryPausedAt = now;
@@ -156,6 +164,11 @@
     memoryPaused = paused;
   };
 
+  const setMemoryPaused = (paused) => {
+    memoryHoverPaused = paused;
+    applyMemoryPause(memoryHoverPaused || memoryUserPaused);
+  };
+
   // 手动滚轮/触摸时放弃当前自动滚动段，避免和用户抢滚动位置。
   const interruptMemoryScroll = () => {
     if (!memoryScroll) return;
@@ -163,10 +176,14 @@
     memoryNextStepAt = Math.max(memoryNextStepAt, performance.now() + 400);
   };
 
+  const measureMemoryViewport = () => {
+    if (!memoryViewport) return;
+    memoryMaxScroll = Math.max(1, memoryViewport.scrollHeight - memoryViewport.clientHeight);
+  };
+
   const memoryProgressNow = () => {
     if (!memoryViewport || !memoryProgress) return;
-    const max = Math.max(1, memoryViewport.scrollHeight - memoryViewport.clientHeight);
-    memoryProgress.style.transform = `scaleX(${Math.min(1, 1 - memoryViewport.scrollTop / max)})`;
+    memoryProgress.style.transform = `scaleX(${Math.min(1, 1 - memoryViewport.scrollTop / memoryMaxScroll)})`;
   };
 
   // 先把当前窗口里已经出现的条目加载出来，之后滚动始终跟着已加载内容走。
@@ -194,7 +211,9 @@
     memoryPausedAt = 0;
     memoryIntro?.querySelectorAll('img').forEach((img) => img.getAnimations().forEach((a) => a.cancel()));
     memoryIntro?.classList.remove('is-showing');
+    memoryIntro?.setAttribute('aria-hidden', 'true');
     memoryIntroSingle?.classList.remove('is-active');
+    memoryOverlay?.classList.remove('is-paused');
   };
 
   const closeMemory = () => {
@@ -228,6 +247,8 @@
     buildMemoryIntro();
     stopMemory();
     memoryIntro.classList.add('is-showing');
+    memoryIntro.setAttribute('aria-hidden', 'false');
+    if (memoryPauseButton) memoryPauseButton.disabled = true;
     memoryIntroSingle.classList.add('is-active');
     let index = 0;
     const show = () => {
@@ -249,6 +270,7 @@
       } else {
         memoryIntroTimer = window.setTimeout(() => {
           memoryIntro.classList.remove('is-showing');
+          memoryIntro.setAttribute('aria-hidden', 'true');
           memoryIntroSingle.classList.remove('is-active');
           memoryIntroTimer = window.setTimeout(playMemory, 300);
         }, 900);
@@ -262,8 +284,10 @@
     stopMemory();
     resetMemoryItems();
     memoryViewport.scrollTop = memoryViewport.scrollHeight;
+    if (memoryPauseButton) memoryPauseButton.disabled = reduceMotion;
     if (memoryFormsEntry) memoryFormsEntry.classList.add('is-in');
     primeMemoryWindow();
+    measureMemoryViewport();
     memoryProgressNow();
     if (reduceMotion) {
       $$('.memory-item, .memory-pet, .memory-forms-entry', memoryTimeline).forEach((el) => el.classList.add('is-in'));
@@ -300,7 +324,13 @@
       }
       memoryProgressNow();
       if (!memoryLoadQueue.length && !memoryScroll) {
-        memoryEndTimer = window.setTimeout(closeMemory, 1600);
+        memoryEndTimer = window.setTimeout(function finish() {
+          if (memoryPaused) {
+            memoryEndTimer = window.setTimeout(finish, 400);
+            return;
+          }
+          closeMemory();
+        }, 1600);
         return;
       }
       memoryRaf = requestAnimationFrame(step);
@@ -314,7 +344,10 @@
     if (memoryOverlay.classList.contains('is-open')) return;
     memoryPreviousFocus = document.activeElement;
     memoryPaused = false;
+    memoryHoverPaused = false;
+    memoryUserPaused = false;
     memoryPausedAt = 0;
+    if (memoryPauseButton) memoryPauseButton.textContent = '暂停';
     memoryOverlay.hidden = false;
     document.body.classList.add('memory-open');
     markMemorySeen();
@@ -326,14 +359,26 @@
   };
 
   if (memoryOverlay) {
-    if ('requestIdleCallback' in window) window.requestIdleCallback(preloadMemoryPets, { timeout: 1800 });
-    else window.setTimeout(preloadMemoryPets, 600);
+    // Warm the DOM while the page is idle; images stay lazy until the overlay actually opens.
+    const warmMemory = () => buildMemory();
+    if ('requestIdleCallback' in window) window.requestIdleCallback(warmMemory, { timeout: 900 });
+    else window.setTimeout(warmMemory, 700);
     $$('[data-memory-open]').forEach((button) => button.addEventListener('click', openMemory));
     memoryClose?.addEventListener('click', closeMemory);
+    memoryPauseButton?.addEventListener('click', () => {
+      memoryUserPaused = !memoryUserPaused;
+      memoryPauseButton.textContent = memoryUserPaused ? '继续' : '暂停';
+      applyMemoryPause(memoryHoverPaused || memoryUserPaused);
+    });
     memoryOverlay.addEventListener('click', (event) => { if (event.target === memoryOverlay) closeMemory(); });
     memoryViewport?.addEventListener('pointerenter', () => setMemoryPaused(true));
     memoryViewport?.addEventListener('pointerleave', () => setMemoryPaused(false));
     memoryViewport?.addEventListener('scroll', memoryProgressNow, { passive: true });
+    window.addEventListener('resize', () => {
+      if (!memoryOverlay?.classList.contains('is-open')) return;
+      measureMemoryViewport();
+      memoryProgressNow();
+    }, { passive: true });
     memoryViewport?.addEventListener('wheel', interruptMemoryScroll, { passive: true });
     memoryViewport?.addEventListener('touchstart', interruptMemoryScroll, { passive: true });
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeMemory(); });

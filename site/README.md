@@ -24,7 +24,7 @@ site/
   js/site.js            导航高亮、进度条、reveal、形态弹窗
   js/pet3d.js           three.js：宠物纹理 + 光环 + 粒子 + 指针视差
   vendor/               three.js 0.170.0（module 版，随站点分发）
-  assets/pet/           小欧 PNG / SVG、十二形态 GIF+PNG
+  assets/pet/           小欧 PNG / SVG、十二形态 WebP+PNG（GIF 原图保留）
   assets/donate/        微信 / 支付宝收款二维码（捐赠卡片）
   assets/social-preview.png  Open Graph 预览图（1280×640，小欧主题）
 ```
@@ -32,14 +32,20 @@ site/
 ## 性能预算
 
 - 无 React/Vue、无外部字体、无阻塞脚本；CSS 与 JS 都是本地小文件。
-- 十二张 GIF 全部 `loading="lazy"`；首屏只加载小欧 PNG 与 three.js。
-- three.js 渲染器 `powerPreference: low-power`、关闭抗锯齿、DPR 上限 1.7（移动端 1.4）；
-  hero 离开视口即停止渲染，页面隐藏即停。
-- 系统开启「减少动态效果」时：不跑动画循环，形态显示 PNG 静帧。
-- 交互（导航 / 弹窗 / 滚动高亮）只做一次 rAF 批处理，不读布局之外的属性；
-  目标是把单次交互控制在 50ms 内。本地无头 Chrome 实测（1440×900）：
-  导航点击 → 下一帧约 40ms，形态弹窗约 36ms（含等待两帧 rAF）；这不是发布门禁，
-  实际值受设备与浏览器影响，发布前用 Lighthouse / DevTools Performance 复测。
+- 十二张形态图使用动图 WebP（约 311 KB，原 GIF 约 900 KB），全部 `loading="lazy"`；
+  系统开启「减少动态效果」时改用 PNG 静帧。
+- three.js 延迟到首屏空闲后再加载，且只在桌面、硬件 WebGL 可用且未开启 Save-Data 时加载；
+  手机与软件渲染（SwiftShader/llvmpipe）使用轻量 CSS 宠物。DPR 上限为桌面 1.5 / 移动 1.25。
+- three.js 在 hero 离屏、页面隐藏或「时光机」打开时完全停止帧循环，关闭后恢复。
+- 版本列表用 `content-visibility` 延后离屏布局，并在进入附近时才定位到 v1.0.0；
+  初始加载不再为 76 条历史版本付布局成本。
+- 形态弹窗使用 `dialog.show()` + 自定义遮罩与焦点循环，避免 `showModal()` 的
+  一次数百毫秒级样式计算；打开后焦点回到原形态卡。
+- 交互处理只做一次 rAF 批处理并缓存滚动尺寸；本地无头 Chrome（软件 WebGL 回退）实测：
+  1440×900 正常 CPU：回忆打开 8.4ms、热打开 1.6ms、形态弹窗 1.8ms、返回顶部 2.2ms；
+  4× CPU 降速：回忆打开 44.5ms、弹窗 15.5ms、返回顶部 5.1ms；移动端 4× CPU：
+  回忆打开约 31ms、弹窗约 10–15ms。移动端首屏传输约 416 KB（此前约 1.03 MB）。
+  这不是发布门禁，实际值受设备与浏览器影响，发布前用 Lighthouse / DevTools Performance 复测。
 
 ## 部署
 

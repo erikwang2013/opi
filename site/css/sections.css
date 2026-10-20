@@ -56,7 +56,7 @@
   transition: opacity .6s var(--ease);
   animation: float-slow 6s ease-in-out infinite;
 }
-.three-ready .hero-pet-fallback { opacity: 0; }
+.three-ready .hero-pet-fallback { opacity: 0; animation-play-state: paused; }
 .orbit-chip {
   position: absolute;
   z-index: 2;
@@ -222,7 +222,7 @@
 .release-latest a:hover { background: rgba(46, 139, 128, .06); }
 .release-latest .release-version { font-size: 1rem; }
 .release-latest .release-note { color: var(--ink); font-size: .84rem; }
-.release-scroll { height: clamp(260px, 40vh, 380px); overflow-y: auto; overscroll-behavior: contain; padding-right: 6px; border-block: 1px solid var(--line); scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+.release-scroll { height: clamp(260px, 40vh, 380px); overflow-y: auto; overscroll-behavior: contain; padding-right: 6px; border-block: 1px solid var(--line); scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; content-visibility: auto; contain-intrinsic-size: auto 320px; }
 .release-scroll::-webkit-scrollbar { width: 8px; }
 .release-scroll::-webkit-scrollbar-thumb { border-radius: 99px; background: var(--line-strong); }
 .release-scroll-hint { margin: 10px 0 0; color: var(--ink-faint); font-family: var(--font-mono); font-size: .62rem; letter-spacing: .04em; }
@@ -297,6 +297,8 @@
 .download-grid.is-minor .os-name { font-size: .92rem; }
 .download-grid.is-minor .os-note { margin-bottom: 10px; }
 .beta-badge { position: absolute; right: 12px; top: 12px; z-index: 1; padding: 2px 7px; border: 1px solid rgba(217, 85, 63, .3); border-radius: 999px; background: rgba(217, 85, 63, .08); color: var(--accent); font-family: var(--font-mono); font-size: .56rem; letter-spacing: .06em; }
+.download-card.is-current-os { border-color: rgba(217, 85, 63, .55); }
+.os-current { position: absolute; right: 18px; top: 18px; z-index: 1; padding: 3px 8px; border-radius: 999px; background: var(--accent); color: #fff; font-family: var(--font-mono); font-size: .55rem; letter-spacing: .04em; }
 
 /* ---------- Donate ---------- */
 .donate { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px 28px; margin-top: 20px; padding: 16px 18px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: rgba(255, 255, 255, .44); }
@@ -329,8 +331,12 @@
 .footer-bottom a:hover { color: var(--primary-deep); }
 
 /* ---------- Dialog ---------- */
-.form-dialog { width: min(520px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); color: var(--ink); box-shadow: 0 40px 100px -30px rgba(20, 32, 29, .45); }
-.form-dialog::backdrop { background: rgba(20, 32, 29, .34); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+.form-dialog { position: fixed; inset: 0; z-index: 82; width: min(520px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); margin: auto; padding: 0; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); color: var(--ink); box-shadow: 0 40px 100px -30px rgba(20, 32, 29, .45); animation: form-pop .18s var(--ease); }
+.form-backdrop { position: fixed; inset: 0; z-index: 81; background: rgba(20, 32, 29, .34); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); animation: form-fade .16s ease-out; }
+.form-backdrop[hidden] { display: none; }
+body.form-modal-open { overflow: hidden; }
+@keyframes form-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes form-pop { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: none; } }
 .dialog-close { position: absolute; right: 12px; top: 10px; z-index: 2; width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 50%; background: var(--paper); color: var(--ink-soft); font-size: 1.2rem; line-height: 1; cursor: pointer; }
 .dialog-close:hover { border-color: var(--accent); color: var(--accent); }
 .dialog-body { display: grid; grid-template-columns: 180px minmax(0, 1fr); align-items: center; gap: 22px; padding: 26px; }
@@ -341,3 +347,5 @@
 .dialog-hint { padding-top: 10px; border-top: 1px solid var(--line); color: var(--ink-faint) !important; font-size: .7rem !important; line-height: 1.65; }
 
 @keyframes cue { 0% { transform: translateY(-100%); } 55%, 100% { transform: translateY(100%); } }
+
+.btn:active, .form-card:active, .download-card:active, .header-github:active, .back-to-top:active { transform: translateY(0) scale(.985); transition-duration: .08s; }

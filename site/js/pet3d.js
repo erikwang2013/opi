@@ -22,8 +22,18 @@ try {
   throw error;
 }
 
+// Software WebGL (SwiftShader/llvmpipe) can cost seconds per frame; keep the CSS pet instead.
+const gl = renderer.getContext();
+const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+const rendererName = debugInfo ? String(gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL)) : '';
+if (/swiftshader|llvmpipe|software/i.test(rendererName)) {
+  renderer.dispose();
+  canvas.hidden = true;
+  throw new Error('opi: software WebGL, using the static pet');
+}
+
 renderer.setClearColor(0x000000, 0);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isMobile ? 1.4 : 1.7));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isMobile ? 1.25 : 1.5));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
@@ -119,7 +129,7 @@ shadow.scale.set(3.2, 0.62, 1);
 shadow.position.set(0, -2.02, -0.4);
 root.add(shadow);
 
-const particleCount = isMobile ? 90 : 220;
+const particleCount = isMobile ? 72 : 180;
 const positions = new Float32Array(particleCount * 3);
 const colors = new Float32Array(particleCount * 3);
 const palette = [
@@ -164,6 +174,7 @@ const target = { x: 0, y: 0 };
 const current = { x: 0, y: 0 };
 if (!reduceMotion) {
   window.addEventListener('pointermove', (event) => {
+    if (!running) return;
     target.x = (event.clientX / window.innerWidth - 0.5) * 2;
     target.y = (event.clientY / window.innerHeight - 0.5) * 2;
   }, { passive: true });
@@ -182,21 +193,28 @@ const resizeObserver = new ResizeObserver(resize);
 resizeObserver.observe(canvas.parentElement || canvas);
 resize();
 
-let visible = true;
-if ('IntersectionObserver' in window) {
-  new IntersectionObserver((entries) => {
-    visible = entries.some((entry) => entry.isIntersecting);
-  }, { threshold: 0 }).observe(hero);
-}
-
+let heroVisible = true;
 const clock = new THREE.Clock();
 let running = false;
+
+const canRender = () => !reduceMotion && heroVisible && !document.hidden
+  && !document.body.classList.contains('memory-open');
+
+const syncLoop = () => {
+  const next = canRender();
+  if (next === running) return;
+  running = next;
+  if (running) {
+    clock.getDelta();
+    frame();
+  }
+};
 
 function frame() {
   if (!running) return;
   window.requestAnimationFrame(frame);
-  if (!visible) {
-    clock.getDelta();
+  if (!canRender()) {
+    running = false;
     return;
   }
   const t = clock.getElapsedTime();
@@ -216,18 +234,15 @@ function frame() {
   renderer.render(scene, camera);
 }
 
-if (!reduceMotion) {
-  running = true;
-  frame();
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      running = false;
-    } else if (!running) {
-      running = true;
-      clock.getDelta();
-      frame();
-    }
-  });
-} else {
-  renderer.render(scene, camera);
+if ('IntersectionObserver' in window) {
+  new IntersectionObserver((entries) => {
+    heroVisible = entries.some((entry) => entry.isIntersecting);
+    syncLoop();
+  }, { threshold: 0 }).observe(hero);
 }
+document.addEventListener('visibilitychange', syncLoop);
+new MutationObserver(syncLoop).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+
+if (reduceMotion) renderer.render(scene, camera);
+else syncLoop();
