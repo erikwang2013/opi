@@ -147,7 +147,7 @@ cp android/app/build/outputs/apk/release/app-release.apk \
 
 **订正（2026-10-20）：release 不再用 debug 签名。** `android/app/build.gradle.kts` 里
 `buildTypes.release` 现在指向 `signingConfigs.release`，密钥库是仓库内自带的
-[`android/keystore/opi-community.jks`](../../android/keystore/README.md)
+[`android/keystore/`](../../android/keystore/README.md)（`opi-community.jks`）
 （公开的 sideload 密钥，密码与警告见该 README）。固定它之后，任何机器、任何 CI run
 打出的 release APK 都是同一张证书，可以直接互相覆盖安装。
 

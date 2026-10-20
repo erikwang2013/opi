@@ -20,7 +20,7 @@
 >
 > **【订正 2026-10-20】** Windows 的**包名 / 启动器 / 安装器一律叫 `opi`**（不再叫
 > `opi-candidates`），默认安装目录 `C:\Program Files\opi`。用户入口改为 CI 打出的
-> **EXE 安装器** `opi-<版本>-setup.exe`（Inno Setup，job `desktop-exe`，§2.5）：
+> **EXE 安装器** `opi-<版本>-windows-x64-setup.exe`（Inno Setup，job `desktop-exe`，§2.5）：
 > TSF 注册在文件落盘后执行 64 位 `regsvr32 /s`，**只记录退出码，失败不回滚安装**。
 > 后处理 MSI 降为**内部证据**（artifact 现名 `opi-msi-internal-v<版本>`），它的注册
 > 动作仍是 Type 1、失败会回滚整包 —— 这正是 Server Core 上「根本装不上」的旧形状。
@@ -317,7 +317,7 @@ MSI 的 `OpRegisterTsf` 失败/回滚会如实留在日志里；EXE 的注册失
 | artifact | 内容 | 实测体积（来源 / 单位 / 日期） |
 |---|---|---|
 | `opi-tsf-dll-v<版本>` | `tsf_opi.dll`（zip 里就这一个文件；**仅供 desktop-msi / desktop-exe job 下载打包，不再作为用户入口发布**） | DLL 本体 778,240 B、上传 zip 331,390 B（2026-10-09 run，旧构建） |
-| `opi-windows-exe-v<版本>` | **用户入口**：`opi-<版本>-setup.exe`（Inno Setup，`desktop-exe` job 产出）。内含 jpackage app image（`opi.exe` + `app\tsf_opi.dll` + jlinked JRE），默认装到 `C:\Program Files\opi`；装完用 64 位 `regsvr32 /s` 注册 TSF，**失败只记日志、不回滚** | 49,119,340 B（2026-10-20 v1.17.0 run 的 artifact） |
+| `opi-windows-exe-v<版本>` | **用户入口**：`opi-<版本>-windows-x64-setup.exe`（Inno Setup，`desktop-exe` job 产出）。内含 jpackage app image（`opi.exe` + `app\tsf_opi.dll` + jlinked JRE），默认装到 `C:\Program Files\opi`；装完用 64 位 `regsvr32 /s` 注册 TSF，**失败只记日志、不回滚** | 49,119,340 B（2026-10-20 v1.17.0 run 的 artifact） |
 | `opi-desktop-msi-raw-v<版本>` | jpackage **原始** `.msi`（zip 里一个文件）。**仅内部中间物**（YAML 注释标 internal）：没有注册动作，只供 `msi-postprocess` 下载；后处理成功后由该 job 删除，**正常 run 的最终 artifacts 里不应出现** | 上传的 **zip** 58,683,236 B（2026-10-09 run）；**未压缩 MSI** 62,034,236 B（2026-10-19 本机核对的 v1.15.1 发布资产）。两者不是同一次构建，别混比 |
 | `opi-msi-internal-v<版本>` | **后处理后的** `opi-<版本>.msi`（zip 里一个文件）。**内部证据，不是用户入口**（`msi-postprocess` job 产出；注册 CA 是 Type 1，失败会回滚） | **未压缩 MSI** 62,443,008 B（2026-10-19 本机由上一行的 v1.15.1 raw 处理得到；+408,772 B）。CI 上传的是 zip，别再拿这个数当 zip 体积 |
 | `opi-msi-install-logs-v<版本>` | `windows-install-test` 在 Windows Server Core 容器里跑 `msiexec` 的日志与目录/注册表输出（`install-custom.log` / `install-default.log` / `dir-*.txt` / `reg-*.txt`）。容器缺语言栏/TSF，失败/回滚会如实留在日志里 | 每次 run 新生成 |
@@ -332,7 +332,7 @@ MSI 的 `OpRegisterTsf` 失败/回滚会如实留在日志里；EXE 的注册失
 
 ```bash
 gh run list   --workflow=windows.yml                 # 找最近一次成功的 run
-gh run download <run-id> -n opi-windows-exe-v<版本>  # 用户入口：opi-<版本>-setup.exe
+gh run download <run-id> -n opi-windows-exe-v<版本>  # 用户入口：opi-<版本>-windows-x64-setup.exe
 gh run download <run-id> -n opi-tsf-dll-v<版本>      # 只有开发者要单独用 DLL 时
 ```
 
@@ -359,7 +359,7 @@ cd ..
 静默安装 / 卸载（`windows-exe-install-test` 用的就是这两条）：
 
 ```bat
-opi-<版本>-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+opi-<版本>-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 C:\Program Files\opi\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 ```
 
@@ -669,7 +669,7 @@ cd ..
   scripts\windows\opi.iss
 ```
 
-产物是 `dist\windows-exe\opi-<版本>-setup.exe`；静默安装、TSF 注册（best-effort）
+产物是 `dist\windows-exe\opi-<版本>-windows-x64-setup.exe`；静默安装、TSF 注册（best-effort）
 与卸载语义见 §2.5。下面的第 2–4 步只适用于 **MSI 内部证据路线**。
 
 **第 2 步：打 desktop MSI（内部证据）**
@@ -1224,6 +1224,6 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 > `processed-static`（Linux `gcab` 重打 CAB）已撤回，不再是交付物。
 >
 > **【订正 2026-10-20】** 用户入口从后处理 MSI 改为 **EXE 安装器**
-> `opi-windows-exe-v<版本>` → `opi-<版本>-setup.exe`（Inno Setup；TSF 注册
+> `opi-windows-exe-v<版本>` → `opi-<版本>-windows-x64-setup.exe`（Inno Setup；TSF 注册
 > best-effort、失败不回滚）。后处理 MSI 保留为内部证据，artifact 改名
 > `opi-msi-internal-v<版本>`；它与旧 MSI 一样**不应**作为发布资产发给用户。
