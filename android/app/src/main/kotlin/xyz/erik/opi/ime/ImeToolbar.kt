@@ -68,10 +68,6 @@ fun ImeToolbar(
     keyboardModes: KeyboardModes,
     /** 小欧的表情（由 ImeScreen 按引擎状态算好；本组件不碰引擎）。 */
     petMood: PetMood,
-    /** 是否英文模式（引擎权威）：只在英文时显示右侧的隐藏「中」键。 */
-    inEnglish: Boolean,
-    /** 切回中文/拼音（隐藏「中」键）：与中/繁/英循环的英→中同一条腿。 */
-    onSwitchToChinese: () -> Unit,
     onOpenEmoji: () -> Unit,
     onOpenSkin: () -> Unit,
     onOpenInputMode: () -> Unit,
@@ -105,30 +101,7 @@ fun ImeToolbar(
         // 收起键盘压在**最右**（用户裁决「功能按钮区域最右侧」）：弹性空白把它推到头。
         // 图标 = 向下折角（2026-10-10 用户裁决「不要用 x」——✕ 是关闭语义）。
         Spacer(Modifier.weight(1f))
-        // 英文模式的隐藏「中」键（2026-10-20 用户裁决）：低存在感、只切回中文。
-        // 放在收起键盘左边 —— 不抢最右的既有位置，也不挤功能组。
-        if (inEnglish) ChineseHiddenButton(onSwitchToChinese)
         ToolbarIcon(OpiIcons.KeyboardHide, "收起键盘") { onCloseKeyboard() }
-    }
-}
-
-/**
- * 隐藏「中」键：英文模式下切回中文/拼音的兜底出口（用户裁决「低存在感，用于切回
- * 中文」）。小号字 + 低透明度；按下时由 [clickable] 的默认水波纹给出可见反馈。
- * 触控区比字大一圈（padding 在 clickable 之内），不靠肉眼对准。
- */
-@Composable
-private fun ChineseHiddenButton(onClick: () -> Unit) {
-    val p = LocalKeyboardPalette.current
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 7.dp, vertical = 5.dp)
-            .semantics { contentDescription = "切换到中文" },
-        contentAlignment = Alignment.Center,
-    ) {
-        Text("中", fontSize = 13.sp, color = p.toolbarFg.copy(alpha = 0.35f))
     }
 }
 

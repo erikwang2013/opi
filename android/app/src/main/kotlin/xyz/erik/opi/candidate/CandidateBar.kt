@@ -6,12 +6,16 @@ package xyz.erik.opi.candidate
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Icon
@@ -21,6 +25,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
@@ -28,6 +35,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import xyz.erik.opi.keyboard.OpiIcons
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.keyboard.LocalKeyboardPalette
 import xyz.erik.opi.engine.EngineMode
@@ -53,6 +61,12 @@ fun CandidateBar(
     onLongPress: (Int) -> Unit,
     /** 右端 ⌄：进平铺候选视图（[xyz.erik.opi.ime.ImeState.expandCandidates]）。 */
     onExpand: () -> Unit,
+    /** 英文模式：在候选栏右端显示隐藏「中」键（英文模式恒走候选栏，不进工具条）。 */
+    inEnglish: Boolean,
+    /** 隐藏「中」：与中/繁/英循环的英→中同一条腿。 */
+    onSwitchToChinese: () -> Unit,
+    /** 最右「收起键盘」：与工具条最右同一个动作。 */
+    onCloseKeyboard: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // 配色走键盘色板（表情条/候选栏与键面同一套「暗光/长辈」换肤，见 Palette.kt）
@@ -73,6 +87,9 @@ fun CandidateBar(
                 color = p.accent,
             )
             Text("字母直接上屏", fontSize = 13.sp, color = p.barDimFg)
+            Spacer(Modifier.weight(1f))
+            if (inEnglish) ChineseHiddenButton(onSwitchToChinese)
+            HideKeyboardButton(onCloseKeyboard, p.toolbarFg)
         }
         return
     }
@@ -164,6 +181,39 @@ fun CandidateBar(
                 Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "展开候选")
             }
         }
+        if (inEnglish) ChineseHiddenButton(onSwitchToChinese)
+        HideKeyboardButton(onCloseKeyboard, p.toolbarFg)
+    }
+}
+
+/**
+ * 隐藏「中」键：英文模式下切回中文/拼音的兜底出口（用户裁决「低存在感，用于切回
+ * 中文」）。小号字 + 低透明度；按下时由 [clickable] 的默认水波纹给出可见反馈。
+ * 触控区比字大一圈（padding 在 clickable 之内），不靠肉眼对准。
+ *
+ * 2026-10-20：英文模式恒走候选栏（[candidatesShowable] 对 ENGLISH 恒真），
+ * 因此它必须放在本栏，而不是只藏在工具条里 —— 否则英文键盘右上角永远看不见。
+ */
+@Composable
+private fun ChineseHiddenButton(onClick: () -> Unit) {
+    val p = LocalKeyboardPalette.current
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 7.dp, vertical = 5.dp)
+            .semantics { contentDescription = "切换到中文" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("中", fontSize = 13.sp, color = p.toolbarFg.copy(alpha = 0.35f))
+    }
+}
+
+/** 候选栏最右「收起键盘」：与工具条最右同一个动作（中文/英文候选态都保留出口）。 */
+@Composable
+private fun HideKeyboardButton(onClick: () -> Unit, tint: Color) {
+    IconButton(onClick = onClick) {
+        Icon(OpiIcons.KeyboardHide, contentDescription = "收起键盘", tint = tint)
     }
 }
 
