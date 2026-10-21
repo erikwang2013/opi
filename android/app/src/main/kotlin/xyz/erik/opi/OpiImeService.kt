@@ -457,7 +457,7 @@ class OpiImeService : InputMethodService() {
      * 弹框/无编辑器窗口拿不到 onStartInput，仍会收起键盘，2026-10-10 的中间态不会回来。
      */
     override fun onEvaluateInputViewShown(): Boolean {
-        val verdict = editorActive
+        val verdict = editorActive && currentInputConnection != null
         Log.i(
             TAG,
             "onEvaluateInputViewShown: info=${currentInputEditorInfo?.inputType} " +
