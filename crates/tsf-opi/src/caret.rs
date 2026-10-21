@@ -29,8 +29,8 @@ use std::sync::{Arc, Mutex};
 use windows::Win32::Foundation::RECT;
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::TextServices::{
-    ITfContext, ITfContextView, ITfEditSession, ITfEditSession_Impl, TF_ANCHOR_END, TF_ES_READ,
-    TF_ES_SYNC, TF_SELECTION,
+    ITfContext, ITfContextView, ITfEditSession, ITfEditSession_Impl, TF_ANCHOR_END,
+    TF_DEFAULT_SELECTION, TF_ES_READ, TF_ES_SYNC, TF_SELECTION,
 };
 use windows::core::{BOOL, Result, implement};
 
@@ -54,9 +54,14 @@ pub(crate) fn candidate_anchor(pic: &ITfContext, tid: u32) -> Option<(i32, i32)>
     }
     .into();
     // SAFETY: 会话对象在本次调用期间存活；`TF_ES_SYNC` 下 `DoEditSession` 与本次
-    // 调用同步完成（异步排队时下面读到 None，本次放弃 —— 下一次按键再取）。
+    // 调用同步完成（异步排队时下面读到 None）。
     let _ = unsafe { pic.RequestEditSession(tid, &session, TF_ES_READ | TF_ES_SYNC) };
-    slot.lock().ok().and_then(|mut g| g.take())
+    let from_session = slot.lock().ok().and_then(|mut g| g.take());
+    // 回退（2026-10-22）：部分宿主在按键回调里不给同步读会话（返回 TF_E_SYNCHRONOUS
+    // 或直接拒绝）。**默认选区**是 TSF 专门为「没有编辑会话时取选区」提供的特殊
+    // cookie，直读一次；GetTextExt 在少数宿主上同样要 cookie，失败仍是 None ——
+    // 不比现状差，只是多给一次机会（症状是候选窗一直停在默认落点）。
+    from_session.or_else(|| read_anchor(pic, TF_DEFAULT_SELECTION))
 }
 
 /// 只读编辑会话：拿选区 → 选区末尾的屏幕矩形 → 折算逻辑像素。

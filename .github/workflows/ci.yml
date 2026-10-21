@@ -743,10 +743,11 @@ jobs:
           files=(
             desktop/windows/launch-and-restart.cmd
             scripts/windows/opi.iss
-            # 2026-10-21：opi.iss 的 [Code] 拆出的两个 ISPP include —— 它们同样是
+            # 2026-10-21：opi.iss 的 [Code] 拆出的 ISPP include —— 它们同样是
             # 安装/卸载代码，Explorer/进程管理的静态门禁必须一并覆盖。
             scripts/windows/opi-code-trash.iss
             scripts/windows/opi-code-uninstall.iss
+            scripts/windows/opi-code-pending.iss
             scripts/postprocess-windows-msi.sh
             scripts/windows/postprocess-windows-msi.ps1
           )

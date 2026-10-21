@@ -287,7 +287,7 @@ LICENSE · CONTRIBUTING.md      # MIT 全文 · 贡献指南（含词库许可�
 
 ### 📅 项目状态
 
-> **当前阶段：v1.21.0（2026-10-22）：Windows 候选窗贴光标、拼音在候选上方、Shift 轻按切中英、候选窗跟随皮肤与候选字号；设置补齐「按键 / 外观」两页，新增新版本检测与提示；安装包布局修正（不再多套一层 `opi\opi`）；Apple 仍为 unsigned，真机未验证**
+> **当前阶段：v1.21.1（2026-10-22）：Windows 安装器修复自定义目录下被旧 pending-rename 卡死（按 `\app\tsf_opi.dll` / `luna.opid` / `is-*.tmp` 识别，不再猜安装目录）；候选窗在空缓冲时不再白取 caret，同步读会话被宿主拒绝时回退 `TF_DEFAULT_SELECTION`。其余同 v1.21.0（候选窗贴光标、拼音在上、Shift 轻按切中英、皮肤/字号跟随、设置补齐按键/外观、更新检测）；Apple 仍为 unsigned，真机未验证**
 
 V1 里程碑进度：
 

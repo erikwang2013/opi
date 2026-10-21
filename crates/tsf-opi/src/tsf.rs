@@ -243,7 +243,11 @@ impl TsfTextService {
                 // 拿不到位置就不发（窗口沿用上一次位置/默认落点），不阻断按键。
                 // 本调用在 logic 锁内跑：caret 的编辑会话**只碰 COM**，绝不回读
                 // logic/sink（重入会死锁，见 caret.rs 模块头）。
-                if let Some(pic) = pic
+                //
+                // 优化（2026-10-22）：缓冲为空（退格清空 / 切模式）时 `push_state`
+                // 马上会 hide，取 caret 是白花一次同步 COM 编辑会话 —— 跳过。
+                if logic.has_composing()
+                    && let Some(pic) = pic
                     && let Some((x, y)) =
                         crate::caret::candidate_anchor(pic, self.state.client_id())
                 {

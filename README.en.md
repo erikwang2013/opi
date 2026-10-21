@@ -287,7 +287,7 @@ LICENSE · CONTRIBUTING.md      # MIT full text · contribution guide (incl. dic
 
 ### 📅 Project Status
 
-> **Current stage: v1.21.0 (2026-10-22): Windows candidate bar follows the caret with pinyin above the candidates, Shift tap toggles Chinese/English, the candidate window follows the selected skin and font size; Settings gains Keys/Appearance pages plus a new-version checker; installer layout fixed (no extra `opi\opi` nesting); Apple unsigned, device verification pending**
+> **Current stage: v1.21.1 (2026-10-22): Windows installer no longer gets stuck on stale pending renames when installing to a custom directory (matched by `\app\tsf_opi.dll` / `luna.opid` / `is-*.tmp` instead of guessing the install dir); the caret probe is skipped for an empty buffer and falls back to `TF_DEFAULT_SELECTION` when the host refuses the read session. Everything else as v1.21.0 (caret-following candidate bar, pinyin above candidates, Shift-tap Chinese/English, skin/font following, Keys/Appearance pages, update checker); Apple unsigned, device verification pending**
 
 V1 milestone progress:
 

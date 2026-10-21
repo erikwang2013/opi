@@ -17,7 +17,7 @@
 ; best-effort and can never roll back the install.
 ;
 ; Build (CI or local, on Windows; ISCC is the Inno Setup 6 compiler):
-;   ISCC.exe /DAppVersion=1.21.0 ^
+;   ISCC.exe /DAppVersion=1.21.1 ^
 ;            /DAppImageDir=C:\path\to\build\compose\binaries\main\app\opi ^
 ;            /DOutputDir=C:\path\to\dist scripts\windows\opi.iss
 ;
@@ -203,22 +203,9 @@ begin
   Result := True;
 end;
 
-// 2026-10-21 real-machine upgrade: the previous setup left
-// PendingFileRenameOperations entries for luna.opid (and its Inno temp file).
-// Inno's PrepareToInstall then refuses to install until Windows is restarted —
-// the exact "must reboot" behavior this installer is not allowed to have.
-// Drop only entries that point into OUR {app} (we will move/overwrite those
-// files ourselves); other programs' pending renames are left untouched.
-function PendingPath(const Raw: String): String;
-begin
-  Result := Raw;
-  if Copy(Result, 1, 3) = '*1!' then
-    Delete(Result, 1, 3)
-  else if Copy(Result, 1, 2) = '*1' then
-    Delete(Result, 1, 2);
-  if Copy(Result, 1, 4) = '\??\' then
-    Delete(Result, 1, 4);
-end;
+// PendingFileRenameOperations 清理（含自定义目录识别）在 include 里：同为安装代码，
+// 拆出守 500 行；Explorer/进程管理静态门禁也把它列进扫描清单。
+#include "opi-code-pending.iss"
 
 // Target directory available before {app} is initialized (InitializeSetup):
 // honor /DIR=..., otherwise use the same default as DefaultDirName.
@@ -250,71 +237,11 @@ begin
 end;
 
 function InitializeSetup(): Boolean;
-var
-  Key, AppPrefix, Data, Kept, Src, Dst: String;
-  Parts: TArrayOfString;
-  I, N: Integer;
-  Dropped: Boolean;
 begin
   Result := True;
-  Key := 'SYSTEM\CurrentControlSet\Control\Session Manager';
-  if not RegQueryMultiStringValue(HKEY_LOCAL_MACHINE, Key,
-    'PendingFileRenameOperations', Data) then
-    Exit;
-  AppPrefix := Lowercase(SetupTargetDir());
-  Log('opi: InitializeSetup target=' + AppPrefix);
-  if AppPrefix = '' then
-    Exit; // cannot tell our own directory: do not touch another program's entries
-  AppPrefix := AppPrefix + '\';
-
-  // RegQueryMultiStringValue returns one String with #0 between entries.
-  N := 0;
-  SetArrayLength(Parts, 0);
-  while Data <> '' do
-  begin
-    I := Pos(#0, Data);
-    SetArrayLength(Parts, N + 1);
-    if I = 0 then
-    begin
-      Parts[N] := Data;
-      Data := '';
-    end
-    else
-    begin
-      Parts[N] := Copy(Data, 1, I - 1);
-      Delete(Data, 1, I);
-    end;
-    N := N + 1;
-  end;
-
-  Kept := '';
-  Dropped := False;
-  I := 0;
-  while I + 1 < N do
-  begin
-    Src := PendingPath(Parts[I]);
-    Dst := PendingPath(Parts[I + 1]);
-    if (Pos(AppPrefix, Lowercase(Src)) = 1) or (Pos(AppPrefix, Lowercase(Dst)) = 1) then
-    begin
-      Log('opi: dropped stale pending rename ' + Parts[I] + ' -> ' + Parts[I + 1]);
-      Dropped := True;
-    end
-    else
-    begin
-      if Kept <> '' then
-        Kept := Kept + #0;
-      Kept := Kept + Parts[I] + #0 + Parts[I + 1];
-    end;
-    I := I + 2;
-  end;
-  if Dropped then
-  begin
-    if Kept = '' then
-      RegDeleteValue(HKEY_LOCAL_MACHINE, Key, 'PendingFileRenameOperations')
-    else
-      RegWriteMultiStringValue(HKEY_LOCAL_MACHINE, Key,
-        'PendingFileRenameOperations', Kept);
-  end;
+  // 交互式安装到自定义目录时，此刻还看不到向导里选的路径（SetupTargetDir 只认
+  // /DIR 或默认 Program Files\opi）；include 里的清理同时按应用文件名匹配兜底。
+  DropStalePendingRenames(SetupTargetDir());
 end;
 
 // Used instead of RenameFile so a failure can be logged with its Win32 error.
