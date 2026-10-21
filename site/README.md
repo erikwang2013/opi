@@ -82,9 +82,9 @@ site/
 把 `site/` 整个目录作为静态站点根目录即可（Nginx / Caddy / Cloudflare Pages /
 GitHub Pages 均可）。页面内没有构建步骤，也没有服务端依赖。
 
-**发版时更新 `version.json`**：`{"version":"1.21.2","download":"https://opi.erik.xyz/#download"}`。
-（`download` 指向首页下载区而不是 `/download` 目录：目录没有 index、服务器返回 403，
-实测具体安装包 `/download/opi-…` 才是 200。）
+**发版时更新 `version.json`**：`{"version":"1.22.0","download":"https://opi.erik.xyz/download"}`。
+（`/download` 由 `site/download/index.html` 转场到首页下载区；具体安装包在
+`/download/opi-…` 下。）
 小欧设置窗（Windows/Linux 桌面端）的「检测更新」先读它；读不到才回退解析
 `index.html` 的 JSON-LD `softwareVersion`（再兜底下载文件名）。`version` 必须与
 `Cargo.toml` / `desktop/build.gradle.kts` 的 `opiAppVersion` 同值；否则用户会被反复
