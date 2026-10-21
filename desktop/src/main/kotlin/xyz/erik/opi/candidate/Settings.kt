@@ -435,7 +435,7 @@ fun saveSettings(s: OpSettings): Boolean {
     } catch (_: Exception) {
         ""
     }
-    Files.writeString(p, if (existing.isBlank()) s.toIni() else mergeIni(existing, s))
+    writeTextAtomically(p, if (existing.isBlank()) s.toIni() else mergeIni(existing, s)) // 原子替换，见 AtomicWrite.kt
     return reloadImeSettings()
 }
 

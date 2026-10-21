@@ -182,6 +182,17 @@ class CandidateFontGateTest {
             src.contains("rememberCandidateBarSize(model, fontScale)") &&
                 src.contains("windowSize = barSize"),
         )
+        // 同一份尺寸还必须真的驱动**窗口**：只留 `windowSize = barSize` 的话，把
+        // rememberWindowState 改回写死尺寸/删掉 LaunchedEffect(barSize)，窗口与面板
+        // 仍会漂移而测试照绿（review 2026-10-22）。
+        assertTrue(
+            "Main.kt 的窗口尺寸没接 rememberCandidateBarSize（width/height = barSize）",
+            src.contains("width = barSize.width") && src.contains("height = barSize.height"),
+        )
+        assertTrue(
+            "Main.kt 没在横条尺寸变化后同步窗口（LaunchedEffect(barSize)）",
+            src.contains("LaunchedEffect(barSize) { windowState.size = barSize }"),
+        )
         // 固定两行：设计高度就是运行期高度（宽度才按内容变）。
         assertEquals("横条设计高度固定 76dp（拼音行 + 候选行）", 76, PANEL_DESIGN_SIZE.height.value.toInt())
         assertEquals("横条设计宽度基准 720dp", 720, PANEL_DESIGN_SIZE.width.value.toInt())

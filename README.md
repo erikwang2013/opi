@@ -287,7 +287,7 @@ LICENSE · CONTRIBUTING.md      # MIT 全文 · 贡献指南（含词库许可�
 
 ### 📅 项目状态
 
-> **当前阶段：v1.21.1（2026-10-22）：Windows 安装器修复自定义目录下被旧 pending-rename 卡死（按 `\app\tsf_opi.dll` / `luna.opid` / `is-*.tmp` 识别，不再猜安装目录）；候选窗在空缓冲时不再白取 caret，同步读会话被宿主拒绝时回退 `TF_DEFAULT_SELECTION`。其余同 v1.21.0（候选窗贴光标、拼音在上、Shift 轻按切中英、皮肤/字号跟随、设置补齐按键/外观、更新检测）；Apple 仍为 unsigned，真机未验证**
+> **当前阶段：v1.21.2（2026-10-22）：Windows 修复失活宿主抢回候选管道（切应用后候选窗/状态栏不出现）、Shift 抬起后单次大写残留（长按超过 300ms 不再误切中英）、跨应用 caret 位置残留、候选条末项少算内边距与 `settings.ini` 半截写入；更新横幅按版本号记关闭。其余同 v1.21.1（安装器 pending-rename 修复、候选窗贴光标、拼音在上等）；Apple 仍为 unsigned，真机未验证**
 
 V1 里程碑进度：
 

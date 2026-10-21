@@ -139,6 +139,8 @@ private const val PAGE_BTN_GAP = 6f
 private const val EMPTY_PET = 30f
 private const val EMPTY_PET_GAP = 8f
 private const val INDEX_TEXT_GAP = 2f
+/** CandidateItem 的左右 padding 合计（2dp × 2）—— 测量必须算进去，否则每项少 4dp。 */
+private const val ITEM_PAD_H = 4f
 
 /**
  * 横条需要的宽度（dp）。**纯函数**：输入是已测好的文字宽度，便于单测钉住上下限与
@@ -198,7 +200,10 @@ internal fun rememberCandidateBarSize(model: CandidateModel, fontScale: Float = 
             }
         val shown = model.candidates.take(MAX_CANDIDATES)
         val items = shown.mapIndexed { i, text ->
-            textW("${i + 1}.", CandidateFont.Index) + INDEX_TEXT_GAP + textW(text, CandidateFont.Candidate)
+            // 与 CandidateItem 的实际盒宽一致：左右 padding + 序号 + 间隙 + 候选。
+            // 漏掉 padding 的话 8 条候选的窗会窄 32dp（review 2026-10-22）。
+            ITEM_PAD_H + textW("${i + 1}.", CandidateFont.Index) +
+                INDEX_TEXT_GAP + textW(text, CandidateFont.Candidate)
         }
         val empty = EMPTY_PET + EMPTY_PET_GAP + textW("无匹配", CandidateFont.Empty)
         val arrow = textW("‹", CandidateFont.Arrow).coerceAtLeast(textW("›", CandidateFont.Arrow))

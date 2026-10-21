@@ -104,14 +104,15 @@ fn read_anchor(pic: &ITfContext, ec: u32) -> Option<(i32, i32)> {
     let TF_SELECTION { range, .. } = take(&mut sel[0]);
     let range = ManuallyDrop::into_inner(range)?;
     // 折叠到选区**末尾**：拖选一段后开始输入，插入点在末尾，候选窗要跟末尾走。
-    let caret = unsafe { range.Clone() }.ok()?;
-    unsafe { caret.Collapse(ec, TF_ANCHOR_END) }.ok()?;
+    // `range` 是刚从 TF_SELECTION 里取出的自有引用，直接折叠即可 —— 不必先 Clone
+    // 一份（review 2026-10-22：每次取位置都白做一次范围复制）。
+    unsafe { range.Collapse(ec, TF_ANCHOR_END) }.ok()?;
 
     let view = unsafe { pic.GetActiveView() }.ok()?;
     let mut rc = RECT::default();
     let mut clipped = BOOL(0);
-    // SAFETY: `caret` 是本次编辑会话内取得的有效范围；`rc`/`clipped` 都是出参。
-    unsafe { view.GetTextExt(ec, &caret, &mut rc, &mut clipped) }.ok()?;
+    // SAFETY: `range` 是本次编辑会话内取得的有效范围；`rc`/`clipped` 都是出参。
+    unsafe { view.GetTextExt(ec, &range, &mut rc, &mut clipped) }.ok()?;
     // 完全空/无效的矩形（部分宿主对无焦点视图返回全 0）不当作位置：放弃本次，
     // 窗口沿用上一次位置。插入点本身是**零宽**的（right == left），这是合法值。
     if rc.right <= rc.left && rc.bottom <= rc.top {

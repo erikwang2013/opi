@@ -90,8 +90,10 @@ unsafe impl Sync for PipeHandle {}
 
 /// 候选窗管道名（窗口侧 = desktop/ 的 JNA 服务器端，两侧保持一致）。
 const PIPE_NAME: PCWSTR = w!(r"\\.\pipe\opi");
-/// 读线程重连间隔（窗口未启动/忙）。
+/// 读线程重连间隔（窗口未启动/忙，**仅 active 时**）。
 const RETRY_SLEEP_MS: u64 = 50;
+/// 宿主失活后的读线程空闲间隔：不抢管道，也不 50ms 醒一次烧 CPU。
+const IDLE_SLEEP_MS: u64 = 250;
 /// 读线程「有数据才 ReadFile」的轮询间隔。**不能再用阻塞 ReadFile**：同一同步命名
 /// 管道句柄上未完成的 ReadFile 会把 WriteFile 串行化 —— 按键线程的第二次 show
 /// 会永久阻塞，宿主 UI 线程冻住（2026-10-21 真机：按 n 出候选窗后按 i 不再响应）。
@@ -228,9 +230,18 @@ impl CandidateClient {
     }
 
     /// 发送一条完整消息（自动补 '\n'）。连接失败 → 本次放弃（不睡眠）；写失败 → 断开待重连。
+    ///
+    /// **不在这里置 `active`**（2026-10-22 review）：`active` 的语义是「本宿主当前
+    /// 是前台输入法」，唯一写入点是 `Activate`/`ThreadFocusSink::OnSetThreadFocus`。
+    /// 旧代码在每次写消息时无条件置 true —— 失焦后若还有一次排队刷新（点候选后
+    /// Alt-Tab），已失活的宿主会把读线程重新武装，50ms 内抢回单实例 `\\.\pipe\opi`，
+    /// 新前台宿主永远连不上（候选窗/状态栏不出现）。
+    ///
+    /// 失活时**连惰性连接也不做**：排队刷新自己 connect 同样会把管道抢回来。检查
+    /// 放在 conn 锁内 —— `disconnect()` 先置 false 再取同一把锁，锁内看到 true
+    /// 的那次连接随后会被 disconnect 关掉；看到 false 则直接放弃。激活时
+    /// `on_activate` 已先置 true，首帧 state 不受影响。
     fn send_json(&self, json: &str) {
-        // 能发出消息 = 本宿主在输入法里活动：写失败后读线程也要继续重连。
-        self.active.store(true, Ordering::SeqCst);
         let bytes = [json.as_bytes(), b"\n"].concat();
         let mut conn = match self.conn.lock() {
             Ok(g) => g,
@@ -238,13 +249,18 @@ impl CandidateClient {
         };
         let handle = match *conn {
             Some(h) => h,
-            None => match Self::connect() {
-                Some(h) => {
-                    *conn = Some(h);
-                    h
+            None => {
+                if !self.active.load(Ordering::SeqCst) {
+                    return;
                 }
-                None => return, // 窗口未启动：本次放弃，下次发送再试
-            },
+                match Self::connect() {
+                    Some(h) => {
+                        *conn = Some(h);
+                        h
+                    }
+                    None => return, // 窗口未启动：本次放弃，下次发送再试
+                }
+            }
         };
         let ok = write_all(handle, &bytes);
         if !ok {
@@ -305,8 +321,16 @@ impl CandidateClient {
                             {
                                 match conn.lock() {
                                     Ok(mut g) if g.is_none() => {
-                                        *g = Some(h);
-                                        continue;
+                                        // **装上句柄前再查一次 active**：disconnect() 先
+                                        // 置 false 再取 conn 锁；若 connect 期间失焦，这里
+                                        // 装回去就等于把管道从新前台宿主手里抢走。
+                                        if active.load(Ordering::SeqCst) {
+                                            *g = Some(h);
+                                            continue;
+                                        }
+                                        drop(g);
+                                        // SAFETY: 句柄刚由 connect 创建，尚未交给任何人。
+                                        unsafe { CloseHandle(h.0) }.ok();
                                     }
                                     _ => {
                                         // 写线程抢先连上了：关掉多出来的这个。
@@ -315,7 +339,13 @@ impl CandidateClient {
                                     }
                                 }
                             }
-                            thread::sleep(Duration::from_millis(RETRY_SLEEP_MS));
+                            // 失活时不必 50ms 醒一次：这条线程只在 active 时才该抢管道。
+                            let ms = if active.load(Ordering::SeqCst) {
+                                RETRY_SLEEP_MS
+                            } else {
+                                IDLE_SLEEP_MS
+                            };
+                            thread::sleep(Duration::from_millis(ms));
                             continue;
                         }
                     }

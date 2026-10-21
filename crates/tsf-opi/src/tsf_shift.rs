@@ -18,10 +18,12 @@
 //! 失活时 [`TsfTextService::shift_tap_disarm`]：按住 Shift 切走后抬起可能到不了本
 //! 服务，不撤销就是回来后的幽灵切换（镜像 `OpiShiftToggle::disarm`）。
 
+use std::time::Instant;
+
 use windows::Win32::UI::TextServices::ITfContext;
 use windows::core::BOOL;
 
-use crate::logic::{KEY_SHIFT, KEY_STATE_RELEASED};
+use crate::logic::{KEY_SHIFT, KEY_STATE_RELEASED, TsfLogic};
 use crate::sink::push_state;
 use crate::tsf::TsfTextService;
 use crate::vk::is_shift_vk;
@@ -38,7 +40,7 @@ impl TsfTextService {
         let armed = is_shift && self.state.shift_toggle();
         // 中毒锁 → 忽略这一次（吞掉判定，不把 panic 带过 COM 边界）。
         if let Ok(mut tap) = self.shift_tap.lock() {
-            tap.on_key_down(armed);
+            tap.on_key_down(armed, Instant::now());
         }
     }
 
@@ -57,27 +59,52 @@ impl TsfTextService {
         }
         self.shift_tap
             .lock()
-            .is_ok_and(|mut tap| tap.take_on_shift_up())
+            .is_ok_and(|mut tap| tap.take_on_shift_up(Instant::now()))
+    }
+
+    /// Shift 抬起的**唯一处理点**（`handle_key_inner` 只调这一句）。返回 `Some` = 本次
+    /// 抬起已处理（调用方直接回 `BOOL(1)`）；`None` = 不是 Shift 抬起，继续正常路由。
+    ///
+    /// 无论是否轻按都要收尾引擎里的 Single：物理 Shift 的大写由 `ToUnicodeEx` 给出，
+    /// Shift+方向/组合键（轻按已被撤销）或 `ShiftToggle=False` 时残留的 Single 会让
+    /// 下一个字母莫名大写（review 2026-10-22）。
+    pub(super) fn handle_shift_release_event(
+        &self,
+        states: u32,
+        keycode: u32,
+        pic: Option<&ITfContext>,
+    ) -> Option<BOOL> {
+        if states & KEY_STATE_RELEASED == 0 || keycode != KEY_SHIFT {
+            return None;
+        }
+        let tap = self.take_shift_tap_on_release(states, keycode);
+        let mut logic = match self.state.lock_logic() {
+            Some(g) => g,
+            None => return Some(BOOL(1)), // 中毒锁：吞键，与 handle_key_inner 同策略
+        };
+        if tap && logic.shift_toggle() {
+            return Some(self.handle_shift_release(&mut logic, pic));
+        }
+        logic.consume_single_shift();
+        Some(BOOL(1))
     }
 
     /// 第三拍：执行中 ⇄ 英。返回 `BOOL(1)`（按键归本服务）。
     ///
+    /// **调用方已持有 logic 锁**并通过 `shift_toggle()` 闸门（见 `tsf.rs` 的 Shift
+    /// 抬起分支）—— 本函数不得再取锁（`std::sync::Mutex` 不可重入）。
+    ///
     /// W1：进英文前把待处理拼音的**原文**插进文档（`toggle_language` 的返回值），
     /// 再让候选窗收起；没有焦点文档时文字静默丢弃，与别处一致。切回拼音无待上屏
     /// 文本 → 推一帧状态（缓冲空 ⇒ 窗口收起），与 `toggle_mode` 同一条收尾。
-    pub(super) fn handle_shift_release(&self, pic: Option<&ITfContext>) -> BOOL {
-        let mut logic = match self.state.lock_logic() {
-            Some(g) => g,
-            None => return BOOL(1), // 中毒锁：吞键，与 handle_key_inner 同策略
-        };
-        if !logic.shift_toggle() {
-            // 开关在 TestKeyUp 与 KeyUp 之间被关掉（设置刚保存）：这次抬起交还应用，
-            // 不切换。正常路径 OnTestKeyUp 已经答 FALSE，不会走到这里。
-            return BOOL(0);
-        }
+    pub(super) fn handle_shift_release(
+        &self,
+        logic: &mut TsfLogic,
+        pic: Option<&ITfContext>,
+    ) -> BOOL {
         let text = logic.toggle_language();
         if text.is_empty() {
-            push_state(&*self.sink, &logic);
+            push_state(&*self.sink, logic);
         } else if let Some(pic) = pic {
             self.state.insert_into(pic, &text);
             self.sink.on_commit(&text);

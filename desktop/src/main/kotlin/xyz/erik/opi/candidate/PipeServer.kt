@@ -120,6 +120,9 @@ class PipeServer(private val model: CandidateModel) {
                 // 关闭入口，漏掉这一步就是一扇关不掉的窗，只能杀进程。
                 // 放 finally = 异常路径同样执行「隐藏 + 关句柄 + 重建」，不留残窗口。
                 model.visible = false
+                // 位置也回到「没收到过」：上一个宿主的 caret 坐标不能带给下一个应用
+                // （否则下一个连接的首个 show 会先用旧坐标画一帧，review 2026-10-22）。
+                model.positioned = false
                 failPendingCtl() // TSF 断开：挂在等应答的控制请求立刻失败，别干等到超时
                 val h = pipe
                 if (h != null) {

@@ -186,10 +186,10 @@ impl TsfTextService {
         if states & KEY_STATE_RELEASED == 0 {
             self.state.remember_target(pic);
         }
-        // Shift 轻按切中英（2026-10-22 用户报障）：判定/执行都在 `tsf_shift.rs`
-        // （三拍见那边模块头）。这里只是接线 —— 触发那一下不经过引擎。
-        if self.take_shift_tap_on_release(states, keycode) {
-            return self.handle_shift_release(pic);
+        // Shift 抬起（2026-10-22）：轻按切中英 + 清掉引擎里的 Single；细节在
+        // `tsf_shift.rs` 的 handle_shift_release_event（拆出去守 500 行）。
+        if let Some(done) = self.handle_shift_release_event(states, keycode, pic) {
+            return done;
         }
         // B0 模式热键要判在引擎**之前**：引擎的按键路径里 Ctrl+符号多半被判
         // 放行给应用（对照 fcitx5 轨 input_method.rs 的 Ctrl/Alt 直通），
@@ -433,9 +433,10 @@ impl ITfKeyEventSink_Impl for TsfTextService_Impl {
     fn OnTestKeyUp(&self, _pic: Ref<ITfContext>, wparam: WPARAM, _lparam: LPARAM) -> Result<BOOL> {
         // OnKeyUp **只在 OnTestKeyUp 答 TRUE 时才被调用**。Shift 抬起是「轻按切中英」
         // 的判定点，必须认领（Windows 抬起事件的 wParam 是 VK_LSHIFT/VK_RSHIFT，
-        // 不是 VK_SHIFT —— 见 `vk::is_shift_vk`）。`ShiftToggle=False` 时不认领：
-        // 开关关掉后 Shift 抬起照旧交还应用。其余键的抬起本服务没有用途。
-        let claim = is_shift_vk(wparam.0 as u32) && self.state.shift_toggle();
+        // 不是 VK_SHIFT —— 见 `vk::is_shift_vk`）。
+        // **ShiftToggle=False 时也认领**：抬起分支还要清掉引擎里的 Single（见
+        // handle_key_inner），不认领就清不掉。其余键的抬起本服务没有用途。
+        let claim = is_shift_vk(wparam.0 as u32);
         Ok(BOOL(if claim { 1 } else { 0 }))
     }
 

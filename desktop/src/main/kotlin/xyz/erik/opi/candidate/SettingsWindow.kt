@@ -167,7 +167,9 @@ fun SettingsWindow() {
     // 发现新版本在内容区顶部出一条可关闭的横幅。网络失败静默（不打扰输入）。
     var update by remember { mutableStateOf<UpdateCheck?>(null) }
     var updateChecking by remember { mutableStateOf(false) }
-    var updateDismissed by remember { mutableStateOf(false) }
+    // 按**版本号**记「已关闭」：关掉 1.21.1 的横幅后，同一会话里手动检测出 1.22.0
+    // 仍应再弹一次（旧布尔会永久压住后续版本的横幅，review 2026-10-22）。
+    var dismissedUpdate by remember { mutableStateOf<String?>(null) }
 
     // 打开设置就意味着「用户在看/要调状态栏」：条该显示却没人拉起 ⇒ 直接拉一支
     // （2026-10-10 用户报障「设置里开了、实际没出现」的根因：装包后没重登录，
@@ -245,8 +247,10 @@ fun SettingsWindow() {
             // 新版本横幅（2026-10-22 用户裁决）：只在检测到更新时出现，可关闭；
             // 不挡任何页 —— 它在这条右栏的顶部，页面在它下面滚动。
             (update as? UpdateCheck.Available)?.let { available ->
-                if (!updateDismissed) {
-                    UpdateBanner(available.latest, available.download) { updateDismissed = true }
+                if (dismissedUpdate != available.latest) {
+                    UpdateBanner(available.latest, available.download) {
+                        dismissedUpdate = available.latest
+                    }
                 }
             }
             Column(
