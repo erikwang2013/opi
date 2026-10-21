@@ -331,7 +331,9 @@ extension OpiSettingsWindow {
     // ---------- 关于 ----------
 
     func buildAbout() {
-        setPageHeight(560)
+        setPageHeight(610)
+        aboutUpdateLabel = nil
+        aboutDownloadButton = nil
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "未知"
         label("OPI 小欧输入法", y: 8, size: 20, bold: true)
         label("macOS · InputMethodKit", y: 40, size: 13)
@@ -346,17 +348,47 @@ extension OpiSettingsWindow {
             view.imageScaling = .scaleProportionallyUpOrDown
             host?.addSubview(view)
         }
-        linkLabel("主页地址：https://opi.erik.xyz", url: "https://opi.erik.xyz", y: 98)
-        linkLabel("项目地址：https://github.com/erikwang2013/opi",
-                  url: "https://github.com/erikwang2013/opi", y: 120)
-        linkLabel("博客地址：https://erik.xyz", url: "https://erik.xyz", y: 142)
 
-        label("草案构建：未签名、未公证、未在真机运行验证。", y: 180, size: 12,
+        // 更新检测（2026-10-22）：打开设置自动检测；这里只显示结论并可手动重测。
+        aboutUpdateLabel = label(OpiUpdateChecker.shared.statusText, y: 88, size: 12,
+                                 color: .secondaryLabelColor)
+        button("检测更新", x: 0, y: 108, w: 96,
+               action: #selector(checkUpdatesManually))
+        let download = button("前往下载", x: 104, y: 108, w: 96,
+                              action: #selector(openUpdateDownload))
+        download.isHidden = OpiUpdateChecker.shared.downloadURL == nil
+        aboutDownloadButton = download
+
+        linkLabel("主页地址：https://opi.erik.xyz", url: "https://opi.erik.xyz", y: 150)
+        linkLabel("项目地址：https://github.com/erikwang2013/opi",
+                  url: "https://github.com/erikwang2013/opi", y: 172)
+        linkLabel("博客地址：https://erik.xyz", url: "https://erik.xyz", y: 194)
+
+        label("草案构建：未签名、未公证、未在真机运行验证。", y: 232, size: 12,
               color: .systemOrange)
         note("Linux 对照：状态栏（LOGO/中英/标点/简繁/模式/全角/软键盘/符号/设置）、设置八页、12 皮肤、暗光/长辈、符号/表情/颜文字/贴纸、26/9/14/笔画自绘键盘。",
-             y: 214, height: 40)
+             y: 266, height: 40)
         note("明确不可用：ENPRO（englishpro 在 macOS 无控制面，状态栏按钮禁用）；系统候选窗皮肤/字号；空缓冲时软键盘退格不能删宿主文本。贴纸走剪贴板（PNG+GIF），不注入 ⌘V。",
-             y: 264, height: 50)
-        note("完整缺口表与「最不确定的 API」见 macos/README.md。", y: 322, height: 20)
+             y: 316, height: 50)
+        note("完整缺口表与「最不确定的 API」见 macos/README.md。", y: 374, height: 20)
+        refreshAboutUpdate()
+    }
+
+    /// 检测结果回来后只改这一行和下载按钮；不在别的页重建控件。
+    func refreshAboutUpdate() {
+        guard page == .about else { return }
+        aboutUpdateLabel?.stringValue = OpiUpdateChecker.shared.statusText
+        aboutUpdateLabel?.textColor =
+            OpiUpdateChecker.shared.downloadURL == nil ? .secondaryLabelColor : .systemOrange
+        aboutDownloadButton?.isHidden = OpiUpdateChecker.shared.downloadURL == nil
+    }
+
+    @objc func checkUpdatesManually() {
+        OpiUpdateChecker.shared.check(manual: true)
+    }
+
+    @objc func openUpdateDownload() {
+        guard let url = OpiUpdateChecker.shared.downloadURL else { return }
+        NSWorkspace.shared.open(url)
     }
 }

@@ -79,7 +79,7 @@ internal fun BarTooltip(
             onDispose { barWindow.removeComponentListener(hide) }
         }
         // 与条同一套摘除任务栏的逻辑（见 SkipTaskbar）；标题唯一，BFS 不会认错窗。
-        LaunchedEffect(window) { SkipTaskbar.apply(window) }
+        LaunchedEffect(window) { statusBarGuard("提示窗 SkipTaskbar") { SkipTaskbar.apply(window) } }
         Box(
             Modifier.fillMaxSize().background(palette.bg).border(1.dp, palette.line)
                 .padding(horizontal = 8.dp, vertical = 4.dp),

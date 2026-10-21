@@ -30,7 +30,8 @@ import org.jetbrains.skia.FontStyle
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * 把「按 [key] 算一次」的重活挪到**后台线程**：先给 [empty]、算完再换成结果。
+ * 把「按 [key] 算一次」的重活挪到**后台线程**：先给 [empty]、算完再换成结果；
+ * 算失败 → [fallback]（调用方给未过滤数据，页面不至于整页空白/崩溃）。
  *
  * 为什么必须有它（2026-10-13 实测）：把过滤写在 `Window(` 前、或写在窗内容里，**一样慢** ——
  * 窗要等内容那一趟组合跑完才显示。于是用户点 Ω 后 15-25s 眼前什么都没有（真机实测 24.6s）。
@@ -38,9 +39,14 @@ import java.util.concurrent.ConcurrentHashMap
  * 过滤本身还是那么贵 —— 但**不再挡在「窗存在」这条路上**。
  */
 @Composable
-internal fun <T> deferredFilter(empty: T, key: Any?, compute: () -> T): T {
+internal fun <T> deferredFilter(empty: T, key: Any?, fallback: T = empty, compute: () -> T): T {
     var value by remember(key) { mutableStateOf(empty) }
-    LaunchedEffect(key) { value = withContext(Dispatchers.Default) { compute() } }
+    // 过滤失败（Skia/字体链异常）不带走整个窗：记日志后落回未过滤数据。
+    LaunchedEffect(key) {
+        value = withContext(Dispatchers.Default) {
+            statusBarGuard("符号页字形过滤") { compute() } ?: fallback
+        }
+    }
     return value
 }
 

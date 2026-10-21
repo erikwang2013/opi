@@ -158,7 +158,7 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
         // 防抖 250ms：用户打字约 100ms 一个字，每个字都发一次进程 + D-Bus 太贵。
         delay(250)
         // ⚠️ 不能在组合线程上跑：那是一整次子进程 + D-Bus 往返（超时 3s），会把界面冻住。
-        search = withContext(Dispatchers.IO) { desktopSymbolSearch(q) }
+        search = withContext(Dispatchers.IO) { statusBarGuard("符号页搜索") { desktopSymbolSearch(q) } }
     }
     val windowState = rememberWindowState(
         width = WIN_W.dp,
@@ -183,7 +183,7 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
         // 内容才 provide —— 读在窗前时状态栏那条路（application{} 顶层，无 Window 祖先）
         // 点 Ω 即整进程崩（2026-10-13 P0 真机复现；网见 SymbolWindowCallPathTest）。
         val focus = LocalFocusManager.current
-        LaunchedEffect(window) { SkipTaskbar.apply(window) } // 同虚拟键盘：输入工具窗不进任务栏（设置窗不贴）
+        LaunchedEffect(window) { statusBarGuard("符号页 SkipTaskbar") { SkipTaskbar.apply(window) } } // 同虚拟键盘：输入工具窗不进任务栏（设置窗不贴）
         val scope = rememberCoroutineScope()
         // 上屏串行锁：从前「点一下 = EDT 冻到上屏返回」，连点两下是 EDT 队列里顺序执行；
         // 挪到 IO 后并发来自协程，这把锁把旧次序保住 —— 否则连点两个符号是两条并发
@@ -192,15 +192,17 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
         // 字形过滤（2026-10-13）：**渲染前**摘掉本机字体画不出的字形（判据见 GlyphCoverage，
         // 规则逐条对齐 Android 的 canRenderGlyph）。与 categories/emoji 同寿命，读一次滤一次。
         // ⚠️ 必须走 deferredFilter：过滤留在组合里会把「窗显示」推到它之后（真机实测 24.6s/15.6s）。
-        val catsShown = deferredFilter(emptyList(), categories) { SymbolCategories.filter(categories, GlyphCoverage::canRender) }
-        val emojiShown = deferredFilter(EmojiData.Empty, emoji) { EmojiData.filter(emoji, GlyphCoverage::canRender) }
+        val catsShown = deferredFilter(emptyList(), categories, categories) { SymbolCategories.filter(categories, GlyphCoverage::canRender) }
+        val emojiShown = deferredFilter(EmojiData.Empty, emoji, emoji) { EmojiData.filter(emoji, GlyphCoverage::canRender) }
         // 允许获焦之后才申请系统焦点（顺序反了申请无效）。交还键盘时只关 focusable 不够：
         // :0 探针实测 —— 关掉后 X 焦点仍留在本窗、用户的键入被静默丢掉；重挂一次窗才会按
         // WM 的焦点历史落回文档窗，且 focusable=false 的窗重新映射不会再抢回来。
         LaunchedEffect(typing) {
-            if (typing) window.requestFocus() else if (window.isFocused) {
-                window.isVisible = false
-                window.isVisible = true
+            statusBarGuard("符号页焦点") {
+                if (typing) window.requestFocus() else if (window.isFocused) {
+                    window.isVisible = false
+                    window.isVisible = true
+                }
             }
         }
         Column(Modifier.fillMaxSize().background(SymBg)) {
@@ -269,7 +271,7 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
                     scope.launch {
                         var waited = 0
                         while (window.isFocused && waited < 300) { delay(20); waited += 20 }
-                        withContext(Dispatchers.IO) { pickLock.withLock { onCommit(sym) } }?.let {
+                        withContext(Dispatchers.IO) { statusBarGuard("符号页上屏") { pickLock.withLock { onCommit(sym) } } }?.let {
                             noticeIsError = true
                             notice = it
                         }

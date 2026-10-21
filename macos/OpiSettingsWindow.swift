@@ -48,6 +48,9 @@ final class OpiSettingsWindow: NSObject {
     var page: Page = .common
     var dictEntries: [OpiDictEntry] = []
     var userWordField: NSTextField?
+    // 「关于」页的更新检测控件（异步结果回来时就地改字，不重建整页）。
+    var aboutUpdateLabel: NSTextField?
+    var aboutDownloadButton: NSButton?
 
     var contentWidth: CGFloat { Self.width - Self.navW - 28 }
 
@@ -58,6 +61,9 @@ final class OpiSettingsWindow: NSObject {
         self.page = page
         rebuildNav()
         rebuildPage()
+        // 打开设置自动检测一次；自动失败保持上次结论（关于页的「检测更新」才显示失败）。
+        OpiUpdateChecker.shared.onChange = { [weak self] in self?.refreshAboutUpdate() }
+        OpiUpdateChecker.shared.check(manual: false)
         NSApp.activate(ignoringOtherApps: true)
         p.makeKeyAndOrderFront(nil)
     }

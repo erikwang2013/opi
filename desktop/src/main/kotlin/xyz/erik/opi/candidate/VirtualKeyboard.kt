@@ -183,7 +183,7 @@ fun VirtualKeyboardWindow(onClose: () -> Unit, onSymbols: () -> String?) {
         icon = OpiPetWindowIcon, // 窗口/任务栏图标 = 小欧（PetIcon.kt）
     ) {
         // 不进任务栏（同状态栏，用户没点名、属同族顺手）：X11 属性直写，见 SkipTaskbar.kt。
-        LaunchedEffect(window) { SkipTaskbar.apply(window) }
+        LaunchedEffect(window) { statusBarGuard("虚拟键盘 SkipTaskbar") { SkipTaskbar.apply(window) } }
         Column(
             modifier = Modifier.fillMaxSize().background(KbBg).padding(6.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),

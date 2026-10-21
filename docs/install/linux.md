@@ -747,6 +747,14 @@ Linux 上 = `--settings` 的设置窗（无参数启动也是它）。**v1.6.0 �
 - 版本号是**单一来源**：`desktop/build.gradle.kts` 的 `opiAppVersion` 同时喂给
   jpackage 包版本与窗口标题（构建时生成 `Version.kt`）。此前窗口里写死过一份，
   到 1.6.0 就成了摆在用户眼前的假话 —— 别再写死第二处。
+- **更新检测**（2026-10-22，Linux 与 Windows 共用同一设置窗）：打开设置时自动请求
+  `https://opi.erik.xyz/version.json`（`{"version":"…","download":"https://opi.erik.xyz/download"}`，
+  连接/读取各 4s），版本按数字段比较（`1.9.10 > 1.9.9`，缺段按 0）。「关于」页显示
+  当前版本与「检测更新」；发现新版本显示「发现新版本 vX（当前 vY）」+「前往下载」
+  （走系统默认浏览器）。自动检测失败不打扰（保留上次结论）；只有手点「检测更新」才
+  显示失败原因。站点未部署 `version.json` 时回退解析首页 JSON-LD 的
+  `softwareVersion`，再兜底 `opi-<版本>-windows` 文件名；下载地址统一为
+  `https://opi.erik.xyz/download`。
 - 升级路径：装新包时 apt/dnf 按 `replaces`/`conflicts` 自动卸掉旧的独立设置窗包
   `opi-candidates`（≤1.5.0）—— 不声明的话 `/opt/opi-candidates/**` 文件归属冲突会让
   dpkg **拒绝安装**。
@@ -794,6 +802,17 @@ Linux 上 = `--settings` 的设置窗（无参数启动也是它）。**v1.6.0 �
   （那样 OPI 热键会全失效）。
 - ⚠️ 与 fcitx5 自己的状态区（§4.6 的「中/英/简/繁/设」三项）**两套并存**：那套挂在
   面板上，这套是独立悬浮窗；两边调同一批引擎动作，状态互相同步。
+- **崩溃取证**（2026-10-22 用户报障「使用一段时间后语言栏间歇性崩溃」）：
+  `opi --statusbar` 启动即安装未捕获异常处理器；异常（AWT/Compose 协程/后台线程）
+  连同完整栈写入 `$XDG_STATE_HOME/opi/statusbar-crash.log`（缺省
+  `~/.local/state/opi/statusbar-crash.log`）并同步打印 stderr（自启动时进 journal）。
+  启动/退出/重复实例各记一行：重复拉起会看到 `duplicate statusbar instance, exiting`，
+  正常单实例只有一对 start/exit。1s 轮询、按钮动作、符号页搜索/字形过滤/贴纸读取等
+  边界会先记日志再降级继续，单个异常不再带走整条。收集现场：
+  `tail -n 200 ~/.local/state/opi/statusbar-crash.log`；时间线对照
+  `journalctl --user -b | grep opi-statusbar`。
+  插件侧（`crates/fcitx5-opi`）的 `keyEvent` / `select` / `deactivate` / `reset` /
+  皮肤写入已补 `catch (...)` 并打 stderr，非 `std::exception` 异常不再逃进 fcitx5 主循环。
 
 **符号大全**（`Ctrl+Shift+Z`、状态栏「符号」按钮、或 `opi-ctl symbols`）—— **两条入口
 两类界面**（2026-10-12 起）：

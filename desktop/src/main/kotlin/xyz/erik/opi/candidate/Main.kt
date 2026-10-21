@@ -126,9 +126,12 @@ fun main(args: Array<String>) = application {
     //     所以「无参数的默认」在那边就该是设置窗（否则从启动器点开是一片空白）。
     // `args` 与操作系统在进程生命周期里恒定 ⇒ 这个分支**不会来回切**（Compose 的早返回安全）。
     if ("--statusbar" in args) {
+        // 崩溃取证（2026-10-22）：先装处理器，连「重复实例/启动失败」也留时间线。
+        installStatusBarCrashLogger()
         // 单实例锁（2026-10-10）：设置窗会按需拉起本进程（见 StatusBarLock.kt），
         // 重复的实例在这里安静退出 —— 否则会在桌面上叠出第二条、第三条。
         if (!acquireStatusBarLock()) {
+            logStatusBarEvent("duplicate statusbar instance, exiting")
             println("[opi-statusbar] 已有一个状态栏在跑，本实例退出")
             // 硬退出，**不能**只 return@application：Compose/AWT 的事件线程会把 JVM
             // 吊住（实测：只 return 时进程活着、没窗口，pgrep 里多一具）

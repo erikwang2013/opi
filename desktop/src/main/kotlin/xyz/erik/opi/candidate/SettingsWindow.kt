@@ -55,6 +55,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -177,14 +178,18 @@ fun SettingsWindow() {
     LaunchedEffect(Unit) {
         // 拉条进程 = fork/exec（还带一次锁文件探测）：挪到 IO，规矩与状态栏那边一致
         // —— 别在组合线程上碰进程与文件（2026-10-13 EDT 取证轮）。
-        withContext(Dispatchers.IO) { ensureStatusBarRunning(s.statusbar) }?.let { status = it }
+        statusBarGuard("设置窗拉起状态栏") {
+            withContext(Dispatchers.IO) { ensureStatusBarRunning(s.statusbar) }?.let { status = it }
+        }
         // 内置词库首启种子（2026-10-16，康熙字典「全发」）：开窗一次把随包词库种进
         // 词库目录（标记门控；删过的不复活 —— 与 Android DictStore.seedBundled、fcitx5
         // opiSeedBundledDict 语义一字不差）。放**窗口启动**而不是词库页里：页面保持
         // 「只读目录、不写目录」的姿态（离屏探针直接渲页，页面里种会让它的空态不再空）。
-        withContext(Dispatchers.IO) {
-            seedBundledDict("kangxi", dictsDir()) {
-                DictsResources::class.java.getResourceAsStream("/kangxi.tsv")
+        statusBarGuard("设置窗种子词库") {
+            withContext(Dispatchers.IO) {
+                seedBundledDict("kangxi", dictsDir()) {
+                    DictsResources::class.java.getResourceAsStream("/kangxi.tsv")
+                }
             }
         }
     }
@@ -195,12 +200,22 @@ fun SettingsWindow() {
     val saveLock = remember { Mutex() }
 
     /** 检测更新（自动/手动同一入口）。网络在 IO 上跑，绝不阻塞设置窗。 */
-    fun triggerUpdateCheck() {
+    fun triggerUpdateCheck(manual: Boolean = false) {
         if (updateChecking) return
         updateChecking = true
         scope.launch {
-            update = withContext(Dispatchers.IO) { checkForUpdate() }
-            updateChecking = false
+            try {
+                val result = withContext(Dispatchers.IO) { checkForUpdate() }
+                // 自动检测失败不打扰：保留上一次成功结论；只有手点「检测更新」才显示原因。
+                update = if (!manual && result is UpdateCheck.Failed) update else result
+            } catch (e: CancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                logStatusBarCrash("更新检测", t)
+                if (manual) update = UpdateCheck.Failed("内部错误：${t.javaClass.simpleName}")
+            } finally {
+                updateChecking = false
+            }
         }
     }
     // 用户裁决（2026-10-22）：打开设置时自动检测一次；发现新版本走顶部横幅。
@@ -218,25 +233,33 @@ fun SettingsWindow() {
         // 已先写），状态行晚一步出现。措辞与状态栏的换肤提示共用一份（saveStatusMessage）。
         scope.launch {
             saveLock.withLock {
-                val live = withContext(Dispatchers.IO) { saveSettings(next) }
-                var msg = saveStatusMessage(live)
-                if (fontChanged && !isWindows()) {
-                    // classicui 那条 = 文件写 + ReloadAddonConfig 子进程，同样挪到 IO
-                    // （与状态栏那边的纪律一致；失败的措辞与 saveStatusMessage 同调）。
-                    val uiOk = withContext(Dispatchers.IO) { applyClassicUiFont(next.candidateFont) }
-                    msg += if (uiOk) {
-                        "；候选字号已写入 classicui.conf 并重载"
-                    } else {
-                        "；候选字号已写入 classicui.conf，但没能通知 fcitx5 重载（它没在跑？重启输入法后生效）"
+                try {
+                    val live = withContext(Dispatchers.IO) { saveSettings(next) }
+                    var msg = saveStatusMessage(live)
+                    if (fontChanged && !isWindows()) {
+                        // classicui 那条 = 文件写 + ReloadAddonConfig 子进程，同样挪到 IO
+                        // （与状态栏那边的纪律一致；失败的措辞与 saveStatusMessage 同调）。
+                        val uiOk = withContext(Dispatchers.IO) { applyClassicUiFont(next.candidateFont) }
+                        msg += if (uiOk) {
+                            "；候选字号已写入 classicui.conf 并重载"
+                        } else {
+                            "；候选字号已写入 classicui.conf，但没能通知 fcitx5 重载（它没在跑？重启输入法后生效）"
+                        }
+                    } else if (fontChanged) {
+                        // Windows：候选窗与状态栏都 1s 轮询 settings.ini（同一套同步机制）。
+                        msg += "；候选字号已保存，候选窗将在 1 秒内跟随"
                     }
-                } else if (fontChanged) {
-                    // Windows：候选窗与状态栏都 1s 轮询 settings.ini（同一套同步机制）。
-                    msg += "；候选字号已保存，候选窗将在 1 秒内跟随"
+                    if (skinChanged && isWindows()) {
+                        msg += "；候选窗与状态栏将在 1 秒内跟随新皮肤"
+                    }
+                    status = msg
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (t: Throwable) {
+                    // 磁盘满/权限/子进程异常：设置窗继续活着，状态行说人话，栈进崩溃日志。
+                    logStatusBarCrash("设置保存", t)
+                    status = "保存失败：${t.javaClass.simpleName}（详见状态栏崩溃日志）"
                 }
-                if (skinChanged && isWindows()) {
-                    msg += "；候选窗与状态栏将在 1 秒内跟随新皮肤"
-                }
-                status = msg
             }
         }
     }
@@ -274,7 +297,7 @@ fun SettingsWindow() {
                         status = status,
                         update = update,
                         checking = updateChecking,
-                        onCheckUpdate = ::triggerUpdateCheck,
+                        onCheckUpdate = { triggerUpdateCheck(manual = true) },
                     )
                 }
             }

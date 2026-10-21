@@ -55,6 +55,7 @@
 | `OpiSettingsWindow.swift` | 设置窗外壳（8 页导航 + 滚动内容区 + 通用控件） |
 | `OpiSettingsPages.swift` | 常用 / 按键 / 外观 / 状态栏 / 符号与表情页 |
 | `OpiSettingsDicts.swift` | 词库 / 五笔 / 关于页 |
+| `OpiUpdateCheck.swift` | 新版本检测：`version.json`、4s 超时、语义化比较、自动/手动检测与下载入口 |
 | `main.swift` | `IMKServer` 启动（无 nib） |
 | `Info.plist` | 输入法组件声明 |
 | `README.md` | 本文件 |
@@ -637,7 +638,7 @@ Linux 同一份：
 | 符号与表情 | 类目/表情计数、打开两个面板、`ShowOwn` 贴纸页开关 | `ShowOwn` |
 | 词库 | 系统词典状态、导入 `.tsv`、启停/删除导入层；用户词导出/导入/清空/删单词 | `DisabledDicts`（逗号分隔；空 = 全启用） |
 | 五笔 | 风格、混入方式、候选个数、回车行为、唯一候选自动上屏、切到五笔 | `WubiStyle` `WubiMixedEntry` `WubiCandidateLimit` `WubiReturn` `WubiAutoCommit` |
-| 关于 | 版本、未签名提示、主页/项目/博客外链、对照与限制摘要 | — |
+| 关于 | 版本、更新检测（打开设置自动一次 + 「检测更新」；新版本显示「发现新版本 vX（当前 vY）」与「前往下载」）、未签名提示、主页/项目/博客外链、对照与限制摘要 | — |
 
 * 启动顺序（`main.swift`）：`opi_load` → 可选 `trad.opid` → 可选 `stroke.opid` /
   `wubi86.opid` → `applyPersisted()` → 重放 `dicts/*.tsv`（按停用名单关层）。
@@ -669,6 +670,7 @@ Linux 同一份：
 | 皮肤 12 款 | `OpiTheme.swift` 逐值镜像 Linux 色板 | 只作用于 OPI 自绘面板（状态栏/键盘/表情）；系统候选窗不换肤 |
 | 暗光 / 长辈 | `DarkMode` / `ElderMode`（Android/Harmony 同源） | 已写；Linux 无此两项 |
 | 设置窗 8 页 | `OpiSettingsWindow` + `OpiSettingsPages` + `OpiSettingsDicts` | 常用/按键/外观/状态栏/符号与表情/词库/五笔/关于 |
+| 更新检测 | `OpiUpdateCheck.swift`：`https://opi.erik.xyz/version.json`，4s 超时，数字段语义比较；自动失败静默，手动才显示原因 | 已写；未上机。线上 `version.json` 需随站点部署，未部署时自动检测保持上次结论 |
 | 符号页 22 类、12×6、搜索 | `OpiSymbolPanel.swift`（2026-10-20 已有） | 已由 CI 编过；未上机 |
 | 表情/颜文字/贴纸 | `OpiEmojiPanel.swift` + `OpiEmojiData.swift`，12×6 / 6×6 / 4×3，中文分组与搜索 | 已写；贴纸写剪贴板（PNG+GIF），不注入 ⌘V |
 | 软键盘 26/9/14/笔画 + 数字 | `OpiKeyboardPanel.swift` 自绘非激活面板，点键直接喂引擎 | 已写；不注入系统键、不影响硬件输入 |

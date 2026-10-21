@@ -132,7 +132,7 @@ public:
             clearState_(event.inputContext());
         } catch (const std::exception &e) {
             fprintf(stderr, "fcitx5-opi: deactivate 异常，已忽略: %s\n", e.what());
-        }
+        } catch (...) { fprintf(stderr, "fcitx5-opi: deactivate 未知异常，已忽略\n"); }
     }
 
     void reset(const fcitx::InputMethodEntry & /*entry*/,
@@ -142,7 +142,7 @@ public:
             clearState_(event.inputContext());
         } catch (const std::exception &e) {
             fprintf(stderr, "fcitx5-opi: reset 异常，已忽略: %s\n", e.what());
-        }
+        } catch (...) { fprintf(stderr, "fcitx5-opi: reset 未知异常，已忽略\n"); }
     }
 
     // opi-ctl 的动作分发（接收侧）。动作串是**冻结的契约**（任务书）：

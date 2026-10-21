@@ -20,11 +20,11 @@ import java.net.HttpURLConnection
 import java.net.URI
 
 /**
- * 下载落点（用户 2026-10-22 裁决）：站点首页的下载区（`#download`）。
- * ⚠️ 不是 `https://opi.erik.xyz/download`：那个目录没有 index、服务器返回 403
- * （实测），具体安装包在 `/download/opi-…` 下才是 200。首页下载区列出全部平台。
+ * 下载落点（用户 2026-10-22 裁决）：`https://opi.erik.xyz/download`。
+ * 该路径现在由 `site/download/index.html` 转场到主页下载区；具体安装包仍在
+ * `/download/opi-…` 下。
  */
-internal const val UPDATE_DOWNLOAD_URL = "https://opi.erik.xyz/#download"
+internal const val UPDATE_DOWNLOAD_URL = "https://opi.erik.xyz/download"
 
 /** 机器可读的最新版本（随站点部署）。 */
 internal const val UPDATE_VERSION_URL = "https://opi.erik.xyz/version.json"

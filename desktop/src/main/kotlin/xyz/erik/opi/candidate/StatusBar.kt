@@ -161,7 +161,9 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
             // EDT 就停摆 —— 用户报的「切换输入法状态栏卡死」正是这条（2026-10-13 jstack
             // 实抓 EDT 停在 ProcessImpl.waitFor ← Actions.runCapture ← readImeState）。
             // 循环仍是单条协程顺序执行：不可重入、次序（设置→状态）与超时值都不变。
-            val (next, st) = withContext(Dispatchers.IO) { loadSettings() to readImeStateOrNull() }
+            val (next, st) = statusBarGuard("状态栏轮询") {
+                withContext(Dispatchers.IO) { loadSettings() to readImeStateOrNull() }
+            } ?: continue
             if (next != s) s = next // 变了才写状态：否则每秒一次无谓重组
             // 读失败（null）：先保留上一次状态（一次管道抖动不把用户正要点的按钮变没），
             // 但连续 3 拍（≈3s）都读不到就回到中性 —— 否则宿主退出后条会永远停在旧状态。
@@ -194,9 +196,10 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
     // 按钮增删（设置窗里拨的开关）与统一缩放（StatusBarScale）→ 条跟着变。位置**不动**：
     // 拖过就保住用户放的地方。设置窗可能是另一进程 ⇒ 这里等 1s 轮询把新值送来。
     LaunchedEffect(buttons.size, s.statusbar.scale) {
-        windowState.size = DpSize(statusBarWidthDp(buttons.size, s.statusbar.scale).dp, metrics.height)
+        statusBarGuard("状态栏尺寸") {
+            windowState.size = DpSize(statusBarWidthDp(buttons.size, s.statusbar.scale).dp, metrics.height)
+        }
     }
-
     /** 失败必须看得见：写进条上的提示，也打一行到 stdout（自启动进程的日志在 journal 里）。 */
     fun report(msg: String?) {
         if (msg != null) {
@@ -294,11 +297,13 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
         // Compose 的 Snapshot 状态跨线程可写，重组合照旧排到 UI 线程。
         scope.launch {
             actionLock.withLock {
-                withContext(Dispatchers.IO) {
-                    // 补读失败（null）**不覆盖**已有状态：动作刚返回时 broker 可能还忙/超时，
-                    // 把 im 清空会让 Windows 下整条立即隐藏（用户报「点按钮条就没了」）。
-                    actionWithStateRefresh({ dispatch(b) }) {
-                        readImeStateOrNull()?.let { imeState = it }
+                statusBarGuard("状态栏动作 ${b.name}") {
+                    withContext(Dispatchers.IO) {
+                        // 补读失败（null）**不覆盖**已有状态：动作刚返回时 broker 可能还忙/超时，
+                        // 把 im 清空会让 Windows 下整条立即隐藏（用户报「点按钮条就没了」）。
+                        actionWithStateRefresh({ dispatch(b) }) {
+                            readImeStateOrNull()?.let { imeState = it }
+                        }
                     }
                 }
             }
@@ -330,7 +335,7 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
     ) {
         // 不进任务栏/菜单栏（用户裁决 2026-10-10 下午）：X11 属性直写，机制与取证状态
         // 见 SkipTaskbar.kt（关键实现：新窗创建时注册一次，之后它自己跟随每次显示重贴）。
-        LaunchedEffect(window) { SkipTaskbar.apply(window) }
+        LaunchedEffect(window) { statusBarGuard("SkipTaskbar") { SkipTaskbar.apply(window) } }
         // 条随 `Skin=` 换装（≤1s，见文件头的同步说明）：根部 provide 一次，子
         // composable 读 LocalBarPalette —— 与 Android 侧 LocalKeyboardPalette 同套做法。
         val palette = skinColors(s.skin)

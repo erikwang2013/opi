@@ -116,16 +116,30 @@ val SystemImageClipboard = ImageClipboard { image, gif ->
         false
     } catch (e: java.awt.HeadlessException) {
         false
+    } catch (e: Exception) {
+        // PNG 编码/剪贴板访问的其余异常（IOException/SecurityException…）：报失败，别崩进程。
+        logStatusBarCrash("复制表情到剪贴板", e)
+        false
     }
 }
 
 /** 从 classpath 读 `/pet/<file>.png`；缺文件 / 解不出 → null（页面显示缺图占位）。 */
 internal fun loadPetSticker(file: String): BufferedImage? =
-    PetStickerAssets::class.java.getResourceAsStream("/pet/$file")?.use { ImageIO.read(it) }
+    try {
+        PetStickerAssets::class.java.getResourceAsStream("/pet/$file")?.use { ImageIO.read(it) }
+    } catch (e: Exception) {
+        logStatusBarCrash("读取表情图片 $file", e)
+        null
+    }
 
 /** 从 classpath 读 `/pet-gif/<file>.gif`；缺失 → null（剪贴板只剩 PNG）。 */
 internal fun loadPetStickerGif(file: String): ByteArray? =
-    PetStickerAssets::class.java.getResourceAsStream("/pet-gif/$file")?.use { it.readBytes() }
+    try {
+        PetStickerAssets::class.java.getResourceAsStream("/pet-gif/$file")?.use { it.readBytes() }
+    } catch (e: Exception) {
+        logStatusBarCrash("读取表情 GIF $file", e)
+        null
+    }
 
 /** 一次自有格点击的结果：给用户看的提示 + 是否成功（决定提示行颜色）。 */
 internal data class StickerCopyResult(val notice: String, val ok: Boolean)
@@ -145,17 +159,23 @@ internal fun copyPetSticker(
     loadGif: (String) -> ByteArray? = ::loadPetStickerGif,
     paste: () -> String? = ::injectPaste,
 ): StickerCopyResult {
-    val file = PetStickerAssets.stickerFile(form.mood)
-    val image = load(file) ?: return StickerCopyResult("小欧表情图片缺失（/pet/$file）", false)
-    val gif = loadGif(PetStickerAssets.gifFile(form.mood))
-    if (!clipboard.copy(image, gif)) {
-        return StickerCopyResult("复制失败：系统剪贴板不可用", false)
-    }
-    val pasteFailure = paste()
-    return if (pasteFailure == null) {
-        StickerCopyResult("小欧表情已粘贴", true)
-    } else {
-        StickerCopyResult("小欧表情已复制，请手动 Ctrl+V 粘贴：$pasteFailure", false)
+    return try {
+        val file = PetStickerAssets.stickerFile(form.mood)
+        val image = load(file) ?: return StickerCopyResult("小欧表情图片缺失（/pet/$file）", false)
+        val gif = loadGif(PetStickerAssets.gifFile(form.mood))
+        if (!clipboard.copy(image, gif)) {
+            return StickerCopyResult("复制失败：系统剪贴板不可用", false)
+        }
+        val pasteFailure = paste()
+        if (pasteFailure == null) {
+            StickerCopyResult("小欧表情已粘贴", true)
+        } else {
+            StickerCopyResult("小欧表情已复制，请手动 Ctrl+V 粘贴：$pasteFailure", false)
+        }
+    } catch (e: Exception) {
+        // 注入的剪贴板/资源读取抛了未预期异常：页面给一句话，栈进崩溃日志。
+        logStatusBarCrash("自有表情复制", e)
+        StickerCopyResult("复制失败：${e.javaClass.simpleName}（详见状态栏崩溃日志）", false)
     }
 }
 
@@ -191,18 +211,22 @@ internal fun PetStickerPage(
     // 12 张透明底小图，窗打开时解一次；解码失败的那格留占位文字（不整页崩）。
     val images = remember(forms) {
         forms.associate { form ->
-            form.mood to loadPetSticker(PetStickerAssets.stickerFile(form.mood))?.toComposeImageBitmap()
+            form.mood to runCatching {
+                loadPetSticker(PetStickerAssets.stickerFile(form.mood))?.toComposeImageBitmap()
+            }.onFailure { logStatusBarCrash("表情图片解码 ${form.mood}", it) }.getOrNull()
         }
     }
     // GIF 帧同样只解一次；坏图/缺图 → null，那格退回 PNG + 相位动效。
     // 12 个 GIF 约 120 帧（ImageIO 首开实测 0.1–0.6s）⇒ 放后台解，先显示 PNG 兜底。
     var gifs: Map<PetMood, GifFrames?> by remember(forms) { mutableStateOf(emptyMap()) }
     LaunchedEffect(forms) {
-        gifs = withContext(Dispatchers.Default) {
-            forms.associate { form ->
-                form.mood to loadPetStickerGif(PetStickerAssets.gifFile(form.mood))?.let(::decodeGifFrames)
+        gifs = statusBarGuard("表情 GIF 解码") {
+            withContext(Dispatchers.Default) {
+                forms.associate { form ->
+                    form.mood to loadPetStickerGif(PetStickerAssets.gifFile(form.mood))?.let(::decodeGifFrames)
+                }
             }
-        }
+        } ?: emptyMap()
     }
     // 内置 map.tsv 是形态标签的真源；读不到才用 PetEmojiMap 的标签。
     val labels = remember { PetEmojiResources.map()?.associate { it.mood to it.label }.orEmpty() }

@@ -150,6 +150,9 @@ inline bool opiPatchClassicuiTheme(const char *themeName) {
     } catch (const std::exception &e) {
         std::fprintf(stderr, "fcitx5-opi: 皮肤写入异常: %s\n", e.what());
         return false;
+    } catch (...) {
+        std::fprintf(stderr, "fcitx5-opi: 皮肤写入未知异常\n");
+        return false;
     }
 }
 

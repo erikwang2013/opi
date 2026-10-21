@@ -95,6 +95,9 @@ void OpiCandidateWord::select(fcitx::InputContext *ic) const {
         refreshingPanelFor(ic);
     } catch (const std::exception &e) {
         fprintf(stderr, "fcitx5-opi: select 异常，本次点选作废: %s\n", e.what());
+    } catch (...) {
+        // 非 std::exception 的异常若逃进 fcitx5 主循环会带走整个守护进程（语言栏一起没）。
+        fprintf(stderr, "fcitx5-opi: select 未知异常，本次点选作废\n");
     }
 }
 
@@ -326,6 +329,8 @@ void OpiEngine::keyEvent(const fcitx::InputMethodEntry &entry,
         keyEventImpl(entry, keyEvent);
     } catch (const std::exception &e) {
         fprintf(stderr, "fcitx5-opi: keyEvent 异常，本次按键作废: %s\n", e.what());
+    } catch (...) {
+        fprintf(stderr, "fcitx5-opi: keyEvent 未知异常，本次按键作废\n");
     }
 }
 
