@@ -202,7 +202,7 @@
 .tag { margin-top: auto; align-self: flex-start; padding: 4px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink-faint); font-family: var(--font-mono); font-size: .6rem; letter-spacing: .03em; }
 
 /* ---------- Timeline ---------- */
-.timeline-track { position: relative; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: clamp(16px, 2vw, 30px); margin: 0; padding: 0; list-style: none; }
+.timeline-track { position: relative; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: clamp(16px, 2vw, 30px); margin: 0; padding: 0; list-style: none; }
 .timeline-track::before { content: ""; position: absolute; left: 0; right: 0; top: 42px; height: 1px; background: linear-gradient(90deg, var(--line), rgba(46, 139, 128, .4), var(--line)); }
 .phase { position: relative; padding-top: 62px; }
 .phase-date { position: absolute; top: 0; left: 0; color: var(--ink-faint); font-family: var(--font-mono); font-size: .68rem; letter-spacing: .04em; }

@@ -47,7 +47,7 @@ kotlin {
 // jpackage 的包版本与设置窗标题栏都从这里取。**此前设置窗里写死过一份**
 // （"1.4.0"），到 1.6.0 就成了摆在用户眼前的假话 —— 两处写死是漂移的充分条件，
 // 生成一个常量是把它压成一处的最短路径（同 android 侧 versionName 的单一来源约定）。
-val opiAppVersion = "1.21.2"
+val opiAppVersion = "1.22.0"
 
 val generateOpiVersionSource by tasks.registering {
     val outDir = layout.buildDirectory.dir("generated/sources/opiVersion/kotlin")

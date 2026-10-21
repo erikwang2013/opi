@@ -244,26 +244,26 @@
     });
   }
 
-  // History scroller starts at the oldest release (bottom); do the layout only when the board is near.
+  // History scroller defaults to the LATEST release (top). Only materialise the
+  // offscreen history when the board is near; never jump to the oldest entry.
   const releaseScroll = $('.release-scroll');
   if (releaseScroll) {
-    const toOldest = () => {
+    const showLatest = () => {
       releaseScroll.style.contentVisibility = 'visible';
-      window.requestAnimationFrame(() => { releaseScroll.scrollTop = releaseScroll.scrollHeight; });
+      window.requestAnimationFrame(() => { releaseScroll.scrollTop = 0; });
     };
-    releaseScroll.addEventListener('focus', toOldest, { once: true });
     const releasesSection = $('#releases');
     if (location.hash === '#releases') {
-      toOldest();
+      showLatest();
     } else if (releasesSection && 'IntersectionObserver' in window) {
       const releaseObserver = new IntersectionObserver((entries) => {
         if (!entries.some((entry) => entry.isIntersecting)) return;
         releaseObserver.disconnect();
-        toOldest();
+        showLatest();
       }, { rootMargin: '500px 0px' });
       releaseObserver.observe(releasesSection);
     } else {
-      toOldest();
+      showLatest();
     }
   }
 

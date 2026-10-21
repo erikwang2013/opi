@@ -18,9 +18,10 @@ python3 -m http.server 8080 --directory site
 
 ```
 site/
-  index.html            语义化单页（七个翻屏 section；含 canonical / OG / Twitter / JSON-LD）
+  index.html            语义化单页（七个翻屏 section：认识/能力/迭代/形态/版本/下载；SEO 元数据见下）
   version.json          机器可读的最新版本（客户端「检测更新」首选；发版时与版本号一起改）
   robots.txt            抓取规则（屏蔽仓库说明 Markdown）与 sitemap 声明
+  download/index.html   /download 入口，转场到首页下载区（noindex）
   sitemap.xml           单页站点地图（lastmod / changefreq）
   css/base.css          设计 token、壳层、按钮、页脚
   css/sections.css      hero / 小欧 / 十二形态 / 能力 / 迭代 / 版本 / 下载
@@ -45,8 +46,9 @@ site/
 - 全站 3D 环境层与加载模块都走 CSS 3D（`transform` + 合成器），不额外创建 WebGL
   上下文，也不占主线程帧循环；手机隐藏环境层以降功耗。打赏二维码用原生 `showModal()`
   原地放大，Esc / 点遮罩 / 关闭键都可退出。
-- 版本列表用 `content-visibility` 延后离屏布局，并在进入附近时才定位到 v1.0.0；
-  初始加载不再为 76 条历史版本付布局成本。
+- 版本列表用 `content-visibility` 延后离屏布局；进入附近时**默认停在最新版本（顶部）**，
+  不再自动跳到 v1.0.0；初始加载不为 76 条历史版本付布局成本。
+- 「回忆时光机」不再首访自动弹出，只由「回忆」按钮打开；打开仍走两帧外壳+内容策略。
 - 形态弹窗使用 `dialog.show()` + 自定义遮罩与焦点循环，避免 `showModal()` 的
   一次数百毫秒级样式计算；打开后焦点回到原形态卡。
 - **交互响应目标是 <50ms**（点击/触摸到第一帧可见变化）。为此交互路径上不使用实时
@@ -71,6 +73,9 @@ site/
 - `hover: none` 设备取消卡片悬停位移，防止触屏点击后残留“悬浮”状态。
 - 头部/页脚接入 `safe-area-inset-*`，`viewport-fit=cover` 下不压刘海和手势区。
 - 形态卡默认 PNG 静帧，进入附近才换 WebP 动图；不支持动图 WebP 的浏览器回退 GIF。
+- 形态区已移到能力/迭代之后（页面靠后），首屏不再为十二张动图付加载优先级；导航与右侧
+  章节圆点同步为 认识 → 能力 → 迭代 → 形态 → 版本 → 下载。
+- 320 / 390 / 768 / 横屏复查过导航换行、时间线、下载卡与形态网格；均无横向溢出。
 
 ## 部署
 
@@ -92,7 +97,7 @@ JSON-LD，以及 `robots.txt` / `sitemap.xml`。换域名时同时改 canonical�
 
 - `site/README.md` 的链接若部署在子路径（如 `/opi/`），保持相对路径即可。
 - 统计脚本由 busuanzi 提供；广告拦截器或离线环境会把它拦掉，页面其余部分不受影响。
-- 版本号在 `index.html`（hero 的 `v1.21.2`）与发布页链接里是手写的，发版时同步。
+- 版本号在 `index.html`（hero 的 `v1.22.0`）与发布页链接里是手写的，发版时同步。
 
 ## 素材授权
 

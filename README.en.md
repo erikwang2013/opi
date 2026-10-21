@@ -287,7 +287,7 @@ LICENSE · CONTRIBUTING.md      # MIT full text · contribution guide (incl. dic
 
 ### 📅 Project Status
 
-> **Current stage: v1.21.2 (2026-10-22): Windows fixes for a deactivated host reclaiming the candidate pipe (candidate bar/status bar missing after switching apps), stale single-shift after a Shift release (holds over 300ms no longer toggle Chinese/English), caret position leaking across apps, the last candidate item being measured 4dp short, and partially-read `settings.ini`; update-banner dismissal is now per-version. Everything else as v1.21.1 (pending-rename installer fix, caret-following candidate bar, pinyin above candidates, etc.); Apple unsigned, device verification pending**
+> **Current stage: v1.22.0 (2026-10-22): Android / iOS / macOS / HarmonyOS / Linux update checks and prompts (version.json only, download at /download); mobile toolbar gains a gear settings page before About (back arrow on top); Linux language-bar crash forensics and exception guards; Windows stays at v1.21.2; Apple / HarmonyOS remain unsigned, device verification pending**
 
 V1 milestone progress:
 

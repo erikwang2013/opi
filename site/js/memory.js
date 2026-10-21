@@ -408,8 +408,6 @@
     memoryViewport?.addEventListener('wheel', interruptMemoryScroll, { passive: true });
     memoryViewport?.addEventListener('touchstart', interruptMemoryScroll, { passive: true });
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeMemory(); });
-    let seen = false;
-    try { seen = localStorage.getItem(memorySeenKey) === '1'; } catch (_) { /* private mode */ }
-    if (!seen) window.setTimeout(openMemory, 1200);
+    // 2026-10-22 用户裁决：不再首访自动弹回忆；只由「回忆」按钮/入口打开。
   }
 })();
