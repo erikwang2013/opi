@@ -93,6 +93,10 @@ final class SymbolPanel: UIView {
     ///
     /// ⚠️ **只判单码位**：多码位序列（组合字符、ZWJ）在字库里问的是「整串连字」，
     /// 会误判成没有 —— 把本来能显示的整类藏掉比留一个空心框更坏（同 Android 口径）。
+    ///
+    /// 2026-10-21 用户报障：只问主字体（`UIFont.systemFont`）会把 SF 没覆盖的符号
+    /// **全部过滤**，面板只剩「符号库未就绪」。主字体查不到时必须让
+    /// `CTFontCreateForString` 按字符串挑出实际回退字体（Apple 字体级联）再问一次。
     static func canRender(_ text: String, font: UIFont) -> Bool {
         // ⚠️ 按**码点**判（`unicodeScalars.count`），别按 `utf16.count`：
         // 后者会把代理对（emoji 全是）当成「多码位」直接放行 —— 而正是 U+1FAEB
@@ -103,25 +107,40 @@ final class SymbolPanel: UIView {
         // 把上面注释说不该藏的整类藏掉。Android 侧是 `codePointCount > 1 || hasGlyph`，
         // 两边语义现在逐字对齐。
         guard text.unicodeScalars.count == 1 else { return true }
-        let ctFont = CTFontCreateWithName(font.fontName as CFString, font.pointSize, nil)
+        let base = CTFontCreateWithName(font.fontName as CFString, font.pointSize, nil)
         var chars = Array(text.utf16)
         var glyphs = [CGGlyph](repeating: 0, count: chars.count)
-        let ok = CTFontGetGlyphsForCharacters(ctFont, &chars, &glyphs, chars.count)
+        if CTFontGetGlyphsForCharacters(base, &chars, &glyphs, chars.count),
+           glyphs.contains(where: { $0 != 0 }) {
+            return true
+        }
+        // 主字体没覆盖：让 CoreText 按整串挑实际回退字体再问。`CFRange` 的单位是
+        // UTF-16 码元（不是 unicodeScalars），长度必须取 `utf16.count`。
+        let fallback = CTFontCreateForString(
+            base, text as CFString, CFRangeMake(0, CFIndex(text.utf16.count))
+        )
+        var fallbackGlyphs = [CGGlyph](repeating: 0, count: chars.count)
+        let ok = CTFontGetGlyphsForCharacters(
+            fallback, &chars, &fallbackGlyphs, chars.count
+        )
         // 全 0 字形也算没有（字库给了映射但画不出 —— 防御性，实测未见）
-        return ok && glyphs.contains { $0 != 0 }
+        return ok && fallbackGlyphs.contains { $0 != 0 }
     }
 
     func setSymbols(_ symbols: [String]) {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        // 渲染前过一道字形可用性（见 canRender 的头注）。
-        let symbols = symbols.filter { Self.canRender($0, font: Self.probeFont) }
+        // 空输入 = 引擎没就绪（2026-10-21 核对：common 块在 symbols.tsv 里非空）。
         guard !symbols.isEmpty else {
             stack.addArrangedSubview(BarButton(title: "（符号库未就绪）") {})
             return
         }
-        for start in stride(from: 0, to: symbols.count, by: Self.perRow) {
-            let end = min(start + Self.perRow, symbols.count)
-            let row = makeRow(Array(symbols[start..<end]))
+        // 渲染前过一道字形可用性（见 canRender 的头注）。**全被过滤时退回不过滤**：
+        // 全部不可画比字体探测本身失败更可疑，不能因此把整库藏掉（2026-10-21 报障）。
+        let renderable = symbols.filter { Self.canRender($0, font: Self.probeFont) }
+        let visible = renderable.isEmpty ? symbols : renderable
+        for start in stride(from: 0, to: visible.count, by: Self.perRow) {
+            let end = min(start + Self.perRow, visible.count)
+            let row = makeRow(Array(visible[start..<end]))
             row.heightAnchor.constraint(equalToConstant: Self.rowHeight).isActive = true
             stack.addArrangedSubview(row)
         }

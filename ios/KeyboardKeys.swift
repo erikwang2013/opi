@@ -35,7 +35,9 @@ enum KeyFallback {
 /// 会让键面字与实际去向脱钩（键面写「ABC」却切到了符号层），而键面字是用户唯一的路标。
 /// 三层的导航关系对齐 Android：字母 →「123」→数字 →「#+=」→符号 →「ABC」→字母。
 enum KeyboardFunctionKey {
-    /// 切到字母层（⇧ 键所在的那层）。
+    /// 切到字母层（⇧ 键所在的那层）。它也是所有面板 / 平铺候选「返回」的路径：
+    /// 控制器统一走 `returnToCurrentInputMode()`，按**当前 `layout.inputMode`** 重画
+    /// 9/14/笔画/26 键，**不**切系统输入法、也不再经过设置面板。
     case showLetters
     /// 切到数字/常用标点层。
     case showNumbers
@@ -50,7 +52,9 @@ enum KeyboardFunctionKey {
     /// 离开拼音类模式前先 `clear()`，否则残留的拼音缓冲会被下一个空格/回车
     /// 意外提交）。
     case cycleMode
-    /// 地球键（切到下一个输入法）。
+    /// 地球键（切到系统下一个输入法）。**只有**每种键面左下角的
+    /// `ModeKeyTables.systemInputKey` 用它；中/英与简繁键不得复用它
+    /// （2026-10-21 用户裁决：那两类只在本输入法内换模式/键面）。
     case nextInputMode
     /// 打开**输入模式菜单**（2026-10-14）。
     ///

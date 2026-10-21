@@ -57,6 +57,12 @@
 > xcframework/扩展目录/宿主 `.app`/临时 Payload 只在构建期存在，退出时清理。
 > `apple.yml` 的 iOS artifact 也只上传 `*.ipa`。
 >
+> **2026-10-21 第三轮（输入法内切换 / 符号面板）**：所有面板「‹ 返回」统一走
+> `returnToCurrentInputMode()`，从设置进入的子面板也直接回当前模式键面（`settingsReturn`
+> 两级导航删除）；中/英与简繁只换引擎/键面，唯一调用 `advanceToNextInputMode()` 的是
+> 每种键面（9/大9/14/26/笔画及数字层）左下角的 🌐；符号面板用 `CTFontCreateForString`
+> 取回退字体判字形，全被过滤时退回不过滤。**本轮未编译、未上机**。
+>
 > 本目录的代码是在 Linux 上写的：本机没有 macOS、没有 Xcode、没有 Apple SDK，
 > `import UIKit` 就断 —— 编译发生在 **CI 的 macOS runner** 上，不在开发机。
 > 改完 Swift **先推一次让 CI 编**，再谈别的（本地读不出来的错，编译器一秒钟就报）。
@@ -876,7 +882,8 @@ xcodebuild -create-xcframework \
     别在 `viewDidLoad` 里做重活（本草案只装词库 + 建 UI）。
     （不确定：系统预加载策略，我记的是「会缓存一段时间，闲置后回收」。）
 13. **地球键要自己提供**：自定义键盘不会自动获得系统的地球键。
-    本草案在功能行放了 🌐 → `advanceToNextInputMode()`。
+    2026-10-21 起每种键面（9/大9/14/26/笔画、数字层）**左下角**各有一枚 🌐 →
+    `advanceToNextInputMode()`；中/英与简繁键不走它。26 键原先最右那枚已移走，避免误触。
     （不确定：`needsInputModeSwitchKey` 为 false 时是否该隐藏 —— 我按「始终显示」写。）
 
 ### 无障碍
@@ -1217,6 +1224,9 @@ OpiString opi_select_page(uint32_t k);  /* 当前页第 k 个；越界/未装载
   Android `SymbolCatalog` **真的踩过这个坑**（见 commit `00cfea4`
   「「常用」符号不是常用标点 + 空结果被永久缓存」）。本草案在 `SymbolPanel`
   里把空列表画成一行可见的「（符号库未就绪）」，不留白。
+- **字形过滤不能把整库藏掉**（2026-10-21 报障）：`canRender` 先用
+  `CTFontCreateForString` 取实际回退字体再判字形；若整批都被过滤，退回显示未过滤列表
+  （只有引擎真的返回空才写「符号库未就绪」）。
 
 ---
 

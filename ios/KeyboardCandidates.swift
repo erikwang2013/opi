@@ -77,7 +77,7 @@ extension KeyboardViewController {
         insert(text)
         // 先回键面再刷新：否则平铺面板会为这一批即将丢弃的候选白重建一次网格。
         if layout.keyLayer == .candidatesTiled {
-            layout.setLayer(.letters)
+            returnToCurrentInputMode()
         }
         refresh()
     }
@@ -94,7 +94,7 @@ extension KeyboardViewController {
     func collapseTiledIfNeeded() {
         guard layout.keyLayer == .candidatesTiled else { return }
         if engine.mode() != .english, engine.buffer().isEmpty, !layout.hasCandidates {
-            layout.setLayer(.letters)
+            returnToCurrentInputMode()
         }
     }
 }

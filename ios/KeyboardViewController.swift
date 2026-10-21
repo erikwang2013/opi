@@ -53,9 +53,6 @@ final class KeyboardViewController: UIInputViewController {
     /// 引擎开关（学习/模糊音/简拼/纠错/中文标点/双拼布局/自己表情）。
     /// 只在本文件用；设置面板拿到的永远是 `layout.setEngineSettings` 的快照。
     private var settings = KeyboardSettings()
-    /// 设置面板 → 皮肤/键盘模式/关于 的返回目标：从设置进入的子面板，返回回设置，
-    /// 再返回才回字母层（二级导航，不把用户直接弹回键盘）。
-    private var settingsReturn = false
     /// 最近一次中文键面（英→中时恢复它；Android `cycleMode` 的「回上次中文方案」）。
     var lastChineseInputMode: InputMode = .pinyin9
     /// 9 键左列当前钉住的读音（空 = 未钉）。只作 UI 高亮/去抖，真源在引擎。
@@ -177,6 +174,17 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
+    // MARK: - 返回键面
+
+    /// 所有面板 / 平铺候选「返回」的唯一落点：回到**当前输入模式**的键面
+    /// （`layout.inputMode` 不动，所以 9/14/笔画/26 键都回各自那套），不切系统输入法。
+    ///
+    /// 2026-10-21 用户裁决：返回**直接回键盘**，包括从设置进入的皮肤/键盘模式/关于
+    /// 子面板 —— 此前为「设置 → 子面板 → 设置」加的两级 `settingsReturn` 已删除。
+    func returnToCurrentInputMode() {
+        layout.setLayer(.letters)
+    }
+
     // MARK: - 路由（软键盘的唯一入口）
 
     /// 一个软键盘按键的完整处理：路由 → 按 action 分流 → 刷新。
@@ -257,23 +265,14 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
     func keyboardLayout(_ layout: KeyboardLayout, didTapFunction name: KeyboardFunctionKey) {
         switch name {
         case .showLetters:
-            // 从设置进入的子面板（皮肤/键盘模式/关于）先回设置，再回字母层。
-            if settingsReturn {
-                let wasSettings = (layout.keyLayer == .settings)
-                settingsReturn = false
-                if !wasSettings {
-                    layout.setLayer(.settings)
-                    return
-                }
-            }
-            layout.setLayer(.letters)
+            // 面板表的「‹ 返回」与数字层「ABC」都走这里：直接回当前模式键面。
+            returnToCurrentInputMode()
         case .showTiledCandidates:
             // 候选栏最右 ⌄：整个键盘换成平铺候选（含顶部 44pt 槽位）。
-            settingsReturn = false
             showTiledCandidates()
         case .hideTiledCandidates:
             // 平铺右列「返回」：无条件收拢。
-            layout.setLayer(.letters)
+            returnToCurrentInputMode()
         case .tiledBackspace:
             // 与键盘右列 ⌫ 同一条引擎路；候选没了就自动回键面。
             route(keyval: OpiKey.backspace, states: 0, fallback: .deleteBackward)
@@ -286,12 +285,10 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             // 9 键左列/平铺左列：钉读音，不上屏。
             togglePinnedReading(reading)
         case .showNumbers:
-            settingsReturn = false
             layout.setLayer(.numbers)
         case .showSymbols:
             // 符号数据**现取**，不缓存：空结果是「没拿到」而不是「真的没有」，
             // 缓存空会让面板从此永远空（Android `SymbolCatalog` 踩过这个坑）。
-            settingsReturn = false
             layout.setSymbols(engine.commonSymbols())
             layout.setLayer(.symbols)
         case .showEmoji:
@@ -302,24 +299,21 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             // `emoji_groups_index_the_full_emoji_list` 两处写明，并点名「别照抄它们的
             // 姿态去改别的出口」）。所以这里**不看 `dictionaryLoaded`**、面板也不会
             // 显示「词库未装载」—— 表情本来就不依赖词库。
-            settingsReturn = false
             layout.setEmojiBrowse(engine.emojiSymbols(), groups: engine.emojiGroups())
             layout.setLayer(.emoji)
         case .showModes:
             // 输入模式菜单（2026-10-14）：**只是切层** —— 菜单里的选项本身不动引擎，
             // 换方案/换键面在用户选中后走 `applyInputMode`（`InputModes.swift`）。
-            settingsReturn = false
             layout.setLayer(.modes)
         case .showRare:
             // 生僻字面板（2026-10-14）：同上，只是切层。**数据不在这里取** ——
             // 索引是 `rare_index.tsv`（不是引擎出口），面板自己在首次打开时读，
             // 见 `RarePanel.show()`。这与符号/表情两层「控制器现取引擎数据」不同，
             // 差别的原因就是数据来源不同（引擎 vs bundle 文件）。
-            settingsReturn = false
             layout.setLayer(.rare)
         case .showSkin:
-            // 皮肤面板（2026-10-20）：与 Android 工具条入口同义。选中不关面板。
-            settingsReturn = (layout.keyLayer == .settings)
+            // 皮肤面板（2026-10-20）：与 Android 工具条入口同义。选中不关面板；
+            // 「‹ 返回」直接回当前模式键面（从设置进来也一样，见 returnToCurrentInputMode）。
             layout.setSkin(skin)
             layout.setLayer(.skins)
         case .selectSkin(let newSkin):
@@ -328,7 +322,6 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             layout.setSkin(newSkin)
             applyTheme()
         case .showKeyboardModes:
-            settingsReturn = (layout.keyLayer == .settings)
             layout.setKeyboardModes(modes, traditional: engine.mode() == .traditional)
             layout.setLayer(.keyboardModes)
         case .updateKeyboardModes(let newModes):
@@ -341,11 +334,9 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
         case .toggleTraditional:
             toggleTraditional()
         case .showAbout:
-            settingsReturn = (layout.keyLayer == .settings)
             layout.setLayer(.about)
         case .showSettings:
             // 每次都重取一份引擎组名（装载可能刚完成/失败），保证逐组 chip 与引擎同步。
-            settingsReturn = true
             layout.setEngineSettings(settings, fuzzyPairNames: engine.fuzzyPairNames())
             layout.setLayer(.settings)
         case .updateSettings(let newSettings):
@@ -379,7 +370,6 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
         case .selectInputMode(let mode):
             // 菜单选中一项。语义（换方案 + 换模式 + 换键面 + 清缓冲的取舍）全在
             // `applyInputMode` 里，那里也写明了与 Android 的**能力缺口**。
-            settingsReturn = false
             applyInputMode(mode)
         case .cycleMode:
             // 非中文（英文/数字/符号）→ 中文：走 applyInputMode 而不是只 switchMode
@@ -388,13 +378,14 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             // 上次中文方案；中→繁→英两跳交给 `cycleMode()`。
             if engine.mode() != .pinyin && engine.mode() != .traditional {
                 // 非中文态回到键面：设置面板若开着，这条路径也会关掉它。
-                settingsReturn = false
                 applyInputMode(lastChineseInputMode)
             } else {
                 cycleMode()
             }
         case .nextInputMode:
-            // 地球键：交给系统切到下一个输入法（Apple 要求自定义键盘自己提供）。
+            // **唯一**的系统输入法切换入口：每种键面左下角那枚 🌐（见
+            // `ModeKeyTables.systemInputKey`）。中/英、简繁、面板「‹ 返回」都只在本
+            // 输入法内换引擎/键面，**绝不**走这里 —— 这是 2026-10-21 用户裁决。
             advanceToNextInputMode()
         case .commitText(let text):
             // 符号面板的键**直提，不过引擎**：引擎的标点表会把 `,` 改写成中文标点/

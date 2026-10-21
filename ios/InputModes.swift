@@ -150,6 +150,12 @@ struct ModeRow {
 /// `crates/engine-core/src/scheme.rs` 的 `key_class` 表逐格核一遍。
 enum ModeKeyTables {
 
+    /// 每种键面**左下角**唯一的「切换系统输入法」键（🌐），数字层同位置。
+    /// 只有它走 `.nextInputMode` → `advanceToNextInputMode()`；中/英（`.cycleMode` /
+    /// `.selectInputMode`）与简繁（`.toggleTraditional`）**不得**复用它。
+    /// 2026-10-21 用户裁决：从 26 键最右移到左下，并去掉重复入口防误触。
+    static let systemInputKey = KeySpec("🌐", function: .nextInputMode)
+
     /// 按当前模式取键面（字母层的行）。数字层与所有模式共用 `numberRows`。
     ///
     /// `rare`（面板式）回落到 26 键：Android 的 `layoutFor` 对「上一个模式是面板式
@@ -191,6 +197,7 @@ enum ModeKeyTables {
         )
 
         let funcRow: [KeySpec] = [
+            systemInputKey,
             KeySpec("123", function: .showNumbers),
             // 键面字 = **点它会切到哪**（2026-10-12 晚裁决，见 KeyboardViewController 的
             // modeKeyLabel 注释），不是写死的 "中/英"。
@@ -199,11 +206,6 @@ enum ModeKeyTables {
             KeySpec(modeLabel, function: .cycleMode, longPressFunction: .showModes),
             KeySpec("空格", keyval: OpiKey.space, fallback: .text(" "), widthUnits: 5),
             KeySpec("回车", keyval: OpiKey.ret, fallback: .text("\n"), widthUnits: 1.6),
-            // 地球键：Apple 要求自定义键盘自己提供切输入法入口（系统不会替你画）。
-            // ⚠️ 未验证：`needsInputModeSwitchKey` 为 false 时是否该隐藏它，
-            // 我按「始终显示」写（点了就是 advanceToNextInputMode，无副作用）；
-            // Mac 上照 HIG 调整。
-            KeySpec("🌐", function: .nextInputMode, widthUnits: 1),
         ]
         return [
             ModeRow.plain(top), ModeRow.plain(mid), ModeRow.plain(bottom), ModeRow.plain(funcRow),
@@ -230,6 +232,7 @@ enum ModeKeyTables {
             KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, widthUnits: 1.4),
         ]
         let funcRow: [KeySpec] = [
+            systemInputKey,
             KeySpec("#+=", function: .showSymbols),
             // 表情入口（2026-10-13）：紧挨符号入口。Android 的表情是从**工具条**进的
             // （`SymbolTab.Emoji`，任何一层都能直达）；iOS 这一版先只加这一个入口 ——
@@ -299,8 +302,9 @@ enum ModeKeyTables {
             ],
             heightUnits: 3
         )
-        // ---- 底行：[符][中/繁][123][英文][↵] ----
+        // ---- 底行：[🌐][符][中/繁][123][英文][↵] ----
         let funcRow = ModeRow.plain([
+            systemInputKey,
             KeySpec("符", function: .showSymbols),
             KeySpec(modeLabel, function: .toggleTraditional, longPressFunction: .showModes),
             KeySpec("123", function: .showNumbers),
@@ -323,9 +327,10 @@ enum ModeKeyTables {
         let r1 = [pairSpec("qw"), pairSpec("er"), pairSpec("ty"), pairSpec("ui"), pairSpec("op")]
         let r2 = [pairSpec("as"), pairSpec("df"), pairSpec("gh"), pairSpec("jk"), pairSpec("l")]
         let r3 = [pairSpec("zx"), pairSpec("cv"), pairSpec("bn"), pairSpec("m")]
-        // 底行：[符][中/繁][英文][空格(2)][⌫][↵]（Android 同序；重输是 9 键专属）。
+        // 底行：[🌐][符][中/繁][英文][空格(2)][⌫][↵]（Android 同序；重输是 9 键专属）。
         // 「英文」是**独立入口**：模式键只切简/繁后，不补这枚英文在本盘就不可达。
         let funcRow: [KeySpec] = [
+            systemInputKey,
             KeySpec("符", function: .showSymbols),
             KeySpec(modeLabel, function: .toggleTraditional, longPressFunction: .showModes),
             KeySpec("英文", function: .selectInputMode(.english26)),
@@ -352,10 +357,11 @@ enum ModeKeyTables {
             strokeSpec("丶", "n", "捺"),
             strokeSpec("乙", "z", "折"),
         ]
-        // 功能行含「生僻字」入口（找不到字时下一步就是它）：符 / 模式 / 英文 /
+        // 功能行含「生僻字」入口（找不到字时下一步就是它）：🌐 / 符 / 模式 / 英文 /
         // 生僻字(1.4) / 空格(2) / ⌫ / ↵（Android 同序；英文是模式键只切简繁后的
         // 独立入口）。
         let funcRow: [KeySpec] = [
+            systemInputKey,
             KeySpec("符", function: .showSymbols),
             KeySpec(modeLabel, function: .toggleTraditional, longPressFunction: .showModes),
             KeySpec("英文", function: .selectInputMode(.english26)),
@@ -445,7 +451,7 @@ extension KeyboardViewController {
         }
         // 键面字按**新键面**的语义给：9/14/笔画只切简繁（「中/繁」），26 键三档循环。
         updateModeLabel()
-        layout.setLayer(.letters)       // 从菜单/面板回到键面
+        returnToCurrentInputMode()      // 从菜单/面板回到当前模式键面（不跳系统输入法）
         refresh()
     }
 
