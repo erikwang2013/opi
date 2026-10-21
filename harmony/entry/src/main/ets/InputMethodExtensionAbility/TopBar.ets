@@ -228,6 +228,9 @@ export struct TopBar {
       this.IconButton($r('sys.symbol.keyboard'), '键盘模式', () => {
         this.ctrl.togglePanel(PanelView.KeyboardMode);
       })
+      this.IconButton($r('sys.symbol.gearshape'), '设置', () => {
+        this.ctrl.togglePanel(PanelView.Settings);
+      })
       this.IconButton($r('sys.symbol.info_circle'), '关于', () => {
         this.ctrl.togglePanel(PanelView.About);
       })

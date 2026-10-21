@@ -3,6 +3,7 @@
 
 package xyz.erik.opi.settings
 
+import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -17,6 +18,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -40,6 +43,7 @@ import xyz.erik.opi.engine.UserWordStore
 import xyz.erik.opi.ime.HandlerDebouncer
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.jni.OpiEngine
+import xyz.erik.opi.keyboard.OpiIcons
 import xyz.erik.opi.pet.OpiPet
 import xyz.erik.opi.pet.petMood
 import kotlinx.coroutines.launch
@@ -149,7 +153,17 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("小欧输入法 设置") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("小欧输入法 设置") },
+                navigationIcon = {
+                    // 从 IME 工具条进来时任务栈里没有上一页，返回箭头统一 finish（回桌面/输入处）
+                    IconButton(onClick = { (context as? Activity)?.finish() }) {
+                        Icon(OpiIcons.ArrowBack, contentDescription = "返回")
+                    }
+                },
+            )
+        },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         // ⚠️ 2026-10-15（v1.9.2 装机核验时发现，当时已发布）：这一页**从来不可滚动** ——

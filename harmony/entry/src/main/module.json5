@@ -20,6 +20,12 @@
     "deliveryWithInstall": true,
     "installationFree": false,
     "pages": "$profile:main_pages",
+    "requestPermissions": [
+      {
+        // 只用于设置/关于页拉 https://opi.erik.xyz/version.json（更新检测）。
+        "name": "ohos.permission.INTERNET"
+      }
+    ],
     "extensionAbilities": [
       {
         "srcEntry": "./ets/InputMethodExtensionAbility/InputMethodService.ets",

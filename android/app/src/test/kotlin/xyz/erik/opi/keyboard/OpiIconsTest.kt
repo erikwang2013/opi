@@ -47,6 +47,7 @@ class OpiIconsTest {
             "KeyboardMode" to OpiIcons.KeyboardMode,
             "Palette" to OpiIcons.Palette,
             "Close" to OpiIcons.Close,
+            "Gear" to OpiIcons.Gear,
         )
         for ((name, icon) in icons) {
             val paths = pathsOf(icon)

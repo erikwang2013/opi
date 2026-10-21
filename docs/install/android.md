@@ -310,7 +310,7 @@ adb shell pidof xyz.erik.opi                      # 安装前后的 pid 应当�
 
 ### 4.1 启用输入法
 
-图形路径：**系统设置 → 系统 → 语言和输入法 → 屏幕键盘 → 管理键盘 → 勾选「小欧输入法」**，再在「当前键盘」里切过去。路径随 ROM 措辞不同（本项目 `AndroidManifest.xml` 里**一条 `uses-permission` 都没有**，所以不会有权限弹窗挡路）。
+图形路径：**系统设置 → 系统 → 语言和输入法 → 屏幕键盘 → 管理键盘 → 勾选「小欧输入法」**，再在「当前键盘」里切过去。路径随 ROM 措辞不同。**权限**：`AndroidManifest.xml` 只有一条 `INTERNET`（2026-10-22 起的版本检测用），它是普通权限、安装即授，**没有运行时权限弹窗**；检测只访问 `opi.erik.xyz` 的 `version.json` 与首页（兜底读 JSON-LD 的 `softwareVersion`），不上传任何用户数据。
 
 命令行路径（【实测】，命令原样可用）：
 
@@ -421,6 +421,7 @@ IME 窗口列布局）**最左是小欧（logo）**，其后才是入口图标 �
 | 调色板 | **皮肤**面板：十张预览卡（见下「皮肤」段；2026-10-09 加，2026-10-10 扩到十款） |
 | 键盘 | **输入模式**面板：七选一（见下表）。2026-10-09 起与皮肤同一形态的**面板**（占键区、左上角返回箭头单独一行、标题在下一行），不再用 DropdownMenu 弹框（用户裁决「做成像选择皮肤的功能」）；选中即换并自动收尾回键面/生僻字面板 |
 | 滑杆 | **键盘模式**面板：繁体 / 单手（关/左/右）/ 悬浮 / 游戏 / 暗光 / 长辈。同上为面板形态；**点选项不关面板**（常要连开两三个），✓ 随开关实时更新，暗光这类换肤当场生效 |
+| 齿轮 | **设置页**（2026-10-22）：以 IME 服务上下文 `startActivity(Intent(context, SettingsActivity::class.java).addFlags(FLAG_ACTIVITY_NEW_TASK))` 直达设置页（IME 窗口不在任务栈里，必须 `NEW_TASK`）；「关于」面板原入口保留 |
 | 圆圈 i | **关于**面板（2026-10-15 用户裁决「关于给移动端键盘功能区加个入口」）：简介 / 版本（`BuildConfig.VERSION_NAME`）/ 版权 / 表情数据（OpenMoji CC BY-SA 4.0、颜文字 MIT）/ 项目地址 / 博客地址，两条地址可点（`ACTION_VIEW`；IME 是 Service，起 Activity 必须 `NEW_TASK`）。文案与设置页那一节**同一份常量**（`settings/AboutSection.kt` 的 `ABOUT_INTRO` / `ABOUT_PROJECT_URL` / `ABOUT_BLOG_URL`），面板里一字不自编；面板**自己可滚动**（键区矮，内容比它高）。门禁 `AboutSectionTest.aboutPanelReusesSourcesAndIsWiredToTheToolbar` |
 
 （2026-10-13 用户裁决「移动端功能区不需要全角、半角切换功能」：本表原「月相（满/半）
@@ -654,9 +655,20 @@ fcitx5 配置面**同名**，宣纸/朱砂与后五款的配色取 `scripts/gen_
 ### 4.6 设置页
 
 `settings/SettingsScreen.kt`。⚠️ **下表是 2026-10-08 的快照，此后设置页长成了「分节」形态**
-（学习 / 模糊音（逐对）/ 拼音纠错 / 简拼 / 拼音方式 / 词库 / 五笔 / 关于），来源是各节的
-`*Section.kt`（`DictSection` / `WubiSection` / `AboutSection`）—— 下面只逐条说明本表里的
-那几个开关，**不是**设置页的全集。
+（学习 / 模糊音（逐对）/ 拼音纠错 / 简拼 / 拼音方式 / 词库 / 五笔 / 关于 / 更新检测），
+来源是各节的 `*Section.kt`（`DictSection` / `WubiSection` / `AboutSection`）—— 下面只逐条
+说明本表里的那几个开关，**不是**设置页的全集。
+
+**顶栏返回箭头**（2026-10-22）：`TopAppBar` 的 `navigationIcon`，点击 `finish()`；从桌面
+launcher 打开时同样显示（那里它就是正常的「关闭设置」出口）。其余设置项行为不变。
+
+**新版本检测**（2026-10-22，`settings/VersionCheck.kt`）：打开设置页时在 IO 线程自动检测
+一次（4s 总预算，不阻塞 UI）；数据源 `https://opi.erik.xyz/version.json`，失败兜底解析首页
+JSON-LD 的 `softwareVersion`。语义化数字逐段比较（`1.21.10 > 1.21.2`，缺段按 0）。
+「关于」节的「更新」行显示「发现新版本 vX（当前 vY）」+「前往下载」（`ACTION_VIEW` 打开
+`https://opi.erik.xyz/download`，**目标固定，不读端点返回的 download 字段**）；「检测更新」
+按钮可手动重测，**失败原因只在手动检测时显示**（自动检测失败静默）。解析/比较的纯函数由
+`VersionCheckTest` 覆盖（不联网）。
 
 ⚠️ **2026-10-15 装机核验发现的真缺陷（v1.9.2 发布后当即修）**：这一页从建页起外层
 `Column` 就没有 `verticalScroll`，内容比视口长时下半截被**裁掉且滑不动**

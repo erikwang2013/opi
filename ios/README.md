@@ -64,6 +64,13 @@
 > 取回退字体判字形，全被过滤时退回不过滤；符号面板补上「‹ 返回」。
 > **Apple CI run 39552112961 已真编译并产出 IPA；真机未验证**。
 >
+> **2026-10-22（新版本检测 / 工具条齿轮前置）**：设置与关于面板共用
+> `UpdateChecker` + `UpdateStatusView`，从 `https://opi.erik.xyz/version.json` 异步检测
+> （4s 超时、语义化数字比较）；发现新版本显示「发现新版本 vX（当前 vY）」+「前往下载」，
+> 下载固定 `https://opi.erik.xyz/download`；打开设置自动检测，失败只在手动检测时显示原因，
+> 无完全访问时自动检测静默跳过。工具条图标顺序改为
+> 表情/皮肤/输入模式/键盘模式/**齿轮**/关于/收起。**本轮未编译，等 Apple CI**。
+>
 > 本目录的代码是在 Linux 上写的：本机没有 macOS、没有 Xcode、没有 Apple SDK，
 > `import UIKit` 就断 —— 编译发生在 **CI 的 macOS runner** 上，不在开发机。
 > 改完 Swift **先推一次让 CI 编**，再谈别的（本地读不出来的错，编译器一秒钟就报）。
@@ -131,7 +138,8 @@
 | `OpiEngineWubi.swift` | 五笔旋钮族包装（2026-10-14）：`loadWubi` + 五个旋钮（风格/混入/个数/回车/自动上屏）。同上，对应 `cabi_wubi.rs`。**本文件没有任何 iOS 调用方**（没有设置界面） |
 | `KeyboardKeys.swift` | 「一个键是什么」：`KeySpec` / `KeyFallback` / `KeyboardFunctionKey` / `KeyButton`。不含布局。2026-10-14 加了 `fontSize` / `longPressFunction` 两个字段；2026-10-20 加了 `.showSkin` / `.showKeyboardModes` / `.showAbout` / `.closeKeyboard` / `.toggleTraditional` / `.segment` 等功能键 case |
 | `KeyboardTheme.swift` | 皮肤与键盘模式（2026-10-20）：12 款皮肤、12 个色板角色（值逐字抄 Android `Palette.kt`）、优先级「长辈 > 暗光 > 皮肤」、长辈字号 1.18、`KeyboardPreferences`（UserDefaults）。另含控制器扩展 `applyTheme` / `openExternal` / `cycleMode` / `modeKeyLabel`。（CI 已编译，未上机） |
-| `KeyboardToolbar.swift` | 顶部工具条（2026-10-20）：表情 / 皮肤 / 输入模式 / 键盘模式 / 关于 / 隐藏「中」/ 收起键盘，图标次序对齐 Android `ImeToolbar.kt`。SF Symbols，缺符号时退文字。（CI 已编译，未上机） |
+| `KeyboardToolbar.swift` | 顶部工具条（2026-10-20，2026-10-22 齿轮前移）：表情 / 皮肤 / 输入模式 / 键盘模式 / 齿轮（设置）/ 关于 / 隐藏「中」/ 收起键盘；齿轮是 iOS 本端入口（Android 设置是独立页），其余次序对齐 `ImeToolbar.kt`。SF Symbols，缺符号时退文字。（CI 已编译，未上机） |
+| `UpdateChecker.swift` | 新版本检测（2026-10-22）：异步读 `https://opi.erik.xyz/version.json`（4s 超时、语义化数字比较），设置/关于共用 `UpdateStatusView`；失败只在手动检测时报原因，无完全访问时自动检测静默跳过。「前往下载」固定 `https://opi.erik.xyz/download`，不读端点里的 `download` 字段。**本轮未编译，等 Apple CI** |
 | `KeyboardPanels.swift` | 工具条打开的四个面板（2026-10-20）：`SkinPanel`（12 卡 + 3×4 小键盘预览）、`KeyboardModePanel`（繁体 / 单手 / 悬浮 / 游戏 / 暗光 / 长辈）、`AboutPanel`（版本文案与外链）、`KeyboardPanelHeader`。（CI 已编译，未上机） |
 | `KeyboardPanelHost.swift` | `KeyboardLayout` 的面板装配扩展（2026-10-20）：工具条回调、七个面板的摆位、顶部槽位切换（候选栏 ⇄ 工具条）、主题下发、单手宽度约束。从 `KeyboardLayout.swift` / `KeyboardViewController.swift` 拆出（500 行门禁） |
 | `KeyboardLayout.swift` | 键盘 UI 骨架的视图装配：候选栏（含翻页）+ 字母/数字层 + 触摸接线 + 外部刷新入口 + 面板摆位（2026-10-20 起摆位在 `KeyboardPanelHost.swift`，本文件只留视图与键位）。**不含**键位表与尺寸算式（见下两行） |
@@ -206,8 +214,9 @@
 * **顶部 44pt 槽位**：候选栏与工具条同位置互斥。判据逐字对齐 Android：
   `candidatesShowable && !englishIdle`（有缓冲或有候选）显示候选栏，否则显示工具条；
   任何面板层恒显示工具条。键区锚在槽位下沿，切换时键位不跳。
-* **工具条**（`KeyboardToolbar.swift`）：表情 / 皮肤 / 输入模式 / 键盘模式 / 关于 /
-  隐藏「中」/ 收起键盘，次序对齐 `ImeToolbar.kt`。SF Symbols 缺失时退文字，不静默丢按钮。
+* **工具条**（`KeyboardToolbar.swift`）：表情 / 皮肤 / 输入模式 / 键盘模式 / 齿轮（设置）/
+  关于 / 隐藏「中」/ 收起键盘；齿轮在关于前（2026-10-22 用户裁决），其余次序对齐
+  `ImeToolbar.kt`。SF Symbols 缺失时退文字，不静默丢按钮。
 * **皮肤**（`KeyboardTheme.swift` + `KeyboardPanels.swift`）：12 款，色板 12 个角色
   逐值抄 `Palette.kt`；选中不关面板（Android 同）。优先级「长辈 > 暗光 > 皮肤」。
 * **键盘模式**：繁体 / 单手关左右 / 暗光 / 长辈。单手只收窄键区到 0.76 并靠左/右
@@ -228,7 +237,7 @@
 | 顶部空闲槽位 | 工具条 | 工具条 |
 | 有缓冲/候选 | 候选栏替换工具条 | 候选栏替换工具条 |
 | 面板打开时 | 工具条 | 工具条 |
-| 工具条入口 | 表情/皮肤/输入模式/键盘模式/关于/中/收起 | 同次序（中键仅英文空闲） |
+| 工具条入口 | 表情/皮肤/输入模式/键盘模式/关于/中/收起 | 表情/皮肤/输入模式/键盘模式/齿轮/关于/中/收起（齿轮仅 iOS，中键仅英文空闲） |
 | 皮肤 | 12 款 + 样张，选中不关 | 12 款 + 样张，选中不关 |
 | 键盘模式 | 繁体/单手/悬浮/游戏/暗光/长辈 | 繁体/单手/暗光/长辈；悬浮、游戏为禁用项 |
 | 单手 | 键区 0.76 靠左/右 | 同 |

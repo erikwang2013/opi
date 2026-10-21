@@ -34,6 +34,8 @@ final class SettingsPanel: UIView {
     var onOpenSkin: (() -> Void)?
     var onOpenKeyboardModes: (() -> Void)?
     var onOpenAbout: (() -> Void)?
+    /// 「前往下载」走与关于面板同一条外链路径（控制器先复制再尝试打开）。
+    var onOpenURL: ((String) -> Void)?
     /// 引擎开关变了：控制器负责持久化 + 推给引擎。
     var onChange: ((KeyboardSettings) -> Void)?
     /// 暗光/长辈变了：控制器负责持久化 + 换肤。
@@ -47,6 +49,7 @@ final class SettingsPanel: UIView {
     private let scroll = UIScrollView()
     private let stack = UIStackView()
     private let wubiSection = WubiSettingsSection()
+    private let updateView = UpdateStatusView()
     private var palette: KeyboardPalette = .light
 
     private var settings = KeyboardSettings()
@@ -77,6 +80,7 @@ final class SettingsPanel: UIView {
             self.settings.wubiAutoCommit = s.wubiAutoCommit
             self.onChange?(self.settings)
         }
+        updateView.onOpenDownload = { [weak self] url in self?.onOpenURL?(url) }
 
         stack.axis = .vertical
         stack.spacing = 6
@@ -202,6 +206,7 @@ final class SettingsPanel: UIView {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
             as? String ?? "未知"
         addNote("小欧输入法 v\(version) · MIT · © 2026 erik.xyz")
+        stack.addArrangedSubview(updateView)
         addNav("关于与链接（主页 / 项目 / 博客）") { [weak self] in self?.onOpenAbout?() }
         addNote(
             "设置只保存在键盘扩展自己的容器里。宿主 App 与键盘扩展没有配置 App Group，"
@@ -433,6 +438,7 @@ final class SettingsPanel: UIView {
         backgroundColor = p.panelBg
         header.applyTheme(p)
         wubiSection.applyTheme(p)
+        updateView.applyTheme(p)
         guard contentBuilt else { return }
         headingLabels.forEach { $0.textColor = p.barDimFg }
         detailLabels.forEach { $0.textColor = p.barDimFg }

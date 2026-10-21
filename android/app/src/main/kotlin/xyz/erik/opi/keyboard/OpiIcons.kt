@@ -209,6 +209,47 @@ object OpiIcons {
         }.build()
     }
 
+    /** 设置入口（齿轮，2026-10-22）：环 + 八枚齿 + 轴孔，齿沿 45° 均匀分布。 */
+    val Gear: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "OpiGear",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f,
+        ).apply {
+            stroke(width = 1.8f) {
+                // 环（r=6，两段半圆闭合）
+                moveTo(18f, 12f)
+                arcToRelative(6f, 6f, 0f, true, true, 0f, 12f)
+                arcToRelative(6f, 6f, 0f, true, true, 0f, -12f)
+                close()
+                // 八枚齿：从环上 r=6 向外到 r=8.4（0/45/…/315°）
+                moveTo(18f, 12f)
+                lineTo(20.4f, 12f)
+                moveTo(16.24f, 16.24f)
+                lineTo(17.94f, 17.94f)
+                moveTo(12f, 18f)
+                lineTo(12f, 20.4f)
+                moveTo(7.76f, 16.24f)
+                lineTo(6.06f, 17.94f)
+                moveTo(6f, 12f)
+                lineTo(3.6f, 12f)
+                moveTo(7.76f, 7.76f)
+                lineTo(6.06f, 6.06f)
+                moveTo(12f, 6f)
+                lineTo(12f, 3.6f)
+                moveTo(16.24f, 7.76f)
+                lineTo(17.94f, 6.06f)
+                // 轴孔（r=2.4）
+                moveTo(14.4f, 12f)
+                arcToRelative(2.4f, 2.4f, 0f, true, true, 0f, 4.8f)
+                arcToRelative(2.4f, 2.4f, 0f, true, true, 0f, -4.8f)
+                close()
+            }
+        }.build()
+    }
+
     /** 关于入口（圆里一个 i）。圆与 [Palette] 的盘身同一套两段半圆闭合的写法。 */
     val Info: ImageVector by lazy {
         ImageVector.Builder(

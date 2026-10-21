@@ -334,8 +334,14 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
         case .toggleTraditional:
             toggleTraditional()
         case .showAbout:
+            // 打开关于也自动检测一次；失败静默，手动「检测更新」才显示原因。
+            UpdateChecker.shared.hasFullAccess = hasFullAccess
+            UpdateChecker.shared.check(manual: false)
             layout.setLayer(.about)
         case .showSettings:
+            // 每次打开设置都自动检测一次；失败静默（手动检测才显示原因）。
+            UpdateChecker.shared.hasFullAccess = hasFullAccess
+            UpdateChecker.shared.check(manual: false)
             // 每次都重取一份引擎组名（装载可能刚完成/失败），保证逐组 chip 与引擎同步。
             layout.setEngineSettings(settings, fuzzyPairNames: engine.fuzzyPairNames())
             layout.setLayer(.settings)

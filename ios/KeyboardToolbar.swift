@@ -16,7 +16,8 @@
 //   · 设置入口是本端新增的齿轮（Android 的设置页是独立 Activity）。
 //
 // 宽度预算（320pt 最窄屏，英文空闲时「中」键也出现）：
-//   pet 26 + 7 图标 × 36 + 中 28 + 左右边距 8 = 314 ≤ 320。
+//   图标次序：表情 / 皮肤 / 输入模式 / 键盘模式 / 齿轮 / 关于 / 收起；
+//   pet 26 + 图标 7 × 36 + 中 28 + 左右边距 8 = 314 ≤ 320。
 //   别再往上加固定宽度 —— 加之前先把这条算式重算一遍。
 //
 // ⚠️ 本机无 UIKit，只在 Apple CI 真编译；从未上机运行。
@@ -59,19 +60,19 @@ final class KeyboardToolbar: UIView {
         let modes = makeIcon("slider.horizontal.3", fallback: "盘", label: "键盘模式") { [weak self] in
             self?.onOpenKeyboardMode?()
         }
-        let about = makeIcon("info.circle", fallback: "i", label: "关于") { [weak self] in
-            self?.onOpenAbout?()
-        }
         // 齿轮：SF Symbols 5 才有 `gearshape`，老系统退回文字「⚙」。
         let settings = makeIcon("gearshape", fallback: "⚙", label: "设置") { [weak self] in
             self?.onOpenSettings?()
+        }
+        let about = makeIcon("info.circle", fallback: "i", label: "关于") { [weak self] in
+            self?.onOpenAbout?()
         }
         let close = makeIcon(
             "keyboard.chevron.compact.down", fallback: "⌄", label: "收起键盘"
         ) { [weak self] in
             self?.onCloseKeyboard?()
         }
-        iconButtons = [emoji, skin, input, modes, about, settings, close]
+        iconButtons = [emoji, skin, input, modes, settings, about, close]
 
         chineseButton.setTitle("中", for: .normal)
         chineseButton.titleLabel?.font = .systemFont(ofSize: 13)
@@ -88,7 +89,7 @@ final class KeyboardToolbar: UIView {
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         let stack = UIStackView(arrangedSubviews: [
-            petView, emoji, skin, input, modes, about, settings, spacer, chineseButton, close,
+            petView, emoji, skin, input, modes, settings, about, spacer, chineseButton, close,
         ])
         stack.axis = .horizontal
         stack.alignment = .fill

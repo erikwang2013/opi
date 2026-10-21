@@ -23,6 +23,7 @@ export enum PanelView {
   About = 4,
   SymbolPage = 5,
   Rare = 6,
+  Settings = 7,
 }
 
 export const ONE_HAND_OFF: number = 0;
@@ -30,6 +31,8 @@ export const ONE_HAND_LEFT: number = 1;
 export const ONE_HAND_RIGHT: number = 2;
 
 let view: number = PanelView.None;
+/** 从设置页打开子面板时的返回落点（其余面板返回 = 键面）。 */
+let returnView: number = PanelView.None;
 let skinIndex: number = 0;
 let darkOn: boolean = false;
 let elderOn: boolean = false;
@@ -60,13 +63,24 @@ export function panelView(): number { return view; }
 
 /** 开面板 = 离开平铺视图（Android：打开别的 View 就不会回到 CANDIDATES_TILED）。 */
 export function openPanel(v: PanelView): void {
+  returnView = PanelView.None;
   view = v as number;
   tiledOn = false;
 }
 
-export function closePanel(): void { view = PanelView.None as number; }
+/** 设置页里的「皮肤 / 关于」：返回箭头回设置页，而不是直接回键面。 */
+export function openSubPanel(v: PanelView): void {
+  openPanel(v);
+  returnView = PanelView.Settings;
+}
+
+export function closePanel(): void {
+  view = returnView as number;
+  returnView = PanelView.None;
+}
 
 export function togglePanel(v: PanelView): void {
+  returnView = PanelView.None;
   view = view === (v as number) ? (PanelView.None as number) : (v as number);
   tiledOn = false;
 }

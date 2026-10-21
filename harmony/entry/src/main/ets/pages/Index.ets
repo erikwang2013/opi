@@ -21,6 +21,7 @@ import {
 import {
   AboutPanel, InputModePanel, KeyboardModePanel, SkinPanel
 } from '../InputMethodExtensionAbility/Panels';
+import { SettingsPanel } from '../InputMethodExtensionAbility/SettingsPanel';
 import { RarePanel, SymbolPage } from '../InputMethodExtensionAbility/SymbolPage';
 
 @Entry
@@ -82,6 +83,8 @@ struct Index {
       KeyboardModePanel()
     } else if (this.view === (PanelView.About as number)) {
       AboutPanel()
+    } else if (this.view === (PanelView.Settings as number)) {
+      SettingsPanel()
     } else if (this.view === (PanelView.SymbolPage as number)) {
       SymbolPage()
     } else if (this.view === (PanelView.Rare as number)) {

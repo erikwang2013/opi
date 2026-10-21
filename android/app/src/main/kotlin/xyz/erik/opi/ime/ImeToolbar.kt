@@ -78,6 +78,8 @@ fun ImeToolbar(
     onOpenSkin: () -> Unit,
     onOpenInputMode: () -> Unit,
     onOpenKeyboardMode: () -> Unit,
+    /** 设置页（2026-10-22：IME 里直达系统设置，不必绕桌面图标）。 */
+    onOpenSettings: () -> Unit,
     /** 关于面板（2026-10-15 用户裁决「关于给移动端键盘功能区加个入口」）。 */
     onOpenAbout: () -> Unit,
     /** 收起键盘（2026-10-10 用户裁决：功能按钮区最右侧加关闭键盘图标）——
@@ -102,6 +104,8 @@ fun ImeToolbar(
             OpiIcons.KeyboardMode,
             "键盘模式${if (keyboardModes.anyOn) "，有开启项" else ""}",
         ) { onOpenKeyboardMode() }
+        // 设置（2026-10-22）：在「关于」之前；关于面板的原入口保留。
+        ToolbarIcon(OpiIcons.Gear, "设置") { onOpenSettings() }
         // 关于（2026-10-15 用户裁决「功能区的入口」）：压在功能组最右、收起键盘之前。
         ToolbarIcon(OpiIcons.Info, "关于") { onOpenAbout() }
         // 收起键盘压在**最右**（用户裁决「功能按钮区域最右侧」）：弹性空白把它推到头。

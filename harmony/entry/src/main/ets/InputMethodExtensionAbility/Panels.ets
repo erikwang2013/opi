@@ -15,6 +15,7 @@ import { OpiMode } from './OpiEngine';
 import { INPUT_MODES, InputMode, currentModeIndex } from './InputModes';
 import { ONE_HAND_LEFT, ONE_HAND_OFF, ONE_HAND_RIGHT, darkEnabled, elderEnabled } from './KeyboardModes';
 import { Palette, SKINS, Skin, paletteFor } from './Palette';
+import { UpdateSection } from './UpdateCheck';
 
 const ABOUT_INTRO: string =
   '小欧输入法（opi）是一款回归本质、人人可用的多端输入法。' +
@@ -64,7 +65,7 @@ export struct PanelHeader {
 
 /** 面板选项 chip：选中 = 强调色描边 + 粗体 + 行尾 ✓。 */
 @Component
-struct ModeChip {
+export struct ModeChip {
   @Prop label: string = '';
   @Prop selected: boolean = false;
   onTap: () => void = () => {
@@ -266,7 +267,7 @@ export struct KeyboardModePanel {
 
 let cachedVersion: string = '';
 
-function appVersion(): string {
+export function appVersion(): string {
   if (cachedVersion.length > 0) {
     return cachedVersion;
   }
@@ -342,6 +343,8 @@ export struct AboutPanel {
           this.Para(ABOUT_INTRO)
           this.Head('版本')
           this.Para(`v${appVersion()}`)
+          this.Head('更新')
+          UpdateSection({ currentVersion: appVersion() })
           this.Head('版权')
           this.Para('© 2026 erik.xyz · 代码按 MIT 许可（全文见仓库 LICENSE）；词库数据与代码分开授权')
           this.Head('表情数据')

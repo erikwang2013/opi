@@ -148,6 +148,7 @@ extension KeyboardLayout {
         settingsPanel.onOpenSkin = { [weak self] in self?.tap(.showSkin) }
         settingsPanel.onOpenKeyboardModes = { [weak self] in self?.tap(.showKeyboardModes) }
         settingsPanel.onOpenAbout = { [weak self] in self?.tap(.showAbout) }
+        settingsPanel.onOpenURL = { [weak self] url in self?.tap(.openURL(url)) }
         addPanel(settingsPanel)
     }
 

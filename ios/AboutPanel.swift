@@ -32,6 +32,7 @@ final class AboutPanel: UIView {
     private let header = KeyboardPanelHeader(title: "关于", hint: "")
     private let scroll = UIScrollView()
     private let stack = UIStackView()
+    private let updateView = UpdateStatusView()
     private var paragraphLabels: [UILabel] = []
     private var headingLabels: [UILabel] = []
     private var linkButtons: [UIButton] = []
@@ -40,6 +41,7 @@ final class AboutPanel: UIView {
     init() {
         super.init(frame: .zero)
         header.onBack = { [weak self] in self?.onClose?() }
+        updateView.onOpenDownload = { [weak self] url in self?.onOpenURL?(url) }
         stack.axis = .vertical
         stack.spacing = 4
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -74,6 +76,7 @@ final class AboutPanel: UIView {
     func applyTheme(_ p: KeyboardPalette) {
         backgroundColor = p.panelBg
         header.applyTheme(p)
+        updateView.applyTheme(p)
         paragraphLabels.forEach { $0.textColor = p.panelFg }
         headingLabels.forEach { $0.textColor = p.panelFg }
         linkButtons.forEach { $0.setTitleColor(p.accent, for: .normal) }
@@ -87,6 +90,7 @@ final class AboutPanel: UIView {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
             as? String ?? "未知"
         addParagraph("v\(version)（引擎随 App 打包，没有独立的版本出口）")
+        stack.addArrangedSubview(updateView)
         addHeading("版权")
         addParagraph("© 2026 erik.xyz · 代码按 MIT 许可（全文见仓库 LICENSE）；词库数据与代码分开授权")
         addHeading("表情数据")

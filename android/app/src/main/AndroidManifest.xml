@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 版本检测（2026-10-22）：只访问 opi.erik.xyz 的 version.json / 首页，不上传用户数据。
+         INTERNET 是普通权限，安装即授、无运行时弹窗。 -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="小欧输入法"
         android:icon="@mipmap/ic_launcher"

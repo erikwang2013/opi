@@ -87,8 +87,8 @@ The name says it all:
 
 #### 2. Privacy First — and You Can Check It Yourself
 - **Local by default**: your input data stays on your machine. Neither the engine nor the export layer has a **HTTP client** in its dependency table — no telemetry, no ad SDK
-- **Zero permissions**: the Android `AndroidManifest.xml` declares **not a single `uses-permission`**
-- **iOS Full Access**: enabled on 2026-10-20 so the keyboard extension can write own-sticker images to the system pasteboard (`RequestsOpenAccess=true`; the user must allow it in Settings, and iOS shows a privacy warning). OPI still makes no network calls, and user words stay in the extension container
+- **Network only for update checks**: Android declares only `INTERNET` (fetches the version number from `https://opi.erik.xyz/version.json`, no input or user data); typing, candidates and learning stay local
+- **iOS Full Access**: enabled on 2026-10-20 so the keyboard extension can write own-sticker images to the system pasteboard (`RequestsOpenAccess=true`; the user must allow it in Settings, and iOS shows a privacy warning). Network access is limited to the settings-page update check (`version.json`); input and user words stay in the extension container
 - **Works offline**: core input runs fully offline; `.opid` dictionaries are read-only `mmap` maps, so the whole dictionary is never read into the heap (matching entries are materialised on demand at query time — `loader.rs`'s `MmapDictionary::query` calls `.to_string()` per hit and `candidates.rs`'s `rank_and_pick` clones again, so it is **not** zero-copy)
 
 (Multi-device cloud sync has been **decided against** (user decision 2026-09-28) — see the Roadmap. **There is no sync or encryption code in the repository today.**)
