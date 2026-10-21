@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+# These are repository notes, not public pages. They are not linked, but keep
+# crawlers away from raw Markdown if the whole directory is deployed.
+Disallow: /README.md
+Disallow: /download/README.md
+
+Sitemap: https://opi.erik.xyz/sitemap.xml

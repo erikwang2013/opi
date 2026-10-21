@@ -18,7 +18,9 @@ python3 -m http.server 8080 --directory site
 
 ```
 site/
-  index.html            语义化单页（七个翻屏 section）
+  index.html            语义化单页（七个翻屏 section；含 canonical / OG / Twitter / JSON-LD）
+  robots.txt            抓取规则（屏蔽仓库说明 Markdown）与 sitemap 声明
+  sitemap.xml           单页站点地图（lastmod / changefreq）
   css/base.css          设计 token、壳层、按钮、页脚
   css/sections.css      hero / 小欧 / 十二形态 / 能力 / 迭代 / 版本 / 下载
   css/responsive.css    1120 / 900 / 720 / 460 四档断点
@@ -73,6 +75,11 @@ site/
 
 把 `site/` 整个目录作为静态站点根目录即可（Nginx / Caddy / Cloudflare Pages /
 GitHub Pages 均可）。页面内没有构建步骤，也没有服务端依赖。
+
+SEO 已内置在 `index.html` 的 `<head>`：canonical、中文 description、Open Graph /
+Twitter Card（绝对图片地址）、`SoftwareApplication` + `WebSite` + `Organization`
+JSON-LD，以及 `robots.txt` / `sitemap.xml`。换域名时同时改 canonical、OG/Twitter
+`url`/`image`、JSON-LD 的 `url`/`@id` 与 robots 的 Sitemap 地址。
 
 - `site/README.md` 的链接若部署在子路径（如 `/opi/`），保持相对路径即可。
 - 统计脚本由 busuanzi 提供；广告拦截器或离线环境会把它拦掉，页面其余部分不受影响。
