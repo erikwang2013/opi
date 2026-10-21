@@ -287,7 +287,7 @@ LICENSE · CONTRIBUTING.md      # MIT full text · contribution guide (incl. dic
 
 ### 📅 Project Status
 
-> **Current stage: v1.20.1 (2026-10-21): iOS 9-key candidate reading column, full-keyboard tiled candidates, no preedit and 9-key default; Windows upgrade registration fix with visible failures; iOS/macOS delivery reduced to a single self-contained IPA/PKG; Apple CI compiles, device verification still pending**
+> **Current stage: v1.20.2 (2026-10-21): iOS panel back / Chinese-English / simplified-traditional stay inside the current IME, symbol glyph fallback fixed, system IME switch added to every keyboard bottom-left; Windows old TSF DLL replacement and uninstall residue fixed (same-volume rename, CI mapped-DLL test); Apple unsigned, device verification pending**
 
 V1 milestone progress:
 
