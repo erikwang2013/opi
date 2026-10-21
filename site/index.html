@@ -26,7 +26,6 @@
   <div class="ambient-3d" aria-hidden="true"><i class="ambient-key key-a"></i><i class="ambient-key key-b"></i><i class="ambient-key key-c"></i><i class="ambient-ring ring-a"></i><i class="ambient-ring ring-b"></i></div>
   <div class="boot-3d" aria-hidden="true"><img src="assets/pet/opi-pet.png" width="44" height="44" alt=""></div>
   <div class="scroll-progress" aria-hidden="true"><span></span></div>
-
   <header class="site-header" id="top">
     <a class="brand" href="#hero" aria-label="opi 小欧输入法首页">
       <img src="assets/pet/opi-pet.png" width="36" height="36" alt="">
@@ -45,7 +44,6 @@
       <a class="header-github" href="https://github.com/erikwang2013/opi" target="_blank" rel="noopener" aria-label="GitHub 仓库">GitHub</a>
     </div>
   </header>
-
   <main id="main">
     <section class="panel hero" id="hero" aria-labelledby="hero-title">
       <div class="container hero-grid">
@@ -75,7 +73,6 @@
       </div>
       <a class="scroll-cue" href="#about"><span>向下滚动</span><i aria-hidden="true"></i></a>
     </section>
-
     <section class="panel about" id="about" aria-labelledby="about-title">
       <div class="container about-grid">
         <div class="about-copy reveal">
@@ -99,7 +96,6 @@
         <div class="fact"><span class="fact-key">本机涟漪</span><span>运算不外传</span></div>
       </div>
     </section>
-
     <section class="panel forms" id="forms" aria-labelledby="forms-title">
       <div class="container">
         <div class="section-head reveal">
@@ -162,7 +158,6 @@
         <p class="forms-note">十二种形态均为 opi 自有资产，不是内置 emoji。输入法里以动画 GIF / PNG 贴纸插入，标签带「小欧·」前缀，和 emoji 不重名。</p>
       </div>
     </section>
-
     <section class="panel features" id="features" aria-labelledby="features-title">
       <div class="container">
         <div class="section-head reveal">
@@ -177,8 +172,8 @@
             <svg class="icon" aria-hidden="true"><use href="#i-engine"></use></svg>
             <span class="feature-num">01</span>
             <h3>一份引擎，六端原生</h3>
-            <p>Rust 核心 + 平台原生外壳：Android IME、fcitx5、Windows TSF、macOS / iOS 键盘扩展、鸿蒙 N-API。同一套词库与键码。</p>
-            <span class="tag">Rust · C ABI</span>
+            <p>Rust 核心 + 平台原生外壳：Android IME、fcitx5、Windows TSF、macOS / iOS 键盘扩展、鸿蒙 N-API。同一套词库与键码；Android（模拟器）与 Linux（容器 / 本机）已验证，其余四端待真机验收。</p>
+            <span class="tag">Rust · C ABI · 六端代码</span>
           </article>
           <article class="feature-card reveal">
             <svg class="icon" aria-hidden="true"><use href="#i-shield"></use></svg>
@@ -191,15 +186,15 @@
             <svg class="icon" aria-hidden="true"><use href="#i-keyboard"></use></svg>
             <span class="feature-num">03</span>
             <h3>中英文输入功能</h3>
-            <p>中文支持拼音、简繁、双拼、五笔、笔画与 26 / 9 / 14 键布局；英文支持普通 / 专业模式、单词联想与中英切换；模糊音、用户词、候选分页和逐字确认都在。</p>
-            <span class="tag">中 · 英 · 简繁 · 双拼 · 五笔</span>
+            <p>拼音 / 简繁 / 双拼 / 五笔 / 笔画，26 / 9 / 14 键布局；9 键左列读音、候选平铺、中英与简繁都在当前输入法内切换；英文普通 / 专业模式、单词联想；模糊音、简拼、逐字确认与本地学习。</p>
+            <span class="tag">中 · 英 · 简繁 · 9/14/26 键</span>
           </article>
           <article class="feature-card reveal">
             <svg class="icon" aria-hidden="true"><use href="#i-book"></use></svg>
             <span class="feature-num">04</span>
             <h3>词库是「活」的</h3>
-            <p>简体主库与繁体库分轨，康熙字典、现代繁体词与常用语持续并入；每条词库变更都有门禁和回归测试守着。</p>
-            <span class="tag">937,780 + 139,355 条</span>
+            <p>简体主库与繁体库分轨，康熙字典、现代繁体词与常用语持续并入；每条词库变更都有门禁和回归测试守着。代码 MIT，词库数据按 GPL-3.0 分发。</p>
+            <span class="tag">937,780 + 139,355 条 · GPL-3.0 数据</span>
           </article>
           <article class="feature-card reveal">
             <svg class="icon" aria-hidden="true"><use href="#i-spark"></use></svg>
@@ -212,8 +207,8 @@
             <svg class="icon" aria-hidden="true"><use href="#i-sliders"></use></svg>
             <span class="feature-num">06</span>
             <h3>克制的桌面体验</h3>
-            <p>候选窗、状态栏与设置页用 Compose 原生绘制；键大小 75–150% 统一调整，皮肤与简繁 / 英文键可按需摆放。</p>
-            <span class="tag">Compose Desktop</span>
+            <p>Linux / Windows 状态栏只在 OPI 激活时出现；候选窗、设置页、皮肤、键盘模式与符号/表情面板在 Android / iOS / 鸿蒙 / macOS / Linux 上按 Android 语义对齐。</p>
+            <span class="tag">状态栏 · 候选 · 面板</span>
           </article>
         </div>
       </div>
@@ -252,6 +247,12 @@
             <span class="phase-dot" style="--mood:#D9553F"></span>
             <h3>多端交付</h3>
             <p>iOS 宿主 App 与 unsigned IPA、鸿蒙 HAP 脚手架、Windows 注册链路修复、状态栏统一缩放；官网与 v1.16.0。</p>
+          </li>
+          <li class="phase reveal">
+            <span class="phase-date">2026.10.21</span>
+            <span class="phase-dot" style="--mood:#2E8B80"></span>
+            <h3>候选与安装收口</h3>
+            <p>iOS 9 键读数列 / 平铺候选 / 输入法内切换；Windows TSF 升级替换与无重启卸载；iOS / macOS 改为单一自包含包，v1.20.2。</p>
           </li>
         </ol>
       </div>
@@ -324,29 +325,29 @@
         </div>
         <div class="download-notice reveal" role="note">
           <strong>测试范围说明</strong>
-          <p>硬件资源和成本有限，仅验证 Android、Windows、Linux 端；其它端已完成代码适配，尚未测试验证。</p>
+          <p>受硬件资源与成本限制，目前只有 <strong>Android（模拟器）</strong>与 <strong>Linux（容器 / 本机）</strong>有运行验证。Windows / iOS / macOS / 鸿蒙已有可构建产物，但均未真机验收，签名也未验证。</p>
         </div>
-        <h3 class="download-group-title reveal">主推平台 <span>已验证 · 推荐下载</span></h3>
+        <h3 class="download-group-title reveal">主推平台 <span>推荐下载</span></h3>
         <div class="download-grid">
           <a class="download-card is-primary reveal" href="download/opi-1.20.2-android-universal.apk" download data-os="android">
             <span class="os-mark"><img src="assets/pet/forms/idle.png" width="46" height="46" alt="" loading="lazy" decoding="async"></span>
             <span class="os-name">Android</span>
             <span class="os-meta">原生 IME · .apk</span>
-            <span class="os-note">Android 5.1+ · arm64 / armv7 / x86_64</span>
+            <span class="os-note">Android 5.1+ · arm64 / armv7 / x86_64 · 模拟器已验证</span>
             <span class="os-cta">下载 APK <span aria-hidden="true">↓</span></span>
           </a>
           <a class="download-card is-primary reveal" href="download/opi-1.20.2-windows-x64-setup.exe" download data-os="windows">
             <span class="os-mark"><img src="assets/pet/forms/waiting.png" width="46" height="46" alt="" loading="lazy" decoding="async"></span>
             <span class="os-name">Windows</span>
             <span class="os-meta">TSF 插件 · .exe x64</span>
-            <span class="os-note">Windows 10 / 11；Win7 / 8 不支持</span>
+            <span class="os-note">Windows 10 / 11 x64 · 内测，未真机验收</span>
             <span class="os-cta">下载安装包 <span aria-hidden="true">↓</span></span>
           </a>
           <div class="download-card is-primary reveal" data-os="linux">
             <span class="os-mark"><img src="assets/pet/forms/cute.png" width="46" height="46" alt="" loading="lazy" decoding="async"></span>
             <span class="os-name">Linux</span>
             <span class="os-meta">fcitx5 插件 · .deb / .rpm</span>
-            <span class="os-note">Debian / Ubuntu 用 .deb；Fedora / openSUSE 用 .rpm</span>
+            <span class="os-note">Debian / Ubuntu 用 .deb；Fedora / openSUSE 用 .rpm · 容器 / 本机已验证</span>
             <a class="os-cta" href="download/opi-1.20.2-linux-amd64.deb" download>下载 .deb <span aria-hidden="true">↓</span></a>
             <a class="os-cta" href="download/opi-1.20.2-linux-x86_64.rpm" download>下载 .rpm <span aria-hidden="true">↓</span></a>
           </div>
@@ -358,7 +359,7 @@
             <span class="os-mark"><img src="assets/pet/forms/coquettish.png" width="46" height="46" alt="" loading="lazy" decoding="async"></span>
             <span class="os-name">macOS</span>
             <span class="os-meta">InputMethodKit · .pkg</span>
-            <span class="os-note">内测版本，约 7 天使用周期 · unsigned，需自行签名</span>
+            <span class="os-note">内测版本 · unsigned pkg，需自行签名 / 公证</span>
             <span class="os-cta">下载 PKG <span aria-hidden="true">↓</span></span>
           </a>
           <a class="download-card reveal" href="download/opi-1.20.2-ios-unsigned.ipa" download data-os="ios">
@@ -374,12 +375,13 @@
             <span class="os-mark"><img src="assets/pet/forms/knocking.png" width="46" height="46" alt="" loading="lazy" decoding="async"></span>
             <span class="os-name">HarmonyOS</span>
             <span class="os-meta">ArkTS + N-API · .hap</span>
-            <span class="os-note">内测版本，约 7 天使用周期 · unsigned HAP，需签名与真机验证</span>
+            <span class="os-note">内测版本 · unsigned HAP，需签名与真机验证</span>
             <span class="os-cta">下载 HAP <span aria-hidden="true">↓</span></span>
           </a>
         </div>
         <div class="download-foot reveal">
-          <p>文件直接放在本站的 <code>download/</code> 目录，不跳转 GitHub。安装说明见发行说明。</p>
+          <p>文件直接放在本站的 <code>download/</code> 目录，不跳转 GitHub。安装教程见 <a href="https://github.com/erikwang2013/opi/tree/main/docs/install" target="_blank" rel="noopener">docs/install</a> 与发行说明。</p>
+          <p><strong>装完必做</strong>：Linux 把 OPI 加进 fcitx5 输入法组；Windows 在「中文(简体)」键盘列表添加「小欧输入法」并注销 / 重启一次；iOS 在设置 → 通用 → 键盘中添加并允许；macOS 在输入源中添加。</p>
           <p class="download-hint">下载目录的版本与文件名和 <code>dist/</code> 保持一致；页面版本 v1.20.2。</p>
         </div>
         <aside class="donate reveal" aria-labelledby="donate-title">

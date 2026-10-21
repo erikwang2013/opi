@@ -194,9 +194,13 @@
 
   const openDialog = (card) => {
     if (dialog.hasAttribute('open')) return;
+    const shown = card.querySelector('img');
+    // Use the already-decoded card frame when possible: swapping in the
+    // animation URL here forces a fresh decode and pushed the open past 50 ms.
+    const loaded = shown?.currentSrc || shown?.getAttribute('src') || '';
     const anim = card.dataset.anim;
-    const still = card.querySelector('img')?.dataset.still;
-    const next = reduceMotion && still ? still : (anim || still || '');
+    const still = shown?.dataset.still;
+    const next = loaded || (reduceMotion && still ? still : (anim || still || ''));
     if (dialogImage && next && dialogImage.getAttribute('src') !== next) dialogImage.src = next;
     if (dialogName) dialogName.textContent = card.dataset.name || '';
     if (dialogNote) dialogNote.textContent = card.dataset.note || '';

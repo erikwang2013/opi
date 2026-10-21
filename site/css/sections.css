@@ -63,14 +63,12 @@
   padding: 7px 12px;
   border: 1px solid rgba(20, 32, 29, .1);
   border-radius: 999px;
-  background: rgba(255, 255, 255, .7);
+  background: rgba(255, 255, 255, .88);
   color: var(--ink-soft);
   font-family: var(--font-mono);
   font-size: .64rem;
   letter-spacing: .04em;
   box-shadow: 0 10px 24px -18px rgba(20, 32, 29, .5);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
   animation: drift 7s ease-in-out infinite;
 }
 .chip-a { left: 2%; top: 19%; animation-delay: -1s; }
@@ -204,7 +202,7 @@
 .tag { margin-top: auto; align-self: flex-start; padding: 4px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink-faint); font-family: var(--font-mono); font-size: .6rem; letter-spacing: .03em; }
 
 /* ---------- Timeline ---------- */
-.timeline-track { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: clamp(16px, 2vw, 30px); margin: 0; padding: 0; list-style: none; }
+.timeline-track { position: relative; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: clamp(16px, 2vw, 30px); margin: 0; padding: 0; list-style: none; }
 .timeline-track::before { content: ""; position: absolute; left: 0; right: 0; top: 42px; height: 1px; background: linear-gradient(90deg, var(--line), rgba(46, 139, 128, .4), var(--line)); }
 .phase { position: relative; padding-top: 62px; }
 .phase-date { position: absolute; top: 0; left: 0; color: var(--ink-faint); font-family: var(--font-mono); font-size: .68rem; letter-spacing: .04em; }
@@ -336,7 +334,7 @@
 .form-dialog:not([open]) { display: none; }
 .form-dialog[open] { display: block; }
 .form-dialog { position: fixed; inset: 0; z-index: 82; width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); margin: auto; padding: 0; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); color: var(--ink); box-shadow: 0 40px 100px -30px rgba(20, 32, 29, .45); overscroll-behavior: contain; animation: form-pop .18s var(--ease); }
-.form-backdrop { position: fixed; inset: 0; z-index: 81; touch-action: none; background: rgba(20, 32, 29, .34); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); animation: form-fade .16s ease-out; }
+.form-backdrop { position: fixed; inset: 0; z-index: 81; touch-action: none; background: rgba(20, 32, 29, .42); animation: form-fade .16s ease-out; }
 .form-backdrop[hidden] { display: none; }
 body.form-modal-open { overflow: hidden; }
 @keyframes form-fade { from { opacity: 0; } to { opacity: 1; } }
@@ -353,7 +351,7 @@ body.form-modal-open { overflow: hidden; }
 /* 打赏二维码：点按后在原页放大，不跳新标签。 */
 .qr-dialog:not([open]) { display: none; }
 .qr-dialog { position: fixed; inset: 0; z-index: 84; width: min(560px, calc(100vw - 28px)); max-height: calc(100vh - 28px); max-height: calc(100dvh - 28px); margin: auto; padding: 18px; overflow: auto; border: 1px solid var(--line); border-radius: 18px; background: var(--paper); color: var(--ink); box-shadow: 0 40px 100px -30px rgba(20, 32, 29, .5); animation: form-pop .18s var(--ease); }
-.qr-dialog::backdrop { background: rgba(20, 32, 29, .42); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.qr-dialog::backdrop { background: rgba(20, 32, 29, .5); }
 .qr-dialog img { width: 100%; height: auto; max-height: calc(100vh - 110px); max-height: calc(100dvh - 110px); object-fit: contain; border-radius: 10px; background: #fff; }
 .qr-dialog p { margin: 10px 0 0; color: var(--ink-soft); font-size: .78rem; text-align: center; }
 

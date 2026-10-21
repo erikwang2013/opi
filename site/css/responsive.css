@@ -110,7 +110,7 @@
   .download-card.is-primary .os-cta { padding: 7px 12px; font-size: .72rem; }
   .download-grid.is-minor .download-card { min-height: 126px; padding: 12px; }
   .donate-qr img { width: 96px; }
-  .memory-overlay { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(20, 32, 29, .62); }
+  .memory-overlay { -webkit-backdrop-filter: none; backdrop-filter: none; background: #14201d; }
   .form-backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; }
   .os-current { right: 12px; top: 12px; font-size: .52rem; }
   .os-mark { width: 28px; height: 28px; margin-bottom: 13px; font-size: .55rem; }

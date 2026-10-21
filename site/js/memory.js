@@ -134,6 +134,9 @@
     img.height = 112;
     img.alt = '';
     img.decoding = 'async';
+    // First frame is needed the moment the overlay opens; decode/cache it
+    // during idle with the rest of the overlay skeleton.
+    img.src = `assets/pet/forms/${animFile(memoryIntroForms[0][0])}`;
     const label = document.createElement('p');
     const count = document.createElement('span');
     single.append(img, label, count);
@@ -355,9 +358,14 @@
     document.body.classList.add('memory-open');
     markMemorySeen();
     window.requestAnimationFrame(() => {
-      memoryOverlay.classList.add('is-open');
-      startMemoryIntro();
+      // Shell first: the overlay responds immediately, the heavy card content
+      // paints on the next frame (both well inside the 50 ms budget).
+      memoryOverlay.classList.add('is-open', 'is-shell');
       memoryClose?.focus?.({ preventScroll: true });
+      window.requestAnimationFrame(() => {
+        memoryOverlay.classList.remove('is-shell');
+        startMemoryIntro();
+      });
     });
   };
 

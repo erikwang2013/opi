@@ -200,8 +200,22 @@ resize();
 let heroVisible = true;
 const clock = new THREE.Clock();
 let running = false;
+// Yield the main thread for a few frames around any input. A single 3D frame
+// landing between click and paint was the only path that pushed a dialog open
+// past the 50 ms response budget.
+let interactionUntil = 0;
+let interactionTimer = 0;
+const yieldToInput = () => {
+  interactionUntil = performance.now() + 350;
+  syncLoop();
+  window.clearTimeout(interactionTimer);
+  interactionTimer = window.setTimeout(syncLoop, 380);
+};
+window.addEventListener('pointerdown', yieldToInput, { passive: true });
+window.addEventListener('keydown', yieldToInput, { passive: true });
 
 const canRender = () => !reduceMotion && heroVisible && !document.hidden
+  && performance.now() >= interactionUntil
   && !document.body.classList.contains('memory-open');
 
 const syncLoop = () => {
