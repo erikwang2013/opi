@@ -791,7 +791,7 @@ adb shell settings get secure enabled_input_methods         # 已启用的输入
 | 现象 | 先看 |
 |---|---|
 | 键盘出来但不出一字、也无报错 | 日志有没有 `engine on builtin fallback dict`（§5.1） |
-| 键盘是空白壳 / 根本不出现 | `OpiImeService` 的 `onCreateInputView` 日志。`onEvaluateInputViewShown()` 被重写为**恒真**（对外接硬件键盘的模拟器是必需的，默认实现在那种设备上返回 false，视图永不创建） |
+| 键盘是空白壳 / 根本不出现 | 先看 `OpiImeService` 的 `onCreateInputView` 与 `onEvaluateInputViewShown` 日志。判定按**输入目标生命周期**：`onStartInput(info != null)` 置 active、`onFinishInput` 清掉；**不能按 `inputType`**——抖音直播弹幕框用 `TYPE_NULL` 但仍通过 InputConnection 收字，旧判据会把它误判成“不接受文本”（2026-10-21 修）。外接硬件键盘的模拟器也由 active 这半保住。 |
 | 启动即崩、报 `UnsatisfiedLinkError` | `.so` 的 ABI 与设备不符，或 `System.loadLibrary` 失败。注意 `EngineLoader` 的注释明确划了边界：**它只覆盖「词库」层面的失败，`.so` 缺失是另一个失败域，而且发生得更早**（`OpiEngine` 是 object，类初始化里就 loadLibrary） |
 | 装了但还是旧词库 | §5.1 第二级 + §3.2 最后那条 `dumpsys` |
 

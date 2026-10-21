@@ -13,7 +13,7 @@ import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
-import android.text.InputType // onEvaluateInputViewShown 判「接受文本」用（拆出的 EditorInfoRules 自带一份）
+import android.text.InputType // 密码/回车判定（EditorInfoRules.kt 里的纯函数）
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -37,14 +37,14 @@ import xyz.erik.opi.settings.ImePreferences
 import java.io.File
 import java.io.IOException
 import kotlin.math.min
-
 // 编辑器信息的两条纯判定（isPasswordEditor / enterDecision）已拆到 EditorInfoRules.kt
 //（2026-10-10，500 行门禁；同包，无需 import）。
-
 /** OPI IME 宿主：ComposeView 作为输入视图，面板状态在 ImeState（A3/A4 填 UI）。 */
 class OpiImeService : InputMethodService() {
     private var inputViewCache: View? = null
-
+    // 有输入目标：onStartInput(info != null) 置 true，onFinishInput 置 false。
+    // 不能按 inputType 判 —— 抖音直播弹幕框用 TYPE_NULL，但仍通过 InputConnection 收字。
+    private var editorActive = false
     /** 提交重试的排程与撤销（字段持有的主线程 Handler，不随 IME 窗口重建而改变）。
      * internal：图片通道（PetStickerCommit.kt 的扩展函数）共用同一套重试/撤销。 */
     internal val pendingCommit = PendingCommit()
@@ -363,6 +363,7 @@ class OpiImeService : InputMethodService() {
     /** P1：输入目标切换/输入视图结束时重置面板状态（组合串、候选、面板视图）。 */
     override fun onStartInput(info: EditorInfo?, restarting: Boolean) {
         super.onStartInput(info, restarting)
+        editorActive = info != null
         if (!restarting) {
             Log.i(TAG, "onStartInput: editor changed")
             // 排队中的重试提交必须在这里撤掉：它与组合串同属「上一个编辑器的东西」
@@ -380,6 +381,10 @@ class OpiImeService : InputMethodService() {
                 imeState.leaveTransientEnglish()
             }
         }
+    }
+
+    override fun onFinishInput() {
+        super.onFinishInput(); editorActive = false; Log.i(TAG, "onFinishInput")
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
@@ -447,19 +452,17 @@ class OpiImeService : InputMethodService() {
      * 「**键盘可见、触摸全无反应**」的中间态（2026-10-10 用户报障「其他 app 有弹框就
      * 没法输入，主流输入法就可以」——它们走系统默认判定，从不进这个状态）。
      *
-     * 改法：当前编辑器接受文本（inputType 类 ≠ TYPE_NULL）且输入连接在 ⇒ true
-     * （模拟器/硬键盘场景由这半保住）；其余一律 false 交回系统 —— 弹框抢焦、
-     * 无编辑器时键盘正常收起，不再留中间态。
+     * 2026-10-21 再次修订：不能按 inputType 判 —— 抖音直播弹幕框用 TYPE_NULL，
+     * 旧判据让它永远返回 false。现在只认生命周期（onStartInput/onFinishInput），
+     * 弹框/无编辑器窗口拿不到 onStartInput，仍会收起键盘，2026-10-10 的中间态不会回来。
      */
     override fun onEvaluateInputViewShown(): Boolean {
-        val info = currentInputEditorInfo
-        val acceptsText = info != null &&
-            (info.inputType and InputType.TYPE_MASK_CLASS) != InputType.TYPE_NULL
-        val verdict = acceptsText && currentInputConnection != null
+        val verdict = editorActive
         Log.i(
             TAG,
-            "onEvaluateInputViewShown: info=${info?.inputType} acceptsText=$acceptsText " +
-                "conn=${currentInputConnection != null} shown=$isInputViewShown -> $verdict",
+            "onEvaluateInputViewShown: info=${currentInputEditorInfo?.inputType} " +
+                "active=$editorActive conn=${currentInputConnection != null} " +
+                "shown=$isInputViewShown -> $verdict",
         )
         return verdict
     }
