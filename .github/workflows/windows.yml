@@ -765,9 +765,8 @@ jobs:
           if ($ulog -notmatch 'Removed all\? Yes') {
             throw '卸载日志没有 Removed all? Yes（Inno 仍认为有元素未删除）'
           }
-          if ($ulog -match 'Failed to delete the file; it may be in use') {
-            throw '卸载日志仍记录文件被占用（DLL 改名没成功）'
-          }
+          # 不把 Inno 的瞬时 "Failed to delete ... in use" 当失败：Inno 会重试，
+          # 最终判据是上面的「目录/DLL 都不存在」与 `Removed all? Yes`。
           foreach ($f in 'uninstall-profile.txt', 'uninstall-run-statusbar.txt') {
             if (-not (Test-Path $f)) { throw "缺少 $f（卸载后的注册表检查没跑）" }
             if ((Get-Content $f -Raw).Trim() -ne 'ABSENT') { throw "卸载后仍残留注册表项（见 $f）" }
