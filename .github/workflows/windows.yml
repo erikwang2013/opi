@@ -772,7 +772,7 @@ jobs:
           if ($uplog -match 'Will replace on restart') {
             throw '升级日志仍记录 Will replace on restart（新 DLL 要等重启才落地）'
           }
-          if ($uplog -notmatch 'opi: tsf_opi\.dll on disk: \d+ bytes') {
+          if ($uplog -notmatch '(?i)opi: (TSF DLL|tsf_opi\.dll) on disk: \d+ bytes') {
             throw '升级日志缺少旧 DLL 大小取证行'
           }
           Write-Host "升级路径通过：锁定的旧 DLL 被移出，磁盘哈希恢复为包内版本（$hashAfter）"
