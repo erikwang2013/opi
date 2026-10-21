@@ -1225,7 +1225,7 @@ Shift 三拍查它）；**外观**页的皮肤由候选窗/状态栏 1s 轮询�
 在右栏顶部显示「发现新版本 vX → 前往下载」横幅（可关闭）；「关于」页常驻当前版本与
 「检测更新」按钮。数据源首选 `https://opi.erik.xyz/version.json`（发版时更新），读不到
 才回退解析首页 JSON-LD 的 `softwareVersion`；下载落点 = 用户裁决的
-`https://opi.erik.xyz/#download`（首页下载区；`/download` 目录未开索引，实测 403）。
+`https://opi.erik.xyz/download`（2026-10-22 起该路径有 `site/download/index.html` 转场到首页下载区）。
 网络失败不打扰（自动检测静默，只有手动检测才显示原因）。
 「符号与表情」页那两个按钮打开的是与 Linux 同一份代码的窗（`SymbolsPage.kt` 的
 `SymbolWindow`，表情页在 `EmojiPage.kt`）：页面能看能翻，点选上屏（2026-10-20 起）走
