@@ -338,7 +338,7 @@ MSI 的 `OpRegisterTsf` 失败/回滚会如实留在日志里；EXE 的注册失
 | `opi-desktop-msi-raw-v<版本>` | jpackage **原始** `.msi`（zip 里一个文件）。**仅内部中间物**（YAML 注释标 internal）：没有注册动作，只供 `msi-postprocess` 下载；后处理成功后由该 job 删除，**正常 run 的最终 artifacts 里不应出现** | 上传的 **zip** 58,683,236 B（2026-10-09 run）；**未压缩 MSI** 62,034,236 B（2026-10-19 本机核对的 v1.15.1 发布资产）。两者不是同一次构建，别混比 |
 | `opi-msi-internal-v<版本>` | **后处理后的** `opi-<版本>.msi`（zip 里一个文件）。**内部证据，不是用户入口**（`msi-postprocess` job 产出；注册 CA 是 Type 1，失败会回滚） | **未压缩 MSI** 62,443,008 B（2026-10-19 本机由上一行的 v1.15.1 raw 处理得到；+408,772 B）。CI 上传的是 zip，别再拿这个数当 zip 体积 |
 | `opi-msi-install-logs-v<版本>` | `windows-install-test` 在 Windows Server Core 容器里跑 `msiexec` 的日志与目录/注册表输出（`install-custom.log` / `install-default.log` / `dir-*.txt` / `reg-*.txt`）。容器缺语言栏/TSF，失败/回滚会如实留在日志里 | 每次 run 新生成 |
-| `opi-exe-install-logs-v<版本>` | `windows-exe-install-test` 的静默安装/卸载日志与断言输出（`install-exe.log` / `uninstall-exe.log` / `*-exit.txt` / `*-removed.txt`）。`regsvr32` 退出码在 `install-exe.log` 里，非 0 不判红 | 每次 run 新生成 |
+| `opi-exe-install-logs-v<版本>` | `windows-exe-install-test` 的静默安装/升级/卸载日志与断言输出（`install-exe.log` / `upgrade-exe.log` / `uninstall-exe.log` / `*-exit.txt` / `sha-*.txt` / `*-removed.txt`）。`regsvr32` 退出码在 `install-exe.log` 里，非 0 不判红；升级路径以 `sha-package.txt` / `sha-after.txt` 的 SHA-256 相等为判据 | 每次 run 新生成 |
 
 名字里的版本来自 `Cargo.toml` 的 `[workspace.package] version`（本仓六 crate 共用的单一来源），
 并与 `desktop/build.gradle.kts` 的 `opiAppVersion`（= jpackage 的 `packageVersion`）**比对**：
@@ -397,18 +397,53 @@ C:\Program Files\opi\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
   CTF 键、升级时 `UnregisterTsf` 的摘除窗口跨越整个文件复制阶段。现在图标失败会
   自动用空图标重试，重试仍失败但 profile 已能读回也算成功；其他降级步骤写日志，
   不再静默。真机上的任务栏显示仍待验证。
-- **卸载（2026-10-21）**：`CurUninstallStepChanged(usUninstall)` 在 Inno 删文件前
-  先 `taskkill /f /t /im opi.exe`（候选窗 / 设置窗 / 状态栏都是同一个 `opi.exe`；
+- **卸载（2026-10-21，同日真机「目录残留 / tsf_opi.dll 被占用」报障后修）**：
+  `CurUninstallStepChanged(usUninstall)` 在 Inno 删文件前先
+  `taskkill /f /t /im opi.exe`（候选窗 / 设置窗 / 状态栏都是同一个 `opi.exe`；
   **本树没有 Windows 服务**），随后清 HKLM64/HKCU Run 下的 `opi` / `opi-statusbar`
   值与 `%TEMP%\opi-statusbar-<用户>.lock`（状态栏单实例锁：进程被杀后文件仍在）。
   `[UninstallDelete] filesandordirs "{app}"` 清整个安装目录。**不杀 Explorer，也不再
-  请求重启**：`tsf_opi.dll` 被 Explorer 加载时，`MoveLockedTsfDllOut` 先尝试删除，
-  失败则把它改名移到 `%TEMP%`（Windows 允许重命名已映射的映象），这样 `{app}`
-  可以立即删掉；不再使用 `uninsrestartdelete`，Inno 不会置 `NeedRestart` 或弹重启
-  提示。未占用时走普通删除。**代价**：极少数情况下连重命名都失败（例如跨卷/被独占
-  锁定），DLL 会留在原处、目录可能非空，但卸载过程不会重启电脑；日志会记录
-  `could not move locked TSF DLL`。EXE 容器冒烟（无 Explorer）断言整个
-  `C:\opi-test` 立即消失；真机的 Explorer 锁定路径仍需验证。
+  请求重启**：被 Explorer/TSF 宿主映射的 DLL 不能删除（映像映射），但加载器以
+  `FILE_SHARE_DELETE` 打开它，**允许改名**。`MoveLockedTsfDllOut` 先试普通删除；失败
+  则用 `MoveFileExW` 改名到**同卷**的 trash 目录：`{commonappdata}\opi\trash`
+  （应用装在系统盘时）或 `<盘符>:\opi-trash`（装在其他盘时），文件名是唯一的
+  `opi-tsf-<时间戳，精确到毫秒>.dll`。`%TEMP%` 只在**同卷**时才会用
+  （`ExtractFileDrive` 比较；用户把 TEMP 放到 RAM 盘/别的盘时，跨卷
+  `MoveFile` 必失败 `ERROR_NOT_SAME_DEVICE`），再退到 `{win}\Temp`。
+  改名成功后 `{app}` 可立即删除；副本用
+  `MoveFileExW(路径, '', MOVEFILE_DELAY_UNTIL_REBOOT)` 登记下次开机删除，不弹窗。
+  下次安装/卸载会先清一遍 trash（仍被映射的副本留给开机删除）。
+  **旧版为什么失败**：目标名是固定的 `%TEMP%\opi-tsf-uninstall-<用户>.dll`。上一次卸载
+  留下的副本仍被映射 ⇒ `DeleteFile` 清不掉，而 Inno 的 `RenameFile` 在目标已存在时
+  直接返回 False；跨卷时 `MoveFile` 也失败。两种情况下 DLL 都留在 `{app}`，Inno 的
+  删除失败后只能报 "Some elements could not be removed"，用户再手动删就看到
+  「文件被占用」。最后兜底（改名仍失败）：`MoveFileExW(原路径, '', MOVEFILE_DELAY_UNTIL_REBOOT)`
+  登记开机删除并**如实**写日志 `{app} remains until then`，不重启、不谎称已清理；此时交互式卸载仍会显示
+  Inno 的 "Some elements could not be removed"（目录确实没删干净，见 §6.1 第 15 条）。
+  未占用时走普通删除。
+  **没有用 Restart Manager**：Inno 的 `CloseApplications` 只作用于安装阶段；卸载器
+  里自建 RM 只能 `RmShutdown` 终止持有 DLL 的进程（通常是 Explorer / 前台应用），
+  正是 2026-10-20 白屏的同一类动作，而改名移出已经能立即清掉目录。
+  EXE 容器冒烟现在会**真的把 DLL 映射住**再卸载，断言 `C:\opi-test` 消失且日志走
+  「moved locked TSF DLL」路径；真机 Explorer 的持有方式仍只能真机复验。
+- **升级路径（2026-10-21，「装完 1.20.1 仍只有英文」的追加根因）**：`[Files]` 的
+  `restartreplace` 只在**删除旧目标失败**时生效 —— Inno 把新 DLL 解到临时文件，
+  `RestartReplace(临时文件, 目标)` 排进 `PendingFileRenameOperations`，然后**跳过**
+  本应把临时文件改名到目标的 `MoveFile`（`Setup.Install.pas` 的
+  `DoHandleFailedDeleteOrMoveFileTry`：置 `ReplaceOnRestart := True` 后
+  `NextAction := naStopAndSucceed`）。旧 DLL 在重启前一直留在
+  `{app}\app\tsf_opi.dll` ⇒ `ssPostInstall` 的 `regsvr32` 注册的也是**旧 DLL**，
+  用户不重启就仍是旧 TSF 代码。现在 `CurStepChanged(ssInstall)` 在
+  `[InstallDelete]`/`[Files]` **之前**先 `UnregisterTsf()` 摘掉旧 profile/COM 键，
+  再 `MoveLockedTsfDll(True)` 把被映射的旧 DLL 改名到同卷 trash；新 DLL 当场落到
+  原路径，`ssPostInstall` 的 `regsvr32` 注册的是新 DLL。
+  `restartreplace` 保留为改名失败时的兜底，日志写
+  `[Files] restartreplace puts the new DLL in place at the next restart`。
+  日志同时打印升级前 DLL 大小（`opi: tsf_opi.dll on disk: N bytes`）与复制后大小
+  （`opi: tsf_opi.dll installed: N bytes`）便于取证；大小相同不构成「已替换」的
+  证据，CI 用包内 SHA-256 判定。
+  ⚠️ 文件名换了不等于**运行中的**代码换了：Explorer/已打开应用里已加载的旧映像
+  仍是旧代码，注销/重启后才会加载新 DLL。所以「安装后必做」第 1 步照旧。
 - 快捷方式：开始菜单「opi settings」= `opi.exe --settings`；桌面图标在安装时可选。
 - **登录自启（2026-10-20）**：`[Registry]` 写一条 **HKLM64**
   `SOFTWARE\Microsoft\Windows\CurrentVersion\Run` 值 `opi` = `"{app}\opi.exe"`，
@@ -437,16 +472,23 @@ C:\Program Files\opi\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
   交互路径没有在真机跑过（CI 的 `/VERYSILENT` 会跳过 `[Run]`）。
 - **`CloseApplications=no`（2026-10-20）**：jpackage/Inno 的 Restart Manager 默认会
   关闭「占用待替换文件」的应用；`tsf_opi.dll` 可能正被 Explorer 加载，升级时关掉
-  Explorer 后就可能不再回来。这里显式禁用 Restart Manager，`[Files]` 用
-  `restartreplace` 把被占用文件的替换排到下次重启；`RestartApplications=yes` 仅作
-  第二道保险（`CloseApplications=no` 时无效果，防止将来有人改回去）。
+  Explorer 后就可能不再回来。这里显式禁用 Restart Manager；被占用的 DLL 由
+  ssInstall 的改名清锁（见上一条），`[Files]` 的 `restartreplace` 只在改名失败时
+  兜底（把替换排到下次重启）；`RestartApplications=yes` 仅作第二道保险
+  （`CloseApplications=no` 时无效果，防止将来有人改回去）。
 - 冒烟（`windows-exe-install-test`）：在干净的 Server Core 容器里静默装到
   `C:\opi-test`，断言 `opi.exe`、`app\tsf_opi.dll`、`app\luna.opid` 存在、安装退出码 0、
   日志里**有** `regsvr32` 退出码（0 或非 0 均可）；2026-10-21 起还断言
-  **HKLM CTF 语言 profile 键真的写入**、**`opi-statusbar` 的 HKLM Run 值存在**，再静默
-  卸载并断言 `opi.exe`、**整个 `C:\opi-test` 目录**以及上面两个注册表项都消失
-  （容器没有 Explorer ⇒ DLL 未被锁定 ⇒ 走立即删除路径；真机的 Explorer 锁定→改名
-  移出路径仍未验证）。**退出码 0 不是 profile 写入的证据** —— 这正是 2026-10-21
+  **HKLM CTF 语言 profile 键真的写入**、**`opi-statusbar` 的 HKLM Run 值存在**；
+  同日起还验证**升级路径**：先给已安装的 DLL 尾部追加一个字节（哈希与包内不同），
+  用只 `LoadLibrary` 的进程把它**映射住**，再跑一次**同一个安装包**，断言磁盘上的
+  `tsf_opi.dll` SHA-256 **变回包内版本**、升级日志有 `moved locked TSF DLL` 且
+  没有 `Will replace on restart`（只断言退出码会假绿：同版本重装的退出码本来就是 0）。
+  然后重新起一个占用进程，走卸载路径：静默卸载并断言 `opi.exe`、**整个
+  `C:\opi-test` 目录**、被占用的 DLL 以及上面两个注册表项都消失，且卸载日志里有
+  `moved locked TSF DLL`、`Removed all? Yes`，没有 in-use 删除失败。容器里这个
+  占用者不是 Explorer，真机 Explorer/TSF 宿主的持有方式仍需真机复验。
+  **退出码 0 不是 profile 写入的证据** —— 这正是 2026-10-21
   真机「装完仍只有英文」要区分的两件事。「TSF 真加载了词库」仍要真机验证。
   ⚠️ 静默路径不执行完成页脚本，该脚本由 `ci.yml` 的静态门禁守护，不是 CI 跑过的；
   静默安装也**不启动**状态栏进程（只有 Run 值），只能证明「下次登录会启动」。
@@ -1260,7 +1302,7 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | 12 | **安装器行为（改安装目录 / 关停运行中实例 / 注册 TSF DLL / 完成页只自启候选窗，2026-10-17 / 10-18 / 10-19 / 10-20）**：表级已改好并可本地复核（§2.5 的后处理脚本 + 读回证据）。**2026-10-19 用户在真机装过的是「未后处理」的 v1.15.1 发布包**（有进程、键盘不显示）—— 这证明了「不跑后处理 = 不注册 = 键盘不出现」。**【订正 2026-10-19 复审】后处理后的三份包**（本地 `processed-static`、本地 `processed`、CI `opi-desktop-msi`）**仍无输入法的根因已定位**：注入的是 32 位 `WixSilentExec`，而随包 `Binary.WixCA` 是 PE32 i386 ⇒ WOW64 调 SysWOW64 的 32 位 `regsvr32`，加载不了 x86-64 DLL。脚本/CI 已改为 `WixSilentExec64` + `WixSilentExec64CmdLine` 并加 PE machine 断言，注册逻辑改为显式判存在 + HKLM 默认启用。**【订正 2026-10-20】EXE 白屏后安装器不再结束/重启 Explorer**：`launch-and-restart.cmd` 只启动 `opi.exe`，`opi.iss` 改用 `runasoriginaluser` 并 `CloseApplications=no`（§2.5）。修复后的 EXE **仍未在真机交互路径装过**（CI 静默安装跳过 `[Run]`），所以 taskkill 真杀没杀掉、`regsvr32` 真注册没成功、WixShellExec 真启没启起来、ExitDialog 复选框出不出现，仍是【未验证】 | §2.5、`scripts/postprocess-windows-msi.sh`、`scripts/windows/opi.iss` |
 | 13 | **卸载不清理 TSF 注册（2026-10-19 reviewer m4 记录，有意未做）**：`OpRegisterTsf` 的条件是 `NOT REMOVE` ⇒ 卸载**不执行** `regsvr32 /s /u`；`HKCR\CLSID\{98C51858-590B-404D-8915-21EB44250062}\InprocServer32` 与 `HKLM\SOFTWARE\Microsoft\CTF` 下由 `DllRegisterServer` 写入的条目会**残留并指向已删除的 DLL**。未加卸载动作的原因：`WixSilentExec64` 只有**一个**命令属性 `WixSilentExec64CmdLine`，安装/卸载两条命令会互相覆盖；手写 `RemoveRegistryKey` 又需精确复制官方 API 写入的键，未在真机取证。重装到同一路径会重新覆盖注册；彻底清理 = 卸载前手工 `regsvr32 /s /u <dll>`，已卸载则手工删上述键 | `scripts/postprocess-windows-msi.sh`、§2.5 | 卸载后注册残留；卸载本身的文件删除不受影响 |
 | 14 | **Win7 / Win8 / 8.1 不支持（2026-10-19 用户裁决：仅文档标注）**：DLL 的 API set/Rust std 与候选窗的 JDK 21/Compose 下限都在 Win10/11；Win7/8 需另建 legacy 轨道 | §1.1 的说明 | 在 Win7/8 上安装/运行不保证；不在本仓库范围 |
-| 15 | **EXE 无重启卸载的锁定 DLL 路径未在真机验证（2026-10-21）**：容器冒烟只能证明没有 Explorer 时 `[UninstallDelete] filesandordirs {app}` 会把目录立即删干净；`tsf_opi.dll` 被 Explorer 映射时，`MoveLockedTsfDllOut` 尝试把它重命名移出 `{app}` 到 `%TEMP%`，**不再使用 `uninsrestartdelete`、不再请求重启**。若重命名也失败，DLL/目录可能残留，但卸载不会重启电脑；日志会记录。另：状态栏锁清理只覆盖运行卸载器的那个用户的 `%TEMP%`（同机其他用户的残留锁文件不处理，无害）。本树没有 Windows 服务，卸载 kill 的就是 `opi.exe` 三种模式 | `scripts/windows/opi.iss`、§2.5 | 真机 Explorer 锁定路径未验证；极端情况下残留 DLL/目录，但无重启 |
+| 15 | **EXE 无重启卸载的锁定 DLL 路径：容器已能模拟，「Explorer 真实持有方式」仍未在真机验证（2026-10-21 更新）**：v1.20.1 真机卸载残留的根因在旧代码：固定目标名 `%TEMP%\opi-tsf-uninstall-<用户>.dll` 让第二次卸载的 `RenameFile` 因目标已存在而失败，跨卷时 `MoveFile` 也失败；失败后 DLL 留在 `{app}`，Inno 报 "Some elements could not be removed"。现改为**同卷 trash 目录**（`{commonappdata}\opi\trash`，装在其他盘时 `<盘符>:\opi-trash`）+ 唯一文件名（时间戳到毫秒）+ 同卷校验；`%TEMP%`/`{win}\Temp` 只在同卷时作回退。成功即删目录，副本 `MoveFileExW(路径, '', MOVEFILE_DELAY_UNTIL_REBOOT)` 登记开机删除；下次安装/卸载先清 trash；全部失败才 `MoveFileExW(原路径, '', MOVEFILE_DELAY_UNTIL_REBOOT)` 并如实记日志（目录保留到重启）。**安装的 `ssInstall`（`[InstallDelete]`/`[Files]` 之前）也先 `UnregisterTsf()` 再 `MoveLockedTsfDll(True)`**：否则 `[Files] restartreplace` 会把新 DLL 排到下次重启（`DoHandleFailedDeleteOrMoveFileTry` 里 `ReplaceOnRestart := True` 后跳过 `MoveFile`），用户装完 1.20.1 仍在跑旧 DLL、`regsvr32` 注册的也是旧 DLL。容器冒烟现在用「改字节 → `LoadLibrary` 映射 → 重装同一包 → SHA-256 对比包内值」验证升级路径，再映射一次验证卸载路径；**容器里的持有者不是 Explorer**，Explorer/TSF 宿主的真实持有方式仍只能真机复验。**升级修好的是磁盘上的文件**：运行中的 Explorer/应用里已加载的旧映像仍是旧代码，注销/重启不可省。另：状态栏锁清理只覆盖运行卸载器的那个用户的 `%TEMP%`（同机其他用户的残留锁文件不处理，无害）。本树没有 Windows 服务，卸载 kill 的就是 `opi.exe` 三种模式 | `scripts/windows/opi.iss`、`.github/workflows/windows.yml`、§2.5 | 真机 Explorer 锁定路径未验证；极端情况下（改名也失败）残留 DLL/目录到重启，交互式卸载会显示 Inno 的 "Some elements could not be removed"，但无重启请求 |
 
 ### 6.2 代码里已知的缺口（读源码得出，不是待办猜测）
 

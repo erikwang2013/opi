@@ -17,7 +17,7 @@
 ; best-effort and can never roll back the install.
 ;
 ; Build (CI or local, on Windows; ISCC is the Inno Setup 6 compiler):
-;   ISCC.exe /DAppVersion=1.20.1 ^
+;   ISCC.exe /DAppVersion=1.20.2 ^
 ;            /DAppImageDir=C:\path\to\build\compose\binaries\main\app\opi ^
 ;            /DOutputDir=C:\path\to\dist scripts\windows\opi.iss
 ;
@@ -29,9 +29,19 @@
 ; Uninstall (2026-10-21): there is NO Windows service in this tree. Candidate,
 ; settings and statusbar are all opi.exe, so usUninstall kills that image before
 ; file removal; [UninstallDelete] removes {app}; a tsf_opi.dll still mapped in
-; Explorer is moved out of {app} by MoveLockedTsfDllOut into %TEMP%.
-; No reboot is requested. Explorer is never killed (that was the white-screen
-; root cause).
+; Explorer is renamed out of {app} to a UNIQUE same-volume trash directory
+; ({commonappdata}\opi\trash, or <drive>:\opi-trash when the app is on another
+; drive) and Windows is asked to delete that copy at the next boot. The old
+; fixed %TEMP% name failed on retry: the previous still-mapped copy blocked
+; RenameFile. If even the rename fails, deletion is scheduled for the next
+; restart and the log says so. No reboot is requested. Explorer is never killed
+; (that was the white-screen root cause).
+;
+; Upgrade (2026-10-21): the same rename runs at ssInstall, BEFORE [InstallDelete]
+; and [Files]. Without it, a DLL mapped in Explorer makes Inno's restartreplace
+; leave the OLD file at {app}\app\tsf_opi.dll and queue the new one for the next
+; restart -- so installing v1.20.1 over v1.20.0 kept running the old TSF code.
+; restartreplace stays as the fallback for when the rename itself fails.
 
 #ifndef AppVersion
   #error AppVersion is required: /DAppVersion=<x.y.z>
@@ -83,8 +93,8 @@ UninstallDisplayIcon={app}\opi.exe
 ; loaded inside explorer.exe while a TSF client is active, so Restart Manager
 ; (CloseApplications=yes, the default) can close the shell during an upgrade.
 ; With RestartApplications=no the shell stayed closed -> blank desktop. Here Setup
-; never closes anything; locked files are handled by the restartreplace flag in
-; [Files] (queued for replacement on the next restart).
+; never closes anything; a locked tsf_opi.dll is renamed out at ssInstall (see
+; MoveLockedTsfDll) and [Files] restartreplace remains only as the fallback.
 CloseApplications=no
 ; Inert while CloseApplications=no; kept at yes as a second belt so re-enabling
 ; Restart Manager later cannot recreate the white screen.
@@ -104,9 +114,11 @@ Type: filesandordirs; Name: "{app}\app"
 Type: filesandordirs; Name: "{app}\runtime"
 
 [Files]
-; restartreplace: on upgrade the old tsf_opi.dll may still be mapped in Explorer
-; or another TSF host. Instead of closing those processes (which caused the white
-; screen) Setup copies the new file and schedules the swap for the next restart.
+; restartreplace is the FALLBACK, not the normal upgrade path: at ssInstall
+; MoveLockedTsfDll(True) renames a mapped old DLL to a same-volume trash
+; directory, so this entry simply writes the new file. restartreplace only
+; matters when that rename failed; Inno then queues the new file for the next
+; restart and logs "Will replace on restart".
 ; NO uninsrestartdelete (2026-10-21): that flag schedules a reboot when Explorer
 ; still maps tsf_opi.dll, and the user saw an uninstall-triggered reboot. On
 ; uninstall we instead move a locked DLL out of {app} (see MoveLockedTsfDllOut),
@@ -116,8 +128,9 @@ Source: "{#AppImageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdir
 [UninstallDelete]
 ; Remove everything under {app}, including files the uninstall log did not record
 ; (logs, stale jars). A locked tsf_opi.dll is moved out of {app} before this runs
-; (MoveLockedTsfDllOut); the directory is deleted now, without a reboot. Never
-; kill Explorer to unlock the DLL.
+; (MoveLockedTsfDllOut); the directory is deleted now, without a reboot. If even
+; the rename fails, the DLL stays and deletion is scheduled for next boot (the
+; log says so). Never kill Explorer to unlock the DLL.
 Type: filesandordirs; Name: "{app}"
 
 [Icons]
@@ -150,6 +163,16 @@ Root: HKLM64; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType
 Filename: "{app}\app\launch-and-restart.cmd"; Description: "Launch opi (then sign out or restart Windows, and add/switch to 小欧输入法 in the Chinese (Simplified) keyboard list)"; Flags: postinstall nowait skipifsilent runasoriginaluser
 
 [Code]
+const
+  // MoveFileExW flag: perform the operation at next boot (session manager).
+  MOVEFILE_DELAY_UNTIL_REBOOT = 4;
+
+// Used instead of RenameFile so a failure can be logged with its Win32 error.
+// Same-volume only: MoveFile cannot cross volumes, and a cross-volume move
+// would have to delete the mapped source, which Windows refuses.
+function MoveFileExW(ExistingName, NewName: String; Flags: Cardinal): Boolean;
+  external 'MoveFileExW@kernel32.dll stdcall';
+
 procedure KillRunningApp();
 var
   ResultCode: Integer;
@@ -166,6 +189,7 @@ procedure RegisterTsf();
 var
   DllPath, ProfileKey: String;
   ResultCode: Integer;
+  Size64: Int64;
 begin
   DllPath := ExpandConstant('{app}\app\tsf_opi.dll');
   if not FileExists(DllPath) then
@@ -173,6 +197,11 @@ begin
     Log('opi: TSF DLL not found at ' + DllPath + '; skipping regsvr32');
     Exit;
   end;
+  // Evidence for the upgrade path: compare with the "on disk" size logged at
+  // ssInstall. Equal sizes do not prove the old file was replaced (the CI hash
+  // check does); a difference proves the new one landed before any reboot.
+  if FileSize64(DllPath, Size64) then
+    Log('opi: tsf_opi.dll installed: ' + IntToStr(Size64) + ' bytes');
   // {sys} is the 64-bit System32 because ArchitecturesInstallIn64BitMode=x64.
   // A failure here is logged and never aborts the install: Server Core and
   // locked-down machines may refuse TSF registration, but the files must land.
@@ -245,41 +274,159 @@ begin
     Log('opi: could not remove statusbar lock ' + LockPath);
 end;
 
-procedure MoveLockedTsfDllOut();
+// 2026-10-21 field report: v1.20.1 uninstall left {app} behind and Windows said
+// tsf_opi.dll was in use. The old code renamed to a FIXED %TEMP% name; Inno's
+// RenameFile fails if the destination exists (previous attempt's still-mapped
+// copy is exactly that), and MoveFile cannot cross volumes. Both leave the DLL
+// in {app}; the uninstaller then reports "Some elements could not be removed".
+// The rename must also run before an upgrade copies files (ssInstall): with a
+// mapped DLL, [Files] restartreplace leaves the OLD file in place until the
+// next reboot. A mapped image cannot be deleted, but the loader shares delete
+// access, so renaming it within its volume works while Explorer holds it.
+function TSFTrashDir(const DllPath: String): String;
 var
-  DllPath, TempPath: String;
+  CommonTrash: String;
+begin
+  Result := '';
+  if ExtractFileDrive(DllPath) = '' then
+    Exit;
+  // Same volume as the DLL by construction; outside {app} so deletes of the
+  // app directory never walk into it.
+  CommonTrash := ExpandConstant('{commonappdata}\opi\trash');
+  if SameText(ExtractFileDrive(CommonTrash), ExtractFileDrive(DllPath)) then
+    Result := CommonTrash
+  else
+    Result := ExtractFileDrive(DllPath) + '\opi-trash';
+  if not ForceDirectories(Result) then
+  begin
+    Log('opi: could not create TSF trash directory ' + Result);
+    Result := '';
+  end;
+end;
+
+// One DLL per upgrade/uninstall stays here while its holder is alive. Deleting
+// it on the next run keeps the trash bounded; Windows also deletes it at boot.
+procedure CleanupTSFTrash(const Dir: String);
+var
+  FindRec: TFindRec;
+begin
+  if (Dir = '') or (not DirExists(Dir)) then
+    Exit;
+  if not FindFirst(Dir + '\opi-tsf-*.dll', FindRec) then
+    Exit;
+  try
+    repeat
+      if not DeleteFile(Dir + '\' + FindRec.Name) then
+        Log('opi: old trash DLL is still mapped and stays until the next restart: ' + Dir + '\' + FindRec.Name);
+    until not FindNext(FindRec);
+  finally
+    FindClose(FindRec);
+  end;
+end;
+
+function TryMoveDllTo(const DllPath, Dir: String; var MovedTo: String): Boolean;
+var
+  ErrorCode: LongInt;
+begin
+  Result := False;
+  if (Dir = '') or (not DirExists(Dir)) then
+    Exit;
+  if not SameText(ExtractFileDrive(Dir), ExtractFileDrive(DllPath)) then
+  begin
+    Log('opi: not using ' + Dir + ' for the TSF DLL: different volume');
+    Exit;
+  end;
+  // Milliseconds in the name: MoveFileExW without REPLACE_EXISTING fails when
+  // the target exists, so two moves within one second must not collide.
+  MovedTo := RemoveBackslash(Dir) + '\opi-tsf-' +
+    GetDateTimeString('yyyymmddhhnnsszzz', '-', ':') + '.dll';
+  Result := MoveFileExW(DllPath, MovedTo, 0);
+  if not Result then
+  begin
+    ErrorCode := DLLGetLastError;
+    Log('opi: MoveFileExW(' + MovedTo + ') failed, error ' + IntToStr(ErrorCode));
+    MovedTo := '';
+  end;
+end;
+
+procedure MoveLockedTsfDll(const ForInstall: Boolean);
+var
+  DllPath, TrashDir, MovedTo: String;
+  Moved: Boolean;
+  Size64: Int64;
 begin
   DllPath := ExpandConstant('{app}\app\tsf_opi.dll');
   if not FileExists(DllPath) then
     Exit;
+  // Upgrade evidence: compare this size with the "installed" line from
+  // RegisterTsf after the file copy. Equal does not prove replacement (the CI
+  // hash check does); different proves the new DLL landed before any reboot.
+  if FileSize64(DllPath, Size64) then
+    Log('opi: tsf_opi.dll on disk: ' + IntToStr(Size64) + ' bytes');
   if DeleteFile(DllPath) then
     Exit; // not locked: normal path
-  // Explorer/TSF host may still map the image. Windows refuses deletion but
-  // allows renaming it away; move it to %TEMP% so {app} can be removed now.
-  TempPath := GetEnv('TEMP');
-  if TempPath = '' then
-    TempPath := ExpandConstant('{tmp}');
-  TempPath := TempPath + '\opi-tsf-uninstall-' + GetUserNameString() + '.dll';
-  // A previous uninstall may have left the same name behind. Clearing it is
-  // best-effort; if it is still locked, RenameFile below fails and we log.
-  if FileExists(TempPath) then
-    DeleteFile(TempPath);
-  if RenameFile(DllPath, TempPath) then
-    Log('opi: moved locked TSF DLL to ' + TempPath)
+
+  // Trash first (same volume by construction, outside {app}), then the old
+  // fallbacks. %TEMP% may be on another drive (RAM disk), which the same-volume
+  // check rejects. Setup and the uninstaller are elevated.
+  TrashDir := TSFTrashDir(DllPath);
+  CleanupTSFTrash(TrashDir);
+  MovedTo := '';
+  Moved := TryMoveDllTo(DllPath, TrashDir, MovedTo);
+  if not Moved then
+    Moved := TryMoveDllTo(DllPath, GetEnv('TEMP'), MovedTo);
+  if not Moved then
+    Moved := TryMoveDllTo(DllPath, ExpandConstant('{win}\Temp'), MovedTo);
+
+  if not FileExists(DllPath) then
+  begin
+    Log('opi: moved locked TSF DLL to ' + MovedTo);
+    // Still mapped under the new name. Ask Windows to delete it at next boot
+    // so the trash does not accumulate one DLL per upgrade/uninstall.
+    if MoveFileExW(MovedTo, '', MOVEFILE_DELAY_UNTIL_REBOOT) then
+      Log('opi: trash DLL deletion scheduled for next boot: ' + MovedTo)
+    else
+      Log('opi: could not schedule trash DLL deletion, error ' + IntToStr(DLLGetLastError) + '; it stays until the next run');
+  end
+  else if ForInstall then
+    // Do NOT also schedule the old file for deletion: [Files] restartreplace
+    // owns this path in the fallback case (two pending renames would race).
+    Log('opi: TSF DLL is locked and could not be moved; [Files] restartreplace puts the new DLL in place at the next restart')
   else
-    Log('opi: could not move locked TSF DLL; uninstall continues without reboot');
+  begin
+    // Last resort: the file stays in {app} for this session. Never claim the
+    // directory was cleaned; Inno will report the remaining element.
+    if MoveFileExW(DllPath, '', MOVEFILE_DELAY_UNTIL_REBOOT) then
+      Log('opi: TSF DLL is locked and could not be moved; deletion scheduled for the next restart, {app} remains until then: ' + DllPath)
+    else
+      Log('opi: TSF DLL is locked and could not be moved or scheduled, error ' + IntToStr(DLLGetLastError));
+  end;
+end;
+
+// Kept as a named call: .github/workflows/ci.yml asserts it appears inside
+// CurUninstallStepChanged (the uninstaller must not kill Explorer instead).
+procedure MoveLockedTsfDllOut();
+begin
+  MoveLockedTsfDll(False);
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssInstall then
+  begin
+    // ssInstall runs before [InstallDelete] and [Files]. Moving a mapped old DLL
+    // out now makes room for the new file immediately, instead of letting
+    // restartreplace defer the swap to the next reboot (the 2026-10-21 field
+    // report: installing v1.20.1 over v1.20.0 still ran the old TSF code).
     KillRunningApp();
+    // 先摘旧 profile/COM 键，再动文件；新 DLL 落下后由 ssPostInstall 重建。
+    UnregisterTsf();
+    MoveLockedTsfDll(True);
+  end;
   if CurStep = ssPostInstall then
   begin
-    // 升级时先摘旧 profile 再注册：RegisterProfile 不会更新已存在 profile 的图标，
-    // 新图标（opi.exe 宠物）只有重新注册才会写进任务栏输入指示器。
-    // 两步必须相邻（2026-10-21）：放在 ssInstall 会让「已卸载」状态跨越整个文件
-    // 复制阶段，任何中途失败都会留下「1.19 能用、升级后完全没输入法」的机器。
+    // RegisterProfile 不会更新已存在 profile 的图标；ssInstall 已摘掉旧 profile，
+    // 这里再 /u 一次再注册，保证 profile 由新 DLL 以新图标（opi.exe 宠物）重建。
     UnregisterTsf();
     RegisterTsf();
   end;

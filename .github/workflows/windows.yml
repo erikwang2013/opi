@@ -556,6 +556,13 @@ jobs:
   #     Server Core 没有语言栏/TSF，注册失败是已知环境限制；安装本身不许因此回滚）
   #   · 断言 HKLM CTF 语言 profile 键与 opi-statusbar 的 HKLM Run 值**真的写入**，
   #     卸载后两者都**消失**（2026-10-21：退出码 0 不是 profile 写入的证据）
+  #   · 卸载前用一个只 LoadLibrary 的进程把 tsf_opi.dll 映射住，复现真机
+  #     「Explorer 占用 DLL」；断言卸载仍清掉整个 C:\opi-test，且日志走
+  #     「改名移出 {app}」而不是 in-use 删除失败（2026-10-21 卸载残留报障）
+  #   · 升级路径（2026-10-21）：先给已安装的 DLL 尾部加一个字节让它的哈希与包内
+  #     不同，再把它映射住，然后**再装一次同一个 EXE**；断言安装后的 DLL 哈希
+  #     恢复成包内的、且日志里没有 "Will replace on restart"。没有这一步时 Inno 的
+  #     restartreplace 会把新 DLL 排到下次重启，用户装完 1.20.1 仍在跑旧的 TSF 代码
   #   · 静默卸载后再断言 opi.exe 已删除
   # 失败时日志全部上传。
   # ⚠️ CI 只跑静默路径，`[Run] ... skipifsilent` 的完成页自启脚本在这里**不会执行**；
@@ -585,6 +592,20 @@ jobs:
           $work = $PWD.Path
           $image = 'mcr.microsoft.com/windows/servercore:ltsc2022'
 
+          # 2026-10-21 真机卸载报障：tsf_opi.dll 被 Explorer 映射时，卸载后
+          # 目录残留。容器里没有 Explorer，所以这里用一个只 LoadLibrary、
+          # 不注册 TSF 的进程把 DLL 映射住，复现「文件被占用」的删除/改名路径。
+          $holder = @'
+          Add-Type -Name K -Namespace W -MemberDefinition '[DllImport("kernel32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr LoadLibraryW(string p);'
+          if ([W.K]::LoadLibraryW('C:\opi-test\app\tsf_opi.dll') -eq [IntPtr]::Zero) {
+            Set-Content -Path C:\work\holder.txt -Value 'FAILED'
+            exit 1
+          }
+          Set-Content -Path C:\work\holder.txt -Value 'READY'
+          Start-Sleep -Seconds 300
+          '@
+          Set-Content -Path (Join-Path $work 'hold-dll.ps1') -Value $holder -Encoding ascii
+
           # 逐行展开 cmd：%ERRORLEVEL% 在 .cmd 里按行取，不会像 cmd /c 一行式
           # 那样在解析期就被展开。前半段无论安装成败都要留下退出码与文件证据。
           $script = @"
@@ -598,12 +619,52 @@ jobs:
           if errorlevel 1 (echo MISSING > C:\work\install-profile.txt) else (echo PRESENT > C:\work\install-profile.txt)
           reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v opi-statusbar >nul 2>&1
           if errorlevel 1 (echo MISSING > C:\work\install-run-statusbar.txt) else (echo PRESENT > C:\work\install-run-statusbar.txt)
-          if exist C:\opi-test\unins000.exe (
-            start "" /wait C:\opi-test\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=C:\work\uninstall-exe.log
-            echo %ERRORLEVEL% > C:\work\uninstall-exit.txt
-          )
+
+          rem ---- Upgrade path: hold the installed DLL, reinstall the same EXE, ----
+          rem ---- and prove the file on disk is the package copy again.        ----
+          rem Baseline hash = what the package put there.
+          powershell -NoProfile -Command "(Get-FileHash -LiteralPath 'C:\opi-test\app\tsf_opi.dll' -Algorithm SHA256).Hash | Set-Content -Encoding Ascii C:\work\sha-package.txt"
+          rem Make the installed copy distinguishable from the package copy (extra
+          rem bytes at EOF do not stop LoadLibrary from mapping the image).
+          echo x>>C:\opi-test\app\tsf_opi.dll
+          powershell -NoProfile -Command "(Get-FileHash -LiteralPath 'C:\opi-test\app\tsf_opi.dll' -Algorithm SHA256).Hash | Set-Content -Encoding Ascii C:\work\sha-mutated.txt"
+          start "" /b powershell -NoProfile -ExecutionPolicy Bypass -File C:\work\hold-dll.ps1
+          set /a holder_tries=0
+          :wait_holder_upgrade
+          if exist C:\work\holder.txt goto holder_ready_upgrade
+          ping -n 2 127.0.0.1 >nul
+          set /a holder_tries+=1
+          if %holder_tries% lss 30 goto wait_holder_upgrade
+          :holder_ready_upgrade
+          copy /y C:\work\holder.txt C:\work\holder-upgrade.txt >nul 2>&1
+          "C:\work\exe\$name" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=C:\opi-test /LOG=C:\work\upgrade-exe.log
+          echo %ERRORLEVEL% > C:\work\upgrade-exit.txt
+          powershell -NoProfile -Command "(Get-FileHash -LiteralPath 'C:\opi-test\app\tsf_opi.dll' -Algorithm SHA256).Hash | Set-Content -Encoding Ascii C:\work\sha-after.txt"
+          taskkill /f /im powershell.exe >nul 2>&1
+          ping -n 3 127.0.0.1 >nul
+          del C:\work\holder.txt >nul 2>&1
+
+          rem ---- Uninstall path: hold the DLL again so the locked path is exercised. ----
+          start "" /b powershell -NoProfile -ExecutionPolicy Bypass -File C:\work\hold-dll.ps1
+          set /a holder_tries=0
+          :wait_holder_uninstall
+          if exist C:\work\holder.txt goto holder_ready_uninstall
+          ping -n 2 127.0.0.1 >nul
+          set /a holder_tries+=1
+          if %holder_tries% lss 30 goto wait_holder_uninstall
+          :holder_ready_uninstall
+          copy /y C:\work\holder.txt C:\work\holder-uninstall.txt >nul 2>&1
+
+          rem Keep the exit-code line OUT of an if-block: %ERRORLEVEL% in a
+          rem parenthesized block is expanded when the block is parsed.
+          if not exist C:\opi-test\unins000.exe goto no_uninstaller
+          start "" /wait C:\opi-test\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=C:\work\uninstall-exe.log
+          echo %ERRORLEVEL% > C:\work\uninstall-exit.txt
+          :no_uninstaller
           ping -n 16 127.0.0.1 >nul
+          taskkill /f /im powershell.exe >nul 2>&1
           if exist C:\opi-test\opi.exe (echo PRESENT > C:\work\uninstall-removed.txt) else (echo ABSENT > C:\work\uninstall-removed.txt)
+          if exist C:\opi-test\app\tsf_opi.dll (echo PRESENT > C:\work\uninstall-dll.txt) else (echo ABSENT > C:\work\uninstall-dll.txt)
           if exist C:\opi-test (echo PRESENT > C:\work\uninstall-dir.txt) else (echo ABSENT > C:\work\uninstall-dir.txt)
           reg query "HKLM\SOFTWARE\Microsoft\CTF\TIP\{98C51858-590B-404D-8915-21EB44250062}\LanguageProfile\0x00000804\{A31A137C-1404-42F2-B82C-4E63F15DEFD6}" >nul 2>&1
           if errorlevel 1 (echo ABSENT > C:\work\uninstall-profile.txt) else (echo PRESENT > C:\work\uninstall-profile.txt)
@@ -644,19 +705,74 @@ jobs:
           }
           Write-Host 'CTF 语言 profile 与 opi-statusbar Run 值均已写入'
 
+          # 2026-10-21 upgrade path: the same EXE ran a second time while the
+          # installed DLL was mapped. Inno's restartreplace would leave the old
+          # file at {app} until a reboot; the ssInstall rename must make the new
+          # file land now. Hashes are the only proof: a same-version reinstall
+          # exits 0 either way, and its DLL bytes equal the package ones.
+          foreach ($f in 'upgrade-exit.txt', 'sha-package.txt', 'sha-mutated.txt', 'sha-after.txt', 'upgrade-exe.log', 'holder-upgrade.txt') {
+            if (-not (Test-Path $f)) { throw "缺少 $f（升级安装没执行或没留下证据）" }
+          }
+          $holderUpgrade = (Get-Content holder-upgrade.txt -Raw).Trim()
+          if ($holderUpgrade -ne 'READY') { throw "升级前没能把 tsf_opi.dll 映射住（holder-upgrade.txt=$holderUpgrade），升级替换路径未被验证" }
+          $upgradeCode = (Get-Content upgrade-exit.txt -Raw).Trim()
+          if ($upgradeCode -ne '0') { throw "升级安装退出码 $upgradeCode（见 upgrade-exe.log）" }
+          $hashPackage = (Get-Content sha-package.txt -Raw).Trim()
+          $hashMutated = (Get-Content sha-mutated.txt -Raw).Trim()
+          $hashAfter = (Get-Content sha-after.txt -Raw).Trim()
+          if ($hashAfter -ne $hashPackage) {
+            throw "升级后 tsf_opi.dll 仍是旧文件（hash=$hashAfter，包内=$hashPackage）—— ssInstall 的改名/替换没生效"
+          }
+          if ($hashAfter -eq $hashMutated) { throw '升级前后哈希相同：替换没有被验证（测试自身失效）' }
+          $uplog = Get-Content upgrade-exe.log -Raw
+          if ($uplog -notmatch 'moved locked TSF DLL') {
+            $uplog = Get-Content upgrade-exe.log -Raw -Encoding Unicode
+          }
+          if ($uplog -notmatch 'opi: moved locked TSF DLL to') {
+            throw '升级日志里没有「已把锁定的 DLL 移出」记录（ssInstall 改名未生效）'
+          }
+          if ($uplog -match 'Will replace on restart') {
+            throw '升级日志仍记录 Will replace on restart（新 DLL 要等重启才落地）'
+          }
+          if ($uplog -notmatch 'opi: tsf_opi\.dll on disk: \d+ bytes') {
+            throw '升级日志缺少旧 DLL 大小取证行'
+          }
+          Write-Host "升级路径通过：锁定的旧 DLL 被移出，磁盘哈希恢复为包内版本（$hashAfter）"
+
           if (-not (Test-Path 'uninstall-exit.txt')) { throw '没有执行卸载（缺 unins000.exe 或卸载器没启动）' }
           $uninstallCode = (Get-Content uninstall-exit.txt -Raw).Trim()
           if ($uninstallCode -ne '0') { throw "卸载退出码 $uninstallCode（见 uninstall-exe.log）" }
           if ((Get-Content uninstall-removed.txt -Raw).Trim() -ne 'ABSENT') { throw '卸载后 opi.exe 仍在' }
-          # 2026-10-20：容器里没有 Explorer，tsf_opi.dll 未被加载 ⇒ 卸载应走「立即可删」
-          # 路径，整个安装目录都应消失。[UninstallDelete] filesandordirs 的直接回归。
+
+          # 2026-10-21: 卸载前 hold-dll.ps1 已把 DLL 映射住。断言走的是
+          # 「改名移出 {app}」路径：目录仍须消失，且日志不能出现 in-use 删除失败。
+          if (-not (Test-Path 'holder-uninstall.txt')) { throw '缺少 holder-uninstall.txt（卸载前的锁定进程没启动）' }
+          $holderStatus = (Get-Content holder-uninstall.txt -Raw).Trim()
+          if ($holderStatus -ne 'READY') { throw "容器里没能把 tsf_opi.dll 映射住（holder-uninstall.txt=$holderStatus），锁定卸载路径未被验证" }
           if (-not (Test-Path 'uninstall-dir.txt')) { throw '缺少 uninstall-dir.txt（卸载没跑完）' }
           if ((Get-Content uninstall-dir.txt -Raw).Trim() -ne 'ABSENT') { throw '卸载后安装目录 C:\opi-test 仍在' }
+          if (-not (Test-Path 'uninstall-dll.txt')) { throw '缺少 uninstall-dll.txt（卸载没跑完）' }
+          if ((Get-Content uninstall-dll.txt -Raw).Trim() -ne 'ABSENT') { throw '卸载后被占用的 tsf_opi.dll 仍在 {app} 里' }
+          $ulog = Get-Content uninstall-exe.log -Raw
+          if ($ulog -notmatch 'moved locked TSF DLL') {
+            $ulog = Get-Content uninstall-exe.log -Raw -Encoding Unicode
+          }
+          if ($ulog -notmatch 'opi: moved locked TSF DLL to') {
+            throw '卸载日志里没有「已把锁定的 DLL 移出 {app}」记录（锁定路径未生效）'
+          }
+          # 直接的「Inno 认为全部删干净」证据：只靠目录/DLL 不存在还不够，
+          # 该行 No 时交互式卸载会弹 "Some elements could not be removed"。
+          if ($ulog -notmatch 'Removed all\? Yes') {
+            throw '卸载日志没有 Removed all? Yes（Inno 仍认为有元素未删除）'
+          }
+          if ($ulog -match 'Failed to delete the file; it may be in use') {
+            throw '卸载日志仍记录文件被占用（DLL 改名没成功）'
+          }
           foreach ($f in 'uninstall-profile.txt', 'uninstall-run-statusbar.txt') {
             if (-not (Test-Path $f)) { throw "缺少 $f（卸载后的注册表检查没跑）" }
             if ((Get-Content $f -Raw).Trim() -ne 'ABSENT') { throw "卸载后仍残留注册表项（见 $f）" }
           }
-          Write-Host 'EXE 安装/卸载冒烟通过（注册、profile、Run 值均已写入并在卸载时清除）'
+          Write-Host 'EXE 安装/卸载冒烟通过（注册、profile、Run 值均已写入并在卸载时清除；锁定 DLL 走改名移出）'
 
       - name: 上传安装日志（无论成败）
         if: always()
@@ -666,9 +782,14 @@ jobs:
           if-no-files-found: warn
           path: |
             install-exe.log
+            upgrade-exe.log
             uninstall-exe.log
             install-exit.txt
+            upgrade-exit.txt
             uninstall-exit.txt
+            sha-package.txt
+            sha-mutated.txt
+            sha-after.txt
             install-opi.txt
             install-dll.txt
             install-luna.txt
@@ -676,8 +797,13 @@ jobs:
             install-run-statusbar.txt
             uninstall-removed.txt
             uninstall-dir.txt
+            uninstall-dll.txt
             uninstall-profile.txt
             uninstall-run-statusbar.txt
+            holder.txt
+            holder-upgrade.txt
+            holder-uninstall.txt
+            hold-dll.ps1
             exe-smoke.cmd
 
   # ---- 只报不进卡的 clippy（Windows 目标）----

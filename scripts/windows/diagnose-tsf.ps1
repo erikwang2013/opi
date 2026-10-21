@@ -252,6 +252,38 @@ if (Test-Path -LiteralPath $tsfLog -PathType Leaf) {
     Write-Host '  no tsf-register.log (no recorded registration failure)'
 }
 
+Section 'Uninstall leftovers (2026-10-21)'
+# A mapped DLL cannot be deleted; the EXE uninstaller renames it out of {app}
+# and asks Windows to delete the copy at next boot. v1.20.1 used a fixed
+# %TEMP%\opi-tsf-uninstall-<user>.dll; newer builds use a same-volume trash
+# directory next to the install drive. These are informational.
+$trashDirs = @((Join-Path $env:ProgramData 'opi\trash')) +
+    @(Get-PSDrive -PSProvider FileSystem | ForEach-Object { Join-Path $_.Root 'opi-trash' })
+$searchDirs = @($env:TEMP) + $trashDirs
+$tombstones = @($searchDirs | ForEach-Object {
+    Get-ChildItem -Path $_ -Filter 'opi-tsf-*.dll' -ErrorAction SilentlyContinue
+})
+if ($tombstones.Count -gt 0) {
+    foreach ($t in $tombstones) { Warn 'Renamed DLL left behind' $t.FullName }
+    Warn 'Expected until the holding process exits or Windows restarts' 'Not part of {app}; delete after restart if it remains.'
+} else {
+    Write-Host '  no opi-tsf-*.dll in %TEMP% or the install-volume trash directories'
+}
+try {
+    $pending = @((Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -Name PendingFileRenameOperations -ErrorAction Stop).PendingFileRenameOperations)
+    $opiPending = @($pending | Where-Object { $_ -match 'opi-tsf-|tsf_opi\.dll' })
+    if ($opiPending.Count -gt 0) {
+        Warn 'Deletion scheduled for next restart' ($opiPending -join '; ')
+    } else {
+        Write-Host '  no opi/tsf_opi entries in PendingFileRenameOperations'
+    }
+} catch {
+    Write-Host '  no PendingFileRenameOperations value'
+}
+if ($dllOk -and -not $inprocDll) {
+    Warn 'Installed DLL is not registered' 'Either registration failed, or this DLL is an uninstall leftover (the old uninstaller could not delete a mapped DLL); check the trash entry above.'
+}
+
 Section 'Result'
 if ($script:fail -eq 0) {
     Write-Host 'RESULT: all required checks passed.'
