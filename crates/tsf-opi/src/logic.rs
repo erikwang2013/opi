@@ -67,6 +67,10 @@ pub struct TsfLogic {
     /// 抬起也放行」成立（见 input_key 的可打印分支与退格/回车分支：那两个按下分支
     /// 会把缓冲改空，抬起再判「当前」缓冲就不对称了）。
     pub(crate) last_printable: Option<(u32, bool)>,
+    /// Shift 轻按切换中英文（`settings.ini` 的 `ShiftToggle`，2026-10-22 起 Windows
+    /// 也认）：**只被胶水的 Shift 三拍读**（`tsf_shift.rs`），不参与 `input_key` ——
+    /// 两轨 Rust 键路由必须逐事件同构（`two_track_parity`）。默认开（与 Linux 一致）。
+    pub(crate) shift_toggle: bool,
 }
 
 impl TsfLogic {
@@ -97,6 +101,7 @@ impl TsfLogic {
             shift_state: ShiftState::Off,
             english_pro: false,
             last_printable: None,
+            shift_toggle: true,
         };
         s.refresh_snapshot();
         s
@@ -140,13 +145,6 @@ impl TsfLogic {
     /// 全角开关的读侧（直传点判据；语义与 `Engine::fullwidth` 同）。
     pub fn fullwidth(&self) -> bool {
         self.engine.fullwidth()
-    }
-
-    /// 清空 ⇧ 残留（状态栏 `lang`/`mode` 动作进英文前用）：与用户按 ⇧ 的「单次大写」
-    /// 不是一回事，切换动作不该把大写带进新档位。
-    pub fn reset_shift(&mut self) {
-        self.shift_state = ShiftState::Off;
-        self.set_shift(false);
     }
 
     /// 符号/表情搜索（设置页与状态栏符号页共用）：命中条目文本，保序。
@@ -215,6 +213,8 @@ impl TsfLogic {
     pub fn apply_settings(&mut self, s: crate::settings::Settings, dicts_dir: &std::path::Path) {
         self.set_learner(s.learn);
         self.set_chinese_punct(s.chinese_punct);
+        // Shift 轻按开关只被胶水读（见字段注释）；**不清缓冲、不动引擎**。
+        self.shift_toggle = s.shift_toggle;
         // 模糊音：列表非空 ⇒ 以列表为准；空 ⇒ 回落旧的布尔（老配置行为一字不变）。
         if s.fuzzy_pairs.is_empty() {
             self.set_fuzzy(s.fuzzy);
@@ -305,11 +305,8 @@ impl TsfLogic {
     /// 与 [`Self::switch_mode`] 的唯一差别就是这步收尾：那条路（本轨 Ctrl+' 的
     /// `toggle_mode`）`Composer::switch_mode` 只清缓冲，打到一半的拼音被静默丢弃。
     /// 配对：`fcitx5-opi/src/candidate.rs` 的同名方法（两轨同构，改一处必须改另一处）。
-    /// ⚠️ **本回合无生产调用方**（2026-10-10 裁决「状态机语义先立住、如实注明」）：
-    /// tsf 的切英文路径仍是 `toggle_mode` → `switch_mode`（丢缓冲）—— 接线 = 改调
-    /// 本函数并把返回值插入文档（Windows 侧插入面未验证，不目测）。fcitx5 侧同语义的
-    /// 另一个实现是 glue 的 C++（「先 `opi_fcitx5_symbol_browse(0)` 退浏览、再上
-    /// 原文」）。
+    /// 生产调用方：控制面 `lang`/`mode`（`ctl.rs`）与 [`Self::toggle_language`]
+    /// （Shift 轻按）—— 返回值由调用方插入文档。
     pub fn switch_mode_confirmed(&mut self, mode: Mode) -> String {
         let text = self.engine.confirm_pending();
         self.switch_mode(mode); // 切换与 ⇧/页码收尾复用既有实现，不复制一份
@@ -324,13 +321,6 @@ impl TsfLogic {
     /// 候选」）。键位占用表见 `vk.rs` 的 `fullwidth_hotkey` 与 C++ 侧同名函数。
     pub fn toggle_fullwidth(&mut self) -> bool {
         self.engine.toggle_fullwidth()
-    }
-
-    fn set_shift(&mut self, on: bool) {
-        self.engine.set_shift(on);
-        // shift 不改变 buffer（reset_page_if_buffer_changed 不会触发），但
-        // 可能改变候选集；将页码钳制到当前 page_count 边界，防 page 越界。
-        self.set_page(self.page);
     }
 
     // ---- 符号浏览（「符号大全」）：转发 + 分页收敛。宿主键路由见
@@ -371,36 +361,6 @@ impl TsfLogic {
     pub fn exit_symbol_browse(&mut self) {
         self.engine.exit_symbol_browse();
         self.reset_page_if_buffer_changed();
-    }
-
-    // ---- ⇧ 状态机（镜像 Android EngineController.shiftTap/ShiftLongPress/consumeSingleShift）----
-
-    pub fn shift_state(&self) -> ShiftState {
-        self.shift_state
-    }
-
-    /// 单击：Off→Single（引擎 shift 开）；Single/Lock→Off（引擎 shift 关）。
-    pub fn shift_tap(&mut self) {
-        self.shift_state = if self.shift_state == ShiftState::Off {
-            ShiftState::Single
-        } else {
-            ShiftState::Off
-        };
-        self.set_shift(self.shift_state != ShiftState::Off);
-    }
-
-    /// 长按：Lock（持续大写）。
-    pub fn shift_long_press(&mut self) {
-        self.shift_state = ShiftState::Lock;
-        self.set_shift(true);
-    }
-
-    /// single 态消费后复位（lock 不受影响）。
-    pub fn consume_single_shift(&mut self) {
-        if self.shift_state == ShiftState::Single {
-            self.shift_state = ShiftState::Off;
-            self.set_shift(false);
-        }
     }
 
     /// 提交当前页第 `index` 个候选（页内索引，0 起）。越界返回空串。
@@ -480,6 +440,11 @@ impl TsfLogic {
 #[path = "logic_input_method.rs"]
 pub mod input_method;
 pub use input_method::*;
+
+// ⇧ 的两套状态（轻按切中英的 armed + 屏上键盘的大小写三态）在子模块：从
+// logic.rs / logic_input_method.rs 拆出守 500 行，两处都是 Shift、拆在一起自成一题。
+#[path = "logic_shift.rs"]
+mod shift;
 
 // 单测独立成文件（`#[path]` 引入）以保持各文件 <500 行：logic_candidate_tests.rs
 // 为候选分页状态机测试（键路由测试见 input_method 模块）。

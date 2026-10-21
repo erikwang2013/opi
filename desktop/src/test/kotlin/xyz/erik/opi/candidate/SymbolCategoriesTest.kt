@@ -67,13 +67,15 @@ class SymbolCategoriesTest {
     @Test
     fun `data file candidates per platform`() {
         // Windows 顺位：① %LOCALAPPDATA%\opi\（与 settings.ini 同目录）→ ② exe 同目录
-        // （windows.yml 打包时装 tsv 的地方）；Linux = /usr/share/opi/（fcitx5-glue 的
-        // CMake install 在装）。顺位/路径错 = 静默显示「没有类目数据」——不报任何错。
+        // → ③ exe 同目录\app\（jpackage 的 files 落点；2026-10-21 起符号 TSV 随包放这里）。
+        // Linux = /usr/share/opi/（fcitx5-glue 的 CMake install 在装）。
+        // 顺位/路径错 = 静默显示「没有类目数据」——不报任何错。
         val exe = Paths.get("/app")
         val win = symbolDataCandidates(windows = true, localAppData = "/la", exeDir = exe)
-        assertEquals(2, win.size)
+        assertEquals(3, win.size)
         assertEquals(Paths.get("/la", "opi", "symbol_categories.tsv"), win[0])
         assertEquals(Paths.get("/app", "symbol_categories.tsv"), win[1])
+        assertEquals(Paths.get("/app", "app", "symbol_categories.tsv"), win[2])
         // LOCALAPPDATA 缺省（空串/未设）⇒ 退回当前目录，而不是抛
         assertEquals(Paths.get(".", "opi", "symbol_categories.tsv"), symbolDataCandidates(true, null, exe)[0])
         assertEquals(Paths.get(".", "opi", "symbol_categories.tsv"), symbolDataCandidates(true, "", exe)[0])

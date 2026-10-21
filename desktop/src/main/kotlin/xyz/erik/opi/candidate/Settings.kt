@@ -19,7 +19,8 @@
 //!   `crates/tsf-opi/src/settings.rs`（Windows 读侧）。
 //!   ⚠️ `Skin` 的值是**中文字面值**（`SkinOption` / opi_config.h 的
 //!   `FCITX_CONFIG_ENUM_NAME_WITH_I18N`）：两侧按字面匹配，写错字 = 静默回「不改动」。
-//!   Windows 读侧没有这个键（未知键忽略）；设置窗在 Windows 上不显示皮肤一节。
+//!   **2026-10-22 起 Windows 也用**：候选窗/状态栏两个桌面进程 1s 轮询本文件并跟随
+//!   （`Main.kt`/`StatusBar.kt`），设置窗「外观」页两平台都出。
 //!
 //! ⚠️ 布尔写 **`True`/`False`**（fcitx5 的 ini 就是这个拼法；读侧大小写不敏感，
 //! 所以手改成 `true` 也能读，但**写回去统一成全大写首字母**，别两种混着出现）。
@@ -46,9 +47,9 @@ import java.nio.file.Paths
  * 五个开关 + 皮肤 + 状态栏。默认值 = 引擎既有行为（开关全开、皮肤不改动），与两端的
  * 读侧一字不差。
  *
- * ⚠️ [shiftToggle]（2026-10-12 加）**只有 Linux 读侧认它**（`opi_config.h` 的
- * `ShiftToggle`）；`crates/tsf-opi/src/settings.rs` 只读前四个开关 ⇒ 设置窗在 Windows
- * 上不列这一行（「宁可少一页，不做点不动的开关」）。写侧照旧不分平台地写全。
+ * ⚠️ [shiftToggle]：**2026-10-22 起两平台都认**。Linux 读侧 = `opi_config.h` 的
+ * `ShiftToggle`（C++ glue 的 `OpiShiftToggle`）；Windows 读侧 = `crates/tsf-opi/src/
+ * settings.rs` 同名键（胶水三拍在 `tsf_shift.rs` 查它）。设置窗两平台都列这一行。
  */
 data class OpSettings(
     val learn: Boolean = true,

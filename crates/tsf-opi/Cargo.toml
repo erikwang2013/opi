@@ -26,9 +26,11 @@ windows = { version = "0.62", default-features = false, features = [
     "Win32_Storage_FileSystem",
     "Win32_System_Com",
     "Win32_System_IO", # C3：ReadFile/WriteFile 在 0.62 中经 Win32_System_IO 门控
+    "Win32_System_Pipes", # 2026-10-21：PeekNamedPipe（读线程改轮询，避免同步句柄读写互锁）
     "Win32_System_LibraryLoader", # DllRegisterServer：GetModuleHandleExW/GetModuleFileNameW
     "Win32_System_Registry",      # DllRegisterServer：RegCreateKeyExW/RegSetValueExW
     "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_HiDpi",             # caret.rs：GetDpiForWindow（物理像素 → 逻辑像素）
     "Win32_System_Threading",     # configure.rs：CreateProcessW（点「属性」拉起设置窗）
     "Win32_UI_TextServices",
     "Win32_UI_WindowsAndMessaging", # langbar.rs：HICON / CreateIconFromResourceEx（GetIcon 的返回类型经它门控）

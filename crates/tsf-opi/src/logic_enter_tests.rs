@@ -25,6 +25,7 @@ fn wubi_state() -> TsfLogic {
         shift_state: ShiftState::Off,
         english_pro: true,
         last_printable: None,
+        shift_toggle: true,
     };
     s.engine.set_scheme(Scheme::Wubi);
     s.refresh_snapshot();

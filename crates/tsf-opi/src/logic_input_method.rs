@@ -304,20 +304,8 @@ impl TsfLogic {
         }
     }
 
-    /// ⇧ 键：单击切换状态机（Off→Single→Off），长按 → Lock；释放/重复忽略。
-    /// 镜像 `EngineController.shiftTap/shiftLongPress`（按住并释放 = 一次 tap）。
-    fn handle_shift(&mut self, key_state: u32) -> KeyOutcome {
-        let released = key_state & KEY_STATE_RELEASED != 0;
-        let repeat = key_state & KEY_STATE_REPEAT != 0;
-        if !released && !repeat {
-            if key_state & KEY_STATE_LONG_PRESSED != 0 {
-                self.shift_long_press();
-            } else {
-                self.shift_tap();
-            }
-        }
-        KeyOutcome::Consumed
-    }
+    // ⇧ 键的路由在 `logic_shift.rs`：handle_shift 与两套 Shift 状态（轻按 armed /
+    // 屏上键盘三态）同在一处；上面的 `KEY_SHIFT =>` 臂直接调它。
 
     /// 可见 ASCII 字符按模式分流。
     fn handle_printable(&mut self, c: char) -> KeyOutcome {

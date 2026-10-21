@@ -9,6 +9,16 @@
 > 没人装过、没人跑过的一端。本文是一份操作步骤，不是一份验证过的配方。**
 > （iOS / macOS / 鸿蒙已由 CI 或本机工具链真编译并产出 unsigned 产物；它们仍未真机验收。）
 >
+> **【订正 2026-10-21】** 安装/卸载已在真 Windows 10 上实测（1.20.2 EXE 安装器：
+> 正常卸载 / DLL 被映射 + 候选窗运行 / DLL 缺失 / `/DELETEUSERDATA`，89/89 项通过；
+> 日志为 `Removed all? Yes`、`Need to restart Windows? No`，Explorer PID 未变）。
+> **打字/候选窗/中英文切换/状态栏也已在 Notepad 真机验证**（§5.3）。**仍未验证**
+> 的是**交互式**安装向导、语言栏图标、非 Notepad 宿主与候选点选的点击回程手感；
+> 安装仍用 `/VERYSILENT`。同日升级路径真机验证：`luna.opid` 被旧 TSF DLL 映射时
+> 在 ssInstall 改名移出，日志 `Need to restart Windows? No`；旧版留下的
+> `PendingFileRenameOperations` 由 `InitializeSetup` 清理。「没人装过、没人跑过」
+> 是本文初稿的表述，不再适用于安装/卸载/打字这一层。
+>
 > **【订正 2026-10-19】** 用户已在真 Windows 上装过 Release 的 v1.15.1 MSI：应用进程能起，
 > **但输入法键盘不出现**。根因用该 MSI 的表级证据钉死 —— 那是 **jpackage 原始产物**，
 > `CustomAction`/`InstallExecuteSequence` 里没有任何注册动作，安装时**从未执行
@@ -250,22 +260,50 @@ android/app/src/main/assets/luna.opid
   见 `candidate_io.rs` 的 `connect` / `send_json`）。用户看到的是"没有候选窗"，
   不是"输入法坏了"。`WriteFile` 仍无超时（候选窗假死时理论上可阻塞按键线程，
   异步写线程是后续项）。
-- **单实例管道与「其他应用不生效」（2026-10-20）**：管道只有 1 个实例
-  （`PipeServer.kt` 的 `MAX_INSTANCES = 1`），而每个加载 TSF DLL 的宿主进程各有一个
-  `CandidateClient`；客户端只在 `show` 时惰性连接、且此前从不主动断开。于是**第一个
-  输入过的应用把实例占到进程结束**，其余应用的 `CreateFileW` 一直 `ERROR_PIPE_BUSY`，
-  `show` 被静默丢弃 —— 这是「输入法只在桌面/单个应用可用」的另一条源码级根因。
-  修复：`Deactivate` 调 `TsfSink::disconnect` 关句柄；窗口侧 `readLoop` 读到 0 字节后
-  在 `finally` 隐藏窗口并重建实例，下次按键再惰性重连。**【未验证】**：TSF 是否在
-  切换应用时如预期调用 `Deactivate`（规范如此，本机无 Windows 观测）。
-- **登录自启 ≠ 常驻渲染（2026-10-20）**：候选窗在首次 `show` 之前**不创建 AWT/Skiko
-  窗口**（`Main.kt` 的 `windowCreated`），所以刚登录、还没打字时进程只有一个阻塞在
-  命名管道上的线程。窗口创建后被隐藏时也不绘制：Skiko 0.144.6 的
-  `Direct3DRedrawer.frameDispatcher` 在 `SkiaLayer.isShowing()` 为 false 时直接跳过
-  `update`/`draw`，`FrameDispatcher` 由 `needRender` 按需调度（不是死循环）。
-  **【未验证】**：以上是 Linux 上反编译 0.144.6 jar 的静态证据，Windows 真机的
-  CPU 占用没有测量；高 CPU 的另一条已定位路径是旧安装脚本杀 Explorer 造成的
-  shell 重启循环（已移除，见 §2.5）。
+- **单实例管道与「其他应用不生效」（2026-10-20；2026-10-21 真机订正）**：管道只有
+  1 个实例（`PipeServer.kt` 的 `MAX_INSTANCES = 1`），而每个加载 TSF DLL 的宿主进程各
+  有一个 `CandidateClient`；客户端只在 `show` 时惰性连接、且此前从不主动断开。于是
+  **第一个输入过的应用把实例占到进程结束**，其余应用的 `CreateFileW` 一直
+  `ERROR_PIPE_BUSY`，`show` 被静默丢弃 —— 这是「输入法只在桌面/单个应用可用」的
+  另一条源码级根因。
+  **真机验证：`ITfTextInputProcessor::Deactivate` 不随应用切换触发**（只在输入法被
+  取消激活时触发），只靠 `Deactivate` 断开不够 —— 后台宿主会一直占着管道，状态栏读到
+  它的 `im=opi`（切走不消失），前台应用连不上（中文模式无候选）。修复分两层：
+  `Deactivate` 调 `TsfSink::disconnect`；`Activate` 另注册 `ITfThreadFocusSink`
+  （`thread_focus.rs`），焦点进入线程 → 主动连接，焦点离开 → 断开。窗口侧 `readLoop`
+  读到 0 字节后在 `finally` 隐藏窗口并重建实例。
+  **2026-10-21 真机（Notepad×2 + Win+Space，1.20.2 新 DLL）已验证**：A 打字候选窗出现
+  → 切到 B 打字同样出现 → 切回 A 仍正常；Win+Space 切到别的输入法后 `state` 变空、
+  状态栏约 3–4s 内隐藏（3 拍轮询宽限），切回 opi 后重新出现；物理键盘
+  `Ctrl+'` / `Shift+Space` 翻转的 `lang=`/`fw=` 与状态栏图标一致。
+- **登录自启 ≠ 常驻渲染（2026-10-21 订正）**：候选窗**始终创建一个隐藏的 AWT/Skiko
+  窗口**。曾试过「首次 `show` 之前不建窗」，但 Compose 1.11 的 `application` 在没有任何
+  Window 时会在 `Recomposer.close/join` 后直接返回 —— 候选进程启动即退出，两条命名管道
+  都不存在。窗口隐藏时不绘制：Skiko 0.144.6 的 `Direct3DRedrawer.frameDispatcher` 在
+  `SkiaLayer.isShowing()` 为 false 时直接跳过 `update`/`draw`，`FrameDispatcher` 由
+  `needRender` 按需调度（不是死循环）。**【未验证】**：Skiko 那半是 Linux 上反编译
+  0.144.6 jar 的静态证据，Windows 真机的 CPU 占用没有测量；高 CPU 的另一条已定位路径是
+  旧安装脚本杀 Explorer 造成的 shell 重启循环（已移除，见 §2.5）。
+- **候选窗形态（2026-10-21 用户裁决「长条的，和搜狗输入法一样」；2026-10-22 订正为
+  两行）**：高固定 76dp，第一行 = 已输入拼音 / 模式，第二行 = 1..8 候选 / `‹ 页码 ›`
+  （用户裁决「候选词中的拼音要在候选词上方」）。宽度按两行里更宽的一行实测
+  （`rememberCandidateBarSize`）在屏幕内伸缩；放不下时候选区**横向滚动**（整词不省略、
+  不缩字号），翻页控件钉在右端。位置：TSF 每次 composition 变化发 `position`（`caret.rs`
+  取选区末尾的屏幕矩形，按输入窗口 DPI 折算成逻辑像素）→ 窗口贴着 caret 下方，接近屏幕
+  边缘时收回虚拟桌面内；没收到过位置时按宽度水平居中。候选窗不可聚焦，点击不会夺走宿主
+  焦点（页面点击回程仍受 §4.3 的"下一次按键才插入"约束）。**候选窗跟着皮肤走**
+  （2026-10-22 用户报障「点击状态栏 logo 切换背景，候选词框的背景没变化」）：候选进程
+  与状态栏一样每秒重读 `settings.ini` 的 `Skin=`，用同一份 `SkinPalette.skinColors`。
+- **状态栏按钮可操作（2026-10-21）**：按钮有按下/悬停反馈；1s 状态轮询在**读取失败时保留
+  上一次状态**（连续 3 拍读不到才回到中性），不会因一次管道抖动把整条隐藏（Windows 上
+  `im` 未知 = 隐藏，用户体感会是"按钮突然点不动"）。**点击按钮不让条消失**：动作后的
+  状态补读失败不覆盖 `im`；打开设置/符号/软键盘时条强制保持可见。**设置/符号/软键盘
+  在 UI 线程直接开窗**（不排 IO 队列、不等状态补读），实测设置窗 <1s 出现。
+- **状态栏出现时机（2026-10-21）**：TSF 客户端在 `Activate` 时**主动**连候选窗（不再等
+  第一次 `show`）。状态栏的 1s 轮询随即能读到 `im=opi`，因此切到「小欧输入法」后状态栏
+  **立即出现，不必先打一个字**。`Deactivate` 先置 inactive 再断开，避免读线程把单实例
+  管道又抢回去。**注意**：安装/升级后，已在运行的宿主仍持有旧 DLL 映像，要注销/重启
+  才会换上新代码。
 - 打包格式**当前只声明了 Deb**：`desktop/build.gradle.kts` 的
   `nativeDistributions { targetFormats(TargetFormat.Deb) }`，同一处的注释写着
   「Windows .msi 为验收阶段（Windows 主机上构建）」。
@@ -426,6 +464,22 @@ C:\Program Files\opi\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
   正是 2026-10-20 白屏的同一类动作，而改名移出已经能立即清掉目录。
   EXE 容器冒烟现在会**真的把 DLL 映射住**再卸载，断言 `C:\opi-test` 消失且日志走
   「moved locked TSF DLL」路径；真机 Explorer 的持有方式仍只能真机复验。
+- **卸载残留清理（2026-10-21 真机测试后补）**：`DllUnregisterServer` 只摘 TSF 官方
+  API 管理的键，Windows 仍保留三处每用户 UI 状态 —— 键盘列表值
+  `HKCU\Control Panel\International\User Profile\<语言>\0804:{CLSID}{PROFILE}`、
+  输入法排序 `HKCU\Software\Microsoft\CTF\SortOrder\AssemblyItem\...`（按 `CLSID`
+  值识别）、`HKCU\Software\Microsoft\CTF\TIP\{CLSID}` 启用子树。卸载器新增
+  `RemoveTsfRegistryResidue` / `RemoveUserInputMethodTip` / `RemoveSortOrderEntries`，
+  在 `usUninstall` 清理；**不放进 `DllUnregisterServer`**：升级时的 `regsvr32 /u`
+  会把用户键盘列表条目一起删掉，而 `RegisterProfile` 不会重新加回，升级用户会
+  发现输入法从列表消失。DLL 已缺失时 `UnregisterTsf` 提前返回，上面的注册表
+  兜底仍会执行。`usPostUninstall` 再清一次 trash 并删除空目录。
+  **用户数据默认保留**：`%LOCALAPPDATA%\opi`（`settings.ini`、`dicts\`）是用户数据，
+  不是安装残留；需要全清时用
+  `unins000.exe /VERYSILENT /DELETEUSERDATA`（静默脚本/干净机器）。
+  真机验证（2026-10-21，Windows 10 Home）：正常卸载、映射 DLL + 运行中候选窗、
+  缺失 DLL、`/DELETEUSERDATA` 共 89/89 项通过；日志仍为
+  `Removed all? Yes` / `Need to restart Windows? No`，Explorer PID 未变。
 - **升级路径（2026-10-21，「装完 1.20.1 仍只有英文」的追加根因）**：`[Files]` 的
   `restartreplace` 只在**删除旧目标失败**时生效 —— Inno 把新 DLL 解到临时文件，
   `RestartReplace(临时文件, 目标)` 排进 `PendingFileRenameOperations`，然后**跳过**
@@ -437,11 +491,14 @@ C:\Program Files\opi\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
   `[InstallDelete]`/`[Files]` **之前**先 `UnregisterTsf()` 摘掉旧 profile/COM 键，
   再 `MoveLockedTsfDll(True)` 把被映射的旧 DLL 改名到同卷 trash；新 DLL 当场落到
   原路径，`ssPostInstall` 的 `regsvr32` 注册的是新 DLL。
-  `restartreplace` 保留为改名失败时的兜底，日志写
-  `[Files] restartreplace puts the new DLL in place at the next restart`。
-  日志同时打印升级前 DLL 大小（`opi: tsf_opi.dll on disk: N bytes`）与复制后大小
-  （`opi: tsf_opi.dll installed: N bytes`）便于取证；大小相同不构成「已替换」的
-  证据，CI 用包内 SHA-256 判定。
+  **【订正 2026-10-21 真机】`restartreplace` 已删除**：升级时 `luna.opid` 也被旧
+  TSF DLL 映射，Inno 把它排进 `PendingFileRenameOperations`（`Will replace on
+  restart`），下一次安装的 `PrepareToInstall` 因该值**拒绝安装并要求重启** ——
+  正是用户禁止的行为。现在 ssInstall 同时 `MoveLockedDictionary(True)` 把
+  `luna.opid` 改名移出；`InitializeSetup` 在安装前清掉指向本 `{app}` 的陈旧
+  pending 项（`/DIR` 或默认 `ProgramW6432\opi`）；改名失败则 `[Files]` 失败（响亮），
+  绝不排重启。日志同时打印两个文件的大小（`... on disk: N bytes` / `installed: N
+  bytes`）；大小相同不构成「已替换」的证据，CI 用包内 SHA-256 判定。
   ⚠️ 文件名换了不等于**运行中的**代码换了：Explorer/已打开应用里已加载的旧映像
   仍是旧代码，注销/重启后才会加载新 DLL。所以「安装后必做」第 1 步照旧。
 - 快捷方式：开始菜单「opi settings」= `opi.exe --settings`；桌面图标在安装时可选。
@@ -472,10 +529,12 @@ C:\Program Files\opi\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
   交互路径没有在真机跑过（CI 的 `/VERYSILENT` 会跳过 `[Run]`）。
 - **`CloseApplications=no`（2026-10-20）**：jpackage/Inno 的 Restart Manager 默认会
   关闭「占用待替换文件」的应用；`tsf_opi.dll` 可能正被 Explorer 加载，升级时关掉
-  Explorer 后就可能不再回来。这里显式禁用 Restart Manager；被占用的 DLL 由
-  ssInstall 的改名清锁（见上一条），`[Files]` 的 `restartreplace` 只在改名失败时
-  兜底（把替换排到下次重启）；`RestartApplications=yes` 仅作第二道保险
-  （`CloseApplications=no` 时无效果，防止将来有人改回去）。
+  Explorer 后就可能不再回来。这里显式禁用 Restart Manager；被占用的 DLL 与
+  `luna.opid` 由 ssInstall 的改名清锁（见上一条）。`restartreplace` 已删除
+  （2026-10-21 真机：它会把文件排进 `PendingFileRenameOperations`，下一次安装
+  因此拒绝并要求重启）；改名失败时安装响亮地失败，绝不排重启。
+  `RestartApplications=yes` 仅作第二道保险（`CloseApplications=no` 时无效果，
+  防止将来有人改回去）。
 - 冒烟（`windows-exe-install-test`）：在干净的 Server Core 容器里静默装到
   `C:\opi-test`，断言 `opi.exe`、`app\tsf_opi.dll`、`app\luna.opid` 存在、安装退出码 0、
   日志里**有** `regsvr32` 退出码（0 或非 0 均可）；2026-10-21 起还断言
@@ -485,7 +544,10 @@ C:\Program Files\opi\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
   `tsf_opi.dll` SHA-256 **变回包内版本**、升级日志有 `moved locked TSF DLL` 且
   没有 `Will replace on restart`（只断言退出码会假绿：同版本重装的退出码本来就是 0）。
   然后重新起一个占用进程，走卸载路径：静默卸载并断言 `opi.exe`、**整个
-  `C:\opi-test` 目录**、被占用的 DLL 以及上面两个注册表项都消失，且卸载日志里有
+  `C:\opi-test` 目录**、被占用的 DLL 以及上面两个注册表项都消失；卸载前还会
+  种入一条每用户键盘列表值和一个输入法排序项（模拟用户在设置里添加过该输入法），
+  卸载后断言 `HKCU\Control Panel\International\User Profile` 下的值、HKCU CTF TIP
+  键与排序项都不在了（2026-10-21 真机残留修复的回归门禁）。卸载日志里还须有
   `moved locked TSF DLL`、`Removed all? Yes`，没有 in-use 删除失败。容器里这个
   占用者不是 Explorer，真机 Explorer/TSF 宿主的持有方式仍需真机复验。
   **退出码 0 不是 profile 写入的证据** —— 这正是 2026-10-21
@@ -501,6 +563,12 @@ C:\Program Files\opi\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 1. **注销或重启 Windows**。安装器只落文件并注册，TSF 宿主（Explorer/已打开的应用）
    要重新加载 `tsf_opi.dll` 才会看到新输入法。完成页的复选框只拉起候选窗/状态栏，
    **不重启 Explorer、也不重启电脑**（2026-10-20 白屏修复的代价）。
+   **2026-10-22 真机补充**：怀疑「装了新包却没生效」时先跑
+   `scripts\windows\diagnose-tsf.ps1` —— 它按注册表自动定位安装目录，并列出所有仍映射
+   `tsf_opi.dll` 的进程。`[WARN] stale host` = 该进程在安装前启动、加载的是旧映像
+   （Chrome/Sublime/Explorer/旧 Notepad 最常见）。Windows 不能替换已加载的 DLL，
+   在这些进程里测试只会复现旧行为（切输入法状态栏不消失、新应用连不上候选管道），
+   与安装包本身无关；注销/登录或彻底重启这些应用后才换上新代码。
 2. **把输入法加进键盘列表**：设置 → 时间和语言 → 语言和区域 →
    **中文(简体，中国)** → 语言选项 → 键盘 → 添加键盘 → **小欧输入法**。
    系统里没有「中文(简体，中国)」语言时，先添加该语言。注册用的 LANGID 是 zh-CN，
@@ -1037,9 +1105,18 @@ HKCU 写失败是系统性权限问题时安装不会红，只是当前用户少
 
 | 按键 | 作用 | 符号 |
 |---|---|---|
+| `Shift` 轻按 | 中 ⇄ 英 | `shift_tap.rs`（判定）+ `tsf_shift.rs`（三拍）→ `TsfLogic::toggle_language` |
 | `Ctrl` + `'` | 英文 ⇄ 拼音 | `vk::mode_hotkey` → `ModeHotkey::ToggleEnglish` → `hotkey_target` |
 | `Ctrl` + `\` | 符号 ⇄ 拼音 | `vk::mode_hotkey` → `ModeHotkey::ToggleSymbol` |
 | `Shift` + `Space` | 全角 ⇄ 半角 | `vk::fullwidth_hotkey` |
+
+**Shift 轻按（2026-10-22 用户报障「无法用 Shift 切换中英文」）**：按下再抬起、
+期间没有别的键按下即算一次轻按；`Shift+字母`/方向/Ctrl 组合不是轻按（撤销判定在
+`OnTestKeyDown`，覆盖不会进 `OnKeyDown` 的 Ctrl/Alt/Win 组合）。切英文时待处理的
+拼音按 W1 **上原文**，⇧ 残留清掉。判定在胶水层而不在 Rust 键路由里 —— Linux 轨的
+同一判定在 C++ glue，两轨 Rust 逻辑必须逐事件同构（`two_track_parity`）。
+**【未在真机验证】**：TSF 是否把 Shift 的按下/抬起都交给键事件 sink（本改动按
+「OnTestKeyUp 答 TRUE 才有 OnKeyUp」实现，见 `tsf.rs` 的 `OnTestKeyUp`）。
 
 - 前两个是**来回切**：已在目标模式就回拼音（`vk::hotkey_target`）；`Shift+Space`
   是同一模式内的**布尔开关**（`logic::toggle_fullwidth` → `Engine::toggle_fullwidth`），
@@ -1064,7 +1141,7 @@ HKCU 写失败是系统性权限问题时安装不会红，只是当前用户少
 | 提交首候选 / 提交 | `Space`（缓冲非空）· `Enter` | `handle_space` / `handle_enter` |
 | 删缓冲末字 | `Backspace` | `handle_backspace` |
 | 上下页 | `PageUp` / `PageDown`；组字中 `-` / `=` | `KEY_PAGE_UP` / `KEY_PAGE_DOWN` 分支；`-`/`=` 见 `handle_printable` 顶部（2026-10-09 补） |
-| 切换 ⇧ 大小写 | `Shift` | `handle_shift`（Off → Single → Off，长按 → Lock） |
+| 切换 ⇧ 大小写（屏上键盘语义） | 程序调用 `TsfLogic::shift_tap` / `shift_long_press` | `logic_shift.rs`（Off → Single → Off，长按 → Lock）；**物理 Shift 不再驱动它**（改走轻按切中英，见 §4.1） |
 
 候选窗里还能**点候选**和**点翻页箭头**（`desktop/.../CandidateWindow.kt` 的
 `onSelect` / `onNext` / `onPrev`，接到 `PipeServer.sendSelect` 等）—— 见下一条。
@@ -1138,9 +1215,18 @@ opi.exe                # 候选窗（无参数；TSF 走命名管道驱动它）
 
 ⚠️ **2026-10-12 布局改过**（用户裁决「布局和功能参考主流输入法」）：设置窗从单列长滚动
 改成**左分类导航 + 右内容 + 底部状态行**（与 Linux 同一份代码，`SettingsWindow.kt`）。
-Windows 上只出**常用 / 状态栏 / 符号与表情 / 关于**四页 —— **按键**（`ShiftToggle`）与
-**外观**（`Skin` 是 fcitx5 主题）两页不出：`crates/tsf-opi/src/settings.rs` 的读侧不认
-这两个键（「宁可少一页，不做点不动的开关」；过滤是纯函数 `settingsTabs`，有单测钉）。
+**2026-10-22 起两平台同页集**（常用 / 按键 / 外观 / 状态栏 / 符号与表情 / 词库 / 五笔 /
+关于）：Windows 的 `ShiftToggle` 读侧已接通（`crates/tsf-opi/src/settings.rs`，胶水的
+Shift 三拍查它）；**外观**页的皮肤由候选窗/状态栏 1s 轮询跟随，候选字号三档由候选窗
+`candidateFontScale` 缩放（不再走 fcitx5 classicui）。页面集合仍是纯函数
+`settingsTabs`，单测钉住两平台相同。
+
+**新版本提示与检测更新（2026-10-22 用户裁决）**：打开设置窗自动检测一次，发现新版本
+在右栏顶部显示「发现新版本 vX → 前往下载」横幅（可关闭）；「关于」页常驻当前版本与
+「检测更新」按钮。数据源首选 `https://opi.erik.xyz/version.json`（发版时更新），读不到
+才回退解析首页 JSON-LD 的 `softwareVersion`；下载落点 = 用户裁决的
+`https://opi.erik.xyz/#download`（首页下载区；`/download` 目录未开索引，实测 403）。
+网络失败不打扰（自动检测静默，只有手动检测才显示原因）。
 「符号与表情」页那两个按钮打开的是与 Linux 同一份代码的窗（`SymbolsPage.kt` 的
 `SymbolWindow`，表情页在 `EmojiPage.kt`）：页面能看能翻，点选上屏（2026-10-20 起）走
 控制面 `\\.\pipe\opi-control` → 候选窗进程 broker → TSF 的 `commit`；设置窗进程
@@ -1268,7 +1354,28 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 
 ### 5.3 能不能打字
 
-**【未验证】—— 这是整份文档里最重要、也最没底的一条。**
+> **【订正 2026-10-21 真机】** 已在真实 Windows 10 + Notepad（TSF 宿主）上验证：
+> 输入 `nihao` → 候选窗显示「你好」→ 空格上屏；`Ctrl+'` 切英文后 `hello` 直插；
+> 再切回中文 `shijie` → `世界`。状态栏在切到 opi 后出现，`中/英` 随模式翻转；
+> 控制面 `{"action":"lang"}` 返回 `ok:true`。**这条不再是【未验证】**。
+>
+> 本轮真机同时钉死了四个「源码看着对、实际不工作」的根因（都已修）：
+>
+> 1. **`OnTestKeyDown` 只认领热键**：TSF 只在它返回 TRUE 时才调 `OnKeyDown`，
+>    旧实现让普通字母全部直落应用 —— 一个字都进不了引擎。现改为「热键 / 普通键
+>    → TRUE；Ctrl/Alt 组合与 Win（组合）键 → FALSE」，引擎不消费的键仍由
+>    `OnKeyDown` 返回 BOOL(0) 放行。
+> 2. **候选进程零窗口即退出**：Compose 1.11 的 `application` 在没有任何 Window 时
+>    会 `Recomposer.close/join` 后返回，候选进程启动即退出，两条命名管道都不存在。
+>    现始终创建隐藏的候选 Window（`visible` 跟随模型）。
+> 3. **同步命名管道的读写互锁**：同一句柄上未完成的阻塞 `ReadFile` 会把 `WriteFile`
+>    串行化 —— 按 `n` 出候选后按 `i` 永久冻住宿主 UI。两侧读线程均改为
+>    `PeekNamedPipe` + 有数据才 `ReadFile`（20ms 轮询）。
+> 4. **`InsertTextAtSelection` 的 `TF_IAS_NOQUERY` 会崩宿主**：Notepad 在
+>    `textinputframework.dll` 里 `0xc0000005`。改为 flags=0（查询范围），并把编辑
+>    会话引用无条件存进 `keepalive`；`RequestEditSession` + 插入已真机通过。
+>
+> 历史记录（2026-10-21 之前）：**【未验证】—— 这是整份文档里最重要、也最没底的一条。**
 
 `crates/tsf-opi/src/state.rs` 的模块头写明了真机验收的第一件事：
 
@@ -1296,7 +1403,7 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | 6 | 候选窗与插件的命名管道连通（含 `\\.\pipe\opi` 单实例语义） | §4.3 |
 | 7 | 四个 `cfg(windows)` 模块**没有任何测试** —— 只有 §1.2 那条 `cargo check` 看过它们 | §1.2 |
 | 8 | 候选窗在 Windows 上的~~构建与~~**运行**：**构建已被 §2.5 覆盖**（.msi 真在 windows runner 上打出来了），**跑起来仍然一次都没有** | §2.3、§2.5 |
-| 9 | `Ctrl+'` / `Ctrl+\` / `Shift+Space` 在 Windows 上有没有被别的软件占用 | §4.1 |
+| 9 | `Ctrl+'` / `Ctrl+\` / `Shift+Space` 在 Windows 上有没有被别的软件占用；**`Shift` 轻按**（2026-10-22）TSF 是否把 Shift 的按下/抬起都交给键事件 sink | §4.1 |
 | 10 | 语言栏按钮（`langbar.rs`）的运行期行为：`AddItem` 成不成、`GetIcon` 有没有被调、图标画没画出来 —— 只有 §1.2 那条 `cargo check` 看过它（"挑条目 + 校验 RT_ICON 形态"那半在 `langbar_icon.rs`，有主机单测） | §2.1、`crates/tsf-opi/src/langbar.rs` 头注释 |
 | 11 | **「属性设置」的生效时机**：设置窗落盘后要等下一次 `Activate` —— 本机无法验证（`Activate` 由 TSF 调）。读取/容错/落点那半在 `settings.rs`，有主机单测 | §4.4、`crates/tsf-opi/src/settings.rs` |
 | 12 | **安装器行为（改安装目录 / 关停运行中实例 / 注册 TSF DLL / 完成页只自启候选窗，2026-10-17 / 10-18 / 10-19 / 10-20）**：表级已改好并可本地复核（§2.5 的后处理脚本 + 读回证据）。**2026-10-19 用户在真机装过的是「未后处理」的 v1.15.1 发布包**（有进程、键盘不显示）—— 这证明了「不跑后处理 = 不注册 = 键盘不出现」。**【订正 2026-10-19 复审】后处理后的三份包**（本地 `processed-static`、本地 `processed`、CI `opi-desktop-msi`）**仍无输入法的根因已定位**：注入的是 32 位 `WixSilentExec`，而随包 `Binary.WixCA` 是 PE32 i386 ⇒ WOW64 调 SysWOW64 的 32 位 `regsvr32`，加载不了 x86-64 DLL。脚本/CI 已改为 `WixSilentExec64` + `WixSilentExec64CmdLine` 并加 PE machine 断言，注册逻辑改为显式判存在 + HKLM 默认启用。**【订正 2026-10-20】EXE 白屏后安装器不再结束/重启 Explorer**：`launch-and-restart.cmd` 只启动 `opi.exe`，`opi.iss` 改用 `runasoriginaluser` 并 `CloseApplications=no`（§2.5）。修复后的 EXE **仍未在真机交互路径装过**（CI 静默安装跳过 `[Run]`），所以 taskkill 真杀没杀掉、`regsvr32` 真注册没成功、WixShellExec 真启没启起来、ExitDialog 复选框出不出现，仍是【未验证】 | §2.5、`scripts/postprocess-windows-msi.sh`、`scripts/windows/opi.iss` |
@@ -1323,7 +1430,7 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | 13 | **`ITfFnConfigure` 只过 `cargo check`**：控制面板里那个「属性」按钮会不会出现、点了拉不拉得起设置窗，本机无法验证；拉起的候选路径判定有主机单测（`settings_exe.rs`），Win32 那一步没有 | §4.4、`crates/tsf-opi/src/configure.rs` | 真机上「属性」可能不出现/不响应 |
 | 14 | ~~**设置窗没有 Windows 安装包**~~ **【订正 2026-10-09】** 安装包有了：`desktop/build.gradle.kts` 的 `targetFormats` 加了 `Msi`（原来只列 `Deb`），`.github/workflows/windows.yml` 在 Windows 主机上真打 `.msi`（§2.5）。剩下的缺口：**不在 Release 里、未签名、artifact 90 天过期**，拿到手得自己去 Actions 取 | §4.4、§2.5 | 装完也不会自己出现（本表 #2：没人拉起它） |
 | 15 | **W1「切中→英直接确认」在 Windows 侧只有状态机**（2026-10-10；同日深夜语义改为**一律原文**——拼音/繁体上缓冲原文、符号模式的关键字只清不提交）：`switch_mode_confirmed` 与引擎 `confirm_pending` 已就位并有两轨配对测试 + 负对照，但 `tsf.rs::toggle_mode` 的调用点**有意未接线**（插入面未通电；接线 = 改调它 + 把返回值插入文档）⇒ 现状仍同 #9 | `logic.rs`、`logic_input_method.rs`、`tsf.rs::toggle_mode` | 行为与 #9 同：打到一半切模式丢字 |
-| 16 | **桌面三件套在 Windows 上已接控制面（2026-10-20），但符号数据仍未随包**：符号页点选经 `\\.\pipe\opi-control` broker 送 TSF `commit`；状态栏 `--statusbar` 由 **EXE 安装器**的 HKLM64 Run 值随登录自启（卸载时删），jpackage MSI 仍没有这条 Run 值；`symbol_categories.tsv` 仍未拷进 MSI/EXE 资源 ⇒ 页面如实显示「没有类目数据」 | `desktop/` 的 `SymbolsPage.kt`/`ControlPlane.kt`/`StatusBar.kt`、`scripts/windows/opi.iss` | EXE 装法在切换为 opi 后能看到状态栏（未切换时隐藏）；符号数据仍缺 |
+| 16 | **桌面三件套在 Windows 上已接控制面（2026-10-20）**：符号页点选经 `\\.\pipe\opi-control` broker 送 TSF `commit`；状态栏 `--statusbar` 由 **EXE 安装器**的 HKLM64 Run 值随登录自启（卸载时删），jpackage MSI 仍没有这条 Run 值。~~`symbol_categories.tsv` 仍未拷进 MSI/EXE 资源~~ **【订正 2026-10-21】** 已随包：Compose `files` 集合把 `symbol_categories.tsv` 放进 app image 的 `app\`（与 `luna.opid`/DLL 同目录），`symbolDataCandidates` 增加该顺位；windows 工作流断言 app image 与安装目录里都有它 ⇒ 状态栏「符号大全」按钮不再打开空页 | `desktop/build.gradle.kts`、`SymbolCategories.kt`、`.github/workflows/windows.yml`、`scripts/windows/opi.iss` | EXE 装法在切换为 opi 后能看到状态栏（未切换时隐藏）；符号数据开箱可用 |
 | 17 | **虚拟键盘 Windows 路径（`SendInput`）只过编译**：本机无 Windows，运行期未验证；一并如实记：Linux 的 XTEST 注入与状态栏窗口**也未做 GUI 冒烟**（本机无 Xvfb，待真桌面时间窗）——逻辑层（键表物理键码、可见性组合、注入序列映射）已测 | `desktop/` 的 `VirtualKeyboard.kt`、`docs/install/linux.md` §4.8 | 未验证 ≠ 不可用，但也别当已验证 |
 
 ### 6.3 交付这件事本身

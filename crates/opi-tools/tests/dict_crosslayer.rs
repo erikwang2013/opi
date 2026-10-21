@@ -107,6 +107,18 @@ fn assert_agree(path: &Path, units: &[u16], what: &str) {
     );
 }
 
+/// 释放单例引擎对测试文件的 mmap（Windows：被映射的文件不能删除/截断，
+/// `ERROR_USER_MAPPED_FILE` 1224）。空路径 = 换回内置库，旧 Engine 连同映射一起析构。
+///
+/// 每个**成功装载**过文件的用例在收尾时调一次：否则 `Dir::drop` 的
+/// `remove_dir_all` 会静默失败，临时目录连同被映射的文件留在 %TEMP%。
+fn release_mapped_dict() {
+    // SAFETY: null + 0 是 read_utf16 文档允许的「空路径」形态（→ 内置回退库）。
+    unsafe {
+        let _ = opi_load(std::ptr::null(), 0);
+    }
+}
+
 /// 截断到每一个长度：从 0 字节到完整文件，两层同判、且都不 panic。
 ///
 /// 截断是最廉价也最像真实故障的损坏（下载中断、磁盘满、`cp` 到一半断电），
@@ -134,6 +146,7 @@ fn cli_verify_and_ffi_load_agree_on_every_truncation() {
         accepted, 1,
         "只有完整文件该通过 verify（当前通过 {accepted} 个长度）"
     );
+    release_mapped_dict(); // 最后一份（完整文件）已被 opi_load 映射
 }
 
 /// 逐字节翻转（每个偏移量各试一对低位/高位）：两层同判、且都不 panic。
@@ -151,7 +164,10 @@ fn cli_verify_and_ffi_load_agree_on_every_single_byte_mutation() {
         for mask in [0x01u8, 0x80u8] {
             let mut b = good.clone();
             b[i] ^= mask;
-            let p = dir.write("m.opid", &b);
+            // 每个变异一个**独立文件名**：某个变异可能仍能被 opi_load 接受，引擎会
+            // 映射住那个文件；再对同一路径 `fs::write`（截断）在 Windows 上直接
+            // ERROR_USER_MAPPED_FILE（2026-10-21 实测）。独立名字 = 不再写已映射文件。
+            let p = dir.write(&format!("m-{i}-{mask:#04x}.opid"), &b);
             assert_agree(&p, &as_units(&p), &format!("第 {i} 字节翻转 {mask:#04x}"));
             if !run_cli(&["verify", p.to_str().unwrap()]).status.success() {
                 rejected += 1;
@@ -167,6 +183,7 @@ fn cli_verify_and_ffi_load_agree_on_every_single_byte_mutation() {
         rejected,
         total
     );
+    release_mapped_dict(); // 最后一次被接受的变异文件可能仍被映射
 }
 
 /// 正控的正面：被两层接受的那份文件，**词条必须真的能用**。
@@ -216,6 +233,7 @@ fn dictionary_accepted_by_both_layers_is_actually_queryable() {
         "hao",
         "输入不得被吞：{cands}"
     );
+    release_mapped_dict();
 }
 
 /// 繁体路径是**另一个** C 导出、走同一条 `load_mmap`：坏字节同样必须 false。
@@ -239,6 +257,7 @@ fn trad_export_uses_the_same_loader_and_rejects_corruption() {
         unsafe { opi_load_trad(as_units(&goodp).as_ptr(), as_units(&goodp).len()) },
         "同一份字节在 opi_load 为真、opi_load_trad 也必须为真（同一加载器）"
     );
+    release_mapped_dict(); // 简体/繁体两份映射都挂在旧 Engine 上
 }
 
 /// `compile` 的确定性：同一输入跑两次必须**字节相同**，且等于库内

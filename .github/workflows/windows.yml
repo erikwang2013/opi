@@ -81,6 +81,20 @@ jobs:
             exit 1
           fi
           grep -Fq 'MoveLockedTsfDllOut();' scripts/windows/opi.iss
+          # 2026-10-21 真机残留：TSF 官方 API 不摘每用户键盘列表/排序，卸载器
+          # 必须自己清；DLL 缺失时 UnregisterTsf 提前返回，注册表兜底不能删。
+          grep -Fq 'RemoveTsfRegistryResidue();' scripts/windows/opi.iss
+          grep -Fq 'RemoveUserInputMethodTip();' scripts/windows/opi.iss
+          grep -Fq 'RemoveSortOrderEntries();' scripts/windows/opi.iss
+          # 2026-10-21 真机升级：luna.opid 也被旧 TSF DLL 映射；不能再用
+          # restartreplace（下一次安装会因 PendingFileRenameOperations 拒绝）。
+          grep -Fq 'MoveLockedDictionary(True);' scripts/windows/opi.iss
+          grep -Fq 'MoveLockedDictionary(False);' scripts/windows/opi.iss
+          grep -Fq 'InitializeSetup' scripts/windows/opi.iss
+          if grep -Eq '^[[:space:]]*Source:.*Flags:.*restartreplace' scripts/windows/opi.iss; then
+            echo '::error::opi.iss 不得用 restartreplace（会把文件排到重启）'
+            exit 1
+          fi
 
       - id: v
         shell: bash
@@ -172,6 +186,12 @@ jobs:
           $bad = $deps | Select-String -Pattern 'VCRUNTIME140|MSVCP140|ucrtbase|api-ms-win-crt'
           if ($bad) { throw "DLL 动态依赖 VC++/UCRT 运行时（未装运行时的机器上 regsvr32 会失败）：`n$bad" }
           Write-Host "导入表无 VCRUNTIME140/MSVCP140/ucrtbase/api-ms-win-crt（静态 CRT）"
+
+      # 2026-10-21：opi-tools 的 `same_file` 在 Windows 上走 GetFileInformationByHandle
+      # （(卷序列号, 文件索引) 判据）；Linux CI 只编译 unix 分支，Windows 分支在这里
+      # 才真正被编译+运行。测的是 `compile` 拒绝覆盖自己的输入（含硬链接别名）。
+      - name: cargo test -p opi-tools（Windows 专属硬链接判据）
+        run: cargo test --locked -p opi-tools --test cli_boundary compile_must_not_overwrite_its_own_input
 
       # if-no-files-found: error —— 默认只 warn，而「绿了但没产物」正是本仓反复栽过的
       # 那种假绿（比红更坏：拿到手才发现空）。
@@ -319,7 +339,7 @@ jobs:
           if ((Split-Path $app -Leaf) -ne 'opi') {
             throw "app image 名不是 opi（是 $(Split-Path $app -Leaf)）—— Windows packageName 没生效"
           }
-          foreach ($f in 'opi.exe', 'app\tsf_opi.dll', 'app\luna.opid', 'app\LICENSE', 'app\LICENSES.md', 'app\GPL-3.0.txt') {
+          foreach ($f in 'opi.exe', 'app\tsf_opi.dll', 'app\luna.opid', 'app\symbol_categories.tsv', 'app\LICENSE', 'app\LICENSES.md', 'app\GPL-3.0.txt') {
             if (-not (Test-Path (Join-Path $app $f))) { throw "app image 缺 $f" }
           }
           # 身份核对：不是「有个叫 luna.opid 的东西」，而是「就是入库那份分发副本」。
@@ -615,6 +635,7 @@ jobs:
           if exist C:\opi-test\opi.exe (echo PRESENT > C:\work\install-opi.txt) else (echo ABSENT > C:\work\install-opi.txt)
           if exist C:\opi-test\app\tsf_opi.dll (echo PRESENT > C:\work\install-dll.txt) else (echo ABSENT > C:\work\install-dll.txt)
           if exist C:\opi-test\app\luna.opid (echo PRESENT > C:\work\install-luna.txt) else (echo ABSENT > C:\work\install-luna.txt)
+          if exist C:\opi-test\app\symbol_categories.tsv (echo PRESENT > C:\work\install-symbols.txt) else (echo ABSENT > C:\work\install-symbols.txt)
           reg query "HKLM\SOFTWARE\Microsoft\CTF\TIP\{98C51858-590B-404D-8915-21EB44250062}\LanguageProfile\0x00000804\{A31A137C-1404-42F2-B82C-4E63F15DEFD6}" >nul 2>&1
           if errorlevel 1 (echo MISSING > C:\work\install-profile.txt) else (echo PRESENT > C:\work\install-profile.txt)
           reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v opi-statusbar >nul 2>&1
@@ -655,6 +676,16 @@ jobs:
           :holder_ready_uninstall
           copy /y C:\work\holder.txt C:\work\holder-uninstall.txt >nul 2>&1
 
+          rem ---- Seed per-user UI residue: a user who added the IME leaves a
+          rem ---- keyboard-list value, an input-method sort-order entry and the
+          rem ---- per-user CTF enable subtree. Uninstall must remove all three
+          rem ---- (2026-10-21 real-machine fix).
+          reg add "HKCU\Control Panel\International\User Profile\zh-Hans-CN" /v "0804:{98C51858-590B-404D-8915-21EB44250062}{A31A137C-1404-42F2-B82C-4E63F15DEFD6}" /t REG_DWORD /d 3 /f >nul
+          reg add "HKCU\SOFTWARE\Microsoft\CTF\SortOrder\AssemblyItem\0x00000804\{34745C63-B2F0-4784-8B67-5E12C8701A31}\00000002" /v CLSID /t REG_SZ /d "{98C51858-590B-404D-8915-21EB44250062}" /f >nul
+          reg add "HKCU\SOFTWARE\Microsoft\CTF\SortOrder\AssemblyItem\0x00000804\{34745C63-B2F0-4784-8B67-5E12C8701A31}\00000002" /v Profile /t REG_SZ /d "{A31A137C-1404-42F2-B82C-4E63F15DEFD6}" /f >nul
+          reg add "HKCU\SOFTWARE\Microsoft\CTF\SortOrder\AssemblyItem\0x00000804\{34745C63-B2F0-4784-8B67-5E12C8701A31}\00000002" /v KeyboardLayout /t REG_DWORD /d 0 /f >nul
+          reg add "HKCU\SOFTWARE\Microsoft\CTF\TIP\{98C51858-590B-404D-8915-21EB44250062}\Enable\0x00000804" /v "{A31A137C-1404-42F2-B82C-4E63F15DEFD6}" /t REG_DWORD /d 1 /f >nul
+
           rem Keep the exit-code line OUT of an if-block: %ERRORLEVEL% in a
           rem parenthesized block is expanded when the block is parsed.
           if not exist C:\opi-test\unins000.exe goto no_uninstaller
@@ -670,6 +701,12 @@ jobs:
           if errorlevel 1 (echo ABSENT > C:\work\uninstall-profile.txt) else (echo PRESENT > C:\work\uninstall-profile.txt)
           reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v opi-statusbar >nul 2>&1
           if errorlevel 1 (echo ABSENT > C:\work\uninstall-run-statusbar.txt) else (echo PRESENT > C:\work\uninstall-run-statusbar.txt)
+          reg query "HKCU\Control Panel\International\User Profile\zh-Hans-CN" /v "0804:{98C51858-590B-404D-8915-21EB44250062}{A31A137C-1404-42F2-B82C-4E63F15DEFD6}" >nul 2>&1
+          if errorlevel 1 (echo ABSENT > C:\work\uninstall-hkcu-tip.txt) else (echo PRESENT > C:\work\uninstall-hkcu-tip.txt)
+          reg query "HKCU\SOFTWARE\Microsoft\CTF\TIP\{98C51858-590B-404D-8915-21EB44250062}" >nul 2>&1
+          if errorlevel 1 (echo ABSENT > C:\work\uninstall-hkcu-ctf.txt) else (echo PRESENT > C:\work\uninstall-hkcu-ctf.txt)
+          reg query "HKCU\SOFTWARE\Microsoft\CTF\SortOrder\AssemblyItem\0x00000804\{34745C63-B2F0-4784-8B67-5E12C8701A31}\00000002" >nul 2>&1
+          if errorlevel 1 (echo ABSENT > C:\work\uninstall-hkcu-sort.txt) else (echo PRESENT > C:\work\uninstall-hkcu-sort.txt)
           exit /b 0
           "@
           Set-Content -Path (Join-Path $work 'exe-smoke.cmd') -Value $script -Encoding ascii
@@ -683,6 +720,7 @@ jobs:
           if ((Get-Content install-opi.txt -Raw).Trim() -ne 'PRESENT') { throw '安装目录里没有 opi.exe' }
           if ((Get-Content install-dll.txt -Raw).Trim() -ne 'PRESENT') { throw '安装目录里没有 app\tsf_opi.dll' }
           if ((Get-Content install-luna.txt -Raw).Trim() -ne 'PRESENT') { throw '安装目录里没有 app\luna.opid（词库没随包）' }
+          if ((Get-Content install-symbols.txt -Raw).Trim() -ne 'PRESENT') { throw '安装目录里没有 app\symbol_categories.tsv（符号大全按钮会打开空页）' }
 
           # 注册结果必须被**记录**；0 与非 0 都接受（后者是 Server Core 的已知限制，
           # 安装不许因此回滚 —— 这正是 EXE 安装器与旧 MSI 的关键区别）。
@@ -767,7 +805,7 @@ jobs:
           }
           # 不把 Inno 的瞬时 "Failed to delete ... in use" 当失败：Inno 会重试，
           # 最终判据是上面的「目录/DLL 都不存在」与 `Removed all? Yes`。
-          foreach ($f in 'uninstall-profile.txt', 'uninstall-run-statusbar.txt') {
+          foreach ($f in 'uninstall-profile.txt', 'uninstall-run-statusbar.txt', 'uninstall-hkcu-tip.txt', 'uninstall-hkcu-ctf.txt', 'uninstall-hkcu-sort.txt') {
             if (-not (Test-Path $f)) { throw "缺少 $f（卸载后的注册表检查没跑）" }
             if ((Get-Content $f -Raw).Trim() -ne 'ABSENT') { throw "卸载后仍残留注册表项（见 $f）" }
           }
@@ -792,6 +830,7 @@ jobs:
             install-opi.txt
             install-dll.txt
             install-luna.txt
+            install-symbols.txt
             install-profile.txt
             install-run-statusbar.txt
             uninstall-removed.txt
@@ -805,26 +844,20 @@ jobs:
             hold-dll.ps1
             exe-smoke.cmd
 
-  # ---- 只报不进卡的 clippy（Windows 目标）----
+  # ---- clippy（Windows 目标，进卡）----
   #
   # 本仓已知盲区：ci.yml 的 clippy 只跑**主机目标**，而 tsf-opi 有四个模块整个在
   # `#[cfg(target_os = "windows")]` 里 —— 主机 clippy 一行都看不到它们。这条补上。
   #
-  # ⚠️ 它是 `continue-on-error`，因为**既有代码本来就有 8 条红**（本机 rustc 1.99.0
-  #    实测，`cargo clippy -p tsf_opi --target x86_64-pc-windows-msvc -- -D warnings`）：
-  #      · not_unsafe_ptr_arg_deref ×4 —— com_server.rs:282/289/290（DllGetClassObject
-  #        解引用裸指针而没标 unsafe fn；那是 COM 的固定导出形状，改签名等于改 ABI）
-  #      · result_unit_err ×1 —— candidate_io.rs:349（attach_sink 返回 Result<(), ()>）
-  #      · doc_lazy_continuation ×3 —— state.rs:208/209/210（续行没缩进）
-  #    本轮**不修代码**（任务边界：只做打包）。修掉这 8 条之后，把 continue-on-error
-  #    去掉即可变成门禁；在那之前它只是「每次 run 都把既有红摆在日志里」的取证点。
-  #    另一个不加卡的理由：clippy 的 lint 集合跟着工具链走（runner 的 stable 可能比
-  #    本机新），进卡会变成随工具链飘的红。
+  # 2026-10-21 起进卡：原有 9 条红已修（DllGetClassObject 标 unsafe + 补 # Safety、
+  # attach_sink 改返回 bool、两处 doc 续行缩进、candidate_io 的空行文档注释），
+  # 本机 rustc 1.99.1 上 `cargo clippy -p tsf_opi --all-targets -- -D warnings` 为绿。
+  # 工具链升级若引入新 lint，这里会与 ci.yml 的主机 clippy 一起红 —— 那是有意的信号，
+  # 不是需要重新加 continue-on-error 的噪声。
   clippy-windows:
-    name: clippy（Windows 目标，只报不进卡）
+    name: clippy（Windows 目标）
     runs-on: windows-latest
     needs: version
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 

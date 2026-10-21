@@ -743,6 +743,10 @@ jobs:
           files=(
             desktop/windows/launch-and-restart.cmd
             scripts/windows/opi.iss
+            # 2026-10-21：opi.iss 的 [Code] 拆出的两个 ISPP include —— 它们同样是
+            # 安装/卸载代码，Explorer/进程管理的静态门禁必须一并覆盖。
+            scripts/windows/opi-code-trash.iss
+            scripts/windows/opi-code-uninstall.iss
             scripts/postprocess-windows-msi.sh
             scripts/windows/postprocess-windows-msi.ps1
           )
@@ -799,8 +803,20 @@ jobs:
           if grep -Eq '^[[:space:]]*Source:.*Flags:.*uninsrestartdelete' <<<"$iss_code"; then
             echo "::error::不得用 uninsrestartdelete（卸载会请求重启）"; exit 1
           fi
+          # 2026-10-21 真机：luna.opid 被旧 TSF DLL 映射，restartreplace 会把它排进
+          # PendingFileRenameOperations，下一次安装直接拒绝（要求重启）。DLL 与词库
+          # 都在 ssInstall 前改名移出，绝不再用 restartreplace。
+          if grep -Eq '^[[:space:]]*Source:.*Flags:.*restartreplace' <<<"$iss_code"; then
+            echo "::error::不得用 restartreplace（会把文件排到重启，下一次安装拒绝）"; exit 1
+          fi
           grep -q 'MoveLockedTsfDllOut();' <<<"$uninst_block" || {
             echo "::error::卸载入口必须把锁定的 tsf_opi.dll 改名移出 {app}"; exit 1; }
+          grep -q 'MoveLockedDictionary(True);' <<<"$iss_code" || {
+            echo "::error::安装入口必须把被映射的 luna.opid 改名移出 {app}"; exit 1; }
+          grep -q 'MoveLockedDictionary(False);' <<<"$uninst_block" || {
+            echo "::error::卸载入口必须把被映射的 luna.opid 改名移出 {app}"; exit 1; }
+          grep -q 'InitializeSetup' <<<"$iss_code" || {
+            echo "::error::缺少 InitializeSetup（清理上一次安装留下的 PendingFileRenameOperations）"; exit 1; }
           for hive in HKEY_LOCAL_MACHINE HKEY_CURRENT_USER; do
             grep -Fq "RegDeleteValue($hive, RunKey, 'opi-statusbar')" <<<"$iss_code" || {
               echo "::error::卸载必须清理 $hive 下将来的 opi-statusbar Run 值"; exit 1; }

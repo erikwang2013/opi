@@ -287,7 +287,7 @@ LICENSE · CONTRIBUTING.md      # MIT full text · contribution guide (incl. dic
 
 ### 📅 Project Status
 
-> **Current stage: v1.20.2 (2026-10-21): iOS panel back / Chinese-English / simplified-traditional stay inside the current IME, symbol glyph fallback fixed, system IME switch added to every keyboard bottom-left; Windows old TSF DLL replacement and uninstall residue fixed (same-volume rename, CI mapped-DLL test); Apple unsigned, device verification pending**
+> **Current stage: v1.21.0 (2026-10-22): Windows candidate bar follows the caret with pinyin above the candidates, Shift tap toggles Chinese/English, the candidate window follows the selected skin and font size; Settings gains Keys/Appearance pages plus a new-version checker; installer layout fixed (no extra `opi\opi` nesting); Apple unsigned, device verification pending**
 
 V1 milestone progress:
 

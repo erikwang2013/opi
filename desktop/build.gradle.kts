@@ -47,7 +47,7 @@ kotlin {
 // jpackage 的包版本与设置窗标题栏都从这里取。**此前设置窗里写死过一份**
 // （"1.4.0"），到 1.6.0 就成了摆在用户眼前的假话 —— 两处写死是漂移的充分条件，
 // 生成一个常量是把它压成一处的最短路径（同 android 侧 versionName 的单一来源约定）。
-val opiAppVersion = "1.20.2"
+val opiAppVersion = "1.21.0"
 
 val generateOpiVersionSource by tasks.registering {
     val outDir = layout.buildDirectory.dir("generated/sources/opiVersion/kotlin")
@@ -149,6 +149,11 @@ tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageT
             // 分发义务与 `scripts/nfpm.yaml` 那段相同（少了它们包在授权上不完整）。
             val luna = file("../android/app/src/main/assets/luna.opid")
             check(luna.isFile) { "找不到词库分发副本：${luna.path}" }
+            // 符号类目数据（2026-10-21）：状态栏「符号大全」按钮在 Windows 上原本只能打开
+            // 一个「没有类目数据」的空页 —— 数据没随包。真源 = Android 分发副本（与 luna
+            // 同一条纪律）；jpackage 把它放进 `app\`，`symbolDataCandidates` 加了该顺位。
+            val symbols = file("../android/app/src/main/assets/symbol_categories.tsv")
+            check(symbols.isFile) { "找不到符号类目分发副本：${symbols.path}" }
             val licenses = listOf(
                 file("../LICENSE"),
                 file("../data/raw/LICENSES.md"),
@@ -159,6 +164,7 @@ tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageT
                 src,
                 file("windows/launch-and-restart.cmd"),
                 luna,
+                symbols,
                 *licenses.toTypedArray(),
             )
         }

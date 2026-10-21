@@ -18,21 +18,25 @@ import org.junit.Test
 
 class ClassicUiFontTest {
 
+    /** Linux 落点的期望串是 `/` 分隔；`Paths.get` 按**运行平台**拼路径，Windows 主机
+     *  上跑这条时 `toString()` 会带 `\`。比较前统一成 `/` —— 判的是推导，不是分隔符。 */
+    private fun posix(p: java.nio.file.Path): String = p.toString().replace('\\', '/')
+
     @Test
     fun `path follows xdg then home, same derivation as the addon config`() {
         assertEquals(
             "/x/cfg/fcitx5/conf/classicui.conf",
-            classicUiPathFor(xdgConfigHome = "/x/cfg", home = "/home/u").toString(),
+            posix(classicUiPathFor(xdgConfigHome = "/x/cfg", home = "/home/u")),
         )
         // XDG_CONFIG_HOME 缺省 ⇒ $HOME/.config
         assertEquals(
             "/home/u/.config/fcitx5/conf/classicui.conf",
-            classicUiPathFor(xdgConfigHome = null, home = "/home/u").toString(),
+            posix(classicUiPathFor(xdgConfigHome = null, home = "/home/u")),
         )
         // 空串等同未设置（与 settingsPathFor 同一口径）
         assertEquals(
             "/home/u/.config/fcitx5/conf/classicui.conf",
-            classicUiPathFor(xdgConfigHome = "", home = "/home/u").toString(),
+            posix(classicUiPathFor(xdgConfigHome = "", home = "/home/u")),
         )
         // 与 addon 配置**同目录**（两处共用 fcitxConfDir；这条防以后有人各写一份推导）
         assertEquals(

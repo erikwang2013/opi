@@ -17,12 +17,14 @@ fn defaults_are_all_on() {
 
 #[test]
 fn parses_every_key_false() {
-    let s = parse("Learn=False\nChinesePunct=False\nFuzzy=False\nJianpin=False\n");
+    let s =
+        parse("Learn=False\nChinesePunct=False\nShiftToggle=False\nFuzzy=False\nJianpin=False\n");
     assert_eq!(
         s,
         Settings {
             learn: false,
             chinese_punct: false,
+            shift_toggle: false,
             fuzzy: false,
             fuzzy_pairs: String::new(),
             jianpin: false,
@@ -38,6 +40,17 @@ fn parses_every_key_false() {
             disabled_dicts: String::new(),
         }
     );
+}
+
+/// 2026-10-22：Shift 轻按开关（键 `ShiftToggle`，与 desktop 写侧同键）。默认开；
+/// 显式 False/小写值按同一套宽容口径。**键名区分大小写**与其它键一致。
+#[test]
+fn shift_toggle_is_read_with_the_shared_bool_rules() {
+    assert!(parse("").shift_toggle, "缺键 = 默认开");
+    assert!(!parse("ShiftToggle=False\n").shift_toggle);
+    assert!(!parse("ShiftToggle=0\n").shift_toggle);
+    assert!(parse("ShiftToggle=ON\n").shift_toggle);
+    assert!(parse("shifttoggle=False\n").shift_toggle, "小写键名不生效");
 }
 
 #[test]
@@ -145,6 +158,19 @@ fn apply_settings_prefers_the_pairs_list() {
     assert_eq!(s.engine.fuzzy_pairs(), FUZZY_ALL, "无列表 → 回落布尔全开");
     s.apply_settings(parse("Fuzzy=False\n"), std::path::Path::new(""));
     assert_eq!(s.engine.fuzzy_pairs(), 0, "无列表 + 布尔关 → 全关");
+}
+
+/// 2026-10-22：`ShiftToggle` 经 `apply_settings` 落到 `TsfLogic`（胶水读的就是它）。
+/// 解析层与套用层各钉一次 —— 只测解析的话「读到了但没应用」依然绿。
+#[test]
+fn apply_settings_carries_shift_toggle() {
+    use engine_core::dictionary::InMemoryDictionary;
+    let mut s = crate::logic::TsfLogic::with_dict(Box::new(InMemoryDictionary::new()));
+    assert!(s.shift_toggle(), "构造默认开");
+    s.apply_settings(parse("ShiftToggle=False\n"), std::path::Path::new(""));
+    assert!(!s.shift_toggle());
+    s.apply_settings(parse("ShiftToggle=True\n"), std::path::Path::new(""));
+    assert!(s.shift_toggle());
 }
 
 /// 拼音纠错（2026-10-13）：键 `Correction`，缺省开（对齐主流输入法）。

@@ -32,6 +32,7 @@ fn punct_state() -> TsfLogic {
         shift_state: ShiftState::Off,
         english_pro: true,
         last_printable: None,
+        shift_toggle: true,
     };
     s.switch_mode(Mode::Pinyin);
     s
@@ -216,4 +217,29 @@ fn switch_to_english_reapplies_shift_state() {
     s.input_key('b' as u32, 0);
     assert_eq!(s.buffer(), "AB", "LOCK 重推且持续");
     assert_eq!(s.shift_state(), ShiftState::Lock);
+}
+
+// ---------- toggle_language（Shift 轻按 / 状态栏 lang 共用的语义本体） ----------
+
+/// 物理 Shift 的「轻按」判定在胶水层（Linux=C++、TSF=tsf.rs，见 crate::shift_tap）；
+/// 这里只钉语义本体两件事：两个方向都切、进英文时待处理拼音按 W1 上原文。
+#[test]
+fn toggle_language_switches_both_ways_and_commits_raw_pinyin() {
+    use crate::logic::TsfLogic;
+
+    let mut s = TsfLogic::load(None).expect("内置回退词库");
+    s.switch_mode(Mode::Pinyin);
+    assert_eq!(s.toggle_language(), "", "空缓冲切英文：没有要上屏的");
+    assert_eq!(s.mode(), Mode::English);
+    assert_eq!(s.toggle_language(), "", "英文切回拼音：无提交");
+    assert_eq!(s.mode(), Mode::Pinyin);
+
+    // 有缓冲：切英文前把拼音原文交出去（不是首候选、更不是静默丢弃）
+    for c in "nihao".chars() {
+        s.input_key(c as u32, 0);
+    }
+    assert_eq!(s.toggle_language(), "nihao");
+    assert_eq!(s.mode(), Mode::English);
+    assert_eq!(s.buffer(), "");
+    assert_eq!(s.shift_state(), ShiftState::Off, "轻按不该把大写带进英文档");
 }

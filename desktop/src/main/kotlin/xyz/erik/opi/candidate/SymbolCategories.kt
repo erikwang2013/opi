@@ -82,9 +82,9 @@ object SymbolCategories {
 /**
  * 数据文件候选（**纯函数**：环境量当参数传，单测才能钉住 —— 这是「本页读哪个文件」
  * 与「打包往哪拷」的接缝，错了就是静默显示「没有类目数据」）。**顺序即优先级**：
- * Windows = ① `%LOCALAPPDATA%\opi\` → ② exe 同目录（对齐 `crates/tsf-opi/src/dict_path.rs`
- * 的「DLL 同目录」候选：LOCALAPPDATA 那份可能没装上/被删，装机里自带的一份还能顶上）；
- * `exeDir` 为 null（非 jpackage 启动：IDE/命令行）时该顺位退出。
+ * Windows = ① `%LOCALAPPDATA%\opi\` → ② exe 同目录 → ③ `exe 同目录\app\`（jpackage 的
+ * `--input`/Compose `files` 落在 app image 的 `app\`，词库/DLL 也在那里；2026-10-21 起
+ * 符号类目 TSV 随包放在这儿）。`exeDir` 为 null（非 jpackage 启动：IDE/命令行）时 ②③ 退出。
  */
 fun symbolDataCandidates(windows: Boolean, localAppData: String?, exeDir: Path?): List<Path> =
     if (windows) {
@@ -92,6 +92,7 @@ fun symbolDataCandidates(windows: Boolean, localAppData: String?, exeDir: Path?)
         listOfNotNull(
             Paths.get(base, "opi", "symbol_categories.tsv"),
             exeDir?.resolve("symbol_categories.tsv"),
+            exeDir?.resolve("app")?.resolve("symbol_categories.tsv"),
         )
     } else {
         listOf(Paths.get("/usr/share/opi/symbol_categories.tsv"))

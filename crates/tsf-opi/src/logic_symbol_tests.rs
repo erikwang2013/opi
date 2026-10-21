@@ -31,6 +31,7 @@ fn symbol_state() -> TsfLogic {
         shift_state: ShiftState::Off,
         english_pro: true,
         last_printable: None,
+        shift_toggle: true,
     };
     s.refresh_snapshot();
     s.switch_mode(Mode::Symbol);

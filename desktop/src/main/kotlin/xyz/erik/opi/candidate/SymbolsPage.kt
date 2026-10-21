@@ -17,8 +17,8 @@
 //! 数据文件（真源 = `android/app/src/main/assets/symbol_categories.tsv`，由
 //! `scripts/gen_symbol_categories.py` 生成）。读取**顺位**见 [symbolDataCandidates]：
 //! · Windows = ① `%LOCALAPPDATA%\opi\`（与 settings.ini 同目录）→ ② **exe 同目录**
-//!   （windows.yml 打包时把 tsv 装在启动器旁）→ 都缺就显示「没有类目数据」
-//!   （本侧不硬编兜底数据）。
+//!   → ③ `exe 同目录\app\`（jpackage 的 `files` 落点；2026-10-21 起符号 TSV 随包放这里，
+//!   与 `luna.opid`/`tsf_opi.dll` 同目录）→ 都缺就显示「没有类目数据」（本侧不硬编兜底数据）。
 //! · Linux = `/usr/share/opi/symbol_categories.tsv`（fcitx5-glue 的 CMake install
 //!   在装；本机实测在：`ls -l /usr/share/opi/`）。
 

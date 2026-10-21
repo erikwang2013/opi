@@ -181,24 +181,13 @@ pub fn execute(
             Ok(CtlReply::Reload)
         }
         CtlOp::Action(action) => match action.as_str() {
-            // 中/英：与 Linux `lang` 同一语义（Shift 轻按）——只在**进英文**时提交
-            // 待定拼音原文（W1），离开英文只切模式。⇧ 残留在进英文后清掉。
-            "lang" => {
-                if logic.mode() == Mode::English {
-                    logic.switch_mode(Mode::Pinyin);
-                    Ok(CtlReply::Action {
-                        token: None,
-                        commit: None,
-                    })
-                } else {
-                    let text = logic.switch_mode_confirmed(Mode::English);
-                    logic.reset_shift();
-                    Ok(CtlReply::Action {
-                        token: None,
-                        commit: non_empty(text),
-                    })
-                }
-            }
+            // 中/英：与 Linux `lang` 同一语义（Shift 轻按）——语义本体在
+            // `TsfLogic::toggle_language`（Shift 轻按走同一个函数，两处不能各写一份：
+            // 一处改了「切英文要先确认缓冲」、另一处漏改就是静默漂移）。
+            "lang" => Ok(CtlReply::Action {
+                token: None,
+                commit: non_empty(logic.toggle_language()),
+            }),
             // 简繁：与 Linux `opiToggleTraditional` 一致（plain switch，不确认缓冲）。
             "trad" => {
                 let next = if logic.mode() == Mode::Traditional {

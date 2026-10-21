@@ -30,7 +30,10 @@
 //! 判据 1、2 与字体无关；判据 3 两侧同字同号。
 //! 判据 4 **不是**「CI 上只弱不假红」：缺 CJK 字体时回退字体的**行盒更高**（DejaVu 级
 //! ~1.4× vs CJK ~1.25×），同一页在 CI 上反而更高 —— 20.sp 初版就是这样在 CI 边沿
-//! （本机 165 / CI 字体 175 > 168）。本机逐字复现这个环境：
+//! （本机 165 / CI 字体 175 > 当时的窗高 168）。**2026-10-22 起候选窗是固定两行
+//! 横条**（拼音一行、候选一行，高 76dp、宽按两行内容实测），判据 4 相应改成「现实
+//! 页形高度恒等于条高」并用横向溢出的页形钉住翻页控件不被挤出窗；判据 6 钉「拼音
+//! 墨迹在候选墨迹上方」。本机逐字复现这个环境：
 //!   `printf '<fontconfig><dir>/usr/share/fonts/truetype/dejavu</dir></fontconfig>' > /tmp/fc-nocjk/fonts.conf`（再加 <cachedir>）
 //!   前提自证：`FONTCONFIG_FILE=… fc-list ':charset=4e2d' | wc -l` 应为 0
 //!   跑：`FONTCONFIG_FILE=… ./gradlew test --tests "…CandidateFontGateTest"`
@@ -47,6 +50,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -108,17 +112,12 @@ class CandidateFontGateTest {
      * `rememberWindowState`」—— 那正好命中设置窗（本门禁第一版就这么翻过车），字号会按 800×560
      * 基准算，门禁自己先假红。
      */
-    private val realWindow: DpSize by lazy {
-        val src = repoFile("desktop/src/main/kotlin/xyz/erik/opi/candidate/Main.kt")
-        val ms = Regex("""val windowState = rememberWindowState\(width = (\d+)\.dp, height = (\d+)\.dp\)""")
-            .findAll(src).toList()
-        assertTrue(
-            "Main.kt 里 `val windowState = rememberWindowState(width = N.dp, height = N.dp)` 命中 ${ms.size} 处" +
-                "（要恰好 1 处）—— 这道门禁会空转/量错窗（候选窗换写法了？）",
-            ms.size == 1,
-        )
-        DpSize(ms[0].groupValues[1].toInt().dp, ms[0].groupValues[2].toInt().dp)
-    }
+    /**
+     * 夹具窗 = 横条设计尺寸（720×48）。**不是**运行期真实宽度：真实宽度按每页内容动态
+     * 计算（`rememberCandidateBarSize`），没有固定值；这里固定尺寸只为量字号/行数。
+     * 设计尺寸与 Main.kt 的接线由下面的 `main drives window and panel from one size` 钉住。
+     */
+    private val realWindow: DpSize get() = PANEL_DESIGN_SIZE
 
     /** 仓库根下的源文件（相对 desktop/ 模块目录，与 SettingsLockstepTest 同一取法）。 */
     private fun repoFile(rel: String): String {
@@ -170,15 +169,22 @@ class CandidateFontGateTest {
         assertTrue(atFloor(CandidateFont.MIN))
     }
 
-    /** 真窗尺寸的两份抄本（Main.kt 的常量 vs 面板基准）不许漂 —— 这是判据 4 夹具的前提。 */
+    /**
+     * 尺寸**只有一个来源**：Main.kt 必须用 `rememberCandidateBarSize(model)` 的返回值同时
+     * 驱动窗口（rememberWindowState）与面板（`windowSize = barSize`）。此前窗口写死一份、
+     * 面板另算一份，必然漂移（门禁上一次就是这么抓到 320 vs 真窗的）。
+     */
     @Test
-    fun `the panel's design window is the real window in Main kt`() {
-        assertEquals(
-            "Main.kt 的真窗与 PANEL_DESIGN_SIZE 不一致：夹具与字号基准都挂在后者上，一起改",
-            realWindow,
-            PANEL_DESIGN_SIZE,
+    fun `main drives window and panel from one measured size`() {
+        val src = repoFile("desktop/src/main/kotlin/xyz/erik/opi/candidate/Main.kt")
+        assertTrue(
+            "Main.kt 没把 rememberCandidateBarSize 的结果传给面板（windowSize = barSize）",
+            src.contains("rememberCandidateBarSize(model, fontScale)") &&
+                src.contains("windowSize = barSize"),
         )
-        assertEquals("真窗高（Main.kt）应为 168 —— 判据 4 的注释与边界数字按它写", 168, realWindow.height.value.toInt())
+        // 固定两行：设计高度就是运行期高度（宽度才按内容变）。
+        assertEquals("横条设计高度固定 76dp（拼音行 + 候选行）", 76, PANEL_DESIGN_SIZE.height.value.toInt())
+        assertEquals("横条设计宽度基准 720dp", 720, PANEL_DESIGN_SIZE.width.value.toInt())
     }
 
     // ---------- 判据 2：按窗口取较大值 ----------
@@ -242,24 +248,23 @@ class CandidateFontGateTest {
         )
     }
 
-    // ---------- 判据 4：不溢出 ----------
+    // ---------- 判据 4：不溢出（横条 = 固定两行，高度恒定） ----------
 
     @Test
-    fun `real-world pages stay inside the window`() {
+    fun `real-world pages keep the fixed two-row height`() {
         val ch = discoveredCoveredCodePoints(1).first()
         // 印出本机**实际用到的**夹具字：CI 上（无 CJK 字体）这行会与本地不同，红的时候
         // 一眼看出是不是字体环境变了 —— 也是「发现式取字真的生效了」的正控。
         println("夹具字 = 「$ch」U+%04X（本机字体覆盖决定；CI 上非 CJK）".format(ch.first().code))
         val h = realWindow.height.value.toInt()
-        // ⚠️ 画布**故意比窗高**（480）：拿真窗高当画布时，超出的内容被裁在窗底，而面板底色正好
-        // 铺满整幅 ⇒ `requiredHeightPx` 恒回 168、`168 <= 168` 恒真 —— 溢出反而看不见（本门禁
-        // 第一版就是这么写的空转）。画布高了，溢出才以真实数字现身。
-        // 宽度仍用真窗宽 —— 决定折行的是宽。
-        val tall = DpSize(realWindow.width, 480.dp)
+        // 画布**故意比条高**（240）：面板根节点按 windowSize.height 定高，横条若偷偷折成
+        // 多行，requiredHeightPx 会大于条高，当场红。宽度用真窗宽（候选溢出由横向滚动接住，
+        // 不参与高度）。
+        val tall = DpSize(realWindow.width, 240.dp)
         for (n in listOf(1, 2, 4, 6)) {
             val need = requiredHeightPx(panel("c-8x$n.png", model(List(8) { ch.repeat(n) }), realWindow, tall))
-            println("8 条 × $n 字 → 需要 ${need}px（窗高 $h）")
-            assertTrue("8 条 × $n 字要 ${need}px > 窗高 ${h}px：底部（翻页行）会被裁", need <= h)
+            println("8 条 × $n 字 → 需要 ${need}px（条高 $h）")
+            assertEquals("8 条 × $n 字把横条撑高了（需要 ${need}px）—— 高度必须恒定", h, need)
         }
         // 读数行也拉满一次：24 字母缓冲（2026-10-14 实测里最长的输入串是无空格长拼音）。
         val need = requiredHeightPx(
@@ -267,27 +272,32 @@ class CandidateFontGateTest {
                 buffer = "guojiazhongdianyanfajihua"
             }, realWindow, tall),
         )
-        println("24 字母缓冲 + 8 条 × 4 字 → 需要 ${need}px（窗高 $h）")
-        assertTrue("长缓冲 + 满页候选要 ${need}px > 窗高 ${h}px", need <= h)
-
-        // 边界只**印**不断言：夹具止于 6 字是「真出现的页形」（引擎侧首页实测最长 6 字），
-        // 8 字起是能算出来、目前引擎到不了的页形 —— 它要真出现，得先加大窗高（Main.kt，不归
-        // 本门禁），所以钉它会红、红得没意义。印出来是为了让「差多少到裁」当场可读（不再抄
-        // 一个会静默漂的数字进注释）。
-        for (n in listOf(8, 10)) {
-            val wide = requiredHeightPx(panel("c-8x$n.png", model(List(8) { ch.repeat(n) }), realWindow, tall))
-            println("（参考，不断言）8 条 × $n 字 → 需要 ${wide}px（窗高 $h）")
-        }
+        println("24 字母缓冲 + 8 条 × 4 字 → 需要 ${need}px（条高 $h）")
+        assertEquals("长缓冲把横条撑高了 —— 拼音行也固定一行", h, need)
     }
 
     /**
-     * 放大档的高度预算（lead 2026-10-14 问：「窗口变大时字号放到多大封顶？别让 8 条候选在大窗里
-     * 溢出」）。封顶值 = [MAX_FONT_SCALE]（1.5×，理由见 CandidateWindow.kt：大屏上不出巨字，
-     * 且要给放大档留出**已实测**的高度余量）；这里把那个余量钉住 —— 量法与判据 4 完全相同，
-     * 只是窗换成 2×（640×336 ⇒ 字号吃到上限、候选 30.sp），阈值换成放大后那个窗的高。
+     * 横向溢出时**翻页控件必须还在右端**：候选区是 weight(1f) + horizontalScroll，长词挤
+     * 不掉它。这条是横条版的正控 —— 换回不带 weight 的 Row 时，8 条 × 60 字会把翻页区推到
+     * 窗外（右端 90px 一点墨迹都没有），当场红。
      */
     @Test
-    fun `the cap keeps a grown window from overflowing`() {
+    fun `the page control stays visible when candidates overflow`() {
+        val ch = discoveredCoveredCodePoints(1).first()
+        val img = panel("bar-overflow.png", model(List(8) { ch.repeat(60) }), realWindow)
+        assertTrue(
+            "候选溢出时右侧翻页控件被挤出窗（应固定在右端）",
+            hasInkInColumns(img, img.width - 90, img.width),
+        )
+    }
+
+    /**
+     * 放大档的高度预算：封顶值 = [MAX_FONT_SCALE]（1.5×）；2× 窗（1440×96）下字号吃到上限、
+     * 候选 30.sp，横条仍是固定两行高度。判据与 `real-world pages` 相同，阈值换成放大后的条高。
+     * 横向溢出/翻页控件不被挤走由 `the page control stays visible` 钉住。
+     */
+    @Test
+    fun `the cap keeps a grown window at its fixed height`() {
         val ch = discoveredCoveredCodePoints(1).first()
         val grown = DpSize(PANEL_DESIGN_SIZE.width * 2, PANEL_DESIGN_SIZE.height * 2)
         // 前提：2× 窗确实吃到上限 —— 否则下面量的是别档，数字失去意义（改 MAX_FONT_SCALE 时先看这里）。
@@ -298,31 +308,90 @@ class CandidateFontGateTest {
             0.01f,
         )
         val h = grown.height.value.toInt()
-        val tall = DpSize(grown.width, 640.dp)
+        val tall = DpSize(grown.width, 320.dp)
         for (n in listOf(1, 2, 4, 6)) {
             val need = requiredHeightPx(panel("big-8x$n.png", model(List(8) { ch.repeat(n) }), grown, tall))
-            println("放大档（1.5×，候选 ${fontSizeFor(CandidateFont.Candidate, grown)}）8 条 × $n 字 → 需要 ${need}px（2× 窗高 $h）")
-            assertTrue("放大档 8 条 × $n 字要 ${need}px > 窗高 ${h}px：大窗里也会裁", need <= h)
+            println("放大档（1.5×，候选 ${fontSizeFor(CandidateFont.Candidate, grown)}）8 条 × $n 字 → 需要 ${need}px（2× 条高 $h）")
+            assertEquals("放大档 8 条 × $n 字把横条撑高了", h, need)
         }
         val need = requiredHeightPx(
             panel("big-longbuf.png", model(List(8) { ch.repeat(4) }).apply {
                 buffer = "guojiazhongdianyanfajihua"
             }, grown, tall),
         )
-        println("放大档 24 字母缓冲 + 8 条 × 4 字 → 需要 ${need}px（2× 窗高 $h）")
-        assertTrue("放大档长缓冲 + 满页候选要 ${need}px > 窗高 ${h}px", need <= h)
+        println("放大档 24 字母缓冲 + 8 条 × 4 字 → 需要 ${need}px（2× 条高 $h）")
+        assertEquals("放大档长缓冲把横条撑高了", h, need)
+    }
 
-        // **正控**：上面那批「不溢出」只有在量具**能量到溢出**时才是证据。拿一页必然溢出的
-        // 页形（8 条 × 60 字：任何字体下都折行到远超 336）反证量具没饱和 —— 画布一旦被改回
-        // 「等于窗高」，溢出会被裁在窗底、量具恒回 $h，这条正控当场红（这正是本门禁第一版
-        // 的空转形态）。页形不现实没关系：它量的不是产品，是尺子。
-        val saturated = requiredHeightPx(
-            panel("big-overflow-control.png", model(List(8) { ch.repeat(60) }), grown, tall),
+    /** 纯函数：横条宽度必须给翻页控件留位，并按上下限收口（超长候选由候选区滚动接住）。 */
+    @Test
+    fun `bar width accounts for the page control and clamps to the bounds`() {
+        fun w(items: List<Float>, empty: Float = 300f, page: Float = 100f): Float =
+            candidateBarWidthDp(40f, 24f, items, empty, page, BAR_MIN_WIDTH, BAR_MAX_WIDTH)
+        assertEquals(
+            "页控件宽度必须整段计入（不能从候选区挤）",
+            100f,
+            w(emptyList(), page = 200f) - w(emptyList(), page = 100f),
+            0.01f,
         )
-        println("（正控，必须超窗）放大档 8 条 × 60 字 → 需要 ${saturated}px（2× 窗高 $h）")
+        assertEquals("空态内容与「一条同宽候选」等价", w(emptyList(), empty = 300f), w(listOf(300f)), 0.01f)
+        assertEquals("极长页：窗宽封顶（超出由候选区横向滚动）", BAR_MAX_WIDTH, w(List(8) { 500f }), 0.01f)
+        assertEquals("极短页：不小于下限（保持长条形态）", BAR_MIN_WIDTH, w(emptyList(), empty = 0f, page = 0f), 0.01f)
+    }
+
+    // ---------- 判据 6：拼音在候选上方（2026-10-22 用户裁决） ----------
+
+    /**
+     * 「候选词中的拼音要在候选词上方」——字面量：拼音墨迹的每一行都严格在候选墨迹
+     * 之上。用两张只换文字的面板图做差分行定位（与字号接线同一套量法），不依赖任何
+     * 坐标常量：布局改回单行时两组墨迹会落在同一行，当场红。
+     */
+    @Test
+    fun `pinyin ink is drawn above the candidate ink`() {
+        val bufferRows = diffRowIndices(
+            panel("rows-buffer-a.png", model(listOf("A")).apply { buffer = "mmm" }, realWindow),
+            panel("rows-buffer-b.png", model(listOf("A")).apply { buffer = "nnn" }, realWindow),
+        )
+        val candidateRows = diffRowIndices(
+            panel("rows-cand-a.png", model(listOf("WWW")), realWindow),
+            panel("rows-cand-b.png", model(listOf("MMM")), realWindow),
+        )
+        assertTrue("拼音行一个像素都没画出来", bufferRows.isNotEmpty())
+        assertTrue("候选行一个像素都没画出来", candidateRows.isNotEmpty())
+        println("拼音墨迹行 = $bufferRows；候选墨迹行 = $candidateRows")
         assertTrue(
-            "正控没超窗（量到 ${saturated}px ≤ $h）：量具饱和了 —— 画布是不是被改成等于窗高了？",
-            saturated > h,
+            "拼音墨迹（$bufferRows）不在候选墨迹（$candidateRows）上方 —— 用户裁决「拼音要在候选词上方」",
+            bufferRows.max() < candidateRows.min(),
+        )
+    }
+
+    // ---------- 判据 7：候选窗跟着皮肤走（2026-10-22 用户报障） ----------
+
+    /**
+     * 底色必须取 `LocalBarPalette`（Main.kt 按 `Skin=` provide），而不是面板里写死的
+     * 深色。用浅色皮肤渲一帧，左上角像素（面板 padding，一定是底色）必须等于
+     * `skinColors(LIGHT).bg` —— 改回写死常量这条立刻红。
+     */
+    @Test
+    fun `the panel background follows the skin palette`() {
+        val light = skinColors(SkinOption.LIGHT)
+        val w = realWindow.width.value.toInt()
+        val h = realWindow.height.value.toInt()
+        val img = render("skin-light.png", w, h) {
+            CompositionLocalProvider(LocalBarPalette provides light) {
+                CandidatePanel(
+                    model(listOf("A")),
+                    onSelect = {},
+                    onNext = {},
+                    onPrev = {},
+                    windowSize = realWindow,
+                )
+            }
+        }
+        assertEquals(
+            "候选窗底色没跟皮肤走（应 = 浅色皮肤的 bg）—— 面板里又写死颜色了？",
+            light.bg.toArgb(),
+            img.getRGB(0, 0),
         )
     }
 
@@ -371,13 +440,16 @@ class CandidateFontGateTest {
     }
 
     /** 两张同布局图里**有像素不同**的行数 = 被换掉那个字的墨迹高度（空格 = 无墨迹）。 */
-    private fun diffRows(a: BufferedImage, b: BufferedImage): Int {
+    private fun diffRows(a: BufferedImage, b: BufferedImage): Int = diffRowIndices(a, b).size
+
+    /** 同 [diffRows]，但返回**行号**（判据 6 要比较两处墨迹的上下位置）。 */
+    private fun diffRowIndices(a: BufferedImage, b: BufferedImage): List<Int> {
         assertEquals("两图尺寸不同，不可比", a.width to a.height, b.width to b.height)
-        var rows = 0
+        val rows = mutableListOf<Int>()
         for (y in 0 until a.height) {
             for (x in 0 until a.width) {
                 if (a.getRGB(x, y) != b.getRGB(x, y)) {
-                    rows++
+                    rows += y
                     break
                 }
             }
@@ -390,5 +462,17 @@ class CandidateFontGateTest {
         val s = sentinel.toArgb()
         for (y in img.height - 1 downTo 0) if (img.getRGB(0, y) != s) return y + 1
         return 0
+    }
+
+    /**
+     * [x0, x1) 列里有没有「非底色」像素。左上角 (0,0) 是面板 padding，一定是底色 ——
+     * 用它当底色样本，不抄第二份颜色常量（抄了就会随皮肤/配色漂）。
+     */
+    private fun hasInkInColumns(img: BufferedImage, x0: Int, x1: Int): Boolean {
+        val bg = img.getRGB(0, 0)
+        for (x in x0.coerceAtLeast(0) until x1.coerceAtMost(img.width)) {
+            for (y in 0 until img.height) if (img.getRGB(x, y) != bg) return true
+        }
+        return false
     }
 }

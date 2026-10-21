@@ -62,6 +62,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -73,6 +74,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -87,7 +89,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -109,54 +110,11 @@ import xyz.erik.opi.pet.OpiPetWindowIcon
 // —— 2026-10-12 用户报障「设置皮肤后状态栏皮肤没同步变化」的修复（此前五个颜色
 // 全是写死的深色常量，条从没读过皮肤）。同步靠本文件既有的 1s 配置轮询，自动。
 // 「不改动」= SkinPalette.KeepColors（= 上述那五个常量原值，行为一字不变）。
+// 尺寸表（BTN/GAP/PAD/BAR_H、BarMetrics、barMetrics、statusBarWidthDp）在 SkinAndStatus.kt：
+// 2026-10-21 为守住 500 行门禁从这里拆出，同包 internal 引用不变。
 
-internal const val BTN = 30 // 100% 时的按钮边长
-private const val GAP = 4
-private const val PAD = 6
-private const val BAR_H = 42
-
-/**
- * 状态栏的**唯一尺寸表**（2026-10-19 用户裁决「统一调整所有状态栏键大小」）：
- * 按钮、间距、内边距、条高全乘 [StatusBarSettings.scale] 同一系数。100% 时逐项等于
- * BTN/GAP/PAD/BAR_H；enpro/en26 与其他键共用这里同一个 [button] 盒（键帽再按 26/30
- * 画在盒内，见 KeycapFace.kt）。别在调用点各自乘 —— 第二份尺寸就是漂移口。
- */
-internal data class BarMetrics(val button: Dp, val gap: Dp, val pad: Dp, val height: Dp)
-
-/** [scale] 先经 [statusBarScalePercent] 收口（越界值按边界算）。纯函数。 */
-internal fun barMetrics(scale: Int): BarMetrics {
-    val k = statusBarScalePercent(scale) / 100f
-    return BarMetrics((BTN * k).dp, (GAP * k).dp, (PAD * k).dp, (BAR_H * k).dp)
-}
-
-/** 条宽随按钮数变（隐藏的按钮不占位）。[scale] 与 [barMetrics] 同一系数。纯函数，单测钉住。 */
-internal fun statusBarWidthDp(buttonCount: Int, scale: Int = STATUS_BAR_SCALE_DEFAULT): Float {
-    val k = statusBarScalePercent(scale) / 100f
-    return (PAD * 2 + BTN * buttonCount + GAP * (buttonCount - 1).coerceAtLeast(0)) * k
-}
-
-/**
- * 纯函数：条该不该显示（[StatusBarApp] 的 visible 用它）。
- *
- * 规则（2026-10-10 下午用户裁决「切到其他输入法时状态栏消失」）：
- * `enabled && (im 未知 || im == "opi")` ——
- * · [buttons] 空 = master 隐藏 / 按钮全关 ⇒ 恒隐藏（老规则，优先级最高，与 [im] 无关）；
- * · [im] 缺键/空串 = **未知** ⇒ Linux 维持现状（可见）、Windows 隐藏（[requireActive]）——
- *   glue 的 `im=` 还没合时旧输出正好落这里，轮询读失败（中性缺省）也落这里；
- * · [im] 非空且 ≠ "opi"（当前是别的输入法）⇒ 隐藏；切回 opi 由 1s 轮询让它自己出现。
- * · Windows 的 [requireActive]：只有 `im == "opi"` 才显示；TSF 未连接时状态读不到，
- *   状态栏进程虽随登录常驻但不可见（否则安装完就出现一条点哪都报错的条）。
- *
- * ⚠️ `"opi"` 是**跨轨字面**（glue 侧追加的 `im=` 值 = 本 addon 的 uniqueName）。对不上的
- * 表现是「opi 激活时条一直藏着」——响的错，不是静默错；但改它必须两侧一起改。
- */
-internal fun barVisible(buttons: List<StatusBarButton>, im: String, requireActive: Boolean = false): Boolean {
-    if (buttons.isEmpty()) return false
-    // Windows 常驻状态栏仅在 TSF 激活（im=opi）时显示；未知状态隐藏，免得安装完就出现
-    // 一条点哪都报错的条。Linux 保留「未知 ⇒ 维持可见」（旧 glue 缺 im= 时不闪）。
-    if (requireActive) return im == "opi"
-    return im.isEmpty() || im == "opi"
-}
+// barVisible 也移到了 SkinAndStatus.kt（2026-10-21 再次撞 500 行）；它是纯函数，
+// 与本文件的状态栏窗口无耦合。
 
 /** 初始位置：屏幕底部居中、离下沿一截（别贴边，也别压任务栏）。 */
 private fun barPosition(widthDp: Int): WindowPosition {
@@ -179,6 +137,9 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
     var s by remember { mutableStateOf(loadSettings()) }
     // 起始 = 中性缺省，首拍轮询（≤1s）补上真实状态 —— 不在组合期做进程调用。
     var imeState by remember { mutableStateOf(ImeState()) }
+    // 连续「状态读不到」的拍数：短暂抖动保留上一条状态（不闪），连续失败才回到中性
+    // （Windows 上 im 空 = 隐藏）。没有这个上限，宿主进程退出后条会停在旧状态不收。
+    var stateFails by remember { mutableIntStateOf(0) }
     // 模式档位（模式按钮面用）。2026-10-14 起 `opi-ctl state` 带 `mode=` 位（modeplumb 落地），
     // 所以真值来自轮询、不是本进程的记忆：**点击 = 乐观更新，轮询 = 权威**（下面每拍
     // `mode = barMode(st)`）。两者不会打架：`opi-ctl mode` 只在引擎切完之后才返回新 token，
@@ -200,10 +161,19 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
             // EDT 就停摆 —— 用户报的「切换输入法状态栏卡死」正是这条（2026-10-13 jstack
             // 实抓 EDT 停在 ProcessImpl.waitFor ← Actions.runCapture ← readImeState）。
             // 循环仍是单条协程顺序执行：不可重入、次序（设置→状态）与超时值都不变。
-            val (next, st) = withContext(Dispatchers.IO) { loadSettings() to readImeState() }
+            val (next, st) = withContext(Dispatchers.IO) { loadSettings() to readImeStateOrNull() }
             if (next != s) s = next // 变了才写状态：否则每秒一次无谓重组
-            if (st != imeState) imeState = st
-            mode = barMode(st) // 档位跟着 state 走（缺 mode 位的老插件 ⇒ barMode 回落默认档）
+            // 读失败（null）：先保留上一次状态（一次管道抖动不把用户正要点的按钮变没），
+            // 但连续 3 拍（≈3s）都读不到就回到中性 —— 否则宿主退出后条会永远停在旧状态。
+            if (st != null) {
+                stateFails = 0
+                if (st != imeState) imeState = st
+                mode = barMode(st) // 档位跟着 state 走（缺 mode 位的老插件 ⇒ barMode 回落默认档）
+            } else if (stateFails < 3) {
+                stateFails++
+            } else if (imeState.im.isNotEmpty()) {
+                imeState = ImeState()
+            }
         }
     }
     LaunchedEffect(notice) {
@@ -286,8 +256,12 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
             // 也不会误判；老插件的 state 没有 enpro= 位，会得到「重启 fcitx5」的提示，
             // 而不是把 err:5「未知动作」原样弹给用户。
             StatusBarButton.ENPRO -> {
-                val why = enproBlockReason(readImeState())
-                if (why != null) report(why) else report(runStatusAction(b))
+                val st = readImeStateOrNull()
+                if (st == null) report("输入法无应答，请稍后重试")
+                else {
+                    val why = enproBlockReason(st)
+                    if (why != null) report(why) else report(runStatusAction(b))
+                }
             }
             // Windows 走控制面（runStatusAction 内的平台分派），Linux 仍是 opi-ctl。
             else -> report(runStatusAction(b))
@@ -300,6 +274,15 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
     val actionLock = remember { Mutex() }
 
     fun onButton(b: StatusBarButton) {
+        // 本进程内的窗口开关：直接在 UI 线程执行，不排 IO 队列。2026-10-21 用户报
+        // 「打开设置好久才会有」：这三个动作不做任何进程/管道调用，却曾和 `opi-ctl`
+        // 一起排进串行 IO 锁，前面还可能堵着一次最长 1.5s 的状态补读。
+        when (b) {
+            StatusBarButton.SETTINGS -> { settingsOpen = true; return }
+            StatusBarButton.VK -> { vkOpen = !vkOpen; return }
+            StatusBarButton.SYMBOLS -> { symbolsOpen = !symbolsOpen; return }
+            else -> {}
+        }
         // 动作一返回就补读状态（点完马上看到翻转，不等下一秒的轮询）。补读与轮询并存：
         // fcitx5 应用切换是异步的，个别时候补读会早于状态落定 —— 1s 轮询是兜底。
         //
@@ -307,12 +290,16 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
         // 换肤那条的 `notifyFcitxReload`（三条 D-Bus 工具，`waitFor` **无超时**），补读又是
         // 一次 1.5s；留在 EDT 上就是「点一下冻 5 秒」（2026-10-13 实抓：EDT 停在
         // notifyFcitxReload 的 waitFor ← saveSettings ← cycleSkin ← dispatch ← onButton）。
-        // dispatch 里那几个赋值（s/vkOpen/settingsOpen/notice）从 IO 线程写 Snapshot 状态
-        // 是安全的：Compose 的 Snapshot 状态跨线程可写，重组合照旧排到 UI 线程。
+        // dispatch 里那几个赋值（s/settingsOpen/notice）从 IO 线程写 Snapshot 状态是安全的：
+        // Compose 的 Snapshot 状态跨线程可写，重组合照旧排到 UI 线程。
         scope.launch {
             actionLock.withLock {
                 withContext(Dispatchers.IO) {
-                    actionWithStateRefresh({ dispatch(b) }) { imeState = readImeState() }
+                    // 补读失败（null）**不覆盖**已有状态：动作刚返回时 broker 可能还忙/超时，
+                    // 把 im 清空会让 Windows 下整条立即隐藏（用户报「点按钮条就没了」）。
+                    actionWithStateRefresh({ dispatch(b) }) {
+                        readImeStateOrNull()?.let { imeState = it }
+                    }
                 }
             }
         }
@@ -320,7 +307,10 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
 
     // 条隐藏时**连内容一起退出组合**：提示窗是独立 Window，只藏条窗不会带走它
     // （悬停状态也可能收不到 Exit）⇒ 必须把按钮/提示从组合里摘掉。
-    val shown = barVisible(buttons, imeState.im, requireActive = isWindows())
+    // 本条自己打开的窗口（设置/符号/软键盘）开着时**强制显示**：这些窗口会拿走焦点，
+    // TSF Deactivate 后 im 读不到；若此时隐藏，用户看到的就是「点一下条就没了」。
+    val shown = barVisible(buttons, imeState.im, requireActive = isWindows()) ||
+        settingsOpen || vkOpen || symbolsOpen
     Window(
         // 无边框窗没有关闭入口；「隐藏」走设置里的 master 开关（进程留着，见 visible 一行）。
         onCloseRequest = {},
@@ -411,6 +401,9 @@ private fun BarButton(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
+    // 按下反馈（2026-10-21 用户裁决「按钮要可操作」）：动作走控制面时可能等上几十~几百 ms，
+    // 没有按下态的话用户会以为没点上而连点。按下 = accent 半透明，悬停 = hover 色。
+    val pressed by interaction.collectIsPressedAsState()
     val palette = LocalBarPalette.current
     // 英文专业键常亮（2026-10-19）：否则切了 pro 看不出任何变化。用既有 hover 色，
     // 不新造颜色/角色（见 SkinPalette.kt 的角色映射）。键帽本身是固定白底（设计图），
@@ -425,7 +418,13 @@ private fun BarButton(
     Box(
         modifier = Modifier
             .size(metrics.button)
-            .background(if (hovered || active) palette.hover else Color.Transparent)
+            .background(
+                when {
+                    pressed -> palette.accent.copy(alpha = 0.30f)
+                    hovered || active -> palette.hover
+                    else -> Color.Transparent
+                },
+            )
             .clickable(interactionSource = interaction, indication = null) { onClick(b) }
             .then(if (b == StatusBarButton.LOGO) dragToMove(windowState) else Modifier)
             .onGloballyPositioned { anchor = it.boundsInWindow() }

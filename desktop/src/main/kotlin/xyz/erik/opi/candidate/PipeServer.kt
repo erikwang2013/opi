@@ -47,6 +47,12 @@ private const val PIPE_WAIT = 0x0
 private const val PIPE_REJECT_REMOTE_CLIENTS = 0x00000008
 private const val PIPE_BUF = 4096
 private const val MAX_INSTANCES = 1
+/**
+ * 「有数据才 ReadFile」的轮询间隔。**不能用阻塞 ReadFile**：同步命名管道句柄上
+ * 未完成的 ReadFile 会把同句柄的 WriteFile 串行化 —— TSF 按键线程的第二次 show
+ * 会永久阻塞，宿主 UI 冻住（2026-10-21 真机：n 出候选窗后 i 不再响应）。
+ */
+private const val READ_POLL_MS = 20L
 
 /** ConnectNamedPipe 返回 0 时的「客户端已抢先连上」错误码 —— 属正常，不是故障。 */
 private const val ERROR_PIPE_CONNECTED = 535
@@ -99,6 +105,7 @@ class PipeServer(private val model: CandidateModel) {
                 synchronized(connLock) { lastClientPipe = created }
                 readLoop(created)
             } catch (t: Throwable) {
+                println("[opi-pipe] serveLoop exception: " + t)
                 // 任何 Throwable（含 Error：StackOverflowError / OutOfMemoryError）都不许
                 // 杀死本线程 —— 线程一死 serveLoop 就再也不会重建管道，而表面症状只有
                 // 「候选窗再也不出现」，零日志，是最难查的一类故障。镜像 Rust 侧读线程
@@ -173,8 +180,16 @@ class PipeServer(private val model: CandidateModel) {
         // 两处「互为镜像」的约定在这里必须同构。
         val pending = ByteArrayOutputStream()
         while (true) {
+            // 先 Peek：同步句柄上不能留一个阻塞 ReadFile，否则同句柄的 WriteFile
+            // 会被串行化（见 READ_POLL_MS）。
+            val avail = IntByReference()
+            if (!Kernel32.INSTANCE.PeekNamedPipe(pipe, null, 0, null, avail, null)) return
+            if (avail.value == 0) {
+                Thread.sleep(READ_POLL_MS)
+                continue
+            }
             val n = IntByReference()
-            // 字节流阻塞读：失败或 0 字节 = 客户端断开。
+            // 字节流读：Peek 已确认有数据，这次 ReadFile 不会阻塞。
             if (!Kernel32.INSTANCE.ReadFile(pipe, buf, buf.size, n, null) || n.value <= 0) return
             pending.write(buf, 0, n.value)
             // 攒够上限还没有 '\n'：丢弃残留并退出 readLoop。只清残留不退出的话，
@@ -239,8 +254,10 @@ class PipeServer(private val model: CandidateModel) {
                 "position" -> {
                     // x/y 单位 = AWT 逻辑像素（约定见 Main.kt 头注释；勿按设备像素或
                     // density 缩放）。
-                    (obj["x"] as? JVal.JNum)?.let { model.x = it.v.toInt() }
-                    (obj["y"] as? JVal.JNum)?.let { model.y = it.v.toInt() }
+                    var got = false
+                    (obj["x"] as? JVal.JNum)?.let { model.x = it.v.toInt(); got = true }
+                    (obj["y"] as? JVal.JNum)?.let { model.y = it.v.toInt(); got = true }
+                    if (got) model.positioned = true
                 }
                 // TSF 对控制请求的应答：按 id 唤醒 requestCtl 的调用方（ControlPlane.kt）。
                 "ctl_result" -> {

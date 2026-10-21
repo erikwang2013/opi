@@ -48,6 +48,26 @@ fn mapped_key_uses_unicode_codepoint() {
     assert_eq!(vk_to_engine_keycode(0x41, -1, 0), NO_KEYVAL);
 }
 
+// 缺陷形态（2026-10-22 用户报障「无法用 Shift 切换中英文」）：Windows 的按键**按下**
+// 事件报 VK_SHIFT=0x10，**抬起**事件报 VK_LSHIFT=0xA0 / VK_RSHIFT=0xA1。旧映射只认
+// VK_SHIFT，抬起两个码经 `ToUnicodeEx` 无映射 → NO_KEYVAL → 引擎看不到抬起事件，
+// 「轻按切中英」永远等不到判定点。三码必须都归一到 KEY_SHIFT。
+#[test]
+fn shift_left_right_and_generic_vks_all_map_to_key_shift() {
+    for vk in [0x10u32, 0xa0, 0xa1] {
+        assert!(is_shift_vk(vk), "VK {vk:#x} 应识别为 Shift");
+        assert_eq!(
+            vk_to_engine_keycode(vk, 0, 0),
+            KEY_SHIFT,
+            "VK {vk:#x} 的抬起映射丢了"
+        );
+    }
+    // 正控：别的键不得被当成 Shift（否则任何按键都会被武装/切换）
+    for vk in [0x41u32, 0x11, 0x12, 0x5b] {
+        assert!(!is_shift_vk(vk), "VK {vk:#x} 不是 Shift");
+    }
+}
+
 #[test]
 fn special_vks_pass_through_as_their_keycode() {
     // 特殊键走编码键码、不取 ToUnicodeEx 的字符：VK_BACK 的映射结果是退格

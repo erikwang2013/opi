@@ -142,19 +142,23 @@ class SettingsTest {
     fun `linux path is the fcitx5 addon config`() {
         // 对侧读侧 = opi_config.h 的 readAsIni(PkgConfig, "conf/opi_fcitx5.conf")。
         // 路径错 = 设置窗写了个 fcitx5 不读的文件（静默不生效），故钉死。
+        //
+        // 期望串用 `/`；`Paths.get` 按**运行平台**拼路径，Windows 主机上 `toString()`
+        // 会带 `\`。判的是推导（目录/文件名），不是分隔符，故比较前统一。
+        fun posix(p: java.nio.file.Path): String = p.toString().replace('\\', '/')
         assertEquals(
             "/x/cfg/fcitx5/conf/opi_fcitx5.conf",
-            settingsPathFor(windows = false, xdgConfigHome = "/x/cfg", home = "/home/u", localAppData = null).toString(),
+            posix(settingsPathFor(windows = false, xdgConfigHome = "/x/cfg", home = "/home/u", localAppData = null)),
         )
         // XDG_CONFIG_HOME 缺省 ⇒ $HOME/.config
         assertEquals(
             "/home/u/.config/fcitx5/conf/opi_fcitx5.conf",
-            settingsPathFor(windows = false, xdgConfigHome = null, home = "/home/u", localAppData = null).toString(),
+            posix(settingsPathFor(windows = false, xdgConfigHome = null, home = "/home/u", localAppData = null)),
         )
         // 空串等同未设置（与 Rust 侧 dict_path/data_dir 的 takeIf { isNotEmpty() } 同口径）
         assertEquals(
             "/home/u/.config/fcitx5/conf/opi_fcitx5.conf",
-            settingsPathFor(windows = false, xdgConfigHome = "", home = "/home/u", localAppData = null).toString(),
+            posix(settingsPathFor(windows = false, xdgConfigHome = "", home = "/home/u", localAppData = null)),
         )
     }
 
@@ -282,15 +286,33 @@ class SettingsTest {
             ),
             settingsTabs(windows = false),
         )
-        // Windows：按键（ShiftToggle 只有 Linux 读侧认）与外观（Skin 是 fcitx5 主题）不出；
-        // 词库页两平台都出（目录推导分平台，页本身同构 —— 见 Dicts.kt）。
+        // 2026-10-22 起 Windows 与 Linux **同页集**：ShiftToggle 读侧已接通、皮肤由
+        // 候选窗/状态栏跟随、候选字号由候选窗缩放 —— 两页不再是「点不动的开关」。
         assertEquals(
-            listOf(
-                SettingsTab.COMMON, SettingsTab.STATUSBAR, SettingsTab.SYMBOLS,
-                SettingsTab.DICTS, SettingsTab.WUBI, SettingsTab.ABOUT,
-            ),
+            "Windows 设置页集合与 Linux 相同（按键/外观两页已接通）",
+            settingsTabs(windows = false),
             settingsTabs(windows = true),
         )
+    }
+
+    @Test
+    fun `fixed hotkeys are listed per platform`() {
+        // Windows 只列 TSF 真有的键：Shift 轻按 / Ctrl+' / Ctrl+\ / Shift+Space。
+        val win = fixedHotkeys(windows = true)
+        assertEquals(
+            listOf("Shift 轻按", "Ctrl+'", "Ctrl+\\", "Shift+Space"),
+            win.map { it.first },
+        )
+        // Linux 多出简繁与符号大全两条（fcitx5 插件里的热键）。
+        val linux = fixedHotkeys(windows = false)
+        assertTrue(linux.any { it.first == "Ctrl+Shift+F" })
+        assertTrue(linux.any { it.first == "Ctrl+Shift+Z" })
+        assertFalse(
+            "Windows 没有 Ctrl+Shift+F 这条热键（简繁只在状态栏按钮上）",
+            win.any { it.first == "Ctrl+Shift+F" },
+        )
+        // 两张表的每一条都有作用说明（空说明 = 状态栏/设置页出现一行假条目）。
+        assertTrue((win + linux).all { it.second.isNotBlank() })
     }
 
     @Test

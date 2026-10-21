@@ -19,11 +19,13 @@
 //!             （page/page_count 为 1 起；candidates 为当前页文本）
 //!   hide      {"type":"hide"}
 //!   position  {"type":"position","x":120,"y":340}
-//!             // caret 提示（骨架降级固定位置）。x/y 单位 = **AWT 逻辑像素**
-//!             // （= Compose 的 .dp 数值）：收端直接 WindowPosition(x.dp, y.dp)，
-//!             // 而 CMP 1.11.1 的窗口定位不乘 density（反编译 setPositionImpl
-//!             // 确认），故发 200 就落在离屏幕左缘 200 逻辑像素处。发端不得
-//!             // 预乘 density/缩放，收端不得按设备像素解读。
+//!             // caret 位置（2026-10-22 起真发：TSF 每次 composition 变化取
+//!             // caret，窗口贴着输入处；发端见 crates/tsf-opi/src/caret.rs）。
+//!             // x/y 单位 = **AWT 逻辑像素**（= Compose 的 .dp 数值）：收端直接
+//!             // WindowPosition(x.dp, y.dp)，而 CMP 1.11.1 的窗口定位不乘 density
+//!             // （反编译 setPositionImpl 确认），故发 200 就落在离屏幕左缘 200
+//!             // 逻辑像素处。发端不得预乘 density/缩放，收端不得按设备像素解读
+//!             // （TSF 的物理像素由发端按 DPI 折算）。
 //!             // 两侧协议头现已同步（crates/tsf-opi/src/candidate_io.rs 的
 //!             // position 条目有同样一段）；改动单位语义时**必须两处同改**。
 //!
@@ -46,8 +48,15 @@
 //! jna-platform 是跨平台 jar，Linux 上可编译（kernel32 仅 Windows 存在 ——
 //! 验收阶段在 Windows 上运行）。
 //!
-//! 窗口行为：无边框 + 置顶 + 不抢焦点（输入法候选窗语义）；初始隐藏，
-//! show 消息到达才显示；position 消息 → 跟随 caret（缺省固定默认位置）。
+//! 窗口行为（2026-10-21 用户裁决「长条的，和搜狗输入法一样」）：无边框 + 置顶 +
+//! 不抢焦点（输入法候选窗语义）；初始隐藏，show 消息到达才显示。**两行横条**
+//! （2026-10-22 用户裁决「拼音要在候选词上方」）：第一行拼音 + 模式、第二行候选 +
+//! 翻页控件，高度固定 76dp；宽度按两行里更宽的一行实测（`rememberCandidateBarSize`）
+//! 在屏幕内伸缩，候选放不下时该区域横向滚动、翻页控件钉在右端。position 消息 →
+//! 窗口贴着 caret（屏幕边缘处收回屏内）；没收到过 caret 位置时水平居中，宽度变化时
+//! 自动重算。**皮肤与候选字号**跟设置窗/状态栏同一份 `settings.ini`（本进程 1s
+//! 轮询，与状态栏的同步机制一致）：皮肤 = `Skin=`，字号 = `CandidateFont=小|中|大`
+//! → `candidateFontScale` 缩放整张字号表。
 //!
 //! 翻页：**本窗只发消息，不改本地页码** —— 页码的唯一真源是 TSF 回发的 show。
 //! TSF 侧已接线：`candidate_io.rs` 的 `SharedAction::on_next_page`/`on_prev_page`
@@ -62,17 +71,23 @@
 
 package xyz.erik.opi.candidate
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalFontFamilyResolver
+import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlin.system.exitProcess
 import xyz.erik.opi.pet.OpiPetWindowIcon
 
@@ -91,6 +106,11 @@ class CandidateModel {
     var mode by mutableStateOf("pinyin")
     var x by mutableIntStateOf(FIXED_X)
     var y by mutableIntStateOf(FIXED_Y)
+    /**
+     * 是否收到过真实 caret 位置（`position` 消息）。否 = 用横条自己的默认落点
+     * （[candidateBarPosition]：按宽度居中，避免长条超出屏幕）；是 = 跟 caret 走。
+     */
+    var positioned by mutableStateOf(false)
 }
 
 // ---------- 入口 ----------
@@ -132,25 +152,69 @@ fun main(args: Array<String>) = application {
         return@application
     }
 
-    val model = remember { CandidateModel() }
-    val server = remember { PipeServer(model).also { it.start() } }
-    // 状态栏/设置进程的控制面 broker（ControlPlane.kt）：本进程是唯一连着 TSF 的一端。
-    remember { ControlServer(server).also { it.start() } }
-    val windowState = rememberWindowState(width = 320.dp, height = 168.dp)
+    // 候选窗分支：application 根组合默认**没有** LocalFontFamilyResolver，而横条宽度要在
+    // 这一层用 TextMeasurer 算（必须赶在 Window 创建前 —— Compose 1.11 实测：首次组合里
+    // 再改 WindowState.size 不会作用于首个 show，要等下一次重组合；初始 state 直接给正确
+    // 尺寸才没有这一帧的错位）。补一个平台 resolver，只影响本分支。
+    CompositionLocalProvider(
+        LocalFontFamilyResolver provides remember { createFontFamilyResolver() },
+    ) {
+        val model = remember { CandidateModel() }
+        val server = remember { PipeServer(model).also { it.start() } }
+        // 状态栏/设置进程的控制面 broker（ControlPlane.kt）：本进程是唯一连着 TSF 的一端。
+        remember { ControlServer(server).also { it.start() } }
+        // 外观：状态栏/设置窗只会写 settings.ini（**另一个进程**），本进程与状态栏
+        // 用同一条既有机制跟上 —— 1s 读一次小文件；首拍立即读，不等 1s。
+        // · 皮肤（2026-10-22 用户报障「点击状态栏logo切换背景，候选词框的背景没变化」）
+        // · 候选字号（设置窗「外观 → 候选字号」，三档缩放见 candidateFontScale）
+        var skin by remember { mutableStateOf(SkinOption.KEEP) }
+        var fontName by remember { mutableStateOf(CLASSIC_UI_FONT_DEFAULT) }
+        LaunchedEffect(Unit) {
+            while (true) {
+                val st = withContext(Dispatchers.IO) { loadSettings() }
+                if (st.skin != skin) skin = st.skin
+                if (st.candidateFont != fontName) fontName = st.candidateFont
+                delay(1000)
+            }
+        }
+        val fontScale = candidateFontScale(fontName)
+        // 2026-10-21 用户裁决：Windows 候选窗 = **搜狗式横条**；2026-10-22 起为
+        // **两行**（拼音行 + 候选行，按内容定宽、高 76dp）。
+        val barSize = rememberCandidateBarSize(model, fontScale)
+        val windowState = rememberWindowState(
+            width = barSize.width,
+            height = barSize.height,
+            position = candidateBarPosition(barSize),
+        )
+        // 翻页/换页 → 宽度跟着内容走（首帧以后的变化都是重组合后的 ComponentUpdater 应用）。
+        LaunchedEffect(barSize) { windowState.size = barSize }
+        // 位置：收到过 caret 位置就跟它走；否则用横条默认落点（按宽度居中，长条不出屏）。
+        // caret 贴近屏幕右/下边缘时要收回屏内 —— 发端只知道 caret 坐标，不知道窗宽高。
+        LaunchedEffect(model.x, model.y, model.visible, model.positioned, barSize) {
+            if (model.visible) {
+                windowState.position = if (model.positioned) {
+                    val screen = virtualScreenBounds()
+                    val maxX = (screen.x + screen.width - barSize.width.value.toInt())
+                        .coerceAtLeast(screen.x)
+                    val maxY = (screen.y + screen.height - barSize.height.value.toInt())
+                        .coerceAtLeast(screen.y)
+                    WindowPosition(
+                        model.x.coerceIn(screen.x, maxX).dp,
+                        model.y.coerceIn(screen.y, maxY).dp,
+                    )
+                } else {
+                    candidateBarPosition(barSize)
+                }
+            }
+        }
 
-    // 登录自启后，进程可能整场都没有候选要显示。**首次 show 之前不建窗**：
-    // Window 一组合就会创建 AWT 窗口并初始化 Skiko/D3D 表面，而这份 GPU 资源
-    // 对「还没开始打字」的会话是纯成本。首次显示后窗口保留（隐藏时不绘制，
-    // 见 Skiko 0.144.6 Direct3DRedrawer.frameDispatcher 的 isShowing 分支），
-    // 后续 show 无重建延迟。
-    // 零窗口不会结束 application：isOpen 只由 exitApplication() 置 false
-    // （反编译 Application.desktop.kt 的 awaitApplication 确认）。
-    var windowCreated by remember { mutableStateOf(false) }
-    LaunchedEffect(model.visible) {
-        if (model.visible) windowCreated = true
-    }
-
-    if (windowCreated) {
+        // 登录自启后，进程可能整场都没有候选要显示。曾尝试「首次 show 之前不建窗」
+        // 以省下 Skiko/D3D 的开销，但 2026-10-21 真机验证发现：Compose 1.11 的
+        // `application` 在**没有任何 Window** 时会在 `Recomposer.close/join` 后直接返回
+        // （反编译 Application_desktopKt$awaitApplication$2$1$2 确认），于是候选进程
+        // 启动即退出 —— `\\.\pipe\opi` / `\\.\pipe\opi-control` 都不存在，候选窗与
+        // 状态栏都拿不到 TSF 状态。**必须保留一个 Window 让 application 活着**；
+        // 不可见时不绘制（见 Skiko Direct3DRedrawer.frameDispatcher 的 isShowing 分支）。
         Window(
             onCloseRequest = ::exitApplication,
             state = windowState,
@@ -163,18 +227,18 @@ fun main(args: Array<String>) = application {
             title = "小欧输入法 候选窗",
             icon = OpiPetWindowIcon, // 窗口/任务栏图标 = 小欧（PetIcon.kt）
         ) {
-            // 位置跟随（position 消息；缺省固定默认位置）。
-            LaunchedEffect(model.x, model.y, model.visible) {
-                if (model.visible) {
-                    windowState.position = WindowPosition(model.x.dp, model.y.dp)
-                }
+            // 皮肤在 Window 内容里 provide 一次：候选面板与状态栏读同一份角色表
+            // （SkinPalette.kt），换肤只改这一个来源。`skin` 由上面的 1s 轮询更新。
+            CompositionLocalProvider(LocalBarPalette provides skinColors(skin)) {
+                CandidatePanel(
+                    model = model,
+                    onSelect = server::sendSelect,
+                    onNext = server::sendNextPage,
+                    onPrev = server::sendPrevPage,
+                    windowSize = barSize,
+                    fontScale = fontScale,
+                )
             }
-            CandidatePanel(
-                model = model,
-                onSelect = server::sendSelect,
-                onNext = server::sendNextPage,
-                onPrev = server::sendPrevPage,
-            )
         }
     }
 }

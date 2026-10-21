@@ -40,6 +40,20 @@ pub mod extra_dicts;
 #[cfg(target_os = "windows")]
 pub mod tsf;
 
+/// Windows 目标专属：TSF 键事件 → 引擎键码/键状态（`tsf.rs` 的 Win32 取数部分，
+/// 拆出只为守住 500 行；判定本体在平台中立的 `vk.rs`）。
+#[cfg(target_os = "windows")]
+mod key_state;
+
+/// Windows 目标专属：`ITfThreadFocusSink`（候选管道跟随前台线程；从 `tsf.rs` 拆出守 500 行）。
+#[cfg(target_os = "windows")]
+mod thread_focus;
+
+/// Windows 目标专属：候选窗接缝 `TsfSink` + 状态推送 + 出口公用件
+/// （从 `tsf.rs` 拆出守 500 行；语义见模块头）。
+#[cfg(target_os = "windows")]
+mod sink;
+
 /// Windows 目标专属：COM 服务器面（类工厂 + `Dll*` 导出 + regsvr32 注册）。
 /// 与 `tsf.rs` 同样的 cfg 门：`windows` 依赖不进 Linux 主机构建路径。
 /// **注册效果与"能否在 Word 里打字"本机（Linux）无法验证**，见模块头注释。
@@ -50,6 +64,11 @@ pub mod com_server;
 /// 从 `com_server.rs` 拆出只为守住 500 行；验证边界同 `com_server`。
 #[cfg(target_os = "windows")]
 mod registration;
+
+/// Shift 轻按判定（平台中立，镜像 fcitx5 轨 C++ 的 `OpiShiftToggle`）：
+/// 与大小写三态分开，**不进** Rust 键路由 —— Linux 轨的同一判定在 C++ glue 里，
+/// 两轨 Rust 逻辑必须逐事件同构（`two_track_parity`）。接线在 `tsf.rs`。
+pub mod shift_tap;
 
 /// Win32 VK → 引擎键码的映射判定（纯函数，无 windows 类型 → 主机可编译可单测）。
 /// `tsf.rs` 是 `#[cfg(target_os = "windows")]`：判定若留在那边，Linux 门禁就永远
@@ -67,6 +86,16 @@ pub mod langbar_icon;
 /// 主机（Linux）构建/测试不受影响。
 #[cfg(target_os = "windows")]
 pub mod candidate_io;
+
+/// Windows 目标专属：候选窗接缝的生产实现（`TsfSink` → show/hide/position）。
+/// 从 `candidate_io.rs` 拆出守 500 行（那边 = 管道，这里 = 事件映射）。
+#[cfg(target_os = "windows")]
+pub mod candidate_sink;
+
+/// Windows 目标专属：caret 屏幕位置 → 候选窗坐标（从 `tsf.rs` 拆出守 500 行；
+/// 坐标空间/编辑会话的理由见模块头）。2026-10-22：候选窗贴着输入位置。
+#[cfg(target_os = "windows")]
+mod caret;
 
 /// Windows 目标专属：引擎状态 + 文档写入（`tsf.rs` 与 `candidate_io.rs` 共用）。
 /// 单独成文件的两个理由（B1 的顺序问题 + 500 行硬规矩）见模块头注释。

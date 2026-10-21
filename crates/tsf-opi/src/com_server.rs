@@ -28,7 +28,8 @@ use windows::Win32::System::LibraryLoader::{
 };
 use windows::core::{BOOL, GUID, HRESULT, IUnknown, Interface, PCWSTR, Ref, Result, implement};
 
-use crate::candidate_io::{CandidateAction, CandidateSink};
+use crate::candidate_io::CandidateAction;
+use crate::candidate_sink::CandidateSink;
 use crate::dict_path;
 use crate::dll::{CLSID_TEXT_SERVICE, DllLock, dll_can_unload};
 use crate::registration::{register, unregister};
@@ -145,7 +146,7 @@ impl IClassFactory_Impl for ClassFactory_Impl {
             // 回填失败只可能是重复初始化（本处是唯一调用点）→ 记一行，不中断：
             // 服务照常可用，只是点选后窗口不会自动刷新。比起让输入法整个不存在，
             // 这个降级明显更轻。
-            if action.attach_sink(Arc::clone(&sink)).is_err() {
+            if !action.attach_sink(Arc::clone(&sink)) {
                 eprintln!("tsf-opi: 候选窗回调的 sink 槽位已有值，点选后窗口不会自动刷新");
             }
             let service = TsfTextService::new(TsfSharedState::new(engine), sink);
@@ -181,8 +182,18 @@ impl IClassFactory_Impl for ClassFactory_Impl {
 ///
 /// `#[unsafe(no_mangle)]` + `extern "system"` 缺一不可：名字被装饰或调用约定
 /// 不对，宿主看到的就是"导出不存在"，与没写这个函数没区别。
+///
+/// `unsafe fn` 是**契约**而不是 ABI：三个参数都是 COM 保证有效的裸指针
+/// （调用方必须遵守），Rust 侧把它标成 unsafe 才能表达这一点；导出名、调用
+/// 约定与 ABI 都不变。
+///
+/// # Safety
+///
+/// 只能由 COM 以本 DLL 的导出表调用：`rclsid`/`riid` 必须指向有效的 `GUID`，
+/// `ppv` 必须指向可写的 `*mut c_void`。任一为空时函数返回 `E_POINTER`，不会
+/// 解引用空指针。
 #[unsafe(no_mangle)]
-pub extern "system" fn DllGetClassObject(
+pub unsafe extern "system" fn DllGetClassObject(
     rclsid: *const GUID,
     riid: *const GUID,
     ppv: *mut *mut c_void,

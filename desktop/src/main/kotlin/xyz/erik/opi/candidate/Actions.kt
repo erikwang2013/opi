@@ -348,6 +348,20 @@ fun readImeState(): ImeState {
 }
 
 /**
+ * 同 [readImeState]，但**通道失败返回 null**（而不是中性缺省）。状态栏的 1s 轮询用它：
+ * 读到失败时保留上一次状态，别把 `im` 清空 —— Windows 的 `barVisible(requireActive=true)`
+ * 会把整条隐藏，一次管道抖动就像「按钮突然点不动了」。其余调用方（按钮动作前现读）仍用
+ * [readImeState] 的中性缺省语义。
+ */
+internal fun readImeStateOrNull(): ImeState? {
+    if (isWindows()) return controlImeState()
+    return when (val r = runCapture(listOf("opi-ctl", "state"), 1500)) {
+        is RunResult.Exit -> if (r.code == 0) parseImeState(r.firstLine) else null
+        RunResult.Timeout, is RunResult.Failed -> null
+    }
+}
+
+/**
  * 英文专业键（en/pro）的**生效范围**（2026-10-19 用户裁决）：只控制英文是否查单词库，
  * 且只在英文输入法下有效。返回 null = 放行；非 null = 给用户看的原因，**不发动作**。
  *

@@ -73,7 +73,10 @@ object PetEmojiTable {
     }
 
     private fun table(tsv: String, header: String, columns: Int): List<List<String>> {
-        val lines = tsv.removeSuffix("\r\n").removeSuffix("\n").split('\n')
+        // CRLF：Windows 检出（core.autocrlf=true）或手改过的 TSV 每一行都以 \r\n 结尾。
+        // 此前只剥掉**末尾一处** \r\n，中间行的字段就拖着 \r —— 表头比较直接失败，表情页
+        // 静默变空。统一换行后再切行（Windows 是桌面端的目标平台，这条必须成立）。
+        val lines = tsv.replace("\r\n", "\n").removeSuffix("\n").split('\n')
         require(lines.isNotEmpty() && lines[0] == header) {
             "表头不对：期望 \"$header\"，实际 \"${lines.firstOrNull()}\""
         }

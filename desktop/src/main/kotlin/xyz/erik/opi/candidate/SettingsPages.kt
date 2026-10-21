@@ -7,8 +7,10 @@
 //! 每页只列**引擎真的支持的开关**（本窗既有原则）：页里没有的东西不是「忘了」，
 //! 是引擎还没有那个旋钮 —— 摆上来就是假承诺。「关于」页里那句自述必须跟着页集合走。
 //!
-//! 平台分叉：皮肤（fcitx5 主题）与 Shift 轻按（`ShiftToggle`）只有 Linux 读侧认，
-//! Windows 上**整页不出现**（导航项由 SettingsWindow.kt 的 `settingsTabs` 过滤）。
+//! 平台分叉：**2026-10-22 起两平台同页集**。Windows 的 `ShiftToggle` 读侧已接通
+//! （`crates/tsf-opi/src/settings.rs`）；皮肤由候选窗/状态栏 1s 轮询跟随；候选字号
+//! 由候选窗按三档缩放（`CandidateWindow.kt` 的 `candidateFontScale`）。页面里只保留
+//! **文案**的平台差异（改的是 fcitx5 classicui 还是小欧候选窗）。
 
 package xyz.erik.opi.candidate
 
@@ -144,7 +146,7 @@ internal fun LayoutChip(name: String, selected: Boolean, onClick: () -> Unit) {
     }
 }
 
-// ---------- 按键（只有 Linux 有真旋钮，见文件头）----------
+// ---------- 按键 ----------
 
 @Composable
 internal fun KeysPage(s: OpSettings, apply: (OpSettings) -> Unit) {
@@ -156,22 +158,38 @@ internal fun KeysPage(s: OpSettings, apply: (OpSettings) -> Unit) {
     ) { apply(s.copy(shiftToggle = it)) }
     SectionTitle("固定热键（暂不可改）")
     Spacer(Modifier.height(6.dp))
-    for ((key, what) in FIXED_HOTKEYS) {
+    for ((key, what) in fixedHotkeys(isWindows())) {
         Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
             Text(key, fontSize = 13.sp, color = Ink, modifier = Modifier.width(120.dp))
             Text(what, fontSize = 13.sp, color = Muted)
         }
     }
     Spacer(Modifier.height(8.dp))
-    // 如实说：这些键位判在插件里（opi_mode.h / opi_fcitx5.cpp），本轮没做成可配置。
+    // 如实说：这些键位判在插件里（Windows = tsf-opi；Linux = fcitx5 addon），
+    // 本轮没做成可配置。
     Text(
         "热键判在输入法插件里，本窗只展示。要改键位目前得改代码（改完重新编译插件）。",
         fontSize = 12.sp, color = Muted,
     )
 }
 
-/** 固定热键表（真源 = `crates/fcitx5-opi/cpp/opi_mode.h` + opi_fcitx5.cpp 的常量点）。 */
-private val FIXED_HOTKEYS = listOf(
+/**
+ * 固定热键表（按平台）。真源：Windows = `crates/tsf-opi/src/vk.rs` 的
+ * `mode_hotkey`/`fullwidth_hotkey` + `tsf_shift.rs`；Linux = `opi_mode.h` 与
+ * `opi_fcitx5.cpp` 的常量点。`internal` 供 SettingsTest 钉住两个平台各自的表。
+ */
+internal fun fixedHotkeys(windows: Boolean): List<Pair<String, String>> =
+    if (windows) FIXED_HOTKEYS_WINDOWS else FIXED_HOTKEYS_LINUX
+
+private val FIXED_HOTKEYS_WINDOWS = listOf(
+    "Shift 轻按" to "中 ⇄ 英（轻按；组合键与长按不触发）",
+    "Ctrl+'" to "英文 ⇄ 拼音",
+    "Ctrl+\\" to "符号 ⇄ 拼音",
+    "Shift+Space" to "全角 ⇄ 半角",
+)
+
+private val FIXED_HOTKEYS_LINUX = listOf(
+    "Shift 轻按" to "中 ⇄ 英（轻按；组合键与长按不触发）",
     "Ctrl+'" to "英文 ⇄ 拼音",
     "Ctrl+\\" to "符号 ⇄ 拼音",
     "Ctrl+Shift+F" to "简体 ⇄ 繁体",
@@ -179,23 +197,30 @@ private val FIXED_HOTKEYS = listOf(
     "Ctrl+Shift+Z" to "符号大全（与编辑器「重做」冲突是已知项）",
 )
 
-// ---------- 外观（皮肤；仅 Linux）----------
+// ---------- 外观 ----------
 
 @Composable
 internal fun AppearancePage(s: OpSettings, apply: (OpSettings) -> Unit) {
+    val windows = isWindows()
     SectionTitle("皮肤")
     Spacer(Modifier.height(8.dp))
     SkinPicker(s.skin) { apply(s.copy(skin = it)) }
     Spacer(Modifier.height(7.dp))
     Text(
-        "皮肤是 fcitx5 的全局主题（对所有输入法生效）；选一款即时换。" +
-            "「不改动」= 小欧不介入主题。",
+        if (windows) {
+            "候选窗、状态栏共用这一款皮肤（状态栏 logo 单击也会循环换肤）；" +
+                "选一款后 1 秒内跟随。「不改动」= 保持默认深色。"
+        } else {
+            "皮肤是 fcitx5 的全局主题（对所有输入法生效）；选一款即时换。" +
+                "「不改动」= 小欧不介入主题。"
+        },
         fontSize = 12.sp, color = Muted,
     )
     SectionTitle("候选字号")
     Spacer(Modifier.height(8.dp))
     // 三档名表 = CLASSIC_UI_FONT_CHOICES 的键（名字 ↔ pango 描述的唯一映射在
-    // ClassicUiFont.kt）。改这一档 ⇒ apply 时把 Font= 写进 classicui.conf 并重载。
+    // ClassicUiFont.kt）。Linux 改这一档 ⇒ 把 Font= 写进 classicui.conf 并重载；
+    // Windows ⇒ 只写 settings.ini，候选窗 1s 轮询按 candidateFontScale 缩放字号表。
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -205,14 +230,19 @@ internal fun AppearancePage(s: OpSettings, apply: (OpSettings) -> Unit) {
         }
     }
     Spacer(Modifier.height(7.dp))
-    // 如实写三件事：改的是谁的字体、写到哪个文件、手改会怎样（措辞不许比实现承诺得多：
-    // 只有「改这一档」时才写，所以手改只在下次改档时被盖回 —— ClassicUiFontTest 钉行为）。
+    // 措辞不许比实现承诺得多：Linux 只在「改这一档」时才写，手改只在下次改档时被盖回
+    // （ClassicUiFontTest 钉行为）；Windows 是候选窗每次读配置。
     Text(
-        "改的是 fcitx5 候选面板（classicui）的字体，对所有输入法生效：" +
-            "小 = Sans 10（fcitx5 默认）、中 = Sans 12、大 = Sans 14。" +
-            "选择写进 fcitx5 的 classicui.conf 的 Font= 行（缺省路径 " +
-            "~/.config/fcitx5/conf/classicui.conf；只在改这一档时写，" +
-            "那时会把手改的那行盖回）。",
+        if (windows) {
+            "作用于小欧候选窗（拼音 / 候选 / 序号 / 页码）：小 = 基准 ×0.83、" +
+                "中 = 基准、大 = 基准 ×1.17；保存后 1 秒内跟随（不改变状态栏字号）。"
+        } else {
+            "改的是 fcitx5 候选面板（classicui）的字体，对所有输入法生效：" +
+                "小 = Sans 10（fcitx5 默认）、中 = Sans 12、大 = Sans 14。" +
+                "选择写进 fcitx5 的 classicui.conf 的 Font= 行（缺省路径 " +
+                "~/.config/fcitx5/conf/classicui.conf；只在改这一档时写，" +
+                "那时会把手改的那行盖回）。"
+        },
         fontSize = 12.sp, color = Muted,
     )
 }
@@ -301,12 +331,47 @@ internal fun SymbolsPage(onOpenSymbols: () -> Unit, onOpenEmoji: () -> Unit) {
 // ---------- 关于 ----------
 
 @Composable
-internal fun AboutPage(status: String) {
+internal fun AboutPage(
+    status: String,
+    update: UpdateCheck? = null,
+    checking: Boolean = false,
+    onCheckUpdate: () -> Unit = {},
+) {
     val uriHandler = LocalUriHandler.current
     Spacer(Modifier.height(6.dp))
     Text("小欧输入法（opi）· 多端输入法", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Ink)
     Spacer(Modifier.height(4.dp))
     Text(status, fontSize = 12.sp, color = Muted)
+
+    // 版本与更新检测（2026-10-22 用户裁决）。当前版本 = 构建时生成的 OPI_VERSION。
+    SectionTitle("版本")
+    Text("当前版本：v$OPI_VERSION", fontSize = 13.sp, color = Ink)
+    Spacer(Modifier.height(6.dp))
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            updateLabel(update, checking),
+            fontSize = 12.sp,
+            color = if (update is UpdateCheck.Available) SymAccent else Muted,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            if (checking) "检测中…" else "检测更新",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = if (checking) Muted else SymAccent,
+            modifier = if (checking) Modifier else Modifier.clickable(onClick = onCheckUpdate),
+        )
+    }
+    if (update is UpdateCheck.Available) {
+        Text(
+            "前往下载：" + update.download,
+            fontSize = 12.sp,
+            color = SymAccent,
+            modifier = Modifier.clickable {
+                runCatching { uriHandler.openUri(update.download) }
+            },
+        )
+    }
     Spacer(Modifier.height(8.dp))
     Text(
         "主页：https://opi.erik.xyz",

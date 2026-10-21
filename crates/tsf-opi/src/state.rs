@@ -40,8 +40,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 use windows::Win32::UI::TextServices::{
-    ITfContext, ITfEditSession, ITfEditSession_Impl, ITfInsertAtSelection, TF_ES_READWRITE,
-    TF_ES_SYNC, TF_IAS_NOQUERY,
+    INSERT_TEXT_AT_SELECTION_FLAGS, ITfContext, ITfEditSession, ITfEditSession_Impl,
+    ITfInsertAtSelection, TF_ES_READWRITE, TF_ES_SYNC,
 };
 use windows::core::{Interface, Result, implement};
 
@@ -168,8 +168,8 @@ pub struct TsfSharedState {
     /// 最后一次键事件带来的插入目标。候选窗点选排回按键线程执行时，
     /// `ITfContext` 只有键事件回调给得了 —— 不在这里存一份，点选就没有目标。
     target: Mutex<Option<ITfContext>>,
-    /// 未能**同步**完成的编辑会话的保活引用（唯一写入点在 `insert_into`，
-    /// 理由见那里）。只保最后一个。
+    /// 最近一次编辑会话的保活引用（唯一写入点在 `insert_into`，理由见那里：
+    /// 异步回调可能在本次调用返回之后才到）。只保最后一个，下一次插入替换。
     keepalive: Mutex<Option<ITfEditSession>>,
 }
 
@@ -202,6 +202,18 @@ impl TsfSharedState {
     /// Activate 记下的 tid；Deactivate 传 0（旧 tid 不再有效，插入会据此静默放弃）。
     pub fn set_client_id(&self, tid: u32) {
         self.client_id.store(tid, Ordering::Relaxed);
+    }
+
+    /// 当前 tid（0 = 未激活）。Deactivate 用它成对摘掉按键监听，见 `tsf.rs`。
+    pub fn client_id(&self) -> u32 {
+        self.client_id.load(Ordering::Relaxed)
+    }
+
+    /// `settings.ini` 的 `ShiftToggle`（2026-10-22：Windows 读侧接通）。给胶水的
+    /// `OnTestKeyUp`（关掉时**不认领** Shift 抬起）与三拍判定用。锁中毒 → false
+    /// （不认领、不切换：宁可让键流入应用，也不在未知状态下改用户输入法模式）。
+    pub fn shift_toggle(&self) -> bool {
+        self.lock_logic().map(|l| l.shift_toggle()).unwrap_or(false)
     }
 
     /// 记下本次键事件的插入目标（每个非抬起键事件调一次）。
@@ -246,9 +258,10 @@ impl TsfSharedState {
     /// 把提交文本真正写进文档 —— 提交的**唯一下沉路径**（键事件与候选窗点选
     /// 都走这里；两份实现必然漂移，一处补了下面的保活另一处就会漏）。
     ///
-    /// 三种「静默放弃」都是**正常情况**，不是错误路径：
+    /// 两种「静默放弃」都是**正常情况**，不是错误路径：
     /// - `client_id` 为 0：尚未 `Activate`，`RequestEditSession` 必失败；
     /// - `pic` 转不出 `ITfInsertAtSelection`：该 context 不支持插入。
+    ///
     /// 放弃后按键仍被吞（调用方返 `BOOL(1)`）：用户看到「这一下没出字」，而不是崩溃。
     /// 这两种不发声（它们是「本就没有目标」）；`RequestEditSession` 的失败则**要**
     /// 记一行 —— 那一类才是「本该出字却没出」，成因全在宿主进程里，没日志查不动。
@@ -264,9 +277,16 @@ impl TsfSharedState {
             return; // 未 Activate：没有合法 tid，RequestEditSession 必失败
         }
         let Ok(session) = InsertTextSession::new(pic, text) else {
+            eprintln!("tsf-opi: InsertTextSession::new failed (no ITfInsertAtSelection?)");
             return;
         };
         let session: ITfEditSession = session.into();
+        // 2026-10-21 真机：提交 "你好" 时 notepad.exe 崩在 textinputframework.dll。
+        // 先把会话引用存进 keepalive（不依赖 RequestEditSession 的返回码），
+        // 排除「异步回调时 session 已释放」这一条；下一次插入才替换。
+        if let Ok(mut keep) = self.keepalive.lock() {
+            *keep = Some(session.clone());
+        }
         // SAFETY: pic 是 TSF 交来的活动 context；session 在本次调用期间存活。
         // 返回 `Result<HRESULT>` 是两层：外层 = 调用本身成不成，
         // 内层 = `phrSession`，也就是 **DoEditSession 的返回值**（0.62 把它当出参映射）。
@@ -276,17 +296,13 @@ impl TsfSharedState {
         match unsafe { pic.RequestEditSession(tid, &session, TF_ES_SYNC | TF_ES_READWRITE) } {
             Ok(hr) if hr.is_ok() => {}
             Ok(hr) => {
-                eprintln!("tsf-opi: 编辑会话未同步完成 hr={hr:?}，保留引用待异步回调");
-                // 这一支就是 TF_E_SYNCHRONOUS：按 TSF 文档是"转为异步排队"，也就是
-                // DoEditSession 在**本次调用返回之后**才被回调 —— 那时 `session`
-                // 已出作用域。TSF 理应自己 AddRef，但这条本机（无 Windows）无法验证，
-                // 赌错的代价是"回调打到已释放对象"→ 崩在用户 Word 里，而留下的代价
-                // 只是一个引用（下一次插入或本对象销毁时释放）。故留。
-                // 锁在这里即取即放：本分支按定义不是同步回调，不会重入（见上面的
-                // 重入警告）；`keepalive` 也从不被 DoEditSession 碰到。
-                if let Ok(mut keep) = self.keepalive.lock() {
-                    *keep = Some(session);
-                }
+                eprintln!(
+                    "tsf-opi: RequestEditSession async hr=0x{:08X}，保留引用待异步回调",
+                    hr.0
+                );
+                // 这一支就是 TF_E_SYNCHRONOUS：按 TSF 文档是"转为异步排队"，
+                // DoEditSession 在**本次调用返回之后**才被回调。keepalive 已在
+                // 调用前无条件存了一份，这里不再重复。
             }
             Err(e) => eprintln!("tsf-opi: RequestEditSession 失败: {e}"),
         }
@@ -303,8 +319,10 @@ impl TsfSharedState {
 /// 只有拿着 `ec` 才允许调用插入 API。`TF_ES_SYNC` 让这次回调同步发生
 /// （否则 `RequestEditSession` 返回而我们还没插入，文本就丢了）。
 ///
-/// 生命周期：本对象在 `insert_into` 里临时构造，调用返回后即释放（无人长期
-/// 持有），故不占模块锁 —— 回调期间宿主一定还在我们的调用栈上，且服务对象
+/// 生命周期：本对象在 `insert_into` 里构造；同步会话在调用返回后即可释放，
+/// 异步会话（`TF_E_SYNCHRONOUS`）则可能在返回之后才被回调，故 `insert_into`
+/// 无条件把最新一份存进 `keepalive`。同步路径下那只是一份引用，下一次插入或
+/// 服务对象销毁时释放 —— 回调期间宿主一定还在我们的调用栈上，且服务对象
 /// 自己持有模块锁，DLL 不会被抽掉。
 ///
 /// 用 `ITfInsertAtSelection` 而不是 `GetSelection` + `ITfRange::SetText`：
@@ -335,17 +353,19 @@ impl ITfEditSession_Impl for InsertTextSession_Impl {
         ensure_panic_hook();
         // COM 出口（TSF 经 vtable 回调）：panic 逃出去 = abort 宿主进程。
         catch_unwind(AssertUnwindSafe(|| {
-            // TF_IAS_NOQUERY = "插入，但不要返回范围"。**成功时 ppRange 被置 NULL**，
-            // 而 windows-rs 把 NULL 出参转成 `Err(Error::empty())`（空 HRESULT）——
-            // 直接 `?` 会把**成功**判成失败。故按 HRESULT 定成败：非零才是真错误。
-            // 这是 0.62 生成代码的实际行为（windows-core/src/type.rs 的 from_abi）。
+            // 2026-10-21 真机：TF_IAS_NOQUERY 下 notepad 崩在 textinputframework.dll。
+            // 改为查询范围（flags=0）：API 写出非空 ppRange，走 windows-rs 的正常路径
+            // （NOQUERY 时 out 参数为 NULL，0.62 的 from_abi 会把它转成 Err）。
             match unsafe {
                 self.insert
-                    .InsertTextAtSelection(ec, TF_IAS_NOQUERY, &self.text)
+                    .InsertTextAtSelection(ec, INSERT_TEXT_AT_SELECTION_FLAGS(0), &self.text)
             } {
                 Ok(_) => Ok(()),
                 Err(e) if e.code().is_ok() => Ok(()),
-                Err(e) => Err(e),
+                Err(e) => {
+                    eprintln!("tsf-opi: InsertTextAtSelection failed: {e}");
+                    Err(e)
+                }
             }
         }))
         .unwrap_or_else(|_| Err(E_FAIL.into()))
@@ -380,10 +400,10 @@ impl SharedAction {
     }
 
     /// 回填 sink（`com_server.rs` 建好 `CandidateSink` 后立刻调，此后只读）。
-    /// 已填过 → Err：那只可能是重复初始化，覆盖会把正在用的一份换掉
-    /// （读线程可能正读着它）。返回 Err 让调用方看得见，不静默。
-    pub fn attach_sink(&self, sink: Arc<dyn TsfSink>) -> std::result::Result<(), ()> {
-        self.sink.set(sink).map_err(|_| ())
+    /// 已填过 → false：那只可能是重复初始化，覆盖会把正在用的一份换掉
+    /// （读线程可能正读着它）。返回 false 让调用方看得见，不静默。
+    pub fn attach_sink(&self, sink: Arc<dyn TsfSink>) -> bool {
+        self.sink.set(sink).is_ok()
     }
 
     /// 动作改变了引擎状态 → 让候选窗跟上（翻页后换页）。sink 未回填 → 跳过：

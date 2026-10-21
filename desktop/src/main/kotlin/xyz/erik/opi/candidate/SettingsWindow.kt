@@ -51,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -90,12 +91,12 @@ internal enum class SettingsTab(val label: String) {
 }
 
 /**
- * 纯函数：本平台该出哪些页。Windows 上没有皮肤（fcitx5 主题）也没有 `ShiftToggle`
- * 的读侧（见 OpSettings 头注）⇒ **按键与外观两页不出**（「宁可少一页，不做点不动的
- * 开关」——那条原则在本窗是写在「关于」页里的自述，别让这里漂）。
+ * 纯函数：本平台该出哪些页。**2026-10-22 起两平台同集**：Windows 的 `ShiftToggle`
+ * 读侧（`crates/tsf-opi/src/settings.rs`）已接通、皮肤也由候选窗/状态栏跟随，按键与
+ * 外观两页不再是「点不动的开关」。`windows` 参数保留只为调用点形状稳定。
  */
-internal fun settingsTabs(windows: Boolean): List<SettingsTab> =
-    SettingsTab.entries.filter { !windows || (it != SettingsTab.KEYS && it != SettingsTab.APPEARANCE) }
+internal fun settingsTabs(@Suppress("UNUSED_PARAMETER") windows: Boolean): List<SettingsTab> =
+    SettingsTab.entries
 
 // ---------- 小部件 ----------
 
@@ -162,6 +163,11 @@ fun SettingsWindow() {
     var tab by remember { mutableStateOf(SettingsTab.COMMON) }
     // 符号页/表情页：null = 关；false = 符号；true = 表情（initialEmoji）。
     var symbolWin by remember { mutableStateOf<Boolean?>(null) }
+    // 更新检测（2026-10-22 用户裁决）：打开设置自动检测一次；「关于」页可手动再测；
+    // 发现新版本在内容区顶部出一条可关闭的横幅。网络失败静默（不打扰输入）。
+    var update by remember { mutableStateOf<UpdateCheck?>(null) }
+    var updateChecking by remember { mutableStateOf(false) }
+    var updateDismissed by remember { mutableStateOf(false) }
 
     // 打开设置就意味着「用户在看/要调状态栏」：条该显示却没人拉起 ⇒ 直接拉一支
     // （2026-10-10 用户报障「设置里开了、实际没出现」的根因：装包后没重登录，
@@ -186,12 +192,24 @@ fun SettingsWindow() {
     // 状态行在后」的旧次序（否则连拨两下可能后写先落，文件停在前一个值上）。
     val saveLock = remember { Mutex() }
 
+    /** 检测更新（自动/手动同一入口）。网络在 IO 上跑，绝不阻塞设置窗。 */
+    fun triggerUpdateCheck() {
+        if (updateChecking) return
+        updateChecking = true
+        scope.launch {
+            update = withContext(Dispatchers.IO) { checkForUpdate() }
+            updateChecking = false
+        }
+    }
+    // 用户裁决（2026-10-22）：打开设置时自动检测一次；发现新版本走顶部横幅。
+    LaunchedEffect(Unit) { triggerUpdateCheck() }
+
     fun apply(next: OpSettings) {
         // 候选字号（2026-10-14）：**只在改这一档时**才写 classicui.conf —— 每次保存都写会
-        // 在无关开关上把用户手改的 Font= 盖回（契约见 ClassicUiFont.kt）。外观页在 Windows
-        // 上不出现 ⇒ 那条路永不触发（外加一道 isWindows 防线：免得手写的配置值把文件写到
-        // Windows 的 ~/.config 去）。
-        val fontChanged = !isWindows() && next.candidateFont != s.candidateFont
+        // 在无关开关上把用户手改的 Font= 盖回（契约见 ClassicUiFont.kt）。Windows 没有
+        // fcitx5：字号只写 settings.ini，由候选窗 1s 轮询跟随（CandidateWindow.kt）。
+        val fontChanged = next.candidateFont != s.candidateFont
+        val skinChanged = next.skin != s.skin
         s = next
         // ⚠️ saveSettings 里是文件写 + `notifyFcitxReload`（busctl 那条 `waitFor` **无超时**，
         // 2026-10-13 实抓 EDT 停在那里）—— 整个保存挪出组合线程；拨开关仍然即时可见（s
@@ -200,7 +218,7 @@ fun SettingsWindow() {
             saveLock.withLock {
                 val live = withContext(Dispatchers.IO) { saveSettings(next) }
                 var msg = saveStatusMessage(live)
-                if (fontChanged) {
+                if (fontChanged && !isWindows()) {
                     // classicui 那条 = 文件写 + ReloadAddonConfig 子进程，同样挪到 IO
                     // （与状态栏那边的纪律一致；失败的措辞与 saveStatusMessage 同调）。
                     val uiOk = withContext(Dispatchers.IO) { applyClassicUiFont(next.candidateFont) }
@@ -209,6 +227,12 @@ fun SettingsWindow() {
                     } else {
                         "；候选字号已写入 classicui.conf，但没能通知 fcitx5 重载（它没在跑？重启输入法后生效）"
                     }
+                } else if (fontChanged) {
+                    // Windows：候选窗与状态栏都 1s 轮询 settings.ini（同一套同步机制）。
+                    msg += "；候选字号已保存，候选窗将在 1 秒内跟随"
+                }
+                if (skinChanged && isWindows()) {
+                    msg += "；候选窗与状态栏将在 1 秒内跟随新皮肤"
                 }
                 status = msg
             }
@@ -218,6 +242,13 @@ fun SettingsWindow() {
     Row(Modifier.fillMaxSize().background(Paper)) {
         NavColumn(tab) { tab = it }
         Column(Modifier.weight(1f).fillMaxHeight()) {
+            // 新版本横幅（2026-10-22 用户裁决）：只在检测到更新时出现，可关闭；
+            // 不挡任何页 —— 它在这条右栏的顶部，页面在它下面滚动。
+            (update as? UpdateCheck.Available)?.let { available ->
+                if (!updateDismissed) {
+                    UpdateBanner(available.latest, available.download) { updateDismissed = true }
+                }
+            }
             Column(
                 Modifier.weight(1f).fillMaxWidth()
                     .verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 6.dp),
@@ -235,7 +266,12 @@ fun SettingsWindow() {
                     // 尾 lambda 只绑「最后一个参数是函数类型」的位置。
                     SettingsTab.DICTS -> DictsPage(s, ::apply, { status = it })
                     SettingsTab.WUBI -> WubiPage(s, ::apply)
-                    SettingsTab.ABOUT -> AboutPage(status)
+                    SettingsTab.ABOUT -> AboutPage(
+                        status = status,
+                        update = update,
+                        checking = updateChecking,
+                        onCheckUpdate = ::triggerUpdateCheck,
+                    )
                 }
             }
             // 底部状态行：拨完任何开关都能立刻看到结果（此前它在「关于」页里，换个页就看不见了）。
@@ -253,6 +289,41 @@ fun SettingsWindow() {
             onCommit = ::desktopSymbolCommit,
             onClose = { symbolWin = null },
             initialEmoji = emoji,
+        )
+    }
+}
+
+/**
+ * 新版本横幅：一句话 + 「前往下载」+ 关闭。出现在右栏顶部（所有页都看得见）。
+ * 链接走系统默认浏览器（与「关于」页的外链同一条 `LocalUriHandler`）。
+ */
+@Composable
+private fun UpdateBanner(latest: String, download: String, onDismiss: () -> Unit) {
+    val uriHandler = LocalUriHandler.current
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .background(Color(0xFFEAF4F2))
+            .border(1.dp, Teal.copy(alpha = 0.35f))
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("发现新版本 v$latest（当前 v$OPI_VERSION）", fontSize = 12.sp, color = Ink)
+        Spacer(Modifier.weight(1f))
+        Text(
+            "前往下载",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = Teal,
+            modifier = Modifier.clickable {
+                runCatching { uriHandler.openUri(download) }
+            },
+        )
+        Spacer(Modifier.width(14.dp))
+        Text(
+            "×",
+            fontSize = 15.sp,
+            color = Muted,
+            modifier = Modifier.clickable(onClick = onDismiss),
         )
     }
 }

@@ -54,7 +54,9 @@ class AndroidPaletteTest {
     private fun repoFile(rel: String): String {
         val p = Paths.get("../$rel")
         assertTrue("源文件不在了（搬家了？）：$rel", Files.exists(p))
-        return Files.readString(p)
+        // 统一成 LF：Windows 检出（core.autocrlf=true）是 CRLF，而本门禁的变异锚点按
+        // `\n` 写（如 `),\n`）—— CRLF 下第三处 twist 会一条都匹配不上（2026-10-21 实测）。
+        return Files.readString(p).replace("\r\n", "\n")
     }
 
     /** 机制角色 → SKINS 键。9 款派生色板里 60/72 格成立，12 格例外见 [deviations]。 */
@@ -95,8 +97,10 @@ class AndroidPaletteTest {
 
     /** SKINS 解析：款数先钉死，格式一改/正则抓不到 ⇒ 当场红，不许空转变绿。 */
     private fun parseSkins(py: String): Map<String, String> {
+        // 正则里的 `\n` 是字面量：Windows 检出（core.autocrlf=true）的 .py 是 CRLF，
+        // 直接匹配会是 0 款（本门禁 2026-10-21 在 Windows 主机上实测）。先统一换行。
         val skins = Regex("""(?m)^    "([a-z]+)": \{\n(.*?)^    \},""", RegexOption.DOT_MATCHES_ALL)
-            .findAll(py).associate { it.groupValues[1] to it.groupValues[2] }
+            .findAll(py.replace("\r\n", "\n")).associate { it.groupValues[1] to it.groupValues[2] }
         assertEquals("SKINS 解析到的款数不对（格式改了？）", 11, skins.size)
         return skins
     }

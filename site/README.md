@@ -19,6 +19,7 @@ python3 -m http.server 8080 --directory site
 ```
 site/
   index.html            语义化单页（七个翻屏 section；含 canonical / OG / Twitter / JSON-LD）
+  version.json          机器可读的最新版本（客户端「检测更新」首选；发版时与版本号一起改）
   robots.txt            抓取规则（屏蔽仓库说明 Markdown）与 sitemap 声明
   sitemap.xml           单页站点地图（lastmod / changefreq）
   css/base.css          设计 token、壳层、按钮、页脚
@@ -76,6 +77,14 @@ site/
 把 `site/` 整个目录作为静态站点根目录即可（Nginx / Caddy / Cloudflare Pages /
 GitHub Pages 均可）。页面内没有构建步骤，也没有服务端依赖。
 
+**发版时更新 `version.json`**：`{"version":"1.21.0","download":"https://opi.erik.xyz/#download"}`。
+（`download` 指向首页下载区而不是 `/download` 目录：目录没有 index、服务器返回 403，
+实测具体安装包 `/download/opi-…` 才是 200。）
+小欧设置窗（Windows/Linux 桌面端）的「检测更新」先读它；读不到才回退解析
+`index.html` 的 JSON-LD `softwareVersion`（再兜底下载文件名）。`version` 必须与
+`Cargo.toml` / `desktop/build.gradle.kts` 的 `opiAppVersion` 同值；否则用户会被反复
+提示「有新版本」或永远收不到提示。`download` 必须是 `https://`（客户端拒绝明文）。
+
 SEO 已内置在 `index.html` 的 `<head>`：canonical、中文 description、Open Graph /
 Twitter Card（绝对图片地址）、`SoftwareApplication` + `WebSite` + `Organization`
 JSON-LD，以及 `robots.txt` / `sitemap.xml`。换域名时同时改 canonical、OG/Twitter
@@ -83,7 +92,7 @@ JSON-LD，以及 `robots.txt` / `sitemap.xml`。换域名时同时改 canonical�
 
 - `site/README.md` 的链接若部署在子路径（如 `/opi/`），保持相对路径即可。
 - 统计脚本由 busuanzi 提供；广告拦截器或离线环境会把它拦掉，页面其余部分不受影响。
-- 版本号在 `index.html`（hero 的 `v1.20.2`）与发布页链接里是手写的，发版时同步。
+- 版本号在 `index.html`（hero 的 `v1.21.0`）与发布页链接里是手写的，发版时同步。
 
 ## 素材授权
 

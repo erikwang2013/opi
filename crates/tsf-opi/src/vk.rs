@@ -62,6 +62,11 @@ pub fn special_keycode(vk: u32) -> Option<u32> {
 /// VK + `ToUnicodeEx` 的返回 → 引擎键码。`n` 为该 API 的返回值
 /// （`<= 0` = 无映射/死键/取不到键盘状态），`first` 为转换出的首个 UTF-16 单元。
 pub fn vk_to_engine_keycode(vk: u32, n: i32, first: u16) -> u32 {
+    // Shift 的左右码（抬起事件）必须先归一：它们不在 SPECIAL_KEYS 里，而
+    // `ToUnicodeEx(VK_LSHIFT)` 返回 0 ⇒ 会落到 NO_KEYVAL，轻按切中英永远收不到抬起。
+    if is_shift_vk(vk) {
+        return KEY_SHIFT;
+    }
     // 特殊键必须走编码后的键码、不可用映射结果：例如 VK_BACK=0x08 经
     // `ToUnicodeEx` 得到的退格控制符 0x08 仍然 `is_ascii()`，会被送到
     // `handle_printable` 当普通符号放行 —— 退格就废了。
@@ -73,6 +78,19 @@ pub fn vk_to_engine_keycode(vk: u32, n: i32, first: u16) -> u32 {
         // 无映射（导航键/小键盘/取不到键盘状态）或死键：交给应用，别拿 VK 冒充字符
         NO_KEYVAL
     }
+}
+
+/// Shift 左/右键码。**Win32 的按键抬起事件带的是左右码**（按下是 VK_SHIFT=0x10，
+/// 抬起是 VK_LSHIFT=0xA0 / VK_RSHIFT=0xA1）—— 不认这两个，TSF 侧「Shift 轻按切
+/// 中英」的抬起判定就永远等不到事件，症状是轻按毫无反应（2026-10-22 用户报障）。
+/// 与 VK_OEM_5/VK_OEM_7 同一条：本模块平台中立，Win32 ABI 值用字面量，
+/// 与 windows crate 的对齐由下面的 const 断言在 Windows 目标上把关。
+const VK_LSHIFT: u32 = 0xa0;
+const VK_RSHIFT: u32 = 0xa1;
+
+/// 这个 VK 是不是 Shift 键（左/右/通用三码）。
+pub fn is_shift_vk(vk: u32) -> bool {
+    vk == special_vk(KEY_SHIFT) || vk == VK_LSHIFT || vk == VK_RSHIFT
 }
 
 // ---------- 模式热键（B0/B5） ----------
@@ -97,6 +115,8 @@ const VK_OEM_7: u32 = 0xde;
 const _: () = {
     assert!(VK_OEM_5 == windows::Win32::UI::Input::KeyboardAndMouse::VK_OEM_5.0 as u32);
     assert!(VK_OEM_7 == windows::Win32::UI::Input::KeyboardAndMouse::VK_OEM_7.0 as u32);
+    assert!(VK_LSHIFT == windows::Win32::UI::Input::KeyboardAndMouse::VK_LSHIFT.0 as u32);
+    assert!(VK_RSHIFT == windows::Win32::UI::Input::KeyboardAndMouse::VK_RSHIFT.0 as u32);
 };
 
 /// 模式热键的语义。**不是目标模式**：切到哪儿取决于当前模式（见 `hotkey_target`），

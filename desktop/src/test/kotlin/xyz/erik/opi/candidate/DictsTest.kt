@@ -36,17 +36,21 @@ class DictsTest {
     fun `dicts dir follows the platform contract`() {
         // Linux：$XDG_DATA_HOME/opi/dicts；缺省/空串 ⇒ $HOME/.local/share/opi/dicts
         // （空串等同未设置 —— 与 settingsPathFor、Rust 侧 data_dir 同口径）。
+        //
+        // 期望串用 `/`；`Paths.get` 按**运行平台**拼路径，Windows 主机上 `toString()`
+        // 会带 `\`。判的是推导，不是分隔符，故比较前统一。
+        fun posix(p: java.nio.file.Path): String = p.toString().replace('\\', '/')
         assertEquals(
             "/x/data/opi/dicts",
-            dictsDirFor(windows = false, xdgDataHome = "/x/data", home = "/home/u", localAppData = null).toString(),
+            posix(dictsDirFor(windows = false, xdgDataHome = "/x/data", home = "/home/u", localAppData = null)),
         )
         assertEquals(
             "/home/u/.local/share/opi/dicts",
-            dictsDirFor(windows = false, xdgDataHome = null, home = "/home/u", localAppData = null).toString(),
+            posix(dictsDirFor(windows = false, xdgDataHome = null, home = "/home/u", localAppData = null)),
         )
         assertEquals(
             "/home/u/.local/share/opi/dicts",
-            dictsDirFor(windows = false, xdgDataHome = "", home = "/home/u", localAppData = null).toString(),
+            posix(dictsDirFor(windows = false, xdgDataHome = "", home = "/home/u", localAppData = null)),
         )
         // Windows：断言**结构**（基目录 + opi/dicts 两段），不是反斜杠字面串 ——
         // Paths.get 按运行平台的分隔符拼路径，在 Linux 上跑这条时反斜杠串永不出现

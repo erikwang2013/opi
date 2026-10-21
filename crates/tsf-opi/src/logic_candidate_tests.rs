@@ -20,6 +20,7 @@ fn state() -> TsfLogic {
         shift_state: ShiftState::Off,
         english_pro: true,
         last_printable: None,
+        shift_toggle: true,
     };
     s.refresh_snapshot();
     s
@@ -110,6 +111,7 @@ fn key_state() -> TsfLogic {
         shift_state: ShiftState::Off,
         english_pro: true,
         last_printable: None,
+        shift_toggle: true,
     };
     for c in ['q', 'w', 'x'] {
         s.engine.input_key(c);
@@ -306,6 +308,7 @@ fn digit_select_fetches_candidate_table_once() {
         shift_state: ShiftState::Off,
         english_pro: true,
         last_printable: None,
+        shift_toggle: true,
     };
     s.refresh_snapshot();
     s.switch_mode(Mode::Pinyin);

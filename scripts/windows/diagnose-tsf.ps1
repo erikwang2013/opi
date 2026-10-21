@@ -6,9 +6,14 @@
 .DESCRIPTION
   Read-only. Checks the COM in-proc server, the CTF TIP language profile,
   the HKLM machine-wide default-enable bit, per-user enable state, the
-  installed language/input-method list, (optionally) the install log —
-  the MSI's OpRegisterTsf or the EXE installer's `opi: regsvr32` line — and
-  %ProgramData%\opi\tsf-register.log (fixed-path failures written by the DLL).
+  installed language/input-method list, running processes that still map
+  tsf_opi.dll (stale hosts loaded before an upgrade), (optionally) the
+  install log — the MSI's OpRegisterTsf or the EXE installer's
+  `opi: regsvr32` line — and %ProgramData%\opi\tsf-register.log
+  (fixed-path failures written by the DLL).
+
+  Default install dir: derived from the registered InprocServer32 path, so a
+  non-default install (for example D:\swoft\opi) is diagnosed without args.
 
   Run in an elevated 64-bit PowerShell for complete HKLM visibility:
     powershell -ExecutionPolicy Bypass -File .\diagnose-tsf.ps1 `
@@ -19,7 +24,9 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$InstallDir = (Join-Path $env:ProgramFiles 'opi'),
+    # Empty = derive from the registered InprocServer32 path (fallback:
+    # %ProgramFiles%\opi). Set explicitly to diagnose a different copy.
+    [string]$InstallDir = '',
     [string]$DllPath,
     [string]$InstallLog
 )
@@ -106,6 +113,19 @@ if (-not [Environment]::Is64BitProcess) {
 }
 
 Section 'Installed files'
+if (-not $InstallDir) {
+    # Follow the registration: the last installer to run regsvr32 wins, and it
+    # may be a non-default directory. Hard-coding %ProgramFiles%\opi made the
+    # 2026-10-22 field report ("new package still broken") diagnose the wrong
+    # copy: the user's TSF host loaded D:\swoft\opi while the script checked C:.
+    $regDllNow = Get-RegDefault "HKEY_CLASSES_ROOT\CLSID\$Clsid\InprocServer32"
+    if ($regDllNow) {
+        $InstallDir = Split-Path -Parent (Split-Path -Parent $regDllNow)
+    } else {
+        $InstallDir = Join-Path $env:ProgramFiles 'opi'
+    }
+}
+Write-Host ("  install dir: {0}" -f $InstallDir)
 if (-not $DllPath) { $DllPath = Join-Path $InstallDir 'app\tsf_opi.dll' }
 $DllPath = [IO.Path]::GetFullPath($DllPath)
 $dllOk = Test-Path -LiteralPath $DllPath -PathType Leaf
@@ -132,6 +152,65 @@ if ($inprocDll) {
     Check 'InprocServer32 file exists' (Test-Path -LiteralPath $inprocDll -PathType Leaf)
 }
 Check 'ThreadingModel = Apartment' ("$threading" -eq 'Apartment') "got [$threading]"
+
+Section 'Running TSF hosts (loaded tsf_opi.dll)'
+# 2026-10-22 field report: after installing a new package the user still saw the
+# OLD behaviour in Chrome/Sublime/Explorer. Installing a DLL cannot replace the
+# image in an already-running process; old hosts have no thread-focus release,
+# so they keep the single-instance candidate pipe held (status bar never hides,
+# the focused app shows no candidates). Make that state visible here instead of
+# letting a fresh install look broken.
+$dllMtime = $null
+if ($dllOk) { $dllMtime = (Get-Item -LiteralPath $DllPath).LastWriteTime }
+$regFull = $null
+if ($inprocDll) {
+    try { $regFull = [IO.Path]::GetFullPath($inprocDll) } catch { }
+}
+$hostCount = 0
+$staleCount = 0
+foreach ($proc in @(Get-Process -ErrorAction SilentlyContinue)) {
+    $module = $null
+    try {
+        $module = @($proc.Modules | Where-Object { $_.ModuleName -eq 'tsf_opi.dll' }) | Select-Object -First 1
+    } catch { continue }
+    if ($null -eq $module) { continue }
+    $hostCount++
+    $modulePath = ''
+    try { $modulePath = $module.FileName } catch { }
+    $start = $null
+    try { $start = $proc.StartTime } catch { }
+    $reasons = New-Object System.Collections.ArrayList
+    if ($regFull -and $modulePath) {
+        try {
+            if ([IO.Path]::GetFullPath($modulePath) -ne $regFull) {
+                [void]$reasons.Add('loaded from a different path than InprocServer32')
+            }
+        } catch { }
+    }
+    if ($modulePath -and -not (Test-Path -LiteralPath $modulePath -PathType Leaf)) {
+        [void]$reasons.Add('loaded image is no longer on disk')
+    }
+    if ($start -and $dllMtime -and $start -lt $dllMtime) {
+        [void]$reasons.Add('process started before the installed DLL was written')
+    }
+    $label = "{0} (PID {1})" -f $proc.ProcessName, $proc.Id
+    $detail = "path=[{0}] start=[{1}]" -f $modulePath, $start
+    if ($reasons.Count -gt 0) {
+        $staleCount++
+        Warn ("stale host: {0}" -f $label) (($reasons -join '; ') + '; ' + $detail)
+    } else {
+        Write-Host ("  [OK]   {0}" -f $label)
+        Write-Host ("         {0}" -f $detail)
+    }
+}
+if ($hostCount -eq 0) {
+    Write-Host '  no running process currently maps tsf_opi.dll'
+} elseif ($staleCount -gt 0) {
+    Warn ("{0} of {1} TSF host process(es) hold an old DLL image" -f $staleCount, $hostCount) `
+        'A loaded DLL cannot be replaced in place. Sign out and sign in (or fully restart those apps) before testing; never kill Explorer.'
+} else {
+    Write-Host '  all mapped TSF hosts use the registered DLL'
+}
 
 Section 'CTF TIP registration (HKLM)'
 $tipPath = "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\CTF\TIP\$Clsid"

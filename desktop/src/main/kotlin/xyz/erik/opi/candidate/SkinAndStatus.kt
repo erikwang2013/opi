@@ -10,6 +10,59 @@
 
 package xyz.erik.opi.candidate
 
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+
+// ---------- 状态栏尺寸表（2026-10-21 从 StatusBar.kt 拆出：那边 510 行撞 500 行门禁） ----------
+
+internal const val BTN = 30 // 100% 时的按钮边长
+private const val GAP = 4
+private const val PAD = 6
+private const val BAR_H = 42
+
+/**
+ * 状态栏的**唯一尺寸表**（2026-10-19 用户裁决「统一调整所有状态栏键大小」）：
+ * 按钮、间距、内边距、条高全乘 [StatusBarSettings.scale] 同一系数。100% 时逐项等于
+ * BTN/GAP/PAD/BAR_H；enpro/en26 与其他键共用这里同一个 [button] 盒（键帽再按 26/30
+ * 画在盒内，见 KeycapFace.kt）。别在调用点各自乘 —— 第二份尺寸就是漂移口。
+ */
+internal data class BarMetrics(val button: Dp, val gap: Dp, val pad: Dp, val height: Dp)
+
+/** [scale] 先经 [statusBarScalePercent] 收口（越界值按边界算）。纯函数。 */
+internal fun barMetrics(scale: Int): BarMetrics {
+    val k = statusBarScalePercent(scale) / 100f
+    return BarMetrics((BTN * k).dp, (GAP * k).dp, (PAD * k).dp, (BAR_H * k).dp)
+}
+
+/** 条宽随按钮数变（隐藏的按钮不占位）。[scale] 与 [barMetrics] 同一系数。纯函数，单测钉住。 */
+internal fun statusBarWidthDp(buttonCount: Int, scale: Int = STATUS_BAR_SCALE_DEFAULT): Float {
+    val k = statusBarScalePercent(scale) / 100f
+    return (PAD * 2 + BTN * buttonCount + GAP * (buttonCount - 1).coerceAtLeast(0)) * k
+}
+
+/**
+ * 纯函数：条该不该显示（[StatusBarApp] 的 visible 用它）。
+ *
+ * 规则（2026-10-10 下午用户裁决「切到其他输入法时状态栏消失」）：
+ * `enabled && (im 未知 || im == "opi")` ——
+ * · [buttons] 空 = master 隐藏 / 按钮全关 ⇒ 恒隐藏（老规则，优先级最高，与 [im] 无关）；
+ * · [im] 缺键/空串 = **未知** ⇒ Linux 维持现状（可见）、Windows 隐藏（[requireActive]）——
+ *   glue 的 `im=` 还没合时旧输出正好落这里，轮询读失败（中性缺省）也落这里；
+ * · [im] 非空且 ≠ "opi"（当前是别的输入法）⇒ 隐藏；切回 opi 由 1s 轮询让它自己出现。
+ * · Windows 的 [requireActive]：只有 `im == "opi"` 才显示；TSF 未连接时状态读不到，
+ *   状态栏进程虽随登录常驻但不可见（否则安装完就出现一条点哪都报错的条）。
+ *
+ * ⚠️ `"opi"` 是**跨轨字面**（glue 侧追加的 `im=` 值 = 本 addon 的 uniqueName）。对不上的
+ * 表现是「opi 激活时条一直藏着」——响的错，不是静默错；但改它必须两侧一起改。
+ */
+internal fun barVisible(buttons: List<StatusBarButton>, im: String, requireActive: Boolean = false): Boolean {
+    if (buttons.isEmpty()) return false
+    // Windows 常驻状态栏仅在 TSF 激活（im=opi）时显示；未知状态隐藏，免得安装完就出现
+    // 一条点哪都报错的条。Linux 保留「未知 ⇒ 维持可见」（旧 glue 缺 im= 时不闪）。
+    if (requireActive) return im == "opi"
+    return im.isEmpty() || im == "opi"
+}
+
 /**
  * 「皮肤」的合法值。**字面值就是写进配置的字符串** —— 与 fcitx5 侧 `OpiSkin`
  * 的枚举字面值（`opi_config.h` 的 `FCITX_CONFIG_ENUM_NAME_WITH_I18N`）逐字相同：

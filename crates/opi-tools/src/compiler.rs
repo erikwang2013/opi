@@ -78,13 +78,80 @@ fn same_file(a: &Path, b: &Path) -> bool {
     }
 }
 
-/// 非 unix 退化：路径规范化后比对（覆盖符号链接与相对/绝对写法，不覆盖硬链接）。
+/// 路径规范化后比对（覆盖符号链接与相对/绝对写法，不覆盖硬链接）。
 #[cfg(not(unix))]
-fn same_file(a: &Path, b: &Path) -> bool {
+fn canonical_paths_equal(a: &Path, b: &Path) -> bool {
     match (a.canonicalize(), b.canonicalize()) {
         (Ok(x), Ok(y)) => x == y,
         _ => false,
     }
+}
+
+/// Windows：`GetFileInformationByHandle` 的（卷序列号, 文件索引）就是 unix 的
+/// （dev, ino）—— 硬链接指向同一份 MFT 记录，故这个判据能拦住
+/// `mklink /H` 造出来的别名。std 的 `MetadataExt::file_index` 仍是 unstable
+/// （`windows_by_handle`），所以这里直接调 Win32。
+#[cfg(windows)]
+fn same_file(a: &Path, b: &Path) -> bool {
+    if canonical_paths_equal(a, b) {
+        return true;
+    }
+    match (windows_file_id(a), windows_file_id(b)) {
+        (Some(x), Some(y)) => x == y,
+        _ => false,
+    }
+}
+
+/// 非 unix / 非 Windows 的退化：只能比规范化路径。
+#[cfg(not(any(unix, windows)))]
+fn same_file(a: &Path, b: &Path) -> bool {
+    canonical_paths_equal(a, b)
+}
+
+#[cfg(windows)]
+fn windows_file_id(path: &Path) -> Option<(u32, u64)> {
+    use std::os::windows::io::AsRawHandle;
+
+    #[repr(C)]
+    struct Filetime {
+        low: u32,
+        high: u32,
+    }
+
+    #[repr(C)]
+    struct ByHandleFileInformation {
+        attributes: u32,
+        creation: Filetime,
+        last_access: Filetime,
+        last_write: Filetime,
+        volume_serial: u32,
+        size_high: u32,
+        size_low: u32,
+        links: u32,
+        index_high: u32,
+        index_low: u32,
+    }
+
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GetFileInformationByHandle(
+            file: *mut core::ffi::c_void,
+            info: *mut ByHandleFileInformation,
+        ) -> i32;
+    }
+
+    let file = std::fs::File::open(path).ok()?;
+    // SAFETY: 全零是该结构合法的初始值（全是标量）；file 的句柄在调用期间
+    // 有效，info 是独占的、大小形状与 Win32 的 BY_HANDLE_FILE_INFORMATION 相同。
+    let mut info: ByHandleFileInformation = unsafe { std::mem::zeroed() };
+    let ok = unsafe { GetFileInformationByHandle(file.as_raw_handle() as *mut _, &mut info) };
+    if ok == 0 {
+        return None;
+    }
+    Some((
+        info.volume_serial,
+        (u64::from(info.index_high) << 32) | u64::from(info.index_low),
+    ))
 }
 
 #[cfg(test)]
