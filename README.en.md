@@ -287,7 +287,7 @@ LICENSE · CONTRIBUTING.md      # MIT full text · contribution guide (incl. dic
 
 ### 📅 Project Status
 
-> **Current stage: v1.20.0 (2026-10-21): iOS in-keyboard settings / pet / panel and English→Chinese fixes, HarmonyOS toolbar / skins / keyboard modes / tiled candidates / persisted settings aligned with Android, macOS status bar / 8-page settings / emoji and stickers / virtual keyboard aligned with Linux, Windows taskbar pet icon and reboot-free uninstall, and 320–430pt mobile sizing; Apple / HarmonyOS remain unsigned, with no device verification**
+> **Current stage: v1.20.1 (2026-10-21): iOS 9-key candidate reading column, full-keyboard tiled candidates, no preedit and 9-key default; Windows upgrade registration fix with visible failures; iOS/macOS delivery reduced to a single self-contained IPA/PKG; Apple CI compiles, device verification still pending**
 
 V1 milestone progress:
 

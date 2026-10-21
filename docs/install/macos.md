@@ -196,7 +196,8 @@ macOS 输入法是**一个 .app**，由 `Info.plist` 里的 IMK 键声明：
 
 `.github/workflows/apple.yml`（macos-latest，三个 job：`rust` / `macos` / `ios`）每次运行都把
 `macos/` 的 Swift 真过一遍编译器（`swiftc -typecheck` → 真编两个架构 → `lipo` → 组装 IME
-bundle → ad-hoc 签名 → `.pkg`/`.zip`）。产物挂在**该次 run 的 Artifacts** 里。取法：
+bundle → ad-hoc 签名 → 只产出一个 `.pkg`；`.app` 是构建中间物，脚本结尾清掉）。
+产物挂在**该次 run 的 Artifacts** 里。取法：
 
 ```bash
 gh run list --workflow apple.yml                  # 找 run id（或网页 Actions 页）
@@ -206,7 +207,7 @@ gh run download <run-id> -n "opi-apple-rust-v$(bash scripts/apple/version.sh)"  
 
 | 产物名（版本号 = `Cargo.toml` 的 `[workspace.package] version`，唯一取法在 `scripts/apple/version.sh`） | 内容 |
 |---|---|
-| `opi-macos-ime-v<版本>` | `OpiInputMethod.app`（**通用** arm64+x86_64、ad-hoc 签名、内含 `Contents/Frameworks/libopi_ffi.dylib`、`Resources/opi.tiff` 与 **`Resources/symbol_categories.tsv`**（符号面板的 22 类真源，2026-10-20 起随包））· `opi-<版本>-macos-universal.pkg`（装到 `/Library/Input Methods/`；2026-10-17 起 pkgbuild 带 `--scripts macos/scripts`：**装/升级前自动 killall 旧 IME 进程**，构建期有 `sh -n` 语法门禁；**未在真 macOS 上装过**）· `opi-<版本>-macos-universal.zip`（用户级安装用） |
+| `opi-macos-ime-v<版本>` | 只有 `opi-<版本>-macos-universal.pkg` 一个文件（**唯一产物**；2026-10-21 起不再附 `.app`/`.zip`）：内含完整 `OpiInputMethod.app` —— **通用** arm64+x86_64、ad-hoc 签名、`Contents/Frameworks/libopi_ffi.dylib`、`Resources/` 下的符号类目表（22 类真源）/表情/颜文字/贴纸/图标与 `luna`/`trad`/`stroke`/`wubi86` 四部词库；装到 `/Library/Input Methods/`；2026-10-17 起 pkgbuild 带 `--scripts macos/scripts`：**装/升级前自动 killall 旧 IME 进程**，构建期有 `sh -n` 语法门禁；**未在真 macOS 上装过** |
 | `opi-apple-rust-v<版本>`（rust job） | `macos/libopi_ffi.dylib` 与 `macos/libopi_ffi.a`（都是**通用**库）· `headers/OpiFFI.h` · `opi_ffi.xcframework`（iOS 用） |
 
 **这次 run 真实证明了什么**（run 37935240583，证据都在 job 日志里，可复核）：
@@ -220,8 +221,9 @@ gh run download <run-id> -n "opi-apple-rust-v$(bash scripts/apple/version.sh)"  
   （构建机绝对路径那种「CI 全绿、别人机器上 dyld 崩」的地雷已排除）；
 - **真跑过一次**：用 ctypes `dlopen` bundle 里的那份 dylib，并调真出口 ——
   `opi_load(内置回退库) = True / opi_mode() = 0`（在 CI 的 arm64 机器上）；
-- `.pkg` 的 payload 真的含 `Library/Input Methods/OpiInputMethod.app` 的可执行文件与
-  `Info.plist`（`pkgutil --payload-files` 断言，防「空包也成功」）。
+- `.pkg` 的 payload 真的含 `Library/Input Methods/OpiInputMethod.app` 的可执行文件、
+  `Info.plist`、`Contents/Frameworks/libopi_ffi.dylib` 与 `Resources/` 下的符号/表情/
+  贴纸/图标/词库（`pkgutil --payload-files` 逐项断言，防「空包也成功」与资源漏拷）。
 
 **2026-10-20 的 7 文件版本也过了编译**（当前树：run `39425977787`，head 739df45）：macOS
 job 的 `swiftc macos/*.swift` typecheck + 真编两架构 + 链接 + ad-hoc 签名打包全绿；此前
@@ -232,9 +234,9 @@ run `39420786257`（2945b31）红过一次，16bbd2a 修的是 Swift 协议一�
 **怎么用**：
 
 ```bash
-# 装法 A：pkg（系统级；未签名 ⇒ installer 会报未签名，需 -allowUntrusted，或对 .app 右键打开）
+# 装法（系统级；未签名 ⇒ installer 会报未签名，需 -allowUntrusted）
 sudo installer -pkg opi-<版本>-macos-universal.pkg -target / -allowUntrusted
-# 装法 B：用户级（不需要 sudo）——解压 zip，照 §5 的手工步骤复制到 ~/Library/Input Methods/
+# 用户级安装不在 CI 产物里：需自己构建 .app，再照 §5 复制到 ~/Library/Input Methods/
 ```
 
 装完照 §5 走：`killall OpiInputMethod` → 注销重新登录 → 系统设置里添加。
@@ -274,6 +276,9 @@ sudo installer -pkg opi-<版本>-macos-universal.pkg -target / -allowUntrusted
 
 ## 5. 安装与启用
 
+> CI 产物只有 `.pkg`（§4.5）；下面用户级安装用的 `OpiInputMethod.app` 指你自己按
+> §3/§4 构建出来的那一个。
+>
 > 以下步骤**除了 `~/Library/Input Methods/` 这个路径**（Apple 的 TIS 文档明确：
 > 输入法包放 `~/Library/Input Methods/` 或 `/Library/Input Methods/`）**其余都是凭记忆写的，
 > 请在 Mac 上逐条核对** —— macOS 各版本「系统设置」的改名/改路径很频繁。
@@ -284,7 +289,7 @@ mkdir -p ~/Library/Input\ Methods
 cp -R OpiInputMethod.app ~/Library/Input\ Methods/
 
 # 2) 若旧版本正在跑，先杀掉（否则系统仍在用旧二进制；改完必须重来这一步）
-#    ⚠️ 只有 **zip/cp 这条用户级安装路**要手做：pkg 安装路自 2026-10-17 起由
+#    ⚠️ 只有**手工 cp 这条用户级安装路**要手做（CI 只发 .pkg）：pkg 安装路自 2026-10-17 起由
 #    macos/scripts/preinstall 自动完成（pkgbuild --scripts 随包编入；装/升级前
 #    killall 旧 IME 进程 —— 与 Linux 的 deb/rpm 维护脚本、Windows MSI 的 taskkill
 #    同一条语义）。杀掉之后由 imklaunchagent 按需拉起，下一次输入就是新版。

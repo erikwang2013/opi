@@ -49,7 +49,7 @@
 > 候选词（点词上屏）；候选栏改为固定槽位 + 最右 `⌄`，平铺候选见
 > `CandidateTiledPanel.swift`；输入框不再显示 marked text；输入模式持久化、缺省 9 键
 > （`InputModePreference.swift`）。下方「无 `opi_candidate_readings`」「9 键左列恒标点」
-> 与「输入模式不持久化」只对 2026-10-21 之前成立。**本轮尚未推 CI 编译**。
+> 与「输入模式不持久化」只对 2026-10-21 之前成立。**Apple CI run `39516620244` 已把本轮全部 Swift 真编译并产出 IPA（未签名）**；真机行为仍未验证。
 >
 > **2026-10-21 打包裁决（用户原话「所有都打包一起，不要有额外其他文件」）**：
 > `scripts/apple/package-ios.sh` 的 `dist/apple/ios/` 最终**只留一个** unsigned IPA
