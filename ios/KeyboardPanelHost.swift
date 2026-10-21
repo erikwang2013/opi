@@ -84,9 +84,10 @@ extension KeyboardLayout {
         panel.isHidden = true
     }
 
-    /// 符号层：点击**直提**（`.commitText`，不过引擎）。
+    /// 符号层：点击**直提**（`.commitText`，不过引擎）；返回回当前模式键面。
     private func buildSymbolPanel() {
         symbolPanel.onPick = { [weak self] text in self?.tap(.commitText(text)) }
+        symbolPanel.onClose = { [weak self] in self?.tap(.showLetters) }
         addPanel(symbolPanel)
     }
 
@@ -205,8 +206,9 @@ extension KeyboardLayout {
         aboutPanel.applyTheme(p)
         modePanel.applyTheme(p)
         settingsPanel.applyTheme(p)
-        // 四个旧面板只统一底色；内部控件仍用系统色（README 记为已知差异）。
-        symbolPanel.backgroundColor = p.panelBg
+        // 符号面板带自己的表头，接完整色板；其余旧面板只统一底色，
+        // 内部控件仍用系统色（README 记为已知差异）。
+        symbolPanel.applyTheme(p)
         emojiPanel.backgroundColor = p.panelBg
         modePanel.backgroundColor = p.panelBg
         rarePanel.backgroundColor = p.panelBg

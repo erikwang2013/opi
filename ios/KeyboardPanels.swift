@@ -12,7 +12,7 @@ import UIKit
 
 // MARK: - 面板表头
 
-/// 面板头（输入模式/键盘模式/皮肤/关于共用）：左上返回 + 标题 + 提示。
+/// 面板头（输入模式/键盘模式/皮肤/关于/符号共用）：左上返回 + 标题 + 提示。
 final class KeyboardPanelHeader: UIView {
     var onBack: (() -> Void)?
 

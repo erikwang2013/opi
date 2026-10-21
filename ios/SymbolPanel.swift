@@ -8,7 +8,7 @@
 // 但从未在设备或模拟器上跑过：**行为仍未验证**，别把「编过」读成「能用」。
 // 见 ios/README.md「在 Mac 上第一件要做的事」：先让它编译过，再谈功能。
 //
-// 符号面板：引擎符号库的**展示层**（竖向滚动的等宽网格）。
+// 符号面板：引擎符号库的**展示层**（表头「‹ 返回」+ 竖向滚动的等宽网格）。
 //
 // 为什么单独一个文件：键位行是**编译期常量**（`ModeKeyTables.letterRows`，
 // 2026-10-14 由 `KeyboardLayout` 移出 —— 那里顶着 500 行上限），
@@ -29,6 +29,10 @@ final class SymbolPanel: UIView {
     /// 点中一个符号。上屏由控制器做（它才知道 textDocumentProxy）。
     var onPick: ((String) -> Void)?
 
+    /// 左上角「‹ 返回」：与其他面板同一条路 —— 回当前输入模式的键面，
+    /// **不是**系统键盘、也不经过设置（2026-10-21 用户裁决）。
+    var onClose: (() -> Void)?
+
     /// 每行几个（与 Android `SymbolPanel` 的网格同粒度）。
     private static let perRow = 8
     /// 行高。⚠️ 未编译：40pt 是拍的，真机上按键高调。
@@ -43,25 +47,33 @@ final class SymbolPanel: UIView {
     /// 「同一台机器上符号过得了、表情过不了」这种不一致没有任何报错。
     static let probeFont = UIFont.systemFont(ofSize: 17)
 
+    private let header = KeyboardPanelHeader(title: "符号", hint: "点符号上屏")
     private let scroll = UIScrollView()
     private let stack = UIStackView()
 
     init() {
         super.init(frame: .zero)
+        header.onBack = { [weak self] in self?.onClose?() }
         scroll.showsVerticalScrollIndicator = true
         scroll.translatesAutoresizingMaskIntoConstraints = false
         stack.axis = .vertical
         stack.spacing = 6
         stack.translatesAutoresizingMaskIntoConstraints = false
         scroll.addSubview(stack)
-        addSubview(scroll)
+        for v in [header, scroll] {
+            v.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(v)
+        }
 
         // ⚠️ 未编译：滚动的约束写法（contentLayoutGuide 定内容、宽度钉 frameLayoutGuide
         // 防横向滚动）是候选栏那套的竖向版本，Mac 上确认一遍。
         NSLayoutConstraint.activate([
+            header.leadingAnchor.constraint(equalTo: leadingAnchor),
+            header.trailingAnchor.constraint(equalTo: trailingAnchor),
+            header.topAnchor.constraint(equalTo: topAnchor),
             scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
-            scroll.topAnchor.constraint(equalTo: topAnchor),
+            scroll.topAnchor.constraint(equalTo: header.bottomAnchor),
             scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
 
             stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor),
@@ -74,6 +86,12 @@ final class SymbolPanel: UIView {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used: 布局全代码构建") }
+
+    /// 与其他面板一致：深色皮肤下让表头也读得清。
+    func applyTheme(_ p: KeyboardPalette) {
+        backgroundColor = p.panelBg
+        header.applyTheme(p)
+    }
 
     /// 装入符号（来自 `OpiEngine.commonSymbols()`）。
     ///
