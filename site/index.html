@@ -47,29 +47,43 @@
 
   <main id="main">
     <section class="hero" id="hero" aria-labelledby="hero-title">
-      <div class="shell hero-grid">
-        <div class="hero-copy">
-          <p class="eyebrow">OPEN PEOPLE INPUT · 本地优先</p>
-          <h1 id="hero-title">把输入，<br><em>还给输入本身。</em></h1>
-          <p class="hero-lead">小欧输入法：一份 <strong>Rust</strong> 引擎，六端原生。<br>离线、无广告、可审计 —— 只把字打对。</p>
-          <div class="hero-actions">
-            <a class="btn btn-primary" href="#download">下载最新版 <span class="btn-meta">v1.23.0</span></a>
-            <a class="btn btn-ghost" href="#about">认识小欧 <span aria-hidden="true">↓</span></a>
+      <div class="hero-keycap" aria-hidden="true"><span>ˉ</span></div>
+      <div class="shell hero-inner">
+        <p class="eyebrow hero-eyebrow">OPEN PEOPLE INPUT · 本地优先</p>
+        <h1 id="hero-title">把输入，<br><em>还给输入本身。</em></h1>
+        <p class="hero-lead">小欧输入法：一份 <strong>Rust</strong> 引擎，六端原生。<br>离线、无广告、可审计 —— 只把字打对。</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#download">下载最新版 <span class="btn-meta">v1.23.0</span></a>
+          <a class="btn btn-ghost" href="#about">认识小欧 <span aria-hidden="true">↓</span></a>
+        </div>
+        <div class="ime-stage" aria-hidden="true">
+          <div class="ime-window">
+            <div class="ime-top"><span class="ime-dots"><i></i><i></i><i></i></span><span>opi · 候选栏</span><span class="ime-top-mode">拼音</span></div>
+            <div class="ime-composer">
+              <div class="ime-pet">
+                <canvas id="pet-stage"></canvas>
+                <img class="hero-pet-fallback" src="assets/pet/opi-pet.png" width="256" height="256" alt="">
+              </div>
+              <div class="ime-field">
+                <div class="ime-bar">
+                  <span class="ime-mode">中</span>
+                  <span class="ime-buffer">ni hao<i class="ime-caret"></i></span>
+                  <span class="ime-candidates"><span class="ime-cand is-active"><b>1</b>你好</span><span class="ime-cand"><b>2</b>你</span><span class="ime-cand"><b>3</b>尼</span><span class="ime-cand"><b>4</b>呢</span></span>
+                  <span class="ime-engine">Rust 引擎 · 本机</span>
+                </div>
+                <div class="ime-keys"><span><kbd>1–4</kbd> 选词</span><span><kbd>Space</kbd> 上屏</span><span><kbd>Shift</kbd> 中 / 英</span><span class="ime-keys-right">0 云端 · 0 遥测</span></div>
+              </div>
+            </div>
           </div>
-          <ul class="hero-facts" aria-label="项目关键词">
-            <li><b>6</b><span>端原生</span></li><li><b>0</b><span>云端</span></li><li><b>MIT</b><span>源码</span></li><li><b>1</b><span>份引擎</span></li>
-          </ul>
-          <p class="hero-byline">由 <a href="https://erik.xyz" target="_blank" rel="noopener">艾瑞可erik</a> 打造 · 持续迭代中</p>
         </div>
-        <div class="hero-stage" aria-hidden="true">
-          <canvas id="pet-stage"></canvas>
-          <img class="hero-pet-fallback" src="assets/pet/opi-pet.png" width="256" height="256" alt="">
-          <span class="orbit-chip chip-a">离线优先</span><span class="orbit-chip chip-b">简 · 繁</span><span class="orbit-chip chip-c">双拼 / 五笔</span>
-        </div>
+        <ul class="hero-facts" aria-label="项目关键词">
+          <li><b>6</b><span>端原生</span></li><li><b>0</b><span>云端</span></li><li><b>MIT</b><span>源码</span></li><li><b>1</b><span>份引擎</span></li>
+        </ul>
+        <p class="hero-byline">由 <a href="https://erik.xyz" target="_blank" rel="noopener">艾瑞可erik</a> 打造 · 持续迭代中</p>
       </div>
     </section>
 
-    <section class="stats-band light-zone" aria-label="项目数据">
+    <section class="stats-band" aria-label="项目数据">
       <div class="shell stats-grid">
         <div class="stat"><strong>1</strong><span>份 Rust 引擎</span></div>
         <div class="stat"><strong>12</strong><span>种小欧形态</span></div>
@@ -307,7 +321,7 @@
     </section>
   </main>
 
-  <footer class="site-footer light-zone" aria-label="页脚">
+  <footer class="site-footer" aria-label="页脚">
     <div class="shell footer-grid">
       <div class="footer-brand">
         <a class="brand" href="#hero"><img class="brand-pet" src="assets/pet/opi-pet.png" width="32" height="32" alt=""><span class="brand-name">opi</span><span class="brand-cn">小欧输入法</span></a>

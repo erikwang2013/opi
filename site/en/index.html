@@ -47,29 +47,43 @@
 
   <main id="main">
     <section class="hero" id="hero" aria-labelledby="hero-title">
-      <div class="shell hero-grid">
-        <div class="hero-copy">
-          <p class="eyebrow">OPEN PEOPLE INPUT · LOCAL-FIRST</p>
-          <h1 id="hero-title">Input,<br><em>back to input.</em></h1>
-          <p class="hero-lead">opi is one <strong>Rust</strong> engine with six native clients.<br>Offline, ad-free and auditable — it just gets the characters right.</p>
-          <div class="hero-actions">
-            <a class="btn btn-primary" href="#download">Download latest <span class="btn-meta">v1.23.0</span></a>
-            <a class="btn btn-ghost" href="#about">Meet Opi <span aria-hidden="true">↓</span></a>
+      <div class="hero-keycap" aria-hidden="true"><span>ˉ</span></div>
+      <div class="shell hero-inner">
+        <p class="eyebrow hero-eyebrow">OPEN PEOPLE INPUT · LOCAL-FIRST</p>
+        <h1 id="hero-title">Input,<br><em>back to input.</em></h1>
+        <p class="hero-lead">opi is one <strong>Rust</strong> engine with six native clients.<br>Offline, ad-free and auditable — it just gets the characters right.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#download">Download latest <span class="btn-meta">v1.23.0</span></a>
+          <a class="btn btn-ghost" href="#about">Meet Opi <span aria-hidden="true">↓</span></a>
+        </div>
+        <div class="ime-stage" aria-hidden="true">
+          <div class="ime-window">
+            <div class="ime-top"><span class="ime-dots"><i></i><i></i><i></i></span><span>opi · candidate bar</span><span class="ime-top-mode">Pinyin</span></div>
+            <div class="ime-composer">
+              <div class="ime-pet">
+                <canvas id="pet-stage"></canvas>
+                <img class="hero-pet-fallback" src="../assets/pet/opi-pet.png" width="256" height="256" alt="">
+              </div>
+              <div class="ime-field">
+                <div class="ime-bar">
+                  <span class="ime-mode">中</span>
+                  <span class="ime-buffer">ni hao<i class="ime-caret"></i></span>
+                  <span class="ime-candidates"><span class="ime-cand is-active"><b>1</b>你好</span><span class="ime-cand"><b>2</b>你</span><span class="ime-cand"><b>3</b>尼</span><span class="ime-cand"><b>4</b>呢</span></span>
+                  <span class="ime-engine">Rust engine · on-device</span>
+                </div>
+                <div class="ime-keys"><span><kbd>1–4</kbd> select</span><span><kbd>Space</kbd> commit</span><span><kbd>Shift</kbd> CN / EN</span><span class="ime-keys-right">0 cloud · 0 telemetry</span></div>
+              </div>
+            </div>
           </div>
-          <ul class="hero-facts" aria-label="Project facts">
-            <li><b>6</b><span>native clients</span></li><li><b>0</b><span>cloud</span></li><li><b>MIT</b><span>code</span></li><li><b>1</b><span>engine</span></li>
-          </ul>
-          <p class="hero-byline">Built by <a href="https://erik.xyz" target="_blank" rel="noopener">艾瑞可erik</a> · in continuous iteration</p>
         </div>
-        <div class="hero-stage" aria-hidden="true">
-          <canvas id="pet-stage"></canvas>
-          <img class="hero-pet-fallback" src="../assets/pet/opi-pet.png" width="256" height="256" alt="">
-          <span class="orbit-chip chip-a">Offline first</span><span class="orbit-chip chip-b">Simplified · Traditional</span><span class="orbit-chip chip-c">Shuangpin / Wubi</span>
-        </div>
+        <ul class="hero-facts" aria-label="Project facts">
+          <li><b>6</b><span>native clients</span></li><li><b>0</b><span>cloud</span></li><li><b>MIT</b><span>code</span></li><li><b>1</b><span>engine</span></li>
+        </ul>
+        <p class="hero-byline">Built by <a href="https://erik.xyz" target="_blank" rel="noopener">艾瑞可erik</a> · in continuous iteration</p>
       </div>
     </section>
 
-    <section class="stats-band light-zone" aria-label="Project data">
+    <section class="stats-band" aria-label="Project data">
       <div class="shell stats-grid">
         <div class="stat"><strong>1</strong><span>Rust engine</span></div>
         <div class="stat"><strong>12</strong><span>Opi forms</span></div>
@@ -291,7 +305,7 @@
     </section>
   </main>
 
-  <footer class="site-footer light-zone" aria-label="Footer">
+  <footer class="site-footer" aria-label="Footer">
     <div class="shell footer-grid">
       <div class="footer-brand">
         <a class="brand" href="#hero"><img class="brand-pet" src="../assets/pet/opi-pet.png" width="32" height="32" alt=""><span class="brand-name">opi</span><span class="brand-cn">Open People Input</span></a>

@@ -1,7 +1,5 @@
 /* opi static site — light green zone below the dark first screen. */
 
-html { background: #f3fbf4; }
-
 .light-zone {
   color-scheme: light;
   --bg: #f3fbf4;
@@ -23,7 +21,7 @@ html { background: #f3fbf4; }
 }
 
 section.light-zone { background: var(--bg); }
-.stats-band.light-zone, section.light-zone.section--tint { background: linear-gradient(180deg, #e8f6ec, #f3fbf4); }
+section.light-zone.section--tint { background: linear-gradient(180deg, #e8f6ec, #f3fbf4); }
 .light-zone ::selection { background: rgba(47, 125, 90, .22); color: var(--ink); }
 
 /* Shared controls inside the light zone. */
