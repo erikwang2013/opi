@@ -169,10 +169,11 @@ extension KeyboardViewController {
     func performHotkey(_ hot: OpiHotkey) {
         switch hot {
         case .toggleEnglish:
-            // 与 `vk.rs` 的 `hotkey_target` 同判：**来回切**，已在英文就回拼音。
-            // 目标模式在本层算是对的 —— 桌面两轨也是客户端算的（`hotkey_target` 在
-            // `vk.rs`，不在引擎里）。契约禁止的是客户端推**全角映射**，不是这个。
-            engine.switchMode(engine.mode() == .english ? .pinyin : .english)
+            // 与 `vk.rs` 的 `hotkey_target` 同判：**来回切**，已在英文就回上次中文。
+            // 但必须走 `applyInputMode`（不是裸 `switchMode`）：否则引擎切了英文，
+            // 键面/菜单还停在上一个模式（2026-10-22 用户报障的硬件侧同一坑）。
+            applyInputMode(engine.mode() == .english ? lastChineseInputMode : .english26)
+            return
         case .toggleSymbol:
             // 这个出口**自己**包办 Pinyin ⇄ Symbol 的来回切 **和** 缓冲收尾
             // （有候选提交首候选、乱码缓冲清掉不上屏），所以本层**不判目标模式**

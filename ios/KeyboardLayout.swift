@@ -160,6 +160,8 @@ final class KeyboardLayout: UIView {
 
     /// 最近一次刷新拿到的候选/读数/钉住态（候选栏、左列、平铺三处共用一份快照）。
     var candidateTexts: [String] = []
+    /// 候选栏当前槽位数（按宽度算；见 `KeyboardCandidateBar.updateCandidateSlots`）。
+    var candidateSlotCount = 5
     var candidateReadingTexts: [String] = []
     var pinnedReading = ""
     /// 读数/左列滚动复位键（拼音缓冲）。缓冲变了整列回顶部（Android `scrollKey`）。
@@ -214,9 +216,10 @@ final class KeyboardLayout: UIView {
     private func buildRows() {
         keyArea.translatesAutoresizingMaskIntoConstraints = false
         addSubview(keyArea)
-        keyAreaLeading = keyArea.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 3)
-        keyAreaTrailing = keyArea.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -3)
-        keyAreaWidth = keyArea.widthAnchor.constraint(equalTo: widthAnchor, multiplier: 0.76)
+        // 横屏刘海把左右 44pt 划进安全区：键区跟着缩，别让首尾键压在传感器上。
+        keyAreaLeading = keyArea.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor, constant: 3)
+        keyAreaTrailing = keyArea.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -3)
+        keyAreaWidth = keyArea.widthAnchor.constraint(equalTo: safeAreaLayoutGuide.widthAnchor, multiplier: 0.76)
         keyAreaLeading?.isActive = true
         keyAreaTrailing?.isActive = true
         keyAreaTop = keyArea.topAnchor.constraint(
@@ -224,9 +227,8 @@ final class KeyboardLayout: UIView {
         )
         keyAreaTop?.isActive = true
         keyAreaTopFull = keyArea.topAnchor.constraint(equalTo: topAnchor)
-        NSLayoutConstraint.activate([
-            keyArea.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
-        ])
+        // 钉安全区：home indicator 那条空白由键盘背景填，键不被遮住。
+        keyArea.bottomAnchor.constraint(equalTo: safeAreaLayoutGuide.bottomAnchor, constant: -4).isActive = true
 
         rowsStack.axis = .vertical
         rowsStack.spacing = 6

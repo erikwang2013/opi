@@ -322,7 +322,7 @@ private:
     //   · trad  = 引擎模式 == Traditional —— 与「简/繁」状态项同一条判据。
     //   · punct = **生效值**（引擎直读口，2026-10-15 改）：中文类模式 = 配置面 ChinesePunct，
     //     英文/数字/符号恒 off —— 配置值不随模式变，当显示值就是「切英文后还画 。，」。
-    //   · fw    = opiFullwidthState_()（借道读侧，见那里）。
+    //   · fw    = opiFullwidthState_()（Rust 只读出口，见那里）。
     //   · im    = 最近 IC 的当前输入法唯一名（Instance::currentInputMethod()，
     //     2026-10-10 追加）—— **唯一与 IC 有关的一格**，给桌面判「状态栏该不该
     //     显示」（== "opi" 显示，其他隐藏；见 opi_ctl.h 的 State 注释）。
@@ -361,21 +361,11 @@ private:
         return s;
     }
 
-    // 全角读侧。**本轨 FFI 面只有 toggle、没有 getter**（opi_rust_ffi.h）：
-    // Rust 侧的 `Engine::fullwidth()` 存在（engine_punct.rs，toggle 的读侧），但
-    // 没导出到 fcitx5_opi 的 C 面；opi-ffi 那份 C ABI 的 `opi_fullwidth_state()`
-    // 读的是**另一条轨**的引擎单例（Android/TSF），在这里等于没初始化 —— 不能借。
-    // 借用 toggle 两次做读：①翻面 ②翻回，返回第二次的返回值（= 翻回后的 = 原状态）。
-    // 对观察者等价只读，靠两条：净效应为零（同一个 bool 翻两次）＋ 本函数只在
-    // **主循环线程**上跑（D-Bus 回调、按键、驱动都在那条线程）⇒ 没有调用者能插进
-    // 两次 toggle 之间。**不落本地镜像**：平台侧记副本必然漂（engine_punct.rs 对
+    // 全角读侧：走 Rust 的只读出口 `opi_fcitx5_fullwidth()`（opi_rust_ffi.h）。
+    // **别再用 toggle 两次借读** —— 状态栏每秒调 State，读路径不该改引擎状态，
+    // 哪怕净效应为零。**不落本地镜像**：平台侧记副本必然漂（engine_punct.rs 对
     // chinese_punct 写过同一句）。
-    // 升级路径：engine-track 把读侧导出成 `opi_fcitx5_fullwidth()` 之后，这里换成
-    // 一次调用、删掉本段（驱动 §8 里为这个借用形态写的三条断言随之简化）。
-    bool opiFullwidthState_() {
-        opi_fcitx5_toggle_fullwidth();        // ① 翻面（返回值是翻面后的，不用）
-        return opi_fcitx5_toggle_fullwidth(); // ② 翻回：返回值 = 原状态
-    }
+    bool opiFullwidthState_() { return opi_fcitx5_fullwidth(); }
 
     // 注册 opi-ctl 的 D-Bus 服务（构造期试一次、activate 再试一次）。见 opi_ctl.h 的
     // spike 段：注册对象是**本类的成员** ctlObject_，它析构时自动从总线注销。

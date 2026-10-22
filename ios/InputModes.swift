@@ -463,6 +463,14 @@ extension KeyboardViewController {
     /// 没有保缓冲的换语言出口。所以本端切简繁会丢掉打了一半的拼音（不崩、不错提交）。
     func toggleTraditional() {
         engine.switchMode(engine.mode() == .traditional ? .pinyin : .traditional)
+        // 英文 26 键面下开繁体：键面同形，但 UI 模式要落到中文 26 键，否则菜单
+        // 仍高亮「英文26键」，回英文再回中文还会走错键面。
+        if layout.inputMode == .english26 {
+            lastChineseInputMode = .pinyin26
+            InputModePreference.lastChinese = .pinyin26
+            InputModePreference.inputMode = .pinyin26
+            layout.setInputMode(.pinyin26)
+        }
         updateModeLabel()
         layout.setKeyboardModes(modes, traditional: engine.mode() == .traditional)
         refresh()

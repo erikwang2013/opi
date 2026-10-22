@@ -438,7 +438,8 @@ extension KeyboardViewController {
     /// **2026-10-21 起**：软键盘上的模式键/工具条「中」/候选栏「中」在**非中文态**
     /// 由控制器先拦下，走 `applyInputMode(lastChineseInputMode)`（回上次中文方案，
     /// 与 Android 的 else 档同义）。本函数只负责**中→繁、繁→英**两跳；硬件的
-    /// `Ctrl+'` 在 `KeyboardHardware.performHotkey` 里直接 `switchMode`，不走这里。
+    /// `Ctrl+'` 在 `KeyboardHardware.performHotkey` 里走 `applyInputMode`（同步键面），
+    /// 也不走这里。
     /// 两条路径都保留 —— 别把控制器那条折进来，也别删掉本函数的 else 档。
     ///
     /// ⚠️ 这里**没有**走「先提交未完成的缓冲」那条路，而且**原因不是「调不到」** ——
@@ -462,6 +463,9 @@ extension KeyboardViewController {
         case .traditional:
             engine.clear()
             engine.switchMode(.english)
+            // 26 键面必须配全拼：这条腿不走 applyInputMode，否则 scheme 会留在
+            // 上一套（如 9 键），之后从英文键面开繁体就会键面/引擎错位。
+            engine.setScheme(InputMode.english26.scheme)
             // 与 Android `switchLanguageKeepingBuffer(InputMode.ENGLISH26)` 同一条：
             // 键面/菜单高亮跟着引擎走，`lastChineseInputMode` 仍留着回程目标。
             layout.setInputMode(.english26)
@@ -470,6 +474,9 @@ extension KeyboardViewController {
         default:
             // English / Number / Symbol 一律回拼音（与 Android 的 `else` 分支同义）。
             engine.switchMode(.pinyin)
+            // 软键盘在控制器里已拦下非中文态；这里兜住其它调用方：键面也要回中文。
+            layout.setInputMode(lastChineseInputMode)
+            InputModePreference.inputMode = lastChineseInputMode
         }
         updateModeLabel()
         refresh()

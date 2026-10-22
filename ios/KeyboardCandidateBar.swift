@@ -6,7 +6,8 @@
 // 用户裁决（2026-10-21）：候选栏「不再横向滚动或翻页；固定显示若干候选（溢出截断），
 // 最右是 v/⌄」。所以：
 //   · ‹ / › 两枚翻页键整段下线；
-//   · 候选槽位固定 5 个、等宽，超出的候选不画，长词由 `UIButton` 尾部截断；
+//   · 候选槽位等宽、按宽度自适应（320pt 5 个，iPad 最多 9 个），超出的候选不画，
+//     长词由 `UIButton` 尾部截断；
 //   · 「中」仍在英文态显示（上一轮裁决，低存在感），⌄ 永远在最右。
 //
 // ⌄ 进平铺候选（`CandidateTiledPanel`），不在这里直接画网格。
@@ -15,11 +16,18 @@
 
 import UIKit
 
-/// 候选栏固定槽位数。5 是在 320pt 宽下仍能放下 5 个两字候选的经验值；
-/// 改这里只改「显示几个」，不改引擎候选数。
-private let candidateSlotCount = 5
-
 extension KeyboardLayout {
+
+    /// 按键盘宽算槽位数：每格（含 4pt 间距）尽量 ≥44pt，320pt 下仍是 5 格，
+    /// iPad 封顶 9 格。由控制器在 `viewWillLayoutSubviews` 调；格数没变就不重建。
+    func updateCandidateSlots(for width: CGFloat) {
+        guard width > 0 else { return }
+        // 预留左右边距 10 + 英文「中」26 + ⌄ 30 + 间距 2 = 68；+4 是槽间距的修正。
+        let slots = min(9, max(5, Int((width - 68) / 48)))
+        guard slots != candidateSlotCount else { return }
+        candidateSlotCount = slots
+        updateCandidateBar(candidateTexts)
+    }
 
     func buildCandidateBar() {
         // 44pt = 工具条同高（Android `IME_TOOLBAR_HEIGHT_DP`）：两者共用一个槽位，
@@ -64,7 +72,10 @@ extension KeyboardLayout {
             candidateBar.topAnchor.constraint(equalTo: topAnchor),
             candidateBar.heightAnchor.constraint(equalToConstant: 44),
 
-            candidateStack.leadingAnchor.constraint(equalTo: candidateBar.leadingAnchor, constant: 6),
+            // 横屏刘海：候选与「中」/⌄ 让开安全区，栏背景仍铺满。
+            candidateStack.leadingAnchor.constraint(
+                equalTo: candidateBar.safeAreaLayoutGuide.leadingAnchor, constant: 6
+            ),
             candidateStack.trailingAnchor.constraint(
                 equalTo: trailingStack.leadingAnchor, constant: -4
             ),
@@ -72,7 +83,7 @@ extension KeyboardLayout {
             candidateStack.bottomAnchor.constraint(equalTo: candidateBar.bottomAnchor, constant: -2),
 
             trailingStack.trailingAnchor.constraint(
-                equalTo: candidateBar.trailingAnchor, constant: -4
+                equalTo: candidateBar.safeAreaLayoutGuide.trailingAnchor, constant: -4
             ),
             trailingStack.centerYAnchor.constraint(equalTo: candidateBar.centerYAnchor),
         ])

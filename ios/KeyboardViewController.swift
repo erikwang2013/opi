@@ -130,17 +130,22 @@ final class KeyboardViewController: UIInputViewController {
     /// 旋转后由系统重排触发；只改常数，**不**新建约束（新建会叠加冲突）。
     override func viewWillLayoutSubviews() {
         super.viewWillLayoutSubviews()
+        // 候选槽位随**可用**宽度重算（横屏刘海两侧 44pt 不算；
+        // 320pt 下仍是 5 格，iPad 上最多 9 格）。
+        let safe = view.safeAreaInsets
+        layout.updateCandidateSlots(for: view.bounds.width - safe.left - safe.right)
         guard let h = heightConstraint else { return }
         let target = preferredKeyboardHeight
         if abs(h.constant - target) > 0.5 { h.constant = target }
     }
 
     private var preferredKeyboardHeight: CGFloat {
-        // 不能拿 `view.bounds` 判横竖：键盘 view 的宽度是屏宽、高度正是本约束
-        // 给的 264 —— 320pt 竖屏会被误判成「宽 > 高」的横屏。看屏幕窗口。
-        let screen = view.window?.windowScene?.screen
-        let size = screen?.bounds.size ?? UIScreen.main.bounds.size
-        return size.width > size.height ? 200 : 264
+        // 横竖看**纵向 size class**，不看窗口宽高：iPad 横屏是 regular，
+        // 旧写法会把它的键区压到 200；手机横屏才是 compact。
+        let base: CGFloat = traitCollection.verticalSizeClass == .compact ? 200 : 264
+        // 扩展视图覆盖到 home indicator 时补上安全区，键区同时钉在安全区上沿：
+        // 两者抵消，键区净高不变。safeArea 为 0 时与旧版逐点相同。
+        return base + view.safeAreaInsets.bottom
     }
 
     // 词库装载已搬到 `KeyboardDictionaryLoader.swift`（2026-10-21：本文件压 500 行门禁）。

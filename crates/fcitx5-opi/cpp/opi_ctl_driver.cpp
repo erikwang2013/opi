@@ -478,10 +478,10 @@ int main() {
         skip("conf 里 ChinesePunct=off ⇒ 两态 punct 同值，联动这一格本轮无分辨力");
     }
 
-    std::printf("-- 8c 只读性：连读同值 + 行为面证明（全角那一格是双翻面读的，见 opi_engine.h）--\n");
+    std::printf("-- 8c 只读性：连读同值 + 行为面证明（全角那一格走只读出口，见 opi_engine.h）--\n");
     const std::string a = engine.ctlState_();
     const std::string b = engine.ctlState_();
-    check(a == b && a == s3, "连读两次值相同 —— 双翻面读法的净效应为零（没在读侧翻走状态）");
+    check(a == b && a == s3, "连读两次值相同 —— 读侧不改状态（没在读时翻走全角）");
     commitNow();
     press(0x2C); // ','
     check(commitNow() == ",",

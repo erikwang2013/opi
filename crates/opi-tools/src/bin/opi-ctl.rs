@@ -27,9 +27,12 @@
 //     发行版是既有事实，不是希望；
 //   · 起不来的那条路有清晰诊断（见下），不做哑失败。
 //   （gdbus / busctl 是「换一个第三方 CLI」，不解决根本问题，先不加。）
-// ⚠️ 已知怪癖（memory: fcitx5-live-desktop-not-harness）：装了 D-Bus 激活文件
-// 的系统上，发给 org.fcitx.Fcitx5 的调用**会把 fcitx5 拉起来**（激活）——
-// 这是 dbus 语义，不是本工具能改的；正常桌面会话里 fcitx5 本来就在跑。
+// ⚠️ 激活怪癖（memory: fcitx5-live-desktop-not-harness）：装了 D-Bus 激活文件
+// 的系统上，发给 org.fcitx.Fcitx5 的调用**会把 fcitx5 拉起来**（激活）—— 拉起的
+// 实例继承的是**调用方**的总线/环境（root 维护脚本、私有总线），实测会抢走 XIM
+// 且没有 OPI 插件。故本工具两步走：先 GetNameOwner（纯查询）确认它**已经在跑**，
+// 再打返回的**唯一名** —— 唯一名不可能触发激活。同理，环境没给总线地址时**绝不**
+// 退到 X11 autolaunch（会另造一条私有总线），只从 XDG_RUNTIME_DIR 推标准会话总线。
 //
 // 应答协议（与 opi_ctl.h 的注释成对，改要两侧同时动）：
 //   插件的方法 Trigger(string) -> string：
@@ -68,7 +71,11 @@
 // 形状）；3/4 同上面两条；5 多一档含义 —— 应答不是那个冻结形状（插件与本工具版本
 // 对不上：宁可在这里红，也别把错位的值交给桌面画图标 / 显示成搜索结果 / 当模式显示）。
 
-use std::process::Command;
+// 子模块放同名目录（`src/bin/bus.rs` 会被 Cargo 当成另一个 bin target）。
+#[path = "opi-ctl/bus.rs"]
+mod bus;
+
+use bus::call_bus;
 
 // 与 cpp/opi_ctl.h 的 kOpiCtlPath / kOpiCtlInterface / D-Bus 服务名同名 —— 改一处
 // 要两侧同时动。服务名 org.fcitx.Fcitx5 是 fcitx5 自己的会话总线名（实测）。
@@ -333,53 +340,6 @@ fn check_state_shape(line: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// 发一条方法调用，取回应答 string。Err(码) = 传输面已判死（3/4/5，见 transport_error）。
-/// 参数带不带由调用方定：动作走 `Trigger(string:<动作>)`（那条命令行是**逐字契约**），
-/// state 走无参的 `State` —— 两者在总线上是同一个对象（/opi）。
-fn call_bus(method: &str, arg: Option<&str>) -> Result<String, i32> {
-    // 先把会进 argv 的串都建好（引用临时值的数组活得比语句短，写在一行里太脆）。
-    let dest = format!("--dest={DEST}");
-    let mut cmd = Command::new("dbus-send");
-    // --reply-timeout：都要在插件主循环上瞬间做完，5 秒足够；缺了它 dbus-send
-    // 会按 libdbus 缺省等下去 —— 状态栏按钮不能挂几十秒。
-    cmd.args([
-        "--session",
-        "--print-reply",
-        "--reply-timeout=5000",
-        &dest,
-        PATH,
-        method,
-    ]);
-    if let Some(a) = arg {
-        cmd.arg(a);
-    }
-    let out = cmd.output();
-    let out = match out {
-        Ok(o) => o,
-        Err(e) => {
-            // dbus-send 不在 PATH 上（或起不来）—— 装它，不是重试。
-            eprintln!("opi-ctl: 起不了 dbus-send（{e}）");
-            eprintln!(
-                "       装 D-Bus 的命令行包再试：Debian/Ubuntu 是 dbus-bin，Fedora 是 dbus-tools"
-            );
-            return Err(3);
-        }
-    };
-    if !out.status.success() {
-        return Err(transport_error(&String::from_utf8_lossy(&out.stderr)));
-    }
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    match parse_reply(&stdout) {
-        Ok(r) => Ok(r),
-        Err(why) => {
-            eprintln!("opi-ctl: 插件的应答看不懂（{why}）—— 插件与本工具版本对不上？");
-            let first = stdout.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
-            eprintln!("       原始输出：{first}");
-            Err(5)
-        }
-    }
-}
-
 /// 服务端应答 → 退出码。协议见文件头。
 fn handle_reply(reply: &str) -> i32 {
     if reply == "ok" {
@@ -401,84 +361,4 @@ fn handle_reply(reply: &str) -> i32 {
     }
     eprintln!("opi-ctl: 插件的应答不认识：{reply:?}");
     5
-}
-
-/// dbus-send 失败（非 0 退出）→ 退出码。判据是 stderr 里的 D-Bus 错误名 / 本地
-/// 连接失败文本（dbus-send 的措辞在 dbus 各版本间稳定，且这里只看**子串**，
-/// 不认识的一律落到 5 并原样带出底层第一行 —— 不静默、也不假装分类成功）。
-fn transport_error(stderr: &str) -> i32 {
-    let channel = [
-        "Failed to open connection", // 本地：连不上会话总线
-        "Unable to autolaunch",      // 本地：没有 DISPLAY 也没地址
-        "Could not connect",
-        "Disconnected",
-        "ServiceUnknown", // 服务名没有属主 = fcitx5 没在跑
-        "NameHasNoOwner",
-        "NoReply", // 送达了但没回（插件主循环卡住 / 超时）
-    ];
-    let missing = [
-        "UnknownObject", // /opi 不在总线上 = 接收侧没注册
-        "UnknownInterface",
-        "UnknownMethod", // 接口/方法不对（插件旧版、或没加载）
-    ];
-    let (code, why) = if channel.iter().any(|p| stderr.contains(p)) {
-        (3, "D-Bus 通道不通（会话总线连不上，或 fcitx5 没在运行）")
-    } else if missing.iter().any(|p| stderr.contains(p)) {
-        (
-            4,
-            "插件没挂上这条通道（接收侧没注册 —— 插件没装 / 没加载？）",
-        )
-    } else {
-        (5, "这次调用被总线/插件拒绝")
-    };
-    eprintln!("opi-ctl: {why}");
-    let detail = stderr.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
-    if !detail.is_empty() {
-        eprintln!("       底层报错：{detail}");
-    }
-    code
-}
-
-/// 从 `--print-reply` 的输出里取回 string 返回值：
-///     method return time=… sender=… -> destination=… serial=… reply_serial=…
-///        string "ok"
-/// 取**最后一个**含 `string "` 的行（应答排在最后；多行输出里更早的不该是它），
-/// 再去掉 dbus-send 的 C 风格转义（\" \\ \n \t \r）—— 服务端会把用户输入原样
-/// 回显进 err 消息（未知动作那条），不反转义就可能漏字符。
-fn parse_reply(stdout: &str) -> Result<String, &'static str> {
-    const MARK: &str = "string \"";
-    let line = stdout
-        .lines()
-        .rev()
-        .find(|l| l.contains(MARK))
-        .ok_or("输出里没有 string 返回值")?;
-    let start = line.find(MARK).unwrap_or(0) + MARK.len();
-    let rest = &line[start..];
-    let end = rest.rfind('"').ok_or("返回值没有收尾引号")?;
-    Ok(unescape(&rest[..end]))
-}
-
-fn unescape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut chars = s.chars();
-    while let Some(c) = chars.next() {
-        if c != '\\' {
-            out.push(c);
-            continue;
-        }
-        match chars.next() {
-            Some('n') => out.push('\n'),
-            Some('t') => out.push('\t'),
-            Some('r') => out.push('\r'),
-            Some('\\') => out.push('\\'),
-            Some('"') => out.push('"'),
-            // 不认识的转义按字面保留（包括结尾孤立的反斜杠）。
-            Some(other) => {
-                out.push('\\');
-                out.push(other);
-            }
-            None => out.push('\\'),
-        }
-    }
-    out
 }

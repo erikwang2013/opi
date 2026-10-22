@@ -24,16 +24,30 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-/// 假 dbus-send：把收到的 argv 记在脚本旁边的 `argv` 文件里，再把 `reply`
-/// 文件原样印到 stdout，退出 0。
+/// 假 dbus-send：`GetNameOwner` 那一步回 `owner` 文件（属主查得到）；其余调用
+/// 把 argv 记在 `argv` 文件里、把 `reply` 印到 stdout，退出 0。argv 只记目标
+/// 调用 —— 逐字断言不必混进预检那一条。
 const REPLY_TO_STDOUT: &str = r#"#!/bin/sh
 d=$(dirname "$0")
-printf '%s\n' "$@" > "$d/argv"
-cat "$d/reply"
+case "$*" in
+  *GetNameOwner*) cat "$d/owner" ;;
+  *) printf '%s\n' "$@" > "$d/argv"
+     printf '%s\n' "$DBUS_SESSION_BUS_ADDRESS" > "$d/addr"
+     cat "$d/reply" ;;
+esac
 "#;
 
-/// 同上，但把 `reply` 印到 **stderr** 并以 1 退出（模拟 dbus-send 的失败面）。
+/// 同上，但目标调用把 `reply` 印到 **stderr** 并以 1 退出（模拟失败面）。
 const REPLY_TO_STDERR: &str = r#"#!/bin/sh
+d=$(dirname "$0")
+case "$*" in
+  *GetNameOwner*) cat "$d/owner" ;;
+  *) printf '%s\n' "$@" > "$d/argv"; cat "$d/reply" >&2; exit 1 ;;
+esac
+"#;
+
+/// 属主查不到（fcitx5 没在跑）：两次调用都印 stderr 并失败。
+const NO_OWNER: &str = r#"#!/bin/sh
 d=$(dirname "$0")
 printf '%s\n' "$@" > "$d/argv"
 cat "$d/reply" >&2
@@ -70,6 +84,7 @@ fn fake(script: &str, reply: &str) -> PathBuf {
         std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
     }
     std::fs::write(dir.join("reply"), reply).unwrap();
+    std::fs::write(dir.join("owner"), reply_of(":1.42")).unwrap();
     dir
 }
 
@@ -84,6 +99,12 @@ fn run_ctl_with_path(path: &str, args: &[&str]) -> (i32, String, String) {
         Command::new(env!("CARGO_BIN_EXE_opi-ctl"))
             .args(args)
             .env("PATH", path)
+            // 假 dbus-send 不连总线，但 opi-ctl 现在**必须先有地址**才肯发命令
+            // （防 autolaunch）；给一个哑地址，别让用例结果随宿主环境漂。
+            .env(
+                "DBUS_SESSION_BUS_ADDRESS",
+                "unix:path=/nonexistent-opi-ctl-test",
+            )
             .output()
             .expect("起不了 opi-ctl")
     };
@@ -114,6 +135,10 @@ fn reply_of(s: &str) -> String {
 #[path = "opi_ctl_cli/mode.rs"]
 mod mode;
 
+// 总线寻址/防激活那一组，见其文件头。
+#[path = "opi_ctl_cli/bus.rs"]
+mod bus;
+
 /// 成功路径：退出 0、静默（成功不刷屏），且发出去的命令行**逐字**如下 ——
 /// 这一段与 cpp/opi_ctl.h 的 kOpiCtlPath / kOpiCtlInterface 是一对，改任一处
 /// 这条就红。
@@ -132,7 +157,7 @@ fn ok_path_sends_exact_wire_command() {
             "--session",
             "--print-reply",
             "--reply-timeout=5000",
-            "--dest=org.fcitx.Fcitx5",
+            "--dest=:1.42",
             "/opi",
             "org.fcitx.Fcitx5.Opi1.Trigger",
             "string:symbols",
@@ -215,7 +240,8 @@ fn escaped_reply_is_unescaped() {
     assert!(stderr.contains("a\"b"), "stderr={stderr}");
 }
 
-/// fcitx5 没在跑（服务名无属主）→ 3：这是「通道不通」，不是「功能不可用」。
+/// 目标调用报 ServiceUnknown（预检之后 fcitx5 正好退出）→ 3：这是「通道不通」，
+/// 不是「功能不可用」。映射判据在 transport_error，与预检那条共用。
 #[test]
 fn service_unknown_maps_to_3() {
     let dir = fake(
@@ -285,7 +311,7 @@ fn state_query_sends_exact_wire_command_and_prints_line() {
             "--session",
             "--print-reply",
             "--reply-timeout=5000",
-            "--dest=org.fcitx.Fcitx5",
+            "--dest=:1.42",
             "/opi",
             "org.fcitx.Fcitx5.Opi1.State",
         ]
@@ -381,7 +407,7 @@ fn search_query_sends_exact_wire_command_and_prints_payload() {
             "--session",
             "--print-reply",
             "--reply-timeout=5000",
-            "--dest=org.fcitx.Fcitx5",
+            "--dest=:1.42",
             "/opi",
             "org.fcitx.Fcitx5.Opi1.Search",
             "string:heart",

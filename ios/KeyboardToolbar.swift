@@ -9,7 +9,10 @@
 // 本类只画图标与回调，状态判断在 `KeyboardLayout.setTopBar(candidatesVisible:english:)`。
 //
 // 2026-10-21 用户裁决：项目宠物放在工具条**最前面**（Android `ImeToolbar` 同位置）。
-// 宠物是静态 `idle` 图（iOS 没有 `petMood` 那套引擎状态出口，不伪造心情）。
+// 2026-10-22 恢复多形态随机显示：对齐 Android `PetStrip`，每 2.8s 换一个随机
+// 形态（同形态不连出）；键盘每次出现时重抽（不是每次候选栏收起都重抽，避免
+// 每提交一个词就解一次 GIF）。减弱动态时只留一张静态图，不轮播；26pt 固定框
+// 只换 `image`，不触发布局。
 //
 // ⚠️ 与 Android 的已知差别（如实列出，不伪造）：
 //   · iOS 扩展不能控制键盘窗口 ⇒ 没有悬浮/游戏快捷入口（面板里有禁用项）；
@@ -17,8 +20,8 @@
 //
 // 宽度预算（320pt 最窄屏，英文空闲时「中」键也出现）：
 //   图标次序：表情 / 皮肤 / 输入模式 / 键盘模式 / 齿轮 / 关于 / 收起；
-//   pet 26 + 图标 7 × 36 + 中 28 + 左右边距 8 = 314 ≤ 320。
-//   别再往上加固定宽度 —— 加之前先把这条算式重算一遍。
+//   pet 26 + 图标 7 个 + 中 28 + 左右边距 8。图标宽在 36…44 间按可用宽均分，
+//   320pt 下 ≈36.9 —— 宽屏放大触摸区，窄屏不溢出。
 //
 // ⚠️ 本机无 UIKit，只在 Apple CI 真编译；从未上机运行。
 
@@ -41,6 +44,12 @@ final class KeyboardToolbar: UIView {
     /// 工具条最左的项目宠物（Android `ImeToolbar` 的 `OpiPet` 同位置，2026-10-21）。
     private let petView = UIImageView(image: PetStickerImages.image(named: "idle"))
     private var iconButtons: [UIButton] = []
+    /// 图标宽约束（随键盘宽度在 36…44 间调，见 `updateIconWidths`）。
+    private var iconWidthConstraints: [NSLayoutConstraint] = []
+    private var petTimer: Timer?
+    private var petFormIndex = -1
+    /// 工具条此刻是否真的可见（空闲态）。隐藏时停表，不让宠物在后台空转。
+    private var petActive = false
     /// 当前色板，供 `applyTheme` 反复调用（切皮肤时控件已存在）。
     private var palette: KeyboardPalette = .light
 
@@ -82,6 +91,7 @@ final class KeyboardToolbar: UIView {
 
         petView.contentMode = .scaleAspectFit
         petView.isUserInteractionEnabled = false
+        petView.isAccessibilityElement = false
         petView.accessibilityElementsHidden = true
         petView.translatesAutoresizingMaskIntoConstraints = false
 
@@ -95,19 +105,25 @@ final class KeyboardToolbar: UIView {
         stack.alignment = .fill
         stack.spacing = 0
         stack.translatesAutoresizingMaskIntoConstraints = false
+        // 隐藏态必须让 stack 能把它压到 0（required 会与 stack 的折叠约束打架）。
+        let chineseWidth = chineseButton.widthAnchor.constraint(equalToConstant: 28)
+        chineseWidth.priority = .defaultHigh
         addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            // 横屏刘海：图标内容让开安全区，背景仍铺满整条。
+            stack.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor, constant: 4),
+            stack.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -4),
             stack.topAnchor.constraint(equalTo: topAnchor),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor),
-            chineseButton.widthAnchor.constraint(equalToConstant: 28),
+            chineseWidth,
             petView.widthAnchor.constraint(equalToConstant: 26),
             // 不锁高度：stack 是 .fill（44pt 高），再锁 28 会与 stack 的约束打架。
             // `.scaleAspectFit` 会自己按 26 宽保持比例。
         ])
         for b in iconButtons {
-            b.widthAnchor.constraint(equalToConstant: 36).isActive = true
+            let width = b.widthAnchor.constraint(equalToConstant: 36)
+            width.isActive = true
+            iconWidthConstraints.append(width)
             b.setContentHuggingPriority(.required, for: .horizontal)
             b.setContentCompressionResistancePriority(.required, for: .horizontal)
         }
@@ -119,9 +135,99 @@ final class KeyboardToolbar: UIView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used: 布局全代码构建") }
 
+    deinit { petTimer?.invalidate() }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        // 键盘收起后别在后台空转。
+        guard window != nil else {
+            stopPetRotation()
+            return
+        }
+        // 键盘每次出现都重抽一形态（不只首次）；对齐 Android `PetStrip` 的「出现即换」。
+        showRandomPet()
+        // 候选栏占位时不轮播；等工具条回到空闲态再启动。
+        if petActive { startPetRotation() }
+    }
+
     /// 英文空闲 = 显示隐藏「中」键（英文有候选时这个键在候选栏，不在这里）。
     func setEnglish(_ english: Bool) {
         chineseButton.isHidden = !english
+    }
+
+    /// 工具条显隐（只在空闲态转宠物）。由 `KeyboardLayout.updateTopBarVisibility` 调。
+    func setActive(_ active: Bool) {
+        guard active != petActive else { return }
+        petActive = active
+        if active { startPetRotation() } else { stopPetRotation() }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        updateIconWidths()
+    }
+
+    /// 图标宽在 36…44 间按可用宽均分：宽屏给足触摸区，320pt 也不溢出。
+    private func updateIconWidths() {
+        let safe = safeAreaInsets
+        let usable = bounds.width - safe.left - safe.right
+        guard usable > 0, !iconWidthConstraints.isEmpty else { return }
+        // 固定占用 = pet 26 + 左右边距 8 + 英文「中」28（隐藏时也按它预留，留余量）。
+        let perIcon = min(44, max(36, (usable - 62) / CGFloat(iconButtons.count)))
+        for c in iconWidthConstraints where abs(c.constant - perIcon) > 0.5 {
+            c.constant = perIcon
+        }
+    }
+
+    // MARK: - 宠物多形态随机轮播（Android `PetStrip` 同节奏）
+
+    private func startPetRotation() {
+        stopPetRotation()
+        // 首帧兜底：窗口出现前就被判为 active 时也得有图（正常由 didMoveToWindow 抽）。
+        if petFormIndex < 0 { showRandomPet() }
+        // 减弱动态：只留这一张静态图，不启动轮播。
+        guard !UIAccessibility.isReduceMotionEnabled else { return }
+        let timer = Timer(timeInterval: 2.8, repeats: true) { [weak self] _ in
+            self?.tickPet()
+        }
+        // 用 default：滚动/触摸跟踪时暂停，别在面板滑动时解 GIF。
+        RunLoop.current.add(timer, forMode: .default)
+        petTimer = timer
+    }
+
+    private func stopPetRotation() {
+        petTimer?.invalidate()
+        petTimer = nil
+    }
+
+    private func tickPet() {
+        // 键盘还活着时用户可能刚打开减弱动态：下一拍停表并换成静态图。
+        guard !UIAccessibility.isReduceMotionEnabled else {
+            stopPetRotation()
+            showRandomPet()
+            return
+        }
+        showRandomPet()
+    }
+
+    private func showRandomPet() {
+        let forms = PetEmojiTable.forms
+        guard !forms.isEmpty else { return }
+        var next = Int.random(in: 0..<forms.count)
+        // 同形态不连出（Android 是整组重抽，单枚这里只做这一步）。
+        if forms.count > 1, next == petFormIndex {
+            next = (next + 1) % forms.count
+        }
+        petFormIndex = next
+        let name = forms[next].sticker
+        if UIAccessibility.isReduceMotionEnabled {
+            petView.image = PetStickerImages.image(named: name)
+                ?? PetStickerImages.image(named: "idle")
+        } else {
+            petView.image = PetStickerGifs.animatedImage(named: name)
+                ?? PetStickerImages.image(named: name)
+                ?? PetStickerImages.image(named: "idle")
+        }
     }
 
     func applyTheme(_ p: KeyboardPalette) {

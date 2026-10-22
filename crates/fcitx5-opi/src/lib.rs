@@ -410,6 +410,20 @@ pub unsafe extern "C" fn opi_fcitx5_toggle_fullwidth() -> bool {
     .unwrap_or(false)
 }
 
+/// 全角只读出口（状态栏 `fw=` 用）。此前 C++ 靠 toggle 两次借读，读路径不该改状态。
+///
+/// # Safety
+///
+/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_fullwidth() -> bool {
+    ensure_panic_hook();
+    catch_unwind(AssertUnwindSafe(|| {
+        with_state(|s| s.fullwidth()).unwrap_or(false)
+    }))
+    .unwrap_or(false)
+}
+
 /// 按键事件结果（B2 路由：`opi_fcitx5_key_event` 的返回值）。
 #[repr(C)]
 pub struct KeyEventResult {

@@ -42,10 +42,11 @@ final class KeyboardPanelHeader: UIView {
         }
         NSLayoutConstraint.activate([
             // 2026-10-21 用户裁决：返回箭头**单独一行**，标题/提示在下一行；各面板统一。
-            heightAnchor.constraint(equalToConstant: 52),
+            // 返回键占满 44pt 命中高（面板内容都可滚，多出的 12pt 从内容区拿）。
+            heightAnchor.constraint(equalToConstant: 64),
             backButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
-            backButton.topAnchor.constraint(equalTo: topAnchor, constant: 1),
-            backButton.heightAnchor.constraint(equalToConstant: 24),
+            backButton.topAnchor.constraint(equalTo: topAnchor),
+            backButton.heightAnchor.constraint(equalToConstant: 44),
             titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
             titleLabel.topAnchor.constraint(equalTo: backButton.bottomAnchor),
             hintLabel.leadingAnchor.constraint(equalTo: titleLabel.trailingAnchor, constant: 8),

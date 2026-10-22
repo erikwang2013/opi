@@ -171,6 +171,7 @@ extension KeyboardLayout {
         let showCandidates = !tiled && wantsCandidateBar && !isPanelLayer
         candidateBar.isHidden = !showCandidates
         toolbar.isHidden = tiled || showCandidates
+        toolbar.setActive(!toolbar.isHidden)
         toolbar.setEnglish(english)
         showChineseButton(english && showCandidates)
         // ⌄ 只在键面候选栏出现；平铺态用右列「返回」，不重复入口。

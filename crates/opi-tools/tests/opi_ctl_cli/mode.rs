@@ -27,7 +27,7 @@ fn mode_sends_exact_wire_command_and_prints_token() {
                 "--session",
                 "--print-reply",
                 "--reply-timeout=5000",
-                "--dest=org.fcitx.Fcitx5",
+                "--dest=:1.42",
                 "/opi",
                 "org.fcitx.Fcitx5.Opi1.Trigger",
                 "string:mode",

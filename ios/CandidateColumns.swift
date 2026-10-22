@@ -35,11 +35,17 @@ extension KeyboardLayout {
             self.delegate?.keyboardLayout(self, didSelectCandidateAt: index)
         }
         keyArea.addSubview(wordColumn)
+        // 0.22 在 iPad 上会到 160pt+：词列封顶 120，手机上（≤93pt）不受影响。
+        let wordWidth = wordColumn.widthAnchor.constraint(
+            equalTo: keyArea.widthAnchor, multiplier: 0.22
+        )
+        wordWidth.priority = .defaultHigh
         NSLayoutConstraint.activate([
             wordColumn.leadingAnchor.constraint(equalTo: keyArea.leadingAnchor),
             wordColumn.topAnchor.constraint(equalTo: keyArea.topAnchor),
             wordColumn.bottomAnchor.constraint(equalTo: keyArea.bottomAnchor),
-            wordColumn.widthAnchor.constraint(equalTo: keyArea.widthAnchor, multiplier: 0.22),
+            wordWidth,
+            wordColumn.widthAnchor.constraint(lessThanOrEqualToConstant: 120),
         ])
         rowsStackToWord = rowsStack.leadingAnchor.constraint(
             equalTo: wordColumn.trailingAnchor, constant: 4
