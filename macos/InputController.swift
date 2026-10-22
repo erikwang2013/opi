@@ -450,7 +450,7 @@ final class OpiCandidateWindow {
     /// 插入点走，不需要我们每键提醒）。hide() 与 update(空/不可见) 都回写 false。
     private var shown = false
 
-    var visibleFrame: NSRect? { shown ? window?.frame : nil } // 拼音提示条避让用
+    var visibleFrame: NSRect? { nil } // IMKCandidates 无公开 frame；拼音条按光标定位
 
     private init() {}
 
