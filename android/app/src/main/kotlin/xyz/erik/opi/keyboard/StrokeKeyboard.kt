@@ -39,6 +39,8 @@ fun StrokeKeyboard(
     onKey: (String) -> Unit,
     onSpace: () -> Unit,
     onBackspace: () -> Unit,
+    /** 长按退格 = 清空整段组合输入（不提交）。 */
+    onBackspaceLongPress: (() -> Unit)? = null,
     onEnter: () -> Unit,
     onModeSwitch: () -> Unit,
     onSymbol: () -> Unit,
@@ -81,10 +83,17 @@ fun StrokeKeyboard(
                 description = "简繁切换",
                 stateDescription = modeStateDescription(modeLabel),
             )
-            KeyButton("英文", modifier = Modifier.weight(1f), onTap = onEnglish)
-            KeyButton("生僻字", modifier = Modifier.weight(1.4f), onTap = onRare)
+            // 底行 7 键在 320dp 上每单位只有 38dp：「英文」（2 字 × 21sp ≈ 42dp）与
+            // 「生僻字」（3 字 × 21sp ≈ 63dp，格 53dp）都会截字，故这两个键单独降字号。
+            KeyButton("英文", modifier = Modifier.weight(1f), onTap = onEnglish, fontSize = 15.sp)
+            KeyButton("生僻字", modifier = Modifier.weight(1.4f), onTap = onRare, fontSize = 14.sp)
             KeyButton("空格", modifier = Modifier.weight(2f), onTap = onSpace)
-            KeyButton("⌫", modifier = Modifier.weight(1f), onTap = onBackspace)
+            KeyButton(
+                "⌫",
+                modifier = Modifier.weight(1f),
+                onTap = onBackspace,
+                onLongPress = onBackspaceLongPress,
+            )
             KeyButton("↵", modifier = Modifier.weight(1f), onTap = onEnter)
         }
     }

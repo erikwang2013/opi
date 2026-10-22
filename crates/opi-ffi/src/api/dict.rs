@@ -23,8 +23,8 @@
 //!    返回 false。宿主 UI 按 `system: true` 把开关隐藏掉（它们启不启用是宿主自己的
 //!    事：fcitx5/Android 装不装 trad.opid、TsfLogic 读不读 stroke）。
 //!
-//! 4. **排序与兜底归引擎侧统一裁决**（2026-10-17 用户裁决「是词库就要抢位」「超过
-//!    50ms 就优先使用自带词库」）：抢位加成（**广覆盖**，重复项取 max）与 40ms 扫描截止
+//! 4. **排序与兜底归引擎侧统一裁决**（2026-10-17 用户裁决「是词库就要抢位」「超时
+//!    就优先使用自带词库」；2026-10-22 总账 30ms）：抢位加成（**广覆盖**，重复项取 max）与 20ms 扫描截止
 //!    都在 `engine-core/src/dict_layers.rs`（`boosted_import_freq` /
 //!    `IMPORT_SCAN_BUDGET`），本层不重复实现、不给宿主开预算开关
 //!    （测试口是 `Engine::set_import_scan_budget`）。宿主可见的变化只是候选表本身。

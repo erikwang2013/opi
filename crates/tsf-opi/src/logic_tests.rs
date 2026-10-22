@@ -21,6 +21,7 @@ fn state() -> TsfLogic {
         english_pro: true,
         last_printable: None,
         shift_toggle: true,
+        fetch_cache: Default::default(),
     };
     s.refresh_snapshot();
     s

@@ -30,6 +30,8 @@ extension KeyboardLayout {
     }
 
     func buildCandidateBar() {
+        // 拼音行在最上（24pt 常驻），候选栏/工具条接在它下沿 —— 见 `buildComposingBar`。
+        buildComposingBar()
         // 44pt = 工具条同高（Android `IME_TOOLBAR_HEIGHT_DP`）：两者共用一个槽位，
         // 高度不同会让键区在「空闲 ↔ 输入」之间上下跳。
         candidateBar.translatesAutoresizingMaskIntoConstraints = false
@@ -69,7 +71,7 @@ extension KeyboardLayout {
         NSLayoutConstraint.activate([
             candidateBar.leadingAnchor.constraint(equalTo: leadingAnchor),
             candidateBar.trailingAnchor.constraint(equalTo: trailingAnchor),
-            candidateBar.topAnchor.constraint(equalTo: topAnchor),
+            candidateBar.topAnchor.constraint(equalTo: composingBar.bottomAnchor),
             candidateBar.heightAnchor.constraint(equalToConstant: 44),
 
             // 横屏刘海：候选与「中」/⌄ 让开安全区，栏背景仍铺满。
@@ -137,5 +139,27 @@ extension KeyboardLayout {
     /// 隐藏键的英→中腿同义），不新造委托方法。
     @objc private func tapChinese() {
         delegate?.keyboardLayout(self, didTapFunction: .cycleMode)
+    }
+
+    // MARK: - 拼音行（2026-10-23）
+
+    /// 顶部拼音行：键盘最上一条 24pt 常驻槽，候选栏与工具条都在它下面。
+    /// 平铺候选态键区顶锚改接 `composingBar.bottom`（见 `buildRows`），所以平铺
+    /// 盖住 44pt 槽位、但**不盖**拼音行 —— 组合中的拼音在平铺态同样可见。
+    func buildComposingBar() {
+        composingBar.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(composingBar)
+        NSLayoutConstraint.activate([
+            composingBar.leadingAnchor.constraint(equalTo: leadingAnchor),
+            composingBar.trailingAnchor.constraint(equalTo: trailingAnchor),
+            composingBar.topAnchor.constraint(equalTo: topAnchor),
+            composingBar.heightAnchor.constraint(equalToConstant: ComposingBar.height),
+        ])
+    }
+
+    /// 刷新拼音行。文本来自 `OpiEngine.displayBuffer()`（引擎已分词）；
+    /// **不要**传 `buffer()` 代替 —— 9 键的缓冲是数字串，显示判据见那边的注释。
+    func setComposingText(_ text: String) {
+        composingBar.setText(text)
     }
 }

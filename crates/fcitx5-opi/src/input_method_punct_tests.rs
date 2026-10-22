@@ -47,6 +47,7 @@ fn punct_state() -> CandidateState {
         last_printable: None,
         dicts: Default::default(),
         english_pro: true,
+        fetch_cache: Default::default(),
     };
     s.switch_mode(Mode::Pinyin);
     s
@@ -284,6 +285,7 @@ fn punctuation_flush_resets_page_to_first() {
         last_printable: None,
         dicts: Default::default(),
         english_pro: true,
+        fetch_cache: Default::default(),
     };
     s.switch_mode(Mode::Pinyin);
     typed(&mut s, "hao");

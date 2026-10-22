@@ -8,6 +8,8 @@
 //! 钳制，buffer 变化时页码归零。纯逻辑结构体（无全局状态、无 FFI），可独立单测；
 //! C 出口（lib.rs）经 Mutex 单例访问本状态。
 
+use std::cell::RefCell;
+
 use engine_core::Engine;
 use engine_core::candidates::Candidate;
 use engine_core::composer::Mode;
@@ -60,6 +62,14 @@ pub struct CandidateState {
     pub(crate) dicts: DictLayer,
     /// 英文专业模式（2026-10-19）：false = en26 只直出字母（默认），true = 词库联想。
     pub(crate) english_pro: bool,
+    /// 「一次抓取」缓存（2026-10-22 性能，30ms 总目标）：`page_count()` 已取过的
+    /// 全量候选留给**紧随其后**的 `candidates()`，让一次翻页键只跑一次
+    /// `Engine::candidates(MAX)`。实测 PageDown after `ni`：两次取回完全相同，
+    /// 完整按键 30.6–32.3ms，其中一次取回 ~15ms。
+    /// 键 = (真缓冲, 逐字片段)：两者任一变化都可能换候选集；设置位入口另行显式清
+    /// （`candidate_settings.rs`）。只由 `page_count` 填充、被 `fetched` 消费一次 ——
+    /// 不在候选窗刷新后继续持有全量表，避免跨键常驻内存与额外的失效面。
+    pub(crate) fetch_cache: RefCell<Option<(String, String, Vec<Candidate>)>>,
 }
 
 impl CandidateState {
@@ -106,6 +116,7 @@ impl CandidateState {
             last_printable: None,
             dicts: DictLayer::default(),
             english_pro: false,
+            fetch_cache: RefCell::new(None),
         };
         s.refresh_snapshot();
         Ok(s)
@@ -116,11 +127,41 @@ impl CandidateState {
     }
 
     /// buffer 与快照不一致 → 页码归零（与 Android 语义一致），再刷新快照。
+    ///
+    /// 所有编辑/提交/装载入口都以本方法收尾 ⇒ 一次抓取缓存也在这里统一作废：
+    /// 即使 buffer 字符串恰好没变（提交后清空、再回到同一串），候选集也可能已换。
     fn reset_page_if_buffer_changed(&mut self) {
+        self.invalidate_fetch_cache();
         if self.engine.buffer() != self.buffer_snapshot {
             self.page = 0;
         }
         self.refresh_snapshot();
+    }
+
+    /// 候选缓存键：候选集依赖真缓冲与已确认的逐字片段，两者一起作键。
+    fn fetch_key(&self) -> (String, String) {
+        (self.engine.buffer().to_string(), self.engine.pending_text())
+    }
+
+    /// 作废一次抓取缓存。除 `reset_page_if_buffer_changed` 外，`candidate_settings.rs`
+    /// 的每个设置位入口也要调（它们改候选集但通常不动 buffer）。
+    pub(crate) fn invalidate_fetch_cache(&mut self) {
+        self.fetch_cache.get_mut().take();
+    }
+
+    /// 取走与当前键匹配的缓存（**一次性**：消费后即清，避免翻页键之外留存）。
+    fn take_fetch_cache(&self, key: &(String, String)) -> Option<Vec<Candidate>> {
+        let mut slot = self.fetch_cache.borrow_mut();
+        let hit = slot
+            .as_ref()
+            .is_some_and(|(b, p, _)| b == &key.0 && p == &key.1);
+        if hit {
+            slot.take().map(|(_, _, list)| list)
+        } else {
+            // 键不匹配的旧表不再可能有用（编辑/设置位都走失效），别留着。
+            slot.take();
+            None
+        }
     }
 
     /// 有**待处理的输入** = 真缓冲或已确认的逐字片段非空（2026-10-17 逐字确认）：
@@ -133,8 +174,23 @@ impl CandidateState {
     /// `buffer()` 保持真缓冲语义不动（两轨的大量门禁钉着它；配对：tsf-opi logic.rs
     /// 的同名方法，逐行同构）。
     pub fn display_buffer(&self) -> String {
+        let shown = self.engine.display_buffer();
+        // 9/14 键的读数由 `candidates()` 填缓存，而 C++ 先读缓冲再取候选 ⇒ 新缓冲的
+        // 首帧读不到读数（只剩逐字片段）。退回原始缓冲，数字/按键不得从候选栏消失。
+        if shown.is_empty()
+            || (!self.engine.buffer().is_empty() && shown == self.engine.pending_text())
+        {
+            return self.raw_buffer();
+        }
+        shown
+    }
+
+    /// **原文**（W1 直接确认 / 切输入法提交用）：已确认逐字片段 + 真缓冲。
+    /// 与 [`Self::display_buffer`] 是两个出口：那个画在面板上（全键盘带 `'` 分词），
+    /// 这个进文档 —— 分词符不能上屏（引擎 API「两个出口别合并」）。
+    pub fn raw_buffer(&self) -> String {
         let mut out = self.engine.pending_text();
-        out.push_str(&self.buffer());
+        out.push_str(self.engine.buffer());
         out
     }
 
@@ -203,6 +259,14 @@ impl CandidateState {
         self.reset_page_if_buffer_changed();
     }
 
+    /// 清空用户词（学习记忆）。缓冲没变但候选集会变（用户词参与排名）⇒ 作废
+    /// 抓取缓存并回第一页，别停在一个已经不存在的页上。
+    pub fn clear_user_words(&mut self) {
+        self.engine.clear_user_words();
+        self.page = 0;
+        self.invalidate_fetch_cache();
+    }
+
     /// 切模式（**不收尾**：待处理的缓冲由 `Composer::switch_mode` 直接清掉）。
     /// 需要「切走收尾（拼音/繁体上原文、符号模式丢关键字）」的用
     /// [`Self::switch_mode_confirmed`]（W1 订正版）。
@@ -255,6 +319,7 @@ impl CandidateState {
     }
 
     pub fn set_shift(&mut self, on: bool) {
+        self.invalidate_fetch_cache();
         self.engine.set_shift(on);
         // shift 不改变 buffer（reset_page_if_buffer_changed 不会触发），但
         // 可能改变候选集；将页码钳制到当前 page_count 边界，防 page 越界。
@@ -355,7 +420,15 @@ impl CandidateState {
     }
 
     /// 批量抓取（FETCH_LIMIT 内；不设上限时 `truncate` 是空操作，排序仍全量）。
+    /// 先消费 `page_count()` 留下的一次抓取缓存（同一 buffer/pending 才有效）。
     pub(crate) fn fetched(&self) -> Vec<Candidate> {
+        if self.fetch_cache.borrow().is_none() {
+            return self.engine.candidates(FETCH_LIMIT);
+        }
+        let key = self.fetch_key();
+        if let Some(list) = self.take_fetch_cache(&key) {
+            return list;
+        }
         self.engine.candidates(FETCH_LIMIT)
     }
 
@@ -374,8 +447,21 @@ impl CandidateState {
     }
 
     /// 总页数（无候选 → 0）。
+    ///
+    /// 命中缓存时只数条数；未命中则取回全量表并**留下**给紧接着的 `candidates()`
+    /// （翻页键：`next_page` → 本方法 → 宿主刷新候选窗 → `candidates()`）。
     pub fn page_count(&self) -> usize {
-        self.fetched().len().div_ceil(PAGE_SIZE)
+        let key = self.fetch_key();
+        if let Some((b, p, list)) = self.fetch_cache.borrow().as_ref()
+            && b == &key.0
+            && p == &key.1
+        {
+            return list.len().div_ceil(PAGE_SIZE);
+        }
+        let list = self.engine.candidates(FETCH_LIMIT);
+        let count = list.len().div_ceil(PAGE_SIZE);
+        *self.fetch_cache.borrow_mut() = Some((key.0, key.1, list));
+        count
     }
 
     /// 下一页，越界钳制到最后一页；返回新页码。

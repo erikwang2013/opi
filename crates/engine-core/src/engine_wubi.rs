@@ -350,6 +350,7 @@ impl Engine {
             jianpin: false,
             prefer_simplified: mode == Mode::Pinyin,
             segment_fallback: false,
+            composition: false,
             tiers: false,
         };
         // z 键进入方式（只混输；表与两条子决定见 `WubiMixedEntry` 头注）：

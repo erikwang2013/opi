@@ -40,6 +40,7 @@ fn state_with_candidates() -> CandidateState {
         last_printable: None,
         dicts: Default::default(),
         english_pro: true,
+        fetch_cache: Default::default(),
     };
     s.buffer_snapshot = s.engine.buffer().to_string();
     s.switch_mode(Mode::Pinyin);
@@ -132,6 +133,42 @@ fn backspace_release_matches_press_after_buffer_emptied() {
         "按下拦下、抬起放行 → 客户端只有 keydown"
     );
     assert_eq!(s.buffer(), "", "抬起事件不得改动缓冲");
+}
+
+/// 胶水层（opi_fcitx5.cpp）在**抬起事件上不再重推面板**，前提是路由的 released
+/// 分支对引擎状态只读。把这条不变量钉在这里：抬起不得改缓冲/候选/页码/模式 ——
+/// 否则那次「省掉的刷新」会把界面留在旧状态（静默错帧）。
+#[test]
+fn release_never_mutates_engine_state() {
+    let mut s = state_with_candidates();
+    for c in ['h', 'a', 'o'] {
+        handle_key(&mut s, c as u32, 0);
+    }
+    let buffer = s.buffer();
+    let cands = s.candidates();
+    let page = s.page();
+    let mode = s.mode();
+    assert!(!cands.is_empty(), "前置：组字中有候选可观测");
+    for key in [
+        'h' as u32,
+        'a' as u32,
+        '1' as u32,
+        KEY_BACK_SPACE,
+        KEY_SPACE,
+        KEY_RETURN,
+        KEY_PAGE_DOWN,
+        KEY_PAGE_UP,
+        KEY_SHIFT_L,
+        KEY_SHIFT_R,
+        KEY_ESCAPE,
+        KEY_TAB,
+    ] {
+        handle_key(&mut s, key, KEY_STATE_RELEASED);
+    }
+    assert_eq!(s.buffer(), buffer, "抬起改了缓冲");
+    assert_eq!(s.candidates(), cands, "抬起改了候选");
+    assert_eq!(s.page(), page, "抬起改了页码");
+    assert_eq!(s.mode(), mode, "抬起改了模式");
 }
 
 #[test]

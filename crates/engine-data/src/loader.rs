@@ -5,12 +5,16 @@
 //! 布局恢复只依赖 `validate` 校验过的 count / pinyin_total / max_freq（三个区段边界），
 //! **不物化任何条目** —— 冷启动只读文件与三条列。
 
+use self::loader_lower_bound::lower_bound;
 use crate::format::{ENTRY_LEN, HEADER_LEN, Validated, validate};
 use engine_core::Entry;
 use engine_core::bytes::byte_successor;
 use engine_core::dictionary::{Dictionary, scheme_entries_scan, scheme_find_scan};
 use engine_core::scheme::Scheme;
 use std::path::Path;
+
+#[path = "loader_lower_bound.rs"]
+mod loader_lower_bound;
 
 /// 内存后盾：mmap 文件或堆上字节，避免自引用结构。
 pub enum Backing {
@@ -258,6 +262,26 @@ impl Dictionary for MmapDictionary {
         }
     }
 
+    /// 只扫拼音以 `prefix` 开头的区间（声母缩写匹配用，见 trait 文档）。
+    /// 与 `visit_entries` 同一趟零拷贝读取，只是先用二分把区间收窄。
+    fn visit_prefix(&self, prefix: &str, f: &mut dyn FnMut(&str, &str, u32)) {
+        if prefix.is_empty() || self.count == 0 {
+            return;
+        }
+        let data = self.data();
+        let (lo, hi) = self.range(data, prefix.as_bytes());
+        let word_start = self.word_start();
+        let pinyin_start = self.pinyin_start();
+        for i in lo..hi {
+            let (po, pl, wo, wl, freq) = self.record(data, i);
+            let pinyin = std::str::from_utf8(&data[pinyin_start + po..pinyin_start + po + pl])
+                .expect("validate 已校验 UTF-8");
+            let word = std::str::from_utf8(&data[word_start + wo..word_start + wo + wl])
+                .expect("validate 已校验 UTF-8");
+            f(pinyin, word, freq);
+        }
+    }
+
     fn len(&self) -> usize {
         self.count
     }
@@ -330,35 +354,6 @@ impl MmapDictionary {
         }
         level.into_iter().map(|(_, lo, hi)| (lo, hi)).collect()
     }
-}
-
-/// 第 i 条记录的 pinyin 字节。
-fn entry_pinyin(data: &[u8], table_start: usize, pinyin_start: usize, i: usize) -> &[u8] {
-    let off = table_start + i * ENTRY_LEN;
-    let po = u32::from_le_bytes(data[off..off + 4].try_into().unwrap()) as usize;
-    let pl = data[off + 4] as usize;
-    &data[pinyin_start + po..pinyin_start + po + pl]
-}
-
-/// 前缀区间下界：第一个 pinyin >= needle 的下标。
-fn lower_bound(
-    data: &[u8],
-    table_start: usize,
-    pinyin_start: usize,
-    count: usize,
-    needle: &[u8],
-) -> usize {
-    let mut lo = 0usize;
-    let mut hi = count;
-    while lo < hi {
-        let mid = lo + (hi - lo) / 2;
-        if entry_pinyin(data, table_start, pinyin_start, mid) < needle {
-            lo = mid + 1;
-        } else {
-            hi = mid;
-        }
-    }
-    lo
 }
 
 /// 打开文件并以只读 mmap 加载 + 校验。

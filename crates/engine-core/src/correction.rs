@@ -27,9 +27,10 @@
 //!    （基线 30/173）—— 超标两三倍；
 //! 2. 封顶到 [`MAX_CORRECTIONS`]（6 个）、砍多段相、逐音节相不再掺纠错：worst 降到
 //!    500ms —— **还贵在前缀查询本身**（fuzzy 头注：一次变体前缀查询可命中 3 万余条）；
-//! 3. **变体查询改精确键**（`query_all`，见 candidates.rs 的纠错档注释）：avg 44.6ms /
-//!    worst 204ms（基线 26.9/147）—— 增量回到 ~18ms 量级（负载机），安静机上是
-//!    单键查找的微秒-毫秒级，**回到 50ms 预算内**。
+//! 3. 当时以为「变体查询改精确键」了，实际用的 `query_all` 是**前缀**语义 ——
+//!    这笔开销一直在（2026-10-22 实测：`a` 的 6 个变体 15–57ms/击键，占整键的
+//!    九成以上）。现改为 `query_prefix_top(v, 0)`（exact 全量、前缀扩展 0 条），
+//!    变体实测 0.02–1.6ms，增量回到毫秒级。
 //!
 //! 语义代价（如实记）：纠错只修**完整词**（typo 的本来就是完整词——nihap 想打 nihao），
 //! 不展开前缀；「修出一个更长词的前缀」这种形态留给模糊音那条既有路（它仍走前缀）。
@@ -186,7 +187,7 @@ pub fn input_corrections(input: &str) -> Vec<String> {
 
 /// 纠错档的候选（`candidates::rank_and_pick_with` 里的 `corr` 档；2026-10-14 从那里
 /// 搬来 —— 加完下面的注释后那个文件 521/500 撞门禁）。每变体查**精确键**
-/// （`query_all`，不展开前缀：typo 修的是完整词，前缀查询又是那条路的贵项），
+/// （`query_prefix_top(v, 0)`，不展开前缀：typo 修的是完整词，前缀查询又是那条路的贵项），
 /// 每变体取 top-3（同逐音节相），最后按分排序。
 ///
 /// ⚠️ **它是独立一档、排在最外**（主档 → 模糊 → 简拼 → 纠错），**不许并进 `fuzzy`**
@@ -199,8 +200,8 @@ pub fn input_corrections(input: &str) -> Vec<String> {
 /// 机制：`fuzzy` 档有「主档为空时它就是这个输入的主结果」的晋升规则（`zongguo` →
 /// 「中国」那条）；纠错混进去后，`nh` 的主档本就为空 ⇒ `merged = fuzzy`（全是纠错
 /// 噪声）⇒ 简拼档只能被**追加**、再被 `truncate(limit)` 砍掉。噪声来源实测：`nh` 的
-/// 单段变体 `anh` 在真 luna 里键真有词（`query_all("anh")` 命中 安哈尔特/俺还/暗害/…，
-/// 含高频「安徽」= 3787750734）。
+/// 单段变体 `anh` 经 `query_all` 的**前缀**语义命中 安哈尔特/俺还/暗害/…（含高频
+/// 「安徽」）；2026-10-22 起改精确键，这族前缀噪声不再进纠错档。
 ///
 /// 排最外与用户裁决「混合参与排序」不冲突：纠错**一直参与**（有别的候选时也照出），
 /// 只是永远在最外层 —— 它是三档里最没把握的一档（「猜」）。生产回归钉见
@@ -213,8 +214,12 @@ pub(crate) fn tier_hits<D: crate::dictionary::Dictionary + ?Sized>(
 ) -> Vec<crate::candidates::Candidate> {
     let mut out: Vec<crate::candidates::Candidate> = Vec::new();
     for v in input_corrections(input) {
+        // **精确键**查询 = `query_prefix_top(v, 0)`（exact 全量 + 前缀扩展截到 0 条）。
+        // 别用 `query_all`：它是**前缀**语义（14 字母内真库命中可达数万条，`a` 的
+        // 纠错变体每次击键实测 15–57ms，2026-10-22 本机），而 typo 要修的是一条完整
+        // 词 —— 前缀扩展既是错的语义也是这条最大的开销。精确层实测 0.02–1.6ms/变体。
         let mut hits: Vec<crate::candidates::Candidate> = dict
-            .query_all(&v)
+            .query_prefix_top(&v, 0)
             .into_iter()
             .map(|e| crate::candidates::Candidate {
                 text: e.word.clone(),

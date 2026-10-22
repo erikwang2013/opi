@@ -151,6 +151,7 @@ public:
     //   成功应答不是 "ok" 而是状态 token（pinyin/en26）的动作（协议见 opi_ctl.h）。
     //   insert:<文本>（2026-10-12 用户裁决加）：桌面大页面（符号/表情）的上屏通道 ——
     //   自绘窗自己没有提交通道（那在插件进程里），文本经既有 Trigger(string) 下沉到这里。
+    //   clearuserwords（2026-10-23 加）：清空引擎学习记忆；桌面设置窗的确认按钮调用。
     // 这里跑在**主循环线程**（dbus 模块把总线挂在自己的事件循环上），所以可以安全地
     // 碰引擎单例与 IC，也就能满足「作用于当前 IC」。
     // 只读查询 state **不在**这张表里：它走另一个 D-Bus 方法（vtable 的 State →
@@ -223,6 +224,12 @@ public:
             shiftToggle_.toggle(ic);
         } else if (action == "englishpro") {
             if (!opiCtlToggleEnglishPro()) return "err:4:英文专业入口未接线（插件版本过旧）";
+            refreshingPanelFor(ic);
+        } else if (action == "clearuserwords") {
+            // 清空用户词（学习记忆）。弱符号：老 .so 上按未接线报 4，别哑成功。
+            if (opi_fcitx5_clear_user_words == nullptr || !opi_fcitx5_clear_user_words()) {
+                return "err:4:清空用户词不可用（引擎未装载或插件版本过旧）";
+            }
             refreshingPanelFor(ic);
         } else if (action == "mode") {
             // 模式循环（用户裁决 2026-10-14；实现、派生与五笔插入点都在

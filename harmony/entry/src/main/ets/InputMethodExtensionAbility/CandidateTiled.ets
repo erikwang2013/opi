@@ -173,9 +173,7 @@ export struct CandidateTiled {
         this.SideKey('返回', () => {
           this.ctrl.collapseTiled();
         })
-        this.SideKey('⌫', () => {
-          this.ctrl.tapBackspace();
-        })
+        this.BackspaceSideKey()
         this.SideKey('重输', () => {
           this.ctrl.retype();
         })
@@ -185,6 +183,28 @@ export struct CandidateTiled {
       }.layoutWeight(1).height('100%').padding({ left: 2, right: 4 })
     }
     .width('100%').height('100%').backgroundColor(this.pal().barBg)
+  }
+
+  /** ⌫：单击删一格；长按清空整段组合（不提交）。 */
+  @Builder
+  BackspaceSideKey() {
+    Column() {
+      Text('⌫')
+        .fontSize(this.elder === 1 ? 17 : 15).fontColor(this.pal().keyFg)
+        .textAlign(TextAlign.Center)
+    }
+    .layoutWeight(1).width('100%').justifyContent(FlexAlign.Center)
+    .backgroundColor(this.pal().keyBg).borderRadius(6)
+    .margin({ top: 2, bottom: 2 })
+    .onClick(() => {
+      this.ctrl.tapBackspace();
+    })
+    .gesture(
+      LongPressGesture({ repeat: false, duration: 500 })
+        .onAction((event: GestureEvent) => {
+          this.ctrl.tapBackspaceLongPress();
+        })
+    )
   }
 
   @Builder

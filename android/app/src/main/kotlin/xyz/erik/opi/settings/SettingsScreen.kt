@@ -9,12 +9,14 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -34,6 +36,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
@@ -172,224 +175,231 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
         // 全部看不到，`adb shell input swipe`/`motionevent` 两种手势都不动；语义树里
         // 也没有那些节点）。外面是 `Scaffold` 的 content 槽，加这一行即可；
         // 门禁：`SettingsScrollableTest`（静态，钉住滚动修饰符在 Column 上）。
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState()),
+        // 平板/横屏：内容列限宽 640dp 居中。整页撑满 1280dp 时每个 ListItem 的
+        // 标题与右侧开关相隔大半屏，读一行要横跳；手机（<640dp）完全不变。
+        Box(
+            modifier = Modifier.fillMaxSize().padding(padding),
+            contentAlignment = Alignment.TopCenter,
         ) {
-            // 小欧报到：表情跟着「学习」开关走 —— 一眼看出引擎在不在记事，
-            // 比读一行说明文字快。
-            //
-            // 优先级：**降级 > 睡着**（petMood 里 dictionaryDegraded 在链首，是有意的）。
-            // 所以词库没装上时，即便用户关了学习也不会显示睡着的表情 —— 断天线说的是
-            // 「引擎坏了」，比「我不记事」紧急，也不该让用户以为自己关过什么开关。
-            // 下面的文字必须跟着一起走：小欧是装饰性 mascot，语义由这行文本承担
-            //（见 OpiPet 头注），表情断天线而文字说「醒着」就是自相矛盾。
-            ListItem(
-                leadingContent = {
-                    OpiPet(
-                        mood = petMood(
-                            buffer = "",
-                            candidateCount = 0,
-                            learnerEnabled = learner,
-                            dictionaryDegraded = dictionaryDegraded,
-                        ),
-                        size = 72.dp,
-                    )
-                },
-                headlineContent = { Text("Open People Input") },
-                supportingContent = {
-                    Text(
-                        when {
-                            dictionaryDegraded -> "小欧的词典没装上 —— 现在只认得几十个常用词"
-                            learner -> "小欧醒着 —— 你选的词它都记着"
-                            else -> "小欧睡着了 —— 不记词，也不联网"
-                        },
-                    )
-                },
-            )
-            HorizontalDivider()
-            ListItem(
-                headlineContent = { Text("学习") },
-                supportingContent = { Text("根据选词学习用户词频") },
-                trailingContent = {
-                    Switch(
-                        checked = learner,
-                        onCheckedChange = { v ->
-                            learner = v
-                            OpiEngine.setLearner(v)
-                            prefs.learn = v
-                        },
-                    )
-                },
-            )
-            HorizontalDivider()
-            // 模糊音**逐对多选**（2026-10-13 用户裁决「可多选类似 z=zh」）：总开关
-            // （开=全勾/关=全不勾）+ 逐组微调；首次触碰即把旧布尔态具体化成列表
-            // （合同：空列表 = 未设置 ⇒ 回落布尔；全不勾写空列表 + fuzzy=false）。
-            // 名字表见 FUZZY_PAIRS_ANDROID（锁步门禁 FuzzyPairsLockstepTest）。
-            val pairSet = if (fuzzyPairs.isNotEmpty()) {
-                fuzzyPairs.split(',').map { it.trim() }.filter { it in FUZZY_PAIRS_ANDROID }.toSet()
-            } else if (fuzzy) {
-                FUZZY_PAIRS_ANDROID.toSet()
-            } else {
-                emptySet()
-            }
-            fun writePairSet(next: Set<String>) {
-                val list = FUZZY_PAIRS_ANDROID.filter { it in next }.joinToString(",")
-                val any = next.isNotEmpty()
-                fuzzyPairs = list
-                fuzzy = any
-                OpiEngine.setFuzzyPairs(fuzzyMaskOf(list))
-                prefs.fuzzyPairs = list
-                prefs.fuzzy = any
-            }
-            ListItem(
-                headlineContent = { Text("模糊音（逐对）") },
-                supportingContent = { Text("总开关：开 = 全勾、关 = 全不勾；下面是逐组微调") },
-                trailingContent = {
-                    Switch(
-                        checked = pairSet.isNotEmpty(),
-                        onCheckedChange = { v ->
-                            writePairSet(if (v) FUZZY_PAIRS_ANDROID.toSet() else emptySet())
-                        },
-                    )
-                },
-            )
-            for (name in FUZZY_PAIRS_ANDROID) {
-                val (a, b) = name.split('/')
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 640.dp)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                // 小欧报到：表情跟着「学习」开关走 —— 一眼看出引擎在不在记事，
+                // 比读一行说明文字快。
+                //
+                // 优先级：**降级 > 睡着**（petMood 里 dictionaryDegraded 在链首，是有意的）。
+                // 所以词库没装上时，即便用户关了学习也不会显示睡着的表情 —— 断天线说的是
+                // 「引擎坏了」，比「我不记事」紧急，也不该让用户以为自己关过什么开关。
+                // 下面的文字必须跟着一起走：小欧是装饰性 mascot，语义由这行文本承担
+                //（见 OpiPet 头注），表情断天线而文字说「醒着」就是自相矛盾。
                 ListItem(
-                    headlineContent = { Text("　$a ↔ $b") },
-                    trailingContent = {
-                        Switch(
-                            checked = name in pairSet,
-                            onCheckedChange = { v ->
-                                writePairSet(pairSet.toMutableSet().apply { if (v) add(name) else remove(name) })
+                    leadingContent = {
+                        OpiPet(
+                            mood = petMood(
+                                buffer = "",
+                                candidateCount = 0,
+                                learnerEnabled = learner,
+                                dictionaryDegraded = dictionaryDegraded,
+                            ),
+                            size = 72.dp,
+                        )
+                    },
+                    headlineContent = { Text("Open People Input") },
+                    supportingContent = {
+                        Text(
+                            when {
+                                dictionaryDegraded -> "小欧的词典没装上 —— 现在只认得几十个常用词"
+                                learner -> "小欧醒着 —— 你选的词它都记着"
+                                else -> "小欧睡着了 —— 不记词，也不联网"
                             },
                         )
                     },
                 )
-            }
-            HorizontalDivider()
-            ListItem(
-                headlineContent = { Text("拼音纠错") },
-                supportingContent = { Text("相邻键错按 / 多打 / 少打一个字母也能出候选") },
-                trailingContent = {
-                    Switch(
-                        checked = correction,
-                        onCheckedChange = { v ->
-                            correction = v
-                            OpiEngine.setCorrection(v)
-                            prefs.correction = v
-                        },
-                    )
-                },
-            )
-            HorizontalDivider()
-            ListItem(
-                headlineContent = { Text("简拼") },
-                supportingContent = { Text("声母缩写：nh → 你好、zg → 中国") },
-                trailingContent = {
-                    Switch(
-                        checked = jianpin,
-                        onCheckedChange = { v ->
-                            jianpin = v
-                            OpiEngine.setJianpin(v)
-                            prefs.jianpin = v
-                        },
-                    )
-                },
-            )
-            HorizontalDivider()
-            // 自有表情（2026-10-20 用户裁决：保留小欧原图贴纸，缺省隐藏）。
-            // 打开后表情页才出现「自有」分类；插入仍是 GIF/PNG → 文字标签。
-            ListItem(
-                headlineContent = { Text("表情中显示自有") },
-                supportingContent = { Text("在表情页显示小欧贴纸分类（默认隐藏）") },
-                trailingContent = {
-                    Switch(
-                        checked = showOwn,
-                        onCheckedChange = { v ->
-                            showOwn = v
-                            prefs.showOwn = v
-                        },
-                    )
-                },
-            )
-            HorizontalDivider()
-            // 双拼布局（2026-10-13）：只在拼音方式选「拼音双拼」（输入模式面板）时参与
-            // 解码 —— 其余方案下写它无害（引擎只在那一个方案里读）。名字表 =
-            // SHUANGPIN_LAYOUTS_ANDROID（锁步门禁 ShuangpinLayoutsLockstepTest）。
-            ListItem(
-                headlineContent = { Text("双拼布局") },
-                supportingContent = { Text("拼音方式选「拼音双拼」时生效（主流同款六套）") },
-                trailingContent = {
-                    TextButton(onClick = { showLayoutDialog = true }) { Text(shuangpinLayout) }
-                },
-            )
-            HorizontalDivider()
-            ListItem(
-                headlineContent = { Text("清除用户词库") },
-                supportingContent = { Text("删除所有学习到的用户词") },
-                trailingContent = {
-                    TextButton(onClick = { confirmClear = true }) { Text("清除") }
-                },
-            )
-            HorizontalDivider()
-            ListItem(
-                headlineContent = { Text("导出词库 JSON") },
-                supportingContent = { Text("复制到剪贴板（为云同步预留格式）") },
-                trailingContent = {
-                    TextButton(onClick = {
-                        val json = OpiEngine.exportUserWords()
-                        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        cm.setPrimaryClip(ClipData.newPlainText("opi-words", json))
-                        toast("已复制到剪贴板")
-                    }) { Text("复制") }
-                },
-            )
-            HorizontalDivider()
-            ListItem(
-                headlineContent = { Text("从剪贴板导入") },
-                supportingContent = { Text("粘贴导出的 JSON（与上面的复制闭环，不经文件）") },
-                trailingContent = {
-                    TextButton(onClick = { importFromClipboard() }) { Text("粘贴") }
-                },
-            )
-            HorizontalDivider()
-            ListItem(
-                headlineContent = { Text("导入词库 JSON 文件") },
-                supportingContent = { Text("选择设备上的用户词表文件") },
-                trailingContent = {
-                    TextButton(onClick = {
-                        // 多类型一起给：见 picker 里的 MIME 注释
-                        picker.launch(
-                            arrayOf("application/json", "text/plain", "application/octet-stream"),
+                HorizontalDivider()
+                ListItem(
+                    headlineContent = { Text("学习") },
+                    supportingContent = { Text("根据选词学习用户词频") },
+                    trailingContent = {
+                        Switch(
+                            checked = learner,
+                            onCheckedChange = { v ->
+                                learner = v
+                                OpiEngine.setLearner(v)
+                                prefs.learn = v
+                            },
                         )
-                    }) { Text("选择文件") }
-                },
-            )
-            HorizontalDivider()
-            // 词库一节（2026-10-14，M3 的 2c 移动端半边）：系统库只读 + 导入库开关/删除 +
-            // tsv 导入。启动装载也在这节里（失败提示就在装载结果那一行）。
-            DictSection(prefs, ::toast)
+                    },
+                )
+                HorizontalDivider()
+                // 模糊音**逐对多选**（2026-10-13 用户裁决「可多选类似 z=zh」）：总开关
+                // （开=全勾/关=全不勾）+ 逐组微调；首次触碰即把旧布尔态具体化成列表
+                // （合同：空列表 = 未设置 ⇒ 回落布尔；全不勾写空列表 + fuzzy=false）。
+                // 名字表见 FUZZY_PAIRS_ANDROID（锁步门禁 FuzzyPairsLockstepTest）。
+                val pairSet = if (fuzzyPairs.isNotEmpty()) {
+                    fuzzyPairs.split(',').map { it.trim() }.filter { it in FUZZY_PAIRS_ANDROID }.toSet()
+                } else if (fuzzy) {
+                    FUZZY_PAIRS_ANDROID.toSet()
+                } else {
+                    emptySet()
+                }
+                fun writePairSet(next: Set<String>) {
+                    val list = FUZZY_PAIRS_ANDROID.filter { it in next }.joinToString(",")
+                    val any = next.isNotEmpty()
+                    fuzzyPairs = list
+                    fuzzy = any
+                    OpiEngine.setFuzzyPairs(fuzzyMaskOf(list))
+                    prefs.fuzzyPairs = list
+                    prefs.fuzzy = any
+                }
+                ListItem(
+                    headlineContent = { Text("模糊音（逐对）") },
+                    supportingContent = { Text("总开关：开 = 全勾、关 = 全不勾；下面是逐组微调") },
+                    trailingContent = {
+                        Switch(
+                            checked = pairSet.isNotEmpty(),
+                            onCheckedChange = { v ->
+                                writePairSet(if (v) FUZZY_PAIRS_ANDROID.toSet() else emptySet())
+                            },
+                        )
+                    },
+                )
+                for (name in FUZZY_PAIRS_ANDROID) {
+                    val (a, b) = name.split('/')
+                    ListItem(
+                        headlineContent = { Text("　$a ↔ $b") },
+                        trailingContent = {
+                            Switch(
+                                checked = name in pairSet,
+                                onCheckedChange = { v ->
+                                    writePairSet(pairSet.toMutableSet().apply { if (v) add(name) else remove(name) })
+                                },
+                            )
+                        },
+                    )
+                }
+                HorizontalDivider()
+                ListItem(
+                    headlineContent = { Text("拼音纠错") },
+                    supportingContent = { Text("相邻键错按 / 多打 / 少打一个字母也能出候选") },
+                    trailingContent = {
+                        Switch(
+                            checked = correction,
+                            onCheckedChange = { v ->
+                                correction = v
+                                OpiEngine.setCorrection(v)
+                                prefs.correction = v
+                            },
+                        )
+                    },
+                )
+                HorizontalDivider()
+                ListItem(
+                    headlineContent = { Text("简拼") },
+                    supportingContent = { Text("声母缩写：nh → 你好、zg → 中国") },
+                    trailingContent = {
+                        Switch(
+                            checked = jianpin,
+                            onCheckedChange = { v ->
+                                jianpin = v
+                                OpiEngine.setJianpin(v)
+                                prefs.jianpin = v
+                            },
+                        )
+                    },
+                )
+                HorizontalDivider()
+                // 自有表情（2026-10-20 用户裁决：保留小欧原图贴纸，缺省隐藏）。
+                // 打开后表情页才出现「自有」分类；插入仍是 GIF/PNG → 文字标签。
+                ListItem(
+                    headlineContent = { Text("表情中显示自有") },
+                    supportingContent = { Text("在表情页显示小欧贴纸分类（默认隐藏）") },
+                    trailingContent = {
+                        Switch(
+                            checked = showOwn,
+                            onCheckedChange = { v ->
+                                showOwn = v
+                                prefs.showOwn = v
+                            },
+                        )
+                    },
+                )
+                HorizontalDivider()
+                // 双拼布局（2026-10-13）：只在拼音方式选「拼音双拼」（输入模式面板）时参与
+                // 解码 —— 其余方案下写它无害（引擎只在那一个方案里读）。名字表 =
+                // SHUANGPIN_LAYOUTS_ANDROID（锁步门禁 ShuangpinLayoutsLockstepTest）。
+                ListItem(
+                    headlineContent = { Text("双拼布局") },
+                    supportingContent = { Text("拼音方式选「拼音双拼」时生效（主流同款六套）") },
+                    trailingContent = {
+                        TextButton(onClick = { showLayoutDialog = true }) { Text(shuangpinLayout) }
+                    },
+                )
+                HorizontalDivider()
+                ListItem(
+                    headlineContent = { Text("清除用户词库") },
+                    supportingContent = { Text("删除所有学习到的用户词") },
+                    trailingContent = {
+                        TextButton(onClick = { confirmClear = true }) { Text("清除") }
+                    },
+                )
+                HorizontalDivider()
+                ListItem(
+                    headlineContent = { Text("导出词库 JSON") },
+                    supportingContent = { Text("复制到剪贴板（为云同步预留格式）") },
+                    trailingContent = {
+                        TextButton(onClick = {
+                            val json = OpiEngine.exportUserWords()
+                            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            cm.setPrimaryClip(ClipData.newPlainText("opi-words", json))
+                            toast("已复制到剪贴板")
+                        }) { Text("复制") }
+                    },
+                )
+                HorizontalDivider()
+                ListItem(
+                    headlineContent = { Text("从剪贴板导入") },
+                    supportingContent = { Text("粘贴导出的 JSON（与上面的复制闭环，不经文件）") },
+                    trailingContent = {
+                        TextButton(onClick = { importFromClipboard() }) { Text("粘贴") }
+                    },
+                )
+                HorizontalDivider()
+                ListItem(
+                    headlineContent = { Text("导入词库 JSON 文件") },
+                    supportingContent = { Text("选择设备上的用户词表文件") },
+                    trailingContent = {
+                        TextButton(onClick = {
+                            // 多类型一起给：见 picker 里的 MIME 注释
+                            picker.launch(
+                                arrayOf("application/json", "text/plain", "application/octet-stream"),
+                            )
+                        }) { Text("选择文件") }
+                    },
+                )
+                HorizontalDivider()
+                // 词库一节（2026-10-14，M3 的 2c 移动端半边）：系统库只读 + 导入库开关/删除 +
+                // tsv 导入。启动装载也在这节里（失败提示就在装载结果那一行）。
+                DictSection(prefs, ::toast)
 
-            // 五笔（2026-10-14，M4 第二波）：六键（方案/风格/混输进入方式/个数/回车/自动上屏）。
-            WubiSection(prefs, ::toast)
+                // 五笔（2026-10-14，M4 第二波）：六键（方案/风格/混输进入方式/个数/回车/自动上屏）。
+                WubiSection(prefs, ::toast)
 
-            // 关于（2026-10-15，用户裁决「移动端：增加关于按钮」）：与词库/五笔两节同一套路
-            // —— 单独文件 + 这一行调用（见 AboutSection.kt）。
-            AboutSection(::toast)
-            HorizontalDivider()
-            Text(
-                text = "注：学习/词库作用于本应用内嵌引擎实例；设置页与输入法共享同一引擎（Rust 静态单例）。",
-                fontSize = 12.sp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                textAlign = TextAlign.Start,
-            )
+                // 关于（2026-10-15，用户裁决「移动端：增加关于按钮」）：与词库/五笔两节同一套路
+                // —— 单独文件 + 这一行调用（见 AboutSection.kt）。
+                AboutSection(::toast)
+                HorizontalDivider()
+                Text(
+                    text = "注：学习/词库作用于本应用内嵌引擎实例；设置页与输入法共享同一引擎（Rust 静态单例）。",
+                    fontSize = 12.sp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    textAlign = TextAlign.Start,
+                )
+            }
         }
     }
 
@@ -401,11 +411,13 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
             confirmButton = {
                 TextButton(onClick = {
                     confirmClear = false
-                    UserWordStore.invalidate()
+                    // 落盘先清、引擎后清（两半缺一不可）：
+                    // · clearPersisted = 作废在途快照 + 取消两实例的防抖保存 + 按共享
+                    //   io 队列删文件（IME 下次启动会 import 它；删晚一步或漏删就等于
+                    //   「清除」在重启后被撤销）；
+                    // · OpiEngine.clearUserWords = 清引擎内存（导出/候选立即变为空）。
+                    store.clearPersisted()
                     OpiEngine.clearUserWords()
-                    // 落盘文件同步删掉：IME 下次启动会 import 它，不删就等于「清除」在
-                    // 重启后被撤销（设置页与输入法同进程，共享同一引擎与同一 filesDir）
-                    File(context.filesDir, UserWordStore.FILE_NAME).delete()
                     toast("已清除用户词库")
                 }) { Text("清除") }
             },
@@ -423,7 +435,9 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
             onDismissRequest = { showLayoutDialog = false },
             title = { Text("双拼布局") },
             text = {
-                Column {
+                // 六行选项在横屏/大字号对话框里可能超过可用高度：可滚动，否则最后
+                // 两个布局永远点不到（对话框本身不会替你滚）。
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     for (name in SHUANGPIN_LAYOUTS_ANDROID) {
                         TextButton(onClick = {
                             shuangpinLayout = name

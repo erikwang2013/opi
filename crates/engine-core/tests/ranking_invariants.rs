@@ -138,6 +138,8 @@ fn rank_and_pick_invariants() {
                 jianpin: false,
                 prefer_simplified: false,
                 segment_fallback: true,
+                // 与 `rank_and_pick` 的默认态一致（2026-10-23 组合识别：默认开）。
+                composition: true,
                 // 与 `rank_and_pick` 的默认态一致（2026-10-14 候选三档：默认开）。
                 tiers: true,
             },

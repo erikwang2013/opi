@@ -287,7 +287,7 @@ LICENSE · CONTRIBUTING.md      # MIT full text · contribution guide (incl. dic
 
 ### 📅 Project Status
 
-> **Current stage: v1.23.1 (2026-10-22): iOS keyboards adapt to safe areas/candidate slots, toolbar pet rotates forms, and back/English/Traditional stay inside the IME; Linux fixes long terminal-session input freezes (opi-ctl avoids D-Bus activation/private buses, read-only fullwidth); Windows hot upgrades and function-key pass-through; Apple/Harmony remain unsigned, device verification pending**
+> **Current stage: v1.24.0 (2026-10-23): composing pinyin stays visible and auto-segments on every client; idiom/xiehouyu and 3-to-multi-character phrase composition (厌蠢症, 样样通); desktop candidate latency under 30 ms; clear-user-words in settings; long-press backspace clears composition on mobile; Baidu Netdisk mirror on the site**
 
 V1 milestone progress:
 

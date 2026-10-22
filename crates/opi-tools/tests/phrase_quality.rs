@@ -25,6 +25,7 @@ use engine_core::Engine;
 use engine_core::symbols::SymbolEngine;
 use engine_data::load_mmap;
 use std::path::Path;
+use std::time::Instant;
 
 const LUNA_OPID: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -67,6 +68,69 @@ const REACHABLE: &[(&str, &str)] = &[
     ("nezha", "哪吒"),
 ];
 
+/// 声母缩写 (缩写, 期望词)：`abbr.rs` 的整串匹配必须把它放在**第 1**。
+/// 覆盖成语 / 歇后语 / 短语 / 俚语；`zmkhjjg` 与 `hslgjbnmahx` 命中的是整条
+/// 歇后语词形（前缀档），断言用库里的完整词。
+const ABBR_FIRST: &[(&str, &str)] = &[
+    ("yffs", "一帆风顺"),
+    ("hstz", "画蛇添足"),
+    ("szdt", "守株待兔"),
+    ("wybl", "亡羊补牢"),
+    ("jdzw", "井底之蛙"),
+    ("yedl", "掩耳盗铃"),
+    ("zxmd", "自相矛盾"),
+    ("kzqj", "刻舟求剑"),
+    ("bgsy", "杯弓蛇影"),
+    ("abdy", "阿鼻地狱"),
+    ("bhys", "不好意思"),
+    ("mmqm", "莫名其妙"),
+    ("ssqs", "实事求是"),
+    ("jjz", "绝绝子"),
+    ("addjsbs", "阿斗的江山——白送"),
+    ("zmkhjjg", "芝麻开花——节节高；节节上升"),
+    ("hslgjbnmahx", "黄鼠狼给鸡拜年——没安好心；来者不善"),
+];
+
+/// 全拼 (拼音, 期望词)：成语 / 歇后语 / 短语 / 俚语各取代表，必须在**第 1**。
+/// 后两条的输入是整条歇后语的**前半截**（词形还长着「；后半截」）：它验证
+/// `candidates_segment` 的「音节边界对齐的长词前缀」档 —— 没有它时长词会被第一个
+/// 音节（`zhi` 有 9813 条）的整档替换，甚至因前缀档截断而**整个消失**。
+const FULL_PHRASE_FIRST: &[(&str, &str)] = &[
+    ("yifanfengshun", "一帆风顺"),
+    ("huashetianzu", "画蛇添足"),
+    ("shouzhudaitu", "守株待兔"),
+    ("adoudejiangshanbaisong", "阿斗的江山——白送"),
+    ("zhimakaihuajiejiegao", "芝麻开花——节节高；节节上升"),
+    (
+        "huangshulanggeijibainianmeianhaoxin",
+        "黄鼠狼给鸡拜年——没安好心；来者不善",
+    ),
+    ("buhaoyisi", "不好意思"),
+    ("momingqimiao", "莫名其妙"),
+    ("shishiqiushi", "实事求是"),
+    ("juejuezi", "绝绝子"),
+];
+
+/// 高频两字母缩写 (缩写, 期望词, 允许名次)：同声母的词多，不苛求第 1，但必须在
+/// 首屏内（用户打 `nh`/`zg` 的意图就是这两个词）。
+const ABBR_VISIBLE: &[(&str, &str, usize)] = &[
+    ("nh", "你好", 3),
+    ("zg", "中国", 2),
+    // 混合输入不是缩写（`nih` 是 `nihao` 的拼音前缀）⇒ 走既有前缀路径；这里只钉
+    // 「本档没有把它挤掉」的可见性下界（实测第 6）。
+    ("nih", "你好", 8),
+];
+
+/// 非缩写负对照：(输入, 期望词, 允许名次)。这些键在主查询里有前缀命中，
+/// `abbr.rs` 必须一步不跑 —— 常用字词的名次与本轮之前一致。
+const PREFIX_CONTROLS: &[(&str, &str, usize)] = &[
+    ("ni", "你", 1),
+    ("nihao", "你好", 1),
+    ("zhongguo", "中国", 1),
+    ("women", "我们", 1),
+    ("xian", "先", 3),
+];
+
 /// 繁体回潮负对照：(拼音, 繁体词形)。luna.opid **字节扫描 0 条**，
 /// **trad.opid 字节扫描 > 0**（正控：否则「0」可能只是扫描/编码写错）。
 const TRAD_CONTROL: &[(&str, &str)] = &[
@@ -97,6 +161,54 @@ fn candidates_of(engine: &mut Engine, pinyin: &str) -> Vec<String> {
         .into_iter()
         .map(|c| c.text)
         .collect()
+}
+
+/// 当前**线程**已用 CPU 毫秒（Linux `/proc/thread-self/stat`，USER_HZ=100）。
+/// 时延门禁用 CPU 而不是墙钟：开发机/CI 可能被别的构建占满，墙钟会把「被调度走」
+/// 记成我们的成本（本机 load ~50/8 核时同一调用墙钟 30–90ms、CPU 只有几毫秒）；
+/// 空闲机单线程上两者同量级。读不到 `/proc` 时返回 `None`，回退墙钟。
+#[cfg(target_os = "linux")]
+fn thread_cpu_ms() -> Option<f64> {
+    let stat = std::fs::read_to_string("/proc/thread-self/stat").ok()?;
+    let rest = &stat[stat.rfind(')')? + 1..];
+    let f: Vec<&str> = rest.split_whitespace().collect();
+    let ut: u64 = f.get(11)?.parse().ok()?;
+    let st: u64 = f.get(12)?.parse().ok()?;
+    Some((ut + st) as f64 * 10.0)
+}
+
+/// 敲前缀并取 8 条候选（只计装配成本，不物化整页）。
+fn candidates_head(engine: &mut Engine, prefix: &str) -> usize {
+    engine.clear();
+    for ch in prefix.chars() {
+        engine.input_key(ch);
+    }
+    engine.candidates(8).len()
+}
+
+/// 单次「敲到该前缀 + 取候选」的成本（ms）。Linux 用线程 CPU 时间（5 次批量摊薄
+/// 10ms 的 tick 粒度）；其他平台用墙钟中位数。
+fn prefix_cost(engine: &mut Engine, prefix: &str) -> f64 {
+    #[cfg(target_os = "linux")]
+    {
+        const REPS: usize = 5;
+        if let Some(t0) = thread_cpu_ms() {
+            for _ in 0..REPS {
+                std::hint::black_box(candidates_head(engine, prefix));
+            }
+            if let Some(t1) = thread_cpu_ms() {
+                return (t1 - t0) / REPS as f64;
+            }
+        }
+    }
+    let mut samples = Vec::new();
+    for _ in 0..5 {
+        let t = Instant::now();
+        std::hint::black_box(candidates_head(engine, prefix));
+        samples.push(t.elapsed().as_secs_f64() * 1000.0);
+    }
+    samples.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    samples[samples.len() / 2]
 }
 
 #[test]
@@ -145,6 +257,139 @@ fn merged_layers_are_reachable() {
         fails.len(),
         REACHABLE.len(),
         fails.join("\n  ")
+    );
+}
+
+#[test]
+fn full_pinyin_phrases_rank_first() {
+    let mut engine = engine_at(LUNA_OPID);
+    let mut fails = Vec::new();
+    for (py, word) in FULL_PHRASE_FIRST {
+        let cands = candidates_of(&mut engine, py);
+        let got = cands.first().map(String::as_str).unwrap_or("—");
+        if got != *word {
+            let pos = cands
+                .iter()
+                .position(|c| c == word)
+                .map(|i| (i + 1).to_string())
+                .unwrap_or_else(|| "缺".into());
+            fails.push(format!(
+                "{py}: 期望第 1 是「{word}」，实得「{got}」（期望词名次 {pos}）"
+            ));
+        }
+    }
+    assert!(
+        fails.is_empty(),
+        "全拼长词没有排到首位（{}/{}）：\n  {}",
+        fails.len(),
+        FULL_PHRASE_FIRST.len(),
+        fails.join("\n  ")
+    );
+}
+
+#[test]
+fn abbreviation_phrases_rank_first() {
+    let mut engine = engine_at(LUNA_OPID);
+    let mut fails = Vec::new();
+    for (abbr, word) in ABBR_FIRST {
+        let cands = candidates_of(&mut engine, abbr);
+        let got = cands.first().map(String::as_str).unwrap_or("—");
+        if got != *word {
+            let pos = cands
+                .iter()
+                .position(|c| c == word)
+                .map(|i| (i + 1).to_string())
+                .unwrap_or_else(|| "缺".into());
+            fails.push(format!(
+                "{abbr}: 期望第 1 是「{word}」，实得「{got}」（期望词名次 {pos}）"
+            ));
+        }
+    }
+    assert!(
+        fails.is_empty(),
+        "声母缩写没有排到首位（{}/{}）：\n  {}",
+        fails.len(),
+        ABBR_FIRST.len(),
+        fails.join("\n  ")
+    );
+
+    let mut fails = Vec::new();
+    for (abbr, word, max_pos) in ABBR_VISIBLE {
+        let cands = candidates_of(&mut engine, abbr);
+        let pos = cands.iter().position(|c| c == word);
+        if pos.is_none_or(|i| i + 1 > *max_pos) {
+            fails.push(format!(
+                "{abbr}: 「{word}」名次 {pos:?}（要求 ≤{max_pos}），head={:?}",
+                cands.iter().take(8).collect::<Vec<_>>()
+            ));
+        }
+    }
+    assert!(
+        fails.is_empty(),
+        "高频缩写/混合输入不可见（{}/{}）：\n  {}",
+        fails.len(),
+        ABBR_VISIBLE.len(),
+        fails.join("\n  ")
+    );
+}
+
+#[test]
+fn prefix_inputs_are_not_displaced_by_abbr() {
+    let mut engine = engine_at(LUNA_OPID);
+    let mut fails = Vec::new();
+    for (input, word, max_pos) in PREFIX_CONTROLS {
+        let cands = candidates_of(&mut engine, input);
+        let pos = cands.iter().position(|c| c == word);
+        if pos.is_none_or(|i| i + 1 > *max_pos) {
+            fails.push(format!(
+                "{input}: 「{word}」名次 {pos:?}（要求 ≤{max_pos}），head={:?}",
+                cands.iter().take(8).collect::<Vec<_>>()
+            ));
+        }
+    }
+    assert!(
+        fails.is_empty(),
+        "常用字词被缩写档挤出（{}/{}）：\n  {}",
+        fails.len(),
+        PREFIX_CONTROLS.len(),
+        fails.join("\n  ")
+    );
+}
+
+/// **release 时延门禁**：缩写键从第 2 击起，逐键 <30ms（用户「所有响应<30ms」）。
+/// 第 1 击是既有的单字母前缀路径（`abbr.rs` 不接手），不归本档；debug 档位无优化，
+/// 只打印不判红（与本仓 `wubi.rs` 的成本证据同一惯例）。
+#[test]
+fn abbreviation_keys_stay_under_30ms_release() {
+    let mut engine = engine_at(LUNA_OPID);
+    let keys = [
+        "yffs",
+        "hstz",
+        "zmkhjjg",
+        "nh",
+        "zg",
+        "addjsbs",
+        "hslgjbnmahx",
+        "qqqq",
+    ];
+    let mut over = Vec::new();
+    let mut report = Vec::new();
+    for k in keys {
+        for pos in 2..=k.chars().count() {
+            let prefix: String = k.chars().take(pos).collect();
+            std::hint::black_box(candidates_head(&mut engine, &prefix)); // 预热
+            let ms = prefix_cost(&mut engine, &prefix);
+            report.push(format!("{prefix}:{ms:.2}ms"));
+            if !cfg!(debug_assertions) && ms >= 30.0 {
+                over.push(format!("{prefix}: {ms:.2}ms"));
+            }
+        }
+    }
+    println!("[abbr] 逐键成本：{}", report.join(" "));
+    assert!(
+        over.is_empty(),
+        "缩写键超出 30ms（release）：\n  {}",
+        over.join("\n  ")
     );
 }
 

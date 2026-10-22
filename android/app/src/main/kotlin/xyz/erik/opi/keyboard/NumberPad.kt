@@ -3,11 +3,13 @@
 
 package xyz.erik.opi.keyboard
 
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.sp
 
 /**
  * 数字面板：Gboard 风格 5 行（对齐 flutter number_pad.dart）。
@@ -25,22 +27,44 @@ fun NumberPad(
     onLetters: () -> Unit,
     onSpace: () -> Unit,
     onBackspace: () -> Unit,
+    /** 长按退格 = 清空组合输入；缓冲为空时才退回单字删除（由路由判断）。 */
+    onBackspaceLongPress: (() -> Unit)? = null,
     onEnter: () -> Unit,
 ) {
-    Column(modifier = modifier.fillMaxSize()) {
-        for (row in numberRows) {
-            Row(modifier = Modifier.weight(1f).fillMaxSize()) {
-                for (ch in row) {
-                    KeyButton(ch, modifier = Modifier.weight(1f), onTap = { onKey(ch) })
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        // 横屏矮键区降一档，见 [compactKeys]。
+        val compact = compactKeys(maxWidth.value, maxHeight.value)
+        val keyFont = if (compact) 15.sp else 21.sp
+        // 多字键单独一档：底行 5 个单位，320dp 屏每格只有 35.6dp（减 padding 33.6），
+        // 「?123」在 21sp 约 44dp、16sp 约 35dp —— 16sp 在 320dp 上仍差 2dp 被省略，
+        // 15sp 才稳定放得下；这两个键是次要标签，小一号不伤主键。
+        val labelFont = if (compact) 14.sp else 15.sp
+        Column(modifier = Modifier.fillMaxSize()) {
+            for (row in numberRows) {
+                Row(modifier = Modifier.weight(1f).fillMaxSize()) {
+                    for (ch in row) {
+                        KeyButton(
+                            ch,
+                            modifier = Modifier.weight(1f),
+                            onTap = { onKey(ch) },
+                            fontSize = keyFont,
+                        )
+                    }
                 }
             }
-        }
-        Row(modifier = Modifier.weight(1f).fillMaxSize()) {
-            KeyButton("ABC", modifier = Modifier.weight(1f), onTap = onLetters)
-            KeyButton("?123", modifier = Modifier.weight(1f), onTap = onSymbol)
-            KeyButton("空格", modifier = Modifier.weight(5f), onTap = onSpace)
-            KeyButton("⌫", modifier = Modifier.weight(1f), onTap = onBackspace)
-            KeyButton("↵", modifier = Modifier.weight(1f), onTap = onEnter)
+            Row(modifier = Modifier.weight(1f).fillMaxSize()) {
+                KeyButton("ABC", modifier = Modifier.weight(1f), onTap = onLetters, fontSize = labelFont)
+                KeyButton("?123", modifier = Modifier.weight(1f), onTap = onSymbol, fontSize = labelFont)
+                KeyButton("空格", modifier = Modifier.weight(5f), onTap = onSpace, fontSize = keyFont)
+                KeyButton(
+                    "⌫",
+                    modifier = Modifier.weight(1f),
+                    onTap = onBackspace,
+                    onLongPress = onBackspaceLongPress,
+                    fontSize = keyFont,
+                )
+                KeyButton("↵", modifier = Modifier.weight(1f), onTap = onEnter, fontSize = keyFont)
+            }
         }
     }
 }

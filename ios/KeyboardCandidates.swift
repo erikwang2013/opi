@@ -26,6 +26,8 @@ extension KeyboardViewController {
                 ["词库未装载"], readings: [], pinned: "", resetKey: engine.buffer()
             )
             layout.setTopBar(candidatesVisible: true, english: false)
+            // 未装载 = 没有组合串可显示（`display_buffer` 也随单例退化）。
+            layout.setComposingText("")
             syncMarkedText()
             return
         }
@@ -48,7 +50,35 @@ extension KeyboardViewController {
             candidatesVisible: !texts.isEmpty || !buffer.isEmpty,
             english: engine.mode() == .english
         )
+        // 拼音行（2026-10-23）：显示串由引擎给（9 键/双拼带分词 `ni'hao`）。
+        // **必须**在 `allCandidates` 之后读：读数与候选同一次排名（见文件头注）。
+        // 不拿 `buffer()` 顶替 —— 9 键的缓冲是数字串，无匹时不该落数字。
+        layout.setComposingText(engine.displayBuffer())
         syncMarkedText()
+    }
+
+    /// ⌫ 长按（2026-10-23）：删掉**全部组合输入**（缓冲 + 逐字待提交片段），
+    /// **不上屏**任何文本。
+    ///
+    /// 空组合时退化为**恰好一次** `deleteBackward` —— 没有循环，也就不存在
+    /// 「长按把宿主正文删光」的那条路（这条防线是结构性的，不靠计数）。
+    ///
+    /// 判「有没有组合输入」不能只看 `buffer()`：9 键逐字态下已确认的片段在
+    /// `pending_text` 里，缓冲可能为空而显示串非空（`Engine::clear` 两者都清）。
+    func clearComposingInput() {
+        guard dictionaryLoaded else {
+            // 引擎未装载 ⇒ 没有组合输入可清；按一次普通退格处理（只删一个字）。
+            textDocumentProxy.deleteBackward()
+            return
+        }
+        let composing = !engine.buffer().isEmpty || !engine.displayBuffer().isEmpty
+        guard composing else {
+            // 空组合：**只删一个字**（最多一次 deleteBackward，绝不是循环）。
+            textDocumentProxy.deleteBackward()
+            return
+        }
+        engine.clear()
+        refresh()
     }
 
     /// 2026-10-21 用户裁决：输入框里**不显示任何** preedit/marked text，

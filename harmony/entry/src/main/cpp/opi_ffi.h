@@ -188,7 +188,14 @@ OpiString opi_emoji_symbols(void);
 OpiString opi_emoji_groups(void);
 
 /// 当前拼音缓冲（= preedit 的来源）。
+/// ⚠️ **行为判定**（退格/空格/回车的「缓冲非空？」分支）只许用它。
 OpiString opi_buffer(void);
+
+/// **显示用**缓冲（拼音行/宿主预编辑的文本来源）：9 键是**带分词**的读音
+/// （`ni'hao`），26/14 键即缓冲本身；已确认未提交的逐字片段在串首。
+/// ⚠️ **两个出口别合并**：9 键无候选时读数恰为空串，拿它做行为判定会让退格
+/// 走「删宿主文字」而引擎缓冲没退（`api::display_buffer` 顶部有同一条血泪注记）。
+OpiString opi_display_buffer(void);
 
 /// 候选总页数（UI 的「共 N 页」）。**无候选 → 0**，引擎未装载 → 0。
 uint32_t opi_page_count(void);
@@ -218,6 +225,9 @@ void opi_set_learner(bool enabled);
 /// 长按删词：从用户词表删除 `text`（不存在/空/null → 无操作，JSON 不变）。
 /// 读侧用户词导出未桥接，删完只能重查候选确认。
 void opi_remove_user_word(const uint16_t *text, size_t len);
+
+/// 清除**全部**用户词（学习表）。不影响内置词库、不清输入缓冲；无返回值。
+void opi_clear_user_words(void);
 
 // ---- 全角 / 符号开关（三条一套，读侧 + 两个写侧）----
 //

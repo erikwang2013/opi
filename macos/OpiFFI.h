@@ -233,8 +233,12 @@ void opi_pin_reading(const uint16_t *ptr, size_t len);
 /// 同源，三者永远一致。
 OpiString opi_candidates_page(void);
 
-/// 当前拼音缓冲（= preedit 的来源）。
+/// 当前拼音缓冲（= preedit 的来源，**行为判定**也读它）。
 OpiString opi_buffer(void);
+
+/// **显示用**缓冲：全键盘按音节分词（`ni'hao`），9 键给拼音读数；行为判定仍读
+/// `opi_buffer()`。两个出口别合并（见 `api/mod.rs`）。
+OpiString opi_display_buffer(void);
 
 /// 当前模式（**0..=4**，4=繁体）。⚠️ 取值必须**全部**列进 Swift 枚举：
 /// 漏一个 case 会让 `OpiMode(rawValue:)` 判 nil、落到 `?? .pinyin` 兜底，

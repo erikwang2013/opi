@@ -31,6 +31,8 @@ export struct SettingsPanel {
   @StorageLink('opiOneHand') oneHand: number = 0;
   @StorageLink('opiFloat') floating: number = 0;
   @StorageLink('opiGame') game: number = 0;
+  /** 「清除用户词库」的两步确认（点了行才展开，避免误触清空学习成果）。 */
+  @State clearConfirm: boolean = false;
   private ctrl: KeyboardController = KeyboardController.getInstance();
 
   private pal(): Palette {
@@ -131,6 +133,29 @@ export struct SettingsPanel {
             this.ctrl.toggleShowOwn();
           })
           this.InfoRow('词库', this.ctrl.dictionaryDegraded() ? '内置回退词库（完整词库未装上）' : '完整词库')
+          this.ActionRow('清除用户词库', '删除学习积累的词频；内置词库不受影响', '', () => {
+            this.clearConfirm = true;
+          })
+          if (this.clearConfirm) {
+            Row() {
+              Text('确认清除全部用户词？')
+                .fontSize(this.elder === 1 ? 14 : 12).fontColor(this.pal().panelFg).layoutWeight(1)
+              Button('取消')
+                .fontSize(13).height(30).backgroundColor(this.pal().keyBg)
+                .fontColor(this.pal().keyFg).margin({ right: 8 })
+                .onClick(() => {
+                  this.clearConfirm = false;
+                })
+              Button('清除')
+                .fontSize(13).height(30).backgroundColor(this.pal().accent)
+                .fontColor(this.pal().highlightFg)
+                .onClick(() => {
+                  this.ctrl.clearUserWords();
+                  this.clearConfirm = false;
+                })
+            }
+            .width('100%').padding({ left: 14, right: 14, top: 2, bottom: 8 })
+          }
 
           this.Section('键盘')
           this.ActionRow('输入模式', '键盘布局与输入方案', INPUT_MODES[this.layout].label, () => {

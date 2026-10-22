@@ -130,9 +130,7 @@ export struct QwertyPad {
         this.Key(cycleModeLabel(this.mode), () => {
           this.ctrl.cycleMode();
         }, 1)
-        this.Key('⌫', () => {
-          this.ctrl.tapBackspace();
-        }, 1)
+        this.BackspaceKey()
       } else {
         // 中文底行：123 / 中繁 / 空格 / ⌫ / ↵。
         this.Key('123', () => {
@@ -144,9 +142,7 @@ export struct QwertyPad {
         this.Key('空格', () => {
           this.ctrl.tapSpace();
         }, 3)
-        this.Key('⌫', () => {
-          this.ctrl.tapBackspace();
-        }, 1)
+        this.BackspaceKey()
         this.Key('↵', () => {
           this.ctrl.tapEnter();
         }, 1)
@@ -181,9 +177,7 @@ export struct QwertyPad {
         this.Key('空格', () => {
           this.ctrl.tapSpace();
         }, 5)
-        this.Key('⌫', () => {
-          this.ctrl.tapBackspace();
-        }, 1)
+        this.BackspaceKey()
         this.Key('↵', () => {
           this.ctrl.tapEnter();
         }, 1)
@@ -206,6 +200,28 @@ export struct QwertyPad {
       .height('100%')
       .margin({ left: 2, right: 2 })
       .onClick(action)
+  }
+
+  /** ⌫：单击删一格（缓冲空则删宿主一格）；长按清空整段组合（不提交）。 */
+  @Builder
+  BackspaceKey() {
+    Button('⌫')
+      .fontSize(this.keySize())
+      .fontColor(this.pal().keyFg)
+      .backgroundColor(this.pal().keyBg)
+      .borderRadius(6)
+      .layoutWeight(1)
+      .height('100%')
+      .margin({ left: 2, right: 2 })
+      .onClick(() => {
+        this.ctrl.tapBackspace();
+      })
+      .gesture(
+        LongPressGesture({ repeat: false, duration: 500 })
+          .onAction((event: GestureEvent) => {
+            this.ctrl.tapBackspaceLongPress();
+          })
+      )
   }
 
   /** 中文盘上的 ⇧：占位但禁用（Android 传 null onShift 的同款外观）。 */

@@ -14,6 +14,8 @@
  * 「AppStorage 契约」拆出来；不改变任何运行时行为。
  */
 export const KEY_BUFFER: string = 'opiBuffer';
+/** 显示用缓冲（9 键带分词读数 `ni'hao`）；行为判定仍读 KEY_BUFFER。 */
+export const KEY_DISPLAY_BUFFER: string = 'opiDisplayBuffer';
 export const KEY_CANDIDATES: string = 'opiCandidates';
 export const KEY_PAGE: string = 'opiPage';
 export const KEY_PAGE_COUNT: string = 'opiPageCount';

@@ -145,7 +145,9 @@ final class KeyboardViewController: UIInputViewController {
         let base: CGFloat = traitCollection.verticalSizeClass == .compact ? 200 : 264
         // 扩展视图覆盖到 home indicator 时补上安全区，键区同时钉在安全区上沿：
         // 两者抵消，键区净高不变。safeArea 为 0 时与旧版逐点相同。
-        return base + view.safeAreaInsets.bottom
+        // + 拼音行（常驻 24pt）：总高补上它、键区顶锚同时下移同一值（`buildRows`），
+        // 所以键区净高与改前逐点相同；平铺态同理（顶锚接拼音行下沿）。
+        return base + view.safeAreaInsets.bottom + ComposingBar.height
     }
 
     // 词库装载已搬到 `KeyboardDictionaryLoader.swift`（2026-10-21：本文件压 500 行门禁）。
@@ -247,6 +249,13 @@ final class KeyboardViewController: UIInputViewController {
 extension KeyboardViewController: KeyboardLayoutDelegate {
 
     func keyboardLayout(_ layout: KeyboardLayout, didPress spec: KeySpec, longPress: Bool) {
+        // ⌫ 长按（2026-10-23）：清空**全部组合输入**，不上屏任何文本。
+        // 不把它做成 `longPressFunction`：那个字段的语义是「长按换成另一个功能键」，
+        // 而 ⌫ 的短按必须仍是普通退格（字段注释见 KeySpec）。
+        if longPress, spec.longPressClearsComposing {
+            clearComposingInput()
+            return
+        }
         // 从 spec.states 起算（键上自带的基础修饰位），再叠加本次的长按。
         var states = spec.states
         if longPress { states |= OpiKey.stateLongPressed }
@@ -350,6 +359,12 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             // 每次都重取一份引擎组名（装载可能刚完成/失败），保证逐组 chip 与引擎同步。
             layout.setEngineSettings(settings, fuzzyPairNames: engine.fuzzyPairNames())
             layout.setLayer(.settings)
+        case .clearUserWords:
+            // 设置面板「清除用户词库」（2026-10-23）。用户词只活在引擎内存里 ——
+            // iOS 端没有导入/导出落盘（`exportUserWords()` 无调用点），所以这一条
+            // 就是全部持久层；清完重拉候选，让学习排序立即回落。
+            engine.clearUserWords()
+            refresh()
         case .updateSettings(let newSettings):
             settings = newSettings
             KeyboardPreferences.settings = newSettings

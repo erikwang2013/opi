@@ -12,8 +12,8 @@ const ROWS: string[][] = [
   ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
   ['z', 'x', 'c', 'v', 'b', 'n', 'm'],
 ];
-/** 一行 4 行等分 96vp（Android 同款；Material 最小触控目标以下，空间所限的折中）。 */
-const ROW_HEIGHT: number = 24;
+/** 4 行等分 96vp（Android 同款；Material 最小触控目标以下，空间所限的折中）。
+ *  行高由 layoutWeight 分，别再写死 24：4×24 + 上下 padding 会顶出 4vp。 */
 
 @Component
 export struct SearchPad {
@@ -45,12 +45,12 @@ export struct SearchPad {
           if (rowIndex === 2) {
             this.Key('⌫', this.onBackspace, 1.5)
           }
-        }.width('100%').height(ROW_HEIGHT)
+        }.width('100%').layoutWeight(1)
       }, (row: string[], rowIndex: number) => `s-row-${rowIndex}`)
       Row() {
         this.Key('空格', this.onSpace, 4)
         this.Key('↵', this.onEnter, 1)
-      }.width('100%').height(ROW_HEIGHT)
+      }.width('100%').layoutWeight(1)
     }
     .width('100%').height('100%').backgroundColor(this.pal().barBg)
     .padding({ left: 2, right: 2, top: 2, bottom: 2 })

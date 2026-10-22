@@ -21,6 +21,7 @@ fn state() -> CandidateState {
         last_printable: None,
         dicts: Default::default(),
         english_pro: true,
+        fetch_cache: Default::default(),
     };
     s.refresh_snapshot();
     s
@@ -71,6 +72,45 @@ fn paging_clamps_both_ends() {
     assert_eq!(s.set_page(0), 0);
 }
 
+/// 翻页键只取一次全量候选：`page_count()` 留下缓存，宿主紧接着的 `candidates()`
+/// 消费它（PageDown after `ni` 的 30.6ms 双取 → 一次取回；见 `CandidateState`
+/// 的 `fetch_cache` 头注）。
+#[test]
+fn page_turn_fetch_is_reused_by_the_following_candidates() {
+    let mut s = state();
+    for c in ['q', 'w', 'x'] {
+        s.input_key(c);
+    }
+    assert_eq!(s.next_page(), 1);
+    assert!(
+        s.fetch_cache.borrow().is_some(),
+        "翻页取回后应留下一次抓取缓存"
+    );
+    assert_eq!(s.candidates()[0], "词08");
+    assert!(
+        s.fetch_cache.borrow().is_none(),
+        "candidates 必须消费掉缓存（不在按键间常驻全量表）"
+    );
+    assert_eq!(s.page(), 1);
+}
+
+/// 缓存按 (buffer, pending) 绑定：编辑与设置位必须显式作废，否则会拿旧候选。
+#[test]
+fn fetch_cache_is_invalidated_by_edits_and_settings() {
+    let mut s = state();
+    for c in ['q', 'w', 'x'] {
+        s.input_key(c);
+    }
+    assert_eq!(s.page_count(), 3);
+    assert!(s.fetch_cache.borrow().is_some());
+    s.set_fuzzy(true); // 设置位不经过 reset_page_if_buffer_changed
+    assert!(s.fetch_cache.borrow().is_none(), "设置位必须作废缓存");
+    assert_eq!(s.page_count(), 3);
+    s.backspace();
+    assert!(s.fetch_cache.borrow().is_none(), "编辑必须作废缓存");
+    assert_eq!(s.page(), 0);
+}
+
 #[test]
 fn select_is_page_relative_and_commits() {
     let mut s = state();
@@ -112,6 +152,7 @@ fn key_state() -> CandidateState {
         last_printable: None,
         dicts: Default::default(),
         english_pro: true,
+        fetch_cache: Default::default(),
     };
     for c in ['q', 'w', 'x'] {
         s.engine.input_key(c);
@@ -310,6 +351,7 @@ fn digit_select_fetches_candidate_table_once() {
         last_printable: None,
         dicts: Default::default(),
         english_pro: true,
+        fetch_cache: Default::default(),
     };
     s.refresh_snapshot();
     s.switch_mode(Mode::Pinyin);
@@ -418,4 +460,28 @@ fn load_with_trad_tolerates_bad_trad_but_not_bad_luna() {
     // trad 路径为 None/空串 → 等价于单装
     assert!(CandidateState::load_with_trad(Some(luna.to_str().unwrap()), Some("")).is_ok());
     let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn clear_user_words_drops_learning_and_resets_page() {
+    let mut s = state();
+    let json = r#"{"version":1,"words":[{"text":"词00","freq":99}]}"#;
+    assert_eq!(s.engine.import_user_words(json).unwrap(), 1);
+    assert!(s.engine.export_user_words().contains("词00"));
+    s.page = 1; // 空缓冲下 next_page 会钳回 0；直接置页即可测「清空复位」
+    assert_eq!(s.page, 1);
+    s.clear_user_words();
+    assert!(!s.engine.export_user_words().contains("词00"));
+    assert_eq!(s.page, 0, "清空后候选集会变，页码必须回第一页");
+}
+
+#[test]
+fn raw_buffer_stays_typed_while_display_buffer_segments() {
+    let mut s = state();
+    for c in "nihao".chars() {
+        s.input_key(c);
+    }
+    assert_eq!(s.buffer(), "nihao", "真缓冲不动");
+    assert_eq!(s.display_buffer(), "ni'hao", "面板显示带分词");
+    assert_eq!(s.raw_buffer(), "nihao", "W1 提交进文档，不能带分词符");
 }

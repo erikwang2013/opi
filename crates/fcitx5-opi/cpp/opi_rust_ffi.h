@@ -78,12 +78,17 @@ extern "C" int32_t opi_fcitx5_scheme() __attribute__((weak));
 // 英文专业模式（2026-10-19）：读/切普通⇄专业；弱符号，老 .so 上静默跳过。
 extern "C" bool opi_fcitx5_english_pro() __attribute__((weak));
 extern "C" bool opi_fcitx5_toggle_english_pro() __attribute__((weak));
+// 清空用户词（学习记忆）；弱符号，老 .so 上按「入口未接线」报 4。
+extern "C" bool opi_fcitx5_clear_user_words() __attribute__((weak));
 bool opi_fcitx5_fullwidth();               // 只读：当前是否全角（状态栏 State 读它）
 bool opi_fcitx5_toggle_fullwidth();        // 返回切换后的状态（true = 全角）
 void opi_fcitx5_set_shift(bool on);
 OpiString opi_fcitx5_input_space();
 OpiString opi_fcitx5_candidates(size_t limit); // JSON 数组（UTF-8）
-OpiString opi_fcitx5_buffer();
+OpiString opi_fcitx5_buffer();                 // 显示串：全键盘带 `'` 分词（预编辑读它）
+// 原文（不分词）：W1 直接确认/切输入法提交进文档用。弱符号，老 .so 上没有 ——
+// 那时 `opi_fcitx5_buffer` 本来就返回原文，退回它即可（见 opi_fcitx5.cpp 的 opiDirectConfirm）。
+extern "C" OpiString opi_fcitx5_raw_buffer() __attribute__((weak));
 int32_t opi_fcitx5_mode();
 OpiKeyEventResult opi_fcitx5_key_event(uint32_t keyval, uint32_t states);
 void opi_ffi_free_string_utf8(OpiString s);

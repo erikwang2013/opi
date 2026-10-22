@@ -21,7 +21,7 @@ import UIKit
 
 /// 布局回调。
 protocol KeyboardLayoutDelegate: AnyObject {
-    /// 按下。longPress = true 表示这是一次长按（目前只有 ⇧ 会产生）。
+    /// 按下。longPress = true 表示这是一次长按（⇧ Lock / ⌫ 清组合，见 KeySpec）。
     func keyboardLayout(_ layout: KeyboardLayout, didPress spec: KeySpec, longPress: Bool)
     /// 抬起（touchUpInside/Outside/Cancel）。
     func keyboardLayout(_ layout: KeyboardLayout, didRelease spec: KeySpec)
@@ -125,6 +125,8 @@ final class KeyboardLayout: UIView {
     /// 有缓冲/候选时是候选栏。候选栏隐藏时仍占 44pt（键区锚在 `candidateBar.bottom`）。
     let candidateBar = UIView()
     let toolbar = KeyboardToolbar()
+    /// 顶部拼音行（2026-10-23）：组合中显示分词拼音；常驻 24pt，空串不铺底。
+    let composingBar = ComposingBar()
     /// 键区容器：单手模式只收窄/偏移这一块（工具条与候选栏保持全宽，Android 同）。
     let keyArea = UIView()
 
@@ -187,8 +189,8 @@ final class KeyboardLayout: UIView {
     var keyAreaWidth: NSLayoutConstraint?
     var keyAreaLeading: NSLayoutConstraint?
     var keyAreaTrailing: NSLayoutConstraint?
-    /// 键区顶锚：平常接候选栏下沿；平铺候选态改接键盘顶部，让平铺占满整个
-    /// 键盘（Android `CandidateTiledView` 同样盖住「候选｜工具条」那一格）。
+    /// 键区顶锚：平常接候选栏下沿；平铺候选态改接拼音行下沿，让平铺盖住整个
+    /// 44pt 槽位（Android `CandidateTiledView` 同义），但**不盖**上面的拼音行。
     var keyAreaTop: NSLayoutConstraint?
     var keyAreaTopFull: NSLayoutConstraint?
     /// 键位行左锚。英文 26 键左侧候选词列出现时，切换到词列右边
@@ -226,7 +228,7 @@ final class KeyboardLayout: UIView {
             equalTo: candidateBar.bottomAnchor, constant: 4
         )
         keyAreaTop?.isActive = true
-        keyAreaTopFull = keyArea.topAnchor.constraint(equalTo: topAnchor)
+        keyAreaTopFull = keyArea.topAnchor.constraint(equalTo: composingBar.bottomAnchor)
         // 钉安全区：home indicator 那条空白由键盘背景填，键不被遮住。
         keyArea.bottomAnchor.constraint(equalTo: safeAreaLayoutGuide.bottomAnchor, constant: -4).isActive = true
 
@@ -320,8 +322,8 @@ final class KeyboardLayout: UIView {
             self, action: #selector(onTouchUp(_:)),
             for: [.touchUpInside, .touchUpOutside, .touchCancel]
         )
-        // 两种键要长按识别：⇧（长按 = Lock）与带 `longPressFunction` 的键（模式键）。
-        if b.spec.keyval == OpiKey.shift || b.spec.longPressFunction != nil {
+        // 三种键要长按识别：⇧（Lock）/ longPressFunction（模式键）/ ⌫ 清组合。
+        if b.spec.keyval == OpiKey.shift || b.spec.longPressFunction != nil || b.spec.longPressClearsComposing {
             // 它们的 touchDown **不能立刻上报** —— 否则先干一次短按的事、长按再补一次，
             // 等于连按两下（⇧ 是「先 tap 再 lock」，模式键是「先切模式再开菜单」）。
             // 处理：按下只起表，抬手时若长按没触发才补一次短按。
@@ -341,8 +343,8 @@ final class KeyboardLayout: UIView {
             delegate?.keyboardLayout(self, didTapFunction: fn)
             return
         }
-        if sender.spec.keyval == OpiKey.shift {
-            sender.longPressFired = false   // 只起表，不上报
+        if sender.spec.keyval == OpiKey.shift || sender.spec.longPressClearsComposing {
+            sender.longPressFired = false   // 只起表，不上报（抬手/长按再定论）
             return
         }
         delegate?.keyboardLayout(self, didPress: sender.spec, longPress: false)
@@ -371,9 +373,9 @@ final class KeyboardLayout: UIView {
             }
             return
         }
-        if sender.spec.keyval == OpiKey.shift {
+        if sender.spec.keyval == OpiKey.shift || sender.spec.longPressClearsComposing {
+            // 没长按 → 补发一次普通点击；长按已由 onLongPress 上报，不补短按。
             if !sender.longPressFired {
-                // 没长按 → 这是一次普通点击：补发按下，抬起照常发。
                 delegate?.keyboardLayout(self, didPress: sender.spec, longPress: false)
             }
             sender.longPressFired = false

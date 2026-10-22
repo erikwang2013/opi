@@ -376,6 +376,16 @@ class CandidateFontGateTest {
         )
     }
 
+    /** 空候选（无匹配/分页到头）时拼音行也必须在：两张只换缓冲的空候选面板做差，上方有墨迹即在场。 */
+    @Test
+    fun `pinyin row survives an empty candidate list`() {
+        val rows = diffRowIndices(
+            panel("empty-buffer-a.png", model(emptyList()).apply { buffer = "mmm" }, realWindow),
+            panel("empty-buffer-b.png", model(emptyList()).apply { buffer = "nnn" }, realWindow))
+        assertTrue("空候选时拼音行消失了", rows.isNotEmpty())
+        assertTrue("拼音行跑到「无匹配」行下面去了（$rows）", rows.max() < realWindow.height.value.toInt() / 2)
+    }
+
     // ---------- 判据 7：候选窗跟着皮肤走（2026-10-22 用户报障） ----------
 
     /**

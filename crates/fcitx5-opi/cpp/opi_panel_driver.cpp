@@ -64,7 +64,7 @@ int main() {
                     q(preeditOf(ic)).c_str(), candidateCount(ic),
                     q(candidateAt(ic, 0)).c_str());
     }
-    check(preeditOf(ic) == "nihao", "预编辑串 == 缓冲 \"nihao\"");
+    check(preeditOf(ic) == "ni'hao", "预编辑串 == 显示串 \"ni'hao\"（2026-10-23 全键盘分词）");
     check(candidateCount(ic) > 0, "候选表非空");
     // 页大小**不写数字**（这里原本是 `<= 8`，第 5 份页大小拷贝）：面板收到的条数
     // 应当 == Rust 侧此刻返回的当前页条数 —— 同一个状态、经 FFI 独立取一次。
@@ -91,7 +91,7 @@ int main() {
     }
     check(labelsOk, "候选序号按页内 1..n 编号（label 非空且以数字开头）");
     check(ic.inputPanel().preedit().cursor() == 5, "预编辑光标在末尾（字节 5）");
-    check(clientPreeditOf(ic) == "nihao", "clientPreedit == 缓冲（内联预编辑通道）");
+    check(clientPreeditOf(ic) == "ni'hao", "clientPreedit == 显示串（内联预编辑通道）");
     check(candidateCursor(ic) == 0, "候选光标 = 0（候选栏有高亮）");
 
     // 上面那条等式在**短页**上照样成立，却测不出「胶水把整页截断」（实测：把胶水的
@@ -131,10 +131,10 @@ int main() {
     std::printf("  'vvv' -> preedit=%s clientPreedit=%s candidates=%d\n",
                 q(preeditOf(ic)).c_str(), q(clientPreeditOf(ic)).c_str(),
                 candidateCount(ic));
-    check(preeditOf(ic) == "vvv", "无候选时缓冲照样进预编辑");
+    check(preeditOf(ic) == "v'v'v", "无候选时缓冲照样进预编辑（逐字分词）");
     check(candidateCount(ic) == 0, "确实 0 条候选（走了守卫，没抛异常）");
     check(candidateCursor(ic) == -1, "无候选时不给候选光标（-1）");
-    check(clientPreeditOf(ic) == "vvv", "无候选时 clientPreedit 照常");
+    check(clientPreeditOf(ic) == "v'v'v", "无候选时 clientPreedit 照常");
 
     std::printf("== 3. 翻页（PageDown/PageUp 走 Rust 页码）==\n");
     // "nihao" 只有一页；换单字母缓冲 "n"（满 8 条，说明还有下一页）。
@@ -178,7 +178,7 @@ int main() {
     } else {
         skip("缓冲 \"nihao\" 在本次词库下只有一页（候选 <8 条），翻页无从观察");
     }
-    check(preeditOf(ic) == "nihao", "翻页不改预编辑串");
+    check(preeditOf(ic) == "ni'hao", "翻页不改预编辑串");
 
     std::printf("== 4. 点击候选（CandidateWord::select）==\n");
     ic.committed_.clear();

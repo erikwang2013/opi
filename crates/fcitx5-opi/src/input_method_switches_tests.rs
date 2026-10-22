@@ -32,6 +32,7 @@ fn punct_state() -> CandidateState {
         last_printable: None,
         dicts: Default::default(),
         english_pro: true,
+        fetch_cache: Default::default(),
     };
     s.switch_mode(Mode::Pinyin);
     s

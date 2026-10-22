@@ -80,7 +80,9 @@ int main() {
         takeEvent(fcitx::EventType::InputContextSwitchInputMethod);
     };
     auto focusOut = [&]() { takeEvent(fcitx::EventType::InputContextFocusOut); };
-    auto bufferOf = [&]() { return take(opi_fcitx5_buffer()); };
+    // 原文出口：W1/浏览恢复判据是 typed 逐字（显示串 2026-10-23 起带分词）。
+    auto bufferOf = [&]() { return take(opi_fcitx5_raw_buffer != nullptr
+                                            ? opi_fcitx5_raw_buffer() : opi_fcitx5_buffer()); };
     // 候选面**从 FFI 读**（经 JSON），不从面板读：§6 要拿它当「W1 提交了什么」的
     // 独立判据，两者同源会更不容易发现胶水接错。SIZE_MAX = 不切（同面板驱动的理由）。
     auto firstCand = [&]() -> std::string {

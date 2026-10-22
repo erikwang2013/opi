@@ -6,6 +6,7 @@ package xyz.erik.opi.ime
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -41,6 +42,17 @@ import xyz.erik.opi.keyboard.LocalKeyboardPalette
 private const val TILED_READING_CELLS = 5
 
 /**
+ * 读数列格数（3–5）：原固定 5 格只在竖屏成立 —— 横屏键区总高约 185dp，5 格每格 37dp，
+ * 26sp 读数在长辈模式 ×1.18 后行高约 38dp，上下各裁一点。按可用高度降到 4/3 格，
+ * 每格保持 ≥44dp（常规字号行高约 31dp + 余量）。
+ */
+internal fun tiledReadingCells(availableHeightDp: Float): Int = when {
+    availableHeightDp < 160f -> 3
+    availableHeightDp < 220f -> 4
+    else -> TILED_READING_CELLS
+}
+
+/**
  * **平铺候选视图**（2026-10-16 用户裁决「左右翻页改成替换键盘平铺出来……上下滑动翻页」，
  * 布局对齐参考图 2）：占满「候选｜工具条」共用格与整个键盘区 ——
  * · 左列 = 放大的读音列（同 [CandidateReadingColumn]：点行 = 钉读音）；
@@ -65,66 +77,79 @@ fun CandidateTiledView(
     val pager = rememberPagerState(pageCount = { pages.size.coerceAtLeast(1) })
     // 候选整批换了（继续输入 / 钉读音 / 选词后剩尾巴接着编）⇒ 回第一页，别停在旧页号上。
     LaunchedEffect(cands) { pager.scrollToPage(0) }
-    Row(modifier = modifier.fillMaxSize().background(p.barBg)) {
-        // 左列：放大的读音列 —— 与键盘左列**同一块** CandidateReadingColumn（点行 = 钉
-        // 读音、读屏串、滚动复位都逐字同构，2026-10-16 抽出）。
-        CandidateReadingColumn(
-            readings = controller.candidateReadings,
-            pinnedReading = controller.pinnedReading,
-            onPick = { i ->
-                controller.candidateReadings.getOrNull(i)?.let(controller::togglePinnedReading)
-            },
-            scrollKey = controller.buffer,
-            cells = TILED_READING_CELLS,
-            fontSize = 26.sp,
-            modifier = Modifier.weight(1f).fillMaxHeight(),
-        )
-        VerticalPager(
-            state = pager,
-            modifier = Modifier.weight(3f).fillMaxHeight(),
-        ) { page ->
-            Column(modifier = Modifier.fillMaxSize()) {
-                val rows = pages.getOrNull(page).orEmpty()
-                repeat(ROWS_PER_PAGE) { r ->
-                    Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                        val row = rows.getOrNull(r).orEmpty()
-                        var used = 0
-                        for (cell in row) {
-                            used += cell.units
-                            TiledCell(
-                                text = cands.getOrElse(cell.index) { "" },
-                                onTap = {
-                                    router.handleCandidateAbsolute(cell.index)
-                                    state.collapseIfNoCandidates()
-                                },
-                                modifier = Modifier.weight(cell.units.toFloat()),
-                            )
-                        }
-                        // 补空位：本行剩余单位用空 Box 占掉，否则 weight 会把实格拉宽。
-                        if (used < UNITS_PER_ROW) {
-                            Box(modifier = Modifier.weight((UNITS_PER_ROW - used).toFloat()))
+    BoxWithConstraints(modifier = modifier.fillMaxSize().background(p.barBg)) {
+        // 横屏/分屏高度不够时减少读数列格数，见 [tiledReadingCells]。
+        val readingCells = tiledReadingCells(maxHeight.value)
+        Row(modifier = Modifier.fillMaxSize()) {
+            // 左列：放大的读音列 —— 与键盘左列**同一块** CandidateReadingColumn（点行 = 钉
+            // 读音、读屏串、滚动复位都逐字同构，2026-10-16 抽出）。
+            CandidateReadingColumn(
+                readings = controller.candidateReadings,
+                pinnedReading = controller.pinnedReading,
+                onPick = { i ->
+                    controller.candidateReadings.getOrNull(i)?.let(controller::togglePinnedReading)
+                },
+                scrollKey = controller.buffer,
+                cells = readingCells,
+                fontSize = 26.sp,
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+            )
+            VerticalPager(
+                state = pager,
+                modifier = Modifier.weight(3f).fillMaxHeight(),
+            ) { page ->
+                Column(modifier = Modifier.fillMaxSize()) {
+                    val rows = pages.getOrNull(page).orEmpty()
+                    repeat(ROWS_PER_PAGE) { r ->
+                        Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                            val row = rows.getOrNull(r).orEmpty()
+                            var used = 0
+                            for (cell in row) {
+                                used += cell.units
+                                TiledCell(
+                                    text = cands.getOrElse(cell.index) { "" },
+                                    onTap = {
+                                        router.handleCandidateAbsolute(cell.index)
+                                        state.collapseIfNoCandidates()
+                                    },
+                                    modifier = Modifier.weight(cell.units.toFloat()),
+                                )
+                            }
+                            // 补空位：本行剩余单位用空 Box 占掉，否则 weight 会把实格拉宽。
+                            if (used < UNITS_PER_ROW) {
+                                Box(modifier = Modifier.weight((UNITS_PER_ROW - used).toFloat()))
+                            }
                         }
                     }
                 }
             }
-        }
-        // 右列：返回 + 与键盘右列同三键（⌫ / 重输 / 空格）。
-        Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-            KeyButton("返回", modifier = Modifier.weight(1f).fillMaxWidth(), onTap = {
-                state.collapseCandidates()
-            })
-            KeyButton("⌫", modifier = Modifier.weight(1f).fillMaxWidth(), onTap = {
-                router.handleBackspace()
-                state.collapseIfNoCandidates()
-            })
-            KeyButton("重输", modifier = Modifier.weight(1f).fillMaxWidth(), onTap = {
-                controller.clear()
-                state.collapseIfNoCandidates()
-            })
-            KeyButton("空格", modifier = Modifier.weight(1f).fillMaxWidth(), onTap = {
-                router.handleSpace()
-                state.collapseIfNoCandidates()
-            })
+            // 右列：返回 + 与键盘右列同三键（⌫ / 重输 / 空格）。
+            Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                KeyButton("返回", modifier = Modifier.weight(1f).fillMaxWidth(), onTap = {
+                    state.collapseCandidates()
+                })
+                KeyButton(
+                    "⌫",
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    onTap = {
+                        router.handleBackspace()
+                        state.collapseIfNoCandidates()
+                    },
+                    // 长按 = 清掉整段组合（不提交）；清空后候选没了 → 自动收拢回键盘。
+                    onLongPress = {
+                        router.handleBackspaceLongPress()
+                        state.collapseIfNoCandidates()
+                    },
+                )
+                KeyButton("重输", modifier = Modifier.weight(1f).fillMaxWidth(), onTap = {
+                    controller.clear()
+                    state.collapseIfNoCandidates()
+                })
+                KeyButton("空格", modifier = Modifier.weight(1f).fillMaxWidth(), onTap = {
+                    router.handleSpace()
+                    state.collapseIfNoCandidates()
+                })
+            }
         }
     }
 }

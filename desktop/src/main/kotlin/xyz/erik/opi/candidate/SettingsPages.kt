@@ -47,13 +47,14 @@ import kotlinx.coroutines.withContext
 // ---------- 常用 ----------
 
 @Composable
-internal fun CommonPage(s: OpSettings, apply: (OpSettings) -> Unit) {
+internal fun CommonPage(s: OpSettings, apply: (OpSettings) -> Unit, status: (String) -> Unit) {
     SectionTitle("常规")
     SettingRow(
         "学习（记住选过的词）",
-        "关掉后不再累计词频；已学的词仍在（清空要用各端自己的入口）",
+        "关掉后不再累计词频；已学的词仍在（用下面「清空用户词」删除）",
         s.learn,
     ) { apply(s.copy(learn = it)) }
+    ClearUserWordsRow(status)
     SettingRow(
         "中文标点",
         "，。、 与成对引号的自动转换（与全角开关相互独立）",

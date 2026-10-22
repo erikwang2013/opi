@@ -53,8 +53,14 @@ export const candidates: (limit: number) => string;
 /** 提交**全局**第 index 个候选（`candidates` 数组下标）。越界 → 空串。 */
 export const select: (index: number) => string;
 
-/** 当前拼音缓冲（preedit 来源）。 */
+/** 当前拼音缓冲（preedit 来源）。**行为判定只许用它**（见 displayBuffer）。 */
 export const buffer: () => string;
+
+/**
+ * **显示用**缓冲：9 键是带分词的读音（`ni'hao`），26/14 键即 buffer 本身。
+ * ⚠️ 9 键无候选时本出口为空串 —— **不要拿它做行为判定**（退格/空格/回车仍用 buffer）。
+ */
+export const displayBuffer: () => string;
 
 /** 当前候选页（0 起）。**不要自己数页** —— 末页由路由钳制。 */
 export const page: () => number;
@@ -83,6 +89,9 @@ export const setLearner: (on: boolean) => void;
 
 /** 长按删词：从用户词表删除该词（不存在/空串 → 无操作）。 */
 export const removeUserWord: (text: string) => void;
+
+/** 清除**全部**用户词（学习表）；不动内置词库、不清当前输入缓冲。 */
+export const clearUserWords: () => void;
 
 /**
  * 切换全角，返回**切换后的新状态**（UI 直接拿去刷高亮）。

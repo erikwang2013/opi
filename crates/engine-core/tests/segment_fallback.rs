@@ -14,8 +14,9 @@
 //!    逐条更新）。缓冲**只消耗第一个字**、剩下的后缀留着接着编
 //!    （`nihaob` 选「你」→ 缓冲变 `haob`，再选「好」→ `b`）；提交文本/学习/清缓冲的收尾仍是 `select_from`
 //!    那一处（四端自动一致）；
-//! 4. **读数**：26 键回退态下 `display_buffer()` 仍是**用户打的整串**（预编辑不缩水）、
-//!    `candidate_readings()` 仍是空（那是 9/14 键专用）；9 键回退态下读数照旧是
+//! 4. **读数**：26 键回退态下 `display_buffer()` 仍是**用户打的整串**（预编辑不缩水，
+//!    2026-10-23 起按音节带 `'` 分词）、`candidate_readings()` 仍是空（那是 9/14 键
+//!    专用）；9 键回退态下读数照旧是
 //!    「第一个字的读音」（可带尾巴字母，`644269` → `ni'w`，左列不因回退而空白）；
 //! 5. **边界**：单音节无匹配维持原「无匹配」；前缀也无候选维持原「无匹配」；
 //!    垃圾串维持死（26 键：段不是完整音节 `qqq`/`zxcvb`；9/14 键：没有音节对齐的
@@ -155,13 +156,14 @@ fn space_flushes_the_whole_buffer_even_in_fallback_state() {
     assert_eq!(e.buffer(), "", "空格是整段上屏，不留回退后缀");
 }
 
-/// 规则 4：回退态下两个读数出口自洽 —— 预编辑显示**用户打的整串**（不缩水到前缀），
-/// 9 键专用的逐条读音在 26 键下本来就是空的；选中后两者都跟着缓冲走。
+/// 规则 4：回退态下两个读数出口自洽 —— 预编辑显示**用户打的整串**（不缩水到前缀，
+/// 2026-10-23 起按音节分词），9 键专用的逐条读音在 26 键下本来就是空的；选中后
+/// 两者都跟着缓冲走。
 #[test]
 fn readings_stay_consistent_in_fallback_state() {
     let mut e = engine(false);
     type_str(&mut e, "nihaob");
-    assert_eq!(e.display_buffer(), "nihaob", "预编辑是整串，不显示前缀");
+    assert_eq!(e.display_buffer(), "ni'hao'b", "预编辑是整串（自动分词）");
     assert!(
         e.candidate_readings().is_empty(),
         "26 键没有逐条读音出口（9/14 专用），回退不改变这一点"
@@ -170,8 +172,8 @@ fn readings_stay_consistent_in_fallback_state() {
     // 2026-10-17 逐字确认：显示串前缀已确认的字（片段 + 剩余缓冲）
     assert_eq!(
         e.display_buffer(),
-        "你haob",
-        "选中后显示 = 已确认片段 + 后缀"
+        "你hao'b",
+        "显示 = 已确认片段 + 分词后缀"
     );
     assert!(e.candidate_readings().is_empty());
 }
@@ -443,4 +445,53 @@ fn nine_key_space_with_no_match_commits_nothing() {
     );
     assert_eq!(nine.input_key(' '), "", "无候选：空格不上屏任何文本");
     assert_eq!(nine.buffer(), "644'26", "不清缓冲：退格改一键仍可重来");
+}
+
+/// **音节边界对齐的长词前缀 ≥ 第一个字整档**（2026-10-22，长歇后语全拼的现场）：
+/// 整串是 **≥3 个完整音节**且真有更长的键以它为前缀时，那是直接匹配，不许被第一个字
+/// 的整档替换（`zhimakaihuajiejiegao` 会被 `zhi` 的 9813 条顶掉、长词整个消失）。
+/// 2026-10-18 裁决的适用面不动：**两音节**的 `zhongguo` 与半截音节的 `zhongguor`
+/// 仍回退到第一个字 —— 三档用例各自新开引擎，避免上一档的选词学习污染下一档。
+#[test]
+fn aligned_phrase_prefix_is_not_replaced_by_first_char_fallback() {
+    fn engine() -> Engine {
+        let mut d = InMemoryDictionary::new();
+        d.insert("zhong", "中", 9_999);
+        d.insert("zhongguoren", "中国人", 900);
+        d.insert(
+            "zhimakaihuajiejiegaojiejieshangsheng",
+            "芝麻开花——节节高；节节上升",
+            500,
+        );
+        Engine::new(Box::new(d), SymbolEngine::new(Vec::new(), Vec::new()), true)
+    }
+
+    let mut e = engine();
+    type_str(&mut e, "zhimakaihuajiejiegao");
+    let cands = texts(&e, 8);
+    assert_eq!(
+        cands.first().map(String::as_str),
+        Some("芝麻开花——节节高；节节上升"),
+        "完整音节长前缀命中更长词：{cands:?}"
+    );
+    assert_eq!(
+        e.select(0),
+        "芝麻开花——节节高；节节上升",
+        "直接前缀匹配选中即整段提交"
+    );
+    assert_eq!(e.buffer(), "");
+
+    // 两音节 = 词的最小单位；半截音节（结尾 r）同样不在长词前缀档内。
+    for (input, suffix) in [("zhongguo", "guo"), ("zhongguor", "guor")] {
+        let mut e = engine();
+        type_str(&mut e, input);
+        let cands = texts(&e, 8);
+        assert_eq!(
+            cands.first().map(String::as_str),
+            Some("中"),
+            "{input} 仍回退到第一个字：{cands:?}"
+        );
+        assert_eq!(e.select(0), "", "{input} 回退态延迟提交");
+        assert_eq!(e.buffer(), suffix, "{input} 只消耗第一个音节");
+    }
 }

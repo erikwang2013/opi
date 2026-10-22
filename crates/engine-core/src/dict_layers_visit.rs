@@ -79,4 +79,67 @@ impl LayeredDictionary {
             (*f)(&py, &w, freq);
         }
     }
+
+    /// [`Dictionary::visit_prefix`] 的导入层合并：语义与 `visit_entries_budgeted` 逐条
+    /// 相同（同键取 max、导入层加成、超预算整层丢弃），只是 base 与导入层都只扫
+    /// `prefix` 区间 —— 不走这里的话默认实现会 `visit_entries` 全表 93 万条再过滤，
+    /// 声母缩写每键实测 30–100ms（2026-10-22）。
+    pub(crate) fn visit_prefix_budgeted(&self, prefix: &str, f: &mut dyn FnMut(&str, &str, u32)) {
+        if self.extras.is_empty() {
+            return self.base.visit_prefix(prefix, f);
+        }
+        let deadline = self.import_deadline();
+        let base_max = self.base_max();
+        let mut idx: HashMap<String, HashMap<String, u32>> = HashMap::new();
+        let mut seen = 0u32;
+        for (_, dict) in &self.extras {
+            if deadline.is_some_and(|d| Instant::now() >= d) {
+                return self.base.visit_prefix(prefix, f);
+            }
+            let mut stop = false;
+            let ok = dict.for_each_prefix_until(prefix, &mut |py, w, freq| {
+                seen += 1;
+                if seen.is_multiple_of(64) && deadline.is_some_and(|d| Instant::now() >= d) {
+                    stop = true;
+                    return false;
+                }
+                if seen as usize >= dict_index::IMPORT_SCAN_HIT_LIMIT {
+                    stop = true;
+                    return false;
+                }
+                let eff = boosted_import_freq(freq, base_max);
+                idx.entry(py.to_string())
+                    .or_default()
+                    .entry(w.to_string())
+                    .and_modify(|f| *f = (*f).max(eff))
+                    .or_insert(eff);
+                true
+            });
+            if !ok || stop {
+                return self.base.visit_prefix(prefix, f);
+            }
+        }
+        if deadline.is_some_and(|d| Instant::now() >= d) {
+            return self.base.visit_prefix(prefix, f);
+        }
+        self.base.visit_prefix(prefix, &mut |py, w, freq| {
+            let merged = match idx.get_mut(py).and_then(|words| words.remove(w)) {
+                Some(extra) => freq.max(extra),
+                None => freq,
+            };
+            (*f)(py, w, merged);
+        });
+        let mut rest: Vec<(String, String, u32)> = Vec::new();
+        for (py, words) in idx {
+            for (w, freq) in words {
+                rest.push((py.clone(), w, freq));
+            }
+        }
+        rest.sort_by(|a, b| b.2.cmp(&a.2).then(a.0.cmp(&b.0)).then(a.1.cmp(&b.1)));
+        rest.truncate(dict_index::IMPORT_HIT_CAP);
+        rest.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+        for (py, w, freq) in rest {
+            (*f)(&py, &w, freq);
+        }
+    }
 }

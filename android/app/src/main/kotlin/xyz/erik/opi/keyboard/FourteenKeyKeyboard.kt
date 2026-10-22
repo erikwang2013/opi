@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.sp
 
 /**
  * 14 键布局表。
@@ -54,6 +55,8 @@ fun FourteenKeyKeyboard(
     onKey: (String) -> Unit,
     onSpace: () -> Unit,
     onBackspace: () -> Unit,
+    /** 长按退格 = 清空整段组合输入（不提交）。 */
+    onBackspaceLongPress: (() -> Unit)? = null,
     onEnter: () -> Unit,
     onModeSwitch: () -> Unit,
     onSymbol: () -> Unit,
@@ -88,9 +91,16 @@ fun FourteenKeyKeyboard(
                 description = "简繁切换",
                 stateDescription = modeStateDescription(modeLabel),
             )
-            KeyButton("英文", modifier = Modifier.weight(1f), onTap = onEnglish)
+            // 底行 6 键在 320dp 上每单位约 45.7dp：「英文」21sp 时 42dp 勉强，长辈模式
+            // ×1.18 会到 50dp，故降一档（与笔画/9 键同判据）。
+            KeyButton("英文", modifier = Modifier.weight(1f), onTap = onEnglish, fontSize = 15.sp)
             KeyButton("空格", modifier = Modifier.weight(2f), onTap = onSpace)
-            KeyButton("⌫", modifier = Modifier.weight(1f), onTap = onBackspace)
+            KeyButton(
+                "⌫",
+                modifier = Modifier.weight(1f),
+                onTap = onBackspace,
+                onLongPress = onBackspaceLongPress,
+            )
             KeyButton("↵", modifier = Modifier.weight(1f), onTap = onEnter)
         }
     }

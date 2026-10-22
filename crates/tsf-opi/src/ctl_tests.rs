@@ -188,6 +188,25 @@ fn fullwidth_toggles() {
 }
 
 #[test]
+fn clearuserwords_clears_the_learner() {
+    let mut s = state();
+    let json = r#"{"version":1,"words":[{"text":"你好","freq":9}]}"#;
+    assert_eq!(s.engine.import_user_words(json).unwrap(), 1);
+    assert!(s.engine.export_user_words().contains("你好"));
+    assert_eq!(
+        act(&mut s, "clearuserwords").unwrap(),
+        CtlReply::Action {
+            token: None,
+            commit: None
+        }
+    );
+    assert!(
+        !s.engine.export_user_words().contains("你好"),
+        "控制面动作没有清空学习器"
+    );
+}
+
+#[test]
 fn englishpro_toggles_and_clears_the_buffer() {
     let mut s = english();
     // 普通档：字母直出，不查词库

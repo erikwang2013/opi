@@ -183,7 +183,11 @@ internal fun candidateBarWidthDp(
 @Composable
 internal fun rememberCandidateBarSize(model: CandidateModel, fontScale: Float = 1f): DpSize {
     val density = LocalDensity.current
-    val measurer = rememberTextMeasurer()
+    // 默认 cacheSize=8，而一次测量就有 ~20 条文本（8 候选 × 序号+词、缓冲、模式、
+    // 空态、箭头、页码）。按键时候选文本全变；缓存只有 8 条时，序号/模式/箭头/
+    // 页码这些**每键都一样**的标签会在下一键前被挤出 ⇒ 每键重排十几次。
+    // 64 条足够盖住一整页 + 常驻标签；候选文本变了自然 miss 换入，无需手动失效。
+    val measurer = rememberTextMeasurer(cacheSize = 64)
     val screenMax = (Toolkit.getDefaultToolkit().screenSize.width - 80)
         .coerceAtLeast(BAR_MIN_WIDTH.toInt()).toFloat()
     return remember(

@@ -139,6 +139,10 @@ fn variant_prefix_extension_is_not_exact_either() {
     d.insert("shu", "书", 3_985_025_359);
     d.insert("suo", "所", 3_992_160_091); // 变体 "su" 的前缀扩展，且等长
     let mut e = engine(d);
+    // 模糊缺省关（2026-10-15）。这两条 `shu` 用例此前**没开模糊**也一直是绿的：
+    // 命中其实来自纠错档的变体 `su`，而纠错当时用的是前缀查询。2026-10-22 纠错改
+    // 精确键后它们才露出来 —— 本文件要钉的是模糊层，故显式开它。
+    e.set_fuzzy(true);
     let got = cands(&mut e, "shu");
     assert_eq!(got[0], "书", "「书」必须是首位：{got:?}");
     assert!(got.contains(&"所".into()), "模糊结果仍要可达：{got:?}");
@@ -157,6 +161,9 @@ fn fuzzy_tier_orders_by_frequency_not_by_key_length_coincidence() {
     d.insert("su", "速", 3_992_000_000);
     d.insert("suo", "所", 3_000_000_000);
     let mut e = engine(d);
+    // 同 `variant_prefix_extension_is_not_exact_either`：模糊缺省关，须显式开
+    // （此前靠纠错档的前缀变体 `su` 供词，纠错改精确键后不再供）。
+    e.set_fuzzy(true);
     // ⚠️ 2026-10-15：候选里现在可能混有**多音字补读音层**（`polyphone.tsv`）为 `shu`
     // 补的字（如 `俞`）—— 它们走精确档、与模糊档的排序无关。本条只钉夹具这两个字的
     // 相对次序（这正是它的意图），故先滤到夹具自己的字。

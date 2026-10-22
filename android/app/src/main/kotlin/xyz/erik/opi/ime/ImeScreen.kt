@@ -41,6 +41,17 @@ import xyz.erik.opi.pet.petMood
 import xyz.erik.opi.pet.PetMood
 
 /**
+ * 单手模式：键盘整体占屏宽的 76%，其余 24% 留在另一侧。
+ *
+ * 注意它与 [oneHandGapWeight] 的分工：键区外层已经 `fillMaxWidth(0.76f)`，行内的
+ * 留白权重是相对**键区**分配的，所以留白要占 `(1-0.76)/0.76 ≈ 0.316`，而不是 0.24。
+ * 原实现用 0.24 → 键只拿到 0.76×0.76 = 58% 屏宽，右手模式还会离右边缘 18%
+ * （320dp 屏上九宫格中列每格只剩约 37dp，提示行放不下）。
+ */
+private const val ONE_HAND_WIDTH_RATIO = 0.76f
+
+
+/**
  * IME 面板根：工具条（图标入口）+ 候选栏 + 键盘；数字/符号/生僻字面板。
  *
  * 2026-10-09 起按 **输入模式 × 键盘模式** 组合渲染（对齐主流移动输入法）：
@@ -107,10 +118,18 @@ fun ImeScreen(
                 state.view == ImeState.View.CANDIDATES_TILED
             ) {
                 // 顶部共用槽位：输入中画拼音行、空闲画**小欧宠物条**。
-                if (controller.composingText().isEmpty() && controller.wubiHint.isEmpty()) {
-                    PetStrip()
-                } else {
+                // 判据在 composingRowActive（缓冲/候选也算输入中 —— 有候选的那一拍
+                // 绝不能让拼音行被宠物条顶掉；9 键无匹读数空时同理）。
+                if (composingRowActive(
+                        controller.composingText(),
+                        controller.wubiHint,
+                        controller.buffer,
+                        controller.candidates.size,
+                    )
+                ) {
                     ComposingBar(controller)
+                } else {
+                    PetStrip()
                 }
             }
             if (state.view == ImeState.View.CANDIDATES_TILED) {
@@ -160,19 +179,16 @@ fun ImeScreen(
                         )
                     }
                 }
-                // ---- 键盘区：单手模式整体偏移 + 收窄（纯布局层）----
+                // ---- 键盘区：单手模式收窄到 76%，贴所选手一侧（纯布局层）----
                 // 键区自己刷底色（根列已透明）：键与键之间的缝是这一层 —— 换深色皮肤时
                 // 不刷会露出窗口底色（2026-10-09「整体统一」那条的落点）。
-                val keyArea = Modifier.weight(1f).fillMaxWidth().background(palette.barBg).let {
-                    when (modes.oneHand) {
-                        KeyboardModes.OneHand.OFF -> it
-                        KeyboardModes.OneHand.LEFT -> it.fillMaxWidth(0.76f)
-                        KeyboardModes.OneHand.RIGHT -> it.fillMaxWidth(0.76f)
-                    }
-                }
-                Row(modifier = keyArea) {
+                // 权重分摊的是**整行宽**：键区 0.76 + 空白 0.24 = 屏宽 76/24。行本身必须满宽，
+                // 否则右手模式的键区停在 76% 处、右侧反而多出一条空白（不是贴边）。
+                Row(
+                    modifier = Modifier.weight(1f).fillMaxWidth().background(palette.barBg),
+                ) {
                     if (modes.oneHand == KeyboardModes.OneHand.RIGHT) {
-                        Box(modifier = Modifier.weight(0.24f)) // 右侧单手：左边留空
+                        Box(modifier = Modifier.weight(1f - ONE_HAND_WIDTH_RATIO)) // 右手：左边留空
                     }
                     KeyboardArea(
                         state,
@@ -183,10 +199,13 @@ fun ImeScreen(
                         symbolCategories,
                         kaomojiCategories,
                         onPickPet,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(
+                            if (modes.oneHand == KeyboardModes.OneHand.OFF) 1f
+                            else ONE_HAND_WIDTH_RATIO,
+                        ),
                     )
                     if (modes.oneHand == KeyboardModes.OneHand.LEFT) {
-                        Box(modifier = Modifier.weight(0.24f)) // 左侧单手：右边留空
+                        Box(modifier = Modifier.weight(1f - ONE_HAND_WIDTH_RATIO)) // 左手：右边留空
                     }
                 }
             }
@@ -275,6 +294,7 @@ private fun KeyboardArea(
             onLetters = state::backToLetters,
             onSpace = router::handleSpace,
             onBackspace = router::handleBackspace,
+            onBackspaceLongPress = router::handleBackspaceLongPress,
             onEnter = router::handleEnter,
         )
         ImeState.View.SYMBOL -> Column(modifier = modifier) {
@@ -342,6 +362,8 @@ private fun KeyboardArea(
                     onKey = router::handleKey,
                     onSpace = router::handleSpace,
                     onBackspace = router::handleBackspace,
+                    // 长按退格 = 清空整段组合输入（不提交；空缓冲退回单字删除，见 KeyRouter）。
+                    onBackspaceLongPress = router::handleBackspaceLongPress,
                     onEnter = router::handleEnter,
                     // 9 键的模式键**只切简/繁**（2026-10-15 用户裁决「简繁按钮就只切换
                     // 简繁」）—— 不是 26 键那条中→繁→英循环（cycleMode 只在 26 键与
@@ -383,6 +405,8 @@ private fun KeyboardArea(
                     onKey = router::handleKey,
                     onSpace = router::handleSpace,
                     onBackspace = router::handleBackspace,
+                    // 长按退格 = 清空整段组合输入（不提交；空缓冲退回单字删除，见 KeyRouter）。
+                    onBackspaceLongPress = router::handleBackspaceLongPress,
                     onEnter = router::handleEnter,
                     // 只切简/繁（2026-10-15 用户裁决，与 9 键统一）
                     onModeSwitch = state::toggleTraditional,
@@ -398,6 +422,8 @@ private fun KeyboardArea(
                     onKey = router::handleKey,
                     onSpace = router::handleSpace,
                     onBackspace = router::handleBackspace,
+                    // 长按退格 = 清空整段组合输入（不提交；空缓冲退回单字删除，见 KeyRouter）。
+                    onBackspaceLongPress = router::handleBackspaceLongPress,
                     onEnter = router::handleEnter,
                     // 只切简/繁（2026-10-15 用户裁决，与 9 键统一）
                     onModeSwitch = state::toggleTraditional,
@@ -413,6 +439,8 @@ private fun KeyboardArea(
                     onKey = router::handleKey,
                     onSpace = router::handleSpace,
                     onBackspace = router::handleBackspace,
+                    // 长按退格 = 清空整段组合输入（不提交；空缓冲退回单字删除，见 KeyRouter）。
+                    onBackspaceLongPress = router::handleBackspaceLongPress,
                     onEnter = router::handleEnter,
                     onModeSwitch = state::cycleMode,
                     onNumber = state::openNumber,

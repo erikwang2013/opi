@@ -160,6 +160,19 @@ pub trait Dictionary: Send + Sync {
     /// 生产词库（`MmapDictionary`）覆写为零拷贝扫描。
     fn visit_entries(&self, _f: &mut dyn FnMut(&str, &str, u32)) {}
 
+    /// 只遍历拼音键以 `prefix` 开头的条目（零拷贝借用），顺序 = 表序（拼音字节序）。
+    ///
+    /// 用途：声母缩写匹配（`abbr.rs`）只要看**首字母**那一段 —— 全表 93 万条对
+    /// 每次击键太贵（`scheme_entries` 的 60ms 实测见上）。默认实现走全表 + `starts_with`
+    /// 过滤（替身词库够用）；`MmapDictionary` 覆写为二分区间扫描。
+    fn visit_prefix(&self, prefix: &str, f: &mut dyn FnMut(&str, &str, u32)) {
+        self.visit_entries(&mut |py, w, fr| {
+            if py.starts_with(prefix) {
+                f(py, w, fr);
+            }
+        });
+    }
+
     /// 按键类匹配（9/14 键）的整档：**精确匹配（键字节长 == 输入键数）全量 + 其余匹配里
     /// 静态词频最高的至多 n 条**（与 [`Self::query_prefix_top`] 同一条取舍）；每条带拼音串
     /// （9 键左列逐条读数要用）。顺序不保证。

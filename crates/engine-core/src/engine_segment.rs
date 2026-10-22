@@ -61,9 +61,29 @@ impl Engine {
                 // 收尾层若还按音节去切就是两层判据不同源 —— 整段消耗，与候选层一致。
                 Scheme::Shuangpin | Scheme::Wubi => None,
                 Scheme::Full | Scheme::Stroke => {
-                    segment_fallback(self.active_dict(), &buffer, self.fuzzy, self.correction)
-                        .map(|fb| fb.suffix)
-                        .filter(|suffix| !suffix.is_empty())
+                    let suffix =
+                        segment_fallback(self.active_dict(), &buffer, self.fuzzy, self.correction)
+                            .map(|fb| fb.suffix)
+                            .filter(|suffix| !suffix.is_empty());
+                    // 多字组合（2026-10-23）：选中的组合**覆盖整个输入**，不是「先打
+                    // 第一个字」—— 整段消耗，否则缓冲里会剩下半截拼音继续编。
+                    // 单字选中的常见路径不进组合枚举（省一次全串 DP）。
+                    match suffix {
+                        Some(_)
+                            if matches!(self.scheme(), Scheme::Full)
+                                && selected.chars().count() > 1
+                                && crate::composition::covers(
+                                    self.active_dict(),
+                                    &self.learner,
+                                    self.user_boost,
+                                    &buffer,
+                                    selected,
+                                ) =>
+                        {
+                            None
+                        }
+                        other => other,
+                    }
                 }
                 // 9/14 键：数字空间回退 —— 只消耗前缀的**键**，尾部键留缓冲接着编
                 // （尾巴长且整段读不出来时不留，见 [`Self::digit_tail_to_keep`]）。

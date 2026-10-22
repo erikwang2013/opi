@@ -175,9 +175,18 @@ export function loadDictionary(path: string): boolean {
   return opiime.load(path);
 }
 
-/** 当前拼音缓冲（= preedit 的来源）。 */
+/** 当前拼音缓冲（= preedit 的来源）。**行为判定只许用它**（见 displayBuffer）。 */
 export function buffer(): string {
   return opiime.buffer();
+}
+
+/**
+ * **显示用**缓冲（拼音行/宿主预编辑的文本）：9 键是带分词的读音（`ni'hao`），
+ * 26/14 键与 `buffer()` 相同。⚠️ 9 键无候选时为空串 —— 行为判定（退格/空格/回车）
+ * 仍用 `buffer()`，否则会出现「删的是宿主文字、引擎缓冲没退」（见 cpp/opi_ffi.h）。
+ */
+export function displayBuffer(): string {
+  return opiime.displayBuffer();
 }
 
 /**
@@ -235,6 +244,11 @@ export function loadTradDictionary(path: string): boolean {
 /** 长按删词（词不存在/空串 → 无操作）。删完要重查候选才能看到效果。 */
 export function removeUserWord(text: string): void {
   opiime.removeUserWord(text);
+}
+
+/** 清除**全部**用户词（学习表）；不动内置词库、不清当前输入缓冲。 */
+export function clearUserWords(): void {
+  opiime.clearUserWords();
 }
 
 /**

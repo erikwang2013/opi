@@ -67,7 +67,8 @@ private const val STATE_TIMEOUT_MS = 1500L
 private const val ACTION_TIMEOUT_MS = 3000L
 
 /** 动作白名单：与 `crates/tsf-opi/src/ctl.rs` 的 match 分支一一对应。 */
-private val CONTROL_ACTIONS = setOf("lang", "trad", "punct", "fullwidth", "englishpro", "mode")
+private val CONTROL_ACTIONS =
+    setOf("lang", "trad", "punct", "fullwidth", "englishpro", "mode", "clearuserwords")
 
 // ---------- 纯协议（Linux 可单测） ----------
 

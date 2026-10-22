@@ -20,7 +20,6 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryOwner
-import xyz.erik.opi.ime.COMPOSING_BAR_HEIGHT_DP
 import xyz.erik.opi.engine.DictStore
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.engine.UserWordStore
@@ -29,6 +28,7 @@ import xyz.erik.opi.jni.EngineLoader
 import xyz.erik.opi.jni.OpiEngine
 import xyz.erik.opi.ime.ImeScreen
 import xyz.erik.opi.ime.ImeState
+import xyz.erik.opi.ime.ImeWindowMetrics
 import xyz.erik.opi.ime.KeyRouter
 import xyz.erik.opi.ime.PendingCommit
 import xyz.erik.opi.keyboard.SymbolCatalog
@@ -36,7 +36,6 @@ import xyz.erik.opi.keyboard.RareIndex
 import xyz.erik.opi.settings.ImePreferences
 import java.io.File
 import java.io.IOException
-import kotlin.math.min
 // 编辑器信息的两条纯判定（isPasswordEditor / enterDecision）已拆到 EditorInfoRules.kt
 //（2026-10-10，500 行门禁；同包，无需 import）。
 /** OPI IME 宿主：ComposeView 作为输入视图，面板状态在 ImeState（A3/A4 填 UI）。 */
@@ -118,25 +117,6 @@ class OpiImeService : InputMethodService() {
 
     companion object {
         private const val TAG = "OpiImeService"
-        /** 键区高度占可用窗口短边的比例（对齐 flutter ime_main.dart 的 0.42）。 */
-        private const val KEY_AREA_RATIO = 0.48
-        /**
-         * 键区在比例基数之外额外加的高度（dp）。
-         *
-         * 原为裸像素 168，注释称它是「底部安全区（按键上移、背景延伸到底）」—— 实测不成立：
-         * 窗口高度是常量，多出来的 168px 被 ImeScreen 里 4 行 weight(1f) 均分掉了，底行键
-         * 照样画到窗口最底（本机实测键底 y=2270，窗口底 y=2400）。真正把键区抬到手势条之上
-         * 的是**系统导航栏 inset**（本机实测 129px，decorFitsSystemWindows 自动下的 padding），
-         * 与这个常量无关，所以这里不需要再留"安全区"。
-         * 它现在的身份就是「键区加高」，按 dp 取实测等效值。
-         * 2026-10-09 用户裁决「整体布局 UI 太小，没有主流输入法移动端显示大」：
-         * 64 → 76dp（连同比率 0.42 → 0.48），本机 1080×2400 实测键盘总高
-         * **736px → 843px**（占屏 30.7% → 35.1%，往主流输入法/GBoard 的 40% 量级靠）；
-         * 键行 ≈91px → ≈106px、字母字号 18 → 21sp（见 NineKeyKeyboard/KeyButton）。
-         * 裸像素在 density 1.0 上是 199dp、3.5 上是 57dp，差 3.5 倍。
-         */
-        private const val KEY_AREA_EXTRA_DP = 76
-
         /** 悬浮/游戏模式下窗口宽度占屏宽的比例（收窄居中，见 applyKeyboardWindow）。 */
         private const val FLOATING_WIDTH_RATIO = 0.86f
         /** 游戏模式的窗口高度相对常规键盘高度的比例（更矮，少挡画面）。 */
@@ -144,33 +124,19 @@ class OpiImeService : InputMethodService() {
     }
 
     /**
-     * IME 窗口高度 = 键区 + 候选栏预留高度（px）。
+     * IME 窗口高度 = 键区 + 候选栏预留高度（px），计算见 [ImeWindowMetrics]。
      *
      * 候选栏必须计入：它在 ImeScreen 里是**固定挂载**的（见那里的注释），不吃窗口高度就会
      * 从 4 行键里抢走 44dp —— 本机实测候选栏一出现键高 117px → 89px、整块键盘下沉 116px、
      * 每个词跳两次。
      *
-     * 代价（刻意的取舍，别为了数字好看改回去）：窗口多出候选栏那 44dp ——
-     * 竖屏实测 621→736px、占屏 25.9%→30.7%（Gboard 约 40%，同量级）；
-     * **横屏键区占屏高由 57% 升到 68%，未在真横屏机上验**。
-     * 换成"从键区里扣 44dp"会让键高锁死在 34dp，低于 44dp 触控目标，所以不换。
+     * 2026-10-22：比例/额外高度与横屏、平板、分屏的上限搬进 [ImeWindowMetrics]（纯函数，
+     * 有 `ImeWindowMetricsTest` 门禁）。横屏原值占屏高 77%，现封顶 60%；平板封顶 340dp。
+     * 竖屏手机的像素与 2026-10-09 裁决的「736→843px」不变（本机口径仍约 831px）。
      */
     private fun keyboardHeight(): Int {
-        val density = resources.displayMetrics.density
         val (w, h) = windowSizePx()
-        // 横屏 0.42×宽 会超屏高（2400×0.42 > 1080），底行面板切换键被裁出屏外；
-        // 基数取短边，再钳制在可用窗口高度内。
-        val side = min(w, h)
-        val keyArea = (side * KEY_AREA_RATIO).toInt() + (KEY_AREA_EXTRA_DP * density).toInt()
-        // 拼音行（2026-10-15）：它常驻在候选行上方，高度必须一起算进窗口 ——
-        // 不加这一项，键区会把它的高度吃回去（那正是「条件挂载 vs 常驻槽位」那条
-        // 实测教训的同族：槽位常驻就必须在窗口高度里兑现）。
-        //
-        // 2026-10-16 裁决：候选栏与工具条合并成**一格**（ImeScreen 的共用槽位，
-        // 高 = 工具条那条 44dp）。英文空闲另有特判：否则英文恒走候选栏、工具条
-        // 永远不可见。keyArea 本就包含工具条那 44dp，公式仍是 keyArea + composing。
-        val composing = (COMPOSING_BAR_HEIGHT_DP * density).toInt()
-        return (keyArea + composing).coerceAtMost(h)
+        return ImeWindowMetrics.keyboardHeightPx(w, h, resources.displayMetrics.density)
     }
 
     /**

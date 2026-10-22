@@ -225,6 +225,9 @@ static napi_value JsBuffer(napi_env env, napi_callback_info info) {
     return take_string(env, opi_buffer());
 }
 
+/// displayBuffer(): string —— 显示用缓冲（9 键带分词 `ni'hao`）。⚠️ 行为判定用 buffer。
+static napi_value JsDisplayBuffer(napi_env env, napi_callback_info info) { (void)info; return take_string(env, opi_display_buffer()); }
+
 /// page(): number —— 当前候选页。**页码必须读这里、不要自己数。**
 static napi_value JsPage(napi_env env, napi_callback_info info) {
     (void)info;
@@ -419,6 +422,8 @@ static napi_value JsLoadTrad(napi_env env, napi_callback_info info) { napi_value
 static napi_value JsCandidates(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); uint32_t limit = 0; if (n >= 1) { (void)napi_get_value_uint32(env, a[0], &limit); } return take_string(env, opi_candidates((size_t)limit)); }
 static napi_value JsSelect(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); uint32_t index = 0; if (n >= 1) { (void)napi_get_value_uint32(env, a[0], &index); } return take_string(env, opi_select((size_t)index)); }
 static napi_value JsRemoveUserWord(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); size_t len = 0; char16_t *p = (n >= 1) ? js_to_utf16(env, a[0], &len) : NULL; opi_remove_user_word((const uint16_t *)p, len); free(p); return ret_undefined(env); }
+/// clearUserWords(): void —— 清空学习积累的全部用户词（不动词库与当前缓冲）。
+static napi_value JsClearUserWords(napi_env env, napi_callback_info info) { (void)info; opi_clear_user_words(); return ret_undefined(env); }
 
 // ============================================================================
 // 模块注册
@@ -434,6 +439,7 @@ static napi_value OpiImeInit(napi_env env, napi_value exports) {
         {"candidates", NULL, JsCandidates, NULL, NULL, NULL, napi_default, NULL},
         {"select", NULL, JsSelect, NULL, NULL, NULL, napi_default, NULL},
         {"buffer", NULL, JsBuffer, NULL, NULL, NULL, napi_default, NULL},
+        {"displayBuffer", NULL, JsDisplayBuffer, NULL, NULL, NULL, napi_default, NULL},
         {"page", NULL, JsPage, NULL, NULL, NULL, napi_default, NULL},
         {"pageCount", NULL, JsPageCount, NULL, NULL, NULL, napi_default, NULL},
         {"clear", NULL, JsClear, NULL, NULL, NULL, napi_default, NULL},
@@ -444,6 +450,7 @@ static napi_value OpiImeInit(napi_env env, napi_value exports) {
         {"learnerEnabled", NULL, JsLearnerEnabled, NULL, NULL, NULL, napi_default, NULL},
         {"setLearner", NULL, JsSetLearner, NULL, NULL, NULL, napi_default, NULL},
         {"removeUserWord", NULL, JsRemoveUserWord, NULL, NULL, NULL, napi_default, NULL},
+        {"clearUserWords", NULL, JsClearUserWords, NULL, NULL, NULL, napi_default, NULL},
         {"toggleFullwidth", NULL, JsToggleFullwidth, NULL, NULL, NULL, napi_default, NULL},
         {"fullwidthState", NULL, JsFullwidthState, NULL, NULL, NULL, napi_default, NULL},
         {"toggleSymbol", NULL, JsToggleSymbol, NULL, NULL, NULL, napi_default, NULL},

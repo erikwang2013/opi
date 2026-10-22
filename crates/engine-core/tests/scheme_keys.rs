@@ -259,8 +259,8 @@ fn set_scheme_clears_the_display_reading() {
     assert_eq!(e.display_buffer(), "", "换方案后读数必须为空");
 }
 
-/// 非 9 键方案：显示缓冲 = 实际缓冲，逐字节相同（26/14 键的字母串本来就是拼音，
-/// 别的端（fcitx5/TSF）读到的必须与改动前一致）。
+/// 非 9 键方案：26 键显示按音节分词（单音节输入与缓冲逐字节相同），14 键仍是原文。
+/// `buffer()` 本体不动 —— 别的端（fcitx5/TSF）的**行为判定**读它。
 #[test]
 fn display_buffer_is_raw_outside_nine() {
     let mut e = engine();

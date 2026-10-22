@@ -36,8 +36,8 @@
 //!    门禁：import_only_entries_take_rank_above_ordinary_builtin、
 //!    learned_words_still_beat_import_layer、duplicate_word_takes_max_freq（重写版）。
 //! 6. **超时兜底（2026-10-18 重构）**：导入层扫描**每键共享一份预算**
-//!    （`dict_budget`：总账 50ms、初始导入上限 40ms），逐条可抢占（每 64 条查一次
-//!    截止）；base 查询之后还会按「总账 − 15ms 后处理 − 已耗时」动态收紧，宽前缀
+//!    （`dict_budget`：2026-10-22 起总账 30ms、初始导入上限 20ms），逐条可抢占（每 64 条查一次
+//!    截止）；base 查询之后还会按「总账 − 20ms 后处理 − 已耗时」动态收紧，宽前缀
 //!    下导入层提前停。超时 ⇒ 导入层结果**整体丢弃**、本轮纯内置，不粘滞。口子
 //!    `Engine::set_import_scan_budget`（None = 不设限）。
 //!    门禁：import_scan_over_budget_falls_back_to_builtin_only、
@@ -60,20 +60,20 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-/// 导入层扫描的时延截止（2026-10-17 用户裁决「如果响应时间超过 50ms 就优先使用
-/// 自带词库」）。
+/// 导入层扫描的时延截止（2026-10-17 用户裁决「响应超时就优先使用自带词库」；
+/// 2026-10-22 总账由 50ms 收紧到 30ms）。
 ///
-/// 取 40ms 而不是 50：50ms 是**总账**（`docs/performance.md` 按键反馈 10–50ms
-/// 的上限），截止之外还要给内置查询与候选装配留余量；扫描独占 40ms ⇒ 最坏情况
-/// 整个查询仍在 50ms 内。
+/// 取 20ms 而不是 30：30ms 是**总账**（`docs/performance.md` 键反馈 <30ms 的上限），
+/// 截止之外还要给内置查询与候选装配留余量；扫描独占 20ms ⇒ 最坏情况整个查询仍在
+/// 30ms 内。
 ///
 /// 2026-10-18：截止不再由每次 `Dictionary` 调用各建一份，而是由 `dict_budget`
 /// 在**每键查询入口**建一份、所有查询家族共享；`trie` 走可停止遍历，扫描逐条
 /// 可抢占（每 64 条查一次），单层不再「层内不可中断」。
-/// 本值是**初始上限**：base 查询之后还会按「总账 50ms − 15ms 后处理 − 已耗时」
+/// 本值是**初始上限**：base 查询之后还会按「总账 30ms − 20ms 后处理 − 已耗时」
 /// 动态收紧（`import_deadline_dynamic`），宽前缀/慢 base 时导入层提前停。
 /// 超时 ⇒ 导入层结果**整体丢弃**，本轮走纯内置；**不粘滞**（下一键重新计时）。
-pub(crate) const IMPORT_SCAN_BUDGET: Duration = Duration::from_millis(40);
+pub(crate) const IMPORT_SCAN_BUDGET: Duration = Duration::from_millis(20);
 
 /// 系统库 + 导入层（见模块头）。
 pub(crate) struct LayeredDictionary {
@@ -111,7 +111,7 @@ impl LayeredDictionary {
         dict_budget::import_deadline(&self.query_budget, self.import_scan_budget)
     }
 
-    /// base 查询之后的动态截止：总账 50ms − 15ms 后处理 − 已耗时（见 `dict_budget`）。
+    /// base 查询之后的动态截止：总账 30ms − 20ms 后处理 − 已耗时（见 `dict_budget`）。
     fn import_deadline_dynamic(&self) -> Option<Instant> {
         dict_budget::import_deadline_dynamic(&self.query_budget, self.import_scan_budget)
     }
@@ -211,7 +211,7 @@ impl Dictionary for LayeredDictionary {
             return base;
         }
         let Some(mut idx) = self.extra_index(pinyin, self.import_deadline_dynamic()) else {
-            // 超预算：本轮纯内置（2026-10-17 裁决「超过 50ms 就优先使用自带词库」）。
+            // 超预算：本轮纯内置（2026-10-17 裁决「超时就优先使用自带词库」；2026-10-22 总账 30ms）。
             return base;
         };
         if idx.is_empty() {
@@ -289,6 +289,12 @@ impl Dictionary for LayeredDictionary {
     fn visit_entries(&self, f: &mut dyn FnMut(&str, &str, u32)) {
         // 实现在 `dict_layers_visit.rs`（500 行门禁拆出）；trait impl 只能有一处。
         self.visit_entries_budgeted(f);
+    }
+
+    /// 前缀区间遍历：base 走 `visit_prefix`（mmap 二分区间），导入层同区间合并 ——
+    /// 默认实现会全表扫描再过滤，见 `visit_prefix_budgeted` 头注。
+    fn visit_prefix(&self, prefix: &str, f: &mut dyn FnMut(&str, &str, u32)) {
+        self.visit_prefix_budgeted(prefix, f);
     }
 
     /// 按键类展开（9/14 键）：base 的区间枚举覆写照旧调用（**不落回全表扫描** ——

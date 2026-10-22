@@ -22,6 +22,7 @@ import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -66,7 +67,9 @@ fun KeyButton(
             .fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, fontSize = fontSize, maxLines = 1, color = fg)
+        // Ellipsis：窄屏单手/320dp 下「生僻字」「英文」这类多字键不再被硬裁成半个字
+        // （读者仍能看出是哪个键；完整读屏名走 contentDescription）。
+        Text(label, fontSize = fontSize, maxLines = 1, overflow = TextOverflow.Ellipsis, color = fg)
     }
 }
 

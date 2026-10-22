@@ -3,7 +3,7 @@
 //
 // `opi-ctl`：桌面状态栏（desktop-ui 用 ProcessBuilder 按名字调 /usr/bin/opi-ctl）
 // 与 fcitx5-opi 插件之间的**唯一** CLI 面。动作集是**冻结契约**（任务书）：
-//     opi-ctl symbols|trad|punct|fullwidth|lang    （动作：会改状态）
+//     opi-ctl symbols|trad|punct|fullwidth|lang|englishpro|clearuserwords （动作：会改状态）
 //     opi-ctl insert <文本>                        （大页面的上屏通道，2026-10-12 加）
 //     opi-ctl mode                                 （模式循环，2026-10-14 用户裁决加）
 //     opi-ctl state                                 （只读查询，2026-10-10 用户裁决加）
@@ -86,13 +86,16 @@ const IFACE: &str = "org.fcitx.Fcitx5.Opi1";
 // 冻结的动作集（顺序即 usage 里印的顺序）。state 不在其中 —— 它不改状态，
 // 走的是另一条协议（见文件头），单独分派。**mode 也不在其中**（2026-10-14）：
 // 它改状态，但成功应答是状态 token 而不是 "ok"，与 insert 一样单独分派。
-const ACTIONS: [&str; 6] = [
+const ACTIONS: [&str; 7] = [
     "symbols",
     "trad",
     "punct",
     "fullwidth",
     "lang",
     "englishpro",
+    // 2026-10-23：设置窗「清空用户词」（引擎学习记忆）。服务端分支见
+    // cpp/opi_engine.h 的 clearuserwords；两端动作名必须逐字一致。
+    "clearuserwords",
 ];
 
 fn main() {
@@ -156,7 +159,7 @@ fn run() -> i32 {
 
 fn usage() {
     eprintln!(
-        "usage: opi-ctl symbols|trad|punct|fullwidth|lang|englishpro|mode [insert <文本>] | state | search <关键词>"
+        "usage: opi-ctl symbols|trad|punct|fullwidth|lang|englishpro|clearuserwords|mode [insert <文本>] | state | search <关键词>"
     );
 }
 

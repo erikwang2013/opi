@@ -96,8 +96,8 @@ impl Engine {
         self.dict.extras_list()
     }
 
-    /// 改导入层扫描预算（2026-10-17 裁决「超过 50ms 就优先使用自带词库」的口子）：
-    /// `None` = 不设限，缺省 = `dict_layers::IMPORT_SCAN_BUDGET`（40ms，代数见那里）。
+    /// 改导入层扫描预算（2026-10-17 裁决「超时就优先使用自带词库」的口子；2026-10-22 总账 30ms）：
+    /// `None` = 不设限，缺省 = `dict_layers::IMPORT_SCAN_BUDGET`（20ms，代数见那里）。
     /// **不重算 boost** —— 预算与词频表无关。
     pub fn set_import_scan_budget(&mut self, budget: Option<std::time::Duration>) {
         self.dict.set_import_scan_budget(budget);

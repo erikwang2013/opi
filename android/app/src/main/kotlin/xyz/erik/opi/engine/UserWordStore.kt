@@ -167,6 +167,39 @@ class UserWordStore(
     private var loaded = false
 
     /**
+     * 清除**落盘**用户词（设置页「清除用户词库」的落盘半边；引擎内存由
+     * `OpiEngine.clearUserWords()` 负责）。
+     *
+     * 三步各有成因：
+     * 1. [invalidate] 作废「已导出、尚未 rename」的在途快照 —— 否则它可能在删除
+     *    **之后**才落地，重启又把旧词导回来（[UserWordStoreRaceTest] 的同一形态）；
+     * 2. 取消**所有**已装载实例的防抖保存：设置页与 IME 是同进程两个实例，只清自己
+     *    那个的话，IME 侧排着的回调会在清词后重新写一份文件；
+     * 3. 删除排在实例的 io 队列上（生产 = 进程级共享单线程）⇒ 一定在已入队的写盘
+     *    之后执行；删除失败走 [onWriteFailure]，不静默。
+     *
+     * 与 [invalidate] 同一条线程纪律：只在主线程调用（[live] 里的实例都在主线程
+     * 排保存）。
+     */
+    fun clearPersisted() {
+        invalidate()
+        // 自己这个实例不一定 load() 过（设置页那只就只做导入）—— 先取消自己的，
+        // 再取消所有已装载实例（IME 那只）的防抖保存。
+        cancelPendingSave()
+        val stores = synchronized(live) { live.keys.toList() }
+        stores.forEach { it.cancelPendingSave() }
+        io.execute {
+            if (file.exists() && !file.delete()) onWriteFailure("delete ${file.name} failed")
+        }
+    }
+
+    /** 取消本实例防抖窗口里的保存（不落盘）。主线程（同 [scheduleSave]）。 */
+    private fun cancelPendingSave() {
+        pending?.invoke()
+        pending = null
+    }
+
+    /**
      * 启动导入（引擎装载后调用一次，主线程）。文件缺失/不可读/JSON 非法/引擎不可用
      * 一律静默降级。
      *

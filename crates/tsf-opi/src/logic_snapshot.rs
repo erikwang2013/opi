@@ -11,6 +11,7 @@
 //!
 //! 从 `logic.rs` 拆出守 500 行；纯逻辑、主机可单测（见文件末）。
 
+use engine_core::candidates::Candidate;
 use engine_core::composer::Mode;
 
 use crate::logic::{PAGE_SIZE, TsfLogic};
@@ -27,6 +28,49 @@ pub struct StateSnapshot {
 }
 
 impl TsfLogic {
+    /// 作废一次抓取缓存。编辑/提交经 `reset_page_if_buffer_changed`；设置位入口在
+    /// `logic_settings.rs` / `logic_shift.rs` 各自调（它们改候选集但不动 buffer）。
+    pub(crate) fn invalidate_fetch_cache(&mut self) {
+        self.fetch_cache.get_mut().take();
+    }
+
+    /// 取走与当前 (buffer, pending) 匹配的缓存（**一次性**）。
+    pub(crate) fn take_fetch_cache(&self) -> Option<Vec<Candidate>> {
+        let key = self.fetch_key();
+        let mut slot = self.fetch_cache.borrow_mut();
+        let hit = slot
+            .as_ref()
+            .is_some_and(|(b, p, _)| b == &key.0 && p == &key.1);
+        if hit {
+            slot.take().map(|(_, _, list)| list)
+        } else {
+            // 键不匹配的旧表不再可能有用（编辑/设置位都走失效），别留着。
+            slot.take();
+            None
+        }
+    }
+
+    /// 缓存命中则只数条数，不重排。
+    pub(crate) fn cached_page_count(&self) -> Option<usize> {
+        let key = self.fetch_key();
+        let cache = self.fetch_cache.borrow();
+        let (b, p, list) = cache.as_ref()?;
+        (b == &key.0 && p == &key.1).then(|| list.len().div_ceil(PAGE_SIZE))
+    }
+
+    /// 留下全量表给紧接着的 `fetched()`，返回页数。
+    pub(crate) fn store_fetch_cache(&self, list: Vec<Candidate>) -> usize {
+        let count = list.len().div_ceil(PAGE_SIZE);
+        let key = self.fetch_key();
+        *self.fetch_cache.borrow_mut() = Some((key.0, key.1, list));
+        count
+    }
+
+    /// 缓存键与 fcitx5 轨同口径：真缓冲 + 已确认的逐字片段。
+    fn fetch_key(&self) -> (String, String) {
+        (self.engine.buffer().to_string(), self.engine.pending_text())
+    }
+
     /// 锁内调用，**只碰引擎**（不碰 sink/COM）。一次 `fetched()` 同时算候选与页数
     /// （2026-10-18：此前各算一次，每键整份排序两遍）。
     pub fn snapshot(&self) -> StateSnapshot {
@@ -70,6 +114,7 @@ mod tests {
             english_pro: true,
             last_printable: None,
             shift_toggle: true,
+            fetch_cache: Default::default(),
         };
         s.refresh_snapshot();
         for c in ['q', 'w', 'x'] {
@@ -83,7 +128,10 @@ mod tests {
         let mut s = state();
         s.next_page();
         let snap = s.snapshot();
-        assert_eq!(snap.buffer, "qwx");
+        // 显示串走 Engine::display_buffer（全键盘自动分词）：qwx → q'w'x；行为判定
+        // 仍读 engine.buffer()，分段只影响候选窗上那一行拼音。
+        assert_eq!(snap.buffer, "q'w'x");
+        assert_eq!(s.engine.buffer(), "qwx");
         assert_eq!(snap.page, 1);
         assert_eq!(snap.page_count, 3);
         assert_eq!(snap.candidates, &s.candidates()[..]);

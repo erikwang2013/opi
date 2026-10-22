@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -32,6 +33,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -59,7 +61,8 @@ fun RarePanel(
     Column(modifier = modifier.fillMaxSize().background(p.panelBg)) {
         // 面包屑/标题行
         Row(
-            modifier = Modifier.fillMaxWidth().height(40.dp).padding(horizontal = 8.dp),
+            // heightIn(min)：长标题/大字号时行可长高，不把 14sp 面包屑上下裁掉。
+            modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp).padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val title = when {
@@ -67,7 +70,14 @@ fun RarePanel(
                 strokes == null -> "生僻字 · ${RareIndex.radicalGlyph(radical!!)}（部首 $radical）· 选笔画数"
                 else -> "生僻字 · 部首 $radical · $strokes 画"
             }
-            Text(title, fontSize = 14.sp, color = p.panelFg, modifier = Modifier.weight(1f))
+            Text(
+                title,
+                fontSize = 14.sp,
+                color = p.panelFg,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             // 回退：笔画 → 部首；部首 → 关闭由 onClose 管
             if (radical != null) {
                 Text(
@@ -93,8 +103,10 @@ fun RarePanel(
             )
         }
         when {
+            // Adaptive(40dp)：手机 320dp 仍是 8 列，平板/横屏自动多排（Fixed(8) 在
+            // 800dp 平板上每格 100dp，部首字悬在空框中间）。
             radical == null -> LazyVerticalGrid(
-                columns = GridCells.Fixed(8),
+                columns = GridCells.Adaptive(40.dp),
                 modifier = Modifier.weight(1f).fillMaxWidth(),
             ) {
                 items((1..RareIndex.MAX_RADICAL).toList()) { r ->
@@ -133,7 +145,7 @@ fun RarePanel(
             else -> {
                 val chars = RareIndex.chars(index, radical!!, strokes!!)
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(8),
+                    columns = GridCells.Adaptive(40.dp),
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     verticalArrangement = Arrangement.Top,
                 ) {

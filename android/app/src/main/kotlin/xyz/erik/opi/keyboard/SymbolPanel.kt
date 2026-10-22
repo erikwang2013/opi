@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -251,7 +252,11 @@ internal fun SymbolCell(text: String, onTap: (String) -> Unit, fontSize: TextUni
 /**
  * 惰性符号网格（全量条目数千，count 构建不展开）。
  *
- * @param columns 列数（emoji/符号 8 列；颜文字更宽，传 3）。
+ * 列数由**格子最小宽度**推（`GridCells.Adaptive`），而不是写死列数：320dp 手机
+ * 仍是 8 列，平板/横屏会自动排更多列（否则 1280dp 宽上 8 列每格 160dp，字悬在
+ * 巨大空格中间）。低列数页面（颜文字 3 列）靠传更大的 [minCell] 保持原列数。
+ *
+ * @param minCell 每格最小宽度（emoji/符号 40dp ≈ 原 8 列；颜文字 96dp ≈ 原 3 列）。
  * @param fontSize 条目字号（多字符 token 传小一号，少截断）。
  */
 @Composable
@@ -259,11 +264,11 @@ internal fun SymbolGrid(
     entries: List<String>,
     onTap: (String) -> Unit,
     state: LazyGridState = rememberLazyGridState(),
-    columns: Int = 8,
+    minCell: Dp = 40.dp,
     fontSize: TextUnit = 20.sp,
 ) {
     LazyVerticalGrid(
-        columns = GridCells.Fixed(columns),
+        columns = GridCells.Adaptive(minCell),
         state = state,
         modifier = Modifier.fillMaxSize(),
     ) {

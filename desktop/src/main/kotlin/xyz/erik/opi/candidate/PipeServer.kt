@@ -51,8 +51,14 @@ private const val MAX_INSTANCES = 1
  * 「有数据才 ReadFile」的轮询间隔。**不能用阻塞 ReadFile**：同步命名管道句柄上
  * 未完成的 ReadFile 会把同句柄的 WriteFile 串行化 —— TSF 按键线程的第二次 show
  * 会永久阻塞，宿主 UI 冻住（2026-10-21 真机：n 出候选窗后 i 不再响应）。
+ *
+ * 这个间隔**直接加在按键→候选窗的延迟上**（TSF 写 show 后本线程才醒）：
+ * 20ms 在现代机器上通常睡 20–31ms，单这一跳就吃掉 30ms 预算的 ⅔。2ms 的
+ * PeekNamedPipe 是廉价系统调用，500 次/秒的唤醒成本可忽略。
+ * shortcut: Windows 默认计时器粒度可能把 2ms 合并成 ~15.6ms（无进程 raise timer
+ * resolution）；要再压到 1ms 级需改用 overlapped ReadFile + 高精度等待。
  */
-private const val READ_POLL_MS = 20L
+private const val READ_POLL_MS = 2L
 
 /** ConnectNamedPipe 返回 0 时的「客户端已抢先连上」错误码 —— 属正常，不是故障。 */
 private const val ERROR_PIPE_CONNECTED = 535

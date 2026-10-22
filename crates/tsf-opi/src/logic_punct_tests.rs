@@ -47,6 +47,7 @@ fn punct_state() -> TsfLogic {
         english_pro: true,
         last_printable: None,
         shift_toggle: true,
+        fetch_cache: Default::default(),
     };
     s.switch_mode(Mode::Pinyin);
     s
@@ -254,6 +255,7 @@ fn punctuation_flush_resets_page_to_first() {
         english_pro: true,
         last_printable: None,
         shift_toggle: true,
+        fetch_cache: Default::default(),
     };
     s.switch_mode(Mode::Pinyin);
     typed(&mut s, "hao");

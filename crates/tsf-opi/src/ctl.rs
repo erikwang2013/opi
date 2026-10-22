@@ -44,7 +44,7 @@ use crate::logic::TsfLogic;
 
 /// 通道里能代表「本输入法」的唯一名（桌面据此判断状态栏该不该显示）。
 pub const IM_NAME: &str = "opi";
-/// 动作名上限（当前最长 `englishpro`，留余量）。
+/// 动作名上限（当前最长 `clearuserwords`，留余量）。
 const MAX_ACTION: usize = 64;
 /// 搜索关键字上限（与 Linux 桌面搜索框的实际输入同量级）。
 const MAX_QUERY: usize = 256;
@@ -214,6 +214,11 @@ pub fn execute(
             "englishpro" => {
                 let on = !logic.english_pro();
                 logic.set_english_pro(on);
+                Ok(action_reply(None))
+            }
+            // 清空用户词（学习记忆）；候选集会变，`on_ctl` 按 Action 自动刷新。
+            "clearuserwords" => {
+                logic.clear_user_words();
                 Ok(action_reply(None))
             }
             // 模式循环：拼音(全拼) → 五笔 → en26 → 拼音（与 `opiCtlCycleMode` 同序）。

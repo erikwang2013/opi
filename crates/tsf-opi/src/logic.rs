@@ -17,6 +17,8 @@
 //! `candidate.rs`（状态 + 分页），子模块 `input_method`（`logic_input_method.rs`）
 //! = fcitx5 轨的 `input_method.rs`（键路由）。
 
+use std::cell::RefCell;
+
 use engine_core::Engine;
 use engine_core::candidates::Candidate;
 use engine_core::composer::Mode;
@@ -71,6 +73,10 @@ pub struct TsfLogic {
     /// 也认）：**只被胶水的 Shift 三拍读**（`tsf_shift.rs`），不参与 `input_key` ——
     /// 两轨 Rust 键路由必须逐事件同构（`two_track_parity`）。默认开（与 Linux 一致）。
     pub(crate) shift_toggle: bool,
+    /// 一次抓取缓存（镜像 fcitx5 轨 `CandidateState::fetch_cache`，2026-10-22 性能）：
+    /// 翻页键 `page_count()` 留下的全量表由紧接着的 `snapshot()/fetched()` 消费一次，
+    /// 让一次 PageDown 只排一遍全量候选。键 = (真缓冲, 逐字片段)。
+    pub(crate) fetch_cache: RefCell<Option<(String, String, Vec<Candidate>)>>,
 }
 
 impl TsfLogic {
@@ -102,6 +108,7 @@ impl TsfLogic {
             english_pro: false,
             last_printable: None,
             shift_toggle: true,
+            fetch_cache: RefCell::new(None),
         };
         s.refresh_snapshot();
         s
@@ -112,7 +119,9 @@ impl TsfLogic {
     }
 
     /// buffer 与快照不一致 → 页码归零（与 Android 语义一致），再刷新快照。
+    /// 所有编辑/提交/装载入口都以本方法收尾 ⇒ 一次抓取缓存也在这里统一作废。
     fn reset_page_if_buffer_changed(&mut self) {
+        self.invalidate_fetch_cache();
         if self.engine.buffer() != self.buffer_snapshot {
             self.page = 0;
         }
@@ -125,13 +134,21 @@ impl TsfLogic {
         !self.engine.buffer().is_empty() || !self.engine.pending_text().is_empty()
     }
 
-    /// 候选窗**显示用**：已确认的逐字片段 + 真缓冲（2026-10-17 逐字确认）。
-    /// `buffer()` 保持真缓冲语义不动（门禁钉着它；配对：fcitx5-opi candidate.rs 的
-    /// 同名方法，逐行同构）。
+    /// 候选窗**显示用**：委托 `Engine::display_buffer()`（逐字片段 + 带分词的拼音
+    /// 读数，9/14 键为 `ni'hao` 而非键位串）。`buffer()` 保持真缓冲语义不动
+    /// （门禁钉着它；配对：fcitx5-opi candidate.rs 的同名方法，逐行同构）。
     pub fn display_buffer(&self) -> String {
-        let mut out = self.engine.pending_text();
-        out.push_str(self.engine.buffer());
-        out
+        let shown = self.engine.display_buffer();
+        // 9/14 键的读数由 `candidates()` 填缓存；缓存未就绪（空候选/读在取候选前）时
+        // 只剩逐字片段。退回原始缓冲，数字/按键不得从候选窗消失。
+        if shown.is_empty()
+            || (!self.engine.buffer().is_empty() && shown == self.engine.pending_text())
+        {
+            let mut out = self.engine.pending_text();
+            out.push_str(self.engine.buffer());
+            return out;
+        }
+        shown
     }
 
     pub fn buffer(&self) -> String {
@@ -271,6 +288,7 @@ impl TsfLogic {
             eprintln!("tsf-opi: {line}");
         }
         let count = report.dicts.len();
+        self.invalidate_fetch_cache();
         self.engine.set_extra_dicts(report.dicts);
         count
     }
@@ -392,7 +410,14 @@ impl TsfLogic {
     }
 
     /// 批量抓取（FETCH_LIMIT 内；不设上限时 `truncate` 是空操作，排序仍全量）。
+    /// 先消费 `page_count()` 留下的一次抓取缓存（同一 buffer/pending 才有效）。
     pub(crate) fn fetched(&self) -> Vec<Candidate> {
+        if self.fetch_cache.borrow().is_none() {
+            return self.engine.candidates(FETCH_LIMIT);
+        }
+        if let Some(list) = self.take_fetch_cache() {
+            return list;
+        }
         self.engine.candidates(FETCH_LIMIT)
     }
 
@@ -411,8 +436,12 @@ impl TsfLogic {
     }
 
     /// 总页数（无候选 → 0）。
+    /// 未命中缓存则取回全量表并留下给紧接着的 `fetched()`（翻页键只排一遍）。
     pub fn page_count(&self) -> usize {
-        self.fetched().len().div_ceil(PAGE_SIZE)
+        if let Some(count) = self.cached_page_count() {
+            return count;
+        }
+        self.store_fetch_cache(self.engine.candidates(FETCH_LIMIT))
     }
 
     /// 下一页，越界钳制到最后一页；返回新页码。

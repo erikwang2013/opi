@@ -19,6 +19,7 @@ impl TsfLogic {
     /// 普通路径。**装载不换方案**（要用五笔还得 `set_scheme(Wubi)`）。
     /// 配对：``fcitx5-opi/src/candidate.rs`` 的同名方法（两轨同构）。
     pub fn load_wubi(&mut self, path: &str) -> bool {
+        self.invalidate_fetch_cache();
         match engine_data::load_mmap(std::path::Path::new(path)) {
             Ok(d) => {
                 self.engine.set_wubi_dict(Some(Box::new(d)));
@@ -37,22 +38,27 @@ impl TsfLogic {
     /// 完成（四端唯一真源，本层不写第二张表）。
     /// 配对：`fcitx5-opi/src/candidate.rs` 的同名方法（两轨同构，改一处必须改另一处）。
     pub fn set_wubi_style(&mut self, style: engine_core::WubiStyle) {
+        self.invalidate_fetch_cache();
         self.engine.set_wubi_style(style);
     }
 
     pub fn set_wubi_mixed_entry(&mut self, entry: engine_core::WubiMixedEntry) {
+        self.invalidate_fetch_cache();
         self.engine.set_wubi_mixed_entry(entry);
     }
 
     pub fn set_wubi_candidate_limit(&mut self, n: usize) {
+        self.invalidate_fetch_cache();
         self.engine.set_wubi_candidate_limit(n);
     }
 
     pub fn set_wubi_return_style(&mut self, style: engine_core::WubiReturnStyle) {
+        self.invalidate_fetch_cache();
         self.engine.set_wubi_return_style(style);
     }
 
     pub fn set_wubi_auto_commit(&mut self, on: bool) {
+        self.invalidate_fetch_cache();
         self.engine.set_wubi_auto_commit(on);
     }
 
@@ -60,7 +66,16 @@ impl TsfLogic {
     /// `Activate` 与控制面 `reload` 时重读，见 settings.rs 模块头）。
     /// 配对：`fcitx5-opi/src/candidate.rs` 的同名方法（两轨同构，改一处必须改另一处）。
     pub fn set_learner(&mut self, on: bool) {
+        self.invalidate_fetch_cache();
         self.engine.set_learner(on);
+    }
+
+    /// 清空用户词（学习记忆）。候选集参与排名 ⇒ 作废抓取缓存并回第一页。
+    /// 配对：`fcitx5-opi/src/candidate.rs::clear_user_words`。
+    pub fn clear_user_words(&mut self) {
+        self.engine.clear_user_words();
+        self.page = 0;
+        self.invalidate_fetch_cache();
     }
 
     /// 中文标点**配置值**（不是按模式折算后的生效值 —— 设置/状态栏动作翻的是这个）。
@@ -90,12 +105,14 @@ impl TsfLogic {
 
     /// 中文标点开关（值来自 settings.ini 的 `ChinesePunct`）。配对同上。
     pub fn set_chinese_punct(&mut self, on: bool) {
+        self.invalidate_fetch_cache();
         self.engine.set_chinese_punct(on);
     }
 
     /// 模糊音开关（值同上，键 `Fuzzy`）。
     /// 配对：`fcitx5-opi/src/candidate.rs` 的同名方法（两轨同构，改一处必须改另一处）。
     pub fn set_fuzzy(&mut self, on: bool) {
+        self.invalidate_fetch_cache();
         self.engine.set_fuzzy(on);
     }
 
@@ -103,17 +120,20 @@ impl TsfLogic {
     /// `engine_core::fuzzy::pair_names`，解析走 `fuzzy::mask_from_names` —— 唯一一份）。
     /// 配对：`fcitx5-opi/src/candidate.rs` 的同名方法（两轨同构）。
     pub fn set_fuzzy_pairs(&mut self, names: &str) {
+        self.invalidate_fetch_cache();
         self.engine
             .set_fuzzy_pairs(engine_core::fuzzy::mask_from_names(names));
     }
 
     /// 简拼开关。配对同上。
     pub fn set_jianpin(&mut self, on: bool) {
+        self.invalidate_fetch_cache();
         self.engine.set_jianpin(on);
     }
 
     /// 拼音纠错开关（2026-10-13；键 `Correction`）。配对：`fcitx5-opi/src/candidate.rs`。
     pub fn set_correction(&mut self, on: bool) {
+        self.invalidate_fetch_cache();
         self.engine.set_correction(on);
     }
 
@@ -122,6 +142,7 @@ impl TsfLogic {
     /// [`Self::apply_settings`]，用 `shuangpin::layout_index_of_name` 这唯一一份）。
     /// 配对：`fcitx5-opi/src/candidate.rs` 的同名方法（两轨同构）。
     pub fn set_shuangpin_layout(&mut self, index: usize) {
+        self.invalidate_fetch_cache();
         self.engine.set_shuangpin_layout(index);
     }
 
@@ -130,6 +151,7 @@ impl TsfLogic {
     /// `Engine::set_scheme`）；认不得的名字由调用方拦下（`apply_settings`）。
     /// 配对：`fcitx5-opi/src/candidate.rs` 的同名方法（两轨同构）。
     pub fn set_scheme(&mut self, scheme: engine_core::Scheme) {
+        self.invalidate_fetch_cache();
         self.engine.set_scheme(scheme);
     }
 }

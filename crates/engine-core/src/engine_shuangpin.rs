@@ -67,6 +67,8 @@ impl Engine {
                     prefer_simplified: mode == Mode::Pinyin,
                     // 解码结果就是**真拼音**，分词回退/逐音节汤对它照旧有效（既有行为）。
                     segment_fallback: true,
+                    // 组合枚举要在**整串**解码拼音上做；逐解析的中间串关掉（2026-10-23）。
+                    composition: false,
                     // 分档在**合并之后**（见上）—— 这里只收元数据。
                     tiers: false,
                 },

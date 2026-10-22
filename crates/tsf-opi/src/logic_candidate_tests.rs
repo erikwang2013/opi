@@ -21,6 +21,7 @@ fn state() -> TsfLogic {
         english_pro: true,
         last_printable: None,
         shift_toggle: true,
+        fetch_cache: Default::default(),
     };
     s.refresh_snapshot();
     s
@@ -50,6 +51,46 @@ fn eight_candidates_per_page_and_page_count() {
     assert_eq!(s.page_count(), 3);
     assert_eq!(s.candidates()[0], "词00");
     assert_eq!(s.candidates()[7], "词07");
+}
+
+/// 翻页键只取一次全量候选：`page_count()` 留下缓存，紧随其后的 `snapshot()`
+/// 消费它（镜像 fcitx5 轨 `page_turn_fetch_is_reused_by_the_following_candidates`）。
+#[test]
+fn page_turn_fetch_is_reused_by_the_following_snapshot() {
+    let mut s = state();
+    for c in ['q', 'w', 'x'] {
+        s.input_key(c as u32, 0);
+    }
+    assert_eq!(s.next_page(), 1);
+    assert!(
+        s.fetch_cache.borrow().is_some(),
+        "翻页取回后应留下一次抓取缓存"
+    );
+    let snap = s.snapshot();
+    assert_eq!(snap.candidates[0], "词08");
+    assert_eq!(snap.page_count, 3);
+    assert!(
+        s.fetch_cache.borrow().is_none(),
+        "snapshot 必须消费掉缓存（不在按键间常驻全量表）"
+    );
+    assert_eq!(s.page(), 1);
+}
+
+/// 缓存按 (buffer, pending) 绑定：编辑与设置位必须显式作废，否则会拿旧候选。
+#[test]
+fn fetch_cache_is_invalidated_by_edits_and_settings() {
+    let mut s = state();
+    for c in ['q', 'w', 'x'] {
+        s.input_key(c as u32, 0);
+    }
+    assert_eq!(s.page_count(), 3);
+    assert!(s.fetch_cache.borrow().is_some());
+    s.set_fuzzy(true); // 设置位不经过 reset_page_if_buffer_changed
+    assert!(s.fetch_cache.borrow().is_none(), "设置位必须作废缓存");
+    assert_eq!(s.page_count(), 3);
+    s.backspace();
+    assert!(s.fetch_cache.borrow().is_none(), "编辑必须作废缓存");
+    assert_eq!(s.page(), 0);
 }
 
 #[test]
@@ -112,6 +153,7 @@ fn key_state() -> TsfLogic {
         english_pro: true,
         last_printable: None,
         shift_toggle: true,
+        fetch_cache: Default::default(),
     };
     for c in ['q', 'w', 'x'] {
         s.engine.input_key(c);
@@ -309,6 +351,7 @@ fn digit_select_fetches_candidate_table_once() {
         english_pro: true,
         last_printable: None,
         shift_toggle: true,
+        fetch_cache: Default::default(),
     };
     s.refresh_snapshot();
     s.switch_mode(Mode::Pinyin);

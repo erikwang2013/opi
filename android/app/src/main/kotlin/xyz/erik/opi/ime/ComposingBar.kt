@@ -6,7 +6,7 @@ package xyz.erik.opi.ime
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -16,6 +16,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xyz.erik.opi.candidate.composingAnnouncement
@@ -29,6 +30,25 @@ import xyz.erik.opi.keyboard.LocalKeyboardPalette
  * 只在这里定义一次，`OpiImeService` 把它算进 IME 窗口高度、本行自己用它占位。
  */
 const val COMPOSING_BAR_HEIGHT_DP = 38
+
+/**
+ * 顶部槽位是否该画**拼音行**（而不是空闲态的宠物条）。
+ *
+ * 判据 = 显示串/五笔提示非空，**或**引擎仍有缓冲/候选。后两条不是冗余：
+ * · 9 键整段无匹时 `composingText()` 是空串（2026-10-13 裁决不落数字），但用户正在
+ *   输入 —— 槽位必须继续由拼音行占着，不能切回宠物条（那会让拼音行看起来被藏了）；
+ * · 「有候选 ⇒ 有拼音行」是产品硬要求（任务 2026-10-23）：候选出现的那一拍，
+ *   顶部这行绝不能消失或换成装饰条。
+ *
+ * 纯函数，JVM 单测钉住（[ComposingRowVisibilityTest]）。
+ */
+internal fun composingRowActive(
+    composingText: String,
+    wubiHint: String,
+    buffer: String,
+    candidateCount: Int,
+): Boolean = composingText.isNotEmpty() || wubiHint.isNotEmpty() ||
+    buffer.isNotEmpty() || candidateCount > 0
 
 /**
  * **拼音行**（2026-10-15 用户裁决「移动端的拼音在候选词上方显示，不要在输入框里」）。
@@ -56,7 +76,9 @@ fun ComposingBar(controller: EngineController, modifier: Modifier = Modifier) {
     val shown = controller.composingText()
     val hint = controller.wubiHint
     Row(
-        modifier = modifier.fillMaxWidth().height(COMPOSING_BAR_HEIGHT_DP.dp)
+        // heightIn(min)：常规字号下仍是 38dp 的固定槽位（窗口高度按它算）；系统字体
+        // 放到 1.6×/2.0× 时让行自己长高，而不是把 18sp 的字上下裁掉。
+        modifier = modifier.fillMaxWidth().heightIn(min = COMPOSING_BAR_HEIGHT_DP.dp)
             // 空槽不铺底（与候选槽同一条 2026-10-09 裁决）；有拼音时才起一条底色带。
             .let { if (shown.isEmpty() && hint.isEmpty()) it else it.background(p.barBg) },
         verticalAlignment = Alignment.CenterVertically,
@@ -64,6 +86,9 @@ fun ComposingBar(controller: EngineController, modifier: Modifier = Modifier) {
         Text(
             shown,
             modifier = Modifier
+                // fill=false：短缓冲保持固有宽度，五笔提示紧跟在码串后面（原布局）；
+                // 长缓冲（五笔/双拼码串）吃掉剩余宽度并以省略号收尾，不把提示挤出屏幕。
+                .weight(1f, fill = false)
                 .padding(horizontal = 10.dp)
                 .semantics {
                     contentDescription = composingAnnouncement(
@@ -79,12 +104,21 @@ fun ComposingBar(controller: EngineController, modifier: Modifier = Modifier) {
                 },
             fontSize = 18.sp,
             color = p.barBufferFg,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
         // 编码提示（五笔，2026-10-14 接线）：与码串同一行、其后一串暗色小字。
         // 空串 = 非五笔态 / 无接续 ⇒ **不画**（画空 Text 会让布局里多一格、
         // 也会让读屏多念一次空气）。
         if (hint.isNotEmpty()) {
-            Text(hint, fontSize = 13.sp, color = p.barDimFg)
+            Text(
+                hint,
+                modifier = Modifier.padding(end = 8.dp),
+                fontSize = 13.sp,
+                color = p.barDimFg,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

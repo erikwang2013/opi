@@ -222,6 +222,9 @@ extension OpiSettingsWindow {
         confirm.addButton(withTitle: "取消")
         guard confirm.runModal() == .alertFirstButtonReturn else { return }
         OpiEngine.shared.clearUserWords()
+        // 本地缓存（与 Rust 侧同名）：内存已清空，残留文件会让下次启动复活旧词。
+        let cache = OpiEngine.dataDirectory.appendingPathComponent("opi_user_words.json")
+        try? FileManager.default.removeItem(at: cache)
         alert("已清空用户词")
     }
 

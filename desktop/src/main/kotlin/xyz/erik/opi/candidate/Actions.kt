@@ -4,7 +4,8 @@
 //! 状态栏按钮的**外部命令**部分：把点击变成一条命令，并把失败如实报回来。
 //!
 //! 契约（2026-10-10 冻结，Linux 侧由另一条轨实现，本侧**只调用**）：
-//! **`opi-ctl <action>`**，action ∈ `symbols|trad|punct|fullwidth|lang|englishpro|mode`；`opi-ctl` 在
+//! **`opi-ctl <action>`**，action ∈ `symbols|trad|punct|fullwidth|lang|englishpro|mode`
+//! （另有 `clearuserwords`，设置窗经 UserWords.kt 调，不属本文件）；`opi-ctl` 在
 //! `/usr/bin/opi-ctl`（PATH 上，按名调）。`mode`（2026-10-14 加）是**唯一**成功应答
 //! 不是 "ok" 的动作：它回新状态 token（见 [cycleMode]），别按「回 ok 才成功」读它。
 //!

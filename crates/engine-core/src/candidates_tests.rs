@@ -439,3 +439,26 @@ fn whole_input_variant_suppresses_per_syllable_fuzzy() {
         "整串变体命中时逐音节模糊应被跳过（「中」会顶掉「中國」所在的那一槽）：{texts:?}"
     );
 }
+
+/// 声母缩写：主查询前缀为空时才补档（`abbr.rs`）。`nh` 不是任何拼音键的前缀 ⇒ 补；
+/// `nih` 是 `nihao` 的前缀 ⇒ 一个字都不许补（内耗的声母序列也是 n,h）。
+#[test]
+fn abbr_supplements_only_when_prefix_query_is_empty() {
+    let mut d = InMemoryDictionary::new();
+    d.insert("nihao", "你好", 9_000);
+    d.insert("neihao", "内耗", 8_000);
+    let s = no_symbols();
+    let l = Learner::new(false);
+
+    let got = rank_and_pick(&d, &s, &l, "nh", Mode::Pinyin, DEFAULT_TOP_N, USER_BOOST);
+    let texts: Vec<&str> = got.iter().map(|c| c.text.as_str()).collect();
+    assert_eq!(texts, ["你好", "内耗"], "缩写补档：{texts:?}");
+
+    let got = rank_and_pick(&d, &s, &l, "nih", Mode::Pinyin, DEFAULT_TOP_N, USER_BOOST);
+    let texts: Vec<&str> = got.iter().map(|c| c.text.as_str()).collect();
+    assert!(texts.contains(&"你好"), "前缀命中本身要保留：{texts:?}");
+    assert!(
+        !texts.contains(&"内耗"),
+        "主查询非空时缩写档必须闭嘴（否则 nih 会被声母序列 n,i,h 改写）：{texts:?}"
+    );
+}

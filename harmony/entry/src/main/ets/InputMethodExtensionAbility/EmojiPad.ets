@@ -18,10 +18,13 @@ import { KAOMOJI_CATEGORIES } from './KaomojiData';
 import { SearchPad } from './SearchPad';
 import { StickerGrid } from './StickerGrid';
 
-/** 每行几个表情。与 Android `EmojiPanel` 的 8 列同值（两端要一致改）。 */
+/** 手机宽度下的每行表情数（Android 同值）；宽屏由 emojiCols() 最多加到 12 列。 */
 const EMOJI_PER_ROW: number = 8;
-/** 颜文字比单个 emoji 宽：3 列 + 小字号，少截断（Android 同款）。 */
+/** 颜文字更宽：3 列 + 小字号（Android 同款）；宽屏最多 6 列。 */
 const KAOMOJI_PER_ROW: number = 3;
+/** 每列最小宽度（vp）：50/120 让 320–430vp 手机的列数与旧版逐格一致。 */
+const EMOJI_CELL_VP: number = 50;
+const KAOMOJI_CELL_VP: number = 120;
 
 @Component
 export struct EmojiPad {
@@ -48,6 +51,8 @@ export struct EmojiPad {
   @StorageLink('opiSkin') skin: number = 0;
   @StorageLink('opiDark') dark: number = 0;
   @StorageLink('opiElder') elder: number = 0;
+  /** 面板实测宽度（vp）：平板/横屏加列，手机宽度下取值与常量相同。 */
+  @State gridW: number = 360;
 
   private ctrl: KeyboardController = KeyboardController.getInstance();
 
@@ -64,6 +69,19 @@ export struct EmojiPad {
 
   private pal(): Palette {
     return paletteFor(this.skin, this.dark === 1, this.elder === 1);
+  }
+
+  private emojiCols(): number {
+    return Math.min(12, Math.max(EMOJI_PER_ROW, Math.floor(this.gridW / EMOJI_CELL_VP)));
+  }
+
+  private kaomojiCols(): number {
+    return Math.min(6, Math.max(KAOMOJI_PER_ROW, Math.floor(this.gridW / KAOMOJI_CELL_VP)));
+  }
+
+  /** 当前子页的列数（搜索结果换行与末行补位都要与它一致）。 */
+  private cols(): number {
+    return this.subTab === 1 ? this.emojiCols() : this.kaomojiCols();
   }
 
   build() {
@@ -101,6 +119,16 @@ export struct EmojiPad {
       }
     }
     .width('100%').backgroundColor(this.pal().panelBg)
+    .onAreaChange((oldValue: Area, newValue: Area) => {
+      const w: number = newValue.width as number;
+      if (w > 0 && w !== this.gridW) {
+        this.gridW = w;
+        // 搜索结果是按列数切好的二维行：换宽度后按新列数重切。
+        if (this.emojiQuery.length > 0) {
+          this.updateSearch(this.emojiQuery);
+        }
+      }
+    })
   }
 
   // ------------------------------------------------------------ 顶部工具条
@@ -232,10 +260,10 @@ export struct EmojiPad {
             .fontSize(24).layoutWeight(1).textAlign(TextAlign.Center)
             .onClick(() => { this.ctrl.commitText(e); })
         }, (e: string, col: number) => `${col}-${e}`)
-        this.Blanks(EMOJI_PER_ROW - row.length)
+        this.Blanks(this.emojiCols() - row.length)
       }
       .width('100%').margin({ top: rowIndex === 0 ? 4 : 2 })
-    }, (row: string[], rowIndex: number) => `emoji-${rowIndex}-${row.join('')}`)
+    }, (row: string[], rowIndex: number) => `emoji-${this.emojiCols()}-${rowIndex}-${row.join('')}`)
   }
 
   /** 颜文字当前分类的行（3 列 + 14 号字）。 */
@@ -248,10 +276,10 @@ export struct EmojiPad {
             .fontSize(14).layoutWeight(1).textAlign(TextAlign.Center)
             .onClick(() => { this.ctrl.commitText(k); })
         }, (k: string, col: number) => `${col}-${k}`)
-        this.Blanks(KAOMOJI_PER_ROW - row.length)
+        this.Blanks(this.kaomojiCols() - row.length)
       }
       .width('100%').margin({ top: rowIndex === 0 ? 4 : 2 })
-    }, (row: string[], rowIndex: number) => `kaomoji-${rowIndex}-${row.join('')}`)
+    }, (row: string[], rowIndex: number) => `kaomoji-${this.kaomojiCols()}-${rowIndex}-${row.join('')}`)
   }
 
   /** 搜索结果的行：Emoji 8 列 / 20 号字，颜文字 3 列 / 14 号字（Android 同款）。 */
@@ -264,10 +292,10 @@ export struct EmojiPad {
             .fontSize(this.subTab === 1 ? 20 : 14).layoutWeight(1).textAlign(TextAlign.Center)
             .onClick(() => { this.ctrl.commitText(s); })
         }, (s: string, col: number) => `${col}-${s}`)
-        this.Blanks((this.subTab === 1 ? EMOJI_PER_ROW : KAOMOJI_PER_ROW) - row.length)
+        this.Blanks(this.cols() - row.length)
       }
       .width('100%').margin({ top: rowIndex === 0 ? 4 : 2 })
-    }, (row: string[], rowIndex: number) => `search-${rowIndex}-${row.join('')}`)
+    }, (row: string[], rowIndex: number) => `search-${this.cols()}-${rowIndex}-${row.join('')}`)
   }
 
   /** 补齐末行空格，避免最后一行的格子被 `layoutWeight` 拉伸成整行（同 Android 网格）。 */
@@ -329,9 +357,9 @@ export struct EmojiPad {
     }
     if (this.subTab === 1) {
       // `searchEmoji` 已与表情集求交（同 Android `filter(catalog::isEmoji)`）。
-      this.searchRows = this.chunk(this.dedup(searchEmoji(q)), EMOJI_PER_ROW);
+      this.searchRows = this.chunk(this.dedup(searchEmoji(q)), this.emojiCols());
     } else {
-      this.searchRows = this.chunk(this.searchKaomoji(q), KAOMOJI_PER_ROW);
+      this.searchRows = this.chunk(this.searchKaomoji(q), this.kaomojiCols());
     }
   }
 
@@ -397,7 +425,7 @@ export struct EmojiPad {
       const g: EmojiGroup = groups[this.selectedEmojiGroup()];
       list = all.slice(g.start, g.start + g.count);
     }
-    return this.chunk(this.dedup(list), EMOJI_PER_ROW);
+    return this.chunk(this.dedup(list), this.emojiCols());
   }
 
   /** 当前颜文字分类的条目（拼平口径见 KaomojiData.ets 头注）。 */
@@ -405,7 +433,7 @@ export struct EmojiPad {
     if (KAOMOJI_CATEGORIES.length === 0) {
       return [];
     }
-    return this.chunk(KAOMOJI_CATEGORIES[this.selectedKaomojiGroup()].items, KAOMOJI_PER_ROW);
+    return this.chunk(KAOMOJI_CATEGORIES[this.selectedKaomojiGroup()].items, this.kaomojiCols());
   }
 
   /** 颜文字搜索：拼平后按子串过滤、保序去重（Android `contains(ignoreCase)` + distinct）。 */

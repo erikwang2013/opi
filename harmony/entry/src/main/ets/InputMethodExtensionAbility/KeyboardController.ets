@@ -137,8 +137,7 @@ export class KeyboardController {
 
   dictionaryDegraded(): boolean { return this.dictDegraded; }
 
-  /** 装载词库（每进程一次）：rawfile 先由 DictionaryAssets 拷进 `ctx.filesDir`，再把绝对路径交给引擎。
-   * 任一步失败都回退内置库并置 degraded。 */
+  /** 装载词库（每进程一次）：文件拷进 `ctx.filesDir` 后把绝对路径交给引擎；任一步失败回退内置库。 */
   private ensureDictionary(): void {
     if (this.dictLoaded) { return; }
     this.dictLoaded = true;
@@ -223,10 +222,7 @@ export class KeyboardController {
     this.pressKey(OpiEngine.charKeyval(ch), this.shiftStates());
   }
 
-  /**
-   * 9 键「分词」键：缓冲非空时插音节边界 `'`（`xi|an`），空缓冲**拦住** ——
-   * 空缓冲的 `'` 在引擎里是引号而不是分词符（Android ImeScreen onSegment 同款守卫）。
-   */
+  /** 9 键「分词」：缓冲非空时插音节边界 `'`；空缓冲的 `'` 是引号，拦住（Android onSegment 同款）。 */
   tapSegment(): void {
     if (OpiEngine.buffer().length === 0) {
       return;
@@ -243,10 +239,17 @@ export class KeyboardController {
     this.pressKey(OpiEngine.KEY_BACK_SPACE, 0);
   }
 
-  /**
-   * 回车：缓冲非空时提交首候选；空缓冲是已知缺口（需 IME Kit 的「送键给应用」接口，
-   * 本机 SDK 未查证）。别退化成 insertText('\n')——单行框里不等于提交。
-   */
+  /** 长按 ⌫：清空整段组合（不提交）；空缓冲退化成单击（删一格/无操作），不整删宿主。 */
+  tapBackspaceLongPress(): void {
+    if (OpiEngine.buffer().length === 0 && OpiEngine.displayBuffer().length === 0) {
+      this.tapBackspace();
+      return;
+    }
+    OpiEngine.clear();
+    this.publish();
+  }
+
+  /** 回车：缓冲非空提交首候选；空缓冲是已知缺口（缺 IME Kit 送键接口，别退化成上屏 '\n'）。 */
   tapEnter(): void {
     this.pressKey(OpiEngine.KEY_RETURN, 0);
   }
@@ -289,6 +292,12 @@ export class KeyboardController {
     this.publish();
   }
 
+  /** 清除全部用户词（设置页确认后调用）；刷新候选（词频排序会变）。 */
+  clearUserWords(): void {
+    OpiEngine.clearUserWords();
+    this.publish();
+  }
+
   /** 候选栏 ⌄：展开平铺视图（只在有候选时由 UI 提供入口）。 */
   expandTiled(): void {
     KeyboardModes.expandTiled();
@@ -301,14 +310,9 @@ export class KeyboardController {
     this.publish();
   }
 
-  /**
-   * 切模式（中/英/数字/符号）。切之前会清空缓冲，避免带着半截拼音换键盘。
-   *
-   * ⇧ 与引擎 shift 的同步归 `KeyRouter::switch_mode`（单一来源）：**离开** English
-   * 清前端三态；**进入** English 时前端三态是唯一真值 —— SINGLE/LOCK 重推给引擎，
-   * 首个字母大写、single 用掉即复位（四端同一条语义）。
-   * ⚠️ 别在这里再 `setShift(false)`：那会把切换刚重推的引擎位又清掉（首个字母变小写）。
-   */
+  /** 切模式：先清缓冲。⇧ 与引擎 shift 的同步归 `KeyRouter::switch_mode`（单一来源：
+   *  离开 English 清前端三态，进入 English 时重推；single 用掉即复位）。
+   *  ⚠️ 别在这里再 `setShift(false)`：会清掉刚重推的引擎位（首个字母变小写）。 */
   switchMode(m: OpiMode): void {
     if (m !== OpiMode.English) {
       KeyboardModes.leaveEnglishPro();
@@ -328,10 +332,7 @@ export class KeyboardController {
 
   // -------------------------------------------------------------- 输入模式（2026-10-14）
 
-  /**
-   * 选一项输入模式（下标见 InputModes.MODE_*）：换布局 + 方案（+ 语言模式）。
-   * ⚠️ 下面四条转发后都 `publish()`：`setScheme` 会清缓冲，不刷新就是「点了没反应」。
-   */
+  /** 选输入模式（MODE_*）：换布局+方案。⚠️ 转发后都 `publish()`（`setScheme` 清缓冲）。 */
   selectInputMode(index: number): void {
     if (index === InputModes.MODE_RARE) {
       // 生僻字是面板视图（不进引擎、不改键位）。

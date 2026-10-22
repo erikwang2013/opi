@@ -34,6 +34,7 @@ use opi_ffi::cabi::{
     opi_clear_user_words,
     opi_correction_enabled,
     opi_dict_list,
+    opi_display_buffer,
     opi_emoji_groups,
     opi_emoji_symbols,
     opi_enter_action,
@@ -140,6 +141,7 @@ fn every_export_returns_a_sentinel_when_engine_is_not_loaded() {
     unsafe {
         // —— 字符串查询类 ——
         assert_eq!(read(opi_buffer()), "");
+        assert_eq!(read(opi_display_buffer()), "");
         assert_eq!(read(opi_export_user_words()), "");
         assert_eq!(read(opi_symbol_blocks()), "");
         // 表情两出口（2026-10-13）**不走单例**：纯静态表 —— 冷进程里**照样给全量**。

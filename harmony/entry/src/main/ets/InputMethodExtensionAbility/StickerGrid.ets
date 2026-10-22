@@ -10,7 +10,10 @@ import {
 } from './PetStickerImages';
 import { copyStickerToClipboard } from './PetStickerClipboard';
 
+/** 手机宽度下的列数；宽屏按 120vp/列加到最多 6 列（手机 4 列不变）。 */
 const PER_ROW: number = 4;
+const MAX_PER_ROW: number = 6;
+const CELL_VP: number = 120;
 const SIZE: number = 56;
 
 @Component
@@ -18,9 +21,14 @@ export struct StickerGrid {
   @StorageLink('opiSkin') skin: number = 0;
   @StorageLink('opiDark') dark: number = 0;
   @StorageLink('opiElder') elder: number = 0;
+  @State gridW: number = 360;
 
   private pal(): Palette {
     return paletteFor(this.skin, this.dark === 1, this.elder === 1);
+  }
+
+  private perRow(): number {
+    return Math.min(MAX_PER_ROW, Math.max(PER_ROW, Math.floor(this.gridW / CELL_VP)));
   }
 
   build() {
@@ -43,14 +51,20 @@ export struct StickerGrid {
                 );
               })
             }, (f: PetStickerForm, col: number) => `${col}-${f.sticker}`)
-            this.Blanks(PER_ROW - row.length)
+            this.Blanks(this.perRow() - row.length)
           }
           .width('100%').margin({ top: rowIndex === 0 ? 6 : 2 })
-        }, (row: PetStickerForm[], rowIndex: number) => `sticker-${rowIndex}`)
+        }, (row: PetStickerForm[], rowIndex: number) => `sticker-${this.perRow()}-${rowIndex}`)
       }
       .width('100%')
     }
     .layoutWeight(1).width('100%')
+    .onAreaChange((oldValue: Area, newValue: Area) => {
+      const w: number = newValue.width as number;
+      if (w > 0 && w !== this.gridW) {
+        this.gridW = w;
+      }
+    })
   }
 
   @Builder
@@ -62,8 +76,9 @@ export struct StickerGrid {
 
   private rows(): PetStickerForm[][] {
     const out: PetStickerForm[][] = [];
-    for (let i = 0; i < PET_STICKER_FORMS.length; i += PER_ROW) {
-      out.push(PET_STICKER_FORMS.slice(i, i + PER_ROW));
+    const per: number = this.perRow();
+    for (let i = 0; i < PET_STICKER_FORMS.length; i += per) {
+      out.push(PET_STICKER_FORMS.slice(i, i + per));
     }
     return out;
   }

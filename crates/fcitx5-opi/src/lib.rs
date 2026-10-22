@@ -342,8 +342,22 @@ pub unsafe extern "C" fn opi_fcitx5_candidates(limit: usize) -> OpString {
 pub unsafe extern "C" fn opi_fcitx5_buffer() -> OpString {
     ensure_panic_hook();
     let out = catch_unwind(AssertUnwindSafe(|| {
-        // 2026-10-17：显示串（已确认逐字片段 + 真缓冲）—— 预编辑读这里。
+        // 2026-10-17：显示串（已确认逐字片段 + 真缓冲）；全键盘 2026-10-23 起带分词。
         with_state(|s| s.display_buffer()).unwrap_or_default()
+    }))
+    .unwrap_or_default();
+    OpString::from_utf8(&out)
+}
+
+/// # Safety
+///
+/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_raw_buffer() -> OpString {
+    ensure_panic_hook();
+    let out = catch_unwind(AssertUnwindSafe(|| {
+        // 2026-10-23：原文（不分词）—— W1 直接确认/切输入法提交；显示读 buffer。
+        with_state(|s| s.raw_buffer()).unwrap_or_default()
     }))
     .unwrap_or_default();
     OpString::from_utf8(&out)
@@ -394,6 +408,20 @@ pub unsafe extern "C" fn opi_fcitx5_toggle_english_pro() -> bool {
             on
         })
         .unwrap_or(false)
+    }))
+    .unwrap_or(false)
+}
+
+/// 清空用户词（学习记忆）。返回 false = 引擎还没装载（与其余动作出口同义）。
+///
+/// # Safety
+///
+/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_clear_user_words() -> bool {
+    ensure_panic_hook();
+    catch_unwind(AssertUnwindSafe(|| {
+        with_state(|s| s.clear_user_words()).is_some()
     }))
     .unwrap_or(false)
 }

@@ -17,12 +17,9 @@ import java.util.concurrent.Executor
  * 用户词落盘（学习持久化）纯 JVM 测试：真实临时目录 + 注入假防抖/假执行器/假引擎
  * （夹具见 [UserWordStoreTestBase]）。
  *
- * 「能不能区分修复前后」：UserWordStore 本身就是被考察的行为，且每个用例都断言到
- * 「不实现持久化就不可能满足」的点 —— 防抖窗口内 0 次写盘、窗口结束 1 次写盘、
- * 落盘走 io 线程、原子写不留 tmp、各失败路径静默且旧文件完好。
- *
- * 本类只放**单实例**行为；跨实例（IME ↔ 设置页）的数据安全见 [UserWordStoreRaceTest]，
- * 导入上限见 [UserWordStoreReadCapTest]。
+ * 每个用例都断言到「不实现持久化就不可能满足」的点：防抖窗口内 0 次写盘、
+ * 窗口结束 1 次写盘、落盘走 io 线程、原子写不留 tmp、失败路径静默且旧文件完好。
+ * 单实例行为；跨实例见 [UserWordStoreRaceTest]，导入上限见 [UserWordStoreReadCapTest]。
  */
 class UserWordStoreTest : UserWordStoreTestBase() {
 
@@ -324,6 +321,71 @@ class UserWordStoreTest : UserWordStoreTestBase() {
         queued.removeAt(0).run()
 
         assertFalse("设置页清除后，在途写盘不得把旧词写回", f.exists())
+    }
+
+    // ---- 设置页「清除用户词库」：引擎内存 + 落盘文件两半都要清（任务 2026-10-23）----
+
+    @Test
+    fun clearPersistedDeletesTheFile() {
+        val f = target().apply { writeText("""{"ni":3}""") }
+
+        store(f).clearPersisted()
+
+        assertFalse("清除用户词后落盘文件必须消失（否则重启又被导入）", f.exists())
+    }
+
+    @Test
+    fun clearPersistedCancelsPendingDebouncedSave() {
+        val f = target()
+        val engine = FakeEngine().apply { export = """{"ni":3}""" }
+        val deb = FakeDebouncer()
+        val s = store(f, engine, deb)
+
+        s.scheduleSave() // 防抖窗口里：尚未导出
+        s.clearPersisted()
+        deb.fire() // 已被取消 ⇒ 不许再导出/写盘
+
+        assertEquals("取消的防抖不许再导出旧词", 0, engine.exportCalls)
+        assertFalse(f.exists())
+    }
+
+    @Test
+    fun clearPersistedCancelsPendingSavesOfOtherInstances() {
+        // 设置页与 IME 是同进程两个实例：清词只取消自己那个回调的话，IME 侧排着的
+        // 保存会在清除后重新写回文件 —— 重启后「已清除」又被撤销。
+        val f = target()
+        val imeEngine = FakeEngine().apply { export = """{"ni":3}""" }
+        val imeDeb = FakeDebouncer()
+        val ime = store(f, imeEngine, imeDeb)
+        ime.load() // 生产里 IME 实例就是 load() 过的（live 注册）
+        val settings = store(f, FakeEngine(), FakeDebouncer())
+
+        ime.scheduleSave()
+        settings.clearPersisted()
+        imeDeb.fire()
+
+        assertEquals("IME 侧的防抖保存必须被取消", 0, imeEngine.exportCalls)
+        assertFalse(f.exists())
+    }
+
+    @Test
+    fun clearPersistedOrdersDeleteAfterInFlightWrite() {
+        // 「已导出、尚未 rename」的旧快照：invalidate 让它自己作废；删除排在共享 io
+        // 队列尾（= 在途写盘之后），两者叠加才能保证文件真的不在了。
+        val f = target()
+        val engine = FakeEngine().apply { export = """{"OLD":1}""" }
+        val deb = FakeDebouncer()
+        val queued = mutableListOf<Runnable>()
+        val s = store(f, engine, deb, io = Executor { queued += it })
+
+        s.scheduleSave()
+        deb.fire() // OLD 导出，写盘任务入队
+        s.clearPersisted() // 作废 + 删除入队
+        assertEquals(2, queued.size)
+        queued.removeAt(0).run() // 迟到的旧 rename —— 必须自己作废
+        queued.removeAt(0).run() // 删除
+
+        assertFalse(f.exists())
     }
 
     @Test

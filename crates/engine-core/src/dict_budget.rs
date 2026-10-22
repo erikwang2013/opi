@@ -4,28 +4,31 @@
 //! 导入层的**每键查询预算**（2026-10-18 性能审计）。
 //!
 //! 旧实现把 `IMPORT_SCAN_BUDGET` 放在每次 `Dictionary` 调用里新建：一次按键的主查询、
-//! 模糊变体、纠错、简拼展开、逐音节、分词回退各自都能再花 40ms —— 50ms 总账
+//! 模糊变体、纠错、简拼展开、逐音节、分词回退各自都能再花 40ms —— 总账
 //! 在结构上不成立。本模块把预算做成**每键一份**：`Engine::candidates` 在入口
 //! `begin()`，所有查询家族共享同一截止；guard 析构恢复，**不粘滞**（下一键重新计时）。
 //!
-//! 总账：50ms 键反馈。导入层的**初始**上限 40ms（总账 − `QUERY_RESERVE` 10ms），
-//! 但 base 查询之后会再按「总账 − `QUERY_POST_RESERVE` 15ms − 已耗时」动态收紧
-//! （`import_deadline_dynamic`）—— 实测宽前缀 `a` 的 base 查询 + 组装本身可达
-//! 30–40ms，固定 40ms 额度在数学上无法把**整键**压在 50ms 内。超时按既有裁决
-//! **整层丢弃**、回纯内置。`None` = 不设限（测试/高级口，见
-//! `Engine::set_import_scan_budget`）。
+//! 总账：**30ms**（2026-10-22 用户裁决「所有端所有的响应要低于 30ms」，收紧自
+//! 2026-10-11 的 50ms）。导入层的**初始**上限 20ms（`IMPORT_SCAN_BUDGET`，且被
+//! 「总账 − `QUERY_RESERVE` 5ms」封顶），base 查询之后再按「总账 −
+//! `QUERY_POST_RESERVE` 20ms − 已耗时」动态收紧（`import_deadline_dynamic`）——
+//! 导入层必须在这之后提前停，才能把**整键**压在 30ms 内。超时按既有裁决**整层丢弃**、回纯内置。`None` = 不设限（测试/高级口，
+//! 见 `Engine::set_import_scan_budget`）。
 
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-/// 单键总预算（与 `docs/performance.md` 的 50ms 键反馈上限对齐）。
-pub(crate) const QUERY_TOTAL_BUDGET: Duration = Duration::from_millis(50);
+/// 单键总预算（与 `docs/performance.md` 的 **30ms** 键反馈上限对齐，2026-10-22）。
+pub(crate) const QUERY_TOTAL_BUDGET: Duration = Duration::from_millis(30);
 /// 给内置查询留的余量（初始导入截止 = 总预算 − 本余量）。
-pub(crate) const QUERY_RESERVE: Duration = Duration::from_millis(10);
-/// 导入扫描结束后给合并 / 候选装配 / 排序留的硬余量（2026-10-18 实测：
-/// `a` 这类宽前缀的 base 查询 + 组装本身可达 30–40ms，10ms 余量远远不够；
-/// 宽前缀下导入层必须提前停，才能把**整键**压在 50ms 内）。
-pub(crate) const QUERY_POST_RESERVE: Duration = Duration::from_millis(15);
+pub(crate) const QUERY_RESERVE: Duration = Duration::from_millis(5);
+/// 导入扫描结束后给合并 / 候选装配 / 排序留的硬余量。
+///
+/// 2026-10-23 实测：base 查询之后到返回（评分/排序/去重/简体优先/三档/纠错）
+/// p50 ≈ 17ms（luna，`candidates(MAX)`），旧的 10ms 让导入层合法地超到总账之外
+/// （20k 命中导入实测整键 71ms）。留 20ms 后导入层在 `总账 − 20ms` 处停：扫描完成
+/// 的层照常合并，扫不完的层按既有语义**整层丢弃**。
+pub(crate) const QUERY_POST_RESERVE: Duration = Duration::from_millis(20);
 
 #[derive(Clone, Copy)]
 pub(crate) struct QueryBudget {
@@ -37,7 +40,7 @@ impl QueryBudget {
     fn new(import: Duration) -> Self {
         let now = Instant::now();
         let total_deadline = now + QUERY_TOTAL_BUDGET;
-        // 初始导入截止仍按「总账 − 10ms」的上限（缺省 40ms）。
+        // 初始导入截止按「总账 − 5ms」封顶（缺省 import = 20ms）。
         let import_deadline = (now + import).min(total_deadline - QUERY_RESERVE);
         Self {
             import_deadline,
@@ -100,9 +103,9 @@ pub(crate) fn import_deadline(
     }
 }
 
-/// **动态导入截止**：在固定上限之外，再按「总账 − 15ms 后处理余量 − 当前已耗时」
+/// **动态导入截止**：在固定上限之外，再按「总账 − 20ms 后处理余量 − 当前已耗时」
 /// 收紧。调用点必须在 base 查询**之后**调用（`now` 已包含 base 成本）；宽前缀
-/// （如 `a`）base 本身很贵时，这里会把导入层提前停掉、整键仍在 50ms 内。
+/// （如 `a`）base 本身很贵时，这里会把导入层提前停掉、整键仍在 30ms 内。
 pub(crate) fn import_deadline_dynamic(
     state: &Mutex<QueryState>,
     import_scan_budget: Option<Duration>,

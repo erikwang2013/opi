@@ -127,6 +127,23 @@ class KeyRouter(
         else deleteBackward()
     }
 
+    /**
+     * 长按退格：清空**整段组合输入**（引擎缓冲 + 已确认未提交的逐字片段），不提交任何文本。
+     *
+     * 缓冲为空时退回与短按相同的**单字删除** —— 绝不在这里做「删光编辑器内容」：
+     * 那会把用户已上屏的正文一起删掉（2026-10-13 过量退格的同类事故）。
+     *
+     * 清空走 [EngineController.clear]：它同时重读候选并触发服务层的组合区收尾
+     * （`onBufferSynced` → `pushComposingText`），所以宿主字段里不会留下旧组合串。
+     */
+    fun handleBackspaceLongPress() {
+        val composing = controller.buffer.isNotEmpty() ||
+            controller.pendingText.isNotEmpty() ||
+            controller.candidates.isNotEmpty()
+        if (composing) controller.clear()
+        else deleteBackward()
+    }
+
     fun handleEnter() {
         if (controller.buffer.isEmpty() && controller.pendingText.isEmpty()) {
             performEnter()

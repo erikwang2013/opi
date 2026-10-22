@@ -7,7 +7,8 @@
 //! 拆的是**同一对缓存的两个视图**：[`Engine::display_buffer`]（首条，候选栏左格/读屏用）
 //! 与 [`Engine::candidate_readings`]（逐条，9 键左列用）—— 都读 `scheme_readings`
 //! 这一对 `(算它时的缓冲, 逐条读数)`。语义一字未动；写点在 `Engine::candidates()`
-//! 的九键分支（仍在 engine.rs）。
+//! 的九键分支（仍在 engine.rs）。全键盘的显示分词（2026-10-23）不走缓存：它是
+//! 缓冲的纯函数（`pinyin::segment`），缓冲一变自动跟着变。
 //!
 //! 字段可见性：本文件要用 `Engine::scheme_readings`，故它升成 `pub(crate)`
 //! （**crate 内**，不泄漏给依赖方）—— 同 engine_punct.rs 头注记的拆分裂代价。
@@ -28,18 +29,29 @@ impl Engine {
         // 逐字确认态（2026-10-17）：已确认的字**留在候选区** —— 显示串以它们打头
         // （「中guo」），四端预编辑/拼音行都读这一份。
         let mut out = self.pending_text();
-        if matches!(self.mode(), Mode::Pinyin | Mode::Traditional)
-            && matches!(self.scheme(), Scheme::Nine | Scheme::Shuangpin)
-        {
-            // **带分词的**读数（主流输入法「拼音9键显示分词」同款）：音节用 `'` 连起来，
-            // 「nihao」显示成「ni'hao」—— 一眼看到引擎怎么切的音节。
-            let cached = self.scheme_readings.borrow();
-            // 缓冲变了（提交/退格/清空）而读数还是旧缓冲那一次算的 ⇒ 作废，报空串 ——
-            // 界面按「读不到拼音」处理（左列回标点列）。下次 candidates() 会按新缓冲重算。
-            if cached.0 == self.buffer() {
-                out.push_str(cached.1.first().map(String::as_str).unwrap_or_default());
+        if matches!(self.mode(), Mode::Pinyin | Mode::Traditional) {
+            match self.scheme() {
+                Scheme::Nine | Scheme::Shuangpin => {
+                    // **带分词的**读数（主流输入法「拼音9键显示分词」同款）：音节用 `'`
+                    // 连起来，「nihao」显示成「ni'hao」—— 一眼看到引擎怎么切的音节。
+                    let cached = self.scheme_readings.borrow();
+                    // 缓冲变了（提交/退格/清空）而读数还是旧缓冲那一次算的 ⇒ 作废，报空串 ——
+                    // 界面按「读不到拼音」处理（左列回标点列）。下次 candidates() 会按新缓冲重算。
+                    if cached.0 == self.buffer() {
+                        out.push_str(cached.1.first().map(String::as_str).unwrap_or_default());
+                    }
+                    return out;
+                }
+                // 全键盘（2026-10-23）：显示层自动分词，缓冲本体一字不动（行为判定读
+                // `buffer()`，见 API 的「两个出口别合并」）。`segment` 把手写的 `'`
+                // 当硬边界跳过 ⇒ 用户的分词位置保留，其余按音节补 `'`；半截音节原样
+                // 成段（`nih` → `ni'h`），不猜、不丢字母。
+                Scheme::Full => {
+                    out.push_str(&crate::pinyin::segment(self.buffer()).join("'"));
+                    return out;
+                }
+                _ => {}
             }
-            return out;
         }
         out.push_str(self.buffer());
         out

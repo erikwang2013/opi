@@ -30,6 +30,7 @@
       {
         "srcEntry": "./ets/InputMethodExtensionAbility/InputMethodService.ets",
         "name": "InputMethodService",
+        "icon": "$media:icon",
         "label": "$string:MainAbility_label",
         "description": "$string:extension_ability_descriptor",
         "type": "inputMethod",

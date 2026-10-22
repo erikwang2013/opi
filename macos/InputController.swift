@@ -236,6 +236,10 @@ final class OpiInputController: IMKInputController {
             refresh(sender)
             return true
         case OpiAction.handled:
+            // 抬起不改引擎状态：`router.rs` 的 released 分支只回放按下时记下的
+            // 结论（last_printable），不碰缓冲/候选/页码/模式。旧实现照常 refresh
+            // ⇒ 每个物理按键付两遍「全量候选排序 + JSON 编解码」。
+            if event.type == .keyUp { return true }
             refresh(sender)
             return true
         default:
@@ -292,6 +296,8 @@ final class OpiInputController: IMKInputController {
             lastCandidates = list
             OpiCandidateWindow.shared.update(list, visible: !buffer.isEmpty)
         }
+        // IMKCandidates 没有标题栏：拼音另画一条；显示串为空回退原文，判定仍读 buffer()。
+        OpiPinyinBar.shared.update(display: engine.displayBuffer(), raw: buffer, client: client, candidatesFrame: OpiCandidateWindow.shared.visibleFrame)
     }
 
     // ---------- 候选窗回调 ----------
@@ -317,6 +323,7 @@ final class OpiInputController: IMKInputController {
         lastCandidates = []
         lastMarked = ""
         OpiCandidateWindow.shared.hide()
+        OpiPinyinBar.shared.hide()
         // 这里没有 handle(_:client:) 的 sender：优先用 Hub 记下的最近客户端。
         if let stored = OpiClientHub.shared.client {
             commit(committed.isEmpty ? text : committed, to: stored)
@@ -410,6 +417,7 @@ final class OpiInputController: IMKInputController {
         engine.clear()
         lastMarked = ""
         lastCandidates = []
+        OpiPinyinBar.shared.hide()
         // 状态栏只在 opi 输入源激活时出现（用户 2026-10-21 要求）。
         OpiStatusBar.shared.setActive(true)
     }
@@ -421,6 +429,7 @@ final class OpiInputController: IMKInputController {
         lastMarked = ""
         lastCandidates = []
         OpiCandidateWindow.shared.hide()
+        OpiPinyinBar.shared.hide()
         OpiKeyboardPanel.shared.hide()
         OpiStatusBar.shared.setActive(false)
         super.deactivateServer(sender)
@@ -436,6 +445,12 @@ final class OpiCandidateWindow {
     static let shared = OpiCandidateWindow()
 
     private var window: IMKCandidates?
+    /// 当前是否由本层显示着。用于「已显示就只换数据，不再 show()」——
+    /// 每键 show() 会白付一次窗口服务器调用与重新定位（面板位置由 IMK 跟着
+    /// 插入点走，不需要我们每键提醒）。hide() 与 update(空/不可见) 都回写 false。
+    private var shown = false
+
+    var visibleFrame: NSRect? { shown ? window?.frame : nil } // 拼音提示条避让用
 
     private init() {}
 
@@ -463,14 +478,23 @@ final class OpiCandidateWindow {
         guard let w = window else { return }
         if list.isEmpty || !visible {
             w.hide()
+            shown = false
             return
         }
         w.setCandidateData(list)
         // 首编确认（同轮）：ObjC 的 `updateCandidates` 在 Swift 里被改名为 `update()`
         // —— 编译器原文：「'updateCandidates()' has been renamed to 'update()'」。
         w.update()
-        w.show(kIMKLocateCandidatesBelowHint)
+        // 已显示时 setCandidateData+update 就够；重复 show() 只是每键多一次
+        // 窗口服务器往返。首次显示（或我们自己 hide 过）才定位/显示。
+        if !shown {
+            w.show(kIMKLocateCandidatesBelowHint)
+            shown = true
+        }
     }
 
-    func hide() { window?.hide() }
+    func hide() {
+        window?.hide()
+        shown = false
+    }
 }

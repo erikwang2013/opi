@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
+use crate::abbr;
 use crate::candidates_tiers_impl as tiers;
 use crate::candidates_tiers_impl::Meta;
 use crate::composer::Mode;
@@ -220,8 +221,10 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
         })
         .collect();
     merged.extend(patch);
-    // 多音节整串无命中时按音节逐段补候选（segment 此前是死代码）：
-    // nihao → [你][好] 逐字可选；单字母音节跳过避免噪音。
+    // 声母缩写与多字组合共用「整串命中」这道闸门：命中即跳过首字回退/逐音节汤。
+    let abbr_hit = abbr::merge(dict, learner, boost, input, &mut merged, opts.jianpin)
+        || crate::composition::merge(dict, learner, boost, input, &mut merged, opts.composition);
+    // 多音节整串无命中时按音节逐段补候选（segment 此前是死代码）：nihao → [你][好] 逐字可选；单字母音节跳过避免噪音。
     // 每音节仅取 top 3：luna 繁体词库下全量并入会把生僻字顶进 top-8。
     //
     // ⚠️ 本档只在**没有可回退前缀**时才跑到（上面那段：完整音节前缀有命中就整档接管，
@@ -231,7 +234,6 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
     // 这个 top 3 必须按**含 learner boost 的最终分**排，不能下推给
     // `dict.query(&syl, 3)` —— 后者截的是静态词频前 3，学过的常用字会在加 boost
     // 之前就被丢掉（用例见 tests/ranking_invariants.rs::per_syllable_fallback_picks_top3_by_final_score）。
-    // 与下方 85-86 行主路径是同一条不变式，此处曾违反。
     // ── 模糊音：整串变体（常开；表与变体生成见 fuzzy.rs）──────────────────────
     // 先算，因为它决定逐音节回退里还要不要再做模糊（见下）：**更具体的匹配优先** ——
     // 与上面「整串命中就不逐音节」是同一条分层规则。
@@ -297,19 +299,20 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
         .any(|(_, meta)| meta.as_ref().is_some_and(|m| m.exact));
     let mut seg_used = false;
     if !exact_hit
+        && !abbr_hit
         && input.chars().count() > 1
         && opts.segment_fallback
         && let Some(fb) = segment_fallback(dict, input, opts.fuzzy, opts.correction)
     {
         // 递归深度 ≤ 1：「前缀有命中」是入选条件，到了里面 `merged` 必非空。
-        merged = rank_and_pick_with(dict, symbols, learner, &fb.prefix, mode, limit, boost, opts)
+        let lim = limit.min(crate::candidates_segment_impl::FALLBACK_LIMIT);
+        merged = rank_and_pick_with(dict, symbols, learner, &fb.prefix, mode, lim, boost, opts)
             .into_iter()
             .map(|c| (c, None))
             .collect();
         seg_used = true;
     }
-    // 逐音节汤与分词回退同一开闸（`segment_fallback`）：五笔关闸后这里也不许漏 ——
-    // 它是同一族「按拼音音节猜」的档（2026-10-14，见 RankOptions::segment_fallback）。
+    // 逐音节汤与分词回退同一开闸（`segment_fallback`）：五笔关闸后这里也不许漏 —— 它是同一族「按拼音音节猜」的档（2026-10-14，见 RankOptions::segment_fallback）。
     if merged.is_empty() && input.chars().count() > 1 && !seg_used && opts.segment_fallback {
         for syl in segment(input) {
             if syl.chars().count() < 2 {
@@ -484,12 +487,10 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
     // 双拼侧拿它当「不参与分档」的判据（那边的分档在跨解析合并之后做，见 `_meta` 头注）。
     merged.into_iter().map(|c| (c, None)).collect()
 }
-
 // 分词回退一族（`SegmentFallback` / `segment_fallback` / `raw_suffix`）拆去
 // `candidates_segment.rs`（2026-10-14，500 行门禁）—— 判定函数走这里转发（对外路径
 // 不变）；结构体 `SegmentFallback` 只由返回值类型推断使用，故只在本模块内可见。
 pub(crate) use crate::candidates_segment_impl::segment_fallback;
-
 // 按键类展开一族（9/14 键）在 `candidates_scheme.rs`（2026-10-12 拆出，拆分保留）。
 pub use crate::candidates_scheme_impl::rank_and_pick_scheme;
 

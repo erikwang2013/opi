@@ -23,7 +23,7 @@ extension KeyboardLayout {
         NSLayoutConstraint.activate([
             toolbar.leadingAnchor.constraint(equalTo: leadingAnchor),
             toolbar.trailingAnchor.constraint(equalTo: trailingAnchor),
-            toolbar.topAnchor.constraint(equalTo: topAnchor),
+            toolbar.topAnchor.constraint(equalTo: composingBar.bottomAnchor),
             toolbar.heightAnchor.constraint(equalToConstant: 44),
         ])
         toolbar.onOpenEmoji = { [weak self] in self?.tap(.showEmoji) }
@@ -149,6 +149,9 @@ extension KeyboardLayout {
         settingsPanel.onOpenKeyboardModes = { [weak self] in self?.tap(.showKeyboardModes) }
         settingsPanel.onOpenAbout = { [weak self] in self?.tap(.showAbout) }
         settingsPanel.onOpenURL = { [weak self] url in self?.tap(.openURL(url)) }
+        // 用户词库（2026-10-23）：面板只负责确认与提示，真清理由控制器做
+        // （引擎单例在控制器手里，布局层碰不到）。
+        settingsPanel.onClearUserWords = { [weak self] in self?.tap(.clearUserWords) }
         addPanel(settingsPanel)
     }
 
@@ -202,6 +205,7 @@ extension KeyboardLayout {
         overrideUserInterfaceStyle = p.isDark ? .dark : .light
         candidateBar.backgroundColor = p.barBg
         keyArea.backgroundColor = p.barBg
+        composingBar.applyTheme(p, fontScale: fontScale)
         toolbar.applyTheme(p)
         skinPanel.applyTheme(p)
         keyboardModePanel.applyTheme(p)

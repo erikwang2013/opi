@@ -281,7 +281,7 @@ fun SettingsWindow() {
                     .verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 6.dp),
             ) {
                 when (tab) {
-                    SettingsTab.COMMON -> CommonPage(s, ::apply)
+                    SettingsTab.COMMON -> CommonPage(s, ::apply) { status = it }
                     SettingsTab.KEYS -> KeysPage(s, ::apply)
                     SettingsTab.APPEARANCE -> AppearancePage(s, ::apply)
                     SettingsTab.STATUSBAR -> StatusBarPage(s, ::apply) { status = it }

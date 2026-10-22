@@ -125,6 +125,8 @@ impl Engine {
                                 // 笔画串不是音节，分词回退对 hspnz 天然惰性 —— 保持
                                 // 既有值（true），别顺手统一成 false（那是五笔的理由）。
                                 segment_fallback: true,
+                                // 组合识别与三档同理：hspnz 是编码不是拼音。
+                                composition: false,
                                 // 三档同理：hspnz 是编码不是拼音（见 RankOptions::tiers）。
                                 tiers: false,
                             },
@@ -165,6 +167,8 @@ impl Engine {
                 jianpin: self.jianpin && !plain,
                 prefer_simplified: s.mode == Mode::Pinyin,
                 segment_fallback: self.scheme() != Scheme::Wubi,
+                // 组合识别只对真拼音缓冲有意义：`plain`（笔画/五笔码串）关。
+                composition: !plain,
                 // 三档跟着 `plain` 走（笔画/五笔 = 码类，不分档）—— 这里正是 **全键盘
                 // 拼音**那条路（Scheme::Full），`plain` 为假 ⇒ 分档生效（2026-10-14 裁决）。
                 tiers: !plain,

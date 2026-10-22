@@ -117,6 +117,9 @@ enum KeyboardFunctionKey {
     /// 设置面板改了引擎开关（学习/模糊音/简拼/纠错/中文标点/双拼布局/五笔/表情页）。
     /// 控制器负责持久化 + 立即推给引擎（与 Android 设置页「改了即生效」同姿态）。
     case updateSettings(KeyboardSettings)
+    /// 设置面板「清除用户词库」（2026-10-23）。面板负责确认，控制器负责
+    /// `clearUserWords()` + 重拉候选；本端没有用户词落盘副本（见控制器 case）。
+    case clearUserWords
 }
 
 /// 键盘布局上的一个键。
@@ -142,6 +145,12 @@ struct KeySpec {
     /// ⚠️ 带了它的键，按下**不能**立刻上报（否则长按会先干一次短按的事）——
     /// 处理与 ⇧ 的三态同款，见 `KeyboardLayout.attach/onTouchDown/onTouchUp`。
     let longPressFunction: KeyboardFunctionKey?
+    /// 长按 = **清空全部组合输入**（2026-10-23，⌫ 专用）。
+    ///
+    /// 与 `longPressFunction` 的区别（别合并）：那个字段把键变成「功能键」——
+    /// 短按也走 `function`；本字段只**追加**长按语义，短按仍是键自己的普通输入
+    /// （⌫ 退一格）。两者不会同时给（`KeyboardLayout.onTouchDown` 的分支按这个约定写）。
+    let longPressClearsComposing: Bool
     /// 相对宽度（1 = 普通字母键）。
     let widthUnits: CGFloat
     /// 键面字号。⚠️ 只有一个字号（不分「数字行/字母行」两级）—— 9 键的键面是
@@ -156,6 +165,7 @@ struct KeySpec {
         fallback: KeyFallback = .none,
         function: KeyboardFunctionKey? = nil,
         longPressFunction: KeyboardFunctionKey? = nil,
+        longPressClearsComposing: Bool = false,
         widthUnits: CGFloat = 1,
         fontSize: CGFloat = 20
     ) {
@@ -165,6 +175,7 @@ struct KeySpec {
         self.fallback = fallback
         self.function = function
         self.longPressFunction = longPressFunction
+        self.longPressClearsComposing = longPressClearsComposing
         self.widthUnits = widthUnits
         self.fontSize = fontSize
     }

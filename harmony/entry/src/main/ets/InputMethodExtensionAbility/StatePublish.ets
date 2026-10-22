@@ -12,9 +12,9 @@ import * as KeyboardModes from './KeyboardModes';
 import * as OpiEngine from './OpiEngine';
 import { OpiMode } from './OpiEngine';
 import {
-  KEY_ALL_CANDIDATES, KEY_BUFFER, KEY_CANDIDATES, KEY_DARK, KEY_ELDER, KEY_FLOAT, KEY_GAME,
-  KEY_LEARNER, KEY_MODE, KEY_MODE_INDEX, KEY_ONE_HAND, KEY_PAGE, KEY_PAGE_COUNT, KEY_PRO,
-  KEY_SHIFT, KEY_SHOW_OWN, KEY_SKIN, KEY_TILED, KEY_VIEW
+  KEY_ALL_CANDIDATES, KEY_BUFFER, KEY_CANDIDATES, KEY_DARK, KEY_DISPLAY_BUFFER, KEY_ELDER,
+  KEY_FLOAT, KEY_GAME, KEY_LEARNER, KEY_MODE, KEY_MODE_INDEX, KEY_ONE_HAND, KEY_PAGE,
+  KEY_PAGE_COUNT, KEY_PRO, KEY_SHIFT, KEY_SHOW_OWN, KEY_SKIN, KEY_TILED, KEY_VIEW
 } from './KeyboardAppStorage';
 
 /** 平铺视图取全量的条数（同 Android EngineController.fetchLimit）。 */
@@ -29,8 +29,14 @@ function candidatesShowable(buffer: string, candidates: string[], mode: OpiMode)
 }
 
 export function publishState(client: inputMethodEngine.InputClient | null): void {
+  // 行为判定用 buffer（原值）；拼音行/宿主预编辑用 displayBuffer（9 键带分词）。
   const buffer: string = OpiEngine.buffer();
   const pageCandidates: string[] = OpiEngine.candidatesPage();
+  // ⚠️ displayBuffer **必须最后读**：9 键读数是 candidates() 的副产物（缓存与算它时的
+  // 缓冲绑存），先读会拿到上一条缓冲的旧值/空串 —— Android EngineController 同款次序。
+  const display: string = OpiEngine.displayBuffer();
+  // 显示串为空时退回原缓冲：9 键「整段无匹」读数恰为空，此时仍要让用户看见在打什么。
+  const composing: string = display.length > 0 ? display : buffer;
   const mode: OpiMode = OpiEngine.mode();
   // 平铺里候选用尽（选词 / ⌫ 退到空）→ 自动收拢，否则键盘回不来（Android 同款）。
   if (KeyboardModes.tiledEnabled() && !candidatesShowable(buffer, pageCandidates, mode)) {
@@ -39,6 +45,7 @@ export function publishState(client: inputMethodEngine.InputClient | null): void
   const tiled: boolean = KeyboardModes.tiledEnabled();
 
   AppStorage.setOrCreate<string>(KEY_BUFFER, buffer);
+  AppStorage.setOrCreate<string>(KEY_DISPLAY_BUFFER, display);
   AppStorage.setOrCreate<string[]>(KEY_CANDIDATES, pageCandidates);
   AppStorage.setOrCreate<number>(KEY_PAGE, OpiEngine.page());
   AppStorage.setOrCreate<number>(KEY_PAGE_COUNT, OpiEngine.pageCount());
@@ -60,7 +67,8 @@ export function publishState(client: inputMethodEngine.InputClient | null): void
   // 平铺没开就不取全量：每键都拉 64 条纯属浪费（普通候选栏只用当前页）。
   AppStorage.setOrCreate<string[]>(KEY_ALL_CANDIDATES,
     tiled ? OpiEngine.candidates(TILED_FETCH_LIMIT) : []);
-  syncPreviewText(client, buffer);
+  // 宿主预编辑与拼音行同源：9 键显示拼音读数（不是数字键串），空则退回原缓冲。
+  syncPreviewText(client, composing);
 }
 
 /**

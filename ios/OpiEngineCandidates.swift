@@ -15,6 +15,21 @@ import Foundation
 
 extension OpiEngine {
 
+    /// **显示用**拼音（`opi_display_buffer()`）：9 键/双拼由引擎分词成 `ni'hao`，
+    /// 其余方案就是字母缓冲；已确认未提交的逐字片段在前（`中guo`）。
+    ///
+    /// ⚠️ 与 `buffer()` 是**两个出口，别合并**（2026-10-09 血泪，见
+    /// `api/mod.rs` 的注释）：`buffer()` 被宿主当「缓冲非空？」的**行为判据**，
+    /// 9 键无候选时显示串恰为空串。**显示是显示，判定是判定** —— 本包装只给
+    /// 拼音行用，路由/回退/平铺收拢仍一律读 `buffer()`。
+    ///
+    /// 为什么放在本文件而不是 `OpiEngine.swift`：那个文件已在 500 行门禁的
+    /// 498 行（本仓 500 行只管源码，判据是物理行）。本文件本就是「候选/读音的
+    /// C ABI 包装」，显示读数与候选同源（同一次排名的缓存），归这里更顺。
+    func displayBuffer() -> String {
+        OpiEngine.takeString(opi_display_buffer())
+    }
+
     /// 全局候选（从第 0 条起，最多 `limit` 条）。
     /// 候选栏只取前几项，平铺视图按 `limit` 全量铺页（Android 平铺同样吃全量候选）。
     func allCandidates(limit: Int = 64) -> [String] {

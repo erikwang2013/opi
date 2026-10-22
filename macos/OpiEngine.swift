@@ -315,6 +315,9 @@ final class OpiEngine {
 
     func buffer() -> String { take(opi_buffer()) }
 
+    /// 显示用拼音（按音节分词）；行为判定仍走 `buffer()`。
+    func displayBuffer() -> String { take(opi_display_buffer()) }
+
     // ---------- 候选分页 ----------
     //
     // 显示与点选**必须**走引擎的当前页出口（`OpiFFI.h` 点名禁止拿

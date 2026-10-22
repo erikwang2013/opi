@@ -386,6 +386,18 @@ pub unsafe extern "C" fn opi_buffer() -> OpiString {
     OpiString::from_utf16(&out)
 }
 
+/// display_buffer() -> OpiString。**显示用**缓冲（与 `opi_buffer` 两个出口，见
+/// `Engine::display_buffer`）：全键盘按音节自动分词（`ni'hao`）、9 键给拼音读数、
+/// 逐字确认态带已确认前缀。行为判定（缓冲非空/回退）仍读 `opi_buffer()`。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_display_buffer() -> OpiString {
+    let out = catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.display_buffer()).unwrap_or_default()
+    }))
+    .unwrap_or_default();
+    OpiString::from_utf16(&out)
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_mode() -> i32 {
     catch_unwind(AssertUnwindSafe(|| {

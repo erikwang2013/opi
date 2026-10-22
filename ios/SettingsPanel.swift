@@ -40,6 +40,8 @@ final class SettingsPanel: UIView {
     var onChange: ((KeyboardSettings) -> Void)?
     /// 暗光/长辈变了：控制器负责持久化 + 换肤。
     var onUpdateModes: ((KeyboardModes) -> Void)?
+    /// 「清除用户词库」已确认（2026-10-23）：控制器调 `clearUserWords()` + 刷新。
+    var onClearUserWords: (() -> Void)?
 
     private enum Toggle: Hashable {
         case learn, fuzzy, jianpin, correction, chinesePunct, showOwn, dark, elder
@@ -49,6 +51,7 @@ final class SettingsPanel: UIView {
     private let scroll = UIScrollView()
     private let stack = UIStackView()
     private let wubiSection = WubiSettingsSection()
+    private let userWordsSection = UserWordsSection()
     private let updateView = UpdateStatusView()
     private var palette: KeyboardPalette = .light
 
@@ -81,6 +84,7 @@ final class SettingsPanel: UIView {
             self.onChange?(self.settings)
         }
         updateView.onOpenDownload = { [weak self] url in self?.onOpenURL?(url) }
+        userWordsSection.onClear = { [weak self] in self?.onClearUserWords?() }
 
         stack.axis = .vertical
         stack.spacing = 6
@@ -131,6 +135,7 @@ final class SettingsPanel: UIView {
         modes = m
         fuzzyNames = names
         wubiSection.show(settings: s)
+        userWordsSection.reset()
         if !contentBuilt || names != builtPairNames {
             rebuildContent()
         } else {
@@ -175,6 +180,10 @@ final class SettingsPanel: UIView {
         addSwitchRow(
             "简拼", detail: "只用声母也能出候选", tag: .jianpin, isOn: settings.jianpin
         )
+
+        addSection("用户词库")
+        stack.addArrangedSubview(userWordsSection)
+        addNote("用户词只存在于本次键盘进程；iOS 端不落盘（无导入/导出）。")
 
         addSection("按键")
         addSwitchRow(
@@ -438,6 +447,7 @@ final class SettingsPanel: UIView {
         backgroundColor = p.panelBg
         header.applyTheme(p)
         wubiSection.applyTheme(p)
+        userWordsSection.applyTheme(p)
         updateView.applyTheme(p)
         guard contentBuilt else { return }
         headingLabels.forEach { $0.textColor = p.barDimFg }

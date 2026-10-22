@@ -37,6 +37,11 @@ pub struct RankOptions {
     /// 码串，候选层给出的会是**更短前缀**的候选项，而收尾层对五笔整段消耗
     /// （`engine_segment.rs`），两层的「匹配了多少」对不上（见 `engine_wubi.rs` 头）。
     pub segment_fallback: bool,
+    /// **多字词组合识别**（2026-10-23：整词不在词库、但能由词库里的几段拼出来，
+    /// `yanchunzheng` → 厌蠢 + 症；见 `composition.rs`）。默认 `true` = 拼音类输入。
+    /// **码类方案（笔画 / 五笔）与双拼逐解析路显式关**：前者缓冲是编码不是拼音；
+    /// 后者每次解析都是半成品拼音串，组合枚举要在**解码后的整串**上做才不产生噪音。
+    pub composition: bool,
     /// **候选三档**（2026-10-14 用户裁决「优先给符合拼音的候选字，然后是词组，最后是
     /// 联想的」；实现见 `candidates_tiers.rs`）。默认 `true` = 拼音类输入的产品行为；
     /// **码类方案（笔画 / 五笔）显式关** —— 缓冲是编码不是拼音，拿「单字/词组/联想」去切
@@ -54,6 +59,7 @@ impl Default for RankOptions {
             jianpin: true,
             prefer_simplified: false,
             segment_fallback: true,
+            composition: true,
             tiers: true,
         }
     }

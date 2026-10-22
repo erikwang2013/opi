@@ -103,6 +103,34 @@ fn correction_hits_still_participate_after_the_jianpin_tier() {
     assert!(jp < corr, "简拼结果必须排在纠错命中之前（{got:?}）");
 }
 
+/// 纠错变体只认**精确键**（2026-10-22）：typo 修的是完整词，`query_all` 的前缀
+/// 语义会把以变体开头的长词也捞进来 —— 既是错的语义，也是整键最大的开销
+/// （真库 `a` 的 6 个变体 15–57ms/击键）。键 `anhao` 以变体 `anh` 为前缀，不许命中。
+#[test]
+fn correction_does_not_expand_prefixes() {
+    let mut d = InMemoryDictionary::new();
+    for (py, w, f) in [
+        ("ni", "你", 3_999_128_899u32),
+        ("hao", "好", 3_997_635_583),
+        ("nihao", "你好", 3_996_000_000),
+        ("anhao", "暗号", 3_900_000_000), // 变体 `anh` 的前缀扩展
+    ] {
+        d.insert(py, w, f);
+    }
+    let mut e = Engine::new(Box::new(d), no_symbols(), false);
+    e.set_correction(true);
+    e.set_jianpin(false);
+    e.set_fuzzy(false);
+    for ch in "nh".chars() {
+        e.input_key(ch);
+    }
+    let got: Vec<String> = e.candidates(50).into_iter().map(|c| c.text).collect();
+    assert!(
+        !got.iter().any(|t| t == "暗号"),
+        "纠错不许前缀展开（`anhao` 只是变体 `anh` 的扩展）：{got:?}"
+    );
+}
+
 /// 关掉纠错 ⇒ 列表里一条纠正来路都没有（双向：开关真的管这一段）。
 #[test]
 fn correction_off_drops_the_variant_hits() {

@@ -137,7 +137,9 @@ fun CandidateBar(
                             onClick = { onTap(i) },
                             onLongClick = { onLongPress(i) },
                         )
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        // vertical 6 而非 8：槽位高 44dp，22sp 在长辈模式 ×1.18 = 26sp，
+                        // 行高 ~31dp + 上下 16dp 会超槽 3dp（上下各裁一截）；6dp 留出余量。
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(c, fontSize = 22.sp, color = p.keyFg)

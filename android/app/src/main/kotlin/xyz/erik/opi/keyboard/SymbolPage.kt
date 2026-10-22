@@ -68,8 +68,16 @@ fun SymbolPage(
         ) {
             Text("符号", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = p.panelFg)
             Spacer(Modifier.width(10.dp))
-            Text("点符号上屏；左右滑动翻页", fontSize = 11.sp, color = p.barDimFg)
-            Spacer(Modifier.weight(1f))
+            // 提示占弹性空间（原 Spacer 的位置）：320dp + 系统大字号时先省略提示，
+            // 右侧关闭键不被挤出；常规字号下文字仍从左侧起排、观感不变。
+            Text(
+                "点符号上屏；左右滑动翻页",
+                modifier = Modifier.weight(1f),
+                fontSize = 11.sp,
+                color = p.barDimFg,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             IconButton(onClick = onClose) {
                 Icon(OpiIcons.Close, contentDescription = "关闭符号页", tint = p.toolbarFg)
             }

@@ -116,6 +116,46 @@ export struct KeyBox {
   }
 }
 
+/**
+ * 右列 ⌫（9 键 / 平铺右列共用观感）：单击删一格；长按清空**整段**组合（不提交）。
+ * 单独成件而不是给 KeyBox 加长按：长按手势会吃掉后续点击，挂在数字/标点键上会让
+ * 那些键的长按变成「什么都不发生」。
+ */
+@Component
+export struct BackspaceBox {
+  @Prop mainSize: number = 17;
+  @StorageLink('opiSkin') skin: number = 0;
+  @StorageLink('opiDark') dark: number = 0;
+  @StorageLink('opiElder') elder: number = 0;
+  private ctrl: KeyboardController = KeyboardController.getInstance();
+
+  private pal(): Palette {
+    return paletteFor(this.skin, this.dark === 1, this.elder === 1);
+  }
+
+  build() {
+    Column() {
+      Text('⌫')
+        .fontSize(this.elder === 1 ? this.mainSize + 3 : this.mainSize)
+        .fontColor(this.pal().keyFg)
+    }
+    .justifyContent(FlexAlign.Center)
+    .height('100%')
+    .margin({ left: 2, right: 2 })
+    .backgroundColor(this.pal().keyBg)
+    .borderRadius(6)
+    .onClick(() => {
+      this.ctrl.tapBackspace();
+    })
+    .gesture(
+      LongPressGesture({ repeat: false, duration: 500 })
+        .onAction((event: GestureEvent) => {
+          this.ctrl.tapBackspaceLongPress();
+        })
+    )
+  }
+}
+
 // ---------------------------------------------------------------- 9 键 / 大 9 键
 
 @Component
@@ -179,12 +219,7 @@ export struct NineKeyPanel {
         }.layoutWeight(3)
 
         Column() {
-          KeyBox({
-            label: '⌫', mainSize: 17,
-            onTap: () => {
-              this.ctrl.tapBackspace();
-            }
-          }).layoutWeight(1)
+          BackspaceBox({ mainSize: 17 }).layoutWeight(1)
           KeyBox({
             label: '重输', mainSize: 15,
             onTap: () => {
@@ -226,7 +261,7 @@ export struct NineKeyPanel {
     Button(label)
       .fontSize(this.elder === 1 ? 17 : 15)
       .fontColor(this.pal().keyFg).backgroundColor(this.pal().keyBg)
-      .borderRadius(6).layoutWeight(weight).height(42)
+      .borderRadius(6).layoutWeight(weight).height('100%')
       .margin({ left: 2, right: 2 })
       .onClick(action)
   }
@@ -251,9 +286,28 @@ export struct FourteenKeyPanel {
     Button(label)
       .fontSize(this.elder === 1 ? 17 : 15)
       .fontColor(this.pal().keyFg).backgroundColor(this.pal().keyBg)
-      .borderRadius(6).layoutWeight(weight).height(42)
+      .borderRadius(6).layoutWeight(weight).height('100%')
       .margin({ left: 2, right: 2 })
       .onClick(action)
+  }
+
+  /** ⌫：单击删一格；长按清空整段组合（不提交）。 */
+  @Builder
+  BackspaceFunc() {
+    Button('⌫')
+      .fontSize(this.elder === 1 ? 17 : 15)
+      .fontColor(this.pal().keyFg).backgroundColor(this.pal().keyBg)
+      .borderRadius(6).layoutWeight(1).height('100%')
+      .margin({ left: 2, right: 2 })
+      .onClick(() => {
+        this.ctrl.tapBackspace();
+      })
+      .gesture(
+        LongPressGesture({ repeat: false, duration: 500 })
+          .onAction((event: GestureEvent) => {
+            this.ctrl.tapBackspaceLongPress();
+          })
+      )
   }
 
   build() {
@@ -284,9 +338,7 @@ export struct FourteenKeyPanel {
         this.Func('空格', 2, () => {
           this.ctrl.tapSpace();
         })
-        this.Func('⌫', 1, () => {
-          this.ctrl.tapBackspace();
-        })
+        this.BackspaceFunc()
         this.Func('↵', 1, () => {
           this.ctrl.tapEnter();
         })
@@ -314,9 +366,28 @@ export struct StrokeKeyPanel {
     Button(label)
       .fontSize(this.elder === 1 ? 17 : 15)
       .fontColor(this.pal().keyFg).backgroundColor(this.pal().keyBg)
-      .borderRadius(6).layoutWeight(weight).height(42)
+      .borderRadius(6).layoutWeight(weight).height('100%')
       .margin({ left: 2, right: 2 })
       .onClick(action)
+  }
+
+  /** ⌫：单击删一格；长按清空整段组合（不提交）。 */
+  @Builder
+  BackspaceFunc() {
+    Button('⌫')
+      .fontSize(this.elder === 1 ? 17 : 15)
+      .fontColor(this.pal().keyFg).backgroundColor(this.pal().keyBg)
+      .borderRadius(6).layoutWeight(1).height('100%')
+      .margin({ left: 2, right: 2 })
+      .onClick(() => {
+        this.ctrl.tapBackspace();
+      })
+      .gesture(
+        LongPressGesture({ repeat: false, duration: 500 })
+          .onAction((event: GestureEvent) => {
+            this.ctrl.tapBackspaceLongPress();
+          })
+      )
   }
 
   build() {
@@ -348,9 +419,7 @@ export struct StrokeKeyPanel {
         this.Func('空格', 2, () => {
           this.ctrl.tapSpace();
         })
-        this.Func('⌫', 1, () => {
-          this.ctrl.tapBackspace();
-        })
+        this.BackspaceFunc()
         this.Func('↵', 1, () => {
           this.ctrl.tapEnter();
         })

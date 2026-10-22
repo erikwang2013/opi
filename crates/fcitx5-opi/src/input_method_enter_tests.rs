@@ -27,6 +27,7 @@ fn wubi_state() -> CandidateState {
         last_printable: None,
         dicts: Default::default(),
         english_pro: true,
+        fetch_cache: Default::default(),
     };
     s.engine.set_scheme(Scheme::Wubi);
     s.buffer_snapshot = s.engine.buffer().to_string();

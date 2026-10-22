@@ -4,6 +4,7 @@
 //! engine-core：小欧输入法纯逻辑内核（M1 全拼）。
 //! 模块文件在 Task 1 以空占位创建，各任务逐个填充；re-export 随类型就位时添加。
 
+mod abbr; // 声母缩写整串匹配（2026-10-22，见 abbr.rs 头注）
 pub mod bytes;
 pub mod candidates;
 #[path = "candidates_options.rs"]
@@ -15,6 +16,7 @@ mod candidates_segment_impl; // 分词回退一族（2026-10-14 从 candidates.r
 #[path = "candidates_tiers.rs"]
 mod candidates_tiers_impl; // 候选三档（常用单字/词组/联想，2026-10-14 用户裁决；500 行门禁拆出）
 pub mod composer;
+mod composition; // 多字词组合识别（2026-10-23，见 composition.rs 头注）
 pub mod correction;
 mod dict_budget; // 导入层每键查询预算（2026-10-18 性能审计）
 mod dict_index; // 导入层命中索引 / 抢位加成 / rest 截断

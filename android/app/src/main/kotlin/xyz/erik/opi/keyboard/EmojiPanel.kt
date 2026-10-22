@@ -5,6 +5,7 @@ package xyz.erik.opi.keyboard
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +20,7 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -152,7 +154,7 @@ internal fun EmojiPanel(
                     SymbolGrid(
                         shown,
                         onCommit,
-                        columns = if (sub == EmojiSubTab.Emoji) 8 else 3,
+                        minCell = if (sub == EmojiSubTab.Emoji) 40.dp else 112.dp,
                         fontSize = if (sub == EmojiSubTab.Emoji) 20.sp else 14.sp,
                     )
                 }
@@ -226,8 +228,11 @@ private fun EmojiTopBar(
             }
         } else {
             // 子页切换：读屏用 Role.Tab 播报「已选择」（选中态不只看颜色）。
+            // 横滑：320dp + 系统字体放大 / 三个 Tab（自有/Emoji/颜文字）时总宽超过
+            // 剩余空间，不滑动就会把右侧 🔍 挤出屏幕（或裁掉第三个 Tab）。
             Row(
-                modifier = Modifier.weight(1f).selectableGroup(),
+                modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState())
+                    .selectableGroup(),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -267,8 +272,10 @@ private fun EmojiBrowse(catalog: SymbolCatalog, grid: LazyGridState, onCommit: (
     Column(modifier = Modifier.fillMaxSize()) {
         if (catalog.recents.isNotEmpty()) RecentsRow(catalog.recents, onCommit)
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            // Adaptive 而非 Fixed(8)：320dp 手机仍是 8 列；平板/横屏自动多排几列，
+            // 否则每格 160dp、emoji 悬在大片空白中间。
             LazyVerticalGrid(
-                columns = GridCells.Fixed(8),
+                columns = GridCells.Adaptive(40.dp),
                 state = grid,
                 modifier = Modifier.fillMaxSize(),
             ) {
@@ -291,8 +298,9 @@ private fun KaomojiBrowse(
             Text("没有颜文字数据", fontSize = 14.sp, color = LocalKeyboardPalette.current.barDimFg)
         }
     } else {
-        // 颜文字比单个 emoji 宽：3 列 + 小字号，少截断。
-        SymbolGrid(all, onCommit, grid, columns = 3, fontSize = 14.sp)
+        // 颜文字比单个 emoji 宽：最小格 112dp（手机仍是 3 列、320dp 落 2 列）+ 小字号，
+        // 少截断；平板/横屏才排更多列。
+        SymbolGrid(all, onCommit, grid, minCell = 112.dp, fontSize = 14.sp)
     }
 }
 

@@ -96,11 +96,11 @@ const PIPE_NAME: PCWSTR = w!(r"\\.\pipe\opi");
 const RETRY_SLEEP_MS: u64 = 50;
 /// 宿主失活后的读线程空闲间隔：不抢管道，也不 50ms 醒一次烧 CPU。
 const IDLE_SLEEP_MS: u64 = 250;
-/// 读线程「有数据才 ReadFile」的轮询间隔。**不能再用阻塞 ReadFile**：同一同步命名
-/// 管道句柄上未完成的 ReadFile 会把 WriteFile 串行化 —— 按键线程的第二次 show
-/// 会永久阻塞，宿主 UI 线程冻住（2026-10-21 真机：按 n 出候选窗后按 i 不再响应）。
-/// 20ms 对候选/控制面足够（按键线程只写，不读）。
-const READ_POLL_MS: u64 = 20;
+/// 读线程轮询间隔。**不能再用阻塞 ReadFile**：同一同步命名管道句柄上未完成的
+/// ReadFile 会把 WriteFile 串行化 —— 按键线程第二次 show 会永久阻塞、宿主 UI 冻住
+/// （2026-10-21 真机：n 出候选窗后 i 不再响应）。该间隔直接加在按键→候选窗延迟上：
+/// 20ms 实际睡 20–31ms；2ms 的 PeekNamedPipe 很廉价（Win 计时器粒度可能到 ~15.6ms）。
+const READ_POLL_MS: u64 = 2;
 /// 读线程缓冲区（单条消息远小于此；字节流模式按 '\n' 分帧）。
 const READ_BUF: usize = 4096;
 /// 分帧残留（pending）上限。对端只要发一条不含 '\n' 的超长消息，残留就会一直涨 ——

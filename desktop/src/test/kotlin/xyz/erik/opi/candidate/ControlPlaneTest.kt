@@ -129,7 +129,7 @@ class ControlPlaneTest {
         assertEquals("\"op\":\"state\"", forward("""{"op":"state"}""").opFields)
         // 设置窗保存后的在线重读：无参数、固定 op。
         assertEquals("\"op\":\"reload\"", forward("""{"op":"reload"}""").opFields)
-        for (action in listOf("lang", "trad", "punct", "fullwidth", "englishpro", "mode")) {
+        for (action in listOf("lang", "trad", "punct", "fullwidth", "englishpro", "mode", "clearuserwords")) {
             assertEquals(
                 "动作名/字段名抄错就会让 TSF 报未知动作：$action",
                 "\"action\":\"$action\",\"op\":\"action\"",

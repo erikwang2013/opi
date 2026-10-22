@@ -225,8 +225,12 @@ void opiDirectConfirm(fcitx::InputContext *ic) {
         opi_fcitx5_clear();
         return;
     }
-    // ③ 拼音/繁体：一律原文 —— 缓冲原样提交（与 typed 逐字一致，不带候选、不加分隔符号）
-    std::string out = take(opi_fcitx5_buffer());
+    // ③ 拼音/繁体：一律原文 —— 真缓冲提交（与 typed 逐字一致，不带候选、不加分隔符）。
+    // 显示出口 2026-10-23 起全键盘带分词（`ni'hao`）；老 .so 没有原文出口，而那时
+    // `opi_fcitx5_buffer` 本来就返回原文，退回它（两种 .so 都提交 typed 逐字）。
+    std::string out = opi_fcitx5_raw_buffer != nullptr
+                          ? take(opi_fcitx5_raw_buffer())
+                          : take(opi_fcitx5_buffer());
     if (!out.empty()) {
         // 原文已经交出去了，引擎状态要跟着清（缓冲/候选/预编辑），否则预编辑串
         // 会留在屏幕上、候选也会错位到下一段输入。
@@ -383,6 +387,14 @@ void OpiEngine::keyEventImpl(const fcitx::InputMethodEntry & /*entry*/,
     }
     if (result.action != 2) {
         opi_ffi_free_string_utf8(result.text);
+    }
+    // 抬起事件不改引擎状态：路由的 released 分支只回放按下时记下的结论
+    // （last_printable），缓冲/候选/模式/页码全不动（门禁：
+    // input_method_release_tests.rs 的 release_never_mutates_engine_state）。
+    // 旧实现照常重推面板 ⇒ 每个物理按键把全量候选排序付两遍；这里直接返回。
+    // action==2 例外：抬头若将来出现「抬起提交」，提交后面板仍必须收起来。
+    if (keyEvent.isRelease() && result.action != 2) {
+        return;
     }
     // 直通（action==0）：Rust 侧没消费这个键、状态没动，重推的是同一份内容 ——
     // 幂等，但白花一次跨 FFI + 候选 JSON 序列化/解析 + 客户端重绘，而 ESC /

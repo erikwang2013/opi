@@ -98,7 +98,9 @@ internal fun PetStickerPanel(onPick: (PetMood) -> Unit) {
         }
         return
     }
-    LazyVerticalGrid(columns = GridCells.Fixed(6), modifier = Modifier.fillMaxSize()) {
+    // Adaptive(48dp)：320dp 仍是 6 列（6×48=288），大屏/平板自动多排，不把 40dp 的
+    // 小欧表情拉在巨大格子里。Fixed(6) 在 800dp 平板上每格 133dp。
+    LazyVerticalGrid(columns = GridCells.Adaptive(48.dp), modifier = Modifier.fillMaxSize()) {
         items(forms.size) { i ->
             val form = forms[i]
             Box(

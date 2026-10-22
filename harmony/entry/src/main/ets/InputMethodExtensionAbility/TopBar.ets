@@ -3,7 +3,7 @@
 
 // 顶部两行（对齐 Android ImeScreen 的「拼音行 + 候选/工具条共用槽」）：
 //   Row1  = 拼音行；空闲时是随机多形态宠物条（Android PetStrip）。
-//   Row2  = 有缓冲/候选 → 候选栏；否则 → 工具条（图标：表情/皮肤/输入/键盘/关于/收起）。
+//   Row2  = 有缓冲/候选 → 候选栏；否则 → 工具条（图标：表情/皮肤/输入/键盘/设置/关于/收起）。
 // 面板视图（view != 0）不画 Row1，只留工具条 —— 与 Android 的面板视图一致。
 // 平铺候选（opiTiled）时只画 Row1，候选/工具条槽与键区让给 CandidateTiled。
 //
@@ -21,9 +21,11 @@ import { stickerDataUri } from './PetStickerImages';
 
 const PET_SIZE_IN_BAR: number = 30;
 const PET_FORM_HOLD_MS: number = 2800;
-/** 工具条图标按钮的点击区（vp）；五个图标 + 宠物 + 收起在 320vp 窄屏也放得下。 */
+/** 工具条图标按钮的点击区上限（vp）；实际按面板宽度收缩（悬浮模式 = 86% 屏宽）。 */
 const TOOL_ICON_SIZE: number = 36;
-const TOOL_ICON_GLYPH: number = 21;
+/** 宠物块（24 + 左右 margin）+ 英文态「中」键的预留宽度：算图标宽度时必须先扣掉。 */
+const TOOLBAR_FIXED_VP: number = 62;
+const TOOL_ICON_COUNT: number = 7;
 
 function petStickerName(mood: PetMood): string {
   switch (mood) {
@@ -45,6 +47,7 @@ function petStickerName(mood: PetMood): string {
 @Component
 export struct TopBar {
   @StorageLink('opiBuffer') buffer: string = '';
+  @StorageLink('opiDisplayBuffer') displayBuffer: string = '';
   @StorageLink('opiCandidates') @Watch('onCandidatesChanged') candidates: string[] = [];
   @StorageLink('opiMode') mode: number = OpiMode.Pinyin as number;
   @StorageLink('opiLearner') learner: number = 1;
@@ -55,6 +58,8 @@ export struct TopBar {
   @StorageLink('opiTiled') tiled: number = 0;
 
   @State petForms: PetMood[] = petStripSelection(Math.random);
+  /** 工具条实测宽度（vp）：图标按它收缩，避免悬浮/单手+悬浮时挤掉收起键。 */
+  @State barWidth: number = 360;
   private petTimer: number = -1;
   private candidatesScroller: Scroller = new Scroller();
   private ctrl: KeyboardController = KeyboardController.getInstance();
@@ -86,13 +91,26 @@ export struct TopBar {
       this.ctrl.dictionaryDegraded());
   }
 
+  /**
+   * 拼音行文本：优先**显示用**缓冲（9 键带分词 `ni'hao`）；读数为空（9 键整段
+   * 无匹）退回原缓冲，保证「正在组合」时这一行永远看得到东西。
+   * ⚠️ 行为判定（退格/空格/回车）仍读 `buffer` —— 两个出口别合并。
+   */
+  private composingText(): string {
+    return this.displayBuffer.length > 0 ? this.displayBuffer : this.buffer;
+  }
+
+  private composing(): boolean {
+    return this.composingText().length > 0;
+  }
+
   private idlePetStrip(): boolean {
-    return this.view === 0 && this.buffer.length === 0 && this.candidates.length === 0;
+    return this.view === 0 && !this.composing() && this.candidates.length === 0;
   }
 
   private showCandidates(): boolean {
     // 英文**空闲**（无缓冲、无候选）显示工具条，不是 EN 条 —— Android `englishIdle` 同款。
-    return this.view === 0 && (this.buffer.length > 0 || this.candidates.length > 0);
+    return this.view === 0 && (this.composing() || this.candidates.length > 0);
   }
 
   /** 平铺视图占满拼音行以下的整块（Android ImeScreen 的 CANDIDATES_TILED 分支）。 */
@@ -109,6 +127,16 @@ export struct TopBar {
       return 24;
     }
     return PET_SIZE_IN_BAR;
+  }
+
+  /** 图标宽度 = 均分「面板宽 - 固定块」；不低于 24vp（再小就看不清了）。 */
+  private iconSize(): number {
+    const fit: number = Math.floor((this.barWidth - TOOLBAR_FIXED_VP) / TOOL_ICON_COUNT);
+    return Math.max(24, Math.min(TOOL_ICON_SIZE, fit));
+  }
+
+  private iconGlyph(): number {
+    return Math.round(this.iconSize() * 0.58);
   }
 
   build() {
@@ -143,10 +171,11 @@ export struct TopBar {
           this.ctrl.toggleLearner();
         })
       } else {
-        Text(this.buffer.length === 0 ? ' ' : this.buffer)
+        Text(this.composing() ? this.composingText() : ' ')
           .fontSize(this.elder === 1 ? 20 : 17)
           .fontColor(this.pal().bufferFg)
           .layoutWeight(1).padding({ left: 12 }).maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
       }
       if (this.learner === 0) {
         Text('不记词').fontSize(12).fontColor(this.pal().accent).margin({ right: 12 })
@@ -172,7 +201,7 @@ export struct TopBar {
             ForEach(this.candidates, (item: string, index: number) => {
               Text(item)
                 .fontSize(this.elder === 1 ? 24 : 22).fontColor(this.pal().keyFg)
-                .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+                .padding({ left: 12, right: 12, top: 6, bottom: 6 })
                 .onClick(() => {
                   this.ctrl.tapCandidate(index);
                 })
@@ -244,17 +273,23 @@ export struct TopBar {
       })
     }
     .height(44).width('100%').backgroundColor(this.pal().toolbarBg)
+    .onAreaChange((oldValue: Area, newValue: Area) => {
+      const w: number = newValue.width as number;
+      if (w > 0 && w !== this.barWidth) {
+        this.barWidth = w;
+      }
+    })
   }
 
   @Builder
   IconButton(icon: Resource, label: string, action: () => void) {
     Column() {
       SymbolGlyph(icon)
-        .fontSize(TOOL_ICON_GLYPH)
+        .fontSize(this.iconGlyph())
         .fontColor([this.pal().toolbarFg])
         .accessibilityText(label)
     }
-    .width(TOOL_ICON_SIZE).height(TOOL_ICON_SIZE)
+    .width(this.iconSize()).height(this.iconSize())
     .justifyContent(FlexAlign.Center)
     .borderRadius(6)
     .onClick(action)

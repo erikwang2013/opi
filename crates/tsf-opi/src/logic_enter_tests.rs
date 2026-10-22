@@ -26,6 +26,7 @@ fn wubi_state() -> TsfLogic {
         english_pro: true,
         last_printable: None,
         shift_toggle: true,
+        fetch_cache: Default::default(),
     };
     s.engine.set_scheme(Scheme::Wubi);
     s.refresh_snapshot();

@@ -60,6 +60,10 @@ class FakeEngine : OpiEngineApi {
         buf = ""
         carriedFrom = null
         cands = null // 真引擎的候选由缓冲派生：清缓冲 ⇒ 候选空
+        // 逐字片段与显示读数同属组合态（真引擎的 clear 一并清掉）：
+        // 长按退格「清空整段组合」的用例要靠它验证，不留假残留。
+        pending = ""
+        displayBuf = null
     }
 
     /** 回车判据（2026-10-14）：测试按需设 0/1/2 —— 缺省 0 = 既有行为（选首候选）。 */

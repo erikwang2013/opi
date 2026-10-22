@@ -203,6 +203,7 @@ fn all_frozen_actions_pass_through() {
         "fullwidth",
         "lang",
         "englishpro",
+        "clearuserwords",
     ] {
         let dir = fake(REPLY_TO_STDOUT, OK_REPLY);
         let (code, _, stderr) = run_ctl(&dir, &[action]);

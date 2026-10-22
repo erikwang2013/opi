@@ -193,7 +193,7 @@ enum ModeKeyTables {
         ]
         bottom += "zxcvbnm".map { KeySpec.char($0) }
         bottom.append(
-            KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, widthUnits: 1.4)
+            KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, longPressClearsComposing: true, widthUnits: 1.4)
         )
 
         let funcRow: [KeySpec] = [
@@ -229,7 +229,7 @@ enum ModeKeyTables {
             KeySpec.char("?"),
             KeySpec.char("!"),
             KeySpec.char("'"),
-            KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, widthUnits: 1.4),
+            KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, longPressClearsComposing: true, widthUnits: 1.4),
         ]
         let funcRow: [KeySpec] = [
             systemInputKey,
@@ -290,7 +290,7 @@ enum ModeKeyTables {
         ]
         // ---- 右列：⌫ / 重输 / 空格（2026-10-10 Android 用户裁决：从底行搬进右列）----
         let right = [
-            KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward),
+            KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, longPressClearsComposing: true),
             // 重输 = 清掉当前组合重来（缓冲空时是空操作，engine.clear() 幂等）。
             // 分词键在主区第一格（见 col1），不在这一列。
             KeySpec("重输", function: .retype),
@@ -335,7 +335,7 @@ enum ModeKeyTables {
             KeySpec(modeLabel, function: .toggleTraditional, longPressFunction: .showModes),
             KeySpec("英文", function: .selectInputMode(.english26)),
             KeySpec("空格", keyval: OpiKey.space, fallback: .text(" "), widthUnits: 2),
-            KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward),
+            KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, longPressClearsComposing: true),
             KeySpec("↵", keyval: OpiKey.ret, fallback: .text("\n")),
         ]
         return [ModeRow.plain(r1), ModeRow.plain(r2), ModeRow.plain(r3), ModeRow.plain(funcRow)]
@@ -367,7 +367,7 @@ enum ModeKeyTables {
             KeySpec("英文", function: .selectInputMode(.english26)),
             KeySpec("生僻字", function: .showRare, widthUnits: 1.4),
             KeySpec("空格", keyval: OpiKey.space, fallback: .text(" "), widthUnits: 2),
-            KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward),
+            KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, longPressClearsComposing: true),
             KeySpec("↵", keyval: OpiKey.ret, fallback: .text("\n")),
         ]
         return [ModeRow.plain(keys), ModeRow.plain(funcRow)]

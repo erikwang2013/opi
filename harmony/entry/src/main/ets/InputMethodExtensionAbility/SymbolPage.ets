@@ -15,10 +15,14 @@ import {
   SymbolCategory, radicalGlyph, rareChars, rareIndex, rareStrokeCounts, symbolCategories,
 } from './SymbolData';
 
+/** 手机宽度下的列数（Android 同值）；宽屏按 50vp/列加到最多 12 列，手机不变。 */
 const SYMBOL_PER_ROW: number = 8;
 const SYMBOL_ROWS: number = 4;
-const SYMBOL_PAGE_SIZE: number = SYMBOL_PER_ROW * SYMBOL_ROWS;
+/** 每行至少 30vp（22fp 单字符 + 呼吸）；窗口更矮时减少每页行数而不是压扁格子。 */
+const SYMBOL_ROW_MIN_VP: number = 30;
 const INDEX_COLS: number = 8;
+const GRID_CELL_VP: number = 50;
+const GRID_MAX_COLS: number = 12;
 
 function blanks(n: number): number[] {
   const out: number[] = [];
@@ -51,10 +55,26 @@ export struct SymbolPage {
   @StorageLink('opiSkin') skin: number = 0;
   @StorageLink('opiDark') dark: number = 0;
   @StorageLink('opiElder') elder: number = 0;
+  /** 面板实测尺寸（vp）：宽屏加列、矮窗减行；手机竖向取值与常量相同。 */
+  @State gridW: number = 360;
+  @State gridH: number = 260;
   private ctrl: KeyboardController = KeyboardController.getInstance();
 
   private pal(): Palette {
     return paletteFor(this.skin, this.dark === 1, this.elder === 1);
+  }
+
+  private perRow(): number {
+    return Math.min(GRID_MAX_COLS, Math.max(SYMBOL_PER_ROW, Math.floor(this.gridW / GRID_CELL_VP)));
+  }
+
+  /** 每页行数：常规窗口 4 行；游戏模式/分屏等矮窗按 30vp/行减到 1 行。 */
+  private rowsPerPage(): number {
+    return Math.max(1, Math.min(SYMBOL_ROWS, Math.floor(this.gridH / SYMBOL_ROW_MIN_VP)));
+  }
+
+  private pageSize(): number {
+    return this.perRow() * this.rowsPerPage();
   }
 
   private categories(): SymbolCategory[] {
@@ -74,7 +94,7 @@ export struct SymbolPage {
     if (cat === null) {
       return 0;
     }
-    return Math.max(1, Math.ceil(cat.symbols.length / SYMBOL_PAGE_SIZE));
+    return Math.max(1, Math.ceil(cat.symbols.length / this.pageSize()));
   }
 
   /** 第 pageNo 页、第 row 行、第 col 列的符号（空串 = 补位格）。 */
@@ -83,7 +103,7 @@ export struct SymbolPage {
     if (cat === null) {
       return '';
     }
-    const i: number = pageNo * SYMBOL_PAGE_SIZE + row * SYMBOL_PER_ROW + col;
+    const i: number = pageNo * this.pageSize() + row * this.perRow() + col;
     return i < cat.symbols.length ? cat.symbols[i] : '';
   }
 
@@ -131,9 +151,9 @@ export struct SymbolPage {
         Swiper() {
           ForEach(this.pages(), (pageNo: number) => {
             Column() {
-              ForEach(rowsOfRange(0, SYMBOL_ROWS - 1, 1), (r: number[]) => {
+              ForEach(rowsOfRange(0, this.rowsPerPage() - 1, 1), (r: number[]) => {
                 Row() {
-                  ForEach(blanks(SYMBOL_PER_ROW), (col: number) => {
+                  ForEach(blanks(this.perRow()), (col: number) => {
                     Stack({ alignContent: Alignment.Center }) {
                       Text(this.symbolAt(pageNo, r[0], col))
                         .fontSize(this.symbolAt(pageNo, r[0], col).length > 1 ? 14
@@ -154,13 +174,21 @@ export struct SymbolPage {
                 }.width('100%').layoutWeight(1)
               }, (r: number[]) => `sym-row-${pageNo}-${r[0]}`)
             }.width('100%').height('100%').padding({ left: 4, right: 4, top: 4, bottom: 4 })
-          }, (pageNo: number) => `sym-page-${pageNo}-${this.selected}`)
+          }, (pageNo: number) => `sym-page-${pageNo}-${this.selected}-${this.pageSize()}`)
         }
         .layoutWeight(1).width('100%')
         .vertical(false).loop(false).indicator(false)
         .index(this.page)
         .onChange((index: number) => {
           this.page = index;
+        })
+        .onAreaChange((oldValue: Area, newValue: Area) => {
+          const h: number = newValue.height as number;
+          if (h > 0 && h !== this.gridH) {
+            this.gridH = h;
+            // 行数变了页大小也变：旧页号夹回最后一页。
+            this.page = Math.min(this.page, Math.max(0, this.pageCount() - 1));
+          }
         })
       }
 
@@ -183,6 +211,14 @@ export struct SymbolPage {
       .width('100%').height(46).backgroundColor(this.pal().barBg)
     }
     .width('100%').height('100%').backgroundColor(this.pal().panelBg)
+    .onAreaChange((oldValue: Area, newValue: Area) => {
+      const w: number = newValue.width as number;
+      if (w > 0 && w !== this.gridW) {
+        this.gridW = w;
+        // 列数变了页大小也变：旧页号可能越界，夹回最后一页（换类目另由 selectCategory 归零）。
+        this.page = Math.min(this.page, Math.max(0, this.pageCount() - 1));
+      }
+    })
   }
 }
 
@@ -195,10 +231,16 @@ export struct RarePanel {
   @StorageLink('opiSkin') skin: number = 0;
   @StorageLink('opiDark') dark: number = 0;
   @StorageLink('opiElder') elder: number = 0;
+  /** 面板实测宽度（vp）：宽屏/平板加列；行仍可纵向滚动，不依赖页大小。 */
+  @State gridW: number = 360;
   private ctrl: KeyboardController = KeyboardController.getInstance();
 
   private pal(): Palette {
     return paletteFor(this.skin, this.dark === 1, this.elder === 1);
+  }
+
+  private cols(): number {
+    return Math.min(GRID_MAX_COLS, Math.max(INDEX_COLS, Math.floor(this.gridW / GRID_CELL_VP)));
   }
 
   private hasData(): boolean {
@@ -268,7 +310,7 @@ export struct RarePanel {
       } else if (this.radical === 0) {
         Scroll() {
           Column() {
-            ForEach(rowsOfRange(1, 214, INDEX_COLS), (row: number[]) => {
+            ForEach(rowsOfRange(1, 214, this.cols()), (row: number[]) => {
               Row() {
                 ForEach(row, (r: number) => {
                   Stack({ alignContent: Alignment.Center }) {
@@ -281,11 +323,11 @@ export struct RarePanel {
                     this.strokes = 0;
                   })
                 }, (r: number) => `rad-${r}`)
-                ForEach(blanks(INDEX_COLS - row.length), (b: number) => {
+                ForEach(blanks(this.cols() - row.length), (b: number) => {
                   Text('').layoutWeight(1).height(44)
                 }, (b: number) => `rad-blank-${b}`)
               }.width('100%')
-            }, (row: number[]) => `rad-row-${row[0]}`)
+            }, (row: number[]) => `rad-row-${this.cols()}-${row[0]}`)
           }.width('100%')
         }.layoutWeight(1).width('100%')
       } else if (this.strokes === 0) {
@@ -312,7 +354,7 @@ export struct RarePanel {
       } else {
         Scroll() {
           Column() {
-            ForEach(rowsOfRange(0, this.chars().length - 1, INDEX_COLS), (row: number[]) => {
+            ForEach(rowsOfRange(0, this.chars().length - 1, this.cols()), (row: number[]) => {
               Row() {
                 ForEach(row, (i: number) => {
                   Stack({ alignContent: Alignment.Center }) {
@@ -324,15 +366,21 @@ export struct RarePanel {
                     this.ctrl.commitText(this.chars()[i]);
                   })
                 }, (i: number) => `rare-${i}-${this.chars()[i]}`)
-                ForEach(blanks(INDEX_COLS - row.length), (b: number) => {
+                ForEach(blanks(this.cols() - row.length), (b: number) => {
                   Text('').layoutWeight(1).height(44)
                 }, (b: number) => `rare-blank-${b}`)
               }.width('100%')
-            }, (row: number[]) => `rare-row-${row[0]}`)
+            }, (row: number[]) => `rare-row-${this.cols()}-${row[0]}`)
           }.width('100%')
         }.layoutWeight(1).width('100%')
       }
     }
     .width('100%').height('100%').backgroundColor(this.pal().panelBg)
+    .onAreaChange((oldValue: Area, newValue: Area) => {
+      const w: number = newValue.width as number;
+      if (w > 0 && w !== this.gridW) {
+        this.gridW = w;
+      }
+    })
   }
 }

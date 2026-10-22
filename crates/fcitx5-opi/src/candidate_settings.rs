@@ -19,6 +19,7 @@ impl CandidateState {
     /// 普通路径。**装载不换方案**（要用五笔还得 `set_scheme(Wubi)`）。
     /// 配对：``tsf-opi/src/logic.rs`` 的同名方法（两轨同构）。
     pub fn load_wubi(&mut self, path: &str) -> bool {
+        self.invalidate_fetch_cache();
         match engine_data::load_mmap(std::path::Path::new(path)) {
             Ok(d) => {
                 self.engine.set_wubi_dict(Some(Box::new(d)));
@@ -37,39 +38,47 @@ impl CandidateState {
     /// 完成（四端唯一真源，本层不写第二张表）。
     /// 配对：`tsf-opi/src/logic.rs` 的同名方法（两轨同构，改一处必须改另一处）。
     pub fn set_wubi_style(&mut self, style: engine_core::WubiStyle) {
+        self.invalidate_fetch_cache();
         self.engine.set_wubi_style(style);
     }
 
     pub fn set_wubi_mixed_entry(&mut self, entry: engine_core::WubiMixedEntry) {
+        self.invalidate_fetch_cache();
         self.engine.set_wubi_mixed_entry(entry);
     }
 
     pub fn set_wubi_candidate_limit(&mut self, n: usize) {
+        self.invalidate_fetch_cache();
         self.engine.set_wubi_candidate_limit(n);
     }
 
     pub fn set_wubi_return_style(&mut self, style: engine_core::WubiReturnStyle) {
+        self.invalidate_fetch_cache();
         self.engine.set_wubi_return_style(style);
     }
 
     pub fn set_wubi_auto_commit(&mut self, on: bool) {
+        self.invalidate_fetch_cache();
         self.engine.set_wubi_auto_commit(on);
     }
 
     /// 学习开关（值来自 addon 配置的 `Learn` → `opi_fcitx5_set_learner`）。
     /// 配对：`tsf-opi/src/logic.rs` 的同名方法（两轨同构，改一处必须改另一处）。
     pub fn set_learner(&mut self, on: bool) {
+        self.invalidate_fetch_cache();
         self.engine.set_learner(on);
     }
 
     /// 中文标点开关（值来自 addon 配置的 `ChinesePunct`）。配对同上。
     pub fn set_chinese_punct(&mut self, on: bool) {
+        self.invalidate_fetch_cache();
         self.engine.set_chinese_punct(on);
     }
 
     /// 模糊音开关（值来自 fcitx5 的 addon 配置 → `opi_fcitx5_set_fuzzy`）。
     /// 配对：`tsf-opi/src/logic.rs` 的同名方法（两轨同构，改一处必须改另一处）。
     pub fn set_fuzzy(&mut self, on: bool) {
+        self.invalidate_fetch_cache();
         self.engine.set_fuzzy(on);
     }
 
@@ -77,18 +86,21 @@ impl CandidateState {
     /// `engine_core::fuzzy::pair_names`，解析走 `fuzzy::mask_from_names` —— 唯一一份）。
     /// 配对：`tsf-opi/src/logic.rs` 的同名方法（两轨同构）。
     pub fn set_fuzzy_pairs(&mut self, names: &str) {
+        self.invalidate_fetch_cache();
         self.engine
             .set_fuzzy_pairs(engine_core::fuzzy::mask_from_names(names));
     }
 
     /// 简拼开关。配对同上。
     pub fn set_jianpin(&mut self, on: bool) {
+        self.invalidate_fetch_cache();
         self.engine.set_jianpin(on);
     }
 
     /// 拼音纠错开关（2026-10-13；配置键 `Correction`）。
     /// 配对：`tsf-opi/src/logic.rs` 的同名方法（两轨同构）。
     pub fn set_correction(&mut self, on: bool) {
+        self.invalidate_fetch_cache();
         self.engine.set_correction(on);
     }
 
@@ -97,6 +109,7 @@ impl CandidateState {
     /// 引擎侧（`set_shuangpin_layout`）。
     /// 配对：`tsf-opi/src/logic.rs` 的同名方法（两轨同构）。
     pub fn set_shuangpin_layout(&mut self, index: usize) {
+        self.invalidate_fetch_cache();
         self.engine.set_shuangpin_layout(index);
     }
 
@@ -105,6 +118,7 @@ impl CandidateState {
     /// 没有「按键路径上换方案」这种用法。
     /// 配对：`tsf-opi/src/logic.rs` 的同名方法（两轨同构）。
     pub fn set_scheme(&mut self, scheme: engine_core::Scheme) {
+        self.invalidate_fetch_cache();
         self.engine.set_scheme(scheme);
     }
 
@@ -113,12 +127,14 @@ impl CandidateState {
     /// 三条裁决见 `dict_layer.rs` 头注（与 opi-ffi `api/dict.rs` 同源）。
     /// 配对：`tsf-opi/src/logic.rs` 的同名方法（两轨同构，改一处必须改另一处）。
     pub fn import_dict(&mut self, path: &str) -> i32 {
+        self.invalidate_fetch_cache();
         self.dicts.import(&mut self.engine, path)
     }
 
     /// 装载 / 卸载一条**导入**词库（原子；`false` = 名字认不得，含系统词典与未导入
     /// 的名字）。停用后再启用**不依赖原文件还在**（数据在本层内存里）。配对同上。
     pub fn set_dict_enabled(&mut self, name: &str, on: bool) -> bool {
+        self.invalidate_fetch_cache();
         self.dicts.set_enabled(&mut self.engine, name, on)
     }
 }

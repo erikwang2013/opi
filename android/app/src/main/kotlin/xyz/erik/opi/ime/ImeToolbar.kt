@@ -8,6 +8,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -36,6 +37,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xyz.erik.opi.keyboard.LocalKeyboardPalette
@@ -47,6 +49,26 @@ import xyz.erik.opi.pet.PetMood
  * 40（原 36）：2026-10-09 起小欧并入本行（用户裁决「入口要和 logo 图标在一行，
  * 放在 logo 后面」），给 28dp 的它留出上下呼吸。 */
 const val IME_TOOLBAR_HEIGHT_DP = 44
+
+// —— 工具条自适应尺寸（纯函数，ImeToolbarSizingTest 门禁） ——
+
+/** 右侧固定功能图标数量（表情/皮肤/输入模式/键盘模式/设置/关于/收起）。 */
+private const val TOOLBAR_ICON_COUNT = 7
+
+/**
+ * 图标之外固定占用的宽度（dp）：小欧 28+6+2 = 36，英文空闲的「中」键约 27（按 40 预留，
+ * 避免中英切换时整行图标跳一下）。
+ */
+private const val TOOLBAR_RESERVED_DP = 76f
+
+/**
+ * 每枚图标的尺寸（dp）：按工具条宽度均分剩余空间并钳在 26–40。
+ *
+ * 40dp 是既有视觉尺寸；320dp 屏上 `(320-76)/7 = 34.9`，最右「收起键盘」不再被裁；
+ * 再窄（分屏/自由窗口）最多缩到 26dp，仍保留可点面积。
+ */
+internal fun toolbarIconSizeDp(toolbarWidthDp: Float): Float =
+    ((toolbarWidthDp - TOOLBAR_RESERVED_DP) / TOOLBAR_ICON_COUNT).coerceIn(26f, 40f)
 
 /**
  * 键盘顶部工具条（2026-10-09，对齐主流移动输入法）：**入口全部用图标** ——
@@ -88,31 +110,41 @@ fun ImeToolbar(
     modifier: Modifier = Modifier,
 ) {
     val p = LocalKeyboardPalette.current
-    Row(
+    BoxWithConstraints(
         modifier = modifier.fillMaxWidth().height(IME_TOOLBAR_HEIGHT_DP.dp)
             .background(p.toolbarBg),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        // 小欧在最左（2026-10-09 用户裁决：入口与 logo 同行、在其后）。它此前站在
-        // 候选栏槽位的待命位 —— 移到本行后那个槽位空闲时就是空的（不多画东西）。
-        OpiPet(mood = petMood, size = 28.dp, modifier = Modifier.padding(start = 6.dp))
-        Spacer(Modifier.width(2.dp))
-        ToolbarIcon(OpiIcons.Emoji, "表情") { onOpenEmoji() }
-        ToolbarIcon(OpiIcons.Palette, "皮肤") { onOpenSkin() }
-        ToolbarIcon(OpiIcons.InputMode, "输入模式，当前 ${currentMode.label}") { onOpenInputMode() }
-        ToolbarIcon(
-            OpiIcons.KeyboardMode,
-            "键盘模式${if (keyboardModes.anyOn) "，有开启项" else ""}",
-        ) { onOpenKeyboardMode() }
-        // 设置（2026-10-22）：在「关于」之前；关于面板的原入口保留。
-        ToolbarIcon(OpiIcons.Gear, "设置") { onOpenSettings() }
-        // 关于（2026-10-15 用户裁决「功能区的入口」）：压在功能组最右、收起键盘之前。
-        ToolbarIcon(OpiIcons.Info, "关于") { onOpenAbout() }
-        // 收起键盘压在**最右**（用户裁决「功能按钮区域最右侧」）：弹性空白把它推到头。
-        // 图标 = 向下折角（2026-10-10 用户裁决「不要用 x」——✕ 是关闭语义）。
-        Spacer(Modifier.weight(1f))
-        if (inEnglish) ChineseHiddenButton(onSwitchToChinese)
-        ToolbarIcon(OpiIcons.KeyboardHide, "收起键盘") { onCloseKeyboard() }
+        // 320dp：7×40 + 小欧 36 + 英文「中」≈ 343 > 320，最右的收起键会被裁掉。
+        // 按剩余宽度收缩图标（26–40dp），这一行在任意宽度都不溢出。
+        val iconSize = toolbarIconSizeDp(maxWidth.value).dp
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // 小欧在最左（2026-10-09 用户裁决：入口与 logo 同行、在其后）。它此前站在
+            // 候选栏槽位的待命位 —— 移到本行后那个槽位空闲时就是空的（不多画东西）。
+            OpiPet(mood = petMood, size = 28.dp, modifier = Modifier.padding(start = 6.dp))
+            Spacer(Modifier.width(2.dp))
+            ToolbarIcon(OpiIcons.Emoji, "表情", iconSize) { onOpenEmoji() }
+            ToolbarIcon(OpiIcons.Palette, "皮肤", iconSize) { onOpenSkin() }
+            ToolbarIcon(OpiIcons.InputMode, "输入模式，当前 ${currentMode.label}", iconSize) {
+                onOpenInputMode()
+            }
+            ToolbarIcon(
+                OpiIcons.KeyboardMode,
+                "键盘模式${if (keyboardModes.anyOn) "，有开启项" else ""}",
+                iconSize,
+            ) { onOpenKeyboardMode() }
+            // 设置（2026-10-22）：在「关于」之前；关于面板的原入口保留。
+            ToolbarIcon(OpiIcons.Gear, "设置", iconSize) { onOpenSettings() }
+            // 关于（2026-10-15 用户裁决「功能区的入口」）：压在功能组最右、收起键盘之前。
+            ToolbarIcon(OpiIcons.Info, "关于", iconSize) { onOpenAbout() }
+            // 收起键盘压在**最右**（用户裁决「功能按钮区域最右侧」）：弹性空白把它推到头。
+            // 图标 = 向下折角（2026-10-10 用户裁决「不要用 x」——✕ 是关闭语义）。
+            Spacer(Modifier.weight(1f))
+            if (inEnglish) ChineseHiddenButton(onSwitchToChinese)
+            ToolbarIcon(OpiIcons.KeyboardHide, "收起键盘", iconSize) { onCloseKeyboard() }
+        }
     }
 }
 
@@ -132,10 +164,30 @@ private fun ChineseHiddenButton(onClick: () -> Unit) {
     }
 }
 
+/**
+ * 图标按钮：尺寸由 [toolbarIconSizeDp] 给出。用 Box + clickable 而不是 Material IconButton ——
+ * M3 的最小交互尺寸会让 40dp 的 IconButton 实际占 48dp（窄屏多占 56dp，正好是 320dp
+ * 溢出的一部分），这里需要精确到 dp 的槽位。
+ */
 @Composable
-private fun ToolbarIcon(icon: ImageVector, description: String, onClick: () -> Unit) {
-    IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
-        Icon(icon, contentDescription = description, tint = LocalKeyboardPalette.current.toolbarFg)
+private fun ToolbarIcon(
+    icon: ImageVector,
+    description: String,
+    size: Dp,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            icon,
+            contentDescription = description,
+            tint = LocalKeyboardPalette.current.toolbarFg,
+        )
     }
 }
 
