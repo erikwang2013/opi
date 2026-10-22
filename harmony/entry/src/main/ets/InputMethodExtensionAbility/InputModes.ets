@@ -89,7 +89,7 @@ export function shuangpinLayout(): number {
 
 // ---- 五笔六键（风格/混入方式/候选个数/回车/自动上屏；读侧同值哨兵）----
 //
-// ⚠️ **本端暂无调用方**：鸿蒙的设置页还没落地（Android 的对应物是设置页的「五笔」节）。
+// ⚠️ **本端暂无调用方**：设置页虽已落地，但未接五笔选项（Android 的对应物是设置页的「五笔」节）。
 // 这五对先接通，是为了让「设置页落地」变成纯 UI 工作（不必再动 C ABI/桥/.d.ts 三层）。
 // **别在 UI 里重编这些整数**：值表真源 `engine_wubi.rs`。
 
@@ -307,7 +307,7 @@ export function traditionalModeLabel(m: number): string {
  * 空串 = 该表没随包或拷贝失败 ⇒ C ABI 语义是「**返回 false 且引擎保持原样**」
  * （不崩、不假装有候选，对应方案下只是查不出字）。
  *
- * 五笔**只装一张**：86/98 码空间重叠、权重不可比。本端无设置页 ⇒ 固定 86
+ * 五笔**只装一张**：86/98 码空间重叠、权重不可比。设置页未提供 86/98 选择 ⇒ 固定 86
  * （缺省与 Android 一致）。
  */
 export function loadOptionalTables(strokePath: string, wubiPath: string): void {

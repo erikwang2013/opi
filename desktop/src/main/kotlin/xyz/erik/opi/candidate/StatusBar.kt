@@ -167,14 +167,13 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
             if (next != s) s = next // 变了才写状态：否则每秒一次无谓重组
             // 读失败（null）：先保留上一次状态（一次管道抖动不把用户正要点的按钮变没），
             // 但连续 3 拍（≈3s）都读不到就回到中性 —— 否则宿主退出后条会永远停在旧状态。
+            // 计数/清空判定是纯函数（nextStatePoll，单测钉住第 3 拍即清）。
+            val poll = nextStatePoll(stateFails, readOk = st != null, imPresent = imeState.im.isNotEmpty())
+            stateFails = poll.fails
+            if (poll.clear) imeState = ImeState()
             if (st != null) {
-                stateFails = 0
                 if (st != imeState) imeState = st
                 mode = barMode(st) // 档位跟着 state 走（缺 mode 位的老插件 ⇒ barMode 回落默认档）
-            } else if (stateFails < 3) {
-                stateFails++
-            } else if (imeState.im.isNotEmpty()) {
-                imeState = ImeState()
             }
         }
     }

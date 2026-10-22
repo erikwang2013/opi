@@ -25,9 +25,10 @@ name: Windows 打包
 #   尚未被真机装过）。
 #   ⚠️ **交互路径无 CI 覆盖**：静默安装用 `/VERYSILENT`，而 `[Run]` 带
 #   `skipifsilent`，所以完成页自启脚本在 CI 里**从不执行**。2026-10-20 的白屏
-#   正是藏在这个盲区里（旧脚本会结束 Explorer）。现在脚本只启动 opi.exe，
-#   且 `opi.iss` 用 `CloseApplications=no`；`.github/workflows/ci.yml` 的
-#   `packaging-scripts` job 有静态门禁，防止 shell 重启命令回到安装器里。
+#   正是藏在这个盲区里（旧脚本会结束 Explorer）。现在完成页脚本只启动 opi.exe，
+#   `opi.iss` 用 `CloseApplications=no`；唯一允许的 shell 重启是升级路径
+#   `opi-code-explorer.iss`（原用户令牌 + 看门狗，仅交互式且旧 DLL 被 Explorer 映射），
+#   `.github/workflows/ci.yml` 的静态门禁只放行这一处，其余一律红。
 #   缺口清单见 docs/install/windows.md 的 §6.1（从未验过的事）与 §6.2（读源码得出的缺口）。
 #   词库自 2026-10-20 起随包：`desktop/build.gradle.kts` 的 JPackage `files` 集合
 #   （`OPI_TSF_DLL` 分支）把入库副本 `android/app/src/main/assets/luna.opid` 放进

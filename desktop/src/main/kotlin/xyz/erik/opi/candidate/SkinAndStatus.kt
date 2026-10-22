@@ -63,6 +63,25 @@ internal fun barVisible(buttons: List<StatusBarButton>, im: String, requireActiv
     return im.isEmpty() || im == "opi"
 }
 
+/** 连续读不到状态多少拍后回到中性（[nextStatePoll]）。Windows 上 im 空 = 隐藏。 */
+internal const val STATE_CLEAR_AFTER_FAILS = 3
+
+/** [nextStatePoll] 的结果：新的失败拍数 + 本拍是否该清回中性状态。 */
+internal data class StatePoll(val fails: Int, val clear: Boolean)
+
+/**
+ * 1s 轮询的状态读失败计数（纯函数，[StatusBarApp] 用它）。
+ *
+ * 2026-10-22 订正：旧内联实现把第 3 拍花在自增上、第 4 拍才清，比注释承诺的
+ * 「连续 3 拍 ≈3s」多一秒；本函数按 lead 要求收口到**第 3 拍即清**。
+ * 读到状态 ⇒ 计数归零；`im` 已经为空 ⇒ 没有可清的旧状态（`clear=false`）。
+ */
+internal fun nextStatePoll(previousFails: Int, readOk: Boolean, imPresent: Boolean): StatePoll {
+    if (readOk) return StatePoll(fails = 0, clear = false)
+    val fails = (previousFails + 1).coerceAtMost(STATE_CLEAR_AFTER_FAILS)
+    return StatePoll(fails, clear = fails >= STATE_CLEAR_AFTER_FAILS && imPresent)
+}
+
 /**
  * 「皮肤」的合法值。**字面值就是写进配置的字符串** —— 与 fcitx5 侧 `OpiSkin`
  * 的枚举字面值（`opi_config.h` 的 `FCITX_CONFIG_ENUM_NAME_WITH_I18N`）逐字相同：

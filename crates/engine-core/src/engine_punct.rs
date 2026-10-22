@@ -86,6 +86,33 @@ impl Engine {
         Some(mapped.to_string())
     }
 
+    /// 只读预览：这个可打印键会不会被标点表/机械全角接管。
+    ///
+    /// 给宿主的 `OnTestKeyDown` 用：TSF 的「认领」是最终决定，测试阶段必须知道
+    /// `input_punct` 会不会消费，而不能真的调用它（会翻引号、改 after_digit、刷新
+    /// 缓冲）。判定逐条镜像 `input_punct`/`punct_text`；`Quotes` 是 Copy，预览用
+    /// 副本，不影响真实交替状态。
+    ///
+    /// 注意 `'` 在缓冲非空时是拼音分隔符（`punct_text` 返回 None）—— 这里也返回
+    /// false；调用方的可打印路由仍会把它当输入码消费，不会漏键。
+    pub fn punct_would_apply(&self, ch: char) -> bool {
+        if ch == '.' && self.after_digit && self.buffer().is_empty() {
+            return true;
+        }
+        if ch == '\'' && !self.buffer().is_empty() {
+            return false;
+        }
+        let mut quotes = self.quotes;
+        match self.mode() {
+            Mode::Pinyin | Mode::Traditional => {
+                (self.chinese_punct && punctuation::chinese(ch, &mut quotes).is_some())
+                    || self.mechanical_fullwidth(ch).is_some()
+            }
+            Mode::English | Mode::Number => self.mechanical_fullwidth(ch).is_some(),
+            Mode::Symbol => false,
+        }
+    }
+
     /// 机械全角那一档（`fullwidth` 闸）：关 → `None`（半角直通）。
     /// 表未命中的兜底与西文模式共用这一处 —— 「全角」这个开关的判定只此一份。
     fn mechanical_fullwidth(&self, ch: char) -> Option<char> {

@@ -77,7 +77,9 @@ use windows::Win32::Storage::FileSystem::{
     CreateFileW, FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_SHARE_MODE, FILE_SHARE_READ,
     FILE_SHARE_WRITE, OPEN_EXISTING, ReadFile, WriteFile,
 };
-use windows::Win32::System::Pipes::PeekNamedPipe;
+use windows::Win32::System::Pipes::{
+    PIPE_NOWAIT, PIPE_READMODE_BYTE, PeekNamedPipe, SetNamedPipeHandleState,
+};
 use windows::core::{PCWSTR, w};
 
 /// 管道句柄的 Send+Sync 包装：windows-rs 的 HANDLE 是裸指针（非 Sync），
@@ -224,7 +226,18 @@ impl CandidateClient {
                 None,
             )
         } {
-            Ok(h) => Some(PipeHandle(h)),
+            Ok(h) => {
+                let handle = PipeHandle(h);
+                // 非阻塞写：候选窗进程若一时不读，管道缓冲满时 WriteFile 会**无限
+                // 阻塞**在宿主 UI 线程上（in-proc，用户的 Word/浏览器一起冻住）。
+                // 写不进去就丢这一帧并断开，下一次 show 重连；候选窗下一帧会全量重发。
+                let mode = PIPE_READMODE_BYTE | PIPE_NOWAIT;
+                if unsafe { SetNamedPipeHandleState(handle.0, Some(&mode), None, None) }.is_err() {
+                    unsafe { CloseHandle(handle.0) }.ok();
+                    return None;
+                }
+                Some(handle)
+            }
             Err(_) => None, // 未启动/忙/不可重试：本次放弃
         }
     }

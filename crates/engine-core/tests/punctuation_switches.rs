@@ -380,3 +380,35 @@ fn english_mode_buffer_commit_widens_too() {
     assert_eq!(e.input_space(), "ｈｉｑ", "空格提交原始缓冲：全角");
     assert_eq!(e.buffer(), "", "提交后缓冲清空");
 }
+
+/// `punct_would_apply` 是 `input_punct` 的**只读预览**，供 TSF 的 `OnTestKeyDown`
+/// 决定认不认领（TRUE 不可撤回）。两者逐格对齐，否则某个标点键会被吞或漏给应用。
+#[test]
+fn punct_preview_matches_input_punct() {
+    const CHARS: &[char] = &[
+        'a', '1', ',', '.', '\\', '/', '[', '"', '\'', '^', '@', '~', '中', 'ü',
+    ];
+    for mode in [
+        Mode::Pinyin,
+        Mode::Traditional,
+        Mode::English,
+        Mode::Number,
+        Mode::Symbol,
+    ] {
+        for cp in [false, true] {
+            for fw in [false, true] {
+                for &c in CHARS {
+                    let mut e = engine();
+                    e.switch_mode(mode);
+                    switches(&mut e, cp, fw);
+                    let preview = e.punct_would_apply(c);
+                    let actual = e.input_punct(c).is_some();
+                    assert_eq!(
+                        preview, actual,
+                        "{mode:?} chinese_punct={cp} fullwidth={fw} {c:?} 预览与 input_punct 不一致"
+                    );
+                }
+            }
+        }
+    }
+}

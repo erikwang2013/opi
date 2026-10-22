@@ -24,27 +24,26 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::{Arc, Mutex};
 
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
-use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VK_LWIN, VK_RWIN};
 use windows::Win32::UI::TextServices::{
     ITfContext, ITfFnConfigure, ITfFnConfigure_Impl, ITfFunction, ITfFunction_Impl,
-    ITfKeyEventSink, ITfKeyEventSink_Impl, ITfKeystrokeMgr, ITfLangBarItem, ITfLangBarItemMgr,
-    ITfSource, ITfTextInputProcessor, ITfTextInputProcessor_Impl, ITfThreadFocusSink, ITfThreadMgr,
+    ITfInputProcessorProfileActivationSink, ITfKeyEventSink, ITfKeystrokeMgr, ITfLangBarItem,
+    ITfLangBarItemMgr, ITfSource, ITfTextInputProcessor, ITfTextInputProcessor_Impl,
+    ITfThreadFocusSink, ITfThreadMgr,
 };
 use windows::core::{
     BOOL, BSTR, ComObjectInterface, GUID, HRESULT, IUnknown, Interface, InterfaceRef, Ref, Result,
     implement,
 };
 
+use self::profile_sink::ProfileSink;
 use crate::dll::{DISPLAY_NAME, DllLock};
 use crate::key_state::{map_key_state, to_engine_keycode};
-use crate::logic::{KEY_STATE_ALT, KEY_STATE_CTRL, KEY_STATE_RELEASED, KeyOutcome};
+use crate::logic::{KEY_STATE_RELEASED, KeyOutcome};
 use crate::settings;
 use crate::shift_tap::ShiftTap;
 use crate::state::TsfSharedState;
 use crate::thread_focus::ThreadFocusSink;
-use crate::vk::{
-    ModeHotkey, fullwidth_hotkey, hotkey_should_act, hotkey_target, is_shift_vk, mode_hotkey,
-};
+use crate::vk::{ModeHotkey, fullwidth_hotkey, hotkey_should_act, hotkey_target, mode_hotkey};
 
 // 接缝/推送/出口公用件在 `sink.rs`（拆出守 500 行）；这里 re-export 保持原路径
 // `crate::tsf::{TsfSink, E_FAIL, …}` 对其余模块不变。
@@ -82,6 +81,9 @@ pub struct TsfTextService {
     /// 状态栏与候选窗都会认错前台应用（2026-10-21 报障：切走不消失、中文模式无候选）。
     /// 焦点进来 → 连接；焦点离开 → 断开，把管道交给下一个前台宿主。
     thread_focus: Mutex<Option<(ITfSource, u32, ITfThreadFocusSink)>>,
+    /// 输入法**配置切换**监听（`profile_sink.rs`）：切到别的输入法时立即断开候选
+    /// 管道，状态栏 1s 轮询读不到 `im=opi` 就会隐藏。`Deactivate` 之外的兜底。
+    profile_focus: Mutex<Option<(ITfSource, u32, ITfInputProcessorProfileActivationSink)>>,
     /// 模块级对象计数（见 `dll.rs`）：本对象活着 → `DllCanUnloadNow` 必须答
     /// S_FALSE。字段本身从不读写，作用全在 `Drop`（故下划线前缀）。
     _module_lock: DllLock,
@@ -104,6 +106,7 @@ impl TsfTextService {
             sink,
             shift_tap: Mutex::new(ShiftTap::new()),
             thread_focus: Mutex::new(None),
+            profile_focus: Mutex::new(None),
             _module_lock: DllLock::new(),
         }
     }
@@ -111,16 +114,20 @@ impl TsfTextService {
     /// B0：模式热键。切完**立刻**刷一次候选窗 —— 不刷的话窗口还挂着上个模式的
     /// 候选（切到英文，窗口里还留着拼音的汉字），用户会以为键没生效。
     fn toggle_mode(&self, hot: ModeHotkey) -> BOOL {
-        let Some(mut logic) = self.state.lock_logic() else {
-            return BOOL(1); // 中毒锁：吞键，与 handle_key_inner 同策略
+        // 锁内只改引擎 + 抓快照；管道写在锁外（理由见 `push_state`）。
+        let snapshot = {
+            let Some(mut logic) = self.state.lock_logic() else {
+                return BOOL(1); // 中毒锁：吞键，与 handle_key_inner 同策略
+            };
+            let target = hotkey_target(hot, logic.mode());
+            // 切走/切英文的收尾（W1 订正版：拼音/繁体上原文、符号模式丢关键字）在
+            // `logic.switch_mode_confirmed` —— 本函数走 `switch_mode`（丢缓冲）。
+            // 接线 = 改调它并把返回值插入文档（2026-10-10 裁决：状态机语义先立住，
+            // 插入面未接线如实注明）。
+            logic.switch_mode(target);
+            logic.snapshot()
         };
-        let target = hotkey_target(hot, logic.mode());
-        // 切走/切英文的收尾（W1 订正版：拼音/繁体上原文、符号模式丢关键字）在
-        // `logic.switch_mode_confirmed` —— 本函数走 `switch_mode`（丢缓冲）。
-        // 接线 = 改调它并把返回值插入文档（2026-10-10 裁决：状态机语义先立住，
-        // 插入面未接线如实注明）。
-        logic.switch_mode(target);
-        push_state(&*self.sink, &logic);
+        push_state(&*self.sink, &snapshot);
         BOOL(1)
     }
 
@@ -140,9 +147,10 @@ impl TsfTextService {
                 continue; // 越界/空缓冲：引擎没变，窗口无需刷新
             }
             // 提交后缓冲已空 → sink 内部走 hide 分支，窗口自己收起来。
-            // 锁在这里即取即放：insert_into 早已返回（见它的重入警告）。
-            if let Some(logic) = self.state.lock_logic() {
-                push_state(&*self.sink, &logic);
+            // 锁只包住抓快照这一步：insert_into 早已返回，管道写在锁外。
+            let snapshot = self.state.lock_logic().map(|logic| logic.snapshot());
+            if let Some(snapshot) = snapshot {
+                push_state(&*self.sink, &snapshot);
             }
         }
         // 候选窗「直接插入」（commit_text：符号页多选）：插文档但**不动引擎、不通知
@@ -221,15 +229,25 @@ impl TsfTextService {
             // （`Engine::toggle_fullwidth` 只翻一个 bool）。刷了是白推一帧。
             return BOOL(1);
         }
-        let mut logic = match self.state.lock_logic() {
-            Some(g) => g,
-            None => return BOOL(1), // 中毒锁：吞键，避免键流入应用造成死循环
+        // 锁内只跑引擎并抓快照，**立刻放锁**。后面三件都可能在宿主 UI 线程上阻塞：
+        // `insert_into` / `candidate_anchor` 是同步 COM 编辑会话（会重入本线程），
+        // `sink` 是管道写（候选窗卡住就写不动）。持着 logic 锁跨它们 = 真机卡死
+        // （2026-10-22 报障「按功能键后卡死、只能输入英文」）。
+        let (outcome, snapshot) = {
+            let mut logic = match self.state.lock_logic() {
+                Some(g) => g,
+                None => return BOOL(1), // 中毒锁：吞键，避免键流入应用造成死循环
+            };
+            let outcome = logic.input_key(keycode, states);
+            let snapshot = match outcome {
+                KeyOutcome::CompositionChanged => Some(logic.snapshot()),
+                _ => None,
+            };
+            (outcome, snapshot)
         };
-        let outcome = logic.input_key(keycode, states);
         match outcome {
             KeyOutcome::Commit(text) => {
-                // 顺序有意：先插入（此时 logic 锁还握着，但 insert_into 不碰 logic，
-                // 见其重入警告），再通知接缝。反过来则"接缝炸了 → 字没插进去"。
+                // 顺序有意：先插入，再通知接缝。反过来则"接缝炸了 → 字没插进去"。
                 // pic 为 None = 无焦点文档，没有可插入的目标：静默跳过，照常吞键。
                 if let Some(pic) = pic {
                     self.state.insert_into(pic, &text);
@@ -241,19 +259,19 @@ impl TsfTextService {
                 // 2026-10-22 用户报障「候选词框要挨着输入的位置」：先发 caret 位置、
                 // 再发 show —— 窗口在新位置出现，不会先画在旧位置再跳一下。
                 // 拿不到位置就不发（窗口沿用上一次位置/默认落点），不阻断按键。
-                // 本调用在 logic 锁内跑：caret 的编辑会话**只碰 COM**，绝不回读
-                // logic/sink（重入会死锁，见 caret.rs 模块头）。
                 //
                 // 优化（2026-10-22）：缓冲为空（退格清空 / 切模式）时 `push_state`
                 // 马上会 hide，取 caret 是白花一次同步 COM 编辑会话 —— 跳过。
-                if logic.has_composing()
-                    && let Some(pic) = pic
-                    && let Some((x, y)) =
-                        crate::caret::candidate_anchor(pic, self.state.client_id())
-                {
-                    self.sink.on_caret(x, y);
+                if let Some(snapshot) = snapshot {
+                    if snapshot.composing
+                        && let Some(pic) = pic
+                        && let Some((x, y)) =
+                            crate::caret::candidate_anchor(pic, self.state.client_id())
+                    {
+                        self.sink.on_caret(x, y);
+                    }
+                    push_state(&*self.sink, &snapshot);
                 }
-                push_state(&*self.sink, &logic);
                 BOOL(1)
             }
             KeyOutcome::Consumed => BOOL(1),
@@ -327,6 +345,26 @@ impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
                     Err(e) => eprintln!("tsf-opi: AdviseSink(thread focus) failed: {e}"),
                 }
             }
+            // 输入法配置切换监听：切到别的输入法（同一应用内也算）时断开管道。
+            // `Deactivate` 不保证每次切换都触发，只靠它状态栏会留在屏幕上。
+            if let Ok(profile) = ProfileSink::new(Arc::clone(&self.sink))
+                && let Ok(source) = tmgr.cast::<ITfSource>()
+            {
+                let profile: ITfInputProcessorProfileActivationSink = profile.into();
+                match unsafe {
+                    source.AdviseSink(&ITfInputProcessorProfileActivationSink::IID, &profile)
+                } {
+                    Ok(cookie) => {
+                        if let Ok(mut slot) = self.profile_focus.lock() {
+                            if let Some((old_src, old_cookie, _)) = slot.take() {
+                                let _ = unsafe { old_src.UnadviseSink(old_cookie) };
+                            }
+                            *slot = Some((source, cookie, profile));
+                        }
+                    }
+                    Err(e) => eprintln!("tsf-opi: AdviseSink(profile activation) failed: {e}"),
+                }
+            }
             // 语言栏按钮（宠物「小欧」在 Windows 上唯一新增的图标位，见 langbar.rs）。
             // 失败**只落空、不冒泡**：语言栏没开（Win11 默认）就挂不上，而那是常态 ——
             // 一个图标不值得让整个输入法激活不了。摘除在 Deactivate。
@@ -359,6 +397,12 @@ impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
             {
                 let _ = unsafe { source.UnadviseSink(cookie) };
             }
+            // 摘掉配置切换监听（配对 Activate；不留悬挂 vtable）。
+            if let Ok(mut slot) = self.profile_focus.lock()
+                && let Some((source, cookie, _)) = slot.take()
+            {
+                let _ = unsafe { source.UnadviseSink(cookie) };
+            }
             self.sink.disconnect(); // 释放单实例管道，焦点切走后下一个应用才能连上。
             let mut tm = match self.thread_mgr.lock() {
                 Ok(g) => g,
@@ -386,76 +430,9 @@ impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
     }
 }
 
-// ---------- ITfKeyEventSink：按键转发 ----------
-
-impl ITfKeyEventSink_Impl for TsfTextService_Impl {
-    fn OnSetFocus(&self, _fforeground: BOOL) -> Result<()> {
-        // 焦点切换撤销 Shift 轻按判定：按住 Shift 切走/切回后，抬起不得切模式
-        // （镜像 fcitx5 轨 `OpiShiftToggle::disarm` 的 reset 语义）。
-        self.shift_tap_disarm();
-        Ok(())
-    }
-
-    fn OnTestKeyDown(&self, _pic: Ref<ITfContext>, wparam: WPARAM, lparam: LPARAM) -> Result<BOOL> {
-        // TSF 只在 OnTestKeyDown 返回 TRUE 时才调用 OnKeyDown。2026-10-21 真机
-        // 验证（`tsf-opi: key ...` 诊断日志一条都没有）证明：这里只认领模式热键、
-        // 其余键答 FALSE 的旧实现让**所有普通字母都没进过引擎** —— 应用直接收到
-        // 原文，候选窗永远不会出现。正确形状是：
-        //   · 模式热键 / 全角热键 → TRUE（必须在应用看到之前认领）；
-        //   · 带 Ctrl/Alt 的组合键（除热键外）与 Win 键/Win 组合键 → FALSE（让应用/系统处理）；
-        //   · 其余键 → TRUE，交给 OnKeyDown；那里对引擎不消费的键返回 BOOL(0)，
-        //     键仍会自然流入应用（Tab/Esc/方向键等）。
-        let states = map_key_state(lparam);
-        let vk = wparam.0 as u32;
-        // Shift 轻按判定第一拍（镜像 fcitx5 轨 `OpiShiftToggle::handle`）：
-        // Shift 按下 → 武装；**任何别的键**按下 → 撤销。必须在所有提前 return
-        // 之前 —— Ctrl/Alt/Win 组合在这下面返回 FALSE、不会进 OnKeyDown，但它们
-        // 同样不是轻按（Shift+Ctrl+C、Shift+Win+S…），漏掉会在 Shift 抬起时误切。
-        self.shift_tap_key_down(vk);
-        if mode_hotkey(vk, states).is_some() || fullwidth_hotkey(vk, states) {
-            return Ok(BOOL(1));
-        }
-        if states & (KEY_STATE_CTRL | KEY_STATE_ALT) != 0 {
-            return Ok(BOOL(0));
-        }
-        // Win 组合键（Win+R、Win+Space、Win+数字…）：Win 键本身与「Win 正被按住」
-        // 都放行。`map_key_state` 没有 Win 位，所以这里单独查 GetKeyState —— 不查的话
-        // Win+R 的 R 会被认领并进拼音缓冲，系统热键还能同时触发。
-        // SAFETY: GetKeyState 只读当前线程输入状态队列，无参数约束。
-        let win_down =
-            unsafe { GetKeyState(VK_LWIN.0 as i32) < 0 || GetKeyState(VK_RWIN.0 as i32) < 0 };
-        if win_down || vk == VK_LWIN.0 as u32 || vk == VK_RWIN.0 as u32 {
-            return Ok(BOOL(0));
-        }
-        Ok(BOOL(1))
-    }
-
-    fn OnTestKeyUp(&self, _pic: Ref<ITfContext>, wparam: WPARAM, _lparam: LPARAM) -> Result<BOOL> {
-        // OnKeyUp **只在 OnTestKeyUp 答 TRUE 时才被调用**。Shift 抬起是「轻按切中英」
-        // 的判定点，必须认领（Windows 抬起事件的 wParam 是 VK_LSHIFT/VK_RSHIFT，
-        // 不是 VK_SHIFT —— 见 `vk::is_shift_vk`）。
-        // **ShiftToggle=False 时也认领**：抬起分支还要清掉引擎里的 Single（见
-        // handle_key_inner），不认领就清不掉。其余键的抬起本服务没有用途。
-        let claim = is_shift_vk(wparam.0 as u32);
-        Ok(BOOL(if claim { 1 } else { 0 }))
-    }
-
-    fn OnKeyDown(&self, pic: Ref<ITfContext>, wparam: WPARAM, lparam: LPARAM) -> Result<BOOL> {
-        // pic 不再丢弃：提交文本要插进的正是这个 context（见 insert_into）。
-        Ok(self.handle_key(pic.as_ref(), wparam, lparam))
-    }
-
-    fn OnKeyUp(&self, pic: Ref<ITfContext>, wparam: WPARAM, lparam: LPARAM) -> Result<BOOL> {
-        // 释放状态由 lParam bit31（转换状态）映射，与按下同路由
-        // （logic 对释放事件返回 Consumed/Unhandled，见 input_key）。
-        Ok(self.handle_key(pic.as_ref(), wparam, lparam))
-    }
-
-    fn OnPreservedKey(&self, _pic: Ref<ITfContext>, _rguid: *const GUID) -> Result<BOOL> {
-        Ok(BOOL(0))
-    }
-}
-
+// ITfKeyEventSink 的五个回调在 `key_sink.rs`（拆出守 500 行）；`OnTestKeyDown`
+// 的认领判定在 `logic_claim.rs`，其 TRUE 是最终吞键决定。
+//
 // ITfThreadFocusSink 的实现（焦点 → 候选管道）在 `thread_focus.rs`：拆出守 500 行。
 // 本文件只负责在 Activate/Deactivate 里配对 AdviseSink/UnadviseSink。
 
@@ -493,6 +470,13 @@ impl ITfFnConfigure_Impl for TsfTextService_Impl {
 // 从本文件拆出守 500 行；与 Linux 轨 C++ 的 OpiShiftToggle 对称，见那边模块头。
 #[path = "tsf_shift.rs"]
 mod shift_glue;
+
+#[path = "key_sink.rs"]
+mod key_sink;
+
+// 输入法配置切换监听（切走立即释放候选管道）在 profile_sink.rs。
+#[path = "profile_sink.rs"]
+mod profile_sink;
 
 // COM 服务器导出（DllGetClassObject / DllCanUnloadNow / DllRegisterServer …）
 // 在 `com_server.rs`：那里是"COM 如何加载与注册本 DLL"的整个面，本文件只管

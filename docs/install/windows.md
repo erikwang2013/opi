@@ -302,8 +302,8 @@ android/app/src/main/assets/luna.opid
 - **状态栏出现时机（2026-10-21）**：TSF 客户端在 `Activate` 时**主动**连候选窗（不再等
   第一次 `show`）。状态栏的 1s 轮询随即能读到 `im=opi`，因此切到「小欧输入法」后状态栏
   **立即出现，不必先打一个字**。`Deactivate` 先置 inactive 再断开，避免读线程把单实例
-  管道又抢回去。**注意**：安装/升级后，已在运行的宿主仍持有旧 DLL 映像，要注销/重启
-  才会换上新代码。
+  管道又抢回去。**注意**：安装/升级后，已在运行的宿主仍持有旧 DLL 映像；EXE 交互式
+  升级会在注册后重启原用户 Explorer（见下方订正），其它宿主需各自重启。
 - 打包格式**当前只声明了 Deb**：`desktop/build.gradle.kts` 的
   `nativeDistributions { targetFormats(TargetFormat.Deb) }`，同一处的注释写着
   「Windows .msi 为验收阶段（Windows 主机上构建）」。
@@ -563,6 +563,12 @@ C:\Program Files\opi\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 1. **注销或重启 Windows**。安装器只落文件并注册，TSF 宿主（Explorer/已打开的应用）
    要重新加载 `tsf_opi.dll` 才会看到新输入法。完成页的复选框只拉起候选窗/状态栏，
    **不重启 Explorer、也不重启电脑**（2026-10-20 白屏修复的代价）。
+
+   > **订正 2026-10-22（EXE 交互式升级）**：若安装前 Explorer 确实映射着旧
+   > `tsf_opi.dll`，`ssPostInstall` 在注册新 DLL 后会以**原用户令牌**结束并重启该用户的
+   > Explorer（看门狗等待 3 秒，必要时原用户令牌补启），因此**不需要注销**；首次安装、
+   > 静默安装与未映射旧 DLL 的升级都不会碰 shell。已打开的其它 TSF 宿主（Word/浏览器/
+   > 编辑器）仍各自持有旧映像，需单独重启；诊断脚本的 `[WARN] stale host` 列表仍适用。
    **2026-10-22 真机补充**：怀疑「装了新包却没生效」时先跑
    `scripts\windows\diagnose-tsf.ps1` —— 它按注册表自动定位安装目录，并列出所有仍映射
    `tsf_opi.dll` 的进程。`[WARN] stale host` = 该进程在安装前启动、加载的是旧映像
@@ -749,7 +755,7 @@ Type 1 的 `OpRegisterTsf@5900`、`WixSilentExec64` 与 `OPI_POSTPROCESSED` 标�
 | 对象 | 会发生什么 |
 |---|---|
 | 新启动的进程 | 加载磁盘上的新 DLL（MSI 的 File 表已含 `tsf_opi.dll`） |
-| Explorer / shell / 语言栏 | **不重启**：`CloseApplications=no` 阻止 Restart Manager 关闭它；新 DLL 在下次注销/重启后由 Explorer/TSF 重载 |
+| Explorer / shell / 语言栏 | **EXE 交互式升级且旧 DLL 被映射**：注册后用原用户令牌重启 shell（带看门狗），新 DLL 立即生效；首次/静默安装不重启。MSI 路径仍为 `CloseApplications=no`，下次注销/重启后重载 |
 | 已打开的其它应用（Office / 浏览器 / 编辑器…） | **仍持旧 DLL**，直到各自关闭重开 |
 | 候选窗进程 | 装前被 797 结束、装后由完成页脚本拉起 |
 | COM 注册 | `OpRegisterTsf@5900` 经 `WixSilentExec64` 调 64 位 `regsvr32 /s` 注册 per-machine（Type 1：失败则安装失败/回滚）；卸载**不清注册**（`NOT REMOVE` ⇒ 不跑 `regsvr32 /u`，`HKCR`/`HKLM\SOFTWARE\Microsoft\CTF` 残留指向已删 DLL 的条目，见 §6.1 #13） |
@@ -761,10 +767,12 @@ Type 1 的 `OpRegisterTsf@5900`、`WixSilentExec64` 与 `OPI_POSTPROCESSED` 标�
 - **失败回退**：注册（`OpRegisterTsf@5900`，Type 1）**失败会让安装失败并回滚**（有意：
   宁可响亮失败，也不留「装成功、键盘不出现」的半注册状态）。完成页启动候选窗
   （`OpLaunchApp`，完成页 Finish 时触发、在 InstallFinalize 之后）失败则不影响安装结果。
-- **不再有 shell 重启副作用**：旧版的 `taskkill /im explorer.exe` 会命中所有可访问会话、
-  并依赖 `AutoRestartShell`，首次安装也会白重启一次；这三条随 2026-10-20 白屏修复一起
-  移除。**代价**：升级后语言栏/已打开的 TSF 宿主不会立刻换到新 DLL，需注销或重启
-  （完成页文案已说明）。
+- **shell 重启范围（2026-10-22 订正）**：EXE 的 `RestartExplorerAfterInstall` 只在
+  **交互式升级 + Explorer 映射旧 DLL** 时，用**原用户令牌** `taskkill /f /im explorer.exe`，
+  并由原用户令牌看门狗补启；首次安装、静默安装、卸载都不碰 shell。旧版无条件的
+  `taskkill` 会命中所有可访问会话、且首次安装也白重启，那一条仍已移除。
+  **代价**：升级瞬间所有文件资源管理器窗口会关闭；其它已打开的 TSF 宿主（Word/浏览器）
+  仍持旧 DLL，需各自重启。
 - ✅ **2026-10-18 起 MSI 含 `tsf_opi.dll`**：File 表由 CI 的 `desktop-msi` job 在打包时
   写入（`OPI_TSF_DLL` → jpackage `--input`），后处理只负责注册动作与完成页脚本。
 - ⚠️ **注册路径按 jpackage app-image 布局推定为 `INSTALLDIR\app\tsf_opi.dll`**

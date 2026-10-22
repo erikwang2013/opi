@@ -5,8 +5,9 @@ rem It must never restart (or kill) Explorer. The previous version ended the she
 rem and relied on a "wait" that returned immediately for loopback, then started
 rem Explorer itself. That could leave the desktop blank: the poll could still see
 rem the dying process and exit, the fallback raced Winlogon, and a shell started
-rem from the installer can carry the wrong token. TSF reloads the freshly
-rem registered DLL on sign-out/reboot; the installer says so instead.
+rem from the installer can carry the wrong token. TSF picks up the freshly
+rem registered DLL after the interactive installer restarts Explorer as the
+rem original user (opi-code-explorer.iss); silent installs wait for next sign-in.
 rem
 rem The file name is historical (the MSI postprocess still looks it up by name).
 tasklist /nh /fi "imagename eq opi.exe" 2>nul | find /i "opi.exe" >nul

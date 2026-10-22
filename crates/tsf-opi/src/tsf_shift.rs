@@ -13,7 +13,8 @@
 //!    非 Shift → 撤销，覆盖 Ctrl/Alt/Win 这些不会进 `OnKeyDown` 的组合键）；
 //! 2. [`TsfTextService::take_shift_tap_on_release`]：Shift 抬起（`OnTestKeyUp` 只认领
 //!    Shift，`OnKeyUp` 才到得了这里）且仍武装 → 一次轻按；
-//! 3. [`TsfTextService::handle_shift_release`]：切中英 + W1 收尾 + 刷新/收起候选窗。
+//! 3. [`TsfTextService::handle_shift_release_event`]：切中英 + W1 收尾 + 刷新/收起候选窗
+//!    （锁内只改引擎+抓快照，COM 插入与管道写在锁外）。
 //!
 //! 失活时 [`TsfTextService::shift_tap_disarm`]：按住 Shift 切走后抬起可能到不了本
 //! 服务，不撤销就是回来后的幽灵切换（镜像 `OpiShiftToggle::disarm`）。
@@ -23,7 +24,7 @@ use std::time::Instant;
 use windows::Win32::UI::TextServices::ITfContext;
 use windows::core::BOOL;
 
-use crate::logic::{KEY_SHIFT, KEY_STATE_RELEASED, TsfLogic};
+use crate::logic::{KEY_SHIFT, KEY_STATE_RELEASED};
 use crate::sink::push_state;
 use crate::tsf::TsfTextService;
 use crate::vk::is_shift_vk;
@@ -78,37 +79,35 @@ impl TsfTextService {
             return None;
         }
         let tap = self.take_shift_tap_on_release(states, keycode);
-        let mut logic = match self.state.lock_logic() {
-            Some(g) => g,
-            None => return Some(BOOL(1)), // 中毒锁：吞键，与 handle_key_inner 同策略
+        // 第三拍：执行中 ⇄ 英。锁内只切语言 + 抓快照，**放锁后**才写文档/管道
+        // （insert_into 是同步 COM 编辑会话，持锁跨它会冻住宿主 UI，见 tsf.rs）。
+        // W1：进英文前把待处理拼音的**原文**插进文档（`toggle_language` 的返回值），
+        // 再让候选窗收起；没有焦点文档时文字静默丢弃，与别处一致。切回拼音无待上屏
+        // 文本 → 推一帧状态（缓冲空 ⇒ 窗口收起），与 `toggle_mode` 同一条收尾。
+        let (text, snapshot) = {
+            let mut logic = match self.state.lock_logic() {
+                Some(g) => g,
+                None => return Some(BOOL(1)), // 中毒锁：吞键，与 handle_key_inner 同策略
+            };
+            if tap && logic.shift_toggle() {
+                let text = logic.toggle_language();
+                let snapshot = if text.is_empty() {
+                    Some(logic.snapshot())
+                } else {
+                    None
+                };
+                (text, snapshot)
+            } else {
+                logic.consume_single_shift();
+                return Some(BOOL(1));
+            }
         };
-        if tap && logic.shift_toggle() {
-            return Some(self.handle_shift_release(&mut logic, pic));
-        }
-        logic.consume_single_shift();
-        Some(BOOL(1))
-    }
-
-    /// 第三拍：执行中 ⇄ 英。返回 `BOOL(1)`（按键归本服务）。
-    ///
-    /// **调用方已持有 logic 锁**并通过 `shift_toggle()` 闸门（见 `tsf.rs` 的 Shift
-    /// 抬起分支）—— 本函数不得再取锁（`std::sync::Mutex` 不可重入）。
-    ///
-    /// W1：进英文前把待处理拼音的**原文**插进文档（`toggle_language` 的返回值），
-    /// 再让候选窗收起；没有焦点文档时文字静默丢弃，与别处一致。切回拼音无待上屏
-    /// 文本 → 推一帧状态（缓冲空 ⇒ 窗口收起），与 `toggle_mode` 同一条收尾。
-    pub(super) fn handle_shift_release(
-        &self,
-        logic: &mut TsfLogic,
-        pic: Option<&ITfContext>,
-    ) -> BOOL {
-        let text = logic.toggle_language();
-        if text.is_empty() {
-            push_state(&*self.sink, logic);
+        if let Some(snapshot) = snapshot {
+            push_state(&*self.sink, &snapshot);
         } else if let Some(pic) = pic {
             self.state.insert_into(pic, &text);
             self.sink.on_commit(&text);
         }
-        BOOL(1)
+        Some(BOOL(1))
     }
 }

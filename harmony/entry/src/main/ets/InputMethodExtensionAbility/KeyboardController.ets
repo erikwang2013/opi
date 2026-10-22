@@ -335,7 +335,7 @@ export class KeyboardController {
   selectInputMode(index: number): void {
     if (index === InputModes.MODE_RARE) {
       // 生僻字是面板视图（不进引擎、不改键位）。
-      KeyboardModes.openPanel(PanelView.Rare);
+      KeyboardModes.openNestedPanel(PanelView.Rare);
       this.publish();
       return;
     }

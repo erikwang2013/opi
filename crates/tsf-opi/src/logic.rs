@@ -446,6 +446,15 @@ pub use input_method::*;
 #[path = "logic_shift.rs"]
 mod shift;
 
+// 状态推送快照在子模块：锁内抓取、锁外发送（2026-10-22 卡死根因），拆出守 500 行。
+#[path = "logic_snapshot.rs"]
+mod snapshot;
+pub use snapshot::StateSnapshot;
+
+// OnTestKeyDown 的“引擎会不会消费”只读判定（TSF 的 TRUE 是最终决定）。
+#[path = "logic_claim.rs"]
+mod claim;
+
 // 单测独立成文件（`#[path]` 引入）以保持各文件 <500 行：logic_candidate_tests.rs
 // 为候选分页状态机测试（键路由测试见 input_method 模块）。
 #[cfg(test)]

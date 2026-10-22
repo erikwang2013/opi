@@ -13,7 +13,7 @@ use std::sync::Once;
 use engine_core::composer::Mode;
 use windows::core::HRESULT;
 
-use crate::logic::{PAGE_SIZE, TsfLogic};
+use crate::logic::StateSnapshot;
 
 /// E_FAIL：引擎内部错误的统一返回码（panic 被兜住 / 锁中毒）。
 pub(crate) const E_FAIL: HRESULT = HRESULT(0x80004005_u32 as i32);
@@ -56,25 +56,19 @@ pub trait TsfSink: Send + Sync {
     fn disconnect(&self) {}
 }
 
-/// 把当前引擎状态推给候选窗。服务对象（按键/切模式）与候选窗回调（点选后刷新，
+/// 把快照推给候选窗。服务对象（按键/切模式）与候选窗回调（点选后刷新，
 /// 见 candidate_io.rs 的 `SharedAction::refresh`）共用 —— 两处各写一遍必然漂移，
 /// 症状是"切了模式/点了候选，窗口还显示旧内容"。
-pub(crate) fn push_state(sink: &dyn TsfSink, logic: &TsfLogic) {
-    // 一次抓取候选+页数（2026-10-18）：此前各抓一次 ⇒ 每键整份排序两遍（白花 4–6ms）。
-    // 复用 `fetched` 的同一次快照，逐字同 `TsfLogic::candidates`/`page_count`。
-    let fetched = logic.fetched();
-    let candidates: Vec<String> = fetched
-        .iter()
-        .skip(logic.page() * PAGE_SIZE)
-        .take(PAGE_SIZE)
-        .map(|c| c.text.clone())
-        .collect();
-    let page_count = fetched.len().div_ceil(PAGE_SIZE);
+///
+/// **只吃快照、不碰 `TsfLogic`**：调用方必须先在锁内 `TsfLogic::snapshot()`、
+/// 放锁后再调本函数。管道写可能阻塞（候选窗进程卡住），持着 logic 锁跨它会
+/// 冻住宿主 UI 线程（2026-10-22 真机卡死根因）。
+pub(crate) fn push_state(sink: &dyn TsfSink, state: &StateSnapshot) {
     sink.on_composition_changed(
-        &logic.display_buffer(), // 2026-10-17：候选窗显示带已确认的逐字片段
-        &candidates,
-        logic.page(),
-        page_count,
-        logic.mode(),
+        &state.buffer, // 2026-10-17：候选窗显示带已确认的逐字片段
+        &state.candidates,
+        state.page,
+        state.page_count,
+        state.mode,
     );
 }

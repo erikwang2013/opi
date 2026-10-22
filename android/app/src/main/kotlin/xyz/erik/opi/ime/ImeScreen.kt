@@ -3,7 +3,6 @@
 
 package xyz.erik.opi.ime
 
-import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,7 +15,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -41,7 +39,6 @@ import xyz.erik.opi.keyboard.SymbolPage
 import xyz.erik.opi.keyboard.SymbolPanel
 import xyz.erik.opi.pet.petMood
 import xyz.erik.opi.pet.PetMood
-import xyz.erik.opi.settings.SettingsActivity
 
 /**
  * IME 面板根：工具条（图标入口）+ 候选栏 + 键盘；数字/符号/生僻字面板。
@@ -71,8 +68,6 @@ fun ImeScreen(
     /** 收起键盘（工具栏最右图标）：服务层注入 requestHideSelf；默认空 = JVM 测试不感知。 */
     onCloseKeyboard: () -> Unit = {},
 ) {
-    // IME 的 ComposeView 由服务宿主，LocalContext 就是该 Service 上下文。
-    val context = LocalContext.current
     val modes = state.keyboardModes
     // 优先级：长辈 > 暗光 > 皮肤（皮肤是「底」，模式是临时覆盖；见 SkinOption 的说明）。
     val palette = when {
@@ -158,13 +153,8 @@ fun ImeScreen(
                             onOpenSkin = state::openSkin,
                             onOpenInputMode = state::openInputMode,
                             onOpenKeyboardMode = state::openKeyboardMode,
-                            // 齿轮（2026-10-22）：IME 窗口不在任务栈里，必须 NEW_TASK
-                            onOpenSettings = {
-                                context.startActivity(
-                                    Intent(context, SettingsActivity::class.java)
-                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                                )
-                            },
+                            // 齿轮（2026-10-22 用户裁决）：不再跳 app 设置页，开键盘内设置面板。
+                            onOpenSettings = state::openSettings,
                             onOpenAbout = state::openAbout,
                             onCloseKeyboard = onCloseKeyboard,
                         )
@@ -267,6 +257,12 @@ private fun KeyboardArea(
         )
         // 关于面板（2026-10-15 用户裁决）：工具条入口直达，内容复用 settings 侧的常量。
         ImeState.View.ABOUT -> AboutPanel(
+            onClose = state::backToLetters,
+            modifier = modifier,
+        )
+        // 设置面板（2026-10-22 用户裁决）：齿轮直达，开关即时生效并落盘。
+        ImeState.View.SETTINGS -> SettingsPanel(
+            controller = controller,
             onClose = state::backToLetters,
             modifier = modifier,
         )

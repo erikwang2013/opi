@@ -74,6 +74,13 @@ export function openSubPanel(v: PanelView): void {
   returnView = PanelView.Settings;
 }
 
+/** 面板里再开面板（输入模式 → 生僻字）：保留原来的返回落点。 */
+export function openNestedPanel(v: PanelView): void {
+  const back: number = returnView;
+  openPanel(v);
+  returnView = back;
+}
+
 export function closePanel(): void {
   view = returnView as number;
   returnView = PanelView.None;

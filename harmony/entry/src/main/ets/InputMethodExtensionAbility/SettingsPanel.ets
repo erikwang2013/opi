@@ -9,6 +9,7 @@
 // 从工具条直接进则返回键面。
 
 import { KeyboardController } from './KeyboardController';
+import { INPUT_MODES } from './InputModes';
 import {
   ONE_HAND_LEFT, ONE_HAND_OFF, ONE_HAND_RIGHT, PanelView, openSubPanel
 } from './KeyboardModes';
@@ -23,6 +24,7 @@ export struct SettingsPanel {
   @StorageLink('opiDark') dark: number = 0;
   @StorageLink('opiElder') elder: number = 0;
   @StorageLink('opiMode') mode: number = OpiMode.Pinyin as number;
+  @StorageLink('opiLayout') layout: number = 0;
   @StorageLink('opiLearner') learner: number = 1;
   @StorageLink('opiPro') pro: number = 0;
   @StorageLink('opiShowOwn') showOwn: number = 0;
@@ -131,6 +133,9 @@ export struct SettingsPanel {
           this.InfoRow('词库', this.ctrl.dictionaryDegraded() ? '内置回退词库（完整词库未装上）' : '完整词库')
 
           this.Section('键盘')
+          this.ActionRow('输入模式', '键盘布局与输入方案', INPUT_MODES[this.layout].label, () => {
+            this.openSub(PanelView.InputMode);
+          })
           this.SwitchRow('繁体模式', '中文输入使用繁体词库', this.mode === (OpiMode.Traditional as number), () => {
             this.ctrl.toggleTraditional();
           })

@@ -68,6 +68,33 @@ fn shift_left_right_and_generic_vks_all_map_to_key_shift() {
     }
 }
 
+// 2026-10-22 真机报障「物理键盘 F1–F12/媒体键无效」：这些键经 `to_engine_keycode`
+// 得到 NO_KEYVAL。`OnTestKeyDown` 现在据此在测试阶段直接答 FALSE 放行（旧实现
+// 一律认领、等 OnKeyDown 回 Unhandled 才放行，宿主已经收不到了）。本用例钉住
+// 「它们必须是 NO_KEYVAL」这个前提 —— 前提一漂，功能键会被重新吞掉。
+#[test]
+fn function_navigation_and_media_keys_are_no_keyval() {
+    let mut vks: Vec<u32> = (0x70..=0x7b).collect(); // F1–F12
+    vks.extend([0x25, 0x26, 0x27, 0x28, 0x24, 0x23, 0x2d]); // ←↑→↓ Home End Insert
+    vks.extend([0xa6, 0xa7, 0xa8, 0xa9, 0xaa, 0xab, 0xac]); // 浏览器键
+    vks.extend([0xad, 0xae, 0xaf, 0xb0, 0xb1, 0xb2, 0xb3]); // 音量/媒体键
+    for vk in vks {
+        assert_eq!(
+            vk_to_engine_keycode(vk, 0, 0),
+            NO_KEYVAL,
+            "VK {vk:#x} 必须放行给系统/应用"
+        );
+    }
+    // 正控：引擎要消费的特殊键不得是 NO_KEYVAL（否则会被一起放行）。
+    for vk in [0x08, 0x09, 0x0d, 0x1b, 0x20, 0x21, 0x22, 0x2e] {
+        assert_ne!(
+            vk_to_engine_keycode(vk, 0, 0),
+            NO_KEYVAL,
+            "VK {vk:#x} 必须认领"
+        );
+    }
+}
+
 #[test]
 fn special_vks_pass_through_as_their_keycode() {
     // 特殊键走编码键码、不取 ToUnicodeEx 的字符：VK_BACK 的映射结果是退格

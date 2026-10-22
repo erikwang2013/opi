@@ -410,10 +410,13 @@ impl SharedAction {
     /// 只有启动那一瞬，那时也还没窗口。
     fn refresh(&self) {
         let Some(sink) = self.sink.get() else { return };
-        let Some(logic) = self.engine.lock_logic() else {
-            return;
+        // 锁内只抓快照；管道写在锁外 —— 本函数跑在读线程上，持锁写管道会让
+        // 按键线程的 `input_key` 等它，候选窗一卡宿主 UI 就跟着卡。
+        let snapshot = match self.engine.lock_logic() {
+            Some(logic) => logic.snapshot(),
+            None => return,
         };
-        push_state(sink.as_ref(), &logic);
+        push_state(sink.as_ref(), &snapshot);
     }
 }
 

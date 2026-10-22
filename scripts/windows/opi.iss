@@ -17,7 +17,7 @@
 ; best-effort and can never roll back the install.
 ;
 ; Build (CI or local, on Windows; ISCC is the Inno Setup 6 compiler):
-;   ISCC.exe /DAppVersion=1.22.0 ^
+;   ISCC.exe /DAppVersion=1.23.0 ^
 ;            /DAppImageDir=C:\path\to\build\compose\binaries\main\app\opi ^
 ;            /DOutputDir=C:\path\to\dist scripts\windows\opi.iss
 ;
@@ -34,8 +34,11 @@
 ; drive) and Windows is asked to delete that copy at the next boot. The old
 ; fixed %TEMP% name failed on retry: the previous still-mapped copy blocked
 ; RenameFile. If even the rename fails, deletion is scheduled for the next
-; restart and the log says so. No reboot is requested. Explorer is never killed
-; (that was the white-screen root cause).
+; restart and the log says so. No reboot is requested. The uninstaller never
+; kills Explorer. On an interactive UPGRADE where Explorer still maps the old
+; DLL, ssPostInstall restarts only the original user's shell (with a watchdog)
+; so the new TSF code is live without signing out; first installs and silent
+; installs never touch the shell.
 ;
 ; Upgrade (2026-10-21): the same rename runs at ssInstall, BEFORE [InstallDelete]
 ; and [Files], for tsf_opi.dll AND app\luna.opid (the old TSF DLL maps the
@@ -156,16 +159,16 @@ Root: HKLM64; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType
 
 [Run]
 ; Finish page: start the candidate window only. It must NOT touch Explorer --
-; the shell restart was the 2026-10-20 white-screen root cause. TSF picks up the
-; freshly registered DLL on the next sign-out/reboot, and the user must then add
-; 小欧输入法 under the Chinese (Simplified) keyboard list -- the description says
-; both, because "installed but still English" was the 2026-10-21 field report.
+; the shell restart lives in RestartExplorerAfterInstall (opi-code-explorer.iss)
+; and runs with the original user token plus a watchdog. The user must then add
+; 小欧输入法 under the Chinese (Simplified) keyboard list if it is not already
+; there -- "installed but still English" was the 2026-10-21 field report.
 ; runasoriginaluser, NOT runascurrentuser: Setup is elevated, so the current-user
 ; token is the admin token; a shell restarted with it is not the user's shell.
 ; (postinstall entries default to the original user, but state it explicitly --
 ; the earlier runascurrentuser here was one half of the white screen.)
 ; The .cmd keeps its historical name because the MSI postprocess looks it up.
-Filename: "{app}\app\launch-and-restart.cmd"; Description: "Launch opi (then sign out or restart Windows, and add/switch to 小欧输入法 in the Chinese (Simplified) keyboard list)"; Flags: postinstall nowait skipifsilent runasoriginaluser
+Filename: "{app}\app\launch-and-restart.cmd"; Description: "Launch opi (desktop refreshes automatically; add/switch to 小欧输入法 in the Chinese keyboard list if needed)"; Flags: postinstall nowait skipifsilent runasoriginaluser
 
 [Code]
 const
@@ -352,6 +355,7 @@ begin
 end;
 
 #include "opi-code-trash.iss"
+#include "opi-code-explorer.iss"
 #include "opi-code-uninstall.iss"
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -364,6 +368,9 @@ begin
     // installing v1.20.1 over v1.20.0 still ran the old TSF code, and the queued
     // rename made the next setup refuse until a reboot.)
     KillRunningApp();
+    // Detect the old in-proc DLL while it is still mapped: a shell restart is
+    // the only way to make Explorer load the new TSF code without a sign-out.
+    ExplorerHadTsf := ExplorerMapsTsf();
     // 先摘旧 profile/COM 键，再动文件；新 DLL 落下后由 ssPostInstall 重建。
     UnregisterTsf();
     MoveLockedTsfDll(True);
@@ -377,6 +384,9 @@ begin
     // 这里再 /u 一次再注册，保证 profile 由新 DLL 以新图标（opi.exe 宠物）重建。
     UnregisterTsf();
     RegisterTsf();
+    // Interactive upgrade: Explorer still has the old DLL mapped. Restart only
+    // the user's shell, with a watchdog, so the new TSF code is live now.
+    RestartExplorerAfterInstall();
   end;
 end;
 

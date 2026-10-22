@@ -735,9 +735,10 @@ jobs:
 
       # 2026-10-20 白屏根因：完成页脚本结束 Explorer 后，靠「等待 + 回退启动」拉回；
       # 等待对 loopback 立即返回，回退又可能与 Winlogon 抢或带错令牌，桌面会停在空白。
-      # 这条交互路径在 Windows CI 里**不可达**（`[Run]` 带 skipifsilent，冒烟用
-      # /VERYSILENT），所以只能靠静态门禁把它钉住。注释行不参与匹配。
-      - name: Windows 安装器静态门禁（不许结束/重启 Explorer）
+      # 2026-10-22 热升级：旧 DLL 映射在 Explorer 里，不重启 shell 就必须注销才生效。
+      # 唯一允许的 shell 重启在 opi-code-explorer.iss：原用户令牌 + 3 秒看门狗补启，
+      # 且只在交互式升级且检测到旧 DLL 被映射时调用。其余任何位置仍一律禁止。
+      - name: Windows 安装器静态门禁（Explorer 只许走受控热升级路径）
         run: |
           set -euo pipefail
           files=(
@@ -748,6 +749,7 @@ jobs:
             scripts/windows/opi-code-trash.iss
             scripts/windows/opi-code-uninstall.iss
             scripts/windows/opi-code-pending.iss
+            scripts/windows/opi-code-explorer.iss
             scripts/postprocess-windows-msi.sh
             scripts/windows/postprocess-windows-msi.ps1
           )
@@ -762,13 +764,50 @@ jobs:
             grep -Ein 'explorer|taskkill|tskill|stop-process|wmic' <<<"$cmd_code" || true
             exit 1
           fi
-          # 安装器/后处理脚本：同一行同时出现「结束进程」与 Explorer 就红。
-          code=$(grep -hviE '^[[:space:]]*(#|;|//|rem([[:space:]]|$)|::)' "${files[@]}" || true)
+          # 除受控的 explorer 助手外，安装器/后处理脚本同一行同时出现
+          # 「结束进程」与 Explorer 就红。
+          checked=()
+          for f in "${files[@]}"; do
+            [ "$f" = scripts/windows/opi-code-explorer.iss ] || checked+=("$f")
+          done
+          code=$(grep -hviE '^[[:space:]]*(#|;|//|rem([[:space:]]|$)|::)' "${checked[@]}" || true)
           if grep -Eiq '(taskkill|tskill|stop-process|wmic).*explorer|explorer.*(taskkill|tskill|stop-process|wmic)' <<<"$code"; then
-            echo "::error::安装器里出现了结束 Explorer 的代码（2026-10-20 白屏根因）"
+            echo "::error::安装器里出现了结束 Explorer 的代码（只许 opi-code-explorer.iss 的受控路径）"
             grep -Ein 'explorer|taskkill|tskill|stop-process|wmic' <<<"$code" || true
             exit 1
           fi
+          # 受控路径的形状：原用户令牌结束 Explorer、原用户令牌看门狗补启；
+          # 静默安装与首次安装（ExplorerHadTsf=false）必须早退。
+          explorer_code=$(grep -viE '^[[:space:]]*(;|//)' scripts/windows/opi-code-explorer.iss || true)
+          if grep -qi 'runascurrentuser' <<<"$explorer_code"; then
+            echo "::error::opi-code-explorer.iss 不得使用 runascurrentuser（提权令牌，白屏根因之一）"
+            exit 1
+          fi
+          kill_lines=$(grep -Ein 'taskkill|tskill|stop-process|wmic' <<<"$explorer_code" || true)
+          [ "$(grep -Ec "ExecAsOriginalUser\\(ExpandConstant\\('\\{sysnative\\}\\\\taskkill\\.exe'\\), '/f /im explorer\\.exe'" <<<"$explorer_code" || true)" -eq 1 ] || {
+            echo "::error::受控 Explorer 路径必须恰有一处结束进程调用"; echo "$kill_lines"; exit 1; }
+          # 该文件里除这一处调用与两条日志文案外，不得再出现任何结束进程的名字。
+          unexpected=$(grep -Ei 'taskkill|tskill|stop-process|wmic' <<<"$explorer_code" \
+            | grep -Fv "ExecAsOriginalUser(ExpandConstant('{sysnative}\\taskkill.exe'), '/f /im explorer.exe'," \
+            | grep -Fv 'Log(' || true)
+          [ -z "$unexpected" ] || {
+            echo "::error::受控 Explorer 路径出现了额外的结束进程代码"; echo "$unexpected"; exit 1; }
+          grep -Fq 'if WizardSilent then' <<<"$explorer_code" || {
+            echo "::error::静默安装必须跳过 Explorer 重启"; exit 1; }
+          grep -Fq 'if not ExplorerHadTsf then' <<<"$explorer_code" || {
+            echo "::error::未映射旧 DLL 时不得重启 Explorer"; exit 1; }
+          grep -Fq 'start "" "%windir%\explorer.exe"' <<<"$explorer_code" || {
+            echo "::error::缺少原用户令牌的 Explorer 看门狗补启"; exit 1; }
+          # 调用点顺序：ssInstall 先探测（旧 DLL 尚未改名）再移文件；
+          # ssPostInstall 先注册新 DLL 再重启 shell。
+          detect_line=$(grep -n 'ExplorerHadTsf := ExplorerMapsTsf();' scripts/windows/opi.iss | cut -d: -f1)
+          move_line=$(grep -n 'MoveLockedTsfDll(True);' scripts/windows/opi.iss | cut -d: -f1)
+          [ -n "$detect_line" ] && [ -n "$move_line" ] && [ "$detect_line" -lt "$move_line" ] || {
+            echo "::error::必须在移动旧 DLL 之前探测 Explorer 是否映射它"; exit 1; }
+          reg_line=$(grep -n 'RegisterTsf();' scripts/windows/opi.iss | tail -1 | cut -d: -f1)
+          restart_line=$(grep -n 'RestartExplorerAfterInstall();' scripts/windows/opi.iss | cut -d: -f1)
+          [ -n "$reg_line" ] && [ -n "$restart_line" ] && [ "$restart_line" -gt "$reg_line" ] || {
+            echo "::error::必须在新 DLL 注册完成之后才重启 Explorer"; exit 1; }
           # Setup 是提权的：runascurrentuser = 管理员令牌，拿它重启的 shell 不是
           # 用户的桌面 shell。postinstall 的默认/显式写法都必须是 runasoriginaluser。
           iss_code=$(grep -viE '^[[:space:]]*(;|//)' scripts/windows/opi.iss || true)
@@ -824,7 +863,7 @@ jobs:
           done
           grep -Fq 'DeleteFile(LockPath)' <<<"$iss_code" || {
             echo "::error::卸载必须清理状态栏单实例锁文件"; exit 1; }
-          echo "通过：完成页只以用户令牌启动 opi.exe，安装器不结束 Explorer；卸载先杀 opi.exe 并排重启删锁定 DLL"
+          echo "通过：完成页只以用户令牌启动 opi.exe；仅交互式升级且旧 DLL 被 Explorer 映射时，以原用户令牌重启 shell（带看门狗），卸载不碰 Explorer"
 
       # 主测试的私有 dbus 用例要真 fcitx5 + dbus-run-session；busctl 由 systemd 提供。
       - name: 装 fcitx5 / dbus
