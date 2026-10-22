@@ -1,6 +1,6 @@
 # opi 静态站点
 
-项目介绍 / 功能迭代 / 版本日志 / 应用下载的静态单页。无前端框架，翻屏使用原生
+项目介绍 / 功能迭代 / 版本日志 / 应用下载的静态站点，中文 `/` 与英文 `/en/` 双页面。无前端框架，翻屏使用原生
 CSS scroll-snap；首屏的 three.js 场景只画小欧与粒子环，离屏暂停；其余分节共用一层
 纯 CSS 3D 键帽/光环环境，首屏加载时显示 3D 小欧加载模块。
 
@@ -18,13 +18,15 @@ python3 -m http.server 8080 --directory site
 
 ```
 site/
-  index.html            语义化单页（七个翻屏 section：认识/能力/迭代/形态/版本/下载；SEO 元数据见下）
+  index.html            中文首页（七个 section：认识/能力/迭代/形态/版本/下载；SEO 元数据见下）
+  en/index.html         英文首页（同结构；EN / 中文切换，独立 canonical 与 hreflang）
   version.json          机器可读的最新版本（客户端「检测更新」首选；发版时与版本号一起改）
   robots.txt            抓取规则（屏蔽仓库说明 Markdown）与 sitemap 声明
   download/index.html   /download 入口，转场到首页下载区（noindex）
   sitemap.xml           单页站点地图（lastmod / changefreq）
   css/base.css          设计 token、壳层、按钮、页脚
   css/sections.css      hero / 小欧 / 十二形态 / 能力 / 迭代 / 版本 / 下载
+  css/components.css    版本板 / 下载卡 / 页脚 / 弹层 / 回忆时光机
   css/responsive.css    1120 / 900 / 720 / 460 四档断点
   js/site.js            导航高亮、进度条、reveal、形态弹窗、打赏二维码弹框
   js/pet3d.js           three.js：宠物纹理 + 光环 + 粒子 + 指针视差

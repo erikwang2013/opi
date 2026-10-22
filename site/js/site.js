@@ -4,6 +4,7 @@
 
   const doc = document.documentElement;
   const scriptBase = document.currentScript?.src || location.href;
+  const isZh = doc.lang.toLowerCase().startsWith('zh');
   doc.classList.add('js');
 
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -94,7 +95,7 @@
     const setMenu = (open) => {
       siteNav.classList.toggle('is-open', open);
       menuToggle.setAttribute('aria-expanded', String(open));
-      menuToggle.setAttribute('aria-label', open ? '关闭菜单' : '打开菜单');
+      menuToggle.setAttribute('aria-label', menuToggle.dataset[open ? 'labelClose' : 'labelOpen'] || (open ? '关闭菜单' : '打开菜单'));
     };
     menuToggle.addEventListener('click', () => {
       setMenu(!siteNav.classList.contains('is-open'));
@@ -184,8 +185,9 @@
         if (!src || !qrImage) return;
         qrPreviousFocus = button;
         qrImage.src = src;
-        qrImage.alt = button.dataset.qrLabel || '收款二维码';
-        if (qrTitle) qrTitle.textContent = button.dataset.qrLabel || '收款二维码';
+        const qrFallback = isZh ? '收款二维码' : 'Donation QR code';
+        qrImage.alt = button.dataset.qrLabel || qrFallback;
+        if (qrTitle) qrTitle.textContent = button.dataset.qrLabel || qrFallback;
         if (typeof qrDialog.showModal === 'function') qrDialog.showModal();
         else qrDialog.setAttribute('open', '');
         $('.qr-close', qrDialog)?.focus?.({ preventScroll: true });
@@ -316,7 +318,7 @@
     currentCard.classList.add('is-current-os');
     const badge = document.createElement('span');
     badge.className = 'os-current';
-    badge.textContent = '当前系统';
+    badge.textContent = isZh ? '当前系统' : 'Current OS';
     currentCard.append(badge);
   }
 

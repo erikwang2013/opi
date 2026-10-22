@@ -180,6 +180,7 @@
 .bento-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
 .bento-note { margin-top: 13px !important; padding-top: 11px; border-top: 1px solid var(--line); color: var(--muted-2) !important; font-size: .72rem !important; line-height: 1.65 !important; }
 .bento-note::before { content: "验证范围 · "; color: var(--accent-soft); font-family: var(--font-mono); font-size: .64rem; letter-spacing: .04em; }
+html[lang="en"] .bento-note::before { content: "Verification scope · "; }
 
 .timeline { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(24px, 3.4vw, 40px); margin: 0; padding: 0; list-style: none; }
 .timeline-item { position: relative; padding-top: 22px; border-top: 1px solid var(--line-strong); }

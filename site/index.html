@@ -8,8 +8,8 @@
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
   <meta name="author" content="erik.xyz"><meta name="application-name" content="小欧输入法">
   <meta name="theme-color" content="#080c11"><meta name="color-scheme" content="dark">
-  <link rel="canonical" href="https://opi.erik.xyz/"><link rel="alternate" hreflang="zh-CN" href="https://opi.erik.xyz/"><link rel="alternate" hreflang="x-default" href="https://opi.erik.xyz/">
-  <meta property="og:type" content="website"><meta property="og:site_name" content="opi · 小欧输入法"><meta property="og:locale" content="zh_CN">
+  <link rel="canonical" href="https://opi.erik.xyz/"><link rel="alternate" hreflang="zh-CN" href="https://opi.erik.xyz/"><link rel="alternate" hreflang="en" href="https://opi.erik.xyz/en/"><link rel="alternate" hreflang="x-default" href="https://opi.erik.xyz/">
+  <meta property="og:type" content="website"><meta property="og:site_name" content="opi · 小欧输入法"><meta property="og:locale" content="zh_CN"><meta property="og:locale:alternate" content="en_US">
   <meta property="og:title" content="opi · 小欧输入法 — 把输入，还给输入本身">
   <meta property="og:description" content="开源、离线、无广告的六端中文输入法：Rust 引擎，Android / Windows / Linux / iOS / macOS / 鸿蒙，支持拼音、双拼、五笔、笔画与简繁。">
   <meta property="og:url" content="https://opi.erik.xyz/">
@@ -22,6 +22,7 @@
   <link rel="preload" as="image" href="assets/pet/opi-pet.png">
   <link rel="stylesheet" href="css/base.css"><link rel="stylesheet" href="css/sections.css"><link rel="stylesheet" href="css/components.css"><link rel="stylesheet" href="css/responsive.css">
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://opi.erik.xyz/#website","url":"https://opi.erik.xyz/","name":"opi · 小欧输入法","alternateName":["opi","小欧输入法","Open People Input"],"description":"开源、离线、无广告的六端中文输入法：一份 Rust 引擎，Android / Windows / Linux / iOS / macOS / 鸿蒙原生客户端。","inLanguage":"zh-CN","publisher":{"@id":"https://opi.erik.xyz/#organization"}},{"@type":"SoftwareApplication","@id":"https://opi.erik.xyz/#app","name":"小欧输入法","alternateName":["opi","OPI","Open People Input"],"applicationCategory":"UtilitiesApplication","applicationSubCategory":"Input Method","operatingSystem":"Android, Windows, Linux, macOS, iOS, HarmonyOS","softwareVersion":"1.23.0","dateModified":"2026-10-22","isAccessibleForFree":true,"license":"https://opensource.org/licenses/MIT","url":"https://opi.erik.xyz/","downloadUrl":"https://github.com/erikwang2013/opi/releases/tag/v1.23.0","image":"https://opi.erik.xyz/assets/social-preview.png","inLanguage":"zh-CN","sameAs":["https://github.com/erikwang2013/opi"],"offers":{"@type":"Offer","price":"0","priceCurrency":"CNY"},"publisher":{"@id":"https://opi.erik.xyz/#organization"}},{"@type":"Organization","@id":"https://opi.erik.xyz/#organization","name":"opi","url":"https://opi.erik.xyz/","logo":"https://opi.erik.xyz/assets/pet/opi-pet.png","sameAs":["https://github.com/erikwang2013/opi","https://erik.xyz"]}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"小欧输入法是什么？","acceptedAnswer":{"@type":"Answer","text":"小欧输入法（opi）是开源、离线、无广告的六端中文输入法：一份 Rust 引擎，Android、Windows、Linux、iOS、macOS、鸿蒙原生客户端。"}},{"@type":"Question","name":"支持哪些平台？","acceptedAnswer":{"@type":"Answer","text":"六端都有客户端代码；目前 Android（模拟器）与 Linux（容器/本机）有运行验证，Windows、iOS、macOS、鸿蒙已有可构建产物但未真机验收。"}},{"@type":"Question","name":"会联网或上传输入吗？","acceptedAnswer":{"@type":"Answer","text":"输入、候选与用户词都在本机完成；联网仅用于设置页读取 version.json 做版本检测，不携带输入数据。"}},{"@type":"Question","name":"如何下载安装？","acceptedAnswer":{"@type":"Answer","text":"安装包直接放在本站 download/ 目录，不跳转 GitHub；各端安装教程见 docs/install。"}},{"@type":"Question","name":"代码和词库是什么许可证？","acceptedAnswer":{"@type":"Answer","text":"代码按 MIT；简体主库因并入 GPL-3.0 数据而整体按 GPL-3.0 分发；项目宠物与表情资产为项目专有资产。"}}]}</script>
 </head>
 <body>
   <a class="skip-link" href="#main">跳到正文</a>
@@ -36,7 +37,8 @@
         <a href="#hero" aria-current="page">首页</a><a href="#about">认识</a><a href="#features">能力</a><a href="#timeline">迭代</a><a href="#forms">形态</a><a href="#releases">版本</a><a href="#download">下载</a>
       </nav>
       <div class="header-actions">
-        <a class="header-link" href="https://erik.xyz" target="_blank" rel="noopener">erik.xyz<span aria-hidden="true"> ↗</span></a>
+        <a class="header-link" href="https://erik.xyz" target="_blank" rel="noopener">艾瑞可erik<span aria-hidden="true"> ↗</span></a>
+        <a class="lang-switch" href="en/" hreflang="en" lang="en" aria-label="Switch to English">EN</a>
         <a class="icon-btn" href="https://github.com/erikwang2013/opi" target="_blank" rel="noopener" aria-label="GitHub 仓库"><svg class="icon" aria-hidden="true"><use href="#i-github"></use></svg></a>
         <button class="menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="打开菜单"><span class="menu-bars" aria-hidden="true"></span></button>
       </div>
@@ -287,7 +289,7 @@
         </div>
         <div class="download-foot reveal">
           <p>文件直接放在本站的 <code>download/</code> 目录，不跳转 GitHub。安装教程见 <a href="https://github.com/erikwang2013/opi/tree/main/docs/install" target="_blank" rel="noopener">docs/install</a> 与发行说明。</p>
-          <p><strong>装完必做</strong>：Linux 把 OPI 加进 fcitx5 输入法组；Windows 在「中文(简体)」键盘列表添加「小欧输入法」并注销 / 重启一次；iOS 在设置 → 通用 → 键盘中添加并允许；macOS 在输入源中添加。</p>
+          <p><strong>装完必做</strong>：Linux 把 OPI 加进 fcitx5 输入法组；Windows 在「中文(简体)」键盘列表添加「小欧输入法」（交互式升级会自动刷新桌面，无需注销）；iOS 在设置 → 通用 → 键盘中添加并允许；macOS 在输入源中添加。</p>
           <p class="download-hint">下载目录的版本与文件名和 <code>dist/</code> 保持一致；页面版本 v1.23.0。</p>
         </div>
         <aside class="donate reveal" aria-labelledby="donate-title">
@@ -321,7 +323,7 @@
         <a href="https://github.com/erikwang2013/opi" target="_blank" rel="noopener">GitHub</a>
         <a href="https://github.com/erikwang2013/opi/tree/main/docs/install" target="_blank" rel="noopener">安装教程</a>
         <a href="https://github.com/erikwang2013/opi/releases" target="_blank" rel="noopener">Releases</a>
-        <a href="https://github.com/erikwang2013/opi/blob/main/README.en.md" target="_blank" rel="noopener" hreflang="en">English</a>
+        <a href="en/" hreflang="en">English</a>
         <a href="https://erik.xyz" target="_blank" rel="noopener">erik.xyz ↗</a>
       </div>
       <div class="footer-meta">

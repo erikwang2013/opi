@@ -1,5 +1,6 @@
 User-agent: *
 Allow: /
+Allow: /en/
 # These are repository notes, not public pages. They are not linked, but keep
 # crawlers away from raw Markdown if the whole directory is deployed.
 Disallow: /README.md
