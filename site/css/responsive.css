@@ -35,11 +35,11 @@
   .pet-halo { width: min(46%, 240px); }
   .pet-facts { grid-template-columns: repeat(2, 1fr); gap: 20px 12px; }
   .feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .timeline-track { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 34px 24px; }
+  .timeline-track { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
   .timeline-track::before { display: none; }
-  .phase { padding-top: 0; padding-left: 26px; }
-  .phase-date { position: static; display: block; margin-bottom: 6px; }
-  .phase-dot { top: 3px; left: 0; }
+  .phase { padding: 16px; }
+  .phase-date { display: inline-block; margin-bottom: 8px; }
+  .phase-dot { display: none; }
   .releases-grid { grid-template-columns: 1fr; gap: 26px; }
   .releases-copy { position: static; }
   .release-scroll { height: 320px; }
@@ -90,7 +90,7 @@
   .feature-card h3 { font-size: .88rem; }
   .feature-card p { font-size: .72rem; line-height: 1.7; }
   .tag { font-size: .54rem; }
-  .timeline-track { grid-template-columns: 1fr; gap: 24px; }
+  .timeline-track { grid-template-columns: 1fr; gap: 14px; }
   .phase p { font-size: .76rem; }
   .release-scroll { height: 300px; }
   .release-item a { grid-template-columns: 5.4rem 4.2rem minmax(0, 1fr) 1rem; padding-block: 12px; }
@@ -132,7 +132,8 @@
 }
 
 @media (max-width: 460px) {
-  .site-nav a:nth-child(5) { display: none; }
+  /* 形态区已后移；最窄屏优先保留 认识/能力/迭代/版本/下载，隐藏形态入口。 */
+  .site-nav a:nth-child(4) { display: none; }
   .brand-copy strong { letter-spacing: .1em; }
   .header-github { display: none; }
   .hero { padding-top: 94px; padding-top: calc(94px + env(safe-area-inset-top)); }
