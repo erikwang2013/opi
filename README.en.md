@@ -287,7 +287,7 @@ LICENSE · CONTRIBUTING.md      # MIT full text · contribution guide (incl. dic
 
 ### 📅 Project Status
 
-> **Current stage: v1.23.1 (2026-10-22): Windows interactive upgrades restart the user shell in place (no sign-out), function/special keys pass through, and the statusbar releases on IME switch; Android/Harmony gear opens an in-keyboard settings page styled like About; Linux language-bar crash forensics and exception guards; Apple/Harmony remain unsigned, device verification pending**
+> **Current stage: v1.23.1 (2026-10-22): iOS keyboards adapt to safe areas/candidate slots, toolbar pet rotates forms, and back/English/Traditional stay inside the IME; Linux fixes long terminal-session input freezes (opi-ctl avoids D-Bus activation/private buses, read-only fullwidth); Windows hot upgrades and function-key pass-through; Apple/Harmony remain unsigned, device verification pending**
 
 V1 milestone progress:
 
