@@ -36,7 +36,7 @@
   const toTop = $('.back-to-top');
   const menuToggle = $('#menu-toggle');
   const siteNav = $('#site-nav');
-  const sections = $$('main > section[id]');
+  const sections = $$('main section[id]');
   const navLinks = $$('.site-nav a[href^="#"]');
   const dots = $$('.section-dots a');
   let offsets = [];

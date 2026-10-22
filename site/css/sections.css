@@ -1,6 +1,10 @@
 /* opi static site — hero, stats, intro, architecture, bento, timeline, forms. */
 
-.hero { position: relative; overflow: hidden; padding-block: clamp(48px, 6.5vw, 84px) clamp(38px, 5vw, 64px); }
+.hero-screen { display: flex; flex-direction: column; min-height: calc(100vh - var(--header)); min-height: calc(100svh - var(--header)); background: var(--bg); }
+.hero-screen .hero { flex: 1 1 auto; display: flex; align-items: center; }
+.hero-screen .hero-inner { width: 100%; }
+.hero-screen .stats-band { flex: 0 0 auto; }
+.hero { position: relative; overflow: hidden; padding-block: clamp(36px, 7vh, 84px) clamp(20px, 3.5vh, 58px); }
 .hero::before {
   content: "";
   position: absolute;
@@ -31,13 +35,13 @@
 .hero-keycap::before { content: ""; position: absolute; inset: 8%; border: 1px solid rgba(232, 116, 59, .09); border-radius: 17%; }
 .hero-keycap::after { content: ""; position: absolute; left: 10%; right: 10%; bottom: -9px; height: 9px; border: 1px solid rgba(243, 239, 232, .06); border-top: 0; border-radius: 0 0 24px 24px; }
 .hero-keycap span { position: absolute; left: 50%; top: 5.6%; transform: translateX(-50%); color: rgba(232, 116, 59, .34); font-family: var(--font-mono); font-size: clamp(.9rem, 1.8vw, 1.35rem); letter-spacing: .1em; }
-.hero-eyebrow { justify-content: center; margin-bottom: 18px; }
-.hero h1 { max-width: 13em; margin-inline: auto; font-size: clamp(2.8rem, 6.2vw, 5.3rem); }
+.hero-eyebrow { justify-content: center; margin-bottom: clamp(10px, 2vh, 18px); }
+.hero h1 { max-width: 13em; margin-inline: auto; margin-bottom: clamp(14px, 2.6vh, 24px); font-size: clamp(2.8rem, min(6.2vw, 9.2vh), 5.3rem); }
 .hero h1 em { display: inline-block; position: relative; white-space: nowrap; isolation: isolate; text-shadow: 0 0 70px rgba(232, 116, 59, .25); }
 .hero h1 em::after { content: ""; position: absolute; left: 1%; right: 0; bottom: .02em; height: .09em; z-index: -1; border-radius: 99px; background: linear-gradient(90deg, rgba(232, 116, 59, .48), rgba(232, 116, 59, .04)); transform: rotate(-1deg); }
 .hero-lead { max-width: 52ch; margin: 0 auto; color: var(--muted); font-size: clamp(1rem, 1.5vw, 1.14rem); line-height: 1.8; }
 .hero-lead strong { color: var(--accent-soft); }
-.hero-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin: 26px 0 0; }
+.hero-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin: clamp(16px, 2.8vh, 26px) 0 0; }
 .hero-facts { display: flex; flex-wrap: wrap; justify-content: center; margin: 26px 0 4px; padding: 0; list-style: none; }
 .hero-facts li { display: flex; align-items: baseline; gap: 7px; padding: 0 clamp(13px, 1.8vw, 22px); border-left: 1px solid var(--line); }
 .hero-facts li:first-child { padding-left: 0; border-left: 0; }
@@ -47,8 +51,14 @@
 .hero-byline a { border-bottom: 1px solid var(--line); color: var(--muted); }
 .hero-byline a:hover { border-color: var(--accent); color: var(--accent-soft); }
 
+@media (min-width: 901px) and (max-height: 740px) {
+  .hero { padding-block: 22px 8px; }
+  .hero h1 { margin-bottom: 10px; }
+  .ime-stage { margin-top: 14px; }
+}
+
 /* IME candidate-bar stage: the hero shows the product, not a generic pet canvas. */
-.ime-stage { position: relative; width: 100%; max-width: 900px; margin: clamp(26px, 4vw, 42px) auto 0; text-align: left; }
+.ime-stage { position: relative; width: 100%; max-width: 900px; margin: clamp(18px, 4vh, 42px) auto 0; text-align: left; }
 .ime-window {
   position: relative;
   padding: 11px clamp(12px, 2vw, 22px) 13px;
@@ -65,7 +75,7 @@
 .ime-dots i:nth-child(3) { background: rgba(245, 166, 180, .55); }
 .ime-top-mode { margin-left: auto; color: var(--accent-soft); }
 .ime-composer { display: flex; align-items: center; gap: clamp(8px, 1.8vw, 20px); padding-top: 11px; }
-.ime-pet { position: relative; flex: 0 0 auto; width: clamp(112px, 14vw, 172px); aspect-ratio: 1; isolation: isolate; }
+.ime-pet { position: relative; flex: 0 0 auto; width: clamp(92px, 12vh, 172px); aspect-ratio: 1; isolation: isolate; }
 .ime-pet::before { content: ""; position: absolute; inset: 4%; z-index: -1; border-radius: 50%; background: radial-gradient(circle at 46% 42%, rgba(232, 116, 59, .18), transparent 58%), radial-gradient(circle at 58% 62%, rgba(47, 143, 138, .14), transparent 62%); }
 #pet-stage {
   position: absolute;
