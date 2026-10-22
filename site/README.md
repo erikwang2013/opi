@@ -23,7 +23,7 @@ site/
   version.json          机器可读的最新版本（客户端「检测更新」首选；发版时与版本号一起改）
   robots.txt            抓取规则（屏蔽仓库说明 Markdown）与 sitemap 声明
   download/index.html   /download 入口，转场到首页下载区（noindex）
-  sitemap.xml           单页站点地图（lastmod / changefreq）
+  sitemap.xml           双语站点地图（zh / en，含 hreflang alternates）
   css/base.css          设计 token、壳层、按钮、页脚
   css/sections.css      hero / 小欧 / 十二形态 / 能力 / 迭代 / 版本 / 下载
   css/components.css    版本板 / 下载卡 / 页脚 / 弹层 / 回忆时光机
