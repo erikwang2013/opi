@@ -94,7 +94,6 @@ int main(int argc, char **argv) {
     }
     /* 路径缓冲是调用方分配的，Rust 侧只读不留引用 —— 这里立刻释放，验证该约定。 */
     free((void *)path16.ptr);
-
     /* ---------- 装载后的空状态 ---------- */
     printf("[2] 空状态\n");
     OpiString buf = opi_buffer();
@@ -110,7 +109,6 @@ int main(int argc, char **argv) {
     CHECK(pages == 0 && page == 0, "空缓冲下页码应为 0/0");
     printf("  opi_shift_state()   = %d\n", opi_shift_state());
     printf("  opi_learner_enabled() = %d\n", (int)opi_learner_enabled());
-
     /* ---------- 键路由：打 "wo" ---------- */
     printf("[3] 键路由 opi_key_event（可打印字符 = Unicode 码点，空格 = 0x20）\n");
     OpiKeyEventResult r1 = opi_key_event(W, 0);
@@ -127,12 +125,9 @@ int main(int argc, char **argv) {
     CHECK(eq_cp(buf, (const uint16_t[]){'w', 'o'}, 2), "缓冲应为 \"wo\"");
     opi_ffi_free_string(buf);
 
-    /* 显示用缓冲（2026-10-23）：单音节 "wo" 分词后仍是 "wo"，两个出口都要能调。 */
-    OpiString disp = opi_display_buffer();
-    dump("  opi_display_buffer()", disp);
+    OpiString disp = opi_display_buffer(); /* 显示用出口（单音节分词仍是 wo） */
     CHECK(eq_cp(disp, (const uint16_t[]){'w', 'o'}, 2), "显示缓冲应为 \"wo\"");
     opi_ffi_free_string(disp);
-
     /* ---------- 候选：JSON 文本数组 ---------- */
     printf("[4] opi_candidates(8)\n");
     OpiString cands = opi_candidates(8);
@@ -161,7 +156,6 @@ int main(int argc, char **argv) {
     dump("  opi_candidates_page()", cpage);
     CHECK(cpage.ptr != NULL && cpage.ptr[0] == '[', "当前页候选也应是 JSON 数组");
     opi_ffi_free_string(cpage);
-
     /* ---------- 空格提交：验证头文件写明的「空格 = 0x20」约定 ---------- */
     printf("[5] 空格提交（头文件约定：空格在可打印段，不是 0x1_0020）\n");
     OpiKeyEventResult r3 = opi_key_event(0x20, 0);
