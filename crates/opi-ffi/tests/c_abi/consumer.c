@@ -127,6 +127,12 @@ int main(int argc, char **argv) {
     CHECK(eq_cp(buf, (const uint16_t[]){'w', 'o'}, 2), "缓冲应为 \"wo\"");
     opi_ffi_free_string(buf);
 
+    /* 显示用缓冲（2026-10-23）：单音节 "wo" 分词后仍是 "wo"，两个出口都要能调。 */
+    OpiString disp = opi_display_buffer();
+    dump("  opi_display_buffer()", disp);
+    CHECK(eq_cp(disp, (const uint16_t[]){'w', 'o'}, 2), "显示缓冲应为 \"wo\"");
+    opi_ffi_free_string(disp);
+
     /* ---------- 候选：JSON 文本数组 ---------- */
     printf("[4] opi_candidates(8)\n");
     OpiString cands = opi_candidates(8);
