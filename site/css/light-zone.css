@@ -1,0 +1,99 @@
+/* opi static site — light green zone below the dark first screen. */
+
+html { background: #f3fbf4; }
+
+.light-zone {
+  color-scheme: light;
+  --bg: #f3fbf4;
+  --bg-deep: #e8f6ec;
+  --bg-elev: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #e8f6ec;
+  --ink: #0f3a27;
+  --muted: #426b57;
+  --muted-2: #52705f;
+  --line: rgba(15, 58, 39, .12);
+  --line-strong: rgba(15, 58, 39, .22);
+  --accent: #2f7d5a;
+  --accent-soft: #327a58;
+  --accent-ink: #ffffff;
+  --teal: #2f7d5a;
+  --teal-soft: #327a58;
+  color: var(--ink);
+}
+
+section.light-zone { background: var(--bg); }
+.stats-band.light-zone, section.light-zone.section--tint { background: linear-gradient(180deg, #e8f6ec, #f3fbf4); }
+.light-zone ::selection { background: rgba(47, 125, 90, .22); color: var(--ink); }
+
+/* Shared controls inside the light zone. */
+.light-zone code { border-color: var(--line); background: rgba(47, 125, 90, .08); color: var(--accent); }
+.light-zone .btn-primary { box-shadow: 0 18px 38px -20px rgba(47, 125, 90, .5); }
+.light-zone .btn-primary:hover { background: var(--accent-soft); box-shadow: 0 22px 42px -18px rgba(47, 125, 90, .45); }
+.light-zone .btn-ghost { background: rgba(255, 255, 255, .6); }
+.light-zone .btn-ghost:hover { border-color: rgba(47, 125, 90, .5); background: rgba(47, 125, 90, .08); }
+.light-zone .btn-meta { background: rgba(15, 58, 39, .2); }
+.light-zone .chip { border-color: var(--line); background: rgba(255, 255, 255, .75); }
+.light-zone .chip--accent { border-color: rgba(47, 125, 90, .34); background: rgba(47, 125, 90, .08); color: var(--accent); }
+.light-zone .chip--teal { border-color: rgba(79, 156, 114, .4); background: rgba(79, 156, 114, .12); color: var(--accent-soft); }
+
+/* About, pet stack, architecture. */
+.light-zone .intro-copy blockquote { background: linear-gradient(90deg, rgba(47, 125, 90, .11), rgba(47, 125, 90, .01)); }
+.light-zone .intro-visual::before { background: radial-gradient(circle at 38% 32%, rgba(255, 255, 255, .95), rgba(79, 156, 114, .16) 48%, transparent 70%); box-shadow: inset 0 0 0 1px rgba(15, 58, 39, .06), 0 40px 80px -50px rgba(15, 58, 39, .35); }
+.light-zone .pet-stack img { filter: drop-shadow(0 22px 30px rgba(15, 58, 39, .18)); }
+.light-zone .arch-panel { border-color: var(--line); background: linear-gradient(160deg, #ffffff, #f5fbf6); box-shadow: 0 30px 70px -60px rgba(15, 58, 39, .45); }
+.light-zone .arch-chips span { border-color: var(--line); background: #f7fcf8; color: var(--muted); }
+.light-zone .arch-row:nth-child(2) .arch-chips span { border-color: rgba(47, 125, 90, .3); background: rgba(47, 125, 90, .06); color: var(--accent); }
+.light-zone .arch-row:nth-child(4) .arch-chips span { border-color: rgba(79, 156, 114, .35); background: rgba(79, 156, 114, .08); color: var(--accent-soft); }
+
+/* Features and timeline. */
+.light-zone .bento-cell { border-color: var(--line); background: linear-gradient(158deg, #ffffff, #f8fdf9); }
+.light-zone .bento-cell:hover { border-color: rgba(47, 125, 90, .35); box-shadow: 0 28px 50px -40px rgba(15, 58, 39, .45); }
+.light-zone .bento-icon { border-color: rgba(15, 58, 39, .08); background: rgba(47, 125, 90, .1); color: var(--accent); }
+.light-zone .bento-cell:nth-child(2) .bento-icon, .light-zone .bento-cell:nth-child(4) .bento-icon, .light-zone .bento-cell:nth-child(5) .bento-icon { background: rgba(79, 156, 114, .13); color: var(--accent-soft); }
+.light-zone .timeline-item:last-child::before { box-shadow: 0 0 0 4px var(--bg), 0 0 20px rgba(47, 125, 90, .55); }
+
+/* Form cards. */
+.light-zone .form-card { border-color: var(--line); background: rgba(255, 255, 255, .82); }
+.light-zone .form-card:hover, .light-zone .form-card:focus-visible { border-color: color-mix(in srgb, var(--mood) 55%, var(--line-strong)); background: #fff; box-shadow: 0 24px 38px -30px rgba(15, 58, 39, .35); }
+
+/* Releases. */
+.light-zone .release-latest { border-color: rgba(47, 125, 90, .32); border-left-color: var(--accent); background: linear-gradient(90deg, rgba(47, 125, 90, .1), rgba(255, 255, 255, .9) 62%); }
+.light-zone .release-latest a:hover { background: rgba(47, 125, 90, .07); }
+.light-zone .release-item a:hover { background: rgba(47, 125, 90, .06); }
+.light-zone .release-item::before { border-color: var(--bg-elev); box-shadow: 0 0 0 1px rgba(47, 125, 90, .3); }
+
+/* Download cards and donation. */
+.light-zone .download-notice { border-color: rgba(47, 125, 90, .3); border-left-color: var(--accent); background: rgba(47, 125, 90, .07); }
+.light-zone .download-notice strong { color: var(--accent); }
+.light-zone .download-card { border-color: var(--line); background: rgba(255, 255, 255, .78); }
+.light-zone .download-card:hover { border-color: rgba(47, 125, 90, .45); background: #fff; box-shadow: 0 28px 50px -42px rgba(15, 58, 39, .45); }
+.light-zone .os-mark { background: rgba(47, 125, 90, .12); }
+.light-zone .download-card.is-primary { border-color: rgba(47, 125, 90, .3); background: linear-gradient(155deg, rgba(79, 156, 114, .16), rgba(255, 255, 255, .9) 56%); }
+.light-zone .download-card.is-primary:hover { border-color: rgba(47, 125, 90, .5); background: linear-gradient(155deg, rgba(79, 156, 114, .22), #fff 56%); }
+.light-zone .download-card.is-primary .os-mark { background: rgba(47, 125, 90, .1); }
+.light-zone .download-card.is-primary .os-cta { background: var(--accent); color: #fff; }
+.light-zone .download-card.is-primary .os-cta:hover { background: #245f46; color: #fff; }
+.light-zone .download-grid.is-minor .download-card { background: rgba(255, 255, 255, .62); }
+.light-zone .download-grid.is-minor .download-card:hover { background: #fff; }
+.light-zone .download-grid.is-minor .os-mark { background: rgba(79, 156, 114, .1); }
+.light-zone .beta-badge { border-color: rgba(47, 125, 90, .34); background: rgba(47, 125, 90, .09); color: var(--accent); }
+.light-zone .download-card.is-current-os { border-color: rgba(47, 125, 90, .6); }
+.light-zone .os-current { background: var(--accent); color: #fff; }
+.light-zone .donate { border-color: var(--line); background: rgba(255, 255, 255, .7); }
+.light-zone .donate-qr figcaption { color: var(--muted); }
+
+/* Fixed pet button. */
+.light-zone.back-to-top { box-shadow: 0 12px 30px -16px rgba(15, 58, 39, .45), 0 0 0 3px rgba(79, 156, 114, .16); }
+
+/* Dialogs and the memory overlay. */
+.light-zone.form-dialog, .light-zone.qr-dialog { box-shadow: 0 40px 100px -30px rgba(15, 58, 39, .35); }
+.light-zone.form-backdrop { background: rgba(15, 58, 39, .32); }
+.light-zone.qr-dialog::backdrop { background: rgba(15, 58, 39, .38); }
+.light-zone .dialog-close { background: var(--bg); }
+.light-zone.memory-overlay { background: radial-gradient(800px 500px at 50% 40%, #e8f6ec, #f3fbf4 72%); }
+.light-zone .memory-card { box-shadow: 0 40px 100px -40px rgba(15, 58, 39, .45); }
+.light-zone .memory-intro-skip { background: #fff; }
+.light-zone .memory-forms-entry { background: linear-gradient(180deg, rgba(79, 156, 114, .13), rgba(255, 255, 255, .4)); }
+.light-zone .memory-item.is-in.is-current { background: rgba(47, 125, 90, .1); }
+.light-zone .memory-item.is-latest { background: rgba(79, 156, 114, .12); }

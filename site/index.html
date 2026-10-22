@@ -20,7 +20,7 @@
   <meta name="twitter:image" content="https://opi.erik.xyz/assets/social-preview.png"><meta name="twitter:image:alt" content="小欧输入法：一枚键帽精灵">
   <link rel="icon" type="image/png" href="assets/pet/opi-pet.png"><link rel="apple-touch-icon" href="assets/pet/opi-pet.png">
   <link rel="preload" as="image" href="assets/pet/opi-pet.png">
-  <link rel="stylesheet" href="css/base.css"><link rel="stylesheet" href="css/sections.css"><link rel="stylesheet" href="css/components.css"><link rel="stylesheet" href="css/responsive.css">
+  <link rel="stylesheet" href="css/base.css"><link rel="stylesheet" href="css/sections.css"><link rel="stylesheet" href="css/components.css"><link rel="stylesheet" href="css/responsive.css"><link rel="stylesheet" href="css/light-zone.css">
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://opi.erik.xyz/#website","url":"https://opi.erik.xyz/","name":"opi · 小欧输入法","alternateName":["opi","小欧输入法","Open People Input"],"description":"开源、离线、无广告的六端中文输入法：一份 Rust 引擎，Android / Windows / Linux / iOS / macOS / 鸿蒙原生客户端。","inLanguage":"zh-CN","publisher":{"@id":"https://opi.erik.xyz/#organization"}},{"@type":"SoftwareApplication","@id":"https://opi.erik.xyz/#app","name":"小欧输入法","alternateName":["opi","OPI","Open People Input"],"applicationCategory":"UtilitiesApplication","applicationSubCategory":"Input Method","operatingSystem":"Android, Windows, Linux, macOS, iOS, HarmonyOS","softwareVersion":"1.23.0","dateModified":"2026-10-22","isAccessibleForFree":true,"license":"https://opensource.org/licenses/MIT","url":"https://opi.erik.xyz/","downloadUrl":"https://github.com/erikwang2013/opi/releases/tag/v1.23.0","image":"https://opi.erik.xyz/assets/social-preview.png","inLanguage":"zh-CN","sameAs":["https://github.com/erikwang2013/opi"],"offers":{"@type":"Offer","price":"0","priceCurrency":"CNY"},"publisher":{"@id":"https://opi.erik.xyz/#organization"}},{"@type":"Organization","@id":"https://opi.erik.xyz/#organization","name":"opi","url":"https://opi.erik.xyz/","logo":"https://opi.erik.xyz/assets/pet/opi-pet.png","sameAs":["https://github.com/erikwang2013/opi","https://erik.xyz"]}]}</script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"小欧输入法是什么？","acceptedAnswer":{"@type":"Answer","text":"小欧输入法（opi）是开源、离线、无广告的六端中文输入法：一份 Rust 引擎，Android、Windows、Linux、iOS、macOS、鸿蒙原生客户端。"}},{"@type":"Question","name":"支持哪些平台？","acceptedAnswer":{"@type":"Answer","text":"六端都有客户端代码；目前 Android（模拟器）与 Linux（容器/本机）有运行验证，Windows、iOS、macOS、鸿蒙已有可构建产物但未真机验收。"}},{"@type":"Question","name":"会联网或上传输入吗？","acceptedAnswer":{"@type":"Answer","text":"输入、候选与用户词都在本机完成；联网仅用于设置页读取 version.json 做版本检测，不携带输入数据。"}},{"@type":"Question","name":"如何下载安装？","acceptedAnswer":{"@type":"Answer","text":"安装包直接放在本站 download/ 目录，不跳转 GitHub；各端安装教程见 docs/install。"}},{"@type":"Question","name":"代码和词库是什么许可证？","acceptedAnswer":{"@type":"Answer","text":"代码按 MIT；简体主库因并入 GPL-3.0 数据而整体按 GPL-3.0 分发；项目宠物与表情资产为项目专有资产。"}}]}</script>
 </head>
@@ -69,7 +69,7 @@
       </div>
     </section>
 
-    <section class="stats-band" aria-label="项目数据">
+    <section class="stats-band light-zone" aria-label="项目数据">
       <div class="shell stats-grid">
         <div class="stat"><strong>1</strong><span>份 Rust 引擎</span></div>
         <div class="stat"><strong>12</strong><span>种小欧形态</span></div>
@@ -80,7 +80,7 @@
       </div>
     </section>
 
-    <section class="section" id="about" aria-labelledby="about-title">
+    <section class="section light-zone" id="about" aria-labelledby="about-title">
       <div class="shell intro-grid">
         <div class="intro-copy reveal">
           <p class="eyebrow">01 / 认识小欧</p>
@@ -118,7 +118,7 @@
       </div>
     </section>
 
-    <section class="section section--tint" id="features" aria-labelledby="features-title">
+    <section class="section section--tint light-zone" id="features" aria-labelledby="features-title">
       <div class="shell">
         <div class="section-head reveal">
           <div>
@@ -168,7 +168,7 @@
       </div>
     </section>
 
-    <section class="section" id="timeline" aria-labelledby="timeline-title">
+    <section class="section light-zone" id="timeline" aria-labelledby="timeline-title">
       <div class="shell">
         <div class="section-head reveal">
           <div>
@@ -188,7 +188,7 @@
       </div>
     </section>
 
-    <section class="section section--tint" id="forms" aria-labelledby="forms-title">
+    <section class="section section--tint light-zone" id="forms" aria-labelledby="forms-title">
       <div class="shell">
         <div class="section-head reveal">
           <div>
@@ -215,7 +215,7 @@
       </div>
     </section>
 
-    <section class="section" id="releases" aria-labelledby="releases-title">
+    <section class="section light-zone" id="releases" aria-labelledby="releases-title">
       <div class="shell releases-grid">
         <div class="releases-copy reveal">
           <p class="eyebrow">05 / 版本日志</p>
@@ -262,7 +262,7 @@
       </div>
     </section>
 
-    <section class="section section--tint" id="download" aria-labelledby="download-title">
+    <section class="section section--tint light-zone" id="download" aria-labelledby="download-title">
       <div class="shell">
         <div class="section-head reveal">
           <div>
@@ -307,7 +307,7 @@
     </section>
   </main>
 
-  <footer class="site-footer" aria-label="页脚">
+  <footer class="site-footer light-zone" aria-label="页脚">
     <div class="shell footer-grid">
       <div class="footer-brand">
         <a class="brand" href="#hero"><img class="brand-pet" src="assets/pet/opi-pet.png" width="32" height="32" alt=""><span class="brand-name">opi</span><span class="brand-cn">小欧输入法</span></a>
@@ -339,10 +339,10 @@
     </div>
   </footer>
 
-  <button class="back-to-top" type="button" aria-label="返回顶部"><img src="assets/pet/opi-pet.png" width="48" height="48" alt=""></button>
+  <button class="back-to-top light-zone" type="button" aria-label="返回顶部"><img src="assets/pet/opi-pet.png" width="48" height="48" alt=""></button>
 
-  <div class="form-backdrop" id="form-backdrop" hidden></div>
-  <dialog class="form-dialog" id="form-dialog" aria-labelledby="dialog-name">
+  <div class="form-backdrop light-zone" id="form-backdrop" hidden></div>
+  <dialog class="form-dialog light-zone" id="form-dialog" aria-labelledby="dialog-name">
     <button class="dialog-close" type="button" aria-label="关闭">×</button>
     <div class="dialog-body">
       <img id="dialog-image" src="assets/pet/forms/idle.png" width="200" height="200" alt="">
@@ -350,13 +350,13 @@
     </div>
   </dialog>
 
-  <dialog class="qr-dialog" id="qr-dialog" aria-labelledby="qr-title">
+  <dialog class="qr-dialog light-zone" id="qr-dialog" aria-labelledby="qr-title">
     <button class="dialog-close qr-close" type="button" aria-label="关闭">×</button>
     <img id="qr-image" width="520" height="570" alt="">
     <p id="qr-title">收款二维码</p>
   </dialog>
 
-  <div class="memory-overlay" id="memory-overlay" hidden>
+  <div class="memory-overlay light-zone" id="memory-overlay" hidden>
     <section class="memory-card" role="dialog" aria-modal="true" aria-labelledby="memory-title" aria-describedby="memory-sub">
       <header class="memory-head">
         <p class="eyebrow">小欧的时光机</p>

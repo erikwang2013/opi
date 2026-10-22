@@ -20,7 +20,7 @@
   <meta name="twitter:image" content="https://opi.erik.xyz/assets/social-preview.png"><meta name="twitter:image:alt" content="Opi, the keycap sprite of the opi input method">
   <link rel="icon" type="image/png" href="../assets/pet/opi-pet.png"><link rel="apple-touch-icon" href="../assets/pet/opi-pet.png">
   <link rel="preload" as="image" href="../assets/pet/opi-pet.png">
-  <link rel="stylesheet" href="../css/base.css"><link rel="stylesheet" href="../css/sections.css"><link rel="stylesheet" href="../css/components.css"><link rel="stylesheet" href="../css/responsive.css">
+  <link rel="stylesheet" href="../css/base.css"><link rel="stylesheet" href="../css/sections.css"><link rel="stylesheet" href="../css/components.css"><link rel="stylesheet" href="../css/responsive.css"><link rel="stylesheet" href="../css/light-zone.css">
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://opi.erik.xyz/en/#website","url":"https://opi.erik.xyz/en/","name":"opi · Open People Input","alternateName":["opi","Open People Input","OPI","小欧输入法"],"description":"An open, offline, ad-free Chinese input method: one Rust engine with native clients for Android, Windows, Linux, iOS, macOS and HarmonyOS.","inLanguage":"en","publisher":{"@id":"https://opi.erik.xyz/#organization"}},{"@type":"SoftwareApplication","@id":"https://opi.erik.xyz/en/#app","name":"opi","alternateName":["Open People Input","OPI","小欧输入法"],"applicationCategory":"UtilitiesApplication","applicationSubCategory":"Input Method","operatingSystem":"Android, Windows, Linux, macOS, iOS, HarmonyOS","softwareVersion":"1.23.0","dateModified":"2026-10-22","isAccessibleForFree":true,"license":"https://opensource.org/licenses/MIT","url":"https://opi.erik.xyz/en/","downloadUrl":"https://github.com/erikwang2013/opi/releases/tag/v1.23.0","image":"https://opi.erik.xyz/assets/social-preview.png","inLanguage":"en","sameAs":["https://github.com/erikwang2013/opi"],"offers":{"@type":"Offer","price":"0","priceCurrency":"CNY"},"publisher":{"@id":"https://opi.erik.xyz/#organization"}},{"@type":"Organization","@id":"https://opi.erik.xyz/#organization","name":"opi","url":"https://opi.erik.xyz/","logo":"https://opi.erik.xyz/assets/pet/opi-pet.png","sameAs":["https://github.com/erikwang2013/opi","https://erik.xyz"]}]}</script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is opi?","acceptedAnswer":{"@type":"Answer","text":"opi (Open People Input) is an open, offline, ad-free Chinese input method: one Rust engine with native clients for Android, Windows, Linux, iOS, macOS and HarmonyOS."}},{"@type":"Question","name":"Which platforms are supported?","acceptedAnswer":{"@type":"Answer","text":"All six clients exist. Android (emulator) and Linux (container/local) have runtime verification; Windows, iOS, macOS and HarmonyOS are buildable but not yet accepted on real devices."}},{"@type":"Question","name":"Does it upload my input?","acceptedAnswer":{"@type":"Answer","text":"Input, candidates and the user dictionary stay local. Network access is only used by settings to read version.json for update checks, without input data."}},{"@type":"Question","name":"How do I download and install it?","acceptedAnswer":{"@type":"Answer","text":"Packages are served from this site's download/ directory, not redirected to GitHub; per-platform guides are in docs/install."}},{"@type":"Question","name":"What licenses apply?","acceptedAnswer":{"@type":"Answer","text":"Code is MIT. The simplified dictionary is distributed under GPL-3.0 because it includes GPL-3.0 data. Pet and emoji art are proprietary project assets."}}]}</script>
 </head>
@@ -69,7 +69,7 @@
       </div>
     </section>
 
-    <section class="stats-band" aria-label="Project data">
+    <section class="stats-band light-zone" aria-label="Project data">
       <div class="shell stats-grid">
         <div class="stat"><strong>1</strong><span>Rust engine</span></div>
         <div class="stat"><strong>12</strong><span>Opi forms</span></div>
@@ -80,7 +80,7 @@
       </div>
     </section>
 
-    <section class="section" id="about" aria-labelledby="about-title">
+    <section class="section light-zone" id="about" aria-labelledby="about-title">
       <div class="shell intro-grid">
         <div class="intro-copy reveal">
           <p class="eyebrow">01 / MEET OPI</p>
@@ -118,7 +118,7 @@
       </div>
     </section>
 
-    <section class="section section--tint" id="features" aria-labelledby="features-title">
+    <section class="section section--tint light-zone" id="features" aria-labelledby="features-title">
       <div class="shell">
         <div class="section-head reveal">
           <div>
@@ -168,7 +168,7 @@
       </div>
     </section>
 
-    <section class="section" id="timeline" aria-labelledby="timeline-title">
+    <section class="section light-zone" id="timeline" aria-labelledby="timeline-title">
       <div class="shell">
         <div class="section-head reveal">
           <div>
@@ -188,7 +188,7 @@
       </div>
     </section>
 
-    <section class="section section--tint" id="forms" aria-labelledby="forms-title">
+    <section class="section section--tint light-zone" id="forms" aria-labelledby="forms-title">
       <div class="shell">
         <div class="section-head reveal">
           <div>
@@ -215,7 +215,7 @@
       </div>
     </section>
 
-    <section class="section" id="releases" aria-labelledby="releases-title">
+    <section class="section light-zone" id="releases" aria-labelledby="releases-title">
       <div class="shell releases-grid">
         <div class="releases-copy reveal">
           <p class="eyebrow">05 / RELEASES</p>
@@ -246,7 +246,7 @@
       </div>
     </section>
 
-    <section class="section section--tint" id="download" aria-labelledby="download-title">
+    <section class="section section--tint light-zone" id="download" aria-labelledby="download-title">
       <div class="shell">
         <div class="section-head reveal">
           <div>
@@ -291,7 +291,7 @@
     </section>
   </main>
 
-  <footer class="site-footer" aria-label="Footer">
+  <footer class="site-footer light-zone" aria-label="Footer">
     <div class="shell footer-grid">
       <div class="footer-brand">
         <a class="brand" href="#hero"><img class="brand-pet" src="../assets/pet/opi-pet.png" width="32" height="32" alt=""><span class="brand-name">opi</span><span class="brand-cn">Open People Input</span></a>
@@ -323,10 +323,10 @@
     </div>
   </footer>
 
-  <button class="back-to-top" type="button" aria-label="Back to top"><img src="../assets/pet/opi-pet.png" width="48" height="48" alt=""></button>
+  <button class="back-to-top light-zone" type="button" aria-label="Back to top"><img src="../assets/pet/opi-pet.png" width="48" height="48" alt=""></button>
 
-  <div class="form-backdrop" id="form-backdrop" hidden></div>
-  <dialog class="form-dialog" id="form-dialog" aria-labelledby="dialog-name">
+  <div class="form-backdrop light-zone" id="form-backdrop" hidden></div>
+  <dialog class="form-dialog light-zone" id="form-dialog" aria-labelledby="dialog-name">
     <button class="dialog-close" type="button" aria-label="Close">×</button>
     <div class="dialog-body">
       <img id="dialog-image" src="../assets/pet/forms/idle.png" width="200" height="200" alt="">
@@ -334,7 +334,7 @@
     </div>
   </dialog>
 
-  <dialog class="qr-dialog" id="qr-dialog" aria-labelledby="qr-title">
+  <dialog class="qr-dialog light-zone" id="qr-dialog" aria-labelledby="qr-title">
     <button class="dialog-close qr-close" type="button" aria-label="Close">×</button>
     <img id="qr-image" width="520" height="570" alt="">
     <p id="qr-title">Donation QR code</p>
