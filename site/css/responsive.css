@@ -133,7 +133,7 @@
 
 @media (max-width: 460px) {
   /* 形态区已后移；最窄屏优先保留 认识/能力/迭代/版本/下载，隐藏形态入口。 */
-  .site-nav a:nth-child(4) { display: none; }
+  .site-nav a:nth-child(5) { display: none; }
   .brand-copy strong { letter-spacing: .1em; }
   .header-github { display: none; }
   .hero { padding-top: 94px; padding-top: calc(94px + env(safe-area-inset-top)); }
