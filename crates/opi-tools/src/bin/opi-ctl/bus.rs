@@ -13,28 +13,17 @@ use super::{DEST, PATH};
 /// **绝不**让 dbus-send 走 X11 autolaunch（`autolaunch:` 也拒）：libdbus 会凭空
 /// 造一条私有总线，D-Bus 激活文件随即拉起一个继承该环境的 fcitx5。
 fn session_bus_address() -> Result<String, i32> {
-    let env_addr = std::env::var("DBUS_SESSION_BUS_ADDRESS")
-        .ok()
-        .filter(|a| !a.is_empty());
-    let canonical = std::env::var("XDG_RUNTIME_DIR")
-        .ok()
-        .filter(|d| !d.is_empty())
-        .map(|d| format!("unix:path={d}/bus"));
-    // 进程可能从桌面/自启动继承了 dbus-launch 的私有总线（`/tmp/dbus-*`）。
-    // 那种环境里 fcitx5 是另一个实例（通常没装 OPI），状态栏会一直问错对象；
-    // systemd 会话存在标准总线时优先用它。普通 `/run/user/...` 或测试给的
-    // 任意地址仍按环境走，避免改变既有语义。
-    let address = match env_addr {
-        Some(a) if a.starts_with("unix:path=/tmp/") => canonical
-            .filter(|c| std::path::Path::new(c.trim_start_matches("unix:path=")).exists())
-            .unwrap_or(a),
-        Some(a) => a,
-        None => canonical.ok_or_else(|| {
-            eprintln!(
-                "opi-ctl: 没有会话总线地址（DBUS_SESSION_BUS_ADDRESS 与 XDG_RUNTIME_DIR 都为空）—— 不自动创建私有总线"
-            );
-            3
-        })?,
+    let address = match std::env::var("DBUS_SESSION_BUS_ADDRESS") {
+        Ok(a) if !a.is_empty() => a,
+        _ => match std::env::var("XDG_RUNTIME_DIR") {
+            Ok(dir) if !dir.is_empty() => format!("unix:path={dir}/bus"),
+            _ => {
+                eprintln!(
+                    "opi-ctl: 没有会话总线地址（DBUS_SESSION_BUS_ADDRESS 与 XDG_RUNTIME_DIR 都为空）—— 不自动创建私有总线"
+                );
+                return Err(3);
+            }
+        },
     };
     if address.starts_with("autolaunch:") {
         eprintln!("opi-ctl: 会话总线地址是 autolaunch:（会另造一条私有总线），拒绝使用");

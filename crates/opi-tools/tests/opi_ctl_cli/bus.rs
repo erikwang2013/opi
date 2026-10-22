@@ -95,21 +95,3 @@ fn missing_owner_never_sends_to_the_activatable_name() {
         "没属主时不许碰目标对象（有激活文件时会把 fcitx5 拉起来）：{argv}"
     );
 }
-
-/// 自启动/桌面进程可能继承 dbus-launch 的私有 `/tmp/dbus-*` 地址；标准用户总线
-/// 存在时改用它，否则状态栏会一直问另一个（通常没有 OPI 的）fcitx5 实例。
-#[test]
-fn private_tmp_bus_yields_to_canonical_user_bus() {
-    let dir = fake(
-        REPLY_TO_STDOUT,
-        &reply_of("lang=zh;trad=off;punct=on;fw=on;im=;mode=pinyin"),
-    );
-    let runtime = dir.join("runtime");
-    std::fs::create_dir_all(&runtime).unwrap();
-    std::fs::write(runtime.join("bus"), b"").unwrap();
-    let xdg = runtime.to_str().unwrap();
-    let (code, _, stderr) = run_ctl_state_env(&dir, Some("unix:path=/tmp/dbus-private"), Some(xdg));
-    assert_eq!(code, 0, "stderr={stderr}");
-    let addr = std::fs::read_to_string(dir.join("addr")).unwrap();
-    assert_eq!(addr.trim(), format!("unix:path={xdg}/bus"));
-}
