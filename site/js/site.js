@@ -33,6 +33,8 @@
   const header = $('.site-header');
   const progress = $('.scroll-progress span');
   const toTop = $('.back-to-top');
+  const menuToggle = $('#menu-toggle');
+  const siteNav = $('#site-nav');
   const sections = $$('main > section[id]');
   const navLinks = $$('.site-nav a[href^="#"]');
   const dots = $$('.section-dots a');
@@ -86,6 +88,30 @@
     scheduled = true;
     window.requestAnimationFrame(update);
   };
+
+  // Mobile menu: same nav in the header, shown below 960px.
+  if (menuToggle && siteNav) {
+    const setMenu = (open) => {
+      siteNav.classList.toggle('is-open', open);
+      menuToggle.setAttribute('aria-expanded', String(open));
+      menuToggle.setAttribute('aria-label', open ? '关闭菜单' : '打开菜单');
+    };
+    menuToggle.addEventListener('click', () => {
+      setMenu(!siteNav.classList.contains('is-open'));
+    });
+    siteNav.addEventListener('click', (event) => {
+      if (event.target.closest('a')) setMenu(false);
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && siteNav.classList.contains('is-open')) {
+        setMenu(false);
+        menuToggle.focus();
+      }
+    });
+    window.matchMedia('(min-width: 961px)').addEventListener('change', (event) => {
+      if (event.matches) setMenu(false);
+    });
+  }
 
   toTop?.addEventListener('click', () => {
     window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });

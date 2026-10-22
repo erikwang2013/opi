@@ -7,7 +7,7 @@
   <meta name="keywords" content="小欧输入法,opi,开源输入法,离线输入法,中文输入法,Rust 输入法,拼音输入法,双拼输入法,五笔输入法,简繁输入,9键输入法,Android 输入法,Windows 输入法,Linux 输入法,macOS 输入法,iOS 输入法,鸿蒙输入法">
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
   <meta name="author" content="erik.xyz"><meta name="application-name" content="小欧输入法">
-  <meta name="theme-color" content="#fbfaf6"><meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#080c11"><meta name="color-scheme" content="dark">
   <link rel="canonical" href="https://opi.erik.xyz/"><link rel="alternate" hreflang="zh-CN" href="https://opi.erik.xyz/"><link rel="alternate" hreflang="x-default" href="https://opi.erik.xyz/">
   <meta property="og:type" content="website"><meta property="og:site_name" content="opi · 小欧输入法"><meta property="og:locale" content="zh_CN">
   <meta property="og:title" content="opi · 小欧输入法 — 把输入，还给输入本身">
@@ -20,308 +20,252 @@
   <meta name="twitter:image" content="https://opi.erik.xyz/assets/social-preview.png"><meta name="twitter:image:alt" content="小欧输入法：一枚键帽精灵">
   <link rel="icon" type="image/png" href="assets/pet/opi-pet.png"><link rel="apple-touch-icon" href="assets/pet/opi-pet.png">
   <link rel="preload" as="image" href="assets/pet/opi-pet.png">
-  <link rel="stylesheet" href="css/base.css"><link rel="stylesheet" href="css/sections.css"><link rel="stylesheet" href="css/responsive.css">
+  <link rel="stylesheet" href="css/base.css"><link rel="stylesheet" href="css/sections.css"><link rel="stylesheet" href="css/components.css"><link rel="stylesheet" href="css/responsive.css">
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://opi.erik.xyz/#website","url":"https://opi.erik.xyz/","name":"opi · 小欧输入法","alternateName":["opi","小欧输入法","Open People Input"],"description":"开源、离线、无广告的六端中文输入法：一份 Rust 引擎，Android / Windows / Linux / iOS / macOS / 鸿蒙原生客户端。","inLanguage":"zh-CN","publisher":{"@id":"https://opi.erik.xyz/#organization"}},{"@type":"SoftwareApplication","@id":"https://opi.erik.xyz/#app","name":"小欧输入法","alternateName":["opi","OPI","Open People Input"],"applicationCategory":"UtilitiesApplication","applicationSubCategory":"Input Method","operatingSystem":"Android, Windows, Linux, macOS, iOS, HarmonyOS","softwareVersion":"1.23.0","dateModified":"2026-10-22","isAccessibleForFree":true,"license":"https://opensource.org/licenses/MIT","url":"https://opi.erik.xyz/","downloadUrl":"https://github.com/erikwang2013/opi/releases/tag/v1.23.0","image":"https://opi.erik.xyz/assets/social-preview.png","inLanguage":"zh-CN","sameAs":["https://github.com/erikwang2013/opi"],"offers":{"@type":"Offer","price":"0","priceCurrency":"CNY"},"publisher":{"@id":"https://opi.erik.xyz/#organization"}},{"@type":"Organization","@id":"https://opi.erik.xyz/#organization","name":"opi","url":"https://opi.erik.xyz/","logo":"https://opi.erik.xyz/assets/pet/opi-pet.png","sameAs":["https://github.com/erikwang2013/opi","https://erik.xyz"]}]}</script>
 </head>
 <body>
   <a class="skip-link" href="#main">跳到正文</a>
-  <div class="ambient-3d" aria-hidden="true"><i class="ambient-key key-a"></i><i class="ambient-key key-b"></i><i class="ambient-key key-c"></i><i class="ambient-ring ring-a"></i><i class="ambient-ring ring-b"></i></div>
-  <div class="boot-3d" aria-hidden="true"><img src="assets/pet/opi-pet.png" width="44" height="44" alt=""></div>
   <div class="scroll-progress" aria-hidden="true"><span></span></div>
   <header class="site-header" id="top">
-    <a class="brand" href="#hero" aria-label="opi 小欧输入法首页">
-      <img src="assets/pet/opi-pet.png" width="36" height="36" alt="">
-      <span class="brand-copy"><strong>opi</strong><small>小欧输入法</small></span>
-    </a>
-    <nav class="site-nav" id="site-nav" aria-label="主导航">
-      <a href="#hero">首页</a>
-      <a href="#about">认识</a>
-      <a href="#features">能力</a>
-      <a href="#timeline">迭代</a>
-      <a href="#forms">形态</a>
-      <a href="#releases">版本</a>
-      <a href="#download">下载</a>
-    </nav>
-    <div class="header-actions">
-      <a class="header-link" href="https://erik.xyz" target="_blank" rel="noopener">艾瑞可erik<span aria-hidden="true"> ↗</span></a>
-      <a class="header-github" href="https://github.com/erikwang2013/opi" target="_blank" rel="noopener" aria-label="GitHub 仓库">GitHub</a>
+    <div class="shell header-inner">
+      <a class="brand" href="#hero" aria-label="opi 小欧输入法首页">
+        <img class="brand-pet" src="assets/pet/opi-pet.png" width="32" height="32" alt="">
+        <span class="brand-name">opi</span><span class="brand-cn">小欧输入法</span>
+      </a>
+      <nav class="site-nav" id="site-nav" aria-label="主导航">
+        <a href="#hero" aria-current="page">首页</a><a href="#about">认识</a><a href="#features">能力</a><a href="#timeline">迭代</a><a href="#forms">形态</a><a href="#releases">版本</a><a href="#download">下载</a>
+      </nav>
+      <div class="header-actions">
+        <a class="header-link" href="https://erik.xyz" target="_blank" rel="noopener">erik.xyz<span aria-hidden="true"> ↗</span></a>
+        <a class="icon-btn" href="https://github.com/erikwang2013/opi" target="_blank" rel="noopener" aria-label="GitHub 仓库"><svg class="icon" aria-hidden="true"><use href="#i-github"></use></svg></a>
+        <button class="menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="打开菜单"><span class="menu-bars" aria-hidden="true"></span></button>
+      </div>
     </div>
   </header>
+
   <main id="main">
-    <section class="panel hero" id="hero" aria-labelledby="hero-title">
-      <div class="container hero-grid">
+    <section class="hero" id="hero" aria-labelledby="hero-title">
+      <div class="shell hero-grid">
         <div class="hero-copy">
-          <p class="eyebrow"><span class="pulse-dot"></span>OPEN PEOPLE INPUT · 2026</p>
-          <h1 id="hero-title"><span class="line">把输入，</span><span class="line"><em>还给输入本身。</em></span></h1>
-          <p class="lede">小欧输入法：一份 <strong>Rust</strong> 引擎，六端原生。<br>离线、无广告、可审计 —— 只把字打对。</p>
+          <p class="eyebrow">OPEN PEOPLE INPUT · 本地优先</p>
+          <h1 id="hero-title">把输入，<br><em>还给输入本身。</em></h1>
+          <p class="hero-lead">小欧输入法：一份 <strong>Rust</strong> 引擎，六端原生。<br>离线、无广告、可审计 —— 只把字打对。</p>
           <div class="hero-actions">
             <a class="btn btn-primary" href="#download">下载最新版 <span class="btn-meta">v1.23.0</span></a>
             <a class="btn btn-ghost" href="#about">认识小欧 <span aria-hidden="true">↓</span></a>
           </div>
           <ul class="hero-facts" aria-label="项目关键词">
-            <li><b>6</b><span>端原生</span></li>
-            <li><b>0</b><span>云端</span></li>
-            <li><b>MIT</b><span>代码</span></li>
-            <li><b>1</b><span>份引擎</span></li>
+            <li><b>6</b><span>端原生</span></li><li><b>0</b><span>云端</span></li><li><b>MIT</b><span>源码</span></li><li><b>1</b><span>份引擎</span></li>
           </ul>
           <p class="hero-byline">由 <a href="https://erik.xyz" target="_blank" rel="noopener">艾瑞可erik</a> 打造 · 持续迭代中</p>
         </div>
-        <div class="hero-art" aria-hidden="true">
+        <div class="hero-stage" aria-hidden="true">
           <canvas id="pet-stage"></canvas>
           <img class="hero-pet-fallback" src="assets/pet/opi-pet.png" width="256" height="256" alt="">
-          <span class="orbit-chip chip-a">离线优先</span>
-          <span class="orbit-chip chip-b">简 · 繁</span>
-          <span class="orbit-chip chip-c">双拼 / 五笔</span>
+          <span class="orbit-chip chip-a">离线优先</span><span class="orbit-chip chip-b">简 · 繁</span><span class="orbit-chip chip-c">双拼 / 五笔</span>
         </div>
       </div>
-      <a class="scroll-cue" href="#about"><span>向下滚动</span><i aria-hidden="true"></i></a>
     </section>
-    <section class="panel about" id="about" aria-labelledby="about-title">
-      <div class="container about-grid">
-        <div class="about-copy reveal">
+
+    <section class="stats-band" aria-label="项目数据">
+      <div class="shell stats-grid">
+        <div class="stat"><strong>1</strong><span>份 Rust 引擎</span></div>
+        <div class="stat"><strong>12</strong><span>种小欧形态</span></div>
+        <div class="stat"><strong>937,780</strong><span>简体词条</span></div>
+        <div class="stat"><strong>139,355</strong><span>繁体词条</span></div>
+        <div class="stat"><strong>9 / 14 / 26</strong><span>键布局</span></div>
+        <div class="stat"><strong>689</strong><span>OpenMoji 表情</span></div>
+      </div>
+    </section>
+
+    <section class="section" id="about" aria-labelledby="about-title">
+      <div class="shell intro-grid">
+        <div class="intro-copy reveal">
           <p class="eyebrow">01 / 认识小欧</p>
-          <h2 id="about-title">一枚键帽，<br><em>为什么值得被认真对待？</em></h2>
+          <h2 id="about-title">一枚键帽，<em>为什么值得被认真对待？</em></h2>
           <p class="body-lg">小欧是 opi 的项目宠物，也是一枚<strong>键帽精灵</strong>。它长得就是键盘上的一颗键 —— 因为输入法本该如此，不必是别的东西。</p>
-          <p class="body">身体是键帽，嘴是字母 <strong>O</strong>（Open），头顶是拼音声调 <strong>ˉ</strong>，侧壁刻着 <strong>opi</strong>，底部涟漪只在本机扩散。<br>这些不是装饰，是项目对「输入」这件事的态度。</p>
-          <p class="body"><strong>Open</strong> 开放可审计 · <strong>People</strong> 为人人设计 · <strong>Input</strong> 回归输入本质。云同步、账号与广告都不做。</p>
+          <p class="body">身体是键帽，嘴是字母 <strong>O</strong>（Open），头顶是拼音声调 <strong>ˉ</strong>，侧壁刻着 <strong>opi</strong>，底部涟漪只在本机扩散。这些不是装饰，是项目对「输入」这件事的态度。</p>
+          <ul class="check-list">
+            <li><strong>Open</strong>：引擎开源，词库开放，透明可审计。</li>
+            <li><strong>People</strong>：为人人设计，不拿输入做别的事。</li>
+            <li><strong>Input</strong>：回归输入本质，只把字打对。</li>
+            <li>云同步、账号、广告与遥测，都不做。</li>
+          </ul>
           <blockquote>始于不满，成于热爱。<cite>—— opi 项目缘起</cite></blockquote>
           <a class="text-link" href="assets/pet/opi-pet.svg" target="_blank" rel="noopener">看小欧的原始矢量稿 <span aria-hidden="true">↗</span></a>
         </div>
-        <div class="about-art reveal">
-          <div class="pet-halo"></div>
-          <img class="about-pet" src="assets/pet/opi-pet.svg" width="240" height="250" alt="小欧：一枚白色键帽形状的精灵，正面有笑脸，头顶有拼音声调天线">
+        <div class="intro-visual reveal" aria-hidden="true">
+          <div class="pet-stack">
+            <img class="pet-stack-main" src="assets/pet/opi-pet.svg" width="480" height="500" loading="lazy" decoding="async" alt="">
+            <img class="pet-stack-a" src="assets/pet/forms/cute.png" width="240" height="240" loading="lazy" decoding="async" alt="">
+            <img class="pet-stack-b" src="assets/pet/forms/angry.png" width="240" height="240" loading="lazy" decoding="async" alt="">
+          </div>
           <div class="about-caption"><span>小欧 / opi</span><span>键帽精灵 · KEYCAP SPRITE</span></div>
         </div>
       </div>
-      <div class="container pet-facts">
-        <div class="fact"><span class="fact-key">键帽身体</span><span>输入的本体，不喧宾夺主</span></div>
-        <div class="fact"><span class="fact-key">O 形嘴</span><span>Open：开放、可审计</span></div>
-        <div class="fact"><span class="fact-key">声调天线</span><span>拼音，唯一的暖色</span></div>
-        <div class="fact"><span class="fact-key">本机涟漪</span><span>运算不外传</span></div>
+      <div class="shell arch-panel reveal">
+        <h3 id="arch-title">输入如何穿过 opi</h3>
+        <p class="arch-note">按键进入引擎，候选回到宿主，上屏全程只在本机完成。没有云端往返。</p>
+        <div class="arch-stack" aria-labelledby="arch-title">
+          <div class="arch-row"><span class="arch-label">按键</span><div class="arch-chips"><span>26 键</span><span>9 键</span><span>14 键</span><span>笔画</span><span>Shift 中英</span><span>中文标点</span></div></div>
+          <div class="arch-row"><span class="arch-label">Rust 引擎</span><div class="arch-chips"><span>Composer</span><span>拼音切分</span><span>Trie 码表</span><span>候选排序</span><span>本地学习</span></div></div>
+          <div class="arch-row"><span class="arch-label">候选</span><div class="arch-chips"><span>拼音</span><span>双拼</span><span>五笔</span><span>笔画</span><span>简繁</span><span>模糊音</span><span>简拼</span><span>逐字确认</span></div></div>
+          <div class="arch-row"><span class="arch-label">原生宿主</span><div class="arch-chips"><span>Android IME</span><span>fcitx5</span><span>Windows TSF</span><span>InputMethodKit</span><span>键盘扩展</span><span>鸿蒙 N-API</span></div></div>
+          <div class="arch-row"><span class="arch-label">上屏</span><div class="arch-chips"><span>commitText</span><span>命名管道</span><span>C ABI</span><span>本机完成</span></div></div>
+        </div>
       </div>
     </section>
-    <section class="panel features" id="features" aria-labelledby="features-title">
-      <div class="container">
+
+    <section class="section section--tint" id="features" aria-labelledby="features-title">
+      <div class="shell">
         <div class="section-head reveal">
           <div>
             <p class="eyebrow">02 / 能力</p>
-            <h2 id="features-title">不是功能堆砌，<br><em>是把每一件小事做对。</em></h2>
+            <h2 id="features-title">不是功能堆砌，<em>是把每一件小事做对。</em></h2>
           </div>
           <p class="section-side">没有弹窗、没有账号、没有「猜你喜欢」。只有一条清晰的输入链路，和足够克制的工具；云同步已裁决不做，未做的边界以 README 为准。</p>
         </div>
-        <div class="feature-grid">
-          <article class="feature-card reveal">
-            <svg class="icon" aria-hidden="true"><use href="#i-engine"></use></svg>
-            <span class="feature-num">01</span>
-            <h3>一份引擎，六端原生</h3>
-            <p>Rust 核心 + 平台原生外壳：Android IME、fcitx5、Windows TSF、macOS / iOS 键盘扩展、鸿蒙 N-API。同一套词库与键码；Android（模拟器）与 Linux（容器 / 本机）已验证，其余四端待真机验收。</p>
-            <span class="tag">Rust · C ABI · 六端代码</span>
+        <div class="bento">
+          <article class="bento-cell span-7 reveal">
+            <div class="bento-head"><span class="bento-icon"><svg class="icon" aria-hidden="true"><use href="#i-engine"></use></svg></span><h3>一份引擎，六端原生</h3></div>
+            <p>Rust 核心 + 平台原生外壳：Android IME、fcitx5、Windows TSF、macOS / iOS 键盘扩展、鸿蒙 N-API。同一套词库与键码，UI 各写各的。</p>
+            <div class="bento-list"><span class="chip chip--accent">Rust</span><span class="chip chip--accent">C ABI</span><span class="chip">Android</span><span class="chip">Windows</span><span class="chip">Linux</span><span class="chip">macOS</span><span class="chip">iOS</span><span class="chip">鸿蒙</span></div>
+            <p class="bento-note">Android（模拟器）· Linux（容器 / 本机）。其余四端已有可构建产物，尚未真机验收。</p>
           </article>
-          <article class="feature-card reveal">
-            <svg class="icon" aria-hidden="true"><use href="#i-shield"></use></svg>
-            <span class="feature-num">02</span>
-            <h3>离线优先，隐私可核对</h3>
-            <p>输入、候选、用户词都在本机完成。没有登录、没有云端同步、没有遥测；联网仅用于拉取版本号（version.json），不携带输入数据。代码 MIT，可自己读。</p>
-            <span class="tag">仅版本检测联网</span>
+          <article class="bento-cell span-5 reveal">
+            <div class="bento-head"><span class="bento-icon"><svg class="icon" aria-hidden="true"><use href="#i-shield"></use></svg></span><h3>离线优先，隐私可核对</h3></div>
+            <p>输入、候选、用户词都在本机完成。没有登录、云端同步与遥测；联网仅用于拉取 <code>version.json</code>，不携带输入数据。</p>
+            <div class="bento-list"><span class="chip chip--teal">0 云端</span><span class="chip chip--teal">无账号</span><span class="chip chip--teal">无遥测</span><span class="chip chip--teal">仅版本检测</span></div>
           </article>
-          <article class="feature-card reveal">
-            <svg class="icon" aria-hidden="true"><use href="#i-keyboard"></use></svg>
-            <span class="feature-num">03</span>
-            <h3>中英文输入功能</h3>
-            <p>拼音 / 简繁 / 双拼 / 五笔 / 笔画，26 / 9 / 14 键布局；9 键左列读音、候选平铺、中英与简繁都在当前输入法内切换；英文普通 / 专业模式、单词联想；模糊音、简拼、逐字确认与本地学习。</p>
-            <span class="tag">中 · 英 · 简繁 · 9/14/26 键</span>
+          <article class="bento-cell span-4 reveal">
+            <div class="bento-head"><span class="bento-icon"><svg class="icon" aria-hidden="true"><use href="#i-keyboard"></use></svg></span><h3>中文输入，一条链路</h3></div>
+            <p>拼音 / 简繁 / 双拼 / 五笔 / 笔画，26 / 9 / 14 键布局；模糊音、简拼、逐字确认与本地学习，都在当前输入法内切换；简繁入口以各端实现为准。</p>
+            <div class="bento-list"><span class="chip">拼音</span><span class="chip">双拼</span><span class="chip">五笔</span><span class="chip">笔画</span><span class="chip">9 / 14 / 26 键</span></div>
           </article>
-          <article class="feature-card reveal">
-            <svg class="icon" aria-hidden="true"><use href="#i-book"></use></svg>
-            <span class="feature-num">04</span>
-            <h3>词库是「活」的</h3>
-            <p>简体主库与繁体库分轨，康熙字典、现代繁体词与常用语持续并入；每条词库变更都有门禁和回归测试守着。代码 MIT，词库数据按 GPL-3.0 分发。</p>
-            <span class="tag">937,780 + 139,355 条 · GPL-3.0 数据</span>
+          <article class="bento-cell span-4 reveal">
+            <div class="bento-head"><span class="bento-icon"><svg class="icon" aria-hidden="true"><use href="#i-book"></use></svg></span><h3>词库是「活」的</h3></div>
+            <p>简体主库与繁体库分轨，康熙字典、现代繁体词与常用语持续并入；词库变更也有门禁与回归测试守着。</p>
+            <div class="bento-list"><span class="chip">简体 937,780</span><span class="chip">繁体 139,355</span><span class="chip chip--teal">简体库 GPL-3.0</span></div>
           </article>
-          <article class="feature-card reveal">
-            <svg class="icon" aria-hidden="true"><use href="#i-spark"></use></svg>
-            <span class="feature-num">05</span>
-            <h3>小欧表情与贴纸</h3>
+          <article class="bento-cell span-4 reveal">
+            <div class="bento-head"><span class="bento-icon"><svg class="icon" aria-hidden="true"><use href="#i-spark"></use></svg></span><h3>小欧与表情</h3></div>
             <p>十二种小欧动画贴纸、689 条 OpenMoji 常用表情、390 条颜文字。自有表情带「小欧·」标签，不跟 emoji 撞名。</p>
-            <span class="tag">GIF · Emoji · 颜文字</span>
+            <div class="bento-list"><span class="chip">12 形态</span><span class="chip">689 Emoji</span><span class="chip">390 颜文字</span></div>
           </article>
-          <article class="feature-card reveal">
-            <svg class="icon" aria-hidden="true"><use href="#i-sliders"></use></svg>
-            <span class="feature-num">06</span>
-            <h3>克制的桌面体验</h3>
-            <p>Linux / Windows 状态栏只在 OPI 激活时出现；移动端工具条齿轮直达设置页；Android / iOS / macOS / 鸿蒙 / Linux 都可检测新版本（只访问 version.json，不上传输入数据）。</p>
-            <span class="tag">状态栏 · 设置 · 更新检测</span>
+          <article class="bento-cell span-6 reveal">
+            <div class="bento-head"><span class="bento-icon"><svg class="icon" aria-hidden="true"><use href="#i-sliders"></use></svg></span><h3>克制的桌面体验</h3></div>
+            <p>Linux / Windows 状态栏只在 OPI 激活时出现；Windows 交互式升级不注销；Android / 鸿蒙齿轮直达键盘内设置页；各端都能检测新版本。</p>
+            <div class="bento-list"><span class="chip">状态栏</span><span class="chip">热升级</span><span class="chip">键盘内设置</span><span class="chip">皮肤 / 候选窗</span><span class="chip">更新检测</span></div>
+          </article>
+          <article class="bento-cell span-6 reveal">
+            <div class="bento-head"><span class="bento-icon"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg></span><h3>七份安装包，直接下载</h3></div>
+            <p>Android / Windows / Linux / macOS / iOS / 鸿蒙的文件放在本站 <code>download/</code>，不跳 GitHub。代码 MIT，简体主库 GPL-3.0。</p>
+            <div class="bento-list"><span class="chip chip--accent">7 份文件</span><span class="chip chip--accent">MIT 源码</span><span class="chip">unsigned 需自行签名</span></div>
           </article>
         </div>
       </div>
     </section>
-    <section class="panel timeline" id="timeline" aria-labelledby="timeline-title">
-      <div class="container">
+
+    <section class="section" id="timeline" aria-labelledby="timeline-title">
+      <div class="shell">
         <div class="section-head reveal">
           <div>
             <p class="eyebrow">03 / 功能迭代</p>
-            <h2 id="timeline-title">从一枚键帽，<br><em>走到六个平台。</em></h2>
+            <h2 id="timeline-title">从一枚键帽，<em>走到六个平台。</em></h2>
           </div>
           <p class="section-side">不是一条直线：引擎、词库、平台外壳和表情系统互相拉扯着长大。这里是几个值得记住的节点。</p>
         </div>
-        <ol class="timeline-track">
-          <li class="phase reveal">
-            <span class="phase-date">2026.08</span>
-            <span class="phase-dot" style="--mood:#2E8B80"></span>
-            <h3>引擎起步</h3>
-            <p>Rust 核心、拼音解析与词库管线成形；Android 原生 IME 跑通第一条输入链路。</p>
-          </li>
-          <li class="phase reveal">
-            <span class="phase-date">2026.09</span>
-            <span class="phase-dot" style="--mood:#4E97E6"></span>
-            <h3>桌面落地</h3>
-            <p>fcitx5 插件、Compose 候选窗与设置页、Windows TSF 骨架；Linux 成为第一个真实验证的桌面端。</p>
-          </li>
-          <li class="phase reveal">
-            <span class="phase-date">2026.10.17–18</span>
-            <span class="phase-dot" style="--mood:#F2B84B"></span>
-            <h3>小欧诞生</h3>
-            <p>十二种形态、OpenMoji、颜文字、自有贴纸与英文普通 / 专业模式；「小欧」成为输入法的名字。</p>
-          </li>
-          <li class="phase reveal">
-            <span class="phase-date">2026.10.19–20</span>
-            <span class="phase-dot" style="--mood:#D9553F"></span>
-            <h3>多端交付</h3>
-            <p>iOS 宿主 App 与 unsigned IPA、鸿蒙 HAP 脚手架、Windows 注册链路修复、状态栏统一缩放；官网与 v1.16.0。</p>
-          </li>
-          <li class="phase reveal">
-            <span class="phase-date">2026.10.21</span>
-            <span class="phase-dot" style="--mood:#2E8B80"></span>
-            <h3>候选与安装收口</h3>
-            <p>iOS 9 键读数列 / 平铺候选 / 输入法内切换；Windows TSF 升级替换与无重启卸载；iOS / macOS 改为单一自包含包，v1.20.2。</p>
-          </li>
-          <li class="phase reveal"><span class="phase-date">2026.10.22</span><span class="phase-dot" style="--mood:#2E8B80"></span><h3>热升级与键盘内设置</h3><p>Windows 交互式升级重启原用户桌面、功能键与空缓冲特殊键放行、切换输入法释放状态栏；Android / 鸿蒙工具条齿轮改为关于同款键盘内设置页，v1.23.0。</p></li>
+        <ol class="timeline">
+          <li class="timeline-item reveal"><div class="timeline-meta"><strong>2026.08</strong><time datetime="2026-08-01">起点</time></div><h3>引擎起步</h3><p>Rust 核心、拼音解析与词库管线成形；Android 原生 IME 跑通第一条输入链路。</p></li>
+          <li class="timeline-item reveal"><div class="timeline-meta"><strong>2026.09</strong><time datetime="2026-09-01">桌面</time></div><h3>桌面落地</h3><p>fcitx5 插件、Compose 候选窗与设置页、Windows TSF 骨架；Linux 成为第一个真实验证的桌面端。</p></li>
+          <li class="timeline-item reveal"><div class="timeline-meta"><strong>2026.10.17–18</strong><time datetime="2026-10-18">小欧</time></div><h3>小欧诞生</h3><p>十二种形态、OpenMoji、颜文字、自有贴纸与英文普通 / 专业模式；「小欧」成为输入法的名字。</p></li>
+          <li class="timeline-item reveal"><div class="timeline-meta"><strong>2026.10.19–20</strong><time datetime="2026-10-20">多端</time></div><h3>多端交付</h3><p>iOS 宿主 App 与 unsigned IPA、鸿蒙 HAP、Windows 注册链路修复、状态栏统一缩放；官网与 v1.16.0。</p></li>
+          <li class="timeline-item reveal"><div class="timeline-meta"><strong>2026.10.21</strong><time datetime="2026-10-21">收口</time></div><h3>候选与安装收口</h3><p>iOS 9 键读数列 / 平铺候选 / 输入法内切换；Windows TSF 升级替换与无重启卸载；Apple 改为单一自包含包。</p></li>
+          <li class="timeline-item reveal"><div class="timeline-meta"><strong>2026.10.22</strong><time datetime="2026-10-22">v1.23.0</time></div><h3>热升级与键盘内设置</h3><p>Windows 交互式升级重启原用户桌面、功能键与空缓冲特殊键放行、切换输入法释放状态栏；Android / 鸿蒙工具条齿轮改为键盘内设置页。</p></li>
         </ol>
       </div>
     </section>
-    <section class="panel forms" id="forms" aria-labelledby="forms-title">
-      <div class="container">
+
+    <section class="section section--tint" id="forms" aria-labelledby="forms-title">
+      <div class="shell">
         <div class="section-head reveal">
           <div>
             <p class="eyebrow">04 / 十二种形态</p>
-            <h2 id="forms-title">十二种小欧，<br><em>十二种心情。</em></h2>
+            <h2 id="forms-title">十二种小欧，<em>十二种心情。</em></h2>
           </div>
           <p class="section-side">它不只住在设置页。候选栏、空态、启动图标、状态栏 —— 小欧会在你打字的每个小瞬间出现。点任意一张，看看它的心情。</p>
         </div>
         <div class="forms-grid">
-          <button class="form-card reveal" type="button" style="--mood:#F5A6B4" data-anim="assets/pet/forms/idle.webp" data-name="小欧·笑" data-note="默认待命。一枚安安静静的键帽，等你敲下第一个字母。">
-            <img src="assets/pet/forms/idle.png" data-still="assets/pet/forms/idle.png" width="200" height="200" loading="lazy" decoding="async" alt="小欧·笑">
-            <strong>笑</strong><small>待命</small>
-          </button>
-          <button class="form-card reveal" type="button" style="--mood:#F27D9D" data-anim="assets/pet/forms/waiting.webp" data-name="小欧·欢乐" data-note="候选来得刚刚好。今天也是被词库接住的一天。">
-            <img src="assets/pet/forms/waiting.png" data-still="assets/pet/forms/waiting.png" width="200" height="200" loading="lazy" decoding="async" alt="小欧·欢乐">
-            <strong>欢乐</strong><small>有候选</small>
-          </button>
-          <button class="form-card reveal" type="button" style="--mood:#4E97E6" data-anim="assets/pet/forms/crying.webp" data-name="小欧·哭" data-note="翻了三页还没找到那个字？别急，换个拼音再试试。">
-            <img src="assets/pet/forms/crying.png" data-still="assets/pet/forms/crying.png" width="200" height="200" loading="lazy" decoding="async" alt="小欧·哭">
-            <strong>哭</strong><small>没找到</small>
-          </button>
-          <button class="form-card reveal" type="button" style="--mood:#7E8C86" data-anim="assets/pet/forms/puzzled.webp" data-name="小欧·沮丧" data-note="这个拼音有点陌生。没关系，下次它会记住。">
-            <img src="assets/pet/forms/puzzled.png" data-still="assets/pet/forms/puzzled.png" width="200" height="200" loading="lazy" decoding="async" alt="小欧·沮丧">
-            <strong>沮丧</strong><small>无匹配</small>
-          </button>
-          <button class="form-card reveal" type="button" style="--mood:#6FB2F0" data-anim="assets/pet/forms/terrified.webp" data-name="小欧·惊恐" data-note="输入法突然安静。别担心，它只是被你的手速吓到了。">
-            <img src="assets/pet/forms/terrified.png" data-still="assets/pet/forms/terrified.png" width="200" height="200" loading="lazy" decoding="async" alt="小欧·惊恐">
-            <strong>惊恐</strong><small>过快</small>
-          </button>
-          <button class="form-card reveal" type="button" style="--mood:#DD5138" data-anim="assets/pet/forms/angry.webp" data-name="小欧·愤怒" data-note="弹窗、广告、云端上传？不可以。离我的输入远一点。">
-            <img src="assets/pet/forms/angry.png" data-still="assets/pet/forms/angry.png" width="200" height="200" loading="lazy" decoding="async" alt="小欧·愤怒">
-            <strong>愤怒</strong><small>拒绝打扰</small>
-          </button>
-          <button class="form-card reveal" type="button" style="--mood:#F46F9B" data-anim="assets/pet/forms/coquettish.webp" data-name="小欧·撒娇" data-note="再打一个字母嘛。就一个。">
-            <img src="assets/pet/forms/coquettish.png" data-still="assets/pet/forms/coquettish.png" width="200" height="200" loading="lazy" decoding="async" alt="小欧·撒娇">
-            <strong>撒娇</strong><small>再打一个</small>
-          </button>
-          <button class="form-card reveal" type="button" style="--mood:#F2B84B" data-anim="assets/pet/forms/cute.webp" data-name="小欧·卖萌" data-note="选我，选我。候选第一位那个，就是我。">
-            <img src="assets/pet/forms/cute.png" data-still="assets/pet/forms/cute.png" width="200" height="200" loading="lazy" decoding="async" alt="小欧·卖萌">
-            <strong>卖萌</strong><small>选我</small>
-          </button>
-          <button class="form-card reveal" type="button" style="--mood:#5FBF9F" data-anim="assets/pet/forms/pleasing.webp" data-name="小欧·讨好" data-note="给个候选位吧。我会努力把字排对的。">
-            <img src="assets/pet/forms/pleasing.png" data-still="assets/pet/forms/pleasing.png" width="200" height="200" loading="lazy" decoding="async" alt="小欧·讨好">
-            <strong>讨好</strong><small>求候选</small>
-          </button>
-          <button class="form-card reveal" type="button" style="--mood:#E8A13C" data-anim="assets/pet/forms/knocking.webp" data-name="小欧·敲打" data-note="正在努力想词。敲一敲键帽，灵感就出来了。">
-            <img src="assets/pet/forms/knocking.png" data-still="assets/pet/forms/knocking.png" width="200" height="200" loading="lazy" decoding="async" alt="小欧·敲打">
-            <strong>敲打</strong><small>想词中</small>
-          </button>
-          <button class="form-card reveal" type="button" style="--mood:#E06A4E" data-anim="assets/pet/forms/face-palm.webp" data-name="小欧·捂脸" data-note="这个拼音……有点难。让我捂一会儿脸。">
-            <img src="assets/pet/forms/face-palm.png" data-still="assets/pet/forms/face-palm.png" width="200" height="200" loading="lazy" decoding="async" alt="小欧·捂脸">
-            <strong>捂脸</strong><small>好难</small>
-          </button>
-          <button class="form-card reveal" type="button" style="--mood:#EF5D8F" data-anim="assets/pet/forms/tongue-out.webp" data-name="小欧·吐舌头" data-note="打错了也不许笑。下次一定。">
-            <img src="assets/pet/forms/tongue-out.png" data-still="assets/pet/forms/tongue-out.png" width="200" height="200" loading="lazy" decoding="async" alt="小欧·吐舌头">
-            <strong>吐舌头</strong><small>打错了</small>
-          </button>
+          <button class="form-card reveal" type="button" style="--mood:#F5A6B4" data-anim="assets/pet/forms/idle.webp" data-name="小欧·笑" data-note="默认待命。一枚安安静静的键帽，等你敲下第一个字母。"><img src="assets/pet/forms/idle.png" data-still="assets/pet/forms/idle.png" width="200" height="200" loading="lazy" decoding="async" alt="小欧·笑"><strong>笑</strong><small>待命</small></button>
+          <button class="form-card reveal" type="button" style="--mood:#F27D9D" data-anim="assets/pet/forms/waiting.webp" data-name="小欧·欢乐" data-note="候选来得刚刚好。今天也是被词库接住的一天。"><img src="assets/pet/forms/waiting.png" data-still="assets/pet/forms/waiting.png" width="200" height="200" loading="lazy" decoding="async" alt="小欧·欢乐"><strong>欢乐</strong><small>有候选</small></button>
+          <button class="form-card reveal" type="button" style="--mood:#4E97E6" data-anim="assets/pet/forms/crying.webp" data-name="小欧·哭" data-note="翻了三页还没找到那个字？别急，换个拼音再试试。"><img src="assets/pet/forms/crying.png" data-still="assets/pet/forms/crying.png" width="200" height="200" loading="lazy" decoding="async" alt="小欧·哭"><strong>哭</strong><small>没找到</small></button>
+          <button class="form-card reveal" type="button" style="--mood:#7E8C86" data-anim="assets/pet/forms/puzzled.webp" data-name="小欧·沮丧" data-note="这个拼音有点陌生。没关系，下次它会记住。"><img src="assets/pet/forms/puzzled.png" data-still="assets/pet/forms/puzzled.png" width="200" height="200" loading="lazy" decoding="async" alt="小欧·沮丧"><strong>沮丧</strong><small>无匹配</small></button>
+          <button class="form-card reveal" type="button" style="--mood:#6FB2F0" data-anim="assets/pet/forms/terrified.webp" data-name="小欧·惊恐" data-note="输入法突然安静。别担心，它只是被你的手速吓到了。"><img src="assets/pet/forms/terrified.png" data-still="assets/pet/forms/terrified.png" width="200" height="200" loading="lazy" decoding="async" alt="小欧·惊恐"><strong>惊恐</strong><small>过快</small></button>
+          <button class="form-card reveal" type="button" style="--mood:#DD5138" data-anim="assets/pet/forms/angry.webp" data-name="小欧·愤怒" data-note="弹窗、广告、云端上传？不可以。离我的输入远一点。"><img src="assets/pet/forms/angry.png" data-still="assets/pet/forms/angry.png" width="200" height="200" loading="lazy" decoding="async" alt="小欧·愤怒"><strong>愤怒</strong><small>拒绝打扰</small></button>
+          <button class="form-card reveal" type="button" style="--mood:#F46F9B" data-anim="assets/pet/forms/coquettish.webp" data-name="小欧·撒娇" data-note="再打一个字母嘛。就一个。"><img src="assets/pet/forms/coquettish.png" data-still="assets/pet/forms/coquettish.png" width="200" height="200" loading="lazy" decoding="async" alt="小欧·撒娇"><strong>撒娇</strong><small>再打一个</small></button>
+          <button class="form-card reveal" type="button" style="--mood:#F2B84B" data-anim="assets/pet/forms/cute.webp" data-name="小欧·卖萌" data-note="选我，选我。候选第一位那个，就是我。"><img src="assets/pet/forms/cute.png" data-still="assets/pet/forms/cute.png" width="200" height="200" loading="lazy" decoding="async" alt="小欧·卖萌"><strong>卖萌</strong><small>选我</small></button>
+          <button class="form-card reveal" type="button" style="--mood:#5FBF9F" data-anim="assets/pet/forms/pleasing.webp" data-name="小欧·讨好" data-note="给个候选位吧。我会努力把字排对的。"><img src="assets/pet/forms/pleasing.png" data-still="assets/pet/forms/pleasing.png" width="200" height="200" loading="lazy" decoding="async" alt="小欧·讨好"><strong>讨好</strong><small>求候选</small></button>
+          <button class="form-card reveal" type="button" style="--mood:#E8A13C" data-anim="assets/pet/forms/knocking.webp" data-name="小欧·敲打" data-note="正在努力想词。敲一敲键帽，灵感就出来了。"><img src="assets/pet/forms/knocking.png" data-still="assets/pet/forms/knocking.png" width="200" height="200" loading="lazy" decoding="async" alt="小欧·敲打"><strong>敲打</strong><small>想词中</small></button>
+          <button class="form-card reveal" type="button" style="--mood:#E06A4E" data-anim="assets/pet/forms/face-palm.webp" data-name="小欧·捂脸" data-note="这个拼音……有点难。让我捂一会儿脸。"><img src="assets/pet/forms/face-palm.png" data-still="assets/pet/forms/face-palm.png" width="200" height="200" loading="lazy" decoding="async" alt="小欧·捂脸"><strong>捂脸</strong><small>好难</small></button>
+          <button class="form-card reveal" type="button" style="--mood:#EF5D8F" data-anim="assets/pet/forms/tongue-out.webp" data-name="小欧·吐舌头" data-note="打错了也不许笑。下次一定。"><img src="assets/pet/forms/tongue-out.png" data-still="assets/pet/forms/tongue-out.png" width="200" height="200" loading="lazy" decoding="async" alt="小欧·吐舌头"><strong>吐舌头</strong><small>打错了</small></button>
         </div>
         <p class="forms-note">十二种形态均为 opi 自有资产，不是内置 emoji。输入法里以动画 GIF / PNG 贴纸插入，标签带「小欧·」前缀，和 emoji 不重名。</p>
       </div>
     </section>
-    <section class="panel releases" id="releases" aria-labelledby="releases-title">
-      <div class="container releases-grid">
+
+    <section class="section" id="releases" aria-labelledby="releases-title">
+      <div class="shell releases-grid">
         <div class="releases-copy reveal">
           <p class="eyebrow">05 / 版本日志</p>
-          <h2 id="releases-title">每一次提交，<br><em>都留下可查的记录。</em></h2>
+          <h2 id="releases-title">每一次提交，<em>都留下可查的记录。</em></h2>
           <p class="body">版本号采用 <code>v主.次.修订</code> 格式，当前版本 <strong>v1.23.0</strong>。发布说明写在 tag 注释与 GitHub Release 里；最新版本在右侧顶部，历史版本收进了可滚动窗口。</p>
-          <div class="release-actions">
-            <button class="btn btn-ghost memory-trigger" type="button" data-memory-open>回忆 <span aria-hidden="true">↺</span></button>
-          </div>
+          <div class="release-actions"><button class="btn btn-ghost memory-trigger" type="button" data-memory-open>回忆 <span aria-hidden="true">↺</span></button></div>
         </div>
         <div class="release-board reveal">
           <article class="release-latest">
-            <a href="https://github.com/erikwang2013/opi/releases/tag/v1.23.0" target="_blank" rel="noopener">
-              <span class="release-version">v1.23.0 <b>最新</b></span>
-              <span class="release-date">2026.10.22</span>
-              <span class="release-note">Windows 交互式升级免注销、功能键放行、切换输入法隐藏状态栏；Android / 鸿蒙键盘内设置页</span>
-              <span class="release-arrow" aria-hidden="true">↗</span>
-            </a>
+            <a href="https://github.com/erikwang2013/opi/releases/tag/v1.23.0" target="_blank" rel="noopener"><span class="release-version">v1.23.0 <b>最新</b></span><span class="release-date">2026.10.22</span><span class="release-note">Windows 交互式升级免注销、功能键放行、切换输入法隐藏状态栏；Android / 鸿蒙键盘内设置页</span><span class="release-arrow" aria-hidden="true">↗</span></a>
           </article>
           <div class="release-scroll" tabindex="0" role="region" aria-label="历史版本日志，可用鼠标滚轮或键盘滚动">
             <ol class="release-list">
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.22.0" target="_blank" rel="noopener"><span class="release-version">v1.22.0</span><span class="release-date">2026.10.22</span><span class="release-note">全端版本检测与提示、移动端齿轮设置入口、Linux 语言栏崩溃取证、站点 /download 入口</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.21.2" target="_blank" rel="noopener"><span class="release-version">v1.21.2</span><span class="release-date">2026.10.22</span><span class="release-note">Windows：失活宿主不再抢回候选管道、Shift 抬起清理大写残留且长按不误切、设置原子写入、候选条末项不再被裁</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.21.1" target="_blank" rel="noopener"><span class="release-version">v1.21.1</span><span class="release-date">2026.10.22</span><span class="release-note">Windows 安装器修复自定义目录 pending-rename 卡死；候选窗空缓冲不再白取 caret、读会话被拒回退默认选区</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.21.0" target="_blank" rel="noopener"><span class="release-version">v1.21.0</span><span class="release-date">2026.10.22</span><span class="release-note">Windows 候选窗贴光标、拼音在上、Shift 轻按切中英、皮肤/字号跟随、设置补齐按键/外观、更新检测；安装包布局修正</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.20.2" target="_blank" rel="noopener"><span class="release-version">v1.20.2</span><span class="release-date">2026.10.21</span><span class="release-note">iOS 输入法内切换与符号库修复、Windows 升级/卸载清锁修复</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.20.1" target="_blank" rel="noopener"><span class="release-version">v1.20.1</span><span class="release-date">2026.10.21</span><span class="release-note">iOS 9 键读数列与整键盘平铺候选、Windows 注册修复、Apple 单包交付</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.20.0" target="_blank" rel="noopener"><span class="release-version">v1.20.0</span><span class="release-date">2026.10.21</span><span class="release-note">iOS 设置与面板修复、鸿蒙全量对齐、macOS 状态栏/设置/键盘、Windows 任务栏宠物图标</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.19.0" target="_blank" rel="noopener"><span class="release-version">v1.19.0</span><span class="release-date">2026.10.20</span><span class="release-note">移动端/桌面/Apple/鸿蒙对齐、Windows 即时生效、贴纸上屏与站点改版</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.18.0" target="_blank" rel="noopener"><span class="release-version">v1.18.0</span><span class="release-date">2026.10.20</span><span class="release-note">Windows 全局输入/白屏修复、覆盖安装、状态栏与站点改版</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.17.0" target="_blank" rel="noopener"><span class="release-version">v1.17.0</span><span class="release-date">2026.10.19</span><span class="release-note">：自有表情开关、各端浅底应用图标、Windows EXE 安装器；Linux/Android/Apple/鸿蒙版本同步</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.16.1" target="_blank" rel="noopener"><span class="release-version">v1.16.1</span><span class="release-date">2026.10.19</span><span class="release-note">安装热重启、状态栏键帽与站点收口</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.16.0" target="_blank" rel="noopener"><span class="release-version">v1.16.0</span><span class="release-date">2026.10.19</span><span class="release-note">官网与多端交付</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-pet pet-a" aria-hidden="true"><img src="assets/pet/forms/cute.png" width="58" height="58" loading="lazy" decoding="async" alt=""></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.15.1" target="_blank" rel="noopener"><span class="release-version">v1.15.1</span><span class="release-date">2026.10.19</span><span class="release-note">桌面 en/pro 键只在英文输入法生效，新增隐藏开关，老插件提示重启</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.15.0" target="_blank" rel="noopener"><span class="release-version">v1.15.0</span><span class="release-date">2026.10.18</span><span class="release-note">英文普通/专业切换；状态栏 en/pro；GIF 贴纸显示与输入；安装不再重启 fcitx5</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.14.0" target="_blank" rel="noopener"><span class="release-version">v1.14.0</span><span class="release-date">2026.10.18</span><span class="release-note">英文候选/数字行/切换重置；自有表情内置字体与动图；宠物多形态动效</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.13.0" target="_blank" rel="noopener"><span class="release-version">v1.13.0</span><span class="release-date">2026.10.18</span><span class="release-note">繁体现代词与康熙并入默认词库；Windows MSI 自带 TSF DLL 并自动注册</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.12.0" target="_blank" rel="noopener"><span class="release-version">v1.12.0</span><span class="release-date">2026.10.18</span><span class="release-note">自有表情字体与短码；输入即得表情；覆盖安装自动重启服务</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.11.0" target="_blank" rel="noopener"><span class="release-version">v1.11.0</span><span class="release-date">2026.10.18</span><span class="release-note">自有表情独立成图片贴纸；百家姓/网络流行语并入简体词库</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.10.1" target="_blank" rel="noopener"><span class="release-version">v1.10.1</span><span class="release-date">2026.10.18</span><span class="release-note">表情 689（🔨/🤦 可进最近使用）；切英文重推 ⇧；iOS/鸿蒙表情页对齐</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-pet pet-b" aria-hidden="true"><img src="assets/pet/forms/puzzled.png" width="58" height="58" loading="lazy" decoding="async" alt=""></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.10.0" target="_blank" rel="noopener"><span class="release-version">v1.10.0</span><span class="release-date">2026.10.17</span><span class="release-note">小欧输入法命名；表情/颜文字/十二宠物形态；英文单词联想；逐字确认与设置页无响应修复</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.9.11" target="_blank" rel="noopener"><span class="release-version">v1.9.11</span><span class="release-date">2026.10.17</span><span class="release-note">移动端顶部小欧宠物条（六形态动态轮播）；撤四季花纹；文档与图同步</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.9.10" target="_blank" rel="noopener"><span class="release-version">v1.9.10</span><span class="release-date">2026.10.17</span><span class="release-note">逐字确认（四端，延迟提交）+ 顶部四季花纹边框；文档与图同步</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.9.9" target="_blank" rel="noopener"><span class="release-version">v1.9.9</span><span class="release-date">2026.10.17</span><span class="release-note">顶部快捷条、Linux 包维护脚本（装前停旧进程/装后拉起）、macOS pkg 装前停进程</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.9.8" target="_blank" rel="noopener"><span class="release-version">v1.9.8</span><span class="release-date">2026.10.17</span><span class="release-note">默认界面全覆盖红线区、隐藏键盘即重置、数字后句号恒 ASCII</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.9.7" target="_blank" rel="noopener"><span class="release-version">v1.9.7</span><span class="release-date">2026.10.17</span><span class="release-note">导入词库抢位 + 50ms 兜底、Win 安装器关停/自启、符号前两页重排、移动端候选去序号</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.9.6" target="_blank" rel="noopener"><span class="release-version">v1.9.6</span><span class="release-date">2026.10.16</span><span class="release-note">移动端候选区改版（共用格 · ⌄ 平铺翻页）+ 康熙字典词库 + 符号常用补数理化</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-pet pet-b" aria-hidden="true"><img src="assets/pet/forms/puzzled.png" width="58" height="58" loading="lazy" decoding="async" alt=""></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.9.5" target="_blank" rel="noopener"><span class="release-version">v1.9.5</span><span class="release-date">2026.10.16</span><span class="release-note">9 键钉读音收紧为「读音恰等」（左侧选拼音的字后不再联想词组）</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.9.4" target="_blank" rel="noopener"><span class="release-version">v1.9.4</span><span class="release-date">2026.10.15</span><span class="release-note">9 键宽松兜底档 + 工具条/键盘小改（⇧ 锁定、关于入口、顿号、状态栏 logo）</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.9.3" target="_blank" rel="noopener"><span class="release-version">v1.9.3</span><span class="release-date">2026.10.15</span><span class="release-note">修设置页不可滚动（页尾「关于」等几节够不到）</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.9.2" target="_blank" rel="noopener"><span class="release-version">v1.9.2</span><span class="release-date">2026.10.15</span><span class="release-note">状态栏内容缩小 40% + 标点随中英联动 · 候选「字全出完再出词」· 模糊音缺省改关 · Android 键盘/设置一轮</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.9.1" target="_blank" rel="noopener"><span class="release-version">v1.9.1</span><span class="release-date">2026.10.14</span><span class="release-note">多音字补读音（打 mo 出么 · 打 lu 出绿 · 打 ka 出咯）+ 拼音移到候选行上方</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.9.0" target="_blank" rel="noopener"><span class="release-version">v1.9.0</span><span class="release-date">2026.10.14</span><span class="release-note">三阶段设置面（拼音 / 双拼 / 词库 / 五笔）+ 候选三档</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.21" target="_blank" rel="noopener"><span class="release-version">v1.7.21</span><span class="release-date">2026.10.13</span><span class="release-note">Android：确认后不再吃掉剩余拼音（用户 2026-10-13 报障）</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.20" target="_blank" rel="noopener"><span class="release-version">v1.7.20</span><span class="release-date">2026.10.13</span><span class="release-note">桌面/状态栏修复批次 + Android 全半角移除 + 符号中文类目补全</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-pet pet-c" aria-hidden="true"><img src="assets/pet/forms/face-palm.png" width="58" height="58" loading="lazy" decoding="async" alt=""></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.19" target="_blank" rel="noopener"><span class="release-version">v1.7.19</span><span class="release-date">2026.10.12</span><span class="release-note">四端同步：表情页（iOS/鸿蒙）、桌面搜索 + 字形过滤、简繁优先、9 键可见性</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.18" target="_blank" rel="noopener"><span class="release-version">v1.7.18</span><span class="release-date">2026.10.12</span><span class="release-note">简拼性能：无匹长串 162ms/击键 → 5ms（「输入无匹时无响应」的根因）</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.17" target="_blank" rel="noopener"><span class="release-version">v1.7.17</span><span class="release-date">2026.10.12</span><span class="release-note">确认后再输入 = 全新开始（撤除上文拼接）+ 9 键左列读数短→长</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.16" target="_blank" rel="noopener"><span class="release-version">v1.7.16</span><span class="release-date">2026.10.12</span><span class="release-note">联想、全角宽化、表情分组、桌面符号/表情大页面与设置重排</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.15" target="_blank" rel="noopener"><span class="release-version">v1.7.15</span><span class="release-date">2026.10.11</span><span class="release-note">9 键左列读数去重 + 桌面状态栏跟随皮肤</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.14" target="_blank" rel="noopener"><span class="release-version">v1.7.14</span><span class="release-date">2026.10.11</span><span class="release-note">9 键无匹配不再泄漏键位数字（组合串/空格/读屏播报三出口）+ 移动端默认输入模式 9 键</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.13" target="_blank" rel="noopener"><span class="release-version">v1.7.13</span><span class="release-date">2026.10.10</span><span class="release-note">中文词库大整合（9.6 万 → 93.6 万条）+ 全端性能预算与两处根因修复</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.12" target="_blank" rel="noopener"><span class="release-version">v1.7.12</span><span class="release-date">2026.10.10</span><span class="release-note">切英文统一「拼音原文上屏」（三端）+ 组合串进字段 + 密码场自动英文 + 回车/数字面板修复</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-pet pet-d" aria-hidden="true"><img src="assets/pet/forms/waiting.png" width="58" height="58" loading="lazy" decoding="async" alt=""></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.11" target="_blank" rel="noopener"><span class="release-version">v1.7.11</span><span class="release-date">2026.10.10</span><span class="release-note">9 键整盘重排 + 弹框输入两修复 + 五款新皮肤 + 工具栏收起键盘</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.10" target="_blank" rel="noopener"><span class="release-version">v1.7.10</span><span class="release-date">2026.10.10</span><span class="release-note">状态栏不进任务栏 + 切其他输入法自动隐藏 + 标点切换即落盘（设置与实际一致）</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.9" target="_blank" rel="noopener"><span class="release-version">v1.7.9</span><span class="release-date">2026.10.10</span><span class="release-note">状态栏「中英」修复（此前会停用整个输入法）+ 标点/Ω 语义与顺序订正 + 小欧窗口图标 + 软键盘默认关</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.8" target="_blank" rel="noopener"><span class="release-version">v1.7.8</span><span class="release-date">2026.10.09</span><span class="release-note">无匹配→分词匹配（26 键 + 9/14 键）+ 桌面状态栏图标重做与实时状态 + Android 符号页底部分类/重输键</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.7" target="_blank" rel="noopener"><span class="release-version">v1.7.7</span><span class="release-date">2026.10.09</span><span class="release-note">桌面虚拟键盘加「符」键</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.6" target="_blank" rel="noopener"><span class="release-version">v1.7.6</span><span class="release-date">2026.10.09</span><span class="release-note">桌面三件套（状态栏悬浮条 / 虚拟键盘 / 符号大全）+ 切中→英「直接确认」+ 设置面版权行</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.5" target="_blank" rel="noopener"><span class="release-version">v1.7.5</span><span class="release-date">2026.10.09</span><span class="release-note">UI 放大到主流输入法量级 + 无匹配去数字 + 符键符号页（22 类目）+ 点读音改钉读音 + Apple/Windows 自动打包</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.4" target="_blank" rel="noopener"><span class="release-version">v1.7.4</span><span class="release-date">2026.10.09</span><span class="release-note">输入模式/键盘模式改面板（皮肤同形态）+ 切英文保留拼音 + 点左列拼音上屏</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-pet pet-a" aria-hidden="true"><img src="assets/pet/forms/crying.png" width="58" height="58" loading="lazy" decoding="async" alt=""></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.3" target="_blank" rel="noopener"><span class="release-version">v1.7.3</span><span class="release-date">2026.10.09</span><span class="release-note">9 键左列逐条候选拼音（可滑动）+ 无匹配可见 + 确定后回标点 + 桌面 -/= 翻页</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.2" target="_blank" rel="noopener"><span class="release-version">v1.7.2</span><span class="release-date">2026.10.09</span><span class="release-note">桌面设置真·即时生效（修 fcitx5-remote -r 的假承诺）+ 移动端候选行/左列/底色三条</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.1" target="_blank" rel="noopener"><span class="release-version">v1.7.1</span><span class="release-date">2026.10.09</span><span class="release-note">9 键按主流布局重做（左列/分词）+ 修「键盘没反应」+ 缓冲上限 16→32</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.0" target="_blank" rel="noopener"><span class="release-version">v1.7.0</span><span class="release-date">2026.10.09</span><span class="release-note">外层入口补齐 + 移动端皮肤与表情全量 + 键盘排版按主流布局 + 图标两处修</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.6.0" target="_blank" rel="noopener"><span class="release-version">v1.6.0</span><span class="release-date">2026.10.08</span><span class="release-note">Shift 切中英 + 可切换皮肤 + 繁体 + 移动端输入模式/键盘模式 + 设置合并安装</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.5.0" target="_blank" rel="noopener"><span class="release-version">v1.5.0</span><span class="release-date">2026.10.08</span><span class="release-note">候选序号四端齐 + 属性设置（模糊音/简拼）+ 宠物图标补齐三端</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.4.0" target="_blank" rel="noopener"><span class="release-version">v1.4.0</span><span class="release-date">2026.10.02</span><span class="release-note">第五种情绪「降级」（天线折断）+ 圆形启动图标 + 各端尺寸统一到 30</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.3.7" target="_blank" rel="noopener"><span class="release-version">v1.3.7</span><span class="release-date">2026.09.28</span><span class="release-note">订正三处与事实不符的陈述；无功能改动</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-pet pet-b" aria-hidden="true"><img src="assets/pet/forms/angry.png" width="58" height="58" loading="lazy" decoding="async" alt=""></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.3.6" target="_blank" rel="noopener"><span class="release-version">v1.3.6</span><span class="release-date">2026.09.28</span><span class="release-note">各端宠物落点补齐；修 Android 启动图标是 Flutter 默认图；包名改 xyz.erik.opi</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.3.5" target="_blank" rel="noopener"><span class="release-version">v1.3.5</span><span class="release-date">2026.09.28</span><span class="release-note">Linux 安装文档修复（「加进输入法组」改用 D-Bus）</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.3.4" target="_blank" rel="noopener"><span class="release-version">v1.3.4</span><span class="release-date">2026.09.28</span><span class="release-note">CI/工具链版本；产品二进制与 v1.3.3 相同</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.3.3" target="_blank" rel="noopener"><span class="release-version">v1.3.3</span><span class="release-date">2026.09.28</span><span class="release-note">包改在 debian:12 容器里构建；补上 glibc 下界</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.3.2" target="_blank" rel="noopener"><span class="release-version">v1.3.2</span><span class="release-date">2026.09.28</span><span class="release-note">Linux 发行版打包 + fcitx5 门槛降到 5.0 + C++20 + 六端教程</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.3.1" target="_blank" rel="noopener"><span class="release-version">v1.3.1</span><span class="release-date">2026.09.27</span><span class="release-note">审计修复轮：emoji 判据、候选上限、FFI 门禁、文档全面跟一轮</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.3.0" target="_blank" rel="noopener"><span class="release-version">v1.3.0</span><span class="release-date">2026.09.27</span><span class="release-note">简拼 + 候选天花板 + Emoji 扩容 + 词库分发落地；英文词源入库</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.2.0" target="_blank" rel="noopener"><span class="release-version">v1.2.0</span><span class="release-date">2026.09.27</span><span class="release-note">模糊拼音 + 符号模式 + 中文标点 + 全角开关；luna 换源；六道契约门禁；四端草案补齐</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-pet pet-c" aria-hidden="true"><img src="assets/pet/forms/coquettish.png" width="58" height="58" loading="lazy" decoding="async" alt=""></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.1.0" target="_blank" rel="noopener"><span class="release-version">v1.1.0</span><span class="release-date">2026.09.27</span><span class="release-note">修复已知问题</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.16" target="_blank" rel="noopener"><span class="release-version">v1.0.16</span><span class="release-date">2026.09.27</span><span class="release-note">第三轮审计：7 个缺陷修复 + 键路由三轨同改 + fcitx5 预编辑通道 + 桌面管道三处不对称</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.15" target="_blank" rel="noopener"><span class="release-version">v1.0.15</span><span class="release-date">2026.09.26</span><span class="release-note">fcitx5 回显链路 + TSF 文本插入与注册 + 四个文件拆分</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.14" target="_blank" rel="noopener"><span class="release-version">v1.0.14</span><span class="release-date">2026.09.26</span><span class="release-note">平台中立键路由层 + iOS/macOS/鸿蒙三端草案 + 全库版权整合</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.13" target="_blank" rel="noopener"><span class="release-version">v1.0.13</span><span class="release-date">2026.09.26</span><span class="release-note">旋转崩溃与 fcitx5 静默失效修复</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.12" target="_blank" rel="noopener"><span class="release-version">v1.0.12</span><span class="release-date">2026.09.26</span><span class="release-note">候选排序与词库收录修正</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.11" target="_blank" rel="noopener"><span class="release-version">v1.0.11</span><span class="release-date">2026.09.26</span><span class="release-note">状态残留与孤儿窗修复</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.10" target="_blank" rel="noopener"><span class="release-version">v1.0.10</span><span class="release-date">2026.09.26</span><span class="release-note">团队审计修复</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-pet pet-d" aria-hidden="true"><img src="assets/pet/forms/pleasing.png" width="58" height="58" loading="lazy" decoding="async" alt=""></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.9" target="_blank" rel="noopener"><span class="release-version">v1.0.9</span><span class="release-date">2026.09.26</span><span class="release-note">项目宠物「小欧」</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.8" target="_blank" rel="noopener"><span class="release-version">v1.0.8</span><span class="release-date">2026.08.14</span><span class="release-note">桌面候选窗（Compose）与 TSF 命名管道通信</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.7" target="_blank" rel="noopener"><span class="release-version">v1.0.7</span><span class="release-date">2026.08.14</span><span class="release-note">fcitx5 XDG 数据目录 + Luna 词库加载</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.6" target="_blank" rel="noopener"><span class="release-version">v1.0.6</span><span class="release-date">2026.08.14</span><span class="release-note">修复与更新</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.5" target="_blank" rel="noopener"><span class="release-version">v1.0.5</span><span class="release-date">2026.08.12</span><span class="release-note">文档更新</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.4" target="_blank" rel="noopener"><span class="release-version">v1.0.4</span><span class="release-date">2026.08.12</span><span class="release-note">Flutter 键盘行按输入法高度弹性布局</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.3" target="_blank" rel="noopener"><span class="release-version">v1.0.3</span><span class="release-date">2026.08.12</span><span class="release-note">README 双语赞赏二维码与支持说明</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
-              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.2" target="_blank" rel="noopener"><span class="release-version">v1.0.2</span><span class="release-date">2026.08.12</span><span class="release-note">README 增加微信/支付宝赞赏二维码</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.1" target="_blank" rel="noopener"><span class="release-version">v1.0.1</span><span class="release-date">2026.08.12</span><span class="release-note">M2 里程碑文档与 Flutter 客户端骨架</span><span class="release-arrow" aria-hidden="true">↗</span></a></li> <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.0" target="_blank" rel="noopener"><span class="release-version">v1.0.0</span><span class="release-date">2026.08.12</span><span class="release-note">M1 引擎内核：Composer 状态机、拼音切分、Trie 码表、候选排序与本地学习</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.22.0" target="_blank" rel="noopener"><span class="release-version">v1.22.0</span><span class="release-date">2026.10.22</span><span class="release-note">全端版本检测与提示、移动端齿轮设置入口、Linux 语言栏崩溃取证、站点 /download 入口</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.21.2" target="_blank" rel="noopener"><span class="release-version">v1.21.2</span><span class="release-date">2026.10.22</span><span class="release-note">Windows：失活宿主不再抢回候选管道、Shift 抬起清理大写残留且长按不误切、设置原子写入、候选条末项不再被裁</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.21.1" target="_blank" rel="noopener"><span class="release-version">v1.21.1</span><span class="release-date">2026.10.22</span><span class="release-note">Windows 安装器修复自定义目录 pending-rename 卡死；候选窗空缓冲不再白取 caret、读会话被拒回退默认选区</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.21.0" target="_blank" rel="noopener"><span class="release-version">v1.21.0</span><span class="release-date">2026.10.22</span><span class="release-note">Windows 候选窗贴光标、拼音在上、Shift 轻按切中英、皮肤/字号跟随、设置补齐按键/外观、更新检测；安装包布局修正</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.20.2" target="_blank" rel="noopener"><span class="release-version">v1.20.2</span><span class="release-date">2026.10.21</span><span class="release-note">iOS 输入法内切换与符号库修复、Windows 升级/卸载清锁修复</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.20.1" target="_blank" rel="noopener"><span class="release-version">v1.20.1</span><span class="release-date">2026.10.21</span><span class="release-note">iOS 9 键读数列与整键盘平铺候选、Windows 注册修复、Apple 单包交付</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.20.0" target="_blank" rel="noopener"><span class="release-version">v1.20.0</span><span class="release-date">2026.10.21</span><span class="release-note">iOS 设置与面板修复、鸿蒙全量对齐、macOS 状态栏/设置/键盘、Windows 任务栏宠物图标</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.19.0" target="_blank" rel="noopener"><span class="release-version">v1.19.0</span><span class="release-date">2026.10.20</span><span class="release-note">移动端/桌面/Apple/鸿蒙对齐、Windows 即时生效、贴纸上屏与站点改版</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.18.0" target="_blank" rel="noopener"><span class="release-version">v1.18.0</span><span class="release-date">2026.10.20</span><span class="release-note">Windows 全局输入/白屏修复、覆盖安装、状态栏与站点改版</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.17.0" target="_blank" rel="noopener"><span class="release-version">v1.17.0</span><span class="release-date">2026.10.19</span><span class="release-note">自有表情开关、各端浅底应用图标、Windows EXE 安装器；Linux/Android/Apple/鸿蒙版本同步</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.16.1" target="_blank" rel="noopener"><span class="release-version">v1.16.1</span><span class="release-date">2026.10.19</span><span class="release-note">安装热重启、状态栏键帽与站点收口</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.16.0" target="_blank" rel="noopener"><span class="release-version">v1.16.0</span><span class="release-date">2026.10.19</span><span class="release-note">官网与多端交付</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.15.1" target="_blank" rel="noopener"><span class="release-version">v1.15.1</span><span class="release-date">2026.10.19</span><span class="release-note">桌面 en/pro 键只在英文输入法生效，新增隐藏开关，老插件提示重启</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.15.0" target="_blank" rel="noopener"><span class="release-version">v1.15.0</span><span class="release-date">2026.10.18</span><span class="release-note">英文普通/专业切换；状态栏 en/pro；GIF 贴纸显示与输入；安装不再重启 fcitx5</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.14.0" target="_blank" rel="noopener"><span class="release-version">v1.14.0</span><span class="release-date">2026.10.18</span><span class="release-note">英文候选/数字行/切换重置；自有表情内置字体与动图；宠物多形态动效</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.13.0" target="_blank" rel="noopener"><span class="release-version">v1.13.0</span><span class="release-date">2026.10.18</span><span class="release-note">繁体现代词与康熙并入默认词库；Windows MSI 自带 TSF DLL 并自动注册</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.12.0" target="_blank" rel="noopener"><span class="release-version">v1.12.0</span><span class="release-date">2026.10.18</span><span class="release-note">自有表情字体与短码；输入即得表情；覆盖安装自动重启服务</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.11.0" target="_blank" rel="noopener"><span class="release-version">v1.11.0</span><span class="release-date">2026.10.18</span><span class="release-note">自有表情独立成图片贴纸；百家姓/网络流行语并入简体词库</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.10.1" target="_blank" rel="noopener"><span class="release-version">v1.10.1</span><span class="release-date">2026.10.18</span><span class="release-note">表情 689（🔨/🤦 可进最近使用）；切英文重推 ⇧；iOS/鸿蒙表情页对齐</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.10.0" target="_blank" rel="noopener"><span class="release-version">v1.10.0</span><span class="release-date">2026.10.17</span><span class="release-note">小欧输入法命名；表情/颜文字/十二宠物形态；英文单词联想；逐字确认与设置页无响应修复</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.9.11" target="_blank" rel="noopener"><span class="release-version">v1.9.11</span><span class="release-date">2026.10.17</span><span class="release-note">移动端顶部小欧宠物条（六形态动态轮播）；撤四季花纹；文档与图同步</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.9.10" target="_blank" rel="noopener"><span class="release-version">v1.9.10</span><span class="release-date">2026.10.17</span><span class="release-note">逐字确认（四端，延迟提交）+ 顶部四季花纹边框；文档与图同步</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.9.9" target="_blank" rel="noopener"><span class="release-version">v1.9.9</span><span class="release-date">2026.10.17</span><span class="release-note">顶部快捷条、Linux 包维护脚本（装前停旧进程/装后拉起）、macOS pkg 装前停进程</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.9.8" target="_blank" rel="noopener"><span class="release-version">v1.9.8</span><span class="release-date">2026.10.17</span><span class="release-note">默认界面全覆盖红线区、隐藏键盘即重置、数字后句号恒 ASCII</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.9.7" target="_blank" rel="noopener"><span class="release-version">v1.9.7</span><span class="release-date">2026.10.17</span><span class="release-note">导入词库抢位 + 50ms 兜底、Win 安装器关停/自启、符号前两页重排、移动端候选去序号</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.9.6" target="_blank" rel="noopener"><span class="release-version">v1.9.6</span><span class="release-date">2026.10.16</span><span class="release-note">移动端候选区改版（共用格 · ⌄ 平铺翻页）+ 康熙字典词库 + 符号常用补数理化</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.9.5" target="_blank" rel="noopener"><span class="release-version">v1.9.5</span><span class="release-date">2026.10.16</span><span class="release-note">9 键钉读音收紧为「读音恰等」（左侧选拼音的字后不再联想词组）</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.9.4" target="_blank" rel="noopener"><span class="release-version">v1.9.4</span><span class="release-date">2026.10.15</span><span class="release-note">9 键宽松兜底档 + 工具条/键盘小改（⇧ 锁定、关于入口、顿号、状态栏 logo）</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.9.3" target="_blank" rel="noopener"><span class="release-version">v1.9.3</span><span class="release-date">2026.10.15</span><span class="release-note">修设置页不可滚动（页尾「关于」等几节够不到）</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.9.2" target="_blank" rel="noopener"><span class="release-version">v1.9.2</span><span class="release-date">2026.10.15</span><span class="release-note">状态栏内容缩小 40% + 标点随中英联动 · 候选「字全出完再出词」· 模糊音缺省改关 · Android 键盘/设置一轮</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.9.1" target="_blank" rel="noopener"><span class="release-version">v1.9.1</span><span class="release-date">2026.10.14</span><span class="release-note">多音字补读音（打 mo 出么 · 打 lu 出绿 · 打 ka 出咯）+ 拼音移到候选行上方</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.9.0" target="_blank" rel="noopener"><span class="release-version">v1.9.0</span><span class="release-date">2026.10.14</span><span class="release-note">三阶段设置面（拼音 / 双拼 / 词库 / 五笔）+ 候选三档</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.21" target="_blank" rel="noopener"><span class="release-version">v1.7.21</span><span class="release-date">2026.10.13</span><span class="release-note">Android：确认后不再吃掉剩余拼音（用户 2026-10-13 报障）</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.20" target="_blank" rel="noopener"><span class="release-version">v1.7.20</span><span class="release-date">2026.10.13</span><span class="release-note">桌面/状态栏修复批次 + Android 全半角移除 + 符号中文类目补全</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.19" target="_blank" rel="noopener"><span class="release-version">v1.7.19</span><span class="release-date">2026.10.12</span><span class="release-note">四端同步：表情页（iOS/鸿蒙）、桌面搜索 + 字形过滤、简繁优先、9 键可见性</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.18" target="_blank" rel="noopener"><span class="release-version">v1.7.18</span><span class="release-date">2026.10.12</span><span class="release-note">简拼性能：无匹长串 162ms/击键 → 5ms（「输入无匹时无响应」的根因）</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.17" target="_blank" rel="noopener"><span class="release-version">v1.7.17</span><span class="release-date">2026.10.12</span><span class="release-note">确认后再输入 = 全新开始（撤除上文拼接）+ 9 键左列读数短→长</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.16" target="_blank" rel="noopener"><span class="release-version">v1.7.16</span><span class="release-date">2026.10.12</span><span class="release-note">联想、全角宽化、表情分组、桌面符号/表情大页面与设置重排</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.15" target="_blank" rel="noopener"><span class="release-version">v1.7.15</span><span class="release-date">2026.10.11</span><span class="release-note">9 键左列读数去重 + 桌面状态栏跟随皮肤</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.14" target="_blank" rel="noopener"><span class="release-version">v1.7.14</span><span class="release-date">2026.10.11</span><span class="release-note">9 键无匹配不再泄漏键位数字（组合串/空格/读屏播报三出口）+ 移动端默认输入模式 9 键</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.13" target="_blank" rel="noopener"><span class="release-version">v1.7.13</span><span class="release-date">2026.10.10</span><span class="release-note">中文词库大整合（9.6 万 → 93.6 万条）+ 全端性能预算与两处根因修复</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.12" target="_blank" rel="noopener"><span class="release-version">v1.7.12</span><span class="release-date">2026.10.10</span><span class="release-note">切英文统一「拼音原文上屏」（三端）+ 组合串进字段 + 密码场自动英文 + 回车/数字面板修复</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.11" target="_blank" rel="noopener"><span class="release-version">v1.7.11</span><span class="release-date">2026.10.10</span><span class="release-note">9 键整盘重排 + 弹框输入两修复 + 五款新皮肤 + 工具栏收起键盘</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.10" target="_blank" rel="noopener"><span class="release-version">v1.7.10</span><span class="release-date">2026.10.10</span><span class="release-note">状态栏不进任务栏 + 切其他输入法自动隐藏 + 标点切换即落盘（设置与实际一致）</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.9" target="_blank" rel="noopener"><span class="release-version">v1.7.9</span><span class="release-date">2026.10.10</span><span class="release-note">状态栏「中英」修复（此前会停用整个输入法）+ 标点/Ω 语义与顺序订正 + 小欧窗口图标 + 软键盘默认关</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.8" target="_blank" rel="noopener"><span class="release-version">v1.7.8</span><span class="release-date">2026.10.09</span><span class="release-note">无匹配→分词匹配（26 键 + 9/14 键）+ 桌面状态栏图标重做与实时状态 + Android 符号页底部分类/重输键</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.7" target="_blank" rel="noopener"><span class="release-version">v1.7.7</span><span class="release-date">2026.10.09</span><span class="release-note">桌面虚拟键盘加「符」键</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.6" target="_blank" rel="noopener"><span class="release-version">v1.7.6</span><span class="release-date">2026.10.09</span><span class="release-note">桌面三件套（状态栏悬浮条 / 虚拟键盘 / 符号大全）+ 切中→英「直接确认」+ 设置面版权行</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.5" target="_blank" rel="noopener"><span class="release-version">v1.7.5</span><span class="release-date">2026.10.09</span><span class="release-note">UI 放大到主流输入法量级 + 无匹配去数字 + 符键符号页（22 类目）+ 点读音改钉读音 + Apple/Windows 自动打包</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.4" target="_blank" rel="noopener"><span class="release-version">v1.7.4</span><span class="release-date">2026.10.09</span><span class="release-note">输入模式/键盘模式改面板（皮肤同形态）+ 切英文保留拼音 + 点左列拼音上屏</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.3" target="_blank" rel="noopener"><span class="release-version">v1.7.3</span><span class="release-date">2026.10.09</span><span class="release-note">9 键左列逐条候选拼音（可滑动）+ 无匹配可见 + 确定后回标点 + 桌面 -/= 翻页</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.2" target="_blank" rel="noopener"><span class="release-version">v1.7.2</span><span class="release-date">2026.10.09</span><span class="release-note">桌面设置真·即时生效（修 fcitx5-remote -r 的假承诺）+ 移动端候选行/左列/底色三条</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.1" target="_blank" rel="noopener"><span class="release-version">v1.7.1</span><span class="release-date">2026.10.09</span><span class="release-note">9 键按主流布局重做（左列/分词）+ 修「键盘没反应」+ 缓冲上限 16→32</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.7.0" target="_blank" rel="noopener"><span class="release-version">v1.7.0</span><span class="release-date">2026.10.09</span><span class="release-note">外层入口补齐 + 移动端皮肤与表情全量 + 键盘排版按主流布局 + 图标两处修</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.6.0" target="_blank" rel="noopener"><span class="release-version">v1.6.0</span><span class="release-date">2026.10.08</span><span class="release-note">Shift 切中英 + 可切换皮肤 + 繁体 + 移动端输入模式/键盘模式 + 设置合并安装</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.5.0" target="_blank" rel="noopener"><span class="release-version">v1.5.0</span><span class="release-date">2026.10.08</span><span class="release-note">候选序号四端齐 + 属性设置（模糊音/简拼）+ 宠物图标补齐三端</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.4.0" target="_blank" rel="noopener"><span class="release-version">v1.4.0</span><span class="release-date">2026.10.02</span><span class="release-note">第五种情绪「降级」（天线折断）+ 圆形启动图标 + 各端尺寸统一到 30</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.3.7" target="_blank" rel="noopener"><span class="release-version">v1.3.7</span><span class="release-date">2026.09.28</span><span class="release-note">订正三处与事实不符的陈述；无功能改动</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.3.6" target="_blank" rel="noopener"><span class="release-version">v1.3.6</span><span class="release-date">2026.09.28</span><span class="release-note">各端宠物落点补齐；修 Android 启动图标是 Flutter 默认图；包名改 xyz.erik.opi</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.3.5" target="_blank" rel="noopener"><span class="release-version">v1.3.5</span><span class="release-date">2026.09.28</span><span class="release-note">Linux 安装文档修复（「加进输入法组」改用 D-Bus）</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.3.4" target="_blank" rel="noopener"><span class="release-version">v1.3.4</span><span class="release-date">2026.09.28</span><span class="release-note">CI/工具链版本；产品二进制与 v1.3.3 相同</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.3.3" target="_blank" rel="noopener"><span class="release-version">v1.3.3</span><span class="release-date">2026.09.28</span><span class="release-note">包改在 debian:12 容器里构建；补上 glibc 下界</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.3.2" target="_blank" rel="noopener"><span class="release-version">v1.3.2</span><span class="release-date">2026.09.28</span><span class="release-note">Linux 发行版打包 + fcitx5 门槛降到 5.0 + C++20 + 六端教程</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.3.1" target="_blank" rel="noopener"><span class="release-version">v1.3.1</span><span class="release-date">2026.09.27</span><span class="release-note">审计修复轮：emoji 判据、候选上限、FFI 门禁、文档全面跟一轮</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.3.0" target="_blank" rel="noopener"><span class="release-version">v1.3.0</span><span class="release-date">2026.09.27</span><span class="release-note">简拼 + 候选天花板 + Emoji 扩容 + 词库分发落地；英文词源入库</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.2.0" target="_blank" rel="noopener"><span class="release-version">v1.2.0</span><span class="release-date">2026.09.27</span><span class="release-note">模糊拼音 + 符号模式 + 中文标点 + 全角开关；luna 换源；六道契约门禁；四端草案补齐</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.1.0" target="_blank" rel="noopener"><span class="release-version">v1.1.0</span><span class="release-date">2026.09.27</span><span class="release-note">修复已知问题</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.16" target="_blank" rel="noopener"><span class="release-version">v1.0.16</span><span class="release-date">2026.09.27</span><span class="release-note">第三轮审计：7 个缺陷修复 + 键路由三轨同改 + fcitx5 预编辑通道 + 桌面管道三处不对称</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.15" target="_blank" rel="noopener"><span class="release-version">v1.0.15</span><span class="release-date">2026.09.26</span><span class="release-note">fcitx5 回显链路 + TSF 文本插入与注册 + 四个文件拆分</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.14" target="_blank" rel="noopener"><span class="release-version">v1.0.14</span><span class="release-date">2026.09.26</span><span class="release-note">平台中立键路由层 + iOS/macOS/鸿蒙三端草案 + 全库版权整合</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.13" target="_blank" rel="noopener"><span class="release-version">v1.0.13</span><span class="release-date">2026.09.26</span><span class="release-note">旋转崩溃与 fcitx5 静默失效修复</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.12" target="_blank" rel="noopener"><span class="release-version">v1.0.12</span><span class="release-date">2026.09.26</span><span class="release-note">候选排序与词库收录修正</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.11" target="_blank" rel="noopener"><span class="release-version">v1.0.11</span><span class="release-date">2026.09.26</span><span class="release-note">状态残留与孤儿窗修复</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.10" target="_blank" rel="noopener"><span class="release-version">v1.0.10</span><span class="release-date">2026.09.26</span><span class="release-note">团队审计修复</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.9" target="_blank" rel="noopener"><span class="release-version">v1.0.9</span><span class="release-date">2026.09.26</span><span class="release-note">项目宠物「小欧」</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.8" target="_blank" rel="noopener"><span class="release-version">v1.0.8</span><span class="release-date">2026.08.14</span><span class="release-note">桌面候选窗（Compose）与 TSF 命名管道通信</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.7" target="_blank" rel="noopener"><span class="release-version">v1.0.7</span><span class="release-date">2026.08.14</span><span class="release-note">fcitx5 XDG 数据目录 + Luna 词库加载</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.6" target="_blank" rel="noopener"><span class="release-version">v1.0.6</span><span class="release-date">2026.08.14</span><span class="release-note">修复与更新</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.5" target="_blank" rel="noopener"><span class="release-version">v1.0.5</span><span class="release-date">2026.08.12</span><span class="release-note">文档更新</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.4" target="_blank" rel="noopener"><span class="release-version">v1.0.4</span><span class="release-date">2026.08.12</span><span class="release-note">Flutter 键盘行按输入法高度弹性布局</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.3" target="_blank" rel="noopener"><span class="release-version">v1.0.3</span><span class="release-date">2026.08.12</span><span class="release-note">README 双语赞赏二维码与支持说明</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
+              <li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.2" target="_blank" rel="noopener"><span class="release-version">v1.0.2</span><span class="release-date">2026.08.12</span><span class="release-note">README 增加微信/支付宝赞赏二维码</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.1" target="_blank" rel="noopener"><span class="release-version">v1.0.1</span><span class="release-date">2026.08.12</span><span class="release-note">M2 里程碑文档与 Flutter 客户端骨架</span><span class="release-arrow" aria-hidden="true">↗</span></a></li><li class="release-item"><a href="https://github.com/erikwang2013/opi/releases/tag/v1.0.0" target="_blank" rel="noopener"><span class="release-version">v1.0.0</span><span class="release-date">2026.08.12</span><span class="release-note">M1 引擎内核：Composer 状态机、拼音切分、Trie 码表、候选排序与本地学习</span><span class="release-arrow" aria-hidden="true">↗</span></a></li>
             </ol>
           </div>
           <p class="release-scroll-hint">默认显示最新版本 · 向下滚动查看更早版本</p>
         </div>
       </div>
     </section>
-    <section class="panel download" id="download" aria-labelledby="download-title">
-      <div class="container">
+
+    <section class="section section--tint" id="download" aria-labelledby="download-title">
+      <div class="shell">
         <div class="section-head reveal">
           <div>
             <p class="eyebrow">06 / 下载</p>
-            <h2 id="download-title">把小欧，<br><em>带回你的键盘。</em></h2>
+            <h2 id="download-title">把小欧，<em>带回你的键盘。</em></h2>
           </div>
           <p class="section-side">Windows 支持 10 / 11 x64；Apple 与鸿蒙目前是 unsigned 产物，需要你自己的签名。</p>
         </div>
@@ -331,55 +275,15 @@
         </div>
         <h3 class="download-group-title reveal">主推平台 <span>推荐下载</span></h3>
         <div class="download-grid">
-          <a class="download-card is-primary reveal" href="download/opi-1.23.0-android-universal.apk" download data-os="android">
-            <span class="os-mark"><img src="assets/pet/forms/idle.png" width="46" height="46" alt="" loading="lazy" decoding="async"></span>
-            <span class="os-name">Android</span>
-            <span class="os-meta">原生 IME · .apk</span>
-            <span class="os-note">Android 5.1+ · arm64 / armv7 / x86_64 · 模拟器已验证</span>
-            <span class="os-cta">下载 APK <span aria-hidden="true">↓</span></span>
-          </a>
-          <a class="download-card is-primary reveal" href="download/opi-1.23.0-windows-x64-setup.exe" download data-os="windows">
-            <span class="os-mark"><img src="assets/pet/forms/waiting.png" width="46" height="46" alt="" loading="lazy" decoding="async"></span>
-            <span class="os-name">Windows</span>
-            <span class="os-meta">TSF 插件 · .exe x64</span>
-            <span class="os-note">Windows 10 / 11 x64 · 内测，未真机验收</span>
-            <span class="os-cta">下载安装包 <span aria-hidden="true">↓</span></span>
-          </a>
-          <div class="download-card is-primary reveal" data-os="linux">
-            <span class="os-mark"><img src="assets/pet/forms/cute.png" width="46" height="46" alt="" loading="lazy" decoding="async"></span>
-            <span class="os-name">Linux</span>
-            <span class="os-meta">fcitx5 插件 · .deb / .rpm</span>
-            <span class="os-note">Debian / Ubuntu 用 .deb；Fedora / openSUSE 用 .rpm · 容器 / 本机已验证</span>
-            <a class="os-cta" href="download/opi-1.23.0-linux-amd64.deb" download>下载 .deb <span aria-hidden="true">↓</span></a>
-            <a class="os-cta" href="download/opi-1.23.0-linux-x86_64.rpm" download>下载 .rpm <span aria-hidden="true">↓</span></a>
-          </div>
+          <a class="download-card is-primary reveal" href="download/opi-1.23.0-android-universal.apk" download data-os="android"><span class="os-mark"><img src="assets/pet/forms/idle.png" width="46" height="46" alt="" loading="lazy" decoding="async"></span><span class="os-name">Android</span><span class="os-meta">原生 IME · .apk</span><span class="os-note">Android 5.0+ · arm64 / armv7 / x86_64 · 模拟器已验证</span><span class="os-cta">下载 APK <span aria-hidden="true">↓</span></span></a>
+          <a class="download-card is-primary reveal" href="download/opi-1.23.0-windows-x64-setup.exe" download data-os="windows"><span class="os-mark"><img src="assets/pet/forms/waiting.png" width="46" height="46" alt="" loading="lazy" decoding="async"></span><span class="os-name">Windows</span><span class="os-meta">TSF 插件 · .exe x64</span><span class="os-note">Windows 10 / 11 x64 · 内测，未真机验收</span><span class="os-cta">下载安装包 <span aria-hidden="true">↓</span></span></a>
+          <div class="download-card is-primary reveal" data-os="linux"><span class="os-mark"><img src="assets/pet/forms/cute.png" width="46" height="46" alt="" loading="lazy" decoding="async"></span><span class="os-name">Linux</span><span class="os-meta">fcitx5 插件 · .deb / .rpm</span><span class="os-note">Debian / Ubuntu 用 .deb；Fedora / openSUSE 用 .rpm · 容器 / 本机已验证</span><a class="os-cta" href="download/opi-1.23.0-linux-amd64.deb" download>下载 .deb <span aria-hidden="true">↓</span></a><a class="os-cta" href="download/opi-1.23.0-linux-x86_64.rpm" download>下载 .rpm <span aria-hidden="true">↓</span></a></div>
         </div>
         <h3 class="download-group-title is-minor reveal">其他平台 <span>内测 · 需自行签名</span></h3>
         <div class="download-grid is-minor">
-          <a class="download-card reveal" href="download/opi-1.23.0-macos-universal.pkg" download data-os="macos">
-            <span class="beta-badge">内测</span>
-            <span class="os-mark"><img src="assets/pet/forms/coquettish.png" width="46" height="46" alt="" loading="lazy" decoding="async"></span>
-            <span class="os-name">macOS</span>
-            <span class="os-meta">InputMethodKit · .pkg</span>
-            <span class="os-note">内测版本 · unsigned pkg，需自行签名 / 公证</span>
-            <span class="os-cta">下载 PKG <span aria-hidden="true">↓</span></span>
-          </a>
-          <a class="download-card reveal" href="download/opi-1.23.0-ios-unsigned.ipa" download data-os="ios">
-            <span class="beta-badge">内测</span>
-            <span class="os-mark"><img src="assets/pet/forms/pleasing.png" width="46" height="46" alt="" loading="lazy" decoding="async"></span>
-            <span class="os-name">iOS</span>
-            <span class="os-meta">键盘扩展 · .ipa</span>
-            <span class="os-note">内测版本，约 7 天使用周期 · unsigned IPA，用 Sideloadly / AltStore 重签</span>
-            <span class="os-cta">下载 IPA <span aria-hidden="true">↓</span></span>
-          </a>
-          <a class="download-card reveal" href="download/opi-1.23.0-harmonyos-unsigned.hap" download data-os="harmony">
-            <span class="beta-badge">内测</span>
-            <span class="os-mark"><img src="assets/pet/forms/knocking.png" width="46" height="46" alt="" loading="lazy" decoding="async"></span>
-            <span class="os-name">HarmonyOS</span>
-            <span class="os-meta">ArkTS + N-API · .hap</span>
-            <span class="os-note">内测版本 · unsigned HAP，需签名与真机验证</span>
-            <span class="os-cta">下载 HAP <span aria-hidden="true">↓</span></span>
-          </a>
+          <a class="download-card reveal" href="download/opi-1.23.0-macos-universal.pkg" download data-os="macos"><span class="beta-badge">内测</span><span class="os-mark"><img src="assets/pet/forms/coquettish.png" width="46" height="46" alt="" loading="lazy" decoding="async"></span><span class="os-name">macOS</span><span class="os-meta">InputMethodKit · .pkg</span><span class="os-note">内测版本 · unsigned pkg，需自行签名 / 公证</span><span class="os-cta">下载 PKG <span aria-hidden="true">↓</span></span></a>
+          <a class="download-card reveal" href="download/opi-1.23.0-ios-unsigned.ipa" download data-os="ios"><span class="beta-badge">内测</span><span class="os-mark"><img src="assets/pet/forms/pleasing.png" width="46" height="46" alt="" loading="lazy" decoding="async"></span><span class="os-name">iOS</span><span class="os-meta">键盘扩展 · .ipa</span><span class="os-note">内测版本，免费 Apple ID 签的约 7 天过期 · unsigned IPA，用 Sideloadly / AltStore 重签</span><span class="os-cta">下载 IPA <span aria-hidden="true">↓</span></span></a>
+          <a class="download-card reveal" href="download/opi-1.23.0-harmonyos-unsigned.hap" download data-os="harmony"><span class="beta-badge">内测</span><span class="os-mark"><img src="assets/pet/forms/knocking.png" width="46" height="46" alt="" loading="lazy" decoding="async"></span><span class="os-name">HarmonyOS</span><span class="os-meta">ArkTS + N-API · .hap</span><span class="os-note">内测版本 · unsigned HAP，需签名与真机验证</span><span class="os-cta">下载 HAP <span aria-hidden="true">↓</span></span></a>
         </div>
         <div class="download-foot reveal">
           <p>文件直接放在本站的 <code>download/</code> 目录，不跳转 GitHub。安装教程见 <a href="https://github.com/erikwang2013/opi/tree/main/docs/install" target="_blank" rel="noopener">docs/install</a> 与发行说明。</p>
@@ -393,63 +297,54 @@
             <p>opi 是 MIT 开源的独立项目：没有订阅、没有广告。扫码可以请小欧喝一杯，纯属自愿。点按二维码可查看大图。</p>
           </div>
           <div class="donate-qrs">
-            <figure class="donate-qr">
-              <button type="button" class="qr-open" data-qr-src="assets/donate/weixinpay.png" data-qr-label="微信支付收款二维码"><img src="assets/donate/weixinpay.png" width="386" height="423" loading="lazy" decoding="async" alt="微信支付收款二维码"></button>
-              <figcaption>微信</figcaption>
-            </figure>
-            <figure class="donate-qr">
-              <button type="button" class="qr-open" data-qr-src="assets/donate/alipay.png" data-qr-label="支付宝收款二维码"><img src="assets/donate/alipay.png" width="412" height="450" loading="lazy" decoding="async" alt="支付宝收款二维码"></button>
-              <figcaption>支付宝</figcaption>
-            </figure>
+            <figure class="donate-qr"><button type="button" class="qr-open" data-qr-src="assets/donate/weixinpay.png" data-qr-label="微信支付收款二维码"><img src="assets/donate/weixinpay.png" width="386" height="423" loading="lazy" decoding="async" alt="微信支付收款二维码"></button><figcaption>微信</figcaption></figure>
+            <figure class="donate-qr"><button type="button" class="qr-open" data-qr-src="assets/donate/alipay.png" data-qr-label="支付宝收款二维码"><img src="assets/donate/alipay.png" width="412" height="450" loading="lazy" decoding="async" alt="支付宝收款二维码"></button><figcaption>支付宝</figcaption></figure>
           </div>
         </aside>
-        <footer class="site-footer" aria-label="页脚">
-          <div class="footer-main">
-            <div class="footer-brand">
-              <img src="assets/pet/opi-pet.png" width="48" height="48" alt="">
-              <div><strong>opi · 小欧输入法</strong><span>把输入，还给输入本身。</span></div>
-            </div>
-            <nav class="footer-links" aria-label="页脚导航">
-              <a href="#about">认识小欧</a>
-              <a href="#forms">十二形态</a>
-              <a href="#releases">版本日志</a>
-              <a href="https://github.com/erikwang2013/opi" target="_blank" rel="noopener">GitHub</a>
-              <a href="https://github.com/erikwang2013/opi/blob/main/README.en.md" target="_blank" rel="noopener" hreflang="en">English</a>
-              <a href="https://erik.xyz" target="_blank" rel="noopener">艾瑞可erik ↗</a>
-            </nav>
-          </div>
-          <div class="footer-info" id="busuanzi"><script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><span id="busuanzi_container_site_pv">本站总访问量 <b id="busuanzi_value_site_pv">0</b> 次 👀</span><span class="dot">·</span><span id="busuanzi_container_site_uv">访客数 <b id="busuanzi_value_site_uv">0</b> 人次 🧑‍🚀</span></div>
-          <div class="footer-bottom">
-            <span>© <span id="year">2026</span> 艾瑞可erik</span>
-            <span>代码 MIT · 词库 GPL-3.0</span>
-            <span><a href="https://beian.miit.gov.cn" target="_blank" rel="noopener">粤ICP备2020136226号-5</a></span>
-            <span>项目宠物与表情资产见 <a href="https://github.com/erikwang2013/opi/blob/main/ASSETS-LICENSE.md" target="_blank" rel="noopener">ASSETS-LICENSE</a></span>
-          </div>
-        </footer>
       </div>
     </section>
   </main>
-  <nav class="section-dots" aria-label="页面章节">
-    <a href="#hero" data-for="hero" aria-label="首页"></a>
-    <a href="#about" data-for="about" aria-label="认识小欧"></a>
-    <a href="#features" data-for="features" aria-label="能力"></a>
-    <a href="#timeline" data-for="timeline" aria-label="功能迭代"></a>
-    <a href="#forms" data-for="forms" aria-label="十二形态"></a>
-    <a href="#releases" data-for="releases" aria-label="版本日志"></a>
-    <a href="#download" data-for="download" aria-label="下载"></a>
-  </nav>
+
+  <footer class="site-footer" aria-label="页脚">
+    <div class="shell footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="#hero"><img class="brand-pet" src="assets/pet/opi-pet.png" width="32" height="32" alt=""><span class="brand-name">opi</span><span class="brand-cn">小欧输入法</span></a>
+        <p>把输入，还给输入本身。开源、离线、无广告的六端中文输入法。</p>
+        <p class="footer-license">代码 MIT · 简体主库 GPL-3.0 · 宠物与表情资产见 <a href="https://github.com/erikwang2013/opi/blob/main/ASSETS-LICENSE.md" target="_blank" rel="noopener">ASSETS-LICENSE</a></p>
+      </div>
+      <div class="footer-links">
+        <h2>项目</h2>
+        <a href="#about">认识小欧</a><a href="#features">能力</a><a href="#timeline">迭代</a><a href="#forms">十二形态</a><a href="#releases">版本日志</a><a href="#download">下载</a>
+      </div>
+      <div class="footer-links">
+        <h2>资源</h2>
+        <a href="https://github.com/erikwang2013/opi" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/erikwang2013/opi/tree/main/docs/install" target="_blank" rel="noopener">安装教程</a>
+        <a href="https://github.com/erikwang2013/opi/releases" target="_blank" rel="noopener">Releases</a>
+        <a href="https://github.com/erikwang2013/opi/blob/main/README.en.md" target="_blank" rel="noopener" hreflang="en">English</a>
+        <a href="https://erik.xyz" target="_blank" rel="noopener">erik.xyz ↗</a>
+      </div>
+      <div class="footer-meta">
+        <h2>作者</h2>
+        <p><a href="https://erik.xyz" target="_blank" rel="noopener">艾瑞可erik</a></p>
+        <p><a href="https://beian.miit.gov.cn" target="_blank" rel="noopener">粤ICP备2020136226号-5</a></p>
+        <div class="footer-info" id="busuanzi"><script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><span id="busuanzi_container_site_pv">本站总访问量 <b id="busuanzi_value_site_pv">0</b> 次 👀</span><span class="dot">·</span><span id="busuanzi_container_site_uv">访客数 <b id="busuanzi_value_site_uv">0</b> 人次 🧑‍🚀</span></div>
+      </div>
+    </div>
+    <div class="shell footer-bottom">
+      <p>© <span id="year">2026</span> 艾瑞可erik</p>
+      <p>用 Rust 构建 · 项目宠物是小欧</p>
+    </div>
+  </footer>
+
+  <button class="back-to-top" type="button" aria-label="返回顶部"><img src="assets/pet/opi-pet.png" width="48" height="48" alt=""></button>
 
   <div class="form-backdrop" id="form-backdrop" hidden></div>
   <dialog class="form-dialog" id="form-dialog" aria-labelledby="dialog-name">
     <button class="dialog-close" type="button" aria-label="关闭">×</button>
     <div class="dialog-body">
       <img id="dialog-image" src="assets/pet/forms/idle.png" width="200" height="200" alt="">
-      <div>
-        <p class="eyebrow">小欧形态</p>
-        <h3 id="dialog-name">小欧·笑</h3>
-        <p id="dialog-note">默认待命。</p>
-        <p class="dialog-hint">在输入法里点击这个形态，会插入对应 GIF 贴纸；不支持图片时回退为「小欧·」文本标签。</p>
-      </div>
+      <div><p class="eyebrow">小欧形态</p><h3 id="dialog-name">小欧·笑</h3><p id="dialog-note">默认待命。</p><p class="dialog-hint">在输入法里点击这个形态，会插入对应 GIF 贴纸；不支持图片时回退为「小欧·」文本标签。</p></div>
     </div>
   </dialog>
 
@@ -467,9 +362,7 @@
         <p id="memory-sub">版本从底部开始生长，小欧的表情一路跟着长大。滚动的是时间，留下的是陪伴。</p>
       </header>
       <div class="memory-body">
-        <div class="memory-viewport" id="memory-viewport" tabindex="0" role="region" aria-label="历史版本滚动区域">
-          <ol class="memory-timeline" id="memory-timeline"></ol>
-        </div>
+        <div class="memory-viewport" id="memory-viewport" tabindex="0" role="region" aria-label="历史版本滚动区域"><ol class="memory-timeline" id="memory-timeline"></ol></div>
         <div class="memory-intro" id="memory-intro" aria-hidden="true"></div>
       </div>
       <footer class="memory-foot">
@@ -481,10 +374,6 @@
     </section>
   </div>
 
-  <button class="back-to-top" type="button" aria-label="返回顶部">
-    <img src="assets/pet/opi-pet.png" width="48" height="48" alt="">
-  </button>
-
   <svg class="svg-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
     <symbol id="i-engine" viewBox="0 0 24 24"><path d="M12 3 3 7.5 12 12l9-4.5L12 3Z"/><path d="m3 12 9 4.5 9-4.5M3 16.5 12 21l9-4.5"/></symbol>
     <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.6 3.2 8 7.5 9.5 4.3-1.5 7.5-4.9 7.5-9.5V6L12 3Z"/><path d="m9 12 2 2 4-4"/></symbol>
@@ -492,6 +381,8 @@
     <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5v-16Z"/><path d="M4 18.5A2.5 2.5 0 0 1 6.5 16H20"/></symbol>
     <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/></symbol>
     <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 19h16"/></symbol>
+    <symbol id="i-github" viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></symbol>
   </svg>
 
   <script src="js/site.js" defer></script>

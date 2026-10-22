@@ -44,7 +44,7 @@ const root = new THREE.Group();
 root.position.y = 0.1;
 scene.add(root);
 
-function radialTexture(inner, outer) {
+function radialTexture(inner, outer, edge = 'rgba(8,12,17,0)') {
   const size = 256;
   const c = document.createElement('canvas');
   c.width = size;
@@ -53,7 +53,7 @@ function radialTexture(inner, outer) {
   const grad = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
   grad.addColorStop(0, inner);
   grad.addColorStop(0.55, outer);
-  grad.addColorStop(1, 'rgba(46,139,128,0)');
+  grad.addColorStop(1, edge);
   g.fillStyle = grad;
   g.fillRect(0, 0, size, size);
   const tex = new THREE.CanvasTexture(c);
@@ -62,19 +62,19 @@ function radialTexture(inner, outer) {
 }
 
 const halo = new THREE.Sprite(new THREE.SpriteMaterial({
-  map: radialTexture('rgba(255,255,255,.9)', 'rgba(46,139,128,.16)'),
+  map: radialTexture('rgba(232,116,59,.32)', 'rgba(47,143,138,.08)'),
   transparent: true,
   depthWrite: false,
   blending: THREE.AdditiveBlending,
-  opacity: 0.95,
+  opacity: 0.75,
 }));
 halo.scale.set(6.8, 6.8, 1);
 root.add(halo);
 
 const ringMaterial = new THREE.MeshBasicMaterial({
-  color: 0x2e8b80,
+  color: 0xe8743b,
   transparent: true,
-  opacity: 0.16,
+  opacity: 0.2,
   side: THREE.DoubleSide,
   depthWrite: false,
 });
@@ -82,16 +82,17 @@ const ringA = new THREE.Mesh(new THREE.RingGeometry(2.62, 2.635, 128), ringMater
 ringA.rotation.set(Math.PI / 2.15, 0.28, 0.15);
 root.add(ringA);
 const ringB = new THREE.Mesh(new THREE.RingGeometry(3.05, 3.07, 128), ringMaterial.clone());
-ringB.material.opacity = 0.1;
+ringB.material.color.setHex(0x2f8f8a);
+ringB.material.opacity = 0.14;
 ringB.rotation.set(Math.PI / 2.4, -0.44, -0.2);
 root.add(ringB);
 
 const glow = new THREE.Sprite(new THREE.SpriteMaterial({
-  map: radialTexture('rgba(46,139,128,.28)', 'rgba(46,139,128,.05)'),
+  map: radialTexture('rgba(47,143,138,.3)', 'rgba(47,143,138,.05)'),
   transparent: true,
   depthWrite: false,
   blending: THREE.AdditiveBlending,
-  opacity: 0.9,
+  opacity: 0.85,
 }));
 glow.scale.set(4.5, 4.5, 1);
 glow.position.set(0, -0.7, -0.2);
@@ -118,12 +119,12 @@ const pet = new THREE.Mesh(
 pet.position.z = 0.15;
 root.add(pet);
 
-const shadowTexture = radialTexture('rgba(20,32,29,.3)', 'rgba(20,32,29,.08)');
+const shadowTexture = radialTexture('rgba(0,0,0,.42)', 'rgba(0,0,0,.1)');
 const shadow = new THREE.Sprite(new THREE.SpriteMaterial({
   map: shadowTexture,
   transparent: true,
   depthWrite: false,
-  opacity: 0.5,
+  opacity: 0.55,
 }));
 shadow.scale.set(3.2, 0.62, 1);
 shadow.position.set(0, -2.02, -0.4);
@@ -133,11 +134,11 @@ const particleCount = isMobile ? 64 : 140;
 const positions = new Float32Array(particleCount * 3);
 const colors = new Float32Array(particleCount * 3);
 const palette = [
-  new THREE.Color('#2e8b80'),
-  new THREE.Color('#d9553f'),
+  new THREE.Color('#e8743b'),
+  new THREE.Color('#63b7b1'),
   new THREE.Color('#f5a6b4'),
-  new THREE.Color('#4e97e6'),
-  new THREE.Color('#f2b84b'),
+  new THREE.Color('#ffd166'),
+  new THREE.Color('#a2adb8'),
 ];
 let seed = 20261020;
 const random = () => {
