@@ -89,7 +89,8 @@ class CustomPhraseStoreTest {
         val notDir = File(tmp.root, "not-a-dir").apply { writeText("") }
         val s = store(File(notDir, CustomPhraseStore.FILE_NAME))
         val error = s.save(CustomPhraseStore.State(true, listOf(CustomPhrase("dz", "地址"))))
-        assertTrue("写不进去必须交回可见原因，实际：$error", error != null)
+        val failed = error != null
+        assertTrue("写不进去必须交回可见原因，实际：$error", failed)
     }
 
     @Test
@@ -110,7 +111,8 @@ class CustomPhraseStoreTest {
     fun pushRejectionIsVisibleAndSkipsEnabledWrite() {
         val engine = FakeEngine().apply { pushResult = -1 }
         val error = store(target(), engine).push(CustomPhraseStore.State(true, emptyList()))
-        assertTrue(error != null && error!!.contains("拒绝"), "实际：$error")
+        val rejected = error != null && error.contains("拒绝")
+        assertTrue("实际：$error", rejected)
         assertTrue(engine.enabledPushes.isEmpty())
     }
 
@@ -121,14 +123,16 @@ class CustomPhraseStoreTest {
             readEnabledValue = true // 推 false，却读回 true
         }
         val error = store(target(), engine).push(CustomPhraseStore.State(false, emptyList()))
-        assertTrue(error != null && error!!.contains("启用"), "实际：$error")
+        val mismatch = error != null && error.contains("启用")
+        assertTrue("实际：$error", mismatch)
     }
 
     @Test
     fun deadLibraryErrorIsReportedNotThrown() {
         val engine = FakeEngine().apply { pushThrows = UnsatisfiedLinkError("so missing") }
         val error = store(target(), engine).push(CustomPhraseStore.State(true, emptyList()))
-        assertTrue(error != null && error!!.contains("引擎不可用"), "实际：$error")
+        val dead = error != null && error.contains("引擎不可用")
+        assertTrue("实际：$error", dead)
     }
 
     @Test
