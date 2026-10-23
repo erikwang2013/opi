@@ -278,12 +278,13 @@ export struct BackspaceButton {
   }
 }
 
-/** ⇧：单击 OFF↔SINGLE、长按 LOCK；中文 26 键传 enabled=false 当占位。 */
+/** ⇧：单击 OFF↔SINGLE、长按 LOCK；中文 26 键传 usable=false 当占位。
+ *  ⚠️ 属性名不能叫 `enabled`：与 CustomComponent 的 `enabled(value)` 冲突（ArkTS 编译错误）。 */
 @Component
 export struct ShiftButton {
   @Prop fontSize: number = 21;
   @Prop weight: number = 1;
-  @Prop enabled: boolean = true;
+  @Prop usable: boolean = true;
   @StorageLink('opiShift') shift: number = OpiShift.Off as number;
   @StorageLink('opiSkin') skin: number = 0;
   @StorageLink('opiDark') dark: number = 0;
@@ -307,8 +308,8 @@ export struct ShiftButton {
       .layoutWeight(this.weight)
       .height('100%')
       .margin({ left: 2, right: 2 })
-      .enabled(this.enabled)
-      .opacity(this.enabled ? 1 : 0.45)
+      .enabled(this.usable)
+      .opacity(this.usable ? 1 : 0.45)
       .onClick(() => {
         this.ctrl.tapShift();
       })

@@ -194,7 +194,7 @@ export struct NineKeyPanel {
     .onAppear(() => {
       this.readBound = true;
     })
-    .onDisappear(() => {
+    .onDisAppear(() => {
       this.readBound = false;
     })
   }
@@ -408,7 +408,7 @@ export struct FourteenKeyPanel {
       ForEach(FOURTEEN_ROWS, (row: string[], rowIndex: number) => {
         Row() {
           if (rowIndex === 2) {
-            ShiftButton({ fontSize: this.keyFont(), weight: 1.2, enabled: true })
+            ShiftButton({ fontSize: this.keyFont(), weight: 1.2, usable: true })
           }
           ForEach(row, (pair: string, index: number) => {
             PopupKey({

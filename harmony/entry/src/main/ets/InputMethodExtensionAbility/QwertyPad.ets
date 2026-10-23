@@ -169,7 +169,7 @@ export struct QwertyPad {
           })
         } else {
           // 中文侧 ⇧ 是死键（Android onShift=null 的同款形态）。
-          ShiftButton({ fontSize: this.keySize(), weight: 1, enabled: this.isEnglish() })
+          ShiftButton({ fontSize: this.keySize(), weight: 1, usable: this.isEnglish() })
         }
       }
       ForEach(keys, (ch: string) => {
