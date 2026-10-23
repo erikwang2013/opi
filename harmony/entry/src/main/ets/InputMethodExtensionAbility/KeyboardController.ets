@@ -225,11 +225,9 @@ export class KeyboardController {
     this.pressKey(OpiEngine.charKeyval(ch), this.shiftStates());
   }
 
-  /** 9 键「分词」：缓冲非空时插音节边界 `'`；空缓冲的 `'` 是引号，拦住（Android onSegment 同款）。 */
+  /** 9 键「分词」：有拼音插 `'`，没拼音打「1」（2026-10-23 用户订正）。 */
   tapSegment(): void {
-    if (OpiEngine.buffer().length === 0) {
-      return;
-    }
+    if (OpiEngine.buffer().length === 0) { this.commitText('1'); return; }
     this.tapChar('\'');
   }
 

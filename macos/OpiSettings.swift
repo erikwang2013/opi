@@ -156,6 +156,17 @@ extension OpiEngine {
     }
     func exportUserWords() -> String { take(opi_export_user_words()) }
 
+    // 自定义短语（2026-10-23）：JSON 原样交给引擎；负数 = 失败且旧表不变。
+    var customPhrasesEnabled: Bool {
+        get { opi_custom_phrases_enabled() }
+        set { opi_set_custom_phrases_enabled(newValue) }
+    }
+    func exportCustomPhrases() -> String { take(opi_export_custom_phrases()) }
+    @discardableResult
+    func setCustomPhrases(json: String) -> Int32 {
+        withUTF16(json) { opi_set_custom_phrases($0, $1) }
+    }
+
     // 导入词库（M3）。系统词典不接受启停，判据看 `OpiDictEntry.system`。
     func dictList() -> [OpiDictEntry] {
         let raw = take(opi_dict_list())

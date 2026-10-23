@@ -289,6 +289,13 @@ int32_t opi_import_user_words(const uint16_t *json, size_t len);
 /// 导出用户词（JSON）。
 OpiString opi_export_user_words(void);
 
+/// 自定义短语（2026-10-23）：JSON `{"version":1,"phrases":[{"trigger":"dz","text":"地址"}]}`。
+/// 返回导入条数；失败 -1（非法 JSON / 版本不符 / 校验不过 / NULL）且旧表不变。
+int32_t opi_set_custom_phrases(const uint16_t *json, size_t len);
+OpiString opi_export_custom_phrases(void);
+void opi_set_custom_phrases_enabled(bool on);
+bool opi_custom_phrases_enabled(void);
+
 // ---------- 导入词库（2026-10-14，M3）----------
 //
 // 宿主契约四端同一份（实现与完整裁决见 crates/opi-ffi/src/api/dict.rs 头注）：

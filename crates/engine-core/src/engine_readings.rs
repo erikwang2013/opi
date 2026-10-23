@@ -159,19 +159,27 @@ fn nine_display_reading(buffer: &str, readings: &[String]) -> String {
     };
     let keys = key_count(buffer);
     let first_len = key_count(first);
-    if first_len == keys {
-        return first.clone();
-    }
-    // 等长读数可能在后面（组合识别/更长匹配的候选排在首条之后）：取第一条等长的。
-    if let Some(exact) = readings.iter().find(|r| key_count(r) == keys) {
-        return exact.clone();
-    }
-    if first_len > keys {
+    let mut out = if first_len == keys {
+        first.clone()
+    } else if let Some(exact) = readings.iter().find(|r| key_count(r) == keys) {
+        // 等长读数可能在后面（组合识别/更长匹配的候选排在首条之后）：取第一条等长的。
+        exact.clone()
+    } else if first_len > keys {
         // 前缀扩展词的读数比按键长：旧行为原样显示（不截断，不补键）。
-        return first.clone();
+        first.clone()
+    } else {
+        let mut s = first.clone();
+        s.push_str(&uncovered_key_letters(buffer, first_len));
+        s
+    };
+    // **手动分词符**（2026-10-23 用户报障「9 键分词键无效果」）：用户点分词键后 buffer
+    // 末尾会多一个 `'`，但候选读数里没有它 ⇒ 行上看不出任何变化。把缓冲末尾的
+    // 分隔符补到显示串尾部（已有的不重复补）。
+    let trailing = buffer.chars().rev().take_while(|c| *c == '\'').count();
+    let shown = out.chars().rev().take_while(|c| *c == '\'').count();
+    for _ in shown..trailing {
+        out.push('\'');
     }
-    let mut out = first.clone();
-    out.push_str(&uncovered_key_letters(buffer, first_len));
     out
 }
 

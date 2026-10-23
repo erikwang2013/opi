@@ -397,10 +397,13 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             // 工具条最右的收起键（Android 同位置）。
             dismissKeyboard()
         case .segment:
-            // 分词键：缓冲空时**不发**（空缓冲的 `'` 在引擎里是引号，不是分词符）。
-            guard !engine.buffer().isEmpty, let quote = "'".unicodeScalars.first else {
+            // 分词键（2026-10-23 用户订正）：有拼音 ⇒ 插音节边界；**没拼音 ⇒ 打「1」**
+            // （空缓冲的 `'` 在引擎里是引号，不是分词符）。
+            guard !engine.buffer().isEmpty else {
+                insert("1")
                 return
             }
+            guard let quote = "'".unicodeScalars.first else { return }
             route(keyval: OpiKey.printable(quote), states: 0, fallback: .none)
         case .openURL(let raw):
             openExternal(raw)

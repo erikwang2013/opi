@@ -376,11 +376,15 @@ private fun KeyboardArea(
                     // 重输（2026-10-10 用户裁决：去分词键、加「重输」）：清掉当前组合重来；
                     // 空缓冲是空操作（clear 幂等）。
                     onRetype = controller::clear,
-                    // 分词键（2026-10-15 用户裁决放回主区域第一格）：缓冲非空才发 `'`
-                    // —— 空缓冲时它在引擎里是引号不是分词符（engine_punct.rs），
-                    // 所以宿主拦住；无匹配的中文分词匹配仍由引擎自动回退承担（engine-seg）。
+                    // 分词键（2026-10-15 放回主区域第一格；2026-10-23 用户订正）：
+                    // 有拼音 ⇒ 发 `'` 往缓冲插音节边界；**没有拼音 ⇒ 打一个「1」**
+                    // （空缓冲的 `'` 在引擎里是引号，不是分词符，engine_punct.rs）。
                     onSegment = {
-                        if (controller.buffer.isNotEmpty()) router.handleKey("'")
+                        if (controller.buffer.isEmpty()) {
+                            router.commitText("1")
+                        } else {
+                            router.handleKey("'")
+                        }
                     },
                     // 数字键盘（2026-10-10 用户裁决：底行新增）——与 26 键的 123 同路。
                     onNumber = state::openNumber,

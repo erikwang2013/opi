@@ -54,6 +54,10 @@ final class OpiEngine {
     static native void clearUserWords();
     static native String exportUserWords();
     static native int importUserWords(String json);
+    static native int setCustomPhrases(String json);
+    static native String exportCustomPhrases();
+    static native void setCustomPhrasesEnabled(boolean on);
+    static native boolean customPhrasesEnabled();
     static native void removeUserWord(String text);
     static native boolean loadWubi(String path);
     static native int wubiStyle();
@@ -75,14 +79,12 @@ final class OpiEngine {
 }
 public final class Main {
     static int failures = 0;
-
     static void check(boolean ok, String what) {
         if (!ok) {
             failures++;
             System.out.println("FAIL: " + what);
         }
     }
-
     /** 候选数组里有没有这个字符串（candidates 可能返回 null）。 */
     static boolean has(String[] arr, String s) {
         if (arr == null) return false;
@@ -91,12 +93,10 @@ public final class Main {
         }
         return false;
     }
-
     public static void main(String[] args) throws Exception {
         String so = System.getProperty("opi.so", "/home/wwwroot/bag/opi/target/debug/libopi_ffi.so");
         System.load(so);
         System.out.println("loaded: " + so);
-
         // 装载：args[0] 词库路径；缺失走内置回退（也必须成功）。
         String dict = args.length > 0 ? args[0] : null;
         check(OpiEngine.load(dict), "load(" + dict + ") 应为 true");

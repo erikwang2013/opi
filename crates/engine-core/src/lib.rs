@@ -19,6 +19,7 @@ pub mod composer;
 mod composition; // 多字词组合识别（2026-10-23，见 composition.rs 头注）
 mod composition_scheme; // 9 键多字词组合识别（2026-10-23，见 composition_scheme.rs 头注）
 pub mod correction;
+mod custom_phrases; // 自定义短语（2026-10-23，见 custom_phrases.rs 头注）
 mod dict_budget; // 导入层每键查询预算（2026-10-18 性能审计）
 mod dict_index; // 导入层命中索引 / 抢位加成 / rest 截断
 mod dict_layers; // 导入词库的合并层（M3 2b）：Engine 主库槽位的具体类型，字段私有故模块不公开

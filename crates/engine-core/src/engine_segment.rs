@@ -46,7 +46,11 @@ impl Engine {
     /// 时 `segment_fallback` 恒 `None`（笔画串的段不可能是完整音节），故这里用
     /// `active_dict()` 与候选层的键差无关紧要。
     pub(crate) fn commit_buffer_after_select(&mut self, selected: &str) -> Option<String> {
-        let fallback = if !matches!(self.mode(), Mode::Pinyin | Mode::Traditional) {
+        let fallback = if self.custom_phrase_selected(selected) {
+            // 自定义短语（2026-10-23）：文本不是缓冲的拼音投影，分词回退会把 `zhangsan`
+            // 这类 trigger 切成「首音节 + 尾巴」⇒ 短语被拆开、留在逐字态。整段消耗。
+            None
+        } else if !matches!(self.mode(), Mode::Pinyin | Mode::Traditional) {
             None
         } else {
             // 缓冲用 composer 的原文（不是 `buffer()` —— 浏览态那个会返回标题，

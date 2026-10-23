@@ -271,6 +271,16 @@ object OpiEngine : OpiEngineApi, SymbolApi {
     /** 导入用户词 JSON。返回导入条数；负数表示格式非法（既有状态不变）。 */
     external fun importUserWords(json: String): Int
 
+    /** 导入自定义短语 JSON。返回导入条数；负数表示格式非法（既有短语表不变）。 */
+    external fun setCustomPhrases(json: String): Int
+
+    /** 导出自定义短语 JSON（与 [setCustomPhrases] 同一 schema/顺序）。 */
+    external fun exportCustomPhrases(): String
+
+    external fun setCustomPhrasesEnabled(on: Boolean)
+
+    external fun customPhrasesEnabled(): Boolean
+
     /** 删除一个用户词（连同其频次）。 */
     override external fun removeUserWord(text: String)
 

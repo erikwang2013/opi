@@ -70,7 +70,8 @@ static const uint16_t W = 'w', O = 'o', X = 'x';
 #include "consumer_dicts.c"
 /* [13] 五笔旋钮族那一段在 consumer_wubi.c —— 同上，#include 片段。 */
 #include "consumer_wubi.c"
-
+/* [14] 自定义短语那一段在 consumer_phrases.c —— 同上。 */
+#include "consumer_phrases.c"
 int main(int argc, char **argv) {
     /* ---------- 装载 ---------- */
     printf("[1] opi_load\n");
@@ -485,10 +486,9 @@ int main(int argc, char **argv) {
     opi_set_chinese_punct(true); /* 复位：别把状态漏给后面的段落 */
 
     check_import_dicts();
-
     /* [13] 五笔旋钮族：argv[2] = wubi 表路径（可选；不给就跳过本段）。 */
     wubi_segment(argc > 2 ? argv[2] : NULL);
-
+    check_custom_phrases();
     /* ---------- 释放语义：空句柄可无条件释放 ---------- */
     printf("[12] 释放语义\n");
     opi_ffi_free_string((OpiString){NULL, 0});

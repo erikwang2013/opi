@@ -14,6 +14,7 @@
 pub mod api;
 pub mod cabi;
 pub mod cabi_dict;
+pub mod cabi_phrases;
 pub mod cabi_scheme;
 pub mod cabi_switches;
 pub mod cabi_symbols;
@@ -22,6 +23,7 @@ pub mod cabi_wubi;
 pub mod jni;
 pub mod jni_candidates;
 pub mod jni_dict;
+pub mod jni_phrases;
 pub mod jni_scheme;
 pub mod jni_switches;
 pub mod jni_symbols;

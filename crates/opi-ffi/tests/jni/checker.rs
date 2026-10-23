@@ -438,10 +438,12 @@ pub const JNI_SWITCHES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni_swi
 pub const JNI_DICT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni_dict.rs");
 /// 同上，五笔旋钮族那一半（2026-10-14：M4 第二波加 12 个出口后 `jni_switches.rs` 越线）。
 pub const JNI_WUBI: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni_wubi.rs");
+/// 自定义短语族（2026-10-23）。与 C ABI 侧的 `CABI_PHRASES` 是镜像。
+pub const JNI_PHRASES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni_phrases.rs");
 /// jni 模块**全部** .rs 的清单（`read_jni` 的合成语料就是按它读的）。
 /// ⚠️ 新拆一个 `jni_*.rs` 要加到这里 —— 漏了那批出口会从门禁视野里消失
 /// （`rust_registration_parser_is_not_blind` 的计数护栏会红）。
-pub const JNI_ALL: [&str; 8] = [
+pub const JNI_ALL: [&str; 9] = [
     JNI_RS,
     JNI_USER_WORDS,
     JNI_SCHEME,
@@ -450,6 +452,7 @@ pub const JNI_ALL: [&str; 8] = [
     JNI_SWITCHES,
     JNI_DICT,
     JNI_WUBI,
+    JNI_PHRASES,
 ];
 pub const KOTLIN_HOST: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),

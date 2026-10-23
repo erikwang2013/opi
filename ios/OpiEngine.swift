@@ -490,9 +490,11 @@ final class OpiEngine {
         OpiEngine.withUTF16(json) { p, n in opi_import_user_words(p, n) }
     }
 
-    func removeUserWord(_ text: String) {
-        OpiEngine.withUTF16(text) { p, n in opi_remove_user_word(p, n) }
-    }
+    func removeUserWord(_ text: String) { OpiEngine.withUTF16(text) { p, n in opi_remove_user_word(p, n) } }
 
     func clearUserWords() { opi_clear_user_words() }
+    // 自定义短语（2026-10-23）：JSON 原样交给引擎；负数 = 失败且旧表不变。
+    var customPhrasesEnabled: Bool { get { opi_custom_phrases_enabled() } set { opi_set_custom_phrases_enabled(newValue) } }
+    func exportCustomPhrases() -> String { OpiEngine.takeString(opi_export_custom_phrases()) }
+    @discardableResult func setCustomPhrases(json: String) -> Int32 { OpiEngine.withUTF16(json) { p, n in opi_set_custom_phrases(p, n) } }
 }

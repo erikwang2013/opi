@@ -12,6 +12,7 @@ use engine_core::router::{KeyAction, KeyRouter, ShiftState};
 use engine_core::symbols::BlockId;
 
 mod convert;
+mod custom_phrases; // 自定义短语薄壳（2026-10-23，见文件头）
 mod dict;
 #[cfg(test)]
 mod tests;

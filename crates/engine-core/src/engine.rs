@@ -101,6 +101,9 @@ pub struct Engine {
     pub(crate) shuangpin_layout: usize,
     /// 简拼开关。默认 `true` = 既有行为。
     pub(crate) jianpin: bool, // pub(crate)：engine_user_words.rs 的开关一族要用
+    /// 自定义短语（2026-10-23）：列表 + 启用位，**只存内存**（宿主落盘）。
+    /// 匹配/校验/前插在 custom_phrases.rs；本层不碰 IO。
+    pub(crate) custom_phrases: crate::custom_phrases::CustomPhrases,
 }
 
 impl Engine {
@@ -143,6 +146,7 @@ impl Engine {
             shuangpin_layout: 0,
             jianpin: true,
             symbol_browse: Default::default(),
+            custom_phrases: Default::default(),
         };
         engine.recompute_user_boost();
         engine

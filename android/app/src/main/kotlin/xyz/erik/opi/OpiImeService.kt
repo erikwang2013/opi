@@ -34,6 +34,7 @@ import xyz.erik.opi.ime.KeyRouter
 import xyz.erik.opi.ime.PendingCommit
 import xyz.erik.opi.keyboard.SymbolCatalog
 import xyz.erik.opi.keyboard.RareIndex
+import xyz.erik.opi.settings.CustomPhraseStore
 import xyz.erik.opi.settings.ImePreferences
 import java.io.File
 import java.io.IOException
@@ -195,6 +196,10 @@ class OpiImeService : InputMethodService() {
         // 用户词导入必须在词库装载之后、建视图之前：文件缺失/损坏静默降级（不崩 IME），
         // 且要赶在第一次刷新候选之前生效
         userWords.load()
+        // 自定义短语（2026-10-23）：宿主文件（filesDir/opi_custom_phrases.json）是唯一真源，
+        // 引擎侧是内存态 —— 每次建视图时整表重推。设置页改动会即时推，但进程被杀后
+        // 只有这里把它装得回去。失败只留日志，不能因此崩输入法。
+        CustomPhraseStore.from(this).loadAndPush { Log.w(TAG, "custom phrases: $it") }
         // 词库目录装载（2026-10-14，M3）：目录里每个 *.tsv 进引擎，**停用名单在装载后重放**
         // —— 引擎里导入层是内存态，同名重导入会置回启用（`api/dict.rs` 裁决 2 把重放
         // 划给宿主）。单个失败不挡启动，只记一条日志（设置页「词库」节会把失败的显示出来）。

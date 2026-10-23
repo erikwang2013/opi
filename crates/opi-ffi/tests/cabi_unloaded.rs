@@ -33,11 +33,13 @@ use opi_ffi::cabi::{
     opi_clear,
     opi_clear_user_words,
     opi_correction_enabled,
+    opi_custom_phrases_enabled,
     opi_dict_list,
     opi_display_buffer,
     opi_emoji_groups,
     opi_emoji_symbols,
     opi_enter_action,
+    opi_export_custom_phrases,
     opi_export_user_words,
     opi_ffi_free_string,
     opi_fullwidth_state,
@@ -67,6 +69,8 @@ use opi_ffi::cabi::{
     opi_select_page,
     opi_set_chinese_punct,
     opi_set_correction,
+    opi_set_custom_phrases,
+    opi_set_custom_phrases_enabled,
     opi_set_dict_enabled,
     opi_set_fuzzy,
     opi_set_fuzzy_pairs,
@@ -268,6 +272,19 @@ fn every_export_returns_a_sentinel_when_engine_is_not_loaded() {
         assert_eq!(opi_import_user_words(std::ptr::null(), 0), -1);
         let word = to_units("我");
         opi_remove_user_word(word.as_ptr(), word.len());
+        // 自定义短语（2026-10-23）：导入负值、导出空串、开关读侧 false ——
+        // 与用户词同一条未装载哨兵规则（也钉住「不给写侧把引擎顺手建出来」）。
+        opi_set_custom_phrases_enabled(true);
+        assert!(
+            !opi_custom_phrases_enabled(),
+            "未装载：短语开关读侧恒 false"
+        );
+        assert_eq!(
+            opi_set_custom_phrases(std::ptr::null(), 0),
+            -1,
+            "未装载 → 导入失败"
+        );
+        assert_eq!(read(opi_export_custom_phrases()), "", "未装载 → 导出空串");
 
         // —— 导入词库（2026-10-14，M3）——
         // 未装载 = 没有引擎可以挂额外层 ⇒ 导入 -1（导入类出口的负数哨兵）、开关 false、

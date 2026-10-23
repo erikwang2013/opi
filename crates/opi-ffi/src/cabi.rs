@@ -32,6 +32,8 @@ use utf16::{read_utf16, texts_to_json};
 /// 导入词库一族（2026-10-14，M3 从 `cabi.rs` 拆出）：与下面那条**再导出**同一约定 ——
 /// 公开路径仍是 `cabi`（`opi_ffi::cabi::opi_import_dict`），调用方不受拆分影响。
 pub use crate::cabi_dict::*;
+/// 自定义短语一族（2026-10-23）：公开路径仍是 `cabi`，同下面几条再导出约定。
+pub use crate::cabi_phrases::*;
 pub use crate::cabi_scheme::*;
 /// 符号 / 表情一族（2026-10-13 从 `cabi.rs` 拆出，见 `cabi_symbols.rs`）：与下面那条
 /// **再导出**同一个约定 —— 公开路径仍是 `cabi`，调用方不受拆分影响。

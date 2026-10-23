@@ -7,6 +7,7 @@ import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
@@ -35,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,6 +68,15 @@ import java.io.IOException
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(dictionaryDegraded: Boolean) {
+    // 自定义短语子页（2026-10-23）：单 Activity 单 Compose 树，没有导航库 —— 用一个
+    // 可保存的开关换根内容；返回箭头把它拨回来（旋转后仍停在子页）。
+    var showPhrases by rememberSaveable { mutableStateOf(false) }
+    if (showPhrases) {
+        // 系统返回键回设置页，而不是退出整个设置 Activity。
+        BackHandler { showPhrases = false }
+        CustomPhraseScreen(onBack = { showPhrases = false })
+        return
+    }
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -336,6 +347,16 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
                     supportingContent = { Text("拼音方式选「拼音双拼」时生效（主流同款六套）") },
                     trailingContent = {
                         TextButton(onClick = { showLayoutDialog = true }) { Text(shuangpinLayout) }
+                    },
+                )
+                HorizontalDivider()
+                // 自定义短语（2026-10-23）：输入字母直接上屏一段常用文本。
+                // 落盘 = filesDir/opi_custom_phrases.json（见 CustomPhraseStore）。
+                ListItem(
+                    headlineContent = { Text("自定义短语") },
+                    supportingContent = { Text("输入字母，快速上屏常用短语") },
+                    trailingContent = {
+                        TextButton(onClick = { showPhrases = true }) { Text("管理") }
                     },
                 )
                 HorizontalDivider()

@@ -21,7 +21,9 @@ use crate::engine::Engine;
 use crate::scheme::Scheme;
 
 impl Engine {
-    pub fn candidates(&self, limit: usize) -> Vec<Candidate> {
+    /// 正常候选装配（**不含**自定义短语：公开入口 [`Engine::candidates`] 在
+    /// `custom_phrases.rs`，算完后把精确命中的短语前插）。
+    pub(crate) fn candidates_base(&self, limit: usize) -> Vec<Candidate> {
         // 每键一份的导入层预算（2026-10-18）：主查询 / 模糊 / 纠错 / 简拼 / 逐音节 /
         // 分词回退共享同一截止，超时整层丢弃；guard 在本方法返回时恢复（不粘滞）。
         let _budget = self.dict.begin_query_budget();
