@@ -163,8 +163,8 @@ var
 begin
   if (CurPageID = wpFinished) and (not WizardSilent) then
   begin
-    Note := '无需注销：新打开的应用会使用已安装的版本；已打开的应用请关闭后重新打开。' +
-      #13#10 + '静默安装不会重启 Explorer。';
+    Note := '无需注销：新打开的应用会使用已安装的版本；已打开的应用请关闭后重新打开。' + #13#10 +
+      '静默安装不会重启 Explorer。';
     if TsfHolders <> '' then
       Note := Note + #13#10 + '仍加载旧版 TSF DLL 的进程：' + TsfHolders + '（关闭重开即可）。';
     WizardForm.FinishedLabel.Caption := Note;
