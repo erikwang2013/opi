@@ -234,11 +234,10 @@ fn punctuation_flushes_pending_buffer_first() {
     );
 }
 
-/// flush 是**本轨**的页码事件：`reset_page_if_buffer_changed` 是「缓冲变了就回第一页」
-/// 的唯一实现处，标点这条新路径必须走它 —— 否则翻到第 3 页打个逗号，下一页停在第 3 页
-/// 而候选早已换了一批（与空格提交后翻页同一个坑）。
+/// flush 提**当前页**首条（2026-10-24 用户报障「翻页后直接确认始终是第一页的 1」），
+/// 提交后 `reset_page_if_buffer_changed` 把页码归零。
 #[test]
-fn punctuation_flush_resets_page_to_first() {
+fn punctuation_flush_uses_current_page_first_then_resets() {
     let mut d = InMemoryDictionary::new();
     for i in 0..20 {
         d.insert("hao", &format!("词{i:02}"), (5000 - i) as u32);
@@ -263,7 +262,7 @@ fn punctuation_flush_resets_page_to_first() {
     assert_eq!(s.page(), 1, "前置：20 条候选有 3 页");
     assert_eq!(
         s.input_key(',' as u32, 0),
-        KeyOutcome::Commit("词00，".into())
+        KeyOutcome::Commit("词08，".into())
     );
     assert_eq!(s.page(), 0, "缓冲被 flush 上屏 → 页码归零");
 }

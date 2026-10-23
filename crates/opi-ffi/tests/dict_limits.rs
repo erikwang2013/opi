@@ -29,9 +29,10 @@ fn import_dict_rejects_oversized_file_and_too_many_entries() {
 
     // 2) 条目上限：上限 + 1 条**合法**行（引擎解析后按条数拒）。
     let many = temp("many.tsv");
-    let mut body = String::with_capacity((api::MAX_IMPORT_DICT_ENTRIES + 1) * 4);
-    for _ in 0..=api::MAX_IMPORT_DICT_ENTRIES {
-        body.push_str("a\tb\n");
+    let mut body = String::with_capacity((api::MAX_IMPORT_DICT_ENTRIES + 1) * 8);
+    for i in 0..=api::MAX_IMPORT_DICT_ENTRIES {
+        // 词必须**互不相同**（词库按 词+读音 去重；同一行重复 20 万次只算 1 条）。
+        body.push_str(&format!("b{i}\ta\n"));
     }
     fs::write(&many, body).expect("写多条文件");
     let err = api::with_engine(|a| a.import_dict(many.to_str().unwrap()))
