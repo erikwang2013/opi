@@ -71,6 +71,12 @@ extern "C" void opi_fcitx5_set_wubi_mixed_entry(int32_t entry) __attribute__((we
 extern "C" void opi_fcitx5_set_wubi_candidate_limit(int32_t n) __attribute__((weak));
 extern "C" void opi_fcitx5_set_wubi_return_style(int32_t style) __attribute__((weak));
 extern "C" void opi_fcitx5_set_wubi_auto_commit(bool on) __attribute__((weak));
+// 自定义短语（2026-10-24）：从 `<数据目录>/opi/custom_phrases.json` 与
+// `custom_phrases_en.json` 重读中英两套整表并推给引擎（设置窗保存 →
+// ReloadAddonConfig → applyOpiSettings 调到这里）。读文件与
+// 校验都在 Rust 侧（坏文件归一为空表）。弱符号：老 .so 上静默跳过 —— 那份 .so
+// 本来就没有短语能力，不能因此让插件整个加载不了。
+extern "C" void opi_fcitx5_reload_custom_phrases() __attribute__((weak));
 // 方案**读侧**（2026-10-14，与 set_scheme 配对）：当前方案码（`Scheme::code`）。
 // opi-ctl 的 `mode` 动作派生态 token（pinyin/en26）靠它 —— 调用点见 opi_ctl_mode.h。
 // 同样是弱符号（落地前按全拼 0 处理，读侧缺省与 `opi_fcitx5_mode()` 未装载给 0 同姿态）。

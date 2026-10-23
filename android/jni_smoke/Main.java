@@ -1,9 +1,6 @@
-// Host JVM smoke：不依赖 Android，直接 System.load libopi_ffi.so 验证
-// JNI_OnLoad + RegisterNatives + 引擎主链路。与 Rust cabi_test 覆盖同一语义。
-//
-// 用法：
-//   javac -d /tmp/smoke-out Main.java
-//   java -Dopi.so=/path/to/libopi_ffi.so -cp /tmp/smoke-out xyz.erik.opi.jni.Main [/path/to/luna.opid]
+// Host JVM smoke：System.load libopi_ffi.so 验 JNI_OnLoad + RegisterNatives + 主链路
+//（与 Rust cabi_test 同语义）。用法：javac -d /tmp/smoke-out Main.java；再
+// java -Dopi.so=/path/libopi_ffi.so -cp /tmp/smoke-out xyz.erik.opi.jni.Main [luna.opid]
 // 成功打印 SMOKE-OK；失败打印 FAIL: <原因> 并退出码 1。
 package xyz.erik.opi.jni;
 final class OpiEngine {
@@ -58,6 +55,11 @@ final class OpiEngine {
     static native String exportCustomPhrases();
     static native void setCustomPhrasesEnabled(boolean on);
     static native boolean customPhrasesEnabled();
+    static native int setEnglishCustomPhrases(String json);
+    static native String exportEnglishCustomPhrases();
+    static native void setEnglishCustomPhrasesEnabled(boolean on);
+    static native boolean englishCustomPhrasesEnabled();
+    static native boolean englishPhrasesActive();
     static native void removeUserWord(String text);
     static native boolean loadWubi(String path);
     static native int wubiStyle();

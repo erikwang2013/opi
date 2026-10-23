@@ -205,27 +205,13 @@ class ImeState(
     }
 
     /**
-     * 「英文」键盘按钮（9 键底行；2026-10-10 新增；2026-10-15 起 14 键与笔画底行也各有一枚）：
+     * 「英文」键盘按钮（9 键与笔画底行各一枚；14 键 2026-10-24 改版后由底行「中英」
+     * 走 [toggleChineseEnglish]，英文向这一腿仍落到本条）：
      * **先按拼音上屏 pending、再切英文 26 键**。
      * 语义单一来源 = [selectInputMode] 的英文档（2026-10-10 深夜裁决统一：面板的
      * 「英文26键」也走同一条——三处英文入口共用 [commitPendingAsPinyin]）。落盘照旧。
      */
     fun switchToEnglishKeyboard() = selectInputMode(InputMode.ENGLISH26)
-
-    /**
-     * 9 键 / 14 键 / 笔画 底行模式键的动作（2026-10-15 用户裁决「简繁按钮就只切换简繁」，
-     * 同日「统一成只切简繁」把 14 键与笔画也归到这条）：**只切简/繁**
-     * （PINYIN ⇄ TRADITIONAL），不再循环进英文 —— 这三盘进英文走各自底行那枚独立的
-     * [英文] 键（[switchToEnglishKeyboard]）。
-     *
-     * 走 [EngineController.switchLanguage]（与 [cycleMode] 的「中→繁」腿**同一条**）：
-     * 方案不动（9 键仍是 9 键）、缓冲保留（2026-10-09 裁决「拼音保留可继续使用」）。
-     * 键面字 = 点它会切到哪（[jianFanModeKeyLabelOf]，ImeScreen.kt）。
-     */
-    fun toggleTraditional() {
-        val next = if (controller.mode == EngineMode.TRADITIONAL) EngineMode.PINYIN else EngineMode.TRADITIONAL
-        controller.switchLanguage(next, controller.inputScheme)
-    }
 
     /**
      * 把 pending 缓冲**按拼音原样上屏**（2026-10-10 用户裁决，切英文专用）：
@@ -240,6 +226,10 @@ class ImeState(
         controller.clear()
         if (text.isNotEmpty()) commit(text)
     }
+
+    /** 9 键左列「自定义」标点（2026-10-24）：空串 = 未选；发送走宿主直提通道。 */
+    var customPunct by mutableStateOf("")
+        internal set
 
     /**
      * 语言切换（中↔英）：换方案 + 模式，但**不提交、不清**缓冲。
@@ -351,10 +341,11 @@ class ImeState(
      * 引擎是权威，UI 的 [inputMode]/[keyboardModes] 由服务从偏好装载后经
      * [selectInputMode] 推一遍（引擎装载成功才调，见 OpiImeService）。
      */
-    fun restore(inputMode: InputMode, modes: KeyboardModes, skin: SkinOption = SkinOption.FOLLOW, englishPro: Boolean = false) {
+    fun restore(inputMode: InputMode, modes: KeyboardModes, skin: SkinOption = SkinOption.FOLLOW, englishPro: Boolean = false, customPunct: String = "") {
         keyboardModes = modes
         this.skin = skin
         this.englishPro = englishPro
+        this.customPunct = customPunct
         selectInputMode(inputMode)
     }
 

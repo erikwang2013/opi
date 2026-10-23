@@ -22,7 +22,7 @@
 //
 // 本文件装两件东西（都是「数据 + 纯算法」，不碰视图树生命周期）：
 //   1. `InputMode`：九项枚举与它们的引擎映射；
-//   2. `ModeKeyTables` / `ModeKeyRenderer`：各模式的**键位表**与**尺寸算法**。
+//   2. `ModeKeyTables`：各模式的**键位表**（26 键的行在 `ModeKeyTables26.swift`）。
 // 「选中一项后对引擎/键面做什么」在 `InputModeApply.swift`（2026-10-23 拆出：
 // 那部分要加懒加载与合并重建，本文件 499 行顶到了 500 行门禁）。
 // 摆位与触摸接线仍在 `KeyboardLayout.swift`（那是它的本职）。
@@ -113,11 +113,14 @@ enum ModeCell {
     /// 竖排一列（列内等高）。列宽**恒为 1**：Android 的 9 键五列权重都是 1；
     /// 哪天真要变宽再加参数，别提前造旋钮。
     case column([KeySpec])
+    /// 可竖向滚动的一列（2026-10-24）：9 键左标点列有 5 个标点 + 末尾自定义键，
+    /// 一屏放不下 6 格，所以每格固定列高的 1/5、整列可滚。
+    case scrollingColumn([KeySpec])
 
     var widthUnits: CGFloat {
         switch self {
         case .key(let spec): return spec.widthUnits
-        case .column: return 1
+        case .column, .scrollingColumn: return 1
         }
     }
 }
@@ -161,62 +164,20 @@ enum ModeKeyTables {
     /// 且引擎没变」保持画面板，收起面板后底下画的就是 26 键（`RARE.scheme == FULL`）。
     /// 本端同此 —— 收起生僻字面板回到 26 键，而 `inputMode` 仍是 `rare`
     /// （所以菜单里的高亮仍在「生僻字键盘」上，与 Android 的 chip 高亮一致）。
-    static func rows(for mode: InputMode, modeLabel: String) -> [ModeRow] {
+    static func rows(
+        for mode: InputMode, modeLabel: String, customPunctuation: String
+    ) -> [ModeRow] {
         switch mode {
         case .pinyin26, .english26, .shuangpin, .wubi, .rare:
-            return letterRows(modeLabel: modeLabel, english: mode == .english26)
+            return letterRows(english: mode == .english26, wubi: mode == .wubi)
         // 大 9 键与拼音 9 键**同一张表**，只差字号（`big` 是唯一的分叉）。
-        case .pinyin9, .big9: return nineKeyRows(modeLabel: modeLabel, big: mode.big)
-        case .pinyin14: return fourteenKeyRows(modeLabel: modeLabel)
+        case .pinyin9, .big9:
+            return nineKeyRows(
+                modeLabel: modeLabel, big: mode.big, customPunctuation: customPunctuation
+            )
+        case .pinyin14: return fourteenKeyRows()
         case .stroke: return strokeRows(modeLabel: modeLabel)
         }
-    }
-
-    // MARK: 26 键（字母层 / 数字层）
-
-    /// 字母层三行 + 功能行（**从 `KeyboardLayout.swift` 机械搬来**，只把
-    /// `modeLabel` 从实例状态改成入参；行内容一字未改）。
-    ///
-    /// 字母键一律送**小写码点 + states 0**，不自己做大写化：keys.rs 的约定是
-    /// 「大小写由码点携带」是给**物理键盘**的（平台已应用 ⇧）；而软键盘的 ⇧ 走
-    /// `handle_shift` 维护的引擎内状态机，由它决定英文模式的 Input 与拼音
-    /// composer 的大小写。这里若再自己转一次大写，就是第五份大小写逻辑。
-    static func letterRows(modeLabel: String, english: Bool = false) -> [ModeRow] {
-        let top = "qwertyuiop".map { KeySpec.char($0) }
-        let mid = "asdfghjkl".map { KeySpec.char($0) }
-        var bottom: [KeySpec] = [
-            // ⇧：单击/长按的**语义**（Off→Single→Lock）全在 Rust 的 handle_shift，
-            // 这里只把「长按」翻成 stateLongPressed 位。states 不送 KEY_STATE_SHIFT：
-            // handle_shift 不读它。
-            KeySpec("⇧", keyval: OpiKey.shift, widthUnits: 1.4)
-        ]
-        bottom += "zxcvbnm".map { KeySpec.char($0) }
-        bottom.append(
-            KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, longPressRepeatsBackspace: true, widthUnits: 1.4)
-        )
-
-        // 2026-10-23 用户裁决（英文 26 键）：底行在空格前加 `,` `.`，空格变小；
-        // ⌫ 本来就在第三行最右、↵ 在底行，与 Android/Harmony 互换后的布局一致。
-        // 标点走 `.commitText` **直提**，不进引擎 —— 英文模式不该被中文标点表改写。
-        let punctuation: [KeySpec] = english
-            ? [KeySpec(",", function: .commitText(",")), KeySpec(".", function: .commitText("."))]
-            : []
-        let spaceUnits: CGFloat = english ? 2.5 : 5
-        let funcRow: [KeySpec] = [
-            systemInputKey,
-            KeySpec("123", function: .showNumbers),
-            // 键面字 = **点它会切到哪**（2026-10-12 晚裁决，见 KeyboardViewController 的
-            // modeKeyLabel 注释），不是写死的 "中/英"。
-            // 长按 = 打开输入模式面板（2026-10-14）：Android 从工具条进，iOS 没有工具条，
-            // 长按模式键是**同一件事的 iOS 说法**（主流输入法在 iOS 上也是长按中/英出菜单）。
-            KeySpec(modeLabel, function: .cycleMode, longPressFunction: .showModes),
-        ] + punctuation + [
-            KeySpec("空格", keyval: OpiKey.space, fallback: .text(" "), widthUnits: spaceUnits),
-            KeySpec("回车", keyval: OpiKey.ret, fallback: .text("\n"), widthUnits: 1.6),
-        ]
-        return [
-            ModeRow.plain(top), ModeRow.plain(mid), ModeRow.plain(bottom), ModeRow.plain(funcRow),
-        ]
     }
 
     /// 数字/标点层（**最小集合**；从 `KeyboardLayout.swift` 机械搬来）。
@@ -259,41 +220,60 @@ enum ModeKeyTables {
     ///
     /// 左列**空闲时是标点列，输入中换成拼音读数**（2026-10-21 C ABI 新增
     /// `opi_candidate_readings` 后补齐；浮层见 `CandidateColumns.swift`）。
+    /// 2026-10-24：标点列变成**可滚动**的 6 格（5 标点 + 末尾自定义键）——
+    /// 自定义键打开常用符号选择器，选中项落 UserDefaults 并成为键面。
     /// 数字键在 9 键方案下**是输入键**（引擎 Nine 方案收进缓冲），所以不需要数字选词 UI。
-    static func nineKeyRows(modeLabel: String, big: Bool) -> [ModeRow] {
-        // 字号（Android：字母 21sp / 大 30sp；多标点键收一档）。
-        // 数字行/字母行两级：`digitSpec` 的 `lineScales: [0.62, 1]`（2026-10-23）。
+    static func nineKeyRows(
+        modeLabel: String, big: Bool, customPunctuation: String
+    ) -> [ModeRow] {
+        // 字号（Android：字母 21sp / 大 30sp）。
         let letterSize: CGFloat = big ? 30 : 21
 
-        // ---- 左列：标点（主流同款一列）----
+        // ---- 左列：标点 + 自定义键 ----
         // 发送键都取引擎中文标点表（punctuation.rs 的 CHINESE_PUNCT）**已有的键**：
         // `,`→，`.`→。`\`→、`?`→？`!`→！ —— 与 26 键的 `,` 是**同一条路**
         // （不是 UI 直提）。
+        // 整列可滚动：每格的按下都推迟到抬手（`defersPress`），否则拖动滚动会先打出字符。
+        // 末尾自定义格（Android 同）：未选 = 面「自定义」、点开选择器；已选 = 点它直提、
+        // 长按换（选择结果持久化）。符号不是键盘键码，直提走 `.commitText`。
+        let customKey: KeySpec = customPunctuation.isEmpty
+            ? KeySpec("自定义", function: .showPunctuationPicker, fontSize: 20, defersPress: true)
+            : KeySpec(
+                customPunctuation, function: .commitText(customPunctuation),
+                longPressFunction: .showPunctuationPicker, fontSize: 20, defersPress: true
+            )
         let strip = [
-            punctSpec("，", ","),
-            punctSpec("。", "."),
-            punctSpec("、", "\\"),
-            punctSpec("？", "?"),
-            punctSpec("！", "!"),
+            punctSpec("，", ",", defersPress: true),
+            punctSpec("。", ".", defersPress: true),
+            punctSpec("、", "\\", defersPress: true),
+            punctSpec("？", "?", defersPress: true),
+            punctSpec("！", "!", defersPress: true),
+            customKey,
         ]
         // ---- 中间三列 = Android 的 3×3 数字格按**列**取（行主序 → 列）----
         let col1 = [
             // 主区域第一格 = **分词键**（Android 2026-10-15 用户裁决「第一符号按钮
             // 改成分词按钮」）：往引擎缓冲插音节边界（`xi|an`，见 `scheme.rs`
             // `matches_segmented`）。空缓冲由控制器拦住（空缓冲的 `'` 是引号）。
-            KeySpec("分词", function: .segment, fontSize: letterSize * 0.72),
-            digitSpec("4", "ghi", letterSize),
-            digitSpec("7", "pqrs", letterSize),
+            // 2026-10-24 裁决：徽标 = 九宫格格序 1–9（分词格也是 1）；浮层末项 = 该序号
+            // （选中输入该数字），默认选中。大 9 键只隐藏徽标，浮层照旧。
+            KeySpec(
+                "分词", function: .segment, fontSize: letterSize * 0.72,
+                cornerHint: big ? nil : "1",
+                popupItems: [KeyPopupItem("1")]
+            ),
+            digitKey("4", "ghi", letterSize, big: big),
+            digitKey("7", "pqrs", letterSize, big: big),
         ]
         let col2 = [
-            digitSpec("2", "abc", letterSize),
-            digitSpec("5", "jkl", letterSize),
-            digitSpec("8", "tuv", letterSize),
+            digitKey("2", "abc", letterSize, big: big),
+            digitKey("5", "jkl", letterSize, big: big),
+            digitKey("8", "tuv", letterSize, big: big),
         ]
         let col3 = [
-            digitSpec("3", "def", letterSize),
-            digitSpec("6", "mno", letterSize),
-            digitSpec("9", "wxyz", letterSize),
+            digitKey("3", "def", letterSize, big: big),
+            digitKey("6", "mno", letterSize, big: big),
+            digitKey("9", "wxyz", letterSize, big: big),
         ]
         // ---- 右列：⌫ / 重输 / 空格（2026-10-10 Android 用户裁决：从底行搬进右列）----
         let right = [
@@ -305,7 +285,8 @@ enum ModeKeyTables {
         ]
         let main = ModeRow(
             [
-                .column(strip), .column(col1), .column(col2), .column(col3), .column(right),
+                .scrollingColumn(strip), .column(col1), .column(col2), .column(col3),
+                .column(right),
             ],
             heightUnits: 3
         )
@@ -325,27 +306,43 @@ enum ModeKeyTables {
 
     // MARK: 14 键
 
-    /// 拼音 14 键：两字母一键，**发送字母对的第一个字母**（`qw→q`）。
+    /// 拼音 14 键（2026-10-24 按参考图 bb 重排）：两字母一键，**发送字母对首字母**
+    /// （`qw→q`）；前两行头上是数字徽标 1–5 / 6–0，第三行是符号提示（~ ! @ ?）。
     ///
     /// ⚠️ **协议级约束**：发送键必须等于 `scheme.rs` 的 `Scheme::Fourteen.key_class`
     /// 规范符号，键面的两个字母必须**恰好**是那一对（`l`/`m` 是单字母键）。
     /// 改这张表 = 改协议，四端一起改（Android 有 `FourteenKeyLayoutTest` 钉着）。
-    static func fourteenKeyRows(modeLabel: String) -> [ModeRow] {
-        let r1 = [pairSpec("qw"), pairSpec("er"), pairSpec("ty"), pairSpec("ui"), pairSpec("op")]
-        let r2 = [pairSpec("as"), pairSpec("df"), pairSpec("gh"), pairSpec("jk"), pairSpec("l")]
-        let r3 = [pairSpec("zx"), pairSpec("cv"), pairSpec("bn"), pairSpec("m")]
-        // 底行：[🌐][符][中/繁][英文][空格(2)][⌫][↵]（Android 同序；重输是 9 键专属）。
-        // 「英文」是**独立入口**：模式键只切简/繁后，不补这枚英文在本盘就不可达。
+    static func fourteenKeyRows() -> [ModeRow] {
+        let digits = Array("1234567890")
+        let pairs = ["qw", "er", "ty", "ui", "op", "as", "df", "gh", "jk", "l"]
+        let pairRows = (0..<2).map { row in
+            ModeRow.plain((0..<5).map { col in
+                let i = row * 5 + col
+                return fourteenPair(pairs[i], badge: String(digits[i]))
+            })
+        }
+        // 第三行：⇧ / ZX~ / CV! / BN@ / M? / ⌫（参考图 bb；⌫ 从底行搬到这里）。
+        let r3: [KeySpec] = [
+            KeySpec("⇧", keyval: OpiKey.shift, widthUnits: 1.4),
+            fourteenPair("zx", symbol: "~"),
+            fourteenPair("cv", symbol: "!"),
+            fourteenPair("bn", symbol: "@"),
+            fourteenPair("m", symbol: "?"),
+            KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, longPressRepeatsBackspace: true, widthUnits: 1.4),
+        ]
+        // 底行（参考图 bb）：符 123 , 空格 。 中英 换行；🌐 是 iOS 的系统切换入口，保留。
+        // 模式键走三态循环（本盘没有独立英文键，否则英文不可达）。
         let funcRow: [KeySpec] = [
             systemInputKey,
             KeySpec("符", function: .showSymbols),
-            KeySpec(modeLabel, function: .toggleTraditional, longPressFunction: .showModes),
-            KeySpec("英文", function: .selectInputMode(.english26)),
-            KeySpec("空格", keyval: OpiKey.space, fallback: .text(" "), widthUnits: 2),
-            KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, longPressRepeatsBackspace: true),
-            KeySpec("↵", keyval: OpiKey.ret, fallback: .text("\n")),
+            KeySpec("123", function: .showNumbers),
+            punctSpec("，", ","),
+            KeySpec("空格", keyval: OpiKey.space, fallback: .text(" "), widthUnits: 3),
+            punctSpec("。", "."),
+            KeySpec("中英", function: .cycleMode, longPressFunction: .showModes),
+            KeySpec("换行", keyval: OpiKey.ret, fallback: .text("\n"), widthUnits: 1.4),
         ]
-        return [ModeRow.plain(r1), ModeRow.plain(r2), ModeRow.plain(r3), ModeRow.plain(funcRow)]
+        return pairRows + [ModeRow.plain(r3), ModeRow.plain(funcRow)]
     }
 
     // MARK: 笔画
@@ -388,24 +385,27 @@ enum ModeKeyTables {
     /// 发下去的是另一个键 —— 而引擎的标点表收的入键是 ASCII 的 `,`。
     /// 兜底文本取**发送键**（不是键面）：英文模式下引擎不管标点，插进去的就是 `,`
     /// （Android 同：onKey 送 key，直通时插 key）。
-    private static func punctSpec(_ label: String, _ send: String, fontSize: CGFloat = 20) -> KeySpec {
+    static func punctSpec(
+        _ label: String, _ send: String, fontSize: CGFloat = 20, defersPress: Bool = false
+    ) -> KeySpec {
         let kv = send.unicodeScalars.first.map { OpiKey.printable($0) } ?? 0
-        return KeySpec(label, keyval: kv, fallback: .text(send), fontSize: fontSize)
+        return KeySpec(label, keyval: kv, fallback: .text(send), fontSize: fontSize,
+                       defersPress: defersPress)
     }
 
-    /// 9 键数字键：键面「2 / abc」两行（数字在上、字母组在下 —— Android 2026-10-09
-    /// 用户裁决「字母为主、数字缩小到下面」，2026-10-23 起用 `lineScales` 落成
-    /// 数字 0.62 / 字母 1 的两级字号），发送数字本身。
-    private static func digitSpec(_ digit: String, _ hint: String, _ size: CGFloat) -> KeySpec {
+    /// 9 键数字键（2026-10-24）：键面**字母为主、数字右上角**（参考图 a1），发送数字本身。
+    ///
+    /// `big`（大 9 键）**不画数字徽标**，但浮层里仍保留数字条目 —— 大键面只是放大，
+    /// 不该把「长按出数字」这条能力一起藏掉。
+    /// 浮层条目 = 该键字母逐个（字号递减）+ **格序数字**最后，默认格序数字。
+    private static func digitKey(
+        _ digit: String, _ letters: String, _ size: CGFloat, big: Bool
+    ) -> KeySpec {
         let kv = digit.unicodeScalars.first.map { OpiKey.printable($0) } ?? 0
-        return KeySpec("\(digit)\n\(hint)", keyval: kv, fallback: .text(digit),
-                       fontSize: size, lineScales: [0.62, 1])
-    }
-
-    /// 14 键两字母键：键面两个字母，发送**首个**字母。
-    private static func pairSpec(_ pair: String) -> KeySpec {
-        let kv = pair.unicodeScalars.first.map { OpiKey.printable($0) } ?? 0
-        return KeySpec(pair, keyval: kv, fallback: .text(pair), fontSize: 22)
+        let items = Array(letters).map { KeyPopupItem(String($0)) } + [KeyPopupItem(digit)]
+        return KeySpec(letters, keyval: kv, fallback: .text(digit),
+                       fontSize: size, cornerHint: big ? nil : digit,
+                       popupItems: items, popupDefaultIndex: items.count - 1)
     }
 
     /// 笔画键：键面「一 / 横」，发送 `h` 等字母。字形大、名称小（同 Android 两级）。

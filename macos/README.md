@@ -52,9 +52,11 @@
 | `OpiEmojiPanel.swift` / `OpiEmojiData.swift` | 表情 / 颜文字 / 贴纸面板与随包 TSV 装载；贴纸走剪贴板（PNG+GIF） |
 | `OpiTheme.swift` | 12 款皮肤、暗光/长辈、状态栏几何、自绘按钮与共用视图 |
 | `OpiSettings.swift` | 设置项/词库/双拼布局/五笔旋钮/用户词的引擎读写面 + UserDefaults 落盘 |
-| `OpiSettingsWindow.swift` | 设置窗外壳（8 页导航 + 滚动内容区 + 通用控件） |
+| `OpiSettingsWindow.swift` | 设置窗外壳（页导航 + 滚动内容区 + 通用控件） |
 | `OpiSettingsPages.swift` | 常用 / 按键 / 外观 / 状态栏 / 符号与表情页 |
 | `OpiSettingsDicts.swift` | 词库 / 五笔 / 关于页 |
+| `OpiSettingsPhrases.swift` | 高级页：中英两套自定义短语列表 / 增删改 / 导入导出 |
+| `OpiCustomPhrases.swift` | 自定义短语的宿主文件（中文 `custom_phrases.json` / 英文 `custom_phrases_en.json`）与编解码 |
 | `OpiUpdateCheck.swift` | 新版本检测：`version.json`、4s 超时、语义化比较、自动/手动检测与下载入口 |
 | `main.swift` | `IMKServer` 启动（无 nib） |
 | `Info.plist` | 输入法组件声明 |
@@ -623,10 +625,10 @@ NSMenuItem 直接用，字典则按 `kIMKCommandMenuItemName` 取项。**哪条�
   提交 `\n`，不会触发宿主默认按钮。系统候选窗（`IMKCandidates`）不接受皮肤/字号，
   所以外观页的皮肤只作用于 OPI 自绘面板。
 
-### 属性设置 / 词库（2026-10-20 起；2026-10-21 扩到 8 页，未编译、未上机）
+### 属性设置 / 词库（2026-10-20 起；2026-10-21 扩到 8 页；2026-10-24 加「高级」页 = 9 页，未编译、未上机）
 
 `OpiSettings.swift` 只做 Swift 值 ↔ C ABI 转发；默认值、越界钳制、模糊音名表都仍由
-Rust 侧决定。设置窗拆成三个文件（外壳 + 两批页面），每文件 <500 行。页签顺序与
+Rust 侧决定。设置窗拆成四个文件（外壳 + 三批页面），每文件 <500 行。页签顺序与
 Linux 同一份：
 
 | 页 | 内容 | 落盘键（UserDefaults，逐字沿用 Linux） |
@@ -638,12 +640,19 @@ Linux 同一份：
 | 符号与表情 | 类目/表情计数、打开两个面板、`ShowOwn` 贴纸页开关 | `ShowOwn` |
 | 词库 | 系统词典状态、导入 `.tsv`、启停/删除导入层；用户词导出/导入/清空/删单词 | `DisabledDicts`（逗号分隔；空 = 全启用） |
 | 五笔 | 风格、混入方式、候选个数、回车行为、唯一候选自动上屏、切到五笔 | `WubiStyle` `WubiMixedEntry` `WubiCandidateLimit` `WubiReturn` `WubiAutoCommit` |
+| 高级 | 自定义短语：中文/英文两套页内切换，各自启用开关、总数、每页 10 条、增删改、JSON/TSV/CSV/`字母=短语` 导入导出 | 中文 `~/Library/Application Support/opi/custom_phrases.json`、英文 `custom_phrases_en.json`（均含 `enabled`；引擎只收 `version`+`phrases`） |
 | 关于 | 版本、更新检测（打开设置自动一次 + 「检测更新」；新版本显示「发现新版本 vX（当前 vY）」与「前往下载」）、未签名提示、主页/项目/博客外链、对照与限制摘要 | — |
 
 * 启动顺序（`main.swift`）：`opi_load` → 可选 `trad.opid` → 可选 `stroke.opid` /
-  `wubi86.opid` → `applyPersisted()` → 重放 `dicts/*.tsv`（按停用名单关层）。
+  `wubi86.opid` → `applyPersisted()` → 重放 `dicts/*.tsv`（按停用名单关层）→
+  重推 `custom_phrases.json` 与 `custom_phrases_en.json`（中英两套）。
   导入是**复制**到 `~/Library/Application Support/opi/dicts/`，同名自动 `-2` 后缀，
   不覆盖；删除会同时删目录里的文件（有确认框）。
+* 自定义短语的真源是宿主文件（引擎只持内存、整表替换）。中英两套文件、开关、
+  引擎表完全独立：中文套只在中文键盘（拼音/九键/十四键）匹配，英文套只在英文
+  键盘匹配。设置窗与输入法**同进程**，所以设置页保存后立即推引擎、下一次按键即
+  生效，不需要重启输入法；进程重启时 `main.swift` 重推两套。文件坏/缺失按空表
+  处理（不删坏文件，下次保存原子覆盖）。
 * 模糊音逐对勾选会写 `FuzzyPairs` 并覆盖总开关；勾总开关会清掉 `FuzzyPairs`，
   与 Linux「空 = 回落布尔」的合同一致。
 * 只在代码层成立、未上机验证的差异：系统候选窗 `IMKCandidates` 不接受皮肤/字号，
@@ -669,7 +678,7 @@ Linux 同一份：
 | ENPRO（englishpro） | **不可用**：C ABI 与 IMK 都没有控制面 | 按钮照位置显示但禁用、tooltip 说明；设置里可隐藏 |
 | 皮肤 12 款 | `OpiTheme.swift` 逐值镜像 Linux 色板 | 只作用于 OPI 自绘面板（状态栏/键盘/表情）；系统候选窗不换肤 |
 | 暗光 / 长辈 | `DarkMode` / `ElderMode`（Android/Harmony 同源） | 已写；Linux 无此两项 |
-| 设置窗 8 页 | `OpiSettingsWindow` + `OpiSettingsPages` + `OpiSettingsDicts` | 常用/按键/外观/状态栏/符号与表情/词库/五笔/关于 |
+| 设置窗 9 页 | `OpiSettingsWindow` + `OpiSettingsPages` + `OpiSettingsDicts` + `OpiSettingsPhrases` | 常用/按键/外观/状态栏/符号与表情/词库/五笔/高级（中英自定义短语）/关于 |
 | 更新检测 | `OpiUpdateCheck.swift`：`https://opi.erik.xyz/version.json`，4s 超时，数字段语义比较；自动失败静默，手动才显示原因 | 已写；未上机。线上 `version.json` 需随站点部署，未部署时自动检测保持上次结论 |
 | 符号页 22 类、12×6、搜索 | `OpiSymbolPanel.swift`（2026-10-20 已有） | 已由 CI 编过；未上机 |
 | 表情/颜文字/贴纸 | `OpiEmojiPanel.swift` + `OpiEmojiData.swift`，12×6 / 6×6 / 4×3，中文分组与搜索 | 已写；贴纸写剪贴板（PNG+GIF），不注入 ⌘V |

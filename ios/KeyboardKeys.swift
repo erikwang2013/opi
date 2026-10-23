@@ -94,6 +94,10 @@ enum KeyboardFunctionKey {
     /// 9 键主区第一格的「分词」键：缓冲非空时发送 `'`（音节边界）。
     /// 空缓冲由控制器拦住 —— 空缓冲的 `'` 在引擎里是引号，不是分词符。
     case segment
+    /// 9 键左标点列末尾的自定义键：打开常用符号选择器（2026-10-24）。
+    /// 选中后由选择器调 `KeyboardLayout.setCustomPunctuation` 落盘；已选状态下
+    /// 短按走 `.commitText` 直提、长按才回到这里换一个。
+    case showPunctuationPicker
     /// 皮肤面板选中一项。
     case selectSkin(SkinOption)
     /// 键盘模式面板改了开关（单手/暗光/长辈）。
@@ -146,6 +150,18 @@ enum KeyboardFunctionKey {
     case clearUserWords
 }
 
+/// 浮层里的一格：`label` 是画出来的字，`value` 是提交值。
+/// 两者分开是因为 14 键的键面是**字母对**（`ZX`），提交的却是协议首字母（`Z`）。
+struct KeyPopupItem {
+    let label: String
+    let value: String
+
+    init(_ label: String, value: String? = nil) {
+        self.label = label
+        self.value = value ?? label
+    }
+}
+
 /// 键盘布局上的一个键。
 struct KeySpec {
     /// 显示文字。
@@ -180,11 +196,28 @@ struct KeySpec {
     let widthUnits: CGFloat
     /// 键面字号（第一行基准）。
     let fontSize: CGFloat
-    /// 两行键的**逐行字号倍数**（2026-10-23）：`[0.62, 1]` = 数字小、字母大；
+    /// 两行键的**逐行字号倍数**（2026-10-23）：`[0.62, 1]` = 提示小、字母大；
     /// `[1, 0.62]` = 笔画字形大、名称小。单行键保持 `[1]`。
     /// 为什么需要：UIButton 的 `titleLabel.font` 对多行只有一个字号，
-    /// 而 9 键要的是 Android 的「数字 12sp / 字母 21sp」两级。
+    /// 而 26 键提示 / 笔画键要的是 Android 的两级字号。
     let lineScales: [CGFloat]
+    /// 键面右上角的数字徽标（2026-10-24）：9 键九宫格格序（1–9，含分词格）、
+    /// 拼音 26 键 Q–P 的 1–0。
+    /// nil = 不画（大 9 键、英文 26 键）。与 `lineScales` 的两行字是两种画法。
+    let cornerHint: String?
+    /// 长按/上滑浮层的条目（2026-10-24）。空 = 这个键没有浮层。
+    /// 条目在浮层里按**声明次序**字号递减；选中项的 `value` 走**普通按键**
+    /// （press + release 进引擎），不是字面直提 —— 9 键字母要进 T9 缓冲、
+    /// 26 键大写要由引擎折大小写。默认项见 `popupDefaultIndex`。
+    let popupItems: [KeyPopupItem]
+    /// 浮层初选下标（空白键默认落点）：9 键 = 数字（末项），26 键 = 符号（中项）。
+    let popupDefaultIndex: Int
+    /// 按下事件**推迟到抬手**（2026-10-24，可滚动列专用）。
+    ///
+    /// 可滚动列里的键若按下即上报，想拖动滚动时手指落点的那个键会先打出一个字符。
+    /// 推迟后由 `UIScrollView` 的滚动接管（内容触摸被取消，抬手也不再补发）；
+    /// 只有真正的点击（touchUpInside）才发键事件。
+    let defersPress: Bool
 
     init(
         _ label: String,
@@ -196,7 +229,11 @@ struct KeySpec {
         longPressRepeatsBackspace: Bool = false,
         widthUnits: CGFloat = 1,
         fontSize: CGFloat = 20,
-        lineScales: [CGFloat] = [1]
+        lineScales: [CGFloat] = [1],
+        cornerHint: String? = nil,
+        popupItems: [KeyPopupItem] = [],
+        popupDefaultIndex: Int = 0,
+        defersPress: Bool = false
     ) {
         self.label = label
         self.keyval = keyval
@@ -208,6 +245,10 @@ struct KeySpec {
         self.widthUnits = widthUnits
         self.fontSize = fontSize
         self.lineScales = lineScales
+        self.cornerHint = cornerHint
+        self.popupItems = popupItems
+        self.popupDefaultIndex = popupDefaultIndex
+        self.defersPress = defersPress
     }
 
     /// 可打印字符键的便捷构造：keyval = 码点，兜底 = 插入该字符。
@@ -227,10 +268,23 @@ final class KeyButton: UIButton {
     let spec: KeySpec
     /// ⇧ 专用：长按（Lock）是否已触发 —— 避免「长按后又补一次 tap」。
     var longPressFired = false
+    /// 浮层专用：本次触摸是否已被长按/上滑浮层接管 —— 抬手时不再补发普通按键。
+    var popupUsed = false
+    /// 右上角数字徽标（9 键 / 拼音 26 键 Q–P）；无徽标的键不加入视图树。
+    private let badgeLabel = UILabel()
 
     init(spec: KeySpec) {
         self.spec = spec
         super.init(frame: .zero)
+        if spec.cornerHint != nil {
+            badgeLabel.isAccessibilityElement = false
+            badgeLabel.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(badgeLabel)
+            NSLayoutConstraint.activate([
+                badgeLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+                badgeLabel.topAnchor.constraint(equalTo: topAnchor, constant: 2),
+            ])
+        }
         // ⚠️ 未编译：系统配色 API 按记忆写的，Mac 上确认语义色名与深色模式表现。
         applyTitle(.label, fontScale: 1)
         backgroundColor = .secondarySystemBackground
@@ -253,7 +307,10 @@ final class KeyButton: UIButton {
     /// 也不生效）；单行键走普通 title + 缩字兜底，窄键不裁字。
     private func applyTitle(_ color: UIColor, fontScale: CGFloat) {
         let base = spec.fontSize * fontScale
-        // 键面文本**可以换行**：9 键的 `"2\nabc"`、笔画键的 `"一\n横"` 都是两行。
+        badgeLabel.text = spec.cornerHint
+        badgeLabel.textColor = color
+        badgeLabel.font = .systemFont(ofSize: max(9, 12 * fontScale))
+        // 键面文本**可以换行**：笔画键 `"一\n横"`、26 键提示 `"~\nA"` 都是两行。
         titleLabel?.numberOfLines = 0
         titleLabel?.textAlignment = .center
         let lines = spec.label.components(separatedBy: "\n")

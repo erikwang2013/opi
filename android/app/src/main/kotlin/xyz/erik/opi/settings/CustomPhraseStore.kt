@@ -11,6 +11,7 @@ import java.io.FileOutputStream
 /**
  * 自定义短语的**宿主真源**（2026-10-23）：启用开关 + 整张短语表落在
  * `filesDir/opi_custom_phrases.json`（[FILE_NAME]），进程重启后由宿主装回引擎。
+ * 英文套（2026-10-24）同构但**完全独立**：独立文件 [FILE_NAME_EN] + 独立 JNI 口。
  *
  * 为什么真源在宿主而不是引擎：引擎侧 `setCustomPhrases` 收整表 JSON、内存态、不落盘；
  * 输入法与设置页共享同一个 Rust 单例，但进程会被系统杀。宿主不存 = 用户配的短语每次
@@ -38,11 +39,22 @@ class CustomPhraseStore(
         /** filesDir 下的短语文件名（与 luna.opid / 用户词同目录）。 */
         const val FILE_NAME = "opi_custom_phrases.json"
 
+        /** 英文套文件（2026-10-24）：与中文套互不覆盖。 */
+        const val FILE_NAME_EN = "opi_custom_phrases_en.json"
+
         fun from(context: Context): CustomPhraseStore = CustomPhraseStore(
             file = File(context.filesDir, FILE_NAME),
             pushPhrases = { OpiEngine.setCustomPhrases(it) },
             pushEnabled = { OpiEngine.setCustomPhrasesEnabled(it) },
             readEnabled = { OpiEngine.customPhrasesEnabled() },
+        )
+
+        /** 英文套：新文件 + 新 JNI 口（引擎侧只在英文键盘匹配，开关与表都独立）。 */
+        fun englishFrom(context: Context): CustomPhraseStore = CustomPhraseStore(
+            file = File(context.filesDir, FILE_NAME_EN),
+            pushPhrases = { OpiEngine.setEnglishCustomPhrases(it) },
+            pushEnabled = { OpiEngine.setEnglishCustomPhrasesEnabled(it) },
+            readEnabled = { OpiEngine.englishCustomPhrasesEnabled() },
         )
     }
 

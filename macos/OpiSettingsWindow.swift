@@ -5,8 +5,9 @@
 //
 // OpiSettingsWindow.swift —— 设置窗外壳（Linux SettingsWindow.kt 的 macOS 等价物）。
 //
-// 页签顺序对齐 Linux：常用 / 按键 / 外观 / 状态栏 / 符号与表情 / 词库 / 五笔 / 关于。
-// 页面构建在 OpiSettingsPages.swift 与 OpiSettingsDicts.swift（每文件 <500 行）。
+// 页签顺序对齐 Linux：常用 / 按键 / 外观 / 状态栏 / 符号与表情 / 词库 / 五笔 / 高级 / 关于。
+// 页面构建在 OpiSettingsPages.swift / OpiSettingsDicts.swift / OpiSettingsPhrases.swift
+// （每文件 <500 行）。「高级」页是自定义短语（中文/英文两套独立）。
 //
 // 开关的**默认值不在这里**：初值一律读引擎（Rust 侧 `RankOptions::default()` 是
 // 真源），只有用户改过才写 UserDefaults（键名沿用 Linux 配置键）。
@@ -20,7 +21,7 @@ import UniformTypeIdentifiers
 
 final class OpiSettingsWindow: NSObject {
     enum Page: Int, CaseIterable {
-        case common, keys, appearance, statusbar, symbols, dicts, wubi, about
+        case common, keys, appearance, statusbar, symbols, dicts, wubi, advanced, about
 
         var title: String {
             switch self {
@@ -31,6 +32,7 @@ final class OpiSettingsWindow: NSObject {
             case .symbols: return "符号与表情"
             case .dicts: return "词库"
             case .wubi: return "五笔"
+            case .advanced: return "高级"
             case .about: return "关于"
             }
         }
@@ -48,6 +50,11 @@ final class OpiSettingsWindow: NSObject {
     var page: Page = .common
     var dictEntries: [OpiDictEntry] = []
     var userWordField: NSTextField?
+    // 「高级」页 / 自定义短语（OpiSettingsPhrases.swift）。中英两套独立，页内切换。
+    var phraseKind: OpiCustomPhraseKind = .chinese
+    var phraseState = OpiCustomPhraseState()
+    var phrasePage = 0
+    var phraseExportFormat = 0
     // 「关于」页的更新检测控件（异步结果回来时就地改字，不重建整页）。
     var aboutUpdateLabel: NSTextField?
     var aboutDownloadButton: NSButton?
@@ -131,6 +138,7 @@ final class OpiSettingsWindow: NSObject {
         case .symbols: buildSymbols()
         case .dicts: buildDicts()
         case .wubi: buildWubi()
+        case .advanced: buildAdvanced()
         case .about: buildAbout()
         }
         if let scroll, let host {

@@ -167,6 +167,18 @@ extension OpiEngine {
         withUTF16(json) { opi_set_custom_phrases($0, $1) }
     }
 
+    // 英文自定义短语（2026-10-24）：与中文套同 schema/语义，表与开关完全独立，
+    // 只在英文键盘匹配。
+    var englishCustomPhrasesEnabled: Bool {
+        get { opi_english_custom_phrases_enabled() }
+        set { opi_set_english_custom_phrases_enabled(newValue) }
+    }
+    func exportEnglishCustomPhrases() -> String { take(opi_export_english_custom_phrases()) }
+    @discardableResult
+    func setEnglishCustomPhrases(json: String) -> Int32 {
+        withUTF16(json) { opi_set_english_custom_phrases($0, $1) }
+    }
+
     // 导入词库（M3）。系统词典不接受启停，判据看 `OpiDictEntry.system`。
     func dictList() -> [OpiDictEntry] {
         let raw = take(opi_dict_list())

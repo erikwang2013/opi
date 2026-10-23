@@ -47,6 +47,12 @@ export const selectPage: (index: number) => string;
 /** JSON 文本数组：**当前页**候选。未装载 → `[]`。 */
 export const candidatesPage: () => string;
 
+/** JSON 文本数组：候选拼音读数（去重、短→长）。**先调 candidatesPage** 再读。 */
+export const candidateReadings: () => string;
+
+/** 钉住一条读音（候选收窄到恰等；空串 = 解除）。只改过滤、不上屏，同一缓冲内有效。 */
+export const pinReading: (reading: string) => void;
+
 /** JSON 文本数组：**全量前 limit 条**（平铺视图用 64，同 Android fetchLimit）。 */
 export const candidates: (limit: number) => string;
 

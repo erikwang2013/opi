@@ -1242,6 +1242,31 @@ Shift 三拍查它）；**外观**页的皮肤由候选窗/状态栏 1s 轮询�
 `candidateFontScale` 缩放（不再走 fcitx5 classicui）。页面集合仍是纯函数
 `settingsTabs`，单测钉住两平台相同。
 
+**自定义短语（2026-10-24，设置窗「高级」页）**：`custom_phrases.json`（中文套）与
+`custom_phrases_en.json`（英文套）在 `%LOCALAPPDATA%\opi\`（与 `settings.ini`、词库目录
+同处，由 `dict_path.rs` 的数据目录推导；设置窗侧路径在
+`desktop/src/main/kotlin/xyz/erik/opi/candidate/CustomPhraseStore.kt`）。两套**完全独立**：
+各自开关、各自表、各自文件；schema =
+`{"version":1,"enabled":true,"phrases":[{"trigger":"dz","text":"地址"}]}`，宿主文件是
+唯一真源（引擎只持内存）。「高级」页并列两个 `CustomPhrasesPage(english = false/true)`：
+列表 10 条/页、显示总数、增删改；导入 JSON / TSV / CSV / `字母=短语` / `字母 空白 短语`，
+**任何一条非法 ⇒ 整份拒收**；导出 JSON / TSV；读文件上限 1 MiB。上限 **2000 条**、
+trigger **≤32 个 ASCII 字母**（`CustomPhraseCodec` 与 `engine-core/src/custom_phrases.rs`
+同值）。
+
+- **装载时机**：TSF 在**启动**（`crates/tsf-opi/src/com_server.rs`）、**Activate**
+  （`tsf.rs`，候选进程不在时的兜底）、**控制面 reload**（`ctl.rs` 的 `CtlOp::Reload`，
+  设置窗保存时）三处各自读两套文件并推引擎（`custom_phrases::load` / `load_english`
+  + `apply_custom_phrases` / `apply_english_custom_phrases`）。fcitx5 只有配置冷路径
+  （见 `linux.md` §4.6）。
+- **匹配**：中文套只在 `Mode::Pinyin`/`Traditional` 且方案 Full/Nine/Fourteen 时匹配
+  （桌面实际只有 Full）；英文套只在 `Mode::English` 匹配；均要求**精确整串**（去 `'`，
+  英文大小写不敏感），命中项前插候选。
+- **普通英文的缓冲判据（2026-10-24）**：`logic_input_method.rs` 的 `Mode::English`
+  分支在 `!english_pro() && !english_custom_phrases_active()` 时逐字直出；**英文短语
+  开关开且表非空** ⇒ 字母进缓冲、候选窗出短语，空格提交首候选。表空或开关关 ⇒ 恢复
+  直出。携带缓冲（中→英保留的拼音）仍直传。
+
 **新版本提示与检测更新（2026-10-22 用户裁决）**：打开设置窗自动检测一次，发现新版本
 在右栏顶部显示「发现新版本 vX → 前往下载」横幅（可关闭）；「关于」页常驻当前版本与
 「检测更新」按钮。数据源首选 `https://opi.erik.xyz/version.json`（发版时更新），读不到

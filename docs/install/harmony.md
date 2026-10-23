@@ -772,6 +772,41 @@ comm -23 \
 **别把这份清单手抄进文档**（手抄的会被当成「工作项」，而且一扩容就假）——
 `harmony/README.md` 实测记录 §5 就是为这件事把清单换成命令的。
 
+### 6.5 键盘版式（2026-10-24 参考图改版，源码层）
+
+与 Android / iOS 同一套参考图（Android 落点见 `android.md` §4.5b、iOS 见 `ios.md` §6.5）。
+**这轮改动还在工作区、没有提交 ⇒ 没有被编译过；本机这轮也没跑 §1.1 的 ArkTS 解析器，
+更没有真机。以下全是源码核对。** 协议值不变：普通点击仍发原来的 T9 数字 / 14 键首字母 /
+26 键字母码点（大写在 `QwertyPad.tapChar` 一侧由引擎折算）。
+
+- **9 键**（`KeyPanels.ets`）：主区 `NINE_ROWS` 3×3（第一格分词键，发 `'`），每格右上角
+  序号按格序 1–9（`corner: rowIndex * 3 + colIndex + 1`，分词格 = 1）；长按/上滑
+  `nineChoices` = 字母（字号递减）+ **末尾数字**，`defaultChoice = k.hint.length`
+  （末项默认选中）。**大 9 键 `corner: ''`**，弹层照旧。
+- **9 键左列**：`NINE_STRIP` 16 枚标点放进 `Scroll`（竖向、可滚动）；末格「自定义」——
+  未选时点开 `SymbolPicker.ets` 的 `CustomSymbolPicker`，已选后点按发送、长按更换，
+  值经 `SettingsStore.saveCustomPunc` 落 Preferences（`KeyPanels.custom`）。
+- **14 键**（`KeyPanels.ets`）：`FOURTEEN_ROWS` = `qw er ty ui op` / `as df gh jk l` /
+  `⇧ zx cv bn m ⌫`；前两行数字提示 1–5 / 6–0，第三行符号提示 ~ ! @ ?（`fourteenSymbol`）；
+  弹层只在第三行四枚字母键（`fourteenChoices`）：`[大写对, 符号, 小写对]`、
+  `defaultChoice = 1`。底行 `符 123 , 空格 。 中英 换行`。
+- **26 键**（`QwertyPad.ets`）：拼音 26 无数字行、键面大写、Q–P 右上角 1–0
+  （`cornerFor`）；英文 26 有 0–9 数字行（`NumberRow`）、键面小写。字母弹层
+  `[大写, 符号(拼音 Q 行是数字), 小写]`，`defaultChoice = 1`。**五笔**：第三行最左
+  「拼」（`selectInputMode(MODE_PINYIN26)`，走输入模式状态机，不是只改 UI）、空格键面
+  「五笔」（动作仍是空格）。
+- **9 键读数（2026-10-24 修复）**：`TopBar.ets` 的 `composingText()` 在
+  `displayBuffer` 为空且当前方案是 9 键时取 `readings[0]` 兜底，仍空则留空 —— 绝不再
+  回退数字缓冲（`hou` → `468` 的成因）。⚠️ 这里同时**订正 §7 末段 2026-10-20 的
+  「9 键左列没有 Android 的候选拼音读数（C ABI 无该出口）」**：`opi_candidate_readings`
+  已进桥（`napi_bridge.c` 的 `JsCandidateReadings`），左列输入时就是 `ReadingColumn`。
+- ⚠️ **§6.3 第 2 条「候选栏出现『1. 你』」的序号已不存在**：`TopBar.ets` 的候选栏
+  不画序号（与 Android 2026-10-17 裁决一致），真机冒烟只要看到「你」即可 —— 那是旧版
+  冒烟文案，别拿序号当判据。
+
+**未验**：键位手感、弹层方向与裁切、左列滚动/选择器、`拼` 键与「五笔」键面在真机上的
+表现；§8 的未验证结论不变。
+
 ---
 
 ## 7. 已知限制（诚实清单）
@@ -793,6 +828,11 @@ comm -23 \
 | G10 | **空缓冲下 ↵ 是死键** | 引擎返回 PassThrough（「这个回车归应用」），而 `handlePassThrough` 只接退格/Delete 与可打印段 ⇒ 什么都不发生。修它要 IME Kit 的「把按键交给应用」接口，**那个接口叫什么本机查不到**，所以只把缺口写在 `tapEnter` 的注释里，**没有凭记忆补一个 API 名**。 |
 | G12 | **全角/符号开关：能力到了桥，UI 没接** | `OpiEngine.toggleFullwidth()` / `fullwidthState()` / `toggleSymbol()` **从 ArkTS 可以调到**，但没有任何键绑 `toggleSymbol()`，`publish()` 推的七样里也**没有 fullwidth** ⇒ 用户看不出状态变了。做的时候回到 `opi_ffi.h` 里那四条契约，**特别是第 1 条**（只有 `opi_switch_mode` 与 `opi_toggle_symbol` 会改全角，后者最易漏）。 |
 | G13 | **无中文标点开关** | 中文标点表**默认开**，所以 `，` `。` 照常出得来（与 G3 说的「缺能提交符号的 UI」**不是同一件事**）；缺的是**关掉它 / 读它** —— 用户没有任何入口切回半角 ASCII。 |
+
+**2026-10-24 新增（未编号，编号真源仍是 `harmony/README.md`）：没有自定义短语 UI。**
+引擎与 C ABI 有中英两套自定义短语出口，但 `harmony/entry/src/main/cpp/napi_bridge.c`
+与 `OpiEngine.ets` 里**没有任何 `*custom_phrase*` 名字**，设置面板也没有入口 ⇒ 用户配不了，
+也没有宿主文件可装。别把 Android / macOS 的「高级 → 自定义短语」读成鸿蒙也有。
 
 > **2026-10-20 对齐轮新增的差异**（平台取舍或未验证项，不是缺陷）：
 > 候选栏只有 `‹ ›` 翻页，**没有** Android 的平铺候选（C ABI 没有「取全部候选」出口）；

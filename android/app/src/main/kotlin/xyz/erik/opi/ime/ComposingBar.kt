@@ -74,25 +74,13 @@ internal fun composingRowActive(
  * 读屏只在「节点自身」语义变化时播报（Compose issue 225780131），故 contentDescription
  * 与 liveRegion 必须在同一块里给。
  */
-/**
- * 拼音行实际显示什么：引擎显示串优先；9 键整段无匹时显示串为空（引擎不把数字当
- * 拼音），此时回退**原按键序列**（数字键串），用次要色画 —— 行不能空白，否则用户
- * 看到的就是「拼音被隐藏」（2026-10-23 用户反馈）。
- * 这不是假拼音：T9 一位多字母，凭键位猜读音会骗人；回退只展示用户实际按下的键。
- */
-internal fun composingRowText(display: String, buffer: String): String =
-    display.ifEmpty { buffer }
-
-/** 当前显示的是不是「无匹回退」的原按键序列（决定用次要色）。 */
-internal fun composingRowIsFallback(display: String, buffer: String): Boolean =
-    display.isEmpty() && buffer.isNotEmpty()
-
 @Composable
 fun ComposingBar(controller: EngineController, modifier: Modifier = Modifier) {
     val p = LocalKeyboardPalette.current
     val display = controller.composingText()
-    val shown = composingRowText(display, controller.buffer)
-    val fallback = composingRowIsFallback(display, controller.buffer)
+    // 9 键读数空时**不再回退数字缓冲**（2026-10-24 用户报障：hou 显示成 468）；
+    // 引擎已经用候选读音兜底，仍为空就留空行，反馈交给候选栏「无匹配」。
+    val shown = display
     val hint = controller.wubiHint
     // 拼音/编码可能比屏幕宽：不省略，横向滑动看完整串（2026-10-23 用户裁决）。
     // 每次内容变化自动滚到最右端，最新输入的尾巴始终可见；用户仍可拖回前面。
@@ -121,11 +109,7 @@ fun ComposingBar(controller: EngineController, modifier: Modifier = Modifier) {
                     contentDescription = composingAnnouncement(
                         shown,
                         controller.candidates.size,
-                        label = when {
-                            controller.inputScheme == InputScheme.WUBI -> "编码"
-                            fallback -> "按键"
-                            else -> "拼音"
-                        },
+                        label = if (controller.inputScheme == InputScheme.WUBI) "编码" else "拼音",
                     ) + if (hint.isNotEmpty()) {
                         "编码提示 ${hint.toCharArray().joinToString(" ")}"
                     } else {
@@ -134,7 +118,7 @@ fun ComposingBar(controller: EngineController, modifier: Modifier = Modifier) {
                     liveRegion = LiveRegionMode.Polite
                 },
                 fontSize = 18.sp,
-                color = if (fallback) p.barDimFg else p.barBufferFg,
+                color = p.barBufferFg,
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Clip,

@@ -70,8 +70,11 @@ impl TsfLogic {
             }
             Mode::English => {
                 // 携带缓冲（中→英保留的拼音）与普通英文都直传；专业模式按下面的
-                // 前缀联想分流。
-                if self.engine.buffer_is_carried() || !self.english_pro() {
+                // 前缀联想分流。英文短语可命中时也走缓冲（2026-10-24，见
+                // `english_phrases_active`）。
+                if self.engine.buffer_is_carried()
+                    || (!self.english_pro() && !self.english_phrases_active())
+                {
                     return true;
                 }
                 if c.is_ascii_alphabetic() {

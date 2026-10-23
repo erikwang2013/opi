@@ -214,16 +214,16 @@ static napi_value JsSelectPage(napi_env env, napi_callback_info info) {
 }
 
 /// candidatesPage(): string —— JSON 文本数组（**当前页**）。未装载 → `[]`。
-static napi_value JsCandidatesPage(napi_env env, napi_callback_info info) {
-    (void)info;
-    return take_string(env, opi_candidates_page());
-}
+static napi_value JsCandidatesPage(napi_env env, napi_callback_info info) { (void)info; return take_string(env, opi_candidates_page()); }
+
+/// candidateReadings(): string —— JSON 文本数组（候选拼音读数）。必须**先**调 candidatesPage。
+static napi_value JsCandidateReadings(napi_env env, napi_callback_info info) { (void)info; return take_string(env, opi_candidate_readings()); }
+
+/// pinReading(text: string): void —— 钉/解钉一条读音（只改过滤，不上屏）。
+static napi_value JsPinReading(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); size_t len = 0; char16_t *p = (n >= 1) ? js_to_utf16(env, a[0], &len) : NULL; opi_pin_reading((const uint16_t *)p, len); free(p); return ret_undefined(env); }
 
 /// buffer(): string —— 当前拼音缓冲（preedit 的来源）。
-static napi_value JsBuffer(napi_env env, napi_callback_info info) {
-    (void)info;
-    return take_string(env, opi_buffer());
-}
+static napi_value JsBuffer(napi_env env, napi_callback_info info) { (void)info; return take_string(env, opi_buffer()); }
 
 /// displayBuffer(): string —— 显示用缓冲（9 键带分词 `ni'hao`）。⚠️ 行为判定用 buffer。
 static napi_value JsDisplayBuffer(napi_env env, napi_callback_info info) { (void)info; return take_string(env, opi_display_buffer()); }
@@ -436,6 +436,8 @@ static napi_value OpiImeInit(napi_env env, napi_value exports) {
         {"keyEvent", NULL, JsKeyEvent, NULL, NULL, NULL, napi_default, NULL},
         {"selectPage", NULL, JsSelectPage, NULL, NULL, NULL, napi_default, NULL},
         {"candidatesPage", NULL, JsCandidatesPage, NULL, NULL, NULL, napi_default, NULL},
+        {"candidateReadings", NULL, JsCandidateReadings, NULL, NULL, NULL, napi_default, NULL},
+        {"pinReading", NULL, JsPinReading, NULL, NULL, NULL, napi_default, NULL},
         {"candidates", NULL, JsCandidates, NULL, NULL, NULL, napi_default, NULL},
         {"select", NULL, JsSelect, NULL, NULL, NULL, napi_default, NULL},
         {"buffer", NULL, JsBuffer, NULL, NULL, NULL, napi_default, NULL},

@@ -14,7 +14,7 @@ import { OpiMode } from './OpiEngine';
 import {
   KEY_ALL_CANDIDATES, KEY_BUFFER, KEY_CANDIDATES, KEY_DARK, KEY_DISPLAY_BUFFER, KEY_ELDER,
   KEY_FLOAT, KEY_GAME, KEY_LEARNER, KEY_MODE, KEY_MODE_INDEX, KEY_ONE_HAND, KEY_PAGE,
-  KEY_PAGE_COUNT, KEY_PRO, KEY_SHIFT, KEY_SHOW_OWN, KEY_SKIN, KEY_TILED, KEY_VIEW
+  KEY_PAGE_COUNT, KEY_PRO, KEY_READINGS, KEY_SHIFT, KEY_SHOW_OWN, KEY_SKIN, KEY_TILED, KEY_VIEW
 } from './KeyboardAppStorage';
 
 /** 平铺视图取全量的条数（同 Android EngineController.fetchLimit）。 */
@@ -32,6 +32,8 @@ export function publishState(): void {
   // 行为判定用 buffer（原值）；拼音行用 displayBuffer（9 键带分词）。
   const buffer: string = OpiEngine.buffer();
   const pageCandidates: string[] = OpiEngine.candidatesPage();
+  // 读数与当前候选批一起缓存，**紧跟** candidatesPage 读；displayBuffer 仍最后。
+  const readings: string[] = OpiEngine.candidateReadings();
   // ⚠️ displayBuffer **必须最后读**：9 键读数是 candidates() 的副产物（缓存与算它时的
   // 缓冲绑存），先读会拿到上一条缓冲的旧值/空串 —— Android EngineController 同款次序。
   const display: string = OpiEngine.displayBuffer();
@@ -45,6 +47,7 @@ export function publishState(): void {
   AppStorage.setOrCreate<string>(KEY_BUFFER, buffer);
   AppStorage.setOrCreate<string>(KEY_DISPLAY_BUFFER, display);
   AppStorage.setOrCreate<string[]>(KEY_CANDIDATES, pageCandidates);
+  AppStorage.setOrCreate<string[]>(KEY_READINGS, readings);
   AppStorage.setOrCreate<number>(KEY_PAGE, OpiEngine.page());
   AppStorage.setOrCreate<number>(KEY_PAGE_COUNT, OpiEngine.pageCount());
   AppStorage.setOrCreate<number>(KEY_MODE, mode as number);

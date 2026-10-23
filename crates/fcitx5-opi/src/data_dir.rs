@@ -94,6 +94,14 @@ pub fn init_dict(source: &Path, data_dir: &Path) -> Result<(), String> {
     install(Some(path)).map_err(|e| format!("词库装载失败: {e}"))
 }
 
+// 自定义短语的宿主文件读取已拆到 `custom_phrases.rs`（避免本文件越过 500 行门禁）；
+// 这些名字仍从本模块转出，既有调用点/测试不用改。
+pub(crate) use crate::custom_phrases::EMPTY_CUSTOM_PHRASES_JSON;
+pub use crate::custom_phrases::{
+    CUSTOM_PHRASES_FILE_NAME, PhraseState, custom_phrases_path, load_custom_phrases,
+    load_custom_phrases_file, parse_custom_phrases,
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -349,5 +357,99 @@ mod tests {
         assert_eq!(load_symbols(&path).unwrap(), 0);
         assert!(!crate::with_state(|s| s.symbol_browse_available()).unwrap());
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    // ---- 自定义短语（2026-10-24） ----
+
+    #[test]
+    fn custom_phrases_parse_reads_enabled_and_strips_it() {
+        let state = parse_custom_phrases(
+            r#"{"version":1,"enabled":false,"phrases":[{"trigger":"dz","text":"地址"}]}"#,
+        )
+        .expect("合法文件");
+        assert!(!state.enabled);
+        assert!(!state.json.contains("enabled"), "{}", state.json);
+        assert!(state.json.contains(r#""trigger":"dz""#), "{}", state.json);
+
+        let no_enabled =
+            parse_custom_phrases(r#"{"version":1,"phrases":[]}"#).expect("enabled 可缺省");
+        assert!(no_enabled.enabled, "缺省 = 开");
+    }
+
+    #[test]
+    fn custom_phrases_parse_rejects_every_broken_shape() {
+        for text in [
+            "",
+            "not json",
+            "[]",
+            r#"{"phrases":[]}"#,
+            r#"{"version":2,"phrases":[]}"#,
+            r#"{"version":1,"phrases":{}}"#,
+            r#"{"version":1,"enabled":"false","phrases":[]}"#,
+        ] {
+            assert!(parse_custom_phrases(text).is_none(), "应拒收: {text}");
+        }
+    }
+
+    #[test]
+    fn custom_phrases_missing_or_broken_file_defaults() {
+        let dir = temp_dir("phrases-missing");
+        assert_eq!(
+            load_custom_phrases_file(&dir.join("nope.json")),
+            PhraseState::default()
+        );
+        let path = dir.join(CUSTOM_PHRASES_FILE_NAME);
+        fs::write(&path, "{").unwrap();
+        assert_eq!(load_custom_phrases_file(&path), PhraseState::default());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn custom_phrases_apply_pushes_phrases_and_enabled() {
+        let _g = crate::serial_install();
+        let dir = temp_dir("phrases-apply");
+        let path = dir.join(CUSTOM_PHRASES_FILE_NAME);
+        fs::write(
+            &path,
+            r#"{"version":1,"enabled":false,"phrases":[{"trigger":"dz","text":"地址"}]}"#,
+        )
+        .unwrap();
+        let state = load_custom_phrases_file(&path);
+        crate::with_state(|s| s.apply_custom_phrases(state)).unwrap();
+        let (json, on) = crate::with_state(|s| {
+            (
+                s.engine.export_custom_phrases(),
+                s.engine.custom_phrases_enabled(),
+            )
+        })
+        .unwrap();
+        assert!(json.contains("地址"), "{json}");
+        assert!(!on, "启用态必须分开推");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn custom_phrases_invalid_entries_fall_back_to_empty() {
+        let _g = crate::serial_install();
+        let good =
+            parse_custom_phrases(r#"{"version":1,"phrases":[{"trigger":"dz","text":"地址"}]}"#)
+                .unwrap();
+        crate::with_state(|s| s.apply_custom_phrases(good)).unwrap();
+        // 形状合法、条目非法（trigger 不是字母）⇒ 引擎整表拒收 ⇒ 空表 + 启用。
+        let bad = parse_custom_phrases(
+            r#"{"version":1,"enabled":false,"phrases":[{"trigger":"1","text":"x"}]}"#,
+        )
+        .expect("外层形状合法");
+        crate::with_state(|s| s.apply_custom_phrases(bad)).unwrap();
+        let (json, on) = crate::with_state(|s| {
+            (
+                s.engine.export_custom_phrases(),
+                s.engine.custom_phrases_enabled(),
+            )
+        })
+        .unwrap();
+        assert!(!json.contains("地址"), "{json}");
+        assert!(!json.contains(r#""x""#), "{json}");
+        assert!(on, "坏表退回默认启用");
     }
 }

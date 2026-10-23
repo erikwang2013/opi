@@ -6,7 +6,7 @@
 
 use engine_core::candidates::{Candidate, CandidateKind};
 use engine_core::symbols::SymbolEngine;
-use engine_core::{Engine, InMemoryDictionary, Scheme};
+use engine_core::{Engine, InMemoryDictionary, Mode, Scheme};
 
 fn no_symbols() -> SymbolEngine {
     SymbolEngine::new(Vec::new(), Vec::new())
@@ -205,6 +205,88 @@ fn phrases_respect_limit() {
     assert_eq!(one.len(), 1);
     assert_eq!(one[0].text, "地址", "limit=1 仍然先是短语");
     assert!(e.candidates(0).is_empty(), "limit=0 ⇒ 空表");
+}
+
+const CN_SAME_TRIGGER: &str = r#"{"version":1,"phrases":[{"trigger":"hello","text":"中文短语"}]}"#;
+const EN_SAME_TRIGGER: &str =
+    r#"{"version":1,"phrases":[{"trigger":"hello","text":"english phrase"}]}"#;
+
+#[test]
+fn chinese_and_english_sets_never_cross_modes() {
+    // 两套用**同一个 trigger**：串门的话会立刻看见对方的文本。
+    let mut e = engine(&[("hello", "哈喽", 100)]);
+    e.set_custom_phrases(CN_SAME_TRIGGER).unwrap();
+    e.set_english_custom_phrases(EN_SAME_TRIGGER).unwrap();
+
+    type_keys(&mut e, "hello");
+    let cn_cands = e.candidates(8);
+    let cn = texts(&cn_cands);
+    assert_eq!(cn[0], "中文短语", "中文键盘只用中文套：{cn:?}");
+    assert!(!cn.contains(&"english phrase"), "英文套不许在中文键盘出现");
+
+    e.clear();
+    e.switch_mode(Mode::English);
+    type_keys(&mut e, "hello");
+    let en_cands = e.candidates(8);
+    let en = texts(&en_cands);
+    assert_eq!(en[0], "english phrase", "英文键盘只用英文套：{en:?}");
+    assert!(!en.contains(&"中文短语"), "中文套不许在英文键盘出现");
+    // 选中/空格都整段提交英文短语（复用中文套同一条收尾路径）。
+    assert_eq!(e.input_space(), "english phrase");
+    assert_eq!(e.buffer(), "");
+}
+
+#[test]
+fn english_and_chinese_enabled_flags_are_independent() {
+    let mut e = engine(&[]);
+    e.set_custom_phrases(CN_SAME_TRIGGER).unwrap();
+    e.set_english_custom_phrases(EN_SAME_TRIGGER).unwrap();
+
+    e.set_english_custom_phrases_enabled(false);
+    assert!(!e.english_custom_phrases_enabled());
+    assert!(e.custom_phrases_enabled(), "关英文套不能连带关中文套");
+
+    type_keys(&mut e, "hello");
+    assert_eq!(
+        e.candidates(8)[0].text,
+        "中文短语",
+        "中文套不受英文开关影响"
+    );
+
+    e.clear();
+    e.switch_mode(Mode::English);
+    type_keys(&mut e, "hello");
+    assert!(
+        !texts(&e.candidates(8)).contains(&"english phrase"),
+        "英文套关掉后不匹配"
+    );
+
+    e.set_custom_phrases_enabled(false);
+    e.set_english_custom_phrases_enabled(true);
+    e.clear();
+    type_keys(&mut e, "hello");
+    assert_eq!(
+        e.candidates(8)[0].text,
+        "english phrase",
+        "中文套关掉不影响英文套"
+    );
+}
+
+#[test]
+fn english_set_requires_exact_letters_not_prefix() {
+    let mut e = engine(&[]);
+    e.set_english_custom_phrases(EN_SAME_TRIGGER).unwrap();
+    e.switch_mode(Mode::English);
+    type_keys(&mut e, "hell");
+    assert!(!texts(&e.candidates(8)).contains(&"english phrase"));
+    type_keys(&mut e, "o");
+    assert_eq!(e.candidates(8)[0].text, "english phrase");
+    // 导出只含英文套自己的表（两套的存储互不影响）。
+    assert_eq!(
+        e.export_english_custom_phrases(),
+        r#"{"version":1,"phrases":[{"trigger":"hello","text":"english phrase"}]}"#
+    );
+    assert_eq!(e.export_custom_phrases(), r#"{"version":1,"phrases":[]}"#);
 }
 
 #[test]

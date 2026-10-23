@@ -143,6 +143,14 @@ class ImePreferences(private val store: PrefStore) {
         set(v) = store.put(KEY_SHUANGPIN_LAYOUT, v)
 
     /**
+     * 9 键左列末尾「自定义」标点（2026-10-24）：**空串 = 未选**（按钮面显示「自定义」）。
+     * 选中后按钮面与发送值都用它；与其它偏好同一条容错（缺键/坏值 → 空，不抛）。
+     */
+    var customPunct: String
+        get() = store.getString(KEY_CUSTOM_PUNCT) ?: ""
+        set(v) = store.put(KEY_CUSTOM_PUNCT, v)
+
+    /**
      * 停用词库名单（2026-10-14，M3 词库管理）：逗号分隔的词库名，**空串 = 全部启用**
      * （与桌面 `DisabledDicts` 同一份契约；解析/写回见 `DictStore.parseDisabled` /
      * `DictStore.withDisabled`）。
@@ -243,6 +251,7 @@ class ImePreferences(private val store: PrefStore) {
         const val KEY_ENGLISH_PRO = "english_pro"
         const val KEY_CORRECTION = "engine_correction"
         const val KEY_SHOW_OWN = "pet_show_own"
+        const val KEY_CUSTOM_PUNCT = "nine_custom_punct"
         const val KEY_SHUANGPIN_LAYOUT = "engine_shuangpin_layout"
         // 五笔六键（2026-10-14，M4 第二波）
         const val KEY_WUBI_PLAN = "wubi_plan"

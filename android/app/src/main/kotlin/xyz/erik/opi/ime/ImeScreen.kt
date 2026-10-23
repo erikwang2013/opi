@@ -50,7 +50,6 @@ import xyz.erik.opi.pet.PetMood
  */
 private const val ONE_HAND_WIDTH_RATIO = 0.76f
 
-
 /**
  * IME 面板根：工具条（图标入口）+ 候选栏 + 键盘；数字/符号/生僻字面板。
  *
@@ -357,28 +356,27 @@ private fun KeyboardArea(
         ImeState.View.QWERTY -> {
             // 输入模式分发（生僻字是面板，已在上面分支）。
             val label = state.modeKeyLabel
-            // 9 键 / 14 键 / 笔画 的模式键**只切简/繁**（2026-10-15 用户裁决，三盘统一）：
+            // 9 键 / 笔画 的模式键**只切简/繁**（2026-10-15 用户裁决）：
             // 键面字不走 [modeKeyLabel] 的三档循环，改用 [jianFanModeKeyLabelOf]。
             // 26 键仍走三档循环（它没有独立的英文键，cycleMode 那条腿不能摘）。
             val jianFanLabel = jianFanModeKeyLabelOf(controller.mode)
             when (state.inputMode) {
                 InputMode.PINYIN9, InputMode.BIG9 -> NineKeyKeyboard(
                     modifier = modifier,
-                    onKey = router::handleKey,
+                    // 弹层序号 1（分词格）：Nine 协议只收 2–9，引擎对 '1' 是空操作 ⇒ 直提。
+                    onKey = { ch -> if (ch == "1") router.commitText("1") else router.handleKey(ch) },
                     onSpace = router::handleSpace,
                     onBackspace = router::handleBackspace,
                     onEnter = router::handleEnter,
-                    // 9 键的模式键**只切简/繁**（2026-10-15 用户裁决「简繁按钮就只切换
-                    // 简繁」）—— 不是 26 键那条中→繁→英循环（cycleMode 只在 26 键与
-                    // 搜索叠盘上留着；14/笔画同日裁决后也归到本条）。
+                    // 9 键模式键只切简/繁（2026-10-15 裁决；笔画同）：不是 26 键/搜索叠盘
+                    // 那条 cycleMode 中→繁→英循环。
                     onModeSwitch = state::toggleTraditional,
                     onSymbol = state::openSymbolPage,
                     // 重输（2026-10-10 用户裁决：去分词键、加「重输」）：清掉当前组合重来；
                     // 空缓冲是空操作（clear 幂等）。
                     onRetype = controller::clear,
-                    // 分词键（2026-10-15 放回主区域第一格；2026-10-23 用户订正）：
-                    // 有拼音 ⇒ 发 `'` 往缓冲插音节边界；**没有拼音 ⇒ 打一个「1」**
-                    // （空缓冲的 `'` 在引擎里是引号，不是分词符，engine_punct.rs）。
+                    // 分词键（2026-10-15；2026-10-23 订正）：有拼音 ⇒ 发 `'` 插音节边界；
+                    // 空缓冲的 `'` 是引号不是分词符 ⇒ 打一个「1」（engine_punct.rs）。
                     onSegment = {
                         if (controller.buffer.isEmpty()) {
                             router.commitText("1")
@@ -391,10 +389,9 @@ private fun KeyboardArea(
                     // 英文键盘：先按拼音上屏 pending、再切英文 26 键
                     //（2026-10-10 用户裁决「切英文默认是拼音，不要是候选词」）。
                     onEnglish = state::switchToEnglishKeyboard,
-                    // 左侧一列：**只有读得到拼音时才替换**（主流同款，2026-10-09
-                    // 用户裁决「不输入、回退、确定，就重置到初始化的一列」）——
-                    // 读数空（没候选/已提交/退空）就回到标点列；不回退显示数字串
-                    // （那是上一版的自作主张，用户明确不要）。
+                    // 左侧一列：**只有读得到拼音时才替换**（2026-10-09 裁决「不输入、
+                    // 回退、确定就重置」）——读数空就回标点列，不回退显示数字串
+                    // （上一版的自作主张，用户明确不要）。
                     readings = controller.candidateReadings,
                     onPickReading = { i ->
                         // 点拼音行 = **钉读音**（2026-10-09 用户裁决「不要直接确认」）：
@@ -406,6 +403,10 @@ private fun KeyboardArea(
                     scrollKey = controller.buffer,
                     modeLabel = jianFanLabel,
                     big = state.inputMode == InputMode.BIG9,
+                    customPunct = state.customPunct,
+                    onPickCustomPunct = state::selectCustomPunct,
+                    commonSymbols = { catalog.common },
+                    onCommitText = router::commitText,
                 )
                 InputMode.PINYIN14 -> FourteenKeyKeyboard(
                     modifier = modifier,
@@ -413,14 +414,14 @@ private fun KeyboardArea(
                     onSpace = router::handleSpace,
                     onBackspace = router::handleBackspace,
                     onEnter = router::handleEnter,
-                    // 只切简/繁（2026-10-15 用户裁决，与 9 键统一）
-                    onModeSwitch = state::toggleTraditional,
+                    // 底行「中英」：中文 ⇄ 英文（2026-10-24 版式；英文恒 26 键布局）。
+                    onModeSwitch = state::toggleChineseEnglish,
+                    onModeLongPress = state::openInputMode,
                     onSymbol = state::openSymbolPage,
-                    // 英文入口必须独立留一枚（与 9 键同）：本盘原先靠模式键循环进英文，
-                    // 摘掉那条腿后不补这枚，英文在本盘**就不可达了**（2026-10-15 实测
-                    // 全仓只有 9 键与 cycleMode 两条进英文的路）。
-                    onEnglish = state::switchToEnglishKeyboard,
-                    modeLabel = jianFanLabel,
+                    onNumber = state::openNumber,
+                    onShift = controller::shiftTap,
+                    onShiftLongPress = controller::shiftLongPress,
+                    shiftState = controller.shiftState,
                 )
                 InputMode.STROKE -> StrokeKeyboard(
                     modifier = modifier,
@@ -436,7 +437,7 @@ private fun KeyboardArea(
                     onEnglish = state::switchToEnglishKeyboard,
                     modeLabel = jianFanLabel,
                 )
-                // PINYIN26 / ENGLISH26 / RARE（RARE 走上面分支，这里只为穷尽）
+                // PINYIN26 / ENGLISH26 / SHUANGPIN / WUBI（RARE 走上面分支，这里只为穷尽）
                 else -> QwertyKeyboard(
                     modifier = modifier,
                     onKey = router::handleKey,
@@ -450,14 +451,17 @@ private fun KeyboardArea(
                     onShiftLongPress = if (shiftVisible) controller::shiftLongPress else null,
                     shiftState = if (shiftVisible) controller.shiftState else ShiftState.OFF,
                     modeLabel = label,
-                    // 英文 26 键顶部数字行（2026-10-19）；搜索叠盘保持关闭。
+                    // 英文 26 键：顶部数字行 + 底行 123 → pro（2026-10-19）；搜索叠盘关闭。
                     showNumberRow = controller.mode == EngineMode.ENGLISH,
-                    // 英文 26 键底行 123 → pro（普通/专业切换，2026-10-19）。
                     showProKey = controller.mode == EngineMode.ENGLISH,
                     proActive = state.englishPro,
                     onProToggle = state::toggleEnglishPro,
                     // 英文底行 `!?#`：进符号页（英文符号在符号页 ASCII 分类）。
                     onSymbol = state::openSymbolPage,
+                    // 五笔 26 键（ads.jpg）：最左「拼」切拼音 26、空格键面「五笔」。
+                    wubi = state.inputMode == InputMode.WUBI,
+                    onSwitchToPinyin = { state.selectInputMode(InputMode.PINYIN26) },
+                    onModeLongPress = state::openInputMode,
                 )
             }
         }
@@ -482,13 +486,13 @@ internal fun modeKeyLabelOf(mode: EngineMode, lastChineseIsTrad: Boolean): Strin
 }
 
 /**
- * **9 键 / 14 键 / 笔画**底行模式键的键面字（2026-10-15 用户裁决「简繁按钮就只切换简繁」，
- * 后两盘同日裁决「统一成只切简繁」）。
+ * **9 键 / 笔画**底行模式键的键面字（2026-10-15 用户裁决「简繁按钮就只切换简繁」，
+ * 笔画同日裁决「统一成只切简繁」；14 键 2026-10-24 改版后底行是「中英」，不再用它）。
  * 与 [modeKeyLabelOf] 同一条语义 —— 键面 = **点它会切到哪** —— 只是把「英」那条腿
- * 摘掉：这三盘上它只在 中/繁 之间切（[ImeState.toggleTraditional]），进英文走各自
+ * 摘掉：这两盘上它只在 中/繁 之间切（[ImeState.toggleTraditional]），进英文走各自
  * 底行那枚独立的 [英文] 键。故：拼音态 →「繁」、繁体态 →「中」。
  *
- * 兜底给「繁」：这三盘按 `state.inputMode` 分发，理论上只会拿到中文态；不返回空/不抛。
+ * 兜底给「繁」：这两盘按 `state.inputMode` 分发，理论上只会拿到中文态；不返回空/不抛。
  * 纯函数，单测钉住（`KeyLabelTest`）。
  */
 internal fun jianFanModeKeyLabelOf(mode: EngineMode): String =

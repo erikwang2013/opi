@@ -13,7 +13,7 @@
 
 import { OpiMode } from './OpiEngine';
 import { KeyboardController } from './KeyboardController';
-import { lastChineseModeIndex } from './InputModes';
+import { INPUT_MODES, lastChineseModeIndex, OpiScheme } from './InputModes';
 import { PanelView } from './KeyboardModes';
 import { OpiPet, PetMood, petMood, petStripSelection } from './OpiPet';
 import { Palette, paletteFor } from './Palette';
@@ -48,6 +48,8 @@ function petStickerName(mood: PetMood): string {
 export struct TopBar {
   @StorageLink('opiBuffer') buffer: string = '';
   @StorageLink('opiDisplayBuffer') displayBuffer: string = '';
+  @StorageLink('opiReadings') readings: string[] = [];
+  @StorageLink('opiLayout') layout: number = 0;
   @StorageLink('opiCandidates') @Watch('onCandidatesChanged') candidates: string[] = [];
   @StorageLink('opiMode') mode: number = OpiMode.Pinyin as number;
   @StorageLink('opiLearner') learner: number = 1;
@@ -93,15 +95,28 @@ export struct TopBar {
 
   /**
    * 拼音行文本：优先**显示用**缓冲（9 键带分词 `ni'hao`）；读数为空（9 键整段
-   * 无匹）退回原缓冲，保证「正在组合」时这一行永远看得到东西。
+   * 无匹）**留空、不退回数字缓冲** —— 9 键的 buffer 是 `468` 这类按键编码，
+   * 退回去会把拼音行画成数字（2026-10-24 用户报障，Android 同款修复）。
    * ⚠️ 行为判定（退格/空格/回车）仍读 `buffer` —— 两个出口别合并。
    */
   private composingText(): string {
-    return this.displayBuffer.length > 0 ? this.displayBuffer : this.buffer;
+    if (this.displayBuffer.length > 0) {
+      return this.displayBuffer;
+    }
+    const nine: boolean = this.layout >= 0 && this.layout < INPUT_MODES.length
+      && INPUT_MODES[this.layout].scheme === OpiScheme.Nine;
+    if (nine) {
+      // 显示串偶发为空时用候选读音兜底；仍空就留空行（绝不落数字）。
+      return this.readings.length > 0 ? this.readings[0] : '';
+    }
+    return this.buffer;
   }
 
+  /** 槽位是否算「输入中」（Android `composingRowActive`）：数字缓冲/候选也算，
+   * 只是 9 键无匹时这行的**文本**为空，槽位不能切回宠物条。 */
   private composing(): boolean {
-    return this.composingText().length > 0;
+    return this.displayBuffer.length > 0 || this.buffer.length > 0
+      || this.candidates.length > 0;
   }
 
   private idlePetStrip(): boolean {

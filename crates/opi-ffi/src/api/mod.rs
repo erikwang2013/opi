@@ -48,9 +48,7 @@ pub fn install(path: Option<&str>) -> Result<(), String> {
     let mut guard = SINGLETON.lock().unwrap_or_else(|p| p.into_inner());
     let saved = guard.as_ref().map(|api| api.export_user_words());
     // 自定义短语：install 整体换引擎，必须与用户词一起回放，否则设置页换词库后短语消失。
-    let saved_phrases = guard
-        .as_ref()
-        .map(|api| (api.export_custom_phrases(), api.custom_phrases_enabled()));
+    let saved_phrases = guard.as_ref().map(Api::export_custom_phrase_sets);
     *guard = Some(Api::with_router(
         KeyRouter::new(Engine::new(dict, symbols, true)),
         luna_count,
@@ -60,11 +58,10 @@ pub fn install(path: Option<&str>) -> Result<(), String> {
     {
         let _ = api.import_user_words(json);
     }
-    if let Some((json, on)) = saved_phrases
+    if let Some(saved) = saved_phrases
         && let Some(api) = guard.as_mut()
     {
-        let _ = api.set_custom_phrases(json);
-        api.set_custom_phrases_enabled(on);
+        api.restore_custom_phrase_sets(saved);
     }
     Ok(())
 }

@@ -150,6 +150,14 @@ OpiString opi_select_page(uint32_t index);
 /// 显示当前页必须用本出口，不要拿全量候选自己按 8 切（同上，页大小是引擎侧常量）。
 OpiString opi_candidates_page(void);
 
+/// JSON 文本数组：9/14/双拼**候选的拼音读数**（去重、短→长）。未装载 → `[]`。
+/// ⚠️ 读数随候选批缓存走：先调 opi_candidates_page，再读本出口（顺序见 StatePublish）。
+OpiString opi_candidate_readings(void);
+
+/// 钉住一条读音（候选收窄到恰等该读音；空串/`NULL` = 解除）。仅同一缓冲内有效。
+/// 只改引擎过滤，不上屏；缓冲一变由调用方负责再传空串解除。
+void opi_pin_reading(const uint16_t *ptr, size_t len);
+
 // ---- 平铺候选（2026-10-21 加：Android CANDIDATES_TILED 的同一份数据）----
 //
 // 平铺视图自己按「字宽单元」排版分页（Android TilePack），**不能**复用当前页出口：

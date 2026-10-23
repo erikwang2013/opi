@@ -66,3 +66,50 @@ pub unsafe extern "C" fn opi_custom_phrases_enabled() -> bool {
     }))
     .unwrap_or(false)
 }
+
+// ---- 英文套（2026-10-24）：与上四条逐条同义，操作的是独立的英文表/英文开关。 ----
+
+/// setEnglishCustomPhrases(json: const uint16_t*, len) -> int32_t。英文套导入，
+/// 返回值/失败语义与 [`opi_set_custom_phrases`] 完全一致。
+/// # Safety
+/// `ptr` 必须指向至少 `len` 个有效 `u16`（或为 null，视为失败）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_set_english_custom_phrases(ptr: *const u16, len: usize) -> i32 {
+    catch_unwind(AssertUnwindSafe(|| -> i32 {
+        let Some(json) = (unsafe { read_utf16(ptr, len) }) else {
+            return -1;
+        };
+        match api::with_engine(|e| e.set_english_custom_phrases(json)) {
+            Some(Ok(n)) => i32::try_from(n).unwrap_or(-1),
+            Some(Err(_)) | None => -1,
+        }
+    }))
+    .unwrap_or(-1)
+}
+
+/// exportEnglishCustomPhrases() -> OpiString。英文套 JSON；未装载 → 空句柄。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_export_english_custom_phrases() -> OpiString {
+    let out = catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.export_english_custom_phrases()).unwrap_or_default()
+    }))
+    .unwrap_or_default();
+    OpiString::from_utf16(&out)
+}
+
+/// setEnglishCustomPhrasesEnabled(on: bool)。英文套开关；缺省为开。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_set_english_custom_phrases_enabled(on: bool) {
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.set_english_custom_phrases_enabled(on))
+    }));
+}
+
+/// englishCustomPhrasesEnabled() -> bool。未装载 → false（哨兵）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_english_custom_phrases_enabled() -> bool {
+    catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.english_custom_phrases_enabled()).unwrap_or(false)
+    }))
+    .unwrap_or(false)
+}

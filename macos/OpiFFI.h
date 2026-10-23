@@ -296,6 +296,13 @@ OpiString opi_export_custom_phrases(void);
 void opi_set_custom_phrases_enabled(bool on);
 bool opi_custom_phrases_enabled(void);
 
+/// 英文自定义短语（2026-10-24）：与上面四条同 schema/同语义，表与开关完全独立，
+/// 只在英文键盘匹配。
+int32_t opi_set_english_custom_phrases(const uint16_t *json, size_t len);
+OpiString opi_export_english_custom_phrases(void);
+void opi_set_english_custom_phrases_enabled(bool on);
+bool opi_english_custom_phrases_enabled(void);
+
 // ---------- 导入词库（2026-10-14，M3）----------
 //
 // 宿主契约四端同一份（实现与完整裁决见 crates/opi-ffi/src/api/dict.rs 头注）：

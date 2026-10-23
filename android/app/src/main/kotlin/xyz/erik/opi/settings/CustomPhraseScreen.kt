@@ -64,15 +64,20 @@ private sealed interface PhraseDialog {
  * 数据流只有一条：**改之前先进宿主文件**（[CustomPhraseStore.save]），存盘成功才改
  * UI，再推引擎。存盘失败 = 什么都没变；引擎拒绝只提示、不回滚（宿主文件是唯一真源，
  * IME 下次启动会重推）。这样任何时刻屏幕显示的都等于磁盘上的那一份。
+ *
+ * @param english true = 英文套（2026-10-24）：独立文件、独立开关、只在英文键盘匹配；
+ *   其余（分页/增删改/导入导出）与中文套共用这一份 UI 与 [CustomPhraseCodec]。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CustomPhraseScreen(onBack: () -> Unit) {
+fun CustomPhraseScreen(onBack: () -> Unit, english: Boolean = false) {
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val store = remember { CustomPhraseStore.from(context) }
-    val initial = remember { store.load() }
+    val store = remember(english) {
+        if (english) CustomPhraseStore.englishFrom(context) else CustomPhraseStore.from(context)
+    }
+    val initial = remember(store) { store.load() }
     var enabled by remember { mutableStateOf(initial.enabled) }
     var phrases by remember { mutableStateOf(initial.phrases) }
     var page by remember { mutableStateOf(0) }
@@ -169,7 +174,7 @@ fun CustomPhraseScreen(onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("自定义短语") },
+                title = { Text(if (english) "英文自定义短语" else "自定义短语") },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(OpiIcons.ArrowBack, contentDescription = "返回") }
                 },
@@ -189,7 +194,15 @@ fun CustomPhraseScreen(onBack: () -> Unit) {
             ) {
                 ListItem(
                     headlineContent = { Text("启用自定义短语") },
-                    supportingContent = { Text("输入完整字母后，候选栏出现对应短语") },
+                    supportingContent = {
+                        Text(
+                            if (english) {
+                                "只在英文键盘匹配：输入完整字母后出现短语"
+                            } else {
+                                "输入完整字母后，候选栏出现对应短语"
+                            },
+                        )
+                    },
                     trailingContent = {
                         Switch(
                             checked = enabled,
@@ -302,13 +315,13 @@ fun CustomPhraseScreen(onBack: () -> Unit) {
             confirmButton = {
                 TextButton(onClick = {
                     exportMenu = false
-                    exportJson.launch("opi-custom-phrases.json")
+                    exportJson.launch(if (english) "opi-custom-phrases-en.json" else "opi-custom-phrases.json")
                 }) { Text("JSON") }
             },
             dismissButton = {
                 TextButton(onClick = {
                     exportMenu = false
-                    exportTsv.launch("opi-custom-phrases.tsv")
+                    exportTsv.launch(if (english) "opi-custom-phrases-en.tsv" else "opi-custom-phrases.tsv")
                 }) { Text("TSV") }
             },
         )

@@ -357,9 +357,10 @@ impl TsfLogic {
                         c.to_string()
                     };
                     KeyOutcome::Commit(self.fullwidthize(&text))
-                } else if !self.english_pro() {
+                } else if !self.english_pro() && !self.english_phrases_active() {
                     // 普通模式（默认，镜像 fcitx5 轨）：所有键直出、不查词库、不进缓冲。
                     // 只有状态栏 `en/pro` 键切到专业模式后才走下面的前缀联想。
+                    // 例外（2026-10-24）：英文短语可命中时必须缓冲，否则 trigger 收不回来。
                     let text = if self.shift_state() != ShiftState::Off {
                         self.consume_single_shift();
                         c.to_ascii_uppercase().to_string()

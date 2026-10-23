@@ -137,4 +137,43 @@ impl CandidateState {
         self.invalidate_fetch_cache();
         self.dicts.set_enabled(&mut self.engine, name, on)
     }
+
+    /// 自定义短语（2026-10-24）：中英两套各自整表 JSON + 启用态**分开**推给引擎
+    /// （引擎侧就是两个写口）。引擎拒收整表时退回空表 + 启用 —— 与宿主文件读取的
+    /// 失败语义一致（见 `data_dir::PhraseState`）。短语参与候选 ⇒ 必须清抓取缓存。
+    /// 配对：`tsf-opi/src/custom_phrases.rs` 的同名方法（两轨同构）。
+    pub fn apply_custom_phrases(&mut self, state: crate::data_dir::PhraseState) {
+        apply_to_engine(
+            &mut self.engine,
+            &state,
+            engine_core::Engine::set_custom_phrases,
+            engine_core::Engine::set_custom_phrases_enabled,
+        );
+        self.invalidate_fetch_cache();
+    }
+
+    /// 英文套：与中文套同一条推送/回退语义，只动英文槽位。
+    pub fn apply_english_custom_phrases(&mut self, state: crate::data_dir::PhraseState) {
+        apply_to_engine(
+            &mut self.engine,
+            &state,
+            engine_core::Engine::set_english_custom_phrases,
+            engine_core::Engine::set_english_custom_phrases_enabled,
+        );
+        self.invalidate_fetch_cache();
+    }
+}
+
+fn apply_to_engine(
+    engine: &mut engine_core::Engine,
+    state: &crate::data_dir::PhraseState,
+    set: fn(&mut engine_core::Engine, &str) -> Result<usize, String>,
+    set_enabled: fn(&mut engine_core::Engine, bool),
+) {
+    if set(engine, &state.json).is_err() {
+        let _ = set(engine, crate::data_dir::EMPTY_CUSTOM_PHRASES_JSON);
+        set_enabled(engine, true);
+        return;
+    }
+    set_enabled(engine, state.enabled);
 }

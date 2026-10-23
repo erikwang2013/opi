@@ -281,6 +281,18 @@ object OpiEngine : OpiEngineApi, SymbolApi {
 
     external fun customPhrasesEnabled(): Boolean
 
+    /** 英文自定义短语（2026-10-24）：与中文套同 schema，表与开关完全独立。 */
+    external fun setEnglishCustomPhrases(json: String): Int
+
+    external fun exportEnglishCustomPhrases(): String
+
+    external fun setEnglishCustomPhrasesEnabled(on: Boolean)
+
+    external fun englishCustomPhrasesEnabled(): Boolean
+
+    /** 英文短语是否实际可命中（开关开 + 表非空）：普通英文据此改走缓冲。 */
+    override external fun englishPhrasesActive(): Boolean
+
     /** 删除一个用户词（连同其频次）。 */
     override external fun removeUserWord(text: String)
 

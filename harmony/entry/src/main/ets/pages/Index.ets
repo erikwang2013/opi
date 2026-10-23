@@ -15,9 +15,8 @@ import { TopBar } from '../InputMethodExtensionAbility/TopBar';
 import { CandidateTiled } from '../InputMethodExtensionAbility/CandidateTiled';
 import { QwertyPad } from '../InputMethodExtensionAbility/QwertyPad';
 import { EmojiPad } from '../InputMethodExtensionAbility/EmojiPad';
-import {
-  FourteenKeyPanel, NineKeyPanel, StrokeKeyPanel
-} from '../InputMethodExtensionAbility/KeyPanels';
+import { FourteenKeyPanel, NineKeyPanel } from '../InputMethodExtensionAbility/KeyPanels';
+import { StrokeKeyPanel } from '../InputMethodExtensionAbility/StrokePanel';
 import {
   AboutPanel, InputModePanel, KeyboardModePanel, SkinPanel
 } from '../InputMethodExtensionAbility/Panels';

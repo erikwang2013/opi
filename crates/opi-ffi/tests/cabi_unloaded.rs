@@ -38,8 +38,10 @@ use opi_ffi::cabi::{
     opi_display_buffer,
     opi_emoji_groups,
     opi_emoji_symbols,
+    opi_english_custom_phrases_enabled,
     opi_enter_action,
     opi_export_custom_phrases,
+    opi_export_english_custom_phrases,
     opi_export_user_words,
     opi_ffi_free_string,
     opi_fullwidth_state,
@@ -72,6 +74,8 @@ use opi_ffi::cabi::{
     opi_set_custom_phrases,
     opi_set_custom_phrases_enabled,
     opi_set_dict_enabled,
+    opi_set_english_custom_phrases,
+    opi_set_english_custom_phrases_enabled,
     opi_set_fuzzy,
     opi_set_fuzzy_pairs,
     opi_set_fuzzy_pairs_names,
@@ -285,6 +289,18 @@ fn every_export_returns_a_sentinel_when_engine_is_not_loaded() {
             "未装载 → 导入失败"
         );
         assert_eq!(read(opi_export_custom_phrases()), "", "未装载 → 导出空串");
+        // 英文套四条同一条哨兵规则。
+        opi_set_english_custom_phrases_enabled(true);
+        assert!(
+            !opi_english_custom_phrases_enabled(),
+            "未装载：英文短语开关恒 false"
+        );
+        assert_eq!(opi_set_english_custom_phrases(std::ptr::null(), 0), -1);
+        assert_eq!(
+            read(opi_export_english_custom_phrases()),
+            "",
+            "未装载 → 导出空串"
+        );
 
         // —— 导入词库（2026-10-14，M3）——
         // 未装载 = 没有引擎可以挂额外层 ⇒ 导入 -1（导入类出口的负数哨兵）、开关 false、

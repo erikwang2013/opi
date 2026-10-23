@@ -4,6 +4,7 @@
 package xyz.erik.opi.settings
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -55,6 +56,8 @@ class CustomPhraseStoreTest {
     )
 
     private fun target(): File = File(tmp.root, CustomPhraseStore.FILE_NAME)
+
+    private fun targetEn(): File = File(tmp.root, CustomPhraseStore.FILE_NAME_EN)
 
     @Test
     fun missingFileLoadsDefaults() {
@@ -158,5 +161,59 @@ class CustomPhraseStoreTest {
         val errors = mutableListOf<String>()
         store(target(), engine).loadAndPush { errors += it }
         assertEquals(1, errors.size)
+    }
+
+    /** 英文套（2026-10-24）：独立文件，两套内容互不可见（中文套行为不变）。 */
+    @Test
+    fun englishAndChineseFilesAreIndependent() {
+        assertNotEquals(
+            "英文套必须用独立文件名，否则会覆盖中文套",
+            CustomPhraseStore.FILE_NAME,
+            CustomPhraseStore.FILE_NAME_EN,
+        )
+        val cnFile = target()
+        val enFile = targetEn()
+        val cnState = CustomPhraseStore.State(true, listOf(CustomPhrase("dz", "地址")))
+        val enState = CustomPhraseStore.State(false, listOf(CustomPhrase("brb", "be right back")))
+        assertNull(store(cnFile).save(cnState))
+        assertNull(store(enFile).save(enState))
+
+        assertEquals(cnState, store(cnFile).load())
+        assertEquals(enState, store(enFile).load())
+        assertTrue(cnFile.readText().contains("地址"))
+        assertTrue(!cnFile.readText().contains("be right back"))
+        assertTrue(enFile.readText().contains("be right back"))
+        assertTrue(!enFile.readText().contains("地址"))
+    }
+
+    /** 英文套与中文套各自推自己的口：表、开关都不串。 */
+    @Test
+    fun englishAndChinesePushesUseSeparateEngines() {
+        val cnEngine = FakeEngine()
+        val enEngine = FakeEngine()
+        val cnState = CustomPhraseStore.State(false, listOf(CustomPhrase("dz", "地址")))
+        val enState = CustomPhraseStore.State(true, listOf(CustomPhrase("brb", "be right back")))
+
+        assertNull(store(target(), cnEngine).push(cnState))
+        assertNull(store(targetEn(), enEngine).push(enState))
+
+        assertEquals(
+            listOf("""{"version":1,"phrases":[{"trigger":"dz","text":"地址"}]}"""),
+            cnEngine.pushed,
+        )
+        assertEquals(
+            listOf("""{"version":1,"phrases":[{"trigger":"brb","text":"be right back"}]}"""),
+            enEngine.pushed,
+        )
+        assertEquals(listOf(false), cnEngine.enabledPushes)
+        assertEquals(listOf(true), enEngine.enabledPushes)
+    }
+
+    /** 英文文件坏掉的回退语义与中文同一条：默认值、不删文件。 */
+    @Test
+    fun corruptEnglishFileLoadsDefaultsAndIsKept() {
+        val f = targetEn().apply { writeText("{ 坏掉的 json") }
+        assertEquals(CustomPhraseStore.State(), store(f).load())
+        assertTrue("不删：下次成功保存原子覆盖", f.exists())
     }
 }

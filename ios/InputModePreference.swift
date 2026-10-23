@@ -52,3 +52,16 @@ enum InputModePreference {
         set { defaults.set(newValue.rawValue, forKey: lastChineseKey) }
     }
 }
+
+/// 9 键左列末尾「自定义标点」键的内容（2026-10-24）。
+/// **空串 = 还没选过**（键面「自定义」，点它开选择器）；选择器写入用户点的那个符号，
+/// 之后点该格直提、长按更换。
+enum PunctuationPreference {
+    private static let defaults = UserDefaults.standard
+    private static let key = "opi.punct.custom"
+
+    static var custom: String {
+        get { defaults.string(forKey: key) ?? "" }
+        set { defaults.set(newValue, forKey: key) }
+    }
+}

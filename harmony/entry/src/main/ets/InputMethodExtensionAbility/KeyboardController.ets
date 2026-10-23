@@ -231,14 +231,18 @@ export class KeyboardController {
     this.tapChar('\'');
   }
 
+  /** 9 键左列点读音 = 钉住/解除（空串解除）；只改引擎过滤，不上屏。 */
+  pinReading(text: string): void {
+    OpiEngine.pinReading(text);
+    this.publish();
+  }
+
   /** 空格 —— 是**可打印段**的 0x20，走路由（缓冲非空时提交候选）。 */
   tapSpace(): void {
     this.pressKey(OpiEngine.KEY_SPACE, this.shiftStates());
   }
 
-  tapBackspace(): void {
-    this.pressKey(OpiEngine.KEY_BACK_SPACE, 0);
-  }
+  tapBackspace(): void { this.pressKey(OpiEngine.KEY_BACK_SPACE, 0); }
   /** 长按 ⌫：true = 开始连续退格（先删一格，之后每 60ms 一格）；false = 松手/取消停止。 */
   setBackspaceRepeat(on: boolean): void {
     if (on) {
@@ -256,14 +260,10 @@ export class KeyboardController {
   }
 
   /** ⇧ 单击：引擎三态只在 OFF ↔ SINGLE 间走；LOCK 只能长按（见 tapShiftLongPress）。 */
-  tapShift(): void {
-    this.pressKey(OpiEngine.KEY_SHIFT, 0);
-  }
+  tapShift(): void { this.pressKey(OpiEngine.KEY_SHIFT, 0); }
 
   /** ⇧ 长按 → LOCK（持续大写）。states 带 LONG_PRESSED，别带 REPEAT（会被忽略）。 */
-  tapShiftLongPress(): void {
-    this.pressKey(OpiEngine.KEY_SHIFT, OpiEngine.STATE_LONG_PRESSED);
-  }
+  tapShiftLongPress(): void { this.pressKey(OpiEngine.KEY_SHIFT, OpiEngine.STATE_LONG_PRESSED); }
 
   tapPageUp(): void {
     this.pressKey(OpiEngine.KEY_PAGE_UP, 0);

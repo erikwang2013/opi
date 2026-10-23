@@ -168,6 +168,9 @@ final class KeyboardLayout: UIView {
     /// 9 键左列读数 / 英文 26 键左列候选词（2026-10-21，见 `CandidateColumns.swift`）。
     let readingColumn = CandidateSideColumn(cells: 5, fontSize: 15)
     let wordColumn = CandidateSideColumn(cells: 5, fontSize: 15)
+    var customPunctuation = PunctuationPreference.custom   // 9 键左列自定义符号
+    var activePopup: KeyPopup?                              // 当前浮层（手势见 KeyboardTouch）
+    let punctuationPicker = PunctuationPicker()             // 常用符号选择器（2026-10-24）
 
     /// 最近一次刷新拿到的候选/读数/钉住态（候选栏、左列、平铺三处共用一份快照）。
     var candidateTexts: [String] = []
@@ -268,6 +271,9 @@ final class KeyboardLayout: UIView {
     /// 行/格/列的**尺寸算式**搬去了 `ModeKeyRenderer`，本函数只挑「画哪套表」并接线。
     private func rebuildKeys() {
         OpiLog.panel.info("rebuildKeys \(String(describing: self.keyLayer), privacy: .public) start")
+        // 拆行前先收浮层/选择器：它们的来源键马上要被销毁。
+        hideKeyPopup()
+        punctuationPicker.isHidden = true
         updateLayerVisibility()
         guard !isPanelLayer else { return }
         // 2026-10-23 真机崩溃修复：先把读数浮层连同它的 4 条约束摘下来，再拆行 ——
@@ -285,7 +291,10 @@ final class KeyboardLayout: UIView {
         }
         // 字母层按**当前输入模式**画（9 键/14 键/笔画各有自己的表）；数字层所有模式共用。
         let rows = keyLayer == .letters
-            ? ModeKeyTables.rows(for: inputMode, modeLabel: modeLabel)
+            ? ModeKeyTables.rows(
+                for: inputMode, modeLabel: modeLabel,
+                customPunctuation: customPunctuation
+            )
             : ModeKeyTables.numberRows()
         autoreleasepool {
             ModeKeyRenderer.render(rows, into: rowsStack, gap: 5) { [weak self] b in
@@ -415,23 +424,14 @@ final class KeyboardLayout: UIView {
         rebuildKeys()
     }
 
-    /// 交给符号层的符号（来自 `OpiEngine.commonSymbols()`，由控制器在切到符号层时取）。
-    /// 只做转发 —— 网格怎么画、空列表怎么提示，都在 `SymbolPanel`（那边有理由）。
-    func setSymbols(_ list: [String]) {
-        symbolPanel.setSymbols(list)
-    }
-
-    /// 交给表情层的**原始**数据（来自 `OpiEngine.emojiSymbols()` / `emojiGroups()`，
-    /// 由控制器在切到表情层时取）。字形过滤与分类下标重算都在 `EmojiPanel` 里做
-    /// （那边有理由），本层一个字都不判。
-    func setEmojiBrowse(_ list: [String], groups: [OpiEmojiGroup]) {
-        emojiPanel.showBrowse(list, groups: groups)
-    }
-
-    /// 交给表情层的搜索结果（来自 `OpiEngine.searchSymbols(keyword:)`）。
-    /// `query` 传**去空白后**的查询词（控制器 trim）—— 空查询时面板画浏览内容。
-    func setEmojiResults(_ results: [String], query: String) {
-        emojiPanel.showResults(results, query: query)
+    /// 换 9 键左列的自定义符号（选择器选完调）：持久化 + 存快照 + 重建键面 + 收起选择器。
+    func setCustomPunctuation(_ text: String) {
+        punctuationPicker.isHidden = true
+        guard !text.isEmpty, text != customPunctuation else { return }
+        PunctuationPreference.custom = text
+        customPunctuation = text
+        renderedRowsLayer = nil
+        if !isPanelLayer { rebuildKeys() }
     }
 
     /// 同步模式键的键面字（中/繁/英）。控制器在切模式后调 —— 键面是模式的显示器。

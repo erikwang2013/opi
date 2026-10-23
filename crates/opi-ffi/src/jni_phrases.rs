@@ -71,6 +71,65 @@ pub unsafe extern "system" fn opijni_custom_phrases_enabled(
     guard(|| api::with_engine(|e| e.custom_phrases_enabled()).unwrap_or_default())
 }
 
+// ---- 英文套（2026-10-24）：与上面四条逐条同义，操作独立的英文表/英文开关。 ----
+
+/// setEnglishCustomPhrases(json) -> Int。返回导入条数；负数 = 失败且不改旧表。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_set_english_custom_phrases(
+    env: JEnv,
+    _class: sys::jclass,
+    json: jstring,
+) -> jint {
+    catch_unwind(AssertUnwindSafe(|| -> jint {
+        let Some(json) = (unsafe { jni_util::jstring_to_rust(env, json) }) else {
+            return -1;
+        };
+        match api::with_engine(|e| e.set_english_custom_phrases(json)) {
+            Some(Ok(n)) => i32::try_from(n).unwrap_or(-1),
+            Some(Err(_)) | None => -1,
+        }
+    }))
+    .unwrap_or(-1)
+}
+
+/// exportEnglishCustomPhrases() -> String。英文套 JSON；未装载 → 空串。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_export_english_custom_phrases(
+    env: JEnv,
+    _class: sys::jclass,
+) -> jstring {
+    let out = guard(|| api::with_engine(|e| e.export_english_custom_phrases()).unwrap_or_default());
+    unsafe { jni_util::rust_to_jstring(env, &out) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_set_english_custom_phrases_enabled(
+    _env: JEnv,
+    _class: sys::jclass,
+    on: jboolean,
+) {
+    guard(|| api::with_engine(|e| e.set_english_custom_phrases_enabled(on)));
+}
+
+/// englishCustomPhrasesEnabled() -> Boolean。未装载 → false。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_english_custom_phrases_enabled(
+    _env: JEnv,
+    _class: sys::jclass,
+) -> jboolean {
+    guard(|| api::with_engine(|e| e.english_custom_phrases_enabled()).unwrap_or_default())
+}
+
+/// englishPhrasesActive() -> Boolean。英文短语**实际可命中**（开关开且表非空）；
+/// 未装载 → false。普通英文模式据此改走缓冲。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_english_phrases_active(
+    _env: JEnv,
+    _class: sys::jclass,
+) -> jboolean {
+    guard(|| api::with_engine(|e| e.english_custom_phrases_active()).unwrap_or_default())
+}
+
 /// 注册表条目（`jni.rs` 用 `methods.extend(...)` 并入）。名字/描述符必须与
 /// `OpiEngine.kt` 的 `external fun` 逐字一致 —— 契约门禁：`tests/jni_contract.rs`。
 pub(crate) fn custom_phrase_native_methods() -> Vec<NativeMethod<'static>> {
@@ -95,6 +154,31 @@ pub(crate) fn custom_phrase_native_methods() -> Vec<NativeMethod<'static>> {
                 jni_str!("customPhrasesEnabled"),
                 jni_str!("()Z"),
                 opijni_custom_phrases_enabled as *mut c_void,
+            ),
+            NativeMethod::from_raw_parts(
+                jni_str!("setEnglishCustomPhrases"),
+                jni_str!("(Ljava/lang/String;)I"),
+                opijni_set_english_custom_phrases as *mut c_void,
+            ),
+            NativeMethod::from_raw_parts(
+                jni_str!("exportEnglishCustomPhrases"),
+                jni_str!("()Ljava/lang/String;"),
+                opijni_export_english_custom_phrases as *mut c_void,
+            ),
+            NativeMethod::from_raw_parts(
+                jni_str!("setEnglishCustomPhrasesEnabled"),
+                jni_str!("(Z)V"),
+                opijni_set_english_custom_phrases_enabled as *mut c_void,
+            ),
+            NativeMethod::from_raw_parts(
+                jni_str!("englishCustomPhrasesEnabled"),
+                jni_str!("()Z"),
+                opijni_english_custom_phrases_enabled as *mut c_void,
+            ),
+            NativeMethod::from_raw_parts(
+                jni_str!("englishPhrasesActive"),
+                jni_str!("()Z"),
+                opijni_english_phrases_active as *mut c_void,
             ),
         ]
     }

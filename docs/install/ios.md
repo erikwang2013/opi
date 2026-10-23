@@ -312,6 +312,40 @@ Payload/Opi.app/
 
 > **这些验证的顺序不能反。** 在编译通过之前做的任何功能工作，都是在给一份可能整体重写的代码上加东西。
 
+### 6.5 键盘版式（2026-10-24 参考图改版，源码层）
+
+与 Android / 鸿蒙同一套参考图（Android 落点见 `android.md` §4.5b）。**这轮改动还在
+工作区、没有提交，因此没有被任何 CI 编译过；本机（Linux）也编不了 UIKit。以下全是
+源码核对，不是真机结论。** 协议值不变：普通点击仍发原来的 T9 数字 / 14 键首字母 /
+26 键小写码点。
+
+- **9 键**（`InputModes.nineKeyRows`）：主区 3×3（第一格分词键），每格右上角序号 1–9
+  （`digitKey` 的 `cornerHint`，分词格固定 `"1"`）；长按/上滑弹层 = 字母（字号递减）+
+  **末尾数字**，`popupDefaultIndex = items.count - 1`。**大 9 键只隐藏角标**
+  （`big ? nil : digit`），弹层照旧。
+- **9 键左列**：`.scrollingColumn` 六格（五标点 + 自定义），格内按下 `defersPress`
+  （否则滚动会先打出字符）。自定义格未选时点开 `KeyPopup.swift` 的 `PunctuationPicker`，
+  数据是 `KeyboardViewController` 传入的 `engine.commonSymbols()`（仍然只有 common 块，
+  见 L1）；选中值存 `PunctuationPreference.custom`（`InputModePreference.swift`，
+  UserDefaults），已选后点按直提、长按重开。
+- **14 键**（`InputModes.fourteenKeyRows`）：`qw er ty ui op` / `as df gh jk l` /
+  `⇧ zx(~) cv(!) bn(@) m(?) ⌫`；前两行数字提示 1–5 / 6–0，第三行符号提示 ~ ! @ ?。
+  弹层只在第三行四枚符号键上（`ModeKeySymbols.fourteenPair`）：`[大写对, 符号, 小写对]`、
+  默认中间项；提交值是**协议首字母**。底行 `🌐 符 123 ， 空格 。 中英 换行`
+  （`🌐` 是 iOS 系统切换入口，保留；模式键走三态循环 —— 本盘没有独立英文键）。
+- **26 键**（`ModeKeyTables26.letterRows`）：拼音 26 无数字行、键面大写、Q–P 角标 1–0；
+  英文 26 有 0–9 数字行、键面小写；字母弹层 `[大写, 符号, 小写]`、默认中间项
+  （`ModeKeySymbols.letterSpec`，`popupDefaultIndex = 1`）。**五笔**：键面同拼音 26，
+  第三行最左换成「拼」（`.selectInputMode(.pinyin26)` → 既有 `InputModeApply.applyInputMode`，
+  不是只改 UI）、空格键面写「五笔」（发送仍是空格）。
+- **9 键读数（2026-10-24 修复）**：`KeyboardCandidates.refresh` 先读
+  `engine.displayBuffer()`；为空且 `layout.wantsReadings` 时用 `readings.first` 兜底，
+  仍空就**留空**，绝不回退 `buffer` 的数字串（`hou` → `468` 的成因）。非读数方案
+  （26/14/笔画）仍回退字母缓冲。
+
+**未验**：这些键位的实际手感、弹层方向/裁切、左列滚动与选择器在真机上的表现；§8
+的「运行时验证数 = 0」不变。
+
 ---
 
 ## 7. 已知限制（诚实清单）
@@ -331,6 +365,7 @@ Payload/Opi.app/
 | L8 | **繁体库不放就回落简体** | `trad.opid` 是可选资源；缺了不报错，繁体模式静默用简体库。 |
 | L9 | **长按 ⇧ → Lock 走的是另一套机制** | 软键盘长按 → `stateLongPressed`，与桌面轨的 `LONG_PRESSED` 键状态位不是同一条路。 |
 | L10 | **候选栏空态没有小欧** | 其他端（Android 候选栏、Windows 候选窗、鸿蒙）在「打不出候选」时会显示小欧 + 提示；iOS 的 `KeyboardLayout.updateCandidates(_:)` 在空数组时先清空子视图再 `return` ⇒ **纯空白**。接它只能走位图（`ios/README.md` §6 明文禁止第三份 CoreGraphics 几何），而 iOS 现在连 `.xcassets` 都没有。**本版没做。** |
+| L11 | **自定义短语：没有 UI（2026-10-24）** | C ABI 有中文套出口，`ios/OpiEngine.swift` 也包了 `customPhrasesEnabled` / `exportCustomPhrases` / `setCustomPhrases`，但**没有英文套包装、没有设置页、没有宿主文件装载**（`ios/` 下没有任何 `*Phrase*` 文件）⇒ 用户在 iOS 上配不了，重启也没有表可装。别把 Android / macOS 的「自定义短语」入口读成 iOS 也有。 |
 
 ---
 
@@ -346,6 +381,10 @@ Payload/Opi.app/
   `plutil -lint` / `plutil -replace`（同样是格式层，`-replace` 对不存在的键照样成功）。
   **键名与取值的语义全部凭记忆**。
 - `ios/OpiFFI.h`：**转发头**，自身没有独立内容（唯一的一份声明在 `macos/OpiFFI.h`）。
+- **2026-10-24 键盘改版与 9 键读数修复**（`InputModes.swift` / `ModeKeyTables26.swift` /
+  `ModeKeySymbols.swift` / `KeyPopup.swift` / `KeyboardCandidates.swift` /
+  `KeyboardPanelHost.swift` 等）：工作区未提交 ⇒ **不在任何 CI run 里**，本机也编不了。
+  §6.5 的每条都只是源码核对；运行时验证数仍是 0。
 
 **做过、但强度有限的检查（别当成「编译过了」）：**
 - Swift 里 `OpiKey` / 状态位常量与 `crates/engine-core/src/keys.rs` 的**数值**逐项比对 ——

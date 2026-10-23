@@ -14,8 +14,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,6 +26,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
@@ -30,9 +36,11 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.roundToInt
 
 /** ⌫ 按住多久开始连续删除（2026-10-23 用户裁决：0.5s）。 */
 internal const val BACKSPACE_LONG_PRESS_MS = 500L
@@ -42,6 +50,9 @@ internal const val BACKSPACE_REPEAT_INTERVAL_MS = 60L
 
 /** 本轮按下是否已经由连续删除接管：挡掉 clickable 在抬手时多发的那一次 onClick。 */
 private class RepeatPressState(var fired: Boolean = false)
+
+/** 本轮按下是否已经由备选弹层接管：同上，挡掉抬手时 clickable 多发的那次 onClick。 */
+private class AlternativesPressState(var fired: Boolean = false)
 
 /**
  * 通用键：圆角灰底，支持长按与高亮（⇧ 激活态用）。
@@ -70,12 +81,94 @@ fun KeyButton(
      * 与 [onLongPress] 互斥（同时给会各触发一次）。
      */
     repeatOnLongPress: Boolean = false,
+    /**
+     * 长按或上滑打开的备选键面（2026-10-24，26 键字母键用）。空表 = 无弹层，
+     * 行为与旧版完全一致。有弹层时 [onLongPress] 不再触发（长按归弹层）。
+     */
+    alternatives: List<KeyAlternative> = emptyList(),
+    /** 弹层初始选中下标；越界按 [alternatives] 末项夹住。 */
+    defaultAlternative: Int = 0,
+    /** 弹层抬手提交选中项的 [KeyAlternative.value]；null 时退回 [onTap]。 */
+    onAlternative: ((String) -> Unit)? = null,
+    /** 键面上方的小字提示（26 键的符号）。 */
+    hint: String? = null,
+    /** 键面右上角的小字（拼音 26 键 Q..P 的 1-0）。 */
+    cornerHint: String? = null,
 ) {
     val palette = LocalKeyboardPalette.current
     val bg = if (highlighted) palette.keyHighlightBg else palette.keyBg
     val fg = if (highlighted) palette.keyHighlightFg else palette.keyFg
     val press = remember { RepeatPressState() }
     val latestOnTap = rememberUpdatedState(onTap)
+    val hasAlternatives = alternatives.isNotEmpty()
+    val altPress = remember { AlternativesPressState() }
+    var popupOpen by remember { mutableStateOf(false) }
+    var popupSelected by remember { mutableStateOf(0) }
+    // 弹层要夹在键盘窗口里：量的就是承载本键的窗口视图（IME 里 = 键盘窗），
+    // 不是 Compose provider 给的整块可见屏。
+    val hostView = LocalView.current
+    var popupWindowSize by remember { mutableStateOf(IntSize.Zero) }
+    val latestAlternatives = rememberUpdatedState(alternatives)
+    val latestOnAlternative = rememberUpdatedState(onAlternative)
+    val popupRowHeightPx = with(LocalDensity.current) { KEY_POPUP_ROW_HEIGHT.toPx() }
+    // 长按超时或上滑过阈值 → 开弹层；之后手指的纵向位移持续改选中行，抬手提交。
+    // 与 repeatModifier 一样**不消费**事件：短按仍走 combinedClickable 的 onClick。
+    val alternativesModifier = if (!hasAlternatives) {
+        Modifier
+    } else {
+        Modifier.pointerInput(alternatives, defaultAlternative, popupRowHeightPx) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                altPress.fired = false
+                var dy = 0f
+                val releasedEarly: Boolean? =
+                    withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                        var released = false
+                        var swiped = false
+                        while (!released && !swiped) {
+                            val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
+                            if (change == null || !change.pressed) {
+                                released = true
+                            } else {
+                                dy += change.positionChange().y
+                                swiped = -dy > viewConfiguration.touchSlop
+                            }
+                        }
+                        !swiped
+                    }
+                // 阈值内抬手 = 普通点击，交给 onClick；超时(null)/上滑(false)才开弹层。
+                if (releasedEarly == true) return@awaitEachGesture
+                altPress.fired = true
+                val count = latestAlternatives.value.size
+                val start = defaultAlternative.coerceIn(0, count - 1)
+                popupSelected = start
+                popupWindowSize = IntSize(hostView.width, hostView.height)
+                popupOpen = true
+                try {
+                    var dragDy = 0f
+                    var released = false
+                    while (true) {
+                        val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                        if (!change.pressed) {
+                            released = true
+                            break
+                        }
+                        dragDy += change.positionChange().y
+                        // 向上拖 = 选更靠上的行（首项在最上方）。
+                        val rows = (-dragDy / popupRowHeightPx).roundToInt()
+                        popupSelected = (start - rows).coerceIn(0, count - 1)
+                    }
+                    if (released) {
+                        val alt = latestAlternatives.value[popupSelected.coerceIn(0, count - 1)]
+                        val handler = latestOnAlternative.value
+                        if (handler != null) handler(alt.value) else latestOnTap.value?.invoke()
+                    }
+                } finally {
+                    popupOpen = false
+                }
+            }
+        }
+    }
     // 观察器**不消费**事件：同一键上的 combinedClickable 还要靠它们出点击与涟漪。
     val repeatModifier = if (!repeatOnLongPress) {
         Modifier
@@ -107,27 +200,55 @@ fun KeyButton(
             .background(bg)
             .combinedClickable(
                 onClick = {
-                    // 连续删除已经接管时，抬手还会再发一次 onClick —— 挡掉。
-                    if (!press.fired) latestOnTap.value?.invoke()
+                    // 连续删除 / 备选弹层已经接管时，抬手还会再发一次 onClick —— 挡掉。
+                    if (!press.fired && !altPress.fired) latestOnTap.value?.invoke()
                     press.fired = false
+                    altPress.fired = false
                 },
-                onLongClick = onLongPress,
+                // 有弹层时长按归弹层（先开弹层、抬手提交），旧长按回调不再触发。
+                onLongClick = if (hasAlternatives) null else onLongPress,
             )
             .then(repeatModifier)
+            .then(alternativesModifier)
             .semantics {
                 role = Role.Button
                 contentDescription = description ?: spokenKeyName(label)
                 // 参数与接收者同名，必须 this. 限定
                 if (stateDescription != null) this.stateDescription = stateDescription
-                // pinyin 模式 ⇧ 是死键（onTap/onLongPress 皆 null）：别让读屏用户对着它双击
-                if (onTap == null && onLongPress == null) disabled()
+                // pinyin 模式 ⇧ 是死键（onTap/onLongPress/备选皆 null）：别让读屏用户对着它双击
+                if (onTap == null && onLongPress == null && onAlternative == null && !hasAlternatives) {
+                    disabled()
+                }
             }
             .fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
+        // 26 键的符号提示 / 拼音 Q 行的数字角标：只作视觉提示，读屏名仍走 contentDescription。
+        val hintFont = fontSize * 0.45f
+        if (hint != null) {
+            Text(
+                hint,
+                fontSize = hintFont,
+                maxLines = 1,
+                color = palette.barDimFg,
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 2.dp),
+            )
+        }
+        if (cornerHint != null) {
+            Text(
+                cornerHint,
+                fontSize = hintFont,
+                maxLines = 1,
+                color = palette.barDimFg,
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 4.dp),
+            )
+        }
         // Ellipsis：窄屏单手/320dp 下「生僻字」「英文」这类多字键不再被硬裁成半个字
         // （读者仍能看出是哪个键；完整读屏名走 contentDescription）。
         Text(label, fontSize = fontSize, maxLines = 1, overflow = TextOverflow.Ellipsis, color = fg)
+        if (popupOpen) {
+            KeyAlternativesPopup(alternatives, popupSelected, fontSize, popupWindowSize)
+        }
     }
 }
 
@@ -163,9 +284,10 @@ internal fun modeStateDescription(modeLabel: String): String? = when (modeLabel)
 internal fun spokenKeyName(label: String): String = when (label) {
     "⇧" -> "大写"
     "⌫" -> "退格"
-    "↵" -> "回车"
+    "↵", "换行" -> "回车"
     "空格" -> "空格"
-    "中", "繁", "英" -> "中英切换"
+    "!?#" -> "符号"
+    "中", "繁", "英", "中英" -> "中英切换"
     "123", "?123" -> "数字与符号"
     "ABC" -> "字母"
     "符" -> "符号" // 9/14 键与笔画键盘的符号入口键

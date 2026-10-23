@@ -4,17 +4,20 @@
 //! 自定义短语（2026-10-23）：`trigger -> text`，**精确**命中时排在所有候选之前。
 //!
 //! 语义（产品裁决）：
-//! - 只在中文模式（Pinyin / Traditional）且方案为 Full / Nine / Fourteen 时匹配；
-//!   其余方案恒不匹配。
-//! - 匹配 = 当前缓冲**恰好等于** trigger（先去掉分词符 `'`，大小写不敏感）。
-//!   9/14 键把 trigger 的字母按 [`Scheme::key_class`] 折成按键类再比 —— 走
-//!   [`Scheme::matches`]，与词库匹配同一张表（四端不另抄）。
+//! - **中英两套，完全独立**（2026-10-24）：中文套只在 Pinyin / Traditional 匹配，
+//!   英文套只在 English 匹配；两套各有自己的开关、导入/导出，互不影响。
+//! - 中文套只在方案 Full / Nine / Fourteen 匹配；其余方案恒不匹配。英文套的缓冲
+//!   是字母原文，直接按大小写不敏感比较（不看方案）。
+//! - 匹配 = 当前缓冲**恰好等于** trigger（先去掉分词符 `'`）。9/14 键把 trigger 的
+//!   字母按 [`Scheme::key_class`] 折成按键类再比 —— 走 [`Scheme::matches`]，与词库
+//!   匹配同一张表（四端不另抄）。
 //! - 多条命中保持导入顺序；候选 kind 用 `Hanzi`（不新增 kind）。
 //! - 短语在正常候选算完之后**前插**，整体再按 `limit` 截断 ⇒ limit=1 也能看到。
 //!
 //! 存储与持久化：引擎只持内存（本模块 **不碰 IO**，同 engine-core 的不变量）。
-//! 宿主经 [`Engine::set_custom_phrases`] / [`Engine::export_custom_phrases`] 负责落盘。
-//! JSON 契约：`{"version":1,"phrases":[{"trigger":"dz","text":"地址"}]}`。
+//! 宿主经 [`Engine::set_custom_phrases`] / [`Engine::export_custom_phrases`]（英文套
+//! 用 `*_english_*` 一族）负责落盘。
+//! JSON 契约：`{"version":1,"phrases":[{"trigger":"dz","text":"地址"}]}`（两套相同）。
 //!
 //! 校验（全有或全无：失败不改旧表）：version==1；trigger 非空、纯 ASCII 字母、
 //! 长度 <= [`MAX_TRIGGER_LEN`]（大写归一为小写）；text 非空；条数 <=
@@ -128,18 +131,35 @@ impl CustomPhrases {
         .unwrap()
     }
 
-    /// 当前缓冲精确命中的短语（保持导入顺序）。`buffer` 为 composer 原文。
-    fn matching<'a>(&'a self, buffer: &str, scheme: Scheme) -> Vec<&'a CustomPhrase> {
+    /// 当前缓冲精确命中的**中文**短语（保持导入顺序）。`buffer` 为 composer 原文。
+    fn matching_cn<'a>(&'a self, buffer: &str, scheme: Scheme) -> Vec<&'a CustomPhrase> {
         if !self.enabled || self.phrases.is_empty() {
             return Vec::new();
         }
-        // 分词符不参与比较（`d'z` 与 trigger `dz` 同义）。
-        let key: String = buffer.chars().filter(|c| *c != '\'').collect();
+        let key = strip_separators(buffer);
         self.phrases
             .iter()
             .filter(|p| phrase_matches(scheme, &p.trigger, &key))
             .collect()
     }
+
+    /// 当前缓冲精确命中的**英文**短语。英文缓冲是字母原文（不经过方案类表），
+    /// 故直接做大小写不敏感比较 —— 即便当时方案还停在 Nine 也不会误判。
+    fn matching_en<'a>(&'a self, buffer: &str) -> Vec<&'a CustomPhrase> {
+        if !self.enabled || self.phrases.is_empty() {
+            return Vec::new();
+        }
+        let key = strip_separators(buffer);
+        self.phrases
+            .iter()
+            .filter(|p| key.len() == p.trigger.len() && key.eq_ignore_ascii_case(&p.trigger))
+            .collect()
+    }
+}
+
+/// 分词符不参与比较（`d'z` 与 trigger `dz` 同义）。
+fn strip_separators(buffer: &str) -> String {
+    buffer.chars().filter(|c| *c != '\'').collect()
 }
 
 /// 缓冲（已去 `'`）是否**恰好**是该 trigger。
@@ -176,6 +196,29 @@ impl Engine {
         self.custom_phrases.enabled
     }
 
+    /// 导入**英文**自定义短语（与中文套同 schema/同校验，表完全独立）。
+    pub fn set_english_custom_phrases(&mut self, json: &str) -> Result<usize, String> {
+        self.custom_phrases_en.set_json(json)
+    }
+
+    pub fn export_english_custom_phrases(&self) -> String {
+        self.custom_phrases_en.export_json()
+    }
+
+    pub fn set_english_custom_phrases_enabled(&mut self, on: bool) {
+        self.custom_phrases_en.enabled = on;
+    }
+
+    pub fn english_custom_phrases_enabled(&self) -> bool {
+        self.custom_phrases_en.enabled
+    }
+
+    /// 英文短语是否**实际可命中**（开关开且表非空）。宿主据此决定英文普通模式要不要
+    /// 把字母送进引擎缓冲 —— 直出模式下短语永远匹配不到（窗口已进文档，收不回来）。
+    pub fn english_custom_phrases_active(&self) -> bool {
+        self.custom_phrases_en.enabled && !self.custom_phrases_en.phrases.is_empty()
+    }
+
     /// 公开候选入口：正常候选（[`Self::candidates_base`]）算完后，把**精确命中**的
     /// 自定义短语前插并整体按 `limit` 截断。没有短语时逐字节等同旧行为。
     pub fn candidates(&self, limit: usize) -> Vec<Candidate> {
@@ -192,18 +235,31 @@ impl Engine {
         phrases
     }
 
-    /// 当前缓冲命中的短语候选（按导入顺序）。模式/方案/浏览态/携带缓冲的门都在这里。
-    fn custom_phrase_candidates(&self) -> Vec<Candidate> {
+    /// 当前缓冲命中的短语（按导入顺序）。模式/方案/浏览态/携带缓冲的门都在这里；
+    /// 中文模式查中文套、英文模式查英文套 —— 两套互不串门。
+    fn matching_custom_phrases(&self) -> Vec<&CustomPhrase> {
         let s = self.composer.session();
-        if !matches!(s.mode, Mode::Pinyin | Mode::Traditional)
-            || self.symbol_browse.is_active()
-            // 英→中保留的英文词不是拼音（与 `candidates_base` 同一判据）。
-            || self.composer.carried_from() == Some(Mode::English)
-        {
+        if self.symbol_browse.is_active() {
             return Vec::new();
         }
-        self.custom_phrases
-            .matching(&s.buffer, self.scheme())
+        match s.mode {
+            Mode::Pinyin | Mode::Traditional
+                // 英→中保留的英文词不是拼音（与 `candidates_base` 同一判据）。
+                if self.composer.carried_from() != Some(Mode::English) =>
+            {
+                self.custom_phrases.matching_cn(&s.buffer, self.scheme())
+            }
+            // 中→英保留的拼音不是英文 trigger：不出英文短语。
+            Mode::English if self.composer.carried_from().is_none() => {
+                self.custom_phrases_en.matching_en(&s.buffer)
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// 当前缓冲命中的短语候选（按导入顺序）。
+    fn custom_phrase_candidates(&self) -> Vec<Candidate> {
+        self.matching_custom_phrases()
             .into_iter()
             .map(|p| Candidate {
                 text: p.text.clone(),
@@ -219,13 +275,8 @@ impl Engine {
     /// 短语文本不是缓冲拼音的投影：若照分词回退切前缀，`zhangsan` 这类 trigger 会把
     /// 短语拆成两半、留在逐字态里。判据自带缓冲校验 ⇒ 不依赖调用方先取过候选。
     pub(crate) fn custom_phrase_selected(&self, selected: &str) -> bool {
-        let s = self.composer.session();
-        matches!(s.mode, Mode::Pinyin | Mode::Traditional)
-            && self.composer.carried_from() != Some(Mode::English)
-            && self
-                .custom_phrases
-                .matching(&s.buffer, self.scheme())
-                .iter()
-                .any(|p| p.text == selected)
+        self.matching_custom_phrases()
+            .iter()
+            .any(|p| p.text == selected)
     }
 }

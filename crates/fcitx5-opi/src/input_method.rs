@@ -345,9 +345,11 @@ fn handle_printable(state: &mut CandidateState, c: char) -> KeyAction {
                     c.to_string()
                 };
                 KeyAction::Input(state.fullwidthize(&text))
-            } else if !state.english_pro() {
+            } else if !state.english_pro() && !state.english_phrases_active() {
                 // 普通模式（2026-10-19，默认）：所有键直出，不查词库、不进缓冲。
                 // 只有状态栏 `en/pro` 键切到专业模式后才走下面的前缀联想。
+                // 例外（2026-10-24）：英文短语可命中时必须缓冲，否则字母已进文档、
+                // trigger 永远匹配不到（见 `english_phrases_active`）。
                 let text = if state.shift_state() != ShiftState::Off {
                     state.consume_single_shift();
                     c.to_ascii_uppercase().to_string()

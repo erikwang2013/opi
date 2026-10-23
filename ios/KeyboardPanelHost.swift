@@ -80,6 +80,56 @@ extension KeyboardLayout {
         buildAboutPanel()
         buildSettingsPanel()
         buildCandidateTiledPanel()
+        buildPunctuationPicker()
+    }
+
+    // MARK: - 面板数据转发
+
+    /// 交给符号层的符号（来自 `OpiEngine.commonSymbols()`，由控制器在切到符号层时取）。
+    /// 只做转发 —— 网格怎么画、空列表怎么提示，都在 `SymbolPanel`（那边有理由）。
+    func setSymbols(_ list: [String]) {
+        symbolPanel.setSymbols(list)
+    }
+
+    /// 交给表情层的**原始**数据（来自 `OpiEngine.emojiSymbols()` / `emojiGroups()`，
+    /// 由控制器在切到表情层时取）。字形过滤与分类下标重算都在 `EmojiPanel` 里做
+    /// （那边有理由），本层一个字都不判。
+    func setEmojiBrowse(_ list: [String], groups: [OpiEmojiGroup]) {
+        emojiPanel.showBrowse(list, groups: groups)
+    }
+
+    /// 交给表情层的搜索结果（来自 `OpiEngine.searchSymbols(keyword:)`）。
+    /// `query` 传**去空白后**的查询词（控制器 trim）—— 空查询时面板画浏览内容。
+    func setEmojiResults(_ results: [String], query: String) {
+        emojiPanel.showResults(results, query: query)
+    }
+
+    /// 9 键左列自定义键的符号选择器（2026-10-24）：盖住键区，点一项就收。
+    /// 选中只换键面并持久化（`setCustomPunctuation`）；上屏由自定义键自己直提。
+    private func buildPunctuationPicker() {
+        punctuationPicker.translatesAutoresizingMaskIntoConstraints = false
+        punctuationPicker.isHidden = true
+        punctuationPicker.onPick = { [weak self] text in
+            // 只换键面 + 持久化（Android `onPickCustomPunct` 同）：选完不自动上屏，
+            // 之后点该格才直提（长按可再换）。
+            self?.setCustomPunctuation(text)
+        }
+        punctuationPicker.onClose = { [weak self] in
+            self?.punctuationPicker.isHidden = true
+        }
+        keyArea.addSubview(punctuationPicker)
+        NSLayoutConstraint.activate([
+            punctuationPicker.leadingAnchor.constraint(equalTo: keyArea.leadingAnchor),
+            punctuationPicker.trailingAnchor.constraint(equalTo: keyArea.trailingAnchor),
+            punctuationPicker.topAnchor.constraint(equalTo: keyArea.topAnchor),
+            punctuationPicker.bottomAnchor.constraint(equalTo: keyArea.bottomAnchor),
+        ])
+    }
+
+    /// 控制器打开选择器时调（数据现取，空列表由选择器兜底）。
+    func showPunctuationPicker(_ symbols: [String]) {
+        punctuationPicker.show(symbols)
+        punctuationPicker.isHidden = false
     }
 
     /// 平铺候选（2026-10-21）：左列钉读音、中间选词、右列四个动作。
@@ -264,6 +314,7 @@ extension KeyboardLayout {
         chineseButton.setTitleColor(p.barDimFg.withAlphaComponent(0.6), for: .normal)
         readingColumn.applyTheme(p, fontScale: fontScale)
         wordColumn.applyTheme(p, fontScale: fontScale)
+        punctuationPicker.applyTheme(p, fontScale: fontScale)
         candidateTiledPanel.applyTheme(p, fontScale: fontScale)
         // 面板态下键位行与顶栏都隐藏：别为一次换肤递归走几十个不可见的 KeyButton。
         if !isPanelLayer { applyKeyTheme() }

@@ -337,6 +337,29 @@ cp luna.opid ~/Library/Application\ Support/opi/luna.opid
    而 Apple 论坛示例用 `length: 0` —— 这处差异必须实测）。
 5. 只有 1–4 都过之后，才验收已有功能（候选窗、菜单/热键、符号面板、设置与词库）。
 
+### 6.5 设置窗「高级」页：自定义短语（2026-10-24，源码层）
+
+设置窗新增 `高级` 分类（`OpiSettingsWindow.swift` 的 `OpiSettingsTab.advanced`，
+内容由 `OpiSettingsPhrases.swift` 的 `buildAdvanced()` 建）。页内一个 `中文 | 英文`
+下拉（`phraseKind`）切换两套**完全独立**的短语：各自开关、表、文件 ——
+`~/Library/Application Support/opi/custom_phrases.json` / `custom_phrases_en.json`
+（`OpiCustomPhraseStore.fileURL`；与 `luna.opid` 同目录）。宿主文件 schema =
+引擎 JSON + `"enabled"`，宿主文件是唯一真源（引擎只持内存）。
+
+- 10 条/页、显示总数、增删改；导入 JSON / TSV / CSV / `字母=短语` / `字母 空白 短语`，
+  **任何一条非法 ⇒ 整份拒收**；导出 JSON / TSV / CSV / `字母=短语`（比 Android/Linux
+  多两种，见 `OpiCustomPhraseCodec` 的 `tsv` / `csv` / `lines`）；读文件上限 1 MiB。
+  上限 **2000 条**、trigger **≤32 个 ASCII 字母**。
+- 装载/推送：`main.swift` 启动时 `loadAndPush(.chinese)` / `loadAndPush(.english)`；
+  打开「高级」页也 `loadAndPush` 一次；每次增删改/导入先写盘再推引擎
+  （`OpiCustomPhraseStore.save` → `push`）。
+- 匹配：中文套仅 `Mode::Pinyin`/`Traditional`（方案 Full/Nine/Fourteen；macOS 只有
+  Full），英文套仅 `Mode::English`；精确整串、英文大小写不敏感；命中项前插候选。
+  macOS 的按键**总是**先过引擎（`InputController` 的 `engine.keyEvent`），没有 fcitx5/
+  TSF 那条「普通英文直出」分支 ⇒ 英文短语在普通英文态即可匹配，不需要 pro（macOS
+  也没有 ENPRO 控制面，见 G7）。
+- **未上机**：设置窗布局、文件路径、导入/导出、引擎推送都只在源码层成立。
+
 ---
 
 ## 7. 已知限制（诚实清单）
@@ -368,6 +391,10 @@ cp luna.opid ~/Library/Application\ Support/opi/luna.opid
   run 37935240583：typecheck + 真编 + 链接 + ad-hoc 签名，见 §4.5）；
   **2026-10-20 的 7 文件版本已由 run 39425977787 编过；仍未上机。**
   **运行时（装进系统之后）验证数依旧是 0。**
+- **2026-10-24 订正文件面**：已不止 7 个 —— 新增 `OpiCustomPhrases.swift` /
+  `OpiSettingsPhrases.swift`，`OpiSettingsWindow.swift` / `main.swift` 也有改动。
+  这批改动还在工作区、**没有任何编译记录**，所以 §6.5 的自定义短语页连「编过」都
+  谈不上；运行时仍是 0。
 - `macos/Info.plist`：**没有被任何 macOS 构建系统读过**，也没有装进过任何系统的输入法列表。
 - `macos/OpiFFI.h`：过了 `clang -fsyntax-only`（C 与 C++ 两种模式，`-Werror` 下 exit 0），
   也过了「把 `cabi.rs` 的每个导出名**取地址**」那个 TU。**2026-10-09 起它被链接过了**

@@ -1457,3 +1457,37 @@ grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|op
 - `crates/fcitx5-opi/cpp/opi_fcitx5.cpp` + 其 `README.md`：**已被真实 fcitx5 加载并测过**
   的同类适配层 —— 里面那张「7 处 API 误写对照表」就是本文件「最不确定的 API」
   这一节的由来。
+
+---
+
+## 2026-10-24 v1.25.0 订正：键盘版式、9 键读数与自定义短语缺口
+
+> 本块只记**工作区源码**的现状（设计留痕，不改上文）。鸿蒙这轮改动**尚未提交**，
+> 未被任何 CI 编译；上一轮 release 构建成功是 2026-10-20，不含这些工作区改动。
+> 没有真机运行。下面每一条都是读源码得到的，不要读成「已验证」。
+
+- **9 / 14 / 26 键版式（参考图改版）**：
+  - 9 键：`KeyPanels.ets` 的 `NINE_ROWS` 为 3×3，右上角按**格序**标 1–9
+    （`rowIndex * 3 + colIndex + 1`，分词格也是 1；大 9 键不画）。长按/上滑浮层
+    `nineChoices` = 字母字号递减 + 格序数字最后，`defaultChoice = k.hint.length`
+    （**默认格序数字**）；普通点击仍送 T9 数字。左列 `StripColumn` 可竖滚，
+    末格「自定义」打开 `SymbolPicker.ets` 的 `CustomSymbolPicker`，选择存
+    `SettingsStore.saveCustomPunc`。输入中若 `readings` 非空，左列整列换成
+    `ReadingColumn`（`opi_candidate_readings` 已由 `napi_bridge.c` 的
+    `JsCandidateReadings` 桥出，旧的「左列恒标点」说法已过期）。
+  - 14 键：`FOURTEEN_ROWS` 前两行 `qw er ty ui op` / `as df gh jk l` 带 1–0 角标；
+    第三行 `⇧ zx(~) cv(!) bn(@) m(?) ⌫`；只有第三行四枚字母对有浮层，
+    `fourteenChoices` 配 `defaultChoice: 1` = **默认符号**；底行
+    `符 123 , 空格 。 中英 换行`。
+  - 26 键：`QwertyPad.ets` 拼音 26 无独立数字行、键面大写、Q–P 右上角 1–0、
+    A/Z 行上方符号提示；英文 26 有 0–9 行、键面小写；浮层
+    `[大写, 符号, 小写]`、默认中间项（拼音 Q 行中间项是角标数字）。
+    五笔键面同拼音 26，第三行最左换成「拼」（走输入模式状态机回拼音 26），
+    空格键面写「五笔」。
+- **9 键读数修复（不再显示按键数字）**：`TopBar.ets` 的 `composingText()` 先取
+  `displayBuffer`；9 键下若为空取 `readings[0]`，仍空**留空行**，绝不回退数字
+  缓冲（`468` 那类）。退格/空格/回车的行为判定仍读 `buffer`，两个出口别合并。
+- **自定义短语：没有 UI，也没有桥出口**：`harmony/` 全目录
+  `custom_phrase` / `customPhrase` / `CustomPhrase` 零命中；`napi_bridge.c`、
+  `OpiEngine.ets`、`SettingsStore.ets` 都没有任何短语相关导出。
+  ⇒ 鸿蒙上既配不了、也没有可装载的表。

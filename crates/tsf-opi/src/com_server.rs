@@ -134,10 +134,11 @@ impl IClassFactory_Impl for ClassFactory_Impl {
             // 就在同一次里装载，见 extra_dicts.rs。
             if let Some(mut logic) = engine.lock_logic() {
                 let lap = std::env::var_os("LOCALAPPDATA");
-                logic.apply_settings(
-                    settings::load(lap.as_deref()),
-                    &dict_path::dicts_dir(lap.as_deref()),
-                );
+                let dicts = dict_path::dicts_dir(lap.as_deref());
+                logic.apply_settings(settings::load(lap.as_deref()), &dicts);
+                // 中英两套自定义短语与设置同一次重读（宿主文件在 dicts 的父目录）。
+                logic.apply_custom_phrases(crate::custom_phrases::load(&dicts));
+                logic.apply_english_custom_phrases(crate::custom_phrases::load_english(&dicts));
             }
             let action = Arc::new(SharedAction::new(Arc::clone(&engine)));
             let sink: Arc<dyn TsfSink> = Arc::new(CandidateSink::new(

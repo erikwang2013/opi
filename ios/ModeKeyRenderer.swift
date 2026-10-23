@@ -82,6 +82,51 @@ enum ModeKeyRenderer {
                 col.addArrangedSubview(b)
             }
             return col
+        case .scrollingColumn(let specs):
+            return makeScrollingColumn(specs, gap: gap, wire: wire)
         }
+    }
+
+    /// 可竖向滚动的一列（9 键左标点列，2026-10-24）。
+    ///
+    /// 返回一个**容器**（而不是 UIScrollView 本身）：读数浮层要贴在容器上、
+    /// 不随列内容滚动（`installReadingColumn` 的 4 条约束按容器算）。
+    /// 每格固定为容器高的 1/5 —— 六格内容 = 1.2 倍高，多出来的一格靠滚动露出。
+    private static func makeScrollingColumn(
+        _ specs: [KeySpec], gap: CGFloat, wire: (KeyButton) -> Void
+    ) -> UIView {
+        let container = UIView()
+        let scroll = UIScrollView()
+        scroll.showsVerticalScrollIndicator = false
+        // 键盘上的点击要立刻生效；纵向拖动仍由滚动手势接管。
+        scroll.delaysContentTouches = false
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(scroll)
+
+        let col = UIStackView()
+        col.axis = .vertical
+        col.spacing = gap
+        col.distribution = .fill
+        col.translatesAutoresizingMaskIntoConstraints = false
+        scroll.addSubview(col)
+        NSLayoutConstraint.activate([
+            scroll.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            scroll.topAnchor.constraint(equalTo: container.topAnchor),
+            scroll.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            col.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor),
+            col.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor),
+            col.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor),
+            col.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor),
+            col.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor),
+        ])
+        for spec in specs {
+            let b = KeyButton(spec: spec)
+            wire(b)
+            col.addArrangedSubview(b)
+            b.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
+            b.heightAnchor.constraint(equalTo: container.heightAnchor, multiplier: 0.2).isActive = true
+        }
+        return container
     }
 }

@@ -68,13 +68,14 @@ import java.io.IOException
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(dictionaryDegraded: Boolean) {
-    // 自定义短语子页（2026-10-23）：单 Activity 单 Compose 树，没有导航库 —— 用一个
-    // 可保存的开关换根内容；返回箭头把它拨回来（旋转后仍停在子页）。
-    var showPhrases by rememberSaveable { mutableStateOf(false) }
-    if (showPhrases) {
+    // 自定义短语子页（2026-10-23；2026-10-24 增英文套）：0=关闭 1=中文 2=英文。
+    // 单 Activity 单 Compose 树，没有导航库 —— 用一个可保存的开关换根内容；
+    // 返回箭头把它拨回来（旋转后仍停在子页）。
+    var phrasePage by rememberSaveable { mutableStateOf(0) }
+    if (phrasePage != 0) {
         // 系统返回键回设置页，而不是退出整个设置 Activity。
-        BackHandler { showPhrases = false }
-        CustomPhraseScreen(onBack = { showPhrases = false })
+        BackHandler { phrasePage = 0 }
+        CustomPhraseScreen(onBack = { phrasePage = 0 }, english = phrasePage == 2)
         return
     }
     val context = LocalContext.current
@@ -356,7 +357,16 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
                     headlineContent = { Text("自定义短语") },
                     supportingContent = { Text("输入字母，快速上屏常用短语") },
                     trailingContent = {
-                        TextButton(onClick = { showPhrases = true }) { Text("管理") }
+                        TextButton(onClick = { phrasePage = 1 }) { Text("管理") }
+                    },
+                )
+                HorizontalDivider()
+                // 英文自定义短语（2026-10-24）：独立文件与独立开关，只在英文键盘匹配。
+                ListItem(
+                    headlineContent = { Text("英文自定义短语") },
+                    supportingContent = { Text("输入字母，在英文键盘上屏常用短语") },
+                    trailingContent = {
+                        TextButton(onClick = { phrasePage = 2 }) { Text("管理") }
                     },
                 )
                 HorizontalDivider()

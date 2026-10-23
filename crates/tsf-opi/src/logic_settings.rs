@@ -93,6 +93,12 @@ impl TsfLogic {
         self.english_pro
     }
 
+    /// 英文短语实际可命中（开关开 + 表非空，2026-10-24）：普通英文模式也要缓冲，
+    /// 否则字母直出进文档、trigger 永远匹配不到（配对 fcitx5 `english_phrases_active`）。
+    pub fn english_phrases_active(&self) -> bool {
+        self.engine.english_custom_phrases_active()
+    }
+
     /// 普通 ⇄ 专业：切换时清掉引擎缓冲/候选（旧串语义不同）。配对：
     /// fcitx5-opi `candidate.rs::set_english_pro`（两轨同构）。
     pub fn set_english_pro(&mut self, on: bool) {

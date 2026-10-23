@@ -101,29 +101,48 @@ class KeyLabelTest {
     }
 
     /**
-     * **接线的静态门禁**（2026-10-15 用户裁决「统一成只切简繁」）。
+     * **接线的静态门禁**（2026-10-15 用户裁决「统一成只切简繁」；14 键 2026-10-24
+     * 改版后底行是「中英」，不再归这条）。
      *
      * 为什么必须静态：8 处 `when(state.inputMode)` 分支里谁接哪条 handler 是 Compose
      * 层的**调用形状**，本仓 JVM 单测够不着（无 Robolectric）；而这条裁决的要害恰恰是
-     * 「三盘接同一条、26 键那条不许跟着改」——纯函数测（上一条）只看键面字，接线错了
-     * 它照样绿。先例：`ComposingPlacementTest` 的布局次序门禁。
+     * 「该接的盘接同一条、26 键那条不许跟着改」——纯函数测（上一条）只看键面字，接线
+     * 错了它照样绿。先例：`ComposingPlacementTest` 的布局次序门禁。
      *
      * ⚠️ 按**调用形状**取，不按行号（行号随任何编辑漂）。
      * ⚠️ 它证明的是「代码仍然这么写」，**不**证明真机上面板行为。
      */
     @Test
-    fun threeKeyboardsBindThePlainJianFanToggleAndKeepAnEnglishEntry() {
+    fun twoKeyboardsBindThePlainJianFanToggleAndTheFourteenKeyTogglesLanguage() {
         val rel = "src/main/kotlin/xyz/erik/opi/ime/ImeScreen.kt"
         val p = java.nio.file.Paths.get(rel)
         assertTrue("源文件不在了（搬家了？）：$rel", java.nio.file.Files.exists(p))
         // ⚠️ readAllBytes 而不是 Files.readString（Java 11 API，本模块单测编译级别不可见）。
         val src = String(java.nio.file.Files.readAllBytes(p), Charsets.UTF_8)
         fun count(needle: String) = Regex(Regex.escape(needle)).findAll(src).count()
-        // 9 / 14 / 笔画 = 三处切简繁；26 键 + 搜索叠盘 = 两处仍是 cycleMode
-        assertEquals("切简繁的键应恰有三盘（9/14/笔画）", 3, count("onModeSwitch = state::toggleTraditional"))
+        // 9 / 笔画 = 两处切简繁；14 键改走中英切换；26 键 + 搜索叠盘 = 两处 cycleMode
+        assertEquals("切简繁的键应恰有两盘（9/笔画）", 2, count("onModeSwitch = state::toggleTraditional"))
+        assertEquals("14 键底行中英 = 一条切语言", 1, count("onModeSwitch = state::toggleChineseEnglish"))
         assertEquals("26 键与搜索叠盘的 cycleMode 不许被带上", 2, count("onModeSwitch = state::cycleMode"))
-        // 英文入口：9/14/笔画三盘各一枚独立键（14 键与笔画原先没有，靠模式键循环 ——
-        // 摘掉那条腿后必须补上，否则英文在这两盘不可达）。
-        assertEquals("三盘各自的独立 [英文] 键", 3, count("onEnglish = state::switchToEnglishKeyboard"))
+        // 独立英文入口：9/笔画两盘各一枚（14 键改版后由「中英」承担）。
+        assertEquals("两盘各自的独立 [英文] 键", 2, count("onEnglish = state::switchToEnglishKeyboard"))
+    }
+
+    /**
+     * 9 键弹层序号 1（分词格，2026-10-24）：Nine 协议没有 '1'，引擎对 raw `'1'`
+     * 是空操作 ⇒ 宿主必须按「空缓冲分词键」直提，否则默认高亮项松手无反应。
+     */
+    @Test
+    fun nineKeyOrdinalOneIsCommittedLiterally() {
+        val src = String(
+            java.nio.file.Files.readAllBytes(
+                java.nio.file.Paths.get("src/main/kotlin/xyz/erik/opi/ime/ImeScreen.kt"),
+            ),
+            Charsets.UTF_8,
+        )
+        assertTrue(
+            "9 键 onKey 必须把弹层序号 1 直提（Nine 无 '1' 类）",
+            src.contains("if (ch == \"1\") router.commitText(\"1\")"),
+        )
     }
 }

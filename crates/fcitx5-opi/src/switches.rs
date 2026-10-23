@@ -96,6 +96,24 @@ pub unsafe extern "C" fn opi_fcitx5_set_correction(on: bool) {
     let _ = catch_unwind(AssertUnwindSafe(|| with_state(|s| s.set_correction(on))));
 }
 
+/// reloadCustomPhrases()：从数据目录重读中英两套短语文件并整表推给引擎
+/// （2026-10-24）。调用点是 C++ 的 `applyOpiSettings`（构造 / reloadConfig /
+/// setConfig 三条冷路径）—— 设置窗保存后经 `ReloadAddonConfig` 走到这里。
+/// 任一文件缺失/不合法 → 该套空表 + 启用（见 `custom_phrases::load_*`）。
+/// # Safety
+///
+/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_fcitx5_reload_custom_phrases() {
+    ensure_panic_hook();
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        let state = crate::custom_phrases::load_custom_phrases();
+        let _ = with_state(|s| s.apply_custom_phrases(state));
+        let state_en = crate::custom_phrases::load_english_custom_phrases();
+        let _ = with_state(|s| s.apply_english_custom_phrases(state_en));
+    }));
+}
+
 /// setFuzzyPairsNames(names)：模糊音**逐对**列表（逗号分隔组名，名字表见
 /// `engine_core::fuzzy::pair_names`）。**空串 = 空操作** —— 回落旧布尔的裁决在
 /// C++ 的 `applyOpiSettings` 里（两档都写这里的话，老配置的 `Fuzzy=False` 会被

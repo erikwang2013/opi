@@ -630,6 +630,32 @@ WubiAutoCommit=True # 四码唯一自动上屏
 DisabledDicts=      # 停用的导入词库（逗号分隔；留空 = 全部启用）
 ```
 
+**自定义短语（2026-10-24，设置窗「高级」页）**：`custom_phrases.json`（中文套）与
+`custom_phrases_en.json`（英文套）在**数据目录** `<数据目录>/opi/`（Linux =
+`$XDG_DATA_HOME`，缺省 `~/.local/share`；与 `settings.ini`、`dicts/` 同处）。两套
+**完全独立**：各自开关、各自表、各自文件；schema =
+`{"version":1,"enabled":true,"phrases":[{"trigger":"dz","text":"地址"}]}`，宿主文件是
+唯一真源（引擎只持内存）。路径推导在 `desktop/src/main/kotlin/xyz/erik/opi/candidate/
+CustomPhraseStore.kt` 的 `customPhrasesPathFor` / `englishCustomPhrasesPathFor`；
+fcitx5 读侧是 `crates/fcitx5-opi/src/custom_phrases.rs` 的 `load_custom_phrases` /
+`load_english_custom_phrases` 与 `data_dir.rs::xdg_data_dir`。
+
+- 列表 10 条/页、显示总数、增删改；导入 JSON / TSV / CSV / `字母=短语` / `字母 空白 短语`，
+  **任何一条非法 ⇒ 整份拒收**；导出 JSON（可再导入）/ TSV；读文件上限 1 MiB。上限
+  **2000 条**、trigger **≤32 个 ASCII 字母**（`CustomPhraseCodec` 与引擎常量同值）。
+- **装载时机**：`opi_fcitx5_reload_custom_phrases()` 由 C++ 的 `applyOpiSettings`
+  调用，覆盖**构造（插件启动）/ `reloadConfig` / `setConfig`** 三条冷路径；设置窗保存后
+  走 `ReloadAddonConfig`，所以立即重读。fcitx5 **没有** per-Activate 重读（这一点与
+  TSF 不同，见 `windows.md`）。
+- **匹配**：中文套只在 `Mode::Pinyin`/`Traditional` 且方案为 Full/Nine/Fourteen 时匹配
+  （桌面实际只有 Full）；英文套只在 `Mode::English` 匹配；都要求**精确整串**
+  （先去掉分词符 `'`，英文大小写不敏感），命中项前插候选（`engine-core/src/custom_phrases.rs`
+  的 `matching_custom_phrases`）。
+- **普通英文的缓冲判据（2026-10-24）**：`input_method.rs` 的 `Mode::English` 分支在
+  `!english_pro() && !english_custom_phrases_active()` 时逐字直出；**英文短语开关开且表
+  非空** ⇒ 字母进缓冲、候选栏出短语，空格提交首候选。表空或开关关 ⇒ 恢复直出。
+  携带缓冲（中→英保留的拼音）仍走直传，不受这条影响。
+
 **词库目录（2026-10-14 导入契约 / 2026-10-16 康熙种子）**：`~/.local/share/opi/dicts/*.tsv`
 就是导入词库（名字 = 文件名去 `.tsv`），本轨每次配置生效重扫并逐条导入；**康熙字典随包**
 （`/usr/share/opi/kangxi.tsv`），**首次配置生效时种进该目录一次**（之后照常启停/删除，
@@ -744,6 +770,12 @@ Linux 上 = `--settings` 的设置窗（无参数启动也是它）。**v1.6.0 �
   常驻，见 §4.8）、**符号与表情**（两个按钮开符号页/表情页，见 §4.8）、**关于**
   （2026-10-20 起含主页 / 项目 / 博客三条可点外链）。
   每页只列引擎真有的旋钮（主流输入法那套的按键自定义/词库页还没有对应能力，不摆假开关）。
+
+  **2026-10-24 订正页集**：上面这份 2026-10-12 的页清单已过期 —— 现为 常用 / 按键 /
+  外观 / 状态栏 / 符号与表情 / **词库** / **五笔** / **高级** / 关于（`SettingsTab`
+  的枚举序 = 展示序；`settingsTabs` 两平台同集，单测钉住）。**高级**页就是中英两套
+  自定义短语（同一文件里并列两个 `CustomPhrasesPage(english = false/true)`），保存或
+  导入后经 `reloadImeSettings()` 让 fcitx5 立即重读（见 §4.6）。
 - 版本号是**单一来源**：`desktop/build.gradle.kts` 的 `opiAppVersion` 同时喂给
   jpackage 包版本与窗口标题（构建时生成 `Version.kt`）。此前窗口里写死过一份，
   到 1.6.0 就成了摆在用户眼前的假话 —— 别再写死第二处。

@@ -206,6 +206,25 @@ export function candidatesPage(): string[] {
   }
 }
 
+/** 9/14/双拼候选的读音（去重、短→长）。**必须先调 `candidatesPage()`**：读数与当前
+ * 候选批缓存在一起，顺序反了会拿到上一批。 */
+export function candidateReadings(): string[] {
+  const raw: string = opiime.candidateReadings();
+  if (raw.length === 0) {
+    return [];
+  }
+  try {
+    return JSON.parse(raw) as string[];
+  } catch (e) {
+    return [];
+  }
+}
+
+/** 钉住一条读音（空串 = 解除）；只改候选过滤、不上屏，同一缓冲内有效。 */
+export function pinReading(reading: string): void {
+  opiime.pinReading(reading);
+}
+
 /** 提交**当前页**第 k 个候选（页内索引，0 起）。越界/无候选 → 空串。 */
 export function selectPage(index: number): string {
   return opiime.selectPage(index);

@@ -150,6 +150,26 @@ class ImeStateEnglishSwitchTest {
         )
     }
 
+    /** 14 键底行「中英」（2026-10-24）：中文 ⇄ 英文，回程沿用英→中的「输入重置」。 */
+    @Test
+    fun fourteenModeKeyTogglesChineseAndEnglish() {
+        val fake = FakeEngine()
+        val state = newState(fake)
+        state.selectInputMode(InputMode.PINYIN14)
+        state.toggleChineseEnglish()
+        assertEquals("中文 → 英文 26 键", InputMode.ENGLISH26, state.inputMode)
+        assertEquals(EngineMode.ENGLISH, state.controller.mode)
+        // 英文里打了一半：切回中文必须清掉、不提交（与 cycleMode 英→中同一裁决）。
+        fake.buf = "hel"
+        fake.cands = arrayOf("help")
+        state.toggleChineseEnglish()
+        assertEquals("回到上次的中文方案", InputMode.PINYIN14, state.inputMode)
+        assertEquals(EngineMode.PINYIN, state.controller.mode)
+        assertTrue("英→中不许提交英文原文/候选：$commits", commits.isEmpty())
+        assertEquals("英文缓冲清空", "", fake.buf)
+        assertTrue("切完候选为空", state.controller.candidates.isEmpty())
+    }
+
     @Test
     fun switchToEnglishKeyboardWithEmptyBufferCommitsNothing() {
         val state = newState(FakeEngine())

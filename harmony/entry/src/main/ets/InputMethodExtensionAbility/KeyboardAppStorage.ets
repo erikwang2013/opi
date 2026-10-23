@@ -39,3 +39,5 @@ export const KEY_SHOW_OWN: string = 'opiShowOwn';
 export const KEY_TILED: string = 'opiTiled';
 /** 平铺视图用的**全量**候选（前 64 条；普通候选栏仍读 opiCandidates 当前页）。 */
 export const KEY_ALL_CANDIDATES: string = 'opiAllCandidates';
+/** 9/14/双拼候选的拼音读音（9 键左列；随候选批刷新，写侧必须紧跟 KEY_CANDIDATES）。 */
+export const KEY_READINGS: string = 'opiReadings';

@@ -282,6 +282,8 @@ class SettingsTest {
                 SettingsTab.STATUSBAR, SettingsTab.SYMBOLS, SettingsTab.DICTS,
                 // 五笔页（2026-10-14，M4 第二波）：两平台都出 —— 六键两端读侧都认。
                 SettingsTab.WUBI,
+                // 高级页（2026-10-24）：自定义短语，两端 IME 读同一个宿主文件。
+                SettingsTab.ADVANCED,
                 SettingsTab.ABOUT,
             ),
             settingsTabs(windows = false),

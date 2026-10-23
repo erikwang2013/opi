@@ -29,4 +29,28 @@ class KeyRouterEnglishProTest {
         assertEquals(listOf("a", "1"), commits)
         assertEquals("缓冲保持空", "", ctrl.buffer)
     }
+
+    @Test
+    fun englishPhrasesActiveBuffersLettersEvenInNormalMode() {
+        // 2026-10-24：英文短语可命中时，普通英文必须缓冲（否则字母已进文档、
+        // trigger 永远匹配不到）。
+        val fake = FakeEngine().apply {
+            mode = EngineMode.ENGLISH.value
+            englishActive = true
+        }
+        val commits = mutableListOf<String>()
+        val ctrl = EngineController(fake)
+        val r = KeyRouter(
+            ctrl,
+            commit = { commits += it },
+            deleteBackward = {},
+            performEnter = {},
+            englishPro = { false },
+        )
+        r.handleKey("h")
+        r.handleKey("i")
+        assertEquals(listOf("h", "i"), fake.inputCalls)
+        assertEquals("不直出", emptyList<String>(), commits)
+        assertEquals("hi", ctrl.buffer)
+    }
 }

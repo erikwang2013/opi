@@ -306,10 +306,10 @@ impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
             // 见 settings.rs；导入词库在同一次里重装，见 extra_dicts.rs。
             if let Some(mut logic) = self.state.lock_logic() {
                 let lap = std::env::var_os("LOCALAPPDATA");
-                logic.apply_settings(
-                    settings::load(lap.as_deref()),
-                    &crate::dict_path::dicts_dir(lap.as_deref()),
-                );
+                let dicts = crate::dict_path::dicts_dir(lap.as_deref());
+                logic.apply_settings(settings::load(lap.as_deref()), &dicts);
+                logic.apply_custom_phrases(crate::custom_phrases::load(&dicts));
+                logic.apply_english_custom_phrases(crate::custom_phrases::load_english(&dicts));
             }
             // 注册按键监听：0.62 API 为 AdviseKeyEventSink（旧式 SetKeypressSink 已移除）。
             // fforeground=true：前台键盘事件也交本服务（输入法语义）。

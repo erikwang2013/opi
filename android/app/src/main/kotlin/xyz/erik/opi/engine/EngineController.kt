@@ -214,6 +214,11 @@ class EngineController(
         // 先读会拿到空串或上一条缓冲的旧值：2026-10-09 用户报障「确定候选词后左列
         // 不恢复标点」的 Kotlin 侧根因。**别把这个赋值挪回前面**（有单测钉次序）。
         reading = api.displayBuffer()
+        // 2026-10-24 用户报障「9 键输入 hou 顶部显示 468」：displayBuffer 偶发为空时
+        // 不能把数字缓冲当拼音显示。取候选读音首条兜底（它就是 9 键的拼音读数）。
+        if (reading.isEmpty() && inputScheme == InputScheme.NINE) {
+            reading = candidateReadings.firstOrNull().orEmpty()
+        }
         pendingText = api.pendingText()
         // 组合串同步点（必须最后）：服务层在此把「字段里的组合串」推给输入框。
         onBufferSynced()
@@ -254,6 +259,9 @@ class EngineController(
         if (text.isNotEmpty()) onLearned()
         return text
     }
+
+    /** 英文短语是否实际可命中（开关开 + 表非空，2026-10-24）：普通英文据此改走缓冲。 */
+    fun englishPhrasesActive(): Boolean = api.englishPhrasesActive()
 
     fun switchMode(m: EngineMode) {
         api.switchMode(m.value)

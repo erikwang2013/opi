@@ -95,15 +95,14 @@ pub struct Engine {
     /// 模糊音开关（「属性设置」可改；排序层的门控见 `candidates::RankOptions`）。
     /// 默认 `true` = 既有行为。
     pub(crate) fuzzy: crate::fuzzy::FuzzyMask, // pub(crate)：engine_segment.rs 判回退时要问它（位掩码 == 0 = 全关）
-    /// 拼音纠错开关（2026-10-13；写读侧见 `engine_user_words.rs`）。
-    pub(crate) correction: bool,
+    pub(crate) correction: bool, // 拼音纠错开关（写读侧见 engine_user_words.rs）
     /// 双拼布局索引（`shuangpin_tables::SHUANGPIN_TABLES` 的下标；越界钳到 0）。
     pub(crate) shuangpin_layout: usize,
     /// 简拼开关。默认 `true` = 既有行为。
     pub(crate) jianpin: bool, // pub(crate)：engine_user_words.rs 的开关一族要用
-    /// 自定义短语（2026-10-23）：列表 + 启用位，**只存内存**（宿主落盘）。
-    /// 匹配/校验/前插在 custom_phrases.rs；本层不碰 IO。
+    /// 自定义短语（见 custom_phrases.rs）：中英两套独立、只存内存（宿主落盘）。
     pub(crate) custom_phrases: crate::custom_phrases::CustomPhrases,
+    pub(crate) custom_phrases_en: crate::custom_phrases::CustomPhrases,
 }
 
 impl Engine {
@@ -147,6 +146,7 @@ impl Engine {
             jianpin: true,
             symbol_browse: Default::default(),
             custom_phrases: Default::default(),
+            custom_phrases_en: Default::default(),
         };
         engine.recompute_user_boost();
         engine

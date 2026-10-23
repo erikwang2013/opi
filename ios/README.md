@@ -1733,3 +1733,39 @@ OpiString opi_toggle_symbol(void);     /* 返回**待上屏的文本**，空句�
 价值：有人在 Rust 侧改了 C ABI 或加了 `cfg` 分支时，**CI 会立刻发现
 「iOS 目标编译不过」**，而不是等到 Mac 上才发现。
 Swift 侧则**无法**进这个 CI（需要 macOS runner），只能靠人。
+
+---
+
+## 2026-10-24 v1.25.0 订正：键盘版式、9 键读数与自定义短语缺口
+
+> 本块只记**工作区源码**的现状（设计留痕，不改上文）。iOS 这轮改动**尚未提交**，
+> 因此没有被任何 CI 编译过；本机是 Linux、没有 UIKit，也**没有真机/模拟器运行**。
+> 下面每一条都是读源码得到的，不要读成「已验证」。
+
+- **9 / 14 / 26 键版式（参考图改版）**：
+  - 9 键：3×3 主区，右上角按**格序**标 1–9（分词格也是 1；大 9 键不画角标），
+    普通点击仍送 T9 数字 2–9。长按/上滑浮层 = 该键字母**字号递减** + 格序数字最后，
+    **默认选中格序数字**（`InputModes.digitKey` / `KeyboardTouch.openKeyPopup`；
+    大 9 键只是隐藏角标，浮层仍在）。左列整列可竖滚（`ModeRow.scrollingColumn`，
+    每格按下推迟到抬手，免得拖动滚成打字）；输入中若读数非空，整列换成读数浮层
+    （`CandidateColumns.swift`），读数空时标点键原样露出。末格「自定义」打开常用
+    符号选择器（`PunctuationPicker`，数据来自 `OpiEngine.commonSymbols()`）；
+    已选符号点它直提、长按更换，结果存 `PunctuationPreference.custom`。
+  - 14 键：前两行 `qw er ty ui op` / `as df gh jk l` 带 1–0 角标；第三行
+    `⇧ zx(~) cv(!) bn(@) m(?) ⌫`；只有第三行四枚字母对带浮层
+    `[大写对, 符号, 小写对]`，**默认符号**（`InputModes.fourteenPair` /
+    `ModeKeySymbols.fourteenPair`）；底行 `符 123 ， 空格 。 中英 换行`。
+  - 26 键：拼音 26 无独立数字行，键面大写，Q–P 右上角 1–0，A/Z 行上方符号提示；
+    英文 26 有 0–9 独立数字行、键面小写；字母键浮层 `[大写, 符号, 小写]`、
+    **默认中间项**（`ModeKeyTables.letterRows` / `ModeKeySymbols.letterSpec`）。
+    五笔键面同拼音 26，但第三行最左是「拼」（`selectInputMode(.pinyin26)` →
+    `applyInputMode`），空格键面写「五笔」（`ModeKeyTables26.swift`）。
+- **9 键读数修复（不再显示按键数字）**：`KeyboardCandidates.refresh` 先取
+  `displayBuffer`，空则取 `candidateReadings.first`，仍空**留空行**；不再回退
+  数字缓冲（`hou` 显示 `468` 的那条）。退格/空格/回车的行为判定仍读 `buffer`，
+  两个出口别合并。
+- **自定义短语：没有 UI**：`ios/` 下没有任何 `*Phrase*` 文件。`OpiEngine.swift`
+  只包了中文套的三个出口（`customPhrasesEnabled` / `exportCustomPhrases` /
+  `setCustomPhrases`），**没有**英文套包装、没有设置页、也没有把
+  `opi_custom_phrases*.json` 从沙箱读进引擎的代码。
+  ⇒ 用户在 iOS 上配不了自定义短语；别把 Android / macOS 的入口读成 iOS 也有。

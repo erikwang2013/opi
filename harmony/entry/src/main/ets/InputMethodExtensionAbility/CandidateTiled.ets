@@ -10,9 +10,8 @@
 // 右列 = 返回 / ⌫ / 重输 / 空格（与 9 键右列同观感）；返回不动引擎、不清缓冲。
 //
 // ⚠️ 与 Android 的**明确差异**：左列在 Android 是「候选读音列」（点 = 钉读音）。
-// 引擎没有 candidate_readings 的 C ABI 出口（不伪造数据），本端左列改为与 9 键
-// 空闲态相同的**标点列**（走引擎中文标点表）—— 功能可用、但不是读音钉选。
-// 见最终报告「仍缺项」。
+// 读音出口 2026-10-24 已桥接，但目前只接在 9 键左列；平铺视图沿用旧的 5 格
+// **标点列**（走引擎中文标点表）—— 功能可用、但不是读音钉选。
 
 import { KeyboardController } from './KeyboardController';
 import { NINE_STRIP, NineKey } from './KeyPanels';
@@ -22,8 +21,10 @@ import { Palette, paletteFor } from './Palette';
 const UNITS_PER_ROW: number = 4;
 /** 一页 4 行（Android ROWS_PER_PAGE）。 */
 const ROWS_PER_PAGE: number = 4;
-/** 左列格数（与 9 键标点列同节奏）。 */
+/** 左列格数（与旧 9 键标点列同节奏）。 */
 const LEFT_CELLS: number = 5;
+/** 9 键标点列 2026-10-24 扩到 16 项；平铺视图保持 5 格，不跟着挤成 16 行。 */
+const TILE_STRIP: NineKey[] = NINE_STRIP.slice(0, LEFT_CELLS);
 
 class TileCell {
   index: number = 0;
@@ -115,9 +116,9 @@ export struct CandidateTiled {
 
   build() {
     Row() {
-      // 左列：标点（Android 这里是读音列；读音出口未桥接，见文件头注）。
+      // 左列：标点（Android 这里是读音列；本视图仍走标点列，见文件头注）。
       Column() {
-        ForEach(NINE_STRIP, (k: NineKey) => {
+        ForEach(TILE_STRIP, (k: NineKey) => {
           Column() {
             Text(k.label)
               .fontSize(this.elder === 1 ? 21 : 18)

@@ -196,10 +196,11 @@ class OpiImeService : InputMethodService() {
         // 用户词导入必须在词库装载之后、建视图之前：文件缺失/损坏静默降级（不崩 IME），
         // 且要赶在第一次刷新候选之前生效
         userWords.load()
-        // 自定义短语（2026-10-23）：宿主文件（filesDir/opi_custom_phrases.json）是唯一真源，
-        // 引擎侧是内存态 —— 每次建视图时整表重推。设置页改动会即时推，但进程被杀后
-        // 只有这里把它装得回去。失败只留日志，不能因此崩输入法。
+        // 自定义短语（2026-10-23；2026-10-24 英文套）：宿主文件（中文/英文各一个）是唯一
+        // 真源，引擎侧是内存态 —— 每次建视图时两套各自整表重推。设置页改动会即时推，
+        // 但进程被杀后只有这里装得回去。失败只留日志，不能因此崩输入法。
         CustomPhraseStore.from(this).loadAndPush { Log.w(TAG, "custom phrases: $it") }
+        CustomPhraseStore.englishFrom(this).loadAndPush { Log.w(TAG, "english custom phrases: $it") }
         // 词库目录装载（2026-10-14，M3）：目录里每个 *.tsv 进引擎，**停用名单在装载后重放**
         // —— 引擎里导入层是内存态，同名重导入会置回启用（`api/dict.rs` 裁决 2 把重放
         // 划给宿主）。单个失败不挡启动，只记一条日志（设置页「词库」节会把失败的显示出来）。
@@ -227,10 +228,11 @@ class OpiImeService : InputMethodService() {
             prefs.keyboardModes = imeState.keyboardModes
             prefs.skin = imeState.skin
             prefs.englishPro = imeState.englishPro
+            prefs.customPunct = imeState.customPunct
             // 键盘模式里悬浮/游戏改的是**窗口**，改完立刻重排（不等系统下一次 configure）
             window?.window?.let { applyKeyboardWindow(it) }
         }
-        imeState.restore(prefs.inputMode, prefs.keyboardModes, prefs.skin, prefs.englishPro)
+        imeState.restore(prefs.inputMode, prefs.keyboardModes, prefs.skin, prefs.englishPro, prefs.customPunct)
         val view = ComposeView(this)
         // 生命周期接线：置 CREATED（onWindowShown→RESUMED、onWindowHidden→STARTED、
         // onDestroy→DESTROYED），Compose 侧 remember/LaunchedEffect 依赖它。

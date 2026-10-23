@@ -120,6 +120,10 @@ pub mod configure;
 /// 它错了是静默的（用户以为改了）；写侧是 Compose 设置窗（desktop/）。
 pub mod settings;
 
+/// 自定义短语的宿主文件读取（`%LOCALAPPDATA%\opi\custom_phrases[_en].json`）。
+/// 与 `settings.rs` 同样平台中立：判定错了的表现是「设置窗里配了、输入时没有」。
+pub mod custom_phrases;
+
 /// 「清空用户词」的世代标记（`%LOCALAPPDATA%\opi\clear_generation`）。
 /// 与 `settings.rs` 同样**平台中立**：路径/读取/去重判定错了的表现是「用户以为
 /// 清了、其实没清」，正是静默失败。写侧在 desktop 的 `UserWords.kt`，消费侧在

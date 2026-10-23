@@ -41,4 +41,17 @@ static void check_custom_phrases(void) {
     exported = opi_export_custom_phrases();
     CHECK(has_ascii(exported, "\"trigger\":\"dz\""), "失败后旧表必须原样保留");
     opi_ffi_free_string(exported);
+
+    /* 英文套（2026-10-24）：同 schema，独立表/独立开关。 */
+    printf("[14b] 英文自定义短语（独立一套）\n");
+    CHECK(opi_english_custom_phrases_enabled() == true, "英文短语开关缺省应为开");
+    CHECK(opi_set_english_custom_phrases(buf, n) == 1, "英文套导入 1 条");
+    exported = opi_export_english_custom_phrases();
+    CHECK(has_ascii(exported, "\"trigger\":\"dz\""), "英文套导出应含 trigger");
+    opi_ffi_free_string(exported);
+    opi_set_english_custom_phrases_enabled(false);
+    CHECK(opi_english_custom_phrases_enabled() == false, "英文套开关可独立关闭");
+    CHECK(opi_custom_phrases_enabled() == true, "关英文套不影响中文套开关");
+    opi_set_english_custom_phrases_enabled(true);
+    CHECK(opi_set_english_custom_phrases(NULL, 0) < 0, "英文套 NULL 入参应返回负值");
 }

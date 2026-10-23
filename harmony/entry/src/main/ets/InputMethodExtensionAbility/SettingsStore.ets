@@ -30,6 +30,8 @@ const KEY_GAME: string = 'kb_game';
 const KEY_ENGLISH_PRO: string = 'english_pro';
 const KEY_SHOW_OWN: string = 'pet_show_own';
 const KEY_LEARN: string = 'engine_learn';
+/** 9 键左列末格的自定义标点（与 Android `nine_custom_punct` 同键名）。 */
+const KEY_CUSTOM_PUNCT: string = 'nine_custom_punct';
 
 let store: preferences.Preferences | null = null;
 
@@ -78,6 +80,18 @@ function readBool(key: string, def: boolean): boolean {
   try {
     const v: preferences.ValueType = store.getSync(key, def);
     return typeof v === 'boolean' ? v as boolean : def;
+  } catch (e) {
+    return def;
+  }
+}
+
+function readString(key: string, def: string): string {
+  if (store === null) {
+    return def;
+  }
+  try {
+    const v: preferences.ValueType = store.getSync(key, def);
+    return typeof v === 'string' ? v as string : def;
   } catch (e) {
     return def;
   }
@@ -142,6 +156,23 @@ export function saveSkin(index: number): void {
     flush();
   } catch (e) {
     console.error(`[opi] 保存皮肤失败：${e}`);
+  }
+}
+
+/** 9 键自定义标点：空串 = 还没选过（键面显示「自定义」）。 */
+export function customPunc(): string {
+  return readString(KEY_CUSTOM_PUNCT, '');
+}
+
+export function saveCustomPunc(value: string): void {
+  if (store === null) {
+    return;
+  }
+  try {
+    store.putSync(KEY_CUSTOM_PUNCT, value);
+    flush();
+  } catch (e) {
+    console.error(`[opi] 保存自定义标点失败：${e}`);
   }
 }
 

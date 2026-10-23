@@ -52,13 +52,16 @@ extension KeyboardViewController {
         )
         // 拼音行（2026-10-23）：显示串由引擎给（9 键/双拼带分词 `ni'hao`）。
         // **必须**在 `allCandidates` 之后读：读数与候选同一次排名（见文件头注）。
-        // 显示串为空（9 键整段无匹）时回退原缓冲并标 fallback：行不空白，但不把
-        // 数字键串冒充拼音；输入框的 pendingCommitText 仍守「9 键不落数字」。
-        let display = engine.displayBuffer()
-        layout.setComposingText(
-            display.isEmpty ? buffer : display,
-            fallback: display.isEmpty && !buffer.isEmpty
-        )
+        // 显示串空时：9 键取候选读音兜底，仍空就**留空行**（绝不回退数字缓冲，
+        // 2026-10-24「hou 显示成 468」同款）；其余方案回退字母缓冲。
+        var shown = engine.displayBuffer()
+        if shown.isEmpty, layout.wantsReadings {
+            shown = readings.first ?? ""
+        }
+        if shown.isEmpty, !layout.wantsReadings {
+            shown = buffer
+        }
+        layout.setComposingText(shown)
         syncMarkedText()
     }
 

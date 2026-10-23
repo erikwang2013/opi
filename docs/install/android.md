@@ -338,6 +338,7 @@ adb shell ime set    xyz.erik.opi/.OpiImeService      # 切为当前输入法
 - 英文模式：**默认普通** = 字母直出（`KeyRouter` 不进引擎）；点 `pro` 切专业后才进引擎做单词前缀联想（2026-10-18 起；单字母缓冲的首候选 = 输入原文，保留大小写）。只有**携带缓冲**（中→英保留的拼音）时字母直传。
 - **英文 26 键顶部有 0-9 数字行**（2026-10-19，`QwertyKeyboard.showNumberRow`；只在主键盘英文模式显示，搜索叠盘与中文模式不显示）。数字**直接上屏**（`KeyRouter.handleKey` 的英文分支；全角规则同其它直传点），不进引擎的英文数字选词。
 - **英文底行布局（2026-10-19）**：`!?#`（进符号页，英文符号在 ASCII 分类）→ `pro`（普通/专业）→ 空格 → 中/英切换 → ⌫；**回车与大写锁定同一行，回车在最右**（第 3 行 `⇧ z…m ↵`），底行不再放回车。原 [123] 位置改为 `pro`（数字已由顶部 0-9 覆盖；符号/数字面板仍从中文键盘进入）。**默认普通** = 字母直出、不查 `en_words.tsv`、无候选；点 `pro` 切到专业 = 现有前缀联想/候选。切换清空英文缓冲并落盘（`ImePreferences.englishPro`），键面高亮表示专业态；`KeyRouter` 的 `englishPro` 判据只在英文模式生效。
+- **英文自定义短语（2026-10-24）**：中英两套短语**完全独立**（各自开关 / 表 / 文件；见 §4.5b、§4.6）。引擎只在 `Mode::English` 且缓冲不是「中→英保留的拼音」时匹配英文套（`crates/engine-core/src/custom_phrases.rs` 的 `matching_custom_phrases`；英文按字母大小写不敏感、精确整串）；中文套只在 `Mode::Pinyin`/`Traditional` 且方案为 Full/Nine/Fourteen 时匹配。**英文短语开关开且表非空时，普通英文也把字母送进引擎缓冲**（`KeyRouter` 的 `controller.englishPhrasesActive()`；JNI `englishPhrasesActive` → `Engine::english_custom_phrases_active`），表空或关闭时普通英文仍直出。桌面 fcitx5/TSF 用同一判据（`english_phrases_active`）；iOS/鸿蒙没有短语 UI 与文件装载，不适用。
 
 ### 4.3 数字面板与符号面板
 
@@ -652,6 +653,47 @@ fcitx5 配置面**同名**，宣纸/朱砂与后五款的配色取 `scripts/gen_
 换布局/换窗口模式的生效时机：输入模式立即（引擎 `setScheme` 清缓冲）；键盘模式里的
 窗口两项由 `applyKeyboardWindow` 当场重排，不等系统下一次 configure。
 
+### 4.5b 键盘版式（2026-10-24 参考图改版）
+
+三端（Android / iOS / 鸿蒙）按同一套参考图改键面；本节记 Android 的落点，iOS 见
+`ios.md` §6.5、鸿蒙见 `harmony.md` §6.5。**协议值没变**：普通点击仍发原来的 T9 数字 /
+14 键首字母 / 26 键字母码点，弹层项才是新增的发送源。本轮只有源码与 JVM 单测，
+**没有真机手势/观感验证**。
+
+- **9 键**（`keyboard/NineKeyKeyboard.kt`）：主区 3×3（第一格仍是分词键），每格
+  **右上角序号 1–9**（`nineKeyBadge`，按格序、分词格 = 1）；序号只是位置提示，点击动作
+  不变（数字格发 T9 `2`–`9`，分词格发 `'`）。**长按/上滑**弹层 = 该格字母（字号递减）+
+  **末尾序号**，末项默认选中（`nineKeyAlternatives`，`defaultAlternative = alts.lastIndex`）。
+  **大 9 键不画序号**（`big` ⇒ `cornerHint = null`），弹层与末项照旧。
+- **9 键左列**：标点列改为**可竖向滚动**（`nineKeyStripPuncts` 的 `LazyColumn`），末格
+  「自定义」：未选时点开 `keyboard/CustomSymbolPicker.kt`；选中后**点它发送、长按更换**，
+  值落 `ImeState.customPunct`（`ImePreferences` 键 `nine_custom_punct` 持久化）。
+- **14 键**（`keyboard/FourteenKeyKeyboard.kt`）：`qw er ty ui op` / `as df gh jk l` /
+  `⇧ zx(~) cv(!) bn(@) m(?) ⌫`；前两行上方数字提示 1–5 / 6–0（`fourteenDigitBadges`），
+  第三行四枚字母键上方符号（`fourteenSymbols`）。字母键长按/上滑弹层
+  `[大写对, 符号, 小写对]`、**默认符号**（`fourteenAlternatives` /
+  `FOURTEEN_DEFAULT_ALT_INDEX`）；普通点击仍发**协议首字母**。底行
+  `符 123 , 空格 。 中英 换行`（`fourteenBottomKeys`，空格加权）。
+- **26 键**（`keyboard/QwertyKeyboard.kt`）：
+  - **拼音 26**：无数字行、字母键面大写；Q–P 右上角 1–0（`pinyinDigitHints`），
+    A/Z 两行上方符号提示（`pinyinSymbolHints`，H/J 是中文引号）。
+  - **英文 26**：有 0–9 数字行（`showNumberRow`）、字母小写；数字仍直接上屏。
+  - 字母键长按/上滑弹层 `[大写, 符号, 小写]`、**默认符号**（`qwertyAlternatives` /
+    `QWERTY_ALTERNATIVE_DEFAULT`；拼音 Q 行的中间项是角标数字）。
+  - **五笔 26**：键面同拼音 26，只差第三行最左「拼」（切回拼音 26，`qwertyLeadLabel`
+    + 宿主传的 `onSwitchToPinyin`）与空格键面「五笔」（`qwertySpaceLabel`，动作仍是空格）。
+- **9 键读数（2026-10-24 修复）**：用户报障「输入 `hou` 顶部显示 `468`」。
+  `EngineController.refresh` 在 9 键下若 `displayBuffer()` 为空，用**候选读音首条**兜底
+  （`candidateReadings.firstOrNull()`），仍空则留空；`ime/ComposingBar.kt` 同步去掉数字
+  回退 ⇒ **绝不把数字缓冲画成拼音**。三端同口径（iOS `KeyboardCandidates.swift`、鸿蒙
+  `TopBar.ets` 的 `composingText()`）。
+
+门禁：`NineKeyLayoutTest.badgesFollowKeyOrderButSendingStaysSchemeDigits` /
+`popupLastValueIsTheBadgeOrdinal`、`FourteenKeyLayoutTest.bottomRowMatchesReferenceOrderAndWideSpace`、
+`Qwerty26LayoutTest.wubiLabelsDifferOnlyOnTheLeadKeyAndSpace` /
+`wubiIsWiredToSwitchBackToPinyin26`、`ComposingRowVisibilityTest`（无匹时拼音行留空）、
+`EngineControllerComposingTest.composingTextNeverLeaksNineKeyDigits`。
+
 ### 4.6 设置页
 
 `settings/SettingsScreen.kt`。⚠️ **下表是 2026-10-08 的快照，此后设置页长成了「分节」形态**
@@ -705,6 +747,31 @@ IME 服务在 `EngineLoader.load` 之后把三个值推给引擎（`prefs.applyE
 `shared/pet/emoji-font/map.tsv` 里的 U+E000–U+E00B 只是 12 个形态的**稳定内部 ID**
 （跨端标签/短码表的索引），不随包提供字体，也不会上屏。旧的
 「自有表情用字体字符（PUA）」开关与 `opi-emoji.ttf` 已于 2026-10-20 删除。
+
+**自定义短语（2026-10-23 中文套 / 2026-10-24 英文套）**：设置页有两项并列入口——
+「自定义短语」（`phrasePage = 1`）与「英文自定义短语」（`phrasePage = 2`），
+`settings/SettingsScreen.kt` 各带一个「管理」按钮，打开同一 `settings/CustomPhraseScreen.kt`
+的 `english = false/true`。两套**完全独立**：独立开关、独立表、独立文件——
+`filesDir/opi_custom_phrases.json` / `opi_custom_phrases_en.json`
+（`CustomPhraseStore.FILE_NAME` / `FILE_NAME_EN`）。宿主文件是**唯一真源**：
+schema `{"version":1,"enabled":true,"phrases":[{"trigger":"dz","text":"地址"}]}`
+（`CustomPhraseCodec.encodeState`；导出用的 `encodeCanonical` 是不带 `enabled` 的引擎
+JSON）。`OpiImeService.onCreateInputView` 每次建视图时把两套整表重推引擎；设置页改动
+「先存盘 → 再改 UI → 再推引擎」（`CustomPhraseScreen.apply`），引擎只持内存。
+
+- 列表 **10 条/页**（`CustomPhraseCodec.PAGE_SIZE`），显示总数，可增删改；导入时同一
+  trigger 后者覆盖前者（`CustomPhraseCodec.merge`，页面内编辑也先过 `normalize`）。
+- 导入：JSON / TSV / CSV / `字母=短语` / `字母 空白 短语` 自动识别；**任何一行非法
+  ⇒ 整份拒收**、旧表不动。导出：JSON（可原样再导入）/ TSV。读文件上限 1 MiB
+  （`CustomPhraseScreen.MAX_IMPORT_CHARS`，有界读）。
+- 上限（宿主与引擎同值）：**2000 条**、trigger **≤32 个 ASCII 字母**、text 非空
+  （`CustomPhraseCodec.MAX_PHRASES` / `MAX_TRIGGER_LEN` 镜像
+  `crates/engine-core/src/custom_phrases.rs` 的 `MAX_CUSTOM_PHRASES` / `MAX_TRIGGER_LEN`）。
+  9/14 键按方案类表把 trigger 折成按键串再精确比较（`Scheme::matches`；分词符 `'`
+  不参与比较），全拼/繁体按键面直接比较字母。
+- 匹配范围见 §4.2 最后一条（中文套仅 Pinyin/Traditional + Full/Nine/Fourteen；英文套仅
+  English；英文短语可命中时普通英文也进缓冲，表空/关闭则直出）。门禁：`CustomPhraseStoreTest`、
+  `CustomPhraseCodecTest`、引擎侧 `crates/engine-core/tests/custom_phrases.rs`。
 
 ---
 

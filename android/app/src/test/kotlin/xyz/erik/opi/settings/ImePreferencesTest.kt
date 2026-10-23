@@ -40,6 +40,18 @@ class ImePreferencesTest {
         // 「表情中显示自有」缺省关 = 「自有」子页隐藏（2026-10-20 用户裁决）。
         assertEquals(false, p.showOwn)
         assertEquals(SkinOption.FOLLOW, p.skin)
+        // 9 键「自定义」标点缺省 = 未选（键面「自定义」）。
+        assertEquals("", p.customPunct)
+    }
+
+    /** 9 键左列「自定义」标点（2026-10-24）：选中值往返；清空 = 回到未选。 */
+    @Test
+    fun customPunctRoundTripsAndClears() {
+        val store = FakeStore()
+        ImePreferences(store).customPunct = "…"
+        assertEquals("…", ImePreferences(store).customPunct)
+        ImePreferences(store).customPunct = ""
+        assertEquals("", ImePreferences(store).customPunct)
     }
 
     @Test

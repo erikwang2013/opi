@@ -5,7 +5,6 @@ package xyz.erik.opi.keyboard
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -15,9 +14,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,12 +28,12 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * 9 键布局表（拼音 9 键 / 大 9 键共用；大 9 只差字号）。
+ * 9 键布局表（拼音 9 键 / 大 9 键共用；大 9 只差字号与「不画数字徽标」）。
  *
  * ⚠️ **发送的键值（[NineKey.key]）= 协议**：
  * · `'2'..'9'` 必须落在 engine-core `scheme.rs` 的 Nine 类表里（各映射三四个字母），
@@ -46,8 +49,9 @@ internal data class NineKey(val label: String, val key: String, val hint: String
 
 /**
  * **左侧一列**的默认内容 = 标点列（主流同款：空闲时一列标点，输入时整列换成拼音）。
+ * 2026-10-24 起整列**可竖向滚动**（条目多于可视三行），末尾追加「自定义」格。
  * 发送键都取引擎中文标点表（punctuation.rs 的 CHINESE_PUNCT）**已有的键**：
- * `,`→，`.`→。`\`→、`?`→？`!`→！ —— 上层不用另造标点通路。
+ * `,`→，`.`→。`\`→、`?`→？`!`→！…… —— 上层不用另造标点通路。
  */
 internal val nineKeyStripPuncts: List<NineKey> = listOf(
     NineKey("，", ","),
@@ -55,11 +59,26 @@ internal val nineKeyStripPuncts: List<NineKey> = listOf(
     NineKey("、", "\\"),
     NineKey("？", "?"),
     NineKey("！", "!"),
+    NineKey("：", ":"),
+    NineKey("；", ";"),
+    NineKey("（", "("),
+    NineKey("）", ")"),
+    NineKey("“", "\""),
+    NineKey("‘", "'"),
+    NineKey("【", "["),
+    NineKey("】", "]"),
+    NineKey("《", "<"),
+    NineKey("》", ">"),
+    NineKey("～", "~"),
 )
 
 /** 分词键的发送键（音节边界分隔符 = 协议值，与 `scheme.rs` 的分隔符同一个字）：
  * 布局表与点击分流共用，别各写一份字面量。 */
 internal const val SEGMENT_KEY = "'"
+
+/** 主区域格子的数字徽标（2026-10-24）：**按格序** 1..9，[index] 从 0 起。
+ * 数字键发送的仍是 T9 的 2..9（徽标只表示位置，不改协议值）。 */
+internal fun nineKeyBadge(index: Int): String = (index + 1).toString()
 
 internal val nineKeyRows: List<List<NineKey>> = listOf(
     // 主区域第一格 = **分词键**（2026-10-15 用户裁决「第一符号按钮改成分词按钮」，
@@ -73,7 +92,8 @@ internal val nineKeyRows: List<List<NineKey>> = listOf(
 )
 
 /**
- * 拼音 9 键（T9）。[big] = 大 9 键（同布局放大键面，对齐主流输入法「拼音大9键」）。
+ * 拼音 9 键（T9）。[big] = 大 9 键（同布局放大键面；2026-10-24 起大 9 **不画数字徽标**，
+ * 对齐主流「大9键」的纯字母键面）。
  * 数字键在此方案下**是输入键**（引擎 Nine 方案收进缓冲），不需要任何数字选词 UI。
  */
 @Composable
@@ -91,20 +111,16 @@ fun NineKeyKeyboard(
      * **由宿主在缓冲空时拦住** —— 空缓冲点它没有边界可切，且空缓冲的 `'` 在引擎里
      * 是引号（不是分词符）。 */
     onSegment: () -> Unit,
-    /** 重输键（2026-10-10 用户裁决「增加重输按钮，去掉分词按钮」）：清掉当前组合重来。
-     * 缓冲空时是空操作（[xyz.erik.opi.engine.EngineController.clear] 本身幂等）。
-     * 手动分词键 2026-10-15 又放回主区域第一格（见上）。 */
+    /** 重输键：清掉当前组合重来。缓冲空时是空操作（clear 本身幂等）。 */
     onRetype: () -> Unit,
-    /** 数字键盘切换（2026-10-10 用户裁决：底行新增）：进数字面板（与 26 键的 123 同路）。 */
+    /** 数字键盘切换（底行 [123]，与 26 键的 123 同路）。 */
     onNumber: () -> Unit,
-    /** 英文键盘切换（同上）：切到英文 26 键输入模式（与输入模式面板的「英文26键」同一条
-     * selectInputMode 路——它会先提交 pending 缓冲，那是「明确换布局」的既有语义）。 */
+    /** 英文键盘切换（底行 [英文]）：切到英文 26 键输入模式（与输入模式面板同一条路）。 */
     onEnglish: () -> Unit,
-    /** 候选拼音读数（9 键左列逐行显示，如 `ni'hao`；**按读音去重保序** —— 同一读音
-     * 只出一行，引擎出口已去重，2026-10-12 用户裁决「左列去重」）。
-     * 空列表 = 没在输入/无候选，左列显示标点）。 */
+    /** 候选拼音读数（9 键左列逐行显示，如 `ni'hao`；**按读音去重保序**）。
+     * 空列表 = 没在输入/无候选，左列显示标点列）。 */
     readings: List<String> = emptyList(),
-    /** 点第 i 行拼音 = 钉该读音（**不确认**，候选收窄到**读音恰等**的条目；见 onPickReading 的注释）。 */
+    /** 点第 i 行拼音 = 钉该读音（**不确认**，候选收窄到**读音恰等**的条目）。 */
     onPickReading: (Int) -> Unit = {},
     /** 当前钉住的读音（空串 = 未钉；命中的行高亮强调色）。 */
     pinnedReading: String = "",
@@ -112,12 +128,17 @@ fun NineKeyKeyboard(
     scrollKey: String = "",
     modeLabel: String = "中",
     big: Boolean = false,
+    /** 左列末尾「自定义」标点的当前值（空 = 未选，按钮面「自定义」）。 */
+    customPunct: String = "",
+    /** 选了一个自定义标点：宿主落盘；下次点该格即发送它。 */
+    onPickCustomPunct: (String) -> Unit = {},
+    /** 自定义符号选择网格的数据源（引擎「常用」符号；只在选择器打开时取）。 */
+    commonSymbols: () -> List<String> = { emptyList() },
+    /** 自定义标点发送通道：任意符号不是键盘键码，走直提（符号面板同一条）。 */
+    onCommitText: (String) -> Unit = onKey,
 ) {
-    // 键面按主流输入法排：**字母为主、数字缩小到下面**（2026-10-09 用户裁决「现在的
-    // 排版太不适应」）。此前是反的（数字 22sp、字母 11sp）—— 人们认键靠字母。
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        // 横屏矮键区 / 单手窄键区降一档，见 [compactKeys]：九宫格中列一格在单手 320dp
-        // 下只有约 44dp，"wxyz" 21sp ≈ 46dp 会被省略号截断；26sp 大字在 4 行矮格也会撑破。
+        // 横屏矮键区 / 单手窄键区降一档，见 [compactKeys]。
         val compact = compactKeys(maxWidth.value, maxHeight.value)
         val letterSize = when {
             big && compact -> 24.sp
@@ -132,94 +153,88 @@ fun NineKeyKeyboard(
             else -> 12.sp
         }
         val keyFont = if (compact) 17.sp else 21.sp
+        var pickerOpen by remember { mutableStateOf(false) }
         Column(modifier = Modifier.fillMaxSize()) {
             Row(modifier = Modifier.weight(3f).fillMaxSize()) {
-                // ---- 左侧一列（2026-10-09，主流输入法 9 键同款）----
-                // 空闲 = 一列标点（可点，走引擎标点表）；输入时**整列换成候选拼音读数**
-                // （一个读音一行、已去重：你好→ni'hao；2026-10-09 用户裁决「一列多个、
-                // 可滑动查看后面候选/下一页」；2026-10-12 用户裁决「左列去重」）——
-                // 「拼音是输入才替换到左侧一列」（用户原话）。
-                // 左列宽度 0.72 → 1.0 键宽（2026-10-10 用户裁决「把左侧一列按钮大了」；
-                // 右列要与它同宽，见下）。
+                // ---- 左侧一列（2026-10-24：整列可滚动 + 末尾「自定义」）----
+                // 空闲 = 标点列（点它走引擎标点表）；输入时**整列换成候选拼音读数**
+                // （一个读音一行、已去重）——「拼音是输入才替换到左侧一列」。
                 Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
                     if (readings.isNotEmpty()) {
-                        // 读数态的整块在 CandidateReadingColumn（2026-10-16 抽出：平铺候选
-                        // 视图要求同语义的第二处）。抽出的口径：点击=钉读音、读屏串、滚动
-                        // 复位、封顶格数都逐字同构 —— 别在本文件里再抄一份。
+                        // 读数态：格数与标点列同节奏（可视三行 ⇒ cells = 3）。
                         CandidateReadingColumn(
                             readings = readings,
                             pinnedReading = pinnedReading,
                             onPick = onPickReading,
                             scrollKey = scrollKey,
-                            cells = nineKeyStripPuncts.size,
+                            cells = 3,
                             fontSize = 15.sp,
                             modifier = Modifier.fillMaxSize(),
                         )
                     } else {
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            for (k in nineKeyStripPuncts) {
-                                KeyBox(
-                                    modifier = Modifier.weight(1f),
-                                    description = nineKeySpoken(k),
-                                    onTap = { onKey(k.key) },
-                                ) {
-                                    Text(k.label, fontSize = letterSize)
+                        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                            val cell = maxHeight / 3
+                            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                items(nineKeyStripPuncts.size) { i ->
+                                    val k = nineKeyStripPuncts[i]
+                                    KeyButton(
+                                        k.label,
+                                        modifier = Modifier.fillMaxWidth().height(cell),
+                                        onTap = { onKey(k.key) },
+                                        description = nineKeyStripSpoken(k),
+                                        fontSize = letterSize,
+                                    )
                                 }
-                            }
-                        }
-                    }
-                }
-                // ---- 右侧 3×3 数字格 ----
-                Column(modifier = Modifier.weight(3f)) {
-                    for (row in nineKeyRows) {
-                        Row(modifier = Modifier.weight(1f).fillMaxSize()) {
-                            for (k in row) {
-                                KeyBox(
-                                    modifier = Modifier.weight(1f),
-                                    description = nineKeySpoken(k),
-                                    // 分词键（发 `'`）走 onSegment（宿主在空缓冲时拦住）；
-                                    // 其余键照常走 onKey（数字 = 输入键）。
-                                    onTap = { if (k.key == SEGMENT_KEY) onSegment() else onKey(k.key) },
-                                ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center,
-                                    ) {
-                                        if (k.hint.isEmpty()) {
-                                            // 无字母组的键（分词）：单行大字，与旁边键的
-                                            // 字母提示同号 —— 2026-10-15 起这格只有两个字，
-                                            // 原先为「，。?！」四个字形收一档的特例随之下线。
-                                            Text(
-                                                k.label,
-                                                fontSize = letterSize,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
+                                // 自定义格：未选 = 点它开选择器；已选 = 点它发送、长按换。
+                                item {
+                                    val face = customPunct.ifEmpty { "自定义" }
+                                    KeyButton(
+                                        face,
+                                        modifier = Modifier.fillMaxWidth().height(cell),
+                                        onTap = {
+                                            if (customPunct.isEmpty()) pickerOpen = true
+                                            else onCommitText(customPunct)
+                                        },
+                                        onLongPress = { pickerOpen = true },
+                                        description = if (customPunct.isEmpty()) {
+                                            "自定义符号，点按选择"
                                         } else {
-                                            // 单手/长辈字号下提示行不换行（换行会把数字行挤出格）。
-                                            Text(
-                                                k.hint,
-                                                fontSize = letterSize,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
-                                            Text(
-                                                k.label,
-                                                fontSize = digitSize,
-                                                color = LocalKeyboardPalette.current.barDimFg,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
-                                        }
-                                    }
+                                            "自定义符号 $customPunct，点按输入，长按更换"
+                                        },
+                                        fontSize = if (customPunct.isEmpty()) keyFont else letterSize,
+                                    )
                                 }
                             }
                         }
                     }
                 }
-                // ---- 右侧一列（2026-10-10 用户裁决）----
-                // ⌫ / 重输 / 空格 从底行搬到右列：三格各占三分之一格高、**与左列同宽**
-                // （「大小和左侧一列一样」）。空格挪到高键上更好按，⌫ 也顺手。
+                // ---- 中间 3×3 数字格（2026-10-24：右上角数字徽标）----
+                Column(modifier = Modifier.weight(3f)) {
+                    nineKeyRows.forEachIndexed { r, row ->
+                        Row(modifier = Modifier.weight(1f).fillMaxSize()) {
+                            row.forEachIndexed { c, k ->
+                                // 长按/上滑候选：字母（字号递减）+ **徽标序号**收尾；
+                                // 弹层默认选中末项（普通点击仍发协议键，见 onTap）。
+                                val alts = nineKeyAlternatives(k, r * 3 + c, letterSize, digitSize)
+                                KeyButton(
+                                    // 字母为主（主流同款）；大 9 只画字母、不画徽标。
+                                    label = k.hint.ifEmpty { k.label },
+                                    modifier = Modifier.weight(1f),
+                                    onTap = {
+                                        if (k.key == SEGMENT_KEY) onSegment() else onKey(k.key)
+                                    },
+                                    description = nineKeySpoken(k),
+                                    fontSize = letterSize,
+                                    alternatives = alts,
+                                    defaultAlternative = alts.lastIndex,
+                                    onAlternative = onKey,
+                                    cornerHint = if (big) null else nineKeyBadge(r * 3 + c),
+                                )
+                            }
+                        }
+                    }
+                }
+                // ---- 右侧一列：⌫ / 重输 / 空格（与左列同宽）----
                 Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
                     KeyButton(
                         "⌫",
@@ -243,15 +258,9 @@ fun NineKeyKeyboard(
                     )
                 }
             }
-            // 底行（2026-10-10 用户裁决）：[符][中/繁] + **新增 [123] 数字键盘与 [英文] 键盘
-            // 切换**，↵ 压尾。⌫/重输/空格 已移入右列。重输是 9 键专属（14/26/笔画无此行）。
+            // 底行：[符][中/繁][123][英文][↵]（⌫/重输/空格 已移入右列）。
             Row(modifier = Modifier.weight(1f).fillMaxSize()) {
                 KeyButton("符", modifier = Modifier.weight(1f), onTap = onSymbol, fontSize = keyFont)
-                // 模式键在 9 键上**只切简/繁**（2026-10-15 用户裁决「简繁按钮就只切换简繁」；
-                // 进英文走右边那枚 [英文] 键）—— 键面仍是「中/繁」两个既有字（= 点它会
-                // 切到哪），但读屏不能沿用 spokenKeyName 对这两字的默认读法「中英切换」，
-                // 故覆写名字；状态用 14 键/笔画同一处 [modeStateDescription]（「繁体」等），
-                // 不为这枚键再造一套串。
                 KeyButton(
                     modeLabel,
                     modifier = Modifier.weight(1f),
@@ -265,6 +274,47 @@ fun NineKeyKeyboard(
                 KeyButton("↵", modifier = Modifier.weight(1f), onTap = onEnter, fontSize = keyFont)
             }
         }
+        if (pickerOpen) {
+            CustomSymbolPicker(
+                symbols = commonSymbols(),
+                onPick = { symbol ->
+                    onPickCustomPunct(symbol)
+                    pickerOpen = false
+                },
+                onClose = { pickerOpen = false },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+/**
+ * 9 键弹层的发送值（2026-10-24 澄清）：字母逐个在前，**右上角徽标序号**收尾。
+ * 九个格子都按格序 1..9（分词格 = 1）；选中末项 = 输入该序号数字。
+ * 普通点击不走这里，仍发协议值（分词 `'` / T9 `2..9`）。
+ * 分词格的「1」在 Nine 里没有键类，宿主把它当空缓冲分词键直提（ImeScreen 的 onKey）。
+ */
+internal fun nineKeyAlternativeValues(k: NineKey, index: Int): List<String> =
+    k.hint.map(Char::toString) + nineKeyBadge(index)
+
+/** 弹层键面：字母**字号递减**，序号数字用 [digitSize]（末项 = 默认高亮）。 */
+private fun nineKeyAlternatives(
+    k: NineKey,
+    index: Int,
+    firstSize: TextUnit,
+    digitSize: TextUnit,
+): List<KeyAlternative> {
+    val values = nineKeyAlternativeValues(k, index)
+    return values.mapIndexed { i, v ->
+        KeyAlternative(
+            label = v,
+            value = v,
+            fontSize = if (i == values.lastIndex) {
+                digitSize
+            } else {
+                (firstSize.value - i * 3f).coerceAtLeast(12f).sp
+            },
+        )
     }
 }
 
@@ -272,15 +322,37 @@ fun NineKeyKeyboard(
 internal fun nineKeySpoken(k: NineKey): String = when {
     k.hint.isNotEmpty() -> "数字 ${k.label}，字母 ${k.hint.toCharArray().joinToString(" ")}"
     // 按**发送键**判，不按键面（多标点那代定的规矩，键面与语义不再一一对应）：
-    // `,` = 逗号（左列那枚）；`'` = 分词键（2026-10-15 起在主区域第一格，面「分词」）。
+    // `,` = 逗号（主区域已无此键，留在这是给读屏一个稳定名字）；
+    // `'` = 分词键（2026-10-15 起在主区域第一格，面「分词」）。
     k.key == "," -> "逗号"
     k.key == "'" -> "分词"
     else -> spokenKeyName(k.label)
 }
 
+/** 左列标点格的读屏名（与主区域分开：同一个 `'` 在主区域是分词、在标点列是单引号）。 */
+internal fun nineKeyStripSpoken(k: NineKey): String = when (k.key) {
+    "," -> "逗号"
+    "." -> "句号"
+    "\\" -> "顿号"
+    "?" -> "问号"
+    "!" -> "感叹号"
+    ":" -> "冒号"
+    ";" -> "分号"
+    "(" -> "左括号"
+    ")" -> "右括号"
+    "[" -> "左方括号"
+    "]" -> "右方括号"
+    "<" -> "左书名号"
+    ">" -> "右书名号"
+    "\"" -> "双引号"
+    "'" -> "单引号"
+    "~" -> "波浪号"
+    else -> spokenKeyName(k.label)
+}
+
 /**
- * 键位容器（9 键 / 14 键 / 笔画共用外观）：圆角底 + 点击 + 读屏名。
- * 与 [KeyButton] 同观感，区别只在内容不是单行文本（数字 + 字母提示两行）。
+ * 键位容器（14 键 / 笔画共用外观）：圆角底 + 点击 + 读屏名。
+ * 与 [KeyButton] 同观感，区别只在内容不是单行文本。
  */
 @Composable
 internal fun KeyBox(

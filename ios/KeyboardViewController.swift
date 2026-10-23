@@ -435,6 +435,9 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             // `ModeKeyTables.systemInputKey`）。中/英、简繁、面板「‹ 返回」都只在本
             // 输入法内换引擎/键面，**绝不**走这里 —— 这是 2026-10-21 用户裁决。
             advanceToNextInputMode()
+        case .showPunctuationPicker:
+            // 9 键左列自定义键（2026-10-24）：符号现取（空列表由选择器兜底）；选中只落盘，上屏走自定义键。
+            layout.showPunctuationPicker(engine.commonSymbols())
         case .commitText(let text):
             // 符号面板的键**直提，不过引擎**：引擎的标点表会把 `,` 改写成中文标点/
             // 全角（那是文本模式该做的事），而用户点的就是 `,`。

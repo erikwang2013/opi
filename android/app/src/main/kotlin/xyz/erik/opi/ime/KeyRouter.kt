@@ -73,7 +73,9 @@ class KeyRouter(
             }
             // 普通模式（2026-10-19，默认）：字母/数字都直出，**不进引擎、不做单词
             // 匹配**；⇧ 语义与携带缓冲直传一致。专业模式才走下面的词库前缀联想。
-            if (!englishPro()) {
+            // 例外（2026-10-24）：英文短语可命中时必须缓冲，否则字母已进文档，
+            // trigger 永远匹配不到（与 fcitx5/TSF 同一判据）。
+            if (!englishPro() && !controller.englishPhrasesActive()) {
                 if (controller.shiftState != ShiftState.OFF) {
                     commit(controller.fullwidthize(ch.uppercase()))
                     controller.consumeSingleShift()

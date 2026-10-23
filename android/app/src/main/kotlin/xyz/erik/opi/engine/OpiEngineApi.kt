@@ -57,6 +57,10 @@ interface OpiEngineApi {
     fun pendingText(): String
     fun mode(): Int
 
+    /** 英文自定义短语是否**实际可命中**（开关开且表非空，2026-10-24）。
+     * 普通英文模式据此改走引擎缓冲；缺省 false 让既有假引擎不用改（生产实现是 JNI 出口）。 */
+    fun englishPhrasesActive(): Boolean = false
+
     /** 删除一个用户词（连同频次）；非用户词/不存在无副作用。 */
     fun removeUserWord(text: String)
 

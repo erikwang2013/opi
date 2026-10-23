@@ -178,6 +178,8 @@ pub fn execute(
         CtlOp::Reload => {
             let path = settings_path.ok_or("设置文件路径不可用（LOCALAPPDATA 未设置）")?;
             logic.apply_settings(crate::settings::load_file(path), dicts_dir);
+            logic.apply_custom_phrases(crate::custom_phrases::load(dicts_dir));
+            logic.apply_english_custom_phrases(crate::custom_phrases::load_english(dicts_dir));
             Ok(CtlReply::Reload)
         }
         CtlOp::Action(action) => match action.as_str() {

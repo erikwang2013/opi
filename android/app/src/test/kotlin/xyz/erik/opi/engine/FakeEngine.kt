@@ -34,6 +34,10 @@ class FakeEngine : OpiEngineApi {
     /** 键 → 引擎要上屏的文本（真引擎：标点键有文本、字母/数字键没有）。 */
     var inputResults = mutableMapOf<String, String>()
 
+    /** 英文短语可命中（真引擎：开关开 + 表非空）。 */
+    var englishActive = false
+    override fun englishPhrasesActive(): Boolean = englishActive
+
     /** 引擎侧 ⇧（真引擎 composer 英文模式按它决定大小写；single 由调用方消费）。 */
     var shiftOn = false
 

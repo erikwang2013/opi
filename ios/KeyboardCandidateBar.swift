@@ -165,10 +165,10 @@ extension KeyboardLayout {
     }
 
     /// 刷新拼音行。文本通常来自 `OpiEngine.displayBuffer()`（引擎已分词）；
-    /// 9 键无匹（display 空）时控制器回退 `buffer()` 并置 `fallback=true`，只作
-    /// 原按键序列展示，不冒充拼音（判据见 `KeyboardCandidates.refresh`）。
-    func setComposingText(_ text: String, fallback: Bool = false) {
-        composingBar.setText(text, fallback: fallback)
+    /// 9 键无匹（display 空）时**留空**，不回退数字键串（判据见
+    /// `KeyboardCandidates.refresh`）。
+    func setComposingText(_ text: String) {
+        composingBar.setText(text)
         lastComposingText = text
         updatePetStripVisibility()
     }

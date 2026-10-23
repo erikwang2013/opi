@@ -59,6 +59,9 @@ OpiEngine.shared.loadOptionalWubiDictionary()
 OpiSettingsStore.applyPersisted()
 // 导入词库（dicts/*.tsv）按停用名单重放；坏文件只记日志，不挡启动。
 OpiEngine.shared.loadImportedDicts(disabled: OpiSettingsStore.disabledDicts())
+// 自定义短语：宿主文件是唯一真源，引擎只持内存，启动时中英两套整表重推（坏文件按空表）。
+OpiCustomPhraseStore.shared.loadAndPush(.chinese)
+OpiCustomPhraseStore.shared.loadAndPush(.english)
 
 // 后台常驻：本进程没有窗口，靠 run loop 收 IMK 事件。
 // ⚠️ 未验证：LSBackgroundOnly 下用 NSApplication.shared.run() 是否正确

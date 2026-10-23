@@ -192,6 +192,12 @@ inline void applyOpiSettings(const OpiSettings &settings) {
         opi_fcitx5_set_wubi_return_style(static_cast<int32_t>(*settings.wubiReturn));
         opi_fcitx5_set_wubi_auto_commit(*settings.wubiAutoCommit);
     }
+    // 自定义短语（2026-10-24）：桌面设置窗写的中英两套宿主文件是唯一真源；读文件 +
+    // 整表推送都在 Rust 侧（坏文件归一为空表）。与上面那些引擎旋钮同一条冷路径 ——
+    // 构造 / reloadConfig / setConfig 都会走到这里。
+    if (opi_fcitx5_reload_custom_phrases != nullptr) {
+        opi_fcitx5_reload_custom_phrases();
+    }
 }
 
 // 从磁盘读进 settings。**文件不存在不是错误**：readAsIni 会把字段留作默认值 ——
