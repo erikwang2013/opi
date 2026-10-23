@@ -287,7 +287,7 @@ LICENSE · CONTRIBUTING.md      # MIT full text · contribution guide (incl. dic
 
 ### 📅 Project Status
 
-> **Current stage: v1.24.2 (2026-10-23): Windows white-screen hotfix after overwrite install (refresh the shell only when Explorer holds the old DLL); otherwise the same as 1.24.1: hold-to-delete on mobile, Android in-keyboard clear, Windows per-host clear, iOS responsive and 9-key pinyin-row fixes**
+> **Current stage: v1.24.3 (2026-10-23): iOS 9-key 繁/123/English stay inside opi; 🌐 short-press cycles languages, long-press switches system; old key rows are released before rebuild with logging. The Windows white-screen fix carries over from 1.24.2**
 
 V1 milestone progress:
 

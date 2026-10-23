@@ -150,11 +150,9 @@ struct ModeRow {
 /// `crates/engine-core/src/scheme.rs` 的 `key_class` 表逐格核一遍。
 enum ModeKeyTables {
 
-    /// 每种键面**左下角**唯一的「切换系统输入法」键（🌐），数字层同位置。
-    /// 只有它走 `.nextInputMode` → `advanceToNextInputMode()`；中/英（`.cycleMode` /
-    /// `.selectInputMode`）与简繁（`.toggleTraditional`）**不得**复用它。
-    /// 2026-10-21 用户裁决：从 26 键最右移到左下，并去掉重复入口防误触。
-    static let systemInputKey = KeySpec("🌐", function: .nextInputMode)
+    /// 🌐：短按在 OPI 内循环语言，**长按**才走系统输入法（2026-10-23：避免 9 键底行
+    /// 的繁/123/英文被误判为系统切换；普通点击不再可能离开 OPI）。
+    static let systemInputKey = KeySpec("🌐", function: .cycleMode, longPressFunction: .nextInputMode)
 
     /// 按当前模式取键面（字母层的行）。数字层与所有模式共用 `numberRows`。
     ///
@@ -467,6 +465,7 @@ extension KeyboardViewController {
     /// C ABI 只有 `opi_switch_mode`（**清缓冲**，Rust `Composer::switch_mode` 语义），
     /// 没有保缓冲的换语言出口。所以本端切简繁会丢掉打了一半的拼音（不崩、不错提交）。
     func toggleTraditional() {
+        OpiLog.input.info("toggleTraditional start")
         engine.switchMode(engine.mode() == .traditional ? .pinyin : .traditional)
         // 英文 26 键面下开繁体：键面同形，但 UI 模式要落到中文 26 键，否则菜单
         // 仍高亮「英文26键」，回英文再回中文还会走错键面。
@@ -479,6 +478,7 @@ extension KeyboardViewController {
         updateModeLabel()
         layout.setKeyboardModes(modes, traditional: engine.mode() == .traditional)
         refresh()
+        OpiLog.input.info("toggleTraditional done")
     }
 
     /// 同步模式键的键面字（**按当前键面语义**）：

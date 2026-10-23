@@ -263,21 +263,25 @@ final class KeyboardLayout: UIView {
     /// 四个面板（符号/表情/模式菜单/生僻字）**互斥显示**、谁亮由 `keyLayer` 决定；
     /// 行/格/列的**尺寸算式**搬去了 `ModeKeyRenderer`，本函数只挑「画哪套表」并接线。
     private func rebuildKeys() {
+        OpiLog.panel.info("rebuildKeys \(String(describing: self.keyLayer), privacy: .public) start")
         updateLayerVisibility()
         guard !isPanelLayer else { return }
-        rowsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        // 先把旧按钮在自己的 autoreleasepool 里放掉，再建新行：否则 UIKit 的延迟释放
+        // 会让旧/新两套按钮同时存活，切 9↔26 键时出现内存尖峰（Jetsam 后系统键盘顶上来）。
+        autoreleasepool {
+            rowsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        }
         // 字母层按**当前输入模式**画（9 键/14 键/笔画各有自己的表）；数字层所有模式共用。
         let rows = keyLayer == .letters
             ? ModeKeyTables.rows(for: inputMode, modeLabel: modeLabel)
             : ModeKeyTables.numberRows()
-        // 旧按钮的 UIKit 临时对象尽早放掉：切 9↔26 键是扩展内存尖峰最大的路径之一
-        // （用户报「点英文键跳系统键盘」，首要嫌疑是重建时被 Jetsam）。
         autoreleasepool {
             ModeKeyRenderer.render(rows, into: rowsStack, gap: 5) { [weak self] b in
                 self?.attach(b)
             }
         }
         renderedRowsLayer = keyLayer
+        OpiLog.panel.info("rebuildKeys done")
         // 行重建后读数浮层要重新贴到新的标点列上（旧列随 arrangedSubviews 一起没了）。
         installReadingColumn()
         applySideColumns()

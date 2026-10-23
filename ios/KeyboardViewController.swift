@@ -311,6 +311,7 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             // 9 键左列/平铺左列：钉读音，不上屏。
             togglePinnedReading(reading)
         case .showNumbers:
+            OpiLog.panel.info("showNumbers")
             layout.setLayer(.numbers)
         case .showSymbols:
             // 符号数据**现取**，不缓存：空结果是「没拿到」而不是「真的没有」，
