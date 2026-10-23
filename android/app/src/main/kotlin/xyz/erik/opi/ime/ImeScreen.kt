@@ -246,6 +246,7 @@ private fun KeyboardArea(
             onCommit = router::commitText,
             onClose = state::backToLetters,
             modifier = modifier,
+            initialCategory = state.symbolPageInitialCategory,
         )
         ImeState.View.SKIN -> SkinPanel(
             selected = state.skin,

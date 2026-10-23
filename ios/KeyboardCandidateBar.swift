@@ -149,11 +149,18 @@ extension KeyboardLayout {
     func buildComposingBar() {
         composingBar.translatesAutoresizingMaskIntoConstraints = false
         addSubview(composingBar)
+        petStrip.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(petStrip)
         NSLayoutConstraint.activate([
             composingBar.leadingAnchor.constraint(equalTo: leadingAnchor),
             composingBar.trailingAnchor.constraint(equalTo: trailingAnchor),
             composingBar.topAnchor.constraint(equalTo: topAnchor),
             composingBar.heightAnchor.constraint(equalToConstant: ComposingBar.height),
+            // 宠物条与拼音行**同一槽位**：空闲时盖住空行，组合中由 setComposingText 隐藏。
+            petStrip.leadingAnchor.constraint(equalTo: composingBar.leadingAnchor),
+            petStrip.trailingAnchor.constraint(equalTo: composingBar.trailingAnchor),
+            petStrip.topAnchor.constraint(equalTo: composingBar.topAnchor),
+            petStrip.bottomAnchor.constraint(equalTo: composingBar.bottomAnchor),
         ])
     }
 
@@ -162,5 +169,7 @@ extension KeyboardLayout {
     /// 原按键序列展示，不冒充拼音（判据见 `KeyboardCandidates.refresh`）。
     func setComposingText(_ text: String, fallback: Bool = false) {
         composingBar.setText(text, fallback: fallback)
+        lastComposingText = text
+        updatePetStripVisibility()
     }
 }

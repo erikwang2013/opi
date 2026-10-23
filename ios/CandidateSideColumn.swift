@@ -26,6 +26,9 @@ final class CandidateSideColumn: UIView {
     private var scrollKey = ""
     private var palette: KeyboardPalette = .light
     private var fontScale: CGFloat = 1
+    /// 本视图贴在宿主列上的 4 条约束。换列/拆行前必须显式停用（2026-10-23 真机
+    /// NSISEngine abort 的根因：旧约束跟着旧列进了错误的布局引擎）。
+    var hostConstraints: [NSLayoutConstraint] = []
     /// 已建的行按钮。每次刷新**复用**前 N 个（打字时每键都会换一批读数，
     /// 整列重建几十个 UIButton 是没必要的卡顿来源）。
     private var rows: [UIButton] = []

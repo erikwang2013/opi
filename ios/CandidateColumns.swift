@@ -88,24 +88,35 @@ extension KeyboardLayout {
               let firstRow = rowsStack.arrangedSubviews.first as? UIStackView,
               let firstColumn = firstRow.arrangedSubviews.first
         else {
-            readingColumn.removeFromSuperview()
+            detachReadingColumn()
             return
         }
         if readingColumn.superview !== firstColumn {
-            readingColumn.removeFromSuperview()
+            // **先停用旧约束再换父视图**（2026-10-23 修 NSISEngine abort）：否则旧列
+            // 被拆除时会把旧约束（属于旧布局引擎）也交给移除流程。
+            detachReadingColumn()
             readingColumn.translatesAutoresizingMaskIntoConstraints = false
             firstColumn.addSubview(readingColumn)
-            NSLayoutConstraint.activate([
+            readingColumn.hostConstraints = [
                 readingColumn.leadingAnchor.constraint(equalTo: firstColumn.leadingAnchor),
                 readingColumn.trailingAnchor.constraint(equalTo: firstColumn.trailingAnchor),
                 readingColumn.topAnchor.constraint(equalTo: firstColumn.topAnchor),
                 readingColumn.bottomAnchor.constraint(equalTo: firstColumn.bottomAnchor),
-            ])
+            ]
+            NSLayoutConstraint.activate(readingColumn.hostConstraints)
         }
         readingColumn.isHidden = false
         // 同 `applySideColumns`：配色只在换肤/长辈模式时下发，不在每次击键时重刷。
         readingColumn.setEntries(
             candidateReadingTexts, pinned: pinnedReading, resetKey: candidateResetKey
         )
+    }
+
+    /// 把读数浮层从当前父视图上摘下来，并**显式停用**它的 4 条约束。
+    /// 幂等；`rebuildKeys`（拆行前）与 `installReadingColumn`（换列前）都走这条。
+    func detachReadingColumn() {
+        NSLayoutConstraint.deactivate(readingColumn.hostConstraints)
+        readingColumn.hostConstraints.removeAll()
+        readingColumn.removeFromSuperview()
     }
 }

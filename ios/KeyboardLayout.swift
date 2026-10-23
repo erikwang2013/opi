@@ -132,6 +132,10 @@ final class KeyboardLayout: UIView {
     let toolbar = KeyboardToolbar()
     /// 顶部拼音行（2026-10-23）：组合中显示分词拼音；常驻 24pt，空串不铺底。
     let composingBar = ComposingBar()
+    /// 顶部多形态宠物条（2026-10-23）：空闲时盖在空的拼音行槽位上；组合中隐藏。
+    let petStrip = PetStripBar()
+    /// 最近一次 `setComposingText` 的文本（判宠物条显隐用；空串 = 空闲/无组合）。
+    var lastComposingText = ""
     /// 键区容器：单手模式只收窄/偏移这一块（工具条与候选栏保持全宽，Android 同）。
     let keyArea = UIView()
 
@@ -266,10 +270,18 @@ final class KeyboardLayout: UIView {
         OpiLog.panel.info("rebuildKeys \(String(describing: self.keyLayer), privacy: .public) start")
         updateLayerVisibility()
         guard !isPanelLayer else { return }
+        // 2026-10-23 真机崩溃修复：先把读数浮层连同它的 4 条约束摘下来，再拆行 ——
+        // 旧约束跟着旧列进布局引擎时 NSISEngine 找不到 marker，抛异常并 SIGABRT（.ips 已证）。
+        detachReadingColumn()
         // 先把旧按钮在自己的 autoreleasepool 里放掉，再建新行：否则 UIKit 的延迟释放
         // 会让旧/新两套按钮同时存活，切 9↔26 键时出现内存尖峰（Jetsam 后系统键盘顶上来）。
+        // 先 removeArrangedSubview 再 removeFromSuperview：前者让 stack 先解除管理，
+        // 避免 UIStackView 在移除过程中反向操作布局引擎（同一 .ips 的崩溃点）。
         autoreleasepool {
-            rowsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+            for view in rowsStack.arrangedSubviews {
+                rowsStack.removeArrangedSubview(view)
+                view.removeFromSuperview()
+            }
         }
         // 字母层按**当前输入模式**画（9 键/14 键/笔画各有自己的表）；数字层所有模式共用。
         let rows = keyLayer == .letters

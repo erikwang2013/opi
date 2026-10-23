@@ -288,7 +288,7 @@ LICENSE · CONTRIBUTING.md      # MIT full text · contribution guide (incl. dic
 
 ### 📅 Project Status
 
-> **Current stage: v1.24.4 (2026-10-23): 9-key multi-word composition (厌蠢症 / 样样通) and a complete pinyin row (no ellipsis, horizontally scrollable); iOS numeric layer inserts digits directly, dictionaries load lazily, switching to English rebuilds keys once; Android update check inside keyboard panels. The Windows white-screen fix carries over from 1.24.2, verified on a real device**
+> **Current stage: v1.24.5 (2026-10-23): iOS fixes the Auto Layout crash when tapping 繁/123/English on the 9-key face (diagnosed from a real .ips), adds a random multi-form pet strip at the top; mobile English keyboard shrinks the space bar, moves `,` `.` before it, swaps ⌫/↵, and sends `!?#` straight to the English symbol category**
 
 V1 milestone progress:
 

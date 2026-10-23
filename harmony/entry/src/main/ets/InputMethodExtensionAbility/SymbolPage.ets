@@ -10,6 +10,7 @@
 // 关闭，没有返回箭头（Android SymbolPage 的紧凑头）。
 
 import { KeyboardController } from './KeyboardController';
+import { OpiMode } from './OpiEngine';
 import { Palette, paletteFor } from './Palette';
 import {
   SymbolCategory, radicalGlyph, rareChars, rareIndex, rareStrokeCounts, symbolCategories,
@@ -52,6 +53,19 @@ function rowsOfRange(from: number, to: number, cols: number): number[][] {
 export struct SymbolPage {
   @State selected: number = 0;
   @State page: number = 0;
+  @StorageLink('opiMode') mode: number = OpiMode.Pinyin as number;
+  /** 2026-10-23：英文键盘的 `!?#` 直达「英文」类目（Android `SymbolPage.initialCategory` 同义）。 */
+  aboutToAppear(): void {
+    if (this.mode !== (OpiMode.English as number)) {
+      return;
+    }
+    const cats = symbolCategories();
+    const i = cats.findIndex((c: SymbolCategory) => c.label === '英文');
+    if (i >= 0) {
+      this.selected = i;
+      this.page = 0;
+    }
+  }
   @StorageLink('opiSkin') skin: number = 0;
   @StorageLink('opiDark') dark: number = 0;
   @StorageLink('opiElder') elder: number = 0;

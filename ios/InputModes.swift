@@ -164,7 +164,7 @@ enum ModeKeyTables {
     static func rows(for mode: InputMode, modeLabel: String) -> [ModeRow] {
         switch mode {
         case .pinyin26, .english26, .shuangpin, .wubi, .rare:
-            return letterRows(modeLabel: modeLabel)
+            return letterRows(modeLabel: modeLabel, english: mode == .english26)
         // 大 9 键与拼音 9 键**同一张表**，只差字号（`big` 是唯一的分叉）。
         case .pinyin9, .big9: return nineKeyRows(modeLabel: modeLabel, big: mode.big)
         case .pinyin14: return fourteenKeyRows(modeLabel: modeLabel)
@@ -181,7 +181,7 @@ enum ModeKeyTables {
     /// 「大小写由码点携带」是给**物理键盘**的（平台已应用 ⇧）；而软键盘的 ⇧ 走
     /// `handle_shift` 维护的引擎内状态机，由它决定英文模式的 Input 与拼音
     /// composer 的大小写。这里若再自己转一次大写，就是第五份大小写逻辑。
-    static func letterRows(modeLabel: String) -> [ModeRow] {
+    static func letterRows(modeLabel: String, english: Bool = false) -> [ModeRow] {
         let top = "qwertyuiop".map { KeySpec.char($0) }
         let mid = "asdfghjkl".map { KeySpec.char($0) }
         var bottom: [KeySpec] = [
@@ -195,6 +195,13 @@ enum ModeKeyTables {
             KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, longPressRepeatsBackspace: true, widthUnits: 1.4)
         )
 
+        // 2026-10-23 用户裁决（英文 26 键）：底行在空格前加 `,` `.`，空格变小；
+        // ⌫ 本来就在第三行最右、↵ 在底行，与 Android/Harmony 互换后的布局一致。
+        // 标点走 `.commitText` **直提**，不进引擎 —— 英文模式不该被中文标点表改写。
+        let punctuation: [KeySpec] = english
+            ? [KeySpec(",", function: .commitText(",")), KeySpec(".", function: .commitText("."))]
+            : []
+        let spaceUnits: CGFloat = english ? 2.5 : 5
         let funcRow: [KeySpec] = [
             systemInputKey,
             KeySpec("123", function: .showNumbers),
@@ -203,7 +210,8 @@ enum ModeKeyTables {
             // 长按 = 打开输入模式面板（2026-10-14）：Android 从工具条进，iOS 没有工具条，
             // 长按模式键是**同一件事的 iOS 说法**（主流输入法在 iOS 上也是长按中/英出菜单）。
             KeySpec(modeLabel, function: .cycleMode, longPressFunction: .showModes),
-            KeySpec("空格", keyval: OpiKey.space, fallback: .text(" "), widthUnits: 5),
+        ] + punctuation + [
+            KeySpec("空格", keyval: OpiKey.space, fallback: .text(" "), widthUnits: spaceUnits),
             KeySpec("回车", keyval: OpiKey.ret, fallback: .text("\n"), widthUnits: 1.6),
         ]
         return [

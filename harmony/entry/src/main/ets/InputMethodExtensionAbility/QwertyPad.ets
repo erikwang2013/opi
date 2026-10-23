@@ -5,7 +5,8 @@
 // （Android QwertyKeyboard.kt + NumberPad.kt 的镜像）。
 //
 // · 中文 26 键：3 行字母 + 底行 123/中繁/空格/⌫/↵（无 ⇧ —— Android 中文侧不显示）。
-// · 英文 26 键：0-9 数字行 + 3 行字母（第三行带 ⇧ 与 ↵）+ 底行 !?#/pro/空格/中/⌫。
+// · 英文 26 键：0-9 数字行 + 3 行字母（第三行带 ⇧ 与 **⌫**）+ 底行
+//   !?#/pro/,/. /空格(变小)/中/↵（2026-10-23 用户裁决：⌫ 与 ↵ 互换、空格前后加 , .）。
 // · 数字面板：1-9 三行 + 「, 0 .」行 + ABC/?123/空格/⌫/↵（Gboard 排法）。
 //
 // ⇧ 长按 = LOCK（`STATE_LONG_PRESSED`），补上了此前「枚举有、用户按不出来」的缺口。
@@ -18,7 +19,7 @@ import { Palette, paletteFor } from './Palette';
 const ROW_1: string[] = ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'];
 const ROW_2: string[] = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'];
 const ROW_3: string[] = ['⇧', 'z', 'x', 'c', 'v', 'b', 'n', 'm'];
-const ENGLISH_ROW_3: string[] = ['⇧', 'z', 'x', 'c', 'v', 'b', 'n', 'm', '↵'];
+const ENGLISH_ROW_3: string[] = ['⇧', 'z', 'x', 'c', 'v', 'b', 'n', 'm', '⌫'];
 const NUMBER_ROW: string[] = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
 const NUMBER_PAD: string[][] = [
   ['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9'], [',', '0', '.'],
@@ -97,6 +98,9 @@ export struct QwertyPad {
               this.Key('↵', () => {
                 this.ctrl.tapEnter();
               }, 1)
+            } else if (ch === '⌫') {
+              // 英文第三行最右（2026-10-23 与回车互换）；长按连续删除同底行。
+              this.BackspaceKey()
             } else {
               this.Key(this.isEnglish() && this.shiftActive() && rowIndex > 0
                 ? ch.toUpperCase() : ch, () => {
@@ -117,20 +121,29 @@ export struct QwertyPad {
   FunctionRow() {
     Row() {
       if (this.isEnglish()) {
-        // 英文底行：`!?#` → 符号页；pro → 普通/专业；空格；中英；⌫。
+        // 英文底行：`!?#` → 符号页；pro → 普通/专业；`,` `.`；**变小**的空格；
+        // 中英；↵（2026-10-23 用户裁决：⌫ 去第三行最右，回车到底行）。
         this.Key('!?#', () => {
           this.ctrl.openSymbolPage();
         }, 1)
         this.Key(this.pro === 1 ? 'pro ✓' : 'pro', () => {
           this.ctrl.toggleEnglishPro();
         }, 1, this.pro === 1)
+        this.Key(',', () => {
+          this.ctrl.tapChar(',');
+        }, 1)
+        this.Key('.', () => {
+          this.ctrl.tapChar('.');
+        }, 1)
         this.Key('空格', () => {
           this.ctrl.tapSpace();
-        }, 3)
+        }, 2)
         this.Key(cycleModeLabel(this.mode), () => {
           this.ctrl.cycleMode();
         }, 1)
-        this.BackspaceKey()
+        this.Key('↵', () => {
+          this.ctrl.tapEnter();
+        }, 1)
       } else {
         // 中文底行：123 / 中繁 / 空格 / ⌫ / ↵。
         this.Key('123', () => {

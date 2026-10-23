@@ -57,9 +57,19 @@ fun SymbolPage(
     onCommit: (String) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    /** 起始类目名（2026-10-23：英文键盘的 `!?#` 直达「英文」类目）；空 = 第一类。 */
+    initialCategory: String = "",
 ) {
     val p = LocalKeyboardPalette.current
-    var selected by remember { mutableStateOf(0) }
+    var selected by remember(initialCategory, categories.size) {
+        mutableStateOf(
+            if (initialCategory.isEmpty()) {
+                0
+            } else {
+                categories.indexOfFirst { it.label == initialCategory }.coerceAtLeast(0)
+            }
+        )
+    }
     Column(modifier = modifier.fillMaxSize().background(p.panelBg)) {
         // 头：与皮肤/输入模式/键盘模式面板同形态
         Row(

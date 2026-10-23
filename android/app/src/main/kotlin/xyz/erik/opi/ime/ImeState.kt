@@ -334,16 +334,17 @@ class ImeState(
         view = View.SYMBOL
     }
 
-    /**
-     * 符号页（9 键左下角「符」；26/14/笔画同键也走它 —— 2026-10-09 用户裁决
-     * 「左下角符按钮点进去应该是个新的页面」）。收起旧符号面板那条路不变（表情图标
-     * 仍走 [openSymbol] 的表情 Tab）。开页面前先提交 pending buffer（同 openSymbol）。
-     */
+    // 符号页（9 键「符」与 26/14/笔画同键，2026-10-09 裁决「点进去是新页面」）；开页前先提交缓冲。
     fun openSymbolPage() {
         commitPendingBuffer()
         resetSearch()
+        // 2026-10-23 用户裁决：英文键盘的 `!?#` 直达「英文」类目，不要落在默认的「常用」。
+        symbolPageInitialCategory = if (controller.mode == EngineMode.ENGLISH) "英文" else ""
         view = View.SYMBOL_PAGE
     }
+
+    /** 符号页的起始类目（空 = 第一类）；由 [openSymbolPage] 按当前引擎模式写。 */
+    var symbolPageInitialCategory by mutableStateOf("")
 
     /**
      * 引擎侧恢复偏好（服务启动时调一次）：方案 + 开关 + 输入模式。

@@ -17,11 +17,12 @@ class QwertyKeyboardRowsTest {
     }
 
     @Test
-    fun englishLayoutPutsEnterOnTheShiftRowAtTheFarRight() {
+    fun englishLayoutPutsBackspaceOnTheShiftRowAtTheFarRight() {
+        // 2026-10-23 用户裁决：⌫ 与 ↵ 互换 —— 退格回字母行最右，回车去底行。
         val rows = qwertyRows(showNumberRow = true, englishLayout = true)
         assertEquals(4, rows.size)
         assertEquals("⇧", rows[3].first())
-        assertEquals("↵", rows[3].last())
+        assertEquals("⌫", rows[3].last())
         assertEquals("z", rows[3][1])
         assertEquals("m", rows[3][rows[3].size - 2])
     }

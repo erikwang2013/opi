@@ -77,6 +77,13 @@ fun QwertyKeyboard(
                                 onTap = onEnter,
                                 fontSize = keyFont,
                             )
+                            BACKSPACE_LABEL -> KeyButton(
+                                BACKSPACE_LABEL,
+                                modifier = Modifier.weight(1f),
+                                onTap = onBackspace,
+                                repeatOnLongPress = true,
+                                fontSize = keyFont,
+                            )
                             else -> {
                                 // ⇧ 激活（SINGLE/LOCK）时字母键面也大写（2026-10-15 用户报障
                                 // 「切换到英文，让英文字母大写的按钮，点击了，键盘还是显示小写，
@@ -95,8 +102,9 @@ fun QwertyKeyboard(
             }
             Row(modifier = Modifier.weight(if (showProKey) 0.95f else 1f).fillMaxSize()) {
                 if (showProKey) {
-                    // 英文 26 键（2026-10-19）：符号 → 普通/专业 → 空格 → 中英 → ⌫。
-                    // 数字已在顶部 0-9；↵ 在第 3 行最右。
+                    // 英文 26 键（2026-10-23 用户裁决）：符号 → 普通/专业 → **, .** →
+                    // 空格（变小）→ 中英 → ↵；⌫ 与 ↵ 互换位置（⌫ 到第 3 行最右）。
+                    // 数字已在顶部 0-9。
                     KeyButton(
                         "!?#",
                         modifier = Modifier.weight(1f),
@@ -116,18 +124,28 @@ fun QwertyKeyboard(
                         fontSize = keyFont,
                     )
                     KeyButton(
+                        ",",
+                        modifier = Modifier.weight(1f),
+                        onTap = { onKey(",") },
+                        fontSize = keyFont,
+                    )
+                    KeyButton(
+                        ".",
+                        modifier = Modifier.weight(1f),
+                        onTap = { onKey(".") },
+                        fontSize = keyFont,
+                    )
+                    KeyButton(
                         "空格",
-                        modifier = Modifier.weight(3f),
+                        modifier = Modifier.weight(2f),
                         onTap = onSpace,
                         fontSize = keyFont,
                     )
                     ModeKey(modeLabel, onModeSwitch, keyFont)
                     KeyButton(
-                        "⌫",
+                        "↵",
                         modifier = Modifier.weight(1f),
-                        onTap = onBackspace,
-                        // 按住连续删除；短按仍只删一个（2026-10-23 用户裁决）。
-                        repeatOnLongPress = true,
+                        onTap = onEnter,
                         fontSize = keyFont,
                     )
                 } else {
@@ -196,8 +214,8 @@ private val rows = listOf(
 private val englishRows = listOf(
     listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p"),
     listOf("a", "s", "d", "f", "g", "h", "j", "k", "l"),
-    // 回车与大写锁定同一行，回车最右（2026-10-19 用户裁决）。
-    listOf("⇧", "z", "x", "c", "v", "b", "n", "m", "↵"),
+    // 退格与大写锁定同一行，退格最右（2026-10-23 用户裁决：与回车互换）。
+    listOf("⇧", "z", "x", "c", "v", "b", "n", "m", "⌫"),
 )
 private val numberRow = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0")
 
@@ -209,3 +227,4 @@ internal fun qwertyRows(showNumberRow: Boolean, englishLayout: Boolean = false):
 
 private const val SHIFT_LABEL = "⇧"
 private const val ENTER_LABEL = "↵"
+private const val BACKSPACE_LABEL = "⌫"

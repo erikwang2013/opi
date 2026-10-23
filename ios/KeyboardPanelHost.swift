@@ -209,6 +209,18 @@ extension KeyboardLayout {
         showChineseButton(english && showCandidates)
         // ⌄ 只在键面候选栏出现；平铺态用右列「返回」，不重复入口。
         setExpandVisible(!candidateTexts.isEmpty && showCandidates)
+        updatePetStripVisibility()
+    }
+
+    /// 顶部宠物条只在**空闲键面**转：不在面板/平铺里、没有候选、没有组合串。
+    /// 与 Android `PetStrip` 的位置判据（`idlePetStrip()`）同义。
+    func updatePetStripVisibility() {
+        // 只在字母键面空闲态出现：数字层（123）与面板态都不画（Android `idlePetStrip`
+        // 的 view === QWERTY 同义）。
+        petStrip.setActive(
+            keyLayer == .letters && !isPanelLayer
+                && candidateTexts.isEmpty && lastComposingText.isEmpty
+        )
     }
 
     func setSkin(_ s: SkinOption) {
@@ -236,6 +248,7 @@ extension KeyboardLayout {
         candidateBar.backgroundColor = p.barBg
         keyArea.backgroundColor = p.barBg
         composingBar.applyTheme(p, fontScale: fontScale)
+        petStrip.applyTheme(p, fontScale: fontScale)
         toolbar.applyTheme(p)
         skinPanel.applyTheme(p)
         keyboardModePanel.applyTheme(p)
