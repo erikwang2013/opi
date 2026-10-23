@@ -141,7 +141,8 @@ impl IClassFactory_Impl for ClassFactory_Impl {
             }
             let action = Arc::new(SharedAction::new(Arc::clone(&engine)));
             let sink: Arc<dyn TsfSink> = Arc::new(CandidateSink::new(
-                Arc::clone(&action) as Arc<dyn CandidateAction>
+                Arc::clone(&action) as Arc<dyn CandidateAction>,
+                Arc::clone(&engine),
             ));
             // 回填失败只可能是重复初始化（本处是唯一调用点）→ 记一行，不中断：
             // 服务照常可用，只是点选后窗口不会自动刷新。比起让输入法整个不存在，

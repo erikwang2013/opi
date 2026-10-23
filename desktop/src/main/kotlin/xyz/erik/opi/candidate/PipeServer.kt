@@ -87,6 +87,12 @@ class PipeServer(private val model: CandidateModel) {
     /** 保护 [lastClientPipe]：句柄取用 + WriteFile 与「置 null + Disconnect + Close」互斥。 */
     private val connLock = Any()
 
+    /**
+     * TSF 断开期间收到的 clearuserwords（下一次连接补发，见 [flushPendingClear]）。
+     * 只管管道连上的那个宿主；其余宿主靠设置窗写的清词世代自清。
+     */
+    private val pendingClear = PendingClear()
+
     /** 控制面请求的 id 源 + 等待表（TSF 按 id 回应，读线程在这里唤醒调用方）。 */
     private val ctlId = AtomicLong(1)
     private val ctlPending = HashMap<Long, CompletableFuture<String?>>()
@@ -109,6 +115,10 @@ class PipeServer(private val model: CandidateModel) {
                 pipe = created
                 if (!connect(created)) continue // 没连上：finally 关句柄，下一轮重建
                 synchronized(connLock) { lastClientPipe = created }
+                // 新宿主连上 = 用户回到输入框：补发断开期间记下的 clearuserwords。
+                // 必须在 readLoop 之前发，但**不能在这里等应答** —— 应答要从 readLoop
+                // 读回来，同步等会死锁；clear 幂等，发出去即可（应答由 handleLine 丢弃）。
+                flushPendingClear()
                 readLoop(created)
             } catch (t: Throwable) {
                 println("[opi-pipe] serveLoop exception: " + t)
@@ -298,13 +308,16 @@ class PipeServer(private val model: CandidateModel) {
      * 控制请求：补 id/type 发到 TSF，等同一 id 的 ctl_result（[handleLine] 唤醒）。
      * `opFields` 是已校验的 op 字段串（见 ControlPlane.ControlServer.handle）。
      * 返回 TSF 的原始应答行；未连接/超时 → null（调用方转成可见失败）。
+     * [onNoClient] 只在请求**没写出去**时调用（区别于写了但没等到应答的超时）：
+     * clearuserwords 靠它改记待发，普通动作忽略。
      */
-    fun requestCtl(opFields: String, timeoutMs: Long): String? {
+    fun requestCtl(opFields: String, timeoutMs: Long, onNoClient: (() -> Unit)? = null): String? {
         val id = ctlId.getAndIncrement()
         val future = CompletableFuture<String?>()
         synchronized(ctlLock) { ctlPending[id] = future }
-        if (!send("""{"id":$id,$opFields,"type":"ctl"}""")) {
+        if (!send(ctlLine(id, opFields))) {
             synchronized(ctlLock) { ctlPending.remove(id) }
+            onNoClient?.invoke()
             return null
         }
         return try {
@@ -315,6 +328,32 @@ class PipeServer(private val model: CandidateModel) {
             synchronized(ctlLock) { ctlPending.remove(id) }
         }
     }
+
+    /**
+     * 设置窗在 TSF 断开时点了「清空用户词」：记一次，下一次连接建立后补发。
+     * 再试一次 flush 是为了压住「请求失败」与「宿主刚好重连」的竞态 —— 不能把这次
+     * 清除留给**再下一次**连接（那可能就是另一个应用了）。
+     */
+    internal fun queueClearForReconnect() {
+        pendingClear.request()
+        flushPendingClear()
+    }
+
+    /**
+     * 把待发的 clearuserwords 发到当前连接（fire-and-forget，不等 ctl_result）。
+     * 重复请求合并成一次；发送失败放回标记，留给下一次连接。
+     * 只动 [pendingClear] 与 [ctlId]，写句柄由 [send] 自己持 [connLock] —— 可从管道
+     * 线程（新连接）与控制面线程（排队后立即重试）并发调用。
+     */
+    private fun flushPendingClear() {
+        if (!pendingClear.takeForSend()) return
+        val id = ctlId.getAndIncrement()
+        if (!send(ctlLine(id, CLEAR_USER_WORDS_OP_FIELDS))) pendingClear.requeue()
+    }
+
+    /** 控制请求整行（id/type 由 broker 补；op 字段形状见 ControlPlane.kt 头）。 */
+    private fun ctlLine(id: Long, opFields: String): String =
+        """{"id":$id,$opFields,"type":"ctl"}"""
 
     /** 连接断开/重建时让所有等待者立刻拿到 null（而不是各自的超时）。 */
     private fun failPendingCtl() {
@@ -356,3 +395,33 @@ class PipeServer(private val model: CandidateModel) {
  */
 internal fun commitTextLine(text: String): String =
     """{"text":${jsonString(text)},"type":"commit_text"}"""
+
+/**
+ * 「等下一次 TSF 连接补发」的 clearuserwords 标记（ControlPlane 的 clearuserwords 专用）。
+ *
+ * 设置窗获得焦点 ⇒ 当前宿主 Deactivate ⇒ 候选管道断开，清除请求写不出去。记一次，
+ * 下一次连接建立后由 [PipeServer.flushPendingClear] 补发（管道只能清当时连上的那个
+ * 宿主；其余宿主靠设置窗写的清词世代自清）。多个请求合并成一次（clear 幂等）；
+ * 发送失败必须放回去 —— 丢了就等于用户点了没反应。
+ *
+ * 独立成类只为在 Linux 上可单测：本机没有 Windows，JNA 管道跑不起来。
+ */
+internal class PendingClear {
+    private var pending = false
+
+    fun request() {
+        synchronized(this) { pending = true }
+    }
+
+    /** 取走待发标记：true = 本次该发一次；并发调用只有一个拿到 true。 */
+    fun takeForSend(): Boolean = synchronized(this) {
+        val had = pending
+        pending = false
+        had
+    }
+
+    /** 发送失败：放回标记，留给下一次连接。 */
+    fun requeue() {
+        synchronized(this) { pending = true }
+    }
+}

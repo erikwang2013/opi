@@ -40,10 +40,11 @@ final class KeyboardPanelHeader: UIView {
             v.translatesAutoresizingMaskIntoConstraints = false
             addSubview(v)
         }
+        let h = heightAnchor.constraint(equalToConstant: 64)
         NSLayoutConstraint.activate([
             // 2026-10-21 用户裁决：返回箭头**单独一行**，标题/提示在下一行；各面板统一。
             // 返回键占满 44pt 命中高（面板内容都可滚，多出的 12pt 从内容区拿）。
-            heightAnchor.constraint(equalToConstant: 64),
+            h,
             backButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
             backButton.topAnchor.constraint(equalTo: topAnchor),
             backButton.heightAnchor.constraint(equalToConstant: 44),
@@ -62,6 +63,12 @@ final class KeyboardPanelHeader: UIView {
         backButton.setTitleColor(p.accent, for: .normal)
         titleLabel.textColor = p.panelFg
         hintLabel.textColor = p.barDimFg
+    }
+
+    /// compact：表头高度保持 64 —— 返回键 44 + 标题行 18 恰好占满，压到 54 会把
+    /// 标题裁掉。面板的紧凑化落在列数/行高（Emoji/Symbol/Rare 各自处理）。
+    func setCompact(_ on: Bool) {
+        _ = on
     }
 
     @objc private func tapBack() { onBack?() }
@@ -145,6 +152,11 @@ final class SkinPanel: UIView {
         backgroundColor = p.panelBg
         header.applyTheme(p)
         if recolor { refreshAll() }
+    }
+
+    /// compact：表头降一档；卡片仍 5 列（320pt 下每格 ~60pt，截断由卡片自己处理）。
+    func setCompact(_ on: Bool) {
+        header.setCompact(on)
     }
 
     private func refreshAll() {

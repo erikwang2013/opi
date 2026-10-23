@@ -193,7 +193,7 @@ enum ModeKeyTables {
         ]
         bottom += "zxcvbnm".map { KeySpec.char($0) }
         bottom.append(
-            KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, longPressClearsComposing: true, widthUnits: 1.4)
+            KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, longPressRepeatsBackspace: true, widthUnits: 1.4)
         )
 
         let funcRow: [KeySpec] = [
@@ -229,7 +229,7 @@ enum ModeKeyTables {
             KeySpec.char("?"),
             KeySpec.char("!"),
             KeySpec.char("'"),
-            KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, longPressClearsComposing: true, widthUnits: 1.4),
+            KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, longPressRepeatsBackspace: true, widthUnits: 1.4),
         ]
         let funcRow: [KeySpec] = [
             systemInputKey,
@@ -255,7 +255,7 @@ enum ModeKeyTables {
     /// 数字键在 9 键方案下**是输入键**（引擎 Nine 方案收进缓冲），所以不需要数字选词 UI。
     static func nineKeyRows(modeLabel: String, big: Bool) -> [ModeRow] {
         // 字号（Android：字母 21sp / 大 30sp；多标点键收一档）。
-        // ⚠️ 本端每键**单一字号**（Android 是「字母大、数字小」两级）—— 见 README。
+        // 数字行/字母行两级：`digitSpec` 的 `lineScales: [0.62, 1]`（2026-10-23）。
         let letterSize: CGFloat = big ? 30 : 21
 
         // ---- 左列：标点（主流同款一列）----
@@ -290,7 +290,7 @@ enum ModeKeyTables {
         ]
         // ---- 右列：⌫ / 重输 / 空格（2026-10-10 Android 用户裁决：从底行搬进右列）----
         let right = [
-            KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, longPressClearsComposing: true),
+            KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, longPressRepeatsBackspace: true),
             // 重输 = 清掉当前组合重来（缓冲空时是空操作，engine.clear() 幂等）。
             // 分词键在主区第一格（见 col1），不在这一列。
             KeySpec("重输", function: .retype),
@@ -335,7 +335,7 @@ enum ModeKeyTables {
             KeySpec(modeLabel, function: .toggleTraditional, longPressFunction: .showModes),
             KeySpec("英文", function: .selectInputMode(.english26)),
             KeySpec("空格", keyval: OpiKey.space, fallback: .text(" "), widthUnits: 2),
-            KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, longPressClearsComposing: true),
+            KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, longPressRepeatsBackspace: true),
             KeySpec("↵", keyval: OpiKey.ret, fallback: .text("\n")),
         ]
         return [ModeRow.plain(r1), ModeRow.plain(r2), ModeRow.plain(r3), ModeRow.plain(funcRow)]
@@ -367,7 +367,7 @@ enum ModeKeyTables {
             KeySpec("英文", function: .selectInputMode(.english26)),
             KeySpec("生僻字", function: .showRare, widthUnits: 1.4),
             KeySpec("空格", keyval: OpiKey.space, fallback: .text(" "), widthUnits: 2),
-            KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, longPressClearsComposing: true),
+            KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, longPressRepeatsBackspace: true),
             KeySpec("↵", keyval: OpiKey.ret, fallback: .text("\n")),
         ]
         return [ModeRow.plain(keys), ModeRow.plain(funcRow)]
@@ -387,10 +387,12 @@ enum ModeKeyTables {
     }
 
     /// 9 键数字键：键面「2 / abc」两行（数字在上、字母组在下 —— Android 2026-10-09
-    /// 用户裁决「字母为主、数字缩小到下面」，本端字号差异见 README），发送数字本身。
+    /// 用户裁决「字母为主、数字缩小到下面」，2026-10-23 起用 `lineScales` 落成
+    /// 数字 0.62 / 字母 1 的两级字号），发送数字本身。
     private static func digitSpec(_ digit: String, _ hint: String, _ size: CGFloat) -> KeySpec {
         let kv = digit.unicodeScalars.first.map { OpiKey.printable($0) } ?? 0
-        return KeySpec("\(digit)\n\(hint)", keyval: kv, fallback: .text(digit), fontSize: size)
+        return KeySpec("\(digit)\n\(hint)", keyval: kv, fallback: .text(digit),
+                       fontSize: size, lineScales: [0.62, 1])
     }
 
     /// 14 键两字母键：键面两个字母，发送**首个**字母。
@@ -399,10 +401,11 @@ enum ModeKeyTables {
         return KeySpec(pair, keyval: kv, fallback: .text(pair), fontSize: 22)
     }
 
-    /// 笔画键：键面「一 / 横」，发送 `h` 等字母。
+    /// 笔画键：键面「一 / 横」，发送 `h` 等字母。字形大、名称小（同 Android 两级）。
     private static func strokeSpec(_ glyph: String, _ send: String, _ name: String) -> KeySpec {
         let kv = send.unicodeScalars.first.map { OpiKey.printable($0) } ?? 0
-        return KeySpec("\(glyph)\n\(name)", keyval: kv, fallback: .text(send), fontSize: 26)
+        return KeySpec("\(glyph)\n\(name)", keyval: kv, fallback: .text(send),
+                       fontSize: 26, lineScales: [1, 0.62])
     }
 }
 
@@ -431,6 +434,7 @@ extension KeyboardViewController {
     ///
     /// 面板式（生僻字）**一个字节都不碰引擎**（Android 同）：只切视图。
     func applyInputMode(_ mode: InputMode) {
+        OpiLog.input.info("applyInputMode \(mode.label, privacy: .public)")
         // 记下选择：键面按它画，菜单高亮也按它。面板式在收起后仍保持高亮
         // （Android 的 chip 同样保持），底下的键面回落 26 键（`RARE.scheme == FULL`）。
         layout.setInputMode(mode)
@@ -453,6 +457,7 @@ extension KeyboardViewController {
         updateModeLabel()
         returnToCurrentInputMode()      // 从菜单/面板回到当前模式键面（不跳系统输入法）
         refresh()
+        OpiLog.input.info("applyInputMode done \(mode.label, privacy: .public)")
     }
 
     /// 9 键 / 14 键 / 笔画的模式键：**只切简/繁**（Android `toggleTraditional` 同义）。

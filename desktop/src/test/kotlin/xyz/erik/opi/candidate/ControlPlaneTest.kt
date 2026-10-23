@@ -139,6 +139,65 @@ class ControlPlaneTest {
     }
 
     @Test
+    fun `clearuserwords is the only action queued while tsf is disconnected`() {
+        // 设置窗获得焦点会让宿主 Deactivate、断开候选管道；只有 clearuserwords 是
+        // 「用户要的结果」而非「此刻的输入法」，断开时改记待发（ControlPlane.kt 头）。
+        val clear = forward("""{"action":"clearuserwords","op":"action"}""")
+        assertTrue("clearuserwords 断开时要记待发", clear.queueClearIfDisconnected)
+        assertEquals(
+            "补发用的 op 字段必须与 broker 校验/转发的那一份逐字相同",
+            CLEAR_USER_WORDS_OP_FIELDS,
+            clear.opFields,
+        )
+        for (action in listOf("lang", "trad", "punct", "fullwidth", "englishpro", "mode")) {
+            assertFalse(
+                "$action 没有「下次连接再补」的语义",
+                forward("""{"action":"$action","op":"action"}""").queueClearIfDisconnected,
+            )
+        }
+        assertFalse(forward("""{"op":"state"}""").queueClearIfDisconnected)
+        assertFalse(forward("""{"op":"reload"}""").queueClearIfDisconnected)
+    }
+
+    @Test
+    fun `queued clear reply keeps the failure shape plus the queued flag`() {
+        val r = parseControlReply(controlQueuedLabel(CLEAR_QUEUED_MESSAGE))!!
+        assertFalse("排队不等于已执行", r.ok)
+        assertTrue(r.queued)
+        assertEquals(CLEAR_QUEUED_MESSAGE, r.error)
+        // 普通失败不得带 queued —— 否则设置窗会把「没清掉」说成「下次生效」。
+        assertFalse(parseControlReply(controlErrorLabel("x"))!!.queued)
+        assertFalse(parseControlReply("""{"ok":true,"type":"ctl_result"}""")!!.queued)
+    }
+
+    @Test
+    fun `pending clear coalesces requests and survives a failed send`() {
+        val q = PendingClear()
+        assertFalse("没有请求时不该补发", q.takeForSend())
+        q.request()
+        q.request()
+        assertTrue("重复请求合并成一次", q.takeForSend())
+        assertFalse("一次连接只补发一次", q.takeForSend())
+        q.request()
+        assertTrue(q.takeForSend())
+        q.requeue()
+        assertTrue("发送失败必须留给下一次连接", q.takeForSend())
+        assertFalse(q.takeForSend())
+    }
+
+    @Test
+    fun `concurrent requests collapse to exactly one send`() {
+        val q = PendingClear()
+        val start = java.util.concurrent.CountDownLatch(1)
+        val threads = (1..8).map { Thread { start.await(); q.request() } }
+        threads.forEach { it.start() }
+        start.countDown()
+        threads.forEach { it.join() }
+        assertTrue(q.takeForSend())
+        assertFalse("并发请求应合并成一次补发", q.takeForSend())
+    }
+
+    @Test
     fun `unknown or malformed actions are rejected at the broker`() {
         // 白名单在服务端：本机任意进程都能连这条管道（信任边界见 ControlPlane.kt 头）。
         rejected("""{"action":"symbols","op":"action"}""", "未知动作")

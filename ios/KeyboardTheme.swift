@@ -412,7 +412,7 @@ extension KeyboardViewController {
         layout.setKeyboardModes(modes, traditional: engine.mode() == .traditional)
         layout.applyTheme(
             KeyboardTheme.palette(skin: skin, modes: modes),
-            fontScale: KeyboardTheme.fontScale(modes)
+            fontScale: effectiveFontScale
         )
     }
 
@@ -480,6 +480,8 @@ extension KeyboardViewController {
         }
         updateModeLabel()
         refresh()
+        // 面包屑（2026-10-23）：切英文/繁体的落点，真机 Console 过滤 input-mode。
+        OpiLog.input.info("cycleMode → \(String(describing: self.engine.mode()), privacy: .public)")
     }
 
     /// 模式键的键面字 = **点它会切到哪**（2026-10-12 晚与 Android 同步的裁决：

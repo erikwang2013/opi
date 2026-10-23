@@ -135,11 +135,9 @@ fun CandidateTiledView(
                         router.handleBackspace()
                         state.collapseIfNoCandidates()
                     },
-                    // 长按 = 清掉整段组合（不提交）；清空后候选没了 → 自动收拢回键盘。
-                    onLongPress = {
-                        router.handleBackspaceLongPress()
-                        state.collapseIfNoCandidates()
-                    },
+                    // 按住连续删除（2026-10-23 用户裁决）；候选删空会收拢回键盘，
+                    // 键随之卸载、重复手势自然停止。
+                    repeatOnLongPress = true,
                 )
                 KeyButton("重输", modifier = Modifier.weight(1f).fillMaxWidth(), onTap = {
                     controller.clear()

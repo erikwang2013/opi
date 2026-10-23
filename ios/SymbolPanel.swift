@@ -33,12 +33,15 @@ final class SymbolPanel: UIView {
     /// **不是**系统键盘、也不经过设置（2026-10-21 用户裁决）。
     var onClose: (() -> Void)?
 
-    /// 每行几个（与 Android `SymbolPanel` 的网格同粒度）。
-    private static let perRow = 8
-    /// 行高。⚠️ 未编译：40pt 是拍的，真机上按键高调。
+    /// 每行几个（与 Android `SymbolPanel` 的网格同粒度；compact 降 6）。
+    private var perRow = 8
+    /// 行高（compact 32 / 常规 40）。⚠️ 未编译：40pt 是拍的，真机上按键高调。
     /// 滚动视图里的行**必须**有明确高度 —— `KeyboardLayout` 的字母层用的是
     /// `.fillEqually`（按容器高度平分），那在滚动视图里会退化成 0 高。
-    private static let rowHeight: CGFloat = 40
+    private var rowHeight: CGFloat = 40
+    private var compact = false
+    /// 最近一次的符号表（compact 翻转时按新列数重画；不含字形过滤丢掉的项）。
+    private var symbols: [String] = []
 
     /// 字形判定用的探针字体：与符号键实际用的一致（系统字体、正文尺寸）。
     /// ⚠️ 未编译：尺寸只要非 0 即可（`CTFontGetGlyphsForCharacters` 只问映射）。
@@ -146,6 +149,12 @@ final class SymbolPanel: UIView {
     }
 
     func setSymbols(_ symbols: [String]) {
+        self.symbols = symbols
+        renderSymbols()
+    }
+
+    /// 按最近一次数据重画网格（compact 翻转时也走这里）。
+    private func renderSymbols() {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         // 空输入 = 引擎没就绪（2026-10-21 核对：common 块在 symbols.tsv 里非空）。
         guard !symbols.isEmpty else {
@@ -156,15 +165,36 @@ final class SymbolPanel: UIView {
         // 全部不可画比字体探测本身失败更可疑，不能因此把整库藏掉（2026-10-21 报障）。
         let renderable = symbols.filter { Self.canRender($0, font: Self.probeFont) }
         let visible = renderable.isEmpty ? symbols : renderable
-        for start in stride(from: 0, to: visible.count, by: Self.perRow) {
-            let end = min(start + Self.perRow, visible.count)
+        for start in stride(from: 0, to: visible.count, by: perRow) {
+            let end = min(start + perRow, visible.count)
             let row = makeRow(Array(visible[start..<end]))
-            row.heightAnchor.constraint(equalToConstant: Self.rowHeight).isActive = true
+            row.heightAnchor.constraint(equalToConstant: rowHeight).isActive = true
             stack.addArrangedSubview(row)
         }
         // 换了一批符号就把滚动位置收回顶部 —— 否则上一批的滚动偏移会留着，
         // 面板看起来像「打开就是空的」（内容其实在视口上方）。
         scroll.setContentOffset(.zero, animated: false)
+    }
+
+    /// 响应式降档（2026-10-23）：列数/行高降一档后按最近一次数据重画。
+    func setCompact(_ on: Bool) {
+        guard on != compact else { return }
+        compact = on
+        perRow = on ? 6 : 8
+        rowHeight = on ? 32 : 40
+        if !symbols.isEmpty { renderSymbols() }
+    }
+
+    /// 释放绘制内容（面板关闭时由 `isHidden` 调）。符号表本身很小，也一并丢掉 ——
+    /// 反正控制器每次打开符号层都会重新 `setSymbols`。
+    func releaseContent() {
+        symbols = []
+        stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+    }
+
+    /// 关闭 = 释放（同 `EmojiPanel`：同值重复赋值也会触发 didSet，只在刚变隐藏时清）。
+    override var isHidden: Bool {
+        didSet { if isHidden, !oldValue { releaseContent() } }
     }
 
     private func makeRow(_ texts: [String]) -> UIStackView {

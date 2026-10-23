@@ -287,7 +287,7 @@ LICENSE · CONTRIBUTING.md      # MIT full text · contribution guide (incl. dic
 
 ### 📅 Project Status
 
-> **Current stage: v1.24.0 (2026-10-23): composing pinyin stays visible and auto-segments on every client; idiom/xiehouyu and 3-to-multi-character phrase composition (厌蠢症, 样样通); desktop candidate latency under 30 ms; clear-user-words in settings; long-press backspace clears composition on mobile; Baidu Netdisk mirror on the site**
+> **Current stage: v1.24.1 (2026-10-23): hold-to-delete backspace on mobile; clear-user-words in the Android in-keyboard settings; Windows per-host clear on next focus and sign-out-free interactive upgrades; iOS responsive layout, panel return and 9-key pinyin-row fixes; always-on pinyin on all clients**
 
 V1 milestone progress:
 

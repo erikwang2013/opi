@@ -94,6 +94,11 @@ enum KeyboardFunctionKey {
     case hideTiledCandidates
     /// 平铺右列 ⌫：走引擎退格，之后按候选余量决定是否收拢。
     case tiledBackspace
+    /// 平铺 ⌫ **长按重复**的一拍（2026-10-23）：只退格、**不收拢** ——
+    /// 长按期间收拢会让手指下的按钮消失、重复提前中断（见控制器 case）。
+    case tiledBackspaceRepeat
+    /// 平铺 ⌫ 长按抬手/取消：候选已空则收拢回键面（同短按后的判定）。
+    case tiledRepeatEnded
     /// 平铺右列空格：走引擎空格（中文态 = 选首候选）。
     case tiledSpace
     /// 9 键左列/平铺左列点一行读数：钉住该读音（不上屏）。
@@ -145,18 +150,22 @@ struct KeySpec {
     /// ⚠️ 带了它的键，按下**不能**立刻上报（否则长按会先干一次短按的事）——
     /// 处理与 ⇧ 的三态同款，见 `KeyboardLayout.attach/onTouchDown/onTouchUp`。
     let longPressFunction: KeyboardFunctionKey?
-    /// 长按 = **清空全部组合输入**（2026-10-23，⌫ 专用）。
+    /// 长按 = **按住连续退格**（2026-10-23，⌫ 专用）。
     ///
     /// 与 `longPressFunction` 的区别（别合并）：那个字段把键变成「功能键」——
     /// 短按也走 `function`；本字段只**追加**长按语义，短按仍是键自己的普通输入
-    /// （⌫ 退一格）。两者不会同时给（`KeyboardLayout.onTouchDown` 的分支按这个约定写）。
-    let longPressClearsComposing: Bool
+    /// （⌫ 退一格）。两者不会同时给（`KeyboardTouch.swift` 的分支按这个约定写）。
+    /// 长按重复调用 `route(.backspace)`：引擎先删组合、组合空后退宿主正文。
+    let longPressRepeatsBackspace: Bool
     /// 相对宽度（1 = 普通字母键）。
     let widthUnits: CGFloat
-    /// 键面字号。⚠️ 只有一个字号（不分「数字行/字母行」两级）—— 9 键的键面是
-    /// `"2\nabc"` 这种两行文本，Android 那边数字小、字母大（12sp/21sp），
-    /// 本端两行同号。差异记在 ios/README.md，Mac 上做外观时再拆两行字体。
+    /// 键面字号（第一行基准）。
     let fontSize: CGFloat
+    /// 两行键的**逐行字号倍数**（2026-10-23）：`[0.62, 1]` = 数字小、字母大；
+    /// `[1, 0.62]` = 笔画字形大、名称小。单行键保持 `[1]`。
+    /// 为什么需要：UIButton 的 `titleLabel.font` 对多行只有一个字号，
+    /// 而 9 键要的是 Android 的「数字 12sp / 字母 21sp」两级。
+    let lineScales: [CGFloat]
 
     init(
         _ label: String,
@@ -165,9 +174,10 @@ struct KeySpec {
         fallback: KeyFallback = .none,
         function: KeyboardFunctionKey? = nil,
         longPressFunction: KeyboardFunctionKey? = nil,
-        longPressClearsComposing: Bool = false,
+        longPressRepeatsBackspace: Bool = false,
         widthUnits: CGFloat = 1,
-        fontSize: CGFloat = 20
+        fontSize: CGFloat = 20,
+        lineScales: [CGFloat] = [1]
     ) {
         self.label = label
         self.keyval = keyval
@@ -175,9 +185,10 @@ struct KeySpec {
         self.fallback = fallback
         self.function = function
         self.longPressFunction = longPressFunction
-        self.longPressClearsComposing = longPressClearsComposing
+        self.longPressRepeatsBackspace = longPressRepeatsBackspace
         self.widthUnits = widthUnits
         self.fontSize = fontSize
+        self.lineScales = lineScales
     }
 
     /// 可打印字符键的便捷构造：keyval = 码点，兜底 = 插入该字符。
@@ -201,15 +212,9 @@ final class KeyButton: UIButton {
     init(spec: KeySpec) {
         self.spec = spec
         super.init(frame: .zero)
-        setTitle(spec.label, for: .normal)
         // ⚠️ 未编译：系统配色 API 按记忆写的，Mac 上确认语义色名与深色模式表现。
-        setTitleColor(.label, for: .normal)
+        applyTitle(.label, fontScale: 1)
         backgroundColor = .secondarySystemBackground
-        titleLabel?.font = .systemFont(ofSize: spec.fontSize)
-        // 键面文本**可以换行**：9 键的 `"2\nabc"`、笔画键的 `"一\n横"` 都是两行
-        // （单行 label 不受影响）。
-        titleLabel?.numberOfLines = 0
-        titleLabel?.textAlignment = .center
         layer.cornerRadius = 5
         // ⚠️ 无障碍：正式版要给每个键设 accessibilityLabel（尤其 ⇧/⌫/回车这类
         // 符号键），否则 VoiceOver 读不出来。本骨架未做 —— 这是**已知缺口**。
@@ -220,8 +225,41 @@ final class KeyButton: UIButton {
 
     /// 换肤 + 长辈字号（重建键位后由 `KeyboardLayout.applyKeyTheme` 逐键调）。
     func applyTheme(_ p: KeyboardPalette, fontScale: CGFloat) {
-        setTitleColor(p.keyFg, for: .normal)
+        applyTitle(p.keyFg, fontScale: fontScale)
         backgroundColor = p.keyBg
-        titleLabel?.font = .systemFont(ofSize: spec.fontSize * fontScale)
+    }
+
+    /// 刷新键面文字。两行键走 attributed title 给**逐行**字号
+    /// （`titleLabel.font` 对多行只有一个字号，`adjustsFontSizeToFitWidth` 对多行
+    /// 也不生效）；单行键走普通 title + 缩字兜底，窄键不裁字。
+    private func applyTitle(_ color: UIColor, fontScale: CGFloat) {
+        let base = spec.fontSize * fontScale
+        // 键面文本**可以换行**：9 键的 `"2\nabc"`、笔画键的 `"一\n横"` 都是两行。
+        titleLabel?.numberOfLines = 0
+        titleLabel?.textAlignment = .center
+        let lines = spec.label.components(separatedBy: "\n")
+        if lines.count > 1 {
+            let title = NSMutableAttributedString()
+            for (i, line) in lines.enumerated() {
+                if i > 0 { title.append(NSAttributedString(string: "\n")) }
+                let scale = spec.lineScales.indices.contains(i) ? spec.lineScales[i] : 1
+                title.append(NSAttributedString(
+                    string: line,
+                    attributes: [
+                        .font: UIFont.systemFont(ofSize: base * scale),
+                        .foregroundColor: color,
+                    ]
+                ))
+            }
+            setAttributedTitle(title, for: .normal)
+        } else {
+            // 先清 attributed：换肤/改字号后普通 title 才会生效。
+            setAttributedTitle(nil, for: .normal)
+            setTitle(spec.label, for: .normal)
+            setTitleColor(color, for: .normal)
+            titleLabel?.font = .systemFont(ofSize: base)
+            titleLabel?.adjustsFontSizeToFitWidth = true
+            titleLabel?.minimumScaleFactor = 0.6
+        }
     }
 }

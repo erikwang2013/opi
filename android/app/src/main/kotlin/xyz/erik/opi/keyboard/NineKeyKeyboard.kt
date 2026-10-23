@@ -82,8 +82,6 @@ fun NineKeyKeyboard(
     onKey: (String) -> Unit,
     onSpace: () -> Unit,
     onBackspace: () -> Unit,
-    /** 长按退格 = 清空整段组合输入（不提交）。 */
-    onBackspaceLongPress: (() -> Unit)? = null,
     onEnter: () -> Unit,
     /** 底行模式键：9 键上**只切简/繁**（2026-10-15 用户裁决），宿主传
      * [xyz.erik.opi.ime.ImeState.toggleTraditional]（不是 26 键的 cycleMode）。 */
@@ -227,7 +225,8 @@ fun NineKeyKeyboard(
                         "⌫",
                         modifier = Modifier.weight(1f).fillMaxWidth(),
                         onTap = onBackspace,
-                        onLongPress = onBackspaceLongPress,
+                        // 按住连续删除；短按仍只删一个（2026-10-23 用户裁决）。
+                        repeatOnLongPress = true,
                         fontSize = keyFont,
                     )
                     KeyButton(

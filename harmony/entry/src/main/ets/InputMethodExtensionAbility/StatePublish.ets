@@ -5,8 +5,8 @@
 // 2026-10-21：控制器已在上限边上，且平铺视图要在这里做自动收拢）。
 //
 // UI 不直接调引擎 —— 单一数据流向，省得两边各自缓存、各自漂移。
+// 拼音只画键盘内 TopBar 行，**不写宿主预编辑**（2026-10-23 对齐 Android/iOS）。
 
-import { inputMethodEngine } from '@kit.IMEKit';
 import * as InputModes from './InputModes';
 import * as KeyboardModes from './KeyboardModes';
 import * as OpiEngine from './OpiEngine';
@@ -28,15 +28,13 @@ function candidatesShowable(buffer: string, candidates: string[], mode: OpiMode)
   return mode === OpiMode.English || buffer.length > 0 || candidates.length > 0;
 }
 
-export function publishState(client: inputMethodEngine.InputClient | null): void {
-  // 行为判定用 buffer（原值）；拼音行/宿主预编辑用 displayBuffer（9 键带分词）。
+export function publishState(): void {
+  // 行为判定用 buffer（原值）；拼音行用 displayBuffer（9 键带分词）。
   const buffer: string = OpiEngine.buffer();
   const pageCandidates: string[] = OpiEngine.candidatesPage();
   // ⚠️ displayBuffer **必须最后读**：9 键读数是 candidates() 的副产物（缓存与算它时的
   // 缓冲绑存），先读会拿到上一条缓冲的旧值/空串 —— Android EngineController 同款次序。
   const display: string = OpiEngine.displayBuffer();
-  // 显示串为空时退回原缓冲：9 键「整段无匹」读数恰为空，此时仍要让用户看见在打什么。
-  const composing: string = display.length > 0 ? display : buffer;
   const mode: OpiMode = OpiEngine.mode();
   // 平铺里候选用尽（选词 / ⌫ 退到空）→ 自动收拢，否则键盘回不来（Android 同款）。
   if (KeyboardModes.tiledEnabled() && !candidatesShowable(buffer, pageCandidates, mode)) {
@@ -67,24 +65,4 @@ export function publishState(client: inputMethodEngine.InputClient | null): void
   // 平铺没开就不取全量：每键都拉 64 条纯属浪费（普通候选栏只用当前页）。
   AppStorage.setOrCreate<string[]>(KEY_ALL_CANDIDATES,
     tiled ? OpiEngine.candidates(TILED_FETCH_LIMIT) : []);
-  // 宿主预编辑与拼音行同源：9 键显示拼音读数（不是数字键串），空则退回原缓冲。
-  syncPreviewText(client, composing);
-}
-
-/**
- * 组合串推进宿主输入框（preview text）。`{0,0}` 只按 API 19 d.ts 选过，
- * 无真机证据；见 docs/install/harmony.md §0.6。
- */
-function syncPreviewText(client: inputMethodEngine.InputClient | null, buffer: string): void {
-  if (client === null) {
-    return;
-  }
-  if (buffer.length === 0) {
-    client.finishTextPreviewSync();
-    return;
-  }
-  // API 19 的 setPreviewText 收 Range（要替换的编辑框区间），不是光标偏移量。
-  // 用 [0,0] 表示「在光标处插入 / 更新预上屏」。
-  const range: inputMethodEngine.Range = { start: 0, end: 0 };
-  client.setPreviewTextSync(buffer, range);
 }

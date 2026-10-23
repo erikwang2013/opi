@@ -27,8 +27,6 @@ fun NumberPad(
     onLetters: () -> Unit,
     onSpace: () -> Unit,
     onBackspace: () -> Unit,
-    /** 长按退格 = 清空组合输入；缓冲为空时才退回单字删除（由路由判断）。 */
-    onBackspaceLongPress: (() -> Unit)? = null,
     onEnter: () -> Unit,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
@@ -60,7 +58,8 @@ fun NumberPad(
                     "⌫",
                     modifier = Modifier.weight(1f),
                     onTap = onBackspace,
-                    onLongPress = onBackspaceLongPress,
+                    // 按住连续删除；短按仍只删一个（2026-10-23 用户裁决）。
+                    repeatOnLongPress = true,
                     fontSize = keyFont,
                 )
                 KeyButton("↵", modifier = Modifier.weight(1f), onTap = onEnter, fontSize = keyFont)

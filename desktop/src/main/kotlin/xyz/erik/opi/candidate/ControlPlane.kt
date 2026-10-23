@@ -16,7 +16,15 @@
 //!       {"op":"reload"}（设置窗保存后让 TSF 重读 settings.ini + 词库）
 //! 应答：TSF 的 ctl_result 行，原样（{"id":1,"ok":true,"state":"..."}）
 //!       broker 自己的失败：{"error":"…","ok":false,"type":"ctl_result"}
+//!       broker 已把 clearuserwords 记成待发：{"error":"…","ok":false,"queued":true,…}
 //! ```
+//!
+//! clearuserwords 的特例：设置窗获得焦点会让当前 TSF 宿主 Deactivate、断开候选管道，
+//! 此刻请求写不出去。broker 不把它当普通失败丢掉，而是记一次待发标记，下一次 TSF
+//! 连接建立后补发（见 PipeServer 的 queueClearForReconnect / flushPendingClear）。
+//! 边界：管道一次只能清**当时连上的一个宿主**。其余已打开应用靠设置窗先写的
+//! 「清词世代」标记：各引擎在下次激活/焦点时自清（见 crates/tsf-opi/src/
+//! clear_generation.rs）。调用方文案照此写。
 //!
 //! 信任边界：**本机同一用户会话**。PIPE_REJECT_REMOTE_CLIENTS 只挡远程 SMB；
 //! 本地任意进程都能连（与候选管道同一条边界），所以两件事必须做：服务端串行、
@@ -70,6 +78,13 @@ private const val ACTION_TIMEOUT_MS = 3000L
 private val CONTROL_ACTIONS =
     setOf("lang", "trad", "punct", "fullwidth", "englishpro", "mode", "clearuserwords")
 
+/** broker 断线时补发 clearuserwords 的 op 字段串（与 controlDispatch 产出的形状一致）。 */
+internal const val CLEAR_USER_WORDS_OP_FIELDS = "\"action\":\"clearuserwords\",\"op\":\"action\""
+
+/** TSF 未连接时 broker 已记下清除请求，给调用方的文案（设置窗原样接在「已清本地缓存；」后）。 */
+internal const val CLEAR_QUEUED_MESSAGE =
+    "已记录清除请求：已打开的应用重新聚焦后清除内存（更新前已打开的应用需重开）"
+
 // ---------- 纯协议（Linux 可单测） ----------
 
 internal data class ControlReply(
@@ -78,6 +93,8 @@ internal data class ControlReply(
     val token: String?,
     val texts: List<String>?,
     val error: String?,
+    /** broker 已把 clear 记成待发（等下一次 TSF 连接补发）—— 只有 broker 的失败应答会带。 */
+    val queued: Boolean = false,
 )
 
 /** 解析 TSF/broker 的一条 ctl_result。形状不对 → null（调用方按失败处理，别降级成空结果）。 */
@@ -92,6 +109,7 @@ internal fun parseControlReply(line: String?): ControlReply? {
         token = (obj["token"] as? JVal.JStr)?.v,
         texts = texts,
         error = (obj["error"] as? JVal.JStr)?.v,
+        queued = (obj["queued"] as? JVal.JBool)?.v ?: false,
     )
 }
 
@@ -108,9 +126,21 @@ internal fun controlReloadRequest(): String = """{"op":"reload"}"""
 internal fun controlErrorLabel(why: String): String =
     """{"error":${jsonString(why)},"ok":false,"type":"ctl_result"}"""
 
+/**
+ * broker 已把 clearuserwords 记成待发（TSF 未连接）的应答：仍是失败形状，
+ * 但 `queued:true` 让设置窗能说「下次回到输入框时生效」而不是「没清掉」。
+ */
+internal fun controlQueuedLabel(why: String): String =
+    """{"error":${jsonString(why)},"ok":false,"queued":true,"type":"ctl_result"}"""
+
 /** broker 对一行请求的判定：转发给 TSF，或直接拒绝（不碰管道，可单测）。 */
 internal sealed interface ControlDispatch {
-    class Forward(val opFields: String, val timeoutMs: Long) : ControlDispatch
+    class Forward(
+        val opFields: String,
+        val timeoutMs: Long,
+        /** clearuserwords 在 TSF 断开时改记待发（下一次连接补发），而不是直接失败。 */
+        val queueClearIfDisconnected: Boolean = false,
+    ) : ControlDispatch
     class Reject(val reply: String) : ControlDispatch
 }
 
@@ -129,7 +159,11 @@ internal fun controlDispatch(line: String): ControlDispatch {
             if (action !in CONTROL_ACTIONS) {
                 return ControlDispatch.Reject(controlErrorLabel("未知动作：$action"))
             }
-            ControlDispatch.Forward("\"action\":${jsonString(action)},\"op\":\"action\"", ACTION_TIMEOUT_MS)
+            ControlDispatch.Forward(
+                "\"action\":${jsonString(action)},\"op\":\"action\"",
+                ACTION_TIMEOUT_MS,
+                queueClearIfDisconnected = action == "clearuserwords",
+            )
         }
         "search" -> {
             val query = (obj["query"] as? JVal.JStr)?.v
@@ -221,6 +255,23 @@ internal fun controlAction(action: String, timeoutMs: Long = ACTION_TIMEOUT_MS):
     return if (reply.ok) null else reply.error ?: "输入法拒绝了该动作"
 }
 
+/**
+ * clearuserwords 的结局：`ok` = 当前 TSF 客户端已执行；`queued` = TSF 未连接，
+ * broker 已记下、下一次连接补发；其余 = 给用户看的原因。
+ * 与 [controlAction] 分开只为把 queued 这一格带给设置窗 —— 不能当成功，也不能当普通失败。
+ */
+internal data class ClearEngineResult(val ok: Boolean, val queued: Boolean, val why: String?)
+
+internal fun controlClearUserWords(timeoutMs: Long = ACTION_TIMEOUT_MS): ClearEngineResult {
+    val reply = parseControlReply(controlCall(controlActionRequest("clearuserwords"), timeoutMs + 1000))
+        ?: return ClearEngineResult(false, false, "连不上输入法（候选窗进程未运行）")
+    return when {
+        reply.ok -> ClearEngineResult(true, false, null)
+        reply.queued -> ClearEngineResult(false, true, reply.error ?: CLEAR_QUEUED_MESSAGE)
+        else -> ClearEngineResult(false, false, reply.error ?: "输入法拒绝了该动作")
+    }
+}
+
 /** 符号页直插。null = 已入上屏队列；非 null = 失败原因。 */
 internal fun controlCommit(text: String): String? = controlActionReply(controlCommitRequest(text))
 
@@ -294,13 +345,28 @@ internal class ControlServer(private val pipes: PipeServer) {
 
     private fun handle(line: String): String =
         when (val d = controlDispatch(line)) {
-            is ControlDispatch.Forward -> forward(d.opFields, d.timeoutMs)
+            is ControlDispatch.Forward -> forward(d)
             is ControlDispatch.Reject -> d.reply
         }
 
-    private fun forward(opFields: String, timeoutMs: Long): String =
-        pipes.requestCtl(opFields, timeoutMs)
-            ?: controlErrorLabel("输入法未连接或应答超时")
+    /**
+     * TSF 没连上时，clearuserwords 不能丢：记成待发，由下一次连接补发（见 PipeServer）。
+     * 其余动作（状态/搜索/提交/切档）本来就是「此刻的输入法」语义，没有客户端就是失败。
+     */
+    private fun forward(d: ControlDispatch.Forward): String {
+        var queued = false
+        val line = pipes.requestCtl(d.opFields, d.timeoutMs) {
+            if (d.queueClearIfDisconnected) {
+                pipes.queueClearForReconnect()
+                queued = true
+            }
+        }
+        return when {
+            line != null -> line
+            queued -> controlQueuedLabel(CLEAR_QUEUED_MESSAGE)
+            else -> controlErrorLabel("输入法未连接或应答超时")
+        }
+    }
 
     private fun createPipe(): WinNT.HANDLE? {
         val h = Kernel32.INSTANCE.CreateNamedPipe(

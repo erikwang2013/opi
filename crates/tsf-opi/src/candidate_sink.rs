@@ -17,24 +17,31 @@ use std::sync::Arc;
 use engine_core::composer::Mode;
 
 use crate::candidate_io::{CandidateAction, CandidateClient};
+use crate::state::EngineShared;
 use crate::tsf::TsfSink;
 
 /// 候选窗接缝的生产实现：把 composition 变化映射为 show/hide。
 pub struct CandidateSink {
     client: CandidateClient,
+    /// 引擎（与 `SharedAction` 同一份）：`on_activate` 顺带比对清词世代 ——
+    /// 这里正是 TSF Activate / 线程焦点 / profile 重新激活三条路的共同出口。
+    engine: Arc<EngineShared>,
 }
 
 impl CandidateSink {
-    pub fn new(action: Arc<dyn CandidateAction>) -> Self {
+    pub fn new(action: Arc<dyn CandidateAction>, engine: Arc<EngineShared>) -> Self {
         Self {
             client: CandidateClient::new(action),
+            engine,
         }
     }
 }
 
 impl TsfSink for CandidateSink {
-    /// 宿主激活：允许读线程主动连候选窗（见 `CandidateClient::on_activate`）。
+    /// 宿主激活：先比对清词世代（按宿主、下次焦点生效，见 `clear_generation.rs`），
+    /// 再允许读线程主动连候选窗（见 `CandidateClient::on_activate`）。
     fn on_activate(&self) {
+        self.engine.check_clear_generation();
         self.client.on_activate();
     }
 

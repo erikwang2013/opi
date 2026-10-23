@@ -3,6 +3,7 @@
 
 package xyz.erik.opi.ime
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -46,5 +47,18 @@ class ComposingRowVisibilityTest {
     fun wubiHintAndDisplayTextEachKeepTheComposingRow() {
         assertTrue(composingRowActive("ni'hao", "", "", 0))
         assertTrue(composingRowActive("", "g k", "", 0))
+    }
+
+    @Test
+    fun emptyDisplayFallsBackToTheRawKeySequence() {
+        // 9 键无匹：引擎不给假拼音，行显示原按键序列（次要色），不能空白。
+        assertEquals("94642", composingRowText("", "94642"))
+        assertTrue(composingRowIsFallback("", "94642"))
+        // 有真实读数时永远用读数，不显示键序。
+        assertEquals("ni'hao", composingRowText("ni'hao", "64426"))
+        assertFalse(composingRowIsFallback("ni'hao", "64426"))
+        // 全空仍是空闲，不伪造内容。
+        assertEquals("", composingRowText("", ""))
+        assertFalse(composingRowIsFallback("", ""))
     }
 }

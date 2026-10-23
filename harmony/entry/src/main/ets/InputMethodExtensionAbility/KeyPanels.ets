@@ -117,7 +117,8 @@ export struct KeyBox {
 }
 
 /**
- * 右列 ⌫（9 键 / 平铺右列共用观感）：单击删一格；长按清空**整段**组合（不提交）。
+ * 右列 ⌫（9 键 / 平铺右列共用观感）：单击删一格；长按按住连续退格（先退组合，
+ * 组合空后退宿主正文），松手停止。
  * 单独成件而不是给 KeyBox 加长按：长按手势会吃掉后续点击，挂在数字/标点键上会让
  * 那些键的长按变成「什么都不发生」。
  */
@@ -149,8 +150,14 @@ export struct BackspaceBox {
     })
     .gesture(
       LongPressGesture({ repeat: false, duration: 500 })
-        .onAction((event: GestureEvent) => {
-          this.ctrl.tapBackspaceLongPress();
+        .onAction(() => {
+          this.ctrl.setBackspaceRepeat(true);
+        })
+        .onActionEnd(() => {
+          this.ctrl.setBackspaceRepeat(false);
+        })
+        .onActionCancel(() => {
+          this.ctrl.setBackspaceRepeat(false);
         })
     )
   }
@@ -291,7 +298,7 @@ export struct FourteenKeyPanel {
       .onClick(action)
   }
 
-  /** ⌫：单击删一格；长按清空整段组合（不提交）。 */
+  /** ⌫：单击删一格；长按按住连续退格，松手停止。 */
   @Builder
   BackspaceFunc() {
     Button('⌫')
@@ -304,8 +311,14 @@ export struct FourteenKeyPanel {
       })
       .gesture(
         LongPressGesture({ repeat: false, duration: 500 })
-          .onAction((event: GestureEvent) => {
-            this.ctrl.tapBackspaceLongPress();
+          .onAction(() => {
+            this.ctrl.setBackspaceRepeat(true);
+          })
+          .onActionEnd(() => {
+            this.ctrl.setBackspaceRepeat(false);
+          })
+          .onActionCancel(() => {
+            this.ctrl.setBackspaceRepeat(false);
           })
       )
   }
@@ -371,7 +384,7 @@ export struct StrokeKeyPanel {
       .onClick(action)
   }
 
-  /** ⌫：单击删一格；长按清空整段组合（不提交）。 */
+  /** ⌫：单击删一格；长按按住连续退格，松手停止。 */
   @Builder
   BackspaceFunc() {
     Button('⌫')
@@ -384,8 +397,14 @@ export struct StrokeKeyPanel {
       })
       .gesture(
         LongPressGesture({ repeat: false, duration: 500 })
-          .onAction((event: GestureEvent) => {
-            this.ctrl.tapBackspaceLongPress();
+          .onAction(() => {
+            this.ctrl.setBackspaceRepeat(true);
+          })
+          .onActionEnd(() => {
+            this.ctrl.setBackspaceRepeat(false);
+          })
+          .onActionCancel(() => {
+            this.ctrl.setBackspaceRepeat(false);
           })
       )
   }

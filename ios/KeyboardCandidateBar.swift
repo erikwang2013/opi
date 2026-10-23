@@ -157,9 +157,10 @@ extension KeyboardLayout {
         ])
     }
 
-    /// 刷新拼音行。文本来自 `OpiEngine.displayBuffer()`（引擎已分词）；
-    /// **不要**传 `buffer()` 代替 —— 9 键的缓冲是数字串，显示判据见那边的注释。
-    func setComposingText(_ text: String) {
-        composingBar.setText(text)
+    /// 刷新拼音行。文本通常来自 `OpiEngine.displayBuffer()`（引擎已分词）；
+    /// 9 键无匹（display 空）时控制器回退 `buffer()` 并置 `fallback=true`，只作
+    /// 原按键序列展示，不冒充拼音（判据见 `KeyboardCandidates.refresh`）。
+    func setComposingText(_ text: String, fallback: Bool = false) {
+        composingBar.setText(text, fallback: fallback)
     }
 }

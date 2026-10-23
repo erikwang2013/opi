@@ -78,6 +78,8 @@ fun ImeScreen(
     onPickPet: (PetMood) -> Unit = {},
     /** 收起键盘（工具栏最右图标）：服务层注入 requestHideSelf；默认空 = JVM 测试不感知。 */
     onCloseKeyboard: () -> Unit = {},
+    /** 键盘内设置面板「清除用户词库」：服务层注入共享两半清理（引擎内存 + 落盘）。 */
+    onClearUserWords: () -> Unit = {},
 ) {
     val modes = state.keyboardModes
     // 优先级：长辈 > 暗光 > 皮肤（皮肤是「底」，模式是临时覆盖；见 SkinOption 的说明）。
@@ -199,6 +201,7 @@ fun ImeScreen(
                         symbolCategories,
                         kaomojiCategories,
                         onPickPet,
+                        onClearUserWords,
                         modifier = Modifier.weight(
                             if (modes.oneHand == KeyboardModes.OneHand.OFF) 1f
                             else ONE_HAND_WIDTH_RATIO,
@@ -224,6 +227,7 @@ private fun KeyboardArea(
     symbolCategories: () -> List<xyz.erik.opi.keyboard.SymbolCategories.Category>,
     kaomojiCategories: () -> List<xyz.erik.opi.keyboard.KaomojiCategories.Category>,
     onPickPet: (PetMood) -> Unit,
+    onClearUserWords: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val shiftVisible = controller.mode == EngineMode.ENGLISH
@@ -283,6 +287,7 @@ private fun KeyboardArea(
         ImeState.View.SETTINGS -> SettingsPanel(
             controller = controller,
             onClose = state::backToLetters,
+            onClearUserWords = onClearUserWords,
             modifier = modifier,
         )
         ImeState.View.NUMBER -> NumberPad(
@@ -294,7 +299,6 @@ private fun KeyboardArea(
             onLetters = state::backToLetters,
             onSpace = router::handleSpace,
             onBackspace = router::handleBackspace,
-            onBackspaceLongPress = router::handleBackspaceLongPress,
             onEnter = router::handleEnter,
         )
         ImeState.View.SYMBOL -> Column(modifier = modifier) {
@@ -362,8 +366,6 @@ private fun KeyboardArea(
                     onKey = router::handleKey,
                     onSpace = router::handleSpace,
                     onBackspace = router::handleBackspace,
-                    // 长按退格 = 清空整段组合输入（不提交；空缓冲退回单字删除，见 KeyRouter）。
-                    onBackspaceLongPress = router::handleBackspaceLongPress,
                     onEnter = router::handleEnter,
                     // 9 键的模式键**只切简/繁**（2026-10-15 用户裁决「简繁按钮就只切换
                     // 简繁」）—— 不是 26 键那条中→繁→英循环（cycleMode 只在 26 键与
@@ -405,8 +407,6 @@ private fun KeyboardArea(
                     onKey = router::handleKey,
                     onSpace = router::handleSpace,
                     onBackspace = router::handleBackspace,
-                    // 长按退格 = 清空整段组合输入（不提交；空缓冲退回单字删除，见 KeyRouter）。
-                    onBackspaceLongPress = router::handleBackspaceLongPress,
                     onEnter = router::handleEnter,
                     // 只切简/繁（2026-10-15 用户裁决，与 9 键统一）
                     onModeSwitch = state::toggleTraditional,
@@ -422,8 +422,6 @@ private fun KeyboardArea(
                     onKey = router::handleKey,
                     onSpace = router::handleSpace,
                     onBackspace = router::handleBackspace,
-                    // 长按退格 = 清空整段组合输入（不提交；空缓冲退回单字删除，见 KeyRouter）。
-                    onBackspaceLongPress = router::handleBackspaceLongPress,
                     onEnter = router::handleEnter,
                     // 只切简/繁（2026-10-15 用户裁决，与 9 键统一）
                     onModeSwitch = state::toggleTraditional,
@@ -439,8 +437,6 @@ private fun KeyboardArea(
                     onKey = router::handleKey,
                     onSpace = router::handleSpace,
                     onBackspace = router::handleBackspace,
-                    // 长按退格 = 清空整段组合输入（不提交；空缓冲退回单字删除，见 KeyRouter）。
-                    onBackspaceLongPress = router::handleBackspaceLongPress,
                     onEnter = router::handleEnter,
                     onModeSwitch = state::cycleMode,
                     onNumber = state::openNumber,

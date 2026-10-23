@@ -8,14 +8,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.engine.FakeEngine
-import xyz.erik.opi.engine.composingText
 
-/** 长按 ⌫ = 清空整段组合（任务 2026-10-23）。从 KeyRouterTest 拆出守 500 行。 */
+/**
+ * 长按 ⌫ = **按住连续删除**（2026-10-23 用户裁决）。
+ *
+ * 重复节奏由键盘层的 `KeyButton.repeatOnLongPress` 驱动；路由器每一拍只做一次
+ * 普通退格（组合态退引擎，组合空后退宿主一个字符），**没有 clear-all**。
+ * 这里钉住“每一拍”的语义，防止以后又退化成一次性清空。
+ */
 class KeyRouterLongPressTest {
     private class Channel {
         val commits = mutableListOf<String>()
         var backspaceCount = 0
-        var enterCount = 0
     }
 
     private fun router(fake: FakeEngine, ch: Channel): Pair<EngineController, KeyRouter> {
@@ -28,74 +32,35 @@ class KeyRouterLongPressTest {
         )
     }
 
-    // ---- 长按退格 = 清空整段组合（任务 2026-10-23）----
-
     @Test
-    fun backspaceLongPressClearsWholeBufferWithoutCommitting() {
+    fun eachRepeatTickDeletesOneCompositionCharacter() {
         val fake = FakeEngine().apply {
             buf = "nihao"
             cands = arrayOf("你好", "你号")
         }
         val ch = Channel()
         val (ctrl, r) = router(fake, ch)
-        r.handleBackspaceLongPress()
-        assertEquals("清空走引擎 clear（不是逐字退格）", 1, fake.clearCalls)
-        assertEquals("不许逐字退格", 0, fake.backspaceCalls)
-        assertEquals("不许提交任何文本", emptyList<String>(), ch.commits)
-        assertEquals("候选随缓冲一起清空", emptyList<String>(), ctrl.candidates)
-        assertEquals("", ctrl.buffer)
-    }
 
-    @Test
-    fun backspaceLongPressClearsPendingSegmentsWithoutDeletingEditorText() {
-        // 逐字确认态（2026-10-17）：缓冲可能已空、片段还在候选区 —— 长按也必须清掉
-        // 这个组合态，而**不是**去删宿主编辑器里的正文。
-        val fake = FakeEngine().apply {
-            buf = ""
-            pending = "你好"
-            cands = arrayOf("你好世界")
-        }
-        val ch = Channel()
-        val (ctrl, r) = router(fake, ch)
-        r.handleBackspaceLongPress()
-        assertEquals(1, fake.clearCalls)
+        repeat(3) { r.handleBackspace() }
+
+        assertEquals("三拍 = 三次引擎退格", 3, fake.backspaceCalls)
+        assertEquals("不许一次性 clear", 0, fake.clearCalls)
+        assertEquals("ni", ctrl.buffer)
         assertEquals("不许删宿主正文", 0, ch.backspaceCount)
-        assertEquals("片段也随 clear 清空", "", ctrl.pendingText)
         assertTrue("不许提交半截组合", ch.commits.isEmpty())
     }
 
     @Test
-    fun backspaceLongPressWithEmptyCompositionFallsBackToSingleDelete() {
-        // 空组合：允许退掉宿主里**一个**字符（与短按同义），但绝不允许「删光编辑器」。
+    fun eachTickDeletesOneHostCharacterWhenCompositionIsEmpty() {
         val fake = FakeEngine()
         val ch = Channel()
         val (_, r) = router(fake, ch)
-        r.handleBackspaceLongPress()
-        assertEquals("缓冲空时不许调 clear", 0, fake.clearCalls)
-        assertEquals("退回单字删除", 1, ch.backspaceCount)
-        assertEquals(0, fake.backspaceCalls)
+
+        repeat(4) { r.handleBackspace() }
+
+        assertEquals("空组合：每拍退宿主一个字符", 4, ch.backspaceCount)
+        assertEquals("不许调引擎 clear", 0, fake.clearCalls)
+        assertEquals("不许调引擎退格", 0, fake.backspaceCalls)
         assertTrue(ch.commits.isEmpty())
     }
-
-    @Test
-    fun backspaceLongPressRefreshSyncsTheHostCompositionArea() {
-        // 清空后 refresh 必须走到组合串同步点（服务层借此收掉字段里可能残留的组合区）。
-        val fake = FakeEngine().apply { buf = "nihao"; displayBuf = "ni'hao" }
-        var synced = 0
-        val ctrl = EngineController(fake, onBufferSynced = { synced++ })
-        val ch = Channel()
-        val r = KeyRouter(
-            ctrl,
-            commit = { ch.commits += it },
-            deleteBackward = { ch.backspaceCount++ },
-            performEnter = { ch.enterCount++ },
-        )
-        // 构造器自己会 refresh 一次（sync 一次）—— 只数清空带来的那一次。
-        val before = synced
-        r.handleBackspaceLongPress()
-        assertEquals("clear 的 refresh 必须触发 onBufferSynced", before + 1, synced)
-        assertEquals(1, fake.clearCalls)
-        assertEquals("同步点读到的是已清空的组合串", "", ctrl.composingText())
-    }
-
 }

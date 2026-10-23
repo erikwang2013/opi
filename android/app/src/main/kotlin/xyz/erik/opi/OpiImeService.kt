@@ -23,6 +23,7 @@ import androidx.savedstate.SavedStateRegistryOwner
 import xyz.erik.opi.engine.DictStore
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.engine.UserWordStore
+import xyz.erik.opi.engine.clearUserWords
 import xyz.erik.opi.ime.HandlerDebouncer
 import xyz.erik.opi.jni.EngineLoader
 import xyz.erik.opi.jni.OpiEngine
@@ -254,6 +255,8 @@ class OpiImeService : InputMethodService() {
                 onPickPet = { commitPetSticker(it) },
                 // 工具栏最右「收起键盘」（2026-10-10 用户裁决）：收回系统键盘。
                 onCloseKeyboard = { requestHideSelf(0) },
+                // 键盘内设置面板的「清除用户词库」：同一个 store、同一套两半清理。
+                onClearUserWords = { clearUserWords(userWords) },
             )
         }
         Log.i(TAG, "onCreateInputView: window=${windowSizePx()} keyboardHeight=${keyboardHeight()}")

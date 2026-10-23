@@ -46,4 +46,30 @@ class UserWordsTest {
         assertNull("本来就不存在不算失败", deleteUserWordsCache(f))
         Files.deleteIfExists(dir)
     }
+
+    @Test
+    fun `clear generation file follows LOCALAPPDATA`() {
+        assertEquals(
+            Paths.get("C:/L/opi/clear_generation"),
+            clearGenerationFile("C:/L"),
+        )
+        // 缺省/空串 = 未设置（与 userWordsFile 同口径）。
+        assertEquals(Paths.get("./opi/clear_generation"), clearGenerationFile(null))
+        assertEquals(Paths.get("./opi/clear_generation"), clearGenerationFile(""))
+    }
+
+    @Test
+    fun `clear generation write creates dirs and changes token each time`() {
+        val dir = Files.createTempDirectory("opi-clear-gen")
+        val f = dir.resolve("opi").resolve("clear_generation")
+        assertNull(writeClearGeneration(f))
+        val first = Files.readString(f)
+        assertFalse("token 不能为空", first.isBlank())
+        assertNull(writeClearGeneration(f))
+        val second = Files.readString(f)
+        assertFalse("两次清词必须写不同 token", first == second)
+        Files.deleteIfExists(f)
+        Files.deleteIfExists(f.parent)
+        Files.deleteIfExists(dir)
+    }
 }

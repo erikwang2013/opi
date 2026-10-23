@@ -20,6 +20,10 @@ final class CandidateTiledPanel: UIView {
     var onSelect: ((Int) -> Void)?
     var onBack: (() -> Void)?
     var onBackspace: (() -> Void)?
+    /// 长按 ⌫ 的重复拍（2026-10-23）：只退格、不收拢（见控制器 `.tiledBackspaceRepeat`）。
+    var onBackspaceRepeat: (() -> Void)?
+    /// 长按 ⌫ 抬手/取消：补一次「候选空则收拢」的判定。
+    var onRepeatEnded: (() -> Void)?
     var onRetype: (() -> Void)?
     var onSpace: (() -> Void)?
     var onPinReading: ((String) -> Void)?
@@ -42,6 +46,8 @@ final class CandidateTiledPanel: UIView {
     private var dirty = true
     private var palette: KeyboardPalette = .light
     private var fontScale: CGFloat = 1
+    /// ⌫ 长按连续退格（2026-10-23，与键面同一个驱动器实现）。
+    private let repeatDriver = RepeatBackspaceDriver()
 
     private static let unitsPerRow: CGFloat = 4
     private static let rowsPerPage = 4
@@ -107,6 +113,15 @@ final class CandidateTiledPanel: UIView {
             b.setTitle(title, for: .normal)
             b.titleLabel?.numberOfLines = 1
             b.addTarget(self, action: action, for: .touchUpInside)
+            if title == "⌫" {
+                // 长按 = 按住连续退格（2026-10-23）。默认 cancelsTouchesInView=true：
+                // 长按成立后按钮的 tap 被取消，抬手不会再补删一次。
+                let lp = UILongPressGestureRecognizer(
+                    target: self, action: #selector(backspaceLongPress(_:))
+                )
+                lp.minimumPressDuration = 0.5
+                b.addGestureRecognizer(lp)
+            }
             actionStack.addArrangedSubview(b)
             actionButtons.append(b)
         }
@@ -296,4 +311,23 @@ final class CandidateTiledPanel: UIView {
     @objc private func tapBackspace() { onBackspace?() }
     @objc private func tapRetype() { onRetype?() }
     @objc private func tapSpace() { onSpace?() }
+
+    /// 平铺 ⌫ 长按：起表/停表；抬手补一次收拢判定（重复期间不收拢，见控制器）。
+    @objc private func backspaceLongPress(_ g: UILongPressGestureRecognizer) {
+        switch g.state {
+        case .began:
+            repeatDriver.onTick = { [weak self] in self?.onBackspaceRepeat?() }
+            repeatDriver.start()
+        case .ended, .cancelled, .failed:
+            repeatDriver.stop()
+            onRepeatEnded?()
+        default:
+            break
+        }
+    }
+
+    /// 面板被隐藏（收拢/切层）时立刻停表：手指可能还按在已隐藏的 ⌫ 上。
+    override var isHidden: Bool {
+        didSet { if isHidden { repeatDriver.stop() } }
+    }
 }

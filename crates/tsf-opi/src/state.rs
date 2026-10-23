@@ -63,6 +63,9 @@ const MAX_PENDING_TEXT: usize = 16;
 /// 出现 COM 接口指针，见模块头的线程模型。想往这加字段前先确认它是 `Send`。
 pub struct EngineShared {
     logic: Mutex<TsfLogic>,
+    /// 「清空用户词」世代：本引擎上次见过并清过的 token（见 `clear_generation.rs`）。
+    /// 每个宿主进程各一份 ⇒ 设置窗写一次标记，各宿主在下次焦点时各自清。
+    clear_seen: crate::clear_generation::SeenGeneration,
     /// 读线程排下的点选（页内 index），由按键线程取走执行（见 `enqueue_select`）。
     pending: Mutex<VecDeque<usize>>,
     /// 读线程排下的「直接插入文本」（候选窗 `commit_text`，不经引擎选词），
@@ -86,6 +89,7 @@ impl EngineShared {
     fn with_dict_inner(logic: TsfLogic) -> Self {
         Self {
             logic: Mutex::new(logic),
+            clear_seen: Default::default(),
             pending: Mutex::new(VecDeque::new()),
             pending_text: Mutex::new(VecDeque::new()),
         }
@@ -96,6 +100,23 @@ impl EngineShared {
     /// 调用方**不得在持锁期间碰 `target` 或走 COM**：见类型头的锁序说明。
     pub fn lock_logic(&self) -> Option<MutexGuard<'_, TsfLogic>> {
         self.logic.lock().ok()
+    }
+
+    /// 比对「清空用户词」世代；变了就清本宿主的学习记忆（按宿主、下次焦点生效）。
+    ///
+    /// 调用点只有 `CandidateSink::on_activate`：TSF Activate、线程焦点进入、本
+    /// profile 重新激活都会走到那里 —— 正是设置窗把焦点交还宿主的时刻。管道控制面
+    /// 一次只能清一个宿主，这个标记让其余宿主各自清（见 `clear_generation.rs`）。
+    /// 读文件在锁外；读不到 = 本次不清，下一次焦点再试。
+    pub fn check_clear_generation(&self) {
+        let lap = std::env::var_os("LOCALAPPDATA");
+        let token = crate::clear_generation::read(lap.as_deref());
+        if !self.clear_seen.take_if_changed(token.as_deref()) {
+            return;
+        }
+        if let Some(mut logic) = self.lock_logic() {
+            logic.clear_user_words();
+        }
     }
 
     /// 候选窗翻页箭头 → 引擎翻页（真源在引擎，窗口自己不存页码）。

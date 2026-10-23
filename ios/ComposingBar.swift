@@ -25,6 +25,8 @@ final class ComposingBar: UIView {
 
     private let label = UILabel()
     private var palette: KeyboardPalette = .light
+    /// 当前显示的是不是「9 键无匹回退」的原按键序列（换肤时保持次要色）。
+    private var isFallback = false
 
     init() {
         super.init(frame: .zero)
@@ -49,17 +51,20 @@ final class ComposingBar: UIView {
 
     /// 显示串（已由引擎分词）。空串 = 无组合输入：清空文字并撤掉底色带，
     /// 但**槽位高度保留**（见文件头注）。
-    func setText(_ text: String) {
+    /// [fallback] = 9 键无匹时回退的**原按键序列**：仍显示，但用次要色，避免空白行
+    /// 被误读成「拼音被隐藏」；不是假拼音（T9 一位多字母，不猜读音）。
+    func setText(_ text: String, fallback: Bool = false) {
+        isFallback = fallback
         label.text = text
         label.isHidden = text.isEmpty
+        label.textColor = fallback ? palette.barDimFg : palette.barBufferFg
         backgroundColor = text.isEmpty ? .clear : palette.barBg
     }
 
     func applyTheme(_ p: KeyboardPalette, fontScale: CGFloat) {
         palette = p
-        label.textColor = p.barBufferFg
         label.font = .systemFont(ofSize: 15 * fontScale)
-        // 保持当前文字/底色与新色板一致（重开面板/切皮肤时）。
-        setText(label.text ?? "")
+        // 保持当前文字/底色/回退色与新色板一致（重开面板/切皮肤时）。
+        setText(label.text ?? "", fallback: isFallback)
     }
 }

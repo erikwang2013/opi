@@ -100,18 +100,21 @@ final class RarePanel: UIView {
     /// 点中一个字。上屏由控制器做（它才知道 textDocumentProxy）。
     /// ⚠️ 与符号/表情面板同一条：**直提、不过引擎**（`commitText`）。
     var onCommit: ((String) -> Void)?
-    /// 「收起」→ 回字母层（由 `KeyboardLayout` 转成 `.showLetters`）。
+    /// 「回键盘」→ 回字母层（由 `KeyboardLayout` 转成 `.showLetters`）。
+    /// ⚠️ 用词与工具条的「收起键盘」分开：那个才是 resignFirstResponder，
+    /// 这里的返回**只离开面板**，不关键盘（2026-10-23 用户要求两者可分）。
     var onClose: (() -> Void)?
 
-    /// 每行几个（与 Android `RarePanel` 的 `GridCells.Fixed(8)` 同粒度）。
-    private static let perRow = 8
-    /// 行高。⚠️ 未编译：44 对齐 Android 的 `CellText` 高；真机上按键高调。
+    /// 每行几个（与 Android `RarePanel` 的 `GridCells.Fixed(8)` 同粒度；compact 降 6）。
+    private var perRow = 8
+    /// 行高（compact 36 / 常规 44）。⚠️ 未编译：44 对齐 Android 的 `CellText` 高；真机上按键高调。
     /// 滚动视图里的行**必须**有明确高度（同 `SymbolPanel` 的理由）。
-    private static let rowHeight: CGFloat = 44
+    private var rowHeight: CGFloat = 44
+    private var compact = false
 
     private let titleLabel = UILabel()
     private let backButton = BarButton(title: "‹ 返回") {}
-    private let closeButton = BarButton(title: "收起") {}
+    private let closeButton = BarButton(title: "回键盘") {}
     private let scroll = UIScrollView()
     private let stack = UIStackView()
 
@@ -141,7 +144,7 @@ final class RarePanel: UIView {
         addSubview(closeButton)
         addSubview(scroll)
         NSLayoutConstraint.activate([
-            // 面包屑行（对齐 Android：标题在左，回退与「收起」在右；高 40）。
+            // 面包屑行（对齐 Android：标题在左，回退与「回键盘」在右；高 40）。
             titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
             titleLabel.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
             backButton.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 8),
@@ -180,6 +183,32 @@ final class RarePanel: UIView {
         radical = nil
         strokes = nil
         render()
+    }
+
+    /// 响应式降档（2026-10-23）：列数/行高降一档，可见时按当前级重画
+    /// （隐藏时不动，下次 `show()` 的 `render()` 自然用新值）。
+    func setCompact(_ on: Bool) {
+        guard on != compact else { return }
+        compact = on
+        perRow = on ? 6 : 8
+        rowHeight = on ? 36 : 44
+        if !isHidden { render() }
+    }
+
+    /// 关闭 = 释放（2026-10-23）：1.1MB 索引 + 子视图。`indexLoaded` 一并复位，
+    /// 下次 `show()` 重读 —— 重开有一次读盘停顿，换掉常驻内存
+    /// （扩展是 jetsam 重点，Android 那边索引也是按需读）。
+    func releaseContent() {
+        index = [:]
+        indexLoaded = false
+        radical = nil
+        strokes = nil
+        stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+    }
+
+    /// 同 `EmojiPanel`：同值重复赋值也触发 didSet，只在刚变隐藏时清。
+    override var isHidden: Bool {
+        didSet { if isHidden, !oldValue { releaseContent() } }
     }
 
     // MARK: - 三级状态机
@@ -221,14 +250,14 @@ final class RarePanel: UIView {
         index.isEmpty ? "（生僻字索引未打包 · 见 ios/README.md）" : "该部首没有索引数据"
     }
 
-    /// 等宽网格（8 列），`tap` 给的是**下标**。
+    /// 等宽网格（列数 = `perRow`），`tap` 给的是**下标**。
     private func renderGrid(_ texts: [String], tap: ((Int) -> Void)? = nil) {
         guard !texts.isEmpty else {
             stack.addArrangedSubview(BarButton(title: emptyHint()) {})
             return
         }
-        for start in stride(from: 0, to: texts.count, by: Self.perRow) {
-            let end = min(start + Self.perRow, texts.count)
+        for start in stride(from: 0, to: texts.count, by: perRow) {
+            let end = min(start + perRow, texts.count)
             let row = UIStackView()
             row.axis = .horizontal
             row.spacing = 4
@@ -246,7 +275,7 @@ final class RarePanel: UIView {
                     }
                 })
             }
-            row.heightAnchor.constraint(equalToConstant: Self.rowHeight).isActive = true
+            row.heightAnchor.constraint(equalToConstant: rowHeight).isActive = true
             stack.addArrangedSubview(row)
         }
         // 换了一级/换了一批就把滚动位置收回顶部（同 `SymbolPanel`：残留的偏移会让

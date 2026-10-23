@@ -50,6 +50,9 @@ final class KeyboardViewController: UIInputViewController {
     /// internal：`KeyboardTheme.swift` 里的 `applyTheme` 扩展要读。
     var skin: SkinOption = .follow
     var modes = KeyboardModes()
+    /// 键区是否紧凑（2026-10-23）。internal：`KeyboardResponsive.swift` 的
+    /// `updateCompactLayout` / `effectiveFontScale` 读写。
+    var compact = false
     /// 引擎开关（学习/模糊音/简拼/纠错/中文标点/双拼布局/自己表情）。
     /// 只在本文件用；设置面板拿到的永远是 `layout.setEngineSettings` 的快照。
     private var settings = KeyboardSettings()
@@ -118,9 +121,9 @@ final class KeyboardViewController: UIInputViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         guard heightConstraint == nil else { return }
-        // 键盘高度必须由扩展自己给。portrait 264 / landscape 200：横屏时屏幕
-        // 纵向只有 ~320pt，264 会把宿主输入框挤没；键区仍够放 4 行 + 候选栏。
-        // priority 用 defaultHigh：避免与系统在旋转/分屏时的约束冲突。
+        // 键盘高度必须由扩展自己给（公式见 KeyboardResponsive.swift：竖屏 264，
+        // 横屏按屏幕高 60% 封顶、绝对上限 340）。priority 用 defaultHigh：
+        // 避免与系统在旋转/分屏时的约束冲突。
         let h = view.heightAnchor.constraint(equalToConstant: preferredKeyboardHeight)
         h.priority = .defaultHigh
         h.isActive = true
@@ -134,20 +137,20 @@ final class KeyboardViewController: UIInputViewController {
         // 320pt 下仍是 5 格，iPad 上最多 9 格）。
         let safe = view.safeAreaInsets
         layout.updateCandidateSlots(for: view.bounds.width - safe.left - safe.right)
+        // 高度/compact 一起重算（2026-10-23 搬到 KeyboardResponsive.swift）。
+        updateCompactLayout()
         guard let h = heightConstraint else { return }
         let target = preferredKeyboardHeight
         if abs(h.constant - target) > 0.5 { h.constant = target }
     }
 
-    private var preferredKeyboardHeight: CGFloat {
-        // 横竖看**纵向 size class**，不看窗口宽高：iPad 横屏是 regular，
-        // 旧写法会把它的键区压到 200；手机横屏才是 compact。
-        let base: CGFloat = traitCollection.verticalSizeClass == .compact ? 200 : 264
-        // 扩展视图覆盖到 home indicator 时补上安全区，键区同时钉在安全区上沿：
-        // 两者抵消，键区净高不变。safeArea 为 0 时与旧版逐点相同。
-        // + 拼音行（常驻 24pt）：总高补上它、键区顶锚同时下移同一值（`buildRows`），
-        // 所以键区净高与改前逐点相同；平铺态同理（顶锚接拼音行下沿）。
-        return base + view.safeAreaInsets.bottom + ComposingBar.height
+    /// 内存警告（2026-10-23）：扩展被系统击杀的表现就是「跳回系统键盘」——
+    /// 用户报的切英文/返回后跳系统键盘首先要排除这条。隐藏面板正常已在
+    /// `isHidden` 时释放，这里再兜一次；可见面板不清（清了没有重载入口）。
+    override func didReceiveMemoryWarning() {
+        super.didReceiveMemoryWarning()
+        OpiLog.memory.warning("didReceiveMemoryWarning")
+        layout?.releaseHeavyContentOnMemoryWarning()
     }
 
     // 词库装载已搬到 `KeyboardDictionaryLoader.swift`（2026-10-21：本文件压 500 行门禁）。
@@ -189,6 +192,13 @@ final class KeyboardViewController: UIInputViewController {
     /// 2026-10-21 用户裁决：返回**直接回键盘**，包括从设置进入的皮肤/键盘模式/关于
     /// 子面板 —— 此前为「设置 → 子面板 → 设置」加的两级 `settingsReturn` 已删除。
     func returnToCurrentInputMode() {
+        // 统一清理（2026-10-23）：挂着的表情搜索防抖要取消（否则关面板后一次
+        // 防抖回来会往已隐藏的网格里灌结果），搜索框要 resign。返回**不**收键盘、
+        // 也不切系统输入法 —— 收起只有工具条最右那枚，切系统只有左下角 🌐。
+        emojiSearchTimer?.invalidate()
+        emojiSearchTimer = nil
+        layout.prepareToLeavePanels()
+        OpiLog.panel.info("returnToCurrentInputMode")
         layout.setLayer(.letters)
     }
 
@@ -249,13 +259,9 @@ final class KeyboardViewController: UIInputViewController {
 extension KeyboardViewController: KeyboardLayoutDelegate {
 
     func keyboardLayout(_ layout: KeyboardLayout, didPress spec: KeySpec, longPress: Bool) {
-        // ⌫ 长按（2026-10-23）：清空**全部组合输入**，不上屏任何文本。
-        // 不把它做成 `longPressFunction`：那个字段的语义是「长按换成另一个功能键」，
-        // 而 ⌫ 的短按必须仍是普通退格（字段注释见 KeySpec）。
-        if longPress, spec.longPressClearsComposing {
-            clearComposingInput()
-            return
-        }
+        // ⌫ 长按（2026-10-23）：手势层在 0.5s 后按 0.1s 重复调进来，每拍就是一次
+        // 普通退格（组合空时引擎 PassThrough → 宿主 deleteBackward）。不再有
+        // 「一次性清组合」的分支 —— 那正是用户报的「长按只删一次」。
         // 从 spec.states 起算（键上自带的基础修饰位），再叠加本次的长按。
         var states = spec.states
         if longPress { states |= OpiKey.stateLongPressed }
@@ -290,6 +296,12 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
         case .tiledBackspace:
             // 与键盘右列 ⌫ 同一条引擎路；候选没了就自动回键面。
             route(keyval: OpiKey.backspace, states: 0, fallback: .deleteBackward)
+            collapseTiledIfNeeded()
+        case .tiledBackspaceRepeat:
+            // 长按重复的一拍：**只退格、不收拢** —— 长按期间收拢会让手指下的
+            // 按钮消失、重复提前中断。抬手后由 `.tiledRepeatEnded` 补判定。
+            route(keyval: OpiKey.backspace, states: 0, fallback: .deleteBackward)
+        case .tiledRepeatEnded:
             collapseTiledIfNeeded()
         case .tiledSpace:
             // 空格也走引擎（中文态 = 选首候选），不是直插空格。

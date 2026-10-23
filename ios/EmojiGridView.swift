@@ -70,9 +70,12 @@ final class EmojiGridView: UIView, UIScrollViewDelegate {
 
     /// 「自有」子页：4 列网格，格子里是**真实小欧 PNG**（`PetStickerImages` 内嵌）。
     /// 点击只发 `onSticker`（面板负责复制图片），不经过 `onPick`、不上屏。
-    func showStickers(_ forms: [PetEmojiTable.Form], columns: Int) {
+    func showStickers(
+        _ forms: [PetEmojiTable.Form], columns: Int,
+        rowHeight: CGFloat = EmojiGridView.stickerRowHeight
+    ) {
         self.columns = columns
-        rowHeight = Self.stickerRowHeight
+        self.rowHeight = rowHeight
         itemCount = forms.count
         reset()
         guard !forms.isEmpty else {
@@ -94,9 +97,11 @@ final class EmojiGridView: UIView, UIScrollViewDelegate {
     }
 
     /// Emoji 子页：只画引擎表情表（`自有` 已是独立子页，不再混进来）。
-    func showEmoji(_ emojis: [String], columns: Int) {
+    func showEmoji(
+        _ emojis: [String], columns: Int, rowHeight: CGFloat = EmojiGridView.rowHeight
+    ) {
         self.columns = columns
-        rowHeight = Self.rowHeight
+        self.rowHeight = rowHeight
         itemCount = emojis.count
         reset()
         guard !emojis.isEmpty else {
@@ -121,9 +126,12 @@ final class EmojiGridView: UIView, UIScrollViewDelegate {
     }
 
     /// 纯文本网格（颜文字 / 搜索结果）。
-    func showTexts(_ texts: [String], columns: Int, empty: String, shrink: Bool) {
+    func showTexts(
+        _ texts: [String], columns: Int, empty: String, shrink: Bool,
+        rowHeight: CGFloat = EmojiGridView.rowHeight
+    ) {
         self.columns = columns
-        rowHeight = Self.rowHeight
+        self.rowHeight = rowHeight
         itemCount = texts.count
         reset()
         guard !texts.isEmpty else {
@@ -170,6 +178,13 @@ final class EmojiGridView: UIView, UIScrollViewDelegate {
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         onScroll?()
+    }
+
+    /// 释放网格子视图与计数（面板关闭时调；2026-10-23）。行高/列数留着 ——
+    /// 下次 `show*` 会重新给；`itemCount = 0` 让高亮反推不再报旧位置。
+    func releaseContent() {
+        reset()
+        itemCount = 0
     }
 
     private func reset() {

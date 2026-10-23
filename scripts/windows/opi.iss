@@ -17,7 +17,7 @@
 ; best-effort and can never roll back the install.
 ;
 ; Build (CI or local, on Windows; ISCC is the Inno Setup 6 compiler):
-;   ISCC.exe /DAppVersion=1.24.0 ^
+;   ISCC.exe /DAppVersion=1.24.1 ^
 ;            /DAppImageDir=C:\path\to\build\compose\binaries\main\app\opi ^
 ;            /DOutputDir=C:\path\to\dist scripts\windows\opi.iss
 ;
@@ -35,10 +35,12 @@
 ; fixed %TEMP% name failed on retry: the previous still-mapped copy blocked
 ; RenameFile. If even the rename fails, deletion is scheduled for the next
 ; restart and the log says so. No reboot is requested. The uninstaller never
-; kills Explorer. On an interactive UPGRADE where Explorer still maps the old
-; DLL, ssPostInstall restarts only the original user's shell (with a watchdog)
-; so the new TSF code is live without signing out; first installs and silent
-; installs never touch the shell.
+; kills Explorer. Every interactive UPGRADE restarts only the original user's
+; shell (with a watchdog) so the new TSF code is live without signing out; the
+; finish page says "no sign-out; new apps use the update, already-open apps need
+; a close and reopen". First installs and silent installs never touch the shell.
+; Other TSF hosts are never killed: the installer logs (and lists on the finish
+; page) the processes still mapping the old DLL.
 ;
 ; Upgrade (2026-10-21): the same rename runs at ssInstall, BEFORE [InstallDelete]
 ; and [Files], for tsf_opi.dll AND app\luna.opid (the old TSF DLL maps the
@@ -168,7 +170,9 @@ Root: HKLM64; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType
 ; (postinstall entries default to the original user, but state it explicitly --
 ; the earlier runascurrentuser here was one half of the white screen.)
 ; The .cmd keeps its historical name because the MSI postprocess looks it up.
-Filename: "{app}\app\launch-and-restart.cmd"; Description: "Launch opi (desktop refreshes automatically; add/switch to 小欧输入法 in the Chinese keyboard list if needed)"; Flags: postinstall nowait skipifsilent runasoriginaluser
+; 完成页文案（2026-10-23 用户口径）：安装完成不要求注销；新打开的应用生效；
+; 已打开的应用关闭重开。静默安装不重启 Explorer。
+Filename: "{app}\app\launch-and-restart.cmd"; Description: "打开 opi（无需注销；新打开的应用生效，已打开的应用请关闭重开）"; Flags: postinstall nowait skipifsilent runasoriginaluser
 
 [Code]
 const
@@ -368,8 +372,11 @@ begin
     // installing v1.20.1 over v1.20.0 still ran the old TSF code, and the queued
     // rename made the next setup refuse until a reboot.)
     KillRunningApp();
-    // Detect the old in-proc DLL while it is still mapped: a shell restart is
-    // the only way to make Explorer load the new TSF code without a sign-out.
+    // Old install present = interactive upgrade. Every interactive upgrade gets a
+    // shell restart (see RestartExplorerAfterInstall): tasklist /m detection is
+    // only evidence, it can silently fail on locked-down machines.
+    IsUpgrade := FileExists(ExpandConstant('{app}\app\tsf_opi.dll'));
+    // Detect the old in-proc DLL while it is still mapped (log evidence only).
     ExplorerHadTsf := ExplorerMapsTsf();
     // 先摘旧 profile/COM 键，再动文件；新 DLL 落下后由 ssPostInstall 重建。
     UnregisterTsf();
@@ -384,9 +391,12 @@ begin
     // 这里再 /u 一次再注册，保证 profile 由新 DLL 以新图标（opi.exe 宠物）重建。
     UnregisterTsf();
     RegisterTsf();
-    // Interactive upgrade: Explorer still has the old DLL mapped. Restart only
-    // the user's shell, with a watchdog, so the new TSF code is live now.
+    // Interactive upgrade: the shell may still have the old DLL mapped; restart
+    // it (original-user token + watchdog) so the new TSF code is live without a
+    // sign-out. First installs and silent installs never touch the shell.
     RestartExplorerAfterInstall();
+    // Finish page lists the hosts we deliberately did NOT kill (close and reopen).
+    RecordTsfHolders();
   end;
 end;
 

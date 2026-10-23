@@ -777,7 +777,8 @@ jobs:
             exit 1
           fi
           # 受控路径的形状：原用户令牌结束 Explorer、原用户令牌看门狗补启；
-          # 静默安装与首次安装（ExplorerHadTsf=false）必须早退。
+          # 静默安装与首次安装（IsUpgrade=false）必须早退。ExplorerHadTsf 只作日志证据
+          # （tasklist /m 在受限机器上可能看不到模块，不能再拿它决定是否重启）。
           explorer_code=$(grep -viE '^[[:space:]]*(;|//)' scripts/windows/opi-code-explorer.iss || true)
           if grep -qi 'runascurrentuser' <<<"$explorer_code"; then
             echo "::error::opi-code-explorer.iss 不得使用 runascurrentuser（提权令牌，白屏根因之一）"
@@ -794,14 +795,17 @@ jobs:
             echo "::error::受控 Explorer 路径出现了额外的结束进程代码"; echo "$unexpected"; exit 1; }
           grep -Fq 'if WizardSilent then' <<<"$explorer_code" || {
             echo "::error::静默安装必须跳过 Explorer 重启"; exit 1; }
-          grep -Fq 'if not ExplorerHadTsf then' <<<"$explorer_code" || {
-            echo "::error::未映射旧 DLL 时不得重启 Explorer"; exit 1; }
+          grep -Fq 'if not IsUpgrade then' <<<"$explorer_code" || {
+            echo "::error::首次安装不得重启 Explorer（交互式升级才刷新 shell）"; exit 1; }
           grep -Fq 'start "" "%windir%\explorer.exe"' <<<"$explorer_code" || {
             echo "::error::缺少原用户令牌的 Explorer 看门狗补启"; exit 1; }
           # 调用点顺序：ssInstall 先探测（旧 DLL 尚未改名）再移文件；
           # ssPostInstall 先注册新 DLL 再重启 shell。
+          upgrade_line=$(grep -n 'IsUpgrade := FileExists' scripts/windows/opi.iss | cut -d: -f1)
           detect_line=$(grep -n 'ExplorerHadTsf := ExplorerMapsTsf();' scripts/windows/opi.iss | cut -d: -f1)
           move_line=$(grep -n 'MoveLockedTsfDll(True);' scripts/windows/opi.iss | cut -d: -f1)
+          [ -n "$upgrade_line" ] && [ -n "$move_line" ] && [ "$upgrade_line" -lt "$move_line" ] || {
+            echo "::error::必须在移动旧 DLL 之前判定 IsUpgrade（旧 DLL 的存在就是升级证据）"; exit 1; }
           [ -n "$detect_line" ] && [ -n "$move_line" ] && [ "$detect_line" -lt "$move_line" ] || {
             echo "::error::必须在移动旧 DLL 之前探测 Explorer 是否映射它"; exit 1; }
           reg_line=$(grep -n 'RegisterTsf();' scripts/windows/opi.iss | tail -1 | cut -d: -f1)

@@ -40,6 +40,34 @@ extension KeyboardLayout {
         delegate?.keyboardLayout(self, didTapFunction: fn)
     }
 
+    // MARK: - 响应式 / 释放
+
+    /// 窄屏/矮屏降档（2026-10-23）：各面板按实际键区尺寸降列数/行高/表头高。
+    /// 控制器在 `viewWillLayoutSubviews` 里按 `compact` 调用（见 KeyboardResponsive）。
+    func setCompact(_ compact: Bool) {
+        symbolPanel.setCompact(compact)
+        emojiPanel.setCompact(compact)
+        rarePanel.setCompact(compact)
+        skinPanel.setCompact(compact)
+        for view in descendants(of: self) {
+            (view as? KeyboardPanelHeader)?.setCompact(compact)
+        }
+    }
+
+    /// 离开面板层前的收尾（`returnToCurrentInputMode` 调）：表情页如果还在
+    /// 搜索态，先退出搜索 —— 否则下次打开浮着搜索框，防抖还会往隐藏网格里写。
+    func prepareToLeavePanels() {
+        emojiPanel.exitSearchForClose()
+    }
+
+    /// 系统内存告警：隐藏着的面板把大数组/子视图全放掉（表情页 689 颗按钮是热点）。
+    /// 可见的那个面板不动 —— 用户正看着，清掉会闪白。
+    func releaseHeavyContentOnMemoryWarning() {
+        if emojiPanel.isHidden { emojiPanel.releaseContent() }
+        if symbolPanel.isHidden { symbolPanel.releaseContent() }
+        if rarePanel.isHidden { rarePanel.releaseContent() }
+    }
+
     // MARK: - 面板装配
 
     func buildPanels() {
@@ -63,6 +91,8 @@ extension KeyboardLayout {
         }
         candidateTiledPanel.onBack = { [weak self] in self?.tap(.hideTiledCandidates) }
         candidateTiledPanel.onBackspace = { [weak self] in self?.tap(.tiledBackspace) }
+        candidateTiledPanel.onBackspaceRepeat = { [weak self] in self?.tap(.tiledBackspaceRepeat) }
+        candidateTiledPanel.onRepeatEnded = { [weak self] in self?.tap(.tiledRepeatEnded) }
         candidateTiledPanel.onRetype = { [weak self] in self?.tap(.retype) }
         candidateTiledPanel.onSpace = { [weak self] in self?.tap(.tiledSpace) }
         candidateTiledPanel.onPinReading = { [weak self] reading in

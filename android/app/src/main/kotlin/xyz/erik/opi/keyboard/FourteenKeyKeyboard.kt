@@ -55,8 +55,6 @@ fun FourteenKeyKeyboard(
     onKey: (String) -> Unit,
     onSpace: () -> Unit,
     onBackspace: () -> Unit,
-    /** 长按退格 = 清空整段组合输入（不提交）。 */
-    onBackspaceLongPress: (() -> Unit)? = null,
     onEnter: () -> Unit,
     onModeSwitch: () -> Unit,
     onSymbol: () -> Unit,
@@ -99,7 +97,8 @@ fun FourteenKeyKeyboard(
                 "⌫",
                 modifier = Modifier.weight(1f),
                 onTap = onBackspace,
-                onLongPress = onBackspaceLongPress,
+                // 按住连续删除；短按仍只删一个（2026-10-23 用户裁决）。
+                repeatOnLongPress = true,
             )
             KeyButton("↵", modifier = Modifier.weight(1f), onTap = onEnter)
         }

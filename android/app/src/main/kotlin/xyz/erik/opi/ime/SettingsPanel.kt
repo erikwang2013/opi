@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,8 +44,9 @@ import xyz.erik.opi.settings.shuangpinLayoutIndexOf
  * 的键盘内面板）。
  *
  * 只收打字时顺手会调的六项：学习 / 模糊音总开关 / 拼音纠错 / 简拼 / 表情中显示自有 /
- * 双拼布局。逐对模糊音、词库导入导出与清除、词库/五笔仍留在 app 设置页 —— 那些要么不是
- * 逐次调的东西，要么必须离开输入目标去操作。
+ * 双拼布局，外加「清除用户词库」（2026-10-23 用户裁决）。逐对模糊音、词库导入导出与
+ * 词库/五笔仍留在 app 设置页 —— 那些要么不是逐次调的东西，要么必须离开输入目标去操作。
+ * 清除入口与设置页共用 [xyz.erik.opi.engine.clearUserWords]（引擎内存 + 落盘两半）。
  *
  * 落盘与生效和设置页逐条同路：偏好走 [ImePreferences]，引擎写侧走服务里那个
  * [EngineController]（写引擎 + 重读，见其 `setXxx` 注释的单一写入口约定）。模糊音只有
@@ -54,6 +56,7 @@ import xyz.erik.opi.settings.shuangpinLayoutIndexOf
 fun SettingsPanel(
     controller: EngineController,
     onClose: () -> Unit,
+    onClearUserWords: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val p = LocalKeyboardPalette.current
@@ -67,6 +70,9 @@ fun SettingsPanel(
     var showOwn by remember { mutableStateOf(prefs.showOwn) }
     var layout by remember { mutableStateOf(prefs.shuangpinLayout) }
     var layoutOpen by remember { mutableStateOf(false) }
+    var clearOpen by remember { mutableStateOf(false) }
+    // 成功/失败反馈：清除会碰 JNI，失败不能静默（否则用户以为已清）。
+    var clearFailed by remember { mutableStateOf<Boolean?>(null) }
     // 总开关的勾选态与设置页同一条判据：逐对列表非空以列表为准，空则回落旧布尔。
     val fuzzyOn = if (fuzzyPairs.isEmpty()) {
         fuzzy
@@ -139,6 +145,50 @@ fun SettingsPanel(
                             .padding(vertical = 6.dp),
                     )
                 }
+            }
+            // 清除用户词库（2026-10-23 用户裁决）：内联二次确认，不用 Dialog —— 同上，
+            // IME 是 Service，没有 Activity token。
+            if (!clearOpen) {
+                Text(
+                    "清除用户词库",
+                    fontSize = 12.sp,
+                    color = p.panelFg,
+                    modifier = Modifier.fillMaxWidth()
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable(role = Role.Button) {
+                            clearOpen = true
+                            clearFailed = null
+                        }
+                        .padding(vertical = 8.dp),
+                )
+            } else {
+                Text(
+                    "将删除所有学习到的用户词，确定吗？",
+                    fontSize = 12.sp,
+                    color = p.panelFg,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { clearOpen = false }) { Text("取消") }
+                    TextButton(onClick = {
+                        clearOpen = false
+                        clearFailed = try {
+                            onClearUserWords()
+                            false
+                        } catch (e: Throwable) {
+                            // 落盘那半已先清；引擎失败（如死 .so）必须让用户看见。
+                            true
+                        }
+                    }) { Text("清除") }
+                }
+            }
+            if (clearFailed != null) {
+                Text(
+                    if (clearFailed == true) "清除失败（引擎不可用）" else "已清除用户词库",
+                    fontSize = 12.sp,
+                    color = if (clearFailed == true) p.accent else p.barDimFg,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                )
             }
         }
     }

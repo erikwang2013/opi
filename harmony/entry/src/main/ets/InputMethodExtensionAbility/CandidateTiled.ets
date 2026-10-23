@@ -185,7 +185,7 @@ export struct CandidateTiled {
     .width('100%').height('100%').backgroundColor(this.pal().barBg)
   }
 
-  /** ⌫：单击删一格；长按清空整段组合（不提交）。 */
+  /** ⌫：单击删一格；长按按住连续退格，松手停止。 */
   @Builder
   BackspaceSideKey() {
     Column() {
@@ -201,8 +201,14 @@ export struct CandidateTiled {
     })
     .gesture(
       LongPressGesture({ repeat: false, duration: 500 })
-        .onAction((event: GestureEvent) => {
-          this.ctrl.tapBackspaceLongPress();
+        .onAction(() => {
+          this.ctrl.setBackspaceRepeat(true);
+        })
+        .onActionEnd(() => {
+          this.ctrl.setBackspaceRepeat(false);
+        })
+        .onActionCancel(() => {
+          this.ctrl.setBackspaceRepeat(false);
         })
     )
   }

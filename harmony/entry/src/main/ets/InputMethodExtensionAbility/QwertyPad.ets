@@ -202,7 +202,7 @@ export struct QwertyPad {
       .onClick(action)
   }
 
-  /** ⌫：单击删一格（缓冲空则删宿主一格）；长按清空整段组合（不提交）。 */
+  /** ⌫：单击删一格（缓冲空则删宿主一格）；长按按住连续退格，松手停止。 */
   @Builder
   BackspaceKey() {
     Button('⌫')
@@ -218,8 +218,14 @@ export struct QwertyPad {
       })
       .gesture(
         LongPressGesture({ repeat: false, duration: 500 })
-          .onAction((event: GestureEvent) => {
-            this.ctrl.tapBackspaceLongPress();
+          .onAction(() => {
+            this.ctrl.setBackspaceRepeat(true);
+          })
+          .onActionEnd(() => {
+            this.ctrl.setBackspaceRepeat(false);
+          })
+          .onActionCancel(() => {
+            this.ctrl.setBackspaceRepeat(false);
           })
       )
   }

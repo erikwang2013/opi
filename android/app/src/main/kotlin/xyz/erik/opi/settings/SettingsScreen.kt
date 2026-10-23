@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xyz.erik.opi.engine.UserWordStore
+import xyz.erik.opi.engine.clearUserWords
 import xyz.erik.opi.ime.HandlerDebouncer
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.jni.OpiEngine
@@ -411,13 +412,8 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
             confirmButton = {
                 TextButton(onClick = {
                     confirmClear = false
-                    // 落盘先清、引擎后清（两半缺一不可）：
-                    // · clearPersisted = 作废在途快照 + 取消两实例的防抖保存 + 按共享
-                    //   io 队列删文件（IME 下次启动会 import 它；删晚一步或漏删就等于
-                    //   「清除」在重启后被撤销）；
-                    // · OpiEngine.clearUserWords = 清引擎内存（导出/候选立即变为空）。
-                    store.clearPersisted()
-                    OpiEngine.clearUserWords()
+                    // 与键盘内设置面板共用同一处两半清理（顺序与成因见 clearUserWords）。
+                    clearUserWords(store)
                     toast("已清除用户词库")
                 }) { Text("清除") }
             },

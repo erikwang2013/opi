@@ -21,7 +21,7 @@ import UIKit
 
 /// 布局回调。
 protocol KeyboardLayoutDelegate: AnyObject {
-    /// 按下。longPress = true 表示这是一次长按（⇧ Lock / ⌫ 清组合，见 KeySpec）。
+    /// 按下。longPress = true 表示这是一次长按（⇧ Lock / ⌫ 长按重复的一拍，见 KeySpec）。
     func keyboardLayout(_ layout: KeyboardLayout, didPress spec: KeySpec, longPress: Bool)
     /// 抬起（touchUpInside/Outside/Cancel）。
     func keyboardLayout(_ layout: KeyboardLayout, didRelease spec: KeySpec)
@@ -78,6 +78,11 @@ final class KeyboardLayout: UIView {
     /// `property 'layer' with type 'KeyboardLayout.Layer' cannot override a property with type 'CALayer'`
     /// （2026-10-09 CI run 37933196475）。改名是唯一符合 API 的修法。
     private(set) var keyLayer: Layer = .letters
+    /// 当前 `rowsStack` 里实际画的是哪一层（`letters`/`numbers`）。面板只是盖住
+    /// 键面，**没有销毁行**；从面板返回时若两者相同，只切显隐、不重建整屏按钮
+    /// （2026-10-23：用户报「工具条返回跳系统键盘」，重建是首要嫌疑）。
+    private var renderedRowsLayer: Layer?
+
 
     /// 当前**输入模式**（键面画哪一套 + 菜单高亮哪一项）。
     ///
@@ -168,6 +173,8 @@ final class KeyboardLayout: UIView {
     var pinnedReading = ""
     /// 读数/左列滚动复位键（拼音缓冲）。缓冲变了整列回顶部（Android `scrollKey`）。
     var candidateResetKey = ""
+    /// ⌫ 长按连续退格的驱动器（2026-10-23）：手势在 `KeyboardTouch.swift`。
+    let backspaceRepeat = RepeatBackspaceDriver()
 
     /// 当前皮肤 / 键盘模式（控制器从 `KeyboardPreferences` 读入并同步）。
     var skin: SkinOption = .follow
@@ -256,6 +263,30 @@ final class KeyboardLayout: UIView {
     /// 四个面板（符号/表情/模式菜单/生僻字）**互斥显示**、谁亮由 `keyLayer` 决定；
     /// 行/格/列的**尺寸算式**搬去了 `ModeKeyRenderer`，本函数只挑「画哪套表」并接线。
     private func rebuildKeys() {
+        updateLayerVisibility()
+        guard !isPanelLayer else { return }
+        rowsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        // 字母层按**当前输入模式**画（9 键/14 键/笔画各有自己的表）；数字层所有模式共用。
+        let rows = keyLayer == .letters
+            ? ModeKeyTables.rows(for: inputMode, modeLabel: modeLabel)
+            : ModeKeyTables.numberRows()
+        // 旧按钮的 UIKit 临时对象尽早放掉：切 9↔26 键是扩展内存尖峰最大的路径之一
+        // （用户报「点英文键跳系统键盘」，首要嫌疑是重建时被 Jetsam）。
+        autoreleasepool {
+            ModeKeyRenderer.render(rows, into: rowsStack, gap: 5) { [weak self] b in
+                self?.attach(b)
+            }
+        }
+        renderedRowsLayer = keyLayer
+        // 行重建后读数浮层要重新贴到新的标点列上（旧列随 arrangedSubviews 一起没了）。
+        installReadingColumn()
+        applySideColumns()
+        applyKeyTheme()
+    }
+
+    /// 只切层的显隐与面板内容，**不动键位行**（键位行的重建由 `rebuildKeys` 做）。
+    /// 从面板返回时键位行还在：走这里能消掉整屏按钮的销毁/重建尖峰。
+    private func updateLayerVisibility() {
         // 符号层/表情层的内容由控制器现取（`setSymbols` / `setEmojiBrowse`），
         // 其余面板是**静态结构**，自己管自己的内容。
         let isSymbols = (keyLayer == .symbols)
@@ -290,19 +321,6 @@ final class KeyboardLayout: UIView {
         updateTopBarVisibility()
         applySideColumns()
         applyOneHand(keyboardModes.oneHand)
-        guard !isPanelLayer else { return }
-        rowsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        // 字母层按**当前输入模式**画（9 键/14 键/笔画各有自己的表）；数字层所有模式共用。
-        let rows = keyLayer == .letters
-            ? ModeKeyTables.rows(for: inputMode, modeLabel: modeLabel)
-            : ModeKeyTables.numberRows()
-        ModeKeyRenderer.render(rows, into: rowsStack, gap: 5) { [weak self] b in
-            self?.attach(b)
-        }
-        // 行重建后读数浮层要重新贴到新的标点列上（旧列随 arrangedSubviews 一起没了）。
-        installReadingColumn()
-        applySideColumns()
-        applyKeyTheme()
     }
 
     /// 换输入模式（键面按它重画；控制器在 `applyInputMode` 里同步）。
@@ -310,78 +328,14 @@ final class KeyboardLayout: UIView {
     func setInputMode(_ mode: InputMode) {
         guard mode != inputMode else { return }
         inputMode = mode
-        // 菜单层与生僻字层没有键位行可重建（rebuildKeys 会早退），代价可忽略。
+        // 键位行依赖 inputMode：即使当前在面板层（rebuildKeys 会早退），也要让
+        // 返回键面时重建，不能复用旧层/旧模式的按钮。
+        renderedRowsLayer = nil
         rebuildKeys()
     }
 
-    // MARK: - 触摸接线
-
-    private func attach(_ b: KeyButton) {
-        b.addTarget(self, action: #selector(onTouchDown(_:)), for: .touchDown)
-        b.addTarget(
-            self, action: #selector(onTouchUp(_:)),
-            for: [.touchUpInside, .touchUpOutside, .touchCancel]
-        )
-        // 三种键要长按识别：⇧（Lock）/ longPressFunction（模式键）/ ⌫ 清组合。
-        if b.spec.keyval == OpiKey.shift || b.spec.longPressFunction != nil || b.spec.longPressClearsComposing {
-            // 它们的 touchDown **不能立刻上报** —— 否则先干一次短按的事、长按再补一次，
-            // 等于连按两下（⇧ 是「先 tap 再 lock」，模式键是「先切模式再开菜单」）。
-            // 处理：按下只起表，抬手时若长按没触发才补一次短按。
-            let lp = UILongPressGestureRecognizer(target: self, action: #selector(onLongPress(_:)))
-            lp.minimumPressDuration = 0.5   // ⚠️ 0.5s 是拍的，真机上按手感调
-            b.addGestureRecognizer(lp)
-        }
-    }
-
-    @objc private func onTouchDown(_ sender: KeyButton) {
-        if let fn = sender.spec.function {
-            // 带长按替代语义的功能键（模式键）：只起表，等抬手/长按定论。
-            if sender.spec.longPressFunction != nil {
-                sender.longPressFired = false
-                return
-            }
-            delegate?.keyboardLayout(self, didTapFunction: fn)
-            return
-        }
-        if sender.spec.keyval == OpiKey.shift || sender.spec.longPressClearsComposing {
-            sender.longPressFired = false   // 只起表，不上报（抬手/长按再定论）
-            return
-        }
-        delegate?.keyboardLayout(self, didPress: sender.spec, longPress: false)
-    }
-
-    @objc private func onLongPress(_ g: UILongPressGestureRecognizer) {
-        guard g.state == .began, let b = g.view as? KeyButton else { return }
-        b.longPressFired = true
-        // 长按的**去向**由键位表给（`KeySpec.longPressFunction`），不在这里按
-        // 「这是模式键所以开菜单」硬判 —— 换表即换语义（见 KeySpec 的字段注释）。
-        if let fn = b.spec.longPressFunction {
-            delegate?.keyboardLayout(self, didTapFunction: fn)
-            return
-        }
-        delegate?.keyboardLayout(self, didPress: b.spec, longPress: true)
-    }
-
-    @objc private func onTouchUp(_ sender: KeyButton) {
-        if let fn = sender.spec.function {
-            // 带长按替代语义的功能键：没长按 → 补发一次普通功能键（长按已上报过）。
-            if sender.spec.longPressFunction != nil {
-                if !sender.longPressFired {
-                    delegate?.keyboardLayout(self, didTapFunction: fn)
-                }
-                sender.longPressFired = false
-            }
-            return
-        }
-        if sender.spec.keyval == OpiKey.shift || sender.spec.longPressClearsComposing {
-            // 没长按 → 补发一次普通点击；长按已由 onLongPress 上报，不补短按。
-            if !sender.longPressFired {
-                delegate?.keyboardLayout(self, didPress: sender.spec, longPress: false)
-            }
-            sender.longPressFired = false
-        }
-        delegate?.keyboardLayout(self, didRelease: sender.spec)
-    }
+    // 触摸接线（down/up、⇧ 长按、⌫ 连续退格）在 `KeyboardTouch.swift` 的扩展里
+    // （2026-10-23 机械搬出：本文件顶着 500 行门禁）。
 
     // MARK: - 外部刷新
 
@@ -411,7 +365,19 @@ final class KeyboardLayout: UIView {
     /// 切换层。符号层的数据**不在这里取** —— 见 `setSymbols(_:)`。
     func setLayer(_ new: Layer) {
         guard new != keyLayer else { return }
+        let old = keyLayer
         keyLayer = new
+        // 面包屑（2026-10-23）：面板开关/返回的每一跳都留痕，真机 Console 可查
+        // 「返回后跳系统键盘」停在哪个层。
+        OpiLog.panel.info("setLayer \(String(describing: old), privacy: .public) → \(String(describing: new), privacy: .public)")
+        // 面板只是盖住键面，键位行没销毁；返回同一层时只切显隐，不重建整屏按钮
+        // （2026-10-23：面板返回跳系统键盘的首要嫌疑是重建时的内存/崩溃尖峰）。
+        if !isPanelLayer, renderedRowsLayer == new, !rowsStack.arrangedSubviews.isEmpty {
+            updateLayerVisibility()
+            // 面板里换过皮肤/字号时，键位行还留着旧样式；返回时补刷一次。
+            applyKeyTheme()
+            return
+        }
         rebuildKeys()
     }
 
@@ -442,8 +408,8 @@ final class KeyboardLayout: UIView {
         showChineseButton(english)
         guard label != modeLabel else { return }
         modeLabel = label
-        // 键面字只在重建行时才读，所以这里必须重建（代价是几行按钮重建，
-        // 切模式是低频操作）。四个面板层都没有这个键（菜单/生僻字里也不画），不用重建。
+        // 键面字只在重建行时才读；面板层没有这个键，返回时也要让行重建。
+        renderedRowsLayer = nil
         if !isPanelLayer { rebuildKeys() }
     }
 

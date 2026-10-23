@@ -17,6 +17,7 @@ import * as RawAssets from './RawAssets';
 import * as ScreenLayout from './ScreenLayout';
 import * as SettingsStore from './SettingsStore';
 import { publishState } from './StatePublish';
+import * as BackspaceRepeat from './BackspaceRepeat';
 
 export class KeyboardController {
   private static instance: KeyboardController = new KeyboardController();
@@ -59,7 +60,8 @@ export class KeyboardController {
   };
 
   private onInputStopCallback: () => void = (): void => {
-    // InputClient 随会话失效，必须丢引用；引擎侧缓冲也要清。
+    // InputClient 随会话失效，必须丢引用；引擎侧缓冲要清，长按连删计时器也要停。
+    BackspaceRepeat.stop();
     OpiEngine.clear();
     this.client = null;
     this.kbController = null;
@@ -124,6 +126,7 @@ export class KeyboardController {
       });
       this.panel = null; // 面板是系统资源，必须显式 destroy，不能只等 GC。
     }
+    BackspaceRepeat.stop();
     this.client = null;
     this.kbController = null;
     this.ctx = null;
@@ -238,15 +241,15 @@ export class KeyboardController {
   tapBackspace(): void {
     this.pressKey(OpiEngine.KEY_BACK_SPACE, 0);
   }
-
-  /** 长按 ⌫：清空整段组合（不提交）；空缓冲退化成单击（删一格/无操作），不整删宿主。 */
-  tapBackspaceLongPress(): void {
-    if (OpiEngine.buffer().length === 0 && OpiEngine.displayBuffer().length === 0) {
-      this.tapBackspace();
-      return;
+  /** 长按 ⌫：true = 开始连续退格（先删一格，之后每 60ms 一格）；false = 松手/取消停止。 */
+  setBackspaceRepeat(on: boolean): void {
+    if (on) {
+      BackspaceRepeat.start(() => {
+        this.tapBackspace();
+      });
+    } else {
+      BackspaceRepeat.stop();
     }
-    OpiEngine.clear();
-    this.publish();
   }
 
   /** 回车：缓冲非空提交首候选；空缓冲是已知缺口（缺 IME Kit 送键接口，别退化成上屏 '\n'）。 */
@@ -292,7 +295,7 @@ export class KeyboardController {
     this.publish();
   }
 
-  /** 清除全部用户词（设置页确认后调用）；刷新候选（词频排序会变）。 */
+  /** 清除全部用户词（设置页确认后调用）：只清引擎学习表（本端无用户词落盘出口），随后刷新候选。 */
   clearUserWords(): void {
     OpiEngine.clearUserWords();
     this.publish();
@@ -490,11 +493,8 @@ export class KeyboardController {
 
   // -------------------------------------------------------------- 状态推送
 
-  /**
-   * 把引擎状态推给 UI（实现在 StatePublish：AppStorage 契约 + 平铺自动收拢 +
-   * preview text）。UI 不直接调引擎 —— 单一数据流向。
-   */
+  /** 把引擎状态推给 UI（StatePublish：AppStorage 契约 + 平铺自动收拢）。UI 不直接调引擎。 */
   publish(): void {
-    publishState(this.client);
+    publishState();
   }
 }
