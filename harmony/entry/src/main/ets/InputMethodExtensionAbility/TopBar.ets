@@ -171,11 +171,17 @@ export struct TopBar {
           this.ctrl.toggleLearner();
         })
       } else {
-        Text(this.composing() ? this.composingText() : ' ')
-          .fontSize(this.elder === 1 ? 20 : 17)
-          .fontColor(this.pal().bufferFg)
-          .layoutWeight(1).padding({ left: 12 }).maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        // 拼音可能比屏幕宽：不省略，横向滑动看完整串（2026-10-23 用户裁决）。
+        Scroll() {
+          Text(this.composing() ? this.composingText() : ' ')
+            .fontSize(this.elder === 1 ? 20 : 17)
+            .fontColor(this.pal().bufferFg)
+            .padding({ left: 12, right: 12 }).maxLines(1)
+            .textOverflow({ overflow: TextOverflow.None })
+        }
+        .scrollable(ScrollDirection.Horizontal)
+        .scrollBar(BarState.Off)
+        .layoutWeight(1)
       }
       if (this.learner === 0) {
         Text('不记词').fontSize(12).fontColor(this.pal().accent).margin({ right: 12 })

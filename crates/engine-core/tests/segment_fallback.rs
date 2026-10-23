@@ -353,9 +353,11 @@ fn dead_long_digit_tail_is_dropped_whole() {
 fn live_digit_tail_is_still_kept() {
     let mut e = engine(false);
     e.set_scheme(Scheme::Nine);
-    // nihao（`64426`，5 键）+ `226`（= bao，夹具里有「包」）—— 别写成 `644269`：
-    // 那是「ni + hao」的分段写法，多出来的 `9` 会把尾巴变成 `9226`。
-    type_str(&mut e, "64426226");
+    // nihao（`64426`）+ bao（`226`）+ 下一音节首键 `9`。⚠️ 2026-10-23 起不能写成
+    // `64426226`：那是 `nihao + bao` 的**整串组合**（composition_scheme.rs），组合覆盖
+    // 整串 ⇒ 不走首字回退；多一个 `9` 让整串切不出组合（`2269` 不是词库键），尾巴
+    // `4262269` 仍读得出来（hao+bao+w）—— 本用例测的是「活尾巴留着」，不是组合。
+    type_str(&mut e, "644262269");
     let cands = texts(&e, 8);
     assert!(
         cands.contains(&"你".to_string()),
@@ -366,8 +368,8 @@ fn live_digit_tail_is_still_kept() {
     assert_eq!(e.pending_text(), "你");
     assert_eq!(
         e.buffer(),
-        "426226",
-        "尾巴自己读得出来（hao+bao）⇒ 留着接着编"
+        "4262269",
+        "尾巴自己读得出来（hao+bao+w）⇒ 留着接着编"
     );
     assert!(
         texts(&e, 8).contains(&"好".to_string()),

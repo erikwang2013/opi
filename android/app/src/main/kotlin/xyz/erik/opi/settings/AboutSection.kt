@@ -24,9 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import xyz.erik.opi.BuildConfig
 
 /**
@@ -62,15 +60,6 @@ internal const val ABOUT_BLOG_URL = "https://erik.xyz"
 /** 官网主页（用户 2026-10-20 给定）。 */
 internal const val ABOUT_HOME_URL = "https://opi.erik.xyz"
 
-/** 更新检测的 UI 状态。自动检测失败静默回 [Idle]；只有手动检测才展示失败原因。 */
-private sealed interface UpdateState {
-    object Idle : UpdateState
-    object Checking : UpdateState
-    data class Newer(val version: String) : UpdateState
-    object Latest : UpdateState
-    data class Failed(val reason: String) : UpdateState
-}
-
 @Composable
 internal fun AboutSection(toast: (String) -> Unit) {
     val context = LocalContext.current
@@ -79,18 +68,7 @@ internal fun AboutSection(toast: (String) -> Unit) {
     // 打开设置页即后台检测一次（IO 线程，UI 不等它）。手动检测才报失败原因。
     val check: suspend (Boolean) -> Unit = { manual ->
         update = UpdateState.Checking
-        update = withContext(Dispatchers.IO) { fetchLatestVersion() }.fold(
-            onSuccess = { latest ->
-                if (isNewerVersion(latest, BuildConfig.VERSION_NAME)) {
-                    UpdateState.Newer(latest)
-                } else {
-                    UpdateState.Latest
-                }
-            },
-            onFailure = { e ->
-                if (manual) UpdateState.Failed(e.message ?: "网络不可用") else UpdateState.Idle
-            },
-        )
+        update = checkForUpdate(BuildConfig.VERSION_NAME, manual)
     }
     LaunchedEffect(Unit) { check(false) }
     HorizontalDivider()
@@ -115,17 +93,11 @@ internal fun AboutSection(toast: (String) -> Unit) {
         headlineContent = { Text("更新") },
         supportingContent = {
             Column {
-                when (val state = update) {
-                    UpdateState.Idle -> Text("当前 v${BuildConfig.VERSION_NAME}")
-                    UpdateState.Checking -> Text("正在检测更新…")
-                    is UpdateState.Newer -> {
-                        Text("发现新版本 v${state.version}（当前 v${BuildConfig.VERSION_NAME}）")
-                        TextButton(onClick = { openExternal(context, OPI_DOWNLOAD_URL, toast) }) {
-                            Text("前往下载")
-                        }
+                Text(updateStatusText(update, BuildConfig.VERSION_NAME))
+                if (update is UpdateState.Newer) {
+                    TextButton(onClick = { openExternal(context, OPI_DOWNLOAD_URL, toast) }) {
+                        Text("前往下载")
                     }
-                    UpdateState.Latest -> Text("已是最新版本 v${BuildConfig.VERSION_NAME}")
-                    is UpdateState.Failed -> Text("检测更新失败：${state.reason}")
                 }
                 if (update != UpdateState.Checking) {
                     TextButton(onClick = { scope.launch { check(true) } }) {

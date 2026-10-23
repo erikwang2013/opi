@@ -4,12 +4,16 @@
 package xyz.erik.opi.ime
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -90,6 +94,14 @@ fun ComposingBar(controller: EngineController, modifier: Modifier = Modifier) {
     val shown = composingRowText(display, controller.buffer)
     val fallback = composingRowIsFallback(display, controller.buffer)
     val hint = controller.wubiHint
+    // 拼音/编码可能比屏幕宽：不省略，横向滑动看完整串（2026-10-23 用户裁决）。
+    // 每次内容变化自动滚到最右端，最新输入的尾巴始终可见；用户仍可拖回前面。
+    val scroll = rememberScrollState()
+    LaunchedEffect(shown, hint) {
+        // 等一帧拿到真实 maxValue（LaunchedEffect 早于布局时它是 0）。
+        withFrameNanos { }
+        scroll.animateScrollTo(scroll.maxValue)
+    }
     Row(
         // heightIn(min)：常规字号下仍是 38dp 的固定槽位（窗口高度按它算）；系统字体
         // 放到 1.6×/2.0× 时让行自己长高，而不是把 18sp 的字上下裁掉。
@@ -98,14 +110,14 @@ fun ComposingBar(controller: EngineController, modifier: Modifier = Modifier) {
             .let { if (shown.isEmpty() && hint.isEmpty()) it else it.background(p.barBg) },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            shown,
-            modifier = Modifier
-                // fill=false：短缓冲保持固有宽度，五笔提示紧跟在码串后面（原布局）；
-                // 长缓冲（五笔/双拼码串）吃掉剩余宽度并以省略号收尾，不把提示挤出屏幕。
-                .weight(1f, fill = false)
-                .padding(horizontal = 10.dp)
-                .semantics {
+        Row(
+            modifier = Modifier.weight(1f).horizontalScroll(scroll)
+                .padding(horizontal = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                shown,
+                modifier = Modifier.semantics {
                     contentDescription = composingAnnouncement(
                         shown,
                         controller.candidates.size,
@@ -121,23 +133,26 @@ fun ComposingBar(controller: EngineController, modifier: Modifier = Modifier) {
                     }
                     liveRegion = LiveRegionMode.Polite
                 },
-            fontSize = 18.sp,
-            color = if (fallback) p.barDimFg else p.barBufferFg,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        // 编码提示（五笔，2026-10-14 接线）：与码串同一行、其后一串暗色小字。
-        // 空串 = 非五笔态 / 无接续 ⇒ **不画**（画空 Text 会让布局里多一格、
-        // 也会让读屏多念一次空气）。
-        if (hint.isNotEmpty()) {
-            Text(
-                hint,
-                modifier = Modifier.padding(end = 8.dp),
-                fontSize = 13.sp,
-                color = p.barDimFg,
+                fontSize = 18.sp,
+                color = if (fallback) p.barDimFg else p.barBufferFg,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                softWrap = false,
+                overflow = TextOverflow.Clip,
             )
+            // 编码提示（五笔，2026-10-14 接线）：与码串同一行、其后一串暗色小字。
+            // 空串 = 非五笔态 / 无接续 ⇒ **不画**（画空 Text 会让布局里多一格、
+            // 也会让读屏多念一次空气）。
+            if (hint.isNotEmpty()) {
+                Text(
+                    hint,
+                    modifier = Modifier.padding(start = 6.dp, end = 2.dp),
+                    fontSize = 13.sp,
+                    color = p.barDimFg,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Clip,
+                )
+            }
         }
     }
 }

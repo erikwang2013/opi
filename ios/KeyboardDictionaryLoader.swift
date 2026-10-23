@@ -33,8 +33,11 @@ extension KeyboardViewController {
         }
     }
 
-    /// 可选增强词库：笔画与五笔。
+    /// 可选增强词库：笔画与五笔。**懒加载**（2026-10-23）：只有用户选到对应输入模式
+    /// 时才读（`applyInputMode` 调这里），启动不再无条件装这两张。
     ///
+    /// 为什么值得懒：两张共约 8.6 MB，而 `load_mmap` 后 `validate()` 要**读完并校验
+    /// 每个字节**才开用 —— 开机为没人用的方案付这笔读盘/常驻页不划算。
     /// 文件名与 Android `EngineLoader` 的常量**逐字对齐**
     /// （`ASSET_NAME_STROKE` = `stroke.opid`、`ASSET_NAME_WUBI86` = `wubi86.opid`）。
     /// `scripts/apple/package-ios.sh` 会把它们从 `android/app/src/main/assets/`
@@ -43,7 +46,19 @@ extension KeyboardViewController {
     ///
     /// 三条失败语义与 Android `EngineLoader.loadStrokeAsset/loadWubiAsset` 相同：
     /// 缺文件 / 装载返回 false → **只降级**（那一个方案回退普通路径），不动 luna 与 trad。
-    func loadBundledDictionaries() {
+    func loadBundledDictionary(for mode: InputMode) {
+        switch mode {
+        case .stroke: loadStrokeDictionaryIfNeeded()
+        case .wubi: loadWubiDictionaryIfNeeded()
+        default: break
+        }
+    }
+
+    /// 幂等：`Tried` 在**尝试前**置位 —— 失败也不重试，切模式不反复读文件、
+    /// 失败日志只打一次（失败语义本身不改：只降级）。
+    private func loadStrokeDictionaryIfNeeded() {
+        guard !strokeDictionaryTried else { return }
+        strokeDictionaryTried = true
         if let p = Bundle.main.path(forResource: "stroke", ofType: "opid") {
             if !engine.loadStroke(path: p) {
                 NSLog("[OPI] stroke.opid 装载失败 —— 笔画键盘回退普通路径（无候选）")
@@ -51,6 +66,11 @@ extension KeyboardViewController {
         } else {
             NSLog("[OPI] bundle 里没有 stroke.opid —— 笔画键盘无候选（见 ios/README.md）")
         }
+    }
+
+    private func loadWubiDictionaryIfNeeded() {
+        guard !wubiDictionaryTried else { return }
+        wubiDictionaryTried = true
         // 五笔码表：**只装一张**（86/98 的码空间重叠、权重不可比，两张同时进引擎 =
         // 两套体系打架；Android `EngineLoader` 与 fcitx5 的 `opi_wubi.h` 同一条裁决）。
         // `package-ios.sh` 只拷 86，本端也没有「选 86/98」的设置项（设置面板里没有，

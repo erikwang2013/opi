@@ -62,6 +62,10 @@ final class KeyboardViewController: UIInputViewController {
     var pinnedReading = ""
     /// 钉住时的拼音缓冲。缓冲一变先解钉（见 `KeyboardCandidates.refresh()`）。
     var pinBuffer = ""
+    /// 可选码表是否已**试装**（2026-10-23 懒加载，见 `KeyboardDictionaryLoader.swift`）：
+    /// 成功/失败都置位 —— 切模式不重读文件、失败日志只打一次。
+    var strokeDictionaryTried = false
+    var wubiDictionaryTried = false
 
     /// 表情搜索的防抖表（对齐 Android `ImeState.SEARCH_DEBOUNCE_MS = 250`：
     /// 每敲一个字就查一次全表是白费的，手停下才查）。
@@ -79,10 +83,9 @@ final class KeyboardViewController: UIInputViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         loadDictionaries()
-        // 可选增强（笔画 / 五笔码表）在同一刻装：引擎刚就绪，正是「文件 → 引擎」的落点
-        // （对齐 Android：`EngineLoader.load(context)` 里 luna → trad → stroke → wubi
-        // 一口气装完，缺哪个降级哪个）。
-        loadBundledDictionaries()
+        // 笔画/五笔码表**不在这里装**（2026-10-23 懒加载）：两张共约 8.6 MB，而
+        // `load_mmap` 会全量校验（校验和要读完每个字节）—— 开机为没人用的方案付这笔钱
+        // 不划算。首次选到对应输入模式时由 `applyInputMode` 装，见装载器的说明。
 
         layout = KeyboardLayout()
         layout.delegate = self
@@ -154,7 +157,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     // 词库装载已搬到 `KeyboardDictionaryLoader.swift`（2026-10-21：本文件压 500 行门禁）。
-    // `loadDictionaries()` / `loadBundledDictionaries()` 仍是控制器的方法，见那边。
+    // `loadDictionaries()` / `loadBundledDictionary(for:)` 仍是控制器的方法，见那边。
 
     // 刷新 UI / marked text 已搬到 `KeyboardCandidates.swift`（2026-10-21，本文件压 500 行）。
 
@@ -217,6 +220,8 @@ final class KeyboardViewController: UIInputViewController {
             applyFallback(fallback)
             return
         }
+        // 数字层：数字键直提、不过引擎（见 `KeyboardNumbers.swift` 的头注）。
+        if insertNumbersLayerDigitIfNeeded(fallback) { return }
         switch engine.keyEvent(keyval: keyval, states: states) {
         case .commit(let text):
             insert(text)
@@ -312,6 +317,7 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             togglePinnedReading(reading)
         case .showNumbers:
             OpiLog.panel.info("showNumbers")
+            leaveCompositionForNumbers()
             layout.setLayer(.numbers)
         case .showSymbols:
             // 符号数据**现取**，不缓存：空结果是「没拿到」而不是「真的没有」，

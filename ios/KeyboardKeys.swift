@@ -29,6 +29,23 @@ enum KeyFallback {
     case deleteBackward
 }
 
+extension KeyFallback {
+    /// 数字层的字面数字（2026-10-23）：`.text` 且恰好一个 ASCII 数字时给出直提文本。
+    ///
+    /// 数字层是唯一「键面 = 字面文本」的层，而拼音 9 键方案下 2–9 是 T9 **输入键**
+    /// （`router_digit.rs`）—— 送进引擎会被吞成缓冲，宿主一个数字都收不到。
+    /// `fullwidth` 开时宽成 U+FF10..U+FF19（+0xFEE0，全角区与 ASCII 连续对应），
+    /// 与 engine-core `punctuation::ascii_fullwidth_wide` / Android `widenAscii`
+    /// 同一条规则（数字在该段内；空格不在，且本函数不碰空格）。
+    func numbersLayerDigit(fullwidth: Bool) -> String? {
+        guard case .text(let t) = self,
+              t.count == 1, let s = t.unicodeScalars.first,
+              s.value >= 0x30, s.value <= 0x39
+        else { return nil }
+        return fullwidth ? String(UnicodeScalar(s.value + 0xFEE0)!) : t
+    }
+}
+
 /// 非输入键（不产生 opi_key_event，改的是本层/控制器状态）。
 ///
 /// 层与模式都写成**显式的目标**而不是「切换」：`toggle` 语义在三个层/三个模式上

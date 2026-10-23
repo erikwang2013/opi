@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 // 组合串（preedit）一族的用例（500 行门禁从 EngineControllerTest.kt 搬出，本仓同惯例）。
-// 覆盖的是「推给字段的文本」这条出口：9 键不落数字、待编键补「·」、上屏文本不含「·」。
+// 覆盖的是「显示/上屏的文本」这条出口：9 键不落数字；显示串 = 引擎补全后的读数
+// （2026-10-23 起不再在本层补「·」—— 完整显示由引擎 `display_buffer` 负责）。
 
 package xyz.erik.opi.engine
 
@@ -39,19 +40,18 @@ class EngineControllerComposingTest {
     }
 
     @Test
-    fun confirmedCharsDoNotInflateTheNineKeyDotCount() {
-        // 逐字确认（2026-10-17）：已确认的字已前置进读数（displayBuffer 带 pending），
-        // 但它们的键位**已被消耗**（不在缓冲里）——「·」覆盖率换算要减掉它们，
-        // 否则点号按字数少算（1 个已确认字 = 少 1 个点，待编反馈就是假的）。
+    fun composingTextIsTheEngineReadingIncludingConfirmedChars() {
+        // 逐字确认（2026-10-17）：已确认的字已前置进读数（displayBuffer 带 pending）。
+        // 2026-10-23 起本层不再补「·」（完整显示由引擎 `display_buffer` 补全未覆盖键），
+        // 所以显示串就是引擎读数本身 —— 已确认字不多不少。
         val fake = FakeEngine().apply {
             schemeValue = InputScheme.NINE.value
-            buf = "66666" // 5 键待编尾巴
-            displayBuf = "中mo'mo" // 已确认「中」+ 覆盖 4 键的读数
+            buf = "66666"
+            displayBuf = "中mo'mo"
             pending = "中"
         }
         val ctrl = EngineController(fake)
-        assertEquals("中mo'mo·", ctrl.composingText())
-        // 对照：同样的读数形态但不带已确认字 —— 历史行为不变
+        assertEquals("中mo'mo", ctrl.composingText())
         fake.displayBuf = "mo'mo"
         fake.pending = ""
         fake.buf = "6666"
@@ -60,24 +60,21 @@ class EngineControllerComposingTest {
     }
 
     @Test
-    fun composingTextMarksKeysNotCoveredByTheReading() {
-        // 9 键点候选确认后残留的尾巴（用户报障的核心形态）：读数只覆盖「最长可匹配
-        // 前缀」，没被覆盖的键以前完全不显示 ⇒ 再按新键时读数与候选一字不变。
-        // 实测：连点 6 次 6 → 点候选确认 → 缓冲剩 `66`（读数 mo'mo 覆盖 4 键）⇒ `mo'mo··`。
+    fun composingTextDoesNotAppendPendingDots() {
+        // 9 键尾巴（历史形态）：读数只覆盖前缀，旧实现补「·」，看起来像省略号
+        // （2026-10-23 用户报障）。现在显示串**原样**是引擎读数；未覆盖的键由引擎
+        // 按「键面首字母」补全（见 engine-core 的 nine_display_reading）。
         val fake = FakeEngine().apply {
             schemeValue = InputScheme.NINE.value
             buf = "666666"
             displayBuf = "mo'mo"
         }
         val ctrl = EngineController(fake)
-        assertEquals("mo'mo··", ctrl.composingText())
-        // 再按一键（缓冲 7 位）：标记跟着长一位 —— 「键被收到了」看得见
+        assertEquals("mo'mo", ctrl.composingText())
+        assertFalse("不许出现旧的点号标记", ctrl.composingText().contains('·'))
+        // 再按一键：显示串跟着引擎读数走，不在这里追加任何记号
         fake.buf = "6666665"
         fake.displayBuf = "mo'mo"
-        ctrl.refresh()
-        assertEquals("mo'mo···", ctrl.composingText())
-        // 读数覆盖满（无待编键）⇒ 不加标记
-        fake.buf = "6666"
         ctrl.refresh()
         assertEquals("mo'mo", ctrl.composingText())
     }

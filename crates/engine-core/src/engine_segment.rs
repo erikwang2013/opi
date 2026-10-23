@@ -88,7 +88,27 @@ impl Engine {
                 // 9/14 键：数字空间回退 —— 只消耗前缀的**键**，尾部键留缓冲接着编
                 // （尾巴长且整段读不出来时不留，见 [`Self::digit_tail_to_keep`]）。
                 // 字节切片安全：缓冲只收 ASCII（composer::input_key 的门）。
-                Scheme::Nine | Scheme::Fourteen => self.digit_tail_to_keep(&buffer),
+                Scheme::Nine | Scheme::Fourteen => {
+                    // 多字组合（2026-10-23）：选中的组合覆盖**整个**输入 ⇒ 整段消耗，
+                    // 不按「第一个字」的回退留后缀键（同全键盘那条 `composition::covers`）。
+                    let composed = matches!(self.scheme(), Scheme::Nine)
+                        && self.active_pin().is_none()
+                        && selected.chars().count() > 1
+                        && !buffer.contains('\'')
+                        && crate::composition_scheme::covers(
+                            self.active_dict(),
+                            &self.learner,
+                            self.user_boost,
+                            Scheme::Nine,
+                            &buffer,
+                            selected,
+                        );
+                    if composed {
+                        None
+                    } else {
+                        self.digit_tail_to_keep(&buffer)
+                    }
+                }
             }
         };
         match fallback {

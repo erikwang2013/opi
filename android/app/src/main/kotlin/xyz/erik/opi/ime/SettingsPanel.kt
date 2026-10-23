@@ -190,6 +190,8 @@ fun SettingsPanel(
                     modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
                 )
             }
+            // 更新检测（2026-10-23）：齿轮面板与关于面板共用同一节，进面板即静默检测。
+            UpdateSection()
         }
     }
 }

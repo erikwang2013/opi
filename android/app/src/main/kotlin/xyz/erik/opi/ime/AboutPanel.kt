@@ -21,9 +21,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,12 +35,17 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import xyz.erik.opi.BuildConfig
 import xyz.erik.opi.keyboard.LocalKeyboardPalette
 import xyz.erik.opi.settings.ABOUT_BLOG_URL
 import xyz.erik.opi.settings.ABOUT_HOME_URL
 import xyz.erik.opi.settings.ABOUT_INTRO
 import xyz.erik.opi.settings.ABOUT_PROJECT_URL
+import xyz.erik.opi.settings.OPI_DOWNLOAD_URL
+import xyz.erik.opi.settings.UpdateState
+import xyz.erik.opi.settings.checkForUpdate
+import xyz.erik.opi.settings.updateStatusText
 
 /**
  * **关于面板**（2026-10-15 用户裁决「关于给移动端键盘功能区加个入口」）。
@@ -68,6 +75,7 @@ fun AboutPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
             Para(ABOUT_INTRO)
             Head("版本")
             Para("v${BuildConfig.VERSION_NAME}")
+            UpdateSection()
             Head("版权")
             Para("© 2026 erik.xyz · 代码按 MIT 许可（全文见仓库 LICENSE）；词库数据与代码分开授权")
             Head("表情数据")
@@ -85,6 +93,38 @@ fun AboutPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * **更新**一节（关于面板与齿轮设置面板共用，2026-10-23「移动端要有更新提示、检测版本」）：
+ * 进入面板即静默检测一次（失败仍只显示当前版本），手动检测才显示失败原因。
+ * 只 GET 官网 `version.json`、不携带用户数据（见 `settings/VersionCheck.kt`）。
+ */
+@Composable
+internal fun UpdateSection() {
+    val p = LocalKeyboardPalette.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var state by remember { mutableStateOf<UpdateState>(UpdateState.Idle) }
+    var note by remember { mutableStateOf("") }
+    val check: suspend (Boolean) -> Unit = { manual ->
+        state = UpdateState.Checking
+        state = checkForUpdate(BuildConfig.VERSION_NAME, manual)
+    }
+    LaunchedEffect(Unit) { check(false) }
+    Column(Modifier.fillMaxWidth()) {
+        Head("更新")
+        Para(updateStatusText(state, BuildConfig.VERSION_NAME), accent = state is UpdateState.Newer)
+        if (state is UpdateState.Newer) {
+            Link("前往下载") { note = openExternal(context, OPI_DOWNLOAD_URL) }
+        }
+        if (state != UpdateState.Checking) {
+            Link("检测更新", "检测新版本") { scope.launch { check(true) } }
+        }
+        if (note.isNotEmpty()) {
+            Text(note, fontSize = 11.sp, color = p.accent, modifier = Modifier.padding(top = 6.dp))
+        }
+    }
+}
+
 /** 小标题（与设置页那节的 headline 同义，这里只为省纵向空间用一行小字）。 */
 @Composable
 private fun Head(text: String) {
@@ -98,25 +138,28 @@ private fun Head(text: String) {
     )
 }
 
-/** 正文一行。 */
+/** 正文一行；[accent] 用于「发现新版本」这类要看见的状态。 */
 @Composable
-private fun Para(text: String) {
+private fun Para(text: String, accent: Boolean = false) {
     val p = LocalKeyboardPalette.current
-    Text(text, fontSize = 12.sp, color = p.panelFg)
+    Text(text, fontSize = 12.sp, color = if (accent) p.accent else p.panelFg)
 }
 
-/** 可点的外链：整行即按钮，行内把**完整地址**写出来（读屏读得到、开不了也看得见）。 */
+/**
+ * 可点的一行：外链把**完整地址**写出来（读屏读得到、开不了也看得见）；
+ * 「前往下载」「检测更新」这类动作直接写动作名。
+ */
 @Composable
-private fun Link(url: String, onClick: () -> Unit) {
+private fun Link(text: String, onClickLabel: String = "打开链接", onClick: () -> Unit) {
     val p = LocalKeyboardPalette.current
     Text(
-        url,
+        text,
         fontSize = 12.sp,
         color = p.accent,
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(6.dp))
-            .clickable(role = Role.Button, onClickLabel = "打开链接") { onClick() }
+            .clickable(role = Role.Button, onClickLabel = onClickLabel) { onClick() }
             .padding(vertical = 4.dp),
     )
     Spacer(Modifier.height(2.dp))

@@ -75,7 +75,8 @@ fn texts(e: &Engine, limit: usize) -> Vec<String> {
 /// **先段后键**的主用例（用户确认过的候选栏逐条）：
 /// `6444444` = `64`（ni，前缀档照旧） + 尾巴 `44444`（读不出来）。
 /// 尾巴整段当 `g` 一个音 ⇒ 个 给 过 国（字，前 4）+ 感觉 工作（词，前 2）；再逐键起音 ⇒
-/// 从同一个池里继续取 该 干。拼音行 = `ni'g`（前缀首条读音 + 尾字母）。
+/// 从同一个池里继续取 该 干。逐条读数 = `ni'g`（前缀首条读音 + 尾字母）；
+/// 拼音行显示串再按 2026-10-23 裁决把**未覆盖的键**逐个补成键面首字母 ⇒ `ni'ggggg`。
 #[test]
 fn junk_tail_falls_back_to_leading_letters_section_then_keys() {
     let mut e = engine_with(dict());
@@ -89,7 +90,11 @@ fn junk_tail_falls_back_to_leading_letters_section_then_keys() {
         "前缀档（字→词）→ 尾巴（前段字→前段词→后段字）→ 联想单字「年」\
          （用户裁决 2026-10-16：尾巴档插在词组之后、联想之前）"
     );
-    assert_eq!(e.display_buffer(), "ni'g", "拼音行把尾巴显示出来（尾字母）");
+    assert_eq!(
+        e.display_buffer(),
+        "ni'ggggg",
+        "拼音行完整显示：读数 `ni'g` + 未覆盖的 4 个键（4→g）"
+    );
     assert_eq!(
         e.candidate_readings(),
         vec!["ni'g"],
@@ -104,7 +109,11 @@ fn whole_tail_without_any_prefix_still_yields_candidates() {
     let mut e = engine_with(dict());
     type_str(&mut e, "999");
     assert_eq!(texts(&e, 8), vec!["我"], "w 一族的字");
-    assert_eq!(e.display_buffer(), "w");
+    assert_eq!(
+        e.display_buffer(),
+        "www",
+        "整串都是尾巴：每个键补一个首字母"
+    );
     assert_ne!(
         e.display_buffer(),
         "999",
@@ -138,8 +147,10 @@ fn tier_is_off_for_fourteen_key_separator_and_classless_keys() {
     );
 }
 
-/// **产出为空不改写读数**：稀疏夹具（尾巴字母一条没有）下，前缀档照旧、读数照旧是 `ni`
-/// —— 不许因为「有过尾巴」就把读数改成 `ni'g`。（既有稀疏夹具的绿就靠这条。）
+/// **产出为空不改写读数**：稀疏夹具（尾巴字母一条没有）下，前缀档照旧、读数本身照旧是
+/// `ni` —— 不许因为「有过尾巴」就把读数改成 `ni'g`。（既有稀疏夹具的绿就靠这条。）
+/// 显示串另算：2026-10-23 起它把未覆盖的键补成首字母（完整显示，`ni` + 5 个 `g`），
+/// 与「读数改写」是两件事。
 #[test]
 fn readings_stay_untouched_when_the_tier_yields_nothing() {
     let mut e = engine_with(sparse_dict());
@@ -149,5 +160,9 @@ fn readings_stay_untouched_when_the_tier_yields_nothing() {
         vec!["你"],
         "前缀档照旧（尾巴字母无条目 ⇒ 本档空）"
     );
-    assert_eq!(e.display_buffer(), "ni", "产出为空 ⇒ 读数一个字不改");
+    assert_eq!(
+        e.display_buffer(),
+        "niggggg",
+        "读数（缓存）不改；显示串把 5 个未覆盖键补成首字母"
+    );
 }

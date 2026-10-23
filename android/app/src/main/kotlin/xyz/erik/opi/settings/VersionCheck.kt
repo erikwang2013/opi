@@ -3,6 +3,8 @@
 
 package xyz.erik.opi.settings
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -85,4 +87,42 @@ private fun httpGet(url: String, timeoutMs: Int): String {
     } finally {
         conn.disconnect()
     }
+}
+
+/** 更新检测的 UI 状态。自动检测失败静默回 [Idle]；只有手动检测才展示失败原因。 */
+internal sealed interface UpdateState {
+    object Idle : UpdateState
+    object Checking : UpdateState
+    data class Newer(val version: String) : UpdateState
+    object Latest : UpdateState
+    data class Failed(val reason: String) : UpdateState
+}
+
+/**
+ * 检测一次并折算成 UI 状态（IO 线程，两处关于面板共用）。
+ * [manual] = false 时失败不打扰：回 [UpdateState.Idle]，界面仍只显示当前版本。
+ */
+internal suspend fun checkForUpdate(currentVersion: String, manual: Boolean): UpdateState =
+    withContext(Dispatchers.IO) {
+        fetchLatestVersion().fold(
+            onSuccess = { latest ->
+                if (isNewerVersion(latest, currentVersion)) {
+                    UpdateState.Newer(latest)
+                } else {
+                    UpdateState.Latest
+                }
+            },
+            onFailure = { e ->
+                if (manual) UpdateState.Failed(e.message ?: "网络不可用") else UpdateState.Idle
+            },
+        )
+    }
+
+/** 「更新」一行的状态文案（设置页、键盘关于/设置面板共用同一口径）。 */
+internal fun updateStatusText(state: UpdateState, currentVersion: String): String = when (state) {
+    UpdateState.Idle -> "当前 v$currentVersion"
+    UpdateState.Checking -> "正在检测更新…"
+    is UpdateState.Newer -> "发现新版本 v${state.version}（当前 v$currentVersion）"
+    UpdateState.Latest -> "已是最新版本 v$currentVersion"
+    is UpdateState.Failed -> "检测更新失败：${state.reason}"
 }

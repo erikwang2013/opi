@@ -85,8 +85,8 @@ class EngineController(
      * 2026-10-12 用户裁决「左列去重」，去重发生在引擎出口）。 */
     var candidateReadings by mutableStateOf<List<String>>(emptyList())
 
-    /** 已确认但未提交的逐字片段（2026-10-17）：显示串里已含（displayBuffer 前置），
-     *  这属性只给「·」待编标记的覆盖率换算用（见 composingText.kt 的 pendingKeyMark）。 */
+    /** 已确认但未提交的逐字片段（2026-10-17）：显示串里已含（displayBuffer 前置）；
+     *  2026-10-23 起只供读屏/状态对照，不再参与「·」覆盖率换算（引擎已补全显示串）。 */
     var pendingText by mutableStateOf("")
         private set
 

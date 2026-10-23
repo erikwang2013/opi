@@ -338,6 +338,24 @@ final class KeyboardLayout: UIView {
         rebuildKeys()
     }
 
+    /// 换输入模式**并**同步模式键键面字，只重建一次键位行（2026-10-23）。
+    ///
+    /// 原来 `applyInputMode` 走 `setInputMode` + `updateModeLabel`：两个状态各重建
+    /// 一整屏按钮（9 键 = 几十个按钮销毁/重建二连）——「切英文后跳系统键盘」的
+    /// 首要内存尖峰嫌疑。这里先把两处状态一起改掉，再重建**一次**。
+    /// 顶部槽位仍走 `updateTopBarVisibility()` 这唯一判据，别另写一份显隐。
+    func setInputMode(_ mode: InputMode, modeLabel label: String, english: Bool) {
+        let changed = mode != inputMode || label != modeLabel
+        inputMode = mode
+        modeLabel = label
+        self.english = english
+        updateTopBarVisibility()
+        guard changed else { return }
+        // 与 `setModeLabel` 同：面板层没有这些键，返回键面时也必须重建（别复用旧按钮）。
+        renderedRowsLayer = nil
+        if !isPanelLayer { rebuildKeys() }
+    }
+
     // 触摸接线（down/up、⇧ 长按、⌫ 连续退格）在 `KeyboardTouch.swift` 的扩展里
     // （2026-10-23 机械搬出：本文件顶着 500 行门禁）。
 

@@ -24,26 +24,50 @@ final class ComposingBar: UIView {
     static let height: CGFloat = 24
 
     private let label = UILabel()
+    private let scroll = UIScrollView()
     private var palette: KeyboardPalette = .light
     /// 当前显示的是不是「9 键无匹回退」的原按键序列（换肤时保持次要色）。
     private var isFallback = false
+    /// `setText` 后等下一次布局再把视图滚到最右端（当时 bounds/contentSize 还没更新）。
+    private var scrollToEnd = false
 
     init() {
         super.init(frame: .zero)
         backgroundColor = .clear
         label.textAlignment = .left
         label.numberOfLines = 1
-        // 长缓冲（五笔/双拼码串）以省略号收尾，不把行撑宽。
-        label.lineBreakMode = .byTruncatingTail
+        // 不省略：完整串放在横向滚动里，超宽可拖动查看（2026-10-23 用户裁决）。
+        label.lineBreakMode = .byClipping
+        label.setContentCompressionResistancePriority(.required, for: .horizontal)
+        label.setContentHuggingPriority(.required, for: .horizontal)
         label.translatesAutoresizingMaskIntoConstraints = false
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        scroll.showsHorizontalScrollIndicator = false
+        scroll.alwaysBounceHorizontal = true
         // 显示串由引擎给，不再在 Swift 里二次分词（`'` 的切分规则只有引擎一份）。
-        addSubview(label)
+        scroll.addSubview(label)
+        addSubview(scroll)
         NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
-            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
-            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
+            scroll.topAnchor.constraint(equalTo: topAnchor),
+            scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
+            label.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 10),
+            label.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -10),
+            label.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor),
+            label.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor),
+            label.heightAnchor.constraint(equalTo: scroll.frameLayoutGuide.heightAnchor),
         ])
         setText("")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard scrollToEnd else { return }
+        scrollToEnd = false
+        scroll.layoutIfNeeded()
+        let maxX = max(0, scroll.contentSize.width - scroll.bounds.width)
+        scroll.setContentOffset(CGPoint(x: maxX, y: 0), animated: false)
     }
 
     @available(*, unavailable)
@@ -59,6 +83,8 @@ final class ComposingBar: UIView {
         label.isHidden = text.isEmpty
         label.textColor = fallback ? palette.barDimFg : palette.barBufferFg
         backgroundColor = text.isEmpty ? .clear : palette.barBg
+        scrollToEnd = !text.isEmpty
+        setNeedsLayout()
     }
 
     func applyTheme(_ p: KeyboardPalette, fontScale: CGFloat) {

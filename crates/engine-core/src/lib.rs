@@ -17,6 +17,7 @@ mod candidates_segment_impl; // 分词回退一族（2026-10-14 从 candidates.r
 mod candidates_tiers_impl; // 候选三档（常用单字/词组/联想，2026-10-14 用户裁决；500 行门禁拆出）
 pub mod composer;
 mod composition; // 多字词组合识别（2026-10-23，见 composition.rs 头注）
+mod composition_scheme; // 9 键多字词组合识别（2026-10-23，见 composition_scheme.rs 头注）
 pub mod correction;
 mod dict_budget; // 导入层每键查询预算（2026-10-18 性能审计）
 mod dict_index; // 导入层命中索引 / 抢位加成 / rest 截断

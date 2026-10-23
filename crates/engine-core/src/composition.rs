@@ -54,11 +54,12 @@ pub(crate) const MAX_RESULTS: usize = 16;
 /// 算法按各段词频排序，「厌蠢 + 症」会被「厌蠢 + 正/政/争…」这些更高频的单字组合
 /// 压到第 10/11 位（真库实测），移动端第一页看不见。这里只改已有组合的次序，
 /// 不凭空造词：词库/组合规则产不出它时（替身词库、缺段），本表一字不加。
-const PINNED: &[(&str, &str)] = &[("yanchunzheng", "厌蠢症"), ("yangyangtong", "样样通")];
+pub(crate) const PINNED: &[(&str, &str)] =
+    &[("yanchunzheng", "厌蠢症"), ("yangyangtong", "样样通")];
 /// 一条组合最多由几段拼成。3–5 字词通常 2–3 段；再碎下去是噪音且组合数爆炸。
-const MAX_CHUNKS: usize = 4;
+pub(crate) const MAX_CHUNKS: usize = 4;
 /// 单段最多几个音节（最长的常用词段，防「半句当一段」）。
-const MAX_CHUNK_SYLLABLES: usize = 4;
+pub(crate) const MAX_CHUNK_SYLLABLES: usize = 4;
 
 /// 组合候选：文本 + 最终分（含精确加成）+ 覆盖的拼音键字节长。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -245,7 +246,8 @@ fn letters(input: &str) -> Option<String> {
 }
 
 /// 整串切成完整音节的**最少**音节数；切不开 ⇒ `None`（ASCII 字节切片安全）。
-fn min_syllables(s: &str) -> Option<usize> {
+/// 9 键那条（`composition_scheme.rs`）拿它算**条目拼音**的音节数。
+pub(crate) fn min_syllables(s: &str) -> Option<usize> {
     let b = s.as_bytes();
     let mut dp = vec![usize::MAX; b.len() + 1];
     dp[0] = 0;

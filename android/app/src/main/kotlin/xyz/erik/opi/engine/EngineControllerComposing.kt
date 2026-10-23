@@ -8,8 +8,9 @@
 // **语义上仍是那个类的一部分** —— 换一个类会让「谁持有状态」多出一层。
 // 调用点一字不变（`ctrl.composingText()`）。
 //
-// ⚠️ 两个视图别合并：`composingText`（显示，带「·」待编标记）与 `pendingCommitText`
-// （**上屏**，不带）—— 合并过一次，被既有的切英文门禁抓住（见 pendingCommitText 头注）。
+// 2026-10-23：读数字符串**不再在本层补「·」** —— 引擎 `display_buffer` 已把 9 键
+// 未覆盖的键按「键面首字母」补全（完整显示、宿主横向滚动）；本层只做「读数优先、
+// 9 键不落数字」的取值。
 
 package xyz.erik.opi.engine
 
@@ -37,37 +38,18 @@ package xyz.erik.opi.engine
      * 字段里不必再堆记号。**读数覆盖前缀时的尾巴补点不变**（那是 10-12 那条的落点，
      * 且此时字段里有真拼音参照、不会看起来像"变成了点"）。
      */
-internal fun EngineController.composingText(): String = pendingCommitText() + pendingKeyMark()
+internal fun EngineController.composingText(): String = pendingCommitText()
 
     /**
-     * **上屏用**的 pending 文本：与 [composingText] 同源，但**不含「·」标记** ——
-     * 那是显示记号不是文本，跟着上屏会往字段里写点（2026-10-12 加标记时真被门禁
-     * 抓到过：`ImeStateEnglishSwitchTest.switchToEnglishWithUnmatchedNineKeyDigitsCommitsNothing`）。
-     * 9 键读数空 ⇒ 空串（守 2026-10-11「别变成数字输入」那条）。
+     * **上屏/显示**用的 pending 文本：读数优先；9 键读数空 ⇒ 空串（守 2026-10-11
+     * 「别变成数字输入」那条）；其余方案读数空回退缓冲。
+     *
+     * 2026-10-23 起显示串与上屏串**逐字相同**：引擎把 9 键未覆盖的键补成键面首字母
+     * （完整拼音行），不再有「·」这种只给显示看的记号 —— 上屏什么就显示什么，
+     * 也避免「字段里出现点」那类回归。切英文上屏（`commitPendingAsPinyin`）读的仍是
+     * 这一条：屏幕上是完整拼音，切英文时原样留下。
      */
 internal fun EngineController.pendingCommitText(): String {
         if (reading.isNotEmpty()) return reading
         return if (inputScheme == InputScheme.NINE) "" else buffer
-    }
-
-    /**
-     * 待编键的标记：「·」× 缓冲里**没被读数覆盖**的键数。
-     *
-     * 覆盖率按**字母数**算（9/14 键每个键恰好一个字母：9 键 = 每字母一个数字，
-     * 14 键 = 缓冲本就是字母）—— 读数的 `'` 是分词符，不占键位。
-     * 非 9/14 键（缓冲即显示文本）恒空串。
-     *
-     * ⚠️ **读数空（整段无匹）⇒ 一个点也不补**（2026-10-13 用户订正，见 [composingText]
-     * 的时间线）：9 键字段留空、反馈交给候选栏的「无匹配」；14 键的显示文本本来就是
-     * 字母缓冲（`pendingCommitText` 的回退），补点只会变成假记号 —— 这条同时兑现了
-     * 本函数旧头注「14 键的读数空时也不补」的承诺（旧代码漏了，14 键读数空会补满点）。
-     */
-private fun EngineController.pendingKeyMark(): String {
-        if (inputScheme != InputScheme.NINE && inputScheme != InputScheme.FOURTEEN) return ""
-        if (reading.isEmpty()) return ""
-        // 已确认的逐字片段（2026-10-17）已前置进 reading，但它的键位**已被消耗**
-        // （不在 buffer 里）—— 覆盖率换算要先把它减掉，否则点号会按字数少算。
-        val covered = (reading.count { it != '\'' } - pendingText.length).coerceAtLeast(0)
-        val pending = buffer.length - covered
-        return if (pending > 0) "·".repeat(pending) else ""
     }

@@ -230,10 +230,9 @@ class ImeState(
     /**
      * 把 pending 缓冲**按拼音原样上屏**（2026-10-10 用户裁决，切英文专用）：
      * 文本取 [EngineController.pendingCommitText]（读数优先；26 键无候选回退原字母；
-     * ⚠️ **不是** [EngineController.composingText] —— 那个带待编键的「·」显示记号
-     * ——「字母串原样留下」；**9 键读数空不回退数字** —— 那是按键编码不是文本，
-     * 2026-10-11 修「9 键没匹配的时候会变成数字输入」的第三扇门）。空文本 = 只清
-     * 不上屏；空缓冲 = 空操作。
+     * 9 键读数已含引擎补全的完整拼音；**9 键读数空不回退数字** —— 那是按键编码不是
+     * 文本，2026-10-11 修「9 键没匹配的时候会变成数字输入」的第三扇门）。空文本 =
+     * 只清不上屏；空缓冲 = 空操作。
      */
     private fun commitPendingAsPinyin() {
         if (controller.buffer.isEmpty()) return

@@ -144,12 +144,28 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
     // 为真 —— **前缀扩展不算**（2026-10-18 用户报障：`64426` 命中 `nihao...` 长词时
     // `merged` 非空，旧判据 `merged.is_empty()` 把逐字确认挡住了）。
     // `tail` = 严格档**读不出来**的那一段余键（宽松兜底档的输入，见 `tail_guess`）：
-    // 整串精确命中 ⇒ 空串（本档一行不做）；回退吃了第一个音节 ⇒ 余键；连回退都没落点 ⇒ 整串。
+    // 整串精确命中 / 组合命中 ⇒ 空串（本档一行不做）；回退吃了第一个音节 ⇒ 余键；
+    // 连回退都没落点 ⇒ 整串。
     let exact_hit = merged
         .iter()
         .any(|(_, _, meta)| meta.as_ref().is_some_and(|m| m.exact));
+    // ── 9 键多字组合（2026-10-23）────────────────────────────────────────────
+    // 与全键盘 `composition::merge` 同一条闸门：整串没有精确命中、没有更长的多字
+    // 前缀词、没有钉读音（钉读音 = 用户只要那个读音的字/词）才做数字空间的整串分段。
+    // 命中即**跳过首字回退** —— 组合是「整句都拼得出来」，回退是「先打第一个字」，
+    // 后者更粗（同 composition.rs 头注）。
+    let composed = if !exact_hit
+        && pin.is_none()
+        && !input.contains('\'')
+        && !merged.iter().any(|(c, _, meta)| {
+            meta.as_ref().is_some_and(|m| m.pinyin_len > input.len()) && c.text.chars().count() > 1
+        }) {
+        crate::composition_scheme::candidates(dict, learner, boost, scheme, input)
+    } else {
+        Vec::new()
+    };
     let mut tail: &str = "";
-    if !exact_hit {
+    if !exact_hit && composed.is_empty() {
         match crate::scheme::scheme_fallback_len(dict, input, scheme, pin) {
             Some(k) => {
                 merged = scan(&input[..k]);
@@ -157,6 +173,24 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
             }
             None => tail = input,
         }
+    }
+    // 组合命中按「整串精确覆盖」并入（`Meta.exact` ⇒ 分档落词组档，pinyin_len ==
+    // 输入键数）；读音是各段拼音的拼接 —— 9 键拼音行因此显示完整拼音（yan'chun'zheng）。
+    for h in composed {
+        merged.push((
+            Candidate {
+                text: h.text,
+                kind: CandidateKind::Hanzi,
+                score: h.score,
+            },
+            h.pinyin,
+            Some(Meta {
+                pinyin_len: input.len(),
+                exact: true,
+                learned: false,
+                tail: false,
+            }),
+        ));
     }
     merged.sort_by(|a, b| b.0.score.cmp(&a.0.score).then(a.0.text.cmp(&b.0.text)));
     let mut seen = std::collections::HashSet::new();
@@ -170,6 +204,8 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
             // —— 9 键拼音行因此把这条尾巴**显示出来**（`ni'g` / `ni'hao'w`），
             // 而不是像报障当时那样「后面还藏着东西但看不出来」。产出为空 ⇒ 一个字不改
             // （稀疏夹具的既有断言因此保绿）。
+            // 2026-10-23：尾巴剩下的键由 `display_buffer` 按「键面首字母」补全（完整显示、
+            // 不再用「·」）；这里仍只放最后一个字母，保持逐条读数（左列）的既有语义。
             let letter = tail
                 .chars()
                 .next_back()

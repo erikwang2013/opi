@@ -23,7 +23,7 @@
 // 2026-10-21 起这些旋钮已接到键盘内设置面板（`WubiSettingsSection.swift`，
 // 工具条齿轮 →「五笔（86 码表）」节），持久化在 `KeyboardPreferences.settings`。
 // 但**别忘**：五笔方案要能用，除了旋钮还得 `loadWubi(path:)` + `setScheme(.wubi)`
-// （头注：装载**不**换方案；iOS 只在 `loadBundledDictionaries()` 里装 86 表）。
+// （头注：装载**不**换方案；iOS 只在 `KeyboardDictionaryLoader` 首次选到五笔时装 86 表）。
 
 import Foundation
 

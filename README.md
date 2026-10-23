@@ -14,7 +14,7 @@
 
 > **官网 / Website**：[https://opi.erik.xyz](https://opi.erik.xyz)（源码：[`site/index.html`](site/index.html)）—— 翻屏式项目介绍、3D 键帽环境与首访回忆时光轴、功能迭代、全量版本日志与各端下载（打赏二维码可原地点开，页脚含备案号）。
 >
-> **验证范围**：受硬件资源与成本限制，目前只有 **Android（模拟器）与 Linux（容器 / 本机）** 有运行验证；**Windows / iOS / macOS / 鸿蒙** 已有客户端代码或可构建产物，但均未在真机验收，签名也未验证。
+> **验证范围**：目前 **Android（模拟器）、Windows（真机，用户验收）与 Linux（容器 / 本机）** 有运行验证；**iOS / macOS / 鸿蒙** 已有客户端代码或可构建产物，但均未在真机验收，签名也未验证。
 >
 
 ![OPI 项目宠物：键帽精灵「小欧」](docs/opi-pet.svg)
@@ -110,6 +110,7 @@
 - **表情与颜文字（2026-10-18，2026-10-19 动图）**：表情面板换成 OpenMoji 常用表情（689 条、9 类：笑脸/人物/动物/植物/食物/旅行/活动/物品/符号）；**「自有」是独立顶级子页**（不与 Emoji/笑脸同组），12 个小欧形态以**动画 GIF** 贴纸呈现（静态 PNG 兜底）——Android 点选经 `InputConnection.commitContent` 依次尝试 **PNG → GIF**（PNG 是宿主最认的格式，GIF 是动图加分项；剪贴板兜底同序；编辑器都不接受时回退**带「小欧·」前缀的可区分文本标签**，如 `[小欧·笑]`，不再插入 Unicode emoji），桌面/iOS/鸿蒙因宿主限制把 **PNG + GIF 两份**复制到剪贴板并提示粘贴（粘贴方自选；iOS 写剪贴板的唯一通道需要「完全访问」，`Info.plist` 自 2026-10-20 起 `RequestsOpenAccess=true`，用户须在系统设置手动允许）；新增 390 条颜文字（7 类）。贴纸源 `shared/pet/stickers/` 与 `shared/pet/stickers-gif/`、数据与许可见 [`data/raw/LICENSES.md`](data/raw/LICENSES.md)，生成器 `scripts/gen_emoji_kaomoji.py` / `scripts/gen_pet_stickers.py`
 - **输入即得表情（2026-10-18，2026-10-19 内置）**：拼音/英文缓冲（≥2 字母）命中常用表情关键字时，把 emoji **追加在文本候选之后**（`data/raw/emoji_keywords.tsv` 295 条；`weixiao`→😊、`smile`→😄；不挤掉文本首候选、9/14 键数字缓冲本轮不匹配）。另提供 12 形态的**短码** `:opi_smile:` 等（`shared/pet/emoji-font/map.tsv` / `shortcodes.tsv`；短码仅 Slack/Mattermost 类客户端渲染）；普通输入框仍以原 GIF/PNG 贴纸插入、失败回退「小欧·」文本标签。PUA 彩色字体与「自有表情用字体字符」开关已于 2026-10-20 删除；「自有」分类由「表情中显示自有」开关控制（缺省隐藏）。映射表与短码是项目专有资产，见 [`ASSETS-LICENSE.md`](ASSETS-LICENSE.md)
 - **逐字确认（2026-10-17 用户裁决）**：整串有词组精确匹配时词组在最前、选中一次上屏；无精确匹配（打一半的前缀扩展词不算）则先出第一个字的整档（所有读音的字），确认一个字后它**留在候选区**（拼音行显示「中guo」），依次确认到最后一段才**整串进输入框**；缓冲空时 ⌫ 回滚上一个已确认的字。语义在引擎（`Engine::pending_text` / `commit_buffer_after_select`），四端同一条路；门禁 `tests/segment_commit.rs`
+- **9 键多字组合与完整拼音行（2026-10-23 用户报障）**：9 键按键串走数字空间 DP（`crates/engine-core/src/composition_scheme.rs`）—— 段 = 词库精确键、2–4 段、至少一个多音节段；`厌蠢症` / `样样通` 这类整词不在库但分段在库的词能组合出来（真库门禁 `crates/engine-data/tests/nine_composition_real.rs`，桌面 release 中位约 2ms，单次最多 24 次按键类查询）。拼音行不再用「·」补待编键，而是把未覆盖键按**键面首字母**补全（引擎 `display_buffer`）；移动三端横向滚动查看完整串、不省略
 - **两处「机制已备」的接线现状**：其一，**中文标点与全角是两个独立开关**（引擎侧 `chinese_punct` 与 `fullwidth` 各自独立，门禁 `tests/punctuation_switches.rs`；`set_chinese_punct` / `toggle_chinese_punct` 与双 ABI 出口都在）—— **桌面状态栏两平台都已接**（`。，`/`🌕` 按钮：Linux 走 `opi-ctl`、Windows 走本机控制面；设置窗「中文标点」与 fcitx5 附加组件配置都落到这两个开关，Windows TSF 从 `settings.ini` 读同组值并经控制面 `reload` 立即重读）；**Android 工具条月相按钮已撤**（2026-10-12 加、2026-10-13 用户裁决「移动端功能区不需要全角、半角切换功能」移除 —— 能力保留：全角仍随模式默认值自动生效，字母/数字的直传点宽化（`Engine::fullwidthize`）不动），**Apple / 鸿蒙仍无 UI 入口**（两端 `toggleFullwidth` 只有 JNI 冒烟表一个调用方）。**键位不在引擎层** —— `engine_punct.rs` 的注释只给桌面两轨**建议**了暂定的 `Ctrl+/`，未定稿、两轨都还没实现，理由与实测见该注释。其二，**Rust 侧的学习落盘**（`engine-data/src/user_words.rs`，原子写）**全仓零调用方**：Android 的持久化走它自己的 Kotlin `UserWordStore.kt`，fcitx5 / TSF 学完照旧丢
 - 排序有一条反直觉的设计 —— **不能把 limit 下推到词典查询**（学过的低频词可能反超截断线外的词）。这类细节才是本项目较真的地方，见下方「功能设计」
 

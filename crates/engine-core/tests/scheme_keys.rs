@@ -244,7 +244,39 @@ fn nine_key_display_buffer_is_the_top_candidate_pinyin() {
     let _ = e2.candidates(8);
     let shown = e2.display_buffer();
     assert_ne!(shown, "999", "数字串不许端上去（旧裁决的本意）");
-    assert_eq!(shown, "w", "尾巴的首字母：宽松兜底档的读数");
+    assert_eq!(
+        shown, "www",
+        "宽松兜底档的读数 + 未覆盖键的首字母（完整显示）"
+    );
+}
+
+/// 拼音行**完整显示**（2026-10-23 用户裁决：「图片里显示省略号了，我需要完整显示出来，
+/// 超出屏幕的可滑动查看」）：读数只覆盖前缀时，未覆盖的键按**键面首字母**补上 ——
+/// 不再出现「·」/省略号。`64426` 只命中 `ni`（`你`）⇒ `ni` + 4→g、2→a、6→m。
+#[test]
+fn nine_key_display_fills_uncovered_keys_with_leading_letters() {
+    let mut e = Engine::new(dict(&[("ni", "你", 5000)]), no_symbols(), false);
+    e.set_scheme(Scheme::Nine);
+    type_str(&mut e, "64426");
+    let _ = e.candidates(8);
+    assert_eq!(e.display_buffer(), "nigam", "未覆盖的键补键面首字母");
+    assert_eq!(e.buffer(), "64426", "缓冲本体不动（行为判定读它）");
+}
+
+/// 首条读数比按键短、但后面有一条**等长**读数（前缀扩展词）⇒ 显示用等长的那条，
+/// 不把短读数补成假尾巴。真库 `64426` 首条是「你」(`ni`)，但「你好」(`nihao`)
+/// 覆盖整串 —— 拼音行应显示 `ni'hao`。
+#[test]
+fn nine_key_display_prefers_an_exact_length_reading() {
+    let mut e = Engine::new(
+        dict(&[("ni", "你", 9000), ("nihao", "你好", 100)]),
+        no_symbols(),
+        false,
+    );
+    e.set_scheme(Scheme::Nine);
+    type_str(&mut e, "64426");
+    let _ = e.candidates(8);
+    assert_eq!(e.display_buffer(), "ni'hao", "等长读数优先于补键");
 }
 
 /// 换方案把读数一起清掉（否则换方案后的一次读拿到上一条输入的拼音）。

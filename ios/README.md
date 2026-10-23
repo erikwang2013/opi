@@ -143,7 +143,9 @@
 | `KeyboardPanels.swift` | 工具条打开的四个面板（2026-10-20）：`SkinPanel`（12 卡 + 3×4 小键盘预览）、`KeyboardModePanel`（繁体 / 单手 / 悬浮 / 游戏 / 暗光 / 长辈）、`AboutPanel`（版本文案与外链）、`KeyboardPanelHeader`。（CI 已编译，未上机） |
 | `KeyboardPanelHost.swift` | `KeyboardLayout` 的面板装配扩展（2026-10-20）：工具条回调、七个面板的摆位、顶部槽位切换（候选栏 ⇄ 工具条）、主题下发、单手宽度约束。从 `KeyboardLayout.swift` / `KeyboardViewController.swift` 拆出（500 行门禁） |
 | `KeyboardLayout.swift` | 键盘 UI 骨架的视图装配：候选栏（含翻页）+ 字母/数字层 + 触摸接线 + 外部刷新入口 + 面板摆位（2026-10-20 起摆位在 `KeyboardPanelHost.swift`，本文件只留视图与键位）。**不含**键位表与尺寸算式（见下两行） |
-| `InputModes.swift` | 输入模式（2026-10-14）：九项枚举（`InputMode`）与三根轴的映射、各模式的**键位表**（26/9/14/笔画）、`applyInputMode`（控制器扩展）。**不含**视图装配 |
+| `InputModes.swift` | 输入模式（2026-10-14）：九项枚举（`InputMode`）与三根轴的映射、各模式的**键位表**（26/9/14/笔画）。**不含**视图装配；控制器的落地动作在 `InputModeApply.swift`（2026-10-23 拆出） |
+| `InputModeApply.swift` | 选中输入模式后的控制器动作（2026-10-23 从 `InputModes.swift` 拆出）：持久化、可选码表懒加载、`setScheme`/`switchMode`、一次合并键面重建、`toggleTraditional` / `updateModeLabel`。⚠️ 本机无 UIKit，只过 CI |
+| `KeyboardNumbers.swift` | 数字层（123）的两条专门逻辑（2026-10-23）：数字键**直提**（拼音 9 键方案下 2–9 是引擎输入键，送进去会被吞）与进数字层前收掉拼音组合。⚠️ 本机无 UIKit，只过 CI |
 | `ModeKeyRenderer.swift` | `[ModeRow]` → 视图树的**尺寸算式**（2026-10-14 从 `KeyboardLayout` 搬出）。含「列」形状（9 键的标点列/右功能列）与行高权重 |
 | `InputModePanel.swift` | 输入模式**菜单**（2026-10-14）：九项 chip，选中即换；2026-10-20 起左上角返回箭头（原右上角关闭已撤）。摆位在 `KeyboardLayout`，语义在 `applyInputMode` |
 | `RarePanel.swift` | 生僻字面板（2026-10-14）：`RareIndex`（TSV 解析）+ 部首→笔画→字三级状态机，提交直提。索引 `rare_index.tsv` 由 `package-ios.sh` 拷进 appex（2026-10-20 起；缺文件则打包硬失败） |
@@ -156,7 +158,7 @@
 | `PetStickerImages.swift` | 「自有」12 张**小欧 PNG**（280×280，透明底）的 base64 内嵌 + `UIImage(data:)` 解码（2026-10-18）。**生成文件**，源 `shared/pet/stickers/*.png`，头部写了生成命令。（CI 已编译，未上机） |
 | `PetStickerGifs.swift` | 「自有」12 张**小欧动画 GIF**（200×200、10 帧、透明底）的 base64 内嵌 + `CGImageSource` 解码为 `UIImage.animatedImage`（2026-10-19）。**生成文件**，源 `shared/pet/stickers-gif/`。（CI 已编译，未上机） |
 | `PetStickerClipboard.swift` | 「自有」贴纸的落点（2026-10-19 改）：优先 `UIPasteboard.setItems` 写 `com.compuserve.gif` + `public.png`，无 GIF 才 `UIPasteboard.general.image`；触觉/读屏公告 + 面板内 `ToastLabel`。**剪贴板回退**（iOS 键盘扩展不能往宿主输入框插图片），不提交文本。（CI 已编译，未上机） |
-| `KeyboardViewController.swift` | `UIInputViewController` 入口：生命周期、词库装载（含 2026-10-14 加的 `loadBundledDictionaries()`）、**软键盘**路由、`textDocumentProxy`，外加外接键盘的两个入口 `pressesBegan/pressesEnded`（逻辑在下一行那个文件） |
+| `KeyboardViewController.swift` | `UIInputViewController` 入口：生命周期、词库装载（luna/trad 启动装；笔画/五笔 2026-10-23 起按输入模式懒加载）、**软键盘**路由（数字层直提在 `KeyboardNumbers.swift`）、`textDocumentProxy`，外加外接键盘的两个入口 `pressesBegan/pressesEnded`（逻辑在下一行那个文件） |
 | `KeyboardHardware.swift` | **外接键盘那一路**：`UIKey`/`UIPress` → 引擎键码、修饰位，以及**引擎之前**判掉的三个热键（`Ctrl+'` / `Ctrl+\` / `Shift+Space`）。不含触摸与布局 |
 | `HostApp/OpiApp.swift` | 最小宿主 App（2026-10-20）：承载键盘扩展、显示启用步骤。`package-ios.sh` 用 `swiftc` 直编，无 storyboard；⚠️ 未上机 |
 | `Info.plist` | 键盘扩展的 `NSExtension` 配置（**键名未核对**） |
@@ -1381,8 +1383,8 @@ U+1FAEB 那种要判的）从不被过滤，多码位（VS16 形/键帽）反倒
 | 大 9 键 | 同 9 键表，只差 `fontSize`（21→30） | 已写 |
 | 笔画（`一丨丿丶乙` → `h/s/p/n/z`） | `ModeKeyTables.strokeRows` | 已写 |
 | 生僻字面板（部首→笔画→字，8 列，直提） | `RarePanel.swift` | 已写；`rare_index.tsv` 由 `package-ios.sh` 打包（2026-10-20），真机读取未验证 |
-| 选中模式的落地动作 | `InputModes.swift` 的 `applyInputMode` | 已写。**与 Android 有一处能力差异** —— see 缺口 |
-| 笔画 / 五笔码表装载 | `KeyboardViewController.loadBundledDictionaries()` | 已写。文件不在 bundle 里，现状只打 NSLog |
+| 选中模式的落地动作 | `InputModeApply.swift` 的 `applyInputMode` | 已写。**与 Android 有一处能力差异** —— see 缺口 |
+| 笔画 / 五笔码表装载 | `KeyboardDictionaryLoader.swift` 的 `loadBundledDictionary(for:)`（2026-10-23 起懒加载） | 已写。文件不在 bundle 里，现状只打 NSLog |
 | 方案族 / 五笔族包装 | `OpiEngineScheme.swift` / `OpiEngineWubi.swift` | 已写。**除 `setScheme`/`loadStroke`/`loadWubi` 外无调用方** |
 
 三根轴分清楚（`InputMode.kt` 的头注就是这条，别混）：**方案**（`OpiScheme`：按键→字母类）、

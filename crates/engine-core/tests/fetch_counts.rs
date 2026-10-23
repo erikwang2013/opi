@@ -140,10 +140,14 @@ fn nine_key_fallback_accounting_is_bounded_scans_and_zero_queries() {
     let one_fetch = v.load(Ordering::Relaxed);
     assert_eq!(
         (one_fetch, q.load(Ordering::Relaxed)),
-        (7, 4),
+        (12, 4),
         "回退态一次抓取 = 主扫(1) + 存在性(1) + 见证者从长到短试（l=5..2 共 4 次，\
          取最长单音节）+ 前缀重扫(1) + 尾部 4269 的 4 个 distinct 首字母各一次 query\
-         （宽松兜底档；2026-10-18 改成第一个字回退后尾巴更长，扫描次数仍 ≤ 输入键数）"
+         （宽松兜底档；2026-10-18 改成第一个字回退后尾巴更长，扫描次数仍 ≤ 输入键数）\
+         + **9 键多字组合探测 5 次 scheme_entries**（2026-10-23；默认实现 = 全表\
+         visit_entries：2 段档段位 6442/644/64 + 尾段 4269（64 命中后），3 段档段位\
+         42（64 与 2 段档缓存复用）；组合只在整串无精确命中时动手，每次调用预算 24，\
+         见 composition_scheme.rs）"
     );
     v.store(0, Ordering::Relaxed);
     // 逐字确认（2026-10-17）：回退态选中 = **延迟提交**（本轮不返回文本；
@@ -151,9 +155,11 @@ fn nine_key_fallback_accounting_is_bounded_scans_and_zero_queries() {
     assert_eq!(r.select(0), "", "回退态选中延迟提交");
     assert_eq!(
         v.load(Ordering::Relaxed),
-        one_fetch + 9,
-        "点击 = 一次抓取 + 长尾巴（≥3 键）的严格档探针（7 扫；1–2 键尾巴跳过它，\
-         见 digit_tail_to_keep）+ 收尾判定（存在性 + 见证者 2 扫）"
+        one_fetch + 10,
+        "点击 = Router 重新抓一次候选表（= one_fetch，含组合探测 5 扫）\
+         + digit_tail_to_keep：scheme_fallback_len 整缓冲 5 扫 + 尾巴 4269 的严格档\
+         探针 5 扫（主扫 1 + 组合探测 1 + 存在性/见证者/前缀重扫 3；2026-10-23 组合\
+         另加 1）。选中单字不触发 covers（多字组合才查，见 engine_segment.rs）"
     );
     assert_eq!(r.buffer(), "4269", "回退选中只消耗第一个字的键");
 }
