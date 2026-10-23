@@ -280,9 +280,20 @@ fn scheme_fallback_on_real_luna_dictionary() {
         tail_texts.len() > 3,
         "尾巴还该补出 g 一族的字/词：{tail_texts:?}"
     );
+    // 2026-10-23：拼音行完整显示 —— 读数 `ni'g` + 其余未覆盖键的键面首字母
+    // （4→g）；长度必须等于按键数，且不许出现数字（旧裁决）。
+    let shown = ni.display_buffer();
+    assert_eq!(
+        shown.chars().filter(|c| *c != '\'').count(),
+        ni.buffer().len(),
+        "拼音行必须覆盖全部按键（完整显示）：{shown}"
+    );
     assert!(
-        ni.display_buffer().ends_with("'g"),
-        "拼音行 = 前缀首条读音 + 尾字母：{}",
-        ni.display_buffer()
+        shown.starts_with("ni'g") && shown.ends_with('g'),
+        "前缀读音 + 尾巴的键面首字母：{shown}"
+    );
+    assert!(
+        !shown.chars().any(|c| c.is_ascii_digit()),
+        "数字串不许端上去：{shown}"
     );
 }
