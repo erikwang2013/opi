@@ -32,6 +32,21 @@
 .download-notice strong { color: var(--accent-soft); font-size: .7rem; letter-spacing: .05em; }
 .download-notice p { margin: 0; }
 .download-notice strong + p strong { color: var(--ink); }
+
+/* 网盘镜像：与安装包同级的主入口，不做成脚注（2026-10-23 用户报「不够明显」）。 */
+.netdisk-banner { display: flex; align-items: center; gap: 16px; margin-top: 18px; padding: 16px 18px; border: 1px solid rgba(47, 125, 90, .38); border-left: 4px solid var(--accent); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; background: linear-gradient(90deg, rgba(47, 125, 90, .12), rgba(255, 255, 255, .82)); }
+.netdisk-icon { display: grid; place-items: center; flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: #fff; }
+.netdisk-icon .icon { width: 22px; height: 22px; }
+.netdisk-copy { flex: 1 1 auto; min-width: 0; }
+.netdisk-copy .eyebrow { margin: 0 0 4px; font-size: .64rem; }
+.netdisk-copy h3 { margin: 0 0 4px; font-size: 1.08rem; }
+.netdisk-copy p { margin: 0; color: var(--muted); font-size: .8rem; line-height: 1.65; }
+.netdisk-banner .btn { flex: 0 0 auto; }
+@media (max-width: 640px) {
+  .netdisk-banner { flex-wrap: wrap; }
+  .netdisk-copy { flex-basis: calc(100% - 60px); }
+  .netdisk-banner .btn { width: 100%; }
+}
 .download-group-title { display: flex; align-items: baseline; gap: 9px; margin: 0 0 10px; color: var(--ink); font-size: .8rem; letter-spacing: .05em; }
 .download-group-title span { color: var(--muted-2); font-family: var(--font-mono); font-size: .6rem; font-weight: 400; letter-spacing: .06em; }
 .download-group-title.is-minor { margin: 24px 0 9px; }
