@@ -272,7 +272,7 @@ internal fun StatusBarPage(s: OpSettings, apply: (OpSettings) -> Unit, status: (
     SectionTitle("键大小")
     Text(
         "当前 ${s.statusbar.scale}%。统一调整条上所有按钮（含 en/pro、en26 键帽）及其间距，" +
-            "基准 30dp；配置键名 StatusBarScale。" +
+            "基准 30dp（Windows 另乘 $WINDOWS_BAR_FACTOR 的紧凑系数）；配置键名 StatusBarScale。" +
             "状态栏是独立进程、每秒轮询配置 ⇒ 改完通常 1–2 秒内按新尺寸重排，不用重启。",
         fontSize = 12.sp, color = Muted,
     )

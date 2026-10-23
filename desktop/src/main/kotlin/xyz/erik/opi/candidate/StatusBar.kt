@@ -37,6 +37,10 @@
 //! 传的仍是按钮盒 —— 100% = 30dp，其余按 `StatusBarScale` 等比，见 [BarMetrics]）—— 面
 //! （字形排版、三个图标、每按钮的槽位表）整体在 BarGlyphs.kt，本文件只管条、按钮框、动作与轮询。
 //!
+//! **Windows 更小、且是胶囊**（2026-10-24 用户报障「win端的状态栏整体大了，边角也不是
+//! 弧形」）：绘制尺寸再乘 [WINDOWS_BAR_FACTOR]（0.85，配置里的 scale 不动），窗底置透明
+//! 并把根盒裁成圆角（[barShape]）—— Linux 不乘、保持直角，行为不变。
+//!
 //! **状态实时可见**（2026-10-10 深夜裁决）：简/繁、中/英、月相随输入法真实状态翻转。
 //! 状态 = `opi-ctl state`（契约见 Actions.kt），1s 轮询 + **每次按钮动作返回后立刻
 //! 补读一次**（「即时生效」的落点，见 [actionWithStateRefresh]）。读不到/坏串/缺键
@@ -81,6 +85,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
@@ -184,9 +189,13 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
         }
     }
 
-    val buttons = visibleStatusButtons(s.statusbar, isWindows())
-    val metrics = barMetrics(s.statusbar.scale)
-    val width = statusBarWidthDp(buttons.size, s.statusbar.scale)
+    // Windows 整体缩一档 + 胶囊圆角（2026-10-24 用户报障「win端的状态栏整体大了，
+    // 边角也不是弧形」）；Linux 不乘、保持直角 —— 见 barMetrics/barShape。
+    val windows = isWindows()
+    val buttons = visibleStatusButtons(s.statusbar, windows)
+    val metrics = barMetrics(s.statusbar.scale, windows)
+    val width = statusBarWidthDp(buttons.size, s.statusbar.scale, windows)
+    val shape = barShape(windows)
     val windowState = rememberWindowState(
         width = width.dp,
         height = metrics.height,
@@ -196,7 +205,7 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
     // 拖过就保住用户放的地方。设置窗可能是另一进程 ⇒ 这里等 1s 轮询把新值送来。
     LaunchedEffect(buttons.size, s.statusbar.scale) {
         statusBarGuard("状态栏尺寸") {
-            windowState.size = DpSize(statusBarWidthDp(buttons.size, s.statusbar.scale).dp, metrics.height)
+            windowState.size = DpSize(statusBarWidthDp(buttons.size, s.statusbar.scale, windows).dp, metrics.height)
         }
     }
     /** 失败必须看得见：写进条上的提示，也打一行到 stdout（自启动进程的日志在 journal 里）。 */
@@ -313,7 +322,7 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
     // （悬停状态也可能收不到 Exit）⇒ 必须把按钮/提示从组合里摘掉。
     // 本条自己打开的窗口（设置/符号/软键盘）开着时**强制显示**：这些窗口会拿走焦点，
     // TSF Deactivate 后 im 读不到；若此时隐藏，用户看到的就是「点一下条就没了」。
-    val shown = barVisible(buttons, imeState.im, requireActive = isWindows()) ||
+    val shown = barVisible(buttons, imeState.im, requireActive = windows) ||
         settingsOpen || vkOpen || symbolsOpen
     Window(
         // 无边框窗没有关闭入口；「隐藏」走设置里的 master 开关（进程留着，见 visible 一行）。
@@ -324,6 +333,9 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
         // 全在 [barVisible]，四态单测钉住。
         visible = shown,
         undecorated = true,
+        // Windows：窗底色透明 —— 圆角外的四角才真的透出桌面（形状见根 Box 的 clip）。
+        // Linux 保持不透明（未报障，行为不变）。
+        transparent = windows,
         alwaysOnTop = true,
         resizable = false,
         // 不抢焦点：点状态栏不该把用户正在打字的窗口的焦点夺走（与候选窗同一条理由）。
@@ -339,7 +351,8 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
         // composable 读 LocalBarPalette —— 与 Android 侧 LocalKeyboardPalette 同套做法。
         val palette = skinColors(s.skin)
         if (shown) CompositionLocalProvider(LocalBarPalette provides palette) {
-            Box(Modifier.fillMaxSize().background(palette.bg).border(1.dp, palette.line)) {
+            // Windows = 胶囊：整条裁成圆角（Linux 的 shape 是 RectangleShape，像素不变）。
+            Box(Modifier.fillMaxSize().clip(shape).background(palette.bg).border(1.dp, palette.line, shape)) {
                 if (notice == null) {
                     Row(
                         modifier = Modifier.fillMaxSize().padding(horizontal = metrics.pad),
@@ -439,42 +452,6 @@ private fun BarButton(
         if (tip) BarTooltip(b, anchor, windowState.position, palette, barWindow)
     }
 }
-
-/**
- * 按钮面上的字。两轮裁决的**时间线**（防止按任一半截「改回去」）：
- * · 2026-10-10 深夜 B 版：SYMBOLS = 「。，」静态、PUNCT = 「Ω」静态；
- * · 同日**中午订正**（按用户对按钮行为的描述）：两枚**互换**且 PUNCT 变**双态** ——
- *   SYMBOLS（符号大全）= 静态「Ω」；PUNCT（中英标点）= punct=on「。，」/ off「.,」。
- * 字面都是用户写的：「。，」是中文侧（**先句号**，勿按惯例改成「，。」）；「.,」是
- * 英文侧（先点号）—— 都不是笔误。
- * · TRAD / LANG = 单字，且是**当前状态**（简/繁、中/英），随输入法状态翻转 ——
- *   用户原话「文字标签全图标化」：多字标签（简繁/中英）全去。
- * 全半角、设置、键盘、小欧不出字：画月相/四小方块/键盘/小欧。
- */
-internal fun iconText(b: StatusBarButton, st: ImeState): String = when (b) {
-    StatusBarButton.SYMBOLS -> "Ω"
-    StatusBarButton.TRAD -> tradIcon(st)
-    StatusBarButton.PUNCT -> punctIcon(st)
-    StatusBarButton.LANG -> langIcon(st)
-    // MODE 不从这里出字：它的面由**档位 token** 驱动（[modeFace]/[modeCorner]，面在
-    // BarGlyphs.kt 的 modeSlots）—— 本函数的入参里没有档位，给不出正确字面。
-    StatusBarButton.MODE -> ""
-    StatusBarButton.ENPRO -> "" // 两行 en/pro 由 enproSlots 画，不走单字 iconText
-    StatusBarButton.FULLWIDTH, StatusBarButton.SETTINGS,
-    StatusBarButton.VK, StatusBarButton.LOGO -> "" // 这四个画图标，不出字
-}
-
-/** 简繁按钮面的字 = **当前输出**（转繁开着写「繁」）；用户裁决②：随真实状态翻转。 */
-internal fun tradIcon(st: ImeState): String = if (st.trad) "繁" else "简"
-
-/** 中英按钮面的字 = 当前模式（zh/en）。 */
-internal fun langIcon(st: ImeState): String = if (st.zh) "中" else "英"
-
-/**
- * 标点按钮面的字 = **当前标点态**（2026-10-10 中午订正：双态）。
- * on = 中文标点「。，」（用户字面序，先句号）；off = 英文「.,」（用户字面序，先点号）。
- */
-internal fun punctIcon(st: ImeState): String = if (st.punct) "。，" else ".,"
 
 /**
  * 把窗口拖动交给这个修饰符（只有 logo 挂它）。

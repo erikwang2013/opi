@@ -10,6 +10,9 @@
 
 package xyz.erik.opi.candidate
 
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -21,24 +24,46 @@ private const val PAD = 6
 private const val BAR_H = 42
 
 /**
+ * Windows 状态栏的**紧凑系数**（2026-10-24 用户报障「win端的状态栏整体大了」）：
+ * 只乘在绘制尺寸上 —— 配置里的 `StatusBarScale`（75–150）与设置页档位**原样保留**，
+ * 100% 在 Windows 上画成 Linux 尺寸的 85%，用户仍可调到 150%。Linux 不乘（未报障，
+ * 行为一字不变）。纯常量；系数只有 [barScaleFactor] 一个乘法口。
+ */
+internal const val WINDOWS_BAR_FACTOR = 0.85f
+
+/** 缩放总系数 = 用户档位 ×（Windows 紧凑系数）。尺寸表的唯一乘法口，纯函数。 */
+internal fun barScaleFactor(scale: Int, windows: Boolean): Float =
+    statusBarScalePercent(scale) / 100f * (if (windows) WINDOWS_BAR_FACTOR else 1f)
+
+/**
  * 状态栏的**唯一尺寸表**（2026-10-19 用户裁决「统一调整所有状态栏键大小」）：
  * 按钮、间距、内边距、条高全乘 [StatusBarSettings.scale] 同一系数。100% 时逐项等于
  * BTN/GAP/PAD/BAR_H；enpro/en26 与其他键共用这里同一个 [button] 盒（键帽再按 26/30
  * 画在盒内，见 KeycapFace.kt）。别在调用点各自乘 —— 第二份尺寸就是漂移口。
+ * `windows = true` 时另乘 [WINDOWS_BAR_FACTOR]。
  */
 internal data class BarMetrics(val button: Dp, val gap: Dp, val pad: Dp, val height: Dp)
 
 /** [scale] 先经 [statusBarScalePercent] 收口（越界值按边界算）。纯函数。 */
-internal fun barMetrics(scale: Int): BarMetrics {
-    val k = statusBarScalePercent(scale) / 100f
+internal fun barMetrics(scale: Int, windows: Boolean = false): BarMetrics {
+    val k = barScaleFactor(scale, windows)
     return BarMetrics((BTN * k).dp, (GAP * k).dp, (PAD * k).dp, (BAR_H * k).dp)
 }
 
 /** 条宽随按钮数变（隐藏的按钮不占位）。[scale] 与 [barMetrics] 同一系数。纯函数，单测钉住。 */
-internal fun statusBarWidthDp(buttonCount: Int, scale: Int = STATUS_BAR_SCALE_DEFAULT): Float {
-    val k = statusBarScalePercent(scale) / 100f
-    return (PAD * 2 + BTN * buttonCount + GAP * (buttonCount - 1).coerceAtLeast(0)) * k
-}
+internal fun statusBarWidthDp(
+    buttonCount: Int,
+    scale: Int = STATUS_BAR_SCALE_DEFAULT,
+    windows: Boolean = false,
+): Float = (PAD * 2 + BTN * buttonCount + GAP * (buttonCount - 1).coerceAtLeast(0)) * barScaleFactor(scale, windows)
+
+/**
+ * 条的裁剪形状（2026-10-24 用户报障「边角也不是弧形」）：Windows 画成**胶囊**（半径 =
+ * 短边一半），与状态栏窗的透明背景（StatusBar.kt 的 `transparent`）配合，四角才真的
+ * 透出桌面；Linux 未报障 ⇒ 保持直角。纯函数，单测钉住。
+ */
+internal fun barShape(windows: Boolean): Shape =
+    if (windows) RoundedCornerShape(percent = 50) else RectangleShape
 
 /**
  * 纯函数：条该不该显示（[StatusBarApp] 的 visible 用它）。
@@ -145,7 +170,7 @@ data class StatusBarSettings(
     /**
      * 全部条上键的**统一缩放**（2026-10-19 用户裁决；键 `StatusBarScale`）：整数百分比
      * 75–150，缺省 100。BTN/GAP/PAD/BAR_H/条窗宽高/键帽/图标/字形全从这一系数派生
-     * （见 StatusBar.kt 的 [barMetrics]）—— 别另存第二份尺寸。
+     * （见本文件的 [barMetrics]）—— 别另存第二份尺寸。
      */
     val scale: Int = STATUS_BAR_SCALE_DEFAULT,
 )
@@ -180,7 +205,7 @@ internal val STATUS_BAR_SCALE_CHOICES = listOf(75, 90, 100, 110, 125, 150)
  * 挪到 TRAD 之后、MODE 之前。旧裁决（「放在标点符号键前面」）已被覆盖，别按旧位置改回。
  *
  * `label` 兼作设置窗的开关名与状态栏的可访问性描述；条上的**图标**另有一套
- * （见 StatusBar.kt 的 iconText 与 BarGlyphs.kt 的各面）。
+ * （见本文件的 iconText 与 BarGlyphs.kt 的各面）。
  */
 enum class StatusBarButton(val label: String, val hint: String) {
     LOGO("logo", "品牌标识兼拖动把手；单击换下一款皮肤"),
@@ -334,4 +359,43 @@ internal fun modeCorner(mode: String): String? = if (mode == "en26") "26" else n
  * 反推恒假：拼音态与繁体态的 `mode` 位**逐字相同**。
  */
 internal fun barMode(st: ImeState): String = st.mode.ifEmpty { MODE_DEFAULT }
+
+// ---------- 按钮面上的字（2026-10-24 从 StatusBar.kt 移来：那边加 Windows 紧凑/圆角
+// 后撞 500 行门禁；同包 internal 引用不变，BarGlyphs 与单测照旧。纯函数） ----------
+
+/**
+ * 按钮面上的字。两轮裁决的**时间线**（防止按任一半截「改回去」）：
+ * · 2026-10-10 深夜 B 版：SYMBOLS = 「。，」静态、PUNCT = 「Ω」静态；
+ * · 同日**中午订正**（按用户对按钮行为的描述）：两枚**互换**且 PUNCT 变**双态** ——
+ *   SYMBOLS（符号大全）= 静态「Ω」；PUNCT（中英标点）= punct=on「。，」/ off「.,」。
+ * 字面都是用户写的：「。，」是中文侧（**先句号**，勿按惯例改成「，。」）；「.,」是
+ * 英文侧（先点号）—— 都不是笔误。
+ * · TRAD / LANG = 单字，且是**当前状态**（简/繁、中/英），随输入法状态翻转 ——
+ *   用户原话「文字标签全图标化」：多字标签（简繁/中英）全去。
+ * 全半角、设置、键盘、小欧不出字：画月相/四小方块/键盘/小欧。
+ */
+internal fun iconText(b: StatusBarButton, st: ImeState): String = when (b) {
+    StatusBarButton.SYMBOLS -> "Ω"
+    StatusBarButton.TRAD -> tradIcon(st)
+    StatusBarButton.PUNCT -> punctIcon(st)
+    StatusBarButton.LANG -> langIcon(st)
+    // MODE 不从这里出字：它的面由**档位 token** 驱动（[modeFace]/[modeCorner]，面在
+    // BarGlyphs.kt 的 modeSlots）—— 本函数的入参里没有档位，给不出正确字面。
+    StatusBarButton.MODE -> ""
+    StatusBarButton.ENPRO -> "" // 两行 en/pro 由 enproSlots 画，不走单字 iconText
+    StatusBarButton.FULLWIDTH, StatusBarButton.SETTINGS,
+    StatusBarButton.VK, StatusBarButton.LOGO -> "" // 这四个画图标，不出字
+}
+
+/** 简繁按钮面的字 = **当前输出**（转繁开着写「繁」）；用户裁决②：随真实状态翻转。 */
+internal fun tradIcon(st: ImeState): String = if (st.trad) "繁" else "简"
+
+/** 中英按钮面的字 = 当前模式（zh/en）。 */
+internal fun langIcon(st: ImeState): String = if (st.zh) "中" else "英"
+
+/**
+ * 标点按钮面的字 = **当前标点态**（2026-10-10 中午订正：双态）。
+ * on = 中文标点「。，」（用户字面序，先句号）；off = 英文「.,」（用户字面序，先点号）。
+ */
+internal fun punctIcon(st: ImeState): String = if (st.punct) "。，" else ".,"
 

@@ -219,13 +219,20 @@ impl Engine {
     /// （2026-10-11 用户报障「9 键没匹配的时候会变成数字输入」）；14/26 键缓冲是
     /// 字母，逃生口语义仍成立，不动。
     pub fn input_space(&mut self) -> String {
+        self.input_space_at(0)
+    }
+
+    /// 空格收尾的**页首**变体：`skip` = 当前页首条全局下标（宿主传 `page * PAGE_SIZE`）。
+    /// 取 `skip+1` 条即可保住页首；越界按「无候选」逃生口，不静默丢缓冲。
+    pub fn input_space_at(&mut self, skip: usize) -> String {
         self.leave_symbol_browse_if_needed(); // 直调引擎的出口（C ABI）也走同一条（契约 ②）
         self.after_digit = false; // 空格收尾 = 数字上下文结束（见字段注释）
+        let limit = skip.saturating_add(1).max(DEFAULT_TOP_N);
         match self.composer.session().mode {
             Mode::Pinyin | Mode::Traditional => {
                 let buffer = self.composer.session().buffer.clone();
-                let cands = self.candidates(DEFAULT_TOP_N);
-                if cands.is_empty() {
+                let cands = self.candidates(limit);
+                if cands.len() <= skip {
                     if self.scheme() == Scheme::Nine {
                         // 不上屏也**不清缓冲**：数字串还留着，退格改一键还能重来
                         // ——与符号模式「关键字仍留在预编辑里」同一条理由。
@@ -237,7 +244,7 @@ impl Engine {
                     out.push_str(&buffer);
                     out
                 } else {
-                    let text = self.select_from(&cands, 0);
+                    let text = self.select_from(&cands, skip);
                     self.composer.commit_buffer(); // 空格 = 整段上屏：不留回退后缀（钉：adversarial_input.rs）
                     // 逐字确认（2026-10-17）与「空格 = 整段上屏」的交界：回退态下那次
                     // select 会**延迟**（把片段攒进 pending）—— 空格在这里把它冲刷出来，
@@ -252,11 +259,11 @@ impl Engine {
             // EngineHandled，**且不清缓冲**：关键字仍留在预编辑里，用户退格改一个
             // 字母就能重来（清了等于静默吞掉用户打的字）。
             Mode::Symbol => {
-                let cands = self.candidates(DEFAULT_TOP_N);
-                if cands.is_empty() {
+                let cands = self.candidates(limit);
+                if cands.len() <= skip {
                     String::new()
                 } else {
-                    self.select_from(&cands, 0)
+                    self.select_from(&cands, skip)
                 }
             }
             // 英文（2026-10-18）：有候选 ⇒ 首候选（`select_from` 已清缓冲并收尾
@@ -265,12 +272,12 @@ impl Engine {
             // （用户裁决 2026-10-12）。
             Mode::English => {
                 let buffer = self.composer.session().buffer.clone();
-                let cands = self.candidates(DEFAULT_TOP_N);
-                let text = if cands.is_empty() {
+                let cands = self.candidates(limit);
+                let text = if cands.len() <= skip {
                     self.composer.commit_buffer();
                     buffer
                 } else {
-                    self.select_from(&cands, 0)
+                    self.select_from(&cands, skip)
                 };
                 let mut out = self.take_pending_text();
                 out.push_str(&self.fullwidthize(&text));

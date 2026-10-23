@@ -396,4 +396,51 @@ class DictStoreTest {
         assertTrue("源回来了就种得下", store.seedBundled("kangxi") { seedSrc() })
         assertTrue(File(dir, "kangxi.tsv").isFile)
     }
+
+    // ---- 导入上限（2026-10-24 用户要求「超限就提示达到上限」）----
+
+    @Test
+    fun importRejectsFileOverTheByteLimit() {
+        val api = FakeDictApi()
+        val big = ByteArray((DictStore.MAX_BYTES + 1).toInt())
+        val r = store(api).importTsv("big.tsv") { ByteArrayInputStream(big) }
+        assertTrue("$r", r is DictStore.ImportResult.Rejected && r.reason.contains("达到上限"))
+        assertTrue("没有落进词库目录", residue().isEmpty())
+        assertTrue("没有调引擎", api.imported.isEmpty())
+    }
+
+    @Test
+    fun importRejectsTooManyEntries() {
+        val api = FakeDictApi()
+        val lines = (0..DictStore.MAX_ENTRIES).joinToString("\n") { "a\tb" }
+        val r = store(api).importTsv("many.tsv") {
+            ByteArrayInputStream(lines.toByteArray())
+        }
+        assertTrue("$r", r is DictStore.ImportResult.Rejected && r.reason.contains("条目达到上限"))
+        assertTrue(api.imported.isEmpty())
+    }
+
+    @Test
+    fun importRejectsTooManyEnabledDictionaries() {
+        val api = FakeDictApi().also { a ->
+            a.listJson = (1..DictStore.MAX_ENABLED_DICTS).joinToString(",", "[", "]") {
+                """{"count":1,"enabled":true,"name":"d$it","system":false}"""
+            }
+        }
+        val r = store(api).importTsv("new.tsv") { ByteArrayInputStream("a\tb".toByteArray()) }
+        assertTrue("$r", r is DictStore.ImportResult.Rejected && r.reason.contains("达到上限"))
+        assertTrue(api.imported.isEmpty())
+    }
+
+    @Test
+    fun importRejectsTotalEntryLimit() {
+        val api = FakeDictApi().also { a ->
+            a.listJson = """[{"count":${DictStore.MAX_TOTAL_ENTRIES - 1},"enabled":true,"name":"big","system":false}]"""
+        }
+        val r = store(api).importTsv("new.tsv") {
+            ByteArrayInputStream("a\tb\nc\td".toByteArray())
+        }
+        assertTrue("$r", r is DictStore.ImportResult.Rejected && r.reason.contains("总条目达到上限"))
+        assertTrue(api.imported.isEmpty())
+    }
 }

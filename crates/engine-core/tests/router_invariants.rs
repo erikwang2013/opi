@@ -17,7 +17,7 @@ use engine_core::Engine;
 use engine_core::composer::Mode;
 use engine_core::dictionary::InMemoryDictionary;
 use engine_core::keys::{
-    KEY_BACK_SPACE, KEY_DELETE, KEY_PAGE_DOWN, KEY_PAGE_UP, KEY_RETURN, KEY_SHIFT,
+    KEY_BACK_SPACE, KEY_DELETE, KEY_PAGE_DOWN, KEY_PAGE_UP, KEY_RETURN, KEY_SHIFT, KEY_SPACE,
 };
 use engine_core::router::{FETCH_LIMIT, KeyAction, KeyRouter, PAGE_SIZE, ShiftState};
 use engine_core::symbols::SymbolEngine;
@@ -232,6 +232,42 @@ fn enter_commits_current_page_first_candidate() {
         "第二页回车 = 第二页首位（页内换算漏了 page 就会提交首页那个）"
     );
     assert_eq!(r.page(), 0, "提交后页码归零");
+}
+
+/// 空格提交**当前页**首位 —— 用户报障「桌面端翻页后直接确认始终是第一页的 1」。
+/// 空格收尾曾无条件走 `Engine::input_space()`（全局第 0 条），页码被静默丢掉。
+#[test]
+fn space_commits_current_page_first_candidate() {
+    let mut r = router_with(20);
+    type_key(&mut r);
+    assert_eq!(
+        r.key_event(KEY_SPACE, 0),
+        KeyAction::Input("词000".into()),
+        "首页空格 = 首页首位"
+    );
+    for (pages_down, want) in [(1usize, "词008"), (2, "词016")] {
+        let mut r = router_with(20);
+        type_key(&mut r);
+        for _ in 0..pages_down {
+            r.key_event(KEY_PAGE_DOWN, 0);
+        }
+        assert_eq!(
+            r.key_event(KEY_SPACE, 0),
+            KeyAction::Input(want.into()),
+            "第 {} 页空格 = 当前页首位（漏 page 就会提交首页那个）",
+            pages_down + 1
+        );
+        assert_eq!(r.page(), 0, "提交后页码归零");
+    }
+    // 标点收尾同一条路（`input_punct` → 空格收尾）：翻页后打逗号也要提当前页首位。
+    let mut r = router_with(20);
+    type_key(&mut r);
+    r.key_event(KEY_PAGE_DOWN, 0);
+    assert_eq!(
+        r.key_event(',' as u32, 0),
+        KeyAction::Input("词008，".into()),
+        "第 2 页打 ',' = 当前页首位 + 标点"
+    );
 }
 
 /// 回归（原缺陷）：数字选词的「越界」判据曾是**全量候选列表**，不是**当前页**。

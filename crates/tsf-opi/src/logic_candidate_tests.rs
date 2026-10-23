@@ -125,6 +125,37 @@ fn select_is_page_relative_and_commits() {
     assert_eq!(s.page(), 0);
 }
 
+/// 回归（用户报障「桌面端翻页后直接确认始终是第一页的 1」）：空格收尾要走
+/// **当前页**首位。旧路径 `Engine::input_space()` 恒取全局第 0 条，页码被静默丢掉。
+#[test]
+fn space_commits_current_page_first_candidate() {
+    let mut s = state();
+    for c in ['q', 'w', 'x'] {
+        s.input_key(c as u32, 0);
+    }
+    s.next_page(); // 第 2 页（global 8..16）
+    assert_eq!(s.candidates()[0], "词08", "前置：当前页首位");
+    assert_eq!(
+        s.input_key(KEY_SPACE, 0),
+        KeyOutcome::Commit("词08".into()),
+        "空格 = 当前页首位，不是首页的 词00"
+    );
+    assert_eq!(s.buffer(), "");
+    assert_eq!(s.page(), 0, "提交后页码归零");
+
+    // 标点收尾同一条路（`input_punct` → 空格收尾）：翻页后打逗号也一样
+    let mut s = state();
+    for c in ['q', 'w', 'x'] {
+        s.input_key(c as u32, 0);
+    }
+    s.next_page();
+    assert_eq!(
+        s.input_key(',' as u32, 0),
+        KeyOutcome::Commit("词08，".into()),
+        "翻页后打 ',' = 当前页首位 + 标点"
+    );
+}
+
 #[test]
 fn select_out_of_range_returns_empty() {
     let mut s = state();

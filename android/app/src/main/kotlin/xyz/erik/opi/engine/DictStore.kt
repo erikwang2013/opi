@@ -150,28 +150,66 @@ class DictStore(private val dir: File, private val api: DictApi) {
             backup.delete()
             if (!target.renameTo(backup)) return ImportResult.Rejected("旧词库文件挪不动（$name$EXT）")
         }
+        // 超限统一走这条：删新文件、还原旧文件，再把原因交给设置页原样显示。
+        fun reject(reason: String): ImportResult {
+            target.delete()
+            restore(backup, target)
+            return ImportResult.Rejected(reason)
+        }
+        // 有界拷贝：超 8 MiB 立刻停，不把一份超大文件先落满磁盘再判失败。
+        var tooBig = false
         val copied = try {
-            open().use { input -> target.outputStream().use { input.copyTo(it) } }
-            true
+            open().use { input ->
+                target.outputStream().use { out ->
+                    val buf = ByteArray(64 * 1024)
+                    var total = 0L
+                    while (true) {
+                        val n = input.read(buf)
+                        if (n < 0) break
+                        total += n
+                        if (total > MAX_BYTES) {
+                            tooBig = true
+                            break
+                        }
+                        out.write(buf, 0, n)
+                    }
+                }
+            }
+            !tooBig
         } catch (e: Throwable) {
             false
         }
         if (!copied) {
-            target.delete()
-            restore(backup, target)
-            return ImportResult.Rejected("无法读取所选文件（$displayName）")
+            return reject(
+                if (tooBig) "词库文件达到上限（${MAX_BYTES / 1024 / 1024} MiB）"
+                else "无法读取所选文件（$displayName）",
+            )
+        }
+        // 条目数先按非空行估上界（引擎还会按有效行精确复核）；再核启用数/总条目。
+        val lines = try {
+            target.useLines { seq -> seq.count { it.isNotBlank() } }
+        } catch (e: Throwable) {
+            return reject("无法读取已拷贝的词库（${e::class.simpleName}）")
+        }
+        if (lines > MAX_ENTRIES) return reject("词库条目达到上限（$MAX_ENTRIES 条）")
+        val others = try {
+            list().filter { !it.system && it.enabled && it.name != name }
+        } catch (e: Throwable) {
+            emptyList()
+        }
+        if (others.size + 1 > MAX_ENABLED_DICTS) {
+            return reject("同时启用的导入词库达到上限（$MAX_ENABLED_DICTS 个）")
+        }
+        if (others.sumOf { it.count } + lines > MAX_TOTAL_ENTRIES) {
+            return reject("导入词库总条目达到上限（$MAX_TOTAL_ENTRIES 条）")
         }
         val count = try {
             api.importDict(target.absolutePath)
         } catch (e: Throwable) {
-            target.delete()
-            restore(backup, target)
-            return ImportResult.Rejected("引擎不可用（${e::class.simpleName}）")
+            return reject("引擎不可用（${e::class.simpleName}）")
         }
         if (count < 0) {
-            target.delete()
-            restore(backup, target)
-            return ImportResult.Rejected("不是有效的词库 tsv（引擎拒收）")
+            return reject("不是有效的词库 tsv（引擎拒收；也可能达到上限）")
         }
         backup.delete()
         return ImportResult.Imported(name, count)
@@ -184,6 +222,13 @@ class DictStore(private val dir: File, private val api: DictApi) {
     companion object {
         /** 词库目录名（`filesDir/dicts`）。 */
         const val DIR_NAME = "dicts"
+
+        // 导入上限（2026-10-24 用户要求；与 engine-core 的 `api/dict.rs` 同值，
+        // 引擎仍会二次校验 —— 这里是给设置页的**可读提示**，不替代引擎门禁）。
+        const val MAX_BYTES = 8L * 1024 * 1024
+        const val MAX_ENTRIES = 200_000
+        const val MAX_ENABLED_DICTS = 8
+        const val MAX_TOTAL_ENTRIES = 500_000
 
         /** 目录只认这个扩展名（契约：`*.tsv`，区分大小写 —— 启动装载与列表用同一口径）。
          * 导入时一律另存为 `<名>.tsv`，所以用户选的文件本身叫什么扩展名都不影响。 */

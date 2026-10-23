@@ -190,7 +190,7 @@ object CustomPhraseCodec {
         }
         val normalized = normalize(out)
         if (normalized.size > MAX_PHRASES) {
-            return CustomPhraseDecode.Invalid("短语过多：${normalized.size} 条（上限 $MAX_PHRASES）")
+            return CustomPhraseDecode.Invalid("短语达到上限（最多 $MAX_PHRASES 条）")
         }
         // 空数组是合法的：宿主文件在「关掉开关且删光短语」时就是 phrases:[] ——
         // 这里拒收会让那次保存的 enabled=false 在重启后悄悄变回 true。
@@ -230,7 +230,7 @@ object CustomPhraseCodec {
         if (out.isEmpty()) return CustomPhraseDecode.Invalid("没有可导入的短语")
         val normalized = normalize(out)
         if (normalized.size > MAX_PHRASES) {
-            return CustomPhraseDecode.Invalid("短语过多：${normalized.size} 条（上限 $MAX_PHRASES）")
+            return CustomPhraseDecode.Invalid("短语达到上限（最多 $MAX_PHRASES 条）")
         }
         return CustomPhraseDecode.Ok(normalized, null)
     }

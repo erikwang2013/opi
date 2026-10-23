@@ -123,7 +123,8 @@ class CustomPhraseCodecTest {
         val lines = (0 until CustomPhraseCodec.MAX_PHRASES + 1).joinToString("\n") { i ->
             "${('a' + i / 676)}${('a' + (i / 26) % 26)}${('a' + i % 26)}\tv"
         }
-        assertTrue(invalid(lines).contains("过多"))
+        // 断言只钉「越限被拒」，不钉面向用户的措辞（提示文案会被产品润色）
+        assertTrue(invalid(lines).contains("上限"))
     }
 
     @Test

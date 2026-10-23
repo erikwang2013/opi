@@ -1,8 +1,7 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! 引擎薄壳：类型转换与边界校验，内部持 engine_core::Engine。
-//! 双 ABI（JNI + C）共享同一引擎单例（SINGLETON）与内部实现，避免双份逻辑。
+//! 引擎薄壳：双 ABI（JNI + C）共享同一引擎单例（SINGLETON）与实现，避免双份逻辑。
 
 use std::sync::Mutex;
 
@@ -23,7 +22,10 @@ pub use convert::{
     emoji_groups_json, emoji_symbol_texts, mode_from_int, mode_to_int, search_symbol_texts,
     symbol_blocks_json, symbol_texts, texts_json,
 };
-pub use dict::DICT_LIST_UNLOADED;
+pub use dict::{
+    DICT_LIST_UNLOADED, MAX_ENABLED_EXTRA_DICTS, MAX_IMPORT_DICT_BYTES, MAX_IMPORT_DICT_ENTRIES,
+    MAX_TOTAL_EXTRA_ENTRIES,
+};
 pub use wubi::{
     wubi_mixed_entry_from_int, wubi_mixed_entry_to_int, wubi_return_from_int, wubi_return_to_int,
     wubi_style_from_int, wubi_style_to_int,
@@ -33,11 +35,7 @@ pub use wubi::{
 pub static SINGLETON: Mutex<Option<Api>> = Mutex::new(None);
 
 /// 装载引擎。`None`/空串 → 内置回退词库（35 词）；非空路径 → load_or_fallback
-/// 原样语义（坏路径返回 Err，仅内置损坏时方为不可恢复）。
-///
-/// 成功即替换单例（缓冲 / 页码 / ⇧ 一并重置）。已有引擎会先导出用户词再导回，
-/// 避免 Settings 与 IME 同进程再次 load 时把 Learner 冲掉。坏路径返回 Err，
-/// 已装引擎保持不动。
+/// 原样语义。成功即替换单例，并回放用户词与自定义短语；坏路径 Err，已装引擎不动。
 pub fn install(path: Option<&str>) -> Result<(), String> {
     let dict: Box<dyn Dictionary> = match path {
         Some(p) if !p.is_empty() => engine_data::load_or_fallback(Some(std::path::Path::new(p)))?,
@@ -49,6 +47,10 @@ pub fn install(path: Option<&str>) -> Result<(), String> {
     // 吞掉 panic 时锁已毒化，into_inner 取回数据；install 整体替换引擎，提供恢复路径。
     let mut guard = SINGLETON.lock().unwrap_or_else(|p| p.into_inner());
     let saved = guard.as_ref().map(|api| api.export_user_words());
+    // 自定义短语：install 整体换引擎，必须与用户词一起回放，否则设置页换词库后短语消失。
+    let saved_phrases = guard
+        .as_ref()
+        .map(|api| (api.export_custom_phrases(), api.custom_phrases_enabled()));
     *guard = Some(Api::with_router(
         KeyRouter::new(Engine::new(dict, symbols, true)),
         luna_count,
@@ -57,6 +59,12 @@ pub fn install(path: Option<&str>) -> Result<(), String> {
         && let Some(api) = guard.as_mut()
     {
         let _ = api.import_user_words(json);
+    }
+    if let Some((json, on)) = saved_phrases
+        && let Some(api) = guard.as_mut()
+    {
+        let _ = api.set_custom_phrases(json);
+        api.set_custom_phrases_enabled(on);
     }
     Ok(())
 }

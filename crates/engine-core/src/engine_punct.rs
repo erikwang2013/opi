@@ -23,6 +23,11 @@ impl Engine {
     /// [`Self::input_key`] 也问它。加进来的是引擎层，不是某一端 —— 用户裁决
     /// 2026-09-27：「引擎层加标点表，四端走同一条路」。
     pub fn input_punct(&mut self, ch: char) -> Option<String> {
+        self.input_punct_at(ch, 0)
+    }
+
+    /// 标点收尾的**页首**变体：`skip` 同 [`Self::input_space_at`]（桌面轨传页偏移）。
+    pub fn input_punct_at(&mut self, ch: char, skip: usize) -> Option<String> {
         // 浏览态：同 input_key —— 先退出浏览恢复真缓冲，再按正常流程处理（契约 ②）。
         self.leave_symbol_browse_if_needed();
         // 数字**紧邻**的句号出 ASCII `.`（2026-10-17 用户裁决，桌面端报障「数字后面
@@ -43,7 +48,7 @@ impl Engine {
         let pending = if self.buffer().is_empty() {
             String::new()
         } else {
-            self.input_space()
+            self.input_space_at(skip)
         };
         Some(pending + &text)
     }

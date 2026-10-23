@@ -9,9 +9,12 @@
 
 package xyz.erik.opi.candidate
 
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -69,5 +72,42 @@ class StatusBarScaleTest {
         // 设置页档位都在合法区间内，且缺省 100% 可选中。
         assertTrue(100 in STATUS_BAR_SCALE_CHOICES)
         assertTrue(STATUS_BAR_SCALE_CHOICES.all { statusBarScalePercent(it) == it })
+    }
+
+    @Test
+    fun `windows compact factor shrinks every drawn size but not the persisted scale`() {
+        // 2026-10-24 用户报障「win端的状态栏整体大了」：Windows 100% = Linux 的 85%，
+        // 逐项同一系数（按钮/间距/内边距/条高）。Linux 不乘 —— 既有像素门禁不受影响。
+        val linux = barMetrics(100)
+        val win = barMetrics(100, windows = true)
+        assertEquals(BTN.dp, linux.button)
+        assertEquals(BTN * WINDOWS_BAR_FACTOR, win.button.value, 1e-4f)
+        assertEquals(42f * WINDOWS_BAR_FACTOR, win.height.value, 1e-4f)
+        assertEquals(linux.gap.value * WINDOWS_BAR_FACTOR, win.gap.value, 1e-4f)
+        assertEquals(linux.pad.value * WINDOWS_BAR_FACTOR, win.pad.value, 1e-4f)
+        // 条宽走同一个 barScaleFactor；设置页档位在 Windows 上仍然有意义
+        // （150% 仍大于 100%，只是整体比 Linux 小一档）。
+        val n = 6
+        for (scale in STATUS_BAR_SCALE_CHOICES) {
+            assertEquals(
+                statusBarWidthDp(n, scale) * WINDOWS_BAR_FACTOR,
+                statusBarWidthDp(n, scale, windows = true),
+                1e-3f,
+            )
+        }
+        assertTrue(statusBarWidthDp(n, 150, windows = true) > statusBarWidthDp(n, 100, windows = true))
+        // 紧凑只在绘制层：配置里读到的仍是用户选的百分比（StatusBarSettings 不认识 Windows）。
+        assertEquals(125, OpSettings.fromIni("StatusBarScale=125\n").statusbar.scale)
+        assertEquals(1.25f * WINDOWS_BAR_FACTOR, barScaleFactor(125, windows = true), 1e-6f)
+        assertEquals(1.25f, barScaleFactor(125, windows = false), 1e-6f)
+    }
+
+    @Test
+    fun `only windows gets the pill shape`() {
+        // 2026-10-24 用户报障「边角也不是弧形」：Windows = 胶囊（配合透明窗，四角真透明）；
+        // Linux 未报障 ⇒ 直角。形状是纯函数，绘制层见 StatusBar.kt 的根 Box。
+        assertEquals(RectangleShape, barShape(windows = false))
+        assertTrue(barShape(windows = true) is RoundedCornerShape)
+        assertNotEquals(barShape(windows = false), barShape(windows = true))
     }
 }

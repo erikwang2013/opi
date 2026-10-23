@@ -188,13 +188,14 @@ impl TsfLogic {
     /// 引擎层标点表：`Some` = 该键归标点表管（文本要上屏），`None` = 交回路由放行。
     /// 与 `input_char` 同一套收尾 —— 命中时引擎可能先 flush 缓冲，页码得跟着归零。
     fn input_punct(&mut self, ch: char) -> Option<String> {
-        let out = self.engine.input_punct(ch);
+        // 收尾要提的「首候选」是**当前页**首条（翻页后不再回第一页）
+        let out = self.engine.input_punct_at(ch, self.page * PAGE_SIZE);
         self.reset_page_if_buffer_changed();
         out
     }
 
     fn input_space(&mut self) -> String {
-        let out = self.engine.input_space();
+        let out = self.engine.input_space_at(self.page * PAGE_SIZE);
         self.reset_page_if_buffer_changed();
         out
     }

@@ -238,13 +238,14 @@ impl CandidateState {
     /// 引擎层标点表：`Some` = 该键归标点表管（文本要上屏），`None` = 交回路由直通。
     /// 与 `input_key` 同一套收尾 —— 命中时引擎可能先 flush 缓冲，页码得跟着归零。
     pub fn input_punct(&mut self, ch: char) -> Option<String> {
-        let out = self.engine.input_punct(ch);
+        // 收尾要提的「首候选」是**当前页**首条（翻页后不再回第一页）
+        let out = self.engine.input_punct_at(ch, self.page * PAGE_SIZE);
         self.reset_page_if_buffer_changed();
         out
     }
 
     pub fn input_space(&mut self) -> String {
-        let out = self.engine.input_space();
+        let out = self.engine.input_space_at(self.page * PAGE_SIZE);
         self.reset_page_if_buffer_changed();
         out
     }
@@ -485,8 +486,10 @@ impl CandidateState {
 
 // 单测独立成文件（`#[path]` 引入）以保持本文件 <500 行：候选分页状态机测试（键路由测试
 // 见 `input_method` 模块）。配对：`candidate_tests.rs`（本轨）↔ `logic_candidate_tests.rs`
-// （tsf 轨）；两轨**分层不同**（本轨的 buffer 编辑方法在本文件，tsf 在 `logic_input_method.rs`），
-// 两份测试的调用面因此不同构 —— 别按「逐行同构」去"修"。
+// （tsf 轨）；两轨分层不同，两份测试的调用面不同构 —— 别按「逐行同构」去"修"。
+#[cfg(test)]
+#[path = "candidate_space_tests.rs"]
+mod candidate_space_tests;
 #[cfg(test)]
 #[path = "candidate_tests.rs"]
 mod candidate_tests;

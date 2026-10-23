@@ -403,7 +403,7 @@ impl KeyRouter {
     fn handle_printable(&mut self, c: char) -> KeyAction {
         // 标点表（引擎层，四端同一条路）：中文模式出中文标点/全角，其余模式下不映射。
         // 放在模式分派**之前**：标点不属于任何模式的关键字/缓冲语义。
-        if let Some(text) = self.engine.input_punct(c) {
+        if let Some(text) = self.engine.input_punct_at(c, self.page * PAGE_SIZE) {
             self.reset_page_if_buffer_changed();
             return commit_or_handled(text);
         }
@@ -454,7 +454,7 @@ impl KeyRouter {
                     // 缓冲非空：先按空格语义收尾（有候选提首候选、无候选提原文），
                     // 标点排在后面 —— 否则报文会拼在残留组合串后面。命中标点表的
                     // 那些在 `input_punct` 里已走同一条收尾（上层先问它），这里只剩未映射的。
-                    let out = self.engine.input_space();
+                    let out = self.engine.input_space_at(self.page * PAGE_SIZE);
                     self.reset_page_if_buffer_changed();
                     KeyAction::Input(out + &c.to_string())
                 } else {

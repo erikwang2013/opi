@@ -9,7 +9,7 @@
 //! 回车那条的判据来自 [`crate::Engine::enter_action`]（实现见 `engine_enter.rs`）。
 
 use crate::EnterAction;
-use crate::router::{KeyAction, KeyRouter, commit_or_handled};
+use crate::router::{KeyAction, KeyRouter, PAGE_SIZE, commit_or_handled};
 
 impl KeyRouter {
     /// 退格：缓冲非空 → 引擎删（引擎按码点删）；空缓冲 → 直通。
@@ -29,7 +29,8 @@ impl KeyRouter {
         if self.buffer().is_empty() {
             KeyAction::Input(" ".to_string())
         } else {
-            let out = self.engine.input_space();
+            // 翻页后空格 = **当前页**首条（页码在本层，引擎不知道）
+            let out = self.engine.input_space_at(self.page() * PAGE_SIZE);
             self.reset_page_if_buffer_changed();
             commit_or_handled(out)
         }

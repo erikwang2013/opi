@@ -142,8 +142,8 @@ fun CustomPhraseScreen(onBack: () -> Unit) {
                 val merged = CustomPhraseCodec.merge(phrases, decoded.phrases)
                 if (merged.phrases.size > CustomPhraseCodec.MAX_PHRASES) {
                     toast(
-                        "导入失败：合并后 ${merged.phrases.size} 条，" +
-                            "超过上限 ${CustomPhraseCodec.MAX_PHRASES}",
+                        "导入失败：合并后达到上限（最多 ${CustomPhraseCodec.MAX_PHRASES} 条，" +
+                            "当前 ${merged.phrases.size} 条）",
                     )
                     return@rememberLauncherForActivityResult
                 }
@@ -369,7 +369,7 @@ private fun PhraseEditDialog(
             x.isEmpty() -> "短语不能为空"
             existing.any { it.trigger == t.lowercase() } -> "字母「${t.lowercase()}」已被其它短语使用"
             initial == null && existing.size >= CustomPhraseCodec.MAX_PHRASES ->
-                "最多 ${CustomPhraseCodec.MAX_PHRASES} 条"
+                "达到上限（最多 ${CustomPhraseCodec.MAX_PHRASES} 条）"
             else -> null
         }
         error = problem

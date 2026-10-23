@@ -38,6 +38,16 @@ use engine_core::dictionary::{Dictionary, InMemoryDictionary};
 use engine_core::router::KeyRouter;
 use serde_json::json;
 
+/// 导入词库的硬上限（2026-10-24 用户要求「超限就提示达到上限」）。
+///
+/// 按键热路径本身有 30ms 预算兜底（超时会整体丢弃导入层），但这些上限防的是
+/// **冷路径**：导入/启动解析时间、常驻内存、以及导入层过多导致预算经常被触发。
+/// 超限一律在 `import_dict` 入口拒绝并给出中文原因，宿主的文件拷贝侧也要先挡一道。
+pub const MAX_IMPORT_DICT_BYTES: u64 = 8 * 1024 * 1024;
+pub const MAX_IMPORT_DICT_ENTRIES: usize = 200_000;
+pub const MAX_ENABLED_EXTRA_DICTS: usize = 8;
+pub const MAX_TOTAL_EXTRA_ENTRIES: usize = 500_000;
+
 use super::Api;
 
 /// 引擎未装载时 `dictList` 的哨兵：**JSON 空数组**。
@@ -108,6 +118,15 @@ impl Api {
             .filter(|s| !s.is_empty())
             .ok_or_else(|| format!("词库路径取不出文件名词干：{path}"))?
             .to_string();
+        let bytes = std::fs::metadata(p)
+            .map_err(|e| format!("读不到词库文件 {path}: {e}"))?
+            .len();
+        if bytes > MAX_IMPORT_DICT_BYTES {
+            return Err(format!(
+                "词库文件达到上限（{} MiB）",
+                MAX_IMPORT_DICT_BYTES / 1024 / 1024
+            ));
+        }
         // ⚠️ `load_extra_dict` 对「全坏」已经返 Err（见 dict_text.rs），但对**空文件**
         // 返 Ok(空词典) —— 这里补上「一条有效条目都没有 = 失败」：空词库装上只会让
         // 用户以为导成功了（宿主 UI 显示 0 条、打什么都不出字）。
@@ -115,6 +134,31 @@ impl Api {
         let count = dict.len();
         if count == 0 {
             return Err(format!("导入词库 {path} 没有有效条目"));
+        }
+        if count > MAX_IMPORT_DICT_ENTRIES {
+            return Err(format!(
+                "词库条目达到上限（{} 条）",
+                MAX_IMPORT_DICT_ENTRIES
+            ));
+        }
+        // 启用数/总条目：同名重导入是原位替换，先把旧的那条从统计里排除再算。
+        let (enabled_others, entries_others) = self
+            .dicts
+            .extra
+            .iter()
+            .filter(|e| e.name != name && e.enabled)
+            .fold((0usize, 0usize), |(n, total), e| (n + 1, total + e.count));
+        if enabled_others + 1 > MAX_ENABLED_EXTRA_DICTS {
+            return Err(format!(
+                "同时启用的导入词库达到上限（{} 个）",
+                MAX_ENABLED_EXTRA_DICTS
+            ));
+        }
+        if entries_others + count > MAX_TOTAL_EXTRA_ENTRIES {
+            return Err(format!(
+                "导入词库总条目达到上限（{} 条）",
+                MAX_TOTAL_EXTRA_ENTRIES
+            ));
         }
         if skipped > 0 {
             // 部分坏行**不**失败（其余条目照样能用），但不能一声不吭：本仓有过
