@@ -303,7 +303,7 @@ android/app/src/main/assets/luna.opid
   第一次 `show`）。状态栏的 1s 轮询随即能读到 `im=opi`，因此切到「小欧输入法」后状态栏
   **立即出现，不必先打一个字**。`Deactivate` 先置 inactive 再断开，避免读线程把单实例
   管道又抢回去。**注意**：安装/升级后，已在运行的宿主仍持有旧 DLL 映像；EXE 交互式
-  升级会在注册后统一重启原用户 Explorer（不再取决于是否探测到映射，见 §2.5/§4.3），
+  升级只在探测到 Explorer 映射旧 DLL 时重启原用户 Explorer（2026-10-23 白屏回归：不能对未映射旧 DLL 的健康 shell 无条件 taskkill），
   其它宿主需各自关闭重开。
 - 打包格式**当前只声明了 Deb**：`desktop/build.gradle.kts` 的
   `nativeDistributions { targetFormats(TargetFormat.Deb) }`，同一处的注释写着
@@ -567,8 +567,7 @@ C:\Program Files\opi\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 1. **安装完成不要求注销**。统一口径（2026-10-23）：
    - 用户入口 EXE 的**交互式升级**会在注册新 DLL 后，以**原用户令牌**重启该用户的
      Explorer（看门狗等待 3 秒，必要时原用户令牌补启；桌面/任务栏会短暂消失后回来），
-     **不需要注销**。重启判定是「是否交互式升级」，不再要求先探测到 Explorer 映射旧
-     DLL —— `tasklist /m` 在受限机器上可能看不到模块，旧判定会静默跳过重启。
+     **不需要注销**。重启判定是「Explorer 是否映射旧 DLL」；探测不到就不碰 shell（白屏回归）。
    - **首次安装、静默安装**不重启 Explorer（静默安装同样跳过完成页）。
    - **新打开的应用**加载新 DLL，立即生效；**已打开的应用**仍持有旧映像，需关闭后
      重新打开（完成页会列出仍加载旧 DLL 的进程）。本安装器**不会**自动结束这些应用
@@ -717,7 +716,7 @@ docker run --rm -v "$PWD:/w" -w /w debian:12 \
    > `[Run]` 还用了 `runascurrentuser`，把「以登录用户运行」写反（Setup 本身提权）。
    > 现在完成页脚本与 MSI 路径都不碰 shell：脚本只启动 `opi.exe`，Inno 的 `[Run]`
    > 用 `runasoriginaluser`，`opi.iss` 用 `CloseApplications=no`。EXE 用户入口的受控
-   > shell 重启不在完成页脚本里，而在 `ssPostInstall`（原用户令牌，交互式升级一律
+   > shell 重启不在完成页脚本里，而在 `ssPostInstall`（原用户令牌，仅在 Explorer 映射旧 DLL 的交互式升级
    > 执行，见「安装后必做」第 1 步）。防回归的静态门禁在 `ci.yml` 的
    > `packaging-scripts` job（受控路径除外，拒绝 shell 结束命令与 `runascurrentuser`）。
 
@@ -765,7 +764,7 @@ Type 1 的 `OpRegisterTsf@5900`、`WixSilentExec64` 与 `OPI_POSTPROCESSED` 标�
 | 对象 | 会发生什么 |
 |---|---|
 | 新启动的进程 | 加载磁盘上的新 DLL（MSI 的 File 表已含 `tsf_opi.dll`） |
-| Explorer / shell / 语言栏 | **EXE 交互式升级（一律）**：注册后用原用户令牌重启 shell（带看门狗），新 DLL 立即生效；不再要求先探测到旧 DLL 被映射。首次/静默安装不重启。MSI 路径仍为 `CloseApplications=no`，下次注销/登录后重载 |
+| Explorer / shell / 语言栏 | **EXE 交互式升级且 Explorer 映射旧 DLL**：注册后用原用户令牌重启 shell（带看门狗），新 DLL 立即生效。首次/静默安装不重启。MSI 路径仍为 `CloseApplications=no`，下次注销/登录后重载 |
 | 已打开的其它应用（Office / 浏览器 / 编辑器…） | **仍持旧 DLL**，直到各自关闭重开 |
 | 候选窗进程 | 装前被 797 结束、装后由完成页脚本拉起 |
 | COM 注册 | `OpRegisterTsf@5900` 经 `WixSilentExec64` 调 64 位 `regsvr32 /s` 注册 per-machine（Type 1：失败则安装失败/回滚）；卸载**不清注册**（`NOT REMOVE` ⇒ 不跑 `regsvr32 /u`，`HKCR`/`HKLM\SOFTWARE\Microsoft\CTF` 残留指向已删 DLL 的条目，见 §6.1 #13） |
@@ -778,11 +777,11 @@ Type 1 的 `OpRegisterTsf@5900`、`WixSilentExec64` 与 `OPI_POSTPROCESSED` 标�
 - **失败回退**：注册（`OpRegisterTsf@5900`，Type 1）**失败会让安装失败并回滚**（有意：
   宁可响亮失败，也不留「装成功、键盘不出现」的半注册状态）。完成页启动候选窗
   （`OpLaunchApp`，完成页 Finish 时触发、在 InstallFinalize 之后）失败则不影响安装结果。
-- **shell 重启范围（2026-10-23 订正）**：EXE 的 `RestartExplorerAfterInstall` 在
-  **每次交互式升级**都用**原用户令牌** `taskkill /f /im explorer.exe`，并由原用户令牌
-  看门狗补启；不再要求先探测到「Explorer 映射旧 DLL」（`tasklist /m` 可能看不到模块，
-  旧判定会静默跳过）。首次安装、静默安装、卸载都不碰 shell。旧版无条件的 `taskkill`
-  会命中所有可访问会话、且首次安装也白重启，那一条仍已移除。
+- **shell 重启范围（2026-10-23 订正）**：EXE 的 `RestartExplorerAfterInstall`
+  **只有 Explorer 映射旧 DLL 的交互式升级**才用**原用户令牌** `taskkill /f /im explorer.exe`，
+  并由原用户令牌看门狗补启；未映射（包括 `tasklist /m` 探测不到）就不碰 shell，避免
+  2026-10-23 的白屏回归。首次安装、静默安装、卸载都不碰 shell。旧版无条件的
+  `taskkill` 会命中所有可访问会话、且首次安装也白重启，那一条仍已移除。
   **代价**：升级瞬间所有文件资源管理器窗口会关闭；其它已打开的 TSF 宿主（Word/浏览器）
   仍持旧 DLL，需各自关闭重开（完成页/日志会列出这些进程）。
 - ✅ **2026-10-18 起 MSI 含 `tsf_opi.dll`**：File 表由 CI 的 `desktop-msi` job 在打包时
@@ -1427,10 +1426,10 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | 9 | `Ctrl+'` / `Ctrl+\` / `Shift+Space` 在 Windows 上有没有被别的软件占用；**`Shift` 轻按**（2026-10-22）TSF 是否把 Shift 的按下/抬起都交给键事件 sink | §4.1 |
 | 10 | 语言栏按钮（`langbar.rs`）的运行期行为：`AddItem` 成不成、`GetIcon` 有没有被调、图标画没画出来 —— 只有 §1.2 那条 `cargo check` 看过它（"挑条目 + 校验 RT_ICON 形态"那半在 `langbar_icon.rs`，有主机单测） | §2.1、`crates/tsf-opi/src/langbar.rs` 头注释 |
 | 11 | **「属性设置」的生效时机**：设置窗落盘后要等下一次 `Activate` —— 本机无法验证（`Activate` 由 TSF 调）。读取/容错/落点那半在 `settings.rs`，有主机单测 | §4.4、`crates/tsf-opi/src/settings.rs` |
-| 12 | **安装器行为（改安装目录 / 关停运行中实例 / 注册 TSF DLL / 完成页只自启候选窗，2026-10-17 / 10-18 / 10-19 / 10-20）**：表级已改好并可本地复核（§2.5 的后处理脚本 + 读回证据）。**2026-10-19 用户在真机装过的是「未后处理」的 v1.15.1 发布包**（有进程、键盘不显示）—— 这证明了「不跑后处理 = 不注册 = 键盘不出现」。**【订正 2026-10-19 复审】后处理后的三份包**（本地 `processed-static`、本地 `processed`、CI `opi-desktop-msi`）**仍无输入法的根因已定位**：注入的是 32 位 `WixSilentExec`，而随包 `Binary.WixCA` 是 PE32 i386 ⇒ WOW64 调 SysWOW64 的 32 位 `regsvr32`，加载不了 x86-64 DLL。脚本/CI 已改为 `WixSilentExec64` + `WixSilentExec64CmdLine` 并加 PE machine 断言，注册逻辑改为显式判存在 + HKLM 默认启用。**【订正 2026-10-20】EXE 白屏后完成页脚本不再结束/重启 Explorer**：`launch-and-restart.cmd` 只启动 `opi.exe`，`opi.iss` 改用 `runasoriginaluser` 并 `CloseApplications=no`（§2.5）。**【订正 2026-10-23】受控的 shell 刷新回来了**：交互式升级在 `ssPostInstall` 注册新 DLL 后，用原用户令牌 `taskkill /f /im explorer.exe` + 看门狗补启（每次升级都执行，不再只在探测到映射时）；首次/静默安装不碰 shell，其它宿主只列日志/完成页、不结束。修复后的 EXE **仍未在真机交互路径装过**（CI 静默安装跳过 `[Run]`），所以 Explorer 重启、`regsvr32` 真注册、ExitDialog 复选框与完成页文案都仍是【未验证】 | §2.5、`scripts/postprocess-windows-msi.sh`、`scripts/windows/opi.iss` |
+| 12 | **安装器行为（改安装目录 / 关停运行中实例 / 注册 TSF DLL / 完成页只自启候选窗，2026-10-17 / 10-18 / 10-19 / 10-20）**：表级已改好并可本地复核（§2.5 的后处理脚本 + 读回证据）。**2026-10-19 用户在真机装过的是「未后处理」的 v1.15.1 发布包**（有进程、键盘不显示）—— 这证明了「不跑后处理 = 不注册 = 键盘不出现」。**【订正 2026-10-19 复审】后处理后的三份包**（本地 `processed-static`、本地 `processed`、CI `opi-desktop-msi`）**仍无输入法的根因已定位**：注入的是 32 位 `WixSilentExec`，而随包 `Binary.WixCA` 是 PE32 i386 ⇒ WOW64 调 SysWOW64 的 32 位 `regsvr32`，加载不了 x86-64 DLL。脚本/CI 已改为 `WixSilentExec64` + `WixSilentExec64CmdLine` 并加 PE machine 断言，注册逻辑改为显式判存在 + HKLM 默认启用。**【订正 2026-10-20】EXE 白屏后完成页脚本不再结束/重启 Explorer**：`launch-and-restart.cmd` 只启动 `opi.exe`，`opi.iss` 改用 `runasoriginaluser` 并 `CloseApplications=no`（§2.5）。**【订正 2026-10-23】受控的 shell 刷新回来了**：交互式升级在 `ssPostInstall` 注册新 DLL 后，用原用户令牌 `taskkill /f /im explorer.exe` + 看门狗补启（仅在探测到 Explorer 映射旧 DLL 时；2026-10-23 白屏回归后已回退无条件重启）；首次/静默安装不碰 shell，其它宿主只列日志/完成页、不结束。修复后的 EXE **仍未在真机交互路径装过**（CI 静默安装跳过 `[Run]`），所以 Explorer 重启、`regsvr32` 真注册、ExitDialog 复选框与完成页文案都仍是【未验证】 | §2.5、`scripts/postprocess-windows-msi.sh`、`scripts/windows/opi.iss` |
 | 13 | **卸载不清理 TSF 注册（2026-10-19 reviewer m4 记录，有意未做）**：`OpRegisterTsf` 的条件是 `NOT REMOVE` ⇒ 卸载**不执行** `regsvr32 /s /u`；`HKCR\CLSID\{98C51858-590B-404D-8915-21EB44250062}\InprocServer32` 与 `HKLM\SOFTWARE\Microsoft\CTF` 下由 `DllRegisterServer` 写入的条目会**残留并指向已删除的 DLL**。未加卸载动作的原因：`WixSilentExec64` 只有**一个**命令属性 `WixSilentExec64CmdLine`，安装/卸载两条命令会互相覆盖；手写 `RemoveRegistryKey` 又需精确复制官方 API 写入的键，未在真机取证。重装到同一路径会重新覆盖注册；彻底清理 = 卸载前手工 `regsvr32 /s /u <dll>`，已卸载则手工删上述键 | `scripts/postprocess-windows-msi.sh`、§2.5 | 卸载后注册残留；卸载本身的文件删除不受影响 |
 | 14 | **Win7 / Win8 / 8.1 不支持（2026-10-19 用户裁决：仅文档标注）**：DLL 的 API set/Rust std 与候选窗的 JDK 21/Compose 下限都在 Win10/11；Win7/8 需另建 legacy 轨道 | §1.1 的说明 | 在 Win7/8 上安装/运行不保证；不在本仓库范围 |
-| 15 | **EXE 无重启卸载的锁定 DLL 路径：容器已能模拟，「Explorer 真实持有方式」仍未在真机验证（2026-10-21 更新）**：v1.20.1 真机卸载残留的根因在旧代码：固定目标名 `%TEMP%\opi-tsf-uninstall-<用户>.dll` 让第二次卸载的 `RenameFile` 因目标已存在而失败，跨卷时 `MoveFile` 也失败；失败后 DLL 留在 `{app}`，Inno 报 "Some elements could not be removed"。现改为**同卷 trash 目录**（`{commonappdata}\opi\trash`，装在其他盘时 `<盘符>:\opi-trash`）+ 唯一文件名（时间戳到毫秒）+ 同卷校验；`%TEMP%`/`{win}\Temp` 只在同卷时作回退。成功即删目录，副本 `MoveFileExW(路径, '', MOVEFILE_DELAY_UNTIL_REBOOT)` 登记开机删除；下次安装/卸载先清 trash；全部失败才 `MoveFileExW(原路径, '', MOVEFILE_DELAY_UNTIL_REBOOT)` 并如实记日志（目录保留到重启）。**安装的 `ssInstall`（`[InstallDelete]`/`[Files]` 之前）也先 `UnregisterTsf()` 再 `MoveLockedTsfDll(True)`**：否则 `[Files] restartreplace` 会把新 DLL 排到下次重启（`DoHandleFailedDeleteOrMoveFileTry` 里 `ReplaceOnRestart := True` 后跳过 `MoveFile`），用户装完 1.20.1 仍在跑旧 DLL、`regsvr32` 注册的也是旧 DLL。容器冒烟现在用「改字节 → `LoadLibrary` 映射 → 重装同一包 → SHA-256 对比包内值」验证升级路径，再映射一次验证卸载路径；**容器里的持有者不是 Explorer**，Explorer/TSF 宿主的真实持有方式仍只能真机复验。**升级修好的是磁盘上的文件**：运行中的应用里已加载的旧映像仍是旧代码；交互式升级会重启 Explorer，但其它已打开的宿主必须关闭重开 —— **不需要注销**。另：状态栏锁清理只覆盖运行卸载器的那个用户的 `%TEMP%`（同机其他用户的残留锁文件不处理，无害）。本树没有 Windows 服务，卸载 kill 的就是 `opi.exe` 三种模式 | `scripts/windows/opi.iss`、`.github/workflows/windows.yml`、§2.5 | 真机 Explorer 锁定路径未验证；极端情况下（改名也失败）残留 DLL/目录到重启，交互式卸载会显示 Inno 的 "Some elements could not be removed"，但无重启请求 |
+| 15 | **EXE 无重启卸载的锁定 DLL 路径：容器已能模拟，「Explorer 真实持有方式」仍未在真机验证（2026-10-21 更新）**：v1.20.1 真机卸载残留的根因在旧代码：固定目标名 `%TEMP%\opi-tsf-uninstall-<用户>.dll` 让第二次卸载的 `RenameFile` 因目标已存在而失败，跨卷时 `MoveFile` 也失败；失败后 DLL 留在 `{app}`，Inno 报 "Some elements could not be removed"。现改为**同卷 trash 目录**（`{commonappdata}\opi\trash`，装在其他盘时 `<盘符>:\opi-trash`）+ 唯一文件名（时间戳到毫秒）+ 同卷校验；`%TEMP%`/`{win}\Temp` 只在同卷时作回退。成功即删目录，副本 `MoveFileExW(路径, '', MOVEFILE_DELAY_UNTIL_REBOOT)` 登记开机删除；下次安装/卸载先清 trash；全部失败才 `MoveFileExW(原路径, '', MOVEFILE_DELAY_UNTIL_REBOOT)` 并如实记日志（目录保留到重启）。**安装的 `ssInstall`（`[InstallDelete]`/`[Files]` 之前）也先 `UnregisterTsf()` 再 `MoveLockedTsfDll(True)`**：否则 `[Files] restartreplace` 会把新 DLL 排到下次重启（`DoHandleFailedDeleteOrMoveFileTry` 里 `ReplaceOnRestart := True` 后跳过 `MoveFile`），用户装完 1.20.1 仍在跑旧 DLL、`regsvr32` 注册的也是旧 DLL。容器冒烟现在用「改字节 → `LoadLibrary` 映射 → 重装同一包 → SHA-256 对比包内值」验证升级路径，再映射一次验证卸载路径；**容器里的持有者不是 Explorer**，Explorer/TSF 宿主的真实持有方式仍只能真机复验。**升级修好的是磁盘上的文件**：运行中的应用里已加载的旧映像仍是旧代码；仅在 Explorer 映射旧 DLL 时升级会重启 Explorer，其它已打开的宿主必须关闭重开 —— **不需要注销**。另：状态栏锁清理只覆盖运行卸载器的那个用户的 `%TEMP%`（同机其他用户的残留锁文件不处理，无害）。本树没有 Windows 服务，卸载 kill 的就是 `opi.exe` 三种模式 | `scripts/windows/opi.iss`、`.github/workflows/windows.yml`、§2.5 | 真机 Explorer 锁定路径未验证；极端情况下（改名也失败）残留 DLL/目录到重启，交互式卸载会显示 Inno 的 "Some elements could not be removed"，但无重启请求 |
 
 ### 6.2 代码里已知的缺口（读源码得出，不是待办猜测）
 

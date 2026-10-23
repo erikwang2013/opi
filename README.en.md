@@ -287,7 +287,7 @@ LICENSE · CONTRIBUTING.md      # MIT full text · contribution guide (incl. dic
 
 ### 📅 Project Status
 
-> **Current stage: v1.24.1 (2026-10-23): hold-to-delete backspace on mobile; clear-user-words in the Android in-keyboard settings; Windows per-host clear on next focus and sign-out-free interactive upgrades; iOS responsive layout, panel return and 9-key pinyin-row fixes; always-on pinyin on all clients**
+> **Current stage: v1.24.2 (2026-10-23): Windows white-screen hotfix after overwrite install (refresh the shell only when Explorer holds the old DLL); otherwise the same as 1.24.1: hold-to-delete on mobile, Android in-keyboard clear, Windows per-host clear, iOS responsive and 9-key pinyin-row fixes**
 
 V1 milestone progress:
 

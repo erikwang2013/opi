@@ -23,7 +23,6 @@
 
 var
   ExplorerHadTsf: Boolean;
-  IsUpgrade: Boolean;
   TsfHolders: String;
 
 // Called before ssInstall moves the locked DLL, when the old image is still mapped.
@@ -121,18 +120,18 @@ begin
     Log('opi: silent install; Explorer restart skipped');
     Exit;
   end;
-  // Evidence only: ci.yml pins this literal. The restart decision is IsUpgrade --
-  // tasklist /m can silently fail to see the module, and that used to skip the
-  // restart on exactly the machines that needed it.
+  // Only Explorer that actually maps the old in-proc DLL needs a shell restart.
+  // A false negative just means the user closes/reopens Explorer or signs out;
+  // a false positive (killing a healthy shell) is the 2026-10-23 white screen.
   if not ExplorerHadTsf then
-    Log('opi: Explorer did not map the old TSF DLL before install')
-  else
-    Log('opi: Explorer mapped the old TSF DLL before install');
-  if not IsUpgrade then
   begin
-    Log('opi: first install; no shell to refresh, Explorer restart skipped');
+    // 2026-10-23 white-screen regression: restarting Explorer on an upgrade that
+    // did not have the old DLL mapped kills a healthy shell for no reason. Only
+    // refresh when the shell actually needs the new in-proc image.
+    Log('opi: Explorer did not map the old TSF DLL; shell restart skipped');
     Exit;
   end;
+  Log('opi: Explorer mapped the old TSF DLL before install');
   // Original-user token: the setup process is elevated and may belong to a
   // different admin account. Killing by image name as that admin could hit
   // another user's shell.
@@ -164,7 +163,7 @@ begin
   if (CurPageID = wpFinished) and (not WizardSilent) then
   begin
     Note := '无需注销：新打开的应用会使用已安装的版本；已打开的应用请关闭后重新打开。' + #13#10 +
-      '静默安装不会重启 Explorer。';
+      '若桌面空白，按 Ctrl+Shift+Esc 打开任务管理器 → 文件 → 运行新任务 → explorer.exe。';
     if TsfHolders <> '' then
       Note := Note + #13#10 + '仍加载旧版 TSF DLL 的进程：' + TsfHolders + '（关闭重开即可）。';
     WizardForm.FinishedLabel.Caption := Note;

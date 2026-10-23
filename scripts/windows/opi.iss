@@ -17,7 +17,7 @@
 ; best-effort and can never roll back the install.
 ;
 ; Build (CI or local, on Windows; ISCC is the Inno Setup 6 compiler):
-;   ISCC.exe /DAppVersion=1.24.1 ^
+;   ISCC.exe /DAppVersion=1.24.2 ^
 ;            /DAppImageDir=C:\path\to\build\compose\binaries\main\app\opi ^
 ;            /DOutputDir=C:\path\to\dist scripts\windows\opi.iss
 ;
@@ -35,12 +35,13 @@
 ; fixed %TEMP% name failed on retry: the previous still-mapped copy blocked
 ; RenameFile. If even the rename fails, deletion is scheduled for the next
 ; restart and the log says so. No reboot is requested. The uninstaller never
-; kills Explorer. Every interactive UPGRADE restarts only the original user's
-; shell (with a watchdog) so the new TSF code is live without signing out; the
-; finish page says "no sign-out; new apps use the update, already-open apps need
-; a close and reopen". First installs and silent installs never touch the shell.
-; Other TSF hosts are never killed: the installer logs (and lists on the finish
-; page) the processes still mapping the old DLL.
+; kills Explorer. An interactive UPGRADE restarts only the original user's shell
+; when Explorer actually has the old DLL mapped (with a watchdog); 2026-10-23
+; white-screen regression: never kill a healthy shell just because it is an
+; upgrade. The finish page says "no sign-out; new apps use the update,
+; already-open apps need a close and reopen". First installs and silent installs
+; never touch the shell. Other TSF hosts are never killed: the installer logs
+; (and lists on the finish page) the processes still mapping the old DLL.
 ;
 ; Upgrade (2026-10-21): the same rename runs at ssInstall, BEFORE [InstallDelete]
 ; and [Files], for tsf_opi.dll AND app\luna.opid (the old TSF DLL maps the
@@ -372,11 +373,9 @@ begin
     // installing v1.20.1 over v1.20.0 still ran the old TSF code, and the queued
     // rename made the next setup refuse until a reboot.)
     KillRunningApp();
-    // Old install present = interactive upgrade. Every interactive upgrade gets a
-    // shell restart (see RestartExplorerAfterInstall): tasklist /m detection is
-    // only evidence, it can silently fail on locked-down machines.
-    IsUpgrade := FileExists(ExpandConstant('{app}\app\tsf_opi.dll'));
-    // Detect the old in-proc DLL while it is still mapped (log evidence only).
+    // Detect the old in-proc DLL while it is still mapped. Only Explorer that
+    // actually loaded the old DLL is restarted (2026-10-23 white-screen regression:
+    // killing Explorer on an upgrade that did not map it can leave a blank desktop).
     ExplorerHadTsf := ExplorerMapsTsf();
     // 先摘旧 profile/COM 键，再动文件；新 DLL 落下后由 ssPostInstall 重建。
     UnregisterTsf();
