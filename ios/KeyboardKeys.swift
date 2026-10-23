@@ -34,15 +34,17 @@ extension KeyFallback {
     ///
     /// 数字层是唯一「键面 = 字面文本」的层，而拼音 9 键方案下 2–9 是 T9 **输入键**
     /// （`router_digit.rs`）—— 送进引擎会被吞成缓冲，宿主一个数字都收不到。
-    /// `fullwidth` 开时宽成 U+FF10..U+FF19（+0xFEE0，全角区与 ASCII 连续对应），
-    /// 与 engine-core `punctuation::ascii_fullwidth_wide` / Android `widenAscii`
-    /// 同一条规则（数字在该段内；空格不在，且本函数不碰空格）。
-    func numbersLayerDigit(fullwidth: Bool) -> String? {
+    ///
+    /// **恒为 ASCII，不跟全角开关**：Android 进数字面板会切 Number 模式（该模式
+    /// 缺省半角），数字层出的是 `123`；iOS 的数字层只是 UI 层、引擎仍是中文拼音、
+    /// 全角缺省开 —— 若跟随开关，用户点「123」会打出 `１２３`，与 Android 和
+    /// 「数字键盘」的直觉都不符。全角只用于拼音的标点/字母直传点。
+    func numbersLayerDigit() -> String? {
         guard case .text(let t) = self,
               t.count == 1, let s = t.unicodeScalars.first,
               s.value >= 0x30, s.value <= 0x39
         else { return nil }
-        return fullwidth ? String(UnicodeScalar(s.value + 0xFEE0)!) : t
+        return t
     }
 }
 

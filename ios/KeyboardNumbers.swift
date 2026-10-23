@@ -17,11 +17,11 @@ extension KeyboardViewController {
     /// 数字层直提：当前层是数字层、且这次按键是**单个 ASCII 数字** ⇒ 直接插入文本。
     /// 返回 true = 已处理（调用方不再走引擎）。
     ///
-    /// 全角跟随引擎开关（`punctuation::ascii_fullwidth_wide` / Android `widenAscii`
-    /// 同一条规则）；标点/空格/回车不在此列，仍走引擎（中文标点映射不变）。
+    /// 恒为 ASCII（对齐 Android Number 模式缺省半角）；标点/空格/回车不在此列，
+    /// 仍走引擎（中文标点映射不变）。
     func insertNumbersLayerDigitIfNeeded(_ fallback: KeyFallback) -> Bool {
         guard layout.keyLayer == .numbers,
-              let digit = fallback.numbersLayerDigit(fullwidth: engine.fullwidthState())
+              let digit = fallback.numbersLayerDigit()
         else { return false }
         insert(digit)
         return true
