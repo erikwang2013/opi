@@ -288,7 +288,7 @@ LICENSE · CONTRIBUTING.md      # MIT full text · contribution guide (incl. dic
 
 ### 📅 Project Status
 
-> **Current stage: v1.24.3 (2026-10-23): iOS 9-key 繁/123/English stay inside opi; 🌐 short-press cycles languages, long-press switches system; old key rows are released before rebuild with logging. The Windows white-screen fix carries over from 1.24.2**
+> **Current stage: v1.24.4 (2026-10-23): 9-key multi-word composition (厌蠢症 / 样样通) and a complete pinyin row (no ellipsis, horizontally scrollable); iOS numeric layer inserts digits directly, dictionaries load lazily, switching to English rebuilds keys once; Android update check inside keyboard panels. The Windows white-screen fix carries over from 1.24.2, verified on a real device**
 
 V1 milestone progress:
 

@@ -87,7 +87,7 @@ site/
 把 `site/` 整个目录作为静态站点根目录即可（Nginx / Caddy / Cloudflare Pages /
 GitHub Pages 均可）。页面内没有构建步骤，也没有服务端依赖。
 
-**发版时更新 `version.json`**：`{"version":"1.24.3","download":"https://opi.erik.xyz/download"}`。
+**发版时更新 `version.json`**：`{"version":"1.24.4","download":"https://opi.erik.xyz/download"}`。
 （`/download` 由 `site/download/index.html` 转场到首页下载区；具体安装包在
 `/download/opi-…` 下。）
 小欧设置窗（Windows/Linux 桌面端）的「检测更新」先读它；读不到才回退解析
@@ -102,7 +102,7 @@ JSON-LD，以及 `robots.txt` / `sitemap.xml`。换域名时同时改 canonical�
 
 - `site/README.md` 的链接若部署在子路径（如 `/opi/`），保持相对路径即可。
 - 统计脚本由 busuanzi 提供；广告拦截器或离线环境会把它拦掉，页面其余部分不受影响。
-- 版本号在 `index.html`（hero 的 `v1.24.3`）与发布页链接里是手写的，发版时同步。
+- 版本号在 `index.html`（hero 的 `v1.24.4`）与发布页链接里是手写的，发版时同步。
 
 ## 素材授权
 
