@@ -1,7 +1,6 @@
 // Host JVM smoke：System.load libopi_ffi.so 验 JNI_OnLoad + RegisterNatives + 主链路
-//（与 Rust cabi_test 同语义）。用法：javac -d /tmp/smoke-out Main.java；再
-// java -Dopi.so=/path/libopi_ffi.so -cp /tmp/smoke-out xyz.erik.opi.jni.Main [luna.opid]
-// 成功打印 SMOKE-OK；失败打印 FAIL: <原因> 并退出码 1。
+//（与 Rust cabi_test 同语义）。用法：javac -d /tmp/smoke-out Main.java；再用
+// java -Dopi.so=... -cp /tmp/smoke-out xyz.erik.opi.jni.Main [luna.opid]；成功 SMOKE-OK，失败 FAIL。
 package xyz.erik.opi.jni;
 final class OpiEngine {
     static native boolean load(String path);
