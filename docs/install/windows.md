@@ -251,9 +251,11 @@ android/app/src/main/assets/luna.opid
 
 ### 2.3 候选窗（`desktop/`）
 
-候选窗是**另一个进程**：Compose Desktop / JVM 应用，经命名管道 `\\.\pipe\opi`
-与插件通信（协议镜像两份：`crates/tsf-opi/src/candidate_io.rs` 与
+候选窗是**另一个进程**：Compose Desktop / JVM 应用，经命名管道与插件通信
+（协议镜像两份：`crates/tsf-opi/src/candidate_io.rs` 与
 `desktop/src/main/kotlin/xyz/erik/opi/candidate/Main.kt` 的模块头注释）。
+2026-10-25 起是**两条管道**：新版 DLL 走 `\\.\pipe\opi-v2`，升级前已打开的
+应用里的旧 DLL 仍走 `\\.\pipe\opi`；候选窗进程两条都服务。
 
 - **不开它也能打字**：`CandidateClient::connect` 连不上时**单次尝试、本次发送放弃、不睡眠**
   （2026-10-18 性能审计：旧实现在按键线程上 4×50ms 退避，候选窗未启动时每键白卡 200ms；
@@ -277,6 +279,16 @@ android/app/src/main/assets/luna.opid
   → 切到 B 打字同样出现 → 切回 A 仍正常；Win+Space 切到别的输入法后 `state` 变空、
   状态栏约 3–4s 内隐藏（3 拍轮询宽限），切回 opi 后重新出现；物理键盘
   `Ctrl+'` / `Shift+Space` 翻转的 `lang=`/`fw=` 与状态栏图标一致。
+- **热升级隔离（2026-10-25）**：覆盖安装后，已打开的应用仍映射旧版
+  `tsf_opi.dll`（Windows 不能热替换进程内映像）。旧版 DLL 只认
+  `\\.\pipe\opi`，若继续与新版共用一个单实例管道，旧宿主会把管道占住 ——
+  新前台应用连不上（中文无候选），状态栏读到旧宿主的 `im=opi` 后切走也不消失。
+  修复：新版 DLL 改连 `\\.\pipe\opi-v2`；候选窗进程同时监听 v2（新版）与
+  `opi`（旧版），v2 的消息优先，旧客户端断开不会藏掉 v2 的窗口。控制面同步
+  升为 `\\.\pipe\opi-control-v2`，状态栏只认新版客户端。**旧管道名永不改**
+  （这是对旧 DLL 的兼容面）；协议再有不兼容变更时 v2 升 v3。
+  另加候选窗单实例锁（`CandidateLock.kt`）：重复启动的 `opi.exe` 直接退出，
+  不再留下多个常驻进程。
 - **登录自启 ≠ 常驻渲染（2026-10-21 订正）**：候选窗**始终创建一个隐藏的 AWT/Skiko
   窗口**。曾试过「首次 `show` 之前不建窗」，但 Compose 1.11 的 `application` 在没有任何
   Window 时会在 `Recomposer.close/join` 后直接返回 —— 候选进程启动即退出，两条命名管道
@@ -306,6 +318,16 @@ android/app/src/main/assets/luna.opid
   管道又抢回去。**注意**：安装/升级后，已在运行的宿主仍持有旧 DLL 映像；EXE 交互式
   升级只在探测到 Explorer 映射旧 DLL 时重启原用户 Explorer（2026-10-23 白屏回归：不能对未映射旧 DLL 的健康 shell 无条件 taskkill），
   其它宿主需各自关闭重开。
+- **状态切换即时（2026-10-25 用户要求 Windows 响应 <10ms）**：候选窗进程在主
+  候选管道客户端接入/断开时 `SetEvent` 一个命名事件
+  （`Local\opi-state-changed-v2`），状态栏线程立即醒来补读，不再等 1s 轮询；
+  无客户端时控制面回 `im=` 空状态，状态栏不再走 3 拍宽限，切到别的输入法立刻
+  隐藏。Shift 切中英、全半角、模式热键还会发一条 `{"type":"state_changed"}`
+  （窗口内容不变，只唤醒状态栏）。控制面的读请求轮询从 10ms 降到 1ms；
+  桌面进程启动时 `timeBeginPeriod(1)` 把候选管道 `Thread.sleep(2)` 的实际粒度
+  从 ~15.6ms 降到 ~1–2ms。
+  **边界**：10ms 是状态/控制路径的目标；候选窗/状态栏最终由 Compose 绘制，
+  受显示器帧率约束（60Hz ≈ 16ms/帧），这一层需真机实测。
 - 打包格式**当前只声明了 Deb**：`desktop/build.gradle.kts` 的
   `nativeDistributions { targetFormats(TargetFormat.Deb) }`，同一处的注释写着
   「Windows .msi 为验收阶段（Windows 主机上构建）」。
@@ -424,6 +446,9 @@ C:\Program Files\opi\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 
 - 默认目录 `C:\Program Files\opi`（`DefaultDirName={autopf}\opi`，可 `/DIR=` 覆盖）；
   安装前会 `taskkill /f /t /im opi.exe` 关掉运行中的旧实例（升级用，失败不拦）。
+  候选窗与状态栏各有一把 `%TEMP%\opi-candidate-<用户>.lock` /
+  `opi-statusbar-<用户>.lock` 单实例锁（2026-10-25 加候选窗锁，重复启动的
+  `opi.exe` 会自己退出，不再堆出多个常驻进程）。
 - 文件落盘后 `[Code]` 调 **64 位** `C:\Windows\System32\regsvr32.exe /s
   "{app}\app\tsf_opi.dll"`；结果只写日志
   `opi: regsvr32 /s tsf_opi.dll exit code <n>`，**非 0 也不回滚**。卸载时先结束
@@ -1277,7 +1302,7 @@ trigger **≤32 个 ASCII 字母**（`CustomPhraseCodec` 与 `engine-core/src/cu
 网络失败不打扰（自动检测静默，只有手动检测才显示原因）。
 「符号与表情」页那两个按钮打开的是与 Linux 同一份代码的窗（`SymbolsPage.kt` 的
 `SymbolWindow`，表情页在 `EmojiPage.kt`）：页面能看能翻，点选上屏（2026-10-20 起）走
-控制面 `\\.\pipe\opi-control` → 候选窗进程 broker → TSF 的 `commit`；设置窗进程
+控制面 `\\.\pipe\opi-control-v2` → 候选窗进程 broker → TSF 的 `commit`；设置窗进程
 不再需要自己持有候选管道。表情页布局与 Android `keyboard/EmojiPanel.kt`
 统一：顶栏 `[← 返回] [自有 | Emoji | 颜文字] [搜索框]`；**自有**是独立子页，4 列网格
 显示 `shared/pet/stickers/` 的 12 张小欧 PNG，点击 = 复制图片到系统剪贴板（不经过
@@ -1448,7 +1473,7 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | 3 | `DllRegisterServer` / `DllUnregisterServer` 的注册效果、管理员判定 | §3.1 |
 | 4 | TSF 能否认出这个 TIP、键盘列表里出不出现。**【订正 2026-10-19 复审】** `register()` 已补 `ITfInputProcessorProfileMgr::RegisterProfile`（判存在 + `bEnabledByDefault=TRUE`）、`ITfInputProcessorProfiles::EnableLanguageProfile` 与 `EnableLanguageProfileByDefault`；后处理改用 64 位 `WixSilentExec64`。但仍未在真 Windows 上装过修复后的包，所以「能出现在列表」仍属未验证 | §3.2、§3.3 |
 | 5 | 按键回调、composition、文本插入的**全部运行期行为** | §5.3 |
-| 6 | 候选窗与插件的命名管道连通（含 `\\.\pipe\opi` 单实例语义） | §4.3 |
+| 6 | 候选窗与插件的命名管道连通（`\\.\pipe\opi-v2`；旧版兼容 `\\.\pipe\opi`） | §4.3 |
 | 7 | 四个 `cfg(windows)` 模块**没有任何测试** —— 只有 §1.2 那条 `cargo check` 看过它们 | §1.2 |
 | 8 | 候选窗在 Windows 上的~~构建与~~**运行**：**构建已被 §2.5 覆盖**（.msi 真在 windows runner 上打出来了），**跑起来仍然一次都没有** | §2.3、§2.5 |
 | 9 | `Ctrl+'` / `Ctrl+\` / `Shift+Space` 在 Windows 上有没有被别的软件占用；**`Shift` 轻按**（2026-10-22）TSF 是否把 Shift 的按下/抬起都交给键事件 sink | §4.1 |
@@ -1478,7 +1503,7 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | 13 | **`ITfFnConfigure` 只过 `cargo check`**：控制面板里那个「属性」按钮会不会出现、点了拉不拉得起设置窗，本机无法验证；拉起的候选路径判定有主机单测（`settings_exe.rs`），Win32 那一步没有 | §4.4、`crates/tsf-opi/src/configure.rs` | 真机上「属性」可能不出现/不响应 |
 | 14 | ~~**设置窗没有 Windows 安装包**~~ **【订正 2026-10-09】** 安装包有了：`desktop/build.gradle.kts` 的 `targetFormats` 加了 `Msi`（原来只列 `Deb`），`.github/workflows/windows.yml` 在 Windows 主机上真打 `.msi`（§2.5）。剩下的缺口：**不在 Release 里、未签名、artifact 90 天过期**，拿到手得自己去 Actions 取 | §4.4、§2.5 | 装完也不会自己出现（本表 #2：没人拉起它） |
 | 15 | **W1「切中→英直接确认」在 Windows 侧只有状态机**（2026-10-10；同日深夜语义改为**一律原文**——拼音/繁体上缓冲原文、符号模式的关键字只清不提交）：`switch_mode_confirmed` 与引擎 `confirm_pending` 已就位并有两轨配对测试 + 负对照，但 `tsf.rs::toggle_mode` 的调用点**有意未接线**（插入面未通电；接线 = 改调它 + 把返回值插入文档）⇒ 现状仍同 #9 | `logic.rs`、`logic_input_method.rs`、`tsf.rs::toggle_mode` | 行为与 #9 同：打到一半切模式丢字 |
-| 16 | **桌面三件套在 Windows 上已接控制面（2026-10-20）**：符号页点选经 `\\.\pipe\opi-control` broker 送 TSF `commit`；状态栏 `--statusbar` 由 **EXE 安装器**的 HKLM64 Run 值随登录自启（卸载时删），jpackage MSI 仍没有这条 Run 值。~~`symbol_categories.tsv` 仍未拷进 MSI/EXE 资源~~ **【订正 2026-10-21】** 已随包：Compose `files` 集合把 `symbol_categories.tsv` 放进 app image 的 `app\`（与 `luna.opid`/DLL 同目录），`symbolDataCandidates` 增加该顺位；windows 工作流断言 app image 与安装目录里都有它 ⇒ 状态栏「符号大全」按钮不再打开空页 | `desktop/build.gradle.kts`、`SymbolCategories.kt`、`.github/workflows/windows.yml`、`scripts/windows/opi.iss` | EXE 装法在切换为 opi 后能看到状态栏（未切换时隐藏）；符号数据开箱可用 |
+| 16 | **桌面三件套在 Windows 上已接控制面（2026-10-20）**：符号页点选经 `\\.\pipe\opi-control-v2` broker 送 TSF `commit`；状态栏 `--statusbar` 由 **EXE 安装器**的 HKLM64 Run 值随登录自启（卸载时删），jpackage MSI 仍没有这条 Run 值。~~`symbol_categories.tsv` 仍未拷进 MSI/EXE 资源~~ **【订正 2026-10-21】** 已随包：Compose `files` 集合把 `symbol_categories.tsv` 放进 app image 的 `app\`（与 `luna.opid`/DLL 同目录），`symbolDataCandidates` 增加该顺位；windows 工作流断言 app image 与安装目录里都有它 ⇒ 状态栏「符号大全」按钮不再打开空页 | `desktop/build.gradle.kts`、`SymbolCategories.kt`、`.github/workflows/windows.yml`、`scripts/windows/opi.iss` | EXE 装法在切换为 opi 后能看到状态栏（未切换时隐藏）；符号数据开箱可用 |
 | 17 | **虚拟键盘 Windows 路径（`SendInput`）只过编译**：本机无 Windows，运行期未验证；一并如实记：Linux 的 XTEST 注入与状态栏窗口**也未做 GUI 冒烟**（本机无 Xvfb，待真桌面时间窗）——逻辑层（键表物理键码、可见性组合、注入序列映射）已测 | `desktop/` 的 `VirtualKeyboard.kt`、`docs/install/linux.md` §4.8 | 未验证 ≠ 不可用，但也别当已验证 |
 
 ### 6.3 交付这件事本身

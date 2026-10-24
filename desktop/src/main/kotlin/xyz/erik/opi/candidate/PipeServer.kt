@@ -15,6 +15,10 @@
 //!
 //! 注意：单实例管道挡不住**同机**任意进程连接（本侧与前端的信任边界是「用户会话」，
 //! 不是进程）；PIPE_REJECT_REMOTE_CLIENTS 只是纵深防御，真正的 DoS 防线是上面第 1、2 条。
+//!
+//! 2026-10-25：本类实例化两次（PRIMARY = `opi-v2`，LEGACY = `opi`），各自单实例、
+//! 共享 [CandidateModel]；取舍见 [acceptsShow]/[hidesModel] 与类注释。控制请求只走
+//! PRIMARY —— LEGACY 的对端是旧 DLL，状态不可信。
 
 package xyz.erik.opi.candidate
 
@@ -29,10 +33,8 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
 
-// ---------- 管道常量 ----------
+// 管道名/来源/取舍在 CandidateRoute.kt（纯常量与纯函数，500 行门禁拆出）。
 
-/** 管道名（与 Rust 侧 candidate_io.rs 的 PIPE_NAME 一致）。 */
-private const val PIPE_NAME = "\\\\.\\pipe\\opi"
 private const val PIPE_ACCESS_DUPLEX = 0x3
 /**
  * CreateNamedPipe 的 dwOpenMode 标志。**只约束本进程**：管道名已被别人占用时，
@@ -74,8 +76,24 @@ private const val MAX_PENDING = 1 shl 20
 
 // ---------- named pipe 服务器（JNA kernel32，本窗为 SERVER） ----------
 
-/** 管道服务器：接受 TSF 客户端连接 → 读消息更新模型 → 回复 select/翻页。 */
-class PipeServer(private val model: CandidateModel) {
+/**
+ * 管道服务器：接受 TSF 客户端连接 → 读消息更新模型 → 回复 select/翻页。
+ *
+ * 候选窗进程开两个实例：[CandidateSource.PRIMARY]（`opi-v2`，新版 DLL）与
+ * [CandidateSource.LEGACY]（`opi`，升级前已打开的应用里的旧 DLL）。两者共用一个
+ * [CandidateModel]：PRIMARY 的消息优先，LEGACY 只在 PRIMARY 没显示时补位 ——
+ * 这样旧宿主占着旧管道既不影响新前台应用，也仍能给自己出候选。
+ *
+ * 控制面（`opi-control-v2`）只接 PRIMARY：旧 DLL 的状态不可信（它可能永远不
+ * 释放），状态栏读不到就隐藏，不会出现「切到别的输入法条还在」。
+ */
+internal class PipeServer(
+    private val model: CandidateModel,
+    private val pipeName: String = PRIMARY_PIPE_NAME,
+    private val source: CandidateSource = CandidateSource.PRIMARY,
+    /** 客户端接入/断开时回调（PRIMARY 用它 `SetEvent` 唤醒状态栏；LEGACY 不用）。 */
+    private val onClientChanged: (() -> Unit)? = null,
+) {
 
     /**
      * 最近一次客户端的连接句柄（UI 点击 select/翻页用）。读写全部在 [connLock] 下 ——
@@ -99,13 +117,22 @@ class PipeServer(private val model: CandidateModel) {
     private val ctlLock = Any()
 
     fun start() {
-        thread(isDaemon = true, name = "opi-pipe") { serveLoop() }
+        thread(isDaemon = true, name = "opi-pipe-$source") { serveLoop() }
+    }
+
+    /** 只有 PRIMARY 能唤醒状态栏；LEGACY 对端是旧 DLL，状态不可信。 */
+    private fun notifyClientChanged() {
+        if (source == CandidateSource.PRIMARY) onClientChanged?.invoke()
     }
 
     private fun serveLoop() {
         while (true) {
             // pipe 保持可空只为 finally 判「本周期是否建出了句柄」；created 是实际句柄。
             var pipe: WinNT.HANDLE? = null
+            // 只有真正接上过客户端，断开时才该清窗口。两条管道并存时，另一条管道
+            // 创建失败/空转也会走到 finally —— 不设这个标记，PRIMARY 的空转会反复
+            // 把 LEGACY 正在显示的候选藏掉。
+            var hadClient = false
             try {
                 val created = createPipe()
                 if (created == null) {
@@ -114,7 +141,10 @@ class PipeServer(private val model: CandidateModel) {
                 }
                 pipe = created
                 if (!connect(created)) continue // 没连上：finally 关句柄，下一轮重建
+                hadClient = true
                 synchronized(connLock) { lastClientPipe = created }
+                // 状态栏立刻补读（切换输入法/切回 opi 不再等 1s 轮询）。
+                notifyClientChanged()
                 // 新宿主连上 = 用户回到输入框：补发断开期间记下的 clearuserwords。
                 // 必须在 readLoop 之前发，但**不能在这里等应答** —— 应答要从 readLoop
                 // 读回来，同步等会死锁；clear 幂等，发出去即可（应答由 handleLine 丢弃）。
@@ -131,14 +161,16 @@ class PipeServer(private val model: CandidateModel) {
                     return // 中断只在关闭路径上出现（Thread.sleep），如实退出而非忙转
                 }
             } finally {
-                // 读循环退出 = 客户端消失（TSF 宿主崩溃/被任务管理器结束/用户注销），
-                // 此时收不到 hide 消息。必须自行隐藏：窗口是置顶+无边框+不可聚焦且无
-                // 关闭入口，漏掉这一步就是一扇关不掉的窗，只能杀进程。
-                // 放 finally = 异常路径同样执行「隐藏 + 关句柄 + 重建」，不留残窗口。
-                model.visible = false
-                // 位置也回到「没收到过」：上一个宿主的 caret 坐标不能带给下一个应用
-                // （否则下一个连接的首个 show 会先用旧坐标画一帧，review 2026-10-22）。
-                model.positioned = false
+                // 读循环退出 = 该管道的客户端消失（TSF 宿主崩溃/被任务管理器结束/
+                // 用户注销）。只清**当前由它驱动**的窗口：legacy 宿主断开不能把
+                // PRIMARY 正在显示的候选一起藏掉（见 hidesModel）。
+                if (hadClient && hidesModel(model.source, source)) {
+                    model.visible = false
+                    model.source = CandidateSource.NONE
+                    // 位置也回到「没收到过」：上一个宿主的 caret 坐标不能带给下一个应用
+                    // （否则下一个连接的首个 show 会先用旧坐标画一帧，review 2026-10-22）。
+                    model.positioned = false
+                }
                 failPendingCtl() // TSF 断开：挂在等应答的控制请求立刻失败，别干等到超时
                 val h = pipe
                 if (h != null) {
@@ -152,6 +184,9 @@ class PipeServer(private val model: CandidateModel) {
                         Kernel32.INSTANCE.CloseHandle(h)
                     }
                 }
+                // 断开 = 当前输入法可能已切走：句柄已置空后再通知状态栏补读
+                // （无客户端会拿到 im= 空，立即隐藏）。
+                if (hadClient) notifyClientChanged()
             }
         }
     }
@@ -162,7 +197,7 @@ class PipeServer(private val model: CandidateModel) {
         // W32APIFunctionMapper 负责，且只有这条路径之后 Native.getLastError() 才拿得到
         // 本次调用的错误码（见 connect）。
         val h = Kernel32.INSTANCE.CreateNamedPipe(
-            PIPE_NAME,
+            pipeName,
             PIPE_ACCESS_DUPLEX or FILE_FLAG_FIRST_PIPE_INSTANCE,
             PIPE_TYPE_BYTE or PIPE_READMODE_BYTE or PIPE_WAIT or PIPE_REJECT_REMOTE_CLIENTS,
             MAX_INSTANCES, PIPE_BUF, PIPE_BUF, 0, null,
@@ -261,6 +296,8 @@ class PipeServer(private val model: CandidateModel) {
                     // 窗口可见、内容空白，且只有下一条 hide 才收得回来）。对端是不可信
                     // 输入，见文件头；真发端 CandidateClient::show 永远带 buffer。
                     val buffer = (obj["buffer"] as? JVal.JStr)?.v ?: return
+                    // 旧宿主不能盖掉新前台应用；PRIMARY 的 show 随时可以接管。
+                    if (!acceptsShow(model.source, source)) return
                     model.buffer = buffer
                     model.candidates = ((obj["candidates"] as? JVal.JArr)?.v
                         ?: emptyList()).mapNotNull { (it as? JVal.JStr)?.v }
@@ -268,9 +305,19 @@ class PipeServer(private val model: CandidateModel) {
                     model.pageCount = ((obj["page_count"] as? JVal.JNum)?.v ?: 1L).toInt().coerceAtLeast(1)
                     model.mode = (obj["mode"] as? JVal.JStr)?.v ?: "pinyin"
                     model.visible = true
+                    model.source = source
                 }
-                "hide" -> model.visible = false
+                "hide" -> if (hidesModel(model.source, source)) {
+                    model.visible = false
+                    model.source = CandidateSource.NONE
+                }
+                // 状态变了但窗口内容不变（Shift 切中英、全半角、模式热键）：
+                // 只唤醒状态栏，不动候选窗（2026-10-25 <10ms 响应）。
+                "state_changed" -> notifyClientChanged()
                 "position" -> {
+                    // 只让当前驱动窗口的那条管道改位置：旧宿主后台发来的 caret 不能
+                    // 把新前台应用的候选条挪走。
+                    if (model.source != source && model.source != CandidateSource.NONE) return
                     // x/y 单位 = AWT 逻辑像素（约定见 Main.kt 头注释；勿按设备像素或
                     // density 缩放）。
                     var got = false

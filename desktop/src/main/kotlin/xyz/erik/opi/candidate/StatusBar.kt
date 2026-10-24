@@ -7,15 +7,16 @@
 //! 进程形态：`opi --statusbar`（Linux 随包装进 `/etc/xdg/autostart/` 随会话
 //! 自启；见 build.gradle.kts 的 injectSettingsDesktopEntry）。**独立进程**，与候选窗
 //! 进程无关 —— 这一条决定了两件事：
-//!  1. 设置、可见性靠**轮询配置文件**同步（见 [StatusBarApp] 的 1s 轮询）；
+//!  1. 设置靠**轮询配置文件**同步；输入法状态另有事件唤醒（见 [StatusBarApp]）；
 //!  2. 符号页的上屏**按平台两条路**（见 [StatusBarApp] 的 `symbolCommit` 参数与
 //!     SymbolsPage.kt 头注释）：Linux = `opi-ctl insert`（D-Bus → addon 提交，与进程
-//!     拓扑无关）；Windows = 控制面 `\\.\pipe\opi-control` → 候选窗进程 broker →
+//!     拓扑无关）；Windows = 控制面 `\\.\pipe\opi-control-v2` → 候选窗进程 broker →
 //!     TSF（ControlPlane.kt）。状态读与按钮动作同一条控制面。
 //!
 //! Windows：EXE 安装器/登录 Run 会拉起 `--statusbar`（scripts/windows/opi.iss），
 //! 但**只在 TSF 激活时显示**：控制面读不到状态（im 为空）就隐藏，切换回 opi 后
-//! 1s 轮询让它出现（2026-10-21 用户裁决「切换到这个输入法才显示」）。Linux 仍
+//! 事件立刻让它出现，1s 轮询兜底（2026-10-21 用户裁决「切换到这个输入法才显示」；
+//! 2026-10-25 用户要求切走/切回都要快）。Linux 仍
 //! 保留「未知 ⇒ 维持可见」的旧语义，避免 fcitx5 旧 glue 缺 im= 时闪条。
 //!
 //! 条上按钮（从左到右 = [StatusBarButton] 的枚举序）：小欧 / 中英 / 。，标点(双态) /
@@ -42,8 +43,9 @@
 //! 并把根盒裁成圆角（[barShape]）—— Linux 不乘、保持直角，行为不变。
 //!
 //! **状态实时可见**（2026-10-10 深夜裁决）：简/繁、中/英、月相随输入法真实状态翻转。
-//! 状态 = `opi-ctl state`（契约见 Actions.kt），1s 轮询 + **每次按钮动作返回后立刻
-//! 补读一次**（「即时生效」的落点，见 [actionWithStateRefresh]）。读不到/坏串/缺键
+//! 状态 = `opi-ctl state`（契约见 Actions.kt），1s 轮询 + Windows 客户端接入/断开
+//! 事件 + **每次按钮动作返回后立刻补读一次**（「即时生效」的落点，见
+//! [actionWithStateRefresh]）。读不到/坏串/缺键
 //! ⇒ 中性缺省（中/简/半月）—— 旧原则「读不到状态就不画成当前状态」被本裁决取代，
 //! 缺省语义定案见 Actions.kt 的 [ImeState]。
 //!
@@ -55,7 +57,7 @@
 //! 窗口图标（小欧）那条裁决不受影响 —— 说的是「任务栏条目」，不是窗口图标。
 //!
 //! **切到别的输入法就藏**（用户裁决 2026-10-10 下午）：`state` 的 `im=` 位非空且 ≠ "opi"
-//! ⇒ 整条隐藏；切回 opi 由 1s 轮询让它自己出现；缺键/空串 = 未知 ⇒ 维持现状（不闪）。
+//! ⇒ 整条隐藏；切回 opi 由事件/1s 轮询让它自己出现；缺键/空串 = 未知 ⇒ 维持现状（不闪）。
 //! 判定全在 [barVisible]（纯函数，四态有单测钉住）。
 
 package xyz.erik.opi.candidate
@@ -102,11 +104,13 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import xyz.erik.opi.pet.OpiPetWindowIcon
 
 // ---------- 配色与尺寸 ----------
@@ -140,7 +144,7 @@ private fun barPosition(widthDp: Int): WindowPosition {
 @Composable
 fun StatusBarApp(symbolCommit: (String) -> String?) {
     var s by remember { mutableStateOf(loadSettings()) }
-    // 起始 = 中性缺省，首拍轮询（≤1s）补上真实状态 —— 不在组合期做进程调用。
+    // 起始 = 中性缺省，循环第一拍立即补上真实状态 —— 不在组合期做进程调用。
     var imeState by remember { mutableStateOf(ImeState()) }
     // 连续「状态读不到」的拍数：短暂抖动保留上一条状态（不闪），连续失败才回到中性
     // （Windows 上 im 空 = 隐藏）。没有这个上限，宿主进程退出后条会停在旧状态不收。
@@ -148,7 +152,7 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
     // 模式档位（模式按钮面用）。2026-10-14 起 `opi-ctl state` 带 `mode=` 位（modeplumb 落地），
     // 所以真值来自轮询、不是本进程的记忆：**点击 = 乐观更新，轮询 = 权威**（下面每拍
     // `mode = barMode(st)`）。两者不会打架：`opi-ctl mode` 只在引擎切完之后才返回新 token，
-    // 所以下一拍 state 必然与它一致。初值 = 拼音（用户裁决的默认档；首拍 ≤1s 就补齐）。
+    // 所以下一拍 state 必然与它一致。初值 = 拼音（用户裁决的默认档；首拍立即补齐）。
     var mode by remember { mutableStateOf(MODE_DEFAULT) }
     var settingsOpen by remember { mutableStateOf(false) }
     var vkOpen by remember { mutableStateOf(false) }
@@ -158,21 +162,33 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
     // 1s 轮询两件事，并进这一个循环：设置文件（设置窗可能在**另一个进程**里，进程间
     // 没有通知通道）+ 输入法状态（简/繁、中/英、月相要跟着真实状态走，用户裁决
     // 2026-10-10 深夜）。一拍 = 一次小文件读 + 一个短命进程，代价可忽略。
+    //
+    // 2026-10-25：Windows 上另有一条**事件**通道（StatusEventWatcher）—— TSF 客户端
+    // 接入/断开候选管道时候选窗进程 SetEvent，本循环立刻醒来补读，不再等 1s；无客户端
+    // 时控制面直接回 `im=` 空状态，状态栏立即隐藏（用户要求切走别的输入法要快）。
+    val stateEvents = remember { Channel<Unit>(Channel.CONFLATED) }
     LaunchedEffect(Unit) {
+        StatusEventWatcher { stateEvents.trySend(Unit) }.start()
         while (true) {
-            delay(1000)
             // ⚠️ 一拍 = 一次小文件读 + 一个短命进程（`opi-ctl state`，超时 1.5s）：必须挪出
             // 组合线程（= AWT EDT）。fcitx5 的 D-Bus 一忙，`opi-ctl` 答不上来的那 1.5s 里
             // EDT 就停摆 —— 用户报的「切换输入法状态栏卡死」正是这条（2026-10-13 jstack
             // 实抓 EDT 停在 ProcessImpl.waitFor ← Actions.runCapture ← readImeState）。
             // 循环仍是单条协程顺序执行：不可重入、次序（设置→状态）与超时值都不变。
-            val (next, st) = statusBarGuard("状态栏轮询") {
+            val read = statusBarGuard("状态栏轮询") {
                 withContext(Dispatchers.IO) { loadSettings() to readImeStateOrNull() }
-            } ?: continue
+            }
+            if (read == null) {
+                // 守卫层自身失败（不是一次状态读失败）：退避，别忙转。
+                withTimeoutOrNull(200) { stateEvents.receive() }
+                continue
+            }
+            val (next, st) = read
             if (next != s) s = next // 变了才写状态：否则每秒一次无谓重组
             // 读失败（null）：先保留上一次状态（一次管道抖动不把用户正要点的按钮变没），
             // 但连续 3 拍（≈3s）都读不到就回到中性 —— 否则宿主退出后条会永远停在旧状态。
-            // 计数/清空判定是纯函数（nextStatePoll，单测钉住第 3 拍即清）。
+            // 计数/清空判定是纯函数（nextStatePoll，单测钉住第 3 拍即清）。Windows 的
+            // 「无客户端」不是读失败：控制面回 im= 空状态，readOk=true，立即隐藏。
             val poll = nextStatePoll(stateFails, readOk = st != null, imPresent = imeState.im.isNotEmpty())
             stateFails = poll.fails
             if (poll.clear) imeState = ImeState()
@@ -180,6 +196,8 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
                 if (st != imeState) imeState = st
                 mode = barMode(st) // 档位跟着 state 走（缺 mode 位的老插件 ⇒ barMode 回落默认档）
             }
+            // 事件来了立即重读；没有事件就 1s 后再来一轮（设置文件也要同步）。
+            withTimeoutOrNull(1000) { stateEvents.receive() }
         }
     }
     LaunchedEffect(notice) {

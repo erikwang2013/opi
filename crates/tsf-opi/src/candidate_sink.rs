@@ -78,4 +78,9 @@ impl TsfSink for CandidateSink {
     fn disconnect(&self) {
         self.client.disconnect();
     }
+
+    /// 状态变了 → 候选窗进程唤醒状态栏（不经过 1s 轮询）。
+    fn on_state_changed(&self) {
+        self.client.state_changed();
+    }
 }

@@ -7,7 +7,7 @@
 //! （那边是键区内嵌面板，这里是独立窗）。
 //!
 //! 上屏通路**两条**，由入口注入的 `onCommit` 决定（见 Main.kt 的 symbolCommit）：
-//! · Windows = 控制面 `\\.\pipe\opi-control` → 候选窗进程 broker → TSF 的 `commit`
+//! · Windows = 控制面 `\\.\pipe\opi-control-v2` → 候选窗进程 broker → TSF 的 `commit`
 //!   （ControlPlane.kt；TSF 在文档插入点插入，不动候选/composition）。状态栏/设置
 //!   进程都走这条，不再受「候选管道在候选窗进程手里」的限制；候选进程没起/TSF 没
 //!   连接时把失败如实显示。本轮的拉起触发器仍归安装脚本（未改）。

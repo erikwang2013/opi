@@ -128,6 +128,7 @@ impl TsfTextService {
             logic.snapshot()
         };
         push_state(&*self.sink, &snapshot);
+        self.sink.on_state_changed(); // 模式/语言变了 → 状态栏立刻补读
         BOOL(1)
     }
 
@@ -220,13 +221,15 @@ impl TsfTextService {
             if !hotkey_should_act(states) {
                 return BOOL(1);
             }
-            let mut logic = match self.state.lock_logic() {
-                Some(g) => g,
-                None => return BOOL(1), // 中毒锁：同下，吞键
-            };
-            logic.toggle_fullwidth();
-            // 不刷候选面板：这个开关只改**后续**的标点映射，不动缓冲也不动候选
-            // （`Engine::toggle_fullwidth` 只翻一个 bool）。刷了是白推一帧。
+            {
+                let mut logic = match self.state.lock_logic() {
+                    Some(g) => g,
+                    None => return BOOL(1), // 中毒锁：同下，吞键
+                };
+                logic.toggle_fullwidth();
+                // 不刷候选面板：这个开关只改**后续**的标点映射，不动缓冲也不动候选。
+            }
+            self.sink.on_state_changed(); // 状态栏的全/半角图标要立刻翻
             return BOOL(1);
         }
         // 锁内只跑引擎并抓快照，**立刻放锁**。后面三件都可能在宿主 UI 线程上阻塞：

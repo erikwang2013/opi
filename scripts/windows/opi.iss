@@ -17,7 +17,7 @@
 ; best-effort and can never roll back the install.
 ;
 ; Build (CI or local, on Windows; ISCC is the Inno Setup 6 compiler):
-;   ISCC.exe /DAppVersion=1.25.2 ^
+;   ISCC.exe /DAppVersion=1.25.3 ^
 ;            /DAppImageDir=C:\path\to\build\compose\binaries\main\app\opi ^
 ;            /DOutputDir=C:\path\to\dist scripts\windows\opi.iss
 ;
@@ -349,14 +349,18 @@ begin
   RegDeleteValue(HKEY_CURRENT_USER, RunKey, 'opi');
   RegDeleteValue(HKEY_CURRENT_USER, RunKey, 'opi-statusbar');
 
-  // StatusBarLock.kt puts its single-instance lock in XDG_RUNTIME_DIR or %TEMP%;
-  // killing the process releases the OS lock but leaves the file behind.
+  // StatusBarLock.kt / CandidateLock.kt put their single-instance locks in
+  // XDG_RUNTIME_DIR or %TEMP%; killing the process releases the OS lock but
+  // leaves the file behind.
   LockBase := GetEnv('XDG_RUNTIME_DIR');
   if LockBase = '' then
     LockBase := GetEnv('TEMP');
   LockPath := LockBase + '\opi-statusbar-' + GetUserNameString() + '.lock';
   if FileExists(LockPath) and (not DeleteFile(LockPath)) then
     Log('opi: could not remove statusbar lock ' + LockPath);
+  LockPath := LockBase + '\opi-candidate-' + GetUserNameString() + '.lock';
+  if FileExists(LockPath) and (not DeleteFile(LockPath)) then
+    Log('opi: could not remove candidate lock ' + LockPath);
 end;
 
 #include "opi-code-trash.iss"

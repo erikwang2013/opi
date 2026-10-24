@@ -4,7 +4,7 @@
 //! 设置窗「清空用户词」（2026-10-23）：引擎学习记忆 + 本地缓存文件，两处一起清。
 //!
 //! 引擎在**输入法进程**里（Linux fcitx5 插件 / Windows TSF DLL），设置窗碰不到它 ——
-//! 走与状态栏动作同一条控制面：Windows `\\.\pipe\opi-control` → TSF；Linux
+//! 走与状态栏动作同一条控制面：Windows `\\.\pipe\opi-control-v2` → TSF；Linux
 //! `opi-ctl clearuserwords` → D-Bus Trigger。两端的服务端动作同名，见
 //! `crates/tsf-opi/src/ctl.rs` 与 `crates/fcitx5-opi/cpp/opi_engine.h`。
 //!

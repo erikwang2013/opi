@@ -7,17 +7,22 @@
 //! 头注释互为镜像，改协议须同步两处）
 //!
 //! ```text
-//! 管道名：\\.\pipe\opi（单实例，字节流模式，'\n' 分帧，UTF-8）
+//! 管道名：新版 `\\.\pipe\opi-v2`，旧版兼容 `\\.\pipe\opi`（两条都监听，
+//! 各单实例；字节流模式，'\n' 分帧，UTF-8）。**旧管道名永不改**，见
+//! PipeServer.kt 的 PRIMARY_PIPE_NAME / LEGACY_PIPE_NAME。
 //! 角色：本窗口为 SERVER 监听管道；TSF 插件进程为 CLIENT（窗口启动后连接）。
 //! 单实例的共享方式：宿主失活（焦点切走/切换应用）时客户端主动断开
 //! （crates/tsf-opi/src/tsf.rs 的 Deactivate → TsfSink::disconnect），本侧
 //! serveLoop 的 finally 隐藏窗口并重建实例，下一个应用按键时再惰性连上。
+//! 2026-10-25 起升级前已打开的应用仍连旧管道：新版 DLL 走 v2，旧 DLL 走 opi，
+//! 两条互不抢占，覆盖安装后不必注销（旧应用重启一次即换到 v2）。
 //!
 //! TSF(CLIENT) → 本窗(SERVER)：
 //!   show      {"type":"show","buffer":"ni","candidates":["你","尼",...],
 //!              "page":1,"page_count":3,"mode":"pinyin"}
 //!             （page/page_count 为 1 起；candidates 为当前页文本）
 //!   hide      {"type":"hide"}
+//!   state_changed {"type":"state_changed"}   // 状态变了、窗口内容不变；唤醒状态栏
 //!   position  {"type":"position","x":120,"y":340}
 //!             // caret 位置（2026-10-22 起真发：TSF 每次 composition 变化取
 //!             // caret，窗口贴着输入处；发端见 crates/tsf-opi/src/caret.rs）。
@@ -97,7 +102,7 @@ private const val FIXED_X = 200
 private const val FIXED_Y = 320
 
 /** 候选窗渲染状态：由管道服务器线程更新，Compose 层读取。 */
-class CandidateModel {
+internal class CandidateModel {
     var visible by mutableStateOf(false)
     var buffer by mutableStateOf("")
     var candidates by mutableStateOf(emptyList<String>())
@@ -106,6 +111,8 @@ class CandidateModel {
     var mode by mutableStateOf("pinyin")
     var x by mutableIntStateOf(FIXED_X)
     var y by mutableIntStateOf(FIXED_Y)
+    /** 当前 show 来自哪条管道：候选窗上的点击/翻页要回给同一条（2026-10-25）。 */
+    var source by mutableStateOf(CandidateSource.NONE)
     /**
      * 是否收到过真实 caret 位置（`position` 消息）。否 = 用横条自己的默认落点
      * （[candidateBarPosition]：按宽度居中，避免长条超出屏幕）；是 = 跟 caret 走。
@@ -115,7 +122,20 @@ class CandidateModel {
 
 // ---------- 入口 ----------
 
-fun main(args: Array<String>) = application {
+fun main(args: Array<String>) {
+    // Windows 默认计时器粒度会把 2ms 轮询合并成 ~15.6ms；IME 响应要压到 10ms 内。
+    beginHighResolutionTimers()
+    // 候选窗（Windows 无 --statusbar/--settings）只能有一个实例：重复实例抢不到
+    // `opi-v2` 管道时会一直重试而不是退出，现场表现为多个 opi.exe 常驻。
+    val candidate = isWindows() && "--statusbar" !in args && "--settings" !in args
+    if (candidate && !acquireCandidateLock()) {
+        println("[opi] 已有一个候选窗在跑，本实例退出")
+        exitProcess(0)
+    }
+    runApp(args)
+}
+
+private fun runApp(args: Array<String>) = application {
     // 三个模式共用一个可执行文件（jpackage 只有一份 mainClass / 一个安装包 / 一套图标）：
     //   --settings        = 「属性设置」窗（两个平台都有）
     //   --statusbar       = 状态栏悬浮条（Linux 随会话自启，见 build.gradle.kts 的
@@ -163,9 +183,22 @@ fun main(args: Array<String>) = application {
         LocalFontFamilyResolver provides remember { createFontFamilyResolver() },
     ) {
         val model = remember { CandidateModel() }
-        val server = remember { PipeServer(model).also { it.start() } }
-        // 状态栏/设置进程的控制面 broker（ControlPlane.kt）：本进程是唯一连着 TSF 的一端。
-        remember { ControlServer(server).also { it.start() } }
+        // 2026-10-25 热升级隔离：新版 DLL 连 opi-v2，升级前已打开的应用里的旧 DLL
+        // 仍连 opi。两条都服务：旧应用照常出候选，新应用不再被旧宿主占住管道。
+        val primary = remember {
+            PipeServer(
+                model, PRIMARY_PIPE_NAME, CandidateSource.PRIMARY,
+                onClientChanged = { StatusEvent.signal() },
+            ).also { it.start() }
+        }
+        val legacy = remember {
+            PipeServer(model, LEGACY_PIPE_NAME, CandidateSource.LEGACY).also { it.start() }
+        }
+        // 控制面只接 PRIMARY（旧 DLL 的 im= 不可信，状态栏据此隐藏而不是卡住）。
+        remember { ControlServer(primary).also { it.start() } }
+        // 候选窗点击/翻页回到正在驱动窗口的那条管道。
+        fun activeServer(): PipeServer =
+            if (model.source == CandidateSource.LEGACY) legacy else primary
         // 外观：状态栏/设置窗只会写 settings.ini（**另一个进程**），本进程与状态栏
         // 用同一条既有机制跟上 —— 1s 读一次小文件；首拍立即读，不等 1s。
         // · 皮肤（2026-10-22 用户报障「点击状态栏logo切换背景，候选词框的背景没变化」）
@@ -215,7 +248,7 @@ fun main(args: Array<String>) = application {
         // 以省下 Skiko/D3D 的开销，但 2026-10-21 真机验证发现：Compose 1.11 的
         // `application` 在**没有任何 Window** 时会在 `Recomposer.close/join` 后直接返回
         // （反编译 Application_desktopKt$awaitApplication$2$1$2 确认），于是候选进程
-        // 启动即退出 —— `\\.\pipe\opi` / `\\.\pipe\opi-control` 都不存在，候选窗与
+        // 启动即退出 —— `\\.\pipe\opi-v2` / `\\.\pipe\opi-control-v2` 都不存在，候选窗与
         // 状态栏都拿不到 TSF 状态。**必须保留一个 Window 让 application 活着**；
         // 不可见时不绘制（见 Skiko Direct3DRedrawer.frameDispatcher 的 isShowing 分支）。
         Window(
@@ -235,9 +268,9 @@ fun main(args: Array<String>) = application {
             CompositionLocalProvider(LocalBarPalette provides skinColors(skin)) {
                 CandidatePanel(
                     model = model,
-                    onSelect = server::sendSelect,
-                    onNext = server::sendNextPage,
-                    onPrev = server::sendPrevPage,
+                    onSelect = { activeServer().sendSelect(it) },
+                    onNext = { activeServer().sendNextPage() },
+                    onPrev = { activeServer().sendPrevPage() },
                     windowSize = barSize,
                     fontScale = fontScale,
                 )

@@ -4,7 +4,7 @@
 //! Windows 状态栏/设置 → TSF 的**控制面**（平台中立部分）。
 //!
 //! 通道拓扑：候选窗进程（`desktop/`）是 broker；状态栏/设置进程连
-//! `\\.\pipe\opi-control`，broker 把请求转发到它和 TSF 之间已有的候选管道
+//! `\\.\pipe\opi-control-v2`，broker 把请求转发到它和 TSF 之间已有的候选管道
 //! （`candidate_io.rs` 的 `{"type":"ctl"}` / `{"type":"ctl_result"}`）。
 //! 本模块只管**请求/应答的语义**，不碰管道/COM —— 故 Linux 主机可单测。
 //!

@@ -106,6 +106,18 @@ class ControlPlaneTest {
         }
     }
 
+    @Test
+    fun `no client state is an explicit empty-im state that hides the bar`() {
+        val reply = parseControlReply(controlNoClientStateLabel())!!
+        assertTrue("无客户端也必须是成功应答（不是超时）", reply.ok)
+        val st = parseImeState(reply.state!!)
+        assertEquals("", st.im)
+        assertFalse(
+            "Windows 状态栏见到空 im 必须立即隐藏（2026-10-25 延迟要求）",
+            barVisible(listOf(StatusBarButton.LOGO), st.im, requireActive = true),
+        )
+    }
+
     // ---------- broker 判定 ----------
 
     private fun forward(line: String): ControlDispatch.Forward {

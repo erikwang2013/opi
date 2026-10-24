@@ -5,12 +5,15 @@
 //!
 //! 为什么要有它：Windows 的引擎状态在 TSF DLL 里（每个宿主进程一份），而状态栏/
 //! 设置是另外的 JVM 进程；TSF 只与**候选窗进程**保持候选管道连接。于是候选窗进程
-//! 当 broker：本文件开第二条本机命名管道 `\\.\pipe\opi-control` 收桌面请求，转成
+//! 当 broker：本文件开第二条本机命名管道 `\\.\pipe\opi-control-v2` 收桌面请求，转成
 //! 候选管道上的 `ctl` 请求，把 TSF 的 `ctl_result` 原样回给调用方。
 //!
+//! 2026-10-25 与候选管道一起升 v2：旧版候选窗进程还占着 `opi-control`，新版状态栏
+//! 必须只跟**新版**候选窗对话；旧 DLL 的状态（可能永远不释放）不能把条卡住。
+//!
 //! ```text
-//! 状态栏/设置 --(本文件 client)--> \\.\pipe\opi-control --(PipeServer.requestCtl)-->
-//! \\.\pipe\opi --> TSF（crates/tsf-opi/src/ctl.rs 执行）--> 原路返回
+//! 状态栏/设置 --(本文件 client)--> \\.\pipe\opi-control-v2 --(PipeServer.requestCtl)-->
+//! \\.\pipe\opi-v2 --> TSF（crates/tsf-opi/src/ctl.rs 执行）--> 原路返回
 //! 请求：{"op":"state"} / {"action":"punct","op":"action"} /
 //!       {"op":"search","query":"smile"} / {"op":"commit","text":"😄"} /
 //!       {"op":"reload"}（设置窗保存后让 TSF 重读 settings.ini + 词库）
@@ -50,7 +53,7 @@ import kotlin.concurrent.thread
 // ---------- 常量 ----------
 
 /** broker 管道名（TSF 侧不连它；只在桌面进程之间）。 */
-private const val CONTROL_PIPE_NAME = "\\\\.\\pipe\\opi-control"
+private const val CONTROL_PIPE_NAME = "\\\\.\\pipe\\opi-control-v2"
 private const val PIPE_ACCESS_DUPLEX = 0x3
 private const val FILE_FLAG_FIRST_PIPE_INSTANCE = 0x80000
 private const val PIPE_TYPE_BYTE = 0x0
@@ -80,6 +83,20 @@ private val CONTROL_ACTIONS =
 
 /** broker 断线时补发 clearuserwords 的 op 字段串（与 controlDispatch 产出的形状一致）。 */
 internal const val CLEAR_USER_WORDS_OP_FIELDS = "\"action\":\"clearuserwords\",\"op\":\"action\""
+
+/** state 请求的 op 字段串（[ControlServer.forward] 用它区分「无客户端」与普通超时）。 */
+internal const val STATE_OP_FIELDS = "\"op\":\"state\""
+
+/**
+ * 没有 PRIMARY 客户端时的状态：`im=` 为空。状态栏 `barVisible(requireActive=true)`
+ * 见到空 im 立即隐藏（2026-10-25 用户要求切走别的输入法要快，不再等 3 拍宽限）。
+ * 这不是「读失败」——它是「当前没有新版 opi 客户端」，状态栏必须可以据此立即动作。
+ */
+internal const val NO_CLIENT_STATE = "lang=zh;trad=off;punct=on;fw=off;im=;mode=pinyin;enpro=off"
+
+/** broker 对「无客户端」的 state 应答（形状与 TSF 的 ctl_result 相同）。 */
+internal fun controlNoClientStateLabel(): String =
+    """{"ok":true,"state":"$NO_CLIENT_STATE","type":"ctl_result"}"""
 
 /** TSF 未连接时 broker 已记下清除请求，给调用方的文案（设置窗原样接在「已清本地缓存；」后）。 */
 internal const val CLEAR_QUEUED_MESSAGE =
@@ -152,7 +169,7 @@ internal sealed interface ControlDispatch {
 internal fun controlDispatch(line: String): ControlDispatch {
     val obj = parseLine(line) ?: return ControlDispatch.Reject(controlErrorLabel("请求不是 JSON 对象"))
     return when (val op = (obj["op"] as? JVal.JStr)?.v) {
-        "state" -> ControlDispatch.Forward("\"op\":\"state\"", STATE_TIMEOUT_MS)
+        "state" -> ControlDispatch.Forward(STATE_OP_FIELDS, STATE_TIMEOUT_MS)
         "action" -> {
             val action = (obj["action"] as? JVal.JStr)?.v
                 ?: return ControlDispatch.Reject(controlErrorLabel("缺 action"))
@@ -212,7 +229,7 @@ internal fun controlCall(request: String, timeoutMs: Long = ACTION_TIMEOUT_MS + 
         }
         // 忙 = broker 正在服务另一条连接（单实例转一圈很快）；文件不存在 = 候选进程没起。
         if (Native.getLastError() != ERROR_PIPE_BUSY || System.nanoTime() >= deadline) return null
-        Thread.sleep(20)
+        Thread.sleep(1) // 10ms 响应预算：忙等别再加 20ms（候选进程已把计时器粒度降到 1ms）
     }
     // 循环只有「赋了非空句柄后 break」与「return null」两种出口 ⇒ 这里必非空。
     val h = pipe
@@ -306,7 +323,7 @@ internal fun controlReload(): Boolean =
 // ---------- broker（候选窗进程内的服务端） ----------
 
 /**
- * `\\.\pipe\opi-control` 的服务端：一次连接一条请求，串行处理。
+ * `\\.\pipe\opi-control-v2` 的服务端：一次连接一条请求，串行处理。
  * 接到后交给 [PipeServer.requestCtl] 转发给 TSF，把应答原样写回并断开。
  * 专用线程 ⇒ 不阻塞候选窗 UI，也不阻塞候选管道的读线程。
  */
@@ -355,7 +372,9 @@ internal class ControlServer(private val pipes: PipeServer) {
      */
     private fun forward(d: ControlDispatch.Forward): String {
         var queued = false
+        var noClient = false
         val line = pipes.requestCtl(d.opFields, d.timeoutMs) {
+            noClient = true
             if (d.queueClearIfDisconnected) {
                 pipes.queueClearForReconnect()
                 queued = true
@@ -363,6 +382,9 @@ internal class ControlServer(private val pipes: PipeServer) {
         }
         return when {
             line != null -> line
+            // 无客户端 ≠ 超时：给状态栏一个明确的 `im=` 空状态，让它立刻隐藏。
+            // 有客户端但应答超时仍走失败，状态栏保留上一次状态（不闪）。
+            noClient && d.opFields == STATE_OP_FIELDS -> controlNoClientStateLabel()
             queued -> controlQueuedLabel(CLEAR_QUEUED_MESSAGE)
             else -> controlErrorLabel("输入法未连接或应答超时")
         }
@@ -405,7 +427,9 @@ internal class ControlServer(private val pipes: PipeServer) {
             } else if (System.nanoTime() >= deadline) {
                 return null
             } else {
-                Thread.sleep(10)
+                // 客户端连上后通常已把整行写好；1ms 轮询把「连接→读到请求」这一跳
+                // 压到 10ms 预算内（原 10ms 睡眠会直接吃掉整个预算）。
+                Thread.sleep(1)
             }
         }
         return null

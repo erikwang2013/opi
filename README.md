@@ -244,7 +244,7 @@ crates/                        # Rust 工作区（crate 清单以根 Cargo.toml 
   tsf-opi/                     # Windows TSF 插件：Rust 逻辑 + COM 服务器 + 候选窗线协议
     src/dict_path.rs           #   词库查找顺序：环境变量 → DLL 同目录 → %LOCALAPPDATA% → 内置回退
     src/settings.rs            #   属性设置读侧（%LOCALAPPDATA%\opi\settings.ini，键名与设置窗逐字对应；控制面 reload 立即重读）
-    src/ctl.rs                 #   本机控制面：状态 / 动作 / 搜索 / 上屏 / reload（\\.\pipe\opi-control）
+    src/ctl.rs                 #   本机控制面：状态 / 动作 / 搜索 / 上屏 / reload（\\.\pipe\opi-control-v2）
 android/                       # Android IME（Kotlin + Jetpack Compose）
   app/                         #   IME 服务 · 键盘 / 候选栏 / 面板 · 设置页（含用户词导入导出）· 宠物组件
     src/main/assets/           #   luna.opid（简体）· trad.opid（繁体）· stroke.opid（笔画）· rare_index.tsv（部首索引）
@@ -290,7 +290,7 @@ LICENSE · CONTRIBUTING.md      # MIT 全文 · 贡献指南（含词库许可�
 
 ### 📅 项目状态
 
-> **当前阶段：v1.25.2（2026-10-25）：移动端 9/14/26 键弹层统一大写在前（小写进引擎匹配词库，大写/数字/符号直提）；14 键所有键都有符号/数字提示与横向弹层；大9分词键不再弹层；桌面自定义短语支持双拼/五笔精确字母匹配**
+> **当前阶段：v1.25.3（2026-10-25）：Windows 覆盖安装不再依赖注销——新版 TSF DLL 走 opi-v2 管道，旧 DLL 走兼容管道，候选窗同时服务两条；候选窗单实例锁消除重复 opi.exe；状态栏切走/切回由命名事件即时唤醒，无客户端直接回 im= 空状态，控制面轮询降到 1ms**
 
 V1 里程碑进度：
 
@@ -301,7 +301,7 @@ V1 里程碑进度：
 - [x] **M6a Android 原生重构**：opi-ffi 双 ABI（JNI + C）替换 frb；Compose 原生 IME + 键盘/候选栏/面板/设置页；删除 flutter/
 - [x] **简繁双词库**（spec §8 未给它 M6 编号，独立成项）：`Mode::Traditional` + 双词典路由 + `trad.opid` + GB2312 单字全覆盖门禁
 - [~] **M6b Linux fcitx5 插件**：Rust 逻辑与单测完成；**C++ 胶水此前从未被编译器看过**，现已补上 CMake 编译 + 安装通路（`crates/fcitx5-opi/cpp/CMakeLists.txt`）、CI 的 fcitx5 job（编译 + 安装落点断言 + debian:12 容器里带三臂对照真加载）与 `.deb` / `.rpm` 打包（`scripts/build-packages.sh`）—— **待在目标平台实机验收；包也从未被 `dpkg -i` / `rpm -i` 过**
-- [~] **M6c Windows TSF 插件 + CMP 候选窗**：Rust 逻辑、候选窗线协议与 Compose Desktop 候选窗 / 状态栏 / 设置窗完成 —— COM 服务端按目标平台门控；**Windows 打包自 2026-10-18 起已接线，2026-10-20 起用户入口改为 EXE 安装器 `opi-<版本>-setup.exe`**（`luna.opid` 已随包放进 app 镜像 `app\`——开箱即用完整简体词库，三份许可证文本一并分发、CI 断言 SHA-256；白屏修复：启动器不再重启 Explorer；卸载会结束 `opi.exe`、删 `{app}`、清 Run 项与 `%TEMP%` 锁文件；状态栏登录自启并经 `\\.\pipe\opi-control` 控制面驱动 TSF，设置即时 `reload`）；**`trad.opid` 仍不随包**（Windows 只持有一本词典），待在 Windows 真机验收（仅支持 Windows 10/11 x64；Win7/8/8.1 不支持）
+- [~] **M6c Windows TSF 插件 + CMP 候选窗**：Rust 逻辑、候选窗线协议与 Compose Desktop 候选窗 / 状态栏 / 设置窗完成 —— COM 服务端按目标平台门控；**Windows 打包自 2026-10-18 起已接线，2026-10-20 起用户入口改为 EXE 安装器 `opi-<版本>-setup.exe`**（`luna.opid` 已随包放进 app 镜像 `app\`——开箱即用完整简体词库，三份许可证文本一并分发、CI 断言 SHA-256；白屏修复：启动器不再重启 Explorer；卸载会结束 `opi.exe`、删 `{app}`、清 Run 项与 `%TEMP%` 锁文件；状态栏登录自启并经 `\\.\pipe\opi-control-v2` 控制面驱动 TSF，设置即时 `reload`）；**`trad.opid` 仍不随包**（Windows 只持有一本词典），待在 Windows 真机验收（仅支持 Windows 10/11 x64；Win7/8/8.1 不支持）
 - [~] **M7 iOS / macOS**：C ABI 已就绪；CI 的 `apple.yml` 已真编译 Swift，iOS 产出宿主 App + unsigned IPA（工具条 / 皮肤 / 键盘模式 / 关于页对齐 Android，贴纸写系统剪贴板需开启「完全访问」），macOS 产出 unsigned pkg/app（符号面板 / 输入法菜单 / 设置窗 / 候选分页）；**签名、真机运行与输入法启用仍未验证**。
 
 > 里程碑编号以 `docs/superpowers/specs/2026-08-14-opi-multi-platform-design.md` §8 与 M6 实施计划为准

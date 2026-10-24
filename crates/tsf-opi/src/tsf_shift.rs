@@ -108,6 +108,8 @@ impl TsfTextService {
             self.state.insert_into(pic, &text);
             self.sink.on_commit(&text);
         }
+        // 中 ⇄ 英已切：状态栏的「中/英」要立刻翻，不等 1s 轮询。
+        self.sink.on_state_changed();
         Some(BOOL(1))
     }
 }

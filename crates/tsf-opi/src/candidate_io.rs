@@ -8,7 +8,9 @@
 //! 头注释互为镜像，改协议须同步两处）
 //!
 //! ```text
-//! 管道名：\\.\pipe\opi（单实例，字节流模式，'\n' 分帧，UTF-8）
+//! 管道名：\\.\pipe\opi-v2（旧版兼容 `\\.\pipe\opi`；单实例，字节流，'\n' 分帧，UTF-8）。
+//! 2026-10-25 热升级隔离：旧 DLL 只连旧管道，新版走 v2，候选窗两条都服务；
+//! 旧管道名**永不改**（协议不兼容变更时 v2 升 v3）。
 //! 角色：候选窗（CMP desktop/）为 SERVER 监听管道；TSF 插件进程为 CLIENT，
 //!       窗口启动后连接（窗口不在 → 本次发送放弃、下一条再试，不报错；
 //!       读线程有自己的重连循环）。
@@ -17,7 +19,7 @@
 //!   show      {"type":"show","buffer":"ni","candidates":["你","尼",...],
 //!              "page":1,"page_count":3,"mode":"pinyin"}
 //!             （page/page_count 为 1 起；candidates 为当前页文本，页内 0 起）
-//!   hide      {"type":"hide"}
+//!   hide      {"type":"hide"}；state_changed {"type":"state_changed"}（只唤醒状态栏）
 //!   position  {"type":"position","x":120,"y":340}
 //!             （2026-10-22 起真发：每次 composition 变化取 caret 位置，窗口贴着
 //!             输入处；发端见 `caret.rs`）
@@ -90,16 +92,14 @@ struct PipeHandle(HANDLE);
 unsafe impl Send for PipeHandle {}
 unsafe impl Sync for PipeHandle {}
 
-/// 候选窗管道名（窗口侧 = desktop/ 的 JNA 服务器端，两侧保持一致）。
-const PIPE_NAME: PCWSTR = w!(r"\\.\pipe\opi");
+/// 新版 TSF 客户端管道（旧版仍连 `\\.\pipe\opi`，见文件头「热升级隔离」）。
+const PIPE_NAME: PCWSTR = w!(r"\\.\pipe\opi-v2");
 /// 读线程重连间隔（窗口未启动/忙，**仅 active 时**）。
 const RETRY_SLEEP_MS: u64 = 50;
 /// 宿主失活后的读线程空闲间隔：不抢管道，也不 50ms 醒一次烧 CPU。
 const IDLE_SLEEP_MS: u64 = 250;
-/// 读线程轮询间隔。**不能再用阻塞 ReadFile**：同一同步命名管道句柄上未完成的
-/// ReadFile 会把 WriteFile 串行化 —— 按键线程第二次 show 会永久阻塞、宿主 UI 冻住
-/// （2026-10-21 真机：n 出候选窗后 i 不再响应）。该间隔直接加在按键→候选窗延迟上：
-/// 20ms 实际睡 20–31ms；2ms 的 PeekNamedPipe 很廉价（Win 计时器粒度可能到 ~15.6ms）。
+/// 读线程轮询间隔（不能阻塞 ReadFile：同句柄 WriteFile 会被串行化，按键线程冻住）。
+/// 直接加在按键→候选窗延迟上；2ms 的 PeekNamedPipe 很廉价（Win 粒度可能 ~15.6ms）。
 const READ_POLL_MS: u64 = 2;
 /// 读线程缓冲区（单条消息远小于此；字节流模式按 '\n' 分帧）。
 const READ_BUF: usize = 4096;
@@ -199,6 +199,11 @@ impl CandidateClient {
         self.send_json(r#"{"type":"hide"}"#);
     }
 
+    /// 状态变了（语言/全半角/模式）→ 候选窗进程唤醒状态栏；窗口内容不变。
+    pub fn state_changed(&self) {
+        self.send_json(r#"{"type":"state_changed"}"#);
+    }
+
     /// position：caret 位置（AWT 逻辑像素；发端 = `caret.rs` 的 `candidate_anchor`）。
     pub fn position(&self, x: i32, y: i32) {
         let msg = serde_json::json!({"type": "position", "x": x, "y": y});
@@ -244,16 +249,11 @@ impl CandidateClient {
 
     /// 发送一条完整消息（自动补 '\n'）。连接失败 → 本次放弃（不睡眠）；写失败 → 断开待重连。
     ///
-    /// **不在这里置 `active`**（2026-10-22 review）：`active` 的语义是「本宿主当前
-    /// 是前台输入法」，唯一写入点是 `Activate`/`ThreadFocusSink::OnSetThreadFocus`。
-    /// 旧代码在每次写消息时无条件置 true —— 失焦后若还有一次排队刷新（点候选后
-    /// Alt-Tab），已失活的宿主会把读线程重新武装，50ms 内抢回单实例 `\\.\pipe\opi`，
-    /// 新前台宿主永远连不上（候选窗/状态栏不出现）。
+    /// **不在这里置 `active`**（2026-10-22 review）：唯一写入点是 `Activate`/
+    /// `ThreadFocusSink::OnSetThreadFocus`；否则失活宿主的排队刷新会把管道抢回去。
     ///
-    /// 失活时**连惰性连接也不做**：排队刷新自己 connect 同样会把管道抢回来。检查
-    /// 放在 conn 锁内 —— `disconnect()` 先置 false 再取同一把锁，锁内看到 true
-    /// 的那次连接随后会被 disconnect 关掉；看到 false 则直接放弃。激活时
-    /// `on_activate` 已先置 true，首帧 state 不受影响。
+    /// 失活时**连惰性连接也不做**：检查放在 conn 锁内 —— `disconnect()` 先置 false
+    /// 再取同一把锁，锁内看到 true 的随后会被关掉；看到 false 则直接放弃。
     fn send_json(&self, json: &str) {
         let bytes = [json.as_bytes(), b"\n"].concat();
         let mut conn = match self.conn.lock() {

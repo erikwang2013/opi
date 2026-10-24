@@ -34,7 +34,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * 按钮 → 控制面动作名（平台中立的部分）。Windows 走 [runStatusAction] 的
- * `\\.\pipe\opi-control`（ControlPlane.kt）；Linux 把它翻成 `opi-ctl <动作>`。
+ * `\\.\pipe\opi-control-v2`（ControlPlane.kt）；Linux 把它翻成 `opi-ctl <动作>`。
  * null = 这个按钮没有控制面动作（开窗/切键盘/换肤等由 StatusBar.dispatch 自己处理）。
  */
 internal fun statusActionOp(b: StatusBarButton): String? = when (b) {
@@ -134,7 +134,7 @@ fun runExternal(cmd: List<String>, timeoutMs: Long = 3000): String? {
  *
  * · Linux：`opi-ctl insert <文本>`（D-Bus → addon 的 `ic->commitString`）—— 只要
  *   fcitx5 里有焦点输入框就能上屏，与进程拓扑无关；失败短语来自 [runExternal]，逐字有用。
- * · Windows：本机控制面 `\\.\pipe\opi-control` → 候选窗进程 broker → TSF
+ * · Windows：本机控制面 `\\.\pipe\opi-control-v2` → 候选窗进程 broker → TSF
  *   （ControlPlane.kt）。TSF 把文本排进上屏队列，由下一个按键事件落进文档（插入
  *   延迟的既有语义，见 crates/tsf-opi/src/state.rs 的线程模型）。
  *
