@@ -79,7 +79,7 @@ class Qwerty26LayoutTest {
     @Test
     fun englishBottomRowMatchesTheReferenceImage() {
         assertEquals(
-            listOf("!?#", "123", ",", "空格", ".", "中", "换行"),
+            listOf("!?#", "pro", ",", "空格", ".", "中", "换行"),
             qwertyBottomKeys(english = true).map { it.label },
         )
     }

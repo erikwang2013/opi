@@ -155,6 +155,8 @@ fun QwertyKeyboard(
                         onModeSwitch = onModeSwitch,
                         onModeLongPress = onModeLongPress,
                         spaceLabel = qwertySpaceLabel(wubi),
+                        proActive = proActive,
+                        onProToggle = onProToggle,
                         keyFont = keyFont,
                     )
                 } else {
@@ -205,7 +207,8 @@ internal fun qwertyBottomKeys(english: Boolean): List<QwertyBottomKey> =
     if (english) {
         listOf(
             QwertyBottomKey("!?#", 1f),
-            QwertyBottomKey("123", 1f),
+            // 2026-10-25 用户裁决：英文 26 键底行「123」改回「pro」（普通/专业切换）。
+            QwertyBottomKey("pro", 1f),
             QwertyBottomKey(",", 1f),
             QwertyBottomKey("空格", 2.5f),
             QwertyBottomKey(".", 1f),
@@ -237,6 +240,8 @@ private fun RowScope.Qwerty26Bottom(
     onModeLongPress: (() -> Unit)?,
     /** 空格键键面字（五笔态 =「五笔」，动作仍 [onSpace]）。 */
     spaceLabel: String,
+    proActive: Boolean,
+    onProToggle: (() -> Unit)?,
     keyFont: TextUnit,
 ) {
     for (key in keys) {
@@ -245,6 +250,14 @@ private fun RowScope.Qwerty26Bottom(
                 key.label,
                 modifier = Modifier.weight(key.weight),
                 onTap = onSymbol,
+                fontSize = keyFont,
+            )
+            key.label == "pro" -> KeyButton(
+                "pro",
+                modifier = Modifier.weight(key.weight),
+                onTap = onProToggle,
+                highlighted = proActive,
+                description = "英文专业模式",
                 fontSize = keyFont,
             )
             key.label == "123" -> KeyButton(

@@ -16,6 +16,7 @@
 import { KeyboardController } from './KeyboardController';
 import { OpiMode, OpiShift } from './OpiEngine';
 import { MODE_ENGLISH26, MODE_PINYIN26, MODE_WUBI, lastChineseModeIndex } from './InputModes';
+import * as KeyboardModes from './KeyboardModes';
 import { BackspaceButton, FuncButton, PopupChoice, PopupKey, ShiftButton } from './KeyPopup';
 
 const ROW_1: string[] = ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'];
@@ -36,6 +37,7 @@ export struct QwertyPad {
   @StorageLink('opiMode') mode: number = OpiMode.Pinyin as number;
   @StorageLink('opiShift') shift: number = OpiShift.Off as number;
   @StorageLink('opiElder') elder: number = 0;
+  @State proOn: boolean = KeyboardModes.englishProEnabled();
   /** 输入模式下标（InputModes.INPUT_MODES 的下标，不是 OpiMode）。五笔键面两处差异用它判。 */
   @StorageLink('opiLayout') layout: number = 0;
   private ctrl: KeyboardController = KeyboardController.getInstance();
@@ -215,9 +217,16 @@ export struct QwertyPad {
         }
       })
       FuncButton({
-        label: '123', fontSize: this.keySize(),
+        // 2026-10-25 用户裁决：英文 26 键底行「123」改回「pro」（普通/专业切换）。
+        label: this.isEnglish() ? 'pro' : '123', fontSize: this.keySize(),
+        active: this.isEnglish() && this.proOn,
         onTap: () => {
-          this.ctrl.switchMode(OpiMode.Number);
+          if (this.isEnglish()) {
+            KeyboardModes.toggleEnglishPro();
+            this.proOn = KeyboardModes.englishProEnabled();
+          } else {
+            this.ctrl.switchMode(OpiMode.Number);
+          }
         }
       })
       FuncButton({
