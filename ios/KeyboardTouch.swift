@@ -220,7 +220,8 @@ extension KeyboardLayout {
         let direct = popup.selectedDirect
         hideKeyPopup()
         if direct {
-            insert(text)
+            // 走控制器的 `.commitText`（只 insertText、不过引擎），与符号面板同一条。
+            delegate?.keyboardLayout(self, didTapFunction: .commitText(text))
             return
         }
         guard let scalar = text.unicodeScalars.first else { return }
