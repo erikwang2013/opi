@@ -159,10 +159,13 @@ enum KeyboardFunctionKey {
 struct KeyPopupItem {
     let label: String
     let value: String
+    /// true = 直接原样上屏（大写/数字/符号）；false = 进引擎（小写字母/9 键 T9 键）。
+    let direct: Bool
 
-    init(_ label: String, value: String? = nil) {
+    init(_ label: String, value: String? = nil, direct: Bool = false) {
         self.label = label
         self.value = value ?? label
+        self.direct = direct
     }
 }
 

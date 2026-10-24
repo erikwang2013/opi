@@ -262,7 +262,8 @@ enum ModeKeyTables {
             KeySpec(
                 "分词", function: .segment, fontSize: letterSize * 0.72,
                 cornerHint: big ? nil : "1",
-                popupItems: [KeyPopupItem("1")]
+                // 2026-10-25：大 9 键没有数字/符号的格（分词）不再有长按/上滑弹层。
+                popupItems: big ? [] : [KeyPopupItem("1", direct: true)]
             ),
             digitKey("4", "ghi", letterSize, big: big),
             digitKey("7", "pqrs", letterSize, big: big),
@@ -405,7 +406,13 @@ enum ModeKeyTables {
         _ digit: String, _ letters: String, _ size: CGFloat, big: Bool
     ) -> KeySpec {
         let kv = digit.unicodeScalars.first.map { OpiKey.printable($0) } ?? 0
-        let items = Array(letters).map { KeyPopupItem(String($0)) } + [KeyPopupItem(digit)]
+        // 2026-10-25：大写在前、小写随后、数字末位（默认数字）。小写项的值是该格 T9
+        // 数字（进引擎匹配词库）；大写/数字直接原样上屏。
+        let items = Array(letters).map {
+            KeyPopupItem(String($0).uppercased(), value: String($0).uppercased(), direct: true)
+        } + Array(letters).map {
+            KeyPopupItem(String($0), value: digit)
+        } + [KeyPopupItem(digit, value: digit, direct: true)]
         return KeySpec(letters, keyval: kv, fallback: .text(digit),
                        fontSize: size, cornerHint: big ? nil : digit,
                        popupItems: items, popupDefaultIndex: items.count - 1)

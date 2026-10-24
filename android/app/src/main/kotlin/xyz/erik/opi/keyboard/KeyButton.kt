@@ -89,7 +89,7 @@ fun KeyButton(
     /** 弹层初始选中下标；越界按 [alternatives] 末项夹住。 */
     defaultAlternative: Int = 0,
     /** 弹层抬手提交选中项的 [KeyAlternative.value]；null 时退回 [onTap]。 */
-    onAlternative: ((String) -> Unit)? = null,
+    onAlternative: ((KeyAlternative) -> Unit)? = null,
     /** 键面上方的小字提示（26 键的符号）。 */
     hint: String? = null,
     /** 键面右上角的小字（拼音 26 键 Q..P 的 1-0）。 */
@@ -160,7 +160,7 @@ fun KeyButton(
                     if (released) {
                         val alt = latestAlternatives.value[popupSelected.coerceIn(0, count - 1)]
                         val handler = latestOnAlternative.value
-                        if (handler != null) handler(alt.value) else latestOnTap.value?.invoke()
+                        if (handler != null) handler(alt) else latestOnTap.value?.invoke()
                     }
                 } finally {
                     popupOpen = false

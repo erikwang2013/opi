@@ -160,11 +160,14 @@ fn phrase_matches(scheme: Scheme, trigger: &str, buffer: &str) -> bool {
         return false;
     }
     match scheme {
-        Scheme::Full => buffer.eq_ignore_ascii_case(trigger),
+        // 双拼/五笔的缓冲同样是字母原文（只是解码表不同），精确整串仍可直接比较 ——
+        // 2026-10-25 用户报障「桌面端无法用配置的字母匹配」：桌面常用双拼/五笔。
+        Scheme::Full | Scheme::Shuangpin | Scheme::Wubi => buffer.eq_ignore_ascii_case(trigger),
         // 9/14 键：缓冲是按键串（数字 / 14 键符号），trigger 是字母 —— 用方案自己的
         // 类表逐位比，与词库匹配同一套语义；取不到类的字符即不匹配。
         Scheme::Nine | Scheme::Fourteen => scheme.matches(buffer, trigger),
-        Scheme::Stroke | Scheme::Shuangpin | Scheme::Wubi => false,
+        // 笔画串是 `hspnz`，与配置的字母 trigger 不是同一套字母表，不匹配。
+        Scheme::Stroke => false,
     }
 }
 

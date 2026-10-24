@@ -56,19 +56,23 @@ class FourteenKeyLayoutTest {
     }
 
     /**
-     * 长按/上滑候选：`[大写对, 符号, 小写对]`。普通点击仍发协议字母
-     * （14 键方案要 `q/e/t/...`，见 [FourteenKeyKeyboard] 的注释）。
+     * 长按/上滑候选（2026-10-25 全键）：`[大写对, 数字或符号, 小写对]`，
+     * 默认中间项。普通点击仍发协议字母（14 键方案要 `q/e/t/...`）。
      */
     @Test
-    fun letterKeysOfferUppercaseSymbolLowercaseAlternatives() {
+    fun everyLetterKeyOffersUppercaseMiddleLowercaseAlternatives() {
         val zx = fourteenKeyRows[2].first { it.key == "z" }
-        val alts = fourteenAlternatives(zx)
-        assertEquals(listOf("ZX", "~", "zx"), alts.map { it.label })
-        assertEquals(listOf("Z", "~", "z"), alts.map { it.value })
-        // 弹层默认选中符号那枚（键面上方就是符号）；普通点击仍是协议字母。
-        assertEquals("符号是弹层默认项", "~", alts[FOURTEEN_DEFAULT_ALT_INDEX].label)
-        // 前两行没有符号映射 ⇒ 无候选（普通点击 = 协议字母）。
-        assertEquals(emptyList<FourteenAlt>(), fourteenAlternatives(fourteenKeyRows[0].first()))
+        val zxAlts = fourteenAlternatives(zx, "~")
+        assertEquals(listOf("ZX", "~", "zx"), zxAlts.map { it.label })
+        assertEquals(listOf("ZX", "~", "z"), zxAlts.map { it.value })
+        assertEquals("符号是弹层默认项", "~", zxAlts[FOURTEEN_DEFAULT_ALT_INDEX].label)
+
+        // 第一/二行的中间项是上方数字；默认仍选中间项。
+        val qw = fourteenKeyRows[0].first { it.key == "q" }
+        val qwAlts = fourteenAlternatives(qw, "1")
+        assertEquals(listOf("QW", "1", "qw"), qwAlts.map { it.label })
+        assertEquals(listOf("QW", "1", "q"), qwAlts.map { it.value })
+        assertEquals("数字是弹层默认项", "1", qwAlts[FOURTEEN_DEFAULT_ALT_INDEX].label)
     }
 
     /** 底行 2026-10-25：符 | 123 | , | 空格（最宽）| 。| 英 | 换行。 */

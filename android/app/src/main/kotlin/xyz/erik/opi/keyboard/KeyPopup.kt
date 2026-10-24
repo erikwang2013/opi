@@ -36,10 +36,12 @@ data class KeyAlternative(
     val value: String,
     /** null = 用发起键的字号。 */
     val fontSize: TextUnit? = null,
+    /** true = 直接原样上屏（大写/数字/符号）；false = 进引擎（小写字母/9 键数字键）。 */
+    val direct: Boolean = false,
 )
 
 /** 弹层每格宽/高：手势按同一常数把**横向**拖动换算成「移了几格」。 */
-internal val KEY_POPUP_ITEM_WIDTH: Dp = 44.dp
+internal val KEY_POPUP_ITEM_WIDTH: Dp = 36.dp
 private val KEY_POPUP_ITEM_HEIGHT: Dp = 44.dp
 
 /** 横向拖动 → 选中项（首项在最左；向右拖选更靠后的项）。纯函数，JVM 单测钉住。 */

@@ -137,6 +137,25 @@ fn english_apply_pushes_only_the_english_slot() {
 }
 
 #[test]
+fn enabled_phrase_file_matches_typed_letters() {
+    // 2026-10-25 用户报障「桌面端无法用配置的字母匹配」：宿主文件 → 推引擎 → 按键。
+    let dir = temp_dir("match");
+    let path = dir.join(FILE_NAME);
+    std::fs::write(
+        &path,
+        r#"{"version":1,"enabled":true,"phrases":[{"trigger":"dz","text":"地址"}]}"#,
+    )
+    .unwrap();
+    let mut s = logic();
+    s.apply_custom_phrases(custom_phrases::load_file(&path));
+    for c in "dz".chars() {
+        s.input_key(c as u32, 0);
+    }
+    assert_eq!(s.candidates()[0], "地址", "配置的字母必须命中短语");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn enabling_reloads_the_same_table_and_matches_immediately() {
     // 2026-10-25 用户报障「开启也无法匹配」：开启只改启用位，**不能要求重新导入**。
     let mut s = logic();

@@ -25,6 +25,11 @@ final class KeyPopup: UIView {
         items.indices.contains(selectedIndex) ? items[selectedIndex].value : ""
     }
 
+    /// true = 该项直接原样上屏（大写/数字/符号）；false = 进引擎匹配词库。
+    var selectedDirect: Bool {
+        items.indices.contains(selectedIndex) ? items[selectedIndex].direct : false
+    }
+
     /// 条目数与初选下标（`KeyboardTouch` 按它们算宽度、把横向拖动换算成选项）。
     var itemCount: Int { items.count }
     let defaultIndex: Int

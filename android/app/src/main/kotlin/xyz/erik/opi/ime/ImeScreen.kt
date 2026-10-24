@@ -27,6 +27,7 @@ import xyz.erik.opi.keyboard.DarkPalette
 import xyz.erik.opi.keyboard.ElderPalette
 import xyz.erik.opi.keyboard.SkinPanel
 import xyz.erik.opi.keyboard.FourteenKeyKeyboard
+import xyz.erik.opi.keyboard.KeyAlternative
 import xyz.erik.opi.keyboard.LightPalette
 import xyz.erik.opi.keyboard.LocalKeyboardPalette
 import xyz.erik.opi.keyboard.NineKeyKeyboard
@@ -327,13 +328,9 @@ private fun KeyboardArea(
                 // 而面板固定头 48dp + Tab 36dp + 叠盘 176dp = 260dp > 226dp，
                 // 于是 weight(3f) 的 Box 只剩 50dp、面板内部结果网格 Box(weight(1f))
                 // 直接塌成 0dp —— 点搜索框后结果区完全不可见，Tab 行也被叠盘盖住。
-                // density > 2.39 必现（近十年手机基本都在此列）。
-                //
-                // 折中取 96dp：结果网格回到约 46dp（可见、可滚），代价是搜索盘键高
-                // 从 44dp 降到 24dp。这是缓解不是根治 —— 根治要让 IME 窗口在
-                // 「符号面板 + 搜索态」下变高（改 OpiImeService.keyboardHeight），
-                // 那会影响所有面板，须真机核对。**本机无设备，此改动未实测**：
-                // 复核请 `adb shell wm density` 确认 ≥2.4，再看搜索结果区是否可见。
+                // density > 2.39 必现。折中取 96dp：结果网格约 46dp（可见可滚），
+                // 搜索盘键高降到 24dp；根治需改 IME 窗口高度，本机无设备未实测
+                //（复核：`adb shell wm density` ≥2.4 时看结果区是否可见）。
                 // 叠盘底部功能行与字母盘同义（原先 中/123/↵ 三个键都接 closeSearch：
                 // 「中」键面写着一个模式字、读屏念「中英切换」，行为却是关搜索；⇧ 传空
                 // lambda，既不动也不被标成已停用）。这里每个键给语义正确的行为，
@@ -407,6 +404,7 @@ private fun KeyboardArea(
                     onPickCustomPunct = state::selectCustomPunct,
                     commonSymbols = { catalog.common },
                     onCommitText = router::commitText,
+                    onAlternative = { a -> if (a.direct) router.commitText(a.value) else router.handleKey(a.value) },
                 )
                 InputMode.PINYIN14 -> FourteenKeyKeyboard(
                     modifier = modifier,
@@ -422,6 +420,7 @@ private fun KeyboardArea(
                     onShift = controller::shiftTap,
                     onShiftLongPress = controller::shiftLongPress,
                     shiftState = controller.shiftState,
+                    onAlternative = { a -> if (a.direct) router.commitText(a.value) else router.handleKey(a.value) },
                 )
                 InputMode.STROKE -> StrokeKeyboard(
                     modifier = modifier,
@@ -462,6 +461,7 @@ private fun KeyboardArea(
                     // 五笔 26 键（ads.jpg）：最左「拼」切拼音 26、空格键面「五笔」。
                     wubi = state.inputMode == InputMode.WUBI,
                     onSwitchToPinyin = { state.selectInputMode(InputMode.PINYIN26) },
+                    onAlternative = { a -> if (a.direct) router.commitText(a.value) else router.handleKey(a.value) },
                     onModeLongPress = state::openInputMode,
                 )
             }

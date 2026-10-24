@@ -110,8 +110,9 @@ export struct QwertyPad {
       }
     }
     return [
-      new PopupChoice(upper, upper),
-      new PopupChoice(middle, middle),
+      // 大写/符号(数字) 直接原样上屏；小写进引擎匹配词库。
+      new PopupChoice(upper, upper, 0, true),
+      new PopupChoice(middle, middle, 0, true),
       new PopupChoice(ch, ch),
     ];
   }
@@ -187,7 +188,11 @@ export struct QwertyPad {
             this.ctrl.tapChar(ch);
           },
           onChoice: (choice: PopupChoice) => {
-            this.ctrl.tapChar(choice.value);
+            if (choice.direct) {
+              this.ctrl.commitText(choice.value);
+            } else {
+              this.ctrl.tapChar(choice.value);
+            }
           }
         }).layoutWeight(1)
       }, (ch: string) => `${rowIndex}-${ch}-${this.mode}`)

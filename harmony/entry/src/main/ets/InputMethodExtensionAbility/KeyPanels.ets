@@ -16,6 +16,7 @@ import { OpiMode, OpiShift } from './OpiEngine';
 import { Palette, paletteFor } from './Palette';
 import { BackspaceButton, FuncButton, PopupChoice, PopupKey, ShiftButton } from './KeyPopup';
 import { CustomSymbolPicker } from './SymbolPicker';
+import { fourteenChoices, fourteenSymbol, nineChoices } from './KeyChoices';
 import * as SettingsStore from './SettingsStore';
 
 export class NineKey {
@@ -56,44 +57,6 @@ const FOURTEEN_ROWS: string[][] = [
   ['zx', 'cv', 'bn', 'm'],
 ];
 const FOURTEEN_DIGITS: string = '1234567890';
-
-/** 14 键第三行四枚字母键上方的符号提示（发送键仍是对首字母）。 */
-function fourteenSymbol(pair: string): string {
-  if (pair === 'zx') {
-    return '~';
-  }
-  if (pair === 'cv') {
-    return '!';
-  }
-  if (pair === 'bn') {
-    return '@';
-  }
-  if (pair === 'm') {
-    return '?';
-  }
-  return '';
-}
-
-/** 14 键备选：[大写对, 符号, 小写对]；大小写两项发送同一个协议字母。 */
-function fourteenChoices(pair: string, size: number): PopupChoice[] {
-  const symbol: string = fourteenSymbol(pair);
-  return [
-    new PopupChoice(pair.toUpperCase(), pair.charAt(0).toUpperCase(), size),
-    new PopupChoice(symbol, symbol, Math.max(12, size - 3)),
-    new PopupChoice(pair, pair.charAt(0), Math.max(12, size - 6)),
-  ];
-}
-
-/** 9 键备选：字母逐个字号递减，数字末位（默认选中 = 数字）。 */
-function nineChoices(k: NineKey, letterSize: number, digitSize: number): PopupChoice[] {
-  const out: PopupChoice[] = [];
-  for (let i = 0; i < k.hint.length; i++) {
-    const ch: string = k.hint.charAt(i);
-    out.push(new PopupChoice(ch, ch, Math.max(12, letterSize - i * 3)));
-  }
-  out.push(new PopupChoice(k.label, k.key, digitSize));
-  return out;
-}
 
 // ---------------------------------------------------------------- 9 键 / 大 9 键
 
@@ -260,13 +223,17 @@ export struct NineKeyPanel {
               hintSize: this.big ? 15 : 12,
               placementTop: rowIndex > 0,
               choices: k.hint.length > 0
-                ? nineChoices(k, this.mainSize(), this.big ? 15 : 12) : [],
+                ? nineChoices(k.hint, k.key, k.label, this.mainSize(), this.big ? 15 : 12) : [],
               defaultChoice: k.hint.length,
               onTap: () => {
                 this.tapNineKey(k);
               },
               onChoice: (choice: PopupChoice) => {
-                this.ctrl.tapChar(choice.value);
+                if (choice.direct) {
+                  this.ctrl.commitText(choice.value);
+                } else {
+                  this.ctrl.tapChar(choice.value);
+                }
               }
             }).layoutWeight(1)
           }, (k: NineKey) => k.key)
@@ -429,13 +396,17 @@ export struct FourteenKeyPanel {
               mainSize: this.pairSize(),
               hintSize: this.elder === 1 ? 13 : 11,
               placementTop: rowIndex > 0,
-              choices: rowIndex === 2 ? fourteenChoices(pair, this.pairSize()) : [],
+              choices: fourteenChoices(pair, this.pairSize(), this.hintFor(pair, rowIndex, index)),
               defaultChoice: 1,
               onTap: () => {
                 this.tapPair(pair);
               },
               onChoice: (choice: PopupChoice) => {
-                this.ctrl.tapChar(choice.value);
+                if (choice.direct) {
+                  this.ctrl.commitText(choice.value);
+                } else {
+                  this.ctrl.tapChar(choice.value);
+                }
               }
             }).layoutWeight(rowIndex === 2 ? (pair === 'm' ? 0.95 : 1.55) : 1)
           }, (pair: string) => pair)

@@ -69,7 +69,12 @@ class NineKeyLayoutTest {
         nineKeyRows.forEachIndexed { r, row ->
             row.forEachIndexed { c, k ->
                 val values = nineKeyAlternativeValues(k, r * 3 + c)
-                assertEquals("字母在前", k.hint.map { it.toString() }, values.dropLast(1))
+                // 2026-10-25：大写在前、小写随后、数字末位。
+                assertEquals(
+                    "大写 + 小写在前",
+                    k.hint.map { it.uppercaseChar().toString() } + k.hint.map { it.toString() },
+                    values.dropLast(1),
+                )
                 assertEquals("末项 = 序号", nineKeyBadge(r * 3 + c), values.last())
             }
         }

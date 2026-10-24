@@ -17,11 +17,14 @@ export class PopupChoice {
   value: string;
   /** 0 = 沿用发起键字号（26 键）；>0 = 本行字号（9/14 键逐行递减）。 */
   size: number;
+  /** true = 直接原样上屏（大写/数字/符号）；false = 进引擎（小写字母/9 键 T9 键）。 */
+  direct: boolean;
 
-  constructor(label: string, value: string, size: number = 0) {
+  constructor(label: string, value: string, size: number = 0, direct: boolean = false) {
     this.label = label;
     this.value = value;
     this.size = size;
+    this.direct = direct;
   }
 }
 

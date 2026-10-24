@@ -212,12 +212,17 @@ extension KeyboardLayout {
         activePopup = nil
     }
 
-    /// 提交当前选中项：合成一对普通按键（press + release）**进引擎** ——
-    /// 9 键字母要进 T9 缓冲、26 键大写由引擎折大小写，所以不能走字面直提。
+    /// 提交当前选中项：小写字母与 9 键 T9 键**进引擎**（匹配词库）；大写、数字、
+    /// 符号**直接原样上屏**（2026-10-25 用户裁决，`KeyPopupItem.direct`）。
     func commitKeyPopup() {
         guard let popup = activePopup else { return }
         let text = popup.selectedValue
+        let direct = popup.selectedDirect
         hideKeyPopup()
+        if direct {
+            insert(text)
+            return
+        }
         guard let scalar = text.unicodeScalars.first else { return }
         let spec = KeySpec(text, keyval: OpiKey.printable(scalar), fallback: .text(text))
         delegate?.keyboardLayout(self, didPress: spec, longPress: false)

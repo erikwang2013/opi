@@ -47,8 +47,8 @@ extension ModeKeyTables {
         let kv = lower.unicodeScalars.first.map { OpiKey.printable($0) } ?? 0
         let middle = badge ?? hint
         let items = middle.isEmpty
-            ? [KeyPopupItem(upper), KeyPopupItem(lower)]
-            : [KeyPopupItem(upper), KeyPopupItem(middle), KeyPopupItem(lower)]
+            ? [KeyPopupItem(upper, direct: true), KeyPopupItem(lower)]
+            : [KeyPopupItem(upper, direct: true), KeyPopupItem(middle, direct: true), KeyPopupItem(lower)]
         return KeySpec(
             label, keyval: kv, fallback: .text(lower),
             fontSize: 22, lineScales: scales, cornerHint: badge,
@@ -58,8 +58,8 @@ extension ModeKeyTables {
 
     /// 14 键两字母键（参考图 bb）：`badge`（数字）或 `symbol`（符号）显示在字母上方。
     /// 键面字母大写；发送**首个字母的小写码点**（协议约束见 `fourteenKeyRows`）。
-    /// 浮层只有第三行四枚符号键有（Android `fourteenAlternatives` 同）：
-    /// [大写对, 符号, 小写对]，**默认符号**；提交值是协议首字母，不是字母对。
+    /// 浮层**所有键都有**（2026-10-25 用户裁决，Android `fourteenAlternatives` 同）：
+    /// [大写对, 数字或符号, 小写对]，**默认中间项**；提交值大小写两项是协议首字母。
     static func fourteenPair(
         _ pair: String, badge: String? = nil, symbol: String? = nil
     ) -> KeySpec {
@@ -70,10 +70,11 @@ extension ModeKeyTables {
         let scales: [CGFloat] = head == nil ? [1] : [0.62, 1]
         let kv = lower.unicodeScalars.first.map { OpiKey.printable($0) } ?? 0
         var items: [KeyPopupItem] = []
-        if let symbol {
+        if let head {
             items = [
-                KeyPopupItem(upper, value: String(upper.prefix(1))),
-                KeyPopupItem(symbol),
+                // 大写项直接原样上屏：显示 `QW` 就上屏 `QW`。
+                KeyPopupItem(upper, direct: true),
+                KeyPopupItem(head, direct: true),
                 KeyPopupItem(lower, value: String(lower.prefix(1))),
             ]
         }

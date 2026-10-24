@@ -205,18 +205,26 @@ fn fourteen_key_encodes_trigger_letters() {
 }
 
 #[test]
-fn other_schemes_never_match() {
-    for scheme in [Scheme::Stroke, Scheme::Shuangpin, Scheme::Wubi] {
+fn letter_schemes_match_but_stroke_does_not() {
+    // 双拼/五笔的缓冲同样是字母原文 ⇒ 精确整串可匹配（2026-10-25 桌面报障）。
+    for scheme in [Scheme::Shuangpin, Scheme::Wubi] {
         let mut e = engine(&[]);
         e.set_custom_phrases(ONE_PHRASE).unwrap();
         e.set_custom_phrases_enabled(true);
         e.set_scheme(scheme);
         type_keys(&mut e, "dz");
         assert!(
-            !texts(&e.candidates(8)).contains(&"地址"),
-            "{scheme:?} 不应匹配自定义短语"
+            texts(&e.candidates(8)).contains(&"地址"),
+            "{scheme:?} 应按字母精确匹配"
         );
     }
+    // 笔画串是 hspnz，不是配置的字母表。
+    let mut e = engine(&[]);
+    e.set_custom_phrases(ONE_PHRASE).unwrap();
+    e.set_custom_phrases_enabled(true);
+    e.set_scheme(Scheme::Stroke);
+    type_keys(&mut e, "dz");
+    assert!(!texts(&e.candidates(8)).contains(&"地址"));
 }
 
 #[test]

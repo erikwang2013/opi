@@ -58,21 +58,28 @@ internal val fourteenDigitBadges = listOf("1", "2", "3", "4", "5", "6", "7", "8"
 internal val fourteenSymbols = mapOf("z" to "~", "c" to "!", "b" to "@", "m" to "?")
 
 /** 一枚 14 键候选的字面与发送值（纯数据：JVM 单测可核，不必碰 Compose）。 */
-internal data class FourteenAlt(val label: String, val value: String)
+internal data class FourteenAlt(
+    val label: String,
+    val value: String,
+    /** true = 直接原样上屏（大写/数字/符号）；false = 进引擎（小写字母）。 */
+    val direct: Boolean = false,
+)
 
 /** 弹层默认选中 = 符号那枚（2026-10-24：键面上方就是符号；普通点击仍发协议字母）。 */
 internal const val FOURTEEN_DEFAULT_ALT_INDEX = 1
 
 /**
- * 字母键的长按/上滑候选（2026-10-24）：`[大写对, 符号, 小写对]`。
- * 普通点击仍发**协议字母**（14 键方案要的是 `q/e/t/...`，符号发不出去拼音）——
- * 大小写两枚的 `value` 都是同一个协议字母（引擎把大写折成小写），符号那枚直发符号。
+ * 字母键的长按/上滑候选（2026-10-25 起**所有键**都有）：`[大写对, 符号或数字, 小写对]`。
+ * 第一/二行中间项是该键上方的数字 1–0，第三行中间项是符号 `~ ! @ ?`；默认选中中间项。
+ * 普通点击仍发**协议字母**；大小写两枚的 `value` 都是同一个协议字母（引擎把大写折成
+ * 小写），中间项直发数字/符号。
  */
-internal fun fourteenAlternatives(k: FourteenKey): List<FourteenAlt> {
-    val symbol = fourteenSymbols[k.key] ?: return emptyList()
+internal fun fourteenAlternatives(k: FourteenKey, hint: String): List<FourteenAlt> {
+    if (hint.isEmpty()) return emptyList()
     return listOf(
-        FourteenAlt(k.label.uppercase(), k.key.uppercase()),
-        FourteenAlt(symbol, symbol),
+        // 大写项直接原样上屏（显示什么就上屏什么：两字母对如 `QW`）。
+        FourteenAlt(k.label.uppercase(), k.label.uppercase(), direct = true),
+        FourteenAlt(hint, hint, direct = true),
         FourteenAlt(k.label.lowercase(), k.key),
     )
 }
@@ -99,7 +106,7 @@ internal val fourteenBottomKeys = listOf(
 
 /**
  * 一枚字母键（字母对 + 上方小字提示）。长按/上滑候选由 [fourteenAlternatives] 给：
- * 只有第三行四枚键有（前两行返回空表，普通点击即协议字母）。
+ * **所有键都有**（中间项 = 上方数字或符号，默认选中）。
  */
 @Composable
 private fun RowScope.FourteenPairKey(
@@ -109,12 +116,14 @@ private fun RowScope.FourteenPairKey(
     pairSize: TextUnit,
     shiftActive: Boolean,
     onKey: (String) -> Unit,
+    onAlternative: ((KeyAlternative) -> Unit)? = null,
 ) {
-    val alts = fourteenAlternatives(k).mapIndexed { i, a ->
+    val alts = fourteenAlternatives(k, hint).mapIndexed { i, a ->
         KeyAlternative(
             label = a.label,
             value = a.value,
             fontSize = (pairSize.value - i * 3f).coerceAtLeast(12f).sp,
+            direct = a.direct,
         )
     }
     KeyButton(
@@ -126,7 +135,7 @@ private fun RowScope.FourteenPairKey(
         fontSize = pairSize,
         alternatives = alts,
         defaultAlternative = if (alts.isEmpty()) 0 else FOURTEEN_DEFAULT_ALT_INDEX,
-        onAlternative = onKey,
+        onAlternative = onAlternative ?: { onKey(it.value) },
         hint = hint.ifEmpty { null },
     )
 }
@@ -152,6 +161,8 @@ fun FourteenKeyKeyboard(
     onShift: (() -> Unit)? = null,
     onShiftLongPress: (() -> Unit)? = null,
     shiftState: ShiftState? = null,
+    /** 长按/上滑选中项：默认走 onKey；宿主可据 [KeyAlternative.direct] 区分直提。 */
+    onAlternative: ((KeyAlternative) -> Unit)? = null,
 ) {
     val shiftActive = shiftState != null && shiftState != ShiftState.OFF
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
@@ -164,13 +175,15 @@ fun FourteenKeyKeyboard(
             // 第一行：数字提示 1–5
             Row(modifier = Modifier.weight(1f).fillMaxSize()) {
                 fourteenKeyRows[0].forEachIndexed { i, k ->
-                    FourteenPairKey(k, fourteenDigitBadges[i], 1f, pairSize, shiftActive, onKey)
+                    FourteenPairKey(k, fourteenDigitBadges[i], 1f, pairSize, shiftActive, onKey, onAlternative)
                 }
             }
             // 第二行：数字提示 6–0
             Row(modifier = Modifier.weight(1f).fillMaxSize()) {
                 fourteenKeyRows[1].forEachIndexed { i, k ->
-                    FourteenPairKey(k, fourteenDigitBadges[5 + i], 1f, pairSize, shiftActive, onKey)
+                    FourteenPairKey(
+                        k, fourteenDigitBadges[5 + i], 1f, pairSize, shiftActive, onKey, onAlternative,
+                    )
                 }
             }
             // 第三行：⇧ | ZX(~) CV(!) BN(@) M(?) | ⌫
@@ -192,7 +205,7 @@ fun FourteenKeyKeyboard(
                     val symbol = fourteenSymbols[k.key] ?: ""
                     FourteenPairKey(
                         k, symbol, if (k.key == "m") 0.95f else 1.55f,
-                        pairSize, shiftActive, onKey,
+                        pairSize, shiftActive, onKey, onAlternative,
                     )
                 }
                 KeyButton(

@@ -129,6 +129,40 @@ fn invalid_english_table_falls_back_without_touching_chinese() {
     assert!(!en_on, "坏表退回空表 + 关");
 }
 
+/// 2026-10-25 用户报障「桌面端无法用配置的字母匹配」：从**宿主文件**读入 →
+/// 推送引擎 → 真按键路径出候选。这条覆盖 fcitx5 的整条桌面读侧（不是只测引擎）。
+#[test]
+fn enabled_phrase_file_matches_typed_letters() {
+    let dir = temp_dir("match");
+    let path = dir.join(CUSTOM_PHRASES_FILE_NAME);
+    fs::write(
+        &path,
+        r#"{"version":1,"enabled":true,"phrases":[{"trigger":"dz","text":"地址"}]}"#,
+    )
+    .unwrap();
+    let mut s = crate::candidate::CandidateState {
+        engine: engine_core::Engine::new(
+            Box::new(engine_core::dictionary::InMemoryDictionary::new()),
+            engine_core::symbols::SymbolEngine::builtin(),
+            true,
+        ),
+        page: 0,
+        buffer_snapshot: String::new(),
+        shift_state: crate::candidate::ShiftState::Off,
+        last_printable: None,
+        dicts: Default::default(),
+        english_pro: false,
+        fetch_cache: Default::default(),
+    };
+    s.apply_custom_phrases(load_custom_phrases_file(&path));
+    s.switch_mode(engine_core::composer::Mode::Pinyin);
+    for c in "dz".chars() {
+        crate::input_method::handle_key(&mut s, c as u32, 0);
+    }
+    assert_eq!(s.candidates()[0], "地址", "配置的字母必须命中短语");
+    let _ = fs::remove_dir_all(&dir);
+}
+
 /// 2026-10-24：英文短语可命中时，**普通英文模式**（pro=false）也必须缓冲 ——
 /// 直出模式下字母已进文档，trigger 永远匹配不到。表空/开关关保持直出。
 #[test]

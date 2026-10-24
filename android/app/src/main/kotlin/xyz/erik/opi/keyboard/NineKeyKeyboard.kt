@@ -136,6 +136,8 @@ fun NineKeyKeyboard(
     commonSymbols: () -> List<String> = { emptyList() },
     /** 自定义标点发送通道：任意符号不是键盘键码，走直提（符号面板同一条）。 */
     onCommitText: (String) -> Unit = onKey,
+    /** 长按/上滑选中项：默认走 onKey；宿主可据 [KeyAlternative.direct] 区分直提。 */
+    onAlternative: ((KeyAlternative) -> Unit)? = null,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         // 横屏矮键区 / 单手窄键区降一档，见 [compactKeys]。
@@ -230,7 +232,7 @@ fun NineKeyKeyboard(
                                     fontSize = letterSize,
                                     alternatives = alts,
                                     defaultAlternative = alts.lastIndex,
-                                    onAlternative = onKey,
+                                    onAlternative = onAlternative ?: { onKey(it.value) },
                                     cornerHint = if (big) null else nineKeyBadge(r * 3 + c),
                                 )
                             }
@@ -302,27 +304,33 @@ fun NineKeyKeyboard(
  * 分词格的「1」在 Nine 里没有键类，宿主把它当空缓冲分词键直提（ImeScreen 的 onKey）。
  */
 internal fun nineKeyAlternativeValues(k: NineKey, index: Int): List<String> =
-    k.hint.map(Char::toString) + nineKeyBadge(index)
+    k.hint.map { it.uppercaseChar().toString() } +
+        k.hint.map(Char::toString) + nineKeyBadge(index)
 
-/** 弹层键面：字母**字号递减**，序号数字用 [digitSize]（末项 = 默认高亮）。 */
+/**
+ * 弹层键面（2026-10-25）：**大写在前、小写随后、数字末位**（字号递减，末项默认高亮）。
+ * 小写项的值是该格 T9 数字（进引擎匹配词库）；大写/数字直接原样上屏。
+ */
 private fun nineKeyAlternatives(
     k: NineKey,
     index: Int,
     firstSize: TextUnit,
     digitSize: TextUnit,
 ): List<KeyAlternative> {
-    val values = nineKeyAlternativeValues(k, index)
-    return values.mapIndexed { i, v ->
+    val letters = k.hint.length
+    val upper = k.hint.mapIndexed { i, c ->
         KeyAlternative(
-            label = v,
-            value = v,
-            fontSize = if (i == values.lastIndex) {
-                digitSize
-            } else {
-                (firstSize.value - i * 3f).coerceAtLeast(12f).sp
-            },
+            c.uppercase().toString(), c.uppercase().toString(),
+            (firstSize.value - i * 3f).coerceAtLeast(12f).sp, direct = true,
         )
     }
+    val lower = k.hint.mapIndexed { i, c ->
+        KeyAlternative(
+            c.toString(), k.key,
+            (firstSize.value - (letters + i) * 3f).coerceAtLeast(12f).sp,
+        )
+    }
+    return upper + lower + KeyAlternative(k.label, k.key, digitSize, direct = true)
 }
 
 /** 9 键键位的读屏名：「数字 2，字母 a b c」—— 只念数字会丢掉「这键打什么」。 */

@@ -57,6 +57,8 @@ fun QwertyKeyboard(
     onSwitchToPinyin: (() -> Unit)? = null,
     /** 模式键长按（打开输入方案菜单）；null = 不长按。 */
     onModeLongPress: (() -> Unit)? = null,
+    /** 长按/上滑选中项：默认走 onKey；宿主可据 [KeyAlternative.direct] 区分直提。 */
+    onAlternative: ((KeyAlternative) -> Unit)? = null,
 ) {
     val shiftActive = shiftState != null && shiftState != ShiftState.OFF
     val englishLayout = showProKey
@@ -133,7 +135,7 @@ fun QwertyKeyboard(
                                         emptyList()
                                     },
                                     defaultAlternative = QWERTY_ALTERNATIVE_DEFAULT,
-                                    onAlternative = onKey,
+                                    onAlternative = onAlternative ?: { onKey(it.value) },
                                 )
                             }
                         }
@@ -347,8 +349,9 @@ internal fun qwertyAlternatives(ch: String, pinyin: Boolean): List<KeyAlternativ
     val middle = if (pinyin) pinyinSymbolHints[ch] ?: pinyinDigitHints[ch] else qwertySymbolHints[ch]
     if (middle == null) return emptyList()
     return listOf(
-        KeyAlternative(ch.uppercase(), ch.uppercase()),
-        KeyAlternative(middle, middle),
+        // 大写/符号(数字) 直接原样上屏；小写进引擎匹配词库。
+        KeyAlternative(ch.uppercase(), ch.uppercase(), direct = true),
+        KeyAlternative(middle, middle, direct = true),
         KeyAlternative(ch, ch),
     )
 }
