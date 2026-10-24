@@ -316,8 +316,9 @@ android/app/src/main/assets/luna.opid
   第一次 `show`）。状态栏的 1s 轮询随即能读到 `im=opi`，因此切到「小欧输入法」后状态栏
   **立即出现，不必先打一个字**。`Deactivate` 先置 inactive 再断开，避免读线程把单实例
   管道又抢回去。**注意**：安装/升级后，已在运行的宿主仍持有旧 DLL 映像；EXE 交互式
-  升级只在探测到 Explorer 映射旧 DLL 时重启原用户 Explorer（2026-10-23 白屏回归：不能对未映射旧 DLL 的健康 shell 无条件 taskkill），
-  其它宿主需各自关闭重开。
+  升级只在探测到 Explorer 映射旧 DLL 时重启原用户 Explorer（2026-10-23 白屏回归：不能对未映射旧 DLL 的健康 shell 无条件 taskkill）。
+  2026-10-25 起其它宿主不必强制重开：旧 DLL 仍可连兼容管道出候选，重开一次即切到 v2；
+  状态栏只显示 v2 状态（旧应用前台时条暂时隐藏，重开后恢复）。
 - **状态切换即时（2026-10-25 用户要求 Windows 响应 <10ms）**：候选窗进程在主
   候选管道客户端接入/断开时 `SetEvent` 一个命名事件
   （`Local\opi-state-changed-v2`），状态栏线程立即醒来补读，不再等 1s 轮询；
