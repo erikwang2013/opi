@@ -172,7 +172,8 @@ fn apply_to_engine(
 ) {
     if set(engine, &state.json).is_err() {
         let _ = set(engine, crate::data_dir::EMPTY_CUSTOM_PHRASES_JSON);
-        set_enabled(engine, true);
+        // 坏表回退「关 + 空表」：缺省关（2026-10-25）。
+        set_enabled(engine, false);
         return;
     }
     set_enabled(engine, state.enabled);

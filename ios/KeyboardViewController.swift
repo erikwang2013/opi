@@ -416,14 +416,14 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             // 平铺态里重输后若候选已空，自动回键面（Android 同判）。
             collapseTiledIfNeeded()
         case .selectInputMode(let mode):
-            // 菜单选中一项。语义（换方案 + 换模式 + 换键面 + 清缓冲的取舍）全在
-            // `applyInputMode` 里，那里也写明了与 Android 的**能力缺口**。
+            // 菜单选中一项；换方案/模式/键面与清缓冲的取舍全在 `applyInputMode`。
             applyInputMode(mode)
+        case .toggleChineseEnglish:
+            // 26 / 14 键「英/中」一键直达；绝不触碰系统输入法切换（那条只在 .nextInputMode）。
+            applyInputMode(engine.mode() == .english ? lastChineseInputMode : .english26)
         case .cycleMode:
-            // 非中文（英文/数字/符号）→ 中文：走 applyInputMode 而不是只 switchMode
-            // —— 后者不会同步 layout.inputMode，英文键盘上点「中」/模式键会看起来没反应
-            // （2026-10-21）。判据与 Android `cycleMode` 的 else 档同：不在中/繁就回
-            // 上次中文方案；中→繁→英两跳交给 `cycleMode()`。
+            // 非中文 → 中文走 applyInputMode（只 switchMode 不同步 layout，看着像没反应）；
+            // 中→繁→英两跳交给 `cycleMode()`（2026-10-21 裁决）。
             if engine.mode() != .pinyin && engine.mode() != .traditional {
                 // 非中文态回到键面：设置面板若开着，这条路径也会关掉它。
                 applyInputMode(lastChineseInputMode)
@@ -431,9 +431,8 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
                 cycleMode()
             }
         case .nextInputMode:
-            // **唯一**的系统输入法切换入口：每种键面左下角那枚 🌐（见
-            // `ModeKeyTables.systemInputKey`）。中/英、简繁、面板「‹ 返回」都只在本
-            // 输入法内换引擎/键面，**绝不**走这里 —— 这是 2026-10-21 用户裁决。
+            // **唯一**的系统输入法切换入口：每种键面左下角的 🌐（中/英、简繁都只在本
+            // 输入法内换，绝不走这里 —— 2026-10-21 用户裁决）。
             advanceToNextInputMode()
         case .showPunctuationPicker:
             // 9 键左列自定义键（2026-10-24）：符号现取（空列表由选择器兜底）；选中只落盘，上屏走自定义键。

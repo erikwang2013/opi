@@ -153,13 +153,16 @@ fun NineKeyKeyboard(
             else -> 12.sp
         }
         val keyFont = if (compact) 17.sp else 21.sp
+        // 左列标点字号**独立一档**（2026-10-25 用户：标点键太大）—— 不再跟主区字母同字号。
+        val stripFont = if (compact) 15.sp else 17.sp
         var pickerOpen by remember { mutableStateOf(false) }
         Column(modifier = Modifier.fillMaxSize()) {
             Row(modifier = Modifier.weight(3f).fillMaxSize()) {
                 // ---- 左侧一列（2026-10-24：整列可滚动 + 末尾「自定义」）----
                 // 空闲 = 标点列（点它走引擎标点表）；输入时**整列换成候选拼音读数**
                 // （一个读音一行、已去重）——「拼音是输入才替换到左侧一列」。
-                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                // 左列比主区窄一档（2026-10-25 用户：标点键太大）。
+                Box(modifier = Modifier.weight(0.8f).fillMaxHeight()) {
                     if (readings.isNotEmpty()) {
                         // 读数态：格数与标点列同节奏（可视三行 ⇒ cells = 3）。
                         CandidateReadingColumn(
@@ -182,7 +185,7 @@ fun NineKeyKeyboard(
                                         modifier = Modifier.fillMaxWidth().height(cell),
                                         onTap = { onKey(k.key) },
                                         description = nineKeyStripSpoken(k),
-                                        fontSize = letterSize,
+                                        fontSize = stripFont,
                                     )
                                 }
                                 // 自定义格：未选 = 点它开选择器；已选 = 点它发送、长按换。
@@ -201,7 +204,7 @@ fun NineKeyKeyboard(
                                         } else {
                                             "自定义符号 $customPunct，点按输入，长按更换"
                                         },
-                                        fontSize = if (customPunct.isEmpty()) keyFont else letterSize,
+                                        fontSize = if (customPunct.isEmpty()) stripFont else letterSize,
                                     )
                                 }
                             }
@@ -251,27 +254,31 @@ fun NineKeyKeyboard(
                         fontSize = keyFont,
                     )
                     KeyButton(
-                        "空格",
+                        // 2026-10-25 用户裁决：右列空格换成 0 键（数字 0 直提），
+                        // 空格移到底行中间并加宽。
+                        "0",
                         modifier = Modifier.weight(1f).fillMaxWidth(),
-                        onTap = onSpace,
+                        onTap = { onKey("0") },
+                        description = "数字 0",
                         fontSize = keyFont,
                     )
                 }
             }
-            // 底行：[符][中/繁][123][英文][↵]（⌫/重输/空格 已移入右列）。
+            // 底行：[符][中/繁][123][空格(宽)][英][↵]。
             Row(modifier = Modifier.weight(1f).fillMaxSize()) {
-                KeyButton("符", modifier = Modifier.weight(1f), onTap = onSymbol, fontSize = keyFont)
+                KeyButton("符", modifier = Modifier.weight(0.9f), onTap = onSymbol, fontSize = keyFont)
                 KeyButton(
                     modeLabel,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(0.9f),
                     onTap = onModeSwitch,
                     description = "简繁切换",
                     stateDescription = modeStateDescription(modeLabel),
                     fontSize = keyFont,
                 )
-                KeyButton("123", modifier = Modifier.weight(1f), onTap = onNumber, fontSize = keyFont)
-                KeyButton("英文", modifier = Modifier.weight(1f), onTap = onEnglish, fontSize = keyFont)
-                KeyButton("↵", modifier = Modifier.weight(1f), onTap = onEnter, fontSize = keyFont)
+                KeyButton("123", modifier = Modifier.weight(0.9f), onTap = onNumber, fontSize = keyFont)
+                KeyButton("空格", modifier = Modifier.weight(2.4f), onTap = onSpace, fontSize = keyFont)
+                KeyButton("英", modifier = Modifier.weight(0.9f), onTap = onEnglish, fontSize = keyFont)
+                KeyButton("↵", modifier = Modifier.weight(0.9f), onTap = onEnter, fontSize = keyFont)
             }
         }
         if (pickerOpen) {

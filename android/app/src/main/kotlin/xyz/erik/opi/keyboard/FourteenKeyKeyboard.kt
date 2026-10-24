@@ -93,7 +93,7 @@ internal val fourteenBottomKeys = listOf(
     FourteenBottomKey(",", FourteenBottomAction.Comma, 1.0f),
     FourteenBottomKey("空格", FourteenBottomAction.Space, 2.7f),
     FourteenBottomKey("。", FourteenBottomAction.Period, 1.0f),
-    FourteenBottomKey("中英", FourteenBottomAction.Mode, 1.3f),
+    FourteenBottomKey("英", FourteenBottomAction.Mode, 1.3f),
     FourteenBottomKey("换行", FourteenBottomAction.Enter, 1.3f),
 )
 

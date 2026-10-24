@@ -344,7 +344,9 @@ cp luna.opid ~/Library/Application\ Support/opi/luna.opid
 下拉（`phraseKind`）切换两套**完全独立**的短语：各自开关、表、文件 ——
 `~/Library/Application Support/opi/custom_phrases.json` / `custom_phrases_en.json`
 （`OpiCustomPhraseStore.fileURL`；与 `luna.opid` 同目录）。宿主文件 schema =
-引擎 JSON + `"enabled"`，宿主文件是唯一真源（引擎只持内存）。
+引擎 JSON + `"enabled"`，宿主文件是唯一真源（引擎只持内存）。**开关缺省关
+（2026-10-25 用户裁决）**：加短语后必须显式开启；每次开关/增删改都先写盘再推引擎，
+立即生效，不需要重启或重新导入。
 
 - 10 条/页、显示总数、增删改；导入 JSON / TSV / CSV / `字母=短语` / `字母 空白 短语`，
   **任何一条非法 ⇒ 整份拒收**；导出 JSON / TSV / CSV / `字母=短语`（比 Android/Linux

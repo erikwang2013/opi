@@ -110,13 +110,13 @@ fun KeyButton(
     var popupWindowSize by remember { mutableStateOf(IntSize.Zero) }
     val latestAlternatives = rememberUpdatedState(alternatives)
     val latestOnAlternative = rememberUpdatedState(onAlternative)
-    val popupRowHeightPx = with(LocalDensity.current) { KEY_POPUP_ROW_HEIGHT.toPx() }
-    // 长按超时或上滑过阈值 → 开弹层；之后手指的纵向位移持续改选中行，抬手提交。
+    val popupItemWidthPx = with(LocalDensity.current) { KEY_POPUP_ITEM_WIDTH.toPx() }
+    // 长按超时或上滑过阈值 → 开弹层；之后手指的**横向**位移持续改选中项，抬手提交。
     // 与 repeatModifier 一样**不消费**事件：短按仍走 combinedClickable 的 onClick。
     val alternativesModifier = if (!hasAlternatives) {
         Modifier
     } else {
-        Modifier.pointerInput(alternatives, defaultAlternative, popupRowHeightPx) {
+        Modifier.pointerInput(alternatives, defaultAlternative, popupItemWidthPx) {
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
                 altPress.fired = false
@@ -145,7 +145,7 @@ fun KeyButton(
                 popupWindowSize = IntSize(hostView.width, hostView.height)
                 popupOpen = true
                 try {
-                    var dragDy = 0f
+                    var dragDx = 0f
                     var released = false
                     while (true) {
                         val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
@@ -153,10 +153,9 @@ fun KeyButton(
                             released = true
                             break
                         }
-                        dragDy += change.positionChange().y
-                        // 向上拖 = 选更靠上的行（首项在最上方）。
-                        val rows = (-dragDy / popupRowHeightPx).roundToInt()
-                        popupSelected = (start - rows).coerceIn(0, count - 1)
+                        dragDx += change.positionChange().x
+                        // 向右拖 = 选更靠右的格（首项在最左）。
+                        popupSelected = popupSelectionForDrag(start, dragDx, popupItemWidthPx, count)
                     }
                     if (released) {
                         val alt = latestAlternatives.value[popupSelected.coerceIn(0, count - 1)]
@@ -247,7 +246,13 @@ fun KeyButton(
         // （读者仍能看出是哪个键；完整读屏名走 contentDescription）。
         Text(label, fontSize = fontSize, maxLines = 1, overflow = TextOverflow.Ellipsis, color = fg)
         if (popupOpen) {
-            KeyAlternativesPopup(alternatives, popupSelected, fontSize, popupWindowSize)
+            KeyAlternativesPopup(
+                alternatives,
+                popupSelected,
+                anchorIndex = defaultAlternative.coerceIn(0, alternatives.lastIndex.coerceAtLeast(0)),
+                fontSize,
+                popupWindowSize,
+            )
         }
     }
 }
@@ -287,7 +292,10 @@ internal fun spokenKeyName(label: String): String = when (label) {
     "↵", "换行" -> "回车"
     "空格" -> "空格"
     "!?#" -> "符号"
-    "中", "繁", "英", "中英" -> "中英切换"
+    "中" -> "切到中文"
+    "英" -> "切到英文"
+    "繁" -> "切到繁体"
+    "中英" -> "中英切换"
     "123", "?123" -> "数字与符号"
     "ABC" -> "字母"
     "符" -> "符号" // 9/14 键与笔画键盘的符号入口键

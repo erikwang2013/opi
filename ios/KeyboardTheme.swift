@@ -410,10 +410,10 @@ extension KeyboardViewController {
     /// 换肤 + 长辈字号 + 单手（启动与皮肤/键盘模式面板改完后调）。
     func applyTheme() {
         layout.setKeyboardModes(modes, traditional: engine.mode() == .traditional)
-        layout.applyTheme(
-            KeyboardTheme.palette(skin: skin, modes: modes),
-            fontScale: effectiveFontScale
-        )
+        let palette = KeyboardTheme.palette(skin: skin, modes: modes)
+        // 根视图铺主题底色：顶部圆角附近不再是系统灰的弧形（2026-10-25 报障）。
+        view.backgroundColor = palette.toolbarBg
+        layout.applyTheme(palette, fontScale: effectiveFontScale)
     }
 
     /// 关于面板的外链。**先复制再尝试打开**：键盘扩展不保证被允许直接开 URL，

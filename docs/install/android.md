@@ -687,6 +687,11 @@ fcitx5 配置面**同名**，宣纸/朱砂与后五款的配色取 `scripts/gen_
   （`candidateReadings.firstOrNull()`），仍空则留空；`ime/ComposingBar.kt` 同步去掉数字
   回退 ⇒ **绝不把数字缓冲画成拼音**。三端同口径（iOS `KeyboardCandidates.swift`、鸿蒙
   `TopBar.ets` 的 `composingText()`）。
+- **2026-10-25 键面/底行订正**：9/大 9 底行「英文」改「英」；左标点列宽 0.8、字号降
+  一档（17sp/紧凑 15sp）；右列空格换成 **0**（数字 0 直提），空格移到底行正中并加宽
+  （其余底行键 0.9 权重）。26 键底行模式键改为**目标语言**「英/中」，**一次点击直达**
+  （`ImeState.toggleChineseEnglish`；繁体走长按输入模式面板）；14 键底行「中英」改「英」。
+  弹层（长按/上滑）由竖排改为**横排一行**、横向拖动选格，默认格对准发起键。
 
 门禁：`NineKeyLayoutTest.badgesFollowKeyOrderButSendingStaysSchemeDigits` /
 `popupLastValueIsTheBadgeOrdinal`、`FourteenKeyLayoutTest.bottomRowMatchesReferenceOrderAndWideSpace`、
@@ -758,6 +763,8 @@ schema `{"version":1,"enabled":true,"phrases":[{"trigger":"dz","text":"地址"}]
 （`CustomPhraseCodec.encodeState`；导出用的 `encodeCanonical` 是不带 `enabled` 的引擎
 JSON）。`OpiImeService.onCreateInputView` 每次建视图时把两套整表重推引擎；设置页改动
 「先存盘 → 再改 UI → 再推引擎」（`CustomPhraseScreen.apply`），引擎只持内存。
+**开关缺省关（2026-10-25 用户裁决）**：加短语后必须显式开启；开关一拨就整表 + 启用位
+一起推给引擎，**不需要重启或重新导入**。
 
 - 列表 **10 条/页**（`CustomPhraseCodec.PAGE_SIZE`），显示总数，可增删改；导入时同一
   trigger 后者覆盖前者（`CustomPhraseCodec.merge`，页面内编辑也先过 `normalize`）。

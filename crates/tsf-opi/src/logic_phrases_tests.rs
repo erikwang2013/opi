@@ -40,7 +40,7 @@ fn parse_reads_enabled_and_strips_it_for_the_engine() {
     assert!(state.json.contains(r#""trigger":"dz""#), "{}", state.json);
 
     let no_enabled = parse(r#"{"version":1,"phrases":[]}"#).expect("enabled 可缺省");
-    assert!(no_enabled.enabled, "缺省 = 开");
+    assert!(!no_enabled.enabled, "缺省 = 关（2026-10-25 裁决）");
 }
 
 #[test]
@@ -63,7 +63,7 @@ fn missing_or_broken_file_falls_back_to_empty_defaults() {
     let dir = temp_dir("missing");
     let missing = load_file(&dir.join("nope.json"));
     assert_eq!(missing, PhraseState::default());
-    assert!(missing.enabled);
+    assert!(!missing.enabled);
 
     let path = dir.join(FILE_NAME);
     std::fs::write(&path, "{").unwrap();
@@ -137,10 +137,33 @@ fn english_apply_pushes_only_the_english_slot() {
 }
 
 #[test]
+fn enabling_reloads_the_same_table_and_matches_immediately() {
+    // 2026-10-25 用户报障「开启也无法匹配」：开启只改启用位，**不能要求重新导入**。
+    let mut s = logic();
+    let off = parse(r#"{"version":1,"enabled":false,"phrases":[{"trigger":"dz","text":"地址"}]}"#)
+        .unwrap();
+    s.apply_custom_phrases(off);
+    s.input_key('d' as u32, 0);
+    s.input_key('z' as u32, 0);
+    assert!(!s.candidates().iter().any(|w| w == "地址"), "关闭时不匹配");
+
+    let on = parse(r#"{"version":1,"enabled":true,"phrases":[{"trigger":"dz","text":"地址"}]}"#)
+        .unwrap();
+    s.apply_custom_phrases(on);
+    assert!(
+        s.candidates().iter().any(|w| w == "地址"),
+        "开启后同一缓冲立即命中"
+    );
+}
+
+#[test]
 fn english_phrase_matches_in_normal_english_mode() {
     let mut s = logic();
     s.apply_english_custom_phrases(
-        parse(r#"{"version":1,"phrases":[{"trigger":"hello","text":"english phrase"}]}"#).unwrap(),
+        parse(
+            r#"{"version":1,"enabled":true,"phrases":[{"trigger":"hello","text":"english phrase"}]}"#,
+        )
+        .unwrap(),
     );
 
     // 2026-10-24：普通英文模式（pro=false）也把字母送进缓冲，否则字母直出进文档、
@@ -197,7 +220,7 @@ fn invalid_phrase_table_falls_back_to_empty_and_enabled() {
     s.apply_custom_phrases(bad);
     assert!(!s.engine.export_custom_phrases().contains("地址"));
     assert!(!s.engine.export_custom_phrases().contains("\"x\""));
-    assert!(s.engine.custom_phrases_enabled());
+    assert!(!s.engine.custom_phrases_enabled(), "坏表退回空表 + 关");
 }
 
 #[test]
@@ -230,11 +253,14 @@ fn invalid_english_table_falls_back_without_touching_chinese() {
 
     assert!(!s.engine.export_english_custom_phrases().contains("\"x\""));
     assert!(
-        s.engine.english_custom_phrases_enabled(),
-        "坏表退回默认启用"
+        !s.engine.english_custom_phrases_enabled(),
+        "坏表退回空表 + 关"
     );
     assert!(s.engine.export_custom_phrases().contains("地址"));
-    assert!(s.engine.custom_phrases_enabled());
+    assert!(
+        !s.engine.custom_phrases_enabled(),
+        "中文套缺省关，英文坏表不许把它打开"
+    );
 }
 
 #[test]

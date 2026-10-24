@@ -120,7 +120,9 @@ enum ModeCell {
     var widthUnits: CGFloat {
         switch self {
         case .key(let spec): return spec.widthUnits
-        case .column, .scrollingColumn: return 1
+        case .column: return 1
+        // 9 键左标点列比主区窄一档（2026-10-25 用户：标点键太大）。
+        case .scrollingColumn: return 0.8
         }
     }
 }
@@ -237,17 +239,17 @@ enum ModeKeyTables {
         // 末尾自定义格（Android 同）：未选 = 面「自定义」、点开选择器；已选 = 点它直提、
         // 长按换（选择结果持久化）。符号不是键盘键码，直提走 `.commitText`。
         let customKey: KeySpec = customPunctuation.isEmpty
-            ? KeySpec("自定义", function: .showPunctuationPicker, fontSize: 20, defersPress: true)
+            ? KeySpec("自定义", function: .showPunctuationPicker, fontSize: 15, defersPress: true)
             : KeySpec(
                 customPunctuation, function: .commitText(customPunctuation),
-                longPressFunction: .showPunctuationPicker, fontSize: 20, defersPress: true
+                longPressFunction: .showPunctuationPicker, fontSize: 17, defersPress: true
             )
         let strip = [
-            punctSpec("，", ",", defersPress: true),
-            punctSpec("。", ".", defersPress: true),
-            punctSpec("、", "\\", defersPress: true),
-            punctSpec("？", "?", defersPress: true),
-            punctSpec("！", "!", defersPress: true),
+            punctSpec("，", ",", fontSize: 17, defersPress: true),
+            punctSpec("。", ".", fontSize: 17, defersPress: true),
+            punctSpec("、", "\\", fontSize: 17, defersPress: true),
+            punctSpec("？", "?", fontSize: 17, defersPress: true),
+            punctSpec("！", "!", fontSize: 17, defersPress: true),
             customKey,
         ]
         // ---- 中间三列 = Android 的 3×3 数字格按**列**取（行主序 → 列）----
@@ -275,13 +277,13 @@ enum ModeKeyTables {
             digitKey("6", "mno", letterSize, big: big),
             digitKey("9", "wxyz", letterSize, big: big),
         ]
-        // ---- 右列：⌫ / 重输 / 空格（2026-10-10 Android 用户裁决：从底行搬进右列）----
+        // ---- 右列：⌫ / 重输 / 0（2026-10-25：空格移到底行中间，右列换成数字 0）----
         let right = [
             KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, longPressRepeatsBackspace: true),
             // 重输 = 清掉当前组合重来（缓冲空时是空操作，engine.clear() 幂等）。
             // 分词键在主区第一格（见 col1），不在这一列。
             KeySpec("重输", function: .retype),
-            KeySpec("空格", keyval: OpiKey.space, fallback: .text(" ")),
+            KeySpec.char("0"),
         ]
         let main = ModeRow(
             [
@@ -290,15 +292,16 @@ enum ModeKeyTables {
             ],
             heightUnits: 3
         )
-        // ---- 底行：[🌐][符][中/繁][123][英文][↵] ----
+        // ---- 底行：[🌐][符][中/繁][123][空格(宽)][英][↵] ----
         let funcRow = ModeRow.plain([
             systemInputKey,
             KeySpec("符", function: .showSymbols),
             KeySpec(modeLabel, function: .toggleTraditional, longPressFunction: .showModes),
             KeySpec("123", function: .showNumbers),
-            // 「英文」= 切到英文 26 键（与菜单里的「英文26键」**同一条路**：
+            KeySpec("空格", keyval: OpiKey.space, fallback: .text(" "), widthUnits: 2.4),
+            // 「英」= 切到英文 26 键（与菜单里的「英文26键」**同一条路**：
             // 走 `.selectInputMode`，不是本地换层 —— 语义含「换方案 + 换模式」）。
-            KeySpec("英文", function: .selectInputMode(.english26)),
+            KeySpec("英", function: .selectInputMode(.english26)),
             KeySpec("↵", keyval: OpiKey.ret, fallback: .text("\n")),
         ])
         return [main, funcRow]
@@ -330,8 +333,8 @@ enum ModeKeyTables {
             fourteenPair("m", symbol: "?"),
             KeySpec("⌫", keyval: OpiKey.backspace, fallback: .deleteBackward, longPressRepeatsBackspace: true, widthUnits: 1.4),
         ]
-        // 底行（参考图 bb）：符 123 , 空格 。 中英 换行；🌐 是 iOS 的系统切换入口，保留。
-        // 模式键走三态循环（本盘没有独立英文键，否则英文不可达）。
+        // 底行（参考图 bb）：符 123 , 空格 。 英 换行；🌐 是 iOS 的系统切换入口，保留。
+        // 「英」一次点击直达英文 26 键（2026-10-25；不再走三态循环的两跳）。
         let funcRow: [KeySpec] = [
             systemInputKey,
             KeySpec("符", function: .showSymbols),
@@ -339,7 +342,7 @@ enum ModeKeyTables {
             punctSpec("，", ","),
             KeySpec("空格", keyval: OpiKey.space, fallback: .text(" "), widthUnits: 3),
             punctSpec("。", "."),
-            KeySpec("中英", function: .cycleMode, longPressFunction: .showModes),
+            KeySpec("英", function: .toggleChineseEnglish, longPressFunction: .showModes),
             KeySpec("换行", keyval: OpiKey.ret, fallback: .text("\n"), widthUnits: 1.4),
         ]
         return pairRows + [ModeRow.plain(r3), ModeRow.plain(funcRow)]

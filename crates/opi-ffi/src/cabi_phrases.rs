@@ -50,7 +50,7 @@ pub unsafe extern "C" fn opi_export_custom_phrases() -> OpiString {
     OpiString::from_utf16(&out)
 }
 
-/// setCustomPhrasesEnabled(on: bool)。缺省为开（列表为空时无副作用）。
+/// setCustomPhrasesEnabled(on: bool)。缺省为关（2026-10-25 用户裁决）。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_set_custom_phrases_enabled(on: bool) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
@@ -97,7 +97,7 @@ pub unsafe extern "C" fn opi_export_english_custom_phrases() -> OpiString {
     OpiString::from_utf16(&out)
 }
 
-/// setEnglishCustomPhrasesEnabled(on: bool)。英文套开关；缺省为开。
+/// setEnglishCustomPhrasesEnabled(on: bool)。英文套开关；缺省为关。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_set_english_custom_phrases_enabled(on: bool) {
     let _ = catch_unwind(AssertUnwindSafe(|| {

@@ -15,7 +15,7 @@
 
 import { KeyboardController } from './KeyboardController';
 import { OpiMode, OpiShift } from './OpiEngine';
-import { MODE_PINYIN26, MODE_WUBI } from './InputModes';
+import { MODE_ENGLISH26, MODE_PINYIN26, MODE_WUBI, lastChineseModeIndex } from './InputModes';
 import { BackspaceButton, FuncButton, PopupChoice, PopupKey, ShiftButton } from './KeyPopup';
 
 const ROW_1: string[] = ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'];
@@ -235,10 +235,15 @@ export struct QwertyPad {
         }
       })
       FuncButton({
-        // 键面固定「中英」（aa/cc/ads 三张参考图一致）；点按仍是 cycleMode()。
-        label: '中英', fontSize: this.keySize(),
+        // 2026-10-25：键面 = 目标语言（中文面「英」、英文面「中」），一次点击直达；
+        // 不再走 中→繁→英 三态循环（繁体仍可从输入模式面板选）。
+        label: this.isEnglish() ? '中' : '英', fontSize: this.keySize(),
         onTap: () => {
-          this.ctrl.cycleMode();
+          if (this.isEnglish()) {
+            this.ctrl.selectInputMode(lastChineseModeIndex());
+          } else {
+            this.ctrl.selectInputMode(MODE_ENGLISH26);
+          }
         }
       })
       FuncButton({

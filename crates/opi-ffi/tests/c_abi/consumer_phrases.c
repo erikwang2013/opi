@@ -16,7 +16,9 @@ static const char PHRASE_JSON[] =
 
 static void check_custom_phrases(void) {
     printf("[14] 自定义短语（set/export/enabled）\n");
-    CHECK(opi_custom_phrases_enabled() == true, "短语开关缺省应为开");
+    CHECK(opi_custom_phrases_enabled() == false, "短语开关缺省应为关（2026-10-25）");
+    opi_set_custom_phrases_enabled(true);
+    CHECK(opi_custom_phrases_enabled() == true, "显式开启应生效");
 
     uint16_t buf[sizeof(PHRASE_JSON)];
     size_t n = strlen(PHRASE_JSON);
@@ -44,7 +46,9 @@ static void check_custom_phrases(void) {
 
     /* 英文套（2026-10-24）：同 schema，独立表/独立开关。 */
     printf("[14b] 英文自定义短语（独立一套）\n");
-    CHECK(opi_english_custom_phrases_enabled() == true, "英文短语开关缺省应为开");
+    CHECK(opi_english_custom_phrases_enabled() == false, "英文短语开关缺省应为关");
+    opi_set_english_custom_phrases_enabled(true);
+    CHECK(opi_english_custom_phrases_enabled() == true, "英文套显式开启生效");
     CHECK(opi_set_english_custom_phrases(buf, n) == 1, "英文套导入 1 条");
     exported = opi_export_english_custom_phrases();
     CHECK(has_ascii(exported, "\"trigger\":\"dz\""), "英文套导出应含 trigger");

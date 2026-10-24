@@ -58,12 +58,13 @@ internal fun statusBarWidthDp(
 ): Float = (PAD * 2 + BTN * buttonCount + GAP * (buttonCount - 1).coerceAtLeast(0)) * barScaleFactor(scale, windows)
 
 /**
- * 条的裁剪形状（2026-10-24 用户报障「边角也不是弧形」）：Windows 画成**胶囊**（半径 =
- * 短边一半），与状态栏窗的透明背景（StatusBar.kt 的 `transparent`）配合，四角才真的
- * 透出桌面；Linux 未报障 ⇒ 保持直角。纯函数，单测钉住。
+ * 条的裁剪形状（2026-10-24 用户报障「边角也不是弧形」；2026-10-25 用户订正「四角弧度
+ * 太大，微微一点就行」）：Windows 用 **4dp 小圆角**，与状态栏窗的透明背景
+ *（StatusBar.kt 的 `transparent`）配合，四角透出桌面又不会像胶囊；Linux 未报障 ⇒
+ * 保持直角。纯函数，单测钉住。
  */
 internal fun barShape(windows: Boolean): Shape =
-    if (windows) RoundedCornerShape(percent = 50) else RectangleShape
+    if (windows) RoundedCornerShape(4.dp) else RectangleShape
 
 /**
  * 纯函数：条该不该显示（[StatusBarApp] 的 visible 用它）。

@@ -71,11 +71,11 @@ class FourteenKeyLayoutTest {
         assertEquals(emptyList<FourteenAlt>(), fourteenAlternatives(fourteenKeyRows[0].first()))
     }
 
-    /** 底行 2026-10-24：符 | 123 | , | 空格（最宽）| 。| 中英 | 换行。 */
+    /** 底行 2026-10-25：符 | 123 | , | 空格（最宽）| 。| 英 | 换行。 */
     @Test
     fun bottomRowMatchesReferenceOrderAndWideSpace() {
         assertEquals(
-            listOf("符", "123", ",", "空格", "。", "中英", "换行"),
+            listOf("符", "123", ",", "空格", "。", "英", "换行"),
             fourteenBottomKeys.map { it.label },
         )
         assertEquals(

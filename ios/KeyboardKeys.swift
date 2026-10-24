@@ -89,8 +89,12 @@ enum KeyboardFunctionKey {
     /// 收起键盘（工具条最右，Android `onCloseKeyboard` 同义）。
     case closeKeyboard
     /// 9 键 / 14 键 / 笔画底行的模式键：**只切简/繁**（与 Android `toggleTraditional`
-    /// 同语义）。26 键仍走 `.cycleMode`（它没有独立英文键）。
+    /// 同语义）。
     case toggleTraditional
+    /// 26 / 14 键底行的「英/中」：中文 → 英文 26 键，英文 → 回上次中文方案。
+    /// **一次点击直达**（2026-10-25 用户裁决）；不再走 `.cycleMode` 的中→繁→英两跳，
+    /// 也不是系统输入法切换（那是 `.nextInputMode`）。
+    case toggleChineseEnglish
     /// 9 键主区第一格的「分词」键：缓冲非空时发送 `'`（音节边界）。
     /// 空缓冲由控制器拦住 —— 空缓冲的 `'` 在引擎里是引号，不是分词符。
     case segment

@@ -126,7 +126,7 @@ fn invalid_english_table_falls_back_without_touching_chinese() {
     .unwrap();
     assert!(cn_json.contains("地址"), "英文坏表不许清中文");
     assert!(!en_json.contains("\"x\""));
-    assert!(en_on, "坏表退回默认启用");
+    assert!(!en_on, "坏表退回空表 + 关");
 }
 
 /// 2026-10-24：英文短语可命中时，**普通英文模式**（pro=false）也必须缓冲 ——

@@ -25,9 +25,9 @@ class KeyLabelTest {
         assertEquals("退格", spokenKeyName("⌫"))
         assertEquals("回车", spokenKeyName("↵"))
         assertEquals("空格", spokenKeyName("空格"))
-        assertEquals("中英切换", spokenKeyName("中"))
-        assertEquals("中英切换", spokenKeyName("繁"))
-        assertEquals("中英切换", spokenKeyName("英"))
+        assertEquals("切到中文", spokenKeyName("中"))
+        assertEquals("切到繁体", spokenKeyName("繁"))
+        assertEquals("切到英文", spokenKeyName("英"))
         assertEquals("数字与符号", spokenKeyName("123"))
         assertEquals("数字与符号", spokenKeyName("?123"))
         assertEquals("字母", spokenKeyName("ABC"))
@@ -120,12 +120,12 @@ class KeyLabelTest {
         // ⚠️ readAllBytes 而不是 Files.readString（Java 11 API，本模块单测编译级别不可见）。
         val src = String(java.nio.file.Files.readAllBytes(p), Charsets.UTF_8)
         fun count(needle: String) = Regex(Regex.escape(needle)).findAll(src).count()
-        // 9 / 笔画 = 两处切简繁；14 键改走中英切换；26 键 + 搜索叠盘 = 两处 cycleMode
+        // 9 / 笔画 = 两处切简繁；14 键 + 26 键 = 两处中英直达；搜索叠盘仍走 cycleMode。
         assertEquals("切简繁的键应恰有两盘（9/笔画）", 2, count("onModeSwitch = state::toggleTraditional"))
-        assertEquals("14 键底行中英 = 一条切语言", 1, count("onModeSwitch = state::toggleChineseEnglish"))
-        assertEquals("26 键与搜索叠盘的 cycleMode 不许被带上", 2, count("onModeSwitch = state::cycleMode"))
-        // 独立英文入口：9/笔画两盘各一枚（14 键改版后由「中英」承担）。
-        assertEquals("两盘各自的独立 [英文] 键", 2, count("onEnglish = state::switchToEnglishKeyboard"))
+        assertEquals("14/26 键底行中英 = 两条切语言", 2, count("onModeSwitch = state::toggleChineseEnglish"))
+        assertEquals("搜索叠盘仍走 cycleMode", 1, count("onModeSwitch = state::cycleMode"))
+        // 独立英文入口：9/笔画两盘各一枚（14/26 改版后由「英」承担）。
+        assertEquals("两盘各自的独立 [英] 键", 2, count("onEnglish = state::switchToEnglishKeyboard"))
     }
 
     /**

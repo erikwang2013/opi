@@ -72,7 +72,13 @@ extension ModeKeyTables {
             comma,
             KeySpec(wubi ? "五笔" : "空格", keyval: OpiKey.space, fallback: .text(" "), widthUnits: 4.2),
             period,
-            KeySpec("中英", function: .cycleMode, longPressFunction: .showModes),
+            // 2026-10-25：键面 = 目标语言（中文面「英」、英文面「中」），一次点击直达；
+            // 繁体仍从长按输入模式面板选。
+            KeySpec(
+                english ? "中" : "英",
+                function: .toggleChineseEnglish,
+                longPressFunction: .showModes
+            ),
             KeySpec("换行", keyval: OpiKey.ret, fallback: .text("\n"), widthUnits: 1.4),
         ]
     }

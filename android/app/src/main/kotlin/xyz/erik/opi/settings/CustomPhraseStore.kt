@@ -32,8 +32,8 @@ class CustomPhraseStore(
     /** OpiEngine.customPhrasesEnabled：写口无返回值，只能读回确认启用态真被接受。 */
     private val readEnabled: () -> Boolean,
 ) {
-    /** 启用态缺省**开**：与主流输入法一致；没有短语时开关本来也不影响输入。 */
-    data class State(val enabled: Boolean = true, val phrases: List<CustomPhrase> = emptyList())
+    /** 启用态缺省**关**（2026-10-25 用户裁决）：加短语后需显式开启才参与匹配。 */
+    data class State(val enabled: Boolean = false, val phrases: List<CustomPhrase> = emptyList())
 
     companion object {
         /** filesDir 下的短语文件名（与 luna.opid / 用户词同目录）。 */
@@ -69,7 +69,7 @@ class CustomPhraseStore(
             return State()
         }
         return when (val d = CustomPhraseCodec.decode(text)) {
-            is CustomPhraseDecode.Ok -> State(d.enabled ?: true, d.phrases)
+            is CustomPhraseDecode.Ok -> State(d.enabled ?: false, d.phrases)
             is CustomPhraseDecode.Invalid -> State()
         }
     }

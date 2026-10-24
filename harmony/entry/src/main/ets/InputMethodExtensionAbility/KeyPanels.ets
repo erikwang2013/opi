@@ -8,7 +8,7 @@
 //
 // 键表是协议：9 键发送 `2..9`（类表见 scheme.rs），14 键发送字母对首字母。
 // 底行口径（2026-10-15 Android 裁决）：9/笔画的中/繁键**只切简繁**，进英文走
-// 独立的 [英文] 键；[符] 打开符号页（不是表情页）。14 键底行 2026-10-24 起是「中英」。
+// 独立的 [英] 键；[符] 打开符号页（不是表情页）。14 键底行 2026-10-25 起是「英」。
 
 import { KeyboardController } from './KeyboardController';
 import { lastChineseModeIndex, MODE_ENGLISH26, traditionalModeLabel } from './InputModes';
@@ -129,6 +129,11 @@ export struct NineKeyPanel {
     return this.elder === 1 ? 24 : 21;
   }
 
+  /** 左标点列字号（2026-10-25：比主区小一档，用户反馈标点键太大）。 */
+  private stripSize(): number {
+    return this.elder === 1 ? 18 : 17;
+  }
+
   /** 左列每格高度：可视约三行，条目多于三行时整列可滚（Android maxHeight/3 同档）。 */
   private stripCell(): number {
     return 58;
@@ -206,7 +211,7 @@ export struct NineKeyPanel {
         ForEach(NINE_STRIP, (k: NineKey) => {
           Row() {
             Button(k.label)
-              .fontSize(this.mainSize()).fontColor(this.pal().keyFg)
+              .fontSize(this.stripSize()).fontColor(this.pal().keyFg)
               .backgroundColor(this.pal().keyBg).borderRadius(6)
               .layoutWeight(1).height('100%').margin({ left: 2, right: 2 })
               .onClick(() => {
@@ -217,7 +222,7 @@ export struct NineKeyPanel {
         // 末尾自定义格：未选 = 点按开选择器；已选 = 点按输入、长按更换。
         Row() {
           Button(this.custom.length > 0 ? this.custom : '自定义')
-            .fontSize(this.custom.length > 0 ? this.mainSize() : this.keyFont())
+            .fontSize(this.custom.length > 0 ? this.stripSize() : 14)
             .fontColor(this.pal().keyFg).backgroundColor(this.pal().keyBg)
             .borderRadius(6).layoutWeight(1).height('100%').margin({ left: 2, right: 2 })
             .onClick(() => {
@@ -280,7 +285,7 @@ export struct NineKeyPanel {
             } else {
               this.StripColumn()
             }
-          }.layoutWeight(1)
+          }.layoutWeight(0.8)
           this.Grid()
           Column() {
             BackspaceButton({ fontSize: this.keyFont(), weight: 1 })
@@ -291,36 +296,43 @@ export struct NineKeyPanel {
               }
             })
             FuncButton({
-              label: '空格', fontSize: this.keyFont(),
+              // 2026-10-25：右列空格换成 0 键，空格移到底行中间并加宽。
+              label: '0', fontSize: this.keyFont(),
               onTap: () => {
-                this.ctrl.tapSpace();
+                this.ctrl.tapChar('0');
               }
             })
           }.layoutWeight(1)
         }.layoutWeight(3).margin({ top: 6 })
 
-        // 符 / 中繁 / 123 / 英文 / ↵。
+        // 符 / 中繁 / 123 / 空格(宽) / 英 / ↵。
         Row() {
           FuncButton({
-            label: '符', fontSize: this.keyFont(),
+            label: '符', fontSize: this.keyFont(), weight: 0.9,
             onTap: () => {
               this.ctrl.openSymbolPage();
             }
           })
           FuncButton({
-            label: traditionalModeLabel(this.mode), fontSize: this.keyFont(),
+            label: traditionalModeLabel(this.mode), fontSize: this.keyFont(), weight: 0.9,
             onTap: () => {
               this.ctrl.toggleTraditional();
             }
           })
           FuncButton({
-            label: '123', fontSize: this.keyFont(),
+            label: '123', fontSize: this.keyFont(), weight: 0.9,
             onTap: () => {
               this.ctrl.switchMode(OpiMode.Number);
             }
           })
           FuncButton({
-            label: '英文', fontSize: this.keyFont(),
+            label: '空格', fontSize: this.keyFont(), weight: 2.4,
+            onTap: () => {
+              this.ctrl.tapSpace();
+            }
+          })
+          FuncButton({
+            label: '英', fontSize: this.keyFont(), weight: 0.9,
             onTap: () => {
               this.ctrl.selectInputMode(MODE_ENGLISH26);
             }
@@ -433,7 +445,7 @@ export struct FourteenKeyPanel {
         }.layoutWeight(1)
       }, (row: string[], rowIndex: number) => `fp-${rowIndex}`)
 
-      // 符 | 123 | , | 空格（宽）| 。| 中英 | 换行。
+      // 符 | 123 | , | 空格（宽）| 。| 英 | 换行。
       Row() {
         FuncButton({
           label: '符', fontSize: this.bottomFont(), weight: 1.3,
@@ -467,7 +479,7 @@ export struct FourteenKeyPanel {
           }
         })
         FuncButton({
-          label: '中英', fontSize: this.bottomFont(), weight: 1.3,
+          label: '英', fontSize: this.bottomFont(), weight: 1.3,
           onTap: () => {
             this.toggleChineseEnglish();
           }

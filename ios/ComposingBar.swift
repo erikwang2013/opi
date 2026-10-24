@@ -21,7 +21,9 @@ import UIKit
 final class ComposingBar: UIView {
 
     /// 行高。控制器把它加进 `preferredKeyboardHeight`，这样键区净高不变。
-    static let height: CGFloat = 24
+    /// 2026-10-25：24 → 38（对齐 Android 拼音行 38dp）—— 宠物条与拼音行共用这条槽，
+    /// 24pt 时 8 枚宠物只能缩到 ~20pt、横向留下大片空隙。
+    static let height: CGFloat = 38
 
     private let label = UILabel()
     private let scroll = UIScrollView()

@@ -30,8 +30,8 @@ struct OpiCustomPhrase: Equatable {
 }
 
 struct OpiCustomPhraseState: Equatable {
-    /// 缺省**开**：与引擎 `CustomPhrases::default()` 一致，空表时开关无副作用。
-    var enabled = true
+    /// 缺省**关**（2026-10-25 用户裁决）：与引擎 `CustomPhrases::default()` 一致。
+    var enabled = false
     var phrases: [OpiCustomPhrase] = []
 }
 
@@ -372,7 +372,7 @@ final class OpiCustomPhraseStore {
         }
         switch OpiCustomPhraseCodec.decode(text) {
         case let .ok(phrases, enabled):
-            return OpiCustomPhraseState(enabled: enabled ?? true, phrases: phrases)
+            return OpiCustomPhraseState(enabled: enabled ?? false, phrases: phrases)
         case let .invalid(reason):
             NSLog("opi: 自定义短语文件无效（按空表处理）：%@ —— %@", url.path, reason)
             return OpiCustomPhraseState()

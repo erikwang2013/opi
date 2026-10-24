@@ -1252,7 +1252,9 @@ Shift 三拍查它）；**外观**页的皮肤由候选窗/状态栏 1s 轮询�
 列表 10 条/页、显示总数、增删改；导入 JSON / TSV / CSV / `字母=短语` / `字母 空白 短语`，
 **任何一条非法 ⇒ 整份拒收**；导出 JSON / TSV；读文件上限 1 MiB。上限 **2000 条**、
 trigger **≤32 个 ASCII 字母**（`CustomPhraseCodec` 与 `engine-core/src/custom_phrases.rs`
-同值）。
+同值）。**开关缺省关（2026-10-25 用户裁决）**：加短语后必须显式开启；每次开关/增删改
+都会写文件并走控制面 `reload`，TSF 立即重读，**不需要重启或重新导入**（候选进程不在时
+下次 Activate 生效）。
 
 - **装载时机**：TSF 在**启动**（`crates/tsf-opi/src/com_server.rs`）、**Activate**
   （`tsf.rs`，候选进程不在时的兜底）、**控制面 reload**（`ctl.rs` 的 `CtlOp::Reload`，

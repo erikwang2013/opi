@@ -25,8 +25,9 @@ export class PopupChoice {
   }
 }
 
-/** 弹层行高：手势按同一常数把纵向拖动换算成「移了几行」（Android 40dp 同档）。 */
-const POPUP_ROW_HEIGHT: number = 40;
+/** 弹层每格宽/高：手势按同一常数把**横向**拖动换算成「移了几格」（Android 44dp 同档）。 */
+const POPUP_ITEM_WIDTH: number = 44;
+const POPUP_ITEM_HEIGHT: number = 44;
 /** 上滑超过这个距离就开弹层（不再等长按超时）。 */
 const SWIPE_UP: number = 16;
 /** 长按开弹层（Android viewConfiguration.longPressTimeoutMillis 同档）。 */
@@ -56,7 +57,9 @@ export struct PopupKey {
   private timer: number = -1;
   private startY: number = 0;
   private lastY: number = 0;
-  private baseY: number = 0;
+  private startX: number = 0;
+  private lastX: number = 0;
+  private baseX: number = 0;
   private suppressClick: boolean = false;
 
   private pal(): Palette {
@@ -70,7 +73,7 @@ export struct PopupKey {
   }
 
   private startChoice(): void {
-    this.baseY = this.lastY;
+    this.baseX = this.lastX;
     this.selected = Math.max(0, Math.min(this.defaultChoice, this.choices.length - 1));
     this.open = true;
     // 弹层接管了这一轮按下：抬手时别再让 onClick 补发一次普通字符。
@@ -87,6 +90,8 @@ export struct PopupKey {
       }
       this.startY = event.touches[0].windowY;
       this.lastY = this.startY;
+      this.startX = event.touches[0].windowX;
+      this.lastX = this.startX;
       this.suppressClick = false;
       if (this.timer !== -1) {
         clearTimeout(this.timer);
@@ -100,6 +105,7 @@ export struct PopupKey {
         return;
       }
       this.lastY = event.touches[0].windowY;
+      this.lastX = event.touches[0].windowX;
       if (!this.open) {
         if (this.startY - this.lastY > SWIPE_UP) {
           if (this.timer !== -1) {
@@ -110,9 +116,9 @@ export struct PopupKey {
         }
         return;
       }
-      // 首项在最上方：向上拖 = 选更靠前的行；在开弹层那点的基础上算位移。
-      const rows: number = Math.round((this.baseY - this.lastY) / POPUP_ROW_HEIGHT);
-      this.selected = Math.max(0, Math.min(this.defaultChoice - rows, this.choices.length - 1));
+      // 首项在最左：向右拖 = 选更靠后的格；在开弹层那点的基础上算位移。
+      const steps: number = Math.round((this.lastX - this.baseX) / POPUP_ITEM_WIDTH);
+      this.selected = Math.max(0, Math.min(this.defaultChoice + steps, this.choices.length - 1));
     } else if (event.type === TouchType.Up) {
       if (this.timer !== -1) {
         clearTimeout(this.timer);
@@ -140,21 +146,21 @@ export struct PopupKey {
 
   @Builder
   PopupList() {
-    Column() {
+    // 横向一行（2026-10-25 用户订正：竖向太难操作）。
+    Row() {
       ForEach(this.choices, (choice: PopupChoice, index: number) => {
         Text(choice.label)
           .fontSize(this.choiceSize(choice))
           .fontColor(index === this.selected ? this.pal().highlightFg : this.pal().keyFg)
           .backgroundColor(index === this.selected ? this.pal().highlightBg : this.pal().keyBg)
-          .width('100%')
-          .height(POPUP_ROW_HEIGHT)
+          .width(POPUP_ITEM_WIDTH)
+          .height(POPUP_ITEM_HEIGHT)
           .textAlign(TextAlign.Center)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
       }, (choice: PopupChoice, index: number) => `${index}-${choice.label}`)
     }
-    .width(64)
-    .padding({ top: 4, bottom: 4 })
+    .padding(4)
     .backgroundColor(this.pal().keyBg)
     .borderRadius(8)
   }

@@ -62,7 +62,7 @@ class CustomPhraseStoreTest {
     @Test
     fun missingFileLoadsDefaults() {
         val s = store(target()).load()
-        assertEquals(true, s.enabled)
+        assertEquals("缺省关（2026-10-25 裁决）", false, s.enabled)
         assertEquals(emptyList<CustomPhrase>(), s.phrases)
     }
 

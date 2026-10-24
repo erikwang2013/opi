@@ -88,6 +88,7 @@ fn exact_match_is_first_and_select_commits_phrase_text() {
     let mut e = engine(&[("nihao", "你好", 9000), ("ni", "你", 5000)]);
     e.set_custom_phrases(r#"{"version":1,"phrases":[{"trigger":"nihao","text":"自定义"}]}"#)
         .unwrap();
+    e.set_custom_phrases_enabled(true);
     type_keys(&mut e, "nihao");
     let cands = e.candidates(8);
     assert_eq!(cands[0].text, "自定义");
@@ -116,6 +117,7 @@ fn phrase_beats_segment_fallback_and_consumes_the_whole_buffer() {
     let mut e = engine(&[("zhang", "张", 100)]);
     e.set_custom_phrases(r#"{"version":1,"phrases":[{"trigger":"zhangsan","text":"张三"}]}"#)
         .unwrap();
+    e.set_custom_phrases_enabled(true);
     type_keys(&mut e, "zhangsan");
     assert_eq!(e.candidates(8)[0].text, "张三");
     assert_eq!(e.select(0), "张三", "短语必须整段提交");
@@ -123,10 +125,27 @@ fn phrase_beats_segment_fallback_and_consumes_the_whole_buffer() {
 }
 
 #[test]
+fn phrases_are_disabled_until_explicitly_enabled() {
+    // 2026-10-25 用户裁决：缺省关；加短语后显式开启即匹配（不必重新导入）。
+    let mut e = engine(&[]);
+    e.set_custom_phrases(ONE_PHRASE).unwrap();
+    assert!(!e.custom_phrases_enabled(), "缺省必须是关");
+    type_keys(&mut e, "dz");
+    assert!(
+        !texts(&e.candidates(8)).contains(&"地址"),
+        "未开启不参与匹配"
+    );
+
+    e.set_custom_phrases_enabled(true);
+    assert!(texts(&e.candidates(8)).contains(&"地址"), "开启后立即命中");
+}
+
+#[test]
 fn disabled_hides_phrases_and_matching_is_exact() {
     let mut e = engine(&[("nihao", "你好", 9000)]);
     e.set_custom_phrases(r#"{"version":1,"phrases":[{"trigger":"nihao","text":"自定义"}]}"#)
         .unwrap();
+    e.set_custom_phrases_enabled(true);
     type_keys(&mut e, "niha"); // 前缀不算
     assert!(!texts(&e.candidates(8)).contains(&"自定义"), "只认精确相等");
 
@@ -146,6 +165,7 @@ fn separator_in_buffer_is_ignored() {
     let mut e = engine(&[("nihao", "你好", 9000)]);
     e.set_custom_phrases(r#"{"version":1,"phrases":[{"trigger":"nihao","text":"自定义"}]}"#)
         .unwrap();
+    e.set_custom_phrases_enabled(true);
     type_keys(&mut e, "ni'hao");
     assert_eq!(e.candidates(8)[0].text, "自定义");
 }
@@ -158,6 +178,7 @@ fn nine_key_encodes_trigger_letters_and_keeps_insertion_order() {
         r#"{"version":1,"phrases":[{"trigger":"dz","text":"地址"},{"trigger":"ez","text":"恶之"}]}"#,
     )
     .unwrap();
+    e.set_custom_phrases_enabled(true);
     e.set_scheme(Scheme::Nine);
     type_keys(&mut e, "39");
     let cands = e.candidates(8);
@@ -177,6 +198,7 @@ fn nine_key_encodes_trigger_letters_and_keeps_insertion_order() {
 fn fourteen_key_encodes_trigger_letters() {
     let mut e = engine(&[]);
     e.set_custom_phrases(ONE_PHRASE).unwrap();
+    e.set_custom_phrases_enabled(true);
     e.set_scheme(Scheme::Fourteen);
     type_keys(&mut e, "dz"); // 14 键 d→d、z→z，键面符号就是字母
     assert_eq!(e.candidates(8)[0].text, "地址");
@@ -187,6 +209,7 @@ fn other_schemes_never_match() {
     for scheme in [Scheme::Stroke, Scheme::Shuangpin, Scheme::Wubi] {
         let mut e = engine(&[]);
         e.set_custom_phrases(ONE_PHRASE).unwrap();
+        e.set_custom_phrases_enabled(true);
         e.set_scheme(scheme);
         type_keys(&mut e, "dz");
         assert!(
@@ -200,6 +223,7 @@ fn other_schemes_never_match() {
 fn phrases_respect_limit() {
     let mut e = engine(&[("dz", "打", 100)]);
     e.set_custom_phrases(ONE_PHRASE).unwrap();
+    e.set_custom_phrases_enabled(true);
     type_keys(&mut e, "dz");
     let one = e.candidates(1);
     assert_eq!(one.len(), 1);
@@ -217,6 +241,8 @@ fn chinese_and_english_sets_never_cross_modes() {
     let mut e = engine(&[("hello", "哈喽", 100)]);
     e.set_custom_phrases(CN_SAME_TRIGGER).unwrap();
     e.set_english_custom_phrases(EN_SAME_TRIGGER).unwrap();
+    e.set_custom_phrases_enabled(true);
+    e.set_english_custom_phrases_enabled(true);
 
     type_keys(&mut e, "hello");
     let cn_cands = e.candidates(8);
@@ -241,6 +267,7 @@ fn english_and_chinese_enabled_flags_are_independent() {
     let mut e = engine(&[]);
     e.set_custom_phrases(CN_SAME_TRIGGER).unwrap();
     e.set_english_custom_phrases(EN_SAME_TRIGGER).unwrap();
+    e.set_custom_phrases_enabled(true);
 
     e.set_english_custom_phrases_enabled(false);
     assert!(!e.english_custom_phrases_enabled());
@@ -276,6 +303,7 @@ fn english_and_chinese_enabled_flags_are_independent() {
 fn english_set_requires_exact_letters_not_prefix() {
     let mut e = engine(&[]);
     e.set_english_custom_phrases(EN_SAME_TRIGGER).unwrap();
+    e.set_english_custom_phrases_enabled(true);
     e.switch_mode(Mode::English);
     type_keys(&mut e, "hell");
     assert!(!texts(&e.candidates(8)).contains(&"english phrase"));

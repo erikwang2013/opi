@@ -130,7 +130,7 @@ final class KeyboardLayout: UIView {
     /// 有缓冲/候选时是候选栏。候选栏隐藏时仍占 44pt（键区锚在 `candidateBar.bottom`）。
     let candidateBar = UIView()
     let toolbar = KeyboardToolbar()
-    /// 顶部拼音行（2026-10-23）：组合中显示分词拼音；常驻 24pt，空串不铺底。
+    /// 顶部拼音行（2026-10-23）：组合中显示分词拼音；常驻 38pt，空串不铺底。
     let composingBar = ComposingBar()
     /// 顶部多形态宠物条（2026-10-23）：空闲时盖在空的拼音行槽位上；组合中隐藏。
     let petStrip = PetStripBar()

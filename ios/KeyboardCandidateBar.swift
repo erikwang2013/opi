@@ -30,7 +30,7 @@ extension KeyboardLayout {
     }
 
     func buildCandidateBar() {
-        // 拼音行在最上（24pt 常驻），候选栏/工具条接在它下沿 —— 见 `buildComposingBar`。
+        // 拼音行在最上（38pt 常驻），候选栏/工具条接在它下沿 —— 见 `buildComposingBar`。
         buildComposingBar()
         // 44pt = 工具条同高（Android `IME_TOOLBAR_HEIGHT_DP`）：两者共用一个槽位，
         // 高度不同会让键区在「空闲 ↔ 输入」之间上下跳。
@@ -143,7 +143,7 @@ extension KeyboardLayout {
 
     // MARK: - 拼音行（2026-10-23）
 
-    /// 顶部拼音行：键盘最上一条 24pt 常驻槽，候选栏与工具条都在它下面。
+    /// 顶部拼音行：键盘最上一条 38pt 常驻槽，候选栏与工具条都在它下面。
     /// 平铺候选态键区顶锚改接 `composingBar.bottom`（见 `buildRows`），所以平铺
     /// 盖住 44pt 槽位、但**不盖**拼音行 —— 组合中的拼音在平铺态同样可见。
     func buildComposingBar() {

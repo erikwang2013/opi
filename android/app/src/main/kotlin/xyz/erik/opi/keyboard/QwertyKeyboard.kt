@@ -207,7 +207,7 @@ internal fun qwertyBottomKeys(english: Boolean): List<QwertyBottomKey> =
             QwertyBottomKey(",", 1f),
             QwertyBottomKey("空格", 2.5f),
             QwertyBottomKey(".", 1f),
-            QwertyBottomKey("中英", 1f),
+            QwertyBottomKey("中", 1f),
             QwertyBottomKey("换行", 1f),
         )
     } else {
@@ -217,7 +217,7 @@ internal fun qwertyBottomKeys(english: Boolean): List<QwertyBottomKey> =
             QwertyBottomKey(",", 1f),
             QwertyBottomKey("空格", 2.5f),
             QwertyBottomKey("。", 1f),
-            QwertyBottomKey("中英", 1f),
+            QwertyBottomKey("英", 1f),
             QwertyBottomKey("换行", 1f),
         )
     }
@@ -259,12 +259,14 @@ private fun RowScope.Qwerty26Bottom(
                 description = if (spaceLabel == "空格") null else "空格",
                 fontSize = keyFont,
             )
-            key.label == "中英" -> ModeKey(
-                modeLabel,
+            // 2026-10-25：26 键底行模式键按**目标语言**写「中」/「英」，点一次即切
+            // （不再走 中→繁→英 三态循环；繁体仍可从长按输入模式面板选）。
+            key.label == "中" || key.label == "英" -> ModeKey(
+                key.label,
                 onModeSwitch,
                 keyFont,
                 onModeLongPress,
-                label = "中英",
+                label = key.label,
             )
             key.label == "换行" -> KeyButton(
                 key.label,

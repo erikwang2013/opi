@@ -41,7 +41,7 @@ private const val MAX_HOST_FILE_BYTES = 64L * 1024 * 1024
 
 /** 宿主文件内容：启用态 + 规范化短语表。缺省启用 = 与引擎/Android 同一姿态。 */
 data class CustomPhraseState(
-    val enabled: Boolean = true,
+    val enabled: Boolean = false,
     val phrases: List<CustomPhrase> = emptyList(),
 )
 
@@ -105,7 +105,7 @@ fun loadCustomPhrases(path: Path = customPhrasesPath()): CustomPhraseState {
         return CustomPhraseState()
     }
     return when (val d = CustomPhraseCodec.decode(text)) {
-        is CustomPhraseDecode.Ok -> CustomPhraseState(d.enabled ?: true, d.phrases)
+        is CustomPhraseDecode.Ok -> CustomPhraseState(d.enabled ?: false, d.phrases)
         is CustomPhraseDecode.Invalid -> CustomPhraseState()
     }
 }

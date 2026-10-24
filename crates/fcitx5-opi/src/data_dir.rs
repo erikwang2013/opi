@@ -373,7 +373,7 @@ mod tests {
 
         let no_enabled =
             parse_custom_phrases(r#"{"version":1,"phrases":[]}"#).expect("enabled 可缺省");
-        assert!(no_enabled.enabled, "缺省 = 开");
+        assert!(!no_enabled.enabled, "缺省 = 关（2026-10-25）");
     }
 
     #[test]
@@ -450,6 +450,6 @@ mod tests {
         .unwrap();
         assert!(!json.contains("地址"), "{json}");
         assert!(!json.contains(r#""x""#), "{json}");
-        assert!(on, "坏表退回默认启用");
+        assert!(!on, "坏表退回空表 + 关");
     }
 }

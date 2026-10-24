@@ -79,7 +79,7 @@ class Qwerty26LayoutTest {
     @Test
     fun englishBottomRowMatchesTheReferenceImage() {
         assertEquals(
-            listOf("!?#", "123", ",", "空格", ".", "中英", "换行"),
+            listOf("!?#", "123", ",", "空格", ".", "中", "换行"),
             qwertyBottomKeys(english = true).map { it.label },
         )
     }
@@ -87,16 +87,16 @@ class Qwerty26LayoutTest {
     @Test
     fun pinyinBottomRowMatchesTheReferenceImage() {
         assertEquals(
-            listOf("符", "123", ",", "空格", "。", "中英", "换行"),
+            listOf("符", "123", ",", "空格", "。", "英", "换行"),
             qwertyBottomKeys(english = false).map { it.label },
         )
     }
 
     @Test
-    fun bottomRowModeKeyIsFixedAndSpaceIsWidest() {
-        // 参考图 aa/cc 的模式键键面固定「中英」；当前模式靠 stateDescription 播报。
-        assertEquals("中英", qwertyBottomKeys(english = true)[5].label)
-        assertEquals("中英", qwertyBottomKeys(english = false)[5].label)
+    fun bottomRowModeKeyShowsTheTargetLanguage() {
+        // 2026-10-25：模式键写**目标语言**（英文面「中」、中文面「英」），点一次直达。
+        assertEquals("中", qwertyBottomKeys(english = true)[5].label)
+        assertEquals("英", qwertyBottomKeys(english = false)[5].label)
         val space = qwertyBottomKeys(english = true)[3]
         assertEquals("空格", space.label)
         assertTrue("空格必须比其它键宽", space.weight > 1f)

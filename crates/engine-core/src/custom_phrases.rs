@@ -55,19 +55,11 @@ pub(crate) struct CustomPhrase {
     pub(crate) text: String,
 }
 
+#[derive(Default)]
 pub(crate) struct CustomPhrases {
-    /// 缺省**开**：列表为空时开关无副作用；宿主导入后即使还没恢复开关也应该立刻可用。
+    /// 缺省**关**（2026-10-25 用户裁决）：加短语后必须显式开启才参与匹配。
     enabled: bool,
     phrases: Vec<CustomPhrase>,
-}
-
-impl Default for CustomPhrases {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            phrases: Vec::new(),
-        }
-    }
 }
 
 impl CustomPhrases {

@@ -640,6 +640,9 @@ CustomPhraseStore.kt` 的 `customPhrasesPathFor` / `englishCustomPhrasesPathFor`
 fcitx5 读侧是 `crates/fcitx5-opi/src/custom_phrases.rs` 的 `load_custom_phrases` /
 `load_english_custom_phrases` 与 `data_dir.rs::xdg_data_dir`。
 
+**开关缺省关（2026-10-25 用户裁决）**：加短语后必须在「高级」页显式开启才参与匹配；
+开启/关闭都会立即写盘并走 `ReloadAddonConfig` 重读，**不需要重启输入法或重新导入**。
+
 - 列表 10 条/页、显示总数、增删改；导入 JSON / TSV / CSV / `字母=短语` / `字母 空白 短语`，
   **任何一条非法 ⇒ 整份拒收**；导出 JSON（可再导入）/ TSV；读文件上限 1 MiB。上限
   **2000 条**、trigger **≤32 个 ASCII 字母**（`CustomPhraseCodec` 与引擎常量同值）。

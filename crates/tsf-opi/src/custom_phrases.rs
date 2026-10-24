@@ -43,8 +43,8 @@ pub struct PhraseState {
 impl Default for PhraseState {
     fn default() -> Self {
         Self {
-            // 缺省开：列表为空时开关无副作用（与 Android 宿主文件同一缺省）。
-            enabled: true,
+            // 缺省关（2026-10-25 用户裁决；与引擎/Android 宿主文件同一缺省）。
+            enabled: false,
             json: EMPTY_JSON.to_string(),
         }
     }
@@ -56,7 +56,7 @@ pub fn parse(text: &str) -> Option<PhraseState> {
     let value: serde_json::Value = serde_json::from_str(text).ok()?;
     let obj = value.as_object()?;
     let enabled = match obj.get("enabled") {
-        None => true,
+        None => false,
         Some(serde_json::Value::Bool(on)) => *on,
         Some(_) => return None, // 类型错 = 整份坏（与 Kotlin 侧同一姿态）
     };
@@ -135,7 +135,8 @@ fn apply_to_engine(
 ) {
     if set(engine, &state.json).is_err() {
         let _ = set(engine, EMPTY_JSON);
-        set_enabled(engine, true);
+        // 坏表回退「关 + 空表」：缺省关（2026-10-25），别让坏文件把开关悄悄打开。
+        set_enabled(engine, false);
         return;
     }
     set_enabled(engine, state.enabled);

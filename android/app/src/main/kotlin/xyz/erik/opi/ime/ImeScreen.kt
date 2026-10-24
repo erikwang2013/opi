@@ -444,7 +444,8 @@ private fun KeyboardArea(
                     onSpace = router::handleSpace,
                     onBackspace = router::handleBackspace,
                     onEnter = router::handleEnter,
-                    onModeSwitch = state::cycleMode,
+                    // 26 键「英/中」一键直达（2026-10-25）；繁体走长按输入模式面板。
+                    onModeSwitch = state::toggleChineseEnglish,
                     onNumber = state::openNumber,
                     // pinyin 模式 ⇧ 无意义且残留状态会泄漏进 English：传 null 禁用
                     onShift = if (shiftVisible) controller::shiftTap else null,
