@@ -400,7 +400,13 @@ void OpiEngine::keyEventImpl(const fcitx::InputMethodEntry & /*entry*/,
     // 幂等，但白花一次跨 FFI + 候选 JSON 序列化/解析 + 客户端重绘，而 ESC /
     // 方向键 / F5 / PageDown 这类直通键是**每次按键**都来一遍。缓冲与上次推出
     // 去的一样就跳过（reset()/select() 不经过这里，各自已经推过）。
-    if (result.action == 0 && take(opi_fcitx5_buffer()) == g_pushedBuffer) {
+    // 2026-10-26：Shift 按下也不改变缓冲/候选（Rust set_shift 只翻 bool），不重新推面板；
+    // 旧实现每次 Shift 按下都付一次全量候选排序。
+    const bool shiftOnly = !keyEvent.isRelease()
+        && (keyEvent.key().sym() == FcitxKey_Shift_L
+            || keyEvent.key().sym() == FcitxKey_Shift_R);
+    if ((result.action == 0 || shiftOnly)
+        && take(opi_fcitx5_buffer()) == g_pushedBuffer) {
         return;
     }
     // 把引擎新状态推给前端：预编辑串（缓冲）+ 当前页候选。

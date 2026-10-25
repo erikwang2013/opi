@@ -290,7 +290,7 @@ LICENSE · CONTRIBUTING.md      # MIT full text · contribution guide (incl. dic
 
 ### 📅 Project Status
 
-> **Current stage: v1.25.5 (2026-10-26): non-Windows response optimisation — the 9-key long-input fallback no longer scans whole dictionary ranges (16 keys measured ~9.8ms → under 0.5ms via a syllable-table witness); iOS reuses fixed candidate-bar slots and fetches only visible candidates during normal typing; HarmonyOS writes only changed state, avoiding a full per-key rebuild**
+> **Current stage: v1.25.6 (2026-10-26): more non-Windows latency work — 9-key segmented (`'`) queries no longer scan all 937k rows (range enumeration; desktop measured 882ms → 1.1ms); HarmonyOS drops the duplicate per-key pageCount ranking and caches dictionary sizes; iOS reuses the loaded dictionary across controller instances and stops refreshing on pass-through keys; Android validates optional dictionaries once per process and caches the ⌫ selection; Linux no longer re-ranks candidates on Shift press**
 
 V1 milestone progress:
 

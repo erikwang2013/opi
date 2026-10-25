@@ -15,7 +15,8 @@ use std::path::Path;
 
 #[path = "loader_lower_bound.rs"]
 mod loader_lower_bound;
-
+#[path = "loader_segmented.rs"]
+mod loader_segmented;
 /// 内存后盾：mmap 文件或堆上字节，避免自引用结构。
 pub enum Backing {
     Map(memmap2::Mmap),
@@ -158,8 +159,12 @@ impl Dictionary for MmapDictionary {
         pin: Option<&str>,
         n: usize,
     ) -> Vec<(Entry, String)> {
-        if input.is_empty() || input.contains('\'') {
+        if input.is_empty() {
             return scheme_entries_scan(self, input, scheme, pin, n);
+        }
+        // 2026-10-26：分词输入改为去引号区间枚举 + 边界过滤，不再全表扫描。
+        if input.contains('\'') {
+            return self.scheme_entries_segmented(input, scheme, pin, n);
         }
         let data = self.data();
         let ps = self.pinyin_start();

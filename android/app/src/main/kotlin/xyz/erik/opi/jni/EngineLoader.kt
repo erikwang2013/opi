@@ -222,6 +222,9 @@ object EngineLoader {
     }
 
     private val lunaGate = LunaLoadGate()
+    /** 可选词典（trad/stroke/wubi）每进程只挂一次（2026-10-26）；方案变了再重挂。 */
+    private var optionalLoaded = false
+    private var optionalPlan = ""
 
     /** 生产入口：assets/luna.opid → filesDir/luna.opid → OpiEngine。 */
     @Synchronized
@@ -254,6 +257,14 @@ object EngineLoader {
         }
         if (result) Log.i(TAG, "luna loaded (${target.length()} bytes)")
         else Log.w(TAG, "luna load failed, engine on builtin fallback dict")
+
+        // 2026-10-26：每次建输入视图都重装 trad/stroke/wubi 会重复哈希 12.4MB + 89 万
+        // 条目访问（手机冷启动 100ms+）。成功后按进程缓存；切换五笔方案才重挂。
+        val plan = ImePreferences.from(context).wubiPlan
+        if (optionalLoaded && optionalPlan == plan) {
+            ImePreferences.from(context).applyWubiSettings()
+            return result
+        }
 
         // trad 可选增强：失败仅告警，不影响 luna 主词典（OpiEngine.loadTrad 严格加载）
         val tradTarget = File(context.filesDir, FILE_NAME_TRAD)
@@ -310,7 +321,6 @@ object EngineLoader {
         // 五笔码表（2026-10-14，M4 第二波）：**按方案装一张**（86/98 二选一 —— 两表码
         // 空间重叠、权重不可比，同时进引擎就是两套体系打架，见 desktop 的 Wubi.kt 与
         // fcitx5 的 opi_wubi.h 同一条裁决）。方案读自偏好（缺省 86）。失败仅告警。
-        val plan = ImePreferences.from(context).wubiPlan
         val wubiAsset = if (plan == "98") ASSET_NAME_WUBI98 else ASSET_NAME_WUBI86
         val wubiFile = if (plan == "98") FILE_NAME_WUBI98 else FILE_NAME_WUBI86
         val wubiTarget = File(context.filesDir, wubiFile)
@@ -342,6 +352,9 @@ object EngineLoader {
         // 正是「配置 → 引擎」的落点（与 fcitx5 的 applyOpiSettings、TSF 的 apply_settings
         // 同一条）。方案不在这里（它已经在上面决定了装哪张表）。
         // 值域/名字 → 整数码的换算在 WubiNames.kt（锁步门禁比对 engine_wubi.rs）。
+        // 只有整套可选表都挂上才置位；任一失败保留重试（下次视图创建再装）。
+        optionalLoaded = tradOk && strokeOk && wubiOk
+        optionalPlan = plan
         ImePreferences.from(context).applyWubiSettings()
         return result
     }

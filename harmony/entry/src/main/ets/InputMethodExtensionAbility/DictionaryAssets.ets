@@ -44,6 +44,26 @@ function toArrayBuffer(data: Uint8Array): ArrayBuffer {
 function syncOne(rm: resourceManager.ResourceManager, dir: string, name: string): string {
   const dest: string = dir + '/' + name;
   try {
+    // 2026-10-26：先取 rawfile 描述符读长度，目标大小一致就直接返回 —— 旧实现先
+    // `getRawFileContentSync`（每次进程启动同步读 45.7MB）再 stat，热启动也会把
+    // 四张表全拷进内存。描述符拿不到才退回读内容。
+    let rawSize: number = 0;
+    try {
+      const fd = rm.getRawFdSync(name);
+      rawSize = fd.length;
+      rm.closeRawFdSync(name);
+    } catch (e) {
+      // 读不到描述符：走完整读取路径
+    }
+    if (rawSize > 0) {
+      try {
+        if (fileIo.statSync(dest).size === rawSize) {
+          return dest; // 上次已完整拷贝（大小即校验；词库随 HAP 更新时大小会变）
+        }
+      } catch (e) {
+        // 目标不存在 ⇒ 往下写
+      }
+    }
     const src: Uint8Array = rm.getRawFileContentSync(name);
     if (src.byteLength === 0) {
       console.error(`[opi] rawfile/${name} 为空，词库不可用`);
@@ -51,7 +71,7 @@ function syncOne(rm: resourceManager.ResourceManager, dir: string, name: string)
     }
     try {
       if (fileIo.statSync(dest).size === src.byteLength) {
-        return dest; // 上次已完整拷贝（大小即校验；词库随 HAP 更新时大小会变）
+        return dest;
       }
     } catch (e) {
       // 目标不存在 ⇒ 往下写

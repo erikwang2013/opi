@@ -322,9 +322,8 @@ impl CandidateState {
     pub fn set_shift(&mut self, on: bool) {
         self.invalidate_fetch_cache();
         self.engine.set_shift(on);
-        // shift 不改变 buffer（reset_page_if_buffer_changed 不会触发），但
-        // 可能改变候选集；将页码钳制到当前 page_count 边界，防 page 越界。
-        self.set_page(self.page);
+        // 2026-10-26：Shift 不改变候选集（只影响后续英文字母大小写）。旧实现在这里
+        // 走 set_page → page_count → candidates(MAX) 全量重排，Shift 按下白付 ~9ms。
     }
 
     // ---- 符号浏览（「符号大全」）：转发 + 分页收敛。宿主键路由见 input_method.rs

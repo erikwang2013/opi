@@ -237,6 +237,11 @@ export class KeyboardController {
     this.publish();
   }
 
+  /** 缓冲变化时静默解除旧钉（外层 publish 已按新缓冲算过候选，不要再嵌套 publish）。 */
+  clearPinnedReading(): void {
+    OpiEngine.pinReading('');
+  }
+
   /** 空格 —— 是**可打印段**的 0x20，走路由（缓冲非空时提交候选）。 */
   tapSpace(): void {
     this.pressKey(OpiEngine.KEY_SPACE, this.shiftStates());

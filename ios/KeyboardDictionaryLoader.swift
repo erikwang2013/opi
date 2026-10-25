@@ -8,6 +8,10 @@
 
 import Foundation
 
+/// 进程级成功标记（2026-10-26）：Rust 引擎是进程单例，每个新控制器实例都重装
+/// 32MB luna + trad 会白付 139ms+；成功一次后直接复用。失败不置位，保留重试。
+private var processDictionaryLoaded = false
+
 extension KeyboardViewController {
 
     /// 装载主词库。
@@ -16,6 +20,10 @@ extension KeyboardViewController {
     /// 与 Android 把 luna.opid / trad.opid 放进 assets 同一思路。
     /// 文件从哪来见 ios/README.md「构建集成」。
     func loadDictionaries() {
+        if processDictionaryLoaded {
+            dictionaryLoaded = true
+            return
+        }
         if let p = Bundle.main.path(forResource: "luna", ofType: "opid") {
             dictionaryLoaded = engine.load(path: p)
         } else {
@@ -30,6 +38,8 @@ extension KeyboardViewController {
         if !dictionaryLoaded {
             // 不静默。候选栏里会显示「词库未装载」。
             NSLog("[OPI] 词库装载失败 —— 引擎将退化为空操作")
+        } else {
+            processDictionaryLoaded = true
         }
     }
 

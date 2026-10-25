@@ -46,6 +46,8 @@ class OpiImeService : InputMethodService() {
     // 有输入目标：onStartInput(info != null) 置 true，onFinishInput 置 false。
     // 不能按 inputType 判 —— 抖音直播弹幕框用 TYPE_NULL，但仍通过 InputConnection 收字。
     private var editorActive = false
+    /** 选区非空（`onUpdateSelection` 缓存，2026-10-26）：⌫ 不再每次 getSelectedText。 */
+    private var selectionNonEmpty = false
     /** 提交重试的排程与撤销（字段持有的主线程 Handler，不随 IME 窗口重建而改变）。
      * internal：图片通道（PetStickerCommit.kt 的扩展函数）共用同一套重试/撤销。 */
     internal val pendingCommit = PendingCommit()
@@ -306,8 +308,10 @@ class OpiImeService : InputMethodService() {
         Log.i(TAG, "deleteBackward")
         val ic = currentInputConnection
         if (ic != null) {
-            val sel = ic.getSelectedText(0)
-            if (!sel.isNullOrEmpty()) {
+            // 2026-10-26：选区来自 onUpdateSelection 缓存。旧实现每次按 ⌫ 都同步
+            // getSelectedText(0)（binder 往返目标应用，慢编辑器数 ms）；只有缓存
+            // 说选区非空时才需要动选区。
+            if (selectionNonEmpty) {
                 ic.commitText("", 1)
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 ic.deleteSurroundingTextInCodePoints(1, 0)
@@ -315,6 +319,16 @@ class OpiImeService : InputMethodService() {
                 ic.deleteSurroundingText(1, 0)
             }
         }
+    }
+
+    override fun onUpdateSelection(
+        selectionStart: Int,
+        selectionEnd: Int,
+        candidatesStart: Int,
+        candidatesEnd: Int,
+    ) {
+        super.onUpdateSelection(selectionStart, selectionEnd, candidatesStart, candidatesEnd)
+        selectionNonEmpty = selectionStart >= 0 && selectionEnd >= 0 && selectionStart != selectionEnd
     }
 
     /** 回车：读目标应用声明的 action；action 位为 0 时回退提交换行。 */

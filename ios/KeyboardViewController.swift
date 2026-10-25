@@ -230,8 +230,8 @@ final class KeyboardViewController: UIInputViewController {
         case .handled:
             refresh()
         case .passThrough:
+            // 2026-10-26：引擎状态未变，不再做一次全量 refresh（候选重排/布局）。
             applyFallback(fallback)
-            refresh()
         }
     }
 

@@ -13,8 +13,8 @@ import * as OpiEngine from './OpiEngine';
 import { OpiMode } from './OpiEngine';
 import {
   KEY_ALL_CANDIDATES, KEY_BUFFER, KEY_CANDIDATES, KEY_DARK, KEY_DISPLAY_BUFFER, KEY_ELDER,
-  KEY_FLOAT, KEY_GAME, KEY_LEARNER, KEY_MODE, KEY_MODE_INDEX, KEY_ONE_HAND, KEY_PAGE,
-  KEY_PAGE_COUNT, KEY_PRO, KEY_READINGS, KEY_SHIFT, KEY_SHOW_OWN, KEY_SKIN, KEY_TILED, KEY_VIEW
+  KEY_FLOAT, KEY_GAME, KEY_LEARNER, KEY_MODE, KEY_MODE_INDEX, KEY_ONE_HAND,
+  KEY_PRO, KEY_READINGS, KEY_SHIFT, KEY_SHOW_OWN, KEY_SKIN, KEY_TILED, KEY_VIEW
 } from './KeyboardAppStorage';
 
 /** 平铺视图取全量的条数（同 Android EngineController.fetchLimit）。 */
@@ -65,7 +65,8 @@ export function publishState(): void {
   const buffer: string = OpiEngine.buffer();
   const pageCandidates: string[] = OpiEngine.candidatesPage();
   // 读数与当前候选批一起缓存，**紧跟** candidatesPage 读；displayBuffer 仍最后。
-  const readings: string[] = OpiEngine.candidateReadings();
+  // 左列最多滚 64 行；9 键一次可能产生上千条读数（JSON/节点都贵），截断到 64。
+  const readings: string[] = OpiEngine.candidateReadings().slice(0, TILED_FETCH_LIMIT);
   // ⚠️ displayBuffer **必须最后读**：9 键读数是 candidates() 的副产物（缓存与算它时的
   // 缓冲绑存），先读会拿到上一条缓冲的旧值/空串 —— Android EngineController 同款次序。
   const display: string = OpiEngine.displayBuffer();
@@ -80,8 +81,6 @@ export function publishState(): void {
   putString(KEY_DISPLAY_BUFFER, display);
   putStrings(KEY_CANDIDATES, pageCandidates);
   putStrings(KEY_READINGS, readings);
-  putNumber(KEY_PAGE, OpiEngine.page());
-  putNumber(KEY_PAGE_COUNT, OpiEngine.pageCount());
   putNumber(KEY_MODE, mode as number);
   putNumber(KEY_SHIFT, OpiEngine.shiftState() as number);
   putNumber(KEY_LEARNER, OpiEngine.learnerEnabled() ? 1 : 0);

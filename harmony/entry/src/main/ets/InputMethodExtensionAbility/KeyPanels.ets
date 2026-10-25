@@ -110,7 +110,7 @@ export struct NineKeyPanel {
   onBufferChanged(): void {
     if (this.pinned.length > 0) {
       this.pinned = '';
-      this.ctrl.pinReading('');
+      this.ctrl.clearPinnedReading();
     }
     if (this.readBound && this.readings.length > 0) {
       this.readScroller.scrollEdge(Edge.Top);
