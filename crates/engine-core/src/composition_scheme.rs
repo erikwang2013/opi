@@ -67,11 +67,15 @@ struct EntryHit {
 }
 
 /// 查询缓存 + 预算（同一段只查一次）。
+///
+/// 缓存键 = **段内容**而不是 (start, end)：长串里重复的片段（连按同一键、
+/// 重复音节）只查一次。这是 2026-10-26 的延迟修复 —— 16 个相同按键原先会
+/// 对每个位置各查一遍，24 次预算全花在同一段内容上。
 struct Cache<'a, D: Dictionary + ?Sized> {
     dict: &'a D,
     learner: &'a Learner,
     boost: u64,
-    map: HashMap<(usize, usize), Option<Rc<Chunk>>>,
+    map: HashMap<&'a str, Option<Rc<Chunk>>>,
     queries: usize,
     /// 预算用尽：整档放弃（见头注判据 6）。
     exhausted: bool,
@@ -187,9 +191,9 @@ fn t9(letters: &str) -> Option<String> {
 /// 枚举「`chunk_count` 段、整串全覆盖」的切法；每段 ≥2 键。每凑出一条切法就回调
 /// `visit`，回调返回 `false` 立即停止整个枚举（调用方的「凑够即停」）。
 /// 段长从长到短枚举 ⇒ 回调次序 = 排序签名降序（与组装时的 sort 键一致）。
-fn walk<D: Dictionary + ?Sized>(
-    s: &str,
-    cache: &mut Cache<'_, D>,
+fn walk<'a, D: Dictionary + ?Sized>(
+    s: &'a str,
+    cache: &mut Cache<'a, D>,
     pos: usize,
     chunks_left: usize,
     path: &mut Vec<Rc<Chunk>>,
@@ -222,13 +226,14 @@ fn walk<D: Dictionary + ?Sized>(
 }
 
 /// 取一段（`s[start..end]`）的精确词库条目；不合格/无命中 ⇒ `None`（带缓存与预算）。
-fn chunk<D: Dictionary + ?Sized>(
-    s: &str,
+fn chunk<'a, D: Dictionary + ?Sized>(
+    s: &'a str,
     start: usize,
     end: usize,
-    cache: &mut Cache<'_, D>,
+    cache: &mut Cache<'a, D>,
 ) -> Option<Rc<Chunk>> {
-    if let Some(cached) = cache.map.get(&(start, end)) {
+    let sub = &s[start..end];
+    if let Some(cached) = cache.map.get(sub) {
         return cached.clone();
     }
     let built = if end - start < 2 {
@@ -238,7 +243,6 @@ fn chunk<D: Dictionary + ?Sized>(
         None
     } else {
         cache.queries += 1;
-        let sub = &s[start..end];
         let mut entries: Vec<EntryHit> = cache
             .dict
             .scheme_entries(sub, Scheme::Nine, None, 0)
@@ -267,7 +271,7 @@ fn chunk<D: Dictionary + ?Sized>(
             }))
         }
     };
-    cache.map.insert((start, end), built.clone());
+    cache.map.insert(sub, built.clone());
     built
 }
 

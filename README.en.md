@@ -290,7 +290,7 @@ LICENSE · CONTRIBUTING.md      # MIT full text · contribution guide (incl. dic
 
 ### 📅 Project Status
 
-> **Current stage: v1.25.4 (2026-10-26): mobile 9-key popups now send the chosen lowercase letter itself (the engine's Nine scheme gained single-letter classes, so picking a matches only a; previously all three cells sent the whole T9 digit and matched the same class)**
+> **Current stage: v1.25.5 (2026-10-26): non-Windows response optimisation — the 9-key long-input fallback no longer scans whole dictionary ranges (16 keys measured ~9.8ms → under 0.5ms via a syllable-table witness); iOS reuses fixed candidate-bar slots and fetches only visible candidates during normal typing; HarmonyOS writes only changed state, avoiding a full per-key rebuild**
 
 V1 milestone progress:
 

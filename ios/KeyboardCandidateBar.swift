@@ -102,24 +102,31 @@ extension KeyboardLayout {
         }
     }
 
-    /// 候选栏重建。文本来自 `opi_candidates(limit)`，槽位固定、超出丢弃。
+    /// 候选栏更新。文本来自 `opi_candidates(limit)`，槽位固定、超出丢弃。
+    /// 2026-10-26：槽位按钮**只建一次**，每键只改标题/可用态；旧实现每键
+    /// removeFromSuperview + 新建 UIButton（Auto Layout/主题全量重建，iOS 上
+    /// 单项就可能吃掉 10ms 预算）。每次 refresh 仍走固定槽位，候选不足留空。
     func updateCandidateBar(_ texts: [String]) {
-        candidateStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        for i in 0..<candidateSlotCount {
-            if i < texts.count {
-                let b = BarButton(title: texts[i]) { [weak self] in
+        if candidateButtons.count != candidateSlotCount {
+            candidateStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+            candidateButtons = (0..<candidateSlotCount).map { i in
+                let b = BarButton(title: "") { [weak self] in
                     guard let self else { return }
                     self.delegate?.keyboardLayout(self, didSelectCandidateAt: i)
                 }
                 b.titleLabel?.lineBreakMode = .byTruncatingTail
                 b.titleLabel?.numberOfLines = 1
                 b.contentEdgeInsets = UIEdgeInsets(top: 2, left: 2, bottom: 2, right: 2)
-                b.applyTheme(palette, fontScale: fontScale)
                 candidateStack.addArrangedSubview(b)
-            } else {
-                // 固定槽位：候选不足时留空，整条栏的格子宽度不随候选数跳。
-                candidateStack.addArrangedSubview(UIView())
+                return b
             }
+        }
+        for (i, b) in candidateButtons.enumerated() {
+            let title = i < texts.count ? texts[i] : ""
+            if b.title(for: .normal) != title { b.setTitle(title, for: .normal) }
+            // 空槽不可点：旧实现的 UIView 占位本身就不可交互。
+            b.isUserInteractionEnabled = i < texts.count
+            b.applyTheme(palette, fontScale: fontScale)
         }
     }
 

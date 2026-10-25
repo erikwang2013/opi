@@ -171,11 +171,11 @@ final class KeyboardLayout: UIView {
     var customPunctuation = PunctuationPreference.custom   // 9 键左列自定义符号
     var activePopup: KeyPopup?                              // 当前浮层（手势见 KeyboardTouch）
     let punctuationPicker = PunctuationPicker()             // 常用符号选择器（2026-10-24）
-
     /// 最近一次刷新拿到的候选/读数/钉住态（候选栏、左列、平铺三处共用一份快照）。
     var candidateTexts: [String] = []
     /// 候选栏当前槽位数（按宽度算；见 `KeyboardCandidateBar.updateCandidateSlots`）。
     var candidateSlotCount = 5
+    var candidateButtons: [BarButton] = [] // 2026-10-26：固定槽位复用，不每键重建
     var candidateReadingTexts: [String] = []
     var pinnedReading = ""
     /// 读数/左列滚动复位键（拼音缓冲）。缓冲变了整列回顶部（Android `scrollKey`）。

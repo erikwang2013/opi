@@ -28,6 +28,38 @@ function candidatesShowable(buffer: string, candidates: string[], mode: OpiMode)
   return mode === OpiMode.English || buffer.length > 0 || candidates.length > 0;
 }
 
+
+/** 只在值真的变了时写 AppStorage（2026-10-26 延迟修复：旧实现每键无条件写 17 项，
+ *  ArkUI 对每个 @StorageLink 观察者都可能触发一轮重建；不变的 mode/skin/开关不该参与）。 */
+function putNumber(key: string, value: number): void {
+  if (AppStorage.get<number>(key) !== value) {
+    AppStorage.setOrCreate<number>(key, value);
+  }
+}
+
+function putString(key: string, value: string): void {
+  if (AppStorage.get<string>(key) !== value) {
+    AppStorage.setOrCreate<string>(key, value);
+  }
+}
+
+function putStrings(key: string, value: string[]): void {
+  const old: string[] | undefined = AppStorage.get<string[]>(key);
+  if (old !== undefined && old.length === value.length) {
+    let same: boolean = true;
+    for (let i = 0; i < value.length; i++) {
+      if (old[i] !== value[i]) {
+        same = false;
+        break;
+      }
+    }
+    if (same) {
+      return;
+    }
+  }
+  AppStorage.setOrCreate<string[]>(key, value);
+}
+
 export function publishState(): void {
   // 行为判定用 buffer（原值）；拼音行用 displayBuffer（9 键带分词）。
   const buffer: string = OpiEngine.buffer();
@@ -44,28 +76,27 @@ export function publishState(): void {
   }
   const tiled: boolean = KeyboardModes.tiledEnabled();
 
-  AppStorage.setOrCreate<string>(KEY_BUFFER, buffer);
-  AppStorage.setOrCreate<string>(KEY_DISPLAY_BUFFER, display);
-  AppStorage.setOrCreate<string[]>(KEY_CANDIDATES, pageCandidates);
-  AppStorage.setOrCreate<string[]>(KEY_READINGS, readings);
-  AppStorage.setOrCreate<number>(KEY_PAGE, OpiEngine.page());
-  AppStorage.setOrCreate<number>(KEY_PAGE_COUNT, OpiEngine.pageCount());
-  AppStorage.setOrCreate<number>(KEY_MODE, mode as number);
-  AppStorage.setOrCreate<number>(KEY_SHIFT, OpiEngine.shiftState() as number);
-  AppStorage.setOrCreate<number>(KEY_LEARNER, OpiEngine.learnerEnabled() ? 1 : 0);
+  putString(KEY_BUFFER, buffer);
+  putString(KEY_DISPLAY_BUFFER, display);
+  putStrings(KEY_CANDIDATES, pageCandidates);
+  putStrings(KEY_READINGS, readings);
+  putNumber(KEY_PAGE, OpiEngine.page());
+  putNumber(KEY_PAGE_COUNT, OpiEngine.pageCount());
+  putNumber(KEY_MODE, mode as number);
+  putNumber(KEY_SHIFT, OpiEngine.shiftState() as number);
+  putNumber(KEY_LEARNER, OpiEngine.learnerEnabled() ? 1 : 0);
   // 这两条不来自引擎（模块级状态机）：未装载时读侧回 0/false 是哨兵，别拿它当 UI 档位。
-  AppStorage.setOrCreate<number>(KEY_MODE_INDEX, InputModes.currentModeIndex());
-  AppStorage.setOrCreate<number>(KEY_VIEW, KeyboardModes.panelView());
-  AppStorage.setOrCreate<number>(KEY_SKIN, KeyboardModes.skinValue());
-  AppStorage.setOrCreate<number>(KEY_DARK, KeyboardModes.darkEnabled() ? 1 : 0);
-  AppStorage.setOrCreate<number>(KEY_ELDER, KeyboardModes.elderEnabled() ? 1 : 0);
-  AppStorage.setOrCreate<number>(KEY_ONE_HAND, KeyboardModes.oneHandValue());
-  AppStorage.setOrCreate<number>(KEY_FLOAT, KeyboardModes.floatingEnabled() ? 1 : 0);
-  AppStorage.setOrCreate<number>(KEY_GAME, KeyboardModes.gameEnabled() ? 1 : 0);
-  AppStorage.setOrCreate<number>(KEY_PRO, KeyboardModes.englishProEnabled() ? 1 : 0);
-  AppStorage.setOrCreate<number>(KEY_SHOW_OWN, KeyboardModes.showOwnEnabled() ? 1 : 0);
-  AppStorage.setOrCreate<number>(KEY_TILED, tiled ? 1 : 0);
+  putNumber(KEY_MODE_INDEX, InputModes.currentModeIndex());
+  putNumber(KEY_VIEW, KeyboardModes.panelView());
+  putNumber(KEY_SKIN, KeyboardModes.skinValue());
+  putNumber(KEY_DARK, KeyboardModes.darkEnabled() ? 1 : 0);
+  putNumber(KEY_ELDER, KeyboardModes.elderEnabled() ? 1 : 0);
+  putNumber(KEY_ONE_HAND, KeyboardModes.oneHandValue());
+  putNumber(KEY_FLOAT, KeyboardModes.floatingEnabled() ? 1 : 0);
+  putNumber(KEY_GAME, KeyboardModes.gameEnabled() ? 1 : 0);
+  putNumber(KEY_PRO, KeyboardModes.englishProEnabled() ? 1 : 0);
+  putNumber(KEY_SHOW_OWN, KeyboardModes.showOwnEnabled() ? 1 : 0);
+  putNumber(KEY_TILED, tiled ? 1 : 0);
   // 平铺没开就不取全量：每键都拉 64 条纯属浪费（普通候选栏只用当前页）。
-  AppStorage.setOrCreate<string[]>(KEY_ALL_CANDIDATES,
-    tiled ? OpiEngine.candidates(TILED_FETCH_LIMIT) : []);
+  putStrings(KEY_ALL_CANDIDATES, tiled ? OpiEngine.candidates(TILED_FETCH_LIMIT) : []);
 }

@@ -62,6 +62,16 @@ pub fn is_syllable(s: &str) -> bool {
     SYLLABLES.binary_search(&s).is_ok()
 }
 
+/// 在音节表里找长度为 `len` 且满足 `ok` 的音节。
+/// 2026-10-26 从 `scheme_fallback_len` 抽出：只枚举 ~400 条音节，避免扫整段词库区间
+/// （16 键长串原实现 7ms）。
+pub(crate) fn find_syllable<F>(len: usize, mut ok: F) -> Option<&'static str>
+where
+    F: FnMut(&str) -> bool,
+{
+    SYLLABLES.iter().copied().find(|s| s.len() == len && ok(s))
+}
+
 /// 对输入的拼音串做最长匹配切分（贪婪，最大音节长 6）。
 /// `'` 为硬分隔符，单字母未匹配时按单字母切。
 pub fn segment(input: &str) -> Vec<String> {

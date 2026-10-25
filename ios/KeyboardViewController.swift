@@ -44,6 +44,7 @@ final class KeyboardViewController: UIInputViewController {
     /// 与 fcitx5 轨「词库损坏时插件静默全失效」是同一个坑。
     /// internal：装载实现搬到 `KeyboardDictionaryLoader.swift`（本文件压 500 行门禁）。
     var dictionaryLoaded = false
+    var markedResidueCleared = false // 2026-10-26：旧版 marked text 只清一次，别每键 unmark
 
     /// 皮肤与键盘模式（2026-10-20）：启动时从扩展自己的 UserDefaults 读，
     /// 切换后即写回（Android `ImePreferences` 的等价物，但没有设置 App）。

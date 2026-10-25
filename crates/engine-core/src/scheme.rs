@@ -285,6 +285,7 @@ fn boundary_aligned(head: &str) -> bool {
 /// 单音节整串（如恰好一个音节的键）本来就命中、走不到这里；垃圾串（无见证者）同样维持
 /// 死。⚠️ 尾部本身**可以**凑满音节（完整的音节键也会被丢）——判定是「丢到第一个音节
 /// 查得到的前缀为止」，与 26 键「先匹配前面的第一个字」逐字同形，不是「尾部必须残缺」。
+#[rustfmt::skip]
 pub(crate) fn scheme_fallback_len<D: Dictionary + ?Sized>(
     dict: &D,
     input: &str,
@@ -312,14 +313,12 @@ pub(crate) fn scheme_fallback_len<D: Dictionary + ?Sized>(
     // 判据 4：见证者 —— 取**最长的单音节**见证者（第一个字的读音是一个完整拼音音节；
     // 2026-10-18 用户裁决「先匹配前面的第一个字」）。从长到短试：多音节词被
     // `is_syllable` 排除，`644269` 不会一次吃掉 `nihao` 两字；单键的 `o` 会被
-    // 更明确的 `ni`（`64`）压过。`scheme_find` 的区间含比 head 更长的键，故谓词里
-    // 显式要求键长 == l。
-    (1..input.len()).rev().find(|&l| {
-        dict.scheme_find(&input[..l], scheme, pin, &mut |py, _| {
-            py.len() == l && boundary_aligned(py) && crate::pinyin::is_syllable(py)
-        })
-        .is_some()
-    })
+    // 更明确的 `ni`（`64`）压过；谓词要求键长==l，单音节最长 6（zhuang）。
+    let present = |l: usize, head: &str| {
+        crate::pinyin::find_syllable(l, |s| pin.is_none_or(|p| p == s) && scheme.matches(head, s)
+            && dict.query_prefix_top(s, 0).iter().any(|e| e.pinyin_len == l)).is_some()
+    };
+    (1..input.len().min(7)).rev().find(|&l| present(l, &input[..l]))
 }
 
 #[cfg(test)]

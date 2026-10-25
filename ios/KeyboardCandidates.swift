@@ -40,7 +40,10 @@ extension KeyboardViewController {
             }
             pinBuffer = buffer
         }
-        let texts = engine.allCandidates(limit: 64)
+        // 2026-10-26：普通候选栏只画固定槽位，没必要每键让引擎排 64 条；
+        // 平铺页才要整批（打开平铺时 showTiledCandidates 会补一次 64 条的 refresh）。
+        let limit = layout.keyLayer == .candidatesTiled ? 64 : max(8, layout.candidateSlotCount)
+        let texts = engine.allCandidates(limit: limit)
         let readings = layout.wantsReadings ? engine.candidateReadings() : []
         layout.updateCandidates(
             texts, readings: readings, pinned: pinnedReading, resetKey: buffer
@@ -66,10 +69,13 @@ extension KeyboardViewController {
     }
 
     /// 2026-10-21 用户裁决：输入框里**不显示任何** preedit/marked text，
-    /// 只有确认/选词后 `insertText`。本函数保留 `unmarkText()` 清理路径
-    /// （否则宿主里可能残留上一版键盘标出的组合区），但**不再 setMarkedText**。
+    /// 只有确认/选词后 `insertText`。本函数只清**旧版残留**的组合区，且每次扩展
+    /// 生命周期只清一次（2026-10-26：`unmarkText` 是跨进程调用，逐键调用会吃掉
+    /// 延迟预算；本版从不 setMarkedText，无需每次都清）。
     /// ⚠️ internal：热键路径（`KeyboardHardware.swift`）也会走到 [refresh]。
     func syncMarkedText() {
+        guard !markedResidueCleared else { return }
+        markedResidueCleared = true
         textDocumentProxy.unmarkText()
     }
 
@@ -100,6 +106,8 @@ extension KeyboardViewController {
     func showTiledCandidates() {
         guard layout.hasCandidates else { return }
         layout.setLayer(.candidatesTiled)
+        // 普通候选栏只取了 8 条；平铺要整批，切层后立刻按 64 条重取一次。
+        refresh()
     }
 
     /// 平铺里 ⌫ / 重输 / 空格之后：中文且缓冲空、候选也没了 ⇒ 自动回键面，
