@@ -69,15 +69,20 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
             .into_iter()
             .map(|(e, pinyin)| {
                 let exact = pinyin.len() == input_len;
+                // 一次查找同时喂分档与分数（9 键首击 2048 条，两次 BTreeMap 查找是白付）。
+                let user = learner.freq_of(&e.word);
                 let meta = Meta {
                     pinyin_len: pinyin.len(),
                     exact,
                     // 同全键盘：学过的排第 0 档（见 `candidates_tiers.rs` 头注）。
-                    learned: learner.freq_of(&e.word) > 0,
+                    learned: user > 0,
                     tail: false,
                 };
-                let score = rank_score(e.freq, learner.freq_of(&e.word), boost)
-                    .saturating_add(if exact { exact_bonus } else { 0 });
+                let score = rank_score(e.freq, user, boost).saturating_add(if exact {
+                    exact_bonus
+                } else {
+                    0
+                });
                 (
                     Candidate {
                         text: e.word,
@@ -167,10 +172,13 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
     let mut tail: &str = "";
     if !exact_hit && composed.is_empty() {
         match crate::scheme::scheme_fallback_len(dict, input, scheme, pin) {
-            Some(k) => {
+            // k == 整串：`scan` 的结果与上面那次逐字相同（2026-10-25 首击尖峰 ——
+            // 单键 9 的 w/x/y/z 四段全扫一遍已够贵，重复扫把 9 键首击翻倍）。
+            Some(k) if k < input.len() => {
                 merged = scan(&input[..k]);
                 tail = &input[k..];
             }
+            Some(_) => {}
             None => tail = input,
         }
     }

@@ -152,7 +152,7 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
         return Vec::new();
     }
     let input_len = input.len();
-    let prefix_cap = crate::dictionary::prefix_cap(learner.has_user_words(), limit);
+    let prefix_cap = crate::dictionary::prefix_cap();
     // 精确等长匹配加成 = boost/2。boost = max(USER_BOOST, 词典最大静态词频×2)
     // （见 Engine::with_dictionaries），故 boost/2 ≥ 最大静态词频 —— 任何精确匹配（哪怕
     // freq=0）都排在任何前缀扩展之前：输入 xian 不再由 xiang 的「想」占首位。

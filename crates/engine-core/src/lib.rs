@@ -7,6 +7,7 @@
 mod abbr; // 声母缩写整串匹配（2026-10-22，见 abbr.rs 头注）
 pub mod bytes;
 pub mod candidates;
+mod candidates_finite; // 单键有限窗口的精确前缀（首击尖峰，见文件头）
 #[path = "candidates_options.rs"]
 mod candidates_options_impl; // 排序层开关 RankOptions（500 行门禁拆出，见文件头）
 #[path = "candidates_scheme.rs"]

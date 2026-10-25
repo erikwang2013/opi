@@ -155,6 +155,23 @@ impl Engine {
         // 五笔同族（2026-10-14）：无码表时也落本支，三档同关 + **分词回退也关**
         // （码串没有音节，理由见 engine_wubi.rs 头）—— `plain` 是这两条路的共同判据。
         let plain = matches!(self.scheme(), Scheme::Stroke | Scheme::Wubi);
+        // 单键首击的有限窗口：只物化首位段，结果与全量列表逐条同前缀（见模块头）。
+        // 主块够一屏时符号/表情都在后面，提前返回不会少候选。
+        if !plain
+            && limit != usize::MAX
+            && s.buffer.chars().count() == 1
+            && matches!(s.mode, Mode::Pinyin | Mode::Traditional)
+            && let Some(fast) = crate::candidates_finite::single_key_prefix(
+                self.active_dict(),
+                &self.learner,
+                &s.buffer,
+                limit,
+                self.user_boost,
+                s.mode == Mode::Pinyin,
+            )
+        {
+            return fast;
+        }
         let mut cands = rank_and_pick_with(
             self.active_dict(),
             &self.symbols,

@@ -17,15 +17,14 @@ use crate::trie::{Entry, Trie};
 /// 判定与实测出处：`data/raw/LICENSES.md` 的 2026-10-11「外部词库并入」一节。
 pub const PREFIX_MATCH_CAP: usize = 9216;
 
-/// 主查询前缀层的实际取回上限（2026-10-18 性能）：没有学习词时 boost 不会把池外
-/// 的低静态词提到前面，最终只留 `limit` 条 ⇒ 取 `limit*8`（下限 256）就够；
-/// 有学习词时必须留满 `PREFIX_MATCH_CAP`，否则「学过一次的低频词」会被提前截掉。
-pub(crate) fn prefix_cap(has_user_words: bool, limit: usize) -> usize {
-    if has_user_words || limit == usize::MAX {
-        PREFIX_MATCH_CAP
-    } else {
-        PREFIX_MATCH_CAP.min(limit.saturating_mul(8).max(256))
-    }
+/// 主查询前缀层的实际取回上限。
+///
+/// **固定 9216，不再按 limit 缩小**（2026-10-25）：移动端用 `candidates(k)` 显示、
+/// 选中时用 `Engine::select` 重算 `candidates(MAX)` 的全局下标提交 —— 有限窗口必须
+/// 是全量列表的**逐条前缀**，缩池会让「看到百度、上屏不饿」。单键首击的成本由
+/// `candidates_finite` 只物化首位那段来省，而不是缩小池。
+pub(crate) fn prefix_cap() -> usize {
+    PREFIX_MATCH_CAP
 }
 
 /// 9/14 键按键类层的静态词频截断（2026-10-11 移动端提速；与 [`PREFIX_MATCH_CAP`]

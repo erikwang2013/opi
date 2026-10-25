@@ -298,6 +298,8 @@ pub(crate) fn scheme_fallback_len<D: Dictionary + ?Sized>(
     {
         return None;
     }
+    // 单键无更短首音节可回退；整段重扫恒 None（尾档仍由调用方走），见 2026-10-25 首击。
+    if input.len() == 1 { return None; }
     // 判据 3：整串（过 pin 滤后）没有**精确**命中 —— 区间枚举走存在性（**不许被
     // top-N 截断**，故用 `scheme_find` 而不是 `scheme_entries`）。`scheme_find` 的
     // 区间含比 input 更长的键（前缀扩展），必须按键长过滤，否则 `64426` 会被
