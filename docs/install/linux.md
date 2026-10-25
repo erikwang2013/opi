@@ -3,6 +3,12 @@
 
 # Linux 端（fcitx5 插件）编译 / 打包 / 使用
 
+> ### v1.26.0 功能注记（2026-10-26）
+>
+> - **用户词落盘**：fcitx5 现在把学习结果写到 `$XDG_DATA_HOME/opi/opi_user_words.json`（缺省 `~/.local/share/opi/…`），选词后 800ms 防抖；损坏或 0 字节文件原样保留，不静默覆盖。
+> - **外部词库**：`$XDG_DATA_HOME/opi/dicts/*.tsv` 可直接放完整 34–39 MiB 词库（本轨无 Android/macOS 的 8 MiB / 20 万条限制）；转换器与许可见 [`../external-dictionaries.md`](../external-dictionaries.md)。
+> - **未接**：括号自动配对只在 Android/iOS/鸿蒙；Linux 桌面端没有光标回移。9/14 键按键类池仍是 2048，26 键全量池 9216。
+
 > ### 先读这一段
 >
 > **Linux 是三个「有端代码」的平台（Android / Linux / Windows）里，唯一有 CI 在真
@@ -294,9 +300,10 @@ Windows 的 `.msi` 有等价物（`scripts/postprocess-windows-msi.sh` 的 taskk
 ExitDialog 自启）。**v1.9.8 及更早的 Linux 包没有这些脚本** —— 升级到带脚本的版本之前，
 手工 `pkill opi-candidates` 再重开即可看到新版本。
 
-卸载就是标准的 `dpkg -r opi` / `rpm -e opi`。**本插件自己不写任何用户状态**（学习结果
-目前不落盘，见 §7），所以 `~/.config/fcitx5` / `~/.local/share/fcitx5` 下不会有本插件
-留下的东西要手清 —— 那里若还有内容，属于 fcitx5 自身或别的 addon。
+卸载就是标准的 `dpkg -r opi` / `rpm -e opi`。**插件现在会写用户词**：
+`$XDG_DATA_HOME/opi/opi_user_words.json`（见 §7）；卸载包不会删除它，想彻底清掉
+请手动删该文件或整个 `opi/` 数据目录。`~/.config/fcitx5` / `~/.local/share/fcitx5`
+下不会有本插件留下的别的状态 —— 那里若还有内容，属于 fcitx5 自身或别的 addon。
 
 ---
 
@@ -1091,8 +1098,8 @@ rime-pinyin-simp/OpenCC 转换表与 MIT 的康熙差集编译而来 —— 逐�
   停 + 记统一由 `preinstall.sh` 做）。
 - **卸载不重启 fcitx5**：正在跑的实例继续持有已删除的插件映射，直到下次重启/登录
   （§3.1 最后一条）。
-- **学习结果不落盘**：`fcitx5-opi` 学完照旧丢（Rust 侧的学习落盘
-  `engine-data/src/user_words.rs` 全仓零调用方）。
+- **学习结果已落盘（2026-10-26）**：fcitx5 写 `$XDG_DATA_HOME/opi/opi_user_words.json`，
+  800ms 防抖；Windows TSF、iOS、鸿蒙仍不落盘。损坏/0 字节文件原样保留。
 - **无障碍未接入**：读屏软件支持只有 Android 有（`README.md` 的平台状态表）。
 
 ## 8. 未验证清单（照抄现状，别读成已完成）

@@ -10,7 +10,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 780" width="1180" height="780"
      role="img" aria-labelledby="lcTitle lcDesc">
   <title id="lcTitle">OPI 生命周期</title>
-  <desc id="lcDesc">上排为词库生命周期：词库产物 → 定位与重拷（Android 走 assets→filesDir，fcitx5 走 XDG 数据目录；草案端鸿蒙的完整词库装载尚未实现）→ mmap 装载 → 格式校验 → 装入单例 → 繁体热替换，任一环节失败回退内置 35 词。另有导入词库 *.tsv 契约（康熙字典随包 + 首启种子）。下排为击键生命周期：按键事件 → KeyRouter 分流 → Composer 状态机 → 缓冲更新 → rank_and_pick 排序 → 候选栏渲染 → 用户选择 → Learner 记录 → 提交上屏 → 缓冲清空，随后循环回步骤 1。</desc>
+  <desc id="lcDesc">上排为词库生命周期：词库产物 → 定位与重拷（Android 走 assets→filesDir，fcitx5 走 XDG 数据目录，鸿蒙由 rawfile 首启拷入沙箱）→ mmap 装载 → 格式校验 → 装入单例 → 繁体热替换，任一环节失败回退内置 35 词；另有导入词库 *.tsv 契约（康熙字典随包 + 首启种子）与用户词 JSON 的启动导入/800ms 防抖落盘。下排为击键生命周期：按键事件 → KeyRouter 分流 → Composer 状态机 → 缓冲更新 → rank_and_pick 排序 → 候选栏渲染（移动端取回 512 条）→ 用户选择 → Learner 记录（来源 +1/+2、误选撤销）→ 提交上屏（括号配对由宿主处理）→ 缓冲清空，随后循环回步骤 1。</desc>
 
   <defs>
     <marker id="lcArw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -35,7 +35,7 @@
     <rect x="30" y="86" width="1120" height="244" rx="14" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
     <rect x="46" y="74" width="128" height="24" rx="12" fill="#2E8B80"/>
     <text x="110" y="91" text-anchor="middle" font-size="12.5" font-weight="700" fill="#FFFFFF">词库生命周期</text>
-    <text x="186" y="91" font-size="11.5" fill="#8A948F">进程启动时装一次 —— .opid 各端定位（Android assets→filesDir / fcitx5 XDG / TSF 三候选）；导入词库 *.tsv 走词库目录（康熙随包 + 首启种子）；鸿蒙草案未实现</text>
+    <text x="186" y="91" font-size="11.5" fill="#8A948F">进程启动时装一次 —— .opid 各端定位（Android assets→filesDir / fcitx5 XDG / TSF 三候选 / 鸿蒙 rawfile）；导入 *.tsv 走词库目录；用户词由宿主导入并防抖落盘</text>
 
     <!-- 六个阶段 -->
     <g>
@@ -100,7 +100,7 @@
     <rect x="30" y="358" width="1120" height="388" rx="14" fill="#EDF6F4" stroke="#B9D9D4" stroke-width="2"/>
     <rect x="46" y="346" width="128" height="24" rx="12" fill="#2E8B80"/>
     <text x="110" y="363" text-anchor="middle" font-size="12.5" font-weight="700" fill="#FFFFFF">击键生命周期</text>
-    <text x="186" y="363" font-size="11.5" fill="#5B8C85">一次按键从进入到上屏 —— 上排输入侧，下排输出侧，清空缓冲后回到步骤 1；标点映射分两档，各由一个独立开关管</text>
+    <text x="186" y="363" font-size="11.5" fill="#5B8C85">一次按键从进入到上屏 —— 上排输入侧，下排输出侧；标点分两档；括号配对由宿主在提交前处理（移动三端）</text>
 
     <!-- 输入侧 -->
     <g>
@@ -149,7 +149,7 @@
     <g>
       <rect x="30" y="570" width="196" height="96" rx="10" fill="#FFFFFF" stroke="#B9D9D4" stroke-width="1.5"/>
       <text x="128" y="598" text-anchor="middle" font-size="12.5" font-weight="700" fill="#22272E">⑥ 候选栏渲染</text>
-      <text x="128" y="621" text-anchor="middle" font-size="9.5" fill="#6B7671">每屏 8 项；9 键 ⌄ 平铺竖向翻页</text>
+      <text x="128" y="621" text-anchor="middle" font-size="9.5" fill="#6B7671">每屏 8 项；移动端取回 512 条</text>
       <text x="128" y="637" text-anchor="middle" font-size="9.5" fill="#6B7671">空候选 → 小欧提示（视前端能否自绘）</text>
     </g>
     <g>
@@ -161,8 +161,8 @@
     <g>
       <rect x="450" y="570" width="196" height="96" rx="10" fill="#FFFFFF" stroke="#B9D9D4" stroke-width="1.5"/>
       <text x="548" y="598" text-anchor="middle" font-size="12.5" font-weight="700" fill="#22272E">⑧ Learner 记录</text>
-      <text x="548" y="621" text-anchor="middle" font-size="9.5" fill="#6B7671">选词记频（可关闭）</text>
-      <text x="548" y="637" text-anchor="middle" font-size="9.5" fill="#6B7671">一次选词压过静态词</text>
+      <text x="548" y="621" text-anchor="middle" font-size="9.5" fill="#6B7671">来源 +1/+2 · 误选撤销</text>
+      <text x="548" y="637" text-anchor="middle" font-size="9.5" fill="#6B7671">fcitx5/macOS 防抖落盘</text>
     </g>
     <g>
       <rect x="660" y="570" width="196" height="96" rx="10" fill="#FFFFFF" stroke="#B9D9D4" stroke-width="1.5"/>

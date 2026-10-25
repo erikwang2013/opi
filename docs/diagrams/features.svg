@@ -8,7 +8,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 676" width="1180" height="676"
      role="img" aria-labelledby="featTitle featDesc">
   <title id="featTitle">OPI 功能设计</title>
-  <desc id="featDesc">上排为五种输入模式（拼音、繁体、英文、数字、符号）的按键路由规则；下排为六大功能域：候选生成、用户学习、词库与数据、符号与表情、隐私与本地、多端与包容。</desc>
+  <desc id="featDesc">上排为五种输入模式（拼音、繁体、英文、数字、符号）的按键路由规则；下排为六大功能域：候选生成（移动端取回 512 条）、用户学习（来源加权 1/2、误选撤销、英文频次、fcitx5/macOS 落盘）、词库与数据（可选 CPD/万象导入）、符号与表情（括号自动配对）、隐私与本地、多端与包容（Apple/鸿蒙已打包）。</desc>
 
   <rect width="1180" height="676" fill="#FBFAF6"/>
 
@@ -81,7 +81,7 @@
       <text x="68" y="391">整串无命中 → 回退首个字整档；确认留候选区，末字才上屏</text>
       <text x="68" y="408">单字母仅并入 emoji，挡掉符号关键字噪音</text>
       <text x="68" y="425">模糊 / 简拼两档接在精确档之后，档空即主结果</text>
-      <text x="68" y="442">每屏 8 项；9 键 ⌄ 平铺态竖向翻页；精确层翻页不限量</text>
+      <text x="68" y="442">每屏 8 项；移动端取回 512 条；9 键 ⌄ 平铺态翻页</text>
     </g>
 
     <!-- 2 用户学习 -->
@@ -90,10 +90,10 @@
     <text x="433" y="320" font-size="15" font-weight="700" fill="#22272E">用户学习</text>
     <g fill="#2E8B80"><circle cx="438" cy="342" r="2.6"/><circle cx="438" cy="362" r="2.6"/><circle cx="438" cy="382" r="2.6"/><circle cx="438" cy="402" r="2.6"/></g>
     <g font-size="10.5" fill="#4A5551">
-      <text x="449" y="346">选词即记频，一次选词压过全部静态词</text>
-      <text x="449" y="366">boost 按词典最大词频动态缩放，不写死</text>
-      <text x="449" y="386">开关即时生效，关闭后不再记录</text>
-      <text x="449" y="406">单条删除 / 全量清空 / 导出·导入 JSON</text>
+      <text x="449" y="346">空格接受 +1、显式选词 +2，按来源加权</text>
+      <text x="449" y="366">同一输入改选另一个候选 → 撤销上一条误选</text>
+      <text x="449" y="386">英文候选读取学习频次（大小写不敏感）</text>
+      <text x="449" y="406">fcitx5/macOS 800ms 防抖落盘；可清空/导入导出</text>
     </g>
 
     <!-- 3 词库与数据 -->
@@ -107,7 +107,7 @@
       <text x="830" y="386">mmap 只读映射，整库不入堆 · 按需转出</text>
       <text x="830" y="406">装载失败 → 内置 35 词回退，绝不因词库崩溃</text>
       <text x="830" y="426">内置库：luna · trad · wubi · stroke · fallback</text>
-      <text x="830" y="446">导入词库契约 *.tsv：康熙字典随包 + 首启种子</text>
+      <text x="830" y="446">导入 *.tsv：康熙随包；CPD/万象转换（可选）</text>
     </g>
 
     <!-- 行 B -->
@@ -121,7 +121,7 @@
       <text x="68" y="547">类目内浏览 + 关键字搜索双通道</text>
       <text x="68" y="567">emoji 与拼音候选同栏合并排序</text>
       <text x="68" y="587">OpenMoji 表情 · 颜文字 · 自有贴纸 PNG/GIF</text>
-      <text x="68" y="607">搜索 250ms 防抖，开面板先提交 pending 拼音</text>
+      <text x="68" y="607">括号自动配对：10 类开括号补闭、光标居中</text>
     </g>
 
     <!-- 5 隐私与本地 -->
@@ -132,7 +132,7 @@
     <g font-size="10.5" fill="#4A5551">
       <text x="449" y="527">输入数据默认只在本机，无任何网络请求</text>
       <text x="449" y="547">核心输入完全离线可用，断网不影响打字</text>
-      <text x="449" y="567">学习落盘只在本机（当前仅 Android 接）</text>
+      <text x="449" y="567">学习落盘只在本机（Android/fcitx5/macOS）</text>
       <text x="449" y="587">云同步已裁决不做：不设账号，无云端服务</text>
     </g>
 
@@ -144,7 +144,7 @@
     <g font-size="10.5" fill="#4A5551">
       <text x="830" y="527">同一 Rust 引擎，各端共享同一套输入语义</text>
       <text x="830" y="547">各端原生 UI：Compose / fcitx5 / TSF / UIKit / IMK / ArkTS</text>
-      <text x="830" y="567">Apple 已在 CI 真编译（未签名）；鸿蒙草案</text>
+      <text x="830" y="567">Apple/鸿蒙已打包（unsigned，真机待验）</text>
       <text x="830" y="587">核心零平台依赖，可在任意目标上单测</text>
       <text x="830" y="607">模式整数与 ABI 约定跨端一致（0..4）</text>
     </g>

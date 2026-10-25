@@ -8,7 +8,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 852" width="1180" height="852"
      role="img" aria-labelledby="archTitle archDesc">
   <title id="archTitle">OPI 架构设计</title>
-  <desc id="archDesc">五层架构：客户端层（已验证三端 Android/Linux/Windows；Apple 两平台（iOS·macOS）已在 CI 真编译（未签名）、鸿蒙 HarmonyOS 草案未经编译）、出口层（三个薄壳 opi-ffi 双 ABI、fcitx5-opi、tsf-opi；C 出口由 Apple 与鸿蒙草案复用）、引擎层（engine-core 核心模块 + Engine 门面，另有候选扩展档 jianpin.rs/fuzzy.rs 与平台中立键路由 router.rs/keys.rs）、数据层（engine-data 的 .opid 格式/校验/mmap/回退 + 用户词落盘）、构建管线（opi-tools 编译与校验）。依赖自下而上。</desc>
+  <desc id="archDesc">五层架构：客户端层（已验证三端 Android/Linux/Windows；Apple 两平台（iOS·macOS）与鸿蒙 HarmonyOS 均已打包发布，真机待验）、出口层（三个薄壳 opi-ffi 双 ABI、fcitx5-opi、tsf-opi；C 出口由 Apple 与鸿蒙复用）、引擎层（engine-core 核心模块 + Engine 门面，另有候选扩展档 jianpin.rs/fuzzy.rs、单键快速档 candidates_finite、学习撤销 engine_learning 与平台中立键路由 router.rs/keys.rs）、数据层（engine-data 的 .opid 格式/校验/mmap/回退 + 用户词 JSON 原子写/读取助手）、构建管线（opi-tools 编译与校验）。依赖自下而上。</desc>
 
   <defs>
     <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -31,7 +31,7 @@
     <rect x="30" y="86" width="1120" height="114" rx="14" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
     <rect x="46" y="74" width="112" height="24" rx="12" fill="#2E8B80"/>
     <text x="102" y="91" text-anchor="middle" font-size="12.5" font-weight="700" fill="#FFFFFF">客户端层</text>
-    <text x="170" y="91" font-size="11.5" fill="#8A948F">各端原生 UI，不共享界面代码 —— 虚线框 = 草案端（未经编译）</text>
+    <text x="170" y="91" font-size="11.5" fill="#8A948F">各端原生 UI，不共享界面代码 —— 虚线框 = 已打包、真机待验</text>
 
     <g>
       <rect x="30" y="108" width="200" height="74" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
@@ -53,15 +53,15 @@
     </g>
     <g>
       <rect x="720" y="108" width="200" height="74" rx="10" fill="#FAF6F5" stroke="#EBD8D4" stroke-width="1.5" stroke-dasharray="6 4"/>
-      <text x="736" y="132" font-size="15" font-weight="700" fill="#22272E">Apple 两平台 · 草案</text>
+      <text x="736" y="132" font-size="15" font-weight="700" fill="#22272E">Apple 两平台 · 已打包</text>
       <text x="736" y="151" font-size="11" fill="#6B7671">iOS 键盘扩展 · macOS IMK</text>
-      <text x="736" y="171" font-size="11" font-weight="700" fill="#D9553F">↓ C ABI（opi-ffi 已就绪）</text>
+      <text x="736" y="171" font-size="11" font-weight="700" fill="#D9553F">↓ C ABI（已接）</text>
     </g>
     <g>
       <rect x="950" y="108" width="200" height="74" rx="10" fill="#FAF6F5" stroke="#EBD8D4" stroke-width="1.5" stroke-dasharray="6 4"/>
       <text x="966" y="132" font-size="15" font-weight="700" fill="#22272E">鸿蒙 HarmonyOS</text>
-      <text x="966" y="151" font-size="11" fill="#6B7671">输入法扩展 · 草案未编译</text>
-      <text x="966" y="171" font-size="11" font-weight="700" fill="#D9553F">↓ C ABI（opi-ffi 已就绪）</text>
+      <text x="966" y="151" font-size="11" fill="#6B7671">输入法扩展 · 已打包</text>
+      <text x="966" y="171" font-size="11" font-weight="700" fill="#D9553F">↓ C ABI（已接）</text>
     </g>
 
     <!-- 层间箭头：客户端 → 出口（Apple 两平台与鸿蒙均复用 opi-ffi 的 C 出口，不另起下行线） -->
@@ -75,7 +75,7 @@
     <rect x="30" y="240" width="1120" height="112" rx="14" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
     <rect x="46" y="228" width="112" height="24" rx="12" fill="#2E8B80"/>
     <text x="102" y="245" text-anchor="middle" font-size="12.5" font-weight="700" fill="#FFFFFF">出口层</text>
-    <text x="170" y="245" font-size="11.5" fill="#8A948F">ABI 薄壳：类型转换、边界校验、进程内单例，不含业务逻辑 · C 出口供 Apple / 鸿蒙草案</text>
+    <text x="170" y="245" font-size="11.5" fill="#8A948F">ABI 薄壳：类型转换、边界校验、进程内单例，不含业务逻辑 · C 出口供 Apple / 鸿蒙</text>
 
     <g>
       <rect x="30" y="262" width="352" height="74" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
@@ -149,7 +149,7 @@
     <text x="590" y="530" text-anchor="middle" font-size="14" font-weight="700" fill="#FFFFFF">Engine 门面</text>
     <text x="590" y="550" text-anchor="middle" font-size="10.5" fill="#C9E4E0">UI 层经 FFI 交互的唯一入口：input_key / candidates / select / switch_mode / learner / symbols</text>
 
-    <text x="590" y="571" text-anchor="middle" font-size="9.5" fill="#5B8C85">另有简拼 jianpin.rs 与模糊 fuzzy.rs 两个候选扩展档（由 rank_and_pick 分档接入）；键路由层 router.rs / keys.rs 平台中立，供 Apple / 鸿蒙经 C ABI 使用</text>
+    <text x="590" y="571" text-anchor="middle" font-size="9.5" fill="#5B8C85">另有简拼/模糊扩展档、candidates_finite 单键快速档、engine_learning 误选撤销与用户词落盘助手；键路由 router.rs / keys.rs 平台中立</text>
 
     <!-- 层间箭头：引擎 → 数据 -->
     <path d="M590 578 L590 622" stroke="#2E8B80" stroke-width="2" marker-end="url(#arw)"/>
@@ -159,7 +159,7 @@
     <rect x="30" y="636" width="1120" height="100" rx="14" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
     <rect x="46" y="624" width="112" height="24" rx="12" fill="#2E8B80"/>
     <text x="102" y="641" text-anchor="middle" font-size="12.5" font-weight="700" fill="#FFFFFF">数据层</text>
-    <text x="170" y="641" font-size="11.5" fill="#8A948F">engine-data —— 词库的 .opid 格式、校验与 mmap 装载、导入词库 *.tsv 解析；文件 IO（用户词落盘）在这一层，engine-core 保持零 IO</text>
+    <text x="170" y="641" font-size="11.5" fill="#8A948F">engine-data —— .opid 格式、校验与 mmap 装载、导入词库 *.tsv 解析、用户词 JSON 原子写/读取助手；实际落盘由各端宿主调用，engine-core 保持零 IO</text>
 
     <g>
       <rect x="30" y="658" width="262" height="62" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
@@ -207,7 +207,7 @@
       <path d="M680 819 L708 819"/>
     </g>
     <text x="742" y="799" text-anchor="middle" font-size="9.5" fill="#6B7671">校验和 / 顺序 / 覆盖率</text>
-    <text x="1000" y="823" text-anchor="middle" font-size="10.5" fill="#6B7671">scripts/gen_luna_dict.py · gen_trad_dict.py · gen_trad_modern.py · gen_kangxi_dict.py/extra · gen_pet_emoji_table.py</text>
+    <text x="1000" y="823" text-anchor="middle" font-size="10.5" fill="#6B7671">scripts/gen_*.py（词库 / 繁体 / 康熙 / 表情）</text>
 
   </g>
 </svg>

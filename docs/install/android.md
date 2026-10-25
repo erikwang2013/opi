@@ -3,6 +3,13 @@
 
 # Android 端（原生 IME）编译 / 打包 / 安装 / 使用
 
+> ### v1.26.0 功能注记（2026-10-26）
+>
+> - **括号自动配对**：10 类开括号提交时自动补闭括号并把光标放到中间；再打闭括号跳过，空配对一次退格删两边。英文/密码框与选区不参与。
+> - **学习来源加权 + 误选撤销**：空格接受首候选 +1，显式点选/数字/面板 +2；同一输入改选另一个候选会撤销上一条误选。英文候选读取学习频次。
+> - **候选窗 512**：`fetchLimit` 64→512，`yi` 的「壹」（第 79 位）与 9 键 `94`（第 155 位）可翻到；9 键左列读数仍截 64。
+> - **用户词持久化**：Android 继续走 Kotlin `UserWordStore.kt`；学习落盘边界与 fcitx5/macOS 的 `opi_user_words.json` 不同，详见 README「核心特性」。
+
 > ### 先读这一段
 >
 > 本机有 Android SDK + NDK，还接着一台 **x86_64 模拟器（API 36）** —— `adb` 与
@@ -888,15 +895,15 @@ adb shell settings get secure enabled_input_methods         # 已启用的输入
 
 ## 6. 已知限制与未验证项
 
-### 6.1 候选翻页有上限：`fetchLimit` 仍写死 64
+### 6.1 候选取回窗口：512 条（2026-10-26 由 64 提高）
 
-**这是端侧限制，不是引擎限制。**
+**这是端侧取回上限，不是引擎排序上限。**
 
-- 现状：`engine/EngineController.kt` 的 `const val fetchLimit = 64`（**以该常量当前值为准** —— 修了它这条限制就没了，本文的 64 只是写作当天从代码里读到的），`refresh()` 里 `api.candidates(fetchLimit)` 一次取这么多条，翻页（每页 `pageSize`）纯客户端做，**引擎侧没有 offset**。
-- 引擎侧早就没有这个上限了：`FETCH_LIMIT` 与 `Engine::select` 内部那道截断都已拆掉，三处同值（`engine-core/src/router.rs` · `fcitx5-opi/src/candidate.rs` · `tsf-opi/src/logic.rs`，互相之间**有等值断言**）。【实测】后两处今天都是 `pub const FETCH_LIMIT: usize = usize::MAX;`，紧邻一行就是与 `engine_core::router::FETCH_LIMIT` 的 `assert!`。
-- **订正（2026-10-11）**：「引擎侧没有上限」只对**精确层**成立 —— 大词库整合后，**前缀扩展层**与 **9/14 键按键类层**各有静态词频 top-N 截断（`dictionary.rs` 的 `PREFIX_MATCH_CAP=9216` / `SCHEME_MATCH_CAP=2048`，缘由与实测见 [`docs/performance.md`](../performance.md)）。Android 一次取 64 条 ≪ 两个上限 ⇒ 本节的实际结论（翻不到第 64 条之后）不受影响。
-- 也就是说：**长前缀拼音打出的候选超过 64 条时，Android 端翻不到第 64 条之后**。macOS 端是同一个病：【实测】`macos/InputController.swift` 调 `engine.candidates(limit: 64)`，而默认值也是 64（`macos/OpiEngine.swift` 的 `candidates(limit: Int = 64)`）。
-- 【未验证】「长前缀能不能翻到末页」这件事**在 Android 真机/模拟器上没跑过** —— 这一条是静态取证（读 `EngineController` 的常量 + 引擎侧门禁），不是实测。
+- 现状：`engine/EngineController.kt` 的 `const val fetchLimit = 512`，`refresh()` 里 `api.candidates(fetchLimit)` 一次取这么多条，翻页（每页 `pageSize`）纯客户端做，**引擎侧没有 offset**。
+- 这修的是真实可达性：26 键 `yi` 的「壹」在第 79 位、9 键 `94` 在第 155 位，旧窗口 64 翻不到，512 可以。9 键左列**读数**仍截 64（控制 UI 成本），与候选取回窗口是两件事。
+- 仍不是全量：桌面 26 键前缀池 9216、9/14 键 2048（`dictionary.rs` 的 `PREFIX_MATCH_CAP` / `SCHEME_MATCH_CAP`），所以 512 之后的候选在 Android 上仍不可达 —— 这是端侧窗口，不是引擎候选被截断。
+- macOS 自 2026-10-20 改走 `candidatesPage()` / `selectPage()`，不再有 64 条上限；iOS 与鸿蒙本来就走分页出口，从不由前端给 limit。
+- 【未验证】真机上的翻页手感与「512 条之后是否还需要」没有实测；本条是源码与候选契约取证。
 
 ### 6.2 本机验证不了、且确实没验过的
 
