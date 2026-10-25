@@ -55,6 +55,9 @@ OpiEngine.shared.loadOptionalTradDictionary()
 // 装载**不切换方案**：当前方案仍由 `applyPersisted()` 决定。
 OpiEngine.shared.loadOptionalStrokeDictionary()
 OpiEngine.shared.loadOptionalWubiDictionary()
+// 用户词（学习结果）从 dataDirectory/opi_user_words.json 恢复到已装载的引擎。
+// 缺失 = 冷启动；坏文件只记日志并保留（见 OpiSettings.swift 的持久化段）。
+OpiEngine.shared.loadPersistedUserWords()
 // 用户设置的套用必须**在词库之后**：opi_load 之后引擎才是可写状态。
 OpiSettingsStore.applyPersisted()
 // 导入词库（dicts/*.tsv）按停用名单重放；坏文件只记日志，不挡启动。

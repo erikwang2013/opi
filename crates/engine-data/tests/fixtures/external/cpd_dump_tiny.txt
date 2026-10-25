@@ -1,0 +1,9 @@
+# Tiny test excerpt from CustomPinyinDictionary (CC BY-SA 4.0) — see README.md here.
+# Format: word<space>syllables<space>freq, as emitted by libime_pinyindict -d.
+㞎㞎 ba'ba 0
+爸爸 ba'ba 0
+爸爸妈妈 ba'ba'ma'ma 0
+北京关区 bei'jing'guan'qu 0
+你好 ni'hao 0
+女儿 nv'er 0
+嗯哪 ng'na 0

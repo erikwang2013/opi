@@ -26,6 +26,78 @@ fn records_and_counts_selections() {
     assert_eq!(l.freq_of("号"), 1);
 }
 
+// ---------------------------------------------------------------- 来源权重 / 撤销
+
+/// 来源权重：空格接受首候选 +1，显式选词 +2；旧入口保持 +1。
+#[test]
+fn selection_source_weights() {
+    assert_eq!(SelectionSource::AcceptFirst.weight(), 1);
+    assert_eq!(SelectionSource::Explicit.weight(), 2);
+    let mut l = Learner::new(true);
+    l.record_selection_weighted("好", SelectionSource::AcceptFirst);
+    assert_eq!(l.freq_of("好"), 1);
+    l.record_selection_weighted("好", SelectionSource::Explicit);
+    assert_eq!(l.freq_of("好"), 3, "1 + 2");
+    l.record_selection("好"); // 旧入口 = 向后兼容的 +1
+    assert_eq!(l.freq_of("好"), 4);
+}
+
+/// 撤销按权重原样退回；退到 0 时两棵树一起清（否则导出留下 freq=0 的幽灵词）。
+#[test]
+fn unrecord_selection_decrements_and_removes_at_zero() {
+    let mut l = Learner::new(true);
+    l.record_selection_weighted("好", SelectionSource::Explicit); // 2
+    l.record_selection("好"); // +1 ⇒ 3
+    l.unrecord_selection("好", 2);
+    assert_eq!(l.freq_of("好"), 1, "只退指定权重");
+    l.unrecord_selection("好", 1);
+    assert_eq!(l.freq_of("好"), 0);
+    assert_eq!(
+        l.export_json(),
+        r#"{"version":1,"words":[]}"#,
+        "退到 0 必须同时从 user_words 删除"
+    );
+}
+
+/// 导入频次可能远小于撤销权重（数据不同源）：saturating 退到 0，不回绕。
+#[test]
+fn unrecord_selection_saturates_at_zero() {
+    let mut l = Learner::new(true);
+    l.record_selection("好"); // 1
+    l.unrecord_selection("好", 9);
+    assert_eq!(l.freq_of("好"), 0);
+    // 不存在的词：无事可做，且不得插入 0 值条目
+    l.unrecord_selection("号", 2);
+    assert_eq!(l.freq_of("号"), 0);
+    assert_eq!(l.export_json(), r#"{"version":1,"words":[]}"#);
+}
+
+/// disabled：加权记录与撤销都不得写学习数据（与 `record_selection` 同一姿态）。
+#[test]
+fn disabled_learner_ignores_weighted_record_and_unrecord() {
+    let mut l = Learner::new(false);
+    l.record_selection_weighted("好", SelectionSource::Explicit);
+    assert_eq!(l.freq_of("好"), 0);
+    // 导入照常进内存（显式用户动作，与 enabled 无关）
+    l.import_json(r#"{"version":1,"words":[{"text":"好","freq":4}]}"#)
+        .unwrap();
+    l.unrecord_selection("好", 2);
+    assert_eq!(l.freq_of("好"), 4, "disabled 时撤销不得动既有数据");
+}
+
+/// 每个 mutator 都必须 bump revision（简拼记忆的键依赖它 —— 漏掉会吃到学习前的旧分）。
+#[test]
+fn mutators_bump_revision() {
+    let mut l = Learner::new(true);
+    let r0 = l.revision();
+    l.record_selection_weighted("好", SelectionSource::AcceptFirst);
+    let r1 = l.revision();
+    assert_ne!(r1, r0, "record_selection_weighted");
+    l.unrecord_selection("好", 1);
+    let r2 = l.revision();
+    assert_ne!(r2, r1, "unrecord_selection");
+}
+
 #[test]
 fn remove_word_drops_freq() {
     let mut l = Learner::new(true);

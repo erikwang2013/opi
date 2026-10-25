@@ -18,6 +18,7 @@
 //! 二分找前缀区间 + 只对命中项按词频排序，**不重排全表**。
 
 use crate::candidates::{Candidate, CandidateKind};
+use crate::learner::Learner;
 use std::sync::OnceLock;
 
 /// `词形\t查询键\t词频`（生成器写的，勿手改；许可与来源见 `data/raw/LICENSES.md`）。
@@ -51,29 +52,35 @@ fn words() -> &'static [Word] {
     })
 }
 
-/// 以 `buffer` 为前缀的词，按词频降序，最多 `limit` 条。
+/// 以 `buffer` 为前缀的词，按**学习词频优先、静态词频次之**排序，最多 `limit` 条。
+///
+/// 学习词频用**原始次数**（不乘中文那套 `user_boost`：英文表静态词频是十亿量级，
+/// 中文量纲的加成在这里没有意义）。没有任何学习记录时（全部为 0）与旧行为逐条相同
+/// —— 仍按静态词频降序。
 ///
 /// 大小写不敏感（缓冲降小写后比查询键）；显示用规范词形，但**缓冲首字母大写**时
 /// 规范小写词形跟着首字母大写（用户按 ⇧ 的语义不能丢）。空缓冲 → 无候选。
-pub(crate) fn candidates(buffer: &str, limit: usize) -> Vec<Candidate> {
+pub(crate) fn candidates(buffer: &str, limit: usize, learner: &Learner) -> Vec<Candidate> {
     if buffer.is_empty() || limit == 0 {
         return Vec::new();
     }
     let prefix = buffer.to_ascii_lowercase();
     let all = words();
     let start = all.partition_point(|w| w.key < prefix.as_str());
-    let mut hits: Vec<&Word> = all[start..]
+    let mut hits: Vec<(&Word, u32)> = all[start..]
         .iter()
         .take_while(|w| w.key.starts_with(&prefix))
+        .map(|w| (w, learned_freq(learner, w.text)))
         .collect();
-    hits.sort_unstable_by_key(|a| std::cmp::Reverse(a.freq));
+    // (学习次数, 静态词频) 的字典序降序 —— 学过一次的词排到所有未学词之前。
+    hits.sort_unstable_by_key(|(w, learned)| std::cmp::Reverse((*learned, w.freq)));
     hits.truncate(limit);
     let capitalize = buffer
         .as_bytes()
         .first()
         .is_some_and(|b| b.is_ascii_uppercase());
     hits.into_iter()
-        .map(|w| {
+        .map(|(w, learned)| {
             let mut text = w.text.to_string();
             // 只对**小写**规范词形做首字母大写：专名（China/I）本来就是规范写法。
             if capitalize
@@ -87,8 +94,27 @@ pub(crate) fn candidates(buffer: &str, limit: usize) -> Vec<Candidate> {
             Candidate {
                 text,
                 kind: CandidateKind::English,
-                score: w.freq as u64,
+                // 与排序键同构：高 32 位学习次数、低 32 位静态词频（表最大 4e9 < 2^32）
+                // ⇒ 候选**按 score 降序**这条既有不变量在有学习记录时仍成立。
+                score: ((learned as u64) << 32) | w.freq as u64,
             }
         })
         .collect()
+}
+
+/// 该词条的学习次数。提交时记的是**当次显示词形**（首字母大写的缓冲会把 `help`
+/// 记成 `Help`），查询按小写缓冲取规范词形 —— 两种词形取 max，学习对大小写不敏感。
+fn learned_freq(learner: &Learner, canonical: &str) -> u32 {
+    let base = learner.freq_of(canonical);
+    if base > 0
+        || !canonical
+            .as_bytes()
+            .first()
+            .is_some_and(|b| b.is_ascii_lowercase())
+    {
+        return base;
+    }
+    let mut upper = canonical.to_string();
+    upper[..1].make_ascii_uppercase(); // 首字节已确认 ASCII，切片安全
+    learner.freq_of(&upper)
 }

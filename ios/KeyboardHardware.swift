@@ -77,12 +77,21 @@ extension KeyboardViewController {
             }
             switch engine.keyEvent(keyval: kv, states: states) {
             case .passThrough:
-                continue    // 这一个交回系统（外层会调 super）
+                // 空缓冲退格：软键盘已走 `deleteBackwardTyped`（成对退格在这里），
+                // 硬件路径若整颗交回 super，成对退格就只在软键盘上生效、换外接键盘失效。
+                // 只在首次按下时删：抬起只消费不动作（与热键同一条纪律）。
+                // KEY_DELETE（前向删除）不在这里接 —— 交给系统保持原义。
+                if !released, kv == OpiKey.backspace {
+                    deleteBackwardTyped()
+                    handledAny = true
+                } else {
+                    continue    // 这一个交回系统（外层会调 super）
+                }
             case .commit(let text):
                 // ⚠️ 容易漏：硬件键盘的提交文本也得自己 insertText，
                 // 不能因为「外接键盘」就以为系统会替我们上屏。漏了的表现是
                 // 「按字母有候选、按空格候选消失但字没上屏」。
-                insert(text)
+                insertTyped(text)
                 handledAny = true
             case .handled:
                 handledAny = true

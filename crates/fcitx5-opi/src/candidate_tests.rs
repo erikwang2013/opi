@@ -22,6 +22,7 @@ fn state() -> CandidateState {
         dicts: Default::default(),
         english_pro: true,
         fetch_cache: Default::default(),
+        persist: Default::default(),
     };
     s.refresh_snapshot();
     s
@@ -153,6 +154,7 @@ fn key_state() -> CandidateState {
         dicts: Default::default(),
         english_pro: true,
         fetch_cache: Default::default(),
+        persist: Default::default(),
     };
     for c in ['q', 'w', 'x'] {
         s.engine.input_key(c);
@@ -352,6 +354,7 @@ fn digit_select_fetches_candidate_table_once() {
         dicts: Default::default(),
         english_pro: true,
         fetch_cache: Default::default(),
+        persist: Default::default(),
     };
     s.refresh_snapshot();
     s.switch_mode(Mode::Pinyin);
@@ -470,7 +473,7 @@ fn clear_user_words_drops_learning_and_resets_page() {
     assert!(s.engine.export_user_words().contains("词00"));
     s.page = 1; // 空缓冲下 next_page 会钳回 0；直接置页即可测「清空复位」
     assert_eq!(s.page, 1);
-    s.clear_user_words();
+    s.clear_user_words().expect("未接线时清空也应成功");
     assert!(!s.engine.export_user_words().contains("词00"));
     assert_eq!(s.page, 0, "清空后候选集会变，页码必须回第一页");
 }

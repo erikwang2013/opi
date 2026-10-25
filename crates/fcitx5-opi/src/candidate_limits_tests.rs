@@ -65,6 +65,7 @@ fn state_n(n: usize) -> CandidateState {
         dicts: Default::default(),
         english_pro: true,
         fetch_cache: Default::default(),
+        persist: Default::default(),
     };
     s.refresh_snapshot();
     s

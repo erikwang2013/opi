@@ -22,6 +22,7 @@
 #include <fcitx/instance.h>
 #include <fcitx/text.h>
 #include <fcitx/userinterface.h> // UserInterfaceComponent
+#include <fcitx-utils/event.h> // 用户词落盘定时器（EventLoop::addTimeEvent / now）
 #include <fcitx-utils/standardpath.h>
 
 #include "opi_json.h"     // parseJsonStringArray（拆出去是为了本文件守住 500 行硬规矩）
@@ -411,6 +412,34 @@ void OpiEngine::keyEventImpl(const fcitx::InputMethodEntry & /*entry*/,
     }
     // 把引擎新状态推给前端：预编辑串（缓冲）+ 当前页候选。
     refreshingPanelFor(keyEvent.inputContext());
+}
+
+// ---------- 用户词自动落盘 ----------
+//
+// Rust 侧在成功选词后标脏，并做 800ms 尾随防抖；本层只提供心跳：事件循环每 250ms
+// 问一次「到点没」，到点才真正写文件。不在 Rust 起后台线程 —— addon 的生命周期与
+// 事件循环都在宿主手里，析构时能停掉定时器并强制 flush 最后一次（<800ms 的尾巴）。
+static std::unique_ptr<fcitx::EventSourceTime> g_userWordsTimer;
+
+void OpiEngine::startUserWordsTimer() {
+    if (opi_fcitx5_save_user_words_if_due == nullptr) {
+        return; // 旧 .so 没有该出口：保持「无自动落盘」，别让插件加载失败。
+    }
+    g_userWordsTimer = instance_->eventLoop().addTimeEvent(
+        CLOCK_MONOTONIC, fcitx::now(CLOCK_MONOTONIC) + 250000, 0,
+        [](fcitx::EventSourceTime *time, uint64_t) {
+            opi_fcitx5_save_user_words_if_due();
+            time->setNextInterval(250000); // 绝对时刻 = now + 250ms
+            time->setOneShot();            // 重新武装一次性定时器（fcitx5 惯例）
+            return true;
+        });
+}
+
+OpiEngine::~OpiEngine() {
+    if (opi_fcitx5_flush_user_words != nullptr) {
+        opi_fcitx5_flush_user_words();
+    }
+    g_userWordsTimer.reset(); // 事件循环销毁前必须摘掉定时器
 }
 
 // 工厂类：FCITX_ADDON_FACTORY 宏（fcitx/addoninstance.h:193）只做

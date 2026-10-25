@@ -20,6 +20,8 @@ class KeyRouter(
     private val syncComposing: () -> Unit = {},
     /** 英文专业模式（默认 true = 保持既有调用方/测试的前缀联想行为；生产注入 [ImeState.englishPro]）。 */
     private val englishPro: () -> Boolean = { true },
+    /** 括号自动配对（服务注入；null = 旧行为，JVM 测试不受影响）。 */
+    private val pairing: BracketPairing? = null,
 ) {
     /**
      * 引擎驱动的提交收尾：提交后**重新推一次组合串**（服务侧 = pushComposingText）。
@@ -39,6 +41,8 @@ class KeyRouter(
      * 缓冲走引擎，提交点照常收尾。
      */
     private fun commitAndResync(text: String) {
+        // 任何非配对提交都结束「刚插入的那一对」的跟踪（上下文回读是第二道保险）。
+        pairing?.reset()
         commit(text)
         syncComposing()
     }
@@ -48,8 +52,17 @@ class KeyRouter(
      * **数字面板不走这里** —— 它的 `,` `.` 是键盘键码，走 [handleKey] 由引擎出文本。
      * 面板提交（如「面板打开时提交 pending buffer」）之后同样收尾：此刻缓冲通常已空，
      * 重推 = 清组合区，无副作用。
+     *
+     * 符号面板点的若是配对开符号（中文模式下），同样自动补闭符号并停光标 —— 用户
+     * 点的就是一个括号，与键盘打出来同义。英文模式不做配对（见 shared 契约第 5 条）。
      */
-    fun commitText(text: String) = commitAndResync(text)
+    fun commitText(text: String) {
+        if (controller.mode != EngineMode.ENGLISH && pairing?.commitTyped(text) == true) {
+            syncComposing()
+            return
+        }
+        commitAndResync(text)
+    }
 
     /**
      * 键盘键（字母盘与数字面板共用）。引擎的返回值必须提交：标点键由引擎层标点表
@@ -57,6 +70,8 @@ class KeyRouter(
      */
     fun handleKey(ch: String) {
         if (controller.mode == EngineMode.ENGLISH) {
+            // 英文直传不配对（含密码场自动临时英文）：跟踪在这里统一清掉。
+            pairing?.reset()
             // 携带缓冲（中→英保留的拼音，2026-10-09 用户裁决「拼音保留可继续使用」）：
             // 保持旧直传 —— 字母进文档、缓冲原样留着切回中文继续用；绝不喂给英文
             // 前缀匹配（否则 `a` 会拼成 `nia`，英文打不出来、拼音也被毁掉）。
@@ -110,7 +125,16 @@ class KeyRouter(
             return
         }
         val text = controller.input(ch)
-        if (text.isNotEmpty()) commitAndResync(text)
+        if (text.isNotEmpty()) {
+            // 中文/数字模式下引擎把 `(` 映射成 `（` 等；配对在这里、提交之前判。
+            if (pairing?.commitTyped(text) == true) {
+                syncComposing()
+            } else {
+                commitAndResync(text)
+            }
+        } else {
+            pairing?.reset()
+        }
     }
 
     fun handleSpace() {
@@ -125,8 +149,12 @@ class KeyRouter(
     }
 
     fun handleBackspace() {
-        if (controller.buffer.isNotEmpty() || controller.pendingText.isNotEmpty()) controller.backspace()
-        else deleteBackward()
+        if (controller.buffer.isNotEmpty() || controller.pendingText.isNotEmpty()) {
+            pairing?.reset()
+            controller.backspace()
+        } else if (pairing?.backspace() != true) {
+            deleteBackward()
+        }
     }
 
     fun handleEnter() {

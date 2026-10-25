@@ -46,7 +46,7 @@ impl Engine {
             // 词库里的同形词（`a` / `I`）按大小写不敏感去重，同一字母只出现一次。
             let single =
                 limit > 0 && s.buffer.len() == 1 && s.buffer.as_bytes()[0].is_ascii_alphabetic();
-            let mut cands = crate::english_words::candidates(&s.buffer, limit);
+            let mut cands = crate::english_words::candidates(&s.buffer, limit, &self.learner);
             if single {
                 cands.retain(|c| !c.text.eq_ignore_ascii_case(s.buffer.as_str()));
                 cands.truncate(limit - 1);

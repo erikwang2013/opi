@@ -208,6 +208,7 @@ extension OpiSettingsWindow {
                 alert("导入失败", info: "引擎拒绝：非法 JSON / 版本不符 / 词表过大 / 未装载。")
                 return
             }
+            OpiEngine.shared.markUserWordsDirty() // 导入结果也要进自动落盘
             alert("用户词已导入", info: "\(count) 条")
         } catch {
             alert("读不了文件", info: error.localizedDescription)
@@ -221,11 +222,12 @@ extension OpiSettingsWindow {
         confirm.addButton(withTitle: "清空")
         confirm.addButton(withTitle: "取消")
         guard confirm.runModal() == .alertFirstButtonReturn else { return }
-        OpiEngine.shared.clearUserWords()
-        // 本地缓存（与 Rust 侧同名）：内存已清空，残留文件会让下次启动复活旧词。
-        let cache = OpiEngine.dataDirectory.appendingPathComponent("opi_user_words.json")
-        try? FileManager.default.removeItem(at: cache)
-        alert("已清空用户词")
+        // 文件删除与内存清空必须串行（内部先取消待落盘），否则防抖保存会把旧词写回。
+        if OpiEngine.clearUserWordsAndFile() {
+            alert("已清空用户词")
+        } else {
+            alert("内存已清空，但用户词文件删不掉", info: "重启后旧词可能复活，请检查文件权限。")
+        }
     }
 
     @objc func removeUserWordClicked() {
@@ -236,6 +238,7 @@ extension OpiSettingsWindow {
             return
         }
         OpiEngine.shared.removeUserWord(text)
+        OpiEngine.shared.markUserWordsDirty() // 删除也要落盘
         userWordField?.stringValue = ""
         alert("已请求删除", info: "若用户词表里有「\(text)」，已移除。")
     }

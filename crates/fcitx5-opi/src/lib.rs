@@ -25,6 +25,7 @@ pub mod data_dir;
 pub(crate) mod dict_layer;
 pub mod input_method;
 mod switches;
+mod user_words;
 
 pub use cabi::{
     opi_fcitx5_import_dict, opi_fcitx5_init_dict, opi_fcitx5_load_symbols,
@@ -33,8 +34,13 @@ pub use cabi::{
 // 「属性设置」旋钮族的出口（2026-10-14 从本文件拆出：加拼音方式后 526/500 越线；
 // 同一手续见 `cabi.rs`。这几个 `pub use` 是测试与内部调用方引用它们的唯一原因）。
 pub use switches::*;
+// 用户词落盘的三出口（定义在私有 `user_words` 模块；与 `cabi::*` 同一套 re-export 手续）。
+pub use user_words::{
+    opi_fcitx5_clear_user_words, opi_fcitx5_flush_user_words, opi_fcitx5_save_user_words_if_due,
+};
 
 use candidate::CandidateState;
+use user_words::install_with_trad_at;
 
 /// 引擎单例：load 后可供 C++ 胶水共享（与 opi-ffi 的 SINGLETON 同构）。
 static SINGLETON: Mutex<Option<CandidateState>> = Mutex::new(None);
@@ -180,6 +186,7 @@ fn texts_to_json(texts: Vec<String>) -> OpString {
 // 2026-10-09 新增 load_with_trad） ----------
 
 /// load(path: const uint8_t*, len) -> bool。null/空串 → 内置回退词库；坏路径 → false。
+/// 成功后从同一数据目录恢复 `opi_user_words.json`（缺失=冷启动；坏文件只报告不删）。
 /// # Safety
 ///
 /// `ptr` 必须指向至少 `len` 字节的有效内存（或为 null，视为空串）。
@@ -188,7 +195,8 @@ pub unsafe extern "C" fn opi_fcitx5_load(ptr: *const u8, len: usize) -> bool {
     ensure_panic_hook();
     catch_unwind(AssertUnwindSafe(|| {
         let path = unsafe { read_utf8(ptr, len) };
-        install(path.as_deref()).is_ok()
+        let dir = crate::data_dir::xdg_data_dir();
+        install_with_trad_at(path.as_deref(), None, Some(&dir)).is_ok()
     }))
     .unwrap_or(false)
 }
@@ -211,7 +219,8 @@ pub unsafe extern "C" fn opi_fcitx5_load_with_trad(
     catch_unwind(AssertUnwindSafe(|| {
         let path = unsafe { read_utf8(ptr, len) };
         let trad = unsafe { read_utf8(trad_ptr, trad_len) };
-        install_with_trad(path.as_deref(), trad.as_deref()).is_ok()
+        let dir = crate::data_dir::xdg_data_dir();
+        install_with_trad_at(path.as_deref(), trad.as_deref(), Some(&dir)).is_ok()
     }))
     .unwrap_or(false)
 }
@@ -409,20 +418,6 @@ pub unsafe extern "C" fn opi_fcitx5_toggle_english_pro() -> bool {
             on
         })
         .unwrap_or(false)
-    }))
-    .unwrap_or(false)
-}
-
-/// 清空用户词（学习记忆）。返回 false = 引擎还没装载（与其余动作出口同义）。
-///
-/// # Safety
-///
-/// 无外部内存参数；共享单例由内部 Mutex 保护，跨线程调用安全。
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn opi_fcitx5_clear_user_words() -> bool {
-    ensure_panic_hook();
-    catch_unwind(AssertUnwindSafe(|| {
-        with_state(|s| s.clear_user_words()).is_some()
     }))
     .unwrap_or(false)
 }

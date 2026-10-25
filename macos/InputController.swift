@@ -255,6 +255,7 @@ final class OpiInputController: IMKInputController {
     ///   2. 「先清 marked text，再 insertText」的顺序；
     ///   3. replacementRange 用 (NSNotFound, NSNotFound) 表示「插在光标处，不替换」。
     private func commit(_ text: String, to sender: Any!) {
+        if !lastMarked.isEmpty { engine.markUserWordsDirty() } // preedit = 可能刚选过词
         guard !text.isEmpty, let client = sender as? IMKTextInput else { return }
         let none = NSRange(location: NSNotFound, length: NSNotFound)
         if !lastMarked.isEmpty {
@@ -321,7 +322,6 @@ final class OpiInputController: IMKInputController {
         // 页大小，引擎改一次就静默选错候选）。
         let committed = engine.selectPage(index)
         lastCandidates = []
-        lastMarked = ""
         OpiCandidateWindow.shared.hide()
         OpiPinyinBar.shared.hide()
         // 这里没有 handle(_:client:) 的 sender：优先用 Hub 记下的最近客户端。

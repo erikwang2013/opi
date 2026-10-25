@@ -86,6 +86,10 @@ extern "C" bool opi_fcitx5_english_pro() __attribute__((weak));
 extern "C" bool opi_fcitx5_toggle_english_pro() __attribute__((weak));
 // 清空用户词（学习记忆）；弱符号，老 .so 上按「入口未接线」报 4。
 extern "C" bool opi_fcitx5_clear_user_words() __attribute__((weak));
+// 用户词自动落盘（2026-10-26）：宿主每 250ms 问一次「防抖到点没」，卸载前强制 flush。
+// 弱符号：老 .so 上没有 ⇒ 静默跳过（只是没有自动落盘，其余功能不受影响）。
+extern "C" bool opi_fcitx5_save_user_words_if_due() __attribute__((weak));
+extern "C" bool opi_fcitx5_flush_user_words() __attribute__((weak));
 bool opi_fcitx5_fullwidth();               // 只读：当前是否全角（状态栏 State 读它）
 bool opi_fcitx5_toggle_fullwidth();        // 返回切换后的状态（true = 全角）
 void opi_fcitx5_set_shift(bool on);

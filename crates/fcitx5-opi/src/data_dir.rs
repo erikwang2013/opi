@@ -13,7 +13,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::install;
+use crate::user_words::install_with_trad_at;
 
 /// 词库文件名（镜像 EngineLoader.FILE_NAME = "luna.opid"）。
 pub const DICT_FILE_NAME: &str = "luna.opid";
@@ -91,7 +91,7 @@ pub fn init_dict(source: &Path, data_dir: &Path) -> Result<(), String> {
     let path = target
         .to_str()
         .ok_or_else(|| format!("数据目录路径非 UTF-8（{data_dir:?}）"))?;
-    install(Some(path)).map_err(|e| format!("词库装载失败: {e}"))
+    install_with_trad_at(Some(path), None, Some(data_dir)).map_err(|e| format!("词库装载失败: {e}"))
 }
 
 // 自定义短语的宿主文件读取已拆到 `custom_phrases.rs`（避免本文件越过 500 行门禁）；

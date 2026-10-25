@@ -25,6 +25,26 @@ pub struct UserWordExport {
 /// 上限挡住畸形文件把内存打爆。
 pub const MAX_IMPORT_WORDS: usize = 100_000;
 
+/// 选词来源 → 学习权重（2026-10-26 智能输入第一批）。
+///
+/// 只影响**累计频次**的增量，不改磁盘格式（导出的 `freq` 仍是累计值）：
+/// 用户主动点选/数字选词比「空格接受首候选」多一票 —— 后者可能只是顺手确认，
+/// 前者是明确意图。误选撤销（`Engine` 侧）按当时的权重原样退回。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectionSource {
+    /// 空格接受首候选：+1。
+    AcceptFirst = 1,
+    /// 显式选词（点选候选 / 数字选词 / 面板 / 符号大全）：+2。
+    Explicit = 2,
+}
+
+impl SelectionSource {
+    /// 记入学习器的权重（与枚举判别值同源，改判别值即改权重）。
+    pub const fn weight(self) -> u32 {
+        self as u32
+    }
+}
+
 pub struct Learner {
     enabled: bool,
     user_freq: BTreeMap<String, u32>,
@@ -52,14 +72,50 @@ impl Learner {
     }
 
     /// 记录一次选词。disabled 时为 no-op。
+    ///
+    /// 向后兼容的 +1 入口（历史调用方/测试不区分来源）；要区分来源用
+    /// [`Self::record_selection_weighted`]。
     pub fn record_selection(&mut self, text: &str) {
+        self.add_freq(text, 1);
+    }
+
+    /// 按来源权重记录一次选词（[`SelectionSource::weight`]：AcceptFirst=1 /
+    /// Explicit=2）。disabled 时为 no-op。
+    pub fn record_selection_weighted(&mut self, text: &str, source: SelectionSource) {
+        self.add_freq(text, source.weight());
+    }
+
+    fn add_freq(&mut self, text: &str, weight: u32) {
         if !self.enabled {
             return;
         }
-        // saturating：导入的词频可来自外部数据（最大 u32::MAX），+1 不得 panic。
+        // saturating：导入的词频可来自外部数据（最大 u32::MAX），加权重不得 panic。
         let slot = self.user_freq.entry(text.to_string()).or_insert(0);
-        *slot = slot.saturating_add(1);
+        *slot = slot.saturating_add(weight);
         self.user_words.insert(text.to_string());
+        self.bump_revision();
+    }
+
+    /// **撤销**一次已记录的选择（误选改选的引擎侧调用点见 `engine_learning.rs`）。
+    ///
+    /// `weight` 是当时记入的权重（AcceptFirst=1 / Explicit=2），原样退回；频次减到
+    /// 0 时连同 `user_words` 一起删（否则 `export_json` 会留下 freq=0 的幽灵词）。
+    /// 减法是 saturating：导入数据与内存记录可能不同源，退多了不许回绕成巨值。
+    ///
+    /// disabled 时与 [`Self::record_selection`] 同一姿态：**不动学习数据** ——
+    /// 关掉学习之后不该再有任何写入（导入是显式用户动作，另当别论）。
+    pub fn unrecord_selection(&mut self, text: &str, weight: u32) {
+        if !self.enabled {
+            return;
+        }
+        let Some(freq) = self.user_freq.get_mut(text) else {
+            return; // 没记过（或已退到 0）：无事可做，也不制造 0 值条目
+        };
+        *freq = freq.saturating_sub(weight);
+        if *freq == 0 {
+            self.user_freq.remove(text);
+            self.user_words.remove(text);
+        }
         self.bump_revision();
     }
 

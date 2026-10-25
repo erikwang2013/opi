@@ -34,6 +34,7 @@ mod engine_candidates_impl; // 主候选装配一族（2026-10-16 从 engine.rs 
 mod engine_dicts_impl; // 词典换装一族（trad/stroke/导入层）+ user_boost 重算（500 行门禁拆出）
 #[path = "engine_enter.rs"]
 mod engine_enter_impl; // 回车一族：缓冲非空时该做什么的单一判据（2026-10-14 接线）
+mod engine_learning; // 候选提交的学习记账与误选撤销（2026-10-26，见文件头）
 #[path = "engine_punct.rs"]
 mod engine_punct_impl; // 标点/全角一族（500 行门禁拆出，见文件头）
 #[path = "engine_readings.rs"]
@@ -75,7 +76,7 @@ pub use engine_wubi_impl::{
     WUBI_CANDIDATE_LIMIT_DEFAULT, WUBI_CANDIDATE_LIMIT_MAX, WubiMixedEntry, WubiReturnStyle,
     WubiStyle,
 };
-pub use learner::{Learner, UserWord, UserWordExport};
+pub use learner::{Learner, SelectionSource, UserWord, UserWordExport};
 pub use router::{KeyAction, KeyRouter, ShiftState};
 pub use scheme::Scheme;
 pub use trie::Entry;

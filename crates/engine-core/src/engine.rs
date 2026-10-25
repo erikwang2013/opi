@@ -1,12 +1,12 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-use crate::candidates::{Candidate, DEFAULT_TOP_N};
+use crate::candidates::DEFAULT_TOP_N;
 use crate::composer::{Composer, KeyEffect, Mode};
 use crate::dict_layers::LayeredDictionary;
 use crate::dictionary::Dictionary;
 use crate::engine_wubi_impl::{WubiMixedEntry, WubiReturnStyle, WubiStyle};
-use crate::learner::Learner;
+use crate::learner::{Learner, SelectionSource};
 use crate::punctuation::Quotes;
 use crate::scheme::Scheme;
 use crate::symbols::SymbolEngine;
@@ -47,6 +47,8 @@ pub struct Engine {
     pub(crate) symbol_browse: crate::symbol_browse::SymbolBrowse,
     /// 学习器（`pub(crate)`：符号浏览的提交收尾与 `select_from` 同一条，归 engine_symbol_browse.rs）。
     pub(crate) learner: Learner,
+    /// 最近一次候选提交的锚点（误选撤销用；语义与清链时机见 engine_learning.rs 头）。
+    pub(crate) last_commit: crate::engine_learning::LastCommit,
     /// 用户词频权重，按词典最大静态词频动态缩放（一次选词即压过所有静态词）。
     pub(crate) user_boost: u64, // pub(crate)：engine_shuangpin.rs 的合并排名要用
     /// 钉读音（9 键左列点一行拼音：**不确认**，候选收窄到该读音 —— 2026-10-09
@@ -131,6 +133,7 @@ impl Engine {
             composer: Composer::new(),
             symbols,
             learner: Learner::new(learner_enabled),
+            last_commit: Default::default(),
             user_boost: 0, // 占位：紧随其后的 recompute_user_boost 定型（唯一算法处）
             scheme_readings: std::cell::RefCell::new((String::new(), Vec::new())),
             pinned_reading: None,
@@ -166,6 +169,7 @@ impl Engine {
     pub fn set_scheme(&mut self, scheme: Scheme) {
         self.composer.set_scheme(scheme);
         self.composer.clear();
+        self.last_commit.clear(); // 换方案 = 新的输入上下文（误选撤销不跨方案）
         // 读数与缓冲同生命周期：不清的话换方案后的一次读会拿到上一条输入的拼音。
         *self.scheme_readings.borrow_mut() = (String::new(), Vec::new());
     }
@@ -244,7 +248,8 @@ impl Engine {
                     out.push_str(&buffer);
                     out
                 } else {
-                    let text = self.select_from(&cands, skip);
+                    // 空格接受首候选 = 来源 AcceptFirst（+1；与显式点选 +2 分开记）。
+                    let text = self.select_from_source(&cands, skip, SelectionSource::AcceptFirst);
                     self.composer.commit_buffer(); // 空格 = 整段上屏：不留回退后缀（钉：adversarial_input.rs）
                     // 逐字确认（2026-10-17）与「空格 = 整段上屏」的交界：回退态下那次
                     // select 会**延迟**（把片段攒进 pending）—— 空格在这里把它冲刷出来，
@@ -263,7 +268,7 @@ impl Engine {
                 if cands.len() <= skip {
                     String::new()
                 } else {
-                    self.select_from(&cands, skip)
+                    self.select_from_source(&cands, skip, SelectionSource::AcceptFirst)
                 }
             }
             // 英文（2026-10-18）：有候选 ⇒ 首候选（`select_from` 已清缓冲并收尾
@@ -277,7 +282,7 @@ impl Engine {
                     self.composer.commit_buffer();
                     buffer
                 } else {
-                    self.select_from(&cands, skip)
+                    self.select_from_source(&cands, skip, SelectionSource::AcceptFirst)
                 };
                 let mut out = self.take_pending_text();
                 out.push_str(&self.fullwidthize(&text));
@@ -312,6 +317,7 @@ impl Engine {
         self.symbol_browse.exit(); // 清会话 = 退出浏览（数据留着；面板随 buffer 空收起）
         self.after_digit = false; // 清会话 = 数字上下文结束
         self.pending_segments.clear(); // 逐字态一并清（2026-10-17）
+        self.last_commit.clear(); // 清会话 = 误选撤销链结束
         self.composer.clear();
     }
 
@@ -324,6 +330,7 @@ impl Engine {
         // 逐字态清空（2026-10-17）：宿主切换前会先 commitPendingBuffer（走 input_space
         // 冲刷），能走到这里的只有直调引擎的换模式口 —— 旧模式的拼音不该跨模式复活。
         self.pending_segments.clear();
+        self.last_commit.clear(); // 切模式 = 新的输入上下文（误选撤销不跨模式）
         self.fullwidth = mode.default_fullwidth();
         self.quotes.reset();
         self.composer.switch_mode(mode);
@@ -425,6 +432,7 @@ impl Engine {
     /// 9 键的读数缓存随之作废（同一个缓冲换过方案/模式后，旧读数不再对应当前语境）；
     /// 切回来时下一次 `candidates()` 会重算。
     pub fn switch_language(&mut self, mode: Mode, scheme: Scheme) {
+        self.last_commit.clear(); // 换模式+方案 = 新的输入上下文（同 switch_mode）
         self.fullwidth = mode.default_fullwidth();
         self.quotes.reset();
         self.composer.set_scheme(scheme);
@@ -447,54 +455,7 @@ impl Engine {
         self.select_from(&cands, index)
     }
 
-    /// 在**调用方已算好的**候选表上选中第 `index` 项（全局下标）。
-    /// 语义与 [`Self::select`] 逐字相同（越界 → 空串，命中 → 记学习 + 清缓冲），
-    /// 唯一区别是不重算候选表 —— 数字选词在 `digit_select` 里已经抓过一次，
-    /// 再排一遍整表是纯浪费。`Engine::select` 保留原签名（C 出口的全局索引用它）。
-    pub fn select_from(&mut self, cands: &[Candidate], index: usize) -> String {
-        self.after_digit = false; // 选词/面板点击 = 数字上下文结束
-        // 浏览态：select = 激活浏览项（类目下钻返回空串 / 符号上屏并回一级），不是提交候选。
-        // 面板点击与数字键因此同一条，且任何路径都提交不出类目名（见 engine_symbol_browse.rs 头）。
-        if self.symbol_browse.is_active() {
-            return self.symbol_browse_select(index);
-        }
-        match cands.get(index) {
-            Some(c) => {
-                let text = c.text.clone();
-                self.learner.record_selection(&text);
-                // 分词回退态只消耗前缀；**逐字态返回 None = 本轮不提交**（engine_segment.rs，
-                // 2026-10-17「确认一个字，依然在候选栏」）。
-                let commit = self.commit_buffer_after_select(&text);
-                // 符号模式一次一符号（用户裁决 2026-09-27）：提交后回拼音，不跨键保持
-                // ——下一次击键就是拼音，不需要先手动切回。放这一层是因为候选提交的收尾
-                // 只此一处：四端（fcitx5 / TSF / Android / Apple）自动一致，
-                // 前端各写一份必漂（`switch_mode` 顺带清 shift，与本层语义一致）。
-                if self.composer.session().mode == Mode::Symbol {
-                    self.switch_mode(Mode::Pinyin);
-                }
-                match commit {
-                    Some(full) => {
-                        // 逐字态收尾：整串也记一次 —— 下一次整词候选因此能顶上来。
-                        if full != text {
-                            self.learner.record_selection(&full);
-                        }
-                        // 英文候选的提交（空格/数字选词/回车/面板点击）与各端**直传点**
-                        // 同一条全角规则：直传是宿主调 `fullwidthize`，候选提交在引擎，
-                        // 只能在这里宽化。非 ASCII 恒等（`café` 的 é 不动），中文/符号
-                        // 模式不受影响；学习记的仍是规范词形（上面那行）。
-                        if self.composer.session().mode == Mode::English {
-                            self.fullwidthize(&full)
-                        } else {
-                            full
-                        }
-                    }
-                    None => String::new(),
-                }
-            }
-            None => String::new(),
-        }
-    }
-
-    // 【另有】符号大全 / 分词回退收尾分别在 engine_symbol_browse.rs / engine_segment.rs；
+    // 【另有】候选选中 `select_from` 与学习/误选撤销在 engine_learning.rs；
+    // 符号大全 / 分词回退收尾分别在 engine_symbol_browse.rs / engine_segment.rs；
     // 用户词与开关一族（2026-10-11 拆出）在 engine_user_words.rs。
 }

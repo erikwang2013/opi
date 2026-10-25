@@ -134,7 +134,9 @@ impl Engine {
     pub(crate) fn symbol_browse_select(&mut self, index: usize) -> String {
         match self.symbol_browse.select(index) {
             Selection::Commit(text) => {
-                self.learner.record_selection(&text);
+                // 符号大全 = 用户显式点选（+2），与空格接受首候选（+1）分开记。
+                self.learner
+                    .record_selection_weighted(&text, crate::learner::SelectionSource::Explicit);
                 text
             }
             Selection::Drill | Selection::Miss => String::new(),

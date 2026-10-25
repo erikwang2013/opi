@@ -24,6 +24,7 @@
 //! | `.` 开头的目录 | 版本控制/工具目录（`.git` `.github` `.agents` `.claude-flow` `.gradle`） |
 //! | `target/` `build/` `__pycache__/` `node_modules/` | 构建与缓存产物 |
 //! | `dist/`（2026-10-25 加） | 本机发布打包产物（`.msi`/`.apk`/`.rpm` …）。旧版 RPM 是 88MB 的 **UTF-8 可解码**文件，扫它会每次发布后把门禁拖到分钟级；构建产物不是源码 |
+//! | `site/download/`（2026-10-26 加） | 站点分发的安装包镜像（APK/PKG/IPA/HAP/EXE/deb/rpm，总量数百 MB）；与 `dist/` 同类，不是源码 |
 //! | `data/generated/` `data/raw/` | 生成物与原始数据（`.tsv` 等） |
 //! | `android/app/src/main/assets/`（2026-10-09 加） | **随包分发的数据资产**：词库 `.opid`（二进制，本就按内容跳过）与部首索引 `.tsv`（文本 —— 正是它暴露了这条口径缺口）。与 `data/raw/` 同类，不是源码 |
 //! | `crates/fcitx5-opi/data/`（2026-10-16 加） | **随包分发的数据资产**（同 android assets 那条）：symbol_categories.tsv 与康熙词库 kangxi.tsv —— 后者 2 万行文本又暴露了同一缺口。数据不是源码 |
@@ -56,6 +57,7 @@ fn dir_is_excluded(name: &str) -> bool {
 /// `crates/fcitx5-opi/data/` 是词的库数据，不在排除之列）。
 fn path_is_excluded(rel: &str) -> bool {
     rel.starts_with("dist/")
+        || rel.starts_with("site/download/")
         || rel.starts_with("data/generated/")
         || rel.starts_with("data/raw/")
         // 随包分发的**数据资产**（词库 .opid、部首索引 .tsv，同 [data/raw] 一类）。

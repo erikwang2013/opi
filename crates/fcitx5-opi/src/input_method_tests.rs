@@ -20,6 +20,7 @@ fn state() -> CandidateState {
         dicts: Default::default(),
         english_pro: true,
         fetch_cache: Default::default(),
+        persist: Default::default(),
     };
     s.buffer_snapshot = s.engine.buffer().to_string();
     s

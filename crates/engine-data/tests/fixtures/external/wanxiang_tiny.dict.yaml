@@ -1,0 +1,24 @@
+# Tiny test excerpt from rime-wanxiang (CC BY 4.0) — see README.md here.
+# Lines are copied from dicts/jichu.dict.yaml and dicts/zi.dict.yaml at the pinned commit.
+---
+name: wanxiang_tiny
+version: "LTS"
+sort: by_weight
+import_tables:
+  - dicts/zi
+  - dicts/jichu
+...
+你好	nǐ hǎo	76730
+北京	běi jīng	98260
+绿林	lù lín	320
+女儿	nǚ er	2547
+银行	yín háng	111881
+测试	cè shì	101667
+贝克	bèi kè
+复方丹参	fù fāng dān shēn	6N
+行	háng	16297
+行	xíng	92900
+重	chóng	13395
+重	zhòng	54918
+啊	a	759839
+啊	ā	11024

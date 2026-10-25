@@ -24,6 +24,7 @@ import xyz.erik.opi.engine.DictStore
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.engine.UserWordStore
 import xyz.erik.opi.engine.clearUserWords
+import xyz.erik.opi.ime.BracketPairing
 import xyz.erik.opi.ime.HandlerDebouncer
 import xyz.erik.opi.jni.EngineLoader
 import xyz.erik.opi.jni.OpiEngine
@@ -80,6 +81,8 @@ class OpiImeService : InputMethodService() {
     private val imeState = ImeState(engineController)
     private val symbolCatalog = SymbolCatalog.androidDefault()
     private lateinit var keyRouter: KeyRouter
+    /** 括号自动配对（宿主读写走 InputConnection，见 BracketCommit.kt）。 */
+    private val bracketPairing = BracketPairing(AndroidBracketHost(this))
 
     /** IME 偏好（输入模式/键盘模式/三个引擎开关）。懒初始化：字段初始化早于
      *  `attachBaseContext`，那时 `getSharedPreferences` 拿不到 Context。 */
@@ -251,6 +254,7 @@ class OpiImeService : InputMethodService() {
             // 语义与理由见 KeyRouter.commitAndResync 的头注）。
             syncComposing = { pushComposingText() },
             englishPro = { imeState.englishPro },
+            pairing = bracketPairing,
         )
         // IME 提交通道在视图创建时注入（构造期无 this 引用；面板打开提交 pending buffer 用）
         imeState.commit = ::commitWithRetry
@@ -360,6 +364,8 @@ class OpiImeService : InputMethodService() {
             Log.i(TAG, "onStartInput: editor changed")
             // 排队中的重试提交必须在这里撤掉：它与组合串同属「上一个编辑器的东西」
             cancelPendingCommit()
+            // 换编辑器后，上一处插入的配对不能再被当成「我们的」于新编辑器里删改
+            bracketPairing.reset()
             imeState.onEditorChanged()
             // 取消组合串（不提交，避免半截拼音泄入新编辑器）
             engineController.clear()
@@ -389,6 +395,7 @@ class OpiImeService : InputMethodService() {
         if (finishingInput) {
             // 同 onStartInput：结束输入时排队中的重试同样不能再落到下一个编辑器
             cancelPendingCommit()
+            bracketPairing.reset()
             imeState.onEditorChanged()
             engineController.clear()
         }
@@ -477,6 +484,7 @@ class OpiImeService : InputMethodService() {
     override fun onDestroy() {
         // 销毁前撤掉未执行的提交重试，避免向新输入框误提交
         cancelPendingCommit()
+        bracketPairing.reset()
         // 取消 pending 搜索防抖（销毁后回调不应再触发）
         imeState.onEditorChanged()
         lifecycleOwner.registry.currentState = Lifecycle.State.DESTROYED

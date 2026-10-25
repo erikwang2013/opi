@@ -54,6 +54,7 @@ public:
         // 导入词库的启动扫描也走这条路（applyOpiSettings → opi_dicts.h 的 opiDictsSync）。
         readOpiSettings(settings_);
         applyOpiSettings(settings_);
+        startUserWordsTimer();
         // 皮肤**不在构造时应用**（理由在 opi_skin.h 头部）：只把读到的值记为
         // 「已应用」，免得每次 fcitx5 启动都拿配置里的旧值改写 classicui.conf、
         // 把用户后来在别处改的主题顶回去。
@@ -70,6 +71,7 @@ public:
         // activate() 再试一次并在那里作诊断（见 ensureCtlService_）。
         ensureCtlService_(false);
     }
+    ~OpiEngine() override;
     // ---- 「属性设置」：fcitx5 的 addon 配置（字段与落点见 opi_config.h）----
     // 改完 `fcitx5-remote -r` 走 reloadConfig；配置工具直接改走 setConfig；
     // 两者都立刻 apply 到引擎（不必重启输入法）。
@@ -228,7 +230,7 @@ public:
         } else if (action == "clearuserwords") {
             // 清空用户词（学习记忆）。弱符号：老 .so 上按未接线报 4，别哑成功。
             if (opi_fcitx5_clear_user_words == nullptr || !opi_fcitx5_clear_user_words()) {
-                return "err:4:清空用户词不可用（引擎未装载或插件版本过旧）";
+                return "err:4:清空用户词未完成（引擎未装载、插件版本过旧或用户词文件删不掉）";
             }
             refreshingPanelFor(ic);
         } else if (action == "mode") {
@@ -426,6 +428,7 @@ private:
     // 把「整个输入法挂掉」降级成「这一次按键无效」。
     void keyEventImpl(const fcitx::InputMethodEntry &entry,
                       fcitx::KeyEvent &keyEvent);
+    void startUserWordsTimer(); // 用户词自动落盘轮询，见 opi_fcitx5.cpp
 
     // XDG 数据目录下找 OPI 词库（B3：Rust 侧 opi_fcitx5_init_dict 把插件分发的
     // luna.opid 拷到 $XDG_DATA_HOME/opi/luna.opid，镜像 Android EngineLoader.

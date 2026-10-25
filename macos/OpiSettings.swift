@@ -156,6 +156,98 @@ extension OpiEngine {
     }
     func exportUserWords() -> String { take(opi_export_user_words()) }
 
+    // ---------- 用户词自动落盘（2026-10-26） ----------
+    //
+    // 路径：~/Library/Application Support/opi/opi_user_words.json —— 与 fcitx5
+    // $XDG_DATA_HOME/opi/opi_user_words.json、Android UserWordStore 同一个文件名。
+    // 引擎（Rust）不做 IO；本层只做「引擎 JSON ↔ 文件」。唯一真源是引擎内存：
+    // 导出直接问引擎，不从文件反读，故无第二份缓存可漂。
+    // 失败一律 NSLog，不静默：0 字节/坏 JSON 在启动时保留原文件（不删不覆盖），
+    // 下一次成功落盘才用原子写整体替换。
+
+    static var userWordsFileURL: URL {
+        dataDirectory.appendingPathComponent("opi_user_words.json")
+    }
+
+    /// 防抖状态只在 userWordsQueue 上读写：键/选词在主线程标脏，写盘在后台队列。
+    private static let userWordsQueue = DispatchQueue(label: "xyz.erik.opi.user-words")
+    private static var userWordsSaveWork: DispatchWorkItem?
+    private static let userWordsSaveDelay: TimeInterval = 0.8
+
+    /// 启动时恢复。缺失 = 冷启动；读不出/0 字节/坏 JSON → 日志 + **保留原文件**。
+    func loadPersistedUserWords() {
+        let url = OpiEngine.userWordsFileURL
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        do {
+            let data = try Data(contentsOf: url)
+            guard !data.isEmpty else {
+                NSLog("opi: 用户词文件是 0 字节（可能是掉电残留），保留原文件：%@", url.path)
+                return
+            }
+            guard let json = String(data: data, encoding: .utf8) else {
+                NSLog("opi: 用户词文件不是 UTF-8，保留原文件：%@", url.path)
+                return
+            }
+            let count = importUserWords(json: json)
+            guard count >= 0 else {
+                NSLog("opi: 用户词文件内容损坏或版本不符，保留原文件：%@", url.path)
+                return
+            }
+            NSLog("opi: 已载入 %d 条用户词：%@", count, url.path)
+        } catch {
+            NSLog("opi: 用户词文件读不出（%@），保留原文件", error.localizedDescription)
+        }
+    }
+
+    /// 一次成功选词后调用（主线程）。尾随防抖：连续选词只在最后一次之后 0.8s 写一次。
+    func markUserWordsDirty() {
+        OpiEngine.userWordsQueue.async {
+            OpiEngine.userWordsSaveWork?.cancel()
+            let work = DispatchWorkItem { self.saveUserWordsNow() }
+            OpiEngine.userWordsSaveWork = work
+            OpiEngine.userWordsQueue.asyncAfter(
+                deadline: .now() + OpiEngine.userWordsSaveDelay, execute: work)
+        }
+    }
+
+    /// 仅在 userWordsQueue 上调用。
+    private func saveUserWordsNow() {
+        let json = exportUserWords()
+        // 引擎未装载时导出是空串；写成 0 字节文件会被下次启动判成损坏。
+        guard !json.isEmpty else {
+            NSLog("opi: 用户词导出为空（引擎未装载？），本次不写文件")
+            return
+        }
+        let url = OpiEngine.userWordsFileURL
+        do {
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data(json.utf8).write(to: url, options: .atomic)
+        } catch {
+            NSLog("opi: 用户词写入失败（%@）：%@", url.path, error.localizedDescription)
+        }
+    }
+
+    /// 清空内存 + 文件（设置页「清空用户词」）。先取消待落盘再删，防清完被写回。
+    /// 返回 false = 文件删不掉（内存已清空，错误已打日志）。
+    @discardableResult
+    static func clearUserWordsAndFile() -> Bool {
+        userWordsQueue.sync {
+            userWordsSaveWork?.cancel()
+            userWordsSaveWork = nil
+            OpiEngine.shared.clearUserWords()
+            let url = userWordsFileURL
+            guard FileManager.default.fileExists(atPath: url.path) else { return true }
+            do {
+                try FileManager.default.removeItem(at: url)
+                return true
+            } catch {
+                NSLog("opi: 用户词文件删除失败（%@）：%@", url.path, error.localizedDescription)
+                return false
+            }
+        }
+    }
+
     // 自定义短语（2026-10-23）：JSON 原样交给引擎；负数 = 失败且旧表不变。
     var customPhrasesEnabled: Bool {
         get { opi_custom_phrases_enabled() }

@@ -18,6 +18,7 @@ import * as ScreenLayout from './ScreenLayout';
 import * as SettingsStore from './SettingsStore';
 import { publishState } from './StatePublish';
 import * as BackspaceRepeat from './BackspaceRepeat';
+import { bracketPairing } from './BracketPairing';
 
 export class KeyboardController {
   private static instance: KeyboardController = new KeyboardController();
@@ -44,6 +45,7 @@ export class KeyboardController {
       inputClient: inputMethodEngine.InputClient): void => {
       this.kbController = kbController;
       this.client = inputClient;
+      bracketPairing.reset();
       // 无会话期间可能转过屏/折叠过：新会话先重读尺寸再 resize。
       this.metrics = ScreenLayout.currentMetrics();
       this.ensureDictionary();
@@ -62,6 +64,7 @@ export class KeyboardController {
   private onInputStopCallback: () => void = (): void => {
     // InputClient 随会话失效，必须丢引用；引擎侧缓冲要清，长按连删计时器也要停。
     BackspaceRepeat.stop();
+    bracketPairing.reset();
     OpiEngine.clear();
     this.client = null;
     this.kbController = null;
@@ -171,10 +174,9 @@ export class KeyboardController {
 
   // -------------------------------------------------------------- 文本上屏
 
-  private insertText(text: string): void {
-    if (this.client === null || text.length === 0) {
-      return;
-    }
+  private insertText(text: string, typed: boolean = false): void {
+    if (this.client === null || text.length === 0) { return; }
+    if (typed && bracketPairing.insertTyped(this.client, text, OpiEngine.mode() === OpiMode.English)) { return; }
     this.client.insertText(text);
   }
 
@@ -191,7 +193,7 @@ export class KeyboardController {
   pressKey(keyval: number, states: number): void {
     const r: KeyResult = OpiEngine.keyEvent(keyval, states);
     if (r.action === OpiAction.Commit) {
-      this.insertText(r.text);
+      this.insertText(r.text, true);
     } else if (r.action === OpiAction.PassThrough) {
       this.handlePassThrough(keyval);
     }
@@ -201,13 +203,13 @@ export class KeyboardController {
   /** 引擎放行的键 = 由应用承接。空缓冲的退格必须真的删应用里的字。 */
   private handlePassThrough(keyval: number): void {
     if (keyval === OpiEngine.KEY_BACK_SPACE || keyval === OpiEngine.KEY_DELETE) {
-      this.deleteForward(1);
+      if (!bracketPairing.backspace(this.client)) { this.deleteForward(1); }
       return;
     }
     // 数字/符号模式的可打印键走这里：引擎不管这些模式，UI 自己上屏。
     // 上界 0xFFFF 同时把特殊键（0x1_00xx）挡在外面 —— 它们不是字符。
     if (keyval >= 0x20 && keyval <= 0xFFFF) {
-      this.insertText(String.fromCharCode(keyval));
+      this.insertText(String.fromCharCode(keyval), true);
     }
     // 空缓冲的 ↵ 也落到这里：KEY_RETURN > 0xFFFF，两个分支都不接 ⇒ 已知死键（见 tapEnter）。
   }
@@ -267,13 +269,9 @@ export class KeyboardController {
   /** ⇧ 长按 → LOCK（持续大写）。states 带 LONG_PRESSED，别带 REPEAT（会被忽略）。 */
   tapShiftLongPress(): void { this.pressKey(OpiEngine.KEY_SHIFT, OpiEngine.STATE_LONG_PRESSED); }
 
-  tapPageUp(): void {
-    this.pressKey(OpiEngine.KEY_PAGE_UP, 0);
-  }
+  tapPageUp(): void { this.pressKey(OpiEngine.KEY_PAGE_UP, 0); }
 
-  tapPageDown(): void {
-    this.pressKey(OpiEngine.KEY_PAGE_DOWN, 0);
-  }
+  tapPageDown(): void { this.pressKey(OpiEngine.KEY_PAGE_DOWN, 0); }
 
   /** 点候选：**页内索引**，引擎自己换算。不要自己算 page*8+k。 */
   tapCandidate(indexInPage: number): void {
@@ -446,7 +444,7 @@ export class KeyboardController {
 
   /** 符号/生僻字/表情直提：整串送，不拆键（旗帜/家庭是多码位序列）。 */
   commitText(text: string): void {
-    this.insertText(text);
+    this.insertText(text, true);
   }
 
   /** 英文 pro：关掉时清掉引擎里可能残留的缓冲（此后字母直接上屏）。 */

@@ -70,6 +70,8 @@ pub struct CandidateState {
     /// （`candidate_settings.rs`）。只由 `page_count` 填充、被 `fetched` 消费一次 ——
     /// 不在候选窗刷新后继续持有全量表，避免跨键常驻内存与额外的失效面。
     pub(crate) fetch_cache: RefCell<Option<(String, String, Vec<Candidate>)>>,
+    /// 用户词落盘的防抖状态（`user_words.rs`；`Default` = 未接线）。
+    pub(crate) persist: crate::user_words::Persistence,
 }
 
 impl CandidateState {
@@ -117,6 +119,7 @@ impl CandidateState {
             dicts: DictLayer::default(),
             english_pro: false,
             fetch_cache: RefCell::new(None),
+            persist: Default::default(),
         };
         s.refresh_snapshot();
         Ok(s)
@@ -130,7 +133,7 @@ impl CandidateState {
     ///
     /// 所有编辑/提交/装载入口都以本方法收尾 ⇒ 一次抓取缓存也在这里统一作废：
     /// 即使 buffer 字符串恰好没变（提交后清空、再回到同一串），候选集也可能已换。
-    fn reset_page_if_buffer_changed(&mut self) {
+    pub(crate) fn reset_page_if_buffer_changed(&mut self) {
         self.invalidate_fetch_cache();
         if self.engine.buffer() != self.buffer_snapshot {
             self.page = 0;
@@ -231,23 +234,21 @@ impl CandidateState {
     /// 非 ASCII 由引擎层拒绝。返回引擎输出（如英文模式下已提交文本）。
     pub fn input_key(&mut self, ch: char) -> String {
         let out = self.engine.input_key(ch);
-        self.reset_page_if_buffer_changed();
-        out
+        self.finish_commit(out)
     }
 
     /// 引擎层标点表：`Some` = 该键归标点表管（文本要上屏），`None` = 交回路由直通。
     /// 与 `input_key` 同一套收尾 —— 命中时引擎可能先 flush 缓冲，页码得跟着归零。
     pub fn input_punct(&mut self, ch: char) -> Option<String> {
         // 收尾要提的「首候选」是**当前页**首条（翻页后不再回第一页）
+        let had_buffer = !self.engine.buffer().is_empty();
         let out = self.engine.input_punct_at(ch, self.page * PAGE_SIZE);
-        self.reset_page_if_buffer_changed();
-        out
+        self.finish_punct(out, had_buffer)
     }
 
     pub fn input_space(&mut self) -> String {
         let out = self.engine.input_space_at(self.page * PAGE_SIZE);
-        self.reset_page_if_buffer_changed();
-        out
+        self.finish_commit(out)
     }
 
     pub fn backspace(&mut self) {
@@ -258,14 +259,6 @@ impl CandidateState {
     pub fn clear(&mut self) {
         self.engine.clear();
         self.reset_page_if_buffer_changed();
-    }
-
-    /// 清空用户词（学习记忆）。缓冲没变但候选集会变（用户词参与排名）⇒ 作废
-    /// 抓取缓存并回第一页，别停在一个已经不存在的页上。
-    pub fn clear_user_words(&mut self) {
-        self.engine.clear_user_words();
-        self.page = 0;
-        self.invalidate_fetch_cache();
     }
 
     /// 切模式（**不收尾**：待处理的缓冲由 `Composer::switch_mode` 直接清掉）。
@@ -415,8 +408,7 @@ impl CandidateState {
         } else {
             String::new()
         };
-        self.reset_page_if_buffer_changed();
-        out
+        self.finish_selection(out)
     }
 
     /// 批量抓取（FETCH_LIMIT 内；不设上限时 `truncate` 是空操作，排序仍全量）。

@@ -124,6 +124,7 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        resetBracketPairing()
         guard heightConstraint == nil else { return }
         // 键盘高度必须由扩展自己给（公式见 KeyboardResponsive.swift：竖屏 264，
         // 横屏按屏幕高 60% 封顶、绝对上限 340）。priority 用 defaultHigh：
@@ -159,7 +160,6 @@ final class KeyboardViewController: UIInputViewController {
 
     // 词库装载已搬到 `KeyboardDictionaryLoader.swift`（2026-10-21：本文件压 500 行门禁）。
     // `loadDictionaries()` / `loadBundledDictionary(for:)` 仍是控制器的方法，见那边。
-
     // 刷新 UI / marked text 已搬到 `KeyboardCandidates.swift`（2026-10-21，本文件压 500 行）。
 
     // MARK: - 文本提交
@@ -182,9 +182,9 @@ final class KeyboardViewController: UIInputViewController {
         case .none:
             break
         case .text(let t):
-            insert(t)
+            insertTyped(t)
         case .deleteBackward:
-            textDocumentProxy.deleteBackward()
+            deleteBackwardTyped()
         }
     }
 
@@ -225,7 +225,7 @@ final class KeyboardViewController: UIInputViewController {
         if insertNumbersLayerDigitIfNeeded(fallback) { return }
         switch engine.keyEvent(keyval: keyval, states: states) {
         case .commit(let text):
-            insert(text)
+            insertTyped(text)
             refresh()
         case .handled:
             refresh()
@@ -442,7 +442,7 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             // 符号面板的键**直提，不过引擎**：引擎的标点表会把 `,` 改写成中文标点/
             // 全角（那是文本模式该做的事），而用户点的就是 `,`。
             // 不调 refresh：缓冲没变，候选栏也不该变。
-            insert(text)
+            insertTyped(text)
         }
     }
 

@@ -153,6 +153,7 @@ fn enabled_phrase_file_matches_typed_letters() {
         dicts: Default::default(),
         english_pro: false,
         fetch_cache: Default::default(),
+        persist: Default::default(),
     };
     s.apply_custom_phrases(load_custom_phrases_file(&path));
     s.switch_mode(engine_core::composer::Mode::Pinyin);
@@ -180,6 +181,7 @@ fn english_phrases_make_normal_english_mode_buffer() {
         dicts: Default::default(),
         english_pro: false,
         fetch_cache: Default::default(),
+        persist: Default::default(),
     };
     s.apply_english_custom_phrases(PhraseState {
         enabled: true,
