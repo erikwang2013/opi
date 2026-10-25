@@ -83,7 +83,7 @@
 
 **六端都有客户端代码**：Android（Compose 原生 IME）、Linux（fcitx5 插件）、Windows（TSF 插件 + Compose Desktop 候选窗 —— 后者是**独立的 UI 代码库**，经命名管道与 TSF 通信）、iOS、macOS、鸿蒙。各端 UI 不共享代码，只共享输入语义；目前 Android（模拟器）、Windows（真机）与 Linux（容器 / 本机）有运行验证，iOS / macOS / 鸿蒙尚无真机证据（见下一段）。
 
-**Apple 两平台与鸿蒙都已有可构建的端，但都还没有真机验证**——三个目录（[`ios/`](ios/)、[`macos/`](macos/)、[`harmony/`](harmony/)）里的 Swift 与 ArkTS 早已不是空骨架。**2026-10-15 订正**：Swift 两边（`ios/` · `macos/`）**已由 CI 真编译**（`apple.yml` 的 iOS / macOS job 里 `swiftc … -typecheck` + 真链接，2026-10-15 起全绿，同日抓出一处真错），iOS 产出宿主 App + unsigned IPA、macOS 产出 unsigned pkg/app；**2026-10-19 订正**：`harmony/` 已是完整 hvigor 工程，本机鸿蒙命令行工具链可跑 `hvigorw assembleHap`，已产出 unsigned HAP（含 `libopiime.so`；`luna.opid` / `stroke.opid` / `wubi86.opid` 由 rawfile 首次启动拷进沙箱，经 C ABI 以绝对路径装载）。⚠️ **三者拦路的原因不是同一个，别把它们绑成一句**：Apple 两端是**开发机不够**（本机无 macOS/Xcode/Apple SDK，编译发生在 CI 的 macOS runner 上）；鸿蒙是**签名与真机证据为零**（没有签名材料与设备，安装、输入法列表与运行行为都未验证）。**已就绪的还有平台中立的 C ABI**（`crates/opi-ffi`，见 `tests/cabi_test.rs`）——它不属于任何一端，且**已实测能为 Apple 与鸿蒙的多个目标编译**。三者的硬约束与现状见「未来规划」。
+**Apple 两平台与鸿蒙都已有可构建的端，但都还没有真机验证**——三个目录（[`ios/`](ios/)、[`macos/`](macos/)、[`harmony/`](harmony/)）里的 Swift 与 ArkTS 早已不是空骨架。**2026-10-15 订正**：Swift 两边（`ios/` · `macos/`）**已由 CI 真编译**（`apple.yml` 的 iOS / macOS job 里 `swiftc … -typecheck` + 真链接，2026-10-15 起全绿，同日抓出一处真错），iOS 产出宿主 App + unsigned IPA、macOS 产出 unsigned pkg/app；**2026-10-19 订正**：`harmony/` 已是完整 hvigor 工程，本机鸿蒙命令行工具链可跑 `hvigorw assembleHap`，已产出 unsigned HAP（含 `libopiime.so`；`luna.opid` / `stroke.opid` / `wubi86.opid` 由 rawfile 首次启动拷进沙箱，经 C ABI 以绝对路径装载），并已进入 1.26.x 的 unsigned 发布资产。⚠️ **三者拦路的原因不是同一个，别把它们绑成一句**：Apple 两端是**开发机不够**（本机无 macOS/Xcode/Apple SDK，编译发生在 CI 的 macOS runner 上）；鸿蒙是**签名与真机证据为零**（没有签名材料与设备，安装、输入法列表与运行行为都未验证）。**已就绪的还有平台中立的 C ABI**（`crates/opi-ffi`，见 `tests/cabi_test.rs`）——它不属于任何一端，且**已实测能为 Apple 与鸿蒙的多个目标编译**。三者的硬约束与现状见「未来规划」。
 
 #### 2. 隐私优先，而且可以自己核对
 - **默认本地化**：输入数据只留在本机。引擎层与出口层的依赖表里**没有 HTTP 客户端**，没有遥测，没有广告 SDK
@@ -305,7 +305,7 @@ V1 里程碑进度：
 - [x] **简繁双词库**（spec §8 未给它 M6 编号，独立成项）：`Mode::Traditional` + 双词典路由 + `trad.opid` + GB2312 单字全覆盖门禁
 - [~] **M6b Linux fcitx5 插件**：Rust 逻辑与单测完成；**C++ 胶水此前从未被编译器看过**，现已补上 CMake 编译 + 安装通路（`crates/fcitx5-opi/cpp/CMakeLists.txt`）、CI 的 fcitx5 job（编译 + 安装落点断言 + debian:12 容器里带三臂对照真加载）与 `.deb` / `.rpm` 打包（`scripts/build-packages.sh`）—— **待在目标平台实机验收；包也从未被 `dpkg -i` / `rpm -i` 过**
 - [~] **M6c Windows TSF 插件 + CMP 候选窗**：Rust 逻辑、候选窗线协议与 Compose Desktop 候选窗 / 状态栏 / 设置窗完成 —— COM 服务端按目标平台门控；**Windows 打包自 2026-10-18 起已接线，2026-10-20 起用户入口改为 EXE 安装器 `opi-<版本>-setup.exe`**（`luna.opid` 已随包放进 app 镜像 `app\`——开箱即用完整简体词库，三份许可证文本一并分发、CI 断言 SHA-256；白屏修复：启动器不再重启 Explorer；卸载会结束 `opi.exe`、删 `{app}`、清 Run 项与 `%TEMP%` 锁文件；状态栏登录自启并经 `\\.\pipe\opi-control-v2` 控制面驱动 TSF，设置即时 `reload`）；**`trad.opid` 仍不随包**（Windows 只持有一本词典）；安装/打字/候选窗/中英文/状态栏已在 Windows 10 真机验收（89/89 安装项与 Notepad 输入），交互式安装向导、语言栏图标与非 Notepad 宿主仍待验（仅支持 Windows 10/11 x64；Win7/8/8.1 不支持）
-- [~] **M7 iOS / macOS**：C ABI 已就绪；CI 的 `apple.yml` 已真编译 Swift，iOS 产出宿主 App + unsigned IPA（工具条 / 皮肤 / 键盘模式 / 关于页对齐 Android，贴纸写系统剪贴板需开启「完全访问」），macOS 产出 unsigned pkg/app（符号面板 / 输入法菜单 / 设置窗 / 候选分页）；两端 1.26.0 起已接括号配对，macOS 另接用户词持久化，iOS 用户词仍为内存态；**签名、真机运行与输入法启用仍未验证**。
+- [~] **M7 iOS / macOS**：C ABI 已就绪；CI 的 `apple.yml` 已真编译 Swift，iOS 产出宿主 App + unsigned IPA（工具条 / 皮肤 / 键盘模式 / 关于页对齐 Android，贴纸写系统剪贴板需开启「完全访问」），macOS 产出 unsigned pkg/app（符号面板 / 输入法菜单 / 设置窗 / 候选分页）；iOS 1.26.0 起已接括号配对，但用户词仍为内存态；macOS 未接括号配对，但已接用户词持久化；**签名、真机运行与输入法启用仍未验证**。
 
 > 里程碑编号以 `docs/superpowers/specs/2026-08-14-opi-multi-platform-design.md` §8 与 M6 实施计划为准
 > （M6a=Android / M6b=fcitx5 / M6c=TSF+候选窗）。
