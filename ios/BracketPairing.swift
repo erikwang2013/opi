@@ -125,9 +125,11 @@ final class BracketPairing {
 }
 
 extension KeyboardViewController {
-    /// 英文模式 / 密码安全框不配对（契约第 5 条）。
+    /// 英文模式 / 密码安全框不配对（契约第 5 条）；有选区也不配对 —— 插入会替换
+    /// 选区，语义交给普通 `insert`（与 Android `pairingAllowed` 同一条）。
     var bracketPairingEnabled: Bool {
-        engine.mode() != .english && !textDocumentProxy.isSecureTextEntry
+        engine.mode() != .english && textDocumentProxy.isSecureTextEntry != true
+            && (textDocumentProxy.selectedText ?? "").isEmpty
     }
 
     /// 用户**敲出来**的文本：软键盘 route/fallback、外接键盘提交、符号面板直提。
