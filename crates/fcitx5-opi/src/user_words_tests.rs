@@ -105,6 +105,21 @@ fn unsupported_version_is_corrupt() {
 }
 
 #[test]
+fn typing_without_selection_does_not_save() {
+    let dir = temp_dir("typing");
+    let mut s = state();
+    assert_eq!(attach(&mut s, &dir), Restore::Missing);
+    for ch in "nihao".chars() {
+        let out = s.input_key(ch);
+        assert!(out.is_empty(), "只打字不应上屏（{ch}）");
+    }
+    assert!(!s.persist.dirty, "未选词不得标脏（不能每键写文件）");
+    assert!(!s.save_user_words_if_due_at(due_later()));
+    assert!(!file_path(&dir).exists(), "整个打字过程不得创建文件");
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn selection_saves_only_after_debounce_and_roundtrips() {
     let dir = temp_dir("roundtrip");
     let mut s = state();

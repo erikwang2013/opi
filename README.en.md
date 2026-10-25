@@ -290,7 +290,7 @@ LICENSE · CONTRIBUTING.md      # MIT full text · contribution guide (incl. dic
 
 ### 📅 Project Status
 
-> **Current stage: v1.25.7 (2026-10-26): first-key spike — 26-key finite windows select tier-by-tier from the full pool and materialise only the leading segment (3.5–6ms in a desktop release build); 9-key single keys skip the pointless fallback scan; finite windows are exact prefixes of the unlimited list, fixing display/commit mismatches**
+> **Current stage: v1.26.0 (2026-10-26): bracket auto-pairing on Android/iOS/HarmonyOS, source-weighted learning with mis-selection undo, English candidates read learned frequency, fcitx5/macOS user-word persistence; mobile candidate windows 64→512; optional CustomPinyinDictionary / rime-wanxiang converters and licensing docs**
 
 V1 milestone progress:
 

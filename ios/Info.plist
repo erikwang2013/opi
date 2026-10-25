@@ -32,9 +32,9 @@
     <string>XPC!</string>
     <key>CFBundleShortVersionString</key>
     <!-- 与 workspace 版本对齐（Cargo.toml [workspace.package] version）。 -->
-    <string>1.25.7</string>
+    <string>1.26.0</string>
     <key>CFBundleVersion</key>
-    <string>16</string>
+    <string>17</string>
     <!-- 手写 bundle 没有 Xcode 的构建设置注入，这两个键要显式写；
          package-ios.sh 会把 MinimumOSVersion 覆盖成脚本里的 IOS_MIN。 -->
     <key>CFBundleSupportedPlatforms</key>

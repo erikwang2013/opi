@@ -114,8 +114,10 @@ export class BracketPairing {
       return false;
     }
     try {
-      client.deleteForwardSync(1); // 删光标前 = 开符号
+      // 先删闭符号再删开符号：第二次失败时调用方还会补一次退格（删光标前），
+      // 此时至多删掉剩下的开符号，不会碰到配对之外的正文。
       client.deleteBackwardSync(1); // 删光标后 = 闭符号
+      client.deleteForwardSync(1); // 删光标前 = 开符号
       return true;
     } catch (e) {
       return false;

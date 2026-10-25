@@ -27,7 +27,8 @@ internal class AndroidBracketHost(private val service: OpiImeService) : BracketH
      * 插入成对符号并把光标移回中间。
      *
      * 起始位置取 `getExtractedText().startOffset + selectionStart`（SDK 契约：selectionStart
-     * 是相对抽取文本起点的下标，真实位置要加 startOffset），失败再用 `getSelectionStart()`。
+     * 是相对抽取文本起点的下标，真实位置要加 startOffset；InputConnection 没有选区 getter，
+     * 读不到抽取文本就取 -1）。
      * `setSelection` 在不支持定位的编辑器上返回 false —— 此时配对已经进了文档，
      * 光标停在闭符号之后：仍然算「已处理」，只是后续跳过/成对退格不会触发（不猜位置）。
      * 表里每个符号都是一个 UTF-16 单元，所以 `+1` 不会劈开代理对。
