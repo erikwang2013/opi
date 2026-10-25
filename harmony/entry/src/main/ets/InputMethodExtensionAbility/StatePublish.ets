@@ -18,7 +18,9 @@ import {
 } from './KeyboardAppStorage';
 
 /** 平铺视图取全量的条数（同 Android EngineController.fetchLimit）。 */
-export const TILED_FETCH_LIMIT: number = 64;
+export const TILED_FETCH_LIMIT: number = 512;
+/** 9 键左列读数最多缓存多少行（读数 JSON/节点比候选贵，仍截 64）。 */
+const READING_LIMIT: number = 64;
 
 /**
  * 平铺候选是否还能站住（Android `ImeState.candidatesShowable` 的镜像）：
@@ -66,7 +68,7 @@ export function publishState(): void {
   const pageCandidates: string[] = OpiEngine.candidatesPage();
   // 读数与当前候选批一起缓存，**紧跟** candidatesPage 读；displayBuffer 仍最后。
   // 左列最多滚 64 行；9 键一次可能产生上千条读数（JSON/节点都贵），截断到 64。
-  const readings: string[] = OpiEngine.candidateReadings().slice(0, TILED_FETCH_LIMIT);
+  const readings: string[] = OpiEngine.candidateReadings().slice(0, READING_LIMIT);
   // ⚠️ displayBuffer **必须最后读**：9 键读数是 candidates() 的副产物（缓存与算它时的
   // 缓冲绑存），先读会拿到上一条缓冲的旧值/空串 —— Android EngineController 同款次序。
   const display: string = OpiEngine.displayBuffer();

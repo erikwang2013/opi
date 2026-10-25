@@ -41,7 +41,8 @@ enum class InputScheme(val value: Int) {
 
 /**
  * 单一状态源：封装 OpiEngine，UI 经 mutableStateOf 订阅
- * （对齐 flutter engine_controller.dart：翻页 fetchLimit=64、8/页、buffer 变化重置页码）。
+ * （翻页 8/页、buffer 变化重置页码；2026-10-26 起 fetchLimit=512，让「壹」这类
+ * 排在第 79/155 位的精确单字可通过翻页到达 —— 此前 64 条只有 8 页）。
  */
 class EngineController(
     private val api: OpiEngineApi = OpiEngine,
@@ -157,7 +158,7 @@ class EngineController(
 
     companion object {
         const val pageSize = 8
-        const val fetchLimit = 64
+        const val fetchLimit = 512
     }
 
     // 候选翻页：引擎 candidates(limit) 无 offset，翻页纯客户端。

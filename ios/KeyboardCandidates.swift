@@ -40,9 +40,9 @@ extension KeyboardViewController {
             }
             pinBuffer = buffer
         }
-        // 2026-10-26：普通候选栏只画固定槽位，没必要每键让引擎排 64 条；
-        // 平铺页才要整批（打开平铺时 showTiledCandidates 会补一次 64 条的 refresh）。
-        let limit = layout.keyLayer == .candidatesTiled ? 64 : max(8, layout.candidateSlotCount)
+        // 2026-10-26：普通候选栏只画固定槽位，没必要每键让引擎排整批；
+        // 平铺页才要整批（打开平铺时 showTiledCandidates 会补一次 512 条的 refresh）。
+        let limit = layout.keyLayer == .candidatesTiled ? 512 : max(8, layout.candidateSlotCount)
         let texts = engine.allCandidates(limit: limit)
         let readings = layout.wantsReadings ? engine.candidateReadings() : []
         layout.updateCandidates(
@@ -106,7 +106,7 @@ extension KeyboardViewController {
     func showTiledCandidates() {
         guard layout.hasCandidates else { return }
         layout.setLayer(.candidatesTiled)
-        // 普通候选栏只取了 8 条；平铺要整批，切层后立刻按 64 条重取一次。
+        // 普通候选栏只取了 8 条；平铺要整批，切层后立刻按 512 条重取一次。
         refresh()
     }
 

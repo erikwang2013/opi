@@ -14,10 +14,10 @@ class EngineControllerTest {
     private fun cands(n: Int) = Array(n) { "c$it" }
 
     @Test
-    fun fetchLimitIs64() {
+    fun fetchLimitIs512() {
         val fake = FakeEngine()
         EngineController(fake)
-        assertEquals(64, fake.lastLimit)
+        assertEquals(512, fake.lastLimit)
     }
 
     @Test
