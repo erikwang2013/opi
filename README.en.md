@@ -290,7 +290,7 @@ LICENSE · CONTRIBUTING.md      # MIT full text · contribution guide (incl. dic
 
 ### 📅 Project Status
 
-> **Current stage: v1.25.6 (2026-10-26): more non-Windows latency work — 9-key segmented (`'`) queries no longer scan all 937k rows (range enumeration; desktop measured 882ms → 1.1ms); HarmonyOS drops the duplicate per-key pageCount ranking and caches dictionary sizes; iOS reuses the loaded dictionary across controller instances and stops refreshing on pass-through keys; Android validates optional dictionaries once per process and caches the ⌫ selection; Linux no longer re-ranks candidates on Shift press**
+> **Current stage: v1.25.7 (2026-10-26): first-key spike — 26-key finite windows select tier-by-tier from the full pool and materialise only the leading segment (3.5–6ms in a desktop release build); 9-key single keys skip the pointless fallback scan; finite windows are exact prefixes of the unlimited list, fixing display/commit mismatches**
 
 V1 milestone progress:
 

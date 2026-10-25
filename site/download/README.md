@@ -5,13 +5,13 @@
 
 ```bash
 # 在仓库根目录执行（版本号按实际发布替换）
-cp dist/opi-1.25.6-linux-amd64.deb \
-   dist/opi-1.25.6-linux-x86_64.rpm \
-   dist/opi-1.25.6-windows-x64-setup.exe \
-   dist/opi-1.25.6-android-universal.apk \
-   dist/opi-1.25.6-macos-universal.pkg \
-   dist/opi-1.25.6-ios-unsigned.ipa \
-   dist/opi-1.25.6-harmonyos-unsigned.hap \
+cp dist/opi-1.25.7-linux-amd64.deb \
+   dist/opi-1.25.7-linux-x86_64.rpm \
+   dist/opi-1.25.7-windows-x64-setup.exe \
+   dist/opi-1.25.7-android-universal.apk \
+   dist/opi-1.25.7-macos-universal.pkg \
+   dist/opi-1.25.7-ios-unsigned.ipa \
+   dist/opi-1.25.7-harmonyos-unsigned.hap \
    site/download/
 ```
 
