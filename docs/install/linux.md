@@ -240,9 +240,11 @@ conf + 词库）就拒绝打包 —— 构建不完整时宁愿不出包，而�
 
 ### 3.1 安装 / 卸载
 
+> 本地 `scripts/build-packages.sh` 产物名是 `opi_<版本>_<架构>.deb` / `opi-<版本>-1.<架构>.rpm`；发布资产会改名为 `opi-<版本>-linux-amd64.deb` / `opi-<版本>-linux-x86_64.rpm`。下面的安装命令以发布资产名为准。
+
 ```bash
-sudo dpkg -i dist/opi_<版本>_<架构>.deb        # Debian 系
-sudo rpm -Uvh dist/opi-<版本>-1.<架构>.rpm     # RPM 系（-U 兼顾首次安装与升级）
+sudo dpkg -i dist/opi-<版本>-linux-amd64.deb   # Debian 系
+sudo rpm -Uvh dist/opi-<版本>-linux-x86_64.rpm  # RPM 系（-U 兼顾首次安装与升级）
 sudo apt-get -f install                        # Debian 系缺依赖时补
 ```
 
@@ -274,8 +276,8 @@ sudo apt-get -f install                        # Debian 系缺依赖时补
   确定不了用户或调用失败时**只记一行日志、安装照常成功**；这时新 `.so` 在下次登录或
   手动重启 fcitx5 后生效。机制与边界写在 `scripts/packaging/restart-fcitx5.sh` 头注释。
   应急关闭：安装时设 `OPI_NO_RESTART_FCITX5=1`，例如
-  `sudo OPI_NO_RESTART_FCITX5=1 dpkg -i dist/opi_<版本>_<架构>.deb`
-  （apt 同理：`sudo OPI_NO_RESTART_FCITX5=1 apt-get install ./dist/opi_<版本>_<架构>.deb`）。
+  `sudo OPI_NO_RESTART_FCITX5=1 dpkg -i dist/opi-<版本>-linux-amd64.deb`
+  （apt 同理：`sudo OPI_NO_RESTART_FCITX5=1 apt-get install ./dist/opi-<版本>-linux-amd64.deb`）。
   ⚠️ 热重启会打断**正在进行的输入**（候选/预编辑状态丢失），但输入法本身随即恢复。
 - **装/升级成功后**（postinst，应用进程）：按记录**以桌面用户**
   （`runuser -u $SUDO_USER`）把 `opi` 按原参数拉回来。**从旧包升级且记录

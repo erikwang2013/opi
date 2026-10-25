@@ -28,7 +28,7 @@
 > 交给 `opi_load` / `opi_load_stroke` / `opi_load_wubi`；任一步失败才回退
 > `opi_load('')` 并置 DEGRADED（小欧画出来）。release HAP 因此变成 **47,867,119 B**（2026-10-20 对齐轮实测），
 > `unzip -l` **13 项**（清单已实测，见 §0.2）。
-> `trad.opid` 仍**不随包**：`opi_load_trad` 不在鸿蒙桥的 use-site 子集里（G2 / G5）。
+> `trad.opid` 自 2026-10-21 起已随包，`opi_load_trad` 已桥接（见下一段）；真机繁体仍未验收。
 > **真机行为（含首次拷贝耗时）仍未验证。**
 >
 > ### ✅ 2026-10-21 订正：**工具条/皮肤/键盘模式/平铺候选/设置持久化对齐 Android**
@@ -70,7 +70,7 @@
 > 值是协议）。本端当前连键盘 UI 都还没有。
 >
 > > **【订正 2026-10-20】** 上面是 2026-10-09 的历史记录：输入模式 / 键盘模式 / 工具条 /
-> > 皮肤 / 符号页 / 生僻字面板现已接线；仍缺项（繁体词典未接、无平铺候选、设置不持久化等）
+> > 皮肤 / 符号页 / 生僻字面板现已接线；仍缺项（用户词持久化、导入词库/康熙等）
 > > 见 §7 的 G5 / G3 / G4 / G7 与「2026-10-20 对齐轮新增的差异」段。
 >
 **补上脚手架之后它真的会被解析**：把 `harmony/ets` 原样放进一个补齐脚手架的项目里，
@@ -266,7 +266,7 @@ x86_64 模拟器不会加载这个 `.so`。要跑模拟器需另编 `x86_64-unkn
 | Rust | 根 `Cargo.toml` 的 `[workspace.package] rust-version`（当前声明 `1.88`）。**这是声明**，实际下限由 CI 的 `msrv` job 量出来 | `Cargo.toml` · `.github/workflows/ci.yml` |
 | Rust target | 三个都要装：`aarch64-unknown-linux-ohos`（arm64-v8a）、`armv7-unknown-linux-ohos`、`x86_64-unknown-linux-ohos` | `harmony/README.md`「构建集成」；它们**不在**默认安装里，必须先 `rustup target add` |
 | CMake | `harmony/cpp/CMakeLists.txt` 里写的是 `cmake_minimum_required(VERSION 3.4.1)`。在 cmake ≥3.31 是**弃用警告**，在 **CMake 4.0+ 是硬错误** | 本机 cmake 3.31.4 观察到的警告见 `harmony/README.md` 实测记录 §4b。**起来第一件事**就是把它抬到 3.10+ |
-| 词库 | **随包**：构建期 `scripts/prepare_harmony_dicts.sh` 把 `luna.opid` / `stroke.opid` / `wubi86.opid` 复制进 `entry/src/main/resources/rawfile/`（不入库）；运行时 `DictionaryAssets.ets` 拷进 `ctx.filesDir` 并把绝对路径交给 C ABI。拷贝/装载失败才退回内置库并置 DEGRADED。`trad.opid` 不随包（`opi_load_trad` 未桥，见 G5）；导入词库与康熙字典仍属未接线通路 | `scripts/prepare_harmony_dicts.sh` · `DictionaryAssets.ets` · `KeyboardController.ensureDictionary()` |
+| 词库 | **随包**：构建期 `scripts/prepare_harmony_dicts.sh` 把 `luna.opid` / `stroke.opid` / `wubi86.opid` 复制进 `entry/src/main/resources/rawfile/`（不入库）；运行时 `DictionaryAssets.ets` 拷进 `ctx.filesDir` 并把绝对路径交给 C ABI。拷贝/装载失败才退回内置库并置 DEGRADED。`trad.opid` 自 2026-10-21 起随包并已桥接；导入词库与康熙字典仍属未接线通路 | `scripts/prepare_harmony_dicts.sh` · `DictionaryAssets.ets` · `KeyboardController.ensureDictionary()` |
 | 设备 | 真机或模拟器。**输入法不会自动生效**，必须在系统设置里手动启用 | `harmony/README.md` 的 P1（检索）|
 | 宿主 App | 输入法扩展**不能独立安装**，要在一个 DevEco 应用工程里 | 与 Apple 两端同一形态（未核实，凭记忆）|
 | 工程文件 | ~~仓库里**没有** `build-profile.json5` …~~ **2026-10-19 起已有完整工程**（工程根 + 模块级各一份、`oh-package.json5`、`hvigorfile.ts`，见 §0.1）；本行是历史记录 | 判据：`find harmony/ -name 'build-profile.json5'` 现为 2 处 |
@@ -708,7 +708,7 @@ opi_load(NULL,0) = true
    TopBar 行，不再写宿主 `setPreviewTextSync`。
 5. **点候选栏最左边的小欧** ⇒ 学习开关取反，preedit 栏出现「不记词」。
 6. **⇧** ⇒ 点亮/大写键帽。**LOCK（⇪）到不了**（「已知限制」G9）。
-7. 只有 1–6 都过之后，才谈补功能（符号面板、用户词、繁体、全角指示……）。
+7. 只有 1–6 都过之后，才谈补功能（符号面板、导入词库、全角指示……）。
 
 ### 6.4 那条「加了声明就必须加调用」的门禁（**不是整洁要求，是有牙的契约**）
 
@@ -768,7 +768,7 @@ diff <(grep -oE '^\s*\{"[A-Za-z]+"' harmony/cpp/napi_bridge.c | grep -oE '"[A-Za
 （ArkTS 能调到的名字），`opi_ffi.h` 数的是**桥调用的 `opi_*` C 函数**。两者不相等是正常的
 （C 侧含 `opi_ffi_free_string` 这种没有 JS 描述符的辅助出口，一个 `JsXxx` 也可能调多个 `opi_*`）。
 
-**想知道「哪些能力已经到了 `cabi.rs`、桥还没挂」**（符号面板、用户词、繁体库、中文标点开关都在里面）：
+**想知道「哪些能力已经到了 `cabi.rs`、桥还没挂」**（如符号面板、中文标点开关等）：
 
 ```bash
 comm -23 \
@@ -833,9 +833,9 @@ comm -23 \
 |---|---|---|
 | G1 | **子类型切换不换键盘** | 未监听 `inputMethodAbility.on('setSubtype')` ⇒ 切中/英/数字子类型，键盘不变（P4）。 |
 | G2 | ~~**词库是内置回退库**~~ **2026-10-20 已补** | 三张完整表随包（rawfile → `filesDir` → 绝对路径）；只有拷贝/装载失败时才退回 `opi_load('')` 并置 DEGRADED。**真机上的拷贝路径未验证**（见 0.6 第 6 条）。 |
-| G5 | **繁体：入口已有，词典未接** | 2026-10-20 起 26 键模式键是三态循环（中→繁→英→上次中文），9/14/笔画底行有「繁」键（只切简繁）。但 `opi_load_trad` 仍**不在**鸿蒙桥的 use-site 子集里，`trad.opid` **有意不随包** ⇒ 引擎 `Traditional` 回退到 luna 简体表，**输出仍是简体**。要真繁体：先加桥出口并随包 `trad.opid`。 |
+| G5 | **繁体：桥接已补，真机未验** | 26 键三态循环、9/14/笔画「繁」键已有；`opi_load_trad` 已桥接并在启动时调用，`trad.opid` 自 2026-10-21 起随包。真机上的繁体切换与词典装载仍未验收。 |
 | G3 | **符号页已补；引擎分块出口仍未桥** | 符号页由 rawfile `symbol_categories.tsv` 驱动（8×4/页 + 页头 ‹ › 翻页 + 分类条，点格直接 `insertText`），生僻字面板由 `rare_index.tsv` 驱动（214 部首 → 笔画数 → 字表）。`opi_symbol_blocks` / `opi_symbols_in_block` 仍未桥，但本路径不依赖它们。与 Android 的差异：翻页是按钮不是左右滑；无「常用/全部」Tab。 |
-| G4 | **无用户词持久化** | `opi_import_user_words` / `opi_export_user_words` / `opi_clear_user_words` / `opi_remove_user_word` 未桥接。 |
+| G4 | **无用户词持久化** | 清除/删除已桥接（`clearUserWords` / `removeUserWord`），但导入/导出未接，也没有落盘；扩展重启后学习丢失。 |
 | G7 | **深色/长辈模式是手动开关，不跟系统** | 键盘模式面板里有「暗光模式」「长辈模式」两个 chip，作用于皮肤色板与字号；**没有**读系统主题，也**没有持久化**（进程重启回默认）。 |
 | G8 | **Android JNI 出口在鸿蒙目标下是死重量** | `jni.rs` 照编，要拆得改 `crates/**`，不在本轮边界内。 |
 | G9 | ~~**⇧ 的 LOCK 态用户按不出来**~~ **2026-10-20 已补** | 26 键 ⇧ 已绑 `LongPressGesture`（500 ms）→ `KeyboardController.tapShiftLongPress()`，OFF → SINGLE → LOCK 三态可走。**真机手势未验证**（本机无设备）。 |
@@ -849,7 +849,8 @@ comm -23 \
 也没有宿主文件可装。别把 Android / macOS 的「高级 → 自定义短语」读成鸿蒙也有。
 
 > **2026-10-20 对齐轮新增的差异**（平台取舍或未验证项，不是缺陷）：
-> 候选栏只有 `‹ ›` 翻页，**没有** Android 的平铺候选（C ABI 没有「取全部候选」出口）；
+> **2026-10-21 订正**：下面的「没有平铺候选」「都不持久化」已在次日对齐轮补上（见本节开头 10-21 订正）；本段保留 10-20 的原始记录。
+> 候选栏当时只有 `‹ ›` 翻页（平铺候选后来补上）；
 > 符号页用页头按钮翻页而非左右滑动；关于页的链接只能**复制到剪贴板**（IME 扩展
 > `startAbility` 报 16000069，另发 toast 提示），不能直接开浏览器；皮肤 / 键盘模式 /
 > 单手 / 悬浮 / 游戏 / 暗光 / 长辈**都不持久化**，进程重启回默认；悬浮与游戏模式只调了
@@ -937,7 +938,7 @@ comm -23 \
    → 目标：链接通过、opi_* 与 napi_* 全部解析
 4. 真机装上、设置里启用 → 打 ni 出现「你」→ hao + 空格上屏「好」
    （失败时回来跑 6.1 的 L1–L4：本机同一条路是通的 ⇒ 问题在桥/UI）
-5. 只有 4 过了，才谈补功能：符号面板、用户词、繁体、全角指示、⇧ 长按绑定
+5. 只有 4 过了，才谈补功能：符号面板、导入词库、全角指示。
 ```
 
 **顺序不能反。** 更细的依据、U1–U20 的不确定清单、每一次实测的原始输出与订正记录，

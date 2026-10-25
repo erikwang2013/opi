@@ -137,7 +137,7 @@
       <text x="1065" y="470">Unicode 符号块</text>
     </g>
     <g text-anchor="middle" fill="#2E8B80" font-size="9.5">
-      <text x="115" y="487">五模式 · 上限 16</text>
+      <text x="115" y="487">五模式 · 上限 32</text>
       <text x="305" y="487">整串失败退逐音节</text>
       <text x="495" y="487">命中即出候选</text>
       <text x="685" y="487">词频 + 用户 ×boost</text>

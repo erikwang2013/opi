@@ -145,7 +145,7 @@
             <div class="bento-head"><span class="bento-icon"><svg class="icon" aria-hidden="true"><use href="#i-engine"></use></svg></span><h3>一份引擎，六端原生</h3></div>
             <p>Rust 核心 + 平台原生外壳：Android IME、fcitx5、Windows TSF、macOS / iOS 键盘扩展、鸿蒙 N-API。同一套词库与键码，UI 各写各的。</p>
             <div class="bento-list"><span class="chip chip--accent">Rust</span><span class="chip chip--accent">C ABI</span><span class="chip">Android</span><span class="chip">Windows</span><span class="chip">Linux</span><span class="chip">macOS</span><span class="chip">iOS</span><span class="chip">鸿蒙</span></div>
-            <p class="bento-note">Android（模拟器）· Linux（容器 / 本机）。其余四端已有可构建产物，尚未真机验收。</p>
+            <p class="bento-note">Android（模拟器）、Windows（真机）与 Linux（容器 / 本机）有运行验证。iOS / macOS / 鸿蒙已有可构建产物，尚未真机验收。</p>
           </article>
           <article class="bento-cell span-5 reveal">
             <div class="bento-head"><span class="bento-icon"><svg class="icon" aria-hidden="true"><use href="#i-shield"></use></svg></span><h3>离线优先，隐私可核对</h3></div>
@@ -154,7 +154,7 @@
           </article>
           <article class="bento-cell span-4 reveal">
             <div class="bento-head"><span class="bento-icon"><svg class="icon" aria-hidden="true"><use href="#i-keyboard"></use></svg></span><h3>中文输入，一条链路</h3></div>
-            <p>拼音 / 简繁 / 双拼 / 五笔 / 笔画，26 / 9 / 14 键布局；字母上方符号提示、长按或上滑弹出大小写与符号，标点列可滚动并可自定义。中英两套自定义短语互相独立：中文只在中文键盘、英文只在英文键盘精确触发；移动端开括号自动补闭括号、光标居中。</p>
+            <p>拼音 / 简繁 / 双拼 / 五笔 / 笔画，26 / 9 / 14 键布局；字母上方符号提示、长按或上滑弹出大小写与符号，标点列可滚动并可自定义。中英两套自定义短语互相独立（Android / 桌面 / macOS 设置）：中文只在中文键盘、英文只在英文键盘精确触发；移动端开括号自动补闭括号、光标居中。</p>
             <div class="bento-list"><span class="chip">拼音</span><span class="chip">双拼</span><span class="chip">五笔</span><span class="chip">笔画</span><span class="chip">9 / 14 / 26 键</span><span class="chip chip--teal">中英自定义短语</span><span class="chip chip--teal">多字组词</span></div>
           </article>
           <article class="bento-cell span-4 reveal">
@@ -340,7 +340,7 @@
           <p>文件直接放在本站的 <code>download/</code> 目录，不跳转 GitHub。</p>
           <p><strong>装完必做</strong>：Linux 把 OPI 加进 fcitx5 输入法组；Windows 在「中文(简体)」键盘列表添加「小欧输入法」（交互式升级按需刷新桌面、无需注销；已打开的应用请关闭重开）；iOS 在设置 → 通用 → 键盘中添加并允许；macOS 在输入源中添加。</p>
           <p class="download-hint">下载目录的版本与文件名和 <code>dist/</code> 保持一致；页面版本 v1.26.1。</p>
-          <p class="download-hint">扩展词库（可选，设置页导入）：<a href="download/opi-1.26.1-custom-pinyin-200k.tsv" download>CustomPinyinDictionary 20 万条</a> · <a href="download/opi-1.26.1-rime-wanxiang-200k.tsv" download>rime-wanxiang 20 万条</a>；许可与完整版转换见 <code>docs/external-dictionaries.md</code>。</p>
+          <p class="download-hint">扩展词库（可选，Android / 桌面 / macOS 设置页导入）：<a href="download/opi-1.26.1-custom-pinyin-200k.tsv" download>CustomPinyinDictionary 20 万条</a> · <a href="download/opi-1.26.1-rime-wanxiang-200k.tsv" download>rime-wanxiang 20 万条</a>；许可与完整版转换见 <code>docs/external-dictionaries.md</code>。</p>
         </div>
         <aside class="donate reveal" aria-labelledby="donate-title">
           <div class="donate-copy">

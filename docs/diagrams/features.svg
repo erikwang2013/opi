@@ -28,7 +28,7 @@
       <text x="134" y="138" text-anchor="middle" font-size="15" font-weight="700" fill="#22272E">拼音</text>
       <text x="134" y="156" text-anchor="middle" font-size="10" fill="#2E8B80" font-weight="700">mode 0 · 默认</text>
       <text x="134" y="180" text-anchor="middle" font-size="10.5" fill="#6B7671">小写字母 + 分隔符 '</text>
-      <text x="134" y="196" text-anchor="middle" font-size="10.5" fill="#6B7671">缓冲上限 16 字符</text>
+      <text x="134" y="196" text-anchor="middle" font-size="10.5" fill="#6B7671">缓冲上限 32 字符</text>
       <text x="134" y="212" text-anchor="middle" font-size="10.5" fill="#6B7671">查主词典出候选</text>
     </g>
     <g>

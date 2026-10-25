@@ -30,6 +30,8 @@ UTF-8 文本，每行：
 女儿	nver
 ```
 
+> **现成包**：Release 与站点 `download/` 附 `opi-<版本>-custom-pinyin-200k.tsv`（约 2.9 MB）与 `opi-<版本>-rime-wanxiang-200k.tsv`（约 4.9 MB），就是下面缺省 200k / 8 MiB 的截断产物，可直接走 Android/macOS 设置窗导入或 Linux/Windows 目录直载。
+
 ## 2. 源一：CustomPinyinDictionary
 
 - 仓库：<https://github.com/wuhgit/CustomPinyinDictionary>

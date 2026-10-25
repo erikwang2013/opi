@@ -175,7 +175,7 @@ xcodebuild -create-xcframework \
 
 `RequestsOpenAccess = true`（2026-10-20 起）：自有贴纸要写 `UIPasteboard` 才能被宿主粘贴，
 无完全访问时这一步会被系统拒绝；用户须在设置里手动允许，系统会展示隐私警告页。
-OPI 仍然不联网，用户词仍只写扩展自己的容器。
+OPI 仍然不联网；用户词只存在扩展内存里（没有落盘），扩展退出即丢，宿主 App 也看不到。
 
 **先做格式检查，再做逐键比对：**
 ```bash
@@ -187,13 +187,13 @@ plutil -lint ios/Info.plist      # 只能在 Mac 上跑
 
 ---
 
-## 4.5 CI 自动打包产物（unsigned IPA —— 需重签后安装）
+## 4.5 CI 自动打包产物与 Release（unsigned IPA —— 需重签后安装）
 
 `.github/workflows/apple.yml`（macos-latest，三个 job：`rust` / `macos` / `ios`）每次运行都把
 `ios/` 的 Swift 真过一遍编译器（`swiftc -typecheck` → 真编 → 与 Rust 静态库链接），
 并组装宿主 App + 扩展、产出 **unsigned IPA**。iOS artifact 只上传这一个 IPA；
 xcframework/扩展目录/宿主 `.app`/临时 Payload 等中间产物只在脚本的临时构建目录里，退出时清理。
-产物挂在**该次 run 的 Artifacts** 里。取法：
+v1.20.2 起同一 IPA 也作为 `opi-<版本>-ios-unsigned.ipa` 附到 GitHub Release 与站点 `download/`；仍为 unsigned，需自行重签。产物挂在**该次 run 的 Artifacts** 里。取法：
 
 ```bash
 gh run list --workflow apple.yml                    # 找 run id（或网页 Actions 页）
@@ -202,7 +202,7 @@ gh run download <run-id> -n "opi-ios-keyboard-v$(bash scripts/apple/version.sh)"
 
 | 产物名（版本号 = `Cargo.toml` 的 `[workspace.package] version`，唯一取法在 `scripts/apple/version.sh`） | 内容 |
 |---|---|
-| `opi-ios-keyboard-v<版本>` | `opi-ios-keyboard-<版本>-unsigned.ipa`（**唯一产物**；`Payload/Opi.app`，内含 `Opi` 可执行、内嵌 `PlugIns/OpiKeyboard.appex`、`luna/trad/stroke/wubi86` 词库、`rare_index.tsv` 与宠物图标）。xcframework/扩展目录/宿主 `.app`/临时 Payload 只在构建期存在，脚本退出时清掉 |
+| `opi-ios-keyboard-v<版本>` | `opi-<版本>-ios-unsigned.ipa`（**唯一产物**；`Payload/Opi.app`，内含 `Opi` 可执行、内嵌 `PlugIns/OpiKeyboard.appex`、`luna/trad/stroke/wubi86` 词库、`rare_index.tsv` 与宠物图标）。xcframework/扩展目录/宿主 `.app`/临时 Payload 只在构建期存在，脚本退出时清掉 |
 | `opi-apple-rust-v<版本>`（rust job） | `opi_ffi.xcframework`（同上的静态库版）+ `headers/OpiFFI.h` + macOS 用的通用库 |
 
 **IPA 的目录结构**（CI 会逐条校验）：
@@ -257,7 +257,7 @@ Payload/Opi.app/
 
 ### 5.1 用 unsigned IPA（需要重签工具）
 
-1. 下载 CI 产物里的 `opi-ios-keyboard-<版本>-unsigned.ipa`。
+1. 下载 CI 产物里的 `opi-<版本>-ios-unsigned.ipa`。
 2. 在电脑上用 [Sideloadly](https://sideloadly.io/) 或 AltStore 打开它，登录你自己的
    Apple ID，让工具重签并安装到 iPhone/iPad。工具会同时重签宿主 App 和内嵌的
    `OpiKeyboard.appex`；不要只签宿主、漏掉扩展。
@@ -371,7 +371,7 @@ Payload/Opi.app/
 | # | 限制 | 说明 |
 |---|---|---|
 | L1 | **符号面板只拿得到 common 块** | `KeyboardViewController` 调的是 `layout.setSymbols(engine.commonSymbols())`，而 `commonSymbols()` 只遍历 `opi_symbol_blocks()` —— 那个出口**只回 common 块**，当前数据表里只有 CJK 符号块是 common ⇒ **非 common 块里的条目（含 emoji）在 iOS 上够不到**。缺口在 UI 上**没有症状**（面板照样有内容，只是少）。`searchSymbols(keyword:)`（包装 `opi_search_symbols`）现在只被**表情搜索**调用（`KeyboardViewController.runEmojiSearch`），符号面板本身仍只拿 common 块。**别把「表情能搜全表」读成「符号面板能拿到全部符号」。** |
-| L2 | **用户词不与宿主 App 同步** | 当前 `RequestsOpenAccess = true`（为贴纸剪贴板），但键盘仍只写扩展自己的容器；App 里做的词库管理看不到键盘攒的词。要同步还要显式接 App Group 共享容器。 |
+| L2 | **用户词不与宿主 App 同步** | 当前 `RequestsOpenAccess = true`（为贴纸剪贴板），但用户词只在扩展内存里，没有落盘；App 里做的词库管理看不到键盘攒的词。要跨重启保留或与宿主同步，需先做持久化并显式接 App Group 共享容器。 |
 | L3 | **无障碍未接** | 每个键都没有 `accessibilityLabel`（⇧ / ⌫ / 回车 / 🌐 这类符号键尤其需要），VoiceOver 读不出来。已知缺口。 |
 | L4 | **键盘高度是拍的** | `viewWillAppear` 里写死 264pt（`priority = .defaultHigh`），**没按内容算、没处理旋转**。真机上要改。 |
 | L5 | **⇧ 三态高亮 UI 未接** | 出口（`opi_shift_state`）与 Swift 包装（`OpiEngine.shiftState()`）都已就绪，**UI 没读**。所以也仍然没有会漂移的镜像。 |

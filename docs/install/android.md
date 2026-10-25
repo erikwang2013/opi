@@ -121,11 +121,11 @@ cd android                      # 必须。仓库根、desktop/ 的 gradlew 都�
 **发布口径的产物落点 = 仓库根的 `dist/`**（与 Linux 侧 `build-packages.sh` 同一条约定，
 见 `docs/install/linux.md` 的「打包（`.deb` / `.rpm`）」一节）：`assembleRelease` 只是把它打在 gradle 的
 `app/build/outputs/apk/release/app-release.apk`，**要自己再拷一份**进 `dist/`，
-并按发布命名规范改名 —— 三件资产的名字形状一致，`gh release upload` 才不会传错：
+并按发布命名规范改名 —— 发布资产统一用 `opi-<版本>-android-universal.apk` 这种连字符形状（v1.26.0 起 Release 共 7 个二进制 + 2 个可选词包），`gh release upload` 才不会传错：
 
 ```bash
 cp android/app/build/outputs/apk/release/app-release.apk \
-   dist/opi_<版本>_android-release.apk        # 例：dist/opi_1.9.3_android-release.apk
+   dist/opi-<版本>-android-universal.apk      # 例：dist/opi-1.26.1-android-universal.apk
 ```
 
 ⚠️ 2026-10-15 补：这条此前只存在于发版人的手上，v1.9.2/v1.9.3 两次都是**手工**拷的

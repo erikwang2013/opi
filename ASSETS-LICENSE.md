@@ -9,7 +9,7 @@
 
 - **小欧形象与自有表情**：`shared/pet/stickers/*.png`、`shared/pet/stickers-gif/*.gif`，以及 `shared/pet/` 中小欧形象的视觉设计（外观、配色、形态）及其生成的位图/动画产物（含各端构建期拷贝与内嵌副本，如 `ios/PetStickerGifs.swift`、`harmony/.../PetStickerImages.ets`）。⚠️ `shared/pet/*.kt` 的**绘制代码仍为 MIT**；本许可只约束视觉设计与生成产物，不改变代码许可。
 - **生成的贴纸映射表**：由上述项目自绘形象派生的标签/短码表 `shared/pet/emoji-font/map.tsv`、`shortcodes.tsv`，以及各端构建期拷贝与内嵌副本。PUA 彩色字体（`opi-emoji.ttf`）及其各端内嵌字体副本已于 2026-10-20 删除
-- **应用图标**：Android `android/app/src/main/res/mipmap-*/ic_launcher*`、`mipmap-anydpi-v26/ic_launcher*.xml`、`drawable/ic_launcher_foreground.xml`；Windows `desktop/icons/opi-pet.ico`、`desktop/icons/opi-pet.png`、`crates/tsf-opi/assets/opi-langbar.ico`；macOS `macos/opi.tiff`、`desktop/icons/opi-pet.icns`；HarmonyOS `harmony/resources/base/media/icon.png`；以及 iOS / HarmonyOS / Windows / macOS 安装包中同一形象的应用图标
+- **应用图标**：Android `android/app/src/main/res/mipmap-*/ic_launcher*`、`mipmap-anydpi-v26/ic_launcher*.xml`、`drawable/ic_launcher_foreground.xml`；Windows `desktop/icons/opi-pet.ico`、`desktop/icons/opi-pet.png`、`crates/tsf-opi/assets/opi-langbar.ico`；macOS `macos/opi.tiff`、`desktop/icons/opi-pet.icns`；HarmonyOS `harmony/AppScope/resources/base/media/app_icon.png`、`harmony/entry/src/main/resources/base/media/icon.png`；以及 iOS / HarmonyOS / Windows / macOS 安装包中同一形象的应用图标
 - **文档与 README 展示图**：`docs/opi-pet.svg`、`docs/opi-pet-forms.svg`、`docs/diagrams/*.svg`、`docs/social-preview*`，以及 `docs/` 下其它项目展示图和 README 中引用的展示图（赞赏码 `docs/alipay.png`、`docs/weixinpay.png` 除外）
 - **随项目分发的其它自绘界面素材**：例如 fcitx5 皮肤中的 `crates/fcitx5-opi/data/themes/opi-*/panel.png`、`prev.png`、`next.png`
 

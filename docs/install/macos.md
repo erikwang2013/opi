@@ -45,7 +45,7 @@
 | Rust | `Cargo.toml` 的 `[workspace.package] rust-version`（当前声明 1.88）。**这是声明**，实际下限由 CI 的 MSRV 执行点量出 | `Cargo.toml` · `.github/workflows/ci.yml` |
 | Rust target | `aarch64-apple-darwin` + `x86_64-apple-darwin`（两者都编，再用 `lipo` 合成通用二进制） | CI 两个都在跑 |
 | `lipo` | 合成通用库用，Xcode 自带 | —— |
-| 词库 | 可选。**不放**就用内置的回退库（候选质量明显下降）。放的话路径是 `~/Library/Application Support/opi/luna.opid` | 这条 macOS 约定**未经核对**（`OpiEngine.defaultDictionaryPath`） |
+| 词库 | pkg 已随包 `Resources/dicts/{luna,trad,stroke,wubi86}.opid`；用户放在 `~/Library/Application Support/opi/<name>.opid` 的同名文件会覆盖包内副本。缺文件时才回退内置库 | 打包脚本 `scripts/apple/package-macos.sh`；覆盖顺序见 `macos/OpiEngine.swift` 的 `defaultDictionaryPath` |
 | 工程文件 | **仓库里没有 `.xcodeproj`、没有 `Package.swift`、没有 `module.modulemap`** —— 工程要在 Mac 上用 Xcode 新建 | `macos/README.md`「构建集成」：手写 `project.pbxproj` 会是第三件「没被工具看过的产物」 |
 
 ```bash
@@ -198,7 +198,7 @@ macOS 输入法是**一个 .app**，由 `Info.plist` 里的 IMK 键声明：
 
 ---
 
-## 4.5 CI 自动打包产物（未签名/未公证 —— **开发用，不能分发**）
+## 4.5 CI 自动打包产物与 Release（未签名/未公证 —— 内测用，需自行签名）
 
 `.github/workflows/apple.yml`（macos-latest，三个 job：`rust` / `macos` / `ios`）每次运行都把
 `macos/` 的 Swift 真过一遍编译器（`swiftc -typecheck` → 真编两个架构 → `lipo` → 组装 IME
@@ -210,6 +210,8 @@ gh run list --workflow apple.yml                  # 找 run id（或网页 Actio
 gh run download <run-id> -n "opi-macos-ime-v$(bash scripts/apple/version.sh)"
 gh run download <run-id> -n "opi-apple-rust-v$(bash scripts/apple/version.sh)"   # 只要 Rust 库时
 ```
+
+v1.26.0 起同一 pkg 也作为 `opi-<版本>-macos-universal.pkg` 附到 GitHub Release 与站点 `download/`；仍为 unsigned，需自行签名 / 公证。
 
 | 产物名（版本号 = `Cargo.toml` 的 `[workspace.package] version`，唯一取法在 `scripts/apple/version.sh`） | 内容 |
 |---|---|

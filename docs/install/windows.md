@@ -1516,9 +1516,9 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 
 ### 6.3 交付这件事本身
 
-**Windows 端目前没有可下载产物**（Release 不带 Windows 包），且**本文档是这一端的第一份安装文档**。
+**Windows 用户入口是 Release 里的 `opi-<版本>-windows-x64-setup.exe`**（v1.20.2 起）。
 「仓库无安装文档」此前是审计记录在案的共同拦路项之一 —— 本文件是它的第一部分，
-但**只覆盖 Windows 一路，且未经验证**。
+仍只覆盖 Windows 一路。
 
 > **【订正 2026-10-18】** Release 从 v1.11.0 起带 `opi-<版本>_windows-desktop.msi`；
 > **从 v1.13.0 起 MSI 内含 `tsf_opi.dll`**，不再单独发布 DLL 资产
