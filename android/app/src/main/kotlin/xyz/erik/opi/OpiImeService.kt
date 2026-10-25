@@ -322,13 +322,15 @@ class OpiImeService : InputMethodService() {
     }
 
     override fun onUpdateSelection(
-        selectionStart: Int,
-        selectionEnd: Int,
+        oldSelStart: Int,
+        oldSelEnd: Int,
+        newSelStart: Int,
+        newSelEnd: Int,
         candidatesStart: Int,
         candidatesEnd: Int,
     ) {
-        super.onUpdateSelection(selectionStart, selectionEnd, candidatesStart, candidatesEnd)
-        selectionNonEmpty = selectionStart >= 0 && selectionEnd >= 0 && selectionStart != selectionEnd
+        super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
+        selectionNonEmpty = newSelStart >= 0 && newSelEnd >= 0 && newSelStart != newSelEnd
     }
 
     /** 回车：读目标应用声明的 action；action 位为 0 时回退提交换行。 */
