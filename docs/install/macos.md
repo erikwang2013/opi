@@ -422,7 +422,7 @@ cp luna.opid ~/Library/Application\ Support/opi/luna.opid
   删除语义）只在源码里成立，**没有在 macOS 上跑过一次**；`~/.config` 与
   `~/Library/Application Support` 的路径约定同样未核对。
 - `Info.plist` 的 `tsInputMethodCharacterRepertoireKey` 取值、`tsInputMethodIconFileKey`
-  指向的文件、`~/Library/Application Support/opi/luna.opid` 这条约定 —— **全都没核对**。
+  指向的文件 —— **未核对**；pkg 随包四部词库与 `~/Library/Application Support/opi/<name>.opid` 的覆盖顺序已在源码核对，真机仍未运行。
 
 **做完这些测试，上述若干条会被推翻 —— 推翻时就地改，别让「记忆级」在文档里冒充「已验证」。**
 
