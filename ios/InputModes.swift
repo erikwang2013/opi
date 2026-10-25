@@ -406,12 +406,14 @@ enum ModeKeyTables {
         _ digit: String, _ letters: String, _ size: CGFloat, big: Bool
     ) -> KeySpec {
         let kv = digit.unicodeScalars.first.map { OpiKey.printable($0) } ?? 0
-        // 2026-10-25：大写在前、小写随后、数字末位（默认数字）。小写项的值是该格 T9
-        // 数字（进引擎匹配词库）；大写/数字直接原样上屏。
+        // 2026-10-25：大写在前、小写随后、数字末位（默认数字）。
+        // 2026-10-26 订正：小写项的值是**该字母本身**（引擎 Nine 支持单字母类，
+        // 选 a 只匹配 a）；旧实现统一发 T9 数字，选哪个字母都匹配同一类。
+        // 大写/数字直接原样上屏。
         let items = Array(letters).map {
             KeyPopupItem(String($0).uppercased(), value: String($0).uppercased(), direct: true)
         } + Array(letters).map {
-            KeyPopupItem(String($0), value: digit)
+            KeyPopupItem(String($0), value: String($0))
         } + [KeyPopupItem(digit, value: digit, direct: true)]
         return KeySpec(letters, keyval: kv, fallback: .text(digit),
                        fontSize: size, cornerHint: big ? nil : digit,

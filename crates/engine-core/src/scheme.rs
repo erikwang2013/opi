@@ -125,17 +125,23 @@ impl Scheme {
             // 双拼的键也是普通字母（映射在引擎的解码层，不在键类层）。
             // 五笔同（映射就是字母本身，候选装配在 engine_wubi.rs）。
             Scheme::Full | Scheme::Stroke | Scheme::Shuangpin | Scheme::Wubi => None,
-            Scheme::Nine => Some(match ch {
-                '2' => &['a', 'b', 'c'],
-                '3' => &['d', 'e', 'f'],
-                '4' => &['g', 'h', 'i'],
-                '5' => &['j', 'k', 'l'],
-                '6' => &['m', 'n', 'o'],
-                '7' => &['p', 'q', 'r', 's'],
-                '8' => &['t', 'u', 'v'],
-                '9' => &['w', 'x', 'y', 'z'],
-                _ => return None,
-            }),
+            Scheme::Nine => {
+                // 2026-10-26：弹层选定的具体小写字母 = 单字母类（选 a 只匹配 a）。
+                #[rustfmt::skip]
+                static EXACT: [char; 26] = ['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z'];
+                match ch {
+                    '2' => Some(&['a', 'b', 'c']),
+                    '3' => Some(&['d', 'e', 'f']),
+                    '4' => Some(&['g', 'h', 'i']),
+                    '5' => Some(&['j', 'k', 'l']),
+                    '6' => Some(&['m', 'n', 'o']),
+                    '7' => Some(&['p', 'q', 'r', 's']),
+                    '8' => Some(&['t', 'u', 'v']),
+                    '9' => Some(&['w', 'x', 'y', 'z']),
+                    'a'..='z' => Some(std::slice::from_ref(&EXACT[(ch as u8 - b'a') as usize])),
+                    _ => None,
+                }
+            }
             Scheme::Fourteen => Some(match ch {
                 'q' => &['q', 'w'],
                 'e' => &['e', 'r'],
@@ -160,9 +166,8 @@ impl Scheme {
     ///
     /// 唯一用途：宽松兜底档把读不出来的按键当「音节起头」时用它（用户裁决 2026-10-15
     /// 「没匹配的用按钮上最前的开始匹配字、词」；落点在
-    /// [`crate::candidates_scheme::rank_and_pick_scheme`] 的尾档）。取不到类（`'0'`/`'1'`/
-    /// 字母）⇒ `None`，调用方据此**整档不启用**（与 [`Self::matches`]「取不到类即不匹配」
-    /// 同姿态）。
+    /// [`crate::candidates_scheme::rank_and_pick_scheme`] 的尾档）。取不到类（`'0'`/`'1'`）
+    /// ⇒ `None`，调用方据此**整档不启用**（与 [`Self::matches`]「取不到类即不匹配」同姿态）。
     pub fn key_leading_letter(self, ch: char) -> Option<char> {
         self.key_class(ch).and_then(|c| c.first()).copied()
     }
@@ -372,10 +377,12 @@ mod tests {
         assert_eq!(Scheme::Nine.key_class('2'), Some(&['a', 'b', 'c'][..]));
         assert_eq!(Scheme::Nine.key_class('6'), Some(&['m', 'n', 'o'][..]));
         assert_eq!(Scheme::Nine.key_class('7'), Some(&['p', 'q', 'r', 's'][..]));
-        // 0/1 与字母都不是 9 键的输入键
+        // 0/1 不是输入键；字母是「单字母类」（2026-10-26 弹层精确选择）
         assert_eq!(Scheme::Nine.key_class('0'), None);
         assert_eq!(Scheme::Nine.key_class('1'), None);
-        assert_eq!(Scheme::Nine.key_class('a'), None);
+        assert_eq!(Scheme::Nine.key_class('a'), Some(&['a'][..]));
+        assert_eq!(Scheme::Nine.key_class('z'), Some(&['z'][..]));
+        assert_eq!(Scheme::Nine.key_leading_letter('a'), Some('a'));
     }
 
     #[test]
@@ -425,10 +432,10 @@ mod tests {
         assert_eq!(Scheme::Nine.key_leading_letter('4'), Some('g'));
         assert_eq!(Scheme::Nine.key_leading_letter('7'), Some('p'));
         assert_eq!(Scheme::Nine.key_leading_letter('9'), Some('w'));
-        // 取不到类 ⇒ None（调用方据此整档不启用）
         assert_eq!(Scheme::Nine.key_leading_letter('0'), None);
         assert_eq!(Scheme::Nine.key_leading_letter('1'), None);
-        assert_eq!(Scheme::Nine.key_leading_letter('a'), None);
+        // 2026-10-26：具体小写字母也有单字母类，首字母就是它自己。
+        assert_eq!(Scheme::Nine.key_leading_letter('a'), Some('a')); // was None before
         // 14 键：键类首字母 == 键自身（退化成字面前缀，故 14 键本版不启用本档）
         assert_eq!(Scheme::Fourteen.key_leading_letter('b'), Some('b'));
         assert_eq!(Scheme::Fourteen.key_leading_letter('q'), Some('q'));
@@ -449,6 +456,13 @@ mod tests {
         assert!(!Scheme::Nine.matches("64426", "ni"), "输入比键长 → 不匹配");
         assert!(!Scheme::Nine.matches("", "ni"));
         assert!(!Scheme::Nine.matches("64", ""), "空键不匹配");
+        // 2026-10-26：弹层选定具体小写字母 = 单字母类，不再按整格 T9 类匹配。
+        assert!(Scheme::Nine.matches("a", "ai"));
+        assert!(Scheme::Nine.matches("c", "ci"));
+        assert!(!Scheme::Nine.matches("a", "bi"), "选 a 不能匹配 b 开头的词");
+        assert!(!Scheme::Nine.matches("a", "ci"), "选 a 不能匹配 c 开头的词");
+        assert!(Scheme::Nine.matches("ab", "abao"));
+        assert!(!Scheme::Nine.matches("ab", "acao"));
     }
 
     #[test]

@@ -783,6 +783,8 @@ comm -23 \
   序号按格序 1–9（`corner: rowIndex * 3 + colIndex + 1`，分词格 = 1）；长按/上滑
   `nineChoices` = 字母（字号递减）+ **末尾数字**，`defaultChoice = k.hint.length`
   （末项默认选中）。**大 9 键 `corner: ''`**，弹层照旧。
+  **【订正 2026-10-26】** 弹层小写项的发送值改为**选中的具体字母**（引擎 Nine
+  新增单字母类）；此前统一发整格 T9 数字，选 a/b/c 都匹配同一类。
 - **9 键左列**：`NINE_STRIP` 16 枚标点放进 `Scroll`（竖向、可滚动）；末格「自定义」——
   未选时点开 `SymbolPicker.ets` 的 `CustomSymbolPicker`，已选后点按发送、长按更换，
   值经 `SettingsStore.saveCustomPunc` 落 Preferences（`KeyPanels.custom`）。

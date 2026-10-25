@@ -62,6 +62,45 @@ fn nine_key_display_buffer_is_the_top_candidate_pinyin() {
     assert_ne!(shown, "999", "数字串不许端上去（旧裁决的本意）");
 }
 
+/// 2026-10-26：9 键弹层选定**具体小写字母**（弹层项发字母本身）⇒ 只匹配该字母。
+/// 旧实现三格都发 T9 数字，选 a/b/c 得到同一类候选，现场表现为「永远匹配最后一个」。
+#[test]
+fn nine_key_exact_letter_matches_only_that_letter() {
+    let mut e = Engine::new(
+        dict(&[("ai", "爱", 5000), ("bi", "比", 4000), ("ci", "次", 3000)]),
+        no_symbols(),
+        false,
+    );
+    e.set_scheme(Scheme::Nine);
+    type_str(&mut e, "a");
+    let a = e.candidates(8);
+    assert!(
+        a.iter().any(|c| c.text == "爱"),
+        "选 a 必须命中 a 开头的词：{a:?}"
+    );
+    assert!(
+        !a.iter().any(|c| c.text == "比" || c.text == "次"),
+        "选 a 不能命中 b/c：{a:?}"
+    );
+
+    let mut b = Engine::new(
+        dict(&[("ai", "爱", 5000), ("bi", "比", 4000), ("ci", "次", 3000)]),
+        no_symbols(),
+        false,
+    );
+    b.set_scheme(Scheme::Nine);
+    type_str(&mut b, "b");
+    let bs = b.candidates(8);
+    assert!(
+        bs.iter().any(|c| c.text == "比"),
+        "选 b 必须命中 b 开头的词：{bs:?}"
+    );
+    assert!(
+        !bs.iter().any(|c| c.text == "爱" || c.text == "次"),
+        "选 b 不能命中 a/c：{bs:?}"
+    );
+}
+
 /// 拼音行**完整显示**（2026-10-23 用户裁决）：「图片里显示省略号了，我需要完整显示
 /// 出来」—— 读数只覆盖前缀时，未覆盖的键按**键面首字母**补上，不再出现「·」。
 /// `64426` 只命中 `ni`（`你`）⇒ `ni` + 4→g、2→a、6→m。

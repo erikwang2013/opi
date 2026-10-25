@@ -36,7 +36,7 @@ data class KeyAlternative(
     val value: String,
     /** null = 用发起键的字号。 */
     val fontSize: TextUnit? = null,
-    /** true = 直接原样上屏（大写/数字/符号）；false = 进引擎（小写字母/9 键数字键）。 */
+    /** true = 直接原样上屏（大写/数字/符号）；false = 进引擎（小写字母，含 9 键单字母类）。 */
     val direct: Boolean = false,
 )
 

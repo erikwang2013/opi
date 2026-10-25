@@ -3,6 +3,7 @@
 
 package xyz.erik.opi.keyboard
 
+import androidx.compose.ui.unit.sp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -82,6 +83,20 @@ class NineKeyLayoutTest {
             "分词格弹层只有序号 1",
             listOf("1"),
             nineKeyAlternativeValues(nineKeyRows[0][0], 0),
+        )
+    }
+
+    /** 2026-10-26：小写项必须发**选中的字母**，不能三格都发同一个 T9 数字。 */
+    @Test
+    fun popupLowercaseValuesAreTheChosenLetter() {
+        val k = nineKeyRows[1][2] // 6 → mno
+        val alts = nineKeyAlternatives(k, 5, 21.sp, 12.sp)
+        assertEquals(listOf("M", "N", "O", "m", "n", "o", "6"), alts.map { it.label })
+        assertEquals(listOf("M", "N", "O", "m", "n", "o", "6"), alts.map { it.value })
+        assertEquals(
+            "大写/数字直提，小写进引擎",
+            listOf(true, true, true, false, false, false, true),
+            alts.map { it.direct },
         )
     }
 

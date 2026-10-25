@@ -323,6 +323,8 @@ Payload/Opi.app/
   （`digitKey` 的 `cornerHint`，分词格固定 `"1"`）；长按/上滑弹层 = 字母（字号递减）+
   **末尾数字**，`popupDefaultIndex = items.count - 1`。**大 9 键只隐藏角标**
   （`big ? nil : digit`），弹层照旧。
+  **【订正 2026-10-26】** 弹层小写项的发送值改为**选中的具体字母**（引擎 Nine
+  新增单字母类）；此前统一发整格 T9 数字，选 a/b/c 都匹配同一类。
 - **9 键左列**：`.scrollingColumn` 六格（五标点 + 自定义），格内按下 `defersPress`
   （否则滚动会先打出字符）。自定义格未选时点开 `KeyPopup.swift` 的 `PunctuationPicker`，
   数据是 `KeyboardViewController` 传入的 `engine.commonSymbols()`（仍然只有 common 块，

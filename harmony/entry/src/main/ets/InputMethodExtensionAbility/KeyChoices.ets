@@ -6,7 +6,8 @@
 //
 // 条目次序统一为：**大写在前、小写随后、数字/符号末位**，默认选中末位。
 // `direct=true` 的项由宿主直接原样上屏（大写/数字/符号）；小写项进引擎匹配词库。
-// 9 键小写项的 `value` 是该格 T9 数字（不是字母）—— 引擎只认 2–9 的按键类。
+// 9 键小写项的 `value` 是**选中的字母本身**（2026-10-26 订正）：引擎 Nine 已有
+// 单字母类，选 a 只匹配 a；旧实现统一发该格 T9 数字，选哪个字母都匹配同一类。
 
 import { PopupChoice } from './KeyPopup';
 
@@ -36,7 +37,7 @@ export function fourteenChoices(pair: string, size: number, hint: string): Popup
   ];
 }
 
-/** 9 键备选：大写在前、小写随后、数字末位；小写项的值是该格 T9 数字。 */
+/** 9 键备选：大写在前、小写随后、数字末位；小写项的值是选中的字母本身。 */
 export function nineChoices(
   hint: string, key: string, label: string, letterSize: number, digitSize: number
 ): PopupChoice[] {
@@ -52,7 +53,7 @@ export function nineChoices(
   }
   for (let i = 0; i < hint.length; i++) {
     const ch: string = hint.charAt(i);
-    out.push(new PopupChoice(ch, key, Math.max(12, letterSize - (hint.length + i) * 3)));
+    out.push(new PopupChoice(ch, ch, Math.max(12, letterSize - (hint.length + i) * 3)));
   }
   out.push(new PopupChoice(label, key, digitSize, true));
   return out;

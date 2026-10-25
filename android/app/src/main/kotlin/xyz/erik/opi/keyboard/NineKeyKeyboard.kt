@@ -309,9 +309,11 @@ internal fun nineKeyAlternativeValues(k: NineKey, index: Int): List<String> =
 
 /**
  * 弹层键面（2026-10-25）：**大写在前、小写随后、数字末位**（字号递减，末项默认高亮）。
- * 小写项的值是该格 T9 数字（进引擎匹配词库）；大写/数字直接原样上屏。
+ * 小写项的值是**该字母本身**（引擎 Nine 已有单字母类，选 a 只匹配 a）；大写/数字
+ * 直接原样上屏。2026-10-26 订正：此前小写统一发该格 T9 数字，选哪个字母都匹配
+ * 同一类，现场表现为「永远匹配最后一个字母」。
  */
-private fun nineKeyAlternatives(
+internal fun nineKeyAlternatives(
     k: NineKey,
     index: Int,
     firstSize: TextUnit,
@@ -326,7 +328,7 @@ private fun nineKeyAlternatives(
     }
     val lower = k.hint.mapIndexed { i, c ->
         KeyAlternative(
-            c.toString(), k.key,
+            c.toString(), c.toString(),
             (firstSize.value - (letters + i) * 3f).coerceAtLeast(12f).sp,
         )
     }

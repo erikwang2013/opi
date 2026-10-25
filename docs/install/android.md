@@ -665,6 +665,9 @@ fcitx5 配置面**同名**，宣纸/朱砂与后五款的配色取 `scripts/gen_
   不变（数字格发 T9 `2`–`9`，分词格发 `'`）。**长按/上滑**弹层 = 该格字母（字号递减）+
   **末尾序号**，末项默认选中（`nineKeyAlternatives`，`defaultAlternative = alts.lastIndex`）。
   **大 9 键不画序号**（`big` ⇒ `cornerHint = null`），弹层与末项照旧。
+  **【订正 2026-10-26】** 弹层小写项的发送值改为**选中的具体字母**（引擎 Nine
+  新增单字母类）；此前统一发整格 T9 数字，选 a/b/c 都匹配同一类，现场表现为
+  「永远匹配最后一个字母」。
 - **9 键左列**：标点列改为**可竖向滚动**（`nineKeyStripPuncts` 的 `LazyColumn`），末格
   「自定义」：未选时点开 `keyboard/CustomSymbolPicker.kt`；选中后**点它发送、长按更换**，
   值落 `ImeState.customPunct`（`ImePreferences` 键 `nine_custom_punct` 持久化）。

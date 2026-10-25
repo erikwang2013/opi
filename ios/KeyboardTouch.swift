@@ -212,8 +212,8 @@ extension KeyboardLayout {
         activePopup = nil
     }
 
-    /// 提交当前选中项：小写字母与 9 键 T9 键**进引擎**（匹配词库）；大写、数字、
-    /// 符号**直接原样上屏**（2026-10-25 用户裁决，`KeyPopupItem.direct`）。
+    /// 提交当前选中项：小写字母（含 9 键弹层里选中的具体字母）**进引擎**（匹配词库）；
+    /// 大写、数字、符号**直接原样上屏**（2026-10-25 用户裁决，`KeyPopupItem.direct`）。
     func commitKeyPopup() {
         guard let popup = activePopup else { return }
         let text = popup.selectedValue

@@ -290,7 +290,7 @@ LICENSE · CONTRIBUTING.md      # MIT full text · contribution guide (incl. dic
 
 ### 📅 Project Status
 
-> **Current stage: v1.25.3 (2026-10-25): Windows in-place upgrades no longer need a sign-out — the new TSF DLL uses the opi-v2 pipe while old DLLs keep the legacy pipe, and the candidate process serves both; a candidate single-instance lock removes duplicate opi.exe processes; the status bar wakes on a named event when clients attach/detach and hides immediately on an empty im state, with control-plane polling down to 1ms**
+> **Current stage: v1.25.4 (2026-10-26): mobile 9-key popups now send the chosen lowercase letter itself (the engine's Nine scheme gained single-letter classes, so picking a matches only a; previously all three cells sent the whole T9 digit and matched the same class)**
 
 V1 milestone progress:
 
