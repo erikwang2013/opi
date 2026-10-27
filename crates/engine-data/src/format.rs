@@ -14,6 +14,7 @@
 //! entries 必须按 pinyin 字节序升序。
 
 use crate::checksum::fnv1a64;
+use crate::format_assoc::AssocView;
 
 pub const MAGIC: &[u8; 4] = b"OPID";
 pub const VERSION: u16 = 1;
@@ -44,12 +45,32 @@ pub enum FormatError {
     ChecksumMismatch { expected: u64, actual: u64 },
     Unsorted,
     BadOffsets,
+    BadFlags(u8),
 }
 
 /// 序列化为 .opid v1。条目先按 pinyin 字节序排序（不改动入参）。
 /// 不变式：pinyin/word 非空且 ≤255 字节（编译管线保证）。违反即 panic —— `parse`
 /// 会以 `BadOffsets` 拒收空 pinyin/空 word，放过就等于产出一个自己解不开的文件。
 pub fn serialize(dict: &OpDict) -> Vec<u8> {
+    let (table, pinyin_blob, word_blob, sorted) = build_parts(dict);
+    let mut out = Vec::with_capacity(
+        HEADER_LEN + table.len() + pinyin_blob.len() + word_blob.len() + TRAILER_LEN,
+    );
+    out.extend_from_slice(MAGIC);
+    out.extend_from_slice(&VERSION.to_le_bytes());
+    out.push(0); // flags
+    out.extend_from_slice(&(sorted.len() as u32).to_le_bytes());
+    out.extend_from_slice(&table);
+    out.extend_from_slice(&pinyin_blob);
+    out.extend_from_slice(&word_blob);
+    let sum = fnv1a64(&out[HEADER_LEN..]);
+    out.extend_from_slice(&sum.to_le_bytes());
+    out
+}
+
+/// `serialize` 与带扩展尾部的序列化共用的基础段：entry table、pinyin blob、
+/// word blob，以及按 pinyin 排好的条目引用。
+pub(crate) fn build_parts(dict: &OpDict) -> (Vec<u8>, Vec<u8>, Vec<u8>, Vec<&RawEntry>) {
     let mut sorted: Vec<&RawEntry> = dict.entries.iter().collect();
     sorted.sort_by(|a, b| a.pinyin.as_bytes().cmp(b.pinyin.as_bytes()));
     let mut pinyin_blob = Vec::new();
@@ -72,19 +93,7 @@ pub fn serialize(dict: &OpDict) -> Vec<u8> {
         table.extend_from_slice(&e.freq.to_le_bytes());
     }
     debug_assert_eq!(pinyin_blob.len(), dict.pinyin_total);
-    let mut out = Vec::with_capacity(
-        HEADER_LEN + table.len() + pinyin_blob.len() + word_blob.len() + TRAILER_LEN,
-    );
-    out.extend_from_slice(MAGIC);
-    out.extend_from_slice(&VERSION.to_le_bytes());
-    out.push(0); // flags
-    out.extend_from_slice(&(sorted.len() as u32).to_le_bytes());
-    out.extend_from_slice(&table);
-    out.extend_from_slice(&pinyin_blob);
-    out.extend_from_slice(&word_blob);
-    let sum = fnv1a64(&out[HEADER_LEN..]);
-    out.extend_from_slice(&sum.to_le_bytes());
-    out
+    (table, pinyin_blob, word_blob, sorted)
 }
 
 /// 校验通过、但**不物化条目**的布局信息。`parse` 与 `load_mmap` 都需要它：
@@ -94,6 +103,10 @@ pub struct Validated {
     pub count: usize,
     pub pinyin_total: usize,
     pub max_freq: u32,
+    pub flags: u8,
+    pub word_end: usize,
+    pub word_index: Option<usize>,
+    pub assoc: Option<AssocView>,
 }
 
 /// 解析并完整校验 .opid v1。
@@ -111,6 +124,10 @@ pub fn validate(data: &[u8]) -> Result<Validated, FormatError> {
     let version = u16::from_le_bytes(data[4..6].try_into().unwrap());
     if version != VERSION {
         return Err(FormatError::BadVersion(version));
+    }
+    let flags = data[6];
+    if flags & !0b11 != 0 {
+        return Err(FormatError::BadFlags(flags & !0b11));
     }
     let tail = data.len() - TRAILER_LEN;
     let expected = u64::from_le_bytes(data[tail..].try_into().unwrap());
@@ -149,7 +166,11 @@ pub fn validate(data: &[u8]) -> Result<Validated, FormatError> {
     if word_start > tail {
         return Err(FormatError::BadOffsets);
     }
-    let word_total = tail - word_start;
+    let tail_info = crate::format_assoc::parse_tail(data, count, word_start, tail)?;
+    let word_total = tail_info
+        .word_end
+        .checked_sub(word_start)
+        .ok_or(FormatError::BadOffsets)?;
     // 第二遍：逐条边界 / UTF-8 / 有序性。检查顺序与旧版单遍实现逐字一致
     // （错得早的变体仍然先被报出），`prev` 借切片而非 String，避免校验期分配。
     let mut prev: Option<&str> = None;
@@ -181,6 +202,10 @@ pub fn validate(data: &[u8]) -> Result<Validated, FormatError> {
         count,
         pinyin_total,
         max_freq,
+        flags,
+        word_end: tail_info.word_end,
+        word_index: tail_info.word_index,
+        assoc: tail_info.assoc,
     })
 }
 
