@@ -28,6 +28,7 @@ mod dict_layers_visit; // 导入层的 visit_entries（500 行门禁拆出，202
 pub mod dictionary;
 mod emoji_keywords; // 输入即得表情（数据 include_str! 嵌入，2026-10-18）
 pub mod engine;
+mod engine_association; // 提交后联想：状态 + 生成算法（2026-10-27，见文件头）
 #[path = "engine_candidates.rs"]
 mod engine_candidates_impl; // 主候选装配一族（2026-10-16 从 engine.rs 拆出，见文件头）
 #[path = "engine_dicts.rs"]

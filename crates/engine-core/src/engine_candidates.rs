@@ -65,6 +65,13 @@ impl Engine {
             crate::emoji_keywords::append_to(&mut cands, &s.buffer, limit);
             return cands;
         }
+        // 提交后联想（2026-10-27）：缓冲空时候选行 = 提交时算好的联想项。
+        // 状态只由 build_association 建立，输入入口清空（见 engine_association.rs）。
+        if s.buffer.is_empty()
+            && let Some(a) = &self.association
+        {
+            return a.items.iter().take(limit).cloned().collect();
+        }
         // 输入方案分流（2026-10-09）：只在「会打拼音缓冲」的两个模式下有意义
         // （English/Number/Symbol 的缓冲不是拼音串）。
         if matches!(s.mode, Mode::Pinyin | Mode::Traditional) {

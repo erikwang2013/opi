@@ -49,6 +49,9 @@ pub struct Engine {
     pub(crate) learner: Learner,
     /// 最近一次候选提交的锚点（误选撤销用；语义与清链时机见 engine_learning.rs 头）。
     pub(crate) last_commit: crate::engine_learning::LastCommit,
+    /// 提交后联想（2026-10-27，见 engine_association.rs）：只在拼音/繁体、缓冲空、
+    /// 无逐字片段时可见；提交时算好，显示路径只克隆。
+    pub(crate) association: Option<crate::engine_association::Association>,
     /// 用户词频权重，按词典最大静态词频动态缩放（一次选词即压过所有静态词）。
     pub(crate) user_boost: u64, // pub(crate)：engine_shuangpin.rs 的合并排名要用
     /// 钉读音（9 键左列点一行拼音：**不确认**，候选收窄到该读音 —— 2026-10-09
@@ -134,6 +137,7 @@ impl Engine {
             symbols,
             learner: Learner::new(learner_enabled),
             last_commit: Default::default(),
+            association: None,
             user_boost: 0, // 占位：紧随其后的 recompute_user_boost 定型（唯一算法处）
             scheme_readings: std::cell::RefCell::new((String::new(), Vec::new())),
             pinned_reading: None,

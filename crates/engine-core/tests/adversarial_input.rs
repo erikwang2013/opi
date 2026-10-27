@@ -346,8 +346,8 @@ fn engine_never_exceeds_limits_and_clears_buffer_on_commit() {
             let out = e.input_key(*k);
             prop_assert!(e.buffer().chars().count() <= MAX_BUFFER);
             prop_assert!(e.candidates(8).len() <= 8);
-            // 缓冲空 ⇒ 候选必空（拼音/繁体模式下不该凭空给候选）
-            if e.buffer().is_empty() {
+            // 缓冲空 ⇒ 候选必空（联想态是唯一合法例外：缓冲空但候选非空）
+            if e.buffer().is_empty() && !e.association_active() {
                 prop_assert!(e.candidates(8).is_empty(), "空缓冲仍有候选");
             }
             // 非空格键永不提交。`'` 除外：缓冲空时它是标点表的引号（`‘’`），

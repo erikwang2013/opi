@@ -15,6 +15,9 @@
 //! ⚠️ 本文件白天钉的是**相反**的语义（联想档排最前、9 键 digits 拼接）。翻面是裁决，
 //! 不是回归 —— 别按白天的断言「改回去」：那条路会让用户点到重复上屏的候选。
 
+mod common;
+
+use common::AssocDict;
 use engine_core::dictionary::InMemoryDictionary;
 use engine_core::symbols::SymbolEngine;
 use engine_core::{Engine, Scheme};
@@ -77,6 +80,36 @@ fn nine_scheme_starts_fresh_after_commit() {
         "9 键同样不拼接上文：{got:?}"
     );
     assert_eq!(e.select(0), "吗", "上屏的只有新输入对应的字");
+}
+
+fn assoc_engine() -> Engine {
+    let d = AssocDict::new()
+        .word("nihao", "你好", 900)
+        .word("nihaoma", "你好吗", 500)
+        .word("ma", "吗", 800)
+        .word("ma", "妈", 700)
+        .prefix("你好", &[("你好吗", 500)])
+        .suffix("你好", &[("吗", 0)]);
+    Engine::new(Box::new(d), SymbolEngine::builtin(), true)
+}
+
+/// 有索引/assoc 的真联想源也必须守住「确认后 = 全新开始」：联想只活在空缓冲，
+/// 任何文本输入都从零开始（Spec §4.6 契约，正控见上面三条的夹具是 InMemoryDictionary）。
+#[test]
+fn association_does_not_leak_into_the_next_input() {
+    let mut e = assoc_engine();
+    type_str(&mut e, "nihao");
+    assert_eq!(e.select(0), "你好");
+    assert!(e.association_active(), "前置：提交后进入联想态");
+    assert!(texts(&e).contains(&"吗".to_string()), "前置：联想候选可见");
+
+    type_str(&mut e, "ma");
+    let got = texts(&e);
+    assert!(
+        !got.contains(&"你好吗".to_string()),
+        "联想不得拼进下文：{got:?}"
+    );
+    assert_eq!(e.select(0), "吗");
 }
 
 /// 确认**不改变**下一次输入的行为：无论中间隔多少动作，第二次输入都与「空引擎」

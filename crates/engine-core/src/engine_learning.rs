@@ -90,7 +90,12 @@ impl Engine {
     /// 的 `fetched()` 对齐后，同一份候选表算出的下标两条路必给同一个答案。
     /// 门禁：tests/select_index_bounds.rs 的 engine_select_index_space_agrees_with_unlimited_list。
     pub fn select_from(&mut self, cands: &[Candidate], index: usize) -> String {
-        self.select_from_source(cands, index, SelectionSource::Explicit)
+        let out = self.select_from_source(cands, index, SelectionSource::Explicit);
+        // 普通提交也建联想（Task 5）；联想点击的链式根在 Task 7 接。
+        if !out.is_empty() {
+            self.build_association(&out);
+        }
+        out
     }
 
     /// [`Self::select_from`] 的**来源标注**变体：空格接受首候选传 `AcceptFirst`，
