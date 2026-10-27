@@ -40,6 +40,9 @@ internal fun OpiImeService.pushComposingText() {
  * （活跃时删的就是组合区、已落定时删的是刚落定的那串）。删除按码点（同退格一条纪律）。
  */
 internal fun OpiImeService.dropComposing(ic: InputConnection) {
+    // 2026-10-27：任何提交都会触发 onUpdateSelection，先记「这是自我提交」，
+    // 否则选区变化会把刚建好的联想收掉。必须在早退之前（正常路径 lastComposing 恒空）。
+    selfCommitGuard.noteSelfCommit()
     if (lastComposing.isEmpty()) return
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
         ic.deleteSurroundingTextInCodePoints(lastComposing.length, 0)
