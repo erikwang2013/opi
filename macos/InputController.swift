@@ -24,12 +24,15 @@ import InputMethodKit
 /// 这里再加 @objc 名字是双保险（模块名展开失败时仍能按裸名找到类）。
 @objc(OpiInputController)
 final class OpiInputController: IMKInputController {
-    private let engine = OpiEngine.shared
+    /// internal：`InputControllerAssociation.swift` 的 refresh/dismiss 要用（2026-10-27）。
+    let engine = OpiEngine.shared
 
     /// 上次设进客户端的 marked text（= preedit），用来挡掉无谓的重复刷新。
-    private var lastMarked = ""
+    var lastMarked = ""
     /// 上次交给候选窗的候选（**当前页**，与 `selectPage(_:)` 的页内索引同序）。
-    private var lastCandidates: [String] = []
+    var lastCandidates: [String] = []
+    /// 上次候选窗的可见性：可见性变化也要推 update（空缓冲的联想候选常与上次同批不同可见）。
+    var lastCandidatesVisible = false
 
     // ---------- 平台键 → 引擎键（本层唯一的映射表） ----------
 
@@ -205,6 +208,8 @@ final class OpiInputController: IMKInputController {
         guard event.type == .keyDown || event.type == .keyUp else { return false }
         // 面板/菜单上屏时没有这个 sender，记下最近客户端（弱引用，不强留宿主）。
         if let client = sender { OpiClientHub.shared.focus(self, client: client as AnyObject) }
+        // 联想态：本键先收起再执行（热键也在其内；Spec §5.1）。
+        dismissAssociationIfNeeded(sender)
         // ⚠️ **热键必须在引擎之前判掉，不能落进下面的 `keyEvent`** ——
         // `router.rs` 的 `key_event` 直通分支（`router.rs:245`）对 `CTRL|ALT|META`
         // **在整个函数最前面就直通**，
@@ -267,39 +272,7 @@ final class OpiInputController: IMKInputController {
         client.insertText(text, replacementRange: none)
     }
 
-    /// 刷新 preedit（marked text）+ 候选窗。
-    ///
-    /// action=1 按 router.rs 的契约就是「请刷新」；它同时覆盖「缓冲/页码变了」与
-    /// 「⇧ 状态机等无变化」两种情况（C ABI 只有一个码，不区分）。
-    /// 「与上次相同就不动客户端」只是省掉无谓的客户端调用，不是正确性依赖。
-    private func refresh(_ sender: Any!) {
-        guard let client = sender as? IMKTextInput else { return }
-        let buffer = engine.buffer()
-
-        if buffer != lastMarked {
-            let none = NSRange(location: NSNotFound, length: NSNotFound)
-            if buffer.isEmpty {
-                client.setMarkedText("",
-                                     selectionRange: NSRange(location: 0, length: 0),
-                                     replacementRange: none)
-            } else {
-                client.setMarkedText(buffer,
-                                     selectionRange: NSRange(location: buffer.utf16.count, length: 0),
-                                     replacementRange: none)
-            }
-            lastMarked = buffer
-        }
-
-        // 显示当前页用引擎的分页出口：页大小/页码/页内选词同源在 router.rs，
-        // 客户端不再抄 PAGE_SIZE（`OpiFFI.h` 明写禁止自己按页大小切）。
-        let list = engine.candidatesPage()
-        if list != lastCandidates {
-            lastCandidates = list
-            OpiCandidateWindow.shared.update(list, visible: !buffer.isEmpty)
-        }
-        // IMKCandidates 没有标题栏：拼音另画一条；显示串为空回退原文，判定仍读 buffer()。
-        OpiPinyinBar.shared.update(display: engine.displayBuffer(), raw: buffer, client: client, candidatesFrame: OpiCandidateWindow.shared.visibleFrame)
-    }
+    // `refresh` 已搬到 `InputControllerAssociation.swift`（2026-10-27，本文件压 500 行）。
 
     // ---------- 候选窗回调 ----------
 
@@ -321,15 +294,12 @@ final class OpiInputController: IMKInputController {
         // 下标与 `opi_select_page(k)` 同序。绝不自己算 page*PAGE_SIZE+k（那是第三份
         // 页大小，引擎改一次就静默选错候选）。
         let committed = engine.selectPage(index)
-        lastCandidates = []
-        OpiCandidateWindow.shared.hide()
-        OpiPinyinBar.shared.hide()
-        // 这里没有 handle(_:client:) 的 sender：优先用 Hub 记下的最近客户端。
-        if let stored = OpiClientHub.shared.client {
-            commit(committed.isEmpty ? text : committed, to: stored)
-        } else {
-            commit(committed.isEmpty ? text : committed, to: client())
-        }
+        // 2026-10-27：不 hide/不清空 —— 引擎已按链式建好下一条联想，refresh 按新候选
+        // 决定显示；这里没有 handle(_:client:) 的 sender，优先用 Hub 记下的最近客户端。
+        let target: Any? = OpiClientHub.shared.client
+        let chosen = target ?? client()
+        commit(committed.isEmpty ? text : committed, to: chosen)
+        refresh(chosen)
     }
 
     // ---------- 输入法菜单 / 跨窗口上屏 ----------
@@ -371,6 +341,7 @@ final class OpiInputController: IMKInputController {
         let sender: Any?
         if let stored = OpiClientHub.shared.client { sender = stored } else { sender = client() }
         guard sender != nil else { return false }
+        dismissAssociationIfNeeded(sender)
         let result = engine.keyEvent(keyval: keyval, states: states)
         switch result.action {
         case OpiAction.commit:
@@ -402,11 +373,11 @@ final class OpiInputController: IMKInputController {
     /// 符号面板上屏。面板保持打开，可连续点选。
     func commitFromOutside(_ text: String) {
         guard !text.isEmpty else { return }
-        if let stored = OpiClientHub.shared.client {
-            commit(text, to: stored)
-        } else {
-            commit(text, to: client())
-        }
+        let target: Any? = OpiClientHub.shared.client
+        let chosen = target ?? client()
+        dismissAssociationIfNeeded(chosen) // 直提入口先收联想（Spec §5.1）
+        commit(text, to: chosen)
+        refresh(chosen)
     }
 
     // ---------- 生命周期 ----------
@@ -417,6 +388,7 @@ final class OpiInputController: IMKInputController {
         engine.clear()
         lastMarked = ""
         lastCandidates = []
+        lastCandidatesVisible = false
         OpiPinyinBar.shared.hide()
         // 状态栏只在 opi 输入源激活时出现（用户 2026-10-21 要求）。
         OpiStatusBar.shared.setActive(true)
@@ -428,6 +400,7 @@ final class OpiInputController: IMKInputController {
         engine.clear()
         lastMarked = ""
         lastCandidates = []
+        lastCandidatesVisible = false
         OpiCandidateWindow.shared.hide()
         OpiPinyinBar.shared.hide()
         OpiKeyboardPanel.shared.hide()
