@@ -17,11 +17,12 @@
 //! 因为本文件同时需要 `CARGO_BIN_EXE_opi-tools`（只有本包自己的二进制才有）。
 
 use engine_data::format::serialize;
+use engine_data::serialize_with_extras;
 use opi_ffi::cabi::{
     OpiString, opi_buffer, opi_candidates, opi_clear, opi_ffi_free_string, opi_input_key, opi_load,
     opi_load_trad, opi_set_learner, opi_switch_mode,
 };
-use opi_tools::compiler::{compile, parse_dict};
+use opi_tools::compiler::{compile, parse_assoc, parse_dict};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -371,11 +372,15 @@ const OPID_TRAD: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../data/generated/trad.opid"
 );
+const TRAD_ASSOC: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../data/generated/trad.assoc.tsv"
+);
 
 /// 入库产物必须等于**用仓库里的源现编**出来的字节。
 ///
 /// 牙齿在于比的是两个各自独立的 2.5 MB / 715 B 字节串：左边由 `parse_dict →
-/// compile → serialize` 现场算出，右边从磁盘读；改动解析规则、排序规则、
+/// compile → serialize(_with_extras)` 现场算出，右边从磁盘读；改动解析规则、排序规则、
 /// FNV 实现、词条布局中的**任何一个**，而忘了重编产物，这条就红。
 /// 这正是本项目怕的那类故障：格式变了、产物没跟上，产物读出来是另一个东西。
 #[test]
@@ -407,7 +412,11 @@ fn committed_dictionaries_match_their_sources() {
         "trad_hanzi.tsv 末尾没有换行 —— `cat` 拼接会把两行粘起来（配方见 CONTRIBUTING.md）"
     );
     let merged = format!("{hanzi}{phrases}{modern}{kangxi}");
-    let rebuilt = serialize(&compile(parse_dict(&merged)));
+    // 2026-10-27 起 trad.opid 带词排序索引与语义小表：重编必须用同一份 assoc 表，
+    // 才能锁住「入库字节 = 源 + 已生成的小表」。
+    let assoc =
+        parse_assoc(&std::fs::read_to_string(TRAD_ASSOC).expect("读 trad.assoc.tsv")).unwrap();
+    let rebuilt = serialize_with_extras(&compile(parse_dict(&merged)), true, &assoc);
     let committed = std::fs::read(OPID_TRAD).expect("读 trad.opid");
     assert!(
         committed.len() > 1_000_000,
@@ -416,8 +425,10 @@ fn committed_dictionaries_match_their_sources() {
     );
     assert_eq!(
         rebuilt, committed,
-        "trad.opid 与四份 raw TSV 现编结果不一致：改了源就用 CONTRIBUTING 的 \
-         `cat` + `opi-tools compile` 重编，并同步 android/app/src/main/assets/trad.opid"
+        "trad.opid 与四份 raw TSV 现编结果不一致：改了源就重跑 \
+         scripts/gen_assoc_table.py，再用 `opi-tools compile --word-index --assoc \
+         data/generated/trad.assoc.tsv` 重编（配方见 CONTRIBUTING），并同步 \
+         android/app/src/main/assets/trad.opid"
     );
 }
 

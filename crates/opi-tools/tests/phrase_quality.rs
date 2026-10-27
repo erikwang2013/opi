@@ -393,20 +393,30 @@ fn abbreviation_keys_stay_under_30ms_release() {
     );
 }
 
+/// 解析出的**词条**（不是原始字节）：2026-10-27 起 luna.opid 带 assoc 尾部，
+/// 对整文件做字节扫描会把小表里的后缀误当词条。
+fn words(path: &str) -> Vec<String> {
+    let bytes = std::fs::read(path).expect("读 opid");
+    engine_data::parse(&bytes)
+        .expect("opid 必须通过校验")
+        .entries
+        .into_iter()
+        .map(|e| e.word)
+        .collect()
+}
+
 #[test]
 fn no_traditional_word_forms_leaked_into_luna() {
-    let luna = std::fs::read(LUNA_OPID).expect("读 luna.opid");
-    let luna = String::from_utf8_lossy(&luna);
-    let trad = std::fs::read(TRAD_OPID).expect("读 trad.opid");
-    let trad = String::from_utf8_lossy(&trad);
+    let luna = words(LUNA_OPID);
+    let trad = words(TRAD_OPID);
     let mut fails = Vec::new();
     for (py, word) in TRAD_CONTROL {
         // 正控先行：trad.opid 里扫不到 = 扫描本身有问题，先红在正控上。
         assert!(
-            trad.contains(word),
+            trad.iter().any(|w| w.as_str() == *word),
             "正控失败：trad.opid 里扫不到「{word}」—— 扫描/编码写错了，否定断言无意义"
         );
-        if luna.contains(word) {
+        if luna.iter().any(|w| w.as_str() == *word) {
             fails.push(format!("{py}: luna.opid 里出现了繁体词形「{word}」"));
         }
     }
