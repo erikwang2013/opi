@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>页面不存在 · 404 — opi 小欧输入法</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#f3fbf4"><meta name="color-scheme" content="light">
+  <link rel="icon" type="image/png" href="/assets/pet/opi-pet.png">
+  <link rel="stylesheet" href="/css/base.css">
+  <style>
+    .not-found { display: grid; place-items: center; min-height: 100dvh; padding-block: clamp(40px, 8vw, 96px); text-align: center; }
+    .not-found-inner { max-width: 36rem; }
+    .not-found-pet { width: clamp(120px, 26vw, 180px); margin: 0 auto 20px; }
+    .not-found .eyebrow { justify-content: center; }
+    .not-found-actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-top: 28px; }
+    .not-found-en { margin: 32px 0 0; padding-top: 24px; border-top: 1px solid var(--line); }
+  </style>
+</head>
+<body>
+  <main class="shell not-found">
+    <div class="not-found-inner">
+      <img class="not-found-pet" src="/assets/pet/opi-pet.png" width="180" height="180" alt="小欧">
+      <p class="eyebrow">404 · page not found</p>
+      <h1>这颗键帽，<br><em>没有字。</em></h1>
+      <p class="body-lg">你要找的页面不存在，或者已经搬走了。</p>
+      <div class="not-found-actions">
+        <a class="btn btn-primary" href="/">返回首页</a>
+        <a class="btn btn-ghost" href="/#download">下载最新版</a>
+      </div>
+      <p class="body not-found-en" lang="en">The page you're looking for doesn't exist. <a class="text-link" href="/en/">Go to the English site <span aria-hidden="true">→</span></a></p>
+    </div>
+  </main>
+</body>
+</html>

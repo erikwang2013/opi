@@ -20,6 +20,7 @@ python3 -m http.server 8080 --directory site
 site/
   index.html            中文首页（七个 section：认识/能力/迭代/形态/版本/下载；SEO 元数据见下）
   en/index.html         英文首页（同结构；EN / 中文切换，独立 canonical 与 hreflang）
+  404.html              404 页（中英双语、noindex；由静态服务器回退，不依赖脚本）
   version.json          机器可读的最新版本（客户端「检测更新」首选；发版时与版本号一起改）
   robots.txt            抓取规则（屏蔽仓库说明 Markdown）与 sitemap 声明
   download/index.html   /download 入口，转场到首页下载区（noindex）
@@ -86,6 +87,9 @@ site/
 
 把 `site/` 整个目录作为静态站点根目录即可（Nginx / Caddy / Cloudflare Pages /
 GitHub Pages 均可）。页面内没有构建步骤，也没有服务端依赖。
+
+404 页在 `site/404.html`：GitHub Pages / Cloudflare Pages 会自动使用它；Nginx 需
+`error_page 404 /404.html;`，Caddy 需在 `handle_errors` 里返回 `/404.html`。
 
 **发版时更新 `version.json`**：`{"version":"1.26.2","download":"https://opi.erik.xyz/download"}`。
 （`/download` 由 `site/download/index.html` 转场到首页下载区；具体安装包在
