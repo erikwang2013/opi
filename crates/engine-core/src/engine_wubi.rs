@@ -481,6 +481,8 @@ impl Engine {
         }
         let text = hits[0].word.clone();
         self.composer.commit_buffer();
+        // 自动上屏也是一次提交：与 select_from 同一条联想规则（Task 8）。
+        self.build_association(&text);
         Some(text)
     }
 }
