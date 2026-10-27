@@ -234,8 +234,20 @@ impl Engine {
 
     /// 空格收尾的**页首**变体：`skip` = 当前页首条全局下标（宿主传 `page * PAGE_SIZE`）。
     /// 取 `skip+1` 条即可保住页首；越界按「无候选」逃生口，不静默丢缓冲。
+    ///
+    /// 入口先收起联想（空格正常执行，不得选中联想项），提交成功后按新文本重建
+    /// 联想（Spec §4.4）。标点冲刷走 [`Self::input_space_core`]，**不**建联想。
     pub fn input_space_at(&mut self, skip: usize) -> String {
-        self.dismiss_association(); // 空格正常执行：不得选中联想项
+        self.dismiss_association();
+        let out = self.input_space_core(skip);
+        if !out.is_empty() {
+            self.build_association(&out);
+        }
+        out
+    }
+
+    /// [`Self::input_space_at`] 的实现体：不碰联想状态（标点冲刷路径共用）。
+    pub(crate) fn input_space_core(&mut self, skip: usize) -> String {
         self.leave_symbol_browse_if_needed(); // 直调引擎的出口（C ABI）也走同一条（契约 ②）
         self.after_digit = false; // 空格收尾 = 数字上下文结束（见字段注释）
         let limit = skip.saturating_add(1).max(DEFAULT_TOP_N);

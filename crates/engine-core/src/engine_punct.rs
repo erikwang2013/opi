@@ -46,10 +46,11 @@ impl Engine {
         // 否则 `ni,` 上屏成 `，你` —— 标点抢在待提交的拼音前面。
         // 不映射 ⇒ 不走这里：那是「直通」，由调用方自己插入，与三轨的 PassThrough 同形
         // （两个开关都关时才是这一档，见 `punct_text`）。
+        // 走 `input_space_core`（不是 `input_space_at`）：冲刷本身不建联想（Spec §4.4）。
         let pending = if self.buffer().is_empty() {
             String::new()
         } else {
-            self.input_space_at(skip)
+            self.input_space_core(skip)
         };
         Some(pending + &text)
     }

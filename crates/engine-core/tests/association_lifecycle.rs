@@ -10,14 +10,46 @@ use common::{AssocDict, type_str};
 use engine_core::symbols::SymbolEngine;
 use engine_core::{Engine, Mode, Scheme};
 
-fn active_engine() -> Engine {
+fn fresh_engine() -> Engine {
     let d = AssocDict::new()
         .word("jintian", "今天", 900)
         .prefix("今天", &[("今天晚上", 700)])
         .suffix("今天", &[("吃饭", 90)]);
+    Engine::new(Box::new(d), SymbolEngine::builtin(), true)
+}
+
+fn active_engine() -> Engine {
+    let mut e = fresh_engine();
+    type_str(&mut e, "jintian");
+    assert_eq!(e.select(0), "今天");
+    assert!(e.association_active(), "前置：提交后进入联想态");
+    e
+}
+
+/// 已选「今天」；前缀链 今天 → 今天晚上 → 今天晚上好。
+fn active_engine_with_chain() -> Engine {
+    let d = AssocDict::new()
+        .word("jintian", "今天", 900)
+        .prefix("今天", &[("今天晚上", 700)])
+        .prefix("今天晚上", &[("今天晚上好", 600)]);
     let mut e = Engine::new(Box::new(d), SymbolEngine::builtin(), true);
     type_str(&mut e, "jintian");
     assert_eq!(e.select(0), "今天");
+    assert!(e.association_active(), "前置：提交后进入联想态");
+    e
+}
+
+/// 已选「中国」；`with_tail` 决定「中国人」是否还有下一层（链的自然终点）。
+fn chain_engine(with_tail: bool) -> Engine {
+    let mut d = AssocDict::new()
+        .word("zhongguo", "中国", 900)
+        .prefix("中国", &[("中国人", 500)]);
+    if with_tail {
+        d = d.prefix("中国人", &[("中国人多", 400)]);
+    }
+    let mut e = Engine::new(Box::new(d), SymbolEngine::builtin(), true);
+    type_str(&mut e, "zhongguo");
+    assert_eq!(e.select(0), "中国");
     assert!(e.association_active(), "前置：提交后进入联想态");
     e
 }
@@ -78,4 +110,88 @@ fn dictionary_setters_clear_association() {
     let mut e = active_engine();
     e.set_wubi_dict(None);
     assert!(!e.association_active(), "set_wubi_dict");
+}
+
+#[test]
+fn clicking_continuation_commits_only_continuation_and_chains() {
+    let mut e = active_engine_with_chain();
+    let before = e.export_user_words(); // 「今天」本身的记账发生在点击之前
+    let first = e.candidates(8);
+    let idx = first.iter().position(|c| c.text == "晚上").unwrap();
+    assert_eq!(e.select_from(&first, idx), "晚上");
+    assert_eq!(e.buffer(), "");
+    assert!(e.association_active());
+    let second: Vec<String> = e.candidates(8).into_iter().map(|c| c.text).collect();
+    assert!(second.iter().all(|s| s != "今天晚上"));
+    assert!(second.iter().any(|s| s == "好"), "链式根 = 今天晚上");
+    assert_eq!(e.export_user_words(), before, "联想点击不得记账");
+}
+
+#[test]
+fn one_char_continuation_can_chain() {
+    let mut e = chain_engine(true); // 中国 → 中国人 → 中国人多
+    assert_eq!(e.select(0), "人");
+    assert!(e.association_active());
+}
+
+#[test]
+fn chain_ends_when_new_root_has_no_hits() {
+    let mut e = chain_engine(false); // 无「中国人」的索引
+    let _ = e.select(0);
+    assert!(!e.association_active(), "中国人 无命中 → 联想结束");
+}
+
+#[test]
+fn consecutive_association_clicks_do_not_change_learning() {
+    let mut e = active_engine_with_chain();
+    let before = e.export_user_words();
+    let first = e.candidates(8);
+    let idx = first.iter().position(|c| c.text == "晚上").unwrap();
+    assert_eq!(e.select_from(&first, idx), "晚上");
+    let second = e.candidates(8);
+    let idx = second.iter().position(|c| c.text == "好").unwrap();
+    assert_eq!(e.select_from(&second, idx), "好");
+    assert_eq!(e.export_user_words(), before, "连续联想点击不得记账");
+    assert!(!e.association_active(), "链到头 → 联想结束");
+}
+
+#[test]
+fn space_at_entry_dismisses_and_never_selects_association() {
+    let mut e = active_engine();
+    assert_eq!(e.input_space_at(0), "");
+    assert!(!e.association_active());
+    assert_eq!(e.buffer(), "");
+}
+
+#[test]
+fn space_commit_enters_association() {
+    let mut e = fresh_engine();
+    type_str(&mut e, "jintian");
+    assert_eq!(e.input_space_at(0), "今天");
+    assert!(e.association_active(), "空格提交后同样进入联想态");
+}
+
+#[test]
+fn punctuation_flush_does_not_build_association() {
+    let mut e = fresh_engine();
+    type_str(&mut e, "jintian");
+    assert_eq!(e.input_punct_at(',', 0).as_deref(), Some("今天，"));
+    assert!(!e.association_active(), "标点冲刷路径不建联想");
+}
+
+#[test]
+fn nine_scheme_tail_kept_does_not_build_association() {
+    let d = AssocDict::new()
+        .word("ni", "你", 900)
+        .prefix("你", &[("你好", 500)]);
+    let mut e = Engine::new(Box::new(d), SymbolEngine::builtin(), true);
+    e.set_scheme(Scheme::Nine);
+    type_str(&mut e, "6442"); // ni 后面还留 42 两键
+    let cands = e.candidates(usize::MAX);
+    let idx = cands
+        .iter()
+        .position(|c| c.text == "你")
+        .expect("候选里没有 你");
+    assert_eq!(e.select(idx), "", "留尾 = 本轮不提交");
+    assert!(!e.association_active(), "留尾不得建链");
 }

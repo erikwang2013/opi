@@ -90,10 +90,14 @@ impl Engine {
     /// 的 `fetched()` 对齐后，同一份候选表算出的下标两条路必给同一个答案。
     /// 门禁：tests/select_index_bounds.rs 的 engine_select_index_space_agrees_with_unlimited_list。
     pub fn select_from(&mut self, cands: &[Candidate], index: usize) -> String {
+        // 旧根要在 `select_from_source` 清联想**之前**取（Spec §4.4 链式）。
+        let old_root = self.association_click_root(cands, index);
         let out = self.select_from_source(cands, index, SelectionSource::Explicit);
-        // 普通提交也建联想（Task 5）；联想点击的链式根在 Task 7 接。
         if !out.is_empty() {
-            self.build_association(&out);
+            match old_root {
+                Some(root) => self.build_association(&format!("{root}{out}")),
+                None => self.build_association(&out),
+            }
         }
         out
     }
@@ -108,6 +112,10 @@ impl Engine {
         source: SelectionSource,
     ) -> String {
         self.after_digit = false; // 选词/面板点击 = 数字上下文结束
+        // 联想项点击 = 跟读一次文档，不是用户选词：不记账、不建误选锚点（否则连续
+        // 两次联动会触发「撤销上一次」），且无条件收起联想。识别必须在 dismiss 之前。
+        let is_association = self.association_click_root(cands, index).is_some();
+        self.dismiss_association();
         // 浏览态：select = 激活浏览项（类目下钻返回空串 / 符号上屏并回一级），不是提交候选。
         // 面板点击与数字键因此同一条，且任何路径都提交不出类目名（见 engine_symbol_browse.rs 头）。
         if self.symbol_browse.is_active() {
@@ -121,7 +129,11 @@ impl Engine {
                 let buffer = self.composer.session().buffer.clone();
                 let mode = self.composer.session().mode;
                 let scheme = self.scheme();
-                self.learn_selection(&text, source, buffer, mode, scheme);
+                if is_association {
+                    self.last_commit.clear();
+                } else {
+                    self.learn_selection(&text, source, buffer, mode, scheme);
+                }
                 // 分词回退态只消耗前缀；**逐字态返回 None = 本轮不提交**（engine_segment.rs，
                 // 2026-10-17「确认一个字，依然在候选栏」）。
                 let commit = self.commit_buffer_after_select(&text);

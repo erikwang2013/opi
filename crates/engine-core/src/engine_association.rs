@@ -17,8 +17,6 @@ use std::collections::BTreeMap;
 
 /// 提交后联想：根 = 文档末尾的连续片段，items 已按显示顺序排好（最多 8 条）。
 pub(crate) struct Association {
-    /// Task 7 的链式根要读它；本任务的生产路径尚无读点（只有内联测试读）。
-    #[allow(dead_code)]
     pub(crate) root: String,
     pub(crate) items: Vec<Candidate>,
 }
@@ -37,6 +35,24 @@ impl Engine {
     /// 收起联想；返回清之前是否存在（宿主据此决定要不要重推候选窗）。
     pub fn dismiss_association(&mut self) -> bool {
         self.association.take().is_some()
+    }
+
+    /// 本次 `select_from` 是否点在联想项上；是则给出链式根（Spec §4.4）。
+    /// 必须在 [`Self::dismiss_association`] **之前**调用（之后联想已清）。
+    pub(crate) fn association_click_root(
+        &self,
+        cands: &[Candidate],
+        index: usize,
+    ) -> Option<String> {
+        if !self.association_active() {
+            return None;
+        }
+        let a = self.association.as_ref()?;
+        let c = cands.get(index)?;
+        a.items
+            .iter()
+            .any(|x| x.text == c.text)
+            .then(|| a.root.clone())
     }
 
     /// 按提交文本重建联想（Spec §4.2）。第一行清旧联想：任何前置失败都不得把
