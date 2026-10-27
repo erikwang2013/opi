@@ -717,17 +717,25 @@ C++ 侧（`crates/fcitx5-opi/cpp/opi_fcitx5.cpp`）：
 - `crates/tsf-opi/src/candidate_sink.rs` 的 `on_composition_changed`：
   现在 `buffer.is_empty()` 就 `hide()`；改为**缓冲空且候选空才 hide**，
   否则 `show(buffer, candidates, ...)`（buffer 可为空）。
-- `crates/tsf-opi/src/tsf.rs` 的 `handle_key_inner`：
-  - `drain_pending()` 之后、`remember_target` 之后、Shift/热键早退之前，对 keydown
-    调用 `logic.dismiss_association()`；若返回 true，立刻 `snapshot + push_state`
-    （早退路径不会自己推状态）。
-  - `KeyOutcome::Commit` 现在只 `insert_into + sink.on_commit`，不抓/推快照；
-    提交后若 `snapshot.association`，补 `caret + push_state`（顺序：
-    `insert_into` → `on_commit`（hide）→ caret → `push_state`（show 联想））。
-    `snapshot` 在 `input_key` 后锁内抓，Commit 分支也要抓。
-  - `Consumed` 不需要额外推：dismiss 时已经推过。
-  - `drain_pending` 已在 `select_and_insert` 后推快照；改完 `CandidateSink` 的
-    可见性即可链式。
+- `crates/tsf-opi/src/key_sink.rs` 的 `OnTestKeyDown` 是**每个 keydown 都经过的唯一
+  入口**：`NO_KEYVAL` 的方向键/功能键、Ctrl/Alt、Win 组合在测试阶段就返回 FALSE，
+  根本不会进 `OnKeyDown`，所以 dismiss 放 `handle_key_inner` 覆盖不到它们。顺序：
+  1. `self.drain_pending()`：排队的候选点选先落地。必须在 dismiss 之前 ——
+     `select_and_insert(index)` 依赖当前候选表，先清联想会让点选越界、静默丢失；
+     也必须在认领判定之前 —— 排队点选提交后缓冲已空，Enter/Tab 等应从「消费」
+     改判「放行」；
+  2. 锁内 `dismiss_association()`；返回 true 就抓 `snapshot`，锁外 `push_state`
+     （测试阶段没有别处会推状态）；
+  3. 再走既有的 `shift_tap_key_down`、热键、Ctrl/Alt/Win、`claim_on_test`。
+  `handle_key_inner` 保留 `drain_pending()`（幂等；key-up 路径仍需要；从
+  `key_sink.rs` 跨模块调用需提升为 `pub(crate)`），不再放 dismiss。
+- `handle_key_inner` 的 `KeyOutcome::Commit` 现在只 `insert_into + sink.on_commit`，
+  不抓/推快照；提交后若 `snapshot.association`，补 `caret + push_state`（顺序：
+  `insert_into` → `on_commit`（hide）→ caret → `push_state`（show 联想））。
+  `snapshot` 在 `input_key` 后锁内抓，Commit 分支也要抓。
+- `Consumed` 不需要额外推：dismiss 时已经推过。
+- `drain_pending` 已在 `select_and_insert` 后推快照；改完 `CandidateSink` 的
+  可见性即可链式。
 - `logic.rs` 498 行：`dismiss_association` 放新 `logic_association.rs`，
   内部 `invalidate_fetch_cache()`（已是 `pub(crate)`）。`tsf.rs` 486 行：
   dismiss+push / commit-push 的 helper 放新 `tsf_association.rs`。
@@ -765,8 +773,9 @@ C++ 侧（`crates/fcitx5-opi/cpp/opi_fcitx5.cpp`）：
 
 ### 6.5 fcitx5 / TSF
 
-- 鼠标/触摸选区没有可靠回调：只覆盖键盘方向键/Home/End（宿主按键入口统一 dismiss
-  已覆盖），鼠标点击文档导致的选区变化不收起。**已知边界**，见 §11。
+- 鼠标/触摸选区没有可靠回调：只覆盖键盘方向键/Home/End（fcitx5 的 `handle_key`
+  与 TSF 的 `OnTestKeyDown` 在放行前统一 dismiss），鼠标点击文档导致的选区变化
+  不收起。**已知边界**，见 §11。
 - 候选窗空白点击不做：fcitx5 面板由框架绘制，TSF 候选窗是独立窗口且收起要经管道
   新增控制动作；本轮不做。
 
@@ -800,7 +809,8 @@ C++ 侧（`crates/fcitx5-opi/cpp/opi_fcitx5.cpp`）：
 - Harmony `pressKey` 与绕过入口（§5.3）；
 - macOS `handle` 顶部（热键之前）/`virtualKey`/`commitFromOutside`（§5.4）；
 - fcitx5 Rust `handle_key` 顶部（Ctrl/Alt 之前）/C++ 热键前（§5.5）；
-- TSF `handle_key_inner` keydown（Shift/热键早退之前）（§5.6）。
+- TSF `OnTestKeyDown`（每个 keydown 都经过，含测试阶段放行的方向键/Ctrl/Alt/Win；
+  在 `shift_tap_key_down` 之前 drain + dismiss）（§5.6）。
 
 引擎入口的 `dismiss_association()` 是**兜底**：即使某个宿主漏了，直接调引擎的
 路径（C ABI/JNI/测试）也不会带着旧联想进入新输入。但宿主不能只靠兜底——宿主在
@@ -928,7 +938,8 @@ fcitx5 的候选机制直接吃掉。Android 数字直提路径在 dismiss + ref
   也 dismiss、数字不选联想项」；C++ `opi_panel_driver` 手工 harness 更新断言
   （点选后链式面板仍在）；两轨逐行同构。
 - TSF：`StateSnapshot.association`、`CandidateSink` 可见性、Commit 后推快照、
-  早退路径 dismiss 后推快照、caret 条件；Windows 目标测试按现有 CI 方式跑。
+  `OnTestKeyDown` 的 drain→dismiss→认领顺序（含 `NO_KEYVAL`/Ctrl/Alt/Win 放行前
+  收起）、caret 条件；Windows 目标测试按现有 CI 方式跑。
 - iOS/macOS/HarmonyOS：编译门禁；macOS 可见性/点选后 refresh 路径检查；
   六端各自真机/模拟器验收：提交出联想、点选链式、任意键正常执行、光标移动收起、
   空白点击（四端）。
@@ -1029,6 +1040,10 @@ fcitx5 的候选机制直接吃掉。Android 数字直提路径在 dismiss + ref
     路径复用 `opi_fcitx5_clear()`。
 21. 性能 <5ms 作为实测记录，不设硬门禁。
 22. 入库 `data/generated/{luna,trad}.assoc.tsv`；不入库 `data/generated/luna.opid`。
+23. TSF 的 dismiss 放 `OnTestKeyDown`（每个 keydown 的唯一入口），而不是
+    `handle_key_inner`：方向键/`NO_KEYVAL`/Ctrl/Alt/Win 在测试阶段就放行，后者
+    覆盖不到；`drain_pending` 必须先于 dismiss 与认领判定，否则排队点选会丢或
+    被误判为「消费」。
 
 **需要用户确认的**（只有这些会改变构建范围/手感）：
 
