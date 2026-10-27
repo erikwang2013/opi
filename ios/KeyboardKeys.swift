@@ -143,6 +143,9 @@ enum KeyboardFunctionKey {
     /// 模式该做的事），而用户在符号面板上点的 `,` 就是要 `,`。
     /// Android 的 `SymbolPanel` 同样绕过引擎直提（`router::commitText`）。
     case commitText(String)
+    /// 收起联想（2026-10-27）：候选栏空白处的点击。走功能键而不是新加委托方法
+    /// （同 `.selectInputMode` 的理由：面板 → 控制器是同一个形状）。
+    case dismissAssociation
     /// 打开**设置面板**（2026-10-21，工具条齿轮）。Android 是独立设置 Activity；
     /// iOS 扩展不能可靠拉起宿主，故用键盘内面板承载可用子集。
     case showSettings

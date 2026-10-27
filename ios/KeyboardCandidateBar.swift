@@ -36,6 +36,11 @@ extension KeyboardLayout {
         // 高度不同会让键区在「空闲 ↔ 输入」之间上下跳。
         candidateBar.translatesAutoresizingMaskIntoConstraints = false
         addSubview(candidateBar)
+        // 联想态点候选栏空白处收起（Spec §5.1）。子按钮是 UIControl，手势在
+        // delegate 里放行给它们；候选槽之间的空白落在 UIStackView 上，归本手势。
+        let blankTap = UITapGestureRecognizer(target: self, action: #selector(tapCandidateBar))
+        blankTap.delegate = self
+        candidateBar.addGestureRecognizer(blankTap)
 
         candidateStack.axis = .horizontal
         candidateStack.spacing = 4
@@ -148,6 +153,11 @@ extension KeyboardLayout {
         delegate?.keyboardLayout(self, didTapFunction: .cycleMode)
     }
 
+    /// 候选栏空白处：收起联想（非联想态时控制器侧是空操作）。
+    @objc private func tapCandidateBar() {
+        delegate?.keyboardLayout(self, didTapFunction: .dismissAssociation)
+    }
+
     // MARK: - 拼音行（2026-10-23）
 
     /// 顶部拼音行：键盘最上一条 38pt 常驻槽，候选栏与工具条都在它下面。
@@ -208,4 +218,15 @@ final class BarButton: UIButton {
     }
 
     @objc private func tapped() { onTap() }
+}
+
+extension KeyboardLayout: UIGestureRecognizerDelegate {
+    /// 候选栏的空白点击手势只收「不是控件」的触点 —— 候选按钮、「中」、⌄ 都是
+    /// UIControl，点击必须归它们自己（Spec §5.1 的「空白处收起」）。
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldReceive touch: UITouch
+    ) -> Bool {
+        !(touch.view is UIControl)
+    }
 }

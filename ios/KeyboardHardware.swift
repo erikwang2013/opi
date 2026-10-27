@@ -51,6 +51,8 @@ extension KeyboardViewController {
     func routeHardware(
         _ presses: Set<UIPress>, released: Bool, event: UIPressesEvent?
     ) -> Bool {
+        // 联想态：本批首键先收起，再正常执行（Spec §5.1）。
+        dismissAssociationIfNeeded()
         var handledAny = false
         for press in presses {
             guard let key = press.key, let kv = keyval(for: key) else { continue }

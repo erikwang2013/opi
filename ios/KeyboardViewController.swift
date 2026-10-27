@@ -45,6 +45,8 @@ final class KeyboardViewController: UIInputViewController {
     /// internal：装载实现搬到 `KeyboardDictionaryLoader.swift`（本文件压 500 行门禁）。
     var dictionaryLoaded = false
     var markedResidueCleared = false // 2026-10-26：旧版 marked text 只清一次，别每键 unmark
+    /// 自我插入时间戳（2026-10-27）：窗口内不收联想，阈值见 `KeyboardAssociation.swift`。
+    var lastSelfInsertAt: TimeInterval = 0
 
     /// 皮肤与键盘模式（2026-10-20）：启动时从扩展自己的 UserDefaults 读，
     /// 切换后即写回（Android `ImePreferences` 的等价物，但没有设置 App）。
@@ -168,24 +170,14 @@ final class KeyboardViewController: UIInputViewController {
     /// 「插前插后要通知宿主」这类修正时只有一处要改。
     /// ⚠️ internal（见上方状态节的说明）：`KeyboardHardware.swift` 的提交路径要调它。
     func insert(_ text: String) {
+        // 自我插入：提交会同步触发 selectionDidChange，先记时间戳（Spec §5.2）。
+        noteSelfInsert()
         guard !text.isEmpty else { return }
         // 先收组合区再插：否则 insertText 落进 marked range 里、替换掉那段拼音，
         // 表现随宿主而异（有的留下拼音、有的吞字）。对齐 Android `dropComposing`。
         // 无条件 unmark（理由见 [syncMarkedText] 的注：proxy 上没有 markedTextRange）。
         textDocumentProxy.unmarkText()
         textDocumentProxy.insertText(text)
-    }
-
-    /// 引擎说「这键我不管」时，客户端该做什么（平台语义，见 KeyFallback 注释）。
-    private func applyFallback(_ f: KeyFallback) {
-        switch f {
-        case .none:
-            break
-        case .text(let t):
-            insertTyped(t)
-        case .deleteBackward:
-            deleteBackwardTyped()
-        }
     }
 
     // MARK: - 返回键面
@@ -221,6 +213,8 @@ final class KeyboardViewController: UIInputViewController {
             applyFallback(fallback)
             return
         }
+        // 联想态：先收起再执行本键（Spec §5.1）。
+        dismissAssociationIfNeeded()
         // 数字层：数字键直提、不过引擎（见 `KeyboardNumbers.swift` 的头注）。
         if insertNumbersLayerDigitIfNeeded(fallback) { return }
         switch engine.keyEvent(keyval: keyval, states: states) {
@@ -318,6 +312,7 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             togglePinnedReading(reading)
         case .showNumbers:
             OpiLog.panel.info("showNumbers")
+            dismissAssociationIfNeeded()
             leaveCompositionForNumbers()
             layout.setLayer(.numbers)
         case .showSymbols:
@@ -401,6 +396,7 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             // 分词键（2026-10-23 用户订正）：有拼音 ⇒ 插音节边界；**没拼音 ⇒ 打「1」**
             // （空缓冲的 `'` 在引擎里是引号，不是分词符）。
             guard !engine.buffer().isEmpty else {
+                dismissAssociationIfNeeded()
                 insert("1")
                 return
             }
@@ -412,6 +408,7 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             // 重输（9 键右列）：清掉当前组合重来。**不提交** —— 这个键的语义就是
             // 「打错了重来」，直提缓冲会把 9 键的数字打进输入框。
             // `clear()` 幂等（缓冲空时是空操作），所以不必先判空。
+            dismissAssociationIfNeeded()
             engine.clear()
             refresh()
             // 平铺态里重输后若候选已空，自动回键面（Android 同判）。
@@ -442,7 +439,11 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             // 符号面板的键**直提，不过引擎**：引擎的标点表会把 `,` 改写成中文标点/
             // 全角（那是文本模式该做的事），而用户点的就是 `,`。
             // 不调 refresh：缓冲没变，候选栏也不该变。
+            dismissAssociationIfNeeded()
             insertTyped(text)
+        case .dismissAssociation:
+            // 候选栏空白点击（`KeyboardCandidateBar.swift` 的父视图 tap）。
+            dismissAssociationIfNeeded()
         }
     }
 
@@ -482,14 +483,13 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
 // MARK: - 宿主文本变化
 
 extension KeyboardViewController {
-    // ⚠️ 未编译 / 待核对：这两个是**系统回调**（宿主文本变化时调用），
-    // 我把它们当「需要刷新本地状态」的信号来重写 —— 正是官方文档描述的用途
-    // （典型场景是重读 documentContextBeforeInput 决定 ⇧ 状态）。
-    // 但「插入前后要不要主动调一次通知宿主」我无法查证（Sandbox 里查不了文档），
-    // 按不加写。Mac 上若发现宿主文本状态不同步，这里是第一个嫌疑点。
+    // ⚠️ 未编译：系统回调（宿主文本变化时调用）的重写，用途是刷新本地状态。
+    // 「插入前后要不要主动通知宿主」无法查证，按不加写；宿主状态不同步先查这里。
 
-    override func textWillChange(_ textInput: UITextInput?) {
-        super.textWillChange(textInput)
+    override func selectionDidChange(_ textInput: UITextInput?) {
+        super.selectionDidChange(textInput)
+        // 2026-10-27：联想态下用户挪光标/点别处 = 放弃联想（自我插入除外）。
+        handleSelectionChange()
     }
 
     override func textDidChange(_ textInput: UITextInput?) {

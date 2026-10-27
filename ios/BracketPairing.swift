@@ -135,6 +135,7 @@ extension KeyboardViewController {
     /// 用户**敲出来**的文本：软键盘 route/fallback、外接键盘提交、符号面板直提。
     /// 候选词 / 表情 / 贴纸仍走 `insert` —— 它们不是「打了一个括号」。
     func insertTyped(_ text: String) {
+        noteSelfInsert() // 自我插入守卫（2026-10-27，见 KeyboardAssociation.swift）
         guard !text.isEmpty else { return }
         if BracketPairing.shared.insertTyped(text, proxy: textDocumentProxy, enabled: bracketPairingEnabled) {
             return
@@ -144,6 +145,7 @@ extension KeyboardViewController {
 
     /// 空缓冲退格：光标仍夹在我们插入的空配对中间时删一对，否则走系统退格。
     func deleteBackwardTyped() {
+        noteSelfInsert() // 退格也是自我修改，会触发选区回调
         if !BracketPairing.shared.backspace(proxy: textDocumentProxy, enabled: bracketPairingEnabled) {
             textDocumentProxy.deleteBackward()
         }

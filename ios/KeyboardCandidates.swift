@@ -93,6 +93,8 @@ extension KeyboardViewController {
     /// 选词（**全局**下标，`opi_candidates(limit)` 的次序）。选完若在平铺态，
     /// 按用户裁决回键面（不留在平铺网格里继续选）。
     func selectCandidate(at index: Int) {
+        // 不 dismiss 联想：点到联想项时由引擎链式建下一条（Task 7 的引擎语义），
+        // 这里只负责上屏与刷新。
         let text = engine.select(index: index)
         insert(text)
         // 先回键面再刷新：否则平铺面板会为这一批即将丢弃的候选白重建一次网格。
