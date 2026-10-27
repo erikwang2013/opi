@@ -40,7 +40,6 @@ pub struct MmapDictionary {
     count: usize,
     pinyin_total: usize,
     max_freq: u32,
-    #[allow(dead_code)] // Task 4 接线后移除
     word_index_start: Option<usize>,
     assoc: Option<AssocView>,
 }
@@ -295,6 +294,14 @@ impl Dictionary for MmapDictionary {
                 .expect("validate 已校验 UTF-8");
             f(pinyin, word, freq);
         }
+    }
+
+    fn words_with_prefix(&self, prefix: &str) -> Vec<(String, u32)> {
+        self.words_with_prefix_impl(prefix)
+    }
+
+    fn association_suffixes(&self, root: &str) -> Vec<(String, u32)> {
+        self.association_suffixes_impl(root)
     }
 
     fn len(&self) -> usize {

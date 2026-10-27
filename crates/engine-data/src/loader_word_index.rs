@@ -6,7 +6,6 @@
 
 use super::MmapDictionary;
 
-#[allow(dead_code)] // Task 4 把它接进 Dictionary trait 后移除
 impl MmapDictionary {
     pub(super) fn words_with_prefix_impl(&self, prefix: &str) -> Vec<(String, u32)> {
         if prefix.is_empty() || self.count == 0 {

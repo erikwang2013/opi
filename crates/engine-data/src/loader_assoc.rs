@@ -7,7 +7,6 @@
 use super::MmapDictionary;
 use crate::format_assoc::AssocView;
 
-#[allow(dead_code)] // Task 4 把它接进 Dictionary trait 后移除
 impl MmapDictionary {
     pub(super) fn association_suffixes_impl(&self, root: &str) -> Vec<(String, u32)> {
         if root.is_empty() {

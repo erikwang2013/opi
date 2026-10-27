@@ -215,6 +215,18 @@ pub trait Dictionary: Send + Sync {
     fn max_freq(&self) -> u64 {
         0
     }
+
+    /// 按词前缀返回 `(词, 权重)`；顺序由实现决定，空串必须返回空。
+    /// 默认空实现：没有词排序索引的词库（替身/导入层）不提供联想。
+    fn words_with_prefix(&self, _prefix: &str) -> Vec<(String, u32)> {
+        Vec::new()
+    }
+
+    /// 返回某根词的语义联想后缀 `(后缀, 权重)`；空串必须返回空。
+    /// 默认空实现：没有语义小表的词库不提供联想。
+    fn association_suffixes(&self, _root: &str) -> Vec<(String, u32)> {
+        Vec::new()
+    }
 }
 
 #[derive(Default)]

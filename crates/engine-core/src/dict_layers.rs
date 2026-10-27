@@ -291,6 +291,14 @@ impl Dictionary for LayeredDictionary {
         self.visit_entries_budgeted(f);
     }
 
+    fn words_with_prefix(&self, prefix: &str) -> Vec<(String, u32)> {
+        self.base.words_with_prefix(prefix)
+    }
+
+    fn association_suffixes(&self, root: &str) -> Vec<(String, u32)> {
+        self.base.association_suffixes(root)
+    }
+
     /// 前缀区间遍历：base 走 `visit_prefix`（mmap 二分区间），导入层同区间合并 ——
     /// 默认实现会全表扫描再过滤，见 `visit_prefix_budgeted` 头注。
     fn visit_prefix(&self, prefix: &str, f: &mut dyn FnMut(&str, &str, u32)) {
@@ -470,3 +478,7 @@ impl Dictionary for LayeredDictionary {
             .fold(self.base.max_freq(), u64::max)
     }
 }
+
+#[cfg(test)]
+#[path = "dict_layers_assoc_tests.rs"]
+mod assoc_tests;
