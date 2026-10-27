@@ -78,6 +78,22 @@ python3 scripts/merge_luna_kangxi.py --luna /tmp/luna_base.opid > /tmp/luna_merg
 cargo run -p opi-tools -- compile /tmp/luna_merged.tsv  data/generated/luna.opid
 cargo run -p opi-tools -- compile data/raw/fallback.tsv data/generated/fallback.opid
 
+# 联想资产（Spec §3.8）：发布产物必须带词索引与小表，否则没有联想。
+# 小表从已编好的库抽根（2–3 字 CJK 词按短语出现次数取前 5000，每条根留 3 个后缀）
+python3 scripts/gen_assoc_table.py --opid android/app/src/main/assets/luna.opid \
+    --phrases data/raw/extra_phrases.tsv \
+    --out data/generated/luna.assoc.tsv --roots 5000 --cap 3
+python3 scripts/gen_assoc_table.py --opid data/generated/trad.opid \
+    --phrases data/raw/trad_phrases.tsv \
+    --out data/generated/trad.assoc.tsv --roots 5000 --cap 3
+# 第 2 步的 luna/trad 最终编译改成带这两个开关：
+cargo run --release -p opi-tools --bin opi-tools -- compile \
+    --word-index --assoc data/generated/luna.assoc.tsv \
+    /tmp/luna_merged.tsv data/generated/luna.opid
+cargo run --release -p opi-tools --bin opi-tools -- compile \
+    --word-index --assoc data/generated/trad.assoc.tsv \
+    /tmp/trad_merged.tsv data/generated/trad.opid
+
 # 3. 校验（校验和 + 条目顺序两道）
 cargo run -p opi-tools -- verify data/generated/trad.opid
 cargo run -p opi-tools -- verify data/generated/luna.opid   # 读样本查询做排序质量人眼抽检（见下）
@@ -98,7 +114,7 @@ cargo test -p opi-tools --test trad_coverage    # GB2312 单字全覆盖门禁
 - **`cli` / `m2_integration`（自动）**：编译产物可加载、可查询、损坏可回退。
 - **排序质量（人工，必做）**：门禁只保证「有候选」，不保证「候选对」。词频改动请**手动实测**常用输入，例如简体 `fa` 应出 `发`、`nihao` 应出 `你好`，繁体模式同理。历史上 luna 的 rime 原始权重曾让 `樊/泛` 压过 `发`，靠脚本按 GB2312 常用度重排才修好 —— 这类回归只有人眼能发现。
 
-`luna.opid` 是本地重编产物、不入库（`data/generated/.gitignore`），部署副本在 `android/app/src/main/assets/`；`fallback.opid` 与 `trad.opid` 入库。
+`luna.opid` 是本地重编产物、不入库（`data/generated/.gitignore`），部署副本在 `android/app/src/main/assets/`；`fallback.opid` 与 `trad.opid` 入库。语义小表 `data/generated/{luna,trad}.assoc.tsv` 入库（`dict_crosslayer` 按它现场重编比对字节）；`--assoc` 给空文件等于不开联想（尾部 bit1 不置位），旧二进制读新库不受尾部扩展影响。
 
 ## 3. 提交与 PR
 
