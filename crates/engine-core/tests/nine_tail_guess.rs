@@ -121,17 +121,26 @@ fn whole_tail_without_any_prefix_still_yields_candidates() {
     );
 }
 
-/// 不启用面（三条，都是**判据**不是巧合）：
-/// · **14 键**：键类首字母 == 键自身 ⇒ 本档本版不开（缓冲读不出来就还是没候选）；
+/// 14 键 2026-10-27 起**同 9 键启用**：键类首字母 == 键自身（`g` 键 → `g`），
+/// 读不出来的尾巴按该字母起音出字/词。`gg` 在夹具里没有严格命中（`ge` 的第二键是
+/// `e`）⇒ 整串是尾巴 ⇒ 应出 g 一族。
+#[test]
+fn fourteen_key_tail_guess_is_enabled() {
+    let mut e14 = engine_with(dict());
+    e14.set_scheme(Scheme::Fourteen);
+    type_str(&mut e14, "gg");
+    let got = texts(&e14, 8);
+    assert!(
+        got.contains(&"个".to_string()),
+        "14 键尾巴 g 应出 g 一族：{got:?}"
+    );
+}
+
+/// 不启用面（两条，都是**判据**不是巧合）：
 /// · **含 `'`**：分词键是用户的**显式**音节边界主张，本档不越过去；
 /// · **无类键**（字母混进 9 键缓冲）：取不到首字母 ⇒ 整档不启用（与 `Scheme::matches` 同姿态）。
 #[test]
-fn tier_is_off_for_fourteen_key_separator_and_classless_keys() {
-    let mut e14 = engine_with(dict());
-    e14.set_scheme(Scheme::Fourteen);
-    type_str(&mut e14, "wqxwqx");
-    assert!(texts(&e14, 8).is_empty(), "14 键本版不启用本档");
-
+fn tier_is_off_for_separator_and_classless_keys() {
     let mut sep = engine_with(dict());
     type_str(&mut sep, "64'444");
     assert!(texts(&sep, 8).is_empty(), "含 `'` ⇒ 不启用");

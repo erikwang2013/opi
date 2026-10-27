@@ -52,6 +52,8 @@ final class KeyboardToolbar: UIView {
     private var petActive = false
     /// 当前色板，供 `applyTheme` 反复调用（切皮肤时控件已存在）。
     private var palette: KeyboardPalette = .light
+    /// iOS 26 默认皮肤：条底交回系统（见 `KeyboardLayout.nativeBackdrop`）。
+    private var nativeBackdrop = false
 
     init() {
         super.init(frame: .zero)
@@ -116,7 +118,9 @@ final class KeyboardToolbar: UIView {
             stack.topAnchor.constraint(equalTo: topAnchor),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor),
             chineseWidth,
-            petView.widthAnchor.constraint(equalToConstant: 26),
+            // 与顶部宠物条的每枚同尺寸（`PetStripBar.petSide`；用户裁决
+            // 「多形态宠物要和工具条 logo 一样大」）。
+            petView.widthAnchor.constraint(equalToConstant: PetStripBar.petSide),
             // 不锁高度：stack 是 .fill（44pt 高），再锁 28 会与 stack 的约束打架。
             // `.scaleAspectFit` 会自己按 26 宽保持比例。
         ])
@@ -230,9 +234,16 @@ final class KeyboardToolbar: UIView {
         }
     }
 
+    /// 见 `KeyboardLayout.nativeBackdrop`。
+    func setNativeBackdrop(_ on: Bool) {
+        nativeBackdrop = on
+        backgroundColor = on ? .clear : palette.toolbarBg
+        isOpaque = !on
+    }
+
     func applyTheme(_ p: KeyboardPalette) {
         palette = p
-        backgroundColor = p.toolbarBg
+        backgroundColor = nativeBackdrop ? .clear : p.toolbarBg
         tintColor = p.toolbarFg
         for b in iconButtons {
             b.tintColor = p.toolbarFg

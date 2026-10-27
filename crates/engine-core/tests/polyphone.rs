@@ -8,6 +8,7 @@
 //! 补的条目按精确匹配算、参与候选三档、去重不重复。
 
 use engine_core::Engine;
+use engine_core::Scheme;
 use engine_core::candidates::CandidateKind;
 use engine_core::dictionary::InMemoryDictionary;
 use engine_core::symbols::SymbolEngine;
@@ -112,6 +113,46 @@ fn patch_does_not_duplicate_dict_entries() {
         1,
         "不得重复：{got:?}"
     );
+}
+
+/// **9 键读数必须是拼音，不是按键数字**（2026-10-27 用户报障「9 键打 ne 显示 63」）：
+/// 补读音条目此前把输入数字串当读数写进候选，9 键左列因此出现 `6'3` 这种行。
+/// 这里用「词库只有锚点」的夹具：`66` 的候选全部来自补读音层，读数只能是 `mo`。
+#[test]
+fn nine_key_polyphone_reading_is_pinyin_not_digit_keys() {
+    let mut e = engine(&[]); // 只有量纲锚点 `miao`
+    e.set_scheme(Scheme::Nine);
+    for c in "66".chars() {
+        e.input_key(c);
+    }
+    let _ = e.candidates(8);
+    assert_eq!(e.display_buffer(), "mo", "补读音的显示读数必须是拼音");
+    let readings = e.candidate_readings();
+    assert!(!readings.is_empty(), "前置：66 应命中补读音条目");
+    assert!(
+        readings
+            .iter()
+            .all(|r| !r.chars().any(|c| c.is_ascii_digit())),
+        "左列读数不许出现数字键序：{readings:?}"
+    );
+}
+
+/// 14 键也拿得到同一张补读音表（2026-10-27）：它的按键串不是 T9 数字，原先映射只建了
+/// 9 键索引 ⇒ 打 `mo`（14 键 = `m` `o` 两枚字母键）补不出 `么`。现在按类表反查编码。
+#[test]
+fn fourteen_key_polyphone_patch_works() {
+    let mut e = engine(&[]); // 只有量纲锚点
+    e.set_scheme(Scheme::Fourteen);
+    for c in "mo".chars() {
+        e.input_key(c);
+    }
+    let got = texts(&e, 8);
+    assert!(
+        got.contains(&"么".to_string()),
+        "14 键 mo 应补出 么：{got:?}"
+    );
+    let _ = e.candidates(8);
+    assert_eq!(e.display_buffer(), "mo", "14 键显示读数也是拼音");
 }
 
 /// 表里没有的音节：一个字都不多加（层是「缺口补丁」，不是第二张词库）。

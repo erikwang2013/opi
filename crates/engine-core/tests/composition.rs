@@ -20,7 +20,7 @@ use engine_core::dictionary::InMemoryDictionary;
 use engine_core::learner::Learner;
 use engine_core::router::KeyRouter;
 use engine_core::symbols::SymbolEngine;
-use engine_core::{Engine, Mode};
+use engine_core::{Engine, Mode, Scheme};
 
 fn dict() -> InMemoryDictionary {
     let mut d = InMemoryDictionary::new();
@@ -236,6 +236,49 @@ fn composition_results_are_capped() {
     );
     assert_eq!(got.len(), 16, "组合结果上限 16 条: {got:?}");
     assert!(got.iter().all(|c| c.text.chars().count() > 1));
+}
+
+/// 14 键也走组合（2026-10-27）：`yanchunzheng` 的两字母键编码是
+/// `tabcgubzgebg`（y→t a→a n→b c→c h→g u→u …），与 9 键同一条判据。
+#[test]
+fn fourteen_key_composes_multi_char_words() {
+    let mut e = engine();
+    e.set_scheme(Scheme::Fourteen);
+    type_str(&mut e, "tabcgubzgebg");
+    let got: Vec<String> = e.candidates(64).into_iter().map(|c| c.text).collect();
+    assert!(
+        got.contains(&"厌蠢症".to_string()),
+        "14 键应组合出「厌蠢症」：{got:?}"
+    );
+}
+
+/// **9 键同一按键串的多种切法要按词频裁决**（2026-10-27）：`96242345464` 既能切成
+/// 我查 + 地精，也能切成 我爱 + 北京。旧实现「首段更长优先」+「凑够 16 条即停」会
+/// 稳定只出「我查地精」，用户看到的就是「匹配错误」。
+#[test]
+fn nine_key_picks_the_better_segmentation_among_colliding_keys() {
+    let mut d = InMemoryDictionary::new();
+    d.insert("wocha", "我查", 3_120_000_000);
+    d.insert("dijing", "地精", 3_670_000_000);
+    d.insert("woai", "我爱", 3_770_000_000);
+    d.insert("beijing", "北京", 3_790_000_000);
+    let mut e = Engine::new(
+        Box::new(d),
+        SymbolEngine::new(Vec::new(), Vec::new()),
+        false,
+    );
+    e.set_scheme(Scheme::Nine);
+    type_str(&mut e, "96242345464"); // woaibeijing
+    let got: Vec<String> = e.candidates(16).into_iter().map(|c| c.text).collect();
+    assert_eq!(
+        got.first().map(String::as_str),
+        Some("我爱北京"),
+        "两段词频更高的切法应排第一：{got:?}"
+    );
+    assert!(
+        got.contains(&"我查地精".to_string()),
+        "另一条切法仍应可见：{got:?}"
+    );
 }
 
 /// 选中组合词 = 整段消耗：不能按「第一个字的回退」只留后缀。

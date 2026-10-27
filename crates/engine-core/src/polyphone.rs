@@ -33,6 +33,8 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
+use crate::scheme::Scheme;
+
 /// `字\t读音\t词频`（生成器写的，**勿手改**；含 Unihan pin 校验 + 词库取键差集）。
 const TABLE: &str = include_str!("../../../data/raw/polyphone.tsv");
 
@@ -110,9 +112,12 @@ fn map() -> &'static HashMap<&'static str, Vec<(&'static str, u32)>> {
     })
 }
 
-/// 9 键表的行：`(字, 词频, 拼音长度)`。**起别名是给 clippy 的 `type_complexity` 让路**
-/// （发布前 `-D warnings` 实测：直写 `Vec<(&'static str, u32, usize)>` 会红）。
-type DigitHit = (&'static str, u32, usize);
+/// 9/14 键表的行：`(字, 词频, 拼音长度, 读音)`。**起别名是给 clippy 的 `type_complexity`
+/// 让路**（发布前 `-D warnings` 实测：直写四元组会红）。
+///
+/// 读音是 2026-10-27 加的：此前这一列只有长度，候选层拿**输入数字串**冒充读数，
+/// 9 键左列因此出现 `6'3` 这样的「拼音」（用户报障「打 ne 显示 63」）。
+type DigitHit = (&'static str, u32, usize, &'static str);
 
 /// 该读音在补读音表里的条目（**词库缺的才在表里** —— 生成器已做差集）。
 /// 空切片 = 这个音没有缺口（绝大多数情况）。
@@ -120,41 +125,57 @@ pub(crate) fn hits(reading: &str) -> &'static [(&'static str, u32)] {
     map().get(reading).map(Vec::as_slice).unwrap_or(&[])
 }
 
-/// 9 键（T9）那一侧：按键串 → [(字, 词频, 拼音长度)]。
+/// 9/14 键那一侧：按键串 → [(字, 词频, 拼音长度, 读音)]。
 ///
-/// 为什么另开一张表：9 键的缓冲是**数字串**（`63`），拿它去查按音节建的 `map()` 查不到。
-/// 键序与 `scheme.rs` 的 9 键类表同一条（2=abc … 9=wxyz）；拼音长度照样带出来 ——
-/// 9/14 键那条路的「精确」判据是**键长相等**（见 `candidates_scheme.rs` 头注），
-/// 而数字串长度与字母串长度在这些音节上 1:1（一位数字对一位字母）。
-pub(crate) fn digit_hits(digits: &str) -> &'static [DigitHit] {
-    static D: OnceLock<HashMap<&'static str, Vec<DigitHit>>> = OnceLock::new();
-    let d = D.get_or_init(|| {
-        let mut m: HashMap<&'static str, Vec<(&'static str, u32, usize)>> = HashMap::new();
+/// 为什么另开一张表：9/14 键的缓冲是**按键串**（9 键 `63`、14 键 `mo`），拿它去查
+/// 按音节建的 `map()` 查不到。键序由 `Scheme::key_for_letter` 从**同一张类表**反查
+/// （9 键 2=abc … 9=wxyz；14 键 `b`={b,n} …）—— 9 键原先只建了 T9 索引，14 键因此
+/// 拿不到「么/mo」这类缺口补丁（2026-10-27 补）。拼音长度照样带出来：9/14 键那条路
+/// 的「精确」判据是**键长相等**（见 `candidates_scheme.rs` 头注），编码后长度 1:1。
+pub(crate) fn hits_for(scheme: Scheme, keys: &str) -> &'static [DigitHit] {
+    fn build(scheme: Scheme) -> HashMap<&'static str, Vec<DigitHit>> {
+        let mut m: HashMap<&'static str, Vec<DigitHit>> = HashMap::new();
         for (reading, items) in map() {
-            let digits: String = reading
+            let Some(encoded) = reading
                 .chars()
-                .map(|c| match c {
-                    'a'..='c' => '2',
-                    'd'..='f' => '3',
-                    'g'..='i' => '4',
-                    'j'..='l' => '5',
-                    'm'..='o' => '6',
-                    'p'..='s' => '7',
-                    't'..='v' => '8',
-                    _ => '9',
-                })
-                .collect();
+                .map(|c| scheme.key_for_letter(c))
+                .collect::<Option<String>>()
+            else {
+                continue;
+            };
             // 借用泄漏**每个读音一次**（最多 410 次，进程内只建一次表）——
             // 键要活成 'static，而它由运行期拼出来（与 `map()` 同一条「一次解析、
             // 终身只读」的账）。
-            let key: &'static str = Box::leak(digits.into_boxed_str());
+            let key: &'static str = Box::leak(encoded.into_boxed_str());
             for (ch, freq) in items {
-                m.entry(key)
-                    .or_default()
-                    .push((ch, *freq, reading.chars().count()));
+                m.entry(key).or_default().push((
+                    ch,
+                    *freq,
+                    reading.chars().count(),
+                    // `reading` 是 `&&'static str`（map() 的键），解一层就是表里的
+                    // 静态切片 —— 不额外分配。
+                    *reading,
+                ));
             }
         }
         m
-    });
-    d.get(digits).map(Vec::as_slice).unwrap_or(&[])
+    }
+    match scheme {
+        Scheme::Nine => {
+            static NINE: OnceLock<HashMap<&'static str, Vec<DigitHit>>> = OnceLock::new();
+            NINE.get_or_init(|| build(Scheme::Nine))
+                .get(keys)
+                .map(Vec::as_slice)
+                .unwrap_or(&[])
+        }
+        Scheme::Fourteen => {
+            static FOURTEEN: OnceLock<HashMap<&'static str, Vec<DigitHit>>> = OnceLock::new();
+            FOURTEEN
+                .get_or_init(|| build(Scheme::Fourteen))
+                .get(keys)
+                .map(Vec::as_slice)
+                .unwrap_or(&[])
+        }
+        _ => &[],
+    }
 }

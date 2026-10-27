@@ -267,8 +267,9 @@ impl Api {
         self.router.engine().buffer_is_carried()
     }
 
-    /// 9 键方案的**拼音读数**（显示用；见 `Engine::display_buffer`，带分词：
-    /// `ni'hao`）。非 9 键与 [`Self::buffer`] 逐字节相同。
+    /// 9/14 键方案的**拼音读数**（显示用；见 `Engine::display_buffer`，带分词：
+    /// `ni'hao`）。14 键的缓冲是按键符号（`bu` = n+i），也取读数。非 9/14 键与
+    /// [`Self::buffer`] 逐字节相同。
     ///
     /// ⚠️ **两个出口别合并**（2026-10-09 血泪）：本轮曾把读数直接塞进 `buffer()`
     /// 出口，而宿主（安卓）拿 `buffer()` 当**行为判定**（回退/空格/回车的「缓冲非空？」

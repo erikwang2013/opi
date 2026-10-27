@@ -301,118 +301,35 @@ enum KeyboardTheme {
     }
 }
 
-/// 本端偏好（UserDefaults）。Android 用 `ImePreferences`；本端没有设置 App，
-/// 但扩展自己的 UserDefaults 在 `RequestsOpenAccess=false` 下也能读写 ——
-/// 它只是扩展容器内的持久化，不涉及宿主数据。
-///
-/// 持久化皮肤、键盘模式与设置面板里的引擎开关（2026-10-21）。输入模式另见
-/// `InputModePreference.swift`（缺省 9 键、记住上次选择，对齐 Android `ImePreferences`）。
-enum KeyboardPreferences {
-    private static let defaults = UserDefaults.standard
-    private static let skinKey = "opi.skin"
-    private static let oneHandKey = "opi.mode.oneHand"
-    private static let darkKey = "opi.mode.dark"
-    private static let elderKey = "opi.mode.elder"
-    private static let floatingKey = "opi.mode.floating"
-    private static let gameKey = "opi.mode.game"
-    private static let learnKey = "opi.setting.learn"
-    private static let fuzzyKey = "opi.setting.fuzzy"
-    private static let fuzzyPairsKey = "opi.setting.fuzzyPairs"
-    private static let jianpinKey = "opi.setting.jianpin"
-    private static let correctionKey = "opi.setting.correction"
-    private static let chinesePunctKey = "opi.setting.chinesePunct"
-    private static let shuangpinKey = "opi.setting.shuangpinLayout"
-    private static let showOwnKey = "opi.setting.showOwn"
-    private static let wubiStyleKey = "opi.setting.wubiStyle"
-    private static let wubiEntryKey = "opi.setting.wubiMixedEntry"
-    private static let wubiLimitKey = "opi.setting.wubiCandidateLimit"
-    private static let wubiReturnKey = "opi.setting.wubiReturn"
-    private static let wubiAutoCommitKey = "opi.setting.wubiAutoCommit"
-
-    /// `UserDefaults.bool` 对缺失键返回 false；缺省为 true 的项必须区分
-    /// 「没设置过」与「用户关了」。
-    private static func readBool(_ key: String, default def: Bool) -> Bool {
-        defaults.object(forKey: key) == nil ? def : defaults.bool(forKey: key)
-    }
-
-    static var skin: SkinOption {
-        get { SkinOption(rawValue: defaults.string(forKey: skinKey) ?? "") ?? .follow }
-        set { defaults.set(newValue.rawValue, forKey: skinKey) }
-    }
-
-    static var modes: KeyboardModes {
-        get {
-            KeyboardModes(
-                floating: defaults.bool(forKey: floatingKey),
-                game: defaults.bool(forKey: gameKey),
-                oneHand: KeyboardModes.OneHand(
-                    rawValue: defaults.string(forKey: oneHandKey) ?? ""
-                ) ?? .off,
-                dark: defaults.bool(forKey: darkKey),
-                elder: defaults.bool(forKey: elderKey)
-            )
-        }
-        set {
-            defaults.set(newValue.floating, forKey: floatingKey)
-            defaults.set(newValue.game, forKey: gameKey)
-            defaults.set(newValue.oneHand.rawValue, forKey: oneHandKey)
-            defaults.set(newValue.dark, forKey: darkKey)
-            defaults.set(newValue.elder, forKey: elderKey)
-        }
-    }
-
-    /// 设置面板的引擎开关（缺省值与 Android `ImePreferences` 对齐）。
-    static var settings: KeyboardSettings {
-        get {
-            let layout = defaults.string(forKey: shuangpinKey) ?? ""
-            let style = defaults.integer(forKey: wubiStyleKey)
-            let entry = defaults.integer(forKey: wubiEntryKey)
-            let limit = defaults.integer(forKey: wubiLimitKey)
-            let ret = defaults.integer(forKey: wubiReturnKey)
-            return KeyboardSettings(
-                learn: readBool(learnKey, default: true),
-                fuzzy: readBool(fuzzyKey, default: false),
-                fuzzyPairs: defaults.string(forKey: fuzzyPairsKey) ?? "",
-                jianpin: readBool(jianpinKey, default: true),
-                correction: readBool(correctionKey, default: true),
-                chinesePunct: readBool(chinesePunctKey, default: true),
-                shuangpinLayout: SHUANGPIN_LAYOUT_NAMES.contains(layout)
-                    ? layout : SHUANGPIN_LAYOUT_NAMES[0],
-                wubiStyle: (0...1).contains(style) ? style : 0,
-                wubiMixedEntry: (0...1).contains(entry) ? entry : 0,
-                wubiCandidateLimit: WUBI_CANDIDATE_LIMITS.contains(limit)
-                    ? limit : WUBI_CANDIDATE_LIMIT_DEFAULT,
-                wubiReturn: (0...1).contains(ret) ? ret : 0,
-                wubiAutoCommit: readBool(wubiAutoCommitKey, default: true),
-                showOwn: readBool(showOwnKey, default: false)
-            )
-        }
-        set {
-            defaults.set(newValue.learn, forKey: learnKey)
-            defaults.set(newValue.fuzzy, forKey: fuzzyKey)
-            defaults.set(newValue.fuzzyPairs, forKey: fuzzyPairsKey)
-            defaults.set(newValue.jianpin, forKey: jianpinKey)
-            defaults.set(newValue.correction, forKey: correctionKey)
-            defaults.set(newValue.chinesePunct, forKey: chinesePunctKey)
-            defaults.set(newValue.shuangpinLayout, forKey: shuangpinKey)
-            defaults.set(newValue.wubiStyle, forKey: wubiStyleKey)
-            defaults.set(newValue.wubiMixedEntry, forKey: wubiEntryKey)
-            defaults.set(newValue.wubiCandidateLimit, forKey: wubiLimitKey)
-            defaults.set(newValue.wubiReturn, forKey: wubiReturnKey)
-            defaults.set(newValue.wubiAutoCommit, forKey: wubiAutoCommitKey)
-            defaults.set(newValue.showOwn, forKey: showOwnKey)
-        }
-    }
-}
-
 extension KeyboardViewController {
 
     /// 换肤 + 长辈字号 + 单手（启动与皮肤/键盘模式面板改完后调）。
     func applyTheme() {
         layout.setKeyboardModes(modes, traditional: engine.mode() == .traditional)
         let palette = KeyboardTheme.palette(skin: skin, modes: modes)
-        // 根视图铺主题底色：顶部圆角附近不再是系统灰的弧形（2026-10-25 报障）。
-        view.backgroundColor = palette.toolbarBg
+        // iOS 26 的系统键盘容器在扩展窗口**上方**画一条圆角背景（灰弧），扩展无法
+        // 覆盖（Apple 论坛与第三方输入法同报；2026-10-25 只铺根视图底色没有生效）。
+        // 默认「不改动」皮肤把根视图与最上面那行交回系统，系统背景透上来与圆角
+        // 连成一片；自定义皮肤保留自身底色（那条弧仍在，是系统限制）。
+        var native = false
+        // 只在浅色外观下交回系统：`.follow` 的色板仍是浅色（与 Android 一致），
+        // 深色系统背景 + 浅色键 / 深色图标会失去对比度；深色下保留主题底色，
+        // 灰弧仍在（系统限制，见上）。视图未进窗口时 traitCollection 可能是
+        // `.unspecified`，回退到进程级当前外观。
+        let style = traitCollection.userInterfaceStyle == .unspecified
+            ? UITraitCollection.current.userInterfaceStyle
+            : traitCollection.userInterfaceStyle
+        // `.light` 与 `.follow` 是同一份浅色板（`SkinOption.palette`），一并交回
+        // 系统；其余皮肤有自己的底色，保持主题。暗光/长辈模式会换成深色或高对比
+        // 色板，顶部图标在系统浅色背景上会失去对比度 —— 一并排除。
+        if #available(iOS 26.0, *), skin == .follow || skin == .light,
+            style == .light, !modes.dark, !modes.elder
+        {
+            native = true
+        }
+        layout.nativeBackdrop = native
+        view.backgroundColor = native ? .clear : palette.toolbarBg
+        view.isOpaque = !native
         layout.applyTheme(palette, fontScale: effectiveFontScale)
     }
 

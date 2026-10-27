@@ -181,9 +181,10 @@ export function buffer(): string {
 }
 
 /**
- * **显示用**缓冲（拼音行/宿主预编辑的文本）：9 键是带分词的读音（`ni'hao`），
- * 26/14 键与 `buffer()` 相同。⚠️ 9 键无候选时为空串 —— 行为判定（退格/空格/回车）
- * 仍用 `buffer()`，否则会出现「删的是宿主文字、引擎缓冲没退」（见 cpp/opi_ffi.h）。
+ * **显示用**缓冲（拼音行/宿主预编辑的文本）：9/14 键是带分词的读音（9 键 `ni'hao`、
+ * 14 键 `bu` → `ni`，2026-10-27 起 14 键不再直接显示按键符号）；26 键与 `buffer()`
+ * 相同。⚠️ 9 键无候选时为空串 —— 行为判定（退格/空格/回车）仍用 `buffer()`，
+ * 否则会出现「删的是宿主文字、引擎缓冲没退」（见 cpp/opi_ffi.h）。
  */
 export function displayBuffer(): string {
   return opiime.displayBuffer();

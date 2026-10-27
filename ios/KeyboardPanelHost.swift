@@ -291,15 +291,22 @@ extension KeyboardLayout {
     func applyTheme(_ p: KeyboardPalette, fontScale: CGFloat) {
         palette = p
         self.fontScale = fontScale
-        backgroundColor = p.toolbarBg
+        // 默认皮肤在 iOS 26 上交回系统背景（见 `nativeBackdrop`）：根视图与最上面
+        // 那行透明，系统键盘容器的圆角背景从顶上透下来，不再出现突兀的灰弧。
+        backgroundColor = nativeBackdrop ? .clear : p.toolbarBg
+        isOpaque = !nativeBackdrop
         // 深色皮肤下让系统控件（旧面板的 label/背景）也切深色 —— 否则候选/表情页
         // 会是「深底黑字」。本端旧面板没有逐控件接色板，这是最小的补救。
         overrideUserInterfaceStyle = p.isDark ? .dark : .light
-        candidateBar.backgroundColor = p.barBg
+        candidateBar.backgroundColor = nativeBackdrop ? .clear : p.barBg
+        candidateBar.isOpaque = !nativeBackdrop
         keyArea.backgroundColor = p.barBg
+        composingBar.setNativeBackdrop(nativeBackdrop)
         composingBar.applyTheme(p, fontScale: fontScale)
+        petStrip.setNativeBackdrop(nativeBackdrop)
         petStrip.applyTheme(p, fontScale: fontScale)
         toolbar.applyTheme(p)
+        toolbar.setNativeBackdrop(nativeBackdrop)
         skinPanel.applyTheme(p)
         keyboardModePanel.applyTheme(p)
         aboutPanel.applyTheme(p)

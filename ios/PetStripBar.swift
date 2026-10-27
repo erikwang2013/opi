@@ -21,14 +21,16 @@ final class PetStripBar: UIView {
     private static let hold: TimeInterval = 2.8
     /// 同时最多显示几枚：条高 38pt，8 枚已足够密；也限制解码张数。
     private static let maxForms = 8
+    /// 单枚宠物的边长 = 工具条 logo 的 26pt（2026-10-27 用户裁决「多形态宠物太大，
+    /// 要和工具条 logo 一样大」）。两处共用一个常量，别各写一个字面量。
+    static let petSide: CGFloat = 26
     /// 固定 8 个格位，只换图/显隐 —— 不在每轮里增删 arrangedSubviews
     /// （2026-10-23 真机 .ips 的教训：UIStackView 里频繁拆子视图会踩 NSISEngine）。
     private let cells: [UIImageView] = (0..<PetStripBar.maxForms).map { _ in
         let v = UIImageView()
-        // 2026-10-25：`scaleAspectFill` + 等高裁切 —— 多枚时横向铺满、不留大空隙；
-        // 贴纸 PNG 四周有 ~11% 透明边，裁掉的正是透明区，不会切到宠物本体。
-        v.contentMode = .scaleAspectFill
-        v.clipsToBounds = true
+        // 2026-10-27：`scaleAspectFit` —— 每枚按 26pt 等比缩放、不裁切；多枚时
+        // 总宽（8×26 + 间距）仍远小于最窄的 320pt 键盘，不需要铺满。
+        v.contentMode = .scaleAspectFit
         v.translatesAutoresizingMaskIntoConstraints = false
         return v
     }
@@ -38,6 +40,8 @@ final class PetStripBar: UIView {
     private var active = false
     private var visibleCount = 0
     private var palette: KeyboardPalette = .light
+    /// iOS 26 默认皮肤：条底交回系统（见 `KeyboardLayout.nativeBackdrop`）。
+    private var nativeBackdrop = false
     /// sticker 名 → 已解码 PNG（避免每 2.8s 重新 base64 解码同一张）。
     private var cache: [String: UIImage] = [:]
 
@@ -88,7 +92,14 @@ final class PetStripBar: UIView {
 
     func applyTheme(_ p: KeyboardPalette, fontScale: CGFloat) {
         palette = p
-        backgroundColor = p.barBg
+        backgroundColor = nativeBackdrop ? .clear : p.barBg
+    }
+
+    /// 见 `KeyboardLayout.nativeBackdrop`。
+    func setNativeBackdrop(_ on: Bool) {
+        nativeBackdrop = on
+        backgroundColor = on ? .clear : palette.barBg
+        isOpaque = !on
     }
 
     private func startTimer() {
@@ -111,15 +122,15 @@ final class PetStripBar: UIView {
         applyCellWidths()
     }
 
-    /// 枚数 → 格宽：`min(条高 × 1.2, 可用宽 / 枚数 - 间距)`。8 枚时约等于条宽/8，
-    /// 横向铺满；1–2 枚时被 1.2×条高封顶，居中显示而不是拉成宽条。
+    /// 每枚固定 26pt（工具条 logo 同尺寸）；数量多到放不下时才按可用宽均分
+    /// （320pt 下 8 枚 = 222pt，实际不会触发）。整组居中，不拉成宽条。
     private func applyCellWidths() {
         let n = max(1, visibleCount)
         guard !cellWidths.isEmpty else { return }
         let available = bounds.width - 12
         let spacing = CGFloat(n - 1) * 2
         let share = (available - spacing) / CGFloat(n)
-        let width = max(0, min(bounds.height * 1.2, share))
+        let width = max(0, min(PetStripBar.petSide, share))
         for c in cellWidths where abs(c.constant - width) > 0.5 {
             c.constant = width
         }

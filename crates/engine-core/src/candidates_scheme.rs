@@ -31,7 +31,8 @@ use crate::learner::Learner;
 /// `display_buffer` 取第一条（主流输入法 9 键候选栏左侧那格同款），
 /// `candidate_readings` 读同一份缓存并按读音**去重保序**（2026-10-12 用户裁决
 /// 「左列去重」；逐条对应只到本函数返回值与引擎内部缓存为止，不再是出口契约）。
-/// 没有候选时两条都为空。14 键同路返回（它的缓冲本来就是字母串，读数字段无副作用）。
+/// 没有候选时两条都为空。14 键同路返回；它的缓冲是**按键符号**（`b` = n/b），
+/// 显示层同样取读数（2026-10-27 起，见 `display_buffer`）。
 // 9 个参数（7 个 + `prefer_simplified` + `tail_guess`）踩了 clippy 的默认上限。**有意放行**：
 // 这两个开关必须在**本函数内部的截断之前**生效（截断后再分区 = 被截掉的简体候选回不来），
 // 所以只能从参数进来；而把它们收进 struct 会牵动唯一调用方之外的测试与全键盘那条路
@@ -97,7 +98,7 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
     };
     let mut merged = scan(input);
     // ── 多音字补读音（2026-10-15「单独打『么』没有候选」那一类）────────────────
-    // 9 键的缓冲是数字串，走 `digit_hits`（按音节建的 `hits` 查不到数字串）。
+    // 9/14 键的缓冲是按键串，走 `hits_for`（按音节建的 `hits` 查不到按键串）。
     // 精确性按**键长相等**判 —— 与全键盘那条路同义（本文件头注的既有契约）；
     // 表里只有词库真缺的条目 ⇒ 去重交给下面的 `seen`。
     let input_len = input.len();
@@ -106,7 +107,7 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
     // 2026-10-16 裁决「读音恰等」的一部分）—— 钉 `me` 时 `那`（缺的读音是 ne）出局、
     // `幺/末`（缺的读音恰是 me）保留，都靠这条。多音节钉（如 `ni'hao`）不在表里 ⇒ 全不出。
     let pin_hits = pin.map(crate::polyphone::hits);
-    for (word, freq, plen) in crate::polyphone::digit_hits(input)
+    for (word, freq, plen, reading) in crate::polyphone::hits_for(scheme, input)
         .iter()
         .filter(|_| crate::polyphone::applies(dict_max))
     {
@@ -128,12 +129,10 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
                     0
                 }),
             },
-            // 读音串不进这条出口（`readings` 是给左列的显示读数）：补读音的字没有
-            // 「逐条读数」可言，按**输入本身的键序**给它一条 —— 9 键左列显示的仍是
-            // 「还能接哪些键」那套语义，不是新造一个读音。
-            // **钉住时除外**：放行名单已保证它们的读音就是钉住那个 ⇒ 报钉住读音
-            // （照旧写输入键序的话，钉住后左列会多出一行「63」这种数字串）。
-            pin.unwrap_or(input).to_string(),
+            // 读数取**这条补读音自己的拼音**（2026-10-27 订正）：此前写输入键序，
+            // 9 键左列会多出一行 `6'3` 这种数字串（用户报障「打 ne 显示 63」）。
+            // 钉住时仍报钉住读音：放行名单已保证它就是这一条。
+            pin.unwrap_or(*reading).to_string(),
             Some(Meta {
                 pinyin_len: *plen,
                 exact,
@@ -154,14 +153,25 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
     let exact_hit = merged
         .iter()
         .any(|(_, _, meta)| meta.as_ref().is_some_and(|m| m.exact));
-    // ── 9 键多字组合（2026-10-23）────────────────────────────────────────────
-    // 与全键盘 `composition::merge` 同一条闸门：整串没有精确命中、没有更长的多字
-    // 前缀词、没有钉读音（钉读音 = 用户只要那个读音的字/词）才做数字空间的整串分段。
-    // 命中即**跳过首字回退** —— 组合是「整句都拼得出来」，回退是「先打第一个字」，
-    // 后者更粗（同 composition.rs 头注）。
-    let composed = if !exact_hit
-        && pin.is_none()
+    // ── 多字组合（2026-10-23；9/14 键共用）──────────────────────────────────
+    // 与全键盘 `composition::merge` 的差别只有一条（2026-10-27）：**不因「有精确
+    // 命中」而停手**。9/14 键的「精确」只表示**键长相等**，同一个按键串常有多种
+    // 同长度读音；拿它当闸门会把整句组合挡掉，用户看到的就是「匹配错误/不完整」。
+    // 组合结果与精确词一起排序，由分数裁决（组合按段平均分，见 composition_scheme）；
+    // 仍保留「更长的多字前缀词」闸门：那是更具体的直接匹配（同全键盘）。
+    let long_prefix = merged.iter().any(|(c, p, meta)| {
+        meta.as_ref().is_some_and(|m| m.pinyin_len > input.len())
+            && c.text.chars().count() > 1
+            && covers_full_syllables(p, input.len())
+    });
+    let composed = if pin.is_none()
         && !input.contains('\'')
+        // 组合是「2 段、每段 ≥2 键、至少一个多音节段」：真库的多音节键通常最短
+        // 5 键（`zhege`）⇒ ≥7 键；这里按 6 键早退留一档余量（防 3 键的 `nia`
+        // 这类两音节键）。精确命中时按这条早退，保住命中态「主扫一趟」的延迟门禁
+        // （2026-10-27 加精确命中组合后实测：`nihao` 会白扫 3 次）；无精确命中时
+        // 维持既有口径（回退档的记账用例盯着它）。
+        && (!exact_hit || input.len() >= 6)
         && !merged.iter().any(|(c, _, meta)| {
             meta.as_ref().is_some_and(|m| m.pinyin_len > input.len()) && c.text.chars().count() > 1
         }) {
@@ -170,7 +180,10 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
         Vec::new()
     };
     let mut tail: &str = "";
-    if !exact_hit && composed.is_empty() {
+    // `long_prefix`：输入是「≥3 个完整音节 + 更长词」的前缀（26 键
+    // `segment_fallback` 判据 3b 的镜像）。此时整档**保留前缀扩展候选**，
+    // 不许被首字回退替换 —— 否则 `shengrikuai` 只剩「生」，而 26 键给「生日快乐」。
+    if !exact_hit && composed.is_empty() && !long_prefix {
         match crate::scheme::scheme_fallback_len(dict, input, scheme, pin) {
             // k == 整串：`scan` 的结果与上面那次逐字相同（2026-10-25 首击尖峰 ——
             // 单键 9 的 w/x/y/z 四段全扫一遍已够贵，重复扫把 9 键首击翻倍）。
@@ -253,6 +266,19 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
     merged.into_iter().map(|(c, p, _)| (c, p)).unzip()
 }
 
+/// `pinyin` 的前 `keys` 个字母是不是**若干个完整音节**（≥3 个、且切分拼回原串）。
+///
+/// 26 键 `segment_fallback` 判据 3b 的镜像：只有「输入恰好覆盖 ≥3 个完整音节、
+/// 后面还有更长的词」才算「用户打的是一个长词的前缀」，此时不许首字回退。
+/// 半截音节（`zhongguor` 的 `r`）与 1–2 音节输入不成立（逐字确认仍要能用）。
+fn covers_full_syllables(pinyin: &str, keys: usize) -> bool {
+    let Some(head) = pinyin.get(..keys) else {
+        return false;
+    };
+    let segs = crate::pinyin::segment(head);
+    segs.len() >= 3 && segs.iter().all(|s| crate::pinyin::is_syllable(s)) && segs.concat() == head
+}
+
 /// 前段（整段当一个音）出的**单字**上限。
 const TAIL_CHARS: usize = 4;
 /// 前段出的**词**上限。
@@ -304,10 +330,14 @@ fn tail_guess_hits<D: Dictionary + ?Sized>(
     boost: u64,
     seen: &mut std::collections::HashSet<String>,
 ) -> Vec<TailHit> {
-    // ⚠️ **本版只给 9 键**：14 键的键类首字母 == 键自身（`'b' => ['b','n']`）⇒ 本档退化
-    // 成「把缓冲当字面字母串做前缀匹配」，与既有的 14 键回退重叠且语义重复。一行可开
-    // （把这里改成 `Nine | Fourteen` 并补 14 键用例），但那是另一次裁决。
-    if scheme != crate::scheme::Scheme::Nine {
+    // 9/14 键同一条（2026-10-27 开 14 键）：14 键的键类首字母 == 键自身
+    // （`'b' => ['b','n']` 的首字母是 `b`）⇒ 本档对它是「按键面字母起音」，
+    // 与 9 键「按键面最前字母起音」同语义。用户报障「14 键匹配不完整」的
+    // 兜底面因此与 9 键对齐。
+    if !matches!(
+        scheme,
+        crate::scheme::Scheme::Nine | crate::scheme::Scheme::Fourteen
+    ) {
         return Vec::new();
     }
     let heads: Option<Vec<char>> = tail.chars().map(|k| scheme.key_leading_letter(k)).collect();

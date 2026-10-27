@@ -1,30 +1,34 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! **9 键多字词组合识别**（2026-10-23）—— `composition.rs` 的数字空间镜像。
+//! **9/14 键多字词组合识别**（2026-10-23；14 键 2026-10-27 开）——
+//! `composition.rs` 的按键空间镜像。
 //!
-//! 全键盘那条把**拼音字母串**切成词库精确键；9 键的缓冲是**按键串**
-//! （`926248694364`），一个键覆盖 3–4 个字母，切法不能只看缓冲 —— 只能问词库：
-//! 「这段按键有没有**恰好等长**的键？」（[`Dictionary::scheme_entries`] 的 n = 0 只回
-//! 精确条目）。每段条目带自己的拼音读数（9 键拼音行要用），因此段内音节数、真实
-//! 读音都按**条目**算，不按按键串算。
+//! 全键盘那条把**拼音字母串**切成词库精确键；9/14 键的缓冲是**按键串**
+//! （9 键 `926248694364`、14 键 `bu…`），一个键覆盖多个字母，切法不能只看缓冲 ——
+//! 只能问词库：「这段按键有没有**恰好等长**的键？」（[`Dictionary::scheme_entries`]
+//! 的 n = 0 只回精确条目）。每段条目带自己的拼音读数（拼音行要用），因此段内音节数、
+//! 真实读音都按**条目**算，不按按键串算。
 //!
 //! ## 判据（与 `composition.rs` 逐条对齐）
 //!
-//! 1. 输入是纯 9 键按键（`2`–`9`）、≤ `MAX_BUFFER`；
+//! 1. 输入是纯按键串（9 键 `2`–`9`；14 键 `q e t u o / a d g j l / z c b m`）、
+//!    ≤ `MAX_BUFFER`；
 //! 2. 整串切成 2..=`MAX_CHUNKS` 段、每段 ≥2 键、每段都是词库精确键（等长）；
 //! 3. 每段条目的拼音能整切成音节、≤ `MAX_CHUNK_SYLLABLES` 个；整句**至少一个
 //!    多音节条目**、总音节 ≥3 —— 否则就是「随便几个同音字凑一串」，与全键盘同一条；
-//! 4. 段数从少到多、同段数首段更长优先、同切法按各段词频和降序；第一档有结果即停；
-//! 5. 用户点名的新词复用 `composition::PINNED`（拼音键按 9 键编码对表）：只在算法
-//!    已经产出时置顶，不造词；
-//! 6. 查询预算 [`MAX_QUERIES`]：每次调用最多这么多次 `scheme_entries`，超了整档放弃
-//!    （回既有回退语义）—— 短按键串的精确条目很多（真库 `926` 有 1177 条），预算
-//!    既是延迟上限，也是「垃圾长串不做无谓枚举」的闸门。
+//! 4. 段数从少到多，第一档有结果即停；同段数内按**各段词频的平均分**降序
+//!    （同分再按「首段更长」、再按文本，保持确定性）；
+//! 5. 用户点名的新词复用 `composition::PINNED`（拼音键按当前方案编码对表）：只在
+//!    算法已经产出时置顶，不造词；
+//! 6. 查询预算 [`MAX_QUERIES`]：每次调用最多这么多次 `scheme_entries`，超了**停止
+//!    枚举**；已经凑出的完整切法保留（一条都没有才整档放弃，回既有回退语义）——
+//!    短按键串的精确条目很多（真库 `926` 有 1177 条），预算既是延迟上限，也是
+//!    「垃圾长串不做无谓枚举」的闸门。
 //!
 //! ## 成本（2026-10-23 luna 实测，桌面 release）
 //!
-//! 单次 `scheme_entries(段, Nine, None, 0)` 亚毫秒级（段越短条目越多，`926` 约
+//! 单次 `scheme_entries(段, scheme, None, 0)` 亚毫秒级（段越短条目越多，`926` 约
 //! 0.4ms）；两个报障串的 2 段枚举各 18 次查询。整档引擎耗时见交付说明 —— 上限
 //! 由 [`MAX_QUERIES`] 钉住，不随输入长度增长。
 
@@ -39,9 +43,23 @@ use crate::learner::Learner;
 use crate::scheme::Scheme;
 
 /// 一次调用最多几次词库查询（见头注判据 6）。
-pub(crate) const MAX_QUERIES: usize = 24;
+///
+/// 2026-10-27：24 → 64 → 128。9/14 键要枚举**所有**切法（旧「凑够 16 条即停」会
+/// 漏掉用户本意的切法）。2 段全枚举要 `2(n−3)` 次（`MAX_BUFFER` 32 键 ⇒ 58），
+/// 3 段在 19 键的整句上还要几十次；64 会在找到本意前耗尽
+/// （`tashiwodehaopengyou` 退化成单字）。128 仍是有界预算，且只在长串上才会用满。
+pub(crate) const MAX_QUERIES: usize = 128;
 
-/// 组合候选：文本 + 各段拼音的拼接读数（长度 == 输入键数）+ 最终分（含精确加成）。
+/// **非末段**最多跨几个键（2026-10-27）。末段不限。
+///
+/// 词库词按拼音 12 键已覆盖到 4 字词（`yiluxiangbei` = 12）。更长的非末段放进
+/// 长度枚举会让切法数爆炸（19 键：17 种首段长度，每种再 × 次段枚举），预算全花在
+/// 长前缀上，本意（`tashi` = 5 键）还没轮到就耗尽。封顶后长句由 3 段拼出
+/// （`中华 + 人民 + 共和国`），末段不限。
+const MAX_CHUNK_KEYS: usize = 12;
+
+/// 组合候选：文本 + 各段拼音的拼接读数（长度 == 输入键数）+ 最终分
+/// （**各段词频的平均值**，与单词同一量纲；见 `candidates` 的返回值）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Hit {
     pub text: String,
@@ -75,9 +93,11 @@ struct Cache<'a, D: Dictionary + ?Sized> {
     dict: &'a D,
     learner: &'a Learner,
     boost: u64,
+    /// 本次调用的方案（9/14 键）：段查询按它展开按键类（2026-10-27 起 14 键也走本档）。
+    scheme: Scheme,
     map: HashMap<&'a str, Option<Rc<Chunk>>>,
     queries: usize,
-    /// 预算用尽：整档放弃（见头注判据 6）。
+    /// 预算用尽：停止枚举；已凑出的完整切法保留，一条都没有才整档放弃（判据 6）。
     exhausted: bool,
 }
 
@@ -92,8 +112,10 @@ pub(crate) fn candidates<D: Dictionary + ?Sized>(
     scheme: Scheme,
     input: &str,
 ) -> Vec<Hit> {
-    // 本版只给 9 键（14 键/全键盘的缓冲不是数字串，见头注）；14 键要开得另立裁决。
-    if scheme != Scheme::Nine
+    // 9 键（数字串）与 14 键（两字母键的规范符号，如 `bu` = n+i）同一条：两者的
+    // 缓冲都是**按键符号**，一个键覆盖多个字母，切法只能问词库。14 键不是数字串，
+    // 但 `key_class` 的类展开与「等长精确键」判据逐字同义（2026-10-27 开）。
+    if !matches!(scheme, Scheme::Nine | Scheme::Fourteen)
         || input.is_empty()
         || input.len() > MAX_BUFFER
         || !input.chars().all(|c| scheme.key_class(c).is_some())
@@ -105,6 +127,7 @@ pub(crate) fn candidates<D: Dictionary + ?Sized>(
         dict,
         learner,
         boost,
+        scheme,
         map: HashMap::new(),
         queries: 0,
         exhausted: false,
@@ -115,13 +138,14 @@ pub(crate) fn candidates<D: Dictionary + ?Sized>(
         if n < 2 * chunk_count {
             break;
         }
-        // 同段数内：首段更长的切法在前（`yanchun+zheng` 先于 `yan+chunzheng`）；
-        // 同切法内按分。同分按文本升序 —— 与候选层其它地方同一条确定性规则。
+        // **按分排序**（2026-10-27 改）：9/14 键一个按键串有多种读音/切法，
+        // 「首段更长」只对全键盘的确定性拼音成立；对按键串它会稳定选出更长的
+        // **错误**切法（`96242345464` →「我查 + 地精」压过「我爱 + 北京」）。
+        // 同分时仍用长度签名（首段更长）再按文本，保持确定性。
         //
-        // 枚举次序 = 各段长度向量（排序签名）降序，**凑够 `MAX_RESULTS` 即停**：首选
-        // 切法通常就有 ≥16 条组合，此时结果与「全枚举后排序截断」逐条相同；只有首选
-        // 切法不足 16 条才会少几条尾部（已返回的次序一字不变）。省下的是尾部切点的
-        // 词库查询 —— 2 段枚举从 2(n−3) 次降到命中切点为止（真库 12 键：18 → 8）。
+        // **枚举所有切法**（不再「凑够 16 条即停」）：`combinations` 的末层不截，
+        // 一次切法就可能吐满 16+ 条，旧停止条件在第一档切法就触发，后面的切法
+        // （往往才是用户本意）根本没被查询。查询次数仍由 [`MAX_QUERIES`] 封顶。
         let mut all: Vec<(Vec<usize>, u64, String, String)> = Vec::new();
         let mut path = Vec::new();
         walk(input, &mut cache, 0, chunk_count, &mut path, &mut |path| {
@@ -129,27 +153,32 @@ pub(crate) fn candidates<D: Dictionary + ?Sized>(
             for (score, text, pinyin) in combinations(path) {
                 all.push((sig.clone(), score, text, pinyin));
             }
-            all.len() < MAX_RESULTS
+            true
         });
-        if cache.exhausted {
+        // 预算用尽：**保留已经凑出的完整切法**（若有），没有才整档放弃。旧实现
+        // 无条件返回空 —— 长整句上枚举到一半就被判死，用户看到的是首字回退
+        // （`tashiwodehaopengyou` → 只有「他」）。
+        if cache.exhausted && all.is_empty() {
             return Vec::new();
         }
         if all.is_empty() {
             continue;
         }
-        all.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.cmp(&a.1)).then(a.2.cmp(&b.2)));
+        all.sort_by(|a, b| b.1.cmp(&a.1).then(b.0.cmp(&a.0)).then(a.2.cmp(&b.2)));
         let mut seen = HashSet::new();
         all.retain(|(_, _, text, _)| seen.insert(text.clone()));
         // 点名的新词若已在算法结果里，提到首位（分数抬到当前最高之上）；不在就不造
         // —— 边界见 `composition::PINNED`。
         if let Some((_, word)) = PINNED
             .iter()
-            .find(|(py, _)| t9(py).as_deref() == Some(input))
+            .find(|(py, _)| encode(scheme, py).as_deref() == Some(input))
             && let Some(pos) = all.iter().position(|(_, _, text, _)| text == word)
         {
             let top = all.iter().map(|(_, score, _, _)| *score).max().unwrap_or(0);
             let mut hit = all.remove(pos);
-            hit.1 = top.saturating_add(1);
+            // 分数在下面按段数取平均（`/ chunk_count`）；加一个**段数**而不是 1，
+            // 除完才严格高于当前最高平均分（加 1 会被整除吞掉）。
+            hit.1 = top.saturating_add(chunk_count as u64);
             all.insert(0, hit);
         }
         all.truncate(MAX_RESULTS);
@@ -158,8 +187,12 @@ pub(crate) fn candidates<D: Dictionary + ?Sized>(
             .map(|(_, score, text, pinyin)| Hit {
                 text,
                 pinyin,
-                // 整串被精确键覆盖：与主查询精确档同一加成（唯一定义在 candidates.rs）。
-                score: score.saturating_add(boost / 2),
+                // **段平均分**，不是和（2026-10-27）：词频是「每个词」的量纲，两段相加
+                // 会天然压过任何单个词库词（实测 `yiluxiangbei`：「一句 + 长辈」把
+                // 词库里的「一路向北」顶出第一页）。除以段数后与单词同一量纲。
+                // 也**不加 exact 加成**：组合是推断，词库里的整词才是直命中；两者
+                // 同键长时由词频裁决（`Meta.exact` 仍为真 ⇒ 仍排在拼音延伸词之前）。
+                score: score / chunk_count as u64,
             })
             .collect();
     }
@@ -180,17 +213,16 @@ pub(crate) fn covers<D: Dictionary + ?Sized>(
         .any(|h| h.text == selected)
 }
 
-/// 拼音字母串 → 9 键按键串（只用于把 `composition::PINNED` 的拼音键对到数字输入）。
-fn t9(letters: &str) -> Option<String> {
-    letters
-        .chars()
-        .map(|c| ('2'..='9').find(|k| Scheme::Nine.key_class(*k).is_some_and(|cs| cs.contains(&c))))
-        .collect()
+/// 拼音字母串 → 按键串（只用于把 `composition::PINNED` 的拼音键对到 9/14 键输入）。
+/// 每个字母取**类里包含它的那个键**；该类表与 `scheme.rs` 同一份，不另抄。
+fn encode(scheme: Scheme, letters: &str) -> Option<String> {
+    letters.chars().map(|c| scheme.key_for_letter(c)).collect()
 }
 
-/// 枚举「`chunk_count` 段、整串全覆盖」的切法；每段 ≥2 键。每凑出一条切法就回调
-/// `visit`，回调返回 `false` 立即停止整个枚举（调用方的「凑够即停」）。
-/// 段长从长到短枚举 ⇒ 回调次序 = 排序签名降序（与组装时的 sort 键一致）。
+/// 枚举「`chunk_count` 段、整串全覆盖」的切法；每段 ≥2 键（非末段 ≤
+/// [`MAX_CHUNK_KEYS`]）。每凑出一条切法就回调 `visit`，回调返回 `false` 立即停止
+/// 整个枚举（当前调用方恒 `true`，靠查询预算收口）。段长从长到短只是枚举次序；
+/// 最终次序由调用方**按分**排序（2026-10-27 起，见 `candidates` 的注释）。
 fn walk<'a, D: Dictionary + ?Sized>(
     s: &'a str,
     cache: &mut Cache<'a, D>,
@@ -209,8 +241,9 @@ fn walk<'a, D: Dictionary + ?Sized>(
         path.pop();
         return go_on;
     }
-    // 剩下的每一段至少要跨 2 键（调用方已保证 `last >= 2 * chunks_left`）。
-    let max_end = last - 2 * (chunks_left - 1);
+    // 剩下的每一段至少要跨 2 键（调用方已保证 `last >= 2 * chunks_left`）；
+    // 非末段再受 [`MAX_CHUNK_KEYS`] 封顶（末段 `chunks_left == 1` 不受限）。
+    let max_end = (last - 2 * (chunks_left - 1)).min(pos + MAX_CHUNK_KEYS);
     for end in ((pos + 2)..=max_end).rev() {
         let Some(c) = chunk(s, pos, end, cache) else {
             continue;
@@ -245,7 +278,7 @@ fn chunk<'a, D: Dictionary + ?Sized>(
         cache.queries += 1;
         let mut entries: Vec<EntryHit> = cache
             .dict
-            .scheme_entries(sub, Scheme::Nine, None, 0)
+            .scheme_entries(sub, cache.scheme, None, 0)
             .into_iter()
             // n = 0 已只返回精确条目；再按长度钉一次（替身词库也守同一条）。
             .filter(|(e, _)| e.pinyin_len == sub.len())
@@ -317,141 +350,7 @@ fn combinations(chunks: &[Rc<Chunk>]) -> Vec<(u64, String, String)> {
         .collect()
 }
 
+// 单测独立成文件（`#[path]` 引入）以保持本文件 <500 行，与 `candidates_tests.rs` 同惯例。
+#[path = "composition_scheme_tests.rs"]
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::dictionary::InMemoryDictionary;
-    use crate::trie::Entry;
-    use std::sync::Arc;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
-    fn dict() -> InMemoryDictionary {
-        let mut d = InMemoryDictionary::new();
-        // 两个报障词：`厌蠢 + 症`、`样样 + 通`（整词不是键）。
-        d.insert("yanchun", "厌蠢", 700);
-        d.insert("zheng", "症", 850);
-        d.insert("zheng", "正", 950);
-        d.insert("yangyang", "样样", 700);
-        d.insert("tong", "通", 850);
-        d.insert("tong", "同", 950);
-        // 负控制：只有单音节键（`ma`）。
-        d.insert("ma", "妈", 900);
-        // 负控制：只有前缀扩展键（`zhengren` 不是 `zheng`）。
-        d.insert("zhengren", "症人", 990);
-        d
-    }
-
-    fn hits(input: &str) -> Vec<Hit> {
-        candidates(&dict(), &Learner::new(false), 1_800, Scheme::Nine, input)
-    }
-
-    #[test]
-    fn user_reported_words_compose_in_digit_space() {
-        let got = hits("926248694364"); // yanchunzheng
-        assert_eq!(got[0].text, "厌蠢症", "PINNED 应置顶: {got:?}");
-        assert_eq!(got[0].pinyin, "yanchunzheng", "整串拼音读数");
-        assert!(got.iter().any(|h| h.text == "厌蠢症"));
-        let got = hits("926492648664"); // yangyangtong
-        assert_eq!(got[0].text, "样样通", "PINNED 应置顶: {got:?}");
-        assert_eq!(got[0].pinyin, "yangyangtong");
-    }
-
-    /// 全是单音节段 ⇒ 不拼（与全键盘的负控制同一条判据）。
-    #[test]
-    fn all_single_syllable_chunks_are_not_composed() {
-        // `ma` × 2：只有 2 个音节（总音节 ≥3 不成立）。
-        assert!(hits("6262").is_empty(), "两个单音节段不该组合");
-        // `ma` × 3：总音节够，但没有多音节条目。
-        assert!(hits("626262").is_empty(), "单音节段拼接是噪音");
-    }
-
-    /// 段必须是**等长精确键**；只有以它开头的更长键不算。
-    #[test]
-    fn chunk_lookup_is_exact_not_prefix() {
-        let mut d = InMemoryDictionary::new();
-        d.insert("yanchun", "厌蠢", 700);
-        d.insert("zhengren", "症人", 990); // 只有 `zheng` 的前缀扩展
-        let got = candidates(
-            &d,
-            &Learner::new(false),
-            1_800,
-            Scheme::Nine,
-            "926248694364",
-        );
-        assert!(
-            !got.iter()
-                .any(|h| h.text.starts_with("厌蠢症") || h.text.starts_with("厌蠢正")),
-            "`94364` 不该拿 `zhengren` 当精确键: {got:?}"
-        );
-    }
-
-    /// 只有 9 键走这条路；非法按键（`0`/`1`/字母/`'`）一律拒绝。
-    #[test]
-    fn only_nine_key_digits_are_accepted() {
-        assert!(
-            candidates(
-                &dict(),
-                &Learner::new(false),
-                1_800,
-                Scheme::Full,
-                "926248694364"
-            )
-            .is_empty()
-        );
-        for input in ["926248694360", "92624869436a", "926'2486"] {
-            assert!(hits(input).is_empty(), "非法输入 {input} 不该出组合");
-        }
-    }
-
-    /// 同一输入两次结果逐条相同（排序/去重无隐藏状态）。
-    #[test]
-    fn results_are_deterministic() {
-        assert_eq!(hits("926248694364"), hits("926248694364"));
-    }
-
-    /// 查询预算：长输入最多查 `MAX_QUERIES` 次，超了整档放弃（不返回半档结果）。
-    #[test]
-    fn query_budget_caps_every_call() {
-        struct Counted {
-            inner: InMemoryDictionary,
-            calls: Arc<AtomicUsize>,
-        }
-        impl Dictionary for Counted {
-            fn query(&self, pinyin: &str, limit: usize) -> Vec<Entry> {
-                self.inner.query(pinyin, limit)
-            }
-            fn scheme_entries(
-                &self,
-                input: &str,
-                scheme: Scheme,
-                pin: Option<&str>,
-                n: usize,
-            ) -> Vec<(Entry, String)> {
-                self.calls.fetch_add(1, Ordering::Relaxed);
-                crate::dictionary::scheme_entries_scan(&self.inner, input, scheme, pin, n)
-            }
-            fn len(&self) -> usize {
-                self.inner.len()
-            }
-        }
-        let calls = Arc::new(AtomicUsize::new(0));
-        let counted = Counted {
-            inner: dict(),
-            calls: calls.clone(),
-        };
-        // 20 键：2 段枚举要 2×(20−3) = 34 次查询 ⇒ 撞预算，整档放弃。
-        let got = candidates(
-            &counted,
-            &Learner::new(false),
-            1_800,
-            Scheme::Nine,
-            "92624869436492624869",
-        );
-        assert!(got.is_empty(), "预算用尽应整档放弃: {got:?}");
-        assert_eq!(
-            calls.load(Ordering::Relaxed),
-            MAX_QUERIES,
-            "查询次数必须封顶"
-        );
-    }
-}
+mod tests;

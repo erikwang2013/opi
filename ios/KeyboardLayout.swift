@@ -198,6 +198,12 @@ final class KeyboardLayout: UIView {
     /// 顶部槽位的当前选择：true = 候选栏，false = 工具条。面板层恒为工具条。
     /// （internal：`KeyboardPanelHost.swift` 的扩展要读写。）
     var wantsCandidateBar = false
+    /// iOS 26+ 的系统键盘容器会在扩展窗口**上方**画一条 ~15pt 的圆角背景
+    /// （Apple 论坛与第三方输入法同报；扩展无法覆盖）。默认「不改动」皮肤把
+    /// 最上面那行（拼音行/宠物条）交回系统 —— 系统背景透上来，灰弧与键盘顶部
+    /// 连成一片；自定义皮肤保留自身底色（那条弧仍在，是系统限制）。
+    /// 由控制器按系统版本 + 皮肤设置。
+    var nativeBackdrop = false
     var english = false
     /// 单手模式的约束（`buildRows` 里建，`applyOneHand` 切换）。
     var keyAreaWidth: NSLayoutConstraint?
@@ -468,33 +474,4 @@ final class KeyboardLayout: UIView {
             settingsPanel.show(settings: s, modes: keyboardModes, fuzzyNames: names)
         }
     }
-}
-
-/// 候选栏/翻页栏/符号面板/表情面板上的小按钮。
-/// 不是 `private`：`SymbolPanel.swift`、`EmojiPanel.swift` 与 `EmojiGridView.swift` 都用它
-/// （同一文件里才 private 的那种小类型，拆成多个文件后必须放开可见性）。
-final class BarButton: UIButton {
-    private let onTap: () -> Void
-    init(title: String, onTap: @escaping () -> Void) {
-        self.onTap = onTap
-        super.init(frame: .zero)
-        setTitle(title, for: .normal)
-        setTitleColor(.label, for: .normal)
-        titleLabel?.font = .systemFont(ofSize: 18)
-        // ⚠️ 未编译：contentEdgeInsets 在 iOS 15 起被 UIButton.Configuration 取代
-        // （废弃但未移除）。Mac 上做外观时换成 Configuration。
-        contentEdgeInsets = UIEdgeInsets(top: 4, left: 8, bottom: 4, right: 8)
-        addTarget(self, action: #selector(tapped), for: .touchUpInside)
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("not used") }
-
-    /// 换肤（候选栏的按钮由 `KeyboardLayout.applyTheme` 递归刷到）。
-    func applyTheme(_ p: KeyboardPalette, fontScale: CGFloat) {
-        setTitleColor(p.barBufferFg, for: .normal)
-        titleLabel?.font = .systemFont(ofSize: 18 * fontScale)
-    }
-
-    @objc private func tapped() { onTap() }
 }

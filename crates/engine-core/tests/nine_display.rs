@@ -160,10 +160,11 @@ fn set_scheme_clears_the_display_reading() {
     assert_eq!(e.display_buffer(), "", "换方案后读数必须为空");
 }
 
-/// 非 9 键方案：26 键显示按音节分词（单音节输入与缓冲逐字节相同），14 键仍是原文。
+/// 非 9 键方案：26 键显示按音节分词（单音节输入与缓冲逐字节相同）；**14 键显示读数**
+/// （2026-10-27 起：它的缓冲是按键符号，`bu` = n+i，直接上屏会显示成 `bu`）。
 /// `buffer()` 本体不动 —— 别的端（fcitx5/TSF）的**行为判定**读它。
 #[test]
-fn display_buffer_is_raw_outside_nine() {
+fn display_buffer_is_reading_for_fourteen_and_raw_for_full() {
     let mut e = engine();
     type_str(&mut e, "ni");
     let _ = e.candidates(8);
@@ -172,7 +173,17 @@ fn display_buffer_is_raw_outside_nine() {
 
     let mut e14 = engine();
     e14.set_scheme(Scheme::Fourteen);
-    type_str(&mut e14, "n");
+    type_str(&mut e14, "bu"); // b=n、u=i ⇒ ni
     let _ = e14.candidates(8);
-    assert_eq!(e14.display_buffer(), e14.buffer());
+    assert_eq!(
+        e14.display_buffer(),
+        "ni",
+        "14 键显示拼音读数，不是按键符号"
+    );
+    assert_eq!(e14.buffer(), "bu", "缓冲本体不动（行为判定读它）");
+
+    // 更长的 14 键串：`bugao` = ni+hao，读数带分词。
+    type_str(&mut e14, "gao");
+    let _ = e14.candidates(8);
+    assert_eq!(e14.display_buffer(), "ni'hao");
 }

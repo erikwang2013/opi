@@ -137,7 +137,8 @@
 | `OpiEngineScheme.swift` | 方案族包装（2026-10-14）：`scheme()`/`setScheme`/`shuangpinLayout()`/`setShuangpinLayout`/`loadStroke`。拆出来是因为主文件顶在 500 行上；拆法照 Rust 的族边界（`cabi_scheme.rs`） |
 | `OpiEngineWubi.swift` | 五笔旋钮族包装（2026-10-14）：`loadWubi` + 五个旋钮（风格/混入/个数/回车/自动上屏）。同上，对应 `cabi_wubi.rs`。**本文件没有任何 iOS 调用方**（没有设置界面） |
 | `KeyboardKeys.swift` | 「一个键是什么」：`KeySpec` / `KeyFallback` / `KeyboardFunctionKey` / `KeyButton`。不含布局。2026-10-14 加了 `fontSize` / `longPressFunction` 两个字段；2026-10-20 加了 `.showSkin` / `.showKeyboardModes` / `.showAbout` / `.closeKeyboard` / `.toggleTraditional` / `.segment` 等功能键 case |
-| `KeyboardTheme.swift` | 皮肤与键盘模式（2026-10-20）：12 款皮肤、12 个色板角色（值逐字抄 Android `Palette.kt`）、优先级「长辈 > 暗光 > 皮肤」、长辈字号 1.18、`KeyboardPreferences`（UserDefaults）。另含控制器扩展 `applyTheme` / `openExternal` / `cycleMode` / `modeKeyLabel`。（CI 已编译，未上机） |
+| `KeyboardTheme.swift` | 皮肤与键盘模式（2026-10-20）：12 款皮肤、12 个色板角色（值逐字抄 Android `Palette.kt`）、优先级「长辈 > 暗光 > 皮肤」、长辈字号 1.18。另含控制器扩展 `applyTheme` / `openExternal` / `cycleMode` / `modeKeyLabel`。（CI 已编译，未上机） |
+| `KeyboardPreferences.swift` | 本端偏好（UserDefaults，2026-10-27 从 `KeyboardTheme.swift` 拆出 —— 那边原本正好 500 行，iOS 26 顶部适配的注释一加就撞 500 行门禁）：皮肤 / 键盘模式 / 引擎开关的读写，语义一字未动。 |
 | `KeyboardToolbar.swift` | 顶部工具条（2026-10-20，2026-10-22 齿轮前移）：表情 / 皮肤 / 输入模式 / 键盘模式 / 齿轮（设置）/ 关于 / 隐藏「中」/ 收起键盘；齿轮是 iOS 本端入口（Android 设置是独立页），其余次序对齐 `ImeToolbar.kt`。SF Symbols，缺符号时退文字。（CI 已编译，未上机） |
 | `UpdateChecker.swift` | 新版本检测（2026-10-22）：异步读 `https://opi.erik.xyz/version.json`（4s 超时、语义化数字比较），设置/关于共用 `UpdateStatusView`；失败只在手动检测时报原因，无完全访问时自动检测静默跳过。「前往下载」固定 `https://opi.erik.xyz/download`，不读端点里的 `download` 字段。**本轮未编译，等 Apple CI** |
 | `KeyboardPanels.swift` | 工具条打开的四个面板（2026-10-20）：`SkinPanel`（12 卡 + 3×4 小键盘预览）、`KeyboardModePanel`（繁体 / 单手 / 悬浮 / 游戏 / 暗光 / 长辈）、`AboutPanel`（版本文案与外链）、`KeyboardPanelHeader`。（CI 已编译，未上机） |

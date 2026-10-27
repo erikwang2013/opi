@@ -389,7 +389,7 @@ pub unsafe extern "C" fn opi_buffer() -> OpiString {
 }
 
 /// display_buffer() -> OpiString。**显示用**缓冲（与 `opi_buffer` 两个出口，见
-/// `Engine::display_buffer`）：全键盘按音节自动分词（`ni'hao`）、9 键给拼音读数、
+/// `Engine::display_buffer`）：全键盘按音节自动分词（`ni'hao`）、9/14 键给拼音读数、
 /// 逐字确认态带已确认前缀。行为判定（缓冲非空/回退）仍读 `opi_buffer()`。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_display_buffer() -> OpiString {

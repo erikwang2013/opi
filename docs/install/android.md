@@ -532,8 +532,9 @@ emoji 列**不动** —— 它管单键候选反馈（搜索路），与浏览�
   不要在输入框里」）—— **对 2026-10-10「组合串进字段」那条的改判**：拼音改画在键盘里
   候选行**上方**的独立一行（`ime/ComposingBar.kt`），**不再**经
   `InputConnection.setComposingText` 推进输入框（`ComposingText.kt::pushComposingText`
-  现在只负责收干净可能残留的组合区）。文本取**显示读数**（9 键 `ni'hao`、其余原字母；
-  9 键读数空不落数字 —— 2026-10-11 那条**仍然有效**，只是换了出口）。
+  现在只负责收干净可能残留的组合区）。文本取**显示读数**（9/14 键取拼音读数：
+  9 键 `ni'hao`、14 键 `bu` → `ni`；其余方案原字母；9 键读数空不落数字 ——
+  2026-10-11 那条**仍然有效**，只是换了出口）。
   行高 `COMPOSING_BAR_HEIGHT_DP=38`，与候选行同为**常驻槽位**（空时不铺底色），
   并由 `OpiImeService.keyboardHeight` 计入 IME 窗口高度。
   静态门禁：`app/src/test/.../ime/ComposingPlacementTest.kt`（拼音行在候选行之前 +
@@ -556,9 +557,10 @@ emoji 列**不动** —— 它管单键候选反馈（搜索路），与浏览�
   尾巴**不分长短**（单键也走 ⇒ 打完一个词再按下下一个音首键时，拼音行显示 `ni'hao'w`
   —— 尾巴从此**看得见**，与上面那条「·」标记各管一段）。判据/封顶在
   `candidates_scheme::tail_guess_hits`，门禁 `crates/engine-core/tests/nine_tail_guess.rs`
-  （夹具）与 `crates/opi-tools/tests/m2_integration.rs`（真库）。**14 键本版不启用**
-  （键类首字母 == 键自身，会退化成字面前缀）；含 `'`（显式音节主张）或无类键（字母/`0`/`1`）
-  的输入整档不启用。⚠️ 连带改判：9 键「无候选时空格不上屏也不清缓冲」的逃生口，现在只剩
+  （夹具）与 `crates/opi-tools/tests/m2_integration.rs`（真库）。**14 键 2026-10-27 起
+  同 9 键启用**（键类首字母 == 键自身 ⇒ 按键面字母起音）；含 `'`（显式音节主张）
+  或无类键（字母/`0`/`1`）的输入整档不启用。同日 14 键也接上多字组合
+  （`composition_scheme`），长整句不再只剩首字。⚠️ 连带改判：9 键「无候选时空格不上屏也不清缓冲」的逃生口，现在只剩
   含 `'`/无类键的输入能构造出来（`m2_integration.rs` 那条 `55` 用例已按此改判）。
 - **密码类字段自动临时英文**（`isPasswordEditor`）：文本类 PASSWORD / VISIBLE_PASSWORD /
   WEB_PASSWORD ⇒ 自动切英文键盘、字母直出；离开还原、**不落盘**；数字类密码有意不在列。

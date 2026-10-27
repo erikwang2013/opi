@@ -78,6 +78,27 @@ fn nine_key_prefix_matches_longer_keys() {
     );
 }
 
+/// 2026-10-27：整串是「≥3 个完整音节 + 更长词」的前缀时，**首字回退不许顶掉它**
+/// （26 键 `segment_fallback` 判据 3b 的镜像）。用户报障：`shengrikuai` 在 26 键给
+/// 「生日快乐」，9/14 键只剩「生」。
+#[test]
+fn nine_and_fourteen_keep_a_longer_prefix_word() {
+    let entries = [("sheng", "生", 900), ("shengrikuaile", "生日快乐", 950)];
+    let mut e = Engine::new(dict(&entries), no_symbols(), false);
+    e.set_scheme(Scheme::Nine);
+    type_str(&mut e, "74364745824"); // shengrikuai
+    assert_eq!(texts(&e)[0], "生日快乐", "9 键：长词前缀不该被首字回退替换");
+
+    let mut f = Engine::new(dict(&entries), no_symbols(), false);
+    f.set_scheme(Scheme::Fourteen);
+    type_str(&mut f, "agebgeujuau"); // s h e n g r i k u a i
+    assert_eq!(
+        texts(&f)[0],
+        "生日快乐",
+        "14 键同一条：长词前缀不该被首字回退替换"
+    );
+}
+
 #[test]
 fn nine_key_digits_enter_buffer_full_scheme_ignores_them() {
     let mut e = engine();

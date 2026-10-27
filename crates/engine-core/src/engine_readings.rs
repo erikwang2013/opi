@@ -1,14 +1,14 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! 9 键「拼音读数」一族（2026-10-09 二期从 `engine.rs` 拆出 —— 那里加逐条读数与
+//! 9/14 键「拼音读数」一族（2026-10-09 二期从 `engine.rs` 拆出 —— 那里加逐条读数与
 //! 语言切换后越了 500 行门禁，与 engine_punct.rs / candidates_tests 同一套先例）。
 //!
 //! 拆的是**同一对缓存的两个视图**：[`Engine::display_buffer`]（首条，候选栏左格/读屏用）
-//! 与 [`Engine::candidate_readings`]（逐条，9 键左列用）—— 都读 `scheme_readings`
+//! 与 [`Engine::candidate_readings`]（逐条，9/14 键左列用）—— 都读 `scheme_readings`
 //! 这一对 `(算它时的缓冲, 逐条读数)`。语义一字未动；写点在 `Engine::candidates()`
-//! 的九键分支（仍在 engine.rs）。全键盘的显示分词（2026-10-23）不走缓存：它是
-//! 缓冲的纯函数（`pinyin::segment`），缓冲一变自动跟着变。
+//! 的九键分支（仍在 engine.rs；14 键 2026-10-27 起同路）。全键盘的显示分词
+//! （2026-10-23）不走缓存：它是缓冲的纯函数（`pinyin::segment`），缓冲一变自动跟着变。
 //!
 //! 字段可见性：本文件要用 `Engine::scheme_readings`，故它升成 `pub(crate)`
 //! （**crate 内**，不泄漏给依赖方）—— 同 engine_punct.rs 头注记的拆分裂代价。
@@ -23,9 +23,11 @@ impl Engine {
     /// 换成**候选的拼音**（「64」→ ni、「64426」→ nihao），即主流输入法 9 键候选栏
     /// 左侧那格「输入时显示的拼音」。首条等长优先；没有等长读数且首条更短时，
     /// 未覆盖的键按**键面首字母**补全（2026-10-23「完整显示、不用省略号/·」，
-    /// 见 [`nine_display_reading`]）。无候选（读数空）时为空串。
-    /// 其余方案 = 实际缓冲（26/14 键的字母串本来就是拼音；英文/数字/符号模式的
-    /// 缓冲也不是拼音，一律回本体）。FFI 的 buffer 出口读这里 —— 别的端没有 9 键
+    /// 见 [`scheme_display_reading`]）。无候选（读数空）时为空串。
+    /// **14 键同一条**（2026-10-27）：它的缓冲也是按键符号（`b` 键 = n/b），
+    /// 直接摆出来会显示成 `be` 这类非拼音串。
+    /// 其余方案 = 实际缓冲（26 键字母串本来就是拼音；英文/数字/符号模式的缓冲
+    /// 也不是拼音，一律回本体）。FFI 的 buffer 出口读这里 —— 别的端没有 9/14 键
     /// 方案，读到的与原值逐字节相同。
     pub fn display_buffer(&self) -> String {
         // 逐字确认态（2026-10-17）：已确认的字**留在候选区** —— 显示串以它们打头
@@ -33,7 +35,10 @@ impl Engine {
         let mut out = self.pending_text();
         if matches!(self.mode(), Mode::Pinyin | Mode::Traditional) {
             match self.scheme() {
-                Scheme::Nine => {
+                // 9 键与 14 键同一条（2026-10-27）：14 键的缓冲也是**按键符号**
+                // （`b` = n 或 b），直接显示会看到「be」这种非拼音串。14 键的读数
+                // 缓存本来就与 9 键同源（`rank_and_pick_scheme` 一并返回）。
+                Scheme::Nine | Scheme::Fourteen => {
                     // **带分词的**读数（主流输入法「拼音9键显示分词」同款）：音节用 `'`
                     // 连起来，「nihao」显示成「ni'hao」—— 一眼看到引擎怎么切的音节。
                     let cached = self.scheme_readings.borrow();
@@ -41,7 +46,7 @@ impl Engine {
                     // 界面按「读不到拼音」处理（左列回标点列）。下次 candidates() 会按新缓冲重算。
                     let buffer = self.buffer();
                     if cached.0 == buffer {
-                        out.push_str(&nine_display_reading(buffer, &cached.1));
+                        out.push_str(&scheme_display_reading(self.scheme(), buffer, &cached.1));
                     }
                     return out;
                 }
@@ -140,20 +145,20 @@ impl Engine {
     }
 }
 
-/// 9 键拼音行显示什么（2026-10-23 用户裁决：「图片里显示省略号了，我需要完整显示出来，
+/// 9/14 键拼音行显示什么（2026-10-23 用户裁决：「图片里显示省略号了，我需要完整显示出来，
 /// 超出屏幕的可滑动查看」）。三条规则，按序：
 ///
 /// 1. **优先等长读数**：读数覆盖的字母数 == 缓冲键数（`'` 不算键）⇒ 原样显示。
 ///    首条等长优先；首条更长（前缀扩展词）时也原样显示（旧行为）；
 /// 2. 首条读数比缓冲**短** ⇒ 从缓冲里补上**没被覆盖的键**，每个键取
-///    `Scheme::key_leading_letter`（9 键 6→m、2→a…）。这取代了旧实现「每个待编键
-///    一个『·』」的标记：行里永远是与按键数等长的字母串，不再长得像省略号；
+///    `Scheme::key_leading_letter`（9 键 6→m、2→a；14 键 b→b…）。这取代了旧实现
+///    「每个待编键一个『·』」的标记：行里永远是与按键数等长的字母串，不再长得像省略号；
 /// 3. 读数**为空**（整段无匹）⇒ 空串（2026-10-13 裁决不变：不把数字/假拼音
 ///    端上去，反馈交给候选栏「无匹配」；Android 行的原按键回退另在宿主侧）。
 ///
 /// 「超出屏幕可滑动」是宿主的事（Android/iOS/Harmony 的拼音行都改成横向滚动 +
 /// 不省略）；引擎只保证**串是完整的**。
-fn nine_display_reading(buffer: &str, readings: &[String]) -> String {
+fn scheme_display_reading(scheme: Scheme, buffer: &str, readings: &[String]) -> String {
     let Some(first) = readings.first() else {
         return String::new();
     };
@@ -169,7 +174,7 @@ fn nine_display_reading(buffer: &str, readings: &[String]) -> String {
         first.clone()
     } else {
         let mut s = first.clone();
-        s.push_str(&uncovered_key_letters(buffer, first_len));
+        s.push_str(&uncovered_key_letters(scheme, buffer, first_len));
         s
     };
     // **手动分词符**（2026-10-23 用户报障「9 键分词键无效果」）：用户点分词键后 buffer
@@ -189,8 +194,9 @@ fn key_count(s: &str) -> usize {
 }
 
 /// 缓冲里第 `covered` 个键之后的部分，按键面字母组的首字母展开（`'` 原样保留）。
-/// 只给 9 键用 —— 9 键缓冲是数字，显示层不能把数字端上去（2026-10-11 裁决）。
-fn uncovered_key_letters(buffer: &str, covered: usize) -> String {
+/// 只给 9/14 键用 —— 两者的缓冲都是按键符号，显示层不能把符号端上去（数字/`b`）；
+/// 14 键的首字母是键自身（`key_leading_letter('b') == 'b'`），与键面一致。
+fn uncovered_key_letters(scheme: Scheme, buffer: &str, covered: usize) -> String {
     let mut out = String::new();
     let mut index = 0usize;
     for ch in buffer.chars() {
@@ -201,7 +207,7 @@ fn uncovered_key_letters(buffer: &str, covered: usize) -> String {
             continue;
         }
         if index >= covered {
-            out.push(Scheme::Nine.key_leading_letter(ch).unwrap_or(ch));
+            out.push(scheme.key_leading_letter(ch).unwrap_or(ch));
         }
         index += 1;
     }

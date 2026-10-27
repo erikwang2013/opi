@@ -60,9 +60,9 @@ internal fun composingRowActive(
  * 这是对 2026-10-10「组合串进字段」那条裁决的**改判**：拼音不再靠
  * `InputConnection.setComposingText` 推进输入框，而是画在**候选行上方**这一行里
  * （主流移动输入法同款位置）。落点分工：
- * · 本行读 `EngineController.composingText()` —— 9 键显示分词读数（`ni'hao`），
- *   26/14/双拼/五笔/笔画显示原缓冲（字母/码串），读数空时 9 键**留空不落数字**
- *   （2026-10-11 那条仍在）；
+ * · 本行读 `EngineController.composingText()` —— 9/14 键显示分词读数（`ni'hao`；
+ *   14 键的缓冲 `bu` 是按键符号，2026-10-27 起也取引擎读数），26/双拼/五笔/笔画
+ *   显示原缓冲（字母/码串），读数空时 9 键**留空不落数字**（2026-10-11 那条仍在）；
  * · 输入框侧：`OpiImeService.pushComposingText` 现在只负责**收干净**可能残留的组合区
  *   （见那儿的注释），不再往里写拼音。
  *

@@ -180,3 +180,32 @@ extension KeyboardLayout {
         updatePetStripVisibility()
     }
 }
+
+/// 候选栏/翻页栏/符号面板/表情面板上的小按钮。
+/// 不是 `private`：`SymbolPanel.swift`、`EmojiPanel.swift` 与 `EmojiGridView.swift` 都用它
+/// （同一文件里才 private 的那种小类型，拆成多个文件后必须放开可见性）。
+final class BarButton: UIButton {
+    private let onTap: () -> Void
+    init(title: String, onTap: @escaping () -> Void) {
+        self.onTap = onTap
+        super.init(frame: .zero)
+        setTitle(title, for: .normal)
+        setTitleColor(.label, for: .normal)
+        titleLabel?.font = .systemFont(ofSize: 18)
+        // ⚠️ 未编译：contentEdgeInsets 在 iOS 15 起被 UIButton.Configuration 取代
+        // （废弃但未移除）。Mac 上做外观时换成 Configuration。
+        contentEdgeInsets = UIEdgeInsets(top: 4, left: 8, bottom: 4, right: 8)
+        addTarget(self, action: #selector(tapped), for: .touchUpInside)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    /// 换肤（候选栏的按钮由 `KeyboardLayout.applyTheme` 递归刷到）。
+    func applyTheme(_ p: KeyboardPalette, fontScale: CGFloat) {
+        setTitleColor(p.barBufferFg, for: .normal)
+        titleLabel?.font = .systemFont(ofSize: 18 * fontScale)
+    }
+
+    @objc private func tapped() { onTap() }
+}
