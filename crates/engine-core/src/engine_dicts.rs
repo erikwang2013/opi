@@ -42,6 +42,7 @@ impl Engine {
     /// ⚠️ 取三个词典的**全局**最大词频（含 stroke，2026-10-09 起）：只按「dict+trad」
     /// 算的话，后装的 stroke 若词频更高，boost 会悄悄偏小 —— 学习者压不过静态词。
     pub fn set_trad_dict(&mut self, dict: Option<Box<dyn Dictionary>>) {
+        self.dismiss_association(); // 换词典 = 联想态结束（候选集合会变）
         self.trad_dict = dict;
         self.recompute_user_boost();
     }
@@ -60,6 +61,7 @@ impl Engine {
     /// 与 [`Self::set_trad_dict`] 同一形状（含重算 user_boost —— 别让更大的词频表
     /// 静默改变「精确加成」的档位）。
     pub fn set_stroke_dict(&mut self, dict: Option<Box<dyn Dictionary>>) {
+        self.dismiss_association(); // 换词典 = 联想态结束（候选集合会变）
         self.stroke_dict = dict;
         self.recompute_user_boost();
     }
@@ -69,6 +71,7 @@ impl Engine {
     /// 静默改变「精确加成」的档位）。换装**不清缓冲**（与两个 style 设置同：只改
     /// 之后怎么装配，缓冲里的码按新表重解）。
     pub fn set_wubi_dict(&mut self, dict: Option<Box<dyn Dictionary>>) {
+        self.dismiss_association(); // 换词典 = 联想态结束（候选集合会变）
         self.wubi_dict = dict;
         self.recompute_user_boost();
     }
@@ -86,6 +89,7 @@ impl Engine {
     /// 合并在词条层完成（`dict_layers.rs`），**不另造排序**：候选仍是同一条
     /// `rank_and_pick` 管线；导入层只叠主库（繁体模式仍查 trad 库，裁决 3）。
     pub fn set_extra_dicts(&mut self, dicts: Vec<(String, InMemoryDictionary)>) {
+        self.dismiss_association(); // 换导入层 = 联想态结束（候选集合会变）
         self.dict.set_extras(dicts);
         self.recompute_user_boost();
     }

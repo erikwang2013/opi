@@ -171,6 +171,7 @@ impl Engine {
     /// 打进去的串，留着会被新方案的匹配器读出个似是而非的结果（例如把 26 键的
     /// "ni" 拿 9 键规则去套，凑出一堆不相关的候选）。清掉 = 明确的重新开始。
     pub fn set_scheme(&mut self, scheme: Scheme) {
+        self.dismiss_association(); // 换方案 = 联想态结束
         self.composer.set_scheme(scheme);
         self.composer.clear();
         self.last_commit.clear(); // 换方案 = 新的输入上下文（误选撤销不跨方案）
@@ -189,6 +190,7 @@ impl Engine {
     /// 三轨的「直通」是把自己交还给客户端应用，Android 没有这一层，返回空串
     /// 就等于吞键（NumberPad 的 `,` `.` 正是靠这条活在引擎里）。
     pub fn input_key(&mut self, ch: char) -> String {
+        self.dismiss_association(); // 任何输入 = 联想态结束
         // 浏览态：「未处理键先退出浏览、再按正常流程处理」的统一落点（契约见
         // engine_symbol_browse.rs 头）——不许带着「符号」标题落进正常路由。
         self.leave_symbol_browse_if_needed();
@@ -233,6 +235,7 @@ impl Engine {
     /// 空格收尾的**页首**变体：`skip` = 当前页首条全局下标（宿主传 `page * PAGE_SIZE`）。
     /// 取 `skip+1` 条即可保住页首；越界按「无候选」逃生口，不静默丢缓冲。
     pub fn input_space_at(&mut self, skip: usize) -> String {
+        self.dismiss_association(); // 空格正常执行：不得选中联想项
         self.leave_symbol_browse_if_needed(); // 直调引擎的出口（C ABI）也走同一条（契约 ②）
         self.after_digit = false; // 空格收尾 = 数字上下文结束（见字段注释）
         let limit = skip.saturating_add(1).max(DEFAULT_TOP_N);
@@ -304,6 +307,7 @@ impl Engine {
     }
 
     pub fn backspace(&mut self) {
+        self.dismiss_association(); // 退格 = 联想态结束
         self.leave_symbol_browse_if_needed(); // 同 input_space（契约 ②；宿主路由是主路，这里是兜底）
         self.after_digit = false; // 退格 = 数字上下文结束
         // 逐字态（2026-10-17）：缓冲空了再按 ⌫ ⇒ **撤销最后一个已确认的字**，它的拼音
@@ -318,6 +322,7 @@ impl Engine {
     }
 
     pub fn clear(&mut self) {
+        self.dismiss_association(); // 清会话 = 联想态结束
         self.symbol_browse.exit(); // 清会话 = 退出浏览（数据留着；面板随 buffer 空收起）
         self.after_digit = false; // 清会话 = 数字上下文结束
         self.pending_segments.clear(); // 逐字态一并清（2026-10-17）
@@ -330,6 +335,7 @@ impl Engine {
     ///
     /// **`chinese_punct` 不在此列**：它是用户偏好而非模式默认值（理由见字段注释）。
     pub fn switch_mode(&mut self, mode: Mode) {
+        self.dismiss_association(); // 切模式 = 联想态结束
         self.after_digit = false; // 切模式 = 数字上下文结束
         // 逐字态清空（2026-10-17）：宿主切换前会先 commitPendingBuffer（走 input_space
         // 冲刷），能走到这里的只有直调引擎的换模式口 —— 旧模式的拼音不该跨模式复活。
@@ -363,6 +369,7 @@ impl Engine {
     /// 调用方负责把非空返回插入文档；拿不到插入通道的端
     /// 不要调它 —— 调了等于只记学习记录却不上屏。
     pub fn toggle_symbol(&mut self) -> String {
+        self.dismiss_association(); // 触发键 = 联想态结束
         let target = if self.composer.session().mode == Mode::Symbol {
             Mode::Pinyin
         } else {
@@ -386,6 +393,7 @@ impl Engine {
     }
 
     pub fn set_shift(&mut self, on: bool) {
+        self.dismiss_association(); // 宿主切 Shift 后要重推候选窗（Spec §4.5）
         self.composer.set_shift(on);
     }
 
@@ -436,6 +444,7 @@ impl Engine {
     /// 9 键的读数缓存随之作废（同一个缓冲换过方案/模式后，旧读数不再对应当前语境）；
     /// 切回来时下一次 `candidates()` 会重算。
     pub fn switch_language(&mut self, mode: Mode, scheme: Scheme) {
+        self.dismiss_association(); // 换模式+方案 = 联想态结束
         self.last_commit.clear(); // 换模式+方案 = 新的输入上下文（同 switch_mode）
         self.fullwidth = mode.default_fullwidth();
         self.quotes.reset();

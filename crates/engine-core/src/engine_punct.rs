@@ -28,6 +28,7 @@ impl Engine {
 
     /// 标点收尾的**页首**变体：`skip` 同 [`Self::input_space_at`]（桌面轨传页偏移）。
     pub fn input_punct_at(&mut self, ch: char, skip: usize) -> Option<String> {
+        self.dismiss_association(); // 标点 = 联想态结束
         // 浏览态：同 input_key —— 先退出浏览恢复真缓冲，再按正常流程处理（契约 ②）。
         self.leave_symbol_browse_if_needed();
         // 数字**紧邻**的句号出 ASCII `.`（2026-10-17 用户裁决，桌面端报障「数字后面
