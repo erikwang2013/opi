@@ -18,6 +18,7 @@ import * as ScreenLayout from './ScreenLayout';
 import * as SettingsStore from './SettingsStore';
 import { publishState } from './StatePublish';
 import * as BackspaceRepeat from './BackspaceRepeat';
+import * as AssociationGuard from './AssociationGuard';
 import { bracketPairing } from './BracketPairing';
 
 export class KeyboardController {
@@ -50,6 +51,7 @@ export class KeyboardController {
       this.metrics = ScreenLayout.currentMetrics();
       this.ensureDictionary();
       this.applyPanelWindow();
+      AssociationGuard.watchSelection();
       // 新会话：上一轮可能死在半路，先清引擎缓冲，否则会带着上次的拼音进新输入框。
       OpiEngine.clear();
       this.publish();
@@ -65,6 +67,7 @@ export class KeyboardController {
     // InputClient 随会话失效，必须丢引用；引擎侧缓冲要清，长按连删计时器也要停。
     BackspaceRepeat.stop();
     bracketPairing.reset();
+    AssociationGuard.unwatchSelection();
     OpiEngine.clear();
     this.client = null;
     this.kbController = null;
@@ -94,12 +97,10 @@ export class KeyboardController {
     this.metrics = ScreenLayout.currentMetrics();
     ScreenLayout.watchDisplay(this.onDisplayChangeCallback);
     const info: inputMethodEngine.PanelInfo = {
-      type: inputMethodEngine.PanelType.SOFT_KEYBOARD,
-      flag: inputMethodEngine.PanelFlag.FLG_FIXED,
+      type: inputMethodEngine.PanelType.SOFT_KEYBOARD, flag: inputMethodEngine.PanelFlag.FLG_FIXED,
     };
 
-    // API 19 的 createPanel 只有异步形态（callback / Promise），没有同步返回值。
-    // 用 callback 形态保持 init() 的同步签名（onCreate 不等 Promise）。
+    // API 19 的 createPanel 只有异步形态；用 callback 保持 init() 同步（onCreate 不等 Promise）。
     ability.createPanel(ctx, info, (err: BusinessError, panel: inputMethodEngine.Panel) => {
       if (err) {
         console.error(`[opi] createPanel 失败: ${err.message}`);
@@ -130,6 +131,7 @@ export class KeyboardController {
       this.panel = null; // 面板是系统资源，必须显式 destroy，不能只等 GC。
     }
     BackspaceRepeat.stop();
+    AssociationGuard.unwatchSelection();
     this.client = null;
     this.kbController = null;
     this.ctx = null;
@@ -160,8 +162,7 @@ export class KeyboardController {
         ok = OpiEngine.loadDictionary('');
       }
       this.dictDegraded = !(ok && files.luna.length > 0);
-      // 繁体是**可选增强**（Android EngineLoader 同一条）：失败不碰已装的 luna，
-      // 繁体模式回退查简库 —— 所以不参与 degraded 判定。
+      // 繁体是**可选增强**（Android 同条）：失败不碰 luna，繁体回退查简库，不参与 degraded。
       if (files.trad.length > 0 && !OpiEngine.loadTradDictionary(files.trad)) {
         console.warn('[opi] trad.opid 未装载：繁体模式回退简体词库');
       }
@@ -176,21 +177,20 @@ export class KeyboardController {
 
   private insertText(text: string, typed: boolean = false): void {
     if (this.client === null || text.length === 0) { return; }
+    AssociationGuard.noteSelfInsert();
     if (typed && bracketPairing.insertTyped(this.client, text, OpiEngine.mode() === OpiMode.English)) { return; }
     this.client.insertText(text);
   }
 
   private deleteForward(n: number): void {
-    if (this.client === null) {
-      return;
-    }
-    this.client.deleteForward(n);
+    if (this.client !== null) { this.client.deleteForward(n); }
   }
 
   // -------------------------------------------------------------- 按键
 
   /** 所有按键的唯一入口（action：2 上屏 / 1 引擎已吃 / 0 交还应用）。 */
   pressKey(keyval: number, states: number): void {
+    AssociationGuard.dismissIfNeeded(); // 联想态：先收起再正常执行（Spec §5.1）
     const r: KeyResult = OpiEngine.keyEvent(keyval, states);
     if (r.action === OpiAction.Commit) {
       this.insertText(r.text, true);
@@ -206,8 +206,7 @@ export class KeyboardController {
       if (!bracketPairing.backspace(this.client)) { this.deleteForward(1); }
       return;
     }
-    // 数字/符号模式的可打印键走这里：引擎不管这些模式，UI 自己上屏。
-    // 上界 0xFFFF 同时把特殊键（0x1_00xx）挡在外面 —— 它们不是字符。
+    // 数字/符号模式的可打印键走这里；上界 0xFFFF 把特殊键（0x1_00xx）挡在外面。
     if (keyval >= 0x20 && keyval <= 0xFFFF) {
       this.insertText(String.fromCharCode(keyval), true);
     }
@@ -311,8 +310,7 @@ export class KeyboardController {
     this.publish();
   }
 
-  /** 切模式：先清缓冲。⇧ 与引擎 shift 的同步归 `KeyRouter::switch_mode`（单一来源：
-   *  离开 English 清前端三态，进入 English 时重推；single 用掉即复位）。
+  /** 切模式：先清缓冲。⇧ 同步归 `KeyRouter::switch_mode`（单一来源）。
    *  ⚠️ 别在这里再 `setShift(false)`：会清掉刚重推的引擎位（首个字母变小写）。 */
   switchMode(m: OpiMode): void {
     if (m !== OpiMode.English) {
@@ -335,6 +333,7 @@ export class KeyboardController {
 
   /** 选输入模式（MODE_*）：换布局+方案。⚠️ 转发后都 `publish()`（`setScheme` 清缓冲）。 */
   selectInputMode(index: number): void {
+    AssociationGuard.dismissIfNeeded();
     if (index === InputModes.MODE_RARE) {
       // 生僻字是面板视图（不进引擎、不改键位）。
       KeyboardModes.openNestedPanel(PanelView.Rare);
@@ -361,19 +360,16 @@ export class KeyboardController {
 
   /** 面板窗口：高度按 Android 公式（ScreenLayout）；悬浮/游戏收窄居中，游戏再压高度。 */
   private applyPanelWindow(): void {
-    if (this.panel === null) {
-      return;
-    }
+    if (this.panel === null) { return; }
     const r: ScreenLayout.PanelRect = ScreenLayout.panelRect(this.metrics,
       KeyboardModes.gameEnabled(), KeyboardModes.floatingEnabled());
-    if (r.w <= 0 || r.h <= 0) {
-      return;
-    }
+    if (r.w <= 0 || r.h <= 0) { return; }
     this.panel.resize(r.w, r.h);
     this.panel.moveTo(r.x, r.y);
   }
 
   togglePanel(v: PanelView): void {
+    AssociationGuard.dismissIfNeeded();
     KeyboardModes.togglePanel(v);
     this.publish();
   }
@@ -418,14 +414,19 @@ export class KeyboardController {
 
   /** 符号页（符/?123）与生僻字面板：面板视图，不碰引擎。 */
   openSymbolPage(): void {
+    AssociationGuard.dismissIfNeeded();
     KeyboardModes.openPanel(PanelView.SymbolPage);
     this.publish();
   }
 
   openRare(): void {
+    AssociationGuard.dismissIfNeeded();
     KeyboardModes.openPanel(PanelView.Rare);
     this.publish();
   }
+
+  /** 联想态点候选行空白：收起（`tapTiledCandidate` 不走这里 —— 那是链式选词）。 */
+  dismissAssociation(): void { AssociationGuard.dismiss(); }
 
   /** 表情页：引擎 Symbol 模式；记住来路，返回时切回（Android 表情是视图，不换引擎模式）。 */
   openEmoji(): void {
@@ -444,6 +445,7 @@ export class KeyboardController {
 
   /** 符号/生僻字/表情直提：整串送，不拆键（旗帜/家庭是多码位序列）。 */
   commitText(text: string): void {
+    AssociationGuard.dismissIfNeeded();
     this.insertText(text, true);
   }
 

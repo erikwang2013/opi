@@ -41,3 +41,5 @@ export const KEY_TILED: string = 'opiTiled';
 export const KEY_ALL_CANDIDATES: string = 'opiAllCandidates';
 /** 9/14/双拼候选的拼音读音（9 键左列；随候选批刷新，写侧必须紧跟 KEY_CANDIDATES）。 */
 export const KEY_READINGS: string = 'opiReadings';
+/** 联想态（2026-10-27）：空缓冲 + 空显示串 + 有候选 + 拼音/繁体；UI 据此认「候选行是联想」。 */
+export const KEY_ASSOCIATION: string = 'opiAssociation';

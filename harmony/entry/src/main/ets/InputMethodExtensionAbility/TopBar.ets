@@ -58,6 +58,7 @@ export struct TopBar {
   @StorageLink('opiDark') dark: number = 0;
   @StorageLink('opiElder') elder: number = 0;
   @StorageLink('opiTiled') tiled: number = 0;
+  @StorageLink('opiAssociation') association: number = 0;
 
   @State petForms: PetMood[] = petStripSelection(Math.random);
   /** 工具条实测宽度（vp）：图标按它收缩，避免悬浮/单手+悬浮时挤掉收起键。 */
@@ -256,6 +257,11 @@ export struct TopBar {
       }
     }
     .height(44).width('100%').backgroundColor(this.pal().barBg)
+    // 联想态点候选行空白 = 收起（Spec §5.1）。候选 Text 自有点击，是否冒泡到本行
+    // 需真机核：若冒泡，点候选会先选词再收起，链式联想就断了。
+    .onClick(() => {
+      if (this.association === 1) { this.ctrl.dismissAssociation(); }
+    })
   }
 
   @Builder

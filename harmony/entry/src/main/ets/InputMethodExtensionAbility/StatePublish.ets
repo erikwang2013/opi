@@ -12,8 +12,8 @@ import * as KeyboardModes from './KeyboardModes';
 import * as OpiEngine from './OpiEngine';
 import { OpiMode } from './OpiEngine';
 import {
-  KEY_ALL_CANDIDATES, KEY_BUFFER, KEY_CANDIDATES, KEY_DARK, KEY_DISPLAY_BUFFER, KEY_ELDER,
-  KEY_FLOAT, KEY_GAME, KEY_LEARNER, KEY_MODE, KEY_MODE_INDEX, KEY_ONE_HAND,
+  KEY_ALL_CANDIDATES, KEY_ASSOCIATION, KEY_BUFFER, KEY_CANDIDATES, KEY_DARK, KEY_DISPLAY_BUFFER,
+  KEY_ELDER, KEY_FLOAT, KEY_GAME, KEY_LEARNER, KEY_MODE, KEY_MODE_INDEX, KEY_ONE_HAND,
   KEY_PRO, KEY_READINGS, KEY_SHIFT, KEY_SHOW_OWN, KEY_SKIN, KEY_TILED, KEY_VIEW
 } from './KeyboardAppStorage';
 
@@ -79,6 +79,11 @@ export function publishState(): void {
   }
   const tiled: boolean = KeyboardModes.tiledEnabled();
 
+  // 联想态（2026-10-27，Spec §5）：空缓冲 + 空显示串 + 有当前页候选 + 拼音/繁体。
+  // 前缀候选都要求非空缓冲，所以空缓冲下的候选只可能来自联想；缓存给 UI 与收起判据共用。
+  putNumber(KEY_ASSOCIATION, buffer.length === 0 && display.length === 0 &&
+    pageCandidates.length > 0 &&
+    (mode === OpiMode.Pinyin || mode === OpiMode.Traditional) ? 1 : 0);
   putString(KEY_BUFFER, buffer);
   putString(KEY_DISPLAY_BUFFER, display);
   putStrings(KEY_CANDIDATES, pageCandidates);
