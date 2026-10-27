@@ -14,6 +14,8 @@ use engine_core::dictionary::{Dictionary, scheme_entries_scan, scheme_find_scan}
 use engine_core::scheme::Scheme;
 use std::path::Path;
 
+#[path = "loader_assoc.rs"]
+mod loader_assoc;
 #[path = "loader_lower_bound.rs"]
 mod loader_lower_bound;
 #[path = "loader_segmented.rs"]
@@ -38,9 +40,8 @@ pub struct MmapDictionary {
     count: usize,
     pinyin_total: usize,
     max_freq: u32,
-    #[allow(dead_code)] // Task 3/4 接线后移除
+    #[allow(dead_code)] // Task 4 接线后移除
     word_index_start: Option<usize>,
-    #[allow(dead_code)] // Task 3 接线后移除
     assoc: Option<AssocView>,
 }
 
