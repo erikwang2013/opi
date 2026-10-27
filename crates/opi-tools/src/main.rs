@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 use engine_data::{Dictionary, load_bytes};
-use opi_tools::compiler::{compile_file, parse_dict_report};
+use opi_tools::compiler::{compile_file_with_extras, parse_assoc, parse_dict_report};
 use std::io::Write;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -64,17 +64,45 @@ fn main() {
             out!("{}", opi_tools::OPI_PET);
         }
         Some("compile") => {
-            let (Some(input), Some(output)) = (args.get(2), args.get(3)) else {
-                errln!("usage: opi-tools compile <input.tsv|dict.yaml> <output.opid>");
+            const USAGE: &str = "usage: opi-tools compile [--word-index] [--assoc <assoc.tsv>] \
+                                 <input.tsv|dict.yaml> <output.opid>";
+            let mut word_index = false;
+            let mut assoc_path: Option<&String> = None;
+            let mut i = 2;
+            while let Some(arg) = args.get(i) {
+                match arg.as_str() {
+                    "--word-index" => {
+                        word_index = true;
+                        i += 1;
+                    }
+                    "--assoc" => {
+                        let Some(path) = args.get(i + 1) else {
+                            errln!("{USAGE}");
+                            std::process::exit(2);
+                        };
+                        assoc_path = Some(path);
+                        i += 2;
+                    }
+                    _ => break,
+                }
+            }
+            let (Some(input), Some(output)) = (args.get(i), args.get(i + 1)) else {
+                errln!("{USAGE}");
                 std::process::exit(2);
             };
             let text = match std::fs::read_to_string(input) {
                 Ok(t) => t,
                 Err(e) => {
+                    // 先读输入再验参数个数：`compile -- ok.tsv x.opid` 的既成语义是
+                    // 「`--` 是文件名」→ 读不到 → 1（tests/cli_boundary.rs 钉着）。
                     errln!("read {}: {e}", input);
                     std::process::exit(1);
                 }
             };
+            if args.get(i + 2).is_some() {
+                errln!("{USAGE}");
+                std::process::exit(2);
+            }
             let report = parse_dict_report(&text);
             outln!("input lines: {}", text.lines().count());
             outln!("kept entries: {}", report.entries.len());
@@ -92,7 +120,32 @@ fn main() {
                     report.unusable
                 );
             }
-            if let Err(e) = compile_file(report, Path::new(input), Path::new(output)) {
+            let assoc_rows = match assoc_path {
+                Some(path) => {
+                    let assoc_text = match std::fs::read_to_string(path) {
+                        Ok(t) => t,
+                        Err(e) => {
+                            errln!("read {path}: {e}");
+                            std::process::exit(1);
+                        }
+                    };
+                    match parse_assoc(&assoc_text) {
+                        Ok(rows) => rows,
+                        Err(e) => {
+                            errln!("{e}");
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                None => Vec::new(),
+            };
+            if let Err(e) = compile_file_with_extras(
+                report,
+                Path::new(input),
+                Path::new(output),
+                word_index,
+                &assoc_rows,
+            ) {
                 errln!("{e}");
                 std::process::exit(1);
             }

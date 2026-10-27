@@ -10,10 +10,45 @@
 //! `Parsed`）与 re-export，**行为一字不变** —— 本文件的既有测试原样跑，
 //! 锁的就是这条「搬家没改行为」。
 
-use engine_data::format::{OpDict, RawEntry, serialize};
+use engine_data::format::{OpDict, RawEntry};
+use engine_data::{AssocRow, serialize_with_extras};
 use std::path::Path;
 
 pub use engine_data::dict_text::{Parsed, parse_report as parse_dict_report};
+
+/// 解析语义小表 TSV：`root \t suffix \t rank`，空行跳过；同 root+suffix 重复报错。
+pub fn parse_assoc(text: &str) -> Result<Vec<AssocRow>, String> {
+    let mut rows = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    for (i, line) in text.lines().enumerate() {
+        let line_no = i + 1;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let cols: Vec<&str> = line.split('\t').collect();
+        if cols.len() != 3 {
+            return Err(format!("assoc 第 {line_no} 行不是 3 列：{line:?}"));
+        }
+        let root = cols[0].trim();
+        let suffix = cols[1].trim();
+        if root.is_empty() || suffix.is_empty() {
+            return Err(format!("assoc 第 {line_no} 行的 root/suffix 为空"));
+        }
+        let rank: u32 = cols[2]
+            .trim()
+            .parse()
+            .map_err(|_| format!("assoc 第 {line_no} 行的 rank 不是 u32：{:?}", cols[2]))?;
+        if !seen.insert((root.to_string(), suffix.to_string())) {
+            return Err(format!("assoc 第 {line_no} 行重复：{root}\t{suffix}"));
+        }
+        rows.push(AssocRow {
+            root: root.to_string(),
+            suffix: suffix.to_string(),
+            rank,
+        });
+    }
+    Ok(rows)
+}
 
 /// 解析 rime dict.yaml / 项目 tsv 文本为条目。规则见 [`engine_data::dict_text`]。
 pub fn parse_dict(text: &str) -> Vec<RawEntry> {
@@ -45,6 +80,17 @@ pub fn compile(entries: Vec<RawEntry>) -> OpDict {
 /// 2. 一条都没解析出来、却有列数不合法的行 —— 那说明列分隔符用错了
 ///    （空格 / 逗号），不是「词库本来就是空的」，不能 exit 0 悄悄写出空壳。
 pub fn compile_file(report: Parsed, input: &Path, output: &Path) -> Result<(), String> {
+    compile_file_with_extras(report, input, output, false, &[])
+}
+
+/// 同 [`compile_file`]，另带两个可选尾部：词排序索引（bit0）与语义小表（bit1）。
+pub fn compile_file_with_extras(
+    report: Parsed,
+    input: &Path,
+    output: &Path,
+    word_index: bool,
+    assoc_rows: &[AssocRow],
+) -> Result<(), String> {
     if same_file(input, output) {
         return Err(format!(
             "拒绝编译：输入与输出是同一个文件（{}）—— 那会把源 TSV 覆盖成二进制、\
@@ -62,7 +108,7 @@ pub fn compile_file(report: Parsed, input: &Path, output: &Path) -> Result<(), S
             report.malformed.len()
         ));
     }
-    let bytes = serialize(&compile(report.entries));
+    let bytes = serialize_with_extras(&compile(report.entries), word_index, assoc_rows);
     std::fs::write(output, &bytes).map_err(|e| format!("write {}: {e}", output.display()))?;
     Ok(())
 }
@@ -157,6 +203,28 @@ fn windows_file_id(path: &Path) -> Option<(u32, u64)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_assoc_reads_root_suffix_rank() {
+        let rows = parse_assoc("今天\t回家\t600\n中国\t人民\t500\n").unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(
+            rows[0],
+            AssocRow {
+                root: "今天".into(),
+                suffix: "回家".into(),
+                rank: 600
+            }
+        );
+    }
+
+    #[test]
+    fn parse_assoc_rejects_malformed_duplicate_and_empty_fields() {
+        assert!(parse_assoc("今天\t回家\n").is_err());
+        assert!(parse_assoc("今天\t回家\tx\n").is_err());
+        assert!(parse_assoc("\t回家\t1\n").is_err());
+        assert!(parse_assoc("今天\t回家\t1\n今天\t回家\t2\n").is_err());
+    }
 
     #[test]
     fn two_column_defaults_to_1000() {
