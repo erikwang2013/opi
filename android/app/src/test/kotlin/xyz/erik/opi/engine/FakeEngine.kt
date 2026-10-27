@@ -103,6 +103,8 @@ class FakeEngine : OpiEngineApi {
     override fun setShift(on: Boolean) {
         shiftCalls += on
         shiftOn = on
+        // 真引擎 set_shift 清联想（2026-10-27 Task 12）；空缓冲时候选只来自联想。
+        if (buf.isEmpty()) cands = null
     }
 
     override fun inputSpace(): String {

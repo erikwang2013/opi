@@ -434,13 +434,15 @@ class EngineController(
             shiftState = ShiftState.LOCK
             api.setShift(true)
         }
-        // shift 不影响 buffer/candidates，仅通知 UI（也不重置候选页码）
+        // 2026-10-27：引擎 set_shift 清联想 ⇒ 必须重读候选（原先只动 UI 三态）。
+        refresh()
     }
 
     /** ⇧ 长按 = **单次大写**（SINGLE）：下一个字母大写后由 [consumeSingleShift] 复位。 */
     fun shiftLongPress() {
         shiftState = ShiftState.SINGLE
         api.setShift(true)
+        refresh()
     }
 
     /** single 态消费后复位（lock 不受影响）。 */

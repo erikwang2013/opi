@@ -6,6 +6,7 @@ package xyz.erik.opi.ime
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.engine.ShiftState
+import xyz.erik.opi.engine.associationActive
 
 /**
  * 按键分流：buffer 非空走引擎，buffer 空走直传（对齐 flutter ime_router.dart）。
@@ -57,6 +58,7 @@ class KeyRouter(
      * 点的就是一个括号，与键盘打出来同义。英文模式不做配对（见 shared 契约第 5 条）。
      */
     fun commitText(text: String) {
+        if (controller.associationActive) controller.clear()
         if (controller.mode != EngineMode.ENGLISH && pairing?.commitTyped(text) == true) {
             syncComposing()
             return
@@ -69,6 +71,7 @@ class KeyRouter(
      * 出文本（中文模式 `,` → `，`、半角 → 原样交回），丢弃返回值就等于吞键。
      */
     fun handleKey(ch: String) {
+        if (controller.associationActive) controller.clear()
         if (controller.mode == EngineMode.ENGLISH) {
             // 英文直传不配对（含密码场自动临时英文）：跟踪在这里统一清掉。
             pairing?.reset()
@@ -138,6 +141,7 @@ class KeyRouter(
     }
 
     fun handleSpace() {
+        if (controller.associationActive) controller.clear()
         if (controller.buffer.isNotEmpty() || controller.pendingText.isNotEmpty()) {
             val text = controller.inputSpace()
             if (text.isNotEmpty()) commitAndResync(text)
@@ -149,6 +153,7 @@ class KeyRouter(
     }
 
     fun handleBackspace() {
+        if (controller.associationActive) controller.clear()
         if (controller.buffer.isNotEmpty() || controller.pendingText.isNotEmpty()) {
             pairing?.reset()
             controller.backspace()
@@ -158,6 +163,7 @@ class KeyRouter(
     }
 
     fun handleEnter() {
+        if (controller.associationActive) controller.clear()
         if (controller.buffer.isEmpty() && controller.pendingText.isEmpty()) {
             performEnter()
             return

@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.keyboard.LocalKeyboardPalette
 import xyz.erik.opi.engine.EngineMode
+import xyz.erik.opi.engine.associationActive
 import xyz.erik.opi.pet.OpiPet
 import xyz.erik.opi.pet.petMood
 
@@ -91,7 +92,10 @@ fun CandidateBar(
     val candidates = controller.pageCandidates
     Row(
         modifier = modifier.fillMaxWidth().fillMaxHeight()
-            .background(p.barBg),
+            .background(p.barBg)
+            // 联想态点空白处收起（Spec §5.1）：子候选的点击/长按与横向滚动都会消费
+            // 自己的手势，只有空白区域落在这里；enabled 保证非联想态不抢点击。
+            .clickable(enabled = controller.associationActive) { controller.clear() },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // ⚠️ 2026-10-15 用户裁决改判：拼音（缓冲/读数）与五笔编码提示**不再画在本栏**——
