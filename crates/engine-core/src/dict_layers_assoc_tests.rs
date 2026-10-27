@@ -29,9 +29,10 @@ impl Dictionary for StubDict {
 
 #[test]
 fn layered_dictionary_delegates_association_to_base_only() {
-    let mut base = StubDict::default();
-    base.prefix = vec![("今天晚上".into(), 7)];
-    base.suffixes = vec![("回家".into(), 9)];
+    let base = StubDict {
+        prefix: vec![("今天晚上".into(), 7)],
+        suffixes: vec![("回家".into(), 9)],
+    };
     let mut d = LayeredDictionary::new(Box::new(base));
     d.set_extras(vec![("导入".into(), {
         let mut e = InMemoryDictionary::new();

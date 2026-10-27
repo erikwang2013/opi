@@ -160,9 +160,11 @@ mod tests {
                 Vec::new()
             }
             fn words_with_prefix(&self, prefix: &str) -> Vec<(String, u32)> {
-                (prefix == self.0)
-                    .then(|| vec![(format!("{prefix}好"), 1)])
-                    .unwrap_or_default()
+                if prefix == self.0 {
+                    vec![(format!("{prefix}好"), 1)]
+                } else {
+                    Vec::new()
+                }
             }
             fn len(&self) -> usize {
                 0
