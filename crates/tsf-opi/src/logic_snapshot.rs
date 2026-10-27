@@ -25,6 +25,8 @@ pub struct StateSnapshot {
     pub page_count: usize,
     pub mode: Mode,
     pub composing: bool,
+    /// 联想态（缓冲空但候选是续接项，Spec §5）：调用方据此取 caret、推快照。
+    pub association: bool,
 }
 
 impl TsfLogic {
@@ -88,8 +90,18 @@ impl TsfLogic {
             page_count: fetched.len().div_ceil(PAGE_SIZE),
             mode: self.mode(),
             composing: self.has_composing(),
+            association: self.engine.association_active(),
         }
     }
+}
+
+/// 候选窗可见性（Spec §5）：缓冲非空，或联想态候选非空 → 显示。
+/// 联想态缓冲是空的，只看缓冲会把续接项连同窗口一起藏掉。
+// 生产调用方只有 Windows 的 `candidate_sink.rs`；Linux 主机上只有测试用它 ——
+// 不加 allow 会让 CI 的 clippy -D warnings 因 dead_code 变红。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub(crate) fn candidates_visible(buffer: &str, candidates: &[String]) -> bool {
+    !buffer.is_empty() || !candidates.is_empty()
 }
 
 #[cfg(test)]
@@ -149,3 +161,11 @@ mod tests {
         assert!(!snap.composing);
     }
 }
+
+// 联想收起（2026-10-27，Spec §5）：`logic.rs` 已 498 行，声明挂在这里。
+#[path = "logic_association.rs"]
+mod association;
+
+#[cfg(test)]
+#[path = "logic_association_tests.rs"]
+mod association_tests;

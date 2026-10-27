@@ -35,6 +35,11 @@ impl ITfKeyEventSink_Impl for TsfTextService_Impl {
         //   · 带 Ctrl/Alt 的组合键（除热键外）与 Win 键/Win 组合键 → FALSE；
         //   · 引擎不会消费的键（功能键、空缓冲特殊键）→ FALSE，交给应用/系统；
         //   · 其余键 → TRUE；OnKeyDown 里引擎保证消费。
+        //
+        // 联想态（Spec §5）：**按下**先收起再走上面的分流 —— 点选候选排回本线程
+        // 的队列也要先落地（点选可能刚把引擎带进联想态）。Ctrl/Alt 直通同样收起。
+        self.drain_pending();
+        self.dismiss_association_and_push();
         let states = map_key_state(lparam);
         let vk = wparam.0 as u32;
         // Shift 轻按判定第一拍（镜像 fcitx5 轨 `OpiShiftToggle::handle`）：

@@ -242,8 +242,10 @@ impl TsfTextService {
                 None => return BOOL(1), // 中毒锁：吞键，避免键流入应用造成死循环
             };
             let outcome = logic.input_key(keycode, states);
-            let snapshot = match outcome {
+            let snapshot = match &outcome {
                 KeyOutcome::CompositionChanged => Some(logic.snapshot()),
+                // 提交可能刚进联想态（Spec §5）：快照要给下面的补推用。
+                KeyOutcome::Commit(_) => Some(logic.snapshot()),
                 _ => None,
             };
             (outcome, snapshot)
@@ -256,6 +258,11 @@ impl TsfTextService {
                     self.state.insert_into(pic, &text);
                 }
                 self.sink.on_commit(&text);
+                // 提交可能刚进联想态（Spec §5）：补 caret + 推快照，候选窗
+                // 才会留着显示续接项（窗口收起的决定在 candidate_sink）。
+                if let Some(snapshot) = snapshot {
+                    self.push_after_commit(&snapshot, pic);
+                }
                 BOOL(1)
             }
             KeyOutcome::CompositionChanged => {
@@ -476,6 +483,10 @@ mod shift_glue;
 
 #[path = "key_sink.rs"]
 mod key_sink;
+
+// 联想态推送（按键收起 / 提交后补推）在 tsf_association.rs：拆出守 500 行。
+#[path = "tsf_association.rs"]
+mod association;
 
 // 输入法配置切换监听（切走立即释放候选管道）在 profile_sink.rs。
 #[path = "profile_sink.rs"]

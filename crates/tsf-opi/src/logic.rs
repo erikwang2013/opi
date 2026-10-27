@@ -478,7 +478,7 @@ mod shift;
 
 // 状态推送快照在子模块：锁内抓取、锁外发送（2026-10-22 卡死根因），拆出守 500 行。
 #[path = "logic_snapshot.rs"]
-mod snapshot;
+pub(crate) mod snapshot;
 pub use snapshot::StateSnapshot;
 
 // OnTestKeyDown 的“引擎会不会消费”只读判定（TSF 的 TRUE 是最终决定）。

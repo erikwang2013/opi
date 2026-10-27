@@ -17,6 +17,7 @@ use std::sync::Arc;
 use engine_core::composer::Mode;
 
 use crate::candidate_io::{CandidateAction, CandidateClient};
+use crate::logic::snapshot::candidates_visible;
 use crate::state::EngineShared;
 use crate::tsf::TsfSink;
 
@@ -57,7 +58,8 @@ impl TsfSink for CandidateSink {
         self.client.position(x, y);
     }
 
-    /// composition/候选变化：缓冲非空 → show（页码 1 起）；空 → hide。
+    /// composition/候选变化：缓冲或候选任一非空 → show（页码 1 起）；
+    /// 都空 → hide。联想态缓冲为空、候选是续接项（Spec §5），只看缓冲会藏掉窗口。
     fn on_composition_changed(
         &self,
         buffer: &str,
@@ -66,11 +68,11 @@ impl TsfSink for CandidateSink {
         page_count: usize,
         mode: Mode,
     ) {
-        if buffer.is_empty() {
-            self.client.hide();
-        } else {
+        if candidates_visible(buffer, candidates) {
             self.client
                 .show(buffer, candidates, page + 1, page_count, mode);
+        } else {
+            self.client.hide();
         }
     }
 
