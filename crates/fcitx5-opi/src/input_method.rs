@@ -90,11 +90,16 @@ pub enum KeyAction {
 /// xkb 符号（物理 shift 已应用，如 Shift+a → 'A'）；若实现侧给的是小写
 /// 键值 + SHIFT 位，本路由同样能正确处理。
 pub fn handle_key(state: &mut CandidateState, keyval: u32, states: u32) -> KeyAction {
+    let released = states & KEY_STATE_RELEASED != 0;
+    // 联想态：**按下**先收起再走正常路由（Spec §5）。排在 Ctrl/Alt 直通之前 ——
+    // 系统快捷键同样先收联想；抬起不动作（否则按住不放会反复清状态）。
+    if !released {
+        state.dismiss_association();
+    }
     // Ctrl/Alt 组合键（系统快捷键）一律直通，不拦截。
     if states & (KEY_STATE_CTRL | KEY_STATE_ALT) != 0 {
         return KeyAction::PassThrough;
     }
-    let released = states & KEY_STATE_RELEASED != 0;
     // 符号浏览（契约 ②，见 engine_symbol_browse.rs 头）：**按下**时只有 `1`-`9`、
     // `-`/`=`、Esc 归浏览；其余键先把浏览退出（恢复真缓冲）再落进下面的正常路由 ——
     // 「退出」放在这里（全部按键之前）而不是各分支里，单点免得某个键漏掉。
@@ -437,6 +442,9 @@ fn commit_or_handled(out: String) -> KeyAction {
 }
 
 // 单测独立成文件（input_method_tests.rs，`#[path]` 引入）以保持本文件 <500 行。
+#[cfg(test)]
+#[path = "input_method_association_tests.rs"]
+mod association_tests;
 #[cfg(test)]
 #[path = "input_method_browse_tests.rs"]
 mod browse_tests;

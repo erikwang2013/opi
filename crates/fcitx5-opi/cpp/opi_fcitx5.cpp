@@ -67,6 +67,9 @@ static constexpr size_t kOpiCandidateFetchLimit = SIZE_MAX;
 // 进程内一个静态量够用：Rust 侧状态本就是进程单例，面板只是它的镜子；切
 // 输入上下文时 fcitx5 会调 reset()，那里两边一起清空并刷新这个缓存。
 static std::string g_pushedBuffer;
+// 上一次推给前端时是否有候选。与 g_pushedBuffer 合起来判「联想态」（缓冲空 +
+// 有候选）：联想没有预编辑，单看缓冲会把它误当成空闲（Spec §5，2026-10-27）。
+static bool g_pushedHadCandidates = false;
 
 // 候选词：点选后走 Rust 侧 select(**页内**索引) 并提交。
 // CandidateWord::select 是纯虚（fcitx/candidatelist.h:44），必须实现。
@@ -108,14 +111,29 @@ void refreshingPanelFor(fcitx::InputContext *ic) {
     }
     auto &panel = ic->inputPanel();
     const std::string buffer = take(opi_fcitx5_buffer());
+    // 候选**只取一次**（2026-10-27）：联想判据要用它，下面的正常分支也复用它；
+    // 重复调 opi_fcitx5_candidates 会把 Rust 侧的页游标推进两次。
+    const auto texts = parseJsonStringArray(
+        take(opi_fcitx5_candidates(kOpiCandidateFetchLimit)));
     // 客户端声明了 Preedit 才走内联预编辑通道；两个入口共用这一个判断。
     const bool wantsClientPreedit =
         ic->capabilityFlags().test(fcitx::CapabilityFlag::Preedit);
-    if (buffer.empty()) {
+    if (buffer.empty() && texts.empty()) {
         // 缓冲空 = 本引擎当前无 composing。用 reset() 而不是 setPreedit("")：
         // 它把预编辑、候选表、辅助串一起清干净（含 clientPreedit），正是
         // 「无 composing」的完整表达。
         panel.reset();
+    } else if (buffer.empty()) {
+        // 空缓冲 + 有候选 = 联想态（Spec §5，2026-10-27）：只建候选表。
+        // **不设** preedit / clientPreedit / selectionKey / globalCursorIndex ——
+        // 联想不是 composing，且数字键必须落回 Rust 路由（联想态数字不选词）。
+        panel.reset();
+        auto list = std::make_unique<fcitx::CommonCandidateList>();
+        list->setPageSize(static_cast<int>(texts.size()));
+        for (size_t i = 0; i < texts.size(); ++i) {
+            list->append<OpiCandidateWord>(texts[i], i);
+        }
+        panel.setCandidateList(std::move(list));
     } else {
         fcitx::Text preedit(buffer);
         // 光标在预编辑串末尾（按字节）。2026-10-17 起缓冲可能带**逐字确认的汉字**
@@ -138,8 +156,7 @@ void refreshingPanelFor(fcitx::InputContext *ic) {
         }
 
         auto list = std::make_unique<fcitx::CommonCandidateList>();
-        const auto texts = parseJsonStringArray(
-            take(opi_fcitx5_candidates(kOpiCandidateFetchLimit)));
+        // texts 已在函数顶部取过（一次抓取；重复调会推进 Rust 页游标）。
         // 页大小 = **实际推过去的条数** → 候选表恒为单页（见文件头说明），
         // 且不需要任何「和 Rust 对齐」的常量：Rust 页变大，这里跟着变大。
         // 空表不设：页大小 0 不是合法值，而空表本来也没东西可翻。
@@ -185,6 +202,7 @@ void refreshingPanelFor(fcitx::InputContext *ic) {
     ic->updateUserInterface(fcitx::UserInterfaceComponent::InputPanel);
     // 推完了才记 —— 半路抛异常时这里保持旧值，下次直通键会照常重推一遍。
     g_pushedBuffer = buffer;
+    g_pushedHadCandidates = !texts.empty();
 }
 
 // ---------- W1「直接确认」：切走/切英文时把待定输入提交掉（2026-10-10） ----------
@@ -341,6 +359,15 @@ void OpiEngine::keyEvent(const fcitx::InputMethodEntry &entry,
 
 void OpiEngine::keyEventImpl(const fcitx::InputMethodEntry & /*entry*/,
                              fcitx::KeyEvent &keyEvent) {
+    // 联想态（Spec §5，2026-10-27）：**按下**先收起再执行本键 —— 无论它随后是
+    // 热键、直通还是普通输入，都不该让联想候选活过这一步。候选窗没有预编辑，
+    // 只能按「上次推出去的状态」判：缓冲空 + 有候选。抬起不动作。
+    const bool associationShown = !keyEvent.isRelease()
+        && g_pushedBuffer.empty() && g_pushedHadCandidates;
+    if (associationShown) {
+        opi_fcitx5_clear();
+        refreshingPanelFor(keyEvent.inputContext());
+    }
     // Shift 轻按判定**最先**：它要看每一个按下事件来撤销判定（Shift+字母/
     // 方向/空格都不是轻按），且从不消费事件、不碰 Rust 状态（见 opi_mode.h）。
     shiftToggle_.handle(keyEvent, *settings_.shiftToggle);
@@ -406,7 +433,7 @@ void OpiEngine::keyEventImpl(const fcitx::InputMethodEntry & /*entry*/,
     const bool shiftOnly = !keyEvent.isRelease()
         && (keyEvent.key().sym() == FcitxKey_Shift_L
             || keyEvent.key().sym() == FcitxKey_Shift_R);
-    if ((result.action == 0 || shiftOnly)
+    if ((result.action == 0 || shiftOnly) && !associationShown
         && take(opi_fcitx5_buffer()) == g_pushedBuffer) {
         return;
     }
@@ -422,7 +449,10 @@ void OpiEngine::keyEventImpl(const fcitx::InputMethodEntry & /*entry*/,
 static std::unique_ptr<fcitx::EventSourceTime> g_userWordsTimer;
 
 void OpiEngine::startUserWordsTimer() {
-    if (opi_fcitx5_save_user_words_if_due == nullptr) {
+    // 手工 harness 的驱动用 `OpiEngine(nullptr)` 直接构造（instance_ 不入库、只存
+    // 不用）；没有这个空判，2026-10-22 加的计时器会在驱动里空指针崩溃 —— 与联想
+    // 无关的既存问题，2026-10-27 跑 Task 17 harness 时暴露。
+    if (instance_ == nullptr || opi_fcitx5_save_user_words_if_due == nullptr) {
         return; // 旧 .so 没有该出口：保持「无自动落盘」，别让插件加载失败。
     }
     g_userWordsTimer = instance_->eventLoop().addTimeEvent(

@@ -90,7 +90,9 @@ int main() {
         }
     }
     check(labelsOk, "候选序号按页内 1..n 编号（label 非空且以数字开头）");
-    check(ic.inputPanel().preedit().cursor() == 5, "预编辑光标在末尾（字节 5）");
+    // 不写死字节数（2026-10-23 起显示串带分词撇号，"ni'hao" = 6 字节）：断言不变量。
+    check(ic.inputPanel().preedit().cursor() == static_cast<int>(preeditOf(ic).size()),
+          "预编辑光标在末尾（== 串字节长）");
     check(clientPreeditOf(ic) == "ni'hao", "clientPreedit == 显示串（内联预编辑通道）");
     check(candidateCursor(ic) == 0, "候选光标 = 0（候选栏有高亮）");
 
@@ -190,7 +192,11 @@ int main() {
                 q(clicked).c_str(), q(ic.committed_).c_str(),
                 q(preeditOf(ic)).c_str(), candidateCount(ic));
     check(ic.committed_ == clicked, "点选提交了该候选文本");
-    check(preeditOf(ic).empty() && candidateCount(ic) == 0, "点选后面板清空");
+    check(preeditOf(ic).empty(), "点选后预编辑清空");
+    // 联想态（Spec §5）：有续接项时链式候选留面板（缓冲空 + 候选非空），无则清空 —— 都合法，按实际分支断言。
+    const bool hasChain = candidateCount(ic) > 0;
+    check(static_cast<bool>(ic.inputPanel().candidateList()) == hasChain,
+          "点选后：联想态保留链式候选，无联想则面板清空");
 
     std::printf("== 5. 空格提交 ==\n");
     ic.committed_.clear();

@@ -489,3 +489,7 @@ mod candidate_tests;
 #[cfg(test)]
 #[path = "candidate_limits_tests.rs"]
 mod limits_tests;
+
+// 联想收起独立成文件（500 行门禁拆分，2026-10-27，Spec §5）。
+#[path = "candidate_association.rs"]
+mod association;
