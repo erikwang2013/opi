@@ -38,6 +38,7 @@ impl ITfKeyEventSink_Impl for TsfTextService_Impl {
         //
         // 联想态（Spec §5）：**按下**先收起再走上面的分流 —— 点选候选排回本线程
         // 的队列也要先落地（点选可能刚把引擎带进联想态）。Ctrl/Alt 直通同样收起。
+        // 点选建出的新链在这里又被收起：TSF 排队架构的已知边界（Spec §11）。
         self.drain_pending();
         self.dismiss_association_and_push();
         let states = map_key_state(lparam);

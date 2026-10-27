@@ -7,6 +7,14 @@
 > 前缀与语义下一词「两种都要」、「可以」、「全做」、「用现有短语表抽小表（推荐）」、
 > 「正常执行（推荐）」、「六端都做」。本文把这些话落成可实施的边界；与用户原话
 > 不同的工程取舍集中在 §12，供复核。
+>
+> **订正（2026-10-28，终审）**：§5.6 末条「`drain_pending` 已在 `select_and_insert`
+> 后推快照；改完 `CandidateSink` 的可见性即可链式」不成立 —— TSF 候选点选经管道
+> 排队、整段延迟到下一次按键执行（`crates/tsf-opi/src/state.rs` 模块头），同一
+> keydown 里新链随即被 dismiss 收起；TSF 上联想项只能点选落字（延迟一次按键），
+> 不能链式。§11 已补记。另：HarmonyOS 空缓冲回车是既存死键，IME Kit 实际有
+> `InputClient.getEditorAttributeSync` + `sendKeyFunction`，可另案补，需真机验证；
+> §11 已补记。
 
 ## 1. 背景与目标
 
@@ -998,6 +1006,12 @@ fcitx5 的候选机制直接吃掉。Android 数字直提路径在 dismiss + ref
 - 9/14 键联想行没有拼音读数（不是输入键序），左列显示由宿主决定。
 - 根含标点/英文时按原样查询，无命中即无联想；汉字计数只算基本区。
 - fcitx5/TSF 鼠标/触摸选区不可观测；只覆盖键盘方向键/Home/End。
+- TSF 候选点选整体延迟到下一次按键（既有架构，见 `crates/tsf-opi/src/state.rs`
+  模块头）：联想项可点选落字，但下一条链在同一 keydown 被收起，**不能链式**；
+  即时插入要走 COM 异步编辑会话或 GIT 代理，两者都需真机验证。
+- HarmonyOS 空缓冲回车无宿主动作（既存平台缺口，与联想无关）：IME Kit 有
+  `InputClient.getEditorAttributeSync()` 与 `sendKeyFunction()`，补法明确，
+  需真机验证；本设计不覆盖。
 - macOS 候选窗（`IMKCandidates`）空白点击不可做；文档鼠标点击用 `IMKMouseHandling`。
 - 非 Rust 宿主用 `clear()` 清联想会顺带清 `last_commit`；只影响学习撤销，不删文本。
 - 词索引/assoc 的有序性不在加载时全量校验（理由见 §3.6），靠写入断言、checksum

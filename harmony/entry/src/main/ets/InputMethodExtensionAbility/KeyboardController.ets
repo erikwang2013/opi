@@ -210,7 +210,7 @@ export class KeyboardController {
     if (keyval >= 0x20 && keyval <= 0xFFFF) {
       this.insertText(String.fromCharCode(keyval), true);
     }
-    // 空缓冲的 ↵ 也落到这里：KEY_RETURN > 0xFFFF，两个分支都不接 ⇒ 已知死键（见 tapEnter）。
+    // 空缓冲的 ↵ 也落到这里：KEY_RETURN > 0xFFFF，两个分支都不接 ⇒ 既存死键（补法见 tapEnter）。
   }
 
   /** 面板上的字符键。英文 pro 关时直提（不经过引擎），其余走统一路由。 */
@@ -257,7 +257,7 @@ export class KeyboardController {
     }
   }
 
-  /** 回车：缓冲非空提交首候选；空缓冲是已知缺口（缺 IME Kit 送键接口，别退化成上屏 '\n'）。 */
+  /** 回车：缓冲非空提交首候选；空缓冲是既存缺口（可用 getEditorAttributeSync + sendKeyFunction 补，需真机；别退化成上屏 '\n'）。 */
   tapEnter(): void {
     this.pressKey(OpiEngine.KEY_RETURN, 0);
   }

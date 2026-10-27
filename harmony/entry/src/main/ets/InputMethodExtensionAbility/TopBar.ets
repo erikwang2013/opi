@@ -257,8 +257,8 @@ export struct TopBar {
       }
     }
     .height(44).width('100%').backgroundColor(this.pal().barBg)
-    // 联想态点候选行空白 = 收起（Spec §5.1）。候选 Text 自有点击，是否冒泡到本行
-    // 需真机核：若冒泡，点候选会先选词再收起，链式联想就断了。
+    // 联想态点候选行空白 = 收起（Spec §5.1）。ArkUI 的 onClick 是手势竞争：
+    // 子组件消费后父级不触发（文档级，真机未核）⇒ 点候选不误触本行；若真机相反改用 hitTestBehavior。
     .onClick(() => {
       if (this.association === 1) { this.ctrl.dismissAssociation(); }
     })

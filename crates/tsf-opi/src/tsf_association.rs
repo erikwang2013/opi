@@ -4,6 +4,10 @@
 //! 联想态的两个推送点（2026-10-27，Spec §5，镜像 fcitx5 轨）：
 //! 按键时收起、提交后补推快照。拆出守 500 行；锁内只碰引擎，管道写在锁外
 //! （理由见 `sink.rs` 的 `push_state`）。
+//!
+//! 已知边界（2026-10-28 终审，Spec §11）：候选窗点选整段延迟到下一次按键
+//! （`state.rs` 模块头），`drain_pending` 刚建的新链会在同一 keydown 被收起 ——
+//! TSF 上联想项可点选落字，不能链式。
 
 use windows::Win32::UI::TextServices::ITfContext;
 
