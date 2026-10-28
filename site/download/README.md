@@ -5,15 +5,15 @@
 
 ```bash
 # 在仓库根目录执行（版本号按实际发布替换）
-cp dist/opi-1.26.3-linux-amd64.deb \
-   dist/opi-1.26.3-linux-x86_64.rpm \
-   dist/opi-1.26.3-windows-x64-setup.exe \
-   dist/opi-1.26.3-android-universal.apk \
-   dist/opi-1.26.3-macos-universal.pkg \
-   dist/opi-1.26.3-ios-unsigned.ipa \
-   dist/opi-1.26.3-harmonyos-unsigned.hap \
-   dist/opi-1.26.3-custom-pinyin-200k.tsv \
-   dist/opi-1.26.3-rime-wanxiang-200k.tsv \
+cp dist/opi-1.26.4-linux-amd64.deb \
+   dist/opi-1.26.4-linux-x86_64.rpm \
+   dist/opi-1.26.4-windows-x64-setup.exe \
+   dist/opi-1.26.4-android-universal.apk \
+   dist/opi-1.26.4-macos-universal.pkg \
+   dist/opi-1.26.4-ios-unsigned.ipa \
+   dist/opi-1.26.4-harmonyos-unsigned.hap \
+   dist/opi-1.26.4-custom-pinyin-200k.tsv \
+   dist/opi-1.26.4-rime-wanxiang-200k.tsv \
    site/download/
 ```
 
