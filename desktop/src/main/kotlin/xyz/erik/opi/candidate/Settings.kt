@@ -65,6 +65,8 @@ data class OpSettings(
      */
     val fuzzyPairs: String = "",
     val jianpin: Boolean = true,
+    /** 智能联想（2026-10-28 用户裁决「默认关闭」；键 `Association`）：缺省 **false**，与 fcitx5/TSF 同步。 */
+    val association: Boolean = false,
     /** 拼音纠错（2026-10-13 用户裁决「混合参与排序」；键 `Correction`）。 */
     val correction: Boolean = true,
     /**
@@ -119,17 +121,15 @@ data class OpSettings(
         appendLine("Fuzzy=${boolText(fuzzy)}")
         appendLine("FuzzyPairs=$fuzzyPairs")
         appendLine("Jianpin=${boolText(jianpin)}")
+        appendLine("Association=${boolText(association)}")
         appendLine("Correction=${boolText(correction)}")
         // 表情页「自有」（2026-10-20）：表情窗打开时读；不分平台地写全（同一份文件格式）。
         appendLine("ShowOwn=${boolText(showOwn)}")
         appendLine("ShuangpinLayout=$shuangpinLayout")
         appendLine("PinyinMethod=$pinyinMethod")
-        // Shift 轻按切换中英文（Linux 读侧 = opi_config.h 的 ShiftToggle；Windows 读侧
-        // 不认这个键、忽略之 —— 见本 data class 的头注）。
+        // Shift 轻按切换中英文（Linux 读侧 = opi_config.h 的 ShiftToggle；Windows 忽略此键）。
         appendLine("ShiftToggle=${boolText(shiftToggle)}")
-        // 皮肤只在 Linux 侧有意义（fcitx5 主题）；Windows 侧读侧忽略未知键，
-        // 但设置窗在 Windows 上不显示这一节，写不写都到不了那条路 —— 写，
-        // 是为了「同一份文件格式」不因平台分叉。
+        // 皮肤只在 Linux 侧有意义；Windows 读侧忽略未知键，写它只为同一份文件格式不分叉。
         appendLine("Skin=${skin.value}")
         // 候选字号：存的只是档位名；真正的落点是 fcitx5 classicui.conf 的 Font=
         // （保存时按需写过去，见 ClassicUiFont.kt）。两侧 IME 读侧都不认这个键
@@ -181,6 +181,7 @@ data class OpSettings(
                 fuzzy = bool("Fuzzy", false),
                 fuzzyPairs = map["FuzzyPairs"] ?: "",
                 jianpin = bool("Jianpin", true),
+                association = bool("Association", false),
                 correction = bool("Correction", true),
                 showOwn = bool("ShowOwn", false),
                 shuangpinLayout = map["ShuangpinLayout"]
@@ -292,17 +293,16 @@ fun mergeIni(existing: String, s: OpSettings): String {
         "Fuzzy" to boolText(s.fuzzy),
         "FuzzyPairs" to s.fuzzyPairs,
         "Jianpin" to boolText(s.jianpin),
+        "Association" to boolText(s.association),
         "Correction" to boolText(s.correction),
         "ShowOwn" to boolText(s.showOwn),
         "ShuangpinLayout" to s.shuangpinLayout,
         "PinyinMethod" to s.pinyinMethod,
         "ShiftToggle" to boolText(s.shiftToggle),
         "Skin" to s.skin.value,
-        // 候选字号只在本窗读写（真正的落点在 classicui.conf，见 ClassicUiFont.kt）——
-        // 进 managed 是为了「同一份 ini 的键由本窗统一负责」，与 StatusBar* 同理。
+        // 候选字号只在本窗读写（真落点是 classicui.conf）；进 managed 同 StatusBar*。
         "CandidateFont" to s.candidateFont,
-        // 词库停用名单（2026-10-14）：与 StatusBar*/CandidateFont 同一条 ——「同一份 ini
-        // 的键由本窗统一负责」，不分平台地写全。
+        // 词库停用名单（2026-10-14）：与 StatusBar*/CandidateFont 同一条，不分平台写全。
         "DisabledDicts" to s.disabledDicts,
         "StatusBarHidden" to boolText(s.statusbar.hidden),
         "StatusBarVk" to boolText(s.statusbar.vk),

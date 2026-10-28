@@ -44,7 +44,7 @@ final class SettingsPanel: UIView {
     var onClearUserWords: (() -> Void)?
 
     private enum Toggle: Hashable {
-        case learn, fuzzy, jianpin, correction, chinesePunct, showOwn, dark, elder
+        case learn, fuzzy, jianpin, association, correction, chinesePunct, showOwn, dark, elder
     }
 
     private let header = KeyboardPanelHeader(title: "设置", hint: "改动立即生效")
@@ -180,6 +180,8 @@ final class SettingsPanel: UIView {
         addSwitchRow(
             "简拼", detail: "只用声母也能出候选", tag: .jianpin, isOn: settings.jianpin
         )
+        addSwitchRow("智能联想", detail: "提交后联想常用续接词句（默认关闭）",
+                     tag: .association, isOn: settings.association)
 
         addSection("用户词库")
         stack.addArrangedSubview(userWordsSection)
@@ -216,7 +218,7 @@ final class SettingsPanel: UIView {
             as? String ?? "未知"
         addNote("小欧输入法 v\(version) · MIT · © 2026 erik.xyz")
         stack.addArrangedSubview(updateView)
-        addNav("关于与链接（主页 / 项目 / 博客）") { [weak self] in self?.onOpenAbout?() }
+        addNav("关于与链接（主页 / 项目 / 博客 / 隐私政策）") { [weak self] in self?.onOpenAbout?() }
         addNote(
             "设置只保存在键盘扩展自己的容器里。宿主 App 与键盘扩展没有配置 App Group，"
                 + "因此宿主 App 不会读取或修改这些设置 —— 真实情况如此，不假装同步。"
@@ -379,6 +381,7 @@ final class SettingsPanel: UIView {
         switches[.learn]?.isOn = settings.learn
         switches[.fuzzy]?.isOn = settings.fuzzy
         switches[.jianpin]?.isOn = settings.jianpin
+        switches[.association]?.isOn = settings.association
         switches[.correction]?.isOn = settings.correction
         switches[.chinesePunct]?.isOn = settings.chinesePunct
         switches[.showOwn]?.isOn = settings.showOwn
@@ -400,6 +403,8 @@ final class SettingsPanel: UIView {
             stylePairChips()
         case .jianpin:
             settings.jianpin = on
+        case .association:
+            settings.association = on
         case .correction:
             settings.correction = on
         case .chinesePunct:

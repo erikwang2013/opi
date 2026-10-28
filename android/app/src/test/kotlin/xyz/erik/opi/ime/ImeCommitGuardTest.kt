@@ -3,16 +3,23 @@
 
 package xyz.erik.opi.ime
 
+import xyz.erik.opi.engine.AssociationGate
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.engine.FakeEngine
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 /** 自我提交窗口与选区变化收起联想（Spec §5.2）。 */
 class ImeCommitGuardTest {
+    // 联想默认关闭 ⇒ 不开门禁时 refresh 会把联想候选挡掉，本类就测不到联想态。
+    @Before fun allowAssociation() { AssociationGate.enabled = true }
+    @After fun resetGate() { AssociationGate.enabled = false }
+
     private fun activeController(): Pair<FakeEngine, EngineController> {
         val fake = FakeEngine()
         val ctrl = EngineController(fake)

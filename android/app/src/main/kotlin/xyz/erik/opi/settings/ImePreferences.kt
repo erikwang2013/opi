@@ -4,6 +4,7 @@
 package xyz.erik.opi.settings
 
 import android.content.Context
+import xyz.erik.opi.engine.AssociationGate
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.ime.InputMode
 import xyz.erik.opi.ime.KeyboardModes
@@ -91,6 +92,11 @@ class ImePreferences(private val store: PrefStore) {
     var learn: Boolean
         get() = store.getBoolean(KEY_LEARN, true)
         set(v) = store.put(KEY_LEARN, v)
+
+    /** 智能联想（2026-10-28 用户裁决「默认关闭」；无引擎出口，见 [AssociationGate]）。 */
+    var association: Boolean
+        get() = store.getBoolean(KEY_ASSOCIATION, false)
+        set(v) = store.put(KEY_ASSOCIATION, v)
 
     var fuzzy: Boolean
         // 缺省 false = 关（2026-10-15 用户裁决「默认关闭模糊音」）；纠错/简拼仍缺省开。
@@ -234,6 +240,8 @@ class ImePreferences(private val store: PrefStore) {
         // 双拼布局（2026-10-13）：与方案正交 —— 无论当前是不是双拼都推进去（引擎侧
         // 只在双拼方案下用它解码），这样切到双拼时布局已经是对的。
         controller.setShuangpinLayout(shuangpinLayoutIndexOf(shuangpinLayout))
+        // 联想开关没有引擎出口：宿主侧的进程级 gate，服务与设置页两个控制器共享。
+        AssociationGate.enabled = association
     }
 
     companion object {
@@ -245,6 +253,7 @@ class ImePreferences(private val store: PrefStore) {
         const val KEY_ELDER = "kb_elder"
         const val KEY_SKIN = "kb_skin"
         const val KEY_LEARN = "engine_learn"
+        const val KEY_ASSOCIATION = "engine_association"
         const val KEY_FUZZY = "engine_fuzzy"
         const val KEY_FUZZY_PAIRS = "engine_fuzzy_pairs"
         const val KEY_JIANPIN = "engine_jianpin"

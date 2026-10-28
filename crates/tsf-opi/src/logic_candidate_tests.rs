@@ -21,6 +21,7 @@ fn state() -> TsfLogic {
         english_pro: true,
         last_printable: None,
         shift_toggle: true,
+        association_enabled: true,
         fetch_cache: Default::default(),
     };
     s.refresh_snapshot();
@@ -184,6 +185,7 @@ fn key_state() -> TsfLogic {
         english_pro: true,
         last_printable: None,
         shift_toggle: true,
+        association_enabled: true,
         fetch_cache: Default::default(),
     };
     for c in ['q', 'w', 'x'] {
@@ -382,6 +384,7 @@ fn digit_select_fetches_candidate_table_once() {
         english_pro: true,
         last_printable: None,
         shift_toggle: true,
+        association_enabled: true,
         fetch_cache: Default::default(),
     };
     s.refresh_snapshot();

@@ -74,12 +74,12 @@ class EngineController(
      * **只给显示**：判「缓冲有没有东西」一律用 [buffer]（[buffer] 是数字串，不能当空判据）。
      */
     var reading by mutableStateOf("")
-        private set
+        internal set
 
     var mode by mutableStateOf(EngineMode.PINYIN)
         private set
     var candidates by mutableStateOf<List<String>>(emptyList())
-        private set
+        internal set
 
     /** 候选拼音读数（已分词），**按读音去重保序**（首现序 = 该读音最好那条候选的
      * 名次）—— 9 键左列用（2026-10-09 用户裁决「一列多个、可滑动查看」；
@@ -210,10 +210,9 @@ class EngineController(
         }
         val maxPage = if (candidates.isEmpty()) 0 else (candidates.size - 1) / pageSize
         if (_candidatePage > maxPage) _candidatePage = maxPage
-        // 读数（9 键左列）**必须最后读**：真引擎的读数是 `candidates()` 的副产物
-        // （`scheme_reading` 缓存，且与算它时的缓冲绑存 —— 缓冲一变即作废报空）。
-        // 先读会拿到空串或上一条缓冲的旧值：2026-10-09 用户报障「确定候选词后左列
-        // 不恢复标点」的 Kotlin 侧根因。**别把这个赋值挪回前面**（有单测钉次序）。
+        // 读数（9 键左列）**必须最后读**：它是 `candidates()` 的副产物（`scheme_reading`
+        // 缓存按缓冲绑存，先读会拿到空串/旧值 —— 2026-10-09「确定候选词后左列不恢复
+        // 标点」的根因）。**别把这个赋值挪回前面**（有单测钉次序）。
         reading = api.displayBuffer()
         // 2026-10-24 用户报障「9 键输入 hou 顶部显示 468」：displayBuffer 偶发为空时
         // 不能把数字缓冲当拼音显示。取候选读音首条兜底（它就是 9 键的拼音读数）。
@@ -221,6 +220,7 @@ class EngineController(
             reading = candidateReadings.firstOrNull().orEmpty()
         }
         pendingText = api.pendingText()
+        gateAssociation() // 智能联想默认关闭：空缓冲候选（联想项）不推给 UI
         // 组合串同步点（必须最后）：服务层在此把「字段里的组合串」推给输入框。
         onBufferSynced()
     }

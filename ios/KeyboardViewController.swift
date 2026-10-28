@@ -58,7 +58,7 @@ final class KeyboardViewController: UIInputViewController {
     var compact = false
     /// 引擎开关（学习/模糊音/简拼/纠错/中文标点/双拼布局/自己表情）。
     /// 只在本文件用；设置面板拿到的永远是 `layout.setEngineSettings` 的快照。
-    private var settings = KeyboardSettings()
+    var settings = KeyboardSettings()
     /// 最近一次中文键面（英→中时恢复它；Android `cycleMode` 的「回上次中文方案」）。
     var lastChineseInputMode: InputMode = .pinyin9
     /// 9 键左列当前钉住的读音（空 = 未钉）。只作 UI 高亮/去抖，真源在引擎。

@@ -17,14 +17,16 @@ fn defaults_are_all_on() {
 
 #[test]
 fn parses_every_key_false() {
-    let s =
-        parse("Learn=False\nChinesePunct=False\nShiftToggle=False\nFuzzy=False\nJianpin=False\n");
+    let s = parse(
+        "Learn=False\nChinesePunct=False\nShiftToggle=False\nFuzzy=False\nJianpin=False\nAssociation=False\n",
+    );
     assert_eq!(
         s,
         Settings {
             learn: false,
             chinese_punct: false,
             shift_toggle: false,
+            association: false,
             fuzzy: false,
             fuzzy_pairs: String::new(),
             jianpin: false,
@@ -51,6 +53,15 @@ fn shift_toggle_is_read_with_the_shared_bool_rules() {
     assert!(!parse("ShiftToggle=0\n").shift_toggle);
     assert!(parse("ShiftToggle=ON\n").shift_toggle);
     assert!(parse("shifttoggle=False\n").shift_toggle, "小写键名不生效");
+}
+
+/// 智能联想开关（2026-10-28 用户裁决「默认关闭」）：缺键 = 关；键名区分大小写。
+#[test]
+fn association_defaults_off_and_parses() {
+    assert!(!parse("").association, "缺键 = 默认关");
+    assert!(parse("Association=True\n").association);
+    assert!(!parse("Association=False\n").association);
+    assert!(!parse("association=True\n").association, "小写键名不生效");
 }
 
 #[test]

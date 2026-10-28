@@ -108,6 +108,9 @@ FCITX_CONFIGURATION(
     // 拼音纠错（2026-10-13 用户裁决「拼音纠错（混合参与排序）」）：相邻键错按/多打/少打。
     fcitx::Option<bool> correction{this, "Correction", "拼音纠错（相邻键、多打、少打）", true};
     fcitx::Option<bool> shiftToggle{this, "ShiftToggle", "Shift 轻按切换中英文（组合键与长按不触发）", true};
+    // 智能联想（2026-10-28 用户裁决「默认关闭」）：提交后是否展示联想候选。
+    // 与上面「默认全开」的惯例相反 —— 这是明确要求默认关，别照抄 true。
+    fcitx::Option<bool> association{this, "Association", "智能联想（提交后联想常用词句）", false};
     fcitx::OptionWithAnnotation<OpiSkin, OpiSkinI18NAnnotation> skin{
         this, "Skin", "候选面板皮肤（fcitx5 全局主题，对所有输入法生效）", OpiSkin::Keep};
     // 双拼布局（2026-10-13）：**下面那项拼音方式选「双拼」时**才参与解码。
@@ -138,6 +141,10 @@ FCITX_CONFIGURATION(
     fcitx::Option<std::string> disabledDicts{
         this, "DisabledDicts", "停用的导入词库（逗号分隔词库名；留空 = 全部启用）", ""};);
 
+// 联想显示开关的 C++ 侧镜像：值在 Rust 引擎之外消费（空缓冲候选是否画给前端）。
+// 定义在 opi_fcitx5.cpp —— 与 ShiftToggle/Skin 一样是宿主自己消费的开关。
+void opiApplyAssociationSetting(bool on);
+
 // 把**引擎旋钮**推给 Rust 侧。**冷路径**（构造 / reloadConfig / setConfig
 // 三处调用），不需要去抖。ShiftToggle 与 Skin 不在这里 —— 它们是 C++ 侧
 // 自己消费的开关（handleModeHotkey / applyOpiSkin），引擎根本不知道它们存在。
@@ -147,6 +154,7 @@ FCITX_CONFIGURATION(
 // 抄一张「枚举名 → 引擎下标」的映射表（抄了就是两处写必漂）。弱符号检查同
 // fuzzyPairs：老 .so 上没有这个出口时静默跳过，不是崩。
 inline void applyOpiSettings(const OpiSettings &settings) {
+    opiApplyAssociationSetting(*settings.association);
     opi_fcitx5_set_learner(*settings.learn);
     opi_fcitx5_set_chinese_punct(*settings.chinesePunct);
     // 逐对列表非空 ⇒ 以它为准；空 ⇒ 回落旧布尔（合同与 TSF/桌面一侧一字不差）。

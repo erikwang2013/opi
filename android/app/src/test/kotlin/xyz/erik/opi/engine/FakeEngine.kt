@@ -6,7 +6,13 @@ package xyz.erik.opi.engine
 //! 假引擎（2026-10-09 自 EngineControllerTest.kt 拆出：加「读数/缓冲两出口」用例后
 //! 源文件 506 行越了 500 行门禁）。**同包**：引用方（KeyRouterTest 等）不用改 import。
 
-/** 假引擎：模拟 Rust 引擎状态（buffer/candidates/mode/shift），JVM 测试无需 JNI。 */
+/**
+ * 假引擎：模拟 Rust 引擎状态（buffer/candidates/mode/shift），JVM 测试无需 JNI。
+ *
+ * ⚠️ `buf` 缺省空却可以直接给 `cands` —— 真引擎里「空缓冲 + 候选」只属于联想态，
+ * 而联想门禁默认关（[AssociationGate]）⇒ refresh 会清空这些候选。非联想用例要在
+ * `@Before` 里开 `AssociationGate.enabled`（见 EngineControllerTest）。
+ */
 class FakeEngine : OpiEngineApi {
     var buf = ""
     var mode = EngineMode.PINYIN.value

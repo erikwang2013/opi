@@ -31,6 +31,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import xyz.erik.opi.engine.AssociationGate
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.keyboard.LocalKeyboardPalette
 import xyz.erik.opi.settings.FUZZY_PAIRS_ANDROID
@@ -67,6 +68,7 @@ fun SettingsPanel(
     var fuzzyPairs by remember { mutableStateOf(prefs.fuzzyPairs) }
     var correction by remember { mutableStateOf(prefs.correction) }
     var jianpin by remember { mutableStateOf(prefs.jianpin) }
+    var association by remember { mutableStateOf(prefs.association) }
     var showOwn by remember { mutableStateOf(prefs.showOwn) }
     var layout by remember { mutableStateOf(prefs.shuangpinLayout) }
     var layoutOpen by remember { mutableStateOf(false) }
@@ -110,6 +112,12 @@ fun SettingsPanel(
                 jianpin = v
                 controller.setJianpin(v)
                 prefs.jianpin = v
+            }
+            ToggleRow("智能联想", association) { v ->
+                association = v
+                AssociationGate.enabled = v
+                controller.refresh()
+                prefs.association = v
             }
             ToggleRow("表情中显示自有", showOwn) { v ->
                 showOwn = v

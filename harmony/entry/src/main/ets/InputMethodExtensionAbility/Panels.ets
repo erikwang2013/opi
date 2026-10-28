@@ -24,6 +24,7 @@ const ABOUT_INTRO: string =
 const ABOUT_HOME_URL: string = 'https://opi.erik.xyz';
 const ABOUT_PROJECT_URL: string = 'https://github.com/erikwang2013/opi';
 const ABOUT_BLOG_URL: string = 'https://erik.xyz';
+const ABOUT_PRIVACY_URL: string = 'https://opi.erik.xyz/privacy/index.html';
 
 // ---------------------------------------------------------------- 零件
 
@@ -355,6 +356,8 @@ export struct AboutPanel {
           this.Para(ABOUT_PROJECT_URL, true)
           this.Head('博客地址（点按复制）')
           this.Para(ABOUT_BLOG_URL, true)
+          this.Head('隐私政策（点按复制）')
+          this.Para(ABOUT_PRIVACY_URL, true)
           this.Para('鸿蒙输入法扩展不能直接拉起浏览器；复制后到浏览器打开。')
         }
         .width('100%').padding({ left: 14, right: 14, bottom: 10 })

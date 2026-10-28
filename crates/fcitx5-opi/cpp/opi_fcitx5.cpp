@@ -70,6 +70,11 @@ static std::string g_pushedBuffer;
 // 上一次推给前端时是否有候选。与 g_pushedBuffer 合起来判「联想态」（缓冲空 +
 // 有候选）：联想没有预编辑，单看缓冲会把它误当成空闲（Spec §5，2026-10-27）。
 static bool g_pushedHadCandidates = false;
+// 「智能联想」开关（配置值在 C++ 侧消费）：false = 空缓冲候选不展示，且引擎
+// 建出的联想立即清掉。由 opi_config.h 的 applyOpiSettings 冷路径写入。
+static bool g_associationEnabled = false;
+
+void opiApplyAssociationSetting(bool on) { g_associationEnabled = on; }
 
 // 候选词：点选后走 Rust 侧 select(**页内**索引) 并提交。
 // CandidateWord::select 是纯虚（fcitx/candidatelist.h:44），必须实现。
@@ -105,6 +110,29 @@ void OpiCandidateWord::select(fcitx::InputContext *ic) const {
     }
 }
 
+// 普通候选与联想候选共用（2026-10-28）：页大小 = 实际推过去的条数 → 候选表恒为
+// 单页；选择键 1..n 让 fcitx5 画序号并把数字路由到 OpiCandidateWord::select
+// （**页内索引**，与 Rust 路由同语义）。空表不设 pageSize / 高亮位
+// （setGlobalCursorIndex(0) 对空表抛 invalid_argument）。
+static std::unique_ptr<fcitx::CommonCandidateList> makeCandidateList(
+    const std::vector<std::string> &texts) {
+    auto list = std::make_unique<fcitx::CommonCandidateList>();
+    if (texts.empty()) {
+        return list;
+    }
+    list->setPageSize(static_cast<int>(texts.size()));
+    for (size_t i = 0; i < texts.size(); ++i) {
+        list->append<OpiCandidateWord>(texts[i], i);
+    }
+    fcitx::KeyList selectionKeys;
+    for (size_t i = 0; i < texts.size(); ++i) {
+        selectionKeys.push_back(fcitx::Key(std::to_string(i + 1)));
+    }
+    list->setSelectionKey(selectionKeys);
+    list->setGlobalCursorIndex(0);
+    return list;
+}
+
 void refreshingPanelFor(fcitx::InputContext *ic) {
     if (ic == nullptr) {
         return;
@@ -118,22 +146,23 @@ void refreshingPanelFor(fcitx::InputContext *ic) {
     // 客户端声明了 Preedit 才走内联预编辑通道；两个入口共用这一个判断。
     const bool wantsClientPreedit =
         ic->capabilityFlags().test(fcitx::CapabilityFlag::Preedit);
-    if (buffer.empty() && texts.empty()) {
+    // 智能联想默认关：空缓冲 + 有候选 = 联想项（Spec §5）。关闭时不展示，
+    // 并立即清掉引擎里的联想 —— 否则数字键/链式会在看不见的状态下生效。
+    const bool associationHidden = buffer.empty() && !texts.empty() && !g_associationEnabled;
+    if (associationHidden) {
+        opi_fcitx5_clear();
+        panel.reset();
+    } else if (buffer.empty() && texts.empty()) {
         // 缓冲空 = 本引擎当前无 composing。用 reset() 而不是 setPreedit("")：
         // 它把预编辑、候选表、辅助串一起清干净（含 clientPreedit），正是
         // 「无 composing」的完整表达。
         panel.reset();
     } else if (buffer.empty()) {
         // 空缓冲 + 有候选 = 联想态（Spec §5，2026-10-27）：只建候选表。
-        // **不设** preedit / clientPreedit / selectionKey / globalCursorIndex ——
-        // 联想不是 composing，且数字键必须落回 Rust 路由（联想态数字不选词）。
+        // **不设** preedit / clientPreedit —— 联想不是 composing；候选序号与
+        // 数字选词由 makeCandidateList 统一给（2026-10-28 用户报障）。
         panel.reset();
-        auto list = std::make_unique<fcitx::CommonCandidateList>();
-        list->setPageSize(static_cast<int>(texts.size()));
-        for (size_t i = 0; i < texts.size(); ++i) {
-            list->append<OpiCandidateWord>(texts[i], i);
-        }
-        panel.setCandidateList(std::move(list));
+        panel.setCandidateList(makeCandidateList(texts));
     } else {
         fcitx::Text preedit(buffer);
         // 光标在预编辑串末尾（按字节）。2026-10-17 起缓冲可能带**逐字确认的汉字**
@@ -155,43 +184,9 @@ void refreshingPanelFor(fcitx::InputContext *ic) {
             panel.setClientPreedit(preedit);
         }
 
-        auto list = std::make_unique<fcitx::CommonCandidateList>();
         // texts 已在函数顶部取过（一次抓取；重复调会推进 Rust 页游标）。
-        // 页大小 = **实际推过去的条数** → 候选表恒为单页（见文件头说明），
-        // 且不需要任何「和 Rust 对齐」的常量：Rust 页变大，这里跟着变大。
-        // 空表不设：页大小 0 不是合法值，而空表本来也没东西可翻。
-        if (!texts.empty()) {
-            list->setPageSize(static_cast<int>(texts.size()));
-        }
-        for (size_t i = 0; i < texts.size(); ++i) {
-            list->append<OpiCandidateWord>(texts[i], i);
-        }
-        // 候选序号（「1. 你」）**必须在这里显式声明**，fcitx5 不会替我们编：
-        // 探针实测（真库、未起守护进程）：不调任何 label API 时 `list->label(i)`
-        // 返回**空串** ⇒ 面板一个序号都不画；调 `setSelectionKey` 后返回
-        // `"1. "` / `"2. "` …（探针源码与输出见 docs/install/linux.md 的「候选序号」）。
-        // 同时它把**数字键的选择路由**交给 fcitx5 的候选机制 —— 会调到
-        // OpiCandidateWord::select（**页内索引**），与 Rust 路由的数字处理同语义，
-        // 也与 Android / 鸿蒙 / Windows 候选窗的「页内 1–8」一致。
-        // 键数按**实际候选数**给（不写 9）：多出来的键若被当选择键，按下时会指到
-        // 不存在的候选上；按实际条数给，超出的数字自然落回 Rust 路由（两边同义）。
-        {
-            fcitx::KeyList selectionKeys;
-            for (size_t i = 0; i < texts.size(); ++i) {
-                selectionKeys.push_back(fcitx::Key(std::to_string(i + 1)));
-            }
-            list->setSelectionKey(selectionKeys);
-        }
-        // 候选栏高亮位（-1 = 无高亮，前端不画选中态）。
-        // ⚠️ 空判是**必须**的：对**空**候选表调 setGlobalCursorIndex(0) 会抛
-        // `std::invalid_argument`（"CommonCandidateList: invalid global index"），
-        // 而「缓冲非空 + 候选 0 条」是常态（`v`/`xz`/`vvv` 都没候选；**别用
-        // `zzzz` 举例** —— 2026-10-12 起它经简拼命中「自自在在」）。抛出后：
-        // 有 try/catch 时该键作废、面板停在上一次的候选表上；没有时 → abort。
-        if (!texts.empty()) {
-            list->setGlobalCursorIndex(0);
-        }
-        panel.setCandidateList(std::move(list));
+        // 候选序号/选择键/高亮位的理由见 makeCandidateList 上方。
+        panel.setCandidateList(makeCandidateList(texts));
     }
     // 清空也要发：提交/失焦后不通知，客户端光标处会一直挂着上次的内联预编辑。
     if (wantsClientPreedit) {
@@ -202,7 +197,7 @@ void refreshingPanelFor(fcitx::InputContext *ic) {
     ic->updateUserInterface(fcitx::UserInterfaceComponent::InputPanel);
     // 推完了才记 —— 半路抛异常时这里保持旧值，下次直通键会照常重推一遍。
     g_pushedBuffer = buffer;
-    g_pushedHadCandidates = !texts.empty();
+    g_pushedHadCandidates = !texts.empty() && !associationHidden;
 }
 
 // ---------- W1「直接确认」：切走/切英文时把待定输入提交掉（2026-10-10） ----------
@@ -362,8 +357,14 @@ void OpiEngine::keyEventImpl(const fcitx::InputMethodEntry & /*entry*/,
     // 联想态（Spec §5，2026-10-27）：**按下**先收起再执行本键 —— 无论它随后是
     // 热键、直通还是普通输入，都不该让联想候选活过这一步。候选窗没有预编辑，
     // 只能按「上次推出去的状态」判：缓冲空 + 有候选。抬起不动作。
+    // 例外（2026-10-28 用户报障）：数字选联想项、PageUp/PageDown 与 `-`/`=`
+    // 翻联想页 —— 先收起会让这些键永远落空；它们交给 Rust 路由处理。
+    const uint32_t keySym = keyEvent.key().sym();
+    const bool associationKey = g_associationEnabled
+        && ((keySym >= '1' && keySym <= '9') || keySym == 0xff55
+            || keySym == 0xff56 || keySym == '-' || keySym == '=');
     const bool associationShown = !keyEvent.isRelease()
-        && g_pushedBuffer.empty() && g_pushedHadCandidates;
+        && g_pushedBuffer.empty() && g_pushedHadCandidates && !associationKey;
     if (associationShown) {
         opi_fcitx5_clear();
         refreshingPanelFor(keyEvent.inputContext());

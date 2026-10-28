@@ -267,6 +267,8 @@ struct KeyboardSettings: Equatable {
     var fuzzyPairs = ""
     /// 简拼。缺省开。
     var jianpin = true
+    /// 智能联想（2026-10-28 用户裁决「默认关闭」）：提交后展示联想候选。
+    var association = false
     /// 拼音纠错。缺省开。
     var correction = true
     /// 中文标点。缺省开。

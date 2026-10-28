@@ -39,6 +39,7 @@ final class HomeViewController: UIViewController {
 
     private static let homeURL = "https://opi.erik.xyz"
     private static let projectURL = "https://github.com/erikwang2013/opi"
+    private static let privacyURL = "https://opi.erik.xyz/privacy/index.html"
 
     private let scroll = UIScrollView()
     private let stack = UIStackView()
@@ -113,7 +114,7 @@ final class HomeViewController: UIViewController {
             "常用：学习、模糊音（逐组）、拼音纠错、简拼。",
             "按键：中文标点、双拼布局、键盘模式（单手 / 暗光 / 长辈）。",
             "外观：12 款皮肤。符号与表情：表情页「自有」贴纸开关。",
-            "关于：版本、主页、项目与博客地址。",
+            "关于：版本、主页、项目、博客与隐私政策地址。",
         ])
         addNote(
             "宿主 App 与键盘扩展没有共享容器（未配置 App Group），两边设置不会互相同步。"
@@ -135,6 +136,7 @@ final class HomeViewController: UIViewController {
         ])
         addLink(Self.homeURL)
         addLink(Self.projectURL)
+        addLink(Self.privacyURL)
 
         let footer = makeLabel(
             "Open People Input · 开放、纯粹、跨端", style: .footnote, bold: false

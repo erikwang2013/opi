@@ -70,6 +70,15 @@ impl TsfLogic {
         self.engine.set_learner(on);
     }
 
+    /// 智能联想开关（`Association`，默认关）：关掉时顺手清掉引擎残留，
+    /// 别留一条看不见却能链式点击的联想（fcitx5 轨在 C++ 侧 gate，无同名配对）。
+    pub(crate) fn apply_association_setting(&mut self, on: bool) {
+        self.association_enabled = on;
+        if !on {
+            self.engine.dismiss_association();
+        }
+    }
+
     /// 清空用户词（学习记忆）。候选集参与排名 ⇒ 作废抓取缓存并回第一页。
     /// 配对：`fcitx5-opi/src/candidate.rs::clear_user_words`。
     pub fn clear_user_words(&mut self) {

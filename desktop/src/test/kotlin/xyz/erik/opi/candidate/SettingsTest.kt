@@ -21,6 +21,7 @@ class SettingsTest {
     fun `round trip keeps every switch`() {
         val s = OpSettings(
             learn = false, chinesePunct = true, fuzzy = false, jianpin = true, shiftToggle = false,
+            association = true,
         )
         assertEquals(s, OpSettings.fromIni(s.toIni()))
     }
@@ -39,9 +40,9 @@ class SettingsTest {
         // 钉整行而不是 contains("Learn")：改名/改大小写/改空格都该在这里红。
         val ini = OpSettings().toIni()
         for (line in listOf(
-            // 模糊音缺省**关**（2026-10-15 用户裁决）：整行契约跟着翻。
+            // 模糊音与智能联想缺省**关**（2026-10-15 / 2026-10-28 用户裁决）：整行契约跟着翻。
             "Learn=True", "ChinesePunct=True", "Fuzzy=False", "Jianpin=True",
-            "ShiftToggle=True", "Skin=不改动", "CandidateFont=中",
+            "ShiftToggle=True", "Skin=不改动", "CandidateFont=中", "Association=False",
         )) {
             assertTrue("缺少键行：$line\n$ini", ini.contains("$line\n"))
         }
@@ -106,7 +107,9 @@ class SettingsTest {
     fun `merge output round trips through the reader`() {
         // 行内注释、未知键、行内空格都掺上：合并结果必须仍被 fromIni 正确解析。
         val existing = "Learn=True\nFuzzy=False # 关掉\n未知键=whatever\n"
-        val s = OpSettings(learn = false, chinesePunct = false, fuzzy = true, jianpin = true)
+        val s = OpSettings(
+            learn = false, chinesePunct = false, fuzzy = true, jianpin = true, association = true,
+        )
         val merged = mergeIni(existing, s)
         assertEquals(s, OpSettings.fromIni(merged))
         assertTrue(merged, merged.contains("未知键=whatever\n"))

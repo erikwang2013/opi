@@ -47,6 +47,7 @@ fn punct_state() -> TsfLogic {
         english_pro: true,
         last_printable: None,
         shift_toggle: true,
+        association_enabled: true,
         fetch_cache: Default::default(),
     };
     s.switch_mode(Mode::Pinyin);
@@ -254,6 +255,7 @@ fn punctuation_flush_uses_current_page_first_then_resets() {
         english_pro: true,
         last_printable: None,
         shift_toggle: true,
+        association_enabled: true,
         fetch_cache: Default::default(),
     };
     s.switch_mode(Mode::Pinyin);

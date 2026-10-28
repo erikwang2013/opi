@@ -41,6 +41,7 @@ import xyz.erik.opi.keyboard.LocalKeyboardPalette
 import xyz.erik.opi.settings.ABOUT_BLOG_URL
 import xyz.erik.opi.settings.ABOUT_HOME_URL
 import xyz.erik.opi.settings.ABOUT_INTRO
+import xyz.erik.opi.settings.ABOUT_PRIVACY_URL
 import xyz.erik.opi.settings.ABOUT_PROJECT_URL
 import xyz.erik.opi.settings.OPI_DOWNLOAD_URL
 import xyz.erik.opi.settings.UpdateState
@@ -86,6 +87,8 @@ fun AboutPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
             Link(ABOUT_PROJECT_URL) { note = openExternal(context, ABOUT_PROJECT_URL) }
             Head("博客地址")
             Link(ABOUT_BLOG_URL) { note = openExternal(context, ABOUT_BLOG_URL) }
+            Head("隐私政策")
+            Link(ABOUT_PRIVACY_URL) { note = openExternal(context, ABOUT_PRIVACY_URL) }
             if (note.isNotEmpty()) {
                 Text(note, fontSize = 11.sp, color = p.accent, modifier = Modifier.padding(top = 6.dp))
             }

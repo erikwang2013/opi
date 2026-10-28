@@ -11,7 +11,7 @@
 import { KeyboardController } from './KeyboardController';
 import { INPUT_MODES } from './InputModes';
 import {
-  ONE_HAND_LEFT, ONE_HAND_OFF, ONE_HAND_RIGHT, PanelView, openSubPanel
+  ONE_HAND_LEFT, ONE_HAND_OFF, ONE_HAND_RIGHT, PanelView, openSubPanel, toggleAssociation
 } from './KeyboardModes';
 import { OpiMode } from './OpiEngine';
 import { Palette, SKINS, paletteFor } from './Palette';
@@ -28,6 +28,7 @@ export struct SettingsPanel {
   @StorageLink('opiLearner') learner: number = 1;
   @StorageLink('opiPro') pro: number = 0;
   @StorageLink('opiShowOwn') showOwn: number = 0;
+  @StorageLink('opiAssociationOn') association: number = 0;
   @StorageLink('opiOneHand') oneHand: number = 0;
   @StorageLink('opiFloat') floating: number = 0;
   @StorageLink('opiGame') game: number = 0;
@@ -125,6 +126,10 @@ export struct SettingsPanel {
           this.Section('常用')
           this.SwitchRow('学习', '根据选词学习用户词频', this.learner === 1, () => {
             this.ctrl.toggleLearner();
+          })
+          this.SwitchRow('智能联想', '提交后联想常用续接词句（默认关闭）', this.association === 1, () => {
+            toggleAssociation();
+            this.ctrl.publish();
           })
           this.SwitchRow('英文专业模式', '英文候选与联想；关闭时字母直接上屏', this.pro === 1, () => {
             this.ctrl.toggleEnglishPro();

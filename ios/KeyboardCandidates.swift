@@ -43,23 +43,29 @@ extension KeyboardViewController {
         // 2026-10-26：普通候选栏只画固定槽位，没必要每键让引擎排整批；
         // 平铺页才要整批（打开平铺时 showTiledCandidates 会补一次 512 条的 refresh）。
         let limit = layout.keyLayer == .candidatesTiled ? 512 : max(8, layout.candidateSlotCount)
-        let texts = engine.allCandidates(limit: limit)
+        let allTexts = engine.allCandidates(limit: limit)
         let readings = layout.wantsReadings ? engine.candidateReadings() : []
+        // 拼音行（2026-10-23）：显示串由引擎给（9 键/双拼带分词 `ni'hao`）。
+        // **必须**在 `allCandidates` 之后读：读数与候选同一次排名（见文件头注）。
+        let shownBuffer = engine.displayBuffer()
+        // 智能联想默认关闭（2026-10-28）：空缓冲 + 空显示串的候选就是联想项，
+        // 推给任何候选 UI 之前清掉（读数一并清，9 键左列不留残影）。
+        let associationHidden = !settings.association && buffer.isEmpty && shownBuffer.isEmpty
+        let texts = associationHidden ? [] : allTexts
+        let visibleReadings = associationHidden ? [] : readings
         layout.updateCandidates(
-            texts, readings: readings, pinned: pinnedReading, resetKey: buffer
+            texts, readings: visibleReadings, pinned: pinnedReading, resetKey: buffer
         )
         // 顶部槽位：有缓冲/候选 → 候选栏；否则工具条（Android `ImeScreen` 同判）。
         layout.setTopBar(
             candidatesVisible: !texts.isEmpty || !buffer.isEmpty,
             english: engine.mode() == .english
         )
-        // 拼音行（2026-10-23）：显示串由引擎给（9 键/双拼带分词 `ni'hao`）。
-        // **必须**在 `allCandidates` 之后读：读数与候选同一次排名（见文件头注）。
         // 显示串空时：9 键取候选读音兜底，仍空就**留空行**（绝不回退数字缓冲，
         // 2026-10-24「hou 显示成 468」同款）；其余方案回退字母缓冲。
-        var shown = engine.displayBuffer()
+        var shown = shownBuffer
         if shown.isEmpty, layout.wantsReadings {
-            shown = readings.first ?? ""
+            shown = visibleReadings.first ?? ""
         }
         if shown.isEmpty, !layout.wantsReadings {
             shown = buffer

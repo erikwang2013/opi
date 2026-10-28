@@ -363,6 +363,13 @@ enum OpiSettingsStore {
         set { set("ShowOwn", newValue) }
     }
 
+    /// 智能联想（Linux `Association`，默认关）。本端无 C ABI 出口，是纯宿主开关：
+    /// 关闭时 `refresh` 在联想候选推给候选窗之前整批挡掉（同 iOS/Android）。
+    static var association: Bool {
+        get { bool("Association", default: false) }
+        set { set("Association", newValue) }
+    }
+
     static func bool(_ key: String, default fallback: Bool) -> Bool {
         guard defaults.object(forKey: key) != nil else { return fallback }
         return defaults.bool(forKey: key)

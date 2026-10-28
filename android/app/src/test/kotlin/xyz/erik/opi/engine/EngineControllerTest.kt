@@ -8,10 +8,17 @@ import xyz.erik.opi.pet.petMood
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.After
+import org.junit.Before
 import org.junit.Test
 
 class EngineControllerTest {
     private fun cands(n: Int) = Array(n) { "c$it" }
+
+    // 假引擎允许「空缓冲 + 候选」（真引擎里这种形态只属于联想态）。本类测分页/读数，
+    // 开着门禁让候选原样通过；门禁关闭时要清空的行为由 EngineControllerAssociationTest 钉。
+    @Before fun allowAssociation() { AssociationGate.enabled = true }
+    @After fun resetGate() { AssociationGate.enabled = false }
 
     @Test
     fun fetchLimitIs512() {

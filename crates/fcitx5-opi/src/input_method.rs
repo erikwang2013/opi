@@ -12,9 +12,11 @@
 //! - 退格：缓冲非空 → 引擎按码点删；空缓冲 → 直通客户端（镜像 `handleBackspace`）。
 //! - ⇧ 键：状态机 Off→Single→Off（长按 → Lock），镜像
 //!   `EngineController.shiftTap/shiftLongPress/consumeSingleShift`。
-//! - 拼音模式有候选时数字 1..=9 按页内索引选词（候选栏点击的键盘等价物）。
-//! - `PageUp`/`PageDown` 翻页；**组字中（拼音/繁体且缓冲非空）`-` 上一页、`=` 下一页**
-//!   （2026-10-09 用户报障补上；空缓冲不抢键，见 input_method_page_tests.rs）。
+//! - 拼音模式有候选时数字 1..=9 按页内索引选词（候选栏点击的键盘等价物）；
+//!   联想态同样用数字选联想项（2026-10-28 用户报障）。
+//! - `PageUp`/`PageDown` 翻页；**组字中（拼音/繁体且缓冲非空）或联想态
+//!   `-` 上一页、`=` 下一页**（2026-10-09 用户报障补上；普通空缓冲不抢键，
+//!   见 input_method_page_tests.rs）。联想态翻页键不收起联想。
 //! - 符号模式：可见 ASCII 入引擎缓冲当**关键字**（符号候选由此搜出），其余直通。
 //! - **符号浏览**（「符号大全」叠加态，2026-10-10）：浏览期间只有 `1`-`9`（激活浏览项：
 //!   类目下钻 / 符号上屏）、`-`/`=`（浏览翻页）、Esc（退出并吞掉）归浏览；**其余一律先
@@ -93,7 +95,14 @@ pub fn handle_key(state: &mut CandidateState, keyval: u32, states: u32) -> KeyAc
     let released = states & KEY_STATE_RELEASED != 0;
     // 联想态：**按下**先收起再走正常路由（Spec §5）。排在 Ctrl/Alt 直通之前 ——
     // 系统快捷键同样先收联想；抬起不动作（否则按住不放会反复清状态）。
-    if !released {
+    // 例外（2026-10-28 用户报障）：数字选联想项、翻页键翻联想页 —— 这两类键
+    // 若先收起，联想候选一按就没，数字/翻页永远落空。
+    let association = state.engine.association_active();
+    let association_key = matches!(
+        keyval,
+        0x31..=0x39 | KEY_PAGE_UP | KEY_PAGE_DOWN | 0x2d | 0x3d
+    );
+    if !released && !(association && association_key) {
         state.dismiss_association();
     }
     // Ctrl/Alt 组合键（系统快捷键）一律直通，不拦截。
@@ -302,12 +311,19 @@ fn handle_shift(state: &mut CandidateState, states: u32) -> KeyAction {
 
 /// 可见 ASCII 字符按模式分流。
 fn handle_printable(state: &mut CandidateState, c: char) -> KeyAction {
+    // 联想态数字先于标点表：`input_punct` 首行会收起联想，数字必须在它之前选词。
+    if c.is_ascii_digit() && state.engine.association_active() {
+        return digit_select(state, c);
+    }
     // 组字中的 `-` / `=` 翻页（2026-10-09 用户报障「桌面端减号、等号不能翻页候选词」）。
     // 与 PageUp/PageDown 同一动作；**必须排在标点表之前** —— 否则全角兜底会把 `-`
     // 当成标点，组字中按下即提交「首候选＋－」（实测：按 `=` 曾提交「词00＝」）。
-    // 只在拼音/繁体（有候选页的模式）且缓冲非空时抢键：空缓冲走标点表/直通老路
-    // （不吞键的不变量见 input_method_punct_tests.rs），符号/英文模式另有归属，不碰。
-    if matches!(state.mode(), Mode::Pinyin | Mode::Traditional) && !state.buffer().is_empty() {
+    // 只在拼音/繁体（有候选页的模式）且缓冲非空或联想态时抢键：普通空缓冲走
+    // 标点表/直通老路（不吞键的不变量见 input_method_punct_tests.rs），
+    // 符号/英文模式另有归属，不碰。
+    if matches!(state.mode(), Mode::Pinyin | Mode::Traditional)
+        && (!state.buffer().is_empty() || state.engine.association_active())
+    {
         match c {
             '-' => {
                 state.prev_page();
@@ -404,7 +420,10 @@ fn handle_printable(state: &mut CandidateState, c: char) -> KeyAction {
 /// 旧路径 `candidates()` + `select()` 抓两次 ⇒ 每次数字选词排两遍。
 fn digit_select(state: &mut CandidateState, c: char) -> KeyAction {
     let fetched = state.fetched();
-    if state.mode().digit_selects_candidates() && !state.buffer().is_empty() {
+    // 联想态也允许数字选词（2026-10-28 用户报障）：空缓冲时候选就是联想项，
+    // `select_from` 走同一套页内换算，引擎的 `association_click_root` 负责链式。
+    let selectable = !state.buffer().is_empty() || state.engine.association_active();
+    if state.mode().digit_selects_candidates() && selectable {
         let Some(idx) = c.to_digit(10).and_then(|d| d.checked_sub(1)) else {
             return KeyAction::PassThrough;
         };

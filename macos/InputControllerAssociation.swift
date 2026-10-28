@@ -21,6 +21,9 @@ extension OpiInputController {
     /// 先判便宜的（缓冲/模式），正常打字时不必取候选；`displayBuffer` 与 `refresh`
     /// 同序 —— 必须在 `candidatesPage()` 之后读（9 键读数缓存绑在候选批上）。
     var associationActive: Bool {
+        // 设置关闭时宿主不认联想态：候选已被 `refresh` 挡掉，且引擎里的联想项
+        // 由下一次输入自然清掉（`input_key`/`input_space_at` 都会 dismiss）。
+        guard OpiSettingsStore.association else { return false }
         guard engine.buffer().isEmpty else { return false }
         let mode = engine.mode()
         guard mode == .pinyin || mode == .traditional else { return false }
@@ -76,7 +79,14 @@ extension OpiInputController {
 
         // 显示当前页用引擎的分页出口：页大小/页码/页内选词同源在 router.rs，
         // 客户端不再抄 PAGE_SIZE（`OpiFFI.h` 明写禁止自己按页大小切）。
-        let list = engine.candidatesPage()
+        let rawList = engine.candidatesPage()
+        // displayBuffer 必须紧跟候选批读（9 键读数缓存绑在候选批上）。
+        let shownBuffer = engine.displayBuffer()
+        // 智能联想默认关闭（2026-10-28）：空缓冲 + 空显示串下的候选就是联想项，
+        // 关闭时整批挡在候选窗之前（与 iOS/Android 同一条前端过滤，不加 FFI）。
+        let associationHidden = !OpiSettingsStore.association &&
+            buffer.isEmpty && shownBuffer.isEmpty
+        let list = associationHidden ? [] : rawList
         // 2026-10-27：可见性 = 有缓冲 **或** 有候选 —— 提交后缓冲为空但联想候选还在，
         // 窗口必须留着显示续接项；可见性变化也要推 update（候选可能同一批）。
         let visible = !buffer.isEmpty || !list.isEmpty
@@ -86,6 +96,6 @@ extension OpiInputController {
             OpiCandidateWindow.shared.update(list, visible: visible)
         }
         // IMKCandidates 没有标题栏：拼音另画一条；显示串为空回退原文，判定仍读 buffer()。
-        OpiPinyinBar.shared.update(display: engine.displayBuffer(), raw: buffer, client: client, candidatesFrame: OpiCandidateWindow.shared.visibleFrame)
+        OpiPinyinBar.shared.update(display: shownBuffer, raw: buffer, client: client, candidatesFrame: OpiCandidateWindow.shared.visibleFrame)
     }
 }

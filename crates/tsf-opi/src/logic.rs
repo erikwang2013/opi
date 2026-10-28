@@ -73,6 +73,9 @@ pub struct TsfLogic {
     /// 也认）：**只被胶水的 Shift 三拍读**（`tsf_shift.rs`），不参与 `input_key` ——
     /// 两轨 Rust 键路由必须逐事件同构（`two_track_parity`）。默认开（与 Linux 一致）。
     pub(crate) shift_toggle: bool,
+    /// 智能联想显示开关（`Association`，默认关）。构造初值 true（测试不经过设置），
+    /// 生产路径由 `apply_settings` 按配置覆盖。
+    pub(crate) association_enabled: bool,
     /// 一次抓取缓存（镜像 fcitx5 轨 `CandidateState::fetch_cache`，2026-10-22 性能）：
     /// 翻页键 `page_count()` 留下的全量表由紧接着的 `snapshot()/fetched()` 消费一次，
     /// 让一次 PageDown 只排一遍全量候选。键 = (真缓冲, 逐字片段)。
@@ -93,11 +96,8 @@ impl TsfLogic {
         Ok(Self::with_dict(dict))
     }
 
-    /// 用**已装好的**词库构建（`load` 的落点，也是 `dict_path::load_dict` 的落点）。
-    /// Windows 侧走这条：词库解析（含逐候选回退）在 `dict_path` 里一次做完，
-    /// 不必经历「先给路径 → 失败再回退」的两段式 —— 那条路的中间态是
-    /// 「服务创建不出来」，用户看到的是输入法整个不在（见 `com_server.rs`）。
-    /// 失败路径归零：能到这里的词库一定是装上了的（最差是内置 35 词）。
+    /// 用**已装好的**词库构建（`load` / `dict_path::load_dict` 的落点）：解析在
+    /// `dict_path` 一次做完，避免「服务建不出来」的中间态（`com_server.rs`）；最差内置 35 词。
     pub fn with_dict(dict: Box<dyn engine_core::dictionary::Dictionary>) -> Self {
         let symbols = engine_core::symbols::SymbolEngine::builtin();
         let mut s = TsfLogic {
@@ -108,6 +108,7 @@ impl TsfLogic {
             english_pro: false,
             last_printable: None,
             shift_toggle: true,
+            association_enabled: true,
             fetch_cache: RefCell::new(None),
         };
         s.refresh_snapshot();
@@ -233,6 +234,7 @@ impl TsfLogic {
         self.set_chinese_punct(s.chinese_punct);
         // Shift 轻按开关只被胶水读（见字段注释）；**不清缓冲、不动引擎**。
         self.shift_toggle = s.shift_toggle;
+        self.apply_association_setting(s.association);
         // 模糊音：列表非空 ⇒ 以列表为准；空 ⇒ 回落旧的布尔（老配置行为一字不变）。
         if s.fuzzy_pairs.is_empty() {
             self.set_fuzzy(s.fuzzy);

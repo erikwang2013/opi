@@ -32,6 +32,7 @@ fn carried_state() -> TsfLogic {
         english_pro: true,
         last_printable: None,
         shift_toggle: true,
+        association_enabled: true,
         fetch_cache: Default::default(),
     };
     s.switch_mode(Mode::Pinyin);

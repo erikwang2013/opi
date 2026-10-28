@@ -74,6 +74,16 @@ fn snapshot_association_flag_and_visibility() {
 }
 
 #[test]
+fn disabled_association_hides_snapshot_candidates() {
+    let mut logic = association_logic();
+    logic.association_enabled = false;
+    let s = logic.snapshot();
+    assert!(!s.association);
+    assert!(s.candidates.is_empty(), "关闭时联想候选不得推给窗口");
+    assert!(!candidates_visible(&s.buffer, &s.candidates));
+}
+
+#[test]
 fn dismiss_association_clears_state_and_fetch_cache() {
     let mut logic = association_logic();
     // 造一次抓取缓存（page_count 会留下全量表）。

@@ -1,11 +1,15 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! 联想态的按键语义（2026-10-27，Spec §5）：按下先收起、抬起不动、
-//! Ctrl/Alt 直通也收起、联想态数字不选词（空缓冲数字本来就落 PassThrough）。
-//! 用内存词库走真引擎路径：喂 `jintian` 选「今天」进联想态。
+//! 联想态的按键语义（2026-10-27，Spec §5；2026-10-28 用户报障修订）：
+//! 普通键按下先收起、抬起不动、Ctrl/Alt 直通也收起；数字键选联想项、
+//! PageUp/PageDown 与 `-`/`=` 翻页且不收起。用内存词库走真引擎路径：
+//! 喂 `jintian` 选「今天」进联想态。
 
-use super::{KEY_SPACE, KEY_STATE_CTRL, KEY_STATE_RELEASED, KeyAction, handle_key};
+use super::{
+    KEY_PAGE_DOWN, KEY_PAGE_UP, KEY_SPACE, KEY_STATE_CTRL, KEY_STATE_RELEASED, KeyAction,
+    handle_key,
+};
 use crate::candidate::CandidateState;
 use engine_core::Engine;
 use engine_core::composer::Mode;
@@ -91,10 +95,42 @@ fn ctrl_combo_dismisses_but_passes_through() {
 }
 
 #[test]
-fn digit_in_association_does_not_select_candidate() {
+fn digit_in_association_selects_candidate() {
     let mut state = association_state();
+    // 联想项存的是**续接部分**：词「今天晚上」(700) 去根后是「晚上」，
+    // 排在语义小表「回家」(90) 之前
     let action = handle_key(&mut state, '1' as u32, 0);
-    // 空缓冲数字落 PassThrough（不进 select），且联想已清
-    assert_eq!(action, KeyAction::PassThrough);
+    assert_eq!(action, KeyAction::Input("晚上".into()));
+    // 以「今天+晚上」重建联想，测试词库无此后缀 ⇒ 联想结束
     assert!(!state.engine.association_active());
+}
+
+#[test]
+fn page_keys_in_association_keep_it_visible() {
+    let mut state = association_state();
+    assert_eq!(
+        handle_key(&mut state, KEY_PAGE_DOWN, 0),
+        KeyAction::EngineHandled
+    );
+    assert!(state.engine.association_active(), "PageDown 不得收起联想");
+    assert_eq!(
+        handle_key(&mut state, KEY_PAGE_UP, 0),
+        KeyAction::EngineHandled
+    );
+    assert!(state.engine.association_active(), "PageUp 不得收起联想");
+}
+
+#[test]
+fn dash_equals_in_association_keep_it_visible() {
+    let mut state = association_state();
+    assert_eq!(
+        handle_key(&mut state, '-' as u32, 0),
+        KeyAction::EngineHandled
+    );
+    assert!(state.engine.association_active(), "- 不得收起联想");
+    assert_eq!(
+        handle_key(&mut state, '=' as u32, 0),
+        KeyAction::EngineHandled
+    );
+    assert!(state.engine.association_active(), "= 不得收起联想");
 }

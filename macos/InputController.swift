@@ -209,7 +209,11 @@ final class OpiInputController: IMKInputController {
         // 面板/菜单上屏时没有这个 sender，记下最近客户端（弱引用，不强留宿主）。
         if let client = sender { OpiClientHub.shared.focus(self, client: client as AnyObject) }
         // 联想态：本键先收起再执行（热键也在其内；Spec §5.1）。
-        dismissAssociationIfNeeded(sender)
+        // 只认按下：提交键的 keyUp 也走这里，抬起时再判会把刚建好的联想
+        // 用同一个物理键的抬起立刻清掉（macOS 上表现为联想只闪一下）。
+        if event.type == .keyDown {
+            dismissAssociationIfNeeded(sender)
+        }
         // ⚠️ **热键必须在引擎之前判掉，不能落进下面的 `keyEvent`** ——
         // `router.rs` 的 `key_event` 直通分支（`router.rs:245`）对 `CTRL|ALT|META`
         // **在整个函数最前面就直通**，

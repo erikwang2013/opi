@@ -42,6 +42,8 @@ let gameOn: boolean = false;
 let englishProOn: boolean = false;
 /** 表情页「自有」分类（Android ImePreferences.showOwn；缺省隐藏）。 */
 let showOwnOn: boolean = false;
+/** 智能联想（Android ImePreferences.association；缺省关）。 */
+let associationOn: boolean = false;
 /** 平铺候选视图（Android ImeState.View.CANDIDATES_TILED；临时状态，不落盘）。 */
 let tiledOn: boolean = false;
 /** 进表情页前的引擎模式（表情是 Symbol 模式，返回时切回）。 */
@@ -57,6 +59,7 @@ export function restore(s: SettingsStore.ImeSettings): void {
   gameOn = s.game;
   englishProOn = s.englishPro;
   showOwnOn = s.showOwn;
+  associationOn = s.association;
 }
 
 export function panelView(): number { return view; }
@@ -152,6 +155,13 @@ export function showOwnEnabled(): boolean { return showOwnOn; }
 export function toggleShowOwn(): void {
   showOwnOn = !showOwnOn;
   SettingsStore.saveBool(SettingsStore.BOOL_SHOW_OWN, showOwnOn);
+}
+
+/** 智能联想开关（2026-10-28，默认关）。 */
+export function associationEnabled(): boolean { return associationOn; }
+export function toggleAssociation(): void {
+  associationOn = !associationOn;
+  SettingsStore.saveBool(SettingsStore.BOOL_ASSOCIATION, associationOn);
 }
 
 /** 平铺候选：展开 / 收起（返回不动引擎、不清缓冲，Android collapseCandidates 同款）。 */

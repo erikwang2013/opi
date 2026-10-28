@@ -3,13 +3,21 @@
 
 package xyz.erik.opi.engine
 
+import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** 联想态判据（Spec §5.1）：空缓冲 + 空逐字片段 + 有候选 + 中文模式。 */
 class EngineControllerAssociationTest {
+    @After
+    fun resetGate() {
+        AssociationGate.enabled = false
+    }
+
     private fun associationController(): Pair<FakeEngine, EngineController> {
+        AssociationGate.enabled = true
         val fake = FakeEngine()
         val ctrl = EngineController(fake)
         fake.buf = ""
@@ -47,6 +55,21 @@ class EngineControllerAssociationTest {
         fake.mode = EngineMode.TRADITIONAL.value
         ctrl.refresh()
         assertTrue("繁体模式同样是联想态", ctrl.associationActive)
+    }
+
+    @Test
+    fun disabledGateHidesAssociationCandidates() {
+        AssociationGate.enabled = false
+        val fake = FakeEngine()
+        val ctrl = EngineController(fake)
+        fake.buf = ""
+        fake.pending = ""
+        fake.cands = arrayOf("回家")
+        fake.mode = EngineMode.PINYIN.value
+        ctrl.refresh()
+        assertTrue("默认关闭：联想候选不得进 UI", ctrl.candidates.isEmpty())
+        assertFalse(ctrl.associationActive)
+        assertEquals("读数也不得残留", "", ctrl.reading)
     }
 
     @Test

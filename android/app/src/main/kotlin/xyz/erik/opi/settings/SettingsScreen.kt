@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import xyz.erik.opi.engine.UserWordStore
 import xyz.erik.opi.engine.clearUserWords
 import xyz.erik.opi.ime.HandlerDebouncer
+import xyz.erik.opi.engine.AssociationGate
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.jni.OpiEngine
 import xyz.erik.opi.keyboard.OpiIcons
@@ -91,6 +92,7 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
     var fuzzyPairs by remember { mutableStateOf(prefs.fuzzyPairs) }
     var correction by remember { mutableStateOf(prefs.correction) }
     var jianpin by remember { mutableStateOf(prefs.jianpin) }
+    var association by remember { mutableStateOf(prefs.association) }
     var showOwn by remember { mutableStateOf(prefs.showOwn) }
     var confirmClear by remember { mutableStateOf(false) }
     // 双拼布局（2026-10-13）：存**名字**（[SHUANGPIN_LAYOUTS_ANDROID] 之一）。
@@ -319,6 +321,20 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
                                 jianpin = v
                                 OpiEngine.setJianpin(v)
                                 prefs.jianpin = v
+                            },
+                        )
+                    },
+                )
+                HorizontalDivider()
+                // 智能联想（2026-10-28 用户裁决「默认关闭」）：无引擎出口，宿主侧 gate。
+                ListItem(
+                    headlineContent = { Text("智能联想") },
+                    supportingContent = { Text("提交词语后联想常用续接词句（默认关闭）") },
+                    trailingContent = {
+                        Switch(
+                            checked = association,
+                            onCheckedChange = { v ->
+                                association = v; AssociationGate.enabled = v; prefs.association = v
                             },
                         )
                     },

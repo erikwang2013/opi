@@ -3,15 +3,22 @@
 
 package xyz.erik.opi.ime
 
+import xyz.erik.opi.engine.AssociationGate
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.engine.FakeEngine
 import xyz.erik.opi.engine.InputScheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.After
+import org.junit.Before
 import org.junit.Test
 
 class KeyRouterTest {
+    // 假引擎的「空缓冲 + 候选」在真引擎里只属于联想态；本类测按键路由，开着门禁放行。
+    @Before fun allowAssociation() { AssociationGate.enabled = true }
+    @After fun resetGate() { AssociationGate.enabled = false }
+
     /** 假通道：记录提交/删除/回车。 */
     private class Channel {
         val commits = mutableListOf<String>()

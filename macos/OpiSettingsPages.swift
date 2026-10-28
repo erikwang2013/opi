@@ -54,8 +54,11 @@ extension OpiSettingsWindow {
                  action: #selector(jianpinChanged(_:)))
         checkbox("拼音纠错", x: 260, y: after, on: engine.correctionEnabled(),
                  action: #selector(correctionChanged(_:)))
+        checkbox("智能联想（提交后联想常用续接词句；默认关闭）", y: after + 26,
+                 on: OpiSettingsStore.association,
+                 action: #selector(associationChanged(_:)))
 
-        let schemeY = after + 42
+        let schemeY = after + 68
         label("输入方案", x: 0, y: schemeY, w: 90, size: 12)
         let current = engine.currentScheme()
         let idx = Self.schemeChoices.firstIndex(of: current) ?? 0
@@ -333,6 +336,11 @@ extension OpiSettingsWindow {
         let on = sender.state == .on
         OpiEngine.shared.setCorrection(on)
         OpiSettingsStore.set("Correction", on)
+    }
+
+    @objc func associationChanged(_ sender: NSButton) {
+        OpiSettingsStore.association = sender.state == .on
+        OpiClientHub.shared.refreshState()
     }
 
     @objc func schemeChanged(_ sender: NSPopUpButton) {

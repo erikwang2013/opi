@@ -25,6 +25,7 @@ enum KeyboardPreferences {
     private static let fuzzyKey = "opi.setting.fuzzy"
     private static let fuzzyPairsKey = "opi.setting.fuzzyPairs"
     private static let jianpinKey = "opi.setting.jianpin"
+    private static let associationKey = "opi.setting.association"
     private static let correctionKey = "opi.setting.correction"
     private static let chinesePunctKey = "opi.setting.chinesePunct"
     private static let shuangpinKey = "opi.setting.shuangpinLayout"
@@ -80,6 +81,7 @@ enum KeyboardPreferences {
                 fuzzy: readBool(fuzzyKey, default: false),
                 fuzzyPairs: defaults.string(forKey: fuzzyPairsKey) ?? "",
                 jianpin: readBool(jianpinKey, default: true),
+                association: readBool(associationKey, default: false),
                 correction: readBool(correctionKey, default: true),
                 chinesePunct: readBool(chinesePunctKey, default: true),
                 shuangpinLayout: SHUANGPIN_LAYOUT_NAMES.contains(layout)
@@ -98,6 +100,7 @@ enum KeyboardPreferences {
             defaults.set(newValue.fuzzy, forKey: fuzzyKey)
             defaults.set(newValue.fuzzyPairs, forKey: fuzzyPairsKey)
             defaults.set(newValue.jianpin, forKey: jianpinKey)
+            defaults.set(newValue.association, forKey: associationKey)
             defaults.set(newValue.correction, forKey: correctionKey)
             defaults.set(newValue.chinesePunct, forKey: chinesePunctKey)
             defaults.set(newValue.shuangpinLayout, forKey: shuangpinKey)

@@ -28,6 +28,7 @@ final class AboutPanel: UIView {
     private static let homeURL = "https://opi.erik.xyz"
     private static let projectURL = "https://github.com/erikwang2013/opi"
     private static let blogURL = "https://erik.xyz"
+    private static let privacyURL = "https://opi.erik.xyz/privacy/index.html"
 
     private let header = KeyboardPanelHeader(title: "关于", hint: "")
     private let scroll = UIScrollView()
@@ -104,6 +105,8 @@ final class AboutPanel: UIView {
         addLink(Self.projectURL)
         addHeading("博客地址")
         addLink(Self.blogURL)
+        addHeading("隐私政策")
+        addLink(Self.privacyURL)
         let note = UILabel()
         note.text = "点地址会先复制到剪贴板，再尝试用浏览器打开；"
             + "键盘扩展不一定会被允许打开链接，复制后可粘贴到浏览器。"

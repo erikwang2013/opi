@@ -60,6 +60,9 @@ internal const val ABOUT_BLOG_URL = "https://erik.xyz"
 /** 官网主页（用户 2026-10-20 给定）。 */
 internal const val ABOUT_HOME_URL = "https://opi.erik.xyz"
 
+/** 隐私政策（2026-10-28 用户给定站点页面）。 */
+internal const val ABOUT_PRIVACY_URL = "https://opi.erik.xyz/privacy/index.html"
+
 @Composable
 internal fun AboutSection(toast: (String) -> Unit) {
     val context = LocalContext.current
@@ -122,6 +125,7 @@ internal fun AboutSection(toast: (String) -> Unit) {
     LinkItem("主页地址", ABOUT_HOME_URL, toast)
     LinkItem("项目地址", ABOUT_PROJECT_URL, toast)
     LinkItem("博客地址", ABOUT_BLOG_URL, toast)
+    LinkItem("隐私政策", ABOUT_PRIVACY_URL, toast)
 }
 
 /**

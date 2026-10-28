@@ -369,14 +369,16 @@ extension OpiSettingsWindow {
         linkLabel("项目地址：https://github.com/erikwang2013/opi",
                   url: "https://github.com/erikwang2013/opi", y: 172)
         linkLabel("博客地址：https://erik.xyz", url: "https://erik.xyz", y: 194)
+        linkLabel("隐私政策：https://opi.erik.xyz/privacy/index.html",
+                  url: "https://opi.erik.xyz/privacy/index.html", y: 216)
 
-        label("草案构建：未签名、未公证、未在真机运行验证。", y: 232, size: 12,
+        label("草案构建：未签名、未公证、未在真机运行验证。", y: 254, size: 12,
               color: .systemOrange)
         note("Linux 对照：状态栏（LOGO/中英/标点/简繁/模式/全角/软键盘/符号/设置）、设置八页、12 皮肤、暗光/长辈、符号/表情/颜文字/贴纸、26/9/14/笔画自绘键盘。",
-             y: 266, height: 40)
+             y: 288, height: 40)
         note("明确不可用：ENPRO（englishpro 在 macOS 无控制面，状态栏按钮禁用）；系统候选窗皮肤/字号；空缓冲时软键盘退格不能删宿主文本。贴纸走剪贴板（PNG+GIF），不注入 ⌘V。",
-             y: 316, height: 50)
-        note("完整缺口表与「最不确定的 API」见 macos/README.md。", y: 374, height: 20)
+             y: 338, height: 50)
+        note("完整缺口表与「最不确定的 API」见 macos/README.md。", y: 396, height: 20)
         refreshAboutUpdate()
     }
 

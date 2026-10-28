@@ -12,7 +12,7 @@ python3 -m http.server 8080 --directory site
 # 打开 http://localhost:8080/
 ```
 
-直接双击 `index.html` 也能看，但 `//busuanzi...` 的统计脚本需要 HTTP(S) 才会工作。
+直接双击 `index.html` 也能看，站点没有任何统计脚本或第三方请求。
 
 ## 结构
 
@@ -20,6 +20,8 @@ python3 -m http.server 8080 --directory site
 site/
   index.html            中文首页（七个 section：认识/能力/迭代/形态/版本/下载；SEO 元数据见下）
   en/index.html         英文首页（同结构；EN / 中文切换，独立 canonical 与 hreflang）
+  privacy/index.html    中文隐私政策（独立静态页，含声明主体与联系方式）
+  en/privacy/index.html 英文隐私政策（同内容，独立 canonical / hreflang）
   404.html              404 页（中英双语、noindex；由静态服务器回退，不依赖脚本）
   version.json          机器可读的最新版本（客户端「检测更新」首选；发版时与版本号一起改）
   robots.txt            抓取规则（屏蔽仓库说明 Markdown）与 sitemap 声明
@@ -105,7 +107,7 @@ JSON-LD，以及 `robots.txt` / `sitemap.xml`。换域名时同时改 canonical�
 `url`/`image`、JSON-LD 的 `url`/`@id` 与 robots 的 Sitemap 地址。
 
 - `site/README.md` 的链接若部署在子路径（如 `/opi/`），保持相对路径即可。
-- 统计脚本由 busuanzi 提供；广告拦截器或离线环境会把它拦掉，页面其余部分不受影响。
+- 站点不接入第三方统计或追踪脚本；隐私政策见 `/privacy/` 与 `/en/privacy/`。
 - 版本号在 `index.html`（hero 的 `v1.26.3`）与发布页链接里是手写的，发版时同步。
 
 ## 素材授权

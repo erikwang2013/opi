@@ -43,3 +43,5 @@ export const KEY_ALL_CANDIDATES: string = 'opiAllCandidates';
 export const KEY_READINGS: string = 'opiReadings';
 /** 联想态（2026-10-27）：空缓冲 + 空显示串 + 有候选 + 拼音/繁体；UI 据此认「候选行是联想」。 */
 export const KEY_ASSOCIATION: string = 'opiAssociation';
+/** 智能联想**设置态**（与上面的运行时联想态分开）：设置面板的开关读数。 */
+export const KEY_ASSOCIATION_ON: string = 'opiAssociationOn';

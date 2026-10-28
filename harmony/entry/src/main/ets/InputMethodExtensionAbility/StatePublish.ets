@@ -12,7 +12,8 @@ import * as KeyboardModes from './KeyboardModes';
 import * as OpiEngine from './OpiEngine';
 import { OpiMode } from './OpiEngine';
 import {
-  KEY_ALL_CANDIDATES, KEY_ASSOCIATION, KEY_BUFFER, KEY_CANDIDATES, KEY_DARK, KEY_DISPLAY_BUFFER,
+  KEY_ALL_CANDIDATES, KEY_ASSOCIATION, KEY_ASSOCIATION_ON, KEY_BUFFER, KEY_CANDIDATES, KEY_DARK,
+  KEY_DISPLAY_BUFFER,
   KEY_ELDER, KEY_FLOAT, KEY_GAME, KEY_LEARNER, KEY_MODE, KEY_MODE_INDEX, KEY_ONE_HAND,
   KEY_PRO, KEY_READINGS, KEY_SHIFT, KEY_SHOW_OWN, KEY_SKIN, KEY_TILED, KEY_VIEW
 } from './KeyboardAppStorage';
@@ -73,8 +74,13 @@ export function publishState(): void {
   // 缓冲绑存），先读会拿到上一条缓冲的旧值/空串 —— Android EngineController 同款次序。
   const display: string = OpiEngine.displayBuffer();
   const mode: OpiMode = OpiEngine.mode();
+  // 智能联想默认关闭（2026-10-28）：空缓冲 + 空显示串下的候选就是联想项，整批挡在 UI 前。
+  const associationOff: boolean = !KeyboardModes.associationEnabled() &&
+    buffer.length === 0 && display.length === 0;
+  const visibleCandidates: string[] = associationOff ? [] : pageCandidates;
+  const visibleReadings: string[] = associationOff ? [] : readings;
   // 平铺里候选用尽（选词 / ⌫ 退到空）→ 自动收拢，否则键盘回不来（Android 同款）。
-  if (KeyboardModes.tiledEnabled() && !candidatesShowable(buffer, pageCandidates, mode)) {
+  if (KeyboardModes.tiledEnabled() && !candidatesShowable(buffer, visibleCandidates, mode)) {
     KeyboardModes.collapseTiled();
   }
   const tiled: boolean = KeyboardModes.tiledEnabled();
@@ -82,12 +88,13 @@ export function publishState(): void {
   // 联想态（2026-10-27，Spec §5）：空缓冲 + 空显示串 + 有当前页候选 + 拼音/繁体。
   // 前缀候选都要求非空缓冲，所以空缓冲下的候选只可能来自联想；缓存给 UI 与收起判据共用。
   putNumber(KEY_ASSOCIATION, buffer.length === 0 && display.length === 0 &&
-    pageCandidates.length > 0 &&
+    visibleCandidates.length > 0 &&
     (mode === OpiMode.Pinyin || mode === OpiMode.Traditional) ? 1 : 0);
+  putNumber(KEY_ASSOCIATION_ON, KeyboardModes.associationEnabled() ? 1 : 0);
   putString(KEY_BUFFER, buffer);
   putString(KEY_DISPLAY_BUFFER, display);
-  putStrings(KEY_CANDIDATES, pageCandidates);
-  putStrings(KEY_READINGS, readings);
+  putStrings(KEY_CANDIDATES, visibleCandidates);
+  putStrings(KEY_READINGS, visibleReadings);
   putNumber(KEY_MODE, mode as number);
   putNumber(KEY_SHIFT, OpiEngine.shiftState() as number);
   putNumber(KEY_LEARNER, OpiEngine.learnerEnabled() ? 1 : 0);
@@ -104,5 +111,6 @@ export function publishState(): void {
   putNumber(KEY_SHOW_OWN, KeyboardModes.showOwnEnabled() ? 1 : 0);
   putNumber(KEY_TILED, tiled ? 1 : 0);
   // 平铺没开就不取全量：每键都拉 64 条纯属浪费（普通候选栏只用当前页）。
-  putStrings(KEY_ALL_CANDIDATES, tiled ? OpiEngine.candidates(TILED_FETCH_LIMIT) : []);
+  putStrings(KEY_ALL_CANDIDATES,
+    tiled && !associationOff ? OpiEngine.candidates(TILED_FETCH_LIMIT) : []);
 }

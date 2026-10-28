@@ -36,11 +36,12 @@ impl ITfKeyEventSink_Impl for TsfTextService_Impl {
         //   · 引擎不会消费的键（功能键、空缓冲特殊键）→ FALSE，交给应用/系统；
         //   · 其余键 → TRUE；OnKeyDown 里引擎保证消费。
         //
-        // 联想态（Spec §5）：**按下**先收起再走上面的分流 —— 点选候选排回本线程
-        // 的队列也要先落地（点选可能刚把引擎带进联想态）。Ctrl/Alt 直通同样收起。
-        // 点选建出的新链在这里又被收起：TSF 排队架构的已知边界（Spec §11）。
-        self.drain_pending();
+        // 联想态（Spec §5）：**按下**先收起旧链，再落地排队的点选 —— 顺序不能反：
+        // 点选候选（尤其点联想项）会在 `drain_pending` 里建出**新**链，先 drain 再
+        // dismiss 会在同一个 keydown 把新链清掉（2026-10-28 用户报障「点了联想项
+        // 没有下一条」）。Ctrl/Alt 直通同样收起。
         self.dismiss_association_and_push();
+        self.drain_pending();
         let states = map_key_state(lparam);
         let vk = wparam.0 as u32;
         // Shift 轻按判定第一拍（镜像 fcitx5 轨 `OpiShiftToggle::handle`）：

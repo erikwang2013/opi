@@ -81,6 +81,9 @@ internal fun CommonPage(s: OpSettings, apply: (OpSettings) -> Unit, status: (Str
         "声母缩写：nh → 你好、zg → 中国",
         s.jianpin,
     ) { apply(s.copy(jianpin = it)) }
+    SettingRow("智能联想", "提交词语后联想常用续接词句；默认关闭。配置键名 Association", s.association) {
+        apply(s.copy(association = it))
+    }
     // 表情页「自有」（2026-10-20，缺省关）：开 = 表情页顶栏出现小欧贴纸子页。
     SettingRow(
         "表情中显示自有",
@@ -374,30 +377,10 @@ internal fun AboutPage(
         )
     }
     Spacer(Modifier.height(8.dp))
-    Text(
-        "主页：https://opi.erik.xyz",
-        fontSize = 12.sp,
-        color = SymAccent,
-        modifier = Modifier.clickable {
-            runCatching { uriHandler.openUri("https://opi.erik.xyz") }
-        },
-    )
-    Text(
-        "项目地址：https://github.com/erikwang2013/opi",
-        fontSize = 12.sp,
-        color = SymAccent,
-        modifier = Modifier.clickable {
-            runCatching { uriHandler.openUri("https://github.com/erikwang2013/opi") }
-        },
-    )
-    Text(
-        "博客地址：https://erik.xyz",
-        fontSize = 12.sp,
-        color = SymAccent,
-        modifier = Modifier.clickable {
-            runCatching { uriHandler.openUri("https://erik.xyz") }
-        },
-    )
+    LinkLine("主页：https://opi.erik.xyz", "https://opi.erik.xyz")
+    LinkLine("项目地址：https://github.com/erikwang2013/opi", "https://github.com/erikwang2013/opi")
+    LinkLine("博客地址：https://erik.xyz", "https://erik.xyz")
+    LinkLine("隐私政策：https://opi.erik.xyz/privacy/index.html", "https://opi.erik.xyz/privacy/index.html")
     Spacer(Modifier.height(10.dp))
     // 一句话说明「为什么只有这几页」——主流输入法那套有十几页，我们引擎现在只有这几个真旋钮；
     // 把引擎没有的开关摆上来就是假承诺（宁可少一页，不做点不动的开关）。
@@ -416,6 +399,20 @@ internal fun AboutPage(
     Text(
         "表情数据 OpenMoji（CC BY-SA 4.0）· 颜文字 rime_kaomoji_dict（MIT）· 小欧贴纸/图标为项目专有资产，商业使用需授权",
         fontSize = 12.sp, color = Muted,
+    )
+}
+
+/** 关于页的外链一行：正文写全地址（读屏看得见），点击交系统浏览器。 */
+@Composable
+private fun LinkLine(label: String, url: String) {
+    val uriHandler = LocalUriHandler.current
+    Text(
+        label,
+        fontSize = 12.sp,
+        color = SymAccent,
+        modifier = Modifier.clickable {
+            runCatching { uriHandler.openUri(url) }
+        },
     )
 }
 

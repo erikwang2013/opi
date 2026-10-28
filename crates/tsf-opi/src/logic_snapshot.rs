@@ -76,6 +76,21 @@ impl TsfLogic {
     /// 锁内调用，**只碰引擎**（不碰 sink/COM）。一次 `fetched()` 同时算候选与页数
     /// （2026-10-18：此前各算一次，每键整份排序两遍）。
     pub fn snapshot(&self) -> StateSnapshot {
+        let buffer = self.display_buffer();
+        let association = self.association_enabled && self.engine.association_active();
+        // 智能联想默认关闭（2026-10-28）：空缓冲下的候选只可能来自联想
+        // （`engine_candidates.rs` 的空输入分支），关掉时整批不推给候选窗。
+        if buffer.is_empty() && !association {
+            return StateSnapshot {
+                buffer,
+                candidates: Vec::new(),
+                page: 0,
+                page_count: 0,
+                mode: self.mode(),
+                composing: self.has_composing(),
+                association: false,
+            };
+        }
         let fetched = self.fetched();
         let candidates: Vec<String> = fetched
             .iter()
@@ -84,13 +99,13 @@ impl TsfLogic {
             .map(|c| c.text.clone())
             .collect();
         StateSnapshot {
-            buffer: self.display_buffer(),
+            buffer,
             candidates,
             page: self.page,
             page_count: fetched.len().div_ceil(PAGE_SIZE),
             mode: self.mode(),
             composing: self.has_composing(),
-            association: self.engine.association_active(),
+            association,
         }
     }
 }
@@ -126,6 +141,7 @@ mod tests {
             english_pro: true,
             last_printable: None,
             shift_toggle: true,
+            association_enabled: true,
             fetch_cache: Default::default(),
         };
         s.refresh_snapshot();

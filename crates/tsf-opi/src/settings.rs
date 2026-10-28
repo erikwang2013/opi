@@ -24,8 +24,8 @@ use std::path::PathBuf;
 /// 设置文件名（与 Compose 写侧约定一致：`<LOCALAPPDATA>/opi/settings.ini`）。
 pub const SETTINGS_FILE_NAME: &str = "settings.ini";
 
-/// 五个开关 + 模糊音逐对列表。默认值 = **引擎既有行为**（全开）—— 与 Kotlin 写侧、
-/// fcitx5 读侧的默认一字不差：三处默认值不同的表现是「没配过 = 随机一种行为」。
+/// 六个开关 + 模糊音逐对列表。默认值 = **引擎既有行为**（除智能联想外全开）—— 与
+/// Kotlin 写侧、fcitx5 读侧的默认一字不差：三处默认值不同的表现是「没配过 = 随机一种行为」。
 ///
 /// `shift_toggle`（2026-10-22 接通 Windows）：Shift 轻按切换中英文。此前只有 Linux
 /// 读侧认它；TSF 轨现在在 `tsf_shift.rs` 的三拍里查这个位，关掉 = 轻按不切换
@@ -41,6 +41,10 @@ pub struct Settings {
     pub chinese_punct: bool,
     /// Shift 轻按切换中英文（键 `ShiftToggle`；桌面写侧 `Settings.kt` 同键）。
     pub shift_toggle: bool,
+    /// 智能联想（2026-10-28 用户裁决「默认关闭」；键 `Association`）：提交后是否
+    /// 展示联想候选。缺省 **false** —— 与 fcitx5 `opi_config.h`、桌面 `Settings.kt`
+    /// 三处同步。
+    pub association: bool,
     pub fuzzy: bool,
     pub fuzzy_pairs: String,
     pub jianpin: bool,
@@ -79,6 +83,8 @@ impl Default for Settings {
             chinese_punct: true,
             // Shift 轻按切中英：默认开（与 Linux 读侧 `opi_config.h` 的默认一致）。
             shift_toggle: true,
+            // 智能联想：默认关（2026-10-28 用户裁决）。
+            association: false,
             // 缺省 false = 关（2026-10-15 用户裁决「默认关闭模糊音、开启拼音纠错、简拼」）。
             fuzzy: false,
             fuzzy_pairs: String::new(), // 空 = 未设置（回落到 fuzzy 布尔）
@@ -157,6 +163,7 @@ pub fn parse(text: &str) -> Settings {
             "Learn" => out.learn = b,
             "ChinesePunct" => out.chinese_punct = b,
             "ShiftToggle" => out.shift_toggle = b,
+            "Association" => out.association = b,
             "Fuzzy" => out.fuzzy = b,
             "Jianpin" => out.jianpin = b,
             "Correction" => out.correction = b,

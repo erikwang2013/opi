@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Privacy Policy — opi · Open People Input</title>
+  <meta name="description" content="opi privacy policy: no personal data collected or uploaded, no accounts so no deletion process, and the only network access is an update check. Contact erik@erik.xyz.">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#f3fbf4"><meta name="color-scheme" content="light">
+  <link rel="canonical" href="https://opi.erik.xyz/en/privacy/">
+  <link rel="alternate" hreflang="zh-CN" href="https://opi.erik.xyz/privacy/">
+  <link rel="alternate" hreflang="en" href="https://opi.erik.xyz/en/privacy/">
+  <link rel="alternate" hreflang="x-default" href="https://opi.erik.xyz/privacy/">
+  <link rel="icon" type="image/png" href="../../assets/pet/opi-pet.png"><link rel="apple-touch-icon" href="../../assets/pet/opi-pet.png">
+  <link rel="stylesheet" href="../../css/base.css"><link rel="stylesheet" href="../../css/components.css"><link rel="stylesheet" href="../../css/responsive.css">
+  <style>
+    .policy { max-width: 860px; padding-block: clamp(36px, 7vw, 72px) clamp(48px, 8vw, 96px); }
+    .policy h1 { margin-bottom: 12px; font-size: clamp(2.1rem, 5.4vw, 3.4rem); }
+    .policy h2 { margin: 2.35em 0 .55em; font-size: clamp(1.3rem, 2.8vw, 1.7rem); letter-spacing: -.02em; }
+    .policy h2:first-of-type { margin-top: 1.8em; }
+    .policy p, .policy li { color: var(--muted); font-size: .98rem; line-height: 1.9; }
+    .policy ul { margin: .4em 0 1.2em; padding-left: 1.3em; }
+    .policy li + li { margin-top: .35em; }
+    .policy strong { color: var(--ink); }
+    .policy a { color: var(--accent-soft); text-decoration: underline; text-underline-offset: 3px; }
+    .policy .summary { margin: 26px 0 0; padding: 20px 22px; border-left: 3px solid var(--accent); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; background: var(--bg-deep); color: var(--ink); font-size: 1.03rem; line-height: 1.85; }
+    .policy-meta { display: grid; gap: 7px; margin: 22px 0 0; padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--radius); background: rgba(255, 255, 255, .55); color: var(--muted); font-size: .9rem; line-height: 1.7; }
+    .policy-meta p { margin: 0; color: inherit; font-size: inherit; line-height: inherit; }
+    .policy-foot { margin-top: 3.2em; padding-top: 1.3em; border-top: 1px solid var(--line); color: var(--muted-2); font-size: .85rem; }
+    .policy-foot a { color: var(--accent-soft); }
+    @media (max-width: 520px) {
+      .policy .brand-cn { display: none; }
+      .policy-meta { padding: 14px 16px; }
+      .policy .summary { padding: 16px 18px; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header" id="top">
+    <div class="shell header-inner">
+      <a class="brand" href="../" aria-label="opi Open People Input home">
+        <img class="brand-pet" src="../../assets/pet/opi-pet.png" width="32" height="32" alt="">
+        <span class="brand-name">opi</span><span class="brand-cn">Open People Input</span>
+      </a>
+      <div class="header-actions" style="margin-left:auto">
+        <a class="lang-switch" href="/privacy/" hreflang="zh-CN" lang="zh-CN" aria-label="以中文查看本政策">中文</a>
+        <a class="header-link" href="../">Back to home</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="shell policy" id="main">
+    <p class="eyebrow">PRIVACY · POLICY</p>
+    <h1>Privacy Policy</h1>
+    <p class="body-lg">opi (Open People Input) · consistent across all six clients</p>
+
+    <div class="policy-meta">
+      <p><strong>Issued by:</strong> the opi project (“小欧输入法”)</p>
+      <p><strong>Operator and contact:</strong> erik (艾瑞可erik), individual developer</p>
+      <p><strong>Contact email:</strong> <a href="mailto:erik@erik.xyz">erik@erik.xyz</a></p>
+      <p><strong>Effective date:</strong> October 28, 2026</p>
+      <p><strong>Applies to:</strong> the Android, iOS, HarmonyOS, Windows, Linux and macOS clients, and this website (opi.erik.xyz)</p>
+    </div>
+
+    <p class="summary"><strong>In one sentence:</strong> opi collects, uploads and shares no personal information. There are no accounts, so there is no account-deletion process. The only network access is an update check; otherwise the clients are fully offline.</p>
+
+    <h2>1. What we collect</h2>
+    <p>We collect <strong>no personal information</strong>, including but not limited to: your input and candidates, clipboard contents, contacts, location, photos, device identifiers, usage statistics or crash logs. There are no accounts, registration or sign-in, and no advertising or profiling.</p>
+
+    <h2>2. Data kept only on your device</h2>
+    <p>Settings, skins, switches, user words and learning data stay on your own device (in the app data or configuration directory of each client). They do not leave the device. Because there are no accounts, <strong>there is no account to delete</strong>; clearing local data removes everything:</p>
+    <ul>
+      <li><strong>Android / HarmonyOS:</strong> uninstall the app or clear its data in system settings.</li>
+      <li><strong>iOS:</strong> deleting the app deletes the keyboard extension container; typing works without granting “Allow Full Access”.</li>
+      <li><strong>Windows / Linux / macOS:</strong> delete the local configuration and user-word files, or uninstall the app.</li>
+    </ul>
+
+    <h2>3. The only network access: update checks</h2>
+    <p>Some clients offer “Check for updates” in Settings, which sends one ordinary HTTPS request to <code>https://opi.erik.xyz/version.json</code> to read the latest version number. The request does <strong>not</strong> carry input, user words, clipboard contents or device identifiers, and is not used for statistics or profiling. If you never check for updates, the client makes no network requests.</p>
+
+    <h2>4. System permissions</h2>
+    <ul>
+      <li><strong>Android:</strong> only <code>INTERNET</code> (a normal permission, used for update checks).</li>
+      <li><strong>iOS:</strong> optional “Allow Full Access” is used only to write the app’s own sticker images to the system pasteboard; typing works without it, and the keyboard extension makes no network requests.</li>
+      <li><strong>HarmonyOS:</strong> only the network permission (used for update checks).</li>
+      <li><strong>Windows / Linux / macOS:</strong> no sensitive system permissions are requested.</li>
+    </ul>
+
+    <h2>5. Third parties and sharing</h2>
+    <p>We do not sell, lend or share personal information, and we integrate no third-party advertising, analytics or tracking SDKs. This website is static: it sets no analytics cookies and loads no third-party analytics scripts.</p>
+
+    <h2>6. Children’s privacy</h2>
+    <p>Because we collect no information at all, we do not (and cannot) collect personal information from children.</p>
+
+    <h2>7. Data security</h2>
+    <p>Input and user words never leave your device, so there is no server-side input data to breach. Update checks only read a public version number over HTTPS.</p>
+
+    <h2>8. Your rights</h2>
+    <p>Since we hold no personal information, there is no server-side data to access, correct, export or delete. Local data is always under your control: clear the app’s data or uninstall it. If you have questions, email us.</p>
+
+    <h2>9. Changes to this policy</h2>
+    <p>This policy may be updated as the product changes. The new version will be published on this page with a new effective date. Because there are no accounts, we cannot notify users individually; this page is the authoritative version.</p>
+
+    <h2>10. Contact us</h2>
+    <p>For any privacy question, email <a href="mailto:erik@erik.xyz">erik@erik.xyz</a>. This is an individual project; we will reply as soon as we can.</p>
+
+    <p class="policy-foot">This policy does not affect rights you have under your local law. © 2026 艾瑞可erik · <a href="../">Back to home</a> · <a href="/privacy/" hreflang="zh-CN" lang="zh-CN">中文</a></p>
+  </main>
+
+  <footer class="site-footer" aria-label="Footer">
+    <div class="shell footer-bottom" style="margin-top:0;border-top:0;padding-top:0">
+      <p>© <span id="year">2026</span> 艾瑞可erik · opi</p>
+      <p><a href="../">Home</a> · <a href="mailto:erik@erik.xyz">erik@erik.xyz</a></p>
+    </div>
+  </footer>
+</body>
+</html>
