@@ -93,7 +93,7 @@ GitHub Pages 均可）。页面内没有构建步骤，也没有服务端依赖�
 404 页在 `site/404.html`：GitHub Pages / Cloudflare Pages 会自动使用它；Nginx 需
 `error_page 404 /404.html;`，Caddy 需在 `handle_errors` 里返回 `/404.html`。
 
-**发版时更新 `version.json`**：`{"version":"1.26.4","download":"https://opi.erik.xyz/download"}`。
+**发版时更新 `version.json`**：`{"version":"1.26.5","download":"https://opi.erik.xyz/download"}`。
 （`/download` 由 `site/download/index.html` 转场到首页下载区；具体安装包在
 `/download/opi-…` 下。）
 小欧设置窗（Windows/Linux 桌面端）的「检测更新」先读它；读不到才回退解析
@@ -108,7 +108,7 @@ JSON-LD，以及 `robots.txt` / `sitemap.xml`。换域名时同时改 canonical�
 
 - `site/README.md` 的链接若部署在子路径（如 `/opi/`），保持相对路径即可。
 - 站点不接入第三方统计或追踪脚本；隐私政策见 `/privacy/` 与 `/en/privacy/`。
-- 版本号在 `index.html`（hero 的 `v1.26.4`）与发布页链接里是手写的，发版时同步。
+- 版本号在 `index.html`（hero 的 `v1.26.5`）与发布页链接里是手写的，发版时同步。
 
 ## 素材授权
 

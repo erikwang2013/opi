@@ -32,7 +32,7 @@
     <string>XPC!</string>
     <key>CFBundleShortVersionString</key>
     <!-- 与 workspace 版本对齐（Cargo.toml [workspace.package] version）。 -->
-    <string>1.26.4</string>
+    <string>1.26.5</string>
     <key>CFBundleVersion</key>
     <string>18</string>
     <!-- 手写 bundle 没有 Xcode 的构建设置注入，这两个键要显式写；
