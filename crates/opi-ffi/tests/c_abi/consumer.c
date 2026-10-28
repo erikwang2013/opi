@@ -64,14 +64,12 @@ static const uint16_t NI[] = {0x4F60};   /* 你 */
 
 static const uint16_t W = 'w', O = 'o', X = 'x';
 
-/* [11d] 导入词库那一段在 consumer_dicts.c —— **#include 片段**，不是独立 TU。
- * 拆出去的唯一理由是 500 行硬门禁（crates/opi-ffi/tests/line_limit.rs 扫全仓源码；
- * 本文件加完那段是 612 行）。拆法与 fcitx5-opi 的 `opi_ctl_*_driver.cpp` 同一种。 */
-#include "consumer_dicts.c"
-/* [13] 五笔旋钮族那一段在 consumer_wubi.c —— 同上，#include 片段。 */
-#include "consumer_wubi.c"
-/* [14] 自定义短语那一段在 consumer_phrases.c —— 同上。 */
-#include "consumer_phrases.c"
+/* [11d]/[13]/[14]/[15] 各段拆到 consumer_*.c：**#include 片段**，不是独立 TU（500 行
+ * 门禁，拆法同 fcitx5-opi 的 `opi_ctl_*_driver.cpp`；必须在 `int main` 之前包含）。 */
+#include "consumer_dicts.c"   /* [11d] 导入词库 */
+#include "consumer_wubi.c"    /* [13] 五笔旋钮族 */
+#include "consumer_phrases.c" /* [14] 自定义短语 */
+#include "consumer_meta.c"    /* [15] 版本/页大小/待提交/语言切换 */
 int main(int argc, char **argv) {
     /* ---------- 装载 ---------- */
     printf("[1] opi_load\n");
@@ -95,6 +93,7 @@ int main(int argc, char **argv) {
     }
     /* 路径缓冲是调用方分配的，Rust 侧只读不留引用 —— 这里立刻释放，验证该约定。 */
     free((void *)path16.ptr);
+    check_meta_exports();
     /* ---------- 装载后的空状态 ---------- */
     printf("[2] 空状态\n");
     OpiString buf = opi_buffer();
