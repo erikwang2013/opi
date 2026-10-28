@@ -20,6 +20,7 @@
 | symbols.tsv（符号条目；**条数与 emoji 条数以生成器每次打印的为准，别写死数字**） | 同上（UnicodeData.txt 逐码位字符名 + **emoji-data.txt 的 `Emoji` 属性**判 emoji 列，2026-09-28 起） | Unicode License（同上，不新增来源、不新增许可证） | 同生成器产出。**emoji 列 = UTS#51 `Emoji` 属性**（含 BMP 区的 ☺♥⌚⭐），不再是「非 BMP」代理指标 —— 判据与复算命令见 scripts/gen_symbols.py 头与 crates/engine-core/tests/symbol_coverage.rs 的 `UTS51_EMOJI` 快照。**消费侧是编译期读取**：engine-core/src/symbols.rs `builtin()` 用 `include_str!("../../../data/raw/symbols.tsv")` 嵌入，故路径固定在 data/raw/ 而非 data/generated/（后者只放 .opid 二进制）；改目录必须两处同改，否则编不过 |
 | en_words.tsv（英文联想，10000 条，2026-09-28 加） | https://github.com/orgtre/google-books-ngram-frequency（Google Books Ngrams v3 英文 1-gram 的清洗产物） | **CC-BY 3.0** | 英文模式单词联想的数据源 —— spec §1「V1 仅做单词联想」承诺过、仓库此前没兑现（`candidates.rs` 对非拼音模式 `return Vec::new()`）。由 scripts/gen_en_dict.py 生成，`word\tpinyin\tfreq` 三列与 trad_hanzi.tsv 同形（第二列是 ASCII 小写查询键，多数与词形相同）。**候选逻辑 2026-10-18 已接线**（`engine-core/src/english_words.rs`，`include_str!` 嵌入；不是牛津原版 —— OUP 数据无授权）。CC-BY 要求署名 + 保留许可声明：**本表就是署名载体**，分发含本数据的产品时须一并保留 |
 | brand_terms.tsv / new_words.tsv / reading_overrides.tsv（人工表，2026-10-11 加） | OPI 项目人工撰写（生成器只做机械校验：音节合法性按 `pinyin.rs` 的 SYLLABLES 全切分、长度/字面/繁形过滤） | MIT | 品牌白名单（609 条）、网络用语/新词（391 条，含 2020–2023 时期词汇）与词级注音覆盖表（422 条，拼音人工写死）。⚠️ 覆盖表另有对上游真值的自动复核：词在 base/ext 出现时其读音必须是上游读音之一（实测揪出 8 条笔误/选读错误，见生成器 stderr 与本节下「外部词库并入」）。由 `scripts/gen_extra_phrases.py` 合并进 extra_manual.tsv |
+| single_reading_overrides.tsv（单字读音覆盖，2026-10-28 加） | OPI 项目人工撰写（B 类读音用户裁决「全部补」） | MIT | `字<TAB>读音<TAB>词典`，13 行（luna 6 对 + trad 7 对；嗯 `n` 两词典各一行）。luna：儿/兒 `r`、嗯 `n`/`ng`、琢 `zuo`、寻 `xin`；trad：似/匙 `shi`、臂 `bei`、抹 `ma`、嗯 `n`、吶 `ne`、尋 `xin`。**含非音节形 `r`/`n`/`ng`**（明示代价：单字母查询出「儿/嗯」）。解析与校验见 `scripts/single_readings.py`，两个生成器直接读取 |
 | surnames.tsv / slang.tsv（人工表，2026-10-18 加） | 百家姓：传统《百家姓》字表（公有领域）+ 项目人工标注姓氏读音；网络流行语：项目自撰（参考 2015–2026 公开网络用法，未复制第三方词表） | MIT | 姓氏 508 条（单姓 446 + 复姓 62；频次档 12000/9000）、流行语 597 条（档 6000/4000）。拼音**逐条人工写**（多音字取姓氏读音/实际读法：单 shan、解 xie、仇 qiu、区 ou、查 zha、朴 piao、乐 yue、覃 qin、尉迟 yuchi、万俟 moqi、澹台 tantai、长孙 zhangsun 等），生成器按 `pinyin.rs` 的 SYLLABLES 全切分校验；ASCII 字面键（yyds、栓Q、City不City、i人、打call、嗑CP）是引擎精确字面匹配例外。两表接在 extra_phrases.tsv **批量段尾**（不进 extra_manual 前置段，避免压过同键常用词），放置理由与校验见 `scripts/manual_tables.py` 头注 |
 | extra_manual.tsv / extra_phrases.tsv（生成物，2026-10-11 加） | 复合来源（逐源见「外部词库并入（2026-10-11）」节） | **合并产物按 GPL-3.0 分发**（含 GPL-3.0-only 的 rime-ice 层）；源码（生成器）仍 MIT | 词组三段序的前置段与批量段，由 `scripts/gen_extra_phrases.py` 生成、`gen_luna_dict.py` 并入 luna.opid。行数/体积**以生成器每次打印的为准**，别写死数字 |
 | GPL-3.0.txt（2026-10-11 加） | https://www.gnu.org/licenses/gpl-3.0.txt （与 Debian `/usr/share/common-licenses/GPL-3` 逐字节同文，双源 sha256 核过） | GPL-3.0 全文 | 随 .deb/.rpm 分发（`scripts/nfpm.yaml` 装进 `/usr/share/doc/opi/`）—— 合并产物按 GPL-3.0 分发时的许可文本义务 |
@@ -231,6 +232,13 @@ lead 用单字读音表反查全部 48078 条词组的拼音（**全量**，非�
 全部已经是第 1 位**。词组键是自包含的（`larou` 直接命中词组条目），单字读音缺不缺**不
 影响整串打词组**。真正受影响的是**单音节查询**（打 `la` 出不出「腊」）。修的是这个。
 「语料里有、单字表里没有的字」跳过 0 个（这类要新增单字候选 = 改排序面，不在本条范围）。
+
+**2026-10-28 用户裁决「B 类全部补」**：新增 `data/raw/single_reading_overrides.tsv`，
+luna 补 6 对（儿/兒 `r`、嗯 `n`/`ng`、琢 `zuo`、寻 `xin`），trad 补 7 对
+（似/匙 `shi`、臂 `bei`、抹 `ma`、嗯 `n`、吶 `ne`、尋 `xin`）。**非音节形 `r`/`n`/`ng`
+也补** —— 明示代价是单字母查询会出「儿/嗯」；这是产品选择，不是遗漏。
+trad 侧只补**同形字/繁体形**的读音；「乐/会/长…」等简体形缺读音不补，因为繁体对应字
+（樂/會/長）已经有该读音，补进 trad 会让繁体模式输出简体字形。
 
 **「错读音」的规模：给了两个数，但都不是可直接用的缺陷判据。**
 - 尖锐判据（可用）：语料出现过的 4001 字里，**luna 的读音与语料完全不交集的只有 4 个**

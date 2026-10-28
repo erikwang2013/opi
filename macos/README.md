@@ -581,9 +581,11 @@ NSMenuItem 直接用，字典则按 `kIMKCommandMenuItemName` 取项。**哪条�
   引擎切换仍走 `opi_switch_mode`，不绕过 `router.rs` 的 `switch_mode`。
   仍未接：中→繁→英三态循环（iOS 的 `cycleMode()`）、独立的数字/符号模式按钮
   （符号模式走 `Ctrl+\`，数字模式 2 由虚拟键盘的 123 进入）、英文专业
-  （ENPRO，fcitx5 控制面专有，C ABI 无出口）、Shift 轻按切中英
-  （Linux 的 `ShiftToggle`；IMK 要在 `recognizedEvents` 申领 `flagsChanged` 才收得到，
-  且 iTerm/VS Code 这类宿主不申领 —— 本批未接，设置「按键」页已如实标注）。
+  （ENPRO，fcitx5 控制面专有，C ABI 无出口）。
+  Shift 轻按切中英（Linux 的 `ShiftToggle`）2026-10-28 已接：`recognizedEvents`
+  申领 `flagsChanged`，三拍判定（按下武装 / 别的键撤销 / ≤300ms 抬起）后走与 `⌃'`
+  同一条切换路径；不消费修饰键事件，设置「按键」页已更新。
+  **未经真机/CI 运行验证**，且 iTerm/VS Code 这类不送修饰键事件的宿主仍不生效。
 - **G3 候选分页（2026-10-20 已补，CI 已编译、未上机）**：`refresh()` 改喂
   `opi_candidates_page()`，`candidateSelected` 改调 `opi_select_page(k)`（页内索引），
   不再使用全局 `opi_candidates(limit:64)` / `opi_select(index)`，也不再自己算

@@ -40,12 +40,11 @@ bing 167）——留着会把 冰 泄漏进 ni 查询（ni 是 ning 的前缀）
   本次只放开 CJK 扩展区，不顺带改收录范围；它们此前也被同一条过滤丢掉，行为不变。
   **局限：收录 ≠ 可见。** 扩展 B 依赖设备字体，各厂商覆盖差异很大（常见 tofu 空白框）。
 
-注意 luna_pinyin.dict.yaml **没有 pin**（gen_trad_dict.py 的 terra 有）：上游取
-rime/rime-luna-pinyin master。本次用的版本 sha256 =
-75bcf6eb3ff62b129882ed89cc22b2d80a5347aa72bcfa2ccc839bac298e7314（889896 字节，
-70771 行，与 LICENSES.md 记录的「889KB ~70771 行」一致），用它跑本脚本产出的
-luna.opid 与入库副本 sha256 逐字节相同 —— 即当前产物确实来自这个版本。
-**升级应照 terra 的做法补 pin**（未做：不在本次任务范围，且当前 master 恰好可复现）。
+luna_pinyin.dict.yaml 自 2026-10-28 起**已 pin**（commit + SHA-256，见下方
+LUNA_* 常量）：脚本对传入的文件做摘要校验，不符即报错、不静默换数据。
+pin 的版本 sha256 = 75bcf6eb3ff62b129882ed89cc22b2d80a5347aa72bcfa2ccc839bac298e7314
+（889896 字节，70771 行，与 LICENSES.md 记录的「889KB ~70771 行」一致），用它跑
+本脚本产出的 luna.opid 与入库副本 sha256 逐字节相同 —— 即当前产物确实来自这个版本。
 
 简体词组段（2026-09-27 加，用户真机反馈「常用词组无法拼音或模糊拼音显示」）：
   **根因是词源不是模糊层。** luna 自己的词组段只有繁体文言成语且拼音刻意空格分隔（见
@@ -101,6 +100,7 @@ luna 繁体成语段退役（2026-09-27，同一任务的后半）：
 
 用法（需要网络，下载 Unihan.zip + pinyin_simp.dict.yaml）：
   python3 scripts/gen_luna_dict.py <luna_pinyin.dict.yaml> > /tmp/luna_merged.tsv
+  （传入的 luna 文件必须与 LUNA_SHA256 一致，否则脚本报错退出。）
 产物不入库（luna.opid 本身 gitignore）；部署副本 android/app/src/main/assets/luna.opid。
 2026-10-18 起康熙差集（`data/raw/kangxi_luna.tsv`，由 gen_kangxi_extra.py 生成）要在
 本脚本输出**之后**用 scripts/merge_luna_kangxi.py 合并再 compile（见 CONTRIBUTING）。
@@ -120,10 +120,23 @@ from hanzi_freq import (
     trad_only,
     unihan_member,
 )
+from single_readings import load as load_single_readings, merge as merge_single_readings
+
+# ---- luna 单字上游 pin（2026-10-28）----
+# 输入是外部文件（用法要求传路径），因此 pin 落在**校验输入**：摘要不符即报错，
+# 与 fetch 的 SIMP pin 同一姿态（宁可失败也不静默换数据）。
+# 升级路径：换 commit + 换 SHA256（`curl -sSL <url> | sha256sum`），重跑本脚本与
+# `cargo test -p opi-tools`（词库/排序门禁会红）。
+LUNA_COMMIT = "56b934b099dfbeab842320f13aa8b461a6ab3e42"
+LUNA_URL = (
+    f"https://raw.githubusercontent.com/rime/rime-luna-pinyin/{LUNA_COMMIT}"
+    "/luna_pinyin.dict.yaml"
+)
+LUNA_SHA256 = "75bcf6eb3ff62b129882ed89cc22b2d80a5347aa72bcfa2ccc839bac298e7314"
 
 # ---- 简体词组上游 pin（2026-09-27）----
-# 照 gen_trad_dict.py 的 terra 做法钉死到 commit + SHA-256：luna 自己至今没 pin（头部
-# 有记录），再引一个浮动上游就是把同一个坑挖两次。
+# 照 gen_trad_dict.py 的 terra 做法钉死到 commit + SHA-256：再引一个浮动上游
+# 就是把同一个坑挖两次。luna 单字的 pin 见上方 LUNA_*。
 # 升级路径：换 commit + 换 SHA256（`curl -sSL <url> | sha256sum`），重跑本脚本与
 # `cargo test -p opi-tools --test simplified_phrases`（词组缺失会红）、
 # `ranking_quality`（排序变化会红）。
@@ -153,6 +166,17 @@ def fetch(url: str, sha256: str) -> str:
             f"上游内容变了，请确认后更新 scripts/gen_luna_dict.py 的 pin 并重跑门禁。"
         )
     return data.decode("utf-8")
+
+
+def verify_file(path: str, sha256: str) -> None:
+    """校验外部输入文件的摘要。不符即报错 —— 与 `fetch` 同一条「宁可失败也不静默换数据」。"""
+    with open(path, "rb") as f:
+        got = hashlib.sha256(f.read()).hexdigest()
+    if got != sha256:
+        raise RuntimeError(
+            f"{path} 摘要与 pin 不符：期望 {sha256}，实得 {got}。"
+            "luna 上游已变，请确认后更新 scripts/gen_luna_dict.py 的 LUNA_* pin 并重跑门禁。"
+        )
 
 
 def parse_rime(path: str) -> dict[str, list[tuple[str, int | None]]]:
@@ -305,6 +329,7 @@ def main() -> None:
     if len(sys.argv) != 2:
         print("usage: gen_luna_dict.py <luna_pinyin.dict.yaml> > luna_merged.tsv", file=sys.stderr)
         sys.exit(1)
+    verify_file(sys.argv[1], LUNA_SHA256)
     first, second = gb2312_levels()
     if len(first) != 3755 or len(second) != 3008:
         print(f"FATAL: GB2312 一级 {len(first)}/3755、二级 {len(second)}/3008 不符", file=sys.stderr)
@@ -342,6 +367,7 @@ def main() -> None:
     corpus_added = 0
     corpus_unfiltered = 0
     corpus_skipped = 0
+    override_added, overrides, tail = 0, load_single_readings("luna", set(singles)), set()
     readings: dict[str, list[str]] = {}
     for ch, ps in singles.items():
         ev = corpus.get(ch, set())
@@ -358,9 +384,11 @@ def main() -> None:
         )
         # ② 上游表里**根本没有**这条读音、但语料用过（行 heng / 挝 wo / 槟 bin / 琢 zuo）：
         #    补进来，这才是纯粹的「新增读音」
-        extra = sorted(ev - {p for p, _ in ps})
+        extra = ev - {p for p, _ in ps}
         corpus_added += len(extra)
-        readings[ch] = kept + extra
+        # ③ 人工覆盖表（2026-10-28 用户裁决「B 类全部补」，含非音节形 r/n/ng）
+        readings[ch], added = merge_single_readings(ch, kept, extra, overrides, tail)
+        override_added += added
     for ch in corpus:
         if ch not in singles:
             # 语料里有、单字表里没有的字：补它 = **新增一个单字候选**（改排序面），
@@ -377,7 +405,7 @@ def main() -> None:
 
     ordered: list[tuple[str, str]] = sorted(
         ((ch, py) for ch, pys in readings.items() for py in pys),
-        key=lambda cp: key_of(*cp),
+        key=lambda cp: (cp in tail, key_of(*cp)),
     )
 
     # 段 4 词组三段序（2026-10-11）：人工段（品牌/新词）→ 既有 simp 词组 →
@@ -462,6 +490,7 @@ def main() -> None:
         f"语料里有、单字表没有的字跳过 {corpus_skipped} 个",
         file=sys.stderr,
     )
+    print(f"单字读音覆盖: 补入 {override_added} 对", file=sys.stderr)
     print(f"总行数(含多读音展开): {len(out)}", file=sys.stderr)
     print(f"freq 范围: [{FMAX - (n - 1) * spacing}, {FMAX}] spacing={spacing}", file=sys.stderr)
 

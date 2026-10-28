@@ -86,6 +86,13 @@ impl EngineShared {
         Self::with_dict_inner(TsfLogic::with_dict(dict))
     }
 
+    pub fn with_dicts(
+        dict: Box<dyn engine_core::dictionary::Dictionary>,
+        trad: Option<Box<dyn engine_core::dictionary::Dictionary>>,
+    ) -> Self {
+        Self::with_dict_inner(TsfLogic::with_dicts(dict, trad))
+    }
+
     fn with_dict_inner(logic: TsfLogic) -> Self {
         Self {
             logic: Mutex::new(logic),
@@ -298,7 +305,7 @@ impl TsfSharedState {
             return; // 未 Activate：没有合法 tid，RequestEditSession 必失败
         }
         let Ok(session) = InsertTextSession::new(pic, text) else {
-            eprintln!("tsf-opi: InsertTextSession::new failed (no ITfInsertAtSelection?)");
+            tlog!("tsf-opi: InsertTextSession::new failed (no ITfInsertAtSelection?)");
             return;
         };
         let session: ITfEditSession = session.into();
@@ -317,7 +324,7 @@ impl TsfSharedState {
         match unsafe { pic.RequestEditSession(tid, &session, TF_ES_SYNC | TF_ES_READWRITE) } {
             Ok(hr) if hr.is_ok() => {}
             Ok(hr) => {
-                eprintln!(
+                tlog!(
                     "tsf-opi: RequestEditSession async hr=0x{:08X}，保留引用待异步回调",
                     hr.0
                 );
@@ -325,7 +332,7 @@ impl TsfSharedState {
                 // DoEditSession 在**本次调用返回之后**才被回调。keepalive 已在
                 // 调用前无条件存了一份，这里不再重复。
             }
-            Err(e) => eprintln!("tsf-opi: RequestEditSession 失败: {e}"),
+            Err(e) => tlog!("tsf-opi: RequestEditSession 失败: {e}"),
         }
     }
 }
@@ -384,7 +391,7 @@ impl ITfEditSession_Impl for InsertTextSession_Impl {
                 Ok(_) => Ok(()),
                 Err(e) if e.code().is_ok() => Ok(()),
                 Err(e) => {
-                    eprintln!("tsf-opi: InsertTextAtSelection failed: {e}");
+                    tlog!("tsf-opi: InsertTextAtSelection failed: {e}");
                     Err(e)
                 }
             }

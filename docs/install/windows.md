@@ -80,7 +80,7 @@
 | 操作系统 | Windows 10 / 11 x64 | 目标三元组只有 `x86_64-pc-windows-msvc`（下面 1.2 有实测）；**Windows on ARM 需要另加 `aarch64-pc-windows-msvc`，本仓库没有为它做过任何事** |
 | C++ 构建工具 | Visual Studio 2017+ 或 Build Tools，勾选「使用 C++ 的桌面开发」 | 提供 `link.exe` 与 MSVC 导入库。`crates/tsf-opi/Cargo.toml` 声明的 `windows` crate 依赖在链接期需要导入库 |
 | Rust | `rustup target add x86_64-pc-windows-msvc` | 目标不是默认安装的 |
-| 词库文件 | `luna.opid`，**安装包已自带**（`app\luna.opid`，见 §2.4）；手工部署时放 DLL 同目录或 `%LOCALAPPDATA%\opi\` 亦可（§2.2） | `crates/tsf-opi/src/dict_path.rs` |
+| 词库文件 | `luna.opid` + `trad.opid`（繁体，可选），**安装包已自带**（`app\`，见 §2.4）；手工部署时放 DLL 同目录或 `%LOCALAPPDATA%\opi\` 亦可（§2.2） | `crates/tsf-opi/src/dict_path.rs` |
 | 候选窗运行时 | JVM（只有要显示候选窗时才需要） | `desktop/` 是 Compose Desktop / JVM 工程 |
 
 > **Win7 / Win8 / 8.1 不支持（2026-10-19 用户裁决：仅文档标注）**：当前
@@ -382,8 +382,8 @@ android/app/src/main/assets/luna.opid
 > （本轮不改根 README，以本节与 §2.5 为准）。
 
 ⇒ 本文 §3、§4 里涉及 `luna.opid` 的步骤现在都是**可选的手工动作**（换词库、排障），
-正常安装不需要用户送货。`trad.opid` **仍不随包**：`dict_path` 没有它的候选，
-`TsfLogic`/`EngineShared` 只持有一部词库，塞进去也不会被加载（见 §6.2）。
+正常安装不需要用户送货。`trad.opid` 自 2026-10-28 起**也随包**（`app\trad.opid`），
+由 `dict_path::load_trad` 装载；缺/坏时繁体模式回退主库（见 §6.2）。
 
 ### 2.5 自动打包（GitHub Actions，2026-10-09 起）
 
@@ -1502,8 +1502,8 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | 4 | `OnSetFocus` 空实现（drain 的天然落点没接） | `tsf.rs` 的 `OnSetFocus` | 同上，放大了 #3 |
 | 5 | 点选后换文档 → 插到上一个文档 | `tsf.rs::drain_pending` 注释 | 边缘场景 |
 | 6 | **`Deactivate` 是骨架**：没有 `UnadviseKeyEventSink`，没有释放 composition / 候选窗 | `tsf.rs::Deactivate`；`docs/superpowers/specs/2026-08-14-opi-multi-platform-design.md` 的「tsf-opi Deactivate 为骨架（正式范围降级）」一行，明示为"验收补全点" | 待真机验收补 |
-| 7 | 装载日志走 `eprintln!`，GUI 宿主里通常看不见；`OutputDebugStringW` **未实现** | `com_server::CreateInstance` 注释 | 排障全靠间接观察 |
-| 8 | **繁体（`trad.opid`）在 Windows 上无从装载**：`dict_path::candidates` 里没有它，且 `TsfLogic` 只持一个词库 | `dict_path.rs` 模块头的「已知缺口」 | 繁体模式打不开（与 README「Windows 没有繁体入口」一致） |
+| 7 | ~~装载日志走 `eprintln!`，GUI 宿主里通常看不见；`OutputDebugStringW` 未实现~~ **已修（2026-10-28）：`tlog!` 同时写 stderr 与 `OutputDebugStringW`** | `logging.rs` | 排障需 DebugView / 调试器 |
+| 8 | ~~繁体（`trad.opid`）在 Windows 上无从装载~~ **已修（2026-10-28）：`dict_path::load_trad` + `EngineShared::with_dicts`，`trad.opid` 随包** | `dict_path.rs`、`logic_with_dicts.rs`、`desktop/build.gradle.kts` | 繁体查 trad 库；缺/坏时回退主库 |
 | 9 | 模式键**丢弃未提交缓冲**（不先上屏） | `tsf.rs::toggle_mode` → `Engine::switch_mode`；`engine.rs::toggle_symbol` 注释 | 打到一半切模式 = 丢字 |
 | 10 | 候选窗单页显示上限 `MAX_CANDIDATES = 8` 与 Rust `logic::PAGE_SIZE` 同为 8，**但两者之间没有门禁**（Rust 那份有 `const` 断言绑 `engine-core`，Kotlin 那份只有一句注释说"一致"） | `CandidateWindow.kt` vs `logic.rs` | 若 `PAGE_SIZE` 改了，窗口会静默少显示最后一个候选 |
 | 11 | **模式热键不认键盘布局**：`vk::mode_hotkey` 比的是**裸 VK**（0xDE / 0xDC），即 US 布局上标着 `'` 与 `\` 的那两个物理键位；而字符键走的是布局感知的 `ToUnicodeEx`（`tsf.rs::to_engine_keycode`）。⇒ 非 US 布局（AZERTY / Dvorak）上，要按的是**那个位置**的键，不是键帽上的字符 | `vk.rs::mode_hotkey` 的 `VK_OEM_5` / `VK_OEM_7`；`tsf.rs::to_engine_keycode` | 非 US 布局用户会"按了没反应"（**未验证**：本机没有任何非 US 布局可测） |

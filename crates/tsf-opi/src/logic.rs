@@ -99,20 +99,7 @@ impl TsfLogic {
     /// 用**已装好的**词库构建（`load` / `dict_path::load_dict` 的落点）：解析在
     /// `dict_path` 一次做完，避免「服务建不出来」的中间态（`com_server.rs`）；最差内置 35 词。
     pub fn with_dict(dict: Box<dyn engine_core::dictionary::Dictionary>) -> Self {
-        let symbols = engine_core::symbols::SymbolEngine::builtin();
-        let mut s = TsfLogic {
-            engine: Engine::new(dict, symbols, true),
-            page: 0,
-            buffer_snapshot: String::new(),
-            shift_state: ShiftState::Off,
-            english_pro: false,
-            last_printable: None,
-            shift_toggle: true,
-            association_enabled: true,
-            fetch_cache: RefCell::new(None),
-        };
-        s.refresh_snapshot();
-        s
+        Self::with_dicts(dict, None)
     }
 
     fn refresh_snapshot(&mut self) {
@@ -288,7 +275,7 @@ impl TsfLogic {
         let report = crate::extra_dicts::load(dir, disabled_raw);
         // 「装载结果必须接住」（本仓的坏词库静默失效前车之鉴）：没装上的在这里现形。
         for line in &report.lines {
-            eprintln!("tsf-opi: {line}");
+            tlog!("tsf-opi: {line}");
         }
         let count = report.dicts.len();
         self.invalidate_fetch_cache();
@@ -486,6 +473,10 @@ pub use snapshot::StateSnapshot;
 // OnTestKeyDown 的“引擎会不会消费”只读判定（TSF 的 TRUE 是最终决定）。
 #[path = "logic_claim.rs"]
 mod claim;
+
+// TsfLogic 的构造（含可选繁体词库）在子模块：logic.rs 顶到 500 行门禁。
+#[path = "logic_with_dicts.rs"]
+mod with_dicts;
 
 // 单测独立成文件（`#[path]` 引入）以保持各文件 <500 行：logic_candidate_tests.rs
 // 为候选分页状态机测试（键路由测试见 input_method 模块）。

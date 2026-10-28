@@ -10,6 +10,9 @@
 //! `logic::TsfLogic::input_key` 的参数，并按 `KeyOutcome` 驱动
 //! composition/候选窗/文档插入（骨架，见 `tsf` 模块头注释）。
 
+#[macro_use]
+mod logging;
+
 pub mod logic;
 mod logic_settings;
 

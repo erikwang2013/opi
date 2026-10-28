@@ -31,10 +31,10 @@ name: Windows 打包
 #   `.github/workflows/ci.yml` 的静态门禁只放行这一处，其余一律红。
 #   缺口清单见 docs/install/windows.md 的 §6.1（从未验过的事）与 §6.2（读源码得出的缺口）。
 #   词库自 2026-10-20 起随包：`desktop/build.gradle.kts` 的 JPackage `files` 集合
-#   （`OPI_TSF_DLL` 分支）把入库副本 `android/app/src/main/assets/luna.opid` 放进
+#   （`OPI_TSF_DLL` 分支）把入库副本 `android/app/src/main/assets/{luna,trad}.opid` 放进
 #   app image 的 `app\`（与 DLL 同目录 ⇒ `dict_path` 第二候选），EXE 与内部 MSI 都携带；
-#   许可文本同批进包。本文件在 app image 布局与 EXE 安装冒烟两处断言它真的在。
-#   **「包里有」仍不等于「真机上 TSF 已加载」**（装载日志走 eprintln!，GUI 宿主看不见）。
+#   许可文本同批进包。本文件在 app image 布局与 EXE 安装冒烟两处断言它们真的在。
+#   **「包里有」仍不等于「真机上 TSF 已加载」**（装载日志走 `tlog!`：stderr + OutputDebugStringW）。
 #
 # 触发方式（2026-10-09 定）：手动 dispatch + 默认分支 push（限下面 paths）。
 #   改动落在 Windows 侧代码上时就该重跑一次；产物只在本次 run 的 artifact 里，
@@ -49,6 +49,7 @@ on:
       - 'crates/tsf-opi/**'
       - 'desktop/**'
       - 'android/app/src/main/assets/luna.opid'
+      - 'android/app/src/main/assets/trad.opid'
       - 'shared/pet/emoji-font/**'
       - 'scripts/postprocess-windows-msi.sh'
       - 'scripts/windows/**'
@@ -299,7 +300,7 @@ jobs:
   # ---- 用户入口：EXE 安装器（2026-10-20）----
   #
   # jpackage 的 MSI 在 Server Core 里因 TSF 注册失败会整包回滚（用户原话「根本无法
-  # 安装」）。这里改用 jpackage 的 app image（同一份应用 + jlinked JRE + TSF DLL + luna.opid）
+  # 安装」）。这里改用 jpackage 的 app image（同一份应用 + jlinked JRE + TSF DLL + luna.opid + trad.opid）
   # 交给 Inno Setup，注册放在 [Code] 的 ssPostInstall：**失败只写日志，不回滚安装**。
   # 产物名固定 `opi-<版本>-setup.exe`，默认装到 `C:\Program Files\opi`。
   desktop-exe:
@@ -327,7 +328,7 @@ jobs:
         env:
           OPI_TSF_DLL: ${{ github.workspace }}\tsf-dll\tsf_opi.dll
 
-      - name: 断言 app image 布局（opi.exe + app\tsf_opi.dll + app\luna.opid）
+      - name: 断言 app image 布局（opi.exe + app\tsf_opi.dll + app\{luna,trad}.opid）
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -340,13 +341,15 @@ jobs:
           if ((Split-Path $app -Leaf) -ne 'opi') {
             throw "app image 名不是 opi（是 $(Split-Path $app -Leaf)）—— Windows packageName 没生效"
           }
-          foreach ($f in 'opi.exe', 'app\tsf_opi.dll', 'app\luna.opid', 'app\symbol_categories.tsv', 'app\LICENSE', 'app\LICENSES.md', 'app\GPL-3.0.txt') {
+          foreach ($f in 'opi.exe', 'app\tsf_opi.dll', 'app\luna.opid', 'app\trad.opid', 'app\symbol_categories.tsv', 'app\LICENSE', 'app\LICENSES.md', 'app\GPL-3.0.txt') {
             if (-not (Test-Path (Join-Path $app $f))) { throw "app image 缺 $f" }
           }
-          # 身份核对：不是「有个叫 luna.opid 的东西」，而是「就是入库那份分发副本」。
-          $want = (Get-FileHash 'android/app/src/main/assets/luna.opid' -Algorithm SHA256).Hash
-          $got = (Get-FileHash (Join-Path $app 'app\luna.opid') -Algorithm SHA256).Hash
-          if ($got -ne $want) { throw "app image 里的 luna.opid 与入库副本不一致（$got != $want）" }
+          # 身份核对：不是「有个叫 *.opid 的东西」，而是「就是入库那份分发副本」。
+          foreach ($dict in 'luna.opid', 'trad.opid') {
+            $want = (Get-FileHash "android/app/src/main/assets/$dict" -Algorithm SHA256).Hash
+            $got = (Get-FileHash (Join-Path $app "app\$dict") -Algorithm SHA256).Hash
+            if ($got -ne $want) { throw "app image 里的 $dict 与入库副本不一致（$got != $want）" }
+          }
           "OPI_APP_IMAGE=$app" >> $env:GITHUB_ENV
           Get-ChildItem $app | Select-Object Name, Length
           Get-ChildItem (Join-Path $app 'app') | Select-Object Name, Length
@@ -572,7 +575,7 @@ jobs:
   #
   # 在干净的 Windows Server Core 里跑用户真正会拿到的那个 EXE：
   #   · 静默安装到 C:\opi-test（默认目录是 C:\Program Files\opi，这里显式给 /DIR）
-  #   · 断言 opi.exe、app\tsf_opi.dll 与 app\luna.opid 真的落盘
+  #   · 断言 opi.exe、app\tsf_opi.dll 与 app\{luna,trad}.opid 真的落盘
   #   · 断言安装退出码 = 0，且日志里**记录了** regsvr32 的退出码（0 或非 0 都不判红：
   #     Server Core 没有语言栏/TSF，注册失败是已知环境限制；安装本身不许因此回滚）
   #   · 断言 HKLM CTF 语言 profile 键与 opi-statusbar 的 HKLM Run 值**真的写入**，
@@ -636,6 +639,7 @@ jobs:
           if exist C:\opi-test\opi.exe (echo PRESENT > C:\work\install-opi.txt) else (echo ABSENT > C:\work\install-opi.txt)
           if exist C:\opi-test\app\tsf_opi.dll (echo PRESENT > C:\work\install-dll.txt) else (echo ABSENT > C:\work\install-dll.txt)
           if exist C:\opi-test\app\luna.opid (echo PRESENT > C:\work\install-luna.txt) else (echo ABSENT > C:\work\install-luna.txt)
+          if exist C:\opi-test\app\trad.opid (echo PRESENT > C:\work\install-trad.txt) else (echo ABSENT > C:\work\install-trad.txt)
           if exist C:\opi-test\app\symbol_categories.tsv (echo PRESENT > C:\work\install-symbols.txt) else (echo ABSENT > C:\work\install-symbols.txt)
           reg query "HKLM\SOFTWARE\Microsoft\CTF\TIP\{98C51858-590B-404D-8915-21EB44250062}\LanguageProfile\0x00000804\{A31A137C-1404-42F2-B82C-4E63F15DEFD6}" >nul 2>&1
           if errorlevel 1 (echo MISSING > C:\work\install-profile.txt) else (echo PRESENT > C:\work\install-profile.txt)
@@ -713,7 +717,7 @@ jobs:
           Set-Content -Path (Join-Path $work 'exe-smoke.cmd') -Value $script -Encoding ascii
           docker run --rm --isolation=process -v "${work}:C:\work" $image cmd /c C:\work\exe-smoke.cmd
 
-          foreach ($f in 'install-exe.log', 'install-exit.txt', 'install-opi.txt', 'install-dll.txt', 'install-luna.txt', 'install-profile.txt', 'install-run-statusbar.txt') {
+          foreach ($f in 'install-exe.log', 'install-exit.txt', 'install-opi.txt', 'install-dll.txt', 'install-luna.txt', 'install-trad.txt', 'install-profile.txt', 'install-run-statusbar.txt') {
             if (-not (Test-Path $f)) { throw "缺少 $f（docker run 失败或安装器没启动）" }
           }
           $exitCode = (Get-Content install-exit.txt -Raw).Trim()
@@ -721,6 +725,7 @@ jobs:
           if ((Get-Content install-opi.txt -Raw).Trim() -ne 'PRESENT') { throw '安装目录里没有 opi.exe' }
           if ((Get-Content install-dll.txt -Raw).Trim() -ne 'PRESENT') { throw '安装目录里没有 app\tsf_opi.dll' }
           if ((Get-Content install-luna.txt -Raw).Trim() -ne 'PRESENT') { throw '安装目录里没有 app\luna.opid（词库没随包）' }
+          if ((Get-Content install-trad.txt -Raw).Trim() -ne 'PRESENT') { throw '安装目录里没有 app\trad.opid（繁体词库没随包）' }
           if ((Get-Content install-symbols.txt -Raw).Trim() -ne 'PRESENT') { throw '安装目录里没有 app\symbol_categories.tsv（符号大全按钮会打开空页）' }
 
           # 注册结果必须被**记录**；0 与非 0 都接受（后者是 Server Core 的已知限制，
@@ -831,6 +836,7 @@ jobs:
             install-opi.txt
             install-dll.txt
             install-luna.txt
+            install-trad.txt
             install-symbols.txt
             install-profile.txt
             install-run-statusbar.txt

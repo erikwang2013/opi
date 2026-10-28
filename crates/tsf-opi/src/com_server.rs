@@ -112,15 +112,24 @@ impl IClassFactory_Impl for ClassFactory_Impl {
             // 为什么不再是「先给一个可能不存在的路径」：那条路（`TsfLogic::load`
             // 对坏路径返回 Err）会让**服务创建不出来**，用户看到"输入法整个不在"，
             // 比词库小更糟。现在解析层自己就带逐候选回退，`with_dict` 没有失败路径。
+            let env = dict_path::env_dict_path();
+            let dll_dir = dll_dir();
+            let local_app_data = std::env::var_os("LOCALAPPDATA");
             let loaded = dict_path::load_dict(
-                dict_path::env_dict_path().as_deref(),
-                dll_dir().as_deref(),
-                std::env::var_os("LOCALAPPDATA").as_deref(),
+                env.as_deref(),
+                dll_dir.as_deref(),
+                local_app_data.as_deref(),
             );
-            // 这一行在 GUI 宿主里通常看不到（无 stderr）；要真看得见得上
-            // `OutputDebugStringW`（未实现）。日志的**格式**在
-            // `DictLoad::log_line` 里，那部分有主机单测。
-            eprintln!("tsf-opi: {}", loaded.log_line());
+            // 繁体词库是可选增强：缺/坏 → None，引擎的 Traditional 模式回退主库。
+            let trad = dict_path::load_trad(
+                env.as_deref(),
+                dll_dir.as_deref(),
+                local_app_data.as_deref(),
+            );
+            // GUI 宿主没有 stderr：`tlog!` 同时写 stderr 与 `OutputDebugStringW`。
+            // 日志的**格式**在 `DictLoad::log_line` 里，那部分有主机单测。
+            tlog!("tsf-opi: {}", loaded.log_line());
+            tlog!("tsf-opi: {}", trad.log_line());
 
             // B1 接线，三步，**顺序不能换**（互相引用的死结见 state.rs 模块头）：
             // 1) `engine` 先建（回调与服务对象共用**同一份**，前者只有这一半能用
@@ -128,7 +137,7 @@ impl IClassFactory_Impl for ClassFactory_Impl {
             // 2) 回调只依赖 engine；3) sink 依赖回调 —— 建好后回填进回调的一次性槽位。
             // sink 是 CandidateSink（C3 生产实现）：惰性连 named pipe，候选窗
             // 进程不在时降级为 no-op，不会让 CreateInstance 失败。
-            let engine = Arc::new(EngineShared::with_dict(loaded.dict));
+            let engine = Arc::new(EngineShared::with_dicts(loaded.dict, trad.dict));
             // 「属性设置」：创建时读一次（读不到 = 全默认）。之后 `Activate` 与控制面
             // `reload`（ctl.rs）再读；导入词库（`DisabledDicts` 名单 + 词库目录）
             // 就在同一次里装载，见 extra_dicts.rs。
@@ -149,7 +158,7 @@ impl IClassFactory_Impl for ClassFactory_Impl {
             // 服务照常可用，只是点选后窗口不会自动刷新。比起让输入法整个不存在，
             // 这个降级明显更轻。
             if !action.attach_sink(Arc::clone(&sink)) {
-                eprintln!("tsf-opi: 候选窗回调的 sink 槽位已有值，点选后窗口不会自动刷新");
+                tlog!("tsf-opi: 候选窗回调的 sink 槽位已有值，点选后窗口不会自动刷新");
             }
             let service = TsfTextService::new(TsfSharedState::new(engine), sink);
             let unknown: IUnknown = service.into();

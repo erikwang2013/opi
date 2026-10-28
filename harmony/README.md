@@ -1301,6 +1301,11 @@ grep -rn "opiBuffer\|opiCandidates\|opiPage\|opiPageCount\|opiMode\|opiShift\|op
    > 上次中文），9/14/笔画底行「繁」键只切简繁。但 `opi_load_trad` 仍未桥、
    > `trad.opid` 仍不随包 ⇒ 引擎 `Traditional` 回退 luna **简体**表，输出仍是简体。
    > 上面「UI 的轮转里进不去」已过期；现在应读作「有入口、无繁体词典」。
+   >
+   > **2026-10-21 订正**：`opi_load_trad` 已桥接、`trad.opid` 已随包
+   > （`scripts/prepare_harmony_dicts.sh` 的 FILES 含 trad，`DictionaryAssets.ets`
+   > 拷贝并装载）；上面「未桥 / 不随包」已过期。真机繁体仍未验收，
+   > 见 `docs/install/harmony.md`。
 
 6. **未处理「抬手」事件**（`STATE_RELEASED`）。软键盘一次点击只送一次按下，
    对路由够用 —— 注意**⇧ 三态不会因此卡住**：`router.rs` 的 `handle_shift`

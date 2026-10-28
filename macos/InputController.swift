@@ -33,6 +33,16 @@ final class OpiInputController: IMKInputController {
     var lastCandidates: [String] = []
     /// 上次候选窗的可见性：可见性变化也要推 update（空缓冲的联想候选常与上次同批不同可见）。
     var lastCandidatesVisible = false
+    /// ⇧ 轻按判定（三拍与 fcitx5 的 `OpiShiftToggle` 一致）。
+    private var shiftTap = ShiftTap()
+
+    // ---------- 事件申领 ----------
+
+    /// IMK 默认只送 keyDown；⇧ 轻按切换需要 `flagsChanged`（2026-10-28）。
+    /// 与 Squirrel / fcitx5-macos 同一条申领（不申领 keyUp：会改变 IMK 的默认鼠标行为）。
+    override func recognizedEvents(_ sender: Any!) -> Int {
+        Int(NSEvent.EventTypeMask.keyDown.rawValue | NSEvent.EventTypeMask.flagsChanged.rawValue)
+    }
 
     // ---------- 平台键 → 引擎键（本层唯一的映射表） ----------
 
@@ -205,9 +215,21 @@ final class OpiInputController: IMKInputController {
     /// `override func handleEvent(_ event: NSEvent!, client sender: Any!) -> Bool`。
     /// 见 README「最不确定的 API」#1 末尾。
     override func handle(_ event: NSEvent, client sender: Any!) -> Bool {
-        guard event.type == .keyDown || event.type == .keyUp else { return false }
+        guard event.type == .keyDown || event.type == .keyUp || event.type == .flagsChanged else { return false }
         // 面板/菜单上屏时没有这个 sender，记下最近客户端（弱引用，不强留宿主）。
         if let client = sender { OpiClientHub.shared.focus(self, client: client as AnyObject) }
+        // 任何别的键按下 → 撤销 Shift 轻按（第 1 拍）。
+        if event.type == .keyDown { shiftTap.cancel() }
+        // ⇧ 轻按切换中英文（第 2/3 拍）：靠 recognizedEvents 申领 flagsChanged；不消费修饰键事件。
+        if event.type == .flagsChanged {
+            guard event.keyCode == 56 || event.keyCode == 60 else { return false }
+            if event.modifierFlags.contains(.shift) {
+                shiftTap.press()
+            } else if shiftTap.release() {
+                performHotkey(.toggleEnglish, sender: sender)
+            }
+            return false
+        }
         // 联想态：本键先收起再执行（热键也在其内；Spec §5.1）。
         // 只认按下：提交键的 keyUp 也走这里，抬起时再判会把刚建好的联想
         // 用同一个物理键的抬起立刻清掉（macOS 上表现为联想只闪一下）。
@@ -401,6 +423,7 @@ final class OpiInputController: IMKInputController {
     /// 失焦 = fcitx5 轨的 `InputMethodEngine::reset()`：清引擎缓冲，
     /// 否则换应用后 preedit 会带着上一个应用的残留。
     override func deactivateServer(_ sender: Any!) {
+        shiftTap.disarm()
         engine.clear()
         lastMarked = ""
         lastCandidates = []

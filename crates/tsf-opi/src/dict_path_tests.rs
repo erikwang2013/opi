@@ -310,3 +310,88 @@ fn list_dicts_takes_only_tsv_regular_files_sorted() {
     // 目录不在：空表（**不是错误** —— 还没导入过是常态）。
     assert!(list_dicts(&dir.path().join("nope")).is_empty());
 }
+
+// ---------- trad：候选与可选装载 ----------
+
+#[test]
+fn trad_candidates_use_env_sibling_then_dll_then_local_app_data() {
+    let got: Vec<(PathBuf, Origin)> = trad_candidates(
+        Some(OsStr::new("/env/luna.opid")),
+        Some(Path::new("/dll/dir")),
+        Some(OsStr::new("/lad")),
+    )
+    .into_iter()
+    .map(|c| (c.path, c.origin))
+    .collect();
+    assert_eq!(
+        got,
+        vec![
+            (PathBuf::from("/env/trad.opid"), Origin::Env),
+            (PathBuf::from("/dll/dir/trad.opid"), Origin::DllDir),
+            (PathBuf::from("/lad/opi/trad.opid"), Origin::LocalAppData),
+        ]
+    );
+    // 空 env 等同未设置（与 candidates 同一条）。
+    assert!(trad_candidates(Some(OsStr::new("")), None, None).is_empty());
+}
+
+#[test]
+fn load_trad_absent_is_none_not_fallback() {
+    let dir = TempDir::new("trad-absent");
+    let load = load_trad(None, Some(dir.path()), None);
+    assert!(load.dict.is_none(), "trad 缺失不应回落内置词库");
+    assert!(load.source.is_none());
+    assert!(
+        load.log_line().contains("回退主库"),
+        "日志应说明回退语义：{}",
+        load.log_line()
+    );
+}
+
+#[test]
+fn load_trad_loads_real_dict() {
+    let dir = TempDir::new("trad-load");
+    let path = dir.path().join(TRAD_FILE_NAME);
+    fs::write(&path, real_dict_bytes()).expect("写繁体词库");
+    let load = load_trad(None, Some(dir.path()), None);
+    let dict = load.dict.as_ref().expect("应装上繁体词库");
+    assert_eq!(
+        dict.query("ceshi", 8).first().map(|e| e.word.as_str()),
+        Some("测试")
+    );
+    assert_eq!(
+        load.source.as_ref().map(|c| c.path.as_path()),
+        Some(path.as_path())
+    );
+    assert!(load.log_line().contains("繁体词库"), "{}", load.log_line());
+}
+
+#[test]
+fn load_trad_corrupt_first_candidate_falls_through() {
+    let env_dir = TempDir::new("trad-env-bad");
+    let dll_dir = TempDir::new("trad-dll-good");
+    fs::write(env_dir.path().join(TRAD_FILE_NAME), corrupt_dict_bytes()).expect("写坏词库");
+    fs::write(dll_dir.path().join(TRAD_FILE_NAME), real_dict_bytes()).expect("写真词库");
+    let env = env_dir.path().join(DICT_FILE_NAME);
+    let load = load_trad(Some(env.as_os_str()), Some(dll_dir.path()), None);
+    assert!(load.dict.is_some(), "坏的首候选应继续尝试下一候选");
+    assert_eq!(load.source.expect("应记录胜出候选").origin, Origin::DllDir);
+    assert!(
+        load.notes.iter().any(|n| n.contains("不可用")),
+        "坏候选必须留证：{:?}",
+        load.notes
+    );
+}
+
+#[test]
+fn load_trad_corrupt_only_is_none() {
+    let dir = TempDir::new("trad-corrupt");
+    fs::write(dir.path().join(TRAD_FILE_NAME), corrupt_dict_bytes()).expect("写坏词库");
+    let load = load_trad(None, Some(dir.path()), None);
+    assert!(load.dict.is_none(), "唯一的 trad 坏了 → None，不装半份");
+    assert!(
+        load.notes.iter().any(|n| n.contains("不可用")),
+        "{:?}",
+        load.notes
+    );
+}

@@ -4,6 +4,7 @@
 //! 候选分页状态机测试（与 fcitx5-opi candidate.rs 测试同源）。
 use super::*;
 use engine_core::dictionary::InMemoryDictionary;
+use engine_data::format::{OpDict, RawEntry, serialize};
 
 /// 20 个 "qwx" 词条 + 引擎：确定性的 3 页候选。
 /// 键选 qwx：不是拼音、也不撞符号/emoji 关键字（emoji 输入匹配会往文本候选**之后**追加）。
@@ -407,4 +408,32 @@ fn digit_select_fetches_candidate_table_once() {
         one_fetch,
         "数字选词应只抓一次候选表（两次 = 整表排两遍）"
     );
+}
+
+#[test]
+fn traditional_mode_queries_trad_dict() {
+    fn dict(entries: &[(&str, &str)]) -> Box<dyn engine_core::dictionary::Dictionary> {
+        let entries: Vec<RawEntry> = entries
+            .iter()
+            .map(|(pinyin, word)| RawEntry {
+                pinyin: (*pinyin).into(),
+                word: (*word).into(),
+                freq: 5000,
+            })
+            .collect();
+        Box::new(
+            engine_data::load_bytes(serialize(&OpDict {
+                pinyin_total: entries.iter().map(|e| e.pinyin.len()).sum(),
+                entries,
+            }))
+            .expect("测试词库应可装载"),
+        )
+    }
+
+    let mut s = TsfLogic::with_dicts(dict(&[("hou", "后")]), Some(dict(&[("hou", "後")])));
+    s.switch_mode(Mode::Traditional);
+    for ch in "hou".chars() {
+        s.input_key(ch as u32, 0);
+    }
+    assert_eq!(s.select(0), "後", "Traditional 模式必须查 trad 词库");
 }

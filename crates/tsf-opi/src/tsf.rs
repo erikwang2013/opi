@@ -333,7 +333,7 @@ impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
             // cast = QueryInterface：对象支持 ITfKeyEventSink，取具体接口指针。
             let key_sink: ITfKeyEventSink = sink.cast()?;
             if let Err(e) = unsafe { km.AdviseKeyEventSink(tid, &key_sink, true) } {
-                eprintln!(
+                tlog!(
                     "tsf-opi: AdviseKeyEventSink failed tid={tid} hr=0x{:08X}",
                     e.code().0 as u32
                 );
@@ -352,7 +352,7 @@ impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
                             *slot = Some((source, cookie, focus));
                         }
                     }
-                    Err(e) => eprintln!("tsf-opi: AdviseSink(thread focus) failed: {e}"),
+                    Err(e) => tlog!("tsf-opi: AdviseSink(thread focus) failed: {e}"),
                 }
             }
             // 输入法配置切换监听：切到别的输入法（同一应用内也算）时断开管道。
@@ -372,7 +372,7 @@ impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
                             *slot = Some((source, cookie, profile));
                         }
                     }
-                    Err(e) => eprintln!("tsf-opi: AdviseSink(profile activation) failed: {e}"),
+                    Err(e) => tlog!("tsf-opi: AdviseSink(profile activation) failed: {e}"),
                 }
             }
             // 语言栏按钮（宠物「小欧」在 Windows 上唯一新增的图标位，见 langbar.rs）。
@@ -465,7 +465,7 @@ impl ITfFnConfigure_Impl for TsfTextService_Impl {
         match catch_unwind(AssertUnwindSafe(crate::configure::launch_settings)) {
             Ok(Ok(())) => Ok(()),
             Ok(Err(e)) => {
-                eprintln!("tsf-opi: 拉起设置窗失败: {e}");
+                tlog!("tsf-opi: 拉起设置窗失败: {e}");
                 Err(E_FAIL.into())
             }
             Err(_) => Err(E_FAIL.into()),

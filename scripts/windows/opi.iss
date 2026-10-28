@@ -8,6 +8,7 @@
 ;   <app-image>\opi.exe              launcher (candidate window / --settings)
 ;   <app-image>\app\tsf_opi.dll      TSF COM server (registered below)
 ;   <app-image>\app\luna.opid        dictionary, loaded from the DLL's directory
+;   <app-image>\app\trad.opid        traditional dictionary (optional, same directory)
 ;   <app-image>\app\*.jar, opi.exe's jars, runtime\ (jlinked JRE)
 ;
 ; Why Inno Setup instead of jpackage's own MSI: jpackage has no knob to run
@@ -44,7 +45,7 @@
 ; (and lists on the finish page) the processes still mapping the old DLL.
 ;
 ; Upgrade (2026-10-21): the same rename runs at ssInstall, BEFORE [InstallDelete]
-; and [Files], for tsf_opi.dll AND app\luna.opid (the old TSF DLL maps the
+; and [Files], for tsf_opi.dll AND the app\*.opid dictionaries (the old TSF DLL maps the
 ; dictionary too). Without it, Inno's restartreplace leaves the OLD file at
 ; {app} and queues the new one for the next restart -- so installing v1.20.1
 ; over v1.20.0 kept running the old TSF code, and the queued rename made the
@@ -102,7 +103,7 @@ UninstallDisplayIcon={app}\opi.exe
 ; loaded inside explorer.exe while a TSF client is active, so Restart Manager
 ; (CloseApplications=yes, the default) can close the shell during an upgrade.
 ; With RestartApplications=no the shell stayed closed -> blank desktop. Here Setup
-; never closes anything; locked files (tsf_opi.dll, luna.opid) are renamed out at
+; never closes anything; locked files (tsf_opi.dll, luna.opid, trad.opid) are renamed out at
 ; ssInstall (see MoveLockedTsfDll / MoveLockedDictionary), so [Files] never needs
 ; restartreplace.
 CloseApplications=no
@@ -124,7 +125,7 @@ Type: filesandordirs; Name: "{app}\app"
 Type: filesandordirs; Name: "{app}\runtime"
 
 [Files]
-; 2026-10-21 real-machine upgrade: tsf_opi.dll AND app\luna.opid are held by
+; 2026-10-21 real-machine upgrade: tsf_opi.dll AND app\*.opid are held by
 ; the old TSF DLL inside Explorer/other hosts. ssInstall moves both out to a
 ; same-volume trash directory first, so this entry simply writes the new files.
 ; **No restartreplace / uninsrestartdelete**: restartreplace queues the locked

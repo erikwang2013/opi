@@ -277,7 +277,7 @@ impl CandidateClient {
         };
         let ok = write_all(handle, &bytes);
         if !ok {
-            eprintln!("tsf-opi: candidate pipe write failed; disconnecting");
+            tlog!("tsf-opi: candidate pipe write failed; disconnecting");
             // 写失败（管道另一端关闭等）：断开，下次发送重连。
             unsafe { CloseHandle(handle.0) }.ok();
             *conn = None;

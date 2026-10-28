@@ -149,6 +149,10 @@ tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageT
             // 分发义务与 `scripts/nfpm.yaml` 那段相同（少了它们包在授权上不完整）。
             val luna = file("../android/app/src/main/assets/luna.opid")
             check(luna.isFile) { "找不到词库分发副本：${luna.path}" }
+            // 繁体词库（2026-10-28）：TSF 现在同装 trad（`dict_path::load_trad`）。
+            // 与 luna 同一条分发纪律：真源 = Android 分发副本，缺源响亮地死。
+            val trad = file("../android/app/src/main/assets/trad.opid")
+            check(trad.isFile) { "找不到繁体词库分发副本：${trad.path}" }
             // 符号类目数据（2026-10-21）：状态栏「符号大全」按钮在 Windows 上原本只能打开
             // 一个「没有类目数据」的空页 —— 数据没随包。真源 = Android 分发副本（与 luna
             // 同一条纪律）；jpackage 把它放进 `app\`，`symbolDataCandidates` 加了该顺位。
@@ -164,6 +168,7 @@ tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageT
                 src,
                 file("windows/launch-and-restart.cmd"),
                 luna,
+                trad,
                 symbols,
                 *licenses.toTypedArray(),
             )

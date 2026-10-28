@@ -26,7 +26,7 @@ impl TsfLogic {
                 true
             }
             Err(e) => {
-                eprintln!("tsf-opi: 五笔码表装载失败，方案回退普通路径: {e:?}");
+                tlog!("tsf-opi: 五笔码表装载失败，方案回退普通路径: {e:?}");
                 false
             }
         }

@@ -151,6 +151,10 @@ procedure MoveLockedDictionary(const ForInstall: Boolean);
 begin
   MoveLockedFile(ExpandConstant('{app}\app\luna.opid'), 'opi-luna-', '.opid',
     'dictionary', ForInstall);
+  // 繁体词库（2026-10-28）：新 TSF DLL 也会 mmap 它，升级时必须先挪开，
+  // 否则 [Files] 会因文件被占用排队重启（与 luna 同一个坑）。
+  MoveLockedFile(ExpandConstant('{app}\app\trad.opid'), 'opi-trad-', '.opid',
+    'traditional dictionary', ForInstall);
 end;
 
 // Kept as a named call: .github/workflows/ci.yml asserts it appears inside

@@ -63,6 +63,7 @@ from hanzi_freq import (
     segpos,
     unihan_member,
 )
+from single_readings import load as load_single_readings
 
 # ---- 上游 pin（2026-09-26）----
 # 钉死到 commit SHA，不再用 master：master 已经漂过一次（2026-08-15 → 09-26 之间
@@ -230,6 +231,13 @@ def main() -> None:
     for ch in SUPPLEMENT:
         for py in SUPPLEMENT[ch]:
             pairs.add((ch, py))
+    # 人工单字读音覆盖（2026-10-28 用户裁决「B 类全部补」；表见 data/raw/）
+    overrides = load_single_readings("trad", {ch for ch, _ in pairs})
+    before = len(pairs)
+    for ch, pys in overrides.items():
+        for py in pys:
+            pairs.add((ch, py))
+    override_added = len(pairs) - before
     ordered: list[tuple[str, str]] = sorted(pairs, key=lambda cp: key_of(*cp))
 
     # 词组段：人工常用 → terra（文件序）；单字之后，无词次数据
@@ -262,6 +270,7 @@ def main() -> None:
     print(f"GB2312 单字: {len(gb)} (一级 {len(first)}, 二级 {len(second)})")
     print(f"繁体单字(含 terra 单字): {len({ch for ch, _ in ordered}) - len(gb)}")
     print(f"Unihan 词次表: {len(kph)} 字（其余字按段位序排）")
+    print(f"单字读音覆盖: 补入 {override_added} 对")
     print(f"词组(人工+terra): {len(phrase_ordered)}")
     print(f"trad_hanzi.tsv 行数: {len(hanzi)}")
     print(f"trad_phrases.tsv 行数: {len(phrases_out)}")

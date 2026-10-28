@@ -101,7 +101,7 @@ extension OpiSettingsWindow {
                action: #selector(openKeyboard))
         note("布局：26 / 9 / 14 / 笔画；9 键含 123 数字面板。空缓冲时 ⌫ 只能删输入缓冲，不能删宿主文档字符（IMK 无删除出口）。",
              y: 78 + CGFloat(rows.count) * 28 + 128, height: 34)
-        note("未实现（本批）：Linux 的「Shift 轻按切换中英文」（ShiftToggle）。IMK 要在 recognizedEvents 里申领 flagsChanged 才收得到，且 iTerm/VS Code 这类宿主不申领；本批未接，中英切换请用 ⌃ '。",
+        note("「Shift 轻按切换中英文」（ShiftToggle）：已接（2026-10-28，经 recognizedEvents 申领 flagsChanged）；iTerm / VS Code 这类不送修饰键事件的宿主仍请用 ⌃ '。",
              y: 78 + CGFloat(rows.count) * 28 + 166, height: 40)
     }
 

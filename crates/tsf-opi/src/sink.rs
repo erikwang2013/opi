@@ -24,7 +24,7 @@ pub(crate) fn ensure_panic_hook() {
     static PANIC_HOOK: Once = Once::new();
     PANIC_HOOK.call_once(|| {
         std::panic::set_hook(Box::new(|info| {
-            eprintln!("tsf-opi: engine panic caught: {info}");
+            tlog!("tsf-opi: engine panic caught: {info}");
         }));
     });
 }

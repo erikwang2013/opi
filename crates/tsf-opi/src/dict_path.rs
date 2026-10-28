@@ -9,15 +9,16 @@
 //! Win32 那一步（取本 DLL 所在目录）在 `com_server::dll_dir`，只有那一处在
 //! Windows 侧。
 //!
-//! 分发（**本仓库现状**，别把大文件塞进 git）：`luna.opid` 是本地重编产物，
-//! 被 `data/generated/.gitignore` 忽略；入库的是各平台的**分发副本**
-//! （`android/app/src/main/assets/luna.opid`）。Windows 侧的构建期拷贝在
+//! 分发（**本仓库现状**，别把大文件塞进 git）：`luna.opid` 与 `trad.opid` 是本地重编
+//! 产物，被 `data/generated/.gitignore` 忽略；入库的是各平台的**分发副本**
+//! （`android/app/src/main/assets/{luna,trad}.opid`）。Windows 侧的构建期拷贝在
 //! `desktop/build.gradle.kts` 的 JPackage `files` 集合（`OPI_TSF_DLL` 分支）：
-//! 该副本被放进 app image 的 `app\` 目录，与本 DLL 同目录 ⇒ 第二候选开箱命中。
-//! `%LOCALAPPDATA%\opi\luna.opid`（第三候选）仍是用户/安装器换词库的落点。
+//! 两份副本被放进 app image 的 `app\` 目录，与本 DLL 同目录 ⇒ 第二候选开箱命中。
+//! `%LOCALAPPDATA%\opi\{luna,trad}.opid`（第三候选）仍是用户/安装器换词库的落点。
 //!
-//! 已知缺口（**未实现，不是 bug 隐藏**）：`trad.opid` 不在候选里 ——
-//! `TsfLogic` 只持一个词库（引擎层无简繁双库入口），繁体模式无从装载。
+//! 繁体词库：`trad.opid` 与 `luna.opid` 同目录（`OPI_DICT_PATH` 的 sibling → DLL 同目录 →
+//! `%LOCALAPPDATA%\opi\`），由 [`load_trad`] **可选**装载；缺/坏 → None，繁体模式回退主库
+//! （引擎层 `Engine::with_dictionaries` 的双库路由，2026-10-28 接通）。
 
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
@@ -28,6 +29,9 @@ use engine_data::LoadError;
 /// 词库文件名（镜像 fcitx5 轨 `data_dir::DICT_FILE_NAME` 与
 /// Android `EngineLoader.FILE_NAME`）。
 pub const DICT_FILE_NAME: &str = "luna.opid";
+
+/// 繁体词库文件名（与 `luna.opid` 同目录；fcitx5 轨的 `opi/trad.opid` 同口径）。
+pub const TRAD_FILE_NAME: &str = "trad.opid";
 
 /// 环境变量：**直接给词库文件全路径**（开发/排障用覆盖，不做目录语义 ——
 /// 目录语义要靠文件名约定猜，全路径没有歧义）。空串等同未设置。
@@ -80,7 +84,7 @@ pub struct DictLoad {
 }
 
 impl DictLoad {
-    /// 一行日志（格式留在本模块：`com_server` 只有 `eprintln!` 一行，
+    /// 一行日志（格式留在本模块：`com_server` 只有 `tlog!` 一行，
     /// 那句在 Windows 侧跑不到，格式逻辑放那边就等于没测过）。
     pub fn log_line(&self) -> String {
         match &self.source {
@@ -223,6 +227,106 @@ pub fn load_dict(
     }
     DictLoad {
         dict: Box::new(engine_data::fallback_dict()),
+        source: None,
+        notes,
+    }
+}
+
+/// 繁体候选路径表：`OPI_DICT_PATH` 的同目录 sibling → DLL 同目录 → `%LOCALAPPDATA%\opi\`。
+///
+/// 与 [`candidates`] 的差别只有 env 一项：luna 的 env 是**文件全路径**，trad 取同目录的
+/// `trad.opid` —— 用户换词库目录时两库一起搬，不需要第二个环境变量。
+pub fn trad_candidates(
+    env: Option<&OsStr>,
+    dll_dir: Option<&Path>,
+    local_app_data: Option<&OsStr>,
+) -> Vec<Candidate> {
+    let mut out = Vec::new();
+    if let Some(e) = env.filter(|e| !e.is_empty()) {
+        out.push(Candidate {
+            path: PathBuf::from(e).with_file_name(TRAD_FILE_NAME),
+            origin: Origin::Env,
+        });
+    }
+    if let Some(d) = dll_dir {
+        out.push(Candidate {
+            path: d.join(TRAD_FILE_NAME),
+            origin: Origin::DllDir,
+        });
+    }
+    if let Some(l) = local_app_data.filter(|l| !l.is_empty()) {
+        out.push(Candidate {
+            path: PathBuf::from(l).join("opi").join(TRAD_FILE_NAME),
+            origin: Origin::LocalAppData,
+        });
+    }
+    out
+}
+
+/// 繁体词库装载结果。**永不失败**：trad 是可选增强，缺/坏 → `None`，
+/// 引擎的 Traditional 模式回退主库（`Engine::with_dictionaries` 的语义）。
+pub struct TradLoad {
+    pub dict: Option<Box<dyn Dictionary>>,
+    pub source: Option<Candidate>,
+    /// 逐候选结论，供调用方记日志；成功装载时**不含**胜出项。
+    pub notes: Vec<String>,
+}
+
+impl TradLoad {
+    /// 一行日志（格式留在本模块，理由同 `DictLoad::log_line`）。
+    pub fn log_line(&self) -> String {
+        match &self.source {
+            Some(c) => format!(
+                "繁体词库 {}（来源：{}）",
+                c.path.display(),
+                c.origin.describe()
+            ),
+            None if self.notes.is_empty() => {
+                "未装载繁体词库（候选都不存在）→ 繁体模式回退主库".to_string()
+            }
+            None => format!(
+                "未装载繁体词库（{}）→ 繁体模式回退主库",
+                self.notes.join("；")
+            ),
+        }
+    }
+}
+
+/// 依次尝试繁体候选。不存在 → 下一个；存在但坏 → 记一条再下一个；全失败 → `None`。
+/// **不 panic**、不回落内置词库（缺省由引擎回退主库）。
+pub fn load_trad(
+    env: Option<&OsStr>,
+    dll_dir: Option<&Path>,
+    local_app_data: Option<&OsStr>,
+) -> TradLoad {
+    let mut notes = Vec::new();
+    for c in trad_candidates(env, dll_dir, local_app_data) {
+        match engine_data::load_mmap(&c.path) {
+            Ok(d) => {
+                return TradLoad {
+                    dict: Some(Box::new(d)),
+                    source: Some(c),
+                    notes,
+                };
+            }
+            Err(LoadError::Io(e)) if e.kind() == std::io::ErrorKind::NotFound => {
+                notes.push(format!(
+                    "{}（{}）不存在",
+                    c.path.display(),
+                    c.origin.describe()
+                ));
+            }
+            Err(e) => {
+                notes.push(format!(
+                    "{}（{}）不可用: {e:?}",
+                    c.path.display(),
+                    c.origin.describe()
+                ));
+            }
+        }
+    }
+    TradLoad {
+        dict: None,
         source: None,
         notes,
     }
