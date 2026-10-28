@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! JNI 出口的**候选 / 缓冲读侧**一族（从 `jni.rs` 拆出：那个文件加
+//! JNI 出口的**候选 / 分页 / 缓冲**一族（从 `jni.rs` 拆出：那个文件加
 //! `candidateReadings` 后越 500 行门禁；与 `jni_scheme.rs` / `jni_user_words.rs`
 //! 同一个拆分先例）。
 //!
@@ -29,6 +29,13 @@ pub unsafe extern "system" fn opijni_candidates(
         api::with_engine(|e| api::candidate_texts(e, limit.max(0) as usize)).unwrap_or_default()
     });
     unsafe { jni_util::string_array(env, texts) }
+}
+
+/// pageSize() -> Int：每页候选数（`engine_core::router::PAGE_SIZE` 的 JNI 载体，
+/// 与 C 面 `opi_page_size()` 同源）。**不依赖引擎装载**（常量，未装载也有值）。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_page_size(_env: JEnv, _class: sys::jclass) -> jint {
+    guard(|| engine_core::router::PAGE_SIZE as jint)
 }
 
 /// candidateReadings() -> String[]。候选拼音读数（已分词），**按读音去重保序**、
@@ -86,4 +93,19 @@ pub unsafe extern "system" fn opijni_display_buffer(env: JEnv, _class: sys::jcla
 pub unsafe extern "system" fn opijni_pending_text(env: JEnv, _class: sys::jclass) -> jstring {
     let out = guard(|| api::with_engine(|e| e.pending_text()).unwrap_or_default());
     unsafe { jni_util::rust_to_jstring(env, &out) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::opijni_page_size;
+
+    /// 门禁（2026-10-28）：两个 ABI 的页大小都必须是 `router::PAGE_SIZE` 本身，
+    /// 不是各自手抄的 8。JNI 不依赖引擎装载（裸指针即可调）；C 面由 ios 同批落地。
+    #[test]
+    fn page_size_exports_match_router_constant() {
+        let jni = unsafe { opijni_page_size(std::ptr::null_mut(), std::ptr::null_mut()) };
+        assert_eq!(jni as usize, engine_core::router::PAGE_SIZE);
+        let c = unsafe { crate::cabi::opi_page_size() };
+        assert_eq!(c as usize, engine_core::router::PAGE_SIZE);
+    }
 }

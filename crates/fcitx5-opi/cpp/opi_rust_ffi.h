@@ -27,6 +27,13 @@ struct OpiKeyEventResult {
     OpiString text;
 };
 
+// Rust 侧 PageState { page, pages }：候选翻页真源（页码只在 Rust 一份）。
+// pages==0 表示无候选。
+struct OpiPageState {
+    int32_t page;
+    int32_t pages;
+};
+
 extern "C" {
 bool opi_fcitx5_load(const uint8_t *ptr, size_t len);
 // 简繁双装（2026-10-09）：两段都是**路径字符串**（同 opi_fcitx5_load 的约定）。
@@ -95,6 +102,10 @@ bool opi_fcitx5_toggle_fullwidth();        // 返回切换后的状态（true = 
 void opi_fcitx5_set_shift(bool on);
 OpiString opi_fcitx5_input_space();
 OpiString opi_fcitx5_candidates(size_t limit); // JSON 数组（UTF-8）
+// 翻页（2026-10-28）：页码真源在 Rust，C++ 的 OpiCandidateList 只转发。
+// **先 page_state 再 candidates**（前者顺手留下全量缓存，后者消费它：一次取回）。
+OpiPageState opi_fcitx5_page_state();
+OpiPageState opi_fcitx5_page_step(int32_t delta); // >0 下一页 / <0 上一页 / 0 只读
 OpiString opi_fcitx5_buffer();                 // 显示串：全键盘带 `'` 分词（预编辑读它）
 // 原文（不分词）：W1 直接确认/切输入法提交进文档用。弱符号，老 .so 上没有 ——
 // 那时 `opi_fcitx5_buffer` 本来就返回原文，退回它即可（见 opi_fcitx5.cpp 的 opiDirectConfirm）。

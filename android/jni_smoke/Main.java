@@ -8,6 +8,7 @@ final class OpiEngine {
     static native void backspace();
     static native void clear();
     static native String select(int index);
+    static native int pageSize();
     static native void switchMode(int mode);
     static native void setShift(boolean on);
     static native boolean toggleFullwidth();
@@ -111,13 +112,17 @@ public final class Main {
         check("".equals(OpiEngine.inputKey("o")), "inputKey(o) 返回空串");
         check("wo".equals(OpiEngine.buffer()), "buffer 应为 wo");
 
-        // 候选非空 + select(0) 非空 + buffer 清空
+        // 候选非空 + 全局选词非空 + buffer 清空（pageSize 由引擎给、别抄 8；
+        // 负/越界不得消耗缓冲）。
+        check(OpiEngine.pageSize() > 0, "pageSize 应为正数");
+        check("".equals(OpiEngine.select(-1)), "select(-1) 越界 → 空串");
+        check("wo".equals(OpiEngine.buffer()), "越界不得提交");
         String[] cands = OpiEngine.candidates(8);
         check(cands != null && cands.length > 0, "candidates(8) 非空");
         String first = OpiEngine.select(0);
         check(first != null && !first.isEmpty(), "select(0) 非空");
         check("".equals(OpiEngine.buffer()), "select 后 buffer 清空");
-        // select 越界 → 空串
+        // select 越界 → 空串（全局下标出口）
         check("".equals(OpiEngine.select(999)), "select(999) 返回空串");
 
         // 单字符外输入返回空串（多字符/空）
@@ -155,10 +160,8 @@ public final class Main {
         OpiEngine.setLearner(true);
         check(OpiEngine.learnerEnabled(), "setLearner(true) 生效");
 
-        // 「属性设置」的两个新开关（2026-10-08）：同样只做表面的读写回环。
-        // ⚠️ 2026-10-15 前提翻转（用户裁决「默认关闭模糊音」，引擎 + 四端一起翻）：缺省由
-        // 「开/全开」改为「关/0」，下面两条随之改判（此前红在 CI 的 rust job，不是回归）；写
-        // 路径改为**先开再关**（对已是关的缺省写 false 无分辨力）；缺省仍须在任何写之前读。
+        // 「属性设置」两个开关（2026-10-08）：读回环。⚠️ 2026-10-15 缺省翻转为「关/0」
+        // （引擎 + 四端一起翻）；写路径先开再关（对已是关的写 false 无分辨力），缺省须先读。
         check(!OpiEngine.fuzzyEnabled(), "fuzzy 缺省关（2026-10-15 裁决）");
         check(OpiEngine.fuzzyPairs() == 0, "fuzzyPairs 缺省 0（2026-10-15 裁决）");
         OpiEngine.setFuzzy(true);
@@ -249,9 +252,8 @@ public final class Main {
         check(emojiSet.contains("❤️"), "emojiSymbols 必须含 VS16 形 ❤️（旧表只有裸 ♥）");
         check(!emojiSet.contains("🞀"), "emojiSymbols 不得含非 emoji 的 🞀(U+1F780)");
 
-        // emojiGroups（2026-10-12）：表情面板分类条 —— `[{name,start,count}]`，纯静态表
-        // （与引擎装载无关，未装载也有值）。判据：JSON 形状 + 9 组 + 首组「笑脸」start=0
-        // + 各组 count 之和 == emojiSymbols 条数（下标必须对得上，点分类才滚得准）。
+        // emojiGroups（2026-10-12）：分类条 `[{name,start,count}]`，纯静态表（未装载也有值）。
+        // 判据：9 组 + 首组「笑脸」start=0 + 各组 count 之和 == emojiSymbols 条数。
         String groups = OpiEngine.emojiGroups();
         check(groups != null && groups.contains("\"name\""), "emojiGroups 含 name");
         // ⚠️ 逐字段抓、**不假设键序**：serde_json 未开 preserve_order ⇒ 键是**字典序**
@@ -395,15 +397,11 @@ public final class Main {
         check(unpinned != null && unpinned.length == wideN, "解除后回全量");
         OpiEngine.setScheme(0); // 回全键盘
 
-        // 导入词库（2026-10-14，M3）：四条出口的**逐字段行为矩阵**归 opi-ffi 的
-        // tests/dict_import.rs（C ABI 面）；这里做的是 JNI 面唯一能做的事 ——
-        // 真调一次证明函数体被执行过（RegisterNatives 成功只证明名字+描述符对得上）。
-        // ⚠️ 词条是「词<TAB>拼音<TAB>频次」，**词在前**（列序真源 engine-data 的
-        // dict_text.rs：cols[0]=word；M3 任务书里的「拼音在前」是反的）。
-        // 非 ASCII 一律写成 Unicode 转义：javac 按平台编码读源码，字面量直接写中文
-        // 在非 UTF-8 的 locale 下会被读坏（转义在词法层处理，与编码无关）。
-        // ⚠️ 连**注释里**都不能出现反斜杠加 u 的那两个字（javac 在词法前先扫转义，
-        // 注释里的也一样 —— 本行起草时就因它红过:非法的 Unicode 转义）。
+        // 导入词库（2026-10-14，M3）：逐字段矩阵归 tests/dict_import.rs；这里真调一次证明
+        // 函数体被执行（RegisterNatives 只证明名字+描述符对）。⚠️ 词条「词<TAB>拼音<TAB>频次」，
+        // 词在前（真源 dict_text.rs 的 cols[0]=word；M3 任务书的「拼音在前」是反的）。
+        // 非 ASCII 一律写 Unicode 转义（javac 按平台编码读源码）；连注释里都不能出现
+        // 反斜杠+u 的那两个字 —— javac 词法前先扫转义，注释里的也一样（起草时红过）。
         final String WORD = "\u6D4B\u8BCD"; // 测词（U+6D4B U+8BCD）
         java.nio.file.Path dd = java.nio.file.Files.createTempDirectory("opi_jni_smoke_dict");
         java.nio.file.Path tsv = dd.resolve("smoke.tsv"); // 词库名 = 文件名词干 ⇒ 必须正好叫 smoke

@@ -48,12 +48,12 @@ use crate::jni_switches::{
     opijni_jianpin_enabled, opijni_set_chinese_punct, opijni_set_correction, opijni_set_fuzzy,
     opijni_set_fuzzy_pairs, opijni_set_jianpin, opijni_toggle_chinese_punct,
 };
-// 拆到 `jni_candidates.rs` 的四个**读侧**出口（candidates / candidateReadings /
-// buffer / displayBuffer）：同一手续（2026-10-09：加 candidateReadings 后本文件
+// 拆到 `jni_candidates.rs` 的**候选 / 分页 / 缓冲**出口（candidates / candidateReadings /
+// buffer / displayBuffer 等）：同一手续（2026-10-09：加 candidateReadings 后本文件
 // 越 500 行）。同样只为注册表能引用到它们。
 use crate::jni_candidates::{
     opijni_buffer, opijni_buffer_is_carried, opijni_candidate_readings, opijni_candidates,
-    opijni_display_buffer, opijni_pending_text, opijni_pin_reading,
+    opijni_display_buffer, opijni_page_size, opijni_pending_text, opijni_pin_reading,
 };
 /// inputKey(ch: String) -> String。永不 panic。单字符外（空/多字符/非 ASCII）返回空串。
 #[unsafe(no_mangle)]
@@ -225,6 +225,11 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _reserved: *mut c
                     jni_str!("select"),
                     jni_str!("(I)Ljava/lang/String;"),
                     opijni_select as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("pageSize"),
+                    jni_str!("()I"),
+                    opijni_page_size as *mut c_void,
                 ),
                 NativeMethod::from_raw_parts(
                     jni_str!("switchMode"),

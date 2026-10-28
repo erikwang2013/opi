@@ -1,0 +1,8 @@
+# actionlint 配置。
+#
+# `harmony` 是自托管 runner 的自定义标签（见 harmony.yml 头部注释），
+# actionlint 静态知道的自托管标签里没有它。不在这里声明的话，唯一的告警会是
+# 「label "harmony" is unknown」，真正的 workflow 错误反而被这条噪音淹没。
+self-hosted-runner:
+  labels:
+    - harmony

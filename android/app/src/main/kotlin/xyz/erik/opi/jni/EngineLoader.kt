@@ -7,6 +7,8 @@ import android.content.Context
 import android.util.Log
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
 
 import xyz.erik.opi.settings.ImePreferences
 
@@ -35,6 +37,15 @@ object EngineLoader {
     const val FILE_NAME_WUBI86 = "wubi86.opid"
     const val FILE_NAME_WUBI98 = "wubi98.opid"
     private const val TAG = "EngineLoader"
+
+    /**
+     * 词库装载的后台线程（2026-10-28）：首次 36MB 拷贝/校验 + Rust install（百毫秒级）
+     * 此前同步占着 IME 主线程。单线程足够 —— 两个调用方（IME 启动、设置页）本来就串行在
+     * [load] 的锁上。
+     */
+    internal val io: Executor = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "opi-engine-loader").apply { isDaemon = true }
+    }
 
     /** 文件操作抽象（JVM 测试注入假实现）。 */
     interface FileOps {

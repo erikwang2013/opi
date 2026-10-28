@@ -16,7 +16,7 @@ fn state() -> CandidateState {
         page: 0,
         buffer_snapshot: String::new(),
         shift_state: ShiftState::Off,
-        last_printable: None,
+        held_passthrough: Default::default(),
         dicts: Default::default(),
         english_pro: true,
         fetch_cache: Default::default(),
@@ -153,11 +153,12 @@ fn delete_mirrors_backspace() {
     assert_eq!(s.buffer(), "");
     // 空缓冲 → 直通客户端
     assert_eq!(handle_key(&mut s, KEY_DELETE, 0), KeyAction::PassThrough);
-    // 释放事件被消费，不删字符
+    // 抬起按**它自己那次按下**的结论回复：上面最后一次 Delete 按下是空缓冲直通，
+    // 中间按下的 'a' 不再顶掉它的记录（旧单槽会顶掉）。放行也不删字符。
     handle_key(&mut s, 'a' as u32, 0);
     assert_eq!(
         handle_key(&mut s, KEY_DELETE, KEY_STATE_RELEASED),
-        KeyAction::EngineHandled
+        KeyAction::PassThrough
     );
     assert_eq!(s.buffer(), "a");
 }

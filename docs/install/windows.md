@@ -1181,11 +1181,11 @@ HKCU 写失败是系统性权限问题时安装不会红，只是当前用户少
   「这里唯一的依据是'不与 Windows 自身的系统快捷键相撞'这一条常识判断，**没有实测**」。
   （对照：Linux 轨那两个键位是 `strings` + harness **实测**选出来的 —— 两轨键位相同是**约定**，
   不是同一份证据，别把 Linux 那份实测当成这条的背书。）
-- ⚠️ **模式键会丢弃未提交的缓冲**：`tsf.rs::toggle_mode` → `TsfLogic::switch_mode` →
-  `Engine::switch_mode`，那条路**只清缓冲、不上屏** —— 打到一半、甚至已经有候选的拼音
-  都会一起丢掉。`engine-core/src/engine.rs` 的 `toggle_symbol` 文档把这点写得很明白
-  （它那条"先提交待上屏文本"的收尾是给有插入通道的端用的，桌面两轨都没接）。
-  **【推断】**，未在真机确认用户手感。
+- ~~⚠️ **模式键会丢弃未提交的缓冲**~~ **【订正 2026-10-28】** 已接线：`tsf.rs::toggle_mode`
+  改走 `TsfLogic::switch_mode_confirmed`（拼音/繁体上**原文**、符号模式只清关键字），
+  返回值经 `insert_into` 插入当前文档 —— 与 ctl 的 `lang`/`mode`、Shift 轻按同一条收尾。
+  **仍未在真机验证**（本机无 Windows）：真机上「打到一半按 Ctrl+'」是否真把原文落进
+  文档、宿主是否稳定，未见。
 
 ### 4.2 候选操作
 
@@ -1210,7 +1210,8 @@ HKCU 写失败是系统性权限问题时安装不会红，只是当前用户少
   → PipeServer.sendSelect 发 {"type":"select","index":N}（页内 0 起）
   → candidate_io.rs 读线程 dispatch_line → SharedAction::on_select
   → EngineShared::enqueue_select(index)          ← 只入队，不碰 COM
-  → 下一个键事件开头 tsf.rs::handle_key_inner → drain_pending()
+  → 下一个键事件开头（tsf.rs::handle_key_inner / key_sink.rs::OnTestKeyDown）
+    或焦点变化（key_sink.rs::OnSetFocus）→ drain_pending()
   → TsfSharedState::select_and_insert → insert_into → ITfInsertAtSelection
 ```
 
@@ -1226,19 +1227,25 @@ HKCU 写失败是系统性权限问题时安装不会红，只是当前用户少
    零命中；`opi-candidates` 在 `crates/` 里只出现在管道名本身。加上 §2.3 那条
    （`gradlew package` 现在产出的是 Linux `.deb`），
    ⇒ ~~今天在 Windows 上这条回程根本走不到：窗口得用户自己起，而且没有 Windows 版安装包。~~）
-2. **点选不是立即插入，要等下一个键事件。** 点选只在读线程入队
+2. **点选不是立即插入，要等下一个键事件或一次焦点变化。** 点选只在读线程入队
    （`EngineShared::enqueue_select`），真正的插入在按键线程的 `drain_pending` 里执行
-   —— 而 `drain_pending` 只在 `handle_key_inner` 开头被调用一次。
-   ⇒ **点了候选但不再按键 = 字不出现**；点了候选接着打字 = 先插入刚才点的词，再处理新键。
-   这是源码写明的**有意代价**（`state.rs` 模块头：「已知代价：插入延迟到下一次按键，
-   换来零跨线程 COM 调用」），不是 bug —— 但用户会当成 bug，文档里必须写。
-   顺带：`tsf.rs` 的 `OnSetFocus` 是空实现（`Ok(())`），**是 drain 的天然落点，没接**。
+   —— 调用点：`handle_key_inner` / `OnTestKeyDown` 开头，以及
+   **`OnSetFocus`（2026-10-28 接线）**。⇒ 点了候选但**既不按键、也不发生焦点变化**
+   = 字不出现；点了候选接着打字/切走窗口 = 先插入刚才点的词，再处理新键。
+   **别把 `OnSetFocus` 当成点选的即时触发**：候选窗是**非激活**窗口（`Main.kt` 的
+   `focusable = false`，`WS_EX_NOACTIVATE` 语义），点它不产生焦点事件，所以
+   「点完原地不动」没有任何回调可接。这是源码写明的**有意代价**（`state.rs` 模块头：
+   升级路径 = message-only 窗口 + PostMessage，或 GIT 代理），不是 bug ——
+   但用户会当成 bug，文档里必须写。**真机未验证**。
 3. **逐字确认（2026-10-17）**：整串无词组精确匹配时（前缀扩展不算），点选先「确认一个字」——它留在候选窗
    的缓冲显示里（管线协议 `show.buffer` 现在带「中guo」这类片段，`TsfLogic::display_buffer`），
    最后一段确认才一次提交整串；点中间的字不会立刻插入，这是语义不是缺口（引擎级，
    门禁 `tests/segment_commit.rs`）。
-4. **目标文档取自上一次键事件。** 点了候选、还没按键就换文档，字会落进**上一个**文档
-   （`tsf.rs::drain_pending` 的注释自己记了这条"已接受的边缘"）。
+4. ~~**目标文档取自上一次键事件。** 点了候选、还没按键就换文档，字会落进**上一个**文档~~
+   **【订正 2026-10-28】** 已修：排队动作带入队时的目标世代（`EngineShared::target_seq`），
+   按键线程发现新键事件的 context 与上次不同就推进世代，旧动作在执行点被丢弃
+   （`select_and_insert` / `insert_text` 里判）。不会插错文档；代价是那次点选丢了
+   —— 旧文档此刻已没有合法插入目标。**真机未验证**（本机无 Windows）。
 5. **队列上限 16 条**（`state.rs` 的 `MAX_PENDING_SELECT`），满了丢弃，不阻塞读线程。
 6. **翻页不改本地页码**：窗口只发消息，页码唯一真源是 TSF 回发的 `show`
    （`Main.kt` 与 `CandidateWindow.kt` 都写明了）。
@@ -1498,19 +1505,19 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 |---|---|---|---|
 | 1 | ~~**词库仍没有打包步骤**~~ **【订正 2026-10-20】已修**：EXE 与 MSI 的 app image 都带 `app\luna.opid`（与 DLL 同目录）。**剩余缺口**：TSF 是否真加载了它只在文件层面被 CI 断言，GUI 宿主里看不到装载日志 | §2.4、§2.5 | 文件开箱即命中第二候选；「真加载」仍待真机 |
 | 2 | **没有人拉起候选窗进程**；~~候选窗也没有 Windows 安装包~~ **【订正 2026-10-09】** 安装包有了（§2.5 的 `opi-desktop-msi-*` artifact），但它在 Release 之外、90 天过期。**【订正 2026-10-17】** 后处理后的 `.msi` 里「装完点 Finish 自启」已接线（§2.5）—— 但**这条线本身未在真机验证**。**【订正 2026-10-19】** 经 v1.15.1 实物 MSI 核实：到 v1.15.1 为止的 **Release 资产全部是未后处理**的原始包（无注册动作；用户真机报障即此）。**【订正 2026-10-20】** EXE 用户入口已加登录自启（HKLM Run，卸载删除）+ 完成页拉起；未在真机验证 | §4.3 #1、§2.5 | 候选窗现在会自启（真机未验证）；打字链路不依赖它是否已起 |
-| 3 | **点选延迟到下一个键事件才插入** | `state.rs` 模块头、`tsf.rs::drain_pending` | 点了不敲键 = 字不出现 |
-| 4 | `OnSetFocus` 空实现（drain 的天然落点没接） | `tsf.rs` 的 `OnSetFocus` | 同上，放大了 #3 |
-| 5 | 点选后换文档 → 插到上一个文档 | `tsf.rs::drain_pending` 注释 | 边缘场景 |
-| 6 | **`Deactivate` 是骨架**：没有 `UnadviseKeyEventSink`，没有释放 composition / 候选窗 | `tsf.rs::Deactivate`；`docs/superpowers/specs/2026-08-14-opi-multi-platform-design.md` 的「tsf-opi Deactivate 为骨架（正式范围降级）」一行，明示为"验收补全点" | 待真机验收补 |
+| 3 | ~~**点选延迟到下一个键事件才插入**~~ **【订正 2026-10-28】** 落地时机加了 `OnSetFocus`（见 #4），但**点了候选原地不动、不敲键**仍不会插入（候选窗非激活，点它无焦点事件）—— 升级路径见 `state.rs` 模块头 | `state.rs` 模块头、`tsf.rs::drain_pending` | 点了不敲键 = 字不出现（仍在，真机未验证） |
+| 4 | ~~`OnSetFocus` 空实现（drain 的天然落点没接）~~ **【订正 2026-10-28】** 已接线：`key_sink.rs::OnSetFocus` 调 `drain_pending`（线程依据：`ITfKeyEventSink` 按 tid 注册、TSF 在宿主 UI 线程回调）；`fforeground` 只触发落地、不决定目标 | `key_sink.rs` 的 `OnSetFocus` | 焦点切走/切回时排队点选会落地；不覆盖「点完候选不动」（#3） |
+| 5 | ~~点选后换文档 → 插到上一个文档~~ **【订正 2026-10-28】** 已修：`EngineShared::target_seq` 世代号，键事件的 context 变了就推进，旧动作在执行点丢弃（`select_and_insert` / `insert_text`）。代价：那次点选丢了 | `state.rs` 的 `note_target` / `target_seq` | 不再插错文档；真机未验证 |
+| 6 | ~~**`Deactivate` 是骨架**~~ **【订正 2026-10-28】** `UnadviseKeyEventSink` 此前已接（与 `Activate` 配对）；本轮补：清队列（`clear_pending`）、释放插入目标与编辑会话保活（`clear_target`）、清引擎缓冲（`logic.clear()`），候选窗由 `sink.disconnect()` 收起。**没有 ITfComposition 可结束**（缓冲只活在候选窗，文档侧无 composition）。**真机未验证** | `tsf.rs::Deactivate`；`state.rs` | 失活后不再残留队列/缓冲；运行时行为待真机 |
 | 7 | ~~装载日志走 `eprintln!`，GUI 宿主里通常看不见；`OutputDebugStringW` 未实现~~ **已修（2026-10-28）：`tlog!` 同时写 stderr 与 `OutputDebugStringW`** | `logging.rs` | 排障需 DebugView / 调试器 |
 | 8 | ~~繁体（`trad.opid`）在 Windows 上无从装载~~ **已修（2026-10-28）：`dict_path::load_trad` + `EngineShared::with_dicts`，`trad.opid` 随包** | `dict_path.rs`、`logic_with_dicts.rs`、`desktop/build.gradle.kts` | 繁体查 trad 库；缺/坏时回退主库 |
-| 9 | 模式键**丢弃未提交缓冲**（不先上屏） | `tsf.rs::toggle_mode` → `Engine::switch_mode`；`engine.rs::toggle_symbol` 注释 | 打到一半切模式 = 丢字 |
-| 10 | 候选窗单页显示上限 `MAX_CANDIDATES = 8` 与 Rust `logic::PAGE_SIZE` 同为 8，**但两者之间没有门禁**（Rust 那份有 `const` 断言绑 `engine-core`，Kotlin 那份只有一句注释说"一致"） | `CandidateWindow.kt` vs `logic.rs` | 若 `PAGE_SIZE` 改了，窗口会静默少显示最后一个候选 |
-| 11 | **模式热键不认键盘布局**：`vk::mode_hotkey` 比的是**裸 VK**（0xDE / 0xDC），即 US 布局上标着 `'` 与 `\` 的那两个物理键位；而字符键走的是布局感知的 `ToUnicodeEx`（`tsf.rs::to_engine_keycode`）。⇒ 非 US 布局（AZERTY / Dvorak）上，要按的是**那个位置**的键，不是键帽上的字符 | `vk.rs::mode_hotkey` 的 `VK_OEM_5` / `VK_OEM_7`；`tsf.rs::to_engine_keycode` | 非 US 布局用户会"按了没反应"（**未验证**：本机没有任何非 US 布局可测） |
+| 9 | ~~模式键**丢弃未提交缓冲**（不先上屏）~~ **【订正 2026-10-28】** 已接线：`tsf.rs::toggle_mode` 改走 `logic.switch_mode_confirmed`，返回值经 `insert_into` 插入文档 | `tsf.rs::toggle_mode`、`logic.rs` | 打到一半切模式不再丢拼音/繁体原文；真机未验证 |
+| 10 | ~~候选窗单页显示上限 `MAX_CANDIDATES = 8` 与 Rust `logic::PAGE_SIZE` 同为 8，**但两者之间没有门禁**~~ **【订正 2026-10-28】** 改为**去重**而不是加门禁：`PAGE_SIZE` 只在 `engine-core/src/router.rs` 定义（tsf 轨重导出），桌面 `CandidateWindow.kt` 删除 `MAX_CANDIDATES`，直接渲染 wire `show.candidates`（协议本就只发当前页）—— 不再有第二份上限字面量可漂移 | `engine-core/src/router.rs`、`logic.rs`、`CandidateWindow.kt`、`Main.kt` 协议头 | 桌面按 wire 页长显示；无副本可漂 |
+| 11 | ~~**模式热键不认键盘布局**~~ **【订正 2026-10-28】** 已改按**字符**匹配：`key_state::layout_char` 用 `ToUnicodeEx`（Ctrl/Alt 清零、Shift 保留）取当前布局字符，`vk::mode_hotkey(ch, states)` 只认 `'` / `\`。Ctrl+Shift+' 得 `"` ⇒ 不命中（与 fcitx5 轨 keysym 语义一致）。**非 US 布局本机无法实测** | `key_state.rs::layout_char`、`vk.rs::mode_hotkey` | 非 US 布局理论上跟随键帽字符；**未验证** |
 | 12 | 语言栏按钮**左键单击打开设置**（2026-10-20 起：`langbar.rs` 的 `OnClick` → `configure::launch_settings()`，与状态栏 LOGO/设置入口一致）；其它点击仍无动作（不假装有功能）。DLL **没有文件图标**（`.rc` / 资源编译器在本机与 CI 都不可验证 ⇒ 走 `include_bytes!`，代价就是缺这一块） | `langbar.rs` 的 `OnClick` 与模块头「为什么不用 .rc」 | 资源管理器里 DLL 显示默认图标 |
 | 13 | **`ITfFnConfigure` 只过 `cargo check`**：控制面板里那个「属性」按钮会不会出现、点了拉不拉得起设置窗，本机无法验证；拉起的候选路径判定有主机单测（`settings_exe.rs`），Win32 那一步没有 | §4.4、`crates/tsf-opi/src/configure.rs` | 真机上「属性」可能不出现/不响应 |
 | 14 | ~~**设置窗没有 Windows 安装包**~~ **【订正 2026-10-09】** 安装包有了：`desktop/build.gradle.kts` 的 `targetFormats` 加了 `Msi`（原来只列 `Deb`），`.github/workflows/windows.yml` 在 Windows 主机上真打 `.msi`（§2.5）。剩下的缺口：**不在 Release 里、未签名、artifact 90 天过期**，拿到手得自己去 Actions 取 | §4.4、§2.5 | 装完也不会自己出现（本表 #2：没人拉起它） |
-| 15 | **W1「切中→英直接确认」在 Windows 侧只有状态机**（2026-10-10；同日深夜语义改为**一律原文**——拼音/繁体上缓冲原文、符号模式的关键字只清不提交）：`switch_mode_confirmed` 与引擎 `confirm_pending` 已就位并有两轨配对测试 + 负对照，但 `tsf.rs::toggle_mode` 的调用点**有意未接线**（插入面未通电；接线 = 改调它 + 把返回值插入文档）⇒ 现状仍同 #9 | `logic.rs`、`logic_input_method.rs`、`tsf.rs::toggle_mode` | 行为与 #9 同：打到一半切模式丢字 |
+| 15 | ~~**W1「切中→英直接确认」在 Windows 侧只有状态机**~~ **【订正 2026-10-28】** 已接线：`tsf.rs::toggle_mode(hot, pic)` 调 `switch_mode_confirmed` 并把返回值插入 `pic` 文档（空 = 推快照刷新窗口，与 Shift 轻按同形）。语义仍为**一律原文**：拼音/繁体上缓冲原文、符号模式的关键字只清不提交 | `logic.rs`、`tsf.rs::toggle_mode`、`tsf_shift.rs` | 与 #9 同一条修复；真机未验证 |
 | 16 | **桌面三件套在 Windows 上已接控制面（2026-10-20）**：符号页点选经 `\\.\pipe\opi-control-v2` broker 送 TSF `commit`；状态栏 `--statusbar` 由 **EXE 安装器**的 HKLM64 Run 值随登录自启（卸载时删），jpackage MSI 仍没有这条 Run 值。~~`symbol_categories.tsv` 仍未拷进 MSI/EXE 资源~~ **【订正 2026-10-21】** 已随包：Compose `files` 集合把 `symbol_categories.tsv` 放进 app image 的 `app\`（与 `luna.opid`/DLL 同目录），`symbolDataCandidates` 增加该顺位；windows 工作流断言 app image 与安装目录里都有它 ⇒ 状态栏「符号大全」按钮不再打开空页 | `desktop/build.gradle.kts`、`SymbolCategories.kt`、`.github/workflows/windows.yml`、`scripts/windows/opi.iss` | EXE 装法在切换为 opi 后能看到状态栏（未切换时隐藏）；符号数据开箱可用 |
 | 17 | **虚拟键盘 Windows 路径（`SendInput`）只过编译**：本机无 Windows，运行期未验证；一并如实记：Linux 的 XTEST 注入与状态栏窗口**也未做 GUI 冒烟**（本机无 Xvfb，待真桌面时间窗）——逻辑层（键表物理键码、可见性组合、注入序列映射）已测 | `desktop/` 的 `VirtualKeyboard.kt`、`docs/install/linux.md` §4.8 | 未验证 ≠ 不可用，但也别当已验证 |
 

@@ -399,17 +399,22 @@ final class OpiKeyboardPanel: NSObject {
             OpiSymbolPanel.shared.show()
         case .mode:
             if current == .numbers { choose(previous) }
-            engine.switchMode(engine.mode() == .traditional ? .pinyin : .traditional)
+            // 成对切换走保缓冲的 `opi_switch_language`（同 iOS `toggleTraditional`）：
+            // 不 flush pending —— 这条出口本来就不清缓冲/已确认片段。
+            engine.switchLanguage(engine.mode() == .traditional ? .pinyin : .traditional,
+                                  engine.currentScheme())
             OpiClientHub.shared.refreshState()
             rebuild()
         case .english:
             choose(.qwerty)
+            OpiClientHub.shared.commitPendingBeforeModeSwitch()
             engine.switchMode(.english)
             OpiClientHub.shared.refreshState()
             rebuild()
         case .numbers:
             previous = current == .numbers ? previous : (current == .stroke ? .qwerty : current)
             current = .numbers
+            OpiClientHub.shared.commitPendingBeforeModeSwitch()
             engine.switchMode(.number)
             OpiClientHub.shared.refreshState()
             rebuild()
@@ -449,6 +454,7 @@ final class OpiKeyboardPanel: NSObject {
             break
         }
         if engine.mode() == .number || (engine.mode() == .english && layout != .qwerty) {
+            OpiClientHub.shared.commitPendingBeforeModeSwitch()
             engine.switchMode(.pinyin)
         }
         OpiClientHub.shared.refreshState()

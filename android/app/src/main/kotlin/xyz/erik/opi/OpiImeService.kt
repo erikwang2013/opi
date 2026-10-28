@@ -6,6 +6,8 @@ package xyz.erik.opi
 import xyz.erik.opi.engine.composingText
 import android.inputmethodservice.InputMethodService
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.util.Log
 import android.view.View
@@ -20,11 +22,12 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryOwner
-import xyz.erik.opi.engine.DictStore
+import xyz.erik.opi.engine.EngineBoot
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.engine.UserWordStore
 import xyz.erik.opi.engine.clearUserWords
 import xyz.erik.opi.ime.BracketPairing
+import xyz.erik.opi.ime.EngineLoadingView
 import xyz.erik.opi.ime.HandlerDebouncer
 import xyz.erik.opi.jni.EngineLoader
 import xyz.erik.opi.jni.OpiEngine
@@ -37,10 +40,8 @@ import xyz.erik.opi.ime.KeyRouter
 import xyz.erik.opi.ime.PendingCommit
 import xyz.erik.opi.keyboard.SymbolCatalog
 import xyz.erik.opi.keyboard.RareIndex
-import xyz.erik.opi.settings.CustomPhraseStore
 import xyz.erik.opi.settings.ImePreferences
 import java.io.File
-import java.io.IOException
 // 编辑器信息的两条纯判定（isPasswordEditor / enterDecision）已拆到 EditorInfoRules.kt
 //（2026-10-10，500 行门禁；同包，无需 import）。
 /** OPI IME 宿主：ComposeView 作为输入视图，面板状态在 ImeState（A3/A4 填 UI）。 */
@@ -56,9 +57,9 @@ class OpiImeService : InputMethodService() {
     /**
      * 用户词落盘。`by lazy` 是必需的：Service 的字段初始化早于 `attachBaseContext`，
      * 那时 `filesDir` 还不可用（mBase 为 null）—— 首次访问发生在 onCreateInputView
-     * 之后（显式 load() 或第一次选词），两条路径都在主线程。
+     * 之后（[bootEngine] 的装载线程；第一次选词则仍走主线程），lazy 自带同步。
      */
-    private val userWords: UserWordStore by lazy {
+    internal val userWords: UserWordStore by lazy {
         UserWordStore(
             file = File(filesDir, UserWordStore.FILE_NAME),
             importJson = { OpiEngine.importUserWords(it) },
@@ -73,12 +74,15 @@ class OpiImeService : InputMethodService() {
         onLearned = { userWords.scheduleSave() },
         onBufferSynced = { pushComposingText() },
     )
+    /** 装载在 [EngineLoader.io] 上跑，完成经 [mainHandler] 回主线程（[EngineBoot]）。 */
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val engineBoot = EngineBoot(EngineLoader.io) { mainHandler.post(it) }
 
     /** 最近一次推给字段的组合串（提交/清空时要动它，见 [dropComposing] 的说明）。 */
     // internal：组合串助手拆到 ComposingText.kt（拆分裂代价，见那里头注）。
     internal var lastComposing: String = ""
 
-    private val imeState = ImeState(engineController)
+    internal val imeState = ImeState(engineController)
     private val symbolCatalog = SymbolCatalog.androidDefault()
     private lateinit var keyRouter: KeyRouter
     /** 括号自动配对（宿主读写走 InputConnection，见 BracketCommit.kt）。 */
@@ -86,7 +90,7 @@ class OpiImeService : InputMethodService() {
 
     /** IME 偏好（输入模式/键盘模式/三个引擎开关）。懒初始化：字段初始化早于
      *  `attachBaseContext`，那时 `getSharedPreferences` 拿不到 Context。 */
-    private val prefs: ImePreferences by lazy { ImePreferences.from(this) }
+    internal val prefs: ImePreferences by lazy { ImePreferences.from(this) }
 
     /**
      * 生僻字索引（1.1MB TSV）。**懒加载到第一次真正打开生僻字面板** —— 别挪进
@@ -123,7 +127,7 @@ class OpiImeService : InputMethodService() {
     }
 
     companion object {
-        private const val TAG = "OpiImeService"
+        internal const val TAG = "OpiImeService"
         /** 悬浮/游戏模式下窗口宽度占屏宽的比例（收窄居中，见 applyKeyboardWindow）。 */
         private const val FLOATING_WIDTH_RATIO = 0.86f
         /** 游戏模式的窗口高度相对常规键盘高度的比例（更矮，少挡画面）。 */
@@ -194,40 +198,9 @@ class OpiImeService : InputMethodService() {
             return cached
         }
         Log.i(TAG, "onCreateInputView: start")
-        // luna 词库编排（幂等：size 校验重拷；失败回退内置词库；与设置页共享 Rust 单例）
-        // 返回值是词库装载结果（false = 回退到内置 35 词库），接住它喂给宠物：降级时
-        // 候选栏待命位的小欧折断天线（DEGRADED），而不是照旧笑嘻嘻。
-        engineController.reportDictionaryLoad(EngineLoader.load(this))
-        // 用户词导入必须在词库装载之后、建视图之前：文件缺失/损坏静默降级（不崩 IME），
-        // 且要赶在第一次刷新候选之前生效
-        userWords.load()
-        // 自定义短语（2026-10-23；2026-10-24 英文套）：宿主文件（中文/英文各一个）是唯一
-        // 真源，引擎侧是内存态 —— 每次建视图时两套各自整表重推。设置页改动会即时推，
-        // 但进程被杀后只有这里装得回去。失败只留日志，不能因此崩输入法。
-        CustomPhraseStore.from(this).loadAndPush { Log.w(TAG, "custom phrases: $it") }
-        CustomPhraseStore.englishFrom(this).loadAndPush { Log.w(TAG, "english custom phrases: $it") }
-        // 词库目录装载（2026-10-14，M3）：目录里每个 *.tsv 进引擎，**停用名单在装载后重放**
-        // —— 引擎里导入层是内存态，同名重导入会置回启用（`api/dict.rs` 裁决 2 把重放
-        // 划给宿主）。单个失败不挡启动，只记一条日志（设置页「词库」节会把失败的显示出来）。
-        // 内置词库首启种子（2026-10-16，康熙字典「全发」）：首启把 assets/kangxi.tsv 种进
-        // 词库目录**一次**（标记门控；用户删过的不复活 —— 见 DictStore.seedBundled）。
-        val dictStore = DictStore.from(this)
-        val seeded = dictStore.seedBundled("kangxi") {
-            try {
-                assets.open("kangxi.tsv")
-            } catch (e: IOException) {
-                Log.w(TAG, "内置词库资产缺失：$e")
-                null
-            }
-        }
-        if (seeded) Log.i(TAG, "已种下内置词库 kangxi.tsv")
-        val dictReport = dictStore.loadAll(DictStore.parseDisabled(prefs.disabledDicts))
-        if (dictReport.failed.isNotEmpty()) {
-            Log.w(TAG, "词库装载失败 ${dictReport.failed.size} 个：${dictReport.failed.joinToString("、")}")
-        }
-        // 偏好恢复（2026-10-09）：引擎三开关 + 输入模式（方案随它落进引擎）+ 键盘模式。
-        // 放这里而不是 onCreate：引擎可能装载失败，偏好是「引擎可用」才有意义的投影。
-        prefs.applyEngineSwitches(engineController)
+        // 引擎/词库装载搬后台（2026-10-28）：此前这段同步占着主线程（首次 36MB 拷贝/校验
+        // + Rust install）。装载期只组合骨架键面（EngineLoadingView）；装完 ready 回调回
+        // 主线程恢复偏好再切真实键盘 —— 在那之前按键会落到即将被 install 重置的引擎上。
         imeState.persist = {
             prefs.inputMode = imeState.inputMode
             prefs.keyboardModes = imeState.keyboardModes
@@ -237,7 +210,18 @@ class OpiImeService : InputMethodService() {
             // 键盘模式里悬浮/游戏改的是**窗口**，改完立刻重排（不等系统下一次 configure）
             window?.window?.let { applyKeyboardWindow(it) }
         }
-        imeState.restore(prefs.inputMode, prefs.keyboardModes, prefs.skin, prefs.englishPro, prefs.customPunct)
+        engineBoot.start(
+            load = { bootEngine() },
+            onReady = { ok ->
+                engineController.reportDictionaryLoad(ok)
+                // 偏好恢复（2026-10-09）：引擎三开关 + 输入模式（方案随它落进引擎）+ 键盘模式。
+                // 放这里而不是 onCreate：引擎可能装载失败，偏好是「引擎可用」才有意义的投影。
+                prefs.applyEngineSwitches(engineController)
+                imeState.restore(prefs.inputMode, prefs.keyboardModes, prefs.skin, prefs.englishPro, prefs.customPunct)
+                // restore 可能晚于 onConfigureWindow（窗口先出来）：按恢复后的模式重排一次。
+                window?.window?.let { applyKeyboardWindow(it) }
+            },
+        )
         val view = ComposeView(this)
         // 生命周期接线：置 CREATED（onWindowShown→RESUMED、onWindowHidden→STARTED、
         // onDestroy→DESTROYED），Compose 侧 remember/LaunchedEffect 依赖它。
@@ -259,18 +243,22 @@ class OpiImeService : InputMethodService() {
         // IME 提交通道在视图创建时注入（构造期无 this 引用；面板打开提交 pending buffer 用）
         imeState.commit = ::commitWithRetry
         view.setContent {
-            ImeScreen(
-                imeState, engineController, keyRouter, symbolCatalog,
-                rareIndex = { rareIndex },
-                symbolCategories = { symbolCategories },
-                kaomojiCategories = { kaomojiCategories },
-                // 「自有」宠物形态 = 插入 PNG 图片（文本通道之外，见 PetStickerCommit.kt）。
-                onPickPet = { commitPetSticker(it) },
-                // 工具栏最右「收起键盘」（2026-10-10 用户裁决）：收回系统键盘。
-                onCloseKeyboard = { requestHideSelf(0) },
-                // 键盘内设置面板的「清除用户词库」：同一个 store、同一套两半清理。
-                onClearUserWords = { clearUserWords(userWords) },
-            )
+            if (engineBoot.loading) {
+                EngineLoadingView()
+            } else {
+                ImeScreen(
+                    imeState, engineController, keyRouter, symbolCatalog,
+                    rareIndex = { rareIndex },
+                    symbolCategories = { symbolCategories },
+                    kaomojiCategories = { kaomojiCategories },
+                    // 「自有」宠物形态 = 插入 PNG 图片（文本通道之外，见 PetStickerCommit.kt）。
+                    onPickPet = { commitPetSticker(it) },
+                    // 工具栏最右「收起键盘」（2026-10-10 用户裁决）：收回系统键盘。
+                    onCloseKeyboard = { requestHideSelf(0) },
+                    // 键盘内设置面板的「清除用户词库」：同一个 store、同一套两半清理。
+                    onClearUserWords = { clearUserWords(userWords) },
+                )
+            }
         }
         Log.i(TAG, "onCreateInputView: window=${windowSizePx()} keyboardHeight=${keyboardHeight()}")
         inputViewCache = view

@@ -147,6 +147,21 @@ pub unsafe extern "C" fn opi_switch_mode(mode: i32) {
     }));
 }
 
+/// switchLanguage(mode: i32, scheme: i32)：**语言切换**（中↔英/中↔繁）—— 换模式与
+/// 方案但**保留缓冲**（同 JNI `opijni_switch_language`；判据见
+/// `engine_core::Engine::switch_language`）。与 `opi_switch_mode` 的区别只有两条：
+/// 不清缓冲、**不清已确认片段**（`pending_segments` 原样留着继续候选区显示）。
+/// 取值同 `opi_switch_mode`/`opi_set_scheme` 两张整数表；任一越界整体忽略 ——
+/// 不做半程切换（宁可不动，也不能落了模式没落方案）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_switch_language(mode: i32, scheme: i32) {
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        if let (Some(m), Some(s)) = (api::mode_from_int(mode), api::scheme_from_int(scheme)) {
+            api::with_engine(|e| e.switch_language(m.into(), s));
+        }
+    }));
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_set_shift(on: bool) {
     let _ = catch_unwind(AssertUnwindSafe(|| api::with_engine(|e| e.set_shift(on))));
@@ -311,6 +326,14 @@ pub unsafe extern "C" fn opi_page_count() -> u32 {
     .unwrap_or(0)
 }
 
+/// pageSize() -> uint32：每页候选数（`engine_core::router::PAGE_SIZE` 的唯一宿主
+/// 载体）。宿主分页/翻页必须读它，别把 8 抄进 UI —— 抄第二份就是引擎改一次、UI
+/// 静默选错候选（`opi_select_page` 的注释里那条教训）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_page_size() -> u32 {
+    catch_unwind(AssertUnwindSafe(|| engine_core::router::PAGE_SIZE as u32)).unwrap_or(0)
+}
+
 /// page() -> uint32：当前候选页（0 起，末页由路由钳制）。**引擎未装载 → 0**。
 ///
 /// 候选栏的页码必须读这里、不要自己数：PageDown 到末页时路由会把页码钳到最后一页，
@@ -397,6 +420,32 @@ pub unsafe extern "C" fn opi_display_buffer() -> OpiString {
         api::with_engine(|e| e.display_buffer()).unwrap_or_default()
     }))
     .unwrap_or_default();
+    OpiString::from_utf16(&out)
+}
+
+/// pendingText() -> OpiString：已确认但**尚未提交**的逐字片段（`Engine::pending_text`）。
+///
+/// 与 JNI `opijni_pending_text` 同源。换输入方案前宿主必须把它上屏 ——
+/// `opi_switch_mode` 会把这些片段**静默丢掉**，`opi_set_scheme` 不清但换方案后也
+/// 不该再提交；成对的 `opi_switch_language` 两者都不清。
+/// 显示串请用 `opi_display_buffer()`（已前置这段）；本出口只负责「切换前交出来」。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_pending_text() -> OpiString {
+    let out = catch_unwind(AssertUnwindSafe(|| {
+        api::with_engine(|e| e.pending_text()).unwrap_or_default()
+    }))
+    .unwrap_or_default();
+    OpiString::from_utf16(&out)
+}
+
+/// engineVersion() -> OpiString：引擎版本（workspace 版本，随 App 打包）。
+///
+/// 与 App 的 `CFBundleShortVersionString` 同一次打包写入（`scripts/apple/version.sh`），
+/// 正常应相等；不相等时宿主**两个都显示**，别只挑一个 —— 那正是要暴露的漂移。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_engine_version() -> OpiString {
+    let out = catch_unwind(AssertUnwindSafe(|| env!("CARGO_PKG_VERSION").to_string()))
+        .unwrap_or_default();
     OpiString::from_utf16(&out)
 }
 

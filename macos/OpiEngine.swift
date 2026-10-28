@@ -318,6 +318,12 @@ final class OpiEngine {
     /// 显示用拼音（按音节分词）；行为判定仍走 `buffer()`。
     func displayBuffer() -> String { take(opi_display_buffer()) }
 
+    /// 已确认但**尚未提交**的逐字片段（`opi_pending_text`，2026-10-28 新出口）。
+    /// 清缓冲的 `opi_switch_mode` 会静默丢掉它们 ⇒ 换模式/方案前必须交出；
+    /// 收口在 `OpiClientHub.commitPendingBeforeModeSwitch()`。成对的语言切换
+    /// （`opi_switch_language`）不清它们，见 `OpiEngine.switchLanguage`。
+    func pendingText() -> String { take(opi_pending_text()) }
+
     // ---------- 候选分页 ----------
     //
     // 显示与点选**必须**走引擎的当前页出口（`OpiFFI.h` 点名禁止拿

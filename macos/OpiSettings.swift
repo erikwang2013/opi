@@ -128,6 +128,15 @@ extension OpiEngine {
     func setScheme(code: Int32) { opi_set_scheme(code) }
     func currentScheme() -> OpiScheme { OpiScheme.from(code: schemeCode()) }
 
+    /// 语言切换（`opi_switch_language`，2026-10-28）：换模式+方案但**保留缓冲**，
+    /// 已确认片段（`opi_pending_text`）也原样留着。只用于中↔繁这类**成对**切换
+    /// （iOS `toggleTraditional` 同一条）；面板换布局仍走清缓冲的 `setScheme`
+    /// （切换前先 `commitPendingBeforeModeSwitch()`）。
+    /// ⚠️ 入参由枚举封死；Rust 侧任一越界 = 整体忽略（不落半程切换）。
+    func switchLanguage(_ mode: OpiMode, _ scheme: OpiScheme) {
+        opi_switch_language(mode.rawValue, scheme.rawValue)
+    }
+
     func shuangpinLayout() -> Int { Int(opi_shuangpin_layout()) }
     func setShuangpinLayout(_ index: Int) { opi_set_shuangpin_layout(Int32(clamping: index)) }
 
@@ -324,6 +333,8 @@ enum OpiSettingsStore {
         }
 
         // 后存的 SchemeCode 优先（9/14/笔画/五笔）；否则回全拼/双拼。
+        // 启动时还没有客户端、引擎刚建立（pending 必空），所以直接 setScheme；
+        // 设置页/菜单/状态栏的切换一律走 `applyScheme`（先上交 pending）。
         if let raw = defaults.object(forKey: "SchemeCode") as? Int,
            let scheme = OpiScheme(rawValue: Int32(clamping: raw)), !scheme.isPinyin {
             engine.setScheme(code: scheme.rawValue)
@@ -346,7 +357,10 @@ enum OpiSettingsStore {
     }
 
     /// 切方案并落盘（设置页/状态栏共用；不要在两处各写一份键名）。
+    /// ⚠️ 先交出已确认未提交片段（`opi_pending_text`）：`setScheme` 不清它们，
+    /// 不交会在换方案后把同一段再上屏一次（见 `commitPendingBeforeModeSwitch`）。
     static func applyScheme(_ scheme: OpiScheme) {
+        OpiClientHub.shared.commitPendingBeforeModeSwitch()
         OpiEngine.shared.setScheme(code: scheme.rawValue)
         if scheme.isPinyin {
             set("PinyinMethod", scheme == .shuangpin
@@ -368,6 +382,13 @@ enum OpiSettingsStore {
     static var association: Bool {
         get { bool("Association", default: false) }
         set { set("Association", newValue) }
+    }
+
+    /// 括号自动配对（macOS 本地开关，默认开；iOS/Android 无开关、恒开）。
+    /// 纯宿主开关；英文模式 / 安全输入框仍然不配对（见 `BracketPairing.swift`）。
+    static var bracketPairing: Bool {
+        get { bool("BracketPairing", default: true) }
+        set { set("BracketPairing", newValue) }
     }
 
     static func bool(_ key: String, default fallback: Bool) -> Bool {

@@ -192,7 +192,7 @@ impl Api {
     /// raw 出口。清空 buffer → 必须对齐页码：否则 `opi_page()` 停在旧值而
     /// `opi_page_count()` 已是 0，UI 显示「第 2 页 / 共 0 页」。
     pub fn clear(&mut self) {
-        self.router.engine_mut().clear();
+        self.router.clear();
         self.router.reset_page_if_buffer_changed();
     }
 
@@ -228,7 +228,7 @@ impl Api {
     /// 输入方案（移动端「输入模式」）。**换方案会清缓冲** —— 调用方按
     /// `switch_mode` 同一档重读 buffer / 候选 / 页码（见 `Engine::set_scheme`）。
     pub fn set_scheme(&mut self, scheme: engine_core::Scheme) {
-        self.router.engine_mut().set_scheme(scheme);
+        self.router.set_scheme(scheme);
     }
 
     /// 输入方案读侧（与 `set_scheme` 成对，供 UI 回读/回环测试）。
@@ -242,7 +242,7 @@ impl Api {
     /// 解码，**不清缓冲、不必重读** —— 缓冲里已有的键序按新布局重新解码
     /// （下一次 `candidates` 就见效）。
     pub fn set_shuangpin_layout(&mut self, index: usize) {
-        self.router.engine_mut().set_shuangpin_layout(index);
+        self.router.set_shuangpin_layout(index);
     }
 
     /// 双拼布局读侧（与 `set_shuangpin_layout` 成对）。未装载 → 0 是**哨兵**

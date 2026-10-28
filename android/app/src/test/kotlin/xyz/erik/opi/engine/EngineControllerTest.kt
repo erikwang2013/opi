@@ -15,7 +15,7 @@ import org.junit.Test
 class EngineControllerTest {
     private fun cands(n: Int) = Array(n) { "c$it" }
 
-    // 假引擎允许「空缓冲 + 候选」（真引擎里这种形态只属于联想态）。本类测分页/读数，
+    // 假引擎允许「空缓冲 + 候选」（真引擎里这种形态只属于联想态）。本类测分页/选择/学习，
     // 开着门禁让候选原样通过；门禁关闭时要清空的行为由 EngineControllerAssociationTest 钉。
     @Before fun allowAssociation() { AssociationGate.enabled = true }
     @After fun resetGate() { AssociationGate.enabled = false }
@@ -192,6 +192,21 @@ class EngineControllerTest {
         ctrl.nextPage()
         assertEquals("中", ctrl.selectFromPage(0))
         assertEquals("", ctrl.buffer) // 选中即提交，buffer 清空
+    }
+
+    @Test
+    fun pageSizeComesFromEngineNotAHardcodedEight() {
+        val fake = FakeEngine().apply {
+            pageSizeValue = 5
+            cands = cands(12)
+        }
+        val ctrl = EngineController(fake)
+        assertEquals(5, ctrl.pageSize)
+        assertEquals(3, ctrl.candidatePageCount) // ⌈12/5⌉；写死 8 会得 2
+        ctrl.nextPage()
+        assertEquals(listOf("c5", "c6", "c7", "c8", "c9"), ctrl.pageCandidates)
+        fake.selectResults[5] = "中" // 第 2 页首位 = 全局 5（写死 8 会去选全局 8）
+        assertEquals("中", ctrl.selectFromPage(0))
     }
 
     // ---- 长按删用户词 ----
@@ -400,23 +415,6 @@ class EngineControllerTest {
         ctrl.refresh()
         assertEquals("", ctrl.reading)
         assertEquals("999", ctrl.buffer)
-    }
-
-    @Test
-    fun candidateReadingsComeThroughRefresh() {
-        // 读数（9 键左列的数据源，2026-10-09 用户裁决）：与 candidates 同一次刷新
-        // 读出（**去重保序在引擎出口**做，本类只透传）；JNI 返回 null 时退空列表
-        // （不崩、不当成一条空读数）。
-        val fake = FakeEngine().apply {
-            cands = arrayOf("你", "你好")
-            candReadings = arrayOf("ni", "ni'hao")
-        }
-        val ctrl = EngineController(fake)
-        assertEquals(listOf("你", "你好"), ctrl.candidates)
-        assertEquals(listOf("ni", "ni'hao"), ctrl.candidateReadings)
-        fake.candReadings = null
-        ctrl.refresh()
-        assertEquals(emptyList<String>(), ctrl.candidateReadings)
     }
 
     @Test

@@ -24,6 +24,7 @@ pub mod custom_phrases;
 pub mod data_dir;
 pub(crate) mod dict_layer;
 pub mod input_method;
+mod page;
 mod switches;
 mod user_words;
 

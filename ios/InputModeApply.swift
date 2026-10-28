@@ -14,20 +14,17 @@ extension KeyboardViewController {
 
     /// 选中输入模式（输入模式面板 `onSelect` 的回调路径）。
     ///
-    /// **本端与 Android 有一处实质差异，是能力缺口不是取舍**：Android 的
-    /// `ImeState.selectInputMode` 会先把**未完成的缓冲提交出去**（英文走
-    /// `commitPendingAsPinyin`、其余走 `commitPendingBuffer`），再换方案；
-    /// 本端**做不到**：C ABI 里**没有**「待提交文本」出口、没有
-    /// `opi_switch_language`（两条仍只在 JNI 面上；读数出口 2026-10-21 已补齐），
-    /// 而 `opi_set_scheme` **自己会清缓冲**（Rust 语义）。于是：
-    ///   * 换模式的净效果 = 打了一半的拼音**丢掉**（不崩、不静默错提交）；
-    ///   * **绝不**改成「把缓冲当文本直提」—— 9 键的缓冲是**数字**，
-    ///     直提就是把 `644269` 打进输入框（Android 2026-10-11 修掉的正是这个 bug，
-    ///     见 `EngineControllerComposing.pendingCommitText()`）。
-    /// 补齐这条路要先在 opi-ffi 加出口（见 README 缺口表），不是本层能绕的。
+    /// 换模式前先交出**已确认未提交**的逐字片段（`opi_pending_text`，2026-10-28）。
+    /// 与 Android 仍有一处能力差异：Android 在「输入模式」面板换布局前会把**未确认
+    /// 的缓冲**也提交（英文 `commitPendingAsPinyin`、其余 `commitPendingBuffer`），
+    /// 而 C ABI 只有「已确认片段」出口。所以面板换方案时打了一半的拼音仍会丢 ——
+    /// 但**绝不**改成「把缓冲当文本直提」：9 键的缓冲是**数字**，直提就是把
+    /// `644269` 打进输入框（Android 2026-10-11 修掉的正是这个 bug）。
+    /// 简/繁这类成对切换不走这里，改走保缓冲的 `engine.switchLanguage`。
     ///
     /// 面板式（生僻字）**一个字节都不碰引擎**（Android 同）：只切视图。
-    func applyInputMode(_ mode: InputMode) {
+    /// `commitPending: false` 只给启动恢复用（见 `viewDidLoad`）。
+    func applyInputMode(_ mode: InputMode, commitPending: Bool = true) {
         OpiLog.input.info("applyInputMode \(mode.label, privacy: .public)")
         // 记下选择：键面按它画，菜单高亮也按它。面板式在收起后仍保持高亮
         // （Android 的 chip 同样保持），底下的键面回落 26 键（`RARE.scheme == FULL`）。
@@ -36,10 +33,16 @@ extension KeyboardViewController {
             lastChineseInputMode = mode
             InputModePreference.lastChinese = mode
         }
+        // 启动恢复：上一实例残留的会话（含已确认未提交片段）不能带进新宿主。
+        // 放在面板分支**之前** —— 恢复成生僻字面板时也要清。
+        if !commitPending { engine.clear() }
         if mode.panel {
             layout.setInputMode(mode)
             layout.setLayer(.rare)
             return
+        }
+        if commitPending {
+            commitPendingBeforeModeSwitch()
         }
         // 可选码表懒加载（2026-10-23）：启动只装 luna/trad，笔画/五笔首次选到才读
         // （见 `KeyboardDictionaryLoader.loadBundledDictionary(for:)`）。
@@ -70,15 +73,26 @@ extension KeyboardViewController {
         OpiLog.input.info("applyInputMode done \(mode.label, privacy: .public)")
     }
 
+    /// 换方案/模式前交出**已确认未提交**的逐字片段（`opi_pending_text`，2026-10-28）。
+    /// 只交已确认的 —— 未确认缓冲是方案相关的（9 键 = 数字），绝不直提。
+    /// 读完必须 `clear()`：`set_scheme` **不清** `pending_segments`，不 clear 会在
+    /// 换模式后再提交一次同一段（重复上屏）；`switch_mode` 则会静默丢掉它们。
+    func commitPendingBeforeModeSwitch() {
+        let pending = engine.pendingText()
+        guard !pending.isEmpty else { return }
+        engine.clear()
+        insert(pending)
+    }
+
     /// 9 键 / 14 键 / 笔画的模式键：**只切简/繁**（Android `toggleTraditional` 同义）。
     /// 键面字 = 点它会到哪（繁 → 中，其余 → 繁）。
     ///
-    /// ⚠️ 与 Android 的已知差异：Android 走 `switchLanguage`（**保留缓冲**）；
-    /// C ABI 只有 `opi_switch_mode`（**清缓冲**，Rust `Composer::switch_mode` 语义），
-    /// 没有保缓冲的换语言出口。所以本端切简繁会丢掉打了一半的拼音（不崩、不错提交）。
+    /// 与 Android `switchLanguage(next, controller.inputScheme)` 同一条：换模式不换
+    /// 方案、**保缓冲**；已确认片段也留着（`opi_switch_language`，2026-10-28）。
     func toggleTraditional() {
         OpiLog.input.info("toggleTraditional start")
-        engine.switchMode(engine.mode() == .traditional ? .pinyin : .traditional)
+        let scheme = engine.scheme()
+        engine.switchLanguage(engine.mode() == .traditional ? .pinyin : .traditional, scheme)
         // 英文 26 键面下开繁体：键面同形，但 UI 模式要落到中文 26 键，否则菜单
         // 仍高亮「英文26键」，回英文再回中文还会走错键面。
         if layout.inputMode == .english26 {

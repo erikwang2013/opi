@@ -84,6 +84,17 @@ extension OpiEngine {
     /// 调用方查不到失败（症状：点了没反应、无日志）。
     func setScheme(_ s: OpiScheme) { opi_set_scheme(s.rawValue) }
 
+    /// 语言切换（`opi_switch_language`，2026-10-28）：换模式与方案但**保留缓冲**，
+    /// 已确认片段也原样留在候选区（`opi_pending_text` 仍有值）。与 `setScheme` /
+    /// `switchMode` 的区别只有这一条，用于中↔英/中↔繁这类成对切换（Android
+    /// `switchLanguage` 同语义）；「输入模式」面板换布局仍走清缓冲那条路。
+    ///
+    /// ⚠️ 入参由枚举封死；Rust 侧**任一越界 = 整体忽略**（不落半程切换）且无返回值。
+    /// 将来若从持久化读裸整数，必须先自校验。
+    func switchLanguage(_ mode: OpiMode, _ scheme: OpiScheme) {
+        opi_switch_language(mode.rawValue, scheme.rawValue)
+    }
+
     // MARK: - 双拼布局
 
     /// 双拼布局下标（`opi_shuangpin_layout()`）。0=N 自然码 … 见桌面/Android 的

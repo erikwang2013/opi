@@ -39,16 +39,12 @@ static void runCtlModeChecks(OpiEngine &engine, TestIC &ic, BufferOf bufferOf,
         return;
     }
     auto schemeNow = []() { return opi_fcitx5_scheme(); };
-    // state 行末格 `;mode=<token>`（2026-10-14 追加）。本段的判据：动作返回的 token
-    // 与 state 那一格在循环面上同源 —— 两处由 opi_ctl_mode.h 的同一张表给出，这条
-    // 断言就是「别写第二套派生」在 C++ 侧的门禁（谁在 stateLine_ 里另写一套就红）。
-    // 键序/整行归 §8 与 CLI 钉；这里只取末格。
+    // state 的 `;mode=<token>` 格（2026-10-14 追加；2026-10-19 起 enpro 在它之后）。
+    // 本段的判据：动作返回的 token 与 state 那一格在循环面上同源 —— 两处由
+    // opi_ctl_mode.h 的同一张表给出，这条断言就是「别写第二套派生」在 C++ 侧的
+    // 门禁（谁在 stateLine_ 里另写一套就红）。键序/整行归 §8 与 CLI 钉。
     auto stateMode = [&engine]() -> std::string {
-        const std::string s = engine.ctlState_();
-        const std::string tag = ";mode=";
-        const auto p = s.rfind(tag);
-        return p == std::string::npos ? std::string("<无 mode 格>")
-                                      : s.substr(p + tag.size());
+        return opiCtlStateField(engine.ctlState_(), ";mode=", "<无 mode 格>");
     };
 
     std::printf("-- 10a 拼(全拼) → 五笔：token=wubi，模式留 Pinyin、scheme 摆到 5 --\n");

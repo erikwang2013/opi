@@ -32,7 +32,10 @@
 //!
 //! ## 覆盖边界（如实记，本门禁**不**保证的）
 //!
-//! * 只钉 `FETCH_LIMIT` / `PAGE_SIZE` 这两个常量，与"翻页能不能翻到底"。
+//! * 只钉 `FETCH_LIMIT` / `PAGE_SIZE` 这两个常量与"翻页能不能翻到底"。
+//!   `PAGE_SIZE` 自 2026-10-28 起只在 `engine-core/src/router.rs` 定义，本轨重导出；
+//!   桌面窗删掉了自带的 `MAX_CANDIDATES`，直接渲染 wire 的当前页候选列表 ——
+//!   两边不再各存一份上限，也就没有需要跨源码比对的字面量。
 //! * **Android 的 `fetchLimit = 64` 不在射程内**：那是 JNI 通路，够不到引擎侧分页出口，
 //!   属结构性不同的另一条路（另一个 owner）。
 //! * macOS/iOS 的 `InputController.swift` 同理不在本 crate。
@@ -62,7 +65,7 @@ fn state_n(n: usize) -> TsfLogic {
         buffer_snapshot: String::new(),
         shift_state: ShiftState::Off,
         english_pro: true,
-        last_printable: None,
+        held_passthrough: Default::default(),
         shift_toggle: true,
         association_enabled: true,
         fetch_cache: Default::default(),

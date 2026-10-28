@@ -38,6 +38,9 @@ object OpiEngine : OpiEngineApi, SymbolApi {
     /** select(index: Int) -> String。越界返回空串（旧语义）。 */
     override external fun select(index: Int): String
 
+    /** pageSize() -> Int。每页候选数（引擎 `router::PAGE_SIZE`，别写死 8）。 */
+    override external fun pageSize(): Int
+
     /** switchMode(mode: Int)。0=Pinyin 1=English 2=Number 3=Symbol，越界忽略。 */
     override external fun switchMode(mode: Int)
 

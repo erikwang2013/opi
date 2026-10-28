@@ -205,6 +205,12 @@ OpiString opi_buffer(void);
 /// 走「删宿主文字」而引擎缓冲没退（`api::display_buffer` 顶部有同一条血泪注记）。
 OpiString opi_display_buffer(void);
 
+/// 已确认但**尚未提交**的逐字片段（JNI `opijni_pending_text` 同源）。
+/// 换方案/模式前必须上屏：`opi_switch_mode` 会静默丢掉这些片段，
+/// `opi_set_scheme` 不清 —— 先 clear 再插入，否则换完方案会同一段再上屏一次。
+/// 显示串仍用 `opi_display_buffer()`（它已前置这段）。
+OpiString opi_pending_text(void);
+
 /// 候选总页数（UI 的「共 N 页」）。**无候选 → 0**，引擎未装载 → 0。
 uint32_t opi_page_count(void);
 
@@ -219,6 +225,11 @@ int32_t opi_mode(void);
 /// 0=Pinyin 1=English 2=Number 3=Symbol 4=Traditional。
 /// ⚠️ 越界值是**静默不动作**：没有返回值，调用方无从知道被忽略。
 void opi_switch_mode(int32_t mode);
+
+/// **语言切换**（JNI `opijni_switch_language` 同源）：换模式+方案但**保留缓冲**、
+/// 已确认片段也不清。任一越界**整体忽略**。用于中↔繁/中↔英成对切换；
+/// 「输入模式」面板换布局仍走 `opi_set_scheme`+`opi_switch_mode`（那条清缓冲）。
+void opi_switch_language(int32_t mode, int32_t scheme);
 
 /// **前端** ⇧ 三态：0=OFF 1=SINGLE（下个字母大写后自动复位）2=LOCK（持续大写）。
 /// 与 opi_set_shift 不是一回事（那个打的是**引擎侧** shift 位）；
@@ -236,6 +247,16 @@ void opi_remove_user_word(const uint16_t *text, size_t len);
 
 /// 清除**全部**用户词（学习表）。不影响内置词库、不清输入缓冲；无返回值。
 void opi_clear_user_words(void);
+
+/// 用户词 JSON 导入：返回**导入条数**（合法空表 = 0）；负数（-1）= 失败：
+/// 非法 JSON / 版本不符 / 词表过大 / 引擎未装载 / null 入参。
+/// 失败**不改动**既有用户词（引擎侧「全有或全无」，见 `engine-user-words`）。
+/// JSON 契约与 fcitx5 / macOS / Android 同一个文件：`{"version":1,"words":[...]}`。
+int32_t opi_import_user_words(const uint16_t *json, size_t len);
+
+/// 用户词 JSON 导出（同上的契约）。**引擎未装载 → 空串** —— 客户端别把空串写进
+/// 文件：下次启动会按 0 字节判成掉电残留（`engine-data::user_words` 的三条语义）。
+OpiString opi_export_user_words(void);
 
 // ---- 全角 / 符号开关（三条一套，读侧 + 两个写侧）----
 //

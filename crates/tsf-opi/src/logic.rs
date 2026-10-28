@@ -23,8 +23,10 @@ use engine_core::Engine;
 use engine_core::candidates::Candidate;
 use engine_core::composer::Mode;
 
-/// 每页候选数（与 Android 候选栏一致）。
-pub const PAGE_SIZE: usize = 8;
+/// 每页候选数：**唯一定义在 `engine-core/src/router.rs`**（2026-10-28 去重），本轨只
+/// 重导出 —— 不存第二份字面量，就没有可静默漂移的副本（桌面侧也改为直接消费 wire 的
+/// 当前页候选列表，不再自带上限常量）。
+pub use engine_core::router::PAGE_SIZE;
 /// 一次抓取的候选批量上限：**不设上限**。曾是 64（对齐 Android fetchLimit），后果见
 /// `engine-core/src/router.rs` 同名常量：真词库下 `y` 前缀一次命中**八千余条**，用户只能
 /// 翻到前 64 条（≈0.8%）—— 而第 64 与第 65 名的静态词频只差 0.01%，没有断崖可供察觉。
@@ -38,7 +40,6 @@ pub const FETCH_LIMIT: usize = usize::MAX;
 // 编译期求值：漂移是 E0080，不是「某条测试恰好没跑到」。放在常量正下方是刻意的 ——
 // 改常量的人没法不看见它（同 `vk.rs` 那条 const 断言的取舍）。
 const _: () = {
-    assert!(PAGE_SIZE == engine_core::router::PAGE_SIZE);
     assert!(FETCH_LIMIT == engine_core::router::FETCH_LIMIT);
 };
 
@@ -65,10 +66,10 @@ pub struct TsfLogic {
     /// false = en26 字母直出、不查词库；true = 前缀联想。**会话内状态、不落配置**
     /// （与 Linux 轨同一语义：每次插件/引擎启动都回 false）。
     pub(crate) english_pro: bool,
-    /// 上一次按下的分流结论：(键值, 是否放行)。抬起按同一结论回复，使「按下放行 →
-    /// 抬起也放行」成立（见 input_key 的可打印分支与退格/回车分支：那两个按下分支
-    /// 会把缓冲改空，抬起再判「当前」缓冲就不对称了）。
-    pub(crate) last_printable: Option<(u32, bool)>,
+    /// 仍按住的**直通**键值（有界，上限见 `logic_keys.rs::HOLD_LIMIT`）：抬起按按下
+    /// 结论回复，使「按下放行 → 抬起也放行」成立（按下分支会改缓冲，抬起再判
+    /// 「当前」就不对称）。集合而非单槽的理由（键盘 rollover）见 `record_key_outcome`。
+    pub(crate) held_passthrough: std::collections::VecDeque<u32>,
     /// Shift 轻按切换中英文（`settings.ini` 的 `ShiftToggle`，2026-10-22 起 Windows
     /// 也认）：**只被胶水的 Shift 三拍读**（`tsf_shift.rs`），不参与 `input_key` ——
     /// 两轨 Rust 键路由必须逐事件同构（`two_track_parity`）。默认开（与 Linux 一致）。
@@ -195,6 +196,7 @@ impl TsfLogic {
 
     pub fn clear(&mut self) {
         self.engine.clear();
+        self.clear_held_keys();
         self.reset_page_if_buffer_changed();
     }
 
@@ -288,6 +290,9 @@ impl TsfLogic {
     /// [`Self::switch_mode_confirmed`]（W1 订正版）。
     pub fn switch_mode(&mut self, mode: Mode) {
         self.engine.switch_mode(mode);
+        // 切模式后旧按住键的抬起结论不再可信（宿主/用户已在另一个上下文里）：
+        // 清空 ⇒ 缺失键的抬起回落到消费（安全方向）。
+        self.clear_held_keys();
         // ⇧ 只在 English 有意义，判据与 Android `EngineController.switchMode` 的
         // `if (m != ENGLISH) resetShift()` 逐字一致：**离开** English 才清。
         // 前端 ⇧ 三态与引擎侧是两份状态，引擎清了不够 —— 英文空缓冲直传的大小写由
@@ -310,11 +315,12 @@ impl TsfLogic {
     /// （空缓冲 = 空串）—— 调用方负责插入文档。
     /// **先确认后切**也是承重的：顺序反了，`switch_mode` 会先把缓冲清掉，
     /// 返回值只能是空串（原文丢在清缓冲里）。
-    /// 与 [`Self::switch_mode`] 的唯一差别就是这步收尾：那条路（本轨 Ctrl+' 的
-    /// `toggle_mode`）`Composer::switch_mode` 只清缓冲，打到一半的拼音被静默丢弃。
+    /// 与 [`Self::switch_mode`] 的唯一差别就是这步收尾：`Composer::switch_mode` 只清
+    /// 缓冲，打到一半的拼音会被静默丢弃 —— 生产调用方一律走本方法。
     /// 配对：`fcitx5-opi/src/candidate.rs` 的同名方法（两轨同构，改一处必须改另一处）。
-    /// 生产调用方：控制面 `lang`/`mode`（`ctl.rs`）与 [`Self::toggle_language`]
-    /// （Shift 轻按）—— 返回值由调用方插入文档。
+    /// 生产调用方：控制面 `lang`/`mode`（`ctl.rs`）、[`Self::toggle_language`]
+    /// （Shift 轻按）与 TSF 的 Ctrl+'/Ctrl+\ 模式热键（`tsf.rs::toggle_mode`，
+    /// 2026-10-28 接线）—— 返回值由调用方插入文档。
     pub fn switch_mode_confirmed(&mut self, mode: Mode) -> String {
         let text = self.engine.confirm_pending();
         self.switch_mode(mode); // 切换与 ⇧/页码收尾复用既有实现，不复制一份

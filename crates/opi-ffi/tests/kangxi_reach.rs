@@ -6,7 +6,8 @@
 //!
 //! 走 **C ABI 面**（与 Android 的真实调用序列逐字同构：`opi_load(luna)` →
 //! `opi_import_dict(kangxi.tsv)`（= 首启种子后的词库目录装载）→ 逐键输入 →
-//! `opi_candidates(64)`（= `EngineController.fetchLimit`，平铺态也吃同一个窗））。
+//! `opi_candidates(512)`（= 当前 `EngineController.fetchLimit`；2026-10-26 起 512，
+//! 原 64 —— 本门禁 2026-10-17 写下时按 64，已随移动端窗口同步）。
 //!
 //! 钉的是**抓取窗内可见**这个用户判据，不是「库里有」那级：改前实测（FREQ=4000）
 //! 馫 在 xin 第 124 位、蘒 在 qiu 第 108 位 —— 库里有、窗里没有，等于打不出。
@@ -39,6 +40,9 @@ fn call(path: &std::path::Path) -> (Vec<u16>, usize) {
     (u, len)
 }
 
+/// 当前移动端候选抓取窗（Android `EngineController.fetchLimit`；2026-10-26 起 512）。
+const MOBILE_FETCH_LIMIT: usize = 512;
+
 #[test]
 fn rare_kangxi_chars_land_within_the_mobile_fetch_window() {
     let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -59,10 +63,10 @@ fn rare_kangxi_chars_land_within_the_mobile_fetch_window() {
             opi_input_key_patched(u.as_ptr(), len);
         }
         // 出口是 JSON 数组串（`texts_to_json`）——按带引号的整词断言，防子串假阳。
-        let got = read(unsafe { opi_candidates(64) });
+        let got = read(unsafe { opi_candidates(MOBILE_FETCH_LIMIT) });
         assert!(
             got.contains(&format!("\"{target}\"")),
-            "打 {py} 应在手机抓取窗（前 64）内出「{target}」—— 实得前 120 字符：{:?}",
+            "打 {py} 应在手机抓取窗（前 512）内出「{target}」—— 实得前 120 字符：{:?}",
             got.chars().take(120).collect::<String>()
         );
         // 2026-10-17「抢位加成」后的对照面：**常用字头不受影响** —— 机制加成只给
@@ -87,7 +91,7 @@ fn rare_kangxi_chars_land_within_the_mobile_fetch_window() {
             top16.iter().take(20).collect::<Vec<_>>()
         );
         println!(
-            "[{py}] 馫/蘒 在窗口内 ✓（完整前 64 长度 {} 字符）",
+            "[{py}] 馫/蘒 在窗口内 ✓（完整前 512 长度 {} 字符）",
             got.len()
         );
         unsafe { opi_clear() };

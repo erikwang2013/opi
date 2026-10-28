@@ -109,6 +109,7 @@ impl CandidateState {
     /// 引擎侧（`set_shuangpin_layout`）。
     /// 配对：`tsf-opi/src/logic.rs` 的同名方法（两轨同构）。
     pub fn set_shuangpin_layout(&mut self, index: usize) {
+        self.clear_held_keys(); // 换解码布局 = 旧的按下记录作废（同 switch_mode 契约）
         self.invalidate_fetch_cache();
         self.engine.set_shuangpin_layout(index);
     }
@@ -118,6 +119,7 @@ impl CandidateState {
     /// 没有「按键路径上换方案」这种用法。
     /// 配对：`tsf-opi/src/logic.rs` 的同名方法（两轨同构）。
     pub fn set_scheme(&mut self, scheme: engine_core::Scheme) {
+        self.clear_held_keys(); // 换方案清缓冲 = 旧的按下记录作废（同 switch_mode 契约）
         self.invalidate_fetch_cache();
         self.engine.set_scheme(scheme);
     }

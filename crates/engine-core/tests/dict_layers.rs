@@ -33,7 +33,12 @@ fn no_symbols() -> SymbolEngine {
 }
 
 fn engine(base: &[(&str, &str, u32)]) -> Engine {
-    Engine::with_dictionaries(Box::new(dict(base)), None, no_symbols(), false)
+    let mut e = Engine::with_dictionaries(Box::new(dict(base)), None, no_symbols(), false);
+    // 预算门禁是**时间量**：机器被并发构建占满时 20ms（动态档 10ms）余量会把导入层
+    // 合法地整层丢弃 —— 本文件其余用例只断词典层语义，不测预算，会被读成假红。
+    // 超预算语义由两条专门用例显式设零预算覆盖。
+    e.set_import_scan_budget(None);
+    e
 }
 
 /// 敲一串按键（走真 composer 路径，候选才知道缓冲是什么）。

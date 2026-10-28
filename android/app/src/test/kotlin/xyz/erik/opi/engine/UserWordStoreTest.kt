@@ -316,11 +316,11 @@ class UserWordStoreTest : UserWordStoreTestBase() {
         deb.fire()
         assertEquals(1, queued.size)
         assertFalse(f.exists())
-
         UserWordStore.invalidate()
         queued.removeAt(0).run()
 
         assertFalse("设置页清除后，在途写盘不得把旧词写回", f.exists())
+        assertEquals(0, engine.exportCalls) // 作废的写盘连导出都不做（世代号先于导出检查）
     }
 
     // ---- 设置页「清除用户词库」：引擎内存 + 落盘文件两半都要清（任务 2026-10-23）----
@@ -370,7 +370,7 @@ class UserWordStoreTest : UserWordStoreTestBase() {
 
     @Test
     fun clearPersistedOrdersDeleteAfterInFlightWrite() {
-        // 「已导出、尚未 rename」的旧快照：invalidate 让它自己作废；删除排在共享 io
+        // 已入队、尚未导出/rename 的旧快照：invalidate 让它自己作废；删除排在共享 io
         // 队列尾（= 在途写盘之后），两者叠加才能保证文件真的不在了。
         val f = target()
         val engine = FakeEngine().apply { export = """{"OLD":1}""" }
@@ -379,7 +379,7 @@ class UserWordStoreTest : UserWordStoreTestBase() {
         val s = store(f, engine, deb, io = Executor { queued += it })
 
         s.scheduleSave()
-        deb.fire() // OLD 导出，写盘任务入队
+        deb.fire() // OLD 落盘任务入队（导出也在任务里）
         s.clearPersisted() // 作废 + 删除入队
         assertEquals(2, queued.size)
         queued.removeAt(0).run() // 迟到的旧 rename —— 必须自己作废
@@ -398,13 +398,13 @@ class UserWordStoreTest : UserWordStoreTestBase() {
         store(f, engine, deb, io = Executor { queued += it }).scheduleSave()
         deb.fire()
 
-        assertEquals(1, engine.exportCalls) // 导出在调用线程（与其它引擎调用同线程）
+        assertEquals(0, engine.exportCalls) // 导出也排在 io 队列里：调用线程一次都不碰引擎
         assertEquals(1, queued.size)
         assertFalse(f.exists()) // 文件系统调用在 io 线程：还没写
-
         queued.removeAt(0).run()
 
         assertEquals("j", f.readText())
+        assertEquals(1, engine.exportCalls)
     }
 
     // ---- 失败路径：一律静默，绝不冒泡到输入路径 ----

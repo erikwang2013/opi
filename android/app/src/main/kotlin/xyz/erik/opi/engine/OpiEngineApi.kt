@@ -21,6 +21,9 @@ interface OpiEngineApi {
     fun clear()
     fun select(index: Int): String
 
+    /** 每页候选数（引擎 `router::PAGE_SIZE` 的 JNI 载体；**别写死 8**）。 */
+    fun pageSize(): Int
+
     /** 回车（缓冲非空时）该做什么：0=选首候选、1=清空、2=上屏原文（2026-10-14 接线；
      * 判据在引擎侧，见 `engine-core/src/engine_enter.rs`）。 */
     fun enterAction(): Int

@@ -1,7 +1,7 @@
-# 括号配对：三端唯一规范表
+# 括号配对：四端唯一规范表
 
-自动配对在 Android / iOS / 鸿蒙三端各有一份实现，**键值表与行为契约以本文件为准**。
-改表必须三端一起改；每端的源码头注都指回本文件。
+自动配对在 Android / iOS / 鸿蒙 / macOS 四端各有一份实现，**键值表与行为契约以本文件为准**。
+改表必须四端一起改；每端的源码头注都指回本文件。
 
 | 开 | 闭 |
 |---|---|
@@ -21,6 +21,7 @@
 - Android：`android/app/src/main/kotlin/xyz/erik/opi/ime/BracketPairing.kt`
 - iOS：`ios/BracketPairing.swift`
 - 鸿蒙：`harmony/entry/src/main/ets/InputMethodExtensionAbility/BracketPairing.ets`
+- macOS：`macos/BracketPairing.swift`（2026-10-28；IMK 宿主能力限制见该文件头）
 
 行为契约：
 

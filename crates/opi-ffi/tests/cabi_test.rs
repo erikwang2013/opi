@@ -8,10 +8,11 @@ use std::sync::Mutex;
 
 use opi_ffi::cabi::{
     OpiString, opi_backspace, opi_buffer, opi_candidates, opi_candidates_page, opi_clear,
-    opi_clear_user_words, opi_export_user_words, opi_ffi_free_string, opi_import_user_words,
-    opi_input_key, opi_input_space, opi_key_event, opi_learner_enabled, opi_load, opi_load_trad,
-    opi_mode, opi_page, opi_page_count, opi_remove_user_word, opi_scheme, opi_search_symbols,
-    opi_select, opi_select_page, opi_set_learner, opi_set_shift, opi_shift_state, opi_switch_mode,
+    opi_clear_user_words, opi_engine_version, opi_export_user_words, opi_ffi_free_string,
+    opi_import_user_words, opi_input_key, opi_input_space, opi_key_event, opi_learner_enabled,
+    opi_load, opi_load_trad, opi_mode, opi_page, opi_page_count, opi_pending_text,
+    opi_remove_user_word, opi_scheme, opi_search_symbols, opi_select, opi_select_page,
+    opi_set_learner, opi_set_shift, opi_shift_state, opi_switch_language, opi_switch_mode,
     opi_symbol_blocks, opi_symbols_in_block,
 };
 
@@ -431,6 +432,65 @@ fn cabi_buffer_stays_raw_under_nine_scheme() {
     // 复位共享单例：其余用例假定全键盘。
     unsafe {
         opi_ffi::cabi::opi_set_scheme(0);
+        opi_clear();
+    }
+}
+
+/// 引擎版本出口返回 workspace 版本（同一个 `version.workspace = true` 真源），
+/// 不是空串、也不是写死的占位。App 侧把它和 `CFBundleShortVersionString` 并列显示。
+#[test]
+fn cabi_engine_version_is_workspace_version() {
+    let v = read(unsafe { opi_engine_version() });
+    assert_eq!(v, env!("CARGO_PKG_VERSION"));
+    assert!(!v.is_empty());
+}
+
+/// 逐字确认（`Engine::pending_text`）的 C 边界：回退态选中**延迟提交**（返回空串、
+/// 文本留在 pending），`opi_clear` 连片段一起清掉。哨兵用 `nihaovvv` —— `v` 不是
+/// 声母、整串抗词库漂移（真实词库下 `nihaob`/`644269` 已被新词条翻转，见
+/// `tests/segment_fallback.rs` 头注）。
+#[test]
+fn cabi_pending_text_shows_until_clear() {
+    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    load_any();
+    for c in "nihaovvv".chars() {
+        let u = to_units(&c.to_string());
+        unsafe { opi_input_key(u.as_ptr(), u.len()) };
+    }
+    let cands = read_texts(unsafe { opi_candidates(8) });
+    let idx = cands.iter().position(|c| c == "你").unwrap_or(0);
+    assert_eq!(read(unsafe { opi_select(idx) }), "", "回退态选中延迟提交");
+    assert_eq!(
+        read(unsafe { opi_buffer() }),
+        "haovvv",
+        "只消耗第一个字，后缀留在缓冲"
+    );
+    assert!(
+        !read(unsafe { opi_pending_text() }).is_empty(),
+        "已确认片段应留在候选区"
+    );
+    unsafe { opi_clear() };
+    assert_eq!(read(unsafe { opi_pending_text() }), "", "clear 一并清片段");
+}
+
+/// 语言切换的 C 边界（同 JNI `switchLanguage`）：**保缓冲**，且越界整体忽略
+/// （不做半程切换）。
+#[test]
+fn cabi_switch_language_keeps_buffer() {
+    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    load_any();
+    for c in ["n", "i"] {
+        let u = to_units(c);
+        unsafe { opi_input_key(u.as_ptr(), u.len()) };
+    }
+    assert_eq!(read(unsafe { opi_buffer() }), "ni");
+    unsafe { opi_switch_language(1, 0) }; // 英文 26 键
+    assert_eq!(unsafe { opi_mode() }, 1);
+    assert_eq!(read(unsafe { opi_buffer() }), "ni", "语言切换保缓冲");
+    unsafe { opi_switch_language(99, 0) }; // 越界：整体忽略
+    assert_eq!(unsafe { opi_mode() }, 1, "越界不得做半程切换");
+    unsafe {
+        opi_switch_language(0, 0);
         opi_clear();
     }
 }

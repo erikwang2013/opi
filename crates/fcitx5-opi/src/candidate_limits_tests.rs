@@ -61,7 +61,7 @@ fn state_n(n: usize) -> CandidateState {
         page: 0,
         buffer_snapshot: String::new(),
         shift_state: ShiftState::Off,
-        last_printable: None,
+        held_passthrough: Default::default(),
         dicts: Default::default(),
         english_pro: true,
         fetch_cache: Default::default(),

@@ -4,7 +4,7 @@
 >
 > - **用户词落盘**：`~/Library/Application Support/opi/opi_user_words.json`，选词后 800ms 防抖；损坏或 0 字节文件原样保留。这套持久化尚未在真机验收。
 > - **外部词库**：设置窗导入与启动重放都走 `opi_import_dict`，受 8 MiB / 200,000 条限制；完整 34–39 MiB 词库只能在 Linux/Windows 目录直载，macOS 请用缺省截断包（见 [`../external-dictionaries.md`](../external-dictionaries.md)）。
-> - **未接**：括号自动配对只在 Android/iOS/鸿蒙，macOS 没有光标回移；智能学习加权/撤销与英文频次是引擎语义，macOS 直接继承。
+> - **括号配对（2026-10-28 已接）**：IMK client 的 `insertText`/`replacementRange`，光标回移依赖宿主的 `doCommandBySelector`；宿主不支持时光标不回移、只插入。**未上机验证**。智能学习加权/撤销与英文频次是引擎语义，macOS 直接继承。
 
 > ## 这份文档的性质：**起点与契约，不是可用实现**
 >

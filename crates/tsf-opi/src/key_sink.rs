@@ -12,20 +12,40 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VK_LWIN, VK_RWIN}
 use windows::Win32::UI::TextServices::{ITfContext, ITfKeyEventSink_Impl};
 use windows::core::{BOOL, GUID, Ref, Result};
 
-use crate::key_state::{map_key_state, to_engine_keycode};
+use crate::key_state::{map_key_state, mode_hotkey, to_engine_keycode};
 use crate::logic::{KEY_STATE_ALT, KEY_STATE_CTRL};
 use crate::tsf::TsfTextService_Impl;
-use crate::vk::{fullwidth_hotkey, is_shift_vk, mode_hotkey};
+use crate::vk::{fullwidth_hotkey, is_shift_vk};
 
 impl ITfKeyEventSink_Impl for TsfTextService_Impl {
     fn OnSetFocus(&self, _fforeground: BOOL) -> Result<()> {
         // 焦点切换撤销 Shift 轻按判定：按住 Shift 切走/切回后，抬起不得切模式
         // （镜像 fcitx5 轨 `OpiShiftToggle::disarm` 的 reset 语义）。
         self.shift_tap_disarm();
+        // 焦点变了，旧按住键的抬起事件可能永不到达（或发到别的窗口）：清空按住表，
+        // 迟到的 keyup 回落到消费（安全方向），不会误放行一个没经过本服务的 keydown。
+        if let Some(mut logic) = self.state.lock_logic() {
+            logic.clear_held_keys();
+        }
+        // 焦点变化时把排队的候选点选/直插落地（2026-10-28 接线）：
+        // 候选窗是**非激活**窗口（desktop `Main.kt` 的 `focusable = false`），点它
+        // 本身不产生焦点事件 —— 这一句覆盖的是「点了候选，随后切走/切回文档、没
+        // 敲键」那一路：本实例的队列里只有一个属于**上一次键事件文档**的动作，此刻
+        // 插入正是用户点选时的目标。点完候选原地不动、不敲键仍要等下一个键事件
+        // （升级路径见 state.rs 模块头）。
+        //
+        // 线程模型（为什么这里可以用 `TsfSharedState` 里的 `ITfContext`）：
+        // `OnSetFocus` 是 `ITfKeyEventSink` 的回调，而该接口是按**线程**经
+        // `ITfKeystrokeMgr::AdviseKeyEventSink(tid, …)` 注册的（Activate 里做的），
+        // TSF 在该 tid 所属线程（宿主 UI 线程）上回调，与 `OnKeyDown` 同线程。
+        // `fforeground` 只表示线程拿到/失去前台，**不**证明键盘焦点真在这（别的
+        // 焦点接收者可能抢走）—— 故只用它触发落地，不用它决定插到哪：目标永远
+        // 是该实例上一次键事件记下的 context（世代号在 state.rs 把关）。
+        self.drain_pending();
         Ok(())
     }
 
-    fn OnTestKeyDown(&self, _pic: Ref<ITfContext>, wparam: WPARAM, lparam: LPARAM) -> Result<BOOL> {
+    fn OnTestKeyDown(&self, pic: Ref<ITfContext>, wparam: WPARAM, lparam: LPARAM) -> Result<BOOL> {
         // TSF 只在 OnTestKeyDown 返回 TRUE 时才调用 OnKeyDown，而且这个 TRUE 是
         // **最终决定**：OnKeyDown 再答 FALSE 不会把键还给应用。2026-10-21 旧实现
         // 只认领热键、普通字母全放行，导致中文永远不出候选；2026-10-22 的另一端
@@ -41,6 +61,10 @@ impl ITfKeyEventSink_Impl for TsfTextService_Impl {
         // dismiss 会在同一个 keydown 把新链清掉（2026-10-28 用户报障「点了联想项
         // 没有下一条」）。Ctrl/Alt 直通同样收起。
         self.dismiss_association_and_push();
+        // 目标换代先于 drain（本回调先于 OnKeyDown；即使这里答 FALSE、OnKeyDown
+        // 不会来，文档也已经换了，旧文档的排队点选同样该丢）。见 state.rs 的
+        // `note_target` 与 tsf.rs 的 handle_key_inner（同一条）。
+        self.state.note_target(pic.as_ref());
         self.drain_pending();
         let states = map_key_state(lparam);
         let vk = wparam.0 as u32;

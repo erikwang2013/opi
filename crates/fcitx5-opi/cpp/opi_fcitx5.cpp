@@ -25,6 +25,7 @@
 #include <fcitx-utils/event.h> // 用户词落盘定时器（EventLoop::addTimeEvent / now）
 #include <fcitx-utils/standardpath.h>
 
+#include "opi_candidates.h" // 候选表 + 翻页（500 行门禁拆分，2026-10-28）
 #include "opi_json.h"     // parseJsonStringArray（拆出去是为了本文件守住 500 行硬规矩）
 #include "opi_config.h"  // 「属性设置」的六个选项（同样为了 500 行门禁拆出去）
 #include "opi_engine.h"  // addon 类声明（opi_mode.h / opi_skin.h 由它带入）
@@ -52,15 +53,6 @@
 // 候选交给 CommonCandidateList 自己翻，C++ 与 Rust 就各存一份页码，前端点翻页
 // 箭头时两边立刻漂移。
 //
-// 取回候选的条数上限：**不要**再往这里写一个「Rust PAGE_SIZE 的镜像」。
-// Rust 的 `opi_fcitx5_candidates(limit)` 返回的已经是**切好的整页**
-// （`candidate.rs` 的 `candidates()` 按它自己的 PAGE_SIZE `.skip().take()`，
-// 这里的 limit 是在那之后再切一刀），所以本文件根本不需要知道页大小；
-// 页大小由**取回的条数**决定（见 refreshingPanelFor）。
-// 给 SIZE_MAX = 「不切」：整页照单全收，页大小自然跟随 Rust，Rust 改 8→9
-// 这边不用动，也不会少画。
-static constexpr size_t kOpiCandidateFetchLimit = SIZE_MAX;
-
 // 上一次推给前端的面板预编辑串。唯一用途：直通键（action==0）不消费按键、
 // Rust 侧状态不变，原样重推要白付一次跨 FFI + 候选 JSON + 客户端重绘，而
 // ESC/方向键/F5 每次按键都来一遍 —— 缓冲相同就跳过（见 keyEvent 尾部）。
@@ -76,69 +68,18 @@ static bool g_associationEnabled = false;
 
 void opiApplyAssociationSetting(bool on) { g_associationEnabled = on; }
 
-// 候选词：点选后走 Rust 侧 select(**页内**索引) 并提交。
-// CandidateWord::select 是纯虚（fcitx/candidatelist.h:44），必须实现。
-class OpiCandidateWord : public fcitx::CandidateWord {
-public:
-    OpiCandidateWord(std::string text, size_t index)
-        : fcitx::CandidateWord(fcitx::Text(std::move(text))), index_(index) {}
-    void select(fcitx::InputContext *ic) const override;
-
-private:
-    // 页内索引（与 Rust 侧 CandidateState::select 同语义 = page*PAGE_SIZE+index）。
-    size_t index_;
-};
-
 // 把 Rust 侧当前状态（缓冲 = 预编辑串，当前页候选）推到 fcitx5 面板。
 // 定义在下面；声明在 opi_engine.h（类声明搬走后它不能再是文件级 static）。
-void refreshingPanelFor(fcitx::InputContext *ic);
-
-void OpiCandidateWord::select(fcitx::InputContext *ic) const {
-    // 点选是从 UI 线程调进来的第三个入口，同样要挡异常（见 keyEvent 的说明）。
-    try {
-        const std::string out = take(opi_fcitx5_select(index_));
-        if (ic != nullptr && !out.empty()) {
-            ic->commitString(out);
-        }
-        // 选完 Rust 侧缓冲/候选都变了，面板必须同步 —— 否则候选栏会留在屏幕上。
-        refreshingPanelFor(ic);
-    } catch (const std::exception &e) {
-        fprintf(stderr, "fcitx5-opi: select 异常，本次点选作废: %s\n", e.what());
-    } catch (...) {
-        // 非 std::exception 的异常若逃进 fcitx5 主循环会带走整个守护进程（语言栏一起没）。
-        fprintf(stderr, "fcitx5-opi: select 未知异常，本次点选作废\n");
-    }
-}
-
-// 普通候选与联想候选共用（2026-10-28）：页大小 = 实际推过去的条数 → 候选表恒为
-// 单页；选择键 1..n 让 fcitx5 画序号并把数字路由到 OpiCandidateWord::select
-// （**页内索引**，与 Rust 路由同语义）。空表不设 pageSize / 高亮位
-// （setGlobalCursorIndex(0) 对空表抛 invalid_argument）。
-static std::unique_ptr<fcitx::CommonCandidateList> makeCandidateList(
-    const std::vector<std::string> &texts) {
-    auto list = std::make_unique<fcitx::CommonCandidateList>();
-    if (texts.empty()) {
-        return list;
-    }
-    list->setPageSize(static_cast<int>(texts.size()));
-    for (size_t i = 0; i < texts.size(); ++i) {
-        list->append<OpiCandidateWord>(texts[i], i);
-    }
-    fcitx::KeyList selectionKeys;
-    for (size_t i = 0; i < texts.size(); ++i) {
-        selectionKeys.push_back(fcitx::Key(std::to_string(i + 1)));
-    }
-    list->setSelectionKey(selectionKeys);
-    list->setGlobalCursorIndex(0);
-    return list;
-}
-
+// 候选表 / 翻页的类与 makeCandidateList 在 opi_candidates.h（500 行门禁拆分）。
 void refreshingPanelFor(fcitx::InputContext *ic) {
     if (ic == nullptr) {
         return;
     }
     auto &panel = ic->inputPanel();
     const std::string buffer = take(opi_fcitx5_buffer());
+    // 翻页状态**必须在 candidates 之前**问：page_state 顺手把全量候选留在 Rust 的
+    // 一次性缓存里，紧接着的 candidates() 命中它（一次取回，不多跑一次排名）。
+    const OpiPageState pageState = opi_fcitx5_page_state();
     // 候选**只取一次**（2026-10-27）：联想判据要用它，下面的正常分支也复用它；
     // 重复调 opi_fcitx5_candidates 会把 Rust 侧的页游标推进两次。
     const auto texts = parseJsonStringArray(
@@ -162,7 +103,7 @@ void refreshingPanelFor(fcitx::InputContext *ic) {
         // **不设** preedit / clientPreedit —— 联想不是 composing；候选序号与
         // 数字选词由 makeCandidateList 统一给（2026-10-28 用户报障）。
         panel.reset();
-        panel.setCandidateList(makeCandidateList(texts));
+        panel.setCandidateList(makeCandidateList(texts, pageState.page, pageState.pages));
     } else {
         fcitx::Text preedit(buffer);
         // 光标在预编辑串末尾（按字节）。2026-10-17 起缓冲可能带**逐字确认的汉字**
@@ -185,8 +126,8 @@ void refreshingPanelFor(fcitx::InputContext *ic) {
         }
 
         // texts 已在函数顶部取过（一次抓取；重复调会推进 Rust 页游标）。
-        // 候选序号/选择键/高亮位的理由见 makeCandidateList 上方。
-        panel.setCandidateList(makeCandidateList(texts));
+        // 候选序号/选择键/高亮位的理由见 opi_candidates.h 的 fill()。
+        panel.setCandidateList(makeCandidateList(texts, pageState.page, pageState.pages));
     }
     // 清空也要发：提交/失焦后不通知，客户端光标处会一直挂着上次的内联预编辑。
     if (wantsClientPreedit) {

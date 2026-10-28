@@ -33,6 +33,10 @@ final class OpiInputController: IMKInputController {
     var lastCandidates: [String] = []
     /// 上次候选窗的可见性：可见性变化也要推 update（空缓冲的联想候选常与上次同批不同可见）。
     var lastCandidatesVisible = false
+    /// 被括号配对吃掉的 keyDown 键值：它们的 keyUp 也要吃掉，别给客户端半个按键。
+    /// 用集合而非单槽：连按 `(`、`[` 时两次 keyDown 都被配对吃掉，松 `(` 的 keyUp
+    /// 也得吞 —— 单槽会被后一个键覆盖、漏吞一个 keyUp（依赖键状态的控件卡键）。
+    private var pairedKeyDowns = Set<UInt32>()
     /// ⇧ 轻按判定（三拍与 fcitx5 的 `OpiShiftToggle` 一致）。
     private var shiftTap = ShiftTap()
 
@@ -180,6 +184,7 @@ final class OpiInputController: IMKInputController {
         switch hot {
         case .toggleEnglish:
             // 与 `vk.rs` 的 `hotkey_target` 同判：**来回切**，已在英文就回拼音。
+            OpiClientHub.shared.commitPendingBeforeModeSwitch()
             engine.switchMode(engine.mode() == .english ? .pinyin : .english)
         case .toggleSymbol:
             // 这个出口**自己**包办 Pinyin ⇄ Symbol 的来回切 **和** 缓冲收尾
@@ -189,7 +194,10 @@ final class OpiInputController: IMKInputController {
             commit(engine.toggleSymbol(), to: sender)
         case .toggleTraditional:
             // 与 `opi_mode.h` 的 opiToggleTraditional 同判：在繁体回拼音，否则进繁体。
-            engine.switchMode(engine.mode() == .traditional ? .pinyin : .traditional)
+            // 成对切换走保缓冲的 `opi_switch_language`（同 iOS `toggleTraditional`）：
+            // 不清缓冲、不清已确认片段，所以不 flush pending、也不走 switchMode。
+            engine.switchLanguage(engine.mode() == .traditional ? .pinyin : .traditional,
+                                  engine.currentScheme())
         case .symbolPanel:
             // 符号画廊是**纯 UI 面板**（不进引擎模式、不动缓冲），与 Linux 的
             // Ctrl+Shift+Z 同语义；面板非激活，未提交的 preedit 留在宿主应用里。
@@ -263,6 +271,11 @@ final class OpiInputController: IMKInputController {
         switch result.action {
         case OpiAction.commit:
             // 先清 preedit 再插入提交文本；提交后引擎缓冲已空，刷新会收起候选窗。
+            // 用户敲出的字符先过括号配对（候选/空格/回车提交不经过它，见 isTypingKey）。
+            if isTypingKey(keyval, event), bracketInsertTyped(result.text, to: sender) {
+                refresh(sender)
+                return true
+            }
             commit(result.text, to: sender)
             refresh(sender)
             return true
@@ -274,6 +287,25 @@ final class OpiInputController: IMKInputController {
             refresh(sender)
             return true
         default:
+            // 引擎放行。普通字符先过括号配对（只对表里的括号动手），空缓冲退格
+            // 先试「删掉一整对」（契约第 3/4 条）；其余原样交应用。
+            // 配对吃掉 keyDown 时同一键的 keyUp 也要吃掉，别给客户端半个按键。
+            if event.type == .keyUp, pairedKeyDowns.remove(keyval) != nil {
+                return true
+            }
+            if isTypingKey(keyval, event), let scalar = Unicode.Scalar(keyval),
+               bracketInsertTyped(String(Character(scalar)), to: sender) {
+                pairedKeyDowns.insert(keyval)
+                return true
+            }
+            // 这一键没被配对吃掉（或根本不是括号）：它的 keyUp 必须还给客户端，
+            // 顺手清掉同键的旧记录，keyUp 丢失留下的残项不会吞下一次按键。
+            pairedKeyDowns.remove(keyval)
+            if event.type == .keyDown, keyval == OpiKeySpace.backspace,
+               bracketBackspace(to: sender) {
+                pairedKeyDowns.insert(keyval)
+                return true
+            }
             return false // 0 = 未处理：键交应用（不拦截）
         }
     }
@@ -286,6 +318,8 @@ final class OpiInputController: IMKInputController {
     ///   2. 「先清 marked text，再 insertText」的顺序；
     ///   3. replacementRange 用 (NSNotFound, NSNotFound) 表示「插在光标处，不替换」。
     private func commit(_ text: String, to sender: Any!) {
+        // 任何上屏都结束括号跟踪（契约第 5 条）；配对插入不走这里。
+        BracketPairing.shared.reset()
         if !lastMarked.isEmpty { engine.markUserWordsDirty() } // preedit = 可能刚选过词
         guard !text.isEmpty, let client = sender as? IMKTextInput else { return }
         let none = NSRange(location: NSNotFound, length: NSNotFound)
@@ -314,6 +348,8 @@ final class OpiInputController: IMKInputController {
     /// 用户点选/回车选定候选（候选窗已先关闭）。
     override func candidateSelected(_ candidateString: NSAttributedString!) {
         let text = candidateString?.string ?? ""
+        // 候选上屏结束跟踪（契约第 5 条）；也挡掉「候选恰好是括号」的极端情况。
+        BracketPairing.shared.reset()
         guard let index = lastCandidates.firstIndex(of: text) else { return }
 
         // 走引擎的**页内**选词：lastCandidates 是 `opi_candidates_page()` 的当前页，
@@ -360,8 +396,8 @@ final class OpiInputController: IMKInputController {
 
     /// 自绘虚拟键盘的唯一入口：把一次「按下」直接喂给引擎，**不合成系统按键**，
     /// 所以不需要辅助功能授权、也不会把焦点从宿主应用抢走。返回 false = 这一键
-    /// 在引擎未处理时没有可用的 IMK 兜底（目前只有空缓冲的退格 —— IMK 没有
-    /// 「删除宿主文本」的出口，这是平台限制，面板据此提示）。
+    /// 在引擎未处理时没有可用的 IMK 兜底（空缓冲的退格只能删配对中间那一对 ——
+    /// IMK 没有一般的「删除宿主文本」出口，这是平台限制，面板据此提示）。
     @discardableResult
     func virtualKey(keyval: UInt32, states: UInt32) -> Bool {
         let sender: Any?
@@ -371,6 +407,10 @@ final class OpiInputController: IMKInputController {
         let result = engine.keyEvent(keyval: keyval, states: states)
         switch result.action {
         case OpiAction.commit:
+            if isTypingKeyval(keyval), bracketInsertTyped(result.text, to: sender) {
+                refresh(sender)
+                return true
+            }
             commit(result.text, to: sender)
             refresh(sender)
             return true
@@ -380,6 +420,9 @@ final class OpiInputController: IMKInputController {
         default:
             // 引擎放行（空缓冲的空格/回车/字母在英文模式下常走这里）：
             // 软键盘必须仍能出字，否则「点了没反应」。
+            if keyval == OpiKeySpace.backspace, bracketBackspace(to: sender) {
+                return true
+            }
             if keyval == OpiKeySpace.space {
                 commit(" ", to: sender)
                 return true
@@ -389,7 +432,9 @@ final class OpiInputController: IMKInputController {
                 return true
             }
             if keyval < OpiKeySpace.specialBase, let scalar = Unicode.Scalar(keyval) {
-                commit(String(Character(scalar)), to: sender)
+                let text = String(Character(scalar))
+                if bracketInsertTyped(text, to: sender) { return true }
+                commit(text, to: sender)
                 return true
             }
             return false // 空缓冲退格：宿主文本删不了（平台限制，见 README）
@@ -402,7 +447,11 @@ final class OpiInputController: IMKInputController {
         let target: Any? = OpiClientHub.shared.client
         let chosen = target ?? client()
         dismissAssociationIfNeeded(chosen) // 直提入口先收联想（Spec §5.1）
-        commit(text, to: chosen)
+        // 符号面板里也有 （【《「『“‘ —— 与敲出走同一个配对入口（契约第 1 条）；
+        // 表情/贴纸不是括号，只清跟踪。
+        if !bracketInsertTyped(text, to: chosen) {
+            commit(text, to: chosen)
+        }
         refresh(chosen)
     }
 
@@ -415,6 +464,8 @@ final class OpiInputController: IMKInputController {
         lastMarked = ""
         lastCandidates = []
         lastCandidatesVisible = false
+        pairedKeyDowns.removeAll()
+        BracketPairing.shared.reset()
         OpiPinyinBar.shared.hide()
         // 状态栏只在 opi 输入源激活时出现（用户 2026-10-21 要求）。
         OpiStatusBar.shared.setActive(true)
@@ -428,73 +479,12 @@ final class OpiInputController: IMKInputController {
         lastMarked = ""
         lastCandidates = []
         lastCandidatesVisible = false
+        pairedKeyDowns.removeAll()
+        BracketPairing.shared.reset()
         OpiCandidateWindow.shared.hide()
         OpiPinyinBar.shared.hide()
         OpiKeyboardPanel.shared.hide()
         OpiStatusBar.shared.setActive(false)
         super.deactivateServer(sender)
-    }
-}
-
-// ---------- 候选窗 ----------
-
-/// 候选窗单例。main.swift 用启动时的 IMKServer 建一次。
-/// ⚠️ 未验证：IMKCandidates 的 init 签名、panelType 常量名、以及**定位行为**
-/// （用单例而非控制器自带窗口，窗随光标定位是否仍生效未经核对）——见 README #3。
-final class OpiCandidateWindow {
-    static let shared = OpiCandidateWindow()
-
-    private var window: IMKCandidates?
-    /// 当前是否由本层显示着。用于「已显示就只换数据，不再 show()」——
-    /// 每键 show() 会白付一次窗口服务器调用与重新定位（面板位置由 IMK 跟着
-    /// 插入点走，不需要我们每键提醒）。hide() 与 update(空/不可见) 都回写 false。
-    private var shown = false
-
-    var visibleFrame: NSRect? { nil } // IMKCandidates 无公开 frame；拼音条按光标定位
-
-    private init() {}
-
-    func configure(server: IMKServer) {
-        // ✅ 首编确认（CI run 37934619550，2026-10-09）：init 也是**可失败**的（`IMKCandidates?`）。
-        // 失败条件文档没写明；但候选窗是**显示层** —— 建不起来时输入法其余部分
-        // （预编辑、上屏）照常工作，只是没有候选面板。所以这里**不**退进程（对照
-        // main.swift 里 IMKServer 为 nil 时的 exit(1)：那是输入法根本没法工作），
-        // 只打日志记账。window 保持 nil，`update`/`hide` 里本来就有 guard。
-        guard let w = IMKCandidates(server: server,
-                                    panelType: kIMKSingleRowSteppingCandidatePanel,
-                                    styleType: kIMKMain) else {
-            NSLog("opi: 候选窗建不起来（IMKCandidates init 返回 nil）—— 输入法仍可用，仅无候选面板")
-            return
-        }
-        // 可见性由本层驱动（缓冲空就 hide、有候选就 show），不让面板自己关。
-        // ⚠️ 默认是 true：那样「回车选中候选」会由**面板**处理并回调
-        // candidateSelected → 若此时按键也进了 handle（Rust 侧回车 = 提交首候选），
-        // 同一个候选会被提交两次。见 README「最不确定的 API」#3。
-        w.setDismissesAutomatically(false)
-        window = w
-    }
-
-    func update(_ list: [String], visible: Bool) {
-        guard let w = window else { return }
-        if list.isEmpty || !visible {
-            w.hide()
-            shown = false
-            return
-        }
-        w.setCandidateData(list)
-        // 首编确认（同轮）：ObjC 的 `updateCandidates` 在 Swift 里被改名为 `update()`
-        // —— 编译器原文：「'updateCandidates()' has been renamed to 'update()'」。
-        w.update()
-        // 已显示时 setCandidateData+update 就够；重复 show() 只是每键多一次
-        // 窗口服务器往返。首次显示（或我们自己 hide 过）才定位/显示。
-        if !shown {
-            w.show(kIMKLocateCandidatesBelowHint)
-            shown = true
-        }
-    }
-
-    func hide() {
-        window?.hide()
-        shown = false
     }
 }

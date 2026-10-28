@@ -24,31 +24,33 @@
 //!   自己推出来的（**没有 `unsafe impl`**），读线程拿的就是这一半；
 //! - `TsfSharedState` 里剩下的 `ITfContext` / 编辑会话只挂在按键线程持有的一份上。
 //!
-//! 读线程点选只 `enqueue_select(index)` 排队，按键线程在下一个键事件开头
-//! `take_pending_selection()` 取走执行。**已知代价：插入延迟到下一次按键**，
-//! 换来零跨线程 COM 调用。要即时插入时的升级路径（二选一，都得真机才验得了）：
-//! (a) 按键线程建一个 message-only 窗口，读线程 `PostMessage` 过去在 UI 线程执行；
-//! (b) 按 GIT（`IGlobalInterfaceTable`）注册 cookie，读线程取 marshal 过的代理。
+//! 读线程点选只 `enqueue_select(index)` 排队，按键线程取走执行。落地时机有两处：
+//! 下一个键事件开头（`tsf.rs::handle_key_inner` / `key_sink.rs::OnTestKeyDown`）与
+//! 焦点变化（`key_sink.rs::OnSetFocus`）。**已知代价：插入仍可能延迟** —— 候选窗是
+//! 非激活窗口（desktop `Main.kt` 的 `focusable = false`），点它不产生焦点事件，
+//! 「点完候选原地不动、不敲键」谁也叫不醒我们。要即时插入时的升级路径（二选一，
+//! 都得真机才验得了）：(a) 按键线程建一个 message-only 窗口，读线程 `PostMessage`
+//! 过去在 UI 线程执行；(b) 按 GIT（`IGlobalInterfaceTable`）注册 cookie，读线程取
+//! marshal 过的代理。
+//!
+//! 排队动作带着入队时的**目标世代**（`EngineShared::target_seq`）：点选之后换了文档，
+//! 世代由按键线程推进，旧动作在执行点被丢弃 —— 不会把 A 文档的候选插进 B 文档。
 //!
 //! 【本机（Linux）无法验证的部分，别当成已验】上面整条排队路径本机一行都跑不了
 //! （无 Windows）：真机验收**第一件事就是点一次候选、再敲一个键**，看文本有没有
 //! 落进文档、宿主进程是否还在。没插入 → 看 `insert_into` 打出的那行 HRESULT。
 
 use std::collections::VecDeque;
-use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
-use windows::Win32::UI::TextServices::{
-    INSERT_TEXT_AT_SELECTION_FLAGS, ITfContext, ITfEditSession, ITfEditSession_Impl,
-    ITfInsertAtSelection, TF_ES_READWRITE, TF_ES_SYNC,
-};
-use windows::core::{Interface, Result, implement};
+use windows::Win32::UI::TextServices::{ITfContext, ITfEditSession};
+use windows::core::Interface;
 
 use crate::candidate_io::CandidateAction;
 use crate::ctl::{CtlReply, CtlRequest};
 use crate::logic::TsfLogic;
-use crate::tsf::{E_FAIL, TsfSink, ensure_panic_hook, push_state};
+use crate::tsf::{TsfSink, push_state};
 
 /// 队列上限。对端是**另一个进程**（候选窗）：不设上限的话它连发 select 就能
 /// 让宿主进程的内存一直涨。16 远超人手点击速度，超过即丢弃（读线程不阻塞）。
@@ -59,18 +61,24 @@ const MAX_PENDING_TEXT: usize = 16;
 
 /// 引擎 + 点选队列：**候选窗读线程够得着的那一半**。
 ///
-/// `Send + Sync` 是编译器自己推的（字段只有 `Mutex`）—— 这个类型里**不允许**
-/// 出现 COM 接口指针，见模块头的线程模型。想往这加字段前先确认它是 `Send`。
+/// `Send + Sync` 是编译器自己推的（字段只有 `Mutex` + 原子计数）—— 这个类型里
+/// **不允许**出现 COM 接口指针，见模块头的线程模型。想往这加字段前先确认它是 `Send`。
 pub struct EngineShared {
     logic: Mutex<TsfLogic>,
     /// 「清空用户词」世代：本引擎上次见过并清过的 token（见 `clear_generation.rs`）。
     /// 每个宿主进程各一份 ⇒ 设置窗写一次标记，各宿主在下次焦点时各自清。
     clear_seen: crate::clear_generation::SeenGeneration,
-    /// 读线程排下的点选（页内 index），由按键线程取走执行（见 `enqueue_select`）。
-    pending: Mutex<VecDeque<usize>>,
-    /// 读线程排下的「直接插入文本」（候选窗 `commit_text`，不经引擎选词），
-    /// 由按键线程取走执行（见 `enqueue_commit_text`）。
-    pending_text: Mutex<VecDeque<String>>,
+    /// 插入目标的世代号：按键线程发现本次键事件的 context 与上次不同时 +1
+    /// （见 `TsfSharedState::note_target`）。读线程入队时记下当时的值，执行时
+    /// 不一致 = 目标文档已换 → 丢弃这次点选/直插（宁可丢一次点击，也不能把
+    /// 上一个文档的候选插进当前文档）。
+    target_seq: AtomicU32,
+    /// 读线程排下的点选（页内 index + 入队时的 `target_seq`），由按键线程取走执行
+    /// （见 `enqueue_select`）。
+    pending: Mutex<VecDeque<(usize, u32)>>,
+    /// 读线程排下的「直接插入文本」（候选窗 `commit_text`，不经引擎选词；同样带
+    /// 入队时的 `target_seq`），由按键线程取走执行（见 `enqueue_commit_text`）。
+    pending_text: Mutex<VecDeque<(String, u32)>>,
 }
 
 impl EngineShared {
@@ -97,9 +105,20 @@ impl EngineShared {
         Self {
             logic: Mutex::new(logic),
             clear_seen: Default::default(),
+            target_seq: AtomicU32::new(0),
             pending: Mutex::new(VecDeque::new()),
             pending_text: Mutex::new(VecDeque::new()),
         }
+    }
+
+    /// 当前插入目标世代（读线程入队时快照一份，见 `enqueue_select`）。
+    fn target_seq(&self) -> u32 {
+        self.target_seq.load(Ordering::Relaxed)
+    }
+
+    /// 目标上下文换了（按键线程）或服务失活（Deactivate）→ 推进世代。
+    fn bump_target_seq(&self) {
+        self.target_seq.fetch_add(1, Ordering::Relaxed);
     }
 
     /// 取引擎锁。中毒 → None（调用方吞掉这次操作，别经 COM vtable 泄漏 panic）。
@@ -144,37 +163,53 @@ impl EngineShared {
 
     /// **读线程**调：收下这次点选，**不做任何 COM 调用**（理由见模块头）。
     /// 返回 false = 队列满（对端刷屏）或锁中毒 —— 都是丢这一次点选，不阻塞读线程。
+    ///
+    /// 先读 `target_seq` 再入队：读与写之间有键事件换了文档时，这一条会带着旧世代
+    /// 被丢弃 —— 保守方向（最多丢一次点击），不会插错文档。
     pub fn enqueue_select(&self, index: usize) -> bool {
+        let seq = self.target_seq();
         match self.pending.lock() {
             Ok(mut q) if q.len() < MAX_PENDING_SELECT => {
-                q.push_back(index);
+                q.push_back((index, seq));
                 true
             }
             _ => false,
         }
     }
 
-    /// **按键线程**调：取一个待执行的点选。None = 队列空。
-    pub fn take_pending_selection(&self) -> Option<usize> {
+    /// **按键线程**调：取一个待执行的点选（index + 入队时的目标世代）。None = 队列空。
+    pub fn take_pending_selection(&self) -> Option<(usize, u32)> {
         self.pending.lock().ok()?.pop_front()
     }
 
     /// **读线程**调（候选窗 `commit_text`）：收下这段要直插文档的文本，**不做任何
     /// COM 调用**（理由同 `enqueue_select`：插入目标不在这半）。返回 false = 队列满
-    /// 或锁中毒 —— 丢这一次，不阻塞读线程。
+    /// 或锁中毒 —— 丢这一次，不阻塞读线程。目标世代语义同 `enqueue_select`。
     pub fn enqueue_commit_text(&self, text: String) -> bool {
+        let seq = self.target_seq();
         match self.pending_text.lock() {
             Ok(mut q) if q.len() < MAX_PENDING_TEXT => {
-                q.push_back(text);
+                q.push_back((text, seq));
                 true
             }
             _ => false,
         }
     }
 
-    /// **按键线程**调：取一段待直插的文本。None = 队列空。
-    pub fn take_pending_text(&self) -> Option<String> {
+    /// **按键线程**调：取一段待直插的文本（文本 + 入队时的目标世代）。None = 队列空。
+    pub fn take_pending_text(&self) -> Option<(String, u32)> {
         self.pending_text.lock().ok()?.pop_front()
+    }
+
+    /// **按键线程**调（Deactivate）：丢弃全部排队动作 —— 失活后执行的插入只会
+    /// 落到不再属于本服务的文档上。与 `clear_target` 一起收尾。
+    pub fn clear_pending(&self) {
+        if let Ok(mut q) = self.pending.lock() {
+            q.clear();
+        }
+        if let Ok(mut q) = self.pending_text.lock() {
+            q.clear();
+        }
     }
 }
 
@@ -218,13 +253,18 @@ impl TsfSharedState {
     }
 
     /// **按键线程**调：取一个待执行的点选（见 `EngineShared::take_pending_selection`）。
-    pub fn take_pending_selection(&self) -> Option<usize> {
+    pub fn take_pending_selection(&self) -> Option<(usize, u32)> {
         self.engine.take_pending_selection()
     }
 
     /// **按键线程**调：取一段待直插的文本（见 `EngineShared::take_pending_text`）。
-    pub fn take_pending_text(&self) -> Option<String> {
+    pub fn take_pending_text(&self) -> Option<(String, u32)> {
         self.engine.take_pending_text()
+    }
+
+    /// **按键线程**调（Deactivate）：丢弃排队动作，见 `EngineShared::clear_pending`。
+    pub fn clear_pending(&self) {
+        self.engine.clear_pending();
     }
 
     /// Activate 记下的 tid；Deactivate 传 0（旧 tid 不再有效，插入会据此静默放弃）。
@@ -244,7 +284,33 @@ impl TsfSharedState {
         self.lock_logic().map(|l| l.shift_toggle()).unwrap_or(false)
     }
 
-    /// 记下本次键事件的插入目标（每个非抬起键事件调一次）。
+    /// **按键线程**调（每个非抬起键事件，**赶在 `drain_pending` 之前**）：本次键事件
+    /// 带来的 context 与上次记的不是同一个 → 推进目标世代，之前排队的点选属于旧文档，
+    /// 执行时按世代号丢弃（见 `select_and_insert`）。
+    ///
+    /// 仅 **Some** 的情况换代；`pic` 为 None（焦点离开文档）时不在这里清目标 ——
+    /// 队列里排着的动作仍应落进上一次键事件的文档（那正是用户点选时所在的文档），
+    /// 清空由 drain 之后的 `remember_target` 做。
+    ///
+    /// 线程模型依据：`OnTestKeyDown`/`OnKeyDown` 与候选窗读线程不同，后者只能入队；
+    /// 本方法只在按键线程上跑，见模块头。
+    pub fn note_target(&self, pic: Option<&ITfContext>) {
+        let Some(pic) = pic else { return };
+        let Ok(mut g) = self.target.lock() else {
+            return; // 中毒锁：不换代（旧世代只会多保留一次排队动作，不插错文档）
+        };
+        // 指针相等是「同一个 context」的近似判据（TSF 对同一文档给同一接口指针）。
+        // shortcut: 同一文档的代理指针若不同，只多丢一次排队点击，不会插错文档。
+        if g.as_ref().is_some_and(|old| old.as_raw() == pic.as_raw()) {
+            return;
+        }
+        *g = Some(pic.clone());
+        self.engine.bump_target_seq();
+    }
+
+    /// 记下本次键事件的插入目标（每个非抬起键事件、drain 之后调一次）。
+    /// 与 `note_target` 的分工：Some 的换代在 drain **之前**（否则旧文档的排队动作
+    /// 会先执行）；这里补的是 None 的清除，以及 Some 的兜底存储。
     pub fn remember_target(&self, pic: Option<&ITfContext>) {
         let next = pic.cloned();
         if let Ok(mut g) = self.target.lock() {
@@ -252,11 +318,30 @@ impl TsfSharedState {
         }
     }
 
+    /// **按键线程**调（Deactivate）：释放插入目标与编辑会话保活，并推进世代 ——
+    /// 之后读线程再排进来的动作（目标为空）不会被当成当前文档的。
+    pub fn clear_target(&self) {
+        if let Ok(mut g) = self.target.lock() {
+            *g = None;
+        }
+        if let Ok(mut g) = self.keepalive.lock() {
+            *g = None;
+        }
+        self.engine.bump_target_seq();
+    }
+
     // ---------- 候选窗回复的执行点（**按键线程**，见模块头） ----------
 
     /// 点选第 `index`（**页内** 0 起）候选：选词 → 插文档。
-    /// 返回提交的文本；`None` = 没提交（越界/空缓冲/锁中毒）。
-    pub fn select_and_insert(&self, index: usize) -> Option<String> {
+    /// 返回提交的文本；`None` = 没提交（越界/空缓冲/锁中毒/**目标已换**）。
+    ///
+    /// `seq` 是入队时 `target_seq` 的快照：与当前世代不同 = 用户在点选之后切了文档，
+    /// 这次点选属于旧文档 → 丢弃（连引擎选词都不做，免得清掉当前文档的拼音缓冲）。
+    pub fn select_and_insert(&self, index: usize, seq: u32) -> Option<String> {
+        if seq != self.engine.target_seq() {
+            tlog!("tsf-opi: 丢弃排队的候选点选 index={index}：目标文档已切换");
+            return None;
+        }
         // 先取文本、**先放锁**：`insert_into` 会阻塞在宿主的同步编辑会话上，
         // 攥着引擎锁等它，按键线程会跟着一起卡住。
         let text = self.lock_logic()?.select(index);
@@ -276,128 +361,24 @@ impl TsfSharedState {
     /// 收起，而符号页要留在屏幕上供连续点选；裁决 2026-10-10，见 candidate_io.rs 协议头）。
     /// 与 `select_and_insert` 同一条下沉路径（`insert_into`），只是没有逻辑层那一步。
     /// 无插入目标（无焦点文档/未在键事件中记过 target）→ 静默放弃，与既有路径同策略。
-    pub fn insert_text(&self, text: &str) {
+    /// `seq` 语义同 `select_and_insert`：目标文档换了就丢这段文本。
+    pub fn insert_text(&self, text: &str, seq: u32) {
+        if seq != self.engine.target_seq() {
+            tlog!(
+                "tsf-opi: 丢弃排队的直插文本（{} 字符）：目标文档已切换",
+                text.chars().count()
+            );
+            return;
+        }
         let pic = self.target.lock().ok().and_then(|g| g.clone());
         if let Some(pic) = pic {
             self.insert_into(&pic, text);
         }
     }
 
-    /// 把提交文本真正写进文档 —— 提交的**唯一下沉路径**（键事件与候选窗点选
-    /// 都走这里；两份实现必然漂移，一处补了下面的保活另一处就会漏）。
-    ///
-    /// 两种「静默放弃」都是**正常情况**，不是错误路径：
-    /// - `client_id` 为 0：尚未 `Activate`，`RequestEditSession` 必失败；
-    /// - `pic` 转不出 `ITfInsertAtSelection`：该 context 不支持插入。
-    ///
-    /// 放弃后按键仍被吞（调用方返 `BOOL(1)`）：用户看到「这一下没出字」，而不是崩溃。
-    /// 这两种不发声（它们是「本就没有目标」）；`RequestEditSession` 的失败则**要**
-    /// 记一行 —— 那一类才是「本该出字却没出」，成因全在宿主进程里，没日志查不动。
-    ///
-    /// **重入警告**：`TF_ES_SYNC` 会让 `DoEditSession` 在**本线程、本栈**上被回调，
-    /// 且此刻调用方（`tsf.rs` 的 `handle_key_inner`）正持有 `logic` 的锁。
-    /// `InsertTextSession` 因此绝不能回头碰 `logic` / `sink`：
-    /// `std::sync::Mutex` 不可重入，一碰就死锁在用户的 Word 里。
-    /// 它只持有文本与插入接口，故安全 —— 改动它时务必守住这条。
-    pub fn insert_into(&self, pic: &ITfContext, text: &str) {
-        let tid = self.client_id.load(Ordering::Relaxed);
-        if tid == 0 {
-            return; // 未 Activate：没有合法 tid，RequestEditSession 必失败
-        }
-        let Ok(session) = InsertTextSession::new(pic, text) else {
-            tlog!("tsf-opi: InsertTextSession::new failed (no ITfInsertAtSelection?)");
-            return;
-        };
-        let session: ITfEditSession = session.into();
-        // 2026-10-21 真机：提交 "你好" 时 notepad.exe 崩在 textinputframework.dll。
-        // 先把会话引用存进 keepalive（不依赖 RequestEditSession 的返回码），
-        // 排除「异步回调时 session 已释放」这一条；下一次插入才替换。
-        if let Ok(mut keep) = self.keepalive.lock() {
-            *keep = Some(session.clone());
-        }
-        // SAFETY: pic 是 TSF 交来的活动 context；session 在本次调用期间存活。
-        // 返回 `Result<HRESULT>` 是两层：外层 = 调用本身成不成，
-        // 内层 = `phrSession`，也就是 **DoEditSession 的返回值**（0.62 把它当出参映射）。
-        // 失败不改行为（"这次不出字"总好过"崩掉宿主进程"），但**必须留下痕迹**：
-        // "字插不进去"的成因全在宿主进程里，没有这一行，用户与我们都只剩
-        // "输入法就是不工作"。TF_E_SYNCHRONOUS（另有编辑会话在跑）就落在这里。
-        match unsafe { pic.RequestEditSession(tid, &session, TF_ES_SYNC | TF_ES_READWRITE) } {
-            Ok(hr) if hr.is_ok() => {}
-            Ok(hr) => {
-                tlog!(
-                    "tsf-opi: RequestEditSession async hr=0x{:08X}，保留引用待异步回调",
-                    hr.0
-                );
-                // 这一支就是 TF_E_SYNCHRONOUS：按 TSF 文档是"转为异步排队"，
-                // DoEditSession 在**本次调用返回之后**才被回调。keepalive 已在
-                // 调用前无条件存了一份，这里不再重复。
-            }
-            Err(e) => tlog!("tsf-opi: RequestEditSession 失败: {e}"),
-        }
-    }
-}
-
-// ---------- 文档写入：编辑会话 ----------
-
-/// 「把一段文本插到当前选区」的编辑会话。
-///
-/// 为什么必须绕这一道：TSF 不允许文本服务直接改文档。服务得先用
-/// `ITfContext::RequestEditSession` 请求一个编辑会话，TSF 回调
-/// `ITfEditSession::DoEditSession` 并把 edit cookie（`ec`）交给它 ——
-/// 只有拿着 `ec` 才允许调用插入 API。`TF_ES_SYNC` 让这次回调同步发生
-/// （否则 `RequestEditSession` 返回而我们还没插入，文本就丢了）。
-///
-/// 生命周期：本对象在 `insert_into` 里构造；同步会话在调用返回后即可释放，
-/// 异步会话（`TF_E_SYNCHRONOUS`）则可能在返回之后才被回调，故 `insert_into`
-/// 无条件把最新一份存进 `keepalive`。同步路径下那只是一份引用，下一次插入或
-/// 服务对象销毁时释放 —— 回调期间宿主一定还在我们的调用栈上，且服务对象
-/// 自己持有模块锁，DLL 不会被抽掉。
-///
-/// 用 `ITfInsertAtSelection` 而不是 `GetSelection` + `ITfRange::SetText`：
-/// 前者是 TSF 为此场景提供的 API（换行、选区替换、插入点后移都由它处理），
-/// 而 `TF_SELECTION.range` 是 `ManuallyDrop<Option<ITfRange>>` —— 手工取用
-/// 时漏一次 `into_inner` 就是一次引用计数泄漏，正是本项目备忘里那条
-/// "COM 生命周期漏了会崩在用户 Word 里"。
-#[implement(ITfEditSession)]
-struct InsertTextSession {
-    /// 目标 context 的插入接口（构造时 QueryInterface 得到，随本对象一起释放）。
-    insert: ITfInsertAtSelection,
-    /// UTF-16 文本（TSF 全线 UTF-16）。**不带结尾 NUL** —— 长度由切片传。
-    text: Vec<u16>,
-}
-
-impl InsertTextSession {
-    /// `pic` 不支持 `ITfInsertAtSelection`（非文档 context）→ Err，调用方放弃。
-    fn new(pic: &ITfContext, text: &str) -> Result<Self> {
-        Ok(Self {
-            insert: pic.cast()?,
-            text: text.encode_utf16().collect(),
-        })
-    }
-}
-
-impl ITfEditSession_Impl for InsertTextSession_Impl {
-    fn DoEditSession(&self, ec: u32) -> Result<()> {
-        ensure_panic_hook();
-        // COM 出口（TSF 经 vtable 回调）：panic 逃出去 = abort 宿主进程。
-        catch_unwind(AssertUnwindSafe(|| {
-            // 2026-10-21 真机：TF_IAS_NOQUERY 下 notepad 崩在 textinputframework.dll。
-            // 改为查询范围（flags=0）：API 写出非空 ppRange，走 windows-rs 的正常路径
-            // （NOQUERY 时 out 参数为 NULL，0.62 的 from_abi 会把它转成 Err）。
-            match unsafe {
-                self.insert
-                    .InsertTextAtSelection(ec, INSERT_TEXT_AT_SELECTION_FLAGS(0), &self.text)
-            } {
-                Ok(_) => Ok(()),
-                Err(e) if e.code().is_ok() => Ok(()),
-                Err(e) => {
-                    tlog!("tsf-opi: InsertTextAtSelection failed: {e}");
-                    Err(e)
-                }
-            }
-        }))
-        .unwrap_or_else(|_| Err(E_FAIL.into()))
-    }
+    // 文档写入（`insert_into` + `InsertTextSession`）在 `state_insert.rs`：
+    // 从本文件拆出守 500 行（2026-10-28），且它自成一体的 —— 只依赖 COM 插入 API。
+    // 这里保留 impl 的收尾括号；`insert_into` 的 impl 块在同 crate 的子模块里。
 }
 
 /// 候选窗回复的**生产实现**（B1 接线）：点选 → 交给按键线程执行（选词 → 插文档）；
@@ -498,3 +479,7 @@ impl CandidateAction for SharedAction {
         Some(crate::ctl::reply_json(request.id, reply))
     }
 }
+
+// 文档写入（`insert_into` + `InsertTextSession`）拆出守 500 行，见那里的模块头。
+#[path = "state_insert.rs"]
+mod insert;

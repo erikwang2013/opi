@@ -112,7 +112,7 @@
 - **逐字确认（2026-10-17 用户裁决）**：整串有词组精确匹配时词组在最前、选中一次上屏；无精确匹配（打一半的前缀扩展词不算）则先出第一个字的整档（所有读音的字），确认一个字后它**留在候选区**（拼音行显示「中guo」），依次确认到最后一段才**整串进输入框**；缓冲空时 ⌫ 回滚上一个已确认的字。语义在引擎（`Engine::pending_text` / `commit_buffer_after_select`），四端同一条路；门禁 `tests/segment_commit.rs`
 - **9 键多字组合与完整拼音行（2026-10-23 用户报障）**：9 键按键串走数字空间 DP（`crates/engine-core/src/composition_scheme.rs`）—— 段 = 词库精确键、2–4 段、至少一个多音节段；`厌蠢症` / `样样通` 这类整词不在库但分段在库的词能组合出来（真库门禁 `crates/engine-data/tests/nine_composition_real.rs`，桌面 release 中位约 2ms，单次最多 24 次按键类查询）。拼音行不再用「·」补待编键，而是把未覆盖键按**键面首字母**补全（引擎 `display_buffer`）；移动三端横向滚动查看完整串、不省略
 - **中英两套自定义短语（2026-10-24；2026-10-25 开关缺省改为关）**：设置里「中文」「英文」两套**完全独立**的表与开关（各上限 2000 条、精确字母匹配、命中排在候选最前；缺省关，开启即热加载，无需重启或重新导入）；中文只在拼音/繁体键盘生效，英文只在英文键盘生效；各自 10 条/页、总数、增删改、JSON/TSV/CSV/等号/空白导入与 JSON/TSV 导出。宿主文件 Android `filesDir/opi_custom_phrases[_en].json`、Linux/Windows `<数据目录>/opi/custom_phrases[_en].json`、macOS `~/Library/Application Support/opi/custom_phrases[_en].json`；引擎只持内存，启动/重载/换词库时由宿主回放（`engine-core/src/custom_phrases.rs`，双 ABI 各四个英文出口）
-- **括号自动配对（2026-10-26，Android/iOS/鸿蒙）**：输入 10 类开括号自动补闭括号、光标停在中间；再打对应闭括号跳过；空配对按一次退格成对删除。英文/密码框与选区不参与；桌面三端未接光标回移（共享约定见 `shared/brackets/README.md`）
+- **括号自动配对（2026-10-26，Android/iOS/鸿蒙）**：输入 10 类开括号自动补闭括号、光标停在中间；再打对应闭括号跳过；空配对按一次退格成对删除。英文/密码框与选区不参与；Windows/Linux 未接光标回移，macOS 2026-10-28 已接（IMK client + `doCommandBySelector`，未上机验证；共享约定见 `shared/brackets/README.md`）
 - **学习来源加权与误选撤销（2026-10-26）**：空格接受首候选 +1，显式点选/数字/面板 +2；同一输入下改选另一个候选时，撤销上一次误选的学习；英文候选读取已学频次（大小写不敏感）；fcitx5/macOS 用户词 800ms 防抖落盘，损坏或 0 字节文件原样保留
 - **可选外部词库（2026-10-26）**：提供 CustomPinyinDictionary（CC BY-SA 4.0）与 rime-wanxiang（CC BY 4.0）离线转换器、许可与各端加载文档，Release 另附 20 万条/8 MiB 以内的导入包；不随包捆绑，Android/macOS 走 `opi_import_dict` 上限，Linux/Windows 目录直载无此限制（`docs/external-dictionaries.md`）
 - **移动端键盘改版（2026-10-24）**：9/14/26 键与五笔统一参考图版式 —— 9 键主区 3×3 右上角序号 1–9（分词格=1），字母弹层字号递减、末项是该格序号且默认选中，左列标点可竖滚且末格「自定义」打开常用符号选择器；14 键 `qw er ty ui op / as df gh jk l / ⇧ zx(~) cv(!) bn(@) m(?) ⌫` 与底行 `符 123 , 空格 。 中英 换行`，ZX/CV/BN/M 弹层 `[大写对, 符号, 小写对]` 默认符号；26 键字母上方符号提示、长按/上滑弹层 `[大写, 符号, 小写]` 默认符号（大写/数字/符号直提，小写进引擎匹配词库）；五笔同 26 键版式，第三行最左「拼」切拼音、空格键面「五笔」。9 键无匹时拼音行只显示读音或留空，**不再把按键数字（如 468）当拼音显示**（Android/iOS/鸿蒙同款修复）
@@ -192,7 +192,7 @@ score = 静态词频 + 用户词频 × boost
 
 **词库生命周期**在进程启动时跑一次：定位（Android 走 assets→filesDir，fcitx5 走 XDG 数据目录，Windows 依次试 `OPI_DICT_PATH` → DLL 同目录 → `%LOCALAPPDATA%\opi` → 内置回退，见 `tsf-opi/src/dict_path.rs`）→ 比对 size 决定是否重拷（幂等，防陈旧词库）→ `mmap` 映射 → 校验 → 装入单例。之后 `install_trad` 可以随时热替换繁体词典，且不影响简体模式。**用户词**在启动时由宿主导入：fcitx5/macOS 读 `opi_user_words.json`，选词后 800ms 防抖写回；Android 走自己的 Kotlin store。
 
-**击键生命周期**每次按键跑一圈，十个步骤：① 按键事件 → ② KeyRouter 分流 → ③ `Composer` 状态机 → ④ 缓冲更新 → ⑤ `rank_and_pick` 排序 → ⑥ 候选栏渲染 → ⑦ 用户选择 → ⑧ 学习记录 → ⑨ 提交上屏 → ⑩ 缓冲清空。关键分支在第 ② 步：**缓冲为空时按键根本不进引擎**（英文/数字模式直传），这是输入法「不卡」的关键 —— 引擎只在真正需要组合的时候才被唤醒。移动端候选栏一次取回 512 条（9 键左列读数仍截 64），括号配对由宿主在提交前处理（Android/iOS/鸿蒙）。
+**击键生命周期**每次按键跑一圈，十个步骤：① 按键事件 → ② KeyRouter 分流 → ③ `Composer` 状态机 → ④ 缓冲更新 → ⑤ `rank_and_pick` 排序 → ⑥ 候选栏渲染 → ⑦ 用户选择 → ⑧ 学习记录 → ⑨ 提交上屏 → ⑩ 缓冲清空。关键分支在第 ② 步：**缓冲为空时按键根本不进引擎**（英文/数字模式直传），这是输入法「不卡」的关键 —— 引擎只在真正需要组合的时候才被唤醒。移动端候选栏一次取回 512 条（9 键左列读数仍截 64），括号配对由宿主在提交前处理（Android/iOS/鸿蒙；macOS 2026-10-28 起）。
 
 装载之后，每次击键都在只读映射上遍历、命中条目按需转出 —— 整库不进城，但**不是零拷贝**。
 
@@ -305,7 +305,7 @@ V1 里程碑进度：
 - [x] **简繁双词库**（spec §8 未给它 M6 编号，独立成项）：`Mode::Traditional` + 双词典路由 + `trad.opid` + GB2312 单字全覆盖门禁
 - [~] **M6b Linux fcitx5 插件**：Rust 逻辑与单测完成；**C++ 胶水此前从未被编译器看过**，现已补上 CMake 编译 + 安装通路（`crates/fcitx5-opi/cpp/CMakeLists.txt`）、CI 的 fcitx5 job（编译 + 安装落点断言 + debian:12 容器里带三臂对照真加载）与 `.deb` / `.rpm` 打包（`scripts/build-packages.sh`）—— **待在目标平台实机验收；包也从未被 `dpkg -i` / `rpm -i` 过**
 - [~] **M6c Windows TSF 插件 + CMP 候选窗**：Rust 逻辑、候选窗线协议与 Compose Desktop 候选窗 / 状态栏 / 设置窗完成 —— COM 服务端按目标平台门控；**Windows 打包自 2026-10-18 起已接线，2026-10-20 起用户入口改为 EXE 安装器 `opi-<版本>-setup.exe`**（`luna.opid` 已随包放进 app 镜像 `app\`——开箱即用完整简体词库，三份许可证文本一并分发、CI 断言 SHA-256；白屏修复：启动器不再重启 Explorer；卸载会结束 `opi.exe`、删 `{app}`、清 Run 项与 `%TEMP%` 锁文件；状态栏登录自启并经 `\\.\pipe\opi-control-v2` 控制面驱动 TSF，设置即时 `reload`）；**`trad.opid` 自 2026-10-28 起也随包**并由 TSF 装载（缺/坏回退简体，CI 断言 SHA-256）；安装/打字/候选窗/中英文/状态栏已在 Windows 10 真机验收（89/89 安装项与 Notepad 输入），交互式安装向导、语言栏图标与非 Notepad 宿主仍待验（仅支持 Windows 10/11 x64；Win7/8/8.1 不支持）
-- [~] **M7 iOS / macOS**：C ABI 已就绪；CI 的 `apple.yml` 已真编译 Swift，iOS 产出宿主 App + unsigned IPA（工具条 / 皮肤 / 键盘模式 / 关于页对齐 Android，贴纸写系统剪贴板需开启「完全访问」），macOS 产出 unsigned pkg/app（符号面板 / 输入法菜单 / 设置窗 / 候选分页）；iOS 1.26.0 起已接括号配对，但用户词仍为内存态；macOS 未接括号配对，但已接用户词持久化；**签名、真机运行与输入法启用仍未验证**。
+- [~] **M7 iOS / macOS**：C ABI 已就绪；CI 的 `apple.yml` 已真编译 Swift，iOS 产出宿主 App + unsigned IPA（工具条 / 皮肤 / 键盘模式 / 关于页对齐 Android，贴纸写系统剪贴板需开启「完全访问」），macOS 产出 unsigned pkg/app（符号面板 / 输入法菜单 / 设置窗 / 候选分页）；iOS 1.26.0 起已接括号配对，但用户词仍为内存态；macOS 2026-10-28 已接括号配对（未上机验证），且已接用户词持久化；**签名、真机运行与输入法启用仍未验证**。
 
 > 里程碑编号以 `docs/superpowers/specs/2026-08-14-opi-multi-platform-design.md` §8 与 M6 实施计划为准
 > （M6a=Android / M6b=fcitx5 / M6c=TSF+候选窗）。

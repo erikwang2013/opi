@@ -412,12 +412,15 @@ final class OpiStatusBar: NSObject {
         case .logo:
             OpiTheme.cycleSkin()
         case .lang:
+            OpiClientHub.shared.commitPendingBeforeModeSwitch()
             engine.switchMode(engine.mode() == .english ? .pinyin : .english)
             OpiClientHub.shared.refreshState()
         case .punct:
             engine.toggleChinesePunct()
         case .trad:
-            engine.switchMode(engine.mode() == .traditional ? .pinyin : .traditional)
+            // 成对切换走保缓冲的 `opi_switch_language`（同 iOS `toggleTraditional`）。
+            engine.switchLanguage(engine.mode() == .traditional ? .pinyin : .traditional,
+                                  engine.currentScheme())
             OpiClientHub.shared.refreshState()
         case .enpro:
             showNotice("英文专业（englishpro）在 macOS 没有控制面 —— 本键已禁用")
@@ -443,11 +446,13 @@ final class OpiStatusBar: NSObject {
         let engine = OpiEngine.shared
         if engine.mode() == .english {
             OpiSettingsStore.applyScheme(.full)
+            OpiClientHub.shared.commitPendingBeforeModeSwitch()
             engine.switchMode(.pinyin)
             OpiClientHub.shared.refreshState()
             return
         }
         if engine.schemeCode() == OpiScheme.wubi.rawValue {
+            OpiClientHub.shared.commitPendingBeforeModeSwitch()
             engine.switchMode(.english)
             OpiClientHub.shared.refreshState()
             return
@@ -456,6 +461,7 @@ final class OpiStatusBar: NSObject {
             showNotice("五笔码表未装载 —— 模式停在拼音；请把 wubi86.opid 放进词库目录")
             return
         }
+        OpiClientHub.shared.commitPendingBeforeModeSwitch()
         engine.switchMode(.pinyin)
         OpiSettingsStore.applyScheme(.wubi)
         OpiClientHub.shared.refreshState()

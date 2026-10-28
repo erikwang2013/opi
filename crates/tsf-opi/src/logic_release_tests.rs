@@ -37,7 +37,7 @@ fn state_with_candidates() -> TsfLogic {
         buffer_snapshot: String::new(),
         shift_state: ShiftState::Off,
         english_pro: true,
-        last_printable: None,
+        held_passthrough: Default::default(),
         shift_toggle: true,
         association_enabled: true,
         fetch_cache: Default::default(),
@@ -68,7 +68,7 @@ fn pinyin_symbol_release_matches_press() {
     // vk.rs 另有 printable_ascii_is_not_hijacked_by_special_keys 钉住码位不相交。
     // 直通的标点只在**两个标点开关都关**时才有：中文标点表那一档会让 `.` 出 `。`、
     // 全角那一档会让它出 `．`（2026-09-28 拆开关后这是两档，只关一档都不直通）。
-    // 记结论的 `last_printable` 只在**按下直通**时才是 true，故这条必须以真直通为背景。
+    // 记结论的 `held_passthrough` 只在**按下直通**时才有键，故这条必须以真直通为背景。
     halfwidth(&mut s);
     assert_eq!(s.input_key('.' as u32, 0), KeyOutcome::Unhandled);
     assert_eq!(
@@ -103,13 +103,72 @@ fn digit_without_candidates_release_matches_press() {
 
 #[test]
 fn release_of_another_key_falls_back_to_consumed() {
-    // 单槽记录的天花板：另一键按下会顶掉记录（键盘 rollover 时才遇到），
-    // 键值不匹配时回落到旧行为（吞掉），绝不误放行。
+    // 从未按下的键抬起：集合里没有 → 回落到旧行为（吞掉），绝不误放行。
     let mut s = pinyin_state();
     halfwidth(&mut s); // 真直通背景：`.` 直通（两档任一开着它都会被映射）
     assert_eq!(s.input_key('.' as u32, 0), KeyOutcome::Unhandled);
     assert_eq!(
         s.input_key('n' as u32, KEY_STATE_RELEASED),
+        KeyOutcome::Consumed
+    );
+}
+
+#[test]
+fn release_after_rollover_still_matches_its_press() {
+    // 键盘 rollover：`.` 按住期间 `n` 按下。旧单槽会被 `n` 顶掉，`.` 的抬起
+    // 被误拦 → 应用只有 keydown。集合让两键各自的结论互不覆盖。
+    let mut s = pinyin_state();
+    halfwidth(&mut s);
+    assert_eq!(s.input_key('.' as u32, 0), KeyOutcome::Unhandled);
+    assert_eq!(s.input_key('n' as u32, 0), KeyOutcome::CompositionChanged);
+    assert_eq!(
+        s.input_key('.' as u32, KEY_STATE_RELEASED),
+        KeyOutcome::Unhandled
+    );
+}
+
+#[test]
+fn held_set_is_bounded_evicts_oldest_but_repeat_refreshes() {
+    // 上限 8，淘汰**最久未按**：'1'..'8' 按满，重按 '1'（自动重复）刷新为最新，
+    // 再按 '9' → '2' 被挤掉。被挤掉的键抬起回落到消费（安全方向）。
+    // 与 fcitx5/engine-core 两轨用例同一断言（2026-10-28 定型）。
+    let mut s = pinyin_state();
+    s.switch_mode(Mode::Number); // 整排可见 ASCII 直通
+    for c in '1'..='8' {
+        assert_eq!(s.input_key(c as u32, 0), KeyOutcome::Unhandled);
+    }
+    assert_eq!(
+        s.input_key('1' as u32, 0),
+        KeyOutcome::Unhandled,
+        "重按刷新（自动重复不得挤掉别的按住键）"
+    );
+    assert_eq!(s.input_key('9' as u32, 0), KeyOutcome::Unhandled);
+    assert_eq!(
+        s.input_key('2' as u32, KEY_STATE_RELEASED),
+        KeyOutcome::Consumed,
+        "最久未按的一条（'2'）已被挤出，抬起不得误放行"
+    );
+    assert_eq!(
+        s.input_key('1' as u32, KEY_STATE_RELEASED),
+        KeyOutcome::Unhandled,
+        "重按刷新过，仍在表内"
+    );
+    assert_eq!(
+        s.input_key('9' as u32, KEY_STATE_RELEASED),
+        KeyOutcome::Unhandled,
+        "最新一条仍在表内，抬起与按下同判"
+    );
+}
+
+#[test]
+fn mode_switch_clears_held_keys() {
+    // 切模式后旧按住键的抬起结论不再可信：应回落到消费，而不是放行。
+    let mut s = pinyin_state();
+    halfwidth(&mut s);
+    assert_eq!(s.input_key('.' as u32, 0), KeyOutcome::Unhandled);
+    s.switch_mode(Mode::English);
+    assert_eq!(
+        s.input_key('.' as u32, KEY_STATE_RELEASED),
         KeyOutcome::Consumed
     );
 }
@@ -120,7 +179,7 @@ fn release_of_another_key_falls_back_to_consumed() {
 // handle_enter 会把它改空（退格删掉最后一个字符、回车提交并清缓冲）。
 // 于是单字符退格、任意回车提交之后，抬起返回 Unhandled 而按下是 Consumed
 // → 应用收到**无 keydown 的 keyup**（依赖键状态的游戏/编辑器卡键）。
-// 修法同可打印分支：按下记结论（`last_printable`），抬起按同一结论回复。
+// 修法同可打印分支：按下记结论（`held_passthrough`），抬起按同一结论回复。
 #[test]
 fn backspace_release_matches_press_after_buffer_emptied() {
     let mut s = pinyin_state();

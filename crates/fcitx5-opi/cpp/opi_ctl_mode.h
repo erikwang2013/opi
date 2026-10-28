@@ -82,6 +82,20 @@ inline std::string opiCtlStateModeToken(int32_t mode) {
     return t.empty() ? std::string("pinyin") : t;
 }
 
+/// state 行里 `tag=`（含前导 ';'，如 `";mode="`）那一格的值：截到下一个 ';' 或行尾。
+/// 2026-10-28：`enpro` 追加在 mode 之后（2026-10-19）后，`rfind(";mode=")` 会把
+/// `;enpro=off` 一起吞进 mode 值（§8/§10 的旧断言因此红）；两处共用这一份切片。
+inline std::string opiCtlStateField(const std::string &line, const std::string &tag,
+                                    const char *missing = "") {
+    const auto p = line.find(tag);
+    if (p == std::string::npos) {
+        return missing;
+    }
+    const auto b = p + tag.size();
+    const auto e = line.find(';', b);
+    return line.substr(b, e == std::string::npos ? std::string::npos : e - b);
+}
+
 // `opi-ctl mode` 的实现体（handleCtlAction_ 的 "mode" 分支调它；C++ 驱动直接调
 // handleCtlAction_，测到的就是 D-Bus 回复出去的这一串）。返回值 = **动作后**的
 // 新状态 token（见上）。

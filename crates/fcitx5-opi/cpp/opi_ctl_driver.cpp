@@ -441,10 +441,10 @@ int main() {
     // —— 那里有真守护进程 + 真 IC（本驱动假装测它就是假证据）。
     check(s0.find(";im=;") != std::string::npos,
           "im 格是空串（本驱动没实例可问，不是失败也不是别的值）");
-    // mode **追加在行尾**（2026-10-14）：按位置读前五段的旧前端照旧 —— 这一条同时
-    // 钉住「追加在末位」这个位置选择本身。
-    check(s0.size() > 12 && s0.compare(s0.size() - 12, 12, ";mode=pinyin") == 0,
-          "末格是 mode=pinyin（拼音 + 全拼 ⇒ pinyin 档；追加在行尾）");
+    // mode / enpro 依次追加在行尾（2026-10-14 / 2026-10-19）：按位置读前五段的旧
+    // 前端照旧；取值截到下一个 ';'，别把 enpro 吞进 mode 格（2026-10-28 修）。
+    check(opiCtlStateField(s0, ";mode=") == "pinyin",
+          "mode 格是 pinyin（拼音 + 全拼 ⇒ pinyin 档；enpro 紧随其后）");
 
     std::printf("-- 8a 切 trad 前后整行变化（off→on 与 on→off 两向都断）--\n");
     check(engine.handleCtlAction_("trad") == "ok" && opi_fcitx5_mode() == kModeTraditional,
@@ -467,7 +467,7 @@ int main() {
     const std::string s3 = engine.ctlState_();
     // punct 格 = **生效值**（2026-10-15 改；原先直接读配置值 ChinesePunct）：英文模式
     // 只有机械全角档、**没有中文标点表这一档** ⇒ 恒 off，与配置值 punctExp 无关。
-    check(s3 == "lang=en;trad=off;punct=off;fw=off;im=;mode=en26",
+    check(s3 == "lang=en;trad=off;punct=off;fw=off;im=;mode=en26;enpro=off",
           "lang=en 且全角随英文缺省变 off，**punct 格恒 off**（生效值；用户裁决 "
           "2026-10-15「切换中英文时标点也联动」的显示面），mode 格 = en26（英文态 "
           "lang 与 mode 同向变）：" + q(s3));

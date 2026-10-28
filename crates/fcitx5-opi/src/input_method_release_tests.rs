@@ -37,7 +37,7 @@ fn state_with_candidates() -> CandidateState {
         page: 0,
         buffer_snapshot: String::new(),
         shift_state: ShiftState::Off,
-        last_printable: None,
+        held_passthrough: Default::default(),
         dicts: Default::default(),
         english_pro: true,
         fetch_cache: Default::default(),
@@ -59,14 +59,14 @@ fn halfwidth(s: &mut CandidateState) {
 // 缺陷形态：抬起一律 EngineHandled，而按下走 handle_printable —— 拼音/繁体的
 // 非字母符号（'.'、'-'）、无候选或越界的数字、Number/Symbol 模式下的全部可见
 // ASCII 都返回 PassThrough。于是客户端收到 keydown 收不到 keyup（依赖键状态的
-// 游戏/编辑器卡键）。修法：记住按下的结论（last_printable），抬起按同一结论回复。
+// 游戏/编辑器卡键）。修法：记住按下的结论（held_passthrough），抬起按同一结论回复。
 #[test]
 fn pinyin_symbol_release_matches_press() {
     let mut s = pinyin_state();
     // 本轨没有 tsf 轨那类码位冲突：特殊键用 keysym 0xffxx，'.'=0x2E 不与任何特殊键同值。
     // 直通的标点只在**两个标点开关都关**时才有：中文标点表那一档会让 `.` 出 `。`、
     // 全角那一档会让它出 `．`（2026-09-28 拆开关后这是两档，只关一档都不直通）。
-    // 记结论的 `last_printable` 只在**按下直通**时才是 true，故这条必须以真直通为背景。
+    // 记结论的 `held_passthrough` 只在**按下直通**时才是 true，故这条必须以真直通为背景。
     halfwidth(&mut s);
     assert_eq!(handle_key(&mut s, '.' as u32, 0), KeyAction::PassThrough);
     assert_eq!(
@@ -101,8 +101,7 @@ fn digit_without_candidates_release_matches_press() {
 
 #[test]
 fn release_of_another_key_falls_back_to_handled() {
-    // 单槽记录的天花板：另一键按下会顶掉记录（键盘 rollover 时才会遇到），
-    // 键值不匹配时回落到旧行为（拦下），绝不误放行。
+    // 从未按下的键抬起：集合里没有 → 回落到旧行为（拦下），绝不误放行。
     let mut s = pinyin_state();
     halfwidth(&mut s); // 真直通背景：`.` 直通（两档任一开着它都会被映射）
     assert_eq!(handle_key(&mut s, '.' as u32, 0), KeyAction::PassThrough);
@@ -112,13 +111,82 @@ fn release_of_another_key_falls_back_to_handled() {
     );
 }
 
+#[test]
+fn release_after_rollover_still_matches_its_press() {
+    // 键盘 rollover：`.` 按住期间 `n` 按下。旧单槽会被 `n` 顶掉，`.` 的抬起
+    // 被误拦 → 客户端只有 keydown。集合让两键各自的结论互不覆盖。
+    let mut s = pinyin_state();
+    halfwidth(&mut s);
+    assert_eq!(handle_key(&mut s, '.' as u32, 0), KeyAction::PassThrough);
+    assert_eq!(handle_key(&mut s, 'n' as u32, 0), KeyAction::EngineHandled);
+    assert_eq!(
+        handle_key(&mut s, '.' as u32, KEY_STATE_RELEASED),
+        KeyAction::PassThrough
+    );
+}
+
+#[test]
+fn held_set_is_bounded_and_deduped() {
+    // 空缓冲数字全直通，拿它们当「按下放行」的键。同键重复按下只占一格（并刷新
+    // 为新近）；第 9 个不同键挤掉最久未按的 '2' —— 被挤掉那键的抬起回落
+    // EngineHandled（宁可拦下，不误放行），其余键的抬起仍与按下同判。
+    let mut s = pinyin_state();
+    for k in '1'..='8' {
+        assert_eq!(handle_key(&mut s, k as u32, 0), KeyAction::PassThrough);
+    }
+    assert_eq!(handle_key(&mut s, '1' as u32, 0), KeyAction::PassThrough);
+    assert_eq!(handle_key(&mut s, '9' as u32, 0), KeyAction::PassThrough);
+    assert_eq!(
+        handle_key(&mut s, '2' as u32, KEY_STATE_RELEASED),
+        KeyAction::EngineHandled
+    );
+    assert_eq!(
+        handle_key(&mut s, '1' as u32, KEY_STATE_RELEASED),
+        KeyAction::PassThrough
+    );
+    assert_eq!(
+        handle_key(&mut s, '9' as u32, KEY_STATE_RELEASED),
+        KeyAction::PassThrough
+    );
+}
+
+#[test]
+fn state_resets_clear_held_set() {
+    // 清空/切模式/换方案/换布局都作废按下记录：每次「按下 '1' → 复位 → 抬起」
+    // 都必须回落 EngineHandled（tsf 有同名同序用例）。用 Number 模式当背景 ——
+    // 它的整排可见 ASCII 都直通（英文模式会直出文本、拼音模式全角默认开）。
+    let mut s = pinyin_state();
+    s.switch_mode(Mode::Number);
+    let press = |s: &mut CandidateState| {
+        assert_eq!(handle_key(s, '1' as u32, 0), KeyAction::PassThrough);
+    };
+    let release_is_handled = |s: &mut CandidateState| {
+        assert_eq!(
+            handle_key(s, '1' as u32, KEY_STATE_RELEASED),
+            KeyAction::EngineHandled
+        );
+    };
+    press(&mut s);
+    s.clear();
+    release_is_handled(&mut s);
+    press(&mut s);
+    s.switch_mode(Mode::Number);
+    release_is_handled(&mut s);
+    press(&mut s);
+    s.set_scheme(engine_core::Scheme::Full);
+    release_is_handled(&mut s);
+    press(&mut s);
+    s.set_shuangpin_layout(0);
+    release_is_handled(&mut s);
+}
+
 // ---- 特殊键抬起须与按下同判（按下会改缓冲，判「当前」缓冲必然不对称） ----
 // 缺陷形态（v1.0.11 只修了可打印分支的那一半）：退格/回车的抬起分支判
 // `buffer().is_empty()`，判的是**当前**缓冲，而按下分支 handle_backspace /
 // handle_enter 会把它改空（退格删掉最后一个字符、回车提交并清缓冲）。
 // 于是单字符退格、任意回车提交之后，抬起返回 PassThrough 而按下是 EngineHandled
 // → 客户端收到**无 keydown 的 keyup**（依赖键状态的游戏/编辑器卡键）。
-// 修法同可打印分支：按下记结论（`last_printable`），抬起按同一结论回复。
+// 修法同可打印分支：按下记结论（`held_passthrough`），抬起按同一结论回复。
 #[test]
 fn backspace_release_matches_press_after_buffer_emptied() {
     let mut s = pinyin_state();

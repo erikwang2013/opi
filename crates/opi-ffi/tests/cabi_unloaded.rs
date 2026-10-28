@@ -38,6 +38,7 @@ use opi_ffi::cabi::{
     opi_display_buffer,
     opi_emoji_groups,
     opi_emoji_symbols,
+    opi_engine_version,
     opi_english_custom_phrases_enabled,
     opi_enter_action,
     opi_export_custom_phrases,
@@ -62,6 +63,8 @@ use opi_ffi::cabi::{
     opi_mode,
     opi_page,
     opi_page_count,
+    opi_page_size,
+    opi_pending_text,
     opi_pin_reading,
     opi_remove_dict,
     opi_remove_user_word,
@@ -91,6 +94,7 @@ use opi_ffi::cabi::{
     opi_set_wubi_style,
     opi_shift_state,
     opi_shuangpin_layout,
+    opi_switch_language,
     opi_switch_mode,
     opi_symbol_blocks,
     opi_symbols_in_block,
@@ -150,6 +154,19 @@ fn every_export_returns_a_sentinel_when_engine_is_not_loaded() {
         // —— 字符串查询类 ——
         assert_eq!(read(opi_buffer()), "");
         assert_eq!(read(opi_display_buffer()), "");
+        // 待提交片段（2026-10-28）：未装载 → 空串哨兵（同 display_buffer）。
+        assert_eq!(read(opi_pending_text()), "");
+        // 版本与页大小**不依赖引擎单例**：冷进程里也必须给真值，不是哨兵。
+        assert_eq!(
+            read(opi_engine_version()),
+            env!("CARGO_PKG_VERSION"),
+            "未装载：版本仍应是 workspace 版本"
+        );
+        assert_eq!(
+            opi_page_size(),
+            engine_core::router::PAGE_SIZE as u32,
+            "页大小是引擎常量，不依赖装载"
+        );
         assert_eq!(read(opi_export_user_words()), "");
         assert_eq!(read(opi_symbol_blocks()), "");
         // 表情两出口（2026-10-13）**不走单例**：纯静态表 —— 冷进程里**照样给全量**。
@@ -272,6 +289,9 @@ fn every_export_returns_a_sentinel_when_engine_is_not_loaded() {
         // 未装载时切模式：没有引擎可切 —— 不 panic，也不留下状态（随后重读仍是哨兵）。
         opi_switch_mode(1); // 1=English：编码见该导出注释，**别**照 `Mode` 枚举声明序推
         assert_eq!(opi_mode(), 0, "未装载时 switch_mode 不该改模式");
+        // 语言切换（2026-10-28）：合法参数调用，未装载不 panic、不建引擎。
+        opi_switch_language(0, 0);
+        assert_eq!(opi_mode(), 0, "未装载时 switch_language 不该改模式");
         opi_clear_user_words();
         assert_eq!(opi_import_user_words(std::ptr::null(), 0), -1);
         let word = to_units("我");

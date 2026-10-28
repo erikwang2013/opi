@@ -7,6 +7,8 @@
 !wubi98.opid
 # kangxi（2026-10-16）：康熙字典适配词库，生成器 scripts/gen_kangxi_dict.py。
 !kangxi.opid
+# cangjie5（2026-10-28，扩展 7）：仓颉五代码表，生成器 scripts/gen_cangjie_dict.py。
+!cangjie5.opid
 # 语义联想小表（2026-10-27）：scripts/gen_assoc_table.py 生成；编进 luna/trad.opid，
 # TSV 入库是为了可复现 —— dict_crosslayer 按它现场重编、比对入库字节。
 !luna.assoc.tsv

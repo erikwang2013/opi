@@ -102,23 +102,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # 单一来源 = Cargo.toml 的 [workspace.package] version（六个 crate 共用一份，
-          # 见该文件头注释）。同一手法与 ci.yml 的 msrv job 取 rust-version 一致。
-          ver="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
-          [ -n "$ver" ] || { echo "::error::Cargo.toml 里取不到 version"; exit 1; }
-
-          # desktop 的 opiAppVersion 是**另一处**写死的版本号（jpackage 的 packageVersion
-          # 与设置窗标题栏都从它来，见 desktop/build.gradle.kts 的注释）。两处必须相等，
-          # 否则 artifact 名（用 Cargo 版本）与 .msi 里真实的 packageVersion 会各说各话 ——
-          # 这正是本仓栽过的那类「摆在使用者眼前的假话」（设置窗写死过一份 1.4.0）。
-          # 它不相等时**在这里红**，而不是打出一个名字撒谎的包。
-          desk="$(sed -n 's/^val opiAppVersion = "\(.*\)"/\1/p' desktop/build.gradle.kts)"
-          [ -n "$desk" ] || { echo "::error::desktop/build.gradle.kts 里取不到 opiAppVersion"; exit 1; }
-          [ "$ver" = "$desk" ] || {
-            echo "::error::版本号漂了：Cargo.toml=$ver，desktop opiAppVersion=$desk —— 两处要一起动"
-            exit 1
-          }
-          echo "版本 $ver（Cargo.toml 与 desktop/build.gradle.kts 一致）"
+          # 单一来源 = Cargo.toml 的 [workspace.package] version。校验逻辑在
+          # scripts/check-versions.sh —— 覆盖 desktop opiAppVersion（jpackage 的
+          # packageVersion 与设置窗标题栏都从它来）以及其余各端；不相等就在这里红，
+          # 而不是打出一个名字撒谎的包。android-release.yml 与 ci.yml 复用同一份。
+          ver="$(bash scripts/check-versions.sh)"
           echo "version=$ver" >> "$GITHUB_OUTPUT"
 
   tsf-dll:

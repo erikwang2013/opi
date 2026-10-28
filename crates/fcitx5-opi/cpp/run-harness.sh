@@ -197,6 +197,11 @@ export LD_LIBRARY_PATH="$rustlib:$FCITX5_LIBS"
 # opi_fcitx5.conf** 来验「设置窗 → 配置文件 → 引擎」那条路；不指的话
 # StandardPath 会落到用户真实的 ~/.config（驱动里已加守卫，没设就 SKIP）。
 XDG_DATA_HOME="$work/data" XDG_CONFIG_HOME="$work/config" "$work/opi_panel_driver"
+# 面板驱动 §13 会**点选繁体「後」**，学习词经落盘留在 $work/data；stage 6 的 modes
+# 变体在**同一目录**里断言「简体 hou 无後」，残留学习词（第 0 档）会让它排回首位。
+# 驱动本身不验落盘（那是 user_words 单测的事），跑完清掉，别把 stage 5 的副作用
+# 带进 stage 6。stage 6 内部各变体之间的学习词残留仍保留 —— 那是真实桌面语义。
+rm -f "$work/data/opi/opi_user_words.json"
 echo
 # ctl 驱动故意用 data-nosym（有词库、符号类目是**零字节坏文件**＝装载失败）：
 # §7e 的「数据缺失」用例要一份装载态为假的目录 —— 理由与分面说明见 stage 4 末尾那段。

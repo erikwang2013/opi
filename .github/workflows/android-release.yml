@@ -67,20 +67,13 @@ jobs:
 
       # 与 windows.yml 的 version job 同理：artifact 名用 Cargo.toml 的版本，
       # 所以必须先证明它与 APK 里真实的 versionName 一致，否则名字会撒谎。
-      - name: 版本一致性（Cargo.toml ↔ Android versionName）
+      # 校验逻辑在 scripts/check-versions.sh（与 ci.yml 的 versions job 同一份）。
+      - name: 版本一致性（全仓，Cargo.toml 单一真源）
         id: version
         shell: bash
         run: |
           set -euo pipefail
-          ver="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)"
-          [ -n "$ver" ] || { echo "::error::Cargo.toml 里取不到 version"; exit 1; }
-          av="$(sed -n 's/^ *versionName = "\(.*\)"/\1/p' android/app/build.gradle.kts)"
-          [ -n "$av" ] || { echo "::error::android/app/build.gradle.kts 里取不到 versionName"; exit 1; }
-          [ "$ver" = "$av" ] || {
-            echo "::error::版本号漂了：Cargo.toml=$ver，Android versionName=$av —— 两处要一起动"
-            exit 1
-          }
-          echo "版本 $ver（Cargo.toml 与 Android versionName 一致）"
+          ver="$(bash scripts/check-versions.sh)"
           echo "version=$ver" >> "$GITHUB_OUTPUT"
 
       # release 用仓库内的社区签名密钥库（android/keystore/），产物可安装但不上市。

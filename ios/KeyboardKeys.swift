@@ -152,8 +152,8 @@ enum KeyboardFunctionKey {
     /// 设置面板改了引擎开关（学习/模糊音/简拼/纠错/中文标点/双拼布局/五笔/表情页）。
     /// 控制器负责持久化 + 立即推给引擎（与 Android 设置页「改了即生效」同姿态）。
     case updateSettings(KeyboardSettings)
-    /// 设置面板「清除用户词库」（2026-10-23）。面板负责确认，控制器负责
-    /// `clearUserWords()` + 重拉候选；本端没有用户词落盘副本（见控制器 case）。
+    /// 设置面板「清除用户词库」。面板负责确认，控制器负责清内存 + 落盘副本
+    /// （`UserWordsStore`）+ 重拉候选。
     case clearUserWords
 }
 
@@ -299,8 +299,54 @@ final class KeyButton: UIButton {
         applyTitle(.label, fontScale: 1)
         backgroundColor = .secondarySystemBackground
         layer.cornerRadius = 5
-        // ⚠️ 无障碍：正式版要给每个键设 accessibilityLabel（尤其 ⇧/⌫/回车这类
-        // 符号键），否则 VoiceOver 读不出来。本骨架未做 —— 这是**已知缺口**。
+        // 无障碍（2026-10-28）：符号键的键面字 VoiceOver 读不出来（"⌫"/"⇧"/"🌐"）。
+        accessibilityLabel = Self.spokenLabel(spec)
+        if spec.longPressRepeatsBackspace {
+            accessibilityHint = "长按连续删除"
+        } else if spec.keyval == OpiKey.shift {
+            accessibilityHint = "长按锁定大写"
+        } else if case .some(.cycleMode) = spec.function {
+            accessibilityHint = "长按切换系统输入法" // 🌐 长按 = nextInputMode（InputModes）
+        }
+    }
+
+    /// VoiceOver 朗读名。按 `function`/`keyval` 判，不按 label 判
+    /// （label 一旦本地化就不再稳定，见 `KeySpec.function` 的说明）。
+    /// 两行键（笔画 "一\n横"）读第二行的名字；单行键沿用键面字。
+    private static func spokenLabel(_ spec: KeySpec) -> String {
+        switch spec.function {
+        case .some(.cycleMode): return "切换输入模式"
+        case .some(.showLetters): return "字母"
+        case .some(.showNumbers): return "数字"
+        case .some(.showSymbols): return "符号"
+        case .some(.showEmoji): return "表情"
+        case .some(.retype): return "重输"
+        case .some(.nextInputMode): return "切换系统输入法"
+        case .some(.closeKeyboard): return "收起键盘"
+        case .some(.showModes): return "输入模式"
+        case .some(.showSettings): return "设置"
+        case .some(.showAbout): return "关于"
+        case .some(.showSkin): return "皮肤"
+        case .some(.showKeyboardModes): return "键盘模式"
+        case .some(.showRare): return "生僻字"
+        case .some(.showTiledCandidates): return "展开候选"
+        case .some(.hideTiledCandidates): return "返回"
+        case .some(.tiledBackspace), .some(.tiledBackspaceRepeat): return "删除"
+        case .some(.tiledSpace): return "空格"
+        case .some(.toggleChineseEnglish): return "切换中英文"
+        case .some(.toggleTraditional): return "切换简繁"
+        case .some(.selectInputMode(let mode)): return "切换到\(mode.label)"
+        case .some(.segment): return "分词"
+        case .some(.showPunctuationPicker): return "常用符号"
+        case .some(.pinReading(_)): return "读音"
+        default: break // 其余功能键不在 KeyButton 键面上（面板控件各自设 label）
+        }
+        if spec.keyval == OpiKey.backspace { return "删除" }
+        if spec.keyval == OpiKey.shift { return "大写" }
+        if spec.keyval == OpiKey.space { return "空格" }
+        if spec.keyval == OpiKey.ret { return "回车" }
+        let lines = spec.label.components(separatedBy: "\n")
+        return lines.count > 1 ? lines[lines.count - 1] : spec.label
     }
 
     @available(*, unavailable)

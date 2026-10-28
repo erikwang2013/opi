@@ -19,7 +19,7 @@ fn state() -> TsfLogic {
         buffer_snapshot: String::new(),
         shift_state: ShiftState::Off,
         english_pro: true,
-        last_printable: None,
+        held_passthrough: Default::default(),
         shift_toggle: true,
         association_enabled: true,
         fetch_cache: Default::default(),
@@ -150,11 +150,12 @@ fn delete_mirrors_backspace() {
     assert_eq!(s.buffer(), "");
     // 空缓冲 → 交应用
     assert_eq!(s.input_key(KEY_DELETE, 0), KeyOutcome::Unhandled);
-    // 释放事件被消费，不删字符
+    // 释放按按住键的按下结论回复（上一条 DELETE 按下已直通）；中间的 'a' 不顶掉它，
+    // 且释放不删字符
     s.input_key('a' as u32, 0);
     assert_eq!(
         s.input_key(KEY_DELETE, KEY_STATE_RELEASED),
-        KeyOutcome::Consumed
+        KeyOutcome::Unhandled
     );
     assert_eq!(s.buffer(), "a");
 }

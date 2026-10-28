@@ -55,9 +55,10 @@ run-harness.sh（它会建好私有 dbus 会话、独立 XDG_CONFIG_HOME、addon
   可观测记录**，可观测的只有客户端这两条。
 
 断言（不再是只打印）：每个按键步骤都要求「该客户端按能力位应收到的信号」
-至少一条（`page` 的 UI NextPage/PrevPage、`passthrough` 的直通键是**已知不该
-发信号**的，反过来要求 **0 条**）。任何一步不符即退出码 1 —— 「订阅了一个不存在
-的信号所以永远静默」这类问题就是这样被发现的（见 SIGNALS 的注释）。
+至少一条（`page` 的 UI NextPage/PrevPage 2026-10-28 起**也会**发信号 —— 胶水把
+翻页接口接到 Rust 页码；`passthrough` 的直通键是**已知不该发信号**的，反过来
+要求 **0 条**）。任何一步不符即退出码 1 —— 「订阅了一个不存在的信号所以永远
+静默」这类问题就是这样被发现的（见 SIGNALS 的注释）。
 """
 
 import re
@@ -164,9 +165,10 @@ def plan(mode, ic, caps):
     if mode == "page":
         return [
             ("输入 'n'", lambda: ic.ProcessKeyEvent(0x6E, 0, 0, False, 0), True),
-            # UI 的翻页接口：本轮实测是空操作（见 README 已知边界）
-            ("UI NextPage()", lambda: ic.NextPage(), False),
-            ("UI PrevPage()", lambda: ic.PrevPage(), False),
+            # UI 的翻页接口（2026-10-28 起不再是空操作）：dbusfrontend 调
+            # pageable->next()/prev() → Rust 页码推进 → updateUserInterface。
+            ("UI NextPage()", lambda: ic.NextPage(), True),
+            ("UI PrevPage()", lambda: ic.PrevPage(), True),
             (f"键 PageDown(0x{PAGE_DOWN:x})",
              lambda: ic.ProcessKeyEvent(PAGE_DOWN, 0, 0, False, 0), True),
             (f"键 PageUp(0x{PAGE_UP:x})",

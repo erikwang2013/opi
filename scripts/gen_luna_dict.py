@@ -13,7 +13,7 @@
 排序键（同拼音前缀组内，依次比较）：
   有词次 > 无词次 → 词次降序 → 简体专形优先 → GB 段位（一级/二级/其余）→ 段内序 → 字码位。
 GB 段位**保留**（同频/缺频字的兜底序：常用字仍在生僻字前），只是不再当主键；
-freq = FMAX - idx × (FMAX // N) 的间距编码不变，词组仍排在全部单字之后。
+freq 用固定容量/固定层基址的位置编码（见 dict_spacing.py）：间距不随条目数变、追加不重算既有 freq，词组仍排在全部单字之后。
 
 kHanyuPinlu 只覆盖 3799 字，其余字按「无词次」落入段位序（旧行为），不会被丢掉。
 「有繁体专形优先」的由来：Unihan 变体镜像字（如 戠 经 kSimplifiedVariant 继承 只 的
@@ -110,6 +110,7 @@ import sys
 import urllib.request
 from functools import partial
 
+from dict_spacing import section_freqs
 from hanzi_freq import (
     FMAX,
     gb2312_levels,
@@ -133,6 +134,9 @@ LUNA_URL = (
     "/luna_pinyin.dict.yaml"
 )
 LUNA_SHA256 = "75bcf6eb3ff62b129882ed89cc22b2d80a5347aa72bcfa2ccc839bac298e7314"
+# 固定容量/词组层基址（见 dict_spacing.py）：越界即报错；上调是一次性全表 freq 变化。
+LUNA_MAX_ENTRIES = 1_048_576
+LUNA_PHRASE_BASE = 65_536
 
 # ---- 简体词组上游 pin（2026-09-27）----
 # 照 gen_trad_dict.py 的 terra 做法钉死到 commit + SHA-256：再引一个浮动上游
@@ -466,14 +470,10 @@ def main() -> None:
             % (len(seen), len(ordered), len(all_phrases))
         )
 
-    n = len(ordered) + len(all_phrases)
-    assert n < FMAX, "行数超过 FMAX，spacing 归零"
-    spacing = FMAX // n
-    out: list[str] = [
-        f"{ch}\t{py}\t{FMAX - idx * spacing}" for idx, (ch, py) in enumerate(ordered)
-    ]
-    for idx, (word, toks, _) in enumerate(all_phrases):
-        out.append(f"{word}\t{''.join(toks)}\t{FMAX - (len(ordered) + idx) * spacing}")
+    single, phrase = section_freqs(len(ordered), len(all_phrases), LUNA_MAX_ENTRIES, LUNA_PHRASE_BASE)
+    out: list[str] = [f"{ch}\t{py}\t{f}" for (ch, py), f in zip(ordered, single)]
+    for (word, toks, _), f in zip(all_phrases, phrase):
+        out.append(f"{word}\t{''.join(toks)}\t{f}")
 
     sys.stdout.write("\n".join(out) + "\n")
     chs = {ch for ch, _ in ordered}
@@ -492,7 +492,7 @@ def main() -> None:
     )
     print(f"单字读音覆盖: 补入 {override_added} 对", file=sys.stderr)
     print(f"总行数(含多读音展开): {len(out)}", file=sys.stderr)
-    print(f"freq 范围: [{FMAX - (n - 1) * spacing}, {FMAX}] spacing={spacing}", file=sys.stderr)
+    print(f"freq 范围: [{phrase[-1]}, {FMAX}] spacing={FMAX // LUNA_MAX_ENTRIES}", file=sys.stderr)
 
 
 if __name__ == "__main__":

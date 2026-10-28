@@ -71,6 +71,21 @@
 > 无完全访问时自动检测静默跳过。工具条图标顺序改为
 > 表情/皮肤/输入模式/键盘模式/**齿轮**/关于/收起。**本轮未编译，等 Apple CI**。
 >
+> **2026-10-28（用户词落盘 / 待提交文本 / 引擎版本 / 读屏名）**：新增
+> `UserWordsStore.swift` —— 用户词 JSON 由引擎导出/导入，写到扩展容器
+> `Library/Application Support/opi/opi_user_words.json`（无 App Group，宿主 App 看不到）；
+> 启动导入、提交后 1.5s 防抖写回、`viewWillDisappear` 立即落盘、设置面板「清除用户词库」
+> 连文件一起删；0 字节 / 非 UTF-8 / 引擎拒收只 NSLog 并保留原文件。C ABI 新增
+> `opi_pending_text` / `opi_engine_version`（`macos/OpiFFI.h` 声明，`ios/OpiFFI.h` 转发）：
+> 「输入模式」面板换布局前把**已确认未提交**片段上屏（`set_scheme` 不清
+> `pending_segments`，读完须 `clear()` 防重复提交；未确认缓冲仍丢弃，见缺口表）；
+> 9/14/笔画的简繁键改走新出口 `opi_switch_language`（换模式不换方案、**保缓冲**，
+> 与 Android `ImeStateModeKeys` 同一条，不再丢打了一半的拼音）；另加 `opi_page_size`
+> （`PAGE_SIZE` 的唯一宿主载体，本端按页出口走、未接）。关于页并列显示 App 与引擎
+> 版本（不一致时两个都显示）；`KeyButton` 给 ⌫/⇧/🌐/空格/回车等补 VoiceOver 读屏名。
+> **本轮未编译（等 Apple CI）、未上机**。下方「没有用户词落盘」「无待提交文本出口」
+> 「无引擎版本出口」「没有读屏名」「切简繁会清缓冲」只对 2026-10-28 之前成立。
+>
 > 本目录的代码是在 Linux 上写的：本机没有 macOS、没有 Xcode、没有 Apple SDK，
 > `import UIKit` 就断 —— 编译发生在 **CI 的 macOS runner** 上，不在开发机。
 > 改完 Swift **先推一次让 CI 编**，再谈别的（本地读不出来的错，编译器一秒钟就报）。

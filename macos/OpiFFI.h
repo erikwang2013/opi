@@ -134,6 +134,14 @@ OpiString opi_select_page(uint32_t index);
 /// 0=Pinyin 1=English 2=Number 3=Symbol 4=Traditional（`api::mode_from_int`）。
 /// ⚠️ 越界值是**静默不动作**：没有返回值，调用方无从知道被忽略。
 void opi_switch_mode(int32_t mode);
+
+/// **语言切换**（2026-10-28 新出口；JNI 对应 `opijni_switch_language`）：换模式与方案
+/// 但**保留缓冲**，已确认片段（`opi_pending_text`）也原样留着。取值同
+/// `opi_switch_mode`/`opi_set_scheme`；任一越界**整体忽略**（不做半程切换）。
+/// 用于中↔英/中↔繁这类成对切换；「输入模式」面板换布局仍走
+/// `opi_set_scheme` + `opi_switch_mode`（那条清缓冲，切换前先提交 pending）。
+void opi_switch_language(int32_t mode, int32_t scheme);
+
 void opi_set_shift(bool on);
 
 // ---------- 标点 / 全角 / 符号开关（B3 / B5 的语义出口；键位仍不在引擎层） ----------
@@ -239,6 +247,18 @@ OpiString opi_buffer(void);
 /// **显示用**缓冲：全键盘按音节分词（`ni'hao`），9 键给拼音读数；行为判定仍读
 /// `opi_buffer()`。两个出口别合并（见 `api/mod.rs`）。
 OpiString opi_display_buffer(void);
+
+/// 已确认但**尚未提交**的逐字片段（2026-10-28 新出口，JNI 对应
+/// `opijni_pending_text`）。换输入方案前必须上屏：`opi_switch_mode` 会把这些
+/// 片段**静默丢掉**，`opi_set_scheme` 不清但换方案后也不该再提交；
+/// 成对的 `opi_switch_language` 两者都不清。
+/// 显示串仍用 `opi_display_buffer()`（它已前置这段）。
+OpiString opi_pending_text(void);
+
+/// 引擎版本（2026-10-28 新出口）：workspace 版本，随 App 打包。
+/// 与 App 的 `CFBundleShortVersionString` 同一次打包写入（`scripts/apple/version.sh`），
+/// 正常相等；**不相等时宿主两个都显示**，别只挑一个 —— 那正是要暴露的漂移。
+OpiString opi_engine_version(void);
 
 /// 当前模式（**0..=4**，4=繁体）。⚠️ 取值必须**全部**列进 Swift 枚举：
 /// 漏一个 case 会让 `OpiMode(rawValue:)` 判 nil、落到 `?? .pinyin` 兜底，
@@ -350,6 +370,10 @@ OpiKeyEventResult opi_key_event(uint32_t keyval, uint32_t states);
 /// 候选总页数（UI 的「共 N 页」）。**无候选 → 0**，引擎未装载 → 0。
 /// ⚠️ 本目录**尚未调用**它（同 G3，等 Mac 上编译通过再接）。
 uint32_t opi_page_count(void);
+
+/// 每页候选数（2026-10-28 新出口）：`engine_core::router::PAGE_SIZE` 的唯一宿主载体。
+/// 分页/翻页读它，别把 8 抄进 UI（抄第二份 = 引擎改一次、UI 静默错位）。
+uint32_t opi_page_size(void);
 
 /// 当前候选页（0 起，末页由路由钳制）。引擎未装载 → 0。
 /// Rust 侧注释的原话：**候选栏的页码必须读这里、不要自己数** ——

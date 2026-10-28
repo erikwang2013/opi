@@ -31,6 +31,7 @@
 | emoji_keywords.tsv（输入匹配表情关键字表，2026-10-18 加） | 关键字：OPI 项目人工撰写（80 条沿用 `scripts/symbol_keywords.py` 的 MANUAL 关键字，其余手写在 `scripts/gen_emoji_keywords.py` 的 EXTRA 表）；emoji 文本：取自 `emoji.tsv`（OpenMoji 常用子集，渊源同上行；MANUAL 里 10 个不在该子集的取码位字符本身） | **关键字 MIT**（项目自撰）；**emoji 文本仍按 emoji.tsv 的 CC BY-SA 4.0** | 输入即得表情的数据源（打 `weixiao` / `smile` 出 😊 / 😄）。两列 `emoji\<TAB\>关键字(逗号分隔,无空格)`，150–300 条（**条数以生成器每次打印的为准，别写死数字**），由 `scripts/gen_emoji_keywords.py` 生成（离线、读已入库数据，不联网）。消费侧 `engine-core/src/emoji_keywords.rs` 用 `include_str!` 编译期嵌入；匹配 = 缓冲（拼音/英文小写字母串）是关键字前缀，候选**追加在文本候选之后**、受 limit 约束（不参与 `rank_and_pick` 既有排序） |
 | kaomoji.tsv（颜文字表，2026-10-18 加） | https://github.com/aoguai/rime_kaomoji_dict @ commit `2f10ddca83f4cd87f41672442d27943f733b488f`（`data/` 下 5 份素材：A_kaomoji_dict / custom_phrase_dict / lmeee_dict / sougou_dict / Temreg_dict） | **MIT**（Copyright (c) 2023 aoguai；分发时保留版权与许可声明） | 颜文字常用子集（200–400 条；**条数以生成器每次打印的为准，别写死数字**）：`text\<TAB\>中文分类`（无表头），分类 开心/难过/生气/惊讶/害羞/动作/其他；保留原文（不插入空格、不把特殊空格转成普通空格），剥掉行首/行尾标签与中文描述后按文本去重，按源优先序 lmeee→sougou→A→custom→Temreg 取到每类上限。由 `scripts/gen_emoji_kaomoji.py` 生成（5 份源各钉 SHA-256）；`data/raw/kaomoji.tsv` 与 `android/app/src/main/assets/kaomoji.tsv` 为同一次运行的逐字节副本。许可全文见上游仓库 LICENSE（commit 同上） |
 | shared/pet/stickers/*.png、shared/pet/stickers-gif/*.gif、shared/pet/emoji-font/*（小欧贴纸/动图/映射表，2026-10-18 加，2026-10-19 扩，2026-10-20 删字体） | OPI 项目自绘：由 `shared/pet` 的 Compose 绘制（`OpiPet` 十二形态）生成，**不是第三方 emoji/贴纸资产** | **专有（非开源）**：版权归项目作者，商业使用需书面授权，个人非商业可随未修改的官方发行版原样使用（见 [`../../ASSETS-LICENSE.md`](../../ASSETS-LICENSE.md)） | 「自有」表情页使用的 12 组 280×280 透明底 PNG 与 200×200 十帧动画 GIF，以及 `map.tsv` / `shortcodes.tsv` 映射表；生成器 `scripts/gen_pet_stickers.py` / `scripts/gen_pet_emoji_table.py`（桌面渲染入口 `OpiPetStickerRenderTest`），文件名契约 `PetStickerAssets`。构建期拷进 Android assets `pet/`、`pet-gif/`、`pet-font/`（仅 TSV）与桌面 resources 同名目录；`opi-emoji.ttf` 与 iOS/鸿蒙字体副本已于 2026-10-20 删除。**不含任何 Unicode emoji 上屏**。生成器脚本与 `shared/pet` 源码仍为 MIT，产物按本行许可 |
+| cangjie5.tsv（2026-10-28 加） | https://github.com/rime/rime-cangjie @ commit `52d90a1b1312e74042b38c1cbc8142defbc53171`（`cangjie5.base.dict.yaml` + `cangjie5.extended.dict.yaml`；stem 表只用于「跳过不丢」断言、不进产物） | **LGPL-3.0**（按仓库 LICENSE 实测；数据文件头仍写 GPL，残留不一致见下「仓颉码表」节） | 仓颉五代码表（码长 1–5、只用 a-z；x/z 前缀行保留）。由 `scripts/gen_cangjie_dict.py` 钉 commit 拉取；上游无词频，逐字取 `trad_hanzi.tsv` 的最大 freq（覆盖约 55% 的字，其余常数 1000 兜底）—— freq 是**同码内排序信号**、不是词频统计。编译产物 `data/generated/cangjie5.opid`（入库）。**条数以生成器每次打印的为准，别写死数字** |
 
 ## 英文联想词源（2026-09-28）
 
@@ -451,3 +452,51 @@ kept entries == 生成行数、且 stderr 零「跳过」警告 —— 任何静
 **分发面**：两表暂不随任何端分发（`.opid` 已入库 `data/generated/`）；接入端时要改的清单
 （fcitx5 安装落点/`opi_locate_check.cpp`/CI grep、Android assets、nfpm/MSI 装载清单）由接入
 任务列出。
+
+## 仓颉码表 cangjie5（2026-10-28；扩展 7 数据阶段）
+
+**来源与署名**：rime/rime-cangjie @ commit `52d90a1b1312e74042b38c1cbc8142defbc53171` 的
+`cangjie5.base.dict.yaml` + `cangjie5.extended.dict.yaml`（两份 sha256 钉在
+`scripts/gen_cangjie_dict.py`；上游副本缓存在 `data/generated/`、未入库）。上游 AUTHORS：
+派生自 acevery（Yu Yuwei）的 ibus-table 仓颉表（LGPL）；原始工作 朱邦復 / Chu Bong-Foo
+（Public Domain）；schema 由 Gong Chen（LGPL）。码表内容来自《五倉世紀》www.chinesecj.com。
+**条数以生成器每次打印的为准。**
+
+**许可残留不一致（如实记，不做法律论断）**：仓库 `LICENSE` 实测是 **LGPL-3.0** 全文
+（GitHub API `license.spdx_id = LGPL-3.0`），但三个 `cangjie5*.dict.yaml` 的文件头都写
+`License: GPL` —— 取仓库 LICENSE 的 LGPL-3.0，与「五笔码表」节 86 的 GPL/LGPL 混记同类
+（同属 copyleft 家族）。分发含本数据的产物时保留本节与上游署名。
+
+**stem 表为什么不进产物**：上游把带第三列 `stem` 的 3 列行拆成
+`cangjie5.stem.dict.yaml` 供词组编码用；本表只需要 (字, 码)。生成器断言 stem 的每个
+(字, 码) 都已在 base 中（2026-10-28 本 pin 实测 855/855 行、844/844 个去重对全在
+base）⇒ 跳过不丢任何映射。将来上游出现 base 之外的 stem 对，生成器红而不是静默丢行。
+
+**上游不可承载的 1 行**：base 里有一行 word 是 U+3000 全角空格（码 `zxaa`）。
+`parse_dict` 的 `trim()` 会把 word 抹成空串、按 unusable 整条丢弃（compile 会打
+`warning: 跳过`）⇒ 生成器提前剔除并在 stderr 报数，保证 `kept entries == 生成行数`、
+stderr 零跳过。
+
+**x/z 前缀行（保留）**：实测 x 前缀 1,604 行、z 前缀 497 行（2026-10-28）。上游 umbrella
+`cangjie5.dict.yaml` 的 encoder 用 `exclude_patterns: ^x.*$ / ^z.*$` 把它们排除在
+**词组编码**之外（x/z 在仓颉里是特殊键，不是正常字根），但它们是码表本身的条目（z 段
+含符号/假名/分类）。是否与 x/z 特殊键打架属于引擎设计问题 —— 数据侧报数、不替它裁决
+（与五笔 z 前缀行同一态度）。
+
+**freq 语义**：上游无词频。逐字取 `trad_hanzi.tsv` 的**最大** freq（多音字取最高读音），
+查不到的字用常数 1000（`parse_dict` 的缺列缺省）。这是**同码内相对排序**的信号，
+不是词频统计；跨码、跨表比较无意义。`trad_hanzi.tsv` 重编后本表 freq 数值会跟着变
+（同码内相对序不变）⇒ 需重跑一次本生成器保持一致。
+
+**收录范围 / tofu 局限**：extended 段照上游收扩展区与兼容区（生成器不过滤）；**收录 ≠
+可见**，扩展 C+ 与兼容区多数字体不覆盖，打出来是 tofu（与「收录范围」节同一结论）。
+全表实测（2026-10-28）：79,261 条 (字,码)，其中 5,056 行字在 `hanzi_freq.CJK_RANGES`
+之外（部首、符号、扩展 C+ 等）。
+
+**自洽校验**（每次生成打 stderr，条数实测、不许写死）：码只准 a-z、码长 1–5；
+(word,code) 去重；同码冲突分布；freq 覆盖率与统计；人工 top-N（a→日、aa→昌、ab→明 ——
+期望值手写、不由同一份 freq 反推；编译产物用 `opi-tools dump-keys` 实测复核同一结论）；
+编译自检（`opi-tools compile` 的 kept entries == 生成行数、且 stderr 零「跳过」警告）。
+
+**分发面**：暂不随任何端分发（`.opid` 已入库 `data/generated/`）；接入端时的装载清单由
+接入任务列出。

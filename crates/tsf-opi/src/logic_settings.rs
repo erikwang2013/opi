@@ -158,6 +158,7 @@ impl TsfLogic {
     /// 配对：`fcitx5-opi/src/candidate.rs` 的同名方法（两轨同构）。
     pub fn set_shuangpin_layout(&mut self, index: usize) {
         self.invalidate_fetch_cache();
+        self.clear_held_keys();
         self.engine.set_shuangpin_layout(index);
     }
 
@@ -167,6 +168,7 @@ impl TsfLogic {
     /// 配对：`fcitx5-opi/src/candidate.rs` 的同名方法（两轨同构）。
     pub fn set_scheme(&mut self, scheme: engine_core::Scheme) {
         self.invalidate_fetch_cache();
+        self.clear_held_keys();
         self.engine.set_scheme(scheme);
     }
 }

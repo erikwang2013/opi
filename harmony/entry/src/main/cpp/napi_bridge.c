@@ -227,22 +227,14 @@ static napi_value JsBuffer(napi_env env, napi_callback_info info) { (void)info; 
 
 /// displayBuffer(): string —— 显示用缓冲（9 键带分词 `ni'hao`）。⚠️ 行为判定用 buffer。
 static napi_value JsDisplayBuffer(napi_env env, napi_callback_info info) { (void)info; return take_string(env, opi_display_buffer()); }
+/// pendingText(): string —— 已确认未提交的逐字片段。换方案/模式前必须上屏（见 KeyboardController）。
+static napi_value JsPendingText(napi_env env, napi_callback_info info) { (void)info; return take_string(env, opi_pending_text()); }
 
 /// page(): number —— 当前候选页。**页码必须读这里、不要自己数。**
-static napi_value JsPage(napi_env env, napi_callback_info info) {
-    (void)info;
-    napi_value out = NULL;
-    napi_create_uint32(env, opi_page(), &out);
-    return out;
-}
+static napi_value JsPage(napi_env env, napi_callback_info info) { (void)info; napi_value out = NULL; napi_create_uint32(env, opi_page(), &out); return out; }
 
 /// pageCount(): number —— 候选总页数，无候选 → 0。
-static napi_value JsPageCount(napi_env env, napi_callback_info info) {
-    (void)info;
-    napi_value out = NULL;
-    napi_create_uint32(env, opi_page_count(), &out);
-    return out;
-}
+static napi_value JsPageCount(napi_env env, napi_callback_info info) { (void)info; napi_value out = NULL; napi_create_uint32(env, opi_page_count(), &out); return out; }
 
 /// clear(): void —— 清空缓冲。
 static napi_value JsClear(napi_env env, napi_callback_info info) {
@@ -253,12 +245,7 @@ static napi_value JsClear(napi_env env, napi_callback_info info) {
 
 /// mode(): number —— 0=Pinyin 1=English 2=Number 3=Symbol 4=Traditional。
 /// ⚠️ 五个取值都要进 ArkTS 枚举，漏一个会让 UI 显示与引擎行为不一致。
-static napi_value JsMode(napi_env env, napi_callback_info info) {
-    (void)info;
-    napi_value out = NULL;
-    napi_create_int32(env, opi_mode(), &out);
-    return out;
-}
+static napi_value JsMode(napi_env env, napi_callback_info info) { (void)info; napi_value out = NULL; napi_create_int32(env, opi_mode(), &out); return out; }
 
 /// switchMode(mode: number): void
 /// ⚠️ 越界值是**静默不动作**（ABI 没有返回值），传之前自己先夹紧。
@@ -272,6 +259,9 @@ static napi_value JsSwitchMode(napi_env env, napi_callback_info info) {
     opi_switch_mode(mode);
     return ret_undefined(env);
 }
+
+/// switchLanguage(mode, scheme): void —— 换模式+方案但**保缓冲**、不清已确认片段（中↔繁/中↔英）。
+static napi_value JsSwitchLanguage(napi_env env, napi_callback_info info) { napi_value a[2]; size_t n = get_args(env, info, a, 2); int32_t mode = 0; int32_t scheme = 0; if (n >= 1) { (void)napi_get_value_int32(env, a[0], &mode); } if (n >= 2) { (void)napi_get_value_int32(env, a[1], &scheme); } opi_switch_language(mode, scheme); return ret_undefined(env); }
 
 /// shiftState(): number —— **前端** ⇧ 三态 0=OFF 1=SINGLE 2=LOCK。
 /// ⇧ 的高亮（尤其 Lock）只能读这里，引擎侧 shift 位看不出三态。
@@ -424,6 +414,13 @@ static napi_value JsSelect(napi_env env, napi_callback_info info) { napi_value a
 static napi_value JsRemoveUserWord(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); size_t len = 0; char16_t *p = (n >= 1) ? js_to_utf16(env, a[0], &len) : NULL; opi_remove_user_word((const uint16_t *)p, len); free(p); return ret_undefined(env); }
 /// clearUserWords(): void —— 清空学习积累的全部用户词（不动词库与当前缓冲）。
 static napi_value JsClearUserWords(napi_env env, napi_callback_info info) { (void)info; opi_clear_user_words(); return ret_undefined(env); }
+/// importUserWords(json: string): number —— 返回导入条数；负数 = 失败（非法 JSON /
+/// 版本不符 / 词表过大 / 引擎未装载）。失败**不改动**既有用户词（引擎侧全有或全无）。
+/// 缺参/空串按 null 处理（`js_to_utf16` 返回 NULL），引擎侧同样返回 -1。
+static napi_value JsImportUserWords(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); size_t len = 0; char16_t *p = (n >= 1) ? js_to_utf16(env, a[0], &len) : NULL; int32_t count = opi_import_user_words((const uint16_t *)p, len); free(p); napi_value out = NULL; napi_create_int32(env, count, &out); return out; }
+/// exportUserWords(): string —— 用户词 JSON（`{"version":1,"words":[...]}`）。
+/// **引擎未装载 → 空串**：调用方别把空串写进文件（启动时按 0 字节判损坏）。
+static napi_value JsExportUserWords(napi_env env, napi_callback_info info) { (void)info; return take_string(env, opi_export_user_words()); }
 
 // ============================================================================
 // 模块注册
@@ -442,17 +439,21 @@ static napi_value OpiImeInit(napi_env env, napi_value exports) {
         {"select", NULL, JsSelect, NULL, NULL, NULL, napi_default, NULL},
         {"buffer", NULL, JsBuffer, NULL, NULL, NULL, napi_default, NULL},
         {"displayBuffer", NULL, JsDisplayBuffer, NULL, NULL, NULL, napi_default, NULL},
+        {"pendingText", NULL, JsPendingText, NULL, NULL, NULL, napi_default, NULL},
         {"page", NULL, JsPage, NULL, NULL, NULL, napi_default, NULL},
         {"pageCount", NULL, JsPageCount, NULL, NULL, NULL, napi_default, NULL},
         {"clear", NULL, JsClear, NULL, NULL, NULL, napi_default, NULL},
         {"mode", NULL, JsMode, NULL, NULL, NULL, napi_default, NULL},
         {"switchMode", NULL, JsSwitchMode, NULL, NULL, NULL, napi_default, NULL},
+        {"switchLanguage", NULL, JsSwitchLanguage, NULL, NULL, NULL, napi_default, NULL},
         {"shiftState", NULL, JsShiftState, NULL, NULL, NULL, napi_default, NULL},
         {"setShift", NULL, JsSetShift, NULL, NULL, NULL, napi_default, NULL},
         {"learnerEnabled", NULL, JsLearnerEnabled, NULL, NULL, NULL, napi_default, NULL},
         {"setLearner", NULL, JsSetLearner, NULL, NULL, NULL, napi_default, NULL},
         {"removeUserWord", NULL, JsRemoveUserWord, NULL, NULL, NULL, napi_default, NULL},
         {"clearUserWords", NULL, JsClearUserWords, NULL, NULL, NULL, napi_default, NULL},
+        {"importUserWords", NULL, JsImportUserWords, NULL, NULL, NULL, napi_default, NULL},
+        {"exportUserWords", NULL, JsExportUserWords, NULL, NULL, NULL, napi_default, NULL},
         {"toggleFullwidth", NULL, JsToggleFullwidth, NULL, NULL, NULL, napi_default, NULL},
         {"fullwidthState", NULL, JsFullwidthState, NULL, NULL, NULL, napi_default, NULL},
         {"toggleSymbol", NULL, JsToggleSymbol, NULL, NULL, NULL, napi_default, NULL},

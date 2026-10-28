@@ -1,13 +1,10 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-// ⚠️ 草案 · **CI 已真编译**（apple.yml 的 iOS job，2026-10-15）· **从未上机运行**
+// ⚠️ 草案 · **CI 已真编译**（apple.yml 的 iOS job）· **从未上机运行**
 //
-// 本文件在 Linux 上编写。**已过 `swiftc ios/*.swift`（-typecheck + -emit-library）** ——
-// 2026-10-15 那次全目录真编译（同一轮还当场抓出一处闭包里的 `continue`，见 RarePanel.swift）；
-// 但从未在设备或模拟器上跑过：**行为仍未验证**，别把「编过」读成「能用」。
-// UIKit 是 Apple 独有框架，本机 `import UIKit` 就会断，所以连语法检查都没做过。
-// 见 ios/README.md「在 Mac 上第一件要做的事」：先让它编译过，再谈功能。
+// 本文件在 Linux 上编写：CI 真编译过（`swiftc ios/*.swift`），但从未在设备或模拟器
+// 跑过 —— **行为仍未验证**，别把「编过」读成「能用」（见 ios/README.md）。
 //
 // 键盘扩展入口。职责只有三件：
 //   1. 生命周期：建引擎、装词库、给 inputView 定高。
@@ -75,9 +72,7 @@ final class KeyboardViewController: UIInputViewController {
     ///
     /// 这里 `private` 是**对的**（与上面那几个成员相反，别顺手改成 internal）：
     /// 它只在本文件的委托扩展里用，`KeyboardHardware.swift` 碰不到它。
-    /// ⚠️ 未编译：`Timer(timeInterval:repeats:block:)` 与 `RunLoop.add(_:forMode:)`
-    /// 都是本仓**没用过**的 API（iOS 10+ 的块回调版）—— Mac 上第一件事是核实这两个，
-    /// 若不便，退回 `Selector` 版（`scheduledTimer(timeInterval:target:selector:...)`）。
+    /// 块回调版 Timer（iOS 10+；本仓仅此一处）—— 已过 CI 编译，未上机。
     private var emojiSearchTimer: Timer?
     private static let emojiSearchDebounce: TimeInterval = 0.25
 
@@ -110,18 +105,19 @@ final class KeyboardViewController: UIInputViewController {
         // 引擎开关必须在装载词库**之后**推（未装载时写侧是空操作），且要在
         // 第一次 refresh 之前 —— 否则首屏候选按旧开关算。
         engine.applySettings(settings)
+        UserWordsStore.load(into: engine) // 用户词落盘：缺失/损坏只记日志，不挡启动
         layout.setEngineSettings(settings, fuzzyPairNames: engine.fuzzyPairNames())
         layout.emojiPanel.setShowOwn(settings.showOwn)
         applyTheme()
         // 恢复上次输入模式（缺省 9 键）：必须在首帧前把引擎方案与键面同步好。
         // 引擎单例是进程级的，另一个键盘实例可能留下别的方案 —— 这里显式设一次。
         lastChineseInputMode = InputModePreference.restoredLastChinese
-        applyInputMode(InputModePreference.restored)
+        // 启动恢复不交出待提交片段：那是上一实例的会话，不能替新宿主上屏。
+        applyInputMode(InputModePreference.restored, commitPending: false)
     }
 
-    /// 键盘高度约束。只建一次 —— `viewWillAppear` 会被多次调用
-    /// （旋转、切回、宿主重排），每次都 `isActive = true` 一条新约束的话，
-    /// 会堆出一把互相冲突的高度约束。
+    /// 键盘高度约束。只建一次 —— `viewWillAppear` 会被多次调用（旋转、切回、宿主
+    /// 重排），每来一次都建约束会堆出一把互相冲突的高度。
     private var heightConstraint: NSLayoutConstraint?
 
     override func viewWillAppear(_ animated: Bool) {
@@ -135,6 +131,12 @@ final class KeyboardViewController: UIInputViewController {
         h.priority = .defaultHigh
         h.isActive = true
         heightConstraint = h
+    }
+
+    /// 键盘收起/切走时立刻落盘（2026-10-28）：1.5s 防抖可能等不到扩展被回收。
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        UserWordsStore.flush(engine)
     }
 
     /// 旋转后由系统重排触发；只改常数，**不**新建约束（新建会叠加冲突）。
@@ -151,18 +153,16 @@ final class KeyboardViewController: UIInputViewController {
         if abs(h.constant - target) > 0.5 { h.constant = target }
     }
 
-    /// 内存警告（2026-10-23）：扩展被系统击杀的表现就是「跳回系统键盘」——
-    /// 用户报的切英文/返回后跳系统键盘首先要排除这条。隐藏面板正常已在
-    /// `isHidden` 时释放，这里再兜一次；可见面板不清（清了没有重载入口）。
+    /// 内存警告（2026-10-23）：扩展被击杀的表现就是「跳回系统键盘」，先排这条。
+    /// 隐藏面板在 `isHidden` 时已释放，这里再兜一次；可见面板不清（没有重载入口）。
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
         OpiLog.memory.warning("didReceiveMemoryWarning")
         layout?.releaseHeavyContentOnMemoryWarning()
     }
 
-    // 词库装载已搬到 `KeyboardDictionaryLoader.swift`（2026-10-21：本文件压 500 行门禁）。
-    // `loadDictionaries()` / `loadBundledDictionary(for:)` 仍是控制器的方法，见那边。
-    // 刷新 UI / marked text 已搬到 `KeyboardCandidates.swift`（2026-10-21，本文件压 500 行）。
+    // 词库装载在 `KeyboardDictionaryLoader.swift`，刷新 UI / marked text 在
+    // `KeyboardCandidates.swift`（2026-10-21 搬家，压 500 行门禁）。
 
     // MARK: - 文本提交
 
@@ -178,6 +178,8 @@ final class KeyboardViewController: UIInputViewController {
         // 无条件 unmark（理由见 [syncMarkedText] 的注：proxy 上没有 markedTextRange）。
         textDocumentProxy.unmarkText()
         textDocumentProxy.insertText(text)
+        // 学习发生在引擎 select 内部，C 面没有「刚学了」信号 ⇒ 按提交导出，防抖合并写盘。
+        UserWordsStore.markDirty(engine)
     }
 
     // MARK: - 返回键面
@@ -375,10 +377,10 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             layout.setEngineSettings(settings, fuzzyPairNames: engine.fuzzyPairNames())
             layout.setLayer(.settings)
         case .clearUserWords:
-            // 设置面板「清除用户词库」（2026-10-23）。用户词只活在引擎内存里 ——
-            // iOS 端没有导入/导出落盘（`exportUserWords()` 无调用点），所以这一条
-            // 就是全部持久层；清完重拉候选，让学习排序立即回落。
+            // 设置面板「清除用户词库」：内存与落盘副本一起清（2026-10-28 起有文件
+            // 副本，见 UserWordsStore）；清完重拉候选，让学习排序立即回落。
             engine.clearUserWords()
+            UserWordsStore.clear()
             refresh()
         case .updateSettings(let newSettings):
             settings = newSettings
@@ -463,9 +465,8 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
     /// 真去查（防抖到点后）。搜索词在**这里**去空白（对齐 Android `searchText.trim()`
     /// —— 那边也是实时 text、去抖后 query 才生效）。
     ///
-    /// ⚠️ 未编译：`trimmingCharacters(in: .whitespacesAndNewlines)` 是 Foundation 常规
-    /// API，但本仓没用过；它与 Kotlin `trim()` 的空白集不完全相同（Kotlin 按
-    /// `Char.isWhitespace`，更宽），差集在少数控制字符上 —— Mac 上顺手核一眼。
+    /// 注：`trimmingCharacters` 的空白集比 Kotlin `Char.isWhitespace` 窄，少数
+    /// 控制字符上两端去空白不同（未上机核过）。
     ///
     /// 空查询 = **回浏览内容，不是「搜到 0 条」**：Android 的内容分支是
     /// `searchActive && searchQuery.isNotEmpty()`，空查询画的就是浏览网格。
@@ -483,8 +484,7 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
 // MARK: - 宿主文本变化
 
 extension KeyboardViewController {
-    // ⚠️ 未编译：系统回调（宿主文本变化时调用）的重写，用途是刷新本地状态。
-    // 「插入前后要不要主动通知宿主」无法查证，按不加写；宿主状态不同步先查这里。
+    // 系统回调重写（未上机验证，用途是刷新本地状态）；宿主状态不同步先查这里。
 
     override func selectionDidChange(_ textInput: UITextInput?) {
         super.selectionDidChange(textInput)

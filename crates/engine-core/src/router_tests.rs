@@ -145,11 +145,12 @@ fn delete_mirrors_backspace() {
     s.key_event(KEY_DELETE, 0);
     assert_eq!(s.buffer(), "");
     assert_eq!(s.key_event(KEY_DELETE, 0), KeyAction::PassThrough);
-    // 释放事件被消费，不删字符
+    // 抬起按**它自己那次按下**的结论回复：上面最后一次 Delete 按下是空缓冲直通，
+    // 中间按下的 'a' 不再顶掉它的记录（旧单槽会顶掉）。放行也不删字符。
     s.key_event('a' as u32, 0);
     assert_eq!(
         s.key_event(KEY_DELETE, KEY_STATE_RELEASED),
-        KeyAction::EngineHandled
+        KeyAction::PassThrough
     );
     assert_eq!(s.buffer(), "a");
 }

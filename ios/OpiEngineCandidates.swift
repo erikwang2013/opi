@@ -33,7 +33,8 @@ extension OpiEngine {
 
     /// 全局候选（从第 0 条起，最多 `limit` 条）。
     /// 候选栏只取前几项，平铺视图按 `limit` 全量铺页（Android 平铺同样吃全量候选）。
-    func allCandidates(limit: Int = 64) -> [String] {
+    /// `limit` 由调用方决定（槽位数 / 平铺整批）；不设默认 —— 默认值会冒充产品口径。
+    func allCandidates(limit: Int) -> [String] {
         guard limit > 0 else { return [] }
         return OpiEngine.decodeTexts(OpiEngine.takeString(opi_candidates(limit)))
     }
@@ -50,5 +51,18 @@ extension OpiEngine {
         OpiEngine.withUTF16(reading) { p, n in
             opi_pin_reading(p, n)
         }
+    }
+
+    /// 已确认但**尚未提交**的逐字片段（`opi_pending_text`，2026-10-28；JNI 同源）。
+    /// 换方案/模式前必须上屏 —— `switchMode` 会静默丢掉它们；显示串仍走
+    /// `displayBuffer()`（已前置这段）。**不**含打了一半的未确认拼音。
+    func pendingText() -> String {
+        OpiEngine.takeString(opi_pending_text())
+    }
+
+    /// 引擎版本（`opi_engine_version`，workspace 版本）。App 版本来自 appex 的
+    /// `CFBundleShortVersionString`，两者同一次打包写入，不一致时关于页两个都显示。
+    static func engineVersion() -> String {
+        takeString(opi_engine_version())
     }
 }

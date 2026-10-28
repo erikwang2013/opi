@@ -11,7 +11,8 @@
    编译时四份 TSV 一起 cat 给 opi-tools；本脚本不覆盖它们 —— 见 CONTRIBUTING）
 
 词频（统一常用度排序，spec 2026-08-15 验收偏差 #4）：
-  freq = FMAX - idx * (FMAX // N)，idx 为排序键排完后的行序。排序键（同拼音前缀组内）：
+  freq = FMAX - (基址 + idx) × (FMAX // 固定容量)，idx 为排序键排完后的行序（见
+  dict_spacing.py）：间距不随条目数变、追加不重算既有 freq，词组的基址独立于单字层。排序键（同拼音前缀组内）：
   [有词次 > 无词次] → [词次降序] → [字形取向] → [变体同门位次] → [GB 段位] → [段内序]
   → [字码位] → [读音]。
   词次来自 Unihan kHanyuPinlu（逐读音语料词次，见 scripts/hanzi_freq.py）。
@@ -33,7 +34,7 @@
   扩展 B 常见 tofu 空白框）。打出来是空白框，用户只会认为是输入法 bug ——
   这一点写在这里是为了让下一个人改数据范围前先想到字体。
   排序影响：扩展区字无 kHanyuPinlu 词次，全部落入「无词次」段（段位 2、码位序），
-  仍排在 GB2312 与常用字之后；既有候选顺序不变，只有 freq 间距因行数增加而变密。
+  仍排在 GB2312 与常用字之后；既有候选顺序不变（按当时的 FMAX//n 间距，行数增加会整表变密）。
 
 人工表退役记录（保留此节，勿静默删除——它记录的是当时的判断与代价）：
   * COMMON_TRAD（约 120 个繁体常用字白名单）：旧排序主体是 GB 码序，靠白名单把
@@ -52,6 +53,7 @@ import os
 import sys
 import urllib.request
 
+from dict_spacing import section_freqs
 from hanzi_freq import (
     FMAX,
     gb2312_levels,
@@ -80,6 +82,11 @@ TERRA_URL = (
 )
 # 本次 pin 时实际取到的 yaml 摘要（sha256）。校验失败 = URL 内容变了，宁可报错不静默换数据。
 TERRA_SHA256 = "2f881a239e09a61e5993e79257655f98f81c3789dc8aeea5f33477f710345b27"
+
+# 固定容量/词组层基址（见 dict_spacing.py）：越界即报错；上调是一次性全表 freq 变化。
+# 容量须容下「基址 + 词组数」：当前 65,536 + 49,672 = 115,208 < 131,072；单字层余 18,772 行。
+TRAD_MAX_ENTRIES = 131_072
+TRAD_PHRASE_BASE = 65_536
 
 # 人工常用繁体词组（terra 缺失的常见词；拼音为全拼无空格连写、无撇号）。
 SUPPLEMENT_PHRASES: dict[str, str] = {
@@ -252,16 +259,12 @@ def main() -> None:
         phrase_ordered.append((w, py))
         phrase_seen.add(w)
 
-    n = len(ordered) + len(phrase_ordered)
-    assert n < FMAX, "行数超过 FMAX，spacing 归零，freq 全等"
-    spacing = FMAX // n
-    hanzi: list[str] = [
-        f"{word}\t{py}\t{FMAX - idx * spacing}"
-        for idx, (word, py) in enumerate(ordered)
-    ]
+    single, phrase = section_freqs(
+        len(ordered), len(phrase_ordered), TRAD_MAX_ENTRIES, TRAD_PHRASE_BASE
+    )
+    hanzi: list[str] = [f"{word}\t{py}\t{f}" for (word, py), f in zip(ordered, single)]
     phrases_out: list[str] = [
-        f"{word}\t{py}\t{FMAX - (len(ordered) + idx) * spacing}"
-        for idx, (word, py) in enumerate(phrase_ordered)
+        f"{word}\t{py}\t{f}" for (word, py), f in zip(phrase_ordered, phrase)
     ]
 
     write_atomic("data/raw/trad_hanzi.tsv", hanzi)
@@ -274,7 +277,7 @@ def main() -> None:
     print(f"词组(人工+terra): {len(phrase_ordered)}")
     print(f"trad_hanzi.tsv 行数: {len(hanzi)}")
     print(f"trad_phrases.tsv 行数: {len(phrases_out)}")
-    print(f"freq 范围: [{FMAX - (n - 1) * spacing}, {FMAX}] spacing={spacing}")
+    print(f"freq 范围: [{phrase[-1]}, {FMAX}] spacing={FMAX // TRAD_MAX_ENTRIES}")
 
 
 if __name__ == "__main__":

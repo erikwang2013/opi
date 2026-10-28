@@ -51,7 +51,7 @@ class UserWordStoreRaceTest : UserWordStoreTestBase() {
         val sSettings = store(f, settings, io = Executor { settingsQueue += it })
 
         sIme.scheduleSave()
-        debIme.fire() // T0：OLD 导出，任务入队（尚未落盘）
+        debIme.fire() // T0：OLD 落盘任务入队（导出也在任务里，尚未落盘）
         val r = sSettings.importFrom { """{"version":1,"words":[]}""" } // T1：NEW 导出，任务入队
 
         assertEquals(UserWordStore.ImportResult.Imported(1), r)
@@ -66,11 +66,11 @@ class UserWordStoreRaceTest : UserWordStoreTestBase() {
 
     /**
      * 上一条的结构性保证：生产（不注入 io）时两个实例必须落**在同一条**队列上，
-     * 于是「rename 顺序 = 入队顺序 = 调用方线程上的导出顺序」。
+     * 于是「导出顺序 = rename 顺序 = 入队顺序」。
      *
-     * 观测点选「父目录为 null」的失败路径：它是**唯一**在 io 线程上执行的回调，借它直接
-     * 读到落盘线程的身份。同一个单线程执行器 ⇒ `Thread` 是同一个对象；每实例一个执行器
-     * ⇒ 两个不同的 `Thread`（确定性红，不依赖时序）。
+     * 观测点选「父目录为 null」的失败路径，借它直接读到落盘线程的身份。同一个单线程
+     * 执行器 ⇒ `Thread` 是同一个对象；每实例一个执行器 ⇒ 两个不同的 `Thread`
+     * （确定性红，不依赖时序）。
      */
     @Test
     fun twoInstancesSaveOnTheSameThread() {

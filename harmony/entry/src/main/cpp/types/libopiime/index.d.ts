@@ -68,6 +68,12 @@ export const buffer: () => string;
  */
 export const displayBuffer: () => string;
 
+/**
+ * 已确认但**尚未提交**的逐字片段。换方案/模式前必须上屏：`switchMode` 会静默丢掉，
+ * `setScheme` 不清 —— 先 `clear()` 再插入，否则换完方案会同一段再上屏一次。
+ */
+export const pendingText: () => string;
+
 /** 当前候选页（0 起）。**不要自己数页** —— 末页由路由钳制。 */
 export const page: () => number;
 
@@ -82,6 +88,9 @@ export const mode: () => number;
 
 /** ⚠️ 越界值是**静默不动作**（无返回值），传之前自己夹紧到 0..4。 */
 export const switchMode: (mode: number) => void;
+
+/** 语言切换（中↔繁/中↔英）：换模式+方案但**保缓冲**、不清已确认片段。⚠️ 任一越界整体忽略。 */
+export const switchLanguage: (mode: number, scheme: number) => void;
 
 /** **前端** ⇧ 三态：0=OFF 1=SINGLE 2=LOCK。⇧ 高亮只能读这里。 */
 export const shiftState: () => number;
@@ -98,6 +107,19 @@ export const removeUserWord: (text: string) => void;
 
 /** 清除**全部**用户词（学习表）；不动内置词库、不清当前输入缓冲。 */
 export const clearUserWords: () => void;
+
+/**
+ * 导入用户词 JSON（`{"version":1,"words":[...]}`，与 fcitx5/macOS/Android 同一契约）。
+ * 返回导入条数（合法空表 = 0）；**负数 = 失败**（非法 JSON / 版本不符 / 词表过大 /
+ * 引擎未装载）。失败不改动既有用户词（引擎侧全有或全无）。
+ */
+export const importUserWords: (json: string) => number;
+
+/**
+ * 导出用户词 JSON。**引擎未装载 → 空串** —— 别把空串写进文件（启动时会按 0 字节
+ * 判成掉电残留，见 engine-data::user_words 的三条语义）。
+ */
+export const exportUserWords: () => string;
 
 /**
  * 切换全角，返回**切换后的新状态**（UI 直接拿去刷高亮）。

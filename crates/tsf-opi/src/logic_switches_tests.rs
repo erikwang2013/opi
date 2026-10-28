@@ -31,7 +31,7 @@ fn punct_state() -> TsfLogic {
         buffer_snapshot: String::new(),
         shift_state: ShiftState::Off,
         english_pro: true,
-        last_printable: None,
+        held_passthrough: Default::default(),
         shift_toggle: true,
         association_enabled: true,
         fetch_cache: Default::default(),

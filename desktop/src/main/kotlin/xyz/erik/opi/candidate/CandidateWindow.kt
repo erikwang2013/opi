@@ -53,9 +53,6 @@ import xyz.erik.opi.pet.PetPalette
 // 一次；本文件只按角色取色（bg/fg/accent/line/hover），不新造颜色。
 // 「不改动」= KeepColors，五个值就是原先这里那组深色常量，行为一字不变。
 
-/** 单页候选上限（与 Rust 侧 logic.rs 的 PAGE_SIZE 一致）。 */
-private const val MAX_CANDIDATES = 8
-
 // ---------- 字号表 ----------
 
 /**
@@ -202,7 +199,8 @@ internal fun rememberCandidateBarSize(model: CandidateModel, fontScale: Float = 
                 measurer.measure(text, TextStyle(fontSize = px, fontWeight = weight))
                     .size.width.toDp().value
             }
-        val shown = model.candidates.take(MAX_CANDIDATES)
+        // wire 的 candidates 已是**当前页**（Main.kt 协议头），本窗口不再自设上限。
+        val shown = model.candidates
         val items = shown.mapIndexed { i, text ->
             // 与 CandidateItem 的实际盒宽一致：左右 padding + 序号 + 间隙 + 候选。
             // 漏掉 padding 的话 8 条候选的窗会窄 32dp（review 2026-10-22）。
@@ -358,7 +356,7 @@ internal fun CandidatePanel(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(BAR_GAP_ITEM.dp),
                 ) {
-                    model.candidates.take(MAX_CANDIDATES).forEachIndexed { index, text ->
+                    model.candidates.forEachIndexed { index, text ->
                         CandidateItem(
                             index = index + 1,
                             text = text,

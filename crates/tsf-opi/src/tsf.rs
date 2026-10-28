@@ -37,13 +37,13 @@ use windows::core::{
 
 use self::profile_sink::ProfileSink;
 use crate::dll::{DISPLAY_NAME, DllLock};
-use crate::key_state::{map_key_state, to_engine_keycode};
+use crate::key_state::{map_key_state, mode_hotkey, to_engine_keycode};
 use crate::logic::{KEY_STATE_RELEASED, KeyOutcome};
 use crate::settings;
 use crate::shift_tap::ShiftTap;
 use crate::state::TsfSharedState;
 use crate::thread_focus::ThreadFocusSink;
-use crate::vk::{ModeHotkey, fullwidth_hotkey, hotkey_should_act, hotkey_target, mode_hotkey};
+use crate::vk::{ModeHotkey, fullwidth_hotkey, hotkey_should_act, hotkey_target};
 
 // 接缝/推送/出口公用件在 `sink.rs`（拆出守 500 行）；这里 re-export 保持原路径
 // `crate::tsf::{TsfSink, E_FAIL, …}` 对其余模块不变。
@@ -113,53 +113,32 @@ impl TsfTextService {
 
     /// B0：模式热键。切完**立刻**刷一次候选窗 —— 不刷的话窗口还挂着上个模式的
     /// 候选（切到英文，窗口里还留着拼音的汉字），用户会以为键没生效。
-    fn toggle_mode(&self, hot: ModeHotkey) -> BOOL {
-        // 锁内只改引擎 + 抓快照；管道写在锁外（理由见 `push_state`）。
-        let snapshot = {
+    ///
+    /// W1（2026-10-28 接线）：切走前走 `logic.switch_mode_confirmed`，拼音/繁体
+    /// **原文**上屏（符号模式丢关键字），与 ctl 的 `lang`/`mode`、Shift 轻按同一
+    /// 条收尾；返回值插入 `pic` 指向的文档。锁内只改引擎 + 抓快照，COM 插入与
+    /// 管道写在锁外（理由见 `insert_into` / `push_state`）。
+    fn toggle_mode(&self, hot: ModeHotkey, pic: Option<&ITfContext>) -> BOOL {
+        let (text, snapshot) = {
             let Some(mut logic) = self.state.lock_logic() else {
                 return BOOL(1); // 中毒锁：吞键，与 handle_key_inner 同策略
             };
             let target = hotkey_target(hot, logic.mode());
-            // 切走/切英文的收尾（W1 订正版：拼音/繁体上原文、符号模式丢关键字）在
-            // `logic.switch_mode_confirmed` —— 本函数走 `switch_mode`（丢缓冲）。
-            // 接线 = 改调它并把返回值插入文档（2026-10-10 裁决：状态机语义先立住，
-            // 插入面未接线如实注明）。
-            logic.switch_mode(target);
-            logic.snapshot()
+            let text = logic.switch_mode_confirmed(target);
+            (text, logic.snapshot())
         };
-        push_state(&*self.sink, &snapshot);
+        // 待上屏文本已由 switch_mode_confirmed 从引擎清掉：插入成功才收窗口；
+        // 空文本或**插入失败**（无焦点文档/只读文档/无 tid）→ 原文确实丢了，
+        // 但必须推切换后的空帧，否则候选窗停在旧模式的旧候选上（review 2026-10-28）。
+        let inserted =
+            !text.is_empty() && pic.is_some_and(|pic| self.state.insert_into(pic, &text));
+        if inserted {
+            self.sink.on_commit(&text);
+        } else {
+            push_state(&*self.sink, &snapshot);
+        }
         self.sink.on_state_changed(); // 模式/语言变了 → 状态栏立刻补读
         BOOL(1)
-    }
-
-    /// 候选窗回复（点选 / 直插文本）的**唯一执行点**：读线程只把 index/文本排进
-    /// 队列（它拿不到 `ITfContext` —— 那是本线程的 COM 接口指针，见 state.rs 模块头），
-    /// 真正走 COM 的插入在这里、在按键线程上跑。
-    ///
-    /// **已知代价：点到下一次按键之间才插入**。即时插入的两条升级路径（都要真机）
-    /// 写在 state.rs 模块头。一次按键最多清空队列（各上限 16 条）。
-    ///
-    /// 已接受的一个边缘：点了候选后**没敲键就换文档**，插入会落到上一个文档
-    /// （目标取自上一次键事件）。这是"排回按键线程"的固有代价 —— 队列里只有一个
-    /// index/文本，没有可判定的新旧依据；换文档时的正确行为需要真机才能定。
-    fn drain_pending(&self) {
-        while let Some(index) = self.state.take_pending_selection() {
-            if self.state.select_and_insert(index).is_none() {
-                continue; // 越界/空缓冲：引擎没变，窗口无需刷新
-            }
-            // 提交后缓冲已空 → sink 内部走 hide 分支，窗口自己收起来。
-            // 锁只包住抓快照这一步：insert_into 早已返回，管道写在锁外。
-            let snapshot = self.state.lock_logic().map(|logic| logic.snapshot());
-            if let Some(snapshot) = snapshot {
-                push_state(&*self.sink, &snapshot);
-            }
-        }
-        // 候选窗「直接插入」（commit_text：符号页多选）：插文档但**不动引擎、不通知
-        // sink**（`on_commit` 会收起窗口，而符号页要留在屏幕上连续点选；裁决
-        // 2026-10-10，见 candidate_io.rs 协议头）。与上面同受"延迟到下一次按键"的约束。
-        while let Some(text) = self.state.take_pending_text() {
-            self.state.insert_text(&text);
-        }
     }
 
     /// 键事件统一入口（OnKeyDown/OnKeyUp 共用）。
@@ -181,17 +160,22 @@ impl TsfTextService {
     }
 
     fn handle_key_inner(&self, pic: Option<&ITfContext>, wparam: WPARAM, lparam: LPARAM) -> BOOL {
+        let states = map_key_state(lparam);
+        // 插入目标换代**先于** drain：本次键事件的 context 与上次不同 ⇒ 排队动作
+        // 属于旧文档，drain 时按世代丢弃（见 state.rs 的 `note_target`）。抬起事件
+        // 不记（它带来的 context 已不是当前焦点文档）。
+        if states & KEY_STATE_RELEASED == 0 {
+            self.state.note_target(pic);
+        }
         // 候选窗点选排回本线程执行。位置是**两个约束夹出来的**，别挪：
         // - 必须在 `input_key` 之前：用户"点一下候选、再打字"的意图顺序才是这样，
         //   反过来新键先改了缓冲，排着的 index 就选到别的词上了；
         // - 必须在 `remember_target` 之前：那一句在 `pic` 为 None（焦点已不在文档，
         //   比如刚点过候选窗）时会**清空**目标，排在它后面就成了"点了没反应"。
         self.drain_pending();
-        let states = map_key_state(lparam);
         let keycode = to_engine_keycode(wparam.0 as u32);
         // 记下插入目标：候选窗点选走的是 named pipe 读线程，那条路上没有任何
-        // ITfContext，只有这里存下的一份可用。抬起事件不记（它带来的 context
-        // 已不是当前焦点文档，记了会把文本插到上一个窗口里）。
+        // ITfContext，只有这里存下的一份可用。抬起事件不记（同 `note_target`）。
         if states & KEY_STATE_RELEASED == 0 {
             self.state.remember_target(pic);
         }
@@ -211,7 +195,7 @@ impl TsfTextService {
             if !hotkey_should_act(states) {
                 return BOOL(1);
             }
-            return self.toggle_mode(hot);
+            return self.toggle_mode(hot, pic);
         }
         // 全角 ⇄ 半角，同一条理由也判在引擎之前：Shift+Space 送进引擎就是普通空格
         // （逻辑层的 KEY_SPACE 分支不看 Shift 位），会被当成"选首候选"。
@@ -414,6 +398,17 @@ impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
                 let _ = unsafe { source.UnadviseSink(cookie) };
             }
             self.sink.disconnect(); // 释放单实例管道，焦点切走后下一个应用才能连上。
+            // 失活收尾（2026-10-28）：排队动作丢弃（失活后执行只会落进不再属于本
+            // 服务的文档）、目标与编辑会话保活释放、引擎缓冲清空 —— 缓冲只活在本
+            // 服务的候选窗里，**没有** ITfComposition 可结束，文档侧无需撤销任何
+            // 东西。候选窗本身由上面的 `sink.disconnect()` 收起（PipeServer 断连
+            // 即 hide）。顺序：先清队列再推进世代（clear_target），此后再排进来的
+            // 动作会因目标为空而不会插错文档。
+            self.state.clear_pending();
+            self.state.clear_target();
+            if let Some(mut logic) = self.state.lock_logic() {
+                logic.clear();
+            }
             let mut tm = match self.thread_mgr.lock() {
                 Ok(g) => g,
                 Err(_) => return Ok(()), // 中毒锁：吞掉，避免经 COM vtable 泄漏 panic
@@ -480,6 +475,10 @@ impl ITfFnConfigure_Impl for TsfTextService_Impl {
 // 从本文件拆出守 500 行；与 Linux 轨 C++ 的 OpiShiftToggle 对称，见那边模块头。
 #[path = "tsf_shift.rs"]
 mod shift_glue;
+
+// 候选窗回复的执行点（drain_pending）在 tsf_drain.rs：拆出守 500 行。
+#[path = "tsf_drain.rs"]
+mod drain;
 
 #[path = "key_sink.rs"]
 mod key_sink;

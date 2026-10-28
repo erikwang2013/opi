@@ -18,7 +18,6 @@
 // 把它画出来 —— 那需要真前端，见同目录 opi_e2e.py 与 README 的 dbus 限制。
 
 #include "opi_fcitx5.cpp"
-
 #include <fcitx/inputcontextmanager.h>
 
 #include <cstdio>
@@ -29,6 +28,7 @@
 #include <string>
 
 #include "opi_driver_common.h"  // 测试器具（TestIC/check/预编辑与候选读回）
+#include "opi_panel_page_check.cpp" // §3b UI 翻页（500 行门禁拆出的片段）
 
 int main() {
     fcitx::InputContextManager manager;
@@ -157,7 +157,7 @@ int main() {
     std::printf("  PageUp:   -> [0]=%s\n", q(candidateAt(ic, 0)).c_str());
     check(candidateAt(ic, 0) == nFirst, "PageUp 回到首页首个候选");
     check(candidateCount(ic) == nCount, "翻页后本页条数不变");
-
+    runUiPageChecks(ic, nFirst); // §3b 拆在 opi_panel_page_check.cpp（500 行门禁）
     std::printf("  --- 以下为缓冲 nihao 的翻页（单页时应无变化）---\n");
     {
         fcitx::ResetEvent clearEvent(&ic);

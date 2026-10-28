@@ -16,6 +16,7 @@ import { PanelView } from './KeyboardModes';
 import * as RawAssets from './RawAssets';
 import * as ScreenLayout from './ScreenLayout';
 import * as SettingsStore from './SettingsStore';
+import * as UserWordStore from './UserWordStore';
 import { publishState } from './StatePublish';
 import * as BackspaceRepeat from './BackspaceRepeat';
 import * as AssociationGuard from './AssociationGuard';
@@ -64,6 +65,7 @@ export class KeyboardController {
   };
 
   private onInputStopCallback: () => void = (): void => {
+    UserWordStore.flush(); // 会话结束：防抖中的用户词立即落盘（进程可能随后被回收）
     // InputClient 随会话失效，必须丢引用；引擎侧缓冲要清，长按连删计时器也要停。
     BackspaceRepeat.stop();
     bracketPairing.reset();
@@ -87,6 +89,7 @@ export class KeyboardController {
 
     // 偏好先于一切：模块级键盘模式/输入模式在 init 时装回来（词库装载后再推给引擎）。
     SettingsStore.init(ctx);
+    UserWordStore.init(ctx.filesDir);
     const saved: SettingsStore.ImeSettings = SettingsStore.load();
     KeyboardModes.restore(saved);
     InputModes.restore(saved.inputModeIndex, saved.lastChineseIndex);
@@ -130,6 +133,7 @@ export class KeyboardController {
       });
       this.panel = null; // 面板是系统资源，必须显式 destroy，不能只等 GC。
     }
+    UserWordStore.flush();
     BackspaceRepeat.stop();
     AssociationGuard.unwatchSelection();
     this.client = null;
@@ -171,6 +175,7 @@ export class KeyboardController {
     // 引擎就绪后才推：学习开关 + 持久化的输入档位（scheme/mode）。
     OpiEngine.setLearner(this.pendingLearner);
     InputModes.applyCurrentMode();
+    UserWordStore.load(); // 必须在词库装载之后：引擎未装载时导入是 -1
   }
 
   // -------------------------------------------------------------- 文本上屏
@@ -180,6 +185,14 @@ export class KeyboardController {
     AssociationGuard.noteSelfInsert();
     if (typed && bracketPairing.insertTyped(this.client, text, OpiEngine.mode() === OpiMode.English)) { return; }
     this.client.insertText(text);
+  }
+
+  /** 换方案/模式前交出已确认未提交片段（iOS `commitPendingBeforeModeSwitch` 同款）：
+   *  `setScheme` 不清 pending_segments（不 clear 会再上屏一次），`switch_mode` 静默丢掉。
+   *  只交已确认的 —— 未确认缓冲（9 键里是数字）绝不直提。 */
+  private commitPendingBeforeModeSwitch(): void {
+    const pending: string = OpiEngine.pendingText();
+    if (pending.length > 0) { OpiEngine.clear(); this.insertText(pending); }
   }
 
   private deleteForward(n: number): void {
@@ -194,6 +207,7 @@ export class KeyboardController {
     const r: KeyResult = OpiEngine.keyEvent(keyval, states);
     if (r.action === OpiAction.Commit) {
       this.insertText(r.text, true);
+      if (r.text.length > 0) { UserWordStore.scheduleSave(); } // 选中即学到频次
     } else if (r.action === OpiAction.PassThrough) {
       this.handlePassThrough(keyval);
     }
@@ -276,6 +290,7 @@ export class KeyboardController {
   tapCandidate(indexInPage: number): void {
     const text: string = OpiEngine.selectPage(indexInPage);
     this.insertText(text);
+    if (text.length > 0) { UserWordStore.scheduleSave(); } // 点选 = 显式学习
     this.publish();
   }
 
@@ -283,18 +298,21 @@ export class KeyboardController {
   tapTiledCandidate(index: number): void {
     const text: string = OpiEngine.selectGlobal(index);
     this.insertText(text);
+    if (text.length > 0) { UserWordStore.scheduleSave(); }
     this.publish();
   }
 
   /** 长按候选 = 从用户词表删词（Android CandidateBar onLongPress 同款；不存在则无操作）。 */
   removeCandidateWord(text: string): void {
     OpiEngine.removeUserWord(text);
+    UserWordStore.scheduleSave(); // 删词也改学习状态：不落盘下次启动会被旧文件导回来
     this.publish();
   }
 
-  /** 清除全部用户词（设置页确认后调用）：只清引擎学习表（本端无用户词落盘出口），随后刷新候选。 */
+  /** 清除全部用户词（设置页确认后调用）：清引擎学习表 + 删落盘文件，随后刷新候选。 */
   clearUserWords(): void {
     OpiEngine.clearUserWords();
+    UserWordStore.clearPersisted();
     this.publish();
   }
 
@@ -305,17 +323,15 @@ export class KeyboardController {
   }
 
   /** 平铺「返回」：回键盘，**不动引擎、不清缓冲**。 */
-  collapseTiled(): void {
-    KeyboardModes.collapseTiled();
-    this.publish();
-  }
+  collapseTiled(): void { KeyboardModes.collapseTiled(); this.publish(); }
 
-  /** 切模式：先清缓冲。⇧ 同步归 `KeyRouter::switch_mode`（单一来源）。
+  /** 切模式：已确认片段先上屏，再清缓冲。⇧ 同步归 `KeyRouter::switch_mode`（单一来源）。
    *  ⚠️ 别在这里再 `setShift(false)`：会清掉刚重推的引擎位（首个字母变小写）。 */
   switchMode(m: OpiMode): void {
     if (m !== OpiMode.English) {
       KeyboardModes.leaveEnglishPro();
     }
+    this.commitPendingBeforeModeSwitch();
     OpiEngine.clear();
     OpiEngine.switchMode(m);
     this.publish();
@@ -340,6 +356,7 @@ export class KeyboardController {
       this.publish();
       return;
     }
+    this.commitPendingBeforeModeSwitch();
     InputModes.selectInputMode(index);
     KeyboardModes.closePanel(); // 选中即回键面（Android selectInputMode 同款）
     this.publish();
@@ -368,11 +385,7 @@ export class KeyboardController {
     this.panel.moveTo(r.x, r.y);
   }
 
-  togglePanel(v: PanelView): void {
-    AssociationGuard.dismissIfNeeded();
-    KeyboardModes.togglePanel(v);
-    this.publish();
-  }
+  togglePanel(v: PanelView): void { AssociationGuard.dismissIfNeeded(); KeyboardModes.togglePanel(v); this.publish(); }
 
   closePanel(): void {
     KeyboardModes.closePanel();
@@ -390,17 +403,9 @@ export class KeyboardController {
 
   setOneHand(v: number): void { KeyboardModes.setOneHandValue(v); this.publish(); }
 
-  toggleFloating(): void {
-    KeyboardModes.toggleFloating();
-    this.applyPanelWindow();
-    this.publish();
-  }
+  toggleFloating(): void { KeyboardModes.toggleFloating(); this.applyPanelWindow(); this.publish(); }
 
-  toggleGame(): void {
-    KeyboardModes.toggleGame();
-    this.applyPanelWindow();
-    this.publish();
-  }
+  toggleGame(): void { KeyboardModes.toggleGame(); this.applyPanelWindow(); this.publish(); }
 
   /** 收起键盘（会话还在；下次 inputStart 仍是同一扩展）。 */
   hideKeyboard(): void {
@@ -413,17 +418,9 @@ export class KeyboardController {
   }
 
   /** 符号页（符/?123）与生僻字面板：面板视图，不碰引擎。 */
-  openSymbolPage(): void {
-    AssociationGuard.dismissIfNeeded();
-    KeyboardModes.openPanel(PanelView.SymbolPage);
-    this.publish();
-  }
+  openSymbolPage(): void { AssociationGuard.dismissIfNeeded(); KeyboardModes.openPanel(PanelView.SymbolPage); this.publish(); }
 
-  openRare(): void {
-    AssociationGuard.dismissIfNeeded();
-    KeyboardModes.openPanel(PanelView.Rare);
-    this.publish();
-  }
+  openRare(): void { AssociationGuard.dismissIfNeeded(); KeyboardModes.openPanel(PanelView.Rare); this.publish(); }
 
   /** 联想态点候选行空白：收起（`tapTiledCandidate` 不走这里 —— 那是链式选词）。 */
   dismissAssociation(): void { AssociationGuard.dismiss(); }
@@ -431,6 +428,7 @@ export class KeyboardController {
   /** 表情页：引擎 Symbol 模式；记住来路，返回时切回（Android 表情是视图，不换引擎模式）。 */
   openEmoji(): void {
     KeyboardModes.setEmojiReturn(OpiEngine.mode());
+    this.commitPendingBeforeModeSwitch();
     OpiEngine.clear();
     OpiEngine.switchMode(OpiMode.Symbol);
     KeyboardModes.closePanel();
@@ -464,9 +462,10 @@ export class KeyboardController {
     this.publish();
   }
 
-  /** 9/14/笔画底行：只切简繁（Android 2026-10-15 裁决）。 */
+  /** 9/14/笔画底行：只切简繁（Android 2026-10-15 裁决）。**保缓冲**：走 switchLanguage，不同 switchMode。 */
   toggleTraditional(): void {
-    this.switchMode(OpiEngine.mode() === OpiMode.Traditional ? OpiMode.Pinyin : OpiMode.Traditional);
+    OpiEngine.switchLanguage(OpiEngine.mode() === OpiMode.Traditional ? OpiMode.Pinyin : OpiMode.Traditional, InputModes.scheme());
+    this.publish();
   }
 
   /** 数字面板 ABC：回到上次的中文键位（不是固定的拼音26键）。 */

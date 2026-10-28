@@ -32,8 +32,9 @@ class UserWordStore(
     private val exportJson: () -> String,
     private val debouncer: Debouncer,
     /**
-     * 落盘线程。生产：**进程级共享**的单线程执行器（见 [sharedIo]）——
-     * 共享才保证「rename 顺序 = 入队顺序 = 导出顺序」。测试注入直接执行器。
+     * 落盘线程（导出 + 文件系统都在这里）。生产：**进程级共享**的单线程执行器
+     * （见 [sharedIo]）—— 共享才保证「导出顺序 = rename 顺序 = 入队顺序」。
+     * 测试注入直接执行器。
      */
     private val io: Executor = sharedIo,
     /**
@@ -97,16 +98,10 @@ class UserWordStore(
          * 必须共享，不能每实例一个：本类有**两个实例**（IME 与设置页），同一文件。
          * 各带一个执行器时两次 rename 互相竞争、顺序不受任何约束 —— 审计实测的
          * 「IME 的旧快照在设置页导入之后落盘、把导入整份盖掉」就是这么来的。共享一条
-         * 队列后，入队序 = 调用方线程上的导出序 = rename 序，**最后导出的必然最后落盘**。
+         * 队列后，入队序 = 导出序 = rename 序，**最后入队的必然最后落盘**。
+         * 导出本身也在队列里（见 [saveSoon]）⇒ 这条不再依赖「调用方都在同一线程」。
          * 顺带把「两次落盘不会交叉写同一个 tmp」从「同一实例内」升级成全类成立。
          * 代价是慢写盘会挡住另一次写盘 —— 这里只有几 KB 的 JSON，可以接受。
-         *
-         * ⚠️ 上面那条等式**隐含一个前提**：[saveSoon] 是「先 [exportJson]、后入队」两步，
-         * 两步之间不是原子的，所以「入队序 = 导出序」只在**所有调用方都跑在同一线程**时
-         * 成立。今天两处调用方（IME 的防抖回调、设置页的导入）都在主线程，成立。
-         * **若将来有人在后台线程上调 [scheduleSave]，这条保证就断了**：两个线程可能
-         * 一个先导出后入队、另一个反过来，旧快照又能最后落盘。那时要么把调用收回主线程，
-         * 要么在 [saveEpoch] 上加一个「按导出序发号」的序列（见 [invalidate] 的说明）。
          */
         private val sharedIo: Executor =
             Executors.newSingleThreadExecutor { r ->
@@ -200,12 +195,12 @@ class UserWordStore(
     }
 
     /**
-     * 启动导入（引擎装载后调用一次，主线程）。文件缺失/不可读/JSON 非法/引擎不可用
-     * 一律静默降级。
+     * 启动导入（引擎装载后调用一次；生产在装载后台线程上）。文件缺失/不可读/JSON 非法/
+     * 引擎不可用一律静默降级。
      *
-     * 同步而非异步：import 改的是引擎的 Learner 状态，必须与其它引擎调用同线程
-     * （Rust 单例没有跨线程保证），且要赶在用户第一次选词之前生效；文件本身很小
-     * （同一处的 EngineLoader 连 1.24MB 词库都在这个线程读）。
+     * 同步而非异步：import 改的是引擎的 Learner 状态，必须赶在用户第一次选词之前生效；
+     * 文件本身很小。本函数不自己排线程 —— 生产的调用点在引擎装载的后台线程上
+     * （Rust 单例有 `Mutex`，跨线程安全，见 `crates/opi-ffi/src/api/mod.rs`）。
      *
      * 非法文件**不删除也不备份**：这份文件坏了就等于没学过 —— 没有可恢复的信息，
      * 删除/改名只是多一次写盘、多一个失败点；留着还能人工看一眼，而下一次成功保存
@@ -279,10 +274,10 @@ class UserWordStore(
     }
 
     /**
-     * 学习状态变更（选词/删用户词）后调用：防抖合并，窗口结束后导出并在 io 线程落盘。
+     * 学习状态变更（选词/删用户词）后调用：防抖合并，窗口结束后在 io 线程导出并落盘。
      *
-     * 导出留在调用线程（引擎调用 + 小 JSON 序列化，与其它引擎调用同线程，不新增并发面），
-     * 只有文件系统调用进 io 线程 —— 那才是慢且不可预测的部分（闪存抖动、磁盘满）。
+     * 导出也进 io 线程（2026-10-28）：Rust 单例有 Mutex，导出不必占主线程；且导出与
+     * rename 同在一条队列里，「导出序 = rename 序」不再依赖调用方都在主线程。
      */
     fun scheduleSave() {
         pending?.invoke()
@@ -298,7 +293,7 @@ class UserWordStore(
      *
      * 未 [load] 过则不写：此时引擎里没有导入过文件，导出结果是空表，写回等于把
      * 用户词清空。没有 pending 时也不写：在途写盘已经排在 io 队列里了。
-     * 与 [scheduleSave] 一样只在主线程调用（exportJson 与其它引擎调用同线程）。
+     * 与 [scheduleSave] 一样只在主线程调用（防抖回调是主线程 Handler）。
      */
     fun flushPending() {
         if (!loaded || pending == null) return
@@ -308,15 +303,16 @@ class UserWordStore(
     }
 
     private fun saveSoon() {
-        // 导出失败不得从防抖回调里逃逸：那跑在主线程 Handler 上，抛出去就是崩 IME。
+        // 导出也在 io 线程（2026-10-28）：Rust 单例有 Mutex，且队列顺序即导出顺序。
         val token = saveEpoch.get()
-        val json = try {
-            exportJson()
-        } catch (e: Throwable) {
-            return
-        }
         io.execute {
             if (token != saveEpoch.get()) return@execute
+            // 导出失败不得从 io 线程逃逸：未捕获异常一样会杀掉整个进程（崩 IME）。
+            val json = try {
+                exportJson()
+            } catch (e: Throwable) {
+                return@execute
+            }
             // 原子写：先写同目录 tmp、**fsync**、再 rename（POSIX 同目录 rename 是原子替换）。
             // 崩在写 tmp 时旧的用户词仍完好。
             //

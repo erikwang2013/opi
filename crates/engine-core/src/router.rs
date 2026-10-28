@@ -67,10 +67,9 @@ pub struct KeyRouter {
     buffer_snapshot: String,
     /// ⇧ 状态机（镜像 Android `EngineController.shiftState`）。
     shift_state: ShiftState,
-    /// 上一次按下的分流结论：(键值, 是否直通)。抬起按同一结论回复，
-    /// 使「按下放行 → 抬起也放行」成立（见 `key_event` 的可打印分支与退格/回车分支：
-    /// 那两个按下分支会把缓冲改空，抬起再判「当前」缓冲就不对称了）。
-    last_printable: Option<(u32, bool)>,
+    /// 仍按住的**直通**键值（有界，见 `HOLD_LIMIT`）：抬起按按下结论回复（按下分支
+    /// 会改缓冲）；集合而非单槽与清空时机见 `record_key_outcome` / `clear_held_keys`。
+    pub(crate) held_passthrough: std::collections::VecDeque<u32>,
 }
 
 impl KeyRouter {
@@ -82,7 +81,7 @@ impl KeyRouter {
             page: 0,
             buffer_snapshot: String::new(),
             shift_state: ShiftState::Off,
-            last_printable: None,
+            held_passthrough: Default::default(),
         };
         r.refresh_snapshot();
         r
@@ -182,6 +181,7 @@ impl KeyRouter {
     /// C ABI 的 `opi_switch_mode` 必须走本方法（而不是直接打引擎），否则 Apple 侧
     /// 就有这个 bug。
     pub fn switch_mode(&mut self, mode: Mode) {
+        self.clear_held_keys(); // 模式复位 = 旧的按下记录作废（与两轨同契约）
         self.engine.switch_mode(mode);
         if mode != Mode::English {
             self.shift_state = ShiftState::Off;
@@ -195,6 +195,7 @@ impl KeyRouter {
     /// 的理由见 [`Engine::switch_language`]）。前端 ⇧ 三态的收尾同 [`Self::switch_mode`]；
     /// 缓冲没变 ⇒ 页码收尾是 no-op（保缓冲即保页码）。
     pub fn switch_language(&mut self, mode: Mode, scheme: crate::scheme::Scheme) {
+        self.clear_held_keys(); // 同 switch_mode：换模式/方案的按下记录作废
         self.engine.switch_language(mode, scheme);
         if mode != Mode::English {
             self.shift_state = ShiftState::Off;
@@ -287,7 +288,7 @@ impl KeyRouter {
     ///   其余模式按各自分支走（英文直传、数字直通、符号模式原样插入）。
     /// - 数字：拼音/繁体/符号且有候选时按**页内**索引选词，页内越界/无候选 → 直通。
     /// - 符号模式：字母数字入引擎缓冲当**关键字**（符号候选由此搜出），其余直通。
-    /// - 退格/回车/可打印键的**抬起按按下的结论回复**（`last_printable` 单槽）。
+    /// - 退格/回车/可打印键的**抬起按按下的结论回复**（`held_passthrough` 集合）。
     pub fn key_event(&mut self, keyval: u32, states: u32) -> KeyAction {
         // Ctrl/Alt/⌘ 组合键（系统快捷键）一律直通，不拦截。
         if states & (KEY_STATE_CTRL | KEY_STATE_ALT | KEY_STATE_META) != 0 {
@@ -297,18 +298,18 @@ impl KeyRouter {
         match keyval {
             KEY_BACK_SPACE | KEY_DELETE => {
                 if released {
-                    // 抬起按**按下时记下的**结论回复（`last_printable`）——不能判「当前」
-                    // 缓冲：按下分支 handle_backspace 会把它改空（删掉最后一个字符），
-                    // 届时再判 buffer().is_empty() 就会放行一个按下时拦下的键 →
+                    // 抬起按**按下时记下的**结论回复——不能判「当前」缓冲：按下分支
+                    // handle_backspace 会把它改空（删掉最后一个字符），届时再判
+                    // buffer().is_empty() 就会放行一个按下时拦下的键 →
                     // 客户端收到无 keydown 的 keyup（依赖键状态的控件卡键）。
-                    match self.last_printable {
-                        Some((k, true)) if k == keyval => KeyAction::PassThrough,
-                        // 键值不匹配（记录被另一个键顶掉）或从未按下 → 按引擎接管拦下
-                        _ => KeyAction::EngineHandled,
+                    if self.release_key(keyval) {
+                        KeyAction::PassThrough
+                    } else {
+                        KeyAction::EngineHandled
                     }
                 } else {
                     let action = self.handle_backspace();
-                    self.last_printable = Some((keyval, matches!(action, KeyAction::PassThrough)));
+                    self.record_key_outcome(keyval, matches!(action, KeyAction::PassThrough));
                     action
                 }
             }
@@ -325,13 +326,14 @@ impl KeyRouter {
             KEY_RETURN => {
                 if released {
                     // 同退格：抬起按按下记下的结论回复（handle_enter 提交后会清空缓冲）
-                    match self.last_printable {
-                        Some((k, true)) if k == keyval => KeyAction::PassThrough,
-                        _ => KeyAction::EngineHandled,
+                    if self.release_key(keyval) {
+                        KeyAction::PassThrough
+                    } else {
+                        KeyAction::EngineHandled
                     }
                 } else {
                     let action = self.handle_enter();
-                    self.last_printable = Some((keyval, matches!(action, KeyAction::PassThrough)));
+                    self.record_key_outcome(keyval, matches!(action, KeyAction::PassThrough));
                     action
                 }
             }
@@ -357,7 +359,7 @@ impl KeyRouter {
                 // 抬起必须判：本函数上面每个特殊键分支都判了 `released`，可打印
                 // 分支此前漏判，导致同一个字符被第二次送进引擎 —— 拼音缓冲翻倍
                 // （"ni"→"nnii"）、英文模式重复提交（"a"→"aa"）。
-                // 抬起时的结论用按下时记下的（self.last_printable），与按下同判：
+                // 抬起时的结论用按下时记下的（self.held_passthrough），与按下同判：
                 // 可打印键里有直通字符（拼音/繁体的非字母符号、无候选或越界的数字、
                 // Number 模式下的全部可见 ASCII、Symbol 模式下的控制符/非 ASCII →
                 // handle_printable 返回 PassThrough），按下放行、抬起拦下会让客户端
@@ -365,15 +367,14 @@ impl KeyRouter {
                 // 记结论而非复刻 handle_printable 的分流判定：判定只有一处，不会漂移。
                 Some(c) if c.is_ascii() => {
                     if released {
-                        match self.last_printable {
-                            Some((k, true)) if k == keyval => KeyAction::PassThrough,
-                            // 键值不匹配（记录被另一个键顶掉）或从未按下 → 按引擎接管拦下
-                            _ => KeyAction::EngineHandled,
+                        if self.release_key(keyval) {
+                            KeyAction::PassThrough
+                        } else {
+                            KeyAction::EngineHandled
                         }
                     } else {
                         let action = self.handle_printable(c);
-                        self.last_printable =
-                            Some((keyval, matches!(action, KeyAction::PassThrough)));
+                        self.record_key_outcome(keyval, matches!(action, KeyAction::PassThrough));
                         action
                     }
                 }

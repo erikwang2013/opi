@@ -179,10 +179,11 @@ Rust 侧状态不变，缓冲与上次推出去的一样就直接跳过 —— �
 异常降级成「这一次按键无效」。
 
 设计要点：**页码只有 Rust 一份**。`opi_fcitx5_candidates` 返回的已经是切片后的
-当前页（`candidate.rs` 的 `PAGE_SIZE`），胶水只把它画出来，翻页由 Rust 路由
-（`input_method.rs` 的 PageUp/PageDown → `prev_page`/`next_page`）驱动。若把整份
-候选交给 `CommonCandidateList` 自己翻，前端点翻页箭头会与 Rust 页码漂移。
-代价是候选表恒为单页（`hasNext()` 恒 false，前端不画翻页箭头）。
+当前页（`candidate.rs` 的 `PAGE_SIZE`），胶水只把它画出来。键盘翻页由 Rust 路由
+（`input_method.rs` 的 PageUp/PageDown）；UI 翻页箭头/滚轮走
+`opi_fcitx5_page_state` / `opi_fcitx5_page_step`，C++ 的 `OpiCandidateList`
+（`opi_candidates.h`）拿到新页后**原地**重建当前页候选。两条入口推进的是同一个
+Rust 页码 —— 不把整份候选交给 `CommonCandidateList` 自己翻，避免两份页码漂移。
 
 ## 已知边界
 
@@ -204,10 +205,12 @@ Rust 侧状态不变，缓冲与上次推出去的一样就直接跳过 —— �
   （`icon()` 一族返回 `std::string`，最终解析成一个图片**文件路径**）。
   所以 Linux 端的小欧只能是**输入法图标**，不能进候选栏。这与 macOS 那条（候选窗是系统的
   `IMKCandidates`，画不进去）是同一类边界、不同成因，别把两者合并叙述。
-- **UI 的 `NextPage`/`PrevPage` 是空操作**（实测：调了没有任何面板更新信号）。
-  面板候选表恒单页，前端因此不画翻页箭头，不存在「点了没反应的控件」。
-  翻页只走 PageUp/PageDown 键。要让箭头可点，得把整份候选交给 C++ 列表翻页
-  并让 `prev()/next()` 回调进 Rust —— 那会把页码变成两份状态，需要先定谁是真源。
+- **翻页箭头依赖前端在 `next()/prev()` 后刷新面板**：`OpiCandidateList` 只改
+  自身内容（页码真源在 Rust），不发 `updateUserInterface` —— classicui 与
+  D-Bus frontend（5.1.12 源码）都在调用后自己发。其他 UI addon 若调了翻页却
+  不刷新，箭头会「点了不动」。本机用真 fcitx5 库 + 真 `InputContext` 驱动验过
+  「虚函数 → Rust 页码 → 列表内容」这一段（`opi_panel_driver.cpp` 第 3b 节），
+  **没有**在真桌面用鼠标点过箭头。
 
 ## 安装
 

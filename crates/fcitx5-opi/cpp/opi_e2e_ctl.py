@@ -283,6 +283,11 @@ def check_ctl(windows, failures):
     def panel_texts(label):
         return [p for n, p in by_label.get(label, []) if n.startswith("Update")]
 
+    def has_symbol_title(p):
+        # 显示串按音节插 `'`（2026-10-23 全键盘分词）：「符号」渲染成「符'号」。
+        # 本段只钉标题在不在，分隔符归引擎的显示格式。
+        return "符号" in p.replace("'", "")
+
     rc, out, err = RESULTS.get("symbols", (None, "", ""))
     if rc != 0:
         failures.append(
@@ -291,7 +296,7 @@ def check_ctl(windows, failures):
     else:
         print(f"[e2e/ctl] symbols 返回 0（真入口 + 真数据）：{out!r}", flush=True)
         sym_panel = panel_texts("opi-ctl symbols")
-        titled = [p for p in sym_panel if "符号" in p]
+        titled = [p for p in sym_panel if has_symbol_title(p)]
         if not sym_panel:
             failures.append(
                 "opi-ctl symbols 返回 0 但客户端一条面板信号都没有 —— 浏览开了却看不见"
@@ -301,7 +306,7 @@ def check_ctl(windows, failures):
         else:
             print(f"[e2e/ctl] 浏览已开且推到客户端：{titled[0]!r}", flush=True)
         drill = panel_texts("浏览中按 '1'（下钻类目 1）")
-        d_titled = [p for p in drill if "符号" in p]
+        d_titled = [p for p in drill if has_symbol_title(p)]
         if not d_titled:
             failures.append(
                 f"浏览中按 '1' 没有带「符号」标题的面板更新：{drill}"
@@ -309,8 +314,9 @@ def check_ctl(windows, failures):
         else:
             print(f"[e2e/ctl] 下钻生效（二级标题推到客户端）：{d_titled[0]!r}", flush=True)
 
-    # 6) state：只读查询的真链路（冻结格式 `lang=…;trad=…;punct=…;fw=…;im=…;mode=…`，
-    #    键序固定；末两格 2026-10-10 / 2026-10-14 先后追加在行尾）。
+    # 6) state：只读查询的真链路（冻结格式
+    #    `lang=…;trad=…;punct=…;fw=…;im=…;mode=…;enpro=…`，键序固定；
+    #    末三格 2026-10-10 / 2026-10-14 / 2026-10-19 先后追加在行尾）。
     #    每一条都按**位置**解析（桌面就是按位置取值 —— 键序漂了在这里必须红，
     #    放过就是把值读错位）。先断「切 trad 前后输出不同」这条主契约，再断它由
     #    **哪一格**变（其余三段逐字不变），最后断退回来逐字回到基线（两个方向）。

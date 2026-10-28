@@ -101,13 +101,11 @@ impl TsfLogic {
         KeyOutcome::Consumed
     }
 
-    /// 引擎侧 shift 位 + 页码钳制（⇧ 可能改变候选集）。`pub(super)`：`logic.rs` 的
-    /// `switch_mode` 也要重推。
+    /// 引擎侧 shift 位。`pub(super)`：`logic.rs` 的 `switch_mode` 也要重推。
     pub(super) fn set_shift(&mut self, on: bool) {
         self.invalidate_fetch_cache();
         self.engine.set_shift(on);
-        // shift 不改变 buffer（reset_page_if_buffer_changed 不会触发），但
-        // 可能改变候选集；将页码钳制到当前 page_count 边界，防 page 越界。
-        self.set_page(self.page);
+        // 2026-10-26：Shift 不改变候选集（只影响后续英文字母大小写）。旧实现在这里
+        // 走 set_page → page_count → candidates(MAX) 全量重排，Shift 按下白付 ~9ms。
     }
 }

@@ -54,9 +54,15 @@ extension OpiSettingsWindow {
                  action: #selector(jianpinChanged(_:)))
         checkbox("拼音纠错", x: 260, y: after, on: engine.correctionEnabled(),
                  action: #selector(correctionChanged(_:)))
-        checkbox("智能联想（提交后联想常用续接词句；默认关闭）", y: after + 26,
-                 on: OpiSettingsStore.association,
-                 action: #selector(associationChanged(_:)))
+        let assoc = checkbox("智能联想（提交后联想常用续接词句；默认关闭）", y: after + 26,
+                             on: OpiSettingsStore.association,
+                             action: #selector(associationChanged(_:)))
+        assoc.frame.size.width = 360
+        let brackets = checkbox("括号自动配对（默认开启）", x: 380, y: after + 26,
+                                on: OpiSettingsStore.bracketPairing,
+                                action: #selector(bracketPairingChanged(_:)))
+        brackets.frame.size.width = 320
+        brackets.toolTip = "打 ( 自动补 )，光标停在中间；宿主不支持光标回移时自动退回普通输入。"
 
         let schemeY = after + 68
         label("输入方案", x: 0, y: schemeY, w: 90, size: 12)
@@ -341,6 +347,11 @@ extension OpiSettingsWindow {
     @objc func associationChanged(_ sender: NSButton) {
         OpiSettingsStore.association = sender.state == .on
         OpiClientHub.shared.refreshState()
+    }
+
+    @objc func bracketPairingChanged(_ sender: NSButton) {
+        OpiSettingsStore.bracketPairing = sender.state == .on
+        BracketPairing.shared.reset() // 关掉后不再跟踪已有的那一对
     }
 
     @objc func schemeChanged(_ sender: NSPopUpButton) {

@@ -9,8 +9,8 @@
 //! 独立成模块（而非留在 `tsf.rs`）的唯一原因：`tsf.rs` 在
 //! `#[cfg(target_os = "windows")]` 下，Linux 主机不编译它，判定写在那边就等于
 //! 永远没有回归测试（本项目在 Linux 上开发/跑门禁）。故把**纯判定**放这里
-//! （无 windows 类型，主机可编译可单测），Win32 调用留在 `tsf.rs` 的
-//! `to_engine_keycode`。键码约定见 `logic` 模块头注释。
+//! （无 windows 类型，主机可编译可单测），Win32 调用留在 `key_state.rs` 的
+//! `to_engine_keycode` / `layout_char`。键码约定见 `logic` 模块头注释。
 
 use engine_core::composer::Mode;
 
@@ -93,31 +93,16 @@ pub fn is_shift_vk(vk: u32) -> bool {
     vk == special_vk(KEY_SHIFT) || vk == VK_LSHIFT || vk == VK_RSHIFT
 }
 
-// ---------- 模式热键（B0/B5） ----------
-
-/// US 布局的反斜杠键（`VK_OEM_5`）。值是 Win32 ABI 事实（winuser.h），冻结的。
-const VK_OEM_5: u32 = 0xdc;
-/// US 布局的撇号键（`VK_OEM_7`）。同上。
-/// **曾错写成 `0xe2`（那是 `VK_OEM_102`）**：后果是 `Ctrl+'` 在 Windows 上按了
-/// 没反应 —— 真键盘发的是 `0xde`，`mode_hotkey` 匹配不上就直落引擎，没有任何报错。
-/// 那条错值能一直活着，是因为原来「与 crate 对齐」的单测两边都是本文件的字面量
-/// （断言与被断言同源）—— 现在改由下面的 const 断言对着 crate 走，见那里。
-const VK_OEM_7: u32 = 0xde;
-
-// 与 windows crate 的**同名常量**对齐 —— 由**编译器**把关（`cargo check
-// --target x86_64-pc-windows-msvc`），不是单测：那个 crate 是 target 作用域依赖
-// （见 Cargo.toml），Linux 主机上根本不存在，写进 `#[cfg(test)]` 只能自己跟自己比
-// —— 本模块原来就有一条这样的假闸（`assert_eq!(VK_OEM_5 as u32, 0xdc)`，两边同源），
-// 已删。放这里而不是 `tsf.rs`：常量就在上面几行，改动时没法不看见它。
-//
-// 只在 Windows 目标存在，故整个块 cfg 掉，本模块在主机侧仍是纯 Rust（模块头那条）。
+// `VK_LSHIFT`/`VK_RSHIFT` 与 windows crate 同名常量的对齐由**编译器**把关
+// （`cargo check --target x86_64-pc-windows-msvc`），不是单测：那个 crate 是
+// target 作用域依赖，Linux 主机上根本不存在，写进 `#[cfg(test)]` 只能自己跟自己比。
 #[cfg(target_os = "windows")]
 const _: () = {
-    assert!(VK_OEM_5 == windows::Win32::UI::Input::KeyboardAndMouse::VK_OEM_5.0 as u32);
-    assert!(VK_OEM_7 == windows::Win32::UI::Input::KeyboardAndMouse::VK_OEM_7.0 as u32);
     assert!(VK_LSHIFT == windows::Win32::UI::Input::KeyboardAndMouse::VK_LSHIFT.0 as u32);
     assert!(VK_RSHIFT == windows::Win32::UI::Input::KeyboardAndMouse::VK_RSHIFT.0 as u32);
 };
+
+// ---------- 模式热键（B0/B5） ----------
 
 /// 模式热键的语义。**不是目标模式**：切到哪儿取决于当前模式（见 `hotkey_target`），
 /// 因为两个键都是「来回切」——只能进不能出等于换个地方卡住。
@@ -148,7 +133,18 @@ pub fn hotkey_should_act(states: u32) -> bool {
     states & (KEY_STATE_REPEAT | KEY_STATE_RELEASED) == 0
 }
 
-/// VK + 修饰位 → 模式热键。`None` = 不是热键，照常走引擎路由。
+/// 布局字符 + 修饰位 → 模式热键。`None` = 不是热键，照常走引擎路由。
+///
+/// `ch` 是**当前键盘布局下该键产生的字符**：Windows 侧由 `key_state::layout_char`
+/// 用 `ToUnicodeEx` 得出（Ctrl/Alt 状态清零、Shift 保留）。按字符而非 VK 位置匹配
+/// 是 2026-10-28 的订正：AZERTY/Dvorak 等布局上撇号/反斜杠不在 US 的
+/// `VK_OEM_7`/`VK_OEM_5` 上，旧实现按 US 位置匹配 ⇒ 热键在非 US 布局下落空
+/// （或落到别的键上）。fcitx5 轨匹配的是 `FcitxKey_apostrophe`/`FcitxKey_backslash`
+/// —— 同样是字符语义，不是物理位置，两轨因此对齐。
+///
+/// Ctrl+Shift+' 不命中：Shift 留在键盘状态里，`ToUnicodeEx` 给的是 `"` ——
+/// fcitx5 那边同组合的 keysym 是 `quotedbl`，也不命中，两轨同判。
+///
 /// **注意**：重复事件也返回 `Some`（键位已确认是我们的，要认领）——改状态前先过
 /// `hotkey_should_act`，否则按住不放就会来回切。
 ///
@@ -168,23 +164,19 @@ pub fn hotkey_should_act(states: u32) -> bool {
 /// 裸 `'` 同样不行：`Engine::punct_text` 在缓冲为空时把它当引号。
 /// ⇒ 拿这些键当模式触发＝与用户裁决的标点功能正面相撞（一个键不能既出 `、` 又切模式）。
 /// Ctrl 组合键反而空着，且**两轨都在引擎之前截获**（本模块的 `mode_hotkey` 判在
-/// `tsf.rs` 调 `to_engine_keycode` **之前**，用的是裸 VK + `GetKeyState`）——
-/// 「Ctrl 到不了路由器」是对的，但热键本来就不走路由器。
+/// `tsf.rs` 调 `to_engine_keycode` **之前**）——「Ctrl 到不了路由器」是对的，
+/// 但热键本来就不走路由器。
 ///
-/// VK_OEM_5 = 0xDC（US 布局反斜杠）、VK_OEM_7 = 0xDE（US 布局撇号）。此处用裸
-/// 字面量是因为本模块**平台中立**（无 windows 类型 → 主机可编译可单测）；
-/// 与 windows crate 同名常量的对齐由上面的 const 断言在 Windows 目标上把关
-/// （**不是单测**：那个 crate 是 target 作用域依赖，主机侧根本没有它）。
-///
-/// 抬起（`KEY_STATE_RELEASED`）不返回热键：按下已经切过一次，抬起再切会切回去，
-/// 用户看到的是模式纹丝不动。与 fcitx5 轨同判。
-pub fn mode_hotkey(vk: u32, states: u32) -> Option<ModeHotkey> {
+/// 本模块**平台中立**（收字符、无 windows 类型 → 主机可编译可单测）；布局换算
+/// 在 `key_state.rs`。抬起（`KEY_STATE_RELEASED`）不返回热键：按下已经切过一次，
+/// 抬起再切会切回去，用户看到的是模式纹丝不动。与 fcitx5 轨同判。
+pub fn mode_hotkey(ch: char, states: u32) -> Option<ModeHotkey> {
     if states & KEY_STATE_CTRL == 0 || states & KEY_STATE_RELEASED != 0 {
         return None;
     }
-    match vk {
-        VK_OEM_7 => Some(ModeHotkey::ToggleEnglish),
-        VK_OEM_5 => Some(ModeHotkey::ToggleSymbol),
+    match ch {
+        '\'' => Some(ModeHotkey::ToggleEnglish),
+        '\\' => Some(ModeHotkey::ToggleSymbol),
         _ => None,
     }
 }

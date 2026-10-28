@@ -6,8 +6,9 @@
 // 而设置面板还要往那边加表头/性能改动。
 //
 // 文案**不自编**：简介/版权/表情数据/三个地址逐字来自
-// `android/.../settings/AboutSection.kt` 与 `ime/AboutPanel.kt`；版本读 appex 的
-// `CFBundleShortVersionString`（`scripts/apple/package-ios.sh` 写入）。
+// `android/.../settings/AboutSection.kt` 与 `ime/AboutPanel.kt`；App 版本读 appex 的
+// `CFBundleShortVersionString`（`scripts/apple/package-ios.sh` 写入），引擎版本读
+// `opi_engine_version`（2026-10-28 起），两者不一致时并列显示。
 //
 // ⚠️ 本机无 UIKit，只在 Apple CI 真编译；从未上机运行。
 
@@ -87,10 +88,16 @@ final class AboutPanel: UIView {
     private func buildContent() {
         addParagraph(Self.intro)
         addHeading("版本")
-        // 引擎没有版本出口（C ABI 与 JNI 都没有）—— 只报 App 版本，不编一个。
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
+        // 2026-10-28 起有引擎版本出口（`opi_engine_version`）。两者本应相等
+        // （同一次打包写入），**不相等就两个都显示** —— 那正是要暴露的漂移。
+        let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
             as? String ?? "未知"
-        addParagraph("v\(version)（引擎随 App 打包，没有独立的版本出口）")
+        let engineVersion = OpiEngine.engineVersion()
+        if engineVersion.isEmpty || engineVersion == appVersion {
+            addParagraph("v\(appVersion)（引擎随 App 打包，版本同上）")
+        } else {
+            addParagraph("App v\(appVersion) · 引擎 v\(engineVersion)（两者不一致，请报告）")
+        }
         stack.addArrangedSubview(updateView)
         addHeading("版权")
         addParagraph("© 2026 erik.xyz · 代码按 MIT 许可（全文见仓库 LICENSE）；词库数据与代码分开授权")

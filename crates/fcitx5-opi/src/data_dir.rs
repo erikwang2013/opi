@@ -12,6 +12,7 @@
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::user_words::install_with_trad_at;
 
@@ -43,10 +44,16 @@ pub fn load_symbols(path: &Path) -> Result<usize, String> {
 /// - 否则 → $HOME/.local/share/opi（XDG Base Directory 规范默认值；
 ///   XDG_DATA_HOME 为空或未设置时同此；HOME 缺失 → 相对 ".local/share/opi"）
 pub fn xdg_data_dir() -> PathBuf {
-    if let Some(xdg) = std::env::var_os("XDG_DATA_HOME").filter(|v| !v.is_empty()) {
+    xdg_data_dir_from(std::env::var_os("XDG_DATA_HOME"), std::env::var_os("HOME"))
+}
+
+/// 判据本体：**不碰进程环境**，单测直接喂值 —— set_var 与并行 getenv 并发是 UB，
+/// 旧测试的 ENV_LOCK 只串行它自己，挡不住同进程别处的 `xdg_data_dir()`。
+fn xdg_data_dir_from(xdg: Option<std::ffi::OsString>, home: Option<std::ffi::OsString>) -> PathBuf {
+    if let Some(xdg) = xdg.filter(|v| !v.is_empty()) {
         return PathBuf::from(xdg).join("opi");
     }
-    PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".local/share/opi")
+    PathBuf::from(home.unwrap_or_default()).join(".local/share/opi")
 }
 
 /// size 校验重拷规则（镜像 EngineLoader.needsCopy：缺失或 size 不一致即重拷）。
@@ -64,7 +71,7 @@ pub fn ensure_dirs(data_dir: &Path) -> io::Result<()> {
 
 /// size 校验后把 luna.opid 拷贝进数据目录，返回目标路径。
 /// 目标缺失或 size 不一致 → 拷贝；一致 → 跳过（幂等）。
-/// 拷贝为原子写盘（同目录 .tmp + rename，POSIX 下 rename 原子），
+/// 拷贝为原子写盘（同目录唯一临时名 + rename，POSIX 下 rename 原子），
 /// 避免中途崩溃留下截断的 luna.opid。失败原样返回 Err
 /// （对照 EngineLoader：write 抛 IOException → 调用方回退）。
 pub fn ensure_dict(source: &Path, data_dir: &Path) -> io::Result<PathBuf> {
@@ -72,14 +79,31 @@ pub fn ensure_dict(source: &Path, data_dir: &Path) -> io::Result<PathBuf> {
     let asset_size = source.metadata()?.len();
     let existing = fs::metadata(&target).ok().map(|m| m.len());
     if needs_copy(existing, asset_size) {
-        let tmp = data_dir.join(format!("{DICT_FILE_NAME}.tmp"));
-        fs::copy(source, &tmp)?;
+        let tmp = tmp_of(&target);
+        if let Err(e) = fs::copy(source, &tmp) {
+            let _ = fs::remove_file(&tmp); // 不留半截临时文件
+            return Err(e);
+        }
         if let Err(e) = fs::rename(&tmp, &target) {
             let _ = fs::remove_file(&tmp); // 清理残留 tmp（不掩盖原始错误）
             return Err(e);
         }
     }
     Ok(target)
+}
+
+/// 同目录唯一临时名：pid + 序号。固定名 `.tmp` 在两个进程同时 ensure_dict 时
+/// 很可能互相覆盖、rename 抢走（同一形态在 engine-data 的原子写已实测；本处
+/// 的并发可达性未单独复现，按最坏情况处理）。
+fn tmp_of(target: &Path) -> PathBuf {
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    let mut name = target.file_name().unwrap_or_default().to_os_string();
+    name.push(format!(
+        ".{}.{}.tmp",
+        std::process::id(),
+        SEQ.fetch_add(1, Ordering::Relaxed)
+    ));
+    target.with_file_name(name)
 }
 
 /// 初始化编排（对照 EngineLoader.loadAsset 顺序）：建目录 → size 校验拷贝 →
@@ -106,12 +130,8 @@ pub use crate::custom_phrases::{
 mod tests {
     use super::*;
     use engine_data::format::{OpDict, RawEntry};
-    use std::sync::Mutex;
     use std::sync::atomic::{AtomicU64, Ordering};
 
-    /// 环境变量互斥：set_var/remove_var 是全局副作用，串行防并行测试竞争
-    /// （对照 opi-ffi cabi_test.rs 的 SERIAL 模式）。
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
     // 触碰 SINGLETON 的用例一律用 `crate::serial_install()`（crate 级唯一测试锁）：
     // 本模块与 lib.rs 的 tests 在同一个测试二进制里并行跑，各拿一把锁等于没锁。
 
@@ -157,52 +177,51 @@ mod tests {
         assert!(needs_copy(Some(101), 100)); // 偏大 → 拷
     }
 
+    // 三条用例喂纯判据而不是改进程环境：set_var/remove_var 与并行的
+    // `xdg_data_dir()`（lib.rs 装载路径会调）并发是 UB，ENV_LOCK 挡不住它。
     #[test]
     fn xdg_data_home_respected() {
-        let _g = ENV_LOCK.lock().unwrap();
-        let tmp = temp_dir("xdg");
-        // Safety: edition 2024 起 set_var/remove_var 为 unsafe；ENV_LOCK 串行保护
-        unsafe {
-            std::env::set_var("XDG_DATA_HOME", &tmp);
-            std::env::set_var("HOME", "/nonexistent/home");
-        }
-        assert_eq!(xdg_data_dir(), tmp.join("opi"));
-        unsafe {
-            std::env::remove_var("XDG_DATA_HOME");
-            std::env::remove_var("HOME");
-        }
-        let _ = fs::remove_dir_all(&tmp);
+        assert_eq!(
+            xdg_data_dir_from(Some("/xdg".into()), Some("/home".into())),
+            Path::new("/xdg/opi")
+        );
     }
 
     #[test]
     fn xdg_falls_back_to_home_local_share() {
-        let _g = ENV_LOCK.lock().unwrap();
-        let tmp = temp_dir("home");
-        // Safety: 同上（XDG_DATA_HOME 未设置 → HOME/.local/share/opi）
-        unsafe {
-            std::env::remove_var("XDG_DATA_HOME");
-            std::env::set_var("HOME", &tmp);
-        }
-        assert_eq!(xdg_data_dir(), tmp.join(".local/share/opi"));
-        unsafe { std::env::remove_var("HOME") };
-        let _ = fs::remove_dir_all(&tmp);
+        assert_eq!(
+            xdg_data_dir_from(None, Some("/home".into())),
+            Path::new("/home/.local/share/opi")
+        );
     }
 
     #[test]
     fn xdg_empty_data_home_falls_back() {
-        let _g = ENV_LOCK.lock().unwrap();
-        let tmp = temp_dir("empty");
-        // Safety: 同上（XDG 规范：XDG_DATA_HOME 为空等同未设置）
-        unsafe {
-            std::env::set_var("XDG_DATA_HOME", "");
-            std::env::set_var("HOME", &tmp);
-        }
-        assert_eq!(xdg_data_dir(), tmp.join(".local/share/opi"));
-        unsafe {
-            std::env::remove_var("XDG_DATA_HOME");
-            std::env::remove_var("HOME");
-        }
-        let _ = fs::remove_dir_all(&tmp);
+        // XDG 规范：为空等同未设置
+        assert_eq!(
+            xdg_data_dir_from(Some("".into()), Some("/home".into())),
+            Path::new("/home/.local/share/opi")
+        );
+    }
+
+    #[test]
+    fn tmp_names_are_unique_and_hidden_beside_the_target() {
+        let target = Path::new("/data/luna.opid");
+        let a = tmp_of(target);
+        let b = tmp_of(target);
+        assert_ne!(a, b, "并发写同一目标不能共用一个临时名");
+        assert_eq!(
+            a.parent(),
+            target.parent(),
+            "rename 必须同目录（原子性前提）"
+        );
+        assert!(
+            a.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("luna.opid."),
+            "残留时能认出是谁的临时文件：{a:?}"
+        );
     }
 
     #[test]

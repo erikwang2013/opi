@@ -40,9 +40,8 @@ enum class InputScheme(val value: Int) {
 // 引擎接口（[OpiEngineApi]）在 OpiEngineApi.kt —— 同包契约文件，500 行门禁拆出。
 
 /**
- * 单一状态源：封装 OpiEngine，UI 经 mutableStateOf 订阅
- * （翻页 8/页、buffer 变化重置页码；2026-10-26 起 fetchLimit=512，让「壹」这类
- * 排在第 79/155 位的精确单字可通过翻页到达 —— 此前 64 条只有 8 页）。
+ * 单一状态源：封装 OpiEngine，UI 经 mutableStateOf 订阅（按引擎页大小翻页、buffer
+ * 变化重置页码；fetchLimit=512，让「壹」这类排在第 79/155 位的单字可翻到）。
  */
 class EngineController(
     private val api: OpiEngineApi = OpiEngine,
@@ -156,10 +155,8 @@ class EngineController(
         dictionaryDegraded = !ok
     }
 
-    companion object {
-        const val pageSize = 8
-        const val fetchLimit = 512
-    }
+    private val fetchLimit = 512
+    val pageSize: Int = api.pageSize() // 每页候选数：引擎 `router::PAGE_SIZE`，别写死 8
 
     // 候选翻页：引擎 candidates(limit) 无 offset，翻页纯客户端。
     /** 编码提示（五笔候选栏显示剩余键；2026-10-14 接线）—— 由 [refresh] 计算。 */
@@ -202,8 +199,8 @@ class EngineController(
         candidates = api.candidates(fetchLimit)?.toList() ?: emptyList() // JNI 可能返回 null
         // 读数（引擎出口已按读音去重保序）：与 candidates 同一次排名的副产物
         // （引擎侧同一对缓存），**必须紧跟 candidates 之后读**（同一读序契约，
-        // 见本函数尾 reading 的注释）。
-        candidateReadings = api.candidateReadings()?.toList() ?: emptyList()
+        // 见本函数尾 reading 的注释）。只有中文 + 9/14/双拼非空，其余方案连 JNI 都不问。
+        candidateReadings = if (needsCandidateReadings(mode, inputScheme)) (api.candidateReadings()?.toList() ?: emptyList()) else emptyList()
         if (buffer != lastQuery) {
             lastQuery = buffer
             _candidatePage = 0
@@ -413,7 +410,7 @@ class EngineController(
         if (_candidatePage > 0) _candidatePage--
     }
 
-    /** 屏内下标 i → 绝对下标 page*8+i。 */
+    /** 屏内下标 → 全局下标：翻页在本地切片（引擎 page 恒 0），别改走 selectPage。 */
     fun selectFromPage(indexInPage: Int): String = select(_candidatePage * pageSize + indexInPage)
 
     // ---- ⇧ 状态机 ----

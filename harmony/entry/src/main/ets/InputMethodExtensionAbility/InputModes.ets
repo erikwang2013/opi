@@ -238,10 +238,10 @@ export function currentModeIndex(): number {
  * **生僻字（panel）不碰引擎** —— 与 Android `InputMode.RARE` 同一条：它只是面板视图，
  * 引擎方案/模式原地不动（选中它再返回，打字行为不变）。
  *
- * ⚠️ **与 Android 已知的差异（如实记）**：那边选之前会把待提交缓冲**提交掉**
- * （`commitPendingBuffer`），本端**没有**这条路 —— `setScheme` / `switchMode` 在引擎侧
- * 都是清缓冲 ⇒ 选模式时未确认的拼音是**丢掉**的。要补得先有「把文本插入文档」的接口
- * （与 `OpiEngine.toggleSymbol` 的前置条件是同一条）。
+ * ⚠️ **与 Android 仍有一处能力差异（如实记）**：那边选之前会把**未确认缓冲**也提交
+ * （`commitPendingBuffer`），本端只交**已确认未提交**片段（`pendingText`，由
+ * `KeyboardController` 在换方案/模式前插入）；打了一半的拼音仍会丢 —— 但**绝不**把
+ * 9 键的数字缓冲直提成文本（Android 2026-10-11 修掉的正是这个 bug）。
  */
 export function selectInputMode(i: number): void {
   if (i < 0 || i >= INPUT_MODES.length) {

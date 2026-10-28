@@ -112,26 +112,26 @@ pub fn handle_key(state: &mut CandidateState, keyval: u32, states: u32) -> KeyAc
     // 符号浏览（契约 ②，见 engine_symbol_browse.rs 头）：**按下**时只有 `1`-`9`、
     // `-`/`=`、Esc 归浏览；其余键先把浏览退出（恢复真缓冲）再落进下面的正常路由 ——
     // 「退出」放在这里（全部按键之前）而不是各分支里，单点免得某个键漏掉。
-    // 抬起不在此处理：各键的 press/release 对称由下方 last_printable 机制管。
+    // 抬起不在此处理：各键的 press/release 对称由下方 held_passthrough 机制管。
     if !released && state.is_symbol_browsing() {
-        // 三个提前 return 的分支必须记 `last_printable`：不记的话，抬起会命中
+        // 三个提前 return 的分支必须记按下结论：不记的话，抬起会命中
         // **上一次**同名键留下的记录（可能 true）→ 放行一个按下时被拦下的 keyup
         // （与退格/回车那两处的理由逐字相同）。浏览态一律不直通。
         match keyval {
             // `1`-`9`：激活浏览项（页内索引，与候选数字键同一套换算）
             0x31..=0x39 => {
                 let action = browse_digit(state, keyval);
-                state.last_printable = Some((keyval, matches!(action, KeyAction::PassThrough)));
+                state.record_key_outcome(keyval, matches!(action, KeyAction::PassThrough));
                 return action;
             }
             0x2d => {
                 state.prev_page(); // `-` 浏览上一页
-                state.last_printable = Some((keyval, false));
+                state.record_key_outcome(keyval, false);
                 return KeyAction::EngineHandled;
             }
             0x3d => {
                 state.next_page(); // `=` 浏览下一页
-                state.last_printable = Some((keyval, false));
+                state.record_key_outcome(keyval, false);
                 return KeyAction::EngineHandled;
             }
             // Esc：归下面的 KEY_ESCAPE 分支（退出 + 吞掉；press/release 对称在那）
@@ -144,18 +144,18 @@ pub fn handle_key(state: &mut CandidateState, keyval: u32, states: u32) -> KeyAc
     match keyval {
         KEY_BACK_SPACE | KEY_DELETE => {
             if released {
-                // 抬起按**按下时记下的**结论回复（`last_printable`）——不能判「当前」
-                // 缓冲：按下分支 handle_backspace 会把它改空（删掉最后一个字符），
-                // 届时再判 buffer().is_empty() 就会放行一个按下时拦下的键 →
+                // 抬起按**按下时记下的**结论回复——不能判「当前」缓冲：按下分支
+                // handle_backspace 会把它改空（删掉最后一个字符），届时再判
+                // buffer().is_empty() 就会放行一个按下时拦下的键 →
                 // 客户端收到无 keydown 的 keyup（依赖键状态的游戏/编辑器卡键）。
-                match state.last_printable {
-                    Some((k, true)) if k == keyval => KeyAction::PassThrough,
-                    // 键值不匹配（记录被另一个键顶掉）或从未按下 → 按引擎接管拦下
-                    _ => KeyAction::EngineHandled,
+                if state.release_key(keyval) {
+                    KeyAction::PassThrough
+                } else {
+                    KeyAction::EngineHandled
                 }
             } else {
                 let action = handle_backspace(state);
-                state.last_printable = Some((keyval, matches!(action, KeyAction::PassThrough)));
+                state.record_key_outcome(keyval, matches!(action, KeyAction::PassThrough));
                 action
             }
         }
@@ -169,13 +169,14 @@ pub fn handle_key(state: &mut CandidateState, keyval: u32, states: u32) -> KeyAc
         KEY_RETURN => {
             if released {
                 // 同退格：抬起按按下记下的结论回复（handle_enter 提交后会清空缓冲）
-                match state.last_printable {
-                    Some((k, true)) if k == keyval => KeyAction::PassThrough,
-                    _ => KeyAction::EngineHandled,
+                if state.release_key(keyval) {
+                    KeyAction::PassThrough
+                } else {
+                    KeyAction::EngineHandled
                 }
             } else {
                 let action = handle_enter(state);
-                state.last_printable = Some((keyval, matches!(action, KeyAction::PassThrough)));
+                state.record_key_outcome(keyval, matches!(action, KeyAction::PassThrough));
                 action
             }
         }
@@ -199,13 +200,14 @@ pub fn handle_key(state: &mut CandidateState, keyval: u32, states: u32) -> KeyAc
             if released {
                 // 同退格：抬起按按下记下的结论回复（handle_escape 会退出浏览，
                 // 「当前」状态与按下时不同，只能复用记录）
-                match state.last_printable {
-                    Some((k, true)) if k == keyval => KeyAction::PassThrough,
-                    _ => KeyAction::EngineHandled,
+                if state.release_key(keyval) {
+                    KeyAction::PassThrough
+                } else {
+                    KeyAction::EngineHandled
                 }
             } else {
                 let action = handle_escape(state);
-                state.last_printable = Some((keyval, matches!(action, KeyAction::PassThrough)));
+                state.record_key_outcome(keyval, matches!(action, KeyAction::PassThrough));
                 action
             }
         }
@@ -213,7 +215,7 @@ pub fn handle_key(state: &mut CandidateState, keyval: u32, states: u32) -> KeyAc
             // 抬起必须判：本函数上面每个特殊键分支都判了 `released`，可打印
             // 分支此前漏判，导致同一个字符被第二次送进引擎 —— 拼音缓冲翻倍
             // （"ni"→"nnii"）、英文模式重复提交（"a"→"aa"）。
-            // 抬起时的结论用按下时记下的（state.last_printable），与按下同判：
+            // 抬起时的结论用按下时记下的（state.held_passthrough），与按下同判：
             // 可打印键里有直通字符（拼音/繁体的非字母符号、无候选或越界的数字、
             // Number 模式下的全部可见 ASCII、Symbol 模式下的控制符/非 ASCII → handle_printable 返回
             // PassThrough），按下放行、抬起拦下会让客户端收到 keydown 收不到
@@ -221,14 +223,14 @@ pub fn handle_key(state: &mut CandidateState, keyval: u32, states: u32) -> KeyAc
             // 记结论而非复刻 handle_printable 的分流判定：判定只有一处，不会漂移。
             Some(c) if c.is_ascii() => {
                 if released {
-                    match state.last_printable {
-                        Some((k, true)) if k == keyval => KeyAction::PassThrough,
-                        // 键值不匹配（记录被另一个键顶掉）或从未按下 → 按引擎接管拦下
-                        _ => KeyAction::EngineHandled,
+                    if state.release_key(keyval) {
+                        KeyAction::PassThrough
+                    } else {
+                        KeyAction::EngineHandled
                     }
                 } else {
                     let action = handle_printable(state, c);
-                    state.last_printable = Some((keyval, matches!(action, KeyAction::PassThrough)));
+                    state.record_key_outcome(keyval, matches!(action, KeyAction::PassThrough));
                     action
                 }
             }
@@ -459,6 +461,10 @@ fn commit_or_handled(out: String) -> KeyAction {
         KeyAction::Input(out)
     }
 }
+
+// 按住键结论表（2026-10-28 集合化）：拆出同目录文件以保持本文件 <500 行。
+#[path = "input_method_keys.rs"]
+mod keys;
 
 // 单测独立成文件（input_method_tests.rs，`#[path]` 引入）以保持本文件 <500 行。
 #[cfg(test)]

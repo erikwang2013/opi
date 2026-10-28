@@ -232,7 +232,7 @@ export function selectPage(index: number): string {
 }
 
 /**
- * 全量候选前 limit 条（平铺视图用 64，同 Android EngineController.fetchLimit）。
+ * 全量候选前 limit 条（平铺视图用 512，同 Android EngineController.fetchLimit）。
  * 解码失败 → 空数组（同 candidatesPage：宁可少显示，也不让键盘崩）。
  */
 export function candidates(limit: number): string[] {
@@ -271,26 +271,22 @@ export function clearUserWords(): void {
   opiime.clearUserWords();
 }
 
-/**
- * 当前候选页 / 总页数。
- * **必须读这两个出口、不要自己数页** —— PageDown 到末页时路由会把页码钳到
- * 最后一页，本地计数超过末页就会与引擎漂移（高亮的页 ≠ 实际选词所在的页）。
- */
-export function page(): number {
-  return opiime.page();
-}
+/** 导入/导出用户词 JSON（契约见 cpp/opi_ffi.h）：导入负数 = 失败，导出空串 = 引擎未装载。 */
+export function importUserWords(json: string): number { return opiime.importUserWords(json); }
 
-export function pageCount(): number {
-  return opiime.pageCount();
-}
+export function exportUserWords(): string { return opiime.exportUserWords(); }
 
-export function clear(): void {
-  opiime.clear();
-}
+/** 已确认未提交的逐字片段：换方案/模式前必须上屏（见 `KeyboardController`）。 */
+export function pendingText(): string { return opiime.pendingText(); }
 
-export function mode(): OpiMode {
-  return toMode(opiime.mode());
-}
+/** 当前候选页 / 总页数。**必须读这两个出口、不要自己数页**（末页由路由钳制，本地数会漂）。 */
+export function page(): number { return opiime.page(); }
+
+export function pageCount(): number { return opiime.pageCount(); }
+
+export function clear(): void { opiime.clear(); }
+
+export function mode(): OpiMode { return toMode(opiime.mode()); }
 
 /** 切模式。⚠️ 越界值是**静默不动作**，所以这里先夹紧到 0..4。 */
 export function switchMode(m: OpiMode): void {
@@ -300,6 +296,9 @@ export function switchMode(m: OpiMode): void {
   }
   opiime.switchMode(v);
 }
+
+/** 语言切换（中↔繁/中↔英）：换模式+方案但**保缓冲**、不清已确认片段。⚠️ 任一越界整体忽略。 */
+export function switchLanguage(m: OpiMode, scheme: number): void { opiime.switchLanguage(m as number, scheme); }
 
 /** **前端** ⇧ 三态。 */
 export function shiftState(): OpiShift {

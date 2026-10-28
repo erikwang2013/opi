@@ -40,7 +40,7 @@ final class SettingsPanel: UIView {
     var onChange: ((KeyboardSettings) -> Void)?
     /// 暗光/长辈变了：控制器负责持久化 + 换肤。
     var onUpdateModes: ((KeyboardModes) -> Void)?
-    /// 「清除用户词库」已确认（2026-10-23）：控制器调 `clearUserWords()` + 刷新。
+    /// 「清除用户词库」已确认：控制器清内存 + 落盘副本（`UserWordsStore`）+ 刷新。
     var onClearUserWords: (() -> Void)?
 
     private enum Toggle: Hashable {

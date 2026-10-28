@@ -82,8 +82,8 @@ impl TsfTextService {
         // 第三拍：执行中 ⇄ 英。锁内只切语言 + 抓快照，**放锁后**才写文档/管道
         // （insert_into 是同步 COM 编辑会话，持锁跨它会冻住宿主 UI，见 tsf.rs）。
         // W1：进英文前把待处理拼音的**原文**插进文档（`toggle_language` 的返回值），
-        // 再让候选窗收起；没有焦点文档时文字静默丢弃，与别处一致。切回拼音无待上屏
-        // 文本 → 推一帧状态（缓冲空 ⇒ 窗口收起），与 `toggle_mode` 同一条收尾。
+        // 再让候选窗收起；没有焦点文档/插入被拒时文字丢，但仍推一帧让窗口按新语言
+        // 收尾。切回拼音无待上屏文本同样推空帧。与 `toggle_mode` 同一条收尾。
         let (text, snapshot) = {
             let mut logic = match self.state.lock_logic() {
                 Some(g) => g,
@@ -91,22 +91,20 @@ impl TsfTextService {
             };
             if tap && logic.shift_toggle() {
                 let text = logic.toggle_language();
-                let snapshot = if text.is_empty() {
-                    Some(logic.snapshot())
-                } else {
-                    None
-                };
-                (text, snapshot)
+                (text, logic.snapshot())
             } else {
                 logic.consume_single_shift();
                 return Some(BOOL(1));
             }
         };
-        if let Some(snapshot) = snapshot {
-            push_state(&*self.sink, &snapshot);
-        } else if let Some(pic) = pic {
-            self.state.insert_into(pic, &text);
+        // 同 toggle_mode：插入成功才收窗口；空文本或插入失败 → 推切换后的空帧，
+        // 免得候选窗停在旧语言/旧候选（原文在失败路径确实丢了）。
+        let inserted =
+            !text.is_empty() && pic.is_some_and(|pic| self.state.insert_into(pic, &text));
+        if inserted {
             self.sink.on_commit(&text);
+        } else {
+            push_state(&*self.sink, &snapshot);
         }
         // 中 ⇄ 英已切：状态栏的「中/英」要立刻翻，不等 1s 轮询。
         self.sink.on_state_changed();

@@ -18,6 +18,10 @@ class FakeEngine : OpiEngineApi {
     var mode = EngineMode.PINYIN.value
     var cands: Array<String>? = null
     var lastLimit = -1
+
+    /** 每页候选数（真引擎：`router::PAGE_SIZE`，由 JNI `pageSize()` 读）。缺省 8 = 生产值。 */
+    var pageSizeValue = 8
+    override fun pageSize(): Int = pageSizeValue
     val shiftCalls = mutableListOf<Boolean>()
     val inputCalls = mutableListOf<String>()
     var spaceResult = ""
@@ -94,7 +98,11 @@ class FakeEngine : OpiEngineApi {
         return wubiNextKeysValue
     }
 
+    /** 每次 select 的全局下标（钉 selectFromPage 的 page*size+k 换算）。 */
+    val selectCalls = mutableListOf<Int>()
+
     override fun select(index: Int): String {
+        selectCalls += index
         val r = selectResults[index] ?: ""
         if (r.isNotEmpty()) buf = ""
         return r
@@ -151,7 +159,15 @@ class FakeEngine : OpiEngineApi {
 
     /** 候选拼音读数（真引擎：与最近一次 candidates() 同源；出口已按读音去重保序）。 */
     var candReadings: Array<String>? = null
-    override fun candidateReadings(): Array<String>? = candReadings
+
+    /** 读出口被问了几次（钉「非 9/14/双拼不调 JNI」这条省法）。 */
+    var candidateReadingsCalls = 0
+        private set
+
+    override fun candidateReadings(): Array<String>? {
+        candidateReadingsCalls++
+        return candReadings
+    }
 
     /** 钉读音（真引擎：候选收窄到**读音恰等**的条目；空串 = 解除）。 */
     val pinCalls = mutableListOf<String>()

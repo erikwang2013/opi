@@ -47,6 +47,20 @@ final class OpiClientHub {
         controller?.commitFromOutside(text)
     }
 
+    /// 换模式/方案前交出**已确认未提交**的逐字片段（`opi_pending_text`，同 iOS
+    /// 的 `commitPendingBeforeModeSwitch`）：`opi_switch_mode` 会静默丢掉它们。
+    /// 先 clear 再插入 —— `opi_set_scheme` **不清**这些片段，不 clear 换了方案后
+    /// 同一段会再上屏一次。未确认缓冲（9 键里是数字）绝不直提，同 iOS。
+    /// 只给「清缓冲」的那条路（`switchMode` / `setScheme`）用；中↔繁这类**成对**
+    /// 切换走 `engine.switchLanguage`（`opi_switch_language` 保缓冲、也不清片段）。
+    func commitPendingBeforeModeSwitch() {
+        let engine = OpiEngine.shared
+        let pending = engine.pendingText()
+        guard !pending.isEmpty else { return }
+        engine.clear()
+        commit(pending)
+    }
+
     /// 自绘虚拟键盘的键 → 引擎（不合成系统按键，见 InputController.virtualKey）。
     @discardableResult
     func virtualKey(keyval: UInt32, states: UInt32) -> Bool {
@@ -178,11 +192,14 @@ enum OpiMenu {
         switch tag {
         case .toggleEnglish:
             // 与 Ctrl+' 同判（InputController.hotkey 的 toggleEnglish 支）。
+            OpiClientHub.shared.commitPendingBeforeModeSwitch()
             engine.switchMode(engine.mode() == .english ? .pinyin : .english)
             controller.refreshFromOutside()
         case .toggleTraditional:
             // 与 `opi_mode.h` 的 opiToggleTraditional 同判：在繁体就回拼音，否则进繁体。
-            engine.switchMode(engine.mode() == .traditional ? .pinyin : .traditional)
+            // 成对切换走保缓冲的 `opi_switch_language`（同 iOS `toggleTraditional`）。
+            engine.switchLanguage(engine.mode() == .traditional ? .pinyin : .traditional,
+                                  engine.currentScheme())
             controller.refreshFromOutside()
         case .toggleChinesePunct:
             // 只翻一个偏好位，不动缓冲/候选 —— 不需要刷新。

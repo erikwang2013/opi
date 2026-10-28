@@ -211,29 +211,27 @@ fn unmatched_special_keycode_degrades_to_passthrough_not_garbage() {
 
 #[test]
 fn hotkey_requires_ctrl_and_ignores_keyup() {
-    // 无 Ctrl：OEM 键是普通字符（' 是拼音分隔符、\ 是可见 ASCII），不是热键
-    assert_eq!(mode_hotkey(VK_OEM_7, 0), None);
-    assert_eq!(mode_hotkey(VK_OEM_5, 0), None);
+    // 无 Ctrl：字符键是普通输入（' 是拼音分隔符、\ 是可见 ASCII），不是热键
+    assert_eq!(mode_hotkey('\'', 0), None);
+    assert_eq!(mode_hotkey('\\', 0), None);
     // 只有 Alt/Shift 也不算
-    assert_eq!(mode_hotkey(VK_OEM_7, crate::logic::KEY_STATE_ALT), None);
-    // Ctrl + 按下：两个热键
+    assert_eq!(mode_hotkey('\'', crate::logic::KEY_STATE_ALT), None);
+    // Ctrl + 按下：两个热键（**按字符**匹配 —— 非 US 布局上这两个字符在哪个 VK
+    // 上由 key_state::layout_char 决定，本层只认字符）
     assert_eq!(
-        mode_hotkey(VK_OEM_7, KEY_STATE_CTRL),
+        mode_hotkey('\'', KEY_STATE_CTRL),
         Some(ModeHotkey::ToggleEnglish)
     );
     assert_eq!(
-        mode_hotkey(VK_OEM_5, KEY_STATE_CTRL),
+        mode_hotkey('\\', KEY_STATE_CTRL),
         Some(ModeHotkey::ToggleSymbol)
     );
+    // Ctrl+Shift+' 的布局字符是 '"'，不是热键：Shift 留在 ToUnicodeEx 的键盘状态里
+    // （fcitx5 轨同组合的 keysym 是 quotedbl，也不命中）
+    assert_eq!(mode_hotkey('"', KEY_STATE_CTRL | KEY_STATE_SHIFT), None);
     // Ctrl + **抬起**：不返回 —— 否则按下切过去、抬起切回来，等于没切
-    assert_eq!(
-        mode_hotkey(VK_OEM_7, KEY_STATE_CTRL | KEY_STATE_RELEASED),
-        None
-    );
-    assert_eq!(
-        mode_hotkey(VK_OEM_5, KEY_STATE_CTRL | KEY_STATE_RELEASED),
-        None
-    );
+    assert_eq!(mode_hotkey('\'', KEY_STATE_CTRL | KEY_STATE_RELEASED), None);
+    assert_eq!(mode_hotkey('\\', KEY_STATE_CTRL | KEY_STATE_RELEASED), None);
 }
 
 #[test]
@@ -269,7 +267,7 @@ fn shift_space_toggles_fullwidth_and_bare_space_does_not() {
 fn hotkey_repeat_is_claimed_but_does_not_act() {
     // 按住不放：系统补发的重复事件仍**是**热键（要认领，别漏给应用/引擎）……
     assert_eq!(
-        mode_hotkey(VK_OEM_7, KEY_STATE_CTRL | KEY_STATE_REPEAT),
+        mode_hotkey('\'', KEY_STATE_CTRL | KEY_STATE_REPEAT),
         Some(ModeHotkey::ToggleEnglish)
     );
     assert!(fullwidth_hotkey(
@@ -294,29 +292,11 @@ fn hotkey_repeat_is_claimed_but_does_not_act() {
 #[test]
 fn hotkey_is_none_for_everything_else() {
     // Ctrl+字母/数字/空格一个都不能吃：那是应用的快捷键（Ctrl+C/V/A…），
-    // 顺带确认没把 VK_OEM_1(0xBA)/VK_OEM_3(0xC0) 这些邻居算进来。
-    // 0xE2 = VK_OEM_102（欧洲键盘那个多的键）**不是**撇号键 —— 它在列表里，
-    // 0xDE（= VK_OEM_7，撇号键本体）不在：原来两处写反了，见 VK_OEM_7 的注释。
-    for vk in [
-        0x41u32, 0x43, 0x56, 0x31, 0x20, 0xba, 0xc0, 0xdb, 0xdd, 0xe2,
-    ] {
-        assert_eq!(
-            mode_hotkey(vk, KEY_STATE_CTRL),
-            None,
-            "VK {vk:#x} 不得是热键"
-        );
+    // 顺带确认没把标点邻居（[ ` { = ; 等）算进来 —— 本层按字符匹配，
+    // 任何不等于 ' 与 \ 的字符一律 None。
+    for ch in ['a', 'c', 'v', '1', ' ', '[', '`', '{', '=', ';', '中'] {
+        assert_eq!(mode_hotkey(ch, KEY_STATE_CTRL), None, "{ch:?} 不得是热键");
     }
-}
-
-/// 两个 VK 字面量的**值**。与上面的 const 断言分工不同，别删了上面那条：
-/// - 这条在主机上跑，钉的是「本模块写下的数值」—— 挡住以后有人改错其中一个
-///   而另一个没跟（比如 `VK_SPACE` 那条单测的同类）；
-/// - 它**挡不住**「两处一起写错」（本文件原来那条 `assert_eq!(VK_OEM_5 as u32,
-///   0xdc)` 就是这么绿的，而 0xE2 的错值一直在），真正的外部基准是 windows
-///   crate 的同名常量，只有 `#[cfg(target_os = "windows")]` 的 const 断言够得着。
-#[test]
-fn oem_vks_are_the_win32_abi_values() {
-    assert_eq!((VK_OEM_5, VK_OEM_7), (0xdc, 0xde));
 }
 
 #[test]

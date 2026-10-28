@@ -46,11 +46,14 @@ DEAD_BUS_ADDR = "unix:path=/tmp/opi-e2e-nonexistent-bus-socket"
 # im（2026-10-10 追加，行尾）：任意串，**空串合法**（= 没有可报的输入法：没有 IC
 # 且 ShareInputState=No 没兜底 —— 实测见 opi_e2e_ctl.py 的「无 IC 差分」臂）⇒
 # 无取值域（None），但位置照样钉死。
-# mode（2026-10-14 追加，行尾）：档位 token，取值域与 `opi-ctl mode` 的应答同域
-# （服务端同一个派生函数，见 cpp/opi_ctl_mode.h）；wubi 预放行（五笔未落地）。
+# mode（2026-10-14 追加）：档位 token，取值域与 `opi-ctl mode` 的应答同域
+# （服务端同一个派生函数，见 cpp/opi_ctl_mode.h）。
+# enpro（2026-10-19 追加，真正的行尾）：英文联想开关，on/off。老插件只有 6 段；
+# 本 harness 用本树 .so（必为 7 段），故这里按定长 7 段钉死。
 STATE_FIELDS = (("lang", ("zh", "en")), ("trad", ("on", "off")),
                 ("punct", ("on", "off")), ("fw", ("on", "off")),
-                ("im", None), ("mode", ("pinyin", "en26", "wubi")))
+                ("im", None), ("mode", ("pinyin", "en26", "wubi")),
+                ("enpro", ("on", "off")))
 
 # 每次调用的结果：{标签: (rc, stdout, stderr)}。信号窗口（_windows）只装 dbus 信号，
 # 装不下进程退出码，故这里单独记一份 —— check_ctl 两样都读。

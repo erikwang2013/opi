@@ -423,3 +423,42 @@ fn cabi_select_page_beyond_page_must_not_commit_hidden_candidate() {
         opi_clear();
     }
 }
+
+/// **raw 会话复位必须作废按下记录**（2026-10-28 跨 crate 缺口）：`opi_clear` /
+/// `opi_set_scheme` / `opi_set_shuangpin_layout` 曾直接 `engine_mut()` 绕过路由，
+/// held 集合留着旧结论 —— 复位后同一键抬起仍按「按下直通」回 PassThrough，客户端
+/// 收到无 keydown 的 keyup（卡键）。观测量：空缓冲数字键按下直通（记入 held），
+/// 复位后抬起回落 EngineHandled（action=1）。
+#[test]
+fn cabi_raw_session_resets_clear_held_keys() {
+    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    load_any();
+    type Reset = fn();
+    let cases: [(&str, Reset); 3] = [
+        ("opi_clear", || unsafe { opi_clear() }),
+        ("opi_set_scheme", || unsafe {
+            opi_ffi::cabi::opi_set_scheme(0)
+        }),
+        ("opi_set_shuangpin_layout", || unsafe {
+            opi_ffi::cabi::opi_set_shuangpin_layout(1)
+        }),
+    ];
+    let key = '1' as u32;
+    for (name, reset) in cases {
+        // 每轮把单例摆回全拼/全键盘/空缓冲：本轮设的布局别串到下一轮。
+        unsafe {
+            opi_ffi::cabi::opi_set_shuangpin_layout(0);
+            opi_ffi::cabi::opi_set_scheme(0);
+            opi_switch_mode(0);
+            opi_clear();
+        }
+        assert_eq!(key_event(key, 0).0, 0, "{name}: 前置——空缓冲数字按下直通");
+        reset();
+        assert_eq!(
+            key_event(key, KEY_STATE_RELEASED).0,
+            1,
+            "{name}: 复位后 held 必须清空（旧按键的抬起不得再直通）"
+        );
+    }
+    unsafe { opi_clear() };
+}

@@ -9,6 +9,75 @@ permissions:
   contents: read
 
 jobs:
+  # 跨端版本号门禁：唯一真源是 Cargo.toml 的 [workspace.package] version。
+  # 放在 ci.yml 而不是 harmony.yml：harmony.yml 的 paths 过滤不含 Cargo.toml，
+  # 只改版本位时它根本不会跑；本 job 覆盖每个 push/PR。
+  # android-release.yml 与 windows.yml 的 version job 复用同一个脚本取版本。
+  versions:
+    name: 版本一致性（Cargo.toml 单一真源）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/check-versions.sh
+
+      # Android versionCode 是**独立递增计数器**（97→98→…，不是 maj.min.pat 编码），
+      # 只读当前树查不出「忘了递增」—— 必须跟最新 release tag 比。规则见
+      # docs/install/android.md §3.2：versionName 变了 → versionCode 必须**严格变大**；
+      # 同一 versionName（即 tag 上那棵树）允许相等。
+      # 已知边界：若已打出一个坏 tag，之后同一 versionName 只能判「相等允许」。
+      - name: Android versionCode 递增（对比最新 release tag）
+        run: |
+          set -euo pipefail
+          cur="$(sed -n 's/^ *versionCode = \([0-9][0-9]*\).*/\1/p' android/app/build.gradle.kts)"
+          curv="$(sed -n 's/^ *versionName = "\(.*\)"/\1/p' android/app/build.gradle.kts)"
+          [ -n "$cur" ] && [ -n "$curv" ] || {
+            echo "::error::android/app/build.gradle.kts 里取不到 versionCode/versionName"
+            exit 1
+          }
+          # 只浅取最新那一个 tag（本仓 tag 多，全取一遍等于把历史整棵树拉下来）。
+          tag="$(git ls-remote --tags --refs origin 'v[0-9]*' | sed 's#.*refs/tags/##' | sort -V | tail -n1)"
+          [ -n "$tag" ] || { echo "::error::远端没有 v* tag —— 无法判断 versionCode 是否递增"; exit 1; }
+          git fetch --depth=1 --no-tags origin "refs/tags/$tag:refs/tags/$tag"
+          old="$(git show "$tag:android/app/build.gradle.kts" | sed -n 's/^ *versionCode = \([0-9][0-9]*\).*/\1/p')"
+          oldv="$(git show "$tag:android/app/build.gradle.kts" | sed -n 's/^ *versionName = "\(.*\)"/\1/p')"
+          [ -n "$old" ] && [ -n "$oldv" ] || { echo "::error::$tag 里取不到 Android 版本位"; exit 1; }
+          if [ "$curv" = "$oldv" ]; then
+            [ "$cur" -ge "$old" ] || { echo "::error::Android versionCode 回退：$cur < $tag 的 $old"; exit 1; }
+          else
+            [ "$cur" -gt "$old" ] || {
+              echo "::error::Android versionCode 没递增：versionName $oldv→$curv，versionCode $old→$cur（必须严格变大）"
+              exit 1
+            }
+          fi
+          echo "Android versionCode $cur（$tag 上是 $old）"
+
+  # workflow YAML 自身的语法/表达式门禁。本地同款：/home/wwwroot/go/bin/actionlint。
+  # -shellcheck=：shellcheck 版本随 runner 镜像漂、本机没有，开了就是本地/CI 两套判据；
+  # 本 job 只守 YAML 与 ${{ }} 表达式。自托管标签 harmony 在 .github/actionlint.yaml 声明。
+  actionlint:
+    name: Workflow YAML — actionlint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # 钉版本，与本地开发用的 v1.7.12 对齐；升级时两边一起换。
+      - name: 下载 actionlint v1.7.12
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/actionlint.tar.gz \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          tar -xzf /tmp/actionlint.tar.gz -C /tmp actionlint
+      - name: actionlint .github/workflows
+        run: /tmp/actionlint -color -shellcheck=
+
+  # 纯离线脚本单测（词库生成/间距/版本解析等）。runner 自带 python3，无额外依赖；
+  # 不接这一步，scripts/tests 只在本地有人想起来时才跑。
+  scripts-tests:
+    name: Scripts — python unittest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s scripts/tests -v
+
   rust:
     name: Rust — fmt + test + clippy
     runs-on: ubuntu-latest
@@ -37,6 +106,12 @@ jobs:
       # 而 CI 存在的意义是让人**一次看全**。（实测：一个变异下带 flag 报
       # 「error: 4 targets failed」，不带则只报 engine-core --lib 就停。）
       # 退出码两边都是非零（实测 101）—— 这不是「假通过」，是「报不全」。
+      # c_abi_contract 的 exported_symbols 会找 target/release 的 .so；不先建，
+      # 干净 runner 上它会 skip（reviewer 2026-10-28 指出）。后面的 C 消费者/JNI
+      # smoke 复用同一份产物。
+      - name: cargo build -p opi_ffi --release（供 c_abi_contract 符号门禁）
+        run: cargo build -p opi_ffi --release
+
       - name: cargo test --workspace --no-fail-fast
         run: cargo test --workspace --no-fail-fast
 
@@ -53,11 +128,7 @@ jobs:
       #    写成 unwrap_or(true) 照样注册成功）。它不需要 Android：主 JVM 上
       #    System.load 即可。
       #
-      # 两条都用下面这份 release cdylib，所以先显式建出来（run.sh 自己也会建，
-      # 这里是让它和 JNI 那步共用同一份产物，而不是谁搭谁的便车）。
-      - name: cargo build -p opi_ffi --release（供下面两条消费者门禁）
-        run: cargo build -p opi_ffi --release
-
+      # 两条都用上面已建的 release cdylib（run.sh 自己也会建；这里复用同一份产物）。
       - name: C 消费者：真编译 macos/OpiFFI.h + 真调导出
         run: |
           set -euo pipefail
