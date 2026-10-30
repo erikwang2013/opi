@@ -40,6 +40,50 @@ class VersionCheckTest {
     }
 
     @Test
+    fun releaseJsonParsesAndroidPackages() {
+        val sha = "a".repeat(64)
+        val text = """{
+          "version":"1.27.0",
+          "download":"https://opi.erik.xyz/download",
+          "packages":{
+            "android":{
+              "full":{"url":"https://opi.erik.xyz/download/opi-1.27.0-android.apk","sha256":"$sha","size":123},
+              "hot":{"url":"https://opi.erik.xyz/download/opi-1.27.0-hot.zip"}
+            },
+            "windows-x64":{"full":{"url":"https://x/setup.exe"}}
+          }
+        }"""
+        val r = parseReleaseJson(text)
+        assertEquals("1.27.0", r?.version)
+        assertEquals("https://opi.erik.xyz/download/opi-1.27.0-android.apk", r?.full?.url)
+        assertEquals(sha, r?.full?.sha256)
+        assertEquals(123L, r?.full?.size)
+        assertEquals("https://opi.erik.xyz/download/opi-1.27.0-hot.zip", r?.hot?.url)
+        assertNull("http 条目必须丢弃", parseReleaseJson("""{"version":"1.27.0","packages":{"android":{"full":{"url":"http://evil/x"}}}}""")?.full)
+    }
+
+    @Test
+    fun jsonObjectAtBalancesBracesAndIgnoresStrings() {
+        val text = """{"outer":{"name":"a}b{c","inner":{"x":1}}}"""
+        assertEquals("""{"name":"a}b{c","inner":{"x":1}}""", jsonObjectAt(text, "outer"))
+    }
+
+    @Test
+    fun downloadFileNamesAreSafe() {
+        assertEquals(
+            "opi-1.27.0-android-universal.apk",
+            downloadFileName(
+                "https://opi.erik.xyz/download/opi-1.27.0-android-universal.apk?x=1",
+                "1.27.0",
+                UpdatePackageKind.FULL,
+            ),
+        )
+        assertTrue(
+            downloadFileName("https://opi.erik.xyz/download/", "1.27.0", UpdatePackageKind.HOT).endsWith(".zip"),
+        )
+    }
+
+    @Test
     fun comparesVersionsNumericallySegmentBySegment() {
         // 字符串比较会把 1.21.10 判成更小 —— 这条是数字比较的判据。
         assertEquals(1, compareVersions("1.21.10", "1.21.2"))

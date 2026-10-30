@@ -791,14 +791,17 @@ Linux 上 = `--settings` 的设置窗（无参数启动也是它）。**v1.6.0 �
 - 版本号是**单一来源**：`desktop/build.gradle.kts` 的 `opiAppVersion` 同时喂给
   jpackage 包版本与窗口标题（构建时生成 `Version.kt`）。此前窗口里写死过一份，
   到 1.6.0 就成了摆在用户眼前的假话 —— 别再写死第二处。
-- **更新检测**（2026-10-22，Linux 与 Windows 共用同一设置窗）：打开设置时自动请求
-  `https://opi.erik.xyz/version.json`（`{"version":"…","download":"https://opi.erik.xyz/download"}`，
-  连接/读取各 4s），版本按数字段比较（`1.9.10 > 1.9.9`，缺段按 0）。「关于」页显示
-  当前版本与「检测更新」；发现新版本显示「发现新版本 vX（当前 vY）」+「前往下载」
-  （走系统默认浏览器）。自动检测失败不打扰（保留上次结论）；只有手点「检测更新」才
-  显示失败原因。站点未部署 `version.json` 时回退解析首页 JSON-LD 的
-  `softwareVersion`，再兜底 `opi-<版本>-windows` 文件名；下载地址统一为
-  `https://opi.erik.xyz/download`。
+- **更新检测与应用内下载**（2026-10-22 检测；2026-10-31 起不跳浏览器，Linux 与 Windows
+  共用同一设置窗）：打开设置时自动请求 `https://opi.erik.xyz/version.json`（连接/读取
+  各 4s），版本按数字段比较（`1.9.10 > 1.9.9`，缺段按 0）。清单的
+  `packages.<platform>.full/hot` 给出可直下包（Linux deb = `linux-amd64`、rpm =
+  `linux-x86_64`，`url` 必须 https，可带 `size`/`sha256`）。「关于」页显示当前版本、
+  「检测更新」和「下载全量安装包 / 下载热更新包」：下载在后台 IO 线程，显示大小/百分比、
+  可取消；完成后校验 SHA-256 与大小，可打开文件或所在文件夹。**只下载+校验，不自动提权
+  替换**；热更新包是 app 目录 zip，关闭小欧后手工覆盖安装目录的 app 文件夹（需 sudo）。
+  自动检测失败不打扰（保留上次结论）；只有手点「检测更新」才显示失败原因。站点未部署
+  `version.json` 时回退解析首页 JSON-LD 的 `softwareVersion`，再兜底下载文件名；没有
+  `packages` 时退回下载页链接。
 - 升级路径：装新包时 apt/dnf 按 `replaces`/`conflicts` 自动卸掉旧的独立设置窗包
   `opi-candidates`（≤1.5.0）—— 不声明的话 `/opt/opi-candidates/**` 文件归属冲突会让
   dpkg **拒绝安装**。

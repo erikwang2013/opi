@@ -4,31 +4,13 @@
 package xyz.erik.opi.ime
 
 import xyz.erik.opi.engine.pendingCommitText
-import android.os.Handler
-import android.os.Looper
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.keyboard.SkinOption
 import xyz.erik.opi.engine.EngineMode
-
-/** 防抖调度抽象：生产用主线程 Handler，JVM 测试注入假时钟（确定性，无 Thread.sleep）。 */
-fun interface Debouncer {
-    /** delayMs 后执行 action；返回取消函数。 */
-    fun schedule(delayMs: Long, action: () -> Unit): () -> Unit
-}
-
-/** 生产实现：主线程 Handler.postDelayed（复用单个 Handler，不在每次调度时新建）。 */
-class HandlerDebouncer : Debouncer {
-    private val handler = Handler(Looper.getMainLooper())
-
-    override fun schedule(delayMs: Long, action: () -> Unit): () -> Unit {
-        val r = Runnable { action() }
-        handler.postDelayed(r, delayMs)
-        return { handler.removeCallbacks(r) }
-    }
-}
+import xyz.erik.opi.scene.SceneTheme
 
 /**
  * 面板状态机（对齐 flutter ime_main.dart _ImeScreenState）：
@@ -93,6 +75,10 @@ class ImeState(
      * 长辈 > 暗光 > 皮肤 —— 皮肤是「底」，模式是临时覆盖。
      */
     var skin by mutableStateOf(xyz.erik.opi.keyboard.SkinOption.FOLLOW)
+        private set
+
+    /** 动态背景主题（与桌面 `Background=` 同集）；皮肤管配色，这一项管插画风格。 */
+    var scene by mutableStateOf(SceneTheme.MEADOW)
         private set
 
     /** 符号面板的起始 Tab（工具条表情入口直达 Emoji）。 */
@@ -261,6 +247,12 @@ class ImeState(
         persist()
     }
 
+    /** 背景主题选择（同一面板的「动态背景」段）→ 立即生效 + 落盘。 */
+    fun selectScene(t: SceneTheme) {
+        scene = t
+        persist()
+    }
+
     /** 表情入口：开符号面板并直达表情页。 */
     fun openEmoji() {
         symbolInitialTab = xyz.erik.opi.keyboard.SymbolTab.Emoji
@@ -341,9 +333,17 @@ class ImeState(
      * 引擎是权威，UI 的 [inputMode]/[keyboardModes] 由服务从偏好装载后经
      * [selectInputMode] 推一遍（引擎装载成功才调，见 OpiImeService）。
      */
-    fun restore(inputMode: InputMode, modes: KeyboardModes, skin: SkinOption = SkinOption.FOLLOW, englishPro: Boolean = false, customPunct: String = "") {
+    fun restore(
+        inputMode: InputMode,
+        modes: KeyboardModes,
+        skin: SkinOption = SkinOption.FOLLOW,
+        englishPro: Boolean = false,
+        customPunct: String = "",
+        scene: SceneTheme = SceneTheme.MEADOW,
+    ) {
         keyboardModes = modes
         this.skin = skin
+        this.scene = scene
         this.englishPro = englishPro
         this.customPunct = customPunct
         selectInputMode(inputMode)

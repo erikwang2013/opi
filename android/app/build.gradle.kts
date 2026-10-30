@@ -15,6 +15,8 @@ android {
     // 共享源码：小欧的 Compose 绘制只有一份（shared/pet），同时供本模块与
     // desktop/ 的 Windows 候选窗使用 —— 两处重复一份几何必然漂移。
     sourceSets.getByName("main").kotlin.srcDir("../../shared/pet")
+    // 键盘动态背景（2026-10-30）：与小欧同一条「一份 Compose 绘制、两端共用」。
+    sourceSets.getByName("main").kotlin.srcDir("../../shared/scene")
 
     // .opid 词库不压缩存储。压缩后 Assets.openFd() 会抛 IOException，
     // EngineLoader.assetLength() 只能返回 null → needsCopy 恒为 true，
@@ -36,8 +38,8 @@ android {
         targetSdk = 34
         // 与发布 tag 对齐（此前 9 个 tag 期间 versionCode 一直是 1、versionName 一直是
         // "1.0.0"：APK 既无法被识别，也无法覆盖安装升级）。
-        versionCode = 100
-        versionName = "1.26.6"
+        versionCode = 101
+        versionName = "1.27.0"
         ndk {
             // 与 rust_builder cargokit targets 对齐（plugin.gradle 固定三 ABI）。
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")

@@ -220,6 +220,21 @@ internal fun AppearancePage(s: OpSettings, apply: (OpSettings) -> Unit) {
         },
         fontSize = 12.sp, color = Muted,
     )
+    SectionTitle("动态背景")
+    Spacer(Modifier.height(8.dp))
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        for (theme in xyz.erik.opi.scene.SceneTheme.entries) {
+            LayoutChip(theme.label, theme == s.background) { apply(s.copy(background = theme)) }
+        }
+    }
+    Spacer(Modifier.height(7.dp))
+    Text(
+        "状态栏条外角色与手机键盘插画共用这一套；颜色仍跟随上面的皮肤，不另算一套配色。",
+        fontSize = 12.sp, color = Muted,
+    )
     SectionTitle("候选字号")
     Spacer(Modifier.height(8.dp))
     // 三档名表 = CLASSIC_UI_FONT_CHOICES 的键（名字 ↔ pango 描述的唯一映射在
@@ -340,6 +355,7 @@ internal fun AboutPage(
     update: UpdateCheck? = null,
     checking: Boolean = false,
     onCheckUpdate: () -> Unit = {},
+    downloader: UpdateDownloader? = null,
 ) {
     val uriHandler = LocalUriHandler.current
     Spacer(Modifier.height(6.dp))
@@ -367,14 +383,21 @@ internal fun AboutPage(
         )
     }
     if (update is UpdateCheck.Available) {
-        Text(
-            "前往下载：" + update.download,
-            fontSize = 12.sp,
-            color = SymAccent,
-            modifier = Modifier.clickable {
-                runCatching { uriHandler.openUri(update.download) }
-            },
-        )
+        if (downloader != null) {
+            UpdateDownloadSection(downloader, update) { url ->
+                runCatching { uriHandler.openUri(url) }
+            }
+        } else {
+            // 离屏/无下载器场景（测试、预览）保留旧的外链兜底。
+            Text(
+                "前往下载：" + update.download,
+                fontSize = 12.sp,
+                color = SymAccent,
+                modifier = Modifier.clickable {
+                    runCatching { uriHandler.openUri(update.download) }
+                },
+            )
+        }
     }
     Spacer(Modifier.height(8.dp))
     LinkLine("主页：https://opi.erik.xyz", "https://opi.erik.xyz")
@@ -414,81 +437,4 @@ private fun LinkLine(label: String, url: String) {
             runCatching { uriHandler.openUri(url) }
         },
     )
-}
-
-// ---------- 皮肤选择器（2026-10-09：可视卡，替掉纯文字清单）----------
-
-/**
- * 一款皮肤的预览色（bg/fg/accent 三项）。
- * ⚠️ 十款的色值**不再各写一份**（2026-10-12）：统一取自 `SkinPalette.skinColors`
- * —— 那份的逐值对应由 SettingsTest 的 `skin palettes match the theme generator`
- * 现读现比（同一个「图与实」门禁，只是比对对象挪去了 SkinPalette.kt）。
- */
-private data class SkinPreview(val bg: Color, val fg: Color, val accent: Color)
-
-private fun previewOf(skin: SkinOption): SkinPreview = when (skin) {
-    // 「不改动」不指定主题：预览画一浅一深的双色底（表意「跟随系统」）—— 这是预览
-    // 专属的中性表示，**不是** SkinPalette.KeepColors（那个是状态栏的固定深色）。
-    SkinOption.KEEP -> SkinPreview(Color(0xFFF2F2F2), Color(0xFF888888), Teal)
-    else -> skinColors(skin).let { SkinPreview(it.bg, it.fg, it.accent) }
-}
-
-/**
- * 十张卡按 FlowRow 折行排开（内容宽 800-180-22×2 ≈ 570dp：一行 7×70 + 6×8 = 538 ≤ 570，
- * 十款固定两行）。窄了仍会折行（首版 76/10=420 > 416 时朱砂掉到第二行，截图复核时
- * 抓到过半宽问题本身）。
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun SkinPicker(selected: SkinOption, onSelect: (SkinOption) -> Unit) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        for (skin in SkinOption.entries) {
-            SkinCard(skin, skin == selected) { onSelect(skin) }
-        }
-    }
-}
-
-/** 一张皮肤卡：候选面板样张（底色 + 样字 + 朱砂/青的强调条）+ 名字。选中 = 青边 + 青字。 */
-@Composable
-private fun SkinCard(skin: SkinOption, selected: Boolean, onClick: () -> Unit) {
-    val pv = previewOf(skin)
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.width(70.dp).clickable(onClick = onClick).padding(2.dp),
-    ) {
-        Box(
-            modifier = Modifier.fillMaxWidth().height(40.dp)
-                .background(pv.bg)
-                .border(
-                    width = if (selected) 2.dp else 1.dp,
-                    color = if (selected) Teal else Hairline,
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (skin == SkinOption.KEEP) {
-                // 「跟随系统」：一浅一深的双色底（不写字，免得误读成某个具体主题）
-                Row(Modifier.fillMaxSize()) {
-                    Box(Modifier.weight(1f).fillMaxHeight().background(Color(0xFFF2F2F2)))
-                    Box(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF3A3A3A)))
-                }
-            } else {
-                Text("你", fontSize = 17.sp, color = pv.fg)
-            }
-            // 强调条贴底：每款的 accent，命中面板的选中下划线
-            Box(
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth(0.7f).height(3.dp)
-                    .background(pv.accent),
-            )
-        }
-        Spacer(Modifier.height(5.dp))
-        Text(
-            skin.value,
-            fontSize = 12.sp,
-            color = if (selected) Teal else Ink,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-        )
-    }
 }

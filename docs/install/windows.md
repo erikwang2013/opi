@@ -1309,12 +1309,15 @@ trigger **≤32 个 ASCII 字母**（`CustomPhraseCodec` 与 `engine-core/src/cu
   开关开且表非空** ⇒ 字母进缓冲、候选窗出短语，空格提交首候选。表空或开关关 ⇒ 恢复
   直出。携带缓冲（中→英保留的拼音）仍直传。
 
-**新版本提示与检测更新（2026-10-22 用户裁决）**：打开设置窗自动检测一次，发现新版本
-在右栏顶部显示「发现新版本 vX → 前往下载」横幅（可关闭）；「关于」页常驻当前版本与
-「检测更新」按钮。数据源首选 `https://opi.erik.xyz/version.json`（发版时更新），读不到
-才回退解析首页 JSON-LD 的 `softwareVersion`；下载落点 = 用户裁决的
-`https://opi.erik.xyz/download`（2026-10-22 起该路径有 `site/download/index.html` 转场到首页下载区）。
-网络失败不打扰（自动检测静默，只有手动检测才显示原因）。
+**新版本提示与应用内下载（2026-10-22 检测；2026-10-31 起不跳浏览器）**：打开设置窗
+自动检测一次，发现新版本在右栏顶部显示「发现新版本 vX → 查看更新」横幅（可关闭，点击
+切到关于页）；「关于」页常驻当前版本、「检测更新」和「下载全量安装包 / 下载热更新包」。
+数据源首选 `https://opi.erik.xyz/version.json`（发版时更新），读不到才回退解析首页
+JSON-LD 的 `softwareVersion`。清单 `packages.windows-x64.full/hot` 给出可直下包（https、
+可带 size/sha256）；下载在后台 IO 线程，显示进度、可取消，完成后校验 SHA-256 与大小，
+可打开文件/文件夹。**只下载+校验，不自动提权替换**；热更新包是 app 目录 zip，关闭小欧后
+手工覆盖安装目录的 app 文件夹。没有 `packages` 时退回下载页
+`https://opi.erik.xyz/download`。网络失败不打扰（自动检测静默，只有手动检测才显示原因）。
 「符号与表情」页那两个按钮打开的是与 Linux 同一份代码的窗（`SymbolsPage.kt` 的
 `SymbolWindow`，表情页在 `EmojiPage.kt`）：页面能看能翻，点选上屏（2026-10-20 起）走
 控制面 `\\.\pipe\opi-control-v2` → 候选窗进程 broker → TSF 的 `commit`；设置窗进程

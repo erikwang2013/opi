@@ -47,7 +47,7 @@ kotlin {
 // jpackage 的包版本与设置窗标题栏都从这里取。**此前设置窗里写死过一份**
 // （"1.4.0"），到 1.6.0 就成了摆在用户眼前的假话 —— 两处写死是漂移的充分条件，
 // 生成一个常量是把它压成一处的最短路径（同 android 侧 versionName 的单一来源约定）。
-val opiAppVersion = "1.26.6"
+val opiAppVersion = "1.27.0"
 
 val generateOpiVersionSource by tasks.registering {
     val outDir = layout.buildDirectory.dir("generated/sources/opiVersion/kotlin")
@@ -228,6 +228,8 @@ tasks.named("processResources") { dependsOn(copyPetStickers) }
 // 共享源码：小欧的 Compose 绘制只有一份（shared/pet），与 android/app 同一份几何
 // （candidate_io.rs 的线协议注释也是同样的「改协议须同步两处」约定）。
 sourceSets["main"].kotlin.srcDir("../shared/pet")
+// 键盘/状态栏动态背景（2026-10-30）：与 Android 同一份 Compose 绘制。
+sourceSets["main"].kotlin.srcDir("../shared/scene")
 
 java {
     // 与 Kotlin 的 JVM_11 对齐（本机 JDK 18 运行 Gradle，java 默认 target 18 会冲突）。

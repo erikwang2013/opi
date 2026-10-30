@@ -8,6 +8,7 @@ import org.junit.Test
 import xyz.erik.opi.ime.InputMode
 import xyz.erik.opi.ime.KeyboardModes
 import xyz.erik.opi.keyboard.SkinOption
+import xyz.erik.opi.scene.SceneTheme
 
 /** 偏好读写：默认值、往返、未知枚举名回默认（损坏容错与设置页读侧同一条约定）。 */
 class ImePreferencesTest {
@@ -40,6 +41,7 @@ class ImePreferencesTest {
         // 「表情中显示自有」缺省关 = 「自有」子页隐藏（2026-10-20 用户裁决）。
         assertEquals(false, p.showOwn)
         assertEquals(SkinOption.FOLLOW, p.skin)
+        assertEquals(SceneTheme.MEADOW, p.scene)
         // 9 键「自定义」标点缺省 = 未选（键面「自定义」）。
         assertEquals("", p.customPunct)
     }
@@ -68,6 +70,7 @@ class ImePreferencesTest {
         p.jianpin = true
         p.showOwn = true
         p.skin = SkinOption.PAPER
+        p.scene = SceneTheme.NIGHT
         val q = ImePreferences(store)
         assertEquals(InputMode.PINYIN14, q.inputMode)
         assertEquals(
@@ -79,6 +82,7 @@ class ImePreferencesTest {
         assertEquals(true, q.jianpin)
         assertEquals(true, q.showOwn)
         assertEquals(SkinOption.PAPER, q.skin)
+        assertEquals(SceneTheme.NIGHT, q.scene)
     }
 
     @Test
@@ -87,11 +91,13 @@ class ImePreferencesTest {
         store.put(ImePreferences.KEY_INPUT_MODE, "SOMETHING_ELSE")
         store.put(ImePreferences.KEY_ONE_HAND, "MIDDLE")
         store.put(ImePreferences.KEY_SKIN, "RAINBOW")
+        store.put(ImePreferences.KEY_SCENE, "RAINBOW")
         store.put(ImePreferences.KEY_SHUANGPIN_LAYOUT, "打错了") // 双拼布局也走同一条容错
         val p = ImePreferences(store)
         assertEquals(InputMode.PINYIN9, p.inputMode)
         assertEquals(KeyboardModes.OneHand.OFF, p.keyboardModes.oneHand)
         assertEquals(SkinOption.FOLLOW, p.skin)
+        assertEquals(SceneTheme.MEADOW, p.scene)
         assertEquals(SHUANGPIN_LAYOUTS_ANDROID.first(), p.shuangpinLayout)
     }
 

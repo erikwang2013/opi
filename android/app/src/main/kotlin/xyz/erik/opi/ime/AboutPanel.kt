@@ -43,7 +43,7 @@ import xyz.erik.opi.settings.ABOUT_HOME_URL
 import xyz.erik.opi.settings.ABOUT_INTRO
 import xyz.erik.opi.settings.ABOUT_PRIVACY_URL
 import xyz.erik.opi.settings.ABOUT_PROJECT_URL
-import xyz.erik.opi.settings.OPI_DOWNLOAD_URL
+import xyz.erik.opi.settings.UpdateDownloadControls
 import xyz.erik.opi.settings.UpdateState
 import xyz.erik.opi.settings.checkForUpdate
 import xyz.erik.opi.settings.updateStatusText
@@ -116,8 +116,15 @@ internal fun UpdateSection() {
     Column(Modifier.fillMaxWidth()) {
         Head("更新")
         Para(updateStatusText(state, BuildConfig.VERSION_NAME), accent = state is UpdateState.Newer)
-        if (state is UpdateState.Newer) {
-            Link("前往下载") { note = openExternal(context, OPI_DOWNLOAD_URL) }
+        val newer = state as? UpdateState.Newer
+        if (newer != null) {
+            UpdateDownloadControls(
+                update = newer,
+                accent = p.accent,
+                dim = p.barDimFg,
+                onOpenBrowser = { url -> note = openExternal(context, url) },
+                onNote = { note = it },
+            )
         }
         if (state != UpdateState.Checking) {
             Link("检测更新", "检测新版本") { scope.launch { check(true) } }

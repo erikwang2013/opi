@@ -6,6 +6,7 @@ package xyz.erik.opi.ime
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.keyboard.SkinOption
+import xyz.erik.opi.scene.SceneTheme
 import xyz.erik.opi.engine.FakeEngine
 import xyz.erik.opi.engine.ShiftState
 import org.junit.Assert.assertEquals
@@ -417,6 +418,15 @@ class ImeStateTest {
     }
 
     @Test
+    fun selectSceneChangesTheBackgroundAndPersists() {
+        var persisted = 0
+        val state = newState().apply { persist = { persisted++ } }
+        state.selectScene(SceneTheme.FOREST)
+        assertEquals(SceneTheme.FOREST, state.scene)
+        assertEquals("背景主题选择即落盘", 1, persisted)
+    }
+
+    @Test
     fun openSkinDoesNotTouchTheEngine() {
         // 皮肤只换观感：不切 scheme/mode、不提交缓冲（与输入模式那类切换的区别）
         val fake = FakeEngine()
@@ -429,8 +439,9 @@ class ImeStateTest {
     @Test
     fun restoreCarriesTheSkin() {
         val state = newState()
-        state.restore(InputMode.PINYIN26, KeyboardModes(), SkinOption.PAPER)
+        state.restore(InputMode.PINYIN26, KeyboardModes(), SkinOption.PAPER, scene = SceneTheme.NIGHT)
         assertEquals(SkinOption.PAPER, state.skin)
+        assertEquals(SceneTheme.NIGHT, state.scene)
     }
 
     @Test

@@ -3,6 +3,7 @@
 
 package xyz.erik.opi.keyboard
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import xyz.erik.opi.ime.PanelHeader
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,6 +36,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import xyz.erik.opi.scene.ScenePalette
+import xyz.erik.opi.scene.SceneTheme
+import xyz.erik.opi.scene.drawOpiSceneBackdrop
 
 /**
  * 皮肤面板（2026-10-09 用户裁决「移动端没有皮肤设置」）。
@@ -50,13 +55,15 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun SkinPanel(
     selected: SkinOption,
+    selectedScene: SceneTheme,
     onSelect: (SkinOption) -> Unit,
+    onSelectScene: (SceneTheme) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val p = LocalKeyboardPalette.current
     Column(modifier = modifier.fillMaxSize().background(p.panelBg)) {
-        PanelHeader("皮肤", "选中即换；「不改动」= 跟随暗光/长辈这些模式", onClose)
+        PanelHeader("皮肤与背景", "选中即换；「不改动」= 跟随暗光/长辈这些模式", onClose)
         // FlowRow 不用 Row：窄屏折行；外层可滚（返回箭头独占一行后高度增加）。
         Column(
             modifier = Modifier.fillMaxWidth().weight(1f)
@@ -70,7 +77,58 @@ fun SkinPanel(
                     SkinCard(skin, skin == selected) { onSelect(skin) }
                 }
             }
+            Spacer(Modifier.height(8.dp))
+            Text("动态背景", fontSize = 12.sp, color = p.barDimFg, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(4.dp))
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                for (theme in SceneTheme.entries) {
+                    SceneCard(theme, theme == selectedScene) { onSelectScene(theme) }
+                }
+            }
         }
+    }
+}
+
+/** 一张背景卡：直接画该主题的缩小版插画（静态相位），点一下换主题。 */
+@Composable
+private fun SceneCard(theme: SceneTheme, selected: Boolean, onClick: () -> Unit) {
+    val p = LocalKeyboardPalette.current
+    val scene = remember(p) { ScenePalette(base = p.barBg, ink = p.keyFg, accent = p.accent) }
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .width(84.dp)
+            .padding(top = 4.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .semantics {
+                role = Role.RadioButton
+                contentDescription = "背景 ${theme.label}${if (selected) "，已选中" else ""}"
+            }
+            .padding(4.dp),
+    ) {
+        val shape = RoundedCornerShape(6.dp)
+        Canvas(
+            modifier = Modifier.fillMaxWidth().height(42.dp).clip(shape)
+                .border(
+                    width = if (selected) 2.dp else 1.dp,
+                    color = if (selected) p.accent else p.barDimFg.copy(alpha = 0.35f),
+                    shape = shape,
+                ),
+        ) {
+            drawOpiSceneBackdrop(scene, theme, phase = 0f, muted = 0.30f)
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            theme.label,
+            fontSize = 11.sp,
+            color = if (selected) p.accent else p.panelFg,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            maxLines = 1,
+        )
     }
 }
 

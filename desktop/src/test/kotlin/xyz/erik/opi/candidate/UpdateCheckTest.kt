@@ -54,6 +54,58 @@ class UpdateCheckTest {
         )
     }
 
+    @Test
+    fun `packages are parsed per platform with https and sha checks`() {
+        val sha = "a".repeat(64)
+        val text = """{"version":"1.20.3","packages":{
+            "linux-amd64":{"full":{"url":"https://x/full.deb","sha256":"$sha","size":123},
+                           "hot":{"url":"https://x/hot.zip"}},
+            "windows-x64":{"full":{"url":"https://x/setup.exe"},
+                           "hot":{"url":"http://evil.example/x"}}
+        }}"""
+        val p = parseVersionPoint(text)
+        val linux = p?.packages?.get("linux-amd64")
+        assertEquals("https://x/full.deb", linux?.full?.url)
+        assertEquals(sha, linux?.full?.sha256)
+        assertEquals(123L, linux?.full?.size)
+        assertNull("hot 缺 sha 是合法的（未提供校验值）", linux?.hot?.sha256)
+        assertNull("http 热更新条目必须丢弃", p?.packages?.get("windows-x64")?.hot)
+        assertEquals("https://x/setup.exe", p?.packages?.get("windows-x64")?.full?.url)
+    }
+
+    @Test
+    fun `platform keys prefer the native package manager`() {
+        assertEquals(
+            listOf("linux-amd64", "linux-x86_64", "linux"),
+            platformKeys(windows = false, arch = "x86_64", hasDpkg = true, hasRpm = false),
+        )
+        assertEquals(
+            listOf("linux-x86_64", "linux-amd64", "linux"),
+            platformKeys(windows = false, arch = "x86_64", hasDpkg = false, hasRpm = true),
+        )
+        assertEquals(
+            listOf("linux-arm64", "linux-aarch64", "linux"),
+            platformKeys(windows = false, arch = "aarch64", hasDpkg = true, hasRpm = false),
+        )
+        assertEquals(
+            listOf("windows-x64", "windows"),
+            platformKeys(windows = true, arch = "amd64", hasDpkg = false, hasRpm = false),
+        )
+    }
+
+    @Test
+    fun `check carries the selected platform packages`() {
+        val full = """{"url":"https://x/full.deb","sha256":"${"b".repeat(64)}","size":9}"""
+        val hot = """{"url":"https://x/hot.zip"}"""
+        val text = """{"version":"1.20.3","packages":{"linux-amd64":{"full":$full,"hot":$hot}}}"""
+        val result = checkForUpdate("1.20.2", packageKeys = listOf("linux-amd64")) { url ->
+            if (url == UPDATE_VERSION_URL) text else null
+        }
+        result as UpdateCheck.Available
+        assertEquals("https://x/full.deb", result.full?.url)
+        assertEquals("https://x/hot.zip", result.hot?.url)
+    }
+
     // ---------- 数据源 2：首页 JSON-LD ----------
 
     /** 线上 index.html 的 JSON-LD 片段（键序与真实一致）。 */

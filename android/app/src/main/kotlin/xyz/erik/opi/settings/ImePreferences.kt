@@ -10,6 +10,7 @@ import xyz.erik.opi.ime.InputMode
 import xyz.erik.opi.ime.KeyboardModes
 import xyz.erik.opi.jni.OpiEngine
 import xyz.erik.opi.keyboard.SkinOption
+import xyz.erik.opi.scene.SceneTheme
 
 /**
  * 键值存储抽象：生产 = SharedPreferences（[AndroidPrefStore]），JVM 测试注入内存实现
@@ -88,6 +89,14 @@ class ImePreferences(private val store: PrefStore) {
     var skin: SkinOption
         get() = SkinOption.fromId(store.getString(KEY_SKIN))
         set(v) = store.put(KEY_SKIN, v.id)
+
+    /**
+     * 动态背景主题（2026-10-30）：与桌面 `Background=` 同一套 id；缺键/未知 → 田园
+     * （改动前的原画）。只影响小欧自绘背景，与引擎无关。
+     */
+    var scene: SceneTheme
+        get() = SceneTheme.fromId(store.getString(KEY_SCENE))
+        set(v) = store.put(KEY_SCENE, v.id)
 
     var learn: Boolean
         get() = store.getBoolean(KEY_LEARN, true)
@@ -252,6 +261,7 @@ class ImePreferences(private val store: PrefStore) {
         const val KEY_DARK = "kb_dark"
         const val KEY_ELDER = "kb_elder"
         const val KEY_SKIN = "kb_skin"
+        const val KEY_SCENE = "kb_scene"
         const val KEY_LEARN = "engine_learn"
         const val KEY_ASSOCIATION = "engine_association"
         const val KEY_FUZZY = "engine_fuzzy"

@@ -3,4 +3,7 @@
      name="pet" 对应提交时授权的那一类 URI；授权本身由 INPUT_CONTENT_GRANT_READ_URI_PERMISSION 完成。 -->
 <paths>
     <cache-path name="pet" path="pet/" />
+    <!-- 应用内更新下载（2026-10-31）：DownloadManager 落在 getExternalFilesDir(Download)，
+         安装 APK / 打开 zip 时用 FileProvider 授权读。 -->
+    <external-files-path name="updates" path="Download/" />
 </paths>

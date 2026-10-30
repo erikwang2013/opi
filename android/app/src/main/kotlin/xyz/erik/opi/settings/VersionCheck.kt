@@ -24,10 +24,85 @@ internal const val VERSION_CHECK_TIMEOUT_MS = 4_000
 
 private val JSON_VERSION = Regex(""""version"\s*:\s*"([^"]+)"""")
 private val JSON_LD_VERSION = Regex(""""softwareVersion"\s*:\s*"([^"]+)"""")
+private val SHA256_RE = Regex("""^[0-9a-fA-F]{64}$""")
 
-/** `version.json` 的 `{"version":"x.y.z","download":"..."}`。 */
+/** 一个可直下的更新包；[sha256] 缺省 = 站点没给校验值。 */
+internal data class UpdatePackage(val url: String, val sha256: String?, val size: Long?)
+
+/** `version.json` 解析结果（Android 取 `packages.android`，桌面取各自平台键）。 */
+internal data class RemoteRelease(
+    val version: String,
+    val download: String = OPI_DOWNLOAD_URL,
+    val full: UpdatePackage? = null,
+    val hot: UpdatePackage? = null,
+)
+
+/** `version.json` 的 `{"version":"x.y.z","download":"..."}`（老形状，单测/兜底用）。 */
 internal fun parseVersionJson(text: String): String? =
     JSON_VERSION.find(text)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotEmpty() }
+
+/** 找到 `"key": { ... }` 的平衡花括号块（字符串/转义内的括号不算）。 */
+internal fun jsonObjectAt(text: String, key: String): String? {
+    val m = Regex(""""$key"\s*:""").find(text) ?: return null
+    var i = m.range.last + 1
+    while (i < text.length && text[i].isWhitespace()) i++
+    if (i >= text.length || text[i] != '{') return null
+    val start = i
+    var depth = 0
+    var inStr = false
+    var esc = false
+    while (i < text.length) {
+        val c = text[i]
+        if (inStr) {
+            when {
+                esc -> esc = false
+                c == '\\' -> esc = true
+                c == '"' -> inStr = false
+            }
+        } else {
+            when (c) {
+                '"' -> inStr = true
+                '{' -> depth++
+                '}' -> {
+                    depth--
+                    if (depth == 0) return text.substring(start, i + 1)
+                }
+            }
+        }
+        i++
+    }
+    return null
+}
+
+private fun jsonString(obj: String, key: String): String? =
+    Regex(""""$key"\s*:\s*"([^"]*)"""").find(obj)?.groupValues?.get(1)
+
+private fun jsonLong(obj: String, key: String): Long? =
+    Regex(""""$key"\s*:\s*(-?\d+)""").find(obj)?.groupValues?.get(1)?.toLongOrNull()
+
+private fun parsePackage(obj: String): UpdatePackage? {
+    val url = jsonString(obj, "url")?.trim()?.takeIf { it.startsWith("https://") } ?: return null
+    val sha = jsonString(obj, "sha256")?.trim()?.takeIf { SHA256_RE.matches(it) }?.lowercase()
+    val size = jsonLong(obj, "size")?.takeIf { it > 0 }
+    return UpdatePackage(url, sha, size)
+}
+
+/**
+ * 解析 `version.json` 的包清单（Android 只认 `packages.android`，兼容
+ * `android-universal`）。任何字段坏了都退成 null，不猜 URL。
+ */
+internal fun parseReleaseJson(text: String, platform: String = "android"): RemoteRelease? {
+    val version = jsonString(text, "version") ?: jsonString(text, "latest")
+    val v = version?.trim()?.removePrefix("v")?.takeIf { it.isNotEmpty() } ?: return null
+    val download = jsonString(text, "download")?.takeIf { it.startsWith("https://") }
+        ?: OPI_DOWNLOAD_URL
+    val packages = jsonObjectAt(text, "packages")
+    val platformObj = packages?.let { jsonObjectAt(it, platform) }
+        ?: packages?.let { jsonObjectAt(it, "android-universal") }
+    val full = platformObj?.let { jsonObjectAt(it, "full") }?.let(::parsePackage)
+    val hot = platformObj?.let { jsonObjectAt(it, "hot") }?.let(::parsePackage)
+    return RemoteRelease(v, download, full, hot)
+}
 
 /** 兜底：首页 JSON-LD 里的 `"softwareVersion":"x.y.z"`。 */
 internal fun parseJsonLdVersion(html: String): String? =
@@ -63,15 +138,15 @@ internal fun isNewerVersion(remote: String, current: String): Boolean =
  * 「前往下载」的目标固定为 [OPI_DOWNLOAD_URL]，**不读**端点里的 `download` 字段 ——
  * 不让网络数据决定要跳去哪。
  */
-internal fun fetchLatestVersion(): Result<String> = runCatching {
+internal fun fetchLatestRelease(): Result<RemoteRelease> = runCatching {
     val deadline = System.currentTimeMillis() + VERSION_CHECK_TIMEOUT_MS
     fun budget(): Int {
         val left = deadline - System.currentTimeMillis()
         if (left <= 0) error("检测超时")
         return left.toInt()
     }
-    runCatching { parseVersionJson(httpGet(OPI_VERSION_URL, budget())) }.getOrNull()
-        ?: parseJsonLdVersion(httpGet(OPI_HOME_URL, budget()))
+    runCatching { parseReleaseJson(httpGet(OPI_VERSION_URL, budget())) }.getOrNull()
+        ?: parseJsonLdVersion(httpGet(OPI_HOME_URL, budget()))?.let { RemoteRelease(it) }
         ?: error("版本端点没有可用版本号")
 }
 
@@ -93,7 +168,15 @@ private fun httpGet(url: String, timeoutMs: Int): String {
 internal sealed interface UpdateState {
     object Idle : UpdateState
     object Checking : UpdateState
-    data class Newer(val version: String) : UpdateState
+
+    /** 新版本；[full]/[hot] = 站点点名的可直下包（没有就只留下载页兜底）。 */
+    data class Newer(
+        val version: String,
+        val full: UpdatePackage? = null,
+        val hot: UpdatePackage? = null,
+        val download: String = OPI_DOWNLOAD_URL,
+    ) : UpdateState
+
     object Latest : UpdateState
     data class Failed(val reason: String) : UpdateState
 }
@@ -104,10 +187,15 @@ internal sealed interface UpdateState {
  */
 internal suspend fun checkForUpdate(currentVersion: String, manual: Boolean): UpdateState =
     withContext(Dispatchers.IO) {
-        fetchLatestVersion().fold(
-            onSuccess = { latest ->
-                if (isNewerVersion(latest, currentVersion)) {
-                    UpdateState.Newer(latest)
+        fetchLatestRelease().fold(
+            onSuccess = { release ->
+                if (isNewerVersion(release.version, currentVersion)) {
+                    UpdateState.Newer(
+                        version = release.version,
+                        full = release.full,
+                        hot = release.hot,
+                        download = release.download,
+                    )
                 } else {
                     UpdateState.Latest
                 }

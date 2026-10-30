@@ -213,6 +213,7 @@ class OpiImeService : InputMethodService() {
             prefs.inputMode = imeState.inputMode
             prefs.keyboardModes = imeState.keyboardModes
             prefs.skin = imeState.skin
+            prefs.scene = imeState.scene
             prefs.englishPro = imeState.englishPro
             prefs.customPunct = imeState.customPunct
             // 键盘模式里悬浮/游戏改的是**窗口**，改完立刻重排（不等系统下一次 configure）
@@ -225,7 +226,7 @@ class OpiImeService : InputMethodService() {
                 // 偏好恢复（2026-10-09）：引擎三开关 + 输入模式（方案随它落进引擎）+ 键盘模式。
                 // 放这里而不是 onCreate：引擎可能装载失败，偏好是「引擎可用」才有意义的投影。
                 prefs.applyEngineSwitches(engineController)
-                imeState.restore(prefs.inputMode, prefs.keyboardModes, prefs.skin, prefs.englishPro, prefs.customPunct)
+                imeState.restore(prefs.inputMode, prefs.keyboardModes, prefs.skin, prefs.englishPro, prefs.customPunct, prefs.scene)
                 // restore 可能晚于 onConfigureWindow（窗口先出来）：按恢复后的模式重排一次。
                 window?.window?.let { applyKeyboardWindow(it) }
             },

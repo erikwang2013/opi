@@ -1,1 +1,51 @@
-{"download":"https://opi.erik.xyz/download","version":"1.26.6"}
+{
+  "download": "https://opi.erik.xyz/download",
+  "version": "1.27.0",
+  "packages": {
+    "windows-x64": {
+      "full": {
+        "url": "https://opi.erik.xyz/download/opi-1.27.0-windows-x64-setup.exe"
+      }
+    },
+    "linux-amd64": {
+      "full": {
+        "url": "https://opi.erik.xyz/download/opi-1.27.0-linux-amd64.deb"
+      },
+      "hot": {
+        "url": "https://opi.erik.xyz/download/opi-1.27.0-linux-amd64-hot.zip",
+        "size": 36012097,
+        "sha256": "b1c9ee48390f70a1e990c7c17cf3aaafc8facde73b402a9bcb31e7460f7e10d1"
+      }
+    },
+    "linux-x86_64": {
+      "full": {
+        "url": "https://opi.erik.xyz/download/opi-1.27.0-linux-x86_64.rpm"
+      },
+      "hot": {
+        "url": "https://opi.erik.xyz/download/opi-1.27.0-linux-amd64-hot.zip",
+        "size": 36012097,
+        "sha256": "b1c9ee48390f70a1e990c7c17cf3aaafc8facde73b402a9bcb31e7460f7e10d1"
+      }
+    },
+    "android": {
+      "full": {
+        "url": "https://opi.erik.xyz/download/opi-1.27.0-android-universal.apk"
+      }
+    },
+    "macos-universal": {
+      "full": {
+        "url": "https://opi.erik.xyz/download/opi-1.27.0-macos-universal.pkg"
+      }
+    },
+    "ios": {
+      "full": {
+        "url": "https://opi.erik.xyz/download/opi-1.27.0-ios-unsigned.ipa"
+      }
+    },
+    "harmony": {
+      "full": {
+        "url": "https://opi.erik.xyz/download/opi-1.27.0-harmonyos-unsigned.hap"
+      }
+    }
+  }
+}

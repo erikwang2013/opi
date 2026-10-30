@@ -36,6 +36,7 @@
 package xyz.erik.opi.candidate
 
 import com.sun.jna.Library
+import com.sun.jna.Memory
 import com.sun.jna.Native
 import com.sun.jna.Pointer
 import com.sun.jna.ptr.IntByReference
@@ -85,10 +86,30 @@ internal interface XTaskbarApi : Library {
     ): Int
 }
 
+/**
+ * X11 输入区域（像素）。**只给状态栏的「错落溢出」用**：AWT `Window.setShape`
+ * 只改 X11 的 bounding shape（2026-10-30 本机 XShape 实测：input rects 仍是整窗），
+ * 透明边距照样吃点击 ⇒ 条外装饰必须再用 `XShapeCombineRectangles(ShapeInput)`
+ * 收成条本体那一块，装饰才真正透传。
+ */
+internal data class InputRect(val x: Int, val y: Int, val width: Int, val height: Int)
+
+/** libXext 的 shape 入口（只映一个函数，与 [XTaskbarApi] 同一纪律）。 */
+internal interface XShapeApi : Library {
+    fun XShapeCombineRectangles(
+        dpy: Pointer, dest: Long, destKind: Int, xOff: Int, yOff: Int,
+        rects: Pointer, nRects: Int, ordering: Int, operation: Int,
+    )
+}
+
 private const val XA_ATOM = 4L // X11/Xatom.h 的预定义原子号，不是随手挑的数
 private const val PROP_MODE_REPLACE = 0
 private const val ANY_PROPERTY_TYPE = 0L
 private const val TICK_MS = 1000L // 与状态栏读状态的轮询同拍
+// X11 shape.h：ShapeBounding=0 / ShapeClip=1 / ShapeInput=2；ShapeSet=0；Unsorted=0。
+private const val SHAPE_INPUT = 2
+private const val SHAPE_SET = 0
+private const val UNSORTED = 0
 
 /** 显示事件后的连发补贴时刻（ms）：把「AWT 稍后重写属性」的兜底窗口从 1s 压到 150ms。 */
 private val BURST_MS = longArrayOf(0, 20, 60, 150)
@@ -132,6 +153,30 @@ internal object SkipTaskbar {
         }
     }
 
+    /** libXext（输入形状）；没有它也不影响窗口，装饰透传退化为「会被点击到」。 */
+    private val shapeApi: XShapeApi? by lazy {
+        try {
+            Native.load("Xext", XShapeApi::class.java)
+        } catch (t: Throwable) {
+            null
+        }
+    }
+
+    /** 标题 → 条本体的输入矩形（像素）。只在状态栏调用。 */
+    private val inputShapes = ConcurrentHashMap<String, List<InputRect>>()
+
+    /**
+     * 把点击区域收成 [rects]（状态栏 = 条本体）。视觉形状仍是 `Window.shape`
+     * （条+椭圆岛），但 X11 的输入形状单独设置后，条外装饰不再吃点击。
+     * 与 SkipTaskbar 共用单线程 Xlib 连接（同一条连接不能多线程碰）。
+     */
+    fun applyInputShape(window: Window, rects: List<InputRect>) {
+        if (isWindows()) return
+        val title = (window as? java.awt.Frame)?.title ?: return
+        inputShapes[title] = rects
+        reapplySoon(title)
+    }
+
     fun apply(window: Window) {
         if (isWindows()) return
         // 标题只在 Frame/Dialog 上（java.awt.Window 自己没有）—— 三条窗都是 Frame（ComposeWindow）。
@@ -172,7 +217,10 @@ internal object SkipTaskbar {
         val (api, dpy) = conn ?: return
         val cached = tracked[title] ?: return // 已注销的标题
         if (cached != 0L) {
-            if (patch(api, dpy, cached)) return
+            if (patch(api, dpy, cached)) {
+                applyInputShapeFor(api, dpy, cached, title)
+                return
+            }
             // 这条窗没了（虚拟键盘关掉就是这条）：退回「还没找到」，别每秒去拍死 XID。
             // ponytail: 没找到期间每秒一次全树扫；一条窗关着不开就这么跑，树是几百条的量级。
             tracked[title] = 0L
@@ -180,6 +228,31 @@ internal object SkipTaskbar {
         val xid = findWindow(api, dpy, title) ?: return // 还没 map / 已经没了：下轮再来
         tracked[title] = xid
         patch(api, dpy, xid)
+        applyInputShapeFor(api, dpy, xid, title)
+    }
+
+    /**
+     * 设置 X11 输入形状。rects 为空/没有 libXext/不是状态栏 ⇒ 不碰（窗口保持整窗
+     * 可点）。ShapeSet + Unsorted：每次整体替换，不用维护增量。
+     */
+    private fun applyInputShapeFor(api: XTaskbarApi, dpy: Pointer, xid: Long, title: String) {
+        val rects = inputShapes[title] ?: return
+        if (rects.isEmpty()) return
+        val shape = shapeApi ?: return
+        // XRectangle = 4 × short = 8 字节（x/y/width/height，均为 16 位；窗口尺寸远小于 32767）。
+        val mem = Memory(rects.size * 8L)
+        for (i in rects.indices) {
+            val r = rects[i]
+            val off = i * 8L
+            mem.setShort(off, r.x.coerceIn(0, Short.MAX_VALUE.toInt()).toShort())
+            mem.setShort(off + 2, r.y.coerceIn(0, Short.MAX_VALUE.toInt()).toShort())
+            mem.setShort(off + 4, r.width.coerceIn(0, Short.MAX_VALUE.toInt()).toShort())
+            mem.setShort(off + 6, r.height.coerceIn(0, Short.MAX_VALUE.toInt()).toShort())
+        }
+        shape.XShapeCombineRectangles(
+            dpy, xid, SHAPE_INPUT, 0, 0, mem, rects.size, UNSORTED, SHAPE_SET,
+        )
+        api.XFlush(dpy)
     }
 
     /** 贴属性；返回 false = 这条窗读不回属性（不再存在），调用方应重新找。 */

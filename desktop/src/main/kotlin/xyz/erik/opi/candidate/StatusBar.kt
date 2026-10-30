@@ -42,6 +42,12 @@
 //! 弧形」）：绘制尺寸再乘 [WINDOWS_BAR_FACTOR]（0.85，配置里的 scale 不动），窗底置透明
 //! 并把根盒裁成圆角（[barShape]）—— Linux 不乘、保持直角，行为不变。
 //!
+//! **错落溢出背景**（2026-10-30 用户裁决：纯色底换成卡通动物/花草/人物的动态背景，
+//! 桌面端角色从状态栏错落探出）：条窗四周加透明边距，窗口裁成「条 + 椭圆岛」；
+//! X11 的输入形状另行收成**条本体**（条外装饰透传点击，透明区不挡桌面）。平台不
+//! 支持 per-pixel 透明/窗口裁剪时边距归零，行为回到纯条。几何在 `BarHalo.kt`，
+//! 插画在 `shared/scene`，按钮底板在 `StatusBarButton.kt`。
+//!
 //! **状态实时可见**（2026-10-10 深夜裁决）：简/繁、中/英、月相随输入法真实状态翻转。
 //! 状态 = `opi-ctl state`（契约见 Actions.kt），1s 轮询 + Windows 客户端接入/断开
 //! 事件 + **每次按钮动作返回后立刻补读一次**（「即时生效」的落点，见
@@ -64,15 +70,11 @@ package xyz.erik.opi.candidate
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.Text
@@ -88,20 +90,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
-import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -112,6 +106,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import xyz.erik.opi.pet.OpiPetWindowIcon
+import kotlin.math.roundToInt
 
 // ---------- 配色与尺寸 ----------
 
@@ -125,10 +120,16 @@ import xyz.erik.opi.pet.OpiPetWindowIcon
 // barVisible 也移到了 SkinAndStatus.kt（2026-10-21 再次撞 500 行）；它是纯函数，
 // 与本文件的状态栏窗口无耦合。
 
-/** 初始位置：屏幕底部居中、离下沿一截（别贴边，也别压任务栏）。 */
-private fun barPosition(widthDp: Int): WindowPosition {
+/**
+ * 初始位置：**条本体**屏幕底部居中、离下沿一截（别贴边，也别压任务栏）。
+ * 窗外有 [haloDp] 透明边距 ⇒ 窗口原点要各退 halo，条的位置才与改动前一致。
+ */
+private fun barPosition(widthDp: Int, haloDp: Int): WindowPosition {
     val screen = java.awt.Toolkit.getDefaultToolkit().screenSize
-    return WindowPosition(((screen.width - widthDp) / 2).dp, (screen.height - 128).dp)
+    return WindowPosition(
+        ((screen.width - widthDp) / 2 - haloDp).dp,
+        (screen.height - 128 - haloDp).dp,
+    )
 }
 
 // ---------- 应用 ----------
@@ -212,18 +213,26 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
     val windows = isWindows()
     val buttons = visibleStatusButtons(s.statusbar, windows)
     val metrics = barMetrics(s.statusbar.scale, windows)
-    val width = statusBarWidthDp(buttons.size, s.statusbar.scale, windows)
+    val barWidth = statusBarWidthDp(buttons.size, s.statusbar.scale, windows)
     val shape = barShape(windows)
+    // 窗口裁剪要像素坐标：与状态栏内容的 density 同一份（HiDPI 下 dp→px）。
+    val density = LocalDensity.current
+    // 2026-10-30「错落溢出」：条窗外加一圈透明边距，窗口裁成条 + 椭圆岛的并集。
+    // 平台不支持 per-pixel 透明或窗口裁剪 ⇒ 边距归零，行为回到改动前（不能挡住桌面）。
+    val canOverflow = remember { supportsOverflowWindow() }
+    val halo = if (canOverflow) barHalo(s.statusbar.scale, windows) else 0.dp
+    val windowWidth = barWidth.dp + halo * 2
+    val windowHeight = metrics.height + halo * 2
     val windowState = rememberWindowState(
-        width = width.dp,
-        height = metrics.height,
-        position = remember { barPosition(width.toInt()) },
+        width = windowWidth,
+        height = windowHeight,
+        position = remember { barPosition(barWidth.toInt(), halo.value.roundToInt()) },
     )
     // 按钮增删（设置窗里拨的开关）与统一缩放（StatusBarScale）→ 条跟着变。位置**不动**：
     // 拖过就保住用户放的地方。设置窗可能是另一进程 ⇒ 这里等 1s 轮询把新值送来。
-    LaunchedEffect(buttons.size, s.statusbar.scale) {
+    LaunchedEffect(buttons.size, s.statusbar.scale, canOverflow) {
         statusBarGuard("状态栏尺寸") {
-            windowState.size = DpSize(statusBarWidthDp(buttons.size, s.statusbar.scale, windows).dp, metrics.height)
+            windowState.size = DpSize(windowWidth, windowHeight)
         }
     }
     /** 失败必须看得见：写进条上的提示，也打一行到 stdout（自启动进程的日志在 journal 里）。 */
@@ -351,9 +360,9 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
         // 全在 [barVisible]，四态单测钉住。
         visible = shown,
         undecorated = true,
-        // Windows：窗底色透明 —— 圆角外的四角才真的透出桌面（形状见根 Box 的 clip）。
-        // Linux 保持不透明（未报障，行为不变）。
-        transparent = windows,
+        // 透明窗：条外透明边距要真的透出桌面（2026-10-30 错落溢出）；
+        // 平台不支持时 canOverflow=false、边距为 0，窗口退回条大小。
+        transparent = canOverflow,
         alwaysOnTop = true,
         resizable = false,
         // 不抢焦点：点状态栏不该把用户正在打字的窗口的焦点夺走（与候选窗同一条理由）。
@@ -365,25 +374,74 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
         // 不进任务栏/菜单栏（用户裁决 2026-10-10 下午）：X11 属性直写，机制与取证状态
         // 见 SkipTaskbar.kt（关键实现：新窗创建时注册一次，之后它自己跟随每次显示重贴）。
         LaunchedEffect(window) { statusBarGuard("SkipTaskbar") { SkipTaskbar.apply(window) } }
+        // 窗口裁剪 = 条 + 条外椭圆岛（像素坐标）。锚点与 StatusBarOverflowScene 同源；
+        // 不支持/失败时窗口保持矩形（supportsOverflowWindow 已先挡掉这种平台）。
+        LaunchedEffect(window, windowWidth, windowHeight, halo, metrics.height, windows, density) {
+            val d = density.density
+            if (halo > 0.dp) {
+                val haloPx = halo.value * d
+                val barWidthPx = barWidth * d
+                val barHeightPx = metrics.height.value * d
+                val area = barWindowShape(
+                    width = windowWidth.value * d,
+                    height = windowHeight.value * d,
+                    halo = haloPx,
+                    barHeight = barHeightPx,
+                    corner = if (windows) BAR_CORNER_DP * d else 0f,
+                )
+                statusBarGuard("状态栏窗口裁剪") {
+                    runCatching { window.shape = area }
+                        .onFailure { println("[opi-statusbar] 窗口裁剪不可用：${it.message}") }
+                    // 视觉形状是条+岛；X11 输入形状单独收成条本体 —— 条外装饰不吃点击。
+                    SkipTaskbar.applyInputShape(
+                        window,
+                        listOf(
+                            InputRect(
+                                x = haloPx.roundToInt(),
+                                y = haloPx.roundToInt(),
+                                width = barWidthPx.roundToInt(),
+                                height = barHeightPx.roundToInt(),
+                            ),
+                        ),
+                    )
+                }
+            } else {
+                runCatching { window.shape = null }
+                // 无溢出 = 窗口本来就是条：整窗可点。
+                SkipTaskbar.applyInputShape(
+                    window,
+                    listOf(InputRect(0, 0, (windowWidth.value * d).roundToInt(), (windowHeight.value * d).roundToInt())),
+                )
+            }
+        }
         // 条随 `Skin=` 换装（≤1s，见文件头的同步说明）：根部 provide 一次，子
         // composable 读 LocalBarPalette —— 与 Android 侧 LocalKeyboardPalette 同套做法。
         val palette = skinColors(s.skin)
         if (shown) CompositionLocalProvider(LocalBarPalette provides palette) {
-            // Windows = 胶囊：整条裁成圆角（Linux 的 shape 是 RectangleShape，像素不变）。
-            Box(Modifier.fillMaxSize().clip(shape).background(palette.bg).border(1.dp, palette.line, shape)) {
-                if (notice == null) {
-                    Row(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = metrics.pad),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(metrics.gap),
-                    ) {
-                        for (b in buttons) BarButton(b, imeState, mode, metrics, windowState, window, ::onButton)
-                    }
-                } else {
-                    // 提示期间**替掉**按钮列（而不是盖在上面）：否则按钮还在下面接着点击，
-                    // 用户会在「看不见的按钮」上点出错愕的结果。4s 后自动让开。
-                    Box(Modifier.fillMaxSize().padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
-                        Text(notice!!, fontSize = 11.sp, color = palette.accent, maxLines = 2)
+            // 根盒 = 整个条窗（条 + 透明边距）；插画铺在边距里，条本体再压在上面。
+            Box(Modifier.fillMaxSize()) {
+                if (halo > 0.dp) {
+                    StatusBarOverflowScene(palette, s.background, halo, metrics.height, Modifier.fillMaxSize())
+                }
+                // Windows = 小圆角（Linux 的 shape 是 RectangleShape，像素不变）。
+                Box(
+                    Modifier.offset(halo, halo).size(barWidth.dp, metrics.height)
+                        .clip(shape).background(palette.bg).border(1.dp, palette.line, shape),
+                ) {
+                    if (notice == null) {
+                        Row(
+                            modifier = Modifier.fillMaxSize().padding(horizontal = metrics.pad),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(metrics.gap),
+                        ) {
+                            for (b in buttons) BarButton(b, imeState, mode, metrics, windowState, window, ::onButton)
+                        }
+                    } else {
+                        // 提示期间**替掉**按钮列（而不是盖在上面）：否则按钮还在下面接着点击，
+                        // 用户会在「看不见的按钮」上点出错愕的结果。4s 后自动让开。
+                        Box(Modifier.fillMaxSize().padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
+                            Text(notice!!, fontSize = 11.sp, color = palette.accent, maxLines = 2)
+                        }
                     }
                 }
             }
@@ -406,89 +464,5 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
         // 失败原因**原样透传**（2026-10-12）：此前这里把 false 统一翻成一句写死的
         // Windows 解释 —— Linux 上「没有焦点输入框」这类真实原因会被顶掉。
         SymbolWindow(onCommit = symbolCommit, onClose = { symbolsOpen = false })
-    }
-}
-
-// ---------- 一个按钮 ----------
-
-/**
- * 一枚按钮：[BarMetrics.button] 见方的框 + 悬停底 + 点击（LOGO 另挂拖动）。**面**
- * （图标/字形）在 [StatusBarButtonFace]（BarGlyphs.kt）—— 分开是为了让门禁能离屏直接渲那一支。
- *
- * 传进去的就是**这块按钮本身**（100% = 30dp，其余尺寸按 `StatusBarScale` 等比）：
- * 用户 2026-10-14 的「根据按钮显示最大」按的是按钮这块盒，字号由 BarGlyphs 按墨迹取满
- * （见其文件头）。别在这里再垫留白 —— 垫掉多少、字就小多少（曾经的 26dp「面盒」就是
- * 这么把 logo 从 30 缩回 26 的）。**缩到 60% 那条 2026-10-15 的缩放不在这里**：它是面
- * 内部的事（`FACE_SCALE`，BarGlyphs.kt），在这边再乘一次就是乘两遍。
- *
- * enpro/en26 与普通键**始终收同一个 [BarMetrics.button]**：键帽只是在这块盒里按
- * 26/30 画（KeycapFace.kt），没有自己的尺寸来源。
- */
-@Composable
-private fun BarButton(
-    b: StatusBarButton,
-    st: ImeState,
-    mode: String,
-    metrics: BarMetrics,
-    windowState: WindowState,
-    barWindow: java.awt.Window,
-    onClick: (StatusBarButton) -> Unit,
-) {
-    val interaction = remember { MutableInteractionSource() }
-    val hovered by interaction.collectIsHoveredAsState()
-    // 按下反馈（2026-10-21 用户裁决「按钮要可操作」）：动作走控制面时可能等上几十~几百 ms，
-    // 没有按下态的话用户会以为没点上而连点。按下 = accent 半透明，悬停 = hover 色。
-    val pressed by interaction.collectIsPressedAsState()
-    val palette = LocalBarPalette.current
-    // 英文专业键常亮（2026-10-19）：否则切了 pro 看不出任何变化。用既有 hover 色，
-    // 不新造颜色/角色（见 SkinPalette.kt 的角色映射）。键帽本身是固定白底（设计图），
-    // 这一圈 hover 只露在键帽外缘 —— 激活态仍可见，且不染色键帽。
-    val active = b == StatusBarButton.ENPRO && st.englishPro
-    var tip by remember { mutableStateOf(false) }
-    // 按钮在条窗内的像素矩形 —— 提示窗要靠它换算屏幕坐标。
-    var anchor by remember { mutableStateOf(Rect.Zero) }
-    // 悬停 400ms 出提示。提示必须是独立 Window：Compose 的 Popup 会被夹进 42dp 高的条窗
-    // （clippingEnabled=false 也救不了，xwininfo 实测无独立弹层），见 BarTooltip.kt。
-    LaunchedEffect(hovered) { tip = false; if (hovered) { delay(400); tip = true } }
-    Box(
-        modifier = Modifier
-            .size(metrics.button)
-            .background(
-                when {
-                    pressed -> palette.accent.copy(alpha = 0.30f)
-                    hovered || active -> palette.hover
-                    else -> Color.Transparent
-                },
-            )
-            .clickable(interactionSource = interaction, indication = null) { onClick(b) }
-            .then(if (b == StatusBarButton.LOGO) dragToMove(windowState) else Modifier)
-            .onGloballyPositioned { anchor = it.boundsInWindow() }
-            .semantics { contentDescription = b.label },
-        contentAlignment = Alignment.Center,
-    ) {
-        StatusBarButtonFace(b, st, mode, metrics.button)
-        if (tip) BarTooltip(b, anchor, windowState.position, palette, barWindow)
-    }
-}
-
-/**
- * 把窗口拖动交给这个修饰符（只有 logo 挂它）。
- *
- * 指针增量单位是**像素**，`WindowPosition` 要 dp ⇒ 经 LocalDensity 换算；不换算的话
- * 高 DPI 下拖起来会「跑」（指针走 1dp，窗口走 2dp）。key 用 density：换 DPI 后重建，
- * 免得一直用旧的换算比。
- */
-@Composable
-private fun dragToMove(windowState: WindowState): Modifier {
-    val density = LocalDensity.current
-    return Modifier.pointerInput(density) {
-        detectDragGestures { change, drag ->
-            change.consume()
-            val cur = windowState.position
-            windowState.position = WindowPosition(
-                cur.x + with(density) { drag.x.toDp() },
-                cur.y + with(density) { drag.y.toDp() },
-            )
-        }
     }
 }

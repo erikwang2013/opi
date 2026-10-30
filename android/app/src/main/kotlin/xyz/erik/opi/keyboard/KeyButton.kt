@@ -4,14 +4,12 @@
 package xyz.erik.opi.keyboard
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -21,8 +19,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.pointerInput
@@ -96,7 +92,6 @@ fun KeyButton(
     cornerHint: String? = null,
 ) {
     val palette = LocalKeyboardPalette.current
-    val bg = if (highlighted) palette.keyHighlightBg else palette.keyBg
     val fg = if (highlighted) palette.keyHighlightFg else palette.keyFg
     val press = remember { RepeatPressState() }
     val latestOnTap = rememberUpdatedState(onTap)
@@ -195,8 +190,7 @@ fun KeyButton(
     Box(
         modifier = modifier
             .padding(1.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(bg)
+            .keyPlate(highlighted)
             .combinedClickable(
                 onClick = {
                     // 连续删除 / 备选弹层已经接管时，抬手还会再发一次 onClick —— 挡掉。

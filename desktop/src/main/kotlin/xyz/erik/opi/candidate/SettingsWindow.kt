@@ -51,7 +51,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -175,6 +174,8 @@ fun SettingsWindow() {
     // 按**版本号**记「已关闭」：关掉 1.21.1 的横幅后，同一会话里手动检测出 1.22.0
     // 仍应再弹一次（旧布尔会永久压住后续版本的横幅，review 2026-10-22）。
     var dismissedUpdate by remember { mutableStateOf<String?>(null) }
+    // 应用内下载（2026-10-31）：进程级单例，切页/关设置窗再开仍是同一个下载。
+    val updateDownloader = SharedUpdateDownloader
 
     // 打开设置就意味着「用户在看/要调状态栏」：条该显示却没人拉起 ⇒ 直接拉一支
     // （2026-10-10 用户报障「设置里开了、实际没出现」的根因：装包后没重登录，
@@ -275,7 +276,10 @@ fun SettingsWindow() {
             // 不挡任何页 —— 它在这条右栏的顶部，页面在它下面滚动。
             (update as? UpdateCheck.Available)?.let { available ->
                 if (dismissedUpdate != available.latest) {
-                    UpdateBanner(available.latest, available.download) {
+                    UpdateBanner(
+                        latest = available.latest,
+                        onOpenAbout = { tab = SettingsTab.ABOUT },
+                    ) {
                         dismissedUpdate = available.latest
                     }
                 }
@@ -306,6 +310,7 @@ fun SettingsWindow() {
                         update = update,
                         checking = updateChecking,
                         onCheckUpdate = { triggerUpdateCheck(manual = true) },
+                        downloader = updateDownloader,
                     )
                 }
             }
@@ -329,12 +334,11 @@ fun SettingsWindow() {
 }
 
 /**
- * 新版本横幅：一句话 + 「前往下载」+ 关闭。出现在右栏顶部（所有页都看得见）。
- * 链接走系统默认浏览器（与「关于」页的外链同一条 `LocalUriHandler`）。
+ * 新版本横幅：一句话 + 「查看更新」+ 关闭。出现在右栏顶部（所有页都看得见）。
+ * 2026-10-31 起不再跳浏览器：按钮切到「关于」页，那里有全量/热更新下载与进度。
  */
 @Composable
-private fun UpdateBanner(latest: String, download: String, onDismiss: () -> Unit) {
-    val uriHandler = LocalUriHandler.current
+private fun UpdateBanner(latest: String, onOpenAbout: () -> Unit, onDismiss: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth()
             .background(Color(0xFFEAF4F2))
@@ -345,13 +349,11 @@ private fun UpdateBanner(latest: String, download: String, onDismiss: () -> Unit
         Text("发现新版本 v$latest（当前 v$OPI_VERSION）", fontSize = 12.sp, color = Ink)
         Spacer(Modifier.weight(1f))
         Text(
-            "前往下载",
+            "查看更新",
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
             color = Teal,
-            modifier = Modifier.clickable {
-                runCatching { uriHandler.openUri(download) }
-            },
+            modifier = Modifier.clickable(onClick = onOpenAbout),
         )
         Spacer(Modifier.width(14.dp))
         Text(

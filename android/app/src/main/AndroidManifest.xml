@@ -2,6 +2,9 @@
     <!-- 版本检测（2026-10-22）：只访问 opi.erik.xyz 的 version.json / 首页，不上传用户数据。
          INTERNET 是普通权限，安装即授、无运行时弹窗。 -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- 应用内更新（2026-10-31）：下载完 APK 后拉起系统安装器；无此权限 Android 8+
+         会拒绝安装来源。只下载/打开，不静默安装。 -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <application
         android:label="小欧输入法"
         android:icon="@mipmap/ic_launcher"

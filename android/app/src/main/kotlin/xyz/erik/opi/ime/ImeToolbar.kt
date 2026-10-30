@@ -112,7 +112,7 @@ fun ImeToolbar(
     val p = LocalKeyboardPalette.current
     BoxWithConstraints(
         modifier = modifier.fillMaxWidth().height(IME_TOOLBAR_HEIGHT_DP.dp)
-            .background(p.toolbarBg),
+            .background(p.toolbarBg.copy(alpha = TOOLBAR_SCENE_ALPHA)),
     ) {
         // 320dp：7×40 + 小欧 36 + 英文「中」≈ 343 > 320，最右的收起键会被裁掉。
         // 按剩余宽度收缩图标（26–40dp），这一行在任意宽度都不溢出。

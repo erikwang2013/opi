@@ -16,6 +16,7 @@
 
 package xyz.erik.opi.candidate
 
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URI
 
@@ -38,19 +39,82 @@ private const val UPDATE_MAX_BYTES = 256 * 1024
 /** 网络超时（连接/读取各一份）。打开设置时的自动检测不该拖慢窗口。 */
 private const val UPDATE_TIMEOUT_MS = 4000
 
+/**
+ * 一个可直接下载的更新包。**只认 HTTPS**；[sha256] 缺省 = 站点没给校验值（下载后
+ * 显示「未提供校验值」，不假装校验过）；[size] 缺省 = 不预检大小。
+ */
+internal data class UpdatePackage(val url: String, val sha256: String?, val size: Long?)
+
+/** 一个平台下的全量/热更新包（任一可为 null = 该类型暂未发布）。 */
+internal data class PlatformPackages(val full: UpdatePackage?, val hot: UpdatePackage?)
+
 /** 版本端点解析结果（`download` 缺省 = 用 [UPDATE_DOWNLOAD_URL]）。 */
-internal data class VersionPoint(val version: String, val download: String?)
+internal data class VersionPoint(
+    val version: String,
+    val download: String?,
+    val packages: Map<String, PlatformPackages> = emptyMap(),
+)
 
 /** 一次检测的结论。 */
 internal sealed interface UpdateCheck {
     /** 当前版本不低于站点版本。 */
     data object UpToDate : UpdateCheck
 
-    /** 站点有更新的版本；[download] 是「前往下载」的地址。 */
-    data class Available(val latest: String, val download: String) : UpdateCheck
+    /**
+     * 站点有更新的版本；[download] 是「下载页」兜底地址，[full]/[hot] 是站点点名的
+     * 可直下包（没有就是 null —— 界面退回浏览器/下载页，不猜 URL）。
+     */
+    data class Available(
+        val latest: String,
+        val download: String,
+        val full: UpdatePackage? = null,
+        val hot: UpdatePackage? = null,
+    ) : UpdateCheck
 
     /** 检测失败（给用户看的一句原因）。 */
     data class Failed(val reason: String) : UpdateCheck
+}
+
+private val SHA256_RE = Regex("""^[0-9a-fA-F]{64}$""")
+
+/** JSON 里一个包对象 → [UpdatePackage]；缺 url/非 https 的条目整条丢弃。 */
+private fun JVal?.asUpdatePackage(): UpdatePackage? {
+    val o = this as? JVal.JObj ?: return null
+    val url = (o.v["url"] as? JVal.JStr)?.v?.trim()
+        ?.takeIf { it.startsWith("https://") } ?: return null
+    val sha = (o.v["sha256"] as? JVal.JStr)?.v?.trim()
+        ?.takeIf { SHA256_RE.matches(it) }?.lowercase()
+    val size = (o.v["size"] as? JVal.JNum)?.v?.takeIf { it > 0 }
+    return UpdatePackage(url, sha, size)
+}
+
+/**
+ * 本机该看哪几个平台键。**按包管理器选 deb/rpm**（两套安装包不通用）：有 dpkg
+ * 先 deb、有 rpm 先 rpm，都没有就两个都试；再退化到泛化键。纯函数，便于单测。
+ */
+internal fun platformKeys(
+    windows: Boolean = isWindows(),
+    arch: String = System.getProperty("os.arch").orEmpty(),
+    hasDpkg: Boolean = File("/usr/bin/dpkg").exists() || File("/bin/dpkg").exists(),
+    hasRpm: Boolean = File("/usr/bin/rpm").exists() || File("/bin/rpm").exists(),
+): List<String> {
+    if (windows) return listOf("windows-x64", "windows")
+    val arm = arch.contains("aarch64") || arch.contains("arm64")
+    val deb = if (arm) "linux-arm64" else "linux-amd64"
+    val rpm = if (arm) "linux-aarch64" else "linux-x86_64"
+    return when {
+        hasDpkg && !hasRpm -> listOf(deb, rpm, "linux")
+        hasRpm && !hasDpkg -> listOf(rpm, deb, "linux")
+        else -> listOf(deb, rpm, "linux")
+    }
+}
+
+/** 按候选键顺序取第一个有 full/hot 的平台；都没有 → null。 */
+internal fun pickPackages(
+    packages: Map<String, PlatformPackages>,
+    keys: List<String>,
+): PlatformPackages? = keys.firstNotNullOfOrNull { key ->
+    packages[key]?.takeIf { it.full != null || it.hot != null }
 }
 
 /** 版本号只认数字与点（`1.20.2`，可带一个 `v`）。 */
@@ -67,7 +131,14 @@ internal fun parseVersionPoint(text: String): VersionPoint? {
     if (!VERSION_RE.matches(version)) return null
     val download = (obj["download"] as? JVal.JStr)?.v
         ?.takeIf { it.startsWith("https://") }
-    return VersionPoint(version, download)
+    val packages = (obj["packages"] as? JVal.JObj)?.v?.mapNotNull { (key, value) ->
+        val platform = value as? JVal.JObj ?: return@mapNotNull null
+        key to PlatformPackages(
+            full = platform.v["full"].asUpdatePackage(),
+            hot = platform.v["hot"].asUpdatePackage(),
+        )
+    }?.toMap() ?: emptyMap()
+    return VersionPoint(version, download, packages)
 }
 
 /**
@@ -106,12 +177,19 @@ internal fun compareVersions(a: String, b: String): Int {
  */
 internal fun checkForUpdate(
     current: String = OPI_VERSION,
+    packageKeys: List<String> = platformKeys(),
     fetch: (String) -> String? = ::httpGet,
 ): UpdateCheck {
     val point = fetch(UPDATE_VERSION_URL)?.let(::parseVersionPoint)
     if (point != null) {
         return if (compareVersions(point.version, current) > 0) {
-            UpdateCheck.Available(point.version, point.download ?: UPDATE_DOWNLOAD_URL)
+            val pkg = pickPackages(point.packages, packageKeys)
+            UpdateCheck.Available(
+                latest = point.version,
+                download = point.download ?: UPDATE_DOWNLOAD_URL,
+                full = pkg?.full,
+                hot = pkg?.hot,
+            )
         } else {
             UpdateCheck.UpToDate
         }

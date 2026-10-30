@@ -97,10 +97,15 @@ internal fun AboutSection(toast: (String) -> Unit) {
         supportingContent = {
             Column {
                 Text(updateStatusText(update, BuildConfig.VERSION_NAME))
-                if (update is UpdateState.Newer) {
-                    TextButton(onClick = { openExternal(context, OPI_DOWNLOAD_URL, toast) }) {
-                        Text("前往下载")
-                    }
+                val newer = update as? UpdateState.Newer
+                if (newer != null) {
+                    UpdateDownloadControls(
+                        update = newer,
+                        accent = MaterialTheme.colorScheme.primary,
+                        dim = MaterialTheme.colorScheme.onSurfaceVariant,
+                        onOpenBrowser = { url -> openExternal(context, url, toast) },
+                        onNote = toast,
+                    )
                 }
                 if (update != UpdateState.Checking) {
                     TextButton(onClick = { scope.launch { check(true) } }) {

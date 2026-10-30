@@ -107,8 +107,8 @@ fun ImeScreen(
         // 铺满所以覆盖得住。这里给根列工具条色 —— 空槽与工具条连成一片，视觉上就是
         // 工具条向上延伸（布局/高度一个字没动）。2026-10-09 那条「候选词没词的时候不
         // 显示背景」管的是**候选槽**（现在候选槽与工具条共用一格、恒有内容），不冲突；
-        // 各分片仍照旧给自己铺底（工具条 toolbarBg、候选栏 barBg、键区 barBg）。
-        Column(modifier = Modifier.fillMaxSize().background(palette.toolbarBg)) {
+        // 各分片仍照旧给自己铺底（工具条 toolbarBg、候选栏 barBg、键区半透明 barBg 罩在插画上）。
+        Column(modifier = Modifier.fillMaxSize().opiSceneBackground(state.scene)) {
             // ---- 拼音行（2026-10-15 用户裁决「移动端的拼音在候选词上方显示，不要在
             // 输入框里」）：槽位常驻（空时不铺底色），画的是 `composingText()`
             // （9 键 = 分词读数 `ni'hao`、其余方案 = 原字母）+ 五笔编码提示。
@@ -187,7 +187,7 @@ fun ImeScreen(
                 // 权重分摊的是**整行宽**：键区 0.76 + 空白 0.24 = 屏宽 76/24。行本身必须满宽，
                 // 否则右手模式的键区停在 76% 处、右侧反而多出一条空白（不是贴边）。
                 Row(
-                    modifier = Modifier.weight(1f).fillMaxWidth().background(palette.barBg),
+                    modifier = Modifier.weight(1f).fillMaxWidth().background(palette.barBg.copy(alpha = KEY_AREA_SCRIM_ALPHA)),
                 ) {
                     if (modes.oneHand == KeyboardModes.OneHand.RIGHT) {
                         Box(modifier = Modifier.weight(1f - ONE_HAND_WIDTH_RATIO)) // 右手：左边留空
@@ -251,7 +251,7 @@ private fun KeyboardArea(
         ImeState.View.SKIN -> SkinPanel(
             selected = state.skin,
             onSelect = state::selectSkin,
-            onClose = state::backToLetters,
+            onClose = state::backToLetters, selectedScene = state.scene, onSelectScene = state::selectScene,
             modifier = modifier,
         )
         // 输入模式/键盘模式面板（2026-10-09 用户裁决「做成像皮肤那样的面板，不要弹框」）：
