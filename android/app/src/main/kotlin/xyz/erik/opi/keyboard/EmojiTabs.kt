@@ -38,3 +38,23 @@ internal fun emojiCategoryGroups(
         SymbolCatalog.EmojiGroup(it.label, it.start, it.items.size)
     }
 }
+
+/**
+ * 分类条选中项 → 网格要显示的条目（纯函数，JVM 单测钉住）。
+ * 组下标越界 / 无分组 → 整表兜底（引擎未就绪时页面不至于空）。
+ *
+ * 2026-10-30 用户报障「点了后一个分类，显示的是前一个」：组的 `start` 不保证落在
+ * 网格行首（8 列下 9 组里 8 组不在行首），旧的 `scrollToItem(start)` 会把**上一组的
+ * 尾巴**滚到首行，高亮又从首项反推 ⇒ 看起来选中了上一组。改为按组切片：点哪组就只画
+ * 哪组（同鸿蒙 `EmojiPad` 的既有做法）。
+ */
+internal fun groupSlice(
+    all: List<String>,
+    groups: List<SymbolCatalog.EmojiGroup>,
+    index: Int,
+): List<String> {
+    val g = groups.getOrNull(index) ?: return all
+    val from = g.start.coerceIn(0, all.size)
+    val to = (g.start + g.count).coerceIn(from, all.size)
+    return all.subList(from, to).toList()
+}

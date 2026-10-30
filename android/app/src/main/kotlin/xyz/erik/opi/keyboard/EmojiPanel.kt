@@ -73,8 +73,7 @@ import xyz.erik.opi.settings.ImePreferences
  *   分类条与网格一一对齐（`start` 直接是 `catalog.emoji` 下标）。
  * - **颜文字**：`assets/kaomoji.tsv` 第二列（解析见 [KaomojiCategories]）。
  * - 默认进 **Emoji**（工具条入口 [xyz.erik.opi.keyboard.SymbolTab.Emoji] 的既有行为）；
- *   分类条点一下把网格滚到该组首项（`scrollToItem(start)`）；高亮 = 网格当前首个
- *   可见项所属的组（滚动时跟着走）。两页共用 [SymbolCatalog.groupIndexOf] 这一套。
+ *   分类条点一下**切成该组**（只画该组条目，[groupSlice]）；高亮 = 选中的组。
  * - 搜索态保持既有两套工具条的裁决：`[← 返回][搜索框]`，框一聚焦宿主就在面板下方
  *   叠字母盘（焦点事件走 `onSearchFocus`）；防抖在 ImeState。返回 = 清查询回浏览态。
  *   自有是纯图片页（没有可搜的文本），不给 🔍。
@@ -106,6 +105,16 @@ internal fun EmojiPanel(
     val kaomoji = remember { kaomojiCategories() }
     val emojiGrid = rememberLazyGridState()
     val kaomojiGrid = rememberLazyGridState()
+    val scope = rememberCoroutineScope()
+    // 分类条是「切片选择器」：选中第几组就只画第几组（2026-10-30 用户报障修复）。
+    var emojiGroup by remember { mutableStateOf(0) }
+    var kaomojiGroup by remember { mutableStateOf(0) }
+    val groups = remember(sub, catalog.emojiGroups, kaomoji) {
+        emojiCategoryGroups(sub, catalog.emojiGroups, kaomoji)
+    }
+    // 引擎重载后组数可能变少：内容与高亮共用同一个夹紧后的下标。
+    val selectedGroup = (if (sub == EmojiSubTab.Emoji) emojiGroup else kaomojiGroup)
+        .coerceIn(0, (groups.size - 1).coerceAtLeast(0))
 
     LaunchedEffect(searchWanted) { if (searchWanted) focus.requestFocus() }
 
@@ -161,19 +170,28 @@ internal fun EmojiPanel(
             } else {
                 when (sub) {
                     EmojiSubTab.Pet -> PetStickerPanel(onPickPet)
-                    EmojiSubTab.Emoji -> EmojiBrowse(catalog, emojiGrid, onCommit)
-                    EmojiSubTab.Kaomoji -> KaomojiBrowse(kaomoji, kaomojiGrid, onCommit)
+                    EmojiSubTab.Emoji ->
+                        EmojiBrowse(catalog, groups, selectedGroup, emojiGrid, onCommit)
+                    EmojiSubTab.Kaomoji ->
+                        KaomojiBrowse(kaomoji, groups, selectedGroup, kaomojiGrid, onCommit)
                 }
             }
         }
-        if (!searching) {
-            val groups = emojiCategoryGroups(sub, catalog.emojiGroups, kaomoji)
-            if (groups.isNotEmpty()) {
-                CategoryBar(
-                    groups = groups,
-                    grid = if (sub == EmojiSubTab.Emoji) emojiGrid else kaomojiGrid,
-                )
-            }
+        if (!searching && groups.isNotEmpty()) {
+            CategoryBar(
+                groups = groups,
+                selected = selectedGroup,
+                onSelect = { i ->
+                    val same = i == selectedGroup
+                    if (sub == EmojiSubTab.Emoji) emojiGroup = i else kaomojiGroup = i
+                    // 同组再点：状态赋同值不触发重组，LaunchedEffect(group) 不会重跑
+                    // ⇒ 网格停在原处；直接滚回组顶（换组仍由 LaunchedEffect 处理）。
+                    if (same) scope.launch {
+                        if (sub == EmojiSubTab.Emoji) emojiGrid.scrollToItem(0)
+                        else kaomojiGrid.scrollToItem(0)
+                    }
+                },
+            )
         }
     }
 }
@@ -265,21 +283,41 @@ private fun EmojiTopBar(
     }
 }
 
-/** Emoji 子页：最近使用 + 引擎表情网格（**不含自有**，自有是独立子页）。 */
+/** Emoji 子页：最近使用 + 选中分类的表情网格（**不含自有**，自有是独立子页）。 */
 @Composable
-private fun EmojiBrowse(catalog: SymbolCatalog, grid: LazyGridState, onCommit: (String) -> Unit) {
-    val emojis = catalog.emoji
+private fun EmojiBrowse(
+    catalog: SymbolCatalog,
+    groups: List<SymbolCatalog.EmojiGroup>,
+    group: Int,
+    grid: LazyGridState,
+    onCommit: (String) -> Unit,
+) {
+    val all = catalog.emoji
+    val emojis = remember(all, groups, group) { groupSlice(all, groups, group) }
     Column(modifier = Modifier.fillMaxSize()) {
         if (catalog.recents.isNotEmpty()) RecentsRow(catalog.recents, onCommit)
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            // Adaptive 而非 Fixed(8)：320dp 手机仍是 8 列；平板/横屏自动多排几列，
-            // 否则每格 160dp、emoji 悬在大片空白中间。
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(40.dp),
-                state = grid,
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                items(emojis.size) { SymbolCell(emojis[it], onCommit) }
+            if (all.isNotEmpty() && emojis.isEmpty()) {
+                // 整表非空、选中组被字形过滤摘空（如整组都是本机字体画不出的新表情）：
+                // 画一个空网格像坏了，给出原因。（整表为空 = 数据未就绪，保持原样不提示。）
+                Text(
+                    "该分类暂无可用表情",
+                    modifier = Modifier.align(Alignment.Center),
+                    fontSize = 14.sp,
+                    color = LocalKeyboardPalette.current.barDimFg,
+                )
+            } else {
+                // 换组就回到顶部：上一组的滚动偏移留给新切片会停在半截。
+                LaunchedEffect(group) { if (emojis.isNotEmpty()) grid.scrollToItem(0) }
+                // Adaptive 而非 Fixed(8)：320dp 手机仍是 8 列；平板/横屏自动多排几列，
+                // 否则每格 160dp、emoji 悬在大片空白中间。
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(40.dp),
+                    state = grid,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    items(emojis.size) { SymbolCell(emojis[it], onCommit) }
+                }
             }
         }
     }
@@ -289,32 +327,44 @@ private fun EmojiBrowse(catalog: SymbolCatalog, grid: LazyGridState, onCommit: (
 @Composable
 private fun KaomojiBrowse(
     categories: List<KaomojiCategories.Category>,
+    groups: List<SymbolCatalog.EmojiGroup>,
+    group: Int,
     grid: LazyGridState,
     onCommit: (String) -> Unit,
 ) {
     val all = remember(categories) { KaomojiCategories.flatten(categories) }
-    if (all.isEmpty()) {
+    val shown = remember(all, groups, group) { groupSlice(all, groups, group) }
+    if (shown.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("没有颜文字数据", fontSize = 14.sp, color = LocalKeyboardPalette.current.barDimFg)
+            Text(
+                if (all.isEmpty()) "没有颜文字数据" else "该分类暂无颜文字",
+                fontSize = 14.sp,
+                color = LocalKeyboardPalette.current.barDimFg,
+            )
         }
     } else {
+        // 换分类回到顶部（同 EmojiBrowse）。
+        LaunchedEffect(group) { if (shown.isNotEmpty()) grid.scrollToItem(0) }
         // 颜文字比单个 emoji 宽：最小格 112dp（手机仍是 3 列、320dp 落 2 列）+ 小字号，
         // 少截断；平板/横屏才排更多列。
-        SymbolGrid(all, onCommit, grid, minCell = 112.dp, fontSize = 14.sp)
+        SymbolGrid(shown, onCommit, grid, minCell = 112.dp, fontSize = 14.sp)
     }
 }
 
 /**
  * 底部分类条（可横滑；选中 = 强调色粗体 + 药丸底）。
  *
- * 高亮反推**只在本组件内读** `grid.firstVisibleItemIndex` —— 读在面板根上会让整个
- * 网格跟着滚动重组。点一项把网格滚到该组首项。
+ * 点一项 = **换切片**，网格只画该组。这里不再用 `scrollToItem(组.start)`：组的 start
+ * 不保证落在行首，滚过去首行仍是上一组的尾巴，高亮反推也会把上一组点亮
+ * （2026-10-30 用户报障「点后一个分类显示前一个」）。同鸿蒙 EmojiPad 的既有做法。
  */
 @Composable
-private fun CategoryBar(groups: List<SymbolCatalog.EmojiGroup>, grid: LazyGridState) {
+private fun CategoryBar(
+    groups: List<SymbolCatalog.EmojiGroup>,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+) {
     val p = LocalKeyboardPalette.current
-    val scope = rememberCoroutineScope()
-    val selected = SymbolCatalog.groupIndexOf(groups, grid.firstVisibleItemIndex)
     LazyRow(
         modifier = Modifier.fillMaxWidth().height(52.dp).background(p.barBg),
         verticalAlignment = Alignment.CenterVertically,
@@ -327,7 +377,7 @@ private fun CategoryBar(groups: List<SymbolCatalog.EmojiGroup>, grid: LazyGridSt
                     .height(44.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .background(if (on) p.keyBg else Color.Transparent)
-                    .clickable { scope.launch { grid.scrollToItem(g.start) } }
+                    .clickable { onSelect(i) }
                     .padding(horizontal = 12.dp)
                     .semantics {
                         role = Role.RadioButton

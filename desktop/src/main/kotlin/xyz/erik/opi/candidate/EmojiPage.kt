@@ -11,8 +11,9 @@
 //!   用户裁决（2026-10-18）：自有是**独立顶级分类**，不再混进 Emoji 的分类条/网格。
 //! - **Emoji** 分类 = `emoji.tsv` 的连续同名段（组名/组序来自数据，不写死）。
 //! - **颜文字** 分类 = `kaomoji.tsv` 第二列（解析见 [KaomojiData]），6×6 网格。
-//! - 分类条点一下把分页器滚到该组首项所在页；高亮 = 当前页首项所属的组
-//!   （[EmojiData.groupIndexOf]），滑动翻页时自动跟随。
+//! - 分类条点一下 = 网格只画该组切片（[EmojiData.groupSlice]）；高亮 = 选中的组。
+//!   组的 `start` 不保证落在网格行首，「滚到 start 所在页」会把上一组的尾巴带进首行
+//!   （2026-10-30 用户报障，口径同 Android `groupSlice`）。
 //!
 //! 数据 = **构建期拷进资源的 `emoji.tsv` / `kaomoji.tsv`**（真源 `data/raw/`，见
 //! `build.gradle.kts` 的 `copyEmojiData` / `copyKaomojiData`）—— 表情表与引擎
@@ -39,14 +40,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -54,8 +53,9 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,7 +65,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.launch
 import xyz.erik.opi.pet.PetEmojiMap
 
 /** 表情表：OpenMoji 常用子集顺序 + 面板分组（`start`/`count` 与条目下标对齐，组序 = 文件序）。 */
@@ -98,27 +97,27 @@ object EmojiData {
     }
 
     /**
-     * 某组第一页的页码（分类条跳转用）。[pageSize] = 该页一页装多少项
-     * （表情页 = `SymbolCategories.PAGE_SIZE`，颜文字页 = 6×6）。
-     */
-    fun pageOfGroup(g: Group, pageSize: Int = SymbolCategories.PAGE_SIZE): Int = g.start / pageSize
-
-    /**
-     * 当前页首项下标 → 组下标（高亮反推）。组按 start 升序，取最后一个
-     * `start <= itemIndex`；空表 / 下标在首组之前 → `-1`（不亮）。
+     * 分类条选中组 → 网格要显示的条目（纯函数，JVM 单测钉住）。
+     * 越界夹紧到表内；组下标越界 / 组表为空 → 整表兜底（数据未就绪时页面不至于空）。
      *
-     * 与 Android `SymbolCatalog.groupIndexOf` 同义：两端都靠这一支把「滚到哪了」
-     * 折回「哪个分类亮」。
+     * 2026-10-30 用户报障「点后一个分类，显示的是前一个」：组的 `start` 不保证落在
+     * 网格行首（12 列下 9 组里 8 组不在行首），旧的「滚到 start 所在页」会把上一组的
+     * 尾巴滚到首行，高亮又从首项反推 ⇒ 看起来选中了上一组。改为按组切片：点哪组就
+     * 只画哪组（口径同 Android `groupSlice`）。
      */
-    fun groupIndexOf(groups: List<Group>, itemIndex: Int): Int =
-        groups.indexOfLast { it.start <= itemIndex }
+    fun groupSlice(entries: List<String>, groups: List<Group>, index: Int): List<String> {
+        val g = groups.getOrNull(index) ?: return entries
+        val from = g.start.coerceIn(0, entries.size)
+        val to = (g.start + g.count).coerceIn(from, entries.size)
+        return entries.subList(from, to).toList()
+    }
 
     /**
      * 按「本机画不画得出」过滤条目，并**重算分组条的 `start`/`count`**（2026-10-13，
      * 口径对齐 Android `SymbolCatalog.emojiGroups`）。保序、幂等。
      *
-     * 为什么必须重算：`start` 是**过滤后**列表里的下标（组条点击 = `pageOfGroup(g)`
-     * 跳页），摘掉若干条后原下标整体偏前，不重算就跳到错的页；`count` 是组条文案里
+     * 为什么必须重算：`start` 是**过滤后**列表里的下标（组条点击 = `groupSlice`
+     * 切出该组），摘掉若干条后原下标整体偏前，不重算就会切错组；`count` 是组条文案里
      * 报的个数和读屏文案（「笑脸（N 个）」），不跟着减就会把摘掉的也算进去。
      *
      * 算法用**前缀存活数**（`aliveUpTo`）而不是逐组累加：组的边界是原下标，
@@ -214,13 +213,23 @@ private fun EmojiBrowse(data: EmojiData.Data, modifier: Modifier, onPick: (Strin
     // 字形过滤在后台落地时 `entries` 从 0 变成全量（见 SymbolWindow 的 deferredFilter）：
     // `rememberPagerState { pages }` 的页数 lambda 是首次组合时捕获的 ⇒ 必须按条数重建。
     key(data.entries.size) {
-        val pages = (data.entries.size + SymbolCategories.PAGE_SIZE - 1) / SymbolCategories.PAGE_SIZE
-        val pager = rememberPagerState { pages }
+        var group by remember { mutableStateOf(0) }
+        // 点分类条（含再点当前组）都递增 ⇒ key 变、分页器重建 ⇒ 回到该组第 0 页。
+        var taps by remember { mutableStateOf(0) }
+        val slice = remember(data, group) { EmojiData.groupSlice(data.entries, data.groups, group) }
+        // 整组被字形过滤摘空（count = 0）：不能给分页器 0 页数，显示空态。
+        val pager = if (slice.isEmpty()) null else key(group, taps) {
+            rememberPagerState { (slice.size + SymbolCategories.PAGE_SIZE - 1) / SymbolCategories.PAGE_SIZE }
+        }
         Column(modifier.fillMaxHeight()) {
-            HorizontalPager(state = pager, modifier = Modifier.weight(1f).fillMaxWidth()) { page ->
-                SymbolGridPage(data.entries, page, emoji = true, onPick = onPick)
+            if (pager == null) {
+                CenteredHint("该分类暂无可用表情", Modifier.weight(1f).fillMaxWidth())
+            } else {
+                HorizontalPager(state = pager, modifier = Modifier.weight(1f).fillMaxWidth()) { page ->
+                    SymbolGridPage(slice, page, emoji = true, onPick = onPick)
+                }
             }
-            CategoryBar(data.groups, pager, SymbolCategories.PAGE_SIZE)
+            CategoryBar(data.groups, group) { i -> group = i; taps++ }
         }
     }
 }
@@ -234,29 +243,35 @@ private fun KaomojiBrowse(
 ) {
     val all = remember(categories) { KaomojiData.flatten(categories) }
     if (all.isEmpty()) {
-        Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("没有颜文字数据", fontSize = 14.sp, color = SymDim)
-        }
+        CenteredHint("没有颜文字数据", modifier)
         return
     }
     val groups = remember(categories) {
         categories.map { EmojiData.Group(it.label, it.start, it.items.size) }
     }
     key(all.size) {
-        val pages = (all.size + KAOMOJI_PAGE_SIZE - 1) / KAOMOJI_PAGE_SIZE
-        val pager = rememberPagerState { pages }
+        var group by remember { mutableStateOf(0) }
+        var taps by remember { mutableStateOf(0) }
+        val slice = remember(all, group) { EmojiData.groupSlice(all, groups, group) }
+        val pager = if (slice.isEmpty()) null else key(group, taps) {
+            rememberPagerState { (slice.size + KAOMOJI_PAGE_SIZE - 1) / KAOMOJI_PAGE_SIZE }
+        }
         Column(modifier.fillMaxHeight()) {
-            HorizontalPager(state = pager, modifier = Modifier.weight(1f).fillMaxWidth()) { page ->
-                SymbolGridPage(
-                    all,
-                    page,
-                    columns = KAOMOJI_COLUMNS,
-                    rows = KAOMOJI_ROWS,
-                    fontSize = 13.sp,
-                    onPick = onPick,
-                )
+            if (pager == null) {
+                CenteredHint("该分类暂无可用颜文字", Modifier.weight(1f).fillMaxWidth())
+            } else {
+                HorizontalPager(state = pager, modifier = Modifier.weight(1f).fillMaxWidth()) { page ->
+                    SymbolGridPage(
+                        slice,
+                        page,
+                        columns = KAOMOJI_COLUMNS,
+                        rows = KAOMOJI_ROWS,
+                        fontSize = 13.sp,
+                        onPick = onPick,
+                    )
+                }
             }
-            CategoryBar(groups, pager, KAOMOJI_PAGE_SIZE)
+            CategoryBar(groups, group) { i -> group = i; taps++ }
         }
     }
 }
@@ -264,14 +279,12 @@ private fun KaomojiBrowse(
 /**
  * 底部分类条（可横滑；选中 = 强调色粗体 + 药丸底）。
  *
- * 高亮反推**只在本组件内读** `pager.currentPage` —— 读在页根上会让整页跟着滚动重组。
- * 点一项把分页器滚到该组首项所在页。
+ * 点一项 = **换切片**，网格只画该组；高亮 = 选中的组，与分页器当前页无关
+ * （理由见 [EmojiData.groupSlice]：组的 start 不保证落在行首）。
  */
 @Composable
-private fun CategoryBar(groups: List<EmojiData.Group>, pager: PagerState, pageSize: Int) {
+private fun CategoryBar(groups: List<EmojiData.Group>, selected: Int, onSelect: (Int) -> Unit) {
     if (groups.isEmpty()) return
-    val selected = EmojiData.groupIndexOf(groups, pager.currentPage * pageSize)
-    val scope = rememberCoroutineScope()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -289,7 +302,7 @@ private fun CategoryBar(groups: List<EmojiData.Group>, pager: PagerState, pageSi
                     .padding(horizontal = 2.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .background(if (on) SymHover else Color.Transparent)
-                    .clickable { scope.launch { pager.animateScrollToPage(EmojiData.pageOfGroup(g, pageSize)) } }
+                    .clickable { onSelect(i) }
                     .semantics {
                         contentDescription =
                             "分类 ${g.label}（${g.count} 个）${if (on) "，当前" else ""}"

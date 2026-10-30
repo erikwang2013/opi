@@ -12,6 +12,21 @@ package xyz.erik.opi.engine
 object AssociationGate {
     @Volatile
     var enabled: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            onChange?.invoke()
+        }
+
+    /**
+     * 开关变化时通知**正在运行的 IME** 立即重算候选（2026-10-30 用户报障
+     * 「关闭了还会联想，热重启前不生效」）：App 设置页与 IME 同进程，但它只改了
+     * gate + 偏好，没有触发服务侧 `refresh`，旧联想候选会一直留在屏幕上。
+     * 由 `OpiImeService` 注册/注销（同一开关只服务一个 IME 实例）。
+     * ⚠️ 回调里会碰控制器状态，**只在主线程改 [enabled]**（设置页与服务同进程同主线程）。
+     */
+    @Volatile
+    var onChange: (() -> Unit)? = null
 }
 
 /** 关闭时把联想候选挡在 UI 之前；判据与 [associationActive] 同一份，不另立一套。 */
@@ -19,6 +34,9 @@ internal fun EngineController.gateAssociation() {
     if (AssociationGate.enabled || !associationActive) {
         return
     }
+    // 引擎里的联想也要清掉（fcitx5/TSF 同款）：只清 UI 列表的话，隐藏的联想仍能被
+    // 数字键/链式选中并上屏（用户报障「联想被直接上屏」）。
+    clearEngineOnly()
     candidates = emptyList()
     candidateReadings = emptyList()
     reading = ""

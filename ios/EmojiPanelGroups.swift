@@ -4,7 +4,7 @@
 // 表情页分类条（2026-10-23 从 `EmojiPanel.swift` 机械搬出）。
 // 搬出的理由与同轮其它拆分相同：主文件顶着 500 行源码门禁，而本轮要往里加
 // 响应式降档与面板释放。这里全是分类条自己的视图逻辑（分组表 → 按钮 →
-// 滚动高亮），数据入口与工具条仍在主文件。
+// 点选切片与高亮），数据入口与工具条仍在主文件。
 //
 // 跨文件扩展要读写 `EmojiPanel` 的几处状态/视图，主文件里相应成员已放开为
 // internal（见那边的注释）。⚠️ 本机无 UIKit，只在 Apple CI 真编译。
@@ -29,19 +29,41 @@ extension EmojiPanel {
 
     func rebuildGroupBar() {
         groups = groupsFor(sub)
-        groupButtons = groups.map { g in
-            BarButton(title: g.name) { [weak self] in
-                self?.grid.scrollTo(start: g.start)
-            }
+        var buttons: [BarButton] = []
+        for (i, g) in groups.enumerated() {
+            buttons.append(BarButton(title: g.name) { [weak self] in
+                self?.selectGroup(i)
+            })
         }
+        groupButtons = buttons
         groupStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         for b in groupButtons {
             groupStack.addArrangedSubview(b)
         }
         groupScroll.setContentOffset(.zero, animated: false)
-        selectedGroup = -1
+        selectedGroup = groups.isEmpty ? -1 : 0
         updateCategoryHighlight()
         updateBarVisibility()
+    }
+
+    /// 点分类条 = 换切片（网格只画该组）。**再点当前组也要重画**：`showBrowseGrid`
+    /// 会把网格滚回顶部（用户滚到中间后点当前分类 = 回组顶）。
+    /// 不用 `grid.scrollTo(start:)`：组的 start 不保证落在行首，滚过去首行仍是上一组的
+    /// 尾巴，高亮反推也会把上一组点亮（2026-10-30 用户报障「点后一个分类显示前一个」）。
+    /// 同 Android `groupSlice`。
+    func selectGroup(_ index: Int) {
+        guard groups.indices.contains(index) else { return }
+        selectedGroup = index
+        updateCategoryHighlight()
+        showBrowseGrid()
+    }
+
+    /// 选中组的条目切片；组下标越界/无分组 → 整表兜底（同 Android `groupSlice`）。
+    func groupSlice(_ all: [String], _ group: OpiEmojiGroup?) -> [String] {
+        guard let g = group else { return all }
+        let from = max(0, min(g.start, all.count))
+        let to = max(from, min(g.start + g.count, all.count))
+        return Array(all[from..<to])
     }
 
     /// 分类条只在浏览态且**有分类**时出现；它藏起来时网格要吃掉这一条的高度。
@@ -58,23 +80,10 @@ extension EmojiPanel {
         }
     }
 
-    /// 网格下标 → 分类条要亮第几项（同 Android `SymbolCatalog.groupIndexOf`）。
-    /// 分组连续覆盖全表（引擎门禁保证），取「最后一个 start ≤ index 的组」即可。
-    private static func groupIndexOf(_ groups: [OpiEmojiGroup], _ index: Int) -> Int {
-        var found = -1
-        for (i, g) in groups.enumerated() where g.start <= index {
-            found = i
-        }
-        return found
-    }
-
+    /// 高亮 = 当前选中的组（切片模式下网格就是它，不再从滚动位置反推）。
     func updateCategoryHighlight() {
-        guard !groups.isEmpty else { return }
-        let index = Self.groupIndexOf(groups, grid.firstVisibleItemIndex())
-        guard index != selectedGroup else { return }
-        selectedGroup = index
         for (i, b) in groupButtons.enumerated() {
-            styleCategory(b, selected: i == index)
+            styleCategory(b, selected: i == selectedGroup)
         }
     }
 

@@ -22,6 +22,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryOwner
+import xyz.erik.opi.engine.AssociationGate
 import xyz.erik.opi.engine.EngineBoot
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.engine.UserWordStore
@@ -186,6 +187,13 @@ class OpiImeService : InputMethodService() {
         // setInputView 是"视图进入 frame"的唯一收口，AOSP 自调用与将来任何调用方都覆盖到。
         (view.parent as? ViewGroup)?.removeView(view)
         super.setInputView(view)
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        // 智能联想开关在 App 设置页也能改（同进程、不同控制器）：gate 一变就让本服务
+        // 的控制器立即重算候选，否则旧联想候选会留到热重启（2026-10-30 用户报障）。
+        AssociationGate.onChange = { engineController.refresh() }
     }
 
     override fun onCreateInputView(): View {
@@ -470,6 +478,8 @@ class OpiImeService : InputMethodService() {
     }
 
     override fun onDestroy() {
+        // 开关变化回调不能留住已销毁的服务/控制器
+        AssociationGate.onChange = null
         // 销毁前撤掉未执行的提交重试，避免向新输入框误提交
         cancelPendingCommit()
         bracketPairing.reset()

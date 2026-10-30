@@ -21,8 +21,9 @@
 // - **Emoji** = 只用引擎 `emojiGroups()`（9 组，**不再加 `自有` 偏移**）。
 // - **颜文字** = `KaomojiData.categories`（生成自 `data/raw/kaomoji.tsv`，
 //   口径同 Android `KaomojiCategories`）。
-// - 分类条点一下 = 网格滚到该组首项所在行；高亮由网格的 `onScroll` 按
-//   「首个可见项」反推（同 Android `groupIndexOf`）。
+// - 分类条点一下 = **切成该组**（网格只画该组条目，`groupSlice`）；高亮 = 选中的组。
+//   不按「滚到组 start」实现：组的 start 不保证落在行首，滚过去首行仍是上一组的尾巴
+//   （2026-10-30 用户报障「点后一个分类显示前一个」）。同鸿蒙 `EmojiPad`。
 //
 // 姿态与 `SymbolPanel.swift` 相同：只画与发射点击，**不上屏、不碰引擎** ——
 // 数据由控制器塞进来（`showBrowse` / `showResults`），点中的文本条目经 `onPick` 回控制器，
@@ -160,11 +161,6 @@ final class EmojiPanel: UIView {
         grid.onSticker = { [weak self] form in
             self?.copySticker(form)
         }
-        // 滚动时反推高亮（搜索态没有分类条，跳过）。
-        grid.onScroll = { [weak self] in
-            guard let self, !self.isSearching else { return }
-            self.updateCategoryHighlight()
-        }
 
         searchField.placeholder = "搜索（拼音/英文）"
         searchField.font = .systemFont(ofSize: 14)
@@ -235,18 +231,17 @@ final class EmojiPanel: UIView {
 
     // MARK: - 数据入口（控制器调）
 
-    /// 载入**浏览全量**（`OpiEngine.emojiSymbols()`）+ 分类条（`OpiEngine.emojiGroups()`）。
+    /// 载入**浏览数据**：已过滤列表 + 对齐后的分类（`EmojiFilter.browse` 的产物）。
     ///
-    /// 两个参数都是引擎的**原始**输出：字形过滤与分类下标重算都在本层做（`EmojiFilter`），
-    /// 与 Android 把过滤放在 `SymbolCatalog`、面板只管画同一分工 —— 控制器一行判据都不留。
+    /// 字形过滤与分类下标重算**不在本层**：缓存必须和过滤同处（见 `EmojiFilter.browse`），
+    /// 面板只管画与切片 —— 控制器一行判据都不留。
     ///
     /// 进浏览态**一律重置搜索态与子页**：与 Android `openEmoji()` 里那次 `resetSearch()` 对齐，
     /// 否则「上次搜到一半退出」会带着查询词/颜文字页再进来。
-    func showBrowse(_ rawList: [String], groups raw: [OpiEmojiGroup]) {
-        let (list, regrouped) = EmojiFilter.filterAndRegroup(rawList, groups: raw)
+    func showBrowse(_ list: [String], groups: [OpiEmojiGroup]) {
         browseList = list
         emojiSet = Set(list)
-        emojiGroups = regrouped
+        emojiGroups = groups
         sub = .emoji
         styleTabs()
         setSearching(false)
@@ -297,24 +292,37 @@ final class EmojiPanel: UIView {
     }
 
     /// 画浏览网格（**不碰工具条**）：搜索态里查询被清空、以及正常浏览都用它。
-    private func showBrowseGrid() {
+    /// internal：分类条（`EmojiPanelGroups.swift`）点选后要重画。
+    func showBrowseGrid() {
+        // 引擎重载后组数可能变少：内容与高亮共用同一个夹紧后的下标。
+        if groups.isEmpty {
+            selectedGroup = -1
+        } else if !groups.indices.contains(selectedGroup) {
+            selectedGroup = 0
+        }
+        let current: OpiEmojiGroup? =
+            groups.indices.contains(selectedGroup) ? groups[selectedGroup] : nil
         switch sub {
         case .pet:
             grid.showStickers(
                 PetEmojiTable.forms, columns: petColumns, rowHeight: stickerRowHeight
             )
         case .emoji:
-            grid.showEmoji(browseList, columns: emojiColumns, rowHeight: gridRowHeight)
+            // 空切片有两种原因：整表没拿到（库未就绪） vs 该组被字形过滤摘空。
+            grid.showEmoji(
+                groupSlice(browseList, current), columns: emojiColumns, rowHeight: gridRowHeight,
+                empty: emojiGroups.isEmpty ? "（表情库未就绪）" : "该分类暂无可用表情"
+            )
         case .kaomoji:
             grid.showTexts(
-                KaomojiData.all, columns: kaomojiColumns,
+                groupSlice(KaomojiData.all, current), columns: kaomojiColumns,
                 empty: Self.noKaomoji, shrink: true, rowHeight: gridRowHeight
             )
         }
         updateCategoryHighlight()
     }
 
-    // 分类条（分组表 → 按钮 → 滚动高亮）在 `EmojiPanelGroups.swift` 的扩展里
+    // 分类条（分组表 → 按钮 → 点选切片与高亮）在 `EmojiPanelGroups.swift` 的扩展里
     // （2026-10-23 搬出：本文件压 500 行门禁）。
 
     // MARK: - 两套工具条（Android `EmojiTopBar` 的两个状态）

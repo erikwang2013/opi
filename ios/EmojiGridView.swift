@@ -7,21 +7,19 @@
 //
 // 为什么单独一个文件：`EmojiPanel.swift` 现在装「面板状态 + 两套工具条 + 分类条」，
 // 再加网格渲染就撞上本仓「源码文件 500 行」的规矩。拆法按**概念**切：
-// 网格只管「画行、发点击、报滚动位置」，分类条高亮仍由面板算（它才知道分类表）。
+// 网格只管「画行、发点击」，分类条高亮仍由面板算（它才知道分类表）。
 //
 // 姿态与 `SymbolPanel.swift` 相同：只画与发射点击，**不上屏、不碰引擎**。
 
 import UIKit
 
 /// 表情/颜文字网格。
-final class EmojiGridView: UIView, UIScrollViewDelegate {
+final class EmojiGridView: UIView {
 
     /// 点中一格文本（emoji / 颜文字；提交什么由面板/控制器决定）。
     var onPick: ((String) -> Void)?
     /// 点中一格「自有」贴纸（面板负责复制图片，网格不碰剪贴板）。
     var onSticker: ((PetEmojiTable.Form) -> Void)?
-    /// 滚动位置变了（分类条高亮跟着反推）。
-    var onScroll: (() -> Void)?
 
     /// 行高。滚动视图里的行**必须**有明确高度（容器 `.fillEqually` 在滚动视图里
     /// 会退化成 0 高，见 `SymbolPanel.init` 那条注释）。
@@ -33,15 +31,12 @@ final class EmojiGridView: UIView, UIScrollViewDelegate {
 
     private let scroll = UIScrollView()
     private let stack = UIStackView()
-    private var itemCount = 0
-    private var columns = 8
-    /// 当前网格的行高（贴纸 / 文本两套；`scrollTo` 与高亮反推都用它）。
+    /// 当前网格的行高（贴纸 / 文本两套；建行用它）。
     private var rowHeight: CGFloat = EmojiGridView.rowHeight
 
     init() {
         super.init(frame: .zero)
         scroll.showsVerticalScrollIndicator = true
-        scroll.delegate = self
         scroll.translatesAutoresizingMaskIntoConstraints = false
         stack.axis = .vertical
         stack.spacing = Self.gridSpacing
@@ -74,9 +69,7 @@ final class EmojiGridView: UIView, UIScrollViewDelegate {
         _ forms: [PetEmojiTable.Form], columns: Int,
         rowHeight: CGFloat = EmojiGridView.stickerRowHeight
     ) {
-        self.columns = columns
         self.rowHeight = rowHeight
-        itemCount = forms.count
         reset()
         guard !forms.isEmpty else {
             addEmpty("（贴纸未内嵌）")
@@ -97,16 +90,17 @@ final class EmojiGridView: UIView, UIScrollViewDelegate {
     }
 
     /// Emoji 子页：只画引擎表情表（`自有` 已是独立子页，不再混进来）。
+    /// `empty` 是空切片时的提示：「整表没拿到」与「该组被字形过滤摘空」是两回事，
+    /// 文案由面板决定（本层不猜）。缺省值保持旧行为。
     func showEmoji(
-        _ emojis: [String], columns: Int, rowHeight: CGFloat = EmojiGridView.rowHeight
+        _ emojis: [String], columns: Int, rowHeight: CGFloat = EmojiGridView.rowHeight,
+        empty: String = "（表情库未就绪）"
     ) {
-        self.columns = columns
         self.rowHeight = rowHeight
-        itemCount = emojis.count
         reset()
         guard !emojis.isEmpty else {
             // 空列表**不休假成空白**（同 SymbolPanel 的理由）。
-            addEmpty("（表情库未就绪）")
+            addEmpty(empty)
             return
         }
         for start in stride(from: 0, to: emojis.count, by: columns) {
@@ -130,9 +124,7 @@ final class EmojiGridView: UIView, UIScrollViewDelegate {
         _ texts: [String], columns: Int, empty: String, shrink: Bool,
         rowHeight: CGFloat = EmojiGridView.rowHeight
     ) {
-        self.columns = columns
         self.rowHeight = rowHeight
-        itemCount = texts.count
         reset()
         guard !texts.isEmpty else {
             addEmpty(empty)
@@ -158,33 +150,9 @@ final class EmojiGridView: UIView, UIScrollViewDelegate {
         scroll.setContentOffset(.zero, animated: false)
     }
 
-    /// 滚到第 `start` 条所在的行（分类条点一下的去向）。
-    ///
-    /// 偏移 = 行号 × (行高 + 行距)：行高是显式约束、行距是 `stack.spacing`，
-    /// 两者都不由内容决定，所以这个换算与真实布局一致（不像内容自适应那样会漂）。
-    func scrollTo(start: Int) {
-        let row = start / columns
-        let y = CGFloat(row) * (rowHeight + Self.gridSpacing)
-        scroll.setContentOffset(CGPoint(x: 0, y: y), animated: true)
-    }
-
-    /// 首个可见项的下标（分类条高亮反推的输入）。滚动偏移是显式行高 + 行距拼的，可逆。
-    func firstVisibleItemIndex() -> Int {
-        guard itemCount > 0 else { return 0 }
-        let stride = rowHeight + Self.gridSpacing
-        let row = Int(max(0, scroll.contentOffset.y) / stride)
-        return min(row * columns, itemCount - 1)
-    }
-
-    func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        onScroll?()
-    }
-
-    /// 释放网格子视图与计数（面板关闭时调；2026-10-23）。行高/列数留着 ——
-    /// 下次 `show*` 会重新给；`itemCount = 0` 让高亮反推不再报旧位置。
+    /// 释放网格子视图（面板关闭时调；2026-10-23）。行高留着 —— 下次 `show*` 会重新给。
     func releaseContent() {
         reset()
-        itemCount = 0
     }
 
     private func reset() {

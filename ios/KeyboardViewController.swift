@@ -323,14 +323,12 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
             layout.setSymbols(engine.commonSymbols())
             layout.setLayer(.symbols)
         case .showEmoji:
-            // 表情数据**现取**，不缓存（同符号层）。
-            // ⚠️ 与符号层有一处**实质差别**：`emojiSymbols()` / `emojiGroups()` 两个出口
-            // **不经引擎单例** —— 编译期静态表，`opi_load` 失败时照样返回全量
-            // （cabi 在 `cabi_symbols.rs` 头注与 `cabi_unloaded.rs` 的
-            // `emoji_groups_index_the_full_emoji_list` 两处写明，并点名「别照抄它们的
-            // 姿态去改别的出口」）。所以这里**不看 `dictionaryLoaded`**、面板也不会
-            // 显示「词库未装载」—— 表情本来就不依赖词库。
-            layout.setEmojiBrowse(engine.emojiSymbols(), groups: engine.emojiGroups())
+            // 表情两出口**不经引擎单例**：编译期静态表，`opi_load` 失败也返回全量
+            // （`cabi_symbols.rs` / `cabi_unloaded.rs` 写明，并点名别照抄去改别的出口），
+            // 所以这里**不看 `dictionaryLoaded`**。逐条字形探测（CoreText）很贵，
+            // `EmojiFilter.browse` 缓存已过滤结果（空 raw 不缓存，理由见那边）。
+            let browse = EmojiFilter.browse { (list: engine.emojiSymbols(), groups: engine.emojiGroups()) }
+            layout.setEmojiBrowse(browse.list, groups: browse.groups)
             layout.setLayer(.emoji)
         case .showModes:
             // 输入模式菜单（2026-10-14）：**只是切层** —— 菜单里的选项本身不动引擎，

@@ -250,7 +250,7 @@ object OpiEngine : OpiEngineApi, SymbolApi {
      * emojiGroups() -> String。JSON：`[{count,name,start}]`（**serde 字典序**，别按
      * name,start,count 写顺序正则；解析照 `symbolBlocks` 逐字段抓）—— 分类条
      * （2026-10-12 用户裁决「中间是表情分类」）。`start` 对齐 `emojiSymbols()` 的下标：
-     * 点分类 = 网格 `scrollToItem(start)`。**纯静态表**（与引擎装载无关），未装载也有值。
+     * 点分类 = 取 `[start, start+count)` 切片。**纯静态表**（与引擎装载无关），未装载也有值。
      */
     override external fun emojiGroups(): String?
 

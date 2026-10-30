@@ -11,7 +11,8 @@ package xyz.erik.opi.keyboard
  * —— 用户设备上的文件可能被替换或截断，页面该少几组而不是崩 IME。
  *
  * 分类按**首次出现顺序**归并（同一分类的条目并进第一处），`start` 是拼平后列表里
- * 的累计下标（点分类条 = 网格滚到 `start`）。数据按分类连续排列时，拼平顺序 = 文件序。
+ * 的累计下标（点分类条 = 取 `[start, start+items.size)` 切片）。数据按分类连续排列时，
+ * 拼平顺序 = 文件序。
  */
 object KaomojiCategories {
 

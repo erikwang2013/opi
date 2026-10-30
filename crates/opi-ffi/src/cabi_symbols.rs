@@ -62,7 +62,7 @@ pub unsafe extern "C" fn opi_symbol_blocks() -> OpiString {
 
 /// emojiGroups() -> JSON：`[{name,start,count}]`（serde **字典序**，未开 preserve_order，
 /// 消费方别按书写顺序写正则；表情面板分类条）。`start` 与 `opi_emoji_symbols()` 的
-/// 下标对齐：点分类 = 网格滚到 `start`。同上**不经引擎单例**，未装载也有值
+/// 下标对齐：点分类 = 取 `[start, start+count)` 切片。同上**不经引擎单例**，未装载也有值
 /// （与 `opi_symbol_blocks` 未装载返回空串相反）。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn opi_emoji_groups() -> OpiString {

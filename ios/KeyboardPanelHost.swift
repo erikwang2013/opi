@@ -91,9 +91,8 @@ extension KeyboardLayout {
         symbolPanel.setSymbols(list)
     }
 
-    /// 交给表情层的**原始**数据（来自 `OpiEngine.emojiSymbols()` / `emojiGroups()`，
-    /// 由控制器在切到表情层时取）。字形过滤与分类下标重算都在 `EmojiPanel` 里做
-    /// （那边有理由），本层一个字都不判。
+    /// 交给表情层的**已过滤**数据（`EmojiFilter.browse` 的产物：字形过滤与分类下标
+    /// 重算都已做完，且是跨面板开关存活的缓存）。本层只转发，一个字都不判。
     func setEmojiBrowse(_ list: [String], groups: [OpiEmojiGroup]) {
         emojiPanel.showBrowse(list, groups: groups)
     }

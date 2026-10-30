@@ -58,4 +58,27 @@ class EmojiTabsTest {
             emojiCategoryGroups(EmojiSubTab.Kaomoji, engine, kaomoji),
         )
     }
+
+    @Test
+    fun groupSliceShowsOnlyTheSelectedGroup() {
+        // 2026-10-30 用户报障：点后一个分类显示前一个 —— 组的 start 不在行首，
+        // 滚过去会露出上一组尾巴。改为切片后必须**只有**选中组的条目。
+        val all = listOf("a", "b", "c", "d", "e")
+        val groups = listOf(
+            SymbolCatalog.EmojiGroup("一", 0, 3),
+            SymbolCatalog.EmojiGroup("二", 3, 2),
+        )
+        assertEquals(listOf("a", "b", "c"), groupSlice(all, groups, 0))
+        assertEquals(listOf("d", "e"), groupSlice(all, groups, 1))
+    }
+
+    @Test
+    fun groupSliceFallsBackToWholeTableWhenGroupsMissingOrOutOfRange() {
+        // 引擎未就绪 / 重载后组数变少：整表兜底，分类下标越界不能切出空页。
+        val all = listOf("a", "b")
+        assertEquals(all, groupSlice(all, emptyList(), 0))
+        assertEquals(all, groupSlice(all, listOf(SymbolCatalog.EmojiGroup("一", 0, 2)), 3))
+        // count 溢出不越界（start+count 夹到表尾）。
+        assertEquals(all, groupSlice(all, listOf(SymbolCatalog.EmojiGroup("一", 0, 99)), 0))
+    }
 }

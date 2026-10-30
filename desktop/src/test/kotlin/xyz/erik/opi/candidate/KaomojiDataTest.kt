@@ -74,7 +74,7 @@ class KaomojiDataTest {
         assertEquals("flatten 总条目与分类累计不一致", start, KaomojiData.flatten(cats).size)
     }
 
-    /** 分类 → 分页器的组：start/count 与拼平列表对齐（点分类条 = 跳到 start 所在页）。 */
+    /** 分类 → 分页器的组：start/count 与拼平列表对齐（点分类条 = 按组切片）。 */
     @Test
     fun `categories convert to groups whose starts match the flattened list`() {
         val cats = KaomojiData.parse("a\t开心\nb\t开心\nc\t生气\n")

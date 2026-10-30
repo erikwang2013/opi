@@ -9,7 +9,7 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
 
-/** 颜文字分类：解析容错 + 累计下标 + 高亮反推（真资产测在数据入库后自动生效）。 */
+/** 颜文字分类：解析容错 + 累计下标（真资产测在数据入库后自动生效）。 */
 class KaomojiCategoriesTest {
 
     @Test
@@ -45,22 +45,6 @@ class KaomojiCategoriesTest {
         val cats = KaomojiCategories.parse("(^_^)\t开心\r\n(>_<)\t生气\r\n")
         assertEquals(listOf("开心", "生气"), cats.map { it.label })
         assertEquals("(^_^)", cats[0].items.single())
-    }
-
-    @Test
-    fun groupIndexOfPicksTheCategoryContainingTheIndex() {
-        // 面板把解析结果映射成 EmojiGroup 后，与 Emoji 页共用同一支 groupIndexOf。
-        val cats = listOf(
-            KaomojiCategories.Category("开心", 0, listOf("a", "b")),
-            KaomojiCategories.Category("生气", 2, listOf("c")),
-            KaomojiCategories.Category("加油", 3, listOf("d", "e")),
-        )
-        val groups = cats.map { SymbolCatalog.EmojiGroup(it.label, it.start, it.items.size) }
-        assertEquals(0, SymbolCatalog.groupIndexOf(groups, 0))
-        assertEquals(0, SymbolCatalog.groupIndexOf(groups, 1))
-        assertEquals(1, SymbolCatalog.groupIndexOf(groups, 2))
-        assertEquals(2, SymbolCatalog.groupIndexOf(groups, 3))
-        assertEquals("空表 → 不亮", -1, SymbolCatalog.groupIndexOf(emptyList(), 0))
     }
 
     /**

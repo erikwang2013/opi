@@ -124,6 +124,46 @@ class SymbolCatalogTest {
         assertEquals(1, api.emojiCalls)
     }
 
+    /**
+     * 2026-10-30：`emoji` 与 `emojiGroups` 曾各拉一次 `emojiSymbols()`、各跑一遍逐条
+     * `canRender`（689 条 Paint.hasGlyph 首帧探两遍）。原始表与存活统计必须一次取回、
+     * 两边共用 —— 否则分类条一出现就再付一次整表探测。
+     */
+    @Test
+    fun emojiAndGroupsShareOneFetchAndOneGlyphProbePass() {
+        val api = FakeSymbolApi().apply {
+            emojiResults = listOf("😀", "😄", "🐶", "🐱")
+            groupsJson = """[{"name":"笑脸","start":0,"count":2},{"name":"动物","start":2,"count":2}]"""
+        }
+        val probes = mutableListOf<String>()
+        val catalog = SymbolCatalog(api, canRender = { probes += it; true })
+        assertEquals(listOf("😀", "😄", "🐶", "🐱"), catalog.emoji)
+        assertEquals(
+            listOf(
+                SymbolCatalog.EmojiGroup("笑脸", 0, 2),
+                SymbolCatalog.EmojiGroup("动物", 2, 2),
+            ),
+            catalog.emojiGroups,
+        )
+        assertEquals("emoji 与 emojiGroups 各拉了一次 emojiSymbols()", 1, api.emojiCalls)
+        assertEquals("每条只该探测一次字形", listOf("😀", "😄", "🐶", "🐱"), probes)
+        assertTrue(catalog.isEmoji("🐶"))
+        assertFalse(catalog.isEmoji("🫫"))
+        assertEquals("isEmoji 不得再触发取表", 1, api.emojiCalls)
+
+        // 反序（先分类条再网格）同样共用：emojiGroups 重算下标时不得再探一遍。
+        val api2 = FakeSymbolApi().apply {
+            emojiResults = listOf("😀", "😄", "🐶", "🐱")
+            groupsJson = """[{"name":"笑脸","start":0,"count":2},{"name":"动物","start":2,"count":2}]"""
+        }
+        val probes2 = mutableListOf<String>()
+        val catalog2 = SymbolCatalog(api2, canRender = { probes2 += it; true })
+        catalog2.emojiGroups
+        catalog2.emoji
+        assertEquals(1, api2.emojiCalls)
+        assertEquals(4, probes2.size)
+    }
+
     /** `emojiSymbols()` 回 null（JNI 常态）不得抛，只当「没拿到」。 */
     @Test
     fun nullEmojiArrayIsTreatedAsNotReady() {
@@ -292,7 +332,7 @@ class SymbolCatalogTest {
     fun unrenderableGlyphsAreFilteredAndGroupStartsFollow() {
         // 2026-10-12 用户报障「有个表情显示是长方形框」= U+1FAEB（Unicode 17.0），
         // 设备系统字体没这个字形。面板层按 canRender 摘掉它；**分组下标必须跟着重算**
-        // —— 点分类条是 scrollToItem(组.start)，不重算就滚错组。
+        // —— 点分类条按 start/count 切片，不重算就切错组。
         // 夹具：5 条表情，第 1 条（下标 1）渲染不出；组 = [0,3) 笑脸 / [3,5) 人物。
         val api = FakeSymbolApi().apply {
             emojiResults = listOf("😀", "🫫", "😄", "🐶", "🐱")
@@ -324,23 +364,5 @@ class SymbolCatalogTest {
             listOf(SymbolCatalog.EmojiGroup("笑脸", 0, 3963)),
             catalog.emojiGroups,
         )
-    }
-
-    /** 分组高亮：网格首个可见项落在哪一组。分组连续覆盖由引擎门禁保证，这里钉边界。 */
-    @Test
-    fun groupIndexOfPicksTheGroupContainingTheIndex() {
-        // 连续覆盖（真实数据由引擎门禁钉住；夹具照它的形状：每组的 start 接上一组末尾）。
-        val g = listOf(
-            SymbolCatalog.EmojiGroup("笑脸", 0, 172),
-            SymbolCatalog.EmojiGroup("人物", 172, 2430),
-            SymbolCatalog.EmojiGroup("旗帜", 2602, 270),
-        )
-        assertEquals(0, SymbolCatalog.groupIndexOf(g, 0))
-        assertEquals(0, SymbolCatalog.groupIndexOf(g, 171))
-        assertEquals(1, SymbolCatalog.groupIndexOf(g, 172))
-        assertEquals(1, SymbolCatalog.groupIndexOf(g, 2601))
-        assertEquals(2, SymbolCatalog.groupIndexOf(g, 2602))
-        assertEquals(2, SymbolCatalog.groupIndexOf(g, 3962))
-        assertEquals("空表 → 不亮", -1, SymbolCatalog.groupIndexOf(emptyList(), 0))
     }
 }

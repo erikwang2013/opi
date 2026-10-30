@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 //! 表情页数据门禁（2026-10-12）：解析口径（连续同名段切组，对齐引擎
-//! `builtin_emoji_groups`）、组跳页的页码算法，以及**真实资源的接线**——
+//! `builtin_emoji_groups`）、分类切片算法，以及**真实资源的接线**——
 //! 最后一条是重点：`emoji.tsv` 由 `build.gradle.kts` 的 copyEmojiData 在构建期拷进
 //! 资源，拷丢了页面只会显示「没有表情数据」（构建树里看不出来），所以这里从
 //! classpath 真读一次。
@@ -49,12 +49,29 @@ class EmojiDataTest {
     }
 
     @Test
-    fun `group start maps to the page holding it`() {
-        val size = SymbolCategories.PAGE_SIZE
-        assertEquals(0, EmojiData.pageOfGroup(EmojiData.Group("g", 0, 1)))
-        assertEquals(0, EmojiData.pageOfGroup(EmojiData.Group("g", size - 1, 1)))
-        assertEquals(1, EmojiData.pageOfGroup(EmojiData.Group("g", size, 1)))
-        assertEquals(4, EmojiData.pageOfGroup(EmojiData.Group("g", size * 4 + 5, 1)))
+    fun `group slice shows exactly the selected group`() {
+        // 2026-10-30 报障：组的 start 不落在网格行首时，「跳到 start 所在页」会把上一组
+        // 的尾巴带进首行。切片必须严丝合缝 = [start, start+count)。
+        val groups = listOf(
+            EmojiData.Group("笑脸", 0, 3),
+            EmojiData.Group("人物", 3, 2),
+            EmojiData.Group("动物", 5, 1),
+        )
+        val all = listOf("a", "b", "c", "d", "e", "f")
+        assertEquals(listOf("a", "b", "c"), EmojiData.groupSlice(all, groups, 0))
+        assertEquals(listOf("d", "e"), EmojiData.groupSlice(all, groups, 1))
+        assertEquals(listOf("f"), EmojiData.groupSlice(all, groups, 2))
+    }
+
+    @Test
+    fun `group slice clamps bounds and falls back on a bad index`() {
+        val all = listOf("a", "b", "c")
+        // count / start 越过表尾 → 夹紧，不抛越界。
+        assertEquals(listOf("b", "c"), EmojiData.groupSlice(all, listOf(EmojiData.Group("g", 1, 99)), 0))
+        assertEquals(emptyList<String>(), EmojiData.groupSlice(all, listOf(EmojiData.Group("g", 3, 5)), 0))
+        // 组表为空 / 下标越界（引擎未就绪）→ 整表兜底，页面不至于空。
+        assertEquals(all, EmojiData.groupSlice(all, emptyList(), 0))
+        assertEquals(all, EmojiData.groupSlice(all, listOf(EmojiData.Group("g", 0, 3)), 1))
     }
 
     @Test
@@ -106,7 +123,7 @@ class EmojiDataTest {
         )
         val f = EmojiData.filter(d) { it != "😃" && it != "🍎" }
         assertEquals(listOf("😀", "🐶"), f.entries)
-        // start 与 count **一起**重算：start 是过滤后列表里的下标（组条点击 = pageOfGroup），
+        // start 与 count **一起**重算：start 是过滤后列表里的下标（组条点击 = groupSlice），
         // count 是组条文案里报的个数 —— 只重算一个就是「点 A 组跳到 B 组」或「个数多报」。
         assertEquals(
             listOf(
@@ -153,7 +170,7 @@ class EmojiDataTest {
     @Test
     fun `filtering the real table keeps the group arithmetic intact`() {
         // 真表 + **确定性**谓词（隔一条摘一条，与字体无关）：重算后的分组仍必须严丝合缝
-        // —— 这是「点组条跳到哪一页」的全部依据。谓词带计数器：顺带钉住
+        // —— 这是「点组条切出哪一组」的全部依据。谓词带计数器：顺带钉住
         // 「每条只问一次、按表序问」（问两次会让这个计数器错位，实现真的变了才红）。
         val d = loadEmojiData()
         assertTrue("真表没读到", d.entries.isNotEmpty())
@@ -183,23 +200,35 @@ class EmojiDataTest {
         assertEquals(d.entries.size, d.groups.sumOf { it.count })
     }
 
-    /** 高亮反推：网格第 i 项落在哪个组。 */
+    /** 整组被字形过滤摘空：点该分类切片为空（页面走空态，不借用邻组条目）。 */
     @Test
-    fun `group index finds the group holding an item`() {
-        val groups = listOf(EmojiData.Group("笑脸", 0, 3), EmojiData.Group("人物", 3, 2))
-        assertEquals(0, EmojiData.groupIndexOf(groups, 0))
-        assertEquals(0, EmojiData.groupIndexOf(groups, 2))
-        assertEquals(1, EmojiData.groupIndexOf(groups, 3))
-        assertEquals(1, EmojiData.groupIndexOf(groups, 4))
-        assertEquals("空表 → 不亮", -1, EmojiData.groupIndexOf(emptyList(), 0))
+    fun `a group emptied by filtering slices to an empty list`() {
+        val d = EmojiData.parse("😀\ta\t笑脸\n🐶\tb\t动物\n🍎\tc\t食物\n")
+        val f = EmojiData.filter(d) { it != "🐶" }
+        assertEquals(listOf("😀"), EmojiData.groupSlice(f.entries, f.groups, 0))
+        assertEquals(emptyList<String>(), EmojiData.groupSlice(f.entries, f.groups, 1))
+        assertEquals(listOf("🍎"), EmojiData.groupSlice(f.entries, f.groups, 2))
     }
 
-    /** 颜文字页每页 36 项（6×6）：页大小是参数，别写死 72。 */
+    /**
+     * 真表逐组切片：与组条 count 一致、互不重叠、并集 = 全表。顺带钉住夹具里确实存在
+     * 「start 不是页大小整数倍」的组 —— 否则这条测试再也暴露不出错位 bug。
+     */
     @Test
-    fun `page of group respects a custom page size`() {
-        assertEquals(0, EmojiData.pageOfGroup(EmojiData.Group("g", 35, 1), 36))
-        assertEquals(1, EmojiData.pageOfGroup(EmojiData.Group("g", 36, 1), 36))
-        assertEquals(2, EmojiData.pageOfGroup(EmojiData.Group("g", 72, 1), 36))
-        assertEquals("默认页大小仍是 12×6", 1, EmojiData.pageOfGroup(EmojiData.Group("g", 72, 1)))
+    fun `the real table slices exactly into its groups`() {
+        val d = loadEmojiData()
+        assertTrue("表情表没读到", d.entries.isNotEmpty())
+        assertTrue(
+            "所有组的 start 都正好在页首，夹具已无法暴露「跳到 start 所在页」的错位",
+            d.groups.any { it.start % SymbolCategories.PAGE_SIZE != 0 },
+        )
+        val seen = ArrayList<String>()
+        for (i in d.groups.indices) {
+            val g = d.groups[i]
+            val slice = EmojiData.groupSlice(d.entries, d.groups, i)
+            assertEquals("第 $i 组（${g.label}）切片条数与组条不符", g.count, slice.size)
+            seen.addAll(slice)
+        }
+        assertEquals("各组切片并集必须等于全表（无重叠无遗漏）", d.entries, seen)
     }
 }

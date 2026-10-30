@@ -111,7 +111,7 @@ struct OpiSymbolBlock: Decodable {
 
 /// `opi_emoji_groups()` 的 JSON 元素：`[{name,start,count}]`。
 ///
-/// `start` 是 `emojiSymbols()` 数组里的下标（点分类 = 网格滚到该下标）；`name` 是
+/// `start` 是 `emojiSymbols()` 数组里的下标（点分类 = 取 `[start, start+count)` 切片）；`name` 是
 /// **中文组名**（笑脸/人物/…/符号，引擎侧 `emoji.tsv` 第 3 列，翻译不在本层）。
 /// ⚠️ serde 输出是**字典序**（`{"count","name","start"}`，未开 preserve_order）——
 /// Android 因此不能用「按书写顺序」的正则；本层走 JSONDecoder 按**键名**解码，

@@ -193,7 +193,7 @@ impl SymbolEngine {
     /// - 顺序 = 文件序 = 面板分类序（笑脸在前、符号在后）；组名的中文标签由生成器
     ///   按 `EMOJI_ORDER` 写进产物（翻译不在引擎层）。
     /// - `start` 与 [`Self::builtin_emoji_texts`] 的下标对齐 —— 面板点分类条就是
-    ///   `grid.scrollToItem(start)`（引擎不替 UI 分页，只给锚点）。
+    ///   取 `[start, start+count)` 切片（引擎不替 UI 分页，只给锚点）。
     /// - 缺第 3 列直接 panic（同 `builtin()` 的姿态：产物损坏 = 仓库损坏，**响亮地**死；
     ///   静默退化成「一个没名字的组」才是最难查的形态）。
     pub fn builtin_emoji_groups() -> Vec<(&'static str, usize, usize)> {

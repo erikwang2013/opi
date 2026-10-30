@@ -80,7 +80,7 @@ class SymbolCatalog(
      * （筛选规则与源 pin 见 `scripts/gen_emoji_kaomoji.py`）。
      * **不能用 `by lazy`** —— 它只算一次，首次若全空就永久空。
      */
-    val emoji: List<String> get() = emojiData.first
+    val emoji: List<String> get() = emojiData.alive
 
     /**
      * emoji 判定：**查引擎给的表**。
@@ -91,24 +91,38 @@ class SymbolCatalog(
      * 如 🞀 U+1F780）。**任何在宿主侧重算引擎判据的写法都会重演这一幕**，
      * 所以判据只留一份：引擎的 `emoji` 标志，经 [SymbolApi.emojiSymbols] 透出来。
      */
-    fun isEmoji(text: String): Boolean = emojiData.second.contains(text)
-
-    private var _emojiData: Pair<List<String>, Set<String>>? = null
+    fun isEmoji(text: String): Boolean = emojiData.aliveSet.contains(text)
 
     /**
-     * 引擎口径的表情集：**列表与集合同一次取回**（列表给表情页、集合给 isEmoji 的
-     * 每帧查），一次 FFI 两次用 —— 「每条符号各打一次 FFI」会让面板滚动卡顿，
-     * 而分开缓存会让首帧打两次（两者都有测试钉着）。
+     * 引擎口径的表情数据：**原始表 + 前缀存活数一次取回**，表情页（[emoji]）、
+     * isEmoji 的每帧查（[aliveSet]）与分类条下标重算（[aliveUpTo]）共用同一份。
+     *
+     * 2026-10-30：原先 [emoji] 与 [emojiGroups] 各拉一次 `emojiSymbols()`、各跑一遍
+     * 逐条 [canRender] —— 首帧把 689 条 `Paint.hasGlyph` 探了两遍。
      * **空结果不写进缓存**，理由同 [common]：空 = 没拿到（引擎未就绪 / FFI 抖一下），
      * 不是「真的没有」，否则「表情」页会一直空到重启进程。
      */
-    private val emojiData: Pair<List<String>, Set<String>>
+    private class EmojiData(val raw: List<String>, val alive: List<String>, val aliveUpTo: IntArray) {
+        val aliveSet: Set<String> = alive.toHashSet()
+    }
+
+    private var _emojiData: EmojiData? = null
+
+    private val emojiData: EmojiData
         get() {
-            _emojiData?.takeIf { it.first.isNotEmpty() }?.let { return it }
-            val list = (api.emojiSymbols()?.toList() ?: emptyList()).filter(canRender)
-            val pair = list to list.toHashSet()
-            if (list.isNotEmpty()) _emojiData = pair
-            return pair
+            _emojiData?.takeIf { it.alive.isNotEmpty() }?.let { return it }
+            val raw = api.emojiSymbols()?.toList() ?: emptyList()
+            val alive = ArrayList<String>(raw.size)
+            // aliveUpTo[i] = raw 的 [0, i) 里通过了 canRender 的条数。
+            val aliveUpTo = IntArray(raw.size + 1)
+            for (i in raw.indices) {
+                aliveUpTo[i] = alive.size
+                if (canRender(raw[i])) alive += raw[i]
+            }
+            aliveUpTo[raw.size] = alive.size
+            val data = EmojiData(raw, alive, aliveUpTo)
+            if (alive.isNotEmpty()) _emojiData = data
+            return data
         }
 
     fun search(q: String): List<String> {
@@ -129,27 +143,23 @@ class SymbolCatalog(
         _emojiGroups?.takeIf { it.isNotEmpty() }?.let { return it }
         val raw = parseEmojiGroups(api.emojiGroups() ?: "")
         // ⚠️ `start` 必须是**过滤后**列表里的下标（过滤会摘掉若干条，原下标会整体偏前）
-        // —— 点分类条是 `grid.scrollToItem(组.start)`，不重算就会滚错组。
-        // 前缀存活数：raw 的 [0, start) 里有多少条通过了同一套 [canRender]。
-        val rawList = api.emojiSymbols()?.toList() ?: emptyList()
+        // —— 点分类条按 start/count 切片，不重算就会切错组。
+        // 存活统计与 [emoji] 共用（同一次取表、同一次字形探测，见 [emojiData]）。
+        val data = emojiData
         // 表情列表拿不到（引擎未就绪）⇒ **不重算**：没有列表就没有「过滤后下标」可言，
         // 硬算会把所有组的 start 压成 0（那比不显示分类更坏）。
-        val list = if (rawList.isEmpty()) {
+        val list = if (data.raw.isEmpty()) {
             raw
         } else {
-            val aliveUpTo = IntArray(rawList.size + 1)
-            var alive = 0
-            for (i in rawList.indices) {
-                aliveUpTo[i] = alive
-                if (canRender(rawList[i])) alive++
-            }
-            aliveUpTo[rawList.size] = alive
             // start 与 count **一起**重算：count 是分类条读屏文案（「笑脸（N 个）」），
             // 不跟着减就会把摘掉的条数也报进去。
             raw.map { g ->
-                val from = g.start.coerceIn(0, rawList.size)
-                val to = (g.start + g.count).coerceIn(0, rawList.size)
-                g.copy(start = aliveUpTo[from], count = aliveUpTo[to] - aliveUpTo[from])
+                val from = g.start.coerceIn(0, data.raw.size)
+                val to = (g.start + g.count).coerceIn(0, data.raw.size)
+                g.copy(
+                    start = data.aliveUpTo[from],
+                    count = data.aliveUpTo[to] - data.aliveUpTo[from],
+                )
             }
         }
         return list.also { if (it.isNotEmpty()) _emojiGroups = it }
@@ -219,17 +229,6 @@ class SymbolCatalog(
             return out
         }
 
-        /**
-         * 网格下标 → 分类条要亮第几项（纯函数，单测钉住）。
-         * 分组**连续覆盖全表**由引擎侧门禁保证（`emoji_groups_cover_the_table_contiguously`），
-         * 所以这里取「最后一个 start ≤ index 的组」即可；空表/负数 → -1（不亮）。
-         */
-        fun groupIndexOf(groups: List<EmojiGroup>, index: Int): Int {
-            for (i in groups.indices.reversed()) {
-                if (index >= groups[i].start) return i
-            }
-            return -1
-        }
     }
 }
 
