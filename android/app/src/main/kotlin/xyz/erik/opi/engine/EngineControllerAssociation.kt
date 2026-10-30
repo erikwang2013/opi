@@ -35,8 +35,9 @@ internal fun EngineController.gateAssociation() {
         return
     }
     // 引擎里的联想也要清掉（fcitx5/TSF 同款）：只清 UI 列表的话，隐藏的联想仍能被
-    // 数字键/链式选中并上屏（用户报障「联想被直接上屏」）。
-    clearEngineOnly()
+    // 数字键/链式选中并上屏（用户报障「联想被直接上屏」）。这里在 refresh 尾部，
+    // 不能再走 clear()（它会递归 refresh），直接调引擎出口。
+    api.clear()
     candidates = emptyList()
     candidateReadings = emptyList()
     reading = ""

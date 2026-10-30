@@ -44,7 +44,7 @@ enum class InputScheme(val value: Int) {
  * 变化重置页码；fetchLimit=512，让「壹」这类排在第 79/155 位的单字可翻到）。
  */
 class EngineController(
-    private val api: OpiEngineApi = OpiEngine,
+    internal val api: OpiEngineApi = OpiEngine,
     /**
      * 每次 [refresh] 收尾（组合串状态的单一同步点）后回调：服务层借此把组合串
      * 推给输入框（setComposingText/finishComposingText，2026-10-10 用户裁决「需要」）。
@@ -241,14 +241,6 @@ class EngineController(
     fun clear() {
         api.clear()
         refresh()
-    }
-
-    /**
-     * 只清引擎状态、不触发 [refresh]：联想门禁正在 refresh 尾部，不能再递归一遍。
-     * 清掉的是引擎里的联想（空缓冲态），UI 侧候选由调用方同时置空。
-     */
-    internal fun clearEngineOnly() {
-        api.clear()
     }
 
     /**
