@@ -98,10 +98,11 @@ flags=(-import-objc-header macos/OpiFFI.h -module-name "$MODULE" -sdk "$sdk" -O)
 # ---- 1) 先 typecheck，再真编 ----
 # 分两步是有用的：typecheck 不产生文件、结论直指源码错，比链接期报错好读得多。
 # 两个 arch 的源码错是同一批，所以 typecheck 只跑一遍（宿主 arch）。
-swiftc "${flags[@]}" -typecheck macos/*.swift
+swiftc "${flags[@]}" -typecheck macos/*.swift shared/apple/OpiClipRunner.swift
 
 for arch in arm64 x86_64; do
   swiftc "${flags[@]}" -target "$arch-apple-macosx$DEPLOY" macos/*.swift \
+    shared/apple/OpiClipRunner.swift \
     -o "$out/.$EXE.$arch" \
     -L "$libdir" -lopi_ffi \
     -framework Cocoa -framework InputMethodKit \

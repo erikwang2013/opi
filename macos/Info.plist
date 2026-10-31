@@ -80,5 +80,13 @@
 
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+
+    <!--
+      跨设备剪贴板（默认关）：开启后只在局域网内做 UDP 发现 + TCP 会话。
+      macOS 15+ 首次访问本地网络会弹权限提示；没有这条描述，系统不会弹，
+      而连接会静默失败（用户只看到「发现不到设备」）。
+    -->
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>在同一局域网内发现并同步已配对设备之间的纯文本剪贴板内容。</string>
 </dict>
 </plist>

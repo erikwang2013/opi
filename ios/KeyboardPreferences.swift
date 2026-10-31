@@ -36,6 +36,7 @@ enum KeyboardPreferences {
     private static let wubiLimitKey = "opi.setting.wubiCandidateLimit"
     private static let wubiReturnKey = "opi.setting.wubiReturn"
     private static let wubiAutoCommitKey = "opi.setting.wubiAutoCommit"
+    private static let clipKey = "opi.clip.enabled"
 
     /// `UserDefaults.bool` 对缺失键返回 false；缺省为 true 的项必须区分
     /// 「没设置过」与「用户关了」。
@@ -118,5 +119,11 @@ enum KeyboardPreferences {
             defaults.set(newValue.wubiAutoCommit, forKey: wubiAutoCommitKey)
             defaults.set(newValue.showOwn, forKey: showOwnKey)
         }
+    }
+
+    /// 跨设备剪贴板：缺省关，只在键盘扩展可见时运行（见 `KeyboardClipboard.swift`）。
+    static var clipEnabled: Bool {
+        get { defaults.bool(forKey: clipKey) }
+        set { defaults.set(newValue, forKey: clipKey) }
     }
 }

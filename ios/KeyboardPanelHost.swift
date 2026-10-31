@@ -34,6 +34,8 @@ extension KeyboardLayout {
         toolbar.onOpenSettings = { [weak self] in self?.tap(.showSettings) }
         toolbar.onCloseKeyboard = { [weak self] in self?.tap(.closeKeyboard) }
         toolbar.onSwitchToChinese = { [weak self] in self?.tap(.cycleMode) }
+        // 发送是本地动作（读 UIPasteboard + 发布），不经过引擎的 function-key 路由。
+        toolbar.onSendClipboard = { OpiClipboard.shared.sendCurrentClipboard() }
     }
 
     private func tap(_ fn: KeyboardFunctionKey) {

@@ -21,7 +21,7 @@ import UniformTypeIdentifiers
 
 final class OpiSettingsWindow: NSObject {
     enum Page: Int, CaseIterable {
-        case common, keys, appearance, statusbar, symbols, dicts, wubi, advanced, about
+        case common, keys, appearance, statusbar, symbols, dicts, wubi, clip, advanced, about
 
         var title: String {
             switch self {
@@ -32,6 +32,7 @@ final class OpiSettingsWindow: NSObject {
             case .symbols: return "符号与表情"
             case .dicts: return "词库"
             case .wubi: return "五笔"
+            case .clip: return "剪贴板"
             case .advanced: return "高级"
             case .about: return "关于"
             }
@@ -139,6 +140,7 @@ final class OpiSettingsWindow: NSObject {
         case .symbols: buildSymbols()
         case .dicts: buildDicts()
         case .wubi: buildWubi()
+        case .clip: buildClipboard()
         case .advanced: buildAdvanced()
         case .about: buildAbout()
         }

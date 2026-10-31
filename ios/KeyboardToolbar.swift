@@ -19,9 +19,9 @@
 //   · 设置入口是本端新增的齿轮（Android 的设置页是独立 Activity）。
 //
 // 宽度预算（320pt 最窄屏，英文空闲时「中」键也出现）：
-//   图标次序：表情 / 皮肤 / 输入模式 / 键盘模式 / 齿轮 / 关于 / 收起；
-//   pet 26 + 图标 7 个 + 中 28 + 左右边距 8。图标宽在 36…44 间按可用宽均分，
-//   320pt 下 ≈36.9 —— 宽屏放大触摸区，窄屏不溢出。
+//   图标次序：表情 / 皮肤 / 输入模式 / 键盘模式 / 剪贴板 / 齿轮 / 关于 / 收起；
+//   pet 26 + 图标 8 个 + 中 28 + 左右边距 8。图标宽在 30…44 间按可用宽均分，
+//   320pt 下 ≈32.2 —— 宽屏放大触摸区，窄屏不溢出（30 仅为最窄屏兜底）。
 //
 // ⚠️ 本机无 UIKit，只在 Apple CI 真编译；从未上机运行。
 
@@ -38,6 +38,8 @@ final class KeyboardToolbar: UIView {
     var onOpenSettings: (() -> Void)?
     var onCloseKeyboard: (() -> Void)?
     var onSwitchToChinese: (() -> Void)?
+    /// 「发送剪贴板」：用户主动点才读 UIPasteboard（iOS 降级版，见 KeyboardClipboard.swift）。
+    var onSendClipboard: (() -> Void)?
 
     /// 英文空闲时出现的低存在感「中」键（Android `ChineseHiddenButton` 同款）。
     private let chineseButton = UIButton(type: .system)
@@ -71,6 +73,9 @@ final class KeyboardToolbar: UIView {
         let modes = makeIcon("slider.horizontal.3", fallback: "盘", label: "键盘模式") { [weak self] in
             self?.onOpenKeyboardMode?()
         }
+        let clip = makeIcon("doc.on.clipboard", fallback: "📋", label: "发送剪贴板") { [weak self] in
+            self?.onSendClipboard?()
+        }
         // 齿轮：SF Symbols 5 才有 `gearshape`，老系统退回文字「⚙」。
         let settings = makeIcon("gearshape", fallback: "⚙", label: "设置") { [weak self] in
             self?.onOpenSettings?()
@@ -83,7 +88,7 @@ final class KeyboardToolbar: UIView {
         ) { [weak self] in
             self?.onCloseKeyboard?()
         }
-        iconButtons = [emoji, skin, input, modes, settings, about, close]
+        iconButtons = [emoji, skin, input, modes, clip, settings, about, close]
 
         chineseButton.setTitle("中", for: .normal)
         chineseButton.titleLabel?.font = .systemFont(ofSize: 13)
@@ -101,7 +106,7 @@ final class KeyboardToolbar: UIView {
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         let stack = UIStackView(arrangedSubviews: [
-            petView, emoji, skin, input, modes, settings, about, spacer, chineseButton, close,
+            petView, emoji, skin, input, modes, clip, settings, about, spacer, chineseButton, close,
         ])
         stack.axis = .horizontal
         stack.alignment = .fill
@@ -171,13 +176,13 @@ final class KeyboardToolbar: UIView {
         updateIconWidths()
     }
 
-    /// 图标宽在 36…44 间按可用宽均分：宽屏给足触摸区，320pt 也不溢出。
+    /// 图标宽在 30…44 间按可用宽均分：宽屏给足触摸区，320pt 也不溢出。
     private func updateIconWidths() {
         let safe = safeAreaInsets
         let usable = bounds.width - safe.left - safe.right
         guard usable > 0, !iconWidthConstraints.isEmpty else { return }
         // 固定占用 = pet 26 + 左右边距 8 + 英文「中」28（隐藏时也按它预留，留余量）。
-        let perIcon = min(44, max(36, (usable - 62) / CGFloat(iconButtons.count)))
+        let perIcon = min(44, max(30, (usable - 62) / CGFloat(iconButtons.count)))
         for c in iconWidthConstraints where abs(c.constant - perIcon) > 0.5 {
             c.constant = perIcon
         }

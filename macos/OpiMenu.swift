@@ -94,8 +94,13 @@ enum OpiMenuTag: Int {
     case settings
     case statusBarSettings
     case about
+    case toggleClipboard
+    case clipboardSettings
+    case stopClipboard
     /// 皮肤项占 `skinBase ..< skinBase + OpiSkin.allCases.count`。
     case skinBase = 100
+    /// 待确认配对：`clipPairBase + index*2`（拒绝）/ `+1`（信任）。
+    case clipPairBase = 1000
 }
 
 enum OpiMenu {
@@ -155,6 +160,42 @@ enum OpiMenu {
         skin.submenu = skinMenu
         menu.addItem(skin)
 
+        // 跨设备剪贴板（默认关）：开关、待确认 SAS、对端概览、来源提示与一键停止。
+        // 每次打开菜单现读快照（OpiClipService 内部加锁），不做缓存。
+        let clip = OpiClipService.shared
+        let clipMenu = NSMenu(title: "跨设备剪贴板")
+        clipMenu.autoenablesItems = false
+        clipMenu.addItem(item("启用（默认关）", target: target, tag: .toggleClipboard,
+                              on: clip.isEnabled))
+        if let source = clip.lastSourceText {
+            clipMenu.addItem(infoItem("最近来源：\(source)"))
+        }
+        for (index, pending) in clip.pendingPairings.enumerated() {
+            clipMenu.addItem(.separator())
+            let who = pending.name.isEmpty ? "未命名设备" : pending.name
+            clipMenu.addItem(infoItem("\(who)：确认码 \(pending.sas)"))
+            clipMenu.addItem(item("信任", target: target,
+                                  tag: OpiMenuTag.clipPairBase.rawValue + index * 2 + 1))
+            clipMenu.addItem(item("拒绝", target: target,
+                                  tag: OpiMenuTag.clipPairBase.rawValue + index * 2))
+        }
+        if !clip.peers.isEmpty {
+            clipMenu.addItem(.separator())
+            for peer in clip.peers.prefix(8) {
+                let name = peer.name.isEmpty ? "未命名设备" : peer.name
+                let trusted = peer.trusted ? "已信任" : "未配对"
+                let online = peer.connected ? "在线" : "离线"
+                clipMenu.addItem(infoItem("\(name) · \(trusted) · \(online)"))
+            }
+        }
+        clipMenu.addItem(.separator())
+        clipMenu.addItem(item("剪贴板设置…", target: target, tag: .clipboardSettings))
+        clipMenu.addItem(item("停止共享", target: target, tag: .stopClipboard,
+                              enabled: clip.isEnabled || clip.isRunning))
+        let clipRoot = NSMenuItem(title: "跨设备剪贴板", action: nil, keyEquivalent: "")
+        clipRoot.submenu = clipMenu
+        menu.addItem(clipRoot)
+
         menu.addItem(.separator())
         // 快捷键只写在标题里，不设 keyEquivalent：IMK 的 handle(_:client:) 已经
         // 截获这些组合，菜单再注册一份会造成「菜单开着时按一次执行两次」。
@@ -185,6 +226,12 @@ enum OpiMenu {
         if rawTag >= base, rawTag < base + OpiSkin.allCases.count {
             OpiTheme.skin = OpiSkin.allCases[rawTag - base]
             OpiTheme.notifyChanged()
+            return
+        }
+        let pairBase = OpiMenuTag.clipPairBase.rawValue
+        if rawTag >= pairBase {
+            let offset = rawTag - pairBase
+            OpiClipService.shared.respondPending(at: offset / 2, accept: offset % 2 == 1)
             return
         }
         guard let tag = OpiMenuTag(rawValue: rawTag) else { return }
@@ -238,10 +285,23 @@ enum OpiMenu {
             OpiSettingsWindow.shared.show(page: .statusbar)
         case .about:
             OpiSettingsWindow.shared.show(page: .about)
-        case .skinBase:
+        case .toggleClipboard:
+            OpiClipService.shared.setEnabled(!OpiClipService.shared.isEnabled)
+        case .clipboardSettings:
+            OpiSettingsWindow.shared.show(page: .clip)
+        case .stopClipboard:
+            OpiClipService.shared.stopAll()
+        case .skinBase, .clipPairBase:
             break
         }
         OpiStatusBar.shared.refresh()
+    }
+
+    /// 纯信息行（设备列表/来源提示）：不可点，只做显示。
+    private static func infoItem(_ title: String) -> NSMenuItem {
+        let it = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        it.isEnabled = false
+        return it
     }
 
     private static func item(_ title: String, target: OpiInputController,

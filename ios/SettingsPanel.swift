@@ -12,16 +12,8 @@
 //   符号与表情（表情页「自有」贴纸）
 //   关于（版本 / 关于面板跳转 / 存储与不可用项说明）
 //
-// **只放 C ABI 有读写出口的开关**（见 `OpiEngineSwitches.swift`）：
-//   · 学习        opi_learner_enabled / opi_set_learner
-//   · 模糊音      opi_fuzzy_enabled / opi_set_fuzzy / opi_fuzzy_pair_names /
-//                 opi_set_fuzzy_pairs_names
-//   · 简拼        opi_jianpin_enabled / opi_set_jianpin
-//   · 纠错        opi_correction_enabled / opi_set_correction
-//   · 中文标点    opi_chinese_punct / opi_set_chinese_punct
-//   · 双拼布局    opi_shuangpin_layout / opi_set_shuangpin_layout
-// 悬浮/游戏（iOS 扩展不能控制键盘窗口）、英文专业模式、五笔 98（码表未打包）
-// 一律**明文标注不可用**，不做点了没反应的假开关。
+// **只放 C ABI 有读写出口的开关**（见 `OpiEngineSwitches.swift`）；
+// 悬浮/游戏/英文专业/五笔 98 在 iOS 上不可用，面板明文标注，不做假开关。
 //
 // ⚠️ 本机无 UIKit，只在 Apple CI 真编译；从未上机运行。
 
@@ -52,6 +44,7 @@ final class SettingsPanel: UIView {
     private let stack = UIStackView()
     private let wubiSection = WubiSettingsSection()
     private let userWordsSection = UserWordsSection()
+    private let clipboardSection = ClipboardSettingsSection()
     private let updateView = UpdateStatusView()
     private var palette: KeyboardPalette = .light
 
@@ -136,6 +129,7 @@ final class SettingsPanel: UIView {
         fuzzyNames = names
         wubiSection.show(settings: s)
         userWordsSection.reset()
+        clipboardSection.refresh()
         if !contentBuilt || names != builtPairNames {
             rebuildContent()
         } else {
@@ -205,6 +199,9 @@ final class SettingsPanel: UIView {
         addNav("皮肤（12 款色板）") { [weak self] in self?.onOpenSkin?() }
         addSwitchRow("暗光模式", detail: nil, tag: .dark, isOn: modes.dark)
         addSwitchRow("长辈模式", detail: "更大字号与高对比配色", tag: .elder, isOn: modes.elder)
+
+        addSection("跨设备剪贴板")
+        stack.addArrangedSubview(clipboardSection)
 
         addSection("符号与表情")
         addSwitchRow(
@@ -454,6 +451,7 @@ final class SettingsPanel: UIView {
         wubiSection.applyTheme(p)
         userWordsSection.applyTheme(p)
         updateView.applyTheme(p)
+        clipboardSection.applyTheme(p)
         guard contentBuilt else { return }
         headingLabels.forEach { $0.textColor = p.barDimFg }
         detailLabels.forEach { $0.textColor = p.barDimFg }

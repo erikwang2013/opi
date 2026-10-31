@@ -75,5 +75,8 @@
         <key>NSExtensionPrincipalClass</key>
         <string>$(PRODUCT_MODULE_NAME).KeyboardViewController</string>
     </dict>
+    <!-- 键盘扩展内的 UDP 发现/TCP 会话；宿主 plist 也带同一条（package-ios.sh 的 heredoc）。 -->
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>在同一局域网内发现并同步已配对设备之间的纯文本剪贴板内容。</string>
 </dict>
 </plist>

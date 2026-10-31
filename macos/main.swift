@@ -60,6 +60,8 @@ OpiEngine.shared.loadOptionalWubiDictionary()
 OpiEngine.shared.loadPersistedUserWords()
 // 用户设置的套用必须**在词库之后**：opi_load 之后引擎才是可写状态。
 OpiSettingsStore.applyPersisted()
+// 跨设备剪贴板（默认关）：按落盘开关启动；只起网络/剪贴板轮询，不记录内容。
+OpiClipService.shared.applyPersisted()
 // 导入词库（dicts/*.tsv）按停用名单重放；坏文件只记日志，不挡启动。
 OpiEngine.shared.loadImportedDicts(disabled: OpiSettingsStore.disabledDicts())
 // 自定义短语：宿主文件是唯一真源，引擎只持内存，启动时中英两套整表重推（坏文件按空表）。

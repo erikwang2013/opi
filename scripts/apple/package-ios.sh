@@ -93,7 +93,7 @@ for spec in "ios-arm64:aarch64-apple-ios:iphoneos" "ios-sim:aarch64-apple-ios-si
   mkdir -p "$fw"
   staticlib="$PWD/$rustlib/libopi_ffi.a"
   common=(-import-objc-header ios/OpiFFI.h -module-name "$MODULE" -sdk "$sdk" -target "$target")
-  swiftc "${common[@]}" -typecheck ios/*.swift
+  swiftc "${common[@]}" -typecheck ios/*.swift shared/apple/OpiClipRunner.swift
   # ⚠️ 2026-10-16 加的 `-force_load`：拉成员不再依赖归档索引按符号查找，把静态库整棵链进来。
   # 背景：iOS job 在 c639167 / 075a382 两连红，**签名逐字相同**（framework 里 `_opi_load`
   # 没有定义、链接本身不报错），而同一镜像跑旧提交（ae9c49a）是绿的（树相关、两次复现）。
@@ -101,7 +101,7 @@ for spec in "ios-arm64:aarch64-apple-ios:iphoneos" "ios-sim:aarch64-apple-ios-si
   # 「索引/查找→拉成员」这条路上（也可能是对象层，见下面这行注释的判据）。
   # 判据：若加 force_load 后**转绿** ⇒ 问题在索引/查找路径；若**同样红** ⇒ 在对象/ld64 层，
   # 把这条留不留另行裁决（它本身只增不减正确链接的成员）。
-  swiftc "${common[@]}" -O -emit-library ios/*.swift -o "$fw/$FMWK" \
+  swiftc "${common[@]}" -O -emit-library ios/*.swift shared/apple/OpiClipRunner.swift -o "$fw/$FMWK" \
     -Xlinker -force_load -Xlinker "$staticlib" \
     -Xlinker -install_name -Xlinker "@rpath/$FMWK.framework/$FMWK"
   # framework 的 Info.plist：`xcodebuild -create-xcframework` 只收**像 framework** 的目录，
@@ -198,7 +198,7 @@ fi
 # IPA 必须有扩展可执行，所以这一步**不再是可选项**：链接失败就退出。扩展二进制必须由
 # 链接器入口 `_NSExtensionMain` 起头（Xcode 生成的链接行就是这么写的）；这条手写链接行
 # 已在 CI 上实测通过。
-if swiftc -parse-as-library -emit-executable ios/*.swift -o "$build/.appex-bin" \
+if swiftc -parse-as-library -emit-executable ios/*.swift shared/apple/OpiClipRunner.swift -o "$build/.appex-bin" \
      -import-objc-header ios/OpiFFI.h -module-name "$MODULE" \
      -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" -target "arm64-apple-ios$IOS_MIN" \
      -Xlinker "$PWD/target/aarch64-apple-ios/release/libopi_ffi.a" \
@@ -278,6 +278,7 @@ cat > "$app/Info.plist" <<PLIST
 	<dict><key>CFBundlePrimaryIcon</key><dict><key>CFBundleIconFiles</key><array><string>AppIcon60x60</string></array></dict></dict>
 	<key>CFBundleIcons~ipad</key>
 	<dict><key>CFBundlePrimaryIcon</key><dict><key>CFBundleIconFiles</key><array><string>AppIcon76x76</string></array></dict></dict>
+	<key>NSLocalNetworkUsageDescription</key><string>在同一局域网内发现并同步已配对设备之间的纯文本剪贴板内容。</string>
 </dict>
 </plist>
 PLIST

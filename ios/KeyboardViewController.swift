@@ -24,10 +24,8 @@ import UIKit
 final class KeyboardViewController: UIInputViewController {
     // MARK: - 状态
 
-    // ⚠️ 下面这几个成员与 `refresh` / `insert` / `modeKeyLabel` 都是 **internal**
-    // （不是 `private`）：`KeyboardHardware.swift` 那个扩展要用它们，而 Swift 的
-    // `private` 只跨「**同文件**的扩展」可见，跨文件必须放开。
-    // **不要为了整洁把它们改回 `private`** —— 那会让 `KeyboardHardware.swift` 编译不过。
+    // ⚠️ 下面几个成员与 `refresh` / `insert` 是 internal：`KeyboardHardware.swift`
+    // 要用；改回 `private` 会编译不过（跨文件扩展）。
     let engine = OpiEngine()
     var layout: KeyboardLayout!
     // 这里**没有** `page` 状态：候选 UI（栏/左列/平铺）统一用 `opi_candidates(limit)`
@@ -121,6 +119,7 @@ final class KeyboardViewController: UIInputViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         resetBracketPairing()
+        OpiClipboard.shared.keyboardDidAppear(self) // 剪贴板只在键盘可见时运行
         guard heightConstraint == nil else { return }
         // 键盘高度必须由扩展自己给（公式见 KeyboardResponsive.swift：竖屏 264，
         // 横屏按屏幕高 60% 封顶、绝对上限 340）。priority 用 defaultHigh：
@@ -135,6 +134,7 @@ final class KeyboardViewController: UIInputViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         UserWordsStore.flush(engine)
+        OpiClipboard.shared.keyboardDidDisappear()
     }
 
     /// 旋转后由系统重排触发；只改常数，**不**新建约束（新建会叠加冲突）。
