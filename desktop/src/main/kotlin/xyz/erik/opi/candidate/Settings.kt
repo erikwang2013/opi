@@ -88,13 +88,14 @@ data class OpSettings(
      */
     val pinyinMethod: String = SCHEME_NAMES.first(),
     val shiftToggle: Boolean = true,
-    val skin: SkinOption = SkinOption.KEEP,
+    /** 纯色皮肤（2026-10-31 默认改为清爽；`Skin=` 中文字面值）。 */
+    val skin: SkinOption = SkinOption.FRESH,
     /**
-     * 动态背景主题（2026-10-30；键 `Background=`，值 = [SceneTheme.id]）：状态栏条外
-     * 角色与手机键盘插画共用一套。**只影响小欧自绘 UI，不推引擎**；缺键/未知 → 田园
-     * （改动前的原画）。手机端存自己的偏好（`kb_scene`），与本键语义同集。
+     * 动态主题（2026-10-30；键 `Background=`，值 = [SceneTheme.id]）：状态栏条外
+     * 角色与手机键盘插画共用一套。**只影响小欧自绘 UI，不推引擎**；缺键/空/未知 =
+     * 纯色皮肤（配色见 [skin]）。手机端存自己的偏好（`kb_scene`），语义同集。
      */
-    val background: SceneTheme = SceneTheme.MEADOW,
+    val background: SceneTheme? = null,
     /**
      * 候选字号（2026-10-14 用户裁决；键 `CandidateFont`）：**档位名**
      * （[CLASSIC_UI_FONT_NAMES] 之一 —— 小/中/大）。存的只是名字，真正的落点是 fcitx5
@@ -138,8 +139,9 @@ data class OpSettings(
         appendLine("ShiftToggle=${boolText(shiftToggle)}")
         // 皮肤只在 Linux 侧有意义；Windows 读侧忽略未知键，写它只为同一份文件格式不分叉。
         appendLine("Skin=${skin.value}")
-        // 动态背景主题（2026-10-30）：只给小欧自绘 UI 读，引擎不认；写 id（ASCII）而不是中文名。
-        appendLine("Background=${background.id}")
+        // 动态主题（2026-10-30）：只给小欧自绘 UI 读，引擎不认；写 id（ASCII）而不是
+        // 中文名。空值 = 纯色皮肤（见 [background]）。
+        appendLine("Background=${background?.id ?: ""}")
         // 候选字号：存的只是档位名；真正的落点是 fcitx5 classicui.conf 的 Font=
         // （保存时按需写过去，见 ClassicUiFont.kt）。两侧 IME 读侧都不认这个键
         // （与 StatusBar* 同一条：未知键忽略），写全只为文件格式不因平台分叉。
@@ -201,7 +203,8 @@ data class OpSettings(
                     ?: SCHEME_NAMES.first(),
                 shiftToggle = bool("ShiftToggle", true),
                 skin = SkinOption.fromValue(map["Skin"]),
-                background = SceneTheme.fromId(map["Background"]),
+                background = map["Background"]?.takeIf { it.isNotEmpty() }
+                    ?.let { id -> SceneTheme.entries.firstOrNull { it.id == id } },
                 candidateFont = map["CandidateFont"]
                     ?.takeIf { it in CLASSIC_UI_FONT_NAMES }
                     ?: CLASSIC_UI_FONT_DEFAULT,

@@ -1,12 +1,16 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! 皮肤选择器（2026-10-30 从 SettingsPages.kt 拆出：加「动态背景」段后那边 509 行
-//! 撞 500 行门禁；同包 internal 引用不变）。
+//! 皮肤选择器（2026-10-31 用户裁决「动态背景就是皮肤」）：19 张动态主题卡直接画
+//! 该主题的缩小插画 + 自带配色；同日又按用户要求并回 11 款纯色皮肤，默认清爽。
+//! 纯色卡只换配色、关掉插画；动态卡插画与配色一起换。选任一卡都同时写
+//! `Background=` 与 `Skin=`（纯色的 `Background=` 为空）。
+//!
+//! 2026-10-30 从 SettingsPages.kt 拆出（加背景段后 509 行撞 500 行门禁）。
 
 package xyz.erik.opi.candidate
 
-import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,91 +21,134 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import xyz.erik.opi.scene.ScenePalette
+import xyz.erik.opi.scene.SceneTheme
+import xyz.erik.opi.scene.drawOpiSceneBackdrop
 
-// ---------- 皮肤选择器（2026-10-09：可视卡，替掉纯文字清单）----------
+private val CardShape = RoundedCornerShape(4.dp)
 
-/**
- * 一款皮肤的预览色（bg/fg/accent 三项）。
- * ⚠️ 十款的色值**不再各写一份**（2026-10-12）：统一取自 `SkinPalette.skinColors`
- * —— 那份的逐值对应由 SettingsTest 的 `skin palettes match the theme generator`
- * 现读现比（同一个「图与实」门禁，只是比对对象挪去了 SkinPalette.kt）。
- */
-private data class SkinPreview(val bg: Color, val fg: Color, val accent: Color)
-
-private fun previewOf(skin: SkinOption): SkinPreview = when (skin) {
-    // 「不改动」不指定主题：预览画一浅一深的双色底（表意「跟随系统」）—— 这是预览
-    // 专属的中性表示，**不是** SkinPalette.KeepColors（那个是状态栏的固定深色）。
-    SkinOption.KEEP -> SkinPreview(Color(0xFFF2F2F2), Color(0xFF888888), Teal)
-    else -> skinColors(skin).let { SkinPreview(it.bg, it.fg, it.accent) }
-}
-
-/**
- * 十张卡按 FlowRow 折行排开（内容宽 800-180-22×2 ≈ 570dp：一行 7×70 + 6×8 = 538 ≤ 570，
- * 十款固定两行）。窄了仍会折行（首版 76/10=420 > 416 时朱砂掉到第二行，截图复核时
- * 抓到过半宽问题本身）。
- */
+/** 纯色在上、动态在下，各自按 FlowRow 折行；选中卡 = 青边 + 青字。 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun SkinPicker(selected: SkinOption, onSelect: (SkinOption) -> Unit) {
+internal fun SceneSkinPicker(
+    selectedScene: SceneTheme?,
+    selectedSkin: SkinOption,
+    onSelectScene: (SceneTheme) -> Unit,
+    onSelectSkin: (SkinOption) -> Unit,
+) {
+    PickerLabel("纯色")
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        for (skin in SkinOption.entries) {
-            SkinCard(skin, skin == selected) { onSelect(skin) }
+        for (skin in SOLID_SKINS) {
+            SolidSkinCard(skin, selectedScene == null && skin == selectedSkin) {
+                onSelectSkin(skin)
+            }
+        }
+    }
+    Spacer(Modifier.height(10.dp))
+    PickerLabel("动态")
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        for (theme in SceneTheme.entries) {
+            SceneSkinCard(theme, theme == selectedScene) { onSelectScene(theme) }
         }
     }
 }
 
-/** 一张皮肤卡：候选面板样张（底色 + 样字 + 朱砂/青的强调条）+ 名字。选中 = 青边 + 青字。 */
 @Composable
-private fun SkinCard(skin: SkinOption, selected: Boolean, onClick: () -> Unit) {
-    val pv = previewOf(skin)
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.width(70.dp).clickable(onClick = onClick).padding(2.dp),
-    ) {
+private fun PickerLabel(text: String) {
+    Text(
+        text,
+        modifier = Modifier.padding(bottom = 4.dp),
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Bold,
+        color = Muted,
+    )
+}
+
+/** 纯色卡：皮肤底色 + 三枚键帽示意。 */
+@Composable
+private fun SolidSkinCard(skin: SkinOption, selected: Boolean, onClick: () -> Unit) {
+    val colors = skinColors(skin)
+    SkinCardFrame(skin.value, selected, onClick) {
         Box(
+            Modifier.fillMaxWidth().height(40.dp).clip(CardShape).background(colors.bg).border(
+                width = if (selected) 2.dp else 1.dp,
+                color = if (selected) Teal else Hairline,
+            ),
+        ) {
+            Box(
+                Modifier.align(Alignment.TopStart).padding(4.dp).size(6.dp)
+                    .clip(CircleShape).background(colors.accent),
+            )
+            Row(
+                Modifier.align(Alignment.BottomCenter).padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                repeat(3) {
+                    Box(
+                        Modifier.weight(1f).height(12.dp)
+                            .clip(RoundedCornerShape(2.dp)).background(colors.hover),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** 动态卡：该主题的缩小插画（用主题自带配色画）+ 主题名。 */
+@Composable
+private fun SceneSkinCard(theme: SceneTheme, selected: Boolean, onClick: () -> Unit) {
+    val colors = skinColors(theme.defaultSkin())
+    val scene = ScenePalette(base = colors.bg, ink = colors.fg, accent = colors.accent)
+    SkinCardFrame(theme.label, selected, onClick) {
+        Canvas(
             modifier = Modifier.fillMaxWidth().height(40.dp)
-                .background(pv.bg)
+                .background(colors.bg)
                 .border(
                     width = if (selected) 2.dp else 1.dp,
                     color = if (selected) Teal else Hairline,
                 ),
-            contentAlignment = Alignment.Center,
         ) {
-            if (skin == SkinOption.KEEP) {
-                // 「跟随系统」：一浅一深的双色底（不写字，免得误读成某个具体主题）
-                Row(Modifier.fillMaxSize()) {
-                    Box(Modifier.weight(1f).fillMaxHeight().background(Color(0xFFF2F2F2)))
-                    Box(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF3A3A3A)))
-                }
-            } else {
-                Text("你", fontSize = 17.sp, color = pv.fg)
-            }
-            // 强调条贴底：每款的 accent，命中面板的选中下划线
-            Box(
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth(0.7f).height(3.dp)
-                    .background(pv.accent),
-            )
+            drawOpiSceneBackdrop(scene, theme, phase = 0f, muted = 0.20f)
         }
+    }
+}
+
+@Composable
+private fun SkinCardFrame(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    preview: @Composable () -> Unit,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.width(70.dp).clickable(onClick = onClick).padding(2.dp),
+    ) {
+        preview()
         Spacer(Modifier.height(5.dp))
         Text(
-            skin.value,
+            label,
             fontSize = 12.sp,
             color = if (selected) Teal else Ink,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,

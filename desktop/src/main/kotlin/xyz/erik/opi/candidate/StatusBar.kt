@@ -268,7 +268,9 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
      * 而提示期间按钮列会被替掉（见下），连点换肤时反而挡路；没生效才占一行。
      */
     fun cycleSkin() {
-        val next = s.copy(skin = nextSkin(s.skin))
+        // 2026-10-31：纯色 11 款 → 动态 19 套依次循环，Skin 跟着主题走。
+        val (theme, skin) = nextSkinChoice(s.background, s.skin)
+        val next = s.copy(background = theme, skin = skin)
         s = next
         report(if (saveSettings(next)) null else saveStatusMessage(live = false))
     }
@@ -414,14 +416,15 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
                 )
             }
         }
-        // 条随 `Skin=` 换装（≤1s，见文件头的同步说明）：根部 provide 一次，子
-        // composable 读 LocalBarPalette —— 与 Android 侧 LocalKeyboardPalette 同套做法。
-        val palette = skinColors(s.skin)
+        // 条随皮肤换装（≤1s，见文件头的同步说明）：动态主题映射出配色，纯色直接用
+        // Skin=；根部 provide 一次，子 composable 读 LocalBarPalette。
+        val theme = s.background
+        val palette = skinColors(if (theme != null) theme.defaultSkin() else s.skin)
         if (shown) CompositionLocalProvider(LocalBarPalette provides palette) {
             // 根盒 = 整个条窗（条 + 透明边距）；插画铺在边距里，条本体再压在上面。
             Box(Modifier.fillMaxSize()) {
-                if (halo > 0.dp) {
-                    StatusBarOverflowScene(palette, s.background, halo, metrics.height, Modifier.fillMaxSize())
+                if (halo > 0.dp && theme != null) {
+                    StatusBarOverflowScene(palette, theme, halo, metrics.height, Modifier.fillMaxSize())
                 }
                 // Windows = 小圆角（Linux 的 shape 是 RectangleShape，像素不变）。
                 Box(

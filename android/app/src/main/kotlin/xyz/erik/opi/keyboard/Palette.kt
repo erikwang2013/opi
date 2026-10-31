@@ -290,8 +290,8 @@ enum class SkinOption(val id: String, val label: String) {
         }
 
     companion object {
-        /** 未知 id（旧版本/手改坏了）→ 不改动，不抛（与其它偏好同一条容错约定）。 */
-        fun fromId(id: String?): SkinOption = entries.firstOrNull { it.id == id } ?: FOLLOW
+        /** 未知 id（旧版本/手改坏了）→ 清爽（默认皮肤），不抛（与其它偏好同一条容错约定）。 */
+        fun fromId(id: String?): SkinOption = entries.firstOrNull { it.id == id } ?: FRESH
     }
 }
 

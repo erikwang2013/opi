@@ -85,18 +85,19 @@ class ImePreferences(private val store: PrefStore) {
             store.put(KEY_ELDER, v.elder)
         }
 
-    /** 皮肤（[SkinOption] 的 id 字符串；未知值回默认，同其它偏好）。 */
+    /** 皮肤（[SkinOption] 的 id 字符串；未知值回默认「清爽」，同其它偏好）。 */
     var skin: SkinOption
         get() = SkinOption.fromId(store.getString(KEY_SKIN))
         set(v) = store.put(KEY_SKIN, v.id)
 
     /**
-     * 动态背景主题（2026-10-30）：与桌面 `Background=` 同一套 id；缺键/未知 → 田园
-     * （改动前的原画）。只影响小欧自绘背景，与引擎无关。
+     * 动态皮肤主题（2026-10-30）：与桌面 `Background=` 同一套 id；缺键/空/未知 =
+     * 纯色皮肤（配色见 [skin]）。只影响小欧自绘背景，与引擎无关。
      */
-    var scene: SceneTheme
-        get() = SceneTheme.fromId(store.getString(KEY_SCENE))
-        set(v) = store.put(KEY_SCENE, v.id)
+    var scene: SceneTheme?
+        get() = store.getString(KEY_SCENE)?.takeIf { it.isNotEmpty() }
+            ?.let { id -> SceneTheme.entries.firstOrNull { it.id == id } }
+        set(v) = store.put(KEY_SCENE, v?.id ?: "")
 
     var learn: Boolean
         get() = store.getBoolean(KEY_LEARN, true)

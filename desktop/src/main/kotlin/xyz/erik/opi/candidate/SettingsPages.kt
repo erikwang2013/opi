@@ -208,31 +208,24 @@ internal fun AppearancePage(s: OpSettings, apply: (OpSettings) -> Unit) {
     val windows = isWindows()
     SectionTitle("皮肤")
     Spacer(Modifier.height(8.dp))
-    SkinPicker(s.skin) { apply(s.copy(skin = it)) }
+    // 2026-10-31 用户裁决：动态背景就是皮肤；纯色皮肤也并回同一张列表（默认清爽）。
+    SceneSkinPicker(
+        selectedScene = s.background,
+        selectedSkin = s.skin,
+        onSelectScene = { theme ->
+            apply(s.copy(background = theme, skin = theme.defaultSkin()))
+        },
+        onSelectSkin = { skin -> apply(s.copy(background = null, skin = skin)) },
+    )
     Spacer(Modifier.height(7.dp))
     Text(
         if (windows) {
-            "候选窗、状态栏共用这一款皮肤（状态栏 logo 单击也会循环换肤）；" +
-                "选一款后 1 秒内跟随。「不改动」= 保持默认深色。"
+            "11 款纯色 + 19 套动态皮肤：纯色只换配色，动态插画与配色一起换；" +
+                "候选窗 / 状态栏 1 秒内跟随，状态栏 logo 单击也会按顺序循环。"
         } else {
-            "皮肤是 fcitx5 的全局主题（对所有输入法生效）；选一款即时换。" +
-                "「不改动」= 小欧不介入主题。"
+            "11 款纯色 + 19 套动态皮肤：纯色只换配色，动态插画与配色一起换；" +
+                "同时写入 fcitx5 的全局主题，状态栏 logo 单击也会按顺序循环。"
         },
-        fontSize = 12.sp, color = Muted,
-    )
-    SectionTitle("动态背景")
-    Spacer(Modifier.height(8.dp))
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        for (theme in xyz.erik.opi.scene.SceneTheme.entries) {
-            LayoutChip(theme.label, theme == s.background) { apply(s.copy(background = theme)) }
-        }
-    }
-    Spacer(Modifier.height(7.dp))
-    Text(
-        "状态栏条外角色与手机键盘插画共用这一套；颜色仍跟随上面的皮肤，不另算一套配色。",
         fontSize = 12.sp, color = Muted,
     )
     SectionTitle("候选字号")

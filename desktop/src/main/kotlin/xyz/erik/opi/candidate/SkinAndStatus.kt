@@ -131,19 +131,11 @@ enum class SkinOption(val value: String) {
     ;
 
     companion object {
-        /** 未知值（手改坏/别的版本写的）回默认 —— 与 bool 的坏值处理同一档。 */
+        /** 未知值（手改坏/别的版本写的）回默认清爽 —— 与 bool 的坏值处理同一档。 */
         fun fromValue(v: String?): SkinOption =
-            entries.firstOrNull { it.value == v } ?: KEEP
+            entries.firstOrNull { it.value == v } ?: FRESH
     }
 }
-
-/**
- * 下一款皮肤（状态栏 LOGO 单击循环换肤用，2026-10-13 用户裁决「点击 logo 的颜色变化」）：
- * 按枚举序绕一圈，**含「不改动」**——转一圈能回到条的本色，不是单向跑掉。
- * 纯函数，首尾与「一圈不重样」由 StatusBarTest 钉住。
- */
-internal fun nextSkin(skin: SkinOption): SkinOption =
-    SkinOption.entries[(skin.ordinal + 1) % SkinOption.entries.size]
 
 /**
  * 状态栏（悬浮条）设置：master 隐藏 + 9 个按钮的常驻开关（未常驻 = 不显示）。

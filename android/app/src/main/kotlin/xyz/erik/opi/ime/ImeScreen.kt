@@ -108,7 +108,7 @@ fun ImeScreen(
         // 工具条向上延伸（布局/高度一个字没动）。2026-10-09 那条「候选词没词的时候不
         // 显示背景」管的是**候选槽**（现在候选槽与工具条共用一格、恒有内容），不冲突；
         // 各分片仍照旧给自己铺底（工具条 toolbarBg、候选栏 barBg、键区半透明 barBg 罩在插画上）。
-        Column(modifier = Modifier.fillMaxSize().opiSceneBackground(state.scene)) {
+        Column(modifier = Modifier.fillMaxSize().opiSkinBackground(state.scene)) {
             // ---- 拼音行（2026-10-15 用户裁决「移动端的拼音在候选词上方显示，不要在
             // 输入框里」）：槽位常驻（空时不铺底色），画的是 `composingText()`
             // （9 键 = 分词读数 `ni'hao`、其余方案 = 原字母）+ 五笔编码提示。
@@ -249,10 +249,8 @@ private fun KeyboardArea(
             initialCategory = state.symbolPageInitialCategory,
         )
         ImeState.View.SKIN -> SkinPanel(
-            selected = state.skin,
-            onSelect = state::selectSkin,
-            onClose = state::backToLetters, selectedScene = state.scene, onSelectScene = state::selectScene,
-            modifier = modifier,
+            state.scene, state.skin, state::selectScene, state::selectSolidSkin,
+            state::backToLetters, modifier,
         )
         // 输入模式/键盘模式面板（2026-10-09 用户裁决「做成像皮肤那样的面板，不要弹框」）：
         // 形态与皮肤同一套；选中/开关的收尾走各自既有路径（selectInputMode 自己回键面）。

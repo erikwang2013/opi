@@ -624,7 +624,8 @@ ChinesePunct=True   # 中文标点（，。、与成对引号）
 Fuzzy=True          # 模糊音（z/zh、n/l…）
 Jianpin=True        # 简拼（声母缩写，nh → 你好）
 ShiftToggle=True    # Shift 轻按切换中英文（2026-10-09 起）
-Skin=不改动          # 候选面板皮肤（2026-10-09 起；值存的就是「不改动/浅色/深色/宣纸/朱砂/清爽/湛蓝/柠檬/晚霞/星光/紫藤/松林」）
+Skin=清爽            # 候选面板皮肤（11 款纯色之一；缺键/未知值回「清爽」）
+Background=         # 动态主题 id（19 套之一；空 = 纯色皮肤，配色走 Skin=）
 # —— 2026-10-13/14 起补齐的一批（键名的唯一出处仍是 opi_config.h）——
 FuzzyPairs=         # 模糊音逐对（逗号分隔组名，如 zh/z,n/l；留空按上面的总开关）
 Correction=True     # 拼音纠错（相邻键/多打/少打）
@@ -735,28 +736,30 @@ fcitx5 读侧是 `crates/fcitx5-opi/src/custom_phrases.rs` 的 `load_custom_phra
 - ⚠️ fcitx5 < 5.1.12 上没有超时判定（那版没有这个 API，代码按能力探测降级）：按住
   很久再抬起也会切一次；组合键的撤销判定不受影响。
 
-**皮肤（Skin）**：内置十一张 —— 浅色 / 深色 / 宣纸 / 朱砂 / 清爽 / 湛蓝 / 柠檬 / 晚霞 / 星光 / 紫藤 / 松林（紫藤/松林 2026-10-13 加）
-（后五款 2026-10-10 加；星光与「暗光」是两款深色，配色取向不同）。⚠️ **候选面板不是本插件画的**：
-它由 UI addon（本机是 classicui）按主题绘制，所以「换皮肤」= 改
-`~/.config/fcitx5/conf/classicui.conf` 的 `Theme=`/`DarkTheme=` 并热重载 classicui。
+**皮肤（Skin / Background）**：11 款纯色 + 19 套动态主题同在一张列表（默认清爽）。
+纯色只换配色；动态主题自带配色，候选面板与状态栏一起换（`ThemeSkin.kt` 的
+`defaultSkin()` 映射）。⚠️ **候选面板不是本插件画的**：它由 UI addon（本机是 classicui）
+按主题绘制，所以换纯色皮肤 = 改 `~/.config/fcitx5/conf/classicui.conf` 的
+`Theme=`/`DarkTheme=` 并热重载 classicui；`Background=` 只供小欧自绘 UI（状态栏、
+候选窗）取色，fcitx5 不认。
 
 - **对所有输入法生效**（面板主题是框架级的一份设置，做不到只影响 OPI，如实记）。
-- 状态栏悬浮条自 2026-10-12 起**也随这张皮肤换色**（自绘窗要吃同一份色板，见 §4.8）。
-- 「不改动」= OPI 不介入（默认）。选皮肤只在**值发生变化**时才写文件：fcitx5 每次启动
+- 状态栏悬浮条自 2026-10-12 起**也随皮肤换色**（有 `Background=` 时按主题配色，
+  否则按 `Skin=`，见 §4.8）。
+- 选皮肤只在**值发生变化**时才写文件：fcitx5 每次启动
   不会拿旧值把用户后来改的主题顶回去。
 - **图形化的选法**（2026-10-09 起）：设置窗（§4.7，菜单「小欧输入法」或状态栏「设」）
-  有「外观」一节 —— 十张**预览卡**（底色 + 样字 + 强调条，FlowRow 两行），点击即换。
-  颜色取自 `scripts/gen_fcitx5_themes.py` 的 SKINS 色板（逐值对应，由 SettingsTest
-  的 `skin previews match the theme generator` 现读现比），与配置面 `Skin=` 的十个
-  字面值一一对应。
+  有「外观」一节 —— 11 张**纯色卡** + 19 张**动态卡**（动态卡直接画该主题的缩小插画），
+  点击即换。色值取自 `scripts/gen_fcitx5_themes.py` 的 SKINS 色板（逐值对应，由
+  SettingsTest 的 `skin palettes match the theme generator` 现读现比）。
 - 想换回系统主题：同一张「附加组件」列表里找**经典界面**（classicui）→ 齿轮 → 主题改回
-  `deepin-light`/`deepin-dark`；或把本项选回「不改动」后自己改。
+  `deepin-light`/`deepin-dark`；或手改 `Skin=不改动` 后自己改（旧值仍能解析，面板不再列出）。
 - ⚠️ 面板由 **classicui** 绘制才看得见这套主题（fcitx5-qt 等别的 UI 不吃它；
   那种环境下文件仍会写、面板不变 —— 重载对未加载的 addon 是 no-op，不会多起面板）。
 - 主题内容是生成产物：`python3 scripts/gen_fcitx5_themes.py`（`--check` 与产物对账）。
 
 ⚠️ 读侧**容忍**：值大小写不敏感、`#` 行内注释、未知键忽略、缺键回默认（默认**四项全开 +
-ShiftToggle 开 + 皮肤「不改动」**= 引擎既有行为/不介入）。手改坏一个值只会让那一项回默认。
+ShiftToggle 开 + 皮肤「清爽」、`Background=` 空**= 纯色皮肤）。手改坏一个值只会让那一项回默认。
 
 ### 4.7 桌面应用（设置窗/候选窗）与打包
 
@@ -830,9 +833,10 @@ Linux 上 = `--settings` 的设置窗（无参数启动也是它）。**v1.6.0 �
 - 自启：`/etc/xdg/autostart/opi-statusbar.desktop`（装包即生效，登录自动起）；
   手动起：`/opt/opi/bin/opi --statusbar`。
 - **跟随皮肤**（2026-10-12 用户报障「设置皮肤后状态栏皮肤没同步变化」的修复）：条按配置
-  里的 `Skin=` 取色 —— 色板 `desktop/…/SkinPalette.kt`（五角色 ← §皮肤那节 SKINS 的
+  里的 `Background=` 主题配色取色，无主题时按 `Skin=` —— 色板
+  `desktop/…/SkinPalette.kt`（五角色 ← §皮肤那节 SKINS 的
   `bg`/`text`/`hl_bg`/`sep`/`accent`，逐值由 SettingsTest 的 `skin palettes match the
-  theme generator` 现读现比；「不改动」= 条自绘以来的固定深色，行为一字不变）。
+  theme generator` 现读现比；旧值「不改动」= 条自绘以来的固定深色，行为一字不变）。
   同步**没有第二条通道**：条本来就每秒重读配置文件（§4.8 上一条），保存后 ≤1s 自己换。
   ⚠️ **同类未做**：虚拟键盘窗、符号大全窗（以及 Windows 候选窗）仍各写死深色 —— 要一起
   随皮肤的话另立一条（色板已备好，见 `SkinPalette.kt`）。

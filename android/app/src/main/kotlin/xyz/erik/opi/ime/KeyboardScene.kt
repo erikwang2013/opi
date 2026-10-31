@@ -10,6 +10,7 @@
 
 package xyz.erik.opi.ime
 
+import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -25,6 +26,12 @@ internal const val KEY_AREA_SCRIM_ALPHA = 0.45f
 
 /** 工具条底色不透明度：图标区几乎不透明，只让插画透一成（候选栏保持全不透明保可读性）。 */
 internal const val TOOLBAR_SCENE_ALPHA = 0.90f
+
+/** 根列背景：动态主题 = 插画，纯色皮肤（null）= 皮肤底色。 */
+@Composable
+internal fun Modifier.opiSkinBackground(theme: SceneTheme?): Modifier =
+    if (theme == null) background(LocalKeyboardPalette.current.barBg)
+    else opiSceneBackground(theme)
 
 /** 根列背景 = 皮肤底色 + 动态插画（只在绘制阶段刷新）。 */
 @Composable

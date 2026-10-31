@@ -245,17 +245,6 @@ class StatusBarTest {
     }
 
     @Test
-    fun `logo click cycles every skin and comes back around`() {
-        // LOGO 单击 = 换下一款皮肤（2026-10-13 用户裁决「点击 logo 的颜色变化」）。
-        // 钉三件：第一步、一圈把每款都走到（**含「不改动」**，转得回条的本色）、再一步回到起点。
-        // 由 entries 驱动、不复述清单：将来加款这条自己跟上（加款要同时改的六处在 SettingsTest 钉着）。
-        assertEquals(SkinOption.LIGHT, nextSkin(SkinOption.KEEP))
-        val seen = generateSequence(SkinOption.KEEP) { nextSkin(it) }.take(SkinOption.entries.size).toList()
-        assertEquals("绕一圈该把每款都恰好走到一次", SkinOption.entries.toList(), seen.sorted())
-        assertEquals("再走一步该回到起点", SkinOption.KEEP, nextSkin(seen.last()))
-    }
-
-    @Test
     fun `windows shows the same buttons as linux`() {
         // 2026-10-20 控制面落地后两平台动作面相同：Windows 的 trad/punct/fullwidth/
         // lang/englishpro/mode 走 ControlPlane.kt → 候选窗 broker → TSF，不再按平台过滤。

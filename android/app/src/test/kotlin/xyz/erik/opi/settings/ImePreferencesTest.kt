@@ -40,8 +40,8 @@ class ImePreferencesTest {
         assertEquals(true, p.jianpin)
         // 「表情中显示自有」缺省关 = 「自有」子页隐藏（2026-10-20 用户裁决）。
         assertEquals(false, p.showOwn)
-        assertEquals(SkinOption.FOLLOW, p.skin)
-        assertEquals(SceneTheme.MEADOW, p.scene)
+        assertEquals(SkinOption.FRESH, p.skin)
+        assertEquals(null, p.scene)
         // 9 键「自定义」标点缺省 = 未选（键面「自定义」）。
         assertEquals("", p.customPunct)
     }
@@ -83,6 +83,9 @@ class ImePreferencesTest {
         assertEquals(true, q.showOwn)
         assertEquals(SkinOption.PAPER, q.skin)
         assertEquals(SceneTheme.NIGHT, q.scene)
+        // 纯色皮肤：清掉主题也要能往返（空串 = 无插画）。
+        p.scene = null
+        assertEquals(null, ImePreferences(store).scene)
     }
 
     @Test
@@ -96,8 +99,8 @@ class ImePreferencesTest {
         val p = ImePreferences(store)
         assertEquals(InputMode.PINYIN9, p.inputMode)
         assertEquals(KeyboardModes.OneHand.OFF, p.keyboardModes.oneHand)
-        assertEquals(SkinOption.FOLLOW, p.skin)
-        assertEquals(SceneTheme.MEADOW, p.scene)
+        assertEquals(SkinOption.FRESH, p.skin)
+        assertEquals(null, p.scene)
         assertEquals(SHUANGPIN_LAYOUTS_ANDROID.first(), p.shuangpinLayout)
     }
 

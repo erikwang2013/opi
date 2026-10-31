@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.keyboard.SkinOption
+import xyz.erik.opi.keyboard.defaultSkin
 import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.scene.SceneTheme
 
@@ -74,11 +75,11 @@ class ImeState(
      * 皮肤（工具条「皮肤」面板的当前选择）。与键盘模式的优先级见 [SkinOption]：
      * 长辈 > 暗光 > 皮肤 —— 皮肤是「底」，模式是临时覆盖。
      */
-    var skin by mutableStateOf(xyz.erik.opi.keyboard.SkinOption.FOLLOW)
+    var skin by mutableStateOf(xyz.erik.opi.keyboard.SkinOption.FRESH)
         private set
 
-    /** 动态背景主题（与桌面 `Background=` 同集）；皮肤管配色，这一项管插画风格。 */
-    var scene by mutableStateOf(SceneTheme.MEADOW)
+    /** 动态皮肤主题；null = 纯色皮肤（配色见 [skin]）。与桌面 `Background=` 同集。 */
+    var scene: SceneTheme? by mutableStateOf(null)
         private set
 
     /** 符号面板的起始 Tab（工具条表情入口直达 Emoji）。 */
@@ -241,15 +242,20 @@ class ImeState(
         persist()
     }
 
-    /** 皮肤选择（工具条「皮肤」面板）→ 立即生效 + 落盘。面板**不自动关**（可连着换着看）。 */
-    fun selectSkin(s: xyz.erik.opi.keyboard.SkinOption) {
-        skin = s
+    /**
+     * 皮肤 = 动态主题（2026-10-31 用户裁决「动态背景就是皮肤」）：选主题时
+     * 配色跟着主题的默认皮肤走。面板**不自动关**（可连着换着看）。
+     */
+    fun selectScene(t: SceneTheme) {
+        scene = t
+        skin = t.defaultSkin()
         persist()
     }
 
-    /** 背景主题选择（同一面板的「动态背景」段）→ 立即生效 + 落盘。 */
-    fun selectScene(t: SceneTheme) {
-        scene = t
+    /** 纯色皮肤：插画关掉，键面/候选栏/工具条用该皮肤配色。 */
+    fun selectSolidSkin(s: SkinOption) {
+        scene = null
+        skin = s
         persist()
     }
 
@@ -336,14 +342,16 @@ class ImeState(
     fun restore(
         inputMode: InputMode,
         modes: KeyboardModes,
-        skin: SkinOption = SkinOption.FOLLOW,
+        skin: SkinOption = SkinOption.FRESH,
         englishPro: Boolean = false,
         customPunct: String = "",
-        scene: SceneTheme = SceneTheme.MEADOW,
+        scene: SceneTheme? = null,
     ) {
         keyboardModes = modes
-        this.skin = skin
+        // 动态主题自带配色；纯色用存下来的皮肤，旧配置的「不改动」迁移为默认清爽。
         this.scene = scene
+        this.skin = scene?.defaultSkin()
+            ?: skin.takeUnless { it == SkinOption.FOLLOW } ?: SkinOption.FRESH
         this.englishPro = englishPro
         this.customPunct = customPunct
         selectInputMode(inputMode)

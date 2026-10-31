@@ -42,7 +42,7 @@ class SettingsTest {
         for (line in listOf(
             // 模糊音与智能联想缺省**关**（2026-10-15 / 2026-10-28 用户裁决）：整行契约跟着翻。
             "Learn=True", "ChinesePunct=True", "Fuzzy=False", "Jianpin=True",
-            "ShiftToggle=True", "Skin=不改动", "CandidateFont=中", "Association=False",
+            "ShiftToggle=True", "Skin=清爽", "Background=", "CandidateFont=中", "Association=False",
         )) {
             assertTrue("缺少键行：$line\n$ini", ini.contains("$line\n"))
         }
@@ -78,7 +78,7 @@ class SettingsTest {
         assertFalse(merged, merged.contains("Learn=True"))
         // 没出现过的管理键要补齐（旧文件里缺键 = 用默认值写回去）
         assertTrue(merged, merged.contains("ChinesePunct=True\n"))
-        assertTrue(merged, merged.contains("Skin=不改动\n"))
+        assertTrue(merged, merged.contains("Skin=清爽\n"))
         assertTrue(merged, merged.contains("ShiftToggle=True\n"))
     }
 
@@ -97,10 +97,10 @@ class SettingsTest {
     }
 
     @Test
-    fun `unknown skin falls back to keep`() {
-        // 手改坏/未来版本的键值 ⇒ 默认「不改动」（与 bool 坏值同一档，不抛）。
-        assertEquals(SkinOption.KEEP, OpSettings.fromIni("Skin=彩虹\n").skin)
-        assertEquals(SkinOption.KEEP, OpSettings.fromIni("").skin)
+    fun `unknown skin falls back to fresh`() {
+        // 手改坏/未来版本的键值 ⇒ 默认「清爽」（与 bool 坏值同一档，不抛）。
+        assertEquals(SkinOption.FRESH, OpSettings.fromIni("Skin=彩虹\n").skin)
+        assertEquals(SkinOption.FRESH, OpSettings.fromIni("").skin)
     }
 
     @Test

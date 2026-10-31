@@ -403,27 +403,19 @@ class ImeStateTest {
     // ---- 皮肤（2026-10-09 用户裁决「移动端没有皮肤设置」）----
 
     @Test
-    fun selectSkinSwitchesPanelAndPersists() {
+    fun selectThemeSwitchesSkinAndPersists() {
         var persisted = 0
         val state = newState().apply { persist = { persisted++ } }
         state.openSkin()
         assertEquals(ImeState.View.SKIN, state.view)
-        state.selectSkin(SkinOption.CINNABAR)
-        assertEquals(SkinOption.CINNABAR, state.skin)
+        state.selectScene(SceneTheme.FOREST)
+        assertEquals(SceneTheme.FOREST, state.scene)
+        assertEquals("动态主题就是皮肤：插画与配色一起换", SkinOption.PINE, state.skin)
         assertEquals("选择即落盘", 1, persisted)
         // 面板不自动关（连换着比才顺手）
         assertEquals(ImeState.View.SKIN, state.view)
         state.backToLetters()
         assertEquals(ImeState.View.QWERTY, state.view)
-    }
-
-    @Test
-    fun selectSceneChangesTheBackgroundAndPersists() {
-        var persisted = 0
-        val state = newState().apply { persist = { persisted++ } }
-        state.selectScene(SceneTheme.FOREST)
-        assertEquals(SceneTheme.FOREST, state.scene)
-        assertEquals("背景主题选择即落盘", 1, persisted)
     }
 
     @Test
@@ -437,11 +429,32 @@ class ImeStateTest {
     }
 
     @Test
-    fun restoreCarriesTheSkin() {
+    fun restoreDerivesSkinFromTheme() {
         val state = newState()
         state.restore(InputMode.PINYIN26, KeyboardModes(), SkinOption.PAPER, scene = SceneTheme.NIGHT)
-        assertEquals(SkinOption.PAPER, state.skin)
+        assertEquals("动态主题自带配色，存下来的皮肤不再生效", SkinOption.STARLIGHT, state.skin)
         assertEquals(SceneTheme.NIGHT, state.scene)
+    }
+
+    @Test
+    fun restoreKeepsSolidSkinAndMigratesFollowToFresh() {
+        val state = newState()
+        state.restore(InputMode.PINYIN26, KeyboardModes(), SkinOption.WISTERIA)
+        assertEquals(SkinOption.WISTERIA, state.skin)
+        assertEquals("纯色皮肤没有插画", null, state.scene)
+        state.restore(InputMode.PINYIN26, KeyboardModes(), SkinOption.FOLLOW)
+        assertEquals("旧默认「不改动」迁到默认清爽", SkinOption.FRESH, state.skin)
+    }
+
+    @Test
+    fun selectSolidSkinClearsScene() {
+        var persisted = 0
+        val state = newState().apply { persist = { persisted++ } }
+        state.selectScene(SceneTheme.FOREST)
+        state.selectSolidSkin(SkinOption.SUNSET)
+        assertEquals(null, state.scene)
+        assertEquals(SkinOption.SUNSET, state.skin)
+        assertEquals(2, persisted)
     }
 
     @Test

@@ -41,10 +41,10 @@ class SkinOptionTest {
     }
 
     @Test
-    fun unknownOrMissingIdFallsBackToFollow() {
-        assertEquals(SkinOption.FOLLOW, SkinOption.fromId(null))
-        assertEquals(SkinOption.FOLLOW, SkinOption.fromId("RAINBOW"))
-        assertEquals(SkinOption.FOLLOW, SkinOption.fromId(""))
+    fun unknownOrMissingIdFallsBackToFresh() {
+        assertEquals(SkinOption.FRESH, SkinOption.fromId(null))
+        assertEquals(SkinOption.FRESH, SkinOption.fromId("RAINBOW"))
+        assertEquals(SkinOption.FRESH, SkinOption.fromId(""))
     }
 
     @Test

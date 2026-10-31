@@ -30,7 +30,7 @@ fun mergeIni(existing: String, s: OpSettings): String {
         "PinyinMethod" to s.pinyinMethod,
         "ShiftToggle" to boolText(s.shiftToggle),
         "Skin" to s.skin.value,
-        "Background" to s.background.id,
+        "Background" to (s.background?.id ?: ""),
         // 候选字号只在本窗读写（真落点是 classicui.conf）；进 managed 同 StatusBar*。
         "CandidateFont" to s.candidateFont,
         // 词库停用名单（2026-10-14）：与 StatusBar*/CandidateFont 同一条，不分平台写全。

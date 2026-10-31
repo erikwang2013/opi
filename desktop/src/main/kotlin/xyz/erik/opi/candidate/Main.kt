@@ -95,6 +95,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlin.system.exitProcess
 import xyz.erik.opi.pet.OpiPetWindowIcon
+import xyz.erik.opi.scene.SceneTheme
 
 // ---------- 窗口状态（snapshot state，服务器线程跨线程写入） ----------
 
@@ -203,11 +204,13 @@ private fun runApp(args: Array<String>) = application {
         // 用同一条既有机制跟上 —— 1s 读一次小文件；首拍立即读，不等 1s。
         // · 皮肤（2026-10-22 用户报障「点击状态栏logo切换背景，候选词框的背景没变化」）
         // · 候选字号（设置窗「外观 → 候选字号」，三档缩放见 candidateFontScale）
-        var skin by remember { mutableStateOf(SkinOption.KEEP) }
+        var theme by remember { mutableStateOf<SceneTheme?>(null) }
+        var skin by remember { mutableStateOf(SkinOption.FRESH) }
         var fontName by remember { mutableStateOf(CLASSIC_UI_FONT_DEFAULT) }
         LaunchedEffect(Unit) {
             while (true) {
                 val st = withContext(Dispatchers.IO) { loadSettings() }
+                if (st.background != theme) theme = st.background
                 if (st.skin != skin) skin = st.skin
                 if (st.candidateFont != fontName) fontName = st.candidateFont
                 delay(1000)
@@ -265,7 +268,12 @@ private fun runApp(args: Array<String>) = application {
         ) {
             // 皮肤在 Window 内容里 provide 一次：候选面板与状态栏读同一份角色表
             // （SkinPalette.kt），换肤只改这一个来源。`skin` 由上面的 1s 轮询更新。
-            CompositionLocalProvider(LocalBarPalette provides skinColors(skin)) {
+            val currentTheme = theme
+            CompositionLocalProvider(
+                LocalBarPalette provides skinColors(
+                    if (currentTheme != null) currentTheme.defaultSkin() else skin,
+                ),
+            ) {
                 CandidatePanel(
                     model = model,
                     onSelect = { activeServer().sendSelect(it) },
