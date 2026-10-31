@@ -126,6 +126,9 @@ Type: filesandordirs; Name: "{app}\app"
 Type: filesandordirs; Name: "{app}\runtime"
 
 [Files]
+; 2026-11-01: app\opi_ffi.dll (LAN clipboard core) ships inside the jpackage app
+; image and is installed by the recursesubdirs entry below. First listen triggers
+; the Windows Firewall prompt; this installer intentionally adds NO firewall rule.
 ; 2026-10-21 real-machine upgrade: tsf_opi.dll AND app\*.opid are held by
 ; the old TSF DLL inside Explorer/other hosts. ssInstall moves both out to a
 ; same-volume trash directory first, so this entry simply writes the new files.

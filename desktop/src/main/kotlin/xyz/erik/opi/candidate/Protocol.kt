@@ -12,6 +12,8 @@ internal sealed interface JVal {
     data class JNum(val v: Long) : JVal
     /** 布尔（2026-10-20 加：控制面应答带 `"ok":true`）。此前协议里没有布尔，解析器只认字面 true/false。 */
     data class JBool(val v: Boolean) : JVal
+    /** JSON `null`（2026-11-01 加：opi-clip 的 `pairing_finished.reason` 成功时为 null）。 */
+    data object JNull : JVal
     data class JArr(val v: List<JVal>) : JVal
     data class JObj(val v: Map<String, JVal>) : JVal
 }
@@ -68,6 +70,7 @@ private class JParse(private val s: String) {
             '[' -> nestedContainer { parseArray() }
             't' -> literal("true")?.let { JVal.JBool(true) }
             'f' -> literal("false")?.let { JVal.JBool(false) }
+            'n' -> literal("null")?.let { JVal.JNull }
             else -> parseNumber()
         }
     }

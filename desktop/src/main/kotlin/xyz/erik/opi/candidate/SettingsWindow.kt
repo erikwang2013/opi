@@ -88,6 +88,9 @@ internal enum class SettingsTab(val label: String) {
     // 五笔页（2026-10-14，M4 第二波）：两平台都出 —— 六键**两端读侧都认**
     // （fcitx5 的 opi_config.h / TSF 的 settings.rs），没有「一半平台够不着」的键。
     WUBI("五笔"),
+    // 跨设备剪贴板（2026-11-01）：默认关；宿主在 `--statusbar` 常驻进程里，
+    // 本页通过本机回环控制面读状态/发命令（见 ClipControl.kt / ClipPage.kt）。
+    CLIP("跨设备剪贴板"),
     // 高级页（2026-10-24）：中英两套自定义短语。真源是两平台同一条数据目录下的
     // `custom_phrases.json` / `custom_phrases_en.json`（见 CustomPhraseStore.kt），
     // 两端 IME 各自重读。
@@ -302,6 +305,7 @@ fun SettingsWindow() {
                     // 尾 lambda 只绑「最后一个参数是函数类型」的位置。
                     SettingsTab.DICTS -> DictsPage(s, ::apply, { status = it })
                     SettingsTab.WUBI -> WubiPage(s, ::apply)
+                    SettingsTab.CLIP -> ClipPage(s, ::apply) { status = it }
                     SettingsTab.ADVANCED -> {
                         CustomPhrasesPage { status = it }
                         CustomPhrasesPage(english = true) { status = it }

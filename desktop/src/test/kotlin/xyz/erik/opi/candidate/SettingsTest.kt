@@ -285,6 +285,8 @@ class SettingsTest {
                 SettingsTab.STATUSBAR, SettingsTab.SYMBOLS, SettingsTab.DICTS,
                 // 五笔页（2026-10-14，M4 第二波）：两平台都出 —— 六键两端读侧都认。
                 SettingsTab.WUBI,
+                // 跨设备剪贴板（2026-11-01）：两平台都出；Wayland 在页内降级为手动发送。
+                SettingsTab.CLIP,
                 // 高级页（2026-10-24）：自定义短语，两端 IME 读同一个宿主文件。
                 SettingsTab.ADVANCED,
                 SettingsTab.ABOUT,

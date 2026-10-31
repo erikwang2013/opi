@@ -117,6 +117,11 @@ data class OpSettings(
      */
     val wubi: WubiSettings = WubiSettings(),
     val statusbar: StatusBarSettings = StatusBarSettings(),
+    /**
+     * 跨设备剪贴板总开关（2026-11-01；键 `ClipEnabled`）：**默认 false**。
+     * 只有本窗读写；状态栏常驻进程 1s 轮询后启停剪贴板宿主（见 ClipService.kt）。
+     */
+    val clipEnabled: Boolean = false,
 ) {
     /** 写成 ini。键名见文件头「三处逐字对应」。 */
     fun toIni(): String = buildString {
@@ -165,6 +170,8 @@ data class OpSettings(
         appendLine("StatusBarSettings=${boolText(statusbar.settings)}")
         // 统一键大小（2026-10-19）：整数百分比，状态栏进程 1s 轮询后自行重排。
         appendLine("StatusBarScale=${statusbar.scale}")
+        // 跨设备剪贴板（2026-11-01）：默认关；状态栏宿主的 1s 轮询是唯一读侧。
+        appendLine("ClipEnabled=${boolText(clipEnabled)}")
     }
 
     companion object {
@@ -229,6 +236,8 @@ data class OpSettings(
                     scale = map["StatusBarScale"]?.toIntOrNull()
                         ?.let(::statusBarScalePercent) ?: STATUS_BAR_SCALE_DEFAULT,
                 ),
+                // 缺键 = 关：老配置升级后不悄悄开局域网监听。
+                clipEnabled = bool("ClipEnabled", false),
             )
         }
     }

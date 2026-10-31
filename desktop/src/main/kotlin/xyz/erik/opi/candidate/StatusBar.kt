@@ -207,6 +207,8 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
             notice = null
         }
     }
+    // 跨设备剪贴板（2026-11-01）：宿主随设置启停；FFI 句柄由宿主自己的线程独占。
+    LaunchedEffect(s.clipEnabled) { ClipHost.setEnabled(s.clipEnabled) }
 
     // Windows 整体缩一档 + 胶囊圆角（2026-10-24 用户报障「win端的状态栏整体大了，
     // 边角也不是弧形」）；Linux 不乘、保持直角 —— 见 barMetrics/barShape。

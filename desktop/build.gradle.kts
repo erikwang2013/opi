@@ -175,6 +175,36 @@ tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageT
         }
     }
 
+// ---------- opi_ffi：跨设备剪贴板的动态库（2026-11-01）----------
+// 与 TSF DLL 同一条路：jpackage 的 --input 是 CMP 自己暂存的 libs 目录，不能手写，
+// 把库挂到 JPackage 任务的 files 集合即可。桌面 CI 任务没有单独编 Rust ⇒ 打包时
+// 在这里编一次；`OPI_FFI_LIB` 可指向预编译产物（设了就不再编，也绝不悄悄回退）。
+val ffiLibName =
+    if (System.getProperty("os.name").lowercase().contains("win")) "opi_ffi.dll"
+    else "libopi_ffi.so"
+val ffiOverride = providers.environmentVariable("OPI_FFI_LIB")
+val ffiFromCargo = file("../target/release/$ffiLibName")
+val buildOpiFfi = tasks.register<Exec>("buildOpiFfi") {
+    onlyIf { !ffiOverride.isPresent }
+    workingDir = projectDir.parentFile
+    commandLine("cargo", "build", "--release", "--locked", "-p", "opi_ffi")
+}
+
+tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask>()
+    .configureEach {
+        dependsOn(buildOpiFfi)
+        val lib = ffiOverride.map { file(it) }.orElse(ffiFromCargo)
+        if (ffiOverride.isPresent) {
+            check(lib.get().isFile) {
+                "OPI_FFI_LIB 指向的文件不存在：${lib.get().path}（打包需要文件，不是目录）"
+            }
+            check(lib.get().name == ffiLibName) {
+                "OPI_FFI_LIB 的文件名必须是 $ffiLibName（jpackage 按原文件名放进 app 目录）"
+            }
+        }
+        files.from(lib)
+    }
+
 // 康熙字典词库（2026-10-16，「全发」的桌面面）：词库页首启种子把它放进词库目录一次
 //（见 Dicts.kt 的 seedBundledDict）。真源 = `data/raw/kangxi.tsv`
 //（`scripts/gen_kangxi_dict.py` 生成；Android/包/desktop 三处消费同一份产物）。
