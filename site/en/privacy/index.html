@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Privacy Policy — opi · Open People Input</title>
-  <meta name="description" content="opi privacy policy: no personal data collected or uploaded, no accounts so no deletion process, and the only network access is an update check. Contact erik@erik.xyz.">
+  <meta name="description" content="opi privacy policy: no personal data collected or uploaded, no accounts so no deletion process. Network access is limited to update checks, user-initiated downloads and optional LAN clipboard. Contact erik@erik.xyz.">
   <meta name="robots" content="index, follow">
   <meta name="theme-color" content="#f3fbf4"><meta name="color-scheme" content="light">
   <link rel="canonical" href="https://opi.erik.xyz/en/privacy/">
@@ -62,7 +62,7 @@
       <p><strong>Applies to:</strong> the Android, iOS, HarmonyOS, Windows, Linux and macOS clients, and this website (opi.erik.xyz)</p>
     </div>
 
-    <p class="summary"><strong>In one sentence:</strong> opi collects, uploads and shares no personal information. There are no accounts, so there is no account-deletion process. The only network access is an update check; otherwise the clients are fully offline.</p>
+    <p class="summary"><strong>In one sentence:</strong> opi collects, uploads and shares no personal information. There are no accounts, so there is no account-deletion process. Normal typing is fully offline; the client only goes online when you check/download an update or enable cross-device clipboard. Clipboard data never goes through a cloud.</p>
 
     <h2>1. What we collect</h2>
     <p>We collect <strong>no personal information</strong>, including but not limited to: your input and candidates, clipboard contents, contacts, location, photos, device identifiers, usage statistics or crash logs. There are no accounts, registration or sign-in, and no advertising or profiling.</p>
@@ -75,15 +75,20 @@
       <li><strong>Windows / Linux / macOS:</strong> delete the local configuration and user-word files, or uninstall the app.</li>
     </ul>
 
-    <h2>3. The only network access: update checks</h2>
-    <p>Some clients offer “Check for updates” in Settings, which sends one ordinary HTTPS request to <code>https://opi.erik.xyz/version.json</code> to read the latest version number. The request does <strong>not</strong> carry input, user words, clipboard contents or device identifiers, and is not used for statistics or profiling. If you never check for updates, the client makes no network requests.</p>
+    <h2>3. Network access (only when you initiate it)</h2>
+    <p>Normal typing is fully offline. Network access happens only in these cases:</p>
+    <ul>
+      <li><strong>Update checks:</strong> some clients offer “Check for updates”, which sends one ordinary HTTPS request to <code>https://opi.erik.xyz/version.json</code> to read the latest version number. It does <strong>not</strong> carry input, user words, clipboard contents or device identifiers, and is not used for statistics or profiling.</li>
+      <li><strong>In-app updates:</strong> when you press Download, the client fetches the installer/hot-update package and verifies its size and SHA-256; no input or user data is sent.</li>
+      <li><strong>Cross-device clipboard (optional, off by default):</strong> only after you enable it and pair devices does the client open an encrypted connection (Noise + ChaCha20-Poly1305) to paired devices on the same LAN. Only plain text (≤256 KiB) is synced; discovery packets contain no clipboard contents; there is <strong>no cloud, no account and no history</strong>, and you can stop/revoke at any time. Your OS’s own cloud clipboard may sync independently; turn it off in system settings if you do not want that.</li>
+    </ul>
 
     <h2>4. System permissions</h2>
     <ul>
-      <li><strong>Android:</strong> only <code>INTERNET</code> (a normal permission, used for update checks).</li>
-      <li><strong>iOS:</strong> optional “Allow Full Access” is used only to write the app’s own sticker images to the system pasteboard; typing works without it, and the keyboard extension makes no network requests.</li>
-      <li><strong>HarmonyOS:</strong> only the network permission (used for update checks).</li>
-      <li><strong>Windows / Linux / macOS:</strong> no sensitive system permissions are requested.</li>
+      <li><strong>Android:</strong> <code>INTERNET</code> (updates/clipboard), <code>REQUEST_INSTALL_PACKAGES</code> (handing a downloaded package to the system installer), optional LAN multicast and foreground-service/notification permissions (cross-device clipboard).</li>
+      <li><strong>iOS:</strong> optional “Allow Full Access” for writing the app’s own sticker images; optional local-network permission for cross-device clipboard. Keyboard extensions <strong>cannot use the microphone</strong>; use system dictation for voice.</li>
+      <li><strong>HarmonyOS:</strong> network permission (updates/clipboard), optional pasteboard permission only when the clipboard feature is enabled.</li>
+      <li><strong>Windows / Linux / macOS:</strong> the firewall may ask on first clipboard listen.</li>
     </ul>
 
     <h2>5. Third parties and sharing</h2>

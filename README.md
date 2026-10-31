@@ -87,11 +87,11 @@
 
 #### 2. 隐私优先，而且可以自己核对
 - **默认本地化**：输入数据只留在本机。引擎层与出口层的依赖表里**没有 HTTP 客户端**，没有遥测，没有广告 SDK
-- **网络只用于版本检测与用户主动触发的更新下载**：Android 声明 `INTERNET`（拉取 `https://opi.erik.xyz/version.json`、用户点下载时拉安装包）与 `REQUEST_INSTALL_PACKAGES`（下载完成后交系统安装器，不静默安装）；下载不携带输入/用户数据，其余输入、候选、学习全在本机
+- **网络只用于版本检测、用户主动触发的更新下载与可选的跨设备剪贴板**：Android 声明 `INTERNET`（拉取 `https://opi.erik.xyz/version.json`、用户点下载时拉安装包）与 `REQUEST_INSTALL_PACKAGES`（下载完成后交系统安装器，不静默安装）；下载不携带输入/用户数据。跨设备剪贴板默认关闭，只在手动配对后的局域网内用 Noise 加密同步纯文本（≤256 KiB），不经云端、无账号、无历史。其余输入、候选、学习全在本机
 - **iOS 的「完全访问」**：2026-10-20 起为自有贴纸写系统剪贴板而开启（`RequestsOpenAccess=true`，用户须在系统设置手动允许）；系统会显示隐私警告页。联网仅限设置页的版本检测（`version.json`），输入与用户词仍只写扩展容器
 - **离线可用**：核心输入完全离线运行；`.opid` 词库走 `mmap` 只读映射，整库不读进堆（命中条目在查询时按需转出 —— `loader.rs` 的 `MmapDictionary::query` 每条命中 `.to_string()`、`candidates.rs` 的 `rank_and_pick` 再 `clone()` 一次，**不是零拷贝**）
 
-（多端云同步**已裁决不做**（用户裁决 2026-09-28），见「未来规划」——**当前仓库里没有任何同步或加密代码**。）
+（多端**云同步**已裁决不做（用户裁决 2026-09-28），见「未来规划」；**局域网跨设备剪贴板是另一条功能**：默认关闭、手动配对、Noise 加密、不经云端。）
 
 #### 3. 词库是「活」的，也有门禁守着
 - **多源整合（2026-10-11，用户裁决「主流开源词库去重整合」）**：rime-ice（雾凇）base+ext、rime-essay、chinese-xinhua 成语/歇后语、THUOCL 专业术语，加品牌/新词/注音/姓氏/流行语五张人工表，去重后并入 `luna.opid`（9.6 万条 → 90 万条量级、33MB；首字母查询靠前缀层 top-N 截断保住延迟，实测与取舍见 `data/raw/LICENSES.md`）。⚠️ 合并产物因此**整体按 GPL-3.0 分发**（数据层；源码仍 MIT）
@@ -112,6 +112,7 @@
 - **符号名称输入（2026-10-31）**：中文模式打**拼音名**命中对应的标点/符号/颜文字（`zuokuohao` → `（`、`jiantou` → `→`、`kaixin` → 一组开心颜文字），英文模式打**英文名**（`leftbracket` → `[`、`arrow` → `→`、`smile` → 表情）；表情沿用 `emoji_keywords.tsv`，标点/符号/颜文字用新表 `data/raw/name_keywords.tsv`（生成器 `scripts/gen_name_keywords.py`，485 条，含 390 条颜文字按分类关键字）。匹配为关键字前缀、大小写不敏感、忽略 `'` 分词符；候选**追加在文本候选之后**、受 limit 约束，绝不顶掉 `nihao`/`hello` 首候选；单键不触发，9/14 键数字缓冲与笔画/五笔编码串不参与。门禁 `crates/engine-core/tests/name_match.rs`。
 - **逐字确认（2026-10-17 用户裁决）**：整串有词组精确匹配时词组在最前、选中一次上屏；无精确匹配（打一半的前缀扩展词不算）则先出第一个字的整档（所有读音的字），确认一个字后它**留在候选区**（拼音行显示「中guo」），依次确认到最后一段才**整串进输入框**；缓冲空时 ⌫ 回滚上一个已确认的字。语义在引擎（`Engine::pending_text` / `commit_buffer_after_select`），四端同一条路；门禁 `tests/segment_commit.rs`
 - **统一皮肤（2026-10-31，v1.28.0 全端）**：五端皮肤列表统一为 11 款纯色（清爽 / 宣纸 / 浅色 / 深色 / 朱砂 / 湛蓝 / 柠檬 / 晚霞 / 星光 / 紫藤 / 松林，**默认清爽**）+ `shared/scene` 的 19 套动态插画（田园 / 森林 / 花园 / 星夜 / 城市 / 山川 / 大海 / 池塘 / 秋色 / 冬雪 / 迷雾 / 菜地 / 落日 / 书房 / 灶台 / 乡村 / 路灯 / 狗群 / 猫群）。纯色只换配色；动态主题自带配色，选中即插画与键面/候选栏/状态栏配色一起换，**键帽直接换成该主题的插画裁片**（`shared/scene/art/keycap-<id>.png`），桌面/Windows 候选窗整幅铺插画、状态栏按键半透明压画（不再只显示底色与条外溢出的角色）。19 套插画已按「清晰、生动」重画：统一描边、分层景物、花藤/花枝补全，花茎入土、角色与道具接地，前景花圃与远景树线成套。Android 与桌面用 `shared/scene` 实时绘制（含动画与状态栏错落溢出）；iOS、macOS、鸿蒙显示 `shared/scene/art` 里同一份高清资产（`SceneArtGeneratorTest` 按各主题默认皮肤渲染）。设置路径：Android/鸿蒙工具条「皮肤」面板、桌面/macOS 设置「外观 → 皮肤」；落盘 `kb_scene` / `Background=`（纯色为空）与 `kb_skin` / `Skin=`。
+- **跨设备剪贴板（2026-11-01）**：六端同一套 `opi-clip` Rust 内核（UDP 发现、Noise_XX + 6 位 SAS 配对、Noise_KK 会话、TCP 分片/ACK/去重/限速、HLC 冲突与防回环；只同步纯文本，上限 256 KiB）。默认关闭；Android/Windows/Linux X11 可自动监听，macOS 轮询 `NSPasteboard`，iOS/Harmony 仅在键盘可见时做「待接收/用户触发」降级，不承诺后台同步；Linux GNOME Wayland 无全局监听，降级为手动发送。发现报文不含剪贴板内容，不经过云端；一键停止/撤销设备。
 - **应用内更新（2026-10-31）**：桌面设置「关于」与 Android 关于面板支持**全量安装包 / 热更新包**后台下载，显示进度、可取消，完成后校验 SHA-256 与大小；不再跳浏览器。**下载前先查本地同名包**：大小与 SHA-256 都对就直接复用，不再走网络。关于页的官网/GitHub/博客/隐私政策只显示链接文字，不展示原始地址。桌面下载器校验 HTTPS（含重定向）并先写 `.part`；Android 用系统 `DownloadManager`（退出 App 后继续），完成后经 FileProvider 交系统安装器。**只下载 + 校验，不自动提权替换**。清单在 `site/version.json` 的 `packages.<platform>.full/hot`；Linux 热更新包为 jpackage app 目录 zip，说明见 `site/download/README.md`。
 - **9 键多字组合与完整拼音行（2026-10-23 用户报障）**：9 键按键串走数字空间 DP（`crates/engine-core/src/composition_scheme.rs`）—— 段 = 词库精确键、2–4 段、至少一个多音节段；`厌蠢症` / `样样通` 这类整词不在库但分段在库的词能组合出来（真库门禁 `crates/engine-data/tests/nine_composition_real.rs`，桌面 release 中位约 2ms，单次最多 24 次按键类查询）。拼音行不再用「·」补待编键，而是把未覆盖键按**键面首字母**补全（引擎 `display_buffer`）；移动三端横向滚动查看完整串、不省略
 - **中英两套自定义短语（2026-10-24；2026-10-25 开关缺省改为关）**：设置里「中文」「英文」两套**完全独立**的表与开关（各上限 2000 条、精确字母匹配、命中排在候选最前；缺省关，开启即热加载，无需重启或重新导入）；中文只在拼音/繁体键盘生效，英文只在英文键盘生效；各自 10 条/页、总数、增删改、JSON/TSV/CSV/等号/空白导入与 JSON/TSV 导出。宿主文件 Android `filesDir/opi_custom_phrases[_en].json`、Linux/Windows `<数据目录>/opi/custom_phrases[_en].json`、macOS `~/Library/Application Support/opi/custom_phrases[_en].json`；引擎只持内存，启动/重载/换词库时由宿主回放（`engine-core/src/custom_phrases.rs`，双 ABI 各四个英文出口）
@@ -131,11 +132,11 @@
 | **更多平台**：Web（含小程序） | 未开始 | 这里指 Web **输入法**；仓库现在有静态官网 [`site/`](site/index.html)，但它不是 Web 输入法，浏览器端 IME 仍未开始 |
 | **鸿蒙 HarmonyOS** | **可构建（unsigned）**（`harmony/`）| 完整 hvigor 工程（`build-profile.json5` / `hvigorfile.ts` / 模块配置与构建脚本齐备），本机鸿蒙命令行工具链 + SDK 可跑 `hvigorw assembleHap`；已产出 unsigned HAP（含 `libopiime.so`；`luna` / `stroke` / `wubi86` 由 rawfile 首启拷进沙箱），工具条 / 皮肤 / 键盘模式 / 符号页 / 生僻字已对齐 Android，CI 为自托管 `harmony.yml`。**签名、安装、真机输入法列表与上述新面板均未上机验证**；Rust 侧 C ABI 已能为鸿蒙目标编译。 |
 | **Apple 两平台**：iOS · macOS | **CI 已编译 + unsigned 产物**（`ios/` · `macos/`）| `apple.yml` 在 macOS runner 上真编译 Swift；iOS 产出宿主 App + unsigned IPA（`Payload/Opi.app` + 键盘 `.appex`，键盘已补顶部槽位 / 工具条 / 皮肤 / 键盘模式 / 关于，自有贴纸经剪贴板且已开完全访问），macOS 产出 unsigned pkg/app（已补符号面板 / 输入法菜单 / 设置窗 / 候选分页）。**签名、公证、真机运行与输入法启用仍未验证**；C ABI 对 Apple 三个目标的 `cargo check` 通过，静态库导出符号已核对。 |
-| **多端云同步 / 端到端加密** | **不做**（用户裁决 2026-09-28） | 无加密库、无 HTTP 客户端：跨 `crates/` `android/` `desktop/` 的 `*.rs` / `*.toml` / `*.kt` 里，`reqwest` / `ureq` / `hyper` / `openssl` / `rustls` / `chacha` / `argon2` / `aes-gcm` / `https://` 逐个零命中。带 `sync` 的命中全是 Rust 同步原语与 TSF 标志（`std::sync`、`TF_ES_SYNC`、`trad_assets_in_sync`），与云同步无关。**注**：学习词库导出 JSON 里确有 `version` 字段，但那是**导出格式**的版本协商（`learner.rs` 的 `import_json` 拒收 `version != 1`），与云同步无关 |
+| **多端云同步（云端）** | **不做**（用户裁决 2026-09-28） | 没有账号、没有云端中继、没有云端历史。**局域网跨设备剪贴板是另一条功能**（2026-11-01，默认关闭、手动配对、Noise 加密、纯文本 ≤256 KiB、不经云端），见上方「跨设备剪贴板」；不要把它读成云同步。 |
 | **更多输入方案**：双拼 · 五笔 · 仓颉 · 注音 · 自定义输入规则 | 双拼（2026-10-13，六套布局）与五笔（2026-10-14，86/98）已落地；其余待做 | `Mode` 的成员仍是拼音 / 繁体 / 英文 / 数字 / 符号（`composer.rs`）；**按键布局**另有独立轴 `Scheme`（`scheme.rs`：全键盘 / 拼音9键 / 拼音14键 / 笔画 / 双拼 / 五笔 —— 匹配走按键类展开）；双拼与五笔在 Android / 桌面 / fcitx5 / TSF 均已接线（iOS / 鸿蒙仍是草案，见各自 README）；仓颉 / 注音 / 自定义规则仍未做 |
 | **英文联想** | **已接线（2026-10-18；2026-10-19 默认普通、pro 才匹配）** | **普通模式字母直出**；`pro` 专业模式才前缀匹配 `data/raw/en_words.tsv`（10000 条常用词，Google Books Ngrams v3，CC-BY 3.0；**不是牛津原版** —— OUP 数据本仓无授权，换数据只需替换 TSV）。候选按词频降序；单字母缓冲时**输入原文排首位**（保留大小写、与词条去重）；空格提交首候选、无匹配提交原文；四端共用同一引擎语义，门禁 `tests/english_words.rs` |
 | **无障碍**：读屏软件 | 部分（仅 Android） | Android 键盘已接基础读屏语义：候选变化自动播报（`liveRegion`）、每个按键有可读名称（不再读字形「⇧」「⌫」）、⇧ 的锁定 / 单次大写状态可读。**其余平台（Windows / Linux / iOS）未接入** |
-| **语音输入 · 扫描输入** | 未开始 | 零命中 |
+| **语音输入 · 扫描输入** | 语音开发中（未发布）；扫描未开始 | `crates/opi-asr` 与各端话筒入口仍在开发，尚无可用发布版；扫描输入零命中 |
 | **少数民族语言与方言**：藏文 · 维文 · 蒙文 · 粤语 · 吴语 | 未开始 | 零命中 |
 | **插件化**：所有「花活」均为可选插件 | 未开始 | 无插件注册表、无插件接口、无动态加载 —— 当前也还没有需要插件化的「花活」 |
 

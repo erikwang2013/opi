@@ -370,6 +370,25 @@ cp luna.opid ~/Library/Application\ Support/opi/luna.opid
   也没有 ENPRO 控制面，见 G7）。
 - **未上机**：设置窗布局、文件路径、导入/导出、引擎推送都只在源码层成立。
 
+### 6.6 跨设备剪贴板（2026-11-01，源码层 / 未上机）
+
+- **入口**：输入法菜单的「跨设备剪贴板」子菜单（开关、待确认 SAS、对端概览、最近
+  来源、停止）与设置窗「剪贴板」页（`macos/OpiMenu.swift` / `OpiClipSettings.swift` /
+  `OpiClip.swift`）；默认关（`UserDefaults` 键 `ClipEnabled`）。
+- **运行**：内核（`opi-clip`）挂在 IMK 常驻进程里，由 `NSPasteboard.general` 的
+  `changeCount` 约 0.5s 轮询本机文本；只处理纯文本（≤256 KiB）。收到远端文本**只写
+  本机剪贴板，不自动粘贴** —— 设置页显示「内容已写入剪贴板，未自动粘贴」，粘贴由用户
+  自己完成。写回后对齐 `changeCount`，不会把同一份内容再发回去。
+- **权限**：macOS 15+ 首次监听会请求「本地网络」权限（`Info.plist` 的
+  `NSLocalNetworkUsageDescription`）；拒绝后功能不可用，需到系统设置放行。剪贴板读写
+  本身不弹权限框。
+- **网络**：UDP 45888 发现（组播 239.255.42.99），TCP 端口由系统临时分配；配对必须
+  两端核对同一个 6 位 SAS；身份/信任在 `~/Library/Application Support/opi/clip`，
+  不记录内容。
+- **验证**：本机没有 Swift 工具链，`macos/*.swift` 与 `shared/apple/OpiClipRunner.swift`
+  由 CI `apple.yml` 首次编译；**运行时 0 验证** —— NSPasteboard 轮询、本地网络授权、
+  菜单/设置页交互都没有在 Mac 上跑过。
+
 ---
 
 ## 7. 已知限制（诚实清单）
@@ -383,7 +402,7 @@ cp luna.opid ~/Library/Application\ Support/opi/luna.opid
 | G3 | **候选分页：已补（2026-10-20，CI 已编译、未上机）** | `refresh()` 改喂 `opi_candidates_page()`，`candidateSelected` 调 `opi_select_page(k)`（页内索引）；不再用 `opi_candidates(limit: 64)` / `opi_select(index)`，也不再自己算 `page*PAGE_SIZE+k`。**未做**候选窗里的「第 N / M 页」文字 —— `IMKCandidates` 没有页标签控制面 |
 | G4 | **无测试、无工程文件；本批 CI 已编译** | `macos/` 里跑过的只有头文件（`clang -fsyntax-only` + 「导出名取地址」那个 TU）；旧版 3 个 Swift 由 CI 在 2026-10-15 前编过。**2026-10-20 新增/改动的 7 个文件已由 CI 编过**（run 39425977787），本机只跑了 `bash -n`、`sh -n` 与 500 行门禁。下一步可执行验证是「装进系统跑最小冒烟」 |
 | G5 | **宠物「小欧」未接（有意）** | 候选窗用的是系统面板 `IMKCandidates`，**画不进去**。要摆小欧得先换成自绘 `NSPanel` —— 那是对未上机验证的代码做结构改动。真要接时**别**新写一份 CoreGraphics 几何：几何真源是 `docs/opi-pet.svg`，同一张图的第三份拷贝必然漂移 |
-| G6 | **符号面板：已补（2026-10-20，CI 已编译、未上机）** | `OpiSymbolPanel.swift`：左侧 22 类竖条、右侧 12×6=72/页网格、搜索框、翻页；数据是随包的 `symbol_categories.tsv`（打包脚本拷进 `Resources/`，`.pkg` payload 有存在性门禁），读不到才回退引擎 `opi_symbol_blocks()` 的 6 个 common 块并打日志。字形过滤用 CoreText 单码位判定；上屏直接 `insertText`，面板保持打开。**未接**表情页（引擎有 `opi_emoji_*` 出口，没有 UI）、贴纸/剪贴板 |
+| G6 | **符号面板：已补（2026-10-20，CI 已编译、未上机）** | `OpiSymbolPanel.swift`：左侧 22 类竖条、右侧 12×6=72/页网格、搜索框、翻页；数据是随包的 `symbol_categories.tsv`（打包脚本拷进 `Resources/`，`.pkg` payload 有存在性门禁），读不到才回退引擎 `opi_symbol_blocks()` 的 6 个 common 块并打日志。字形过滤用 CoreText 单码位判定；上屏直接 `insertText`，面板保持打开。**未接**表情页（引擎有 `opi_emoji_*` 出口，没有 UI）、贴纸；跨设备剪贴板已于 2026-11-01 另接（见 §6.6）。2026-11-01 起动态主题的插画底也铺到本面板与设置窗（`OpiTheme.swift`），纯色皮肤不变 |
 | G7 | **「状态栏」是菜单，不是常驻条** | InputMethodKit 没有 Linux 那种悬浮状态栏；`OpiMenu.swift` 用输入法菜单承载同组入口。皮肤与虚拟键盘已在 OPI 自绘面板落地（11 纯色 + 19 动态，2026-10-31）；LOGO 与 ENPRO 仍没有等价物 |
 | L1 | **全角状态只在菜单里读** | `OpiMenu` 的「全角字符」勾选读 `opi_fullwidth_state()`（2026-10-20），但**没有常驻状态栏**可显示。⚠️ 它**不是**在报错：「未装载」与「已装载且半角」共用 `false`，那时按键全部交系统，宿主拿到的本来就是半角 |
 | L2 | **⇧ 长按 → Lock 不可达** | `NSEvent` 没有长按信号（同 fcitx5 轨的已知边界）。本层**不合成** `LONG_PRESSED` 位，所以 ⇧ 长按 = 单击。要接得自己定入口，别靠猜补一个信号 |

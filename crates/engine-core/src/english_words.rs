@@ -14,6 +14,10 @@
 //! - 第二列是小写 ASCII 查询键（`china` / `cafe`）——匹配一律按它；
 //! - 第三列是缩放后的词频（生成器保证全表**严格递减**，故按它排序无并列）。
 //!
+//! **整词优先**（2026-11-01）：缓冲恰好等于某个查询键时，该词排第一，其次才是
+//! 学习过的同前缀词、最后按静态词频。用户已打完整词（`abandon`）时要的是这个词，
+//! 不是词频更高的派生词（`abandoned`）—— 与中文精确等长匹配分层的产品语义一致。
+//!
 //! 索引在首次使用时解析 + 按查询键排序（`OnceLock`，之后只读）；每次查询 =
 //! 二分找前缀区间 + 只对命中项按词频排序，**不重排全表**。
 
@@ -67,20 +71,20 @@ pub(crate) fn candidates(buffer: &str, limit: usize, learner: &Learner) -> Vec<C
     let prefix = buffer.to_ascii_lowercase();
     let all = words();
     let start = all.partition_point(|w| w.key < prefix.as_str());
-    let mut hits: Vec<(&Word, u32)> = all[start..]
+    let mut hits: Vec<(&Word, u32, bool)> = all[start..]
         .iter()
         .take_while(|w| w.key.starts_with(&prefix))
-        .map(|w| (w, learned_freq(learner, w.text)))
+        .map(|w| (w, learned_freq(learner, w.text), w.key == prefix))
         .collect();
-    // (学习次数, 静态词频) 的字典序降序 —— 学过一次的词排到所有未学词之前。
-    hits.sort_unstable_by_key(|(w, learned)| std::cmp::Reverse((*learned, w.freq)));
+    // (整词, 学习次数, 静态词频) 的字典序降序 —— 整词最先，其次学过的词。
+    hits.sort_unstable_by_key(|(w, learned, exact)| std::cmp::Reverse((*exact, *learned, w.freq)));
     hits.truncate(limit);
     let capitalize = buffer
         .as_bytes()
         .first()
         .is_some_and(|b| b.is_ascii_uppercase());
     hits.into_iter()
-        .map(|(w, learned)| {
+        .map(|(w, learned, exact)| {
             let mut text = w.text.to_string();
             // 只对**小写**规范词形做首字母大写：专名（China/I）本来就是规范写法。
             if capitalize
@@ -94,9 +98,9 @@ pub(crate) fn candidates(buffer: &str, limit: usize, learner: &Learner) -> Vec<C
             Candidate {
                 text,
                 kind: CandidateKind::English,
-                // 与排序键同构：高 32 位学习次数、低 32 位静态词频（表最大 4e9 < 2^32）
-                // ⇒ 候选**按 score 降序**这条既有不变量在有学习记录时仍成立。
-                score: ((learned as u64) << 32) | w.freq as u64,
+                // 与排序键同构：bit63 整词、中间 32 位学习次数、低 32 位静态词频
+                // （表最大 4e9 < 2^32）⇒ 候选**按 score 降序**这条既有不变量仍成立。
+                score: ((exact as u64) << 63) | ((learned as u64) << 32) | w.freq as u64,
             }
         })
         .collect()

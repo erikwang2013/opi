@@ -21,6 +21,7 @@ import { publishState } from './StatePublish';
 import * as BackspaceRepeat from './BackspaceRepeat';
 import * as AssociationGuard from './AssociationGuard';
 import { bracketPairing } from './BracketPairing';
+import * as ClipSync from './ClipSync';
 
 export class KeyboardController {
   private static instance: KeyboardController = new KeyboardController();
@@ -48,6 +49,7 @@ export class KeyboardController {
       this.kbController = kbController;
       this.client = inputClient;
       bracketPairing.reset();
+      ClipSync.onInputStart(this.ctx);
       // 无会话期间可能转过屏/折叠过：新会话先重读尺寸再 resize。
       this.metrics = ScreenLayout.currentMetrics();
       this.ensureDictionary();
@@ -65,6 +67,7 @@ export class KeyboardController {
   };
 
   private onInputStopCallback: () => void = (): void => {
+    ClipSync.onInputStop();
     UserWordStore.flush(); // 会话结束：防抖中的用户词立即落盘（进程可能随后被回收）
     // InputClient 随会话失效，必须丢引用；引擎侧缓冲要清，长按连删计时器也要停。
     BackspaceRepeat.stop();
@@ -120,6 +123,7 @@ export class KeyboardController {
   }
 
   release(): void {
+    ClipSync.shutdown();
     const ability = inputMethodEngine.getInputMethodAbility();
     ability.off('inputStart', this.onInputStartCallback);
     ability.off('inputStop', this.onInputStopCallback);
@@ -146,7 +150,6 @@ export class KeyboardController {
 
   /** true = 正用内置回退库（拷贝失败或完整库装载失败）；UI 据此画 DEGRADED。 */
   private dictDegraded: boolean = true;
-
   dictionaryDegraded(): boolean { return this.dictDegraded; }
 
   /** 装载词库（每进程一次）：文件拷进 `ctx.filesDir` 后把绝对路径交给引擎；任一步失败回退内置库。 */
@@ -255,9 +258,7 @@ export class KeyboardController {
   /** 缓冲变化时静默解钉，不嵌套 publish。 */ clearPinnedReading(): void { OpiEngine.pinReading(''); }
 
   /** 空格 —— 是**可打印段**的 0x20，走路由（缓冲非空时提交候选）。 */
-  tapSpace(): void {
-    this.pressKey(OpiEngine.KEY_SPACE, this.shiftStates());
-  }
+  tapSpace(): void { this.pressKey(OpiEngine.KEY_SPACE, this.shiftStates()); }
 
   tapBackspace(): void { this.pressKey(OpiEngine.KEY_BACK_SPACE, 0); }
   /** 长按 ⌫：true = 开始连续退格（先删一格，之后每 60ms 一格）；false = 松手/取消停止。 */
@@ -283,7 +284,6 @@ export class KeyboardController {
   tapShiftLongPress(): void { this.pressKey(OpiEngine.KEY_SHIFT, OpiEngine.STATE_LONG_PRESSED); }
 
   tapPageUp(): void { this.pressKey(OpiEngine.KEY_PAGE_UP, 0); }
-
   tapPageDown(): void { this.pressKey(OpiEngine.KEY_PAGE_DOWN, 0); }
 
   /** 点候选：**页内索引**，引擎自己换算。不要自己算 page*8+k。 */

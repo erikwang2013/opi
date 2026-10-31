@@ -227,7 +227,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "engine-core"
-version = "1.28.3"
+version = "1.29.0"
 dependencies = [
  "proptest",
  "serde",
@@ -236,7 +236,7 @@ dependencies = [
 
 [[package]]
 name = "engine-data"
-version = "1.28.3"
+version = "1.29.0"
 dependencies = [
  "engine-core",
  "memmap2",
@@ -260,7 +260,7 @@ checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
 name = "fcitx5_opi"
-version = "1.28.3"
+version = "1.29.0"
 dependencies = [
  "engine-core",
  "engine-data",
@@ -448,7 +448,7 @@ checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
 name = "opi-clip"
-version = "1.28.3"
+version = "1.29.0"
 dependencies = [
  "getrandom 0.3.4",
  "hex",
@@ -464,7 +464,7 @@ dependencies = [
 
 [[package]]
 name = "opi-tools"
-version = "1.28.3"
+version = "1.29.0"
 dependencies = [
  "engine-core",
  "engine-data",
@@ -474,7 +474,7 @@ dependencies = [
 
 [[package]]
 name = "opi_ffi"
-version = "1.28.3"
+version = "1.29.0"
 dependencies = [
  "engine-core",
  "engine-data",
@@ -844,7 +844,7 @@ dependencies = [
 
 [[package]]
 name = "tsf_opi"
-version = "1.28.3"
+version = "1.29.0"
 dependencies = [
  "engine-core",
  "engine-data",

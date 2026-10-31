@@ -8,6 +8,7 @@
 // 皮肤 / 关于仍是独立面板：从本页进去时返回箭头回本页（KeyboardModes.openSubPanel），
 // 从工具条直接进则返回键面。
 
+import { ClipSection } from './ClipSection';
 import { KeyboardController } from './KeyboardController';
 import { INPUT_MODES } from './InputModes';
 import {
@@ -163,6 +164,9 @@ export struct SettingsPanel {
             }
             .width('100%').padding({ left: 14, right: 14, top: 2, bottom: 8 })
           }
+
+          this.Section('跨设备剪贴板')
+          ClipSection()
 
           this.Section('键盘')
           this.ActionRow('输入模式', '键盘布局与输入方案', INPUT_MODES[this.layout].label, () => {

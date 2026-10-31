@@ -1,62 +1,62 @@
 {
   "download": "https://opi.erik.xyz/download",
-  "version": "1.28.3",
+  "version": "1.29.0",
   "packages": {
     "windows-x64": {
       "full": {
-        "url": "https://opi.erik.xyz/download/opi-1.28.3-windows-x64-setup.exe",
+        "url": "https://opi.erik.xyz/download/opi-1.29.0-windows-x64-setup.exe",
         "size": 66494374,
         "sha256": "40b04673dd176b4c3e0253ccedf63682750f5306fd70837fea82b48051b0ca60"
       }
     },
     "linux-amd64": {
       "full": {
-        "url": "https://opi.erik.xyz/download/opi-1.28.3-linux-amd64.deb",
+        "url": "https://opi.erik.xyz/download/opi-1.29.0-linux-amd64.deb",
         "size": 88356344,
         "sha256": "72d2e3e7a16b56303c7786a6479a1b0c01e43bcb03a755de9328d7623ba766e0"
       },
       "hot": {
-        "url": "https://opi.erik.xyz/download/opi-1.28.3-linux-amd64-hot.zip",
+        "url": "https://opi.erik.xyz/download/opi-1.29.0-linux-amd64-hot.zip",
         "size": 36138497,
         "sha256": "c1a9c2252047d635af7de732060a1039677dc5450d88454fe218f70ceaba6974"
       }
     },
     "linux-x86_64": {
       "full": {
-        "url": "https://opi.erik.xyz/download/opi-1.28.3-linux-x86_64.rpm",
+        "url": "https://opi.erik.xyz/download/opi-1.29.0-linux-x86_64.rpm",
         "size": 88201143,
         "sha256": "b992b01b474a5905a15a5c141870519c8a83327e2fa032179da29faa46d83034"
       },
       "hot": {
-        "url": "https://opi.erik.xyz/download/opi-1.28.3-linux-amd64-hot.zip",
+        "url": "https://opi.erik.xyz/download/opi-1.29.0-linux-amd64-hot.zip",
         "size": 36138497,
         "sha256": "c1a9c2252047d635af7de732060a1039677dc5450d88454fe218f70ceaba6974"
       }
     },
     "android": {
       "full": {
-        "url": "https://opi.erik.xyz/download/opi-1.28.3-android-universal.apk",
+        "url": "https://opi.erik.xyz/download/opi-1.29.0-android-universal.apk",
         "size": 65920705,
         "sha256": "f7254ba63480a228b0f099d6f484897194ce4fe45785dfeb2c8c39d24f930697"
       }
     },
     "macos-universal": {
       "full": {
-        "url": "https://opi.erik.xyz/download/opi-1.28.3-macos-universal.pkg",
+        "url": "https://opi.erik.xyz/download/opi-1.29.0-macos-universal.pkg",
         "size": 30222085,
         "sha256": "ac8cb83a4869390014eba27a582f8488dacc126e52abb5a5d67bf73ec1883ef3"
       }
     },
     "ios": {
       "full": {
-        "url": "https://opi.erik.xyz/download/opi-1.28.3-ios-unsigned.ipa",
+        "url": "https://opi.erik.xyz/download/opi-1.29.0-ios-unsigned.ipa",
         "size": 30064854,
         "sha256": "e7170dbf400185c6155a388df03f18f0be436b1592ca3de37cb111a22c3d9e66"
       }
     },
     "harmony": {
       "full": {
-        "url": "https://opi.erik.xyz/download/opi-1.28.3-harmonyos-unsigned.hap",
+        "url": "https://opi.erik.xyz/download/opi-1.29.0-harmonyos-unsigned.hap",
         "size": 60730509,
         "sha256": "07fa0fe78656dbfc7982c7dd9dec5c18048bdeb9c921d9ff4f058c2ce06563f6"
       }

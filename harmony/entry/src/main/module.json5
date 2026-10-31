@@ -22,9 +22,14 @@
     "pages": "$profile:main_pages",
     "requestPermissions": [
       {
-        // 只用于设置/关于页拉 https://opi.erik.xyz/version.json（更新检测）。
+        // 更新检测 + 跨设备剪贴板：INTERNET 同时覆盖 UDP 组播发现与 TCP 传输；
+        // HarmonyOS 没有单独的「局域网组播」权限可声明。
         "name": "ohos.permission.INTERNET"
       }
+      // 不声明 ohos.permission.READ_PASTEBOARD：它是 system_basic + user_grant + ACL，
+      // 普通应用声明会导致安装失败。写入剪贴板无需权限；读取只在用户点击设置页的
+      // PasteButton（系统安全控件）时获得一次性临时授权。身份/信任文件由内核写在
+      // 应用私有目录 ctx.filesDir/clip，不需要任何存储权限。
     ],
     "extensionAbilities": [
       {

@@ -18,7 +18,7 @@
 ; best-effort and can never roll back the install.
 ;
 ; Build (CI or local, on Windows; ISCC is the Inno Setup 6 compiler):
-;   ISCC.exe /DAppVersion=1.28.3 ^
+;   ISCC.exe /DAppVersion=1.29.0 ^
 ;            /DAppImageDir=C:\path\to\build\compose\binaries\main\app\opi ^
 ;            /DOutputDir=C:\path\to\dist scripts\windows\opi.iss
 ;
@@ -139,6 +139,8 @@ Type: filesandordirs; Name: "{app}\runtime"
 ; hit. If a file still cannot be moved, the install fails loudly; close the
 ; holding app and retry — never schedule a reboot. MoveLockedFile(True) handles
 ; the DLL and the dictionary before this line.
+; 语音运行时（opi_asr.dll / sherpa-onnx-*.dll / onnxruntime.dll）也在这个通配里，
+; 由 desktop/build.gradle.kts 的 buildOpiAsr 放进 app image，无需逐文件列。
 Source: "{#AppImageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [UninstallDelete]

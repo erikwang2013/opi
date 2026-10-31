@@ -33,6 +33,8 @@ const KEY_SHOW_OWN: string = 'pet_show_own';
 const KEY_LEARN: string = 'engine_learn';
 /** 智能联想（2026-10-28 用户裁决默认关闭；与桌面/fcitx5/TSF 同语义）。 */
 const KEY_ASSOCIATION: string = 'engine_association';
+/** 跨设备剪贴板：默认关闭，只在输入会话可见时运行。 */
+const KEY_CLIP: string = 'clip_enabled';
 /** 9 键左列末格的自定义标点（与 Android `nine_custom_punct` 同键名）。 */
 const KEY_CUSTOM_PUNCT: string = 'nine_custom_punct';
 
@@ -54,6 +56,7 @@ export class ImeSettings {
   showOwn: boolean = false;
   learn: boolean = true;
   association: boolean = false;
+  clipEnabled: boolean = false;
 }
 
 /** 绑定扩展上下文（每进程一次；失败时本模块退化成内存默认值）。 */
@@ -128,6 +131,7 @@ export function load(): ImeSettings {
   s.showOwn = readBool(KEY_SHOW_OWN, false);
   s.learn = readBool(KEY_LEARN, true);
   s.association = readBool(KEY_ASSOCIATION, false);
+  s.clipEnabled = readBool(KEY_CLIP, false);
   return s;
 }
 
@@ -229,3 +233,4 @@ export const BOOL_ENGLISH_PRO: string = KEY_ENGLISH_PRO;
 export const BOOL_SHOW_OWN: string = KEY_SHOW_OWN;
 export const BOOL_LEARN: string = KEY_LEARN;
 export const BOOL_ASSOCIATION: string = KEY_ASSOCIATION;
+export const BOOL_CLIP: string = KEY_CLIP;
