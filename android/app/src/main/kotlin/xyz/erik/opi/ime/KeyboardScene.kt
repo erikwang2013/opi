@@ -10,12 +10,17 @@
 
 package xyz.erik.opi.ime
 
+import android.graphics.BitmapFactory
 import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import xyz.erik.opi.keyboard.LocalKeyboardPalette
 import xyz.erik.opi.scene.ScenePalette
 import xyz.erik.opi.scene.SceneTheme
@@ -30,6 +35,23 @@ internal const val KEY_AREA_SCENE_SCRIM_ALPHA = 0.16f
 
 /** 当前是不是动态插画皮肤（键面需要透出插画并给文字加一点阴影）。 */
 internal val LocalSceneActive = compositionLocalOf { false }
+
+/** 当前主题的键帽纹理；null = 纯色皮肤（键帽照旧用 keyBg）。 */
+internal val LocalKeycapBitmap = compositionLocalOf<ImageBitmap?> { null }
+
+/** 读 assets/scene/keycap-<id>.png；缺资产时返回 null（键帽退回半透明 keyBg）。 */
+@Composable
+internal fun rememberKeycapBitmap(theme: SceneTheme?): ImageBitmap? {
+    if (theme == null) return null
+    val ctx = LocalContext.current
+    return remember(theme) {
+        runCatching {
+            ctx.assets.open("scene/keycap-${theme.id}.png").use {
+                BitmapFactory.decodeStream(it).asImageBitmap()
+            }
+        }.getOrNull()
+    }
+}
 
 /** 工具条底色不透明度：图标区几乎不透明，只让插画透一成（候选栏保持全不透明保可读性）。 */
 internal const val TOOLBAR_SCENE_ALPHA = 0.90f

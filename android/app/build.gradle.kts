@@ -38,8 +38,8 @@ android {
         targetSdk = 34
         // 与发布 tag 对齐（此前 9 个 tag 期间 versionCode 一直是 1、versionName 一直是
         // "1.0.0"：APK 既无法被识别，也无法覆盖安装升级）。
-        versionCode = 105
-        versionName = "1.28.2"
+        versionCode = 106
+        versionName = "1.28.3"
         ndk {
             // 与 rust_builder cargokit targets 对齐（plugin.gradle 固定三 ABI）。
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
@@ -101,6 +101,11 @@ val copyPetStickers by tasks.registering(Copy::class) {
     from(tableSrc) {
         include("map.tsv", "shortcodes.tsv")
         into("pet-font")
+    }
+    // 动态皮肤的键帽纹理（与 iOS/鸿蒙同一份）：scene/keycap-<id>.png。
+    from(layout.projectDirectory.dir("../../shared/scene/art")) {
+        include("keycap-*.png")
+        into("scene")
     }
     into(layout.buildDirectory.dir("generated/opiAssets"))
 }

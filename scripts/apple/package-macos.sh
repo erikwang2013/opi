@@ -161,6 +161,7 @@ scenes_src="shared/scene/art"
 [ -d "$scenes_src" ] || { echo "!! 缺少插画资产 $scenes_src" >&2; exit 1; }
 mkdir -p "$APP/Contents/Resources/scenes"
 cp "$scenes_src"/scene-*.png "$APP/Contents/Resources/scenes/"
+cp "$scenes_src"/keycap-*.png "$APP/Contents/Resources/scenes/"
 # 词库：主库/繁体/笔画/五笔。`OpiEngine.resourceDictionaryPath` 优先用户目录，
 # 否则读 `Resources/dicts/`。与 Android assets 同一份格式，不要再生成第二份。
 mkdir -p "$APP/Contents/Resources/dicts"

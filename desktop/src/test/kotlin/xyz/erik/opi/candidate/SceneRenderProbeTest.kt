@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import org.jetbrains.skia.EncodedImageFormat
 import org.junit.Assert.assertEquals
@@ -182,6 +183,33 @@ class SceneRenderProbeTest {
     }
 
     /** 整条构图（条 + 键帽底 + 条外角色）：给人眼看，也防「条盖住整幅画」。 */
+    @Test
+    fun `renders the candidate bar with the scene theme`() {
+        val model = CandidateModel().apply {
+            buffer = "nihao"
+            candidates = listOf("你好", "你号", "妮好", "拟好")
+            page = 1
+            pageCount = 1
+            mode = "pinyin"
+        }
+        val img = render("candidate-scene", 720, 86) {
+            CompositionLocalProvider(LocalBarPalette provides skinColors(SkinOption.PAPER)) {
+                CandidatePanel(
+                    model = model,
+                    onSelect = {},
+                    onNext = {},
+                    onPrev = {},
+                    windowSize = DpSize(720.dp, 76.dp),
+                    fontScale = 1f,
+                    theme = SceneTheme.MEADOW,
+                )
+            }
+        }
+        val colors = mutableSetOf<Int>()
+        for (y in 0 until img.height step 3) for (x in 0 until img.width step 3) colors += img.getRGB(x, y)
+        assertTrue("候选条应铺插画（采样到 ${colors.size} 色）", colors.size > 8)
+    }
+
     @Test
     fun `full status bar with the overflow scene renders`() {
         val buttons = StatusBarButton.entries

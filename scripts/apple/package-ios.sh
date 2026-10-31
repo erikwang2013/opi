@@ -243,6 +243,7 @@ scenes_src="shared/scene/art"
 [ -d "$scenes_src" ] || { echo "!! 缺少插画资产 $scenes_src" >&2; exit 1; }
 mkdir -p "$app/PlugIns/OpiKeyboard.appex/scenes"
 cp "$scenes_src"/scene-*.png "$app/PlugIns/OpiKeyboard.appex/scenes/"
+cp "$scenes_src"/keycap-*.png "$app/PlugIns/OpiKeyboard.appex/scenes/"
 # 图标用项目宠物图标；sips 生成 iOS 需要的尺寸（AppIcon60x60@2x/@3x、AppIcon76x76@2x）。
 icon="desktop/icons/opi-pet.png"
 [ -f "$icon" ] || { echo "!! 缺少图标 $icon" >&2; exit 1; }
@@ -306,7 +307,8 @@ for member in \
   "Payload/Opi.app/PlugIns/OpiKeyboard.appex/stroke.opid" \
   "Payload/Opi.app/PlugIns/OpiKeyboard.appex/wubi86.opid" \
   "Payload/Opi.app/PlugIns/OpiKeyboard.appex/rare_index.tsv" \
-  "Payload/Opi.app/PlugIns/OpiKeyboard.appex/scenes/scene-meadow.png"; do
+  "Payload/Opi.app/PlugIns/OpiKeyboard.appex/scenes/scene-meadow.png" \
+  "Payload/Opi.app/PlugIns/OpiKeyboard.appex/scenes/keycap-meadow.png"; do
   if ! grep -qF "$member" <<<"$ipa_list"; then
     echo "!! IPA 缺少 $member" >&2
     exit 1

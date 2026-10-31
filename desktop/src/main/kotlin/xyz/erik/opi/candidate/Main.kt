@@ -276,6 +276,7 @@ private fun runApp(args: Array<String>) = application {
             ) {
                 CandidatePanel(
                     model = model,
+                    theme = currentTheme,
                     onSelect = { activeServer().sendSelect(it) },
                     onNext = { activeServer().sendNextPage() },
                     onPrev = { activeServer().sendPrevPage() },

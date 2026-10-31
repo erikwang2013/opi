@@ -65,5 +65,16 @@ enum SceneTheme: String, CaseIterable {
         return img
     }
 
+    /// 键帽纹理（预压主题底色的 256×256 裁片，包内 scenes/keycap-<id>.png）。
+    var keycapImage: UIImage? {
+        if let cached = SceneTheme.keycapCache[self] { return cached }
+        guard let path = Bundle.main.path(
+            forResource: "keycap-\(rawValue)", ofType: "png", inDirectory: "scenes"
+        ), let img = UIImage(contentsOfFile: path) else { return nil }
+        SceneTheme.keycapCache[self] = img
+        return img
+    }
+
     private static var imageCache: [SceneTheme: UIImage] = [:]
+    private static var keycapCache: [SceneTheme: UIImage] = [:]
 }

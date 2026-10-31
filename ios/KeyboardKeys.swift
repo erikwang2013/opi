@@ -284,6 +284,9 @@ final class KeyButton: UIButton {
     var popupUsed = false
     /// 右上角数字徽标（9 键 / 拼音 26 键 Q–P）；无徽标的键不加入视图树。
     private let badgeLabel = UILabel()
+    /// 动态皮肤的键帽纹理。用图层而不是 `setBackgroundImage`：后者会把
+    /// 256×256 方图拉满整个键面，窄键上的猫/花会明显变形。
+    private let keycapLayer = CALayer()
 
     init(spec: KeySpec) {
         self.spec = spec
@@ -301,6 +304,10 @@ final class KeyButton: UIButton {
         applyTitle(.label, fontScale: 1)
         backgroundColor = .secondarySystemBackground
         layer.cornerRadius = 5
+        layer.masksToBounds = true
+        keycapLayer.contentsGravity = .resizeAspectFill
+        keycapLayer.isHidden = true
+        layer.insertSublayer(keycapLayer, at: 0)
         // 无障碍（2026-10-28）：符号键的键面字 VoiceOver 读不出来（"⌫"/"⇧"/"🌐"）。
         accessibilityLabel = Self.spokenLabel(spec)
         if spec.longPressRepeatsBackspace {
@@ -354,18 +361,32 @@ final class KeyButton: UIButton {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used: 布局全代码构建") }
 
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        keycapLayer.frame = bounds
+    }
+
     /// 换肤 + 长辈字号（重建键位后由 `KeyboardLayout.applyKeyTheme` 逐键调）。
     func applyTheme(_ p: KeyboardPalette, fontScale: CGFloat) {
         applyTitle(p.keyFg, fontScale: fontScale)
         // 动态插画皮肤：键帽留 32% 让插画透到键面上（用户 2026-10-31 要求
         // 「插画要显示出来，不能只显示颜色」）；纯色皮肤保持原来的不透明键帽。
         // 文字加一层反向阴影，浅色插画/深色插画下都还能读。
-        let scene = KeyboardPreferences.scene != nil
-        backgroundColor = scene ? p.keyBg.withAlphaComponent(0.68) : p.keyBg
+        if let scene = KeyboardPreferences.scene, let keycap = scene.keycapImage {
+            // 键帽纹理本身就是该主题的插画裁片（已压 55% 主题底色）；不再叠半透明底色。
+            keycapLayer.contents = keycap.cgImage
+            keycapLayer.isHidden = false
+            backgroundColor = .clear
+        } else {
+            keycapLayer.contents = nil
+            keycapLayer.isHidden = true
+            backgroundColor = p.keyBg
+        }
         let shadow: UIColor = p.isDark
             ? UIColor.white.withAlphaComponent(0.35)
             : UIColor.black.withAlphaComponent(0.30)
-        titleLabel?.shadowColor = scene ? shadow : .clear
+        let hasScene = KeyboardPreferences.scene != nil
+        titleLabel?.shadowColor = hasScene ? shadow : .clear
         titleLabel?.shadowOffset = CGSize(width: 0, height: 1)
     }
 

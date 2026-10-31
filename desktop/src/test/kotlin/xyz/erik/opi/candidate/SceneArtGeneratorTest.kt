@@ -22,7 +22,11 @@ import org.junit.Test
 import xyz.erik.opi.scene.ScenePalette
 import xyz.erik.opi.scene.SceneTheme
 import xyz.erik.opi.scene.drawOpiSceneBackdrop
+import java.awt.RenderingHints
+import java.awt.image.BufferedImage
+import java.io.ByteArrayInputStream
 import java.io.File
+import javax.imageio.ImageIO
 
 class SceneArtGeneratorTest {
 
@@ -48,6 +52,21 @@ class SceneArtGeneratorTest {
                 scene.close()
             }
             File(dir, "scene-${theme.id}.png").writeBytes(bytes)
+            // 键帽纹理：从画面左下前景裁一块 512×512，缩到 256，再压 55% 主题底色 ——
+            // 键面自己带插画/主题色，而不是只靠背景透出来。三端共用同一份。
+            val src = ImageIO.read(ByteArrayInputStream(bytes))
+            val side = minOf(512, src.width, src.height)
+            val crop = src.getSubimage(64.coerceAtMost(src.width - side), src.height - side, side, side)
+            val keycap = BufferedImage(256, 256, BufferedImage.TYPE_INT_RGB)
+            val g = keycap.createGraphics()
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+            g.drawImage(crop, 0, 0, 256, 256, null)
+            g.color = java.awt.Color(
+                colors.bg.red, colors.bg.green, colors.bg.blue, 140f / 255f,
+            )
+            g.fillRect(0, 0, 256, 256)
+            g.dispose()
+            ImageIO.write(keycap, "png", File(dir, "keycap-${theme.id}.png"))
         }
     }
 

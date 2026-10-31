@@ -58,3 +58,29 @@ export function sceneImage(id: string): Resource {
   const s: SceneSkin | undefined = sceneById(id);
   return s === undefined ? $r('app.media.scene_meadow') : s.image;
 }
+
+/** 键帽纹理（预压主题底色的 256×256 裁片）；未知 id 回透明占位。 */
+export function sceneKeycapImage(id: string): Resource {
+  switch (id) {
+    case 'meadow': return $r('app.media.keycap_meadow');
+    case 'forest': return $r('app.media.keycap_forest');
+    case 'garden': return $r('app.media.keycap_garden');
+    case 'night': return $r('app.media.keycap_night');
+    case 'city': return $r('app.media.keycap_city');
+    case 'mountain': return $r('app.media.keycap_mountain');
+    case 'sea': return $r('app.media.keycap_sea');
+    case 'pond': return $r('app.media.keycap_pond');
+    case 'autumn': return $r('app.media.keycap_autumn');
+    case 'winter': return $r('app.media.keycap_winter');
+    case 'mist': return $r('app.media.keycap_mist');
+    case 'vegetable': return $r('app.media.keycap_vegetable');
+    case 'sunset': return $r('app.media.keycap_sunset');
+    case 'study': return $r('app.media.keycap_study');
+    case 'kitchen': return $r('app.media.keycap_kitchen');
+    case 'countryside': return $r('app.media.keycap_countryside');
+    case 'streetlight': return $r('app.media.keycap_streetlight');
+    case 'dogs': return $r('app.media.keycap_dogs');
+    case 'cats': return $r('app.media.keycap_cats');
+    default: return $r('app.media.keycap_none');
+  }
+}

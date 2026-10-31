@@ -101,6 +101,7 @@ fun ImeScreen(
         LocalKeyboardPalette provides palette,
         LocalDensity provides density,
         LocalSceneActive provides (state.scene != null),
+        LocalKeycapBitmap provides rememberKeycapBitmap(state.scene),
     ) {
         // 根列**铺工具条底色**（2026-10-17 用户裁决「红线区域内输入法的其他界面都覆盖了，
         // 只有默认界面没有，默认界面也要全覆盖」）：顶部信息行槽此前透明 ⇒ 窗口

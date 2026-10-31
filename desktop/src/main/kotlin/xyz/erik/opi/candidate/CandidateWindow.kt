@@ -7,6 +7,7 @@
 
 package xyz.erik.opi.candidate
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -44,6 +46,10 @@ import java.awt.Toolkit
 import xyz.erik.opi.pet.OpiPet
 import xyz.erik.opi.pet.PetMood
 import xyz.erik.opi.pet.PetPalette
+import xyz.erik.opi.scene.ScenePalette
+import xyz.erik.opi.scene.SceneTheme
+import xyz.erik.opi.scene.drawOpiSceneBackdrop
+import xyz.erik.opi.scene.rememberOpiScenePhase
 
 // ---------- 自绘配色 ----------
 //
@@ -305,20 +311,30 @@ internal fun CandidatePanel(
     windowSize: DpSize = PANEL_DESIGN_SIZE,
     // 设置里的候选字号档位（[candidateFontScale]）；1 = 中档（既有行为）。
     fontScale: Float = 1f,
+    // 动态插画皮肤：整条铺插画，面板压半透明底色（与状态栏同一条）。
+    theme: SceneTheme? = null,
 ) {
     val fontFor: (TextUnit) -> TextUnit = { fontSizeFor(it, windowSize, fontScale) }
     val palette = LocalBarPalette.current
     // 「次要文字」没有独立角色：用 fg 降透明度，深底/浅底皮肤都自动成立。
     val dim = palette.fg.copy(alpha = 0.62f)
     val scroll = rememberScrollState()
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(windowSize.height)
-            .background(palette.bg)
-            .padding(horizontal = BAR_PAD_H.dp, vertical = BAR_PAD_V.dp),
-        verticalArrangement = Arrangement.spacedBy(BAR_GAP_ROWS.dp),
-    ) {
+    val scene = remember(palette) { ScenePalette(base = palette.bg, ink = palette.fg, accent = palette.accent) }
+    val phase = rememberOpiScenePhase(animate = theme != null)
+    Box(Modifier.fillMaxWidth().height(windowSize.height)) {
+        if (theme != null) {
+            Canvas(Modifier.fillMaxSize()) {
+                drawOpiSceneBackdrop(scene, theme, phase.value, muted = 0.20f)
+            }
+            Box(Modifier.fillMaxSize().background(palette.bg.copy(alpha = 0.52f)))
+        } else {
+            Box(Modifier.fillMaxSize().background(palette.bg))
+        }
+        Column(
+            modifier = Modifier.fillMaxSize()
+                .padding(horizontal = BAR_PAD_H.dp, vertical = BAR_PAD_V.dp),
+            verticalArrangement = Arrangement.spacedBy(BAR_GAP_ROWS.dp),
+        ) {
         // 第一行 = 拼音（用户裁决 2026-10-22「候选词中的拼音要在候选词上方」）。
         // 太长时省略 —— 它是输入提示、不是候选，省掉最后几个字母不会选错词；
         // 候选本身**绝不省略**（见 CandidateItem）。
@@ -382,6 +398,7 @@ internal fun CandidatePanel(
                 Spacer(Modifier.width(PAGE_BTN_GAP.dp))
                 PageButton("›", enabled = model.page < model.pageCount, size = fontFor(CandidateFont.Arrow), onClick = onNext)
             }
+        }
         }
     }
 }
