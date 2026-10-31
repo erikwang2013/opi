@@ -190,17 +190,17 @@ export struct SkinPanel {
           Text('纯色')
             .fontSize(12).fontWeight(FontWeight.Bold).fontColor(this.pal().dimFg)
             .width('100%').padding({ left: 8, top: 8, bottom: 2 })
-          // 11 款纯色（SKINS[0] 是旧「不改动」，不再列出）。
+          // 11 款纯色（清爽排首；SKINS[0] 是旧「不改动」，不再列出）。
           Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start }) {
-            ForEach(SKINS.slice(1), (s: Skin, i: number) => {
+            ForEach([5, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11], (idx: number, i: number) => {
               SkinCard({
-                index: i + 1,
-                selected: this.scene.length === 0 && (i + 1) === this.skin,
+                index: idx,
+                selected: this.scene.length === 0 && idx === this.skin,
                 onTap: () => {
-                  this.ctrl.selectSkin(i + 1);
+                  this.ctrl.selectSkin(idx);
                 }
               })
-            }, (s: Skin, i: number) => `skin-${i}`)
+            }, (idx: number, i: number) => `skin-${idx}`)
           }.width('100%').padding({ left: 8, right: 8, top: 2 })
           Text('动态')
             .fontSize(12).fontWeight(FontWeight.Bold).fontColor(this.pal().dimFg)

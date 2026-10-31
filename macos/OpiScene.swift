@@ -80,6 +80,7 @@ enum OpiSkinChoice: Hashable {
 
     /// 11 款纯色（不含旧「不改动」）+ 19 套动态，顺序与 Android/桌面一致。
     static let all: [OpiSkinChoice] =
-        OpiSkin.allCases.filter { $0 != .keep }.map { .solid($0) }
+        [.solid(.fresh)]
+        + OpiSkin.allCases.filter { $0 != .fresh && $0 != .keep }.map { .solid($0) }
         + OpiSceneTheme.allCases.map { .scene($0) }
 }

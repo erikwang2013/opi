@@ -122,7 +122,8 @@ final class SkinPanel: UIView {
     /// 纯色 11 张（不含旧「不改动」），动态 19 张；窄屏折行由固定列数承担。
     private func buildCards() {
         addSection("纯色")
-        let solids = SkinOption.allCases.filter { $0 != .follow }
+        let solids = [SkinOption.fresh]
+            + SkinOption.allCases.filter { $0 != .fresh && $0 != .follow }
         for start in stride(from: 0, to: solids.count, by: 5) {
             let row = UIStackView()
             row.axis = .horizontal
