@@ -215,24 +215,24 @@ enum OpiTheme {
     }
 
     /// 统一给自绘面板涂底 + 1pt 边线（Linux 条的 border 同款）。
-    private static let sceneLayerTag = 0x0B1
-    private static let sceneScrimTag = 0x0B2
+    private static let sceneLayerID = NSUserInterfaceItemIdentifier("opi.scene.bg")
+    private static let sceneScrimID = NSUserInterfaceItemIdentifier("opi.scene.scrim")
 
     /// 动态皮肤：插画铺在内容后，再压一层页面色（[alpha] 越大文字越稳）。
     /// 每次 style 都重装，切纯色皮肤时把两层清掉。
     private static func installScene(content: NSView, scrim: NSColor, alpha: CGFloat) {
-        content.subviews
-            .filter { $0.tag == sceneLayerTag || $0.tag == sceneScrimTag }
-            .forEach { $0.removeFromSuperview() }
+        for view in content.subviews where view.identifier == sceneLayerID || view.identifier == sceneScrimID {
+            view.removeFromSuperview()
+        }
         guard let theme = scene, let img = theme.image else { return }
         let iv = NSImageView(frame: content.bounds)
-        iv.tag = sceneLayerTag
+        iv.identifier = sceneLayerID
         iv.image = img
         iv.imageScaling = .scaleAxesIndependently
         iv.autoresizingMask = [.width, .height]
         content.addSubview(iv, positioned: .below, relativeTo: nil)
         let dim = NSView(frame: content.bounds)
-        dim.tag = sceneScrimTag
+        dim.identifier = sceneScrimID
         dim.wantsLayer = true
         dim.layer?.backgroundColor = scrim.withAlphaComponent(alpha).cgColor
         dim.autoresizingMask = [.width, .height]
