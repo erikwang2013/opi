@@ -205,7 +205,7 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
                 }
             }
         }
-        Column(Modifier.fillMaxSize().background(SymBg)) {
+        Column(Modifier.fillMaxSize().sceneBackdrop(LocalPageScene.current, SymBg, SymFg, SymAccent)) {
             if (onEmoji) {
                 // 与 Android `EmojiPanel` 同一套布局：`[← 返回] [Emoji | 颜文字] [搜索框]`。
                 // 桌面窗无系统标题栏 ⇒ 最右保留 ✕（本窗自己的页级关闭入口）。

@@ -77,13 +77,13 @@
 
 | 项 | 值 | 依据 |
 |---|---|---|
-| 操作系统 | Windows 10 / 11 x64 | 目标三元组只有 `x86_64-pc-windows-msvc`（下面 1.2 有实测）；**Windows on ARM 需要另加 `aarch64-pc-windows-msvc`，本仓库没有为它做过任何事** |
+| 操作系统 | Windows 10 1607+ / 11 x64 | 目标三元组只有 `x86_64-pc-windows-msvc`（下面 1.2 有实测）；**Windows on ARM 需要另加 `aarch64-pc-windows-msvc`，本仓库没有为它做过任何事** |
 | C++ 构建工具 | Visual Studio 2017+ 或 Build Tools，勾选「使用 C++ 的桌面开发」 | 提供 `link.exe` 与 MSVC 导入库。`crates/tsf-opi/Cargo.toml` 声明的 `windows` crate 依赖在链接期需要导入库 |
 | Rust | `rustup target add x86_64-pc-windows-msvc` | 目标不是默认安装的 |
 | 词库文件 | `luna.opid` + `trad.opid`（繁体，可选），**安装包已自带**（`app\`，见 §2.4）；手工部署时放 DLL 同目录或 `%LOCALAPPDATA%\opi\` 亦可（§2.2） | `crates/tsf-opi/src/dict_path.rs` |
 | 候选窗运行时 | JVM（只有要显示候选窗时才需要） | `desktop/` 是 Compose Desktop / JVM 工程 |
 
-> **Win7 / Win8 / 8.1 不支持（2026-10-19 用户裁决：仅文档标注）**：当前
+> **Windows 10 1607 以下、XP / Vista / Win7 / Win8 / 8.1 不支持（2026-10-31 复核）**：当前
 > `tsf_opi.dll` 导入 `api-ms-win-core-synch-l1-2-0`（Win8+）与 `bcryptprimitives`
 > （Rust 1.88 std 的 Win10 路径）；候选窗是 JDK 21/Temurin/jpackage + Compose
 > Desktop 1.11，官方目标 Win10/11。要在 Win7/8 上运行须另建 legacy 轨道

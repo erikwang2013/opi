@@ -281,7 +281,7 @@ fun InputModePanel(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxSize().background(LocalKeyboardPalette.current.panelBg)) {
+    Column(modifier = modifier.fillMaxSize().opiPanelBackground(LocalKeyboardPalette.current.panelBg)) {
         PanelHeader("输入模式", "选中即换", onClose)
         PanelChips {
             for (m in InputMode.entries) {
@@ -311,7 +311,7 @@ fun KeyboardModePanel(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxSize().background(LocalKeyboardPalette.current.panelBg)) {
+    Column(modifier = modifier.fillMaxSize().opiPanelBackground(LocalKeyboardPalette.current.panelBg)) {
         PanelHeader("键盘模式", "可连开多个；再点一下关", onClose)
         PanelChips {
             // —— 繁体：引擎模式开关（与「中/繁/英」键同一条路） ——

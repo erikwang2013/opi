@@ -191,18 +191,8 @@ final class OpiKeyboardPanel: NSObject {
             + noticeHeight
         panel.setContentSize(NSSize(width: width, height: height))
         root.frame = NSRect(x: 0, y: 0, width: width, height: height)
-        OpiTheme.style(content: root, palette: palette)
-        // 动态皮肤：插画铺在键面后，从键缝里透出来（Android/iOS 同一条）。
-        if let scene = OpiTheme.scene, let img = scene.image {
-            let iv = NSImageView(frame: root.bounds)
-            iv.image = img
-            iv.imageScaling = .scaleAxesIndependently
-            root.addSubview(iv, positioned: .below, relativeTo: nil)
-            let scrim = NSView(frame: root.bounds)
-            scrim.wantsLayer = true
-            scrim.layer?.backgroundColor = palette.bg.withAlphaComponent(0.30).cgColor
-            root.addSubview(scrim, positioned: .above, relativeTo: iv)
-        }
+        // 插画铺在键面后，从键缝里透出来（Android/iOS 同一条）；0.30 保持键面原观感。
+        OpiTheme.style(content: root, palette: palette, scrimAlpha: 0.30)
 
         // 头部：标题 + 四档键面 + 关闭。
         let title = NSTextField(labelWithString: "小欧虚拟键盘")

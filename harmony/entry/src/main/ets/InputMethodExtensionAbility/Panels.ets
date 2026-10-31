@@ -14,7 +14,7 @@ import { KeyboardController } from './KeyboardController';
 import { OpiMode } from './OpiEngine';
 import { INPUT_MODES, InputMode, currentModeIndex } from './InputModes';
 import { ONE_HAND_LEFT, ONE_HAND_OFF, ONE_HAND_RIGHT, darkEnabled, elderEnabled } from './KeyboardModes';
-import { Palette, SKINS, Skin, paletteFor } from './Palette';
+import { Palette, SKINS, Skin, paletteFor, scenePanelBg } from './Palette';
 import { SCENES, SceneSkin } from './SceneTheme';
 import { UpdateSection } from './UpdateCheck';
 
@@ -219,7 +219,7 @@ export struct SkinPanel {
         }.width('100%')
       }.layoutWeight(1).width('100%')
     }
-    .width('100%').height('100%').backgroundColor(this.pal().panelBg)
+    .width('100%').height('100%').backgroundColor(scenePanelBg(this.pal().panelBg))
   }
 }
 
@@ -309,7 +309,7 @@ export struct KeyboardModePanel {
         }.width('100%').padding({ left: 8, right: 8, top: 4, bottom: 8 })
       }.layoutWeight(1).width('100%')
     }
-    .width('100%').height('100%').backgroundColor(this.pal().panelBg)
+    .width('100%').height('100%').backgroundColor(scenePanelBg(this.pal().panelBg))
   }
 }
 
@@ -420,7 +420,7 @@ export struct AboutPanel {
         .width('100%').padding({ left: 14, right: 14, bottom: 10 })
       }.layoutWeight(1).width('100%')
     }
-    .width('100%').height('100%').backgroundColor(this.pal().panelBg)
+    .width('100%').height('100%').backgroundColor(scenePanelBg(this.pal().panelBg))
   }
 }
 
@@ -464,6 +464,6 @@ export struct InputModePanel {
         }.width('100%').padding({ left: 8, right: 8, bottom: 8 })
       }.layoutWeight(1).width('100%')
     }
-    .width('100%').height('100%').backgroundColor(this.pal().panelBg)
+    .width('100%').height('100%').backgroundColor(scenePanelBg(this.pal().panelBg))
   }
 }

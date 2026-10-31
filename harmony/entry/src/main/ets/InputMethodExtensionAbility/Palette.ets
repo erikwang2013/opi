@@ -121,3 +121,16 @@ export function paletteFor(skin: number, dark: boolean, elder: boolean): Palette
   const i: number = Math.max(0, Math.min(skin, SKINS.length - 1));
   return SKINS[i].palette;
 }
+
+/**
+ * 动态皮肤下的面板底：保留原色相，只留 ~62% 不透明度让 Root 的插画透出来。
+ * 纯色皮肤原值返回。scene 直接读 AppStorage，面板不必各挂一条 @StorageLink。
+ */
+export function scenePanelBg(color: string): string {
+  const scene: string = AppStorage.get<string>('opiScene') ?? '';
+  if (scene.length === 0) {
+    return color;
+  }
+  const rgb: string = color.length === 9 ? color.slice(3) : color.slice(1);
+  return '#9E' + rgb;
+}

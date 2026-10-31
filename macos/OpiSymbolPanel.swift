@@ -64,6 +64,7 @@ final class OpiSymbolPanel: NSObject, NSTextFieldDelegate, NSSearchFieldDelegate
 
     func show() {
         let panel = ensurePanel()
+        if let root = panel.contentView { OpiTheme.styleNative(content: root) }
         // 每次打开都重读（iOS 侧的同一条纪律：空结果/旧数据不缓存）。
         categories = loadCategories()
         currentCategory = min(currentCategory, max(0, categories.count - 1))

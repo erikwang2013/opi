@@ -303,7 +303,8 @@ extension KeyboardLayout {
         candidateBar.isOpaque = !nativeBackdrop
         // 动态插画皮肤：键区底板留 20% 让插画透到键缝/键面上（键帽自己也有 32%
         // 透明，见 KeyButton.applyTheme）；纯色皮肤保持原来的不透明底板。
-        keyArea.backgroundColor = KeyboardPreferences.scene != nil
+        let scene = KeyboardPreferences.scene
+        keyArea.backgroundColor = scene != nil
             ? p.barBg.withAlphaComponent(0.20) : p.barBg
         composingBar.setNativeBackdrop(nativeBackdrop)
         composingBar.applyTheme(p, fontScale: fontScale)
@@ -327,6 +328,10 @@ extension KeyboardLayout {
         wordColumn.applyTheme(p, fontScale: fontScale)
         punctuationPicker.applyTheme(p, fontScale: fontScale)
         candidateTiledPanel.applyTheme(p, fontScale: fontScale)
+        // 子页整块盖住键区：各自铺同一张主题插画，动态皮肤在面板里也不退回纯色。
+        let panels: [UIView] = [skinPanel, keyboardModePanel, aboutPanel, modePanel, settingsPanel,
+                                symbolPanel, emojiPanel, rarePanel, candidateTiledPanel, punctuationPicker]
+        for panel in panels { panel.applySceneBackdrop(scene, base: p.panelBg) }
         // 面板态下键位行与顶栏都隐藏：别为一次换肤递归走几十个不可见的 KeyButton。
         if !isPanelLayer { applyKeyTheme() }
         applyOneHand(keyboardModes.oneHand)

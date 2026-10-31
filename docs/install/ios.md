@@ -395,6 +395,7 @@ appex 的 `scenes/`）；选中后插画铺在键面后、配色取该主题的�
 | L8 | **繁体库不放就回落简体** | `trad.opid` 是可选资源；缺了不报错，繁体模式静默用简体库。 |
 | L9 | **长按 ⇧ → Lock 走的是另一套机制** | 软键盘长按 → `stateLongPressed`，与桌面轨的 `LONG_PRESSED` 键状态位不是同一条路。 |
 | L10 | **候选栏空态没有小欧** | 其他端（Android 候选栏、Windows 候选窗、鸿蒙）在「打不出候选」时会显示小欧 + 提示；iOS 的 `KeyboardLayout.updateCandidates(_:)` 在空数组时先清空子视图再 `return` ⇒ **纯空白**。接它只能走位图（`ios/README.md` §6 明文禁止第三份 CoreGraphics 几何），而 iOS 现在连 `.xcassets` 都没有。**本版没做。** |
+| L12 | **键盘内没有语音输入** | Apple 不允许任何键盘扩展访问麦克风，Full Access 也不授予；因此小欧 iOS 键盘不放假话筒。2026-10-31 用户裁决 v1 只提示使用系统听写（设置 → 通用 → 键盘 → 启用听写），Android / 桌面 / 鸿蒙才做本地语音。 |
 | L11 | **自定义短语：没有 UI（2026-10-24）** | C ABI 有中文套出口，`ios/OpiEngine.swift` 也包了 `customPhrasesEnabled` / `exportCustomPhrases` / `setCustomPhrases`，但**没有英文套包装、没有设置页、没有宿主文件装载**（`ios/` 下没有任何 `*Phrase*` 文件）⇒ 用户在 iOS 上配不了，重启也没有表可装。别把 Android / macOS 的「自定义短语」入口读成 iOS 也有。 |
 
 ---

@@ -15,9 +15,9 @@ import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -35,6 +35,9 @@ internal const val KEY_AREA_SCENE_SCRIM_ALPHA = 0.16f
 
 /** 当前是不是动态插画皮肤（键面需要透出插画并给文字加一点阴影）。 */
 internal val LocalSceneActive = compositionLocalOf { false }
+
+/** 当前动态皮肤；各面板据此铺插画（null = 纯色皮肤，保持原来的纯色底）。 */
+internal val LocalSceneTheme = compositionLocalOf<SceneTheme?> { null }
 
 /** 当前主题的键帽纹理；null = 纯色皮肤（键帽照旧用 keyBg）。 */
 internal val LocalKeycapBitmap = compositionLocalOf<ImageBitmap?> { null }
@@ -73,5 +76,24 @@ internal fun Modifier.opiSceneBackground(theme: SceneTheme): Modifier {
     return drawBehind {
         drawRect(p.barBg)
         drawOpiSceneBackdrop(scene, theme, phase.value)
+    }
+}
+
+/** 面板底色不透明度：留四成插画，文字仍落在足够深/浅的底上。 */
+private const val PANEL_SCENE_SCRIM_ALPHA = 0.58f
+
+/** 面板底：动态皮肤 = 插画 + 半透明面板色；纯色皮肤 = 原来的不透明面板色。 */
+@Composable
+internal fun Modifier.opiPanelBackground(base: Color): Modifier {
+    val theme = LocalSceneTheme.current
+    if (theme == null) return background(base)
+    val p = LocalKeyboardPalette.current
+    val scene = remember(p, base) {
+        ScenePalette(base = base, ink = p.keyFg, accent = p.accent)
+    }
+    val phase = rememberOpiScenePhase()
+    return drawBehind {
+        drawOpiSceneBackdrop(scene, theme, phase.value)
+        drawRect(base.copy(alpha = PANEL_SCENE_SCRIM_ALPHA))
     }
 }

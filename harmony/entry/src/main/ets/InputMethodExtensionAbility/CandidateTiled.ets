@@ -15,7 +15,7 @@
 
 import { KeyboardController } from './KeyboardController';
 import { NINE_STRIP, NineKey } from './KeyPanels';
-import { Palette, paletteFor } from './Palette';
+import { Palette, paletteFor, scenePanelBg } from './Palette';
 
 /** 一行 4 个「字宽单元」（Android UNITS_PER_ROW）。 */
 const UNITS_PER_ROW: number = 4;
@@ -183,7 +183,7 @@ export struct CandidateTiled {
         })
       }.layoutWeight(1).height('100%').padding({ left: 2, right: 4 })
     }
-    .width('100%').height('100%').backgroundColor(this.pal().barBg)
+    .width('100%').height('100%').backgroundColor(scenePanelBg(this.pal().barBg))
   }
 
   /** ⌫：单击删一格；长按按住连续退格，松手停止。 */

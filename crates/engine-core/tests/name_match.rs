@@ -111,6 +111,57 @@ fn text_candidate_stays_first() {
     assert_eq!(got[0].text, "你好", "符号/颜文字不得顶掉文本首候选");
 }
 
+fn engine_with(pinyin: &str, word: &str) -> Engine {
+    let mut d = InMemoryDictionary::new();
+    d.insert(pinyin, word, 999_999);
+    Engine::new(
+        Box::new(d),
+        SymbolEngine::new(Vec::new(), Vec::new()),
+        false,
+    )
+}
+
+/// 候选词反查：纠错给出的词本身要有对应符号（按键串 `dianhau` 不是 `dianhua` 的前缀，
+/// 前缀层不会命中）。
+#[test]
+fn corrected_candidate_word_gets_its_symbol() {
+    let mut e = engine_with("dianhua", "电话");
+    typed(&mut e, "dianhau");
+    let got = e.candidates(usize::MAX);
+    assert_eq!(got[0].text, "电话", "纠错词仍是首候选");
+    let word_at = got.iter().position(|c| c.text == "电话").unwrap();
+    let sym_at = got
+        .iter()
+        .position(|c| c.kind == CandidateKind::Symbol && c.text == "☎")
+        .expect("电话 → ☎");
+    assert!(word_at < sym_at, "符号追加在词候选之后");
+}
+
+/// 简拼同理：`kx` → 「开心」→ 一组开心颜文字。
+#[test]
+fn jianpin_candidate_word_gets_kaomoji() {
+    let mut e = engine_with("kaixin", "开心");
+    typed(&mut e, "kx");
+    let got = e.candidates(usize::MAX);
+    assert!(got.iter().any(|c| c.text == "开心"));
+    assert!(
+        got.iter()
+            .any(|c| c.kind == CandidateKind::Symbol
+                && (c.text.contains('∀') || c.text.contains('✿'))),
+        "开心对应颜文字：{got:?}"
+    );
+}
+
+/// 反查层同样受 limit 约束：词候选填满时一条不加。
+#[test]
+fn reverse_symbols_never_displace_the_word() {
+    let mut e = engine_with("dianhua", "电话");
+    typed(&mut e, "dianhau");
+    let got = e.candidates(1);
+    assert_eq!(got.len(), 1);
+    assert_eq!(got[0].text, "电话");
+}
+
 #[test]
 fn limit_is_respected_and_single_key_does_not_trigger() {
     let mut e = empty_engine();

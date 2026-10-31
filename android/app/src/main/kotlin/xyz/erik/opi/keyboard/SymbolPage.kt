@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import xyz.erik.opi.ime.opiPanelBackground
 
 /**
  * 符号页（2026-10-09 用户裁决：「9 键，左下角符按钮点进去应该是个新的页面，右L布局，
@@ -70,7 +71,7 @@ fun SymbolPage(
             }
         )
     }
-    Column(modifier = modifier.fillMaxSize().background(p.panelBg)) {
+    Column(modifier = modifier.fillMaxSize().opiPanelBackground(p.panelBg)) {
         // 头：与皮肤/输入模式/键盘模式面板同形态
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 4.dp, top = 4.dp),

@@ -128,6 +128,7 @@ final class OpiSettingsWindow: NSObject {
     }
 
     func rebuildPage() {
+        if let root = panel?.contentView { OpiTheme.styleNative(content: root) }
         host?.subviews.forEach { $0.removeFromSuperview() }
         setPageHeight(Self.height)
         switch page {

@@ -13,7 +13,7 @@ import { KeyboardController } from './KeyboardController';
 import { EmojiGroup } from './OpiEngine';
 import { OpiPet, PetMood } from './OpiPet';
 import { emojiGroups, emojiSymbols, searchEmoji } from './EmojiData';
-import { Palette, paletteFor } from './Palette';
+import { Palette, paletteFor, scenePanelBg } from './Palette';
 import { KAOMOJI_CATEGORIES } from './KaomojiData';
 import { SearchPad } from './SearchPad';
 import { StickerGrid } from './StickerGrid';
@@ -118,7 +118,7 @@ export struct EmojiPad {
         }).height(96).width('100%')
       }
     }
-    .width('100%').backgroundColor(this.pal().panelBg)
+    .width('100%').backgroundColor(scenePanelBg(this.pal().panelBg))
     .onAreaChange((oldValue: Area, newValue: Area) => {
       const w: number = newValue.width as number;
       if (w > 0 && w !== this.gridW) {

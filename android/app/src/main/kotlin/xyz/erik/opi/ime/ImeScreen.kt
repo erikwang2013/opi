@@ -100,7 +100,7 @@ fun ImeScreen(
     CompositionLocalProvider(
         LocalKeyboardPalette provides palette,
         LocalDensity provides density,
-        LocalSceneActive provides (state.scene != null),
+        LocalSceneActive provides (state.scene != null), LocalSceneTheme provides state.scene,
         LocalKeycapBitmap provides rememberKeycapBitmap(state.scene),
     ) {
         // 根列**铺工具条底色**（2026-10-17 用户裁决「红线区域内输入法的其他界面都覆盖了，

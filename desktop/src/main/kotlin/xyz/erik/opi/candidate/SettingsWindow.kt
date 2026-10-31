@@ -42,6 +42,7 @@ import androidx.compose.material.Switch
 import androidx.compose.material.SwitchDefaults
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -269,7 +270,7 @@ fun SettingsWindow() {
         }
     }
 
-    Row(Modifier.fillMaxSize().background(Paper)) {
+    Row(Modifier.fillMaxSize().sceneBackdrop(s.background, Paper, Ink, Teal, 0.78f)) {
         NavColumn(tab) { tab = it }
         Column(Modifier.weight(1f).fillMaxHeight()) {
             // 新版本横幅（2026-10-22 用户裁决）：只在检测到更新时出现，可关闭；
@@ -325,11 +326,13 @@ fun SettingsWindow() {
         }
     }
     symbolWin?.let { emoji ->
-        SymbolWindow(
-            onCommit = ::desktopSymbolCommit,
-            onClose = { symbolWin = null },
-            initialEmoji = emoji,
-        )
+        CompositionLocalProvider(LocalPageScene provides s.background) {
+            SymbolWindow(
+                onCommit = ::desktopSymbolCommit,
+                onClose = { symbolWin = null },
+                initialEmoji = emoji,
+            )
+        }
     }
 }
 

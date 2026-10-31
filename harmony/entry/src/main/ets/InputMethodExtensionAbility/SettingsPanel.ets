@@ -14,7 +14,7 @@ import {
   ONE_HAND_LEFT, ONE_HAND_OFF, ONE_HAND_RIGHT, PanelView, openSubPanel, toggleAssociation
 } from './KeyboardModes';
 import { OpiMode } from './OpiEngine';
-import { Palette, SKINS, paletteFor } from './Palette';
+import { Palette, SKINS, paletteFor, scenePanelBg } from './Palette';
 import { sceneLabel } from './SceneTheme';
 import { ModeChip, PanelHeader, appVersion } from './Panels';
 import { UpdateSection } from './UpdateCheck';
@@ -222,6 +222,6 @@ export struct SettingsPanel {
         .width('100%').padding({ bottom: 10 })
       }.layoutWeight(1).width('100%')
     }
-    .width('100%').height('100%').backgroundColor(this.pal().panelBg)
+    .width('100%').height('100%').backgroundColor(scenePanelBg(this.pal().panelBg))
   }
 }

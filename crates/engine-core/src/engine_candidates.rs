@@ -65,6 +65,8 @@ impl Engine {
             crate::emoji_keywords::append_to(&mut cands, &s.buffer, limit);
             // 符号/标点/颜文字名称（2026-10-31）：英文模式用英文名，排在 emoji 之后。
             crate::name_keywords::append_to(&mut cands, &s.buffer, limit, Mode::English);
+            // 候选词反查（2026-10-31）：同理兜住「词本身在候选里、按键串不是名称前缀」。
+            crate::name_keywords::append_word_to(&mut cands, limit, Mode::English);
             return cands;
         }
         // 提交后联想（2026-10-27）：缓冲空时候选行 = 提交时算好的联想项。
@@ -213,6 +215,9 @@ impl Engine {
             // 名称层继续填剩余空位（`zuokuohao` 这类没有表情的输入照常命中）。
             crate::emoji_keywords::append_to(&mut cands, &s.buffer, limit);
             crate::name_keywords::append_to(&mut cands, &s.buffer, limit, s.mode);
+            // 候选词反查（2026-10-31）：`kaixn` 纠出「开心」、`kx` 简拼出「开心」时，
+            // 按键串不是 `kaixin` 的前缀，上面那条前缀层不会命中 —— 按词名补颜文字。
+            crate::name_keywords::append_word_to(&mut cands, limit, s.mode);
         }
         cands
     }

@@ -14,6 +14,9 @@
 //! 位置与 limit 同 emoji 层：只追加在文本候选之后，limit 满了就一个也不加 ——
 //! 绝不顶掉 `nihao` / `hello` 这类文本首候选。匹配是**关键字前缀**（`zuokuo` 命中
 //! `zuokuohao`），大小写不敏感，缓冲里的 `'` 分词符忽略；单键不触发。
+//!
+//! 两条路：按键串前缀（[`append_to`]）+ 已完成候选的词**名称反查**（[`append_word_to`]，
+//! 补纠错/简拼/模糊给出的词）；反查最多补 4 条，两条都只在词候选之后追加。
 
 use crate::candidates::{Candidate, CandidateKind};
 use crate::composer::Mode;
@@ -38,6 +41,8 @@ enum Kind {
 
 struct Entry {
     text: &'static str,
+    /// 中文/英文名称列，候选词反查用（见 [`append_word_to`]）。
+    name: &'static str,
     keywords: Vec<&'static str>,
     lang: Lang,
     kind: Kind,
@@ -52,7 +57,7 @@ fn entries() -> &'static [Entry] {
             .filter_map(|line| {
                 let mut cols = line.split('\t');
                 let text = cols.next()?;
-                let _name = cols.next()?;
+                let name = cols.next()?;
                 let keywords = cols.next()?;
                 let kind = match cols.next()? {
                     "punct" => Kind::Punct,
@@ -69,6 +74,7 @@ fn entries() -> &'static [Entry] {
                 };
                 Some(Entry {
                     text,
+                    name,
                     keywords: keywords.split(',').filter(|k| !k.is_empty()).collect(),
                     lang,
                     kind,
@@ -148,6 +154,51 @@ pub(crate) fn append_to(out: &mut Vec<Candidate>, buffer: &str, limit: usize, mo
     }
 }
 
+/// **按候选词反查**（2026-10-31）：纠错 / 简拼 / 模糊给出的词不一定命中上面的宏
+/// 关键字前缀（`kaixn` 纠出「开心」、`kx` 简拼出「开心」，而缓冲区都不是 `kaixin`
+/// 的前缀）。这些词已经出现在候选里，把表里**名称列**与它精确相等的符号/颜文字
+/// 追加在后面 —— 用户要的是「词有对应的符号」，起作用的应是词本身，不是按键串。
+///
+/// 只用现有数据：名称列是中文（标点/符号/颜文字分类名），所以同义词仍不命中
+/// （「高兴」不在表里，表里是「开心」）；表情层没有中文词条，反查不到 emoji。
+/// 最多看前 8 个文本候选、最多补 4 条，且始终受 `limit` 约束（词候选填满时一条不加）。
+pub(crate) fn append_word_to(out: &mut Vec<Candidate>, limit: usize, mode: Mode) {
+    const MAX_WORDS: usize = 8;
+    const MAX_ADDED: usize = 4;
+    if out.len() >= limit {
+        return;
+    }
+    let words: Vec<String> = out
+        .iter()
+        .filter(|c| matches!(c.kind, CandidateKind::Hanzi | CandidateKind::English))
+        .take(MAX_WORDS)
+        .map(|c| c.text.clone())
+        .collect();
+    if words.is_empty() {
+        return;
+    }
+    let mut seen: HashSet<String> = out.iter().map(|c| c.text.clone()).collect();
+    let mut added = 0usize;
+    'words: for word in &words {
+        for entry in entries() {
+            if added >= MAX_ADDED || out.len() >= limit {
+                break 'words;
+            }
+            if entry.name != word.as_str() || !allowed(entry.lang, mode) {
+                continue;
+            }
+            if seen.insert(entry.text.to_string()) {
+                out.push(Candidate {
+                    text: entry.text.to_string(),
+                    kind: CandidateKind::Symbol,
+                    score: 0,
+                });
+                added += 1;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -192,5 +243,52 @@ mod tests {
         assert!(texts("z", Mode::Pinyin).is_empty());
         assert!(texts("zuo'kuo", Mode::Pinyin).contains(&"（".to_string()));
         assert!(texts("左", Mode::Pinyin).is_empty());
+    }
+
+    fn word_candidates(words: &[&str]) -> Vec<Candidate> {
+        words
+            .iter()
+            .map(|w| Candidate {
+                text: (*w).to_string(),
+                kind: CandidateKind::Hanzi,
+                score: 1,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn candidate_word_reverse_lookup_finds_symbols_and_kaomoji() {
+        let mut out = word_candidates(&["电话", "开心"]);
+        append_word_to(&mut out, usize::MAX, Mode::Pinyin);
+        let got: Vec<&str> = out.iter().map(|c| c.text.as_str()).collect();
+        assert!(got.contains(&"☎"), "电话 → ☎：{got:?}");
+        assert!(
+            got.iter().any(|t| t.contains("∀") || t.contains("✿")),
+            "开心 → 颜文字：{got:?}"
+        );
+        // 反查层最多补 4 条（电话 1 条 + 开心 3 条）。
+        assert!(out.len() <= 2 + 4, "反查要限流：{got:?}");
+    }
+
+    #[test]
+    fn reverse_lookup_is_exact_and_mode_gated() {
+        // 同义词不在表里（表里是「开心」）。这条钉住边界，别指望语义映射。
+        let mut out = word_candidates(&["高兴"]);
+        append_word_to(&mut out, usize::MAX, Mode::Pinyin);
+        assert_eq!(out.len(), 1);
+
+        // 中文名称不泄漏进英文模式（「逗号」行是 zh；☎ 这类 both 行两边都行，数据说话）。
+        let mut out = word_candidates(&["逗号"]);
+        append_word_to(&mut out, usize::MAX, Mode::English);
+        assert_eq!(out.len(), 1);
+        append_word_to(&mut out, usize::MAX, Mode::Pinyin);
+        assert!(out.iter().any(|c| c.text == "，"));
+    }
+
+    #[test]
+    fn reverse_lookup_respects_limit() {
+        let mut out = word_candidates(&["电话"]);
+        append_word_to(&mut out, 1, Mode::Pinyin);
+        assert_eq!(out.len(), 1, "词候选填满 limit 时一条也不加");
     }
 }

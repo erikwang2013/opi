@@ -46,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xyz.erik.opi.ime.PanelHeader
+import xyz.erik.opi.ime.opiPanelBackground
 import xyz.erik.opi.scene.ScenePalette
 import xyz.erik.opi.scene.SceneTheme
 import xyz.erik.opi.scene.drawOpiSceneBackdrop
@@ -63,7 +64,7 @@ fun SkinPanel(
     modifier: Modifier = Modifier,
 ) {
     val p = LocalKeyboardPalette.current
-    Column(modifier = modifier.fillMaxSize().background(p.panelBg)) {
+    Column(modifier = modifier.fillMaxSize().opiPanelBackground(p.panelBg)) {
         PanelHeader("皮肤", "11 款纯色 + 19 套动态；默认清爽，选中即换", onClose)
         Column(
             modifier = Modifier.fillMaxWidth().weight(1f)

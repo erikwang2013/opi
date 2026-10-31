@@ -82,7 +82,7 @@ fun SettingsPanel(
         fuzzyPairs.split(',').any { it.trim() in FUZZY_PAIRS_ANDROID }
     }
 
-    Column(modifier = modifier.fillMaxSize().background(p.panelBg)) {
+    Column(modifier = modifier.fillMaxSize().opiPanelBackground(p.panelBg)) {
         PanelHeader("设置", "", onClose)
         Column(
             modifier = Modifier.fillMaxWidth().weight(1f)

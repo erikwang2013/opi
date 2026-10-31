@@ -49,6 +49,7 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.delay
 import xyz.erik.opi.pet.OpiPetWindowIcon
+import xyz.erik.opi.scene.SceneTheme
 
 // ---------- 键位表（纯数据） ----------
 
@@ -159,7 +160,7 @@ private fun keyboardPosition(): WindowPosition {
  * 它也漂浮、也常驻，留任务栏条目同样说不通。机制与取证状态见 SkipTaskbar.kt 头注释。
  */
 @Composable
-fun VirtualKeyboardWindow(onClose: () -> Unit, onSymbols: () -> String?) {
+fun VirtualKeyboardWindow(theme: SceneTheme?, onClose: () -> Unit, onSymbols: () -> String?) {
     var notice by remember { mutableStateOf<String?>(null) }
     val windowState = rememberWindowState(
         width = KB_WIDTH_DP.dp,
@@ -185,7 +186,8 @@ fun VirtualKeyboardWindow(onClose: () -> Unit, onSymbols: () -> String?) {
         // 不进任务栏（同状态栏，用户没点名、属同族顺手）：X11 属性直写，见 SkipTaskbar.kt。
         LaunchedEffect(window) { statusBarGuard("虚拟键盘 SkipTaskbar") { SkipTaskbar.apply(window) } }
         Column(
-            modifier = Modifier.fillMaxSize().background(KbBg).padding(6.dp),
+            modifier = Modifier.fillMaxSize().sceneBackdrop(theme, KbBg, KbFg, KeyPressed, 0.72f)
+                .padding(6.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             for (row in VK_ROWS) {

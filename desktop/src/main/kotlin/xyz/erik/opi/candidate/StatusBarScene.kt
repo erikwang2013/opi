@@ -10,11 +10,14 @@
 package xyz.erik.opi.candidate
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import xyz.erik.opi.scene.HALO_BOTTOM_ANCHORS
 import xyz.erik.opi.scene.HALO_TOP_ANCHORS
@@ -30,6 +33,27 @@ internal val LocalBarSceneActive = compositionLocalOf { false }
 /** 皮肤五色 → 插画三色（base/ink/accent），与 Android 侧同一条映射。 */
 internal fun SkinColors.scenePalette(): ScenePalette =
     ScenePalette(base = bg, ink = fg, accent = accent)
+
+/** 自绘窗（设置/符号/虚拟键盘）共用的当前动态皮肤；null = 纯色。 */
+internal val LocalPageScene = compositionLocalOf<SceneTheme?> { null }
+
+/** 页面底：动态皮肤 = 插画 + 半透明页面色；纯色 = 原页面色。 */
+@Composable
+internal fun Modifier.sceneBackdrop(
+    theme: SceneTheme?,
+    base: Color,
+    ink: Color,
+    accent: Color,
+    scrim: Float = 0.58f,
+): Modifier {
+    if (theme == null) return background(base)
+    val scene = remember(base, ink, accent) { ScenePalette(base = base, ink = ink, accent = accent) }
+    val phase = rememberOpiScenePhase()
+    return drawBehind {
+        drawOpiSceneBackdrop(scene, theme, phase.value)
+        drawRect(base.copy(alpha = scrim))
+    }
+}
 
 /**
  * 条窗外溢出的插画。[halo] = 四周透明边距，[barHeight] = 条体高度；Canvas 大小

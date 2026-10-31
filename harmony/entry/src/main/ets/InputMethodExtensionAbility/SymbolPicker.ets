@@ -5,7 +5,7 @@
 // 常用符号网格，点一格 = 选中并关闭。画在键区之上（同层覆盖，不是系统 Dialog ——
 // IME 窗口里的 Dialog 要另起窗口，真机焦点/尺寸都不可控）。
 
-import { Palette, paletteFor } from './Palette';
+import { Palette, paletteFor, scenePanelBg } from './Palette';
 import { symbolCategories } from './SymbolData';
 
 const PER_ROW: number = 8;
@@ -110,7 +110,7 @@ export struct CustomSymbolPicker {
         .layoutWeight(1).width('100%')
       }
     }
-    .width('100%').height('100%').backgroundColor(this.pal().panelBg)
+    .width('100%').height('100%').backgroundColor(scenePanelBg(this.pal().panelBg))
     .onClick(() => {
       // 吞掉空白处点击，别漏到下面的键。
     })

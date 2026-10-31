@@ -11,7 +11,7 @@
 
 import { KeyboardController } from './KeyboardController';
 import { OpiMode } from './OpiEngine';
-import { Palette, paletteFor } from './Palette';
+import { Palette, paletteFor, scenePanelBg } from './Palette';
 import {
   SymbolCategory, radicalGlyph, rareChars, rareIndex, rareStrokeCounts, symbolCategories,
 } from './SymbolData';
@@ -224,7 +224,7 @@ export struct SymbolPage {
       .scrollable(ScrollDirection.Horizontal)
       .width('100%').height(46).backgroundColor(this.pal().barBg)
     }
-    .width('100%').height('100%').backgroundColor(this.pal().panelBg)
+    .width('100%').height('100%').backgroundColor(scenePanelBg(this.pal().panelBg))
     .onAreaChange((oldValue: Area, newValue: Area) => {
       const w: number = newValue.width as number;
       if (w > 0 && w !== this.gridW) {
@@ -389,7 +389,7 @@ export struct RarePanel {
         }.layoutWeight(1).width('100%')
       }
     }
-    .width('100%').height('100%').backgroundColor(this.pal().panelBg)
+    .width('100%').height('100%').backgroundColor(scenePanelBg(this.pal().panelBg))
     .onAreaChange((oldValue: Area, newValue: Area) => {
       const w: number = newValue.width as number;
       if (w > 0 && w !== this.gridW) {

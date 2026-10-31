@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import xyz.erik.opi.ime.opiPanelBackground
 
 /**
  * 生僻字键盘（对齐主流输入法：**选部首 → 选笔画数 → 挑字**的浏览式查法）。
@@ -58,7 +59,7 @@ fun RarePanel(
     var radical by remember { mutableStateOf<Int?>(null) }
     var strokes by remember { mutableStateOf<Int?>(null) }
 
-    Column(modifier = modifier.fillMaxSize().background(p.panelBg)) {
+    Column(modifier = modifier.fillMaxSize().opiPanelBackground(p.panelBg)) {
         // 面包屑/标题行
         Row(
             // heightIn(min)：长标题/大字号时行可长高，不把 14sp 面包屑上下裁掉。

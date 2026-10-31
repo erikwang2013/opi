@@ -474,10 +474,14 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
             SettingsWindow() // 与 `--settings` 模式同一个主体（那份自带落盘 + 通知）
         }
     }
-    if (vkOpen) VirtualKeyboardWindow(onClose = { vkOpen = false }, onSymbols = ::openSymbols)
+    if (vkOpen) {
+        VirtualKeyboardWindow(s.background, onClose = { vkOpen = false }, onSymbols = ::openSymbols)
+    }
     if (symbolsOpen) {
         // 失败原因**原样透传**（2026-10-12）：此前这里把 false 统一翻成一句写死的
         // Windows 解释 —— Linux 上「没有焦点输入框」这类真实原因会被顶掉。
-        SymbolWindow(onCommit = symbolCommit, onClose = { symbolsOpen = false })
+        CompositionLocalProvider(LocalPageScene provides s.background) {
+            SymbolWindow(onCommit = symbolCommit, onClose = { symbolsOpen = false })
+        }
     }
 }

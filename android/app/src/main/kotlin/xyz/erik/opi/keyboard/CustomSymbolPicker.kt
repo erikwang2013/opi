@@ -3,7 +3,6 @@
 
 package xyz.erik.opi.keyboard
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import xyz.erik.opi.ime.opiPanelBackground
 
 /**
  * 9 键左列「自定义」标点的选择器（2026-10-24）：常用符号网格，点一格 = 选中并关闭。
@@ -39,7 +39,7 @@ internal fun CustomSymbolPicker(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(palette.panelBg)
+            .opiPanelBackground(palette.panelBg)
             // 吞掉空白处点击（网格/按钮的子节点先拿到事件）。
             .pointerInput(Unit) { detectTapGestures { } },
     ) {

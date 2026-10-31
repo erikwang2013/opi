@@ -9,6 +9,49 @@ import UIKit
 
 private let sceneBackgroundTag = 0x5CE6E
 private let sceneScrimTag = 0x5CE6F
+private let panelSceneBackgroundTag = 0x5CE70
+private let panelSceneScrimTag = 0x5CE71
+
+extension UIView {
+    /// 面板/选择器页底：铺当前主题插画，再压一层半透明面板色保证文字可读。
+    /// nil = 纯色皮肤（两层隐藏，面板自己的 backgroundColor 照旧）。
+    func applySceneBackdrop(_ theme: SceneTheme?, base: UIColor) {
+        let bg: UIImageView
+        let scrim: UIView
+        if let existing = viewWithTag(panelSceneBackgroundTag) as? UIImageView,
+           let existingScrim = viewWithTag(panelSceneScrimTag) {
+            bg = existing
+            scrim = existingScrim
+        } else {
+            bg = UIImageView()
+            bg.tag = panelSceneBackgroundTag
+            bg.contentMode = .scaleAspectFill
+            bg.clipsToBounds = true
+            bg.isUserInteractionEnabled = false
+            bg.translatesAutoresizingMaskIntoConstraints = false
+            insertSubview(bg, at: 0)
+            scrim = UIView()
+            scrim.tag = panelSceneScrimTag
+            scrim.isUserInteractionEnabled = false
+            scrim.translatesAutoresizingMaskIntoConstraints = false
+            insertSubview(scrim, aboveSubview: bg)
+            NSLayoutConstraint.activate([
+                bg.leadingAnchor.constraint(equalTo: leadingAnchor),
+                bg.trailingAnchor.constraint(equalTo: trailingAnchor),
+                bg.topAnchor.constraint(equalTo: topAnchor),
+                bg.bottomAnchor.constraint(equalTo: bottomAnchor),
+                scrim.leadingAnchor.constraint(equalTo: leadingAnchor),
+                scrim.trailingAnchor.constraint(equalTo: trailingAnchor),
+                scrim.topAnchor.constraint(equalTo: topAnchor),
+                scrim.bottomAnchor.constraint(equalTo: bottomAnchor),
+            ])
+        }
+        bg.image = theme?.image
+        bg.isHidden = theme == nil
+        scrim.isHidden = theme == nil
+        scrim.backgroundColor = base.withAlphaComponent(0.72)
+    }
+}
 
 extension KeyboardLayout {
     /// 换主题图；nil = 纯色皮肤（隐藏插画）。

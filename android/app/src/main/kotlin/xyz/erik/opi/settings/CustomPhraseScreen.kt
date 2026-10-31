@@ -30,6 +30,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +39,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -171,10 +173,11 @@ fun CustomPhraseScreen(onBack: () -> Unit, english: Boolean = false) {
         }
     }
 
-    Scaffold(
+    Scaffold(modifier = Modifier.opiSettingsSceneBackground(), containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text(if (english) "英文自定义短语" else "自定义短语") },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(OpiIcons.ArrowBack, contentDescription = "返回") }
                 },

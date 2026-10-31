@@ -31,6 +31,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +41,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -170,10 +172,10 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
         )
     }
 
-    Scaffold(
+    Scaffold(modifier = Modifier.opiSettingsSceneBackground(), containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
-                title = { Text("小欧输入法 设置") },
+                title = { Text("小欧输入法 设置") }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 navigationIcon = {
                     // 从 IME 工具条进来时任务栈里没有上一页，返回箭头统一 finish（回桌面/输入处）
                     IconButton(onClick = { (context as? Activity)?.finish() }) {
@@ -184,14 +186,11 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        // ⚠️ 2026-10-15（v1.9.2 装机核验时发现，当时已发布）：这一页**从来不可滚动** ——
-        // 从建页起就没有 `verticalScroll`，内容比视口长时下半截被裁掉且**滑不动**
-        // （1080×2400@420dpi 实测：视口 862dp，页尾的 简拼/拼音方式/词库/五笔/**关于**
-        // 全部看不到，`adb shell input swipe`/`motionevent` 两种手势都不动；语义树里
-        // 也没有那些节点）。外面是 `Scaffold` 的 content 槽，加这一行即可；
-        // 门禁：`SettingsScrollableTest`（静态，钉住滚动修饰符在 Column 上）。
-        // 平板/横屏：内容列限宽 640dp 居中。整页撑满 1280dp 时每个 ListItem 的
-        // 标题与右侧开关相隔大半屏，读一行要横跳；手机（<640dp）完全不变。
+        // ⚠️ 2026-10-15（v1.9.2 装机核验发现，当时已发布）：这一页**从来不可滚动** ——
+        // 建页起就没有 `verticalScroll`，内容比视口长时下半截被裁且滑不动（1080×2400@420dpi
+        // 实测：页尾 简拼/拼音方式/词库/五笔/关于 全看不到；两种手势都不动，语义树无节点）。
+        // 外面是 `Scaffold` content 槽，加这一行即可；门禁 `SettingsScrollableTest` 钉住它。
+        // 平板/横屏内容列限宽 640dp 居中（整页撑满时标题与开关隔大半屏要横跳）；手机不变。
         Box(
             modifier = Modifier.fillMaxSize().padding(padding),
             contentAlignment = Alignment.TopCenter,

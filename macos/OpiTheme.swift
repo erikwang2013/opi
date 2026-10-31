@@ -215,11 +215,44 @@ enum OpiTheme {
     }
 
     /// 统一给自绘面板涂底 + 1pt 边线（Linux 条的 border 同款）。
-    static func style(content: NSView, palette: OpiPalette = OpiTheme.palette) {
+    private static let sceneLayerTag = 0x0B1
+    private static let sceneScrimTag = 0x0B2
+
+    /// 动态皮肤：插画铺在内容后，再压一层页面色（[alpha] 越大文字越稳）。
+    /// 每次 style 都重装，切纯色皮肤时把两层清掉。
+    private static func installScene(content: NSView, scrim: NSColor, alpha: CGFloat) {
+        content.subviews
+            .filter { $0.tag == sceneLayerTag || $0.tag == sceneScrimTag }
+            .forEach { $0.removeFromSuperview() }
+        guard let theme = scene, let img = theme.image else { return }
+        let iv = NSImageView(frame: content.bounds)
+        iv.tag = sceneLayerTag
+        iv.image = img
+        iv.imageScaling = .scaleAxesIndependently
+        iv.autoresizingMask = [.width, .height]
+        content.addSubview(iv, positioned: .below, relativeTo: nil)
+        let dim = NSView(frame: content.bounds)
+        dim.tag = sceneScrimTag
+        dim.wantsLayer = true
+        dim.layer?.backgroundColor = scrim.withAlphaComponent(alpha).cgColor
+        dim.autoresizingMask = [.width, .height]
+        content.addSubview(dim, positioned: .above, relativeTo: iv)
+    }
+
+    static func style(content: NSView, palette: OpiPalette = OpiTheme.palette,
+                      scrimAlpha: CGFloat = 0.55) {
         content.wantsLayer = true
         content.layer?.backgroundColor = palette.bg.cgColor
         content.layer?.borderColor = palette.line.cgColor
         content.layer?.borderWidth = 1
+        installScene(content: content, scrim: palette.bg, alpha: scrimAlpha)
+    }
+
+    /// 原生控件页（设置窗/符号窗）：底色用系统窗口色，.labelColor 在插画上仍可读。
+    static func styleNative(content: NSView, scrimAlpha: CGFloat = 0.72) {
+        content.wantsLayer = true
+        content.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        installScene(content: content, scrim: .windowBackgroundColor, alpha: scrimAlpha)
     }
 
     static func font(_ size: CGFloat, bold: Bool = false) -> NSFont {

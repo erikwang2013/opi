@@ -77,7 +77,7 @@ fun CandidateTiledView(
     val pager = rememberPagerState(pageCount = { pages.size.coerceAtLeast(1) })
     // 候选整批换了（继续输入 / 钉读音 / 选词后剩尾巴接着编）⇒ 回第一页，别停在旧页号上。
     LaunchedEffect(cands) { pager.scrollToPage(0) }
-    BoxWithConstraints(modifier = modifier.fillMaxSize().background(p.barBg)) {
+    BoxWithConstraints(modifier = modifier.fillMaxSize().opiPanelBackground(p.barBg)) {
         // 横屏/分屏高度不够时减少读数列格数，见 [tiledReadingCells]。
         val readingCells = tiledReadingCells(maxHeight.value)
         Row(modifier = Modifier.fillMaxSize()) {

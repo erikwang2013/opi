@@ -85,7 +85,8 @@ PrivilegesRequired=admin
 ; x64 only (the TSF DLL and jlinked runtime are x86_64).
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
-MinVersion=10.0
+; 10.0.14393 = Windows 10 1607：DLL 依赖 GetDpiForWindow，1507/1511 会在加载阶段失败。
+MinVersion=10.0.14393
 OutputDir={#OutputDir}
 OutputBaseFilename=opi-{#AppVersion}-windows-x64-setup
 ; Installer/uninstaller icon = project pet (same art as opi.exe). A relative

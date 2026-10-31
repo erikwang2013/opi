@@ -8,6 +8,8 @@ import android.view.Gravity
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.CompositionLocalProvider
+import xyz.erik.opi.ime.LocalSceneTheme
 import xyz.erik.opi.jni.EngineLoader
 
 /**
@@ -35,7 +37,12 @@ class SettingsActivity : ComponentActivity() {
             val dictionaryLoaded = EngineLoader.load(this)
             runOnUiThread {
                 if (!isFinishing && !isDestroyed) {
-                    setContent { SettingsScreen(dictionaryDegraded = !dictionaryLoaded) }
+                    val scene = ImePreferences.from(this).scene
+                    setContent {
+                        CompositionLocalProvider(LocalSceneTheme provides scene) {
+                            SettingsScreen(dictionaryDegraded = !dictionaryLoaded)
+                        }
+                    }
                 }
             }
         }

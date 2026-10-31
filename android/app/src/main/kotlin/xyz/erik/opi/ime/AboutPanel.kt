@@ -66,7 +66,7 @@ fun AboutPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
     // 打不开链接时的就地反馈（IME 里没有 Snackbar 宿主；设置页那边走 toast，
     // 这里就把话写在面板里，别静默）。
     var note by remember { mutableStateOf("") }
-    Column(modifier = modifier.fillMaxSize().background(p.panelBg)) {
+    Column(modifier = modifier.fillMaxSize().opiPanelBackground(p.panelBg)) {
         PanelHeader("关于", "", onClose)
         Column(
             modifier = Modifier.fillMaxWidth().weight(1f)
