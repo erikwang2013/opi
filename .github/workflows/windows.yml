@@ -483,18 +483,19 @@ jobs:
           gh api -X DELETE "repos/$REPO/actions/artifacts/$id"
           echo "已删除内部中间物 $ARTIFACT_NAME（id=$id）"
 
-  # ---- MSI 容器安装冒烟（内部证据；2026-10-20 起不阻断）----
+  # ---- MSI 容器安装冒烟（内部证据；2026-10-31 起只放行已知 TSF 回滚）----
   #
   # 只证明「msiexec 能在干净的 Windows Server Core 里跑完并留下日志」，**不**证明
   # 真机可用：容器没有语言栏/TSF 环境，`OpRegisterTsf` 会失败并回滚（Type 1
   # Return=check），这就是 MSI 在 Server Core 上「根本装不上」的形状。日志无论成败
   # 都上传；**用户入口是 EXE 安装器**（desktop-exe / windows-exe-install-test），
-  # 所以这个已知会红的 job 用 continue-on-error，不阻断发布。
+  # 2026-10-31 用户要求把这条「非阻断但常红」的检查修绿：脚本现在把**恰好是**
+  # `OpRegisterTsf` 回滚（1603 + 动作 Return value 3）视为已知环境限制并通过；
+  # 其他任何安装失败仍会红。因此去掉 continue-on-error，让它重新成为真门禁。
   windows-install-test:
-    name: MSI 容器安装冒烟（内部证据，不阻断）
+    name: MSI 容器安装冒烟（已知 TSF 回滚放行）
     runs-on: windows-latest
     needs: [version, msi-postprocess]
-    continue-on-error: true
     timeout-minutes: 60 # ltsc2022 镜像约 5 GB，给足拉取时间
     steps:
       - uses: actions/download-artifact@v4
@@ -536,6 +537,16 @@ jobs:
           )) {
             $log = Get-Content -Raw -Encoding Unicode $pair[0]
             if ($log -notmatch 'Installation success or error status:\s*0') {
+              # Server Core 没有语言栏/TSF：regsvr32 的 DllRegisterServer 返回
+              # 0x80070003，MSI 的注册动作是 Type 1（Return=check），按设计回滚。
+              # 这是已知环境限制，不是包坏了；只接受「恰好是 OpRegisterTsf 回滚」，
+              # 其他失败继续红（例如文件缺失、安装前杀进程失败、MSI 表损坏）。
+              $tsRollback = $log -match 'Action ended .*OpRegisterTsf\. Return value 3' -and
+                            $log -match 'Installation success or error status:\s*1603'
+              if ($tsRollback) {
+                Write-Warning "$($pair[0])：Server Core 无 TSF，OpRegisterTsf 按设计回滚（已知环境限制）"
+                continue
+              }
               throw "$($pair[0]) 安装失败（见日志末段 Installation success or error status）"
             }
             if (-not (Select-String -Path $pair[1] -Pattern 'opi\.exe' -Quiet)) {
