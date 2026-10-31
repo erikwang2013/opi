@@ -365,12 +365,10 @@ extension OpiSettingsWindow {
         download.isHidden = OpiUpdateChecker.shared.downloadURL == nil
         aboutDownloadButton = download
 
-        linkLabel("主页地址：https://opi.erik.xyz", url: "https://opi.erik.xyz", y: 150)
-        linkLabel("项目地址：https://github.com/erikwang2013/opi",
-                  url: "https://github.com/erikwang2013/opi", y: 172)
-        linkLabel("博客地址：https://erik.xyz", url: "https://erik.xyz", y: 194)
-        linkLabel("隐私政策：https://opi.erik.xyz/privacy/index.html",
-                  url: "https://opi.erik.xyz/privacy/index.html", y: 216)
+        linkLabel("官网主页", url: "https://opi.erik.xyz", y: 150)
+        linkLabel("GitHub 项目", url: "https://github.com/erikwang2013/opi", y: 172)
+        linkLabel("博客", url: "https://erik.xyz", y: 194)
+        linkLabel("隐私政策", url: "https://opi.erik.xyz/privacy/index.html", y: 216)
 
         label("草案构建：未签名、未公证、未在真机运行验证。", y: 254, size: 12,
               color: .systemOrange)

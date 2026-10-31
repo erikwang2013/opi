@@ -81,14 +81,11 @@ fun AboutPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
             Para("© 2026 erik.xyz · 代码按 MIT 许可（全文见仓库 LICENSE）；词库数据与代码分开授权")
             Head("表情数据")
             Para("Emoji 取自 OpenMoji（CC BY-SA 4.0）；颜文字取自 rime_kaomoji_dict（MIT）；小欧贴纸/图标为项目专有资产，商业使用需授权")
-            Head("主页地址")
-            Link(ABOUT_HOME_URL) { note = openExternal(context, ABOUT_HOME_URL) }
-            Head("项目地址")
-            Link(ABOUT_PROJECT_URL) { note = openExternal(context, ABOUT_PROJECT_URL) }
-            Head("博客地址")
-            Link(ABOUT_BLOG_URL) { note = openExternal(context, ABOUT_BLOG_URL) }
-            Head("隐私政策")
-            Link(ABOUT_PRIVACY_URL) { note = openExternal(context, ABOUT_PRIVACY_URL) }
+            Head("链接")
+            Link("官网主页") { note = openExternal(context, ABOUT_HOME_URL) }
+            Link("GitHub 项目") { note = openExternal(context, ABOUT_PROJECT_URL) }
+            Link("博客") { note = openExternal(context, ABOUT_BLOG_URL) }
+            Link("隐私政策") { note = openExternal(context, ABOUT_PRIVACY_URL) }
             if (note.isNotEmpty()) {
                 Text(note, fontSize = 11.sp, color = p.accent, modifier = Modifier.padding(top = 6.dp))
             }

@@ -106,16 +106,13 @@ final class AboutPanel: UIView {
             "Emoji 取自 OpenMoji（CC BY-SA 4.0）；颜文字取自 rime_kaomoji_dict（MIT）；"
                 + "小欧贴纸/图标为项目专有资产，商业使用需授权"
         )
-        addHeading("主页地址")
-        addLink(Self.homeURL)
-        addHeading("项目地址")
-        addLink(Self.projectURL)
-        addHeading("博客地址")
-        addLink(Self.blogURL)
-        addHeading("隐私政策")
-        addLink(Self.privacyURL)
+        addHeading("链接")
+        addLink("官网主页", Self.homeURL)
+        addLink("GitHub 项目", Self.projectURL)
+        addLink("博客", Self.blogURL)
+        addLink("隐私政策", Self.privacyURL)
         let note = UILabel()
-        note.text = "点地址会先复制到剪贴板，再尝试用浏览器打开；"
+        note.text = "点链接会先复制地址到剪贴板，再尝试用浏览器打开；"
             + "键盘扩展不一定会被允许打开链接，复制后可粘贴到浏览器。"
         note.font = .systemFont(ofSize: 11)
         note.numberOfLines = 0
@@ -141,13 +138,13 @@ final class AboutPanel: UIView {
         stack.addArrangedSubview(label)
     }
 
-    private func addLink(_ url: String) {
+    private func addLink(_ title: String, _ url: String) {
         let b = UIButton(type: .system)
-        b.setTitle(url, for: .normal)
+        b.setTitle(title, for: .normal)
         b.titleLabel?.font = .systemFont(ofSize: 12)
         b.contentHorizontalAlignment = .left
         b.contentEdgeInsets = UIEdgeInsets(top: 2, left: 0, bottom: 2, right: 0)
-        b.accessibilityLabel = "打开 \(url)"
+        b.accessibilityLabel = "打开 \(title)"
         b.addAction(UIAction { [weak self] _ in self?.onOpenURL?(url) }, for: .touchUpInside)
         linkButtons.append(b)
         stack.addArrangedSubview(b)

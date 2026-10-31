@@ -127,16 +127,16 @@ internal fun AboutSection(toast: (String) -> Unit) {
             Text("Emoji 取自 OpenMoji（CC BY-SA 4.0）；颜文字取自 rime_kaomoji_dict（MIT）；小欧贴纸/图标为项目专有资产，商业使用需授权")
         },
     )
-    LinkItem("主页地址", ABOUT_HOME_URL, toast)
-    LinkItem("项目地址", ABOUT_PROJECT_URL, toast)
-    LinkItem("博客地址", ABOUT_BLOG_URL, toast)
+    LinkItem("官网主页", ABOUT_HOME_URL, toast)
+    LinkItem("GitHub 项目", ABOUT_PROJECT_URL, toast)
+    LinkItem("博客", ABOUT_BLOG_URL, toast)
     LinkItem("隐私政策", ABOUT_PRIVACY_URL, toast)
 }
 
 /**
  * 一行可点的外链：整行即按钮（`role = Button` ⇒ 读屏会报「按钮」+ 行内容），
- * `onClickLabel` 给动作一个名字。行内仍把**完整地址**写出来 —— 读屏读得到，
- * 拿不到浏览器/网络时用户也看得见它是什么。
+ * `onClickLabel` 给动作一个名字。**不显示 URL**（2026-10-31 用户裁决）：链接文字
+ * 就是入口，地址只在点按后交给浏览器。
  */
 @Composable
 private fun LinkItem(label: String, url: String, toast: (String) -> Unit) {
@@ -146,7 +146,7 @@ private fun LinkItem(label: String, url: String, toast: (String) -> Unit) {
             openExternal(context, url, toast)
         },
         headlineContent = { Text(label) },
-        supportingContent = { Text(url) },
+        supportingContent = { Text("点按打开") },
     )
 }
 

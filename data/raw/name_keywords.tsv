@@ -1,0 +1,485 @@
+，	逗号	douhao,comma	punct	zh
+。	句号	juhao,period,fullstop	punct	zh
+、	顿号	dunhao,enumerationcomma,listcomma	punct	zh
+；	分号	fenhao,semicolon	punct	zh
+：	冒号	maohao,colon	punct	zh
+？	问号	wenhao,questionmark,question	punct	zh
+！	感叹号	gantanhao,exclamation,exclamationmark	punct	zh
+（	左括号	zuokuohao,leftparen,leftparenthesis,openparen	punct	zh
+）	右括号	youkuohao,rightparen,rightparenthesis,closeparen	punct	zh
+【	左方括号	zuofangkuohao,leftsquarebracket	punct	zh
+】	右方括号	youfangkuohao,rightsquarebracket	punct	zh
+《	左书名号	zuoshuminghao,lefttitlemark	punct	zh
+》	右书名号	youshuminghao,righttitlemark	punct	zh
+“	左引号	zuoyinhao,leftquote,openquote	punct	zh
+”	右引号	youyinhao,rightquote,closequote	punct	zh
+‘	左单引号	zuodanyinhao,leftsinglequote	punct	zh
+’	右单引号	youdanyinhao,rightsinglequote	punct	zh
+…	省略号	shengluehao,ellipsis	punct	zh
+—	破折号	pozhehao,dash,emdash	punct	zh
+·	间隔号	jiangehao,middot	punct	zh
+～	波浪号	bolanghao,tilde	punct	zh
+￥	人民币	renminbi,yuan,rmb,yuan,rmb	symbol	zh
+(	left parenthesis	leftparen,leftparenthesis,openparen	punct	en
+)	right parenthesis	rightparen,rightparenthesis,closeparen	punct	en
+[	left bracket	leftbracket,leftsquarebracket	punct	en
+]	right bracket	rightbracket,rightsquarebracket	punct	en
+{	left brace	leftbrace,leftcurly	punct	en
+}	right brace	rightbrace,rightcurly	punct	en
+,	comma	comma	punct	en
+.	period	period,dot,fullstop	punct	en
+;	semicolon	semicolon	punct	en
+:	colon	colon	punct	en
+?	question mark	questionmark,question	punct	en
+!	exclamation mark	exclamation,exclamationmark,bang	punct	en
+'	apostrophe	apostrophe,singlequote	punct	en
+"	quotation mark	quote,quotationmark,doublequote	punct	en
+/	slash	slash,forwardslash	punct	en
+\	backslash	backslash	punct	en
+|	vertical bar	pipe,verticalbar	punct	en
+-	hyphen	hyphen,minus,dash	punct	en
+_	underscore	underscore,underbar	punct	en
+@	at sign	aite,at,atsign	symbol	both
+#	hash	jinghao,hash,numbersign	symbol	both
+$	dollar	meiyuan,dollar	symbol	both
+%	percent	baifenhao,percent	symbol	both
+&	ampersand	hehao,ampersand,and	symbol	both
+*	asterisk	xinghao,asterisk,star	symbol	both
++	plus	jiahao,plus	symbol	both
+=	equals	denghao,equals,equal	symbol	both
+<	less than	xiaoyuhao,lessthan	symbol	both
+>	greater than	dayuhao,greaterthan	symbol	both
+^	caret	tuozifu,caret	symbol	both
+~	tilde	bolanghao,tilde	symbol	both
+°	度	du,degree	symbol	both
+℃	摄氏度	sheshidu,celsius	symbol	both
+±	正负号	zhengfuhao,plusminus	symbol	both
+×	乘号	chenghao,multiply,times	symbol	both
+÷	除号	chuhao,divide,division	symbol	both
+√	根号	genhao,squareroot,root	symbol	both
+∞	无穷	wuqiong,infinity	symbol	both
+≠	不等号	budengyu,notequal	symbol	both
+≤	小于等于	xiaoyudengyu,lessthanorequal	symbol	both
+≥	大于等于	dayudengyu,greaterthanorequal	symbol	both
+≈	约等于	yuedengyu,approx,almostequal	symbol	both
+←	左箭头	zuojiantou,leftarrow	symbol	both
+→	右箭头	youjiantou,jiantou,rightarrow,arrow	symbol	both
+↑	上箭头	shangjiantou,uparrow	symbol	both
+↓	下箭头	xiajiantou,downarrow	symbol	both
+↔	左右箭头	zuoyoujiantou,leftrightarrow	symbol	both
+★	实心星	xingxing,xing,star,blackstar	symbol	both
+☆	空心星	kongxinxing,emptystar,whitestar	symbol	both
+♥	爱心	aixin,xin,heart,love	symbol	both
+♡	空心爱心	kongxinaixin,emptyheart,whiteheart	symbol	both
+✓	对勾	duigou,check,checkmark,tick	symbol	both
+✔	粗对勾	cuduigou,heavycheck,checkmark	symbol	both
+✗	叉	cha,cross,xmark	symbol	both
+✘	粗叉	cucha,heavyx,xmark	symbol	both
+☀	太阳	taiyang,sun	symbol	both
+☁	云	yun,cloud	symbol	both
+☂	雨伞	yusan,umbrella	symbol	both
+☎	电话	dianhua,telephone,phone	symbol	both
+✉	信封	xinfeng,envelope,mail	symbol	both
+✈	飞机	feiji,airplane,plane	symbol	both
+♠	黑桃	heitao,spade	symbol	both
+♣	梅花	meihua,club	symbol	both
+♦	方块	fangkuai,diamond	symbol	both
+♪	音符	yinfu,note,music	symbol	both
+♫	双音符	shuangyinfu,musicnotes	symbol	both
+©	版权	banquan,copyright	symbol	both
+®	注册商标	zhuce,registered	symbol	both
+™	商标	shangbiao,trademark	symbol	both
+§	章节	zhangjie,section	symbol	both
+¶	段落	duanluo,paragraph	symbol	both
+•	圆点	yuandian,bullet	symbol	both
+‰	千分号	qianfenhao,permille	symbol	both
+(。・∀・)ノ	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(u‿ฺu✿ฺ)	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+ヽ(✿ﾟ▽ﾟ)ノ	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+（゜▽＾*））	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(ﾟｰﾟ)	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+ε(*´･∀･｀)зﾞ	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+（´v｀）	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(≧∇≦)ﾉ	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+o(^▽^)o	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(￣︶￣)↗	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+o(*￣▽￣*)o	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(p≧w≦q)	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+ㄟ(≧◇≦)ㄏ	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(/≧▽≦)/	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(　ﾟ∀ﾟ) ﾉ♡	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+o(*￣︶￣*)o	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(๑¯∀¯๑)	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(≧∀≦)ゞ	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+φ(≧ω≦*)♪	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(*^▽^*)	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+o(￣▽￣)ｄ	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+φ(゜▽゜*)♪	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(o゜▽゜)o☆[BINGO!]	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(๑•̀ㅂ•́)و✧	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+ヾ(≧O≦)〃嗷~	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+♪(^∇^*)	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(o>ε(o>ｕ(≧∩≦)	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(＾－＾)V	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+！*★,°*:.☆(￣▽￣)/$:*.°★* 。	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+ヾ(￣ー￣)X(^▽^)ゞ	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+( ＾∀＾）／欢迎＼( ＾∀＾）	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+^O^	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(( へ(へ´∀`)へ	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(´▽`ʃ♡ƪ)	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+╰(￣▽￣)╭	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+<(*￣▽￣*)/	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(^▽^ )	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+*´∀`)´∀`)*´∀`)*´∀`)	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+．<{=．．．．（嘎~嘎~嘎~）	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+o(*≧▽≦)ツ	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(‾◡◝)	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(눈~눈)	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+Ψ(￣∀￣)Ψ	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(╯▽╰ )好香~~	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(￣▽￣)～■干杯□～(￣▽￣)	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+￣O￣)ノ	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+ヾ(´･ω･｀)ﾉ	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+[]~(￣▽￣)~*	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+<(￣ˇ￣)/	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+...φ(0￣*)啦啦啦_φ(*￣0￣)>	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+<(￣︶￣)>	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+( ఠൠఠ )ﾉ	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+ヾ(^▽^*)))	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+┏ (^ω^)=☞	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(๑￫ܫ￩)	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(=^x^=)	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(o≖◡≖)	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+=￣ω￣=	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(>▽<)	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+*(੭*ˊᵕˋ)੭*ଘ	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(◆゜∀゜）b	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(❤´艸｀❤)	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+○( ＾皿＾)っHiahiahia…	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+（ ￣ー￣）	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(* ￣︿￣)	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+d=====(￣▽￣*)b	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(((o(*ﾟ▽ﾟ*)o)))	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+( *︾▽︾)	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(｡･ω･｡)ﾉ	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+(〃'▽'〃)	开心	kaixin,happy,smile,joy,haha	kaomoji	both
+（。・＿・。）ﾉ	难过	nanguo,sad,cry,unhappy	kaomoji	both
+テ_デ	难过	nanguo,sad,cry,unhappy	kaomoji	both
+□_□	难过	nanguo,sad,cry,unhappy	kaomoji	both
+(;´༎ຶД༎ຶ`)	难过	nanguo,sad,cry,unhappy	kaomoji	both
+(ノへ`、)	难过	nanguo,sad,cry,unhappy	kaomoji	both
+（-_-。）	难过	nanguo,sad,cry,unhappy	kaomoji	both
+(ノへ￣、)	难过	nanguo,sad,cry,unhappy	kaomoji	both
+┌|*´∀｀|┘	难过	nanguo,sad,cry,unhappy	kaomoji	both
+(๐॔˃̶ᗜ˂̶๐॓)	难过	nanguo,sad,cry,unhappy	kaomoji	both
+(ρ_・).。	难过	nanguo,sad,cry,unhappy	kaomoji	both
+o(≧口≦)o	难过	nanguo,sad,cry,unhappy	kaomoji	both
+(。_。)	难过	nanguo,sad,cry,unhappy	kaomoji	both
+...( ＿ ＿)ノ｜壁	难过	nanguo,sad,cry,unhappy	kaomoji	both
+( ′ 3`) sigh~	难过	nanguo,sad,cry,unhappy	kaomoji	both
+╮(╯▽╰)╭	难过	nanguo,sad,cry,unhappy	kaomoji	both
+(´；ω；`)	难过	nanguo,sad,cry,unhappy	kaomoji	both
+(´･Д･)」	难过	nanguo,sad,cry,unhappy	kaomoji	both
+( ;`д´; )	难过	nanguo,sad,cry,unhappy	kaomoji	both
+⁽´°`⁾	难过	nanguo,sad,cry,unhappy	kaomoji	both
+( ;´д`)	难过	nanguo,sad,cry,unhappy	kaomoji	both
+o<<(≧口≦)>>o	难过	nanguo,sad,cry,unhappy	kaomoji	both
+o<(=′益`=)>o	难过	nanguo,sad,cry,unhappy	kaomoji	both
+<(=X﹏X=)>	难过	nanguo,sad,cry,unhappy	kaomoji	both
+<(ノへ￣、=)>	难过	nanguo,sad,cry,unhappy	kaomoji	both
+<(=ノへ￣ =)>	难过	nanguo,sad,cry,unhappy	kaomoji	both
+<(＿　＿)>	难过	nanguo,sad,cry,unhappy	kaomoji	both
+<(=┳＿┳=)>	难过	nanguo,sad,cry,unhappy	kaomoji	both
+<(=;′⌒`)	难过	nanguo,sad,cry,unhappy	kaomoji	both
+<(=－︿－=)>	难过	nanguo,sad,cry,unhappy	kaomoji	both
+(PД`q。=)>·。'゜	难过	nanguo,sad,cry,unhappy	kaomoji	both
+<(=╥﹏╥=)>	难过	nanguo,sad,cry,unhappy	kaomoji	both
+<(o ;′Д`)ノ	难过	nanguo,sad,cry,unhappy	kaomoji	both
+╮<(=╯-╰=)>╭	难过	nanguo,sad,cry,unhappy	kaomoji	both
+<(=﹌○﹌=)>	难过	nanguo,sad,cry,unhappy	kaomoji	both
+<(%>_<%)>	难过	nanguo,sad,cry,unhappy	kaomoji	both
+<(=∥ರ﹏ರ)σ	难过	nanguo,sad,cry,unhappy	kaomoji	both
+< ( ￣︶￣ ) ╱ ( o 〒﹏〒 o )	难过	nanguo,sad,cry,unhappy	kaomoji	both
+(๑´╹‸╹`๑)	难过	nanguo,sad,cry,unhappy	kaomoji	both
+(｡•́︿•̀｡)	难过	nanguo,sad,cry,unhappy	kaomoji	both
+( >﹏<。)～呜呜呜……	难过	nanguo,sad,cry,unhappy	kaomoji	both
+(*Ծ﹏Ծ)ぐ	难过	nanguo,sad,cry,unhappy	kaomoji	both
+(٥﹏٥` )	难过	nanguo,sad,cry,unhappy	kaomoji	both
+//( ㄒ o ㄒ )//	难过	nanguo,sad,cry,unhappy	kaomoji	both
+Q_Q	难过	nanguo,sad,cry,unhappy	kaomoji	both
+T^T"///	难过	nanguo,sad,cry,unhappy	kaomoji	both
+(＠￣ー￣＠)	生气	shengqi,angry,mad	kaomoji	both
+(ˉ▽￣～) 切~~	生气	shengqi,angry,mad	kaomoji	both
+~~( ﹁ ﹁ ) ~~~	生气	shengqi,angry,mad	kaomoji	both
+(╯‵□′)╯炸弹！•••*～●	生气	shengqi,angry,mad	kaomoji	both
+（￣ー￣）ノ~~マ☆’.・.・:★	生气	shengqi,angry,mad	kaomoji	both
+( ‵▽′)ψ	生气	shengqi,angry,mad	kaomoji	both
+(；′⌒`)	生气	shengqi,angry,mad	kaomoji	both
+＼(゜ロ＼)(／ロ゜)／	生气	shengqi,angry,mad	kaomoji	both
+<(－︿－)>	生气	shengqi,angry,mad	kaomoji	both
+（｀へ´）	生气	shengqi,angry,mad	kaomoji	both
+ε=怒ε=怒ε=怒ε=( o｀ω′)ノ	生气	shengqi,angry,mad	kaomoji	both
+┻━┻︵╰(‵□′)╯︵┻━┻	生气	shengqi,angry,mad	kaomoji	both
+→)╥﹏╥)	生气	shengqi,angry,mad	kaomoji	both
+抽!!(￣ε(#￣)☆╰╮(￣▽￣///)	生气	shengqi,angry,mad	kaomoji	both
+(⊙x⊙;)	生气	shengqi,angry,mad	kaomoji	both
+(ノω<。)ノ))☆.。	生气	shengqi,angry,mad	kaomoji	both
+o(*≧▽≦)ツ┏━┓	生气	shengqi,angry,mad	kaomoji	both
+o(￣ヘ￣o＃)	生气	shengqi,angry,mad	kaomoji	both
+(ー`´ー)	生气	shengqi,angry,mad	kaomoji	both
+( `д´)	生气	shengqi,angry,mad	kaomoji	both
+(`ε´ )	生气	shengqi,angry,mad	kaomoji	both
+( `ー´)	生气	shengqi,angry,mad	kaomoji	both
+c(　╹^╹)	生气	shengqi,angry,mad	kaomoji	both
+(￣皿￣)	生气	shengqi,angry,mad	kaomoji	both
+<(!=￣□￣)ｏ―∈‥oo━━━━━━━☆	生气	shengqi,angry,mad	kaomoji	both
+<(=￢_￢=)>	生气	shengqi,angry,mad	kaomoji	both
+(￣_,￣ =)>	生气	shengqi,angry,mad	kaomoji	both
+<(=ˉ^ˉ=)>	生气	shengqi,angry,mad	kaomoji	both
+┻━┻︵╰<(=‵Д′=)>╯︵┻━┻	生气	shengqi,angry,mad	kaomoji	both
+<(=╯‵Д′)╯""┻━┻☆))>○<)	生气	shengqi,angry,mad	kaomoji	both
+<(=┘￣Д￣)┘╧═╧	生气	shengqi,angry,mad	kaomoji	both
+o(=￣ヘ￣o＃)>	生气	shengqi,angry,mad	kaomoji	both
+凸(゜皿゜=メ)>	生气	shengqi,angry,mad	kaomoji	both
+<(=￣ー￣)	生气	shengqi,angry,mad	kaomoji	both
+<(=o#゜ 曲゜)o	生气	shengqi,angry,mad	kaomoji	both
+╰(*°▽°*)╯	惊讶	jingya,surprised,wow,shock	kaomoji	both
+╰(*°‿°*)╯	惊讶	jingya,surprised,wow,shock	kaomoji	both
+(´･_･`)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+(-@y@)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+(☄⊙ω⊙)☄	惊讶	jingya,surprised,wow,shock	kaomoji	both
+┌(。Д。)┐	惊讶	jingya,surprised,wow,shock	kaomoji	both
+(:.;ﾟ;益;ﾟ;益;ﾟ;ﾟ;益;ﾟ;益;ﾟ;.)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+(*Φ皿Φ*)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+ヽ(*。>Д<)o゜	惊讶	jingya,surprised,wow,shock	kaomoji	both
+Σ( ° △ °|||)︴	惊讶	jingya,surprised,wow,shock	kaomoji	both
+’(°ー°〃)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+(○´･д･)ﾉ	惊讶	jingya,surprised,wow,shock	kaomoji	both
+wow~ ⊙o⊙	惊讶	jingya,surprised,wow,shock	kaomoji	both
+Σ(｀д′*ノ)ノ	惊讶	jingya,surprised,wow,shock	kaomoji	both
+Σ(っ °Д °;)っ	惊讶	jingya,surprised,wow,shock	kaomoji	both
+(⊙ˍ⊙)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+⊙▽⊙	惊讶	jingya,surprised,wow,shock	kaomoji	both
+━━∑(￣□￣*|||━━	惊讶	jingya,surprised,wow,shock	kaomoji	both
+|(*′口`)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+(°ー°〃)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+(￣△￣；)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+( ｀д′)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+(O_o)(o_O)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+(lll￢ω￢)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+(((φ(◎ロ◎;)φ)))	惊讶	jingya,surprised,wow,shock	kaomoji	both
+~%?…,# *'☆&℃$︿★?	惊讶	jingya,surprised,wow,shock	kaomoji	both
+(＠_＠;)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+(*ﾟ∇ﾟ)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+(´ﾟДﾟ`)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+( ´ー`)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+(|||ˇヮˇ)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+(|||ﾟдﾟ)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+ﾟÅﾟ )	惊讶	jingya,surprised,wow,shock	kaomoji	both
+(((　ﾟдﾟ)))	惊讶	jingya,surprised,wow,shock	kaomoji	both
+(｡◕∀◕｡)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+(|||^ヮ^)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+( ;ﾟдﾟ)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+(|||ﾟДﾟ)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+( ﾟдﾟ)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+<(=＠_＠;=)?>	惊讶	jingya,surprised,wow,shock	kaomoji	both
+<(=⊙_⊙=)>	惊讶	jingya,surprised,wow,shock	kaomoji	both
+Σ<(=っ°Д °)っ	惊讶	jingya,surprised,wow,shock	kaomoji	both
+Σ<(= ° △ °|||)>︴	惊讶	jingya,surprised,wow,shock	kaomoji	both
+<(=┘￣︶￣)┘└(￣︶￣└=)>	惊讶	jingya,surprised,wow,shock	kaomoji	both
+<(=〃￣︶￣)人(￣︶￣〃=)>	惊讶	jingya,surprised,wow,shock	kaomoji	both
+<(=o-ωｑ=)>	惊讶	jingya,surprised,wow,shock	kaomoji	both
+Σ<(=￣д￣=!)>	惊讶	jingya,surprised,wow,shock	kaomoji	both
+Σ(゜д゜=!)>	惊讶	jingya,surprised,wow,shock	kaomoji	both
+<(=-@y@)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+<(=◎ロ◎=)>	惊讶	jingya,surprised,wow,shock	kaomoji	both
+<(=￣_￣|||)>	惊讶	jingya,surprised,wow,shock	kaomoji	both
+<(=˚_˚=)>	惊讶	jingya,surprised,wow,shock	kaomoji	both
+...(*￣０￣)ノ	惊讶	jingya,surprised,wow,shock	kaomoji	both
+(-_-;)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+(￣_￣|||)	惊讶	jingya,surprised,wow,shock	kaomoji	both
+(◡ᴗ◡✿)	害羞	haixiu,shy,blush	kaomoji	both
+o(￣┰￣*)ゞ	害羞	haixiu,shy,blush	kaomoji	both
+|ω・）	害羞	haixiu,shy,blush	kaomoji	both
+|･ω･｀)	害羞	haixiu,shy,blush	kaomoji	both
+(* /ω＼*)	害羞	haixiu,shy,blush	kaomoji	both
+o(*////▽////*)q	害羞	haixiu,shy,blush	kaomoji	both
+(*/ω＼*)	害羞	haixiu,shy,blush	kaomoji	both
+(′▽`〃)	害羞	haixiu,shy,blush	kaomoji	both
+(✿◡‿◡)	害羞	haixiu,shy,blush	kaomoji	both
+(๑´ㅂ`๑)	害羞	haixiu,shy,blush	kaomoji	both
+(╯ε╰)	害羞	haixiu,shy,blush	kaomoji	both
+(っ´Ι`)っ	害羞	haixiu,shy,blush	kaomoji	both
+o(*￣3￣)o	害羞	haixiu,shy,blush	kaomoji	both
+（づ￣3￣）づ╭❤～	害羞	haixiu,shy,blush	kaomoji	both
+(*╯3╰)	害羞	haixiu,shy,blush	kaomoji	both
+!(*￣(￣　*)	害羞	haixiu,shy,blush	kaomoji	both
+(* ￣3)(ε￣ *)	害羞	haixiu,shy,blush	kaomoji	both
+（○｀ 3′○）	害羞	haixiu,shy,blush	kaomoji	both
+（*＾-＾*）	害羞	haixiu,shy,blush	kaomoji	both
+(/ω＼*)……… (/ω•＼*)	害羞	haixiu,shy,blush	kaomoji	both
+o(￣ε￣*)	害羞	haixiu,shy,blush	kaomoji	both
+＼（＾▽＾）／	害羞	haixiu,shy,blush	kaomoji	both
+(๑❛ᴗ❛๑)	害羞	haixiu,shy,blush	kaomoji	both
+(๑•́ ₃ •̀๑)	害羞	haixiu,shy,blush	kaomoji	both
+(〃∀〃)	害羞	haixiu,shy,blush	kaomoji	both
+ﾟ(つд`ﾟ)	害羞	haixiu,shy,blush	kaomoji	both
+(　ˇωˇ )◕∀◕｡)^ω^)	害羞	haixiu,shy,blush	kaomoji	both
+|д` )	害羞	haixiu,shy,blush	kaomoji	both
+( ﾟωﾟ)	害羞	haixiu,shy,blush	kaomoji	both
+ヾ(´ε`ヾ)	害羞	haixiu,shy,blush	kaomoji	both
+|∀` )	害羞	haixiu,shy,blush	kaomoji	both
+|-` )	害羞	haixiu,shy,blush	kaomoji	both
+( ﾉд`ﾟ)	害羞	haixiu,shy,blush	kaomoji	both
+|ー` )	害羞	haixiu,shy,blush	kaomoji	both
+(*´ω`*)	害羞	haixiu,shy,blush	kaomoji	both
+(*ﾟーﾟ)	害羞	haixiu,shy,blush	kaomoji	both
+|дﾟ )	害羞	haixiu,shy,blush	kaomoji	both
+(*´д`)	害羞	haixiu,shy,blush	kaomoji	both
+(oﾟωﾟo)	害羞	haixiu,shy,blush	kaomoji	both
+|∀ﾟ	害羞	haixiu,shy,blush	kaomoji	both
+(つд⊂)	害羞	haixiu,shy,blush	kaomoji	both
+<(=′▽')爻 (`▽｀=)>	害羞	haixiu,shy,blush	kaomoji	both
+<(=*′д｀)爻(′д｀*=)>	害羞	haixiu,shy,blush	kaomoji	both
+<(=￣3￣)╭❤	害羞	haixiu,shy,blush	kaomoji	both
+o<(=*^＠^*=)>o	害羞	haixiu,shy,blush	kaomoji	both
+¯\_(౦▾౦ ✿)¯\_	动作	dongzuo,action,move,hug,wave	kaomoji	both
+...φ(0￣*)啦啦啦_φ(*￣0￣)′	动作	dongzuo,action,move,hug,wave	kaomoji	both
+︿(￣︶￣)︿	动作	dongzuo,action,move,hug,wave	kaomoji	both
+<(￣ ﹌ ￣)@m	动作	dongzuo,action,move,hug,wave	kaomoji	both
+_〆(´Д｀ )	动作	dongzuo,action,move,hug,wave	kaomoji	both
+ヽ(゜▽゜　)－C<(/;◇;)/~	动作	dongzuo,action,move,hug,wave	kaomoji	both
+▄︻┻┳═一∵∴∷∶∵>>	动作	dongzuo,action,move,hug,wave	kaomoji	both
+( *^-^)ρ(^0^* )	动作	dongzuo,action,move,hug,wave	kaomoji	both
+(((((ヾ(　o=^•ェ•)o　┏━┓	动作	dongzuo,action,move,hug,wave	kaomoji	both
+ψ(｀∇´)ψ	动作	dongzuo,action,move,hug,wave	kaomoji	both
+(ToT)/~~~	动作	dongzuo,action,move,hug,wave	kaomoji	both
+(#`O′)	动作	dongzuo,action,move,hug,wave	kaomoji	both
+o(*^▽^*)┛	动作	dongzuo,action,move,hug,wave	kaomoji	both
+_(:驴」∠)_	动作	dongzuo,action,move,hug,wave	kaomoji	both
+ε=ε=ε=(~￣▽￣)~	动作	dongzuo,action,move,hug,wave	kaomoji	both
+～o(▽｀ o) =3 =3 =3	动作	dongzuo,action,move,hug,wave	kaomoji	both
+(*￣3￣)╭	动作	dongzuo,action,move,hug,wave	kaomoji	both
+(～o￣▽￣)～o 。。。	动作	dongzuo,action,move,hug,wave	kaomoji	both
+_( ﾟДﾟ)ﾉ	动作	dongzuo,action,move,hug,wave	kaomoji	both
+(      。＿ 。） ✎ ＿	动作	dongzuo,action,move,hug,wave	kaomoji	both
+( ´_ゝ`)✎	动作	dongzuo,action,move,hug,wave	kaomoji	both
+✎～～～✐	动作	dongzuo,action,move,hug,wave	kaomoji	both
+☆⌒(*＾-゜)v THX!!	动作	dongzuo,action,move,hug,wave	kaomoji	both
+(ง •_•)ง	动作	dongzuo,action,move,hug,wave	kaomoji	both
+_____λ......___丬	动作	dongzuo,action,move,hug,wave	kaomoji	both
+(///￣皿￣)○～	动作	dongzuo,action,move,hug,wave	kaomoji	both
+(_ _)( - . - )(~O~) ……( - . - )	动作	dongzuo,action,move,hug,wave	kaomoji	both
+※=○☆(＿＿*)Ｚｚｚ	动作	dongzuo,action,move,hug,wave	kaomoji	both
+ZZzz…(。-ω-)	动作	dongzuo,action,move,hug,wave	kaomoji	both
+ε=ε=ε=┏(゜ロ゜;)┛	动作	dongzuo,action,move,hug,wave	kaomoji	both
+…（⊙＿⊙；）…	动作	dongzuo,action,move,hug,wave	kaomoji	both
+～（□`）～	动作	dongzuo,action,move,hug,wave	kaomoji	both
+ε = = (づ′▽`)づ	动作	dongzuo,action,move,hug,wave	kaomoji	both
+ヽ(ﾟ∀ﾟ*)ﾉ━━━ｩ♪	动作	dongzuo,action,move,hug,wave	kaomoji	both
+(　′Д`)彡	动作	dongzuo,action,move,hug,wave	kaomoji	both
+(ㄏ￣▽￣)ㄏbyeㄟ(￣▽￣ㄟ)	动作	dongzuo,action,move,hug,wave	kaomoji	both
+ヾ(￣▽￣)Bye~Bye~	动作	dongzuo,action,move,hug,wave	kaomoji	both
+=└(┐卍^o^)卍	动作	dongzuo,action,move,hug,wave	kaomoji	both
+( ﾟдﾟ)つBye	动作	dongzuo,action,move,hug,wave	kaomoji	both
+✧(≖ ◡ ≖✿)	动作	dongzuo,action,move,hug,wave	kaomoji	both
+╭( ･ㅂ･)و ̑̑	动作	dongzuo,action,move,hug,wave	kaomoji	both
+（｀Δ´）！	动作	dongzuo,action,move,hug,wave	kaomoji	both
+(ﾉ#)`д´)σ	动作	dongzuo,action,move,hug,wave	kaomoji	both
+ﾟ∀ﾟ)σ	动作	dongzuo,action,move,hug,wave	kaomoji	both
+(σﾟдﾟ)σ	动作	dongzuo,action,move,hug,wave	kaomoji	both
+(ノﾟ∀ﾟ)ノ	动作	dongzuo,action,move,hug,wave	kaomoji	both
+(　↺ω↺)	动作	dongzuo,action,move,hug,wave	kaomoji	both
+乚(`ヮ´ ﾐэ)Э	动作	dongzuo,action,move,hug,wave	kaomoji	both
+₍₍(ง`ᝫ´ )ว⁾	动作	dongzuo,action,move,hug,wave	kaomoji	both
+( ﾟᯅ 。)	动作	dongzuo,action,move,hug,wave	kaomoji	both
+ｍ<(＿　＿)>ｍ	动作	dongzuo,action,move,hug,wave	kaomoji	both
+<(=￣)ε(￣=)>	动作	dongzuo,action,move,hug,wave	kaomoji	both
+<(=￣ε￣ = ￣3￣=)>	动作	dongzuo,action,move,hug,wave	kaomoji	both
+ε=ε=~\<(= ￣皿￣)/~	动作	dongzuo,action,move,hug,wave	kaomoji	both
+<(=￣c￣)y▂ξ。。。	动作	dongzuo,action,move,hug,wave	kaomoji	both
+<(=～￣▽￣)→)￣▽￣=)>o	动作	dongzuo,action,move,hug,wave	kaomoji	both
+→)╥﹏╥=)>	动作	dongzuo,action,move,hug,wave	kaomoji	both
+<( =￣▽￣)o ─═≡※:☆▆▅▄▃▂＿	动作	dongzuo,action,move,hug,wave	kaomoji	both
+<(= ￣O￣=)ノノ……∞∞OOO)))	动作	dongzuo,action,move,hug,wave	kaomoji	both
+<(=￣ー￣<(＿＿<(=￣ー￣<(＿＿	动作	dongzuo,action,move,hug,wave	kaomoji	both
+<(o＿＿)o彡☆	动作	dongzuo,action,move,hug,wave	kaomoji	both
+||┣(—_＼=)>	动作	dongzuo,action,move,hug,wave	kaomoji	both
+<(=￣_￣)σ…<( ＿ ＿)ノ｜	动作	dongzuo,action,move,hug,wave	kaomoji	both
+︿<(=￣︶￣=)>︿	动作	dongzuo,action,move,hug,wave	kaomoji	both
+<(=／-_-)／ξ ξ ξ ξ ξ ξ (+_+ ／)>／	动作	dongzuo,action,move,hug,wave	kaomoji	both
+ε～(～(～(卍)＼(￣▽￣＼)>	动作	dongzuo,action,move,hug,wave	kaomoji	both
+(=<(=<(=m -__-)m	动作	dongzuo,action,move,hug,wave	kaomoji	both
+<(=￣┰￣=)>	动作	dongzuo,action,move,hug,wave	kaomoji	both
+～o=(`▽｀o=)>~=3=3=3	动作	dongzuo,action,move,hug,wave	kaomoji	both
+<(= o^_^)o~|| 加油 ||~o(^_^o =)>	动作	dongzuo,action,move,hug,wave	kaomoji	both
+……(((((ヾ<(　=o·ェ·)=o　┏━┓	动作	dongzuo,action,move,hug,wave	kaomoji	both
+...φ(￣0￣*=)>啦啦啦_φ<(=*￣0￣)′	动作	dongzuo,action,move,hug,wave	kaomoji	both
+<(=￣^￣<(=￣^￣<(=￣^￣=)>	动作	dongzuo,action,move,hug,wave	kaomoji	both
+<(=‵□′)>───Ｃε=┬﹏┬)>	动作	dongzuo,action,move,hug,wave	kaomoji	both
+<(╬￣皿￣)=○＃)３￣)>	动作	dongzuo,action,move,hug,wave	kaomoji	both
+(눈▂눈)	其他	qita,other,misc	kaomoji	both
+( ﹁ ﹁ ) ~→	其他	qita,other,misc	kaomoji	both
+(☆-ｖ-)	其他	qita,other,misc	kaomoji	both
+(´ｰ∀ｰ`)	其他	qita,other,misc	kaomoji	both
+┌( ´_ゝ` )┐	其他	qita,other,misc	kaomoji	both
+(￣_,￣ )	其他	qita,other,misc	kaomoji	both
+( ￣ー￣)	其他	qita,other,misc	kaomoji	both
+눈_눈	其他	qita,other,misc	kaomoji	both
+(눈益눈)	其他	qita,other,misc	kaomoji	both
+(눈160눈)	其他	qita,other,misc	kaomoji	both
+(눈▽눈)	其他	qita,other,misc	kaomoji	both
+(눈◇눈)	其他	qita,other,misc	kaomoji	both
+(屮눈皿눈)	其他	qita,other,misc	kaomoji	both
+(눈0눈)	其他	qita,other,misc	kaomoji	both
+(눈_눈)	其他	qita,other,misc	kaomoji	both
+( *・ω・)✄╰ひ╯	其他	qita,other,misc	kaomoji	both
+↑↑↓↓←→←→ＢＡ...┗( -o-)┛	其他	qita,other,misc	kaomoji	both
+ˋ( ° ▽、° ) (o(￣▽￣///(斩!!)	其他	qita,other,misc	kaomoji	both
+z(-_-z)).....((s-_-)s	其他	qita,other,misc	kaomoji	both
+(╬￣皿￣)＝○＃(￣＃)３￣)	其他	qita,other,misc	kaomoji	both
+(o ￣3)==@))゜ロ゜((@==(′ε′ )o	其他	qita,other,misc	kaomoji	both
+<( ￣^￣)(θ(θ☆( >_<	其他	qita,other,misc	kaomoji	both
+>○<）	其他	qita,other,misc	kaomoji	both
+(ﾉ*･ω･)ﾉ	其他	qita,other,misc	kaomoji	both
+( *⊙~⊙)	其他	qita,other,misc	kaomoji	both
+0＾）吞！	其他	qita,other,misc	kaomoji	both
+(￣～～￣)	其他	qita,other,misc	kaomoji	both
+(。﹏。)	其他	qita,other,misc	kaomoji	both
+(。﹏。*)	其他	qita,other,misc	kaomoji	both
+( ￣ ￣)σ…( ＿ ＿)ノ｜壁	其他	qita,other,misc	kaomoji	both
+(．． )…	其他	qita,other,misc	kaomoji	both
+Hi~ o(*￣▽￣*)ブ	其他	qita,other,misc	kaomoji	both
+ヾ(≧∇≦*)ゝ	其他	qita,other,misc	kaomoji	both
+(｡･∀･)ﾉﾞ	其他	qita,other,misc	kaomoji	both
+(oﾟvﾟ)ノ	其他	qita,other,misc	kaomoji	both
+<(ˉ^ˉ)>	其他	qita,other,misc	kaomoji	both
+━━(￣ー￣*|||━━	其他	qita,other,misc	kaomoji	both
+ʅ（´◔౪◔）ʃ	其他	qita,other,misc	kaomoji	both
+*★,°*:.☆(￣▽￣)/$:*.°★* 。	其他	qita,other,misc	kaomoji	both
+︿(￣︶￣)～	其他	qita,other,misc	kaomoji	both
+～(￣▽￣～)(～￣▽￣)～	其他	qita,other,misc	kaomoji	both
+^(*￣(oo)￣)^	其他	qita,other,misc	kaomoji	both
+(*￣(エ)￣)	其他	qita,other,misc	kaomoji	both
+(+(工)+╬)	其他	qita,other,misc	kaomoji	both
+--(˙<>˙)/--	其他	qita,other,misc	kaomoji	both
+m( =∩王∩= )m	其他	qita,other,misc	kaomoji	both
+(°°)～　(°°)～　(°°)～　(°°)～	其他	qita,other,misc	kaomoji	both
+（￣。。￣）	其他	qita,other,misc	kaomoji	both
+||o(*°▽°*)o|Ю	其他	qita,other,misc	kaomoji	both
+ヽ(￣︿￣　)—C<(/;◇;)/	其他	qita,other,misc	kaomoji	both
+━((*′д｀)爻(′д｀*))━!!!!	其他	qita,other,misc	kaomoji	both
+┐(T.T ) ( T.T) ノ	其他	qita,other,misc	kaomoji	both
+┏┛墓┗┓...(((m -__-)m	其他	qita,other,misc	kaomoji	both
+o((⊙﹏⊙))o.	其他	qita,other,misc	kaomoji	both
+||Φ|(|T|Д|T|)|Φ||	其他	qita,other,misc	kaomoji	both
+◕ฺ‿◕ฺ✿ฺ)	其他	qita,other,misc	kaomoji	both
+(/▽＼)	其他	qita,other,misc	kaomoji	both
+@(｡･o･)@	其他	qita,other,misc	kaomoji	both
+@(o･ｪ･)@	其他	qita,other,misc	kaomoji	both
+ヽ( o･ｪ･)ﾉ	其他	qita,other,misc	kaomoji	both
+@(/o･ｪ･o)@/	其他	qita,other,misc	kaomoji	both
+@(o･ｪ･o)@	其他	qita,other,misc	kaomoji	both
+٩(͡๏̯͡๏)۶	其他	qita,other,misc	kaomoji	both
+(～o￣▽￣)～o ~。。。	其他	qita,other,misc	kaomoji	both
+~(～￣▽￣)～	其他	qita,other,misc	kaomoji	both

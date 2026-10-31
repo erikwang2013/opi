@@ -383,7 +383,7 @@ internal fun AboutPage(
         } else {
             // 离屏/无下载器场景（测试、预览）保留旧的外链兜底。
             Text(
-                "前往下载：" + update.download,
+                "前往下载页",
                 fontSize = 12.sp,
                 color = SymAccent,
                 modifier = Modifier.clickable {
@@ -393,10 +393,10 @@ internal fun AboutPage(
         }
     }
     Spacer(Modifier.height(8.dp))
-    LinkLine("主页：https://opi.erik.xyz", "https://opi.erik.xyz")
-    LinkLine("项目地址：https://github.com/erikwang2013/opi", "https://github.com/erikwang2013/opi")
-    LinkLine("博客地址：https://erik.xyz", "https://erik.xyz")
-    LinkLine("隐私政策：https://opi.erik.xyz/privacy/index.html", "https://opi.erik.xyz/privacy/index.html")
+    LinkLine("官网主页", "https://opi.erik.xyz")
+    LinkLine("GitHub 项目", "https://github.com/erikwang2013/opi")
+    LinkLine("博客", "https://erik.xyz")
+    LinkLine("隐私政策", "https://opi.erik.xyz/privacy/index.html")
     Spacer(Modifier.height(10.dp))
     // 一句话说明「为什么只有这几页」——主流输入法那套有十几页，我们引擎现在只有这几个真旋钮；
     // 把引擎没有的开关摆上来就是假承诺（宁可少一页，不做点不动的开关）。

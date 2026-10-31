@@ -142,7 +142,7 @@ internal class UpdateDownloader(
             state = DownloadState.Failed(kind, version, "下载地址不是 HTTPS，已拒绝")
             return
         }
-        state = DownloadState.Running(kind, version, 0, pkg.size)
+        state = DownloadState.Verifying(kind, version)
         job = scope.launch {
             try {
                 download(kind, pkg, version)
@@ -181,6 +181,11 @@ internal class UpdateDownloader(
         withContext(Dispatchers.IO) {
             val dir = targetDir.apply { mkdirs() }
             val target = File(dir, downloadFileName(pkg.url, version, kind))
+            // 本地已有完整包（上次下完/用户手动放进来）：校验后直接用，不再走网络。
+            checkExisting(target, pkg)?.let { hit ->
+                state = DownloadState.Done(kind, version, target, hit.shaOk)
+                return@withContext
+            }
             val part = File(dir, "${target.name}.part")
             part.delete()
             var ok = false
@@ -192,6 +197,7 @@ internal class UpdateDownloader(
                     setRequestProperty("User-Agent", "opi/$OPI_VERSION")
                     setRequestProperty("Accept", "application/octet-stream, */*")
                 }
+                state = DownloadState.Running(kind, version, 0, pkg.size)
                 conn = c
                 try {
                     if (c.responseCode !in 200..299) error("服务器返回 HTTP ${c.responseCode}")
@@ -241,4 +247,39 @@ internal class UpdateDownloader(
                 if (!ok) part.delete()
             }
         }
+
+    private data class LocalHit(val shaOk: Boolean?)
+
+    /**
+     * 本地已有同名文件：大小/SHA 都对 ⇒ 直接复用；有一项不对 ⇒ 删掉重下。
+     * 清单没给 size 也没给 sha 时不复用（无法证明完整）。
+     */
+    private fun checkExisting(file: File, pkg: UpdatePackage): LocalHit? {
+        if (!file.isFile) return null
+        if (pkg.size == null && pkg.sha256 == null) return null
+        if (pkg.size != null && file.length() != pkg.size) {
+            file.delete()
+            return null
+        }
+        if (pkg.sha256 == null) return LocalHit(null)
+        val actual = sha256(file)
+        if (!actual.equals(pkg.sha256, ignoreCase = true)) {
+            file.delete()
+            return null
+        }
+        return LocalHit(true)
+    }
+
+    private fun sha256(file: File): String {
+        val md = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buf = ByteArray(64 * 1024)
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) break
+                md.update(buf, 0, n)
+            }
+        }
+        return md.digest().joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+    }
 }

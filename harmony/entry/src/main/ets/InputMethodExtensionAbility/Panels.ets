@@ -339,13 +339,13 @@ function copyLink(url: string): void {
   try {
     const data: pasteboard.PasteData = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, url);
     pasteboard.getSystemPasteboard().setData(data).then(() => {
-      toast(`链接已复制：${url}`);
+      toast('链接已复制');
     }).catch(() => {
-      toast(`复制失败，请手动记录：${url}`);
+      toast('复制失败');
     });
   } catch (e) {
     console.error(`[opi] 复制链接失败：${e}`);
-    toast(`复制失败，请手动记录：${url}`);
+    toast('复制失败');
   }
 }
 
@@ -370,6 +370,17 @@ export struct AboutPanel {
         if (accent) {
           copyLink(text);
         }
+      })
+  }
+
+  @Builder
+  LinkRow(label: string, url: string) {
+    Text(label)
+      .fontSize(this.elder === 1 ? 14 : 12)
+      .fontColor(this.pal().accent)
+      .width('100%').margin({ top: 4 })
+      .onClick(() => {
+        copyLink(url);
       })
   }
 
@@ -399,15 +410,12 @@ export struct AboutPanel {
           this.Para('© 2026 erik.xyz · 代码按 MIT 许可（全文见仓库 LICENSE）；词库数据与代码分开授权')
           this.Head('表情数据')
           this.Para('Emoji 取自 OpenMoji（CC BY-SA 4.0）；颜文字取自 rime_kaomoji_dict（MIT）；小欧贴纸/图标为项目专有资产，商业使用需授权')
-          this.Head('主页地址（点按复制）')
-          this.Para(ABOUT_HOME_URL, true)
-          this.Head('项目地址（点按复制）')
-          this.Para(ABOUT_PROJECT_URL, true)
-          this.Head('博客地址（点按复制）')
-          this.Para(ABOUT_BLOG_URL, true)
-          this.Head('隐私政策（点按复制）')
-          this.Para(ABOUT_PRIVACY_URL, true)
-          this.Para('鸿蒙输入法扩展不能直接拉起浏览器；复制后到浏览器打开。')
+          this.Head('链接')
+          this.LinkRow('官网主页', ABOUT_HOME_URL)
+          this.LinkRow('GitHub 项目', ABOUT_PROJECT_URL)
+          this.LinkRow('博客', ABOUT_BLOG_URL)
+          this.LinkRow('隐私政策', ABOUT_PRIVACY_URL)
+          this.Para('鸿蒙输入法扩展不能直接拉起浏览器；点链接复制地址后到浏览器打开。')
         }
         .width('100%').padding({ left: 14, right: 14, bottom: 10 })
       }.layoutWeight(1).width('100%')

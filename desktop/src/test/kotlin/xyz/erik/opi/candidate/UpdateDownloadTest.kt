@@ -91,6 +91,38 @@ class UpdateDownloadTest {
     }
 
     @Test
+    fun `reuses a verified local file without touching the network`() {
+        val payload = ByteArray(64_000) { (it % 241).toByte() }
+        val sha = sha256(payload)
+        var requests = 0
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/pkg.bin") { ex ->
+            requests++
+            ex.sendResponseHeaders(200, payload.size.toLong())
+            ex.responseBody.use { it.write(payload) }
+        }
+        server.start()
+        val url = "http://127.0.0.1:${server.address.port}/pkg.bin"
+        val dir = Files.createTempDirectory("opi-update-reuse").toFile()
+        try {
+            File(dir, downloadFileName(url, "1.2.3", UpdatePackageKind.FULL)).writeBytes(payload)
+            val d = UpdateDownloader(
+                scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+                requireHttps = false,
+                targetDir = dir,
+            )
+            d.start(UpdatePackageKind.FULL, UpdatePackage(url, sha, payload.size.toLong()), "1.2.3")
+            val end = awaitTerminal(d)
+            assertTrue("应直接复用本地文件，实际 $end", end is DownloadState.Done)
+            assertEquals("复用时不得请求网络", 0, requests)
+            assertEquals(true, (end as DownloadState.Done).shaOk)
+        } finally {
+            server.stop(0)
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
     fun `wrong sha256 deletes the bad file`() {
         val payload = "hello update".toByteArray()
         withServer(payload) { url ->

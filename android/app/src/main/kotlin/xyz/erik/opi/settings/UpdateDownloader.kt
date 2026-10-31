@@ -129,29 +129,41 @@ internal object UpdateDownloader {
         }
         pollJob?.cancel()
         val fileName = downloadFileName(pkg.url, version, kind)
-        val dm = downloadManager(ctx)
-        val request = DownloadManager.Request(Uri.parse(pkg.url))
-            .setTitle("小欧输入法 v$version")
-            .setDescription(kind.label)
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .setDestinationInExternalFilesDir(ctx, Environment.DIRECTORY_DOWNLOADS, fileName)
-            .setAllowedOverRoaming(false)
-            .addRequestHeader("User-Agent", "opi/${xyz.erik.opi.BuildConfig.VERSION_NAME}")
-        val id = runCatching { dm.enqueue(request) }.getOrElse { e ->
-            _state.value = DownloadState.Failed(kind, version, "无法开始下载：${e.message ?: e.javaClass.simpleName}")
-            return
+        pollJob = scope.launch {
+            _state.value = DownloadState.Verifying(kind, version)
+            val local = File(ctx.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName)
+            val hit = checkExisting(local, pkg.sha256, pkg.size)
+            if (hit != null) {
+                // 本地已有完整包：校验后直接用，不再入队 DownloadManager。
+                finish(ctx, kind, version, local, hit.shaOk)
+                return@launch
+            }
+            val dm = downloadManager(ctx)
+            val request = DownloadManager.Request(Uri.parse(pkg.url))
+                .setTitle("小欧输入法 v$version")
+                .setDescription(kind.label)
+                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                .setDestinationInExternalFilesDir(ctx, Environment.DIRECTORY_DOWNLOADS, fileName)
+                .setAllowedOverRoaming(false)
+                .addRequestHeader("User-Agent", "opi/${xyz.erik.opi.BuildConfig.VERSION_NAME}")
+            val id = runCatching { dm.enqueue(request) }.getOrElse { e ->
+                _state.value = DownloadState.Failed(kind, version, "无法开始下载：${e.message ?: e.javaClass.simpleName}")
+                return@launch
+            }
+            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putLong(KEY_ID, id)
+                .putString(KEY_KIND, kind.id)
+                .putString(KEY_VERSION, version)
+                .putString(KEY_SHA, pkg.sha256)
+                .putLong(KEY_SIZE, pkg.size ?: -1L)
+                .putString(KEY_FILE, fileName)
+                .putString(KEY_URL, pkg.url)
+                .apply()
+            _state.value = DownloadState.Running(kind, version, 0, pkg.size)
+            // 本协程即将结束；把句柄交给 poll 的独立协程，别再让它取消自己。
+            pollJob = null
+            poll(ctx, id, kind, version, fileName, pkg.sha256, pkg.size)
         }
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putLong(KEY_ID, id)
-            .putString(KEY_KIND, kind.id)
-            .putString(KEY_VERSION, version)
-            .putString(KEY_SHA, pkg.sha256)
-            .putLong(KEY_SIZE, pkg.size ?: -1L)
-            .putString(KEY_FILE, fileName)
-            .putString(KEY_URL, pkg.url)
-            .apply()
-        _state.value = DownloadState.Running(kind, version, 0, pkg.size)
-        poll(ctx, id, kind, version, fileName, pkg.sha256, pkg.size)
     }
 
     fun cancel(context: Context) {
@@ -264,6 +276,48 @@ internal object UpdateDownloader {
             fail(ctx, kind, version, "SHA-256 校验失败，已删除下载文件")
             return
         }
+        finish(ctx, kind, version, file, shaOk)
+    }
+
+    /** 本地已有同名文件：大小/SHA 都对 ⇒ 直接复用；有一项不对 ⇒ 删掉重下。 */
+    private data class LocalHit(val shaOk: Boolean?)
+
+    private fun checkExisting(file: File, sha: String?, size: Long?): LocalHit? {
+        if (!file.isFile) return null
+        if (size == null && sha == null) return null
+        if (size != null && file.length() != size) {
+            file.delete()
+            return null
+        }
+        if (sha == null) return LocalHit(null)
+        val actual = runCatching { sha256(file) }.getOrNull()
+        if (actual?.equals(sha, ignoreCase = true) != true) {
+            file.delete()
+            return null
+        }
+        return LocalHit(true)
+    }
+
+    private fun sha256(file: File): String {
+        val md = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buf = ByteArray(64 * 1024)
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) break
+                md.update(buf, 0, n)
+            }
+        }
+        return md.digest().joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+    }
+
+    private fun finish(
+        ctx: Context,
+        kind: UpdatePackageKind,
+        version: String,
+        file: File,
+        shaOk: Boolean?,
+    ) {
         val uri = runCatching {
             FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", file)
         }.getOrElse {
