@@ -649,7 +649,9 @@ emoji 列**不动** —— 它管单键候选反馈（搜索路），与浏览�
 （`shared/scene/art/keycap-<id>.png`，256×256、预压 55% 主题底色，等比放大裁剪铺满），
 上面只留 22% 主题色薄层与主题强调色描边；键区罩层降到 16%，键缝里仍能看见整幅插画，
 键面文字加反向阴影保证对比度。纯色皮肤仍是原来的不透明键帽。工具条的调色板图标开面板：纯色在上、动态在下，
-点一张换一张、不自动关（连换着比）。
+点一张换一张、不自动关（连换着比）。**2026-11-01 起动态主题的插画底也铺到工具条各面板**
+（皮肤 / 输入模式 / 符号 / 表情 / 颜文字 / 生僻字 / 自定义符号）、平铺候选、选择器与
+设置页（`settings/SettingsScene.kt`，面板色压到半透明保证文字可读）；**纯色皮肤保持原样**。
 
 配色三条轴的**优先级**（`ImeScreen.kt` 里那条 `when` 就是它）：
 **长辈 > 暗光 > 皮肤** —— 模式是临时覆盖，皮肤是「底」。「深色皮肤」与「暗光模式」
@@ -800,6 +802,31 @@ JSON）。`OpiImeService.onCreateInputView` 每次建视图时把两套整表重
 - 匹配范围见 §4.2 最后一条（中文套仅 Pinyin/Traditional + Full/Nine/Fourteen；英文套仅
   English；英文短语可命中时普通英文也进缓冲，表空/关闭则直出）。门禁：`CustomPhraseStoreTest`、
   `CustomPhraseCodecTest`、引擎侧 `crates/engine-core/tests/custom_phrases.rs`。
+
+**跨设备剪贴板（2026-11-01，默认关闭）**：设置页独立一节（`settings/ClipSection.kt`，
+`ImePreferences` 键 `clip_enabled`，缺省 `false`），开关、附近设备、6 位数字配对、
+逐台移除与「停止共享」都在这里；本机指纹只用于识别，信任依据是 Noise 握手 + SAS。
+打开后 IME 进程内启动 `ClipRuntime`，并由设置页拉起 `ClipSyncService`
+（`connectedDevice` 类型前台服务）—— **前台服务只由设置页启动**（Android 12+ 禁止
+后台启动 FGS），输入法自己在进程内持有内核即可。
+
+- **权限**：`INTERNET`（UDP 发现 + TCP 会话）、`CHANGE_WIFI_MULTICAST_STATE`
+  （组播锁；`connectedDevice` 类型的资格也靠它）、`FOREGROUND_SERVICE` /
+  `FOREGROUND_SERVICE_CONNECTED_DEVICE`、Android 13+ 的 `POST_NOTIFICATIONS`。**拒绝
+  通知权限只让通知不可见，共享仍会运行**（设置页会提示）。
+- **读剪贴板的系统限制**：Android 10+ 只有前台应用或**默认输入法**能读本机剪贴板。
+  本功能在 IME 进程里注册监听，所以**只有 OPI 是当前默认输入法且在前台输入时**才能
+  持续读到本机复制；读失败（`SecurityException`）静默跳过，下次再试。远端写入不受
+  此限制。只处理 `text/plain` 纯文本，图片/文件/URI 直接忽略，单条上限 256 KiB；
+  **只写剪贴板，不自动粘贴、不自动打开链接**。
+- **落盘**：身份/信任/配置在 `filesDir/clip`；`res/xml/backup_rules.xml` 与
+  `data_extraction_rules.xml` 已把该目录排除在云备份和换机迁移之外（同一身份出现在
+  两台设备会破坏实例 ID 与信任语义）。
+- **网络**：发现端口 UDP 45888（组播 239.255.42.99 + 广播），TCP 端口默认由系统临时
+  分配，beacon 通告实际端口。通知栏只有状态文案（不含内容）和「停止」动作，点它等于
+  关掉开关并清偏好。
+- **验证**：JVM 单测覆盖协议、回环抑制、偏好与 FFI 契约；两台真机配对与同步、
+  各 ROM 的剪贴板监听差异均【未验证】。
 
 ---
 

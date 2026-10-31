@@ -1,0 +1,19 @@
+[package]
+name = "opi-win7-ui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Native candidate window skeleton for the Windows 7/8 legacy client"
+
+[dependencies]
+serde_json = "1"
+
+# The window/pipe code is Windows-only; the protocol module and its tests build
+# everywhere so CI can gate framing on a Linux host as well.
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "=0.61.3", default-features = false, features = [
+    "Win32_Foundation",
+    "Win32_System_LibraryLoader", # GetModuleHandleW
+    "Win32_UI_WindowsAndMessaging", # window class, STATIC children, message loop
+] }

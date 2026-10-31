@@ -209,3 +209,40 @@ export const wubiReturnStyle: () => number;
 /** 自动上屏（缺省 true；未装载 → false 是哨兵）。 */
 export const setWubiAutoCommit: (on: boolean) => void;
 export const wubiAutoCommit: () => boolean;
+
+// ---- 跨设备剪贴板（opi-clip，2026-11-01）----
+//
+// 语义真源 crates/opi-ffi/src/cabi_clip.rs（与 Android JNI 面同源）。失败统一返回
+// 哨兵（0/false/-1/空串），原因读 clipLastError()。句柄是 Rust 裸指针的 number 形态
+// （arm64 用户态指针 < 2^53）；**不可跨线程** —— 本桥所有调用都在 ArkTS 主线程。
+// 事件 JSON 上限 1 MiB，文本上限 256 KiB；内容不落盘、不写日志。
+
+/** create(configJson): 句柄；0 = 失败（配置坏/内存不足）。只解析配置，不启动。 */
+export const clipCreate: (configJson: string) => number;
+/** destroy(handle): 停止并释放；0 安全。 */
+export const clipDestroy: (handle: number) => void;
+/** start(handle): 绑端口并起后台线程；重复调用幂等。 */
+export const clipStart: (handle: number) => boolean;
+/** stop(handle): 幂等；未启动也算成功。 */
+export const clipStop: (handle: number) => void;
+/** localText(handle, text): 0=已发布 1=防回环抑制（正常）-1=失败。 */
+export const clipLocalText: (handle: number, text: string) => number;
+/**
+ * pollEvent(handle, timeoutMs): 事件 JSON；空串 = 这段时间没有事件。
+ * ⚠️ timeoutMs > 0 会阻塞调用线程（最多 1 秒）—— UI 线程只传 0，用定时器轮询。
+ */
+export const clipPollEvent: (handle: number, timeoutMs: number) => string;
+/** pairStart(handle, peerId): 发起配对；peerId 是 32 位十六进制实例 ID。 */
+export const clipPairStart: (handle: number, peerId: string) => boolean;
+/** pairConfirm(handle, peerId, accept): 用户核对 SAS 后调用一次。 */
+export const clipPairConfirm: (handle: number, peerId: string, accept: boolean) => boolean;
+/** pairCancel(handle, peerId): 等价于 clipPairConfirm(..., false)。 */
+export const clipPairCancel: (handle: number, peerId: string) => boolean;
+/** peers(handle): JSON 数组；未启动 → `[]`。 */
+export const clipPeers: (handle: number) => string;
+/** forgetPeer(handle, peerId): 移除信任；不存在的对端也算成功。 */
+export const clipForgetPeer: (handle: number, peerId: string) => boolean;
+/** status(handle): JSON；未启动时 instance_id / fingerprint 为 null。 */
+export const clipStatus: (handle: number) => string;
+/** lastError(): 最近一次失败原因；空串 = 没有错误。按线程记录。 */
+export const clipLastError: () => string;

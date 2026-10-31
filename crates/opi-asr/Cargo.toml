@@ -1,0 +1,29 @@
+[package]
+name = "opi-asr"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+# cdylib：Android / Harmony / 桌面壳直接 dlopen；staticlib：iOS 需要 .a。
+crate-type = ["lib", "staticlib", "cdylib"]
+
+[features]
+default = ["sherpa"]
+# 关闭后仅保留分帧/VAD 状态机/manifest/ABI 逻辑，用于无模型、无 ONNX 运行时的 CI。
+sherpa = ["dep:sherpa-rs"]
+
+[dependencies]
+hex = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+# 单一运行时：SenseVoice 与 Whisper 都走 sherpa-onnx 的离线识别器。
+# download-binaries 仅在**构建期**取 sherpa-onnx v1.12.9 预编译库（约 25 MB），
+# 运行期不联网；平台壳可用 SHERPA_LIB_PATH 指向自己交叉编译的同版本库。
+sherpa-rs = { version = "0.6.8", default-features = false, features = ["download-binaries"], optional = true }
+thiserror = "2"
+
+[dev-dependencies]
+hound = "3"

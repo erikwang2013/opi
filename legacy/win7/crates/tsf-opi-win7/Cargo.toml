@@ -1,0 +1,37 @@
+[package]
+name = "tsf_opi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "opi TSF text service skeleton for Windows 7/8 (legacy)"
+
+# Same DLL name as the Windows 10 client so the installer/registration layout is
+# unchanged; the two builds never coexist in one workspace.
+[lib]
+name = "tsf_opi"
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+# Full engine via path dependency (no copy/backport needed: nightly > 1.88
+# accepts the edition-2024 let-chains in engine-core/engine-data).
+engine-core = { path = "../../../../crates/engine-core" }
+engine-data = { path = "../../../../crates/engine-data" }
+
+# windows 0.61.3 is the last release before windows-future became an
+# unconditional dependency; 0.61.3 also generates no combase import and has
+# MSRV 1.74. Only compiled for the Windows target so host tests stay clean.
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "=0.61.3", default-features = false, features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",             # dpi.rs: GetDeviceCaps / GetDC fallback
+    "Win32_Security",                 # RegCreateKeyExW signature takes SECURITY_ATTRIBUTES
+    "Win32_System_Com",               # TSF profile registration + class factory
+    "Win32_System_Diagnostics_Debug", # OutputDebugStringW (no stderr in GUI hosts)
+    "Win32_System_LibraryLoader",     # GetModuleHandleExW / GetProcAddress
+    "Win32_System_Registry",          # CLSID\InprocServer32 registration
+    "Win32_UI_Input_KeyboardAndMouse",# HKL for RegisterProfile
+    "Win32_UI_TextServices",          # ITfTextInputProcessor + profile APIs
+] }
+# implement! expands to ::windows_core::imp::..., so it must be a direct dep.
+windows-core = { version = "=0.61.2", default-features = false }

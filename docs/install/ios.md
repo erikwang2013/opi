@@ -371,10 +371,35 @@ Payload/Opi.app/
 appex 的 `scenes/`）；选中后插画铺在键面后、配色取该主题的默认纯色皮肤，
 键帽**换成同主题的 `scenes/keycap-<id>.png` 插画裁片**（按比例填充，不拉伸），
 键区底板留 20% 透明度，键缝里透出整幅插画（文字加阴影保证对比度）。
-`screenshots`/真机观感仍未验证。
+**2026-11-01 起**动态主题的插画底也铺到各面板、选择器与设置面板
+（`KeyboardScene.swift` 的 `applySceneBackdrop`，面板色压半透明保证文字可读）；
+**纯色皮肤保持原样**。`screenshots`/真机观感仍未验证。
 
 **未验**：这些键位的实际手感、弹层方向/裁切、左列滚动与选择器在真机上的表现；§8
 的「运行时验证数 = 0」不变。
+
+### 6.6 跨设备剪贴板（2026-11-01，源码层 / 未上机）
+
+- **入口与默认值**：键盘内设置面板的「跨设备剪贴板」节
+  （`ios/ClipboardSettingsSection.swift`），默认关（`KeyboardPreferences.clipEnabled`）。
+  工具条多一枚剪贴板图标用于手动发送；收到内容时键盘顶部出现一枚 chip，点「插入」才
+  把文本写进当前输入框。
+- **降级边界（设计，不是缺陷）**：只在键盘扩展**可见**时运行（`viewWillAppear` 起、
+  `viewWillDisappear` 停，`ios/KeyboardClipboard.swift`），**没有后台模式** —— 键盘
+  收起后不接收也不发送。接收**不自动插入、不自动写剪贴板**；发送必须用户点工具条。
+  读取 `UIPasteboard.general` 在 iOS 16+ 可能触发系统粘贴提示。
+- **权限**：写系统剪贴板的唯一通道需要「完全访问」，用户必须在系统设置里允许
+  `RequestsOpenAccess`；打包脚本与 `Info.plist` 带 `NSLocalNetworkUsageDescription`，
+  首次发现/连接时系统会请求「本地网络」权限，拒绝则功能不可用。App Group
+  `group.xyz.erik.opi` 未配置时，身份/信任回退到**扩展私有目录** ⇒ 重装或系统清理后
+  配对要重做。
+- **网络**：与其它端同一套 `opi-clip`（UDP 45888 发现 + TCP 加密会话，纯文本
+  ≤256 KiB）。⚠️ **UDP/TCP 在键盘扩展里是否可用未上机验证**：扩展没有独立的网络开关，
+  靠宿主 App 的本地网络授权。
+- **语音**：Apple 不允许键盘扩展访问麦克风（完全访问也不授予），**iOS 键盘没有语音
+  输入**；需要语音请用系统听写（设置 → 通用 → 键盘 → 启用听写），见 §7 的 L12。
+- **验证**：本轮 Swift 文件由 CI `apple.yml` 首次编译；**运行时 0 验证** —— 配对、
+  接收 chip、工具条发送、系统粘贴提示与本地网络授权都没有在 iPhone 上跑过。
 
 ---
 
@@ -395,7 +420,7 @@ appex 的 `scenes/`）；选中后插画铺在键面后、配色取该主题的�
 | L8 | **繁体库不放就回落简体** | `trad.opid` 是可选资源；缺了不报错，繁体模式静默用简体库。 |
 | L9 | **长按 ⇧ → Lock 走的是另一套机制** | 软键盘长按 → `stateLongPressed`，与桌面轨的 `LONG_PRESSED` 键状态位不是同一条路。 |
 | L10 | **候选栏空态没有小欧** | 其他端（Android 候选栏、Windows 候选窗、鸿蒙）在「打不出候选」时会显示小欧 + 提示；iOS 的 `KeyboardLayout.updateCandidates(_:)` 在空数组时先清空子视图再 `return` ⇒ **纯空白**。接它只能走位图（`ios/README.md` §6 明文禁止第三份 CoreGraphics 几何），而 iOS 现在连 `.xcassets` 都没有。**本版没做。** |
-| L12 | **键盘内没有语音输入** | Apple 不允许任何键盘扩展访问麦克风，Full Access 也不授予；因此小欧 iOS 键盘不放假话筒。2026-10-31 用户裁决 v1 只提示使用系统听写（设置 → 通用 → 键盘 → 启用听写），Android / 桌面 / 鸿蒙才做本地语音。 |
+| L12 | **键盘内没有语音输入** | Apple 不允许任何键盘扩展访问麦克风，Full Access 也不授予；因此小欧 iOS 键盘不放假话筒。2026-10-31 用户裁决 v1 只提示使用系统听写（设置 → 通用 → 键盘 → 启用听写）；Android / 桌面 / 鸿蒙的本地语音仍在开发，尚未发布。 |
 | L11 | **自定义短语：没有 UI（2026-10-24）** | C ABI 有中文套出口，`ios/OpiEngine.swift` 也包了 `customPhrasesEnabled` / `exportCustomPhrases` / `setCustomPhrases`，但**没有英文套包装、没有设置页、没有宿主文件装载**（`ios/` 下没有任何 `*Phrase*` 文件）⇒ 用户在 iOS 上配不了，重启也没有表可装。别把 Android / macOS 的「自定义短语」入口读成 iOS 也有。 |
 
 ---

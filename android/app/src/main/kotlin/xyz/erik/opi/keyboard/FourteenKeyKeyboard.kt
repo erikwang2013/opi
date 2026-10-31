@@ -229,7 +229,13 @@ fun FourteenKeyKeyboard(
                         FourteenBottomAction.Comma ->
                             KeyButton(b.label, m, onTap = { onKey(",") }, fontSize = keyFont)
                         FourteenBottomAction.Space ->
-                            KeyButton(b.label, m, onTap = onSpace, fontSize = bottomFont)
+                            KeyButton(
+                                b.label,
+                                m,
+                                onTap = onSpace,
+                                mic = true,
+                                fontSize = bottomFont,
+                            )
                         FourteenBottomAction.Period ->
                             KeyButton(b.label, m, onTap = { onKey(".") }, fontSize = keyFont)
                         FourteenBottomAction.Mode -> KeyButton(

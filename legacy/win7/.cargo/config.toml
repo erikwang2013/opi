@@ -1,0 +1,17 @@
+# Win7/8 targets ship no prebuilt std: build it from the pinned rust-src.
+# This applies to host builds too, but host tests are small and still work.
+[unstable]
+build-std = ["std", "panic_abort"]
+
+# Static CRT (/MT) and abort-on-panic: the DLL is loaded into arbitrary host
+# processes; a panic must not unwind through COM vtables.
+[target.x86_64-win7-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static", "-C", "panic=abort"]
+
+[target.i686-win7-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static", "-C", "panic=abort"]
+
+# Deliberately no linker section here. Real builds use the MSVC linker on a
+# Windows runner (CI) or cargo-xwin's licensed CRT. Phase 0 linked on Linux with
+# Wine export libs and a hand-written CRT stub; that setup is NOT shippable and
+# is not committed (see tools/README.md).

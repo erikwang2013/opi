@@ -5,8 +5,11 @@
     <!-- 应用内更新（2026-10-31）：下载完 APK 后拉起系统安装器；无此权限 Android 8+
          会拒绝安装来源。只下载/打开，不静默安装。 -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+    <!-- 离线语音输入（2026-11-01）：只在前台 IME 窗口录音，不起前台服务；Android 12+
+         的系统麦克风指示由 AudioRecord(VOICE_RECOGNITION) 自动显示。 -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <!-- 跨设备剪贴板（2026-11-01，默认关闭）：UDP 组播发现需要组播锁，内核监听需要
-         前台服务。INTERNET 已在上面。不申请 RECORD_AUDIO。 -->
+         前台服务。INTERNET 已在上面。 -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
@@ -30,6 +33,12 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- 透明权限页：IME 是 Service，不能自己弹运行时权限。授权后只回结果，不常驻。 -->
+        <activity
+            android:name=".asr.AsrPermissionActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"/>
         <!-- 自有表情 = 插入 PNG：commitContent 把 cacheDir/pet 下的文件以 content:// 暴露给编辑框。
              authority 与 PetStickerCommit.kt 的 "${packageName}.fileprovider" 一致。 -->
         <provider

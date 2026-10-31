@@ -115,6 +115,29 @@ fn four_and_five_char_words_compose() {
     }
 }
 
+/// 五段短句（2026-11-01）：整句不在词库、但五段都是精确键时要能拼出来。
+/// 这是 `MAX_CHUNKS` 从 4 提到 6 的产品理由 —— 四个词以上的短句一次打完。
+#[test]
+fn five_chunk_sentences_compose() {
+    let mut d = InMemoryDictionary::new();
+    d.insert("women", "我们", 900);
+    d.insert("mingtian", "明天", 880);
+    d.insert("yiqi", "一起", 860);
+    d.insert("qu", "去", 840);
+    d.insert("gongyuan", "公园", 820);
+    let mut e = Engine::new(
+        Box::new(d),
+        SymbolEngine::new(Vec::new(), Vec::new()),
+        false,
+    );
+    type_str(&mut e, "womenmingtianyiqiqugongyuan");
+    let got = texts(&e, 64);
+    assert!(
+        got.contains(&"我们明天一起去公园".to_string()),
+        "五段直连应组合出整句: {got:?}"
+    );
+}
+
 /// 负控制 1：全是单音节段 ⇒ 不拼（否则任意同音字都能凑成一串）。
 #[test]
 fn all_single_syllable_chunks_are_not_composed() {

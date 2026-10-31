@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>隐私政策 — opi 小欧输入法</title>
-  <meta name="description" content="小欧输入法（opi）隐私政策：不收集、不上传个人信息；没有账号体系，无需注销；唯一的联网行为是版本检测。联系 erik@erik.xyz。">
+  <meta name="description" content="小欧输入法（opi）隐私政策：不收集、不上传个人信息；没有账号体系，无需注销；联网仅限版本检测、用户主动更新与可选的局域网剪贴板。联系 erik@erik.xyz。">
   <meta name="robots" content="index, follow">
   <meta name="theme-color" content="#f3fbf4"><meta name="color-scheme" content="light">
   <link rel="canonical" href="https://opi.erik.xyz/privacy/">
@@ -62,7 +62,7 @@
       <p><strong>适用范围：</strong>Android、iOS、鸿蒙、Windows、Linux、macOS 客户端及本网站（opi.erik.xyz）</p>
     </div>
 
-    <p class="summary"><strong>一句话：</strong>小欧输入法不收集、不上传、不共享你的个人信息；没有账号体系，因此也没有「注销账号」这个动作。唯一的联网行为是版本检测；除此之外，客户端完全离线。</p>
+    <p class="summary"><strong>一句话：</strong>小欧输入法不收集、不上传、不共享你的个人信息；没有账号体系，因此也没有「注销账号」这个动作。日常输入完全离线；只有你主动检查/下载更新或手动开启跨设备剪贴板时才联网，局域网剪贴板不经过云端。</p>
 
     <h2>1. 我们收集什么</h2>
     <p>我们<strong>不收集任何个人信息</strong>，包括但不限于：输入内容与候选词、剪贴板内容、通讯录、位置、照片、设备标识符、使用统计或崩溃日志。没有账号、注册或登录，也没有广告与用户画像。</p>
@@ -75,15 +75,20 @@
       <li><strong>Windows / Linux / macOS：</strong>删除本机配置文件与用户词文件，或卸载应用。</li>
     </ul>
 
-    <h2>3. 唯一的联网行为：版本检测</h2>
-    <p>部分客户端的设置页提供「检查更新」，会向 <code>https://opi.erik.xyz/version.json</code> 发起一次普通 HTTPS 请求，读取最新版本号。该请求<strong>不携带</strong>输入内容、用户词、剪贴板内容或设备标识，也不用于统计或画像。不主动检查更新时，客户端不发起网络请求。</p>
+    <h2>3. 联网行为（均由你主动触发）</h2>
+    <p>日常输入完全离线。只有以下情况会联网：</p>
+    <ul>
+      <li><strong>版本检测：</strong>部分客户端的设置页提供「检查更新」，向 <code>https://opi.erik.xyz/version.json</code> 发起一次普通 HTTPS 请求，读取最新版本号。该请求<strong>不携带</strong>输入内容、用户词、剪贴板内容或设备标识，也不用于统计或画像。</li>
+      <li><strong>应用内更新：</strong>你点「下载」时，客户端访问安装包/热更新包并校验大小与 SHA-256；不携带输入或用户数据。</li>
+      <li><strong>跨设备剪贴板（可选，默认关闭）：</strong>只有你手动开启并完成配对后，才在同一局域网内与已配对设备建立加密连接（Noise + ChaCha20-Poly1305）；只同步纯文本（≤256 KiB），发现报文不含剪贴板内容，<strong>不经过云端、无账号、无历史</strong>；可一键停止并撤销设备。系统自带的云剪贴板可能独立同步，建议在系统设置中关闭。</li>
+    </ul>
 
     <h2>4. 系统权限</h2>
     <ul>
-      <li><strong>Android：</strong>仅申请 <code>INTERNET</code>（普通权限，用于版本检测）。</li>
-      <li><strong>iOS：</strong>可选「允许完全访问」仅用于把自有贴纸图片写入系统剪贴板；不开启也能正常输入，键盘扩展不发起网络请求。</li>
-      <li><strong>鸿蒙：</strong>仅申请网络权限（用于版本检测）。</li>
-      <li><strong>Windows / Linux / macOS：</strong>不申请系统级敏感权限。</li>
+      <li><strong>Android：</strong><code>INTERNET</code>（版本检测/更新/可选剪贴板/模型下载）、<code>REQUEST_INSTALL_PACKAGES</code>（把下载的安装包交系统安装器）、可选的局域网多播与前台服务/通知权限（跨设备剪贴板）。</li>
+      <li><strong>iOS：</strong>可选「允许完全访问」用于把自有贴纸图片写入系统剪贴板；可选的本地网络权限用于跨设备剪贴板；键盘扩展<strong>不能使用麦克风</strong>，语音输入请使用系统听写。</li>
+      <li><strong>鸿蒙：</strong>网络权限（版本检测/更新/剪贴板）、可选的粘贴板权限（仅在启用剪贴板时）。</li>
+      <li><strong>Windows / Linux / macOS：</strong>跨设备剪贴板首次监听时系统可能询问防火墙。</li>
     </ul>
 
     <h2>5. 第三方与共享</h2>

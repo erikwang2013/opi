@@ -26,13 +26,13 @@ class StatusBarTest {
         // （要用的在设置里自己开；已有配置里的显式值照旧）。其余仍默认常驻 ——
         // 「全关」会让老用户升级后条上什么都不剩。
         // 2026-10-14 起多一枚**恒常驻**的模式按钮（见 `the mode button has no switch`）；
-        // 2026-10-19 再加默认常驻的英文专业键 ENPRO：
-        // 默认条上 9 枚 = 10 枚里去掉软键盘。
+        // 2026-10-19 再加默认常驻的英文专业键 ENPRO；2026-11-02 加默认常驻的话筒：
+        // 默认条上 10 枚 = 11 枚里去掉软键盘。
         assertEquals(
             StatusBarButton.entries.filter { it != StatusBarButton.VK },
             visibleStatusButtons(StatusBarSettings(), windows = false),
         )
-        assertEquals(9, visibleStatusButtons(StatusBarSettings(), windows = false).size)
+        assertEquals(10, visibleStatusButtons(StatusBarSettings(), windows = false).size)
         assertFalse("软键盘默认必须是关（2026-10-10 中午裁决）", StatusBarSettings().vk)
         assertFalse("缺键的旧配置读出来也得是关（fromIni 的回落别写成 true）", OpSettings.fromIni("").statusbar.vk)
     }
@@ -50,8 +50,12 @@ class StatusBarTest {
         // `frozen icon literals` 那条管。两处配套，只改一处时对面的钉要跟着动。
         // **2026-10-19 用户裁决把英文专业移到简繁之后**（旧位置在标点之前，已废止；
         // 见 EnProTest 头部的时间线）。位置 = 枚举序，没有第二处。
+        // **2026-11-02 用户裁决「符号按钮后加话筒」**：紧挨 SYMBOLS 之后、SETTINGS 之前。
         assertEquals(
-            listOf("logo", "中英文切换", "中英标点", "简繁转换", "英文专业", "模式", "全半角", "软键盘", "符号大全", "设置"),
+            listOf(
+                "logo", "中英文切换", "中英标点", "简繁转换", "英文专业", "模式",
+                "全半角", "软键盘", "符号大全", "语音输入", "设置",
+            ),
             StatusBarButton.entries.map { it.label },
         )
     }
@@ -72,10 +76,10 @@ class StatusBarTest {
         assertEquals("简", iconText(StatusBarButton.TRAD, ImeState(trad = false)))
         assertEquals("英", iconText(StatusBarButton.LANG, ImeState(zh = false)))
         assertEquals("中", iconText(StatusBarButton.LANG, ImeState(zh = true)))
-        // 画图标的四个不出字（出字就会在自绘图形上叠一层文字）
+        // 画图标的五个不出字（出字就会在自绘图形上叠一层文字）
         for (b in listOf(
             StatusBarButton.VK, StatusBarButton.LOGO,
-            StatusBarButton.FULLWIDTH, StatusBarButton.SETTINGS,
+            StatusBarButton.FULLWIDTH, StatusBarButton.SETTINGS, StatusBarButton.MIC,
         )) {
             assertEquals("$b 该画图标、不出字", "", iconText(b, ImeState()))
         }
@@ -115,7 +119,7 @@ class StatusBarTest {
         )
         assertFalse("设置窗不该给 MODE 出行", statusButtonWired(StatusBarButton.MODE, windows = false))
         assertFalse("MODE 没有常驻开关，两平台都不该出行", statusButtonWired(StatusBarButton.MODE, windows = true))
-        // 全关（九枚开关逐个关掉）之后条上只剩 MODE —— 「恒常驻」的直接后果。
+        // 全关（十枚开关逐个关掉）之后条上只剩 MODE —— 「恒常驻」的直接后果。
         // ⚠️ 顺带作废一条老路：「按钮全关 ⇒ 条隐藏」现在到不了了（条至少剩 MODE 一枚），
         // 要隐藏整条走 master 开关（它本来就是给用户的那条路，见 StatusBarPage 的文案）。
         val allOff = StatusBarButton.entries.filter { it != StatusBarButton.MODE }
@@ -211,7 +215,7 @@ class StatusBarTest {
 
     @Test
     fun `each button can be turned off alone`() {
-        // 覆盖 resident ⇄ with 的九对分支：任一对写错（比如 VK 那行复制成 SYMBOLS），
+        // 覆盖 resident ⇄ with 的十对分支：任一对写错（比如 VK 那行复制成 SYMBOLS），
         // 这条就在那个按钮上红。基线取**全开**（默认里 VK 已是关，拿默认当基线的话
         // 「关 VK」是空操作，那条分支就测不到了）。
         // MODE 不在这一组里：它没有开关（关不掉、也关不着）—— 见
@@ -258,9 +262,9 @@ class StatusBarTest {
             StatusBarButton.entries.toList(),
             visibleStatusButtons(StatusBarSettings(vk = true), windows = false),
         )
-        // 设置窗的开关行：两平台都是除 MODE 外的 9 枚（MODE 没有开关、不出行）。
-        assertEquals(9, StatusBarButton.entries.count { statusButtonWired(it, windows = true) })
-        assertEquals(9, StatusBarButton.entries.count { statusButtonWired(it, windows = false) })
+        // 设置窗的开关行：两平台都是除 MODE 外的 10 枚（MODE 没有开关、不出行）。
+        assertEquals(10, StatusBarButton.entries.count { statusButtonWired(it, windows = true) })
+        assertEquals(10, StatusBarButton.entries.count { statusButtonWired(it, windows = false) })
     }
 
     @Test
@@ -276,13 +280,14 @@ class StatusBarTest {
         // 停用、中文一个字打不出来（lead 真机实测指纹：点两次后 `fcitx5-remote` 报 2）。
         // 中英切换的正确动作是契约里的 `opi-ctl lang`。改回 -t 之前先读完这段。
         assertEquals(listOf("opi-ctl", "lang"), statusActionCommand(StatusBarButton.LANG))
-        // 这四个是进程内动作（开键盘窗 / 开符号页 / 开设置窗），不出命令。
+        // 这几个是进程内动作（开键盘窗 / 开符号页 / 开设置窗 / 语音会话），不出命令。
         // SYMBOLS 2026-10-12 从「跑 opi-ctl symbols」改到这一档：用户裁决「点击后要是
         // 个大的页面，可以翻页选择」（两端同款符号页窗，见 StatusBar.openSymbols）。
         assertNull(statusActionCommand(StatusBarButton.VK))
         assertNull(statusActionCommand(StatusBarButton.SYMBOLS))
         assertNull(statusActionCommand(StatusBarButton.LOGO))
         assertNull(statusActionCommand(StatusBarButton.SETTINGS))
+        assertNull(statusActionCommand(StatusBarButton.MIC))
         // MODE 也不出命令：它走 Actions.cycleMode（`opi-ctl mode` 由那条路发、应答是新档位
         // token），不是这张「按钮 → 命令行」的表 —— 它若漏在这里被 else 兜住，就会出现
         // 「点了模式按钮跑了条别的命令」。

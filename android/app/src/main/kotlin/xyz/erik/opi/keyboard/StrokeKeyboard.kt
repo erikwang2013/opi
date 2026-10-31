@@ -85,7 +85,7 @@ fun StrokeKeyboard(
             // 「生僻字」（3 字 × 21sp ≈ 63dp，格 53dp）都会截字，故这两个键单独降字号。
             KeyButton("英文", modifier = Modifier.weight(1f), onTap = onEnglish, fontSize = 15.sp)
             KeyButton("生僻字", modifier = Modifier.weight(1.4f), onTap = onRare, fontSize = 14.sp)
-            KeyButton("空格", modifier = Modifier.weight(2f), onTap = onSpace)
+            KeyButton("空格", modifier = Modifier.weight(2f), onTap = onSpace, mic = true)
             KeyButton(
                 "⌫",
                 modifier = Modifier.weight(1f),

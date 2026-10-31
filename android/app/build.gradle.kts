@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
+import java.io.File
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -38,8 +41,8 @@ android {
         targetSdk = 34
         // 与发布 tag 对齐（此前 9 个 tag 期间 versionCode 一直是 1、versionName 一直是
         // "1.0.0"：APK 既无法被识别，也无法覆盖安装升级）。
-        versionCode = 106
-        versionName = "1.28.3"
+        versionCode = 107
+        versionName = "1.29.0"
         ndk {
             // 与 rust_builder cargokit targets 对齐（plugin.gradle 固定三 ABI）。
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
@@ -125,6 +128,114 @@ tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }
 // 精确匹配会漏掉它，下一次 `assembleRelease` 仍红。
 tasks.matching { it.name.contains("Lint", ignoreCase = true) }
     .configureEach { dependsOn(copyPetStickers) }
+
+// ---------- 离线语音识别原生库（libopi_asr.so + JNI 薄层） ----------
+//
+// 不复用 cargokit：它按 Cargo 包名找 lib<package>.so，`opi-asr` 实际产出
+// libopi_asr.so（连字符/下划线），改共享插件或改 Rust 包名都比单独构建代价大。
+// 本任务只在打包 native libs 前跑；`testDebugUnitTest` 不依赖它，所以没有
+// NDK/Rust 的 CI 单测环境不受影响。
+val asrJniRoot = layout.buildDirectory.dir("generated/asrJniLibs")
+val asrShim = layout.projectDirectory.file("src/main/cpp/asr_jni.c")
+val asrRepoRoot = rootProject.projectDir.parentFile
+val asrLocalProperties = rootProject.file("local.properties")
+val asrNdkVersion = "27.0.12077973"
+val asrAbis = listOf(
+    "arm64-v8a" to "aarch64-linux-android",
+    "x86_64" to "x86_64-linux-android",
+)
+
+fun asrNdkDir(): File {
+    val local = Properties()
+    if (asrLocalProperties.isFile) {
+        asrLocalProperties.inputStream().use { local.load(it) }
+    }
+    val candidates = listOfNotNull(
+        local.getProperty("ndk.dir")?.let(::File),
+        System.getenv("ANDROID_NDK_HOME")?.let(::File),
+        System.getenv("ANDROID_NDK_ROOT")?.let(::File),
+        local.getProperty("sdk.dir")?.let { File(it, "ndk/$asrNdkVersion") },
+        System.getenv("ANDROID_HOME")?.let { File(it, "ndk/$asrNdkVersion") },
+        System.getenv("ANDROID_SDK_ROOT")?.let { File(it, "ndk/$asrNdkVersion") },
+    )
+    return candidates.firstOrNull { File(it, "toolchains/llvm/prebuilt").isDirectory }
+        ?: error("找不到 NDK $asrNdkVersion：设 ANDROID_NDK_HOME，或检查 local.properties 的 sdk.dir")
+}
+
+val buildAsrNative by tasks.registering {
+    group = "build"
+    description = "构建 arm64-v8a/x86_64 的 libopi_asr.so 与 JNI 薄层"
+    outputs.dir(asrJniRoot)
+    outputs.upToDateWhen { false }
+    doLast {
+        val ndk = asrNdkDir()
+        val toolchain = ndk.resolve("toolchains/llvm/prebuilt").listFiles()
+            ?.firstOrNull { it.isDirectory } ?: error("NDK toolchain 缺失：$ndk")
+        val isWindows = System.getProperty("os.name").startsWith("Windows", ignoreCase = true)
+        val cmdExt = if (isWindows) ".cmd" else ""
+        val exeExt = if (isWindows) ".exe" else ""
+        val outRoot = asrJniRoot.get().asFile.apply {
+            deleteRecursively()
+            mkdirs()
+        }
+        val cargoOut = asrJniRoot.get().asFile.parentFile.resolve("asrRust")
+
+        fun run(cmd: List<String>, env: Map<String, String> = emptyMap()) {
+            val pb = ProcessBuilder(cmd).directory(asrRepoRoot).inheritIO()
+            pb.environment().putAll(env)
+            val code = pb.start().waitFor()
+            check(code == 0) { "命令失败（$code）：${cmd.joinToString(" ")}" }
+        }
+
+        // 缺 target 时 cargo 的报错很难看懂；rustup target add 是幂等的。
+        run(listOf("rustup", "target", "add", *asrAbis.map { it.second }.toTypedArray()))
+        for ((abi, triple) in asrAbis) {
+            val clang = toolchain.resolve("bin/${triple}21-clang$cmdExt")
+            val env = mapOf(
+                "CC_${triple.replace('-', '_')}" to clang.absolutePath,
+                "CXX_${triple.replace('-', '_')}" to
+                    toolchain.resolve("bin/${triple}21-clang++$cmdExt").absolutePath,
+                "AR_${triple.replace('-', '_')}" to
+                    toolchain.resolve("bin/llvm-ar$exeExt").absolutePath,
+                "CARGO_TARGET_${triple.uppercase().replace('-', '_')}_LINKER" to clang.absolutePath,
+                "BINDGEN_EXTRA_CLANG_ARGS" to
+                    "--sysroot=${toolchain.resolve("sysroot")} " +
+                    "-I${toolchain.resolve("sysroot/usr/include")} " +
+                    "-I${toolchain.resolve("sysroot/usr/include/$triple")}",
+                "PATH" to "${toolchain.resolve("bin")}${File.pathSeparator}${System.getenv("PATH").orEmpty()}",
+            )
+            run(
+                listOf(
+                    "cargo", "build", "-p", "opi-asr", "--release", "--target", triple,
+                    "--target-dir", cargoOut.absolutePath,
+                ),
+                env,
+            )
+            val built = cargoOut.resolve("$triple/release")
+            val dest = outRoot.resolve(abi).apply { mkdirs() }
+            for (name in listOf("libopi_asr.so", "libsherpa-onnx-c-api.so", "libonnxruntime.so")) {
+                val src = built.resolve(name)
+                check(src.isFile) { "构建产物缺失：$src" }
+                src.copyTo(dest.resolve(name), overwrite = true)
+            }
+            run(
+                listOf(
+                    clang.absolutePath, "-shared", "-fPIC", "-O2", "-Wall", "-Wextra",
+                    "-o", dest.resolve("libopi_asr_jni.so").absolutePath,
+                    asrShim.asFile.absolutePath,
+                    "-L${built.absolutePath}", "-lopi_asr", "-ldl",
+                ),
+            )
+        }
+        check(asrAbis.all { outRoot.resolve(it.first).resolve("libopi_asr_jni.so").isFile }) {
+            "ASR JNI 库没有全部生成：$outRoot"
+        }
+    }
+}
+
+android.sourceSets.getByName("main").jniLibs.srcDir(asrJniRoot.get().asFile)
+tasks.matching { it.name.contains("NativeLibs") || it.name.contains("JniLibFolders") }
+    .configureEach { dependsOn(buildAsrNative) }
 
 kotlin {
     compilerOptions {

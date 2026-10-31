@@ -10,6 +10,8 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -23,12 +25,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -39,6 +43,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import xyz.erik.opi.asr.LocalAsrMic
 import xyz.erik.opi.ime.LocalSceneActive
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.withTimeoutOrNull
@@ -56,6 +61,13 @@ private class RepeatPressState(var fired: Boolean = false)
 /** 本轮按下是否已经由备选弹层接管：同上，挡掉抬手时 clickable 多发的那次 onClick。 */
 private class AlternativesPressState(var fired: Boolean = false)
 
+/** 抬手是否还应发普通点击；长按（连删/语音）已经接管时挡掉。纯函数，单测钉住。 */
+internal fun keyClickAllowed(repeatFired: Boolean, altPressFired: Boolean): Boolean =
+    !repeatFired && !altPressFired
+
+/** 话筒空格键的读屏名：动作是「空格」，长按才是语音。 */
+internal const val MIC_SPACE_DESCRIPTION = "空格，长按语音输入"
+
 /**
  * 通用键：圆角灰底，支持长按与高亮（⇧ 激活态用）。
  *
@@ -68,6 +80,8 @@ fun KeyButton(
     modifier: Modifier = Modifier,
     onTap: (() -> Unit)? = null,
     onLongPress: (() -> Unit)? = null,
+    /** 空格键话筒入口：原生库可用时显示话筒，长按锁定录音；点击仍走 [onTap]（空格）。 */
+    mic: Boolean = false,
     highlighted: Boolean = false,
     stateDescription: String? = null,
     /** 读屏名覆盖（默认 null = 按 [spokenKeyName] 从 label 推）。用于**同一键面字在不同
@@ -104,6 +118,10 @@ fun KeyButton(
     val latestOnTap = rememberUpdatedState(onTap)
     val hasAlternatives = alternatives.isNotEmpty()
     val altPress = remember { AlternativesPressState() }
+    // 32 位 ABI 不打包原生库 → LocalAsrMic.available=false → 键面保持「空格」。
+    val micEntry = if (mic) LocalAsrMic.current?.takeIf { it.available } else null
+    val latestMic = rememberUpdatedState(micEntry)
+    val haptics = LocalHapticFeedback.current
     var popupOpen by remember { mutableStateOf(false) }
     var popupSelected by remember { mutableStateOf(0) }
     // 弹层要夹在键盘窗口里：量的就是承载本键的窗口视图（IME 里 = 键盘窗），
@@ -194,25 +212,51 @@ fun KeyButton(
             }
         }
     }
+    // 长按话筒 = 锁定录音（不是按住说话）。观察器不消费：短按仍交给 onClick 发空格，
+    // 长按置 press.fired 挡住抬手那次点击。触觉反馈只在这里发一次。
+    val micModifier = if (micEntry == null) {
+        Modifier
+    } else {
+        Modifier.pointerInput(Unit) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                press.fired = false
+                val upBeforeTimeout = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                    awaitReleaseOrCancel(down.id)
+                }
+                if (upBeforeTimeout != null) return@awaitEachGesture
+                press.fired = true
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                latestMic.value?.start?.invoke()
+            }
+        }
+    }
     Box(
         modifier = modifier
             .padding(1.dp)
             .keyPlate(highlighted)
             .combinedClickable(
                 onClick = {
-                    // 连续删除 / 备选弹层已经接管时，抬手还会再发一次 onClick —— 挡掉。
-                    if (!press.fired && !altPress.fired) latestOnTap.value?.invoke()
+                    // 连续删除 / 备选弹层 / 语音长按已经接管时，抬手还会再发一次 onClick —— 挡掉。
+                    if (keyClickAllowed(press.fired, altPress.fired)) {
+                        latestOnTap.value?.invoke()
+                    }
                     press.fired = false
                     altPress.fired = false
                 },
                 // 有弹层时长按归弹层（先开弹层、抬手提交），旧长按回调不再触发。
-                onLongClick = if (hasAlternatives) null else onLongPress,
+                onLongClick = if (hasAlternatives || micEntry != null) null else onLongPress,
             )
             .then(repeatModifier)
+            .then(micModifier)
             .then(alternativesModifier)
             .semantics {
                 role = Role.Button
-                contentDescription = description ?: spokenKeyName(label)
+                contentDescription = if (micEntry != null) {
+                    MIC_SPACE_DESCRIPTION
+                } else {
+                    description ?: spokenKeyName(label)
+                }
                 // 参数与接收者同名，必须 this. 限定
                 if (stateDescription != null) this.stateDescription = stateDescription
                 // pinyin 模式 ⇧ 是死键（onTap/onLongPress/备选皆 null）：别让读屏用户对着它双击
@@ -243,25 +287,34 @@ fun KeyButton(
                 modifier = Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 4.dp),
             )
         }
-        // Ellipsis：窄屏单手/320dp 下「生僻字」「英文」这类多字键不再被硬裁成半个字
-        // （读者仍能看出是哪个键；完整读屏名走 contentDescription）。
-        Text(
-            label,
-            fontSize = fontSize,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            color = fg,
-            style = if (sceneActive) {
-                TextStyle(
-                    shadow = Shadow(
-                        color = if (fg.luminance() > 0.5f) Color.Black.copy(alpha = 0.45f)
-                        else Color.White.copy(alpha = 0.45f),
-                        offset = Offset(0f, 1f),
-                        blurRadius = 3f,
-                    ),
-                )
-            } else TextStyle.Default,
-        )
+        if (micEntry != null) {
+            Icon(
+                OpiIcons.Mic,
+                contentDescription = null,
+                tint = fg,
+                modifier = Modifier.size(24.dp),
+            )
+        } else {
+            // Ellipsis：窄屏单手/320dp 下「生僻字」「英文」这类多字键不再被硬裁成半个字
+            // （读者仍能看出是哪个键；完整读屏名走 contentDescription）。
+            Text(
+                label,
+                fontSize = fontSize,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = fg,
+                style = if (sceneActive) {
+                    TextStyle(
+                        shadow = Shadow(
+                            color = if (fg.luminance() > 0.5f) Color.Black.copy(alpha = 0.45f)
+                            else Color.White.copy(alpha = 0.45f),
+                            offset = Offset(0f, 1f),
+                            blurRadius = 3f,
+                        ),
+                    )
+                } else TextStyle.Default,
+            )
+        }
         if (popupOpen) {
             KeyAlternativesPopup(
                 alternatives,

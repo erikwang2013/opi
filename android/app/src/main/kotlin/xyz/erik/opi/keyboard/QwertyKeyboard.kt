@@ -50,6 +50,8 @@ fun QwertyKeyboard(
     /** 拼音 26 键主盘（无数字行、Q 行数字角标、底行 `符`）。默认按 [onSymbol] 判定：
      *  只有 26 键主盘提供符号入口，搜索叠盘等紧凑调用方保持旧底行。 */
     pinyin26: Boolean = onSymbol != null,
+    /** 空格键话筒入口。搜索叠盘等紧凑调用（无 [onSymbol]）不给长按语音：输入的是搜索词。 */
+    micSpace: Boolean = onSymbol != null,
     /** 五笔 26 键（2026-10-24 参考图 ads）：第三行最左「拼」、底行空格键面「五笔」。
      *  其余键面与拼音 26 键相同（弹层/角标/符号提示都不另做）。 */
     wubi: Boolean = false,
@@ -158,6 +160,7 @@ fun QwertyKeyboard(
                         proActive = proActive,
                         onProToggle = onProToggle,
                         keyFont = keyFont,
+                        micSpace = micSpace,
                     )
                 } else {
                     // 中文/其它键盘保持既有顺序：123 / 中英 / 空格 / ⌫ / ↵。
@@ -173,6 +176,7 @@ fun QwertyKeyboard(
                         "空格",
                         modifier = Modifier.weight(3f),
                         onTap = onSpace,
+                        mic = micSpace,
                         fontSize = keyFont,
                     )
                     KeyButton(
@@ -243,6 +247,7 @@ private fun RowScope.Qwerty26Bottom(
     proActive: Boolean,
     onProToggle: (() -> Unit)?,
     keyFont: TextUnit,
+    micSpace: Boolean,
 ) {
     for (key in keys) {
         when {
@@ -272,6 +277,7 @@ private fun RowScope.Qwerty26Bottom(
                 onTap = onSpace,
                 // 五笔键面写方案名，动作仍是打空格：读屏按动作念。
                 description = if (spaceLabel == "空格") null else "空格",
+                mic = micSpace,
                 fontSize = keyFont,
             )
             // 2026-10-25：26 键底行模式键按**目标语言**写「中」/「英」，点一次即切

@@ -275,7 +275,13 @@ fun NineKeyKeyboard(
                     fontSize = keyFont,
                 )
                 KeyButton("123", modifier = Modifier.weight(0.9f), onTap = onNumber, fontSize = keyFont)
-                KeyButton("空格", modifier = Modifier.weight(2.4f), onTap = onSpace, fontSize = keyFont)
+                KeyButton(
+                    "空格",
+                    modifier = Modifier.weight(2.4f),
+                    onTap = onSpace,
+                    mic = true,
+                    fontSize = keyFont,
+                )
                 KeyButton("英", modifier = Modifier.weight(0.9f), onTap = onEnglish, fontSize = keyFont)
                 KeyButton("↵", modifier = Modifier.weight(0.9f), onTap = onEnter, fontSize = keyFont)
             }

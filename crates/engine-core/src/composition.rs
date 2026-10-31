@@ -56,8 +56,10 @@ pub(crate) const MAX_RESULTS: usize = 16;
 /// 不凭空造词：词库/组合规则产不出它时（替身词库、缺段），本表一字不加。
 pub(crate) const PINNED: &[(&str, &str)] =
     &[("yanchunzheng", "厌蠢症"), ("yangyangtong", "样样通")];
-/// 一条组合最多由几段拼成。3–5 字词通常 2–3 段；再碎下去是噪音且组合数爆炸。
-pub(crate) const MAX_CHUNKS: usize = 4;
+/// 一条组合最多由几段拼成。3–5 字词通常 2–3 段；6 段覆盖「五个两字词直连」这类
+/// 一次打完的短句（2026-11-01 基准：4 段时五词句 top-1 仅 2.5%）。再往上组合数
+/// 与词频噪声都会明显增加，不做。
+pub(crate) const MAX_CHUNKS: usize = 6;
 /// 单段最多几个音节（最长的常用词段，防「半句当一段」）。
 pub(crate) const MAX_CHUNK_SYLLABLES: usize = 4;
 
@@ -300,6 +302,11 @@ fn walk<D: Dictionary + ?Sized>(
     out: &mut Vec<Vec<Rc<Chunk>>>,
 ) {
     let last = bounds.len() - 1;
+    // 每段至少跨一个边界：剩余边界不够时直接剪枝（`MAX_CHUNKS` > 音节数时
+    // 下面 `last - (chunks_left - 1)` 会下溢）。
+    if last - pos < chunks_left {
+        return;
+    }
     if chunks_left == 1 {
         let Some(c) = chunk(s, bounds[pos], bounds[last], dict, learner, boost, cache) else {
             return;

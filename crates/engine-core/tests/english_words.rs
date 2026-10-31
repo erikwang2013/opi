@@ -75,6 +75,22 @@ fn prefix_candidates_are_frequency_ordered() {
     assert_eq!(scores, want, "候选必须按词频降序");
 }
 
+/// 打完整词时整词第一：旧行为按纯词频排，派生词（abandoned 1795794 >
+/// abandon 814642、protection > protect、kind > kin）会把用户已经打完的词压到第 2。
+#[test]
+fn exact_word_ranks_before_longer_prefix_words() {
+    for (input, expected) in [
+        ("abandon", "abandon"),
+        ("immigrant", "immigrant"),
+        ("protect", "protect"),
+        ("kin", "kin"),
+    ] {
+        let mut e = english_state();
+        typed(&mut e, input);
+        assert_eq!(e.candidates(3)[0].text, expected, "{input}: 整词必须排第一");
+    }
+}
+
 #[test]
 fn limit_caps_candidates() {
     let mut e = english_state();

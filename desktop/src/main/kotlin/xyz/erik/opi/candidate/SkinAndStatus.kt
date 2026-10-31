@@ -151,6 +151,8 @@ data class StatusBarSettings(
     val hidden: Boolean = false,
     val vk: Boolean = false,
     val symbols: Boolean = true,
+    /** 话筒（2026-11-02；语音总开关在 OpSettings.speechEnabled，默认关）。 */
+    val mic: Boolean = true,
     val trad: Boolean = true,
     val punct: Boolean = true,
     val lang: Boolean = true,
@@ -223,6 +225,9 @@ enum class StatusBarButton(val label: String, val hint: String) {
     FULLWIDTH("全半角", "全角 ⇄ 半角（调 opi-ctl）"),
     VK("软键盘", "虚拟键盘窗：按键注入系统（会照常流经输入法）"),
     SYMBOLS("符号大全", "符号页入口"),
+    // 语音输入（2026-11-02 用户要求）：**严格插在符号后、设置前**，枚举序 = 显示序。
+    // 默认常驻；总开关 SpeechEnabled 默认关（点了只提示去设置，不开麦）。
+    MIC("语音输入", "点击开始录音，再点停止并识别；本地离线识别，正文不记录"),
     SETTINGS("设置", "打开本设置窗"),
 }
 
@@ -236,6 +241,7 @@ internal fun tooltipText(b: StatusBarButton): String = "${b.label}：${b.hint}"
 fun StatusBarSettings.resident(b: StatusBarButton): Boolean = when (b) {
     StatusBarButton.VK -> vk
     StatusBarButton.SYMBOLS -> symbols
+    StatusBarButton.MIC -> mic
     StatusBarButton.TRAD -> trad
     StatusBarButton.PUNCT -> punct
     StatusBarButton.LANG -> lang
@@ -254,6 +260,7 @@ fun StatusBarSettings.resident(b: StatusBarButton): Boolean = when (b) {
 fun StatusBarSettings.with(b: StatusBarButton, on: Boolean): StatusBarSettings = when (b) {
     StatusBarButton.VK -> copy(vk = on)
     StatusBarButton.SYMBOLS -> copy(symbols = on)
+    StatusBarButton.MIC -> copy(mic = on)
     StatusBarButton.TRAD -> copy(trad = on)
     StatusBarButton.PUNCT -> copy(punct = on)
     StatusBarButton.LANG -> copy(lang = on)
@@ -376,8 +383,8 @@ internal fun iconText(b: StatusBarButton, st: ImeState): String = when (b) {
     // BarGlyphs.kt 的 modeSlots）—— 本函数的入参里没有档位，给不出正确字面。
     StatusBarButton.MODE -> ""
     StatusBarButton.ENPRO -> "" // 两行 en/pro 由 enproSlots 画，不走单字 iconText
-    StatusBarButton.FULLWIDTH, StatusBarButton.SETTINGS,
-    StatusBarButton.VK, StatusBarButton.LOGO -> "" // 这四个画图标，不出字
+    StatusBarButton.FULLWIDTH, StatusBarButton.SETTINGS, StatusBarButton.MIC,
+    StatusBarButton.VK, StatusBarButton.LOGO -> "" // 这五个画图标，不出字
 }
 
 /** 简繁按钮面的字 = **当前输出**（转繁开着写「繁」）；用户裁决②：随真实状态翻转。 */

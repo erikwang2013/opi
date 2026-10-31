@@ -1,0 +1,100 @@
+# SPDX-FileCopyrightText: 2026 erik.xyz
+# SPDX-License-Identifier: MIT
+name: Windows 7/8 legacy (compile + import gate)
+
+# What this workflow proves: both Win7/8 targets compile and link on a real
+# MSVC toolchain, and neither produced PE imports a Win8+/Win10 API nor the
+# dynamic CRT.
+#
+# What it does NOT prove: that the DLL loads on Windows 7 SP1, that regsvr32
+# succeeds, or that a TSF host can type with it. GitHub-hosted runners cannot
+# boot Win7; runtime validation needs an authorized VM image.
+#
+# TODO(Phase 2, needs an authorized/licensed image): add a QEMU or VM matrix
+# that boots Windows 7 SP1 x86/x64 and Windows 8.1, runs the installer silently,
+# checks the import gate inside the guest, and loads the DLL in a TSF host.
+# Do not add it with an unlicensed or auto-downloaded image, and do not replace
+# it with "runs on windows-latest" — that is a different OS.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: &legacy_paths
+      - 'legacy/win7/**'
+      - 'crates/engine-core/**'
+      - 'crates/engine-data/**'
+      - 'data/generated/fallback.opid'
+      - 'Cargo.toml'
+      - '.github/workflows/windows-legacy.yml'
+  pull_request:
+    paths: *legacy_paths
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-legacy-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: legacy/win7
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build + gate (${{ matrix.arch }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-win7-windows-msvc
+            arch: x86_64
+          - target: i686-win7-windows-msvc
+            arch: i686
+    steps:
+      - uses: actions/checkout@v4
+
+      # Keep in sync with legacy/win7/rust-toolchain.toml. Explicit install makes
+      # a missing dated nightly fail here instead of on the first cargo call.
+      - name: Install pinned nightly + rust-src
+        run: rustup toolchain install nightly-2026-10-04 --profile minimal --component rust-src
+
+      # -Z build-std=std,panic_abort comes from legacy/win7/.cargo/config.toml;
+      # the target ships no prebuilt std.
+      - name: cargo build (release, static CRT)
+        run: cargo build --release --workspace --target ${{ matrix.target }}
+
+      - name: Import gate (no Win8+ APIs, no dynamic CRT)
+        run: |
+          python tools/check-imports.py "target/${{ matrix.target }}/release/tsf_opi.dll" --arch ${{ matrix.arch }} --require-exports
+          python tools/check-imports.py "target/${{ matrix.target }}/release/opi-win7-ui.exe" --arch ${{ matrix.arch }}
+
+      # One host run is enough: the protocol module is arch-independent. This
+      # also compiles the Windows window/pipe modules into the test harness.
+      - name: Protocol tests (host)
+        if: matrix.arch == 'x86_64'
+        run: cargo test -p opi-win7-ui --lib
+
+      - name: Static gate (candidate window must never take focus)
+        shell: bash
+        run: |
+          grep -q 'WS_EX_NOACTIVATE' crates/opi-win7-ui/src/window.rs
+          grep -q 'WS_EX_TOOLWINDOW' crates/opi-win7-ui/src/window.rs
+
+      - name: 500-line gate
+        shell: bash
+        run: |
+          bad=0
+          while IFS= read -r f; do
+            n=$(wc -l < "$f")
+            if [ "$n" -gt 500 ]; then
+              echo "::error::$f has $n lines (limit 500)"
+              bad=1
+            fi
+          done < <(find crates tools installer -type f \( -name '*.rs' -o -name '*.py' -o -name '*.iss' \))
+          exit "$bad"

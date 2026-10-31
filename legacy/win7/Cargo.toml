@@ -1,0 +1,18 @@
+# Win7/8 legacy client workspace. Separate from the main workspace on purpose:
+# it pins a nightly toolchain and builds std from source for the tier-3
+# `*-win7-windows-msvc` targets. Never add these crates to the main workspace.
+[workspace]
+resolver = "2"
+members = ["crates/tsf-opi-win7", "crates/opi-win7-ui"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+# Inherited from engine-core/engine-data (let-chains). The nightly toolchain is
+# only required for -Z build-std, not by the language level.
+rust-version = "1.88"
+license = "MIT"
+
+[profile.release]
+lto = true
+codegen-units = 1

@@ -213,6 +213,15 @@ for fmt in "${FORMATS[@]}"; do
             echo "    检查 desktop/build.gradle.kts 的 buildOpiFfi / JPackage files.from" >&2
             exit 1
         fi
+        # 语音运行时（2026-11-02）：主库 + sherpa/onnxruntime 必须同目录，缺一个 =
+        # 状态栏话筒点了只报 dlopen 失败（包层静默降级，钉在暂存树里）。
+        for lib in libopi_asr.so libsherpa-onnx-c-api.so libsherpa-onnx-cxx-api.so libonnxruntime.so; do
+            if ! ls "$stage"/opt/*/lib/app/"$lib" >/dev/null 2>&1; then
+                echo "  ✗ 桌面应用里缺 lib/app/$lib —— 语音识别运行时没进包" >&2
+                echo "    检查 desktop/build.gradle.kts 的 buildOpiAsr / JPackage files.from" >&2
+                exit 1
+            fi
+        done
         # 同款负控：两处注入的桌面入口也必须在暂存树里。少了它们是**静默**的 ——
         # 2026-10-10 实测形态：autostart 注入进了桌面包、但 nfpm.yaml 的 contents
         # 原先只打 `${PKG_STAGE}/usr`，/etc 那条被丢在主包外，用户装完永远没有

@@ -341,6 +341,7 @@ internal fun StatusBarButtonFace(b: StatusBarButton, st: ImeState, mode: String,
             )
         }
         StatusBarButton.VK -> VkIcon(face)
+        StatusBarButton.MIC -> MicIcon(face)
         StatusBarButton.FULLWIDTH -> MoonIcon(st.fullwidth, face)
         StatusBarButton.SETTINGS -> SettingsIcon(face)
         // 英文专业键 = 白底圆角键帽（2026-10-19 设计图）：en 居中、pro 右下。
@@ -418,6 +419,39 @@ internal fun SettingsIcon(box: Dp) {
                 )
             }
         }
+    }
+}
+
+/**
+ * 话筒图标（2026-11-02 用户要求「符号按钮后加话筒」）：胶囊麦克风 + U 形托架 + 立杆。
+ * 与其它自绘图标同一条纪律：填满传入的盒（= 按钮 × [FACE_SCALE]），几何全按盒比例。
+ */
+@Composable
+internal fun MicIcon(box: Dp) {
+    val fg = LocalBarPalette.current.fg
+    Canvas(Modifier.size(box)) {
+        val d = size.minDimension
+        val stroke = d * 0.08f
+        val capW = d * 0.34f
+        val capH = d * 0.52f
+        drawRoundRect(
+            color = fg,
+            topLeft = Offset((size.width - capW) / 2f, d * 0.06f),
+            size = Size(capW, capH),
+            cornerRadius = CornerRadius(capW / 2f),
+        )
+        // 0°→180° = 下半圆（托架开口朝上）。
+        drawArc(
+            color = fg,
+            startAngle = 0f,
+            sweepAngle = 180f,
+            useCenter = false,
+            topLeft = Offset(d * 0.16f, d * 0.30f),
+            size = Size(d * 0.68f, d * 0.52f),
+            style = Stroke(stroke),
+        )
+        drawLine(fg, Offset(d * 0.5f, d * 0.82f), Offset(d * 0.5f, d * 0.94f), strokeWidth = stroke)
+        drawLine(fg, Offset(d * 0.30f, d * 0.94f), Offset(d * 0.70f, d * 0.94f), strokeWidth = stroke)
     }
 }
 

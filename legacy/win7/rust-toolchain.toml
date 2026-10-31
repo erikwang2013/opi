@@ -1,0 +1,10 @@
+# Pinned nightly for the Win7/8 tier-3 targets.
+#
+# Verified 2026-11-01 (Phase 1): rustc 1.101.0-nightly (db8f076d2 2026-10-03)
+# builds `x86_64-win7-windows-msvc` with `-Z build-std=std,panic_abort` and the
+# import gate passes (no combase / WaitOnAddress / ProcessPrng / GetDpiForWindow).
+# Do not bump without re-running the import gate on a real static-CRT build.
+[toolchain]
+channel = "nightly-2026-10-04"
+profile = "minimal"
+components = ["rust-src"]

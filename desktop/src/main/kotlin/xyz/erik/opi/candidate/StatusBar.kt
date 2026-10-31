@@ -209,6 +209,10 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
     }
     // 跨设备剪贴板（2026-11-01）：宿主随设置启停；FFI 句柄由宿主自己的线程独占。
     LaunchedEffect(s.clipEnabled) { ClipHost.setEnabled(s.clipEnabled) }
+    // 语音（2026-11-02）：总开关/语言同步进宿主；关掉时宿主自己取消当前会话。
+    LaunchedEffect(s.speechEnabled, s.speechLanguage) {
+        SpeechHost.setConfig(s.speechEnabled, SpeechLanguage.fromValue(s.speechLanguage))
+    }
 
     // Windows 整体缩一档 + 胶囊圆角（2026-10-24 用户报障「win端的状态栏整体大了，
     // 边角也不是弧形」）；Linux 不乘、保持直角 —— 见 barMetrics/barShape。
@@ -283,6 +287,8 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
             StatusBarButton.LOGO -> cycleSkin()
             StatusBarButton.SETTINGS -> settingsOpen = true
             StatusBarButton.SYMBOLS -> report(openSymbols())
+            // 语音：录音/停止/取消全在 SpeechHost 的单线程里；这里只递命令，不等 IO。
+            StatusBarButton.MIC -> SpeechHost.toggle(symbolCommit)
             // 模式：循环一次（拼 → 五 → en26 → 拼，引擎侧与 token 派生见
             // Actions.cycleMode）。返回**新档位 token**，当场换字（不等 1s 轮询；
             // 轮询随后会由 state 的 mode= 位确认，见文件顶部 mode 变量）。
@@ -323,6 +329,8 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
             StatusBarButton.SETTINGS -> { settingsOpen = true; return }
             StatusBarButton.VK -> { vkOpen = !vkOpen; return }
             StatusBarButton.SYMBOLS -> { symbolsOpen = !symbolsOpen; return }
+            // 语音不碰进程/管道，别排进 actionLock（前面可能堵着 1.5s 的状态补读）。
+            StatusBarButton.MIC -> { SpeechHost.toggle(symbolCommit); return }
             else -> {}
         }
         // 动作一返回就补读状态（点完马上看到翻转，不等下一秒的轮询）。补读与轮询并存：
@@ -486,4 +494,6 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
             SymbolWindow(onCommit = symbolCommit, onClose = { symbolsOpen = false })
         }
     }
+    // 语音浮层独立于条（条可能因切走输入法隐藏）：录音中仍要看得到音量与取消。
+    SpeechOverlay(s.background, s.skin) { settingsOpen = true; SpeechHost.dismiss() }
 }
