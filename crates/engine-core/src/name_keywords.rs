@@ -153,7 +153,10 @@ mod tests {
     use super::*;
 
     fn texts(buffer: &str, mode: Mode) -> Vec<String> {
-        candidates(buffer, mode).into_iter().map(|c| c.text).collect()
+        candidates(buffer, mode)
+            .into_iter()
+            .map(|c| c.text)
+            .collect()
     }
 
     #[test]

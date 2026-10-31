@@ -27,7 +27,6 @@ mod dict_layers; // 导入词库的合并层（M3 2b）：Engine 主库槽位的
 mod dict_layers_visit; // 导入层的 visit_entries（500 行门禁拆出，2026-10-18）
 pub mod dictionary;
 mod emoji_keywords; // 输入即得表情（数据 include_str! 嵌入，2026-10-18）
-mod name_keywords; // 输入符号/标点/颜文字名称（2026-10-31）
 pub mod engine;
 mod engine_association; // 提交后联想：状态 + 生成算法（2026-10-27，见文件头）
 #[path = "engine_candidates.rs"]
@@ -56,6 +55,7 @@ pub mod fuzzy;
 pub mod jianpin;
 pub mod keys;
 pub mod learner;
+mod name_keywords; // 输入符号/标点/颜文字名称（2026-10-31）
 pub mod pinyin;
 pub mod polyphone; // 多音字补读音纠偏层（2026-10-15，见文件头）
 pub mod punctuation;
