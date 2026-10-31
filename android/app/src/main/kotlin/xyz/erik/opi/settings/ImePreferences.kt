@@ -139,6 +139,15 @@ class ImePreferences(private val store: PrefStore) {
         set(v) = store.put(KEY_SHOW_OWN, v)
 
     /**
+     * 跨设备剪贴板（2026-11-01）：**默认关闭**。这里只存「用户想不想用」；
+     * 内核线程/前台服务由设置页开关和 `ClipSyncService` 拉起（见 `ClipRuntime`）。
+     * 打开后身份与信任表落在 `filesDir/clip`，已从备份规则里排除。
+     */
+    var clipEnabled: Boolean
+        get() = store.getBoolean(KEY_CLIP_ENABLED, false)
+        set(v) = store.put(KEY_CLIP_ENABLED, v)
+
+    /**
      * 模糊音**逐对**列表（2026-10-13 用户裁决「可多选类似 z=zh」）：
      * 逗号分隔组名（[FUZZY_PAIRS_ANDROID] 的条目）。**空串 = 未设置 ⇒ 回落
      * [fuzzy] 布尔**（老装机行为一字不变）；非空 ⇒ 以列表为准。
@@ -271,6 +280,7 @@ class ImePreferences(private val store: PrefStore) {
         const val KEY_ENGLISH_PRO = "english_pro"
         const val KEY_CORRECTION = "engine_correction"
         const val KEY_SHOW_OWN = "pet_show_own"
+        const val KEY_CLIP_ENABLED = "clip_enabled"
         const val KEY_CUSTOM_PUNCT = "nine_custom_punct"
         const val KEY_SHUANGPIN_LAYOUT = "engine_shuangpin_layout"
         // 五笔六键（2026-10-14，M4 第二波）

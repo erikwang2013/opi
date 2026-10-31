@@ -333,4 +333,51 @@ object OpiEngine : OpiEngineApi, SymbolApi {
      * **文件是宿主的事**（本层不碰磁盘）。名字认不得 / 已经不在 / 未装载 → false。
      */
     external fun removeDict(name: String): Boolean
+
+    // ---------- 局域网跨端剪贴板（opi-clip，2026-11-01）----------
+    // 注册表在 `crates/opi-ffi/src/jni_clip.rs`，且**注册在 OpiEngine 这个类上**
+    // （JNI_OnLoad 的 find_class 写死），所以声明只能放在这里 —— 新开一个 object
+    // 调不到。13 条必须与注册表逐条同名同签名；句柄**不可跨线程**，统一由
+    // `xyz.erik.opi.clip.ClipBridge` 的专用线程持有。
+    // 失败哨兵：create → 0、poll/peers/status → null、其余 → false / -1；
+    // 原因读 clipLastError()（按线程记录）。
+
+    /** create(configJson) -> 句柄；失败 → 0。只解析配置，不启动。 */
+    external fun clipCreate(configJson: String?): Long
+
+    /** destroy(handle)：停止并释放；0 是空句柄，安全。 */
+    external fun clipDestroy(handle: Long)
+
+    /** start(handle) -> Boolean：绑定端口并起内核线程；幂等。 */
+    external fun clipStart(handle: Long): Boolean
+
+    /** stop(handle)：幂等。 */
+    external fun clipStop(handle: Long)
+
+    /** localText(handle, text) -> Int：0=已发布 1=防回环抑制 -1=失败。 */
+    external fun clipLocalText(handle: Long, text: String?): Int
+
+    /** pollEvent(handle, timeoutMs) -> JSON；null=失败，空串=无事件。 */
+    external fun clipPollEvent(handle: Long, timeoutMs: Int): String?
+
+    /** pairStart(handle, peerId)：peerId 是 32 位十六进制实例 ID。 */
+    external fun clipPairStart(handle: Long, peerId: String): Boolean
+
+    /** pairConfirm(handle, peerId, accept)：收到 pairing_prompt 后调用一次。 */
+    external fun clipPairConfirm(handle: Long, peerId: String, accept: Boolean): Boolean
+
+    /** pairCancel(handle, peerId)：等价于 pairConfirm(accept=false)。 */
+    external fun clipPairCancel(handle: Long, peerId: String): Boolean
+
+    /** peers(handle) -> JSON 数组；失败 → null，未启动 → `[]`。 */
+    external fun clipPeers(handle: Long): String?
+
+    /** forgetPeer(handle, peerId)：移除信任；不存在也算成功。 */
+    external fun clipForgetPeer(handle: Long, peerId: String): Boolean
+
+    /** status(handle) -> JSON；失败 → null。 */
+    external fun clipStatus(handle: Long): String?
+
+    /** lastError() -> String：空串 = 没有错误（按线程记录）。 */
+    external fun clipLastError(): String
 }

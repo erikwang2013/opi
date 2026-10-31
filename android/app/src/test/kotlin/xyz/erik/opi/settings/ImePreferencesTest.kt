@@ -40,6 +40,8 @@ class ImePreferencesTest {
         assertEquals(true, p.jianpin)
         // 「表情中显示自有」缺省关 = 「自有」子页隐藏（2026-10-20 用户裁决）。
         assertEquals(false, p.showOwn)
+        // 跨设备剪贴板缺省关（2026-11-01）：不监听、不联网，用户打开才起服务。
+        assertEquals(false, p.clipEnabled)
         assertEquals(SkinOption.FRESH, p.skin)
         assertEquals(null, p.scene)
         // 9 键「自定义」标点缺省 = 未选（键面「自定义」）。
@@ -69,6 +71,7 @@ class ImePreferencesTest {
         p.fuzzy = false
         p.jianpin = true
         p.showOwn = true
+        p.clipEnabled = true
         p.skin = SkinOption.PAPER
         p.scene = SceneTheme.NIGHT
         val q = ImePreferences(store)
@@ -81,6 +84,7 @@ class ImePreferencesTest {
         assertEquals(false, q.fuzzy)
         assertEquals(true, q.jianpin)
         assertEquals(true, q.showOwn)
+        assertEquals(true, q.clipEnabled)
         assertEquals(SkinOption.PAPER, q.skin)
         assertEquals(SceneTheme.NIGHT, q.scene)
         // 纯色皮肤：清掉主题也要能往返（空串 = 无插画）。

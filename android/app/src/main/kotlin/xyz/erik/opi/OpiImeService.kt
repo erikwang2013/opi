@@ -8,7 +8,6 @@ import android.inputmethodservice.InputMethodService
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.view.Gravity
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
@@ -22,6 +21,8 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryOwner
+import xyz.erik.opi.clip.ClipRuntime
+import xyz.erik.opi.clip.ClipSyncService
 import xyz.erik.opi.engine.AssociationGate
 import xyz.erik.opi.engine.EngineBoot
 import xyz.erik.opi.engine.EngineController
@@ -129,10 +130,6 @@ class OpiImeService : InputMethodService() {
 
     companion object {
         internal const val TAG = "OpiImeService"
-        /** 悬浮/游戏模式下窗口宽度占屏宽的比例（收窄居中，见 applyKeyboardWindow）。 */
-        private const val FLOATING_WIDTH_RATIO = 0.86f
-        /** 游戏模式的窗口高度相对常规键盘高度的比例（更矮，少挡画面）。 */
-        private const val GAME_HEIGHT_RATIO = 0.72f
     }
 
     /**
@@ -146,7 +143,7 @@ class OpiImeService : InputMethodService() {
      * 有 `ImeWindowMetricsTest` 门禁）。横屏原值占屏高 77%，现封顶 60%；平板封顶 340dp。
      * 竖屏手机的像素与 2026-10-09 裁决的「736→843px」不变（本机口径仍约 831px）。
      */
-    private fun keyboardHeight(): Int {
+    internal fun keyboardHeight(): Int {
         val (w, h) = windowSizePx()
         return ImeWindowMetrics.keyboardHeightPx(w, h, resources.displayMetrics.density)
     }
@@ -155,7 +152,7 @@ class OpiImeService : InputMethodService() {
      * 可用窗口尺寸（px）。API 30+ 用 `currentWindowMetrics.bounds`：`resources.displayMetrics`
      * 报的是**整屏**，分屏/折叠屏/自由窗口下会高估，键盘按整屏算就会盖住应用。
      */
-    private fun windowSizePx(): Pair<Int, Int> {
+    internal fun windowSizePx(): Pair<Int, Int> {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val b = getSystemService(WindowManager::class.java).currentWindowMetrics.bounds
             return b.width() to b.height()
@@ -194,6 +191,10 @@ class OpiImeService : InputMethodService() {
         // 智能联想开关在 App 设置页也能改（同进程、不同控制器）：gate 一变就让本服务
         // 的控制器立即重算候选，否则旧联想候选会留到热重启（2026-10-30 用户报障）。
         AssociationGate.onChange = { engineController.refresh() }
+        // 跨设备剪贴板（默认关）：用户打开过才在进程内拉起内核线程。这里**不**起
+        // 前台服务 —— Android 12+ 禁止后台启动 FGS；后台存活由设置页拉的
+        // ClipSyncService 负责。IME 是进程内唯一能持续读剪贴板的位置（Android 10+）。
+        if (prefs.clipEnabled) ClipRuntime.start(this)
     }
 
     override fun onCreateInputView(): View {
@@ -407,39 +408,6 @@ class OpiImeService : InputMethodService() {
     }
 
     /**
-     * 键盘窗口布局（2026-10-09，「键盘模式」里的**窗口层**两种）：
-     *   · 悬浮模式：窗口收窄到屏宽 [FLOATING_WIDTH_RATIO]、水平居中、贴底；
-     *   · 游戏模式：窗口更矮（[GAME_HEIGHT_RATIO] × 常规高度）+ 同样收窄居中，
-     *     尽量少挡画面。
-     * 默认（都关）：全宽 + 常规高度，与 2026-10-09 之前逐像素一致。
-     *
-     * ⚠️ **本机无真机**：窗口尺寸/重力只能真机看效果（分屏、手势条 inset 都可能影响）。
-     * 实现按 Android IME 窗口惯例（setAttributes 改 gravity/width + setLayout 设尺寸），
-     * 如实标在 docs/install/android.md；悬浮**不做拖动**（那要处理触摸重设 layout，
-     * 没有真机的反馈链不写这个）。
-     */
-    private fun applyKeyboardWindow(win: Window) {
-        val modes = imeState.keyboardModes
-        val height = if (modes.game) {
-            (keyboardHeight() * GAME_HEIGHT_RATIO).toInt().coerceAtLeast(1)
-        } else {
-            keyboardHeight()
-        }
-        val lp = win.attributes
-        if (modes.floating || modes.game) {
-            val (w, _) = windowSizePx()
-            lp.width = (w * FLOATING_WIDTH_RATIO).toInt()
-            win.attributes = lp
-            win.setGravity(Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL)
-        } else {
-            lp.width = ViewGroup.LayoutParams.MATCH_PARENT
-            win.attributes = lp
-            win.setGravity(Gravity.BOTTOM)
-        }
-        win.setLayout(lp.width, height)
-    }
-
-    /**
      * 输入视图显示判定（2026-10-10 修订）：**有「接受文本」的编辑器才返回 true**。
      *
      * 历史：原实现无条件 `= true` —— 理由是模拟器上报硬件键盘（qwerty）时默认实现
@@ -481,6 +449,9 @@ class OpiImeService : InputMethodService() {
     override fun onDestroy() {
         // 开关变化回调不能留住已销毁的服务/控制器
         AssociationGate.onChange = null
+        // 没有前台服务托底时 IME 销毁就停内核：进程内线程不该比宿主活得更久。
+        // 有 ClipSyncService 时留给它继续跑（用户从设置页打开的共享不该被换输入法打断）。
+        if (!ClipSyncService.running) ClipRuntime.stop(this)
         // 销毁前撤掉未执行的提交重试，避免向新输入框误提交
         cancelPendingCommit()
         bracketPairing.reset()

@@ -5,10 +5,20 @@
     <!-- 应用内更新（2026-10-31）：下载完 APK 后拉起系统安装器；无此权限 Android 8+
          会拒绝安装来源。只下载/打开，不静默安装。 -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+    <!-- 跨设备剪贴板（2026-11-01，默认关闭）：UDP 组播发现需要组播锁，内核监听需要
+         前台服务。INTERNET 已在上面。不申请 RECORD_AUDIO。 -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
+    <!-- Android 13+ 通知运行时权限：拒绝也不阻止服务，只是通知不可见。 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="小欧输入法"
         android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round">
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules">
         <!-- 设置入口（A5）：launcher 即设置页，与 IME 共享 Rust 静态单例引擎。 -->
         <activity
             android:name=".settings.SettingsActivity"
@@ -53,5 +63,11 @@
                 android:name="android.view.im"
                 android:resource="@xml/method" />
         </service>
+        <!-- 跨设备剪贴板的 connectedDevice 前台服务（默认不启动，设置页开关拉起）。
+             类型资格由 CHANGE_WIFI_MULTICAST_STATE 满足（Android 14 的要求）。 -->
+        <service
+            android:name=".clip.ClipSyncService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
     </application>
 </manifest>

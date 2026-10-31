@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 及以下的 Auto Backup 规则：filesDir/clip 里是设备身份私钥与信任表，
+     不随云备份离开本机（恢复后身份/信任都该重新生成/重新配对）。 -->
+<full-backup-content>
+    <exclude domain="file" path="clip/" />
+</full-backup-content>
