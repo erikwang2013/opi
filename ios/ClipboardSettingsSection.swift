@@ -110,7 +110,7 @@ final class ClipboardSettingsSection: UIView {
 
     // MARK: - 快照
 
-    private func refresh() {
+    func refresh() {
         let clip = OpiClipboard.shared
         toggle.isOn = clip.isEnabled
         if !clip.isEnabled {
