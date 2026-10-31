@@ -109,6 +109,10 @@ jobs:
           distribution: temurin
           java-version: '21' # jpackage 需要 ≥17；21 是当前 LTS
 
+      # desktop 的 jpackage 现在把 opi_ffi 打进行镜像（跨设备剪贴板）；
+      # 打包任务会调 cargo，runner 默认没有 Rust，必须显式装。
+      - uses: dtolnay/rust-toolchain@stable
+
       # 在 desktop/ 里跑（本模块有**自己的** gradlew + settings.gradle.kts，
       # 与 android/ 同约定：阿里云镜像、无 google()）。
       # 两个任务都要：packageDeb 出应用包，injectSettingsDesktopEntry 往它里面注入
