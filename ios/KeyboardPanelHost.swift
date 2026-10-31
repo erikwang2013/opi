@@ -199,6 +199,7 @@ extension KeyboardLayout {
     /// 皮肤：**选中不关面板**（Android 同：方便连着换着比）。
     private func buildSkinPanel() {
         skinPanel.onSelect = { [weak self] s in self?.tap(.selectSkin(s)) }
+        skinPanel.onSelectScene = { [weak self] t in self?.tap(.selectScene(t)) }
         skinPanel.onClose = { [weak self] in self?.tap(.showLetters) }
         addPanel(skinPanel)
     }
@@ -272,9 +273,10 @@ extension KeyboardLayout {
         )
     }
 
-    func setSkin(_ s: SkinOption) {
+    func setSkin(_ s: SkinOption, scene: SceneTheme? = nil) {
         skin = s
-        if keyLayer == .skins { skinPanel.show(current: s) }
+        applyScene(scene)
+        if keyLayer == .skins { skinPanel.show(current: s, scene: scene) }
     }
 
     func setKeyboardModes(_ m: KeyboardModes, traditional: Bool) {

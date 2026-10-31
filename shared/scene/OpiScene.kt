@@ -102,7 +102,7 @@ fun DrawScope.drawOpiSceneBackdrop(
     palette: ScenePalette,
     theme: SceneTheme,
     phase: Float,
-    muted: Float = 0.55f,
+    muted: Float = 0.24f,
 ) {
     when (theme) {
         SceneTheme.MEADOW -> drawMeadowBackdrop(palette, phase, muted)
@@ -131,7 +131,7 @@ fun DrawScope.drawOpiSceneBackdrop(
 internal fun DrawScope.drawMeadowBackdrop(
     palette: ScenePalette,
     phase: Float,
-    muted: Float = 0.55f,
+    muted: Float = 0.24f,
 ) {
     val w = size.width
     val h = size.height
@@ -142,47 +142,89 @@ internal fun DrawScope.drawMeadowBackdrop(
     // 天空底色：在皮肤底上极轻的冷暖过渡，保证任何皮肤都只泛一点色。
     drawRect(
         brush = Brush.verticalGradient(
-            0f to sceneFill(SceneSky, palette, (muted * 0.55f).coerceAtLeast(0.35f)),
+            0f to sceneFill(SceneSky, palette, (muted * 0.55f).coerceAtLeast(0.28f)),
             0.58f to palette.base,
-            1f to sceneFill(SceneGround, palette, (muted * 0.45f).coerceAtLeast(0.3f)),
+            1f to sceneFill(SceneGround, palette, (muted * 0.42f).coerceAtLeast(0.24f)),
         ),
         size = size,
     )
-    // 远山/草坡（先画，角色站在上面）。
+    drawSun(palette, Offset(w * 0.83f, h * 0.14f), u * 0.075f, phase, muted)
+    // 远景树篱 + 草坡（先画，角色站在上面）。
+    drawRect(
+        sceneFill(LeafDark, palette, 0.45f),
+        Offset(0f, h * 0.695f),
+        Size(w, h * 0.02f),
+    )
+    for ((i, x) in listOf(0.06f, 0.22f, 0.40f, 0.60f, 0.78f, 0.94f).withIndex()) {
+        drawShrub(palette, Offset(w * x, h * 0.705f), u * (0.10f + 0.02f * (i % 2)), phase + i * 0.2f, muted + 0.12f)
+    }
     drawOval(
-        color = sceneFill(LeafGreen, palette, 0.5f),
+        color = sceneFill(LeafGreen, palette, 0.42f),
         topLeft = Offset(-w * 0.12f, h * 0.68f),
         size = Size(w * 0.78f, h * 0.52f),
     )
     drawOval(
-        color = sceneFill(LeafDark, palette, 0.58f),
+        color = sceneFill(LeafDark, palette, 0.48f),
         topLeft = Offset(w * 0.42f, h * 0.74f),
         size = Size(w * 0.78f, h * 0.5f),
     )
     // 云（低对比，只做层次）。
     drawCloud(palette, Offset(w * 0.20f, h * 0.18f), u * 0.20f, phase, muted)
     drawCloud(palette, Offset(w * 0.74f, h * 0.12f), u * 0.16f, phase + 0.35f, muted)
-    // 两侧垂下的藤蔓。
-    drawVine(palette, Offset(w * 0.015f, h * 0.12f), h * 0.46f, phase, muted, flip = false)
-    drawVine(palette, Offset(w * 0.985f, h * 0.18f), h * 0.42f, phase + 0.45f, muted, flip = true)
+    // 两角伸进来的花枝 + 两侧花藤（根在地面、梢在画面上沿）。
+    drawFloweringBranch(
+        palette, Offset(-w * 0.02f, h * 0.08f), Offset(w * 0.24f, h * 0.22f),
+        u * 0.42f, phase, muted, BlossomPink, seed = 0.15f,
+    )
+    drawFloweringBranch(
+        palette, Offset(w * 1.02f, h * 0.05f), Offset(w * 0.76f, h * 0.20f),
+        u * 0.40f, phase + 0.4f, muted, BlossomWhite, seed = 0.65f,
+    )
+    drawClimbingVine(
+        palette, Offset(w * 0.02f, h * 1.02f), Offset(w * 0.05f, h * 0.18f),
+        u * 0.50f, phase, muted, BlossomPink, flowers = 3, seed = 0.1f,
+    )
+    drawClimbingVine(
+        palette, Offset(w * 0.98f, h * 1.02f), Offset(w * 0.95f, h * 0.20f),
+        u * 0.46f, phase + 0.45f, muted, BlossomWhite, flowers = 3, seed = 0.7f,
+    )
 
-    // 角色：底边一排花，左右两只动物，中间的小人举着气球。
-    drawFlowerCluster(palette, Offset(w * 0.18f, h * 0.92f), u * 0.16f, phase + 0.10f, muted)
-    drawFlowerCluster(palette, Offset(w * 0.43f, h * 0.98f), u * 0.13f, phase + 0.55f, muted)
-    drawFlowerCluster(palette, Offset(w * 0.73f, h * 0.93f), u * 0.15f, phase + 0.30f, muted)
-    drawCatFigure(palette, Offset(w * 0.13f, h * 0.74f), u * 0.26f, phase, muted, detail = 0.45f)
-    drawRabbitFigure(palette, Offset(w * 0.87f, h * 0.77f), u * 0.21f, phase + 0.45f, muted, detail = 0.45f)
-    drawPersonFigure(palette, Offset(w * 0.53f, h * 0.72f), u * 0.22f, phase, muted, detail = 0.45f)
-    drawBalloon(palette, Offset(w * 0.61f, h * 0.31f), u * 0.075f, phase + 0.2f, muted)
+    // 角色：底边花圃，左右两只动物，中间的小人举着气球。
+    drawFlowerBed(
+        palette, Offset(w * 0.18f, h * 0.94f), u * 0.26f, u * 0.16f,
+        phase + 0.10f, muted, listOf(BlossomPink, BlossomYellow, BlossomWhite), count = 5,
+    )
+    drawFlowerBed(
+        palette, Offset(w * 0.43f, h * 0.98f), u * 0.22f, u * 0.14f,
+        phase + 0.55f, muted, listOf(BlossomYellow, BlossomRed, BlossomPink), count = 4,
+    )
+    drawFlowerBed(
+        palette, Offset(w * 0.73f, h * 0.94f), u * 0.24f, u * 0.15f,
+        phase + 0.30f, muted, listOf(BlossomWhite, BlossomPink, BlossomYellow), count = 5,
+    )
+    val personS = u * 0.24f
+    val personC = Offset(w * 0.53f, h * 0.78f)
+    drawContactShadow(palette, Offset(w * 0.13f, h * 0.80f + u * 0.20f), u * 0.30f, muted)
+    drawContactShadow(palette, Offset(w * 0.87f, h * 0.80f + u * 0.15f), u * 0.26f, muted)
+    drawContactShadow(palette, Offset(personC.x, personC.y + u * 0.15f), u * 0.28f, muted)
+    drawCatFigure(palette, Offset(w * 0.13f, h * 0.80f), u * 0.28f, phase, muted, detail = 0.55f)
+    drawRabbitFigure(palette, Offset(w * 0.87f, h * 0.80f), u * 0.22f, phase + 0.45f, muted, detail = 0.55f)
+    drawPersonFigure(palette, personC, personS, phase, muted, detail = 0.55f)
+    drawBalloon(
+        palette, Offset(w * 0.63f, h * 0.30f), u * 0.085f, phase + 0.2f, muted,
+        stringEnd = Offset(personC.x + personS * 0.23f, personC.y - personS * 0.28f),
+    )
 
     // 前景：蝴蝶和飘落的花瓣（很淡，不挡字）。
     drawButterfly(
         palette,
         Offset(w * 0.35f + sin(a) * w * 0.018f, h * 0.28f + cos(a * 1.3f) * h * 0.02f),
-        u * 0.045f,
+        u * 0.05f,
         phase,
         muted,
     )
+    drawBird(palette, Offset(w * 0.35f, h * 0.30f), u * 0.022f, phase, muted)
+    drawBird(palette, Offset(w * 0.41f, h * 0.26f), u * 0.018f, phase + 0.3f, muted)
     drawPetals(palette, w, h, phase, muted)
 }
 
@@ -311,4 +353,4 @@ private fun lerpColor(a: Color, b: Color, t: Float): Color =
         alpha = a.alpha + (b.alpha - a.alpha) * t,
     )
 
-private fun Color.luminance(): Float = 0.2126f * red + 0.7152f * green + 0.0722f * blue
+internal fun Color.luminance(): Float = 0.2126f * red + 0.7152f * green + 0.0722f * blue

@@ -27,6 +27,8 @@ export const KEY_MODE_INDEX: string = 'opiLayout';
 /** 面板视图 / 皮肤 / 暗光 / 长辈 / 单手 / 悬浮 / 游戏 / 英文 pro（KeyboardModes 的模块级状态）。 */
 export const KEY_VIEW: string = 'opiView';
 export const KEY_SKIN: string = 'opiSkin';
+/** 动态插画主题 id（空 = 纯色皮肤）。 */
+export const KEY_SCENE: string = 'opiScene';
 export const KEY_DARK: string = 'opiDark';
 export const KEY_ELDER: string = 'opiElder';
 export const KEY_ONE_HAND: string = 'opiOneHand';

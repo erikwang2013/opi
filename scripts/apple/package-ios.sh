@@ -238,6 +238,11 @@ done
 rare="android/app/src/main/assets/rare_index.tsv"
 [ -f "$rare" ] || { echo "!! 缺少生僻字索引 $rare；不能产出可用 IPA" >&2; exit 1; }
 cp "$rare" "$app/PlugIns/OpiKeyboard.appex/rare_index.tsv"
+# 动态皮肤插画（2026-10-31）：与 Android/桌面/鸿蒙同一份生成产物，iOS 只显示图片。
+scenes_src="shared/scene/art"
+[ -d "$scenes_src" ] || { echo "!! 缺少插画资产 $scenes_src" >&2; exit 1; }
+mkdir -p "$app/PlugIns/OpiKeyboard.appex/scenes"
+cp "$scenes_src"/scene-*.png "$app/PlugIns/OpiKeyboard.appex/scenes/"
 # 图标用项目宠物图标；sips 生成 iOS 需要的尺寸（AppIcon60x60@2x/@3x、AppIcon76x76@2x）。
 icon="desktop/icons/opi-pet.png"
 [ -f "$icon" ] || { echo "!! 缺少图标 $icon" >&2; exit 1; }
@@ -300,7 +305,8 @@ for member in \
   "Payload/Opi.app/PlugIns/OpiKeyboard.appex/trad.opid" \
   "Payload/Opi.app/PlugIns/OpiKeyboard.appex/stroke.opid" \
   "Payload/Opi.app/PlugIns/OpiKeyboard.appex/wubi86.opid" \
-  "Payload/Opi.app/PlugIns/OpiKeyboard.appex/rare_index.tsv"; do
+  "Payload/Opi.app/PlugIns/OpiKeyboard.appex/rare_index.tsv" \
+  "Payload/Opi.app/PlugIns/OpiKeyboard.appex/scenes/scene-meadow.png"; do
   if ! grep -qF "$member" <<<"$ipa_list"; then
     echo "!! IPA 缺少 $member" >&2
     exit 1

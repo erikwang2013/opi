@@ -257,12 +257,15 @@ internal fun DrawScope.drawLotus(
     muted: Float,
 ) {
     drawOval(sceneFill(LotusGreen, p, muted), Offset(center.x - s * 0.70f, center.y - s * 0.10f), Size(s * 1.40f, s * 0.40f))
+    drawOval(sceneEdge(p, 0.22f), Offset(center.x - s * 0.70f, center.y - s * 0.10f), Size(s * 1.40f, s * 0.40f), style = Stroke(s * 0.02f))
     drawOval(sceneFill(LotusGreen, p, muted).copy(alpha = 0.7f), Offset(center.x + s * 0.10f, center.y - s * 0.02f), Size(s * 0.70f, s * 0.26f))
+    // 花茎：从水面/荷叶连到花托，不再让花悬空。
+    drawLine(sceneFill(LotusGreen, p, muted), Offset(center.x, center.y), Offset(center.x, center.y - s * 0.34f), s * 0.05f, StrokeCap.Round)
     val petal = sceneFill(LotusPink, p, muted)
     for (i in 0..4) {
-        val a = i * SCENE_TAU / 5f - PI.toFloat() / 2f
         rotate(degrees = i * 72f + sceneSway(phase, 0.2f) * 4f, pivot = center) {
             drawOval(petal, Offset(center.x - s * 0.16f, center.y - s * 0.62f), Size(s * 0.32f, s * 0.62f))
+            drawOval(sceneEdge(p, 0.22f), Offset(center.x - s * 0.16f, center.y - s * 0.62f), Size(s * 0.32f, s * 0.62f), style = Stroke(s * 0.015f))
         }
     }
     drawCircle(sceneFill(SunWarm, p, muted), s * 0.16f, Offset(center.x, center.y - s * 0.30f))

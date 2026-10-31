@@ -156,6 +156,11 @@ mkdir -p "$APP/Contents/Resources/pet/stickers" \
          "$APP/Contents/Resources/pet/stickers-gif"
 cp shared/pet/stickers/*.png "$APP/Contents/Resources/pet/stickers/"
 cp shared/pet/stickers-gif/*.gif "$APP/Contents/Resources/pet/stickers-gif/"
+# 动态皮肤插画（2026-10-31）：与其它端同一份生成产物。
+scenes_src="shared/scene/art"
+[ -d "$scenes_src" ] || { echo "!! 缺少插画资产 $scenes_src" >&2; exit 1; }
+mkdir -p "$APP/Contents/Resources/scenes"
+cp "$scenes_src"/scene-*.png "$APP/Contents/Resources/scenes/"
 # 词库：主库/繁体/笔画/五笔。`OpiEngine.resourceDictionaryPath` 优先用户目录，
 # 否则读 `Resources/dicts/`。与 Android assets 同一份格式，不要再生成第二份。
 mkdir -p "$APP/Contents/Resources/dicts"
@@ -233,6 +238,7 @@ for f in shared/pet/stickers/*.png; do sticker_res+=("pet/stickers/${f##*/}"); d
 for f in shared/pet/stickers-gif/*.gif; do sticker_res+=("pet/stickers-gif/${f##*/}"); done
 for res in "symbol_categories.tsv" "opi.tiff" "opi-pet.icns" \
            "emoji.tsv" "kaomoji.tsv" "pet-map.tsv" \
+           "scenes/scene-meadow.png" \
            "${sticker_res[@]}" \
            "dicts/luna.opid" "dicts/trad.opid" "dicts/stroke.opid" "dicts/wubi86.opid"; do
   grep -q "OpiInputMethod.app/Contents/Resources/$res" "$out/.payload.txt" || {

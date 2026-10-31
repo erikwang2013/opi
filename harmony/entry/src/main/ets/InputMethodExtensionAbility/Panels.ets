@@ -15,6 +15,7 @@ import { OpiMode } from './OpiEngine';
 import { INPUT_MODES, InputMode, currentModeIndex } from './InputModes';
 import { ONE_HAND_LEFT, ONE_HAND_OFF, ONE_HAND_RIGHT, darkEnabled, elderEnabled } from './KeyboardModes';
 import { Palette, SKINS, Skin, paletteFor } from './Palette';
+import { SCENES, SceneSkin } from './SceneTheme';
 import { UpdateSection } from './UpdateCheck';
 
 const ABOUT_INTRO: string =
@@ -134,11 +135,40 @@ struct SkinCard {
   }
 }
 
+/** 一张动态皮肤卡：直接显示该主题的高清插画缩略图。 */
+@Component
+struct SceneCard {
+  @Prop index: number = 0;
+  @Prop selected: boolean = false;
+  onTap: () => void = () => {
+  };
+
+  build() {
+    Column() {
+      Image(SCENES[this.index].image)
+        .width('90%').height(46).objectFit(ImageFit.Cover).borderRadius(6)
+        .border({
+          width: this.selected ? 2 : 1,
+          color: this.selected ? SKINS[SCENES[this.index].skin].palette.accent : '#33000000'
+        })
+      Text(SCENES[this.index].label)
+        .fontSize(11).margin({ top: 3 }).maxLines(1)
+        .fontColor(this.selected ? SKINS[SCENES[this.index].skin].palette.accent
+          : SKINS[SCENES[this.index].skin].palette.panelFg)
+        .fontWeight(this.selected ? FontWeight.Bold : FontWeight.Normal)
+    }
+    .width(78).height(84).justifyContent(FlexAlign.Center)
+    .margin({ left: 4, right: 4 })
+    .onClick(this.onTap)
+  }
+}
+
 // ---------------------------------------------------------------- 皮肤
 
 @Component
 export struct SkinPanel {
   @StorageLink('opiSkin') skin: number = 0;
+  @StorageLink('opiScene') scene: string = '';
   @StorageLink('opiDark') dark: number = 0;
   @StorageLink('opiElder') elder: number = 0;
   private ctrl: KeyboardController = KeyboardController.getInstance();
@@ -150,24 +180,43 @@ export struct SkinPanel {
   build() {
     Column() {
       PanelHeader({
-        title: '皮肤', hint: '选中即换；「不改动」= 跟随暗光/长辈',
+        title: '皮肤', hint: '11 款纯色 + 19 套动态；选中即换',
         onClose: () => {
           this.ctrl.closePanel();
         }
       })
       Scroll() {
-        // Flex 折行（Android FlowRow）：窄屏/长辈字号下都折行，不裁剪。
-        Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start }) {
-          ForEach(SKINS, (s: Skin, i: number) => {
-            SkinCard({
-              index: i,
-              selected: i === this.skin,
-              onTap: () => {
-                this.ctrl.selectSkin(i);
-              }
-            })
-          }, (s: Skin, i: number) => `skin-${i}`)
-        }.width('100%').padding({ left: 8, right: 8, top: 4, bottom: 8 })
+        Column() {
+          Text('纯色')
+            .fontSize(12).fontWeight(FontWeight.Bold).fontColor(this.pal().dimFg)
+            .width('100%').padding({ left: 8, top: 8, bottom: 2 })
+          // 11 款纯色（SKINS[0] 是旧「不改动」，不再列出）。
+          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start }) {
+            ForEach(SKINS.slice(1), (s: Skin, i: number) => {
+              SkinCard({
+                index: i + 1,
+                selected: this.scene.length === 0 && (i + 1) === this.skin,
+                onTap: () => {
+                  this.ctrl.selectSkin(i + 1);
+                }
+              })
+            }, (s: Skin, i: number) => `skin-${i}`)
+          }.width('100%').padding({ left: 8, right: 8, top: 2 })
+          Text('动态')
+            .fontSize(12).fontWeight(FontWeight.Bold).fontColor(this.pal().dimFg)
+            .width('100%').padding({ left: 8, top: 10, bottom: 2 })
+          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start }) {
+            ForEach(SCENES, (s: SceneSkin, i: number) => {
+              SceneCard({
+                index: i,
+                selected: this.scene === s.id,
+                onTap: () => {
+                  this.ctrl.selectScene(s.skin, s.id);
+                }
+              })
+            }, (s: SceneSkin) => `scene-${s.id}`)
+          }.width('100%').padding({ left: 8, right: 8, top: 2, bottom: 8 })
+        }.width('100%')
       }.layoutWeight(1).width('100%')
     }
     .width('100%').height('100%').backgroundColor(this.pal().panelBg)

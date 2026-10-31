@@ -11,6 +11,7 @@ import { OpiMode } from '../InputMethodExtensionAbility/OpiEngine';
 import { MODE_BIG9, MODE_PINYIN9, MODE_PINYIN14, MODE_STROKE } from '../InputMethodExtensionAbility/InputModes';
 import { PanelView } from '../InputMethodExtensionAbility/KeyboardModes';
 import { Palette, paletteFor } from '../InputMethodExtensionAbility/Palette';
+import { sceneImage } from '../InputMethodExtensionAbility/SceneTheme';
 import { TopBar } from '../InputMethodExtensionAbility/TopBar';
 import { CandidateTiled } from '../InputMethodExtensionAbility/CandidateTiled';
 import { QwertyPad } from '../InputMethodExtensionAbility/QwertyPad';
@@ -32,6 +33,7 @@ struct Index {
   @StorageLink('opiLayout') layout: number = 0;
   @StorageLink('opiOneHand') oneHand: number = 0;
   @StorageLink('opiSkin') skin: number = 0;
+  @StorageLink('opiScene') scene: string = '';
   @StorageLink('opiDark') dark: number = 0;
   @StorageLink('opiElder') elder: number = 0;
   @StorageLink('opiTiled') tiled: number = 0;
@@ -41,7 +43,16 @@ struct Index {
   }
 
   build() {
-    Column() {
+    Stack() {
+      if (this.scene.length > 0) {
+        // 动态皮肤：插画铺在键面后，键缝/边缘透出（Android/iOS/桌面同一条）。
+        Image(sceneImage(this.scene))
+          .width('100%').height('100%').objectFit(ImageFit.Cover)
+        Column()
+          .width('100%').height('100%')
+          .backgroundColor(this.pal().barBg).opacity(0.45)
+      }
+      Column() {
       TopBar()
       if (this.tiled === 1 && this.view === 0) {
         // 平铺候选：占满拼音行以下的整块（含单手模式的留白区 —— Android 平铺也在
@@ -61,10 +72,14 @@ struct Index {
             this.SideBlank()
           }
         }
-        .width('100%').layoutWeight(1).backgroundColor(this.pal().barBg)
+        .width('100%').layoutWeight(1)
+        .backgroundColor(this.scene.length > 0 ? '#00000000' : this.pal().barBg)
       }
+      }
+      .width('100%').height('100%')
+      .backgroundColor(this.scene.length > 0 ? '#00000000' : this.pal().panelBg)
     }
-    .width('100%').height('100%').backgroundColor(this.pal().panelBg)
+    .width('100%').height('100%')
   }
 
   @Builder

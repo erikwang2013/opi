@@ -384,7 +384,7 @@ cp luna.opid ~/Library/Application\ Support/opi/luna.opid
 | G4 | **无测试、无工程文件；本批 CI 已编译** | `macos/` 里跑过的只有头文件（`clang -fsyntax-only` + 「导出名取地址」那个 TU）；旧版 3 个 Swift 由 CI 在 2026-10-15 前编过。**2026-10-20 新增/改动的 7 个文件已由 CI 编过**（run 39425977787），本机只跑了 `bash -n`、`sh -n` 与 500 行门禁。下一步可执行验证是「装进系统跑最小冒烟」 |
 | G5 | **宠物「小欧」未接（有意）** | 候选窗用的是系统面板 `IMKCandidates`，**画不进去**。要摆小欧得先换成自绘 `NSPanel` —— 那是对未上机验证的代码做结构改动。真要接时**别**新写一份 CoreGraphics 几何：几何真源是 `docs/opi-pet.svg`，同一张图的第三份拷贝必然漂移 |
 | G6 | **符号面板：已补（2026-10-20，CI 已编译、未上机）** | `OpiSymbolPanel.swift`：左侧 22 类竖条、右侧 12×6=72/页网格、搜索框、翻页；数据是随包的 `symbol_categories.tsv`（打包脚本拷进 `Resources/`，`.pkg` payload 有存在性门禁），读不到才回退引擎 `opi_symbol_blocks()` 的 6 个 common 块并打日志。字形过滤用 CoreText 单码位判定；上屏直接 `insertText`，面板保持打开。**未接**表情页（引擎有 `opi_emoji_*` 出口，没有 UI）、贴纸/剪贴板 |
-| G7 | **「状态栏」是菜单，不是常驻条** | InputMethodKit 没有 Linux 那种悬浮状态栏；`OpiMenu.swift` 用输入法菜单承载同组入口。皮肤、LOGO、虚拟键盘（VK）与 ENPRO 因此没有等价物；外观/状态栏两个设置页也没有画空壳 |
+| G7 | **「状态栏」是菜单，不是常驻条** | InputMethodKit 没有 Linux 那种悬浮状态栏；`OpiMenu.swift` 用输入法菜单承载同组入口。皮肤与虚拟键盘已在 OPI 自绘面板落地（11 纯色 + 19 动态，2026-10-31）；LOGO 与 ENPRO 仍没有等价物 |
 | L1 | **全角状态只在菜单里读** | `OpiMenu` 的「全角字符」勾选读 `opi_fullwidth_state()`（2026-10-20），但**没有常驻状态栏**可显示。⚠️ 它**不是**在报错：「未装载」与「已装载且半角」共用 `false`，那时按键全部交系统，宿主拿到的本来就是半角 |
 | L2 | **⇧ 长按 → Lock 不可达** | `NSEvent` 没有长按信号（同 fcitx5 轨的已知边界）。本层**不合成** `LONG_PRESSED` 位，所以 ⇧ 长按 = 单击。要接得自己定入口，别靠猜补一个信号 |
 | L3 | **`keyUp` 大概率收不到** | `recognizedEvents:` 属于 `IMKStateSetting`，默认只返回 `NSKeyDownMask`；公开报告说即使加上 `NSKeyUpMask`，`NSKeyUp` **仍然**不会被投递给 `handleEvent:client:`（被指为 IMKit 已知问题）。**故本轮不动** `recognizedEvents`。影响：`RELEASED` 位收不到时，退格/回车的「按下放行、抬起也放行」对称性不成立，在依赖键状态的控件里可能表现为卡键 —— ⚠️ **但这个影响的前提本身也没被验证**（取决于 IMK 是否替我们转发了抬起）。代码里那个 `.keyUp` 分支很可能是死代码 |

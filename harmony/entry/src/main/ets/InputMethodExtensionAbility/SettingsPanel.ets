@@ -15,12 +15,14 @@ import {
 } from './KeyboardModes';
 import { OpiMode } from './OpiEngine';
 import { Palette, SKINS, paletteFor } from './Palette';
+import { sceneLabel } from './SceneTheme';
 import { ModeChip, PanelHeader, appVersion } from './Panels';
 import { UpdateSection } from './UpdateCheck';
 
 @Component
 export struct SettingsPanel {
   @StorageLink('opiSkin') skin: number = 0;
+  @StorageLink('opiScene') scene: string = '';
   @StorageLink('opiDark') dark: number = 0;
   @StorageLink('opiElder') elder: number = 0;
   @StorageLink('opiMode') mode: number = OpiMode.Pinyin as number;
@@ -197,7 +199,8 @@ export struct SettingsPanel {
           })
 
           this.Section('外观')
-          this.ActionRow('皮肤', '选中即换；「不改动」跟随暗光/长辈', SKINS[this.skin].label, () => {
+          this.ActionRow('皮肤', '11 款纯色 + 19 套动态；选中即换',
+            this.scene.length > 0 ? sceneLabel(this.scene) : SKINS[this.skin].label, () => {
             this.openSub(PanelView.Skin);
           })
           this.SwitchRow('暗光模式', '深色键盘配色', this.dark === 1, () => {

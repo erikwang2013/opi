@@ -22,6 +22,7 @@ const FILE_NAME: string = 'opi_ime_prefs';
 const KEY_INPUT_MODE: string = 'input_mode';
 const KEY_LAST_CHINESE: string = 'last_chinese_mode';
 const KEY_SKIN: string = 'kb_skin';
+const KEY_SCENE: string = 'kb_scene';
 const KEY_DARK: string = 'kb_dark';
 const KEY_ELDER: string = 'kb_elder';
 const KEY_ONE_HAND: string = 'kb_one_hand';
@@ -41,7 +42,9 @@ let store: preferences.Preferences | null = null;
 export class ImeSettings {
   inputModeIndex: number = -1;
   lastChineseIndex: number = -1;
-  skin: number = 0;
+  skin: number = 5;
+  /** 动态插画主题 id；空 = 纯色皮肤。 */
+  scene: string = '';
   dark: boolean = false;
   elder: boolean = false;
   oneHand: number = 0;
@@ -114,7 +117,8 @@ export function load(): ImeSettings {
   const s: ImeSettings = new ImeSettings();
   s.inputModeIndex = readNumber(KEY_INPUT_MODE, -1);
   s.lastChineseIndex = readNumber(KEY_LAST_CHINESE, -1);
-  s.skin = readNumber(KEY_SKIN, 0);
+  s.skin = readNumber(KEY_SKIN, 5);
+  s.scene = readString(KEY_SCENE, '');
   s.dark = readBool(KEY_DARK, false);
   s.elder = readBool(KEY_ELDER, false);
   s.oneHand = readNumber(KEY_ONE_HAND, 0);
@@ -160,6 +164,18 @@ export function saveSkin(index: number): void {
     flush();
   } catch (e) {
     console.error(`[opi] 保存皮肤失败：${e}`);
+  }
+}
+
+export function saveScene(id: string): void {
+  if (store === null) {
+    return;
+  }
+  try {
+    store.putSync(KEY_SCENE, id);
+    flush();
+  } catch (e) {
+    console.error(`[opi] 保存动态皮肤失败：${e}`);
   }
 }
 

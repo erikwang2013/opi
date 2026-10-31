@@ -342,7 +342,7 @@ final class KeyboardLayout: UIView {
         if isTiled { candidateTiledPanel.reloadIfNeeded() }
         if isModes { modePanel.show(current: inputMode) }
         if isRare { rarePanel.show() }
-        if isSkins { skinPanel.show(current: skin) }
+        if isSkins { skinPanel.show(current: skin, scene: KeyboardPreferences.scene) }
         if isKeyboardModes {
             keyboardModePanel.show(traditional: traditional, modes: keyboardModes)
         }

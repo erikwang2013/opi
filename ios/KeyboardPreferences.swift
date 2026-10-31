@@ -16,6 +16,7 @@ import Foundation
 enum KeyboardPreferences {
     private static let defaults = UserDefaults.standard
     private static let skinKey = "opi.skin"
+    private static let sceneKey = "opi.scene"
     private static let oneHandKey = "opi.mode.oneHand"
     private static let darkKey = "opi.mode.dark"
     private static let elderKey = "opi.mode.elder"
@@ -43,8 +44,14 @@ enum KeyboardPreferences {
     }
 
     static var skin: SkinOption {
-        get { SkinOption(rawValue: defaults.string(forKey: skinKey) ?? "") ?? .follow }
+        get { SkinOption(rawValue: defaults.string(forKey: skinKey) ?? "") ?? .fresh }
         set { defaults.set(newValue.rawValue, forKey: skinKey) }
+    }
+
+    /// 动态插画主题；空/未知 = 纯色皮肤（配色见 `skin`）。
+    static var scene: SceneTheme? {
+        get { SceneTheme(rawValue: defaults.string(forKey: sceneKey) ?? "") }
+        set { defaults.set(newValue?.rawValue ?? "", forKey: sceneKey) }
     }
 
     static var modes: KeyboardModes {

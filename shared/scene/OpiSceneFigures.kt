@@ -294,13 +294,14 @@ internal fun DrawScope.drawPersonFigure(
     )
 }
 
-/** 气球：圆 + 高光 + 打结 + 飘线；上下浮动。 */
+/** 气球：圆 + 高光 + 打结 + 飘线；[stringEnd] 非空时线一定牵到那只手上。 */
 internal fun DrawScope.drawBalloon(
     p: ScenePalette,
     center: Offset,
     s: Float,
     phase: Float,
     muted: Float,
+    stringEnd: Offset? = null,
 ) {
     val bob = sceneSway(phase, 0.25f) * s * 0.10f
     val c = Offset(center.x + sceneSway(phase, 0.9f) * s * 0.06f, center.y + bob)
@@ -324,10 +325,17 @@ internal fun DrawScope.drawBalloon(
         },
         fill,
     )
+    val stringStart = Offset(c.x, c.y + r + s * 0.08f)
+    val stringTip = stringEnd ?: Offset(c.x + s * 0.10f, c.y + r + s * 0.95f)
     drawPath(
         Path().apply {
-            moveTo(c.x, c.y + r + s * 0.08f)
-            quadraticTo(c.x + s * 0.22f, c.y + r + s * 0.55f, c.x + s * 0.10f, c.y + r + s * 0.95f)
+            moveTo(stringStart.x, stringStart.y)
+            quadraticTo(
+                (stringStart.x + stringTip.x) * 0.5f + s * 0.12f,
+                (stringStart.y + stringTip.y) * 0.5f,
+                stringTip.x,
+                stringTip.y,
+            )
         },
         edge.copy(alpha = edge.alpha * 0.65f),
         style = Stroke(s * 0.035f, cap = StrokeCap.Round),

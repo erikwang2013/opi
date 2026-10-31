@@ -15,6 +15,8 @@ package xyz.erik.opi.scene
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import kotlin.math.PI
 import kotlin.math.abs
@@ -41,30 +43,73 @@ internal fun DrawScope.drawForestBackdrop(p: ScenePalette, phase: Float, muted: 
     val u = min(w, h)
     drawRect(
         brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-            0f to sceneFill(ForestSky, p, (muted * 0.55f).coerceAtLeast(0.3f)),
-            0.6f to sceneFill(ForestGround, p, (muted * 0.4f).coerceAtLeast(0.25f)),
+            0f to sceneFill(ForestSky, p, (muted * 0.55f).coerceAtLeast(0.28f)),
+            0.6f to sceneFill(ForestGround, p, (muted * 0.4f).coerceAtLeast(0.22f)),
             1f to p.base,
         ),
         size = size,
     )
+    // 林间漏下的光和云。
+    drawSun(p, Offset(w * 0.18f, h * 0.16f), u * 0.06f, phase, muted)
+    drawCloud(p, Offset(w * 0.55f, h * 0.12f), u * 0.14f, phase + 0.3f, muted)
+    // 远景树线：一排压暗的小松树，森林才有纵深。
+    for ((i, x) in listOf(0.04f, 0.14f, 0.26f, 0.38f, 0.50f, 0.62f, 0.74f, 0.86f, 0.96f).withIndex()) {
+        drawPine(p, Offset(w * x, h * 0.72f), u * (0.18f + 0.03f * (i % 3)), phase + i * 0.17f, muted + 0.18f)
+    }
     drawOval(sceneFill(ForestHill, p, 0.55f), Offset(-w * 0.1f, h * 0.70f), Size(w * 0.75f, h * 0.5f))
     drawOval(sceneFill(ForestHill, p, 0.45f), Offset(w * 0.45f, h * 0.74f), Size(w * 0.75f, h * 0.5f))
-    // 远景松树 + 两侧近景。
-    drawPine(p, Offset(w * 0.07f, h * 0.86f), u * 0.55f, phase, muted)
-    drawPine(p, Offset(w * 0.93f, h * 0.82f), u * 0.48f, phase + 0.3f, muted)
-    drawPine(p, Offset(w * 0.80f, h * 0.66f), u * 0.32f, phase + 0.6f, muted)
-    drawPine(p, Offset(w * 0.20f, h * 0.62f), u * 0.26f, phase + 0.1f, muted)
-    drawVine(p, Offset(w * 0.01f, h * 0.12f), h * 0.42f, phase, muted, flip = false)
-    drawVine(p, Offset(w * 0.99f, h * 0.18f), h * 0.40f, phase + 0.45f, muted, flip = true)
-    // 蘑菇丛 + 蕨叶。
-    drawMushroom(p, Offset(w * 0.28f, h * 0.94f), u * 0.10f, phase + 0.2f, muted)
-    drawMushroom(p, Offset(w * 0.35f, h * 0.98f), u * 0.07f, phase + 0.5f, muted)
-    drawMushroom(p, Offset(w * 0.72f, h * 0.95f), u * 0.08f, phase + 0.8f, muted)
-    drawVine(p, Offset(w * 0.64f, h * 0.92f), h * 0.10f, phase + 0.2f, muted, flip = false)
-    // 角色：猫、徒步的小人、兔子。
-    drawCatFigure(p, Offset(w * 0.13f, h * 0.78f), u * 0.24f, phase, muted, detail = 0.45f)
-    drawPersonFigure(p, Offset(w * 0.52f, h * 0.74f), u * 0.18f, phase + 0.2f, muted, detail = 0.45f)
-    drawRabbitFigure(p, Offset(w * 0.87f, h * 0.80f), u * 0.20f, phase + 0.4f, muted, detail = 0.45f)
+    // 林间小路：从画面底部弯向远处。
+    drawPath(
+        Path().apply {
+            moveTo(w * 0.38f, h * 1.02f)
+            quadraticTo(w * 0.44f, h * 0.84f, w * 0.56f, h * 0.72f)
+            lineTo(w * 0.62f, h * 0.72f)
+            quadraticTo(w * 0.52f, h * 0.86f, w * 0.50f, h * 1.02f)
+            close()
+        },
+        sceneFill(Color(0xFFD8C9A8), p, (muted + 0.25f).coerceAtMost(0.75f)),
+    )
+    // 两侧近景松树。
+    drawPine(p, Offset(w * 0.07f, h * 0.90f), u * 0.60f, phase, muted)
+    drawPine(p, Offset(w * 0.93f, h * 0.88f), u * 0.54f, phase + 0.3f, muted)
+    drawPine(p, Offset(w * 0.80f, h * 0.74f), u * 0.38f, phase + 0.6f, muted)
+    drawPine(p, Offset(w * 0.20f, h * 0.72f), u * 0.34f, phase + 0.1f, muted)
+    // 花枝与花藤：森林里也补上，且根/枝都落在实景上。
+    drawFloweringBranch(
+        p, Offset(-w * 0.02f, h * 0.06f), Offset(w * 0.26f, h * 0.20f),
+        u * 0.40f, phase, muted, BlossomWhite, seed = 0.1f,
+    )
+    drawFloweringBranch(
+        p, Offset(w * 1.02f, h * 0.05f), Offset(w * 0.74f, h * 0.18f),
+        u * 0.38f, phase + 0.4f, muted, BlossomPink, seed = 0.6f,
+    )
+    drawClimbingVine(
+        p, Offset(w * 0.03f, h * 1.02f), Offset(w * 0.05f, h * 0.22f),
+        u * 0.48f, phase, muted, BlossomWhite, flowers = 3, seed = 0.2f,
+    )
+    drawClimbingVine(
+        p, Offset(w * 0.97f, h * 1.02f), Offset(w * 0.95f, h * 0.24f),
+        u * 0.44f, phase + 0.5f, muted, BlossomPink, flowers = 3, seed = 0.8f,
+    )
+    // 蘑菇丛 + 蕨叶 + 花圃；每朵都从地面长出来。
+    drawContactShadow(p, Offset(w * 0.28f, h * 0.98f), u * 0.16f, muted)
+    drawContactShadow(p, Offset(w * 0.72f, h * 0.97f), u * 0.14f, muted)
+    drawMushroom(p, Offset(w * 0.28f, h * 0.96f), u * 0.12f, phase + 0.2f, muted)
+    drawMushroom(p, Offset(w * 0.35f, h * 0.99f), u * 0.08f, phase + 0.5f, muted)
+    drawMushroom(p, Offset(w * 0.72f, h * 0.97f), u * 0.10f, phase + 0.8f, muted)
+    drawGrassTuft(p, Offset(w * 0.64f, h * 0.98f), u * 0.12f, phase + 0.2f, muted)
+    drawFlowerBed(
+        p, Offset(w * 0.47f, h * 0.99f), u * 0.20f, u * 0.12f,
+        phase + 0.3f, muted, listOf(BlossomWhite, BlossomPink, BlossomYellow), count = 4,
+    )
+    // 角色：猫、徒步的小人、兔子，全部踩在地面上。
+    val personC = Offset(w * 0.52f, h * 0.80f)
+    drawContactShadow(p, Offset(w * 0.13f, h * 0.80f + u * 0.20f), u * 0.30f, muted)
+    drawContactShadow(p, Offset(w * 0.87f, h * 0.82f + u * 0.16f), u * 0.26f, muted)
+    drawContactShadow(p, Offset(personC.x, personC.y + u * 0.15f), u * 0.26f, muted)
+    drawCatFigure(p, Offset(w * 0.13f, h * 0.80f), u * 0.28f, phase, muted, detail = 0.55f)
+    drawPersonFigure(p, personC, u * 0.22f, phase + 0.2f, muted, detail = 0.55f)
+    drawRabbitFigure(p, Offset(w * 0.87f, h * 0.82f), u * 0.22f, phase + 0.4f, muted, detail = 0.55f)
     // 萤火虫。
     fireflies(p, w, h, u, phase, muted, listOf(0.24f to 0.55f, 0.44f to 0.42f, 0.62f to 0.58f, 0.78f to 0.40f))
 }
@@ -100,33 +145,62 @@ internal fun DrawScope.drawGardenBackdrop(p: ScenePalette, phase: Float, muted: 
     drawRect(
         brush = androidx.compose.ui.graphics.Brush.verticalGradient(
             0f to sceneFill(GardenSky, p, (muted * 0.5f).coerceAtLeast(0.28f)),
-            0.62f to p.base,
-            1f to sceneFill(GardenHill, p, (muted * 0.35f).coerceAtLeast(0.22f)),
+            0.60f to p.base,
+            1f to sceneFill(GardenHill, p, (muted * 0.32f).coerceAtLeast(0.20f)),
         ),
         size = size,
     )
-    drawOval(sceneFill(GardenHill, p, 0.5f), Offset(-w * 0.1f, h * 0.70f), Size(w * 0.8f, h * 0.48f))
-    drawOval(sceneFill(GardenHillDark, p, 0.55f), Offset(w * 0.4f, h * 0.76f), Size(w * 0.8f, h * 0.46f))
-    drawCloud(p, Offset(w * 0.18f, h * 0.16f), u * 0.18f, phase, muted)
-    drawCloud(p, Offset(w * 0.78f, h * 0.12f), u * 0.14f, phase + 0.4f, muted)
-    // 向日葵 + 花丛。
-    drawSunflower(p, Offset(w * 0.10f, h * 0.52f), u * 0.16f, phase, muted)
-    drawSunflower(p, Offset(w * 0.90f, h * 0.56f), u * 0.14f, phase + 0.5f, muted)
-    for ((x, s, seed) in listOf(
-        Triple(0.16f, 0.16f, 0.1f), Triple(0.32f, 0.12f, 0.4f), Triple(0.50f, 0.15f, 0.7f),
-        Triple(0.68f, 0.12f, 0.2f), Triple(0.84f, 0.15f, 0.6f),
-    )) {
-        drawFlowerCluster(p, Offset(w * x, h * 0.94f), u * s, phase + seed, muted)
+    drawSun(p, Offset(w * 0.86f, h * 0.13f), u * 0.075f, phase, muted)
+    drawCloud(p, Offset(w * 0.17f, h * 0.15f), u * 0.20f, phase, muted)
+    drawCloud(p, Offset(w * 0.62f, h * 0.09f), u * 0.13f, phase + 0.4f, muted)
+    // 远处树篱：让花园有背景，不是一块空草地。
+    for ((i, x) in listOf(0.08f, 0.24f, 0.47f, 0.66f, 0.86f).withIndex()) {
+        drawShrub(p, Offset(w * x, h * 0.70f), u * (0.14f + 0.02f * (i % 2)), phase + i * 0.2f, muted + 0.12f)
     }
-    // 园丁 + 猫 + 兔。
-    drawPersonFigure(p, Offset(w * 0.50f, h * 0.74f), u * 0.20f, phase, muted, detail = 0.45f)
-    drawWateringCan(p, Offset(w * 0.58f, h * 0.76f), u * 0.075f, phase + 0.2f, muted)
-    drawCatFigure(p, Offset(w * 0.14f, h * 0.82f), u * 0.18f, phase + 0.5f, muted, detail = 0.4f)
-    drawRabbitFigure(p, Offset(w * 0.87f, h * 0.82f), u * 0.16f, phase + 0.3f, muted, detail = 0.4f)
+    drawOval(sceneFill(GardenHill, p, 0.45f), Offset(-w * 0.1f, h * 0.70f), Size(w * 0.8f, h * 0.48f))
+    drawOval(sceneFill(GardenHillDark, p, 0.50f), Offset(w * 0.4f, h * 0.76f), Size(w * 0.8f, h * 0.46f))
+    // 花枝从画面两角伸进来，顶住空旷的天空。
+    drawFloweringBranch(
+        p, Offset(-w * 0.03f, h * 0.06f), Offset(w * 0.27f, h * 0.22f),
+        u * 0.52f, phase, muted, BlossomPink, seed = 0.2f,
+    )
+    drawFloweringBranch(
+        p, Offset(w * 1.03f, h * 0.04f), Offset(w * 0.70f, h * 0.21f),
+        u * 0.48f, phase + 0.4f, muted, BlossomWhite, seed = 0.6f,
+    )
+    // 两侧花藤：从地面爬到画面上沿，根与梢都在画面里。
+    drawClimbingVine(
+        p, Offset(w * 0.035f, h * 1.02f), Offset(w * 0.06f, h * 0.20f),
+        u * 0.62f, phase, muted, BlossomPink, flowers = 4, seed = 0.1f,
+    )
+    drawClimbingVine(
+        p, Offset(w * 0.965f, h * 1.02f), Offset(w * 0.94f, h * 0.24f),
+        u * 0.58f, phase + 0.5f, muted, BlossomWhite, flowers = 4, seed = 0.7f,
+    )
+    // 向日葵：茎一直扎到地平线，花头在视平线上。
+    drawSunflower(p, Offset(w * 0.10f, h * 0.50f), u * 0.18f, phase, muted)
+    drawSunflower(p, Offset(w * 0.90f, h * 0.54f), u * 0.16f, phase + 0.5f, muted)
+    // 前景花圃：五丛花全部从地面长出来。
+    for ((i, x) in listOf(0.14f, 0.32f, 0.50f, 0.68f, 0.86f).withIndex()) {
+        drawFlowerBed(
+            p, Offset(w * x, h * 0.95f), u * 0.22f, u * 0.15f,
+            phase + i * 0.17f, muted,
+            listOf(BlossomPink, BlossomYellow, BlossomWhite, BlossomRed),
+            count = 4,
+        )
+    }
+    // 园丁 + 猫 + 兔：脚底有接地阴影。
+    drawContactShadow(p, Offset(w * 0.50f, h * 0.80f + u * 0.15f), u * 0.26f, muted)
+    drawContactShadow(p, Offset(w * 0.15f, h * 0.80f + u * 0.16f), u * 0.26f, muted)
+    drawContactShadow(p, Offset(w * 0.86f, h * 0.80f + u * 0.14f), u * 0.24f, muted)
+    drawPersonFigure(p, Offset(w * 0.50f, h * 0.80f), u * 0.24f, phase, muted, detail = 0.45f)
+    drawWateringCan(p, Offset(w * 0.59f, h * 0.84f), u * 0.09f, phase + 0.2f, muted)
+    drawCatFigure(p, Offset(w * 0.14f, h * 0.80f), u * 0.22f, phase + 0.5f, muted, detail = 0.4f)
+    drawRabbitFigure(p, Offset(w * 0.86f, h * 0.80f), u * 0.20f, phase + 0.3f, muted, detail = 0.4f)
     // 蜜蜂 + 蝴蝶。
     drawBee(p, Offset(w * 0.30f + sin(phase * 2f * PI.toFloat()) * w * 0.03f, h * 0.34f), u * 0.06f, phase, muted)
     drawBee(p, Offset(w * 0.68f + cos(phase * 2f * PI.toFloat()) * w * 0.02f, h * 0.28f), u * 0.045f, phase + 0.5f, muted)
-    drawButterfly(p, Offset(w * 0.42f, h * 0.26f), u * 0.045f, phase + 0.2f, muted)
+    drawButterfly(p, Offset(w * 0.42f, h * 0.26f), u * 0.05f, phase + 0.2f, muted)
     drawPetals(p, w, h, phase, muted)
 }
 
@@ -160,28 +234,62 @@ internal fun DrawScope.drawNightBackdrop(p: ScenePalette, phase: Float, muted: F
     val u = min(w, h)
     drawRect(
         brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-            0f to sceneFill(NightSky, p, (muted * 0.45f).coerceAtLeast(0.25f)),
-            0.55f to sceneFill(NightHillFar, p, (muted * 0.4f).coerceAtLeast(0.2f)),
+            0f to sceneFill(NightSky, p, (muted * 0.45f).coerceAtLeast(0.22f)),
+            0.55f to sceneFill(NightHillFar, p, (muted * 0.4f).coerceAtLeast(0.18f)),
             1f to p.base,
         ),
         size = size,
     )
     drawStars(p, w, h, phase, muted)
-    drawMoon(p, Offset(w * 0.82f, h * 0.18f), u * 0.11f, phase, muted)
+    drawMoon(p, Offset(w * 0.82f, h * 0.18f), u * 0.12f, phase, muted)
+    // 远山与树影。
     drawOval(sceneFill(NightHillFar, p, 0.4f), Offset(-w * 0.1f, h * 0.70f), Size(w * 0.8f, h * 0.5f))
     drawOval(sceneFill(NightHill, p, 0.45f), Offset(w * 0.4f, h * 0.76f), Size(w * 0.8f, h * 0.48f))
+    drawTree(p, Offset(w * 0.06f, h * 0.84f), u * 0.42f, phase, muted, BotanyLeafDark, Color(0xFF243B33), BlossomWhite)
+    drawTree(p, Offset(w * 0.94f, h * 0.86f), u * 0.38f, phase + 0.4f, muted, BotanyLeafDark, Color(0xFF243B33), BlossomPink)
     // 栅栏 + 坐在上面的猫。
     val fenceTop = h * 0.72f
-    drawFence(p, w * 0.04f, fenceTop, w * 0.46f, h * 0.14f, muted)
-    drawCatFigure(p, Offset(w * 0.22f, fenceTop - u * 0.10f), u * 0.18f, phase, muted, detail = 0.45f)
-    // 提灯的小人 + 灯笼。
-    drawPersonFigure(p, Offset(w * 0.62f, h * 0.78f), u * 0.20f, phase + 0.3f, muted, detail = 0.45f)
-    drawLantern(p, Offset(w * 0.70f, h * 0.66f), u * 0.08f, phase + 0.2f, muted)
-    drawFlowerCluster(p, Offset(w * 0.12f, h * 0.98f), u * 0.12f, phase + 0.2f, 0.30f)
-    drawFlowerCluster(p, Offset(w * 0.46f, h * 0.96f), u * 0.10f, phase + 0.6f, 0.30f)
-    drawFlowerCluster(p, Offset(w * 0.88f, h * 0.96f), u * 0.11f, phase + 0.4f, 0.30f)
-    drawVine(p, Offset(w * 0.01f, h * 0.12f), h * 0.36f, phase, muted, flip = false)
-    drawVine(p, Offset(w * 0.99f, h * 0.16f), h * 0.32f, phase + 0.5f, muted, flip = true)
+    drawFence(p, w * 0.04f, fenceTop, w * 0.92f, h * 0.14f, muted)
+    drawCatFigure(p, Offset(w * 0.22f, fenceTop - u * 0.12f), u * 0.18f, phase, muted, detail = 0.6f)
+    // 提灯的小人：灯笼挂在手上，不再悬空。
+    val personC = Offset(w * 0.62f, h * 0.80f)
+    val personS = u * 0.22f
+    drawPersonFigure(p, personC, personS, phase + 0.3f, muted, detail = 0.55f)
+    val hand = Offset(personC.x + personS * 0.23f, personC.y - personS * 0.28f)
+    val lanternC = Offset(hand.x + u * 0.02f, hand.y - u * 0.03f)
+    drawLine(
+        sceneEdge(p, 0.45f),
+        hand,
+        Offset(lanternC.x, lanternC.y - u * 0.075f),
+        u * 0.006f,
+        StrokeCap.Round,
+    )
+    drawLantern(p, lanternC, u * 0.09f, phase + 0.2f, muted)
+    drawContactShadow(p, Offset(personC.x, personC.y + u * 0.14f), u * 0.26f, muted)
+    // 花枝与花藤：夜色里也把花接满。
+    drawFloweringBranch(
+        p, Offset(-w * 0.02f, h * 0.06f), Offset(w * 0.25f, h * 0.21f),
+        u * 0.40f, phase, muted, BlossomWhite, seed = 0.2f,
+    )
+    drawFloweringBranch(
+        p, Offset(w * 1.02f, h * 0.05f), Offset(w * 0.75f, h * 0.19f),
+        u * 0.38f, phase + 0.4f, muted, BlossomPink, seed = 0.7f,
+    )
+    drawClimbingVine(
+        p, Offset(w * 0.03f, h * 1.02f), Offset(w * 0.05f, h * 0.24f),
+        u * 0.46f, phase, muted, BlossomWhite, flowers = 3, seed = 0.3f,
+    )
+    drawClimbingVine(
+        p, Offset(w * 0.97f, h * 1.02f), Offset(w * 0.95f, h * 0.26f),
+        u * 0.42f, phase + 0.5f, muted, BlossomPink, flowers = 3, seed = 0.9f,
+    )
+    // 前景花圃。
+    for ((i, x) in listOf(0.12f, 0.46f, 0.88f).withIndex()) {
+        drawFlowerBed(
+            p, Offset(w * x, h * 0.98f), u * 0.22f, u * 0.13f,
+            phase + i * 0.2f, muted, listOf(BlossomWhite, BlossomPink, BlossomYellow), count = 4,
+        )
+    }
     fireflies(p, w, h, u, phase, muted, listOf(0.30f to 0.55f, 0.55f to 0.45f, 0.76f to 0.58f, 0.16f to 0.68f))
 }
 

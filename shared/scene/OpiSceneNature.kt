@@ -39,7 +39,7 @@ internal fun DrawScope.drawCloud(
     phase: Float,
     muted: Float,
 ) {
-    val fill = sceneFill(Color.White, p, (muted + 0.22f).coerceAtMost(0.9f))
+    val fill = sceneFill(Color.White, p, (muted * 0.5f + 0.15f).coerceAtMost(0.6f))
     val dx = sin(phase * SCENE_TAU + s) * s * 0.12f
     drawOval(fill, Offset(center.x - s + dx, center.y - s * 0.25f), Size(s * 1.05f, s * 0.65f))
     drawOval(fill, Offset(center.x - s * 0.25f + dx, center.y - s * 0.55f), Size(s * 1.0f, s * 0.85f))

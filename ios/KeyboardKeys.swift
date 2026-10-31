@@ -102,8 +102,10 @@ enum KeyboardFunctionKey {
     /// 选中后由选择器调 `KeyboardLayout.setCustomPunctuation` 落盘；已选状态下
     /// 短按走 `.commitText` 直提、长按才回到这里换一个。
     case showPunctuationPicker
-    /// 皮肤面板选中一项。
+    /// 皮肤面板选中一项（纯色）。
     case selectSkin(SkinOption)
+    /// 皮肤面板选中一套动态插画主题。
+    case selectScene(SceneTheme)
     /// 键盘模式面板改了开关（单手/暗光/长辈）。
     case updateKeyboardModes(KeyboardModes)
     /// 关于面板的外链（控制器复制 + 尝试打开）。

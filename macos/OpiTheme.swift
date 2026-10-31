@@ -53,8 +53,8 @@ enum OpiSkin: String, CaseIterable {
     var title: String { rawValue }
 
     static func from(_ raw: String?) -> OpiSkin {
-        guard let raw else { return .keep }
-        return OpiSkin(rawValue: raw) ?? .keep
+        guard let raw else { return .fresh }
+        return OpiSkin(rawValue: raw) ?? .fresh
     }
 
     var palette: OpiPalette {
@@ -146,12 +146,39 @@ struct OpiPalette {
 
 enum OpiTheme {
     static let skinKey = "Skin"
+    static let sceneKey = "Scene"
     static let darkKey = "DarkMode"
     static let elderKey = "ElderMode"
 
     static var skin: OpiSkin {
         get { OpiSkin.from(UserDefaults.standard.string(forKey: skinKey)) }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: skinKey) }
+    }
+
+    /// 动态插画主题；空/未知 = 纯色皮肤（配色见 `skin`）。
+    static var scene: OpiSceneTheme? {
+        get { OpiSceneTheme(rawValue: UserDefaults.standard.string(forKey: sceneKey) ?? "") }
+        set {
+            if let newValue { UserDefaults.standard.set(newValue.rawValue, forKey: sceneKey) }
+            else { UserDefaults.standard.removeObject(forKey: sceneKey) }
+        }
+    }
+
+    /// 当前列表项：有动态主题时以它为准，否则是纯色皮肤。
+    static var currentChoice: OpiSkinChoice {
+        if let scene { return .scene(scene) }
+        return .solid(skin)
+    }
+
+    static func select(_ choice: OpiSkinChoice) {
+        switch choice {
+        case .solid(let s):
+            scene = nil
+            skin = s
+        case .scene(let t):
+            skin = t.defaultSkin
+            scene = t
+        }
     }
 
     static var darkPanels: Bool {
@@ -177,7 +204,9 @@ enum OpiTheme {
     }
 
     static func cycleSkin() {
-        skin = skin.next
+        let all = OpiSkinChoice.all
+        let index = all.firstIndex(of: currentChoice) ?? -1
+        select(all[(index + 1) % all.count])
         NotificationCenter.default.post(name: .opiThemeChanged, object: nil)
     }
 

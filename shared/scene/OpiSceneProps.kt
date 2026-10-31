@@ -111,7 +111,7 @@ internal fun DrawScope.drawFirefly(
     muted: Float,
 ) {
     val twinkle = 0.35f + 0.65f * abs(sin((phase + 0.13f) * SCENE_TAU * 2f))
-    drawCircle(sceneFill(FireflyGlow, p, muted).copy(alpha = 0.20f * twinkle), s * 1.9f, center)
+    drawCircle(sceneFill(FireflyGlow, p, muted).copy(alpha = 0.12f * twinkle), s * 1.45f, center)
     drawCircle(sceneFill(FireflyGlow, p, muted).copy(alpha = 0.85f * twinkle), s * 0.45f, center)
     drawCircle(Color.White.copy(alpha = 0.75f * twinkle), s * 0.18f, center)
     for (dir in listOf(-1f, 1f)) {

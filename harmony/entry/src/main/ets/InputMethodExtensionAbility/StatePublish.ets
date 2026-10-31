@@ -15,7 +15,7 @@ import {
   KEY_ALL_CANDIDATES, KEY_ASSOCIATION, KEY_ASSOCIATION_ON, KEY_BUFFER, KEY_CANDIDATES, KEY_DARK,
   KEY_DISPLAY_BUFFER,
   KEY_ELDER, KEY_FLOAT, KEY_GAME, KEY_LEARNER, KEY_MODE, KEY_MODE_INDEX, KEY_ONE_HAND,
-  KEY_PRO, KEY_READINGS, KEY_SHIFT, KEY_SHOW_OWN, KEY_SKIN, KEY_TILED, KEY_VIEW
+  KEY_PRO, KEY_READINGS, KEY_SCENE, KEY_SHIFT, KEY_SHOW_OWN, KEY_SKIN, KEY_TILED, KEY_VIEW
 } from './KeyboardAppStorage';
 
 /** 平铺视图取全量的条数（同 Android EngineController.fetchLimit）。 */
@@ -102,6 +102,7 @@ export function publishState(): void {
   putNumber(KEY_MODE_INDEX, InputModes.currentModeIndex());
   putNumber(KEY_VIEW, KeyboardModes.panelView());
   putNumber(KEY_SKIN, KeyboardModes.skinValue());
+  putString(KEY_SCENE, KeyboardModes.sceneValue());
   putNumber(KEY_DARK, KeyboardModes.darkEnabled() ? 1 : 0);
   putNumber(KEY_ELDER, KeyboardModes.elderEnabled() ? 1 : 0);
   putNumber(KEY_ONE_HAND, KeyboardModes.oneHandValue());

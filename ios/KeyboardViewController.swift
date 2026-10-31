@@ -22,7 +22,6 @@ import UIKit
 /// 第一个要查的就是这里（连同 Info.plist 的 NSExtensionPrincipalClass）。
 @objc(KeyboardViewController)
 final class KeyboardViewController: UIInputViewController {
-
     // MARK: - 状态
 
     // ⚠️ 下面这几个成员与 `refresh` / `insert` / `modeKeyLabel` 都是 **internal**
@@ -75,7 +74,6 @@ final class KeyboardViewController: UIInputViewController {
     /// 块回调版 Timer（iOS 10+；本仓仅此一处）—— 已过 CI 编译，未上机。
     private var emojiSearchTimer: Timer?
     private static let emojiSearchDebounce: TimeInterval = 0.25
-
     // MARK: - 生命周期
 
     override func viewDidLoad() {
@@ -100,7 +98,7 @@ final class KeyboardViewController: UIInputViewController {
         skin = KeyboardPreferences.skin
         modes = KeyboardPreferences.modes
         settings = KeyboardPreferences.settings
-        layout.setSkin(skin)
+        layout.setSkin(skin, scene: KeyboardPreferences.scene)
         layout.setKeyboardModes(modes, traditional: engine.mode() == .traditional)
         // 引擎开关必须在装载词库**之后**推（未装载时写侧是空操作），且要在
         // 第一次 refresh 之前 —— 否则首屏候选按旧开关算。
@@ -343,13 +341,16 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
         case .showSkin:
             // 皮肤面板（2026-10-20）：与 Android 工具条入口同义。选中不关面板；
             // 「‹ 返回」直接回当前模式键面（从设置进来也一样，见 returnToCurrentInputMode）。
-            layout.setSkin(skin)
+            layout.setSkin(skin, scene: KeyboardPreferences.scene)
             layout.setLayer(.skins)
         case .selectSkin(let newSkin):
             skin = newSkin
             KeyboardPreferences.skin = newSkin
-            layout.setSkin(newSkin)
+            KeyboardPreferences.scene = nil
+            layout.setSkin(newSkin, scene: nil)
             applyTheme()
+        case .selectScene(let theme):
+            self.selectScene(theme)
         case .showKeyboardModes:
             layout.setKeyboardModes(modes, traditional: engine.mode() == .traditional)
             layout.setLayer(.keyboardModes)

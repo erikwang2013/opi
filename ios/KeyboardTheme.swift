@@ -324,7 +324,8 @@ extension KeyboardViewController {
         // `.light` 与 `.follow` 是同一份浅色板（`SkinOption.palette`），一并交回
         // 系统；其余皮肤有自己的底色，保持主题。暗光/长辈模式会换成深色或高对比
         // 色板，顶部图标在系统浅色背景上会失去对比度 —— 一并排除。
-        if #available(iOS 26.0, *), skin == .follow || skin == .light,
+        if #available(iOS 26.0, *), KeyboardPreferences.scene == nil,
+            skin == .follow || skin == .light || skin == .fresh,
             style == .light, !modes.dark, !modes.elder
         {
             native = true

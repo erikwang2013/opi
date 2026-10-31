@@ -33,7 +33,9 @@ export const ONE_HAND_RIGHT: number = 2;
 let view: number = PanelView.None;
 /** 从设置页打开子面板时的返回落点（其余面板返回 = 键面）。 */
 let returnView: number = PanelView.None;
-let skinIndex: number = 0;
+let skinIndex: number = 5;
+/** 动态插画主题 id；空 = 纯色皮肤。 */
+let sceneId: string = '';
 let darkOn: boolean = false;
 let elderOn: boolean = false;
 let oneHand: number = ONE_HAND_OFF;
@@ -52,6 +54,7 @@ let emojiReturnMode: OpiMode = OpiMode.Pinyin;
 /** 从偏好恢复（扩展 init 时一次；没存过的项保持现缺省）。 */
 export function restore(s: SettingsStore.ImeSettings): void {
   if (s.skin >= 0 && s.skin < 12) { skinIndex = s.skin; }
+  sceneId = s.scene;
   darkOn = s.dark;
   elderOn = s.elder;
   if (s.oneHand >= ONE_HAND_OFF && s.oneHand <= ONE_HAND_RIGHT) { oneHand = s.oneHand; }
@@ -101,6 +104,17 @@ export function setSkinValue(i: number): void {
     skinIndex = i;
     SettingsStore.saveSkin(i);
   }
+}
+
+export function sceneValue(): string { return sceneId; }
+export function setSceneValue(id: string): void {
+  sceneId = id;
+  SettingsStore.saveScene(id);
+}
+export function clearScene(): void {
+  if (sceneId.length === 0) { return; }
+  sceneId = '';
+  SettingsStore.saveScene('');
 }
 
 export function darkEnabled(): boolean { return darkOn; }

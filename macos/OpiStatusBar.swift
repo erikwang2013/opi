@@ -195,7 +195,7 @@ final class OpiStatusBar: NSObject {
         }
         let palette = OpiTheme.palette
         let sig = shown.map { String($0.rawValue) }.joined(separator: ",")
-            + "|\(settings.scale)|\(OpiTheme.skin.rawValue)"
+            + "|\(settings.scale)|\(OpiTheme.skin.rawValue)|\(OpiTheme.scene?.rawValue ?? "")"
             + "|\(OpiTheme.darkPanels)|\(OpiTheme.elderPanels)"
 
         if panel == nil || sig != signature {

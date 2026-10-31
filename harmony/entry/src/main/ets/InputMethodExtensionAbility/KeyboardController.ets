@@ -393,20 +393,22 @@ export class KeyboardController {
   }
 
   selectSkin(i: number): void {
+    KeyboardModes.clearScene();
     KeyboardModes.setSkinValue(i);
     this.publish();
   }
 
+  /** 动态主题：配色跟主题默认纯色皮肤走（与其它端同一条）。 */
+  selectScene(skin: number, id: string): void {
+    KeyboardModes.setSkinValue(skin);
+    KeyboardModes.setSceneValue(id);
+    this.publish();
+  }
   toggleDark(): void { KeyboardModes.toggleDark(); this.publish(); }
-
   toggleElder(): void { KeyboardModes.toggleElder(); this.publish(); }
-
   setOneHand(v: number): void { KeyboardModes.setOneHandValue(v); this.publish(); }
-
   toggleFloating(): void { KeyboardModes.toggleFloating(); this.applyPanelWindow(); this.publish(); }
-
   toggleGame(): void { KeyboardModes.toggleGame(); this.applyPanelWindow(); this.publish(); }
-
   /** 收起键盘（会话还在；下次 inputStart 仍是同一扩展）。 */
   hideKeyboard(): void {
     if (this.kbController === null) {
@@ -419,9 +421,7 @@ export class KeyboardController {
 
   /** 符号页（符/?123）与生僻字面板：面板视图，不碰引擎。 */
   openSymbolPage(): void { AssociationGuard.dismissIfNeeded(); KeyboardModes.openPanel(PanelView.SymbolPage); this.publish(); }
-
   openRare(): void { AssociationGuard.dismissIfNeeded(); KeyboardModes.openPanel(PanelView.Rare); this.publish(); }
-
   /** 联想态点候选行空白：收起（`tapTiledCandidate` 不走这里 —— 那是链式选词）。 */
   dismissAssociation(): void { AssociationGuard.dismiss(); }
 

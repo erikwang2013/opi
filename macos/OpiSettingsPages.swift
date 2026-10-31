@@ -120,16 +120,27 @@ extension OpiSettingsWindow {
     func buildAppearance() {
         setPageHeight(560)
         label("外观", y: 8, size: 18, bold: true)
-        note("皮肤与显示模式只作用于 OPI 自绘面板（状态栏、虚拟键盘、表情/贴纸）。系统候选窗与设置窗本身保持 macOS 外观。",
+        note("11 款纯色 + 19 套动态插画：纯色只换配色，动态主题插画与配色一起换。只作用于 OPI 自绘面板（状态栏、虚拟键盘、表情/贴纸）；系统候选窗与设置窗本身保持 macOS 外观。",
              y: 34, height: 34)
 
         label("皮肤", y: 84, size: 13)
-        let all = OpiSkin.allCases
-        popup(all.map { $0.title }, x: 96, y: 79, w: 160,
-              selected: all.firstIndex(of: OpiTheme.skin) ?? 0,
+        let all = OpiSkinChoice.all
+        popup(all.map { $0.title }, x: 96, y: 79, w: 180,
+              selected: all.firstIndex(of: OpiTheme.currentChoice) ?? 0,
               action: #selector(skinChanged(_:)))
-        label("当前：\(OpiTheme.skin.title)", x: 270, y: 84, w: 220, size: 12,
+        label("当前：\(OpiTheme.currentChoice.title)", x: 290, y: 84, w: 160, size: 12,
               color: .secondaryLabelColor)
+        if let scene = OpiTheme.scene, let img = scene.image {
+            let iv = NSImageView(frame: NSRect(x: 470, y: 62, width: 220, height: 124))
+            iv.image = img
+            iv.imageScaling = .scaleProportionallyUpOrDown
+            iv.wantsLayer = true
+            iv.layer?.cornerRadius = 6
+            iv.layer?.masksToBounds = true
+            iv.layer?.borderWidth = 1
+            iv.layer?.borderColor = NSColor.separatorColor.cgColor
+            host?.addSubview(iv)
+        }
 
         let palette = OpiTheme.palette
         let colors = [palette.bg, palette.fg, palette.hover, palette.line, palette.accent]
@@ -159,9 +170,9 @@ extension OpiSettingsWindow {
     }
 
     @objc func skinChanged(_ sender: NSPopUpButton) {
-        let all = OpiSkin.allCases
+        let all = OpiSkinChoice.all
         guard all.indices.contains(sender.indexOfSelectedItem) else { return }
-        OpiTheme.skin = all[sender.indexOfSelectedItem]
+        OpiTheme.select(all[sender.indexOfSelectedItem])
         OpiTheme.notifyChanged()
         rebuildPage()
     }
