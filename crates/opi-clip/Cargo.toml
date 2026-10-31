@@ -1,0 +1,25 @@
+[package]
+name = "opi-clip"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+# 纯逻辑库：各端薄壳自行决定静态/动态链接（iOS 仍走 opi_ffi 的 staticlib）。
+crate-type = ["lib", "staticlib"]
+
+[dependencies]
+getrandom = "0.3"
+hex = "0.4"
+postcard = { version = "1", default-features = false, features = ["use-std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+# 不用 snow 的 std/ring feature：分帧由本 crate 自己做，纯 Rust 解析器即可，
+# 避免引入 ring（减少构建面与依赖）。
+snow = { version = "0.10", default-features = false, features = ["default-resolver", "default-resolver-crypto"] }
+# 仅为发现套接字设置 SO_REUSEADDR/SO_REUSEPORT（同机多实例与 loopback 测试）。
+socket2 = "0.6"
+thiserror = "2"
+x25519-dalek = { version = "2", default-features = false, features = ["static_secrets", "zeroize"] }
