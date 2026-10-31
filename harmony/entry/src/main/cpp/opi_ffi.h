@@ -316,6 +316,11 @@ OpiString opi_toggle_symbol(void);
 /// 自己无条件 deleteForward(1) 会吞掉这个信号，表现成「删不掉已上屏的字」。
 OpiKeyEventResult opi_key_event(uint32_t keyval, uint32_t states);
 
+// TODO(opi-clip, 2026-11-01)：C ABI / JNI 已就绪（crates/opi-ffi/src/cabi_clip.rs），
+// 鸿蒙本轮**不接**剪贴板。接线时在这里补 OpiClip 与 opi_clip_* 声明，并在
+// napi_bridge.c 真调用 —— 本头文件是 use-site 子集，门禁要求「声明即被调用」
+// （harmony_header_is_consistent_use_site_subset），不需要等于全集。
+
 #ifdef __cplusplus
 }
 #endif

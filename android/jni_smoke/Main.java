@@ -78,6 +78,20 @@ final class OpiEngine {
     static native String dictList();
     static native boolean setDictEnabled(String name, boolean on);
     static native boolean removeDict(String name);
+    // opi-clip：函数体由 c_abi/consumer_clip.c 与 cabi_clip 单测取证；整表注册要求这里声明全部 13 条。
+    static native long clipCreate(String configJson);
+    static native void clipDestroy(long handle);
+    static native boolean clipStart(long handle);
+    static native void clipStop(long handle);
+    static native int clipLocalText(long handle, String text);
+    static native String clipPollEvent(long handle, int timeoutMs);
+    static native boolean clipPairStart(long handle, String peerId);
+    static native boolean clipPairConfirm(long handle, String peerId, boolean accept);
+    static native boolean clipPairCancel(long handle, String peerId);
+    static native String clipPeers(long handle);
+    static native boolean clipForgetPeer(long handle, String peerId);
+    static native String clipStatus(long handle);
+    static native String clipLastError();
 }
 public final class Main {
     static int failures = 0;
@@ -102,7 +116,6 @@ public final class Main {
         // 装载：args[0] 词库路径；缺失走内置回退（也必须成功）。
         String dict = args.length > 0 ? args[0] : null;
         check(OpiEngine.load(dict), "load(" + dict + ") 应为 true");
-
         // 初始模式 Pinyin(0)
         check(OpiEngine.mode() == 0, "初始 mode 应为 0");
 
@@ -129,7 +142,6 @@ public final class Main {
         check("".equals(OpiEngine.inputKey("ab")), "inputKey(ab) 返回空串");
         check("".equals(OpiEngine.inputKey("")), "inputKey(空) 返回空串");
         check("".equals(OpiEngine.buffer()), "非法输入后 buffer 仍为空");
-
         // 模式切换：0→1，越界忽略
         OpiEngine.switchMode(1);
         check(OpiEngine.mode() == 1, "switchMode(1) 后 mode==1");
@@ -159,7 +171,6 @@ public final class Main {
         check(!OpiEngine.learnerEnabled(), "setLearner(false) 生效");
         OpiEngine.setLearner(true);
         check(OpiEngine.learnerEnabled(), "setLearner(true) 生效");
-
         // 「属性设置」两个开关（2026-10-08）：读回环。⚠️ 2026-10-15 缺省翻转为「关/0」
         // （引擎 + 四端一起翻）；写路径先开再关（对已是关的写 false 无分辨力），缺省须先读。
         check(!OpiEngine.fuzzyEnabled(), "fuzzy 缺省关（2026-10-15 裁决）");
@@ -192,7 +203,6 @@ public final class Main {
         check(OpiEngine.scheme() == 1, "越界值忽略（仍为 1）");
         OpiEngine.setScheme(0);
         check(OpiEngine.scheme() == 0, "换回全键盘");
-
         // 双拼布局（2026-10-13）：同一条整数回环 + 钳制的两个方向（与 C 面 consumer.c
         // 逐条对照，那是双面的行为契约）。「布局真的能解码」归 engine-core。
         check(OpiEngine.shuangpinLayout() == 0, "双拼布局默认自然码（0）");
@@ -209,7 +219,6 @@ public final class Main {
         check(words != null && !words.isEmpty() && words.contains("\"version\""), "exportUserWords 含 version");
         OpiEngine.clearUserWords();
         check("{\"version\":1,\"words\":[]}".equals(OpiEngine.exportUserWords()), "清空后导出为空列表");
-
         // 符号：块 + 块内符号 + 搜索
         String blocks = OpiEngine.symbolBlocks();
         check(blocks != null && blocks.contains("\"id\""), "symbolBlocks 含 id");
@@ -251,7 +260,6 @@ public final class Main {
         check(!emojiSet.contains("🇨🇳"), "emojiSymbols 不得含旗帜（常用子集已排除）");
         check(emojiSet.contains("❤️"), "emojiSymbols 必须含 VS16 形 ❤️（旧表只有裸 ♥）");
         check(!emojiSet.contains("🞀"), "emojiSymbols 不得含非 emoji 的 🞀(U+1F780)");
-
         // emojiGroups（2026-10-12）：分类条 `[{name,start,count}]`，纯静态表（未装载也有值）。
         // 判据：9 组 + 首组「笑脸」start=0 + 各组 count 之和 == emojiSymbols 条数。
         String groups = OpiEngine.emojiGroups();
@@ -296,7 +304,6 @@ public final class Main {
         String disp = OpiEngine.displayBuffer();
         check(buf != null && disp != null, "buffer/displayBuffer 都必须可读");
         check(buf.equals(disp), "非 9 键方案下 displayBuffer 必须与 buffer 相同（实得：" + buf + "/" + disp + "）");
-
         // loadTrad：空路径必须 false（引擎已装载，但坏路径不得动既有词库）
         check(!OpiEngine.loadTrad(""), "loadTrad(空) 应为 false");
         check(OpiEngine.mode() == 0, "loadTrad 失败不得改模式（此时应为 0/Pinyin）");
@@ -333,7 +340,6 @@ public final class Main {
         check(OpiEngine.chinesePunct(), "chinesePunct 不随 switchMode 重置（用户偏好）");
         OpiEngine.switchMode(0); // 回 Pinyin（全角默认值）
         check(OpiEngine.fullwidthState(), "switchMode(0) 回拼音的全角默认值");
-
         // toggleSymbol：空缓冲 → 空串，且切进 Symbol(3)；再切一次回 Pinyin
         check("".equals(OpiEngine.toggleSymbol()), "toggleSymbol 空缓冲返回空串");
         check(OpiEngine.mode() == 3, "toggleSymbol 后 mode==3(Symbol)");
@@ -379,7 +385,6 @@ public final class Main {
         String[] back = OpiEngine.candidates(8);
         check(back != null && back.length > 0, "切回后候选按同一缓冲重新算出");
         OpiEngine.setScheme(0); // 回全键盘
-
         // pinReading（2026-10-09）：钉读音 —— 候选**收窄**、**不上屏**；空串解除。
         OpiEngine.setScheme(1); // 9 键
         OpiEngine.inputKey("6");
@@ -409,7 +414,6 @@ public final class Main {
             (WORD + "\tce\t999999999\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
         int dn = OpiEngine.importDict(tsv.toString());
         check(dn == 1, "importDict 返回条目数 1（实得 " + dn + "）");
-
         // 真进了引擎：打 ce 的候选里有它（limit 给 64 —— CI 拿的是完整 luna.opid，
         // ce 一族候选比本地回退库多得多；频次贴 u32 上限保证排得进）。
         OpiEngine.clear();
@@ -437,7 +441,6 @@ public final class Main {
         OpiEngine.inputKey("c");
         OpiEngine.inputKey("e");
         check(has(OpiEngine.candidates(64), WORD), "再启用后候选里应有它");
-
         check(OpiEngine.importDict(tsv.toString()) == -1, "路径已不存在 → -1");
         check(OpiEngine.removeDict("smoke"), "removeDict → true");
         check(!OpiEngine.removeDict("smoke"), "已经不在 → false");
@@ -487,7 +490,6 @@ public final class Main {
         OpiEngine.setWubiReturnStyle(0);
         OpiEngine.setScheme(0);
         check(OpiEngine.scheme() == 0, "切回全键盘");
-
         if (failures == 0) {
             System.out.println("SMOKE-OK");
         } else {

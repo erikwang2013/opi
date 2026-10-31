@@ -431,7 +431,25 @@ fn emoji_groups_index_the_full_emoji_list() {
 #[test]
 fn every_export_is_actually_exercised_here() {
     // 按设计排除：本文件不得装载引擎（见文件头），故 `opi_load` 永不在此调用。
-    const BY_DESIGN_EXCLUDED: &[&str] = &["opi_load"];
+    // opi-clip 的 13 条出口**不经过引擎单例**（句柄自带生命周期），「未装载哨兵」
+    // 这一档不适用；它们的未 start 哨兵与全生命周期由 `tests/c_abi/consumer_clip.c`
+    // （run.sh 真链接执行）和 `cabi_clip` 单测覆盖。
+    const BY_DESIGN_EXCLUDED: &[&str] = &[
+        "opi_load",
+        "opi_clip_create",
+        "opi_clip_destroy",
+        "opi_clip_start",
+        "opi_clip_stop",
+        "opi_clip_local_text",
+        "opi_clip_poll_event",
+        "opi_clip_pair_start",
+        "opi_clip_pair_confirm",
+        "opi_clip_pair_cancel",
+        "opi_clip_peers",
+        "opi_clip_forget_peer",
+        "opi_clip_status",
+        "opi_clip_last_error",
+    ];
 
     // 只看**代码**：注释先剥掉，免得文档里提一句 `opi_xxx(` 就被算作已覆盖。
     let body = checker::strip_c_comments(include_str!("cabi_unloaded.rs"));

@@ -61,6 +61,11 @@ typedef struct {
     OpiString text;
 } OpiKeyEventResult;
 
+/// opi-clip 不透明句柄（真源 `cabi_clip.rs` 的 `OpiClip`）。句柄**不可跨线程**：
+/// 除 `opi_clip_last_error` 外，所有调用必须在创建它的线程；错线程返回哨兵并写
+/// lastError。错误线程上的 `opi_clip_destroy` 只泄漏、不释放（不制造 UB）。
+typedef struct OpiClip OpiClip;
+
 /// 释放 opi_* 返回的 OpiString。每个句柄恰好释放一次，重复释放是 UB。
 void opi_ffi_free_string(OpiString s);
 
@@ -389,6 +394,57 @@ uint32_t opi_page(void);
 /// 英文直传路径的大小写由它决定，引擎位看不出来 —— ⇧ 的高亮（尤其 Lock）只能读这里。
 /// ⚠️ 本目录**尚未调用**它（macOS 端目前没有 ⇧ 高亮 UI）。
 int32_t opi_shift_state(void);
+
+// ---------- 局域网剪贴板（opi-clip，2026-11-01）----------
+//
+// 生命周期：create → start → … → stop → destroy。create 只解析配置，start 才绑端口/
+// 起线程；start/stop/destroy 幂等，destroy(NULL) 安全。
+// 失败统一返回哨兵（NULL / false / -1 / 空 OpiString），原因读 opi_clip_last_error()。
+// 单条事件 JSON 上限 1 MiB（超限丢弃并写 last_error）；文本本身上限 256 KiB。
+// 事件 `type`：peer_discovered / peer_offline / pairing_prompt / pairing_finished /
+// clipboard_received / send_failed / error。
+
+/// config_json 形如 `{"data_dir":"...","tcp_port":0,"discovery_port":45888,
+/// "device_name":"..."}`；data_dir 为空、JSON 坏、端口 0 → NULL。
+OpiClip* opi_clip_create(const uint16_t *config_json, size_t len);
+
+/// 停止并释放句柄；NULL 安全。必须在创建它的线程调用。
+void opi_clip_destroy(OpiClip *clip);
+
+/// 绑定端口并起后台线程；重复调用幂等（已运行 → true）。
+bool opi_clip_start(OpiClip *clip);
+
+/// 停止后台线程；幂等，未 start 也成功。
+void opi_clip_stop(OpiClip *clip);
+
+/// 本地剪贴板变化 → 0=已发布 1=防回环抑制（正常） -1=失败（未 start/超限/NULL）。
+int32_t opi_clip_local_text(OpiClip *clip, const uint16_t *text, size_t len);
+
+/// 取一条事件 JSON；空串 = 这段时间没有事件。timeout_ms=0 立即返回（非阻塞），
+/// >0 最多等 1 秒。
+OpiString opi_clip_poll_event(OpiClip *clip, uint32_t timeout_ms);
+
+/// 对已发现的对端发起配对；peer_id 是 32 位十六进制实例 ID。
+bool opi_clip_pair_start(OpiClip *clip, const uint16_t *peer_id, size_t len);
+
+/// 收到 pairing_prompt 后接受/拒绝一次。
+bool opi_clip_pair_confirm(OpiClip *clip, const uint16_t *peer_id, size_t len, bool accept);
+
+/// 等价于 `opi_clip_pair_confirm(..., false)`。
+bool opi_clip_pair_cancel(OpiClip *clip, const uint16_t *peer_id, size_t len);
+
+/// 对端快照 JSON 数组；未 start → `[]`。
+OpiString opi_clip_peers(OpiClip *clip);
+
+/// 移除信任；不存在的对端也算成功（幂等）。
+bool opi_clip_forget_peer(OpiClip *clip, const uint16_t *peer_id, size_t len);
+
+/// 状态 JSON：`{running,instance_id,fingerprint,device_name,tcp_port,
+/// discovery_port,peers}`；未 start 时 instance_id/fingerprint 为 null。
+OpiString opi_clip_status(OpiClip *clip);
+
+/// 最近一次失败原因；空串 = 没有错误。按线程记录（句柄不跨线程）。
+OpiString opi_clip_last_error(void);
 
 #ifdef __cplusplus
 }

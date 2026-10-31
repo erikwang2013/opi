@@ -39,6 +39,7 @@ pub fn canon_rust(t: &str) -> String {
         "bool" => "bool",
         "()" => "void",
         "*constu16" => "constuint16_t*",
+        "*mutOpiClip" => "OpiClip*",
         other => other,
     };
     mapped.to_string()
@@ -118,6 +119,8 @@ pub fn split_args(s: &str) -> Vec<String> {
         cur.push(c);
     }
     out.push(cur);
+    // Rust 多行参数表的**尾逗号**是合法的（rustfmt 会加），不能算一个空参数。
+    out.retain(|p| !p.trim().is_empty());
     out
 }
 
@@ -380,6 +383,9 @@ pub const CABI_SCHEME: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/cabi_sch
 /// 自定义短语族（2026-10-23）。拆出即必须并入 `read_cabi()`，否则那批出口从
 /// 契约门禁视野里静默消失（本文件头注记的老病）。
 pub const CABI_PHRASES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/cabi_phrases.rs");
+/// opi-clip 的 C 出口（2026-11-01）。不透明句柄 + 13 条 `opi_clip_*`；同样必须
+/// 并入 `read_cabi()`，否则 macOS 头文件与 Rust 导出的集合比对看不见这一族。
+pub const CABI_CLIP: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/cabi_clip.rs");
 /// 同上，「属性设置」旋钮族那一半（2026-10-13：加拼音纠错后 cabi.rs 505/500 拆出）。
 /// ⚠️ 与 `jni/checker.rs` 的 `JNI_SWITCHES` 是镜像 —— 两轨族边界一致。
 pub const CABI_SWITCHES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/cabi_switches.rs");
@@ -405,7 +411,7 @@ pub fn read(p: &str) -> String {
 /// 拼接用换行，保证相邻两文件的行不会粘成一行（解析按行扫）。
 pub fn read_cabi() -> String {
     format!(
-        "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
+        "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
         read(CABI),
         read(CABI_USER_WORDS),
         read(CABI_SCHEME),
@@ -413,7 +419,8 @@ pub fn read_cabi() -> String {
         read(CABI_SWITCHES),
         read(CABI_DICT),
         read(CABI_WUBI),
-        read(CABI_PHRASES)
+        read(CABI_PHRASES),
+        read(CABI_CLIP)
     )
 }
 

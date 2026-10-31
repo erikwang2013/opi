@@ -70,6 +70,7 @@ static const uint16_t W = 'w', O = 'o', X = 'x';
 #include "consumer_wubi.c"    /* [13] 五笔旋钮族 */
 #include "consumer_phrases.c" /* [14] 自定义短语 */
 #include "consumer_meta.c"    /* [15] 版本/页大小/待提交/语言切换 */
+#include "consumer_clip.c"    /* [16] opi-clip 句柄生命周期/事件/配对 */
 int main(int argc, char **argv) {
     /* ---------- 装载 ---------- */
     printf("[1] opi_load\n");
@@ -493,7 +494,7 @@ int main(int argc, char **argv) {
     opi_ffi_free_string((OpiString){NULL, 0});
     opi_ffi_free_string((OpiString){NULL, 0});
     CHECK(1, "空句柄重复释放未崩溃");
-
+    check_clip_exports();
     printf("\n结果：%d/%d 通过（%d 失败）\n", checks - failures, checks, failures);
     return failures == 0 ? 0 : 1;
 }

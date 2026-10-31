@@ -470,6 +470,8 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _reserved: *mut c
         methods.extend(crate::jni_wubi::wubi_native_methods());
         // 自定义短语四条（2026-10-23）在 `jni_phrases.rs`，同一条 extend 手续。
         methods.extend(crate::jni_phrases::custom_phrase_native_methods());
+        // opi-clip 的 13 条（2026-11-01）在 `jni_clip.rs`；`OpiEngine.kt` 已声明。
+        methods.extend(crate::jni_clip::clip_native_methods());
         unsafe {
             env.register_native_methods(class, &methods)
                 .map_err(|e| format!("register_natives 失败: {e}"))?;
