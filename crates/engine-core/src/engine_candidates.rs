@@ -60,11 +60,11 @@ impl Engine {
                     },
                 );
             }
-            // 符号/标点/颜文字名称（2026-10-31）：英文模式用英文名，追加在英文词之后。
-            crate::name_keywords::append_to(&mut cands, &s.buffer, limit, Mode::English);
             // emoji 输入匹配（2026-10-18）：追加在英文词之后、受 limit 约束 ——
             // 单词候选填满时一个也不进，`hello` 这类词的首位不受影响。
             crate::emoji_keywords::append_to(&mut cands, &s.buffer, limit);
+            // 符号/标点/颜文字名称（2026-10-31）：英文模式用英文名，排在 emoji 之后。
+            crate::name_keywords::append_to(&mut cands, &s.buffer, limit, Mode::English);
             return cands;
         }
         // 提交后联想（2026-10-27）：缓冲空时候选行 = 提交时算好的联想项。
@@ -208,10 +208,11 @@ impl Engine {
         // ⚠️ 边界：9/14 键与双拼在上面各自 return，**本轮不覆盖**（数字/编码缓冲
         // 不是关键字前缀；要覆盖得先解码成拼音，见 tests/emoji_match.rs 文件头）。
         if !plain && matches!(s.mode, Mode::Pinyin | Mode::Traditional) {
-            // 符号/标点/颜文字名称（2026-10-31）：中文模式用拼音名；先于 emoji，
-            // 让「左括号」这类明确的文本优先于趣味表情。
-            crate::name_keywords::append_to(&mut cands, &s.buffer, limit, s.mode);
+            // 先 emoji、再符号/标点/颜文字名称（2026-10-31）：短前缀如 `xiao`
+            // 仍由表情占满 limit，不会因为「小于号」等名称而把笑脸挤掉；
+            // 名称层继续填剩余空位（`zuokuohao` 这类没有表情的输入照常命中）。
             crate::emoji_keywords::append_to(&mut cands, &s.buffer, limit);
+            crate::name_keywords::append_to(&mut cands, &s.buffer, limit, s.mode);
         }
         cands
     }

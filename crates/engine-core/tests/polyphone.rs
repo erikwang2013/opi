@@ -13,12 +13,13 @@ use engine_core::candidates::CandidateKind;
 use engine_core::dictionary::InMemoryDictionary;
 use engine_core::symbols::SymbolEngine;
 
-/// 本文件钉的是**词库/补读音**候选：emoji 输入匹配（2026-10-18）是另一层，
-/// 追加在文本候选之后、会填满 limit 的空位 —— 它不参与这里「一个字都不多加」的判据。
+/// 本文件钉的是**词库/补读音**候选：emoji（2026-10-18）与符号/颜文字名称
+/// （2026-10-31）都是另一层，追加在文本候选之后、会填满 limit 的空位 ——
+/// 它们不参与这里「一个字都不多加」的判据。
 fn text_texts(e: &Engine, limit: usize) -> Vec<String> {
     e.candidates(limit)
         .into_iter()
-        .filter(|c| c.kind != CandidateKind::Emoji)
+        .filter(|c| c.kind == CandidateKind::Hanzi)
         .map(|c| c.text)
         .collect()
 }
