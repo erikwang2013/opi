@@ -50,7 +50,7 @@ struct Index {
           .width('100%').height('100%').objectFit(ImageFit.Cover)
         Column()
           .width('100%').height('100%')
-          .backgroundColor(this.pal().barBg).opacity(0.45)
+          .backgroundColor(this.pal().barBg).opacity(0.18)
       }
       Column() {
       TopBar()

@@ -19,6 +19,11 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.pointerInput
@@ -34,6 +39,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import xyz.erik.opi.ime.LocalSceneActive
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
@@ -93,6 +99,7 @@ fun KeyButton(
 ) {
     val palette = LocalKeyboardPalette.current
     val fg = if (highlighted) palette.keyHighlightFg else palette.keyFg
+    val sceneActive = LocalSceneActive.current
     val press = remember { RepeatPressState() }
     val latestOnTap = rememberUpdatedState(onTap)
     val hasAlternatives = alternatives.isNotEmpty()
@@ -238,7 +245,23 @@ fun KeyButton(
         }
         // Ellipsis：窄屏单手/320dp 下「生僻字」「英文」这类多字键不再被硬裁成半个字
         // （读者仍能看出是哪个键；完整读屏名走 contentDescription）。
-        Text(label, fontSize = fontSize, maxLines = 1, overflow = TextOverflow.Ellipsis, color = fg)
+        Text(
+            label,
+            fontSize = fontSize,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            color = fg,
+            style = if (sceneActive) {
+                TextStyle(
+                    shadow = Shadow(
+                        color = if (fg.luminance() > 0.5f) Color.Black.copy(alpha = 0.45f)
+                        else Color.White.copy(alpha = 0.45f),
+                        offset = Offset(0f, 1f),
+                        blurRadius = 3f,
+                    ),
+                )
+            } else TextStyle.Default,
+        )
         if (popupOpen) {
             KeyAlternativesPopup(
                 alternatives,

@@ -12,6 +12,7 @@ package xyz.erik.opi.ime
 
 import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -23,6 +24,12 @@ import xyz.erik.opi.scene.rememberOpiScenePhase
 
 /** 键区底色不透明度：留 55% 给插画，颜色仍来自当前皮肤。 */
 internal const val KEY_AREA_SCRIM_ALPHA = 0.45f
+
+/** 动态皮肤下的键区底色：再让出插画，键面自己另有半透明键帽（见 KeyPlate.kt）。 */
+internal const val KEY_AREA_SCENE_SCRIM_ALPHA = 0.16f
+
+/** 当前是不是动态插画皮肤（键面需要透出插画并给文字加一点阴影）。 */
+internal val LocalSceneActive = compositionLocalOf { false }
 
 /** 工具条底色不透明度：图标区几乎不透明，只让插画透一成（候选栏保持全不透明保可读性）。 */
 internal const val TOOLBAR_SCENE_ALPHA = 0.90f

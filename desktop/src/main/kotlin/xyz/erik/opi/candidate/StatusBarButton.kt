@@ -63,6 +63,7 @@ internal fun BarButton(
     val hovered by interaction.collectIsHoveredAsState()
     val pressed by interaction.collectIsPressedAsState()
     val palette = LocalBarPalette.current
+    val sceneActive = LocalBarSceneActive.current
     // 英文专业键常亮（2026-10-19）：否则切了 pro 看不出任何变化。用既有 hover 色，
     // 不新造颜色/角色（见 SkinPalette.kt 的角色映射）。键帽本身是固定白底（设计图），
     // 这一圈 hover 只露在键帽外缘 —— 激活态仍可见，且不染色键帽。
@@ -77,6 +78,7 @@ internal fun BarButton(
     val keyPlated = b != StatusBarButton.ENPRO && b != StatusBarButton.MODE
     val shape = RoundedCornerShape((metrics.button.value * 0.18f).dp)
     val plate = lerp(palette.bg, palette.fg, 0.07f)
+        .copy(alpha = if (sceneActive) 0.62f else 1f)
     val plateBg = when {
         pressed -> lerp(plate, palette.accent, 0.32f)
         hovered || active -> lerp(plate, palette.fg, 0.09f)

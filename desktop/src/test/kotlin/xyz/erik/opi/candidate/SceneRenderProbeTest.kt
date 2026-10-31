@@ -192,15 +192,20 @@ class SceneRenderProbeTest {
         val h = (metrics.height.value + 2f * halo.value).toInt()
         val barPalette = skinColors(SkinOption.PAPER)
         val img = render("statusbar", w, h) {
-            CompositionLocalProvider(LocalBarPalette provides barPalette) {
+            CompositionLocalProvider(
+                LocalBarPalette provides barPalette,
+                LocalBarSceneActive provides true,
+            ) {
                 Box(Modifier.fillMaxSize()) {
                     StatusBarOverflowScene(barPalette, SceneTheme.MEADOW, halo, metrics.height, Modifier.fillMaxSize())
                     val shape = RoundedCornerShape((metrics.button.value * 0.18f).dp)
                     Box(
                         Modifier.offset(halo, halo).size(barW.dp, metrics.height)
-                            .clip(barShape(false)).background(barPalette.bg)
+                            .clip(barShape(false))
                             .border(1.dp, barPalette.line),
                     ) {
+                        StatusBarSceneBackdrop(barPalette, SceneTheme.MEADOW, Modifier.fillMaxSize())
+                        Box(Modifier.fillMaxSize().background(barPalette.bg.copy(alpha = 0.42f)))
                         Row(
                             Modifier.fillMaxSize().padding(horizontal = metrics.pad),
                             verticalAlignment = Alignment.CenterVertically,
@@ -209,7 +214,7 @@ class SceneRenderProbeTest {
                             for (b in buttons) {
                                 Box(
                                     Modifier.size(metrics.button).clip(shape)
-                                        .background(lerp(barPalette.bg, barPalette.fg, 0.07f))
+                                        .background(lerp(barPalette.bg, barPalette.fg, 0.07f).copy(alpha = 0.62f))
                                         .border(1.dp, barPalette.line.copy(alpha = 0.72f), shape),
                                     contentAlignment = Alignment.Center,
                                 ) {

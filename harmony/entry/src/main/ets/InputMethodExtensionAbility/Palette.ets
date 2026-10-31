@@ -50,43 +50,47 @@ export class Skin {
 }
 
 const LIGHT: Palette = new Palette(
-  '#E0E0E0', '#1F1F1F', '#546E7A', '#FFFFFF', '#EEEEEE', '#8A000000', '#757575',
+  '#B8E0E0E0', '#1F1F1F', '#546E7A', '#FFFFFF', '#EEEEEE', '#8A000000', '#757575',
   '#455A64', '#EEEEEE', '#1F1F1F', '#E0E0E0', '#455A64');
 const DARK: Palette = new Palette(
-  '#2A2A2A', '#E6E6E6', '#4A6572', '#FFFFFF', '#1F1F1F', '#CCE6E6E6', '#9E9E9E',
+  '#B82A2A2A', '#E6E6E6', '#4A6572', '#FFFFFF', '#1F1F1F', '#CCE6E6E6', '#9E9E9E',
   '#9FB4BE', '#1F1F1F', '#E6E6E6', '#2A2A2A', '#CFD8DC');
 const ELDER: Palette = new Palette(
   '#FAFAFA', '#000000', '#263238', '#FFFFFF', '#FFFFFF', '#FF000000', '#424242',
   '#263238', '#FFFFFF', '#000000', '#F5F5F5', '#263238');
 const PAPER: Palette = new Palette(
-  '#E7DFCC', '#3D3222', '#8A5A2B', '#FFFBF2', '#F5EFE1', '#CC3D3222', '#8A7A5B',
+  '#B8E7DFCC', '#3D3222', '#8A5A2B', '#FFFBF2', '#F5EFE1', '#CC3D3222', '#8A7A5B',
   '#8A5A2B', '#F5EFE1', '#3D3222', '#E7DFCC', '#8A5A2B');
 const CINNABAR: Palette = new Palette(
-  '#9E2228', '#FFF6EC', '#FFD9A0', '#5A1012', '#8A1C21', '#CCFFF6EC', '#E8BCB4',
-  '#FFD9A0', '#9E2228', '#FFF6EC', '#8A1C21', '#FFD9A0');
+  '#B89E2228', '#FFF6EC', '#FFD9A0', '#5A1012', '#8A1C21', '#CCFFF6EC', '#E8BCB4',
+  '#FFD9A0', '#B89E2228', '#FFF6EC', '#8A1C21', '#FFD9A0');
 const FRESH: Palette = new Palette(
-  '#CFE9DF', '#16332B', '#2E7D6B', '#FFFFFF', '#E6F5EE', '#CC16332B', '#4F7A6C',
+  '#B8CFE9DF', '#16332B', '#2E7D6B', '#FFFFFF', '#E6F5EE', '#CC16332B', '#4F7A6C',
   '#2E7D6B', '#E6F5EE', '#16332B', '#CFE9DF', '#2E7D6B');
 const AZURE: Palette = new Palette(
-  '#3C6AA3', '#F4F8FD', '#CFE6FF', '#12395C', '#3A679E', '#F0F4F8FD', '#C9DCF2',
+  '#B83C6AA3', '#F4F8FD', '#CFE6FF', '#12395C', '#3A679E', '#F0F4F8FD', '#C9DCF2',
   '#FFE3A8', '#3A679E', '#F4F8FD', '#33598A', '#FFE3A8');
 const LEMON: Palette = new Palette(
-  '#F9EA6C', '#3A3000', '#7E6200', '#FFFDF0', '#FBEE7E', '#CC3A3000', '#6E5F1E',
+  '#B8F9EA6C', '#3A3000', '#7E6200', '#FFFDF0', '#FBEE7E', '#CC3A3000', '#6E5F1E',
   '#7E6200', '#FBEE7E', '#3A3000', '#F9EA6C', '#5A4A00');
 const SUNSET: Palette = new Palette(
-  '#F4BC8A', '#4A2317', '#A63412', '#FFF3E8', '#F7C79C', '#CC4A2317', '#8E5A40',
+  '#B8F4BC8A', '#4A2317', '#A63412', '#FFF3E8', '#F7C79C', '#CC4A2317', '#8E5A40',
   '#A63412', '#F7C79C', '#4A2317', '#F4BC8A', '#B4441F');
 const STARLIGHT: Palette = new Palette(
-  '#262E4A', '#E8EBF7', '#FFD966', '#23283F', '#161B2E', '#CCE8EBF7', '#9AA3C0',
+  '#B8262E4A', '#E8EBF7', '#FFD966', '#23283F', '#161B2E', '#CCE8EBF7', '#9AA3C0',
   '#FFD966', '#1B2138', '#E8EBF7', '#262E4A', '#FFD966');
 const WISTERIA: Palette = new Palette(
-  '#E3D9F8', '#3A2A63', '#6B4BC4', '#F7F3FF', '#EDE7FB', '#CC3A2A63', '#6E5E96',
+  '#B8E3D9F8', '#3A2A63', '#6B4BC4', '#F7F3FF', '#EDE7FB', '#CC3A2A63', '#6E5E96',
   '#6B4BC4', '#EDE7FB', '#3A2A63', '#E3D9F8', '#5A3AA8');
 const PINE: Palette = new Palette(
-  '#26473A', '#DCEEE2', '#7FD3A2', '#17301F', '#1E3A2F', '#CCDCEEE2', '#9DBFAE',
+  '#B826473A', '#DCEEE2', '#7FD3A2', '#17301F', '#1E3A2F', '#CCDCEEE2', '#9DBFAE',
   '#7FD3A2', '#1E3A2F', '#DCEEE2', '#26473A', '#7FD3A2');
 
-/** 12 款，顺序 = Android `SkinOption.entries`（opiSkin 存的就是本表下标）。 */
+/**
+ * 12 款，顺序 = Android `SkinOption.entries`（opiSkin 存的就是本表下标）。
+ * 键面 keyBg 统一带 72% alpha（#B8）：动态插画要透到键帽上（2026-10-31 用户
+ * 要求）；ELDER 保持不透明（高对比优先）。
+ */
 export const SKINS: Skin[] = [
   new Skin('不改动', LIGHT),
   new Skin('浅色', LIGHT),

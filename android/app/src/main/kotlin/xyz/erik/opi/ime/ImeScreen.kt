@@ -100,6 +100,7 @@ fun ImeScreen(
     CompositionLocalProvider(
         LocalKeyboardPalette provides palette,
         LocalDensity provides density,
+        LocalSceneActive provides (state.scene != null),
     ) {
         // 根列**铺工具条底色**（2026-10-17 用户裁决「红线区域内输入法的其他界面都覆盖了，
         // 只有默认界面没有，默认界面也要全覆盖」）：顶部信息行槽此前透明 ⇒ 窗口
@@ -187,7 +188,7 @@ fun ImeScreen(
                 // 权重分摊的是**整行宽**：键区 0.76 + 空白 0.24 = 屏宽 76/24。行本身必须满宽，
                 // 否则右手模式的键区停在 76% 处、右侧反而多出一条空白（不是贴边）。
                 Row(
-                    modifier = Modifier.weight(1f).fillMaxWidth().background(palette.barBg.copy(alpha = KEY_AREA_SCRIM_ALPHA)),
+                    modifier = Modifier.weight(1f).fillMaxWidth().background(palette.barBg.copy(alpha = if (state.scene != null) KEY_AREA_SCENE_SCRIM_ALPHA else KEY_AREA_SCRIM_ALPHA)),
                 ) {
                     if (modes.oneHand == KeyboardModes.OneHand.RIGHT) {
                         Box(modifier = Modifier.weight(1f - ONE_HAND_WIDTH_RATIO)) // 右手：左边留空

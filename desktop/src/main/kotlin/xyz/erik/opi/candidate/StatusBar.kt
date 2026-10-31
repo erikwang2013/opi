@@ -420,17 +420,29 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
         // Skin=；根部 provide 一次，子 composable 读 LocalBarPalette。
         val theme = s.background
         val palette = skinColors(if (theme != null) theme.defaultSkin() else s.skin)
-        if (shown) CompositionLocalProvider(LocalBarPalette provides palette) {
-            // 根盒 = 整个条窗（条 + 透明边距）；插画铺在边距里，条本体再压在上面。
+        if (shown) CompositionLocalProvider(
+            LocalBarPalette provides palette,
+            LocalBarSceneActive provides (theme != null),
+        ) {
+            // 根盒 = 整个条窗（条 + 透明边距）；条外仍只画错落角色，条内插画在条自己的
+            // 裁剪形状里画 —— 不能在整窗铺底，否则透明边距会被填成一块矩形。
             Box(Modifier.fillMaxSize()) {
-                if (halo > 0.dp && theme != null) {
+                if (theme != null && halo > 0.dp) {
                     StatusBarOverflowScene(palette, theme, halo, metrics.height, Modifier.fillMaxSize())
                 }
                 // Windows = 小圆角（Linux 的 shape 是 RectangleShape，像素不变）。
                 Box(
                     Modifier.offset(halo, halo).size(barWidth.dp, metrics.height)
-                        .clip(shape).background(palette.bg).border(1.dp, palette.line, shape),
+                        .clip(shape)
+                        .border(1.dp, palette.line, shape),
                 ) {
+                    // 条内：插画 → 半透明条底色 → 按钮（按钮自己也是半透明键帽）。
+                    if (theme != null) {
+                        StatusBarSceneBackdrop(palette, theme, Modifier.fillMaxSize())
+                        Box(Modifier.fillMaxSize().background(palette.bg.copy(alpha = 0.42f)))
+                    } else {
+                        Box(Modifier.fillMaxSize().background(palette.bg))
+                    }
                     if (notice == null) {
                         Row(
                             modifier = Modifier.fillMaxSize().padding(horizontal = metrics.pad),

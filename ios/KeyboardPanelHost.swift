@@ -301,7 +301,10 @@ extension KeyboardLayout {
         overrideUserInterfaceStyle = p.isDark ? .dark : .light
         candidateBar.backgroundColor = nativeBackdrop ? .clear : p.barBg
         candidateBar.isOpaque = !nativeBackdrop
-        keyArea.backgroundColor = p.barBg
+        // 动态插画皮肤：键区底板留 20% 让插画透到键缝/键面上（键帽自己也有 32%
+        // 透明，见 KeyButton.applyTheme）；纯色皮肤保持原来的不透明底板。
+        keyArea.backgroundColor = KeyboardPreferences.scene != nil
+            ? p.barBg.withAlphaComponent(0.20) : p.barBg
         composingBar.setNativeBackdrop(nativeBackdrop)
         composingBar.applyTheme(p, fontScale: fontScale)
         petStrip.setNativeBackdrop(nativeBackdrop)
