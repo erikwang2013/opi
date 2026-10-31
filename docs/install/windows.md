@@ -400,6 +400,8 @@ android/app/src/main/assets/luna.opid
 容器内 `msiexec` 冒烟日志、EXE 产出、EXE 静默安装/卸载冒烟**。后处理 job 只做表级注入；
 两个容器冒烟 job 都**不**等于真机验证 —— 容器通常缺语言栏/TSF。
 MSI 的 `OpRegisterTsf` 失败/回滚会如实留在日志里；EXE 的注册失败只记日志、安装照常成功。
+**2026-10-31 起** MSI 冒烟把「恰好是 `OpRegisterTsf` 回滚（1603 + 动作 Return value 3）」
+视为 Server Core 无 TSF 的已知环境限制并通过；其他安装失败仍然红，不再是 continue-on-error。
 「表里注入了」与「Windows 端能用」仍是两件事（§6）。
 
 | artifact | 内容 | 实测体积（来源 / 单位 / 日期） |
