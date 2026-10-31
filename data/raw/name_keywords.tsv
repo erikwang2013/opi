@@ -5,34 +5,34 @@
 ：	冒号	maohao,colon	punct	zh
 ？	问号	wenhao,questionmark,question	punct	zh
 ！	感叹号	gantanhao,exclamation,exclamationmark	punct	zh
-（	左括号	zuokuohao,leftparen,leftparenthesis,openparen	punct	zh
-）	右括号	youkuohao,rightparen,rightparenthesis,closeparen	punct	zh
-【	左方括号	zuofangkuohao,leftsquarebracket	punct	zh
-】	右方括号	youfangkuohao,rightsquarebracket	punct	zh
-《	左书名号	zuoshuminghao,lefttitlemark	punct	zh
-》	右书名号	youshuminghao,righttitlemark	punct	zh
-“	左引号	zuoyinhao,leftquote,openquote	punct	zh
-”	右引号	youyinhao,rightquote,closequote	punct	zh
-‘	左单引号	zuodanyinhao,leftsinglequote	punct	zh
-’	右单引号	youdanyinhao,rightsinglequote	punct	zh
+（	左括号	zuokuohao,kuohao,leftparen,leftparenthesis,openparen	punct	zh
+）	右括号	youkuohao,kuohao,rightparen,rightparenthesis,closeparen	punct	zh
+【	左方括号	zuofangkuohao,kuohao,leftsquarebracket	punct	zh
+】	右方括号	youfangkuohao,kuohao,rightsquarebracket	punct	zh
+《	左书名号	zuoshuminghao,kuohao,shuminghao,lefttitlemark	punct	zh
+》	右书名号	youshuminghao,kuohao,shuminghao,righttitlemark	punct	zh
+“	左引号	zuoyinhao,yinhao,leftquote,openquote	punct	zh
+”	右引号	youyinhao,yinhao,rightquote,closequote	punct	zh
+‘	左单引号	zuodanyinhao,yinhao,leftsinglequote	punct	zh
+’	右单引号	youdanyinhao,yinhao,rightsinglequote	punct	zh
 …	省略号	shengluehao,ellipsis	punct	zh
 —	破折号	pozhehao,dash,emdash	punct	zh
 ·	间隔号	jiangehao,middot	punct	zh
 ～	波浪号	bolanghao,tilde	punct	zh
 ￥	人民币	renminbi,yuan,rmb,yuan,rmb	symbol	zh
-(	left parenthesis	leftparen,leftparenthesis,openparen	punct	en
-)	right parenthesis	rightparen,rightparenthesis,closeparen	punct	en
-[	left bracket	leftbracket,leftsquarebracket	punct	en
-]	right bracket	rightbracket,rightsquarebracket	punct	en
-{	left brace	leftbrace,leftcurly	punct	en
-}	right brace	rightbrace,rightcurly	punct	en
+(	left parenthesis	leftparen,leftparenthesis,openparen,paren,parenthesis,bracket	punct	en
+)	right parenthesis	rightparen,rightparenthesis,closeparen,paren,parenthesis,bracket	punct	en
+[	left bracket	leftbracket,leftsquarebracket,bracket	punct	en
+]	right bracket	rightbracket,rightsquarebracket,bracket	punct	en
+{	left brace	leftbrace,leftcurly,brace,bracket	punct	en
+}	right brace	rightbrace,rightcurly,brace,bracket	punct	en
 ,	comma	comma	punct	en
 .	period	period,dot,fullstop	punct	en
 ;	semicolon	semicolon	punct	en
 :	colon	colon	punct	en
 ?	question mark	questionmark,question	punct	en
 !	exclamation mark	exclamation,exclamationmark,bang	punct	en
-'	apostrophe	apostrophe,singlequote	punct	en
+'	apostrophe	apostrophe,singlequote,quote	punct	en
 "	quotation mark	quote,quotationmark,doublequote	punct	en
 /	slash	slash,forwardslash	punct	en
 \	backslash	backslash	punct	en
@@ -62,15 +62,15 @@ $	dollar	meiyuan,dollar	symbol	both
 ≤	小于等于	xiaoyudengyu,lessthanorequal	symbol	both
 ≥	大于等于	dayudengyu,greaterthanorequal	symbol	both
 ≈	约等于	yuedengyu,approx,almostequal	symbol	both
-←	左箭头	zuojiantou,leftarrow	symbol	both
+←	左箭头	zuojiantou,jiantou,leftarrow	symbol	both
 →	右箭头	youjiantou,jiantou,rightarrow,arrow	symbol	both
-↑	上箭头	shangjiantou,uparrow	symbol	both
-↓	下箭头	xiajiantou,downarrow	symbol	both
-↔	左右箭头	zuoyoujiantou,leftrightarrow	symbol	both
+↑	上箭头	shangjiantou,jiantou,uparrow	symbol	both
+↓	下箭头	xiajiantou,jiantou,downarrow	symbol	both
+↔	左右箭头	zuoyoujiantou,jiantou,leftrightarrow	symbol	both
 ★	实心星	xingxing,xing,star,blackstar	symbol	both
-☆	空心星	kongxinxing,emptystar,whitestar	symbol	both
+☆	空心星	kongxinxing,xingxing,emptystar,whitestar	symbol	both
 ♥	爱心	aixin,xin,heart,love	symbol	both
-♡	空心爱心	kongxinaixin,emptyheart,whiteheart	symbol	both
+♡	空心爱心	kongxinaixin,aixin,emptyheart,whiteheart	symbol	both
 ✓	对勾	duigou,check,checkmark,tick	symbol	both
 ✔	粗对勾	cuduigou,heavycheck,checkmark	symbol	both
 ✗	叉	cha,cross,xmark	symbol	both

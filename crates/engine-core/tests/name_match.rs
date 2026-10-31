@@ -51,6 +51,12 @@ fn pinyin_symbol_names_match_punctuation_symbols_and_kaomoji() {
     let got = symbol_texts(&e, usize::MAX);
     assert!(!got.is_empty(), "开心应命中颜文字");
     assert!(got.len() <= 8, "颜文字同组最多 8 条，实得 {}", got.len());
+
+    let mut e = empty_engine();
+    typed(&mut e, "kuohao");
+    let got = symbol_texts(&e, usize::MAX);
+    assert!(got.iter().any(|t| t == "（"));
+    assert!(got.iter().any(|t| t == "【"));
 }
 
 #[test]
@@ -66,6 +72,13 @@ fn english_symbol_names_match_in_english_mode() {
     e.switch_mode(Mode::English);
     typed(&mut e, "arrow");
     assert!(symbol_texts(&e, usize::MAX).iter().any(|t| t == "→"));
+
+    let mut e = empty_engine();
+    e.switch_mode(Mode::English);
+    typed(&mut e, "bracket");
+    let got = symbol_texts(&e, usize::MAX);
+    assert!(got.iter().any(|t| t == "["));
+    assert!(got.iter().any(|t| t == "("));
 }
 
 #[test]
