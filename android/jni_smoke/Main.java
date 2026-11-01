@@ -78,7 +78,7 @@ final class OpiEngine {
     static native String dictList();
     static native boolean setDictEnabled(String name, boolean on);
     static native boolean removeDict(String name);
-    // opi-clip：函数体由 c_abi/consumer_clip.c 与 cabi_clip 单测取证；整表注册要求这里声明全部 13 条。
+    // opi-clip：函数体由 c_abi/consumer_clip.c 与 cabi_clip 单测取证；整表注册要求这里声明全部 14 条。
     static native long clipCreate(String configJson);
     static native void clipDestroy(long handle);
     static native boolean clipStart(long handle);
@@ -92,6 +92,7 @@ final class OpiEngine {
     static native boolean clipForgetPeer(long handle, String peerId);
     static native String clipStatus(long handle);
     static native String clipLastError();
+    static native boolean clipProbe(long handle, String ip);
 }
 public final class Main {
     static int failures = 0;
@@ -448,7 +449,6 @@ public final class Main {
         check(!OpiEngine.setDictEnabled("smoke", true), "删掉之后名字认不得 → false");
         OpiEngine.clear();
         java.nio.file.Files.delete(dd); // 目录已空 ⇒ 可删（别把空壳留在 /tmp）
-
         // 五笔旋钮族（2026-10-14，M4 第二波）：缺省值 → 读写回环 → 越界语义 → 编码提示。
         // ⚠️ 真码表（.opid）不在本冒烟的可选参数里：`loadWubi` 只验**坏路径哨兵**
         //    （好路径那条由 C 消费者 run.sh 传 wubi86.opid 真跑，见 consumer_wubi.c）。

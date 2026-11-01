@@ -1,13 +1,13 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! **opi-clip 的 13 条 JNI 签名单独钉死**（`jni.rs` 同一张 RegisterNatives 表）。
+//! **opi-clip 的 14 条 JNI 签名单独钉死**（`jni.rs` 同一张 RegisterNatives 表）。
 //!
 //! `JNI_CLIP` 已并入 `JNI_ALL`，整表 ↔ 活文件 `OpiEngine.kt` 的集合相等由
 //! `jni_contract.rs` 负责。本文件额外做两件事：
-//! 1. 把这一族的 13 条**同名同描述符**独立钉住（[`FIX_KT`] 是期望形态，
+//! 1. 把这一族的 14 条**同名同描述符**独立钉住（[`FIX_KT`] 是期望形态，
 //!    即使活 Kotlin 被误改，这里也能指出「计划签名」是什么）；
-//! 2. 证明 `JNI_OnLoad` 真的调用了 `clip_native_methods()`，且这 13 条没有
+//! 2. 证明 `JNI_OnLoad` 真的调用了 `clip_native_methods()`，且这 14 条没有
 //!    塞进 `jni.rs` 里那张大字面量表（保持文件行数、按族 extend）。
 
 #[allow(dead_code)]
@@ -32,6 +32,7 @@ object OpiEngineClipPlan {
     external fun clipForgetPeer(handle: Long, peerId: String): Boolean
     external fun clipStatus(handle: Long): String?
     external fun clipLastError(): String
+    external fun clipProbe(handle: Long, ip: String?): Boolean
 }
 "#;
 
@@ -39,7 +40,7 @@ object OpiEngineClipPlan {
 fn clip_registration_parser_is_not_blind() {
     let src = read(JNI_CLIP);
     let reg = parse_rust_registrations(&src).expect("解析 jni_clip.rs 注册表");
-    assert_eq!(reg.len(), 13, "clip 注册表应为 13 条，实为 {}", reg.len());
+    assert_eq!(reg.len(), 14, "clip 注册表应为 14 条，实为 {}", reg.len());
 
     for (name, desc) in [
         ("clipCreate", "(Ljava/lang/String;)J"),
@@ -69,7 +70,7 @@ fn clip_registration_parser_is_not_blind() {
 fn clip_registration_matches_planned_kotlin() {
     let reg = parse_rust_registrations(&read(JNI_CLIP)).expect("解析 jni_clip.rs");
     let host = parse_kotlin_externals(FIX_KT).expect("解析计划声明");
-    assert_eq!(host.len(), 13, "计划声明应为 13 条");
+    assert_eq!(host.len(), 14, "计划声明应为 14 条");
     let diffs = check_exact(&reg, &host, "计划中的 OpiEngine.kt");
     assert!(
         diffs.is_empty(),
@@ -90,7 +91,7 @@ fn clip_kotlin_signature_mutant_is_reported() {
     assert!(diffs[0].contains("clipPollEvent"), "{}", diffs[0]);
 }
 
-/// 注册必须真的发生在 `JNI_OnLoad` 路径上；13 条按族 extend，不塞进大字面量表。
+/// 注册必须真的发生在 `JNI_OnLoad` 路径上；14 条按族 extend，不塞进大字面量表。
 #[test]
 fn jni_onload_registers_clip_table() {
     let jni_rs = read(JNI_RS);
@@ -105,6 +106,6 @@ fn jni_onload_registers_clip_table() {
     );
     assert!(
         JNI_ALL.contains(&JNI_CLIP),
-        "JNI_CLIP 应并入 JNI_ALL（OpiEngine.kt 已声明这 13 条，整表门禁必须看见）"
+        "JNI_CLIP 应并入 JNI_ALL（OpiEngine.kt 已声明这 14 条，整表门禁必须看见）"
     );
 }
