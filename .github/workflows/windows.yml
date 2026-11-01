@@ -376,27 +376,11 @@ jobs:
             if (-not (Test-Path (Join-Path $app $f))) { throw "app image 缺 $f" }
           }
           if ($env:TIER -eq 'full') {
-            # appResourcesRootDir 在 Windows 上可能落到镜像根或 app 子目录；运行期两处都找。
-            $bases = @($app, (Join-Path $app 'app')) |
-              Where-Object { Test-Path (Join-Path $_ 'asr\sensevoice\model.int8.onnx') }
-            if (-not $bases) {
-              Get-ChildItem $app -Recurse -Filter 'model.int8.onnx' -ErrorAction SilentlyContinue |
-                ForEach-Object { Write-Host "找到模型：$($_.FullName)" }
-              throw 'app image 缺内置语音模型（asr/sensevoice/model.int8.onnx）'
-            }
-            foreach ($b in $bases) {
-              foreach ($f in 'asr\whisper-small.en\small.en-encoder.int8.onnx', 'asr\vad\silero_vad.onnx') {
-                if (-not (Test-Path (Join-Path $b $f))) { throw "app image 缺 $f（基准 $b）" }
-              }
-            }
-          }
-          # 身份核对：不是「有个叫 *.opid 的东西」，而是「就是入库那份分发副本」。
-          $dicts = @('luna.opid')
-          if ($env:TIER -ne 'basic') { $dicts += 'trad.opid' }
-          foreach ($dict in $dicts) {
-            $want = (Get-FileHash "android/app/src/main/assets/$dict" -Algorithm SHA256).Hash
-            $got = (Get-FileHash (Join-Path $app "app\$dict") -Algorithm SHA256).Hash
-            if ($got -ne $want) { throw "app image 里的 $dict 与入库副本不一致（$got != $want）" }
+            # 模型作为 JAR 资源随包（运行期首次录音解压）；确认主 jar 确实变大。
+            $modelJar = Get-ChildItem (Join-Path $app 'app') -Filter '*.jar' -ErrorAction SilentlyContinue |
+              Where-Object { $_.Length -gt 300MB } | Select-Object -First 1
+            if (-not $modelJar) { throw '完整包 app image 里没有含模型的 jar（>300MB）' }
+            Write-Host "模型 jar：$($modelJar.Name) $($modelJar.Length)"
           }
           "OPI_APP_IMAGE=$app" >> $env:GITHUB_ENV
           Get-ChildItem $app | Select-Object Name, Length

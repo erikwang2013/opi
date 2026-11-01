@@ -209,12 +209,12 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
     }
     // 跨设备剪贴板（2026-11-01）：宿主随设置启停；FFI 句柄由宿主自己的线程独占。
     LaunchedEffect(s.clipEnabled) { ClipHost.setEnabled(s.clipEnabled) }
-    // 语音总开关同步进宿主；引擎跟随输入模式（英文 26 键且 Pro = Whisper，其余 = SenseVoice）。
+    // 语音总开关/引擎跟随输入模式（英文 26 键且 Pro = Whisper，其余 = SenseVoice）。
     LaunchedEffect(s.speechEnabled, mode, imeState.englishPro) {
         val lang = if (mode == "en26" && imeState.englishPro) SpeechLanguage.EN else SpeechLanguage.ZH
-        SpeechHost.setConfig(s.speechEnabled, lang)
+        // 完整包模型随包：开关没拨也直接可用；普通包下载完成后由语音页自动拨开。
+        SpeechHost.setConfig(s.speechEnabled || bundledJar(), lang)
     }
-
     // Windows 整体缩一档 + 胶囊圆角（2026-10-24 用户报障「win端的状态栏整体大了，
     // 边角也不是弧形」）；Linux 不乘、保持直角 —— 见 barMetrics/barShape。
     val windows = isWindows()
