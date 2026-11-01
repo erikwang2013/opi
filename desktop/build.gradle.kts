@@ -295,7 +295,7 @@ compose.desktop {
 
         nativeDistributions {
             if (providers.gradleProperty("opiPackageTier").getOrElse("normal") == "full") {
-                appResourcesRootDir.set(layout.buildDirectory.dir("generated/asrAppResources"))
+                appResourcesRootDir.set(file(providers.gradleProperty("opiAsrModelsDir").get()))
             }
             // 构建验证用 Deb（Linux 主机，dpkg-deb 本机可用）；CMP 1.11 已移除
             // Zip 格式（枚举仅 AppImage/Deb/Rpm/Dmg/Pkg/Exe/Msi）。

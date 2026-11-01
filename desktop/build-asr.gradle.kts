@@ -38,22 +38,13 @@ tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageT
     }
 
 
-// 完整包：模型随应用镜像进 `<app>/asr`（appResourcesRootDir 保留目录结构），
-// 运行期 SpeechModels.bundledModelRoot() 优先用它。
-val asrModelsDir = providers.gradleProperty("opiAsrModelsDir")
+// 完整包：模型目录由主脚本的 appResourcesRootDir 直接指向（目录必须已存在），
+// 这里只校验参数，避免再 Sync 一遍 588MB。
 if (providers.gradleProperty("opiPackageTier").getOrElse("normal") == "full") {
     require(asrModelsDir.isPresent) {
         "full 档需要 -PopiAsrModelsDir=<目录>（内含 asr/sensevoice、asr/whisper-small.en、asr/vad）"
     }
-    val root = file(asrModelsDir.get())
-    check(root.isDirectory) { "opiAsrModelsDir 不是目录：${root.path}" }
-    val appResources = layout.buildDirectory.dir("generated/asrAppResources")
-    val syncAsrResources = tasks.register<Sync>("syncAsrAppResources") {
-        from(root)
-        into(appResources)
+    check(file(asrModelsDir.get()).isDirectory) {
+        "opiAsrModelsDir 不是目录：${asrModelsDir.get()}"
     }
-    tasks.matching { it.name == "prepareAppResources" }
-        .configureEach { dependsOn(syncAsrResources) }
-    tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask>()
-        .configureEach { dependsOn(syncAsrResources) }
 }
