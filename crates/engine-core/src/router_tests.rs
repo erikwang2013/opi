@@ -486,7 +486,6 @@ fn printable_release_does_not_refeed_pinyin_buffer() {
     s.key_event('i' as u32, KEY_STATE_RELEASED);
     assert_eq!(s.buffer(), "ni", "两键按下+抬起后应为 ni，而非 nnii");
 }
-
 #[test]
 fn printable_release_does_not_double_feed_english() {
     let mut s = english_state();
