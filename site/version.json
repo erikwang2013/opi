@@ -17,10 +17,6 @@
         "url": "https://opi.erik.xyz/download/basic/opi-1.31.0-windows-x64-basic-setup.exe",
         "size": 69593359,
         "sha256": "83b5671a2044f3f2afe100621c34115a26ddb6e7372b6be11d3b731bd12b99ed"
-      },
-      "hot": {
-        "url": "https://opi.erik.xyz/download/normal/opi-1.31.0-linux-amd64-hot.zip",
-        "size": 0
       }
     },
     "linux-amd64": {
@@ -31,16 +27,13 @@
       },
       "normal": {
         "url": "https://opi.erik.xyz/download/normal/opi-1.31.0-linux-amd64.deb",
-        "size": 0
+        "size": 102393090,
+        "sha256": "fff55c8c1932fe43b99726c03c15a76b40700ec6b9d46f758fb2ed249af6c94c"
       },
       "basic": {
         "url": "https://opi.erik.xyz/download/basic/opi-1.31.0-linux-amd64-basic.deb",
         "size": 96552330,
         "sha256": "db3a3f9c149ed698d487ed1e1bd9d2f26f4ec1e3596e4c6e42796987df8926da"
-      },
-      "hot": {
-        "url": "https://opi.erik.xyz/download/normal/opi-1.31.0-linux-amd64-hot.zip",
-        "size": 0
       }
     },
     "linux-x86_64": {
@@ -51,16 +44,13 @@
       },
       "normal": {
         "url": "https://opi.erik.xyz/download/normal/opi-1.31.0-linux-x86_64.rpm",
-        "size": 0
+        "size": 102433038,
+        "sha256": "4d1ef5797cecd48a30687374c4c073620ff61484e152dbf941a24dc16658937b"
       },
       "basic": {
         "url": "https://opi.erik.xyz/download/basic/opi-1.31.0-linux-x86_64-basic.rpm",
         "size": 96589865,
         "sha256": "317e2eb16cb7e3ba9b746ee4fd3a31354aa379c8a4d457cf03d856460dc58bc4"
-      },
-      "hot": {
-        "url": "https://opi.erik.xyz/download/normal/opi-1.31.0-linux-amd64-hot.zip",
-        "size": 0
       }
     },
     "android": {
