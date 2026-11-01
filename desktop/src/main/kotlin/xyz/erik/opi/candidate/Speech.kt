@@ -90,41 +90,6 @@ internal fun asrConfigJson(root: Path, language: SpeechLanguage): String = build
 }
 
 /** Java Sound 采集：16 kHz / 16 bit / mono / little-endian，专用读线程。 */
-/** 录音时暂停其他音频：Linux 走 playerctl，Windows 发一次媒体播放/暂停键；恢复时反向。 */
-private object OtherAudio {
-    private var paused = false
-
-    fun pause() {
-        if (paused) return
-        paused = true
-        runCatching {
-            if (System.getProperty("os.name").lowercase().contains("win")) {
-                ProcessBuilder(
-                    "powershell", "-NoProfile", "-Command",
-                    "(New-Object -ComObject WScript.Shell).SendKeys([char]173)",
-                ).start()
-            } else {
-                ProcessBuilder("playerctl", "pause").start()
-            }
-        }
-    }
-
-    fun resume() {
-        if (!paused) return
-        paused = false
-        runCatching {
-            if (System.getProperty("os.name").lowercase().contains("win")) {
-                ProcessBuilder(
-                    "powershell", "-NoProfile", "-Command",
-                    "(New-Object -ComObject WScript.Shell).SendKeys([char]173)",
-                ).start()
-            } else {
-                ProcessBuilder("playerctl", "play").start()
-            }
-        }
-    }
-}
-
 internal class AudioCapture(
     private val onChunk: (ByteArray) -> Unit,
     private val onError: (String) -> Unit,
