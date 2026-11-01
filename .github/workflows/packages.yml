@@ -373,6 +373,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          sudo chown -R "$(id -u):$(id -g)" dist
           shopt -s nullglob
           for f in dist/opi_*.deb dist/opi-*.rpm; do
             base="${f%.*}"; ext="${f##*.}"

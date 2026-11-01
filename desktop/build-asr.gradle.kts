@@ -52,6 +52,8 @@ if (providers.gradleProperty("opiPackageTier").getOrElse("normal") == "full") {
         from(root)
         into(appResources)
     }
+    tasks.matching { it.name == "prepareAppResources" }
+        .configureEach { dependsOn(syncAsrResources) }
     tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask>()
         .configureEach { dependsOn(syncAsrResources) }
 }
