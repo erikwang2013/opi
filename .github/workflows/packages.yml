@@ -87,7 +87,7 @@ on:
         description: '安装包档位（full 含两套模型，约 +588MB）'
         type: choice
         options: [normal, full, basic]
-        default: normal''
+        default: normal
 
 # gh release upload 要写 release 上的资产 —— 只有末尾那一步、且只有手填了 tag 时才用到。
 # 缺了它 gh 会以 403 失败，报错文本指向 token 而不是权限块，容易看错地方。

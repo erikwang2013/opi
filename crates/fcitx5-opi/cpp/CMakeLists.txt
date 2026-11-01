@@ -433,26 +433,15 @@ install(FILES "${OPI_LUNA_OPID}"
               DESTINATION "${CMAKE_INSTALL_DATADIR}/opi"
               RENAME luna.opid)
 
-# 基础包（2026-11-01 三档打包）：只装拼音主词库；繁体/五笔/康熙由设置页下载到
-# ~/.local/share/opi（Type::Data 会优先命中用户目录）。
+# 基础包（2026-11-01）：只装拼音主词库；其余词库由设置页下载到用户目录。
 option(OPI_BASIC_PACKAGE "Basic package: ship only the main pinyin dictionary" OFF)
-
-# 繁体词库（2026-10-09）：同一条查找路（Type::Data + "opi/trad.opid"），
-# 由 opi_locate_check 的第 4 个参数守着。可选增强的语义在胶水侧
-# （load_with_trad：坏了退回简体，不拖垮拼音）。
+# 繁体词库：Type::Data + "opi/trad.opid"；坏了退回简体，不拖垮拼音。
 if(NOT OPI_BASIC_PACKAGE)
     install(FILES "${OPI_TRAD_OPID}"
                   DESTINATION "${CMAKE_INSTALL_DATADIR}/opi"
                   RENAME trad.opid)
 endif()
-
-# 五笔码表（2026-10-14，M4 第二波）：**两张都装**（运行时按 WubiPlan 选一张装载，
-# 见 opi_wubi.h 的裁决 —— 只装选中的，不是两张都进引擎）。查找路与 luna/trad 同一条
-# （Type::Data + "opi/wubi86.opid" / "opi/wubi98.opid"），由 opi_locate_check 的
-# 第 6/7 个参数守着。
-# ⚠️ 缺省源**直接指 data/generated/**（这两张表**没有** android 部署副本 ——
-# 桌面/Windows 才是五笔的主场，移动端本轮不发五笔）⇒ 与 trad 的差别是「源从哪来」，
-# 别照抄它那句「缺省用入库的 android 部署副本」。
+# 五笔码表：两张都装，运行时按 WubiPlan 选一张；源在 data/generated/。
 set(OPI_WUBI86_OPID "" CACHE FILEPATH "wubi86.opid 源文件。缺省用 data/generated/")
 if(NOT OPI_WUBI86_OPID)
     set(_wubi86_cand "${CMAKE_CURRENT_SOURCE_DIR}/../../../data/generated/wubi86.opid")
@@ -467,7 +456,6 @@ if(NOT EXISTS "${OPI_WUBI86_OPID}")
         "或用 -DOPI_WUBI86_OPID=/path/to/wubi86.opid 指一个已有文件。")
 endif()
 message(STATUS "OPI 五笔 86 码表源: ${OPI_WUBI86_OPID}")
-
 set(OPI_WUBI98_OPID "" CACHE FILEPATH "wubi98.opid 源文件。缺省用 data/generated/")
 if(NOT OPI_WUBI98_OPID)
     set(_wubi98_cand "${CMAKE_CURRENT_SOURCE_DIR}/../../../data/generated/wubi98.opid")
@@ -482,7 +470,6 @@ if(NOT EXISTS "${OPI_WUBI98_OPID}")
         "或用 -DOPI_WUBI98_OPID=/path/to/wubi98.opid 指一个已有文件。")
 endif()
 message(STATUS "OPI 五笔 98 码表源: ${OPI_WUBI98_OPID}")
-
 if(NOT OPI_BASIC_PACKAGE)
     install(FILES "${OPI_WUBI86_OPID}"
                   DESTINATION "${CMAKE_INSTALL_DATADIR}/opi"
@@ -491,7 +478,6 @@ if(NOT OPI_BASIC_PACKAGE)
                   DESTINATION "${CMAKE_INSTALL_DATADIR}/opi"
                   RENAME wubi98.opid)
 endif()
-
 # 符号类目数据（2026-10-10）：loadDictionary() 找的是 Type::Data +
 # "opi/symbol_categories.tsv"，即 <prefix>/share/opi/symbol_categories.tsv ——
 # 与两个词库同一层（**没有** fcitx5 中间层，别顺手挪进 share/fcitx5/ 下）。
@@ -501,7 +487,6 @@ endif()
 install(FILES "${OPI_SYMBOL_CATEGORIES}"
               DESTINATION "${CMAKE_INSTALL_DATADIR}/opi"
               RENAME symbol_categories.tsv)
-
 # 康熙字典词库（2026-10-16）：落点与 lookups 同一条路（Type::Data + opi/kangxi.tsv）
 # —— fcitx5 侧首启种子从这儿取源（opi_config.h 的 applyOpiSettings locate 它）。
 if(NOT OPI_BASIC_PACKAGE)
