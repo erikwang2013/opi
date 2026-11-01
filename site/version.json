@@ -33,7 +33,8 @@
       },
       "basic": {
         "url": "https://opi.erik.xyz/download/basic/opi-1.31.0-linux-amd64-basic.deb",
-        "size": 0
+        "size": 96551006,
+        "sha256": "02aee062361ddd99c53daa3b42a58b2cc9b7132fffaac137e715ed4545d586cc"
       },
       "hot": {
         "url": "https://opi.erik.xyz/download/normal/opi-1.31.0-linux-amd64-hot.zip",
@@ -51,7 +52,8 @@
       },
       "basic": {
         "url": "https://opi.erik.xyz/download/basic/opi-1.31.0-linux-x86_64-basic.rpm",
-        "size": 0
+        "size": 96583860,
+        "sha256": "74a53659cf5a7c2c57442ac3a7548cbc2e0468badf5dfa2ac0a447f6aa28199a"
       },
       "hot": {
         "url": "https://opi.erik.xyz/download/normal/opi-1.31.0-linux-amd64-hot.zip",
