@@ -208,6 +208,8 @@ enum class StatusBarButton(val label: String, val hint: String) {
     // 2026-10-10 中午用户踩过；事故留痕见 Actions.kt 头部与 StatusBarTest 的映射钉）。
     LANG("中英文切换", "与 Shift 轻按同一条通路（opi-ctl lang）"),
     PUNCT("中英标点", "中英文标点切换（调 opi-ctl）"),
+    // 语音输入（2026-11-02 用户要求）：放在「简」键前；总开关默认关。
+    MIC("语音输入", "点击开始录音，再点停止并识别；本地离线识别，正文不记录"),
     TRAD("简繁转换", "简 ⇄ 繁（调 opi-ctl）"),
     // 英文普通/专业（2026-10-19）：白底圆角键帽里 en 居中、pro 在右下角；只有专业模式
     // 查词库。受 `StatusBarEnPro` 常驻开关控制（默认开、设置窗可隐藏）；点击只在英文
@@ -225,9 +227,6 @@ enum class StatusBarButton(val label: String, val hint: String) {
     FULLWIDTH("全半角", "全角 ⇄ 半角（调 opi-ctl）"),
     VK("软键盘", "虚拟键盘窗：按键注入系统（会照常流经输入法）"),
     SYMBOLS("符号大全", "符号页入口"),
-    // 语音输入（2026-11-02 用户要求）：**严格插在符号后、设置前**，枚举序 = 显示序。
-    // 默认常驻；总开关 SpeechEnabled 默认关（点了只提示去设置，不开麦）。
-    MIC("语音输入", "点击开始录音，再点停止并识别；本地离线识别，正文不记录"),
     SETTINGS("设置", "打开本设置窗"),
 }
 

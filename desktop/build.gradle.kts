@@ -29,12 +29,14 @@ dependencies {
     // kotlin-test 未缓存。测试只覆盖纯 JVM 的 Protocol.kt 解析器（无 JNA/无 Windows）。
     testImplementation("junit:junit:4.13.2")
 }
-
 tasks.test {
     // Gradle 9 默认测试框架未定，显式选 JUnit 4（避免运行期告警/静默零执行）。
     useJUnit()
 }
 
+if (providers.gradleProperty("opiPackageTier").getOrElse("normal") == "full") {
+    sourceSets["main"].resources.srcDir(layout.projectDirectory.dir("asr-bundle"))
+}
 kotlin {
     compilerOptions {
         // Compose Desktop 要求 JVM target >= 11；不配置 toolchain（避免离线下载 JDK）。
@@ -294,8 +296,6 @@ compose.desktop {
         mainClass = "xyz.erik.opi.candidate.MainKt"
 
         nativeDistributions {
-            // 完整包构建前把模型放到 desktop/asr-bundle；普通/基础包该目录不存在 ⇒ NO-SOURCE。
-            appResourcesRootDir.set(layout.projectDirectory.dir("asr-bundle"))
             // 构建验证用 Deb（Linux 主机，dpkg-deb 本机可用）；CMP 1.11 已移除
             // Zip 格式（枚举仅 AppImage/Deb/Rpm/Dmg/Pkg/Exe/Msi）。
             //

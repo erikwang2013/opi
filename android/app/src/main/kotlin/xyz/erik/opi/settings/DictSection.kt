@@ -89,8 +89,12 @@ internal fun DictSection(prefs: ImePreferences, toast: (String) -> Unit) {
             // 是谎报（引擎的注释：不是「读不出来」，是真的没这层）
             supportingContent = { Text(if (e.system && !e.enabled) "未装载" else "${e.count} 条") },
             trailingContent = {
-                if (!e.system) {
-                    Row {
+                Row {
+                    // 基础包删掉/未随包的扩展词库：列表里直接给下载入口（与上方组件节同一个下载器）。
+                    if (e.system && !e.enabled && e.name in OPTIONAL_SYSTEM_DICTS) {
+                        TextButton(onClick = { DictPack.download(context) }) { Text("下载") }
+                    }
+                    if (!e.system) {
                         Switch(
                             checked = e.enabled,
                             onCheckedChange = { v ->
@@ -179,6 +183,8 @@ internal fun DictSection(prefs: ImePreferences, toast: (String) -> Unit) {
         )
     }
 }
+
+private val OPTIONAL_SYSTEM_DICTS = setOf("trad", "stroke", "wubi86", "wubi98", "kangxi")
 
 /**
  * SAF Uri 的显示名（文件名）。`OpenableColumns.DISPLAY_NAME` 是**提供方答的**，

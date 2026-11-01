@@ -103,7 +103,7 @@ internal fun SpeechPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Str
 private fun ModelCard(model: SpeechModel, userRoot: java.nio.file.Path, report: (String) -> Unit) {
     val state = SpeechModels.state
     val root = modelRoot(model.engine, userRoot)
-    val bundled = bundledModelRoot()?.let { modelReady(model.engine, it) } == true
+    val bundled = bundledJar()
     val ready = modelReady(model.engine, root)
     val mine = state.engine == model.engine
     val running = state.phase == DownloadPhase.RUNNING

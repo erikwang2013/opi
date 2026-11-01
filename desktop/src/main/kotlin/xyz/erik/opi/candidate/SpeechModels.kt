@@ -168,7 +168,48 @@ internal fun bundledModelRoot(): Path? {
     return candidates.firstOrNull { Files.isDirectory(it) }
 }
 
-/** 该引擎实际可用的模型根：随包且完整优先，否则用户数据目录。 */
+/** 完整包：模型作为 JAR 资源随包；首次录音时解压到用户模型目录。 */
+internal fun bundledJar(): Boolean =
+    SpeechModels::class.java.getResource("/asr/sensevoice/model.int8.onnx") != null
+
+internal fun ensureBundledModels(root: Path = speechModelRoot()) {
+    if (!bundledJar()) return
+    for (engine in SpeechEngine.entries) {
+        if (modelReady(engine, root)) continue
+        val model = engine.model()
+        val dir = engine.dir(root)
+        ensurePrivateDir(dir)
+        for (spec in model.files) {
+            val target = dir.resolve(spec.name)
+            if (!fileMatches(target, spec)) copyResource("/asr/${model.dirName}/${spec.name}", target, spec.size)
+        }
+        val manifest = dir.resolve("manifest.json")
+        if (!Files.isRegularFile(manifest)) {
+            copyResource("/asr/${model.dirName}/manifest.json", manifest, -1)
+        }
+    }
+    val vad = vadPath(root)
+    if (!fileMatches(vad, VAD_FILE)) {
+        ensurePrivateDir(vad.parent)
+        copyResource("/asr/vad/${VAD_FILE.name}", vad, VAD_FILE.size)
+    }
+}
+
+private fun copyResource(path: String, target: Path, expected: Long) {
+    val input = SpeechModels::class.java.getResourceAsStream(path)
+        ?: error("完整包缺内置模型资源：$path")
+    input.use { ins ->
+        val part = target.resolveSibling(target.fileName.toString() + ".part")
+        Files.copy(ins, part, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        if (expected >= 0 && Files.size(part) != expected) {
+            Files.deleteIfExists(part)
+            error("内置模型大小不符：$path")
+        }
+        Files.move(part, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+    }
+}
+
+/** 该引擎实际可用的模型根：JAR 内置模型解压后走用户目录。 */
 internal fun modelRoot(engine: SpeechEngine, userRoot: Path = speechModelRoot()): Path {
     val bundled = bundledModelRoot()
     return if (bundled != null && modelReady(engine, bundled)) bundled else userRoot
