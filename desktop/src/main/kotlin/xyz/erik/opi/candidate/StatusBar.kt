@@ -209,8 +209,7 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
     }
     // 跨设备剪贴板（2026-11-01）：宿主随设置启停；FFI 句柄由宿主自己的线程独占。
     LaunchedEffect(s.clipEnabled) { ClipHost.setEnabled(s.clipEnabled) }
-    // 语音（2026-11-02）：总开关同步进宿主；引擎跟随输入模式（英文 26 键 = Whisper，
-    // 其余 = SenseVoice），切模式即切引擎。
+    // 语音总开关同步进宿主；引擎跟随输入模式（英文 26 键且 Pro = Whisper，其余 = SenseVoice）。
     LaunchedEffect(s.speechEnabled, mode, imeState.englishPro) {
         val lang = if (mode == "en26" && imeState.englishPro) SpeechLanguage.EN else SpeechLanguage.ZH
         SpeechHost.setConfig(s.speechEnabled, lang)

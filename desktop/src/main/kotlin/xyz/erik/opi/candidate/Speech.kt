@@ -64,7 +64,7 @@ private sealed interface SpeechCommand {
     data object Dismiss : SpeechCommand
 }
 
-private data class SpeechConfig(val enabled: Boolean = false, val language: SpeechLanguage = SpeechLanguage.ZH)
+private data class SpeechConfig(val enabled: Boolean = false, val language: SpeechLanguage = SpeechLanguage.AUTO)
 
 private class LoadedAsr(
     val ffi: OpiAsrFfi,

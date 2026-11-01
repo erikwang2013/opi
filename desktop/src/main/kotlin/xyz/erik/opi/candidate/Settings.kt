@@ -129,7 +129,7 @@ data class OpSettings(
      */
     val speechEnabled: Boolean = false,
     /** 识别语言（键 `SpeechLanguage`）：auto/zh → SenseVoice，en → Whisper。 */
-    val speechLanguage: String = "zh",
+    val speechLanguage: String = "auto",
 ) {
     /** 写成 ini。键名见文件头「三处逐字对应」。 */
     fun toIni(): String = buildString {
