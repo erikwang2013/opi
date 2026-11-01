@@ -40,6 +40,7 @@ tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageT
 
 // 完整包：模型目录由主脚本的 appResourcesRootDir 直接指向（目录必须已存在），
 // 这里只校验参数，避免再 Sync 一遍 588MB。
+val asrModelsDir = providers.gradleProperty("opiAsrModelsDir")
 if (providers.gradleProperty("opiPackageTier").getOrElse("normal") == "full") {
     require(asrModelsDir.isPresent) {
         "full 档需要 -PopiAsrModelsDir=<目录>（内含 asr/sensevoice、asr/whisper-small.en、asr/vad）"
