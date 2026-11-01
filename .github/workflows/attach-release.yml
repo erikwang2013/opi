@@ -47,7 +47,7 @@ jobs:
               *) continue ;;
             esac
             case "$name" in
-              opi-android-release-*|opi-windows-exe-*|opi-packages|opi-ios-keyboard-*|opi-macos-ime-*|opi-asr-engine-*) ;;
+              opi-android-release-*|opi-windows-exe-*|opi-packages|opi-ios-keyboard-*|opi-macos-ime-*|opi-harmony*|opi-asr-engine-*) ;;
               *) continue ;;
             esac
             d="work/$id-$(echo "$name" | tr -c 'A-Za-z0-9._-' '_')"
