@@ -11,8 +11,8 @@ import android.view.Window
  * 「键盘模式」里的**窗口层**两种（2026-10-09；2026-11-01 从 `OpiImeService.kt` 拆出，
  * 500 行门禁）：
  *   · 悬浮模式：窗口收窄到屏宽 [FLOATING_WIDTH_RATIO]、水平居中、贴底；
- *   · 游戏模式：窗口更矮（[GAME_HEIGHT_RATIO] × 常规高度）+ 同样收窄居中，
- *     尽量少挡画面。
+ *   · 游戏模式：窗口更矮（[GAME_HEIGHT_RATIO] × 常规高度），**全宽贴底**；
+ *     和悬浮同时开时以游戏为准（全宽），避免横向再收窄把按键挤成一团。
  * 默认（都关）：全宽 + 常规高度，与 2026-10-09 之前逐像素一致。
  *
  * ⚠️ **本机无真机**：窗口尺寸/重力只能真机看效果（分屏、手势条 inset 都可能影响）。
@@ -28,7 +28,12 @@ internal fun OpiImeService.applyKeyboardWindow(win: Window) {
         keyboardHeight()
     }
     val lp = win.attributes
-    if (modes.floating || modes.game) {
+    if (modes.game) {
+        // 游戏模式优先：全宽 + 明显更矮。再叠加悬浮收窄会让按键横向也挤在一起。
+        lp.width = ViewGroup.LayoutParams.MATCH_PARENT
+        win.attributes = lp
+        win.setGravity(Gravity.BOTTOM)
+    } else if (modes.floating) {
         val (w, _) = windowSizePx()
         lp.width = (w * FLOATING_WIDTH_RATIO).toInt()
         win.attributes = lp
@@ -45,4 +50,4 @@ internal fun OpiImeService.applyKeyboardWindow(win: Window) {
 private const val FLOATING_WIDTH_RATIO = 0.86f
 
 /** 游戏模式的窗口高度相对常规键盘高度的比例（更矮，少挡画面）。 */
-private const val GAME_HEIGHT_RATIO = 0.72f
+private const val GAME_HEIGHT_RATIO = 0.58f
