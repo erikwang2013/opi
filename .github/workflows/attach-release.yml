@@ -80,11 +80,9 @@ jobs:
                   *-full.deb) tier=full ;;
                   *-basic.deb) tier=basic ;;
                   *)
-                    if dpkg-deb -c "$deb" | grep -q 'share/opi/trad.opid'; then
-                      tier=normal
-                    else
-                      tier=basic
-                    fi
+                    # 新构建：normal 的包名没有 -full/-basic 后缀，直接判 normal。
+                    # （dpkg-deb 在部分 runner 上解 zstd 会失败，不能拿它当唯一判据。）
+                    tier=normal
                     ;;
                 esac
                 suffix=""; [ "$tier" = normal ] || suffix="-$tier"
@@ -104,7 +102,8 @@ jobs:
                 [ -n "$hap" ] && cp "$hap" "assets/opi-$V-harmonyos-unsigned.hap"
                 ;;
               opi-asr-engine-*)
-                zip="$(find "$d" -name '*.zip' | head -1)"
+                # $d/a.zip 是 gh api 下载的 artifact 外壳，真正的组件是解压出来的 zip。
+                zip="$(find "$d" -name '*.zip' ! -name 'a.zip' | head -1)"
                 [ -n "$zip" ] && cp "$zip" "assets/$(basename "$zip")"
                 ;;
             esac
