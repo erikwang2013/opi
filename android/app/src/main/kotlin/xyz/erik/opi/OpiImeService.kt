@@ -21,6 +21,8 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryOwner
+import xyz.erik.opi.asr.AsrKeyboardHost
+import xyz.erik.opi.asr.AsrRuntime
 import xyz.erik.opi.clip.ClipRuntime
 import xyz.erik.opi.clip.ClipSyncService
 import xyz.erik.opi.engine.AssociationGate
@@ -252,22 +254,33 @@ class OpiImeService : InputMethodService() {
         )
         // IME 提交通道在视图创建时注入（构造期无 this 引用；面板打开提交 pending buffer 用）
         imeState.commit = ::commitWithRetry
+        // 语音结果走同一条重试通道；先清引擎组合，避免候选栏残留旧拼音。
+        AsrRuntime.attach(
+            this,
+            whisper = { prefs.asrWhisper },
+            commit = { text ->
+                engineController.clear()
+                commitWithRetry(text)
+            },
+        )
         view.setContent {
-            if (engineBoot.loading) {
-                EngineLoadingView()
-            } else {
-                ImeScreen(
-                    imeState, engineController, keyRouter, symbolCatalog,
-                    rareIndex = { rareIndex },
-                    symbolCategories = { symbolCategories },
-                    kaomojiCategories = { kaomojiCategories },
-                    // 「自有」宠物形态 = 插入 PNG 图片（文本通道之外，见 PetStickerCommit.kt）。
-                    onPickPet = { commitPetSticker(it) },
-                    // 工具栏最右「收起键盘」（2026-10-10 用户裁决）：收回系统键盘。
-                    onCloseKeyboard = { requestHideSelf(0) },
-                    // 键盘内设置面板的「清除用户词库」：同一个 store、同一套两半清理。
-                    onClearUserWords = { clearUserWords(userWords) },
-                )
+            AsrKeyboardHost {
+                if (engineBoot.loading) {
+                    EngineLoadingView()
+                } else {
+                    ImeScreen(
+                        imeState, engineController, keyRouter, symbolCatalog,
+                        rareIndex = { rareIndex },
+                        symbolCategories = { symbolCategories },
+                        kaomojiCategories = { kaomojiCategories },
+                        // 「自有」宠物形态 = 插入 PNG 图片（文本通道之外，见 PetStickerCommit.kt）。
+                        onPickPet = { commitPetSticker(it) },
+                        // 工具栏最右「收起键盘」（2026-10-10 用户裁决）：收回系统键盘。
+                        onCloseKeyboard = { requestHideSelf(0) },
+                        // 键盘内设置面板的「清除用户词库」：同一个 store、同一套两半清理。
+                        onClearUserWords = { clearUserWords(userWords) },
+                    )
+                }
             }
         }
         Log.i(TAG, "onCreateInputView: window=${windowSizePx()} keyboardHeight=${keyboardHeight()}")
@@ -357,6 +370,8 @@ class OpiImeService : InputMethodService() {
     /** P1：输入目标切换/输入视图结束时重置面板状态（组合串、候选、面板视图）。 */
     override fun onStartInput(info: EditorInfo?, restarting: Boolean) {
         super.onStartInput(info, restarting)
+        // 换编辑器/重连：录音必须立刻停，迟到的识别结果不能写进新输入框。
+        AsrRuntime.onEditorChanged()
         editorActive = info != null
         if (!restarting) {
             Log.i(TAG, "onStartInput: editor changed")
@@ -380,11 +395,15 @@ class OpiImeService : InputMethodService() {
     }
 
     override fun onFinishInput() {
-        super.onFinishInput(); editorActive = false; Log.i(TAG, "onFinishInput")
+        super.onFinishInput()
+        AsrRuntime.onEditorChanged()
+        editorActive = false
+        Log.i(TAG, "onFinishInput")
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
+        AsrRuntime.onEditorChanged()
         Log.i(TAG, "onFinishInputView")
         // 普通 hide（返回键/同一编辑器重开）也会走到本方法，此时 finishingInput=false。
         // 这里只管「真正结束输入」那档（清缓冲/清 ⇧/回 qwerty）；普通 hide 的
@@ -440,6 +459,7 @@ class OpiImeService : InputMethodService() {
 
     override fun onWindowHidden() {
         super.onWindowHidden()
+        AsrRuntime.cancel()
         Log.i(TAG, "onWindowHidden")
         // 2026-10-17 裁决：隐藏即重置到默认界面（覆盖返回键/收起键/切应用；不碰引擎缓冲）。
         imeState.resetToDefaultView()
@@ -447,6 +467,8 @@ class OpiImeService : InputMethodService() {
     }
 
     override fun onDestroy() {
+        // 停止录音并在工作线程退出后卸载模型（约 240–360MB）。
+        AsrRuntime.detach()
         // 开关变化回调不能留住已销毁的服务/控制器
         AssociationGate.onChange = null
         // 没有前台服务托底时 IME 销毁就停内核：进程内线程不该比宿主活得更久。

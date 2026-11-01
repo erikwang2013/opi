@@ -80,10 +80,13 @@ overrides:
     depends:
       - fcitx5 (>= 5.0)
       - libc6 (>= 2.34)
+      # 语音运行时（sherpa-onnx c-api / onnxruntime）需要 libstdc++.so.6。
+      - libstdc++6 (>= 6)
   rpm:
     depends:
       - fcitx5 >= 5.0
       - glibc >= 2.34
+      - libstdc++ >= 6
 
 contents:
   # 暂存树整棵 —— 落点见上面那段说明

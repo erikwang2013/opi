@@ -38,6 +38,7 @@ fun mergeIni(existing: String, s: OpSettings): String {
         "StatusBarHidden" to boolText(s.statusbar.hidden),
         "StatusBarVk" to boolText(s.statusbar.vk),
         "StatusBarSymbols" to boolText(s.statusbar.symbols),
+        "StatusBarMic" to boolText(s.statusbar.mic),
         "StatusBarTrad" to boolText(s.statusbar.trad),
         "StatusBarPunct" to boolText(s.statusbar.punct),
         "StatusBarLang" to boolText(s.statusbar.lang),
@@ -48,6 +49,8 @@ fun mergeIni(existing: String, s: OpSettings): String {
         "StatusBarScale" to s.statusbar.scale.toString(),
         // 跨设备剪贴板（2026-11-01）：默认关。
         "ClipEnabled" to boolText(s.clipEnabled),
+        "SpeechEnabled" to boolText(s.speechEnabled),
+        "SpeechLanguage" to s.speechLanguage,
     ).apply {
         // 五笔六键（2026-10-14）：整族并进管理键表 —— `putAll` 而不是逐键列一遍，
         // 防两处各写一份（值口径与 toIniLines 同一份，见 WubiSettings.managed()）。

@@ -143,10 +143,15 @@ fun CandidateTiledView(
                     controller.clear()
                     state.collapseIfNoCandidates()
                 })
-                KeyButton("空格", modifier = Modifier.weight(1f).fillMaxWidth(), onTap = {
-                    router.handleSpace()
-                    state.collapseIfNoCandidates()
-                })
+                KeyButton(
+                    "空格",
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    onTap = {
+                        router.handleSpace()
+                        state.collapseIfNoCandidates()
+                    },
+                    mic = true,
+                )
             }
         }
     }

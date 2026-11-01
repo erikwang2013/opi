@@ -75,6 +75,36 @@ object OpiIcons {
         }.build()
     }
 
+    /** 语音输入（话筒：胶囊 + U 形托架 + 底座）。空格键长按入口用。 */
+    val Mic: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "OpiMic",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f,
+        ).apply {
+            stroke(width = 1.8f) {
+                // 胶囊
+                moveTo(9f, 7f)
+                arcToRelative(3f, 3f, 0f, false, true, 6f, 0f)
+                lineTo(15f, 13f)
+                arcToRelative(3f, 3f, 0f, false, true, -6f, 0f)
+                close()
+                // 托架（从两侧向下兜住胶囊）
+                moveTo(6f, 11f)
+                lineTo(6f, 12.5f)
+                arcToRelative(6f, 6f, 0f, false, false, 12f, 0f)
+                lineTo(18f, 11f)
+                // 立杆 + 底座
+                moveTo(12f, 18.5f)
+                lineTo(12f, 21f)
+                moveTo(9f, 21f)
+                lineTo(15f, 21f)
+            }
+        }.build()
+    }
+
     /** 键盘模式入口（滑杆：三档开关的通用写法）。 */
     val KeyboardMode: ImageVector by lazy {
         ImageVector.Builder(

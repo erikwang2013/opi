@@ -826,6 +826,18 @@ JSON）。`OpiImeService.onCreateInputView` 每次建视图时把两套整表重
 - **验证**：JVM 单测覆盖协议、回环抑制、偏好与 FFI 契约；两台真机配对与同步、
   各 ROM 的剪贴板监听差异均【未验证】。
 
+**本地语音输入（2026-11-02，默认关闭）**：空格键换话筒图标，**短按仍打空格**，
+长按进入锁定录音（浮层有停止/取消/音量/识别中/错误）；点击工具条或设置页可开启。
+音频 16 kHz 单声道 PCM16 只在本机识别，不落盘、不上传；中文/自动走 SenseVoice，
+英文走高精度 Whisper（`crates/opi-asr`，sherpa-onnx）。模型不随 APK：首次使用前在
+设置页下载（SenseVoice 约 239 MB、Whisper 约 375 MB，另加 Silero VAD），逐文件
+SHA-256 校验后写 `filesDir/asr`。**只打包 arm64-v8a / x86_64**（32 位 ABI 不显示
+话筒入口）；`RECORD_AUDIO` 运行时权限由 `AsrPermissionActivity` 申请，拒绝时给可读
+提示。录音开始/结束与编辑器切换会做 generation 校验，避免把结果上屏到错误输入框。
+**验证**：Rust 单测/真实 wav、Android JVM 单测、release APK 含 `libopi_asr.so` +
+sherpa/onnxruntime；**真机录音、权限弹窗与不同 ROM 的省电策略仍【未验证】**。
+iOS 键盘无麦克风，鸿蒙未接语音。
+
 ---
 
 ## 5. 验证

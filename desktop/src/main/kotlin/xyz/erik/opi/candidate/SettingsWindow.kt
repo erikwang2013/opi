@@ -91,6 +91,8 @@ internal enum class SettingsTab(val label: String) {
     // 跨设备剪贴板（2026-11-01）：默认关；宿主在 `--statusbar` 常驻进程里，
     // 本页通过本机回环控制面读状态/发命令（见 ClipControl.kt / ClipPage.kt）。
     CLIP("跨设备剪贴板"),
+    // 语音输入（2026-11-02）：总开关默认关；语言 auto/zh/en + 两个离线模型下载。
+    SPEECH("语音"),
     // 高级页（2026-10-24）：中英两套自定义短语。真源是两平台同一条数据目录下的
     // `custom_phrases.json` / `custom_phrases_en.json`（见 CustomPhraseStore.kt），
     // 两端 IME 各自重读。
@@ -306,6 +308,7 @@ fun SettingsWindow() {
                     SettingsTab.DICTS -> DictsPage(s, ::apply, { status = it })
                     SettingsTab.WUBI -> WubiPage(s, ::apply)
                     SettingsTab.CLIP -> ClipPage(s, ::apply) { status = it }
+                    SettingsTab.SPEECH -> SpeechPage(s, ::apply) { status = it }
                     SettingsTab.ADVANCED -> {
                         CustomPhrasesPage { status = it }
                         CustomPhrasesPage(english = true) { status = it }

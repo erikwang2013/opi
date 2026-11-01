@@ -62,7 +62,7 @@
       <p><strong>Applies to:</strong> the Android, iOS, HarmonyOS, Windows, Linux and macOS clients, and this website (opi.erik.xyz)</p>
     </div>
 
-    <p class="summary"><strong>In one sentence:</strong> opi collects, uploads and shares no personal information. There are no accounts, so there is no account-deletion process. Normal typing is fully offline; the client only goes online when you check/download an update or enable cross-device clipboard. Clipboard data never goes through a cloud.</p>
+    <p class="summary"><strong>In one sentence:</strong> opi collects, uploads and shares no personal information. There are no accounts, so there is no account-deletion process. Normal typing is fully offline; the client only goes online when you check/download an update, enable cross-device clipboard, or enable voice input and download a model. Clipboard data never goes through a cloud.</p>
 
     <h2>1. What we collect</h2>
     <p>We collect <strong>no personal information</strong>, including but not limited to: your input and candidates, clipboard contents, contacts, location, photos, device identifiers, usage statistics or crash logs. There are no accounts, registration or sign-in, and no advertising or profiling.</p>
@@ -80,15 +80,16 @@
     <ul>
       <li><strong>Update checks:</strong> some clients offer “Check for updates”, which sends one ordinary HTTPS request to <code>https://opi.erik.xyz/version.json</code> to read the latest version number. It does <strong>not</strong> carry input, user words, clipboard contents or device identifiers, and is not used for statistics or profiling.</li>
       <li><strong>In-app updates:</strong> when you press Download, the client fetches the installer/hot-update package and verifies its size and SHA-256; no input or user data is sent.</li>
+      <li><strong>Voice model download (optional, when voice input is enabled):</strong> models are fetched over HTTPS and checked by SHA-256; audio is recognised on-device and is <strong>never uploaded or written to disk</strong>.</li>
       <li><strong>Cross-device clipboard (optional, off by default):</strong> only after you enable it and pair devices does the client open an encrypted connection (Noise + ChaCha20-Poly1305) to paired devices on the same LAN. Only plain text (≤256 KiB) is synced; discovery packets contain no clipboard contents; there is <strong>no cloud, no account and no history</strong>, and you can stop/revoke at any time. Your OS’s own cloud clipboard may sync independently; turn it off in system settings if you do not want that.</li>
     </ul>
 
     <h2>4. System permissions</h2>
     <ul>
-      <li><strong>Android:</strong> <code>INTERNET</code> (updates/clipboard), <code>REQUEST_INSTALL_PACKAGES</code> (handing a downloaded package to the system installer), optional LAN multicast and foreground-service/notification permissions (cross-device clipboard).</li>
+      <li><strong>Android:</strong> <code>INTERNET</code> (updates/clipboard), <code>REQUEST_INSTALL_PACKAGES</code> (handing a downloaded package to the system installer), optional LAN multicast and foreground-service/notification permissions (cross-device clipboard), and <code>RECORD_AUDIO</code> only when voice input is enabled.</li>
       <li><strong>iOS:</strong> optional “Allow Full Access” for writing the app’s own sticker images; optional local-network permission for cross-device clipboard. Keyboard extensions <strong>cannot use the microphone</strong>; use system dictation for voice.</li>
-      <li><strong>HarmonyOS:</strong> network permission (updates/clipboard), optional pasteboard permission only when the clipboard feature is enabled.</li>
-      <li><strong>Windows / Linux / macOS:</strong> the firewall may ask on first clipboard listen.</li>
+      <li><strong>HarmonyOS:</strong> network permission (updates/clipboard), optional pasteboard permission only when the clipboard feature is enabled; voice is not wired yet.</li>
+      <li><strong>Windows / Linux / macOS:</strong> optional microphone permission only when voice input is enabled; the firewall may ask on first clipboard listen.</li>
     </ul>
 
     <h2>5. Third parties and sharing</h2>

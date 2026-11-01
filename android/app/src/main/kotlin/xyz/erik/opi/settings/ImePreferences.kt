@@ -125,6 +125,11 @@ class ImePreferences(private val store: PrefStore) {
         get() = store.getBoolean(KEY_ENGLISH_PRO, false)
         set(v) = store.put(KEY_ENGLISH_PRO, v)
 
+    /** 语音输入选 Whisper small.en（缺省 false = SenseVoice 中英混识）。 */
+    var asrWhisper: Boolean
+        get() = store.getBoolean(KEY_ASR_WHISPER, false)
+        set(v) = store.put(KEY_ASR_WHISPER, v)
+
     /** 拼音纠错（2026-10-13；缺省开）。 */
     var correction: Boolean
         get() = store.getBoolean(KEY_CORRECTION, true)
@@ -281,6 +286,7 @@ class ImePreferences(private val store: PrefStore) {
         const val KEY_CORRECTION = "engine_correction"
         const val KEY_SHOW_OWN = "pet_show_own"
         const val KEY_CLIP_ENABLED = "clip_enabled"
+        const val KEY_ASR_WHISPER = "asr_whisper"
         const val KEY_CUSTOM_PUNCT = "nine_custom_punct"
         const val KEY_SHUANGPIN_LAYOUT = "engine_shuangpin_layout"
         // 五笔六键（2026-10-14，M4 第二波）

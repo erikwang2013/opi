@@ -45,7 +45,8 @@ internal fun statusActionOp(b: StatusBarButton): String? = when (b) {
     StatusBarButton.ENPRO -> "englishpro"
     // MODE 走 [cycleMode]（要读新 token），不在这张「动作名」表里。
     StatusBarButton.MODE, StatusBarButton.SYMBOLS,
-    StatusBarButton.VK, StatusBarButton.LOGO, StatusBarButton.SETTINGS -> null
+    StatusBarButton.MIC, StatusBarButton.VK,
+    StatusBarButton.LOGO, StatusBarButton.SETTINGS -> null
 }
 
 /**
@@ -83,7 +84,8 @@ fun statusActionCommand(b: StatusBarButton): List<String>? = when (b) {
     // MODE 也不出命令：它走 [cycleMode]（进程内一次 `opi-ctl mode` 循环，返回新档位
     // token），与这张「按钮 → 命令行」的表不是一件事（分派见 StatusBar.dispatch）。
     StatusBarButton.MODE -> null
-    StatusBarButton.VK, StatusBarButton.LOGO, StatusBarButton.SETTINGS -> null
+    StatusBarButton.MIC, StatusBarButton.VK,
+    StatusBarButton.LOGO, StatusBarButton.SETTINGS -> null
 }
 
 // ---------- 跑命令 ----------

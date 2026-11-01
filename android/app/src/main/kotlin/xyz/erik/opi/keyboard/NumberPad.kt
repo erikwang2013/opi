@@ -53,7 +53,13 @@ fun NumberPad(
             Row(modifier = Modifier.weight(1f).fillMaxSize()) {
                 KeyButton("ABC", modifier = Modifier.weight(1f), onTap = onLetters, fontSize = labelFont)
                 KeyButton("?123", modifier = Modifier.weight(1f), onTap = onSymbol, fontSize = labelFont)
-                KeyButton("空格", modifier = Modifier.weight(5f), onTap = onSpace, fontSize = keyFont)
+                KeyButton(
+                    "空格",
+                    modifier = Modifier.weight(5f),
+                    onTap = onSpace,
+                    mic = true,
+                    fontSize = keyFont,
+                )
                 KeyButton(
                     "⌫",
                     modifier = Modifier.weight(1f),

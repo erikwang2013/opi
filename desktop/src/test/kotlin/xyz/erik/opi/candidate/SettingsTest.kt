@@ -43,6 +43,8 @@ class SettingsTest {
             // 模糊音与智能联想缺省**关**（2026-10-15 / 2026-10-28 用户裁决）：整行契约跟着翻。
             "Learn=True", "ChinesePunct=True", "Fuzzy=False", "Jianpin=True",
             "ShiftToggle=True", "Skin=清爽", "Background=", "CandidateFont=中", "Association=False",
+            // 语音输入（2026-11-02）：总开关默认关，语言默认自动。
+            "SpeechEnabled=False", "SpeechLanguage=auto",
         )) {
             assertTrue("缺少键行：$line\n$ini", ini.contains("$line\n"))
         }
@@ -183,7 +185,7 @@ class SettingsTest {
         assertEquals("C:\\Users\\u\\AppData\\Local", p.parent.parent.toString())
     }
 
-    // ---------- 状态栏十一个键（2026-10-10 加；2026-10-19 加 StatusBarEnPro/Scale）----------
+    // ---------- 状态栏十二个键（2026-10-10 加；2026-10-19 加 EnPro/Scale；2026-11-02 加 Mic）----------
 
     @Test
     fun `statusbar round trip keeps every switch`() {
@@ -198,14 +200,14 @@ class SettingsTest {
 
     @Test
     fun `statusbar key names are pinned`() {
-        // 与上面四个开关同一条纪律：**钉整行**。这十个键只有本窗读写（两端 IME 的读侧
+        // 与上面四个开关同一条纪律：**钉整行**。这十二个键只有本窗读写（两端 IME 的读侧
         // 都不认识它们，见 Settings.kt 文件头），所以没有第二处能替这里发现改名。
         val ini = OpSettings(
             statusbar = StatusBarSettings(hidden = true, vk = false, trad = false),
         ).toIni()
         for (line in listOf(
             "StatusBarHidden=True", "StatusBarVk=False", "StatusBarSymbols=True",
-            "StatusBarTrad=False", "StatusBarPunct=True", "StatusBarLang=True",
+            "StatusBarMic=True", "StatusBarTrad=False", "StatusBarPunct=True", "StatusBarLang=True",
             "StatusBarLogo=True", "StatusBarFullwidth=True", "StatusBarSettings=True",
             "StatusBarEnPro=True", "StatusBarScale=100",
         )) {
@@ -215,7 +217,7 @@ class SettingsTest {
 
     @Test
     fun `config without statusbar keys gets the decided defaults`() {
-        // 1.7.5 及更早写的配置文件没有这十个键 ⇒ 默认「不隐藏 + 除软键盘外全常驻」
+        // 1.7.5 及更早写的配置文件没有这些键 ⇒ 默认「不隐藏 + 除软键盘外全常驻」
         // （2026-10-10 中午裁决收窄：软键盘默认关），而不是全关 —— 全关会让老用户
         // 升级后条上什么都不剩。比对**整个** StatusBarSettings()：fromIni 的回落值
         // 与数据类默认漂了一处就会红在这里。
@@ -287,6 +289,8 @@ class SettingsTest {
                 SettingsTab.WUBI,
                 // 跨设备剪贴板（2026-11-01）：两平台都出；Wayland 在页内降级为手动发送。
                 SettingsTab.CLIP,
+                // 语音输入（2026-11-02）：总开关默认关，语言与离线模型都在页内。
+                SettingsTab.SPEECH,
                 // 高级页（2026-10-24）：自定义短语，两端 IME 读同一个宿主文件。
                 SettingsTab.ADVANCED,
                 SettingsTab.ABOUT,
@@ -348,6 +352,27 @@ class SettingsTest {
         val merged = mergeIni("ShuangpinLayout=微软\n", OpSettings(shuangpinLayout = "紫光"))
         assertTrue(merged, merged.contains("ShuangpinLayout=紫光\n"))
         assertTrue(merged, !merged.contains("ShuangpinLayout=微软\n"))
+    }
+
+    // ---------- 语音输入（2026-11-02）----------
+
+    @Test
+    fun `speech defaults are off and language routing round-trips`() {
+        // 用户要求：语音总开关**默认关**；语言 auto/zh → SenseVoice，en → Whisper。
+        assertFalse(OpSettings().speechEnabled)
+        assertEquals("auto", OpSettings().speechLanguage)
+        assertEquals(OpSettings(), OpSettings.fromIni(""))
+        // 写得出、读得回；坏值回落自动（不抛）。
+        val on = OpSettings(speechEnabled = true, speechLanguage = SpeechLanguage.EN.value)
+        assertEquals(on, OpSettings.fromIni(on.toIni()))
+        assertEquals("en", OpSettings.fromIni("SpeechLanguage=en\n").speechLanguage)
+        assertEquals("auto", OpSettings.fromIni("SpeechLanguage=fr\n").speechLanguage)
+        // merge：管理键（旧值被新值顶掉，不是当未知键留着）。
+        val merged = mergeIni("SpeechEnabled=True\nSpeechLanguage=en\n", OpSettings())
+        assertTrue(merged, merged.contains("SpeechEnabled=False\n"))
+        assertTrue(merged, merged.contains("SpeechLanguage=auto\n"))
+        assertFalse(merged, merged.contains("SpeechEnabled=True\n"))
+        assertFalse(merged, merged.contains("SpeechLanguage=en\n"))
     }
 
     // ---------- 五笔六键（2026-10-14，M4 第二波）----------
