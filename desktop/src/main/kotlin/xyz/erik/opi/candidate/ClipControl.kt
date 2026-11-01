@@ -41,6 +41,7 @@ internal fun clipControlPath(): Path = clipDataDir().resolve("control.json")
 internal sealed interface ClipCommand {
     data class SetEnabled(val on: Boolean) : ClipCommand
     data class Pair(val peer: String) : ClipCommand
+    data class Probe(val ip: String) : ClipCommand
     data class Confirm(val peer: String, val accept: Boolean) : ClipCommand
     data class Forget(val peer: String) : ClipCommand
 
@@ -154,6 +155,12 @@ internal class ClipControlServer(
                 enqueue(ClipCommand.SetEnabled(on))
                 writeJson(socket, "{\"ok\":true}")
             }
+            "probe" -> {
+                val ip = (m["ip"] as? JVal.JStr)?.v?.trim().orEmpty()
+                if (ip.isEmpty() || ip.length > 64) return replyError(socket, "ip 不合法")
+                enqueue(ClipCommand.Probe(ip))
+                writeJson(socket, "{\"ok\":true}")
+            }
             "pair", "forget" -> {
                 val peer = peerArg(m) ?: return replyError(socket, "peer 必须是 32 位十六进制")
                 enqueue(
@@ -255,6 +262,8 @@ internal object ClipClient {
     fun setEnabled(on: Boolean): Boolean = command("\"enable\",\"on\":$on")
 
     fun pair(peer: String): Boolean = command("\"pair\",\"peer\":${jsonString(peer)}")
+
+    fun probe(ip: String): Boolean = command("\"probe\",\"ip\":${jsonString(ip)}")
 
     fun confirm(peer: String, accept: Boolean): Boolean =
         command("\"confirm\",\"peer\":${jsonString(peer)},\"accept\":$accept")

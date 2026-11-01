@@ -26,6 +26,10 @@ pub struct ClipConfig {
     /// 组播出口与 /24 探测；不传则退回默认出口地址（VPN/双网卡时可能选错）。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub advertise_ipv4: Option<std::net::Ipv4Addr>,
+    /// 本机局域网地址的 IPv4 前缀长度（如 /24 = 24）。用于按真实子网发广播；
+    /// 不传则按 /24 处理（家宽最常见）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub advertise_prefix: Option<u8>,
 }
 
 fn default_discovery_port() -> u16 {
@@ -40,6 +44,7 @@ impl ClipConfig {
             discovery_port: DEFAULT_DISCOVERY_PORT,
             device_name: String::from("Opi"),
             advertise_ipv4: None,
+            advertise_prefix: None,
         }
     }
 
@@ -143,6 +148,7 @@ mod tests {
             discovery_port: 45999,
             device_name: "书房".into(),
             advertise_ipv4: None,
+            advertise_prefix: None,
         };
         config.save(&path).unwrap();
         assert_eq!(ClipConfig::load(&path).unwrap(), config);

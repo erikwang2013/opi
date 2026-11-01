@@ -21,7 +21,7 @@ extension OpiSettingsWindow {
 
         setPageHeight(720)
         label("跨设备剪贴板", y: 8, size: 18, bold: true)
-        note("同一局域网内同步纯文本剪贴板：UDP 发现 + TCP 加密会话。默认关闭；"
+        note("同一局域网内同步纯文本剪贴板：局域网发现 + 加密会话。默认关闭；"
              + "配对时两端必须显示同一个 6 位确认码。远端内容只写入剪贴板，不自动粘贴。",
              y: 34, height: 40)
 
@@ -95,7 +95,7 @@ extension OpiSettingsWindow {
 
         label("一键停止", y: y, size: 14, bold: true)
         y += 24
-        note("关闭开关并释放监听端口。已配对设备仍保留信任，重新开启后可直接使用。",
+        note("关闭开关并释放监听。已配对设备仍保留信任，重新开启后可直接使用。",
              y: y, height: 20)
         button("停止共享", y: y + 24, w: 120, action: #selector(clipStopAll(_:)))
         y += 66
@@ -103,7 +103,7 @@ extension OpiSettingsWindow {
         label("安全与网络", y: y, size: 14, bold: true)
         y += 24
         let notes = [
-            "· 默认关闭；开启后只在局域网内通信（UDP 发现 + TCP 加密会话）。",
+            "· 默认关闭；开启后只在局域网内通信（局域网发现 + 加密会话）。",
             "· 配对必须由两端核对同一个 6 位数字；远端内容只写剪贴板，不自动粘贴。",
             "· 不记录剪贴板内容，不做剪贴板历史；状态文件只存设备身份与信任表。",
             "· 首次监听时系统会请求「本地网络」权限；拒绝后功能不可用，需到系统设置里放行。",

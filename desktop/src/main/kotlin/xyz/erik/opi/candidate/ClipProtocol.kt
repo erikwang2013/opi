@@ -73,6 +73,7 @@ internal fun clipConfigJson(
     tcpPort: Int = 0,
     discoveryPort: Int = 45888,
     advertiseIp: String? = null,
+    advertisePrefix: Int? = null,
 ): String = buildString {
     append("{\"data_dir\":").append(jsonString(dataDir))
     append(",\"tcp_port\":").append(tcpPort)
@@ -81,6 +82,9 @@ internal fun clipConfigJson(
     if (!advertiseIp.isNullOrBlank()) {
         append(",\"advertise_ipv4\":").append(jsonString(advertiseIp))
     }
+    if (advertisePrefix != null) {
+        append(",\"advertise_prefix\":").append(advertisePrefix)
+    }
     append('}')
 }
 
@@ -88,25 +92,28 @@ internal fun clipConfigJson(
  * 本机局域网 IPv4：优先站点本地地址，跳过 Docker/VPN 等虚拟网卡。
  * 多网卡/有 VPN 时默认出口不一定是局域网那块网卡，广播会发错网段。
  */
-internal fun localLanIpv4(): String? {
+internal fun localLanAddress(): Pair<String, Int>? {
     val excluded = listOf(
-        "docker", "veth", "br-", "virbr", "vmnet", "vbox", "tun", "tap", "wg", "tailscale", "zt",
+        "docker", "veth", "br-", "virbr", "vmnet", "vbox", "virtualbox", "vethernet",
+        "hyper-v", "wsl", "vmware", "tun", "tap", "wg", "tailscale", "zt",
     )
-    val candidates = runCatching {
+    val nifs = runCatching {
         java.util.Collections.list(java.net.NetworkInterface.getNetworkInterfaces())
-            .asSequence()
-            .filter { it.isUp && !it.isLoopback }
-            .flatMap { n ->
-                java.util.Collections.list(n.inetAddresses).asSequence()
-                    .filterIsInstance<java.net.Inet4Address>()
-                    .filter { !it.isLoopbackAddress && !it.isLinkLocalAddress && it.isSiteLocalAddress }
-                    .map { addr -> n.name.lowercase() to addr.hostAddress }
-            }
-            .filter { (name, _) -> excluded.none { name.contains(it) } }
-            .toList()
     }.getOrDefault(emptyList())
-    return candidates.firstOrNull()?.second
+    for (n in nifs) {
+        if (!n.isUp || n.isLoopback) continue
+        val name = n.name.lowercase()
+        if (excluded.any { name.contains(it) }) continue
+        for (ia in n.interfaceAddresses) {
+            val addr = ia.address as? java.net.Inet4Address ?: continue
+            if (addr.isLoopbackAddress || addr.isLinkLocalAddress || !addr.isSiteLocalAddress) continue
+            return (addr.hostAddress ?: continue) to ia.networkPrefixLength.toInt()
+        }
+    }
+    return null
 }
+
+internal fun localLanIpv4(): String? = localLanAddress()?.first
 
 // ---------- 事件 ----------
 

@@ -37,6 +37,8 @@ pub(crate) struct NodeInner {
     /// 诊断计数：只用于设置页显示「发/收过多少发现报文」，不含内容。
     pub(crate) beacons_sent: AtomicU64,
     pub(crate) beacons_received: AtomicU64,
+    /// 手动连接：设置页输入的对方 IPv4，由发现线程取走发送探测。
+    pub(crate) probes: Mutex<Vec<Ipv4Addr>>,
 }
 
 impl NodeInner {
@@ -177,6 +179,7 @@ impl ClipNode {
             active: AtomicUsize::new(0),
             beacons_sent: AtomicU64::new(0),
             beacons_received: AtomicU64::new(0),
+            probes: Mutex::new(Vec::new()),
         });
 
         let mut threads = Vec::new();
@@ -252,6 +255,19 @@ impl ClipNode {
 
     pub fn peers(&self) -> Vec<PeerInfo> {
         self.inner.lock().peer_snapshot()
+    }
+
+    /// 手动探测一个 IPv4：对端收到后单播回复，随后出现在 peers 里。
+    pub fn probe(&self, ip: Ipv4Addr) -> Result<(), ClipError> {
+        if self.inner.is_stopped() {
+            return Err(ClipError::Stopped);
+        }
+        self.inner
+            .probes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(ip);
+        Ok(())
     }
 
     /// `(beacons_sent, beacons_received)`：发现链路诊断，不含剪贴板内容。

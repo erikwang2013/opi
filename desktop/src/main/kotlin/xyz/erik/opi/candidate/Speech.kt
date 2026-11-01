@@ -75,7 +75,11 @@ private class LoadedAsr(
     val eventCap: Int,
 )
 
-private class Session(val engine: SpeechEngine, val commit: (String) -> String?) {
+private class Session(
+    val engine: SpeechEngine,
+    val commit: (String) -> String?,
+    val epoch: Int,
+) {
     var deadlineMs: Long = 0L
 }
 
@@ -86,7 +90,7 @@ internal fun asrConfigJson(root: Path, language: SpeechLanguage): String = build
     append(",\"whisper_dir\":\"whisper-small.en\"")
     append(",\"vad_model\":\"vad/silero_vad.onnx\"")
     append(",\"language\":").append(jsonString(language.value))
-    append(",\"num_threads\":2,\"verify_models\":true}")
+    append(",\"num_threads\":2,\"verify_models\":false}")
 }
 
 /** Java Sound 采集：16 kHz / 16 bit / mono / little-endian，专用读线程。 */
@@ -168,6 +172,8 @@ internal class SpeechHostImpl {
         private set
 
     @Volatile private var config = SpeechConfig()
+    /** 取消/关闭立刻隐藏 UI；加载线程回来时用代际校验丢弃过期状态。 */
+    @Volatile private var epoch = 0
     private val commands = LinkedBlockingQueue<SpeechCommand>()
     private val runtime = AsrRuntime()
 
@@ -201,16 +207,24 @@ internal class SpeechHostImpl {
         // 准备/识别中再点是「取消」，不是「开始下一个」—— 否则会排队一个 Toggle，
         // 等当前会话结束后立刻又开一段（用户看到的是点了取消反而还在录）。
         when (ui.phase) {
-            SpeechPhase.PREPARING, SpeechPhase.RECOGNIZING -> commands.offer(SpeechCommand.Cancel)
+            SpeechPhase.PREPARING, SpeechPhase.RECOGNIZING -> {
+                epoch++
+                update(SpeechUi())
+                commands.offer(SpeechCommand.Cancel)
+            }
             else -> commands.offer(SpeechCommand.Toggle(commit))
         }
     }
 
     fun cancel() {
+        epoch++
+        update(SpeechUi())
         commands.offer(SpeechCommand.Cancel)
     }
 
     fun dismiss() {
+        epoch++
+        update(SpeechUi())
         commands.offer(SpeechCommand.Dismiss)
     }
 
@@ -253,6 +267,7 @@ internal class SpeechHostImpl {
         }
 
         private fun start(commit: (String) -> String?) {
+            val myEpoch = epoch
             val cfg = config
             val engine = cfg.language.engine
             update(SpeechUi(phase = nextSpeechPhase(ui.phase, SpeechTransition.START), engine = engine))
@@ -290,11 +305,16 @@ internal class SpeechHostImpl {
                     fail("模型加载失败：$why")
                     return
                 }
+                if (myEpoch != epoch) {
+                    runCatching { ffi.opi_asr_destroy(ptr) }
+                    return
+                }
                 val max = runCatching { ffi.opi_asr_max_event_bytes() }.getOrDefault(65_536)
                     .coerceIn(4096, 1 shl 20)
                 h = LoadedAsr(ffi, engine, ptr, Memory((max + 1).toLong()), max + 1)
                 loaded = h
             }
+            if (myEpoch != epoch) return
             drain(ffi, h)
             if (ffi.opi_asr_start(h.handle) != 0) {
                 fail("启动识别失败：${ffi.lastError(h.handle)}")
@@ -314,9 +334,14 @@ internal class SpeechHostImpl {
                 fail(audioErr)
                 return
             }
+            if (myEpoch != epoch) {
+                capture.stop()
+                runCatching { ffi.opi_asr_cancel(h.handle) }
+                return
+            }
             recording = capture
             OtherAudio.pause()
-            session = Session(engine, commit)
+            session = Session(engine, commit, myEpoch)
             update(ui.copy(phase = nextSpeechPhase(ui.phase, SpeechTransition.READY), level = 0f, text = "", error = ""))
         }
 
@@ -338,6 +363,7 @@ internal class SpeechHostImpl {
         fun poll() {
             val h = loaded ?: return
             val s = session ?: return
+            if (s.epoch != epoch) return
             if (s.deadlineMs > 0 && System.currentTimeMillis() > s.deadlineMs) {
                 fail("识别超时（60 秒）：请缩短录音或检查模型")
                 cancelSession(keepUi = true)
@@ -364,7 +390,6 @@ internal class SpeechHostImpl {
                 }
             }
         }
-
         /** true = 继续抽；false = 这一拍停止（会话结束/已出错）。 */
         private fun onEvent(h: LoadedAsr, s: Session, json: String): Boolean {
             return when (eventType(json)) {
@@ -390,7 +415,6 @@ internal class SpeechHostImpl {
                 else -> true
             }
         }
-
         private fun finishFinal(s: Session, text: String) {
             session = null
             val shown = text.ifBlank { "（未识别到语音）" }
@@ -410,7 +434,6 @@ internal class SpeechHostImpl {
             }
             if (err != null) update(ui.copy(error = "上屏失败：$err"))
         }
-
         private fun feed(s: Session, bytes: ByteArray) {
             val h = loaded ?: return
             var tries = 0
@@ -435,7 +458,6 @@ internal class SpeechHostImpl {
                 return
             }
         }
-
         /** 清理采集与 Rust 会话。`keepUi` = 保留调用方刚写下的错误浮层。 */
         private fun cancelSession(keepUi: Boolean = false) {
             recording?.stop()
@@ -449,11 +471,9 @@ internal class SpeechHostImpl {
             session = null
             if (!keepUi) update(SpeechUi())
         }
-
         private fun fail(message: String) {
             update(SpeechUi(phase = nextSpeechPhase(ui.phase, SpeechTransition.FAIL), engine = ui.engine, error = message))
         }
-
         /** 丢掉句柄里已经排队的事件（取消后/新会话开始前）。 */
         private fun drain(ffi: OpiAsrFfi, h: LoadedAsr) {
             repeat(64) {
@@ -463,23 +483,18 @@ internal class SpeechHostImpl {
         }
     }
 }
-
 private val EVENT_TYPE = Regex("\"type\"\\s*:\\s*\"([a-z_]+)\"")
 private val RMS_DB = Regex("\"rms_db\"\\s*:\\s*(-?[0-9]+(?:\\.[0-9]+)?)")
-
 internal fun eventType(json: String): String? =
     EVENT_TYPE.find(json)?.groupValues?.getOrNull(1)
-
 /** rms_db → 0..1；-60 dB 以下按 0 画。 */
 internal fun eventLevel(json: String): Float? {
     val db = RMS_DB.find(json)?.groupValues?.getOrNull(1)?.toFloatOrNull() ?: return null
     return ((db + 60f) / 60f).coerceIn(0f, 1f)
 }
-
 /** final/segment/error 的 `text`（`message` 也认，兼容 error 事件）。 */
 internal fun eventText(json: String): String? {
     val obj = parseLine(json) ?: return null
     return (obj["text"] as? JVal.JStr)?.v ?: (obj["message"] as? JVal.JStr)?.v
 }
-
 internal val SpeechHost = SpeechHostImpl()

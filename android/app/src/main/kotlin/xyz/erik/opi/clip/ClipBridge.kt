@@ -19,6 +19,7 @@ internal interface ClipNativeApi {
     fun localText(handle: Long, text: String?): Int
     fun pollEvent(handle: Long, timeoutMs: Int): String?
     fun pairStart(handle: Long, peerId: String): Boolean
+    fun probe(handle: Long, ip: String): Boolean
     fun pairConfirm(handle: Long, peerId: String, accept: Boolean): Boolean
     fun pairCancel(handle: Long, peerId: String): Boolean
     fun peers(handle: Long): String?
@@ -38,6 +39,7 @@ internal object OpiClipNative : ClipNativeApi {
         OpiEngine.clipPollEvent(handle, timeoutMs)
     override fun pairStart(handle: Long, peerId: String): Boolean =
         OpiEngine.clipPairStart(handle, peerId)
+    override fun probe(handle: Long, ip: String): Boolean = OpiEngine.clipProbe(handle, ip)
     override fun pairConfirm(handle: Long, peerId: String, accept: Boolean): Boolean =
         OpiEngine.clipPairConfirm(handle, peerId, accept)
     override fun pairCancel(handle: Long, peerId: String): Boolean =
@@ -122,6 +124,8 @@ internal class ClipBridge(
     }
 
     fun pairStart(peerId: String) = call({ api.pairStart(handle, peerId) }, refresh = true)
+
+    fun probe(ip: String) = call({ api.probe(handle, ip) }, refresh = true)
 
     fun pairConfirm(peerId: String, accept: Boolean) =
         call({ api.pairConfirm(handle, peerId, accept) }, refresh = true)

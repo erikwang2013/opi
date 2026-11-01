@@ -134,6 +134,19 @@ internal class ClipService {
             is ClipCommand.Pair -> withPeer(cmd.peer) { f, h, arg ->
                 f.opi_clip_pair_start(h, arg.memory, arg.len)
             }
+            is ClipCommand.Probe -> {
+                val f = ffi
+                val h = handle
+                if (f != null && h != null) {
+                    val arg = Utf16Arg(cmd.ip)
+                    if (f.opi_clip_probe(h, arg.memory, arg.len) == 0.toByte()) {
+                        ui = ui.copy(lastError = readLastError(f))
+                    } else {
+                        ui = ui.copy(lastError = null)
+                    }
+                    publishSnapshot()
+                }
+            }
             is ClipCommand.Confirm -> withPeer(cmd.peer) { f, h, arg ->
                 f.opi_clip_pair_confirm(
                     h, arg.memory, arg.len, if (cmd.accept) 1.toByte() else 0.toByte(),
@@ -228,11 +241,13 @@ internal class ClipService {
             publishSnapshot()
             return
         }
+        val lan = localLanAddress()
         val config = Utf16Arg(
             clipConfigJson(
                 clipDataDir().toString(),
                 deviceName,
-                advertiseIp = localLanIpv4(),
+                advertiseIp = lan?.first,
+                advertisePrefix = lan?.second,
             ),
         )
         val clip = f.opi_clip_create(config.memory, config.len)

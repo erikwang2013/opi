@@ -669,7 +669,7 @@ JSON 带 version 1，可原样再导入；行式格式不保留短语内的换�
 当前版本号未知	Current version unknown
 网络不可用	Network unavailable
 Windows 若发现不到设备，请确认安装器添加的防火墙规则未被禁用、当前网络为「专用」。	If Windows cannot find devices, check that the installer's firewall rules are enabled and the network is marked Private.
-· Windows 安装器会为 opi.exe 添加专用/域网络的入站规则（UDP 45888 发现、TCP 会话）。	· The Windows installer adds private/domain inbound rules for opi.exe (UDP 45888 discovery and TCP sessions).
+· Windows 安装器会为 opi.exe 添加专用/域网络的程序入站规则。	· The Windows installer adds program-scoped inbound rules for opi.exe on private/domain networks.
 若仍连不上，请到 Windows 安全中心确认规则未被禁用，且当前网络为「专用」。	If it still cannot connect, check in Windows Security that the rules are enabled and the network is Private.
 中文短语	Chinese
 英文短语	English
@@ -713,3 +713,11 @@ JSON 格式错误：	JSON format error:
 随包符号类目：%d 类 · 每页 12×6	Bundled symbol categories: %d · 12×6 per page
 未找到随包类目表 —— 面板会回退到引擎常用符号块（类目更少）	Bundled category table not found — the panel falls back to the engine's common symbol blocks (fewer categories)
 表情 %d 个 · 颜文字 %d 个 · 贴纸 %d 个（ShowOwn）	Emoji %d · Kaomoji %d · Stickers %d (ShowOwn)
+手动连接	Manual connect
+探测	Probe
+对方 IP（例如 192.168.1.5）	Peer IP (e.g. 192.168.1.5)
+自动发现被路由器或防火墙拦住时，输入对方设置页显示的局域网 IP	If auto-discovery is blocked by the router or firewall, enter the LAN IP shown on the other device's settings.
+自动发现被路由器或防火墙拦住时，输入对方设置页显示的局域网 IP；对端收到探测会自动回复。	If auto-discovery is blocked by the router or firewall, enter the LAN IP shown on the other device's settings; the peer replies automatically.
+已发送探测；对方在线会出现在附近设备	Probe sent; the peer will appear under Nearby devices if online.
+IP 格式不正确	Invalid IP address
+· 如启用了 ufw/firewalld，请按程序放行局域网入站连接。	· If ufw/firewalld is enabled, allow program inbound LAN connections.

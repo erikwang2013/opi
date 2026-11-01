@@ -81,7 +81,7 @@
       <li><strong>版本检测：</strong>部分客户端的设置页提供「检查更新」，向 <code>https://opi.erik.xyz/version.json</code> 发起一次普通 HTTPS 请求，读取最新版本号。该请求<strong>不携带</strong>输入内容、用户词、剪贴板内容或设备标识，也不用于统计或画像。</li>
       <li><strong>应用内更新：</strong>你点「下载」时，客户端访问安装包/热更新包并校验大小与 SHA-256；不携带输入或用户数据。</li>
       <li><strong>语音引擎与模型下载（可选，启用语音输入时）：</strong>普通包/基础包首次启用语音时，通过 HTTPS 下载语音引擎原生库（约 8 MB）与识别模型，读取站点清单里的大小与 SHA-256，校验通过后才安装并自动启用；音频只在本机识别，<strong>不上传、不落盘</strong>。未启用语音时不会下载。</li>
-      <li><strong>跨设备剪贴板（可选，默认关闭）：</strong>只有你手动开启并完成配对后，才在同一局域网内与已配对设备建立加密连接（Noise + ChaCha20-Poly1305）；只同步纯文本（≤256 KiB），<strong>不经过云端、无账号、无历史</strong>，可一键停止并撤销设备。发现使用 UDP 45888：组播、广播、按本机局域网地址推导的定向广播，以及（广播被丢弃时的）同网段逐机单播探测；发现报文只含随机实例 ID、密钥指纹、TCP 端口与能力位，不含剪贴板内容。系统自带的云剪贴板可能独立同步，建议在系统设置中关闭。</li>
+      <li><strong>跨设备剪贴板（可选，默认关闭）：</strong>只有你手动开启并完成配对后，才在同一局域网内与已配对设备建立加密连接（Noise + ChaCha20-Poly1305）；只同步纯文本（≤256 KiB），<strong>不经过云端、无账号、无历史</strong>，可一键停止并撤销设备。发现使用局域网组播、广播与单播探测；发现报文只含随机实例 ID、密钥指纹、连接参数与能力位，不含剪贴板内容。系统自带的云剪贴板可能独立同步，建议在系统设置中关闭。</li>
     </ul>
 
     <h2>4. 系统权限</h2>
@@ -89,7 +89,7 @@
       <li><strong>Android：</strong><code>INTERNET</code>（版本检测/更新/可选剪贴板/语音引擎与模型下载）、<code>REQUEST_INSTALL_PACKAGES</code>（把下载的安装包交系统安装器）、<code>ACCESS_NETWORK_STATE</code> / <code>ACCESS_WIFI_STATE</code> 与可选的局域网多播锁、前台服务/通知权限（跨设备剪贴板；组播锁只用于接收发现报文）、<code>RECORD_AUDIO</code>（仅在启用语音输入时请求）。</li>
       <li><strong>iOS：</strong>可选「允许完全访问」用于把自有贴纸图片写入系统剪贴板；可选的本地网络权限用于跨设备剪贴板；键盘扩展<strong>不能使用麦克风</strong>，语音输入请使用系统听写。</li>
       <li><strong>鸿蒙：</strong>网络权限（版本检测/更新/剪贴板）、可选的粘贴板权限（仅在启用剪贴板时）；语音尚未接线。</li>
-      <li><strong>Windows / Linux / macOS：</strong>可选麦克风权限（仅在启用语音输入时）。Windows 安装器会为 <code>opi.exe</code> 添加两条<strong>仅限专用/域网络</strong>的入站防火墙规则（UDP 45888 发现、TCP 加密会话），卸载时删除；规则只放行该程序，可随时在 Windows 安全中心关闭或移除。Linux 如需跨设备发现，请在防火墙放行 UDP 45888 与程序入站连接。</li>
+      <li><strong>Windows / Linux / macOS：</strong>可选麦克风权限（仅在启用语音输入时）。Windows 安装器会为 <code>opi.exe</code> 添加两条<strong>仅限专用/域网络</strong>的入站防火墙规则（局域网发现与加密会话），卸载时删除；规则只放行该程序，可随时在 Windows 安全中心关闭或移除。Linux 如需跨设备发现，请按程序放行局域网入站连接。</li>
     </ul>
 
     <h2>5. 第三方与共享</h2>

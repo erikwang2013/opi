@@ -168,6 +168,23 @@ pub unsafe extern "system" fn opijni_clip_pair_start(
     )
 }
 
+/// probe(handle, ip) -> Boolean：向指定 IPv4 的发现端口发探测。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_clip_probe(
+    env: JEnv,
+    _class: sys::jclass,
+    handle: jlong,
+    ip: jstring,
+) -> jboolean {
+    settle(
+        catch_unwind(AssertUnwindSafe(|| {
+            let ip = unsafe { read_arg(env, ip, "ip") }?;
+            unsafe { OpiClip::borrow(ptr(handle)) }?.probe(&ip)
+        })),
+        false,
+    )
+}
+
 /// pairConfirm(handle, peerId, accept) -> Boolean。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_clip_pair_confirm(
@@ -312,6 +329,11 @@ pub(crate) fn clip_native_methods() -> Vec<NativeMethod<'static>> {
                 jni_str!("clipPairStart"),
                 jni_str!("(JLjava/lang/String;)Z"),
                 opijni_clip_pair_start as *mut c_void,
+            ),
+            NativeMethod::from_raw_parts(
+                jni_str!("clipProbe"),
+                jni_str!("(JLjava/lang/String;)Z"),
+                opijni_clip_probe as *mut c_void,
             ),
             NativeMethod::from_raw_parts(
                 jni_str!("clipPairConfirm"),

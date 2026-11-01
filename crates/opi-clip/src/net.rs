@@ -57,6 +57,7 @@ pub(crate) fn discovery_loop(inner: Arc<NodeInner>, socket: UdpSocket, tcp_port:
                     inner.config.discovery_port,
                     beacon,
                     inner.config.advertise_ipv4,
+                    inner.config.advertise_prefix,
                 );
                 inner
                     .beacons_sent
@@ -72,12 +73,38 @@ pub(crate) fn discovery_loop(inner: Arc<NodeInner>, socket: UdpSocket, tcp_port:
                     inner.config.discovery_port,
                     beacon,
                     inner.config.advertise_ipv4,
+                    inner.config.advertise_prefix,
                 );
                 inner
                     .beacons_sent
                     .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             }
             next_probe = now + PROBE_INTERVAL;
+        }
+        // 手动连接：设置页输入的 IP 立即发一个探测，不等 8 秒周期。
+        let requested: Vec<std::net::Ipv4Addr> = {
+            let mut q = inner
+                .probes
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            std::mem::take(&mut *q)
+        };
+        if !requested.is_empty() {
+            let (instance_id, public_key, capabilities) = {
+                let core = inner.lock();
+                (
+                    core.instance_id,
+                    core.public_key.clone(),
+                    core.capabilities(),
+                )
+            };
+            let probe = discovery::beacon_for(instance_id, &public_key, tcp_port, capabilities);
+            for ip in requested {
+                let _ = discovery::send_probe_to(&socket, inner.config.discovery_port, probe, ip);
+                inner
+                    .beacons_sent
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
         }
         match socket.recv_from(&mut buffer) {
             Ok((len, source)) => {

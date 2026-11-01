@@ -108,20 +108,17 @@ pub(crate) fn send_beacon(
     port: u16,
     beacon: Beacon,
     local_ip: Option<Ipv4Addr>,
+    prefix: Option<u8>,
 ) -> std::io::Result<()> {
     let bytes = beacon.encode();
     // 组播之外再发受限广播与**子网定向广播**：不少手机/路由器会丢掉
-    // 255.255.255.255，但同一 /24 的 x.x.x.255 能到；只发一种就会「互相发现不了」。
+    // 255.255.255.255，但同一子网的广播地址能到；只发一种就会「互相发现不了」。
     let mut targets = vec![
         SocketAddr::from((DISCOVERY_GROUP, port)),
         SocketAddr::from((Ipv4Addr::BROADCAST, port)),
     ];
     if let Some(ip) = local_ip.or_else(local_ipv4) {
-        let o = ip.octets();
-        targets.push(SocketAddr::from((
-            Ipv4Addr::new(o[0], o[1], o[2], 255),
-            port,
-        )));
+        targets.push(SocketAddr::from((broadcast_for(ip, prefix), port)));
     }
     for target in targets {
         let _ = socket.send_to(&bytes, target);
@@ -129,17 +126,32 @@ pub(crate) fn send_beacon(
     Ok(())
 }
 
+/// 该地址/前缀的定向广播地址；缺前缀时按 /24（家宽最常见）。
+pub(crate) fn broadcast_for(ip: Ipv4Addr, prefix: Option<u8>) -> Ipv4Addr {
+    let p = prefix.unwrap_or(24).min(32);
+    if p == 0 {
+        return Ipv4Addr::BROADCAST;
+    }
+    let mask = u32::MAX << (32 - u32::from(p));
+    Ipv4Addr::from(u32::from(ip) | !mask)
+}
+
 /// 广播/组播都被丢弃时的兜底：对同一 /24 的每台主机发探测 beacon。
 /// 收到探测的一方会单播回一个普通 beacon（见 `discovery_loop`）。
+/// 前缀小于 /24 时网段太大，只发定向广播，不逐机扫。
 pub(crate) fn send_probes(
     socket: &UdpSocket,
     port: u16,
     mut beacon: Beacon,
     local_ip: Option<Ipv4Addr>,
+    prefix: Option<u8>,
 ) -> std::io::Result<()> {
     let Some(ip) = local_ip.or_else(local_ipv4) else {
         return Ok(());
     };
+    if prefix.unwrap_or(24) < 24 {
+        return Ok(());
+    }
     let o = ip.octets();
     beacon.capabilities |= crate::types::CAP_PROBE;
     let bytes = beacon.encode();
@@ -151,6 +163,19 @@ pub(crate) fn send_probes(
         let _ = socket.send_to(&bytes, target);
     }
     Ok(())
+}
+
+/// 手动连接：向指定 IPv4 的发现端口发一个探测 beacon，对端会单播回复。
+pub(crate) fn send_probe_to(
+    socket: &UdpSocket,
+    port: u16,
+    mut beacon: Beacon,
+    ip: Ipv4Addr,
+) -> std::io::Result<()> {
+    beacon.capabilities |= crate::types::CAP_PROBE;
+    socket
+        .send_to(&beacon.encode(), SocketAddr::from((ip, port)))
+        .map(|_| ())
 }
 
 /// 探测本机默认出口 IPv4（UDP connect 不真正发包）；用于推导 /24 广播地址。
@@ -205,13 +230,29 @@ mod tests {
     }
 
     #[test]
+    fn broadcast_uses_the_real_prefix() {
+        assert_eq!(
+            broadcast_for(Ipv4Addr::new(192, 168, 1, 5), None),
+            Ipv4Addr::new(192, 168, 1, 255)
+        );
+        assert_eq!(
+            broadcast_for(Ipv4Addr::new(10, 1, 2, 3), Some(16)),
+            Ipv4Addr::new(10, 1, 255, 255)
+        );
+        assert_eq!(
+            broadcast_for(Ipv4Addr::new(10, 1, 2, 3), Some(24)),
+            Ipv4Addr::new(10, 1, 2, 255)
+        );
+    }
+
+    #[test]
     fn probes_are_unicast_and_flagged_for_reply() {
         let rx = UdpSocket::bind((Ipv4Addr::new(127, 0, 0, 2), 0)).unwrap();
         rx.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
         let port = rx.local_addr().unwrap().port();
         let tx = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let beacon = beacon_for(id(7), &[3u8; 32], 5000, 1);
-        send_probes(&tx, port, beacon, Some(Ipv4Addr::LOCALHOST)).unwrap();
+        send_probes(&tx, port, beacon, Some(Ipv4Addr::LOCALHOST), None).unwrap();
         let mut buf = [0u8; 64];
         let (len, _) = rx
             .recv_from(&mut buf)

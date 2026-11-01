@@ -363,6 +363,9 @@ object OpiEngine : OpiEngineApi, SymbolApi {
     /** pairStart(handle, peerId)：peerId 是 32 位十六进制实例 ID。 */
     external fun clipPairStart(handle: Long, peerId: String): Boolean
 
+    /** probe(handle, ip)：向指定 IPv4 的发现端口发探测（手动连接）。 */
+    external fun clipProbe(handle: Long, ip: String): Boolean
+
     /** pairConfirm(handle, peerId, accept)：收到 pairing_prompt 后调用一次。 */
     external fun clipPairConfirm(handle: Long, peerId: String, accept: Boolean): Boolean
 

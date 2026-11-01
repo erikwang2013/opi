@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -58,6 +59,7 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
     val localMode = remember { currentClipMode() }
     var status by remember { mutableStateOf<ClipStatus?>(null) }
     var probed by remember { mutableStateOf(false) }
+    var manualIp by remember { mutableStateOf("") }
 
     // 1s 一次；页面离开组合即取消。宿主可能在另一个进程，没有事件通道。
     LaunchedEffect(Unit) {
@@ -188,11 +190,11 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
             ClipButton("启动宿主", enabled = true) { startHost() }
         }
         else -> {
-            val localIp = remember { localLanIpv4() }
+            val localIp = remember { localLanAddress() }
             Text(
                 "本机设备：${st.deviceName} · " +
                     (if (running) "运行中" else if (st.enabled) "启动中" else "已停止") +
-                    " · 局域网地址：${localIp ?: "未找到"} · UDP 45888 · 监听方式：" +
+                    " · 局域网地址：${localIp?.let { "${it.first}/${it.second}" } ?: "未找到"} · 监听方式：" +
                     if (mode == ClipMode.MANUAL) "手动（Wayland）" else "轮询",
                 fontSize = 12.sp, color = Muted,
             )
@@ -234,7 +236,7 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
         }
     }
 
-    SectionTitle("已发现设备")
+    SectionTitle("附近设备")
     when {
         st == null -> Text("宿主运行后，这里会列出同一局域网内发现的小欧设备。", fontSize = 12.sp, color = Muted)
         st.peers.isEmpty() -> Text(
@@ -252,22 +254,53 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
         }
     }
 
-    SectionTitle("一键停止")
+    SectionTitle("手动连接")
     Text(
-        "关闭开关并释放监听端口。已配对设备仍保留信任，重新开启后可直接使用。",
+        "自动发现被路由器或防火墙拦住时，输入对方设置页显示的局域网 IP；对端收到探测会自动回复。",
+        fontSize = 12.sp, color = Muted,
+    )
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        OutlinedTextField(
+            value = manualIp,
+            onValueChange = { manualIp = it },
+            singleLine = true,
+            label = { Text("对方 IP（例如 192.168.1.5）", fontSize = 11.sp) },
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(Modifier.width(8.dp))
+        ClipButton(
+            label = "探测",
+            enabled = running && manualIp.isNotBlank(),
+        ) {
+            scope.launch {
+                val ok = withContext(Dispatchers.IO) { ClipClient.probe(manualIp.trim()) }
+                report(if (ok) "已发送探测；对方在线会出现在「已发现设备」" else "探测命令未送达宿主")
+            }
+        }
+    }
+    Spacer(Modifier.height(6.dp))
+
+    SectionTitle("停止共享")
+    Text(
+        "关闭开关并释放监听。已配对设备仍保留信任，重新开启后可直接使用。",
         fontSize = 12.sp, color = Muted,
     )
     Spacer(Modifier.height(6.dp))
     ClipButton("停止共享", enabled = s.clipEnabled || running) { stopAll() }
 
     SectionTitle("安全与网络")
-    Text("· 默认关闭；开启后只在局域网内通信（UDP 发现 + TCP 加密会话）。", fontSize = 12.sp, color = Muted)
+    Text("· 默认关闭；开启后只在局域网内通信（局域网发现 + 加密会话）。", fontSize = 12.sp, color = Muted)
     Text("· 配对必须由两端核对同一个 6 位数字；远端内容只写剪贴板，不自动粘贴。", fontSize = 12.sp, color = Muted)
     Text("· 不记录剪贴板内容，不做剪贴板历史；状态文件只存设备与开关。", fontSize = 12.sp, color = Muted)
     if (isWindows()) {
         Text(
-            "· Windows 安装器会为 opi.exe 添加专用/域网络的入站规则（UDP 45888 发现、TCP 会话）。" +
+            "· Windows 安装器会为 opi.exe 添加专用/域网络的入站规则（局域网发现与加密会话）。" +
                 "若仍连不上，请到 Windows 安全中心确认规则未被禁用，且当前网络为「专用」。",
+            fontSize = 12.sp, color = Muted,
+        )
+    } else {
+        Text(
+            "· 如启用了 ufw/firewalld，请按程序放行局域网入站连接。",
             fontSize = 12.sp, color = Muted,
         )
     }

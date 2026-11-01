@@ -48,6 +48,7 @@ interface OpiClipFfi : Library {
     fun opi_clip_local_text(clip: Pointer?, text: Pointer?, len: Long): Int
     fun opi_clip_poll_event(clip: Pointer?, timeoutMs: Int): OpiStringStruct
     fun opi_clip_pair_start(clip: Pointer?, peerId: Pointer?, len: Long): Byte
+    fun opi_clip_probe(clip: Pointer?, ip: Pointer?, len: Long): Byte
     fun opi_clip_pair_confirm(clip: Pointer?, peerId: Pointer?, len: Long, accept: Byte): Byte
     fun opi_clip_pair_cancel(clip: Pointer?, peerId: Pointer?, len: Long): Byte
     fun opi_clip_peers(clip: Pointer?): OpiStringStruct

@@ -58,6 +58,7 @@ class ClipBridgeTest {
         override fun pollEvent(handle: Long, timeoutMs: Int): String? = pollResult
 
         override fun pairStart(handle: Long, peerId: String): Boolean = true
+        override fun probe(handle: Long, ip: String): Boolean = true
 
         override fun pairConfirm(handle: Long, peerId: String, accept: Boolean): Boolean {
             confirms += accept

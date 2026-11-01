@@ -18,7 +18,7 @@
 ; best-effort and can never roll back the install.
 ;
 ; Build (CI or local, on Windows; ISCC is the Inno Setup 6 compiler):
-;   ISCC.exe /DAppVersion=1.31.2 ^
+;   ISCC.exe /DAppVersion=1.31.3 ^
 ;            /DAppImageDir=C:\path\to\build\compose\binaries\main\app\opi ^
 ;            /DOutputDir=C:\path\to\dist scripts\windows\opi.iss
 ;
@@ -128,8 +128,8 @@ Type: filesandordirs; Name: "{app}\runtime"
 [Files]
 ; 2026-11-01: app\opi_ffi.dll (LAN clipboard core) ships inside the jpackage app
 ; image and is installed by the recursesubdirs entry below.
-; 2026-11-02: LAN clipboard also needs inbound UDP 45888 (discovery) and inbound
-; TCP (encrypted sessions) on the private/domain profiles. The interactive prompt
+; 2026-11-02: LAN clipboard needs program-scoped inbound discovery/session traffic
+; on the private/domain profiles. The interactive prompt
 ; is easy to miss and a denied prompt is silent forever after, so the installer
 ; adds two program-scoped rules below and the uninstaller removes them.
 ; 2026-10-21 real-machine upgrade: tsf_opi.dll AND app\*.opid are held by
@@ -188,12 +188,14 @@ Filename: "{app}\app\launch-and-restart.cmd"; Description: "打开 opi（无需�
 ; 先删后加，升级不会叠出重复规则；静默安装也执行（Flags 没有 skipifsilent）。
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""opi LAN discovery"""; Flags: runhidden
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""opi LAN sessions"""; Flags: runhidden
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""opi LAN discovery"" dir=in action=allow program=""{app}\opi.exe"" protocol=UDP localport=45888 profile=private,domain enable=yes"; Flags: runhidden
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""opi LAN sessions"" dir=in action=allow program=""{app}\opi.exe"" protocol=TCP profile=private,domain enable=yes"; Flags: runhidden
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""opi LAN clipboard"""; Flags: runhidden
+; 单条程序级规则：不写具体端口/协议，端口由程序内部管理、界面不公开。
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""opi LAN clipboard"" dir=in action=allow program=""{app}\opi.exe"" profile=private,domain enable=yes"; Flags: runhidden
 
 [UninstallRun]
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""opi LAN discovery"""; Flags: runhidden
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""opi LAN sessions"""; Flags: runhidden
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""opi LAN clipboard"""; Flags: runhidden
 
 [Code]
 const

@@ -79,12 +79,14 @@ internal object ClipRuntime {
         lastError = ""
         lastSource = ""
         lastPairing = ""
+        val lan = localAddress(app)
         created.start(
             clipConfigJson(
                 dataDir = File(app.filesDir, "clip").absolutePath,
                 deviceName = deviceName(),
                 discoveryPort = DISCOVERY_PORT,
-                advertiseIp = localIpv4(app),
+                advertiseIp = lan?.ip,
+                advertisePrefix = lan?.prefix,
             ),
         )
         clipAdapter.start()
@@ -109,6 +111,12 @@ internal object ClipRuntime {
     fun pairStart(instanceId: String) {
         lastError = ""
         bridge?.pairStart(instanceId)
+    }
+
+    /** 手动连接：向对方 IP 的发现端口发探测；对端会单播回复并出现在 peers。 */
+    fun probe(ip: String) {
+        lastError = ""
+        bridge?.probe(ip.trim())
     }
 
     /** 用户在 SAS 对话框点了允许/拒绝（或关掉对话框 = 拒绝）。 */
@@ -145,24 +153,30 @@ internal object ClipRuntime {
      * 本机 Wi-Fi/以太网 IPv4。默认出口在「Wi-Fi 无外网 + 蜂窝/VPN 在线」时可能是
      * 蜂窝或 VPN，拿它推 /24 会广播到错误网段；这里优先 Wi-Fi 接口的站点本地地址。
      */
-    internal fun localIpv4(context: Context): String? {
+    internal data class LanAddr(val ip: String, val prefix: Int)
+
+    /** 显示用：只取地址。 */
+    internal fun localIpv4(context: Context): String? = localAddress(context)?.ip
+
+    internal fun localAddress(context: Context): LanAddr? {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
             ?: return null
-        fun addrs(network: android.net.Network): List<Inet4Address> =
+        fun links(network: android.net.Network): List<Pair<Inet4Address, Int>> =
             cm.getLinkProperties(network)?.linkAddresses.orEmpty().mapNotNull { link ->
                 (link.address as? Inet4Address)
                     ?.takeIf { !it.isLoopbackAddress && !it.isLinkLocalAddress }
+                    ?.let { it to link.prefixLength }
             }
 
         val wifi = cm.allNetworks.firstOrNull { network ->
             cm.getNetworkCapabilities(network)
                 ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
         }
-        val wifiAddr = wifi?.let { addrs(it).firstOrNull { a -> a.isSiteLocalAddress } }
+        val wifiAddr = wifi?.let { links(it).firstOrNull { p -> p.first.isSiteLocalAddress } }
         val anyLocal = cm.allNetworks.asSequence()
-            .flatMap { addrs(it).asSequence() }
-            .firstOrNull { it.isSiteLocalAddress }
-        return (wifiAddr ?: anyLocal)?.hostAddress
+            .flatMap { links(it).asSequence() }
+            .firstOrNull { p -> p.first.isSiteLocalAddress }
+        return (wifiAddr ?: anyLocal)?.let { LanAddr(it.first.hostAddress ?: return null, it.second) }
     }
 
     /** 组播锁：Android 不持锁时通常收不到 UDP 组播（发现报文）。权限是普通权限。 */

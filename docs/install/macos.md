@@ -382,7 +382,7 @@ cp luna.opid ~/Library/Application\ Support/opi/luna.opid
 - **权限**：macOS 15+ 首次监听会请求「本地网络」权限（`Info.plist` 的
   `NSLocalNetworkUsageDescription`）；拒绝后功能不可用，需到系统设置放行。剪贴板读写
   本身不弹权限框。
-- **网络**：UDP 45888 发现（组播 239.255.42.99），TCP 端口由系统临时分配；配对必须
+- **网络**：局域网发现与加密会话（具体网络参数由程序内部管理，不公开）；配对必须
   两端核对同一个 6 位 SAS；身份/信任在 `~/Library/Application Support/opi/clip`，
   不记录内容。
 - **验证**：本机没有 Swift 工具链，`macos/*.swift` 与 `shared/apple/OpiClipRunner.swift`

@@ -22,6 +22,7 @@
 #![allow(clippy::missing_safety_doc)]
 
 use std::cell::RefCell;
+use std::net::Ipv4Addr;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::thread::{self, ThreadId};
 use std::time::{Duration, Instant};
@@ -163,6 +164,16 @@ impl OpiClip {
         };
         let peers: Vec<serde_json::Value> = node.peers().iter().map(peer_json).collect();
         to_json(&serde_json::Value::Array(peers))
+    }
+
+    pub(crate) fn probe(&self, ip: &str) -> Result<bool, String> {
+        self.check_owner()?;
+        let ip: Ipv4Addr = ip
+            .trim()
+            .parse()
+            .map_err(|_| "IP 地址格式错误".to_string())?;
+        self.node()?.probe(ip).map_err(|e| e.to_string())?;
+        Ok(true)
     }
 
     pub(crate) fn pair_start(&self, peer_hex: &str) -> Result<bool, String> {
@@ -401,6 +412,20 @@ pub unsafe extern "C" fn opi_clip_peers(clip: *mut OpiClip) -> OpiString {
         String::new(),
     );
     OpiString::from_utf16(&json)
+}
+
+/// probe(clip, ip) -> bool：向指定 IPv4 的发现端口发探测，对端会单播回复。
+/// # Safety
+/// `ip` 必须指向至少 `len` 个有效 `u16`（或为 null，视为空串）。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn opi_clip_probe(clip: *mut OpiClip, ip: *const u16, len: usize) -> bool {
+    settle(
+        catch_unwind(AssertUnwindSafe(|| {
+            let ip = unsafe { read_utf16(ip, len) }.ok_or("ip is not valid UTF-16")?;
+            unsafe { OpiClip::borrow(clip) }?.probe(&ip)
+        })),
+        false,
+    )
 }
 
 /// forgetPeer(clip, peer_hex) -> bool：移除信任；不存在的对端也算成功。

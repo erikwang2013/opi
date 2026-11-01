@@ -124,12 +124,16 @@ internal fun clipConfigJson(
     deviceName: String,
     discoveryPort: Int = 45888,
     advertiseIp: String? = null,
+    advertisePrefix: Int? = null,
 ): String = buildString {
     append("{\"data_dir\":").append(clipJsonString(dataDir))
     append(",\"tcp_port\":0,\"discovery_port\":").append(discoveryPort)
     append(",\"device_name\":").append(clipJsonString(deviceName))
     if (!advertiseIp.isNullOrBlank()) {
         append(",\"advertise_ipv4\":").append(clipJsonString(advertiseIp))
+    }
+    if (advertisePrefix != null) {
+        append(",\"advertise_prefix\":").append(advertisePrefix)
     }
     append('}')
 }

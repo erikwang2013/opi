@@ -156,7 +156,8 @@ class SpeechTest {
         assertEquals("vad/silero_vad.onnx", (cfg["vad_model"] as JVal.JStr).v)
         assertEquals("en", (cfg["language"] as JVal.JStr).v)
         assertEquals(2L, (cfg["num_threads"] as JVal.JNum).v)
-        assertEquals(JVal.JBool(true), cfg["verify_models"])
+        // 下载时已逐文件校验 SHA-256；每次加载别再全量哈希 239/358MB。
+        assertEquals(JVal.JBool(false), cfg["verify_models"])
         assertEquals("zh", (parseLine(asrConfigJson(root, SpeechLanguage.ZH))!!["language"] as JVal.JStr).v)
         assertEquals("auto", (parseLine(asrConfigJson(root, SpeechLanguage.AUTO))!!["language"] as JVal.JStr).v)
     }

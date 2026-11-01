@@ -9,11 +9,13 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import xyz.erik.opi.i18n.Text
 import androidx.compose.material3.TextButton
@@ -46,6 +48,7 @@ internal fun ClipSection(prefs: ImePreferences, toast: (String) -> Unit) {
     val context = LocalContext.current
     var enabled by remember { mutableStateOf(prefs.clipEnabled) }
     var confirmForget by remember { mutableStateOf<ClipPeer?>(null) }
+    var manualIp by remember { mutableStateOf("") }
     // 通知栏「停止」也会关掉偏好；内核运行状态变化时把开关同步回来。
     LaunchedEffect(ClipRuntime.running) { enabled = prefs.clipEnabled }
     val notificationPermission = rememberLauncherForActivityResult(
@@ -79,18 +82,18 @@ internal fun ClipSection(prefs: ImePreferences, toast: (String) -> Unit) {
         supportingContent = { Text("同一局域网内已配对设备之间共享纯文本；默认关闭") },
     )
     ListItem(
-        headlineContent = { Text("启用") },
+        headlineContent = { Text("开启跨设备剪贴板") },
         supportingContent = {
             val device = ClipRuntime.status?.deviceName.orEmpty()
-            val localIp = remember { ClipRuntime.localIpv4(context) }
+            val local = remember { ClipRuntime.localAddress(context) }
             val status = ClipRuntime.status
             Text(
                 when {
                     ClipRuntime.running && device.isNotEmpty() ->
-                        "运行中 · $device · ${localIp ?: "无局域网 IPv4"} · UDP 45888" +
+                        "运行中 · $device · ${local?.let { "${it.ip}/${it.prefix}" } ?: "无局域网 IPv4"}" +
                             " · 发现报文 ${status?.beaconsSent ?: 0} 发 / ${status?.beaconsReceived ?: 0} 收"
                     ClipRuntime.running ->
-                        "运行中 · ${localIp ?: "无局域网 IPv4"} · UDP 45888" +
+                        "运行中 · ${local?.let { "${it.ip}/${it.prefix}" } ?: "无局域网 IPv4"}" +
                             " · 发现报文 ${status?.beaconsSent ?: 0} 发 / ${status?.beaconsReceived ?: 0} 收"
                     enabled -> "已启用，正在启动内核…"
                     else -> "关闭：不监听剪贴板，也不联网"
@@ -143,6 +146,31 @@ internal fun ClipSection(prefs: ImePreferences, toast: (String) -> Unit) {
                 supportingContent = { Text("确认两台设备在同一 Wi-Fi，且两边都打开了本功能") },
             )
         }
+        ListItem(
+            headlineContent = { Text("手动连接") },
+            supportingContent = { Text("自动发现被路由器或防火墙拦住时，输入对方设置页显示的局域网 IP") },
+        )
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+            OutlinedTextField(
+                value = manualIp,
+                onValueChange = { manualIp = it },
+                singleLine = true,
+                label = { Text("对方 IP（例如 192.168.1.5）", fontSize = 12.sp) },
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(
+                enabled = manualIp.isNotBlank(),
+                onClick = {
+                    val ip = manualIp.trim()
+                    if (!Regex("""^\d{1,3}(\.\d{1,3}){3}$""").matches(ip)) {
+                        toast("IP 格式不正确")
+                    } else {
+                        ClipRuntime.probe(ip)
+                        toast("已发送探测；对方在线会出现在附近设备")
+                    }
+                },
+            ) { Text("探测") }
+        }
         for (peer in ClipRuntime.peers) {
             HorizontalDivider()
             val name = peer.name.ifEmpty { peer.instanceId.take(8) }
@@ -177,6 +205,16 @@ internal fun ClipSection(prefs: ImePreferences, toast: (String) -> Unit) {
             },
         )
         HorizontalDivider()
+        ListItem(
+            headlineContent = { Text("安全与网络") },
+            supportingContent = {
+                Text(
+                    "· 默认关闭；开启后只在同一局域网、已配对设备之间同步纯文本。\n" +
+                        "· 配对必须由两端核对同一个 6 位数字；远端内容只写入本机剪贴板，不自动粘贴。\n" +
+                        "· 不记录剪贴板内容，不做剪贴板历史；状态文件只存设备与开关。",
+                )
+            },
+        )
         ListItem(
             headlineContent = { Text("停止共享") },
             supportingContent = { Text("立即断开所有会话并停止局域网监听") },

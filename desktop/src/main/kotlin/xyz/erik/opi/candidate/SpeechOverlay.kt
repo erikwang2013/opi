@@ -58,7 +58,7 @@ internal fun SpeechOverlay(
         undecorated = true,
         alwaysOnTop = true,
         resizable = false,
-        focusable = false,
+        focusable = true,
         title = "小欧输入法 语音输入",
     ) {
         LaunchedEffect(window) { statusBarGuard("语音浮层 SkipTaskbar") { SkipTaskbar.apply(window) } }
