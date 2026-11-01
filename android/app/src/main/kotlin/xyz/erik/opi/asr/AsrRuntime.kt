@@ -7,7 +7,10 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Build
@@ -75,6 +78,7 @@ internal object AsrRuntime {
     /** 只在 [worker] 上读写。 */
     private var handle = 0L
     private var loadedKey = ""
+    private var focusRequest: AudioFocusRequest? = null
     private var eventBuf: ByteArray? = null
 
     var uiState by mutableStateOf(AsrUiState())
@@ -177,7 +181,13 @@ internal object AsrRuntime {
                 post(gen, AsrEvent.Cancel)
                 return
             }
-            record(gen)
+            val am = context.getSystemService(android.content.Context.AUDIO_SERVICE) as? AudioManager
+            acquireAudioFocus(am)
+            try {
+                record(gen)
+            } finally {
+                abandonAudioFocus(am)
+            }
         } catch (t: Throwable) {
             Log.w(TAG, "asr session failed", t)
             if (t is SecurityException) {
@@ -188,6 +198,41 @@ internal object AsrRuntime {
         } finally {
             // 每个会话结束都回到 native 空闲态；final 已取出，清事件无副作用。
             if (handle != 0L) AsrNative.cancel(handle)
+        }
+    }
+
+    /** 录音期间独占音频焦点：音乐/视频/播客会被系统暂停，停止录音后自动恢复。 */
+    private fun acquireAudioFocus(am: AudioManager?) {
+        if (am == null) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val attrs = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build()
+            val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+                .setAudioAttributes(attrs)
+                .setOnAudioFocusChangeListener { }
+                .build()
+            am.requestAudioFocus(request)
+            focusRequest = request
+        } else {
+            @Suppress("DEPRECATION")
+            am.requestAudioFocus(
+                { },
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT,
+            )
+        }
+    }
+
+    private fun abandonAudioFocus(am: AudioManager?) {
+        if (am == null) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            focusRequest?.let { am.abandonAudioFocusRequest(it) }
+            focusRequest = null
+        } else {
+            @Suppress("DEPRECATION")
+            am.abandonAudioFocus {}
         }
     }
 

@@ -20,6 +20,8 @@ internal data class AsrModelFile(
     val path: String,
     val url: String,
     val fallback: String? = null,
+    /** 官方/本服务都不通时的最后兜底（镜像或代理）。 */
+    val mirror: String? = null,
     val bytes: Long,
     val sha256: String,
     val role: String,
@@ -41,15 +43,20 @@ internal object AsrModels {
     const val VAD_BYTES = 643_854L
     const val VAD_SHA256 = "9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6"
 
-    // 国内直连 huggingface.co 不通，用只读镜像；VAD 只在 GitHub Release 有原文件。
+    // 官方源优先；官方不通再走本站组件目录；国内镜像最后兜底。
     private const val SV_BASE =
-        "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/"
+        "https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/"
     private const val WH_BASE =
+        "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-small.en/resolve/main/"
+    private const val SV_MIRROR =
+        "https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/"
+    private const val WH_MIRROR =
         "https://hf-mirror.com/csukuangfj/sherpa-onnx-whisper-small.en/resolve/main/"
-    private const val VAD_URL =
-        "https://gh-proxy.com/https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx"
-    private const val VAD_FALLBACK =
+    private const val SITE = "https://opi.erik.xyz/download/components/asr/"
+    private const val VAD_OFFICIAL =
         "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx"
+    private const val VAD_SITE = SITE + "vad/silero_vad.onnx"
+    private const val VAD_PROXY = "https://gh-proxy.com/" + VAD_OFFICIAL
 
     val senseVoice = AsrModelPack(
         id = SENSE_VOICE_ID,
@@ -59,7 +66,8 @@ internal object AsrModels {
             AsrModelFile(
                 "model.int8.onnx",
                 SV_BASE + "model.int8.onnx",
-                "https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.int8.onnx",
+                SITE + "sensevoice/model.int8.onnx",
+                SV_MIRROR + "model.int8.onnx",
                 239_233_841,
                 "c71f0ce00bec95b07744e116345e33d8cbbe08cef896382cf907bf4b51a2cd51",
                 "model",
@@ -67,7 +75,8 @@ internal object AsrModels {
             AsrModelFile(
                 "tokens.txt",
                 SV_BASE + "tokens.txt",
-                "https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt",
+                SITE + "sensevoice/tokens.txt",
+                SV_MIRROR + "tokens.txt",
                 315_894,
                 "f449eb28dc567533d7fa59be34e2abca8784f771850c78a47fb731a31429a1dc",
                 "tokens",
@@ -83,7 +92,8 @@ internal object AsrModels {
             AsrModelFile(
                 "small.en-encoder.int8.onnx",
                 WH_BASE + "small.en-encoder.int8.onnx",
-                "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-small.en/resolve/main/small.en-encoder.int8.onnx",
+                SITE + "whisper-small.en/small.en-encoder.int8.onnx",
+                WH_MIRROR + "small.en-encoder.int8.onnx",
                 112_442_483,
                 "8bdac288f369aa94ee2194059238c465ed82ea9d47ee8fa4a8c0a891873e462f",
                 "encoder",
@@ -91,7 +101,8 @@ internal object AsrModels {
             AsrModelFile(
                 "small.en-decoder.int8.onnx",
                 WH_BASE + "small.en-decoder.int8.onnx",
-                "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-small.en/resolve/main/small.en-decoder.int8.onnx",
+                SITE + "whisper-small.en/small.en-decoder.int8.onnx",
+                WH_MIRROR + "small.en-decoder.int8.onnx",
                 262_223_042,
                 "710ccf890e10f3faa15f51ec346081a2723c9f3adb6e4da81c6573a5a6f877fb",
                 "decoder",
@@ -99,7 +110,8 @@ internal object AsrModels {
             AsrModelFile(
                 "small.en-tokens.txt",
                 WH_BASE + "small.en-tokens.txt",
-                "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-small.en/resolve/main/small.en-tokens.txt",
+                SITE + "whisper-small.en/small.en-tokens.txt",
+                WH_MIRROR + "small.en-tokens.txt",
                 835_554,
                 "306cd27f03c1a714eca7108e03d66b7dc042abe8c258b44c199a7ed9838dd930",
                 "tokens",
@@ -162,7 +174,7 @@ internal object AsrModels {
         }
     }
 
-    fun vadUrls(): List<String> = listOf(VAD_URL, VAD_FALLBACK)
+    fun vadUrls(): List<String> = listOf(VAD_OFFICIAL, VAD_SITE, VAD_PROXY)
 
     /** 原生库只打包 64 位（armeabi-v7a 内存风险）：设置页据此隐藏无意义的下载入口。 */
     fun abiSupported(): Boolean =

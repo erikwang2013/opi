@@ -268,7 +268,7 @@ internal object SpeechModels {
                 }
                 Files.deleteIfExists(target)
                 state = state.copy(message = "下载 ${spec.name}…")
-                downloadVerified(spec, target) { fileBytes ->
+                downloadVerified(spec, target, engine) { fileBytes ->
                     state = state.copy(done = done + fileBytes, message = "下载 ${spec.name}…")
                 }
                 done += spec.size
@@ -314,10 +314,15 @@ internal object SpeechModels {
      * 逐个源试；全部失败才报错。写 `.part` 边写边算哈希，长度或 SHA 不对就删掉重来。
      * HTTPS-only（下载物还有 hash 兜底，这里挡的是明文降级）。
      */
-    private fun downloadVerified(spec: ModelFileSpec, target: Path, onProgress: (Long) -> Unit) {
+    private fun downloadVerified(
+        spec: ModelFileSpec,
+        target: Path,
+        engine: SpeechEngine,
+        onProgress: (Long) -> Unit,
+    ) {
         val part = target.resolveSibling(target.fileName.toString() + ".part")
         val errors = ArrayList<String>(2)
-        for (url in urls(spec)) {
+        for (url in urls(spec, engine)) {
             checkCancelled()
             try {
                 if (URI(url).scheme != "https") error("只允许 HTTPS：$url")
@@ -376,15 +381,23 @@ internal object SpeechModels {
     }
 
     /** 官方源在前，镜像兜底（国内网络；两者内容同一份 SHA-256）。 */
-    private fun urls(spec: ModelFileSpec): List<String> = when (spec.source) {
-        ModelSource.HUGGING_FACE -> listOf(
-            "https://huggingface.co/${spec.repo}/resolve/main/${spec.name}",
-            "https://hf-mirror.com/${spec.repo}/resolve/main/${spec.name}",
-        )
-        ModelSource.GITHUB_RELEASE -> {
-            val official =
-                "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/${spec.name}"
-            listOf(official, "https://gh-proxy.com/$official")
+    private fun urls(spec: ModelFileSpec, engine: SpeechEngine): List<String> {
+        val site = if (spec === VAD_FILE) {
+            "https://opi.erik.xyz/download/components/asr/vad/${spec.name}"
+        } else {
+            "https://opi.erik.xyz/download/components/asr/${engine.model().dirName}/${spec.name}"
+        }
+        return when (spec.source) {
+            ModelSource.HUGGING_FACE -> listOf(
+                "https://huggingface.co/${spec.repo}/resolve/main/${spec.name}",
+                site,
+                "https://hf-mirror.com/${spec.repo}/resolve/main/${spec.name}",
+            )
+            ModelSource.GITHUB_RELEASE -> {
+                val official =
+                    "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/${spec.name}"
+                listOf(official, site, "https://gh-proxy.com/$official")
+            }
         }
     }
 }

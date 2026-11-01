@@ -90,6 +90,41 @@ internal fun asrConfigJson(root: Path, language: SpeechLanguage): String = build
 }
 
 /** Java Sound 采集：16 kHz / 16 bit / mono / little-endian，专用读线程。 */
+/** 录音时暂停其他音频：Linux 走 playerctl，Windows 发一次媒体播放/暂停键；恢复时反向。 */
+private object OtherAudio {
+    private var paused = false
+
+    fun pause() {
+        if (paused) return
+        paused = true
+        runCatching {
+            if (System.getProperty("os.name").lowercase().contains("win")) {
+                ProcessBuilder(
+                    "powershell", "-NoProfile", "-Command",
+                    "(New-Object -ComObject WScript.Shell).SendKeys([char]173)",
+                ).start()
+            } else {
+                ProcessBuilder("playerctl", "pause").start()
+            }
+        }
+    }
+
+    fun resume() {
+        if (!paused) return
+        paused = false
+        runCatching {
+            if (System.getProperty("os.name").lowercase().contains("win")) {
+                ProcessBuilder(
+                    "powershell", "-NoProfile", "-Command",
+                    "(New-Object -ComObject WScript.Shell).SendKeys([char]173)",
+                ).start()
+            } else {
+                ProcessBuilder("playerctl", "play").start()
+            }
+        }
+    }
+}
+
 internal class AudioCapture(
     private val onChunk: (ByteArray) -> Unit,
     private val onError: (String) -> Unit,
@@ -313,6 +348,7 @@ internal class SpeechHostImpl {
                 return
             }
             recording = capture
+            OtherAudio.pause()
             session = Session(engine, commit)
             update(ui.copy(phase = nextSpeechPhase(ui.phase, SpeechTransition.READY), level = 0f, text = "", error = ""))
         }
@@ -322,6 +358,7 @@ internal class SpeechHostImpl {
             val h = loaded ?: return
             recording?.stop()
             recording = null
+            OtherAudio.resume()
             update(ui.copy(phase = nextSpeechPhase(ui.phase, SpeechTransition.STOP), level = 0f, text = ""))
             if (h.ffi.opi_asr_finish(h.handle) != 0) {
                 fail("结束录音失败：${h.ffi.lastError(h.handle)}")
@@ -436,6 +473,7 @@ internal class SpeechHostImpl {
         private fun cancelSession(keepUi: Boolean = false) {
             recording?.stop()
             recording = null
+            OtherAudio.resume()
             val h = loaded
             if (h != null && session != null) {
                 runCatching { h.ffi.opi_asr_cancel(h.handle) }

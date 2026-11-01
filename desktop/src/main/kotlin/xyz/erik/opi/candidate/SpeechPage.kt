@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.Text
 import androidx.compose.material.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,6 +37,12 @@ private val ErrorRed = Color(0xFFB3261E)
 @Composable
 internal fun SpeechPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (String) -> Unit) {
     val userRoot = remember { speechModelRoot() }
+    // 模型下载完成即自动启用语音（用户不用再回设置拨一次开关）。
+    LaunchedEffect(SpeechModels.state.phase) {
+        if (SpeechModels.state.phase == DownloadPhase.DONE && !s.speechEnabled) {
+            apply(s.copy(speechEnabled = true))
+        }
+    }
     SectionTitle("语音输入")
     SettingRow(
         "启用语音输入",

@@ -294,9 +294,8 @@ compose.desktop {
         mainClass = "xyz.erik.opi.candidate.MainKt"
 
         nativeDistributions {
-            if (providers.gradleProperty("opiPackageTier").getOrElse("normal") == "full") {
-                appResourcesRootDir.set(layout.projectDirectory.dir("asr-bundle"))
-            }
+            // 完整包构建前把模型放到 desktop/asr-bundle；普通/基础包该目录不存在 ⇒ NO-SOURCE。
+            appResourcesRootDir.set(layout.projectDirectory.dir("asr-bundle"))
             // 构建验证用 Deb（Linux 主机，dpkg-deb 本机可用）；CMP 1.11 已移除
             // Zip 格式（枚举仅 AppImage/Deb/Rpm/Dmg/Pkg/Exe/Msi）。
             //

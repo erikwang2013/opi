@@ -61,6 +61,9 @@ internal object AsrModelDownloader {
         scope.launch {
             try {
                 install(app, pack, total)
+                // 下载完成即启用这一档引擎（中/英切换跟随包）。
+                xyz.erik.opi.settings.ImePreferences.from(app).asrWhisper =
+                    pack.id == AsrModels.WHISPER_ID
                 main.post {
                     state = AsrDownloadState.Done(packId)
                     running.set(false)
@@ -96,7 +99,7 @@ internal object AsrModelDownloader {
                 done += f.bytes
                 continue
             }
-            downloadWithFallback(listOfNotNull(f.url, f.fallback), dest, f.bytes, f.sha256) { received ->
+            downloadWithFallback(listOfNotNull(f.url, f.fallback, f.mirror), dest, f.bytes, f.sha256) { received ->
                 publish(pack.id, done + received, total)
             }
             done += f.bytes
