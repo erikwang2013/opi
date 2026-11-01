@@ -42,10 +42,7 @@ tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageT
 // 这里只校验参数，避免再 Sync 一遍 588MB。
 val asrModelsDir = providers.gradleProperty("opiAsrModelsDir")
 if (providers.gradleProperty("opiPackageTier").getOrElse("normal") == "full") {
-    require(asrModelsDir.isPresent) {
-        "full 档需要 -PopiAsrModelsDir=<目录>（内含 asr/sensevoice、asr/whisper-small.en、asr/vad）"
-    }
-    check(file(asrModelsDir.get()).isDirectory) {
-        "opiAsrModelsDir 不是目录：${asrModelsDir.get()}"
+    check(layout.projectDirectory.dir("build/generated/asrAppResources/asr").asFile.isDirectory) {
+        "full 档缺 build/generated/asrAppResources/asr（构建前先把模型放进该目录）"
     }
 }

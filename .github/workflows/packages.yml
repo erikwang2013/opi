@@ -125,7 +125,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          root="$RUNNER_TEMP/asr-bundle/asr"
+          root="$GITHUB_WORKSPACE/desktop/build/generated/asrAppResources/asr"
           mkdir -p "$root/sensevoice" "$root/whisper-small.en" "$root/vad"
           sv=https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main
           wh=https://hf-mirror.com/csukuangfj/sherpa-onnx-whisper-small.en/resolve/main
@@ -158,7 +158,7 @@ jobs:
         run: |
           args=(-PopiPackageTier="$TIER")
           if [ "$TIER" = full ]; then
-            args+=(-PopiAsrModelsDir="$RUNNER_TEMP/asr-bundle")
+            args+=(-PopiAsrModelsDir="$GITHUB_WORKSPACE/desktop/build/generated/asrAppResources")
           fi
           ./gradlew "${args[@]}" packageDeb injectSettingsDesktopEntry --no-daemon
         working-directory: desktop
