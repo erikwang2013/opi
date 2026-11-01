@@ -372,9 +372,23 @@ jobs:
           }
           $required = @('opi.exe', 'app\tsf_opi.dll', 'app\luna.opid', 'app\symbol_categories.tsv', 'app\LICENSE', 'app\LICENSES.md', 'app\GPL-3.0.txt')
           if ($env:TIER -ne 'basic') { $required += 'app\trad.opid' }
-          if ($env:TIER -eq 'full') { $required += 'app\asr\sensevoice\model.int8.onnx', 'app\asr\whisper-small.en\small.en-encoder.int8.onnx', 'app\asr\vad\silero_vad.onnx' }
           foreach ($f in $required) {
             if (-not (Test-Path (Join-Path $app $f))) { throw "app image 缺 $f" }
+          }
+          if ($env:TIER -eq 'full') {
+            # appResourcesRootDir 在 Windows 上可能落到镜像根或 app 子目录；运行期两处都找。
+            $bases = @($app, (Join-Path $app 'app')) |
+              Where-Object { Test-Path (Join-Path $_ 'asr\sensevoice\model.int8.onnx') }
+            if (-not $bases) {
+              Get-ChildItem $app -Recurse -Filter 'model.int8.onnx' -ErrorAction SilentlyContinue |
+                ForEach-Object { Write-Host "找到模型：$($_.FullName)" }
+              throw 'app image 缺内置语音模型（asr/sensevoice/model.int8.onnx）'
+            }
+            foreach ($b in $bases) {
+              foreach ($f in 'asr\whisper-small.en\small.en-encoder.int8.onnx', 'asr\vad\silero_vad.onnx') {
+                if (-not (Test-Path (Join-Path $b $f))) { throw "app image 缺 $f（基准 $b）" }
+              }
+            }
           }
           # 身份核对：不是「有个叫 *.opid 的东西」，而是「就是入库那份分发副本」。
           $dicts = @('luna.opid')
