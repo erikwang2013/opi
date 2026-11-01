@@ -1,0 +1,48 @@
+name: Upload Windows Chrome hotfix
+
+# 一次性：把 ae35773 的 Windows 三档 EXE 覆盖到 v1.31.0 Release。
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag
+        required: true
+        default: v1.31.0
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 下载并覆盖 Windows 三档 EXE
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p assets work
+          while IFS=' ' read -r id name; do
+            d="work/$id"; mkdir -p "$d"
+            gh api "repos/$REPO/actions/artifacts/$id/zip" > "$d/a.zip"
+            unzip -q "$d/a.zip" -d "$d"
+            exe="$(find "$d" -name '*.exe' | head -1)"
+            test -n "$exe"
+            case "$name" in
+              *-full) cp "$exe" assets/opi-1.31.0-windows-x64-full-setup.exe ;;
+              *-basic) cp "$exe" assets/opi-1.31.0-windows-x64-basic-setup.exe ;;
+              *) cp "$exe" assets/opi-1.31.0-windows-x64-setup.exe ;;
+            esac
+          done <<'LIST'
+          13084722181 opi-windows-exe-v1.31.0-normal
+          13084339350 opi-windows-exe-v1.31.0-full
+          13084636580 opi-windows-exe-v1.31.0-basic
+          LIST
+          ls -lh assets
+          gh release upload "$TAG" assets/* --clobber
