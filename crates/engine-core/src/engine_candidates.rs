@@ -220,13 +220,7 @@ impl Engine {
         if !plain && matches!(s.mode, Mode::Pinyin | Mode::Traditional) {
             // 精确单位/符号（2026-11-02）：`du` → `°`、`ke` → `g`、`mi` → `m`，
             // 插在前几条文本候选之后，首屏可见且不顶掉首个文本候选。
-            crate::name_keywords::prepend_exact_symbols(
-                &mut cands,
-                &s.buffer,
-                s.mode,
-                3,
-                limit,
-            );
+            crate::name_keywords::prepend_exact_symbols(&mut cands, &s.buffer, s.mode, 3, limit);
             // 先 emoji、再符号/标点/颜文字名称（2026-10-31）：短前缀如 `xiao`
             // 仍由表情占满 limit，不会因为「小于号」等名称而把笑脸挤掉；
             // 名称层继续填剩余空位（`zuokuohao` 这类没有表情的输入照常命中）。

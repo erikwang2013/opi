@@ -58,7 +58,9 @@ pub(crate) fn discovery_loop(inner: Arc<NodeInner>, socket: UdpSocket, tcp_port:
                     beacon,
                     inner.config.advertise_ipv4,
                 );
-                inner.beacons_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                inner
+                    .beacons_sent
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             }
             next_beacon = now + BEACON_INTERVAL;
         }
@@ -72,7 +74,9 @@ pub(crate) fn discovery_loop(inner: Arc<NodeInner>, socket: UdpSocket, tcp_port:
                         beacon,
                         inner.config.advertise_ipv4,
                     );
-                    inner.beacons_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    inner
+                        .beacons_sent
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 }
             }
             next_probe = now + PROBE_INTERVAL;
@@ -80,7 +84,9 @@ pub(crate) fn discovery_loop(inner: Arc<NodeInner>, socket: UdpSocket, tcp_port:
         match socket.recv_from(&mut buffer) {
             Ok((len, source)) => {
                 if let Some(mut beacon) = Beacon::decode(&buffer[..len]) {
-                    inner.beacons_received.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    inner
+                        .beacons_received
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     // /24 探测的报文：立刻单播回一个普通 beacon，让对方也能发现我们。
                     if beacon.capabilities & crate::types::CAP_PROBE != 0 {
                         beacon.capabilities &= !crate::types::CAP_PROBE;
@@ -92,12 +98,8 @@ pub(crate) fn discovery_loop(inner: Arc<NodeInner>, socket: UdpSocket, tcp_port:
                                 core.capabilities(),
                             )
                         };
-                        let reply = discovery::beacon_for(
-                            instance_id,
-                            &public_key,
-                            tcp_port,
-                            capabilities,
-                        );
+                        let reply =
+                            discovery::beacon_for(instance_id, &public_key, tcp_port, capabilities);
                         let _ = socket.send_to(&reply.encode(), source);
                     }
                     inner.lock().observe_beacon(source, beacon, Instant::now());

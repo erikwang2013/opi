@@ -213,7 +213,9 @@ mod tests {
         let beacon = beacon_for(id(7), &[3u8; 32], 5000, 1);
         send_probes(&tx, port, beacon, Some(Ipv4Addr::LOCALHOST)).unwrap();
         let mut buf = [0u8; 64];
-        let (len, _) = rx.recv_from(&mut buf).expect("probe should reach the /24 host");
+        let (len, _) = rx
+            .recv_from(&mut buf)
+            .expect("probe should reach the /24 host");
         let got = Beacon::decode(&buf[..len]).unwrap();
         assert_eq!(got.instance_id, beacon.instance_id);
         assert_ne!(got.capabilities & crate::types::CAP_PROBE, 0);
