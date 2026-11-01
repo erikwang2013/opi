@@ -28,7 +28,8 @@ use windows::core::{GUID, HRESULT, IUnknown, PCWSTR, Result};
 
 use crate::com_server::{own_module_path, parse_guid};
 use crate::dll::{
-    CLSID_TEXT_SERVICE, DISPLAY_NAME, GUID_PROFILE, LANGID_ZH_CN, clsid_key, inproc_server_key,
+    CLSID_TEXT_SERVICE, DISPLAY_NAME, GUID_PROFILE, LANGID_EN_US, LANGID_ZH_CN, clsid_key,
+    inproc_server_key,
 };
 
 /// `WIN32_ERROR`（注册表 API 的返回）→ `Result`：0 = `ERROR_SUCCESS`。
@@ -157,14 +158,71 @@ fn ok_if_already_exists(r: Result<()>) -> Result<()> {
 
 /// profile 是否已注册。`GetProfile` 是查询正路；只把 `Ok` 当存在，
 /// 查询失败（含真的不存在）交给随后的 `RegisterProfile` 报出真实错误。
-fn profile_exists(mgr: &ITfInputProcessorProfileMgr, clsid: &GUID, profile: &GUID) -> bool {
+/// 注册一个 LANGID 下的 profile；图标被拒时退回空图标（图标不是输入能力）。
+fn register_profile(
+    mgr: &ITfInputProcessorProfileMgr,
+    clsid: &GUID,
+    profile: &GUID,
+    desc: &[u16],
+    icon: &[u16],
+    langid: u16,
+) -> Result<()> {
+    // SAFETY: 同调用点：GUID/描述/图标切片生命周期覆盖调用。
+    if let Err(first) = unsafe {
+        mgr.RegisterProfile(
+            clsid,
+            langid,
+            profile,
+            desc,
+            icon,
+            0,
+            HKL::default(),
+            0,
+            true,
+            0,
+        )
+    } {
+        if icon.is_empty() {
+            return Err(first);
+        }
+        if let Err(second) = unsafe {
+            mgr.RegisterProfile(
+                clsid,
+                langid,
+                profile,
+                desc,
+                &[],
+                0,
+                HKL::default(),
+                0,
+                true,
+                0,
+            )
+        } {
+            if !profile_exists(mgr, clsid, profile, langid) {
+                return Err(second);
+            }
+            crate::com_server::log_register_failure("RegisterProfile(icon fallback)", &second);
+        } else {
+            crate::com_server::log_register_failure("RegisterProfile(icon)", &first);
+        }
+    }
+    Ok(())
+}
+
+fn profile_exists(
+    mgr: &ITfInputProcessorProfileMgr,
+    clsid: &GUID,
+    profile: &GUID,
+    langid: u16,
+) -> bool {
     let mut found = TF_INPUTPROCESSORPROFILE::default();
     // SAFETY: found 是本次调用独占的输出结构；GUID 指针指向调用方栈上的值，
     // 生命周期覆盖调用；hkl 对 INPUTPROCESSOR 类型被忽略，传 NULL。
     unsafe {
         mgr.GetProfile(
             TF_PROFILETYPE_INPUTPROCESSOR,
-            LANGID_ZH_CN,
+            langid,
             clsid,
             profile,
             HKL::default(),
@@ -283,50 +341,16 @@ pub(crate) fn register() -> Result<()> {
         // 对已存在 profile 的返回值不可依赖（TF_E_ALREADY_EXISTS 是保留键冲突，
         // 不是"已注册"），所以用 GetProfile 判存在；只有真的不存在才写。
         // `profiles.Register` 同样只在首次注册时调用，重复安装不再碰旧接口。
-        if !profile_exists(&profile_mgr, &clsid, &profile) {
+        if !profile_exists(&profile_mgr, &clsid, &profile, LANGID_ZH_CN) {
             ok_if_already_exists(profiles.Register(&clsid))?;
-            if let Err(first) = profile_mgr.RegisterProfile(
-                &clsid,
-                LANGID_ZH_CN,
-                &profile,
-                &desc,
-                &icon,
-                0,
-                HKL::default(),
-                0,
-                true,
-                0,
-            ) {
-                // 图标路径在少数布局/权限下可能被 TSF 拒绝；图标不是输入能力，
-                // 绝不能因此让整个 profile 注册失败（否则表现为「只有英文、状态栏不出现」）。
-                if icon.is_empty() {
-                    return Err(first);
-                }
-                // 第一次失败可能已经把 profile 写进去了（只是图标没被接受）：
-                // 空图标重试若再失败，能读回 profile 就算成功。
-                if let Err(second) = profile_mgr.RegisterProfile(
-                    &clsid,
-                    LANGID_ZH_CN,
-                    &profile,
-                    &desc,
-                    &[],
-                    0,
-                    HKL::default(),
-                    0,
-                    true,
-                    0,
-                ) {
-                    if !profile_exists(&profile_mgr, &clsid, &profile) {
-                        return Err(second);
-                    }
-                    crate::com_server::log_register_failure(
-                        "RegisterProfile(icon fallback)",
-                        &second,
-                    );
-                } else {
-                    crate::com_server::log_register_failure("RegisterProfile(icon)", &first);
-                }
+        }
+        // Chrome 地址栏按浏览器 UI 语言走 en-US 配置；只注册 zh-CN 时它看不到本 TIP
+        //（Edge 用文档语言所以正常）。两种 LANGID 都注册，实际只多一个启用位。
+        for langid in [LANGID_ZH_CN, LANGID_EN_US] {
+            if profile_exists(&profile_mgr, &clsid, &profile, langid) {
+                continue;
             }
+            register_profile(&profile_mgr, &clsid, &profile, &desc, &icon, langid)?;
         }
         // 旧接口 AddLanguageProfile 已删除：RegisterProfile 是正式路径，
         // 目标 Windows 10 不需要它；两者叠加会在首次安装时就写重复 profile。
@@ -336,18 +360,21 @@ pub(crate) fn register() -> Result<()> {
         // 之后能在输入法列表里看到 OPI 的保险。已设置时是 no-op（成功）。
         // 失败**不阻断**：profile 与类别注册必须写完（否则「装成功、键盘不出现」
         // 连手工添加的机会都没有）；失败写进固定日志，由安装器/诊断脚本读回。
-        if let Err(e) =
-            profiles.EnableLanguageProfileByDefault(&clsid, LANGID_ZH_CN, &profile, true)
-        {
-            crate::com_server::log_register_failure("EnableLanguageProfileByDefault", &e);
+        for langid in [LANGID_ZH_CN, LANGID_EN_US] {
+            if let Err(e) = profiles.EnableLanguageProfileByDefault(&clsid, langid, &profile, true)
+            {
+                crate::com_server::log_register_failure("EnableLanguageProfileByDefault", &e);
+            }
         }
 
         // 当前用户的启用位（HKCU\Software\Microsoft\CTF\TIP\...\Enable）。
         //    只写 HKLM 的 profile 不够：Windows 10 的输入法列表按**用户**启用状态
         //    过滤，旧实现缺这一步 ⇒ 「装完有进程、键盘不显示」。
         //    best-effort：SYSTEM/异常 HKCU 的失败不应把整包安装打回滚，但必须可见。
-        if let Err(e) = profiles.EnableLanguageProfile(&clsid, LANGID_ZH_CN, &profile, true) {
-            crate::com_server::log_register_failure("EnableLanguageProfile", &e);
+        for langid in [LANGID_ZH_CN, LANGID_EN_US] {
+            if let Err(e) = profiles.EnableLanguageProfile(&clsid, langid, &profile, true) {
+                crate::com_server::log_register_failure("EnableLanguageProfile", &e);
+            }
         }
 
         let cats: ITfCategoryMgr = CoCreateInstance(
@@ -416,7 +443,9 @@ pub(crate) fn unregister() -> Result<()> {
             CLSCTX_INPROC_SERVER,
         ) {
             // register() 经 RegisterProfile 写下的 profile 在这里摘掉。
-            let _ = profile_mgr.UnregisterProfile(&clsid, LANGID_ZH_CN, &profile, 0);
+            for langid in [LANGID_ZH_CN, LANGID_EN_US] {
+                let _ = profile_mgr.UnregisterProfile(&clsid, langid, &profile, 0);
+            }
         }
         if let Ok(profiles) = CoCreateInstance::<_, ITfInputProcessorProfiles>(
             &CLSID_TF_InputProcessorProfiles,
@@ -426,7 +455,9 @@ pub(crate) fn unregister() -> Result<()> {
             // 先关当前用户的 Enable 位，再摘服务（尽力而为）。profile 已由上面的
             // ITfInputProcessorProfileMgr::UnregisterProfile 摘掉；旧接口
             // RemoveLanguageProfile 不再配对使用。
-            let _ = profiles.EnableLanguageProfile(&clsid, LANGID_ZH_CN, &profile, false);
+            for langid in [LANGID_ZH_CN, LANGID_EN_US] {
+                let _ = profiles.EnableLanguageProfile(&clsid, langid, &profile, false);
+            }
             let _ = profiles.Unregister(&clsid);
         }
     }

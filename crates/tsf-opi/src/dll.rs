@@ -33,6 +33,7 @@ pub const GUID_PROFILE: &str = "A31A137C-1404-42F2-B82C-4E63F15DEFD6";
 
 /// 语言 ID：zh-CN（0x0804）。TSF 的 profile 按 LANGID 分桶。
 pub const LANGID_ZH_CN: u16 = 0x0804;
+pub const LANGID_EN_US: u16 = 0x0409;
 
 /// 服务显示名（注册表默认值 + 语言栏里显示的名字）。
 pub const DISPLAY_NAME: &str = "小欧输入法";
