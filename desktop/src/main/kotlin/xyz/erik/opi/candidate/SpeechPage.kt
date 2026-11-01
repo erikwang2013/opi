@@ -53,25 +53,8 @@ internal fun SpeechPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Str
         report(if (it) "语音输入已开启：点状态栏话筒开始/停止" else "语音输入已关闭")
     }
     Text(
-        "识别语言（配置键 SpeechLanguage）",
-        fontSize = 13.sp, color = Ink, fontWeight = FontWeight.Bold,
-    )
-    Spacer(Modifier.height(6.dp))
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        for (lang in SpeechLanguage.entries) {
-            LayoutChip(lang.label, s.speechLanguage == lang.value) {
-                apply(s.copy(speechLanguage = lang.value))
-                report("识别语言：${lang.label}")
-            }
-        }
-    }
-    Spacer(Modifier.height(6.dp))
-    Text(
-        when (s.speechLanguage) {
-            "en" -> "Whisper 仅英文：适合长句/听写；15 秒内短句可能不如「自动」，建议短句用自动。"
-            "zh" -> "SenseVoice：中文优先，中英混合短句也能识别（本地、快）。"
-            else -> "自动：中文与英文短句走 SenseVoice；只有明确选 English 才用 Whisper。"
-        },
+        "引擎跟随输入模式：中文/繁体用 SenseVoice，英文用 Whisper；切换输入法模式即切换引擎。" +
+            "默认中文引擎。",
         fontSize = 12.sp, color = Muted,
     )
 

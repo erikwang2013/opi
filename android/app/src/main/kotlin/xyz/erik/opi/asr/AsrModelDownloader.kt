@@ -61,9 +61,6 @@ internal object AsrModelDownloader {
         scope.launch {
             try {
                 install(app, pack, total)
-                // 下载完成即启用这一档引擎（中/英切换跟随包）。
-                xyz.erik.opi.settings.ImePreferences.from(app).asrWhisper =
-                    pack.id == AsrModels.WHISPER_ID
                 main.post {
                     state = AsrDownloadState.Done(packId)
                     running.set(false)

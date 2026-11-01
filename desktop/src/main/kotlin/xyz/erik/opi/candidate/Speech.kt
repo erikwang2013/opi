@@ -64,7 +64,7 @@ private sealed interface SpeechCommand {
     data object Dismiss : SpeechCommand
 }
 
-private data class SpeechConfig(val enabled: Boolean = false, val language: SpeechLanguage = SpeechLanguage.AUTO)
+private data class SpeechConfig(val enabled: Boolean = false, val language: SpeechLanguage = SpeechLanguage.ZH)
 
 private class LoadedAsr(
     val ffi: OpiAsrFfi,
@@ -227,8 +227,9 @@ internal class SpeechHostImpl {
         val next = SpeechConfig(enabled, language)
         if (next == config) return
         val wasEnabled = config.enabled
+        val languageChanged = next.language != config.language
         config = next
-        if (wasEnabled && !enabled) commands.offer(SpeechCommand.Cancel)
+        if (wasEnabled && (!enabled || languageChanged)) commands.offer(SpeechCommand.Cancel)
     }
 
     fun toggle(commit: (String) -> String?) {

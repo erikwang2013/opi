@@ -44,7 +44,6 @@ internal fun AsrModelSection(prefs: ImePreferences) {
     }
     val context = LocalContext.current
     val download = AsrModelDownloader.state
-    var whisper by remember { mutableStateOf(prefs.asrWhisper) }
     val busy = download is AsrDownloadState.Running
     val vadReady = AsrModels.vadReady(context)
 
@@ -109,20 +108,10 @@ internal fun AsrModelSection(prefs: ImePreferences) {
             },
         )
     }
-    ListItem(
-        headlineContent = { Text("英文高精度（Whisper）") },
-        supportingContent = {
-            Text("开：仅英文，模型约 358 MB，延迟约 15 秒/条；关：SenseVoice 中英混识，更快。")
-        },
-        trailingContent = {
-            Switch(
-                checked = whisper,
-                onCheckedChange = {
-                    whisper = it
-                    prefs.asrWhisper = it
-                },
-            )
-        },
+    Text(
+        text = "语音引擎跟随输入模式：中文/繁体用 SenseVoice，英文用 Whisper；切换键盘模式即切换引擎。",
+        fontSize = 12.sp,
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
     )
     Text(
         text = "模型存于应用私有目录 files/asr，卸载应用即删除；下载完成前会逐文件校验 SHA-256。",

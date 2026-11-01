@@ -28,6 +28,7 @@ import xyz.erik.opi.clip.ClipSyncService
 import xyz.erik.opi.engine.AssociationGate
 import xyz.erik.opi.engine.EngineBoot
 import xyz.erik.opi.engine.EngineController
+import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.engine.UserWordStore
 import xyz.erik.opi.engine.clearUserWords
 import xyz.erik.opi.ime.BracketPairing
@@ -263,7 +264,7 @@ class OpiImeService : InputMethodService() {
         // 语音结果走同一条重试通道；先清引擎组合，避免候选栏残留旧拼音。
         AsrRuntime.attach(
             this,
-            whisper = { prefs.asrWhisper },
+            whisper = { engineController.mode == EngineMode.ENGLISH },
             commit = { text ->
                 engineController.clear()
                 commitWithRetry(text)
