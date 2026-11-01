@@ -102,11 +102,6 @@ val copyPetStickers by tasks.registering(Copy::class) {
         include("map.tsv", "shortcodes.tsv")
         into("pet-font")
     }
-    // 动态皮肤的键帽纹理（与 iOS/鸿蒙同一份）：scene/keycap-<id>.png。
-    from(layout.projectDirectory.dir("../../shared/scene/art")) {
-        include("keycap-*.png")
-        into("scene")
-    }
     into(layout.buildDirectory.dir("generated/opiAssets"))
 }
 // assets 根指向 `generated/opiAssets`（其下是 pet/ 等），运行期路径才是 pet/<file>.png。

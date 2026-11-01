@@ -10,7 +10,6 @@
 import { KeyboardController } from './KeyboardController';
 import { OpiShift } from './OpiEngine';
 import { Palette, paletteFor } from './Palette';
-import { sceneKeycapImage } from './SceneTheme';
 
 /** 弹层里的一行：label 是键面字，value 是发送值（两者只对 14 键大写项不同）。 */
 export class PopupChoice {
@@ -56,7 +55,6 @@ export struct PopupKey {
   @StorageLink('opiSkin') skin: number = 0;
   @StorageLink('opiDark') dark: number = 0;
   @StorageLink('opiElder') elder: number = 0;
-  @StorageLink('opiScene') scene: string = '';
   @State open: boolean = false;
   @State selected: number = 0;
   private timer: number = -1;
@@ -195,10 +193,7 @@ export struct PopupKey {
     .height('100%')
     .margin({ left: 2, right: 2 })
     .backgroundColor(this.pal().keyBg)
-    .backgroundImage(this.scene.length > 0 ? sceneKeycapImage(this.scene) : $r('app.media.keycap_none'))
-    .backgroundImageSize(ImageSize.Cover)
-    .borderRadius(6)
-    .clip(true)
+        .borderRadius(6)
     .onClick(() => {
       if (this.suppressClick) {
         this.suppressClick = false;
@@ -233,7 +228,6 @@ export struct FuncButton {
   @StorageLink('opiSkin') skin: number = 0;
   @StorageLink('opiDark') dark: number = 0;
   @StorageLink('opiElder') elder: number = 0;
-  @StorageLink('opiScene') scene: string = '';
 
   private pal(): Palette {
     return paletteFor(this.skin, this.dark === 1, this.elder === 1);
@@ -244,11 +238,7 @@ export struct FuncButton {
       .fontSize(this.fontSize)
       .fontColor(this.active ? this.pal().highlightFg : this.pal().keyFg)
       .backgroundColor(this.active ? this.pal().highlightBg : this.pal().keyBg)
-      .backgroundImage(this.scene.length > 0 && !this.active
-        ? sceneKeycapImage(this.scene) : $r('app.media.keycap_none'))
-      .backgroundImageSize(ImageSize.Cover)
       .borderRadius(6)
-      .clip(true)
       .layoutWeight(this.weight)
       .height('100%')
       .margin({ left: 2, right: 2 })
@@ -264,7 +254,6 @@ export struct BackspaceButton {
   @StorageLink('opiSkin') skin: number = 0;
   @StorageLink('opiDark') dark: number = 0;
   @StorageLink('opiElder') elder: number = 0;
-  @StorageLink('opiScene') scene: string = '';
   private ctrl: KeyboardController = KeyboardController.getInstance();
 
   private pal(): Palette {
@@ -276,10 +265,7 @@ export struct BackspaceButton {
       .fontSize(this.fontSize)
       .fontColor(this.pal().keyFg)
       .backgroundColor(this.pal().keyBg)
-      .backgroundImage(this.scene.length > 0 ? sceneKeycapImage(this.scene) : $r('app.media.keycap_none'))
-      .backgroundImageSize(ImageSize.Cover)
       .borderRadius(6)
-      .clip(true)
       .layoutWeight(this.weight)
       .height('100%')
       .margin({ left: 2, right: 2 })
@@ -312,7 +298,6 @@ export struct ShiftButton {
   @StorageLink('opiSkin') skin: number = 0;
   @StorageLink('opiDark') dark: number = 0;
   @StorageLink('opiElder') elder: number = 0;
-  @StorageLink('opiScene') scene: string = '';
   private ctrl: KeyboardController = KeyboardController.getInstance();
 
   private pal(): Palette {
@@ -328,11 +313,7 @@ export struct ShiftButton {
       .fontSize(this.fontSize)
       .fontColor(this.active() ? this.pal().highlightFg : this.pal().keyFg)
       .backgroundColor(this.active() ? this.pal().highlightBg : this.pal().keyBg)
-      .backgroundImage(this.scene.length > 0 && !this.active()
-        ? sceneKeycapImage(this.scene) : $r('app.media.keycap_none'))
-      .backgroundImageSize(ImageSize.Cover)
       .borderRadius(6)
-      .clip(true)
       .layoutWeight(this.weight)
       .height('100%')
       .margin({ left: 2, right: 2 })
