@@ -127,8 +127,11 @@ Type: filesandordirs; Name: "{app}\runtime"
 
 [Files]
 ; 2026-11-01: app\opi_ffi.dll (LAN clipboard core) ships inside the jpackage app
-; image and is installed by the recursesubdirs entry below. First listen triggers
-; the Windows Firewall prompt; this installer intentionally adds NO firewall rule.
+; image and is installed by the recursesubdirs entry below.
+; 2026-11-02: LAN clipboard also needs inbound UDP 45888 (discovery) and inbound
+; TCP (encrypted sessions) on the private/domain profiles. The interactive prompt
+; is easy to miss and a denied prompt is silent forever after, so the installer
+; adds two program-scoped rules below and the uninstaller removes them.
 ; 2026-10-21 real-machine upgrade: tsf_opi.dll AND app\*.opid are held by
 ; the old TSF DLL inside Explorer/other hosts. ssInstall moves both out to a
 ; same-volume trash directory first, so this entry simply writes the new files.
@@ -181,6 +184,16 @@ Root: HKLM64; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType
 ; 完成页文案（2026-10-23 用户口径）：安装完成不要求注销；新打开的应用生效；
 ; 已打开的应用关闭重开。静默安装不重启 Explorer。
 Filename: "{app}\app\launch-and-restart.cmd"; Description: "打开 opi（无需注销；新打开的应用生效，已打开的应用请关闭重开）"; Flags: postinstall nowait skipifsilent runasoriginaluser
+; 跨设备剪贴板防火墙规则（2026-11-02）：只放行 opi.exe，且只在专用/域网络。
+; 先删后加，升级不会叠出重复规则；静默安装也执行（Flags 没有 skipifsilent）。
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""opi LAN discovery"""; Flags: runhidden
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""opi LAN sessions"""; Flags: runhidden
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""opi LAN discovery"" dir=in action=allow program=""{app}\opi.exe"" protocol=UDP localport=45888 profile=private,domain enable=yes"; Flags: runhidden
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""opi LAN sessions"" dir=in action=allow program=""{app}\opi.exe"" protocol=TCP profile=private,domain enable=yes"; Flags: runhidden
+
+[UninstallRun]
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""opi LAN discovery"""; Flags: runhidden
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""opi LAN sessions"""; Flags: runhidden
 
 [Code]
 const

@@ -29,6 +29,8 @@ pub(crate) const MAX_REASSEMBLY_EVENTS: usize = 8;
 pub(crate) const MAX_REASSEMBLY_BYTES: usize = 4 * MAX_TEXT_BYTES;
 pub(crate) const CAP_TEXT: u8 = 1 << 0;
 pub(crate) const CAP_PAIRING: u8 = 1 << 1;
+/// 探测报文：请求收到者立刻单播回一个普通 beacon。只在广播/组播被丢时用。
+pub(crate) const CAP_PROBE: u8 = 1 << 7;
 
 /// 设备实例 ID：随机 16 字节，首次启动生成并随身份文件持久化。
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]

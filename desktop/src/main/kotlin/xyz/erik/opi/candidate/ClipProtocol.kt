@@ -72,9 +72,41 @@ internal fun clipConfigJson(
     deviceName: String,
     tcpPort: Int = 0,
     discoveryPort: Int = 45888,
-): String =
-    "{\"data_dir\":${jsonString(dataDir)},\"tcp_port\":$tcpPort," +
-        "\"discovery_port\":$discoveryPort,\"device_name\":${jsonString(deviceName)}}"
+    advertiseIp: String? = null,
+): String = buildString {
+    append("{\"data_dir\":").append(jsonString(dataDir))
+    append(",\"tcp_port\":").append(tcpPort)
+    append(",\"discovery_port\":").append(discoveryPort)
+    append(",\"device_name\":").append(jsonString(deviceName))
+    if (!advertiseIp.isNullOrBlank()) {
+        append(",\"advertise_ipv4\":").append(jsonString(advertiseIp))
+    }
+    append('}')
+}
+
+/**
+ * 本机局域网 IPv4：优先站点本地地址，跳过 Docker/VPN 等虚拟网卡。
+ * 多网卡/有 VPN 时默认出口不一定是局域网那块网卡，广播会发错网段。
+ */
+internal fun localLanIpv4(): String? {
+    val excluded = listOf(
+        "docker", "veth", "br-", "virbr", "vmnet", "vbox", "tun", "tap", "wg", "tailscale", "zt",
+    )
+    val candidates = runCatching {
+        java.util.Collections.list(java.net.NetworkInterface.getNetworkInterfaces())
+            .asSequence()
+            .filter { it.isUp && !it.isLoopback }
+            .flatMap { n ->
+                java.util.Collections.list(n.inetAddresses).asSequence()
+                    .filterIsInstance<java.net.Inet4Address>()
+                    .filter { !it.isLoopbackAddress && !it.isLinkLocalAddress && it.isSiteLocalAddress }
+                    .map { addr -> n.name.lowercase() to addr.hostAddress }
+            }
+            .filter { (name, _) -> excluded.none { name.contains(it) } }
+            .toList()
+    }.getOrDefault(emptyList())
+    return candidates.firstOrNull()?.second
+}
 
 // ---------- 事件 ----------
 

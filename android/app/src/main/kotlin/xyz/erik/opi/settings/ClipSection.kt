@@ -82,10 +82,16 @@ internal fun ClipSection(prefs: ImePreferences, toast: (String) -> Unit) {
         headlineContent = { Text("启用") },
         supportingContent = {
             val device = ClipRuntime.status?.deviceName.orEmpty()
+            val localIp = remember { ClipRuntime.localIpv4(context) }
+            val status = ClipRuntime.status
             Text(
                 when {
-                    ClipRuntime.running && device.isNotEmpty() -> "运行中 · $device"
-                    ClipRuntime.running -> "运行中"
+                    ClipRuntime.running && device.isNotEmpty() ->
+                        "运行中 · $device · ${localIp ?: "无局域网 IPv4"} · UDP 45888" +
+                            " · 发现报文 ${status?.beaconsSent ?: 0} 发 / ${status?.beaconsReceived ?: 0} 收"
+                    ClipRuntime.running ->
+                        "运行中 · ${localIp ?: "无局域网 IPv4"} · UDP 45888" +
+                            " · 发现报文 ${status?.beaconsSent ?: 0} 发 / ${status?.beaconsReceived ?: 0} 收"
                     enabled -> "已启用，正在启动内核…"
                     else -> "关闭：不监听剪贴板，也不联网"
                 },
@@ -161,6 +167,15 @@ internal fun ClipSection(prefs: ImePreferences, toast: (String) -> Unit) {
                 },
             )
         }
+        ListItem(
+            headlineContent = { Text("发送当前剪贴板") },
+            supportingContent = { Text("手动测试：只发送文本，不显示、不记录内容") },
+            trailingContent = {
+                TextButton(onClick = { toast(ClipRuntime.publishCurrentClipboard(context)) }) {
+                    Text("发送")
+                }
+            },
+        )
         HorizontalDivider()
         ListItem(
             headlineContent = { Text("停止共享") },

@@ -5,6 +5,8 @@ package xyz.erik.opi.clip
 
 import android.content.ClipboardManager
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Handler
@@ -14,6 +16,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import java.io.File
+import java.net.Inet4Address
 
 /**
  * 进程内唯一实例：把 [ClipBridge]（内核线程）与 [ClipboardAdapter]（系统剪贴板）
@@ -81,6 +84,7 @@ internal object ClipRuntime {
                 dataDir = File(app.filesDir, "clip").absolutePath,
                 deviceName = deviceName(),
                 discoveryPort = DISCOVERY_PORT,
+                advertiseIp = localIpv4(app),
             ),
         )
         clipAdapter.start()
@@ -117,9 +121,48 @@ internal object ClipRuntime {
         bridge?.forgetPeer(instanceId)
     }
 
+    /** 手动发送当前剪贴板（后台读剪贴板可能被系统拒绝，这里由设置页前台触发）。 */
+    fun publishCurrentClipboard(context: Context): String {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+            ?: return "系统剪贴板不可用"
+        val text = try {
+            clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
+        } catch (_: SecurityException) {
+            null
+        }
+        if (text.isNullOrEmpty()) return "剪贴板里没有文本"
+        if (text.length > 256 * 1024) return "文本超过 256 KiB 上限"
+        bridge?.publishLocalText(text) ?: return "剪贴板内核未启动"
+        return "已发送 ${text.length} 字（内容不显示、不记录）"
+    }
+
     private fun deviceName(): String {
         val raw = "${Build.MANUFACTURER} ${Build.MODEL}".trim()
         return raw.ifEmpty { "Android" }.take(MAX_DEVICE_NAME)
+    }
+
+    /**
+     * 本机 Wi-Fi/以太网 IPv4。默认出口在「Wi-Fi 无外网 + 蜂窝/VPN 在线」时可能是
+     * 蜂窝或 VPN，拿它推 /24 会广播到错误网段；这里优先 Wi-Fi 接口的站点本地地址。
+     */
+    internal fun localIpv4(context: Context): String? {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return null
+        fun addrs(network: android.net.Network): List<Inet4Address> =
+            cm.getLinkProperties(network)?.linkAddresses.orEmpty().mapNotNull { link ->
+                (link.address as? Inet4Address)
+                    ?.takeIf { !it.isLoopbackAddress && !it.isLinkLocalAddress }
+            }
+
+        val wifi = cm.allNetworks.firstOrNull { network ->
+            cm.getNetworkCapabilities(network)
+                ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        }
+        val wifiAddr = wifi?.let { addrs(it).firstOrNull { a -> a.isSiteLocalAddress } }
+        val anyLocal = cm.allNetworks.asSequence()
+            .flatMap { addrs(it).asSequence() }
+            .firstOrNull { it.isSiteLocalAddress }
+        return (wifiAddr ?: anyLocal)?.hostAddress
     }
 
     /** 组播锁：Android 不持锁时通常收不到 UDP 组播（发现报文）。权限是普通权限。 */

@@ -189,10 +189,12 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
             ClipButton("启动宿主", enabled = true) { startHost() }
         }
         else -> {
+            val localIp = remember { localLanIpv4() }
             Text(
                 "本机设备：${st.deviceName} · " +
                     (if (running) "运行中" else if (st.enabled) "启动中" else "已停止") +
-                    " · 监听方式：" + if (mode == ClipMode.MANUAL) "手动（Wayland）" else "轮询",
+                    " · 局域网地址：${localIp ?: "未找到"} · UDP 45888 · 监听方式：" +
+                    if (mode == ClipMode.MANUAL) "手动（Wayland）" else "轮询",
                 fontSize = 12.sp, color = Muted,
             )
             if (s.clipEnabled && !st.enabled) {
@@ -319,7 +321,7 @@ private fun PeerRow(
         if (peer.trusted) {
             ClipButton("撤销", enabled = canControl) { onForget() }
         } else {
-            ClipButton("配对", enabled = canControl && peer.connected) { onPair() }
+            ClipButton("配对", enabled = canControl) { onPair() }
         }
     }
 }

@@ -22,6 +22,10 @@ pub struct ClipConfig {
     /// 仅用于配对界面显示与信任表记录，不参与发现广播。
     #[serde(default)]
     pub device_name: String,
+    /// 本机在**局域网**里的 IPv4（由各端传入 Wi-Fi/以太网地址）。用于定向广播、
+    /// 组播出口与 /24 探测；不传则退回默认出口地址（VPN/双网卡时可能选错）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub advertise_ipv4: Option<std::net::Ipv4Addr>,
 }
 
 fn default_discovery_port() -> u16 {
@@ -35,6 +39,7 @@ impl ClipConfig {
             tcp_port: 0,
             discovery_port: DEFAULT_DISCOVERY_PORT,
             device_name: String::from("Opi"),
+            advertise_ipv4: None,
         }
     }
 
@@ -137,6 +142,7 @@ mod tests {
             tcp_port: 0,
             discovery_port: 45999,
             device_name: "书房".into(),
+            advertise_ipv4: None,
         };
         config.save(&path).unwrap();
         assert_eq!(ClipConfig::load(&path).unwrap(), config);

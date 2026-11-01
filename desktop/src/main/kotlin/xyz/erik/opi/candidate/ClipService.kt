@@ -228,7 +228,13 @@ internal class ClipService {
             publishSnapshot()
             return
         }
-        val config = Utf16Arg(clipConfigJson(clipDataDir().toString(), deviceName))
+        val config = Utf16Arg(
+            clipConfigJson(
+                clipDataDir().toString(),
+                deviceName,
+                advertiseIp = localLanIpv4(),
+            ),
+        )
         val clip = f.opi_clip_create(config.memory, config.len)
         if (clip == null) {
             ui = ui.copy(lastError = readLastError(f))

@@ -34,6 +34,9 @@ pub(crate) struct NodeInner {
     pub(crate) config: ClipConfig,
     pub(crate) generation: AtomicU64,
     active: AtomicUsize,
+    /// 诊断计数：只用于设置页显示「发/收过多少发现报文」，不含内容。
+    pub(crate) beacons_sent: AtomicU64,
+    pub(crate) beacons_received: AtomicU64,
 }
 
 impl NodeInner {
@@ -158,7 +161,7 @@ impl ClipNode {
         let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, config.tcp_port))?;
         listener.set_nonblocking(true)?;
         let tcp_port = listener.local_addr()?.port();
-        let udp = discovery::bind(config.discovery_port)?;
+        let udp = discovery::bind(config.discovery_port, config.advertise_ipv4)?;
 
         let inner = Arc::new(NodeInner {
             core: Mutex::new(Core::new(
@@ -172,6 +175,8 @@ impl ClipNode {
             config,
             generation: AtomicU64::new(0),
             active: AtomicUsize::new(0),
+            beacons_sent: AtomicU64::new(0),
+            beacons_received: AtomicU64::new(0),
         });
 
         let mut threads = Vec::new();
@@ -247,6 +252,14 @@ impl ClipNode {
 
     pub fn peers(&self) -> Vec<PeerInfo> {
         self.inner.lock().peer_snapshot()
+    }
+
+    /// `(beacons_sent, beacons_received)`：发现链路诊断，不含剪贴板内容。
+    pub fn discovery_stats(&self) -> (u64, u64) {
+        (
+            self.inner.beacons_sent.load(Ordering::Relaxed),
+            self.inner.beacons_received.load(Ordering::Relaxed),
+        )
     }
 
     /// 对发现到的未知实例发起 Noise_XX 配对；SAS 通过 `PairingPrompt` 事件返回。

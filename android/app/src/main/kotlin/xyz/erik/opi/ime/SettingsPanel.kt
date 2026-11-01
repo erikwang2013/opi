@@ -31,6 +31,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import xyz.erik.opi.clip.ClipRuntime
+import xyz.erik.opi.clip.ClipSyncService
 import xyz.erik.opi.engine.AssociationGate
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.keyboard.LocalKeyboardPalette
@@ -70,6 +72,8 @@ fun SettingsPanel(
     var jianpin by remember { mutableStateOf(prefs.jianpin) }
     var association by remember { mutableStateOf(prefs.association) }
     var showOwn by remember { mutableStateOf(prefs.showOwn) }
+    var clip by remember { mutableStateOf(prefs.clipEnabled) }
+    var clipError by remember { mutableStateOf("") }
     var layout by remember { mutableStateOf(prefs.shuangpinLayout) }
     var layoutOpen by remember { mutableStateOf(false) }
     var clearOpen by remember { mutableStateOf(false) }
@@ -123,6 +127,32 @@ fun SettingsPanel(
                 showOwn = v
                 prefs.showOwn = v
             }
+            // 跨设备剪贴板（2026-11-02 用户要求键盘内也能开关）。配对仍在应用设置页。
+            ToggleRow("跨设备剪贴板", clip) { v ->
+                clip = v
+                clipError = ""
+                prefs.clipEnabled = v
+                runCatching {
+                    if (v) {
+                        ClipRuntime.start(context)
+                        ClipSyncService.start(context)
+                    } else {
+                        ClipRuntime.stop(context)
+                        ClipSyncService.stop(context)
+                    }
+                }.onFailure { clipError = it.message ?: "启动失败" }
+            }
+            Text(
+                when {
+                    clipError.isNotEmpty() -> "启动失败：$clipError"
+                    !clip -> "默认关闭；只在同一局域网、已配对设备之间同步纯文本"
+                    ClipRuntime.running -> "运行中 · 已发现 ${ClipRuntime.peers.size} 台设备 · 配对/移除请到应用设置"
+                    else -> "正在启动局域网监听…"
+                },
+                fontSize = 11.sp,
+                color = if (clipError.isNotEmpty()) p.accent else p.barDimFg,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+            )
             // 双拼布局：内联展开，不用 Dialog —— IME 宿主是 Service，弹窗没有 Activity token。
             Row(
                 modifier = Modifier.fillMaxWidth()

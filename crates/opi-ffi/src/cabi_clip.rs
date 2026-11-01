@@ -190,13 +190,18 @@ impl OpiClip {
 
     pub(crate) fn status_json(&self) -> Result<String, String> {
         self.check_owner()?;
-        let (instance_id, fingerprint, peers) = match &self.node {
-            Some(node) => (
-                Some(node.local_instance_id().to_hex()),
-                Some(node.local_fingerprint().to_hex()),
-                node.peers().len(),
-            ),
-            None => (None, None, 0),
+        let (instance_id, fingerprint, peers, sent, received) = match &self.node {
+            Some(node) => {
+                let (sent, received) = node.discovery_stats();
+                (
+                    Some(node.local_instance_id().to_hex()),
+                    Some(node.local_fingerprint().to_hex()),
+                    node.peers().len(),
+                    sent,
+                    received,
+                )
+            }
+            None => (None, None, 0, 0, 0),
         };
         to_json(&json!({
             "running": self.node.is_some(),
@@ -206,6 +211,8 @@ impl OpiClip {
             "tcp_port": self.config.tcp_port,
             "discovery_port": self.config.discovery_port,
             "peers": peers,
+            "beacons_sent": sent,
+            "beacons_received": received,
         }))
     }
 

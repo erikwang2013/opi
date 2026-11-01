@@ -64,7 +64,7 @@ impl Beacon {
 
 /// 绑定发现端口并加入组播组；失败时启动直接报错（没有发现就无法配对/连接）。
 /// 允许同机多实例共享端口（beacon 不含任何敏感内容）。
-pub(crate) fn bind(port: u16) -> Result<UdpSocket, ClipError> {
+pub(crate) fn bind(port: u16, local_ip: Option<Ipv4Addr>) -> Result<UdpSocket, ClipError> {
     let socket = socket2::Socket::new(
         socket2::Domain::IPV4,
         socket2::Type::DGRAM,
@@ -74,10 +74,15 @@ pub(crate) fn bind(port: u16) -> Result<UdpSocket, ClipError> {
     // 在部分平台不可用，组播接收不需要它。
     socket.set_reuse_address(true)?;
     socket.bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, port)).into())?;
-    socket.join_multicast_v4(&DISCOVERY_GROUP, &Ipv4Addr::UNSPECIFIED)?;
+    // 明确组播出口：Wi-Fi + 蜂窝/VPN 并存时，内核默认出口不一定是局域网那块网卡。
+    let iface = local_ip.unwrap_or(Ipv4Addr::UNSPECIFIED);
+    socket.join_multicast_v4(&DISCOVERY_GROUP, &iface)?;
     // 同机回环让测试与桌面多实例可用；TTL=1 把发现限制在局域网。
     socket.set_multicast_loop_v4(true)?;
     socket.set_multicast_ttl_v4(1)?;
+    if !iface.is_unspecified() {
+        socket.set_multicast_if_v4(&iface)?;
+    }
     socket.set_broadcast(true)?;
     let socket: UdpSocket = socket.into();
     socket.set_read_timeout(Some(READ_TIMEOUT))?;
@@ -98,7 +103,12 @@ pub(crate) fn beacon_for(
     }
 }
 
-pub(crate) fn send_beacon(socket: &UdpSocket, port: u16, beacon: Beacon) -> std::io::Result<()> {
+pub(crate) fn send_beacon(
+    socket: &UdpSocket,
+    port: u16,
+    beacon: Beacon,
+    local_ip: Option<Ipv4Addr>,
+) -> std::io::Result<()> {
     let bytes = beacon.encode();
     // 组播之外再发受限广播与**子网定向广播**：不少手机/路由器会丢掉
     // 255.255.255.255，但同一 /24 的 x.x.x.255 能到；只发一种就会「互相发现不了」。
@@ -106,7 +116,7 @@ pub(crate) fn send_beacon(socket: &UdpSocket, port: u16, beacon: Beacon) -> std:
         SocketAddr::from((DISCOVERY_GROUP, port)),
         SocketAddr::from((Ipv4Addr::BROADCAST, port)),
     ];
-    if let Some(ip) = local_ipv4() {
+    if let Some(ip) = local_ip.or_else(local_ipv4) {
         let o = ip.octets();
         targets.push(SocketAddr::from((
             Ipv4Addr::new(o[0], o[1], o[2], 255),
@@ -114,6 +124,30 @@ pub(crate) fn send_beacon(socket: &UdpSocket, port: u16, beacon: Beacon) -> std:
         )));
     }
     for target in targets {
+        let _ = socket.send_to(&bytes, target);
+    }
+    Ok(())
+}
+
+/// 广播/组播都被丢弃时的兜底：对同一 /24 的每台主机发探测 beacon。
+/// 收到探测的一方会单播回一个普通 beacon（见 `discovery_loop`）。
+pub(crate) fn send_probes(
+    socket: &UdpSocket,
+    port: u16,
+    mut beacon: Beacon,
+    local_ip: Option<Ipv4Addr>,
+) -> std::io::Result<()> {
+    let Some(ip) = local_ip.or_else(local_ipv4) else {
+        return Ok(());
+    };
+    let o = ip.octets();
+    beacon.capabilities |= crate::types::CAP_PROBE;
+    let bytes = beacon.encode();
+    for host in 1u8..=254 {
+        if host == o[3] {
+            continue;
+        }
+        let target = SocketAddr::from((Ipv4Addr::new(o[0], o[1], o[2], host), port));
         let _ = socket.send_to(&bytes, target);
     }
     Ok(())
@@ -168,6 +202,21 @@ mod tests {
         bytes[31] = 0;
         assert!(Beacon::decode(&bytes).is_none());
         assert!(Beacon::decode(&bytes[..31]).is_none());
+    }
+
+    #[test]
+    fn probes_are_unicast_and_flagged_for_reply() {
+        let rx = UdpSocket::bind((Ipv4Addr::new(127, 0, 0, 2), 0)).unwrap();
+        rx.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+        let port = rx.local_addr().unwrap().port();
+        let tx = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let beacon = beacon_for(id(7), &[3u8; 32], 5000, 1);
+        send_probes(&tx, port, beacon, Some(Ipv4Addr::LOCALHOST)).unwrap();
+        let mut buf = [0u8; 64];
+        let (len, _) = rx.recv_from(&mut buf).expect("probe should reach the /24 host");
+        let got = Beacon::decode(&buf[..len]).unwrap();
+        assert_eq!(got.instance_id, beacon.instance_id);
+        assert_ne!(got.capabilities & crate::types::CAP_PROBE, 0);
     }
 
     #[test]

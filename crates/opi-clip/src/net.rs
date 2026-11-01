@@ -22,13 +22,17 @@ use std::time::{Duration, Instant};
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(3);
 const SUPERVISOR_TICK: Duration = Duration::from_millis(100);
+/// 没有发现任何设备时，每隔这么久对 /24 逐机发一次探测；一旦发现就停。
+const PROBE_INTERVAL: Duration = Duration::from_secs(8);
+const PROBE_FIRST_DELAY: Duration = Duration::from_secs(2);
 
 pub(crate) fn discovery_loop(inner: Arc<NodeInner>, socket: UdpSocket, tcp_port: u16) {
     let mut next_beacon = Instant::now();
+    let mut next_probe = Instant::now() + PROBE_FIRST_DELAY;
     let mut buffer = [0u8; 64];
     while !inner.is_stopped() {
         let now = Instant::now();
-        if now >= next_beacon {
+        let beacon = if now >= next_beacon || now >= next_probe {
             let (instance_id, public_key, capabilities) = {
                 let core = inner.lock();
                 (
@@ -37,13 +41,65 @@ pub(crate) fn discovery_loop(inner: Arc<NodeInner>, socket: UdpSocket, tcp_port:
                     core.capabilities(),
                 )
             };
-            let beacon = discovery::beacon_for(instance_id, &public_key, tcp_port, capabilities);
-            let _ = discovery::send_beacon(&socket, inner.config.discovery_port, beacon);
+            Some(discovery::beacon_for(
+                instance_id,
+                &public_key,
+                tcp_port,
+                capabilities,
+            ))
+        } else {
+            None
+        };
+        if now >= next_beacon {
+            if let Some(beacon) = beacon {
+                let _ = discovery::send_beacon(
+                    &socket,
+                    inner.config.discovery_port,
+                    beacon,
+                    inner.config.advertise_ipv4,
+                );
+                inner.beacons_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
             next_beacon = now + BEACON_INTERVAL;
+        }
+        if now >= next_probe {
+            let no_peers = inner.lock().discovered.is_empty();
+            if no_peers {
+                if let Some(beacon) = beacon {
+                    let _ = discovery::send_probes(
+                        &socket,
+                        inner.config.discovery_port,
+                        beacon,
+                        inner.config.advertise_ipv4,
+                    );
+                    inner.beacons_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                }
+            }
+            next_probe = now + PROBE_INTERVAL;
         }
         match socket.recv_from(&mut buffer) {
             Ok((len, source)) => {
-                if let Some(beacon) = Beacon::decode(&buffer[..len]) {
+                if let Some(mut beacon) = Beacon::decode(&buffer[..len]) {
+                    inner.beacons_received.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    // /24 探测的报文：立刻单播回一个普通 beacon，让对方也能发现我们。
+                    if beacon.capabilities & crate::types::CAP_PROBE != 0 {
+                        beacon.capabilities &= !crate::types::CAP_PROBE;
+                        let (instance_id, public_key, capabilities) = {
+                            let core = inner.lock();
+                            (
+                                core.instance_id,
+                                core.public_key.clone(),
+                                core.capabilities(),
+                            )
+                        };
+                        let reply = discovery::beacon_for(
+                            instance_id,
+                            &public_key,
+                            tcp_port,
+                            capabilities,
+                        );
+                        let _ = socket.send_to(&reply.encode(), source);
+                    }
                     inner.lock().observe_beacon(source, beacon, Instant::now());
                 }
             }

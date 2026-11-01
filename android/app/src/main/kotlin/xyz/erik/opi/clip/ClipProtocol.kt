@@ -32,6 +32,8 @@ internal data class ClipStatus(
     val fingerprint: String?,
     val deviceName: String,
     val peers: Int,
+    val beaconsSent: Long = 0,
+    val beaconsReceived: Long = 0,
 )
 
 /** 需要用户核对的 6 位 SAS。`incoming` = 这次配对由对端发起。 */
@@ -97,6 +99,8 @@ internal fun parseClipStatus(json: String): ClipStatus? {
         fingerprint = root.str("fingerprint"),
         deviceName = root.str("device_name") ?: "",
         peers = (root["peers"] as? Number)?.toInt() ?: 0,
+        beaconsSent = (root["beacons_sent"] as? Number)?.toLong() ?: 0,
+        beaconsReceived = (root["beacons_received"] as? Number)?.toLong() ?: 0,
     )
 }
 
@@ -119,10 +123,15 @@ internal fun clipConfigJson(
     dataDir: String,
     deviceName: String,
     discoveryPort: Int = 45888,
+    advertiseIp: String? = null,
 ): String = buildString {
     append("{\"data_dir\":").append(clipJsonString(dataDir))
     append(",\"tcp_port\":0,\"discovery_port\":").append(discoveryPort)
-    append(",\"device_name\":").append(clipJsonString(deviceName)).append('}')
+    append(",\"device_name\":").append(clipJsonString(deviceName))
+    if (!advertiseIp.isNullOrBlank()) {
+        append(",\"advertise_ipv4\":").append(clipJsonString(advertiseIp))
+    }
+    append('}')
 }
 
 /** 只用于配置字符串（路径/设备名）；转义控制字符与引号，非 ASCII 原样输出。 */
