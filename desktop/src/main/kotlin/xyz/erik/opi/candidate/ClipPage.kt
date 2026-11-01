@@ -240,8 +240,9 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
     when {
         st == null -> Text("宿主运行后，这里会列出同一局域网内发现的小欧设备。", fontSize = 12.sp, color = Muted)
         st.peers.isEmpty() -> Text(
-            "还没有发现设备。确认两台设备在同一局域网、都已开启本开关；" +
-                "Windows 若发现不到设备，请确认安装器添加的防火墙规则未被禁用、当前网络为「专用」。",
+            "正在发现局域网设备…两边都开启本功能即可自动发现；" +
+                "若路由器拦截广播，可用下方「手动连接」输入对方 IP。" +
+                "Windows 请确认安装器添加的防火墙规则未被禁用、当前网络为「专用」。",
             fontSize = 12.sp, color = Muted,
         )
         else -> for (p in st.peers) {

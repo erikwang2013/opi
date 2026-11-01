@@ -142,8 +142,8 @@ internal fun ClipSection(prefs: ImePreferences, toast: (String) -> Unit) {
         )
         if (ClipRuntime.peers.isEmpty()) {
             ListItem(
-                headlineContent = { Text("没有发现设备") },
-                supportingContent = { Text("确认两台设备在同一 Wi-Fi，且两边都打开了本功能") },
+                headlineContent = { Text("正在发现局域网设备…") },
+                supportingContent = { Text("两边都打开本功能即可自动发现；若路由器拦截广播，可用下方手动连接") },
             )
         }
         ListItem(

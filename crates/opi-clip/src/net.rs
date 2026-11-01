@@ -23,8 +23,8 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(3);
 const SUPERVISOR_TICK: Duration = Duration::from_millis(100);
 /// 没有发现任何设备时，每隔这么久对 /24 逐机发一次探测；一旦发现就停。
-const PROBE_INTERVAL: Duration = Duration::from_secs(8);
-const PROBE_FIRST_DELAY: Duration = Duration::from_secs(2);
+const PROBE_INTERVAL: Duration = Duration::from_secs(2);
+const PROBE_FIRST_DELAY: Duration = Duration::ZERO;
 
 pub(crate) fn discovery_loop(inner: Arc<NodeInner>, socket: UdpSocket, tcp_port: u16) {
     let mut next_beacon = Instant::now();

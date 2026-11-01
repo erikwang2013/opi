@@ -721,3 +721,8 @@ JSON 格式错误：	JSON format error:
 已发送探测；对方在线会出现在附近设备	Probe sent; the peer will appear under Nearby devices if online.
 IP 格式不正确	Invalid IP address
 · 如启用了 ufw/firewalld，请按程序放行局域网入站连接。	· If ufw/firewalld is enabled, allow program inbound LAN connections.
+正在发现局域网设备…	Discovering LAN devices…
+两边都打开本功能即可自动发现；若路由器拦截广播，可用下方手动连接	Enable this feature on both devices for automatic discovery; if the router blocks broadcasts, use Manual connect below.
+正在发现局域网设备…两边都开启本功能即可自动发现；	Discovering LAN devices… enable this feature on both devices for automatic discovery;
+若路由器拦截广播，可用下方「手动连接」输入对方 IP。	If the router blocks broadcasts, use Manual connect below and enter the peer IP.
+Windows 请确认安装器添加的防火墙规则未被禁用、当前网络为「专用」。	On Windows, make sure the installer's firewall rules are enabled and the network is Private.
