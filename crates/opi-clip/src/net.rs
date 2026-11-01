@@ -66,18 +66,16 @@ pub(crate) fn discovery_loop(inner: Arc<NodeInner>, socket: UdpSocket, tcp_port:
         }
         if now >= next_probe {
             let no_peers = inner.lock().discovered.is_empty();
-            if no_peers {
-                if let Some(beacon) = beacon {
-                    let _ = discovery::send_probes(
-                        &socket,
-                        inner.config.discovery_port,
-                        beacon,
-                        inner.config.advertise_ipv4,
-                    );
-                    inner
-                        .beacons_sent
-                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                }
+            if no_peers && let Some(beacon) = beacon {
+                let _ = discovery::send_probes(
+                    &socket,
+                    inner.config.discovery_port,
+                    beacon,
+                    inner.config.advertise_ipv4,
+                );
+                inner
+                    .beacons_sent
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             }
             next_probe = now + PROBE_INTERVAL;
         }
