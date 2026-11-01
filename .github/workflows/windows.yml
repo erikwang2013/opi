@@ -321,7 +321,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $root = Join-Path $env:GITHUB_WORKSPACE 'desktop\build\generated\asrAppResources\asr'
+          $root = Join-Path $env:GITHUB_WORKSPACE 'desktop\asr-bundle\asr'
           foreach ($d in 'sensevoice','whisper-small.en','vad') {
             New-Item -ItemType Directory -Force (Join-Path $root $d) | Out-Null
           }
@@ -342,16 +342,16 @@ jobs:
             $got = (Get-FileHash $out -Algorithm SHA256).Hash.ToLower()
             if ($got -ne $x.h) { throw "校验失败：$($x.f) $got != $($x.h)" }
           }
-          "ASR_BUNDLE=$env:GITHUB_WORKSPACE\desktop\build\generated\asrAppResources" >> $env:GITHUB_ENV
+          "ASR_BUNDLE=$env:GITHUB_WORKSPACE\desktop\asr-bundle" >> $env:GITHUB_ENV
 
       # app image 与 MSI 用同一套 jpackage 配置；Windows 主机上 packageName=opi
       # ⇒ 产物目录与启动器都叫 opi。Inno 以这个目录为唯一输入。
       - name: ./gradlew.bat createDistributable（app image）
         shell: pwsh
         run: |
-          $args = @("-PopiPackageTier=$env:TIER")
-          if ($env:TIER -eq 'full') { $args += "-PopiAsrModelsDir=$env:ASR_BUNDLE" }
-          & .\gradlew.bat @args createDistributable --no-daemon
+          $gradleArgs = @("-PopiPackageTier=$env:TIER")
+          if ($env:TIER -eq 'full') { $gradleArgs += "-PopiAsrModelsDir=$env:ASR_BUNDLE" }
+          & .\gradlew.bat @gradleArgs createDistributable --no-daemon
           if ($LASTEXITCODE -ne 0) { throw "gradle 失败：$LASTEXITCODE" }
         working-directory: desktop
         env:

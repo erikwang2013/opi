@@ -1,0 +1,98 @@
+name: Attach release assets
+
+# 把各端 CI artifact 直接挂到已存在的 GitHub Release（2026-11-01）。
+# 大包（完整 APK / deb / rpm / EXE）在 Actions 网络里取，不经过本机下载。
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag（必须已存在）'
+        required: true
+        type: string
+      version:
+        description: '版本号（文件名用）'
+        required: true
+        default: '1.31.0'
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 下载并归位 1.31.0 artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          V: ${{ inputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p assets work
+          gh api --paginate "repos/$REPO/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | [.id,.name,.created_at] | @tsv' > work/artifacts.tsv
+          while IFS=$'\t' read -r id name created; do
+            case "$name" in
+              *"v$V"*) ;;
+              *) continue ;;
+            esac
+            case "$name" in
+              opi-android-release-*|opi-windows-exe-*|opi-packages|opi-ios-keyboard-*|opi-macos-ime-*|opi-harmony*|opi-harmonyos*) ;;
+              *) continue ;;
+            esac
+            d="work/$id-$(echo "$name" | tr -c 'A-Za-z0-9._-' '_')"
+            rm -rf "$d"; mkdir -p "$d"
+            gh api "repos/$REPO/actions/artifacts/$id/zip" > "$d/a.zip" || continue
+            unzip -q "$d/a.zip" -d "$d" || continue
+            case "$name" in
+              opi-android-release-*)
+                tier=normal
+                case "$name" in *-full) tier=full;; *-basic) tier=basic;; esac
+                apk="$(find "$d" -name '*.apk' | head -1)"
+                [ -n "$apk" ] || continue
+                suffix=""; [ "$tier" = normal ] || suffix="-$tier"
+                cp "$apk" "assets/opi-$V-android-universal${suffix}.apk"
+                ;;
+              opi-windows-exe-*)
+                tier=normal
+                case "$name" in *-full) tier=full;; *-basic) tier=basic;; esac
+                exe="$(find "$d" -name '*.exe' | head -1)"
+                [ -n "$exe" ] || continue
+                suffix=""; [ "$tier" = normal ] || suffix="-$tier"
+                cp "$exe" "assets/opi-$V-windows-x64${suffix}-setup.exe"
+                ;;
+              opi-packages)
+                deb="$(find "$d" -name '*.deb' | head -1)"
+                rpm="$(find "$d" -name '*.rpm' | head -1)"
+                [ -n "$deb" ] || continue
+                tier=normal
+                if dpkg-deb -c "$deb" | grep -q 'asr/sensevoice/model.int8.onnx'; then
+                  tier=full
+                elif ! dpkg-deb -c "$deb" | grep -q 'share/opi/trad.opid'; then
+                  tier=basic
+                fi
+                suffix=""; [ "$tier" = normal ] || suffix="-$tier"
+                cp "$deb" "assets/opi-$V-linux-amd64${suffix}.deb"
+                [ -n "$rpm" ] && cp "$rpm" "assets/opi-$V-linux-x86_64${suffix}.rpm"
+                ;;
+              opi-ios-keyboard-*)
+                ipa="$(find "$d" -name '*.ipa' | head -1)"
+                [ -n "$ipa" ] && cp "$ipa" "assets/opi-$V-ios-unsigned.ipa"
+                ;;
+              opi-macos-ime-*)
+                pkg="$(find "$d" -name '*.pkg' | head -1)"
+                [ -n "$pkg" ] && cp "$pkg" "assets/opi-$V-macos-universal.pkg"
+                ;;
+              opi-harmony*)
+                hap="$(find "$d" -name '*.hap' | head -1)"
+                [ -n "$hap" ] && cp "$hap" "assets/opi-$V-harmonyos-unsigned.hap"
+                ;;
+            esac
+          done < work/artifacts.tsv
+          ls -lh assets
+          gh release upload "$TAG" assets/* --clobber

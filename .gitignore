@@ -40,3 +40,5 @@ harmony/.idea/
 # packages.yml 里 desktop-deb job 产物的**中转目录**（CI 里是 download-artifact 的
 # path，本地复刻打包流程时同样要放一份）；纯暂存，不入库。
 desktop-deb/
+
+desktop/asr-bundle/
