@@ -78,6 +78,7 @@ internal fun asrCandidates(
     appPath: String?,
     windows: Boolean,
     userDir: String,
+    engineDir: String? = null,
 ): List<String> {
     val name = if (windows) "opi_asr.dll" else "libopi_asr.so"
     val out = LinkedHashSet<String>()
@@ -94,6 +95,8 @@ internal fun asrCandidates(
             out += root.resolve(sub).resolve(name).toString()
         }
     }
+    // 普通包/基础包：按需下载的引擎落在用户模型目录 engine/ 下。
+    engineDir?.takeIf { it.isNotBlank() }?.let { out += File(it).resolve(name).toString() }
     // 开发/测试：Gradle 测试的 CWD = desktop/，打包任务的 CWD = desktop/ 亦然。
     out += Paths.get(userDir).resolve("../target/release/$name").normalize().toString()
     out += Paths.get(userDir).resolve("target/release/$name").normalize().toString()
@@ -135,9 +138,10 @@ internal fun loadAsrFfi(
     appPath: String? = System.getProperty("jpackage.app-path"),
     windows: Boolean = isWindows(),
     userDir: String = System.getProperty("user.dir") ?: ".",
+    engineDir: String = SpeechEnginePack.root().toString(),
 ): AsrLoad {
     val errors = ArrayList<String>(2)
-    for (candidate in asrCandidates(envLib, appPath, windows, userDir)) {
+    for (candidate in asrCandidates(envLib, appPath, windows, userDir, engineDir)) {
         val isPath = candidate.contains('/') || candidate.contains('\\') || candidate.endsWith(".so") ||
             candidate.endsWith(".dll")
         if (isPath && !File(candidate).isFile) {

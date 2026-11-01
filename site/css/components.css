@@ -42,10 +42,16 @@
 .netdisk-copy h3 { margin: 0 0 4px; font-size: 1.08rem; }
 .netdisk-copy p { margin: 0; color: var(--muted); font-size: .8rem; line-height: 1.65; }
 .netdisk-banner .btn { flex: 0 0 auto; }
+.netdisk-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; margin: 10px 0 0; padding: 0; list-style: none; }
+.netdisk-list li { display: flex; flex-wrap: wrap; gap: 1px 8px; padding: 5px 0; border-top: 1px solid rgba(47, 125, 90, .18); color: var(--muted); font-size: .72rem; line-height: 1.5; }
+.netdisk-list strong { color: var(--ink); font-weight: 650; }
+.netdisk-list li > span:nth-child(2) { flex: 1 1 100%; color: var(--muted-2); }
+.netdisk-list .netdisk-size { margin-left: auto; color: var(--accent-soft); font-family: var(--font-mono); white-space: nowrap; }
 @media (max-width: 640px) {
   .netdisk-banner { flex-wrap: wrap; }
   .netdisk-copy { flex-basis: calc(100% - 60px); }
   .netdisk-banner .btn { width: 100%; }
+  .netdisk-list { grid-template-columns: 1fr; }
 }
 .download-group-title { display: flex; align-items: baseline; gap: 9px; margin: 0 0 10px; color: var(--ink); font-size: .8rem; letter-spacing: .05em; }
 .download-group-title span { color: var(--muted-2); font-family: var(--font-mono); font-size: .6rem; font-weight: 400; letter-spacing: .06em; }

@@ -109,6 +109,13 @@ internal fun platformKeys(
     }
 }
 
+/** `components.<key>` → 组件包（语音引擎等）；缺字段/非 HTTPS 时返回 null。 */
+internal fun parseComponent(text: String, key: String): UpdatePackage? {
+    val obj = parseLine(text) ?: return null
+    val components = obj["components"] as? JVal.JObj ?: return null
+    return components.v[key].asUpdatePackage()
+}
+
 /** 按候选键顺序取第一个有 full/hot 的平台；都没有 → null。 */
 internal fun pickPackages(
     packages: Map<String, PlatformPackages>,

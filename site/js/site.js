@@ -378,6 +378,41 @@
         const size = v.components?.[el.dataset.component]?.size;
         if (size) el.textContent = fmt(size);
       });
+
+      // 网盘说明：每个平台/档位的包名、内容说明与体积（2026-11-01 用户要求）。
+      const list = document.querySelector('[data-netdisk]');
+      if (list && v.packages) {
+        const zh = document.documentElement.lang.startsWith('zh');
+        const tiers = [
+          ['full', zh ? '完整包' : 'Full',
+            zh ? '语音引擎 + 两套模型 + 全部词库' : 'Engine + both models + all dictionaries'],
+          ['normal', zh ? '普通包' : 'Normal',
+            zh ? '全部词库；引擎与模型按需下载' : 'All dictionaries; engine and models on demand'],
+          ['basic', zh ? '基础包' : 'Basic',
+            zh ? '拼音主词库；引擎与词库按需下载' : 'Pinyin core; engine and dictionaries on demand'],
+        ];
+        const platforms = [
+          ['android', 'Android · APK'],
+          ['windows-x64', 'Windows · EXE'],
+          ['linux-amd64', 'Linux · DEB'],
+          ['linux-x86_64', 'Linux · RPM'],
+          ['macos-universal', 'macOS · PKG'],
+          ['ios', 'iOS · IPA'],
+          ['harmony', 'HarmonyOS · HAP'],
+        ];
+        const items = [];
+        for (const [key, label] of platforms) {
+          for (const [tier, tierLabel, desc] of tiers) {
+            const size = v.packages?.[key]?.[tier]?.size;
+            if (!size) continue;
+            items.push(`<li><strong>${label} · ${tierLabel}</strong><span>${desc}</span><span class="netdisk-size">${fmt(size)}</span></li>`);
+          }
+        }
+        if (items.length) {
+          list.innerHTML = items.join('');
+          list.hidden = false;
+        }
+      }
     })
     .catch(() => {});
 })();

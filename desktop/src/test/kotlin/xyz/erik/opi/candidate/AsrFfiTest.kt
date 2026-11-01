@@ -43,6 +43,22 @@ class AsrFfiTest {
     }
 
     @Test
+    fun `downloaded engine directory is searched before system fallback`() {
+        val list = asrCandidates(
+            envLib = null,
+            appPath = "/opt/opi/bin/opi-statusbar",
+            windows = false,
+            userDir = "/work/desktop",
+            engineDir = "/home/u/.local/share/opi/models/engine",
+        )
+        assertTrue(
+            list.toString(),
+            list.contains("/home/u/.local/share/opi/models/engine/libopi_asr.so"),
+        )
+        assertEquals("opi_asr", list.last())
+    }
+
+    @Test
     fun `dependency preload order puts runtime before the apis`() {
         // Linux：onnxruntime → cxx → c-api（c-api 的 NEEDED 靠已加载模块满足）。
         // Windows 同序：DLL 按已加载模块的 basename 解析，不能先载 c-api。

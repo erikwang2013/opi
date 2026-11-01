@@ -34,19 +34,20 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p assets work
+          tag_date="$(gh release view "$TAG" --json publishedAt --jq '.publishedAt[:10]')"
           gh api --paginate "repos/$REPO/actions/artifacts?per_page=100" \
             --jq '.artifacts[] | [.id,.name,.created_at] | @tsv' | sort -t$'\t' -k3,3 > work/artifacts.tsv
           while IFS=$'\t' read -r id name created; do
             case "$name" in
-              opi-packages)
+              opi-packages|opi-asr-engine-linux)
                 # 无版本号的老 artifact 很多；只取本发布日构建的包。
-                case "$created" in 2026-11-01*) ;; *) continue ;; esac
+                case "$created" in "$tag_date"*) ;; *) continue ;; esac
                 ;;
               *"v$V"*) ;;
               *) continue ;;
             esac
             case "$name" in
-              opi-android-release-*|opi-windows-exe-*|opi-packages|opi-ios-keyboard-*|opi-macos-ime-*) ;;
+              opi-android-release-*|opi-windows-exe-*|opi-packages|opi-ios-keyboard-*|opi-macos-ime-*|opi-asr-engine-*) ;;
               *) continue ;;
             esac
             d="work/$id-$(echo "$name" | tr -c 'A-Za-z0-9._-' '_')"
@@ -101,6 +102,10 @@ jobs:
               opi-harmony*)
                 hap="$(find "$d" -name '*.hap' | head -1)"
                 [ -n "$hap" ] && cp "$hap" "assets/opi-$V-harmonyos-unsigned.hap"
+                ;;
+              opi-asr-engine-*)
+                zip="$(find "$d" -name '*.zip' | head -1)"
+                [ -n "$zip" ] && cp "$zip" "assets/$(basename "$zip")"
                 ;;
             esac
           done < work/artifacts.tsv

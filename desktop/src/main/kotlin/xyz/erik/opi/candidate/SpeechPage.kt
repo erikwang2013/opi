@@ -58,10 +58,51 @@ internal fun SpeechPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Str
         fontSize = 12.sp, color = Muted,
     )
 
+    SectionTitle("语音引擎（原生库）")
+    val engineState = SpeechEnginePack.state
+    val engineReady = remember(engineState) { SpeechEnginePack.ready() }
+    val engineRunning = engineState as? SpeechEnginePack.State.Running
+    val engineFailed = engineState as? SpeechEnginePack.State.Failed
+    Text(
+        when {
+            SpeechEnginePack.bundled() -> "已随完整包提供，无需下载。"
+            engineReady -> "已下载，可直接使用。"
+            !SpeechEnginePack.supported() -> "当前平台暂无语音引擎组件。"
+            else -> "普通包/基础包需先下载语音引擎（约 ${SpeechEnginePack.approxMb()} MB），再下载模型。"
+        },
+        fontSize = 12.sp, color = Muted,
+    )
+    if (engineRunning != null) {
+        Text(
+            "下载中 ${engineRunning.received * 100 / engineRunning.total.coerceAtLeast(1)}%" +
+                "（${engineRunning.received / 1_048_576} / ${engineRunning.total / 1_048_576} MB）",
+            fontSize = 12.sp, color = Ink,
+        )
+        Box(Modifier.fillMaxWidth().height(6.dp).background(Hairline)) {
+            Box(
+                Modifier.fillMaxWidth(
+                    if (engineRunning.total <= 0) 0f
+                    else (engineRunning.received.toFloat() / engineRunning.total).coerceIn(0f, 1f),
+                ).fillMaxHeight().background(Teal),
+            )
+        }
+    }
+    if (engineFailed != null) {
+        Text("下载失败：${engineFailed.message}", fontSize = 12.sp, color = ErrorRed)
+    }
+    if (!SpeechEnginePack.bundled() && !engineReady && SpeechEnginePack.supported() &&
+        engineRunning == null
+    ) {
+        TextButton(onClick = { SpeechEnginePack.download() }) {
+            Text("下载语音引擎（约 ${SpeechEnginePack.approxMb()} MB）", color = Teal)
+        }
+    }
+
     SectionTitle("离线模型（首次使用前下载）")
     Text(
-        "完整包已内置两套模型（首次使用解压）；普通/基础包在设置里下载，逐文件校验 SHA-256。" +
-            "SenseVoice 约 ${SpeechEngine.SENSEVOICE.approxMb()} MB，Whisper 约 ${SpeechEngine.WHISPER.approxMb()} MB（均含 VAD）。",
+        "完整包已内置引擎与两套模型（首次使用解压）；普通/基础包需先下载引擎，再在设置里下载模型，" +
+            "逐文件校验 SHA-256。SenseVoice 约 ${SpeechEngine.SENSEVOICE.approxMb()} MB，" +
+            "Whisper 约 ${SpeechEngine.WHISPER.approxMb()} MB（均含 VAD）。",
         fontSize = 12.sp, color = Muted,
     )
     ModelCard(SENSEVOICE_MODEL, userRoot, report)

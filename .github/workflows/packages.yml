@@ -159,14 +159,14 @@ jobs:
       # 用户裁决「设置功能要在外层可以设置」；理由与核对法见 desktop/build.gradle.kts
       # 文件尾的任务注释）。下面 packages job 的合并步骤会把这个 .deb 的数据文件
       # 原样解进主包暂存树。
-      - name: ./gradlew packageDeb injectSettingsDesktopEntry
+      - name: ./gradlew packageDeb injectSettingsDesktopEntry packageAsrEngine
         shell: bash
         run: |
           args=(-PopiPackageTier="$TIER")
           if [ "$TIER" = full ]; then
             args+=(-PopiAsrModelsDir="$GITHUB_WORKSPACE/desktop/asr-bundle")
           fi
-          ./gradlew "${args[@]}" packageDeb injectSettingsDesktopEntry --no-daemon
+          ./gradlew "${args[@]}" packageDeb injectSettingsDesktopEntry packageAsrEngine --no-daemon
         working-directory: desktop
 
       # if-no-files-found: error —— 默认只 warn，而「绿了但没产物」正是本仓
@@ -176,6 +176,12 @@ jobs:
           name: opi-desktop-deb
           if-no-files-found: error
           path: desktop/build/compose/binaries/main/deb/*.deb
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opi-asr-engine-linux
+          if-no-files-found: error
+          path: desktop/build/outputs/asr-engine/*.zip
 
   packages:
     name: 打包 .deb / .rpm（debian:12 容器里构建）

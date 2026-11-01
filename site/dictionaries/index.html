@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>词库许可与导入 — opi 小欧输入法</title>
+  <meta name="description" content="小欧输入法（opi）词库许可：内置简体、繁体、笔画、五笔、康熙与生僻字索引的许可证；外部词库 CustomPinyinDictionary（CC BY-SA 4.0）与 rime-wanxiang（CC BY 4.0）的署名、改动说明与导入限制。">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#f3fbf4"><meta name="color-scheme" content="light">
+  <link rel="canonical" href="https://opi.erik.xyz/dictionaries/">
+  <link rel="alternate" hreflang="zh-CN" href="https://opi.erik.xyz/dictionaries/">
+  <link rel="alternate" hreflang="en" href="https://opi.erik.xyz/en/dictionaries/">
+  <link rel="alternate" hreflang="x-default" href="https://opi.erik.xyz/dictionaries/">
+  <link rel="icon" type="image/png" href="../assets/pet/opi-pet.png"><link rel="apple-touch-icon" href="../assets/pet/opi-pet.png">
+  <link rel="stylesheet" href="../css/base.css"><link rel="stylesheet" href="../css/components.css"><link rel="stylesheet" href="../css/responsive.css">
+  <style>
+    .policy { max-width: 900px; padding-block: clamp(36px, 7vw, 72px) clamp(48px, 8vw, 96px); }
+    .policy h1 { margin-bottom: 12px; font-size: clamp(2.1rem, 5.4vw, 3.4rem); }
+    .policy h2 { margin: 2.35em 0 .55em; font-size: clamp(1.3rem, 2.8vw, 1.7rem); letter-spacing: -.02em; }
+    .policy h2:first-of-type { margin-top: 1.8em; }
+    .policy p, .policy li { color: var(--muted); font-size: .98rem; line-height: 1.9; }
+    .policy ul { margin: .4em 0 1.2em; padding-left: 1.3em; }
+    .policy li + li { margin-top: .35em; }
+    .policy strong { color: var(--ink); }
+    .policy a { color: var(--accent-soft); text-decoration: underline; text-underline-offset: 3px; }
+    .policy .summary { margin: 26px 0 0; padding: 20px 22px; border-left: 3px solid var(--accent); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; background: var(--bg-deep); color: var(--ink); font-size: 1.03rem; line-height: 1.85; }
+    .policy table { width: 100%; margin: 1em 0 1.6em; border-collapse: collapse; font-size: .92rem; }
+    .policy th, .policy td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; color: var(--muted); }
+    .policy th { color: var(--ink); font-weight: 600; background: rgba(255,255,255,.55); }
+    .policy td strong { color: var(--ink); }
+    .policy-foot { margin-top: 3.2em; padding-top: 1.3em; border-top: 1px solid var(--line); color: var(--muted-2); font-size: .85rem; }
+    .policy-foot a { color: var(--accent-soft); }
+    @media (max-width: 620px) { .policy table, .policy thead, .policy tbody, .policy tr, .policy th, .policy td { display: block; } .policy th { display: none; } .policy td { padding: 6px 0; border: 0; } .policy tr { padding: 10px 0; border-bottom: 1px solid var(--line); } }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到正文</a>
+  <header class="site-header" id="top">
+    <div class="shell header-inner">
+      <a class="brand" href="../" aria-label="opi 小欧输入法首页">
+        <img class="brand-pet" src="../assets/pet/opi-pet.png" width="32" height="32" alt="">
+        <span class="brand-name">opi</span><span class="brand-cn">小欧输入法</span>
+      </a>
+      <div class="header-actions" style="margin-left:auto">
+        <a class="lang-switch" href="../en/dictionaries/" hreflang="en" lang="en" aria-label="View this page in English">EN</a>
+        <a class="header-link" href="../#download">返回下载</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="shell policy" id="main">
+    <p class="eyebrow">DICTIONARIES · 词库许可</p>
+    <h1>词库许可与导入</h1>
+    <p class="body-lg">内置词库、可选词库与外部导入数据的许可证</p>
+
+    <p class="summary"><strong>一句话：</strong>项目代码是 MIT；<strong>词库数据不是 MIT</strong>。简体主库因并入 GPL-3.0 数据而整体按 GPL-3.0 分发；繁体、笔画、五笔 86 按 LGPL-3.0；五笔 98 按 Unlicense；康熙按 MIT；生僻字索引按 Unicode License。可选导入的 CustomPinyinDictionary 是 CC BY-SA 4.0，rime-wanxiang 是 CC BY 4.0 —— 再分发时必须保留署名、许可链接与改动说明。</p>
+
+    <h2>1. 随安装包分发的词库</h2>
+    <table>
+      <thead><tr><th>词库</th><th>内容</th><th>许可证与义务</th></tr></thead>
+      <tbody>
+        <tr><td><strong>简体主库</strong><br>luna.opid</td><td>单字 + 常用词组 + 外部词库并入段</td><td><strong>GPL-3.0</strong>。单字层来自 rime-luna-pinyin（LGPL-3.0），词组层含 rime-pinyin-simp（Apache-2.0），另并入 GPL-3.0-only 数据 ⇒ 产物整体按 GPL-3.0 分发。</td></tr>
+        <tr><td><strong>繁体库</strong><br>trad.opid</td><td>繁体单字、常用繁体词组、现代繁体词组层</td><td><strong>LGPL-3.0</strong>。rime-terra-pinyin（LGPL-3.0）+ rime-pinyin-simp / OpenCC（Apache-2.0）+ Unicode License + 项目人工段（MIT）。</td></tr>
+        <tr><td><strong>笔画码表</strong><br>stroke.opid</td><td>五笔画输入与生僻字按笔画查字</td><td><strong>LGPL-3.0</strong>。来自 rime-stroke，钉 commit 后原样编译。</td></tr>
+        <tr><td><strong>五笔 86</strong><br>wubi86.opid</td><td>五笔 86 码表</td><td><strong>LGPL-3.0</strong>。来自 rime-wubi，钉 commit 后转换。</td></tr>
+        <tr><td><strong>五笔 98</strong><br>wubi98.opid</td><td>五笔 98 单字 + 词组</td><td><strong>Unlicense</strong>。来自 98wubi-tables，钉 commit 后转换。</td></tr>
+        <tr><td><strong>康熙词库</strong><br>kangxi.tsv</td><td>康熙字典全字头读音</td><td><strong>MIT</strong>。须保留 <em>Copyright (c) Shunshi.AI</em>。词频是项目排序常数，不是上游数据。</td></tr>
+        <tr><td><strong>生僻字索引</strong><br>rare_index.tsv</td><td>部首 / 笔画索引</td><td><strong>Unicode License</strong>。来自 Unicode Unihan 的 kRSUnicode 与 kTotalStrokes。</td></tr>
+      </tbody>
+    </table>
+    <p>表情面板的常用表情子集改编自 <a href="https://github.com/hfg-gmuend/openmoji" target="_blank" rel="noopener">OpenMoji</a>，按 <strong>CC BY-SA 4.0</strong> 分发（署名 OpenMoji 项目及贡献者）。颜文字来自 rime_kaomoji_dict（MIT，Copyright (c) 2023 aoguai）。</p>
+
+    <h2>2. 可选导入词库（不随包分发）</h2>
+    <p>以下两份词库由用户自行下载、转换、导入；项目仓库不包含、也不在构建时下载它们。站点提供已截断的 20 万条版本，可直接在设置页导入：</p>
+    <ul>
+      <li><a href="../download/v1.31.2/normal/opi-1.31.2-custom-pinyin-200k.tsv" download>CustomPinyinDictionary 20 万条</a>（约 2.9 MB）</li>
+      <li><a href="../download/v1.31.2/normal/opi-1.31.2-rime-wanxiang-200k.tsv" download>rime-wanxiang 20 万条</a>（约 4.9 MB）</li>
+    </ul>
+    <table>
+      <thead><tr><th>数据</th><th>上游</th><th>许可证与义务</th></tr></thead>
+      <tbody>
+        <tr><td><strong>CustomPinyinDictionary</strong></td><td><a href="https://github.com/wuhgit/CustomPinyinDictionary" target="_blank" rel="noopener">wuhgit/CustomPinyinDictionary</a></td><td><strong>CC BY-SA 4.0</strong>。必须署名 <em>dictionary data by wuhgit and contributors</em>、给出许可链接、标明改动；改编数据再分发须继续按 CC BY-SA 4.0（或兼容许可）授权，不能加额外限制。</td></tr>
+        <tr><td><strong>rime-wanxiang</strong></td><td><a href="https://github.com/amzxyz/rime-wanxiang" target="_blank" rel="noopener">amzxyz/rime-wanxiang</a></td><td><strong>CC BY 4.0</strong>。必须署名 <em>rime-wanxiang data by amzxyz and contributors</em>、给出许可链接、标明改动；没有 ShareAlike 义务。</td></tr>
+      </tbody>
+    </table>
+    <p>转换脚本本身是 MIT；<strong>转换出来的数据沿用上游许可</strong>。产物头部的注释块就是署名与改动声明，转换后不要删除。CustomPinyinDictionary 无可用词频，导入后按默认频次参与排序。</p>
+
+    <h2>3. 各端导入限制</h2>
+    <ul>
+      <li><strong>Android / macOS：</strong>单文件上限 <strong>8 MiB / 200,000 条</strong>；Android 同时启用 ≤8 个、总计 ≤500,000 条。请使用上面的 20 万条截断版；全量词库会被拒收。</li>
+      <li><strong>Linux（fcitx5）/ Windows（TSF）：</strong>直接扫描词库目录，<strong>没有</strong> 8 MiB / 20 万条限制，可使用完整词库。</li>
+      <li><strong>iOS / 鸿蒙：</strong>当前没有导入词库入口。</li>
+    </ul>
+    <p>导入层会参与候选排序：重复词取主库词频与导入加成的较大值，独有词按加成抬升。大词库可能改变候选顺序；可随时在设置页停用或删除。</p>
+
+    <h2>4. 再分发注意</h2>
+    <ul>
+      <li>分发安装包时，随包词库按上表各自许可处理；GPL-3.0 / LGPL-3.0 的源码与许可文本应一并提供。</li>
+      <li>分发用户生成的 TSV 时，保留头部署名与改动说明，并附上游许可链接。</li>
+      <li>项目自绘的宠物与表情资产是<strong>专有资产</strong>，见 <a href="../assets-license/">视觉资产许可</a>。</li>
+    </ul>
+
+    <p class="policy-foot">本页只做许可说明，不改变任何上游许可证的条款。© 2026 艾瑞可erik · <a href="../">返回首页</a> · <a href="../privacy/">隐私政策</a> · <a href="../assets-license/">视觉资产许可</a></p>
+  </main>
+
+  <footer class="site-footer" aria-label="页脚">
+    <div class="shell footer-bottom" style="margin-top:0;border-top:0;padding-top:0">
+      <p>© <span id="year">2026</span> 艾瑞可erik · opi 小欧输入法</p>
+      <p><a href="../">首页</a> · <a href="../#download">下载</a> · <a href="../en/dictionaries/" hreflang="en" lang="en">English</a></p>
+    </div>
+  </footer>
+</body>
+</html>

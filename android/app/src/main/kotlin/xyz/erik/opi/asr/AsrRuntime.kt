@@ -93,7 +93,13 @@ internal object AsrRuntime {
 
     fun start() {
         val context = appContext ?: return
-        if (!AsrNative.loaded) return
+        if (!AsrNative.ensureLoaded(context)) {
+            uiState = AsrUiState(
+                AsrPhase.MODEL_MISSING,
+                "语音引擎尚未下载。请到「设置 → 语音」下载语音引擎与模型后重试。",
+            )
+            return
+        }
         val whisper = whisperPref?.invoke() ?: false
         val pack = AsrModels.selected(context, whisper)
         val gate = asrGate(

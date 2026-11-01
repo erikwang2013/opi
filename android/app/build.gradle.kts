@@ -10,10 +10,10 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// ---------- 三档打包（2026-11-01 用户裁决）----------
+// ---------- 三档打包（2026-11-01；语音引擎 2026-11-02 调整）----------
 // full   = 语音引擎 + 两套模型 + 全部词库（模型首次使用从 assets 解压）
-// normal = 语音引擎 + 全部词库，模型在设置页下载
-// basic  = 语音引擎 + 仅拼音主词库；扩展词库/模型都在设置页下载
+// normal = 全部词库；语音引擎与模型在设置页按需下载
+// basic  = 仅拼音主词库；语音引擎、扩展词库、模型都在设置页按需下载
 val packageTier = providers.gradleProperty("opiPackageTier").getOrElse("normal").lowercase()
 require(packageTier in setOf("full", "normal", "basic")) {
     "opiPackageTier 只能是 full / normal / basic（当前 $packageTier）"
@@ -57,10 +57,11 @@ android {
         targetSdk = 34
         // 与发布 tag 对齐（此前 9 个 tag 期间 versionCode 一直是 1、versionName 一直是
         // "1.0.0"：APK 既无法被识别，也无法覆盖安装升级）。
-        versionCode = 112
-        versionName = "1.31.1"
+        versionCode = 113
+        versionName = "1.31.2"
         buildConfigField("String", "PACKAGE_TIER", "\"$packageTier\"")
         buildConfigField("boolean", "ASR_MODELS_BUNDLED", "${packageTier == "full"}")
+        buildConfigField("boolean", "ASR_ENGINE_BUNDLED", "${packageTier == "full"}")
         ndk {
             // 与 rust_builder cargokit targets 对齐（plugin.gradle 固定三 ABI）。
             // 完整包带 615MB 模型，只出 64 位：32 位设备本来没有 ASR 原生库。
@@ -275,6 +276,43 @@ val buildAsrNative by tasks.registering {
 android.sourceSets.getByName("main").jniLibs.srcDir(asrJniRoot.get().asFile)
 tasks.matching { it.name.contains("NativeLibs") || it.name.contains("JniLibFolders") }
     .configureEach { dependsOn(buildAsrNative) }
+
+// 普通包/基础包不带语音引擎原生库（2026-11-01 用户裁决）：仍构建出来用于生成
+// 组件 zip，但从 APK 的合并/裁剪产物里删掉；用户按需从设置下载。
+if (packageTier != "full") {
+    val asrEngineLibs = setOf(
+        "libopi_asr.so", "libsherpa-onnx-c-api.so", "libonnxruntime.so", "libopi_asr_jni.so",
+    )
+    tasks.matching { it.name.contains("NativeLibs") || it.name.contains("JniLibFolders") }
+        .configureEach {
+            doLast {
+                outputs.files.files.filter { it.isDirectory }.forEach { dir ->
+                    dir.walkTopDown()
+                        .filter { it.isFile && it.name in asrEngineLibs }
+                        .forEach { it.delete() }
+                }
+            }
+        }
+}
+
+// 发布用组件：每个 ABI 一个 zip，供普通包/基础包按需下载（大小/SHA 由站点清单给出）。
+val asrEngineZips = asrAbis.map { (abi, _) ->
+    tasks.register<Zip>("packageAsrEngine-$abi") {
+        group = "build"
+        description = "打包 $abi 语音引擎组件"
+        dependsOn(buildAsrNative)
+        from(asrJniRoot.map { File(it.asFile, abi) }) { include("*.so") }
+        archiveFileName.set("opi-asr-engine-android-$abi.zip")
+        destinationDirectory.set(layout.buildDirectory.dir("outputs/asr-engine"))
+        isPreserveFileTimestamps = false
+        isReproducibleFileOrder = true
+    }
+}
+tasks.register("packageAsrEngine") {
+    group = "build"
+    description = "打包全部 ABI 的语音引擎组件"
+    dependsOn(asrEngineZips)
+}
 
 kotlin {
     compilerOptions {

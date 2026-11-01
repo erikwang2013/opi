@@ -376,6 +376,17 @@ jobs:
             if (-not (Test-Path (Join-Path $app $f))) { throw "app image 缺 $f" }
           }
           if ($env:TIER -eq 'full') {
+            foreach ($f in @('app\opi_asr.dll', 'app\onnxruntime.dll')) {
+              if (-not (Test-Path (Join-Path $app $f))) { throw "完整包 app image 缺语音引擎 $f" }
+            }
+          } else {
+            foreach ($f in @('app\opi_asr.dll', 'app\onnxruntime.dll')) {
+              if (Test-Path (Join-Path $app $f)) {
+                throw "普通/基础包不应带语音引擎 $f（应改为设置内下载）"
+              }
+            }
+          }
+          if ($env:TIER -eq 'full') {
             # 模型作为 JAR 资源随包（运行期首次录音解压）；确认主 jar 确实变大。
             $modelJar = Get-ChildItem (Join-Path $app 'app') -Filter '*.jar' -ErrorAction SilentlyContinue |
               Where-Object { $_.Length -gt 300MB } | Select-Object -First 1
@@ -425,6 +436,19 @@ jobs:
           name: opi-windows-exe-v${{ needs.version.outputs.version }}-${{ env.TIER }}
           if-no-files-found: error
           path: dist/windows-exe/*.exe
+
+      - name: 打包语音引擎组件（供普通/基础包按需下载）
+        shell: pwsh
+        run: |
+          .\gradlew.bat -PopiPackageTier=$env:TIER packageAsrEngine --no-daemon
+          if ($LASTEXITCODE -ne 0) { throw "packageAsrEngine 失败：$LASTEXITCODE" }
+        working-directory: desktop
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opi-asr-engine-windows-v${{ needs.version.outputs.version }}
+          path: desktop/build/outputs/asr-engine/*.zip
+          if-no-files-found: error
 
   # ---- MSI 后处理（Linux runner，msitools 表级注入）----
   #

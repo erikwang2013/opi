@@ -174,10 +174,30 @@ jobs:
             ! grep -qF "assets/trad.opid" <<<"$entries" || {
               echo "::error::基础包不应带 trad.opid"; exit 1; }
           fi
+          if [ "$TIER" = full ]; then
+            grep -qF "lib/arm64-v8a/libopi_asr_jni.so" <<<"$entries" || {
+              echo "::error::完整包缺语音引擎原生库"; exit 1; }
+          else
+            ! grep -qE "lib/(arm64-v8a|x86_64)/libopi_asr(_jni)?\.so" <<<"$entries" || {
+              echo "::error::普通/基础包不应带语音引擎原生库（应改为设置内下载）"; exit 1; }
+            ! grep -qE "lib/(arm64-v8a|x86_64)/(libsherpa-onnx-c-api|libonnxruntime)\.so" <<<"$entries" || {
+              echo "::error::普通/基础包不应带语音引擎依赖库"; exit 1; }
+          fi
           ls -l "$out"
+
+      - name: 打包语音引擎组件（供普通/基础包按需下载）
+        shell: bash
+        run: ./gradlew -PopiPackageTier="$TIER" :app:packageAsrEngine --no-daemon
+        working-directory: android
 
       - uses: actions/upload-artifact@v4
         with:
           name: opi-android-release-v${{ steps.version.outputs.version }}-${{ env.TIER }}
           path: dist/opi-*-android-universal*.apk
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opi-asr-engine-android-v${{ steps.version.outputs.version }}
+          path: android/app/build/outputs/asr-engine/*.zip
           if-no-files-found: error

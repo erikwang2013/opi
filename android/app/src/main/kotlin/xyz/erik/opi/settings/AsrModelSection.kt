@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xyz.erik.opi.asr.AsrBundled
 import xyz.erik.opi.asr.AsrDownloadState
+import xyz.erik.opi.asr.AsrEngine
+import xyz.erik.opi.asr.AsrEngineDownloader
 import xyz.erik.opi.asr.AsrModelDownloader
 import xyz.erik.opi.asr.AsrModels
 
@@ -50,9 +52,63 @@ internal fun AsrModelSection(prefs: ImePreferences) {
     ListItem(
         headlineContent = { Text("离线语音输入") },
         supportingContent = {
-            Text("长按空格键录音，识别全部在本机完成。完整包内置模型；普通/基础包在下方下载。")
+            Text("长按空格键录音，识别全部在本机完成。完整包内置引擎与模型；普通/基础包先下载引擎，再下载模型。")
         },
     )
+
+    // 语音引擎（原生库）：只有完整包随包提供，其余档位按需下载。
+    val engineState = AsrEngineDownloader.state
+    val engineReady = AsrEngine.ready(context)
+    val engineRunning = engineState as? AsrEngineDownloader.State.Running
+    val engineFailed = engineState as? AsrEngineDownloader.State.Failed
+    ListItem(
+        headlineContent = { Text("语音引擎") },
+        supportingContent = {
+            Column {
+                Text(
+                    when {
+                        AsrEngine.bundled() -> "随完整包提供"
+                        engineReady -> "已下载 · 约 ${AsrEngine.mb(AsrEngine.APPROX_BYTES)}"
+                        else -> "未下载 · 约 ${AsrEngine.mb(AsrEngine.APPROX_BYTES)} · 建议 Wi-Fi"
+                    },
+                )
+                if (engineRunning != null) {
+                    LinearProgressIndicator(
+                        progress = {
+                            if (engineRunning.total > 0) {
+                                engineRunning.received.toFloat() / engineRunning.total
+                            } else {
+                                0f
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().height(4.dp),
+                    )
+                    Text(
+                        "${engineRunning.received * 100 / engineRunning.total.coerceAtLeast(1)}%",
+                        fontSize = 12.sp,
+                    )
+                }
+                if (engineFailed != null) {
+                    Text(
+                        "下载失败：${engineFailed.message}",
+                        color = MaterialTheme.colorScheme.error,
+                        fontSize = 12.sp,
+                    )
+                }
+            }
+        },
+        trailingContent = {
+            when {
+                AsrEngine.bundled() -> Text("已内置")
+                engineReady -> Text("已就绪")
+                else -> TextButton(
+                    onClick = { AsrEngineDownloader.download(context) },
+                    enabled = !busy && engineRunning == null,
+                ) { Text(if (engineRunning != null) "下载中" else "下载") }
+            }
+        },
+    )
+
     for (pack in AsrModels.packs) {
         val ready = AsrModels.packReady(context, pack)
         val bundled = !ready && AsrBundled.ready(context, pack)

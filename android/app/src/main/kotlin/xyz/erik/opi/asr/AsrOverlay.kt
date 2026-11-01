@@ -51,7 +51,8 @@ private val LevelColor = Color(0xFF7FDBB6)
  */
 @Composable
 internal fun AsrKeyboardHost(content: @Composable () -> Unit) {
-    val mic = remember { AsrMic(AsrNative.loaded) { AsrRuntime.start() } }
+    // 有下载引擎的 64 位设备即使还没下载也显示话筒：点按后浮层会引导去设置。
+    val mic = remember { AsrMic(AsrModels.abiSupported()) { AsrRuntime.start() } }
     CompositionLocalProvider(LocalAsrMic provides mic) {
         Box(Modifier.fillMaxSize()) {
             content()

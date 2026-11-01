@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Dictionary licenses and imports — opi</title>
+  <meta name="description" content="opi dictionary licenses: built-in Simplified, Traditional, stroke, Wubi, Kangxi and rare-character dictionaries; external CustomPinyinDictionary (CC BY-SA 4.0) and rime-wanxiang (CC BY 4.0) attribution and import limits.">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#f3fbf4"><meta name="color-scheme" content="light">
+  <link rel="canonical" href="https://opi.erik.xyz/en/dictionaries/">
+  <link rel="alternate" hreflang="zh-CN" href="https://opi.erik.xyz/dictionaries/">
+  <link rel="alternate" hreflang="en" href="https://opi.erik.xyz/en/dictionaries/">
+  <link rel="alternate" hreflang="x-default" href="https://opi.erik.xyz/dictionaries/">
+  <link rel="icon" type="image/png" href="../../assets/pet/opi-pet.png"><link rel="apple-touch-icon" href="../../assets/pet/opi-pet.png">
+  <link rel="stylesheet" href="../../css/base.css"><link rel="stylesheet" href="../../css/components.css"><link rel="stylesheet" href="../../css/responsive.css">
+  <style>
+    .policy { max-width: 900px; padding-block: clamp(36px, 7vw, 72px) clamp(48px, 8vw, 96px); }
+    .policy h1 { margin-bottom: 12px; font-size: clamp(2.1rem, 5.4vw, 3.4rem); }
+    .policy h2 { margin: 2.35em 0 .55em; font-size: clamp(1.3rem, 2.8vw, 1.7rem); letter-spacing: -.02em; }
+    .policy h2:first-of-type { margin-top: 1.8em; }
+    .policy p, .policy li { color: var(--muted); font-size: .98rem; line-height: 1.9; }
+    .policy ul { margin: .4em 0 1.2em; padding-left: 1.3em; }
+    .policy li + li { margin-top: .35em; }
+    .policy strong { color: var(--ink); }
+    .policy a { color: var(--accent-soft); text-decoration: underline; text-underline-offset: 3px; }
+    .policy .summary { margin: 26px 0 0; padding: 20px 22px; border-left: 3px solid var(--accent); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; background: var(--bg-deep); color: var(--ink); font-size: 1.03rem; line-height: 1.85; }
+    .policy table { width: 100%; margin: 1em 0 1.6em; border-collapse: collapse; font-size: .92rem; }
+    .policy th, .policy td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; color: var(--muted); }
+    .policy th { color: var(--ink); font-weight: 600; background: rgba(255,255,255,.55); }
+    .policy td strong { color: var(--ink); }
+    .policy-foot { margin-top: 3.2em; padding-top: 1.3em; border-top: 1px solid var(--line); color: var(--muted-2); font-size: .85rem; }
+    .policy-foot a { color: var(--accent-soft); }
+    @media (max-width: 620px) { .policy table, .policy thead, .policy tbody, .policy tr, .policy th, .policy td { display: block; } .policy th { display: none; } .policy td { padding: 6px 0; border: 0; } .policy tr { padding: 10px 0; border-bottom: 1px solid var(--line); } }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header" id="top">
+    <div class="shell header-inner">
+      <a class="brand" href="../" aria-label="opi home">
+        <img class="brand-pet" src="../../assets/pet/opi-pet.png" width="32" height="32" alt="">
+        <span class="brand-name">opi</span><span class="brand-cn">Open People Input</span>
+      </a>
+      <div class="header-actions" style="margin-left:auto">
+        <a class="lang-switch" href="../../dictionaries/" hreflang="zh-CN" lang="zh-CN" aria-label="查看中文页面">中文</a>
+        <a class="header-link" href="../#download">Downloads</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="shell policy" id="main">
+    <p class="eyebrow">DICTIONARIES · LICENSES</p>
+    <h1>Dictionary licenses and imports</h1>
+    <p class="body-lg">Licenses for bundled, optional and user-imported dictionary data</p>
+
+    <p class="summary"><strong>In one line:</strong> the project code is MIT, but <strong>dictionary data is not MIT</strong>. The main Simplified dictionary is distributed as GPL-3.0 because it includes GPL-3.0-only data. Traditional, stroke and Wubi 86 are LGPL-3.0; Wubi 98 is Unlicense; Kangxi is MIT; the rare-character index uses the Unicode License. Optional imports CustomPinyinDictionary (CC BY-SA 4.0) and rime-wanxiang (CC BY 4.0) require attribution, a license link and a change notice when redistributed.</p>
+
+    <h2>1. Dictionaries shipped with the installer</h2>
+    <table>
+      <thead><tr><th>Dictionary</th><th>Contents</th><th>License and obligations</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Simplified main</strong><br>luna.opid</td><td>Characters + common phrases + merged external data</td><td><strong>GPL-3.0</strong>. Character layer from rime-luna-pinyin (LGPL-3.0); phrase layer includes rime-pinyin-simp (Apache-2.0); GPL-3.0-only data is also merged, so the product is distributed as GPL-3.0.</td></tr>
+        <tr><td><strong>Traditional</strong><br>trad.opid</td><td>Traditional characters, phrases and a modern conversion layer</td><td><strong>LGPL-3.0</strong>. rime-terra-pinyin (LGPL-3.0) + rime-pinyin-simp / OpenCC (Apache-2.0) + Unicode License + project-authored entries (MIT).</td></tr>
+        <tr><td><strong>Stroke table</strong><br>stroke.opid</td><td>Five-stroke input and stroke lookup for rare characters</td><td><strong>LGPL-3.0</strong>. From rime-stroke, pinned commit and compiled as-is.</td></tr>
+        <tr><td><strong>Wubi 86</strong><br>wubi86.opid</td><td>Wubi 86 code table</td><td><strong>LGPL-3.0</strong>. From rime-wubi, pinned commit and converted.</td></tr>
+        <tr><td><strong>Wubi 98</strong><br>wubi98.opid</td><td>Wubi 98 characters + phrases</td><td><strong>Unlicense</strong>. From 98wubi-tables, pinned commit and converted.</td></tr>
+        <tr><td><strong>Kangxi</strong><br>kangxi.tsv</td><td>Readings for all Kangxi headwords</td><td><strong>MIT</strong>. Keep <em>Copyright (c) Shunshi.AI</em>. Frequencies are project ranking constants, not upstream data.</td></tr>
+        <tr><td><strong>Rare-character index</strong><br>rare_index.tsv</td><td>Radical / stroke-count index</td><td><strong>Unicode License</strong>. From Unicode Unihan kRSUnicode and kTotalStrokes.</td></tr>
+      </tbody>
+    </table>
+    <p>The emoji panel's common subset is adapted from <a href="https://github.com/hfg-gmuend/openmoji" target="_blank" rel="noopener">OpenMoji</a> and distributed under <strong>CC BY-SA 4.0</strong> (credit the OpenMoji project and contributors). Kaomoji come from rime_kaomoji_dict (MIT, Copyright (c) 2023 aoguai).</p>
+
+    <h2>2. Optional imported dictionaries (not bundled)</h2>
+    <p>These dictionaries are downloaded, converted and imported by the user. The project repository does not contain them and does not download them at build time. Truncated 200k-entry files are available for direct import:</p>
+    <ul>
+      <li><a href="../../download/v1.31.2/normal/opi-1.31.2-custom-pinyin-200k.tsv" download>CustomPinyinDictionary 200k</a> (about 2.9 MB)</li>
+      <li><a href="../../download/v1.31.2/normal/opi-1.31.2-rime-wanxiang-200k.tsv" download>rime-wanxiang 200k</a> (about 4.9 MB)</li>
+    </ul>
+    <table>
+      <thead><tr><th>Data</th><th>Upstream</th><th>License and obligations</th></tr></thead>
+      <tbody>
+        <tr><td><strong>CustomPinyinDictionary</strong></td><td><a href="https://github.com/wuhgit/CustomPinyinDictionary" target="_blank" rel="noopener">wuhgit/CustomPinyinDictionary</a></td><td><strong>CC BY-SA 4.0</strong>. Credit <em>dictionary data by wuhgit and contributors</em>, link the license and state changes. Adapted data redistributed must remain under CC BY-SA 4.0 (or a compatible license), with no extra restrictions.</td></tr>
+        <tr><td><strong>rime-wanxiang</strong></td><td><a href="https://github.com/amzxyz/rime-wanxiang" target="_blank" rel="noopener">amzxyz/rime-wanxiang</a></td><td><strong>CC BY 4.0</strong>. Credit <em>rime-wanxiang data by amzxyz and contributors</em>, link the license and state changes. There is no ShareAlike requirement.</td></tr>
+      </tbody>
+    </table>
+    <p>The conversion scripts are MIT; <strong>the converted data keeps its upstream license</strong>. The header comment in each output file is the attribution and change notice — do not remove it. CustomPinyinDictionary has no usable frequencies, so imported entries use the default frequency for ranking.</p>
+
+    <h2>3. Import limits per client</h2>
+    <ul>
+      <li><strong>Android / macOS:</strong> at most <strong>8 MiB / 200,000 entries</strong> per file. Android also limits active imports to 8 files and 500,000 entries in total. Use the 200k files above; full-size dictionaries are rejected.</li>
+      <li><strong>Linux (fcitx5) / Windows (TSF):</strong> dictionaries are scanned directly from the dictionary directory, with <strong>no</strong> 8 MiB / 200k limit, so full-size files work.</li>
+      <li><strong>iOS / HarmonyOS:</strong> no dictionary import entry yet.</li>
+    </ul>
+    <p>Imported entries participate in candidate ranking: duplicate words take the larger of the main-dictionary frequency and the import boost, while unique words receive the boost. Large dictionaries can change candidate order; disable or delete them at any time in Settings.</p>
+
+    <h2>4. Redistribution notes</h2>
+    <ul>
+      <li>When distributing installers, follow each bundled dictionary's license and include the corresponding source and license texts for GPL-3.0 / LGPL-3.0 data.</li>
+      <li>When distributing user-generated TSV files, keep the attribution and change notice header and link the upstream license.</li>
+      <li>Project-drawn pet and emoji assets are <strong>proprietary</strong>; see <a href="../assets-license/">Visual asset license</a>.</li>
+    </ul>
+
+    <p class="policy-foot">This page explains licenses only and does not change any upstream license terms. © 2026 erik.xyz · <a href="../">Home</a> · <a href="../privacy/">Privacy</a> · <a href="../assets-license/">Visual asset license</a></p>
+  </main>
+
+  <footer class="site-footer" aria-label="Footer">
+    <div class="shell footer-bottom" style="margin-top:0;border-top:0;padding-top:0">
+      <p>© <span id="year">2026</span> erik.xyz · opi</p>
+      <p><a href="../">Home</a> · <a href="../#download">Downloads</a> · <a href="../../dictionaries/" hreflang="zh-CN" lang="zh-CN">中文</a></p>
+    </div>
+  </footer>
+</body>
+</html>

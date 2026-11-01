@@ -160,7 +160,13 @@ internal fun fetchLatestRelease(): Result<RemoteRelease> = runCatching {
         ?: error("版本端点没有可用版本号")
 }
 
-private fun httpGet(url: String, timeoutMs: Int): String {
+/** 组件（词库/模型/引擎）在 `components` 下的 size + SHA-256 + 稳定地址。 */
+internal fun parseComponentJson(text: String, key: String): UpdatePackage? {
+    val components = jsonObjectAt(text, "components") ?: return null
+    return jsonObjectAt(components, key)?.let(::parsePackage)
+}
+
+internal fun httpGet(url: String, timeoutMs: Int): String {
     val conn = (URL(url).openConnection() as HttpURLConnection).apply {
         connectTimeout = timeoutMs
         readTimeout = timeoutMs
