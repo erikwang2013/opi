@@ -5,18 +5,18 @@
     "windows-x64": {
       "full": {
         "url": "https://opi.erik.xyz/download/full/opi-1.31.0-windows-x64-full-setup.exe",
-        "size": 460140086,
-        "sha256": "0051f4bd2e73242925145a16791229e12328787ee6562df4e9db1e981267a8db"
+        "size": 460248285,
+        "sha256": "8705cddb0c27efdf9cf91406693310cf4cc2ab2d532640bb5604b7603731d288"
       },
       "normal": {
         "url": "https://opi.erik.xyz/download/normal/opi-1.31.0-windows-x64-setup.exe",
-        "size": 71237898,
-        "sha256": "8b9c09609dadbefc2716dc78713d25aad5c6d23161c0693d94f9b452b3b70b88"
+        "size": 71237281,
+        "sha256": "d8d99f77a530453e5cbe2fe068cce2ee45dc30c321a505c6117fb1ee52dbcf5f"
       },
       "basic": {
         "url": "https://opi.erik.xyz/download/basic/opi-1.31.0-windows-x64-basic-setup.exe",
-        "size": 69593359,
-        "sha256": "83b5671a2044f3f2afe100621c34115a26ddb6e7372b6be11d3b731bd12b99ed"
+        "size": 69592070,
+        "sha256": "a31534350d9763c60a7aed2bdcb5d4054824a5eb0b1ee8d46152a5df3bdc4d0a"
       }
     },
     "linux-amd64": {
