@@ -122,6 +122,16 @@
       "url": "https://opi.erik.xyz/download/components/asr/engine/opi-asr-engine-windows-x64.zip",
       "size": 5962050,
       "sha256": "ff68cf8924c923b1b0f799c34117193847446647034ce97a2232b97f8f6c4b43"
+    },
+    "opi-asr-engine-android-arm64-v8a": {
+      "url": "https://opi.erik.xyz/download/components/asr/engine/opi-asr-engine-android-arm64-v8a.zip",
+      "size": 7603761,
+      "sha256": "95f88228e48c6a109f962960dc3a53a4eb3678b5e8a6725e08a9b065159567cd"
+    },
+    "opi-asr-engine-android-x86_64": {
+      "url": "https://opi.erik.xyz/download/components/asr/engine/opi-asr-engine-android-x86_64.zip",
+      "size": 8342515,
+      "sha256": "f7d93c4d1ce119fbe8698c61ecc3c8c08c876187b7c0843352eb472b5fdce98e"
     }
   }
 }
