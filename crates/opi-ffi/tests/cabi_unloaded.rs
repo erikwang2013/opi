@@ -447,6 +447,7 @@ fn every_export_is_actually_exercised_here() {
         "opi_clip_pair_cancel",
         "opi_clip_peers",
         "opi_clip_forget_peer",
+        "opi_clip_probe",
         "opi_clip_status",
         "opi_clip_last_error",
     ];

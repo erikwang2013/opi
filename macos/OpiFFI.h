@@ -427,6 +427,9 @@ OpiString opi_clip_poll_event(OpiClip *clip, uint32_t timeout_ms);
 /// 对已发现的对端发起配对；peer_id 是 32 位十六进制实例 ID。
 bool opi_clip_pair_start(OpiClip *clip, const uint16_t *peer_id, size_t len);
 
+/// 向指定 IPv4 的发现端口发探测，对端会单播回复。
+bool opi_clip_probe(OpiClip *clip, const uint16_t *ip, size_t len);
+
 /// 收到 pairing_prompt 后接受/拒绝一次。
 bool opi_clip_pair_confirm(OpiClip *clip, const uint16_t *peer_id, size_t len, bool accept);
 
