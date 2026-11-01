@@ -105,13 +105,13 @@
     },
     "asr-engine-android-arm64-v8a": {
       "url": "https://opi.erik.xyz/download/components/asr/engine/opi-asr-engine-android-arm64-v8a.zip",
-      "size": 7603527,
-      "sha256": "7c1b2e77b4d487184112f87a00d5d9d26203612eb3fcde08472f2c8855e5ddff"
+      "size": 7603761,
+      "sha256": "95f88228e48c6a109f962960dc3a53a4eb3678b5e8a6725e08a9b065159567cd"
     },
     "asr-engine-android-x86_64": {
       "url": "https://opi.erik.xyz/download/components/asr/engine/opi-asr-engine-android-x86_64.zip",
-      "size": 8342519,
-      "sha256": "88336f0fa7b20466ce5ab9ea5160ffc036e0e75cfb79f0310b63fc79454735f1"
+      "size": 8342515,
+      "sha256": "f7d93c4d1ce119fbe8698c61ecc3c8c08c876187b7c0843352eb472b5fdce98e"
     },
     "asr-engine-linux-x86_64": {
       "url": "https://opi.erik.xyz/download/components/asr/engine/opi-asr-engine-linux-x86_64.zip",
@@ -122,16 +122,6 @@
       "url": "https://opi.erik.xyz/download/components/asr/engine/opi-asr-engine-windows-x64.zip",
       "size": 5962050,
       "sha256": "ff68cf8924c923b1b0f799c34117193847446647034ce97a2232b97f8f6c4b43"
-    },
-    "opi-asr-engine-android-arm64-v8a": {
-      "url": "https://opi.erik.xyz/download/components/asr/engine/opi-asr-engine-android-arm64-v8a.zip",
-      "size": 7603761,
-      "sha256": "95f88228e48c6a109f962960dc3a53a4eb3678b5e8a6725e08a9b065159567cd"
-    },
-    "opi-asr-engine-android-x86_64": {
-      "url": "https://opi.erik.xyz/download/components/asr/engine/opi-asr-engine-android-x86_64.zip",
-      "size": 8342515,
-      "sha256": "f7d93c4d1ce119fbe8698c61ecc3c8c08c876187b7c0843352eb472b5fdce98e"
     }
   }
 }
