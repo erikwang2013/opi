@@ -38,11 +38,15 @@ jobs:
             --jq '.artifacts[] | [.id,.name,.created_at] | @tsv' | sort -t$'\t' -k3,3 > work/artifacts.tsv
           while IFS=$'\t' read -r id name created; do
             case "$name" in
+              opi-packages)
+                # 无版本号的老 artifact 很多；只取本发布日构建的包。
+                case "$created" in 2026-11-01*) ;; *) continue ;; esac
+                ;;
               *"v$V"*) ;;
               *) continue ;;
             esac
             case "$name" in
-              opi-android-release-*|opi-windows-exe-*|opi-packages|opi-ios-keyboard-*|opi-macos-ime-*|opi-harmony*|opi-harmonyos*) ;;
+              opi-android-release-*|opi-windows-exe-*|opi-packages|opi-ios-keyboard-*|opi-macos-ime-*) ;;
               *) continue ;;
             esac
             d="work/$id-$(echo "$name" | tr -c 'A-Za-z0-9._-' '_')"
