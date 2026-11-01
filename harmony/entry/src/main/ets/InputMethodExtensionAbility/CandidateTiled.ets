@@ -15,7 +15,7 @@
 
 import { KeyboardController } from './KeyboardController';
 import { NINE_STRIP, NineKey } from './KeyPanels';
-import { Palette, paletteFor, scenePanelBg } from './Palette';
+import { Palette, paletteFor, scenePanelBg, sceneKeyBg } from './Palette';
 
 /** 一行 4 个「字宽单元」（Android UNITS_PER_ROW）。 */
 const UNITS_PER_ROW: number = 4;
@@ -125,7 +125,7 @@ export struct CandidateTiled {
               .fontColor(this.pal().keyFg)
           }
           .layoutWeight(1).width('100%').justifyContent(FlexAlign.Center)
-          .backgroundColor(this.pal().keyBg).borderRadius(6).margin({ top: 2, bottom: 2 })
+          .backgroundColor(sceneKeyBg(this.pal().keyBg)).borderRadius(6).margin({ top: 2, bottom: 2 })
           .onClick(() => {
             this.ctrl.tapChar(k.key);
           })
@@ -147,7 +147,7 @@ export struct CandidateTiled {
                         .textAlign(TextAlign.Center).width('100%')
                     }
                     .layoutWeight(cell.units).height('100%').justifyContent(FlexAlign.Center)
-                    .backgroundColor(this.pal().keyBg).borderRadius(6)
+                    .backgroundColor(sceneKeyBg(this.pal().keyBg)).borderRadius(6)
                     .margin({ left: 1, right: 1, top: 1, bottom: 1 })
                     .onClick(() => {
                       this.ctrl.tapTiledCandidate(cell.index);
@@ -195,7 +195,7 @@ export struct CandidateTiled {
         .textAlign(TextAlign.Center)
     }
     .layoutWeight(1).width('100%').justifyContent(FlexAlign.Center)
-    .backgroundColor(this.pal().keyBg).borderRadius(6)
+    .backgroundColor(sceneKeyBg(this.pal().keyBg)).borderRadius(6)
     .margin({ top: 2, bottom: 2 })
     .onClick(() => {
       this.ctrl.tapBackspace();
@@ -222,7 +222,7 @@ export struct CandidateTiled {
         .textAlign(TextAlign.Center)
     }
     .layoutWeight(1).width('100%').justifyContent(FlexAlign.Center)
-    .backgroundColor(this.pal().keyBg).borderRadius(6)
+    .backgroundColor(sceneKeyBg(this.pal().keyBg)).borderRadius(6)
     .margin({ top: 2, bottom: 2 })
     .onClick(action)
   }

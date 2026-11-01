@@ -148,7 +148,7 @@ final class InputModePanel: UIView {
                 ofSize: 14, weight: selected ? .bold : .regular
             )
             chip.setTitleColor(selected ? palette.accent : palette.panelFg, for: .normal)
-            chip.backgroundColor = palette.keyBg
+            chip.backgroundColor = palette.keySurface(palette.keyBg)
             chip.layer.borderWidth = selected ? 2 : 1
             chip.layer.borderColor = (selected
                 ? palette.accent

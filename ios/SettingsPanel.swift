@@ -332,7 +332,7 @@ final class SettingsPanel: UIView {
         b.titleLabel?.adjustsFontSizeToFitWidth = true
         b.titleLabel?.minimumScaleFactor = 0.7
         b.contentEdgeInsets = UIEdgeInsets(top: 4, left: 4, bottom: 4, right: 4)
-        b.backgroundColor = palette.keyBg
+        b.backgroundColor = palette.keySurface(palette.keyBg)
         b.layer.cornerRadius = 7
         b.addAction(UIAction { _ in action() }, for: .touchUpInside)
         return b
@@ -486,7 +486,7 @@ final class SettingsPanel: UIView {
         b.setTitle(selected ? "\(title) ✓" : title, for: .normal)
         b.titleLabel?.font = .systemFont(ofSize: 12, weight: selected ? .bold : .regular)
         b.setTitleColor(selected ? palette.accent : palette.panelFg, for: .normal)
-        b.backgroundColor = palette.keyBg
+        b.backgroundColor = palette.keySurface(palette.keyBg)
         b.layer.borderWidth = selected ? 2 : 1
         b.layer.borderColor = (selected
             ? palette.accent

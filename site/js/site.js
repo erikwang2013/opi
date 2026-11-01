@@ -358,3 +358,26 @@
   else window.addEventListener('load', markReady, { once: true });
   window.setTimeout(markReady, 2500);
 })();
+
+// 下载页大小（2026-11-01）：从 version.json 读 size，静态页不再手抄体积。
+(() => {
+  const script = [...document.scripts].find((s) => s.src.endsWith('site.js'));
+  if (!script) return;
+  const url = new URL('../version.json', script.src);
+  const fmt = (bytes) => (bytes / 1048576 >= 10 ? `${Math.round(bytes / 1048576)} MB` : `${(bytes / 1048576).toFixed(1)} MB`);
+  fetch(url, { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((v) => {
+      if (!v) return;
+      document.querySelectorAll('[data-size]').forEach((el) => {
+        const [pkg, kind] = el.dataset.size.split('.');
+        const size = v.packages?.[pkg]?.[kind]?.size ?? v.components?.[pkg]?.[kind]?.size;
+        if (size) el.textContent = fmt(size);
+      });
+      document.querySelectorAll('[data-component]').forEach((el) => {
+        const size = v.components?.[el.dataset.component]?.size;
+        if (size) el.textContent = fmt(size);
+      });
+    })
+    .catch(() => {});
+})();

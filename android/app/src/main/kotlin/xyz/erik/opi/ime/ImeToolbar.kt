@@ -232,7 +232,7 @@ private fun PanelChip(
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
-            .background(p.keyBg)
+            .background(sceneSurface(p.keyBg))
             .border(
                 width = if (selected) 2.dp else 1.dp,
                 color = if (selected) p.accent else p.barDimFg.copy(alpha = 0.35f),

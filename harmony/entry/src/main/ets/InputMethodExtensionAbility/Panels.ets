@@ -14,7 +14,7 @@ import { KeyboardController } from './KeyboardController';
 import { OpiMode } from './OpiEngine';
 import { INPUT_MODES, InputMode, currentModeIndex } from './InputModes';
 import { ONE_HAND_LEFT, ONE_HAND_OFF, ONE_HAND_RIGHT, darkEnabled, elderEnabled } from './KeyboardModes';
-import { Palette, SKINS, Skin, paletteFor, scenePanelBg } from './Palette';
+import { Palette, SKINS, Skin, paletteFor, scenePanelBg, sceneKeyBg } from './Palette';
 import { SCENES, SceneSkin } from './SceneTheme';
 import { UpdateSection } from './UpdateCheck';
 
@@ -82,7 +82,7 @@ export struct ModeChip {
       .fontColor(this.selected ? paletteFor(this.skin, this.dark === 1, this.elder === 1).accent
         : paletteFor(this.skin, this.dark === 1, this.elder === 1).panelFg)
       .fontWeight(this.selected ? FontWeight.Bold : FontWeight.Normal)
-      .backgroundColor(paletteFor(this.skin, this.dark === 1, this.elder === 1).keyBg)
+      .backgroundColor(sceneKeyBg(paletteFor(this.skin, this.dark === 1, this.elder === 1).keyBg))
       .border({
         width: this.selected ? 2 : 1,
         color: this.selected ? paletteFor(this.skin, this.dark === 1, this.elder === 1).accent

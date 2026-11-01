@@ -1,12 +1,10 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! 键盘动态背景的 Android 接线（2026-10-30）：把 `shared/scene` 的插画铺在
-//! ImeScreen 根列后面。绘制放在 `drawBehind` 里、相位只在绘制阶段读 —— 每帧只
-//! 重画背景，不重组键盘。
-//!
-//! 键区自己还压一层 [KEY_AREA_SCRIM_ALPHA] 的 `barBg`：插画在键缝里可见，键面
-//! 仍由不透明键帽（`keyPlate`）保证文字对比度 —— 背景不能为了好看牺牲可读性。
+//! 键盘动态背景的 Android 接线（2026-10-30；2026-11-01 用户订正）：插画是**整页
+//! 皮肤**，不是只铺在按键背后的背景 —— 工具条、候选栏、键区、面板都只压一层半透明
+//! 主题色，让同一张连续插画从所有表面透出来；按键不贴独立插画/纹理。
+//! 绘制放在 `drawBehind` 里、相位只在绘制阶段读 —— 每帧只重画背景，不重组键盘。
 
 package xyz.erik.opi.ime
 
@@ -16,7 +14,11 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.text.TextStyle
 import xyz.erik.opi.keyboard.LocalKeyboardPalette
 import xyz.erik.opi.scene.ScenePalette
 import xyz.erik.opi.scene.SceneTheme
@@ -26,14 +28,40 @@ import xyz.erik.opi.scene.rememberOpiScenePhase
 /** 键区底色不透明度：留 55% 给插画，颜色仍来自当前皮肤。 */
 internal const val KEY_AREA_SCRIM_ALPHA = 0.45f
 
-/** 动态皮肤下的键区底色：再让出插画，键面自己另有半透明键帽（见 KeyPlate.kt）。 */
-internal const val KEY_AREA_SCENE_SCRIM_ALPHA = 0.16f
+/** 动态皮肤下的键区底色：几乎全透明，插画连成一片（键面自己再压薄薄一层）。 */
+internal const val KEY_AREA_SCENE_SCRIM_ALPHA = 0.06f
 
 /** 当前动态皮肤；各面板据此铺插画（null = 纯色皮肤，保持原来的纯色底）。 */
 internal val LocalSceneTheme = compositionLocalOf<SceneTheme?> { null }
 
-/** 工具条底色不透明度：图标区几乎不透明，只让插画透一成（候选栏保持全不透明保可读性）。 */
-internal const val TOOLBAR_SCENE_ALPHA = 0.90f
+/** 工具条/候选栏底色不透明度：只留一层主题色，插画仍清晰可见。 */
+internal const val TOOLBAR_SCENE_ALPHA = 0.40f
+
+/** 候选栏与工具条同一档（候选文字另加阴影保证可读）。 */
+internal const val BAR_SCENE_ALPHA = 0.42f
+
+/** 动态皮肤下的表面色：只压一层薄主题色（纯色皮肤原值返回）。 */
+@Composable
+internal fun sceneSurface(color: Color, alpha: Float = 0.42f): Color =
+    if (LocalSceneTheme.current != null) color.copy(alpha = alpha) else color
+
+/** 动态皮肤下文字阴影：浅字配黑、深字配白，插画再花也读得清。 */
+@Composable
+internal fun sceneTextStyle(fg: Color): TextStyle {
+    if (LocalSceneTheme.current == null) return TextStyle.Default
+    val shadowColor = if (fg.luminance() > 0.5f) {
+        Color.Black.copy(alpha = 0.55f)
+    } else {
+        Color.White.copy(alpha = 0.55f)
+    }
+    return TextStyle(
+        shadow = Shadow(
+            color = shadowColor,
+            offset = Offset(0f, 1f),
+            blurRadius = 3f,
+        ),
+    )
+}
 
 /** 根列背景：动态主题 = 插画，纯色皮肤（null）= 皮肤底色。 */
 @Composable
@@ -55,8 +83,8 @@ internal fun Modifier.opiSceneBackground(theme: SceneTheme): Modifier {
     }
 }
 
-/** 面板底色不透明度：留四成插画，文字仍落在足够深/浅的底上。 */
-private const val PANEL_SCENE_SCRIM_ALPHA = 0.58f
+/** 面板底色不透明度：插画是整页皮肤，面板只压薄薄一层主题色。 */
+private const val PANEL_SCENE_SCRIM_ALPHA = 0.42f
 
 /** 面板底：动态皮肤 = 插画 + 半透明面板色；纯色皮肤 = 原来的不透明面板色。 */
 @Composable

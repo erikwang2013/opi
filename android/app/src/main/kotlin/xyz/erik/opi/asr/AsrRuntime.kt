@@ -91,10 +91,11 @@ internal object AsrRuntime {
         val context = appContext ?: return
         if (!AsrNative.loaded) return
         val whisper = whisperPref?.invoke() ?: false
+        val pack = AsrModels.selected(context, whisper)
         val gate = asrGate(
             available = true,
             permissionGranted = micGranted(context),
-            modelReady = AsrModels.modelReady(context, whisper),
+            modelReady = AsrModels.packReady(context, pack) || AsrBundled.ready(context, pack),
         )
         when (gate) {
             AsrGate.UNSUPPORTED -> return
@@ -194,8 +195,16 @@ internal object AsrRuntime {
     private fun ensureModel(context: Context, gen: Int, whisper: Boolean): Boolean {
         val pack = AsrModels.selected(context, whisper)
         if (!AsrModels.packReady(context, pack)) {
-            post(gen, AsrEvent.Missing(whisper))
-            return false
+            if (!AsrBundled.ready(context, pack)) {
+                post(gen, AsrEvent.Missing(whisper))
+                return false
+            }
+            // 完整包：首次使用时从 assets 解压（239/358MB，浮层保持 PREPARING）。
+            AsrBundled.install(context, pack)
+            if (!AsrModels.packReady(context, pack)) {
+                post(gen, AsrEvent.Missing(whisper))
+                return false
+            }
         }
         val key = "${pack.dir}|$whisper"
         if (handle != 0L && loadedKey != key) unloadModel()

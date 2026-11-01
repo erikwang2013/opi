@@ -183,7 +183,7 @@ final class WubiSettingsSection: UIView {
             b.setTitle(on ? "\(titles[i]) ✓" : titles[i], for: .normal)
             b.titleLabel?.font = .systemFont(ofSize: 12, weight: on ? .bold : .regular)
             b.setTitleColor(on ? palette.accent : palette.panelFg, for: .normal)
-            b.backgroundColor = palette.keyBg
+            b.backgroundColor = palette.keySurface(palette.keyBg)
             b.layer.cornerRadius = 7
             b.layer.borderWidth = on ? 2 : 1
             b.layer.borderColor = (on

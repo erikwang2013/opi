@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xyz.erik.opi.ime.opiPanelBackground
+import xyz.erik.opi.ime.sceneSurface
 
 /**
  * 生僻字键盘（对齐主流输入法：**选部首 → 选笔画数 → 挑字**的浏览式查法）。
@@ -133,7 +134,7 @@ fun RarePanel(
                                 modifier = Modifier
                                     .padding(6.dp)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(p.keyBg)
+                                    .background(sceneSurface(p.keyBg))
                                     .clickable { strokes = s }
                                     .padding(horizontal = 16.dp, vertical = 12.dp),
                             ) {

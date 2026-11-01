@@ -10,6 +10,21 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// ---------- 三档打包（2026-11-01 用户裁决）----------
+// full   = 语音引擎 + 两套模型 + 全部词库（模型首次使用从 assets 解压）
+// normal = 语音引擎 + 全部词库，模型在设置页下载
+// basic  = 语音引擎 + 仅拼音主词库；扩展词库/模型都在设置页下载
+val packageTier = providers.gradleProperty("opiPackageTier").getOrElse("normal").lowercase()
+require(packageTier in setOf("full", "normal", "basic")) {
+    "opiPackageTier 只能是 full / normal / basic（当前 $packageTier）"
+}
+val asrBundleDir = providers.gradleProperty("opiAsrBundleDir")
+if (packageTier == "full") {
+    require(asrBundleDir.isPresent) {
+        "full 档需要 -PopiAsrBundleDir=<目录>（内含 asr/sensevoice、asr/whisper-small.en、asr/vad）"
+    }
+}
+
 android {
     namespace = "xyz.erik.opi"
     compileSdk = 34
@@ -30,6 +45,7 @@ android {
         noCompress += setOf("opid")
     }
 
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -41,11 +57,18 @@ android {
         targetSdk = 34
         // 与发布 tag 对齐（此前 9 个 tag 期间 versionCode 一直是 1、versionName 一直是
         // "1.0.0"：APK 既无法被识别，也无法覆盖安装升级）。
-        versionCode = 110
-        versionName = "1.30.0"
+        versionCode = 111
+        versionName = "1.31.0"
+        buildConfigField("String", "PACKAGE_TIER", "\"$packageTier\"")
+        buildConfigField("boolean", "ASR_MODELS_BUNDLED", "${packageTier == "full"}")
         ndk {
             // 与 rust_builder cargokit targets 对齐（plugin.gradle 固定三 ABI）。
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+            // 完整包带 615MB 模型，只出 64 位：32 位设备本来没有 ASR 原生库。
+            abiFilters += if (packageTier == "full") {
+                listOf("arm64-v8a", "x86_64")
+            } else {
+                listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+            }
         }
     }
 
@@ -123,6 +146,27 @@ tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }
 // 精确匹配会漏掉它，下一次 `assembleRelease` 仍红。
 tasks.matching { it.name.contains("Lint", ignoreCase = true) }
     .configureEach { dependsOn(copyPetStickers) }
+
+// ---------- 三档打包：完整包内置模型 / 基础包裁掉扩展词库 ----------
+if (packageTier == "full") {
+    // 目录结构 = asr/sensevoice、asr/whisper-small.en、asr/vad（见 scripts/package-components.py）。
+    android.sourceSets.getByName("main").assets.srcDir(asrBundleDir.get())
+}
+if (packageTier == "basic") {
+    val optionalAssets = listOf(
+        "trad.opid", "stroke.opid", "wubi86.opid", "wubi98.opid",
+        "rare_index.tsv", "kangxi.tsv",
+    )
+    tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }
+        .configureEach {
+            doLast {
+                val dirs = outputs.files.files.filter { it.isDirectory }
+                for (dir in dirs) {
+                    for (name in optionalAssets) File(dir, name).delete()
+                }
+            }
+        }
+}
 
 // ---------- 离线语音识别原生库（libopi_asr.so + JNI 薄层） ----------
 //

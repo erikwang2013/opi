@@ -155,6 +155,7 @@ build_stage() {
                 -DCMAKE_INSTALL_PREFIX=/usr
                 "${HDR_ARGS[@]}")
     [ -n "$libdir" ] && args+=("-DCMAKE_INSTALL_LIBDIR=$libdir")
+    [ "${OPI_BASIC_PACKAGE:-0}" = "1" ] && args+=("-DOPI_BASIC_PACKAGE=ON")
 
     echo "==> [$name] configure（${libdir:-GNUInstallDirs 自适应}）" >&2
     cmake "${args[@]}" >&2 || return 1

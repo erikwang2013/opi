@@ -7,7 +7,7 @@
 import { BusinessError } from '@kit.BasicServicesKit';
 import * as ClipSync from './ClipSync';
 import { ClipPairingPrompt, ClipPeer, ClipStatus } from './ClipSync';
-import { Palette, paletteFor } from './Palette';
+import { Palette, paletteFor, sceneKeyBg } from './Palette';
 
 @Component
 export struct ClipSection {
@@ -170,7 +170,7 @@ export struct ClipSection {
         }
         .width('100%').alignItems(HorizontalAlign.Start)
         .padding({ left: 14, right: 14, top: 8, bottom: 8 })
-        .backgroundColor(this.pal().keyBg)
+        .backgroundColor(sceneKeyBg(this.pal().keyBg))
       }
 
       // ---- 系统剪贴板 → 远端：PasteButton 的点击给一次临时读取授权 ----
@@ -243,7 +243,7 @@ export struct ClipSection {
       if (this.clipOn) {
         Button('立即停止共享')
           .fontSize(this.fs(12)).height(32).width('100%')
-          .backgroundColor(this.pal().keyBg).fontColor(this.pal().keyFg)
+          .backgroundColor(sceneKeyBg(this.pal().keyBg)).fontColor(this.pal().keyFg)
           .margin({ top: 8 })
           .onClick(() => {
             this.toggle(false);

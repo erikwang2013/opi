@@ -233,3 +233,7 @@ body.memory-open { overflow: hidden; }
 .memory-foot .btn { flex: 0 0 auto; min-height: 38px; padding: 0 15px; font-size: .74rem; }
 .memory-pause:disabled { opacity: .45; cursor: default; }
 .memory-pause:disabled:hover { transform: none; }
+
+/* 下载页：安装包大小（2026-11-01 三档包） */
+.pkg-size { margin-left: .35em; opacity: .72; font-variant-numeric: tabular-nums; }
+.pkg-size:empty { display: none; }

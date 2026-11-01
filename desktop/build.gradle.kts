@@ -47,12 +47,14 @@ kotlin {
 // jpackage 的包版本与设置窗标题栏都从这里取。**此前设置窗里写死过一份**
 // （"1.4.0"），到 1.6.0 就成了摆在用户眼前的假话 —— 两处写死是漂移的充分条件，
 // 生成一个常量是把它压成一处的最短路径（同 android 侧 versionName 的单一来源约定）。
-val opiAppVersion = "1.30.0"
+val opiAppVersion = "1.31.0"
+
 
 val generateOpiVersionSource by tasks.registering {
     val outDir = layout.buildDirectory.dir("generated/sources/opiVersion/kotlin")
     outputs.dir(outDir)
     val v = opiAppVersion
+    val tier = providers.gradleProperty("opiPackageTier").getOrElse("normal")
     doLast {
         val f = outDir.get().file("xyz/erik/opi/candidate/Version.kt").asFile
         f.parentFile.mkdirs()
@@ -67,6 +69,9 @@ val generateOpiVersionSource by tasks.registering {
 
             /** 设置窗标题栏显示的版本；与 jpackage 的包版本同源。 */
             const val OPI_VERSION: String = "$v"
+
+            /** 安装包档位（full / normal / basic），更新清单按它选包。 */
+            const val OPI_PACKAGE_TIER: String = "$tier"
             """.trimIndent() + "\n",
         )
     }
@@ -136,6 +141,7 @@ val tsfDll = providers.environmentVariable("OPI_TSF_DLL")
 tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask>()
     .configureEach {
         if (tsfDll.isPresent) {
+            val tier = providers.gradleProperty("opiPackageTier").getOrElse("normal")
             val src = file(tsfDll.get())
             check(src.isFile) { "OPI_TSF_DLL 指向的文件不存在：${src.path}" }
             // 完成页复选框拉起这个脚本：只启动候选窗，**不碰 Explorer**（2026-10-20 白屏后）。
@@ -164,14 +170,14 @@ tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageT
                 file("../data/raw/GPL-3.0.txt"),
             )
             licenses.forEach { check(it.isFile) { "找不到许可文本：${it.path}" } }
-            files.from(
+            val bundled = listOf(
                 src,
                 file("windows/launch-and-restart.cmd"),
                 luna,
-                trad,
                 symbols,
                 *licenses.toTypedArray(),
-            )
+            ) + if (tier == "basic") emptyList() else listOf(trad)
+            files.from(*bundled.toTypedArray())
         }
     }
 
@@ -206,6 +212,7 @@ tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageT
     }
 
 apply(from = "build-asr.gradle.kts")
+
 
 // 康熙字典词库（2026-10-16，「全发」的桌面面）：词库页首启种子把它放进词库目录一次
 //（见 Dicts.kt 的 seedBundledDict）。真源 = `data/raw/kangxi.tsv`

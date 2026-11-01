@@ -49,7 +49,7 @@ extension UIView {
         bg.image = theme?.image
         bg.isHidden = theme == nil
         scrim.isHidden = theme == nil
-        scrim.backgroundColor = base.withAlphaComponent(0.72)
+        scrim.backgroundColor = base.withAlphaComponent(0.42)
     }
 }
 

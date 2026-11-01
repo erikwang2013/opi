@@ -78,7 +78,7 @@ internal fun BarButton(
     val keyPlated = b != StatusBarButton.ENPRO && b != StatusBarButton.MODE
     val shape = RoundedCornerShape((metrics.button.value * 0.18f).dp)
     val plate = lerp(palette.bg, palette.fg, 0.07f)
-        .copy(alpha = if (sceneActive) 0.62f else 1f)
+        .copy(alpha = if (sceneActive) 0.45f else 1f)
     val plateBg = when {
         pressed -> lerp(plate, palette.accent, 0.32f)
         hovered || active -> lerp(plate, palette.fg, 0.09f)

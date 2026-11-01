@@ -35,6 +35,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xyz.erik.opi.engine.EngineController
+import xyz.erik.opi.ime.BAR_SCENE_ALPHA
+import xyz.erik.opi.ime.LocalSceneTheme
+import xyz.erik.opi.ime.sceneTextStyle
 import xyz.erik.opi.keyboard.LocalKeyboardPalette
 import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.engine.associationActive
@@ -68,12 +71,18 @@ fun CandidateBar(
 ) {
     // 配色走键盘色板（表情条/候选栏与键面同一套「暗光/长辈」换肤，见 Palette.kt）
     val p = LocalKeyboardPalette.current
+    // 动态皮肤 = 整页插画：候选栏只压薄薄一层主题色，不再是一块纯色。
+    val surface = if (LocalSceneTheme.current != null) {
+        p.barBg.copy(alpha = BAR_SCENE_ALPHA)
+    } else {
+        p.barBg
+    }
     // english 模式：**有候选时照常画候选**（2026-10-18 单词联想）；无候选
     // （含切英文时保留的拼音缓冲——它不参与英文匹配）退化为模式条，保留中/英反馈。
     if (controller.mode == EngineMode.ENGLISH && controller.candidates.isEmpty()) {
         Row(
             modifier = modifier.fillMaxWidth().fillMaxHeight()
-                .background(p.barBg),
+                .background(surface),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -92,7 +101,7 @@ fun CandidateBar(
     val candidates = controller.pageCandidates
     Row(
         modifier = modifier.fillMaxWidth().fillMaxHeight()
-            .background(p.barBg)
+            .background(surface)
             // 联想态点空白处收起（Spec §5.1）：子候选的点击/长按与横向滚动都会消费
             // 自己的手势，只有空白区域落在这里；enabled 保证非联想态不抢点击。
             .clickable(enabled = controller.associationActive) { controller.clear() },
@@ -146,7 +155,7 @@ fun CandidateBar(
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(c, fontSize = 22.sp, color = p.keyFg)
+                    Text(c, fontSize = 22.sp, color = p.keyFg, style = sceneTextStyle(p.keyFg))
                 }
             }
             // 拼音无候选：小欧出来摊手，比一行灰字更不像"卡住了"。

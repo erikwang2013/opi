@@ -13,7 +13,7 @@ import { KeyboardController } from './KeyboardController';
 import { EmojiGroup } from './OpiEngine';
 import { OpiPet, PetMood } from './OpiPet';
 import { emojiGroups, emojiSymbols, searchEmoji } from './EmojiData';
-import { Palette, paletteFor, scenePanelBg } from './Palette';
+import { Palette, paletteFor, scenePanelBg, sceneKeyBg } from './Palette';
 import { KAOMOJI_CATEGORIES } from './KaomojiData';
 import { SearchPad } from './SearchPad';
 import { StickerGrid } from './StickerGrid';
@@ -152,7 +152,7 @@ export struct EmojiPad {
         Text(this.emojiQuery.length === 0 ? '搜索（拼音/英文）' : this.emojiQuery)
           .layoutWeight(1).height(34).fontSize(14)
           .fontColor(this.emojiQuery.length === 0 ? this.pal().dimFg : this.pal().panelFg)
-          .backgroundColor(this.pal().keyBg).borderRadius(6)
+          .backgroundColor(sceneKeyBg(this.pal().keyBg)).borderRadius(6)
           .padding({ left: 10, right: 10 }).margin({ right: 8 })
           .onClick(() => {
             this.searchPadShown = !this.searchPadShown;

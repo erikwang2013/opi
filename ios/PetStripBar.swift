@@ -92,13 +92,13 @@ final class PetStripBar: UIView {
 
     func applyTheme(_ p: KeyboardPalette, fontScale: CGFloat) {
         palette = p
-        backgroundColor = nativeBackdrop ? .clear : p.barBg
+        backgroundColor = nativeBackdrop ? .clear : p.sceneSurface(p.barBg)
     }
 
     /// 见 `KeyboardLayout.nativeBackdrop`。
     func setNativeBackdrop(_ on: Bool) {
         nativeBackdrop = on
-        backgroundColor = on ? .clear : palette.barBg
+        backgroundColor = on ? .clear : palette.sceneSurface(palette.barBg)
         isOpaque = !on
     }
 

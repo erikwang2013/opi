@@ -7,7 +7,7 @@
 import { KeyboardController } from './KeyboardController';
 import { MODE_ENGLISH26, traditionalModeLabel } from './InputModes';
 import { OpiMode } from './OpiEngine';
-import { Palette, paletteFor } from './Palette';
+import { Palette, paletteFor, sceneKeyBg } from './Palette';
 import { BackspaceButton, FuncButton } from './KeyPopup';
 
 /** 键位容器（笔画共用外观）。 */
@@ -45,7 +45,7 @@ export struct KeyBox {
     .justifyContent(FlexAlign.Center)
     .height('100%')
     .margin({ left: 2, right: 2 })
-    .backgroundColor(this.pal().keyBg)
+    .backgroundColor(sceneKeyBg(this.pal().keyBg))
     .borderRadius(6)
     .onClick(this.onTap)
   }

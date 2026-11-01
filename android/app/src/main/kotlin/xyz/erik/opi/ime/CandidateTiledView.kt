@@ -174,7 +174,7 @@ private fun TiledCell(
             .fillMaxHeight()
             .padding(1.dp)
             .clip(RoundedCornerShape(6.dp))
-            .background(p.keyBg)
+            .background(sceneSurface(p.keyBg))
             .clickable(onClick = onTap)
             .semantics {
                 role = Role.Button

@@ -37,3 +37,17 @@ tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageT
         files.from(dir.map { d -> asrLibNames.map { File(d, it) } })
     }
 
+
+// 完整包：模型随应用镜像进 `<app>/asr`，运行期 SpeechModels.bundledModelRoot() 优先用它。
+val asrModelsDir = providers.gradleProperty("opiAsrModelsDir")
+tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask>()
+    .configureEach {
+        if (providers.gradleProperty("opiPackageTier").getOrElse("normal") == "full") {
+            require(asrModelsDir.isPresent) {
+                "full 档需要 -PopiAsrModelsDir=<目录>（内含 asr/sensevoice、asr/whisper-small.en、asr/vad）"
+            }
+            val root = file(asrModelsDir.get())
+            check(root.isDirectory) { "opiAsrModelsDir 不是目录：${root.path}" }
+            files.from(fileTree(root) { include("asr/**") })
+        }
+    }

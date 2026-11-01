@@ -816,7 +816,7 @@ Linux 上 = `--settings` 的设置窗（无参数启动也是它）。**v1.6.0 �
 - **语音输入（2026-11-01，默认关闭）**：状态栏符号键后的话筒按钮开始/停止录音；
   设置「语音」页开关、语言与模型下载。音频 16 kHz 单声道经 Java Sound 采集，交给
   同目录 `libopi_asr.so` 本地识别，不落盘、不上传；中文/自动 SenseVoice，英文
-  Whisper；模型不随包（约 239/375 MB + VAD），SHA-256 校验。**验证**：JVM 单测与
+  Whisper；完整包内置模型；普通/基础包在设置页下载（约 239/358 MB + VAD），SHA-256 校验。**验证**：JVM 单测与
   ASR 真实 wav 通过；真机麦克风/长句/噪声未验证。
 - 版本号是**单一来源**：`desktop/build.gradle.kts` 的 `opiAppVersion` 同时喂给
   jpackage 包版本与窗口标题（构建时生成 `Version.kt`）。此前窗口里写死过一份，

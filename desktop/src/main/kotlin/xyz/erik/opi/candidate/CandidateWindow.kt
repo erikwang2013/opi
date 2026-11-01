@@ -326,7 +326,7 @@ internal fun CandidatePanel(
             Canvas(Modifier.fillMaxSize()) {
                 drawOpiSceneBackdrop(scene, theme, phase.value, muted = 0.20f)
             }
-            Box(Modifier.fillMaxSize().background(palette.bg.copy(alpha = 0.52f)))
+            Box(Modifier.fillMaxSize().background(palette.bg.copy(alpha = 0.40f)))
         } else {
             Box(Modifier.fillMaxSize().background(palette.bg))
         }

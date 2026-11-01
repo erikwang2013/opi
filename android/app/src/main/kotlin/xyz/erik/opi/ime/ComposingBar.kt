@@ -95,7 +95,7 @@ fun ComposingBar(controller: EngineController, modifier: Modifier = Modifier) {
         // 放到 1.6×/2.0× 时让行自己长高，而不是把 18sp 的字上下裁掉。
         modifier = modifier.fillMaxWidth().heightIn(min = COMPOSING_BAR_HEIGHT_DP.dp)
             // 空槽不铺底（与候选槽同一条 2026-10-09 裁决）；有拼音时才起一条底色带。
-            .let { if (shown.isEmpty() && hint.isEmpty()) it else it.background(p.barBg) },
+            .let { if (shown.isEmpty() && hint.isEmpty()) it else it.background(sceneSurface(p.barBg, BAR_SCENE_ALPHA)) },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(

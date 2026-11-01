@@ -53,6 +53,14 @@ struct KeyboardPalette {
         self.toolbarFg = toolbarFg
         self.isDark = isDark
     }
+
+    /// 动态皮肤 = 整页插画：所有表面只压薄薄一层主题色，纯色皮肤原值返回。
+    func sceneSurface(_ color: UIColor, alpha: CGFloat = 0.42) -> UIColor {
+        KeyboardPreferences.scene == nil ? color : color.withAlphaComponent(alpha)
+    }
+
+    /// 键面与面板里的按钮/键帽（同一档薄色）。
+    func keySurface(_ color: UIColor) -> UIColor { sceneSurface(color) }
 }
 
 /// 0xAARRGGBB（与 Android `Color(0x...)` 同一种写法，抄值时不会看错通道）。
@@ -331,7 +339,7 @@ extension KeyboardViewController {
             native = true
         }
         layout.nativeBackdrop = native
-        view.backgroundColor = native ? .clear : palette.toolbarBg
+        view.backgroundColor = native ? .clear : palette.sceneSurface(palette.toolbarBg)
         view.isOpaque = !native
         layout.applyTheme(palette, fontScale: effectiveFontScale)
     }

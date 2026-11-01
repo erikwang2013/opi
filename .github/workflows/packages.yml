@@ -83,6 +83,11 @@ on:
         # 显式写出默认值，别让 `if: inputs.tag != ''` 押在「未提供的可选输入会取什么值」
         # 这条我没核实过的规则上。有了它，没填 ⇒ 确定是空串 ⇒ 那一步确定跳过。
         default: ''
+      tier:
+        description: '安装包档位（full 含两套模型，约 +588MB）'
+        type: choice
+        options: [normal, full, basic]
+        default: normal''
 
 # gh release upload 要写 release 上的资产 —— 只有末尾那一步、且只有手填了 tag 时才用到。
 # 缺了它 gh 会以 403 失败，报错文本指向 token 而不是权限块，容易看错地方。
@@ -101,6 +106,8 @@ jobs:
   desktop-deb:
     name: 桌面应用（jpackage .deb，ubuntu-22.04）
     runs-on: ubuntu-22.04
+    env:
+      TIER: ${{ inputs.tier || 'normal' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -113,6 +120,32 @@ jobs:
       # 打包任务会调 cargo，runner 默认没有 Rust，必须显式装。
       - uses: dtolnay/rust-toolchain@stable
 
+      - name: 下载完整包语音模型（仅 full）
+        if: env.TIER == 'full'
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/asr-bundle/asr"
+          mkdir -p "$root/sensevoice" "$root/whisper-small.en" "$root/vad"
+          sv=https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main
+          wh=https://hf-mirror.com/csukuangfj/sherpa-onnx-whisper-small.en/resolve/main
+          get() { curl -fL --retry 5 --retry-delay 3 --connect-timeout 30 "$1" -o "$2"; }
+          get "$sv/model.int8.onnx" "$root/sensevoice/model.int8.onnx"
+          get "$sv/tokens.txt" "$root/sensevoice/tokens.txt"
+          get "$wh/small.en-encoder.int8.onnx" "$root/whisper-small.en/small.en-encoder.int8.onnx"
+          get "$wh/small.en-decoder.int8.onnx" "$root/whisper-small.en/small.en-decoder.int8.onnx"
+          get "$wh/small.en-tokens.txt" "$root/whisper-small.en/small.en-tokens.txt"
+          get https://gh-proxy.com/https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx "$root/vad/silero_vad.onnx"
+          cd "$root"
+          sha256sum -c <<'SUM'
+          c71f0ce00bec95b07744e116345e33d8cbbe08cef896382cf907bf4b51a2cd51  sensevoice/model.int8.onnx
+          f449eb28dc567533d7fa59be34e2abca8784f771850c78a47fb731a31429a1dc  sensevoice/tokens.txt
+          8bdac288f369aa94ee2194059238c465ed82ea9d47ee8fa4a8c0a891873e462f  whisper-small.en/small.en-encoder.int8.onnx
+          710ccf890e10f3faa15f51ec346081a2723c9f3adb6e4da81c6573a5a6f877fb  whisper-small.en/small.en-decoder.int8.onnx
+          306cd27f03c1a714eca7108e03d66b7dc042abe8c258b44c199a7ed9838dd930  whisper-small.en/small.en-tokens.txt
+          9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6  vad/silero_vad.onnx
+          SUM
+
       # 在 desktop/ 里跑（本模块有**自己的** gradlew + settings.gradle.kts，
       # 与 android/ 同约定：阿里云镜像、无 google()）。
       # 两个任务都要：packageDeb 出应用包，injectSettingsDesktopEntry 往它里面注入
@@ -121,7 +154,13 @@ jobs:
       # 文件尾的任务注释）。下面 packages job 的合并步骤会把这个 .deb 的数据文件
       # 原样解进主包暂存树。
       - name: ./gradlew packageDeb injectSettingsDesktopEntry
-        run: ./gradlew packageDeb injectSettingsDesktopEntry --no-daemon
+        shell: bash
+        run: |
+          args=(-PopiPackageTier="$TIER")
+          if [ "$TIER" = full ]; then
+            args+=(-PopiAsrModelsDir="$RUNNER_TEMP/asr-bundle")
+          fi
+          ./gradlew "${args[@]}" packageDeb injectSettingsDesktopEntry --no-daemon
         working-directory: desktop
 
       # if-no-files-found: error —— 默认只 warn，而「绿了但没产物」正是本仓
@@ -135,6 +174,8 @@ jobs:
   packages:
     name: 打包 .deb / .rpm（debian:12 容器里构建）
     runs-on: ubuntu-latest
+    env:
+      TIER: ${{ inputs.tier || 'normal' }}
     # 合并安装（用户裁决 2026-10-09）要桌面应用的产物先进来：desktop-deb 失败 ⇒
     # 本 job 不跑（拿不到应用就没法「和到一起安装」，打一半的包不如不打）。
     needs: desktop-deb
@@ -231,6 +272,7 @@ jobs:
           }
           OUT_DIR=/w/dist WORK_DIR=/tmp/opi-packages \
             OPI_DESKTOP_DEB="$(ls /w/desktop-deb/*.deb | head -1)" \
+            OPI_BASIC_PACKAGE="${{ env.TIER == 'basic' && '1' || '0' }}" \
             scripts/build-packages.sh
 
           # ---- 守卫：产物自带的符号版本要求必须 ≤ 本发行版提供的那一份 ----
@@ -326,6 +368,18 @@ jobs:
       # 否则跑一次只能证明「它绿了」，拿不到包。
       # if-no-files-found: error —— 默认只 warn，而「绿了但没产物」正是本仓
       # 反复栽过的那种假绿。
+      - name: 按档位重命名产物
+        if: env.TIER != 'normal'
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for f in dist/opi_*.deb dist/opi-*.rpm; do
+            base="${f%.*}"; ext="${f##*.}"
+            mv "$f" "${base}-${TIER}.${ext}"
+          done
+          ls -l dist
+
       - uses: actions/upload-artifact@v4
         with:
           name: opi-packages

@@ -79,14 +79,14 @@ check site/version.json version \
 # 站点下载卡片：所有 download/opi-* 链接必须指向当前版本。历史 changelog 没有下载 URL，
 # 所以可以整页匹配；防的是「version.json 改了、页面下载链接还挂旧版」这种半更新。
 for page in site/index.html site/en/index.html; do
-  bad="$(grep -oE '(\.\./)?download/opi-[0-9][^"[:space:]]*' "$page" \
-    | grep -v "download/opi-$v-" || true)"
+  bad="$(grep -oE '(\.\./)?download/((full|normal|basic)/)?opi-[0-9][^"[:space:]]*' "$page" \
+    | grep -vE "download/((full|normal|basic)/)?opi-$v-" || true)"
   if [ -n "$bad" ]; then
     echo "!! $page: 下载链接版本不是 $v：" >&2
     printf '   %s\n' "$bad" >&2
     fail=1
   fi
-  if ! grep -q "download/opi-$v-" "$page"; then
+  if ! grep -qE "download/((full|normal|basic)/)?opi-$v-" "$page"; then
     echo "!! $page: 没有 $v 的下载链接" >&2
     fail=1
   fi

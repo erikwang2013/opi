@@ -74,6 +74,17 @@ class UpdateCheckTest {
     }
 
     @Test
+    fun `installed tier package wins over full`() {
+        val text = """{"version":"1.31.0","packages":{"windows-x64":{
+            "full":{"url":"https://x/full.exe"},
+            "normal":{"url":"https://x/normal.exe"},
+            "basic":{"url":"https://x/basic.exe"}
+        }}}"""
+        val pkg = parseVersionPoint(text)?.packages?.get("windows-x64")
+        assertEquals("https://x/normal.exe", pkg?.full?.url)
+    }
+
+    @Test
     fun `platform keys prefer the native package manager`() {
         assertEquals(
             listOf("linux-amd64", "linux-x86_64", "linux"),

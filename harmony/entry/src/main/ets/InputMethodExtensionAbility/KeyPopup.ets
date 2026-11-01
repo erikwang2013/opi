@@ -9,7 +9,7 @@
 
 import { KeyboardController } from './KeyboardController';
 import { OpiShift } from './OpiEngine';
-import { Palette, paletteFor } from './Palette';
+import { Palette, paletteFor, sceneKeyBg } from './Palette';
 
 /** 弹层里的一行：label 是键面字，value 是发送值（两者只对 14 键大写项不同）。 */
 export class PopupChoice {
@@ -164,7 +164,7 @@ export struct PopupKey {
       }, (choice: PopupChoice, index: number) => `${index}-${choice.label}`)
     }
     .padding(4)
-    .backgroundColor(this.pal().keyBg)
+    .backgroundColor(sceneKeyBg(this.pal().keyBg))
     .borderRadius(8)
   }
 
@@ -192,7 +192,7 @@ export struct PopupKey {
     .justifyContent(FlexAlign.Center)
     .height('100%')
     .margin({ left: 2, right: 2 })
-    .backgroundColor(this.pal().keyBg)
+    .backgroundColor(sceneKeyBg(this.pal().keyBg))
         .borderRadius(6)
     .onClick(() => {
       if (this.suppressClick) {
@@ -264,7 +264,7 @@ export struct BackspaceButton {
     Button('⌫')
       .fontSize(this.fontSize)
       .fontColor(this.pal().keyFg)
-      .backgroundColor(this.pal().keyBg)
+      .backgroundColor(sceneKeyBg(this.pal().keyBg))
       .borderRadius(6)
       .layoutWeight(this.weight)
       .height('100%')

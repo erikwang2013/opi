@@ -44,7 +44,7 @@ internal fun Modifier.sceneBackdrop(
     base: Color,
     ink: Color,
     accent: Color,
-    scrim: Float = 0.58f,
+    scrim: Float = 0.42f,
 ): Modifier {
     if (theme == null) return background(base)
     val scene = remember(base, ink, accent) { ScenePalette(base = base, ink = ink, accent = accent) }

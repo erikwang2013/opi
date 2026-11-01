@@ -428,6 +428,7 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
                 )
                 HorizontalDivider()
                 AsrModelSection(prefs)
+                DictPackSection()
                 ClipSection(prefs, ::toast)
                 HorizontalDivider()
                 // 词库一节（2026-10-14，M3 的 2c 移动端半边）：系统库只读 + 导入库开关/删除 + tsv 导入。

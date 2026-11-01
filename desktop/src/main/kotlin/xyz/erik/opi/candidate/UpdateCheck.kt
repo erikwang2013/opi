@@ -133,8 +133,9 @@ internal fun parseVersionPoint(text: String): VersionPoint? {
         ?.takeIf { it.startsWith("https://") }
     val packages = (obj["packages"] as? JVal.JObj)?.v?.mapNotNull { (key, value) ->
         val platform = value as? JVal.JObj ?: return@mapNotNull null
+        val tier = platform.v[OPI_PACKAGE_TIER] ?: platform.v["full"]
         key to PlatformPackages(
-            full = platform.v["full"].asUpdatePackage(),
+            full = tier.asUpdatePackage(),
             hot = platform.v["hot"].asUpdatePackage(),
         )
     }?.toMap() ?: emptyMap()

@@ -88,7 +88,7 @@ final class UserWordsSection: UIView {
         confirmButton.setTitleColor(.systemRed, for: .normal)
         cancelButton.setTitleColor(p.panelFg, for: .normal)
         for b in [cancelButton, confirmButton] {
-            b.backgroundColor = p.keyBg
+            b.backgroundColor = p.keySurface(p.keyBg)
             b.layer.cornerRadius = 7
             b.layer.borderWidth = 1
             b.layer.borderColor = p.barDimFg.withAlphaComponent(0.35).cgColor

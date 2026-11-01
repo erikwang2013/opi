@@ -259,7 +259,7 @@ internal class SpeechHostImpl {
                 fail("语音输入已关闭：打开 设置 → 语音 启用（默认关闭）")
                 return
             }
-            val root = speechModelRoot()
+            val root = modelRoot(engine)
             if (!modelReady(engine, root)) {
                 fail("未下载 ${engine.title} 模型（约 ${engine.approxMb()} MB）：打开 设置 → 语音 下载")
                 return

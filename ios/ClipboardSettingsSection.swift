@@ -215,7 +215,7 @@ final class ClipboardSettingsSection: UIView {
         b.setTitle(title, for: .normal)
         b.titleLabel?.font = .systemFont(ofSize: 12, weight: .medium)
         b.setTitleColor(palette.accent, for: .normal)
-        b.backgroundColor = palette.keyBg
+        b.backgroundColor = palette.keySurface(palette.keyBg)
         b.layer.cornerRadius = 6
         b.contentEdgeInsets = UIEdgeInsets(top: 3, left: 8, bottom: 3, right: 8)
         b.addAction(UIAction { _ in action() }, for: .touchUpInside)

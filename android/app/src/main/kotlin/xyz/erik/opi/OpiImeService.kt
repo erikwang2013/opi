@@ -103,7 +103,13 @@ class OpiImeService : InputMethodService() {
      */
     private val rareIndex: Map<Int, Map<Int, List<String>>> by lazy {
         try {
-            assets.open("rare_index.tsv").bufferedReader().use { RareIndex.parse(it.readText()) }
+            val downloaded = java.io.File(filesDir, "rare_index.tsv")
+            val reader = if (downloaded.isFile) {
+                downloaded.bufferedReader()
+            } else {
+                assets.open("rare_index.tsv").bufferedReader()
+            }
+            reader.use { RareIndex.parse(it.readText()) }
         } catch (e: Exception) {
             Log.w(TAG, "rare_index.tsv 读取失败，生僻字面板将为空: $e")
             emptyMap()

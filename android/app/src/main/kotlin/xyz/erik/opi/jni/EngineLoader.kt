@@ -149,7 +149,11 @@ object EngineLoader {
     fun loadTradAsset(fileOps: FileOps, api: LoadTradApi, targetPath: String): Boolean {
         try {
             val assetSize = fileOps.assetLength()
-            if (assetSize == null || needsCopy(assetSize, fileOps.existingSize())) {
+            val existing = fileOps.existingSize()
+            if (assetSize == null) {
+                // 基础包没有随包资产：设置页下载到 filesDir 后直接装这份。
+                if (existing == null || existing <= 0L) return false
+            } else if (needsCopy(assetSize, existing)) {
                 fileOps.write(fileOps.readAsset())
             }
         } catch (e: Exception) {
@@ -172,7 +176,10 @@ object EngineLoader {
     fun loadStrokeAsset(fileOps: FileOps, api: LoadStrokeApi, targetPath: String): Boolean {
         try {
             val assetSize = fileOps.assetLength()
-            if (assetSize == null || needsCopy(assetSize, fileOps.existingSize())) {
+            val existing = fileOps.existingSize()
+            if (assetSize == null) {
+                if (existing == null || existing <= 0L) return false
+            } else if (needsCopy(assetSize, existing)) {
                 fileOps.write(fileOps.readAsset())
             }
         } catch (e: Exception) {
@@ -193,7 +200,10 @@ object EngineLoader {
     fun loadWubiAsset(fileOps: FileOps, api: LoadWubiApi, targetPath: String): Boolean {
         try {
             val assetSize = fileOps.assetLength()
-            if (assetSize == null || needsCopy(assetSize, fileOps.existingSize())) {
+            val existing = fileOps.existingSize()
+            if (assetSize == null) {
+                if (existing == null || existing <= 0L) return false
+            } else if (needsCopy(assetSize, existing)) {
                 fileOps.write(fileOps.readAsset())
             }
         } catch (e: Exception) {

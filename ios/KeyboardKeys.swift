@@ -358,9 +358,13 @@ final class KeyButton: UIButton {
     /// 换肤 + 长辈字号（重建键位后由 `KeyboardLayout.applyKeyTheme` 逐键调）。
     func applyTheme(_ p: KeyboardPalette, fontScale: CGFloat) {
         applyTitle(p.keyFg, fontScale: fontScale)
-        // 动态皮肤只替换整页背景；键帽保持主题默认纯色。
-        backgroundColor = p.keyBg
-        titleLabel?.shadowColor = .clear
+        // 动态皮肤 = 整页插画：键帽只压薄色，让同一张连续插画透出来。
+        backgroundColor = p.keySurface(p.keyBg)
+        let scene = KeyboardPreferences.scene != nil
+        titleLabel?.shadowColor = scene ? UIColor.black.withAlphaComponent(0.45) : .clear
+        titleLabel?.shadowOffset = CGSize(width: 0, height: 1)
+        badgeLabel.shadowColor = scene ? UIColor.black.withAlphaComponent(0.45) : .clear
+        badgeLabel.shadowOffset = CGSize(width: 0, height: 1)
     }
 
     /// 刷新键面文字。两行键走 attributed title 给**逐行**字号

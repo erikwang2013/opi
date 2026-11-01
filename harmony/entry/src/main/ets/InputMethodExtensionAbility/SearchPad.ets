@@ -5,7 +5,7 @@
 // 鸿蒙 IME 面板里的 TextInput 唤不起第二个输入法，搜索文本改由本盘直接编辑；
 // 键位只留搜索用得到的语义：字母 / 空格 / ⌫ / ↵（收起叠盘，查询与结果保留）。
 
-import { Palette, paletteFor, scenePanelBg } from './Palette';
+import { Palette, paletteFor, scenePanelBg, sceneKeyBg } from './Palette';
 
 const ROWS: string[][] = [
   ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
@@ -60,7 +60,7 @@ export struct SearchPad {
   Key(label: string, action: () => void, weight: number) {
     Button(label)
       .fontSize(14).fontColor(this.pal().keyFg)
-      .backgroundColor(this.pal().keyBg).borderRadius(5)
+      .backgroundColor(sceneKeyBg(this.pal().keyBg)).borderRadius(5)
       .layoutWeight(weight).height('100%')
       .margin({ left: 1, right: 1, top: 1, bottom: 1 })
       .onClick(action)

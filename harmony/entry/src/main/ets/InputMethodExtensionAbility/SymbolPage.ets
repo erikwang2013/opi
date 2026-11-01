@@ -11,7 +11,7 @@
 
 import { KeyboardController } from './KeyboardController';
 import { OpiMode } from './OpiEngine';
-import { Palette, paletteFor, scenePanelBg } from './Palette';
+import { Palette, paletteFor, scenePanelBg, sceneKeyBg } from './Palette';
 import {
   SymbolCategory, radicalGlyph, rareChars, rareIndex, rareStrokeCounts, symbolCategories,
 } from './SymbolData';
@@ -331,7 +331,7 @@ export struct RarePanel {
                     Text(radicalGlyph(r)).fontSize(20).fontColor(this.pal().keyFg)
                   }
                   .layoutWeight(1).height(44).margin(2).borderRadius(6)
-                  .backgroundColor(this.pal().keyBg)
+                  .backgroundColor(sceneKeyBg(this.pal().keyBg))
                   .onClick(() => {
                     this.radical = r;
                     this.strokes = 0;
@@ -353,7 +353,7 @@ export struct RarePanel {
               ForEach(this.strokeCounts(), (s: number) => {
                 Text(`${s} 画`)
                   .fontSize(16).fontColor(this.pal().keyFg)
-                  .backgroundColor(this.pal().keyBg).borderRadius(8)
+                  .backgroundColor(sceneKeyBg(this.pal().keyBg)).borderRadius(8)
                   .padding({ left: 16, right: 16, top: 10, bottom: 10 })
                   .margin(5)
                   .onClick(() => {
@@ -375,7 +375,7 @@ export struct RarePanel {
                     Text(this.chars()[i]).fontSize(22).fontColor(this.pal().keyFg)
                   }
                   .layoutWeight(1).height(44).margin(2).borderRadius(6)
-                  .backgroundColor(this.pal().keyBg)
+                  .backgroundColor(sceneKeyBg(this.pal().keyBg))
                   .onClick(() => {
                     this.ctrl.commitText(this.chars()[i]);
                   })

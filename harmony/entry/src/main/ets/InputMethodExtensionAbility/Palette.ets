@@ -127,10 +127,24 @@ export function paletteFor(skin: number, dark: boolean, elder: boolean): Palette
  * 纯色皮肤原值返回。scene 直接读 AppStorage，面板不必各挂一条 @StorageLink。
  */
 export function scenePanelBg(color: string): string {
+  return sceneSurface(color);
+}
+
+/** 键面/按钮：动态皮肤下只压 42% 主题色，插画是整页皮肤。 */
+export function sceneKeyBg(color: string): string {
+  return sceneSurface(color);
+}
+
+/** 工具条/候选栏：与键面同一档薄色。 */
+export function sceneBarBg(color: string): string {
+  return sceneSurface(color);
+}
+
+function sceneSurface(color: string): string {
   const scene: string = AppStorage.get<string>('opiScene') ?? '';
   if (scene.length === 0) {
     return color;
   }
   const rgb: string = color.length === 9 ? color.slice(3) : color.slice(1);
-  return '#9E' + rgb;
+  return '#6B' + rgb;
 }

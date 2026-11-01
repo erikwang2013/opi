@@ -242,13 +242,13 @@ final class KeyboardToolbar: UIView {
     /// 见 `KeyboardLayout.nativeBackdrop`。
     func setNativeBackdrop(_ on: Bool) {
         nativeBackdrop = on
-        backgroundColor = on ? .clear : palette.toolbarBg
+        backgroundColor = on ? .clear : palette.sceneSurface(palette.toolbarBg)
         isOpaque = !on
     }
 
     func applyTheme(_ p: KeyboardPalette) {
         palette = p
-        backgroundColor = nativeBackdrop ? .clear : p.toolbarBg
+        backgroundColor = nativeBackdrop ? .clear : p.sceneSurface(p.toolbarBg)
         tintColor = p.toolbarFg
         for b in iconButtons {
             b.tintColor = p.toolbarFg

@@ -15,8 +15,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import org.json.JSONArray
-import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -103,7 +101,7 @@ internal object AsrModelDownloader {
             }
             done += f.bytes
         }
-        writeManifest(dir, pack)
+        AsrModels.writeManifest(dir, pack)
         main.post { state = AsrDownloadState.Running(pack.id, total, total) }
     }
 
@@ -190,30 +188,6 @@ internal object AsrModelDownloader {
         } finally {
             conn.disconnect()
             if (part.exists()) part.delete()
-        }
-    }
-
-    private fun writeManifest(dir: File, pack: AsrModelPack) {
-        val files = JSONArray()
-        for (f in pack.files) {
-            files.put(
-                JSONObject()
-                    .put("path", f.path)
-                    .put("size", f.bytes)
-                    .put("sha256", f.sha256)
-                    .put("role", f.role),
-            )
-        }
-        val json = JSONObject().put("version", 1).put("files", files).toString()
-        val tmp = File(dir, "manifest.json.part")
-        tmp.writeText(json)
-        val manifest = File(dir, "manifest.json")
-        if (!tmp.renameTo(manifest)) {
-            manifest.delete()
-            if (!tmp.renameTo(manifest)) {
-                tmp.copyTo(manifest, overwrite = true)
-                tmp.delete()
-            }
         }
     }
 

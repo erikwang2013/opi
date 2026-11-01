@@ -5,7 +5,7 @@
 // 常用符号网格，点一格 = 选中并关闭。画在键区之上（同层覆盖，不是系统 Dialog ——
 // IME 窗口里的 Dialog 要另起窗口，真机焦点/尺寸都不可控）。
 
-import { Palette, paletteFor, scenePanelBg } from './Palette';
+import { Palette, paletteFor, scenePanelBg, sceneKeyBg } from './Palette';
 import { symbolCategories } from './SymbolData';
 
 const PER_ROW: number = 8;
@@ -69,7 +69,7 @@ export struct CustomSymbolPicker {
       Row() {
         Button('返回')
           .fontSize(this.elder === 1 ? 19 : 17)
-          .fontColor(this.pal().keyFg).backgroundColor(this.pal().keyBg)
+          .fontColor(this.pal().keyFg).backgroundColor(sceneKeyBg(this.pal().keyBg))
           .borderRadius(6).layoutWeight(1).height('100%')
           .margin({ left: 2, right: 2 })
           .onClick(() => {

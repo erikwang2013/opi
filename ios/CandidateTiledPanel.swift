@@ -55,7 +55,7 @@ final class CandidateTiledPanel: UIView {
 
     init() {
         super.init(frame: .zero)
-        backgroundColor = palette.barBg
+        backgroundColor = palette.sceneSurface(palette.barBg)
         buildReadingColumn()
         buildPager()
         buildActions()
@@ -170,7 +170,7 @@ final class CandidateTiledPanel: UIView {
     func applyTheme(_ p: KeyboardPalette, fontScale: CGFloat) {
         palette = p
         self.fontScale = fontScale
-        backgroundColor = p.barBg
+        backgroundColor = p.sceneSurface(p.barBg)
         readingColumn.applyTheme(p, fontScale: fontScale)
         styleActions()
         dirty = true
@@ -251,7 +251,7 @@ final class CandidateTiledPanel: UIView {
         let b = UIButton(type: .system)
         b.setTitle(text, for: .normal)
         b.setTitleColor(palette.keyFg, for: .normal)
-        b.backgroundColor = palette.keyBg
+        b.backgroundColor = palette.keySurface(palette.keyBg)
         b.layer.cornerRadius = 6
         b.clipsToBounds = true
         b.titleLabel?.font = .systemFont(ofSize: 20 * fontScale)
@@ -299,7 +299,7 @@ final class CandidateTiledPanel: UIView {
     private func styleActions() {
         for b in actionButtons {
             b.setTitleColor(palette.keyFg, for: .normal)
-            b.backgroundColor = palette.keyBg
+            b.backgroundColor = palette.keySurface(palette.keyBg)
             b.layer.cornerRadius = 6
             b.clipsToBounds = true
             b.titleLabel?.font = .systemFont(ofSize: 16 * fontScale)

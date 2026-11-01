@@ -84,7 +84,7 @@ final class ComposingBar: UIView {
         label.textColor = palette.barBufferFg
         // 默认皮肤在 iOS 26 上整行透明（系统圆角背景透上来）；其余皮肤/系统保留
         // 组合态的底色带。
-        backgroundColor = (text.isEmpty || nativeBackdrop) ? .clear : palette.barBg
+        backgroundColor = (text.isEmpty || nativeBackdrop) ? .clear : palette.sceneSurface(palette.barBg)
         scrollToEnd = !text.isEmpty
         setNeedsLayout()
     }

@@ -5,6 +5,7 @@ package xyz.erik.opi.settings
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import xyz.erik.opi.BuildConfig
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -91,7 +92,11 @@ private fun parsePackage(obj: String): UpdatePackage? {
  * 解析 `version.json` 的包清单（Android 只认 `packages.android`，兼容
  * `android-universal`）。任何字段坏了都退成 null，不猜 URL。
  */
-internal fun parseReleaseJson(text: String, platform: String = "android"): RemoteRelease? {
+internal fun parseReleaseJson(
+    text: String,
+    platform: String = "android",
+    tier: String = "full",
+): RemoteRelease? {
     val version = jsonString(text, "version") ?: jsonString(text, "latest")
     val v = version?.trim()?.removePrefix("v")?.takeIf { it.isNotEmpty() } ?: return null
     val download = jsonString(text, "download")?.takeIf { it.startsWith("https://") }
@@ -99,8 +104,11 @@ internal fun parseReleaseJson(text: String, platform: String = "android"): Remot
     val packages = jsonObjectAt(text, "packages")
     val platformObj = packages?.let { jsonObjectAt(it, platform) }
         ?: packages?.let { jsonObjectAt(it, "android-universal") }
-    val full = platformObj?.let { jsonObjectAt(it, "full") }?.let(::parsePackage)
-    val hot = platformObj?.let { jsonObjectAt(it, "hot") }?.let(::parsePackage)
+    val tierObj = platformObj?.let { jsonObjectAt(it, tier) }
+        ?: platformObj?.let { jsonObjectAt(it, "full") }
+    val full = tierObj?.let(::parsePackage)
+    val hot = tierObj?.let { jsonObjectAt(it, "hot") }?.let(::parsePackage)
+        ?: platformObj?.let { jsonObjectAt(it, "hot") }?.let(::parsePackage)
     return RemoteRelease(v, download, full, hot)
 }
 
@@ -145,7 +153,9 @@ internal fun fetchLatestRelease(): Result<RemoteRelease> = runCatching {
         if (left <= 0) error("检测超时")
         return left.toInt()
     }
-    runCatching { parseReleaseJson(httpGet(OPI_VERSION_URL, budget())) }.getOrNull()
+    runCatching {
+        parseReleaseJson(httpGet(OPI_VERSION_URL, budget()), tier = BuildConfig.PACKAGE_TIER)
+    }.getOrNull()
         ?: parseJsonLdVersion(httpGet(OPI_HOME_URL, budget()))?.let { RemoteRelease(it) }
         ?: error("版本端点没有可用版本号")
 }

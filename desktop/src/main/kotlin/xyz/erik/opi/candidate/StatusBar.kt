@@ -449,7 +449,7 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
                     // 条内：插画 → 半透明条底色 → 按钮（按钮自己也是半透明键帽）。
                     if (theme != null) {
                         StatusBarSceneBackdrop(palette, theme, Modifier.fillMaxSize())
-                        Box(Modifier.fillMaxSize().background(palette.bg.copy(alpha = 0.42f)))
+                        Box(Modifier.fillMaxSize().background(palette.bg.copy(alpha = 0.36f)))
                     } else {
                         Box(Modifier.fillMaxSize().background(palette.bg))
                     }

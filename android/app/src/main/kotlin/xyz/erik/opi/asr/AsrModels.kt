@@ -137,6 +137,31 @@ internal object AsrModels {
     fun selected(context: Context, whisper: Boolean): AsrModelPack =
         if (whisper) this.whisper else senseVoice
 
+    /** 下载器与内置模型解压共用：manifest.json 必须与 Rust 加载器逐字段一致。 */
+    fun writeManifest(dir: File, pack: AsrModelPack) {
+        val files = org.json.JSONArray()
+        for (f in pack.files) {
+            files.put(
+                org.json.JSONObject()
+                    .put("path", f.path)
+                    .put("size", f.bytes)
+                    .put("sha256", f.sha256)
+                    .put("role", f.role),
+            )
+        }
+        val json = org.json.JSONObject().put("version", 1).put("files", files).toString()
+        val tmp = File(dir, "manifest.json.part")
+        tmp.writeText(json)
+        val manifest = File(dir, "manifest.json")
+        if (!tmp.renameTo(manifest)) {
+            manifest.delete()
+            if (!tmp.renameTo(manifest)) {
+                tmp.copyTo(manifest, overwrite = true)
+                tmp.delete()
+            }
+        }
+    }
+
     fun vadUrls(): List<String> = listOf(VAD_URL, VAD_FALLBACK)
 
     /** 原生库只打包 64 位（armeabi-v7a 内存风险）：设置页据此隐藏无意义的下载入口。 */

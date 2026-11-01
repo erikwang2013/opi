@@ -1334,7 +1334,7 @@ trigger **≤32 个 ASCII 字母**（`CustomPhraseCodec` 与 `engine-core/src/cu
 **语音输入（2026-11-01，默认关闭）**：状态栏符号键后新增话筒按钮，点击开始录音，
 再点停止并识别；设置「语音」页可开关、选 auto/zh/en、下载模型。音频 16 kHz 单声道
 经 Java Sound 采集，交给同目录 `opi_asr.dll` 本地识别，不落盘、不上传；中文/自动
-SenseVoice，英文 Whisper。模型不随安装包（SenseVoice 约 239 MB、Whisper 约 375 MB
+SenseVoice，英文 Whisper。完整包内置模型；普通/基础包在设置页下载（SenseVoice 约 239 MB、Whisper 约 358 MB
 + VAD），下载后逐文件 SHA-256 校验。**验证**：桌面 JVM 单测与 ASR 真实 wav 通过；
 真机麦克风、长句/噪声与安装包运行仍【未验证】。
 

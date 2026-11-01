@@ -35,7 +35,7 @@ private val ErrorRed = Color(0xFFB3261E)
 
 @Composable
 internal fun SpeechPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (String) -> Unit) {
-    val root = remember { speechModelRoot() }
+    val userRoot = remember { speechModelRoot() }
     SectionTitle("语音输入")
     SettingRow(
         "启用语音输入",
@@ -70,22 +70,50 @@ internal fun SpeechPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Str
 
     SectionTitle("离线模型（首次使用前下载）")
     Text(
-        "模型下载到本机私有目录，不进安装包；下载后逐文件校验 SHA-256。" +
+        "完整包已内置两套模型（首次使用解压）；普通/基础包在设置里下载，逐文件校验 SHA-256。" +
             "SenseVoice 约 ${SpeechEngine.SENSEVOICE.approxMb()} MB，Whisper 约 ${SpeechEngine.WHISPER.approxMb()} MB（均含 VAD）。",
         fontSize = 12.sp, color = Muted,
     )
-    ModelCard(SENSEVOICE_MODEL, root, report)
-    ModelCard(WHISPER_MODEL, root, report)
-    Text("模型目录：$root", fontSize = 11.sp, color = Muted)
+    ModelCard(SENSEVOICE_MODEL, userRoot, report)
+    ModelCard(WHISPER_MODEL, userRoot, report)
+    Text("模型目录：$userRoot", fontSize = 11.sp, color = Muted)
     Text(
         "VAD：Silero（MIT）。Whisper 权重：MIT（OpenAI）。sherpa-onnx 运行时：Apache-2.0。",
         fontSize = 11.sp, color = Muted,
     )
+
+    SectionTitle("扩展词库（基础包）")
+    val dictState = DictPack.state
+    val dictInstalled = remember(dictState) { DictPack.installed() }
+    val dictPackaged = remember { DictPack.packaged() }
+    val dictRunning = dictState as? DictPack.State.Running
+    val dictFailed = dictState as? DictPack.State.Failed
+    Text(
+        when {
+            dictInstalled -> "已下载：繁体 / 笔画 / 五笔 / 生僻字索引（重开输入法生效）。"
+            dictPackaged -> "当前安装包已带扩展词库，无需下载。"
+            else -> "基础包未带扩展词库：下载约 ${DictPack.mb(DictPack.BYTES)} MB，解压到 ${DictPack.installRoot()}。"
+        },
+        fontSize = 12.sp, color = Muted,
+    )
+    if (dictRunning != null) {
+        Text("下载中 ${dictRunning.received * 100 / dictRunning.total.coerceAtLeast(1)}%", fontSize = 12.sp, color = Ink)
+    }
+    if (dictFailed != null) {
+        Text("下载失败：${dictFailed.message}", fontSize = 12.sp, color = ErrorRed)
+    }
+    if (!dictInstalled && !dictPackaged) {
+        TextButton(enabled = dictRunning == null, onClick = { DictPack.download() }) {
+            Text(if (dictRunning != null) "下载中" else "下载扩展词库", color = Teal)
+        }
+    }
 }
 
 @Composable
-private fun ModelCard(model: SpeechModel, root: java.nio.file.Path, report: (String) -> Unit) {
+private fun ModelCard(model: SpeechModel, userRoot: java.nio.file.Path, report: (String) -> Unit) {
     val state = SpeechModels.state
+    val root = modelRoot(model.engine, userRoot)
+    val bundled = bundledModelRoot()?.let { modelReady(model.engine, it) } == true
     val ready = modelReady(model.engine, root)
     val mine = state.engine == model.engine
     val running = state.phase == DownloadPhase.RUNNING
@@ -98,7 +126,11 @@ private fun ModelCard(model: SpeechModel, root: java.nio.file.Path, report: (Str
             Text(model.engine.title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Ink)
             Spacer(Modifier.width(8.dp))
             Text(
-                if (ready) "已下载" else "未下载",
+                when {
+                    bundled -> "已随安装包提供"
+                    ready -> "已下载"
+                    else -> "未下载"
+                },
                 fontSize = 12.sp, color = if (ready) Teal else Muted,
             )
             Spacer(Modifier.weight(1f))
@@ -116,11 +148,13 @@ private fun ModelCard(model: SpeechModel, root: java.nio.file.Path, report: (Str
                 Box(Modifier.fillMaxWidth(state.fraction).fillMaxHeight().background(Teal))
             }
             TextButton(onClick = { SpeechModels.cancel() }) { Text("取消下载", color = Teal) }
+        } else if (bundled) {
+            Text("已内置，无需下载", fontSize = 12.sp, color = Teal)
         } else {
             TextButton(
                 enabled = !running,
                 onClick = {
-                    SpeechModels.start(model.engine, root)
+                    SpeechModels.start(model.engine, userRoot)
                     report("开始下载 ${model.engine.title}（约 ${model.engine.approxMb()} MB）")
                 },
             ) {

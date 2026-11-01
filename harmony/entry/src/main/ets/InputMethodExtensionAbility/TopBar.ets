@@ -16,7 +16,7 @@ import { KeyboardController } from './KeyboardController';
 import { INPUT_MODES, lastChineseModeIndex, OpiScheme } from './InputModes';
 import { PanelView } from './KeyboardModes';
 import { OpiPet, PetMood, petMood, petStripSelection } from './OpiPet';
-import { Palette, paletteFor } from './Palette';
+import { Palette, paletteFor, sceneBarBg } from './Palette';
 import { stickerDataUri } from './PetStickerImages';
 
 const PET_SIZE_IN_BAR: number = 30;
@@ -206,7 +206,7 @@ export struct TopBar {
           })
       }
     }
-    .height(32).width('100%').backgroundColor(this.pal().toolbarBg)
+    .height(32).width('100%').backgroundColor(sceneBarBg(this.pal().toolbarBg))
   }
 
   @Builder
@@ -256,7 +256,7 @@ export struct TopBar {
         this.HiddenChinese()
       }
     }
-    .height(44).width('100%').backgroundColor(this.pal().barBg)
+    .height(44).width('100%').backgroundColor(sceneBarBg(this.pal().barBg))
     // 联想态点候选行空白 = 收起（Spec §5.1）。ArkUI 的 onClick 是手势竞争：
     // 子组件消费后父级不触发（文档级，真机未核）⇒ 点候选不误触本行；若真机相反改用 hitTestBehavior。
     .onClick(() => {
@@ -299,7 +299,7 @@ export struct TopBar {
         this.ctrl.hideKeyboard();
       })
     }
-    .height(44).width('100%').backgroundColor(this.pal().toolbarBg)
+    .height(44).width('100%').backgroundColor(sceneBarBg(this.pal().toolbarBg))
     .onAreaChange((oldValue: Area, newValue: Area) => {
       const w: number = newValue.width as number;
       if (w > 0 && w !== this.barWidth) {

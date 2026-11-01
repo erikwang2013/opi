@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import xyz.erik.opi.asr.LocalAsrMic
 import androidx.compose.ui.unit.sp
+import xyz.erik.opi.ime.sceneTextStyle
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
 
@@ -268,6 +269,7 @@ fun KeyButton(
                 fontSize = hintFont,
                 maxLines = 1,
                 color = palette.barDimFg,
+                style = sceneTextStyle(palette.barDimFg),
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = 2.dp),
             )
         }
@@ -277,6 +279,7 @@ fun KeyButton(
                 fontSize = hintFont,
                 maxLines = 1,
                 color = palette.barDimFg,
+                style = sceneTextStyle(palette.barDimFg),
                 modifier = Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 4.dp),
             )
         }
@@ -296,6 +299,7 @@ fun KeyButton(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 color = fg,
+                style = sceneTextStyle(fg),
             )
         }
         if (popupOpen) {

@@ -240,7 +240,7 @@ enum OpiTheme {
     }
 
     static func style(content: NSView, palette: OpiPalette = OpiTheme.palette,
-                      scrimAlpha: CGFloat = 0.55) {
+                      scrimAlpha: CGFloat = 0.40) {
         content.wantsLayer = true
         content.layer?.backgroundColor = palette.bg.cgColor
         content.layer?.borderColor = palette.line.cgColor
@@ -249,7 +249,7 @@ enum OpiTheme {
     }
 
     /// 原生控件页（设置窗/符号窗）：底色用系统窗口色，.labelColor 在插画上仍可读。
-    static func styleNative(content: NSView, scrimAlpha: CGFloat = 0.72) {
+    static func styleNative(content: NSView, scrimAlpha: CGFloat = 0.45) {
         content.wantsLayer = true
         content.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
         installScene(content: content, scrim: .windowBackgroundColor, alpha: scrimAlpha)

@@ -45,7 +45,7 @@ final class KeyPopup: UIView {
         self.palette = palette
         super.init(frame: .zero)
         isUserInteractionEnabled = false
-        backgroundColor = palette.keyBg
+        backgroundColor = palette.keySurface(palette.keyBg)
         layer.cornerRadius = 8
         layer.borderWidth = 1
         layer.borderColor = palette.accent.withAlphaComponent(0.7).cgColor
@@ -163,7 +163,7 @@ final class PunctuationPicker: UIView {
         header.applyTheme(p)
         for button in buttons {
             button.setTitleColor(p.panelFg, for: .normal)
-            button.backgroundColor = p.keyBg
+            button.backgroundColor = p.keySurface(p.keyBg)
             button.titleLabel?.font = .systemFont(ofSize: 20 * fontScale)
         }
     }
@@ -186,7 +186,7 @@ final class PunctuationPicker: UIView {
                 button.setTitle(symbols[i], for: .normal)
                 button.titleLabel?.font = .systemFont(ofSize: 20 * fontScale)
                 button.setTitleColor(palette.panelFg, for: .normal)
-                button.backgroundColor = palette.keyBg
+                button.backgroundColor = palette.keySurface(palette.keyBg)
                 button.layer.cornerRadius = 6
                 button.tag = i
                 button.addTarget(self, action: #selector(tap(_:)), for: .touchUpInside)

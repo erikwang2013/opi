@@ -15,7 +15,7 @@ import {
   ONE_HAND_LEFT, ONE_HAND_OFF, ONE_HAND_RIGHT, PanelView, openSubPanel, toggleAssociation
 } from './KeyboardModes';
 import { OpiMode } from './OpiEngine';
-import { Palette, SKINS, paletteFor, scenePanelBg } from './Palette';
+import { Palette, SKINS, paletteFor, scenePanelBg, sceneKeyBg } from './Palette';
 import { sceneLabel } from './SceneTheme';
 import { ModeChip, PanelHeader, appVersion } from './Panels';
 import { UpdateSection } from './UpdateCheck';
@@ -149,7 +149,7 @@ export struct SettingsPanel {
               Text('确认清除全部用户词？')
                 .fontSize(this.elder === 1 ? 14 : 12).fontColor(this.pal().panelFg).layoutWeight(1)
               Button('取消')
-                .fontSize(13).height(30).backgroundColor(this.pal().keyBg)
+                .fontSize(13).height(30).backgroundColor(sceneKeyBg(this.pal().keyBg))
                 .fontColor(this.pal().keyFg).margin({ right: 8 })
                 .onClick(() => {
                   this.clearConfirm = false;

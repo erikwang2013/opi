@@ -1,56 +1,46 @@
 # 站点下载目录
 
-静态站“下载”页直接链接本目录下的安装包，**不跳转 GitHub**。文件名与仓库
-`dist/` 保持一致，发版后从 `dist/` 拷入：
+静态站“下载”页直接链接本目录下的安装包，**不跳转 GitHub**。三档安装包分目录存放：
 
-```bash
-# 在仓库根目录执行（版本号按实际发布替换）
-cp dist/opi-1.30.0-linux-amd64.deb \
-   dist/opi-1.30.0-linux-x86_64.rpm \
-   dist/opi-1.30.0-linux-amd64-hot.zip \
-   dist/opi-1.30.0-windows-x64-setup.exe \
-   dist/opi-1.30.0-android-universal.apk \
-   dist/opi-1.30.0-macos-universal.pkg \
-   dist/opi-1.30.0-ios-unsigned.ipa \
-   dist/opi-1.30.0-harmonyos-unsigned.hap \
-   dist/opi-1.30.0-custom-pinyin-200k.tsv \
-   dist/opi-1.30.0-rime-wanxiang-200k.tsv \
-   site/download/
-```
+- `full/`：语音引擎 + 两套模型 + 全部词库（Android 仅 64 位）
+- `normal/`：语音引擎 + 全部词库，模型在设置页下载
+- `basic/`：语音引擎 + 仅拼音主词库，扩展词库/模型在设置页下载
+- `components/asr/`：语音模型整包（普通/基础包也可在设置内逐文件下载）
+- `components/dicts/`：基础包的扩展词库包（设置内下载并自动解压）
 
 二进制不进入 git（见同目录 `.gitignore`）；部署时把该目录与 `site/` 一起同步到
-静态服务器即可。
-
-## 应用内下载清单（2026-10-31）
-
-`site/version.json` 除 `version` / `download` 外，可带 `packages`：应用现在直接在
-「关于」里下载并显示进度，不再跳浏览器。每个平台可给 `full`（完整安装包）和
-`hot`（热更新包），字段都是 `url`（**必须 https**）、`size`（字节）、`sha256`
-（64 位十六进制；缺省 = 客户端显示「未校验」）：
-
-```json
-"packages": {
-  "windows-x64": { "full": { "url": "...exe", "size": 66094276, "sha256": "..." },
-                    "hot":  { "url": "...zip", "size": 0, "sha256": "..." } },
-  "linux-amd64": { "full": { "url": "...deb", ... }, "hot": { "url": "...zip", ... } },
-  "linux-x86_64": { "full": { "url": "...rpm", ... }, "hot": { "url": "...zip", ... } },
-  "android": { "full": { "url": "...apk", ... } }
-}
-```
-
-平台键：Windows = `windows-x64`；Linux deb 系 = `linux-amd64`/`linux-arm64`，
-rpm 系 = `linux-x86_64`/`linux-aarch64`；Android = `android`。客户端按本机包管理器
-选键；没有对应 full/hot 时按钮不出现，退回下载页。
-
-热更新包（桌面）= jpackage 应用映像里的 **app 目录**（不是整个安装包，省掉 JRE）：
+静态服务器即可。文件由 `scripts/build-packages.sh`、Android/Windows/Packages CI
+或桌面 jpackage 产出后按版本改名放入对应目录。
 
 ```bash
-# Linux（安装后目标是 /opt/opi/lib/app）
-(cd desktop/build/compose/binaries/main/app/opi/lib/app && zip -r -9 /tmp/opi-$V-linux-amd64-hot.zip .)
-# Windows（安装后目标是 {app}\app）
-#   在 Windows 上把 <app-image>\app 整个目录压成 opi-$V-windows-x64-hot.zip
+# 版本号按实际发布替换
+V=1.31.0
+mkdir -p site/download/{full,normal,basic,components/asr,components/dicts}
+cp dist/opi-$V-android-universal.apk            site/download/normal/
+cp dist/opi-$V-android-universal-full.apk       site/download/full/
+cp dist/opi-$V-android-universal-basic.apk      site/download/basic/
+cp dist/opi-$V-windows-x64-setup.exe            site/download/normal/
+cp dist/opi-$V-windows-x64-full-setup.exe       site/download/full/
+cp dist/opi-$V-windows-x64-basic-setup.exe      site/download/basic/
+cp dist/opi-$V-linux-amd64.deb                  site/download/normal/
+cp dist/opi-$V-linux-amd64-full.deb             site/download/full/
+cp dist/opi-$V-linux-amd64-basic.deb            site/download/basic/
+cp dist/opi-$V-linux-x86_64.rpm                 site/download/normal/
+cp dist/opi-$V-linux-x86_64-full.rpm            site/download/full/
+cp dist/opi-$V-linux-x86_64-basic.rpm           site/download/basic/
+cp dist/opi-$V-macos-universal.pkg              site/download/normal/
+cp dist/opi-$V-ios-unsigned.ipa                 site/download/normal/
+cp dist/opi-$V-harmonyos-unsigned.hap           site/download/normal/
+cp dist/opi-$V-custom-pinyin-200k.tsv           site/download/normal/
+cp dist/opi-$V-rime-wanxiang-200k.tsv           site/download/normal/
+cp dist/components/dicts/opi-dicts-$V.zip       site/download/components/dicts/
+cp dist/components/asr/opi-asr-models-$V.zip    site/download/components/asr/
 ```
 
-客户端只下载 + 校验，不自动提权覆盖；落地后由用户在「关于」里打开文件/文件夹，
-关闭小欧后手工覆盖对应 app 目录（Linux 需 sudo）。Android 的 APK 由系统安装器二次
-确认，无法静默替换。
+## 应用内下载清单
+
+`site/version.json` 的 `packages.<平台>` 现在带 `full` / `normal` / `basic` 三档
+（每档字段 `url`、`size`、`sha256`，客户端按 `BuildConfig.PACKAGE_TIER` /
+`OPI_PACKAGE_TIER` 选自己那一档，缺档回退 `full`）；`hot` 仍是桌面热更新包。
+`components` 给站点显示组件体积（`asr`、`dicts`）。字段大小 = 字节，SHA-256 = 64 位
+十六进制；缺省 = 客户端显示「未校验」。

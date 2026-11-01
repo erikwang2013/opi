@@ -1,65 +1,42 @@
 {
   "download": "https://opi.erik.xyz/download",
-  "version": "1.30.0",
+  "version": "1.31.0",
   "packages": {
     "windows-x64": {
-      "full": {
-        "url": "https://opi.erik.xyz/download/opi-1.30.0-windows-x64-setup.exe",
-        "size": 71214950,
-        "sha256": "656156e3572519ff82799d689c4452973c0aafb5a43f5aab534a967f8a9cd3f8"
-      }
+      "full": { "url": "https://opi.erik.xyz/download/full/opi-1.31.0-windows-x64-full-setup.exe", "size": 0 },
+      "normal": { "url": "https://opi.erik.xyz/download/normal/opi-1.31.0-windows-x64-setup.exe", "size": 0 },
+      "basic": { "url": "https://opi.erik.xyz/download/basic/opi-1.31.0-windows-x64-basic-setup.exe", "size": 0 },
+      "hot": { "url": "https://opi.erik.xyz/download/normal/opi-1.31.0-linux-amd64-hot.zip", "size": 0 }
     },
     "linux-amd64": {
-      "full": {
-        "url": "https://opi.erik.xyz/download/opi-1.30.0-linux-amd64.deb",
-        "size": 102368678,
-        "sha256": "542186a950c5104b635edce812363225e7c5f008575e009aa207f6238d9fd10a"
-      },
-      "hot": {
-        "url": "https://opi.erik.xyz/download/opi-1.30.0-linux-amd64-hot.zip",
-        "size": 45630891,
-        "sha256": "9c135488156a75b1f27b4bc414920cd520278ebac64ea2b39bc5f6c5c134d313"
-      }
+      "full": { "url": "https://opi.erik.xyz/download/full/opi-1.31.0-linux-amd64-full.deb", "size": 0 },
+      "normal": { "url": "https://opi.erik.xyz/download/normal/opi-1.31.0-linux-amd64.deb", "size": 0 },
+      "basic": { "url": "https://opi.erik.xyz/download/basic/opi-1.31.0-linux-amd64-basic.deb", "size": 0 },
+      "hot": { "url": "https://opi.erik.xyz/download/normal/opi-1.31.0-linux-amd64-hot.zip", "size": 0 }
     },
     "linux-x86_64": {
-      "full": {
-        "url": "https://opi.erik.xyz/download/opi-1.30.0-linux-x86_64.rpm",
-        "size": 102410603,
-        "sha256": "6551a7592b964c16cf8a2a33d4da25171487826f501eaea16c5e7c6e323bb6ba"
-      },
-      "hot": {
-        "url": "https://opi.erik.xyz/download/opi-1.30.0-linux-amd64-hot.zip",
-        "size": 45630891,
-        "sha256": "9c135488156a75b1f27b4bc414920cd520278ebac64ea2b39bc5f6c5c134d313"
-      }
+      "full": { "url": "https://opi.erik.xyz/download/full/opi-1.31.0-linux-x86_64-full.rpm", "size": 0 },
+      "normal": { "url": "https://opi.erik.xyz/download/normal/opi-1.31.0-linux-x86_64.rpm", "size": 0 },
+      "basic": { "url": "https://opi.erik.xyz/download/basic/opi-1.31.0-linux-x86_64-basic.rpm", "size": 0 },
+      "hot": { "url": "https://opi.erik.xyz/download/normal/opi-1.31.0-linux-amd64-hot.zip", "size": 0 }
     },
     "android": {
-      "full": {
-        "url": "https://opi.erik.xyz/download/opi-1.30.0-android-universal.apk",
-        "size": 82270203,
-        "sha256": "188421f1245ec9fa28c1562c8c410f70a24a0fdd94f9d24c2671fd71f5d097eb"
-      }
+      "full": { "url": "https://opi.erik.xyz/download/full/opi-1.31.0-android-universal-full.apk", "size": 0 },
+      "normal": { "url": "https://opi.erik.xyz/download/normal/opi-1.31.0-android-universal.apk", "size": 0 },
+      "basic": { "url": "https://opi.erik.xyz/download/basic/opi-1.31.0-android-universal-basic.apk", "size": 0 }
     },
     "macos-universal": {
-      "full": {
-        "url": "https://opi.erik.xyz/download/opi-1.30.0-macos-universal.pkg",
-        "size": 30521571,
-        "sha256": "fd878cdaf7b665e74f4b817ab0d9a20d4500dd5063cfb3dfbecc736ee021381b"
-      }
+      "normal": { "url": "https://opi.erik.xyz/download/normal/opi-1.31.0-macos-universal.pkg", "size": 0 }
     },
     "ios": {
-      "full": {
-        "url": "https://opi.erik.xyz/download/opi-1.30.0-ios-unsigned.ipa",
-        "size": 30128594,
-        "sha256": "bd750d2394f6738f9c74ec690770dc469dea9c9e8f67abad2e6e27c85e27a455"
-      }
+      "normal": { "url": "https://opi.erik.xyz/download/normal/opi-1.31.0-ios-unsigned.ipa", "size": 0 }
     },
     "harmony": {
-      "full": {
-        "url": "https://opi.erik.xyz/download/opi-1.30.0-harmonyos-unsigned.hap",
-        "size": 62720183,
-        "sha256": "064d390f0e3a958943c95fdd4c21299a5e7a82b22527a7b57abeca56fff4c9bc"
-      }
+      "normal": { "url": "https://opi.erik.xyz/download/normal/opi-1.31.0-harmonyos-unsigned.hap", "size": 0 }
     }
+  },
+  "components": {
+    "dicts": { "url": "https://opi.erik.xyz/download/components/dicts/opi-dicts-1.31.0.zip", "size": 7564289, "sha256": "719011206ad590d9b609b917ca465f3851200ed5a62a6e4b8f0c2e4eeb8b5d9f" },
+    "asr": { "url": "https://opi.erik.xyz/download/components/asr/opi-asr-models-1.31.0.zip", "size": 0 }
   }
 }

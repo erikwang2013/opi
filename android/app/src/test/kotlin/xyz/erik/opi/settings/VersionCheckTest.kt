@@ -63,6 +63,21 @@ class VersionCheckTest {
     }
 
     @Test
+    fun releaseJsonSelectsInstalledTier() {
+        val text = """{
+          "version":"1.31.0",
+          "packages":{"android":{
+            "full":{"url":"https://opi.erik.xyz/download/full.apk"},
+            "normal":{"url":"https://opi.erik.xyz/download/normal.apk"},
+            "basic":{"url":"https://opi.erik.xyz/download/basic.apk"}
+          }}
+        }"""
+        assertEquals("https://opi.erik.xyz/download/normal.apk", parseReleaseJson(text, tier = "normal")?.full?.url)
+        assertEquals("https://opi.erik.xyz/download/basic.apk", parseReleaseJson(text, tier = "basic")?.full?.url)
+        assertEquals("https://opi.erik.xyz/download/full.apk", parseReleaseJson(text, tier = "missing")?.full?.url)
+    }
+
+    @Test
     fun jsonObjectAtBalancesBracesAndIgnoresStrings() {
         val text = """{"outer":{"name":"a}b{c","inner":{"x":1}}}"""
         assertEquals("""{"name":"a}b{c","inner":{"x":1}}""", jsonObjectAt(text, "outer"))

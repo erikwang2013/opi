@@ -296,18 +296,18 @@ extension KeyboardLayout {
         self.fontScale = fontScale
         // 默认皮肤在 iOS 26 上交回系统背景（见 `nativeBackdrop`）：根视图与最上面
         // 那行透明，系统键盘容器的圆角背景从顶上透下来，不再出现突兀的灰弧。
-        backgroundColor = nativeBackdrop ? .clear : p.toolbarBg
+        backgroundColor = nativeBackdrop ? .clear : p.sceneSurface(p.toolbarBg)
         isOpaque = !nativeBackdrop
         // 深色皮肤下让系统控件（旧面板的 label/背景）也切深色 —— 否则候选/表情页
         // 会是「深底黑字」。本端旧面板没有逐控件接色板，这是最小的补救。
         overrideUserInterfaceStyle = p.isDark ? .dark : .light
-        candidateBar.backgroundColor = nativeBackdrop ? .clear : p.barBg
+        candidateBar.backgroundColor = nativeBackdrop ? .clear : p.sceneSurface(p.barBg)
         candidateBar.isOpaque = !nativeBackdrop
         // 动态插画皮肤：键区底板留 20% 让插画透到键缝/键面上（键帽自己也有 32%
         // 透明，见 KeyButton.applyTheme）；纯色皮肤保持原来的不透明底板。
         let scene = KeyboardPreferences.scene
         keyArea.backgroundColor = scene != nil
-            ? p.barBg.withAlphaComponent(0.20) : p.barBg
+            ? p.barBg.withAlphaComponent(0.10) : p.barBg
         composingBar.setNativeBackdrop(nativeBackdrop)
         composingBar.applyTheme(p, fontScale: fontScale)
         petStrip.setNativeBackdrop(nativeBackdrop)
@@ -322,9 +322,9 @@ extension KeyboardLayout {
         // 符号面板带自己的表头，接完整色板；其余旧面板只统一底色，
         // 内部控件仍用系统色（README 记为已知差异）。
         symbolPanel.applyTheme(p)
-        emojiPanel.backgroundColor = p.panelBg
-        modePanel.backgroundColor = p.panelBg
-        rarePanel.backgroundColor = p.panelBg
+        emojiPanel.backgroundColor = p.sceneSurface(p.panelBg)
+        modePanel.backgroundColor = p.sceneSurface(p.panelBg)
+        rarePanel.backgroundColor = p.sceneSurface(p.panelBg)
         chineseButton.setTitleColor(p.barDimFg.withAlphaComponent(0.6), for: .normal)
         readingColumn.applyTheme(p, fontScale: fontScale)
         wordColumn.applyTheme(p, fontScale: fontScale)

@@ -89,7 +89,7 @@ fun PetStrip(modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxWidth()
             .height(COMPOSING_BAR_HEIGHT_DP.dp)
-            .background(p.barBg)
+            .background(sceneSurface(p.barBg, BAR_SCENE_ALPHA))
             // 光晕/粒子的半径大于槽高：裁在条内，别漏到下一行的候选/工具条上。
             .clipToBounds()
             .clearAndSetSemantics {},

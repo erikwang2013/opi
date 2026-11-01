@@ -13,7 +13,7 @@
 import { KeyboardController } from './KeyboardController';
 import { lastChineseModeIndex, MODE_ENGLISH26, traditionalModeLabel } from './InputModes';
 import { OpiMode, OpiShift } from './OpiEngine';
-import { Palette, paletteFor } from './Palette';
+import { Palette, paletteFor, sceneKeyBg } from './Palette';
 import { BackspaceButton, FuncButton, PopupChoice, PopupKey, ShiftButton } from './KeyPopup';
 import { CustomSymbolPicker } from './SymbolPicker';
 import { fourteenChoices, fourteenSymbol, nineChoices } from './KeyChoices';
@@ -175,7 +175,7 @@ export struct NineKeyPanel {
           Row() {
             Button(k.label)
               .fontSize(this.stripSize()).fontColor(this.pal().keyFg)
-              .backgroundColor(this.pal().keyBg)
+              .backgroundColor(sceneKeyBg(this.pal().keyBg))
               .borderRadius(6)
               .layoutWeight(1).height('100%').margin({ left: 2, right: 2 })
               .onClick(() => {
@@ -187,7 +187,7 @@ export struct NineKeyPanel {
         Row() {
           Button(this.custom.length > 0 ? this.custom : '自定义')
             .fontSize(this.custom.length > 0 ? this.stripSize() : 14)
-            .fontColor(this.pal().keyFg).backgroundColor(this.pal().keyBg)
+            .fontColor(this.pal().keyFg).backgroundColor(sceneKeyBg(this.pal().keyBg))
             .borderRadius(6).layoutWeight(1).height('100%').margin({ left: 2, right: 2 })
             .onClick(() => {
               if (this.customLong) {

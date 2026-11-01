@@ -152,6 +152,28 @@ internal fun speechModelRoot(): Path = speechModelRoot(
     home = System.getProperty("user.home"),
 )
 
+/** 应用镜像里随包的模型根（`<app>/asr`）；没有或未装全 → null。 */
+internal fun bundledModelRoot(): Path? {
+    val override = System.getProperty("opi.asr.models")?.takeIf { it.isNotEmpty() }
+        ?.let { Paths.get(it) }
+    if (override != null && Files.isDirectory(override)) return override
+    val appPath = System.getProperty("jpackage.app-path") ?: return null
+    val launchDir = runCatching { Paths.get(appPath).parent }.getOrNull() ?: return null
+    val candidates = listOfNotNull(
+        launchDir.resolve("asr"),
+        launchDir.resolve("app").resolve("asr"),
+        launchDir.parent?.resolve("lib")?.resolve("app")?.resolve("asr"),
+        launchDir.parent?.resolve("app")?.resolve("asr"),
+    )
+    return candidates.firstOrNull { Files.isDirectory(it) }
+}
+
+/** 该引擎实际可用的模型根：随包且完整优先，否则用户数据目录。 */
+internal fun modelRoot(engine: SpeechEngine, userRoot: Path = speechModelRoot()): Path {
+    val bundled = bundledModelRoot()
+    return if (bundled != null && modelReady(engine, bundled)) bundled else userRoot
+}
+
 internal fun SpeechEngine.dir(root: Path): Path = root.resolve(model().dirName)
 
 internal fun vadPath(root: Path): Path = root.resolve("vad").resolve(VAD_FILE.name)

@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
+import xyz.erik.opi.ime.sceneSurface
+import xyz.erik.opi.ime.sceneTextStyle
 
 /** 长按/上滑弹层里的一个备选键面；列表**首项画在最左**。 */
 data class KeyAlternative(
@@ -98,7 +100,7 @@ internal fun KeyAlternativesPopup(
         Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(8.dp))
-                .background(palette.keyBg)
+                .background(sceneSurface(palette.keyBg))
                 .padding(4.dp),
         ) {
             alternatives.forEachIndexed { index, alternative ->
@@ -116,6 +118,7 @@ internal fun KeyAlternativesPopup(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         color = if (selected) palette.keyHighlightFg else palette.keyFg,
+                        style = sceneTextStyle(if (selected) palette.keyHighlightFg else palette.keyFg),
                     )
                 }
             }

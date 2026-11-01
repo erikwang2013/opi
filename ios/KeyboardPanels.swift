@@ -196,7 +196,7 @@ final class KeyboardModePanel: UIView {
         b.titleLabel?.adjustsFontSizeToFitWidth = true
         b.titleLabel?.minimumScaleFactor = 0.75
         b.setTitleColor(selected ? palette.accent : palette.panelFg, for: .normal)
-        b.backgroundColor = palette.keyBg
+        b.backgroundColor = palette.keySurface(palette.keyBg)
         b.layer.cornerRadius = 8
         b.layer.borderWidth = selected ? 2 : 1
         b.layer.borderColor = (selected ? palette.accent : palette.barDimFg.withAlphaComponent(0.35)).cgColor

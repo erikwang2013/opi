@@ -40,7 +40,7 @@ final class CandidateSideColumn: UIView {
         self.cells = CGFloat(max(1, cells))
         self.baseFontSize = fontSize
         super.init(frame: .zero)
-        backgroundColor = palette.barBg
+        backgroundColor = palette.sceneSurface(palette.barBg)
 
         scroll.showsVerticalScrollIndicator = false
         scroll.alwaysBounceVertical = false
@@ -88,7 +88,7 @@ final class CandidateSideColumn: UIView {
     func applyTheme(_ p: KeyboardPalette, fontScale: CGFloat) {
         palette = p
         self.fontScale = fontScale
-        backgroundColor = p.barBg
+        backgroundColor = p.sceneSurface(p.barBg)
         rebuild()
     }
 

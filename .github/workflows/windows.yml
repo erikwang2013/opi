@@ -41,6 +41,12 @@ name: Windows 打包
 #   **不自动附 release**（与 packages.yml 同一条约定：发版产物的控制权归人）。
 on:
   workflow_dispatch:
+    inputs:
+      tier:
+        description: '安装包档位（full 含两套模型，约 +588MB）'
+        type: choice
+        options: [normal, full, basic]
+        default: normal
   # 合并后正式形态：默认分支 push 触发（迭代期曾用 feat/windows-packaging 分支
   # 触发 —— 本仓约定「workflow 必须存在于默认分支才可 dispatch」，合并前只能那样）。
   push:
@@ -295,6 +301,8 @@ jobs:
     name: 用户入口 EXE 安装器（windows-latest，Inno Setup）
     runs-on: windows-latest
     needs: [version, tsf-dll]
+    env:
+      TIER: ${{ inputs.tier || 'normal' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -308,10 +316,43 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      - name: 下载完整包语音模型（仅 full）
+        if: env.TIER == 'full'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:RUNNER_TEMP 'asr-bundle\asr'
+          foreach ($d in 'sensevoice','whisper-small.en','vad') {
+            New-Item -ItemType Directory -Force (Join-Path $root $d) | Out-Null
+          }
+          $sv = 'https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main'
+          $wh = 'https://hf-mirror.com/csukuangfj/sherpa-onnx-whisper-small.en/resolve/main'
+          $files = @(
+            @{ u="$sv/model.int8.onnx"; f='sensevoice/model.int8.onnx'; h='c71f0ce00bec95b07744e116345e33d8cbbe08cef896382cf907bf4b51a2cd51' },
+            @{ u="$sv/tokens.txt"; f='sensevoice/tokens.txt'; h='f449eb28dc567533d7fa59be34e2abca8784f771850c78a47fb731a31429a1dc' },
+            @{ u="$wh/small.en-encoder.int8.onnx"; f='whisper-small.en/small.en-encoder.int8.onnx'; h='8bdac288f369aa94ee2194059238c465ed82ea9d47ee8fa4a8c0a891873e462f' },
+            @{ u="$wh/small.en-decoder.int8.onnx"; f='whisper-small.en/small.en-decoder.int8.onnx'; h='710ccf890e10f3faa15f51ec346081a2723c9f3adb6e4da81c6573a5a6f877fb' },
+            @{ u="$wh/small.en-tokens.txt"; f='whisper-small.en/small.en-tokens.txt'; h='306cd27f03c1a714eca7108e03d66b7dc042abe8c258b44c199a7ed9838dd930' },
+            @{ u='https://gh-proxy.com/https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx'; f='vad/silero_vad.onnx'; h='9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6' }
+          )
+          foreach ($x in $files) {
+            $out = Join-Path $root $x.f
+            curl.exe -fL --retry 5 --retry-delay 3 --connect-timeout 30 $x.u -o $out
+            if ($LASTEXITCODE -ne 0) { throw "下载失败：$($x.u)" }
+            $got = (Get-FileHash $out -Algorithm SHA256).Hash.ToLower()
+            if ($got -ne $x.h) { throw "校验失败：$($x.f) $got != $($x.h)" }
+          }
+          "ASR_BUNDLE=$env:RUNNER_TEMP\asr-bundle" >> $env:GITHUB_ENV
+
       # app image 与 MSI 用同一套 jpackage 配置；Windows 主机上 packageName=opi
       # ⇒ 产物目录与启动器都叫 opi。Inno 以这个目录为唯一输入。
       - name: ./gradlew.bat createDistributable（app image）
-        run: ./gradlew.bat createDistributable --no-daemon
+        shell: pwsh
+        run: |
+          $args = @("-PopiPackageTier=$env:TIER")
+          if ($env:TIER -eq 'full') { $args += "-PopiAsrModelsDir=$env:ASR_BUNDLE" }
+          & .\gradlew.bat @args createDistributable --no-daemon
+          if ($LASTEXITCODE -ne 0) { throw "gradle 失败：$LASTEXITCODE" }
         working-directory: desktop
         env:
           OPI_TSF_DLL: ${{ github.workspace }}\tsf-dll\tsf_opi.dll
@@ -329,11 +370,16 @@ jobs:
           if ((Split-Path $app -Leaf) -ne 'opi') {
             throw "app image 名不是 opi（是 $(Split-Path $app -Leaf)）—— Windows packageName 没生效"
           }
-          foreach ($f in 'opi.exe', 'app\tsf_opi.dll', 'app\luna.opid', 'app\trad.opid', 'app\symbol_categories.tsv', 'app\LICENSE', 'app\LICENSES.md', 'app\GPL-3.0.txt') {
+          $required = @('opi.exe', 'app\tsf_opi.dll', 'app\luna.opid', 'app\symbol_categories.tsv', 'app\LICENSE', 'app\LICENSES.md', 'app\GPL-3.0.txt')
+          if ($env:TIER -ne 'basic') { $required += 'app\trad.opid' }
+          if ($env:TIER -eq 'full') { $required += 'app\asr\sensevoice\model.int8.onnx', 'app\asr\whisper-small.en\small.en-encoder.int8.onnx', 'app\asr\vad\silero_vad.onnx' }
+          foreach ($f in $required) {
             if (-not (Test-Path (Join-Path $app $f))) { throw "app image 缺 $f" }
           }
           # 身份核对：不是「有个叫 *.opid 的东西」，而是「就是入库那份分发副本」。
-          foreach ($dict in 'luna.opid', 'trad.opid') {
+          $dicts = @('luna.opid')
+          if ($env:TIER -ne 'basic') { $dicts += 'trad.opid' }
+          foreach ($dict in $dicts) {
             $want = (Get-FileHash "android/app/src/main/assets/$dict" -Algorithm SHA256).Hash
             $got = (Get-FileHash (Join-Path $app "app\$dict") -Algorithm SHA256).Hash
             if ($got -ne $want) { throw "app image 里的 $dict 与入库副本不一致（$got != $want）" }
@@ -368,11 +414,17 @@ jobs:
 
           $setup = Join-Path $out "opi-${{ needs.version.outputs.version }}-windows-x64-setup.exe"
           if (-not (Test-Path $setup)) { throw "没产出 $setup" }
+          $suffix = switch ($env:TIER) { 'full' { '-full' } 'basic' { '-basic' } default { '' } }
+          if ($suffix) {
+            $renamed = Join-Path $out "opi-${{ needs.version.outputs.version }}-windows-x64$suffix-setup.exe"
+            Move-Item -Force $setup $renamed
+            $setup = $renamed
+          }
           Get-Item $setup | Format-List Name, Length
 
       - uses: actions/upload-artifact@v4
         with:
-          name: opi-windows-exe-v${{ needs.version.outputs.version }}
+          name: opi-windows-exe-v${{ needs.version.outputs.version }}-${{ env.TIER }}
           if-no-files-found: error
           path: dist/windows-exe/*.exe
 

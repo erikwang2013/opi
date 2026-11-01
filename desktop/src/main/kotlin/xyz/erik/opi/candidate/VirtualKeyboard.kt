@@ -186,7 +186,7 @@ fun VirtualKeyboardWindow(theme: SceneTheme?, onClose: () -> Unit, onSymbols: ()
         // 不进任务栏（同状态栏，用户没点名、属同族顺手）：X11 属性直写，见 SkipTaskbar.kt。
         LaunchedEffect(window) { statusBarGuard("虚拟键盘 SkipTaskbar") { SkipTaskbar.apply(window) } }
         Column(
-            modifier = Modifier.fillMaxSize().sceneBackdrop(theme, KbBg, KbFg, KeyPressed, 0.72f)
+            modifier = Modifier.fillMaxSize().sceneBackdrop(theme, KbBg, KbFg, KeyPressed, 0.36f)
                 .padding(6.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
@@ -196,7 +196,7 @@ fun VirtualKeyboardWindow(theme: SceneTheme?, onClose: () -> Unit, onSymbols: ()
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     for (key in row) {
-                        VkKeyButton(key.label, Modifier.weight(1f)) { press(key) { notice = it } }
+                        VkKeyButton(key.label, Modifier.weight(1f), theme != null) { press(key) { notice = it } }
                     }
                 }
             }
@@ -205,7 +205,7 @@ fun VirtualKeyboardWindow(theme: SceneTheme?, onClose: () -> Unit, onSymbols: ()
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 for (item in VK_BOTTOM) {
-                    VkKeyButton(item.label, Modifier.weight(item.weight.toFloat())) {
+                    VkKeyButton(item.label, Modifier.weight(item.weight.toFloat()), theme != null) {
                         when (item) {
                             is VkBottomKey -> press(item.key) { notice = it }
                             // 动作键（「符」）：不注入，走 onSymbols；失败原因同注入口径进提示行。
@@ -234,13 +234,14 @@ private fun press(key: VkKey, onFailure: (String) -> Unit) {
 }
 
 @Composable
-private fun VkKeyButton(label: String, modifier: Modifier, onClick: () -> Unit) {
+private fun VkKeyButton(label: String, modifier: Modifier, scene: Boolean, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
+    val bg = if (pressed) KeyPressed else if (scene) KeyBg.copy(alpha = 0.42f) else KeyBg
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(if (pressed) KeyPressed else KeyBg)
+            .background(bg)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .semantics { contentDescription = "虚拟键盘 $label" },
         contentAlignment = Alignment.Center,

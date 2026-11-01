@@ -275,7 +275,7 @@ fun SettingsWindow() {
         }
     }
 
-    Row(Modifier.fillMaxSize().sceneBackdrop(s.background, Paper, Ink, Teal, 0.78f)) {
+    Row(Modifier.fillMaxSize().sceneBackdrop(s.background, Paper, Ink, Teal, 0.42f)) {
         NavColumn(tab) { tab = it }
         Column(Modifier.weight(1f).fillMaxHeight()) {
             // 新版本横幅（2026-10-22 用户裁决）：只在检测到更新时出现，可关闭；
