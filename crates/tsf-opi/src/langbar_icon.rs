@@ -15,7 +15,7 @@
 //! 就无声回退；而本文件的单测拿 `include_bytes!` 的**真实字节**当夹具，漂了会红。
 //!
 //! **两条格式约定**（生成器按此产出、这里按此校验，一处约定两处执行）：
-//! 1. 条目必须是 **BMP(DIB)** 条目，不能是 PNG 条目 —— Vista 起 ico 允许 PNG 压缩，
+//! 1. 条目必须是 **BMP(DIB)** 条目，不能是 PNG 条目 —— ICO 允许 PNG 压缩时，
 //!    但 `CreateIconFromResourceEx` 要的是 RT_ICON 位图形态，PNG 条目是非法输入；
 //! 2. 条目 = `BITMAPINFOHEADER(biHeight = 2h)` + XOR(32bpp，行**自下而上**) + AND(1bpp)。
 

@@ -83,11 +83,7 @@
 | 词库文件 | `luna.opid` + `trad.opid`（繁体，可选），**安装包已自带**（`app\`，见 §2.4）；手工部署时放 DLL 同目录或 `%LOCALAPPDATA%\opi\` 亦可（§2.2） | `crates/tsf-opi/src/dict_path.rs` |
 | 候选窗运行时 | JVM（只有要显示候选窗时才需要） | `desktop/` 是 Compose Desktop / JVM 工程 |
 
-> **Windows 10 1607 以下、XP / Vista / Win7 / Win8 / 8.1 不支持（2026-10-31 复核）**：当前
-> `tsf_opi.dll` 导入 `api-ms-win-core-synch-l1-2-0`（Win8+）与 `bcryptprimitives`
-> （Rust 1.88 std 的 Win10 路径）；候选窗是 JDK 21/Temurin/jpackage + Compose
-> Desktop 1.11，官方目标 Win10/11。要在 Win7/8 上运行须另建 legacy 轨道
-> （Rust ≤1.77 + windows_7/8 + 老 TSF 注册 + 原生候选窗 + 独立安装包），不在本仓库范围。
+> **仅支持 Windows 10 1607+ / 11 x64**：`tsf_opi.dll` 与候选窗按该基线构建，
 > 安装器用 `MinVersion=10.0.14393` 拦截更低版本；**真机验收目前只覆盖 Windows 10
 > Home（2026-10-21），Windows 10 Pro / Enterprise 与 Win11 都尚未真机验收。**
 
@@ -1095,7 +1091,7 @@ regsvr32 /u "C:\path\to\tsf_opi.dll"
 **② TSF 侧（调官方 API，让 TSF 自己写自己的键）** —— `registration::register` 里调用：
 
 - `ITfInputProcessorProfiles::Register`；
-- `ITfInputProcessorProfileMgr::RegisterProfile`（Vista+ 的新接口；从同一个
+- `ITfInputProcessorProfileMgr::RegisterProfile`（新接口；从同一个
   `CLSID_TF_InputProcessorProfiles` coclass 取），`bEnabledByDefault=TRUE`，
   `LANGID_ZH_CN` = 0x0804 · 中文简体。**注册前先用 `GetProfile` 判存在**：
   已存在就跳过 `Register` + `RegisterProfile`，二次安装/覆盖升级不重写 profile
@@ -1114,7 +1110,7 @@ regsvr32 /u "C:\path\to\tsf_opi.dll"
   根因之一）。机器级默认启用已成功后，这一步是 **best-effort**：HKCU 写失败
   不让整个安装回滚（SYSTEM / 异常 HKCU），仍用 `IsEnabledLanguageProfile` 复核；
 - `ITfCategoryMgr::RegisterCategory`：`GUID_TFCAT_TIP_KEYBOARD`（"键盘输入法"）+
-  Windows 8+ 的 TIP 能力类别 `GUID_TFCAT_TIPCAP_IMMERSIVESUPPORT`（UWP/沉浸式宿主）、
+  TIP 能力类别 `GUID_TFCAT_TIPCAP_IMMERSIVESUPPORT`（UWP/沉浸式宿主）、
   `GUID_TFCAT_TIPCAP_UIELEMENTENABLED`（TIP 自带候选 UI）、
   `GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT`（系统托盘语言栏）。
   **调用前用 `EnumItemsInCategory` 枚举**，已有本 CLSID 就跳过。
@@ -1125,7 +1121,7 @@ regsvr32 /u "C:\path\to\tsf_opi.dll"
   0.62 的常量与签名；注册结果要 Windows 真机读回（§5.2 的诊断脚本已列这四个类别）。
 
 **幂等（2026-10-19 复审改写）**：旧接口 `AddLanguageProfile` / `RemoveLanguageProfile`
-已删除 —— 目标 Windows 10 走 Vista+ 的 `RegisterProfile` 正路，两者叠加会在**首次安装**
+已删除 —— 目标 Windows 10 走 `RegisterProfile` 正路，两者叠加会在**首次安装**
 时就写重复 profile。`TF_E_ALREADY_EXISTS`（0x80040506，保留键冲突）**不是**通用的
 「profile 已存在」，不能靠吞它实现幂等；profile 与类别都改为**先查询、存在就跳过**。
 `ok_if_already_exists` 现在只为旧接口 `ITfInputProcessorProfiles::Register` 保留，
@@ -1332,7 +1328,7 @@ trigger **≤32 个 ASCII 字母**（`CustomPhraseCodec` 与 `engine-core/src/cu
   失败。因为 TCP 端口每次启动可能不同，**按端口写死的入站规则会失效 —— 按程序放行**；
   发现另需放行 UDP 45888 入站。
 - **支持面**：与安装器 `MinVersion=10.0.14393` 一致，只有 Windows 10 1607+ / 11 x64；
-  更低版本与 Win7/8/8.1 不在支持范围。
+  更低版本不在支持范围。
 - **验证**：桌面 JVM 单测（适配器 / 协议 / 设置）通过；**两台真机的配对与同步
   【未验证】**，防火墙弹窗与专用/公用网络判定也未上机。
 
@@ -1526,7 +1522,7 @@ TSF 那一半是官方 API 写的，**没有"预期键路径"可对照** —— 
 | 11 | **「属性设置」的生效时机**：设置窗落盘后要等下一次 `Activate` —— 本机无法验证（`Activate` 由 TSF 调）。读取/容错/落点那半在 `settings.rs`，有主机单测 | §4.4、`crates/tsf-opi/src/settings.rs` |
 | 12 | **安装器行为（改安装目录 / 关停运行中实例 / 注册 TSF DLL / 完成页只自启候选窗，2026-10-17 / 10-18 / 10-19 / 10-20）**：表级已改好并可本地复核（§2.5 的后处理脚本 + 读回证据）。**2026-10-19 用户在真机装过的是「未后处理」的 v1.15.1 发布包**（有进程、键盘不显示）—— 这证明了「不跑后处理 = 不注册 = 键盘不出现」。**【订正 2026-10-19 复审】后处理后的三份包**（本地 `processed-static`、本地 `processed`、CI `opi-desktop-msi`）**仍无输入法的根因已定位**：注入的是 32 位 `WixSilentExec`，而随包 `Binary.WixCA` 是 PE32 i386 ⇒ WOW64 调 SysWOW64 的 32 位 `regsvr32`，加载不了 x86-64 DLL。脚本/CI 已改为 `WixSilentExec64` + `WixSilentExec64CmdLine` 并加 PE machine 断言，注册逻辑改为显式判存在 + HKLM 默认启用。**【订正 2026-10-20】EXE 白屏后完成页脚本不再结束/重启 Explorer**：`launch-and-restart.cmd` 只启动 `opi.exe`，`opi.iss` 改用 `runasoriginaluser` 并 `CloseApplications=no`（§2.5）。**【订正 2026-10-23】受控的 shell 刷新回来了**：交互式升级在 `ssPostInstall` 注册新 DLL 后，用原用户令牌 `taskkill /f /im explorer.exe` + 看门狗补启（仅在探测到 Explorer 映射旧 DLL 时；2026-10-23 白屏回归后已回退无条件重启）；首次/静默安装不碰 shell，其它宿主只列日志/完成页、不结束。修复后的 EXE **仍未在真机交互路径装过**（CI 静默安装跳过 `[Run]`），所以 Explorer 重启、`regsvr32` 真注册、ExitDialog 复选框与完成页文案都仍是【未验证】 | §2.5、`scripts/postprocess-windows-msi.sh`、`scripts/windows/opi.iss` |
 | 13 | **卸载不清理 TSF 注册（2026-10-19 reviewer m4 记录，有意未做）**：`OpRegisterTsf` 的条件是 `NOT REMOVE` ⇒ 卸载**不执行** `regsvr32 /s /u`；`HKCR\CLSID\{98C51858-590B-404D-8915-21EB44250062}\InprocServer32` 与 `HKLM\SOFTWARE\Microsoft\CTF` 下由 `DllRegisterServer` 写入的条目会**残留并指向已删除的 DLL**。未加卸载动作的原因：`WixSilentExec64` 只有**一个**命令属性 `WixSilentExec64CmdLine`，安装/卸载两条命令会互相覆盖；手写 `RemoveRegistryKey` 又需精确复制官方 API 写入的键，未在真机取证。重装到同一路径会重新覆盖注册；彻底清理 = 卸载前手工 `regsvr32 /s /u <dll>`，已卸载则手工删上述键 | `scripts/postprocess-windows-msi.sh`、§2.5 | 卸载后注册残留；卸载本身的文件删除不受影响 |
-| 14 | **Win7 / Win8 / 8.1 不支持（2026-10-19 用户裁决：仅文档标注）**：DLL 的 API set/Rust std 与候选窗的 JDK 21/Compose 下限都在 Win10/11；Win7/8 需另建 legacy 轨道 | §1.1 的说明 | 在 Win7/8 上安装/运行不保证；不在本仓库范围 |
+| 14 | **仅支持 Windows 10 1607+ / 11 x64**：安装器与 DLL 均以该基线构建 | §1.1 的说明 | 其他版本不在支持范围 |
 | 15 | **EXE 无重启卸载的锁定 DLL 路径：容器已能模拟，「Explorer 真实持有方式」仍未在真机验证（2026-10-21 更新）**：v1.20.1 真机卸载残留的根因在旧代码：固定目标名 `%TEMP%\opi-tsf-uninstall-<用户>.dll` 让第二次卸载的 `RenameFile` 因目标已存在而失败，跨卷时 `MoveFile` 也失败；失败后 DLL 留在 `{app}`，Inno 报 "Some elements could not be removed"。现改为**同卷 trash 目录**（`{commonappdata}\opi\trash`，装在其他盘时 `<盘符>:\opi-trash`）+ 唯一文件名（时间戳到毫秒）+ 同卷校验；`%TEMP%`/`{win}\Temp` 只在同卷时作回退。成功即删目录，副本 `MoveFileExW(路径, '', MOVEFILE_DELAY_UNTIL_REBOOT)` 登记开机删除；下次安装/卸载先清 trash；全部失败才 `MoveFileExW(原路径, '', MOVEFILE_DELAY_UNTIL_REBOOT)` 并如实记日志（目录保留到重启）。**安装的 `ssInstall`（`[InstallDelete]`/`[Files]` 之前）也先 `UnregisterTsf()` 再 `MoveLockedTsfDll(True)`**：否则 `[Files] restartreplace` 会把新 DLL 排到下次重启（`DoHandleFailedDeleteOrMoveFileTry` 里 `ReplaceOnRestart := True` 后跳过 `MoveFile`），用户装完 1.20.1 仍在跑旧 DLL、`regsvr32` 注册的也是旧 DLL。容器冒烟现在用「改字节 → `LoadLibrary` 映射 → 重装同一包 → SHA-256 对比包内值」验证升级路径，再映射一次验证卸载路径；**容器里的持有者不是 Explorer**，Explorer/TSF 宿主的真实持有方式仍只能真机复验。**升级修好的是磁盘上的文件**：运行中的应用里已加载的旧映像仍是旧代码；仅在 Explorer 映射旧 DLL 时升级会重启 Explorer，其它已打开的宿主必须关闭重开 —— **不需要注销**。另：状态栏锁清理只覆盖运行卸载器的那个用户的 `%TEMP%`（同机其他用户的残留锁文件不处理，无害）。本树没有 Windows 服务，卸载 kill 的就是 `opi.exe` 三种模式 | `scripts/windows/opi.iss`、`.github/workflows/windows.yml`、§2.5 | 真机 Explorer 锁定路径未验证；极端情况下（改名也失败）残留 DLL/目录到重启，交互式卸载会显示 Inno 的 "Some elements could not be removed"，但无重启请求 |
 
 ### 6.2 代码里已知的缺口（读源码得出，不是待办猜测）

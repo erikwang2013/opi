@@ -155,7 +155,7 @@ fn ok_if_already_exists(r: Result<()>) -> Result<()> {
     }
 }
 
-/// profile 是否已注册。`GetProfile` 是 Vista+ 的查询正路；只把 `Ok` 当存在，
+/// profile 是否已注册。`GetProfile` 是查询正路；只把 `Ok` 当存在，
 /// 查询失败（含真的不存在）交给随后的 `RegisterProfile` 报出真实错误。
 fn profile_exists(mgr: &ITfInputProcessorProfileMgr, clsid: &GUID, profile: &GUID) -> bool {
     let mut found = TF_INPUTPROCESSORPROFILE::default();
@@ -263,7 +263,7 @@ pub(crate) fn register() -> Result<()> {
         // 输入法列表/输入指示器拿到宠物图标。路径不存在时退回空切片（保持旧行为）。
         let icon = profile_icon_path(&dll_path);
 
-        // 新接口：ITfInputProcessorProfileMgr::RegisterProfile（Vista+ 的 profile
+        // 新接口：ITfInputProcessorProfileMgr::RegisterProfile（profile
         //    注册正路，与 ITfInputProcessorProfiles 是**同一个 coclass** 的两个接口）。
         //    Windows 0.62 的实际签名：
         //      RegisterProfile(&clsid, langid, &profile, desc: &[u16], icon: &[u16],
@@ -328,7 +328,7 @@ pub(crate) fn register() -> Result<()> {
                 }
             }
         }
-        // 旧接口 AddLanguageProfile 已删除：RegisterProfile 是 Vista+ 的正式路径，
+        // 旧接口 AddLanguageProfile 已删除：RegisterProfile 是正式路径，
         // 目标 Windows 10 不需要它；两者叠加会在首次安装时就写重复 profile。
 
         // HKLM 的「默认启用」位。交互式安装下面还会写当前用户的 HKCU 启用位；

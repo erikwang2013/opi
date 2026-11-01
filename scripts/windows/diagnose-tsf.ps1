@@ -37,7 +37,7 @@ $script:fail = 0
 $Clsid = '{98C51858-590B-404D-8915-21EB44250062}'
 $ProfileGuid = '{A31A137C-1404-42F2-B82C-4E63F15DEFD6}'
 $LangId = '0x00000804'
-# TSF categories (msctf.h / windows crate constants). TIPCAP_* are the Windows 8+
+# TSF categories (msctf.h / windows crate constants). TIPCAP_* are the extended
 # capabilities; a missing IMMERSIVESUPPORT is the documented reason a TIP is
 # offered to desktop apps but not to UWP/Store (immersive) hosts.
 $TipCategories = [ordered]@{
