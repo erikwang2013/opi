@@ -109,7 +109,7 @@ internal fun AsrModelSection(prefs: ImePreferences) {
         )
     }
     Text(
-        text = "语音引擎跟随输入模式：中文/繁体用 SenseVoice，英文用 Whisper；切换键盘模式即切换引擎。",
+        text = "语音引擎跟随输入模式：中文/繁体用 SenseVoice；英文 Pro 用 Whisper，普通英文用 SenseVoice。切换模式即切换引擎。",
         fontSize = 12.sp,
         modifier = Modifier.fillMaxWidth().padding(16.dp),
     )

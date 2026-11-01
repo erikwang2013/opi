@@ -264,7 +264,7 @@ class OpiImeService : InputMethodService() {
         // 语音结果走同一条重试通道；先清引擎组合，避免候选栏残留旧拼音。
         AsrRuntime.attach(
             this,
-            whisper = { engineController.mode == EngineMode.ENGLISH },
+            whisper = { engineController.mode == EngineMode.ENGLISH && imeState.englishPro },
             commit = { text ->
                 engineController.clear()
                 commitWithRetry(text)

@@ -53,8 +53,8 @@ internal fun SpeechPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Str
         report(if (it) "语音输入已开启：点状态栏话筒开始/停止" else "语音输入已关闭")
     }
     Text(
-        "引擎跟随输入模式：中文/繁体用 SenseVoice，英文用 Whisper；切换输入法模式即切换引擎。" +
-            "默认中文引擎。",
+        "引擎跟随输入模式：中文/繁体用 SenseVoice；英文 Pro 用 Whisper，普通英文用 SenseVoice。" +
+            "切换输入法模式即切换引擎，默认中文引擎。",
         fontSize = 12.sp, color = Muted,
     )
 
