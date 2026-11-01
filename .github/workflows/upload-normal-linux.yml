@@ -1,0 +1,40 @@
+name: Upload normal Linux assets
+
+# 一次性补传：attach-release 的历史 artifact 识别漏掉了 normal 档的 Linux 包。
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag
+        required: true
+        default: v1.31.0
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 下载 normal 包 artifact 并补传
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          gh api "repos/$REPO/actions/artifacts/13081399670/zip" > out/a.zip
+          unzip -q out/a.zip -d out
+          deb="$(find out -name '*.deb' | head -1)"
+          rpm="$(find out -name '*.rpm' | head -1)"
+          test -n "$deb" && test -n "$rpm"
+          mkdir -p assets
+          cp "$deb" assets/opi-1.31.0-linux-amd64.deb
+          cp "$rpm" assets/opi-1.31.0-linux-x86_64.rpm
+          ls -lh assets
+          gh release upload "$TAG" assets/* --clobber
