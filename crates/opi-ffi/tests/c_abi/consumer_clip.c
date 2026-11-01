@@ -75,6 +75,9 @@ static void check_clip_exports(void) {
     CHECK(opi_clip_local_text(clip, WO_CLIP, 1) == 0,
           "start 后 local_text 应为 0=已发布");
 
+    /* 手动探测：空 IP 在解析阶段就失败（不触网），但仍要真调一次覆盖导出。 */
+    CHECK(opi_clip_probe(clip, NULL, 0) == false, "空 IP 的 probe 应为 false");
+
     OpiString event = opi_clip_poll_event(clip, 0);
     CHECK(event.len == 0, "timeout=0 应立即返回空串（无事件），实为 len=%zu", event.len);
     opi_ffi_free_string(event);
