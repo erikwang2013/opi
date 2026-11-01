@@ -34,7 +34,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p assets work
-          tag_date="$(gh release view "$TAG" --json publishedAt --jq '.publishedAt[:10]')"
+          tag_date="$(gh release view "$TAG" --json publishedAt,createdAt --jq '(.publishedAt // .createdAt)[:10]')"
           gh api --paginate "repos/$REPO/actions/artifacts?per_page=100" \
             --jq '.artifacts[] | [.id,.name,.created_at] | @tsv' | sort -t$'\t' -k3,3 > work/artifacts.tsv
           while IFS=$'\t' read -r id name created; do
