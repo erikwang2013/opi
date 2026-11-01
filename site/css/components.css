@@ -47,6 +47,7 @@
 .netdisk-list strong { color: var(--ink); font-weight: 650; }
 .netdisk-list li > span:nth-child(2) { flex: 1 1 100%; color: var(--muted-2); }
 .netdisk-list .netdisk-size { margin-left: auto; color: var(--accent-soft); font-family: var(--font-mono); white-space: nowrap; }
+.netdisk-list .netdisk-file { flex: 1 1 100%; color: var(--muted-2); font-family: var(--font-mono); font-size: .66rem; overflow-wrap: anywhere; }
 @media (max-width: 640px) {
   .netdisk-banner { flex-wrap: wrap; }
   .netdisk-copy { flex-basis: calc(100% - 60px); }
@@ -93,6 +94,7 @@
 .download-grid.is-minor .os-note { margin-bottom: 10px; }
 .beta-badge { position: absolute; right: 12px; top: 12px; z-index: 1; padding: 2px 7px; border: 1px solid rgba(232, 116, 59, .34); border-radius: var(--pill); background: rgba(232, 116, 59, .1); color: var(--accent-soft); font-family: var(--font-mono); font-size: .56rem; letter-spacing: .06em; }
 .download-card.is-current-os { border-color: rgba(232, 116, 59, .6); }
+.rec-badge { display: inline-block; margin-left: 4px; padding: 1px 7px; border-radius: var(--pill); background: var(--accent); color: var(--accent-ink); font-family: var(--font-mono); font-size: .56rem; font-weight: 600; letter-spacing: .04em; vertical-align: 2px; }
 .os-current { position: absolute; right: 18px; top: 18px; z-index: 1; padding: 3px 8px; border-radius: var(--pill); background: var(--accent); color: var(--accent-ink); font-family: var(--font-mono); font-size: .55rem; letter-spacing: .04em; }
 .download-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; margin-top: 22px; color: var(--muted-2); font-size: .72rem; }
 .download-foot p { margin: 0; }
