@@ -57,8 +57,8 @@ android {
         targetSdk = 34
         // 与发布 tag 对齐（此前 9 个 tag 期间 versionCode 一直是 1、versionName 一直是
         // "1.0.0"：APK 既无法被识别，也无法覆盖安装升级）。
-        versionCode = 111
-        versionName = "1.31.0"
+        versionCode = 112
+        versionName = "1.31.1"
         buildConfigField("String", "PACKAGE_TIER", "\"$packageTier\"")
         buildConfigField("boolean", "ASR_MODELS_BUNDLED", "${packageTier == "full"}")
         ndk {
