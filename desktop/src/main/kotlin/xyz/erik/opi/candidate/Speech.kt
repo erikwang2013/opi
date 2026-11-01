@@ -24,11 +24,6 @@ import com.sun.jna.Pointer
 import java.nio.file.Path
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
-import javax.sound.sampled.AudioFormat
-import javax.sound.sampled.AudioSystem
-import javax.sound.sampled.DataLine
-import javax.sound.sampled.LineUnavailableException
-import javax.sound.sampled.TargetDataLine
 
 internal enum class SpeechPhase { IDLE, PREPARING, RECORDING, RECOGNIZING, DONE, ERROR }
 
@@ -62,6 +57,7 @@ private sealed interface SpeechCommand {
     data class AudioError(val message: String) : SpeechCommand
     data object Cancel : SpeechCommand
     data object Dismiss : SpeechCommand
+    data object Warm : SpeechCommand
 }
 
 private data class SpeechConfig(val enabled: Boolean = false, val language: SpeechLanguage = SpeechLanguage.AUTO)
@@ -93,75 +89,6 @@ internal fun asrConfigJson(root: Path, language: SpeechLanguage): String = build
     append(",\"num_threads\":2,\"verify_models\":false}")
 }
 
-/** Java Sound 采集：16 kHz / 16 bit / mono / little-endian，专用读线程。 */
-internal class AudioCapture(
-    private val onChunk: (ByteArray) -> Unit,
-    private val onError: (String) -> Unit,
-) {
-    @Volatile private var running = false
-    private var line: TargetDataLine? = null
-    private var thread: Thread? = null
-
-    private val format = AudioFormat(16_000f, 16, 1, true, false)
-
-    /** 返回 null = 已开录；非 null = 给用户看的原因。 */
-    fun start(): String? {
-        val info = DataLine.Info(TargetDataLine::class.java, format)
-        val supported = runCatching { AudioSystem.isLineSupported(info) }.getOrDefault(false)
-        if (!supported) return "麦克风不可用：系统没有支持 16 kHz 单声道的输入设备"
-        val l = try {
-            AudioSystem.getLine(info) as TargetDataLine
-        } catch (_: LineUnavailableException) {
-            return "麦克风不可用（可能被其他程序占用）"
-        } catch (t: Throwable) {
-            return "打开麦克风失败：${t.message ?: t.javaClass.simpleName}"
-        }
-        line = l
-        try {
-            // 3200 B = 100 ms。给得小一点，停止时最多丢一小块。
-            l.open(format, 3200)
-            l.start()
-        } catch (_: LineUnavailableException) {
-            runCatching { l.close() }
-            line = null
-            return "麦克风不可用（可能被其他程序占用）"
-        } catch (t: Throwable) {
-            runCatching { l.close() }
-            line = null
-            return "开始录音失败：${t.message ?: t.javaClass.simpleName}"
-        }
-        running = true
-        thread = Thread({ readLoop(l) }, "opi-speech-audio").apply {
-            isDaemon = true
-            start()
-        }
-        return null
-    }
-
-    private fun readLoop(l: TargetDataLine) {
-        val buf = ByteArray(3200)
-        while (running) {
-            val n = try {
-                l.read(buf, 0, buf.size)
-            } catch (t: Throwable) {
-                if (running) onError("录音读取失败：${t.message ?: t.javaClass.simpleName}")
-                return
-            }
-            if (!running) return
-            if (n > 0) onChunk(buf.copyOf(n))
-        }
-    }
-
-    fun stop() {
-        running = false
-        // 先 stop 让阻塞的 read 返回，再 join；顺序反了会白等一个采集缓冲。
-        line?.let { runCatching { it.stop() } }
-        thread?.let { runCatching { it.join(500) } }
-        line?.let { runCatching { it.close() } }
-        thread = null
-        line = null
-    }
-}
 
 /**
  * 语音宿主。`toggle` 是从状态栏按钮来的唯一入口：空闲/结束态 = 开始，录音中 = 停止
@@ -201,6 +128,13 @@ internal class SpeechHostImpl {
         val languageChanged = next.language != config.language
         config = next
         if (wasEnabled && (!enabled || languageChanged)) commands.offer(SpeechCommand.Cancel)
+        // 开启语音/切换引擎时预加载：第一次点话筒不再现场读 239/358MB 模型。
+        if (enabled && (!wasEnabled || languageChanged)) commands.offer(SpeechCommand.Warm)
+    }
+
+    /** 后台预热当前输入模式对应的引擎；失败不打扰 UI，点话筒时再报。 */
+    fun warm() {
+        if (config.enabled) commands.offer(SpeechCommand.Warm)
     }
 
     fun toggle(commit: (String) -> String?) {
@@ -212,7 +146,11 @@ internal class SpeechHostImpl {
                 update(SpeechUi())
                 commands.offer(SpeechCommand.Cancel)
             }
-            else -> commands.offer(SpeechCommand.Toggle(commit))
+            else -> {
+                // 先让浮层在同一次点击里出现；模型/麦克风都在工作线程上再准备。
+                if (config.enabled) update(SpeechUi(phase = SpeechPhase.PREPARING, engine = config.language.engine))
+                commands.offer(SpeechCommand.Toggle(commit))
+            }
         }
     }
 
@@ -252,6 +190,7 @@ internal class SpeechHostImpl {
                     }
                 }
                 SpeechCommand.Cancel -> cancelSession()
+                SpeechCommand.Warm -> ensureEngine(config.language.engine, updateErrors = false)
                 SpeechCommand.Dismiss -> {
                     if (session != null) cancelSession() else update(SpeechUi())
                 }
@@ -266,6 +205,47 @@ internal class SpeechHostImpl {
             }
         }
 
+        /** 加载/复用引擎；warm 时 updateErrors=false，不因未下载模型弹错误。 */
+        private fun ensureEngine(engine: SpeechEngine, updateErrors: Boolean): LoadedAsr? {
+            val root = speechModelRoot()
+            ensureBundledModels(root)
+            if (!modelReady(engine, root)) {
+                if (updateErrors) {
+                    fail("未下载 ${engine.title} 模型（约 ${engine.approxMb()} MB）：打开 设置 → 语音 下载")
+                }
+                return null
+            }
+            val load = loadAsrFfi()
+            val ffi = when (load) {
+                is AsrLoad.Loaded -> load.ffi
+                is AsrLoad.Unavailable -> {
+                    if (updateErrors) fail(load.reason)
+                    return null
+                }
+            }
+            val existing = loaded
+            if (existing != null && existing.engine == engine) return existing
+            existing?.let { runCatching { ffi.opi_asr_destroy(it.handle) } }
+            loaded = null
+            val cfgArg = cStringArg(asrConfigJson(root, config.language))
+            val ptr = ffi.opi_asr_create(cfgArg)
+            if (ptr == null) {
+                if (updateErrors) fail("创建识别器失败：${ffi.lastError(null)}")
+                return null
+            }
+            if (ffi.opi_asr_load_model(ptr) != 0) {
+                val why = ffi.lastError(ptr)
+                runCatching { ffi.opi_asr_destroy(ptr) }
+                if (updateErrors) fail("模型加载失败：$why")
+                return null
+            }
+            val max = runCatching { ffi.opi_asr_max_event_bytes() }.getOrDefault(65_536)
+                .coerceIn(4096, 1 shl 20)
+            val made = LoadedAsr(ffi, engine, ptr, Memory((max + 1).toLong()), max + 1)
+            loaded = made
+            return made
+        }
+
         private fun start(commit: (String) -> String?) {
             val myEpoch = epoch
             val cfg = config
@@ -275,45 +255,8 @@ internal class SpeechHostImpl {
                 fail("语音输入已关闭：打开 设置 → 语音 启用（默认关闭）")
                 return
             }
-            val root = speechModelRoot()
-            ensureBundledModels(root)
-            if (!modelReady(engine, root)) {
-                fail("未下载 ${engine.title} 模型（约 ${engine.approxMb()} MB）：打开 设置 → 语音 下载")
-                return
-            }
-            val load = loadAsrFfi()
-            val ffi = when (load) {
-                is AsrLoad.Loaded -> load.ffi
-                is AsrLoad.Unavailable -> {
-                    fail(load.reason)
-                    return
-                }
-            }
-            var h = loaded
-            if (h == null || h.engine != engine) {
-                h?.let { runCatching { ffi.opi_asr_destroy(it.handle) } }
-                loaded = null
-                val cfgArg = cStringArg(asrConfigJson(root, cfg.language))
-                val ptr = ffi.opi_asr_create(cfgArg)
-                if (ptr == null) {
-                    fail("创建识别器失败：${ffi.lastError(null)}")
-                    return
-                }
-                if (ffi.opi_asr_load_model(ptr) != 0) {
-                    val why = ffi.lastError(ptr)
-                    runCatching { ffi.opi_asr_destroy(ptr) }
-                    fail("模型加载失败：$why")
-                    return
-                }
-                if (myEpoch != epoch) {
-                    runCatching { ffi.opi_asr_destroy(ptr) }
-                    return
-                }
-                val max = runCatching { ffi.opi_asr_max_event_bytes() }.getOrDefault(65_536)
-                    .coerceIn(4096, 1 shl 20)
-                h = LoadedAsr(ffi, engine, ptr, Memory((max + 1).toLong()), max + 1)
-                loaded = h
-            }
+            val h = ensureEngine(engine, updateErrors = true) ?: return
+            val ffi = h.ffi
             if (myEpoch != epoch) return
             drain(ffi, h)
             if (ffi.opi_asr_start(h.handle) != 0) {
