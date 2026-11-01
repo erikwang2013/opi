@@ -52,7 +52,6 @@ if (providers.gradleProperty("opiPackageTier").getOrElse("normal") == "full") {
         from(root)
         into(appResources)
     }
-    compose.desktop.application.nativeDistributions.appResourcesRootDir.set(appResources)
     tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask>()
         .configureEach { dependsOn(syncAsrResources) }
 }

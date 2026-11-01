@@ -41,7 +41,6 @@ kotlin {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
     }
 }
-
 // ---------- 版本号单一来源（2026-10-09）----------
 //
 // jpackage 的包版本与设置窗标题栏都从这里取。**此前设置窗里写死过一份**
@@ -180,7 +179,6 @@ tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageT
             files.from(*bundled.toTypedArray())
         }
     }
-
 // ---------- opi_ffi：跨设备剪贴板的动态库（2026-11-01）----------
 // 与 TSF DLL 同一条路：jpackage 的 --input 是 CMP 自己暂存的 libs 目录，不能手写，
 // 把库挂到 JPackage 任务的 files 集合即可。桌面 CI 任务没有单独编 Rust ⇒ 打包时
@@ -296,6 +294,9 @@ compose.desktop {
         mainClass = "xyz.erik.opi.candidate.MainKt"
 
         nativeDistributions {
+            if (providers.gradleProperty("opiPackageTier").getOrElse("normal") == "full") {
+                appResourcesRootDir.set(layout.buildDirectory.dir("generated/asrAppResources"))
+            }
             // 构建验证用 Deb（Linux 主机，dpkg-deb 本机可用）；CMP 1.11 已移除
             // Zip 格式（枚举仅 AppImage/Deb/Rpm/Dmg/Pkg/Exe/Msi）。
             //
