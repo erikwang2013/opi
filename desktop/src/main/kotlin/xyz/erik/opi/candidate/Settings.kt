@@ -130,6 +130,8 @@ data class OpSettings(
     val speechEnabled: Boolean = false,
     /** 识别语言（键 `SpeechLanguage`）：auto/zh → SenseVoice，en → Whisper。 */
     val speechLanguage: String = "auto",
+    /** 设置/关于页界面语言（键 `UiLanguage`）：zh（默认）/ en。 */
+    val uiLanguage: String = "zh",
 ) {
     /** 写成 ini。键名见文件头「三处逐字对应」。 */
     fun toIni(): String = buildString {
@@ -184,6 +186,7 @@ data class OpSettings(
         // 语音输入（2026-11-02）：默认关；状态栏宿主 1s 轮询后启停采集。
         appendLine("SpeechEnabled=${boolText(speechEnabled)}")
         appendLine("SpeechLanguage=$speechLanguage")
+        appendLine("UiLanguage=$uiLanguage")
     }
 
     companion object {
@@ -255,6 +258,7 @@ data class OpSettings(
                 speechEnabled = bool("SpeechEnabled", false),
                 // 认不得的值回 auto（枚举的 fromValue 是唯一收口）。
                 speechLanguage = SpeechLanguage.fromValue(map["SpeechLanguage"]).value,
+                uiLanguage = map["UiLanguage"]?.takeIf { it == "en" } ?: "zh",
             )
         }
     }

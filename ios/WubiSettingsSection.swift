@@ -91,7 +91,7 @@ final class WubiSettingsSection: UIView {
 
     private func addCaption(_ text: String) {
         let label = UILabel()
-        label.text = text
+        label.text = OpiText.t(text)
         label.font = .systemFont(ofSize: 11, weight: .semibold)
         label.numberOfLines = 0
         captions.append(label)
@@ -100,7 +100,7 @@ final class WubiSettingsSection: UIView {
 
     private func addAutoCommitRow() {
         let label = UILabel()
-        label.text = "四码唯一自动上屏"
+        label.text = OpiText.t("四码唯一自动上屏")
         label.font = .systemFont(ofSize: 13)
         label.numberOfLines = 0
         dimLabels.append(label)
@@ -121,7 +121,7 @@ final class WubiSettingsSection: UIView {
 
     private func addNote(_ text: String) {
         let label = UILabel()
-        label.text = text
+        label.text = OpiText.t(text)
         label.font = .systemFont(ofSize: 10)
         label.numberOfLines = 0
         captions.append(label)
@@ -145,7 +145,7 @@ final class WubiSettingsSection: UIView {
                 b.titleLabel?.adjustsFontSizeToFitWidth = true
                 b.titleLabel?.minimumScaleFactor = 0.7
                 b.contentEdgeInsets = UIEdgeInsets(top: 4, left: 4, bottom: 4, right: 4)
-                b.accessibilityLabel = titles[i]
+                b.accessibilityLabel = OpiText.t(titles[i])
                 b.addAction(UIAction { _ in action(i) }, for: .touchUpInside)
                 result.append(b)
                 row.addArrangedSubview(b)
@@ -180,7 +180,7 @@ final class WubiSettingsSection: UIView {
     private func paint(_ buttons: [UIButton], titles: [String], selected: Int) {
         for (i, b) in buttons.enumerated() {
             let on = i == selected
-            b.setTitle(on ? "\(titles[i]) ✓" : titles[i], for: .normal)
+            b.setTitle(on ? "\(OpiText.t(titles[i])) ✓" : OpiText.t(titles[i]), for: .normal)
             b.titleLabel?.font = .systemFont(ofSize: 12, weight: on ? .bold : .regular)
             b.setTitleColor(on ? palette.accent : palette.panelFg, for: .normal)
             b.backgroundColor = palette.keySurface(palette.keyBg)
@@ -190,7 +190,7 @@ final class WubiSettingsSection: UIView {
                 ? palette.accent
                 : palette.barDimFg.withAlphaComponent(0.35)).cgColor
             b.accessibilityTraits = on ? [.button, .selected] : .button
-            b.accessibilityLabel = titles[i] + (on ? "，已选中" : "")
+            b.accessibilityLabel = OpiText.t(titles[i]) + (on ? OpiText.t("，已选中") : "")
         }
     }
 }

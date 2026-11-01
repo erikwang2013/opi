@@ -37,6 +37,8 @@ tasks.test {
 if (providers.gradleProperty("opiPackageTier").getOrElse("normal") == "full") {
     sourceSets["main"].resources.srcDir(layout.projectDirectory.dir("asr-bundle"))
 }
+// 设置/关于页中英对照表（2026-11-02）：与 Android 共用同一份 TSV。
+sourceSets["main"].resources.srcDir(layout.projectDirectory.dir("../shared/i18n"))
 kotlin {
     compilerOptions {
         // Compose Desktop 要求 JVM target >= 11；不配置 toolchain（避免离线下载 JDK）。
@@ -496,4 +498,3 @@ tasks.register("injectSettingsDesktopEntry") {
         println("核对：dpkg-deb -c ${deb.absolutePath} | grep -E 'applications|autostart|bin/'")
     }
 }
-

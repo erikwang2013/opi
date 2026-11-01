@@ -31,9 +31,12 @@ final class AboutPanel: UIView {
     private static let blogURL = "https://erik.xyz"
     private static let privacyURL = "https://opi.erik.xyz/privacy/index.html"
 
-    private let header = KeyboardPanelHeader(title: "关于", hint: "")
+    private let header = KeyboardPanelHeader(
+        title: OpiText.t("关于"), hint: "", backTitle: "‹ " + OpiText.t("返回")
+    )
     private let scroll = UIScrollView()
     private let stack = UIStackView()
+    private let languageRow = OpiLanguageRow()
     private let updateView = UpdateStatusView()
     private var paragraphLabels: [UILabel] = []
     private var headingLabels: [UILabel] = []
@@ -78,6 +81,7 @@ final class AboutPanel: UIView {
     func applyTheme(_ p: KeyboardPalette) {
         backgroundColor = p.panelBg
         header.applyTheme(p)
+        languageRow.applyTheme(p)
         updateView.applyTheme(p)
         paragraphLabels.forEach { $0.textColor = p.panelFg }
         headingLabels.forEach { $0.textColor = p.panelFg }
@@ -86,6 +90,7 @@ final class AboutPanel: UIView {
     }
 
     private func buildContent() {
+        stack.addArrangedSubview(languageRow)
         addParagraph(Self.intro)
         addHeading("语音输入")
         addParagraph(
@@ -99,9 +104,10 @@ final class AboutPanel: UIView {
             as? String ?? "未知"
         let engineVersion = OpiEngine.engineVersion()
         if engineVersion.isEmpty || engineVersion == appVersion {
-            addParagraph("v\(appVersion)（引擎随 App 打包，版本同上）")
+            addParagraph("v\(appVersion) " + OpiText.t("（引擎随 App 打包，版本同上）"))
         } else {
-            addParagraph("App v\(appVersion) · 引擎 v\(engineVersion)（两者不一致，请报告）")
+            addParagraph("App v\(appVersion) · " + OpiText.t("引擎")
+                + " v\(engineVersion) " + OpiText.t("（两者不一致，请报告）"))
         }
         stack.addArrangedSubview(updateView)
         addHeading("版权")
@@ -117,8 +123,10 @@ final class AboutPanel: UIView {
         addLink("博客", Self.blogURL)
         addLink("隐私政策", Self.privacyURL)
         let note = UILabel()
-        note.text = "点链接会先复制地址到剪贴板，再尝试用浏览器打开；"
-            + "键盘扩展不一定会被允许打开链接，复制后可粘贴到浏览器。"
+        note.text = OpiText.t(
+            "点链接会先复制地址到剪贴板，再尝试用浏览器打开；"
+                + "键盘扩展不一定会被允许打开链接，复制后可粘贴到浏览器。"
+        )
         note.font = .systemFont(ofSize: 11)
         note.numberOfLines = 0
         noteLabel = note
@@ -127,7 +135,7 @@ final class AboutPanel: UIView {
 
     private func addHeading(_ text: String) {
         let label = UILabel()
-        label.text = text
+        label.text = OpiText.t(text)
         label.font = .boldSystemFont(ofSize: 12)
         label.numberOfLines = 0
         headingLabels.append(label)
@@ -136,7 +144,7 @@ final class AboutPanel: UIView {
 
     private func addParagraph(_ text: String) {
         let label = UILabel()
-        label.text = text
+        label.text = OpiText.t(text)
         label.font = .systemFont(ofSize: 12)
         label.numberOfLines = 0
         paragraphLabels.append(label)
@@ -145,11 +153,11 @@ final class AboutPanel: UIView {
 
     private func addLink(_ title: String, _ url: String) {
         let b = UIButton(type: .system)
-        b.setTitle(title, for: .normal)
+        b.setTitle(OpiText.t(title), for: .normal)
         b.titleLabel?.font = .systemFont(ofSize: 12)
         b.contentHorizontalAlignment = .left
         b.contentEdgeInsets = UIEdgeInsets(top: 2, left: 0, bottom: 2, right: 0)
-        b.accessibilityLabel = "打开 \(title)"
+        b.accessibilityLabel = OpiText.t("打开") + " \(OpiText.t(title))"
         b.addAction(UIAction { [weak self] _ in self?.onOpenURL?(url) }, for: .touchUpInside)
         linkButtons.append(b)
         stack.addArrangedSubview(b)

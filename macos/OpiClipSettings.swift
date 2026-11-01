@@ -25,18 +25,21 @@ extension OpiSettingsWindow {
              + "配对时两端必须显示同一个 6 位确认码。远端内容只写入剪贴板，不自动粘贴。",
              y: 34, height: 40)
 
-        let state = clip.isEnabled ? (clip.isRunning ? "运行中" : "启动中或失败") : "已停止"
-        label("本机设备：\(clip.deviceName) · \(state)", y: 82, size: 12,
+        let state = clip.isEnabled
+            ? (clip.isRunning ? OpiText.t("运行中") : OpiText.t("启动中或失败"))
+            : OpiText.t("已停止")
+        label(OpiText.t("本机设备：") + "\(clip.deviceName) · \(state)", y: 82, size: 12,
               color: .secondaryLabelColor)
 
         var y: CGFloat = 106
         let error = clip.lastErrorText
         if !error.isEmpty {
-            label("错误：\(error)", y: y, size: 12, color: .systemRed)
+            label(OpiText.t("错误：") + OpiText.t(error), y: y, size: 12, color: .systemRed)
             y += 24
         }
         if let source = clip.lastSourceText {
-            label("最近一次来源：\(source)（内容已写入本机剪贴板，未自动粘贴）",
+            label(OpiText.t("最近一次来源：") + source
+                  + OpiText.t("（内容已写入本机剪贴板，未自动粘贴）"),
                   y: y, size: 12, color: .systemTeal)
             y += 26
         }
@@ -50,8 +53,9 @@ extension OpiSettingsWindow {
             label("配对确认", y: y, size: 14, bold: true)
             y += 26
             for (index, item) in pending.enumerated() {
-                let who = item.name.isEmpty ? "未命名设备" : item.name
-                label("\(who)\(item.incoming ? " 请求配对" : " 配对中")", y: y, size: 13)
+                let who = item.name.isEmpty ? OpiText.t("未命名设备") : item.name
+                label(who + (item.incoming ? OpiText.t(" 请求配对") : OpiText.t(" 配对中")),
+                      y: y, size: 13)
                 label(item.sas, y: y + 18, size: 24, bold: true, color: .systemTeal)
                 button("信任", x: 240, y: y + 14, w: 90,
                        action: #selector(clipPairAnswer(_:)), tag: index * 2 + 1)
@@ -74,8 +78,9 @@ extension OpiSettingsWindow {
             for peer in peers {
                 let name = peer.name.isEmpty ? "未命名设备" : peer.name
                 label(name, y: y, size: 13)
-                let meta = "\(String(peer.id.prefix(8))) · \(peer.connected ? "在线" : "离线")"
-                    + " · \(peer.trusted ? "已信任" : "未配对")"
+                let meta = "\(String(peer.id.prefix(8))) · "
+                    + OpiText.t(peer.connected ? "在线" : "离线")
+                    + " · " + OpiText.t(peer.trusted ? "已信任" : "未配对")
                 label(meta, y: y + 18, size: 11, color: .secondaryLabelColor)
                 let action = button(peer.trusted ? "撤销" : "配对",
                                     x: contentWidth - 110, y: y + 4, w: 100,

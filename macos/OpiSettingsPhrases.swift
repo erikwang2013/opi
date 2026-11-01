@@ -29,23 +29,26 @@ extension OpiSettingsWindow {
         phrasePage = page
 
         label("高级", y: 8, size: 18, bold: true)
-        let lang = kind == .chinese ? "中文" : "英文"
+        let lang = kind == .chinese ? "中文短语" : "英文短语"
         let hint = kind == .chinese
             ? "中文套只在中文键盘（拼音/九键/十四键）匹配"
             : "英文套只在英文键盘匹配"
-        note("自定义短语：输入完整字母后，短语排在候选最前，本页改动立即生效。\(hint)；文件在 \(kind.displayPath)。",
+        note(OpiText.t("自定义短语：输入完整字母后，短语排在候选最前，本页改动立即生效。")
+             + OpiText.t(hint) + OpiText.t("；文件在 ") + kind.displayPath + OpiText.t("。"),
              y: 34, height: 34)
         label("自定义短语", y: 72, size: 14, bold: true)
-        popup(["中文", "英文"], x: 120, y: 67, w: 110,
+        popup(["中文短语", "英文短语"], x: 120, y: 67, w: 110,
               selected: kind.rawValue,
               action: #selector(phraseKindChanged(_:)))
 
-        checkbox("启用\(lang)自定义短语", y: 98, on: state.enabled,
-                 action: #selector(phraseEnabledChanged(_:)))
+        checkbox(String(format: OpiText.t("启用%@自定义短语"), OpiText.t(lang)),
+                 y: 98, on: state.enabled, action: #selector(phraseEnabledChanged(_:)))
 
-        label("共 \(phrases.count) 条", x: 0, y: 128, w: 140, size: 13)
+        label(String(format: OpiText.t("共 %d 条"), phrases.count),
+              x: 0, y: 128, w: 140, size: 13)
         if phrases.count >= OpiCustomPhraseCodec.maxPhrases {
-            label("达到上限（最多 \(OpiCustomPhraseCodec.maxPhrases) 条）",
+            label(String(format: OpiText.t("达到上限（最多 %d 条）"),
+                         OpiCustomPhraseCodec.maxPhrases),
                   x: 150, y: 128, w: 300, size: 12, color: .systemOrange)
         }
         let add = button("添加", x: contentWidth - 70, y: 122, w: 70,
@@ -75,8 +78,8 @@ extension OpiSettingsWindow {
             let prev = button("‹ 上一页", x: 0, y: cursor, w: 90,
                               action: #selector(phrasePrevPage))
             prev.isEnabled = page > 0
-            label("第 \(page + 1) / \(pageCount) 页", x: 100, y: cursor + 5,
-                  w: 140, size: 12, color: .secondaryLabelColor)
+            label(String(format: OpiText.t("第 %d / %d 页"), page + 1, pageCount),
+                  x: 100, y: cursor + 5, w: 140, size: 12, color: .secondaryLabelColor)
             let next = button("下一页 ›", x: 250, y: cursor, w: 90,
                               action: #selector(phraseNextPage))
             next.isEnabled = page < pageCount - 1
@@ -134,7 +137,8 @@ extension OpiSettingsWindow {
 
     @objc func addPhrase() {
         guard phraseState.phrases.count < OpiCustomPhraseCodec.maxPhrases else {
-            alert("达到上限（最多 \(OpiCustomPhraseCodec.maxPhrases) 条）")
+            alert(String(format: OpiText.t("达到上限（最多 %d 条）"),
+                          OpiCustomPhraseCodec.maxPhrases))
             return
         }
         guard let phrase = promptPhrase(title: "添加短语", initial: nil,
@@ -161,10 +165,10 @@ extension OpiSettingsWindow {
         guard phraseState.phrases.indices.contains(sender.tag) else { return }
         let phrase = phraseState.phrases[sender.tag]
         let confirm = NSAlert()
-        confirm.messageText = "删除短语「\(phrase.trigger)」？"
-        confirm.informativeText = "只删除这一条，不可撤销。"
-        confirm.addButton(withTitle: "删除")
-        confirm.addButton(withTitle: "取消")
+        confirm.messageText = String(format: OpiText.t("删除短语「%@」？"), phrase.trigger)
+        confirm.informativeText = OpiText.t("只删除这一条，不可撤销。")
+        confirm.addButton(withTitle: OpiText.t("删除"))
+        confirm.addButton(withTitle: OpiText.t("取消"))
         guard confirm.runModal() == .alertFirstButtonReturn else { return }
         var next = phraseState.phrases
         next.remove(at: sender.tag)
@@ -193,16 +197,18 @@ extension OpiSettingsWindow {
         var text = initial?.text ?? ""
         while true {
             let alertPanel = NSAlert()
-            alertPanel.messageText = title
-            alertPanel.informativeText = "字母只能是英文字母（大小写不敏感）；输入完整字母后出现短语。"
-            alertPanel.addButton(withTitle: "保存")
-            alertPanel.addButton(withTitle: "取消")
+            alertPanel.messageText = OpiText.t(title)
+            alertPanel.informativeText = OpiText.t("字母只能是英文字母（大小写不敏感）；输入完整字母后出现短语。")
+            alertPanel.addButton(withTitle: OpiText.t("保存"))
+            alertPanel.addButton(withTitle: OpiText.t("取消"))
             let box = NSView(frame: NSRect(x: 0, y: 0, width: 280, height: 56))
             let triggerField = NSTextField(frame: NSRect(x: 0, y: 30, width: 280, height: 24))
-            triggerField.placeholderString = "字母（a–z，最多 \(OpiCustomPhraseCodec.maxTriggerLength) 个）"
+            triggerField.placeholderString = String(
+                format: OpiText.t("字母（a–z，最多 %d 个）"), OpiCustomPhraseCodec.maxTriggerLength
+            )
             triggerField.stringValue = trigger
             let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
-            textField.placeholderString = "短语"
+            textField.placeholderString = OpiText.t("短语")
             textField.stringValue = text
             box.addSubview(triggerField)
             box.addSubview(textField)
@@ -216,11 +222,13 @@ extension OpiSettingsWindow {
             } else if !OpiCustomPhraseCodec.validTrigger(trigger) {
                 alert("字母只能是英文字母（a–z）")
             } else if trigger.count > OpiCustomPhraseCodec.maxTriggerLength {
-                alert("字母最多 \(OpiCustomPhraseCodec.maxTriggerLength) 个")
+                alert(String(format: OpiText.t("字母最多 %d 个"),
+                             OpiCustomPhraseCodec.maxTriggerLength))
             } else if text.isEmpty {
                 alert("短语不能为空")
             } else if existing.contains(where: { $0.trigger == trigger.lowercased() }) {
-                alert("字母「\(trigger.lowercased())」已被其它短语使用")
+                alert(String(format: OpiText.t("字母「%@」已被其它短语使用"),
+                             trigger.lowercased()))
             } else {
                 return OpiCustomPhrase(trigger: trigger.lowercased(), text: text)
             }
@@ -234,7 +242,7 @@ extension OpiSettingsWindow {
         picker.canChooseFiles = true
         picker.canChooseDirectories = false
         picker.allowsMultipleSelection = false
-        picker.title = "选择短语文件（JSON / TSV / CSV / 字母=短语）"
+        picker.title = OpiText.t("选择短语文件（JSON / TSV / CSV / 字母=短语）")
         guard picker.runModal() == .OK, let url = picker.url else { return }
 
         let data: Data
@@ -261,13 +269,16 @@ extension OpiSettingsWindow {
                                                     imported: imported)
             guard merged.phrases.count <= OpiCustomPhraseCodec.maxPhrases else {
                 alert("导入失败",
-                      info: "合并后达到上限（最多 \(OpiCustomPhraseCodec.maxPhrases) 条，当前 \(merged.phrases.count) 条）")
+                      info: String(format: OpiText.t("合并后达到上限（最多 %d 条，当前 %d 条）"),
+                                   OpiCustomPhraseCodec.maxPhrases, merged.phrases.count))
                 return
             }
             let state = OpiCustomPhraseState(enabled: phraseState.enabled,
                                              phrases: merged.phrases)
             guard applyPhraseState(state, kind: phraseKind) == nil else { return }
-            alert("导入完成", info: "新增 \(merged.added) 条，更新 \(merged.updated) 条")
+            alert("导入完成",
+                  info: String(format: OpiText.t("新增 %d 条，更新 %d 条"),
+                               merged.added, merged.updated))
         }
     }
 

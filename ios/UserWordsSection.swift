@@ -41,17 +41,17 @@ final class UserWordsSection: UIView {
             stack.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
 
-        clearButton.setTitle("清除用户词库", for: .normal)
+        clearButton.setTitle(OpiText.t("清除用户词库"), for: .normal)
         clearButton.titleLabel?.font = .systemFont(ofSize: 13)
         clearButton.contentEdgeInsets = UIEdgeInsets(top: 6, left: 4, bottom: 6, right: 4)
-        clearButton.accessibilityHint = "清除后需要再次确认"
+        clearButton.accessibilityHint = OpiText.t("清除后需要再次确认")
         clearButton.addTarget(self, action: #selector(tapClear), for: .touchUpInside)
         stack.addArrangedSubview(clearButton)
         clearButton.heightAnchor.constraint(equalToConstant: 34).isActive = true
 
-        cancelButton.setTitle("取消", for: .normal)
+        cancelButton.setTitle(OpiText.t("取消"), for: .normal)
         cancelButton.titleLabel?.font = .systemFont(ofSize: 13)
-        confirmButton.setTitle("确认清除", for: .normal)
+        confirmButton.setTitle(OpiText.t("确认清除"), for: .normal)
         confirmButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .bold)
         cancelButton.addTarget(self, action: #selector(tapCancel), for: .touchUpInside)
         confirmButton.addTarget(self, action: #selector(tapConfirm), for: .touchUpInside)
@@ -93,8 +93,8 @@ final class UserWordsSection: UIView {
             b.layer.borderWidth = 1
             b.layer.borderColor = p.barDimFg.withAlphaComponent(0.35).cgColor
         }
-        clearButton.accessibilityLabel = "清除用户词库"
-        clearButton.accessibilityHint = "点一次进入确认，再点确认才会清除"
+        clearButton.accessibilityLabel = OpiText.t("清除用户词库")
+        clearButton.accessibilityHint = OpiText.t("点一次进入确认，再点确认才会清除")
     }
 
     // MARK: - 两步确认
@@ -102,7 +102,7 @@ final class UserWordsSection: UIView {
     @objc private func tapClear() {
         clearButton.isHidden = true
         confirmRow.isHidden = false
-        statusLabel.text = "确定清除全部用户词？学习排序会立即回落，且不可恢复。"
+        statusLabel.text = OpiText.t("确定清除全部用户词？学习排序会立即回落，且不可恢复。")
     }
 
     @objc private func tapCancel() {
@@ -113,6 +113,6 @@ final class UserWordsSection: UIView {
         onClear?()
         confirmRow.isHidden = true
         clearButton.isHidden = false
-        statusLabel.text = "已清除全部用户词。"
+        statusLabel.text = OpiText.t("已清除全部用户词。")
     }
 }

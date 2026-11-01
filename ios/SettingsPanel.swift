@@ -39,9 +39,13 @@ final class SettingsPanel: UIView {
         case learn, fuzzy, jianpin, association, correction, chinesePunct, showOwn, dark, elder
     }
 
-    private let header = KeyboardPanelHeader(title: "设置", hint: "改动立即生效")
+    private let header = KeyboardPanelHeader(
+        title: OpiText.t("设置"), hint: OpiText.t("改动立即生效"),
+        backTitle: "‹ " + OpiText.t("返回")
+    )
     private let scroll = UIScrollView()
     private let stack = UIStackView()
+    private let languageRow = OpiLanguageRow()
     private let wubiSection = WubiSettingsSection()
     private let userWordsSection = UserWordsSection()
     private let clipboardSection = ClipboardSettingsSection()
@@ -159,21 +163,15 @@ final class SettingsPanel: UIView {
         builtPairNames = fuzzyNames
         resolvePairs()
 
+        stack.addArrangedSubview(languageRow)
         addSection("常用")
-        addSwitchRow(
-            "学习", detail: "根据选词学习用户词频", tag: .learn, isOn: settings.learn
-        )
-        addSwitchRow(
-            "模糊音", detail: "总开关；开 = 全选，关 = 逐组不生效",
-            tag: .fuzzy, isOn: settings.fuzzy
-        )
+        addSwitchRow("学习", detail: "根据选词学习用户词频", tag: .learn, isOn: settings.learn)
+        addSwitchRow("模糊音", detail: "总开关；开 = 全选，关 = 逐组不生效",
+                     tag: .fuzzy, isOn: settings.fuzzy)
         addPairChips()
-        addSwitchRow(
-            "拼音纠错", detail: "允许常见误拼自动纠正", tag: .correction, isOn: settings.correction
-        )
-        addSwitchRow(
-            "简拼", detail: "只用声母也能出候选", tag: .jianpin, isOn: settings.jianpin
-        )
+        addSwitchRow("拼音纠错", detail: "允许常见误拼自动纠正",
+                     tag: .correction, isOn: settings.correction)
+        addSwitchRow("简拼", detail: "只用声母也能出候选", tag: .jianpin, isOn: settings.jianpin)
         addSwitchRow("智能联想", detail: "提交后联想常用续接词句（默认关闭）",
                      tag: .association, isOn: settings.association)
 
@@ -233,7 +231,7 @@ final class SettingsPanel: UIView {
 
     private func addSection(_ title: String) {
         let label = UILabel()
-        label.text = title
+        label.text = OpiText.t(title)
         label.font = .boldSystemFont(ofSize: 12)
         label.numberOfLines = 0
         headingLabels.append(label)
@@ -244,7 +242,7 @@ final class SettingsPanel: UIView {
         _ title: String, detail: String?, tag: Toggle, isOn: Bool
     ) {
         let titleLabel = UILabel()
-        titleLabel.text = title
+        titleLabel.text = OpiText.t(title)
         titleLabel.font = .systemFont(ofSize: 13)
         titleLabel.numberOfLines = 0
         let labels = UIStackView(arrangedSubviews: [titleLabel])
@@ -252,7 +250,7 @@ final class SettingsPanel: UIView {
         labels.spacing = 1
         if let detail {
             let d = UILabel()
-            d.text = detail
+            d.text = OpiText.t(detail)
             d.font = .systemFont(ofSize: 10)
             d.numberOfLines = 0
             detailLabels.append(d)
@@ -263,7 +261,7 @@ final class SettingsPanel: UIView {
         sw.onTintColor = palette.accent
         sw.setContentHuggingPriority(.required, for: .horizontal)
         sw.setContentCompressionResistancePriority(.required, for: .horizontal)
-        sw.accessibilityLabel = title
+        sw.accessibilityLabel = OpiText.t(title)
         sw.addAction(UIAction { [weak self] _ in
             guard let self, let on = self.switches[tag]?.isOn else { return }
             self.toggle(tag, on: on)
@@ -327,7 +325,7 @@ final class SettingsPanel: UIView {
 
     private func makeChip(_ title: String, action: @escaping () -> Void) -> UIButton {
         let b = UIButton(type: .system)
-        b.setTitle(title, for: .normal)
+        b.setTitle(OpiText.t(title), for: .normal)
         b.titleLabel?.font = .systemFont(ofSize: 12)
         b.titleLabel?.adjustsFontSizeToFitWidth = true
         b.titleLabel?.minimumScaleFactor = 0.7
@@ -340,12 +338,12 @@ final class SettingsPanel: UIView {
 
     private func addNav(_ title: String, action: @escaping () -> Void) {
         let b = UIButton(type: .system)
-        b.setTitle("\(title)  ›", for: .normal)
+        b.setTitle("\(OpiText.t(title))  ›", for: .normal)
         b.titleLabel?.font = .systemFont(ofSize: 13)
         b.contentHorizontalAlignment = .left
         b.contentEdgeInsets = UIEdgeInsets(top: 6, left: 0, bottom: 6, right: 0)
         b.setTitleColor(palette.accent, for: .normal)
-        b.accessibilityLabel = title
+        b.accessibilityLabel = OpiText.t(title)
         b.addAction(UIAction { _ in action() }, for: .touchUpInside)
         navButtons.append(b)
         stack.addArrangedSubview(b)
@@ -353,7 +351,7 @@ final class SettingsPanel: UIView {
 
     private func addNote(_ text: String) {
         let label = UILabel()
-        label.text = text
+        label.text = OpiText.t(text)
         label.font = .systemFont(ofSize: 10)
         label.numberOfLines = 0
         detailLabels.append(label)
@@ -448,6 +446,7 @@ final class SettingsPanel: UIView {
         palette = p
         backgroundColor = p.panelBg
         header.applyTheme(p)
+        languageRow.applyTheme(p)
         wubiSection.applyTheme(p)
         userWordsSection.applyTheme(p)
         updateView.applyTheme(p)
@@ -483,7 +482,7 @@ final class SettingsPanel: UIView {
 
     /// 与 Android `PanelChip` 同款：键底色 + 强调色描边 + 粗体 + 行尾 ✓。
     private func styleChip(_ b: UIButton, title: String, selected: Bool) {
-        b.setTitle(selected ? "\(title) ✓" : title, for: .normal)
+        b.setTitle(selected ? "\(OpiText.t(title)) ✓" : OpiText.t(title), for: .normal)
         b.titleLabel?.font = .systemFont(ofSize: 12, weight: selected ? .bold : .regular)
         b.setTitleColor(selected ? palette.accent : palette.panelFg, for: .normal)
         b.backgroundColor = palette.keySurface(palette.keyBg)
@@ -492,6 +491,6 @@ final class SettingsPanel: UIView {
             ? palette.accent
             : palette.barDimFg.withAlphaComponent(0.35)).cgColor
         b.accessibilityTraits = selected ? [.button, .selected] : .button
-        b.accessibilityLabel = title + (selected ? "，已选中" : "")
+        b.accessibilityLabel = OpiText.t(title) + (selected ? OpiText.t("，已选中") : "")
     }
 }

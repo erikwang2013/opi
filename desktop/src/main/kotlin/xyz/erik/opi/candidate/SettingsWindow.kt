@@ -40,7 +40,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Divider
 import androidx.compose.material.Switch
 import androidx.compose.material.SwitchDefaults
-import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -169,6 +168,7 @@ internal fun SectionTitle(text: String) {
 @Composable
 fun SettingsWindow() {
     var s by remember { mutableStateOf(loadSettings()) }
+    UiLang.init(s.uiLanguage)
     var status by remember { mutableStateOf("配置文件：${settingsPath()}") }
     var tab by remember { mutableStateOf(SettingsTab.COMMON) }
     // 符号页/表情页：null = 关；false = 符号；true = 表情（initialEmoji）。
@@ -294,6 +294,14 @@ fun SettingsWindow() {
                 Modifier.weight(1f).fillMaxWidth()
                     .verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 6.dp),
             ) {
+                LanguageRow(s.uiLanguage) { lang ->
+                    if (lang != s.uiLanguage) {
+                        val next = s.copy(uiLanguage = lang)
+                        UiLang.init(lang)
+                        apply(next)
+                        status = if (lang == "en") "Interface language: English" else "界面语言：中文"
+                    }
+                }
                 when (tab) {
                     SettingsTab.COMMON -> CommonPage(s, ::apply) { status = it }
                     SettingsTab.KEYS -> KeysPage(s, ::apply)

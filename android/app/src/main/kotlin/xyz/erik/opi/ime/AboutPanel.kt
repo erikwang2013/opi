@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Text
+import xyz.erik.opi.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import xyz.erik.opi.BuildConfig
+import xyz.erik.opi.i18n.UiLang
 import xyz.erik.opi.keyboard.LocalKeyboardPalette
 import xyz.erik.opi.settings.ABOUT_BLOG_URL
 import xyz.erik.opi.settings.ABOUT_HOME_URL
@@ -73,6 +74,10 @@ fun AboutPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
                 .verticalScroll(rememberScrollState())
                 .padding(start = 14.dp, end = 14.dp, bottom = 10.dp),
         ) {
+            UiLang.ensure(context)
+            Link(if (UiLang.english) "界面语言：English（切换中文）" else "界面语言：中文（Switch to English）") {
+                UiLang.setEnglish(context, !UiLang.english)
+            }
             Para(ABOUT_INTRO)
             Head("版本")
             Para("v${BuildConfig.VERSION_NAME}")

@@ -202,9 +202,9 @@ enum OpiMenu {
         menu.addItem(item("符号面板…  ⌃⇧Z", target: target, tag: .symbolPanel))
         menu.addItem(item("表情与贴纸…", target: target, tag: .emojiPanel))
         menu.addItem(item("状态栏设置…", target: target, tag: .statusBarSettings))
-        menu.addItem(item("设置…", target: target, tag: .settings))
+        menu.addItem(item(OpiText.t("设置…"), target: target, tag: .settings))
         menu.addItem(.separator())
-        let about = item("关于 OPI", target: target, tag: .about)
+        let about = item(OpiText.t("关于 OPI"), target: target, tag: .about)
         // 菜单也带上项目宠物（与状态栏 LOGO、窗口「关于」页同一份 idle.png）。
         about.image = petImage()
         menu.addItem(about)

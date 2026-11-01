@@ -138,6 +138,54 @@ fn candidates(buffer: &str, mode: Mode) -> Vec<Candidate> {
     out
 }
 
+/// 精确命中的**单位/符号**提前插到候选前部（2026-11-02 用户需求）：
+/// `du` → `°`、`ke` → `g`、`mi` → `m`。只看关键字与缓冲完全相等的 `symbol` 条目，
+/// 最多插 2 条、插在 `after` 条文本候选之后（默认第 4 位），既保证首屏可见，又不
+/// 顶掉第一个文本候选。前缀命中仍走 [append_to] 追加在尾部，避免 `m` 前缀把
+/// `mi` 的一屏候选挤满。
+pub(crate) fn prepend_exact_symbols(
+    out: &mut Vec<Candidate>,
+    buffer: &str,
+    mode: Mode,
+    after: usize,
+    limit: usize,
+) {
+    let prefix = buffer.to_ascii_lowercase().replace('\'', "");
+    if prefix.chars().count() < 2
+        || !prefix.bytes().all(|b| b.is_ascii_alphanumeric())
+        || out.len() >= limit
+    {
+        return;
+    }
+    let mut insert_at = after.min(out.len());
+    let mut seen: HashSet<String> = out.iter().map(|c| c.text.clone()).collect();
+    let mut added = 0usize;
+    for entry in entries() {
+        if entry.kind != Kind::Symbol || !allowed(entry.lang, mode) {
+            continue;
+        }
+        if !entry.keywords.iter().any(|kw| *kw == prefix) {
+            continue;
+        }
+        if !seen.insert(entry.text.to_string()) {
+            continue;
+        }
+        out.insert(
+            insert_at,
+            Candidate {
+                text: entry.text.to_string(),
+                kind: CandidateKind::Symbol,
+                score: 0,
+            },
+        );
+        insert_at += 1;
+        added += 1;
+        if added >= 2 || out.len() >= limit {
+            break;
+        }
+    }
+}
+
 /// 在已有候选**之后**追加命中的标点/符号/颜文字，受 `limit` 约束。
 pub(crate) fn append_to(out: &mut Vec<Candidate>, buffer: &str, limit: usize, mode: Mode) {
     if out.len() >= limit {
@@ -215,6 +263,30 @@ mod tests {
         assert!(texts("zuokuohao", Mode::Pinyin).contains(&"（".to_string()));
         assert!(texts("jiantou", Mode::Pinyin).contains(&"→".to_string()));
         assert!(texts("aixin", Mode::Pinyin).contains(&"♥".to_string()));
+        assert!(texts("du", Mode::Pinyin).contains(&"°".to_string()));
+        assert!(texts("ke", Mode::Pinyin).contains(&"g".to_string()));
+    }
+
+    #[test]
+    fn exact_units_are_inserted_near_the_front() {
+        let mut out: Vec<Candidate> = (0..6)
+            .map(|i| Candidate {
+                text: format!("词{i}"),
+                kind: CandidateKind::Hanzi,
+                score: 0,
+            })
+            .collect();
+        prepend_exact_symbols(&mut out, "du", Mode::Pinyin, 3, usize::MAX);
+        assert_eq!(out[3].text, "°");
+        let mut out: Vec<Candidate> = (0..6)
+            .map(|i| Candidate {
+                text: format!("词{i}"),
+                kind: CandidateKind::Hanzi,
+                score: 0,
+            })
+            .collect();
+        prepend_exact_symbols(&mut out, "ke", Mode::Pinyin, 3, usize::MAX);
+        assert_eq!(out[3].text, "g");
     }
 
     #[test]

@@ -70,6 +70,11 @@ fn path_is_excluded(rel: &str) -> bool {
         // 随包分发的数据资产（2026-10-20 加，同上一条）：鸿蒙 rawfile 里的
         // symbol_categories.tsv / rare_index.tsv 由 prepare 脚本拷入，数据不是源码。
         || rel.starts_with("harmony/entry/src/main/resources/rawfile/")
+        // 设置/关于页的翻译数据（2026-11-02）：`shared/i18n/*.tsv` 与各端
+        // `*.lproj/Localizable.strings` 是查表数据，不是可拆的源码；按数据资产放行，
+        // 与上面的词库/索引同一条口径。
+        || rel.starts_with("shared/i18n/")
+        || rel.contains(".lproj/")
 }
 
 /// 生成物（按**文件名**，任何目录下都算）。`Cargo.lock` 是 cargo 生成并**重写**的锁文件

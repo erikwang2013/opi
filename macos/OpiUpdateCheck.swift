@@ -51,15 +51,16 @@ final class OpiUpdateChecker {
     var statusText: String {
         switch state {
         case .idle:
-            return "尚未检测"
+            return OpiText.t("尚未检测")
         case .checking:
-            return "正在检测更新…"
+            return OpiText.t("正在检测更新…")
         case .upToDate:
-            return "已是最新版本（v\(currentVersion)）"
+            return String(format: OpiText.t("已是最新版本（v%@）"), currentVersion)
         case .available(let latest, _):
-            return "发现新版本 v\(latest)（当前 v\(currentVersion)）"
+            return String(format: OpiText.t("发现新版本 v%@（当前 v%@）"),
+                          latest, currentVersion)
         case .failed(let reason):
-            return "检测失败：\(reason)"
+            return OpiText.t("检测失败：") + reason
         }
     }
 
@@ -107,24 +108,24 @@ final class OpiUpdateChecker {
     static func evaluate(data: Data?, response: URLResponse?, error: Error?,
                          current: String) -> State {
         if let error {
-            return .failed(reason: "网络错误：\(error.localizedDescription)")
+            return .failed(reason: OpiText.t("网络错误：") + error.localizedDescription)
         }
         guard let http = response as? HTTPURLResponse else {
-            return .failed(reason: "服务器无响应")
+            return .failed(reason: OpiText.t("服务器无响应"))
         }
         guard http.statusCode == 200 else {
-            return .failed(reason: "服务器返回 \(http.statusCode)")
+            return .failed(reason: OpiText.t("服务器返回 ") + "\(http.statusCode)")
         }
         guard let data,
               let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
-            return .failed(reason: "版本信息格式不正确")
+            return .failed(reason: OpiText.t("版本信息格式不正确"))
         }
         let raw = (obj["version"] as? String) ?? (obj["latest"] as? String)
         guard let raw, let latest = normalizedVersion(raw) else {
-            return .failed(reason: "版本信息缺少有效版本号")
+            return .failed(reason: OpiText.t("版本信息缺少有效版本号"))
         }
         guard let mine = normalizedVersion(current) else {
-            return .failed(reason: "当前版本号未知")
+            return .failed(reason: OpiText.t("当前版本号未知"))
         }
         guard compare(latest, mine) > 0 else { return .upToDate }
         let download = (obj["download"] as? String)

@@ -290,8 +290,8 @@ final class OpiSymbolPanel: NSObject, NSTextFieldDelegate, NSSearchFieldDelegate
     static func catalogSummary() -> String {
         let count = bundledCategories().count
         return count > 0
-            ? "随包符号类目：\(count) 类 · 每页 12×6"
-            : "未找到随包类目表 —— 面板会回退到引擎常用符号块（类目更少）"
+            ? String(format: OpiText.t("随包符号类目：%d 类 · 每页 12×6"), count)
+            : OpiText.t("未找到随包类目表 —— 面板会回退到引擎常用符号块（类目更少）")
     }
 
     private func loadCategories() -> [OpiSymbolCategory] {

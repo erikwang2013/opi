@@ -30,7 +30,8 @@ extension OpiSettingsWindow {
         } else {
             for (i, entry) in dictEntries.prefix(12).enumerated() {
                 let y = 82 + CGFloat(i) * 34
-                label("\(entry.name)  ·  \(entry.count) 条", x: 0, y: y + 4, w: 300, size: 12)
+                label("\(entry.name)  ·  \(entry.count) " + OpiText.t("条"),
+                      x: 0, y: y + 4, w: 300, size: 12)
                 if entry.system {
                     label(entry.enabled ? "随包" : "未装载", x: 310, y: y + 4, w: 70,
                           size: 11, color: .secondaryLabelColor)
@@ -43,7 +44,8 @@ extension OpiSettingsWindow {
                 }
             }
             if dictEntries.count > 12 {
-                label("……其余 \(dictEntries.count - 12) 条未显示", y: 78 + 12 * 34,
+                label("……" + OpiText.t("其余") + " \(dictEntries.count - 12) "
+                      + OpiText.t("条未显示"), y: 78 + 12 * 34,
                       size: 11, color: .secondaryLabelColor)
             }
             cursor = 82 + CGFloat(min(dictEntries.count, 12)) * 34 + 24
@@ -62,7 +64,7 @@ extension OpiSettingsWindow {
 
         label("删除单个词", x: 0, y: cursor + 4, w: 90, size: 12)
         let field = NSTextField(frame: NSRect(x: 96, y: cursor, width: 220, height: 26))
-        field.placeholderString = "输入要删除的词"
+        field.placeholderString = OpiText.t("输入要删除的词")
         host?.addSubview(field)
         userWordField = field
         button("删除", x: 326, y: cursor - 1, w: 70,
@@ -76,7 +78,7 @@ extension OpiSettingsWindow {
         picker.canChooseFiles = true
         picker.canChooseDirectories = false
         picker.allowsMultipleSelection = false
-        picker.title = "选择词库 TSV（词<TAB>拼音<TAB>频次）"
+        picker.title = OpiText.t("选择词库 TSV（词<TAB>拼音<TAB>频次）")
         if let tsv = UTType(filenameExtension: "tsv") { picker.allowedContentTypes = [tsv] }
         guard picker.runModal() == .OK, let src = picker.url else { return }
 
@@ -117,7 +119,8 @@ extension OpiSettingsWindow {
             return
         }
         rebuildPage()
-        alert("已导入 \(dst.deletingPathExtension().lastPathComponent)", info: "\(count) 条")
+        alert(String(format: OpiText.t("已导入 %@"), dst.deletingPathExtension().lastPathComponent),
+              info: "\(count) " + OpiText.t("条"))
     }
 
     @objc func dictToggle(_ sender: NSButton) {
@@ -130,7 +133,8 @@ extension OpiSettingsWindow {
             return
         }
         guard OpiEngine.shared.setDictEnabled(entry.name, sender.state == .on) else {
-            alert("引擎拒绝了启停", info: "系统词典或名字认不得：\(entry.name)")
+            alert("引擎拒绝了启停",
+                  info: String(format: OpiText.t("系统词典或名字认不得：%@"), entry.name))
             rebuildPage()
             return
         }
@@ -143,10 +147,13 @@ extension OpiSettingsWindow {
         let entry = dictEntries[sender.tag]
         guard !entry.system else { return }
         let confirm = NSAlert()
-        confirm.messageText = "删除词库「\(entry.name)」？"
-        confirm.informativeText = "会同时删掉 \(OpiEngine.dictsDirectory.path)/\(entry.name).tsv，不可撤销。"
-        confirm.addButton(withTitle: "删除")
-        confirm.addButton(withTitle: "取消")
+        confirm.messageText = String(format: OpiText.t("删除词库「%@」？"), entry.name)
+        confirm.informativeText = String(
+            format: OpiText.t("会同时删掉 %@，不可撤销。"),
+            "\(OpiEngine.dictsDirectory.path)/\(entry.name).tsv"
+        )
+        confirm.addButton(withTitle: OpiText.t("删除"))
+        confirm.addButton(withTitle: OpiText.t("取消"))
         guard confirm.runModal() == .alertFirstButtonReturn else { return }
 
         let file = OpiEngine.dictsDirectory.appendingPathComponent("\(entry.name).tsv")
@@ -199,7 +206,7 @@ extension OpiSettingsWindow {
         picker.canChooseDirectories = false
         picker.allowsMultipleSelection = false
         picker.allowedContentTypes = [.json]
-        picker.title = "选择用户词 JSON"
+        picker.title = OpiText.t("选择用户词 JSON")
         guard picker.runModal() == .OK, let url = picker.url else { return }
         do {
             let json = try String(contentsOf: url, encoding: .utf8)
@@ -209,7 +216,7 @@ extension OpiSettingsWindow {
                 return
             }
             OpiEngine.shared.markUserWordsDirty() // 导入结果也要进自动落盘
-            alert("用户词已导入", info: "\(count) 条")
+            alert("用户词已导入", info: "\(count) " + OpiText.t("条"))
         } catch {
             alert("读不了文件", info: error.localizedDescription)
         }
@@ -217,10 +224,10 @@ extension OpiSettingsWindow {
 
     @objc func clearUserWords() {
         let confirm = NSAlert()
-        confirm.messageText = "清空用户词？"
-        confirm.informativeText = "学习积累的用户词会全部删除，系统词库与导入词库不受影响。"
-        confirm.addButton(withTitle: "清空")
-        confirm.addButton(withTitle: "取消")
+        confirm.messageText = OpiText.t("清空用户词？")
+        confirm.informativeText = OpiText.t("学习积累的用户词会全部删除，系统词库与导入词库不受影响。")
+        confirm.addButton(withTitle: OpiText.t("清空"))
+        confirm.addButton(withTitle: OpiText.t("取消"))
         guard confirm.runModal() == .alertFirstButtonReturn else { return }
         // 文件删除与内存清空必须串行（内部先取消待落盘），否则防抖保存会把旧词写回。
         if OpiEngine.clearUserWordsAndFile() {
@@ -240,7 +247,8 @@ extension OpiSettingsWindow {
         OpiEngine.shared.removeUserWord(text)
         OpiEngine.shared.markUserWordsDirty() // 删除也要落盘
         userWordField?.stringValue = ""
-        alert("已请求删除", info: "若用户词表里有「\(text)」，已移除。")
+        alert("已请求删除",
+              info: String(format: OpiText.t("若用户词表里有「%@」，已移除。"), text))
     }
 
     // ---------- 五笔 ----------
@@ -356,7 +364,7 @@ extension OpiSettingsWindow {
         }
 
         // 更新检测（2026-10-22）：打开设置自动检测；这里只显示结论并可手动重测。
-        aboutUpdateLabel = label(OpiUpdateChecker.shared.statusText, y: 88, size: 12,
+        aboutUpdateLabel = label(OpiText.t(OpiUpdateChecker.shared.statusText), y: 88, size: 12,
                                  color: .secondaryLabelColor)
         button("检测更新", x: 0, y: 108, w: 96,
                action: #selector(checkUpdatesManually))
@@ -383,7 +391,7 @@ extension OpiSettingsWindow {
     /// 检测结果回来后只改这一行和下载按钮；不在别的页重建控件。
     func refreshAboutUpdate() {
         guard page == .about else { return }
-        aboutUpdateLabel?.stringValue = OpiUpdateChecker.shared.statusText
+        aboutUpdateLabel?.stringValue = OpiText.t(OpiUpdateChecker.shared.statusText)
         aboutUpdateLabel?.textColor =
             OpiUpdateChecker.shared.downloadURL == nil ? .secondaryLabelColor : .systemOrange
         aboutDownloadButton?.isHidden = OpiUpdateChecker.shared.downloadURL == nil

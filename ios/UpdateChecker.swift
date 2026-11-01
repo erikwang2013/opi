@@ -167,10 +167,10 @@ final class UpdateStatusView: UIView {
             b.titleLabel?.font = .systemFont(ofSize: 11)
             b.contentEdgeInsets = UIEdgeInsets(top: 4, left: 0, bottom: 4, right: 10)
         }
-        checkButton.setTitle("检测更新", for: .normal)
-        downloadButton.setTitle("前往下载", for: .normal)
-        checkButton.accessibilityLabel = "检测更新"
-        downloadButton.accessibilityLabel = "前往下载新版本"
+        checkButton.setTitle(OpiText.t("检测更新"), for: .normal)
+        downloadButton.setTitle(OpiText.t("前往下载"), for: .normal)
+        checkButton.accessibilityLabel = OpiText.t("检测更新")
+        downloadButton.accessibilityLabel = OpiText.t("前往下载新版本")
         checkButton.addAction(UIAction { _ in
             UpdateChecker.shared.check(manual: true)
         }, for: .touchUpInside)
@@ -216,23 +216,25 @@ final class UpdateStatusView: UIView {
         let current = UpdateChecker.shared.currentVersion
         switch UpdateChecker.shared.phase {
         case .idle:
-            label.text = "当前版本 v\(current)"
+            label.text = OpiText.t("当前版本") + " v\(current)"
             checkButton.isHidden = false
             downloadButton.isHidden = true
         case .checking:
-            label.text = "正在检测更新…"
+            label.text = OpiText.t("正在检测更新…")
             checkButton.isHidden = true
             downloadButton.isHidden = true
         case .upToDate:
-            label.text = "已是最新版本 v\(current)"
+            label.text = OpiText.t("已是最新版本") + " v\(current)"
             checkButton.isHidden = false
             downloadButton.isHidden = true
         case .available(let remote):
-            label.text = "发现新版本 v\(remote)（当前 v\(current)）"
+            label.text = String(
+                format: OpiText.t("发现新版本 v%@（当前 v%@）"), remote, current
+            )
             checkButton.isHidden = false
             downloadButton.isHidden = false
         case .failed(let reason):
-            label.text = "检测更新失败：\(reason)"
+            label.text = OpiText.t("检测更新失败：") + OpiText.t(reason)
             checkButton.isHidden = false
             downloadButton.isHidden = true
         }

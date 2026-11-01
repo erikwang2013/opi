@@ -9,6 +9,7 @@
 // 从工具条直接进则返回键面。
 
 import { ClipSection } from './ClipSection';
+import { LanguageRow, ensureLanguage, t } from './I18n';
 import { KeyboardController } from './KeyboardController';
 import { INPUT_MODES } from './InputModes';
 import {
@@ -35,9 +36,15 @@ export struct SettingsPanel {
   @StorageLink('opiOneHand') oneHand: number = 0;
   @StorageLink('opiFloat') floating: number = 0;
   @StorageLink('opiGame') game: number = 0;
+  /** 订阅语言键：切换后本页 t(...) 的文案当帧重渲染。 */
+  @StorageLink('opiLang') lang: number = 0;
   /** 「清除用户词库」的两步确认（点了行才展开，避免误触清空学习成果）。 */
   @State clearConfirm: boolean = false;
   private ctrl: KeyboardController = KeyboardController.getInstance();
+
+  aboutToAppear(): void {
+    ensureLanguage();
+  }
 
   private pal(): Palette {
     return paletteFor(this.skin, this.dark === 1, this.elder === 1);
@@ -119,42 +126,43 @@ export struct SettingsPanel {
   build() {
     Column() {
       PanelHeader({
-        title: '设置', hint: '常用 / 键盘 / 外观 / 关于',
+        title: t('设置'), hint: t('常用 / 键盘 / 外观 / 关于'),
         onClose: () => {
           this.ctrl.closePanel();
         }
       })
       Scroll() {
         Column() {
-          this.Section('常用')
-          this.SwitchRow('学习', '根据选词学习用户词频', this.learner === 1, () => {
+          LanguageRow()
+          this.Section(t('常用'))
+          this.SwitchRow(t('学习'), t('根据选词学习用户词频'), this.learner === 1, () => {
             this.ctrl.toggleLearner();
           })
-          this.SwitchRow('智能联想', '提交后联想常用续接词句（默认关闭）', this.association === 1, () => {
+          this.SwitchRow(t('智能联想'), t('提交后联想常用续接词句（默认关闭）'), this.association === 1, () => {
             toggleAssociation();
             this.ctrl.publish();
           })
-          this.SwitchRow('英文专业模式', '英文候选与联想；关闭时字母直接上屏', this.pro === 1, () => {
+          this.SwitchRow(t('英文专业模式'), t('英文候选与联想；关闭时字母直接上屏'), this.pro === 1, () => {
             this.ctrl.toggleEnglishPro();
           })
-          this.SwitchRow('表情页显示自有', '在表情页显示小欧贴纸分类', this.showOwn === 1, () => {
+          this.SwitchRow(t('表情页显示自有'), t('在表情页显示小欧贴纸分类'), this.showOwn === 1, () => {
             this.ctrl.toggleShowOwn();
           })
-          this.InfoRow('词库', this.ctrl.dictionaryDegraded() ? '内置回退词库（完整词库未装上）' : '完整词库')
-          this.ActionRow('清除用户词库', '删除学习积累的词频；内置词库不受影响', '', () => {
+          this.InfoRow(t('词库'), t(this.ctrl.dictionaryDegraded() ? '内置回退词库（完整词库未装上）' : '完整词库'))
+          this.ActionRow(t('清除用户词库'), t('删除学习积累的词频；内置词库不受影响'), '', () => {
             this.clearConfirm = true;
           })
           if (this.clearConfirm) {
             Row() {
-              Text('确认清除全部用户词？')
+              Text(t('确认清除全部用户词？'))
                 .fontSize(this.elder === 1 ? 14 : 12).fontColor(this.pal().panelFg).layoutWeight(1)
-              Button('取消')
+              Button(t('取消'))
                 .fontSize(13).height(30).backgroundColor(sceneKeyBg(this.pal().keyBg))
                 .fontColor(this.pal().keyFg).margin({ right: 8 })
                 .onClick(() => {
                   this.clearConfirm = false;
                 })
-              Button('清除')
+              Button(t('清除'))
                 .fontSize(13).height(30).backgroundColor(this.pal().accent)
                 .fontColor(this.pal().highlightFg)
                 .onClick(() => {
@@ -165,61 +173,61 @@ export struct SettingsPanel {
             .width('100%').padding({ left: 14, right: 14, top: 2, bottom: 8 })
           }
 
-          this.Section('跨设备剪贴板')
+          this.Section(t('跨设备剪贴板'))
           ClipSection()
 
-          this.Section('键盘')
-          this.ActionRow('输入模式', '键盘布局与输入方案', INPUT_MODES[this.layout].label, () => {
+          this.Section(t('键盘'))
+          this.ActionRow(t('输入模式'), t('键盘布局与输入方案'), t(INPUT_MODES[this.layout].label), () => {
             this.openSub(PanelView.InputMode);
           })
-          this.SwitchRow('繁体模式', '中文输入使用繁体词库', this.mode === (OpiMode.Traditional as number), () => {
+          this.SwitchRow(t('繁体模式'), t('中文输入使用繁体词库'), this.mode === (OpiMode.Traditional as number), () => {
             this.ctrl.toggleTraditional();
           })
           Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start }) {
             ModeChip({
-              label: '单手模式：关', selected: this.oneHand === ONE_HAND_OFF,
+              label: t('单手模式：关'), selected: this.oneHand === ONE_HAND_OFF,
               onTap: () => {
                 this.ctrl.setOneHand(ONE_HAND_OFF);
               }
             })
             ModeChip({
-              label: '单手模式：左手', selected: this.oneHand === ONE_HAND_LEFT,
+              label: t('单手模式：左手'), selected: this.oneHand === ONE_HAND_LEFT,
               onTap: () => {
                 this.ctrl.setOneHand(ONE_HAND_LEFT);
               }
             })
             ModeChip({
-              label: '单手模式：右手', selected: this.oneHand === ONE_HAND_RIGHT,
+              label: t('单手模式：右手'), selected: this.oneHand === ONE_HAND_RIGHT,
               onTap: () => {
                 this.ctrl.setOneHand(ONE_HAND_RIGHT);
               }
             })
           }.width('100%').padding({ left: 10, right: 10, top: 2 })
-          this.SwitchRow('悬浮模式', '键盘收窄居中，可拖动', this.floating === 1, () => {
+          this.SwitchRow(t('悬浮模式'), t('键盘收窄居中，可拖动'), this.floating === 1, () => {
             this.ctrl.toggleFloating();
           })
-          this.SwitchRow('游戏模式', '更矮的键盘，减少遮挡', this.game === 1, () => {
+          this.SwitchRow(t('游戏模式'), t('更矮的键盘，减少遮挡'), this.game === 1, () => {
             this.ctrl.toggleGame();
           })
 
-          this.Section('外观')
-          this.ActionRow('皮肤', '11 款纯色 + 19 套动态；选中即换',
-            this.scene.length > 0 ? sceneLabel(this.scene) : SKINS[this.skin].label, () => {
+          this.Section(t('外观'))
+          this.ActionRow(t('皮肤'), t('11 款纯色 + 19 套动态；选中即换'),
+            t(this.scene.length > 0 ? sceneLabel(this.scene) : SKINS[this.skin].label), () => {
             this.openSub(PanelView.Skin);
           })
-          this.SwitchRow('暗光模式', '深色键盘配色', this.dark === 1, () => {
+          this.SwitchRow(t('暗光模式'), t('深色键盘配色'), this.dark === 1, () => {
             this.ctrl.toggleDark();
           })
-          this.SwitchRow('长辈模式', '大字号键盘与面板', this.elder === 1, () => {
+          this.SwitchRow(t('长辈模式'), t('大字号键盘与面板'), this.elder === 1, () => {
             this.ctrl.toggleElder();
           })
 
-          this.Section('关于')
-          this.InfoRow('版本', `v${appVersion()}`)
+          this.Section(t('关于'))
+          this.InfoRow(t('版本'), `v${appVersion()}`)
           Column() {
             UpdateSection({ currentVersion: appVersion() })
           }.width('100%').padding({ left: 14, right: 14, top: 2, bottom: 4 })
-          this.ActionRow('关于与链接', '简介 / 版权 / 项目地址', '', () => {
+          this.ActionRow(t('关于与链接'), t('简介 / 版权 / 项目地址'), '', () => {
             this.openSub(PanelView.About);
           })
         }

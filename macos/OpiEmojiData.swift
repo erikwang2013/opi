@@ -92,6 +92,7 @@ extension OpiEmojiPanel {
         let emoji = loadEmoji().reduce(0) { $0 + $1.items.count }
         let kaomoji = loadKaomoji().reduce(0) { $0 + $1.items.count }
         let stickers = loadStickers().count
-        return "表情 \(emoji) 个 · 颜文字 \(kaomoji) 个 · 贴纸 \(stickers) 个（ShowOwn）"
+        return String(format: OpiText.t("表情 %d 个 · 颜文字 %d 个 · 贴纸 %d 个（ShowOwn）"),
+                      emoji, kaomoji, stickers)
     }
 }

@@ -37,6 +37,8 @@ const KEY_ASSOCIATION: string = 'engine_association';
 const KEY_CLIP: string = 'clip_enabled';
 /** 9 键左列末格的自定义标点（与 Android `nine_custom_punct` 同键名）。 */
 const KEY_CUSTOM_PUNCT: string = 'nine_custom_punct';
+/** 设置/关于页界面语言：0=中文，1=英文（与 Android `ui_language` 同语义）。 */
+const KEY_UI_LANGUAGE: string = 'ui_language';
 
 let store: preferences.Preferences | null = null;
 
@@ -57,6 +59,8 @@ export class ImeSettings {
   learn: boolean = true;
   association: boolean = false;
   clipEnabled: boolean = false;
+  /** 0=中文，1=英文。 */
+  lang: number = 0;
 }
 
 /** 绑定扩展上下文（每进程一次；失败时本模块退化成内存默认值）。 */
@@ -132,6 +136,7 @@ export function load(): ImeSettings {
   s.learn = readBool(KEY_LEARN, true);
   s.association = readBool(KEY_ASSOCIATION, false);
   s.clipEnabled = readBool(KEY_CLIP, false);
+  s.lang = readNumber(KEY_UI_LANGUAGE, 0);
   return s;
 }
 
@@ -209,6 +214,18 @@ export function saveBool(key: string, value: boolean): void {
     flush();
   } catch (e) {
     console.error(`[opi] 保存开关失败（${key}）：${e}`);
+  }
+}
+
+export function saveLanguage(value: number): void {
+  if (store === null) {
+    return;
+  }
+  try {
+    store.putSync(KEY_UI_LANGUAGE, value === 1 ? 1 : 0);
+    flush();
+  } catch (e) {
+    console.error(`[opi] 保存界面语言失败：${e}`);
   }
 }
 

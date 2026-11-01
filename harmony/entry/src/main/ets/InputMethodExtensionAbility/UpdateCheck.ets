@@ -17,6 +17,7 @@ import { InputMethodExtensionContext } from '@kit.IMEKit';
 import { http } from '@kit.NetworkKit';
 import { promptAction } from '@kit.ArkUI';
 import { Palette, paletteFor } from './Palette';
+import { t } from './I18n';
 
 const VERSION_URL: string = 'https://opi.erik.xyz/version.json';
 const DOWNLOAD_URL: string = 'https://opi.erik.xyz/download';
@@ -175,6 +176,8 @@ export struct UpdateSection {
   @StorageLink('opiSkin') skin: number = 0;
   @StorageLink('opiDark') dark: number = 0;
   @StorageLink('opiElder') elder: number = 0;
+  /** 订阅语言键，切换后本区块文案当帧重渲染。 */
+  @StorageLink('opiLang') lang: number = 0;
   @State state: number = UpdateState.Idle as number;
   @State latest: string = '';
   @State download: string = DOWNLOAD_URL;
@@ -205,18 +208,18 @@ export struct UpdateSection {
 
   private statusText(): string {
     if (this.state === (UpdateState.Checking as number)) {
-      return '正在检测更新…';
+      return t('正在检测更新…');
     }
     if (this.state === (UpdateState.Newer as number)) {
-      return `发现新版本 v${this.latest}（当前 v${this.currentVersion}）`;
+      return `${t('发现新版本')} v${this.latest}${t('（当前 v')}${this.currentVersion}${t('）')}`;
     }
     if (this.state === (UpdateState.Latest as number)) {
-      return `已是最新版本 v${this.currentVersion}`;
+      return `${t('已是最新版本')} v${this.currentVersion}`;
     }
     if (this.state === (UpdateState.Failed as number)) {
-      return `检测更新失败：${this.reason}`;
+      return `${t('检测更新失败：')}${t(this.reason)}`;
     }
-    return `当前 v${this.currentVersion}`;
+    return `${t('当前 v')}${this.currentVersion}`;
   }
 
   private openDownload(): void {
@@ -242,12 +245,12 @@ export struct UpdateSection {
     try {
       const data: pasteboard.PasteData = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, url);
       pasteboard.getSystemPasteboard().setData(data).then(() => {
-        toast(`无法直接打开浏览器，下载链接已复制：${url}`);
+        toast(`${t('无法直接打开浏览器，下载链接已复制：')}${url}`);
       }).catch(() => {
-        toast(`请手动访问：${url}`);
+        toast(`${t('请手动访问：')}${url}`);
       });
     } catch (e) {
-      toast(`请手动访问：${url}`);
+      toast(`${t('请手动访问：')}${url}`);
     }
   }
 
@@ -259,7 +262,7 @@ export struct UpdateSection {
           ? this.pal().accent : this.pal().panelFg)
         .width('100%').margin({ top: 3 })
       if (this.state === (UpdateState.Newer as number)) {
-        Text('前往下载')
+        Text(t('前往下载'))
           .fontSize(this.elder === 1 ? 15 : 13).fontWeight(FontWeight.Bold)
           .fontColor(this.pal().accent).width('100%').margin({ top: 8 })
           .onClick(() => {
@@ -267,7 +270,7 @@ export struct UpdateSection {
           })
       }
       if (this.state !== (UpdateState.Checking as number)) {
-        Text('检测更新')
+        Text(t('检测更新'))
           .fontSize(this.elder === 1 ? 15 : 13)
           .fontColor(this.pal().accent).width('100%').margin({ top: 8 })
           .onClick(() => {

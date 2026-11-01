@@ -8,12 +8,15 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import * as ClipSync from './ClipSync';
 import { ClipPairingPrompt, ClipPeer, ClipStatus } from './ClipSync';
 import { Palette, paletteFor, sceneKeyBg } from './Palette';
+import { t } from './I18n';
 
 @Component
 export struct ClipSection {
   @StorageLink('opiSkin') skin: number = 0;
   @StorageLink('opiDark') dark: number = 0;
   @StorageLink('opiElder') elder: number = 0;
+  /** 订阅语言键，切换后本区块文案当帧重渲染。 */
+  @StorageLink('opiLang') lang: number = 0;
   @State clipOn: boolean = false;
   @State running: boolean = false;
   @State peers: ClipPeer[] = [];
@@ -111,9 +114,9 @@ export struct ClipSection {
     Column() {
       Row() {
         Column() {
-          Text('跨设备剪贴板')
+          Text(t('跨设备剪贴板'))
             .fontSize(this.fs(14)).fontColor(this.pal().panelFg)
-          Text('仅在键盘输入时运行；默认关闭')
+          Text(t('仅在键盘输入时运行；默认关闭'))
             .fontSize(this.fs(11)).fontColor(this.pal().dimFg).margin({ top: 2 })
         }
         .layoutWeight(1).alignItems(HorizontalAlign.Start)
@@ -128,21 +131,21 @@ export struct ClipSection {
       .width('100%').padding({ left: 14, right: 14, top: 8, bottom: 8 })
 
       if (!this.running) {
-        this.Info('状态', this.clipOn ? '等待键盘输入会话' : '已关闭', true)
+        this.Info(t('状态'), t(this.clipOn ? '等待键盘输入会话' : '已关闭'), true)
       } else {
-        this.Info('状态', `运行中 · 发现 ${this.peers.length} 台设备`, false)
+        this.Info(t('状态'), `${t('运行中 · 发现')} ${this.peers.length} ${t('台设备')}`, false)
         if (this.fingerprint.length > 0) {
-          this.Info('本机指纹', this.fingerprint, true)
+          this.Info(t('本机指纹'), this.fingerprint, true)
         }
       }
       if (this.lastSource.length > 0) {
-        this.Info('最近来源', this.lastSource, true)
+        this.Info(t('最近来源'), this.lastSource, true)
       }
       if (this.lastPairing.length > 0) {
-        this.Info('上次配对', this.lastPairing, true)
+        this.Info(t('上次配对'), this.lastPairing, true)
       }
       if (this.lastError.length > 0) {
-        Text(this.lastError)
+        Text(t(this.lastError))
           .fontSize(this.fs(11)).fontColor('#C62828')
           .width('100%').padding({ left: 14, right: 14, top: 2, bottom: 4 })
       }
@@ -150,19 +153,19 @@ export struct ClipSection {
       // ---- 配对确认：SAS 只能人工核对，绝不自动接受 ----
       if (this.promptId.length > 0) {
         Column() {
-          Text(this.promptIncoming ? '对方请求配对' : '确认配对')
+          Text(t(this.promptIncoming ? '对方请求配对' : '确认配对'))
             .fontSize(this.fs(12)).fontColor(this.pal().dimFg)
           Text(this.sasText())
             .fontSize(this.fs(26)).fontWeight(FontWeight.Bold)
             .fontColor(this.pal().panelFg).letterSpacing(4).margin({ top: 4, bottom: 4 })
-          Text('核对两台设备显示相同的 6 位数字；不一致请拒绝。')
+          Text(t('核对两台设备显示相同的 6 位数字；不一致请拒绝。'))
             .fontSize(this.fs(10)).fontColor(this.pal().dimFg).maxLines(2)
           Row() {
-            this.MiniButton('拒绝', false, () => {
+            this.MiniButton(t('拒绝'), false, () => {
               ClipSync.pairConfirm(this.promptId, false);
               this.refresh();
             })
-            this.MiniButton('允许', true, () => {
+            this.MiniButton(t('允许'), true, () => {
               ClipSync.pairConfirm(this.promptId, true);
               this.refresh();
             })
@@ -186,51 +189,51 @@ export struct ClipSection {
               }
               this.refresh();
             })
-          Text('把当前剪贴板发到已配对设备')
+          Text(t('把当前剪贴板发到已配对设备'))
             .fontSize(this.fs(10)).fontColor(this.pal().dimFg)
             .layoutWeight(1).margin({ left: 8 }).maxLines(2)
         }
         .width('100%').padding({ left: 14, right: 14, top: 4, bottom: 8 })
       }
       if (this.readLimited) {
-        this.Hint('系统限制后台读取剪贴板：点「粘贴」手动同步一次，或从系统复制后立即同步。')
+        this.Hint(t('系统限制后台读取剪贴板：点「粘贴」手动同步一次，或从系统复制后立即同步。'))
       }
-      this.Hint('收到的文本只写入系统剪贴板，不会自动粘贴；请回到应用里手动粘贴。')
+      this.Hint(t('收到的文本只写入系统剪贴板，不会自动粘贴；请回到应用里手动粘贴。'))
 
       // ---- 设备列表 ----
       if (this.running) {
-        Text('设备')
+        Text(t('设备'))
           .fontSize(this.fs(11)).fontWeight(FontWeight.Bold).fontColor(this.pal().dimFg)
           .width('100%').padding({ left: 14, right: 14, top: 8, bottom: 2 })
         if (this.peers.length === 0) {
-          this.Hint('未发现设备。确保两台设备在同一局域网、都打开开关，且本机未被基础体验模式限制。')
+          this.Hint(t('未发现设备。确保两台设备在同一局域网、都打开开关，且本机未被基础体验模式限制。'))
         }
         ForEach(this.peers, (peer: ClipPeer) => {
           Row() {
             Column() {
               Text(peer.name.length > 0 ? peer.name : peer.instanceId.substring(0, 8))
                 .fontSize(this.fs(14)).fontColor(this.pal().panelFg)
-              Text(`${peer.connected ? '已连接' : '未连接'}${peer.trusted ? ' · 已配对' : ''}`)
+              Text(`${peer.connected ? t('已连接') : t('未连接')}${peer.trusted ? ' · ' + t('已配对') : ''}`)
                 .fontSize(this.fs(10))
                 .fontColor(peer.connected ? this.pal().accent : this.pal().dimFg)
                 .margin({ top: 2 })
             }
             .layoutWeight(1).alignItems(HorizontalAlign.Start)
             if (!peer.trusted && peer.connected) {
-              this.MiniButton('配对', true, () => {
+              this.MiniButton(t('配对'), true, () => {
                 ClipSync.pairStart(peer.instanceId);
                 this.refresh();
               })
             }
             if (peer.trusted) {
               if (this.confirmForget === peer.instanceId) {
-                this.MiniButton('确认移除', true, () => {
+                this.MiniButton(t('确认移除'), true, () => {
                   ClipSync.forgetPeer(peer.instanceId);
                   this.confirmForget = '';
                   this.refresh();
                 })
               } else {
-                this.MiniButton('移除', false, () => {
+                this.MiniButton(t('移除'), false, () => {
                   this.confirmForget = peer.instanceId;
                 })
               }
@@ -241,7 +244,7 @@ export struct ClipSection {
       }
 
       if (this.clipOn) {
-        Button('立即停止共享')
+        Button(t('立即停止共享'))
           .fontSize(this.fs(12)).height(32).width('100%')
           .backgroundColor(sceneKeyBg(this.pal().keyBg)).fontColor(this.pal().keyFg)
           .margin({ top: 8 })
@@ -249,7 +252,7 @@ export struct ClipSection {
             this.toggle(false);
           })
       }
-      this.Hint('基础体验模式会限制后台网络与剪贴板能力；若始终发现不到设备，请在系统设置中退出基础体验模式后重试。')
+      this.Hint(t('基础体验模式会限制后台网络与剪贴板能力；若始终发现不到设备，请在系统设置中退出基础体验模式后重试。'))
     }
     .width('100%')
   }

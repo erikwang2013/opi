@@ -40,7 +40,7 @@ final class ClipboardSettingsSection: UIView {
         labels.axis = .vertical
         labels.spacing = 1
 
-        toggle.accessibilityLabel = "启用跨设备剪贴板"
+        toggle.accessibilityLabel = OpiText.t("启用跨设备剪贴板")
         toggle.setContentHuggingPriority(.required, for: .horizontal)
         toggle.addAction(UIAction { [weak self] _ in
             guard let self else { return }
@@ -114,20 +114,20 @@ final class ClipboardSettingsSection: UIView {
         let clip = OpiClipboard.shared
         toggle.isOn = clip.isEnabled
         if !clip.isEnabled {
-            statusLabel.text = "已关闭（默认）"
+            statusLabel.text = OpiText.t("已关闭（默认）")
         } else if clip.isRunning {
-            statusLabel.text = "共享中 · 仅键盘可见时运行"
+            statusLabel.text = OpiText.t("共享中 · 仅键盘可见时运行")
         } else {
-            statusLabel.text = "已开启 · 键盘可见时启动"
+            statusLabel.text = OpiText.t("已开启 · 键盘可见时启动")
         }
         if let source = clip.lastSourceText, !source.isEmpty {
-            sourceLabel.text = "最近来源：\(source)"
+            sourceLabel.text = OpiText.t("最近来源：") + source
             sourceLabel.isHidden = false
         } else {
             sourceLabel.isHidden = true
         }
         let error = clip.lastErrorText
-        errorLabel.text = error
+        errorLabel.text = OpiText.t(error)
         errorLabel.isHidden = error.isEmpty
 
         dynamic.arrangedSubviews.forEach { $0.removeFromSuperview() }
@@ -151,8 +151,8 @@ final class ClipboardSettingsSection: UIView {
             let reject = makeAction("拒绝") {
                 OpiClipboard.shared.respondPairing(at: index, accept: false)
             }
-            accept.accessibilityLabel = "信任 \(name)"
-            reject.accessibilityLabel = "拒绝 \(name)"
+            accept.accessibilityLabel = String(format: OpiText.t("信任 %@"), name)
+            reject.accessibilityLabel = String(format: OpiText.t("拒绝 %@"), name)
             let row = UIStackView(arrangedSubviews: [title, accept, reject])
             row.axis = .horizontal
             row.alignment = .center
@@ -174,8 +174,8 @@ final class ClipboardSettingsSection: UIView {
             title.font = .systemFont(ofSize: 12)
             title.lineBreakMode = .byTruncatingTail
             let detail = UILabel()
-            detail.text = "\(peer.trusted ? "已信任" : "未配对") · "
-                + "\(peer.connected ? "在线" : "离线") · \(peer.address)"
+            detail.text = OpiText.t(peer.trusted ? "已信任" : "未配对") + " · "
+                + OpiText.t(peer.connected ? "在线" : "离线") + " · \(peer.address)"
             detail.font = .systemFont(ofSize: 9)
             detail.textColor = palette.barDimFg
             detail.lineBreakMode = .byTruncatingMiddle
@@ -190,7 +190,9 @@ final class ClipboardSettingsSection: UIView {
                     OpiClipboard.shared.pair(peer.id)
                 }
             }
-            action.accessibilityLabel = peer.trusted ? "撤销对 \(name) 的信任" : "与 \(name) 配对"
+            action.accessibilityLabel = String(
+                format: OpiText.t(peer.trusted ? "撤销对 %@ 的信任" : "与 %@ 配对"), name
+            )
             let row = UIStackView(arrangedSubviews: [labels, action])
             row.axis = .horizontal
             row.alignment = .center
@@ -203,7 +205,7 @@ final class ClipboardSettingsSection: UIView {
 
     private func heading(_ text: String) -> UILabel {
         let label = UILabel()
-        label.text = text
+        label.text = OpiText.t(text)
         label.font = .systemFont(ofSize: 10, weight: .semibold)
         label.textColor = palette.barDimFg
         label.numberOfLines = 0
@@ -212,7 +214,7 @@ final class ClipboardSettingsSection: UIView {
 
     private func makeAction(_ title: String, action: @escaping () -> Void) -> UIButton {
         let b = UIButton(type: .system)
-        b.setTitle(title, for: .normal)
+        b.setTitle(OpiText.t(title), for: .normal)
         b.titleLabel?.font = .systemFont(ofSize: 12, weight: .medium)
         b.setTitleColor(palette.accent, for: .normal)
         b.backgroundColor = palette.keySurface(palette.keyBg)
@@ -224,7 +226,7 @@ final class ClipboardSettingsSection: UIView {
 
     private func addNote(_ text: String) {
         let label = UILabel()
-        label.text = text
+        label.text = OpiText.t(text)
         label.font = .systemFont(ofSize: 10)
         label.textColor = palette.barDimFg
         label.numberOfLines = 0

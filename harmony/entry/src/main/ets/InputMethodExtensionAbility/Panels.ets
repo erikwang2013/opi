@@ -17,6 +17,7 @@ import { ONE_HAND_LEFT, ONE_HAND_OFF, ONE_HAND_RIGHT, darkEnabled, elderEnabled 
 import { Palette, SKINS, Skin, paletteFor, scenePanelBg, sceneKeyBg } from './Palette';
 import { SCENES, SceneSkin } from './SceneTheme';
 import { UpdateSection } from './UpdateCheck';
+import { LanguageRow, ensureLanguage, t } from './I18n';
 
 const ABOUT_INTRO: string =
   '小欧输入法（opi）是一款回归本质、人人可用的多端输入法。' +
@@ -339,13 +340,13 @@ function copyLink(url: string): void {
   try {
     const data: pasteboard.PasteData = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, url);
     pasteboard.getSystemPasteboard().setData(data).then(() => {
-      toast('链接已复制');
+      toast(t('链接已复制'));
     }).catch(() => {
-      toast('复制失败');
+      toast(t('复制失败'));
     });
   } catch (e) {
     console.error(`[opi] 复制链接失败：${e}`);
-    toast('复制失败');
+    toast(t('复制失败'));
   }
 }
 
@@ -354,7 +355,13 @@ export struct AboutPanel {
   @StorageLink('opiSkin') skin: number = 0;
   @StorageLink('opiDark') dark: number = 0;
   @StorageLink('opiElder') elder: number = 0;
+  /** 订阅语言键：切换后本页 t(...) 的文案当帧重渲染。 */
+  @StorageLink('opiLang') lang: number = 0;
   private ctrl: KeyboardController = KeyboardController.getInstance();
+
+  aboutToAppear(): void {
+    ensureLanguage();
+  }
 
   private pal(): Palette {
     return paletteFor(this.skin, this.dark === 1, this.elder === 1);
@@ -394,28 +401,29 @@ export struct AboutPanel {
   build() {
     Column() {
       PanelHeader({
-        title: '关于',
+        title: t('关于'),
         onClose: () => {
           this.ctrl.closePanel();
         }
       })
       Scroll() {
         Column() {
-          this.Para(ABOUT_INTRO)
-          this.Head('版本')
-          this.Para(`v${appVersion()}`)
-          this.Head('更新')
+          LanguageRow()
+          this.Para(t(ABOUT_INTRO))
+          this.Head(t('版本'))
+          this.Para(`v${t(appVersion())}`)
+          this.Head(t('更新'))
           UpdateSection({ currentVersion: appVersion() })
-          this.Head('版权')
-          this.Para('© 2026 erik.xyz · 代码按 MIT 许可（全文见仓库 LICENSE）；词库数据与代码分开授权')
-          this.Head('表情数据')
-          this.Para('Emoji 取自 OpenMoji（CC BY-SA 4.0）；颜文字取自 rime_kaomoji_dict（MIT）；小欧贴纸/图标为项目专有资产，商业使用需授权')
-          this.Head('链接')
-          this.LinkRow('官网主页', ABOUT_HOME_URL)
-          this.LinkRow('GitHub 项目', ABOUT_PROJECT_URL)
-          this.LinkRow('博客', ABOUT_BLOG_URL)
-          this.LinkRow('隐私政策', ABOUT_PRIVACY_URL)
-          this.Para('鸿蒙输入法扩展不能直接拉起浏览器；点链接复制地址后到浏览器打开。')
+          this.Head(t('版权'))
+          this.Para(t('© 2026 erik.xyz · 代码按 MIT 许可（全文见仓库 LICENSE）；词库数据与代码分开授权'))
+          this.Head(t('表情数据'))
+          this.Para(t('Emoji 取自 OpenMoji（CC BY-SA 4.0）；颜文字取自 rime_kaomoji_dict（MIT）；小欧贴纸/图标为项目专有资产，商业使用需授权'))
+          this.Head(t('链接'))
+          this.LinkRow(t('官网主页'), ABOUT_HOME_URL)
+          this.LinkRow(t('GitHub 项目'), ABOUT_PROJECT_URL)
+          this.LinkRow(t('博客'), ABOUT_BLOG_URL)
+          this.LinkRow(t('隐私政策'), ABOUT_PRIVACY_URL)
+          this.Para(t('鸿蒙输入法扩展不能直接拉起浏览器；点链接复制地址后到浏览器打开。'))
         }
         .width('100%').padding({ left: 14, right: 14, bottom: 10 })
       }.layoutWeight(1).width('100%')

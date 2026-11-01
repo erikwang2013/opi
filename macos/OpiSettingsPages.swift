@@ -62,7 +62,7 @@ extension OpiSettingsWindow {
                                 on: OpiSettingsStore.bracketPairing,
                                 action: #selector(bracketPairingChanged(_:)))
         brackets.frame.size.width = 320
-        brackets.toolTip = "打 ( 自动补 )，光标停在中间；宿主不支持光标回移时自动退回普通输入。"
+        brackets.toolTip = OpiText.t("打 ( 自动补 )，光标停在中间；宿主不支持光标回移时自动退回普通输入。")
 
         let schemeY = after + 68
         label("输入方案", x: 0, y: schemeY, w: 90, size: 12)
@@ -72,7 +72,8 @@ extension OpiSettingsWindow {
                            w: 150, selected: idx, action: #selector(schemeChanged(_:)))
         for (i, value) in Self.schemeChoices.enumerated() where !engine.isSchemeAvailable(value) {
             scheme.menu?.item(at: i)?.isEnabled = false
-            scheme.menu?.item(at: i)?.toolTip = "\(value.title)词典未装载"
+            scheme.menu?.item(at: i)?.toolTip =
+                OpiText.t(value.title) + " " + OpiText.t("词典未装载")
         }
 
         label("双拼布局", x: 270, y: schemeY, w: 80, size: 12)
@@ -128,8 +129,8 @@ extension OpiSettingsWindow {
         popup(all.map { $0.title }, x: 96, y: 79, w: 180,
               selected: all.firstIndex(of: OpiTheme.currentChoice) ?? 0,
               action: #selector(skinChanged(_:)))
-        label("当前：\(OpiTheme.currentChoice.title)", x: 290, y: 84, w: 160, size: 12,
-              color: .secondaryLabelColor)
+        label(OpiText.t("当前：") + OpiText.t(OpiTheme.currentChoice.title),
+              x: 290, y: 84, w: 160, size: 12, color: .secondaryLabelColor)
         if let scene = OpiTheme.scene, let img = scene.image {
             let iv = NSImageView(frame: NSRect(x: 470, y: 62, width: 220, height: 124))
             iv.image = img
@@ -217,14 +218,14 @@ extension OpiSettingsWindow {
             let b = checkbox(choice.label, x: x, y: y, on: choice.resident(bar),
                              action: #selector(statusButtonChanged(_:)), tag: choice.rawValue)
             b.frame.size.width = 220
-            b.toolTip = choice.hint
+            b.toolTip = OpiText.t(choice.hint)
             if choice == .mode {
                 b.isEnabled = false
                 b.state = .on
-                b.toolTip = "模式按钮恒常驻（Linux 无 StatusBarMode= 键）"
+                b.toolTip = OpiText.t("模式按钮恒常驻（Linux 无 StatusBarMode= 键）")
             }
             if choice == .enpro {
-                b.toolTip = "englishpro 在 macOS 无控制面：按钮会显示但动作禁用，可在这里隐藏"
+                b.toolTip = OpiText.t("englishpro 在 macOS 无控制面：按钮会显示但动作禁用，可在这里隐藏")
             }
         }
 
@@ -370,7 +371,8 @@ extension OpiSettingsWindow {
         guard Self.schemeChoices.indices.contains(index) else { return }
         let scheme = Self.schemeChoices[index]
         guard OpiEngine.shared.isSchemeAvailable(scheme) else {
-            alert("\(scheme.title)词典未装载", info: "把对应 .opid 放进包的 Resources/dicts/ 或 ~/Library/Application Support/opi/。")
+            alert(OpiText.t(scheme.title) + " " + OpiText.t("词典未装载"),
+                  info: OpiText.t("把对应 .opid 放进包的 Resources/dicts/ 或 ~/Library/Application Support/opi/。"))
             rebuildPage()
             return
         }

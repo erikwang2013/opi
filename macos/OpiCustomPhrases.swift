@@ -137,6 +137,15 @@ enum OpiCustomPhraseCodec {
         return decodeLines(text)
     }
 
+    /// 「第 N 条：」「第 N 行：」的前缀：数字保留，前缀查表翻译。
+    private static func entryLabel(_ index: Int) -> String {
+        String(format: OpiText.t("第 %d 条："), index + 1)
+    }
+
+    private static func lineLabel(_ index: Int) -> String {
+        String(format: OpiText.t("第 %d 行："), index + 1)
+    }
+
     private static func decodeJSON(_ text: String) -> OpiCustomPhraseDecode {
         guard let data = text.data(using: .utf8) else { return .invalid("文件不是 UTF-8") }
         let root: Any
@@ -165,7 +174,7 @@ enum OpiCustomPhraseCodec {
 
         var out: [OpiCustomPhrase] = []
         for (index, entry) in entries.enumerated() {
-            let label = "第 \(index + 1) 条："
+            let label = entryLabel(index)
             let trigger: Any?
             let text: Any?
             if let object = entry as? [String: Any] {
@@ -175,22 +184,22 @@ enum OpiCustomPhraseCodec {
                 trigger = pair[0]
                 text = pair[1]
             } else {
-                return .invalid("\(label)格式不对")
+                return .invalid(label + OpiText.t("格式不对"))
             }
             guard let t = trigger as? String, let x = text as? String else {
-                return .invalid("\(label)字母和短语都必须是字符串")
+                return .invalid(label + OpiText.t("字母和短语都必须是字符串"))
             }
             do {
                 out.append(try checked(t, x, label: label))
             } catch let error as OpiPhraseError {
                 return .invalid(error.message)
             } catch {
-                return .invalid("\(label)格式不对")
+                return .invalid(label + OpiText.t("格式不对"))
             }
         }
         let normalized = normalize(out)
         if normalized.count > maxPhrases {
-            return .invalid("达到上限（最多 \(maxPhrases) 条）")
+            return .invalid(String(format: OpiText.t("达到上限（最多 %d 条）"), maxPhrases))
         }
         return .ok(normalized, enabled)
     }
@@ -203,15 +212,15 @@ enum OpiCustomPhraseCodec {
             do {
                 out.append(try lineEntry(line))
             } catch let error as OpiPhraseError {
-                return .invalid("第 \(index + 1) 行：\(error.message)")
+                return .invalid(lineLabel(index) + error.message)
             } catch {
-                return .invalid("第 \(index + 1) 行：格式不对")
+                return .invalid(lineLabel(index) + OpiText.t("格式不对"))
             }
         }
         if out.isEmpty { return .invalid("没有可导入的短语") }
         let normalized = normalize(out)
         if normalized.count > maxPhrases {
-            return .invalid("达到上限（最多 \(maxPhrases) 条）")
+            return .invalid(String(format: OpiText.t("达到上限（最多 %d 条）"), maxPhrases))
         }
         return .ok(normalized, nil)
     }
@@ -281,12 +290,15 @@ enum OpiCustomPhraseCodec {
                                 label: String) throws -> OpiCustomPhrase {
         let t = trigger.trimmingCharacters(in: .whitespaces)
         let x = rawText.trimmingCharacters(in: .whitespaces)
-        if t.isEmpty { throw OpiPhraseError("\(label)字母不能为空") }
-        if !validTrigger(t) { throw OpiPhraseError("\(label)字母只能是英文字母") }
-        if t.count > maxTriggerLength {
-            throw OpiPhraseError("\(label)字母过长（上限 \(maxTriggerLength) 个）")
+        if t.isEmpty { throw OpiPhraseError(label + OpiText.t("字母不能为空")) }
+        if !validTrigger(t) {
+            throw OpiPhraseError(label + OpiText.t("字母只能是英文字母"))
         }
-        if x.isEmpty { throw OpiPhraseError("\(label)短语不能为空") }
+        if t.count > maxTriggerLength {
+            throw OpiPhraseError(label
+                + String(format: OpiText.t("字母过长（上限 %d 个）"), maxTriggerLength))
+        }
+        if x.isEmpty { throw OpiPhraseError(label + OpiText.t("短语不能为空")) }
         return OpiCustomPhrase(trigger: t.lowercased(), text: x)
     }
 

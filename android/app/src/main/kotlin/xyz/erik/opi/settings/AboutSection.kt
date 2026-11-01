@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import xyz.erik.opi.i18n.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import kotlinx.coroutines.launch
 import xyz.erik.opi.BuildConfig
+import xyz.erik.opi.i18n.LanguageSwitcher
 
 /**
  * 设置页「关于」一节（2026-10-15，用户裁决「移动端：增加关于按钮，主要是项目简介、版本、
@@ -74,6 +75,8 @@ internal fun AboutSection(toast: (String) -> Unit) {
         update = checkForUpdate(BuildConfig.VERSION_NAME, manual)
     }
     LaunchedEffect(Unit) { check(false) }
+    HorizontalDivider()
+    LanguageSwitcher()
     HorizontalDivider()
     ListItem(
         headlineContent = { Text("关于") },

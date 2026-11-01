@@ -7,7 +7,7 @@
 //! （ClipControl.kt）；本页不碰 FFI 句柄，也不显示剪贴板文本 —— 只显示元数据与来源。
 //!
 //! 隐藏操作：Wayland/GNOME 没有后台全局监听，页面会明说，并提供「发送当前剪贴板」。
-//! Windows 的防火墙授权提示只写在这里，不自动加规则。
+//! Windows 防火墙：安装器按程序放行专用/域网络；页面只展示排查提示。
 
 package xyz.erik.opi.candidate
 
@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -240,7 +239,7 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
         st == null -> Text("宿主运行后，这里会列出同一局域网内发现的小欧设备。", fontSize = 12.sp, color = Muted)
         st.peers.isEmpty() -> Text(
             "还没有发现设备。确认两台设备在同一局域网、都已开启本开关；" +
-                "Windows 首次开启时请在防火墙弹窗里允许「专用网络」。",
+                "Windows 若发现不到设备，请确认安装器添加的防火墙规则未被禁用、当前网络为「专用」。",
             fontSize = 12.sp, color = Muted,
         )
         else -> for (p in st.peers) {
@@ -267,8 +266,8 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
     Text("· 不记录剪贴板内容，不做剪贴板历史；状态文件只存设备与开关。", fontSize = 12.sp, color = Muted)
     if (isWindows()) {
         Text(
-            "· 第一次监听时 Windows 会弹防火墙授权，请允许「专用网络」。" +
-                "本程序不会自动修改防火墙规则；拒绝后请到 Windows 安全中心手动放行。",
+            "· Windows 安装器会为 opi.exe 添加专用/域网络的入站规则（UDP 45888 发现、TCP 会话）。" +
+                "若仍连不上，请到 Windows 安全中心确认规则未被禁用，且当前网络为「专用」。",
             fontSize = 12.sp, color = Muted,
         )
     }

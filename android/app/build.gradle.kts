@@ -35,6 +35,8 @@ android {
     sourceSets.getByName("main").kotlin.srcDir("../../shared/pet")
     // 键盘动态背景（2026-10-30）：与小欧同一条「一份 Compose 绘制、两端共用」。
     sourceSets.getByName("main").kotlin.srcDir("../../shared/scene")
+    // 设置/关于页中英对照表（2026-11-02）：与桌面端共用同一份 TSV。
+    sourceSets.getByName("main").assets.srcDir("../../shared/i18n")
 
     // .opid 词库不压缩存储。压缩后 Assets.openFd() 会抛 IOException，
     // EngineLoader.assetLength() 只能返回 null → needsCopy 恒为 true，

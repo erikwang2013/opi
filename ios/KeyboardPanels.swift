@@ -20,9 +20,9 @@ final class KeyboardPanelHeader: UIView {
     private let titleLabel = UILabel()
     private let hintLabel = UILabel()
 
-    init(title: String, hint: String) {
+    init(title: String, hint: String, backTitle: String = "‹ 返回") {
         super.init(frame: .zero)
-        backButton.setTitle("‹ 返回", for: .normal)
+        backButton.setTitle(backTitle, for: .normal)
         backButton.titleLabel?.font = .systemFont(ofSize: 14)
         backButton.addTarget(self, action: #selector(tapBack), for: .touchUpInside)
         titleLabel.text = title

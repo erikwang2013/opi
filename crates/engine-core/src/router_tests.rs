@@ -28,6 +28,18 @@ fn pinyin_state() -> KeyRouter {
     s
 }
 
+/// 翻页测试专用：`qwx` 不会命中符号/表情关键字，候选数恒为 20（避免符号层增长
+/// 把页数从 3 变成 4，见 2026-11-02 单位符号用例）。
+fn paging_state() -> KeyRouter {
+    let mut d = InMemoryDictionary::new();
+    for i in 0..20 {
+        d.insert("qwx", &format!("词{i:02}"), (5000 - i) as u32);
+    }
+    let mut s = KeyRouter::new(Engine::new(Box::new(d), SymbolEngine::builtin(), true));
+    s.switch_mode(Mode::Pinyin);
+    s
+}
+
 // ---- 拼音模式：字母入缓冲 ----
 #[test]
 fn pinyin_letter_goes_to_engine_buffer() {
@@ -348,8 +360,8 @@ fn digit_one_selects_first_candidate() {
 
 #[test]
 fn digit_out_of_range_passes_through() {
-    let mut s = pinyin_state();
-    for c in ['h', 'a', 'o'] {
+    let mut s = paging_state();
+    for c in ['q', 'w', 'x'] {
         s.key_event(c as u32, 0);
     }
     s.key_event(KEY_PAGE_DOWN, 0);
@@ -372,8 +384,8 @@ fn digit_without_candidates_passes_through() {
 
 #[test]
 fn page_keys_navigate() {
-    let mut s = pinyin_state();
-    for c in ['h', 'a', 'o'] {
+    let mut s = paging_state();
+    for c in ['q', 'w', 'x'] {
         s.key_event(c as u32, 0);
     }
     assert_eq!(s.key_event(KEY_PAGE_DOWN, 0), KeyAction::EngineHandled);

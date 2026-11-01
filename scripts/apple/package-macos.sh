@@ -57,6 +57,9 @@ CONTROLLER="OpiInputController"
 # 部署目标：仓库**没有**声明 macOS 最低版本（`macos/README.md` 明写了这件事）。
 # 11.0 = Apple Silicon 的第一个 macOS，且覆盖 InputMethodKit 全部用到的 API。本脚本的选择。
 DEPLOY="11.0"
+# 设置/关于页英文表（由 shared/i18n/zh-en.tsv 生成）：缺了英文界面会整体回落中文。
+[ -f macos/en.lproj/Localizable.strings ] || {
+  echo "!! 缺少 macos/en.lproj/Localizable.strings（见 shared/i18n/zh-en.tsv）" >&2; exit 1; }
 
 # 通用 dylib：从两个 arch 的 cargo 产物当场 lipo（缺哪边就**响**，不静默退化成单架构）。
 # 落在 target/ 下而不是 $out 下 —— 后者会被上面的 rm -rf 清掉。
@@ -142,6 +145,9 @@ plist_ver="$(plutil -extract CFBundleShortVersionString raw "$plist")"
 cp "$dylib" "$APP/Contents/Frameworks/"
 # tsInputMethodIconFileKey 指向 opi.tiff —— 键在 plist 里，文件得在 Resources 里。
 cp macos/opi.tiff "$APP/Contents/Resources/opi.tiff"
+# 设置/关于页的英文表（由 shared/i18n/zh-en.tsv 生成；Swift 按 en.lproj 读回）。
+mkdir -p "$APP/Contents/Resources/en.lproj"
+cp macos/en.lproj/Localizable.strings "$APP/Contents/Resources/en.lproj/Localizable.strings"
 # 应用包图标（Finder 里看到的那张，浅底小欧），CFBundleIconFile 指向它；
 # 与上面那张必须保持透明的输入源模板图标是两码事。
 cp desktop/icons/opi-pet.icns "$APP/Contents/Resources/opi-pet.icns"
@@ -238,6 +244,7 @@ sticker_res=()
 for f in shared/pet/stickers/*.png; do sticker_res+=("pet/stickers/${f##*/}"); done
 for f in shared/pet/stickers-gif/*.gif; do sticker_res+=("pet/stickers-gif/${f##*/}"); done
 for res in "symbol_categories.tsv" "opi.tiff" "opi-pet.icns" \
+           "en.lproj/Localizable.strings" \
            "emoji.tsv" "kaomoji.tsv" "pet-map.tsv" \
            "scenes/scene-meadow.png" \
            "${sticker_res[@]}" \

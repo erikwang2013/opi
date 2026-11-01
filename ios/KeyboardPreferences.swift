@@ -37,6 +37,7 @@ enum KeyboardPreferences {
     private static let wubiReturnKey = "opi.setting.wubiReturn"
     private static let wubiAutoCommitKey = "opi.setting.wubiAutoCommit"
     private static let clipKey = "opi.clip.enabled"
+    private static let uiLanguageKey = "opi.ui.language"
 
     /// `UserDefaults.bool` 对缺失键返回 false；缺省为 true 的项必须区分
     /// 「没设置过」与「用户关了」。
@@ -125,5 +126,11 @@ enum KeyboardPreferences {
     static var clipEnabled: Bool {
         get { defaults.bool(forKey: clipKey) }
         set { defaults.set(newValue, forKey: clipKey) }
+    }
+
+    /// 设置/关于页的界面语言："zh"（缺省）或 "en"；重启后生效（见 `OpiLanguage.swift`）。
+    static var uiLanguage: String {
+        get { defaults.string(forKey: uiLanguageKey) ?? "zh" }
+        set { defaults.set(newValue, forKey: uiLanguageKey) }
     }
 }

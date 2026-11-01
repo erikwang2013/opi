@@ -15,7 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Text
+import xyz.erik.opi.i18n.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -35,6 +35,7 @@ import xyz.erik.opi.clip.ClipRuntime
 import xyz.erik.opi.clip.ClipSyncService
 import xyz.erik.opi.engine.AssociationGate
 import xyz.erik.opi.engine.EngineController
+import xyz.erik.opi.i18n.UiLang
 import xyz.erik.opi.keyboard.LocalKeyboardPalette
 import xyz.erik.opi.settings.FUZZY_PAIRS_ANDROID
 import xyz.erik.opi.settings.ImePreferences
@@ -65,6 +66,7 @@ fun SettingsPanel(
     val p = LocalKeyboardPalette.current
     val context = LocalContext.current
     val prefs = remember { ImePreferences.from(context) }
+    UiLang.ensure(context)
     var learner by remember { mutableStateOf(prefs.learn) }
     var fuzzy by remember { mutableStateOf(prefs.fuzzy) }
     var fuzzyPairs by remember { mutableStateOf(prefs.fuzzyPairs) }
@@ -93,6 +95,7 @@ fun SettingsPanel(
                 .verticalScroll(rememberScrollState())
                 .padding(start = 14.dp, end = 14.dp, bottom = 10.dp),
         ) {
+            ToggleRow("English", UiLang.english) { v -> UiLang.setEnglish(context, v) }
             ToggleRow("学习", learner) { v ->
                 learner = v
                 controller.setLearner(v)

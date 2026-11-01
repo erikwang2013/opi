@@ -57,6 +57,9 @@ IOS_MIN="15.0"
 HOST_APP="Opi"
 HOST_BUNDLE_ID="xyz.erik.opi"
 KB_BUNDLE_ID="$HOST_BUNDLE_ID.keyboard"
+# 设置/关于页英文表（由 shared/i18n/zh-en.tsv 生成）：缺了英文界面会整体回落中文。
+[ -f ios/en.lproj/Localizable.strings ] || {
+  echo "!! 缺少 ios/en.lproj/Localizable.strings（见 shared/i18n/zh-en.tsv）" >&2; exit 1; }
 
 rm -rf "$out"
 
@@ -204,7 +207,8 @@ if swiftc -parse-as-library -emit-executable ios/*.swift shared/apple/OpiClipRun
      -Xlinker "$PWD/target/aarch64-apple-ios/release/libopi_ffi.a" \
      -Xlinker -e -Xlinker _NSExtensionMain 2>&1 | tee "$build/appex-link.log"; then
   appex="$build/OpiKeyboard.appex"
-  mkdir -p "$appex"
+  mkdir -p "$appex/en.lproj"
+  cp ios/en.lproj/Localizable.strings "$appex/en.lproj/Localizable.strings"
   mv "$build/.appex-bin" "$appex/$FMWK"
   cp "$kb" "$appex/Info.plist"
   rm -f "$build/appex-link.log"
@@ -224,7 +228,8 @@ fi
 # 宿主源码是 ios/HostApp/OpiApp.swift，用 swiftc 直接编，不依赖 .xcodeproj。
 app="$build/$HOST_APP.app"
 hostbin="$app/$HOST_APP"
-mkdir -p "$app/PlugIns"
+mkdir -p "$app/PlugIns" "$app/en.lproj"
+cp ios/en.lproj/Localizable.strings "$app/en.lproj/Localizable.strings"
 cp -R "$appex" "$app/PlugIns/OpiKeyboard.appex"
 # 词库放进**扩展**的 bundle（扩展里 Bundle.main 指向 appex，不是宿主 App）。
 # 取已入库的 Android 部署副本：CI checkout 里一定有；data/generated/luna.opid 被 gitignore。
@@ -301,6 +306,8 @@ rm -rf "$build/Payload"
 ipa_list="$(unzip -l "$ipa")"
 for member in \
   "Payload/Opi.app/Opi" \
+  "Payload/Opi.app/en.lproj/Localizable.strings" \
+  "Payload/Opi.app/PlugIns/OpiKeyboard.appex/en.lproj/Localizable.strings" \
   "Payload/Opi.app/PlugIns/OpiKeyboard.appex/OPIKeyboard" \
   "Payload/Opi.app/PlugIns/OpiKeyboard.appex/luna.opid" \
   "Payload/Opi.app/PlugIns/OpiKeyboard.appex/trad.opid" \

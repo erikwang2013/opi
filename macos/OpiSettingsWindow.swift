@@ -25,16 +25,16 @@ final class OpiSettingsWindow: NSObject {
 
         var title: String {
             switch self {
-            case .common: return "常用"
-            case .keys: return "按键"
-            case .appearance: return "外观"
-            case .statusbar: return "状态栏"
-            case .symbols: return "符号与表情"
-            case .dicts: return "词库"
-            case .wubi: return "五笔"
-            case .clip: return "剪贴板"
-            case .advanced: return "高级"
-            case .about: return "关于"
+            case .common: return OpiText.t("常用")
+            case .keys: return OpiText.t("按键")
+            case .appearance: return OpiText.t("外观")
+            case .statusbar: return OpiText.t("状态栏")
+            case .symbols: return OpiText.t("符号与表情")
+            case .dicts: return OpiText.t("词库")
+            case .wubi: return OpiText.t("五笔")
+            case .clip: return OpiText.t("剪贴板")
+            case .advanced: return OpiText.t("高级")
+            case .about: return OpiText.t("关于")
             }
         }
     }
@@ -83,7 +83,7 @@ final class OpiSettingsWindow: NSObject {
         let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: Self.width, height: Self.height),
                         styleMask: [.titled, .closable, .miniaturizable, .resizable],
                         backing: .buffered, defer: false)
-        p.title = "OPI 设置"
+        p.title = OpiText.t("OPI 设置")
         p.isReleasedWhenClosed = false
         p.minSize = NSSize(width: 760, height: 480)
         p.center()
@@ -103,6 +103,23 @@ final class OpiSettingsWindow: NSObject {
             root.addSubview(b)
             navButtons.append(b)
         }
+        // 语言开关固定在侧栏底部：每一页（含关于）都看得到；重启后生效。
+        let langLabel = NSTextField(labelWithString: OpiText.t("界面语言"))
+        langLabel.frame = NSRect(x: 12, y: 16 + CGFloat(Page.allCases.count) * 38 + 8,
+                                 width: Self.navW - 24, height: 18)
+        langLabel.font = .systemFont(ofSize: 11)
+        langLabel.textColor = .secondaryLabelColor
+        root.addSubview(langLabel)
+        let lang = NSPopUpButton(
+            frame: NSRect(x: 12, y: 16 + CGFloat(Page.allCases.count) * 38 + 28,
+                          width: Self.navW - 24, height: 26), pullsDown: false
+        )
+        lang.addItems(withTitles: ["中文", "English"])
+        // 选中的是「已保存、待重启生效」的值，不是本进程缓存的语言。
+        lang.selectItem(at: UserDefaults.standard.string(forKey: OpiText.languageKey) == "en" ? 1 : 0)
+        lang.target = self
+        lang.action = #selector(languageChanged(_:))
+        root.addSubview(lang)
 
         let scroll = NSScrollView(frame: NSRect(x: Self.navW, y: 12,
                                                 width: Self.width - Self.navW - 12,
@@ -158,6 +175,13 @@ final class OpiSettingsWindow: NSObject {
         rebuildPage()
     }
 
+    @objc private func languageChanged(_ sender: NSPopUpButton) {
+        let code = sender.indexOfSelectedItem == 1 ? "en" : "zh"
+        UserDefaults.standard.set(code, forKey: OpiText.languageKey)
+        UserDefaults.standard.set([code == "en" ? "en" : "zh-Hans"], forKey: "AppleLanguages")
+        alert("重启 App 后生效 / Restart the app to apply")
+    }
+
     /// 页面构建器在开头调用：内容比窗口高时滚动，不裁字。
     func setPageHeight(_ height: CGFloat) {
         guard let host else { return }
@@ -174,7 +198,7 @@ final class OpiSettingsWindow: NSObject {
     func label(_ text: String, x: CGFloat = 0, y: CGFloat, w: CGFloat? = nil,
                size: CGFloat = 13, bold: Bool = false,
                color: NSColor = .labelColor) -> NSTextField {
-        let l = NSTextField(labelWithString: text)
+        let l = NSTextField(labelWithString: OpiText.t(text))
         l.frame = NSRect(x: x, y: y, width: w ?? contentWidth - x, height: 20)
         l.font = bold ? .boldSystemFont(ofSize: size) : .systemFont(ofSize: size)
         l.textColor = color
@@ -188,7 +212,7 @@ final class OpiSettingsWindow: NSObject {
     func note(_ text: String, x: CGFloat = 0, y: CGFloat, w: CGFloat? = nil,
               size: CGFloat = 11, color: NSColor = .secondaryLabelColor,
               height: CGFloat = 34) -> NSTextField {
-        let l = NSTextField(wrappingLabelWithString: text)
+        let l = NSTextField(wrappingLabelWithString: OpiText.t(text))
         l.frame = NSRect(x: x, y: y, width: w ?? contentWidth - x, height: height)
         l.font = .systemFont(ofSize: size)
         l.textColor = color
@@ -199,7 +223,7 @@ final class OpiSettingsWindow: NSObject {
     @discardableResult
     func checkbox(_ title: String, x: CGFloat = 0, y: CGFloat, on: Bool,
                   action: Selector, tag: Int = 0) -> NSButton {
-        let b = NSButton(checkboxWithTitle: title, target: self, action: action)
+        let b = NSButton(checkboxWithTitle: OpiText.t(title), target: self, action: action)
         b.frame = NSRect(x: x, y: y, width: 380, height: 22)
         b.state = on ? .on : .off
         b.tag = tag
@@ -210,7 +234,7 @@ final class OpiSettingsWindow: NSObject {
     @discardableResult
     func button(_ title: String, x: CGFloat = 0, y: CGFloat, w: CGFloat = 130,
                 action: Selector, tag: Int = 0) -> NSButton {
-        let b = NSButton(title: title, target: self, action: action)
+        let b = NSButton(title: OpiText.t(title), target: self, action: action)
         b.frame = NSRect(x: x, y: y, width: w, height: 28)
         b.bezelStyle = .rounded
         b.tag = tag
@@ -223,7 +247,7 @@ final class OpiSettingsWindow: NSObject {
                selected: Int, action: Selector) -> NSPopUpButton {
         let p = NSPopUpButton(frame: NSRect(x: x, y: y, width: w, height: 26),
                               pullsDown: false)
-        p.addItems(withTitles: titles)
+        p.addItems(withTitles: titles.map(OpiText.t))
         p.selectItem(at: min(max(0, selected), max(0, titles.count - 1)))
         p.target = self
         p.action = action
@@ -233,7 +257,7 @@ final class OpiSettingsWindow: NSObject {
 
     @discardableResult
     func linkLabel(_ title: String, url: String, y: CGFloat) -> NSButton {
-        let b = NSButton(title: title, target: self, action: #selector(openAboutLink(_:)))
+        let b = NSButton(title: OpiText.t(title), target: self, action: #selector(openAboutLink(_:)))
         b.frame = NSRect(x: 0, y: y, width: 420, height: 18)
         b.isBordered = false
         b.alignment = .left
@@ -255,9 +279,9 @@ final class OpiSettingsWindow: NSObject {
 
     func alert(_ message: String, info: String = "") {
         let a = NSAlert()
-        a.messageText = message
-        a.informativeText = info
-        a.addButton(withTitle: "好")
+        a.messageText = OpiText.t(message)
+        a.informativeText = OpiText.t(info)
+        a.addButton(withTitle: OpiText.t("好"))
         a.runModal()
     }
 }

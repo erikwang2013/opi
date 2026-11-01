@@ -60,6 +60,14 @@ impl Engine {
                     },
                 );
             }
+            // 精确单位/符号（2026-11-02）：`gram` → `g` 等，插在前几条文本候选之后。
+            crate::name_keywords::prepend_exact_symbols(
+                &mut cands,
+                &s.buffer,
+                Mode::English,
+                3,
+                limit,
+            );
             // emoji 输入匹配（2026-10-18）：追加在英文词之后、受 limit 约束 ——
             // 单词候选填满时一个也不进，`hello` 这类词的首位不受影响。
             crate::emoji_keywords::append_to(&mut cands, &s.buffer, limit);
@@ -210,6 +218,15 @@ impl Engine {
         // ⚠️ 边界：9/14 键与双拼在上面各自 return，**本轮不覆盖**（数字/编码缓冲
         // 不是关键字前缀；要覆盖得先解码成拼音，见 tests/emoji_match.rs 文件头）。
         if !plain && matches!(s.mode, Mode::Pinyin | Mode::Traditional) {
+            // 精确单位/符号（2026-11-02）：`du` → `°`、`ke` → `g`、`mi` → `m`，
+            // 插在前几条文本候选之后，首屏可见且不顶掉首个文本候选。
+            crate::name_keywords::prepend_exact_symbols(
+                &mut cands,
+                &s.buffer,
+                s.mode,
+                3,
+                limit,
+            );
             // 先 emoji、再符号/标点/颜文字名称（2026-10-31）：短前缀如 `xiao`
             // 仍由表情占满 limit，不会因为「小于号」等名称而把笑脸挤掉；
             // 名称层继续填剩余空位（`zuokuohao` 这类没有表情的输入照常命中）。

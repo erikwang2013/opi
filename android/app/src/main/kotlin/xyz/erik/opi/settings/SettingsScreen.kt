@@ -28,7 +28,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
+import xyz.erik.opi.i18n.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xyz.erik.opi.engine.UserWordStore
 import xyz.erik.opi.engine.clearUserWords
+import xyz.erik.opi.i18n.LanguageSwitcher
 import xyz.erik.opi.ime.HandlerDebouncer
 import xyz.erik.opi.engine.AssociationGate
 import xyz.erik.opi.engine.EngineController
@@ -102,7 +103,7 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
     var showLayoutDialog by remember { mutableStateOf(false) }
 
     fun toast(msg: String) {
-        scope.launch { snackbar.showSnackbar(msg) }
+        scope.launch { snackbar.showSnackbar(xyz.erik.opi.i18n.UiLang.t(msg)) }
     }
 
     /**
@@ -171,7 +172,6 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
             }
         )
     }
-
     Scaffold(modifier = Modifier.opiSettingsSceneBackground(), containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
@@ -232,6 +232,8 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
                         )
                     },
                 )
+                HorizontalDivider()
+                LanguageSwitcher()
                 HorizontalDivider()
                 ListItem(
                     headlineContent = { Text("学习") },
@@ -450,7 +452,6 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
             }
         }
     }
-
     if (confirmClear) {
         AlertDialog(
             onDismissRequest = { confirmClear = false },
@@ -469,7 +470,6 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
             },
         )
     }
-
     // 双拼布局选择（六选一）。用 TextButton 列而不是 RadioButton：这里没有 androidx
     // material 的 RadioButton 依赖（本页从没用过它），为六行选项引一个新组件不值当；
     // 选中态用「✓ 」前缀表达，读屏走文本本身。
