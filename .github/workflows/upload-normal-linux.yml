@@ -7,7 +7,16 @@ on:
       tag:
         description: Release tag
         required: true
-        default: v1.31.0
+        default: v1.31.1
+        type: string
+      version:
+        description: Version
+        required: true
+        default: 1.31.1
+        type: string
+      artifact_id:
+        description: opi-packages artifact ID
+        required: true
         type: string
 
 permissions:
@@ -25,16 +34,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           TAG: ${{ inputs.tag }}
+          V: ${{ inputs.version }}
+          ARTIFACT: ${{ inputs.artifact_id }}
         run: |
           set -euo pipefail
           mkdir -p out
-          gh api "repos/$REPO/actions/artifacts/13081399670/zip" > out/a.zip
+          gh api "repos/$REPO/actions/artifacts/$ARTIFACT/zip" > out/a.zip
           unzip -q out/a.zip -d out
           deb="$(find out -name '*.deb' | head -1)"
           rpm="$(find out -name '*.rpm' | head -1)"
           test -n "$deb" && test -n "$rpm"
           mkdir -p assets
-          cp "$deb" assets/opi-1.31.0-linux-amd64.deb
-          cp "$rpm" assets/opi-1.31.0-linux-x86_64.rpm
+          cp "$deb" assets/opi-$V-linux-amd64.deb
+          cp "$rpm" assets/opi-$V-linux-x86_64.rpm
           ls -lh assets
           gh release upload "$TAG" assets/* --clobber
