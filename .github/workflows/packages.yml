@@ -121,7 +121,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - name: 下载完整包语音模型（仅 full）
-        if: env.TIER == 'full'
+        if: inputs.tier == 'full'
         shell: bash
         run: |
           set -euo pipefail
@@ -145,6 +145,12 @@ jobs:
           306cd27f03c1a714eca7108e03d66b7dc042abe8c258b44c199a7ed9838dd930  whisper-small.en/small.en-tokens.txt
           9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6  vad/silero_vad.onnx
           SUM
+
+      - name: 检查完整包模型目录
+        shell: bash
+        run: |
+          echo "TIER=$TIER"
+          ls -lR desktop/asr-bundle 2>/dev/null | head -20 || echo "asr-bundle 不存在"
 
       # 在 desktop/ 里跑（本模块有**自己的** gradlew + settings.gradle.kts，
       # 与 android/ 同约定：阿里云镜像、无 google()）。

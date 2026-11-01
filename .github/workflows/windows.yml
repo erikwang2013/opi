@@ -317,7 +317,7 @@ jobs:
           java-version: '21'
 
       - name: 下载完整包语音模型（仅 full）
-        if: env.TIER == 'full'
+        if: inputs.tier == 'full'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
