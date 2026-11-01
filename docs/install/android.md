@@ -635,7 +635,7 @@ emoji 列**不动** —— 它管单键候选反馈（搜索路），与浏览�
 | 暗光模式 | 配色：`keyboard/Palette.kt` 的 `DarkPalette`；**覆盖皮肤**（优先级见下） | ✅ |
 | 长辈模式 | 配色（`ElderPalette` 高对比）+ 字号整体 +18% | ✅ |
 | 悬浮模式 | **IME 窗口**：收窄到屏宽 86%、居中贴底（`OpiImeService.applyKeyboardWindow`） | ⚠️ **无真机可验**；不做拖动 |
-| 游戏模式 | **IME 窗口**：高度 ×0.72 + 同样收窄 | ⚠️ 同上 |
+| 游戏模式 | **IME 窗口**：高度 ×0.58、全宽贴底；与悬浮同开时以游戏为准 | ⚠️ 同上 |
 
 ⚠️ **悬浮/游戏只在本机静态验证**（编译 + 单元测试），窗口尺寸/重力的真实观感
 要真机（分屏、手势条 inset 都可能影响）——别把「CI 绿」读成「真机上好看」。
@@ -829,10 +829,12 @@ JSON）。`OpiImeService.onCreateInputView` 每次建视图时把两套整表重
 
 **本地语音输入（2026-11-01，默认关闭）**：空格键换话筒图标，**短按仍打空格**，
 长按进入锁定录音（浮层有停止/取消/音量/识别中/错误）；点击工具条或设置页可开启。
-音频 16 kHz 单声道 PCM16 只在本机识别，不落盘、不上传；中文/自动走 SenseVoice，
-英文走高精度 Whisper（`crates/opi-asr`，sherpa-onnx）。完整包内置模型；普通/基础包首次使用前在
-设置页下载（SenseVoice 约 239 MB、Whisper 约 375 MB，另加 Silero VAD），逐文件
-SHA-256 校验后写 `filesDir/asr`。**只打包 arm64-v8a / x86_64**（32 位 ABI 不显示
+音频 16 kHz 单声道 PCM16 只在本机识别，不落盘、不上传。录音开始时申请独占音频焦点，
+其他音乐/视频会被系统暂停，停止录音后恢复。引擎跟随输入模式：中文/繁体用 SenseVoice，
+**英文 Pro** 用 Whisper（普通英文仍用 SenseVoice），默认中文引擎。完整包内置模型；
+普通/基础包首次使用前在设置页下载（SenseVoice 约 239 MB、Whisper 约 358 MB，另加
+Silero VAD），官方 Hugging Face 优先、本站组件目录兜底，逐文件 SHA-256 校验后写
+`filesDir/asr`，下载完成自动启用。**只打包 arm64-v8a / x86_64**（32 位 ABI 不显示
 话筒入口）；`RECORD_AUDIO` 运行时权限由 `AsrPermissionActivity` 申请，拒绝时给可读
 提示。录音开始/结束与编辑器切换会做 generation 校验，避免把结果上屏到错误输入框。
 **验证**：Rust 单测/真实 wav、Android JVM 单测、release APK 含 `libopi_asr.so` +

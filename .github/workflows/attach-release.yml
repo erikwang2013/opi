@@ -75,11 +75,17 @@ jobs:
                 rpm="$(find "$d" -name '*.rpm' | head -1)"
                 [ -n "$deb" ] || continue
                 tier=normal
-                if dpkg-deb -c "$deb" | grep -q 'asr/sensevoice/model.int8.onnx'; then
-                  tier=full
-                elif ! dpkg-deb -c "$deb" | grep -q 'share/opi/trad.opid'; then
-                  tier=basic
-                fi
+                case "$deb" in
+                  *-full.deb) tier=full ;;
+                  *-basic.deb) tier=basic ;;
+                  *)
+                    if dpkg-deb -c "$deb" | grep -q 'share/opi/trad.opid'; then
+                      tier=normal
+                    else
+                      tier=basic
+                    fi
+                    ;;
+                esac
                 suffix=""; [ "$tier" = normal ] || suffix="-$tier"
                 cp "$deb" "assets/opi-$V-linux-amd64${suffix}.deb"
                 [ -n "$rpm" ] && cp "$rpm" "assets/opi-$V-linux-x86_64${suffix}.rpm"
