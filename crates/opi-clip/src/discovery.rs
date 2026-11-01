@@ -100,12 +100,33 @@ pub(crate) fn beacon_for(
 
 pub(crate) fn send_beacon(socket: &UdpSocket, port: u16, beacon: Beacon) -> std::io::Result<()> {
     let bytes = beacon.encode();
-    let group = SocketAddr::from((DISCOVERY_GROUP, port));
-    let broadcast = SocketAddr::from((Ipv4Addr::BROADCAST, port));
-    socket.send_to(&bytes, group)?;
-    // 广播在部分平台/网络被禁用；组播成功即可，广播失败不致命。
-    let _ = socket.send_to(&bytes, broadcast);
+    // 组播之外再发受限广播与**子网定向广播**：不少手机/路由器会丢掉
+    // 255.255.255.255，但同一 /24 的 x.x.x.255 能到；只发一种就会「互相发现不了」。
+    let mut targets = vec![
+        SocketAddr::from((DISCOVERY_GROUP, port)),
+        SocketAddr::from((Ipv4Addr::BROADCAST, port)),
+    ];
+    if let Some(ip) = local_ipv4() {
+        let o = ip.octets();
+        targets.push(SocketAddr::from((
+            Ipv4Addr::new(o[0], o[1], o[2], 255),
+            port,
+        )));
+    }
+    for target in targets {
+        let _ = socket.send_to(&bytes, target);
+    }
     Ok(())
+}
+
+/// 探测本机默认出口 IPv4（UDP connect 不真正发包）；用于推导 /24 广播地址。
+fn local_ipv4() -> Option<Ipv4Addr> {
+    let probe = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).ok()?;
+    probe.connect((Ipv4Addr::new(8, 8, 8, 8), 80)).ok()?;
+    match probe.local_addr().ok()?.ip() {
+        std::net::IpAddr::V4(ip) => Some(ip),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
