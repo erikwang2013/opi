@@ -187,7 +187,12 @@ jobs:
 
       - name: 打包语音引擎组件（供普通/基础包按需下载）
         shell: bash
-        run: ./gradlew -PopiPackageTier="$TIER" :app:packageAsrEngine --no-daemon
+        run: |
+          args=(-PopiPackageTier="$TIER")
+          if [ "$TIER" = full ]; then
+            args+=(-PopiAsrBundleDir="$RUNNER_TEMP/asr-bundle")
+          fi
+          ./gradlew "${args[@]}" :app:packageAsrEngine --no-daemon
         working-directory: android
 
       - uses: actions/upload-artifact@v4

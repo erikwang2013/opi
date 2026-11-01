@@ -285,6 +285,7 @@ jobs:
           OUT_DIR=/w/dist WORK_DIR=/tmp/opi-packages \
             OPI_DESKTOP_DEB="$(ls /w/desktop-deb/*.deb | head -1)" \
             OPI_BASIC_PACKAGE="${{ env.TIER == 'basic' && '1' || '0' }}" \
+            OPI_ASR_ENGINE_BUNDLED="${{ env.TIER == 'full' && '1' || '0' }}" \
             scripts/build-packages.sh
 
           # ---- 守卫：产物自带的符号版本要求必须 ≤ 本发行版提供的那一份 ----
