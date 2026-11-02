@@ -198,6 +198,42 @@ jobs:
           }
           Write-Host "两个 DLL 的导入表均无 VCRUNTIME140/MSVCP140/ucrtbase/api-ms-win-crt（静态 CRT）"
 
+      # IMM32 契约冒烟（2026-11-02）：不止看导出名 —— 真 LoadLibrary 进 PowerShell
+      # 进程并调一次 ImeInquire，验证静态 CRT/依赖/类注册/ABI 都能落地。
+      - name: IMM32 真加载 + ImeInquire 冒烟
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ime = (Resolve-Path 'target/x86_64-pc-windows-msvc/release/opi_imm32.ime').Path
+          Add-Type @"
+          using System;
+          using System.Runtime.InteropServices;
+          public static class OpiIme {
+            [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr LoadLibraryW(string p);
+            [DllImport("kernel32.dll")] public static extern IntPtr GetProcAddress(IntPtr h, string n);
+            [DllImport("kernel32.dll")] public static extern bool FreeLibrary(IntPtr h);
+            [UnmanagedFunctionPointer(CallingConvention.Winapi)] public delegate bool Inquire(IntPtr info, IntPtr cls, uint flags);
+          }
+          "@
+          $h = [OpiIme]::LoadLibraryW($ime)
+          if ($h -eq [IntPtr]::Zero) { throw "IMM32 LoadLibrary 失败：$ime" }
+          try {
+            $p = [OpiIme]::GetProcAddress($h, 'ImeInquire')
+            if ($p -eq [IntPtr]::Zero) { throw 'ImeInquire 导出找不到' }
+            $fn = [OpiIme+Inquire][System.Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer($p, [OpiIme+Inquire])
+            $info = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(32)
+            $cls = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(64)
+            try {
+              if (-not $fn($info, $cls, 0)) { throw 'ImeInquire 返回 FALSE' }
+              $name = [System.Runtime.InteropServices.Marshal]::PtrToStringUni($cls)
+              if ($name -ne 'OpiImm32Wnd') { throw "ImeInquire 类名不对：$name" }
+              Write-Host "IMM32 加载并返回类名 $name"
+            } finally {
+              [System.Runtime.InteropServices.Marshal]::FreeHGlobal($info)
+              [System.Runtime.InteropServices.Marshal]::FreeHGlobal($cls)
+            }
+          } finally { [void][OpiIme]::FreeLibrary($h) }
+
       # 2026-10-21：opi-tools 的 `same_file` 在 Windows 上走 GetFileInformationByHandle
       # （(卷序列号, 文件索引) 判据）；Linux CI 只编译 unix 分支，Windows 分支在这里
       # 才真正被编译+运行。测的是 `compile` 拒绝覆盖自己的输入（含硬链接别名）。

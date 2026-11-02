@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
-use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
+use windows::Win32::Foundation::{GetLastError, HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Registry::{HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ, RegGetValueW};
 use windows::Win32::UI::Input::Ime::{
@@ -131,7 +131,7 @@ fn register_classes() -> bool {
         lpszClassName: PCWSTR(IME_CLASS_W.as_ptr()),
         ..Default::default()
     };
-    if unsafe { RegisterClassW(&ime) } == 0 {
+    if unsafe { RegisterClassW(&ime) } == 0 && unsafe { GetLastError() }.0 != 1410 {
         return false;
     }
     ui::register()

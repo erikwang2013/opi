@@ -9,7 +9,7 @@
 use std::ffi::c_void;
 use std::sync::Mutex;
 
-use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
+use windows::Win32::Foundation::{COLORREF, GetLastError, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
     BeginPaint, ClientToScreen, CreateSolidBrush, DEFAULT_GUI_FONT, DeleteObject, EndPaint,
     FillRect, FrameRect, GetStockObject, InvalidateRect, PAINTSTRUCT, SelectObject, SetBkMode,
@@ -206,5 +206,5 @@ pub(crate) fn register() -> bool {
         lpszClassName: PCWSTR(CAND_CLASS_W.as_ptr()),
         ..Default::default()
     };
-    unsafe { RegisterClassW(&wc) != 0 }
+    unsafe { RegisterClassW(&wc) != 0 || GetLastError().0 == 1410 }
 }
