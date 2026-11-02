@@ -107,16 +107,13 @@ jobs:
           # xcframework 里给的是**静态库**：iOS 扩展不允许带第三方 dylib。
           # 头单独拷一份 —— `-headers` 收的是目录，别把 macos/ 整个塞进去（那会把
           # opi.tiff、README.md 一起卷进 Headers/ 发出去）。
-          # Xcode 26 起同一 headers 目录传给两个切片会报「item with the same name
-          # already exists」；每个切片各给一份临时头目录，产物里仍只有一份。
-          hdr_device="$(mktemp -d)"
-          hdr_sim="$(mktemp -d)"
-          trap 'rm -rf "$hdr_device" "$hdr_sim"' EXIT
-          cp macos/OpiFFI.h "$hdr_device/"
-          cp macos/OpiFFI.h "$hdr_sim/"
+          # rust-cache 会连 target/apple-rust 一起恢复；上次成功留下的 xcframework
+          # 会让 create-xcframework 报「item with the same name already exists」。
+          rm -rf "$out/opi_ffi.xcframework"
+          cp macos/OpiFFI.h "$out/headers/"
           xcodebuild -create-xcframework \
-            -library target/aarch64-apple-ios/release/libopi_ffi.a -headers "$hdr_device" \
-            -library target/aarch64-apple-ios-sim/release/libopi_ffi.a -headers "$hdr_sim" \
+            -library target/aarch64-apple-ios/release/libopi_ffi.a -headers "$out/headers" \
+            -library target/aarch64-apple-ios-sim/release/libopi_ffi.a -headers "$out/headers" \
             -output "$out/opi_ffi.xcframework"
           find "$out" -type f | sort
 
