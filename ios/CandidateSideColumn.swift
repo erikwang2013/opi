@@ -26,6 +26,9 @@ final class CandidateSideColumn: UIView {
     private var scrollKey = ""
     private var palette: KeyboardPalette = .light
     private var fontScale: CGFloat = 1
+    /// 每次击键都会 rebuild；字体只随皮肤/长辈字号变，别在循环里反复查系统字体。
+    private var regularFont: UIFont
+    private var boldFont: UIFont
     /// 本视图贴在宿主列上的 4 条约束。换列/拆行前必须显式停用（2026-10-23 真机
     /// NSISEngine abort 的根因：旧约束跟着旧列进了错误的布局引擎）。
     var hostConstraints: [NSLayoutConstraint] = []
@@ -39,6 +42,8 @@ final class CandidateSideColumn: UIView {
     init(cells: Int, fontSize: CGFloat) {
         self.cells = CGFloat(max(1, cells))
         self.baseFontSize = fontSize
+        regularFont = .systemFont(ofSize: fontSize)
+        boldFont = .systemFont(ofSize: fontSize, weight: .bold)
         super.init(frame: .zero)
         backgroundColor = palette.sceneSurface(palette.barBg)
 
@@ -88,6 +93,9 @@ final class CandidateSideColumn: UIView {
     func applyTheme(_ p: KeyboardPalette, fontScale: CGFloat) {
         palette = p
         self.fontScale = fontScale
+        let size = baseFontSize * fontScale
+        regularFont = .systemFont(ofSize: size)
+        boldFont = .systemFont(ofSize: size, weight: .bold)
         backgroundColor = p.sceneSurface(p.barBg)
         rebuild()
     }
@@ -102,10 +110,7 @@ final class CandidateSideColumn: UIView {
             let selected = !pinned.isEmpty && title == pinned
             b.setTitle(title, for: .normal)
             b.setTitleColor(selected ? palette.accent : palette.barDimFg, for: .normal)
-            b.titleLabel?.font = .systemFont(
-                ofSize: baseFontSize * fontScale,
-                weight: selected ? .bold : .regular
-            )
+            b.titleLabel?.font = selected ? boldFont : regularFont
             b.tag = i
         }
     }
