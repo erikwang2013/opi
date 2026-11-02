@@ -199,6 +199,9 @@ internal sealed interface ClipEvent {
 
     data class SendFailed(val instanceId: String) : ClipEvent
     data class Error(val message: String) : ClipEvent
+
+    /** 文件/文件夹传输事件（字段与状态归约见 TransferProtocol.kt）。 */
+    data class Transfer(val event: TransferEvent) : ClipEvent
 }
 
 private fun Map<String, JVal>.str(key: String): String? = (this[key] as? JVal.JStr)?.v
@@ -240,7 +243,7 @@ internal fun parseClipEvent(json: String): ClipEvent? {
         }
         "send_failed" -> m.str("instance_id")?.let(ClipEvent::SendFailed)
         "error" -> m.str("message")?.let(ClipEvent::Error)
-        else -> null
+        else -> parseTransferEvent(m)?.let(ClipEvent::Transfer)
     }
 }
 
@@ -313,6 +316,8 @@ internal fun ClipUiState.applyEvent(event: ClipEvent): ClipUiState = when (event
         lastError = "发送到 ${displayName(event.instanceId, names, emptyList())} 失败",
     )
     is ClipEvent.Error -> copy(lastError = event.message.take(300))
+    // 传输状态由宿主单独的 TransferService 维护，不混进剪贴板 UI 状态。
+    is ClipEvent.Transfer -> this
 }
 
 // ---------- 控制面快照（状态栏宿主 ⇄ 设置窗） ----------
@@ -332,6 +337,8 @@ internal data class ClipStatus(
     val beaconsReceived: Long = 0,
     val advertiseIp: String? = null,
     val advertisePrefix: Int? = null,
+    /** 传输 offer/进度/结果；设置窗每秒轮询本快照。 */
+    val transfers: List<TransferUi> = emptyList(),
 )
 
 internal fun peerJson(p: ClipPeer): String =
@@ -352,6 +359,7 @@ internal fun encodeClipStatus(s: ClipStatus): String = buildString {
     append(",\"beacons_received\":").append(s.beaconsReceived)
     append(",\"advertise_ipv4\":").append(s.advertiseIp?.let(::jsonString) ?: "null")
     append(",\"advertise_prefix\":").append(s.advertisePrefix ?: "null")
+    append(",\"transfers\":").append(encodeTransferStatuses(s.transfers))
     append(",\"peers\":[")
     s.peers.forEachIndexed { i, p -> if (i > 0) append(','); append(peerJson(p)) }
     append("],\"pending\":[")
@@ -391,5 +399,6 @@ internal fun parseClipStatus(line: String): ClipStatus? {
         beaconsReceived = (m["beacons_received"] as? JVal.JNum)?.v ?: 0L,
         advertiseIp = m.str("advertise_ipv4"),
         advertisePrefix = (m["advertise_prefix"] as? JVal.JNum)?.v?.toInt(),
+        transfers = parseTransferStatuses(m["transfers"]),
     )
 }

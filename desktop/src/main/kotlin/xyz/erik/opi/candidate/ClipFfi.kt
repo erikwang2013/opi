@@ -39,13 +39,34 @@ class OpiStringStruct : Structure(), Structure.ByValue {
     @JvmField var len: Long = 0
 }
 
-/** 13 个 `opi_clip_*` + `opi_ffi_free_string`。名字必须与导出符号逐字一致。 */
+/** 17 个 `opi_clip_*` + `opi_ffi_free_string`。名字必须与导出符号逐字一致。 */
 interface OpiClipFfi : Library {
     fun opi_clip_create(configJson: Pointer?, len: Long): Pointer?
     fun opi_clip_destroy(clip: Pointer?)
     fun opi_clip_start(clip: Pointer?): Byte
     fun opi_clip_stop(clip: Pointer?)
     fun opi_clip_local_text(clip: Pointer?, text: Pointer?, len: Long): Int
+
+    /** sendFiles(clip, peer_hex, files_json) -> 传输 ID（失败为空串）。 */
+    fun opi_clip_send_files(
+        clip: Pointer?,
+        peerId: Pointer?,
+        peerLen: Long,
+        filesJson: Pointer?,
+        filesLen: Long,
+    ): OpiStringStruct
+
+    /** respondTransfer(clip, transfer_hex, accept, save_dir)；接受时 save_dir 必填。 */
+    fun opi_clip_respond_transfer(
+        clip: Pointer?,
+        transferId: Pointer?,
+        idLen: Long,
+        accept: Byte,
+        saveDir: Pointer?,
+        saveDirLen: Long,
+    ): Byte
+
+    fun opi_clip_cancel_transfer(clip: Pointer?, transferId: Pointer?, idLen: Long): Byte
     fun opi_clip_poll_event(clip: Pointer?, timeoutMs: Int): OpiStringStruct
     fun opi_clip_pair_start(clip: Pointer?, peerId: Pointer?, len: Long): Byte
     fun opi_clip_probe(clip: Pointer?, ip: Pointer?, len: Long): Byte

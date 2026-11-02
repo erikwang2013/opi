@@ -65,6 +65,17 @@ internal class ClipService {
     private var adapter: ClipboardAdapter? = null
     private var peers: List<ClipPeer> = emptyList()
     private var ui = ClipUiState()
+    private val transfers = TransferService(
+        ffi = { ffi },
+        handle = { handle },
+        enabled = { enabled },
+        reportError = { message -> ui = ui.copy(lastError = message) },
+    )
+    private val autoClipboard = AutoClipboardGate(
+        enabled = { enabled },
+        trustedPeerCount = { peers.count { it.trusted } },
+        publish = ::publish,
+    )
     private var lastPeersAt = 0L
     private var lastLocalAt = 0L
     private var lastCoreAttempt = 0L
@@ -175,6 +186,18 @@ internal class ClipService {
                     publish(cmd.text)
                 }
             }
+            is ClipCommand.SendFiles -> {
+                transfers.send(cmd.peer, cmd.filesJson)
+                publishSnapshot()
+            }
+            is ClipCommand.RespondTransfer -> {
+                transfers.respond(cmd.id, cmd.accept, cmd.saveDir)
+                publishSnapshot()
+            }
+            is ClipCommand.CancelTransfer -> {
+                transfers.cancel(cmd.id)
+                publishSnapshot()
+            }
         }
     }
 
@@ -191,6 +214,7 @@ internal class ClipService {
             stopCore()
             peers = emptyList()
             ui = ClipUiState()
+            transfers.reset()
             publishSnapshot()
         }
     }
@@ -339,7 +363,8 @@ internal class ClipService {
             publishSnapshot()
             return
         }
-        publish(text)
+        // 自动剪贴板只在有已信任设备时才发布；逐会话过滤仍由内核负责。
+        autoClipboard.onLocalText(text)
     }
 
     private fun publish(text: String) {
@@ -383,6 +408,8 @@ internal class ClipService {
             if (!written) {
                 ui = ui.copy(lastError = "收到远端内容，但写入本机剪贴板失败")
             }
+        } else if (event is ClipEvent.Transfer) {
+            transfers.apply(event.event)
         } else {
             val pendingBefore = ui.pending.size
             ui = ui.applyEvent(event)
@@ -439,16 +466,6 @@ internal class ClipService {
 
     // ---------- 杂项 ----------
 
-    private fun readLastError(f: OpiClipFfi): String {
-        val message = runCatching { f.opi_clip_last_error().takeText(f) }.getOrNull().orEmpty()
-        return message.takeIf { it.isNotBlank() } ?: "剪贴板内核调用失败"
-    }
-
-    /** 异常文本可能带路径/端口，但不会带剪贴板内容；只留类型 + 短消息。 */
-    private fun transportError(t: Throwable): String =
-        "剪贴板内核异常：${t.javaClass.simpleName}" +
-            (t.message?.take(120)?.let { "：$it" } ?: "")
-
     private fun buildStatus(): ClipStatus = ClipStatus(
         enabled = enabled,
         running = handle != null,
@@ -463,6 +480,7 @@ internal class ClipService {
         beaconsReceived = beaconsReceived,
         advertiseIp = coreLanIp,
         advertisePrefix = coreLanPrefix,
+        transfers = transfers.state.items,
     )
 
     private fun publishSnapshot() {

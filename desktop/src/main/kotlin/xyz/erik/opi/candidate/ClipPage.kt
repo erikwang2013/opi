@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! 「跨设备剪贴板」设置页。
+//! 「跨设备传输」设置页：设备/配对状态 + 文件、文件夹、媒体、文本、剪贴板发送。
 //!
-//! 宿主的真实状态（对端、SAS 待确认、最近来源、FFI 加载失败）全部来自本机回环控制面
-//! （ClipControl.kt）；本页不碰 FFI 句柄，也不显示剪贴板文本 —— 只显示元数据与来源。
+//! 宿主的真实状态（对端、SAS 待确认、最近来源、传输进度、FFI 加载失败）全部来自本机
+//! 回环控制面（ClipControl.kt）；本页不碰 FFI 句柄，也不显示剪贴板文本 —— 只显示元数据。
 //!
 //! 隐藏操作：Wayland/GNOME 没有后台全局监听，页面会明说，并提供「发送当前剪贴板」。
 //! Windows 防火墙：安装器按程序放行全部网络类型；页面只展示排查提示。
@@ -73,14 +73,14 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
     fun toggle(on: Boolean) {
         apply(s.copy(clipEnabled = on))
         if (!on) {
-            report("正在关闭跨设备剪贴板…")
+            report("正在关闭跨设备传输…")
             scope.launch {
                 withContext(Dispatchers.IO) { ClipClient.setEnabled(false) }
-                report("已关闭跨设备剪贴板")
+                report("已关闭跨设备传输")
             }
             return
         }
-        report("正在启动跨设备剪贴板…")
+        report("正在启动跨设备传输…")
         scope.launch {
             val spawnErr = withContext(Dispatchers.IO) {
                 if (statusBarRunning()) null else spawnStatusBar()
@@ -96,7 +96,13 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
                 return@launch
             }
             val ok = withContext(Dispatchers.IO) { ClipClient.setEnabled(true) }
-            report(if (ok) "已开启：本机剪贴板变化会发到已配对设备" else "宿主未接受开启命令")
+            report(
+                if (ok) {
+                    "已开启：可发送文件/文本；剪贴板文本仅在有已信任设备时自动同步"
+                } else {
+                    "宿主未接受开启命令"
+                },
+            )
         }
     }
 
@@ -170,11 +176,11 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
     val mode = st?.mode ?: localMode
     val running = st?.running == true
 
-    SectionTitle("跨设备剪贴板")
+    SectionTitle("跨设备传输")
     SettingRow(
-        "开启跨设备剪贴板",
-        "默认关闭。开启后，本机复制/剪切的文本发到已配对设备；远端内容只写入本机剪贴板，" +
-            "不会自动粘贴。配置键名 ClipEnabled",
+        "开启跨设备传输",
+        "默认关闭。开启后可向已配对设备发送文件/文件夹/媒体/文本；本机复制的文本只在有" +
+            "已信任设备时自动同步。远端内容只写入本机剪贴板，不会自动粘贴。配置键名 ClipEnabled",
         s.clipEnabled,
     ) { toggle(it) }
 
@@ -257,6 +263,10 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
         }
     }
 
+    if (s.clipEnabled && st != null) {
+        TransferPage(st, report)
+    }
+
     SectionTitle("手动连接")
     Text(
         "自动发现被路由器或防火墙拦住时，输入对方设置页显示的局域网 IP；对端收到探测会自动回复。",
@@ -293,8 +303,8 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
 
     SectionTitle("安全与网络")
     Text("· 默认关闭；开启后只在局域网内通信（局域网发现 + 加密会话）。", fontSize = 12.sp, color = Muted)
-    Text("· 配对必须由两端核对同一个 6 位数字；远端内容只写剪贴板，不自动粘贴。", fontSize = 12.sp, color = Muted)
-    Text("· 不记录剪贴板内容，不做剪贴板历史；状态文件只存设备与开关。", fontSize = 12.sp, color = Muted)
+    Text("· 配对必须由两端核对同一个 6 位数字；文件只发给已配对设备，远端内容只写剪贴板，不自动粘贴。", fontSize = 12.sp, color = Muted)
+    Text("· 接收文件默认保存到 Downloads/opi，可逐次改选目录；不记录剪贴板内容，状态文件只存设备与开关。", fontSize = 12.sp, color = Muted)
     if (isWindows()) {
         Text(
             "· Windows 安装器会为 opi.exe 添加覆盖全部网络类型的程序入站规则（局域网发现与加密会话）。" +
@@ -310,7 +320,7 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
 }
 
 @Composable
-private fun ClipButton(label: String, enabled: Boolean, onClick: () -> Unit) {
+internal fun ClipButton(label: String, enabled: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .border(1.dp, if (enabled) Teal else Hairline)

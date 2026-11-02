@@ -120,8 +120,8 @@ data class OpSettings(
     val wubi: WubiSettings = WubiSettings(),
     val statusbar: StatusBarSettings = StatusBarSettings(),
     /**
-     * 跨设备剪贴板总开关（2026-11-01；键 `ClipEnabled`）：**默认 false**。
-     * 只有本窗读写；状态栏常驻进程 1s 轮询后启停剪贴板宿主（见 ClipService.kt）。
+     * 跨设备传输总开关（2026-11-01 剪贴板，2026-11-02 文件传输；键 `ClipEnabled`）：
+     * **默认 false**。只有本窗读写；状态栏常驻进程 1s 轮询后启停传输宿主（ClipService.kt）。
      */
     val clipEnabled: Boolean = false,
     /**
