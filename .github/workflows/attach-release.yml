@@ -48,10 +48,10 @@ jobs:
             --jq '.artifacts[] | [.id,.name,.created_at] | @tsv' \
             | awk -F'\t' -v c="$CUTOFF" 'c == "" || $3 >= c' \
             | sort -t$'\t' -k3,3r \
-            | awk -F'\t' '!seen[$2]++ || $2 == "opi-packages" || $2 == "opi-asr-engine-linux"' > work/artifacts.tsv
+            | awk -F'\t' '!seen[$2]++ || $2 == "opi-packages"' > work/artifacts.tsv
           while IFS=$'\t' read -r id name created; do
             case "$name" in
-              opi-packages|opi-asr-engine-linux)
+              opi-packages|opi-asr-engine-linux|opi-harmony-unsigned)
                 # 无版本号的老 artifact 很多；只取本发布日构建的包。
                 case "$created" in "$tag_date"*) ;; *) continue ;; esac
                 ;;
