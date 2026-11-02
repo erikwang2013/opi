@@ -148,7 +148,7 @@ Type: filesandordirs; Name: "{app}\runtime"
 Source: "{#AppImageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; IMM32 兼容输入法（2026-11-02）：IMM32 只从 System32 加载 .ime；文件随安装器
 ; 嵌入并按 uninsdeletefile 在卸载时删除。注册表键在 [Registry] 里成组删除。
-Source: "{#AppImageDir}\app\opi_imm32.ime"; DestDir: "{sys}"; Flags: ignoreversion uninsdeletefile
+Source: "{#AppImageDir}\app\opi_imm32.ime"; DestDir: "{sys}"; Flags: ignoreversion
 
 [UninstallDelete]
 ; Remove everything under {app}, including files the uninstall log did not record
