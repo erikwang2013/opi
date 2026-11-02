@@ -408,6 +408,12 @@ pub const HARMONY_BRIDGE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../harmony/entry/src/main/cpp/napi_bridge.c"
 );
+/// 2026-11-03 拆出的 clip 桥（napi_bridge.c 到 500 行门禁）。契约门禁必须两份都读，
+/// 否则「声明了但桥没调用」会在拆文件后静默失明。
+pub const HARMONY_CLIP_BRIDGE: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../harmony/entry/src/main/cpp/napi_clip.c"
+);
 
 pub fn read(p: &str) -> String {
     fs::read_to_string(p).unwrap_or_else(|e| panic!("读不到 {p}：{e}"))

@@ -246,6 +246,20 @@ export const clipForgetPeer: (handle: number, peerId: string) => boolean;
 export const clipStatus: (handle: number) => string;
 /** lastError(): 最近一次失败原因；空串 = 没有错误。按线程记录。 */
 export const clipLastError: () => string;
+/**
+ * sendFiles(handle, peerId, filesJson): 传输 ID 十六进制；失败 → 空串。
+ * filesJson = `[{"path":"/abs/local","name":"可选","mime":"可选"}]`；目录项只给 path。
+ * 只接受已配对且已连接的对端；128 项/2 GiB/8 GiB 上限由内核校验。
+ */
+export const clipSendFiles: (handle: number, peerId: string, filesJson: string) => string;
+/**
+ * respondTransfer(handle, transferId, accept, saveDir): 接受/拒绝入站传输。
+ * accept=true 时 saveDir 必须是可写目录；拒绝传空串。
+ */
+export const clipRespondTransfer: (handle: number, transferId: string, accept: boolean,
+  saveDir: string) => boolean;
+/** cancelTransfer(handle, transferId): 取消进行中的收发。 */
+export const clipCancelTransfer: (handle: number, transferId: string) => boolean;
 
 // ---- 本地语音识别（opi-asr，2026-11-02）----
 //

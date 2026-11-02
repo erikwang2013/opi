@@ -35,6 +35,8 @@ const KEY_LEARN: string = 'engine_learn';
 const KEY_ASSOCIATION: string = 'engine_association';
 /** 跨设备剪贴板：默认关闭，只在输入会话可见时运行。 */
 const KEY_CLIP: string = 'clip_enabled';
+/** 跨设备传输（文件/文件夹/媒体/文本）：默认关闭，与剪贴板共用内核与输入会话生命周期。 */
+const KEY_TRANSFER: string = 'transfer_enabled';
 /** 9 键左列末格的自定义标点（与 Android `nine_custom_punct` 同键名）。 */
 const KEY_CUSTOM_PUNCT: string = 'nine_custom_punct';
 /** 设置/关于页界面语言：0=中文，1=英文（与 Android `ui_language` 同语义）。 */
@@ -61,6 +63,7 @@ export class ImeSettings {
   learn: boolean = true;
   association: boolean = false;
   clipEnabled: boolean = false;
+  transferEnabled: boolean = false;
   /** 0=中文，1=英文。 */
   lang: number = 0;
   voiceEnabled: boolean = false;
@@ -139,6 +142,7 @@ export function load(): ImeSettings {
   s.learn = readBool(KEY_LEARN, true);
   s.association = readBool(KEY_ASSOCIATION, false);
   s.clipEnabled = readBool(KEY_CLIP, false);
+  s.transferEnabled = readBool(KEY_TRANSFER, false);
   s.lang = readNumber(KEY_UI_LANGUAGE, 0);
   s.voiceEnabled = readBool(KEY_VOICE, false);
   return s;
@@ -255,4 +259,5 @@ export const BOOL_SHOW_OWN: string = KEY_SHOW_OWN;
 export const BOOL_LEARN: string = KEY_LEARN;
 export const BOOL_ASSOCIATION: string = KEY_ASSOCIATION;
 export const BOOL_CLIP: string = KEY_CLIP;
+export const BOOL_TRANSFER: string = KEY_TRANSFER;
 export const BOOL_VOICE: string = KEY_VOICE;

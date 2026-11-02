@@ -24,19 +24,26 @@ test -s "$LIB" || { echo "[smoke] 缺 Rust 静态库：$LIB（先按 harmony/REA
 test -x "$NM" || NM=nm
 
 FLAGS=(--target=aarch64-linux-ohos --sysroot="$NDK/sysroot" -std=c11)
-"$CLANG" "${FLAGS[@]}" -Wall -Wextra -Wpedantic -fsyntax-only -I"$CPP" "$CPP/napi_bridge.c"
+"$CLANG" "${FLAGS[@]}" -Wall -Wextra -Wpedantic -fsyntax-only -I"$CPP" \
+    "$CPP/napi_bridge.c" "$CPP/napi_clip.c" "$CPP/napi_asr.c"
 echo "[smoke] PASS 语法检查（真实 NDK N-API 头）"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-"$CLANG" "${FLAGS[@]}" -shared -o "$TMP/libopiime.so" "$CPP/napi_bridge.c" "$LIB" \
-    -lace_napi.z -lhilog_ndk.z -Wl,--gc-sections -Wl,--allow-multiple-definition -Wl,-s
+"$CLANG" "${FLAGS[@]}" -shared -o "$TMP/libopiime.so" \
+    "$CPP/napi_bridge.c" "$CPP/napi_clip.c" "$CPP/napi_asr.c" "$LIB" \
+    "$HARMONY/entry/libs/arm64-v8a/libopi_asr.so" \
+    -lace_napi.z -lhilog_ndk.z -Wl,--gc-sections -Wl,--allow-multiple-definition \
+    -Wl,--no-as-needed -Wl,-s
 # 先落文件再 grep：`... | grep -q` 在 pipefail 下会被 SIGPIPE 判红（-q 提前关管道），
 # 反向还会把「真有未解析符号」误判成干净 —— 两种方向都不能要。
 "$NM" -D --undefined-only "$TMP/libopiime.so" > "$TMP/undef.txt"
-if grep -q ' opi_' "$TMP/undef.txt"; then
+# opi_asr_* 由运行期依赖 libopi_asr.so 提供（NDK 链接后仍是 U，属正常）；
+# 用户词/传输的 opi_* 必须来自静态库并全部解析。
+grep ' opi_' "$TMP/undef.txt" | grep -v ' opi_asr_' > "$TMP/undef_rest.txt" || true
+if [ -s "$TMP/undef_rest.txt" ]; then
     echo "[smoke] FAIL 链接产物仍有未解析的 opi_* 符号：" >&2
-    grep ' opi_' "$TMP/undef.txt" >&2
+    cat "$TMP/undef_rest.txt" >&2
     exit 1
 fi
 echo "[smoke] PASS 链接（bridge + libopi_ffi.a → aarch64 .so，opi_* 全解析）"
@@ -51,3 +58,12 @@ for name in importUserWords exportUserWords pendingText switchLanguage; do
         || { echo "[smoke] FAIL OpiEngine.ets 未转出 $name" >&2; exit 1; }
 done
 echo "[smoke] PASS 名字三面一致（desc[] / index.d.ts / OpiEngine.ets）"
+
+# 传输导出只走 ClipSync/TransferSync（不经 OpiEngine），这里核对 desc[] 与 d.ts。
+for name in clipSendFiles clipRespondTransfer clipCancelTransfer; do
+    grep -qx "$name" "$TMP/strings.txt" \
+        || { echo "[smoke] FAIL 模块 desc[] 缺 $name（运行期 undefined）" >&2; exit 1; }
+    grep -q "export const $name" "$CPP/types/libopiime/index.d.ts" \
+        || { echo "[smoke] FAIL index.d.ts 缺 $name" >&2; exit 1; }
+done
+echo "[smoke] PASS 传输导出 desc[] / index.d.ts 一致"

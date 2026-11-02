@@ -47,3 +47,5 @@ export const KEY_READINGS: string = 'opiReadings';
 export const KEY_ASSOCIATION: string = 'opiAssociation';
 /** 智能联想**设置态**（与上面的运行时联想态分开）：设置面板的开关读数。 */
 export const KEY_ASSOCIATION_ON: string = 'opiAssociationOn';
+/** 跨设备传输设置态（1 = 工具条显示传输图标；0 = 隐藏）。 */
+export const KEY_TRANSFER: string = 'opiTransfer';
