@@ -11,12 +11,12 @@ use crate::error::{AsrError, ERR_ARGUMENT, ERR_EVENT_TOO_SMALL, ERR_IO};
 use crate::manifest::{self, ModelManifest};
 use crate::worker::{Asr, MAX_EVENT_BYTES};
 use serde_json::json;
+use std::cell::RefCell;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
 use std::ptr;
-use std::sync::Mutex;
 
 /// FFI 边界兜底：panic 不得穿过 extern "C"（会 abort 状态栏宿主）。返回负错误码。
 fn guard_i32(f: impl FnOnce() -> i32) -> i32 {
@@ -32,14 +32,15 @@ fn guard_void(f: impl FnOnce()) {
     let _ = catch_unwind(AssertUnwindSafe(f));
 }
 
-/// Error from `opi_asr_create`, readable via `opi_asr_last_error(NULL, ..)`.
-static CREATE_ERROR: Mutex<Option<String>> = Mutex::new(None);
+// Error from `opi_asr_create`, readable via `opi_asr_last_error(NULL, ..)`.
+// Thread-local: 创建失败后由**同一线程**读取；并发测试/多个引擎初始化不会互相
+// 覆盖（此前全局 Mutex 会被另一个成功 create 清空，造成假失败）。
+thread_local! {
+    static CREATE_ERROR: RefCell<Option<String>> = const { RefCell::new(None) };
+}
 
 fn set_create_error(e: &AsrError) {
-    let mut slot = CREATE_ERROR
-        .lock()
-        .unwrap_or_else(|poison| poison.into_inner());
-    *slot = Some(e.to_string());
+    CREATE_ERROR.with(|slot| *slot.borrow_mut() = Some(e.to_string()));
 }
 
 unsafe fn str_arg<'a>(p: *const c_char) -> Result<&'a str, AsrError> {
@@ -87,9 +88,7 @@ pub unsafe extern "C" fn opi_asr_create(config_json: *const c_char) -> *mut Asr 
         })();
         match result {
             Ok(asr) => {
-                *CREATE_ERROR
-                    .lock()
-                    .unwrap_or_else(|poison| poison.into_inner()) = None;
+                CREATE_ERROR.with(|slot| *slot.borrow_mut() = None);
                 Box::into_raw(Box::new(asr))
             }
             Err(e) => {
@@ -193,10 +192,7 @@ pub unsafe extern "C" fn opi_asr_poll_event(handle: *mut Asr, buf: *mut c_char, 
 pub unsafe extern "C" fn opi_asr_last_error(handle: *mut Asr, buf: *mut c_char, cap: i32) -> i32 {
     guard_i32(|| {
         let message = if handle.is_null() {
-            CREATE_ERROR
-                .lock()
-                .unwrap_or_else(|poison| poison.into_inner())
-                .clone()
+            CREATE_ERROR.with(|slot| slot.borrow().clone())
         } else {
             unsafe { &*handle }.last_error()
         };
