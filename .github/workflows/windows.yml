@@ -669,10 +669,12 @@ jobs:
     runs-on: windows-latest
     needs: [version, desktop-exe]
     timeout-minutes: 60 # ltsc2022 镜像约 5 GB，给足拉取时间
+    env:
+      TIER: ${{ inputs.tier || 'normal' }}
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: opi-windows-exe-v${{ needs.version.outputs.version }}
+          name: opi-windows-exe-v${{ needs.version.outputs.version }}-${{ env.TIER }}
           path: exe
 
       - name: docker pull windows/servercore:ltsc2022
