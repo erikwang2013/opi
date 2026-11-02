@@ -28,6 +28,10 @@ class ClipBridgeTest {
         val localTexts = mutableListOf<String>()
         val confirms = mutableListOf<Boolean>()
         val forgotten = mutableListOf<String>()
+        var sendResult: String? = "aabbcc"
+        val sends = mutableListOf<Pair<String, String>>()
+        val responses = mutableListOf<Triple<String, Boolean, String?>>()
+        val cancels = mutableListOf<String>()
         var peersJson = "[]"
         var statusJson =
             """{"device_name":"测试机","discovery_port":45888,"fingerprint":"0011223344556677","instance_id":"aa","peers":0,"running":true,"tcp_port":0}"""
@@ -76,6 +80,26 @@ class ClipBridgeTest {
 
         override fun status(handle: Long): String? = statusJson
 
+        override fun sendFiles(handle: Long, peerId: String, filesJson: String): String? {
+            sends += peerId to filesJson
+            return sendResult
+        }
+
+        override fun respondTransfer(
+            handle: Long,
+            transferId: String,
+            accept: Boolean,
+            saveDir: String?,
+        ): Boolean {
+            responses += Triple(transferId, accept, saveDir)
+            return true
+        }
+
+        override fun cancelTransfer(handle: Long, transferId: String): Boolean {
+            cancels += transferId
+            return true
+        }
+
         override fun lastError(): String = lastErrorText
     }
 
@@ -105,6 +129,7 @@ class ClipBridgeTest {
         val prompts = mutableListOf<ClipPairingPrompt>()
         val finished = mutableListOf<Pair<String, Boolean>>()
         val remote = mutableListOf<Pair<String, String>>()
+        val transferEvents = mutableListOf<ClipEvent>()
         val errors = mutableListOf<String>()
 
         override fun onStatus(status: ClipStatus) {
@@ -125,6 +150,10 @@ class ClipBridgeTest {
 
         override fun onRemoteText(instanceId: String, text: String) {
             remote += instanceId to text
+        }
+
+        override fun onTransfer(event: ClipEvent) {
+            transferEvents += event
         }
 
         override fun onError(message: String) {
@@ -241,6 +270,71 @@ class ClipBridgeTest {
         worker.drain(2)
         assertEquals(listOf("peer3"), api.forgotten)
         assertFalse(recorder.peerLists.isEmpty())
+    }
+
+    @Test
+    fun transferEventsAreDeliveredToTheTransferCallback() {
+        val api = FakeApi().apply {
+            pollResult =
+                """{"type":"transfer_offer","instance_id":"peer1","transfer_id":"0a0b","files":[{"relative_path":"a.txt","size":12,"mime":"text/plain","is_dir":false}],"total_bytes":12,"outgoing":false}"""
+        }
+        val worker = QueueWorker()
+        val recorder = Recorder()
+        val bridge = bridge(api, worker, recorder)
+        bridge.start("{}")
+        worker.drain(1)
+        val offer = recorder.transferEvents.single() as ClipEvent.TransferOffer
+        assertEquals("peer1", offer.instanceId)
+        assertEquals("0a0b", offer.transferId)
+        assertEquals(12L, offer.totalBytes)
+        assertFalse(offer.outgoing)
+        assertEquals("a.txt", offer.files.single().relativePath)
+    }
+
+    @Test
+    fun sendFilesReturnsTheKernelTransferIdOnTheWorker() {
+        val api = FakeApi().apply { sendResult = "deadbeef" }
+        val worker = QueueWorker()
+        val bridge = bridge(api, worker, Recorder())
+        bridge.start("{}")
+        worker.drain(1)
+        var id: String? = null
+        bridge.sendFiles("peer1", """[{"path":"/tmp/a"}]""") { id = it }
+        worker.drain(2)
+        assertEquals("deadbeef", id)
+        assertEquals("peer1" to """[{"path":"/tmp/a"}]""", api.sends.single())
+        bridgeStop(bridge, worker, api)
+    }
+
+    @Test
+    fun failedSendReportsErrorAndNullId() {
+        val api = FakeApi().apply { sendResult = null }
+        val worker = QueueWorker()
+        val recorder = Recorder()
+        val bridge = bridge(api, worker, recorder)
+        bridge.start("{}")
+        worker.drain(1)
+        var id: String? = "unset"
+        bridge.sendFiles("peer1", "[]") { id = it }
+        worker.drain(2)
+        assertEquals(null, id)
+        assertEquals(listOf("内核错误"), recorder.errors)
+        bridgeStop(bridge, worker, api)
+    }
+
+    @Test
+    fun respondAndCancelTransferGoToNative() {
+        val api = FakeApi()
+        val worker = QueueWorker()
+        val bridge = bridge(api, worker, Recorder())
+        bridge.start("{}")
+        worker.drain(1)
+        bridge.respondTransfer("tid", accept = true, "/sdcard/opi")
+        bridge.cancelTransfer("tid2")
+        worker.drain(3)
+        assertEquals(Triple("tid", true, "/sdcard/opi"), api.responses.single())
+        assertEquals(listOf("tid2"), api.cancels)
+        bridgeStop(bridge, worker, api)
     }
 
     private fun bridgeStop(bridge: ClipBridge, worker: QueueWorker, api: FakeApi): Boolean {

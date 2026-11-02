@@ -167,6 +167,8 @@ fun ImeScreen(
                             onOpenSkin = state::openSkin,
                             onOpenInputMode = state::openInputMode,
                             onOpenKeyboardMode = state::openKeyboardMode,
+                            transferEnabled = state.transferEnabled,
+                            onOpenTransfer = state::openTransfer,
                             // 齿轮（2026-10-22 用户裁决）：不再跳 app 设置页，开键盘内设置面板。
                             onOpenSettings = state::openSettings,
                             onOpenAbout = state::openAbout,
@@ -280,6 +282,12 @@ private fun KeyboardArea(
             controller = controller,
             onClose = state::backToLetters,
             onClearUserWords = onClearUserWords,
+            onTransferEnabledChanged = { state.transferEnabled = it },
+            modifier = modifier,
+        )
+        // 跨设备传输面板（2026-11-02）：附近设备 + 五种发送入口 + 收发状态。
+        ImeState.View.TRANSFER -> TransferPanel(
+            onClose = state::backToLetters,
             modifier = modifier,
         )
         ImeState.View.NUMBER -> NumberPad(

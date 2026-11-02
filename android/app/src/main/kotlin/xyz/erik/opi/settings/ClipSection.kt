@@ -47,10 +47,14 @@ import xyz.erik.opi.clip.ClipSyncService
 internal fun ClipSection(prefs: ImePreferences, toast: (String) -> Unit) {
     val context = LocalContext.current
     var enabled by remember { mutableStateOf(prefs.clipEnabled) }
+    var transfer by remember { mutableStateOf(prefs.transferEnabled) }
     var confirmForget by remember { mutableStateOf<ClipPeer?>(null) }
     var manualIp by remember { mutableStateOf("") }
     // 通知栏「停止」也会关掉偏好；内核运行状态变化时把开关同步回来。
-    LaunchedEffect(ClipRuntime.running) { enabled = prefs.clipEnabled }
+    LaunchedEffect(ClipRuntime.running) {
+        enabled = prefs.clipEnabled
+        transfer = prefs.transferEnabled
+    }
     val notificationPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -70,10 +74,34 @@ internal fun ClipSection(prefs: ImePreferences, toast: (String) -> Unit) {
             ) {
                 notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
-        } else {
+        } else if (!prefs.transferEnabled) {
             ClipRuntime.stop(context)
             ClipSyncService.stop(context)
             toast("已停止跨设备剪贴板")
+        } else {
+            toast("已关闭剪贴板开关；传输模式仍会同步纯文本")
+        }
+    }
+
+    // 跨设备传输（2026-11-02）：与剪贴板共用同一内核；任一开关开启都保持运行。
+    fun setTransfer(on: Boolean) {
+        transfer = on
+        prefs.transferEnabled = on
+        if (on) {
+            ClipRuntime.start(context)
+            ClipSyncService.start(context)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        } else if (!prefs.clipEnabled) {
+            ClipRuntime.stop(context)
+            ClipSyncService.stop(context)
+            toast("已停止跨设备传输")
+        } else {
+            toast("已关闭传输入口；剪贴板共享仍在运行")
         }
     }
 
@@ -103,7 +131,20 @@ internal fun ClipSection(prefs: ImePreferences, toast: (String) -> Unit) {
         trailingContent = { Switch(checked = enabled, onCheckedChange = ::setEnabled) },
     )
 
-    if (enabled) {
+    ListItem(
+        headlineContent = { Text("开启跨设备传输") },
+        supportingContent = {
+            Text(
+                when {
+                    transfer -> "工具条齿轮前已显示传输入口 · 文件/文件夹/媒体/文本/剪贴板"
+                    else -> "默认关闭；开启后键盘工具条出现传输入口，与剪贴板共用已配对设备"
+                },
+            )
+        },
+        trailingContent = { Switch(checked = transfer, onCheckedChange = ::setTransfer) },
+    )
+
+    if (enabled || transfer) {
         val fingerprint = ClipRuntime.status?.fingerprint
         if (!fingerprint.isNullOrEmpty()) {
             ListItem(
@@ -135,7 +176,7 @@ internal fun ClipSection(prefs: ImePreferences, toast: (String) -> Unit) {
         )
     }
 
-    if (enabled) {
+    if (enabled || transfer) {
         ListItem(
             headlineContent = { Text("附近设备") },
             supportingContent = { Text("配对时双方必须核对同一组 6 位数字；未配对设备收不到内容") },
@@ -219,7 +260,15 @@ internal fun ClipSection(prefs: ImePreferences, toast: (String) -> Unit) {
             headlineContent = { Text("停止共享") },
             supportingContent = { Text("立即断开所有会话并停止局域网监听") },
             trailingContent = {
-                TextButton(onClick = { setEnabled(false) }) { Text("停止") }
+                TextButton(onClick = {
+                    enabled = false
+                    transfer = false
+                    prefs.clipEnabled = false
+                    prefs.transferEnabled = false
+                    ClipRuntime.stop(context)
+                    ClipSyncService.stop(context)
+                    toast("已停止跨设备剪贴板与传输")
+                }) { Text("停止") }
             },
         )
     }

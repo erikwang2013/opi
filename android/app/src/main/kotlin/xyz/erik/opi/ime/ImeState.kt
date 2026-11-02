@@ -26,7 +26,7 @@ class ImeState(
     var commit: (String) -> Unit = {},
     private val debouncer: Debouncer = HandlerDebouncer(),
 ) {
-    enum class View { QWERTY, NUMBER, SYMBOL, RARE, SKIN, INPUT_MODE, KEYBOARD_MODE, SYMBOL_PAGE, ABOUT, SETTINGS, CANDIDATES_TILED }
+    enum class View { QWERTY, NUMBER, SYMBOL, RARE, SKIN, INPUT_MODE, KEYBOARD_MODE, SYMBOL_PAGE, ABOUT, SETTINGS, TRANSFER, CANDIDATES_TILED }
 
     companion object {
         /** 搜索防抖窗口（对齐 flutter 250ms）。 */
@@ -303,6 +303,13 @@ class ImeState(
      */
     fun openAbout() = openPanel(View.ABOUT)
     fun openSettings() = openPanel(View.SETTINGS)
+
+    /** 跨设备传输面板（工具条入口，仅偏好开启时显示）。 */
+    fun openTransfer() = openPanel(View.TRANSFER)
+
+    /** 工具条传输入口的显隐真相；服务在创建视图与每次窗口显示时从偏好同步。 */
+    var transferEnabled by mutableStateOf(false)
+        internal set
     private fun openPanel(v: View) { resetSearch(); view = v }
 
     // ---- 面板切换（开面板前提交 pending buffer） ----

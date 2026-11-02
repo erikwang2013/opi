@@ -43,8 +43,11 @@ class ClipSyncService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
-            // 「一键停止」也是设置开关的关闭：不清偏好，下次 IME 进程启动会再次拉起。
-            ImePreferences.from(this).clipEnabled = false
+            // 「一键停止」同时关掉两个开关：只关剪贴板时传输会随下次 IME 启动复活。
+            ImePreferences.from(this).apply {
+                clipEnabled = false
+                transferEnabled = false
+            }
             ClipRuntime.stop(this)
             stopSelf()
             return START_NOT_STICKY
