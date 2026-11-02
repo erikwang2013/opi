@@ -106,13 +106,8 @@ impl LayeredDictionary {
         dict_budget::begin(&self.query_budget, self.import_scan_budget)
     }
 
-    /// 当前导入层截止（`None` = 不设限）。没有活动查询时退化成一调用一份（旧语义）。
-    pub(crate) fn import_deadline(&self) -> Option<Instant> {
-        dict_budget::import_deadline(&self.query_budget, self.import_scan_budget)
-    }
-
     /// base 查询之后的动态截止：总账 30ms − 20ms 后处理 − 已耗时（见 `dict_budget`）。
-    fn import_deadline_dynamic(&self) -> Option<Instant> {
+    pub(crate) fn import_deadline_dynamic(&self) -> Option<Instant> {
         dict_budget::import_deadline_dynamic(&self.query_budget, self.import_scan_budget)
     }
 

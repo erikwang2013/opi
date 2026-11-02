@@ -109,18 +109,12 @@ impl Engine {
                         s.mode == Mode::Pinyin,
                         true,
                     );
-                    // 读数随每次取候选刷新（逐条、已分词），**并与当时的缓冲绑存**
-                    // （见 display_buffer：缓冲一变这对就作废，不许把旧缓冲的读数报给新状态）。
-                    // 原始读音先去重（首次出现者留）再分词：同一读音的 `segment` 只付一次。
-                    let mut seen_readings = std::collections::HashSet::new();
-                    *self.scheme_readings.borrow_mut() = (
-                        s.buffer.clone(),
-                        readings
-                            .iter()
-                            .filter(|py| seen_readings.insert(py.as_str()))
-                            .map(|py| crate::pinyin::segment(py).join("'"))
-                            .collect(),
-                    );
+                    // 读数随每次取候选刷新，**并与当时的缓冲绑存**（见 display_buffer：
+                    // 缓冲一变这对就作废，不许把旧缓冲的读数报给新状态）。
+                    // 缓存只存**原始词典拼音**：分词与去重推迟到读数出口（2026-11-02
+                    // 性能项 6）—— `candidates(MAX)` / 分页取候选不再为整页所有候选
+                    // 各分词一次，只有真正要显示的那一两条才付 `segment`。
+                    *self.scheme_readings.borrow_mut() = (s.buffer.clone(), readings);
                     return cands;
                 }
                 // 双拼（2026-10-13）：解码 + 每解析一次全拼排名 + 合并。两块双拼专属
@@ -177,13 +171,15 @@ impl Engine {
         // 五笔同族（2026-10-14）：无码表时也落本支，三档同关 + **分词回退也关**
         // （码串没有音节，理由见 engine_wubi.rs 头）—— `plain` 是这两条路的共同判据。
         let plain = matches!(self.scheme(), Scheme::Stroke | Scheme::Wubi);
-        // 单键首击的有限窗口：只物化首位段，结果与全量列表逐条同前缀（见模块头）。
-        // 主块够一屏时符号/表情都在后面，提前返回不会少候选。
+        // 有限窗口：只物化首位段，结果与全量列表逐条同前缀（见模块头）。单键
+        // （2026-10-25 首击尖峰）与多字符宽前缀（2026-11-02 性能项 6）同一条路 ——
+        // 多字符只有在精确命中时才启用（无精确命中时组合/分词回退可能改写主块，
+        // 由 `finite_prefix` 自己判据回落）。主块够一屏时符号/表情都在后面，
+        // 提前返回不会少候选。
         if !plain
             && limit != usize::MAX
-            && s.buffer.chars().count() == 1
             && matches!(s.mode, Mode::Pinyin | Mode::Traditional)
-            && let Some(fast) = crate::candidates_finite::single_key_prefix(
+            && let Some(fast) = crate::candidates_finite::finite_prefix(
                 self.active_dict(),
                 &self.learner,
                 &s.buffer,

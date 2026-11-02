@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! **单键有限窗口的精确前缀**（2026-10-25 首击尖峰）。
+//! **有限窗口的精确前缀**（2026-10-25 首击尖峰；2026-11-02 性能项 6 扩到多字符宽前缀）。
 //!
 //! 移动端 `candidates(8/64)` 显示候选，选中时 `Engine::select` 用 `candidates(MAX)` 的
 //! 全局下标提交。因此有限窗口必须是全量列表的**逐条前缀**，否则会「看到百度、上屏不饿」。
@@ -9,19 +9,25 @@
 //! 单字按长度分组且每组封顶 6 —— 都不是分数序），所以这里不缩池，而是**只物化首位
 //! 那一小段**：
 //!
-//! 1. 取与 MAX 完全相同的池：`query_prefix_top(input, PREFIX_MATCH_CAP)`；
+//! 1. 取与 MAX 完全相同的池：`query_prefix_top(input, PREFIX_MATCH_CAP)`（+ 多音字
+//!    补读音，与全管线同一张表、同一条量纲门）；
 //! 2. 在池上按全管线同一条规则算「每个文本的最佳行」（最高分；同分保留池序）；
 //! 3. 按 `tiers::apply` 的档位顺序，只挑出填满 `limit` 所需的分组（整组保留）；
 //! 4. 档位内用与全管线相同的键排序：(得分是否 ≤ floor, 是否含繁体, 分数降序, 文本升序)。
 //!
-//! 只在**单字符输入**启用：这是首击尖峰所在；多字符输入直接走全管线（池也固定 9216，
-//! 因此同样满足前缀契约）。单字符下 `abbr`（要求主块为空）、`composition`（至少 3 个
-//! 音节）都不参与主块，`polyphone` 表也没有单字母键 —— 这三点由本函数的入口校验兜底。
-//! 符号/模糊/纠错/简拼都追加在主块之后；主块已够 `limit` 时它们不可见，故可安全省掉。
+//! 启用条件（不成立就返回 `None`，调用方回落全管线，结果相同、只是慢）：
+//! - 26 键拼音/繁体、有限 limit；
+//! - **单字符**：沿用 2026-10-25 的判据（组合识别不产出该输入的主块条目）；
+//! - **多字符**：主查询/补读音里必须有**精确命中**（`pinyin_len == 输入长度`）。
+//!   有精确命中时 `abbr`（要求主块为空）、`composition`（其 `merge` 遇精确命中即停）、
+//!   分词回退与逐音节汤（都要求无精确命中）都不参与主块；符号/模糊/纠错/简拼只追加在
+//!   主块之后，主块够一屏时不可见。无精确命中时这些档都可能改写主块 ⇒ 回落。
+//!   多字符下 `polyphone::hits(input)` 直接查按音节建的表，与全管线同一份 patch。
 
 use std::collections::HashMap;
 
 use crate::candidates::{Candidate, CandidateKind, rank_score};
+use crate::candidates_tiers_impl::PER_LENGTH_SLOTS;
 use crate::dictionary::{Dictionary, PREFIX_MATCH_CAP};
 use crate::learner::Learner;
 
@@ -34,9 +40,9 @@ struct Row<'a> {
     learned: bool,
 }
 
-/// 单字符、有限 limit 的精确前缀；条件不成立或主块填不满一屏时返回 `None`
+/// 有限 limit 的精确前缀；条件不成立或主块填不满一屏时返回 `None`
 /// （调用方回落到全管线，结果相同，只是慢）。
-pub(crate) fn single_key_prefix<D: Dictionary + ?Sized>(
+pub(crate) fn finite_prefix<D: Dictionary + ?Sized>(
     dict: &D,
     learner: &Learner,
     input: &str,
@@ -44,26 +50,23 @@ pub(crate) fn single_key_prefix<D: Dictionary + ?Sized>(
     boost: u64,
     prefer_simplified: bool,
 ) -> Option<Vec<Candidate>> {
-    if limit == 0
-        || limit == usize::MAX
-        || input.chars().count() != 1
-        // 单字母没有补读音条目（表按合法音节建；单字母只有 a/e/o，表里也没有）。
-        || !crate::polyphone::hits(input).is_empty()
-        // 兜底：将来组合识别若对单键产出，交给全管线。
-        || !crate::composition::candidates(dict, learner, boost, input).is_empty()
-    {
+    if limit == 0 || limit == usize::MAX || input.is_empty() {
         return None;
     }
-    let pool = dict.query_prefix_top(input, PREFIX_MATCH_CAP);
-    if pool.is_empty() {
+    let single_char = input.chars().count() == 1;
+    // 单字符下组合识别本不产出（至少 3 个音节），仍查一次兜底：将来规则变了就回全管线。
+    if single_char && !crate::composition::candidates(dict, learner, boost, input).is_empty() {
         return None;
     }
     let exact_bonus = boost / 2;
-    let rows: Vec<Row<'_>> = pool
+    let input_len = input.len();
+    // 池要先落成局部变量：`Row` 借用池里的词条文本，临时值活不过这条语句。
+    let pool = dict.query_prefix_top(input, PREFIX_MATCH_CAP);
+    let mut rows: Vec<Row<'_>> = pool
         .iter()
         .map(|e| {
             let user = learner.freq_of(&e.word);
-            let exact = e.pinyin_len == input.len();
+            let exact = e.pinyin_len == input_len;
             Row {
                 text: &e.word,
                 score: rank_score(e.freq, user, boost).saturating_add(if exact {
@@ -77,6 +80,29 @@ pub(crate) fn single_key_prefix<D: Dictionary + ?Sized>(
             }
         })
         .collect();
+    // 多音字补读音：与 `candidates.rs` 同一道门（拼音/简体 + 词库量纲同档）。
+    // 引擎调用点里 `prefer_simplified` 恰为 `mode == Mode::Pinyin`（繁体传 false）。
+    let dict_max = dict.max_freq();
+    if prefer_simplified && crate::polyphone::applies(dict_max) {
+        for (word, freq) in crate::polyphone::hits(input) {
+            let user = learner.freq_of(word);
+            let freq = crate::polyphone::scaled_freq(*freq, dict_max);
+            rows.push(Row {
+                text: word,
+                score: rank_score(freq, user, boost).saturating_add(exact_bonus),
+                pinyin_len: input_len,
+                exact: true,
+                learned: user > 0,
+            });
+        }
+    }
+    if rows.is_empty() {
+        return None;
+    }
+    // 多字符没有精确命中时，abbr/组合/分词回退都可能改写主块（见模块头）⇒ 回全管线。
+    if !single_char && !rows.iter().any(|r| r.exact) {
+        return None;
+    }
 
     // 全管线先按 (分数降序, 文本升序) 排序再去重：每个文本保留最高分那一行；
     // 同分保留池序（这里的 `>=` 即「先出现者赢」）。
@@ -171,13 +197,13 @@ pub(crate) fn single_key_prefix<D: Dictionary + ?Sized>(
             return Some(materialize(&rows, &out));
         }
     }
-    // 联想档：进入顺序 = 全局分档序；每长度前 6 条进「联想」，其余沉底。
+    // 联想档：进入顺序 = 全局分档序；每长度前 `PER_LENGTH_SLOTS` 条进「联想」，其余沉底。
     singles.sort_by(|&a, &b| ci(a, b));
     let mut per_len: HashMap<usize, usize> = HashMap::new();
     let (mut assoc, mut sunk) = (Vec::new(), Vec::new());
     for i in singles {
         let n = per_len.entry(rows[i].pinyin_len).or_insert(0);
-        if *n < 6 {
+        if *n < PER_LENGTH_SLOTS {
             *n += 1;
             assoc.push(i);
         } else {
@@ -223,13 +249,34 @@ mod tests {
     fn fills_exactly_on_the_last_word() {
         // limit 恰好等于词数：最后一组最后一条推入后就应返回 Some（曾在循环顶部
         // 检查长度，填满后没有下一轮 ⇒ 误判为「填不满」并退回全管线）。
-        let fast = single_key_prefix(&dict(8), &Learner::new(true), "b", 8, 100_000, true);
+        let fast = finite_prefix(&dict(8), &Learner::new(true), "b", 8, 100_000, true);
         assert_eq!(fast.map(|c| c.len()), Some(8));
     }
 
     #[test]
     fn returns_none_when_the_main_block_cannot_fill_the_page() {
         // 只有 3 条、limit 8：符号/追加档可能补位，必须交回全管线。
-        assert!(single_key_prefix(&dict(3), &Learner::new(true), "b", 8, 100_000, true).is_none());
+        assert!(finite_prefix(&dict(3), &Learner::new(true), "b", 8, 100_000, true).is_none());
+    }
+
+    #[test]
+    fn multi_char_prefix_with_an_exact_hit_fills_a_page() {
+        let mut d = InMemoryDictionary::new();
+        d.insert("xin", "心", 9000);
+        d.insert("xin", "新", 8000);
+        d.insert("xing", "行", 7000); // 前缀扩展单字：精确单字之后才轮到
+        let fast = finite_prefix(&d, &Learner::new(true), "xin", 2, 100_000, true)
+            .expect("精确命中且主块够一屏 ⇒ 应走有限窗口");
+        let texts: Vec<String> = fast.into_iter().map(|c| c.text).collect();
+        assert_eq!(texts, vec!["心".to_string(), "新".to_string()]);
+    }
+
+    #[test]
+    fn multi_char_prefix_without_exact_hit_falls_back_to_the_full_pipeline() {
+        let mut d = InMemoryDictionary::new();
+        d.insert("xing", "行", 7000);
+        // 主块只有一条、limit 1 也「填得满」，但没有精确命中：组合/分词回退可能
+        // 改写主块，必须交回全管线。
+        assert!(finite_prefix(&d, &Learner::new(true), "xin", 1, 100_000, true).is_none());
     }
 }

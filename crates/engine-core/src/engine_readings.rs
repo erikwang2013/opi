@@ -6,9 +6,12 @@
 //!
 //! 拆的是**同一对缓存的两个视图**：[`Engine::display_buffer`]（首条，候选栏左格/读屏用）
 //! 与 [`Engine::candidate_readings`]（逐条，9/14 键左列用）—— 都读 `scheme_readings`
-//! 这一对 `(算它时的缓冲, 逐条读数)`。语义一字未动；写点在 `Engine::candidates()`
-//! 的九键分支（仍在 engine.rs；14 键 2026-10-27 起同路）。全键盘的显示分词
-//! （2026-10-23）不走缓存：它是缓冲的纯函数（`pinyin::segment`），缓冲一变自动跟着变。
+//! 这一对 `(算它时的缓冲, 逐条原始拼音)`。9/14 键缓存存的是**词典原始拼音**（未分词），
+//! 分词/去重都在本文件的出口按需做（2026-11-02 性能项 6）：宽前缀下 `candidates(MAX)`
+//! 不再为整页候选各切一次音节。双拼缓存存的已经是展示形（`shuangpin::display`）。
+//! 写点在 `Engine::candidates()` 的九键分支（仍在 engine.rs；14 键 2026-10-27 起同路）。
+//! 全键盘的显示分词（2026-10-23）不走缓存：它是缓冲的纯函数（`pinyin::segment`），
+//! 缓冲一变自动跟着变。
 //!
 //! 字段可见性：本文件要用 `Engine::scheme_readings`，故它升成 `pub(crate)`
 //! （**crate 内**，不泄漏给依赖方）—— 同 engine_punct.rs 头注记的拆分裂代价。
@@ -41,6 +44,7 @@ impl Engine {
                 Scheme::Nine | Scheme::Fourteen => {
                     // **带分词的**读数（主流输入法「拼音9键显示分词」同款）：音节用 `'`
                     // 连起来，「nihao」显示成「ni'hao」—— 一眼看到引擎怎么切的音节。
+                    // 缓存是原始拼音，这里只给**选中的那一条**分词（2026-11-02 惰性化）。
                     let cached = self.scheme_readings.borrow();
                     // 缓冲变了（提交/退格/清空）而读数还是旧缓冲那一次算的 ⇒ 作废，报空串 ——
                     // 界面按「读不到拼音」处理（左列回标点列）。下次 candidates() 会按新缓冲重算。
@@ -106,13 +110,21 @@ impl Engine {
         if cached.0 != self.buffer() {
             return Vec::new();
         }
+        // 9/14 键缓存是原始拼音：先按展示形分词，再去重（去重键就是用户看到的串）。
+        // 双拼缓存已是展示形，原样用。分词只在这里做一次（2026-11-02 惰性化）。
+        let segment = matches!(self.scheme(), Scheme::Nine | Scheme::Fourteen);
         // 去重保序：n = 候选数（≤ 调用方的 limit，量级 8–64）—— 一趟遍历 + 集合判重，
         // 成本在字符级（读音串很短），相对本函数的调用点（一次全库排名）可忽略。
         let mut seen = std::collections::HashSet::new();
         let mut out = Vec::with_capacity(cached.1.len());
         for r in &cached.1 {
-            if seen.insert(r.as_str()) {
-                out.push(r.clone());
+            let shown = if segment {
+                crate::pinyin::segment(r).join("'")
+            } else {
+                r.clone()
+            };
+            if seen.insert(shown.clone()) {
+                out.push(shown);
             }
         }
         // 短→长（稳定排序：同长度保持上面的名次序）。长度 = 显示串字符数（见函数注）。
@@ -162,18 +174,20 @@ fn scheme_display_reading(scheme: Scheme, buffer: &str, readings: &[String]) -> 
     let Some(first) = readings.first() else {
         return String::new();
     };
+    // 缓存存原始拼音：只在**选中的这一条**上分词（2026-11-02 性能项 6）。
+    let shown = |r: &str| crate::pinyin::segment(r).join("'");
     let keys = key_count(buffer);
     let first_len = key_count(first);
     let mut out = if first_len == keys {
-        first.clone()
+        shown(first)
     } else if let Some(exact) = readings.iter().find(|r| key_count(r) == keys) {
         // 等长读数可能在后面（组合识别/更长匹配的候选排在首条之后）：取第一条等长的。
-        exact.clone()
+        shown(exact)
     } else if first_len > keys {
         // 前缀扩展词的读数比按键长：旧行为原样显示（不截断，不补键）。
-        first.clone()
+        shown(first)
     } else {
-        let mut s = first.clone();
+        let mut s = shown(first);
         s.push_str(&uncovered_key_letters(scheme, buffer, first_len));
         s
     };
@@ -212,4 +226,51 @@ fn uncovered_key_letters(scheme: Scheme, buffer: &str, covered: usize) -> String
         index += 1;
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::dictionary::InMemoryDictionary;
+    use crate::symbols::SymbolEngine;
+
+    fn engine() -> Engine {
+        let mut d = InMemoryDictionary::new();
+        d.insert("ni", "你", 9000);
+        d.insert("ni", "尼", 700);
+        d.insert("nihao", "你好", 8000);
+        let mut e = Engine::new(
+            Box::new(d),
+            SymbolEngine::new(Vec::new(), Vec::new()),
+            false,
+        );
+        e.set_scheme(Scheme::Nine);
+        e
+    }
+
+    /// 2026-11-02 性能项 6：缓存存**原始拼音**，分词推迟到读数出口 —— 宽前缀 /
+    /// `candidates(MAX)` 不再为整页候选预先 `segment`。行为仍与旧实现逐条相同。
+    #[test]
+    fn nine_readings_stay_raw_in_the_cache_and_are_segmented_at_the_exit() {
+        let mut e = engine();
+        for c in "64".chars() {
+            e.input_key(c);
+        }
+        let cands = e.candidates(usize::MAX);
+        assert!(cands.len() >= 2, "前置：主块应有至少两条候选");
+        {
+            let cached = e.scheme_readings.borrow();
+            assert_eq!(cached.0, "64");
+            assert!(
+                cached.1.iter().all(|r| !r.contains('\'')),
+                "缓存里是原始拼音，分词不在 candidates() 里做"
+            );
+            assert!(cached.1.iter().any(|r| r == "nihao"));
+        }
+        assert_eq!(e.display_buffer(), "ni");
+        assert_eq!(
+            e.candidate_readings(),
+            vec!["ni".to_string(), "ni'hao".to_string()]
+        );
+    }
 }

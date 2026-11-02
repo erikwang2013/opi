@@ -22,7 +22,9 @@ impl LayeredDictionary {
         // 的键逐字相同。索引只存**导入层**的条目（小），两级 HashMap 是为了 base 的
         // 每条都拿 `&str` 直查、不克隆 —— 单个 `HashMap<(&str, &str), _>` 会被
         // 生命周期间题卡住（闭包参数是 for<'x> 的高阶借用，装不进固定生命周期的键）。
-        let deadline = self.import_deadline();
+        // 动态截止（2026-11-02 性能项 6）：base 查询的耗时也算进总账 —— 慢 base 之后
+        // 导入层立即停，而不是只按「导入命中花了多少」计时。
+        let deadline = self.import_deadline_dynamic();
         let base_max = self.base_max();
         let mut idx: HashMap<String, HashMap<String, u32>> = HashMap::new();
         let mut seen = 0u32;
@@ -88,7 +90,8 @@ impl LayeredDictionary {
         if self.extras.is_empty() {
             return self.base.visit_prefix(prefix, f);
         }
-        let deadline = self.import_deadline();
+        // 动态截止同 visit_entries：base 的前缀区间扫描已花掉的时间计入总账。
+        let deadline = self.import_deadline_dynamic();
         let base_max = self.base_max();
         let mut idx: HashMap<String, HashMap<String, u32>> = HashMap::new();
         let mut seen = 0u32;
