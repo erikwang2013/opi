@@ -63,9 +63,11 @@ pub struct Engine {
     pub(crate) pinned_reading: Option<(String, String)>,
     /// 9 键方案的「拼音读数」（显示用，见 [Self::display_buffer] 与
     /// [Self::candidate_readings]）：由 `candidates()` 在九键分支里刷新 ——
-    /// **逐条**（`readings[i]` = `candidates(limit)` 第 i 条的拼音，已分词；
-    /// 同一次排名产出，见 `rank_and_pick_scheme`）—— 这是**缓存**的形态；
-    /// 出口 `candidate_readings` 会按读音去重保序（2026-10-12 用户裁决「左列去重」）。
+    /// **逐条**（`readings[i]` = `candidates(limit)` 第 i 条的**原始词典拼音**；
+    /// 同一次排名产出，见 `rank_and_pick_scheme`）。分词是**出口的事**（2026-11-02
+    /// 性能项 6：宽前缀下不再为整页候选预先 `segment`，只有显示到的那条才切）；
+    /// 出口 `candidate_readings` 再去重保序（2026-10-12 用户裁决「左列去重」）。
+    /// 双拼分支存的是展示形（`shuangpin::display`），出口不再重复分词。
     /// **存 `(算它时的缓冲, 逐条读数)` 一对** ——
     /// 缓冲一变（提交/退格/清空）旧读数立即作废，两个出口都返回空，
     /// **不依赖调用方「之后又取了一次候选」的次序**（2026-10-09 用户报障「确定候选词后

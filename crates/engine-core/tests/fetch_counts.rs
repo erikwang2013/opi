@@ -73,11 +73,13 @@ fn digit_select_fetches_candidate_table_once() {
     for c in "hao".chars() {
         r.key_event(c as u32, 0);
     }
-    // 基准：读一次当前页候选表要查几次词库（= 一次全量抓取）
+    // 基准：数字选词走**全量下标**，对照的是一次 `candidates(MAX)` 的抓取。
+    // 当前页 `candidates()` 自 2026-11-02 起可能走有限窗口快路径（查询更少），
+    // 不能拿它当基准 —— 否则快路径会把本用例误判成「数字选词多抓了」。
     n.store(0, Ordering::Relaxed);
-    let _ = r.candidates();
-    let one_fetch = n.load(Ordering::Relaxed);
-    assert!(one_fetch > 0, "基准抓取没查到词库，用例失效");
+    let _ = r.engine().candidates(usize::MAX);
+    let full_fetch = n.load(Ordering::Relaxed);
+    assert!(full_fetch > 0, "基准抓取没查到词库，用例失效");
     n.store(0, Ordering::Relaxed);
     assert_eq!(
         r.key_event('1' as u32, 0),
@@ -85,8 +87,8 @@ fn digit_select_fetches_candidate_table_once() {
     );
     assert_eq!(
         n.load(Ordering::Relaxed),
-        one_fetch,
-        "数字选词应只抓一次候选表（两次 = 整表排两遍）"
+        full_fetch,
+        "数字选词应只抓一次全量候选表（两次 = 整表排两遍）"
     );
 }
 
