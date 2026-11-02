@@ -219,6 +219,7 @@ export function applyCurrentMode(): void {
   if (m.panel) {
     return;
   }
+  ensureTable(m.scheme);
   setScheme(m.scheme);
   if ((OpiEngine.mode() as number) !== (m.mode as number)) {
     OpiEngine.switchMode(m.mode);
@@ -262,6 +263,7 @@ export function selectInputMode(i: number): void {
     lastChineseIndex = i;
     SettingsStore.saveLastChinese(i);
   }
+  ensureTable(m.scheme); // 首次切到笔画/五笔才装那张码表
   setScheme(m.scheme); // 清缓冲（引擎侧）⇒ 调用方随后要重读 buffer/候选/页码
   if ((OpiEngine.mode() as number) !== (m.mode as number)) {
     // 与 KeyboardController.switchMode 同一份语义：切模式。⇧/引擎 shift 的同步归
@@ -311,12 +313,29 @@ export function traditionalModeLabel(m: number): string {
  * （缺省与 Android 一致）。
  */
 export function loadOptionalTables(strokePath: string, wubiPath: string): void {
-  const strokeOk: boolean = loadStroke(strokePath);
-  const wubiOk: boolean = loadWubi(wubiPath);
-  if (!strokeOk) {
-    console.warn('[opi] stroke.opid 未装载：笔画方案将查不出字（引擎未装载该表）');
-  }
-  if (!wubiOk) {
-    console.warn('[opi] wubi86.opid 未装载：五笔方案将查不出字（引擎未装载该表）');
+  strokeTablePath = strokePath;
+  wubiTablePath = wubiPath;
+  // 首帧只装持久化方案需要的那张；其余等用户真的切过去再装（见 ensureTable）。
+  ensureTable(INPUT_MODES[currentIndex].scheme);
+}
+
+// 可选表路径与装载状态（模块级：面板重建不丢；每进程只装一次）。
+let strokeTablePath: string = '';
+let wubiTablePath: string = '';
+let strokeTableLoaded: boolean = false;
+let wubiTableLoaded: boolean = false;
+
+/** 按需装载笔画/五笔表；其它方案不碰。失败置日志并保留重试。 */
+function ensureTable(scheme: number): void {
+  if (scheme === (OpiScheme.Stroke as number) && !strokeTableLoaded) {
+    strokeTableLoaded = loadStroke(strokeTablePath);
+    if (!strokeTableLoaded) {
+      console.warn('[opi] stroke.opid 未装载：笔画方案将查不出字（引擎未装载该表）');
+    }
+  } else if (scheme === (OpiScheme.Wubi as number) && !wubiTableLoaded) {
+    wubiTableLoaded = loadWubi(wubiTablePath);
+    if (!wubiTableLoaded) {
+      console.warn('[opi] wubi86.opid 未装载：五笔方案将查不出字（引擎未装载该表）');
+    }
   }
 }
