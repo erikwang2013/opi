@@ -140,6 +140,7 @@ jobs:
     env:
       # push 触发没有 input，默认 normal；workflow_dispatch 与 iOS 共用 tier 输入。
       OPI_MACOS_TIER: ${{ github.event.inputs.tier || 'normal' }}
+      MACOSX_DEPLOYMENT_TARGET: '11.0'
     steps:
       - uses: actions/checkout@v4
 
@@ -230,6 +231,9 @@ jobs:
     env:
       # push 触发没有 input，默认 normal；workflow_dispatch 可选 full。
       OPI_IOS_TIER: ${{ github.event.inputs.tier || 'normal' }}
+      # sherpa-onnx 预编译对象要求 iOS 13+；不设它时 cc/rustc 默认 10.0，
+      # 链接会缺 ___chkstk_darwin（2026-11-02 Apple CI）。
+      IPHONEOS_DEPLOYMENT_TARGET: '15.0'
     steps:
       - uses: actions/checkout@v4
 
