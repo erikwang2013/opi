@@ -53,6 +53,10 @@ on:
     branches: [main]
     paths:
       - 'crates/tsf-opi/**'
+      - 'crates/imm32-opi/**'
+      - 'crates/engine-core/**'
+      - 'crates/engine-data/**'
+      - 'crates/opi-ffi/**'
       - 'desktop/**'
       - 'android/app/src/main/assets/luna.opid'
       - 'android/app/src/main/assets/trad.opid'
