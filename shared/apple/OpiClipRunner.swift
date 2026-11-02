@@ -58,6 +58,76 @@ final class OpiClipRunner {
         enqueue { [weak self] in self?.publishCore(text) }
     }
 
+    /// 发送文件/文件夹（清单 JSON 见 OpiFFI.h）；completion 在剪贴板线程回调，
+    /// 返回传输 ID 十六进制，失败为 nil（原因走 onState）。
+    func sendFiles(
+        peerId: String, filesJSON: String, completion: @escaping (String?) -> Void
+    ) {
+        guard isRunning else {
+            completion(nil)
+            return
+        }
+        enqueue { [weak self] in
+            guard let self, let h = self.handle else {
+                completion(nil)
+                return
+            }
+            let id = self.clipWithUTF16(peerId) { peer, peerLen in
+                self.clipWithUTF16(filesJSON) { files, filesLen in
+                    let s = opi_clip_send_files(h, peer, peerLen, files, filesLen)
+                    defer { opi_ffi_free_string(s) }
+                    guard let ptr = s.ptr, s.len > 0 else { return "" }
+                    return String(
+                        decoding: UnsafeBufferPointer(start: ptr, count: s.len), as: UTF16.self)
+                }
+            }
+            self.finishCall(!id.isEmpty)
+            completion(id.isEmpty ? nil : id)
+        }
+    }
+
+    /// 接受/拒绝入站传输；接受时 saveDir 必填。completion 在剪贴板线程回调。
+    func respondTransfer(
+        id: String, accept: Bool, saveDir: String, completion: ((Bool) -> Void)? = nil
+    ) {
+        guard isRunning else {
+            completion?(false)
+            return
+        }
+        enqueue { [weak self] in
+            guard let self, let h = self.handle else {
+                completion?(false)
+                return
+            }
+            let ok = self.clipWithUTF16(id) { idPtr, idLen in
+                self.clipWithUTF16(saveDir) { dir, dirLen in
+                    opi_clip_respond_transfer(h, idPtr, idLen, accept, dir, dirLen)
+                }
+            }
+            self.finishCall(ok)
+            completion?(ok)
+        }
+    }
+
+    /// 取消收发两侧的传输；completion 在剪贴板线程回调。
+    func cancelTransfer(id: String, completion: ((Bool) -> Void)? = nil) {
+        guard isRunning else {
+            completion?(false)
+            return
+        }
+        enqueue { [weak self] in
+            guard let self, let h = self.handle else {
+                completion?(false)
+                return
+            }
+            let ok = self.clipWithUTF16(id) { idPtr, idLen in
+                opi_clip_cancel_transfer(h, idPtr, idLen)
+            }
+            self.finishCall(ok)
+            completion?(ok)
+        }
+    }
+
     func pair(_ peerId: String) {
         enqueue { [weak self] in
             guard let self, let h = self.handle else { return }
@@ -242,5 +312,76 @@ final class OpiClipRunner {
         let units = Array(s.utf16)
         guard !units.isEmpty else { return body(nil, 0) }
         return units.withUnsafeBufferPointer { body($0.baseAddress, $0.count) }
+    }
+}
+
+/// 传输前置校验：与 `crates/opi-clip/src/types.rs` 的上限同源，超限在选完就拒绝，
+/// 不把大目录交给内核再失败。内核仍会独立校验一次（这里只是更早的提示）。
+enum OpiTransferLimits {
+    static let maxFiles = 128
+    static let maxFileBytes: UInt64 = 2 * 1024 * 1024 * 1024
+    static let maxTotalBytes: UInt64 = 8 * 1024 * 1024 * 1024
+
+    static func bytes(_ value: UInt64) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(clamping: value), countStyle: .file)
+    }
+
+    /// nil = 通过；否则是给用户看的原因。根目录本身算一个条目，
+    /// 目录内符号链接跳过（与内核 `collect_one` 一致）。
+    static func violation(_ urls: [URL]) -> String? {
+        let keys: [URLResourceKey] = [.isDirectoryKey, .isSymbolicLinkKey, .fileSizeKey]
+        var entries = 0
+        var total: UInt64 = 0
+
+        func add(size: UInt64, name: String) -> String? {
+            entries += 1
+            if entries > maxFiles { return "一次最多 \(maxFiles) 个条目（含文件夹）" }
+            if size > maxFileBytes { return "\(name) 超过单文件 2 GiB 上限" }
+            total += size
+            if total > maxTotalBytes { return "总大小超过 8 GiB 上限" }
+            return nil
+        }
+
+        for url in urls {
+            guard let values = try? url.resourceValues(forKeys: Set(keys)) else {
+                return "无法读取：\(url.lastPathComponent)"
+            }
+            if values.isSymbolicLink == true {
+                return "不支持符号链接：\(url.lastPathComponent)"
+            }
+            if values.isDirectory == true {
+                if let error = add(size: 0, name: url.lastPathComponent) { return error }
+            } else if let error = add(size: UInt64(values.fileSize ?? 0),
+                                      name: url.lastPathComponent) {
+                return error
+            }
+            guard values.isDirectory == true else { continue }
+            guard let walker = FileManager.default.enumerator(
+                at: url, includingPropertiesForKeys: keys, options: [],
+                errorHandler: { _, _ in true }
+            ) else {
+                return "无法读取目录：\(url.lastPathComponent)"
+            }
+            for case let child as URL in walker {
+                guard let childValues = try? child.resourceValues(forKeys: Set(keys)) else {
+                    continue
+                }
+                if childValues.isSymbolicLink == true { continue }
+                if let error = add(size: 0, name: child.lastPathComponent) { return error }
+                guard childValues.isDirectory != true else { continue }
+                if let error = add(size: UInt64(childValues.fileSize ?? 0),
+                                   name: child.lastPathComponent) { return error }
+            }
+        }
+        return nil
+    }
+
+    /// `[{"path":"..."}]`；目录只给 path，由内核递归展开。
+    static func filesJSON(paths: [String]) -> String? {
+        guard !paths.isEmpty,
+              let data = try? JSONSerialization.data(
+                  withJSONObject: paths.map { ["path": $0] }, options: []),
+              let json = String(data: data, encoding: .utf8) else { return nil }
+        return json
     }
 }

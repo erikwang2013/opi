@@ -32,9 +32,9 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         window.rootViewController = nav
         window.makeKeyAndVisible()
         self.window = window
-        // 冷启动带 URL：键盘的麦克风按钮在 App 未运行时走这里。
-        if let url = launchOptions?[.url] as? URL, url.scheme == "opi-voice" {
-            showVoice(autoStart: url.host == "record")
+        // 冷启动带 URL：键盘的麦克风/传输按钮在 App 未运行时走这里。
+        if let url = launchOptions?[.url] as? URL {
+            _ = handle(url)
         }
         return true
     }
@@ -44,9 +44,20 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         open url: URL,
         options: [UIApplication.OpenURLOptionsKey: Any] = [:]
     ) -> Bool {
-        guard url.scheme == "opi-voice" else { return false }
-        showVoice(autoStart: url.host == "record")
-        return true
+        handle(url)
+    }
+
+    private func handle(_ url: URL) -> Bool {
+        switch url.scheme {
+        case "opi-voice":
+            showVoice(autoStart: url.host == "record")
+            return true
+        case "opi-transfer":
+            showTransfer()
+            return true
+        default:
+            return false
+        }
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
@@ -61,6 +72,12 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
             nav.popViewController(animated: false)
         }
         nav.pushViewController(VoiceViewController(autoStart: autoStart), animated: true)
+    }
+
+    private func showTransfer() {
+        guard let nav = window?.rootViewController as? UINavigationController else { return }
+        if nav.topViewController is TransferViewController { return }
+        nav.pushViewController(TransferViewController(), animated: true)
     }
 }
 
@@ -134,6 +151,13 @@ final class HomeViewController: UIViewController {
         ])
         addPrimaryButton("打开语音输入", action: #selector(openVoice))
 
+        addCard(title: "跨设备传输", body: [
+            "在同一局域网发现已配对设备，收发文件、文件夹、媒体、文本与纯文本剪贴板。",
+            "传输完全在局域网内进行；只发给已配对/已信任设备。",
+            "键盘扩展不能后台传输：先在键盘设置里打开传输入口开关，点工具条图标会跳到这里。",
+        ])
+        addPrimaryButton("打开跨设备传输", action: #selector(openTransfer))
+
         addCard(title: "启用键盘（三步）", body: [
             "1. 打开「设置 → 通用 → 键盘 → 键盘 → 添加新键盘」，选择「小欧输入法」。",
             "2. 在任意输入框里长按地球键，切换到「小欧输入法」。",
@@ -150,6 +174,7 @@ final class HomeViewController: UIViewController {
             "常用：学习、模糊音（逐组）、拼音纠错、简拼。",
             "按键：中文标点、双拼布局、键盘模式（单手 / 暗光 / 长辈）。",
             "外观：12 款皮肤。符号与表情：表情页「自有」贴纸开关。",
+            "跨设备：剪贴板节里的「工具条显示传输入口」开关（默认关），点图标跳到本 App。",
             "关于：版本、主页、项目、博客与隐私政策地址。",
         ])
         addNote(
@@ -286,6 +311,10 @@ final class HomeViewController: UIViewController {
 
     @objc private func openVoice() {
         navigationController?.pushViewController(VoiceViewController(autoStart: false), animated: true)
+    }
+
+    @objc private func openTransfer() {
+        navigationController?.pushViewController(TransferViewController(), animated: true)
     }
 
     @objc private func openSystemSettings() {

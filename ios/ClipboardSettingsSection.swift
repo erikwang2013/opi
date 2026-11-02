@@ -17,6 +17,7 @@ final class ClipboardSettingsSection: UIView {
     private let sourceLabel = UILabel()
     private let errorLabel = UILabel()
     private let toggle = UISwitch()
+    private let transferToggle = UISwitch()
     private let root = UIStackView()
     private let dynamic = UIStackView()
     private var noteLabels: [UILabel] = []
@@ -53,6 +54,23 @@ final class ClipboardSettingsSection: UIView {
         switchRow.alignment = .center
         switchRow.spacing = 10
 
+        // 传输开关只控制工具条图标显隐：键盘扩展不能后台跑传输，点图标跳宿主 App。
+        let transferLabel = UILabel()
+        transferLabel.text = OpiText.t("工具条显示跨设备传输入口（默认关）")
+        transferLabel.font = .systemFont(ofSize: 13)
+        transferLabel.numberOfLines = 0
+        transferToggle.accessibilityLabel = OpiText.t("在工具条显示跨设备传输入口")
+        transferToggle.setContentHuggingPriority(.required, for: .horizontal)
+        transferToggle.addAction(UIAction { [weak self] _ in
+            guard let self else { return }
+            KeyboardPreferences.transferEnabled = self.transferToggle.isOn
+            NotificationCenter.default.post(name: .opiTransferChanged, object: nil)
+        }, for: .valueChanged)
+        let transferRow = UIStackView(arrangedSubviews: [transferLabel, transferToggle])
+        transferRow.axis = .horizontal
+        transferRow.alignment = .center
+        transferRow.spacing = 10
+
         dynamic.axis = .vertical
         dynamic.spacing = 4
 
@@ -66,6 +84,7 @@ final class ClipboardSettingsSection: UIView {
         actions.spacing = 8
 
         root.addArrangedSubview(switchRow)
+        root.addArrangedSubview(transferRow)
         root.addArrangedSubview(dynamic)
         root.addArrangedSubview(actions)
         root.axis = .vertical
@@ -80,6 +99,8 @@ final class ClipboardSettingsSection: UIView {
         ])
 
         addNote("只在键盘可见时运行，键盘收起后不同步；iOS 扩展没有后台常驻。")
+        addNote("传输不能在键盘扩展里后台运行：打开上面的开关只会让工具条多一个入口，"
+                + "点它跳到宿主 App 的传输页，发现/收发都在宿主 App 完成。")
         addNote("收到的内容只显示顶部提示，点「插入」才写入输入框；不会自动写剪贴板。")
         addNote("发送需点工具条的剪贴板图标；读取本机剪贴板可能触发系统粘贴提示。")
         addNote("联网与读取剪贴板依赖系统设置里的「完全访问」；未授权时功能不可用。")
@@ -104,6 +125,7 @@ final class ClipboardSettingsSection: UIView {
         statusLabel.textColor = p.panelFg
         sourceLabel.textColor = p.barDimFg
         toggle.onTintColor = p.accent
+        transferToggle.onTintColor = p.accent
         noteLabels.forEach { $0.textColor = p.barDimFg }
         refresh() // 动态行里的按钮用色板建，换肤后重建一次
     }
@@ -113,6 +135,7 @@ final class ClipboardSettingsSection: UIView {
     func refresh() {
         let clip = OpiClipboard.shared
         toggle.isOn = clip.isEnabled
+        transferToggle.isOn = KeyboardPreferences.transferEnabled
         if !clip.isEnabled {
             statusLabel.text = OpiText.t("已关闭（默认）")
         } else if clip.isRunning {

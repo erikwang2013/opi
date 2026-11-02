@@ -17,11 +17,13 @@
 // ⚠️ 与 Android 的已知差别（如实列出，不伪造）：
 //   · iOS 扩展不能控制键盘窗口 ⇒ 没有悬浮/游戏快捷入口（面板里有禁用项）；
 //   · 设置入口是本端新增的齿轮（Android 的设置页是独立 Activity）。
+//   · 传输入口在齿轮前，受设置开关控制（默认隐藏）；点击只跳宿主 App，
+//     键盘扩展不建传输节点（见 TransferKeyboard.swift）。
 //
 // 宽度预算（320pt 最窄屏，英文空闲时「中」键也出现）：
-//   图标次序：表情 / 皮肤 / 输入模式 / 键盘模式 / 语音 / 剪贴板 / 齿轮 / 关于 / 收起；
-//   pet 26 + 图标 9 个 + 中 28 + 左右边距 8。图标宽在 28…44 间按可用宽均分，
-//   320pt 下 ≈28.7 —— 宽屏放大触摸区，窄屏不溢出（28 仅为最窄屏兜底）。
+//   图标次序：表情 / 皮肤 / 输入模式 / 键盘模式 / 语音 / 剪贴板 / 传输 / 齿轮 / 关于 / 收起；
+//   pet 26 + 图标 9～10 个 + 中 28 + 左右边距 8。图标宽在 24…44 间按**可见**图标
+//   均分；10 枚时下限降到 24（320pt 下 ≈25），9 枚仍为 28。
 //
 // ⚠️ 本机无 UIKit，只在 Apple CI 真编译；从未上机运行。
 
@@ -42,9 +44,13 @@ final class KeyboardToolbar: UIView {
     var onSendClipboard: (() -> Void)?
     /// 语音输入：跳到宿主 App 的语音页（扩展里不建引擎、不摸麦克风）。
     var onOpenVoice: (() -> Void)?
+    /// 跨设备传输：跳到宿主 App 的传输页（扩展里不能后台跑传输）。
+    var onOpenTransfer: (() -> Void)?
 
     /// 英文空闲时出现的低存在感「中」键（Android `ChineseHiddenButton` 同款）。
     private let chineseButton = UIButton(type: .system)
+    /// 传输图标（齿轮前）；`KeyboardPreferences.transferEnabled` 控制显隐。
+    private var transferButton: UIButton!
     /// 工具条最左的项目宠物（Android `ImeToolbar` 的 `OpiPet` 同位置，2026-10-21）。
     private let petView = UIImageView(image: PetStickerImages.image(named: "idle"))
     private var iconButtons: [UIButton] = []
@@ -81,6 +87,13 @@ final class KeyboardToolbar: UIView {
         let clip = makeIcon("doc.on.clipboard", fallback: "📋", label: "发送剪贴板") { [weak self] in
             self?.onSendClipboard?()
         }
+        let transfer = makeIcon(
+            "arrow.up.arrow.down.circle", fallback: "⇄", label: "跨设备传输"
+        ) { [weak self] in
+            self?.onOpenTransfer?()
+        }
+        transferButton = transfer
+        transfer.isHidden = !KeyboardPreferences.transferEnabled
         // 齿轮：SF Symbols 5 才有 `gearshape`，老系统退回文字「⚙」。
         let settings = makeIcon("gearshape", fallback: "⚙", label: "设置") { [weak self] in
             self?.onOpenSettings?()
@@ -93,7 +106,7 @@ final class KeyboardToolbar: UIView {
         ) { [weak self] in
             self?.onCloseKeyboard?()
         }
-        iconButtons = [emoji, skin, input, modes, voice, clip, settings, about, close]
+        iconButtons = [emoji, skin, input, modes, voice, clip, transfer, settings, about, close]
 
         chineseButton.setTitle("中", for: .normal)
         chineseButton.titleLabel?.font = .systemFont(ofSize: 13)
@@ -111,8 +124,8 @@ final class KeyboardToolbar: UIView {
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         let stack = UIStackView(arrangedSubviews: [
-            petView, emoji, skin, input, modes, voice, clip, settings, about, spacer,
-            chineseButton, close,
+            petView, emoji, skin, input, modes, voice, clip, transfer, settings, about,
+            spacer, chineseButton, close,
         ])
         stack.axis = .horizontal
         stack.alignment = .fill
@@ -137,6 +150,8 @@ final class KeyboardToolbar: UIView {
         ])
         for b in iconButtons {
             let width = b.widthAnchor.constraint(equalToConstant: 36)
+            // 可隐藏按钮用 defaultHigh：隐藏时不再和 stack 的折叠约束较劲。
+            if b === transferButton { width.priority = .defaultHigh }
             width.isActive = true
             iconWidthConstraints.append(width)
             b.setContentHuggingPriority(.required, for: .horizontal)
@@ -144,13 +159,25 @@ final class KeyboardToolbar: UIView {
         }
         petView.setContentHuggingPriority(.required, for: .horizontal)
         petView.setContentCompressionResistancePriority(.required, for: .horizontal)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(transferSettingChanged(_:)),
+            name: .opiTransferChanged, object: nil)
         applyTheme(palette)
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used: 布局全代码构建") }
 
-    deinit { petTimer?.invalidate() }
+    deinit {
+        petTimer?.invalidate()
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func transferSettingChanged(_ note: Notification) {
+        transferButton.isHidden = !KeyboardPreferences.transferEnabled
+        updateIconWidths()
+        setNeedsLayout()
+    }
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
@@ -182,14 +209,17 @@ final class KeyboardToolbar: UIView {
         updateIconWidths()
     }
 
-    /// 图标宽在 30…44 间按可用宽均分：宽屏给足触摸区，320pt 也不溢出。
+    /// 图标宽在 24…44 间按**可见**图标均分：宽屏给足触摸区，320pt 也不溢出。
     private func updateIconWidths() {
         let safe = safeAreaInsets
         let usable = bounds.width - safe.left - safe.right
         guard usable > 0, !iconWidthConstraints.isEmpty else { return }
+        let visible = iconButtons.filter { !$0.isHidden }.count
+        let count = max(1, visible)
         // 固定占用 = pet 26 + 左右边距 8 + 英文「中」28（隐藏时也按它预留，留余量）。
-        // 9 枚图标时 320pt 下只剩 ~28.7pt，故下限从 30 降到 28（仍 ≥ 原设计余量）。
-        let perIcon = min(44, max(28, (usable - 62) / CGFloat(iconButtons.count)))
+        // 10 枚时 320pt 下约 25pt；9 枚仍保持 28pt 下限。
+        let minimum: CGFloat = count >= 10 ? 24 : 28
+        let perIcon = min(44, max(minimum, (usable - 62) / CGFloat(count)))
         for c in iconWidthConstraints where abs(c.constant - perIcon) > 0.5 {
             c.constant = perIcon
         }

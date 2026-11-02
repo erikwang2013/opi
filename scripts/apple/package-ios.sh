@@ -348,32 +348,29 @@ cat > "$app/Info.plist" <<PLIST
 	<dict><key>CFBundlePrimaryIcon</key><dict><key>CFBundleIconFiles</key><array><string>AppIcon60x60</string></array></dict></dict>
 	<key>CFBundleIcons~ipad</key>
 	<dict><key>CFBundlePrimaryIcon</key><dict><key>CFBundleIconFiles</key><array><string>AppIcon76x76</string></array></dict></dict>
-	<key>NSLocalNetworkUsageDescription</key><string>在同一局域网内发现并同步已配对设备之间的纯文本剪贴板内容。</string>
+	<key>NSLocalNetworkUsageDescription</key><string>在同一局域网内发现并连接已配对设备，同步纯文本剪贴板并收发文件；内容不经过服务器。</string>
 	<key>NSMicrophoneUsageDescription</key><string>用于录制语音并在本机识别，识别结果回填到键盘；录音不会上传或保存。</string>
+	<key>UIFileSharingEnabled</key><true/><key>LSSupportsOpeningDocumentsInPlace</key><true/>
 	<key>CFBundleURLTypes</key>
-	<array><dict>
-		<key>CFBundleURLName</key><string>$HOST_BUNDLE_ID.voice</string>
-		<key>CFBundleURLSchemes</key><array><string>opi-voice</string></array>
-	</dict></array>
+	<array><dict><key>CFBundleURLName</key><string>$HOST_BUNDLE_ID.urls</string>
+	<key>CFBundleURLSchemes</key><array><string>opi-voice</string><string>opi-transfer</string></array></dict></array>
 </dict>
 </plist>
 PLIST
 plutil -lint "$app/Info.plist" >/dev/null
 host_plist="$(plutil -p "$app/Info.plist")"
-printf '%s\n' "$host_plist" | grep -q 'NSMicrophoneUsageDescription' || {
-  echo "!! 宿主 Info.plist 缺 NSMicrophoneUsageDescription" >&2; exit 1; }
-printf '%s\n' "$host_plist" | grep -q 'opi-voice' || {
-  echo "!! 宿主 Info.plist 缺 opi-voice URL scheme" >&2; exit 1; }
-# 宿主源码不止 OpiApp.swift：语音页/引擎/下载器都是独立文件。
-host_sources=(ios/HostApp/*.swift ios/VoiceResultChannel.swift)
-host_common=(-parse-as-library -import-objc-header ios/HostApp/OpiAsr.h \
+for key in NSMicrophoneUsageDescription opi-voice opi-transfer UIFileSharingEnabled; do
+  printf '%s\n' "$host_plist" | grep -q "$key" || { echo "!! 宿主 Info.plist 缺 $key" >&2; exit 1; }
+done
+# 宿主源码：语音页/引擎/下载器 + 传输服务/页面 + 平台中立的 opi-clip 宿主。
+host_sources=(ios/HostApp/*.swift ios/VoiceResultChannel.swift shared/apple/OpiClipRunner.swift)
+host_common=(-parse-as-library -import-objc-header ios/OpiFFI.h \
   -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" -target "arm64-apple-ios$IOS_MIN")
 swiftc "${host_common[@]}" -typecheck "${host_sources[@]}"
 asrlib="$PWD/target/aarch64-apple-ios/release/libopi_asr.a"
-[ -f "$asrlib" ] || {
-  echo "!! 缺少 $asrlib —— 先 cargo build --release -p opi-asr --target aarch64-apple-ios" >&2
-  exit 1
-}
+[ -f "$asrlib" ] || { echo "!! 缺少 $asrlib（先编 opi-asr）" >&2; exit 1; }
+host_ffi="$PWD/target/aarch64-apple-ios/release/libopi_ffi.a"
+[ -f "$host_ffi" ] || { echo "!! 缺少 $host_ffi（先编 opi_ffi）" >&2; exit 1; }
 # sherpa-rs 的 iOS 包是两个静态库；构建脚本把它们的目录写进 build output。
 sherpa_dirs=("")
 [ -n "${SHERPA_LIB_PATH:-}" ] && sherpa_dirs+=("$SHERPA_LIB_PATH" "$SHERPA_LIB_PATH/lib")
@@ -407,26 +404,13 @@ onnx_lib="$(find_archive libonnxruntime.a "${sherpa_dirs[@]}")" || {
 echo "宿主 ASR 静态库：$asrlib"
 echo "  sherpa：$sherpa_lib"
 echo "  onnxruntime：$onnx_lib"
-# iOS 的 onnxruntime 静态 xcframework 可能把 absl 拆成独立归档；收集同目录的
-# libabsl*.a 一并链接（找不到就交给链接器报真实缺符号）。
-extra_archives=()
-while IFS= read -r absl; do extra_archives+=("$absl"); done < <(
-  find "$(dirname "$sherpa_lib")" "$(dirname "$onnx_lib")"     -name 'libabsl*.a' -o -name 'libabsl*.a' 2>/dev/null
-)
-if [ "${#extra_archives[@]}" -gt 0 ]; then
-  echo "  absl：${extra_archives[*]}"
-fi
-for lib in "$sherpa_lib" "$onnx_lib"; do
-  printf 'absl defs in %s: ' "$(basename "$lib")"
-  xcrun nm -g "$lib" 2>/dev/null | grep -c 'AbslInternalSpinLock' || true
-done
-# 链接顺序：opi_asr → sherpa → onnxruntime。force_load 让归档成员稳定进宿主。
+# 链接顺序：opi_asr → sherpa → onnxruntime，另加 opi_ffi（传输）。
 swiftc "${host_common[@]}" -emit-executable "${host_sources[@]}" -O -o "$hostbin" \
   -Xlinker -all_load \
+  -Xlinker -force_load -Xlinker "$host_ffi" \
   -Xlinker -force_load -Xlinker "$asrlib" \
   -Xlinker -force_load -Xlinker "$sherpa_lib" \
   -Xlinker -force_load -Xlinker "$onnx_lib" \
-  ${extra_archives[@]+"${extra_archives[@]}"} \
   -Xlinker -lc++ -Xlinker -lz \
   -Xlinker -framework -Xlinker CoreML \
   -Xlinker -framework -Xlinker Foundation \
@@ -438,14 +422,14 @@ chmod +x "$hostbin"
 host_nm="$(nm -gU "$hostbin" 2>&1 || true)"
 host_nm_u="$(nm -u "$hostbin" 2>&1 || true)"
 host_link="$(otool -L "$hostbin" 2>&1 || true)"
-for sym in _opi_asr_create _opi_asr_load_model _opi_asr_poll_event _opi_asr_destroy; do
+for sym in _opi_asr_create _opi_asr_load_model _opi_asr_poll_event _opi_asr_destroy _opi_clip_create _opi_clip_send_files _opi_clip_respond_transfer; do
   printf '%s\n' "$host_nm" | grep -q "$sym\$" || {
-    echo "!! 宿主没有定义 $sym —— opi_asr 静态库没链进去" >&2
+    echo "!! 宿主没有定义 $sym —— 对应静态库没链进去" >&2
     printf '%s\n' "$host_nm_u" >&2; exit 1; }
 done
-if printf '%s\n' "$host_nm_u" | grep -q '_opi_asr_'; then
-  echo "!! 宿主有未定义 opi_asr 符号：" >&2
-  printf '%s\n' "$host_nm_u" | grep '_opi_asr_' >&2; exit 1
+if printf '%s\n' "$host_nm_u" | grep -qE '_opi_asr_|_opi_clip_'; then
+  echo "!! 宿主有未定义 opi_asr/opi_clip 符号：" >&2
+  printf '%s\n' "$host_nm_u" | grep -E '_opi_asr_|_opi_clip_' >&2; exit 1
 fi
 if printf '%s\n' "$host_link" | grep -qE 'libsherpa-onnx|libonnxruntime|libopi_asr'; then
   echo "!! 宿主动态依赖了 ASR 库（应为静态链接）：" >&2

@@ -38,6 +38,7 @@ enum OpiBarButton: Int, CaseIterable {
     case vk
     case mic
     case symbols
+    case transfer
     case settings
 
     var label: String {
@@ -52,6 +53,7 @@ enum OpiBarButton: Int, CaseIterable {
         case .vk: return "软键盘"
         case .mic: return "语音输入"
         case .symbols: return "符号大全"
+        case .transfer: return "跨设备传输"
         case .settings: return "设置"
         }
     }
@@ -68,6 +70,7 @@ enum OpiBarButton: Int, CaseIterable {
         case .vk: return "显示/隐藏自绘虚拟键盘"
         case .mic: return "单击开始/停止录音；Option 单击取消。首次使用会下载模型（本地识别）"
         case .symbols: return "打开符号与表情面板"
+        case .transfer: return "打开跨设备传输页（收发文件/文本）"
         case .settings: return "打开 OPI 设置"
         }
     }
@@ -85,6 +88,7 @@ enum OpiBarButton: Int, CaseIterable {
         case .vk: return s.vk
         case .mic: return s.mic
         case .symbols: return s.symbols
+        case .transfer: return s.transfer
         case .settings: return s.settings
         }
     }
@@ -108,6 +112,7 @@ extension OpiBarSettings {
         case .vk: vk = on
         case .mic: mic = on
         case .symbols: symbols = on
+        case .transfer: transfer = on
         case .settings: settings = on
         }
     }
@@ -134,7 +139,6 @@ final class OpiStatusBar: NSObject {
     private var signature = ""
     private var noticeText: String?
     private var noticeTimer: Timer?
-
     private override init() {
         super.init()
         NotificationCenter.default.addObserver(
@@ -149,7 +153,6 @@ final class OpiStatusBar: NSObject {
     }
 
     var isActive: Bool { active }
-
     // ---------- 公开入口 ----------
 
     /// IMK 生命周期驱动：只有 opi 输入源激活时才显示。
@@ -355,6 +358,7 @@ final class OpiStatusBar: NSObject {
                 case .mode:
                     title = engine.schemeCode() == OpiScheme.wubi.rawValue ? "五" : "拼"
                 case .symbols: title = "Ω"
+                case .transfer: title = "传"
                 default: title = ""
                 }
                 b.setThemedTitle(title, color: palette.fg,
@@ -452,6 +456,8 @@ final class OpiStatusBar: NSObject {
             OpiVoice.shared.toggle(cancel: NSApp.currentEvent?.modifierFlags.contains(.option) == true)
         case .symbols:
             OpiSymbolPanel.shared.show()
+        case .transfer:
+            OpiSettingsWindow.shared.show(page: .transfer)
         case .settings:
             OpiSettingsWindow.shared.show(page: .common)
         }
