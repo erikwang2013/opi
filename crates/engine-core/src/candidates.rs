@@ -163,15 +163,16 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
     // 它仍管着**同一档内部**的顺序，也仍把「想（xiang）」挡在 `xian` 的首位之外（想 落进
     // 联想档，因为拼音更长）；被让到词组之后的只有精确单字里的**生僻尾巴**。
     let exact_bonus = boost / 2;
-    let hanzi = |e: Entry, exact: bool| Candidate {
-        text: e.word.clone(),
-        kind: CandidateKind::Hanzi,
-        score: rank_score(e.freq, learner.freq_of(&e.word), boost).saturating_add(if exact {
-            exact_bonus
-        } else {
-            0
-        }),
-    };
+    let hanzi =
+        |e: Entry, exact: bool| {
+            let score = rank_score(e.freq, learner.freq_of(&e.word), boost)
+                .saturating_add(if exact { exact_bonus } else { 0 });
+            Candidate {
+                text: e.word,
+                kind: CandidateKind::Hanzi,
+                score,
+            }
+        };
     // ── 多音字补读音（2026-10-15 用户报障「单独打『么』候选词没有」）──────────────
     // 词库缺的读音（`么` 没有 `mo`、`绿` 没有 `lu`…）在这里补上：条目**按精确匹配**算
     // （它确实是该读音）并吃 `exact_bonus`，词频已由生成器换算到**词库量纲**
@@ -327,7 +328,7 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
                     hanzi(e, exact)
                 })
                 .collect();
-            syl_cands.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
+            syl_cands.sort_unstable_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
             merged.extend(syl_cands.into_iter().take(3).map(|c| (c, None)));
             // 逐音节模糊：**只在整串变体一无所获时**才用。两库都有连写词组（新 luna 简体
             // 词组、trad），整串变体会带回「中国/中國」，那条更具体；再叠逐音节的「中/种/種」
@@ -371,12 +372,12 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
                     .flat_map(|v| dict.query_prefix_top(v, prefix_cap))
                     .map(|e| hanzi(e, false))
                     .collect();
-                syl_fuzzy.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
+                syl_fuzzy.sort_unstable_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
                 merged.extend(syl_fuzzy.into_iter().take(3).map(|c| (c, None)));
             }
         }
     }
-    fuzzy.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
+    fuzzy.sort_unstable_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
 
     // ── 简拼：缩写展开（常开；展开选择与上限见 jianpin.rs）────────────────────
     // 与模糊同一分档规则、同一「非精确」约定（`exact = false`）：纯缩写输入下这个 flag
@@ -391,7 +392,7 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
     } else {
         Vec::new()
     };
-    jianpin.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
+    jianpin.sort_unstable_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
 
     // 单字符时仅并入 emoji：符号英文关键字前缀（如 comma→顿号）泄漏进拼音候选是噪音
     // ——真机 "c" 键唯一候选曾是顿号。emoji 保留作趣味反馈。过滤由 search 内部完成：
@@ -420,7 +421,7 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
     // 不能下推 limit 到词库：学过的低静态词可反超截断线外的词，
     // 全量收集 + 排序是唯一正确方案（select 用有限 limit 只限 FFI 载荷）。
     // 故走 query_all：词库不必先按词频排一遍（下面这一排就是权威序）。
-    merged.sort_by(|a, b| b.0.score.cmp(&a.0.score).then(a.0.text.cmp(&b.0.text)));
+    merged.sort_unstable_by(|a, b| b.0.score.cmp(&a.0.score).then(a.0.text.cmp(&b.0.text)));
     let mut seen = std::collections::HashSet::new();
     merged.retain(|(c, _)| seen.insert(c.text.clone()));
     // ── 简体优先（见 `RankOptions::prefer_simplified`）**先于**分档 ──────────────
@@ -468,7 +469,7 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
     }
     // 纠错档：**最外层**（见 `correction::tier_hits`）。分档规则同上面逐字相同：只有
     // 前三档全空时它才当主结果（`nihap` 的整串查不到东西，纠出的就是唯一来路）。
-    corr.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
+    corr.sort_unstable_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
     corr.retain(|c| seen.insert(c.text.clone()));
     if merged.is_empty() {
         merged = corr;
@@ -493,7 +494,6 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
 pub(crate) use crate::candidates_segment_impl::segment_fallback;
 // 按键类展开一族（9/14 键）在 `candidates_scheme.rs`（2026-10-12 拆出，拆分保留）。
 pub use crate::candidates_scheme_impl::rank_and_pick_scheme;
-
 // 单测独立成文件（`#[path]` 引入）以保持本文件 <500 行，与 router_tests.rs 同惯例。
 #[cfg(test)]
 #[path = "candidates_tests.rs"]

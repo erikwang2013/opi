@@ -29,18 +29,40 @@ const TABLE: &str = include_str!("../../../data/raw/trad_chars.tsv");
 /// 首次调用时把表解析成升序码位数组（表 ~2.4k 条，二分查；不引依赖、不加锁）。
 pub fn is_trad_only(ch: char) -> bool {
     use std::sync::OnceLock;
+    // BMP 走 8 KB 位图（每次排序对 ~9k 候选逐字查表，二分是这里的实测热点）；
+    // 表里唯一的非 BMP 码位回落到有序数组。
+    static BITS: OnceLock<Box<[u64; 1024]>> = OnceLock::new();
     static CODES: OnceLock<Vec<u32>> = OnceLock::new();
-    let codes = CODES.get_or_init(|| {
-        let mut v: Vec<u32> = TABLE
-            .lines()
-            .filter_map(|l| l.split('\t').next())
-            .filter_map(|c| c.chars().next())
-            .map(|c| c as u32)
-            .collect();
-        v.sort_unstable(); // 生成器已升序；这里再排一次，改生成器也不会让查表失效
-        v
-    });
-    codes.binary_search(&(ch as u32)).is_ok()
+    let cp = ch as u32;
+    if cp < 0x1_0000 {
+        let bits = BITS.get_or_init(|| {
+            let mut bits = Box::new([0u64; 1024]);
+            for code in table_codes() {
+                let i = code as usize;
+                if i < 0x1_0000 {
+                    bits[i / 64] |= 1 << (i % 64);
+                }
+            }
+            bits
+        });
+        return bits[(cp as usize) / 64] & (1 << (cp as usize % 64)) != 0;
+    }
+    CODES
+        .get_or_init(|| {
+            let mut v: Vec<u32> = table_codes().collect();
+            v.sort_unstable();
+            v
+        })
+        .binary_search(&cp)
+        .is_ok()
+}
+
+fn table_codes() -> impl Iterator<Item = u32> {
+    TABLE
+        .lines()
+        .filter_map(|l| l.split('\t').next())
+        .filter_map(|c| c.chars().next())
+        .map(|c| c as u32)
 }
 
 /// 文本里有没有繁体专属字（词组只要一个字命中就算）。

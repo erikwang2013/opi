@@ -128,14 +128,29 @@ pub(crate) fn single_key_prefix<D: Dictionary + ?Sized>(
         }
     }
     let mut out: Vec<usize> = Vec::with_capacity(limit);
-    learned.sort_by(|&a, &b| ci(a, b));
+    // 只要前 `need` 条：先 nth_element 再排前缀，避免为 8 条候选全排序。
+    fn prefix_sort(
+        v: &mut [usize],
+        need: usize,
+        cmp: impl Fn(&usize, &usize) -> std::cmp::Ordering,
+    ) {
+        if need < v.len() {
+            v.select_nth_unstable_by(need, &cmp);
+        }
+        let end = need.min(v.len());
+        v[..end].sort_by(cmp);
+    }
+    let need = |out_len: usize| limit.saturating_sub(out_len);
+    let n = need(out.len());
+    prefix_sort(&mut learned, n, |a, b| ci(*a, *b));
     for i in learned {
         out.push(i);
         if out.len() == limit {
             return Some(materialize(&rows, &out));
         }
     }
-    chars.sort_by(|&a, &b| ci(a, b));
+    let n = need(out.len());
+    prefix_sort(&mut chars, n, |a, b| ci(*a, *b));
     for i in chars {
         out.push(i);
         if out.len() == limit {
@@ -143,7 +158,8 @@ pub(crate) fn single_key_prefix<D: Dictionary + ?Sized>(
         }
     }
     // 词组档：先按拼音长度分组，组内按同一分档键；整组取到填满为止。
-    words.sort_by(|&a, &b| {
+    let n = need(out.len());
+    prefix_sort(&mut words, n, |&a, &b| {
         rows[a]
             .pinyin_len
             .cmp(&rows[b].pinyin_len)

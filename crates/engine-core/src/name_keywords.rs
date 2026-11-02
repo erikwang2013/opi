@@ -158,8 +158,8 @@ pub(crate) fn prepend_exact_symbols(
         return;
     }
     let mut insert_at = after.min(out.len());
-    let mut seen: HashSet<String> = out.iter().map(|c| c.text.clone()).collect();
-    let mut added = 0usize;
+    let mut seen: HashSet<&str> = out.iter().map(|c| c.text.as_str()).collect();
+    let mut add: Vec<&'static str> = Vec::new();
     for entry in entries() {
         if entry.kind != Kind::Symbol || !allowed(entry.lang, mode) {
             continue;
@@ -167,22 +167,28 @@ pub(crate) fn prepend_exact_symbols(
         if !entry.keywords.iter().any(|kw| *kw == prefix) {
             continue;
         }
-        if !seen.insert(entry.text.to_string()) {
+        if !seen.insert(entry.text) {
             continue;
         }
+        if out.len() + add.len() >= limit {
+            break;
+        }
+        add.push(entry.text);
+        if add.len() >= 2 {
+            break;
+        }
+    }
+    drop(seen);
+    for text in add {
         out.insert(
             insert_at,
             Candidate {
-                text: entry.text.to_string(),
+                text: text.to_string(),
                 kind: CandidateKind::Symbol,
                 score: 0,
             },
         );
         insert_at += 1;
-        added += 1;
-        if added >= 2 || out.len() >= limit {
-            break;
-        }
     }
 }
 
@@ -191,15 +197,20 @@ pub(crate) fn append_to(out: &mut Vec<Candidate>, buffer: &str, limit: usize, mo
     if out.len() >= limit {
         return;
     }
-    let mut seen: HashSet<String> = out.iter().map(|c| c.text.clone()).collect();
+    let seen: HashSet<&str> = out.iter().map(|c| c.text.as_str()).collect();
+    let mut added: HashSet<String> = HashSet::new();
+    let mut add = Vec::new();
     for c in candidates(buffer, mode) {
-        if out.len() >= limit {
+        if out.len() + add.len() >= limit {
             break;
         }
-        if seen.insert(c.text.clone()) {
-            out.push(c);
+        if seen.contains(c.text.as_str()) || !added.insert(c.text.clone()) {
+            continue;
         }
+        add.push(c);
     }
+    drop(seen);
+    out.extend(add);
 }
 
 /// **按候选词反查**（2026-10-31）：纠错 / 简拼 / 模糊给出的词不一定命中上面的宏
@@ -225,26 +236,29 @@ pub(crate) fn append_word_to(out: &mut Vec<Candidate>, limit: usize, mode: Mode)
     if words.is_empty() {
         return;
     }
-    let mut seen: HashSet<String> = out.iter().map(|c| c.text.clone()).collect();
-    let mut added = 0usize;
+    let seen: HashSet<&str> = out.iter().map(|c| c.text.as_str()).collect();
+    let mut added: HashSet<String> = HashSet::new();
+    let mut add = Vec::new();
     'words: for word in &words {
         for entry in entries() {
-            if added >= MAX_ADDED || out.len() >= limit {
+            if add.len() >= MAX_ADDED || out.len() + add.len() >= limit {
                 break 'words;
             }
             if entry.name != word.as_str() || !allowed(entry.lang, mode) {
                 continue;
             }
-            if seen.insert(entry.text.to_string()) {
-                out.push(Candidate {
-                    text: entry.text.to_string(),
-                    kind: CandidateKind::Symbol,
-                    score: 0,
-                });
-                added += 1;
+            if seen.contains(entry.text) || !added.insert(entry.text.to_string()) {
+                continue;
             }
+            add.push(Candidate {
+                text: entry.text.to_string(),
+                kind: CandidateKind::Symbol,
+                score: 0,
+            });
         }
     }
+    drop(seen);
+    out.extend(add);
 }
 
 #[cfg(test)]

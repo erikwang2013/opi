@@ -19,6 +19,8 @@ use crate::keys::*;
 // 数字键分派（方案门 + 页内选词）：impl 体在 router_digit.rs（500 行门禁拆出）。
 #[path = "router_digit.rs"]
 mod digit_impl;
+#[path = "router_pages.rs"]
+mod pages;
 
 /// 每页候选数（与 Android 候选栏、两轨 `PAGE_SIZE` 一致）。
 pub const PAGE_SIZE: usize = 8;
@@ -210,27 +212,6 @@ impl KeyRouter {
     /// 批量抓取（分页的唯一数据源：`page_count`/`candidates`/`select` 都从这一份算）。
     pub(crate) fn fetched(&self) -> Vec<Candidate> {
         self.engine.candidates(FETCH_LIMIT)
-    }
-
-    /// 当前页候选文本（最多 PAGE_SIZE 条）。**分页只此一份** —— 经 `opi_candidates_page`
-    /// 出口给 UI，前端因此不需要知道 PAGE_SIZE（自己切全局列表 = 常量抄第二份）。
-    pub fn candidates(&self) -> Vec<String> {
-        self.fetched()
-            .iter()
-            .skip(self.page * PAGE_SIZE)
-            .take(PAGE_SIZE)
-            .map(|c| c.text.clone())
-            .collect()
-    }
-
-    pub fn page(&self) -> usize {
-        self.page
-    }
-
-    /// 总页数（无候选 → 0）。公开给 `opi_page_count` 出口（UI 的「共 N 页」）——
-    /// 与 [`Self::candidates`] 同源，两者不会各算一套。
-    pub fn page_count(&self) -> usize {
-        self.fetched().len().div_ceil(PAGE_SIZE)
     }
 
     /// 直接跳到第 `p` 页（0 起），钳制到 [0, page_count-1]；返回实际页码。

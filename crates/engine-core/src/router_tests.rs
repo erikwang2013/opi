@@ -11,6 +11,8 @@
 
 use super::*;
 use crate::dictionary::InMemoryDictionary;
+#[path = "router_page_tests.rs"]
+mod page_tests;
 use crate::symbols::SymbolEngine;
 
 /// 20 个 "hao" 词条 + 引擎：确定性的 3 页候选。
@@ -458,7 +460,6 @@ fn non_ascii_keyval_passes_through() {
     assert_eq!(s.key_event(u32::MAX, 0), KeyAction::PassThrough);
     assert_eq!(s.buffer(), "");
 }
-
 #[test]
 fn mode_switch_clears_buffer_then_english_letter_buffers() {
     // 拼音输入后切英文：缓冲清空，随后英文字母从空缓冲重新进引擎
@@ -470,7 +471,6 @@ fn mode_switch_clears_buffer_then_english_letter_buffers() {
     assert_eq!(s.key_event('a' as u32, 0), KeyAction::EngineHandled);
     assert_eq!(s.buffer(), "a");
 }
-
 // ---- 可打印字符的抬起不得二次入引擎（回归：拼音缓冲翻倍 / 英文重复提交） ----
 // 缺陷形态：`_ =>` 可打印分支漏判 `released`，而同一函数里每个特殊键分支都判了。
 #[test]
