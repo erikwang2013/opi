@@ -69,6 +69,18 @@ class AsrStateTest {
     }
 
     @Test
+    fun warmOnlyWhileNoSessionIsActive() {
+        for (phase in listOf(AsrPhase.PREPARING, AsrPhase.LISTENING, AsrPhase.TRANSCRIBING)) {
+            assertFalse("$phase 进行中不能换引擎", asrWarmAllowed(phase))
+        }
+        for (phase in listOf(
+            AsrPhase.IDLE, AsrPhase.ERROR, AsrPhase.MODEL_MISSING, AsrPhase.PERMISSION_DENIED,
+        )) {
+            assertTrue("$phase 可以后台预热", asrWarmAllowed(phase))
+        }
+    }
+
+    @Test
     fun commitTextTrimsAndRejectsBlankResults() {
         assertEquals("你好", asrCommitText("  你好 \n"))
         assertEquals(null, asrCommitText(""))

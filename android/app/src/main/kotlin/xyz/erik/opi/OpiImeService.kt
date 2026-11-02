@@ -382,6 +382,7 @@ class OpiImeService : InputMethodService() {
         super.onStartInput(info, restarting)
         // 换编辑器/重连：录音必须立刻停，迟到的识别结果不能写进新输入框。
         AsrRuntime.onEditorChanged()
+        AsrRuntime.warm()
         editorActive = info != null
         if (!restarting) {
             Log.i(TAG, "onStartInput: editor changed")
@@ -403,14 +404,12 @@ class OpiImeService : InputMethodService() {
             }
         }
     }
-
     override fun onFinishInput() {
         super.onFinishInput()
         AsrRuntime.onEditorChanged()
         editorActive = false
         Log.i(TAG, "onFinishInput")
     }
-
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
         AsrRuntime.onEditorChanged()
@@ -463,6 +462,7 @@ class OpiImeService : InputMethodService() {
     override fun onWindowShown() {
         super.onWindowShown()
         Log.i(TAG, "onWindowShown")
+        AsrRuntime.warm() // 键盘显示时后台预热语音引擎；失败静默，点话筒时再报
         // Compose 是普通 View 渲染：无 FlutterSurfaceView 重建问题，仅推进生命周期。
         lifecycleOwner.registry.currentState = Lifecycle.State.RESUMED
     }

@@ -210,10 +210,11 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
     // 跨设备剪贴板（2026-11-01）：宿主随设置启停；FFI 句柄由宿主自己的线程独占。
     LaunchedEffect(s.clipEnabled) { ClipHost.setEnabled(s.clipEnabled) }
     // 语音总开关/引擎跟随输入模式（英文 26 键且 Pro = Whisper，其余 = SenseVoice）。
-    LaunchedEffect(s.speechEnabled, mode, imeState.englishPro) {
+    LaunchedEffect(s.speechEnabled, mode, imeState.englishPro, imeState.im) {
         val lang = if (mode == "en26" && imeState.englishPro) SpeechLanguage.EN else SpeechLanguage.ZH
         // 完整包模型随包：开关没拨也直接可用；普通包下载完成后由语音页自动拨开。
         SpeechHost.setConfig(s.speechEnabled || bundledJar(), lang)
+        if (imeState.im == "opi") SpeechHost.warm() // 切回 opi 时预热；按值触发，不随轮询重复
     }
     // Windows 整体缩一档 + 胶囊圆角（2026-10-24 用户报障「win端的状态栏整体大了，
     // 边角也不是弧形」）；Linux 不乘、保持直角 —— 见 barMetrics/barShape。
@@ -316,7 +317,6 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
             else -> report(runStatusAction(b))
         }
     }
-
     val scope = rememberCoroutineScope()
     // 动作串行锁：从前「点一下 = EDT 冻到动作跑完」，后续点击排在 AWT 事件队列里按序执行；
     // 挪到 IO 后并发来自协程，这把锁把旧次序（一次一个、动作在前、补读在后）原样保住。
