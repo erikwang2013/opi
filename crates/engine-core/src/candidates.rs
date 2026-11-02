@@ -163,16 +163,20 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
     // 它仍管着**同一档内部**的顺序，也仍把「想（xiang）」挡在 `xian` 的首位之外（想 落进
     // 联想档，因为拼音更长）；被让到词组之后的只有精确单字里的**生僻尾巴**。
     let exact_bonus = boost / 2;
-    let hanzi =
-        |e: Entry, exact: bool| {
-            let score = rank_score(e.freq, learner.freq_of(&e.word), boost)
-                .saturating_add(if exact { exact_bonus } else { 0 });
-            Candidate {
-                text: e.word,
-                kind: CandidateKind::Hanzi,
-                score,
-            }
-        };
+    let hanzi_with_user = |e: Entry, exact: bool, user: u32| {
+        let score =
+            rank_score(e.freq, user, boost).saturating_add(if exact { exact_bonus } else { 0 });
+        Candidate {
+            text: e.word,
+            kind: CandidateKind::Hanzi,
+            score,
+        }
+    };
+    // 主查询的元数据与分数共用一次词频查找（下面 `.map` 里两次 BTreeMap 查找是白付）。
+    let hanzi = |e: Entry, exact: bool| {
+        let user = learner.freq_of(&e.word);
+        hanzi_with_user(e, exact, user)
+    };
     // ── 多音字补读音（2026-10-15 用户报障「单独打『么』候选词没有」）──────────────
     // 词库缺的读音（`么` 没有 `mo`、`绿` 没有 `lu`…）在这里补上：条目**按精确匹配**算
     // （它确实是该读音）并吃 `exact_bonus`，词频已由生成器换算到**词库量纲**
@@ -211,14 +215,15 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
         .into_iter()
         .map(|e| {
             let exact = e.pinyin_len == input_len;
+            let user = learner.freq_of(&e.word);
             let meta = Meta {
                 pinyin_len: e.pinyin_len,
                 exact,
                 // 学过的一律排在三档之前（第 0 档）—— 见 `candidates_tiers.rs` 头注。
-                learned: learner.freq_of(&e.word) > 0,
+                learned: user > 0,
                 tail: false,
             };
-            (hanzi(e, exact), Some(meta))
+            (hanzi_with_user(e, exact, user), Some(meta))
         })
         .collect();
     merged.extend(patch);
@@ -421,9 +426,11 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
     // 不能下推 limit 到词库：学过的低静态词可反超截断线外的词，
     // 全量收集 + 排序是唯一正确方案（select 用有限 limit 只限 FFI 载荷）。
     // 故走 query_all：词库不必先按词频排一遍（下面这一排就是权威序）。
-    merged.sort_unstable_by(|a, b| b.0.score.cmp(&a.0.score).then(a.0.text.cmp(&b.0.text)));
-    let mut seen = std::collections::HashSet::new();
-    merged.retain(|(c, _)| seen.insert(c.text.clone()));
+    crate::candidates_merge::sort_and_dedupe(
+        &mut merged,
+        |(c, _)| c.score,
+        |(c, _)| c.text.as_str(),
+    );
     // ── 简体优先（见 `RankOptions::prefer_simplified`）**先于**分档 ──────────────
     // 两个步骤都是「按位稳定分区」：谁在后面，谁的次序就是最终次序。它必须在**前面**
     // （2026-10-14 实测：反过来的话它会把三档整段重排、档位消失）—— 跑在前面还让三档
@@ -451,31 +458,14 @@ pub(crate) fn rank_and_pick_meta<D: Dictionary + ?Sized>(
     // 与顺序一字不变（= 开模糊后的列表以未开模糊的列表为前缀）；**为空** ⇒ 模糊结果就是
     // 主结果（打 zongguo 想打「中国」不该退到列表末尾）。两分支同一份代码：先追加再截断，
     // 故截断永远先砍模糊结果，精确档不受影响。
-    fuzzy.retain(|c| seen.insert(c.text.clone()));
-    if merged.is_empty() {
-        merged = fuzzy;
-    } else {
-        merged.extend(fuzzy);
-    }
     // 简拼档比模糊档更靠外（模糊是同音/近音的整串替换，简拼是缩写），故接在模糊之后。
     // 分档规则与上面逐字相同：**精确档为空时它就是这个输入的主结果** —— 打 `nh` 的人想要
     // 的就是「你好」，退到列表末尾等于没做（`nh` 这类纯缩写在词库里本就查不出东西，
     // 这是产品上最常见的那条路径，不是边角）。非空时只追加，截断先砍它。
-    jianpin.retain(|c| seen.insert(c.text.clone()));
-    if merged.is_empty() {
-        merged = jianpin;
-    } else {
-        merged.extend(jianpin);
-    }
     // 纠错档：**最外层**（见 `correction::tier_hits`）。分档规则同上面逐字相同：只有
     // 前三档全空时它才当主结果（`nihap` 的整串查不到东西，纠出的就是唯一来路）。
     corr.sort_unstable_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
-    corr.retain(|c| seen.insert(c.text.clone()));
-    if merged.is_empty() {
-        merged = corr;
-    } else {
-        merged.extend(corr);
-    }
+    crate::candidates_merge::append_tiers(&mut merged, [&mut fuzzy, &mut jianpin, &mut corr]);
     // 简体优先（见 RankOptions::prefer_simplified）：**截断之前**分区 —— 截断后才排
     // 等于「被截掉的简体候选永远回不来」。
     // 追加档那一截的简体优先（主块那一截已在分档之前跑过 —— 这里**只碰追加部分**，

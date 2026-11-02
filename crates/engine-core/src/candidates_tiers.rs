@@ -122,13 +122,14 @@ pub(crate) fn apply<T: Tiered>(items: Vec<T>) -> Vec<T> {
     // 原先只取前 `COMMON_CHAR_SLOTS` 条，现在不封顶）。次序 = 进来的次序（分数降序）。
     let mut chars: Vec<T> = Vec::new();
     // 第 2 档：词组（精确 + 拼音延伸）——元数据（拼音长度）跟着走：按长度升序、同长度按分。
-    let mut words: Vec<(T, usize)> = Vec::new();
+    // 桶下标 = 拼音长度：桶内 push 序就是进来的次序（分数降序 + 简体优先已分区），
+    // 按桶序拼接即旧「长度升序 + 同长度稳定」排序，故不再排序、不再搬元组。
+    let mut words: Vec<Vec<T>> = Vec::new();
     // 第 2.5 档：**9 键宽松兜底档**的产物（`meta.tail`，见 `Meta::tail`）：排在词组之后、
     // 联想单字之前 —— 顺序按进来的次序（本档自己那套 字→词→字 已由产出方排好）。
     let mut pending: Vec<T> = Vec::new();
     // 第 3 档：拼音延伸的**单字**（联想；每个拼音长度封顶 `PER_LENGTH_SLOTS`）。
-    let mut assoc: Vec<(T, usize)> = Vec::new();
-    let mut per_slot: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
+    let mut assoc: Vec<Vec<T>> = Vec::new();
     // 沉底：联想档超出每长度封顶的条目（进来的次序即分数序）。
     let mut sunk: Vec<T> = Vec::new();
     let mut tail: Vec<T> = Vec::new();
@@ -145,41 +146,47 @@ pub(crate) fn apply<T: Tiered>(items: Vec<T>) -> Vec<T> {
             learned.push(it);
             continue;
         }
-        let single = it.text().chars().count() == 1;
+        // 只看到第二个字符为止（长词不再整串数一遍）；空文本仍按旧语义算「非单字」。
+        let single = !it.text().is_empty() && it.text().chars().nth(1).is_none();
         if single && m.exact {
             chars.push(it); // 全部精确单字，不封顶（裁决）
             continue;
         }
         if !single {
-            words.push((it, m.pinyin_len)); // 词组：精确的 plen == 输入长 ⇒ 天然最前
+            bucket(&mut words, m.pinyin_len).push(it); // 词组：精确的 plen == 输入长 ⇒ 天然最前
             continue;
         }
-        let taken = per_slot.entry(m.pinyin_len).or_insert(0);
-        if *taken < PER_LENGTH_SLOTS {
-            *taken += 1;
-            assoc.push((it, m.pinyin_len));
+        // 桶长就是原来的每长度计数器（只计进联想档的，不计数沉底项）。
+        let slot = bucket(&mut assoc, m.pinyin_len);
+        if slot.len() < PER_LENGTH_SLOTS {
+            slot.push(it);
         } else {
             sunk.push(it);
         }
     }
-    // 词与联想：拼音长度升序；同长度保持进来的次序（分数降序 + 简体优先已分区，见头注）。
-    words.sort_by_key(|(_, plen)| *plen);
-    assoc.sort_by_key(|(_, plen)| *plen);
     let mut out = Vec::with_capacity(
         learned.len()
             + chars.len()
-            + words.len()
+            + words.iter().map(Vec::len).sum::<usize>()
             + pending.len()
-            + assoc.len()
+            + assoc.iter().map(Vec::len).sum::<usize>()
             + sunk.len()
             + tail.len(),
     );
     out.extend(learned);
     out.extend(chars);
-    out.extend(words.into_iter().map(|(it, _)| it));
+    out.extend(words.into_iter().flatten());
     out.extend(pending);
-    out.extend(assoc.into_iter().map(|(it, _)| it));
+    out.extend(assoc.into_iter().flatten());
     out.extend(sunk);
     out.extend(tail);
     out
+}
+
+/// 按拼音长度取桶（下标即长度；按需扩展，不预设上界）。
+fn bucket<T>(buckets: &mut Vec<Vec<T>>, pinyin_len: usize) -> &mut Vec<T> {
+    if buckets.len() <= pinyin_len {
+        buckets.resize_with(pinyin_len + 1, Vec::new);
+    }
+    &mut buckets[pinyin_len]
 }

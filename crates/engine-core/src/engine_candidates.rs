@@ -111,10 +111,13 @@ impl Engine {
                     );
                     // 读数随每次取候选刷新（逐条、已分词），**并与当时的缓冲绑存**
                     // （见 display_buffer：缓冲一变这对就作废，不许把旧缓冲的读数报给新状态）。
+                    // 原始读音先去重（首次出现者留）再分词：同一读音的 `segment` 只付一次。
+                    let mut seen_readings = std::collections::HashSet::new();
                     *self.scheme_readings.borrow_mut() = (
                         s.buffer.clone(),
                         readings
                             .iter()
+                            .filter(|py| seen_readings.insert(py.as_str()))
                             .map(|py| crate::pinyin::segment(py).join("'"))
                             .collect(),
                     );

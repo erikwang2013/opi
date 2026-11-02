@@ -18,14 +18,16 @@
 //!
 //! **与 fcitx5 轨 `dict_layer.rs` 的不对称（刻意，不是漏做）**：本轨**没有**
 //! `importDict` / `setDictEnabled` 出口 —— 没有宿主会调它们（导入 = 桌面设置窗往目录里
-//! 拷文件；停用 = 同一个窗写 settings.ini 的 `DisabledDicts`）。于是本层**零状态**：
-//! 每次 [`load`] 都从目录重算并**整体替换**引擎里的导入层（`set_extra_dicts` 本就是
-//! 全集替换语义）。如实记两条后果：
+//! 拷文件；停用 = 同一个窗写 settings.ini 的 `DisabledDicts`）。于是 [`load`] 本身
+//! **零状态**：每次调用都从目录重算并**整体替换**引擎里的导入层（`set_extra_dicts`
+//! 本就是全集替换语义）。如实记两条后果：
 //!   · 文件**删掉/改名** ⇒ 下次重读（激活或 `reload`）这层就没了（fcitx5 轨做不到：
 //!     它的数据留在内存层里。本轨不需要「停用后仍保数据」—— 重读那一刻文件本来就该在）；
-//!   · **代价** = 每次激活重读目录里的全部词库文件（Windows 上切窗口即 `Activate`）。
-//!     ponytail: 目录里 N 个文件就读 N 次；真到激活卡手再加 (路径, mtime, 大小) 缓存 ——
-//!     那是第二份真源（fcitx5 轨头注说的「记了就是第二份真源，必漂」），别顺手加。
+//!   · **代价**原为每次激活重读目录里的全部词库文件（Windows 上切窗口即 `Activate`）。
+//!     现由 [`fingerprint`]（路径 + mtime + 大小，外加归一后的 `DisabledDicts`，存在
+//!     `TsfLogic`）挡掉未变化的目录 —— **只缓存指纹，不缓存解析结果**：引擎里的导入层
+//!     仍是唯一真源，指纹只回答「目录变过没有」。别顺手把词典也记进来：那是第二份
+//!     真源（fcitx5 轨头注说的「记了就是第二份真源，必漂」），必与文件静默漂开。
 //!
 //! 反常识处同 fcitx5 轨：**装载结果必须接住**。本仓出过「坏词库静默失效」的事故
 //! （插件照常加载、按键被接受、一个字不出、任何地方都没报错，用户侧只表现为候选质量
@@ -94,6 +96,66 @@ pub fn load(dir: &Path, disabled_raw: &str) -> ExtraDicts {
         }
     }
     out
+}
+
+/// 目录指纹：**只**用来判断能否跳过下一次装载，不存任何解析结果。
+/// 文件按 `dict_path::list_dicts` 的名字序（确定性），每项带 mtime + 大小；
+/// 外加归一后的停用名单（` a , b ` 与 `a,b` 同值 —— 与装载判定同一份
+/// [`parse_disabled`]，不另写一套口径）。
+///
+/// 任一文件读不到 metadata → `None`：调用方必须重装，绝不把「读不到」当成「没变」。
+/// shortcut: mtime + 大小看不见「同大小、且落在文件系统时间戳粒度内」的改写
+/// （FAT 2s）；真遇到再升级为内容哈希。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Fingerprint {
+    files: Vec<(std::path::PathBuf, std::time::SystemTime, u64)>,
+    disabled: Vec<String>,
+}
+
+/// 目录当前指纹（见 [`Fingerprint`]）。目录不在 = 空文件表（与 [`load`] 同口径）。
+pub fn fingerprint(dir: &Path, disabled_raw: &str) -> Option<Fingerprint> {
+    let mut files = Vec::new();
+    for (_, path) in crate::dict_path::list_dicts(dir) {
+        let meta = std::fs::metadata(&path).ok()?;
+        files.push((path, meta.modified().ok()?, meta.len()));
+    }
+    Some(Fingerprint {
+        files,
+        disabled: parse_disabled(disabled_raw),
+    })
+}
+
+impl crate::logic::TsfLogic {
+    /// 扫词库目录 + **整体替换**引擎里的导入层（判定在本文模块，这里只转发 + 日志）。
+    /// 指纹（[`Fingerprint`]）与上次相同 ⇒ **整段跳过**（不重读文件、不碰引擎）。
+    /// 返回装上的层数（跳过时 = 上次的层数；生产侧不用，门禁/排障要看）。
+    /// 配对：fcitx5-opi 的 `opi_fcitx5_import_dict` + `opi_fcitx5_set_dict_enabled`
+    /// 那一对出口（那边由 C++ 宿主逐条调 —— 不对称的理由见模块头注）。
+    pub(crate) fn sync_extra_dicts(&mut self, dir: &Path, disabled_raw: &str) -> usize {
+        let current = fingerprint(dir, disabled_raw);
+        if let Some((cached, layers)) = &self.extra_dicts_fingerprint
+            && Some(cached) == current.as_ref()
+        {
+            return *layers;
+        }
+        let report = load(dir, disabled_raw);
+        // 「装载结果必须接住」（本仓的坏词库静默失效前车之鉴）：没装上的在这里现形。
+        for line in &report.lines {
+            tlog!("tsf-opi: {line}");
+        }
+        let layers = report.dicts.len();
+        self.invalidate_fetch_cache();
+        self.engine.set_extra_dicts(report.dicts);
+        // 读不到指纹（metadata 失败）⇒ 不记，下次照常重装。
+        self.extra_dicts_fingerprint = current.map(|f| (f, layers));
+        layers
+    }
+
+    /// 控制面 `Reload` 用：忘掉指纹 ⇒ 紧接着的 `apply_settings` 一定重装。
+    /// 设置窗保存/导入词库后必须看见新文件，哪怕 mtime + 大小恰好没变。
+    pub(crate) fn invalidate_extra_dict_cache(&mut self) {
+        self.extra_dicts_fingerprint = None;
+    }
 }
 
 // 单测独立成文件（`#[path]` 引入）以保持各文件 <500 行：extra_dicts_tests.rs

@@ -22,9 +22,16 @@
 //! 【拿不到就静默】宿主不支持（非文档 context）、选区为空、编辑会话被拒：都返回
 //! `None`，候选窗沿用上一次位置（或窗口自己的默认落点）。位置只是体验，不该让
 //! 一次按键失败。
+//!
+//! 【每键一次同步 COM 太贵（2026-11-02）】组字期间每次 buffer 变化都取 caret，等于
+//! 每个字母都开一次 `TF_ES_READ` 编辑会话（宿主的 UI 线程上、同步）。故按键线程上
+//! 缓存最近一次结果：**组字起点**（缓冲空→非空）、**target 换人**、或距上次超过
+//! [`ANCHOR_TTL`] 才重查；其余按键复用。缓存只放位置与裸指针身份，不持 context 引用。
 
+use std::cell::RefCell;
 use std::mem::{ManuallyDrop, take};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use windows::Win32::Foundation::RECT;
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
@@ -32,12 +39,72 @@ use windows::Win32::UI::TextServices::{
     ITfContext, ITfContextView, ITfEditSession, ITfEditSession_Impl, TF_ANCHOR_END,
     TF_DEFAULT_SELECTION, TF_ES_READ, TF_ES_SYNC, TF_SELECTION,
 };
-use windows::core::{BOOL, Result, implement};
+use windows::core::{BOOL, Interface, Result, implement};
 
 use crate::sink::ensure_panic_hook;
 
 /// caret 底边到候选窗顶边的间距（逻辑像素）。2 是「贴着但不压住光标」。
 const CARET_GAP: i32 = 2;
+
+/// 组字期间复用 caret 的窗口：超过就重查。100ms = 「按键不感到延迟」与
+/// 「鼠标挪了光标，候选窗最多旧一瞬」的折中。
+const ANCHOR_TTL: Duration = Duration::from_millis(100);
+
+thread_local! {
+    /// caret 缓存：按键线程专属（`candidate_anchor` 的调用方都在 TSF 键回调上）。
+    /// `target` 是裸指针，**仅作身份比较，绝不解引用**。
+    static CACHE: RefCell<CaretCache> = RefCell::new(CaretCache::default());
+}
+
+#[derive(Default)]
+struct CaretCache {
+    target: Option<*mut std::ffi::c_void>,
+    anchor: Option<(i32, i32)>,
+    at: Option<Instant>,
+}
+
+impl CaretCache {
+    /// `Some(anchor)` = 命中（`anchor` 本身可能是 `None`：上次没拿到，TTL 内不重试）；
+    /// `None` = 未命中，调用方查询后必须 [`Self::store`]。
+    fn lookup(
+        &self,
+        target: *mut std::ffi::c_void,
+        composition_started: bool,
+    ) -> Option<Option<(i32, i32)>> {
+        if composition_started || self.target != Some(target) {
+            return None;
+        }
+        self.at
+            .filter(|at| at.elapsed() < ANCHOR_TTL)
+            .map(|_| self.anchor)
+    }
+
+    fn store(&mut self, target: *mut std::ffi::c_void, anchor: Option<(i32, i32)>) {
+        self.target = Some(target);
+        self.anchor = anchor;
+        self.at = Some(Instant::now());
+    }
+}
+
+impl crate::tsf::TsfTextService {
+    /// 候选窗锚点：组字起点 / target 变 / 缓存过期才走同步编辑会话，其余复用。
+    /// 命中时连「上次没拿到」的 `None` 也复用 —— 宿主不给读会话时别每个键都白问一次。
+    pub(crate) fn caret_anchor(
+        &self,
+        pic: &ITfContext,
+        composition_started: bool,
+    ) -> Option<(i32, i32)> {
+        let target = pic.as_raw();
+        let hit = CACHE.with(|cache| cache.borrow().lookup(target, composition_started));
+        if let Some(anchor) = hit {
+            return anchor;
+        }
+        let anchor = candidate_anchor(pic, self.state.client_id());
+        // 查询期间可能在同步编辑会话里重入本函数：借用只在本行，不在 COM 调用期间。
+        CACHE.with(|cache| cache.borrow_mut().store(target, anchor));
+        anchor
+    }
+}
 
 /// 取 caret 位置 → 候选窗左上角（AWT 逻辑像素）。`tid` 为 `Activate` 记下的 client id；
 /// 0（未激活）直接放弃 —— 没有合法 tid，`RequestEditSession` 必失败。

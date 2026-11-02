@@ -35,6 +35,7 @@ fn punct_state() -> TsfLogic {
         shift_toggle: true,
         association_enabled: true,
         fetch_cache: Default::default(),
+        extra_dicts_fingerprint: Default::default(),
     };
     s.switch_mode(Mode::Pinyin);
     s

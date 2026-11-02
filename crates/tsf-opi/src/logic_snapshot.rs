@@ -143,6 +143,7 @@ mod tests {
             shift_toggle: true,
             association_enabled: true,
             fetch_cache: Default::default(),
+            extra_dicts_fingerprint: Default::default(),
         };
         s.refresh_snapshot();
         for c in ['q', 'w', 'x'] {

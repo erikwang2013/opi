@@ -30,6 +30,7 @@ impl TsfLogic {
             shift_toggle: true,
             association_enabled: true,
             fetch_cache: RefCell::new(None),
+            extra_dicts_fingerprint: None,
         };
         s.refresh_snapshot();
         s

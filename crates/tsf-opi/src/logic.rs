@@ -81,6 +81,9 @@ pub struct TsfLogic {
     /// 翻页键 `page_count()` 留下的全量表由紧接着的 `snapshot()/fetched()` 消费一次，
     /// 让一次 PageDown 只排一遍全量候选。键 = (真缓冲, 逐字片段)。
     pub(crate) fetch_cache: RefCell<Option<(String, String, Vec<Candidate>)>>,
+    /// 导入词库目录上次装载的指纹 + 层数（见 `extra_dicts::Fingerprint`）。
+    /// **不存解析结果**：引擎里的导入层仍是唯一真源；指纹没变就跳过重读与替换。
+    pub(crate) extra_dicts_fingerprint: Option<(crate::extra_dicts::Fingerprint, usize)>,
 }
 
 impl TsfLogic {
@@ -265,24 +268,8 @@ impl TsfLogic {
         }
         // 导入词库：名单是配置值、目录是环境量，两个都到手才成立 —— 与 fcitx5 轨
         // `applyOpiSettings → opiDictsSync` 同一条（那边目录由 C++ 现推）。
+        // 实现（+ 目录指纹缓存）在 `extra_dicts.rs` 的 `sync_extra_dicts`。
         self.sync_extra_dicts(dicts_dir, &s.disabled_dicts);
-    }
-
-    /// 扫词库目录 + **整体替换**引擎里的导入层（判定在 `extra_dicts`，这里只转发 + 日志）。
-    /// 每次调用都从目录重算（零状态；后果与代价见 `extra_dicts` 头注）。返回装上的层数
-    /// （生产侧不用，门禁/排障要看）。
-    /// 配对：fcitx5-opi 的 `opi_fcitx5_import_dict` + `opi_fcitx5_set_dict_enabled` 那一对
-    /// 出口（那边由 C++ 宿主逐条调 —— 不对称的理由见 `extra_dicts` 头注）。
-    pub(crate) fn sync_extra_dicts(&mut self, dir: &std::path::Path, disabled_raw: &str) -> usize {
-        let report = crate::extra_dicts::load(dir, disabled_raw);
-        // 「装载结果必须接住」（本仓的坏词库静默失效前车之鉴）：没装上的在这里现形。
-        for line in &report.lines {
-            tlog!("tsf-opi: {line}");
-        }
-        let count = report.dicts.len();
-        self.invalidate_fetch_cache();
-        self.engine.set_extra_dicts(report.dicts);
-        count
     }
 
     /// 切模式（**不收尾**：待处理的缓冲由 `Composer::switch_mode` 直接清掉）。

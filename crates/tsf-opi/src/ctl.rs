@@ -173,10 +173,12 @@ pub fn execute(
         CtlOp::State => Ok(CtlReply::State(state_line(logic))),
         CtlOp::Search(q) => Ok(CtlReply::Texts(logic.search_symbol_texts(q))),
         CtlOp::Commit(text) => Ok(CtlReply::Commit(text.clone())),
-        // 与 Activate 完全同一条套用路径（设置 + 五笔表 + 导入词库）。
+        // 与 Activate 同一条套用路径（设置 + 五笔表 + 导入词库），但**强制**重装
+        // 导入词库：设置窗保存/导入后必须看见新文件，哪怕目录指纹没变。
         // 代价：若此刻正在组字，apply_settings 的 set_scheme 会清缓冲 —— 与激活时一致。
         CtlOp::Reload => {
             let path = settings_path.ok_or("设置文件路径不可用（LOCALAPPDATA 未设置）")?;
+            logic.invalidate_extra_dict_cache();
             logic.apply_settings(crate::settings::load_file(path), dicts_dir);
             logic.apply_custom_phrases(crate::custom_phrases::load(dicts_dir));
             logic.apply_english_custom_phrases(crate::custom_phrases::load_english(dicts_dir));

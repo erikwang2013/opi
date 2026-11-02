@@ -356,6 +356,29 @@ fn reload_rereads_settings_and_imported_dicts() {
         s.candidates().iter().any(|w| w == "测词"),
         "词库目录必须被重扫"
     );
+
+    // 控制面 Reload 必须**绕过**目录指纹缓存：设置窗导入的新文件哪怕 mtime + 大小
+    // 恰好没变（同字节数改写 + 恢复 mtime），保存后也要立刻生效。
+    let dict = dir.join("smoke.tsv");
+    let mtime = std::fs::metadata(&dict).unwrap().modified().unwrap();
+    std::fs::write(&dict, "改词\tce\t999999999\n").unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&dict)
+        .unwrap()
+        .set_times(std::fs::FileTimes::new().set_modified(mtime))
+        .unwrap();
+    assert_eq!(
+        execute(&mut s, &CtlOp::Reload, Some(&path), &dir).unwrap(),
+        CtlReply::Reload
+    );
+    s.clear();
+    s.input_key('c' as u32, 0);
+    s.input_key('e' as u32, 0);
+    assert!(
+        s.candidates().iter().any(|w| w == "改词"),
+        "Reload 必须强制重装导入词库（指纹缓存只服务 Activate）"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 

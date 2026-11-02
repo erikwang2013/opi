@@ -176,3 +176,110 @@ fn apply_settings_loads_and_disables_through_the_engine() {
 
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// 输入 `keys` 后的候选（每个用例自己 clear，互不影响）。
+fn typed(s: &mut crate::logic::TsfLogic, keys: &str) -> Vec<String> {
+    s.clear();
+    for c in keys.chars() {
+        s.input_key(c as u32, 0);
+    }
+    s.candidates()
+}
+
+/// 指纹的三样输入必须都能分辨：文件清单、文件状态（mtime/大小）、停用名单。
+#[test]
+fn fingerprint_tracks_listing_file_state_and_disabled_list() {
+    let d = tmpdir("fingerprint-fn");
+    write(&d, "one.tsv", "测试\tceshi\t100\n");
+    let a = fingerprint(&d, "").expect("目录可读");
+    assert_eq!(a, fingerprint(&d, "").unwrap(), "未变 ⇒ 指纹相同");
+    assert_ne!(a, fingerprint(&d, "one").unwrap(), "停用名单变了 ⇒ 不同");
+    write(&d, "two.tsv", "好词\thao\t100\n");
+    assert_ne!(a, fingerprint(&d, "").unwrap(), "目录清单变了 ⇒ 不同");
+    write(&d, "two.tsv", "好词\thao\t100\n多一行\tduo\t100\n");
+    assert_ne!(a, fingerprint(&d, "").unwrap(), "文件大小变了 ⇒ 不同");
+    assert!(
+        fingerprint(std::path::Path::new("/nonexistent/opi/dicts"), "").is_some(),
+        "目录不在 = 空指纹（与 load 同口径），不是「读不到」"
+    );
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// 指纹没变 ⇒ 跳过重读 + `set_extra_dicts`（引擎里仍是旧词）；mtime 前进 ⇒ 重装。
+/// 用「同字节数改写 + 恢复 mtime」造出**只有内容变了、指纹看不见**的形态 ——
+/// 这正是缓存必须跳过的判据（也钉住 shortcut：mtime 粒度内的同大小改写看不见）。
+#[test]
+fn unchanged_directory_skips_reload_and_touched_file_reloads() {
+    use crate::settings::Settings;
+    use std::time::Duration;
+
+    let d = tmpdir("fingerprint-skip");
+    let path = d.join("smoke.tsv");
+    write(&d, "smoke.tsv", "测词\tce\t999999999\n");
+    let mut s = crate::logic::TsfLogic::load(None).expect("内置回退词库");
+    s.apply_settings(Settings::default(), &d);
+    assert!(
+        typed(&mut s, "ce").iter().any(|w| w == "测词"),
+        "首次套用必须装载"
+    );
+
+    let mtime = std::fs::metadata(&path).unwrap().modified().unwrap();
+    write(&d, "smoke.tsv", "改词\tce\t999999999\n"); // 同字节数
+    std::fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_times(std::fs::FileTimes::new().set_modified(mtime))
+        .unwrap();
+    s.apply_settings(Settings::default(), &d);
+    let got = typed(&mut s, "ce");
+    assert!(
+        got.iter().any(|w| w == "测词") && !got.iter().any(|w| w == "改词"),
+        "指纹未变 ⇒ 跳过重装（引擎里仍是旧词），实际：{got:?}"
+    );
+
+    std::fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_times(std::fs::FileTimes::new().set_modified(mtime + Duration::from_secs(2)))
+        .unwrap();
+    s.apply_settings(Settings::default(), &d);
+    let got = typed(&mut s, "ce");
+    assert!(
+        got.iter().any(|w| w == "改词") && !got.iter().any(|w| w == "测词"),
+        "mtime 变了 ⇒ 必须重装，实际：{got:?}"
+    );
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// 文件一个字节没动，只改 `DisabledDicts` ⇒ 指纹变 ⇒ 必须重装（词随之消失/回来）。
+#[test]
+fn disabled_list_change_reloads_even_when_files_are_unchanged() {
+    use crate::settings::Settings;
+
+    let d = tmpdir("fingerprint-disabled");
+    write(&d, "smoke.tsv", "测词\tce\t999999999\n");
+    let mut s = crate::logic::TsfLogic::load(None).expect("内置回退词库");
+    s.apply_settings(Settings::default(), &d);
+    assert!(typed(&mut s, "ce").iter().any(|w| w == "测词"));
+
+    s.apply_settings(
+        Settings {
+            disabled_dicts: "smoke".to_string(),
+            ..Default::default()
+        },
+        &d,
+    );
+    assert!(
+        !typed(&mut s, "ce").iter().any(|w| w == "测词"),
+        "停用名单变了 ⇒ 指纹变 ⇒ 必须重装"
+    );
+
+    s.apply_settings(Settings::default(), &d);
+    assert!(
+        typed(&mut s, "ce").iter().any(|w| w == "测词"),
+        "名单清空 ⇒ 同样触发重装"
+    );
+    let _ = std::fs::remove_dir_all(&d);
+}

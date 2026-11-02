@@ -24,6 +24,7 @@ fn state() -> TsfLogic {
         shift_toggle: true,
         association_enabled: true,
         fetch_cache: Default::default(),
+        extra_dicts_fingerprint: Default::default(),
     };
     s.refresh_snapshot();
     s
@@ -188,6 +189,7 @@ fn key_state() -> TsfLogic {
         shift_toggle: true,
         association_enabled: true,
         fetch_cache: Default::default(),
+        extra_dicts_fingerprint: Default::default(),
     };
     for c in ['q', 'w', 'x'] {
         s.engine.input_key(c);
@@ -387,6 +389,7 @@ fn digit_select_fetches_candidate_table_once() {
         shift_toggle: true,
         association_enabled: true,
         fetch_cache: Default::default(),
+        extra_dicts_fingerprint: Default::default(),
     };
     s.refresh_snapshot();
     s.switch_mode(Mode::Pinyin);

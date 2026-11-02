@@ -263,8 +263,7 @@ impl TsfTextService {
                 if let Some(snapshot) = snapshot {
                     if snapshot.composing
                         && let Some(pic) = pic
-                        && let Some((x, y)) =
-                            crate::caret::candidate_anchor(pic, self.state.client_id())
+                        && let Some((x, y)) = self.caret_anchor(pic, false)
                     {
                         self.sink.on_caret(x, y);
                     }

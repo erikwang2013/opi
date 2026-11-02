@@ -28,6 +28,7 @@ fn wubi_state() -> TsfLogic {
         shift_toggle: true,
         association_enabled: true,
         fetch_cache: Default::default(),
+        extra_dicts_fingerprint: Default::default(),
     };
     s.engine.set_scheme(Scheme::Wubi);
     s.refresh_snapshot();
