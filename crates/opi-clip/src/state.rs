@@ -43,6 +43,9 @@ pub(crate) struct Core {
     pub pairing_enabled: bool,
     pub pair_rate: HashMap<IpAddr, Instant>,
     pub events: VecDeque<ClipEvent>,
+    /// stop() 在**同一把锁**里置位；`push_event` 据此拒绝停止后的事件，避免
+    /// 「先清空队列、后到的线程又把事件插回去」。
+    stopped: bool,
     seen_events: HashMap<crate::types::EventId, Instant>,
     remote_hashes: HashMap<[u8; 32], Instant>,
     fragments: HashMap<crate::types::EventId, Reassembly>,
@@ -120,6 +123,7 @@ impl Core {
             pairing_enabled: true,
             pair_rate: HashMap::new(),
             events: VecDeque::new(),
+            stopped: false,
             seen_events: HashMap::new(),
             remote_hashes: HashMap::new(),
             fragments: HashMap::new(),
@@ -412,6 +416,12 @@ impl Core {
             return Err(error);
         }
         Ok(())
+    }
+
+    /// 停止时在同一把锁里置位并清空；之后任何线程的 push_event 都直接丢弃。
+    pub(crate) fn mark_stopped(&mut self) {
+        self.stopped = true;
+        self.clear_queues();
     }
 
     pub(crate) fn clear_queues(&mut self) {

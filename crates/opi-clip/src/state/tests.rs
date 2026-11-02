@@ -324,3 +324,14 @@ fn fragment_limits_and_corrupt_hash_are_rejected() {
     }
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn stopped_core_drops_events_pushed_after_stop() {
+    let (mut core, dir) = core();
+    core.push_event(peer_event(sender(2)));
+    core.mark_stopped();
+    assert!(core.events.is_empty(), "mark_stopped 必须清空已有事件");
+    core.push_event(peer_event(sender(3)));
+    assert!(core.events.is_empty(), "停止后 push_event 必须拒绝，防回填");
+    let _ = std::fs::remove_dir_all(dir);
+}

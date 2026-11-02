@@ -14,6 +14,9 @@ use crate::types::ClipEvent;
 
 impl Core {
     pub(crate) fn push_event(&mut self, event: ClipEvent) {
+        if self.stopped {
+            return;
+        }
         if self.events.len() >= MAX_EVENTS {
             // 宁可丢一条过期的发现通知，也不丢剪贴板/配对内容事件。
             if let Some(pos) = self

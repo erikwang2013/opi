@@ -344,7 +344,7 @@ impl ClipNode {
         if self.inner.stop.swap(true, Ordering::SeqCst) {
             return;
         }
-        self.inner.lock().clear_queues();
+        self.inner.lock().mark_stopped();
         let handles = {
             let mut guard = self
                 .threads
