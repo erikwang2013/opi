@@ -410,6 +410,7 @@ echo "  sherpa：$sherpa_lib"
 echo "  onnxruntime：$onnx_lib"
 # 链接顺序：opi_asr → sherpa → onnxruntime。force_load 让归档成员稳定进宿主。
 swiftc "${host_common[@]}" -emit-executable "${host_sources[@]}" -O -o "$hostbin" \
+  -Xlinker -all_load \
   -Xlinker -force_load -Xlinker "$asrlib" \
   -Xlinker -force_load -Xlinker "$sherpa_lib" \
   -Xlinker -force_load -Xlinker "$onnx_lib" \
