@@ -276,6 +276,7 @@ enum OpiTheme {
 struct OpiBarSettings {
     var hidden = false
     var vk = false
+    var mic = true
     var symbols = true
     var trad = true
     var punct = true
@@ -290,6 +291,7 @@ struct OpiBarSettings {
         var s = OpiBarSettings()
         s.hidden = bool(defaults, "StatusBarHidden", false)
         s.vk = bool(defaults, "StatusBarVk", false)
+        s.mic = bool(defaults, "StatusBarMic", true)
         s.symbols = bool(defaults, "StatusBarSymbols", true)
         s.trad = bool(defaults, "StatusBarTrad", true)
         s.punct = bool(defaults, "StatusBarPunct", true)
@@ -306,6 +308,7 @@ struct OpiBarSettings {
     func save(_ defaults: UserDefaults = .standard) {
         defaults.set(hidden, forKey: "StatusBarHidden")
         defaults.set(vk, forKey: "StatusBarVk")
+        defaults.set(mic, forKey: "StatusBarMic")
         defaults.set(symbols, forKey: "StatusBarSymbols")
         defaults.set(trad, forKey: "StatusBarTrad")
         defaults.set(punct, forKey: "StatusBarPunct")

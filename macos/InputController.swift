@@ -469,6 +469,8 @@ final class OpiInputController: IMKInputController {
         OpiPinyinBar.shared.hide()
         // 状态栏只在 opi 输入源激活时出现（用户 2026-10-21 要求）。
         OpiStatusBar.shared.setActive(true)
+        // 已存在的语音模型在后台预热；没有模型时这里什么也不做。
+        OpiVoice.shared.prewarmIfNeeded()
     }
 
     /// 失焦 = fcitx5 轨的 `InputMethodEngine::reset()`：清引擎缓冲，
@@ -485,6 +487,8 @@ final class OpiInputController: IMKInputController {
         OpiPinyinBar.shared.hide()
         OpiKeyboardPanel.shared.hide()
         OpiStatusBar.shared.setActive(false)
+        // 失焦时停掉录音/识别（音频只在内存，不上屏半句）。
+        OpiVoice.shared.inputDeactivated()
         super.deactivateServer(sender)
     }
 }
