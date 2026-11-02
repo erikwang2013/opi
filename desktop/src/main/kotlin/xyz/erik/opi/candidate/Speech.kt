@@ -449,8 +449,10 @@ internal class SpeechHostImpl {
 
         /** 工作线程兜底：把异常折成浮层错误，线程继续处理后续命令。 */
         fun crashed(t: Throwable) {
+            val active = ui.phase != SpeechPhase.IDLE
             runCatching { cancelSession() }
-            fail("语音内部错误：${t.message ?: t.javaClass.simpleName}")
+            // 启动预热（Warm）失败且用户没点话筒：静默保住线程，别在登录时弹错误浮层。
+            if (active) fail("语音内部错误：${t.message ?: t.javaClass.simpleName}")
         }
         /** 丢掉句柄里已经排队的事件（取消后/新会话开始前）。 */
         private fun drain(ffi: OpiAsrFfi, h: LoadedAsr) {
