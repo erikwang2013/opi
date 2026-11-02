@@ -407,12 +407,26 @@ onnx_lib="$(find_archive libonnxruntime.a "${sherpa_dirs[@]}")" || {
 echo "宿主 ASR 静态库：$asrlib"
 echo "  sherpa：$sherpa_lib"
 echo "  onnxruntime：$onnx_lib"
+# iOS 的 onnxruntime 静态 xcframework 可能把 absl 拆成独立归档；收集同目录的
+# libabsl*.a 一并链接（找不到就交给链接器报真实缺符号）。
+extra_archives=()
+while IFS= read -r absl; do extra_archives+=("$absl"); done < <(
+  find "$(dirname "$sherpa_lib")" "$(dirname "$onnx_lib")"     -name 'libabsl*.a' -o -name 'libabsl*.a' 2>/dev/null
+)
+if [ "${#extra_archives[@]}" -gt 0 ]; then
+  echo "  absl：${extra_archives[*]}"
+fi
+for lib in "$sherpa_lib" "$onnx_lib"; do
+  printf 'absl defs in %s: ' "$(basename "$lib")"
+  xcrun nm -g "$lib" 2>/dev/null | grep -c 'AbslInternalSpinLock' || true
+done
 # 链接顺序：opi_asr → sherpa → onnxruntime。force_load 让归档成员稳定进宿主。
 swiftc "${host_common[@]}" -emit-executable "${host_sources[@]}" -O -o "$hostbin" \
   -Xlinker -all_load \
   -Xlinker -force_load -Xlinker "$asrlib" \
   -Xlinker -force_load -Xlinker "$sherpa_lib" \
   -Xlinker -force_load -Xlinker "$onnx_lib" \
+  "${extra_archives[@]}" \
   -Xlinker -lc++ -Xlinker -lz \
   -Xlinker -framework -Xlinker CoreML \
   -Xlinker -framework -Xlinker Foundation \
