@@ -68,6 +68,10 @@ internal class ClipService {
     private var lastPeersAt = 0L
     private var lastLocalAt = 0L
     private var lastCoreAttempt = 0L
+    private var lastLanCheck = 0L
+
+    /** 内核启动时实际使用的地址；换网（WSL→Wi-Fi、DHCP 换段）时据此重启。 */
+    private var coreLanIp: String? = null
 
     init {
         publishSnapshot()
@@ -122,6 +126,7 @@ internal class ClipService {
                 pollLocal()
                 pollEvents(f, h)
                 maybeRefreshPeers(f, h)
+                maybeFollowNetwork()
             }
         } finally {
             stopCore()
@@ -246,8 +251,8 @@ internal class ClipService {
             clipConfigJson(
                 clipDataDir().toString(),
                 deviceName,
-                advertiseIp = lan?.first,
-                advertisePrefix = lan?.second,
+                advertiseIp = lan?.ip,
+                advertisePrefix = lan?.prefix,
             ),
         )
         val clip = f.opi_clip_create(config.memory, config.len)
@@ -264,6 +269,7 @@ internal class ClipService {
             return
         }
         handle = clip
+        coreLanIp = lan?.ip
         adapter = createClipboardAdapter(windows, mode)
         if (adapter == null) {
             ui = ui.copy(lastError = "剪贴板适配器不可用（当前桌面环境不支持）")
@@ -277,6 +283,12 @@ internal class ClipService {
     }
 
     private fun stopCore() {
+        destroyCore()
+        enabled = false
+        publishSnapshot()
+    }
+
+    private fun destroyCore() {
         val f = ffi
         val h = handle
         if (f != null && h != null) {
@@ -284,10 +296,22 @@ internal class ClipService {
             runCatching { f.opi_clip_destroy(h) }
         }
         handle = null
+        coreLanIp = null
         runCatching { adapter?.close() }
         adapter = null
-        enabled = false
-        publishSnapshot()
+    }
+
+    /** 5 秒查一次：没有已发现设备时，若局域网地址变了就按新网卡重建内核。 */
+    private fun maybeFollowNetwork() {
+        val now = System.nanoTime()
+        if (lastLanCheck != 0L && now - lastLanCheck < 5_000_000_000L) return
+        lastLanCheck = now
+        if (peers.isNotEmpty()) return
+        val lan = localLanAddress() ?: return
+        if (lan.ip == coreLanIp) return
+        destroyCore()
+        lastCoreAttempt = 0L
+        ensureCore()
     }
 
     // ---------- 本机 → 远端 ----------

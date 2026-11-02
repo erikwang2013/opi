@@ -168,15 +168,26 @@ internal object ClipRuntime {
                     ?.let { it to link.prefixLength }
             }
 
-        val wifi = cm.allNetworks.firstOrNull { network ->
+        // VPN/蜂窝不参与局域网广播：开着 VPN 时「默认网络」往往不是 Wi-Fi。
+        val lanNets = cm.allNetworks.filter { network ->
+            val caps = cm.getNetworkCapabilities(network) ?: return@filter false
+            !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+        }
+        val wifi = lanNets.firstOrNull { network ->
             cm.getNetworkCapabilities(network)
                 ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
         }
-        val wifiAddr = wifi?.let { links(it).firstOrNull { p -> p.first.isSiteLocalAddress } }
-        val anyLocal = cm.allNetworks.asSequence()
+        val ethernet = lanNets.firstOrNull { network ->
+            cm.getNetworkCapabilities(network)
+                ?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true
+        }
+        val preferred = (wifi ?: ethernet)?.let { network ->
+            links(network).firstOrNull { p -> p.first.isSiteLocalAddress }
+        }
+        val anyLocal = lanNets.asSequence()
             .flatMap { links(it).asSequence() }
             .firstOrNull { p -> p.first.isSiteLocalAddress }
-        return (wifiAddr ?: anyLocal)?.let { LanAddr(it.first.hostAddress ?: return null, it.second) }
+        return (preferred ?: anyLocal)?.let { LanAddr(it.first.hostAddress ?: return null, it.second) }
     }
 
     /** 组播锁：Android 不持锁时通常收不到 UDP 组播（发现报文）。权限是普通权限。 */

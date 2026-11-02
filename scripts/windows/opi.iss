@@ -184,13 +184,15 @@ Root: HKLM64; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType
 ; 完成页文案（2026-10-23 用户口径）：安装完成不要求注销；新打开的应用生效；
 ; 已打开的应用关闭重开。静默安装不重启 Explorer。
 Filename: "{app}\app\launch-and-restart.cmd"; Description: "打开 opi（无需注销；新打开的应用生效，已打开的应用请关闭重开）"; Flags: postinstall nowait skipifsilent runasoriginaluser
-; 跨设备剪贴板防火墙规则（2026-11-02）：只放行 opi.exe，且只在专用/域网络。
+; 跨设备剪贴板防火墙规则（2026-11-02）：只放行 opi.exe，覆盖全部网络类型。
+; 只看专用/域网络时，被 Windows 判成「公用」的 Wi-Fi 收不到发现报文，用户
+; 会看到「一台设备都没有」。规则仍只放行该程序，不写端口/协议。
 ; 先删后加，升级不会叠出重复规则；静默安装也执行（Flags 没有 skipifsilent）。
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""opi LAN discovery"""; Flags: runhidden
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""opi LAN sessions"""; Flags: runhidden
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""opi LAN clipboard"""; Flags: runhidden
 ; 单条程序级规则：不写具体端口/协议，端口由程序内部管理、界面不公开。
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""opi LAN clipboard"" dir=in action=allow program=""{app}\opi.exe"" profile=private,domain enable=yes"; Flags: runhidden
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""opi LAN clipboard"" dir=in action=allow program=""{app}\opi.exe"" profile=private,domain,public enable=yes"; Flags: runhidden
 
 [UninstallRun]
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""opi LAN discovery"""; Flags: runhidden

@@ -89,31 +89,98 @@ internal fun clipConfigJson(
 }
 
 /**
- * 本机局域网 IPv4：优先站点本地地址，跳过 Docker/VPN 等虚拟网卡。
- * 多网卡/有 VPN 时默认出口不一定是局域网那块网卡，广播会发错网段。
+ * 本机局域网 IPv4 + 网卡名。
+ *
+ * Windows 上 `NetworkInterface.name` **不是**网卡显示名：JDK < 21 是 `eth0/eth1`，
+ * JDK 21+ 是 `ethernet_32768`。只按 `name` 过滤 WSL 时 `vEthernet (WSL)` 永远
+ * 漏过去，于是组播/探测都发到 WSL 网段，局域网里一台设备也发现不了。
+ * 这里同时看 `displayName`，并优先选「默认出口地址所属的网卡」，最后才回退。
  */
-internal fun localLanAddress(): Pair<String, Int>? {
-    val excluded = listOf(
-        "docker", "veth", "br-", "virbr", "vmnet", "vbox", "virtualbox", "vethernet",
-        "hyper-v", "wsl", "vmware", "tun", "tap", "wg", "tailscale", "zt",
-    )
+internal data class LanAddress(val iface: String, val ip: String, val prefix: Int)
+
+internal data class LanCandidate(
+    val name: String,
+    val display: String,
+    val ip: String,
+    val prefix: Int,
+    val virtual: Boolean = false,
+)
+
+private val virtualIfaceTokens = listOf(
+    "docker", "veth", "br-", "virbr", "vmnet", "vbox", "virtualbox", "vmware",
+    "vethernet", "hyper-v", "wsl", "tun", "tap", "wg", "wireguard", "tailscale",
+    "zerotier", "zt", "hamachi", "npcap", "bluetooth", "openvpn", "nordlynx",
+    "globalprotect", "anyconnect", "fortinet",
+)
+
+private fun isLanCandidate(c: LanCandidate): Boolean {
+    val parts = c.ip.split('.')
+    if (parts.size != 4) return false
+    val o = parts.mapNotNull { it.toIntOrNull()?.takeIf { n -> n in 0..255 } }
+    if (o.size != 4) return false
+    // 10/8、172.16/12、192.168/16，以及运营商级 NAT 常用的 100.64/10。
+    return o[0] == 10 ||
+        (o[0] == 172 && o[1] in 16..31) ||
+        (o[0] == 192 && o[1] == 168) ||
+        (o[0] == 100 && o[1] in 64..127)
+}
+
+private fun isVirtualIface(c: LanCandidate): Boolean {
+    if (c.virtual) return true
+    val text = "${c.name} ${c.display}".lowercase(Locale.ROOT)
+    return virtualIfaceTokens.any { text.contains(it) }
+}
+
+private fun looksPhysical(c: LanCandidate): Boolean {
+    val text = "${c.name} ${c.display}".lowercase(Locale.ROOT)
+    return listOf(
+        "wlan", "wi-fi", "wifi", "wireless", "ethernet", "eth", "enp", "eno",
+        "ens", "wlp", "enx",
+    ).any { text.contains(it) }
+}
+
+/** 纯判定：候选 + 默认出口地址 → 该用的局域网地址。可单测。 */
+internal fun pickLanAddress(candidates: List<LanCandidate>, routeIp: String?): LanAddress? {
+    val lan = candidates.filter(::isLanCandidate)
+    val physical = lan.filterNot(::isVirtualIface)
+    val pool = physical.ifEmpty { lan }
+    val chosen = pool.firstOrNull { it.ip == routeIp }
+        ?: pool.firstOrNull(::looksPhysical)
+        ?: pool.firstOrNull()
+    return chosen?.let { LanAddress(it.name, it.ip, it.prefix) }
+}
+
+/** 默认出口地址（UDP connect 不真正发包；失败 = null）。 */
+private fun routeLanIpv4(): String? = runCatching {
+    java.net.DatagramSocket().use { socket ->
+        socket.connect(java.net.InetAddress.getByName("223.5.5.5"), 53)
+        (socket.localAddress as? java.net.Inet4Address)?.hostAddress
+    }
+}.getOrNull()
+
+internal fun localLanAddress(): LanAddress? {
     val nifs = runCatching {
         java.util.Collections.list(java.net.NetworkInterface.getNetworkInterfaces())
     }.getOrDefault(emptyList())
+    val candidates = ArrayList<LanCandidate>()
     for (n in nifs) {
         if (!n.isUp || n.isLoopback) continue
-        val name = n.name.lowercase()
-        if (excluded.any { name.contains(it) }) continue
         for (ia in n.interfaceAddresses) {
             val addr = ia.address as? java.net.Inet4Address ?: continue
-            if (addr.isLoopbackAddress || addr.isLinkLocalAddress || !addr.isSiteLocalAddress) continue
-            return (addr.hostAddress ?: continue) to ia.networkPrefixLength.toInt()
+            if (addr.isLoopbackAddress || addr.isLinkLocalAddress) continue
+            candidates += LanCandidate(
+                name = n.name.orEmpty(),
+                display = n.displayName.orEmpty(),
+                ip = addr.hostAddress ?: continue,
+                prefix = ia.networkPrefixLength.toInt(),
+                virtual = n.isVirtual,
+            )
         }
     }
-    return null
+    return pickLanAddress(candidates, routeLanIpv4())
 }
 
-internal fun localLanIpv4(): String? = localLanAddress()?.first
+internal fun localLanIpv4(): String? = localLanAddress()?.ip
 
 // ---------- 事件 ----------
 

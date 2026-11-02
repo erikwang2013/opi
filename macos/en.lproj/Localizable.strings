@@ -624,9 +624,9 @@
 "服务器返回 " = "Server returned ";
 "版本信息缺少有效版本号" = "Version information has no valid version number";
 "当前版本号未知" = "Current version unknown";
-"Windows 若发现不到设备，请确认安装器添加的防火墙规则未被禁用、当前网络为「专用」。" = "If Windows cannot find devices, check that the installer's firewall rules are enabled and the network is marked Private.";
-"· Windows 安装器会为 opi.exe 添加专用/域网络的程序入站规则。" = "· The Windows installer adds program-scoped inbound rules for opi.exe on private/domain networks.";
-"若仍连不上，请到 Windows 安全中心确认规则未被禁用，且当前网络为「专用」。" = "If it still cannot connect, check in Windows Security that the rules are enabled and the network is Private.";
+"Windows 若发现不到设备，请确认安装器添加的程序级防火墙规则未被禁用。" = "If Windows cannot find devices, check that the installer's program-scoped firewall rule is enabled.";
+"· Windows 安装器会为 opi.exe 添加覆盖全部网络类型的程序入站规则。" = "· The Windows installer adds a program-scoped inbound rule for opi.exe on all network types.";
+"若仍连不上，请到 Windows 安全中心确认该规则未被禁用。" = "If it still cannot connect, check in Windows Security that the rule is enabled.";
 "中文短语" = "Chinese";
 "英文短语" = "English";
 "文件不是 UTF-8" = "The file is not UTF-8";
@@ -679,4 +679,4 @@
 "两边都打开本功能即可自动发现；若路由器拦截广播，可用下方手动连接" = "Enable this feature on both devices for automatic discovery; if the router blocks broadcasts, use Manual connect below.";
 "正在发现局域网设备…两边都开启本功能即可自动发现；" = "Discovering LAN devices… enable this feature on both devices for automatic discovery;";
 "若路由器拦截广播，可用下方「手动连接」输入对方 IP。" = "If the router blocks broadcasts, use Manual connect below and enter the peer IP.";
-"Windows 请确认安装器添加的防火墙规则未被禁用、当前网络为「专用」。" = "On Windows, make sure the installer's firewall rules are enabled and the network is Private.";
+"Windows 请确认安装器添加的程序级防火墙规则未被禁用。" = "On Windows, make sure the installer's program-scoped firewall rule is enabled.";

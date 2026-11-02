@@ -136,22 +136,21 @@ pub(crate) fn broadcast_for(ip: Ipv4Addr, prefix: Option<u8>) -> Ipv4Addr {
     Ipv4Addr::from(u32::from(ip) | !mask)
 }
 
-/// 广播/组播都被丢弃时的兜底：对同一 /24 的每台主机发探测 beacon。
+/// 广播/组播都被丢弃时的兜底：对**本机所在 /24** 的每台主机发探测 beacon。
 /// 收到探测的一方会单播回一个普通 beacon（见 `discovery_loop`）。
-/// 前缀小于 /24 时网段太大，只发定向广播，不逐机扫。
+///
+/// 前缀不是 /24 也照样扫：家宽常见 /22、/16，定向广播常被路由器丢掉；扫本机
+/// 所在 /24 既覆盖同网段邻居，又不会因为前缀大而发几万个包。
 pub(crate) fn send_probes(
     socket: &UdpSocket,
     port: u16,
     mut beacon: Beacon,
     local_ip: Option<Ipv4Addr>,
-    prefix: Option<u8>,
+    _prefix: Option<u8>,
 ) -> std::io::Result<()> {
     let Some(ip) = local_ip.or_else(local_ipv4) else {
         return Ok(());
     };
-    if prefix.unwrap_or(24) < 24 {
-        return Ok(());
-    }
     let o = ip.octets();
     beacon.capabilities |= crate::types::CAP_PROBE;
     let bytes = beacon.encode();
@@ -260,6 +259,25 @@ mod tests {
         let got = Beacon::decode(&buf[..len]).unwrap();
         assert_eq!(got.instance_id, beacon.instance_id);
         assert_ne!(got.capabilities & crate::types::CAP_PROBE, 0);
+    }
+
+    #[test]
+    fn probes_still_run_on_wide_subnets() {
+        // /16 家宽：定向广播可能被丢，仍要扫本机所在 /24（而不是直接放弃）。
+        let rx = UdpSocket::bind((Ipv4Addr::new(127, 0, 0, 3), 0)).unwrap();
+        rx.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+        let port = rx.local_addr().unwrap().port();
+        let tx = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let beacon = beacon_for(id(8), &[3u8; 32], 5000, 1);
+        send_probes(&tx, port, beacon, Some(Ipv4Addr::LOCALHOST), Some(16)).unwrap();
+        let mut buf = [0u8; 64];
+        let (len, _) = rx
+            .recv_from(&mut buf)
+            .expect("wide subnet must still probe /24");
+        assert_eq!(
+            Beacon::decode(&buf[..len]).unwrap().instance_id,
+            beacon.instance_id
+        );
     }
 
     #[test]

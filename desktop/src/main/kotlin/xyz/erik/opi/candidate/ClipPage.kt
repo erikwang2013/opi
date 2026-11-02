@@ -7,7 +7,7 @@
 //! （ClipControl.kt）；本页不碰 FFI 句柄，也不显示剪贴板文本 —— 只显示元数据与来源。
 //!
 //! 隐藏操作：Wayland/GNOME 没有后台全局监听，页面会明说，并提供「发送当前剪贴板」。
-//! Windows 防火墙：安装器按程序放行专用/域网络；页面只展示排查提示。
+//! Windows 防火墙：安装器按程序放行全部网络类型；页面只展示排查提示。
 
 package xyz.erik.opi.candidate
 
@@ -194,7 +194,7 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
             Text(
                 "本机设备：${st.deviceName} · " +
                     (if (running) "运行中" else if (st.enabled) "启动中" else "已停止") +
-                    " · 局域网地址：${localIp?.let { "${it.first}/${it.second}" } ?: "未找到"} · 监听方式：" +
+                    " · 局域网地址：${localIp?.let { "${it.ip}/${it.prefix}（${it.iface}）" } ?: "未找到"} · 监听方式：" +
                     if (mode == ClipMode.MANUAL) "手动（Wayland）" else "轮询",
                 fontSize = 12.sp, color = Muted,
             )
@@ -242,7 +242,7 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
         st.peers.isEmpty() -> Text(
             "正在发现局域网设备…两边都开启本功能即可自动发现；" +
                 "若路由器拦截广播，可用下方「手动连接」输入对方 IP。" +
-                "Windows 请确认安装器添加的防火墙规则未被禁用、当前网络为「专用」。",
+                "Windows 请确认安装器添加的程序级防火墙规则未被禁用。",
             fontSize = 12.sp, color = Muted,
         )
         else -> for (p in st.peers) {
@@ -295,8 +295,8 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
     Text("· 不记录剪贴板内容，不做剪贴板历史；状态文件只存设备与开关。", fontSize = 12.sp, color = Muted)
     if (isWindows()) {
         Text(
-            "· Windows 安装器会为 opi.exe 添加专用/域网络的入站规则（局域网发现与加密会话）。" +
-                "若仍连不上，请到 Windows 安全中心确认规则未被禁用，且当前网络为「专用」。",
+            "· Windows 安装器会为 opi.exe 添加覆盖全部网络类型的程序入站规则（局域网发现与加密会话）。" +
+                "若仍连不上，请到 Windows 安全中心确认该规则未被禁用。",
             fontSize = 12.sp, color = Muted,
         )
     } else {

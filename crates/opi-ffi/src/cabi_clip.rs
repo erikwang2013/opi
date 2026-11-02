@@ -221,6 +221,8 @@ impl OpiClip {
             "device_name": self.config.device_name,
             "tcp_port": self.config.tcp_port,
             "discovery_port": self.config.discovery_port,
+            "advertise_ipv4": self.config.advertise_ipv4.map(|ip| ip.to_string()),
+            "advertise_prefix": self.config.advertise_prefix,
             "peers": peers,
             "beacons_sent": sent,
             "beacons_received": received,

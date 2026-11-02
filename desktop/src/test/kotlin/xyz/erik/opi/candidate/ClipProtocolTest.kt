@@ -81,6 +81,72 @@ class ClipProtocolTest {
     }
 
     @Test
+    fun `lan picker ignores WSL even when java only exposes eth0 names`() {
+        // Windows JDK < 21：name 是 JDK 自造的 eth0/eth1，WSL 只在 displayName 里。
+        val picked = pickLanAddress(
+            listOf(
+                LanCandidate("eth0", "vEthernet (WSL (Hyper-V firewall))", "172.28.0.1", 20),
+                LanCandidate("eth1", "Realtek PCIe GbE Family Controller", "192.168.1.20", 24),
+            ),
+            routeIp = "192.168.1.20",
+        )
+        assertEquals(LanAddress("eth1", "192.168.1.20", 24), picked)
+    }
+
+    @Test
+    fun `lan picker uses display name on jdk 21 windows names`() {
+        val picked = pickLanAddress(
+            listOf(
+                LanCandidate("vethernet_32768", "vEthernet (Default Switch)", "172.20.0.1", 20),
+                LanCandidate("wireless_32768", "Intel(R) Wi-Fi 6E AX211", "10.0.0.9", 24),
+            ),
+            routeIp = null,
+        )
+        assertEquals("10.0.0.9", picked?.ip)
+    }
+
+    @Test
+    fun `lan picker never prefers wsl even if the route points at it`() {
+        val picked = pickLanAddress(
+            listOf(
+                LanCandidate("eth0", "vEthernet (WSL)", "172.28.0.1", 20, virtual = true),
+                LanCandidate("eth1", "Realtek PCIe GbE", "192.168.1.20", 24),
+            ),
+            routeIp = "172.28.0.1",
+        )
+        assertEquals("192.168.1.20", picked?.ip)
+    }
+
+    @Test
+    fun `lan picker skips linux bridge and docker subnets`() {
+        val picked = pickLanAddress(
+            listOf(
+                LanCandidate("veth123", "", "169.254.1.1", 16), // 链路本地：先被过滤
+                LanCandidate("br-47ef89938a1b", "", "192.168.0.1", 20),
+                LanCandidate("docker0", "", "172.17.0.1", 16),
+                LanCandidate("wlp3s0", "", "192.168.31.87", 24),
+            ),
+            routeIp = "192.168.31.87",
+        )
+        assertEquals(LanAddress("wlp3s0", "192.168.31.87", 24), picked)
+    }
+
+    @Test
+    fun `lan picker falls back to a virtual adapter when nothing physical exists`() {
+        val picked = pickLanAddress(
+            listOf(LanCandidate("eth0", "vEthernet (WSL)", "172.28.0.1", 20)),
+            routeIp = null,
+        )
+        assertEquals("172.28.0.1", picked?.ip)
+    }
+
+    @Test
+    fun `lan picker rejects non-lan addresses`() {
+        assertNull(pickLanAddress(listOf(LanCandidate("eth0", "Ethernet", "8.8.8.8", 24)), null))
+        assertNull(pickLanAddress(emptyList(), "192.168.1.2"))
+    }
+
+    @Test
     fun `peers array parses and malformed entries are skipped`() {
         val peers = parseClipPeers(
             """[{"instance_id":"$ID","name":"A","address":"1.2.3.4:5",
