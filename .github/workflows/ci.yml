@@ -105,9 +105,9 @@ jobs:
       # 命中，所以把下载目录一起缓存。
       - uses: Swatinem/rust-cache@v2
         with:
-          cache-directories: ~/.cache/sherpa-rs
-          # 旧缓存里没有 sherpa 目录；换 key 强制重建一次，否则仍命中坏缓存。
-          key: sherpa-v1
+          cache-directories: /home/runner/.cache/sherpa-rs
+          # v1 缓存的目录路径没展开、也没留下运行库；换 key 重建一次。
+          key: sherpa-v2
 
       # 放最前面：最便宜，错了也最容易看懂。
       # 这条是补上的 —— 此前仓库**从来没有** fmt 门禁，于是漂移只增不减，
@@ -127,8 +127,25 @@ jobs:
       - name: cargo build -p opi_ffi --release（供 c_abi_contract 符号门禁）
         run: cargo build -p opi_ffi --release
 
+      # rust-cache 会清掉 target 里不被依赖图引用的 .so；sherpa 的运行库因此可能
+      # 只留在下载缓存里。测试前补回 deps，并给找不到库的坏缓存一次重建机会。
+      - name: 准备 sherpa 运行库
+        run: |
+          set -euo pipefail
+          mkdir -p target/debug/deps target/debug
+          if [ -d "$HOME/.cache/sherpa-rs" ]; then
+            find "$HOME/.cache/sherpa-rs" -type f \( -name 'libsherpa-onnx-*.so*' -o -name 'libonnxruntime.so*' \) \
+              -exec cp -an {} target/debug/deps/ \; -exec cp -an {} target/debug/ \; || true
+          fi
+          if ! compgen -G "target/debug/deps/libsherpa-onnx-c-api.so*" >/dev/null; then
+            echo "sherpa 运行库缺失，重建 sherpa-rs-sys"
+            cargo clean -p sherpa-rs-sys
+          fi
+
       - name: cargo test --workspace --no-fail-fast
-        run: cargo test --workspace --no-fail-fast
+        run: |
+          export LD_LIBRARY_PATH="$PWD/target/debug/deps:$PWD/target/debug${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          cargo test --workspace --no-fail-fast
 
       - name: cargo clippy --workspace --all-targets -- -D warnings
         run: cargo clippy --workspace --all-targets -- -D warnings

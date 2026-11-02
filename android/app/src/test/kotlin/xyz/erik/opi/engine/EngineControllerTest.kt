@@ -22,9 +22,8 @@ class EngineControllerTest {
 
     @Test
     fun fetchLimitStaysOnePageUntilTiled() {
-        val fake = FakeEngine()
-        val ctrl = EngineController(fake)
-        // 普通栏只画一页；展开平铺才拉全量（512 条字符串的 JNI 搬运不再每键都做）。
+        val fake = FakeEngine(); val ctrl = EngineController(fake)
+        // 普通栏一页；展开平铺才拉全量（512 条 JNI 字符串不再每键搬）。
         assertEquals(fake.pageSizeValue, fake.lastLimit)
         ctrl.setTiledFetch(true)
         assertEquals(512, fake.lastLimit)
