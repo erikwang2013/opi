@@ -80,6 +80,8 @@ final class OpiClipboard {
     func keyboardDidAppear(_ controller: KeyboardViewController) {
         self.controller = controller
         visible = true
+        // 语音回填也在键盘可见时检查一次（这是扩展最早的可见点）；见 VoiceKeyboard.swift。
+        controller.consumeVoiceResultIfNeeded()
         if isEnabled { start() }
     }
 
@@ -388,7 +390,8 @@ final class OpiClipboard {
     }
 
     /// 短暂提示（发送结果/错误）；1.6s 后自消失。不显示剪贴板内容。
-    private func showFlash(_ message: String) {
+    /// internal：语音回填（VoiceKeyboard.swift）也用同一条提示，别再抄一份。
+    func showFlash(_ message: String) {
         guard let view = controller?.view, !message.isEmpty else { return }
         flashWork?.cancel()
         flashView?.removeFromSuperview()
