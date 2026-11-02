@@ -251,19 +251,17 @@ class ImePreferences(private val store: PrefStore) {
 
     /** 把三个引擎开关推给引擎（服务启动与设置页保存共用一处，防两处漂）。 */
     fun applyEngineSwitches(controller: EngineController) {
-        controller.setLearner(learn)
         // 逐对列表非空 ⇒ 以它为准；空 ⇒ 回落旧布尔（合同与 TSF/桌面/fcitx5 一字不差）。
+        // 五写一读：setter 各自 refresh 会让 onReady 连做 5 次全量 JNI 回读。
         val pairs = fuzzyPairs
-        if (pairs.isEmpty()) {
-            controller.setFuzzy(fuzzy)
-        } else {
-            controller.setFuzzyPairs(fuzzyMaskOf(pairs))
-        }
-        controller.setJianpin(jianpin)
-        controller.setCorrection(correction)
-        // 双拼布局（2026-10-13）：与方案正交 —— 无论当前是不是双拼都推进去（引擎侧
-        // 只在双拼方案下用它解码），这样切到双拼时布局已经是对的。
-        controller.setShuangpinLayout(shuangpinLayoutIndexOf(shuangpinLayout))
+        controller.applySwitches(
+            learn = learn,
+            fuzzy = fuzzy,
+            fuzzyPairs = if (pairs.isEmpty()) 0 else fuzzyMaskOf(pairs),
+            jianpin = jianpin,
+            correction = correction,
+            shuangpinLayout = shuangpinLayoutIndexOf(shuangpinLayout),
+        )
         // 联想开关没有引擎出口：宿主侧的进程级 gate，服务与设置页两个控制器共享。
         AssociationGate.enabled = association
     }
