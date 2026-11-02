@@ -258,6 +258,7 @@ class ImePreferences(private val store: PrefStore) {
             learn = learn,
             fuzzy = fuzzy,
             fuzzyPairs = if (pairs.isEmpty()) 0 else fuzzyMaskOf(pairs),
+            useFuzzyPairs = pairs.isNotEmpty(),
             jianpin = jianpin,
             correction = correction,
             shuangpinLayout = shuangpinLayoutIndexOf(shuangpinLayout),

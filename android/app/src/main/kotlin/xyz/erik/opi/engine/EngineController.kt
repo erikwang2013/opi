@@ -339,12 +339,13 @@ class EngineController(
         learn: Boolean,
         fuzzy: Boolean,
         fuzzyPairs: Int,
+        useFuzzyPairs: Boolean,
         jianpin: Boolean,
         correction: Boolean,
         shuangpinLayout: Int,
     ) {
         api.setLearner(learn)
-        if (fuzzyPairs > 0) api.setFuzzyPairs(fuzzyPairs) else api.setFuzzy(fuzzy)
+        if (useFuzzyPairs) api.setFuzzyPairs(fuzzyPairs) else api.setFuzzy(fuzzy)
         api.setJianpin(jianpin)
         api.setCorrection(correction)
         api.setShuangpinLayout(shuangpinLayout)
