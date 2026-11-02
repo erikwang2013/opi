@@ -23,7 +23,9 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(3);
 const SUPERVISOR_TICK: Duration = Duration::from_millis(100);
 /// 没有发现任何设备时，每隔这么久对 /24 逐机发一次探测；一旦发现就停。
-const PROBE_INTERVAL: Duration = Duration::from_secs(2);
+/// /24 探测每次 254 个 sendto，在 ARP 未解析的网段上要 ~3 秒；2 秒一轮会让
+/// 发现线程几乎一直阻塞在探测里、读不到组播。8 秒与注释里的兜底周期一致。
+const PROBE_INTERVAL: Duration = Duration::from_secs(8);
 const PROBE_FIRST_DELAY: Duration = Duration::ZERO;
 
 pub(crate) fn discovery_loop(inner: Arc<NodeInner>, socket: UdpSocket, tcp_port: u16) {

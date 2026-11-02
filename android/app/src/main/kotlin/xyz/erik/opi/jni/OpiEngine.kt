@@ -345,7 +345,7 @@ object OpiEngine : OpiEngineApi, SymbolApi {
     // ---------- 局域网跨端剪贴板（opi-clip，2026-11-01）----------
     // 注册表在 `crates/opi-ffi/src/jni_clip.rs`，且**注册在 OpiEngine 这个类上**
     // （JNI_OnLoad 的 find_class 写死），所以声明只能放在这里 —— 新开一个 object
-    // 调不到。13 条必须与注册表逐条同名同签名；句柄**不可跨线程**，统一由
+    // 调不到。16 条必须与注册表逐条同名同签名；句柄**不可跨线程**，统一由
     // `xyz.erik.opi.clip.ClipBridge` 的专用线程持有。
     // 失败哨兵：create → 0、poll/peers/status → null、其余 → false / -1；
     // 原因读 clipLastError()（按线程记录）。
@@ -391,4 +391,18 @@ object OpiEngine : OpiEngineApi, SymbolApi {
 
     /** lastError() -> String：空串 = 没有错误（按线程记录）。 */
     external fun clipLastError(): String
+
+    /** sendFiles(handle, peerId, filesJson) -> 传输 ID 十六进制；失败 → null。 */
+    external fun clipSendFiles(handle: Long, peerId: String, filesJson: String): String?
+
+    /** respondTransfer(handle, transferId, accept, saveDir)：接受时 saveDir 必填。 */
+    external fun clipRespondTransfer(
+        handle: Long,
+        transferId: String,
+        accept: Boolean,
+        saveDir: String?,
+    ): Boolean
+
+    /** cancelTransfer(handle, transferId)：收发两侧都可调用。 */
+    external fun clipCancelTransfer(handle: Long, transferId: String): Boolean
 }

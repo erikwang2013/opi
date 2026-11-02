@@ -5,7 +5,7 @@
 //! start 要绑端口，真链路留给 `tests/c_abi/consumer_clip.c`（run.sh 执行）。
 
 use super::*;
-use opi_clip::{ClipEvent, EventId, Version};
+use opi_clip::{ClipEvent, EventId, TransferFileInfo, TransferId, Version};
 use serde_json::Value;
 
 fn config_json(dir: &std::path::Path) -> String {
@@ -89,4 +89,45 @@ fn event_json_escapes_text_and_enforces_1mib_cap() {
     let huge = "\u{1}".repeat(256 * 1024);
     let err = encode_event(ClipEvent::Error { message: huge }).unwrap_err();
     assert!(err.contains("limit is"), "超过 1 MiB 必须报错：{err}");
+}
+
+#[test]
+fn transfer_events_encode_id_files_and_saved_dir() {
+    let peer = InstanceId::from_bytes([7; 16]);
+    let id = TransferId::from_bytes([3; 16]);
+    let files = vec![TransferFileInfo {
+        relative_path: "相册/a.txt".into(),
+        size: 5,
+        mime: "text/plain".into(),
+        is_dir: false,
+    }];
+    let offer = encode_event(ClipEvent::TransferOffer {
+        instance_id: peer,
+        transfer_id: id,
+        files: files.clone(),
+        total_bytes: 5,
+        outgoing: true,
+    })
+    .unwrap();
+    let value: Value = serde_json::from_str(&offer).unwrap();
+    assert_eq!(value["type"], "transfer_offer");
+    assert_eq!(value["transfer_id"], id.to_hex());
+    assert_eq!(value["instance_id"], peer.to_hex());
+    assert_eq!(value["files"][0]["relative_path"], "相册/a.txt");
+    assert_eq!(value["files"][0]["size"], 5);
+    assert_eq!(value["total_bytes"], 5);
+    assert_eq!(value["outgoing"], true);
+
+    let completed = encode_event(ClipEvent::TransferCompleted {
+        instance_id: peer,
+        transfer_id: id,
+        files,
+        total_bytes: 5,
+        outgoing: false,
+        saved_dir: Some(std::path::PathBuf::from("/tmp/保存")),
+    })
+    .unwrap();
+    let value: Value = serde_json::from_str(&completed).unwrap();
+    assert_eq!(value["type"], "transfer_completed");
+    assert_eq!(value["saved_dir"], "/tmp/保存");
 }

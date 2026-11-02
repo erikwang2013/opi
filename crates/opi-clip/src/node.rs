@@ -4,6 +4,8 @@
 //! 公开句柄与线程编排。停止语义：置位 → 清空内存队列（会话发送端同时 drop）→
 //! join 主线程 → 最多等 1 秒让会话/配对线程自行退出。没有剪贴板历史可清。
 
+mod transfers;
+
 use crate::ClipError;
 use crate::config::ClipConfig;
 use crate::discovery;
@@ -233,7 +235,14 @@ impl ClipNode {
             let Some(event) = core.prepare_local(text)? else {
                 return Ok(PublishOutcome::SuppressedLoop);
             };
-            let senders: Vec<_> = core.sessions.values().map(|s| s.tx.clone()).collect();
+            // 会话建立时已验过 Noise_KK 静态公钥，这里再按信任表过滤一次：
+            // 自动剪贴板只允许发给已配对/已信任设备（文件传输同一条门槛）。
+            let senders: Vec<_> = core
+                .sessions
+                .iter()
+                .filter(|(peer, _)| core.trust.contains(**peer))
+                .map(|(_, session)| session.tx.clone())
+                .collect();
             (event, senders)
         };
         let mut peers = 0;

@@ -281,6 +281,37 @@ mod tests {
     }
 
     #[test]
+    fn two_sockets_on_same_port_see_each_other() {
+        let port = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0))
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let ip = local_ipv4().unwrap_or(Ipv4Addr::LOCALHOST);
+        let a = bind(port, Some(ip)).unwrap();
+        let b = bind(port, Some(ip)).unwrap();
+        let ba = beacon_for(id(7), &[3u8; 32], 5000, 1);
+        let bb = beacon_for(id(8), &[3u8; 32], 5000, 1);
+        a.send_to(&ba.encode(), (DISCOVERY_GROUP, port)).unwrap();
+        b.send_to(&bb.encode(), (DISCOVERY_GROUP, port)).unwrap();
+        let mut buf = [0u8; 64];
+        a.set_read_timeout(Some(Duration::from_millis(500)))
+            .unwrap();
+        b.set_read_timeout(Some(Duration::from_millis(500)))
+            .unwrap();
+        let mut seen_a = Vec::new();
+        let mut seen_b = Vec::new();
+        for _ in 0..2 {
+            let (len, _) = a.recv_from(&mut buf).expect("a must receive multicast");
+            seen_a.push(Beacon::decode(&buf[..len]).unwrap().instance_id);
+            let (len, _) = b.recv_from(&mut buf).expect("b must receive multicast");
+            seen_b.push(Beacon::decode(&buf[..len]).unwrap().instance_id);
+        }
+        assert!(seen_a.contains(&id(8)), "a must hear b");
+        assert!(seen_b.contains(&id(7)), "b must hear a");
+    }
+
+    #[test]
     fn beacon_has_no_content_field() {
         // 固定长度本身就是内容不存在的结构保证：加字段只能改协议版本。
         let beacon = beacon_for(id(5), &[9u8; 32], 5000, 1);
