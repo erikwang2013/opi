@@ -18,6 +18,7 @@
 #include "napi/native_api.h"
 
 #include "napi_asr.h"
+#include "napi_clip.h"
 #include "opi_ffi.h"
 
 // ============================================================================
@@ -96,7 +97,7 @@ static napi_value ret_undefined(napi_env env) {
 // ⚠️ 每一条都必须在 cpp/types/libopiime/index.d.ts 里有**同名**声明 ——
 // 少一条 = 运行期 `xxx is not a function`，多一条 = 真机打到那条路径才炸。
 // 核对用下面这条（两边名字集合相等才输出空；只扫 desc[]，避开注释里的 JSON 示例）：
-//   diff <(sed -n '/napi_property_descriptor desc\[\]/,/^    };/p' cpp/napi_bridge.c cpp/napi_asr.c \
+//   diff <(sed -n '/napi_property_descriptor desc\[\]/,/^    };/p' cpp/napi_bridge.c cpp/napi_clip.c cpp/napi_asr.c \
 //          | grep -o '{"[a-zA-Z]*"' | tr -d '{"' | sort) \
 //        <(grep -o '^export const [a-zA-Z]*' cpp/types/libopiime/index.d.ts | awk '{print $3}' | sort)
 // 两边**都不写条数**：它随出口增删而漂（同源教训见 opi_ffi.h 顶部）。
@@ -381,36 +382,7 @@ static napi_value JsImportUserWords(napi_env env, napi_callback_info info) { nap
 /// **引擎未装载 → 空串**：调用方别把空串写进文件（启动时按 0 字节判损坏）。
 static napi_value JsExportUserWords(napi_env env, napi_callback_info info) { (void)info; return take_string(env, opi_export_user_words()); }
 
-// ---- 跨设备剪贴板（opi-clip）：句柄以 double 往返（arm64 用户指针 < 2^53）。所有
-// 调用都在 ArkTS 主线程（Rust 句柄按创建线程校验）；失败原因走 clipLastError()。----
-static OpiClip *clip_arg(napi_env env, napi_value v) { double raw = 0; return (napi_get_value_double(env, v, &raw) != napi_ok || raw < 0) ? NULL : (OpiClip *)(uintptr_t)raw; }
-
-/// create(configJson: string): number（0 = 失败）
-static napi_value JsClipCreate(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); size_t len = 0; char16_t *cfg = (n >= 1) ? js_to_utf16(env, a[0], &len) : NULL; OpiClip *h = opi_clip_create((const uint16_t *)cfg, len); free(cfg); napi_value out = NULL; napi_create_double(env, (double)(uintptr_t)h, &out); return out; }
-/// destroy(handle: number): void（0 / NULL 安全）
-static napi_value JsClipDestroy(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); if (n >= 1) { opi_clip_destroy(clip_arg(env, a[0])); } return ret_undefined(env); }
-/// start(handle: number): boolean
-static napi_value JsClipStart(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); bool ok = false; if (n >= 1) { OpiClip *h = clip_arg(env, a[0]); if (h != NULL) { ok = opi_clip_start(h); } } napi_value out = NULL; napi_get_boolean(env, ok, &out); return out; }
-/// stop(handle: number): void
-static napi_value JsClipStop(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); if (n >= 1) { OpiClip *h = clip_arg(env, a[0]); if (h != NULL) { opi_clip_stop(h); } } return ret_undefined(env); }
-/// localText(handle, text): number 0=已发布 1=防回环 -1=失败
-static napi_value JsClipLocalText(napi_env env, napi_callback_info info) { napi_value a[2]; size_t n = get_args(env, info, a, 2); size_t len = 0; char16_t *t = (n >= 2) ? js_to_utf16(env, a[1], &len) : NULL; int32_t code = -1; if (n >= 1) { OpiClip *h = clip_arg(env, a[0]); if (h != NULL) { code = opi_clip_local_text(h, (const uint16_t *)t, len); } } free(t); napi_value out = NULL; napi_create_int32(env, code, &out); return out; }
-/// pollEvent(handle, timeoutMs): string（空串 = 这段时间没有事件）
-static napi_value JsClipPollEvent(napi_env env, napi_callback_info info) { napi_value a[2]; size_t n = get_args(env, info, a, 2); uint32_t wait = 0; if (n >= 2) { (void)napi_get_value_uint32(env, a[1], &wait); } OpiClip *h = (n >= 1) ? clip_arg(env, a[0]) : NULL; return take_string(env, opi_clip_poll_event(h, wait)); }
-/// pairStart(handle, peerId): boolean
-static napi_value JsClipPairStart(napi_env env, napi_callback_info info) { napi_value a[2]; size_t n = get_args(env, info, a, 2); size_t len = 0; char16_t *p = (n >= 2) ? js_to_utf16(env, a[1], &len) : NULL; bool ok = false; if (n >= 1) { OpiClip *h = clip_arg(env, a[0]); if (h != NULL) { ok = opi_clip_pair_start(h, (const uint16_t *)p, len); } } free(p); napi_value out = NULL; napi_get_boolean(env, ok, &out); return out; }
-/// pairConfirm(handle, peerId, accept): boolean
-static napi_value JsClipPairConfirm(napi_env env, napi_callback_info info) { napi_value a[3]; size_t n = get_args(env, info, a, 3); size_t len = 0; char16_t *p = (n >= 2) ? js_to_utf16(env, a[1], &len) : NULL; bool accept = false; if (n >= 3) { (void)napi_get_value_bool(env, a[2], &accept); } bool ok = false; if (n >= 1) { OpiClip *h = clip_arg(env, a[0]); if (h != NULL) { ok = opi_clip_pair_confirm(h, (const uint16_t *)p, len, accept); } } free(p); napi_value out = NULL; napi_get_boolean(env, ok, &out); return out; }
-/// pairCancel(handle, peerId): boolean（= confirm(false)）
-static napi_value JsClipPairCancel(napi_env env, napi_callback_info info) { napi_value a[2]; size_t n = get_args(env, info, a, 2); size_t len = 0; char16_t *p = (n >= 2) ? js_to_utf16(env, a[1], &len) : NULL; bool ok = false; if (n >= 1) { OpiClip *h = clip_arg(env, a[0]); if (h != NULL) { ok = opi_clip_pair_cancel(h, (const uint16_t *)p, len); } } free(p); napi_value out = NULL; napi_get_boolean(env, ok, &out); return out; }
-/// peers(handle): string（JSON 数组；未 start → []）
-static napi_value JsClipPeers(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); OpiClip *h = (n >= 1) ? clip_arg(env, a[0]) : NULL; return take_string(env, opi_clip_peers(h)); }
-/// forgetPeer(handle, peerId): boolean
-static napi_value JsClipForgetPeer(napi_env env, napi_callback_info info) { napi_value a[2]; size_t n = get_args(env, info, a, 2); size_t len = 0; char16_t *p = (n >= 2) ? js_to_utf16(env, a[1], &len) : NULL; bool ok = false; if (n >= 1) { OpiClip *h = clip_arg(env, a[0]); if (h != NULL) { ok = opi_clip_forget_peer(h, (const uint16_t *)p, len); } } free(p); napi_value out = NULL; napi_get_boolean(env, ok, &out); return out; }
-/// status(handle): string（JSON）
-static napi_value JsClipStatus(napi_env env, napi_callback_info info) { napi_value a[1]; size_t n = get_args(env, info, a, 1); OpiClip *h = (n >= 1) ? clip_arg(env, a[0]) : NULL; return take_string(env, opi_clip_status(h)); }
-/// lastError(): string（空串 = 没有错误）
-static napi_value JsClipLastError(napi_env env, napi_callback_info info) { (void)info; return take_string(env, opi_clip_last_error()); }
+// 跨设备剪贴板/传输的 clip* 出口在 napi_clip.c（2026-11-03 拆出守 500 行门禁）。
 // 模块注册
 
 static napi_value OpiImeInit(napi_env env, napi_value exports) {
@@ -464,21 +436,9 @@ static napi_value OpiImeInit(napi_env env, napi_value exports) {
         {"wubiReturnStyle", NULL, JsWubiReturnStyle, NULL, NULL, NULL, napi_default, NULL},
         {"setWubiAutoCommit", NULL, JsSetWubiAutoCommit, NULL, NULL, NULL, napi_default, NULL},
         {"wubiAutoCommit", NULL, JsWubiAutoCommit, NULL, NULL, NULL, napi_default, NULL},
-        {"clipCreate", NULL, JsClipCreate, NULL, NULL, NULL, napi_default, NULL},
-        {"clipDestroy", NULL, JsClipDestroy, NULL, NULL, NULL, napi_default, NULL},
-        {"clipStart", NULL, JsClipStart, NULL, NULL, NULL, napi_default, NULL},
-        {"clipStop", NULL, JsClipStop, NULL, NULL, NULL, napi_default, NULL},
-        {"clipLocalText", NULL, JsClipLocalText, NULL, NULL, NULL, napi_default, NULL},
-        {"clipPollEvent", NULL, JsClipPollEvent, NULL, NULL, NULL, napi_default, NULL},
-        {"clipPairStart", NULL, JsClipPairStart, NULL, NULL, NULL, napi_default, NULL},
-        {"clipPairConfirm", NULL, JsClipPairConfirm, NULL, NULL, NULL, napi_default, NULL},
-        {"clipPairCancel", NULL, JsClipPairCancel, NULL, NULL, NULL, napi_default, NULL},
-        {"clipPeers", NULL, JsClipPeers, NULL, NULL, NULL, napi_default, NULL},
-        {"clipForgetPeer", NULL, JsClipForgetPeer, NULL, NULL, NULL, napi_default, NULL},
-        {"clipStatus", NULL, JsClipStatus, NULL, NULL, NULL, napi_default, NULL},
-        {"clipLastError", NULL, JsClipLastError, NULL, NULL, NULL, napi_default, NULL},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
+    opi_clip_napi_init(env, exports);
     opi_asr_napi_init(env, exports);
     return exports;
 }

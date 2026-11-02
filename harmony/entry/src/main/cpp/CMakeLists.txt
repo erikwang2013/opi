@@ -39,7 +39,7 @@ set(OPI_RUST_LIB "${CMAKE_CURRENT_SOURCE_DIR}/libs/${OHOS_ARCH}/libopi_ffi.a")
 set(OPI_ASR_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../libs/${OHOS_ARCH}")
 set(OPI_ASR_LIB "${OPI_ASR_LIB_DIR}/libopi_asr.so")
 
-add_library(opiime SHARED napi_bridge.c napi_asr.c)
+add_library(opiime SHARED napi_bridge.c napi_clip.c napi_asr.c)
 
 if(NOT EXISTS "${OPI_RUST_LIB}")
     # 显式报错。少了这一步的表现是「链接期一堆 undefined reference to opi_*」，

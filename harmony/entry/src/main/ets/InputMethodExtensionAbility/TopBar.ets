@@ -64,6 +64,8 @@ export struct TopBar {
   /** 0=语音关闭（不显示麦克风）；2=准备 3=录音 4=识别 5=错误（显示状态条）。 */
   @StorageLink('opiVoice') voice: number = 0;
   @StorageLink('opiVoiceMsg') voiceMsg: string = '';
+  /** 1 = 「跨设备传输」设置开启：设置齿轮前多一个传输图标。 */
+  @StorageLink('opiTransfer') transfer: number = 0;
 
   @State petForms: PetMood[] = petStripSelection(Math.random);
   /** 工具条实测宽度（vp）：图标按它收缩，避免悬浮/单手+悬浮时挤掉收起键。 */
@@ -152,7 +154,8 @@ export struct TopBar {
 
   /** 图标宽度 = 均分「面板宽 - 固定块」；不低于 24vp（再小就看不清了）。 */
   private iconSize(): number {
-    const count: number = TOOL_ICON_COUNT + (this.voice !== 0 ? 1 : 0);
+    const count: number = TOOL_ICON_COUNT + (this.voice !== 0 ? 1 : 0)
+      + (this.transfer === 1 ? 1 : 0);
     const fit: number = Math.floor((this.barWidth - TOOLBAR_FIXED_VP) / count);
     return Math.max(24, Math.min(TOOL_ICON_SIZE, fit));
   }
@@ -303,6 +306,9 @@ export struct TopBar {
             }
           })
       }
+      if (this.transfer === 1) {
+        this.TransferButton()
+      }
       this.IconButton($r('sys.symbol.gearshape'), '设置', () => {
         this.ctrl.togglePanel(PanelView.Settings);
       })
@@ -361,6 +367,26 @@ export struct TopBar {
     }
     .height(32).width('100%').padding({ left: 10, right: 6 })
     .backgroundColor(sceneBarBg(this.pal().barBg))
+  }
+
+  /** 跨设备传输：手机 + 电脑两个系统符号拼成一个图标（设置齿轮前）。 */
+  @Builder
+  TransferButton() {
+    Row({ space: 1 }) {
+      SymbolGlyph($r('sys.symbol.phone'))
+        .fontSize(Math.round(this.iconGlyph() * 0.55))
+        .fontColor([this.pal().toolbarFg])
+      SymbolGlyph($r('sys.symbol.computer'))
+        .fontSize(Math.round(this.iconGlyph() * 0.62))
+        .fontColor([this.pal().toolbarFg])
+    }
+    .width(this.iconSize()).height(this.iconSize())
+    .justifyContent(FlexAlign.Center)
+    .borderRadius(6)
+    .accessibilityText('跨设备传输')
+    .onClick(() => {
+      this.ctrl.togglePanel(PanelView.Transfer);
+    })
   }
 
   @Builder

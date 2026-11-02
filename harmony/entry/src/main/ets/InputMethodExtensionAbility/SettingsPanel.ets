@@ -20,6 +20,7 @@ import { OpiMode } from './OpiEngine';
 import { Palette, SKINS, paletteFor, scenePanelBg, sceneKeyBg } from './Palette';
 import { sceneLabel } from './SceneTheme';
 import { ModeChip, PanelHeader, appVersion } from './Panels';
+import * as TransferSync from './TransferSync';
 import { UpdateSection } from './UpdateCheck';
 
 @Component
@@ -37,6 +38,8 @@ export struct SettingsPanel {
   @StorageLink('opiOneHand') oneHand: number = 0;
   @StorageLink('opiFloat') floating: number = 0;
   @StorageLink('opiGame') game: number = 0;
+  /** 跨设备传输开关（默认关闭；开后才显示工具条图标）。 */
+  @StorageLink('opiTransfer') transfer: number = 0;
   /** 订阅语言键：切换后本页 t(...) 的文案当帧重渲染。 */
   @StorageLink('opiLang') lang: number = 0;
   /** 「清除用户词库」的两步确认（点了行才展开，避免误触清空学习成果）。 */
@@ -179,6 +182,13 @@ export struct SettingsPanel {
 
           this.Section(t('跨设备剪贴板'))
           ClipSection()
+
+          this.Section(t('跨设备传输'))
+          this.SwitchRow(t('跨设备传输'), t('发现附近已配对设备，传送文件/文件夹/媒体/文本/剪贴板；默认关闭'),
+            this.transfer === 1, () => {
+              TransferSync.setEnabled(this.transfer !== 1);
+              this.ctrl.publish();
+            })
 
           this.Section(t('键盘'))
           this.ActionRow(t('输入模式'), t('键盘布局与输入方案'), t(INPUT_MODES[this.layout].label), () => {

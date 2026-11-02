@@ -357,6 +357,25 @@ OpiString opi_clip_peers(OpiClip *clip);
 /// forgetPeer(clip, peer_id)：移除信任；不存在的对端也算成功。
 bool opi_clip_forget_peer(OpiClip *clip, const uint16_t *peer_id, size_t len);
 
+// ---- 文件传输（2026-11-03，真源 cabi_clip/transfer_exports.rs）----
+//
+// files_json：`[{"path":"/abs/local","name":"可选/相对名","mime":"可选"}]`。
+// 目录条目只能给 path（内核递归展开）；name/mime 只对文件有效。清单超过
+// 128 项/单文件 2 GiB/总量 8 GiB 时发送侧与接收侧都会拒绝（真源 types.rs）。
+
+/// sendFiles(clip, peer_id, files_json) -> 传输 ID 十六进制；失败 → 空串。
+/// 只接受已配对且已连接的对端；失败原因读 opi_clip_last_error()。
+OpiString opi_clip_send_files(OpiClip *clip, const uint16_t *peer_id, size_t peer_len,
+                              const uint16_t *files_json, size_t files_len);
+
+/// respondTransfer(clip, transfer_id, accept, save_dir) -> bool。
+/// accept=true 时 save_dir 必须非空（内核会创建/校验目录）；拒绝传空串。
+bool opi_clip_respond_transfer(OpiClip *clip, const uint16_t *transfer_id, size_t id_len,
+                               bool accept, const uint16_t *save_dir, size_t save_dir_len);
+
+/// cancelTransfer(clip, transfer_id) -> bool。
+bool opi_clip_cancel_transfer(OpiClip *clip, const uint16_t *transfer_id, size_t id_len);
+
 /// status(clip) -> JSON：running / instance_id / fingerprint / device_name /
 /// tcp_port / discovery_port / peers（未 start 时前两项为 null）。
 OpiString opi_clip_status(OpiClip *clip);

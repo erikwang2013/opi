@@ -313,14 +313,18 @@ fn harmony_header_is_consistent_use_site_subset() {
     }
 
     // 「声明了但桥里没用」—— 子集的意义就在于此，抄而不调用会积累漂移。
-    let bridge = strip_c_comments(&read(HARMONY_BRIDGE));
+    let bridge = strip_c_comments(&format!(
+        "{}\n{}",
+        read(HARMONY_BRIDGE),
+        read(HARMONY_CLIP_BRIDGE)
+    ));
     for name in &names {
         let hit = bridge
             .match_indices(name.as_str())
             .any(|(i, _)| bridge[i + name.len()..].trim_start().starts_with('('));
         if !hit {
             diffs.push(format!(
-                "`{name}` 在 harmony/entry/src/main/cpp/opi_ffi.h 里声明了，但 napi_bridge.c 从未调用"
+                "`{name}` 在 harmony/entry/src/main/cpp/opi_ffi.h 里声明了，但 napi_bridge.c / napi_clip.c 从未调用"
             ));
         }
     }

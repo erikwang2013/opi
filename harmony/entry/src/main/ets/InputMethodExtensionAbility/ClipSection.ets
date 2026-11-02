@@ -6,7 +6,7 @@
 
 import { BusinessError } from '@kit.BasicServicesKit';
 import * as ClipSync from './ClipSync';
-import { ClipPairingPrompt, ClipPeer, ClipStatus } from './ClipSync';
+import { ClipPairingPrompt, ClipPeer, ClipStatus } from './ClipTypes';
 import { Palette, paletteFor, sceneKeyBg } from './Palette';
 import { t } from './I18n';
 

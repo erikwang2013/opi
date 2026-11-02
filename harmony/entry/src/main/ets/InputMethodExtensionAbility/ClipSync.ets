@@ -11,6 +11,9 @@ import { deviceInfo } from '@kit.BasicServicesKit';
 import opiime from 'libopiime.so';
 import { ClipboardAdapter } from './ClipboardAdapter';
 import * as SettingsStore from './SettingsStore';
+import {
+  ClipConfig, ClipPairingPrompt, ClipPeer, ClipStatus, parsePeerJson, parseStatusJson
+} from './ClipTypes';
 
 const DISCOVERY_PORT: number = 45888;
 const POLL_MS: number = 200;
@@ -20,47 +23,7 @@ const REFRESH_EVERY_POLLS: number = 8;
 const MAX_TEXT_CHARS: number = 256 * 1024;
 const MAX_DEVICE_NAME: number = 48;
 
-export interface ClipPeer {
-  instanceId: string;
-  name: string;
-  address: string;
-  fingerprint: string;
-  trusted: boolean;
-  connected: boolean;
-}
-
-export interface ClipStatus {
-  running: boolean;
-  instanceId: string;
-  fingerprint: string;
-  deviceName: string;
-  peers: number;
-}
-
-export interface ClipPairingPrompt {
-  instanceId: string;
-  sas: string;
-  /** true = 这次配对由对端发起。 */
-  incoming: boolean;
-}
-
-// ---- JSON 形状：真源 crates/opi-ffi/src/cabi_clip/encode.rs，字段名 snake_case ----
-interface RawPeer {
-  instance_id?: string;
-  name?: string;
-  address?: string;
-  fingerprint?: string;
-  trusted?: boolean;
-  connected?: boolean;
-}
-
-interface RawStatus {
-  running?: boolean;
-  instance_id?: string | null;
-  fingerprint?: string | null;
-  device_name?: string;
-  peers?: number;
-}
+// 类型/JSON 形状在 ClipTypes.ets（真源 crates/opi-ffi/src/cabi_clip/encode.rs）。
 
 interface RawEvent {
   type?: string;
@@ -73,13 +36,6 @@ interface RawEvent {
   message?: string;
 }
 
-interface ClipConfig {
-  data_dir: string;
-  tcp_port: number;
-  discovery_port: number;
-  device_name: string;
-}
-
 let started: boolean = false;
 let handle: number = 0;
 let pollTimer: number = -1;
@@ -89,6 +45,10 @@ let adapter: ClipboardAdapter | null = null;
 let activeCtx: common.Context | null = null;
 let prefLoaded: boolean = false;
 let prefEnabled: boolean = false;
+let transferLoaded: boolean = false;
+let transferPref: boolean = false;
+/** 传输事件接收器（TransferSync 注册；避免 ClipSync ↔ TransferSync 互相 import）。 */
+let eventSink: ((json: string) => void) | null = null;
 
 let peers: ClipPeer[] = [];
 let status: ClipStatus | null = null;
@@ -101,6 +61,10 @@ let readLimited: boolean = false;
 // ---------------------------------------------------------------- 只读投影
 
 export function isRunning(): boolean { return started && handle !== 0; }
+/** 传输出口复用同一个句柄；调用方必须留在主线程（Rust 按创建线程校验）。 */
+export function handleValue(): number { return handle; }
+/** TransferSync 注册传输事件接收器；空串 = 内核已停（标记未完成传输中断）。 */
+export function setEventSink(sink: ((json: string) => void) | null): void { eventSink = sink; }
 export function peerList(): ClipPeer[] { return peers; }
 export function currentStatus(): ClipStatus | null { return status; }
 export function prompt(): ClipPairingPrompt | null { return pairingPrompt; }
@@ -122,22 +86,44 @@ export function sharingEnabled(): boolean {
   return prefEnabled;
 }
 
-/** 设置页开关：立即落盘；会话进行中则立即起停。 */
+/** 跨设备传输开关：默认关闭；与剪贴板开关共用同一个 opi-clip 实例（端口 45888 只能一个）。 */
+export function transferEnabled(): boolean {
+  if (!transferLoaded) {
+    transferPref = SettingsStore.load().transferEnabled;
+    transferLoaded = true;
+  }
+  return transferPref;
+}
+
+export function setTransferEnabled(on: boolean): void {
+  transferPref = on;
+  transferLoaded = true;
+  SettingsStore.saveBool(SettingsStore.BOOL_TRANSFER, on);
+  if (!on && !sharingEnabled()) {
+    stopNow();
+  } else if (on && activeCtx !== null) {
+    start(activeCtx);
+  }
+}
+
+/** 设置页剪贴板开关：立即落盘；传输还开着就别停内核。 */
 export function setEnabled(on: boolean): void {
   prefEnabled = on;
   prefLoaded = true;
   SettingsStore.saveBool(SettingsStore.BOOL_CLIP, on);
   if (!on) {
-    stopNow();
+    if (!transferEnabled()) {
+      stopNow();
+    }
   } else if (activeCtx !== null) {
     start(activeCtx);
   }
 }
 
-/** InputMethodService inputStart：记住上下文，开关打开才启动。 */
+/** InputMethodService inputStart：记住上下文，任一功能打开就启动。 */
 export function onInputStart(ctx: common.Context | null): void {
   activeCtx = ctx;
-  if (ctx !== null && sharingEnabled()) {
+  if (ctx !== null && (sharingEnabled() || transferEnabled())) {
     start(ctx);
   }
 }
@@ -177,7 +163,10 @@ export function start(ctx: common.Context): void {
   idlePolls = 0;
   const createdAdapter: ClipboardAdapter = new ClipboardAdapter(
     (text: string): void => {
-      publishText(text);
+      // 自动剪贴板只属于「跨设备剪贴板」开关；只开传输时不得把本机复制内容广播出去。
+      if (sharingEnabled()) {
+        publishText(text);
+      }
     },
     (): void => {
       readLimited = true;
@@ -190,6 +179,17 @@ export function start(ctx: common.Context): void {
   }, POLL_MS);
   refreshStatus();
   refreshPeers();
+}
+
+/** picker/文件管理器可能让输入会话暂时结束；回到面板时内核若已停，用原上下文重启。 */
+export function ensureStarted(): boolean {
+  if (handle !== 0) {
+    return true;
+  }
+  if (activeCtx !== null && (sharingEnabled() || transferEnabled())) {
+    start(activeCtx);
+  }
+  return handle !== 0;
 }
 
 /** 输入会话结束：延迟到当前回调之后停止（Rust stop 会 join 后台线程，最多约 3 秒）。 */
@@ -282,6 +282,12 @@ export function publishCurrentClipboard(): void {
   publishText(text);
 }
 
+/** 传输面板的「剪贴板」入口：返回一句面板反馈（不记录内容）。 */
+export function publishClipboardNow(): string {
+  publishCurrentClipboard();
+  return lastError.length > 0 ? lastError : '已发送剪贴板文本（仅已配对设备）';
+}
+
 /** PasteButton 返回授权失败：不重试、不弹窗，只在设置页给提示。 */
 export function markReadDenied(): void {
   readLimited = true;
@@ -321,6 +327,9 @@ function pollOnce(): void {
 }
 
 function handleEvent(json: string): void {
+  if (eventSink !== null) {
+    eventSink(json);
+  }
   let event: RawEvent;
   try {
     event = JSON.parse(json) as RawEvent;
@@ -386,20 +395,10 @@ function refreshPeers(): void {
   if (json.length === 0) {
     return;
   }
-  let raw: RawPeer[];
-  try {
-    raw = JSON.parse(json) as RawPeer[];
-  } catch (e) {
-    return;
+  const parsed: ClipPeer[] | null = parsePeerJson(json);
+  if (parsed !== null) {
+    peers = parsed;
   }
-  const out: ClipPeer[] = [];
-  for (let i = 0; i < raw.length; i++) {
-    const peer: ClipPeer | null = peerOf(raw[i]);
-    if (peer !== null) {
-      out.push(peer);
-    }
-  }
-  peers = out;
 }
 
 function refreshStatus(): void {
@@ -411,35 +410,10 @@ function refreshStatus(): void {
   if (json.length === 0) {
     return;
   }
-  let raw: RawStatus;
-  try {
-    raw = JSON.parse(json) as RawStatus;
-  } catch (e) {
-    return;
+  const parsed: ClipStatus | null = parseStatusJson(json);
+  if (parsed !== null) {
+    status = parsed;
   }
-  const parsed: ClipStatus = {
-    running: raw.running === true,
-    instanceId: typeof raw.instance_id === 'string' ? raw.instance_id : '',
-    fingerprint: typeof raw.fingerprint === 'string' ? raw.fingerprint : '',
-    deviceName: typeof raw.device_name === 'string' ? raw.device_name : '',
-    peers: typeof raw.peers === 'number' ? raw.peers : 0,
-  };
-  status = parsed;
-}
-
-function peerOf(raw: RawPeer): ClipPeer | null {
-  if (typeof raw.instance_id !== 'string' || raw.instance_id.length === 0) {
-    return null;
-  }
-  const peer: ClipPeer = {
-    instanceId: raw.instance_id,
-    name: typeof raw.name === 'string' ? raw.name : '',
-    address: typeof raw.address === 'string' ? raw.address : '',
-    fingerprint: typeof raw.fingerprint === 'string' ? raw.fingerprint : '',
-    trusted: raw.trusted === true,
-    connected: raw.connected === true,
-  };
-  return peer;
 }
 
 function peerName(instanceId: string): string {
@@ -457,6 +431,10 @@ function stopNow(): void {
   if (stopTimer !== -1) {
     clearTimeout(stopTimer);
     stopTimer = -1;
+  }
+  // 先告诉传输层：内核要停了，未完成传输标记中断并清掉 staging。
+  if (eventSink !== null) {
+    eventSink('');
   }
   if (pollTimer !== -1) {
     clearInterval(pollTimer);
