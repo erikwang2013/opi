@@ -156,10 +156,18 @@ jobs:
       - name: 确保 sherpa 动态库缓存
         run: |
           set -euo pipefail
-          if ! find "$HOME/Library/Caches/sherpa-rs" -name 'libonnxruntime*.dylib' 2>/dev/null | grep -q .; then
-            echo 'sherpa 缓存缺库，清掉构建产物强制重下'
-            cargo clean -p sherpa-rs-sys
-          fi
+          sha=e3f3596b84c65eef8939a8a45ced3d7c4ed857455ba5ae1148ce7a1c93ff9a3c
+          tar=sherpa-onnx-v1.12.9-osx-universal2-shared.tar.bz2
+          for triple in aarch64-apple-darwin x86_64-apple-darwin; do
+            dir="$HOME/Library/Caches/sherpa-rs/$triple/$sha"
+            if [ ! -f "$dir/sherpa-onnx-v1.12.9-osx-universal2-shared/lib/libonnxruntime.1.17.1.dylib" ]; then
+              mkdir -p "$dir"
+              curl -fL --retry 3 -o "$dir/$tar" \
+                "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.12.9/$tar"
+              echo "$sha  $dir/$tar" | shasum -a 256 -c -
+              tar -xjf "$dir/$tar" -C "$dir"
+            fi
+          done
 
       - name: 编 Rust 通用库的两个切片（含 macOS 语音）
         run: |
