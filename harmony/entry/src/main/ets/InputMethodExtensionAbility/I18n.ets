@@ -132,7 +132,54 @@ GitHub 项目\tGitHub project
 检测更新\tCheck for updates
 无法直接打开浏览器，下载链接已复制：\tCannot open a browser directly; download link copied:
 请手动访问：\tPlease visit manually:
-网络不可用\tNetwork unavailable`;
+网络不可用\tNetwork unavailable
+语音输入\tVoice input
+启用语音输入\tEnable voice input
+本地识别，录音不上传；开启后键盘工具条出现麦克风\tOn-device recognition; recordings are not uploaded. A microphone appears in the keyboard toolbar when enabled.
+模型\tModel
+已就绪\tReady
+内置模型（首次使用时自动准备）\tBuilt-in model (prepared automatically on first use)
+正在准备内置模型…\tPreparing built-in model…
+正在下载模型\tDownloading model
+语音模型不可用\tVoice model unavailable
+未下载\tNot downloaded
+重试下载\tRetry download
+下载语音模型\tDownload voice model
+重试准备\tRetry preparation
+停止\tStop
+关闭\tClose
+停止录音\tStop recording
+正在听… 再次点麦克风结束\tListening… tap the microphone again to finish
+正在识别…\tTranscribing…
+正在准备本地语音模型…\tPreparing the on-device voice model…
+语音模型尚未下载，请到「设置 → 语音输入」下载\tVoice model is not downloaded yet. Download it in Settings → Voice input.
+内置语音模型准备失败，请重试或重新安装完整包\tFailed to prepare the built-in voice model. Retry or reinstall the full package.
+需要麦克风权限：请在系统设置中允许小欧输入法使用麦克风\tMicrophone permission required: allow opi to use the microphone in system settings.
+没有识别到语音，请重试\tNo speech detected. Please try again.
+识别超时，请重试\tRecognition timed out. Please try again.
+音频处理跟不上，请缩短录音\tAudio processing cannot keep up. Please record a shorter clip.
+语音事件解析失败\tFailed to parse a voice event
+语音识别出错\tVoice recognition error
+语音识别失败\tVoice recognition failed
+语音引擎初始化失败\tVoice engine initialisation failed
+语音引擎初始化失败：\tVoice engine initialisation failed:
+语音模型加载失败\tVoice model failed to load
+语音模型加载失败：\tVoice model failed to load:
+语音识别失败（\tVoice recognition failed (
+无法打开麦克风：\tCannot open the microphone:
+服务器返回 \tServer returned
+下载不完整（\tIncomplete download (
+模型校验失败（SHA-256 不符）\tModel verification failed (SHA-256 mismatch)
+下载后校验失败\tVerification after download failed
+下载失败\tDownload failed
+模型写入失败（存储空间不足？）\tFailed to write the model (out of storage?)
+语音模型下载失败：\tVoice model download failed:
+内置语音模型准备失败：\tFailed to prepare the built-in voice model:
+读取内置模型失败\tFailed to read the built-in model
+写入内置模型失败\tFailed to write the built-in model
+内置模型校验失败\tBuilt-in model verification failed
+内置模型大小不符\tBuilt-in model size mismatch
+清单写入不完整\tManifest write incomplete`;
 
 function parseTable(text: string): Map<string, string> {
   const map: Map<string, string> = new Map<string, string>();

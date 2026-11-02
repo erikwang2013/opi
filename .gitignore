@@ -31,9 +31,14 @@ harmony/entry/oh_modules/
 harmony/entry/build/
 harmony/entry/.cxx/
 harmony/entry/src/main/cpp/libs/
+# 语音引擎动态库（sherpa-onnx / ONNX Runtime / libc++）与 libopi_asr.so：
+# scripts/prepare_harmony_asr.sh 从预编译包/交叉编译产物复制，不入库。
+harmony/entry/libs/
 # HarmonyOS 随包词库：构建期由 scripts/prepare_harmony_dicts.sh 从
 # android/app/src/main/assets/ 复制到 rawfile，**复制品不入库**（大文件、可再生）。
 harmony/entry/src/main/resources/rawfile/*.opid
+# full 档随包语音模型（脚本下载 + 校验后复制），normal 档没有这个目录。
+harmony/entry/src/main/resources/rawfile/asr/
 harmony/local.properties
 harmony/.idea/
 

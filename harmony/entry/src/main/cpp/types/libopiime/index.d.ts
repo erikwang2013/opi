@@ -246,3 +246,36 @@ export const clipForgetPeer: (handle: number, peerId: string) => boolean;
 export const clipStatus: (handle: number) => string;
 /** lastError(): 最近一次失败原因；空串 = 没有错误。按线程记录。 */
 export const clipLastError: () => string;
+
+// ---- 本地语音识别（opi-asr，2026-11-02）----
+//
+// 语义/错误码真源 crates/opi-asr/src/ffi.rs（0 成功；-1 参数、-3 模型、-4 状态、
+// -5 队列满、-8 事件缓冲太小）。所有调用都在 ArkTS 主线程；load 走 NAPI 线程池。
+// 句柄是 Rust 指针的 number 形态（arm64 用户态指针 < 2^53），**不可跨进程/持久化**。
+
+/** create(configJson): 句柄；0 = 失败（原因读 asrLastError(0, out)）。只建状态机，不加载模型。 */
+export const asrCreate: (configJson: string) => number;
+/**
+ * loadModel(handle, done): 是否已排入线程池。done 在加载结束/失败时回调一次，
+ * 参数是 C ABI 错误码（0 = 成功）。同一句柄重复 load 前必须先等上一次回调。
+ */
+export const asrLoadModel: (handle: number, done: (code: number) => void) => boolean;
+/** start(handle): 开始一次录音会话（load 成功后）。 */
+export const asrStart: (handle: number) => number;
+/** feedPcm(handle, pcm): 送 16 kHz 单声道 PCM16；-5 = 队列满，调用方退避重试。 */
+export const asrFeedPcm: (handle: number, pcm: Uint8Array) => number;
+/** finish(handle): 停止收音并等待 final（事件仍通过 pollEvent 取）。 */
+export const asrFinish: (handle: number) => number;
+/** cancel(handle): 丢弃当前会话；幂等。会话结束/切换输入框时调用。 */
+export const asrCancel: (handle: number) => number;
+/**
+ * pollEvent(handle, out): 事件 JSON 字节数；0 = 暂无。out 至少 asrMaxEventBytes()，
+ * -8 = 缓冲太小（事件保留，下次再取）。
+ */
+export const asrPollEvent: (handle: number, out: Uint8Array) => number;
+/** lastError(handle, out): 错误文本字节数；handle 传 0 读 create 失败原因。 */
+export const asrLastError: (handle: number, out: Uint8Array) => number;
+/** 单条事件 JSON 的上限（当前 64 KiB）。 */
+export const asrMaxEventBytes: () => number;
+/** destroy(handle): 释放句柄；必须是该句柄最后一次调用，0 安全。 */
+export const asrDestroy: (handle: number) => void;

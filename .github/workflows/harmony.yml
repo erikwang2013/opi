@@ -23,6 +23,12 @@ on:
       - 'shared/**'
       - '.github/workflows/harmony.yml'
   workflow_dispatch:
+    inputs:
+      tier:
+        description: '语音模型档位：normal 按需下载，full 随包'
+        type: choice
+        options: [normal, full]
+        default: normal
 
 permissions:
   contents: read
@@ -34,10 +40,12 @@ concurrency:
 env:
   HARMONY_CLI_HOME: ${{ vars.HARMONY_CLI_HOME || '/home/component/command-line-tools' }}
   CARGO_TERM_COLOR: always
+  # push/PR 只跑 normal；full 由手动触发（下载并校验 240 MB 模型后再打包）。
+  VOICE_TIER: ${{ inputs.tier || 'normal' }}
 
 jobs:
   hap:
-    name: assembleHap (unsigned)
+    name: assembleHap (unsigned, ${{ inputs.tier || 'normal' }})
     runs-on: [self-hosted, linux, harmony]
     timeout-minutes: 60
     steps:
@@ -57,17 +65,21 @@ jobs:
       - name: Add HarmonyOS Rust target
         run: rustup target add aarch64-unknown-linux-ohos
 
-      - name: Build Rust engine (arm64-v8a)
-        run: |
-          set -euo pipefail
-          export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_OHOS_LINKER="$HARMONY_CLI_HOME/sdk/default/openharmony/native/llvm/bin/aarch64-unknown-linux-ohos-clang"
-          cargo build -p opi_ffi --release --target aarch64-unknown-linux-ohos
-          mkdir -p harmony/entry/src/main/cpp/libs/arm64-v8a
-          cp target/aarch64-unknown-linux-ohos/release/libopi_ffi.a harmony/entry/src/main/cpp/libs/arm64-v8a/libopi_ffi.a
-          ls -l harmony/entry/src/main/cpp/libs/arm64-v8a/libopi_ffi.a
-
       - name: Prepare dictionary rawfiles
         run: scripts/prepare_harmony_dicts.sh
+
+      - name: Build native ASR engine and models
+        run: |
+          set -euo pipefail
+          scripts/prepare_harmony_asr.sh "$VOICE_TIER"
+          test -s harmony/entry/libs/arm64-v8a/libopi_asr.so
+          test -s harmony/entry/libs/arm64-v8a/libsherpa-onnx-c-api.so
+          test -s harmony/entry/libs/arm64-v8a/libonnxruntime.so
+          case "$VOICE_TIER" in
+            normal) test ! -e harmony/entry/src/main/resources/rawfile/asr ;;
+            full) test -s harmony/entry/src/main/resources/rawfile/asr/manifest.json
+                  test -s harmony/entry/src/main/resources/rawfile/asr/sensevoice/model.int8.onnx ;;
+          esac
 
       - name: Build HAP
         run: |
@@ -80,14 +92,26 @@ jobs:
           ls -l "$HAP"
           unzip -l "$HAP"
           unzip -l "$HAP" | grep -q 'libs/arm64-v8a/libopiime.so' || { echo "HAP is missing libopiime.so"; exit 1; }
+          for lib in libopi_asr.so libsherpa-onnx-c-api.so libonnxruntime.so libc++_shared.so; do
+            unzip -l "$HAP" | grep -q "libs/arm64-v8a/$lib" || { echo "HAP is missing $lib"; exit 1; }
+          done
           for f in luna.opid stroke.opid wubi86.opid; do
             unzip -l "$HAP" | grep -q "resources/rawfile/$f" || { echo "HAP is missing rawfile/$f"; exit 1; }
           done
+          if [ "$VOICE_TIER" = "full" ]; then
+            for f in manifest.json sensevoice/model.int8.onnx sensevoice/tokens.txt vad/silero_vad.onnx; do
+              unzip -l "$HAP" | grep -q "resources/rawfile/asr/$f" || { echo "HAP is missing asr/$f"; exit 1; }
+            done
+          else
+            if unzip -l "$HAP" | grep -q 'resources/rawfile/asr/'; then
+              echo "normal HAP must not bundle ASR models"; exit 1
+            fi
+          fi
 
       - name: Upload unsigned HAP
         uses: actions/upload-artifact@v4
         with:
-          name: opi-harmony-unsigned
+          name: opi-harmony-unsigned-${{ inputs.tier || 'normal' }}
           path: harmony/entry/build/default/outputs/default/entry-default-unsigned.hap
           if-no-files-found: error
           retention-days: 14
