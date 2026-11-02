@@ -153,6 +153,14 @@ jobs:
         id: ver
         run: echo "v=$(bash scripts/apple/version.sh)" >> "$GITHUB_OUTPUT"
 
+      - name: 确保 sherpa 动态库缓存
+        run: |
+          set -euo pipefail
+          if ! find "$HOME/Library/Caches/sherpa-rs" -name 'libonnxruntime*.dylib' 2>/dev/null | grep -q .; then
+            echo 'sherpa 缓存缺库，清掉构建产物强制重下'
+            cargo clean -p sherpa-rs-sys
+          fi
+
       - name: 编 Rust 通用库的两个切片（含 macOS 语音）
         run: |
           set -euo pipefail
