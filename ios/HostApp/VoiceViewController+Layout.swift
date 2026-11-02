@@ -53,13 +53,7 @@ extension VoiceViewController {
         detailLabel.numberOfLines = 0
         detailLabel.font = .preferredFont(forTextStyle: .footnote)
         detailLabel.textColor = .secondaryLabel
-        progressView.isHidden = true
-        downloadButton.addTarget(self, action: #selector(downloadModels), for: .touchUpInside)
-        downloadButton.titleLabel?.font = .preferredFont(forTextStyle: .headline)
-        downloadButton.titleLabel?.numberOfLines = 0
-        downloadButton.titleLabel?.textAlignment = .center
-        downloadButton.setTitleColor(.systemBlue, for: .normal)
-        addCard(views: [statusLabel, detailLabel, progressView, downloadButton])
+        addCard(views: [statusLabel, detailLabel])
 
         micButton.setTitle("开始录音", for: .normal)
         micButton.titleLabel?.font = .preferredFont(forTextStyle: .headline)
