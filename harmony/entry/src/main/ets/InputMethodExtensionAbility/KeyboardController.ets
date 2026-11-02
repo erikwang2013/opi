@@ -22,6 +22,7 @@ import * as BackspaceRepeat from './BackspaceRepeat';
 import * as AssociationGuard from './AssociationGuard';
 import { bracketPairing } from './BracketPairing';
 import * as ClipSync from './ClipSync';
+import * as AsrVoice from './AsrVoice';
 
 export class KeyboardController {
   private static instance: KeyboardController = new KeyboardController();
@@ -29,7 +30,6 @@ export class KeyboardController {
   static getInstance(): KeyboardController {
     return KeyboardController.instance;
   }
-
   private ctx: InputMethodExtensionContext | null = null;
   private panel: inputMethodEngine.Panel | null = null;
   private client: inputMethodEngine.InputClient | null = null;
@@ -49,7 +49,7 @@ export class KeyboardController {
       this.kbController = kbController;
       this.client = inputClient;
       bracketPairing.reset();
-      ClipSync.onInputStart(this.ctx);
+      ClipSync.onInputStart(this.ctx); AsrVoice.onInputStart();
       // 无会话期间可能转过屏/折叠过：新会话先重读尺寸再 resize。
       this.metrics = ScreenLayout.currentMetrics();
       this.ensureDictionary();
@@ -65,9 +65,8 @@ export class KeyboardController {
     this.metrics = ScreenLayout.currentMetrics();
     this.applyPanelWindow();
   };
-
   private onInputStopCallback: () => void = (): void => {
-    ClipSync.onInputStop();
+    ClipSync.onInputStop(); AsrVoice.onInputStop();
     UserWordStore.flush(); // 会话结束：防抖中的用户词立即落盘（进程可能随后被回收）
     // InputClient 随会话失效，必须丢引用；引擎侧缓冲要清，长按连删计时器也要停。
     BackspaceRepeat.stop();
@@ -97,6 +96,7 @@ export class KeyboardController {
     KeyboardModes.restore(saved);
     InputModes.restore(saved.inputModeIndex, saved.lastChineseIndex);
     this.pendingLearner = saved.learn;
+    AsrVoice.init(ctx, (text: string): void => { this.commitText(text); }, saved.voiceEnabled);
 
     const ability = inputMethodEngine.getInputMethodAbility();
 
@@ -123,7 +123,7 @@ export class KeyboardController {
   }
 
   release(): void {
-    ClipSync.shutdown();
+    ClipSync.shutdown(); AsrVoice.shutdown();
     const ability = inputMethodEngine.getInputMethodAbility();
     ability.off('inputStart', this.onInputStartCallback);
     ability.off('inputStop', this.onInputStopCallback);

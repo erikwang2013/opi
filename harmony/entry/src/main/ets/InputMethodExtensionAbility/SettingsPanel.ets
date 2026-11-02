@@ -8,6 +8,7 @@
 // 皮肤 / 关于仍是独立面板：从本页进去时返回箭头回本页（KeyboardModes.openSubPanel），
 // 从工具条直接进则返回键面。
 
+import { AsrSection } from './AsrSection';
 import { ClipSection } from './ClipSection';
 import { LanguageRow, ensureLanguage, t } from './I18n';
 import { KeyboardController } from './KeyboardController';
@@ -172,6 +173,9 @@ export struct SettingsPanel {
             }
             .width('100%').padding({ left: 14, right: 14, top: 2, bottom: 8 })
           }
+
+          this.Section(t('语音输入'))
+          AsrSection()
 
           this.Section(t('跨设备剪贴板'))
           ClipSection()

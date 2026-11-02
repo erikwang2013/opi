@@ -25,6 +25,8 @@ project(opiime)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
+# CMake 默认把所链 .so 的构建机绝对路径写进 RUNPATH；HAP 里只需要下面显式的 $ORIGIN。
+set(CMAKE_SKIP_BUILD_RPATH TRUE)
 
 # Rust 引擎：静态库，由 scripts/ 里的命令产出后放到 cpp/libs/${OHOS_ARCH}/
 # 见 harmony/README.md「构建集成」。三套 ABI 目录名对应关系：
@@ -32,8 +34,12 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 #   armeabi-v7a ← armv7-unknown-linux-ohos
 #   x86_64      ← x86_64-unknown-linux-ohos
 set(OPI_RUST_LIB "${CMAKE_CURRENT_SOURCE_DIR}/libs/${OHOS_ARCH}/libopi_ffi.a")
+# opi-asr 的 cdylib 与 sherpa/onnxruntime/libc++ 放 entry/libs/${abi}/，
+# hvigor 会把该目录自动打进 HAP（scripts/prepare_harmony_asr.sh 负责产出）。
+set(OPI_ASR_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../libs/${OHOS_ARCH}")
+set(OPI_ASR_LIB "${OPI_ASR_LIB_DIR}/libopi_asr.so")
 
-add_library(opiime SHARED napi_bridge.c)
+add_library(opiime SHARED napi_bridge.c napi_asr.c)
 
 if(NOT EXISTS "${OPI_RUST_LIB}")
     # 显式报错。少了这一步的表现是「链接期一堆 undefined reference to opi_*」，
@@ -44,8 +50,21 @@ if(NOT EXISTS "${OPI_RUST_LIB}")
         "把 libopi_ffi.a 拷到 cpp/libs/${OHOS_ARCH}/。")
 endif()
 
+if(NOT EXISTS "${OPI_ASR_LIB}")
+    message(FATAL_ERROR
+        "找不到语音引擎: ${OPI_ASR_LIB}\n"
+        "先跑 scripts/prepare_harmony_asr.sh（会交叉编译 opi-asr 并暂存 sherpa 库）。")
+endif()
+
 target_link_libraries(opiime PUBLIC
     "${OPI_RUST_LIB}"       # Rust 引擎（28 个 C 导出，本桥用到 16 个）
+    # ASR 依赖链显式进主库 NEEDED（--no-as-needed 防止链接器按未引用丢掉）：
+    # sherpa/onnxruntime 各自带 $ORIGIN RUNPATH，加载器和打包都以本目录为准。
+    "-Wl,--no-as-needed"
+    "${OPI_ASR_LIB}"
+    "${OPI_ASR_LIB_DIR}/libsherpa-onnx-c-api.so"
+    "${OPI_ASR_LIB_DIR}/libonnxruntime.so"
+    "${OPI_ASR_LIB_DIR}/libc++_shared.so"
     libace_napi.z.so        # N-API：napi_module_register / napi_create_string_utf16 ...
     libhilog_ndk.z.so       # 日志（OH_LOG_*）；本桥暂未用，留着以便加调试输出
 )
@@ -56,6 +75,8 @@ target_link_libraries(opiime PUBLIC
 target_link_options(opiime PRIVATE
     "-Wl,--gc-sections"
     "-Wl,--allow-multiple-definition"
+    # libopiime.so 与 ASR 依赖同目录：运行时按 $ORIGIN 解析。
+    "-Wl,-rpath,\$ORIGIN"
 )
 
 # Rust 静态库 release 带 debug_info，未 strip 时约 9 MB（本机实测）。

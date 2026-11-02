@@ -17,6 +17,7 @@
 
 #include "napi/native_api.h"
 
+#include "napi_asr.h"
 #include "opi_ffi.h"
 
 // ============================================================================
@@ -95,7 +96,7 @@ static napi_value ret_undefined(napi_env env) {
 // ⚠️ 每一条都必须在 cpp/types/libopiime/index.d.ts 里有**同名**声明 ——
 // 少一条 = 运行期 `xxx is not a function`，多一条 = 真机打到那条路径才炸。
 // 核对用下面这条（两边名字集合相等才输出空；只扫 desc[]，避开注释里的 JSON 示例）：
-//   diff <(sed -n '/napi_property_descriptor desc\[\]/,/^    };/p' cpp/napi_bridge.c \
+//   diff <(sed -n '/napi_property_descriptor desc\[\]/,/^    };/p' cpp/napi_bridge.c cpp/napi_asr.c \
 //          | grep -o '{"[a-zA-Z]*"' | tr -d '{"' | sort) \
 //        <(grep -o '^export const [a-zA-Z]*' cpp/types/libopiime/index.d.ts | awk '{print $3}' | sort)
 // 两边**都不写条数**：它随出口增删而漂（同源教训见 opi_ffi.h 顶部）。
@@ -478,6 +479,7 @@ static napi_value OpiImeInit(napi_env env, napi_value exports) {
         {"clipLastError", NULL, JsClipLastError, NULL, NULL, NULL, napi_default, NULL},
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
+    opi_asr_napi_init(env, exports);
     return exports;
 }
 
