@@ -45,8 +45,13 @@ private const val UPDATE_TIMEOUT_MS = 4000
  */
 internal data class UpdatePackage(val url: String, val sha256: String?, val size: Long?)
 
-/** 一个平台下的全量/热更新包（任一可为 null = 该类型暂未发布）。 */
-internal data class PlatformPackages(val full: UpdatePackage?, val hot: UpdatePackage?)
+/** 一个平台下的完整/普通/基础/热更新包（任一可为 null = 该类型暂未发布）。 */
+internal data class PlatformPackages(
+    val full: UpdatePackage?,
+    val normal: UpdatePackage? = null,
+    val basic: UpdatePackage? = null,
+    val hot: UpdatePackage? = null,
+)
 
 /** 版本端点解析结果（`download` 缺省 = 用 [UPDATE_DOWNLOAD_URL]）。 */
 internal data class VersionPoint(
@@ -68,6 +73,8 @@ internal sealed interface UpdateCheck {
         val latest: String,
         val download: String,
         val full: UpdatePackage? = null,
+        val normal: UpdatePackage? = null,
+        val basic: UpdatePackage? = null,
         val hot: UpdatePackage? = null,
     ) : UpdateCheck
 
@@ -121,7 +128,9 @@ internal fun pickPackages(
     packages: Map<String, PlatformPackages>,
     keys: List<String>,
 ): PlatformPackages? = keys.firstNotNullOfOrNull { key ->
-    packages[key]?.takeIf { it.full != null || it.hot != null }
+    packages[key]?.takeIf {
+        it.full != null || it.normal != null || it.basic != null || it.hot != null
+    }
 }
 
 /** 版本号只认数字与点（`1.20.2`，可带一个 `v`）。 */
@@ -140,9 +149,10 @@ internal fun parseVersionPoint(text: String): VersionPoint? {
         ?.takeIf { it.startsWith("https://") }
     val packages = (obj["packages"] as? JVal.JObj)?.v?.mapNotNull { (key, value) ->
         val platform = value as? JVal.JObj ?: return@mapNotNull null
-        val tier = platform.v[OPI_PACKAGE_TIER] ?: platform.v["full"]
         key to PlatformPackages(
-            full = tier.asUpdatePackage(),
+            full = platform.v["full"].asUpdatePackage(),
+            normal = platform.v["normal"].asUpdatePackage(),
+            basic = platform.v["basic"].asUpdatePackage(),
             hot = platform.v["hot"].asUpdatePackage(),
         )
     }?.toMap() ?: emptyMap()
@@ -196,6 +206,8 @@ internal fun checkForUpdate(
                 latest = point.version,
                 download = point.download ?: UPDATE_DOWNLOAD_URL,
                 full = pkg?.full,
+                normal = pkg?.normal,
+                basic = pkg?.basic,
                 hot = pkg?.hot,
             )
         } else {

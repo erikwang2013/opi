@@ -45,9 +45,11 @@ import kotlin.coroutines.coroutineContext
  */
 internal val SharedUpdateDownloader: UpdateDownloader by lazy { UpdateDownloader() }
 
-/** 两种包型；[id] 用于文件名/状态，[label] 用于界面。 */
+/** 四种包型；[id] 用于文件名/状态，[label] 用于界面。 */
 internal enum class UpdatePackageKind(val id: String, val label: String) {
-    FULL("full", "全量安装包"),
+    FULL("full", "完整包"),
+    NORMAL("normal", "普通包"),
+    BASIC("basic", "基础包"),
     HOT("hot", "热更新包"),
 }
 
@@ -97,7 +99,7 @@ internal fun downloadFileName(url: String, version: String, kind: UpdatePackageK
     val raw = runCatching { URI(url).path.substringAfterLast('/') }.getOrNull().orEmpty()
     // 没有文件名（比如 .../download/）时版本号里的点不能被当成扩展名，按包型给扩展名。
     if (raw.isBlank()) {
-        return "opi-$version-${kind.id}." + if (kind == UpdatePackageKind.FULL) "bin" else "zip"
+        return "opi-$version-${kind.id}." + if (kind == UpdatePackageKind.HOT) "zip" else "bin"
     }
     val safe = raw.replace(Regex("[^A-Za-z0-9._-]"), "_").take(160)
     val dot = safe.lastIndexOf('.')

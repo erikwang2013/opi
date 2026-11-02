@@ -63,7 +63,7 @@ class VersionCheckTest {
     }
 
     @Test
-    fun releaseJsonSelectsInstalledTier() {
+    fun releaseJsonExposesAllThreeTiers() {
         val text = """{
           "version":"1.31.0",
           "packages":{"android":{
@@ -72,9 +72,10 @@ class VersionCheckTest {
             "basic":{"url":"https://opi.erik.xyz/download/basic.apk"}
           }}
         }"""
-        assertEquals("https://opi.erik.xyz/download/normal.apk", parseReleaseJson(text, tier = "normal")?.full?.url)
-        assertEquals("https://opi.erik.xyz/download/basic.apk", parseReleaseJson(text, tier = "basic")?.full?.url)
-        assertEquals("https://opi.erik.xyz/download/full.apk", parseReleaseJson(text, tier = "missing")?.full?.url)
+        val r = parseReleaseJson(text)
+        assertEquals("https://opi.erik.xyz/download/full.apk", r?.full?.url)
+        assertEquals("https://opi.erik.xyz/download/normal.apk", r?.normal?.url)
+        assertEquals("https://opi.erik.xyz/download/basic.apk", r?.basic?.url)
     }
 
     @Test

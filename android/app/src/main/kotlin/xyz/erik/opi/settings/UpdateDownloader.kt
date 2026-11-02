@@ -35,7 +35,9 @@ import java.io.File
 import java.security.MessageDigest
 
 internal enum class UpdatePackageKind(val id: String, val label: String) {
-    FULL("full", "全量安装包"),
+    FULL("full", "完整包"),
+    NORMAL("normal", "普通包"),
+    BASIC("basic", "基础包"),
     HOT("hot", "热更新包"),
 }
 
@@ -81,7 +83,7 @@ internal fun downloadFileName(url: String, version: String, kind: UpdatePackageK
     // 用 java.net.URI 而不是 android.net.Uri：JVM 单测里的 android.jar 是空壳，Uri 会抛。
     val raw = runCatching { java.net.URI(url).path.substringAfterLast('/') }.getOrNull().orEmpty()
     if (raw.isBlank()) {
-        return "opi-$version-${kind.id}." + if (kind == UpdatePackageKind.FULL) "apk" else "zip"
+        return "opi-$version-${kind.id}." + if (kind == UpdatePackageKind.HOT) "zip" else "apk"
     }
     val safe = raw.replace(Regex("[^A-Za-z0-9._-]"), "_").take(160)
     val dot = safe.lastIndexOf('.')

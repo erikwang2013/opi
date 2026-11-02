@@ -42,8 +42,10 @@ internal fun UpdateDownloadControls(
     LaunchedEffect(Unit) { UpdateDownloader.resume(context) }
     val busy = state is DownloadState.Running || state is DownloadState.Verifying
     val full = update.full
+    val normal = update.normal
+    val basic = update.basic
     val hot = update.hot
-    if (full == null && hot == null) {
+    if (full == null && normal == null && basic == null && hot == null) {
         Text(
             "前往下载页",
             fontSize = 12.sp,
@@ -115,6 +117,8 @@ internal fun UpdateDownloadControls(
                 Text("下载失败（${s.kind.label}）：${s.reason}", fontSize = 12.sp, color = dim)
                 val pkg = when (s.kind) {
                     UpdatePackageKind.FULL -> full
+                    UpdatePackageKind.NORMAL -> normal
+                    UpdatePackageKind.BASIC -> basic
                     UpdatePackageKind.HOT -> hot
                 }
                 if (pkg != null) {
