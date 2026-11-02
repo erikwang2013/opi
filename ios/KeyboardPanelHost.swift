@@ -40,6 +40,10 @@ extension KeyboardLayout {
         toolbar.onOpenVoice = { [weak self] in
             (self?.delegate as? KeyboardViewController)?.openVoiceFromKeyboard()
         }
+        // 传输页在宿主 App；扩展只负责打开 URL（见 TransferKeyboard.swift）。
+        toolbar.onOpenTransfer = { [weak self] in
+            (self?.delegate as? KeyboardViewController)?.openTransferFromKeyboard()
+        }
     }
 
     private func tap(_ fn: KeyboardFunctionKey) {

@@ -14,6 +14,7 @@
 import { InputMethodExtensionAbility } from '@kit.IMEKit';
 import { Want } from '@kit.AbilityKit';
 import { KeyboardController } from './KeyboardController';
+import * as TransferSync from './TransferSync';
 
 export default class InputMethodService extends InputMethodExtensionAbility {
   /**
@@ -23,6 +24,7 @@ export default class InputMethodService extends InputMethodExtensionAbility {
    * 所以里面必须幂等 —— KeyboardController.init() 自身有 started 挡重入。
    */
   onCreate(want: Want): void {
+    TransferSync.init(this.context);
     KeyboardController.getInstance().init(this.context);
   }
 
@@ -33,5 +35,6 @@ export default class InputMethodService extends InputMethodExtensionAbility {
    */
   onDestroy(): void {
     KeyboardController.getInstance().release();
+    TransferSync.shutdown();
   }
 }

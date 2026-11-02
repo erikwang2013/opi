@@ -44,13 +44,18 @@ final class OpiClipService {
     /// 状态变化（主线程）。设置页用它就地重画；菜单每次打开现读快照。
     var onChange: (() -> Void)?
 
-    private let runner = OpiClipRunner()
-    private let lock = NSLock()
+    let runner = OpiClipRunner()
+    let lock = NSLock()
     private var enabled = false
+    private var transferEnabled = false
     private var peersCache: [OpiClipPeer] = []
     private var pendingCache: [OpiClipPending] = []
+    /// 进行中/已完成的传输（README：UI 只读这份快照，不碰 FFI 句柄）。
+    var transferCache: [OpiTransfer] = []
+    /// 传输期间要保持打开的安全作用域 URL（iOS 宿主；macOS 通常为空）。
+    var transferAccessCache: [String: [URL]] = [:]
     private var running = false
-    private var errorText = ""
+    var errorText = ""
     private var sourceName: String?
     private var pasteboardTimer: Timer?
     private var lastChangeCount = NSPasteboard.general.changeCount
@@ -64,8 +69,10 @@ final class OpiClipService {
     // MARK: - 快照（主线程读）
 
     var isEnabled: Bool { enabled }
+    var isTransferEnabled: Bool { transferEnabled }
     var isRunning: Bool { withLock { running } }
     var peers: [OpiClipPeer] { withLock { peersCache } }
+    var transfers: [OpiTransfer] { withLock { transferCache } }
     var pendingPairings: [OpiClipPending] { withLock { pendingCache } }
     var lastErrorText: String { withLock { errorText } }
     var lastSourceText: String? { withLock { sourceName } }
@@ -74,11 +81,14 @@ final class OpiClipService {
     // MARK: - 生命周期
 
     /// main.swift 启动时调用：只按落盘开关决定是否启动，不碰剪贴板内容。
+    /// 剪贴板与传输共用同一个内核；任一开关打开就启动节点。
     func applyPersisted() {
-        enabled = false
-        if OpiSettingsStore.bool("ClipEnabled", default: false) {
-            setEnabled(true)
-        }
+        enabled = OpiSettingsStore.bool("ClipEnabled", default: false)
+        transferEnabled = OpiSettingsStore.bool("TransferEnabled", default: false)
+        guard enabled || transferEnabled else { return }
+        lastChangeCount = NSPasteboard.general.changeCount
+        runner.start(configJSON: Self.configJSON(deviceName: Self.localDeviceName()))
+        if enabled { startPasteboardWatch() }
     }
 
     func setEnabled(_ on: Bool) {
@@ -91,23 +101,50 @@ final class OpiClipService {
             runner.start(configJSON: Self.configJSON(deviceName: Self.localDeviceName()))
             startPasteboardWatch()
         } else {
-            runner.stop()
             pasteboardTimer?.invalidate()
             pasteboardTimer = nil
-            withLock {
-                peersCache = []
-                pendingCache = []
-                running = false
-                errorText = ""
-                sourceName = nil
-            }
+            withLock { sourceName = nil }
+            stopIfIdle()
         }
         onChange?()
     }
 
-    /// 「一键停止」= 关开关并释放端口；信任表保留（核心负责落盘）。
+    /// 传输开关与剪贴板开关共用内核：只开传输时不轮询剪贴板（自动剪贴板仍归剪贴板开关）。
+    func setTransferEnabled(_ on: Bool) {
+        guard on != transferEnabled else { return }
+        transferEnabled = on
+        OpiSettingsStore.set("TransferEnabled", on)
+        if on {
+            runner.start(configJSON: Self.configJSON(deviceName: Self.localDeviceName()))
+        } else {
+            stopIfIdle()
+        }
+        onChange?()
+    }
+
+    private func stopIfIdle() {
+        guard !enabled, !transferEnabled else { return }
+        runner.stop()
+        withLock {
+            peersCache = []
+            pendingCache = []
+            transferCache = []
+            running = false
+            errorText = ""
+            sourceName = nil
+        }
+    }
+
+    /// 「一键停止」= 关两个开关并释放端口；信任表保留（核心负责落盘）。
     func stopAll() {
-        setEnabled(false)
+        enabled = false
+        transferEnabled = false
+        OpiSettingsStore.set("ClipEnabled", false)
+        OpiSettingsStore.set("TransferEnabled", false)
+        pasteboardTimer?.invalidate()
+        pasteboardTimer = nil
+        stopIfIdle()
+        onChange?()
     }
 
     func pair(_ peerId: String) {
@@ -211,6 +248,9 @@ final class OpiClipService {
         case "send_failed":
             withLock { errorText = "发送失败：对端离线或会话已断开" }
             notifyMain()
+        case "transfer_offer", "transfer_progress", "transfer_completed",
+             "transfer_failed", "transfer_canceled":
+            handleTransferEvent(type: type, event: event)
         case "error":
             withLock { errorText = event["message"] as? String ?? "剪贴板内核报错" }
             notifyMain()
@@ -261,20 +301,20 @@ final class OpiClipService {
         if changed { notifyMain() }
     }
 
-    private func notifyMain() {
+    func notifyMain() {
         DispatchQueue.main.async { [weak self] in self?.onChange?() }
     }
 
     // MARK: - 工具
 
-    private func peerName(_ id: String) -> String {
+    func peerName(_ id: String) -> String {
         withLock {
             let name = peersCache.first { $0.id == id }?.name ?? ""
             return name.isEmpty ? String(id.prefix(8)) : name
         }
     }
 
-    private func withLock<T>(_ body: () -> T) -> T {
+    func withLock<T>(_ body: () -> T) -> T {
         lock.lock()
         defer { lock.unlock() }
         return body()

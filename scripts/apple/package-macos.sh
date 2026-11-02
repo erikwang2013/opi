@@ -136,9 +136,12 @@ while [ "$idx" -lt "${#asr_fw_libs[@]}" ]; do
     case " ${asr_fw_libs[*]} " in *" $libdir/$name "*) continue ;; esac
     # sherpa-rs 把共享库放在 target/<triple>/release；按实际依赖名找，不写死版本号。
     src=""
-    for d in target/aarch64-apple-darwin/release target/x86_64-apple-darwin/release; do
+    for d in target/aarch64-apple-darwin/release target/x86_64-apple-darwin/release \
+             target/aarch64-apple-darwin/release/deps target/x86_64-apple-darwin/release/deps; do
       [ -f "$d/$name" ] && { src="$d/$name"; break; }
     done
+    # sherpa-rs 把 osx-universal2 共享包放在下载缓存里，不一定复制进 target。
+    [ -n "$src" ] || src="$(find "$HOME/Library/Caches/sherpa-rs" -type f -name "$name" 2>/dev/null | head -1)"
     [ -n "$src" ] || {
       echo "!! libopi_asr 的依赖 $dep 找不到对应动态库（先编 -p opi-asr）" >&2
       exit 1

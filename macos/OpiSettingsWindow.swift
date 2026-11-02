@@ -21,7 +21,8 @@ import UniformTypeIdentifiers
 
 final class OpiSettingsWindow: NSObject {
     enum Page: Int, CaseIterable {
-        case common, keys, appearance, statusbar, symbols, dicts, wubi, clip, advanced, about
+        case common, keys, appearance, statusbar, symbols, dicts, wubi, clip, transfer,
+             advanced, about
 
         var title: String {
             switch self {
@@ -33,6 +34,7 @@ final class OpiSettingsWindow: NSObject {
             case .dicts: return OpiText.t("词库")
             case .wubi: return OpiText.t("五笔")
             case .clip: return OpiText.t("剪贴板")
+            case .transfer: return OpiText.t("传输")
             case .advanced: return OpiText.t("高级")
             case .about: return OpiText.t("关于")
             }
@@ -59,6 +61,8 @@ final class OpiSettingsWindow: NSObject {
     // 「关于」页的更新检测控件（异步结果回来时就地改字，不重建整页）。
     var aboutUpdateLabel: NSTextField?
     var aboutDownloadButton: NSButton?
+    // 「传输」页的目标设备下拉（动作按当前选择取 peer id）。
+    var transferTargetPopup: NSPopUpButton?
 
     var contentWidth: CGFloat { Self.width - Self.navW - 28 }
 
@@ -158,6 +162,7 @@ final class OpiSettingsWindow: NSObject {
         case .dicts: buildDicts()
         case .wubi: buildWubi()
         case .clip: buildClipboard()
+        case .transfer: buildTransfer()
         case .advanced: buildAdvanced()
         case .about: buildAbout()
         }

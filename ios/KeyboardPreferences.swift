@@ -37,6 +37,7 @@ enum KeyboardPreferences {
     private static let wubiReturnKey = "opi.setting.wubiReturn"
     private static let wubiAutoCommitKey = "opi.setting.wubiAutoCommit"
     private static let clipKey = "opi.clip.enabled"
+    private static let transferKey = "opi.transfer.enabled"
     private static let uiLanguageKey = "opi.ui.language"
 
     /// `UserDefaults.bool` 对缺失键返回 false；缺省为 true 的项必须区分
@@ -126,6 +127,13 @@ enum KeyboardPreferences {
     static var clipEnabled: Bool {
         get { defaults.bool(forKey: clipKey) }
         set { defaults.set(newValue, forKey: clipKey) }
+    }
+
+    /// 工具条是否显示跨设备传输入口（缺省关）。传输本身在宿主 App 里做，
+    /// 键盘扩展不能后台发现/传输（见 `TransferKeyboard.swift`）。
+    static var transferEnabled: Bool {
+        get { defaults.bool(forKey: transferKey) }
+        set { defaults.set(newValue, forKey: transferKey) }
     }
 
     /// 设置/关于页的界面语言："zh"（缺省）或 "en"；重启后生效（见 `OpiLanguage.swift`）。

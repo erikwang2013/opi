@@ -284,6 +284,7 @@ struct OpiBarSettings {
     var enpro = true
     var logo = true
     var fullwidth = true
+    var transfer = true
     var settings = true
     var scale = OpiBarMetrics.defaultScale
 
@@ -299,6 +300,7 @@ struct OpiBarSettings {
         s.enpro = bool(defaults, "StatusBarEnPro", true)
         s.logo = bool(defaults, "StatusBarLogo", true)
         s.fullwidth = bool(defaults, "StatusBarFullwidth", true)
+        s.transfer = bool(defaults, "StatusBarTransfer", true)
         s.settings = bool(defaults, "StatusBarSettings", true)
         s.scale = OpiBarMetrics.clamp(defaults.object(forKey: "StatusBarScale") as? Int
                                       ?? OpiBarMetrics.defaultScale)
@@ -316,6 +318,7 @@ struct OpiBarSettings {
         defaults.set(enpro, forKey: "StatusBarEnPro")
         defaults.set(logo, forKey: "StatusBarLogo")
         defaults.set(fullwidth, forKey: "StatusBarFullwidth")
+        defaults.set(transfer, forKey: "StatusBarTransfer")
         defaults.set(settings, forKey: "StatusBarSettings")
         defaults.set(scale, forKey: "StatusBarScale")
     }

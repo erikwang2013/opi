@@ -24,6 +24,8 @@ export enum PanelView {
   SymbolPage = 5,
   Rare = 6,
   Settings = 7,
+  /** 跨设备传输（工具条图标仅在该开关打开时出现）。 */
+  Transfer = 8,
 }
 
 export const ONE_HAND_OFF: number = 0;

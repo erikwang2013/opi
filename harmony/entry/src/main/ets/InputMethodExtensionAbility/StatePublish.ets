@@ -10,12 +10,14 @@
 import * as InputModes from './InputModes';
 import * as KeyboardModes from './KeyboardModes';
 import * as OpiEngine from './OpiEngine';
+import * as TransferSync from './TransferSync';
 import { OpiMode } from './OpiEngine';
 import {
   KEY_ALL_CANDIDATES, KEY_ASSOCIATION, KEY_ASSOCIATION_ON, KEY_BUFFER, KEY_CANDIDATES, KEY_DARK,
   KEY_DISPLAY_BUFFER,
   KEY_ELDER, KEY_FLOAT, KEY_GAME, KEY_LEARNER, KEY_MODE, KEY_MODE_INDEX, KEY_ONE_HAND,
-  KEY_PRO, KEY_READINGS, KEY_SCENE, KEY_SHIFT, KEY_SHOW_OWN, KEY_SKIN, KEY_TILED, KEY_VIEW
+  KEY_PRO, KEY_READINGS, KEY_SCENE, KEY_SHIFT, KEY_SHOW_OWN, KEY_SKIN, KEY_TILED, KEY_TRANSFER,
+  KEY_VIEW
 } from './KeyboardAppStorage';
 
 /** 平铺视图取全量的条数（同 Android EngineController.fetchLimit）。 */
@@ -123,6 +125,7 @@ export function publishState(): void {
   putNumber(KEY_GAME, KeyboardModes.gameEnabled() ? 1 : 0);
   putNumber(KEY_PRO, KeyboardModes.englishProEnabled() ? 1 : 0);
   putNumber(KEY_SHOW_OWN, KeyboardModes.showOwnEnabled() ? 1 : 0);
+  putNumber(KEY_TRANSFER, TransferSync.enabled() ? 1 : 0);
   putNumber(KEY_TILED, tiled ? 1 : 0);
   // 平铺没开就不取全量：每键都拉 64 条纯属浪费（普通候选栏只用当前页）。
   putStrings(KEY_ALL_CANDIDATES,

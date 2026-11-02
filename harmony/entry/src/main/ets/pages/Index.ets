@@ -22,6 +22,7 @@ import {
   AboutPanel, InputModePanel, KeyboardModePanel, SkinPanel
 } from '../InputMethodExtensionAbility/Panels';
 import { SettingsPanel } from '../InputMethodExtensionAbility/SettingsPanel';
+import { TransferPanel } from '../InputMethodExtensionAbility/TransferPanel';
 import { RarePanel, SymbolPage } from '../InputMethodExtensionAbility/SymbolPage';
 
 @Entry
@@ -99,6 +100,8 @@ struct Index {
       AboutPanel()
     } else if (this.view === (PanelView.Settings as number)) {
       SettingsPanel()
+    } else if (this.view === (PanelView.Transfer as number)) {
+      TransferPanel()
     } else if (this.view === (PanelView.SymbolPage as number)) {
       SymbolPage()
     } else if (this.view === (PanelView.Rare as number)) {
