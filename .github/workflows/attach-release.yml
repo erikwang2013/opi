@@ -129,12 +129,12 @@ jobs:
                 fi
                 ;;
               opi-asr-engine-*)
-                # $d/a.zip 是 gh api 下载的 artifact 外壳，真正的组件是解压出来的 zip。
-                zip="$(find "$d" -name '*.zip' ! -name 'a.zip' | head -1)"
-                if [ -n "$zip" ]; then
+                # Android artifact 一次装两个 ABI；逐个上传，别只取第一个。
+                while IFS= read -r zip; do
+                  [ -n "$zip" ] || continue
                   cp "$zip" "assets/$(basename "$zip")"
                   wrote+=("$(basename "$zip")")
-                fi
+                done < <(find "$d" -name '*.zip' ! -name 'a.zip')
                 ;;
             esac
           done < work/artifacts.tsv
