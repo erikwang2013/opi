@@ -12,6 +12,15 @@
 # 用法（仓库根目录）：
 #   scripts/apple/package-macos.sh <版本号> [产物目录]
 #   版本号用 scripts/apple/version.sh 取（CI 里就是这么调的）。
+#   档位由环境变量 OPI_MACOS_TIER 选择：normal（默认，模型按需下载）/ full（内置模型）。
+#
+# ===== 语音输入（2026-11-02）=====
+#
+#   宿主进程（IMK）直接链 opi_asr + sherpa-onnx/onnxruntime 动态库。两个上游库由
+#   sherpa-rs 的 macOS 预编译包提供（默认动态链接），脚本按 libopi_asr.dylib 的
+#   `otool -L` 实际依赖收集，改 @rpath 后放进 Contents/Frameworks 并逐个签名。
+#   full 档把 `desktop/asr-bundle/asr` 复制到 Contents/Resources/asr，normal 不复制。
+#   宿主 Info.plist 需含 NSMicrophoneUsageDescription；本脚本不改 Swift 源码。
 #
 # ===== ⚠️ 未签名 / 未公证：产物是**开发用**的，不是可发布的 =====
 #
@@ -27,6 +36,8 @@
 #   rustup target add aarch64-apple-darwin x86_64-apple-darwin
 #   cargo build --release -p opi_ffi --target aarch64-apple-darwin
 #   cargo build --release -p opi_ffi --target x86_64-apple-darwin
+#   cargo build --release -p opi-asr --target aarch64-apple-darwin
+#   cargo build --release -p opi-asr --target x86_64-apple-darwin
 #
 # 库是**通用**的（两个 arch），所以下面 app 也编两个 arch 再 lipo —— 否则会得到
 # 「通用 dylib + 单架构 app」这种半成品，而它在 `file` 输出里不显眼。
@@ -57,6 +68,12 @@ CONTROLLER="OpiInputController"
 # 部署目标：仓库**没有**声明 macOS 最低版本（`macos/README.md` 明写了这件事）。
 # 11.0 = Apple Silicon 的第一个 macOS，且覆盖 InputMethodKit 全部用到的 API。本脚本的选择。
 DEPLOY="11.0"
+# 模型档位：normal=按需下载；full=内置模型。CI 的 tier 输入经环境变量传进来。
+TIER="${OPI_MACOS_TIER:-normal}"
+case "$TIER" in
+  normal|full) ;;
+  *) echo "!! OPI_MACOS_TIER 只能是 normal 或 full（现在是 '$TIER'）" >&2; exit 1 ;;
+esac
 # 设置/关于页英文表（由 shared/i18n/zh-en.tsv 生成）：缺了英文界面会整体回落中文。
 [ -f macos/en.lproj/Localizable.strings ] || {
   echo "!! 缺少 macos/en.lproj/Localizable.strings（见 shared/i18n/zh-en.tsv）" >&2; exit 1; }
@@ -91,6 +108,70 @@ dylib="$libdir/libopi_ffi.dylib"
 # LC_RPATH（@executable_path/../Frameworks）解析到 bundle 内那份，下面第 5 节有断言钉住。
 install_name_tool -id @rpath/libopi_ffi.dylib "$dylib"
 
+# ---- 语音：通用 libopi_asr.dylib + sherpa-onnx/onnxruntime 动态依赖 ----
+# sherpa-rs 默认在 macOS 动态链接，并把共享库复制到 target/<triple>/release/。
+# 先 lipo 出通用 opi_asr，再按它的实际 otool 依赖名找同目录文件（不写死上游文件名）。
+for rustt in aarch64-apple-darwin x86_64-apple-darwin; do
+  f="target/$rustt/release/libopi_asr.dylib"
+  [ -f "$f" ] || {
+    echo "!! 缺少 $f —— 先 cargo build --release -p opi-asr --target $rustt" >&2
+    exit 1
+  }
+done
+lipo -create target/aarch64-apple-darwin/release/libopi_asr.dylib \
+            target/x86_64-apple-darwin/release/libopi_asr.dylib \
+  -output "$libdir/libopi_asr.dylib"
+install_name_tool -id @rpath/libopi_asr.dylib "$libdir/libopi_asr.dylib"
+asr_fw_libs=("$libdir/libopi_asr.dylib")
+idx=0
+while [ "$idx" -lt "${#asr_fw_libs[@]}" ]; do
+  f="${asr_fw_libs[$idx]}"; idx=$((idx + 1))
+  while IFS= read -r dep; do
+    name="${dep##*/}"
+    case "$dep" in
+      /usr/lib/*|/System/Library/*|/Library/Frameworks/*) continue ;;
+      /*|@*) ;;
+      *) continue ;;
+    esac
+    case " ${asr_fw_libs[*]} " in *" $libdir/$name "*) continue ;; esac
+    # sherpa-rs 把共享库放在 target/<triple>/release；按实际依赖名找，不写死版本号。
+    src=""
+    for d in target/aarch64-apple-darwin/release target/x86_64-apple-darwin/release; do
+      [ -f "$d/$name" ] && { src="$d/$name"; break; }
+    done
+    [ -n "$src" ] || {
+      echo "!! libopi_asr 的依赖 $dep 找不到对应动态库（先编 -p opi-asr）" >&2
+      exit 1
+    }
+    cp "$src" "$libdir/$name"
+    asr_fw_libs+=("$libdir/$name")
+    # 上游是 osx-universal2 共享包；万一切片不全，用另一架构副本补齐。
+    if ! lipo -archs "$libdir/$name" | grep -qw x86_64; then
+      other="target/x86_64-apple-darwin/release/$name"
+      [ -f "$other" ] || other="target/aarch64-apple-darwin/release/$name"
+      [ -f "$other" ] && [ "$other" != "$src" ] || {
+        echo "!! $name 缺 x86_64 切片" >&2; exit 1; }
+      lipo -create "$src" "$other" -output "$libdir/.$name.universal"
+      mv "$libdir/.$name.universal" "$libdir/$name"
+    fi
+    lipo -archs "$libdir/$name" | grep -qw arm64 || {
+      echo "!! $name 缺 arm64 切片" >&2; exit 1; }
+  done < <(otool -L "$f" | awk '/^[[:space:]]/ {print $1}')
+done
+[ "${#asr_fw_libs[@]}" -gt 1 ] || {
+  echo "!! libopi_asr 没有 sherpa-onnx/onnxruntime 动态依赖；sherpa-rs 是否被编成静态？" >&2
+  exit 1
+}
+# 把对内依赖与各自 install_name 改成 @rpath，避免把构建机绝对路径带进用户机器。
+for f in "${asr_fw_libs[@]}"; do
+  while IFS= read -r dep; do
+    name="${dep##*/}"
+    [ "$dep" = "@rpath/$name" ] && continue
+    [ -f "$libdir/$name" ] && install_name_tool -change "$dep" "@rpath/$name" "$f"
+  done < <(otool -L "$f" | awk '/^[[:space:]]/ {print $1}')
+  install_name_tool -id "@rpath/${f##*/}" "$f"
+done
+
 rm -rf "$out"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 
@@ -107,8 +188,9 @@ for arch in arm64 x86_64; do
   swiftc "${flags[@]}" -target "$arch-apple-macosx$DEPLOY" macos/*.swift \
     shared/apple/OpiClipRunner.swift \
     -o "$out/.$EXE.$arch" \
-    -L "$libdir" -lopi_ffi \
-    -framework Cocoa -framework InputMethodKit \
+    -L "$libdir" -lopi_ffi -lopi_asr \
+    "${asr_fw_libs[@]:1}" \
+    -framework Cocoa -framework InputMethodKit -framework AVFoundation \
     -Xlinker -rpath -Xlinker @executable_path/../Frameworks
 done
 lipo -create "$out/.$EXE.arm64" "$out/.$EXE.x86_64" -output "$APP/Contents/MacOS/$EXE"
@@ -143,6 +225,9 @@ plist_ver="$(plutil -extract CFBundleShortVersionString raw "$plist")"
 
 # ---- 3) 放 Rust dylib 与图标 ----
 cp "$dylib" "$APP/Contents/Frameworks/"
+for f in "${asr_fw_libs[@]}"; do
+  cp "$f" "$APP/Contents/Frameworks/"
+done
 # tsInputMethodIconFileKey 指向 opi.tiff —— 键在 plist 里，文件得在 Resources 里。
 cp macos/opi.tiff "$APP/Contents/Resources/opi.tiff"
 # 设置/关于页的英文表（由 shared/i18n/zh-en.tsv 生成；Swift 按 en.lproj 读回）。
@@ -175,10 +260,59 @@ for dict in luna trad stroke wubi86; do
   cp "android/app/src/main/assets/$dict.opid" "$APP/Contents/Resources/dicts/$dict.opid"
 done
 
+# 语音模型：full 复制到 Resources/asr（OpiVoiceModels 先读 Bundle）；normal 不复制。
+if [ "$TIER" = full ]; then
+  models_src="desktop/asr-bundle/asr"
+  [ -d "$models_src" ] || {
+    echo "!! full 档缺少 $models_src；先按 .github/workflows/apple.yml 下载模型" >&2
+    exit 1
+  }
+  mkdir -p "$APP/Contents/Resources/asr"
+  cp -R "$models_src"/. "$APP/Contents/Resources/asr/"
+  for rel in sensevoice/model.int8.onnx sensevoice/tokens.txt \
+    whisper-small.en/small.en-encoder.int8.onnx \
+    whisper-small.en/small.en-decoder.int8.onnx \
+    whisper-small.en/small.en-tokens.txt vad/silero_vad.onnx; do
+    [ -f "$APP/Contents/Resources/asr/$rel" ] || {
+      echo "!! full 档模型缺 $rel" >&2; exit 1; }
+  done
+  # Rust 加载器无条件读 manifest.json；桌面 bundle 没有，按实际文件生成。
+  python3 - "$APP/Contents/Resources/asr" <<'PY'
+import hashlib, json, os, sys
+root = sys.argv[1]
+roles = {
+    "sensevoice/model.int8.onnx": "model",
+    "sensevoice/tokens.txt": "tokens",
+    "whisper-small.en/small.en-encoder.int8.onnx": "encoder",
+    "whisper-small.en/small.en-decoder.int8.onnx": "decoder",
+    "whisper-small.en/small.en-tokens.txt": "tokens",
+}
+for d in ("sensevoice", "whisper-small.en"):
+    files = []
+    for rel, role in roles.items():
+        if not rel.startswith(d + "/"):
+            continue
+        path = os.path.join(root, rel)
+        digest = hashlib.sha256()
+        with open(path, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1 << 20), b""):
+                digest.update(chunk)
+        files.append({"path": os.path.basename(rel), "size": os.path.getsize(path),
+                      "sha256": digest.hexdigest(), "role": role})
+    with open(os.path.join(root, d, "manifest.json"), "w", encoding="utf-8") as out:
+        json.dump({"version": 1, "files": files}, out, separators=(",", ":"))
+PY
+else
+  [ ! -e "$APP/Contents/Resources/asr" ] || {
+    echo "!! normal 档不应包含 Resources/asr" >&2; exit 1; }
+fi
+
 # ---- 4) 签名（ad-hoc）----
 # 顺序：先签里面那份 dylib，再签外层 bundle。反过来的话外层签名封的是**旧**哈希，
 # `--verify --deep` 立刻红（这条顺序不是讲究，是必须）。
-codesign --force --sign - "$APP/Contents/Frameworks/libopi_ffi.dylib"
+for lib in "$APP/Contents/Frameworks"/*.dylib; do
+  codesign --force --sign - "$lib"
+done
 codesign --force --deep --sign - "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"
 
@@ -196,6 +330,24 @@ otool -L "$bin" | grep -q 'libopi_ffi.dylib' || {
 otool -L "$bin" | grep -q '^[[:space:]]*@rpath/libopi_ffi\.dylib' || {
   echo "!! app 对 libopi_ffi 的依赖不是 @rpath 形式（换台机器就加载不了）：" >&2
   otool -L "$bin" | grep 'libopi_ffi' >&2; exit 1; }
+otool -L "$bin" | grep -q '^[[:space:]]*@rpath/libopi_asr\.dylib' || {
+  echo "!! app 对 libopi_asr 的依赖不是 @rpath 形式：" >&2
+  otool -L "$bin" | grep 'libopi_asr' >&2; exit 1; }
+# Frameworks 里每个 dylib：自身 install_name 必须是 @rpath，所有非系统依赖必须能
+# 按 @rpath 在同目录找到（否则装到别的机器就是 dyld: Library not loaded）。
+for lib in "$APP/Contents/Frameworks"/*.dylib; do
+  otool -D "$lib" | grep -q "^@rpath/${lib##*/}$" || {
+    echo "!! $(basename "$lib") 的 install_name 不是 @rpath/${lib##*/}：" >&2
+    otool -D "$lib" >&2; exit 1; }
+  while IFS= read -r dep; do
+    case "$dep" in
+      @rpath/*) [ -f "$APP/Contents/Frameworks/${dep#@rpath/}" ] || {
+        echo "!! $(basename "$lib") 的依赖 $dep 不在 Frameworks 里" >&2; exit 1; } ;;
+      /usr/lib/*|/System/Library/*|/Library/Frameworks/*) ;;
+      *) echo "!! $(basename "$lib") 有非 @rpath 依赖：$dep" >&2; exit 1 ;;
+    esac
+  done < <(otool -L "$lib" | awk '/^[[:space:]]/ {print $1}')
+done
 otool -l "$bin" | grep -q '@executable_path/../Frameworks' || {
   echo "!! app 里没有 @executable_path/../Frameworks 这条 rpath —— 装到系统里会找不到 dylib" >&2
   exit 1; }
@@ -238,6 +390,29 @@ grep -q 'OpiInputMethod.app/Contents/Info.plist' "$out/.payload.txt" || {
 grep -q 'OpiInputMethod.app/Contents/Frameworks/libopi_ffi.dylib' "$out/.payload.txt" || {
   echo "!! .pkg 的 payload 里没有 Frameworks/libopi_ffi.dylib —— 装完 dyld 找不到库" >&2
   cat "$out/.payload.txt" >&2; exit 1; }
+grep -q 'OpiInputMethod.app/Contents/Frameworks/libopi_asr.dylib' "$out/.payload.txt" || {
+  echo "!! .pkg 的 payload 里没有 Frameworks/libopi_asr.dylib —— 语音引擎装不上" >&2
+  cat "$out/.payload.txt" >&2; exit 1; }
+grep -Eq 'OpiInputMethod\.app/Contents/Frameworks/libsherpa-onnx[^/]*\.dylib' "$out/.payload.txt" || {
+  echo "!! .pkg 里没有 sherpa-onnx 动态库" >&2; cat "$out/.payload.txt" >&2; exit 1; }
+grep -Eq 'OpiInputMethod\.app/Contents/Frameworks/libonnxruntime[^/]*\.dylib' "$out/.payload.txt" || {
+  echo "!! .pkg 里没有 onnxruntime 动态库" >&2; cat "$out/.payload.txt" >&2; exit 1; }
+if [ "$TIER" = full ]; then
+  for res in \
+    "asr/sensevoice/model.int8.onnx" "asr/sensevoice/tokens.txt" \
+    "asr/sensevoice/manifest.json" \
+    "asr/whisper-small.en/small.en-encoder.int8.onnx" \
+    "asr/whisper-small.en/small.en-decoder.int8.onnx" \
+    "asr/whisper-small.en/small.en-tokens.txt" \
+    "asr/whisper-small.en/manifest.json" "asr/vad/silero_vad.onnx"; do
+    grep -q "OpiInputMethod.app/Contents/Resources/$res" "$out/.payload.txt" || {
+      echo "!! full 档 .pkg 缺少 Resources/$res" >&2
+      cat "$out/.payload.txt" >&2; exit 1; }
+  done
+elif grep -q 'OpiInputMethod.app/Contents/Resources/asr/' "$out/.payload.txt"; then
+  echo "!! normal 档 .pkg 不应包含 Resources/asr/" >&2
+  cat "$out/.payload.txt" >&2; exit 1
+fi
 # 资源漏拷 = 对应面板/方案静默变空（还照常能开）—— 所以钉最终 payload，
 # 而不只是钉打包前的 $APP。贴纸按源目录逐个列，避免「只查 idle 一个」漏掉别的。
 sticker_res=()
@@ -268,4 +443,5 @@ fi
 echo "---- macOS 产物（未签名/未公证，开发用；dist 只此一个）----"
 echo "  $pkg"
 echo "  内含 /Library/Input Methods/$EXE.app（Frameworks + Resources 全量）"
+echo "  语音模型档位：${TIER}（$([ "$TIER" = full ] && echo 'Resources/asr 内置' || echo '按需下载')）"
 echo "  版本：${version}（取自 $(basename "$root")/Cargo.toml）；Info.plist 记的是 $plist_ver"
