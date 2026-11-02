@@ -53,8 +53,12 @@ OpiEngine.shared.loadDictionary()
 OpiEngine.shared.loadOptionalTradDictionary()
 // 可选笔画/五笔码表（Resources/dicts/ 或用户目录；缺文件只记日志）。
 // 装载**不切换方案**：当前方案仍由 `applyPersisted()` 决定。
-OpiEngine.shared.loadOptionalStrokeDictionary()
-OpiEngine.shared.loadOptionalWubiDictionary()
+// 启动只为持久化方案需要的那张表（8.6MB 校验移出首帧）；另一张与导入词库
+// 放到 run loop 启动后的 main.async（见下）。
+let persistedScheme = (UserDefaults.standard.object(forKey: "SchemeCode") as? Int)
+    .flatMap { OpiScheme(rawValue: Int32(clamping: $0)) }
+if persistedScheme == .stroke { _ = OpiEngine.shared.loadOptionalStrokeDictionary() }
+if persistedScheme == .wubi { _ = OpiEngine.shared.loadOptionalWubiDictionary() }
 // 用户词（学习结果）从 dataDirectory/opi_user_words.json 恢复到已装载的引擎。
 // 缺失 = 冷启动；坏文件只记日志并保留（见 OpiSettings.swift 的持久化段）。
 OpiEngine.shared.loadPersistedUserWords()
@@ -62,11 +66,18 @@ OpiEngine.shared.loadPersistedUserWords()
 OpiSettingsStore.applyPersisted()
 // 跨设备剪贴板（默认关）：按落盘开关启动；只起网络/剪贴板轮询，不记录内容。
 OpiClipService.shared.applyPersisted()
-// 导入词库（dicts/*.tsv）按停用名单重放；坏文件只记日志，不挡启动。
-OpiEngine.shared.loadImportedDicts(disabled: OpiSettingsStore.disabledDicts())
 // 自定义短语：宿主文件是唯一真源，引擎只持内存，启动时中英两套整表重推（坏文件按空表）。
 OpiCustomPhraseStore.shared.loadAndPush(.chinese)
 OpiCustomPhraseStore.shared.loadAndPush(.english)
+
+// 大块可选装载移出首帧：未持久化的那张码表与导入词库（dicts/*.tsv，可能有数 MB）。
+// run loop 一起来就跑；持久化方案需要的表已在上面同步装好。
+DispatchQueue.main.async {
+    if persistedScheme != .stroke { _ = OpiEngine.shared.loadOptionalStrokeDictionary() }
+    if persistedScheme != .wubi { _ = OpiEngine.shared.loadOptionalWubiDictionary() }
+    // 导入词库按停用名单重放；坏文件只记日志，不挡启动。
+    OpiEngine.shared.loadImportedDicts(disabled: OpiSettingsStore.disabledDicts())
+}
 
 // 后台常驻：本进程没有窗口，靠 run loop 收 IMK 事件。
 // ⚠️ 未验证：LSBackgroundOnly 下用 NSApplication.shared.run() 是否正确
