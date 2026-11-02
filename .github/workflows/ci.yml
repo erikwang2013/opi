@@ -100,7 +100,14 @@ jobs:
           targets: x86_64-pc-windows-msvc, aarch64-apple-ios, aarch64-apple-ios-sim, aarch64-apple-darwin, x86_64-apple-darwin
 
       # 缓存 ~/.cargo 与 target/（key 含 rustc 版本与 Cargo.lock）。
+      # sherpa-rs 的构建脚本把下载的 .so 放在 ~/.cache/sherpa-rs，目标产物却引用
+      # 那个绝对路径；只缓存 target 会出现「链接时找不到 libonnxruntime」的假缓存
+      # 命中，所以把下载目录一起缓存。
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-directories: ~/.cache/sherpa-rs
+          # 旧缓存里没有 sherpa 目录；换 key 强制重建一次，否则仍命中坏缓存。
+          key: sherpa-v1
 
       # 放最前面：最便宜，错了也最容易看懂。
       # 这条是补上的 —— 此前仓库**从来没有** fmt 门禁，于是漂移只增不减，
