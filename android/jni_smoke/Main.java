@@ -20,6 +20,7 @@ final class OpiEngine {
     static native String inputSpace();
     static native String[] candidates(int limit);
     static native String[] candidateReadings();
+    static native String[] stateSnapshot(int limit);
     static native void pinReading(String reading);
     static native String buffer();
     static native boolean bufferIsCarried();
@@ -119,13 +120,11 @@ public final class Main {
         check(OpiEngine.load(dict), "load(" + dict + ") 应为 true");
         // 初始模式 Pinyin(0)
         check(OpiEngine.mode() == 0, "初始 mode 应为 0");
-
         // 输入 w → buffer=w
         check("".equals(OpiEngine.inputKey("w")), "inputKey(w) 返回空串");
         check("w".equals(OpiEngine.buffer()), "buffer 应为 w");
         check("".equals(OpiEngine.inputKey("o")), "inputKey(o) 返回空串");
         check("wo".equals(OpiEngine.buffer()), "buffer 应为 wo");
-
         // 候选非空 + 全局选词非空 + buffer 清空（pageSize 由引擎给、别抄 8；
         // 负/越界不得消耗缓冲）。
         check(OpiEngine.pageSize() > 0, "pageSize 应为正数");

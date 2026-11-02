@@ -7,6 +7,7 @@ import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.engine.ShiftState
 import xyz.erik.opi.engine.associationActive
+import xyz.erik.opi.engine.fullwidthize
 
 /**
  * 按键分流：buffer 非空走引擎，buffer 空走直传（对齐 flutter ime_router.dart）。

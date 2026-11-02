@@ -443,10 +443,12 @@ pub const JNI_PHRASES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni_phra
 /// opi-clip 的 JNI 出口（2026-11-01）。与 C ABI 侧的 `CABI_CLIP` 是镜像：
 /// 13 条注册在 `jni.rs` 的同一张 RegisterNatives 表上（`OpiEngine.kt` 已声明）。
 pub const JNI_CLIP: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni_clip.rs");
+/// 状态快照（2026-11-02，性能项 1+2）：一次刷新一发 JNI 取回全部刷新状态。
+pub const JNI_SNAPSHOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni_snapshot.rs");
 /// jni 模块**全部** .rs 的清单（`read_jni` 的合成语料就是按它读的）。
 /// ⚠️ 新拆一个 `jni_*.rs` 要加到这里 —— 漏了那批出口会从门禁视野里消失
 /// （`rust_registration_parser_is_not_blind` 的计数护栏会红）。
-pub const JNI_ALL: [&str; 10] = [
+pub const JNI_ALL: [&str; 11] = [
     JNI_RS,
     JNI_USER_WORDS,
     JNI_SCHEME,
@@ -457,6 +459,7 @@ pub const JNI_ALL: [&str; 10] = [
     JNI_WUBI,
     JNI_PHRASES,
     JNI_CLIP,
+    JNI_SNAPSHOT,
 ];
 pub const KOTLIN_HOST: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),

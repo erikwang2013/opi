@@ -8,36 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import xyz.erik.opi.jni.OpiEngine
 
-/** 引擎模式（JNI mode() 返回值：0=Pinyin 1=English 2=Number 3=Symbol 4=Traditional）。 */
-enum class EngineMode(val value: Int) {
-    PINYIN(0), ENGLISH(1), NUMBER(2), SYMBOL(3), TRADITIONAL(4);
-
-    companion object {
-        fun fromInt(v: Int) = entries.firstOrNull { it.value == v } ?: PINYIN
-    }
-}
-
-/** ⇧ 状态：off / single（下个字母大写后自动复位）/ lock（持续大写）。 */
-enum class ShiftState { OFF, SINGLE, LOCK }
-
-/**
- * 输入方案（JNI `scheme()` 返回值）：0=全键盘 1=拼音9键 2=拼音14键 3=笔画 4=双拼 5=五笔。
- *
- * 「输入模式」= 方案 × 模式的组合（拼音9键 = NINE + PINYIN）；繁体模式是**模式**轴上的
- * 事（[EngineMode.TRADITIONAL]），与方案正交 —— 9 键也能切繁体。
- * 双拼的**布局**（自然码/微软/…）在 [OpiEngineApi.shuangpinLayout] 上，与本枚举正交。
- * ⚠️ 整数表是**协议**：opi-ffi 的 `scheme_from_int`、`OpiEngine.kt` 的注释、
- * 这里三处逐值对应（jni_contract 只保签名不保语义）。
- */
-enum class InputScheme(val value: Int) {
-    FULL(0), NINE(1), FOURTEEN(2), STROKE(3), SHUANGPIN(4), WUBI(5);
-
-    companion object {
-        fun fromInt(v: Int) = entries.firstOrNull { it.value == v } ?: FULL
-    }
-}
-
-// 引擎接口（[OpiEngineApi]）在 OpiEngineApi.kt —— 同包契约文件，500 行门禁拆出。
+// 引擎模式 / ⇧ / 输入方案在 EngineTypes.kt；接口在 OpiEngineApi.kt（同包，500 行门禁拆出）。
 
 /**
  * 单一状态源：封装 OpiEngine，UI 经 mutableStateOf 订阅（按引擎页大小翻页、buffer
@@ -155,9 +126,15 @@ class EngineController(
         dictionaryDegraded = !ok
     }
 
-    // 普通栏只取一页；512 条只为平铺全量，或读音列（它是 candidates 的副产物）。
+    // 普通栏只取一页；512 条只为平铺全量，或旧 so 的读音列（它是 candidates 的副产物）。
     private var tiledFetch = false
-    private val fetchLimit: Int get() = if (tiledFetch || needsCandidateReadings(mode, inputScheme)) 512 else pageSize
+    private val fetchLimit: Int get() = if (tiledFetch || needsCandidateReadings(mode, inputScheme)) FETCH_LIMIT_FULL else pageSize
+
+    /** 快照回传的候选窗口：折叠一页、平铺 512；读数深度由 Rust 按方案自己加深。 */
+    private val snapshotLimit: Int get() = if (tiledFetch) FETCH_LIMIT_FULL else pageSize
+
+    /** 旧 so / 假引擎无快照出口：失败一次后不再重试，后续都走逐出口路径。 */
+    private var snapshotBroken = false
     val pageSize: Int = api.pageSize() // 每页候选数：引擎 `router::PAGE_SIZE`，别写死 8
 
     /** 编码提示（五笔候选栏显示剩余键；2026-10-14 接线）—— 由 [refresh] 计算。 */
@@ -171,56 +148,101 @@ class EngineController(
         refresh()
     }
 
-    /** 引擎状态回读；buffer 变化重置候选页码，候选数缩水时钳制页码。 */
+    /**
+     * 引擎状态回读；buffer 变化重置页码。**快照优先**（性能项 1）：一次 JNI 取回全部
+     * 读侧状态；失败/旧 so 安全回退 [refreshLegacy]。两条路都保持
+     * candidates → candidateReadings → displayBuffer 的读序。
+     */
     fun refresh() {
+        val snapshot = stateSnapshotOrNull()
+        if (snapshot != null) {
+            buffer = snapshot.buffer
+            bufferCarried = snapshot.bufferCarried
+            clearStalePin()
+            mode = snapshot.mode
+            learnerEnabled = snapshot.learnerEnabled
+            fuzzyEnabled = snapshot.fuzzyEnabled
+            jianpinEnabled = snapshot.jianpinEnabled
+            fullwidth = snapshot.fullwidth
+            inputScheme = snapshot.scheme
+            wubiHint = snapshot.wubiHint
+            candidates = snapshot.candidates
+            candidateReadings = snapshot.candidateReadings
+            reading = snapshot.displayBuffer
+            pendingText = snapshot.pendingText
+        } else {
+            refreshLegacy()
+        }
+        finishRefresh()
+    }
+
+    /** 逐出口回退路径（旧 so 的唯一路径）。读序契约与快照相同，别调换顺序。 */
+    private fun refreshLegacy() {
         buffer = api.buffer()
         bufferCarried = api.bufferIsCarried()
-        // 钉读音的缓冲看守：缓冲一走到别处即解除。引擎侧同样按缓冲配对校验（双保险），
-        // 但**不带这层的话「变了又变回」会让旧钉复活**（退格再打同一串）—— 见
-        // engine-core 的 `pinned_reading` 字段注释，那条边界就靠这里收。
-        if (pinBuffer != null && buffer != pinBuffer) {
-            api.pinReading("")
-            pinnedReading = ""
-            pinBuffer = null
-        }
+        clearStalePin()
         mode = EngineMode.fromInt(api.mode())
         learnerEnabled = api.learnerEnabled()
         fuzzyEnabled = api.fuzzyEnabled()
         jianpinEnabled = api.jianpinEnabled()
         fullwidth = api.fullwidthState() // 切模式会重置它 ⇒ 每次刷新都重读
         inputScheme = InputScheme.fromInt(api.scheme())
-        // 编码提示（2026-10-14 接线）：**只在五笔态、缓冲非空时**问引擎，且只在这里问
-        // 一次（引擎侧每次调用是全量重算，别在每帧渲染里调 —— 见接口文档）。
-        // 非五笔态恒空：省掉那 O(26×前缀查询)，也避免别的方案栏上挂一条永远为空的提示。
+        // 编码提示只在五笔态、缓冲非空时问（引擎每次全量重算，别在每帧渲染里调）。
         wubiHint = if (inputScheme == InputScheme.WUBI && buffer.isNotEmpty()) {
             api.wubiNextKeys()
         } else {
             ""
         }
         candidates = api.candidates(fetchLimit)?.toList() ?: emptyList() // JNI 可能返回 null
-        // 读数（引擎出口已按读音去重保序）：与 candidates 同一次排名的副产物
-        // （引擎侧同一对缓存），**必须紧跟 candidates 之后读**（同一读序契约，
-        // 见本函数尾 reading 的注释）。只有中文 + 9/14/双拼非空，其余方案连 JNI 都不问。
-        candidateReadings = if (needsCandidateReadings(mode, inputScheme)) (api.candidateReadings()?.toList() ?: emptyList()) else emptyList()
+        // 读数与 candidates 同一次排名的副产物（引擎同一对缓存），**必须紧跟其后读**。
+        candidateReadings = if (needsCandidateReadings(mode, inputScheme)) {
+            api.candidateReadings()?.toList() ?: emptyList()
+        } else {
+            emptyList()
+        }
+        // displayBuffer 也读这份缓存，**必须最后读**（先读会拿到空串/旧值）。
+        reading = api.displayBuffer()
+        pendingText = api.pendingText()
+    }
+
+    /** 快照出口：抛异常 / 非空畸形载荷才永久回退；空数组 = 未装载，下次再试。 */
+    private fun stateSnapshotOrNull(): EngineSnapshot? {
+        if (snapshotBroken) return null
+        val raw = try {
+            api.stateSnapshot(snapshotLimit)
+        } catch (e: Throwable) {
+            snapshotBroken = true // 旧 so / ABI 不符：不崩输入法，也不每次击键都抛
+            return null
+        }
+        if (raw.isNullOrEmpty()) return null
+        val parsed = parseSnapshot(raw)
+        if (parsed == null) snapshotBroken = true
+        return parsed
+    }
+
+    /** 钉读音的缓冲看守（不带这层「变了又变回」会让旧钉复活）。 */
+    private fun clearStalePin() {
+        if (pinBuffer != null && buffer != pinBuffer) {
+            api.pinReading("")
+            pinnedReading = ""
+            pinBuffer = null
+        }
+    }
+
+    /** 两条刷新路的共同收尾：页码、9 键读数兜底、联想门禁、组合串同步点。 */
+    private fun finishRefresh() {
         if (buffer != lastQuery) {
             lastQuery = buffer
             _candidatePage = 0
         }
         val maxPage = if (candidates.isEmpty()) 0 else (candidates.size - 1) / pageSize
         if (_candidatePage > maxPage) _candidatePage = maxPage
-        // 读数（9 键左列）**必须最后读**：它是 `candidates()` 的副产物（`scheme_reading`
-        // 缓存按缓冲绑存，先读会拿到空串/旧值 —— 2026-10-09「确定候选词后左列不恢复
-        // 标点」的根因）。**别把这个赋值挪回前面**（有单测钉次序）。
-        reading = api.displayBuffer()
-        // 2026-10-24 用户报障「9 键输入 hou 顶部显示 468」：displayBuffer 偶发为空时
-        // 不能把数字缓冲当拼音显示。取候选读音首条兜底（它就是 9 键的拼音读数）。
+        // 9 键 displayBuffer 偶发为空时不能把数字缓冲当拼音显示（2026-10-24 报障）。
         if (reading.isEmpty() && inputScheme == InputScheme.NINE) {
             reading = candidateReadings.firstOrNull().orEmpty()
         }
-        pendingText = api.pendingText()
         gateAssociation() // 智能联想默认关闭：空缓冲候选（联想项）不推给 UI
-        // 组合串同步点（必须最后）：服务层在此把「字段里的组合串」推给输入框。
-        onBufferSynced()
+        onBufferSynced() // 组合串同步点（必须最后）
     }
 
     /**
@@ -464,20 +486,6 @@ class EngineController(
     }
 
     /**
-     * 全角化待上屏文本（**宽档**：ASCII 可打印平移 +0xFEE0；空格与非 ASCII 恒等）。
-     * 开关关 ⇒ 原样返回。
-     *
-     * 为什么要在本类里再写一遍映射：**英文/数字模式下的字母数字各端都是直传**，
-     * 不进引擎（[xyz.erik.opi.ime.KeyRouter] 的英文直传与数字面板直提），引擎收不到
-     * 那些字符 —— 规则搬不过来，只能镜像；语义源 = engine-core 的
-     * `punctuation::ascii_fullwidth_wide` 与 `Engine::fullwidthize`（那边的头注写着
-     * 「宿主直传点的唯一入口」）。⚠️ 改一边必须改另一边：`FullwidthTextTest` 现读
-     * `punctuation.rs` 的常数与范围，两边的用例集相同。
-     */
-    fun fullwidthize(text: String): String =
-        if (!fullwidth) text else text.map(::widenAscii).joinToString("")
-
-    /**
      * 无论 single/lock 一律复位（UI 与引擎同步）。模式切换/输入目标变更时调用：
      * shiftVisible 只能隐藏 ⇧ 按钮，清不掉状态——中→繁→英 长按锁定后离开再切回 English，
      * ⇧ 仍高亮锁定、字母全大写。
@@ -488,13 +496,3 @@ class EngineController(
         api.setShift(false)
     }
 }
-
-/**
- * 全角宽档的单字符映射（**镜像** engine-core 的 `punctuation::ascii_fullwidth_wide`）：
- * ASCII 可打印（0x21..0x7E：字母/数字/标点，**除空格**）平移 +0xFEE0；其余原样。
- * ⚠️ 空格：全角空格是 U+3000，不在那条连续段上（0x20+0xFEE0 = U+FF00，未分配），
- * 且引擎侧**有意不宽化空格**（见 `Engine::fullwidthize` 头注）—— 这里保持一致。
- * 锁同步：`FullwidthTextTest` 现读 `punctuation.rs` 的常数与范围。
- */
-internal fun widenAscii(ch: Char): Char =
-    if (ch.code in 0x21..0x7E) (ch.code + 0xFEE0).toChar() else ch

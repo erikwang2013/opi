@@ -23,7 +23,7 @@ use super::checker::{read, strip_comments};
 pub const CONVERT_RS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/api/convert.rs");
 pub const KOTLIN_ENGINE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../android/app/src/main/kotlin/xyz/erik/opi/engine/EngineController.kt"
+    "/../../android/app/src/main/kotlin/xyz/erik/opi/engine/EngineTypes.kt"
 );
 
 /// `{` 的下标 → 配对 `}` 的下标。
@@ -126,7 +126,7 @@ pub fn parse_kotlin_mode_enum(src: &str) -> Result<BTreeMap<String, i32>, String
     let text = strip_comments(src);
     let at = text
         .find("enum class EngineMode(")
-        .ok_or("EngineController.kt 里找不到 enum class EngineMode（被改名/搬家了？）")?;
+        .ok_or("EngineTypes.kt 里找不到 enum class EngineMode（被改名/搬家了？）")?;
     let rest = &text[at..];
     let open = rest.find('{').ok_or("EngineMode 没有枚举体")?;
     let close = matching_brace(rest, open)?;

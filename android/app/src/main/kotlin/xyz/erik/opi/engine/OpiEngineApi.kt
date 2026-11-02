@@ -24,6 +24,11 @@ interface OpiEngineApi {
     /** 每页候选数（引擎 `router::PAGE_SIZE` 的 JNI 载体；**别写死 8**）。 */
     fun pageSize(): Int
 
+    /** 状态快照（性能项 1）：一次 JNI 取回 refresh 所需的全部读侧状态，布局见
+     *  `EngineReadings.kt` 的 `SNAP_*`。**缺省 null = 旧实现/不可用**，refresh 自动
+     *  回退逐出口路径。返回值必须按定长槽位布局，不得用分隔符拼串。 */
+    fun stateSnapshot(limit: Int): Array<String>? = null
+
     /** 回车（缓冲非空时）该做什么：0=选首候选、1=清空、2=上屏原文（2026-10-14 接线；
      * 判据在引擎侧，见 `engine-core/src/engine_enter.rs`）。 */
     fun enterAction(): Int

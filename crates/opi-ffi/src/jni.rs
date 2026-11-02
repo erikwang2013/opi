@@ -175,8 +175,9 @@ use crate::jni_user_words::{
 use crate::jni_dict::{
     opijni_dict_list, opijni_import_dict, opijni_remove_dict, opijni_set_dict_enabled,
 };
+// 状态快照（2026-11-02，性能项 1+2）：一次刷新只打一发 JNI。
+use crate::jni_snapshot::opijni_state_snapshot;
 
-// ---------- JNI_OnLoad ----------
 // ---------- JNI_OnLoad ----------
 
 #[unsafe(no_mangle)]
@@ -355,6 +356,11 @@ pub unsafe extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _reserved: *mut c
                     jni_str!("candidateReadings"),
                     jni_str!("()[Ljava/lang/String;"),
                     opijni_candidate_readings as *mut c_void,
+                ),
+                NativeMethod::from_raw_parts(
+                    jni_str!("stateSnapshot"),
+                    jni_str!("(I)[Ljava/lang/String;"),
+                    opijni_state_snapshot as *mut c_void,
                 ),
                 NativeMethod::from_raw_parts(
                     jni_str!("pinReading"),
