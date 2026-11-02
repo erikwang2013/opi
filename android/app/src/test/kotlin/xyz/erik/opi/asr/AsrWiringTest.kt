@@ -113,6 +113,34 @@ class AsrWiringTest {
     }
 
     @Test
+    fun warmRunsInBackgroundSilentlyAndOnlyForReadyModels() {
+        val src = moduleFile("src/main/kotlin/xyz/erik/opi/asr/AsrRuntime.kt")
+        val start = src.indexOf("fun warm()")
+        val end = src.indexOf("fun start()", start)
+        assertTrue("AsrRuntime 找不到 warm()", start >= 0 && end > start)
+        val warm = src.substring(start, end)
+        assertTrue("预热必须投到后台线程", warm.contains("worker.execute"))
+        assertTrue("失败必须吞掉（点话筒时再报）", warm.contains("runCatching"))
+        assertTrue("只预热已落地模型（完整包解压留给首次长按）", warm.contains("AsrModels.packReady"))
+        assertTrue("同语言已装载即返回", warm.contains("loadedKey =="))
+        assertTrue("静默装载：不给 UI 发事件", warm.contains("ensureModel(context, gen = null"))
+        for (forbidden in listOf("asrGate(", "AsrPermissionActivity", "openRecorder", "micGranted(")) {
+            assertFalse("warm 不能弹权限/录音：$forbidden", warm.contains(forbidden))
+        }
+    }
+
+    @Test
+    fun imeWarmsOnViewCreationEditorChangeAndWindowShow() {
+        val svc = moduleFile("src/main/kotlin/xyz/erik/opi/OpiImeService.kt")
+        val startInput = svc.substring(svc.indexOf("override fun onStartInput"), svc.indexOf("override fun onFinishInput"))
+        assertTrue("onStartInput 要预热", startInput.contains("AsrRuntime.warm()"))
+        val windowShown = svc.substring(svc.indexOf("override fun onWindowShown"), svc.indexOf("override fun onWindowHidden"))
+        assertTrue("onWindowShown 要预热", windowShown.contains("AsrRuntime.warm()"))
+        val host = moduleFile("src/main/kotlin/xyz/erik/opi/asr/AsrOverlay.kt")
+        assertTrue("键盘视图创建时预热", host.contains("LaunchedEffect(Unit) { AsrRuntime.warm() }"))
+    }
+
+    @Test
     fun manifestDeclaresOnlyTheMicPermissionAndTransparentGate() {
         val manifest = moduleFile("src/main/AndroidManifest.xml")
         assertEquals(

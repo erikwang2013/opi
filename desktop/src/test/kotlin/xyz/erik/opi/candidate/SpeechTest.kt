@@ -140,6 +140,24 @@ class SpeechTest {
     }
 
     @Test
+    fun `status bar and virtual keyboard prewarm speech without per-frame calls`() {
+        val root = Paths.get("src/main/kotlin/xyz/erik/opi/candidate")
+        val status = Files.readString(root.resolve("StatusBar.kt"))
+        // 预热必须挂在按值触发的 LaunchedEffect 里（键含 im），不能直接写在组合体里；
+        // 1s 轮询的重复重组因此不会反复投递 Warm。
+        assertTrue(
+            "状态栏缺少「切回 opi 时预热」的 LaunchedEffect",
+            Regex("""LaunchedEffect\([^)]*imeState\.im[^)]*\)\s*\{[^}]*SpeechHost\.warm\(\)""")
+                .containsMatchIn(status),
+        )
+        val vk = Files.readString(root.resolve("VirtualKeyboard.kt"))
+        assertTrue(
+            "虚拟键盘显示时没有预热语音引擎",
+            vk.contains("LaunchedEffect(Unit) { SpeechHost.warm() }"),
+        )
+    }
+
+    @Test
     fun `state machine only accepts transitions from the expected phase`() {
         assertEquals(SpeechPhase.PREPARING, nextSpeechPhase(SpeechPhase.IDLE, SpeechTransition.START))
         assertEquals(SpeechPhase.PREPARING, nextSpeechPhase(SpeechPhase.ERROR, SpeechTransition.START))
