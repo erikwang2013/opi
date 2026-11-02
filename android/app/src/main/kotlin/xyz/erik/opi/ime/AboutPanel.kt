@@ -44,6 +44,7 @@ import xyz.erik.opi.settings.ABOUT_HOME_URL
 import xyz.erik.opi.settings.ABOUT_INTRO
 import xyz.erik.opi.settings.ABOUT_PRIVACY_URL
 import xyz.erik.opi.settings.ABOUT_PROJECT_URL
+import xyz.erik.opi.settings.OPEN_SOURCE_CREDITS
 import xyz.erik.opi.settings.UpdateDownloadControls
 import xyz.erik.opi.settings.UpdateState
 import xyz.erik.opi.settings.checkForUpdate
@@ -86,6 +87,11 @@ fun AboutPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
             Para("© 2026 erik.xyz · 代码按 MIT 许可（全文见仓库 LICENSE）；词库数据与代码分开授权")
             Head("表情数据")
             Para("Emoji 取自 OpenMoji（CC BY-SA 4.0）；颜文字取自 rime_kaomoji_dict（MIT）；小欧贴纸/图标为项目专有资产，商业使用需授权")
+            Head("开源致谢")
+            OPEN_SOURCE_CREDITS.forEach { section ->
+                Para("【${section.title}】")
+                section.items.forEach { Para("· $it") }
+            }
             Head("链接")
             Link("官网主页") { note = openExternal(context, ABOUT_HOME_URL) }
             Link("GitHub 项目") { note = openExternal(context, ABOUT_PROJECT_URL) }

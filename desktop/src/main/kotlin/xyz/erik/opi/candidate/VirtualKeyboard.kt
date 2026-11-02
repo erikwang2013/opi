@@ -185,6 +185,8 @@ fun VirtualKeyboardWindow(theme: SceneTheme?, onClose: () -> Unit, onSymbols: ()
     ) {
         // 不进任务栏（同状态栏，用户没点名、属同族顺手）：X11 属性直写，见 SkipTaskbar.kt。
         LaunchedEffect(window) { statusBarGuard("虚拟键盘 SkipTaskbar") { SkipTaskbar.apply(window) } }
+        // 键盘显示时顺带预热语音引擎（同一状态栏进程；已装载即返回，失败静默）。
+        LaunchedEffect(Unit) { SpeechHost.warm() }
         Column(
             modifier = Modifier.fillMaxSize().sceneBackdrop(theme, KbBg, KbFg, KeyPressed, 0.36f)
                 .padding(6.dp),

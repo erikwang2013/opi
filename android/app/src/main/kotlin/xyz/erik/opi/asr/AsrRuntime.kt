@@ -91,6 +91,31 @@ internal object AsrRuntime {
         this.commit = commit
     }
 
+    /**
+     * 键盘显示/切换编辑器时后台预热当前语言引擎（幂等）。主线程只做轻判定，库加载与
+     * 模型装载都在 [worker] 上；只读**已落地**的模型 —— 完整包解压仍留给首次长按，
+     * 避免键盘弹出时做 239–358MB I/O。失败静默（只在日志留痕），第一次点话筒时
+     * [start] 照常报错。
+     */
+    fun warm() {
+        val context = appContext ?: return
+        val whisper = whisperPref?.invoke() ?: return
+        if (!AsrModels.abiSupported() || !asrWarmAllowed(uiState.phase)) return
+        worker.execute {
+            runCatching { warmEngine(context, whisper) }
+                .onFailure { Log.w(TAG, "asr warm failed", it) }
+        }
+    }
+
+    /** 只在 [worker] 上跑：前提是模型已就绪；同语言已装载直接返回。 */
+    private fun warmEngine(context: Context, whisper: Boolean) {
+        val pack = AsrModels.selected(context, whisper)
+        if (!AsrModels.packReady(context, pack)) return
+        if (handle != 0L && loadedKey == "${pack.dir}|$whisper") return
+        if (!AsrNative.ensureLoaded(context)) return
+        ensureModel(context, gen = null, whisper = whisper)
+    }
+
     fun start() {
         val context = appContext ?: return
         if (!AsrNative.ensureLoaded(context)) {
@@ -242,12 +267,15 @@ internal object AsrRuntime {
         }
     }
 
-    /** 返回 false = 已给出 MODEL_MISSING/ERROR 浮层，会话不再继续。 */
-    private fun ensureModel(context: Context, gen: Int, whisper: Boolean): Boolean {
+    /**
+     * 返回 false = 已给出 MODEL_MISSING/ERROR 浮层，会话不再继续。
+     * [gen] = null 是后台预热：不出浮层、也不解压完整包。
+     */
+    private fun ensureModel(context: Context, gen: Int?, whisper: Boolean): Boolean {
         val pack = AsrModels.selected(context, whisper)
         if (!AsrModels.packReady(context, pack)) {
-            if (!AsrBundled.ready(context, pack)) {
-                post(gen, AsrEvent.Missing(whisper))
+            if (gen == null || !AsrBundled.ready(context, pack)) {
+                gen?.let { post(it, AsrEvent.Missing(whisper)) }
                 return false
             }
             // 完整包：首次使用时从 assets 解压（239/358MB，浮层保持 PREPARING）。
@@ -273,7 +301,7 @@ internal object AsrRuntime {
         val created = AsrNative.create(config)
         if (created == 0L) {
             val why = lastError(0L)
-            post(gen, AsrEvent.Fail(why.ifEmpty { "语音模型初始化失败" }))
+            gen?.let { post(it, AsrEvent.Fail(why.ifEmpty { "语音模型初始化失败" })) }
             return false
         }
         val rc = AsrNative.loadModel(created)
@@ -281,9 +309,9 @@ internal object AsrRuntime {
             val why = lastError(created)
             AsrNative.destroy(created)
             if (rc == AsrNative.ERR_MODEL) {
-                post(gen, AsrEvent.Missing(whisper))
+                gen?.let { post(it, AsrEvent.Missing(whisper)) }
             } else {
-                post(gen, AsrEvent.Fail(why.ifEmpty { "模型加载失败（$rc）" }))
+                gen?.let { post(it, AsrEvent.Fail(why.ifEmpty { "模型加载失败（$rc）" })) }
             }
             return false
         }

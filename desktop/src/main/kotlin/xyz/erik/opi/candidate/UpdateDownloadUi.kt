@@ -36,9 +36,11 @@ internal fun UpdateDownloadSection(
     val state = downloader.state
     val busy = state is DownloadState.Running || state is DownloadState.Verifying
     val full = available.full
+    val normal = available.normal
+    val basic = available.basic
     val hot = available.hot
     var note by remember { mutableStateOf("") }
-    if (full == null && hot == null) {
+    if (full == null && normal == null && basic == null && hot == null) {
         Text(
             "前往下载页：" + available.download,
             fontSize = 12.sp,
@@ -49,6 +51,12 @@ internal fun UpdateDownloadSection(
     }
     if (full != null) {
         DownloadLink(UpdatePackageKind.FULL, full, available.latest, busy, downloader)
+    }
+    if (normal != null) {
+        DownloadLink(UpdatePackageKind.NORMAL, normal, available.latest, busy, downloader)
+    }
+    if (basic != null) {
+        DownloadLink(UpdatePackageKind.BASIC, basic, available.latest, busy, downloader)
     }
     if (hot != null) {
         DownloadLink(UpdatePackageKind.HOT, hot, available.latest, busy, downloader)
@@ -121,6 +129,8 @@ internal fun UpdateDownloadSection(
             )
             val pkg = when (state.kind) {
                 UpdatePackageKind.FULL -> full
+                UpdatePackageKind.NORMAL -> normal
+                UpdatePackageKind.BASIC -> basic
                 UpdatePackageKind.HOT -> hot
             }
             if (pkg != null) {

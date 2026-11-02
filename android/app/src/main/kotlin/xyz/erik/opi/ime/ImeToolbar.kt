@@ -53,7 +53,11 @@ const val IME_TOOLBAR_HEIGHT_DP = 44
 // —— 工具条自适应尺寸（纯函数，ImeToolbarSizingTest 门禁） ——
 
 /** 右侧固定功能图标数量（表情/皮肤/输入模式/键盘模式/设置/关于/收起）。 */
-private const val TOOLBAR_ICON_COUNT = 7
+private const val TOOLBAR_BASE_ICON_COUNT = 7
+
+/** 传输图标（齿轮前）只在偏好开启时加入；数量参与均分宽度计算。 */
+internal fun toolbarIconCount(transferEnabled: Boolean): Int =
+    TOOLBAR_BASE_ICON_COUNT + if (transferEnabled) 1 else 0
 
 /**
  * 图标之外固定占用的宽度（dp）：小欧 28+6+2 = 36，英文空闲的「中」键约 27（按 40 预留，
@@ -67,8 +71,10 @@ private const val TOOLBAR_RESERVED_DP = 76f
  * 40dp 是既有视觉尺寸；320dp 屏上 `(320-76)/7 = 34.9`，最右「收起键盘」不再被裁；
  * 再窄（分屏/自由窗口）最多缩到 26dp，仍保留可点面积。
  */
-internal fun toolbarIconSizeDp(toolbarWidthDp: Float): Float =
-    ((toolbarWidthDp - TOOLBAR_RESERVED_DP) / TOOLBAR_ICON_COUNT).coerceIn(26f, 40f)
+internal fun toolbarIconSizeDp(
+    toolbarWidthDp: Float,
+    iconCount: Int = TOOLBAR_BASE_ICON_COUNT,
+): Float = ((toolbarWidthDp - TOOLBAR_RESERVED_DP) / iconCount).coerceIn(26f, 40f)
 
 /**
  * 键盘顶部工具条（2026-10-09，对齐主流移动输入法）：**入口全部用图标** ——
@@ -100,6 +106,9 @@ fun ImeToolbar(
     onOpenSkin: () -> Unit,
     onOpenInputMode: () -> Unit,
     onOpenKeyboardMode: () -> Unit,
+    /** 跨设备传输（2026-11-02）：偏好开启时才显示图标。 */
+    transferEnabled: Boolean,
+    onOpenTransfer: () -> Unit,
     /** 设置页（2026-10-22：IME 里直达系统设置，不必绕桌面图标）。 */
     onOpenSettings: () -> Unit,
     /** 关于面板（2026-10-15 用户裁决「关于给移动端键盘功能区加个入口」）。 */
@@ -116,7 +125,7 @@ fun ImeToolbar(
     ) {
         // 320dp：7×40 + 小欧 36 + 英文「中」≈ 343 > 320，最右的收起键会被裁掉。
         // 按剩余宽度收缩图标（26–40dp），这一行在任意宽度都不溢出。
-        val iconSize = toolbarIconSizeDp(maxWidth.value).dp
+        val iconSize = toolbarIconSizeDp(maxWidth.value, toolbarIconCount(transferEnabled)).dp
         Row(
             modifier = Modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically,
@@ -135,6 +144,10 @@ fun ImeToolbar(
                 "键盘模式${if (keyboardModes.anyOn) "，有开启项" else ""}",
                 iconSize,
             ) { onOpenKeyboardMode() }
+            // 跨设备传输（2026-11-02 用户要求）：放在齿轮前，仅设置开关开启时出现。
+            if (transferEnabled) {
+                ToolbarIcon(OpiIcons.Transfer, "跨设备传输", iconSize) { onOpenTransfer() }
+            }
             // 设置（2026-10-22）：在「关于」之前；关于面板的原入口保留。
             ToolbarIcon(OpiIcons.Gear, "设置", iconSize) { onOpenSettings() }
             // 关于（2026-10-15 用户裁决「功能区的入口」）：压在功能组最右、收起键盘之前。

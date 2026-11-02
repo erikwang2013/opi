@@ -11,9 +11,11 @@
 // 候选栏不画 ‹ ›（Android 平铺视图上线后撤掉）：右侧 ⌄ 展开平铺、上下滑翻页；
 // 长按候选 = 从用户词表删词（Android CandidateBar onLongPress）。
 
+import * as AsrVoice from './AsrVoice';
 import { OpiMode } from './OpiEngine';
 import { KeyboardController } from './KeyboardController';
 import { INPUT_MODES, lastChineseModeIndex, OpiScheme } from './InputModes';
+import { t } from './I18n';
 import { PanelView } from './KeyboardModes';
 import { OpiPet, PetMood, petMood, petStripSelection } from './OpiPet';
 import { Palette, paletteFor, sceneBarBg } from './Palette';
@@ -59,6 +61,9 @@ export struct TopBar {
   @StorageLink('opiElder') elder: number = 0;
   @StorageLink('opiTiled') tiled: number = 0;
   @StorageLink('opiAssociation') association: number = 0;
+  /** 0=语音关闭（不显示麦克风）；2=准备 3=录音 4=识别 5=错误（显示状态条）。 */
+  @StorageLink('opiVoice') voice: number = 0;
+  @StorageLink('opiVoiceMsg') voiceMsg: string = '';
 
   @State petForms: PetMood[] = petStripSelection(Math.random);
   /** 工具条实测宽度（vp）：图标按它收缩，避免悬浮/单手+悬浮时挤掉收起键。 */
@@ -147,7 +152,8 @@ export struct TopBar {
 
   /** 图标宽度 = 均分「面板宽 - 固定块」；不低于 24vp（再小就看不清了）。 */
   private iconSize(): number {
-    const fit: number = Math.floor((this.barWidth - TOOLBAR_FIXED_VP) / TOOL_ICON_COUNT);
+    const count: number = TOOL_ICON_COUNT + (this.voice !== 0 ? 1 : 0);
+    const fit: number = Math.floor((this.barWidth - TOOLBAR_FIXED_VP) / count);
     return Math.max(24, Math.min(TOOL_ICON_SIZE, fit));
   }
 
@@ -161,6 +167,9 @@ export struct TopBar {
         this.ComposingRow()
       }
       if (!this.inTiled()) {
+        if (this.voice >= 2) {
+          this.VoiceStrip()
+        }
         if (this.showCandidates()) {
           this.CandidateRow()
         } else {
@@ -284,6 +293,16 @@ export struct TopBar {
       this.IconButton($r('sys.symbol.keyboard'), '键盘模式', () => {
         this.ctrl.togglePanel(PanelView.KeyboardMode);
       })
+      if (this.voice !== 0) {
+        this.IconButton(this.voice === 3 ? $r('sys.symbol.stop_circle_fill') : $r('sys.symbol.mic_fill'),
+          this.voice === 3 ? t('停止录音') : t('语音输入'), () => {
+            if (this.voice === 3) {
+              AsrVoice.stop();
+            } else {
+              AsrVoice.start();
+            }
+          })
+      }
       this.IconButton($r('sys.symbol.gearshape'), '设置', () => {
         this.ctrl.togglePanel(PanelView.Settings);
       })
@@ -306,6 +325,42 @@ export struct TopBar {
         this.barWidth = w;
       }
     })
+  }
+
+  /** 录音状态条：准备/收音/识别时可取消，出错时可关闭；文案由 AsrVoice 提供。 */
+  @Builder
+  VoiceStrip() {
+    Row() {
+      SymbolGlyph(this.voice === 3 ? $r('sys.symbol.waveform') : $r('sys.symbol.mic_fill'))
+        .fontSize(16)
+        .fontColor([this.voice === 5 ? this.pal().accent : this.pal().toolbarFg])
+      Text(this.voiceMsg)
+        .fontSize(12).fontColor(this.voice === 5 ? this.pal().accent : this.pal().bufferFg)
+        .layoutWeight(1).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+        .margin({ left: 6, right: 6 })
+      if (this.voice === 3) {
+        Text(t('停止')).fontSize(13).fontColor(this.pal().accent)
+          .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+          .onClick(() => {
+            AsrVoice.stop();
+          })
+      }
+      if (this.voice === 5) {
+        Text(t('关闭')).fontSize(13).fontColor(this.pal().dimFg)
+          .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+          .onClick(() => {
+            AsrVoice.dismissError();
+          })
+      } else {
+        Text(t('取消')).fontSize(13).fontColor(this.pal().dimFg)
+          .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+          .onClick(() => {
+            AsrVoice.cancel();
+          })
+      }
+    }
+    .height(32).width('100%').padding({ left: 10, right: 6 })
+    .backgroundColor(sceneBarBg(this.pal().barBg))
   }
 
   @Builder

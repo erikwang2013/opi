@@ -415,6 +415,14 @@ internal fun AboutPage(
         "表情数据 OpenMoji（CC BY-SA 4.0）· 颜文字 rime_kaomoji_dict（MIT）· 小欧贴纸/图标为项目专有资产，商业使用需授权",
         fontSize = 12.sp, color = Muted,
     )
+    // 开源致谢（2026-11-02）：文案在 Credits.kt，设置窗口整体可滚动。
+    Spacer(Modifier.height(10.dp))
+    Text("开源致谢", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Ink)
+    OPEN_SOURCE_CREDITS.forEach { section ->
+        Spacer(Modifier.height(6.dp))
+        Text(section.title, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Ink)
+        section.items.forEach { Text("· $it", fontSize = 12.sp, color = Muted) }
+    }
 }
 
 /** 关于页的外链一行：正文写全地址（读屏看得见），点击交系统浏览器。 */

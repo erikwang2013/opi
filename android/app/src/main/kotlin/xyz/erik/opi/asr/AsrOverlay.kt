@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,6 +52,8 @@ private val LevelColor = Color(0xFF7FDBB6)
  */
 @Composable
 internal fun AsrKeyboardHost(content: @Composable () -> Unit) {
+    // 键盘视图进入组合 = 唤起键盘：后台预热当前引擎（失败静默，长按时再报）。
+    LaunchedEffect(Unit) { AsrRuntime.warm() }
     // 有下载引擎的 64 位设备即使还没下载也显示话筒：点按后浮层会引导去设置。
     val mic = remember { AsrMic(AsrModels.abiSupported()) { AsrRuntime.start() } }
     CompositionLocalProvider(LocalAsrMic provides mic) {

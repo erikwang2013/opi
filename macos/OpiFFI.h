@@ -463,6 +463,12 @@ bool opi_clip_respond_transfer(OpiClip *clip, const uint16_t *transfer_id, size_
 /// 取消进行中的传输（收发两侧都可调用）。失败 → false。
 bool opi_clip_cancel_transfer(OpiClip *clip, const uint16_t *transfer_id, size_t id_len);
 
+// ---------- 语音识别（opi-asr，2026-11-02）----------
+//
+// 声明单独成头：本头与 opi-ffi 导出要求集合相等（c_abi_contract），
+// opi-asr 是另一个 crate，不能混进来。Swift bridging header 经此处包含它。
+#include "OpiAsrFFI.h"
+
 #ifdef __cplusplus
 }
 #endif

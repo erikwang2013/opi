@@ -31,6 +31,24 @@ class ImeToolbarSizingTest {
     }
 
     @Test
+    fun transferIconAppearsOnlyWhenEnabled() {
+        assertEquals(7, toolbarIconCount(transferEnabled = false))
+        assertEquals(8, toolbarIconCount(transferEnabled = true))
+    }
+
+    @Test
+    fun eightIconsStillFitCommonPhones() {
+        val count = toolbarIconCount(transferEnabled = true)
+        for (width in listOf(320f, 360f, 390f, 411f, 430f)) {
+            val total = reserved + count * toolbarIconSizeDp(width, count)
+            assertTrue(
+                "宽 ${width}dp、8 图标时工具条需要 ${total}dp，会裁掉最右图标",
+                total <= width + 0.01f,
+            )
+        }
+    }
+
+    @Test
     fun wideScreensKeepOriginalIconSize() {
         assertEquals(40f, toolbarIconSizeDp(390f), 0.001f)
         assertEquals(40f, toolbarIconSizeDp(430f), 0.001f)

@@ -10,7 +10,11 @@ license.workspace = true
 crate-type = ["lib", "staticlib", "cdylib"]
 
 [features]
-default = ["sherpa"]
+# download-binaries：构建期取 sherpa-onnx v1.12.9 预编译库（桌面/Android）。
+# HarmonyOS 目标不在 sherpa-rs-sys 0.6.8 的 dist.json 里（checksum 有、目标表没有），
+# 该端用 --no-default-features --features sherpa + SHERPA_LIB_PATH 指向 OHOS 预编译库。
+default = ["sherpa", "download-binaries"]
+download-binaries = ["sherpa-rs/download-binaries"]
 # 关闭后仅保留分帧/VAD 状态机/manifest/ABI 逻辑，用于无模型、无 ONNX 运行时的 CI。
 sherpa = ["dep:sherpa-rs"]
 
@@ -22,7 +26,7 @@ sha2 = "0.10"
 # 单一运行时：SenseVoice 与 Whisper 都走 sherpa-onnx 的离线识别器。
 # download-binaries 仅在**构建期**取 sherpa-onnx v1.12.9 预编译库（约 25 MB），
 # 运行期不联网；平台壳可用 SHERPA_LIB_PATH 指向自己交叉编译的同版本库。
-sherpa-rs = { version = "0.6.8", default-features = false, features = ["download-binaries"], optional = true }
+sherpa-rs = { version = "0.6.8", default-features = false, optional = true }
 thiserror = "2"
 
 [dev-dependencies]

@@ -25,6 +25,9 @@ internal interface ClipNativeApi {
     fun peers(handle: Long): String?
     fun forgetPeer(handle: Long, peerId: String): Boolean
     fun status(handle: Long): String?
+    fun sendFiles(handle: Long, peerId: String, filesJson: String): String?
+    fun respondTransfer(handle: Long, transferId: String, accept: Boolean, saveDir: String?): Boolean
+    fun cancelTransfer(handle: Long, transferId: String): Boolean
     fun lastError(): String
 }
 
@@ -48,6 +51,16 @@ internal object OpiClipNative : ClipNativeApi {
     override fun forgetPeer(handle: Long, peerId: String): Boolean =
         OpiEngine.clipForgetPeer(handle, peerId)
     override fun status(handle: Long): String? = OpiEngine.clipStatus(handle)
+    override fun sendFiles(handle: Long, peerId: String, filesJson: String): String? =
+        OpiEngine.clipSendFiles(handle, peerId, filesJson)
+    override fun respondTransfer(
+        handle: Long,
+        transferId: String,
+        accept: Boolean,
+        saveDir: String?,
+    ): Boolean = OpiEngine.clipRespondTransfer(handle, transferId, accept, saveDir)
+    override fun cancelTransfer(handle: Long, transferId: String): Boolean =
+        OpiEngine.clipCancelTransfer(handle, transferId)
     override fun lastError(): String = OpiEngine.clipLastError()
 }
 
@@ -99,6 +112,8 @@ internal class ClipBridge(
         fun onPairingPrompt(prompt: ClipPairingPrompt)
         fun onPairingFinished(instanceId: String, trusted: Boolean, reason: String?)
         fun onRemoteText(instanceId: String, text: String)
+        /** transfer_offer/progress/completed/failed/canceled（在 worker 线程回调）。 */
+        fun onTransfer(event: ClipEvent)
         fun onError(message: String)
     }
 
@@ -131,6 +146,37 @@ internal class ClipBridge(
         call({ api.pairConfirm(handle, peerId, accept) }, refresh = true)
 
     fun forgetPeer(peerId: String) = call({ api.forgetPeer(handle, peerId) }, refresh = true)
+
+    /**
+     * 发送文件清单。[onResult] 在 worker 线程回调传输 ID（失败 = null），调用方负责转主线程。
+     * 未 start 时直接回 null（调用方本来就在主线程）。
+     */
+    fun sendFiles(peerId: String, filesJson: String, onResult: (String?) -> Unit) {
+        if (!started) {
+            onResult(null)
+            return
+        }
+        worker.post(0) {
+            if (!started || handle == 0L) {
+                onResult(null)
+                return@post
+            }
+            val id = runCatching { api.sendFiles(handle, peerId, filesJson) }
+                .getOrElse { failFrom(it); null }
+            if (id.isNullOrEmpty()) {
+                fail(lastError())
+                onResult(null)
+            } else {
+                onResult(id)
+            }
+        }
+    }
+
+    fun respondTransfer(transferId: String, accept: Boolean, saveDir: String) =
+        call({ api.respondTransfer(handle, transferId, accept, saveDir) }, refresh = false)
+
+    fun cancelTransfer(transferId: String) =
+        call({ api.cancelTransfer(handle, transferId) }, refresh = false)
 
     fun stop() {
         if (!started && handle == 0L) return
@@ -204,6 +250,11 @@ internal class ClipBridge(
                 publishPeers()
             }
             is ClipEvent.ClipboardReceived -> callback.onRemoteText(event.instanceId, event.text)
+            is ClipEvent.TransferOffer,
+            is ClipEvent.TransferProgress,
+            is ClipEvent.TransferCompleted,
+            is ClipEvent.TransferFailed,
+            is ClipEvent.TransferCanceled -> callback.onTransfer(event)
             is ClipEvent.SendFailed -> callback.onError("发送到一台已配对设备失败")
             is ClipEvent.Error -> callback.onError(event.message)
             is ClipEvent.Unknown, null -> Unit // 新事件类型：老宿主忽略，不崩

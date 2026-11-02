@@ -36,6 +36,10 @@ extension KeyboardLayout {
         toolbar.onSwitchToChinese = { [weak self] in self?.tap(.cycleMode) }
         // 发送是本地动作（读 UIPasteboard + 发布），不经过引擎的 function-key 路由。
         toolbar.onSendClipboard = { OpiClipboard.shared.sendCurrentClipboard() }
+        // 语音只负责打开宿主 App；不在这里建引擎、不碰麦克风（见 VoiceKeyboard.swift）。
+        toolbar.onOpenVoice = { [weak self] in
+            (self?.delegate as? KeyboardViewController)?.openVoiceFromKeyboard()
+        }
     }
 
     private func tap(_ fn: KeyboardFunctionKey) {

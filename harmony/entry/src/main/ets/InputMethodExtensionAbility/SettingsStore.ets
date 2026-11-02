@@ -39,6 +39,8 @@ const KEY_CLIP: string = 'clip_enabled';
 const KEY_CUSTOM_PUNCT: string = 'nine_custom_punct';
 /** 设置/关于页界面语言：0=中文，1=英文（与 Android `ui_language` 同语义）。 */
 const KEY_UI_LANGUAGE: string = 'ui_language';
+/** 本地语音输入：默认关闭；开启后工具条出现麦克风，会话开始预热。 */
+const KEY_VOICE: string = 'voice_enabled';
 
 let store: preferences.Preferences | null = null;
 
@@ -61,6 +63,7 @@ export class ImeSettings {
   clipEnabled: boolean = false;
   /** 0=中文，1=英文。 */
   lang: number = 0;
+  voiceEnabled: boolean = false;
 }
 
 /** 绑定扩展上下文（每进程一次；失败时本模块退化成内存默认值）。 */
@@ -137,6 +140,7 @@ export function load(): ImeSettings {
   s.association = readBool(KEY_ASSOCIATION, false);
   s.clipEnabled = readBool(KEY_CLIP, false);
   s.lang = readNumber(KEY_UI_LANGUAGE, 0);
+  s.voiceEnabled = readBool(KEY_VOICE, false);
   return s;
 }
 
@@ -251,3 +255,4 @@ export const BOOL_SHOW_OWN: string = KEY_SHOW_OWN;
 export const BOOL_LEARN: string = KEY_LEARN;
 export const BOOL_ASSOCIATION: string = KEY_ASSOCIATION;
 export const BOOL_CLIP: string = KEY_CLIP;
+export const BOOL_VOICE: string = KEY_VOICE;

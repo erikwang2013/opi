@@ -4,13 +4,15 @@
 // OPI iOS 宿主 App —— 承载键盘扩展（Apple 规定扩展不能独立安装），并给出
 // **真实可用**的安装/设置指引（2026-10-21 用户报障「iOS 安装后点击无设置页面」）。
 //
-// 为什么设置主体不在这里：宿主 App 与键盘扩展**没有配置 App Group**，两者
+// 为什么设置主体不在这里：宿主 App 与键盘扩展**默认没有配置 App Group**，两者
 // 各有自己的容器。宿主里的开关不可能同步到键盘（反过来也一样），所以这里
 // 只做「怎么启用 + 设置在哪里 + 数据与隐私」，不摆一排会撒谎的假开关。
+// 语音输入是例外：宿主识别完成后经 App Group（签名构建）或带标记的剪贴板回填。
 // 键盘内的设置面板（工具条齿轮）才是真正生效的那一份。
 //
-// 仓库仍然不手写 .xcodeproj：`scripts/apple/package-ios.sh` 用 swiftc 把这个文件
-// 直接编成 `Opi.app/Opi`，与扩展一起组装进 `Payload/Opi.app` 的 unsigned IPA。
+// 仓库仍然不手写 .xcodeproj：`scripts/apple/package-ios.sh` 用 swiftc 把
+// `ios/HostApp/*.swift` 与 `ios/VoiceResultChannel.swift` 直接编成 `Opi.app/Opi`，
+// 与扩展一起组装进 `Payload/Opi.app` 的 unsigned IPA。
 // 没有 storyboard / nib；整个页面是滚动容器 + 卡片，支持动态字号与横屏。
 
 import UIKit
@@ -30,7 +32,35 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         window.rootViewController = nav
         window.makeKeyAndVisible()
         self.window = window
+        // 冷启动带 URL：键盘的麦克风按钮在 App 未运行时走这里。
+        if let url = launchOptions?[.url] as? URL, url.scheme == "opi-voice" {
+            showVoice(autoStart: url.host == "record")
+        }
         return true
+    }
+
+    func application(
+        _ application: UIApplication,
+        open url: URL,
+        options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+    ) -> Bool {
+        guard url.scheme == "opi-voice" else { return false }
+        showVoice(autoStart: url.host == "record")
+        return true
+    }
+
+    func applicationDidBecomeActive(_ application: UIApplication) {
+        // 已下载模型时后台加载一次，语音页打开即可录音；未下载则不做任何事。
+        VoiceService.shared.prewarm()
+    }
+
+    private func showVoice(autoStart: Bool) {
+        guard let nav = window?.rootViewController as? UINavigationController else { return }
+        // 从键盘再次进入时重建页面，保证这次仍会自动开始录音。
+        if nav.topViewController is VoiceViewController {
+            nav.popViewController(animated: false)
+        }
+        nav.pushViewController(VoiceViewController(autoStart: autoStart), animated: true)
     }
 }
 
@@ -98,6 +128,12 @@ final class HomeViewController: UIViewController {
     private func buildContent() {
         addHero()
 
+        addCard(title: "语音输入", body: [
+            "点「打开语音输入」说话，识别结果会回填到键盘。",
+            "识别完全在本机完成；普通包首次使用需下载语音模型。",
+        ])
+        addPrimaryButton("打开语音输入", action: #selector(openVoice))
+
         addCard(title: "启用键盘（三步）", body: [
             "1. 打开「设置 → 通用 → 键盘 → 键盘 → 添加新键盘」，选择「小欧输入法」。",
             "2. 在任意输入框里长按地球键，切换到「小欧输入法」。",
@@ -117,14 +153,18 @@ final class HomeViewController: UIViewController {
             "关于：版本、主页、项目、博客与隐私政策地址。",
         ])
         addNote(
-            "宿主 App 与键盘扩展没有共享容器（未配置 App Group），两边设置不会互相同步。"
+            "宿主 App 与键盘扩展默认没有共享容器，两边设置不会互相同步。"
                 + "真正生效的设置只在键盘内，所以这里不摆会撒谎的开关。"
         )
 
         addCard(title: "数据与隐私", body: [
-            "输入、候选与用户词学习全部在本机完成；App 与键盘扩展都不发起网络请求。",
+            "输入、候选、用户词学习与语音识别全部在本机完成。",
+            "只有「普通包」下载语音模型时会访问 opi.erik.xyz，且不发送任何输入内容；"
+                + "完整包从内置模型加载，完全不联网。",
             "学到的词只存在键盘扩展自己的容器里；删除 App 即一并删除，"
                 + "不经过任何服务器。",
+            "语音结果默认经带标记的剪贴板回填；键盘需「允许完全访问」才能读取，"
+                + "签名构建若启用 App Group 则不需要。",
             "键盘不需要「允许完全访问」即可打字；密码输入框由系统强制使用内置键盘。",
         ])
 
@@ -242,6 +282,10 @@ final class HomeViewController: UIViewController {
         }
         label.adjustsFontForContentSizeCategory = true
         return label
+    }
+
+    @objc private func openVoice() {
+        navigationController?.pushViewController(VoiceViewController(autoStart: false), animated: true)
     }
 
     @objc private func openSystemSettings() {

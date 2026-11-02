@@ -77,6 +77,15 @@ internal fun asrGate(
     else -> AsrGate.READY
 }
 
+/**
+ * 后台预热只在没有进行中会话时做：换语言会卸载正在用的引擎。
+ * 纯函数，JVM 单测钉住（[AsrRuntime.warm] 调用）。
+ */
+internal fun asrWarmAllowed(phase: AsrPhase): Boolean = when (phase) {
+    AsrPhase.PREPARING, AsrPhase.LISTENING, AsrPhase.TRANSCRIBING -> false
+    AsrPhase.IDLE, AsrPhase.ERROR, AsrPhase.MODEL_MISSING, AsrPhase.PERMISSION_DENIED -> true
+}
+
 /** 只提交有内容的识别结果；空白/纯空格不是一次有效识别。 */
 internal fun asrCommitText(text: String?): String? = text?.trim()?.takeIf { it.isNotEmpty() }
 

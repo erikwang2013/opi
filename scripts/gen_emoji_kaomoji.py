@@ -40,7 +40,7 @@ OpenMoji 全量 4565 条里，`flags`/`component`/`extras-*` 整组不要；肤�
 的原因同 `symbol_keywords.py`：本文件贴着仓库的 500 行门禁）。
 
 颜文字从 5 份素材合并、按清洗后的文本去重（源内大量重复），优先保留 lmeee /
-sougou / A 岛的精选列表，再用 custom_phrase / Temreg 补足；分类先看素材自带的
+第三方整理 / A 岛的精选列表，再用 custom_phrase / Temreg 补足；分类先看素材自带的
 中文描述，再看拼音（custom/Temreg 只有拼音），都匹配不上归「其他」。每类设上限，
 目标 200–400 条。
 
@@ -75,12 +75,13 @@ DEFAULT_KAOMOJI_DIR = Path("/tmp/kaomoji-src2/data")
 
 # 源文件钉（2026-10-18 取得）。不符 = 上游换了数据，先人工确认再改这里。
 OPENMOJI_SHA256 = "b3a07c1c41b6b500423d01fb91c5d41e9c9337a53d217af20a3539d7df8438e4"
+# 标签是中性源名（第三方整理件不按品牌记）；文件按内容 SHA-256 认，不依赖上游文件名。
 KAOMOJI_SHA256 = {
-    "A_kaomoji_dict_data.txt": "d67207ab5e719f622f6d7b87a0146408ed776cca0680fcd37bb4fc87e3f8c23e",
-    "custom_phrase_dict_data.txt": "b7c15690d6bda27c4654979d014eb38bcae186537ab4ed1a772321d54453facb",
-    "lmeee_dict_data.txt": "06d6bef7c6d83f522e846729a15b46c9fd42367e498023845bebb5e5da2a9718",
-    "sougou_dict_data.txt": "30153a4c5befcca01df7d8519dff3f6f7932f508cd06c773ff5f999bd761e842",
-    "Temreg_dict_data.txt": "557cf8a32dd3e575f696f0af99fdc183bd74d0a31494f5ed4d515c4b536eb27e",
+    "A": "d67207ab5e719f622f6d7b87a0146408ed776cca0680fcd37bb4fc87e3f8c23e",
+    "custom": "b7c15690d6bda27c4654979d014eb38bcae186537ab4ed1a772321d54453facb",
+    "lmeee": "06d6bef7c6d83f522e846729a15b46c9fd42367e498023845bebb5e5da2a9718",
+    "third": "30153a4c5befcca01df7d8519dff3f6f7932f508cd06c773ff5f999bd761e842",
+    "Temreg": "557cf8a32dd3e575f696f0af99fdc183bd74d0a31494f5ed4d515c4b536eb27e",
 }
 
 CJK = "㐀-鿿豈-﫿"
@@ -171,31 +172,48 @@ def select_emoji(path: Path) -> list[tuple[str, str, str]]:
     return [(t, n, cat) for cat in EMOJI_ORDER for t, n in buckets[cat]]
 
 
+def load_kaomoji_sources(src: Path) -> dict[str, str]:
+    """按 SHA-256 认文件（不依赖上游文件名）→ {中性标签: 文本}。"""
+    by_sha = {sha: label for label, sha in KAOMOJI_SHA256.items()}
+    files: dict[str, str] = {}
+    for path in src.iterdir():
+        if not path.is_file():
+            continue
+        sha = hashlib.sha256(path.read_bytes()).hexdigest()
+        label = by_sha.get(sha)
+        if label is not None:
+            files[label] = path.read_text(encoding="utf-8")
+    missing = sorted(set(KAOMOJI_SHA256) - set(files))
+    if missing:
+        raise SystemExit(f"FATAL: 颜文字源缺失或 SHA-256 不符 {missing}（目录 {src}）")
+    return files
+
+
 def extract_kaomoji(src: Path) -> list[tuple[str, str, str]]:
     """5 份素材 → [(原文, 描述或拼音, 源名)]，源序 = 常用度代理。"""
     out: list[tuple[str, str, str]] = []
-    files = {name: (src / name).read_text(encoding="utf-8") for name in KAOMOJI_SHA256}
-    for line in files["lmeee_dict_data.txt"].splitlines():
+    files = load_kaomoji_sources(src)
+    for line in files["lmeee"].splitlines():
         m = re.search(r'data-clipboard-text="([^"]*)"', line)
         if m:
             d = re.search(r'data-desc="([^"]*)"', line)
             out.append((html.unescape(m.group(1)), html.unescape(d.group(1)) if d else "", "lmeee"))
-    for line in files["sougou_dict_data.txt"].splitlines():
+    for line in files["third"].splitlines():
         m = re.match(
             r'<div class="ywz_content">(.*?)</div>\t'
             r'<div class="ywz_cont_name">输入文字：(.*?)</div>',
             line,
         )
         if m:
-            out.append((html.unescape(m.group(1)), html.unescape(m.group(2)), "sougou"))
-    for line in files["A_kaomoji_dict_data.txt"].splitlines():
+            out.append((html.unescape(m.group(1)), html.unescape(m.group(2)), "third"))
+    for line in files["A"].splitlines():
         if line.strip():
             out.append((line.rstrip("\n"), "", "A"))
-    for line in files["custom_phrase_dict_data.txt"].splitlines():
+    for line in files["custom"].splitlines():
         m = re.match(r"^([a-z ]+?)\s{2,}(.+)$", line)
         if m:
             out.append((m.group(2), m.group(1), "custom"))
-    for line in files["Temreg_dict_data.txt"].splitlines():
+    for line in files["Temreg"].splitlines():
         parts = line.split("\t")
         if len(parts) >= 2:
             out.append((parts[0], parts[1], "Temreg"))
@@ -276,8 +294,7 @@ def main() -> None:
     args = ap.parse_args()
 
     verify(args.openmoji, OPENMOJI_SHA256, "OpenMoji openmoji.json")
-    for name, expected in KAOMOJI_SHA256.items():
-        verify(args.kaomoji_dir / name, expected, f"rime_kaomoji_dict/{name}")
+    # 颜文字 5 份素材由 load_kaomoji_sources 按 SHA-256 识别并校验（extract 时调用）。
 
     emoji = select_emoji(args.openmoji)
     # 生成期门禁（与 engine-core/tests/emoji_coverage.rs 两道坎；这里拦得更早）。

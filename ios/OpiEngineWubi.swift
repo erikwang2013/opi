@@ -68,7 +68,7 @@ extension OpiEngine {
     /// 当天 23:20 前后实读消费面：C ABI 键路由（`router_edit_keys.rs::handle_enter`
     /// —— **iOS 走的正是这条**）、fcitx5、TSF 已接；Android `KeyRouter.handleEnter`
     /// 实读**仍是**写死的 `select(0)`（未接）。⇒ 本值在 iOS 上**确实**决定回车行为
-    /// （前提：当前 scheme 为五笔）。缺省档 = 清空（Sogou 语义）：装了五笔表、选了
+    /// （前提：当前 scheme 为五笔）。缺省档 = 清空（常见输入法语义）：装了五笔表、选了
     /// 五笔模式之后，打一半按回车**不上屏、直接清掉** —— 2026-10-21 起可在
     /// 设置面板「五笔（86 码表）→ 回车行为」里改成「上屏原文」。
     func wubiReturnStyle() -> Int32 { opi_wubi_return_style() }

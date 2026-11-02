@@ -23,6 +23,10 @@
     {
       "name": "subtype_number_label",
       "value": "小欧数字"
+    },
+    {
+      "name": "mic_permission_reason",
+      "value": "使用麦克风进行本地语音识别，录音不会上传"
     }
   ]
 }

@@ -74,14 +74,16 @@ class UpdateCheckTest {
     }
 
     @Test
-    fun `installed tier package wins over full`() {
+    fun `all three tiers are exposed to the download UI`() {
         val text = """{"version":"1.31.0","packages":{"windows-x64":{
             "full":{"url":"https://x/full.exe"},
             "normal":{"url":"https://x/normal.exe"},
             "basic":{"url":"https://x/basic.exe"}
         }}}"""
         val pkg = parseVersionPoint(text)?.packages?.get("windows-x64")
-        assertEquals("https://x/normal.exe", pkg?.full?.url)
+        assertEquals("https://x/full.exe", pkg?.full?.url)
+        assertEquals("https://x/normal.exe", pkg?.normal?.url)
+        assertEquals("https://x/basic.exe", pkg?.basic?.url)
     }
 
     @Test

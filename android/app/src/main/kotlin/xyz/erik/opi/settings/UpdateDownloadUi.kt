@@ -42,8 +42,10 @@ internal fun UpdateDownloadControls(
     LaunchedEffect(Unit) { UpdateDownloader.resume(context) }
     val busy = state is DownloadState.Running || state is DownloadState.Verifying
     val full = update.full
+    val normal = update.normal
+    val basic = update.basic
     val hot = update.hot
-    if (full == null && hot == null) {
+    if (full == null && normal == null && basic == null && hot == null) {
         Text(
             "前往下载页",
             fontSize = 12.sp,
@@ -88,7 +90,7 @@ internal fun UpdateDownloadControls(
                 "正在校验 ${s.kind.label} 的 SHA-256…", fontSize = 12.sp, color = dim,
             )
             is DownloadState.Done -> {
-                Text("已下载${s.kind.label}：${s.file.name}", fontSize = 12.sp, color = dim)
+                Text("已下载${s.kind.label}：${s.fileName}", fontSize = 12.sp, color = dim)
                 Text(
                     when (s.shaOk) {
                         true -> "SHA-256 校验通过"
@@ -99,7 +101,7 @@ internal fun UpdateDownloadControls(
                 )
                 Row {
                     Text(
-                        if (s.file.name.endsWith(".apk", ignoreCase = true)) "安装" else "打开文件",
+                        if (s.fileName.endsWith(".apk", ignoreCase = true)) "安装" else "打开文件",
                         fontSize = 12.sp, color = accent, fontWeight = FontWeight.Bold,
                         modifier = Modifier.clickable {
                             UpdateDownloader.open(context, s)?.let(onNote)
@@ -115,6 +117,8 @@ internal fun UpdateDownloadControls(
                 Text("下载失败（${s.kind.label}）：${s.reason}", fontSize = 12.sp, color = dim)
                 val pkg = when (s.kind) {
                     UpdatePackageKind.FULL -> full
+                    UpdatePackageKind.NORMAL -> normal
+                    UpdatePackageKind.BASIC -> basic
                     UpdatePackageKind.HOT -> hot
                 }
                 if (pkg != null) {

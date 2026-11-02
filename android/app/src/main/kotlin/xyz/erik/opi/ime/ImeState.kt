@@ -26,7 +26,7 @@ class ImeState(
     var commit: (String) -> Unit = {},
     private val debouncer: Debouncer = HandlerDebouncer(),
 ) {
-    enum class View { QWERTY, NUMBER, SYMBOL, RARE, SKIN, INPUT_MODE, KEYBOARD_MODE, SYMBOL_PAGE, ABOUT, SETTINGS, CANDIDATES_TILED }
+    enum class View { QWERTY, NUMBER, SYMBOL, RARE, SKIN, INPUT_MODE, KEYBOARD_MODE, SYMBOL_PAGE, ABOUT, SETTINGS, TRANSFER, CANDIDATES_TILED }
 
     companion object {
         /** 搜索防抖窗口（对齐 flutter 250ms）。 */
@@ -302,9 +302,10 @@ class ImeState(
      * app 设置页，改键盘内面板」）面板：只切视图、不碰引擎、无缓冲语义，中途关掉不丢缓冲。
      */
     fun openAbout() = openPanel(View.ABOUT)
-    fun openSettings() = openPanel(View.SETTINGS)
+    fun openSettings() = openPanel(View.SETTINGS); fun openTransfer() = openPanel(View.TRANSFER)
+    var transferEnabled by mutableStateOf(false)
+        internal set
     private fun openPanel(v: View) { resetSearch(); view = v }
-
     // ---- 面板切换（开面板前提交 pending buffer） ----
 
     fun openNumber() {

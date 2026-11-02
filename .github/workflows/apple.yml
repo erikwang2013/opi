@@ -26,6 +26,15 @@
 # **合并前把 `feat/apple-packaging` 从 branches 里删掉**（只删一个词，其余不动）。
 on:
   workflow_dispatch:
+    inputs:
+      tier:
+        description: 'Apple 语音模型档位（normal=按需下载；full=内置完整模型）'
+        required: true
+        default: normal
+        type: choice
+        options:
+          - normal
+          - full
   push:
     branches: [main]
     paths:
@@ -128,6 +137,10 @@ jobs:
   macos:
     name: macOS — Swift 真编译 + IME bundle + 未签名 pkg
     runs-on: macos-latest
+    env:
+      # push 触发没有 input，默认 normal；workflow_dispatch 与 iOS 共用 tier 输入。
+      OPI_MACOS_TIER: ${{ github.event.inputs.tier || 'normal' }}
+      MACOSX_DEPLOYMENT_TARGET: '11.0'
     steps:
       - uses: actions/checkout@v4
 
@@ -136,22 +149,80 @@ jobs:
           targets: aarch64-apple-darwin, x86_64-apple-darwin
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          # sherpa-rs 的构建产物引用 ~/Library/Caches/sherpa-rs 下的 dylib；
+          # 只缓存 target 会出现「缓存命中但库文件不存在」，链接时找不到
+          # onnxruntime（2026-11-02 Apple CI）。
+          cache-directories: ~/Library/Caches/sherpa-rs
+          key: sherpa-apple-v1
 
       - name: 取版本号
         id: ver
         run: echo "v=$(bash scripts/apple/version.sh)" >> "$GITHUB_OUTPUT"
 
-      - name: 编 Rust 通用库的两个切片
+      - name: 编 Rust 通用库的两个切片（含 macOS 语音）
         run: |
           set -euo pipefail
           cargo build --release -p opi_ffi --target aarch64-apple-darwin
           cargo build --release -p opi_ffi --target x86_64-apple-darwin
+          # 语音：sherpa-rs 在 macOS 动态链接，两个 arch 的 .dylib 由脚本 lipo。
+          cargo build --release -p opi-asr --target aarch64-apple-darwin
+          cargo build --release -p opi-asr --target x86_64-apple-darwin
+
+      - name: 下载完整包语音模型（仅 full 档）
+        if: env.OPI_MACOS_TIER == 'full'
+        run: |
+          set -euo pipefail
+          root=desktop/asr-bundle/asr
+          base=https://opi.erik.xyz/download/components/asr
+          files=(
+            "sensevoice/model.int8.onnx c71f0ce00bec95b07744e116345e33d8cbbe08cef896382cf907bf4b51a2cd51"
+            "sensevoice/tokens.txt f449eb28dc567533d7fa59be34e2abca8784f771850c78a47fb731a31429a1dc"
+            "whisper-small.en/small.en-encoder.int8.onnx 8bdac288f369aa94ee2194059238c465ed82ea9d47ee8fa4a8c0a891873e462f"
+            "whisper-small.en/small.en-decoder.int8.onnx 710ccf890e10f3faa15f51ec346081a2723c9f3adb6e4da81c6573a5a6f877fb"
+            "whisper-small.en/small.en-tokens.txt 306cd27f03c1a714eca7108e03d66b7dc042abe8c258b44c199a7ed9838dd930"
+            "vad/silero_vad.onnx 9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6"
+          )
+          for entry in "${files[@]}"; do
+            rel="${entry%% *}"; want="${entry##* }"
+            mkdir -p "$root/$(dirname "$rel")"
+            echo "== 下载 $rel =="
+            curl -fL --retry 3 --retry-delay 2 -o "$root/$rel" "$base/$rel"
+            got="$(shasum -a 256 "$root/$rel" | awk '{print $1}')"
+            [ "$got" = "$want" ] || { echo "!! $rel SHA-256 不符" >&2; exit 1; }
+          done
 
       # 编译 + 组装 + 签名 + 打包全在脚本里：这类多行步骤写进 YAML 会立刻撞上本仓那条
       # 「run 块里不能有 heredoc」的限制（块状 YAML 的 heredoc 结束符必须在行首），
       # 于是要么把脚本挤成一行、要么躲开 shellcheck —— 两边都是坑。放脚本里还能本机跑。
       - name: 组装 IME bundle + ad-hoc 签名 + .pkg
         run: bash scripts/apple/package-macos.sh "${{ steps.ver.outputs.v }}"
+
+      - name: 验证 pkg 结构与语音运行库（未签名）
+        run: |
+          set -euo pipefail
+          pkg="$(ls dist/apple/macos/*.pkg)"
+          pkgutil --payload-files "$pkg" > /tmp/opi-macos-payload.txt
+          cat /tmp/opi-macos-payload.txt
+          grep -q 'OpiInputMethod.app/Contents/MacOS/OpiInputMethod' /tmp/opi-macos-payload.txt
+          grep -q 'OpiInputMethod.app/Contents/Frameworks/libopi_ffi.dylib' /tmp/opi-macos-payload.txt
+          grep -q 'OpiInputMethod.app/Contents/Frameworks/libopi_asr.dylib' /tmp/opi-macos-payload.txt
+          grep -Eq 'OpiInputMethod\.app/Contents/Frameworks/libsherpa-onnx[^/]*\.dylib' /tmp/opi-macos-payload.txt
+          grep -Eq 'OpiInputMethod\.app/Contents/Frameworks/libonnxruntime[^/]*\.dylib' /tmp/opi-macos-payload.txt
+          if [ "$OPI_MACOS_TIER" = full ]; then
+            for rel in \
+              asr/sensevoice/model.int8.onnx asr/sensevoice/tokens.txt asr/sensevoice/manifest.json \
+              asr/whisper-small.en/small.en-encoder.int8.onnx \
+              asr/whisper-small.en/small.en-decoder.int8.onnx \
+              asr/whisper-small.en/small.en-tokens.txt \
+              asr/whisper-small.en/manifest.json asr/vad/silero_vad.onnx; do
+              grep -qF "OpiInputMethod.app/Contents/Resources/$rel" /tmp/opi-macos-payload.txt || {
+                echo "!! full 档 pkg 缺少 Resources/$rel" >&2; exit 1; }
+            done
+          elif grep -qF 'OpiInputMethod.app/Contents/Resources/asr/' /tmp/opi-macos-payload.txt; then
+            echo "!! normal 档 pkg 不应包含 Resources/asr/" >&2; exit 1
+          fi
+          echo "pkg 结构自洽：${pkg}（档位 ${OPI_MACOS_TIER}）"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -163,6 +234,12 @@ jobs:
   ios:
     name: iOS — Swift 真编译 + 宿主 App/unsigned IPA
     runs-on: macos-latest
+    env:
+      # push 触发没有 input，默认 normal；workflow_dispatch 可选 full。
+      OPI_IOS_TIER: ${{ github.event.inputs.tier || 'normal' }}
+      # sherpa-onnx 预编译对象要求 iOS 13+；不设它时 cc/rustc 默认 10.0，
+      # 链接会缺 ___chkstk_darwin（2026-11-02 Apple CI）。
+      IPHONEOS_DEPLOYMENT_TARGET: '15.0'
     steps:
       - uses: actions/checkout@v4
 
@@ -171,6 +248,9 @@ jobs:
           targets: aarch64-apple-ios, aarch64-apple-ios-sim
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-directories: ~/Library/Caches/sherpa-rs
+          key: sherpa-apple-v1
 
       - name: 取版本号
         id: ver
@@ -181,6 +261,34 @@ jobs:
           set -euo pipefail
           cargo build --release -p opi_ffi --target aarch64-apple-ios
           cargo build --release -p opi_ffi --target aarch64-apple-ios-sim
+          # 宿主语音用；sherpa-rs 的 iOS 预编译包是静态库（见 package-ios.sh 头注释）。
+          # rustc 的 aarch64-apple-ios 默认部署目标 10.0，而 sherpa 对象是 13.0；
+          # 不显式抬到 15.0 会在 ___chkstk_darwin 上链接失败。
+          RUSTFLAGS="-C link-arg=-mios-version-min=15.0" \
+            cargo build --release -p opi-asr --target aarch64-apple-ios
+
+      - name: 下载完整包语音模型（仅 full 档）
+        if: env.OPI_IOS_TIER == 'full'
+        run: |
+          set -euo pipefail
+          root=desktop/asr-bundle/asr
+          base=https://opi.erik.xyz/download/components/asr
+          files=(
+            "sensevoice/model.int8.onnx c71f0ce00bec95b07744e116345e33d8cbbe08cef896382cf907bf4b51a2cd51"
+            "sensevoice/tokens.txt f449eb28dc567533d7fa59be34e2abca8784f771850c78a47fb731a31429a1dc"
+            "whisper-small.en/small.en-encoder.int8.onnx 8bdac288f369aa94ee2194059238c465ed82ea9d47ee8fa4a8c0a891873e462f"
+            "whisper-small.en/small.en-decoder.int8.onnx 710ccf890e10f3faa15f51ec346081a2723c9f3adb6e4da81c6573a5a6f877fb"
+            "whisper-small.en/small.en-tokens.txt 306cd27f03c1a714eca7108e03d66b7dc042abe8c258b44c199a7ed9838dd930"
+            "vad/silero_vad.onnx 9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6"
+          )
+          for entry in "${files[@]}"; do
+            rel="${entry%% *}"; want="${entry##* }"
+            mkdir -p "$root/$(dirname "$rel")"
+            echo "== 下载 $rel =="
+            curl -fL --retry 3 --retry-delay 2 -o "$root/$rel" "$base/$rel"
+            got="$(shasum -a 256 "$root/$rel" | awk '{print $1}')"
+            [ "$got" = "$want" ] || { echo "!! $rel SHA-256 不符" >&2; exit 1; }
+          done
 
       - name: 编译扩展 + 宿主 App + 组装 unsigned IPA
         run: bash scripts/apple/package-ios.sh "${{ steps.ver.outputs.v }}"
@@ -214,7 +322,27 @@ jobs:
           host_id="$(plutil -extract CFBundleIdentifier raw "$app/Info.plist")"
           kb_id="$(plutil -extract CFBundleIdentifier raw "$app/PlugIns/OpiKeyboard.appex/Info.plist")"
           case "$kb_id" in "$host_id".*) ;; *) echo "扩展 id 不以宿主 id 为前缀: $kb_id / $host_id" >&2; exit 1;; esac
-          echo "IPA 结构自洽：${ipa}（未签名，需重签后安装）"
+          mic="$(plutil -extract NSMicrophoneUsageDescription raw "$app/Info.plist")"
+          [ -n "$mic" ] || { echo "!! 宿主 Info.plist 缺麦克风用途说明" >&2; exit 1; }
+          scheme="$(plutil -extract CFBundleURLTypes.0.CFBundleURLSchemes.0 raw "$app/Info.plist")"
+          [ "$scheme" = "opi-voice" ] || { echo "!! 宿主 URL scheme 不是 opi-voice: $scheme" >&2; exit 1; }
+          if [ "$OPI_IOS_TIER" = full ]; then
+            for member in \
+              'Payload/Opi.app/asr/sensevoice/model.int8.onnx' \
+              'Payload/Opi.app/asr/sensevoice/tokens.txt' \
+              'Payload/Opi.app/asr/sensevoice/manifest.json' \
+              'Payload/Opi.app/asr/whisper-small.en/small.en-encoder.int8.onnx' \
+              'Payload/Opi.app/asr/whisper-small.en/small.en-decoder.int8.onnx' \
+              'Payload/Opi.app/asr/whisper-small.en/small.en-tokens.txt' \
+              'Payload/Opi.app/asr/whisper-small.en/manifest.json' \
+              'Payload/Opi.app/asr/vad/silero_vad.onnx'; do
+              grep -qF "$member" /tmp/opi-ipa-list.txt || {
+                echo "!! full 档 IPA 缺少 $member" >&2; exit 1; }
+            done
+          elif grep -qF 'Payload/Opi.app/asr/' /tmp/opi-ipa-list.txt; then
+            echo "!! normal 档 IPA 不应包含 asr/ 模型" >&2; exit 1
+          fi
+          echo "IPA 结构自洽：${ipa}（未授权/未签名，需重签后安装；档位 ${OPI_IOS_TIER}）"
 
       - uses: actions/upload-artifact@v4
         with:

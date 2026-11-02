@@ -47,6 +47,11 @@ internal sealed interface ClipCommand {
 
     /** 手动发送（Wayland）：文本只在内存里过一手，不落盘、不记日志。 */
     data class SendText(val text: String) : ClipCommand
+
+    /** 文件/文件夹传输：清单只含本机绝对路径，FFI 在宿主线程上展开目录。 */
+    data class SendFiles(val peer: String, val filesJson: String) : ClipCommand
+    data class RespondTransfer(val id: String, val accept: Boolean, val saveDir: String?) : ClipCommand
+    data class CancelTransfer(val id: String) : ClipCommand
 }
 
 private fun writeJson(socket: Socket, json: String) {
@@ -188,6 +193,33 @@ internal class ClipControlServer(
                 enqueue(ClipCommand.SendText(text))
                 writeJson(socket, "{\"ok\":true}")
             }
+            "send_files" -> {
+                val peer = peerArg(m) ?: return replyError(socket, "peer 必须是 32 位十六进制")
+                val files = (m["files"] as? JVal.JStr)?.v
+                    ?: return replyError(socket, "send_files 缺少 files")
+                val picks = parseTransferFiles(files)
+                    ?: return replyError(socket, "files 清单不合法或超过上限")
+                enqueue(ClipCommand.SendFiles(peer, encodeTransferFiles(picks)))
+                writeJson(socket, "{\"ok\":true}")
+            }
+            "respond_transfer" -> {
+                val id = transferArg(m) ?: return replyError(socket, "transfer id 必须是 32 位十六进制")
+                val accept = (m["accept"] as? JVal.JBool)?.v
+                    ?: return replyError(socket, "respond_transfer 缺少 accept")
+                val saveDir = (m["save_dir"] as? JVal.JStr)?.v?.takeIf { it.isNotEmpty() }
+                if (accept) {
+                    val valid = saveDir != null && saveDir.length <= 4096 &&
+                        runCatching { java.nio.file.Paths.get(saveDir).isAbsolute }.getOrDefault(false)
+                    if (!valid) return replyError(socket, "接受传输需要绝对 save_dir")
+                }
+                enqueue(ClipCommand.RespondTransfer(id, accept, saveDir))
+                writeJson(socket, "{\"ok\":true}")
+            }
+            "cancel_transfer" -> {
+                val id = transferArg(m) ?: return replyError(socket, "transfer id 必须是 32 位十六进制")
+                enqueue(ClipCommand.CancelTransfer(id))
+                writeJson(socket, "{\"ok\":true}")
+            }
             "stop" -> {
                 enqueue(ClipCommand.SetEnabled(false))
                 writeJson(socket, "{\"ok\":true}")
@@ -198,6 +230,9 @@ internal class ClipControlServer(
 
     private fun peerArg(m: Map<String, JVal>): String? =
         (m["peer"] as? JVal.JStr)?.v?.takeIf { it.matches(Regex("[0-9a-fA-F]{32}")) }
+
+    private fun transferArg(m: Map<String, JVal>): String? =
+        (m["id"] as? JVal.JStr)?.v?.takeIf { it.matches(Regex("[0-9a-fA-F]{32}")) }
 
     fun close() {
         closed = true
@@ -271,6 +306,21 @@ internal object ClipClient {
     fun forget(peer: String): Boolean = command("\"forget\",\"peer\":${jsonString(peer)}")
 
     fun sendText(text: String): Boolean = command("\"send\",\"text\":${jsonString(text)}")
+
+    fun sendFiles(peer: String, filesJson: String): Boolean =
+        command("\"send_files\",\"peer\":${jsonString(peer)},\"files\":${jsonString(filesJson)}")
+
+    fun respondTransfer(id: String, accept: Boolean, saveDir: String?): Boolean {
+        val fields = buildString {
+            append("\"respond_transfer\",\"id\":").append(jsonString(id))
+            append(",\"accept\":").append(accept)
+            if (saveDir != null) append(",\"save_dir\":").append(jsonString(saveDir))
+        }
+        return command(fields)
+    }
+
+    fun cancelTransfer(id: String): Boolean =
+        command("\"cancel_transfer\",\"id\":${jsonString(id)}")
 
     fun stop(): Boolean = command("\"stop\"")
 }

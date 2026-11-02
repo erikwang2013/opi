@@ -5,7 +5,6 @@ package xyz.erik.opi.settings
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import xyz.erik.opi.BuildConfig
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -35,6 +34,8 @@ internal data class RemoteRelease(
     val version: String,
     val download: String = OPI_DOWNLOAD_URL,
     val full: UpdatePackage? = null,
+    val normal: UpdatePackage? = null,
+    val basic: UpdatePackage? = null,
     val hot: UpdatePackage? = null,
 )
 
@@ -95,7 +96,6 @@ private fun parsePackage(obj: String): UpdatePackage? {
 internal fun parseReleaseJson(
     text: String,
     platform: String = "android",
-    tier: String = "full",
 ): RemoteRelease? {
     val version = jsonString(text, "version") ?: jsonString(text, "latest")
     val v = version?.trim()?.removePrefix("v")?.takeIf { it.isNotEmpty() } ?: return null
@@ -104,12 +104,16 @@ internal fun parseReleaseJson(
     val packages = jsonObjectAt(text, "packages")
     val platformObj = packages?.let { jsonObjectAt(it, platform) }
         ?: packages?.let { jsonObjectAt(it, "android-universal") }
-    val tierObj = platformObj?.let { jsonObjectAt(it, tier) }
-        ?: platformObj?.let { jsonObjectAt(it, "full") }
-    val full = tierObj?.let(::parsePackage)
-    val hot = tierObj?.let { jsonObjectAt(it, "hot") }?.let(::parsePackage)
-        ?: platformObj?.let { jsonObjectAt(it, "hot") }?.let(::parsePackage)
-    return RemoteRelease(v, download, full, hot)
+    fun pkg(key: String): UpdatePackage? =
+        platformObj?.let { jsonObjectAt(it, key) }?.let(::parsePackage)
+    return RemoteRelease(
+        version = v,
+        download = download,
+        full = pkg("full"),
+        normal = pkg("normal"),
+        basic = pkg("basic"),
+        hot = pkg("hot"),
+    )
 }
 
 /** 兜底：首页 JSON-LD 里的 `"softwareVersion":"x.y.z"`。 */
@@ -154,7 +158,7 @@ internal fun fetchLatestRelease(): Result<RemoteRelease> = runCatching {
         return left.toInt()
     }
     runCatching {
-        parseReleaseJson(httpGet(OPI_VERSION_URL, budget()), tier = BuildConfig.PACKAGE_TIER)
+        parseReleaseJson(httpGet(OPI_VERSION_URL, budget()))
     }.getOrNull()
         ?: parseJsonLdVersion(httpGet(OPI_HOME_URL, budget()))?.let { RemoteRelease(it) }
         ?: error("版本端点没有可用版本号")
@@ -185,10 +189,12 @@ internal sealed interface UpdateState {
     object Idle : UpdateState
     object Checking : UpdateState
 
-    /** 新版本；[full]/[hot] = 站点点名的可直下包（没有就只留下载页兜底）。 */
+    /** 新版本；完整/普通/基础/热更新包（没有就只留下载页兜底）。 */
     data class Newer(
         val version: String,
         val full: UpdatePackage? = null,
+        val normal: UpdatePackage? = null,
+        val basic: UpdatePackage? = null,
         val hot: UpdatePackage? = null,
         val download: String = OPI_DOWNLOAD_URL,
     ) : UpdateState
@@ -209,6 +215,8 @@ internal suspend fun checkForUpdate(currentVersion: String, manual: Boolean): Up
                     UpdateState.Newer(
                         version = release.version,
                         full = release.full,
+                        normal = release.normal,
+                        basic = release.basic,
                         hot = release.hot,
                         download = release.download,
                     )

@@ -116,7 +116,7 @@ EMOJI_MUST_HAVE = {
     "trade mark",
 }
 
-# 颜文字每类上限（源优先序：lmeee → sougou → A → custom → Temreg）。
+# 颜文字每类上限（源优先序：lmeee → 第三方整理 → A → custom → Temreg）。
 KAOMOJI_CAP = {
     "开心": 70, "难过": 45, "生气": 35, "惊讶": 55,
     "害羞": 45, "动作": 75, "其他": 65,
