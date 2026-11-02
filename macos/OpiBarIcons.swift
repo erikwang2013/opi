@@ -123,6 +123,30 @@ enum OpiBarIcons {
         }
     }
 
+    /// 麦克风：胶囊 + 下半圆 + 支架。录音中由状态栏改成文字徽标，不在这里画红点。
+    static func mic(buttonSide: CGFloat, color: NSColor) -> NSImage {
+        let d = buttonSide * faceScale
+        return image(side: d) { _ in
+            let ctx = NSGraphicsContext.current?.cgContext
+            let stroke = d * 0.075
+            let body = CGRect(x: d * 0.37, y: d * 0.40, width: d * 0.26, height: d * 0.46)
+            ctx?.setFillColor(color.cgColor)
+            ctx?.addPath(CGPath(roundedRect: body, cornerWidth: body.width / 2,
+                                cornerHeight: body.width / 2, transform: nil))
+            ctx?.fillPath()
+            ctx?.setStrokeColor(color.cgColor)
+            ctx?.setLineWidth(stroke)
+            ctx?.addArc(center: CGPoint(x: d / 2, y: d * 0.55), radius: d * 0.25,
+                        startAngle: .pi, endAngle: 2 * .pi, clockwise: false)
+            ctx?.strokePath()
+            ctx?.move(to: CGPoint(x: d / 2, y: d * 0.30))
+            ctx?.addLine(to: CGPoint(x: d / 2, y: d * 0.16))
+            ctx?.move(to: CGPoint(x: d * 0.36, y: d * 0.16))
+            ctx?.addLine(to: CGPoint(x: d * 0.64, y: d * 0.16))
+            ctx?.strokePath()
+        }
+    }
+
     // ---------- 工具 ----------
 
     private static func image(side d: CGFloat,

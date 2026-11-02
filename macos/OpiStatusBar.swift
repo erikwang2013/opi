@@ -36,6 +36,7 @@ enum OpiBarButton: Int, CaseIterable {
     case mode
     case fullwidth
     case vk
+    case mic
     case symbols
     case settings
 
@@ -49,6 +50,7 @@ enum OpiBarButton: Int, CaseIterable {
         case .mode: return "模式"
         case .fullwidth: return "全半角"
         case .vk: return "软键盘"
+        case .mic: return "语音输入"
         case .symbols: return "符号大全"
         case .settings: return "设置"
         }
@@ -64,6 +66,7 @@ enum OpiBarButton: Int, CaseIterable {
         case .mode: return "拼音 → 五笔 → 英文26键 循环"
         case .fullwidth: return "全角 ⇄ 半角"
         case .vk: return "显示/隐藏自绘虚拟键盘"
+        case .mic: return "单击开始/停止录音；Option 单击取消。首次使用会下载模型（本地识别）"
         case .symbols: return "打开符号与表情面板"
         case .settings: return "打开 OPI 设置"
         }
@@ -80,6 +83,7 @@ enum OpiBarButton: Int, CaseIterable {
         case .mode: return true
         case .fullwidth: return s.fullwidth
         case .vk: return s.vk
+        case .mic: return s.mic
         case .symbols: return s.symbols
         case .settings: return s.settings
         }
@@ -102,6 +106,7 @@ extension OpiBarSettings {
         case .mode: break
         case .fullwidth: fullwidth = on
         case .vk: vk = on
+        case .mic: mic = on
         case .symbols: symbols = on
         case .settings: settings = on
         }
@@ -320,6 +325,17 @@ final class OpiStatusBar: NSObject {
                                              buttonSide: buttonSide, color: palette.fg))
             case .vk:
                 useImage(b, OpiBarIcons.keyboard(buttonSide: buttonSide, color: palette.fg))
+            case .mic:
+                let voice = OpiVoice.shared
+                if let badge = voice.badge {
+                    useText(b)
+                    b.setThemedTitle(badge, color: palette.accent,
+                                     size: badge.count > 1 ? 10 * scale : 16 * scale,
+                                     bold: true)
+                } else {
+                    useImage(b, OpiBarIcons.mic(buttonSide: buttonSide, color: palette.fg))
+                }
+                b.toolTip = voice.tooltip
             case .settings:
                 useImage(b, OpiBarIcons.settings(buttonSide: buttonSide, color: palette.fg))
             case .enpro:
@@ -389,7 +405,7 @@ final class OpiStatusBar: NSObject {
     }
 
     /// 失败必须看得见（Linux 的 notice 行同义）。4 秒后回到按钮列。
-    private func showNotice(_ text: String) {
+    func showNotice(_ text: String) {
         noticeText = text
         noticeTimer?.invalidate()
         noticeTimer = Timer.scheduledTimer(withTimeInterval: 4, repeats: false) { [weak self] _ in
@@ -431,6 +447,9 @@ final class OpiStatusBar: NSObject {
             engine.toggleFullwidth()
         case .vk:
             OpiKeyboardPanel.shared.toggle()
+        case .mic:
+            // Option 单击 = 取消当前录音/识别（普通单击是开始或停止）。
+            OpiVoice.shared.toggle(cancel: NSApp.currentEvent?.modifierFlags.contains(.option) == true)
         case .symbols:
             OpiSymbolPanel.shared.show()
         case .settings:

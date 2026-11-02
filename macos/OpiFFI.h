@@ -449,6 +449,12 @@ OpiString opi_clip_status(OpiClip *clip);
 /// 最近一次失败原因；空串 = 没有错误。按线程记录（句柄不跨线程）。
 OpiString opi_clip_last_error(void);
 
+// ---------- 语音识别（opi-asr，2026-11-02）----------
+//
+// 声明单独成头：本头与 opi-ffi 导出要求集合相等（c_abi_contract），
+// opi-asr 是另一个 crate，不能混进来。Swift bridging header 经此处包含它。
+#include "OpiAsrFFI.h"
+
 #ifdef __cplusplus
 }
 #endif

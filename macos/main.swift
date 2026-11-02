@@ -77,6 +77,8 @@ DispatchQueue.main.async {
     if persistedScheme != .wubi { _ = OpiEngine.shared.loadOptionalWubiDictionary() }
     // 导入词库按停用名单重放；坏文件只记日志，不挡启动。
     OpiEngine.shared.loadImportedDicts(disabled: OpiSettingsStore.disabledDicts())
+    // 语音引擎：只在模型已存在（full 包或已下载）时后台预热，不阻塞启动。
+    OpiVoice.shared.prewarmIfNeeded()
 }
 
 // 后台常驻：本进程没有窗口，靠 run loop 收 IMK 事件。
