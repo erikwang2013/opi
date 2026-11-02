@@ -331,27 +331,6 @@ class EngineController(
         refresh()
     }
 
-    /**
-     * 偏好恢复：五个开关一次性写入后**只 refresh 一次**。逐个 setter 会让
-     * onReady 连做 5 次全量回读（含 candidates(512)），冷启动白白多花 5–20ms。
-     */
-    fun applySwitches(
-        learn: Boolean,
-        fuzzy: Boolean,
-        fuzzyPairs: Int,
-        useFuzzyPairs: Boolean,
-        jianpin: Boolean,
-        correction: Boolean,
-        shuangpinLayout: Int,
-    ) {
-        api.setLearner(learn)
-        if (useFuzzyPairs) api.setFuzzyPairs(fuzzyPairs) else api.setFuzzy(fuzzy)
-        api.setJianpin(jianpin)
-        api.setCorrection(correction)
-        api.setShuangpinLayout(shuangpinLayout)
-        refresh()
-    }
-
     fun setFuzzy(on: Boolean) {
         api.setFuzzy(on)
         refresh()

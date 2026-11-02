@@ -6,6 +6,7 @@ package xyz.erik.opi.settings
 import android.content.Context
 import xyz.erik.opi.engine.AssociationGate
 import xyz.erik.opi.engine.EngineController
+import xyz.erik.opi.engine.applySwitches
 import xyz.erik.opi.ime.InputMode
 import xyz.erik.opi.ime.KeyboardModes
 import xyz.erik.opi.jni.OpiEngine
