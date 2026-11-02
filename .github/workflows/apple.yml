@@ -253,7 +253,10 @@ jobs:
           cargo build --release -p opi_ffi --target aarch64-apple-ios
           cargo build --release -p opi_ffi --target aarch64-apple-ios-sim
           # 宿主语音用；sherpa-rs 的 iOS 预编译包是静态库（见 package-ios.sh 头注释）。
-          cargo build --release -p opi-asr --target aarch64-apple-ios
+          # rustc 的 aarch64-apple-ios 默认部署目标 10.0，而 sherpa 对象是 13.0；
+          # 不显式抬到 15.0 会在 ___chkstk_darwin 上链接失败。
+          RUSTFLAGS="-C link-arg=-mios-version-min=15.0" \
+            cargo build --release -p opi-asr --target aarch64-apple-ios
 
       - name: 下载完整包语音模型（仅 full 档）
         if: env.OPI_IOS_TIER == 'full'
