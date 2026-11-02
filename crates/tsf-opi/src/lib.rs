@@ -21,6 +21,11 @@ mod logic_settings;
 /// 而真正的平台胶水只剩管道读写。
 pub mod ctl;
 
+/// 候选窗出站队列（平台中立：有界、保序、溢出丢弃/关闭语义）。
+/// 平台胶水（`candidate_io.rs`）只在 Windows 编译，而"队列满先丢谁、关闭后还发不发"
+/// 这些判定在主机就能测 —— 与 `vk.rs`/`ctl.rs` 同一个理由搬出来。
+pub mod candidate_queue;
+
 /// DLL 服务器资料（CLSID/GUID · 注册表键路径 · 模块级对象计数）。
 /// 与 `vk.rs` 同样是**平台中立**的：`windows_core::GUID` 是无条件依赖，
 /// 主机可构造、可格式化、可单测 —— 而这些值错了的后果全是静默的（见 `dll.rs`）。
