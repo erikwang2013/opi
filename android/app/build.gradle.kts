@@ -207,8 +207,12 @@ fun asrNdkDir(): File {
 val buildAsrNative by tasks.registering {
     group = "build"
     description = "构建 arm64-v8a/x86_64 的 libopi_asr.so 与 JNI 薄层"
+    // 输入齐了才能复用产物：opi-asr 只依赖 crates.io（版本由 Cargo.lock 钉住），
+    // 本地代码只有 crates/opi-asr 与这份 JNI 薄层。
+    inputs.file(asrRepoRoot.resolve("Cargo.lock"))
+    inputs.dir(asrRepoRoot.resolve("crates/opi-asr"))
+    inputs.file(asrShim)
     outputs.dir(asrJniRoot)
-    outputs.upToDateWhen { false }
     doLast {
         val ndk = asrNdkDir()
         val toolchain = ndk.resolve("toolchains/llvm/prebuilt").listFiles()

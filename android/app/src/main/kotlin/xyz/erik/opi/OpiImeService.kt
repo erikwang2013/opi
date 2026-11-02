@@ -239,6 +239,9 @@ class OpiImeService : InputMethodService() {
                 imeState.restore(prefs.inputMode, prefs.keyboardModes, prefs.skin, prefs.englishPro, prefs.customPunct, prefs.scene)
                 // restore 可能晚于 onConfigureWindow（窗口先出来）：按恢复后的模式重排一次。
                 window?.window?.let { applyKeyboardWindow(it) }
+                // 生僻字索引 1.1MB：首次打开面板才懒读会在主线程卡一下；引擎就绪后
+                // 用后台线程预热，面板打开时直接命中。
+                Thread({ runCatching { rareIndex } }, "opi-rare-preload").start()
             },
         )
         val view = ComposeView(this)
@@ -472,7 +475,6 @@ class OpiImeService : InputMethodService() {
         imeState.resetToDefaultView()
         lifecycleOwner.registry.currentState = Lifecycle.State.STARTED
     }
-
     override fun onDestroy() {
         // 停止录音并在工作线程退出后卸载模型（约 240–360MB）。
         AsrRuntime.detach()
@@ -491,7 +493,6 @@ class OpiImeService : InputMethodService() {
         super.onDestroy()
     }
 }
-
 /** IME Service 最小 LifecycleOwner：registry 由 Service 手动推进状态。 */
 private class ImeLifecycleOwner : LifecycleOwner {
     val registry: LifecycleRegistry = LifecycleRegistry(this)
