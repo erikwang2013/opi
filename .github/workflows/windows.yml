@@ -224,7 +224,8 @@ jobs:
             $info = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(32)
             $cls = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(64)
             try {
-              if (-not $fn($info, $cls, 0)) { throw 'ImeInquire 返回 FALSE' }
+              $ok = $fn.Invoke($info, $cls, 0)
+            if (-not $ok) { throw 'ImeInquire 返回 FALSE' }
               $name = [System.Runtime.InteropServices.Marshal]::PtrToStringUni($cls)
               if ($name -ne 'OpiImm32Wnd') { throw "ImeInquire 类名不对：$name" }
               Write-Host "IMM32 加载并返回类名 $name"
