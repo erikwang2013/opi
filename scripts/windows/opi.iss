@@ -7,6 +7,7 @@
 ; with OPI_TSF_DLL set. Layout on Windows:
 ;   <app-image>\opi.exe              launcher (candidate window / --settings)
 ;   <app-image>\app\tsf_opi.dll      TSF COM server (registered below)
+;   <app-image>\app\opi_imm32.ime    IMM32 compatibility IME (copied to System32)
 ;   <app-image>\app\luna.opid        dictionary, loaded from the DLL's directory
 ;   <app-image>\app\trad.opid        traditional dictionary (optional, same directory)
 ;   <app-image>\app\*.jar, opi.exe's jars, runtime\ (jlinked JRE)
@@ -145,6 +146,9 @@ Type: filesandordirs; Name: "{app}\runtime"
 ; 语音运行时（opi_asr.dll / sherpa-onnx-*.dll / onnxruntime.dll）也在这个通配里，
 ; 由 desktop/build.gradle.kts 的 buildOpiAsr 放进 app image，无需逐文件列。
 Source: "{#AppImageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; IMM32 兼容输入法（2026-11-02）：IMM32 只从 System32 加载 .ime；文件随安装器
+; 嵌入并按 uninsdeletefile 在卸载时删除。注册表键在 [Registry] 里成组删除。
+Source: "{#AppImageDir}\app\opi_imm32.ime"; DestDir: "{sys}"; Flags: ignoreversion uninsdeletefile
 
 [UninstallDelete]
 ; Remove everything under {app}, including files the uninstall log did not record
@@ -169,6 +173,15 @@ Root: HKLM64; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType
 ; Statusbar is a second process of the same opi.exe; the candidate process hosts the
 ; control-plane broker it needs. Both Run values are required.
 Root: HKLM64; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "opi-statusbar"; ValueData: """{app}\opi.exe"" --statusbar"; Flags: uninsdeletevalue
+; IMM32 兼容输入法（2026-11-02，用户裁决）：独立键盘布局，用户可在语言设置里
+; 添加「小欧输入法（兼容模式）」。不写 Preload，避免安装后擅自改变默认输入法。
+; KLID 固定为 E0F10804；Layout File 用 KBDUS.DLL（中文 IME 的常规基座）。
+Root: HKLM64; Subkey: "SYSTEM\CurrentControlSet\Control\Keyboard Layouts\E0F10804"; ValueType: string; ValueName: "Ime File"; ValueData: "opi_imm32.ime"; Flags: uninsdeletekey
+Root: HKLM64; Subkey: "SYSTEM\CurrentControlSet\Control\Keyboard Layouts\E0F10804"; ValueType: string; ValueName: "Layout File"; ValueData: "KBDUS.DLL"
+Root: HKLM64; Subkey: "SYSTEM\CurrentControlSet\Control\Keyboard Layouts\E0F10804"; ValueType: string; ValueName: "Layout Text"; ValueData: "小欧输入法（兼容模式）"
+Root: HKLM64; Subkey: "SYSTEM\CurrentControlSet\Control\Keyboard Layouts\E0F10804"; ValueType: string; ValueName: "Layout Display Name"; ValueData: "小欧输入法（兼容模式）"
+; IMM32 DLL 在 System32 里，靠这个值找到 {app}\app 下的词库/设置。
+Root: HKLM64; Subkey: "Software\opi"; ValueType: string; ValueName: "InstallDir"; ValueData: "{app}"; Flags: uninsdeletevalue
 
 [Run]
 ; Finish page: start the candidate window only. It must NOT touch Explorer --

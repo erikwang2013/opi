@@ -668,6 +668,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "imm32_opi"
+version = "1.31.3"
+dependencies = [
+ "engine-core",
+ "engine-data",
+ "tsf_opi",
+ "windows",
+ "windows-core",
+]
+
+[[package]]
 name = "indenter"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

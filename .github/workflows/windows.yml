@@ -137,10 +137,13 @@ jobs:
       # 在包内但不在 DLL 旁的 app\，也不进 PATH）。动态 CRT 的 DLL 在这类机器上
       # regsvr32 会以 0x8007007E（找不到模块）失败。静态 CRT 后导入表不再有
       # VCRUNTIME140/MSVCP140/ucrtbase/api-ms-win-crt* —— 下一条门禁会核。
-      - name: cargo build --release -p tsf_opi（真链接出 DLL，静态 CRT）
+      - name: cargo build --release -p tsf_opi -p imm32_opi（真链接出 DLL，静态 CRT）
         env:
           RUSTFLAGS: -C target-feature=+crt-static
-        run: cargo build --release --locked -p tsf_opi --target x86_64-pc-windows-msvc
+        run: |
+          cargo build --release --locked -p tsf_opi -p imm32_opi --target x86_64-pc-windows-msvc
+          Copy-Item target/x86_64-pc-windows-msvc/release/imm32_opi.dll `
+            target/x86_64-pc-windows-msvc/release/opi_imm32.ime -Force
 
       # 「编出来了」与「这个 DLL 里真有 COM 入口」是两件事：导出名漏一个（或名字被
       # 装饰），宿主看到的就是「导出不存在」——regsvr32 报找不到入口点，产物外观毫无异样。
@@ -155,7 +158,9 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $dll = 'target/x86_64-pc-windows-msvc/release/tsf_opi.dll'
+          $ime = 'target/x86_64-pc-windows-msvc/release/opi_imm32.ime'
           if (-not (Test-Path $dll)) { throw "没编出 $dll" }
+          if (-not (Test-Path $ime)) { throw "没编出 $ime" }
 
           # dumpbin 不在 PATH 上（runner 镜像不预置 VS 开发者命令行的环境）。用 vswhere
           # 找 VS 安装，再从它下面取 dumpbin —— 不猜版本目录名（Enterprise/Community/年份都会变）。
@@ -172,16 +177,26 @@ jobs:
           }
           Write-Host "四个 COM 导出都在（名字未被装饰）"
 
+          $imeOut = & $dumpbin.FullName /nologo /exports $ime
+          $imeOut
+          foreach ($sym in 'ImeInquire','ImeProcessKey','ImeToAsciiEx','ImeSelect',
+                           'ImeSetActiveContext','NotifyIME','ImeConfigure','ImeEscape') {
+            if (-not ($imeOut | Select-String -SimpleMatch $sym -Quiet)) { throw "IMM32 导出表里没有 $sym" }
+          }
+          Write-Host "IMM32 导出都在"
+
           # 导入表门禁（2026-10-19）：MSI 不装 VC++ 运行时，动态 CRT 会让 regsvr32
           # 以 0x8007007E 失败。+crt-static 的正向证据就是这些名字不在导入表里。
           # api-ms-win-crt-* 也要查：ucrtbase 重定向后的转发 DLL 同样是动态 CRT 的一部分
           # （2026-10-19 reviewer m2）。注意别误伤 api-ms-win-core-*（系统 DLL，静态 CRT 也有）。
-          $deps = & $dumpbin.FullName /nologo /dependents $dll
-          if ($LASTEXITCODE -ne 0) { throw "dumpbin /dependents 失败（退出码 $LASTEXITCODE）" }
-          $deps
-          $bad = $deps | Select-String -Pattern 'VCRUNTIME140|MSVCP140|ucrtbase|api-ms-win-crt'
-          if ($bad) { throw "DLL 动态依赖 VC++/UCRT 运行时（未装运行时的机器上 regsvr32 会失败）：`n$bad" }
-          Write-Host "导入表无 VCRUNTIME140/MSVCP140/ucrtbase/api-ms-win-crt（静态 CRT）"
+          foreach ($bin in @($dll, $ime)) {
+            $deps = & $dumpbin.FullName /nologo /dependents $bin
+            if ($LASTEXITCODE -ne 0) { throw "dumpbin /dependents 失败（$bin，退出码 $LASTEXITCODE）" }
+            $deps
+            $bad = $deps | Select-String -Pattern 'VCRUNTIME140|MSVCP140|ucrtbase|api-ms-win-crt'
+            if ($bad) { throw "$bin 动态依赖 VC++/UCRT 运行时：`n$bad" }
+          }
+          Write-Host "两个 DLL 的导入表均无 VCRUNTIME140/MSVCP140/ucrtbase/api-ms-win-crt（静态 CRT）"
 
       # 2026-10-21：opi-tools 的 `same_file` 在 Windows 上走 GetFileInformationByHandle
       # （(卷序列号, 文件索引) 判据）；Linux CI 只编译 unix 分支，Windows 分支在这里
@@ -195,7 +210,9 @@ jobs:
         with:
           name: opi-tsf-dll-v${{ needs.version.outputs.version }}
           if-no-files-found: error
-          path: target/x86_64-pc-windows-msvc/release/tsf_opi.dll
+          path: |
+            target/x86_64-pc-windows-msvc/release/tsf_opi.dll
+            target/x86_64-pc-windows-msvc/release/opi_imm32.ime
 
   desktop-msi:
     name: 桌面应用 .msi（windows-latest，jpackage）
@@ -259,6 +276,7 @@ jobs:
           # Gradle 把 DLL 挂进 JPackage files → jpackage --input → MSI 的 File 表；
           # scripts/postprocess-windows-msi.sh 再注入 regsvr32 注册与完成页脚本。
           OPI_TSF_DLL: ${{ github.workspace }}\tsf-dll\tsf_opi.dll
+          OPI_IMM32_IME: ${{ github.workspace }}\tsf-dll\opi_imm32.ime
 
       # jpackage 是 Gradle 起的外部进程，**它的话不在 Gradle 的输出里** —— 失败时
       # Gradle 只报「Exit code: 1」+ 两行日志文件路径，真原因（light.exe/candle.exe 说什么、
@@ -356,6 +374,7 @@ jobs:
         working-directory: desktop
         env:
           OPI_TSF_DLL: ${{ github.workspace }}\tsf-dll\tsf_opi.dll
+          OPI_IMM32_IME: ${{ github.workspace }}\tsf-dll\opi_imm32.ime
 
       - name: 断言 app image 布局（opi.exe + app\tsf_opi.dll + app\{luna,trad}.opid）
         shell: pwsh
@@ -370,7 +389,7 @@ jobs:
           if ((Split-Path $app -Leaf) -ne 'opi') {
             throw "app image 名不是 opi（是 $(Split-Path $app -Leaf)）—— Windows packageName 没生效"
           }
-          $required = @('opi.exe', 'app\tsf_opi.dll', 'app\luna.opid', 'app\symbol_categories.tsv', 'app\LICENSE', 'app\LICENSES.md', 'app\GPL-3.0.txt')
+          $required = @('opi.exe', 'app\tsf_opi.dll', 'app\opi_imm32.ime', 'app\luna.opid', 'app\symbol_categories.tsv', 'app\LICENSE', 'app\LICENSES.md', 'app\GPL-3.0.txt')
           if ($env:TIER -ne 'basic') { $required += 'app\trad.opid' }
           foreach ($f in $required) {
             if (-not (Test-Path (Join-Path $app $f))) { throw "app image 缺 $f" }
@@ -716,6 +735,9 @@ jobs:
           if exist C:\opi-test\app\luna.opid (echo PRESENT > C:\work\install-luna.txt) else (echo ABSENT > C:\work\install-luna.txt)
           if exist C:\opi-test\app\trad.opid (echo PRESENT > C:\work\install-trad.txt) else (echo ABSENT > C:\work\install-trad.txt)
           if exist C:\opi-test\app\symbol_categories.tsv (echo PRESENT > C:\work\install-symbols.txt) else (echo ABSENT > C:\work\install-symbols.txt)
+          if exist C:\Windows\System32\opi_imm32.ime (echo PRESENT > C:\work\install-imm32.txt) else (echo ABSENT > C:\work\install-imm32.txt)
+          reg query "HKLM\SYSTEM\CurrentControlSet\Control\Keyboard Layouts\E0F10804" /v "Ime File" 2>nul | find "opi_imm32.ime" >nul
+          if errorlevel 1 (echo MISSING > C:\work\install-imm32-reg.txt) else (echo PRESENT > C:\work\install-imm32-reg.txt)
           reg query "HKLM\SOFTWARE\Microsoft\CTF\TIP\{98C51858-590B-404D-8915-21EB44250062}\LanguageProfile\0x00000804\{A31A137C-1404-42F2-B82C-4E63F15DEFD6}" >nul 2>&1
           if errorlevel 1 (echo MISSING > C:\work\install-profile.txt) else (echo PRESENT > C:\work\install-profile.txt)
           reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v opi-statusbar >nul 2>&1
@@ -776,6 +798,9 @@ jobs:
           taskkill /f /im powershell.exe >nul 2>&1
           if exist C:\opi-test\opi.exe (echo PRESENT > C:\work\uninstall-removed.txt) else (echo ABSENT > C:\work\uninstall-removed.txt)
           if exist C:\opi-test\app\tsf_opi.dll (echo PRESENT > C:\work\uninstall-dll.txt) else (echo ABSENT > C:\work\uninstall-dll.txt)
+          if exist C:\Windows\System32\opi_imm32.ime (echo PRESENT > C:\work\uninstall-imm32.txt) else (echo ABSENT > C:\work\uninstall-imm32.txt)
+          reg query "HKLM\SYSTEM\CurrentControlSet\Control\Keyboard Layouts\E0F10804" >nul 2>&1
+          if errorlevel 1 (echo ABSENT > C:\work\uninstall-imm32-reg.txt) else (echo PRESENT > C:\work\uninstall-imm32-reg.txt)
           if exist C:\opi-test (echo PRESENT > C:\work\uninstall-dir.txt) else (echo ABSENT > C:\work\uninstall-dir.txt)
           reg query "HKLM\SOFTWARE\Microsoft\CTF\TIP\{98C51858-590B-404D-8915-21EB44250062}\LanguageProfile\0x00000804\{A31A137C-1404-42F2-B82C-4E63F15DEFD6}" >nul 2>&1
           if errorlevel 1 (echo ABSENT > C:\work\uninstall-profile.txt) else (echo PRESENT > C:\work\uninstall-profile.txt)
@@ -792,7 +817,7 @@ jobs:
           Set-Content -Path (Join-Path $work 'exe-smoke.cmd') -Value $script -Encoding ascii
           docker run --rm --isolation=process -v "${work}:C:\work" $image cmd /c C:\work\exe-smoke.cmd
 
-          foreach ($f in 'install-exe.log', 'install-exit.txt', 'install-opi.txt', 'install-dll.txt', 'install-luna.txt', 'install-trad.txt', 'install-profile.txt', 'install-run-statusbar.txt') {
+          foreach ($f in 'install-exe.log', 'install-exit.txt', 'install-opi.txt', 'install-dll.txt', 'install-luna.txt', 'install-trad.txt', 'install-profile.txt', 'install-run-statusbar.txt', 'install-imm32.txt', 'install-imm32-reg.txt') {
             if (-not (Test-Path $f)) { throw "缺少 $f（docker run 失败或安装器没启动）" }
           }
           $exitCode = (Get-Content install-exit.txt -Raw).Trim()
@@ -802,6 +827,8 @@ jobs:
           if ((Get-Content install-luna.txt -Raw).Trim() -ne 'PRESENT') { throw '安装目录里没有 app\luna.opid（词库没随包）' }
           if ((Get-Content install-trad.txt -Raw).Trim() -ne 'PRESENT') { throw '安装目录里没有 app\trad.opid（繁体词库没随包）' }
           if ((Get-Content install-symbols.txt -Raw).Trim() -ne 'PRESENT') { throw '安装目录里没有 app\symbol_categories.tsv（符号大全按钮会打开空页）' }
+          if ((Get-Content install-imm32.txt -Raw).Trim() -ne 'PRESENT') { throw 'System32 里没有 opi_imm32.ime（IMM32 兼容层没落盘）' }
+          if ((Get-Content install-imm32-reg.txt -Raw).Trim() -ne 'PRESENT') { throw 'IMM32 键盘布局键没写进注册表' }
 
           # 注册结果必须被**记录**；0 与非 0 都接受（后者是 Server Core 的已知限制，
           # 安装不许因此回滚 —— 这正是 EXE 安装器与旧 MSI 的关键区别）。
@@ -872,6 +899,8 @@ jobs:
           if ((Get-Content uninstall-dir.txt -Raw).Trim() -ne 'ABSENT') { throw '卸载后安装目录 C:\opi-test 仍在' }
           if (-not (Test-Path 'uninstall-dll.txt')) { throw '缺少 uninstall-dll.txt（卸载没跑完）' }
           if ((Get-Content uninstall-dll.txt -Raw).Trim() -ne 'ABSENT') { throw '卸载后被占用的 tsf_opi.dll 仍在 {app} 里' }
+          if ((Get-Content uninstall-imm32.txt -Raw).Trim() -ne 'ABSENT') { throw '卸载后 System32\opi_imm32.ime 仍在' }
+          if ((Get-Content uninstall-imm32-reg.txt -Raw).Trim() -ne 'ABSENT') { throw '卸载后 IMM32 键盘布局键仍在' }
           $ulog = Get-Content uninstall-exe.log -Raw
           if ($ulog -notmatch 'moved locked TSF DLL') {
             $ulog = Get-Content uninstall-exe.log -Raw -Encoding Unicode
@@ -914,10 +943,14 @@ jobs:
             install-trad.txt
             install-symbols.txt
             install-profile.txt
+            install-imm32.txt
+            install-imm32-reg.txt
             install-run-statusbar.txt
             uninstall-removed.txt
             uninstall-dir.txt
             uninstall-dll.txt
+            uninstall-imm32.txt
+            uninstall-imm32-reg.txt
             uninstall-profile.txt
             uninstall-run-statusbar.txt
             holder.txt
@@ -948,5 +981,5 @@ jobs:
           targets: x86_64-pc-windows-msvc
           components: clippy
 
-      - name: cargo clippy -p tsf_opi --target x86_64-pc-windows-msvc -- -D warnings
-        run: cargo clippy --locked -p tsf_opi --target x86_64-pc-windows-msvc -- -D warnings
+      - name: cargo clippy -p tsf_opi -p imm32_opi --target x86_64-pc-windows-msvc -- -D warnings
+        run: cargo clippy --locked -p tsf_opi -p imm32_opi --target x86_64-pc-windows-msvc -- -D warnings

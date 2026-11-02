@@ -1350,8 +1350,26 @@ Whisper（普通英文 SenseVoice），默认中文引擎；录音时暂停播�
 **Chrome 地址栏（2026-11-01 反馈）**：Chrome 的 Omnibox 走浏览器 UI 的语言配置（常见为 en-US），
 只注册 zh-CN TSF profile 时它不会激活小欧。本版同时注册/启用 zh-CN 与 en-US profile。
 若旧版 Chrome 仍不出现，可临时用 `--enable-features=TSFImeSupport` 启动 Chrome 后重试
-（Chrome 默认已开启 TSF；这是诊断开关，不是安装要求）。Chrome 历史上有 Omnibox 走
-IMM32 的路径，TSF-only 输入法在该路径下无法工作——真机验证仍待补。
+（Chrome 默认已开启 TSF；这是诊断开关，不是安装要求）。
+
+### IMM32 兼容模式（2026-11-02，仅 EXE 安装器）
+
+TSF 与 IMM32 是 Windows 的两条输入通路；只走 IMM32 的宿主（部分经典 PowerShell/
+旧版 Chrome/控制台路径）看不到 TSF-only 输入法。EXE 安装器现在额外安装一个
+**独立的键盘布局**「小欧输入法（兼容模式）」：
+
+- 文件：`%SystemRoot%\System32\opi_imm32.ime`（x64，静态 CRT）。
+- 注册表：`HKLM\SYSTEM\CurrentControlSet\Control\Keyboard Layouts\E0F10804`
+  （`Ime File=opi_imm32.ime`，`Layout File=KBDUS.DLL`）。卸载时删除键与文件。
+- 启用：设置 → 时间和语言 → 语言和区域 → 中文（简体）→ 添加键盘 →
+  「小欧输入法（兼容模式）」。它是一个**独立输入法条目**，不会自动替换 TSF 条目；
+  Windows 没有“TSF 失败时自动切 IMM32”的机制。
+- 能力：组合串 + 自绘候选窗；数字/空格选词，`-`/`=` 翻页，Shift 轻按切中英。
+  候选窗目前**只显示、不接受鼠标点选**（鼠标点选需要宿主 IME 消息回程，尚未接线）。
+- 词库：安装器写 `HKLM\Software\opi\InstallDir`，DLL 从 `{app}\app` 读
+  `luna.opid`/`trad.opid`；每个宿主进程各加载一份。
+- **验证边界**：本机无 Windows，只做到 Windows 目标编译 + 导出表/静态 CRT 门禁 +
+  安装器静默安装/卸载落盘与注册表断言；真实 PowerShell/Chrome 输入未验证。
 
 **新版本提示与应用内下载（2026-10-22 检测；2026-10-31 起不跳浏览器）**：打开设置窗
 自动检测一次，发现新版本在右栏顶部显示「发现新版本 vX → 查看更新」横幅（可关闭，点击

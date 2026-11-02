@@ -138,6 +138,8 @@ tasks.named("processResources") { dependsOn(copyKaomojiData) }
 // Windows CI 在 `packageMsi` / `createDistributable` 前下载 TSF DLL artifact 并把路径放进 OPI_TSF_DLL；
 // Linux 打 Deb 时该变量不存在 ⇒ files 集合不变，不会把 DLL/脚本/词库带进 Deb。
 val tsfDll = providers.environmentVariable("OPI_TSF_DLL")
+// IMM32 兼容输入法（2026-11-02）：安装器复制到 System32 并注册键盘布局。
+val imm32Ime = providers.environmentVariable("OPI_IMM32_IME")
 // jpackage 的 `--input` 是 CMP 自己暂存的 libs 目录（会清空重填），所以不能往里
 // 手写文件；把 DLL 挂到 JPackage 任务的 `files` 集合，CMP 会与 jar 一起暂存并
 // 打进应用镜像。Windows CI 在 packageMsi 前设 OPI_TSF_DLL；Linux 构建不设。
@@ -173,12 +175,9 @@ tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageT
                 file("../data/raw/GPL-3.0.txt"),
             )
             licenses.forEach { check(it.isFile) { "找不到许可文本：${it.path}" } }
-            val bundled = listOf(
-                src,
-                file("windows/launch-and-restart.cmd"),
-                luna,
-                symbols,
-                *licenses.toTypedArray(),
+            val imm32 = imm32Ime.orNull?.let { file(it).also { f -> check(f.isFile) { "缺 OPI_IMM32_IME：${f.path}" } } }
+            val bundled = listOfNotNull(
+                src, file("windows/launch-and-restart.cmd"), luna, symbols, imm32, *licenses.toTypedArray(),
             ) + if (tier == "basic") emptyList() else listOf(trad)
             files.from(*bundled.toTypedArray())
         }

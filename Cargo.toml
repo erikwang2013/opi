@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/engine-core", "crates/engine-data", "crates/opi-tools", "crates/opi-ffi", "crates/fcitx5-opi", "crates/tsf-opi", "crates/opi-clip", "crates/opi-asr"]
+members = ["crates/engine-core", "crates/engine-data", "crates/opi-tools", "crates/opi-ffi", "crates/fcitx5-opi", "crates/tsf-opi", "crates/imm32-opi", "crates/opi-clip", "crates/opi-asr"]
 
 # 单一版本源：8 个 crate 全用 version.workspace = true。
 # 与发布 tag 及 android versionName / desktop packageVersion 对齐 ——（**不写具体版本号**：
