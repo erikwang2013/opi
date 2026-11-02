@@ -9,7 +9,7 @@
 use std::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::PathBuf;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
 use windows::Win32::Foundation::{GetLastError, HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
@@ -41,6 +41,8 @@ use tsf_opi::vk::{
     ModeHotkey, fullwidth_hotkey, hotkey_should_act, is_shift_vk, mode_hotkey, vk_to_engine_keycode,
 };
 
+use crate::dict::shared;
+use crate::hosts::HostMap;
 use crate::session::{ImmAction, ImmSession};
 use ui::{hide_candidates, show_candidates};
 
@@ -53,10 +55,11 @@ pub(crate) const CAND_CLASS_W: &[u16] = &[79, 112, 105, 73, 109, 109, 51, 50, 67
 
 struct Host {
     session: ImmSession,
-    himc: isize,
     /// `ImeProcessKey` 的键状态（含释放位）；ImeToAsciiEx 没有 lParam，必须从这里取。
     pending_states: u32,
     /// 引擎前的热键：ImeProcessKey 判定，ImeToAsciiEx 执行。
+    /// 这两项随 Host 一起按 HIMC 隔离 —— 旧实现进程级单槽，两个上下文的
+    /// ImeProcessKey/ImeToAsciiEx 交错时会执行对方的热键。
     pending_hotkey: PendingHotkey,
 }
 
@@ -69,11 +72,31 @@ enum PendingHotkey {
     Fullwidth,
 }
 
-static HOST: Mutex<Option<Host>> = Mutex::new(None);
+/// 进程内同时保留的 HIMC 槽位上限。主词库已进程级共享；导入词库/五笔码表
+/// 仍随每个 Host 的 `apply_settings` 各装一份，这里给它们一个上限（超限淘汰
+/// 最久未用且不持焦点的 Host，见 `hosts.rs`）。正常 `ImeSelect(FALSE)` 会移除。
+const MAX_HOSTS: usize = 8;
+
+/// 进程级只读词库：同一进程里所有 HIMC 共用这一份（不再每槽位重装载/校验）。
+///
+/// 只覆盖主库/繁体库：导入词库与五笔码表由 `TsfLogic::apply_settings` 装进各
+/// 自 Engine 的 `LayeredDictionary`（具体 `InMemoryDictionary`，外部注不进共享
+/// 句柄），所以那两层仍按 Host 各一份 —— 由 `MAX_HOSTS` 封顶并随
+/// `ImeSelect(FALSE)` 释放；主库（体积与校验成本的大头）不再重复。
+struct DictBundle {
+    dict: Arc<dyn engine_core::Dictionary>,
+    /// `None` = 没装繁体词库（`load_trad` 的唯一空态），引擎按主库回退。
+    trad: Option<Arc<dyn engine_core::Dictionary>>,
+}
+
+static BUNDLE: OnceLock<DictBundle> = OnceLock::new();
+static HOSTS: OnceLock<Mutex<HostMap<Host>>> = OnceLock::new();
 static CLASSES: OnceLock<bool> = OnceLock::new();
 
-fn lock_host() -> std::sync::MutexGuard<'static, Option<Host>> {
-    HOST.lock()
+fn lock_hosts() -> std::sync::MutexGuard<'static, HostMap<Host>> {
+    HOSTS
+        .get_or_init(|| Mutex::new(HostMap::new(MAX_HOSTS)))
+        .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
@@ -105,17 +128,41 @@ fn install_dir() -> Option<PathBuf> {
     std::env::var_os("ProgramFiles").map(|p| PathBuf::from(p).join("opi"))
 }
 
+/// 进程级只读词库：装载一次，所有 HIMC 共享（`dict.rs` 的 `Arc` 外壳）。
+/// `OPI_DICT_PATH` 只在宿主进程首次用到输入法时读一次，改它要重启宿主
+/// —— 旧实现每次新建 Host 都重读，但那是实现细节，从未是文档承诺。
+fn dict_bundle() -> &'static DictBundle {
+    BUNDLE.get_or_init(|| {
+        let lap = std::env::var_os("LOCALAPPDATA");
+        let app = install_dir().map(|p| p.join("app"));
+        let dict = load_dict(None, app.as_deref(), lap.as_deref());
+        let trad = load_trad(None, app.as_deref(), lap.as_deref());
+        DictBundle {
+            dict: Arc::from(dict.dict),
+            trad: trad.dict.map(Arc::from),
+        }
+    })
+}
+
 fn build_session() -> ImmSession {
+    let b = dict_bundle();
+    let mut logic = TsfLogic::with_dicts(shared(&b.dict), b.trad.as_ref().map(shared));
     let lap = std::env::var_os("LOCALAPPDATA");
-    let app = install_dir().map(|p| p.join("app"));
-    let dict = load_dict(None, app.as_deref(), lap.as_deref());
-    let trad = load_trad(None, app.as_deref(), lap.as_deref());
-    let mut logic = TsfLogic::with_dicts(dict.dict, trad.dict);
     let dicts = dict_path::dicts_dir(lap.as_deref());
     logic.apply_settings(tsf_opi::settings::load(lap.as_deref()), &dicts);
     logic.apply_custom_phrases(tsf_opi::custom_phrases::load(&dicts));
     logic.apply_english_custom_phrases(tsf_opi::custom_phrases::load_english(&dicts));
     ImmSession::new(logic)
+}
+
+impl Host {
+    fn new() -> Self {
+        Self {
+            session: build_session(),
+            pending_states: 0,
+            pending_hotkey: PendingHotkey::None,
+        }
+    }
 }
 
 /// 重新读设置/自定义短语（IMM32 没有 TSF 的 CtlOp::Reload 通道；每个宿主进程
@@ -132,21 +179,6 @@ fn reload_settings(h: &mut Host) {
     h.session
         .logic_mut()
         .apply_english_custom_phrases(tsf_opi::custom_phrases::load_english(&dicts));
-}
-
-fn ensure_host(himc: HIMC) -> bool {
-    let mut g = lock_host();
-    if g.is_none() {
-        *g = Some(Host {
-            session: build_session(),
-            himc: himc.0 as isize,
-            pending_states: 0,
-            pending_hotkey: PendingHotkey::None,
-        });
-    } else if let Some(h) = g.as_mut() {
-        h.himc = himc.0 as isize;
-    }
-    true
 }
 
 fn register_classes() -> bool {
@@ -266,6 +298,8 @@ fn transmsg(message: u32, lparam: isize) -> TRANSMSG {
 
 /// 执行动作，把需要 IMM 转发的消息写进 `out`（容量由 `uMsgCount` 给）。
 fn apply_actions(himc: HIMC, actions: Vec<ImmAction>, out: &mut Vec<TRANSMSG>) {
+    // 候选窗只有一个：后台 HIMC 的动作不得显示/隐藏焦点上下文正在看的窗口。
+    let owns_candidates = lock_hosts().owns_candidates(himc.0 as isize);
     for action in actions {
         match action {
             ImmAction::StartComposition => out.push(transmsg(WM_IME_STARTCOMPOSITION, 0)),
@@ -283,8 +317,16 @@ fn apply_actions(himc: HIMC, actions: Vec<ImmAction>, out: &mut Vec<TRANSMSG>) {
                 items,
                 page,
                 page_count,
-            } => show_candidates(items, page, page_count),
-            ImmAction::HideCandidates => hide_candidates(),
+            } => {
+                if owns_candidates {
+                    show_candidates(items, page, page_count);
+                }
+            }
+            ImmAction::HideCandidates => {
+                if owns_candidates {
+                    hide_candidates();
+                }
+            }
         }
     }
 }
@@ -295,13 +337,13 @@ fn apply_actions(himc: HIMC, actions: Vec<ImmAction>, out: &mut Vec<TRANSMSG>) {
 /// `ImmLockIMC` 取宿主窗口后 **Post** 两条消息（不 Send，避免在 IME 回调里
 /// 重入宿主消息循环）。失败时至少清掉本地状态，不让下次输入带旧缓冲。
 fn finish_composition(himc: HIMC, commit: bool) {
-    let text = if commit {
-        lock_host()
-            .as_ref()
-            .map(|h| h.session.logic().display_buffer())
-            .unwrap_or_default()
-    } else {
-        String::new()
+    let key = himc.0 as isize;
+    let text = {
+        let mut g = lock_hosts();
+        match g.get_mut(key) {
+            Some(h) if commit => h.session.logic().display_buffer(),
+            _ => String::new(),
+        }
     };
     if !text.is_empty() {
         set_comp_string(himc, &text);
@@ -329,8 +371,10 @@ fn finish_composition(himc: HIMC, commit: bool) {
             let _ = PostMessageW(Some(hwnd), WM_IME_ENDCOMPOSITION, WPARAM(0), LPARAM(0));
         }
     }
-    hide_candidates();
-    if let Some(h) = lock_host().as_mut() {
+    if lock_hosts().owns_candidates(key) {
+        hide_candidates();
+    }
+    if let Some(h) = lock_hosts().get_mut(key) {
         h.session.reset();
     }
 }
