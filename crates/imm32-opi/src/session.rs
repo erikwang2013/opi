@@ -17,6 +17,7 @@ use tsf_opi::logic::{
     TsfLogic,
 };
 use tsf_opi::shift_tap::ShiftTap;
+use tsf_opi::vk::{ModeHotkey, hotkey_target};
 
 /// 一次按键后需要执行的动作。顺序就是发送顺序。
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -75,6 +76,33 @@ impl ImmSession {
         self.logic.clear();
         self.tap.disarm();
         self.composing = false;
+    }
+
+    /// 未认领的 keydown（Shift+方向键等）也必须撤销 Shift 轻按：IMM32 不会把这类
+    /// 键送进 `ImeToAsciiEx`，但在 `ImeProcessKey` 里必须让 tap 重新计数。
+    pub fn disarm_shift_tap(&mut self) {
+        self.tap.disarm();
+    }
+
+    /// Ctrl+' / Ctrl+\ 的模式热键（TSF `toggle_mode` 的 IMM32 对应）。
+    pub fn toggle_mode_hotkey(&mut self, hot: ModeHotkey) -> Vec<ImmAction> {
+        let target = hotkey_target(hot, self.logic.mode());
+        let text = self.logic.switch_mode_confirmed(target);
+        let mut out = Vec::new();
+        if !text.is_empty() {
+            out.push(ImmAction::Result(text));
+        }
+        if self.composing {
+            out.push(ImmAction::EndComposition);
+            self.composing = false;
+        }
+        out.push(ImmAction::HideCandidates);
+        out
+    }
+
+    /// Shift+Space 的全角开关（不改变缓冲/候选集）。
+    pub fn toggle_fullwidth(&mut self) {
+        self.logic.toggle_fullwidth();
     }
 
     /// 键事件 → 动作。`states` 用 `logic::KEY_STATE_*` 位；`now` 供 Shift 轻按判定

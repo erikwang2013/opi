@@ -4,6 +4,7 @@
 use std::time::{Duration, Instant};
 
 use tsf_opi::logic::{KEY_SHIFT, KEY_SPACE, KEY_STATE_RELEASED, TsfLogic};
+use tsf_opi::vk::ModeHotkey;
 
 use crate::session::{ImmAction, ImmSession};
 
@@ -134,6 +135,32 @@ fn selecting_a_candidate_commits_it() {
     assert!(has_result(&out, "你"), "{out:?}");
     assert!(out.contains(&ImmAction::EndComposition));
     assert!(out.contains(&ImmAction::HideCandidates));
+}
+
+#[test]
+fn ctrl_hotkey_toggles_mode_and_flushes_composition() {
+    let mut s = session();
+    type_keys(&mut s, "ni");
+    let out = s.toggle_mode_hotkey(ModeHotkey::ToggleEnglish);
+    assert!(has_result(&out, "ni"), "切英文应上原文：{out:?}");
+    assert!(out.contains(&ImmAction::EndComposition));
+    let out = s.process('a' as u32, 0);
+    assert!(has_result(&out, "a"), "已切英文：{out:?}");
+}
+
+#[test]
+fn unclaimed_keydown_disarms_shift_tap() {
+    let t = Instant::now();
+    let mut s = session();
+    s.process_at(KEY_SHIFT, 0, t);
+    s.disarm_shift_tap();
+    let up = s.process_at(KEY_SHIFT, KEY_STATE_RELEASED, t + Duration::from_millis(50));
+    assert!(up.is_empty(), "Shift+方向键后松开不应切中英：{up:?}");
+    let out = s.process('n' as u32, 0);
+    assert!(
+        out.iter()
+            .any(|a| matches!(a, ImmAction::SetComposition(t) if t == "n"))
+    );
 }
 
 #[test]

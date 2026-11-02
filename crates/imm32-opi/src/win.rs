@@ -16,18 +16,19 @@ use windows::Win32::Foundation::{GetLastError, HINSTANCE, HWND, LPARAM, LRESULT,
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Registry::{HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ, RegGetValueW};
 use windows::Win32::UI::Input::Ime::{
-    GCS_COMPSTR, GCS_CURSORPOS, GCS_RESULTSTR, HIMC, IME_CMODE_NATIVE, IME_PROP_AT_CARET,
-    IME_PROP_UNICODE, IME_SENTENCE_MODE, IMEINFO, ISC_SHOWUIALL, ImmSetCompositionStringW,
-    ImmSetConversionStatus, ImmSetOpenStatus, SCS_CAP_COMPSTR, SCS_SETSTR, TRANSMSG, TRANSMSGLIST,
-    UI_CAP_2700,
+    CPS_CANCEL, CPS_COMPLETE, GCS_COMPSTR, GCS_CURSORPOS, GCS_RESULTSTR, HIMC, IME_CMODE_NATIVE,
+    IME_PROP_AT_CARET, IME_PROP_UNICODE, IME_SENTENCE_MODE, IMEINFO, ISC_SHOWUIALL, ImmLockIMC,
+    ImmSetCompositionStringW, ImmSetConversionStatus, ImmSetOpenStatus, ImmUnlockIMC,
+    NI_COMPOSITIONSTR, SCS_CAP_COMPSTR, SCS_SETSTR, TRANSMSG, TRANSMSGLIST, UI_CAP_2700,
 };
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    GetKeyState, ToUnicodeEx, VK_CAPITAL, VK_CONTROL, VK_LCONTROL, VK_LMENU, VK_LSHIFT, VK_MENU,
-    VK_RCONTROL, VK_RMENU, VK_RSHIFT, VK_SHIFT,
+    GetFocus, GetKeyState, ToUnicodeEx, VK_CAPITAL, VK_CONTROL, VK_LCONTROL, VK_LMENU, VK_LSHIFT,
+    VK_LWIN, VK_MENU, VK_RCONTROL, VK_RMENU, VK_RSHIFT, VK_RWIN, VK_SHIFT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CS_IME, DefWindowProcW, IDC_ARROW, LoadCursorW, RegisterClassW, WM_IME_COMPOSITION,
-    WM_IME_CONTROL, WM_IME_ENDCOMPOSITION, WM_IME_SETCONTEXT, WM_IME_STARTCOMPOSITION, WNDCLASSW,
+    CS_IME, DefWindowProcW, IDC_ARROW, LoadCursorW, PostMessageW, RegisterClassW,
+    WM_IME_COMPOSITION, WM_IME_CONTROL, WM_IME_ENDCOMPOSITION, WM_IME_SETCONTEXT,
+    WM_IME_STARTCOMPOSITION, WNDCLASSW,
 };
 use windows::core::PCWSTR;
 
@@ -36,11 +37,14 @@ use tsf_opi::logic::{
     KEY_STATE_ALT, KEY_STATE_CAPS_LOCK, KEY_STATE_CTRL, KEY_STATE_RELEASED, KEY_STATE_REPEAT,
     KEY_STATE_SHIFT, TsfLogic,
 };
-use tsf_opi::vk::vk_to_engine_keycode;
+use tsf_opi::vk::{
+    ModeHotkey, fullwidth_hotkey, hotkey_should_act, is_shift_vk, mode_hotkey, vk_to_engine_keycode,
+};
 
 use crate::session::{ImmAction, ImmSession};
 use ui::{hide_candidates, show_candidates};
 
+mod exports;
 mod ui;
 
 const IME_CLASS: &str = "OpiImm32Wnd";
@@ -52,6 +56,17 @@ struct Host {
     himc: isize,
     /// `ImeProcessKey` 的键状态（含释放位）；ImeToAsciiEx 没有 lParam，必须从这里取。
     pending_states: u32,
+    /// 引擎前的热键：ImeProcessKey 判定，ImeToAsciiEx 执行。
+    pending_hotkey: PendingHotkey,
+}
+
+#[derive(Clone, Copy)]
+enum PendingHotkey {
+    None,
+    /// 认领但不动作（按住重复/抬起）。
+    Ignore,
+    Mode(ModeHotkey),
+    Fullwidth,
 }
 
 static HOST: Mutex<Option<Host>> = Mutex::new(None);
@@ -103,6 +118,22 @@ fn build_session() -> ImmSession {
     ImmSession::new(logic)
 }
 
+/// 重新读设置/自定义短语（IMM32 没有 TSF 的 CtlOp::Reload 通道；每个宿主进程
+/// 在 `ImeSelect(TRUE)` 时重读一次，改设置后切回输入法即可生效）。
+fn reload_settings(h: &mut Host) {
+    let lap = std::env::var_os("LOCALAPPDATA");
+    let dicts = dict_path::dicts_dir(lap.as_deref());
+    h.session
+        .logic_mut()
+        .apply_settings(tsf_opi::settings::load(lap.as_deref()), &dicts);
+    h.session
+        .logic_mut()
+        .apply_custom_phrases(tsf_opi::custom_phrases::load(&dicts));
+    h.session
+        .logic_mut()
+        .apply_english_custom_phrases(tsf_opi::custom_phrases::load_english(&dicts));
+}
+
 fn ensure_host(himc: HIMC) -> bool {
     let mut g = lock_host();
     if g.is_none() {
@@ -110,6 +141,7 @@ fn ensure_host(himc: HIMC) -> bool {
             session: build_session(),
             himc: himc.0 as isize,
             pending_states: 0,
+            pending_hotkey: PendingHotkey::None,
         });
     } else if let Some(h) = g.as_mut() {
         h.himc = himc.0 as isize;
@@ -191,6 +223,25 @@ fn engine_keycode(vk: u32, scan: u32, ks: &[u8; 256]) -> u32 {
     vk_to_engine_keycode(vk, n, buf[0])
 }
 
+/// 热键要按**布局字符**判（AZERTY/Dvorak 上 ' 与 \ 不在 US 位置）：
+/// 复制键盘状态、清掉 Ctrl/Alt（Shift 保留），再问 ToUnicodeEx。
+fn layout_char(vk: u32, ks: &[u8; 256]) -> Option<char> {
+    let mut copy = *ks;
+    for m in [
+        VK_CONTROL,
+        VK_LCONTROL,
+        VK_RCONTROL,
+        VK_MENU,
+        VK_LMENU,
+        VK_RMENU,
+    ] {
+        copy[m.0 as usize] = 0;
+    }
+    let mut buf = [0u16; 8];
+    let n = unsafe { ToUnicodeEx(vk, 0, &copy, &mut buf, 0x4, None) };
+    (n >= 1).then(|| char::from_u32(buf[0] as u32)).flatten()
+}
+
 fn set_comp_string(himc: HIMC, text: &str) {
     let units: Vec<u16> = text.encode_utf16().collect();
     unsafe {
@@ -238,227 +289,48 @@ fn apply_actions(himc: HIMC, actions: Vec<ImmAction>, out: &mut Vec<TRANSMSG>) {
     }
 }
 
-// ---------- `.ime` 导出 ----------
-
-#[unsafe(no_mangle)]
-pub extern "system" fn ImeInquire(info: *mut IMEINFO, class: *mut u16, _flags: u32) -> i32 {
-    catch_unwind(AssertUnwindSafe(|| unsafe {
-        if info.is_null() || class.is_null() {
-            return 0;
-        }
-        if !classes_ok() {
-            return 0;
-        }
-        *info = IMEINFO {
-            dwPrivateDataSize: 0,
-            fdwProperty: IME_PROP_UNICODE | IME_PROP_AT_CARET,
-            fdwConversionCaps: IME_CMODE_NATIVE.0,
-            fdwSentenceCaps: 0,
-            fdwUICaps: UI_CAP_2700,
-            fdwSCSCaps: SCS_CAP_COMPSTR,
-            fdwSelectCaps: 0,
-        };
-        let name: Vec<u16> = IME_CLASS.encode_utf16().chain([0]).collect();
-        std::ptr::copy_nonoverlapping(name.as_ptr(), class, name.len().min(32));
-        if name.len() < 32 {
-            *class.add(name.len()) = 0;
-        }
-        1
-    }))
-    .unwrap_or(0)
-}
-
-#[unsafe(no_mangle)]
-pub extern "system" fn ImeSelect(himc: HIMC, select: i32) -> i32 {
-    catch_unwind(AssertUnwindSafe(|| unsafe {
-        if himc.0.is_null() {
-            return 0;
-        }
-        if select != 0 {
-            if !ensure_host(himc) {
-                return 0;
-            }
-            if let Some(h) = lock_host().as_mut() {
-                h.session.reset();
-            }
-            let _ = ImmSetOpenStatus(himc, true);
-            let _ = ImmSetConversionStatus(himc, IME_CMODE_NATIVE, IME_SENTENCE_MODE(0));
+/// 结束当前 HIMC 的组合：`commit=true` 时把可见的拼音作为结果串交给宿主。
+///
+/// `NotifyIME(CPS_COMPLETE)` / `ImeSelect(FALSE)` 没有 TRANSMSGLIST 可填；用
+/// `ImmLockIMC` 取宿主窗口后 **Post** 两条消息（不 Send，避免在 IME 回调里
+/// 重入宿主消息循环）。失败时至少清掉本地状态，不让下次输入带旧缓冲。
+fn finish_composition(himc: HIMC, commit: bool) {
+    let text = if commit {
+        lock_host()
+            .as_ref()
+            .map(|h| h.session.logic().display_buffer())
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+    if !text.is_empty() {
+        set_comp_string(himc, &text);
+    }
+    let hwnd = unsafe {
+        let imc = ImmLockIMC(himc);
+        if imc.is_null() {
+            GetFocus()
         } else {
-            hide_candidates();
-            if let Some(h) = lock_host().as_mut() {
-                h.session.reset();
+            let h = (*imc).hWnd;
+            let _ = ImmUnlockIMC(himc);
+            if h.0.is_null() { GetFocus() } else { h }
+        }
+    };
+    if !hwnd.0.is_null() {
+        unsafe {
+            if !text.is_empty() {
+                let _ = PostMessageW(
+                    Some(hwnd),
+                    WM_IME_COMPOSITION,
+                    WPARAM(0),
+                    LPARAM(GCS_RESULTSTR.0 as isize),
+                );
             }
+            let _ = PostMessageW(Some(hwnd), WM_IME_ENDCOMPOSITION, WPARAM(0), LPARAM(0));
         }
-        1
-    }))
-    .unwrap_or(0)
-}
-
-#[unsafe(no_mangle)]
-pub extern "system" fn ImeSetActiveContext(himc: HIMC, focus: i32) -> i32 {
-    catch_unwind(AssertUnwindSafe(|| {
-        if himc.0.is_null() {
-            return 0;
-        }
-        if focus != 0 {
-            ensure_host(himc);
-        } else {
-            hide_candidates();
-        }
-        1
-    }))
-    .unwrap_or(0)
-}
-
-#[unsafe(no_mangle)]
-pub extern "system" fn ImeProcessKey(
-    himc: HIMC,
-    vk: u32,
-    lparam: LPARAM,
-    key_state: *const u8,
-) -> i32 {
-    catch_unwind(AssertUnwindSafe(|| unsafe {
-        if himc.0.is_null() || key_state.is_null() {
-            return 0;
-        }
-        let ks = &*key_state.cast::<[u8; 256]>();
-        let states = key_states(lparam, ks);
-        let code = engine_keycode(vk, ((lparam.0 >> 16) & 0xff) as u32, ks);
-        if !ensure_host(himc) {
-            return 0;
-        }
-        let claimed = {
-            let mut g = lock_host();
-            g.as_mut()
-                .map(|h| {
-                    h.pending_states = states;
-                    h.session.claim(code, states)
-                })
-                .unwrap_or(false)
-        };
-        if claimed { 1 } else { 0 }
-    }))
-    .unwrap_or(0)
-}
-
-#[unsafe(no_mangle)]
-pub extern "system" fn ImeToAsciiEx(
-    vk: u32,
-    scan: u32,
-    key_state: *const u8,
-    trans: *mut TRANSMSGLIST,
-    _state: u32,
-    himc: HIMC,
-) -> u32 {
-    catch_unwind(AssertUnwindSafe(|| unsafe {
-        if himc.0.is_null() || key_state.is_null() || trans.is_null() {
-            return 0;
-        }
-        let ks = &*key_state.cast::<[u8; 256]>();
-        let code = engine_keycode(vk, scan, ks);
-        if !ensure_host(himc) {
-            return 0;
-        }
-        // ImeToAsciiEx 没有 lParam：释放/重复位取 ImeProcessKey 刚存下的那一份。
-        let actions = {
-            let mut g = lock_host();
-            g.as_mut()
-                .map(|h| {
-                    let states = h.pending_states;
-                    h.pending_states = 0;
-                    h.session.process_at(code, states, Instant::now())
-                })
-                .unwrap_or_default()
-        };
-        let mut msgs = Vec::new();
-        apply_actions(himc, actions, &mut msgs);
-        let cap = (*trans).uMsgCount as usize;
-        let n = msgs.len().min(cap);
-        for (i, m) in msgs.into_iter().take(n).enumerate() {
-            (*trans).TransMsg[i] = m;
-        }
-        n as u32
-    }))
-    .unwrap_or(0)
-}
-
-#[unsafe(no_mangle)]
-pub extern "system" fn NotifyIME(himc: HIMC, action: u32, _index: u32, _value: u32) -> i32 {
-    catch_unwind(AssertUnwindSafe(|| {
-        if himc.0.is_null() {
-            return 0;
-        }
-        // NI_COMPOSITIONSTR = 21; CPS_CANCEL/COMPLETE 都收尾当前组合。
-        if action == 21 {
-            hide_candidates();
-            if let Some(h) = lock_host().as_mut() {
-                h.session.reset();
-            }
-        }
-        1
-    }))
-    .unwrap_or(0)
-}
-
-#[unsafe(no_mangle)]
-pub extern "system" fn ImeSetCompositionString(
-    _himc: HIMC,
-    _index: u32,
-    _comp: *const c_void,
-    _comp_len: u32,
-    _read: *const c_void,
-    _read_len: u32,
-) -> i32 {
-    1
-}
-
-#[unsafe(no_mangle)]
-pub extern "system" fn ImeConfigure(
-    _hkl: isize,
-    _hwnd: HWND,
-    _mode: u32,
-    _data: *mut c_void,
-) -> i32 {
-    0
-}
-
-#[unsafe(no_mangle)]
-pub extern "system" fn ImeConversionList(
-    _himc: HIMC,
-    _source: *const u16,
-    _dest: *mut c_void,
-    _len: u32,
-    _flag: u32,
-) -> u32 {
-    0
-}
-
-#[unsafe(no_mangle)]
-pub extern "system" fn ImeRegisterWord(_read: *const u16, _style: u32, _word: *const u16) -> i32 {
-    0
-}
-
-#[unsafe(no_mangle)]
-pub extern "system" fn ImeUnregisterWord(_read: *const u16, _style: u32, _word: *const u16) -> i32 {
-    0
-}
-
-#[unsafe(no_mangle)]
-pub extern "system" fn ImeGetRegisterWordStyle(_n: u32, _buf: *mut c_void) -> u32 {
-    0
-}
-
-#[unsafe(no_mangle)]
-pub extern "system" fn ImeEnumRegisterWord(
-    _proc: *const c_void,
-    _read: *const u16,
-    _style: u32,
-    _data: *mut c_void,
-) -> u32 {
-    0
-}
-
-#[unsafe(no_mangle)]
-pub extern "system" fn ImeEscape(_himc: HIMC, _escape: u32, _data: *mut c_void) -> isize {
-    0
+    }
+    hide_candidates();
+    if let Some(h) = lock_host().as_mut() {
+        h.session.reset();
+    }
 }

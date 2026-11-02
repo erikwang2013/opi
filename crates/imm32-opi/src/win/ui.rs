@@ -9,7 +9,9 @@
 use std::ffi::c_void;
 use std::sync::Mutex;
 
-use windows::Win32::Foundation::{COLORREF, GetLastError, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
+use windows::Win32::Foundation::{
+    COLORREF, GetLastError, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM,
+};
 use windows::Win32::Graphics::Gdi::{
     BeginPaint, ClientToScreen, CreateSolidBrush, DEFAULT_GUI_FONT, DeleteObject, EndPaint,
     FillRect, FrameRect, GetStockObject, InvalidateRect, PAINTSTRUCT, SelectObject, SetBkMode,
@@ -19,10 +21,10 @@ use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Input::KeyboardAndMouse::GetFocus;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, GetCaretPos, GetClientRect, GetCursorPos, GetSystemMetrics,
-    HWND_TOPMOST, IDC_ARROW, LoadCursorW, MA_NOACTIVATE, RegisterClassW, SM_CXSCREEN, SM_CYSCREEN,
-    SW_HIDE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_SHOWWINDOW, SetWindowPos, ShowWindow,
-    WM_MOUSEACTIVATE, WM_PAINT, WNDCLASSW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
-    WS_POPUP,
+    HWND_TOPMOST, IDC_ARROW, IsWindow, LoadCursorW, MA_NOACTIVATE, RegisterClassW, SM_CXSCREEN,
+    SM_CYSCREEN, SW_HIDE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_SHOWWINDOW, SetWindowPos,
+    ShowWindow, WM_MOUSEACTIVATE, WM_PAINT, WNDCLASSW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
+    WS_EX_TOPMOST, WS_POPUP,
 };
 use windows::core::PCWSTR;
 
@@ -50,7 +52,12 @@ fn lock_cand() -> std::sync::MutexGuard<'static, Cand> {
 fn candidate_hwnd() -> HWND {
     let existing = { lock_cand().hwnd };
     if existing != 0 {
-        return HWND(existing as *mut c_void);
+        let hwnd = HWND(existing as *mut c_void);
+        // 属主线程退出后 Windows 会销毁窗口；句柄不能复用，重建。
+        if unsafe { IsWindow(Some(hwnd)) }.as_bool() {
+            return hwnd;
+        }
+        lock_cand().hwnd = 0;
     }
     let module = match unsafe { GetModuleHandleW(None) } {
         Ok(m) => m,
