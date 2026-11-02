@@ -116,7 +116,7 @@ pub(crate) fn mode_hotkey(vk: u32, states: u32) -> Option<ModeHotkey> {
 
 /// lParam 键状态位 → logic 的 KEY_STATE_*（位约定见 logic.rs 头注释）。
 /// TSF lParam：bit30 = 按下前状态（1 = 重复），bit31 = 转换状态（1 = 释放）；
-/// 修饰键（⇧/Ctrl/Alt/CapsLock）TSF 键事件不携带，用 GetKeyState 移位查询。
+/// 修饰键（⇧/Ctrl/Alt/CapsLock）TSF 键事件不携带，用键盘状态查询。
 pub(crate) fn map_key_state(lparam: LPARAM) -> u32 {
     let lp = lparam.0 as u32;
     let mut s = (lp >> 3) & KEY_STATE_REPEAT; // bit30 → 1<<27

@@ -72,6 +72,9 @@ internal class ClipService {
 
     /** 内核启动时实际使用的地址；换网（WSL→Wi-Fi、DHCP 换段）时据此重启。 */
     private var coreLanIp: String? = null
+    private var coreLanPrefix: Int? = null
+    private var beaconsSent = 0L
+    private var beaconsReceived = 0L
 
     init {
         publishSnapshot()
@@ -270,6 +273,7 @@ internal class ClipService {
         }
         handle = clip
         coreLanIp = lan?.ip
+        coreLanPrefix = lan?.prefix
         adapter = createClipboardAdapter(windows, mode)
         if (adapter == null) {
             ui = ui.copy(lastError = "剪贴板适配器不可用（当前桌面环境不支持）")
@@ -297,6 +301,9 @@ internal class ClipService {
         }
         handle = null
         coreLanIp = null
+        coreLanPrefix = null
+        beaconsSent = 0L
+        beaconsReceived = 0L
         runCatching { adapter?.close() }
         adapter = null
     }
@@ -392,6 +399,27 @@ internal class ClipService {
         lastPeersAt = now
         val json = runCatching { f.opi_clip_peers(h).takeText(f) }.getOrNull() ?: return
         applyPeers(parseClipPeers(json))
+        refreshCoreStats(f, h)
+    }
+
+    /** 每秒读一次核心状态：发现计数 + 核心真正绑定的地址（设置页诊断用）。 */
+    private fun refreshCoreStats(f: OpiClipFfi, h: Pointer) {
+        val json = runCatching { f.opi_clip_status(h).takeText(f) }.getOrNull() ?: return
+        val m = parseLine(json) ?: return
+        val sent = (m["beacons_sent"] as? JVal.JNum)?.v ?: 0L
+        val received = (m["beacons_received"] as? JVal.JNum)?.v ?: 0L
+        val ip = (m["advertise_ipv4"] as? JVal.JStr)?.v
+        val prefix = (m["advertise_prefix"] as? JVal.JNum)?.v?.toInt()
+        if (sent == beaconsSent && received == beaconsReceived &&
+            ip == coreLanIp && prefix == coreLanPrefix
+        ) {
+            return
+        }
+        beaconsSent = sent
+        beaconsReceived = received
+        if (ip != null) coreLanIp = ip
+        if (prefix != null) coreLanPrefix = prefix
+        publishSnapshot()
     }
 
     private fun refreshPeersNow() {
@@ -431,6 +459,10 @@ internal class ClipService {
         lastSource = ui.lastSource,
         lastError = ui.lastError,
         ffiError = ffiError,
+        beaconsSent = beaconsSent,
+        beaconsReceived = beaconsReceived,
+        advertiseIp = coreLanIp,
+        advertisePrefix = coreLanPrefix,
     )
 
     private fun publishSnapshot() {

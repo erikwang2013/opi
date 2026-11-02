@@ -191,11 +191,13 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
         }
         else -> {
             val localIp = remember { localLanAddress() }
+            val addr = st.advertiseIp?.let { "${it}/${st.advertisePrefix ?: "-"}" }
+                ?: localIp?.let { "${it.ip}/${it.prefix}（${it.iface}）" } ?: "未找到"
             Text(
                 "本机设备：${st.deviceName} · " +
                     (if (running) "运行中" else if (st.enabled) "启动中" else "已停止") +
-                    " · 局域网地址：${localIp?.let { "${it.ip}/${it.prefix}（${it.iface}）" } ?: "未找到"} · 监听方式：" +
-                    if (mode == ClipMode.MANUAL) "手动（Wayland）" else "轮询",
+                    " · 局域网地址：$addr · 发现报文 ${st.beaconsSent} 发 / ${st.beaconsReceived} 收" +
+                    " · 监听方式：" + if (mode == ClipMode.MANUAL) "手动（Wayland）" else "轮询",
                 fontSize = 12.sp, color = Muted,
             )
             if (s.clipEnabled && !st.enabled) {

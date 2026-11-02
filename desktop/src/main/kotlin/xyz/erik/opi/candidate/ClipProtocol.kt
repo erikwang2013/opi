@@ -327,6 +327,11 @@ internal data class ClipStatus(
     val lastSource: String?,
     val lastError: String?,
     val ffiError: String?,
+    /** 核心自报的发现计数与实际绑定地址；用于「一台设备都没有」时定位。 */
+    val beaconsSent: Long = 0,
+    val beaconsReceived: Long = 0,
+    val advertiseIp: String? = null,
+    val advertisePrefix: Int? = null,
 )
 
 internal fun peerJson(p: ClipPeer): String =
@@ -343,6 +348,10 @@ internal fun encodeClipStatus(s: ClipStatus): String = buildString {
     append(",\"last_source\":").append(s.lastSource?.let(::jsonString) ?: "null")
     append(",\"last_error\":").append(s.lastError?.let(::jsonString) ?: "null")
     append(",\"ffi_error\":").append(s.ffiError?.let(::jsonString) ?: "null")
+    append(",\"beacons_sent\":").append(s.beaconsSent)
+    append(",\"beacons_received\":").append(s.beaconsReceived)
+    append(",\"advertise_ipv4\":").append(s.advertiseIp?.let(::jsonString) ?: "null")
+    append(",\"advertise_prefix\":").append(s.advertisePrefix ?: "null")
     append(",\"peers\":[")
     s.peers.forEachIndexed { i, p -> if (i > 0) append(','); append(peerJson(p)) }
     append("],\"pending\":[")
@@ -378,5 +387,9 @@ internal fun parseClipStatus(line: String): ClipStatus? {
         lastSource = m.str("last_source"),
         lastError = m.str("last_error"),
         ffiError = m.str("ffi_error"),
+        beaconsSent = (m["beacons_sent"] as? JVal.JNum)?.v ?: 0L,
+        beaconsReceived = (m["beacons_received"] as? JVal.JNum)?.v ?: 0L,
+        advertiseIp = m.str("advertise_ipv4"),
+        advertisePrefix = (m["advertise_prefix"] as? JVal.JNum)?.v?.toInt(),
     )
 }
