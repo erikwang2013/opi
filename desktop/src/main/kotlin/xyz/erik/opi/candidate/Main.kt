@@ -53,7 +53,7 @@
 //! jna-platform 是跨平台 jar，Linux 上可编译（kernel32 仅 Windows 存在 ——
 //! 验收阶段在 Windows 上运行）。
 //!
-//! 窗口行为（2026-10-21 用户裁决「长条的，和搜狗输入法一样」）：无边框 + 置顶 +
+//! 窗口行为（2026-10-21 用户裁决「长条的横排候选窗」）：无边框 + 置顶 +
 //! 不抢焦点（输入法候选窗语义）；初始隐藏，show 消息到达才显示。**两行横条**
 //! （2026-10-22 用户裁决「拼音要在候选词上方」）：第一行拼音 + 模式、第二行候选 +
 //! 翻页控件，高度固定 76dp；宽度按两行里更宽的一行实测（`rememberCandidateBarSize`）
@@ -217,7 +217,7 @@ private fun runApp(args: Array<String>) = application {
             }
         }
         val fontScale = candidateFontScale(fontName)
-        // 2026-10-21 用户裁决：Windows 候选窗 = **搜狗式横条**；2026-10-22 起为
+        // 2026-10-21 用户裁决：Windows 候选窗 = **横排长条**；2026-10-22 起为
         // **两行**（拼音行 + 候选行，按内容定宽、高 76dp）。
         val barSize = rememberCandidateBarSize(model, fontScale)
         val windowState = rememberWindowState(

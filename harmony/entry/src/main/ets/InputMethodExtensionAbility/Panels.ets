@@ -18,6 +18,7 @@ import { Palette, SKINS, Skin, paletteFor, scenePanelBg, sceneKeyBg } from './Pa
 import { SCENES, SceneSkin } from './SceneTheme';
 import { UpdateSection } from './UpdateCheck';
 import { LanguageRow, ensureLanguage, t } from './I18n';
+import { CreditSection, OPEN_SOURCE_CREDITS } from './Credits';
 
 const ABOUT_INTRO: string =
   '小欧输入法（opi）是一款回归本质、人人可用的多端输入法。' +
@@ -418,6 +419,14 @@ export struct AboutPanel {
           this.Para(t('© 2026 erik.xyz · 代码按 MIT 许可（全文见仓库 LICENSE）；词库数据与代码分开授权'))
           this.Head(t('表情数据'))
           this.Para(t('Emoji 取自 OpenMoji（CC BY-SA 4.0）；颜文字取自 rime_kaomoji_dict（MIT）；小欧贴纸/图标为项目专有资产，商业使用需授权'))
+          // 开源致谢（2026-11-02）：条目在 Credits.ets，本面板 Scroll 可滚。
+          this.Head(t('开源致谢'))
+          ForEach(OPEN_SOURCE_CREDITS, (section: CreditSection) => {
+            this.Para(`【${t(section.title)}】`)
+            ForEach(section.items, (item: string) => {
+              this.Para('· ' + t(item))
+            }, (item: string) => item)
+          }, (section: CreditSection) => section.title)
           this.Head(t('链接'))
           this.LinkRow(t('官网主页'), ABOUT_HOME_URL)
           this.LinkRow(t('GitHub 项目'), ABOUT_PROJECT_URL)

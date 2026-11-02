@@ -180,6 +180,51 @@ class UpdateDownloadTest {
     }
 
     @Test
+    fun `update downloads follow the user Downloads folder`() {
+        assertEquals(
+            File("/home/eric/Downloads/opi"),
+            downloadsSubdir(false, mapOf("HOME" to "/home/eric"), "/fallback"),
+        )
+        assertEquals(
+            File("/mnt/data/Downloads/opi"),
+            downloadsSubdir(
+                false,
+                mapOf("HOME" to "/home/eric", "XDG_DOWNLOAD_DIR" to "/mnt/data/Downloads"),
+                "/fallback",
+            ),
+        )
+        assertEquals(File("/home/fallback/Downloads/opi"), downloadsSubdir(false, emptyMap(), "/home/fallback"))
+        assertEquals(
+            File("/Users/eric/Downloads/opi"),
+            downloadsSubdir(true, mapOf("USERPROFILE" to "/Users/eric"), "/fallback"),
+        )
+        assertEquals(File("/Users/fallback/Downloads/opi"), downloadsSubdir(true, emptyMap(), "/Users/fallback"))
+    }
+
+    @Test
+    fun `updatesDir creates Downloads opi and falls back when it cannot`() {
+        val home = Files.createTempDirectory("opi-home").toFile()
+        val home2 = Files.createTempDirectory("opi-home2").toFile()
+        try {
+            val dir = updatesDir(false, mapOf("HOME" to home.absolutePath), home.absolutePath)
+            assertEquals(File(home, "Downloads/opi").absoluteFile, dir.absoluteFile)
+            assertTrue("目录应被创建", dir.isDirectory)
+
+            // 同名普通文件占住 Downloads ⇒ 新落点建不出来，必须回退旧目录。
+            File(home2, "Downloads").writeText("not a directory")
+            val fallback = updatesDir(false, mapOf("HOME" to home2.absolutePath), home2.absolutePath)
+            assertEquals(
+                File(home2, ".local/share/opi/updates").absoluteFile,
+                fallback.absoluteFile,
+            )
+            assertTrue("回退目录应被创建", fallback.isDirectory)
+        } finally {
+            home.deleteRecursively()
+            home2.deleteRecursively()
+        }
+    }
+
+    @Test
     fun `file names and human sizes are stable`() {
         assertEquals(
             "opi-1.2.3-windows-x64-setup.exe",

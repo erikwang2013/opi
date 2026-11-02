@@ -130,6 +130,20 @@ internal fun AboutSection(toast: (String) -> Unit) {
             Text("Emoji 取自 OpenMoji（CC BY-SA 4.0）；颜文字取自 rime_kaomoji_dict（MIT）；小欧贴纸/图标为项目专有资产，商业使用需授权")
         },
     )
+    // 开源致谢（2026-11-02）：文案在 `Credits.kt`，键盘内关于面板读同一份。
+    ListItem(
+        headlineContent = { Text("开源致谢") },
+        supportingContent = {
+            Column {
+                OPEN_SOURCE_CREDITS.forEach { section ->
+                    Text(section.title, style = MaterialTheme.typography.titleSmall)
+                    section.items.forEach { item ->
+                        Text("· $item", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        },
+    )
     LinkItem("官网主页", ABOUT_HOME_URL, toast)
     LinkItem("GitHub 项目", ABOUT_PROJECT_URL, toast)
     LinkItem("博客", ABOUT_BLOG_URL, toast)

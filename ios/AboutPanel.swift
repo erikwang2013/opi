@@ -117,6 +117,14 @@ final class AboutPanel: UIView {
             "Emoji 取自 OpenMoji（CC BY-SA 4.0）；颜文字取自 rime_kaomoji_dict（MIT）；"
                 + "小欧贴纸/图标为项目专有资产，商业使用需授权"
         )
+        // 开源致谢（2026-11-02）：条目在 Credits.swift，面板本身可滚动。
+        addHeading("开源致谢")
+        for section in OpiCredits.sections {
+            addParagraph("【\(section.title)】")
+            for item in section.items {
+                addParagraph("· " + item)
+            }
+        }
         addHeading("链接")
         addLink("官网主页", Self.homeURL)
         addLink("GitHub 项目", Self.projectURL)

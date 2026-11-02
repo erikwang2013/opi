@@ -14,7 +14,7 @@ kTotalStrokes；Unicode License，与 trad_hanzi.tsv 同源）。下载与 SHA-2
 用法（需要网络）：`cd <repo 根> && python3 scripts/gen_rare_index.py`
 
 为什么不用 stroke.opid 代替：stroke.opid 是**笔画序**（能按开头笔画查），本表是
-**部首+笔画数**（Sogou 式生僻字键盘的浏览式查法）；两者互补，不是一份数据的两种
+**部首+笔画数**（按部首与笔画数浏览的生僻字键盘查法）；两者互补，不是一份数据的两种
 存法。两张表都覆盖扩展区（stroke 至 Ext J；本表随 Unihan 收录范围）。
 """
 
