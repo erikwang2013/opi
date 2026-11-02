@@ -13,19 +13,23 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
+import kotlinx.coroutines.delay
 import xyz.erik.opi.scene.HALO_BOTTOM_ANCHORS
 import xyz.erik.opi.scene.HALO_TOP_ANCHORS
+import xyz.erik.opi.scene.OPI_SCENE_PERIOD_MS
 import xyz.erik.opi.scene.ScenePalette
 import xyz.erik.opi.scene.SceneTheme
 import xyz.erik.opi.scene.drawOpiSceneBackdrop
 import xyz.erik.opi.scene.drawOpiSceneHalo
-import xyz.erik.opi.scene.rememberOpiScenePhase
 
 /** 动态皮肤是否生效：条底板/按钮随之变半透明，让插画透到按键上。 */
 internal val LocalBarSceneActive = compositionLocalOf { false }
@@ -36,6 +40,29 @@ internal fun SkinColors.scenePalette(): ScenePalette =
 
 /** 自绘窗（设置/符号/虚拟键盘）共用的当前动态皮肤；null = 纯色。 */
 internal val LocalPageScene = compositionLocalOf<SceneTheme?> { null }
+
+/** 插画相位刷新间隔（≈30Hz）：背景只是 16s 一圈的慢速装饰，vsync 的 60/120Hz 没有视觉收益。 */
+private const val SCENE_TICK_MS = 33L
+
+/**
+ * 桌面端的插画相位（替掉 vsync 驱动的 `rememberOpiScenePhase`）：按墙钟算相位，周期与
+ * 视觉轨迹逐帧一致，但每秒只唤醒 ~30 次而不是跟着显示器刷新率跑。只看绘制阶段的
+ * `.value`，不重组按钮/页面。`animate = false`（纯色皮肤/窗已隐藏）= 相位恒 0，不起定时器。
+ */
+@Composable
+internal fun rememberScenePhase(animate: Boolean = true): State<Float> {
+    val phase = remember(animate) { mutableStateOf(0f) }
+    if (!animate) return phase
+    LaunchedEffect(Unit) {
+        val start = System.nanoTime()
+        while (true) {
+            delay(SCENE_TICK_MS)
+            val elapsedMs = (System.nanoTime() - start) / 1_000_000
+            phase.value = (elapsedMs % OPI_SCENE_PERIOD_MS) / OPI_SCENE_PERIOD_MS.toFloat()
+        }
+    }
+    return phase
+}
 
 /** 页面底：动态皮肤 = 插画 + 半透明页面色；纯色 = 原页面色。 */
 @Composable
@@ -48,7 +75,7 @@ internal fun Modifier.sceneBackdrop(
 ): Modifier {
     if (theme == null) return background(base)
     val scene = remember(base, ink, accent) { ScenePalette(base = base, ink = ink, accent = accent) }
-    val phase = rememberOpiScenePhase()
+    val phase = rememberScenePhase()
     return drawBehind {
         drawOpiSceneBackdrop(scene, theme, phase.value)
         drawRect(base.copy(alpha = scrim))
@@ -68,7 +95,7 @@ internal fun StatusBarOverflowScene(
     modifier: Modifier = Modifier,
 ) {
     val scene = remember(palette) { palette.scenePalette() }
-    val phase = rememberOpiScenePhase()
+    val phase = rememberScenePhase()
     Canvas(modifier.fillMaxSize()) {
         val h = halo.toPx()
         drawOpiSceneHalo(
@@ -92,7 +119,7 @@ internal fun StatusBarSceneBackdrop(
     modifier: Modifier = Modifier,
 ) {
     val scene = remember(palette) { palette.scenePalette() }
-    val phase = rememberOpiScenePhase()
+    val phase = rememberScenePhase()
     Canvas(modifier.fillMaxSize()) {
         drawOpiSceneBackdrop(scene, theme, phase.value, muted = 0.20f)
     }

@@ -209,7 +209,7 @@ private fun runApp(args: Array<String>) = application {
         var fontName by remember { mutableStateOf(CLASSIC_UI_FONT_DEFAULT) }
         LaunchedEffect(Unit) {
             while (true) {
-                val st = withContext(Dispatchers.IO) { loadSettings() }
+                val st = withContext(Dispatchers.IO) { loadSettingsCached() }
                 if (st.background != theme) theme = st.background
                 if (st.skin != skin) skin = st.skin
                 if (st.candidateFont != fontName) fontName = st.candidateFont

@@ -177,7 +177,7 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
             // 实抓 EDT 停在 ProcessImpl.waitFor ← Actions.runCapture ← readImeState）。
             // 循环仍是单条协程顺序执行：不可重入、次序（设置→状态）与超时值都不变。
             val read = statusBarGuard("状态栏轮询") {
-                withContext(Dispatchers.IO) { loadSettings() to readImeStateOrNull() }
+                withContext(Dispatchers.IO) { loadSettingsCached() to readImeStateOrNull() }
             }
             if (read == null) {
                 // 守卫层自身失败（不是一次状态读失败）：退避，别忙转。

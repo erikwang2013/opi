@@ -62,6 +62,14 @@ private const val MAX_INSTANCES = 1
  */
 private const val READ_POLL_MS = 2L
 
+/**
+ * 空闲档：连续 [READ_IDLE_AFTER_EMPTY] 次 Peek 无数据后退到 6ms（任务要求 4–8ms，
+ * 取中间）。有数据立刻回到 2ms，所以按键路径的延迟不变；空闲时不打字的代价只是
+ * 唤醒频率减半，最坏额外延迟 = 一次 6ms 睡眠。
+ */
+private const val READ_IDLE_POLL_MS = 6L
+private const val READ_IDLE_AFTER_EMPTY = 8
+
 /** ConnectNamedPipe 返回 0 时的「客户端已抢先连上」错误码 —— 属正常，不是故障。 */
 private const val ERROR_PIPE_CONNECTED = 535
 
@@ -233,15 +241,21 @@ internal class PipeServer(
         // 候选窗显示乱码。Rust 侧 candidate_io.rs 的 pending 就是 Vec<u8>，
         // 两处「互为镜像」的约定在这里必须同构。
         val pending = ByteArrayOutputStream()
+        // 连续空转计数：只影响睡眠长度，不影响读取/分帧语义。
+        var emptyPeeks = 0
         while (true) {
             // 先 Peek：同步句柄上不能留一个阻塞 ReadFile，否则同句柄的 WriteFile
             // 会被串行化（见 READ_POLL_MS）。
             val avail = IntByReference()
             if (!Kernel32.INSTANCE.PeekNamedPipe(pipe, null, 0, null, avail, null)) return
             if (avail.value == 0) {
-                Thread.sleep(READ_POLL_MS)
+                emptyPeeks++
+                Thread.sleep(
+                    if (emptyPeeks > READ_IDLE_AFTER_EMPTY) READ_IDLE_POLL_MS else READ_POLL_MS,
+                )
                 continue
             }
+            emptyPeeks = 0
             val n = IntByReference()
             // 字节流读：Peek 已确认有数据，这次 ReadFile 不会阻塞。
             if (!Kernel32.INSTANCE.ReadFile(pipe, buf, buf.size, n, null) || n.value <= 0) return

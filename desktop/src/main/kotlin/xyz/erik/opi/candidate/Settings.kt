@@ -43,6 +43,8 @@ import xyz.erik.opi.scene.SceneTheme
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.nio.file.attribute.BasicFileAttributes
+import java.nio.file.attribute.FileTime
 
 /**
  * 五个开关 + 皮肤 + 状态栏。默认值 = 引擎既有行为（开关全开、皮肤不改动），与两端的
@@ -369,6 +371,33 @@ fun loadSettings(): OpSettings = try {
     OpSettings.fromIni(Files.readString(settingsPath()))
 } catch (_: Exception) {
     OpSettings()
+}
+
+// 1s 轮询缓存：文件的 (mtime, size)。状态栏与候选窗每秒各读一次配置，绝大多数拍
+// 文件根本没动 —— 命中缓存就省掉一次读 + 解析。**跨进程**写入（设置窗是另一个进程）
+// 也会体现在 mtime/size 上，所以仍能在一个轮询周期内看到新值。
+private var cachedSettings: OpSettings? = null
+private var cachedSettingsStamp: Pair<FileTime, Long>? = null
+
+/**
+ * [loadSettings] 的轮询版：文件 (mtime, size) 没变就复用上次解析结果。
+ * 只给每秒轮询用；需要「刚写完必读新值」的一次性读仍用 [loadSettings]。
+ */
+@Synchronized
+internal fun loadSettingsCached(): OpSettings {
+    val p = settingsPath()
+    val stamp = try {
+        val attrs = Files.readAttributes(p, BasicFileAttributes::class.java)
+        attrs.lastModifiedTime() to attrs.size()
+    } catch (_: Exception) {
+        null // 文件不存在/读不动：与 loadSettings 的全默认同一语义
+    }
+    val cached = cachedSettings
+    if (cached != null && stamp == cachedSettingsStamp) return cached
+    return loadSettings().also {
+        cachedSettings = it
+        cachedSettingsStamp = stamp
+    }
 }
 
 /**

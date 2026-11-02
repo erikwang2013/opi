@@ -43,13 +43,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.WindowPosition
 import java.awt.Toolkit
+import kotlin.math.ceil
 import xyz.erik.opi.pet.OpiPet
 import xyz.erik.opi.pet.PetMood
 import xyz.erik.opi.pet.PetPalette
 import xyz.erik.opi.scene.ScenePalette
 import xyz.erik.opi.scene.SceneTheme
 import xyz.erik.opi.scene.drawOpiSceneBackdrop
-import xyz.erik.opi.scene.rememberOpiScenePhase
 
 // ---------- 自绘配色 ----------
 //
@@ -128,6 +128,13 @@ internal val PANEL_DESIGN_SIZE = DpSize(720.dp, 76.dp)
 internal const val BAR_MIN_WIDTH = 360f
 internal const val BAR_MAX_WIDTH = 1000f
 
+/**
+ * 窗宽取整粒度（dp，向上取整）。候选每键都变，实测宽度常有几 dp 抖动 —— 直接按实测值
+ * 改窗会让每次按键都触发一次原生 resize；取整后只有跨过桶边界才动窗。**只向上取**，
+ * 不会把内容裁掉（向下取会裁掉最后一条候选）。
+ */
+private const val BAR_WIDTH_BUCKET_DP = 16f
+
 // 横条的间距账（[candidateBarWidthDp] 与布局共用同一批数字 —— 别在调用点各写一份）。
 private const val BAR_PAD_H = 10f
 private const val BAR_PAD_V = 6f
@@ -191,11 +198,14 @@ internal fun rememberCandidateBarSize(model: CandidateModel, fontScale: Float = 
     // 页码这些**每键都一样**的标签会在下一键前被挤出 ⇒ 每键重排十几次。
     // 64 条足够盖住一整页 + 常驻标签；候选文本变了自然 miss 换入，无需手动失效。
     val measurer = rememberTextMeasurer(cacheSize = 64)
-    val screenMax = (Toolkit.getDefaultToolkit().screenSize.width - 80)
-        .coerceAtLeast(BAR_MIN_WIDTH.toInt()).toFloat()
+    // 每键重组合都会走到这里；AWT 的 screenSize 只查一次（分辨率变化要重启进程才跟）。
+    val screenMax = remember {
+        (Toolkit.getDefaultToolkit().screenSize.width - 80)
+            .coerceAtLeast(BAR_MIN_WIDTH.toInt()).toFloat()
+    }
     return remember(
         model.buffer, model.candidates, model.page, model.pageCount, model.mode, density,
-        screenMax, fontScale,
+        fontScale,
     ) {
         // 高度固定 = PANEL_DESIGN_SIZE.height ⇒ 真实运行期的窗口系数恒为 1；这里用
         // fontSizeFor 而不是裸乘，是为了与面板的 MIN 下限/缩放口径逐字一致。
@@ -227,7 +237,10 @@ internal fun rememberCandidateBarSize(model: CandidateModel, fontScale: Float = 
             page = page,
             max = screenMax,
         )
-        DpSize(width.dp, PANEL_DESIGN_SIZE.height)
+        // 向上取整到 16dp 桶；取整后超出屏幕上限时用 screenMax（candidateBarWidthDp
+        // 已按它收口，实际内容不会超 ⇒ 不裁）。
+        val bucketed = ceil(width / BAR_WIDTH_BUCKET_DP) * BAR_WIDTH_BUCKET_DP
+        DpSize(minOf(bucketed, screenMax).dp, PANEL_DESIGN_SIZE.height)
     }
 }
 
@@ -320,7 +333,8 @@ internal fun CandidatePanel(
     val dim = palette.fg.copy(alpha = 0.62f)
     val scroll = rememberScrollState()
     val scene = remember(palette) { ScenePalette(base = palette.bg, ink = palette.fg, accent = palette.accent) }
-    val phase = rememberOpiScenePhase(animate = theme != null)
+    // 30Hz 定时器（见 StatusBarScene.kt）：窗隐藏时连定时器一起停。
+    val phase = rememberScenePhase(animate = theme != null && model.visible)
     Box(Modifier.fillMaxWidth().height(windowSize.height)) {
         if (theme != null) {
             Canvas(Modifier.fillMaxSize()) {
