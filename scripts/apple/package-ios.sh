@@ -56,7 +56,6 @@
 #
 # 模拟器只做 arm64 切片：Intel Mac 上的模拟器要 x86_64-apple-ios —— 本轮不做，
 # 要加就是在下面 `for spec` 里多一行，没有别的机关（如实记：现在缺这一片）。
-
 set -euo pipefail
 
 version="${1:?用法: scripts/apple/package-ios.sh <版本号> [产物目录]}"
@@ -365,7 +364,7 @@ printf '%s\n' "$host_plist" | grep -q 'NSMicrophoneUsageDescription' || {
   echo "!! 宿主 Info.plist 缺 NSMicrophoneUsageDescription" >&2; exit 1; }
 printf '%s\n' "$host_plist" | grep -q 'opi-voice' || {
   echo "!! 宿主 Info.plist 缺 opi-voice URL scheme" >&2; exit 1; }
-# 宿主源码不止 OpiApp.swift：语音页/引擎/下载器都是独立文件，必须一起编。
+# 宿主源码不止 OpiApp.swift：语音页/引擎/下载器都是独立文件。
 host_sources=(ios/HostApp/*.swift ios/VoiceResultChannel.swift)
 host_common=(-parse-as-library -import-objc-header ios/HostApp/OpiAsr.h \
   -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" -target "arm64-apple-ios$IOS_MIN")
@@ -408,11 +407,6 @@ onnx_lib="$(find_archive libonnxruntime.a "${sherpa_dirs[@]}")" || {
 echo "宿主 ASR 静态库：$asrlib"
 echo "  sherpa：$sherpa_lib"
 echo "  onnxruntime：$onnx_lib"
-# 2026-11-02 iOS 链接诊断：absl 符号是否真的在归档里（CI 日志可见）。
-for lib in "$sherpa_lib" "$onnx_lib"; do
-  printf 'absl in %s: ' "$(basename "$lib")"
-  xcrun nm -gU "$lib" 2>/dev/null | grep -c 'AbslInternalSpinLock' || true
-done
 # 链接顺序：opi_asr → sherpa → onnxruntime。force_load 让归档成员稳定进宿主。
 swiftc "${host_common[@]}" -emit-executable "${host_sources[@]}" -O -o "$hostbin" \
   -Xlinker -all_load \

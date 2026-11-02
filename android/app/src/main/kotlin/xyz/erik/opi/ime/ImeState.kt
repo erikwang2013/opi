@@ -302,16 +302,10 @@ class ImeState(
      * app 设置页，改键盘内面板」）面板：只切视图、不碰引擎、无缓冲语义，中途关掉不丢缓冲。
      */
     fun openAbout() = openPanel(View.ABOUT)
-    fun openSettings() = openPanel(View.SETTINGS)
-
-    /** 跨设备传输面板（工具条入口，仅偏好开启时显示）。 */
-    fun openTransfer() = openPanel(View.TRANSFER)
-
-    /** 工具条传输入口的显隐真相；服务在创建视图与每次窗口显示时从偏好同步。 */
+    fun openSettings() = openPanel(View.SETTINGS); fun openTransfer() = openPanel(View.TRANSFER)
     var transferEnabled by mutableStateOf(false)
         internal set
     private fun openPanel(v: View) { resetSearch(); view = v }
-
     // ---- 面板切换（开面板前提交 pending buffer） ----
 
     fun openNumber() {
