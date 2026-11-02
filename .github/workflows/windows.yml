@@ -68,6 +68,11 @@ on:
 permissions:
   contents: read
 
+# 同一 ref/tier 只留最新一次；full/basic 手动构建不会与 normal 互相取消。
+concurrency:
+  group: windows-${{ github.workflow }}-${{ github.ref }}-${{ inputs.tier || 'normal' }}
+  cancel-in-progress: true
+
 jobs:
   # 版本号只在这里解析一次，两个构建 job 都从这里取 —— 顺带把「跨端版本号漂移」变成一条
   # 会红的判据（见下面的比对）。空值/取不到一律红：产物名里的版本号要是空的，
@@ -131,6 +136,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
 
       # --locked：按 Cargo.lock 编，不让 cargo 静默改写依赖树再据此编译（本仓 msrv job
       # 同一条约定：不加 --locked，测的就不是锁定那份依赖）。锁文件漂了会在这一步响的红。
@@ -245,6 +253,11 @@ jobs:
       - name: cargo test -p opi-tools（Windows 专属硬链接判据）
         run: cargo test --locked -p opi-tools --test cli_boundary compile_must_not_overwrite_its_own_input
 
+      # 原独立 job 并进来：同一 runner、同一份缓存，省一次 checkout/装工具链。
+      # ci.yml 的 clippy 只跑主机目标，看不到 #[cfg(target_os = "windows")] 的模块。
+      - name: cargo clippy -p tsf_opi -p imm32_opi --target x86_64-pc-windows-msvc -- -D warnings
+        run: cargo clippy --locked -p tsf_opi -p imm32_opi --target x86_64-pc-windows-msvc -- -D warnings
+
       # if-no-files-found: error —— 默认只 warn，而「绿了但没产物」正是本仓反复栽过的
       # 那种假绿（比红更坏：拿到手才发现空）。
       - uses: actions/upload-artifact@v4
@@ -261,6 +274,9 @@ jobs:
     # 2026-10-18 用户裁决「DLL 不要单独发布」：MSI 必须在打包时就把 TSF DLL
     # 挂进 jpackage 的 `--input`，否则用户拿到一个只能装候选窗、不能打字的包。
     needs: [version, tsf-dll]
+    # MSI 只是内部证据（用户入口是 EXE）。push 不再跑整条 MSI 链，省一个
+    # windows-latest + 一个 ubuntu-latest + 一个 5GB 容器；手动 dispatch 仍全跑。
+    if: github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
 
@@ -302,6 +318,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+          cache: gradle
+          cache-dependency-path: |
+            desktop/gradle/wrapper/gradle-wrapper.properties
+            desktop/**/*.gradle.kts
 
       # 在 desktop/ 里跑（本模块有**自己的** gradlew + settings.gradle.kts，与 android/
       # 同约定：阿里云镜像优先、mavenCentral 兜底、无 google()）。Windows 上必须用
@@ -374,6 +394,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+          cache: gradle
+          cache-dependency-path: |
+            desktop/gradle/wrapper/gradle-wrapper.properties
+            desktop/**/*.gradle.kts
 
       - name: 下载完整包语音模型（仅 full）
         if: inputs.tier == 'full'
@@ -405,12 +429,13 @@ jobs:
 
       # app image 与 MSI 用同一套 jpackage 配置；Windows 主机上 packageName=opi
       # ⇒ 产物目录与启动器都叫 opi。Inno 以这个目录为唯一输入。
-      - name: ./gradlew.bat createDistributable（app image）
+      - name: ./gradlew.bat createDistributable（app image）+ packageAsrEngine
         shell: pwsh
         run: |
           $gradleArgs = @("-PopiPackageTier=$env:TIER")
           if ($env:TIER -eq 'full') { $gradleArgs += "-PopiAsrModelsDir=$env:ASR_BUNDLE" }
-          & .\gradlew.bat @gradleArgs createDistributable --no-daemon
+          # 同一次 Gradle 调用出 app image + 语音引擎组件：buildOpiAsr 只跑一遍。
+          & .\gradlew.bat @gradleArgs createDistributable packageAsrEngine --no-daemon
           if ($LASTEXITCODE -ne 0) { throw "gradle 失败：$LASTEXITCODE" }
         working-directory: desktop
         env:
@@ -496,19 +521,15 @@ jobs:
           name: opi-windows-exe-v${{ needs.version.outputs.version }}-${{ env.TIER }}
           if-no-files-found: error
           path: dist/windows-exe/*.exe
-
-      - name: 打包语音引擎组件（供普通/基础包按需下载）
-        shell: pwsh
-        run: |
-          .\gradlew.bat -PopiPackageTier=$env:TIER packageAsrEngine --no-daemon
-          if ($LASTEXITCODE -ne 0) { throw "packageAsrEngine 失败：$LASTEXITCODE" }
-        working-directory: desktop
+          # EXE 安装器内部已是压缩数据，upload-artifact 不再压。
+          compression-level: 0
 
       - uses: actions/upload-artifact@v4
         with:
           name: opi-asr-engine-windows-v${{ needs.version.outputs.version }}
           path: desktop/build/outputs/asr-engine/*.zip
           if-no-files-found: error
+          compression-level: 0
 
   # ---- MSI 后处理（Linux runner，msitools 表级注入）----
   #
@@ -531,6 +552,8 @@ jobs:
     name: MSI 后处理 + 表级验证（ubuntu-latest，msitools）
     runs-on: ubuntu-latest
     needs: [version, desktop-msi]
+    # 与 desktop-msi 同一条门：MSI 链只在手动 dispatch 时跑。
+    if: github.event_name == 'workflow_dispatch'
     # 删除 raw artifact 需要 actions: write；job 级 permissions 会覆盖顶层，
     # 所以 contents: read 必须一起写（checkout 要用）。
     permissions:
@@ -630,6 +653,8 @@ jobs:
     name: MSI 容器安装冒烟（已知 TSF 回滚放行）
     runs-on: windows-latest
     needs: [version, msi-postprocess]
+    # 与 desktop-msi 同一条门：MSI 链只在手动 dispatch 时跑。
+    if: github.event_name == 'workflow_dispatch'
     timeout-minutes: 60 # ltsc2022 镜像约 5 GB，给足拉取时间
     steps:
       - uses: actions/download-artifact@v4
@@ -999,28 +1024,3 @@ jobs:
             holder-uninstall.txt
             hold-dll.ps1
             exe-smoke.cmd
-
-  # ---- clippy（Windows 目标，进卡）----
-  #
-  # 本仓已知盲区：ci.yml 的 clippy 只跑**主机目标**，而 tsf-opi 有四个模块整个在
-  # `#[cfg(target_os = "windows")]` 里 —— 主机 clippy 一行都看不到它们。这条补上。
-  #
-  # 2026-10-21 起进卡：原有 9 条红已修（DllGetClassObject 标 unsafe + 补 # Safety、
-  # attach_sink 改返回 bool、两处 doc 续行缩进、candidate_io 的空行文档注释），
-  # 本机 rustc 1.99.1 上 `cargo clippy -p tsf_opi --all-targets -- -D warnings` 为绿。
-  # 工具链升级若引入新 lint，这里会与 ci.yml 的主机 clippy 一起红 —— 那是有意的信号，
-  # 不是需要重新加 continue-on-error 的噪声。
-  clippy-windows:
-    name: clippy（Windows 目标）
-    runs-on: windows-latest
-    needs: version
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-pc-windows-msvc
-          components: clippy
-
-      - name: cargo clippy -p tsf_opi -p imm32_opi --target x86_64-pc-windows-msvc -- -D warnings
-        run: cargo clippy --locked -p tsf_opi -p imm32_opi --target x86_64-pc-windows-msvc -- -D warnings

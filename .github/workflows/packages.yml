@@ -115,6 +115,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '21' # jpackage 需要 ≥17；21 是当前 LTS
+          cache: gradle
+          cache-dependency-path: |
+            desktop/gradle/wrapper/gradle-wrapper.properties
+            desktop/**/*.gradle.kts
 
       # desktop 的 jpackage 现在把 opi_ffi 打进行镜像（跨设备剪贴板）；
       # 打包任务会调 cargo，runner 默认没有 Rust，必须显式装。
@@ -176,12 +180,14 @@ jobs:
           name: opi-desktop-deb
           if-no-files-found: error
           path: desktop/build/compose/binaries/main/deb/*.deb
+          compression-level: 0
 
       - uses: actions/upload-artifact@v4
         with:
           name: opi-asr-engine-linux
           if-no-files-found: error
           path: desktop/build/outputs/asr-engine/*.zip
+          compression-level: 0
 
   packages:
     name: 打包 .deb / .rpm（debian:12 容器里构建）
@@ -401,6 +407,7 @@ jobs:
           path: |
             dist/*.deb
             dist/*.rpm
+          compression-level: 0
 
       # 附到 release 是**显式选择**，不是默认动作：只有手填了上面的 tag 输入项才跑。
       # 留空时本步跳过 —— 不猜 tag、不碰任何 release，产物就停在上面的 artifact 里，

@@ -40,6 +40,11 @@ on:
 permissions:
   contents: read
 
+# 同一 ref 只留最新一次（三个 job 共用这一组；新 push 顶掉旧构建）。
+concurrency:
+  group: apple-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   rust:
     name: Rust 产物 — darwin 通用库 + iOS 静态库/xcframework
@@ -54,6 +59,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin, x86_64-apple-darwin, aarch64-apple-ios, aarch64-apple-ios-sim
+
+      - uses: Swatinem/rust-cache@v2
 
       # 版本号只有一个真源（Cargo.toml 的 [workspace.package] version），取法也只有一份
       # （scripts/apple/version.sh）。三个 job 各自取一次，是为了不让 job 之间多一条
@@ -125,6 +132,8 @@ jobs:
         with:
           targets: aarch64-apple-darwin, x86_64-apple-darwin
 
+      - uses: Swatinem/rust-cache@v2
+
       - name: 取版本号
         id: ver
         run: echo "v=$(bash scripts/apple/version.sh)" >> "$GITHUB_OUTPUT"
@@ -157,6 +166,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-ios, aarch64-apple-ios-sim
+
+      - uses: Swatinem/rust-cache@v2
 
       - name: 取版本号
         id: ver

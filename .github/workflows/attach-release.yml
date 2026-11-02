@@ -15,7 +15,7 @@ on:
         default: '1.31.0'
         type: string
       cutoff:
-        description: '忽略早于该 UTC 时间的无版本号 artifact（2026-11-01T19:30:00Z）'
+        description: '忽略早于该 UTC 时间的 artifact（带版本号的也算，2026-11-01T19:30:00Z）'
         required: false
         default: ''
         type: string
@@ -40,15 +40,20 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p assets work
+          wrote=()
           tag_date="$(gh release view "$TAG" --json publishedAt,createdAt --jq '(.publishedAt // .createdAt)[:10]')"
+          # 同名 artifact 只留最新一份（历史 run 会重复产出同名包）：按 created_at
+          # 倒序后 awk 只保留每个 name 的第一行。cutoff 对带版本号的名字同样生效。
           gh api --paginate "repos/$REPO/actions/artifacts?per_page=100" \
-            --jq '.artifacts[] | [.id,.name,.created_at] | @tsv' | sort -t$'\t' -k3,3 > work/artifacts.tsv
+            --jq '.artifacts[] | [.id,.name,.created_at] | @tsv' \
+            | awk -F'\t' -v c="$CUTOFF" 'c == "" || $3 >= c' \
+            | sort -t$'\t' -k3,3r \
+            | awk -F'\t' '!seen[$2]++ || $2 == "opi-packages" || $2 == "opi-asr-engine-linux"' > work/artifacts.tsv
           while IFS=$'\t' read -r id name created; do
             case "$name" in
               opi-packages|opi-asr-engine-linux)
                 # 无版本号的老 artifact 很多；只取本发布日构建的包。
                 case "$created" in "$tag_date"*) ;; *) continue ;; esac
-                if [ -n "$CUTOFF" ] && [[ "$created" < "$CUTOFF" ]]; then continue; fi
                 ;;
               *"v$V"*) ;;
               *) continue ;;
@@ -69,6 +74,7 @@ jobs:
                 [ -n "$apk" ] || continue
                 suffix=""; [ "$tier" = normal ] || suffix="-$tier"
                 cp "$apk" "assets/opi-$V-android-universal${suffix}.apk"
+                wrote+=("opi-$V-android-universal${suffix}.apk")
                 ;;
               opi-windows-exe-*)
                 tier=normal
@@ -77,6 +83,7 @@ jobs:
                 [ -n "$exe" ] || continue
                 suffix=""; [ "$tier" = normal ] || suffix="-$tier"
                 cp "$exe" "assets/opi-$V-windows-x64${suffix}-setup.exe"
+                wrote+=("opi-$V-windows-x64${suffix}-setup.exe")
                 ;;
               opi-packages)
                 deb="$(find "$d" -name '*.deb' | head -1)"
@@ -94,26 +101,48 @@ jobs:
                 esac
                 suffix=""; [ "$tier" = normal ] || suffix="-$tier"
                 cp "$deb" "assets/opi-$V-linux-amd64${suffix}.deb"
-                [ -n "$rpm" ] && cp "$rpm" "assets/opi-$V-linux-x86_64${suffix}.rpm"
+                wrote+=("opi-$V-linux-amd64${suffix}.deb")
+                if [ -n "$rpm" ]; then
+                  cp "$rpm" "assets/opi-$V-linux-x86_64${suffix}.rpm"
+                  wrote+=("opi-$V-linux-x86_64${suffix}.rpm")
+                fi
                 ;;
               opi-ios-keyboard-*)
                 ipa="$(find "$d" -name '*.ipa' | head -1)"
-                [ -n "$ipa" ] && cp "$ipa" "assets/opi-$V-ios-unsigned.ipa"
+                if [ -n "$ipa" ]; then
+                  cp "$ipa" "assets/opi-$V-ios-unsigned.ipa"
+                  wrote+=("opi-$V-ios-unsigned.ipa")
+                fi
                 ;;
               opi-macos-ime-*)
                 pkg="$(find "$d" -name '*.pkg' | head -1)"
-                [ -n "$pkg" ] && cp "$pkg" "assets/opi-$V-macos-universal.pkg"
+                if [ -n "$pkg" ]; then
+                  cp "$pkg" "assets/opi-$V-macos-universal.pkg"
+                  wrote+=("opi-$V-macos-universal.pkg")
+                fi
                 ;;
               opi-harmony*)
                 hap="$(find "$d" -name '*.hap' | head -1)"
-                [ -n "$hap" ] && cp "$hap" "assets/opi-$V-harmonyos-unsigned.hap"
+                if [ -n "$hap" ]; then
+                  cp "$hap" "assets/opi-$V-harmonyos-unsigned.hap"
+                  wrote+=("opi-$V-harmonyos-unsigned.hap")
+                fi
                 ;;
               opi-asr-engine-*)
                 # $d/a.zip 是 gh api 下载的 artifact 外壳，真正的组件是解压出来的 zip。
                 zip="$(find "$d" -name '*.zip' ! -name 'a.zip' | head -1)"
-                [ -n "$zip" ] && cp "$zip" "assets/$(basename "$zip")"
+                if [ -n "$zip" ]; then
+                  cp "$zip" "assets/$(basename "$zip")"
+                  wrote+=("$(basename "$zip")")
+                fi
                 ;;
             esac
           done < work/artifacts.tsv
+          # 每个发布文件名只允许被写一次：两个不同 artifact 名字撞到同一目标名时，
+          # 后写的会静默覆盖前一个（例如旧版无后缀包与新档位包）。
+          printf '%s\n' "${wrote[@]}" | sort | uniq -c
+          dupes="$(printf '%s\n' "${wrote[@]}" | sort | uniq -d)"
+          [ -z "$dupes" ] || { echo "::error::多个 artifact 落到同一发布文件名："; printf '%s\n' "$dupes"; exit 1; }
+          [ "${#wrote[@]}" -gt 0 ] || { echo "::error::没有可上传的资产（检查 version/tag/cutoff 输入）"; exit 1; }
           ls -lh assets
           gh release upload "$TAG" assets/* --clobber

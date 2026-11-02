@@ -26,6 +26,11 @@ on:
 permissions:
   contents: read
 
+# 同一 ref 只留最新一次；tier 进 group，full/basic 的手动构建不会互相取消。
+concurrency:
+  group: android-release-${{ github.ref }}-${{ inputs.tier || 'normal' }}
+  cancel-in-progress: true
+
 jobs:
   android-release:
     name: Android — release APK
@@ -40,12 +45,18 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
+          cache-dependency-path: |
+            android/gradle/wrapper/gradle-wrapper.properties
+            android/**/*.gradle.kts
 
       # cargokit 按 android-arm64/android-arm/android-x64 固定三个平台编译
       # （rust_builder/cargokit/gradle/plugin.gradle）。
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - uses: Swatinem/rust-cache@v2
 
       # cargokit 的 run_build_tool.sh 自己跑 `dart pub get`，所以只需装 Dart SDK。
       - uses: dart-lang/setup-dart@v1
@@ -119,7 +130,8 @@ jobs:
           if [ "$TIER" = full ]; then
             args+=(-PopiAsrBundleDir="$RUNNER_TEMP/asr-bundle")
           fi
-          ./gradlew "${args[@]}" assembleRelease --no-daemon
+          # 一次 Gradle 调用出 APK + 语音引擎组件：两次调用会让 buildAsrNative 跑两遍。
+          ./gradlew "${args[@]}" assembleRelease :app:packageAsrEngine --no-daemon
         working-directory: android
 
       # 核对 APK 里的真实 versionName 与三个 ABI，再按发布命名拷进 dist/。
@@ -185,24 +197,17 @@ jobs:
           fi
           ls -l "$out"
 
-      - name: 打包语音引擎组件（供普通/基础包按需下载）
-        shell: bash
-        run: |
-          args=(-PopiPackageTier="$TIER")
-          if [ "$TIER" = full ]; then
-            args+=(-PopiAsrBundleDir="$RUNNER_TEMP/asr-bundle")
-          fi
-          ./gradlew "${args[@]}" :app:packageAsrEngine --no-daemon
-        working-directory: android
-
       - uses: actions/upload-artifact@v4
         with:
           name: opi-android-release-v${{ steps.version.outputs.version }}-${{ env.TIER }}
           path: dist/opi-*-android-universal*.apk
           if-no-files-found: error
+          # APK 已是 zip，再压一遍只费 CPU 不省字节。
+          compression-level: 0
 
       - uses: actions/upload-artifact@v4
         with:
           name: opi-asr-engine-android-v${{ steps.version.outputs.version }}
           path: android/app/build/outputs/asr-engine/*.zip
           if-no-files-found: error
+          compression-level: 0
