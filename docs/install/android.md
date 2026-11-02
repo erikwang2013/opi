@@ -624,7 +624,7 @@ emoji 列**不动** —— 它管单键候选反馈（搜索路），与浏览�
   键位表在 `keyboard/NineKeyKeyboard.kt` / `FourteenKeyKeyboard.kt`，两边由单测**交叉核对**
   （`NineKeyLayoutTest` / `FourteenKeyLayoutTest` 里各带一份 `scheme.rs` 的快照）。
 - 笔画词典 = `assets/stroke.opid`（|rime-stroke|，5.4MB，`gen_stroke_dict.py` 生成、入库）；
-  没装/坏了时候选为空（可选增强），键盘照常可打。
+  没装/坏了时候选为空（可选增强），键盘照常可打。**2026-11-02 起首帧只同步装载当前持久化方案需要的表**，其余在键盘就绪后由 `EngineLoader.preloadOptional` 后台补齐。
 
 **键盘模式（六种）**——落地层各不相同，改之前先看 `ime/KeyboardModes.kt` 的注释：
 
@@ -661,7 +661,7 @@ emoji 列**不动** —— 它管单键候选反馈（搜索路），与浏览�
 **五笔六键**（2026-10-14，M4）同样落盘（`wubi_plan`/`wubi_style`/`wubi_mixed_entry`/
 `wubi_candidate_limit`/`wubi_return`/`wubi_auto_commit`）；名字表与「名字 → FFI 整数码」
 换算在 `settings/WubiNames.kt`（锁步门禁 `WubiNamesLockstepTest` 现读 `engine_wubi.rs`）。
-两条如实记：**方案**（86/98）决定装哪张码表，**下次启动**才装载（`EngineLoader.load`
+两条如实记：**方案**（86/98）决定装哪张码表，切换后由 `EngineLoader` 重装（`load` 的 `optionalPlan` 判据
 读偏好、按方案装一张）；**回车行为**引擎只存设置位、四端路由未接线（改动不生效，
 设置页文案已写明）。
 **未设置过时默认「拼音9键」**（2026-10-11 用户裁决「移动端默认初始 9 键」；已存过选择的

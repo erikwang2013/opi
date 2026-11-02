@@ -10,6 +10,37 @@
 > `candidates`）：全键盘 `n/a/xin` 引擎侧 p50 7.2–8.3ms（p90 ≤12.5ms）；拼音缩写/
 > 成语/歇后语档 0.9–3.6ms；fcitx5 胶水端到端（含测试面板）p50 21–27ms。
 
+## 2026-11-02 全端热路径与首帧
+
+本机 release 实测（8 核共享机、同进程、真实 `luna.opid`；每轮重新组字后取第一次
+`candidates`，不含 JNI/UI）：
+
+| 场景 | 修复前 p50 | 修复后 p50 |
+|---|---|---|
+| 26 键单键，`candidates(8)` | ≈3.0ms | **≈1.8ms** |
+| 26 键全量档（9216），`candidates(64)` | ≈7.2ms | **≈6.3ms** |
+
+落地项：
+
+- **候选合并/去重零克隆**（`candidates_merge.rs`）：排序键借用文本，去重集合存
+  `&str`，不再为每条候选复制字符串；档位追加保留原有顺序语义。
+- **有限前缀快选**（`candidates_finite.rs`）：`select_nth_unstable_by` 先取出所需前缀，
+  再只排序该段；前缀契约 `candidates(k) == candidates(MAX)[..k]` 仍有测试。
+- **分页有限取词**（`router_pages.rs`）：Full/Stroke/Wubi 按 `(page+1)*PAGE_SIZE` 取，
+  九/十四/双拼仍取全量；`page_count/select` 语义不变。
+- **繁简位图**（`trad_chars.rs`）：BMP 判定走 `OnceLock<Box<[u64; 1024]>>`，非 BMP 回退
+  有序码点；**导入词库指纹**（TSF）：按 (路径, mtime, size, 停用名单) 跳过重复哈希；
+  **caret 缓存**：按目标指针 + 100ms TTL 复用；**ASR FFI** 全部出口加 `catch_unwind`。
+- **首帧**：Android `loadFast` 只同步装 luna/trad + 当前持久化方案需要的码表，其余在
+  就绪后后台补齐；macOS 同理把可选码表/导入词库移到 run loop 启动后；鸿蒙首帧只装
+  当前方案表，切换时懒装。
+- **移动取回**：Android 普通候选栏每键 8 条，展开平铺或 9/14/双拼读音列才取 512；
+  鸿蒙非 9/14/双拼不再每键解析候选读音 JSON；iOS 候选侧栏字体按主题缓存；桌面候选栏
+  尺寸/设置文件/场景帧（30Hz）与管道空闲退避。
+
+**证据边界**：以上为本机 release 数字与构建/单测证据；Android/HarmonyOS 真机首帧与
+按键延迟未重新测量。
+
 ## 2026-10-26 补充：首击、9 键分词与移动取回窗口
 
 - **26 键单键首击（1.25.7）**：单键有限前缀在全量池（9216）上按档位直接选首位段，不再先截小池再补档；桌面 release 实测 **3.5–6ms**。契约是 `candidates(k) == candidates(MAX)[..k]`，见 `engine-core/src/candidates_finite.rs` 与 `prefix_contract` 测试。
@@ -76,6 +107,10 @@ base 查询 + 候选装配的耗时通过动态截止计入总账。端到端可
   未真机实测；导入库规模是合成极端（10 万/40 万行），真实用户导入通常更小。
 
 **剩余优化 / 扩展（未落地，按收益/风险）**：
+
+> 2026-11-02 状态：第 1 项已做「折叠态只取一页、读数按方案惰性取」，标量 JNI 仍未合并；
+> 第 3 项已把可选码表移出首帧，用户词/导入库的启动 IO 仍在；第 4 项未做；第 7 项已做
+> learner 频次复用与有限前缀排序。
 1. Android `refresh` 拆轻/重（去 6 个标量 JNI）；`candidateReadings` 惰性化；折叠态
    只取 8 条（平铺再取 64）。
 2. `PetStrip` 隐藏暂停（`LocalLifecycleOwner` + RESUMED 门控）、`drawWithCache` 复用

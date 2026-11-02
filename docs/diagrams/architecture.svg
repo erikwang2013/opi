@@ -8,7 +8,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 852" width="1180" height="852"
      role="img" aria-labelledby="archTitle archDesc">
   <title id="archTitle">OPI 架构设计</title>
-  <desc id="archDesc">五层架构：客户端层（已验证三端 Android/Linux/Windows；Apple 两平台（iOS·macOS）与鸿蒙 HarmonyOS 均已打包发布，真机待验）、出口层（三个薄壳 opi-ffi 双 ABI、fcitx5-opi、tsf-opi；C 出口由 Apple 与鸿蒙复用）、引擎层（engine-core 核心模块 + Engine 门面，另有候选扩展档 jianpin.rs/fuzzy.rs、单键快速档 candidates_finite、学习撤销 engine_learning 与平台中立键路由 router.rs/keys.rs）、数据层（engine-data 的 .opid 格式/校验/mmap/回退 + 用户词 JSON 原子写/读取助手）、构建管线（opi-tools 编译与校验）。依赖自下而上。</desc>
+  <desc id="archDesc">五层架构：客户端层（已验证三端 Android/Linux/Windows；Apple 两平台（iOS·macOS）与鸿蒙 HarmonyOS 均已打包发布，真机待验）、出口层（四个薄壳 opi-ffi 双 ABI、fcitx5-opi、tsf-opi、imm32-opi；C 出口由 Apple 与鸿蒙复用）、引擎层（engine-core 核心模块 + Engine 门面，另有候选扩展档 jianpin.rs/fuzzy.rs、单键快速档 candidates_finite、学习撤销 engine_learning 与平台中立键路由 router.rs/keys.rs）、数据层（engine-data 的 .opid 格式/校验/mmap/回退 + 用户词 JSON 原子写/读取助手）、构建管线（opi-tools 编译与校验）。依赖自下而上。</desc>
 
   <defs>
     <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -25,7 +25,7 @@
 
     <!-- ══════════════ 标题 ══════════════ -->
     <text x="590" y="40" text-anchor="middle" font-size="25" font-weight="700" fill="#22272E">OPI 架构设计</text>
-    <text x="590" y="63" text-anchor="middle" font-size="12.5" fill="#6B7671">一套 Rust 引擎 · 三个出口薄壳 · 零跨端框架</text>
+    <text x="590" y="63" text-anchor="middle" font-size="12.5" fill="#6B7671">一套 Rust 引擎 · 四个出口薄壳 · 零跨端框架</text>
 
     <!-- ══════════════ 1. 客户端层 68..200 ══════════════ -->
     <rect x="30" y="86" width="1120" height="114" rx="14" fill="#FFFFFF" stroke="#E3E8E6" stroke-width="1.5"/>
@@ -47,8 +47,8 @@
     </g>
     <g>
       <rect x="490" y="108" width="200" height="74" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
-      <text x="506" y="132" font-size="15" font-weight="700" fill="#22272E">Windows TSF</text>
-      <text x="506" y="151" font-size="11" fill="#6B7671">COM 服务器 + NDJSON 候选窗</text>
+      <text x="506" y="132" font-size="15" font-weight="700" fill="#22272E">Windows TSF + IMM32</text>
+      <text x="506" y="151" font-size="11" fill="#6B7671">COM 服务器 / IME DLL + NDJSON 候选窗</text>
       <text x="506" y="171" font-size="11" font-weight="700" fill="#2E8B80">↓ COM</text>
     </g>
     <g>
@@ -91,8 +91,8 @@
     </g>
     <g>
       <rect x="798" y="262" width="352" height="74" rx="10" fill="#F4F9F8" stroke="#CFE2DF" stroke-width="1.5"/>
-      <text x="814" y="286" font-size="14.5" font-weight="700" fill="#22272E">tsf-opi</text>
-      <text x="814" y="306" font-size="11" fill="#6B7671">cdylib COM 服务器 · windows crate 目标隔离</text>
+      <text x="814" y="286" font-size="14.5" font-weight="700" fill="#22272E">tsf-opi + imm32-opi</text>
+      <text x="814" y="306" font-size="11" fill="#6B7671">TSF COM 服务器 + IMM32 IME · windows crate 目标隔离</text>
       <text x="814" y="325" font-size="11" fill="#6B7671">候选窗序列化 candidate_io · 词库三候选查找（无打包步骤）</text>
     </g>
 

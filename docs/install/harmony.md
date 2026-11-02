@@ -273,7 +273,7 @@ x86_64 模拟器不会加载这个 `.so`。要跑模拟器需另编 `x86_64-unkn
 | Rust | 根 `Cargo.toml` 的 `[workspace.package] rust-version`（当前声明 `1.88`）。**这是声明**，实际下限由 CI 的 `msrv` job 量出来 | `Cargo.toml` · `.github/workflows/ci.yml` |
 | Rust target | 三个都要装：`aarch64-unknown-linux-ohos`（arm64-v8a）、`armv7-unknown-linux-ohos`、`x86_64-unknown-linux-ohos` | `harmony/README.md`「构建集成」；它们**不在**默认安装里，必须先 `rustup target add` |
 | CMake | `harmony/cpp/CMakeLists.txt` 里写的是 `cmake_minimum_required(VERSION 3.4.1)`。在 cmake ≥3.31 是**弃用警告**，在 **CMake 4.0+ 是硬错误** | 本机 cmake 3.31.4 观察到的警告见 `harmony/README.md` 实测记录 §4b。**起来第一件事**就是把它抬到 3.10+ |
-| 词库 | **随包**：构建期 `scripts/prepare_harmony_dicts.sh` 把 `luna.opid` / `stroke.opid` / `wubi86.opid` 复制进 `entry/src/main/resources/rawfile/`（不入库）；运行时 `DictionaryAssets.ets` 拷进 `ctx.filesDir` 并把绝对路径交给 C ABI。拷贝/装载失败才退回内置库并置 DEGRADED。`trad.opid` 自 2026-10-21 起随包并已桥接；导入词库与康熙字典仍属未接线通路 | `scripts/prepare_harmony_dicts.sh` · `DictionaryAssets.ets` · `KeyboardController.ensureDictionary()` |
+| 词库 | **随包**：构建期 `scripts/prepare_harmony_dicts.sh` 把 `luna.opid` / `stroke.opid` / `wubi86.opid` 复制进 `entry/src/main/resources/rawfile/`（不入库）；运行时 `DictionaryAssets.ets` 拷进 `ctx.filesDir` 并把绝对路径交给 C ABI。**2026-11-02 起笔画/五笔按当前方案懒装**（`InputModes.ensureTable`）。拷贝/装载失败才退回内置库并置 DEGRADED。`trad.opid` 自 2026-10-21 起随包并已桥接；导入词库与康熙字典仍属未接线通路 | `scripts/prepare_harmony_dicts.sh` · `DictionaryAssets.ets` · `KeyboardController.ensureDictionary()` |
 | 设备 | 真机或模拟器。**输入法不会自动生效**，必须在系统设置里手动启用 | `harmony/README.md` 的 P1（检索）|
 | 宿主 App | 输入法扩展**不能独立安装**，要在一个 DevEco 应用工程里 | 与 Apple 两端同一形态（未核实，凭记忆）|
 | 工程文件 | ~~仓库里**没有** `build-profile.json5` …~~ **2026-10-19 起已有完整工程**（工程根 + 模块级各一份、`oh-package.json5`、`hvigorfile.ts`，见 §0.1）；本行是历史记录 | 判据：`find harmony/ -name 'build-profile.json5'` 现为 2 处 |
