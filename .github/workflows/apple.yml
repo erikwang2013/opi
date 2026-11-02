@@ -149,6 +149,12 @@ jobs:
           targets: aarch64-apple-darwin, x86_64-apple-darwin
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          # sherpa-rs 的构建产物引用 ~/Library/Caches/sherpa-rs 下的 dylib；
+          # 只缓存 target 会出现「缓存命中但库文件不存在」，链接时找不到
+          # onnxruntime（2026-11-02 Apple CI）。
+          cache-directories: ~/Library/Caches/sherpa-rs
+          key: sherpa-apple-v1
 
       - name: 取版本号
         id: ver
@@ -242,6 +248,9 @@ jobs:
           targets: aarch64-apple-ios, aarch64-apple-ios-sim
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-directories: ~/Library/Caches/sherpa-rs
+          key: sherpa-apple-v1
 
       - name: 取版本号
         id: ver
