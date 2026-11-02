@@ -25,6 +25,8 @@ import UIKit
 extension Notification.Name {
     /// 状态快照变化（主线程）；设置页的剪贴板节用它刷新。
     static let opiClipChanged = Notification.Name("opi.clip.changed")
+    /// 「工具条显示传输入口」开关变化；工具条据此显隐（传输本身在宿主 App）。
+    static let opiTransferChanged = Notification.Name("opi.transfer.changed")
 }
 
 struct OpiClipPeerInfo: Equatable {
