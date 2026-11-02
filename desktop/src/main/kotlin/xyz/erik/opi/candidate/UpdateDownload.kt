@@ -81,15 +81,42 @@ internal sealed interface DownloadState {
 /** 下载上限：2 GiB，防坏清单/坏端点把磁盘写满。 */
 private const val MAX_DOWNLOAD_BYTES = 2L * 1024 * 1024 * 1024
 
-/** 更新包落点：Linux `$XDG_DATA_HOME/opi/updates`，Windows `%LOCALAPPDATA%\opi\updates`。 */
-internal fun updatesDir(): File {
-    val base = if (isWindows()) {
-        System.getenv("LOCALAPPDATA")?.takeIf { it.isNotEmpty() }
-            ?: System.getProperty("user.home")
+/**
+ * 更新包落点（2026-11-02 用户裁决「应用内下载默认落到用户 Downloads 目录」）：
+ * Windows `%USERPROFILE%\Downloads\opi`；Linux `$XDG_DOWNLOAD_DIR`（否则
+ * `$HOME/Downloads`）下的 `opi/`。目录建不出来时回退旧目录
+ * （Windows `%LOCALAPPDATA%\opi\updates`，Linux `$XDG_DATA_HOME/opi/updates`）。
+ */
+internal fun updatesDir(
+    windows: Boolean = isWindows(),
+    env: Map<String, String> = System.getenv(),
+    home: String = System.getProperty("user.home"),
+): File {
+    val preferred = downloadsSubdir(windows, env, home)
+    if (preferred.isDirectory || preferred.mkdirs()) return preferred
+    return legacyUpdatesDir(windows, env, home).apply { mkdirs() }
+}
+
+/** 用户 Downloads 下的 `opi/`；纯路径决策，不建目录（单测钉住）。 */
+internal fun downloadsSubdir(windows: Boolean, env: Map<String, String>, home: String): File {
+    val downloads = if (windows) {
+        (env["USERPROFILE"]?.takeIf { it.isNotEmpty() } ?: home) + "/Downloads"
     } else {
-        System.getenv("XDG_DATA_HOME")?.takeIf { it.isNotEmpty() }
-            ?: System.getenv("HOME")?.takeIf { it.isNotEmpty() }?.let { "$it/.local/share" }
-            ?: System.getProperty("user.home")
+        env["XDG_DOWNLOAD_DIR"]?.takeIf { it.isNotEmpty() }
+            ?: env["HOME"]?.takeIf { it.isNotEmpty() }?.let { "$it/Downloads" }
+            ?: "$home/Downloads"
+    }
+    return File(downloads, "opi")
+}
+
+/** 旧落点（回退用）；纯路径决策，不建目录。 */
+internal fun legacyUpdatesDir(windows: Boolean, env: Map<String, String>, home: String): File {
+    val base = if (windows) {
+        env["LOCALAPPDATA"]?.takeIf { it.isNotEmpty() } ?: home
+    } else {
+        env["XDG_DATA_HOME"]?.takeIf { it.isNotEmpty() }
+            ?: env["HOME"]?.takeIf { it.isNotEmpty() }?.let { "$it/.local/share" }
+            ?: home
     }
     return File(base, "opi/updates")
 }

@@ -33,7 +33,7 @@ class InputModeTest {
     }
 
     @Test
-    fun nineModesWithSogouStyleLabels() {
+    fun nineModesWithStyleLabels() {
         assertEquals(9, InputMode.entries.size)
         assertEquals(
             listOf(

@@ -389,15 +389,14 @@ busctl --user call org.fcitx.Fcitx5 /controller \
 # 2) 把 opi 追加进去 —— 已有项原样保留，顺序与 DefaultIM 都不动
 busctl --user call org.fcitx.Fcitx5 /controller \
   org.fcitx.Fcitx.Controller1 SetInputMethodGroupInfo 'ssa(ss)' 默认 us 3 \
-  "keyboard-us" "" "com.sogou.ime.ng.fcitx5.deepin" "" "opi" ""
+  "keyboard-us" "" "pinyin" "" "opi" ""
 
 # 3) 落盘
 busctl --user call org.fcitx.Fcitx5 /controller org.fcitx.Fcitx.Controller1 Save
 ```
 
 > ⚠️ **第 2 条是照抄本机的，你必须改两处**：
-> ① `com.sogou.ime.ng.fcitx5.deepin` 是**本机预装输入法**的项名（那是 Deepin 自带的
-> 第三方输入法，profile 名原样照抄就行）—— 换成第 1 条打印出来的
+> ① `pinyin` 只是 fcitx5 自带拼音的**占位示例** —— 换成第 1 条打印出来的
 > **你自己的项**；② 那个 `3` 是你**总共有几项**（本例 = 原有 2 项 + opi）。数错
 > `busctl` 会报参数不匹配，**不会写坏东西**。格式是成对的「输入法名 + 布局」，
 > 最后一项固定是 `opi` 配空布局。

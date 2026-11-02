@@ -5,9 +5,11 @@
 //! 进度；全量与热更新都走这一条）。用系统 **DownloadManager**：退出 App/键盘后仍继续，
 //! 完成由系统通知；本类只负责入队、轮询进度、完成后校验 SHA-256。
 //!
-//! 落点是 App 专属外部目录 `getExternalFilesDir(DIRECTORY_DOWNLOADS)`（API 21 起免
-//! 存储权限），完成后用 FileProvider 授权给系统安装器/查看器。**只下载 + 校验，
-//! 不自动安装**；用户点「安装/打开」后仍由系统二次确认。
+//! 落点是系统 Downloads 下的 `opi/`（`setDestinationInExternalPublicDir`，由系统
+//! DownloadProvider 写入，API 21 起免存储权限）。Android 10+ 不能直接读公共目录路径，
+//! 校验走 `openDownloadedFile` 的 fd，安装/打开用 `getUriForDownloadedFile` 的内容 URI
+//! 授权给系统安装器/查看器。**只下载 + 校验，不自动安装**；用户点「安装/打开」后仍由
+//! 系统二次确认。
 //!
 //! 状态放在进程级单例 + SharedPreferences 记录下载 ID：进程被杀再回来，DownloadManager
 //! 还在下，`resume()` 按 ID 重新挂上轮询。
@@ -20,7 +22,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Environment
-import androidx.core.content.FileProvider
+import android.os.ParcelFileDescriptor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -31,7 +33,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.io.File
 import java.security.MessageDigest
 
 internal enum class UpdatePackageKind(val id: String, val label: String) {
@@ -57,7 +58,7 @@ internal sealed interface DownloadState {
     data class Done(
         val kind: UpdatePackageKind,
         val version: String,
-        val file: File,
+        val fileName: String,
         val uri: Uri,
         /** null = 清单没给校验值（如实显示，不冒充校验通过）。 */
         val shaOk: Boolean?,
@@ -94,6 +95,9 @@ internal fun downloadFileName(url: String, version: String, kind: UpdatePackageK
 
 internal object UpdateDownloader {
     private const val PREFS = "opi_update_download"
+
+    /** 系统 Downloads 下的子目录（与桌面端 `Downloads/opi` 对齐）。 */
+    private const val PUBLIC_SUBDIR = "opi"
     private const val KEY_ID = "download_id"
     private const val KEY_KIND = "kind"
     private const val KEY_VERSION = "version"
@@ -133,22 +137,19 @@ internal object UpdateDownloader {
         val fileName = downloadFileName(pkg.url, version, kind)
         pollJob = scope.launch {
             _state.value = DownloadState.Verifying(kind, version)
-            val local = File(ctx.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName)
-            val hit = checkExisting(local, pkg.sha256, pkg.size)
-            if (hit != null) {
-                // 本地已有完整包：校验后直接用，不再入队 DownloadManager。
-                finish(ctx, kind, version, local, hit.shaOk)
-                return@launch
-            }
             val dm = downloadManager(ctx)
-            val request = DownloadManager.Request(Uri.parse(pkg.url))
-                .setTitle("小欧输入法 v$version")
-                .setDescription(kind.label)
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setDestinationInExternalFilesDir(ctx, Environment.DIRECTORY_DOWNLOADS, fileName)
-                .setAllowedOverRoaming(false)
-                .addRequestHeader("User-Agent", "opi/${xyz.erik.opi.BuildConfig.VERSION_NAME}")
-            val id = runCatching { dm.enqueue(request) }.getOrElse { e ->
+            // 构造 Request 也可能抛（如外部存储不可用），和 enqueue 一起兜住。
+            val id = runCatching {
+                val request = DownloadManager.Request(Uri.parse(pkg.url))
+                    .setTitle("小欧输入法 v$version")
+                    .setDescription(kind.label)
+                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    // 用户可见的系统 Downloads/opi；写入由 DownloadProvider 完成，不需要存储权限。
+                    .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "$PUBLIC_SUBDIR/$fileName")
+                    .setAllowedOverRoaming(false)
+                    .addRequestHeader("User-Agent", "opi/${xyz.erik.opi.BuildConfig.VERSION_NAME}")
+                dm.enqueue(request)
+            }.getOrElse { e ->
                 _state.value = DownloadState.Failed(kind, version, "无法开始下载：${e.message ?: e.javaClass.simpleName}")
                 return@launch
             }
@@ -181,14 +182,14 @@ internal object UpdateDownloader {
     /** 点「安装/打开」：APK 交给系统安装器，zip 等交给能接的应用。返回 null = 已拉起。 */
     fun open(context: Context, done: DownloadState.Done): String? {
         val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(done.uri, mimeOf(done.file.name))
+            setDataAndType(done.uri, mimeOf(done.fileName))
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         return try {
             context.startActivity(intent)
             null
         } catch (_: ActivityNotFoundException) {
-            "没有能打开 ${done.file.name} 的应用"
+            "没有能打开 ${done.fileName} 的应用"
         }
     }
 
@@ -223,7 +224,7 @@ internal object UpdateDownloader {
 
                         DownloadManager.STATUS_SUCCESSFUL -> {
                             _state.value = DownloadState.Verifying(kind, version)
-                            verify(ctx, kind, version, fileName, sha, size)
+                            verify(ctx, kind, version, id, fileName, sha, size)
                             return@launch
                         }
                         DownloadManager.STATUS_FAILED -> {
@@ -242,92 +243,61 @@ internal object UpdateDownloader {
         ctx: Context,
         kind: UpdatePackageKind,
         version: String,
+        id: Long,
         fileName: String,
         sha: String?,
         size: Long?,
     ) {
-        val file = File(ctx.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName)
-        if (!file.isFile) {
-            fail(ctx, kind, version, "下载完成但文件不存在")
+        val dm = downloadManager(ctx)
+        val pfd = runCatching { dm.openDownloadedFile(id) }.getOrNull()
+        if (pfd == null) {
+            fail(ctx, kind, version, "下载完成但无法读取文件")
             return
         }
-        if (size != null && file.length() != size) {
-            file.delete()
-            fail(ctx, kind, version, "大小校验失败：期望 ${formatDownloadSize(size)}，实际 ${formatDownloadSize(file.length())}")
+        // AutoCloseInputStream 关闭流时一并关掉 PFD；别再单独 close（同一 fd 关两次
+        // 在多线程进程里可能误关被复用的 fd）。
+        val measured = runCatching {
+            ParcelFileDescriptor.AutoCloseInputStream(pfd).use { input ->
+                readSizeAndSha(input, sha != null)
+            }
+        }.getOrElse { e ->
+            runCatching { pfd.close() }
+            fail(ctx, kind, version, "读取下载文件失败：${e.message ?: e.javaClass.simpleName}")
             return
         }
-        val shaOk = if (sha == null) {
-            null
-        } else {
-            val actual = runCatching {
-                val md = MessageDigest.getInstance("SHA-256")
-                file.inputStream().use { input ->
-                    val buf = ByteArray(64 * 1024)
-                    while (true) {
-                        val n = input.read(buf)
-                        if (n < 0) break
-                        md.update(buf, 0, n)
-                    }
-                }
-                md.digest().joinToString("") { "%02x".format(it.toInt() and 0xFF) }
-            }.getOrNull()
-            actual?.equals(sha, ignoreCase = true) ?: false
+        val (actualSize, actualSha) = measured
+        if (size != null && actualSize != size) {
+            runCatching { dm.remove(id) }
+            fail(ctx, kind, version, "大小校验失败：期望 ${formatDownloadSize(size)}，实际 ${formatDownloadSize(actualSize)}")
+            return
         }
+        val shaOk = sha?.let { it.equals(actualSha, ignoreCase = true) }
         if (shaOk == false) {
-            file.delete()
+            runCatching { dm.remove(id) }
             fail(ctx, kind, version, "SHA-256 校验失败，已删除下载文件")
             return
         }
-        finish(ctx, kind, version, file, shaOk)
-    }
-
-    /** 本地已有同名文件：大小/SHA 都对 ⇒ 直接复用；有一项不对 ⇒ 删掉重下。 */
-    private data class LocalHit(val shaOk: Boolean?)
-
-    private fun checkExisting(file: File, sha: String?, size: Long?): LocalHit? {
-        if (!file.isFile) return null
-        if (size == null && sha == null) return null
-        if (size != null && file.length() != size) {
-            file.delete()
-            return null
-        }
-        if (sha == null) return LocalHit(null)
-        val actual = runCatching { sha256(file) }.getOrNull()
-        if (actual?.equals(sha, ignoreCase = true) != true) {
-            file.delete()
-            return null
-        }
-        return LocalHit(true)
-    }
-
-    private fun sha256(file: File): String {
-        val md = MessageDigest.getInstance("SHA-256")
-        file.inputStream().use { input ->
-            val buf = ByteArray(64 * 1024)
-            while (true) {
-                val n = input.read(buf)
-                if (n < 0) break
-                md.update(buf, 0, n)
-            }
-        }
-        return md.digest().joinToString("") { "%02x".format(it.toInt() and 0xFF) }
-    }
-
-    private fun finish(
-        ctx: Context,
-        kind: UpdatePackageKind,
-        version: String,
-        file: File,
-        shaOk: Boolean?,
-    ) {
-        val uri = runCatching {
-            FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", file)
-        }.getOrElse {
-            fail(ctx, kind, version, "无法共享下载文件：${it.message ?: it.javaClass.simpleName}")
+        val uri = runCatching { dm.getUriForDownloadedFile(id) }.getOrNull()
+        if (uri == null) {
+            fail(ctx, kind, version, "无法获取下载文件（任务 $id）")
             return
         }
         clearPrefs(ctx)
-        _state.value = DownloadState.Done(kind, version, file, uri, shaOk)
+        _state.value = DownloadState.Done(kind, version, fileName, uri, shaOk)
+    }
+
+    /** 读下载流：返回 (字节数, SHA-256 或 null)；关闭由调用方的 `use` 负责。 */
+    private fun readSizeAndSha(input: java.io.InputStream, wantSha: Boolean): Pair<Long, String?> {
+        val md = if (wantSha) MessageDigest.getInstance("SHA-256") else null
+        var total = 0L
+        val buf = ByteArray(64 * 1024)
+        while (true) {
+            val n = input.read(buf)
+            if (n < 0) break
+            total += n
+            md?.update(buf, 0, n)
+        }
+        return total to md?.digest()?.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
     }
 
     private fun fail(ctx: Context, kind: UpdatePackageKind, version: String, reason: String) {

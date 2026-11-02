@@ -1445,7 +1445,7 @@ U+1FAEB 那种要判的）从不被过滤，多码位（VS16 形/键帽）反倒
   `KeySpec(keyval: OpiKey.ret, fallback: .text("\n"))` → `KeyboardViewController.route`
   → `opi_key_event` → `KeyRouter::handle_enter`。硬件键盘同理（`KeyboardHardware.swift`
   的 `.keyboardReturnOrEnter → OpiKey.ret`）。
-- **行为后果**：五笔缺省档 = 清空（Sogou 语义）⇒ 装了 `wubi86.opid`、选了「五笔」模式后，
+- **行为后果**：五笔缺省档 = 清空（常见输入法语义）⇒ 装了 `wubi86.opid`、选了「五笔」模式后，
   打一半按回车**不上屏、直接清掉**。本端没有设置界面 ⇒ 卡在缺省档，改不了。
 - 独立出口 `opi_enter_action()`（`cabi_wubi.rs` / `macos/OpiFFI.h`）本端**故意不包**：
   iOS 没有第二条通道会问它（理由同 `opi_wubi_next_keys()`，见 `OpiEngineWubi.swift` 末尾）。
