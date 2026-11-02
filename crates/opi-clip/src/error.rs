@@ -24,6 +24,12 @@ pub enum ClipError {
     #[error("discovered peer not found")]
     PeerNotFound,
 
+    #[error("peer is not trusted; pair and confirm it first")]
+    NotTrusted,
+
+    #[error("transfer not found")]
+    TransferNotFound,
+
     #[error("no pairing prompt is pending for this peer")]
     NotPairing,
 

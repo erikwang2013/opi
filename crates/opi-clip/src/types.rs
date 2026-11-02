@@ -6,6 +6,7 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::net::{Ipv4Addr, SocketAddr};
+use std::path::PathBuf;
 use std::sync::mpsc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -29,8 +30,26 @@ pub(crate) const MAX_REASSEMBLY_EVENTS: usize = 8;
 pub(crate) const MAX_REASSEMBLY_BYTES: usize = 4 * MAX_TEXT_BYTES;
 pub(crate) const CAP_TEXT: u8 = 1 << 0;
 pub(crate) const CAP_PAIRING: u8 = 1 << 1;
+/// 支持文件/文件夹传输（`TransferOffer` 一族 Wire 消息）。
+pub(crate) const CAP_TRANSFER: u8 = 1 << 2;
 /// 探测报文：请求收到者立刻单播回一个普通 beacon。只在广播/组播被丢时用。
 pub(crate) const CAP_PROBE: u8 = 1 << 7;
+
+// ---------- 文件传输上限（对外公开，宿主据此禁用超限选择） ----------
+/// 单次传输的条目上限（文件 + 目录项）。offer 必须能放进一帧 64 KiB。
+pub const MAX_TRANSFER_FILES: usize = 128;
+/// 相对路径的 UTF-8 字节上限。
+pub const MAX_TRANSFER_PATH_BYTES: usize = 256;
+/// 单文件字节上限。
+pub const MAX_TRANSFER_FILE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+/// 单次传输总字节上限。
+pub const MAX_TRANSFER_TOTAL_BYTES: u64 = 8 * 1024 * 1024 * 1024;
+/// 全局同时进行的传输数（收 + 发）。
+pub const MAX_CONCURRENT_TRANSFERS: usize = 4;
+/// 文件块大小，留出 postcard 头与 Noise tag 的余量。
+pub const TRANSFER_CHUNK_BYTES: usize = 48 * 1024;
+/// 等待对方接受 / 等待最终 Done 确认的空闲上限。
+pub(crate) const TRANSFER_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// 设备实例 ID：随机 16 字节，首次启动生成并随身份文件持久化。
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -125,6 +144,62 @@ impl fmt::Debug for Fingerprint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.to_hex())
     }
+}
+
+/// 一次文件传输的随机 16 字节 ID（收发双方各自的路由键）。
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct TransferId([u8; 16]);
+
+impl TransferId {
+    pub fn from_bytes(bytes: [u8; 16]) -> Self {
+        Self(bytes)
+    }
+
+    pub fn as_bytes(&self) -> &[u8; 16] {
+        &self.0
+    }
+
+    pub fn to_hex(self) -> String {
+        hex::encode(self.0)
+    }
+
+    pub fn from_hex(text: &str) -> Result<Self, crate::ClipError> {
+        let bytes = hex::decode(text).map_err(|e| crate::ClipError::Invalid(e.to_string()))?;
+        let bytes: [u8; 16] = bytes
+            .try_into()
+            .map_err(|_| crate::ClipError::Invalid("transfer id must be 16 bytes".into()))?;
+        Ok(Self(bytes))
+    }
+}
+
+impl fmt::Debug for TransferId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.to_hex())
+    }
+}
+
+impl fmt::Display for TransferId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.to_hex())
+    }
+}
+
+/// offer / 事件里的文件条目（不含宿主本地路径）。
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TransferFileInfo {
+    /// 相对路径，`/` 分隔；不含 `..`、绝对路径、空组件。
+    pub relative_path: String,
+    pub size: u64,
+    pub mime: String,
+    pub is_dir: bool,
+}
+
+/// 待发送条目：本地源路径 + 已校验的元数据。由 [`crate::transfer`] 的构造器生成。
+#[derive(Clone, Debug)]
+pub struct TransferFile {
+    pub(crate) source: PathBuf,
+    pub(crate) info: TransferFileInfo,
 }
 
 /// Hybrid Logical Clock 的物理/逻辑分量。
@@ -232,6 +307,45 @@ pub enum ClipEvent {
         instance_id: InstanceId,
         event_id: EventId,
     },
+    /// 收到对方的文件清单，等待宿主调用 [`crate::ClipNode::respond_transfer`]。
+    /// `outgoing=true` 表示本端发起、正在等对方确认。
+    TransferOffer {
+        instance_id: InstanceId,
+        transfer_id: TransferId,
+        files: Vec<TransferFileInfo>,
+        total_bytes: u64,
+        outgoing: bool,
+    },
+    /// 已传字节进度（发送/接收两侧都会发，按 1 MiB 或 500 ms 节流）。
+    TransferProgress {
+        instance_id: InstanceId,
+        transfer_id: TransferId,
+        transferred_bytes: u64,
+        total_bytes: u64,
+        file_index: u16,
+        file_count: u16,
+        outgoing: bool,
+    },
+    /// 完成；接收侧的 `saved_dir` 是宿主给出的落盘目录。
+    TransferCompleted {
+        instance_id: InstanceId,
+        transfer_id: TransferId,
+        files: Vec<TransferFileInfo>,
+        total_bytes: u64,
+        outgoing: bool,
+        saved_dir: Option<PathBuf>,
+    },
+    TransferFailed {
+        instance_id: InstanceId,
+        transfer_id: TransferId,
+        reason: String,
+        outgoing: bool,
+    },
+    TransferCanceled {
+        instance_id: InstanceId,
+        transfer_id: TransferId,
+        outgoing: bool,
+    },
     Error {
         message: String,
     },
@@ -258,12 +372,30 @@ pub(crate) struct StoredEvent {
 
 pub(crate) enum Outbound {
     Publish(StoredEvent),
+    SendTransfer {
+        id: TransferId,
+        files: Vec<TransferFile>,
+    },
+    RespondTransfer {
+        id: TransferId,
+        accept: bool,
+        save_dir: Option<PathBuf>,
+    },
+    CancelTransfer {
+        id: TransferId,
+    },
 }
 
 pub(crate) struct SessionEntry {
     pub tx: mpsc::SyncSender<Outbound>,
     pub generation: u64,
     pub addr: SocketAddr,
+}
+
+/// 内核里的传输路由：把 transfer id 映射回对端会话，同时用于并发上限。
+pub(crate) struct TransferRoute {
+    pub peer: InstanceId,
+    pub outgoing: bool,
 }
 
 pub(crate) fn now_ms() -> u64 {

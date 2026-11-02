@@ -4,7 +4,7 @@
 //! 事件/对端 → JSON（`cabi_clip.rs` 的**非导出**辅助，拆出只为 500 行门禁）。
 //! 真源是 `opi_clip::ClipEvent`；`type` 是判别键，字段名与 Kotlin/Swift 侧约定一致。
 
-use opi_clip::{ClipEvent, PeerInfo, Version};
+use opi_clip::{ClipEvent, PeerInfo, TransferFileInfo, Version};
 use serde_json::{Value, json};
 
 /// 单条事件 JSON 的输出上限。
@@ -33,6 +33,22 @@ fn version_json(version: Version) -> Value {
         "instance_id": version.instance_id.to_hex(),
         "event_id": version.event_id.to_hex(),
     })
+}
+
+fn files_json(files: &[TransferFileInfo]) -> Value {
+    Value::Array(
+        files
+            .iter()
+            .map(|file| {
+                json!({
+                    "relative_path": file.relative_path,
+                    "size": file.size,
+                    "mime": file.mime,
+                    "is_dir": file.is_dir,
+                })
+            })
+            .collect(),
+    )
 }
 
 /// 事件 → JSON；文本由 serde_json 转义。超过 1 MiB 直接报错（事件由调用方丢弃）。
@@ -81,6 +97,76 @@ pub(super) fn encode_event(event: ClipEvent) -> Result<String, String> {
             "type": "send_failed",
             "instance_id": instance_id.to_hex(),
             "event_id": event_id.to_hex(),
+        }),
+        ClipEvent::TransferOffer {
+            instance_id,
+            transfer_id,
+            files,
+            total_bytes,
+            outgoing,
+        } => json!({
+            "type": "transfer_offer",
+            "instance_id": instance_id.to_hex(),
+            "transfer_id": transfer_id.to_hex(),
+            "files": files_json(&files),
+            "total_bytes": total_bytes,
+            "outgoing": outgoing,
+        }),
+        ClipEvent::TransferProgress {
+            instance_id,
+            transfer_id,
+            transferred_bytes,
+            total_bytes,
+            file_index,
+            file_count,
+            outgoing,
+        } => json!({
+            "type": "transfer_progress",
+            "instance_id": instance_id.to_hex(),
+            "transfer_id": transfer_id.to_hex(),
+            "transferred_bytes": transferred_bytes,
+            "total_bytes": total_bytes,
+            "file_index": file_index,
+            "file_count": file_count,
+            "outgoing": outgoing,
+        }),
+        ClipEvent::TransferCompleted {
+            instance_id,
+            transfer_id,
+            files,
+            total_bytes,
+            outgoing,
+            saved_dir,
+        } => json!({
+            "type": "transfer_completed",
+            "instance_id": instance_id.to_hex(),
+            "transfer_id": transfer_id.to_hex(),
+            "files": files_json(&files),
+            "total_bytes": total_bytes,
+            "outgoing": outgoing,
+            "saved_dir": saved_dir.map(|dir| dir.to_string_lossy().into_owned()),
+        }),
+        ClipEvent::TransferFailed {
+            instance_id,
+            transfer_id,
+            reason,
+            outgoing,
+        } => json!({
+            "type": "transfer_failed",
+            "instance_id": instance_id.to_hex(),
+            "transfer_id": transfer_id.to_hex(),
+            "reason": reason,
+            "outgoing": outgoing,
+        }),
+        ClipEvent::TransferCanceled {
+            instance_id,
+            transfer_id,
+            outgoing,
+        } => json!({
+            "type": "transfer_canceled",
+            "instance_id": instance_id.to_hex(),
+            "transfer_id": transfer_id.to_hex(),
+            "outgoing": outgoing,
         }),
         ClipEvent::Error { message } => json!({"type": "error", "message": message}),
     };

@@ -20,13 +20,16 @@
 //! external fun clipForgetPeer(handle: Long, peerId: String): Boolean
 //! external fun clipStatus(handle: Long): String?
 //! external fun clipLastError(): String
+//! external fun clipSendFiles(handle: Long, peerId: String, filesJson: String): String?
+//! external fun clipRespondTransfer(handle: Long, transferId: String, accept: Boolean, saveDir: String?): Boolean
+//! external fun clipCancelTransfer(handle: Long, transferId: String): Boolean
 //! ```
 //!
 //! 注册方式与五笔/短语同一条手续：`jni.rs` 的 `JNI_OnLoad` 里
 //! `methods.extend(clip_native_methods())`，**同一张 RegisterNatives 表**。
 //! ⚠️ 表里错 1 条 = 整表注册失败 = `System.load` 抛 `UnsatisfiedLinkError`；
 //! 名字/描述符漂移由 `tests/jni_contract.rs`（活文件集合相等）与
-//! `tests/jni_clip_contract.rs`（本族 13 条钉死）兜住。
+//! `tests/jni_clip_contract.rs`（本族 16 条钉死）兜住。
 //!
 //! 句柄是 `Long`（Rust 侧裸指针）；**不可跨线程**，与 C ABI 同一条契约。
 //! JNI 的 `null` 入参与 C ABI 的「null 指针 = 空串」同义（见 [`read_arg`]）。
@@ -279,6 +282,69 @@ pub unsafe extern "system" fn opijni_clip_status(
     }
 }
 
+/// sendFiles(handle, peerId, filesJson) -> 传输 ID 十六进制；失败 → null。
+/// filesJson：`[{"path":"/abs/local","name":"可选","mime":"可选"}]`。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_clip_send_files(
+    env: JEnv,
+    _class: sys::jclass,
+    handle: jlong,
+    peer_id: jstring,
+    files_json: jstring,
+) -> jstring {
+    let out = settle(
+        catch_unwind(AssertUnwindSafe(|| {
+            let peer = unsafe { read_arg(env, peer_id, "peer id") }?;
+            let files = unsafe { read_arg(env, files_json, "files JSON") }?;
+            unsafe { OpiClip::borrow(ptr(handle)) }?
+                .send_files(&peer, &files)
+                .map(Some)
+        })),
+        None,
+    );
+    match out {
+        Some(id) => unsafe { jni_util::rust_to_jstring(env, &id) },
+        None => std::ptr::null_mut(),
+    }
+}
+
+/// respondTransfer(handle, transferId, accept, saveDir) -> Boolean。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_clip_respond_transfer(
+    env: JEnv,
+    _class: sys::jclass,
+    handle: jlong,
+    transfer_id: jstring,
+    accept: jboolean,
+    save_dir: jstring,
+) -> jboolean {
+    settle(
+        catch_unwind(AssertUnwindSafe(|| {
+            let id = unsafe { read_arg(env, transfer_id, "transfer id") }?;
+            let dir = unsafe { read_arg(env, save_dir, "save_dir") }?;
+            unsafe { OpiClip::borrow(ptr(handle)) }?.respond_transfer(&id, accept, &dir)
+        })),
+        false,
+    )
+}
+
+/// cancelTransfer(handle, transferId) -> Boolean。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_clip_cancel_transfer(
+    env: JEnv,
+    _class: sys::jclass,
+    handle: jlong,
+    transfer_id: jstring,
+) -> jboolean {
+    settle(
+        catch_unwind(AssertUnwindSafe(|| {
+            let id = unsafe { read_arg(env, transfer_id, "transfer id") }?;
+            unsafe { OpiClip::borrow(ptr(handle)) }?.cancel_transfer(&id)
+        })),
+        false,
+    )
+}
+
 /// lastError() -> String：空串 = 没有错误（按线程记录）。
 #[unsafe(no_mangle)]
 pub unsafe extern "system" fn opijni_clip_last_error(env: JEnv, _class: sys::jclass) -> jstring {
@@ -364,6 +430,21 @@ pub(crate) fn clip_native_methods() -> Vec<NativeMethod<'static>> {
                 jni_str!("clipLastError"),
                 jni_str!("()Ljava/lang/String;"),
                 opijni_clip_last_error as *mut c_void,
+            ),
+            NativeMethod::from_raw_parts(
+                jni_str!("clipSendFiles"),
+                jni_str!("(JLjava/lang/String;Ljava/lang/String;)Ljava/lang/String;"),
+                opijni_clip_send_files as *mut c_void,
+            ),
+            NativeMethod::from_raw_parts(
+                jni_str!("clipRespondTransfer"),
+                jni_str!("(JLjava/lang/String;ZLjava/lang/String;)Z"),
+                opijni_clip_respond_transfer as *mut c_void,
+            ),
+            NativeMethod::from_raw_parts(
+                jni_str!("clipCancelTransfer"),
+                jni_str!("(JLjava/lang/String;)Z"),
+                opijni_clip_cancel_transfer as *mut c_void,
             ),
         ]
     }

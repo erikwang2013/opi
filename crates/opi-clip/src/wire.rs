@@ -4,7 +4,7 @@
 //! Noise 传输层内的应用消息。postcard 编码，外层再由 Noise AEAD 保护。
 
 use crate::ClipError;
-use crate::types::{EventId, InstanceId, Version};
+use crate::types::{EventId, InstanceId, TransferFileInfo, TransferId, Version};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -31,6 +31,35 @@ pub(crate) enum Wire {
     Ack {
         event_id: EventId,
     },
+    /// 文件清单；接收端用 `TransferDecision` 回答。
+    TransferOffer {
+        transfer_id: TransferId,
+        files: Vec<TransferFileInfo>,
+    },
+    TransferDecision {
+        transfer_id: TransferId,
+        accept: bool,
+        reason: Option<String>,
+    },
+    /// 一块文件内容；`offset` 是该文件内的字节偏移。
+    TransferChunk {
+        transfer_id: TransferId,
+        file_index: u16,
+        offset: u64,
+        bytes: Vec<u8>,
+    },
+    /// 发送端宣告结束并给出整次传输的 SHA-256；接收端校验后原样回一条作为确认。
+    TransferDone {
+        transfer_id: TransferId,
+        sha256: Option<[u8; 32]>,
+    },
+    TransferCancel {
+        transfer_id: TransferId,
+    },
+    TransferError {
+        transfer_id: TransferId,
+        message: String,
+    },
     Ping,
     Pong,
 }
@@ -50,6 +79,19 @@ mod tests {
 
     fn id(n: u8) -> InstanceId {
         InstanceId::from_bytes([n; 16])
+    }
+
+    fn tid(n: u8) -> TransferId {
+        TransferId::from_bytes([n; 16])
+    }
+
+    fn info(path: &str, size: u64) -> TransferFileInfo {
+        TransferFileInfo {
+            relative_path: path.into(),
+            size,
+            mime: "application/octet-stream".into(),
+            is_dir: false,
+        }
     }
 
     #[test]
@@ -78,6 +120,32 @@ mod tests {
             },
             Wire::Ack {
                 event_id: EventId::from_bytes([4; 16]),
+            },
+            Wire::TransferOffer {
+                transfer_id: tid(5),
+                files: vec![info("dir/a.txt", 5), info("dir", 0)],
+            },
+            Wire::TransferDecision {
+                transfer_id: tid(5),
+                accept: true,
+                reason: None,
+            },
+            Wire::TransferChunk {
+                transfer_id: tid(5),
+                file_index: 0,
+                offset: 48 * 1024,
+                bytes: vec![7u8; 1024],
+            },
+            Wire::TransferDone {
+                transfer_id: tid(5),
+                sha256: Some([8u8; 32]),
+            },
+            Wire::TransferCancel {
+                transfer_id: tid(5),
+            },
+            Wire::TransferError {
+                transfer_id: tid(5),
+                message: "disk full".into(),
             },
             Wire::Ping,
             Wire::Pong,

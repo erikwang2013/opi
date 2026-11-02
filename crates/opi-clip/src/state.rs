@@ -8,10 +8,10 @@ use crate::ClipError;
 use crate::crypto::{content_hash, content_hash_bytes, event_id};
 use crate::trust::{TrustStore, TrustedPeer};
 use crate::types::{
-    CAP_PAIRING, CAP_TEXT, ClipEvent, FRAGMENT_BYTES, FRAGMENT_EXPIRY, Fingerprint,
+    CAP_PAIRING, CAP_TEXT, CAP_TRANSFER, ClipEvent, FRAGMENT_BYTES, FRAGMENT_EXPIRY, Fingerprint,
     HASH_SUPPRESS_TTL, Hlc, InstanceId, MAX_REASSEMBLY_BYTES, MAX_REASSEMBLY_EVENTS,
-    MAX_TEXT_BYTES, PEER_EXPIRY, PeerInfo, SEEN_EVENT_TTL, SessionEntry, StoredEvent, Version,
-    now_ms,
+    MAX_TEXT_BYTES, PEER_EXPIRY, PeerInfo, SEEN_EVENT_TTL, SessionEntry, StoredEvent, TransferId,
+    TransferRoute, Version, now_ms,
 };
 use crate::util::{fragment_count, trim_oldest};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -42,6 +42,8 @@ pub(crate) struct Core {
     pub pairing_attempts: HashSet<InstanceId>,
     pub pairing_enabled: bool,
     pub pair_rate: HashMap<IpAddr, Instant>,
+    /// transfer id → 对端/方向/清单；并发上限与 respond/cancel 路由都查这里。
+    pub transfers: HashMap<TransferId, TransferRoute>,
     pub events: VecDeque<ClipEvent>,
     /// stop() 在**同一把锁**里置位；`push_event` 据此拒绝停止后的事件，避免
     /// 「先清空队列、后到的线程又把事件插回去」。
@@ -122,6 +124,7 @@ impl Core {
             pairing_attempts: HashSet::new(),
             pairing_enabled: true,
             pair_rate: HashMap::new(),
+            transfers: HashMap::new(),
             events: VecDeque::new(),
             stopped: false,
             seen_events: HashMap::new(),
@@ -131,7 +134,7 @@ impl Core {
     }
 
     pub(crate) fn capabilities(&self) -> u8 {
-        CAP_TEXT | if self.pairing_enabled { CAP_PAIRING } else { 0 }
+        CAP_TEXT | CAP_TRANSFER | if self.pairing_enabled { CAP_PAIRING } else { 0 }
     }
 
     /// 本地剪贴板变化。返回 `None` 表示这是刚由远端写入的内容（防回环抑制）。
@@ -432,6 +435,7 @@ impl Core {
         self.pending_local = None;
         self.current = None;
         self.sessions.clear();
+        self.transfers.clear();
         self.pairing.clear();
         self.connecting.clear();
         self.discovered.clear();
@@ -464,6 +468,7 @@ impl Core {
 }
 
 mod events;
+mod transfers;
 
 #[cfg(test)]
 mod tests;

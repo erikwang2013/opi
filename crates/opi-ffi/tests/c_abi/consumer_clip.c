@@ -1,7 +1,7 @@
 /* SPDX-FileCopyrightText: 2026 erik.xyz
  * SPDX-License-Identifier: MIT
  *
- * [16] opi-clip 的 C ABI：真调全部 13 个导出（consumer.c 的 #include 片段，
+ * [16] opi-clip 的 C ABI：真调全部 16 个导出（consumer.c 的 #include 片段，
  * 不是独立 TU —— 500 行门禁，拆法同 consumer_dicts.c）。
  *
  * 只验证 FFI 骨架与哨兵约定：无对端、不依赖真实局域网。数据目录留在 /tmp
@@ -103,6 +103,40 @@ static void check_clip_exports(void) {
     status = opi_clip_status(clip);
     CHECK(status.len > 0 && status.ptr != NULL, "start 后 status 应非空");
     opi_ffi_free_string(status);
+
+    /* 文件传输：未配对对端 → send_files 空串；未知 ID 的 respond/cancel 失败。 */
+    char note_path[256];
+    snprintf(note_path, sizeof note_path, "%s/note.txt", dir);
+    FILE *note = fopen(note_path, "wb");
+    CHECK(note != NULL, "创建传输夹具失败：%s", note_path);
+    if (note) {
+        fputs("hi", note);
+        fclose(note);
+    }
+    char files_json[512];
+    int files_n = snprintf(files_json, sizeof files_json, "[{\"path\":\"%s\"}]", note_path);
+    CHECK(files_n > 0 && (size_t)files_n < sizeof files_json, "files JSON 放不下");
+    uint16_t files16[512];
+    size_t files_len = clip_ascii_to_utf16(files_json, files16, sizeof files16 / sizeof files16[0]);
+    CHECK(files_len == (size_t)files_n, "files JSON 被截断");
+
+    OpiString transfer_id =
+        opi_clip_send_files(clip, peer16, peer_len, files16, files_len);
+    CHECK(transfer_id.len == 0, "未配对对端的 send_files 应失败，实为 len=%zu",
+          transfer_id.len);
+    opi_ffi_free_string(transfer_id);
+
+    static const char TID_HEX[] = "02020202020202020202020202020202";
+    static const char SAVE_DIR[] = "/tmp";
+    uint16_t tid16[32];
+    size_t tid_len = clip_ascii_to_utf16(TID_HEX, tid16, sizeof tid16 / sizeof tid16[0]);
+    CHECK(tid_len == 32, "传输 ID 应为 32 个码元");
+    uint16_t save16[8];
+    size_t save_len = clip_ascii_to_utf16(SAVE_DIR, save16, sizeof save16 / sizeof save16[0]);
+    CHECK(opi_clip_respond_transfer(clip, tid16, tid_len, true, save16, save_len) == false,
+          "未知传输 ID 的 respond_transfer 应为 false");
+    CHECK(opi_clip_cancel_transfer(clip, tid16, tid_len) == false,
+          "未知传输 ID 的 cancel_transfer 应为 false");
 
     /* stop/destroy 幂等；NULL 句柄安全。 */
     opi_clip_stop(clip);

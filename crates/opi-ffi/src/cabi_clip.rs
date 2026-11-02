@@ -27,7 +27,10 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::thread::{self, ThreadId};
 use std::time::{Duration, Instant};
 
-use opi_clip::{ClipConfig, ClipNode, InstanceId, PublishOutcome};
+use opi_clip::{
+    ClipConfig, ClipNode, InstanceId, MAX_CONCURRENT_TRANSFERS, MAX_TRANSFER_FILE_BYTES,
+    MAX_TRANSFER_FILES, MAX_TRANSFER_TOTAL_BYTES, PublishOutcome,
+};
 use serde_json::json;
 
 use crate::cabi::OpiString;
@@ -36,6 +39,7 @@ use crate::cabi::utf16::read_utf16;
 mod encode;
 #[cfg(test)]
 mod tests;
+mod transfer_exports;
 
 use encode::{encode_event, peer_json, to_json};
 
@@ -226,6 +230,12 @@ impl OpiClip {
             "peers": peers,
             "beacons_sent": sent,
             "beacons_received": received,
+            "transfer_limits": {
+                "max_files": MAX_TRANSFER_FILES,
+                "max_file_bytes": MAX_TRANSFER_FILE_BYTES,
+                "max_total_bytes": MAX_TRANSFER_TOTAL_BYTES,
+                "max_concurrent": MAX_CONCURRENT_TRANSFERS,
+            },
         }))
     }
 

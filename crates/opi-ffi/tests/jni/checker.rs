@@ -441,7 +441,7 @@ pub const JNI_WUBI: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni_wubi.rs
 /// 自定义短语族（2026-10-23）。与 C ABI 侧的 `CABI_PHRASES` 是镜像。
 pub const JNI_PHRASES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni_phrases.rs");
 /// opi-clip 的 JNI 出口（2026-11-01）。与 C ABI 侧的 `CABI_CLIP` 是镜像：
-/// 13 条注册在 `jni.rs` 的同一张 RegisterNatives 表上（`OpiEngine.kt` 已声明）。
+/// 16 条注册在 `jni.rs` 的同一张 RegisterNatives 表上（`OpiEngine.kt` 已声明）。
 pub const JNI_CLIP: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni_clip.rs");
 /// 状态快照（2026-11-02，性能项 1+2）：一次刷新一发 JNI 取回全部刷新状态。
 pub const JNI_SNAPSHOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/jni_snapshot.rs");

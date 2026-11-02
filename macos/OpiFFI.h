@@ -402,7 +402,8 @@ int32_t opi_shift_state(void);
 // 失败统一返回哨兵（NULL / false / -1 / 空 OpiString），原因读 opi_clip_last_error()。
 // 单条事件 JSON 上限 1 MiB（超限丢弃并写 last_error）；文本本身上限 256 KiB。
 // 事件 `type`：peer_discovered / peer_offline / pairing_prompt / pairing_finished /
-// clipboard_received / send_failed / error。
+// clipboard_received / send_failed / transfer_offer / transfer_progress /
+// transfer_completed / transfer_failed / transfer_canceled / error。
 
 /// config_json 形如 `{"data_dir":"...","tcp_port":0,"discovery_port":45888,
 /// "device_name":"..."}`；data_dir 为空、JSON 坏、端口 0 → NULL。
@@ -443,11 +444,24 @@ OpiString opi_clip_peers(OpiClip *clip);
 bool opi_clip_forget_peer(OpiClip *clip, const uint16_t *peer_id, size_t len);
 
 /// 状态 JSON：`{running,instance_id,fingerprint,device_name,tcp_port,
-/// discovery_port,peers}`；未 start 时 instance_id/fingerprint 为 null。
+/// discovery_port,peers,transfer_limits}`；未 start 时 instance_id/fingerprint 为 null。
 OpiString opi_clip_status(OpiClip *clip);
 
 /// 最近一次失败原因；空串 = 没有错误。按线程记录（句柄不跨线程）。
 OpiString opi_clip_last_error(void);
+
+/// 发送文件/文件夹 → 传输 ID 十六进制；失败 → 空串。
+/// files_json 形如 `[{"path":"/abs/local","name":"可选","mime":"可选"}]`；
+/// 目录条目只给 path（递归展开），name/mime 只对文件有效。
+OpiString opi_clip_send_files(OpiClip *clip, const uint16_t *peer_id, size_t peer_len,
+                              const uint16_t *files_json, size_t files_len);
+
+/// 接受/拒绝入站传输；接受时 save_dir 必填（UTF-16）。失败 → false。
+bool opi_clip_respond_transfer(OpiClip *clip, const uint16_t *transfer_id, size_t id_len,
+                               bool accept, const uint16_t *save_dir, size_t save_dir_len);
+
+/// 取消进行中的传输（收发两侧都可调用）。失败 → false。
+bool opi_clip_cancel_transfer(OpiClip *clip, const uint16_t *transfer_id, size_t id_len);
 
 // ---------- 语音识别（opi-asr，2026-11-02）----------
 //
