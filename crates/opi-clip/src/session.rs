@@ -15,11 +15,13 @@ use crate::types::{
 };
 use crate::wire::{self, Wire};
 use snow::TransportState;
+mod transfer;
 use std::collections::HashMap;
 use std::net::{Shutdown, SocketAddr, TcpStream};
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, TryRecvError};
 use std::time::{Duration, Instant};
+use transfer::{Incoming, Outgoing, PendingOffer};
 
 const READ_TIMEOUT: Duration = Duration::from_millis(150);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -96,6 +98,9 @@ pub(crate) fn start(
         rate: RateLimit::new(),
         last_received: Instant::now(),
         next_ping: Instant::now() + PING_INTERVAL,
+        outgoing: None,
+        incoming: None,
+        offer: None,
     };
     if let Some(event) = initial {
         let _ = session.queue_event(event);
@@ -115,6 +120,9 @@ struct Session {
     rate: RateLimit,
     last_received: Instant,
     next_ping: Instant,
+    outgoing: Option<Outgoing>,
+    incoming: Option<Incoming>,
+    offer: Option<PendingOffer>,
 }
 
 impl Session {
@@ -136,7 +144,7 @@ impl Session {
             if self.service_acks().is_err() || self.drain_outbound(receiver).is_err() {
                 break;
             }
-            if self.read_available().is_err() {
+            if self.read_available().is_err() || self.pump_outgoing().is_err() {
                 break;
             }
             let now = Instant::now();
@@ -150,6 +158,7 @@ impl Session {
                 self.next_ping = now + PING_INTERVAL;
             }
         }
+        self.abort_transfers("connection closed");
         let _ = self.stream.shutdown(Shutdown::Both);
     }
 
@@ -166,6 +175,13 @@ impl Session {
                         return Err(error);
                     }
                 }
+                Ok(Outbound::SendTransfer { id, files }) => self.start_outgoing(id, files)?,
+                Ok(Outbound::RespondTransfer {
+                    id,
+                    accept,
+                    save_dir,
+                }) => self.respond_incoming(id, accept, save_dir)?,
+                Ok(Outbound::CancelTransfer { id }) => self.local_cancel(id)?,
                 Err(TryRecvError::Empty) | Err(TryRecvError::Disconnected) => return Ok(()),
             }
         }
@@ -176,13 +192,17 @@ impl Session {
             let Some(frame) = self.reader.next(&mut self.stream)? else {
                 return Ok(());
             };
-            if !self.rate.allow(frame.len() + FRAME_OVERHEAD) {
+            let plaintext = noise::decrypt(&mut self.transport, &frame)?;
+            let message = wire::decode(&plaintext)?;
+            // 文件块不受 2 MiB/s 剪贴板限速约束（否则传输慢到不可用）；信任门槛
+            // 与单文件/总量上限仍由传输状态机把关。
+            if !matches!(message, Wire::TransferChunk { .. })
+                && !self.rate.allow(frame.len() + FRAME_OVERHEAD)
+            {
                 self.inner
                     .push_error(format!("rate limit exceeded by {}", self.peer));
                 return Err(ClipError::invalid("peer rate limit"));
             }
-            let plaintext = noise::decrypt(&mut self.transport, &frame)?;
-            let message = wire::decode(&plaintext)?;
             self.handle(message)?;
         }
         Ok(())
@@ -229,6 +249,12 @@ impl Session {
             Wire::PairInfo { .. } | Wire::PairDecision { .. } => {
                 return Err(ClipError::invalid("unexpected session message"));
             }
+            Wire::TransferOffer { .. }
+            | Wire::TransferDecision { .. }
+            | Wire::TransferChunk { .. }
+            | Wire::TransferDone { .. }
+            | Wire::TransferCancel { .. }
+            | Wire::TransferError { .. } => self.handle_transfer(message)?,
         }
         self.last_received = Instant::now();
         Ok(())

@@ -79,7 +79,7 @@ final class OpiEngine {
     static native String dictList();
     static native boolean setDictEnabled(String name, boolean on);
     static native boolean removeDict(String name);
-    // opi-clip：函数体由 c_abi/consumer_clip.c 与 cabi_clip 单测取证；整表注册要求这里声明全部 14 条。
+    // opi-clip：函数体由 c_abi/consumer_clip.c 与 cabi_clip 单测取证；整表注册要求这里声明全部 17 条。
     static native long clipCreate(String configJson);
     static native void clipDestroy(long handle);
     static native boolean clipStart(long handle);
@@ -94,6 +94,9 @@ final class OpiEngine {
     static native String clipStatus(long handle);
     static native String clipLastError();
     static native boolean clipProbe(long handle, String ip);
+    static native String clipSendFiles(long handle, String peerId, String filesJson);
+    static native boolean clipRespondTransfer(long handle, String transferId, boolean accept, String saveDir);
+    static native boolean clipCancelTransfer(long handle, String transferId);
 }
 public final class Main {
     static int failures = 0;
@@ -137,7 +140,6 @@ public final class Main {
         check("".equals(OpiEngine.buffer()), "select 后 buffer 清空");
         // select 越界 → 空串（全局下标出口）
         check("".equals(OpiEngine.select(999)), "select(999) 返回空串");
-
         // 单字符外输入返回空串（多字符/空）
         check("".equals(OpiEngine.inputKey("ab")), "inputKey(ab) 返回空串");
         check("".equals(OpiEngine.inputKey("")), "inputKey(空) 返回空串");
@@ -147,7 +149,6 @@ public final class Main {
         check(OpiEngine.mode() == 1, "switchMode(1) 后 mode==1");
         OpiEngine.switchMode(9);
         check(OpiEngine.mode() == 1, "越界 mode 忽略");
-
         // English 模式：输入 abc → space 提交 → buffer 清空
         check("".equals(OpiEngine.inputKey("a")), "inputKey(a)");
         check("".equals(OpiEngine.inputKey("b")), "inputKey(b)");

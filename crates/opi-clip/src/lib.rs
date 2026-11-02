@@ -35,6 +35,7 @@ mod noise;
 mod pairing;
 mod session;
 mod state;
+mod transfer;
 mod trust;
 mod types;
 mod util;
@@ -43,8 +44,11 @@ mod wire;
 pub use config::ClipConfig;
 pub use error::ClipError;
 pub use node::ClipNode;
+pub use transfer::collect_files;
 pub use types::{
     BEACON_INTERVAL, ClipEvent, DEFAULT_DISCOVERY_PORT, DISCOVERY_GROUP, EventId, FRAGMENT_BYTES,
-    Fingerprint, InstanceId, MAX_FRAME_BYTES, MAX_TEXT_BYTES, PROTOCOL_VERSION, PeerInfo,
-    PublishOutcome, Version,
+    Fingerprint, InstanceId, MAX_CONCURRENT_TRANSFERS, MAX_FRAME_BYTES, MAX_TEXT_BYTES,
+    MAX_TRANSFER_FILE_BYTES, MAX_TRANSFER_FILES, MAX_TRANSFER_PATH_BYTES, MAX_TRANSFER_TOTAL_BYTES,
+    PROTOCOL_VERSION, PeerInfo, PublishOutcome, TRANSFER_CHUNK_BYTES, TransferFile,
+    TransferFileInfo, TransferId, Version,
 };
