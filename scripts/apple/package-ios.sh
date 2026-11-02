@@ -295,6 +295,7 @@ cat > "$app/Info.plist" <<PLIST
 	<key>NSLocalNetworkUsageDescription</key><string>在同一局域网内发现并同步已配对设备之间的纯文本剪贴板内容。</string>
 	<key>NSMicrophoneUsageDescription</key><string>用于录制语音并交给 iOS 系统在本机识别，识别结果回填到键盘；录音不会上传或保存。</string>
 	<key>NSSpeechRecognitionUsageDescription</key><string>用于调用 iOS 系统本地语音识别把语音转换为文字并回填到键盘；音频不会上传或保存。</string>
+	<key>UIFileSharingEnabled</key><true/><key>LSSupportsOpeningDocumentsInPlace</key><true/>
 	<key>CFBundleURLTypes</key>
 	<array><dict>
 		<key>CFBundleURLName</key><string>$HOST_BUNDLE_ID.voice</string>
