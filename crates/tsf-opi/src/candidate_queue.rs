@@ -125,6 +125,12 @@ impl SendQueue {
     }
 }
 
+impl Default for SendQueue {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Inner {
     /// 队列已满：按类别淘汰一条旧帧。返回 true = 腾出了位置。
     fn make_room(&mut self, incoming: SendClass) -> bool {

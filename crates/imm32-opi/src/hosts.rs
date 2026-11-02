@@ -99,7 +99,7 @@ impl<H> HostMap<H> {
     /// 候选窗归属：有焦点记录时只归当前焦点；没有记录（宿主不发
     /// `ImeSetActiveContext`）时退回旧行为 —— 有动作就显示。
     pub(crate) fn owns_candidates(&self, himc: isize) -> bool {
-        self.active.map_or(true, |a| a == himc)
+        self.active.is_none_or(|a| a == himc)
     }
 
     #[cfg(test)]

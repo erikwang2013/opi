@@ -211,7 +211,10 @@ mod tests {
         let m = count(&s, m_at);
         assert_eq!(s.len(), m_at + 1 + m, "布局长度必须与两段计数吻合");
         assert!(n <= 8, "候选只回 limit 条（实得 {n}）");
-        assert!(!s[SLOT_DISPLAY].is_empty(), "9 键中文态 displayBuffer 应有读数");
+        assert!(
+            !s[SLOT_DISPLAY].is_empty(),
+            "9 键中文态 displayBuffer 应有读数"
+        );
         assert!(m > 0, "9 键中文态应回读数");
     }
 
