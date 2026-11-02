@@ -41,6 +41,35 @@
 **证据边界**：以上为本机 release 数字与构建/单测证据；Android/HarmonyOS 真机首帧与
 按键延迟未重新测量。
 
+### 2026-11-02 后续（main，未进入 v1.31.4 构建）
+
+同一轮性能项的后续五条，已合入 main、通过工作区/Android/Windows 目标测试，但**没有**
+进入已发布的 v1.31.4 产物（构建早于这些提交）：
+
+- **Android 单次 JNI 快照**：一次 `stateSnapshot(limit)` 取回缓冲/模式/方案/开关/候选/
+  读数/显示串/pending；旧 `.so` 或畸形载荷回退原逐出口路径。9/14/双拼只在 Rust 内按
+  512 深度排名，不再把 512 条候选搬给 Java；普通候选栏仍一页，平铺仍 512。
+- **Android Compose**：根组合只订阅 `derivedStateOf` 的粗粒度可见性/情绪档；窗口隐藏时
+  场景与宠物条动画销毁；宠物条 Brush 缓存在 `drawWithCache`。
+- **TSF 候选窗写**：有界队列 + 单写线程，按键线程不再 `WriteFile`；溢出先丢旧 position、
+  再丢旧 state，控制应答也串行化。
+- **IMM32**：Host 按 HIMC 隔离（上限 8 + LRU），主库/繁体库进程级共享；候选窗只跟随
+  active HIMC。
+- **引擎**：9/14 键读数缓存改存原始拼音，分词/去重推迟到出口；导入层 base 查询计入
+  同一预算；有限前缀快路径扩到有精确命中的多字符宽前缀。
+
+本机 release 复测（8 核 x86_64，修复前后同进程）：
+
+| 路径 | 前 p50 | 后 p50 |
+|---|---|---|
+| full `xin` candidates(8) | 6.02ms | **2.00ms** |
+| nine `64` candidates(MAX) | 3.37ms | **1.48ms** |
+| full `a` candidates(MAX) | 5.00ms | 4.47ms |
+| full `n` candidates(MAX) | 4.73ms | 4.05ms |
+
+**证据边界**：仅本机 release + 单测/Windows 目标编译；没有真机延迟、内存或候选窗联调
+数据。
+
 ## 2026-10-26 补充：首击、9 键分词与移动取回窗口
 
 - **26 键单键首击（1.25.7）**：单键有限前缀在全量池（9216）上按档位直接选首位段，不再先截小池再补档；桌面 release 实测 **3.5–6ms**。契约是 `candidates(k) == candidates(MAX)[..k]`，见 `engine-core/src/candidates_finite.rs` 与 `prefix_contract` 测试。
@@ -108,9 +137,10 @@ base 查询 + 候选装配的耗时通过动态截止计入总账。端到端可
 
 **剩余优化 / 扩展（未落地，按收益/风险）**：
 
-> 2026-11-02 状态：第 1 项已做「折叠态只取一页、读数按方案惰性取」，标量 JNI 仍未合并；
-> 第 3 项已把可选码表移出首帧，用户词/导入库的启动 IO 仍在；第 4 项未做；第 7 项已做
-> learner 频次复用与有限前缀排序。
+> 2026-11-02 状态：第 1/4 项已做单次 JNI 快照与折叠态一页；第 2 项已做 Compose 隐藏
+> 动画与宠物条 Brush 缓存；第 3 项已把可选码表移出首帧，用户词/导入库的启动 IO 仍在；
+> 第 6 项已做 TSF 有界队列 + 单写线程；第 7 项已做 learner 频次复用、有限前缀排序与
+> 读数惰性化；第 5、8 项未做。
 1. Android `refresh` 拆轻/重（去 6 个标量 JNI）；`candidateReadings` 惰性化；折叠态
    只取 8 条（平铺再取 64）。
 2. `PetStrip` 隐藏暂停（`LocalLifecycleOwner` + RESUMED 门控）、`drawWithCache` 复用
