@@ -15,7 +15,6 @@
 # 用法（仓库根目录）：
 #   scripts/apple/package-ios.sh <版本号> [产物目录]
 #   版本号用 scripts/apple/version.sh 取（CI 里就是这么调的）。
-#   档位由环境变量 OPI_IOS_TIER 选择：normal（默认，模型按需下载）/ full（内置模型）。
 #
 # ===== ⚠️ 未签名 IPA = 需要重签才能安装 =====
 #
@@ -31,31 +30,25 @@
 # 本脚本能证明的是：Swift 过编译器、链接上 Rust 静态库、无未定义 opi_ 符号，
 # 且宿主 App / appex / IPA 的目录结构与 plist 自洽。
 #
-# ===== 语音输入（2026-11-02）=====
+# ===== 语音输入（2026-11-03）=====
 #
-#   · 宿主 App 链接 opi_asr + sherpa-onnx/onnxruntime 静态库；采集、识别、回填都在
-#     宿主。键盘扩展仍只链 opi_ffi，不申请麦克风、不创建 ASR 引擎。
-#   · normal 档 IPA 不含模型，App 首次使用时从 opi.erik.xyz 逐文件下载到
-#     Application Support/opi/asr。full 档把 `desktop/asr-bundle/asr` 复制进宿主
-#     bundle 的 `asr/`，并补写两个 manifest.json（桌面 bundle 只有模型文件）。
+#   · 宿主 App 用系统 SFSpeechRecognizer + AVAudioEngine 做**本地**识别
+#     （`requiresOnDeviceRecognition = true`），不链接 opi_asr/sherpa/onnxruntime，
+#     也不下载任何语音模型；音频只在内存中处理，不落盘、不上传。
+#   · 键盘扩展仍只链 opi_ffi，不申请麦克风、不创建识别任务；结果经 App Group 或
+#     UIPasteboard（前缀 opi-voice:）回填。没有 App Group 时键盘需「允许完全访问」。
 #   · App Group（group.xyz.erik.opi）是签名构建的可选项：本脚本**不加** entitlements
-#     （unsigned IPA 带了也没用）。没有 App Group 时语音结果经 UIPasteboard
-#     （前缀 opi-voice:）回填，键盘需「允许完全访问」才能读取。
+#     （unsigned IPA 带了也没用）。
 #
 # ===== 前置：Rust 侧 iOS 静态库（本脚本**不**编 Rust，只读它的产物）=====
 #
 #   rustup target add aarch64-apple-ios aarch64-apple-ios-sim
 #   cargo build --release -p opi_ffi --target aarch64-apple-ios
 #   cargo build --release -p opi_ffi --target aarch64-apple-ios-sim
-#   cargo build --release -p opi-asr --target aarch64-apple-ios
-#
-# opi_asr 带 sherpa-rs 的 iOS 预编译静态库。本脚本按
-# `target/aarch64-apple-ios/release/build/sherpa-rs-sys-*/output` 里的
-# `cargo:rustc-link-search=` 找 libsherpa-onnx.a / libonnxruntime.a；也认 sherpa-rs
-# 缓存（macOS: ~/Library/Caches/sherpa-rs/aarch64-apple-ios）与 SHERPA_LIB_PATH。
 #
 # 模拟器只做 arm64 切片：Intel Mac 上的模拟器要 x86_64-apple-ios —— 本轮不做，
 # 要加就是在下面 `for spec` 里多一行，没有别的机关（如实记：现在缺这一片）。
+
 set -euo pipefail
 
 version="${1:?用法: scripts/apple/package-ios.sh <版本号> [产物目录]}"
@@ -69,12 +62,6 @@ MODULE="OPIKeyboard"                  # Swift 模块名
 # 部署目标：仓库**没有**声明 iOS 最低版本。15.0 覆盖键盘扩展用到的全部 API
 # （`UIPress.key` 只要 13.4，取 15.0 留余量）。本脚本的选择，不是仓库约定。
 IOS_MIN="15.0"
-# 模型档位：normal=按需下载；full=内置模型。CI 的 tier 输入经环境变量传进来。
-TIER="${OPI_IOS_TIER:-normal}"
-case "$TIER" in
-  normal|full) ;;
-  *) echo "!! OPI_IOS_TIER 只能是 normal 或 full（现在是 '$TIER'）" >&2; exit 1 ;;
-esac
 # 宿主 App 与扩展的 bundle id。扩展 id **必须**以宿主 id 为前缀（Apple 强制），
 # 所以这里由 HOST_BUNDLE_ID 派生，别分别手写两个容易漂的常量。
 HOST_APP="Opi"
@@ -278,49 +265,6 @@ sips -z 120 120 "$icon" --out "$app/AppIcon60x60@2x.png" >/dev/null
 sips -z 180 180 "$icon" --out "$app/AppIcon60x60@3x.png" >/dev/null
 sips -z 152 152 "$icon" --out "$app/AppIcon76x76@2x.png" >/dev/null
 
-# 语音模型：full 复制内置，normal 不复制（IPA 里不能出现 asr/）。
-if [ "$TIER" = full ]; then
-  models_src="desktop/asr-bundle/asr"
-  [ -d "$models_src" ] || {
-    echo "!! full 档缺少 $models_src；先按 .github/workflows/apple.yml 下载模型" >&2
-    exit 1
-  }
-  mkdir -p "$app/asr"
-  cp -R "$models_src"/. "$app/asr/"
-  for rel in sensevoice/model.int8.onnx sensevoice/tokens.txt \
-    whisper-small.en/small.en-encoder.int8.onnx \
-    whisper-small.en/small.en-decoder.int8.onnx \
-    whisper-small.en/small.en-tokens.txt vad/silero_vad.onnx; do
-    [ -f "$app/asr/$rel" ] || { echo "!! full 档模型缺 $rel" >&2; exit 1; }
-  done
-  # Rust 加载器无条件读 manifest.json；桌面 bundle 没有，按实际文件生成。
-  python3 - "$app/asr" <<'PY'
-import hashlib, json, os, sys
-root = sys.argv[1]
-roles = {
-    "sensevoice/model.int8.onnx": "model",
-    "sensevoice/tokens.txt": "tokens",
-    "whisper-small.en/small.en-encoder.int8.onnx": "encoder",
-    "whisper-small.en/small.en-decoder.int8.onnx": "decoder",
-    "whisper-small.en/small.en-tokens.txt": "tokens",
-}
-for d in ("sensevoice", "whisper-small.en"):
-    files = []
-    for rel, role in roles.items():
-        if not rel.startswith(d + "/"):
-            continue
-        path = os.path.join(root, rel)
-        digest = hashlib.sha256()
-        with open(path, "rb") as handle:
-            for chunk in iter(lambda: handle.read(1 << 20), b""):
-                digest.update(chunk)
-        files.append({"path": os.path.basename(rel), "size": os.path.getsize(path),
-                      "sha256": digest.hexdigest(), "role": role})
-    with open(os.path.join(root, d, "manifest.json"), "w", encoding="utf-8") as out:
-        json.dump({"version": 1, "files": files}, out, separators=(",", ":"))
-PY
-fi
-
 cat > "$app/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -348,91 +292,51 @@ cat > "$app/Info.plist" <<PLIST
 	<dict><key>CFBundlePrimaryIcon</key><dict><key>CFBundleIconFiles</key><array><string>AppIcon60x60</string></array></dict></dict>
 	<key>CFBundleIcons~ipad</key>
 	<dict><key>CFBundlePrimaryIcon</key><dict><key>CFBundleIconFiles</key><array><string>AppIcon76x76</string></array></dict></dict>
-	<key>NSLocalNetworkUsageDescription</key><string>在同一局域网内发现并连接已配对设备，同步纯文本剪贴板并收发文件；内容不经过服务器。</string>
-	<key>NSMicrophoneUsageDescription</key><string>用于录制语音并在本机识别，识别结果回填到键盘；录音不会上传或保存。</string>
-	<key>UIFileSharingEnabled</key><true/><key>LSSupportsOpeningDocumentsInPlace</key><true/>
+	<key>NSLocalNetworkUsageDescription</key><string>在同一局域网内发现并同步已配对设备之间的纯文本剪贴板内容。</string>
+	<key>NSMicrophoneUsageDescription</key><string>用于录制语音并交给 iOS 系统在本机识别，识别结果回填到键盘；录音不会上传或保存。</string>
+	<key>NSSpeechRecognitionUsageDescription</key><string>用于调用 iOS 系统本地语音识别把语音转换为文字并回填到键盘；音频不会上传或保存。</string>
 	<key>CFBundleURLTypes</key>
-	<array><dict><key>CFBundleURLName</key><string>$HOST_BUNDLE_ID.urls</string>
-	<key>CFBundleURLSchemes</key><array><string>opi-voice</string><string>opi-transfer</string></array></dict></array>
+	<array><dict>
+		<key>CFBundleURLName</key><string>$HOST_BUNDLE_ID.voice</string>
+		<key>CFBundleURLSchemes</key><array><string>opi-voice</string><string>opi-transfer</string></array>
+	</dict></array>
 </dict>
 </plist>
 PLIST
 plutil -lint "$app/Info.plist" >/dev/null
 host_plist="$(plutil -p "$app/Info.plist")"
-for key in NSMicrophoneUsageDescription opi-voice opi-transfer UIFileSharingEnabled; do
-  printf '%s\n' "$host_plist" | grep -q "$key" || { echo "!! 宿主 Info.plist 缺 $key" >&2; exit 1; }
+printf '%s\n' "$host_plist" | grep -q 'NSMicrophoneUsageDescription' || {
+  echo "!! 宿主 Info.plist 缺 NSMicrophoneUsageDescription" >&2; exit 1; }
+printf '%s\n' "$host_plist" | grep -q 'NSSpeechRecognitionUsageDescription' || {
+  echo "!! 宿主 Info.plist 缺 NSSpeechRecognitionUsageDescription" >&2; exit 1; }
+for key in opi-voice opi-transfer UIFileSharingEnabled; do
+  printf '%s\n' "$host_plist" | grep -q "$key" || {
+    echo "!! 宿主 Info.plist 缺 $key" >&2; exit 1; }
 done
-# 宿主源码：语音页/引擎/下载器 + 传输服务/页面 + 平台中立的 opi-clip 宿主。
+# 宿主源码不止 OpiApp.swift：语音页/系统识别引擎都是独立文件，必须一起编。
 host_sources=(ios/HostApp/*.swift ios/VoiceResultChannel.swift shared/apple/OpiClipRunner.swift)
 host_common=(-parse-as-library -import-objc-header ios/OpiFFI.h \
   -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" -target "arm64-apple-ios$IOS_MIN")
 swiftc "${host_common[@]}" -typecheck "${host_sources[@]}"
-asrlib="$PWD/target/aarch64-apple-ios/release/libopi_asr.a"
-[ -f "$asrlib" ] || { echo "!! 缺少 $asrlib（先编 opi-asr）" >&2; exit 1; }
+# 语音走系统框架；显式给出 Speech/AVFoundation，避免只靠 Swift autolink。
 host_ffi="$PWD/target/aarch64-apple-ios/release/libopi_ffi.a"
 [ -f "$host_ffi" ] || { echo "!! 缺少 $host_ffi（先编 opi_ffi）" >&2; exit 1; }
-# sherpa-rs 的 iOS 包是两个静态库；构建脚本把它们的目录写进 build output。
-sherpa_dirs=("")
-[ -n "${SHERPA_LIB_PATH:-}" ] && sherpa_dirs+=("$SHERPA_LIB_PATH" "$SHERPA_LIB_PATH/lib")
-while IFS= read -r dir; do
-  sherpa_dirs+=("$dir")
-done < <(
-  for sherpa_out in target/aarch64-apple-ios/release/build/sherpa-rs-sys-*/output; do
-    [ -f "$sherpa_out" ] && sed -n \
-      -e 's/^cargo:rustc-link-search=native=//p' \
-      -e 's/^cargo:rustc-link-search=//p' "$sherpa_out"
-  done
-)
-for sherpa_cache in "$HOME/Library/Caches/sherpa-rs/aarch64-apple-ios" \
-  "$HOME/.cache/sherpa-rs/aarch64-apple-ios"; do
-  [ -d "$sherpa_cache" ] || continue
-  while IFS= read -r lib; do
-    sherpa_dirs+=("$(dirname "$lib")")
-  done < <(find "$sherpa_cache" \( -name libsherpa-onnx.a -o -name libonnxruntime.a \) 2>/dev/null)
-done
-find_archive() {
-  name="$1"; shift
-  for dir in "$@"; do
-    [ -n "$dir" ] && [ -f "$dir/$name" ] && { printf '%s\n' "$dir/$name"; return 0; }
-  done
-  return 1
-}
-sherpa_lib="$(find_archive libsherpa-onnx.a "${sherpa_dirs[@]}")" || {
-  echo "!! 找不到 libsherpa-onnx.a（先在本机编 opi_asr，或设 SHERPA_LIB_PATH）" >&2; exit 1; }
-onnx_lib="$(find_archive libonnxruntime.a "${sherpa_dirs[@]}")" || {
-  echo "!! 找不到 libonnxruntime.a（随 sherpa-rs 下载缓存）" >&2; exit 1; }
-echo "宿主 ASR 静态库：$asrlib"
-echo "  sherpa：$sherpa_lib"
-echo "  onnxruntime：$onnx_lib"
-# 链接顺序：opi_asr → sherpa → onnxruntime，另加 opi_ffi（传输）。
 swiftc "${host_common[@]}" -emit-executable "${host_sources[@]}" -O -o "$hostbin" \
-  -Xlinker -all_load \
   -Xlinker -force_load -Xlinker "$host_ffi" \
-  -Xlinker -force_load -Xlinker "$asrlib" \
-  -Xlinker -force_load -Xlinker "$sherpa_lib" \
-  -Xlinker -force_load -Xlinker "$onnx_lib" \
-  -Xlinker -lc++ -Xlinker -lz \
-  -Xlinker -framework -Xlinker CoreML \
-  -Xlinker -framework -Xlinker Foundation \
-  -Xlinker -framework -Xlinker Accelerate \
-  -Xlinker -framework -Xlinker CoreGraphics \
-  -Xlinker -framework -Xlinker Security
+  -Xlinker -framework -Xlinker Speech \
+  -Xlinker -framework -Xlinker AVFoundation
 chmod +x "$hostbin"
-# 取证：宿主定义 opi_asr、无未定义 opi_asr、无动态 ASR 依赖。
+# 取证：宿主有 opi_clip 符号、无动态 ASR 依赖。
 host_nm="$(nm -gU "$hostbin" 2>&1 || true)"
 host_nm_u="$(nm -u "$hostbin" 2>&1 || true)"
-host_link="$(otool -L "$hostbin" 2>&1 || true)"
-for sym in _opi_asr_create _opi_asr_load_model _opi_asr_poll_event _opi_asr_destroy _opi_clip_create _opi_clip_send_files _opi_clip_respond_transfer; do
+for sym in _opi_clip_create _opi_clip_send_files _opi_clip_respond_transfer; do
   printf '%s\n' "$host_nm" | grep -q "$sym\$" || {
-    echo "!! 宿主没有定义 $sym —— 对应静态库没链进去" >&2
+    echo "!! 宿主没有定义 $sym —— opi_ffi 没链进去" >&2
     printf '%s\n' "$host_nm_u" >&2; exit 1; }
 done
-if printf '%s\n' "$host_nm_u" | grep -qE '_opi_asr_|_opi_clip_'; then
-  echo "!! 宿主有未定义 opi_asr/opi_clip 符号：" >&2
-  printf '%s\n' "$host_nm_u" | grep -E '_opi_asr_|_opi_clip_' >&2; exit 1
-fi
+host_link="$(otool -L "$hostbin" 2>&1 || true)"
 if printf '%s\n' "$host_link" | grep -qE 'libsherpa-onnx|libonnxruntime|libopi_asr'; then
-  echo "!! 宿主动态依赖了 ASR 库（应为静态链接）：" >&2
+  echo "!! 宿主仍依赖旧 ASR 库：" >&2
   printf '%s\n' "$host_link" >&2; exit 1
 fi
 # IPA 就是 zip(Payload/Opi.app)。未签名，需重签后安装。
@@ -462,26 +366,6 @@ for member in \
   fi
 done
 
-if [ "$TIER" = full ]; then
-  for member in \
-    "Payload/Opi.app/asr/sensevoice/model.int8.onnx" \
-    "Payload/Opi.app/asr/sensevoice/tokens.txt" \
-    "Payload/Opi.app/asr/sensevoice/manifest.json" \
-    "Payload/Opi.app/asr/whisper-small.en/small.en-encoder.int8.onnx" \
-    "Payload/Opi.app/asr/whisper-small.en/small.en-decoder.int8.onnx" \
-    "Payload/Opi.app/asr/whisper-small.en/small.en-tokens.txt" \
-    "Payload/Opi.app/asr/whisper-small.en/manifest.json" \
-    "Payload/Opi.app/asr/vad/silero_vad.onnx"; do
-    if ! grep -qF "$member" <<<"$ipa_list"; then
-      echo "!! full 档 IPA 缺少 $member" >&2
-      exit 1
-    fi
-  done
-elif grep -qF "Payload/Opi.app/asr/" <<<"$ipa_list"; then
-  echo "!! normal 档 IPA 不应包含 asr/ 模型" >&2
-  exit 1
-fi
-
 mkdir -p "$out"
 final_ipa="$out/$(basename "$ipa")"
 mv "$ipa" "$final_ipa"
@@ -494,5 +378,4 @@ fi
 
 echo "---- iOS 产物（unsigned IPA；未上机验证）----"
 echo "  $final_ipa（dist 仅此一个文件）"
-echo "  版本：${version}（取自 Cargo.toml）；语音模型档位：${TIER}"
-echo "  语音模型：$([ "$TIER" = full ] && echo '已内置（无需下载）' || echo '按需下载')"
+echo "  版本：${version}（取自 Cargo.toml）；语音：系统本地识别，无模型下载"

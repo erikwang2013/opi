@@ -60,11 +60,6 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         }
     }
 
-    func applicationDidBecomeActive(_ application: UIApplication) {
-        // 已下载模型时后台加载一次，语音页打开即可录音；未下载则不做任何事。
-        VoiceService.shared.prewarm()
-    }
-
     private func showVoice(autoStart: Bool) {
         guard let nav = window?.rootViewController as? UINavigationController else { return }
         // 从键盘再次进入时重建页面，保证这次仍会自动开始录音。
@@ -147,7 +142,7 @@ final class HomeViewController: UIViewController {
 
         addCard(title: "语音输入", body: [
             "点「打开语音输入」说话，识别结果会回填到键盘。",
-            "识别完全在本机完成；普通包首次使用需下载语音模型。",
+            "使用 iOS 系统本地语音识别，无需下载模型；音频只在内存中处理。",
         ])
         addPrimaryButton("打开语音输入", action: #selector(openVoice))
 
@@ -183,9 +178,9 @@ final class HomeViewController: UIViewController {
         )
 
         addCard(title: "数据与隐私", body: [
-            "输入、候选、用户词学习与语音识别全部在本机完成。",
-            "只有「普通包」下载语音模型时会访问 opi.erik.xyz，且不发送任何输入内容；"
-                + "完整包从内置模型加载，完全不联网。",
+            "输入、候选与用户词学习全部在本机完成。",
+            "语音识别使用 iOS 系统本地能力；音频只在内存中交给系统识别，"
+                + "不落盘、不上传，也不下载任何语音模型。",
             "学到的词只存在键盘扩展自己的容器里；删除 App 即一并删除，"
                 + "不经过任何服务器。",
             "语音结果默认经带标记的剪贴板回填；键盘需「允许完全访问」才能读取，"

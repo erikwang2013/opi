@@ -94,8 +94,9 @@ final class AboutPanel: UIView {
         addParagraph(Self.intro)
         addHeading("语音输入")
         addParagraph(
-            "iOS 不允许键盘扩展使用麦克风，所以小欧键盘内没有语音按钮；"
-                + "请使用系统键盘的听写麦克风（设置 → 通用 → 键盘 → 启用听写）。"
+            "点键盘工具条的麦克风按钮会打开小欧 App 语音页；"
+                + "识别使用 iOS 系统本地能力，音频只在内存中处理，不落盘、不上传。"
+                + "结果回到键盘时自动插入；剪贴板回填需「允许完全访问」（App Group 构建除外）。"
         )
         addHeading("版本")
         // 2026-10-28 起有引擎版本出口（`opi_engine_version`）。两者本应相等
