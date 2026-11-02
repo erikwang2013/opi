@@ -426,7 +426,7 @@ swiftc "${host_common[@]}" -emit-executable "${host_sources[@]}" -O -o "$hostbin
   -Xlinker -force_load -Xlinker "$asrlib" \
   -Xlinker -force_load -Xlinker "$sherpa_lib" \
   -Xlinker -force_load -Xlinker "$onnx_lib" \
-  "${extra_archives[@]}" \
+  ${extra_archives[@]+"${extra_archives[@]}"} \
   -Xlinker -lc++ -Xlinker -lz \
   -Xlinker -framework -Xlinker CoreML \
   -Xlinker -framework -Xlinker Foundation \
