@@ -46,6 +46,12 @@ final class CandidateTiledPanel: UIView {
     private var dirty = true
     private var palette: KeyboardPalette = .light
     private var fontScale: CGFloat = 1
+    /// 候选 → 页 → 行 → 格（2026-11-02）：只建当前页 ±1 的内容。
+    private var pages: [[[Tile]]] = []
+    /// 每页一个空宿主（只保 contentSize/分页几何，不建按钮）；内容按需填。
+    private var pageHosts: [UIView] = []
+    private var builtPages: Set<Int> = []
+    private var visiblePage = 0
     /// ⌫ 长按连续退格（2026-10-23，与键面同一个驱动器实现）。
     private let repeatDriver = RepeatBackspaceDriver()
 
@@ -85,6 +91,7 @@ final class CandidateTiledPanel: UIView {
         pageStack.axis = .vertical
         pageStack.spacing = 0
         pageStack.translatesAutoresizingMaskIntoConstraints = false
+        pager.delegate = self
 
         addSubview(pager)
         pager.addSubview(pageStack)
@@ -185,42 +192,57 @@ final class CandidateTiledPanel: UIView {
 
     // MARK: - 平铺网格
 
+    /// 全量重建（候选整批换了）：只造每页的空宿主，页面内容交给 `buildPage`。
+    /// 旧实现一次造 512 条候选的全部按钮（≈32 页 × 25 视图），每次刷新都重来一遍。
     private func rebuildPages() {
+        builtPages.removeAll()
         pageStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        let pages = Self.pack(candidates)
-        for page in pages {
-            let pageView = UIView()
-            pageView.translatesAutoresizingMaskIntoConstraints = false
-            pageStack.addArrangedSubview(pageView)
+        pageHosts.removeAll()
+        pages = Self.pack(candidates)
+        for _ in pages.indices {
+            let host = UIView()
+            host.translatesAutoresizingMaskIntoConstraints = false
+            pageStack.addArrangedSubview(host)
             NSLayoutConstraint.activate([
-                pageView.widthAnchor.constraint(equalTo: pageStack.widthAnchor),
-                pageView.heightAnchor.constraint(equalTo: pager.frameLayoutGuide.heightAnchor),
+                host.widthAnchor.constraint(equalTo: pageStack.widthAnchor),
+                host.heightAnchor.constraint(equalTo: pager.frameLayoutGuide.heightAnchor),
             ])
-
-            let rows = UIStackView()
-            rows.axis = .vertical
-            rows.distribution = .fillEqually
-            rows.spacing = 0
-            rows.translatesAutoresizingMaskIntoConstraints = false
-            pageView.addSubview(rows)
-            NSLayoutConstraint.activate([
-                rows.leadingAnchor.constraint(equalTo: pageView.leadingAnchor),
-                rows.trailingAnchor.constraint(equalTo: pageView.trailingAnchor),
-                rows.topAnchor.constraint(equalTo: pageView.topAnchor),
-                rows.bottomAnchor.constraint(equalTo: pageView.bottomAnchor),
-            ])
-            for r in 0..<Self.rowsPerPage {
-                let row = UIStackView()
-                row.axis = .horizontal
-                row.distribution = .fill
-                row.spacing = Self.gap
-                rows.addArrangedSubview(row)
-                addRow(r < page.count ? page[r] : [], to: row)
-            }
+            pageHosts.append(host)
         }
         // 候选整批换了（继续输入 / 钉读音 / 选词后剩尾巴）→ 回第一页，别停在旧页。
         layoutIfNeeded()
         pager.setContentOffset(.zero, animated: false)
+        visiblePage = 0
+        buildPage(0)
+        buildPage(1)
+    }
+
+    /// 按需填一页的 4×4 网格。`pages`/`pageHosts` 与候选同批，已建过的页不重复建。
+    private func buildPage(_ index: Int) {
+        guard pages.indices.contains(index), !builtPages.contains(index) else { return }
+        builtPages.insert(index)
+        let page = pages[index]
+        let host = pageHosts[index]
+        let rows = UIStackView()
+        rows.axis = .vertical
+        rows.distribution = .fillEqually
+        rows.spacing = 0
+        rows.translatesAutoresizingMaskIntoConstraints = false
+        host.addSubview(rows)
+        NSLayoutConstraint.activate([
+            rows.leadingAnchor.constraint(equalTo: host.leadingAnchor),
+            rows.trailingAnchor.constraint(equalTo: host.trailingAnchor),
+            rows.topAnchor.constraint(equalTo: host.topAnchor),
+            rows.bottomAnchor.constraint(equalTo: host.bottomAnchor),
+        ])
+        for r in 0..<Self.rowsPerPage {
+            let row = UIStackView()
+            row.axis = .horizontal
+            row.distribution = .fill
+            row.spacing = Self.gap
+            rows.addArrangedSubview(row)
+            addRow(r < page.count ? page[r] : [], to: row)
+        }
     }
 
     private func addRow(_ tiles: [Tile], to row: UIStackView) {
@@ -329,5 +351,23 @@ final class CandidateTiledPanel: UIView {
     /// 面板被隐藏（收拢/切层）时立刻停表：手指可能还按在已隐藏的 ⌫ 上。
     override var isHidden: Bool {
         didSet { if isHidden { repeatDriver.stop() } }
+    }
+}
+
+// MARK: - 懒建页（2026-11-02）
+
+extension CandidateTiledPanel: UIScrollViewDelegate {
+
+    /// 翻页/拖动后只补当前页前后各一页；已建的页不拆（翻回去不重造按钮）。
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        guard scrollView === pager, !pages.isEmpty else { return }
+        let height = pager.bounds.height
+        guard height > 0 else { return }
+        let page = min(pages.count - 1, max(0, Int((pager.contentOffset.y / height).rounded())))
+        guard page != visiblePage else { return }
+        visiblePage = page
+        buildPage(page - 1)
+        buildPage(page)
+        buildPage(page + 1)
     }
 }

@@ -11,6 +11,9 @@ import Foundation
 /// 进程级成功标记（2026-10-26）：Rust 引擎是进程单例，每个新控制器实例都重装
 /// 32MB luna + trad 会白付 139ms+；成功一次后直接复用。失败不置位，保留重试。
 private var processDictionaryLoaded = false
+/// 繁体库（可选增强）的进程级尝试标记（2026-11-02）：启动只为繁体装 32MB 不划算，
+/// 首次进繁体模式时才读；成功/失败都置位（失败语义仍是「回退简体库」）。
+private var processTradDictionaryTried = false
 
 extension KeyboardViewController {
 
@@ -22,6 +25,8 @@ extension KeyboardViewController {
     func loadDictionaries() {
         if processDictionaryLoaded {
             dictionaryLoaded = true
+            // 同进程的上一实例可能没碰过繁体；当前引擎仍是繁体态（进程单例）才补装。
+            if engine.mode() == .traditional { ensureTradDictionaryLoaded() }
             return
         }
         if let p = Bundle.main.path(forResource: "luna", ofType: "opid") {
@@ -31,16 +36,24 @@ extension KeyboardViewController {
             // （opi_load 对空路径的语义）。可用但候选很少，UI 上要提示。
             dictionaryLoaded = engine.load(path: "")
         }
-        // 繁体库可选：失败**不是**错误 —— 繁体模式会回退简体库（Rust 侧语义）。
-        if let t = Bundle.main.path(forResource: "trad", ofType: "opid") {
-            engine.loadTrad(path: t)
-        }
+        // 繁体库可选且**懒装**（2026-11-02）：失败不是错误 —— 繁体模式回退简体库。
+        // 只有引擎当前已是繁体态（上一实例留下的进程单例状态）才现在装。
+        if engine.mode() == .traditional { ensureTradDictionaryLoaded() }
         if !dictionaryLoaded {
             // 不静默。候选栏里会显示「词库未装载」。
             NSLog("[OPI] 词库装载失败 —— 引擎将退化为空操作")
         } else {
             processDictionaryLoaded = true
         }
+    }
+
+    /// 首次进繁体模式前补装 trad.opid（幂等；每进程只试一次）。
+    /// 缺文件/装载失败都只降级：繁体模式查简体库（Rust 侧 `trad_dict == None` 的回退）。
+    func ensureTradDictionaryLoaded() {
+        guard !processTradDictionaryTried else { return }
+        processTradDictionaryTried = true
+        guard let t = Bundle.main.path(forResource: "trad", ofType: "opid") else { return }
+        engine.loadTrad(path: t)
     }
 
     /// 可选增强词库：笔画与五笔。**懒加载**（2026-10-23）：只有用户选到对应输入模式

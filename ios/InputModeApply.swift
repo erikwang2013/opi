@@ -91,6 +91,8 @@ extension KeyboardViewController {
     /// 方案、**保缓冲**；已确认片段也留着（`opi_switch_language`，2026-10-28）。
     func toggleTraditional() {
         OpiLog.input.info("toggleTraditional start")
+        // 首次进繁体：先补装 trad.opid（启动时为省 32MB 没装，见装载器）。
+        if engine.mode() != .traditional { ensureTradDictionaryLoaded() }
         let scheme = engine.scheme()
         engine.switchLanguage(engine.mode() == .traditional ? .pinyin : .traditional, scheme)
         // 英文 26 键面下开繁体：键面同形，但 UI 模式要落到中文 26 键，否则菜单

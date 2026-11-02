@@ -387,6 +387,8 @@ extension KeyboardViewController {
         switch engine.mode() {
         case .pinyin:
             engine.clear()
+            // 首次进繁体：先补装 trad.opid（启动时为省 32MB 没装，见装载器）。
+            ensureTradDictionaryLoaded()
             engine.switchMode(.traditional)
         case .traditional:
             engine.clear()
