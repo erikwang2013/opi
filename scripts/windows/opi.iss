@@ -147,10 +147,12 @@ Type: filesandordirs; Name: "{app}\runtime"
 ; 由 desktop/build.gradle.kts 的 buildOpiAsr 放进 app image，无需逐文件列。
 Source: "{#AppImageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; IMM32 兼容输入法（2026-11-02）：IMM32 只从 System32 加载 .ime；文件随安装器
-; 嵌入并按 uninsdeletefile 在卸载时删除。注册表键在 [Registry] 里成组删除。
+; 嵌入，卸载由 [Files] 记录 + [UninstallDelete] 兜底删除。注册表键在 [Registry] 删除。
 Source: "{#AppImageDir}\app\opi_imm32.ime"; DestDir: "{sys}"; Flags: ignoreversion
 
 [UninstallDelete]
+; IMM32 DLL 在 System32；[Files] 的正常卸载删除之外再显式兜底一次。
+Type: files; Name: "{sys}\opi_imm32.ime"
 ; Remove everything under {app}, including files the uninstall log did not record
 ; (logs, stale jars). A locked tsf_opi.dll is moved out of {app} before this runs
 ; (MoveLockedTsfDllOut); the directory is deleted now, without a reboot. If even
