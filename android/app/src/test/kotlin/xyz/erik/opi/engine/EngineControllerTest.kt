@@ -21,10 +21,15 @@ class EngineControllerTest {
     @After fun resetGate() { AssociationGate.enabled = false }
 
     @Test
-    fun fetchLimitIs512() {
+    fun fetchLimitStaysOnePageUntilTiled() {
         val fake = FakeEngine()
-        EngineController(fake)
+        val ctrl = EngineController(fake)
+        // 普通栏只画一页；展开平铺才拉全量（512 条字符串的 JNI 搬运不再每键都做）。
+        assertEquals(fake.pageSizeValue, fake.lastLimit)
+        ctrl.setTiledFetch(true)
         assertEquals(512, fake.lastLimit)
+        ctrl.setTiledFetch(false)
+        assertEquals(fake.pageSizeValue, fake.lastLimit)
     }
 
     @Test

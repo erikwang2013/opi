@@ -155,10 +155,11 @@ class EngineController(
         dictionaryDegraded = !ok
     }
 
-    private val fetchLimit = 512
+    // 普通栏只取一页；512 条只为平铺全量，或读音列（它是 candidates 的副产物）。
+    private var tiledFetch = false
+    private val fetchLimit: Int get() = if (tiledFetch || needsCandidateReadings(mode, inputScheme)) 512 else pageSize
     val pageSize: Int = api.pageSize() // 每页候选数：引擎 `router::PAGE_SIZE`，别写死 8
 
-    // 候选翻页：引擎 candidates(limit) 无 offset，翻页纯客户端。
     /** 编码提示（五笔候选栏显示剩余键；2026-10-14 接线）—— 由 [refresh] 计算。 */
     var wubiHint by mutableStateOf("")
         private set
@@ -277,6 +278,8 @@ class EngineController(
         refresh()
     }
 
+    /** 平铺候选展开/收拢：展开要全量（滑动翻页），收拢回一页。 */
+    internal fun setTiledFetch(on: Boolean) { if (tiledFetch != on) { tiledFetch = on; refresh() } }
     /**
      * 语言切换（中↔英/中↔繁）：换模式与方案但**保留缓冲** —— 用户裁决 2026-10-09
      * 「中文输入的时候切换英文，拼音保留可继续使用」。⚠️ 与 [switchMode]+[switchScheme]

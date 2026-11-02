@@ -372,12 +372,13 @@ class ImeState(
 
     /** 折叠行右端 ⌄ 进入：占满「候选｜工具条」共用格与键盘区（竖向滑动翻页）。 */
     fun expandCandidates() {
+        controller.setTiledFetch(true)
         view = View.CANDIDATES_TILED
     }
 
     /** 平铺视图「返回」：回键盘，**不动引擎、不清缓冲**（还要接着选就接着打）。 */
     fun collapseCandidates() {
-        if (view == View.CANDIDATES_TILED) view = View.QWERTY
+        if (view == View.CANDIDATES_TILED) { controller.setTiledFetch(false); view = View.QWERTY }
     }
 
     /** 「候选｜工具条」共用格的**单一判据**（英文提示条 / 缓冲非空 / 有候选）：
