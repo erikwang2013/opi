@@ -169,6 +169,59 @@ class FakeEngine : OpiEngineApi {
         return candReadings
     }
 
+    // ---- 状态快照（性能项 1+2）----
+    // 缺省关闭：既有用例继续走逐出口回退路径，一字不变。新用例显式打开。
+    var snapshotEnabled = false
+    var snapshotThrows: Throwable? = null
+
+    /** 直接替换载荷（畸形快照回退用例）；为空时按当前假状态按 Rust 布局组装。 */
+    var snapshotRaw: Array<String>? = null
+    var snapshotCalls = 0
+        private set
+
+    /** 快照入参 + 内部排名深度（`lastLimit`）分开记：前者是回传窗口，后者是排名。 */
+    var snapshotLimit = -1
+        private set
+
+    override fun stateSnapshot(limit: Int): Array<String>? {
+        snapshotCalls++
+        snapshotLimit = limit
+        snapshotThrows?.let { throw it }
+        if (!snapshotEnabled) return null
+        snapshotRaw?.let { return it }
+        val m = EngineMode.fromInt(mode)
+        val s = InputScheme.fromInt(schemeValue)
+        val wantReadings = needsCandidateReadings(m, s)
+        // 真引擎：读数方案内部排名 512（读数覆盖整份排名），但只回传 limit 条候选。
+        val rankLimit = if (wantReadings) maxOf(limit, FETCH_LIMIT_FULL) else limit
+        lastLimit = rankLimit
+        readingModel?.let { cachedReading = if (buf.isEmpty()) "" else it(buf) }
+        val picked = cands?.take(limit).orEmpty()
+        val readings = if (wantReadings) {
+            candidateReadingsCalls++ // 镜像 Rust：读数只在中英条件需要时取
+            candReadings.orEmpty().toList()
+        } else {
+            emptyList()
+        }
+        return buildList {
+            add(buf)
+            add(if (carriedFrom != null) "1" else "0")
+            add(mode.toString())
+            add(schemeValue.toString())
+            add(if (learnerOn) "1" else "0")
+            add(if (fuzzyOn) "1" else "0")
+            add(if (jianpinOn) "1" else "0")
+            add(if (fullwidthValue) "1" else "0")
+            add(if (s == InputScheme.WUBI && buf.isNotEmpty()) wubiNextKeys() else "")
+            add(displayBuffer())
+            add(pending)
+            add(picked.size.toString())
+            addAll(picked)
+            add(readings.size.toString())
+            addAll(readings)
+        }.toTypedArray()
+    }
+
     /** 钉读音（真引擎：候选收窄到**读音恰等**的条目；空串 = 解除）。 */
     val pinCalls = mutableListOf<String>()
     override fun pinReading(reading: String) {

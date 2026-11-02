@@ -211,6 +211,14 @@ object OpiEngine : OpiEngineApi, SymbolApi {
     override external fun candidateReadings(): Array<String>?
 
     /**
+     * stateSnapshot(limit: Int) -> String[]：一次 JNI 取回 refresh 的全部读侧状态
+     * （缓冲/开关/候选/读数/displayBuffer/pendingText）。`limit` 只限**回传的候选条数**
+     * （折叠一页、平铺 512）；9/14/双拼中文态在 Rust 内部仍按 512 深度排名，读数完整。
+     * 布局见 `EngineReadings.kt` 的 `SNAP_*`，固定槽位、不用分隔符。
+     */
+    override external fun stateSnapshot(limit: Int): Array<String>?
+
+    /**
      * pinReading(reading: String)：**钉读音**（空串 = 解除）—— 9 键左列点一行拼音后
      * **不确认**，候选收窄到**读音恰等**的条目（2026-10-09 用户裁决「不要直接确认」；
      * 2026-10-16 裁决收紧为恰等）。缓冲一变自动作废。调用方重读 candidates/读数。

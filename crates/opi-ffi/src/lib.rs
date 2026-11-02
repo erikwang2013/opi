@@ -27,6 +27,7 @@ pub mod jni_clip;
 pub mod jni_dict;
 pub mod jni_phrases;
 pub mod jni_scheme;
+pub mod jni_snapshot;
 pub mod jni_switches;
 pub mod jni_symbols;
 pub mod jni_user_words;
