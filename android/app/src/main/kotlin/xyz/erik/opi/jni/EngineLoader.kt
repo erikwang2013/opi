@@ -65,9 +65,10 @@ object EngineLoader {
         /** 覆盖写目标文件。 */
         fun write(bytes: ByteArray)
 
-        /** 流式拷贝资产到目标（生产覆写；测试默认走 readAsset+write）。 */
+        /** 流式拷贝资产到目标（生产覆写；测试默认仍走可观测的 readAsset+write）。 */
+        @Suppress("UNUSED_PARAMETER")
         fun copyAssetTo(target: File) {
-            target.writeBytes(readAsset())
+            write(readAsset())
         }
     }
 
