@@ -23,6 +23,16 @@ export const TILED_FETCH_LIMIT: number = 512;
 /** 9 键左列读数最多缓存多少行（读数 JSON/节点比候选贵，仍截 64）。 */
 const READING_LIMIT: number = 64;
 
+/** 9/14/双拼的中文态才有左列读数（Android `needsCandidateReadings` 同一条判据）。 */
+function needsReadings(mode: OpiMode, scheme: number): boolean {
+  if (mode !== OpiMode.Pinyin && mode !== OpiMode.Traditional) {
+    return false;
+  }
+  return scheme === (InputModes.OpiScheme.Nine as number)
+    || scheme === (InputModes.OpiScheme.Fourteen as number)
+    || scheme === (InputModes.OpiScheme.Shuangpin as number);
+}
+
 /**
  * 平铺候选是否还能站住（Android `ImeState.candidatesShowable` 的镜像）：
  * 英文（空闲提示条也算）/ 缓冲非空 / 有当前页候选。
@@ -66,14 +76,17 @@ function putStrings(key: string, value: string[]): void {
 export function publishState(): void {
   // 行为判定用 buffer（原值）；拼音行用 displayBuffer（9 键带分词）。
   const buffer: string = OpiEngine.buffer();
+  const mode: OpiMode = OpiEngine.mode();
+  const scheme: number = InputModes.scheme();
   const pageCandidates: string[] = OpiEngine.candidatesPage();
   // 读数与当前候选批一起缓存，**紧跟** candidatesPage 读；displayBuffer 仍最后。
-  // 左列最多滚 64 行；9 键一次可能产生上千条读数（JSON/节点都贵），截断到 64。
-  const readings: string[] = OpiEngine.candidateReadings().slice(0, READING_LIMIT);
+  // 只有 9/14/双拼的中文态才需要（Android needsCandidateReadings 同义）：其余方案
+  // 每键白读一遍读数 JSON（可能上千条），左列根本用不到。
+  const readings: string[] = needsReadings(mode, scheme)
+    ? OpiEngine.candidateReadings().slice(0, READING_LIMIT) : [];
   // ⚠️ displayBuffer **必须最后读**：9 键读数是 candidates() 的副产物（缓存与算它时的
   // 缓冲绑存），先读会拿到上一条缓冲的旧值/空串 —— Android EngineController 同款次序。
   const display: string = OpiEngine.displayBuffer();
-  const mode: OpiMode = OpiEngine.mode();
   // 智能联想默认关闭（2026-10-28）：空缓冲 + 空显示串下的候选就是联想项，整批挡在 UI 前。
   const associationOff: boolean = !KeyboardModes.associationEnabled() &&
     buffer.length === 0 && display.length === 0;
