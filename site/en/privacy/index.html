@@ -62,10 +62,10 @@
       <p><strong>Applies to:</strong> the Android, iOS, HarmonyOS, Windows, Linux and macOS clients, and this website (opi.erik.xyz)</p>
     </div>
 
-    <p class="summary"><strong>In one sentence:</strong> opi collects, uploads and shares no personal information. There are no accounts, so there is no account-deletion process. Normal typing is fully offline; the client only goes online when you check/download an update, enable cross-device clipboard, or enable voice input and download the voice engine/model. Clipboard data never goes through a cloud.</p>
+    <p class="summary"><strong>In one sentence:</strong> The opi client collects, uploads and shares none of your input or clipboard content. There are no accounts, so there is no account-deletion process. Normal typing is fully offline; the client only goes online when you check/download an update, enable cross-device clipboard, or enable voice input and download the voice engine/model. Clipboard data never goes through a cloud. The website home page also loads the Busuanzi visitor counter (busuanzi.ibruce.info), which receives only ordinary web request data such as page URL, referrer and IP; it never sees input or clipboard content.</p>
 
     <h2>1. What we collect</h2>
-    <p>We collect <strong>no personal information</strong>, including but not limited to: your input and candidates, clipboard contents, contacts, location, photos, device identifiers, usage statistics or crash logs. There are no accounts, registration or sign-in, and no advertising or profiling.</p>
+    <p>The client collects <strong>no personal information</strong>, including but not limited to: your input and candidates, clipboard contents, contacts, location, photos, device identifiers, usage statistics or crash logs. There are no accounts, registration or sign-in, and no advertising or profiling. The website visitor counter is described in sections 3 and 5.</p>
 
     <h2>2. Data kept only on your device</h2>
     <p>Settings, skins, switches, user words and learning data stay on your own device (in the app data or configuration directory of each client). They do not leave the device. Because there are no accounts, <strong>there is no account to delete</strong>; clearing local data removes everything:</p>
@@ -82,6 +82,7 @@
       <li><strong>In-app updates:</strong> when you press Download, the client fetches the installer/hot-update package and verifies its size and SHA-256; no input or user data is sent.</li>
       <li><strong>Voice engine and model download (optional, when voice input is enabled):</strong> normal/basic packages first fetch the voice engine native libraries (about 8 MB) and recognition models over HTTPS, read their size and SHA-256 from the site manifest, install only after verification and enable them automatically. Audio is recognised on-device and is <strong>never uploaded or written to disk</strong>.</li>
       <li><strong>Cross-device clipboard (optional, off by default):</strong> only after you enable it and pair devices does the client open an encrypted connection (Noise + ChaCha20-Poly1305) to paired devices on the same LAN. Only plain text (≤256 KiB) is synced; there is <strong>no cloud, no account and no history</strong>, and you can stop/revoke at any time. Discovery uses LAN multicast, broadcast and unicast probes; discovery packets contain only a random instance ID, key fingerprint, connection parameters and capability bits, never clipboard contents. Your OS’s own cloud clipboard may sync independently; turn it off in system settings if you do not want that.</li>
+      <li><strong>Website visitor counter (home page only):</strong> the home page loads a Busuanzi (busuanzi.ibruce.info) script to display page views/visitors. The request contains ordinary web data such as page URL, referrer and IP, and never input, clipboard or account data. Blocking the script does not affect the rest of the page.</li>
     </ul>
 
     <h2>4. System permissions</h2>
@@ -93,7 +94,7 @@
     </ul>
 
     <h2>5. Third parties and sharing</h2>
-    <p>We do not sell, lend or share personal information, and we integrate no third-party advertising, analytics or tracking SDKs. This website is static: it sets no analytics cookies and loads no third-party analytics scripts.</p>
+    <p>We do not sell, lend or share personal information, and the client integrates no third-party advertising, analytics or tracking SDKs. The website home page loads the Busuanzi visitor-counter script (busuanzi.ibruce.info); that third party receives ordinary web request data such as page URL, referrer and IP and may store local data, but never sees input, clipboard or account data. Apart from that, the website loads no other third-party analytics, advertising or tracking scripts.</p>
 
     <h2>6. Children’s privacy</h2>
     <p>Because we collect no information at all, we do not (and cannot) collect personal information from children.</p>
