@@ -43,6 +43,14 @@ internal data class ClipPairingPrompt(
     val incoming: Boolean,
 )
 
+/** `TransferOffer/Progress/Completed/Failed/Canceled` 里的文件项（`files_json` 的读侧）。 */
+internal data class TransferFileInfo(
+    val relativePath: String,
+    val size: Long,
+    val mime: String,
+    val isDir: Boolean,
+)
+
 /** `ClipEvent` 的宿主投影（真源 `crates/opi-clip/src/types.rs`）。 */
 internal sealed interface ClipEvent {
     data class PeerDiscovered(val peer: ClipPeer) : ClipEvent
@@ -51,6 +59,41 @@ internal sealed interface ClipEvent {
     data class PairingFinished(val instanceId: String, val trusted: Boolean, val reason: String?) : ClipEvent
     data class ClipboardReceived(val instanceId: String, val text: String) : ClipEvent
     data class SendFailed(val instanceId: String) : ClipEvent
+    data class TransferOffer(
+        val instanceId: String,
+        val transferId: String,
+        val files: List<TransferFileInfo>,
+        val totalBytes: Long,
+        val outgoing: Boolean,
+    ) : ClipEvent
+    data class TransferProgress(
+        val instanceId: String,
+        val transferId: String,
+        val transferredBytes: Long,
+        val totalBytes: Long,
+        val fileIndex: Int,
+        val fileCount: Int,
+        val outgoing: Boolean,
+    ) : ClipEvent
+    data class TransferCompleted(
+        val instanceId: String,
+        val transferId: String,
+        val files: List<TransferFileInfo>,
+        val totalBytes: Long,
+        val outgoing: Boolean,
+        val savedDir: String?,
+    ) : ClipEvent
+    data class TransferFailed(
+        val instanceId: String,
+        val transferId: String,
+        val reason: String,
+        val outgoing: Boolean,
+    ) : ClipEvent
+    data class TransferCanceled(
+        val instanceId: String,
+        val transferId: String,
+        val outgoing: Boolean,
+    ) : ClipEvent
     data class Error(val message: String) : ClipEvent
     data class Unknown(val type: String) : ClipEvent
 }
@@ -79,10 +122,79 @@ internal fun parseClipEvent(json: String): ClipEvent? {
             if (id == null || text == null) null else ClipEvent.ClipboardReceived(id, text)
         }
         "send_failed" -> root.str("instance_id")?.let { ClipEvent.SendFailed(it) }
+        "transfer_offer" -> {
+            val id = root.str("instance_id")
+            val transferId = root.str("transfer_id")
+            if (id == null || transferId == null) null
+            else ClipEvent.TransferOffer(
+                instanceId = id,
+                transferId = transferId,
+                files = transferFilesOf(root["files"]),
+                totalBytes = root.long("total_bytes"),
+                outgoing = root.bool("outgoing"),
+            )
+        }
+        "transfer_progress" -> {
+            val id = root.str("instance_id")
+            val transferId = root.str("transfer_id")
+            if (id == null || transferId == null) null
+            else ClipEvent.TransferProgress(
+                instanceId = id,
+                transferId = transferId,
+                transferredBytes = root.long("transferred_bytes"),
+                totalBytes = root.long("total_bytes"),
+                fileIndex = root.long("file_index").toInt(),
+                fileCount = root.long("file_count").toInt(),
+                outgoing = root.bool("outgoing"),
+            )
+        }
+        "transfer_completed" -> {
+            val id = root.str("instance_id")
+            val transferId = root.str("transfer_id")
+            if (id == null || transferId == null) null
+            else ClipEvent.TransferCompleted(
+                instanceId = id,
+                transferId = transferId,
+                files = transferFilesOf(root["files"]),
+                totalBytes = root.long("total_bytes"),
+                outgoing = root.bool("outgoing"),
+                savedDir = root.str("saved_dir"),
+            )
+        }
+        "transfer_failed" -> {
+            val id = root.str("instance_id")
+            val transferId = root.str("transfer_id")
+            if (id == null || transferId == null) null
+            else ClipEvent.TransferFailed(id, transferId, root.str("reason") ?: "", root.bool("outgoing"))
+        }
+        "transfer_canceled" -> {
+            val id = root.str("instance_id")
+            val transferId = root.str("transfer_id")
+            if (id == null || transferId == null) null
+            else ClipEvent.TransferCanceled(id, transferId, root.bool("outgoing"))
+        }
         "error" -> ClipEvent.Error(root.str("message") ?: "")
         else -> ClipEvent.Unknown(type)
     }
 }
+
+private fun transferFilesOf(raw: Any?): List<TransferFileInfo> =
+    (raw as? List<*>).orEmpty().mapNotNull { item ->
+        val map = item as? Map<*, *> ?: return@mapNotNull null
+        val path = map.str("relative_path") ?: return@mapNotNull null
+        TransferFileInfo(
+            relativePath = path,
+            size = map.long("size"),
+            mime = map.str("mime") ?: "",
+            isDir = map.bool("is_dir"),
+        )
+    }
+
+/** 自动剪贴板只允许发给已配对（trusted）设备；未配对设备由内核与会话层双重拒绝。 */
+internal fun trustedTargets(peers: List<ClipPeer>): List<ClipPeer> = peers.filter { it.trusted }
+
+/** 本机复制内容是否值得发布：没有已配对设备时直接跳过，连防回环哈希都不产生。 */
+internal fun hasTrustedTarget(peers: List<ClipPeer>): Boolean = peers.any { it.trusted }
 
 /** `peers()` → 列表；非数组/坏项整份 → 空（宁少不崩）。 */
 internal fun parseClipPeers(json: String): List<ClipPeer> {
@@ -115,6 +227,7 @@ private fun peerOf(raw: Map<*, *>): ClipPeer = ClipPeer(
 
 private fun Map<*, *>.str(key: String): String? = this[key] as? String
 private fun Map<*, *>.bool(key: String): Boolean = this[key] as? Boolean ?: false
+private fun Map<*, *>.long(key: String): Long = (this[key] as? Number)?.toLong() ?: 0L
 
 // ---------- 编码 ----------
 

@@ -302,6 +302,40 @@ object OpiIcons {
             }
         }.build()
     }
+
+    /** 跨设备传输（工具条，2026-11-02）：电脑显示器 + 手机组合图标。 */
+    val Transfer: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "OpiTransfer",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f,
+        ).apply {
+            stroke(width = 1.8f) {
+                // 电脑：屏幕 + 支架
+                moveTo(2.5f, 5f)
+                lineTo(15f, 5f)
+                lineTo(15f, 14f)
+                lineTo(2.5f, 14f)
+                close()
+                moveTo(8.75f, 14f)
+                lineTo(8.75f, 17f)
+                moveTo(6.5f, 17f)
+                lineTo(11f, 17f)
+                // 手机：机身 + 听筒线（与电脑右侧重叠，表示组合关系）
+                moveTo(15.5f, 8.5f)
+                lineTo(21.5f, 8.5f)
+                lineTo(21.5f, 20f)
+                lineTo(15.5f, 20f)
+                close()
+                moveTo(17.5f, 10f)
+                lineTo(19.5f, 10f)
+                moveTo(17.5f, 18.2f)
+                lineTo(19.5f, 18.2f)
+            }
+        }.build()
+    }
 }
 
 /**

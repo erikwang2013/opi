@@ -200,13 +200,12 @@ class OpiImeService : InputMethodService() {
         // 智能联想开关在 App 设置页也能改（同进程、不同控制器）：gate 一变就让本服务
         // 的控制器立即重算候选，否则旧联想候选会留到热重启（2026-10-30 用户报障）。
         AssociationGate.onChange = { engineController.refresh() }
-        // 跨设备剪贴板（默认关）：用户打开过才在进程内拉起内核线程。这里**不**起
-        // 前台服务 —— Android 12+ 禁止后台启动 FGS；后台存活由设置页拉的
-        // ClipSyncService 负责。IME 是进程内唯一能持续读剪贴板的位置（Android 10+）。
-        if (prefs.clipEnabled) ClipRuntime.start(this)
+        // 跨设备剪贴板/传输（默认关）：打开过才在进程内拉起内核；前台服务由设置页负责。
+        if (prefs.clipEnabled || prefs.transferEnabled) ClipRuntime.start(this)
     }
 
     override fun onCreateInputView(): View {
+        imeState.transferEnabled = prefs.transferEnabled // 设置页可能刚改过，每次建视图都同步
         // P1 防重入：窗口每次重建（模式切换/重新显示）都会再调本方法，每次新建视图会丢状态
         // （面板/候选/生命周期接线全部重来）。复用本身是安全的 —— 安全性由 setInputView
         // 负责：它会把视图先摘离旧 parent。这条路径真正的坑是"复用却没摘"，不是"新建"。
@@ -459,10 +458,10 @@ class OpiImeService : InputMethodService() {
         )
         return verdict
     }
-
     override fun onWindowShown() {
         super.onWindowShown()
         Log.i(TAG, "onWindowShown")
+        imeState.transferEnabled = prefs.transferEnabled // 图标显隐无需重启 IME
         // Compose 是普通 View 渲染：无 FlutterSurfaceView 重建问题，仅推进生命周期。
         lifecycleOwner.registry.currentState = Lifecycle.State.RESUMED
     }

@@ -61,6 +61,8 @@ fun SettingsPanel(
     controller: EngineController,
     onClose: () -> Unit,
     onClearUserWords: () -> Unit,
+    /** 传输开关变化 → 工具条立即显隐（无 Activity 可重启 IME 视图）。 */
+    onTransferEnabledChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val p = LocalKeyboardPalette.current
@@ -75,6 +77,7 @@ fun SettingsPanel(
     var association by remember { mutableStateOf(prefs.association) }
     var showOwn by remember { mutableStateOf(prefs.showOwn) }
     var clip by remember { mutableStateOf(prefs.clipEnabled) }
+    var transfer by remember { mutableStateOf(prefs.transferEnabled) }
     var clipError by remember { mutableStateOf("") }
     var layout by remember { mutableStateOf(prefs.shuangpinLayout) }
     var layoutOpen by remember { mutableStateOf(false) }
@@ -139,7 +142,7 @@ fun SettingsPanel(
                     if (v) {
                         ClipRuntime.start(context)
                         ClipSyncService.start(context)
-                    } else {
+                    } else if (!prefs.transferEnabled) {
                         ClipRuntime.stop(context)
                         ClipSyncService.stop(context)
                     }
@@ -148,12 +151,39 @@ fun SettingsPanel(
             Text(
                 when {
                     clipError.isNotEmpty() -> "启动失败：$clipError"
+                    !clip && transfer -> "剪贴板开关关闭；传输模式仍会同步纯文本"
                     !clip -> "默认关闭；只在同一局域网、已配对设备之间同步纯文本"
                     ClipRuntime.running -> "运行中 · 已发现 ${ClipRuntime.peers.size} 台设备 · 配对/移除请到应用设置"
                     else -> "正在启动局域网监听…"
                 },
                 fontSize = 11.sp,
                 color = if (clipError.isNotEmpty()) p.accent else p.barDimFg,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+            )
+            // 跨设备传输（2026-11-02）：工具条图标 + 文件/文件夹/媒体/文本/剪贴板。
+            ToggleRow("跨设备传输", transfer) { v ->
+                transfer = v
+                clipError = ""
+                prefs.transferEnabled = v
+                runCatching {
+                    if (v) {
+                        ClipRuntime.start(context)
+                        ClipSyncService.start(context)
+                    } else if (!prefs.clipEnabled) {
+                        ClipRuntime.stop(context)
+                        ClipSyncService.stop(context)
+                    }
+                }.onFailure { clipError = it.message ?: "启动失败" }
+                onTransferEnabledChanged(v)
+            }
+            Text(
+                when {
+                    !transfer -> "默认关闭；开启后工具条齿轮前出现传输入口"
+                    ClipRuntime.running -> "工具条已显示传输图标 · 配对/移除请到应用设置"
+                    else -> "正在启动局域网监听…"
+                },
+                fontSize = 11.sp,
+                color = p.barDimFg,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
             )
             // 双拼布局：内联展开，不用 Dialog —— IME 宿主是 Service，弹窗没有 Activity token。

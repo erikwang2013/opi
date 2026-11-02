@@ -9,6 +9,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.os.Build
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.runtime.getValue
@@ -33,12 +34,20 @@ import java.net.Inet4Address
 internal object ClipRuntime {
     private const val DISCOVERY_PORT = 45888
     private const val MAX_DEVICE_NAME = 48
+    private const val STAGING_DIR = "transfer"
+    private const val SAVE_DIR = "opi"
+    private const val MAX_TRANSFERS = 20
 
     val peers = mutableStateListOf<ClipPeer>()
+    /** 传输面板的收发记录（只保留最近 20 条；终态不自动消失，便于看「打开文件夹」）。 */
+    val transfers = mutableStateListOf<ClipTransfer>()
     var running by mutableStateOf(false)
         private set
     var status by mutableStateOf<ClipStatus?>(null)
         private set
+    /** 传输面板里的一次性反馈（复制成功/失败原因），不记录内容。 */
+    var transferMessage by mutableStateOf("")
+        internal set
 
     /** 待用户核对的 SAS；绝不自动接受。 */
     var pairingPrompt by mutableStateOf<ClipPairingPrompt?>(null)
@@ -56,6 +65,8 @@ internal object ClipRuntime {
     private var bridge: ClipBridge? = null
     private var adapter: ClipboardAdapter? = null
     private var multicastLock: WifiManager.MulticastLock? = null
+    /** 发送侧暂存目录：transferId → cacheDir/transfer/<uuid>；终态事件后删除。主线程访问。 */
+    private val staged = mutableMapOf<String, File>()
 
     @Synchronized
     fun start(context: Context) {
@@ -66,7 +77,11 @@ internal object ClipRuntime {
             lastError = "系统剪贴板不可用"
             return
         }
-        val clipAdapter = ClipboardAdapter(clipboard) { text -> bridge?.publishLocalText(text) }
+        // 只对已配对设备自动发送：未配对设备既不产生会话，内核 publish_text 也只发给
+        // trusted 会话；这里再挡一层，避免「只发现到未配对设备」时白跑一次发布。
+        val clipAdapter = ClipboardAdapter(clipboard) { text ->
+            if (hasTrustedTarget(peers)) bridge?.publishLocalText(text)
+        }
         lateinit var created: ClipBridge
         created = ClipBridge(
             api = OpiClipNative,
@@ -76,6 +91,7 @@ internal object ClipRuntime {
         adapter = clipAdapter
         bridge = created
         multicastLock = acquireMulticastLock(app)
+        pruneStaleStaging(File(app.cacheDir, STAGING_DIR))
         lastError = ""
         lastSource = ""
         lastPairing = ""
@@ -101,11 +117,15 @@ internal object ClipRuntime {
         multicastLock?.let { lock -> runCatching { if (lock.isHeld) lock.release() } }
         multicastLock = null
         peers.clear()
+        transfers.clear()
+        staged.values.forEach { runCatching { it.deleteRecursively() } }
+        staged.clear()
         running = false
         status = null
         pairingPrompt = null
         lastSource = ""
         lastError = ""
+        transferMessage = ""
     }
 
     fun pairStart(instanceId: String) {
@@ -142,6 +162,86 @@ internal object ClipRuntime {
         if (text.length > 256 * 1024) return "文本超过 256 KiB 上限"
         bridge?.publishLocalText(text) ?: return "剪贴板内核未启动"
         return "已发送 ${text.length} 字（内容不显示、不记录）"
+    }
+
+    /** 传输面板「文本」：与系统剪贴板同一条 publish_text（内核只发给 trusted 会话）。 */
+    fun publishText(text: String): String {
+        if (text.isEmpty()) return "文本为空"
+        if (text.length > 256 * 1024) return "文本超过 256 KiB 上限"
+        bridge?.publishLocalText(text) ?: return "传输内核未启动"
+        return "已发送 ${text.length} 字（内容不显示、不记录）"
+    }
+
+    /** 发送侧 staging 目录（cacheDir/transfer/<uuid>），调用方负责复制完再交给内核。 */
+    fun newStageDir(context: Context): File {
+        val root = File(context.cacheDir, STAGING_DIR)
+        if (!root.isDirectory && !root.mkdirs()) {
+            throw IllegalStateException("无法创建传输缓存目录")
+        }
+        return File(root, java.util.UUID.randomUUID().toString()).apply { mkdirs() }
+    }
+
+    /** 文件已复制进 [stage]：发送清单；失败或终态事件后删除 staging。 */
+    fun sendStagedFiles(peerId: String, filesJson: String, stage: File) {
+        transferMessage = ""
+        val current = bridge
+        if (current == null) {
+            stage.deleteRecursively()
+            transferMessage = "传输内核未启动"
+            return
+        }
+        current.sendFiles(peerId, filesJson) { id ->
+            main.post {
+                if (id == null) {
+                    stage.deleteRecursively()
+                    transferMessage = "发送失败"
+                } else {
+                    staged[id] = stage
+                }
+            }
+        }
+    }
+
+    /** 入站传输接受后的落点是应用专属外部「下载/opi」（免存储权限；见面板文案）。 */
+    fun incomingSaveDir(context: Context): String? {
+        val base = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
+        val dir = File(base, SAVE_DIR)
+        if (!dir.isDirectory && !dir.mkdirs()) return null
+        return dir.absolutePath
+    }
+
+    fun respondTransfer(context: Context, transferId: String, accept: Boolean) {
+        transferMessage = ""
+        val current = bridge
+        if (current == null) {
+            transferMessage = "传输内核未启动"
+            return
+        }
+        val dir = if (accept) incomingSaveDir(context) else ""
+        if (dir == null) {
+            transferMessage = "无法创建接收目录"
+            return
+        }
+        current.respondTransfer(transferId, accept, dir)
+        // 内核的接收答复没有同步返回值；先乐观切状态，后续 progress/终态事件会覆盖。
+        val index = transfers.indexOfFirst { it.id == transferId }
+        if (index >= 0 && transfers[index].phase == TransferPhase.OFFERED) {
+            transfers[index] = transfers[index].copy(
+                phase = if (accept) TransferPhase.ACTIVE else TransferPhase.CANCELED,
+                savedDir = if (accept) dir else null,
+            )
+        }
+    }
+
+    fun cancelTransfer(transferId: String) {
+        bridge?.cancelTransfer(transferId)
+    }
+
+    private fun pruneStaleStaging(root: File) {
+        val cutoff = System.currentTimeMillis() - 24L * 60 * 60 * 1000
+        root.listFiles()?.forEach { dir ->
+            if (dir.lastModified() < cutoff) runCatching { dir.deleteRecursively() }
+        }
     }
 
     private fun deviceName(): String {
@@ -245,8 +345,85 @@ internal object ClipRuntime {
             ClipRuntime.adapter?.applyRemote(text)
         }
 
+        override fun onTransfer(event: ClipEvent) = onMain {
+            when (event) {
+                is ClipEvent.TransferOffer -> upsert(
+                    ClipTransfer(
+                        id = event.transferId,
+                        instanceId = event.instanceId,
+                        peerName = peerName(event.instanceId),
+                        outgoing = event.outgoing,
+                        files = event.files,
+                        totalBytes = event.totalBytes,
+                        fileCount = event.files.size,
+                        phase = if (event.outgoing) TransferPhase.ACTIVE else TransferPhase.OFFERED,
+                    ),
+                )
+                is ClipEvent.TransferProgress -> update(event.transferId) {
+                    it.copy(
+                        transferredBytes = event.transferredBytes,
+                        totalBytes = event.totalBytes,
+                        fileIndex = event.fileIndex,
+                        fileCount = event.fileCount,
+                        phase = TransferPhase.ACTIVE,
+                    )
+                }
+                is ClipEvent.TransferCompleted -> {
+                    cleanupStage(event.transferId)
+                    update(event.transferId) {
+                        it.copy(
+                            phase = TransferPhase.COMPLETED,
+                            transferredBytes = event.totalBytes,
+                            totalBytes = event.totalBytes,
+                            savedDir = event.savedDir,
+                            files = event.files,
+                        )
+                    }
+                }
+                is ClipEvent.TransferFailed -> {
+                    cleanupStage(event.transferId)
+                    update(event.transferId) {
+                        it.copy(phase = TransferPhase.FAILED, reason = event.reason)
+                    }
+                }
+                is ClipEvent.TransferCanceled -> {
+                    cleanupStage(event.transferId)
+                    update(event.transferId) { it.copy(phase = TransferPhase.CANCELED) }
+                }
+                else -> Unit
+            }
+        }
+
         override fun onError(message: String) = onMain {
             ClipRuntime.lastError = message
+        }
+
+        private fun upsert(transfer: ClipTransfer) {
+            val index = ClipRuntime.transfers.indexOfFirst { it.id == transfer.id }
+            if (index >= 0) {
+                ClipRuntime.transfers[index] = transfer
+                return
+            }
+            if (ClipRuntime.transfers.size >= MAX_TRANSFERS) {
+                val terminal = ClipRuntime.transfers.indexOfFirst {
+                    it.phase == TransferPhase.COMPLETED ||
+                        it.phase == TransferPhase.FAILED ||
+                        it.phase == TransferPhase.CANCELED
+                }
+                ClipRuntime.transfers.removeAt(if (terminal >= 0) terminal else 0)
+            }
+            ClipRuntime.transfers.add(transfer)
+        }
+
+        private fun update(transferId: String, block: (ClipTransfer) -> ClipTransfer) {
+            val index = ClipRuntime.transfers.indexOfFirst { it.id == transferId }
+            if (index >= 0) ClipRuntime.transfers[index] = block(ClipRuntime.transfers[index])
+        }
+
+        private fun cleanupStage(transferId: String) {
+            ClipRuntime.staged.remove(transferId)?.let { dir ->
+                runCatching { dir.deleteRecursively() }
+            }
         }
 
         private fun peerName(instanceId: String): String =

@@ -82,6 +82,68 @@ class ClipProtocolTest {
     }
 
     @Test
+    fun transferEventsDecodeAllFields() {
+        val offer = parseClipEvent(
+            """{"type":"transfer_offer","instance_id":"p1","transfer_id":"01af","files":[""" +
+                """{"relative_path":"dir/a.txt","size":10,"mime":"text/plain","is_dir":false},""" +
+                """{"relative_path":"dir","size":0,"mime":"","is_dir":true}],""" +
+                """"total_bytes":10,"outgoing":false}""",
+        ) as ClipEvent.TransferOffer
+        assertEquals("p1", offer.instanceId)
+        assertEquals("01af", offer.transferId)
+        assertEquals(10L, offer.totalBytes)
+        assertEquals(false, offer.outgoing)
+        assertEquals(
+            listOf(
+                TransferFileInfo("dir/a.txt", 10, "text/plain", false),
+                TransferFileInfo("dir", 0, "", true),
+            ),
+            offer.files,
+        )
+
+        val progress = parseClipEvent(
+            """{"type":"transfer_progress","instance_id":"p1","transfer_id":"01af",""" +
+                """"transferred_bytes":4,"total_bytes":10,"file_index":0,"file_count":2,"outgoing":true}""",
+        ) as ClipEvent.TransferProgress
+        assertEquals(4L, progress.transferredBytes)
+        assertEquals(2, progress.fileCount)
+        assertTrue(progress.outgoing)
+
+        val completed = parseClipEvent(
+            """{"type":"transfer_completed","instance_id":"p1","transfer_id":"01af",""" +
+                """"files":[{"relative_path":"a","size":1,"mime":"x","is_dir":false}],""" +
+                """"total_bytes":1,"outgoing":false,"saved_dir":"/sdcard/opi"}""",
+        ) as ClipEvent.TransferCompleted
+        assertEquals("/sdcard/opi", completed.savedDir)
+        assertEquals(1L, completed.totalBytes)
+        assertEquals(1, completed.files.size)
+
+        val failed = parseClipEvent(
+            """{"type":"transfer_failed","instance_id":"p1","transfer_id":"01af","reason":"disk full","outgoing":true}""",
+        ) as ClipEvent.TransferFailed
+        assertEquals("disk full", failed.reason)
+        assertTrue(failed.outgoing)
+
+        val canceled = parseClipEvent(
+            """{"type":"transfer_canceled","instance_id":"p1","transfer_id":"01af","outgoing":false}""",
+        ) as ClipEvent.TransferCanceled
+        assertEquals("01af", canceled.transferId)
+    }
+
+    @Test
+    fun autoClipboardOnlyTargetsTrustedPeers() {
+        val untrusted = ClipPeer("u", "未配对", "", "", trusted = false, connected = true)
+        val trustedOffline = ClipPeer("t1", "已配对离线", "", "", trusted = true, connected = false)
+        val trustedOnline = ClipPeer("t2", "已配对在线", "", "", trusted = true, connected = true)
+        assertEquals(
+            listOf(trustedOffline, trustedOnline),
+            trustedTargets(listOf(untrusted, trustedOffline, trustedOnline)),
+        )
+        assertEquals(false, hasTrustedTarget(listOf(untrusted)))
+        assertEquals(true, hasTrustedTarget(listOf(untrusted, trustedOffline)))
+    }
+
+    @Test
     fun configJsonEscapesPathAndName() {
         val json = clipConfigJson("""/data/"x"\clip""", "书\"房")
         assertEquals(
