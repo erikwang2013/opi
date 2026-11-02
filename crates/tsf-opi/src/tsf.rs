@@ -161,6 +161,10 @@ impl TsfTextService {
 
     fn handle_key_inner(&self, pic: Option<&ITfContext>, wparam: WPARAM, lparam: LPARAM) -> BOOL {
         let states = map_key_state(lparam);
+        // 有些宿主跳过 OnTestKeyDown 直接发 OnKeyDown（Mozc #1415）：这里补同一拍。
+        if states & KEY_STATE_RELEASED == 0 {
+            self.shift_tap_key_down(wparam.0 as u32);
+        }
         // 插入目标换代**先于** drain：本次键事件的 context 与上次不同 ⇒ 排队动作
         // 属于旧文档，drain 时按世代丢弃（见 state.rs 的 `note_target`）。抬起事件
         // 不记（它带来的 context 已不是当前焦点文档）。

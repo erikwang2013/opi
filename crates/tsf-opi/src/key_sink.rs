@@ -116,9 +116,10 @@ impl ITfKeyEventSink_Impl for TsfTextService_Impl {
     }
 
     fn OnKeyUp(&self, pic: Ref<ITfContext>, wparam: WPARAM, lparam: LPARAM) -> Result<BOOL> {
-        // 释放状态由 lParam bit31（转换状态）映射，与按下同路由
-        // （logic 对释放事件返回 Consumed/Unhandled，见 input_key）。
-        Ok(self.handle_key(pic.as_ref(), wparam, lparam))
+        // OnKeyUp 本身就是释放；部分宿主把 lParam bit31 填 0，强制置位，否则
+        // Shift 抬起会被当成按下，轻按永远等不到切换点。
+        let release = LPARAM(lparam.0 | (1 << 31));
+        Ok(self.handle_key(pic.as_ref(), wparam, release))
     }
 
     fn OnPreservedKey(&self, _pic: Ref<ITfContext>, _rguid: *const GUID) -> Result<BOOL> {

@@ -10,8 +10,8 @@
 
 use windows::Win32::Foundation::LPARAM;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    GetKeyState, GetKeyboardLayout, GetKeyboardState, ToUnicodeEx, VK_CAPITAL, VK_CONTROL,
-    VK_LCONTROL, VK_LMENU, VK_MENU, VK_RCONTROL, VK_RMENU, VK_SHIFT,
+    GetAsyncKeyState, GetKeyState, GetKeyboardLayout, GetKeyboardState, ToUnicodeEx, VK_CAPITAL,
+    VK_CONTROL, VK_LCONTROL, VK_LMENU, VK_MENU, VK_RCONTROL, VK_RMENU, VK_SHIFT,
 };
 
 use crate::logic::{
@@ -121,14 +121,15 @@ pub(crate) fn map_key_state(lparam: LPARAM) -> u32 {
     let lp = lparam.0 as u32;
     let mut s = (lp >> 3) & KEY_STATE_REPEAT; // bit30 → 1<<27
     s |= (lp >> 5) & KEY_STATE_RELEASED; // bit31 → 1<<26
-    // GetKeyState 返回 i16：高位为 1 = 按下（负数）。
-    if unsafe { GetKeyState(VK_SHIFT.0 as i32) } < 0 {
+    // GetAsyncKeyState 返回 i16：高位为 1 = 按下（负数）。这里不能用 GetKeyState：
+    // Word 等宿主的消息队列有延迟，回调里读到的是上一条消息的修饰键状态。
+    if unsafe { GetAsyncKeyState(VK_SHIFT.0 as i32) } < 0 {
         s |= KEY_STATE_SHIFT;
     }
-    if unsafe { GetKeyState(VK_CONTROL.0 as i32) } < 0 {
+    if unsafe { GetAsyncKeyState(VK_CONTROL.0 as i32) } < 0 {
         s |= KEY_STATE_CTRL;
     }
-    if unsafe { GetKeyState(VK_MENU.0 as i32) } < 0 {
+    if unsafe { GetAsyncKeyState(VK_MENU.0 as i32) } < 0 {
         s |= KEY_STATE_ALT;
     }
     if unsafe { GetKeyState(VK_CAPITAL.0 as i32) } & 1 != 0 {
