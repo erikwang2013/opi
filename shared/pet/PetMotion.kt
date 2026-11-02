@@ -10,6 +10,8 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
@@ -26,15 +28,23 @@ import kotlin.math.sin
  *
  * 相位 0..1 无限循环；调用方用 [rememberPetMotionPhase] 拿 `State`，只在
  * [petMotion] 的 graphicsLayer 块里读 `.value`（读在绘制阶段，不触发重组）。
+ *
+ * [animate] = false（宿主不可见/生命周期未 RESUMED）时返回恒 0 的静态相位 ——
+ * 无限动画随之被销毁，不再按 60fps 空转；重新可见时从 0 重新起转。
  */
 @Composable
-fun rememberPetMotionPhase(periodMs: Int = PET_MOTION_PERIOD_MS): State<Float> =
-    rememberInfiniteTransition(label = "opiPetMotion").animateFloat(
+fun rememberPetMotionPhase(
+    periodMs: Int = PET_MOTION_PERIOD_MS,
+    animate: Boolean = true,
+): State<Float> {
+    if (!animate) return remember { mutableStateOf(0f) }
+    return rememberInfiniteTransition(label = "opiPetMotion").animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(tween(periodMs, easing = LinearEasing)),
         label = "opiPetPhase",
     )
+}
 
 /** 动效周期（ms）：相位 0..1 循环，各形态按不同倍频取用。 */
 const val PET_MOTION_PERIOD_MS = 2400

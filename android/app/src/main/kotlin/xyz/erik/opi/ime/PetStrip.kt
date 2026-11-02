@@ -6,12 +6,12 @@ package xyz.erik.opi.ime
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -60,8 +61,11 @@ import kotlin.random.Random
 @Composable
 fun PetStrip(modifier: Modifier = Modifier) {
     val p = LocalKeyboardPalette.current
+    // 键盘收起（生命周期 STARTED）时别继续轮播/空转；重新可见从下一轮重新计时。
+    val active = animationsActive()
     var forms by remember { mutableStateOf(petStripSelection(Random.Default)) }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(active) {
+        if (!active) return@LaunchedEffect
         while (true) {
             delay(PET_FORM_HOLD_MS)
             forms = petStripSelection(Random.Default)
@@ -83,7 +87,7 @@ fun PetStrip(modifier: Modifier = Modifier) {
     val petPalette = if (dark) PetPalette.Dark else PetPalette.Default
     // 相位 0..1 无限循环：各形态按不同倍频取用（见 shared/pet/PetMotion.kt），
     // 只在绘制层读它 —— 不触发重组。
-    val phase = rememberPetMotionPhase()
+    val phase = rememberPetMotionPhase(animate = active)
 
     BoxWithConstraints(
         modifier = modifier
@@ -96,28 +100,30 @@ fun PetStrip(modifier: Modifier = Modifier) {
         contentAlignment = Alignment.Center,
     ) {
         // 条底：横向情绪洗色（两端淡、中间浓）+ 小欧身后一束同色光晕 + 漂浮粒子。
-        Canvas(Modifier.fillMaxSize()) {
-            drawRect(
-                Brush.horizontalGradient(
+        // Brush 只在尺寸/洗色变化时重建；相位只在绘制阶段读，逐帧不分配、不重组。
+        Spacer(
+            Modifier.fillMaxSize().drawWithCache {
+                val washBrush = Brush.horizontalGradient(
                     listOf(
                         wash.copy(alpha = 0.04f),
                         wash.copy(alpha = 0.18f),
                         wash.copy(alpha = 0.04f),
                     ),
-                ),
-            )
-            val glow = 30.dp.toPx()
-            drawCircle(
-                brush = Brush.radialGradient(
+                )
+                val glow = 30.dp.toPx()
+                val glowCenter = Offset(size.width / 2f, size.height * 0.62f)
+                val glowBrush = Brush.radialGradient(
                     listOf(accent.copy(alpha = 0.16f), Color.Transparent),
-                    center = Offset(size.width / 2f, size.height * 0.62f),
+                    center = glowCenter,
                     radius = glow,
-                ),
-                radius = glow,
-                center = Offset(size.width / 2f, size.height * 0.62f),
-            )
-            drawPetParticles(lead, phase.value, accent)
-        }
+                )
+                onDrawBehind {
+                    drawRect(washBrush)
+                    drawCircle(brush = glowBrush, radius = glow, center = glowCenter)
+                    drawPetParticles(lead, phase.value, accent)
+                }
+            },
+        )
         // 一枚形态占一格：按条宽均分算尺寸，12 枚时自动缩小（最窄机型也 ≥ ~24dp）。
         val gap = if (forms.size > 8) 2.dp else 4.dp
         val petSize = minOf(

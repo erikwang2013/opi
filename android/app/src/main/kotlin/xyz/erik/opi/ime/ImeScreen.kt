@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -20,7 +21,6 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import xyz.erik.opi.candidate.CandidateBar
 import xyz.erik.opi.engine.EngineController
-import xyz.erik.opi.engine.composingText
 import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.engine.ShiftState
 import xyz.erik.opi.keyboard.DarkPalette
@@ -38,7 +38,6 @@ import xyz.erik.opi.keyboard.StrokeKeyboard
 import xyz.erik.opi.keyboard.SymbolCatalog
 import xyz.erik.opi.keyboard.SymbolPage
 import xyz.erik.opi.keyboard.SymbolPanel
-import xyz.erik.opi.pet.petMood
 import xyz.erik.opi.pet.PetMood
 
 /**
@@ -97,6 +96,9 @@ fun ImeScreen(
         baseDensity
     }
 
+    // 根组合只订阅可见性/情绪的粗粒度结果，每键的缓冲变化由子组合自己读。
+    val slots by rememberImeScreenSlots(controller, state)
+
     CompositionLocalProvider(
         LocalKeyboardPalette provides palette,
         LocalDensity provides density,
@@ -110,26 +112,21 @@ fun ImeScreen(
         // 显示背景」管的是**候选槽**（现在候选槽与工具条共用一格、恒有内容），不冲突；
         // 各分片仍照旧给自己铺底（工具条 toolbarBg、候选栏 barBg、键区半透明 barBg 罩在插画上）。
         Column(modifier = Modifier.fillMaxSize().opiSkinBackground(state.scene)) {
+            // 粗粒度派生值的局部别名：条件形状与原实现逐字一致（静态门禁按调用形状断言）。
+            val englishIdle = slots.englishIdle
+            val candidatesShowable = slots.candidatesShowable
             // ---- 拼音行（2026-10-15 用户裁决「移动端的拼音在候选词上方显示，不要在
             // 输入框里」）：槽位常驻（空时不铺底色），画的是 `composingText()`
             // （9 键 = 分词读数 `ni'hao`、其余方案 = 原字母）+ 五笔编码提示。
             // 读屏播报也挂在这一行（原先挂在候选栏的缓冲首格，那格已随裁决撤掉）。
             // 平铺候选视图也保留它（参考图 2 的拼音就在最顶上）。----
-            val englishIdle = controller.mode == EngineMode.ENGLISH &&
-                controller.buffer.isEmpty() && controller.candidates.isEmpty()
             if (state.view == ImeState.View.QWERTY || state.view == ImeState.View.RARE ||
                 state.view == ImeState.View.CANDIDATES_TILED
             ) {
                 // 顶部共用槽位：输入中画拼音行、空闲画**小欧宠物条**。
                 // 判据在 composingRowActive（缓冲/候选也算输入中 —— 有候选的那一拍
                 // 绝不能让拼音行被宠物条顶掉；9 键无匹读数空时同理）。
-                if (composingRowActive(
-                        controller.composingText(),
-                        controller.wubiHint,
-                        controller.buffer,
-                        controller.candidates.size,
-                    )
-                ) {
+                if (slots.composingRow) {
                     ComposingBar(controller)
                 } else {
                     PetStrip()
@@ -148,14 +145,14 @@ fun ImeScreen(
                     modifier = Modifier.fillMaxWidth().height(IME_TOOLBAR_HEIGHT_DP.dp),
                     contentAlignment = Alignment.CenterStart,
                 ) {
-                    if (state.view == ImeState.View.QWERTY && state.candidatesShowable && !englishIdle) {
+                    if (state.view == ImeState.View.QWERTY && candidatesShowable && !englishIdle) {
                         // 候选栏仍替换工具条；只有英文**空闲**（无缓冲、无候选）时显示工具条。
                         CandidateBar(
                             controller = controller,
                             onTap = router::handleCandidate,
                             onLongPress = controller::removeUserWord,
                             onExpand = state::expandCandidates,
-                            inEnglish = controller.mode == EngineMode.ENGLISH,
+                            inEnglish = slots.englishMode,
                             onSwitchToChinese = state::cycleMode,
                         )
                     } else {
@@ -163,13 +160,8 @@ fun ImeScreen(
                         ImeToolbar(
                             currentMode = state.inputMode,
                             keyboardModes = modes,
-                            petMood = petMood(
-                                buffer = controller.buffer,
-                                candidateCount = controller.candidates.size,
-                                learnerEnabled = controller.learnerEnabled,
-                                dictionaryDegraded = controller.dictionaryDegraded,
-                            ),
-                            inEnglish = controller.mode == EngineMode.ENGLISH,
+                            petMood = slots.toolbarMood,
+                            inEnglish = slots.englishMode,
                             onSwitchToChinese = state::cycleMode,
                             onOpenEmoji = state::openEmoji,
                             onOpenSkin = state::openSkin,

@@ -11,6 +11,7 @@ package xyz.erik.opi.ime
 import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -19,6 +20,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.TextStyle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import xyz.erik.opi.keyboard.LocalKeyboardPalette
 import xyz.erik.opi.scene.ScenePalette
 import xyz.erik.opi.scene.SceneTheme
@@ -63,6 +67,16 @@ internal fun sceneTextStyle(fg: Color): TextStyle {
     )
 }
 
+/**
+ * 是否该跑无限动画：IME 窗口可见时生命周期是 RESUMED，收起后 [xyz.erik.opi.OpiImeService]
+ * 把它降到 STARTED —— 此时 Compose 重组器仍在跑，不主动停相位就会继续按 60fps 空转。
+ */
+@Composable
+internal fun animationsActive(): Boolean {
+    val state by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    return state == Lifecycle.State.RESUMED
+}
+
 /** 根列背景：动态主题 = 插画，纯色皮肤（null）= 皮肤底色。 */
 @Composable
 internal fun Modifier.opiSkinBackground(theme: SceneTheme?): Modifier =
@@ -76,7 +90,7 @@ internal fun Modifier.opiSceneBackground(theme: SceneTheme): Modifier {
     val scene = remember(p) {
         ScenePalette(base = p.barBg, ink = p.keyFg, accent = p.accent)
     }
-    val phase = rememberOpiScenePhase()
+    val phase = rememberOpiScenePhase(animate = animationsActive())
     return drawBehind {
         drawRect(p.barBg)
         drawOpiSceneBackdrop(scene, theme, phase.value)
@@ -95,7 +109,7 @@ internal fun Modifier.opiPanelBackground(base: Color): Modifier {
     val scene = remember(p, base) {
         ScenePalette(base = base, ink = p.keyFg, accent = p.accent)
     }
-    val phase = rememberOpiScenePhase()
+    val phase = rememberOpiScenePhase(animate = animationsActive())
     return drawBehind {
         drawOpiSceneBackdrop(scene, theme, phase.value)
         drawRect(base.copy(alpha = PANEL_SCENE_SCRIM_ALPHA))
