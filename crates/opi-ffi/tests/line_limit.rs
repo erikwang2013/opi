@@ -58,6 +58,8 @@ fn dir_is_excluded(name: &str) -> bool {
 fn path_is_excluded(rel: &str) -> bool {
     rel.starts_with("dist/")
         || rel.starts_with("site/download/")
+        // 完整包语音模型的构建暂存（2026-11-02）：tokens.txt 2.5/5 万行，数据不是源码。
+        || rel.starts_with("desktop/asr-bundle/")
         || rel.starts_with("data/generated/")
         || rel.starts_with("data/raw/")
         // 随包分发的**数据资产**（词库 .opid、部首索引 .tsv，同 [data/raw] 一类）。

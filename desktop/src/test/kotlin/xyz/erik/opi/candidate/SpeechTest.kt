@@ -76,6 +76,36 @@ class SpeechTest {
     }
 
     @Test
+    fun `bundled models extract with a generated manifest`() {
+        // 只在完整包（资源里有 /asr）下跑；普通包跳过。
+        org.junit.Assume.assumeTrue("非完整包，无内置模型", bundledJar())
+        val root = Files.createTempDirectory("opi-speech-bundled").toFile()
+        try {
+            val result = ensureBundledModels(root.toPath(), SpeechEngine.SENSEVOICE)
+            assertEquals(ModelPrep.Ready, result)
+            assertTrue(modelReady(SpeechEngine.SENSEVOICE, root.toPath()))
+            // 关键回归：JAR 里没有 manifest.json，必须由代码生成。
+            assertTrue(Files.isRegularFile(SENSEVOICE_MODEL.engine.dir(root.toPath()).resolve("manifest.json")))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `bundled model extraction is cancellable`() {
+        org.junit.Assume.assumeTrue("非完整包，无内置模型", bundledJar())
+        val root = Files.createTempDirectory("opi-speech-cancel").toFile()
+        try {
+            val result = ensureBundledModels(
+                root.toPath(), SpeechEngine.SENSEVOICE, isCancelled = { true },
+            )
+            assertEquals(ModelPrep.Cancelled, result)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun `manifest json matches the rust schema`() {
         val obj = parseLine(manifestJson(SENSEVOICE_MODEL.files))
             ?: error("manifest 不是 JSON：${manifestJson(SENSEVOICE_MODEL.files)}")

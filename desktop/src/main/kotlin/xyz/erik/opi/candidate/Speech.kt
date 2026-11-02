@@ -112,8 +112,20 @@ internal class SpeechHostImpl {
                 } catch (_: InterruptedException) {
                     break
                 }
-                if (cmd != null) runtime.handle(cmd)
-                runtime.poll()
+                // 工作线程绝不能因一条命令的异常退出：线程一死，后续 Toggle 只会
+                // 把浮层停在 PREPARING，用户看到的就是「一直正在加载模型」。
+                if (cmd != null) {
+                    try {
+                        runtime.handle(cmd)
+                    } catch (t: Throwable) {
+                        runtime.crashed(t)
+                    }
+                }
+                try {
+                    runtime.poll()
+                } catch (t: Throwable) {
+                    runtime.crashed(t)
+                }
             }
         }, "opi-speech").apply {
             isDaemon = true
@@ -190,7 +202,7 @@ internal class SpeechHostImpl {
                     }
                 }
                 SpeechCommand.Cancel -> cancelSession()
-                SpeechCommand.Warm -> ensureEngine(config.language.engine, updateErrors = false)
+                SpeechCommand.Warm -> ensureEngine(config.language.engine, updateErrors = false, startEpoch = epoch)
                 SpeechCommand.Dismiss -> {
                     if (session != null) cancelSession() else update(SpeechUi())
                 }
@@ -205,15 +217,32 @@ internal class SpeechHostImpl {
             }
         }
 
-        /** 加载/复用引擎；warm 时 updateErrors=false，不因未下载模型弹错误。 */
-        private fun ensureEngine(engine: SpeechEngine, updateErrors: Boolean): LoadedAsr? {
+        /** 加载/复用引擎；warm 不触发完整包解压，避免启动时先把语音线程堵死。 */
+        private fun ensureEngine(engine: SpeechEngine, updateErrors: Boolean, startEpoch: Int = epoch): LoadedAsr? {
             val root = speechModelRoot()
-            ensureBundledModels(root)
             if (!modelReady(engine, root)) {
-                if (updateErrors) {
+                if (!updateErrors) return null
+                if (!bundledJar()) {
                     fail("未下载 ${engine.title} 模型（约 ${engine.approxMb()} MB）：打开 设置 → 语音 下载")
+                    return null
                 }
-                return null
+                val prep = ensureBundledModels(
+                    root, engine,
+                    onProgress = { done, total ->
+                        val pct = if (total <= 0) 0 else (done * 100 / total).toInt().coerceIn(0, 100)
+                        update(ui.copy(text = "正在准备内置模型… $pct%"))
+                    },
+                    isCancelled = { epoch != startEpoch },
+                )
+                when (prep) {
+                    ModelPrep.Cancelled -> return null
+                    is ModelPrep.Failed -> {
+                        fail(prep.message)
+                        return null
+                    }
+                    ModelPrep.Ready -> Unit
+                }
+                update(ui.copy(text = "正在加载模型…"))
             }
             val load = loadAsrFfi()
             val ffi = when (load) {
@@ -255,7 +284,7 @@ internal class SpeechHostImpl {
                 fail("语音输入已关闭：打开 设置 → 语音 启用（默认关闭）")
                 return
             }
-            val h = ensureEngine(engine, updateErrors = true) ?: return
+            val h = ensureEngine(engine, updateErrors = true, startEpoch = myEpoch) ?: return
             val ffi = h.ffi
             if (myEpoch != epoch) return
             drain(ffi, h)
@@ -416,6 +445,12 @@ internal class SpeechHostImpl {
         }
         private fun fail(message: String) {
             update(SpeechUi(phase = nextSpeechPhase(ui.phase, SpeechTransition.FAIL), engine = ui.engine, error = message))
+        }
+
+        /** 工作线程兜底：把异常折成浮层错误，线程继续处理后续命令。 */
+        fun crashed(t: Throwable) {
+            runCatching { cancelSession() }
+            fail("语音内部错误：${t.message ?: t.javaClass.simpleName}")
         }
         /** 丢掉句柄里已经排队的事件（取消后/新会话开始前）。 */
         private fun drain(ffi: OpiAsrFfi, h: LoadedAsr) {

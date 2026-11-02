@@ -3,8 +3,9 @@
 
 //! 语音模型目录、清单与下载（2026-11-02）。
 //!
-//! 模型**不进安装包**（SenseVoice 229 MB / Whisper 359 MB）：首次启用时由本文件下到
-//! 用户私有目录。落点与 Rust 侧 `AsrConfig` 的缺省相对路径一一对应：
+//! 普通/基础包不含模型：首次启用时由本文件下到用户私有目录；完整包把模型作为 JAR
+//! 资源随包，由 `SpeechModelPrep.kt` 在首次点击话筒时按需解压。落点与 Rust 侧
+//! `AsrConfig` 的缺省相对路径一一对应：
 //! `models_dir/sensevoice`、`models_dir/whisper-small.en`、`models_dir/vad/silero_vad.onnx`。
 //!
 //! 每个文件都钉死 **size + SHA-256**（真值来自本机实测与上游元数据）。下载写 `.part`，
@@ -168,47 +169,6 @@ internal fun bundledModelRoot(): Path? {
     return candidates.firstOrNull { Files.isDirectory(it) }
 }
 
-/** 完整包：模型作为 JAR 资源随包；首次录音时解压到用户模型目录。 */
-internal fun bundledJar(): Boolean =
-    SpeechModels::class.java.getResource("/asr/sensevoice/model.int8.onnx") != null
-
-internal fun ensureBundledModels(root: Path = speechModelRoot()) {
-    if (!bundledJar()) return
-    for (engine in SpeechEngine.entries) {
-        if (modelReady(engine, root)) continue
-        val model = engine.model()
-        val dir = engine.dir(root)
-        ensurePrivateDir(dir)
-        for (spec in model.files) {
-            val target = dir.resolve(spec.name)
-            if (!fileMatches(target, spec)) copyResource("/asr/${model.dirName}/${spec.name}", target, spec.size)
-        }
-        val manifest = dir.resolve("manifest.json")
-        if (!Files.isRegularFile(manifest)) {
-            copyResource("/asr/${model.dirName}/manifest.json", manifest, -1)
-        }
-    }
-    val vad = vadPath(root)
-    if (!fileMatches(vad, VAD_FILE)) {
-        ensurePrivateDir(vad.parent)
-        copyResource("/asr/vad/${VAD_FILE.name}", vad, VAD_FILE.size)
-    }
-}
-
-private fun copyResource(path: String, target: Path, expected: Long) {
-    val input = SpeechModels::class.java.getResourceAsStream(path)
-        ?: error("完整包缺内置模型资源：$path")
-    input.use { ins ->
-        val part = target.resolveSibling(target.fileName.toString() + ".part")
-        Files.copy(ins, part, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
-        if (expected >= 0 && Files.size(part) != expected) {
-            Files.deleteIfExists(part)
-            error("内置模型大小不符：$path")
-        }
-        Files.move(part, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
-    }
-}
-
 /** 该引擎实际可用的模型根：JAR 内置模型解压后走用户目录。 */
 internal fun modelRoot(engine: SpeechEngine, userRoot: Path = speechModelRoot()): Path {
     val bundled = bundledModelRoot()
@@ -230,7 +190,7 @@ internal fun modelReady(engine: SpeechEngine, root: Path): Boolean {
     return fileMatches(vadPath(root), VAD_FILE)
 }
 
-private fun fileMatches(path: Path, spec: ModelFileSpec): Boolean =
+internal fun fileMatches(path: Path, spec: ModelFileSpec): Boolean =
     runCatching { Files.isRegularFile(path) && Files.size(path) == spec.size }.getOrDefault(false)
 
 /** 模型目录里那份 manifest（格式逐字对齐 `ModelManifest::from_json`）。 */

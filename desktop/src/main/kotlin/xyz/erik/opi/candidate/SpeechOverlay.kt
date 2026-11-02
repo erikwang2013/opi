@@ -81,7 +81,7 @@ internal fun SpeechOverlay(
             }
             when (ui.phase) {
                 SpeechPhase.PREPARING -> Text(
-                    "正在加载模型…首次加载需要几秒（之后复用）",
+                    ui.text.ifEmpty { "正在加载模型…首次加载需要几秒（之后复用）" },
                     fontSize = 13.sp, color = palette.fg,
                 )
                 SpeechPhase.RECORDING -> {
