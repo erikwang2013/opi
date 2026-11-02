@@ -12,8 +12,7 @@
 //! 2026-10-25 热升级隔离：旧 DLL 只连旧管道，新版走 v2，候选窗两条都服务；
 //! 旧管道名**永不改**（协议不兼容变更时 v2 升 v3）。
 //! 角色：候选窗（CMP desktop/）为 SERVER 监听管道；TSF 插件进程为 CLIENT，
-//!       窗口启动后连接（窗口不在 → 本次发送放弃、下一条再试，不报错；
-//!       读线程有自己的重连循环）。
+//!       窗口启动后连接（不在 → 本次放弃、下一条再试；读线程有自己的重连循环）。
 //!
 //! TSF(CLIENT) → 候选窗(SERVER)：
 //!   show      {"type":"show","buffer":"ni","candidates":["你","尼",...],
@@ -21,14 +20,9 @@
 //!             （page/page_count 为 1 起；candidates 为当前页文本，页内 0 起）
 //!   hide      {"type":"hide"}；state_changed {"type":"state_changed"}（只唤醒状态栏）
 //!   position  {"type":"position","x":120,"y":340}
-//!             （2026-10-22 起真发：每次 composition 变化取 caret 位置，窗口贴着
-//!             输入处；发端见 `caret.rs`）
-//!             x/y 单位 = **AWT 逻辑像素**（= Compose 的 `.dp` 数值）：收端直接
-//!             `WindowPosition(x.dp, y.dp)`，而 CMP 1.11.1 的窗口定位**不乘 density**
-//!             （反编译 `setPositionImpl` 确认），故发 200 就落在离屏幕左缘 200
-//!             逻辑像素处。**发端不得预乘 density/缩放，收端不得按设备像素解读。**
-//!             TSF 给的是物理像素 ⇒ `caret.rs` 按输入窗口 DPI 折回逻辑像素
-//!             （100% = 恒等；125%/150% 必须折算，否则窗口偏出去一截）。
+//!             （每次 composition 变化发；x/y = **AWT 逻辑像素** = Compose `.dp`。
+//!             发端 `caret.rs` 按窗口 DPI 把 TSF 物理像素折成逻辑像素；收端直接当
+//!             `.dp` 用。**双方都不得预乘 density/缩放**，否则 125%/150% 会偏出去。）
 //!
 //! 候选窗(SERVER) → TSF(CLIENT)：
 //!   select    {"type":"select","index":0}    // 用户点击第 index（页内 0 起）候选
@@ -39,33 +33,29 @@
 //!             队列语义（见 state.rs 的线程模型）。
 //!
 //! 控制面（2026-10-20，状态栏/设置 → TSF）：候选窗进程把桌面请求原样转发进来，
-//! TSF 在同一条管道上应答。请求/应答的**语义**在 `ctl.rs`（平台中立、有单测），
-//! 这里只负责分帧与回写：
+//! TSF 在同一管道应答。语义在 `ctl.rs`（平台中立、有单测），这里只管分帧与回写：
 //!   ctl        {"type":"ctl","id":7,"op":"state"} 等（见 ctl.rs 头）
 //!   ctl_result {"type":"ctl_result","id":7,"ok":true,"state":"..."}（按 id 关联）
-//! ctl 在读线程上**同步**执行（只动引擎锁，不碰 COM）；上屏文本入既有队列。
-//! 应答从读线程直接回写（`write_now`）：窗口侧读循环与读线程是两个线程，
-//! 同一句柄上的写由 conn 锁串行化。
+//! ctl 在读线程上**同步**执行（只动引擎锁，不碰 COM）；应答入同一条有界队列
+//! （`candidate_queue.rs`），由唯一 writer 回写 —— 读线程也不做管道写。
 //! ```
 //!
-//! 本模块是纯胶水（镜像 tsf.rs 结构）：经 `TsfSink` 接缝（on_commit /
-//! on_composition_changed）把候选数据序列化为 show/hide/position 发给候选窗；
-//! 逻辑层（`TsfLogic`）零改动。`CandidateAction` 是候选窗回复（select/翻页）的
-//! 回调接缝，生产实现是 `SharedAction`（B1 接线：select → `TsfLogic::select` →
-//! 插进文档；翻页 → `next_page`/`prev_page`）。
+//! 本模块是纯胶水（镜像 tsf.rs 结构）：经 `TsfSink` 接缝把候选数据序列化为
+//! show/hide/position；逻辑层（`TsfLogic`）零改动。`CandidateAction` 是候选窗
+//! 回复（select/翻页）的回调接缝，生产实现是 `SharedAction`（B1 接线）。
 //!
-//! 连接语义：惰性连接；**窗口未启动时本次发送直接放弃、不睡眠**（下一条 show
-//! 再试，2026-10-18 性能审计：旧行为在按键线程 4×50ms 空等 200ms）；写失败即断开、
-//! 下次发送时重连；读线程 `PeekNamedPipe` 轮询（有数据才 `ReadFile`，见
-//! `READ_POLL_MS`）并分帧解析（它自己的重连循环才使用 `RETRY_SLEEP_MS`，
-//! 不在按键线程上）。**宿主 Deactivate 时主动断开**
-//! （`TsfSink::disconnect`）：管道是单实例，每个宿主进程一个客户端，谁先 show
-//! 谁占住；不释放则其余应用永远连不上（「只在桌面/单个应用可用」）。
-//! 生命周期：`CandidateClient` 的 Drop 关句柄 + 停读线程（否则句柄/线程/回调
-//! 陪宿主进程跑到结束）；分帧残留有 1 MiB 上限（见 `MAX_PENDING`）。
-//! 已知简化（验收可加固）：句柄替换与读线程的竞态以“仅清除仍指向自身句柄”
-//! 的方式容忍（Drop 关闭句柄与读线程的 ReadFile 亦是同一容忍级别）；
-//! 重连场景罕见（候选窗重启），骨架期不做 DuplicateHandle。
+//! 发送线程模型（2026-11 性能项 4）：按键线程上的 show/hide/position/state_changed
+//! **只入有界队列，不做管道 I/O**；连接与 `WriteFile` 只在唯一 writer 线程。
+//! 队列满时先丢最旧位置、状态帧保留最新一条（详见 `candidate_queue.rs`），
+//! 候选窗卡死不会拖住按键线程。
+//!
+//! 连接语义：惰性连接；**窗口未启动时本次放弃、不睡眠**（下一条 show 再试，
+//! 2026-10-18 审计：旧行为按键线程 4×50ms 空等 200ms）。写失败即断开、下次重连；
+//! 读线程 `PeekNamedPipe` 轮询（`READ_POLL_MS`）分帧解析，重连用 `RETRY_SLEEP_MS`
+//! （都不在按键线程上）。**宿主 Deactivate 时主动断开**（`TsfSink::disconnect`）：
+//! 管道单实例，谁先 show 谁占住；不释放则其余应用永远连不上。
+//! 生命周期：Drop 关队列 + 关句柄 + join 写线程/停读线程；分帧残留上限 `MAX_PENDING`。
+//! 已知简化：句柄替换/关闭与读线程的竞态以“仅清除仍指向自身句柄”的方式容忍。
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -83,6 +73,8 @@ use windows::Win32::System::Pipes::{
     PIPE_NOWAIT, PIPE_READMODE_BYTE, PeekNamedPipe, SetNamedPipeHandleState,
 };
 use windows::core::{PCWSTR, w};
+
+use crate::candidate_queue::{SendClass, SendQueue};
 
 /// 管道句柄的 Send+Sync 包装：windows-rs 的 HANDLE 是裸指针（非 Sync），
 /// 而读写跨线程使用（按键线程写 + 读线程阻塞读），此处显式承诺线程安全。
@@ -152,6 +144,10 @@ pub struct CandidateClient {
     /// 还没敲第一个键时，状态栏读不到 `im=opi`，整条不显示（体感「没有状态栏」）。
     /// Deactivate 置 false，保证管线交还给下一个应用（单实例管道）。
     active: Arc<AtomicBool>,
+    /// 发往候选窗的有界队列：按键线程只入队，writer 线程消费（见模块头）。
+    queue: Arc<SendQueue>,
+    /// writer 线程句柄：Drop 时 join，保证卸载后不再有 WriteFile 在飞。
+    writer: Mutex<Option<thread::JoinHandle<()>>>,
     action: Arc<dyn CandidateAction>,
 }
 
@@ -163,9 +159,12 @@ impl CandidateClient {
             reader_started: AtomicBool::new(false),
             reader_stop: Arc::new(AtomicBool::new(false)),
             active: Arc::new(AtomicBool::new(false)),
+            queue: Arc::new(SendQueue::new()),
+            writer: Mutex::new(None),
             action,
         };
         client.spawn_reader();
+        client.spawn_writer();
         client
     }
 
@@ -191,34 +190,30 @@ impl CandidateClient {
             "page_count": page_count,
             "mode": mode_str(mode),
         });
-        self.send_json(&msg.to_string());
+        self.send_json(&msg.to_string(), SendClass::State);
     }
 
     /// hide：composition 结束/清空 → 隐藏候选窗。
     pub fn hide(&self) {
-        self.send_json(r#"{"type":"hide"}"#);
+        self.send_json(r#"{"type":"hide"}"#, SendClass::State);
     }
 
     /// 状态变了（语言/全半角/模式）→ 候选窗进程唤醒状态栏；窗口内容不变。
     pub fn state_changed(&self) {
-        self.send_json(r#"{"type":"state_changed"}"#);
+        self.send_json(r#"{"type":"state_changed"}"#, SendClass::State);
     }
 
     /// position：caret 位置（AWT 逻辑像素；发端 = `caret.rs` 的 `candidate_anchor`）。
     pub fn position(&self, x: i32, y: i32) {
         let msg = serde_json::json!({"type": "position", "x": x, "y": y});
-        self.send_json(&msg.to_string());
+        self.send_json(&msg.to_string(), SendClass::Position);
     }
 
     // ---------- 内部：连接 / 发送 / 读线程 ----------
 
-    /// 尝试连接（**单次，不睡眠**）。
-    ///
-    /// 2026-10-18 性能审计：旧实现在**按键线程**上对 `ERROR_FILE_NOT_FOUND` 做
-    /// 4×50ms 退避 —— 而「候选窗没启动」正是默认状态（全仓没有拉起候选窗的代码），
-    /// 于是每键白白阻塞 200ms，直接击穿 50ms 键反馈预算。窗口不会在 200ms 内出现；
-    /// 本次放弃，下一次 show 自然再试（状态每次全量重发，丢一次连接不丢状态）。
-    /// 读线程有自己的重连循环（`spawn_reader` 的 `RETRY_SLEEP_MS`），不受影响。
+    /// 尝试连接（**单次，不睡眠**）。2026-10-18 审计：旧实现按键线程 4×50ms
+    /// 退避「候选窗没启动」这个默认状态，每键白等 200ms。本次放弃，下一次 show
+    /// 再试（状态每次全量重发）。现在本函数只在 writer/读线程上。
     fn connect() -> Option<PipeHandle> {
         match unsafe {
             CreateFileW(
@@ -233,9 +228,9 @@ impl CandidateClient {
         } {
             Ok(h) => {
                 let handle = PipeHandle(h);
-                // 非阻塞写：候选窗进程若一时不读，管道缓冲满时 WriteFile 会**无限
-                // 阻塞**在宿主 UI 线程上（in-proc，用户的 Word/浏览器一起冻住）。
-                // 写不进去就丢这一帧并断开，下一次 show 重连；候选窗下一帧会全量重发。
+                // 非阻塞写：候选窗进程若一时不读，阻塞模式下的 WriteFile 会**无限
+                // 阻塞**。现在写只在 writer 线程上（按键线程只入队），PIPE_NOWAIT
+                // 再兜一层：写不进去就丢这一帧并断开，下一次 show 重连。
                 let mode = PIPE_READMODE_BYTE | PIPE_NOWAIT;
                 if unsafe { SetNamedPipeHandleState(handle.0, Some(&mode), None, None) }.is_err() {
                     unsafe { CloseHandle(handle.0) }.ok();
@@ -247,61 +242,30 @@ impl CandidateClient {
         }
     }
 
-    /// 发送一条完整消息（自动补 '\n'）。连接失败 → 本次放弃（不睡眠）；写失败 → 断开待重连。
-    ///
-    /// **不在这里置 `active`**（2026-10-22 review）：唯一写入点是 `Activate`/
-    /// `ThreadFocusSink::OnSetThreadFocus`；否则失活宿主的排队刷新会把管道抢回去。
-    ///
-    /// 失活时**连惰性连接也不做**：检查放在 conn 锁内 —— `disconnect()` 先置 false
-    /// 再取同一把锁，锁内看到 true 的随后会被关掉；看到 false 则直接放弃。
-    fn send_json(&self, json: &str) {
+    /// 把一条完整消息（自动补 '\n'）放进有界发送队列：**按键线程不等待 I/O**。
+    /// 连接/重连/写失败都在 writer 线程；溢出淘汰见 `candidate_queue.rs`。
+    fn send_json(&self, json: &str, class: SendClass) {
         let bytes = [json.as_bytes(), b"\n"].concat();
-        let mut conn = match self.conn.lock() {
-            Ok(g) => g,
-            Err(_) => return, // 中毒锁：吞掉（与 tsf.rs 的锁策略一致）
-        };
-        let handle = match *conn {
-            Some(h) => h,
-            None => {
-                if !self.active.load(Ordering::SeqCst) {
-                    return;
-                }
-                match Self::connect() {
-                    Some(h) => {
-                        *conn = Some(h);
-                        h
-                    }
-                    None => return, // 窗口未启动：本次放弃，下次发送再试
-                }
-            }
-        };
-        let ok = write_all(handle, &bytes);
-        if !ok {
-            tlog!("tsf-opi: candidate pipe write failed; disconnecting");
-            // 写失败（管道另一端关闭等）：断开，下次发送重连。
-            unsafe { CloseHandle(handle.0) }.ok();
-            *conn = None;
-        }
+        self.queue.enqueue(class, bytes);
     }
 
-    /// 断开当前连接（宿主 Deactivate 时调用）：关句柄让读线程退出本轮，
-    /// 窗口服务端在 readLoop 的 finally 里隐藏并重建单实例管道。下次 show 惰性重连。
-    ///
-    /// 关闭方式与 `Drop` 相同（读线程每 20ms 醒一次，看到句柄没了就退本轮）；
-    /// 不在这里 sleep/等确认 —— Deactivate 跑在宿主的 UI 线程上。
+    /// 断开当前连接（宿主 Deactivate 时调用）：关句柄让读线程退出本轮，窗口服务端
+    /// 在 readLoop 的 finally 里隐藏并重建单实例管道。下次 show 惰性重连。
+    /// 不 sleep/等确认 —— Deactivate 跑在宿主 UI 线程上。
     pub fn disconnect(&self) {
         // 先停主动重连：否则读线程会在 Deactivate 后把单实例管道又抢回去，
         // 焦点切到的下一个应用就永远连不上（2026-10-21）。
         self.active.store(false, Ordering::SeqCst);
+        // 丢掉失活前积压的旧状态：重新激活后由下一次 show 全量重发，不重放旧页。
+        self.queue.clear();
         if let Some(h) = self.conn.lock().ok().and_then(|mut g| g.take()) {
             // SAFETY: 句柄由本对象持有，take 后 write/show 不会再使用它。
             unsafe { CloseHandle(h.0) }.ok();
         }
     }
 
-    /// 读线程（构造时启动一次）：轮询候选窗回复，'\n' 分帧解析，
-    /// 回调 `CandidateAction`。连接失效 → 清句柄（仅当仍是本线程持有的那个），
-    /// 下一轮退避重试 —— 骨架期容忍与写线程的句柄替换竞态。
+    /// 读线程（构造时启动一次）：轮询候选窗回复，'\n' 分帧解析并回调
+    /// `CandidateAction`。连接失效 → 清句柄（仅当仍是自己的），下一轮退避重试。
     fn spawn_reader(&self) {
         if self.reader_started.swap(true, Ordering::SeqCst) {
             return;
@@ -309,6 +273,7 @@ impl CandidateClient {
         let conn = Arc::clone(&self.conn);
         let stop = Arc::clone(&self.reader_stop);
         let active = Arc::clone(&self.active);
+        let queue = Arc::clone(&self.queue);
         let action = Arc::clone(&self.action);
         thread::spawn(move || {
             let mut buf = vec![0u8; READ_BUF];
@@ -409,27 +374,75 @@ impl CandidateClient {
                             .ok()
                             .flatten();
                     if let Some(reply) = response {
-                        write_now(&conn, &reply);
+                        let bytes = [reply.as_bytes(), b"\n"].concat();
+                        queue.enqueue(SendClass::Control, bytes);
                     }
                 }
             }
         });
     }
-}
 
-impl Drop for CandidateClient {
-    /// 停读线程 + 关句柄。此前两者都不回收：正常路径永不 `CloseHandle`，读线程
-    /// 阻塞在 `ReadFile` 上永不退出 → 句柄 + 线程 + `Arc<CandidateAction>` 一起
-    /// 泄漏到宿主进程结束（插件重载时累积）。
-    fn drop(&mut self) {
-        self.reader_stop.store(true, Ordering::SeqCst);
-        // 取走句柄（PipeHandle 是 Copy，take() 留 None）：读线程下一次轮询看到
-        // 句柄为 None 或 stop 置位就退出（不会再有阻塞中的 ReadFile）。
-        self.disconnect();
+    /// 写线程（构造时启动一次）：从有界队列取帧、惰性连接、`WriteFile`。
+    /// 本线程独占管道写，帧之间不会交错；失活时排队消息作废。
+    fn spawn_writer(&self) {
+        let queue = Arc::clone(&self.queue);
+        let conn = Arc::clone(&self.conn);
+        let active = Arc::clone(&self.active);
+        let handle = thread::spawn(move || {
+            while let Some(msg) = queue.pop() {
+                let mut guard = match conn.lock() {
+                    Ok(g) => g,
+                    Err(_) => return, // 中毒锁：与 tsf.rs 的锁策略一致
+                };
+                // active 在 conn 锁内复查：`disconnect()` 先置 false 再取同一把锁，
+                // 锁内看到 false 的排队消息直接作废（不把单实例管道抢回来）。
+                if !active.load(Ordering::SeqCst) {
+                    continue;
+                }
+                let h = match *guard {
+                    Some(h) => h,
+                    None => match Self::connect() {
+                        Some(h) => {
+                            *guard = Some(h);
+                            h
+                        }
+                        None => continue, // 窗口未启动：丢弃本帧，不睡眠
+                    },
+                };
+                drop(guard);
+                // 写失败（管道另一端关闭等）：仅当仍是当前句柄才断开，下次 show 重连。
+                if !write_all(h, &msg.bytes) {
+                    tlog!("tsf-opi: candidate pipe write failed; disconnecting");
+                    disconnect(&conn, h);
+                }
+            }
+        });
+        if let Ok(mut slot) = self.writer.lock() {
+            *slot = Some(handle);
+        }
     }
 }
 
-/// 写一段完整帧（调用方持有 conn 锁）。部分写循环（0.62 的 WriteFile 是切片签名）。
+impl Drop for CandidateClient {
+    /// 停读线程 + 关队列 + 关句柄 + join 写线程：否则句柄/线程/回调陪宿主进程
+    /// 跑到结束（插件重载时累积）。
+    fn drop(&mut self) {
+        self.reader_stop.store(true, Ordering::SeqCst);
+        // 顺序有讲究：先关队列（writer 不再取新帧），再 disconnect 关句柄
+        // （让可能卡在 WriteFile 的 writer 失败返回），最后 join —— 卸载后不留线程。
+        self.queue.close();
+        // 取走句柄（PipeHandle 是 Copy，take() 留 None）：读线程下一次轮询看到
+        // 句柄为 None 或 stop 置位就退出（不会再有阻塞中的 ReadFile）。
+        self.disconnect();
+        let writer = self.writer.lock().ok().and_then(|mut g| g.take());
+        if let Some(writer) = writer {
+            writer.join().ok();
+        }
+    }
+}
+
+/// 写一段完整帧（仅 writer 线程调用；帧间串行由单写线程保证）。
+/// 部分写循环（0.62 的 WriteFile 是切片签名）。
 fn write_all(handle: PipeHandle, bytes: &[u8]) -> bool {
     let mut done = 0usize;
     while done < bytes.len() {
@@ -441,19 +454,6 @@ fn write_all(handle: PipeHandle, bytes: &[u8]) -> bool {
         done += written as usize;
     }
     true
-}
-
-/// 读线程回写应答（不惰性连接：能收到请求说明连接已在）。写失败 → 断开待重连。
-fn write_now(conn: &Mutex<Option<PipeHandle>>, json: &str) {
-    let bytes = [json.as_bytes(), b"\n"].concat();
-    let Ok(mut guard) = conn.lock() else {
-        return;
-    };
-    let Some(handle) = *guard else { return };
-    if !write_all(handle, &bytes) {
-        unsafe { CloseHandle(handle.0) }.ok();
-        *guard = None;
-    }
 }
 
 /// 解析一行并分发到 `CandidateAction`（未知 type 忽略）。返回应答行 = ctl 请求。
