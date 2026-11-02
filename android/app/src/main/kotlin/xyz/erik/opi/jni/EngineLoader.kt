@@ -64,6 +64,11 @@ object EngineLoader {
 
         /** 覆盖写目标文件。 */
         fun write(bytes: ByteArray)
+
+        /** 流式拷贝资产到目标（生产覆写；测试默认走 readAsset+write）。 */
+        fun copyAssetTo(target: File) {
+            target.writeBytes(readAsset())
+        }
     }
 
     /** 引擎加载抽象（JVM 测试注入假实现；生产为 OpiEngine）。 */
@@ -107,7 +112,7 @@ object EngineLoader {
         try {
             val assetSize = fileOps.assetLength()
             if (assetSize == null || needsCopy(assetSize, fileOps.existingSize())) {
-                fileOps.write(fileOps.readAsset())
+                fileOps.copyAssetTo(File(targetPath))
             }
         } catch (e: IOException) {
             fallback(api) // I/O 失败 → 回退内置词库（与 flutter catch → loadFallback 一致）
@@ -154,7 +159,7 @@ object EngineLoader {
                 // 基础包没有随包资产：设置页下载到 filesDir 后直接装这份。
                 if (existing == null || existing <= 0L) return false
             } else if (needsCopy(assetSize, existing)) {
-                fileOps.write(fileOps.readAsset())
+                fileOps.copyAssetTo(File(targetPath))
             }
         } catch (e: Exception) {
             return false
@@ -180,7 +185,7 @@ object EngineLoader {
             if (assetSize == null) {
                 if (existing == null || existing <= 0L) return false
             } else if (needsCopy(assetSize, existing)) {
-                fileOps.write(fileOps.readAsset())
+                fileOps.copyAssetTo(File(targetPath))
             }
         } catch (e: Exception) {
             return false
@@ -204,7 +209,7 @@ object EngineLoader {
             if (assetSize == null) {
                 if (existing == null || existing <= 0L) return false
             } else if (needsCopy(assetSize, existing)) {
-                fileOps.write(fileOps.readAsset())
+                fileOps.copyAssetTo(File(targetPath))
             }
         } catch (e: Exception) {
             return false
@@ -270,6 +275,12 @@ object EngineLoader {
 
                     override fun write(bytes: ByteArray) {
                         target.writeBytes(bytes)
+                    }
+
+                    override fun copyAssetTo(dest: File) {
+                        context.assets.open(ASSET_NAME).use { input ->
+                            dest.outputStream().use { output -> input.copyTo(output) }
+                        }
                     }
                 },
                 api = LoadApi { OpiEngine.load(it) },

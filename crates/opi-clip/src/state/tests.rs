@@ -6,7 +6,8 @@
 use super::*;
 use crate::config::temp_dir;
 use crate::crypto::event_id;
-use crate::types::{Hlc, Version, now_ms};
+use crate::discovery::Beacon;
+use crate::types::{Hlc, PeerInfo, Version, now_ms};
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -19,6 +20,72 @@ fn core() -> (Core, PathBuf) {
     let path = dir.join("trust.json");
     let core = Core::new(sender(1), vec![1u8; 32], TrustStore::default(), path);
     (core, dir)
+}
+
+fn peer_event(id: InstanceId) -> ClipEvent {
+    ClipEvent::PeerDiscovered(PeerInfo {
+        instance_id: id,
+        name: "flood".into(),
+        address: "127.0.0.1:9".parse().unwrap(),
+        fingerprint: Fingerprint::from_bytes([1; 8]),
+        capabilities: 0,
+        trusted: false,
+        connected: false,
+    })
+}
+
+#[test]
+fn discovered_table_caps_unauthenticated_instance_ids() {
+    let (mut core, dir) = core();
+    for i in 0..MAX_DISCOVERED {
+        let mut id = [0u8; 16];
+        id[0..2].copy_from_slice(&(i as u16).to_be_bytes());
+        core.discovered.insert(
+            InstanceId::from_bytes(id),
+            Discovered {
+                addr: "127.0.0.1:9".parse().unwrap(),
+                fingerprint: Fingerprint::from_bytes([1; 8]),
+                capabilities: 0,
+                last_seen: Instant::now(),
+            },
+        );
+    }
+    let before = core.discovered.len();
+    core.observe_beacon(
+        "127.0.0.1:1234".parse().unwrap(),
+        Beacon {
+            instance_id: sender(99),
+            fingerprint: Fingerprint::from_bytes([2; 8]),
+            tcp_port: 1,
+            capabilities: 0,
+        },
+        Instant::now(),
+    );
+    assert_eq!(core.discovered.len(), before);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn flooded_discovery_events_do_not_evict_content_errors() {
+    let (mut core, dir) = core();
+    for i in 0..MAX_EVENTS {
+        let mut id = [0u8; 16];
+        id[0..2].copy_from_slice(&(i as u16).to_be_bytes());
+        core.push_event(peer_event(InstanceId::from_bytes(id)));
+    }
+    core.push_event(ClipEvent::Error {
+        message: "real content event".into(),
+    });
+    assert_eq!(core.events.len(), MAX_EVENTS);
+    assert!(matches!(core.events.back(), Some(ClipEvent::Error { .. })));
+    assert_eq!(
+        core.events
+            .iter()
+            .filter(|e| matches!(e, ClipEvent::Error { .. }))
+            .count(),
+        1
+    );
+    let _ = std::fs::remove_dir_all(dir);
 }
 
 fn event(from: InstanceId, wall_ms: u64, counter: u32, text: &str) -> StoredEvent {

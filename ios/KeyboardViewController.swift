@@ -484,15 +484,16 @@ extension KeyboardViewController: KeyboardLayoutDelegate {
 
 extension KeyboardViewController {
     // 系统回调重写（未上机验证，用途是刷新本地状态）；宿主状态不同步先查这里。
-
     override func selectionDidChange(_ textInput: UITextInput?) {
         super.selectionDidChange(textInput)
         // 2026-10-27：联想态下用户挪光标/点别处 = 放弃联想（自我插入除外）。
         handleSelectionChange()
     }
-
     override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
+        // 提交路径（route -> insertTyped -> refresh）已经刷新过；系统会在插入后同步
+        // 回调本方法，窗口内再 refresh 就是每键两遍完整排名 + JSON 解码。
+        guard !inSelfInsertWindow() else { return }
         // 宿主文本变了 → 候选栏可能已经过期（例：用户点进另一个输入框）。
         refresh()
     }

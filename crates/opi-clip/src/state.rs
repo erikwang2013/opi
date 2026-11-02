@@ -6,7 +6,6 @@
 
 use crate::ClipError;
 use crate::crypto::{content_hash, content_hash_bytes, event_id};
-use crate::discovery::Beacon;
 use crate::trust::{TrustStore, TrustedPeer};
 use crate::types::{
     CAP_PAIRING, CAP_TEXT, ClipEvent, FRAGMENT_BYTES, FRAGMENT_EXPIRY, Fingerprint,
@@ -22,6 +21,8 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 const MAX_EVENTS: usize = 1024;
+/// 见 `events.rs`。
+pub(super) const MAX_DISCOVERED: usize = 256;
 const MAX_SEEN: usize = 1024;
 const MAX_REMOTE_HASHES: usize = 64;
 
@@ -123,13 +124,6 @@ impl Core {
             remote_hashes: HashMap::new(),
             fragments: HashMap::new(),
         }
-    }
-
-    pub(crate) fn push_event(&mut self, event: ClipEvent) {
-        if self.events.len() >= MAX_EVENTS {
-            self.events.pop_front();
-        }
-        self.events.push_back(event);
     }
 
     pub(crate) fn capabilities(&self) -> u8 {
@@ -324,36 +318,6 @@ impl Core {
         }
     }
 
-    pub(crate) fn observe_beacon(&mut self, source: SocketAddr, beacon: Beacon, now: Instant) {
-        if beacon.instance_id == self.instance_id {
-            return;
-        }
-        let addr = Beacon::peer_addr(source, beacon.tcp_port);
-        let changed = self.discovered.get(&beacon.instance_id).is_none_or(|old| {
-            old.addr != addr
-                || old.fingerprint != beacon.fingerprint
-                || old.capabilities != beacon.capabilities
-        });
-        self.discovered.insert(
-            beacon.instance_id,
-            Discovered {
-                addr,
-                fingerprint: beacon.fingerprint,
-                capabilities: beacon.capabilities,
-                last_seen: now,
-            },
-        );
-        if changed {
-            let info = self.peer_info_for(
-                beacon.instance_id,
-                addr,
-                beacon.fingerprint,
-                beacon.capabilities,
-            );
-            self.push_event(ClipEvent::PeerDiscovered(info));
-        }
-    }
-
     pub(crate) fn prune(&mut self, now: Instant) {
         self.prune_fragments(now);
         self.seen_events
@@ -488,6 +452,8 @@ impl Core {
         self.fragments.values().map(|entry| entry.total_len).sum()
     }
 }
+
+mod events;
 
 #[cfg(test)]
 mod tests;
