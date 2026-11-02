@@ -11,6 +11,13 @@
 
 pub mod session;
 
+// 词库共享与 Host 表是平台中立的，但生产上只被 Windows 胶水用；Linux 测试构建
+// 也编进来（多 HIMC 隔离在主机上验证）。
+#[cfg(any(target_os = "windows", test))]
+mod dict;
+#[cfg(any(target_os = "windows", test))]
+mod hosts;
+
 #[cfg(target_os = "windows")]
 mod win;
 

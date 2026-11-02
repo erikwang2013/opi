@@ -41,18 +41,28 @@ pub extern "system" fn ImeSelect(himc: HIMC, select: i32) -> i32 {
         if himc.0.is_null() {
             return 0;
         }
+        let key = himc.0 as isize;
         if select != 0 {
-            if !ensure_host(himc) {
-                return 0;
-            }
-            if let Some(h) = lock_host().as_mut() {
+            {
+                let mut g = lock_hosts();
+                let h = g.get_or_insert_with(key, Host::new);
                 h.session.reset();
                 reload_settings(h);
             }
             let _ = ImmSetOpenStatus(himc, true);
             let _ = ImmSetConversionStatus(himc, IME_CMODE_NATIVE, IME_SENTENCE_MODE(0));
         } else {
+            // 反选 = 这个上下文结束：收尾后释放槽位（词库是共享的，只丢会话态）。
             finish_composition(himc, false);
+            let was_active = {
+                let mut g = lock_hosts();
+                let was = g.active() == Some(key);
+                let _ = g.remove(key);
+                was
+            };
+            if was_active {
+                hide_candidates();
+            }
         }
         1
     }))
@@ -65,10 +75,31 @@ pub extern "system" fn ImeSetActiveContext(himc: HIMC, focus: i32) -> i32 {
         if himc.0.is_null() {
             return 0;
         }
+        let key = himc.0 as isize;
         if focus != 0 {
-            ensure_host(himc);
-        } else {
+            {
+                let mut g = lock_hosts();
+                g.get_or_insert_with(key, Host::new);
+                g.set_active(Some(key));
+            }
+            // 焦点换了：先藏起上一个上下文留下的候选窗，下一次组合动作再按
+            // 新焦点位置显示。窗口只有一个，始终跟着 active。
             hide_candidates();
+        } else {
+            // 失焦：给宿主发 ENDCOMPOSITION 并清这个上下文的会话态（HIMC 仍被
+            // 选中，槽位保留到 ImeSelect(FALSE) 再释放，免得每次失焦都重装设置）。
+            let was_active = {
+                let mut g = lock_hosts();
+                let was = g.active() == Some(key);
+                if was {
+                    g.set_active(None);
+                }
+                was
+            };
+            finish_composition(himc, false);
+            if was_active {
+                hide_candidates();
+            }
         }
         1
     }))
@@ -89,9 +120,6 @@ pub extern "system" fn ImeProcessKey(
         let ks = &*key_state.cast::<[u8; 256]>();
         let states = key_states(lparam, ks);
         let code = engine_keycode(vk, ((lparam.0 >> 16) & 0xff) as u32, ks);
-        if !ensure_host(himc) {
-            return 0;
-        }
         let released = states & KEY_STATE_RELEASED != 0;
         let shift = is_shift_vk(vk);
         // TSF 的引擎前分流：Win 组合放行；Ctrl/Alt 只放行热键；Shift+Space 先于空格
@@ -104,8 +132,8 @@ pub extern "system" fn ImeProcessKey(
             return 0;
         }
         let claimed = {
-            let mut g = lock_host();
-            let Some(h) = g.as_mut() else { return 0 };
+            let mut g = lock_hosts();
+            let h = g.get_or_insert_with(himc.0 as isize, Host::new);
             h.pending_states = states;
             h.pending_hotkey = PendingHotkey::None;
             if !released && !shift {
@@ -148,13 +176,11 @@ pub extern "system" fn ImeToAsciiEx(
         }
         let ks = &*key_state.cast::<[u8; 256]>();
         let code = engine_keycode(vk, scan, ks);
-        if !ensure_host(himc) {
-            return 0;
-        }
-        // ImeToAsciiEx 没有 lParam：释放/重复位与热键取 ImeProcessKey 刚存下的那一份。
+        // ImeToAsciiEx 没有 lParam：释放/重复位与热键取**同一 HIMC** 的
+        // ImeProcessKey 刚存下的那一份。
         let actions = {
-            let mut g = lock_host();
-            let Some(h) = g.as_mut() else { return 0 };
+            let mut g = lock_hosts();
+            let h = g.get_or_insert_with(himc.0 as isize, Host::new);
             let states = h.pending_states;
             let hot = h.pending_hotkey;
             h.pending_states = 0;
