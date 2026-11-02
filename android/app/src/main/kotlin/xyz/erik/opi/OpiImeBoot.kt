@@ -23,7 +23,8 @@ internal fun OpiImeService.bootEngine(): Boolean {
     // luna 词库编排（幂等：size 校验重拷；失败回退内置词库；与设置页共享 Rust 单例）
     // 返回值是词库装载结果（false = 回退到内置 35 词库），接住它喂给宠物：降级时
     // 候选栏待命位的小欧折断天线（DEGRADED），而不是照旧笑嘻嘻。
-    val dictionaryOk = EngineLoader.load(this)
+    // 首帧只装当前方案要的可选表；笔画/五笔由 onReady 后的 preloadOptional 后台补。
+    val dictionaryOk = EngineLoader.loadFast(this)
     // 用户词导入必须在词库装载之后、建视图之前：文件缺失/损坏静默降级（不崩 IME），
     // 且要赶在第一次刷新候选之前生效
     userWords.load()

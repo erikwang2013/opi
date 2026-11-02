@@ -10,6 +10,7 @@ import java.io.IOException
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 
+import xyz.erik.opi.engine.InputScheme
 import xyz.erik.opi.settings.ImePreferences
 
 /**
@@ -252,10 +253,30 @@ object EngineLoader {
     /** 可选词典（trad/stroke/wubi）每进程只挂一次（2026-10-26）；方案变了再重挂。 */
     private var optionalLoaded = false
     private var optionalPlan = ""
+    /** 各表各自只成功装一次；首帧跳过的表由 [preloadOptional] 补。 */
+    private var tradLoaded = false
+    private var strokeLoaded = false
+    private var wubiLoaded = false
 
     /** 生产入口：assets/luna.opid → filesDir/luna.opid → OpiEngine。 */
     @Synchronized
-    fun load(context: Context): Boolean {
+    fun load(context: Context): Boolean = load(context, deferUnusedOptional = false)
+
+    /**
+     * 首帧装载：只装 luna/trad 与**当前持久化方案**需要的笔画/五笔表。首帧省下
+     * 无关码表的 8MB 校验/解析；其余由 [preloadOptional] 在键盘就绪后补。
+     */
+    @Synchronized
+    fun loadFast(context: Context): Boolean = load(context, deferUnusedOptional = true)
+
+    /** 键盘就绪后的后台补齐（[io] 单线程，排在 bootEngine 之后）。 */
+    @Synchronized
+    fun preloadOptional(context: Context) {
+        load(context, deferUnusedOptional = false)
+    }
+
+    @Synchronized
+    private fun load(context: Context, deferUnusedOptional: Boolean): Boolean {
         val target = File(context.filesDir, FILE_NAME)
         // 已装好 ⇒ 跳过 install（保留方案/模式/开关）；失败（回退内置）不置位，
         // 下次调用继续尝试，与旧的「每次视图创建都重试」语义一致。
@@ -293,15 +314,25 @@ object EngineLoader {
 
         // 2026-10-26：每次建输入视图都重装 trad/stroke/wubi 会重复哈希 12.4MB + 89 万
         // 条目访问（手机冷启动 100ms+）。成功后按进程缓存；切换五笔方案才重挂。
-        val plan = ImePreferences.from(context).wubiPlan
+        val prefs = ImePreferences.from(context)
+        val plan = prefs.wubiPlan
         if (optionalLoaded && optionalPlan == plan) {
-            ImePreferences.from(context).applyWubiSettings()
+            prefs.applyWubiSettings()
             return result
         }
+        if (optionalPlan != plan) {
+            // 五笔方案换表（86↔98）：旧表不能算数。
+            optionalPlan = plan
+            wubiLoaded = false
+        }
+        // 首帧只装当前方案要用的表；别把「跳过」当成「装载失败」。
+        val scheme = prefs.inputMode.scheme
+        val wantStroke = !deferUnusedOptional || scheme == InputScheme.STROKE
+        val wantWubi = !deferUnusedOptional || scheme == InputScheme.WUBI
 
         // trad 可选增强：失败仅告警，不影响 luna 主词典（OpiEngine.loadTrad 严格加载）
         val tradTarget = File(context.filesDir, FILE_NAME_TRAD)
-        val tradOk = loadTradAsset(
+        val tradOk = tradLoaded || loadTradAsset(
             fileOps = object : FileOps {
                 override fun assetLength(): Long? = try {
                     context.assets.openFd(ASSET_NAME_TRAD).use { it.length }
@@ -322,12 +353,16 @@ object EngineLoader {
             api = LoadTradApi { OpiEngine.loadTrad(it) },
             targetPath = tradTarget.absolutePath,
         )
-        if (tradOk) Log.i(TAG, "trad loaded (${tradTarget.length()} bytes)")
-        else Log.w(TAG, "trad load failed, Traditional mode falls back to simplified dict")
+        if (tradOk) {
+            tradLoaded = true
+            Log.i(TAG, "trad loaded (${tradTarget.length()} bytes)")
+        } else {
+            Log.w(TAG, "trad load failed, Traditional mode falls back to simplified dict")
+        }
 
         // stroke 可选增强（2026-10-09）：失败仅告警，笔画方案回退普通路径
         val strokeTarget = File(context.filesDir, FILE_NAME_STROKE)
-        val strokeOk = loadStrokeAsset(
+        val strokeOk = strokeLoaded || if (!wantStroke) false else loadStrokeAsset(
             fileOps = object : FileOps {
                 override fun assetLength(): Long? = try {
                     context.assets.openFd(ASSET_NAME_STROKE).use { it.length }
@@ -348,8 +383,12 @@ object EngineLoader {
             api = LoadStrokeApi { OpiEngine.loadStroke(it) },
             targetPath = strokeTarget.absolutePath,
         )
-        if (strokeOk) Log.i(TAG, "stroke loaded (${strokeTarget.length()} bytes)")
-        else Log.w(TAG, "stroke load failed, Stroke scheme falls back to the plain path")
+        if (strokeOk) {
+            strokeLoaded = true
+            Log.i(TAG, "stroke loaded (${strokeTarget.length()} bytes)")
+        } else if (wantStroke) {
+            Log.w(TAG, "stroke load failed, Stroke scheme falls back to the plain path")
+        }
 
         // 五笔码表（2026-10-14，M4 第二波）：**按方案装一张**（86/98 二选一 —— 两表码
         // 空间重叠、权重不可比，同时进引擎就是两套体系打架，见 desktop 的 Wubi.kt 与
@@ -357,7 +396,7 @@ object EngineLoader {
         val wubiAsset = if (plan == "98") ASSET_NAME_WUBI98 else ASSET_NAME_WUBI86
         val wubiFile = if (plan == "98") FILE_NAME_WUBI98 else FILE_NAME_WUBI86
         val wubiTarget = File(context.filesDir, wubiFile)
-        val wubiOk = loadWubiAsset(
+        val wubiOk = wubiLoaded || if (!wantWubi) false else loadWubiAsset(
             fileOps = object : FileOps {
                 override fun assetLength(): Long? = try {
                     context.assets.openFd(wubiAsset).use { it.length }
@@ -378,17 +417,20 @@ object EngineLoader {
             api = LoadWubiApi { OpiEngine.loadWubi(it) },
             targetPath = wubiTarget.absolutePath,
         )
-        if (wubiOk) Log.i(TAG, "wubi($plan) loaded (${wubiTarget.length()} bytes)")
-        else Log.w(TAG, "wubi($plan) load failed, Wubi scheme falls back to the plain path")
+        if (wubiOk) {
+            wubiLoaded = true
+            Log.i(TAG, "wubi($plan) loaded (${wubiTarget.length()} bytes)")
+        } else if (wantWubi) {
+            Log.w(TAG, "wubi($plan) load failed, Wubi scheme falls back to the plain path")
+        }
 
         // 五键（风格/混输进入方式/个数/回车/自动上屏）也在这一刻推给引擎 —— 引擎刚建好，
         // 正是「配置 → 引擎」的落点（与 fcitx5 的 applyOpiSettings、TSF 的 apply_settings
         // 同一条）。方案不在这里（它已经在上面决定了装哪张表）。
         // 值域/名字 → 整数码的换算在 WubiNames.kt（锁步门禁比对 engine_wubi.rs）。
         // 只有整套可选表都挂上才置位；任一失败保留重试（下次视图创建再装）。
-        optionalLoaded = tradOk && strokeOk && wubiOk
-        optionalPlan = plan
-        ImePreferences.from(context).applyWubiSettings()
+        optionalLoaded = tradLoaded && strokeLoaded && wubiLoaded
+        prefs.applyWubiSettings()
         return result
     }
 }

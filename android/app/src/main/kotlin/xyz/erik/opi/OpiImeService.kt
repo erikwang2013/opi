@@ -239,9 +239,9 @@ class OpiImeService : InputMethodService() {
                 imeState.restore(prefs.inputMode, prefs.keyboardModes, prefs.skin, prefs.englishPro, prefs.customPunct, prefs.scene)
                 // restore 可能晚于 onConfigureWindow（窗口先出来）：按恢复后的模式重排一次。
                 window?.window?.let { applyKeyboardWindow(it) }
-                // 生僻字索引 1.1MB：首次打开面板才懒读会在主线程卡一下；引擎就绪后
-                // 用后台线程预热，面板打开时直接命中。
+                // 生僻字索引 1.1MB：打开面板才懒读会卡主线程，就绪后后台预热。
                 Thread({ runCatching { rareIndex } }, "opi-rare-preload").start()
+                EngineLoader.io.execute { EngineLoader.preloadOptional(this) } // 补首帧跳过的码表
             },
         )
         val view = ComposeView(this)
