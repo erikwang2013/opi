@@ -33,10 +33,10 @@ class ClipProtocolTest {
     @Test
     fun pairingEventsDecode() {
         val prompt = parseClipEvent(
-            """{"type":"pairing_prompt","incoming":true,"instance_id":"deadbeef","sas":"123456"}""",
+            """{"type":"pairing_prompt","incoming":true,"instance_id":"deadbeef","name":"书桌","sas":"123456"}""",
         )
         assertEquals(
-            ClipEvent.PairingPrompt("deadbeef", "123456", incoming = true),
+            ClipEvent.PairingPrompt("deadbeef", "书桌", "123456", incoming = true),
             prompt,
         )
         val finished = parseClipEvent(

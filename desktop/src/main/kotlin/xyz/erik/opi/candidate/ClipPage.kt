@@ -238,7 +238,7 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
         for (p in pending) {
             PairingCard(
                 pending = p,
-                name = displayName(p.instanceId, emptyMap(), st?.peers.orEmpty()),
+                name = p.name.takeIf { it.isNotEmpty() } ?: displayName(p.instanceId, emptyMap(), st?.peers.orEmpty()),
                 enabled = running,
             ) { accept -> confirm(p.instanceId, accept) }
         }

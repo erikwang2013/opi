@@ -231,7 +231,8 @@ final class OpiClipService {
         case "pairing_prompt":
             let sas = event["sas"] as? String ?? ""
             let incoming = event["incoming"] as? Bool ?? false
-            let name = peerName(id)
+            let eventName = event["name"] as? String ?? ""
+            let name = eventName.isEmpty ? peerName(id) : eventName
             withLock {
                 pendingCache.removeAll { $0.id == id }
                 pendingCache.append(OpiClipPending(id: id, name: name, sas: sas, incoming: incoming))

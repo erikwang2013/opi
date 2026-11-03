@@ -22,6 +22,7 @@ export struct ClipSection {
   @State peers: ClipPeer[] = [];
   @State promptId: string = '';
   @State promptSas: string = '';
+  @State promptName: string = '';
   @State promptIncoming: boolean = false;
   @State fingerprint: string = '';
   @State lastSource: string = '';
@@ -62,6 +63,7 @@ export struct ClipSection {
     const pr: ClipPairingPrompt | null = ClipSync.prompt();
     this.promptId = pr !== null ? pr.instanceId : '';
     this.promptSas = pr !== null ? pr.sas : '';
+    this.promptName = pr !== null ? pr.name : '';
     this.promptIncoming = pr !== null ? pr.incoming : false;
     this.lastSource = ClipSync.sourceDevice();
     this.lastPairing = ClipSync.pairingResult();
@@ -153,7 +155,7 @@ export struct ClipSection {
       // ---- 配对确认：SAS 只能人工核对，绝不自动接受 ----
       if (this.promptId.length > 0) {
         Column() {
-          Text(t(this.promptIncoming ? '对方请求配对' : '确认配对'))
+          Text(this.promptName.length > 0 ? this.promptName : t(this.promptIncoming ? '对方请求配对' : '确认配对'))
             .fontSize(this.fs(12)).fontColor(this.pal().dimFg)
           Text(this.sasText())
             .fontSize(this.fs(26)).fontWeight(FontWeight.Bold)

@@ -202,14 +202,14 @@ class ClipBridgeTest {
     @Test
     fun pairingPromptAndFinishAreRoutedAndConfirmGoesToNative() {
         val api = FakeApi().apply {
-            pollResult = """{"type":"pairing_prompt","incoming":false,"instance_id":"peer2","sas":"654321"}"""
+            pollResult = """{"type":"pairing_prompt","incoming":false,"instance_id":"peer2","name":"书桌","sas":"654321"}"""
         }
         val worker = QueueWorker()
         val recorder = Recorder()
         val bridge = bridge(api, worker, recorder)
         bridge.start("{}")
         worker.drain(1)
-        assertEquals(ClipPairingPrompt("peer2", "654321", incoming = false), recorder.prompts.single())
+        assertEquals(ClipPairingPrompt("peer2", "书桌", "654321", incoming = false), recorder.prompts.single())
         bridge.pairConfirm("peer2", accept = true)
         worker.drain(2)
         assertEquals(listOf(true), api.confirms)

@@ -17,9 +17,11 @@ pub const MAX_FRAME_BYTES: usize = 64 * 1024;
 /// 剪贴板事件分片大小，留出 postcard 头与 Noise tag 的余量。
 pub const FRAGMENT_BYTES: usize = 48 * 1024;
 pub const DEFAULT_DISCOVERY_PORT: u16 = 45888;
-/// 链路本地组播（224.0.0.0/24）。路由器与 AP 必须转发这一段的组播；
-/// 2026-11-03 起改用 LocalSend 已在现场验证可达的 224.0.0.167。
-pub const DISCOVERY_GROUP: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 167);
+/// 链路本地组播（224.0.0.0/24）。路由器与 AP 必须转发这一段的组播。
+/// 2026-11-04：改用**独立**组 224.0.0.168 —— 224.0.0.167 是 LocalSend 的发现组，
+/// 共用会在部分平台/驱动上互相收到报文（用户报障「跨设备传输导致 LocalSend 无法匹配」）。
+/// 旧组 239.255.42.99 继续兼容老客户端。
+pub const DISCOVERY_GROUP: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 168);
 /// 旧组播组：只为兼容未升级的客户端，新客户端同时加入并发送。
 pub const DISCOVERY_GROUP_LEGACY: Ipv4Addr = Ipv4Addr::new(239, 255, 42, 99);
 pub const BEACON_INTERVAL: Duration = Duration::from_secs(2);
@@ -295,6 +297,8 @@ pub enum ClipEvent {
     /// 双方算出同一 6 位 SAS；`incoming` 表示这次配对由对端发起。
     PairingPrompt {
         instance_id: InstanceId,
+        /// 握手 `PairInfo` 里对端自报的设备名（SAS 提示直接显示，便于确认设备）。
+        name: String,
         sas: String,
         incoming: bool,
     },

@@ -23,6 +23,7 @@ internal data class ClipPeer(
 
 internal data class ClipPending(
     val instanceId: String,
+    val name: String,
     val sas: String,
     val incoming: Boolean,
 )
@@ -187,7 +188,7 @@ internal fun localLanIpv4(): String? = localLanAddress()?.ip
 internal sealed interface ClipEvent {
     data class PeerDiscovered(val peer: ClipPeer) : ClipEvent
     data class PeerOffline(val instanceId: String) : ClipEvent
-    data class PairingPrompt(val instanceId: String, val sas: String, val incoming: Boolean) : ClipEvent
+    data class PairingPrompt(val instanceId: String, val name: String, val sas: String, val incoming: Boolean) : ClipEvent
     data class PairingFinished(val instanceId: String, val trusted: Boolean, val reason: String?) : ClipEvent
 
     /** [text] 只给写入剪贴板用；任何状态/日志/控制面都不得包含它。 */
@@ -230,7 +231,7 @@ internal fun parseClipEvent(json: String): ClipEvent? {
         "pairing_prompt" -> {
             val id = m.str("instance_id") ?: return null
             val sas = m.str("sas") ?: return null
-            ClipEvent.PairingPrompt(id, sas, m.bool("incoming") ?: false)
+            ClipEvent.PairingPrompt(id, m.str("name").orEmpty(), sas, m.bool("incoming") ?: false)
         }
         "pairing_finished" -> m.str("instance_id")?.let {
             ClipEvent.PairingFinished(it, m.bool("trusted") ?: false, m.str("reason"))
@@ -287,7 +288,7 @@ internal fun ClipUiState.applyEvent(event: ClipEvent): ClipUiState = when (event
     is ClipEvent.PeerOffline -> copy(pending = pending - event.instanceId)
     is ClipEvent.PairingPrompt -> copy(
         pending = pending + (
-            event.instanceId to ClipPending(event.instanceId, event.sas, event.incoming)
+            event.instanceId to ClipPending(event.instanceId, event.name, event.sas, event.incoming)
             ),
         lastError = null,
     )
@@ -366,6 +367,7 @@ internal fun encodeClipStatus(s: ClipStatus): String = buildString {
     s.pending.forEachIndexed { i, p ->
         if (i > 0) append(',')
         append("{\"instance_id\":").append(jsonString(p.instanceId))
+        append(",\"name\":").append(jsonString(p.name))
         append(",\"sas\":").append(jsonString(p.sas))
         append(",\"incoming\":").append(p.incoming)
         append('}')
@@ -383,7 +385,7 @@ internal fun parseClipStatus(line: String): ClipStatus? {
         val pm = (v as? JVal.JObj)?.v ?: return@mapNotNull null
         val id = pm.str("instance_id") ?: return@mapNotNull null
         val sas = pm.str("sas") ?: return@mapNotNull null
-        ClipPending(id, sas, pm.bool("incoming") ?: false)
+        ClipPending(id, pm.str("name").orEmpty(), sas, pm.bool("incoming") ?: false)
     }
     return ClipStatus(
         enabled = m.bool("enabled") ?: false,

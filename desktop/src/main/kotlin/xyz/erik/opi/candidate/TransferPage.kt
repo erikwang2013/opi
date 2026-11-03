@@ -15,6 +15,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.draw.clip
+import java.awt.datatransfer.DataFlavor
+import java.awt.dnd.DnDConstants
+import java.awt.dnd.DropTarget
+import java.awt.dnd.DropTargetAdapter
+import java.awt.dnd.DropTargetDragEvent
+import java.awt.dnd.DropTargetDropEvent
+import java.awt.dnd.DropTargetEvent
+import java.io.File
 import androidx.compose.material.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -34,12 +49,17 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.nio.file.Path
 
+/** 设置窗的 AWT 窗口（拖拽入站用；Compose 的 LocalWindow 是 internal）。 */
+internal val LocalSettingsWindow = staticCompositionLocalOf<java.awt.Window?> { null }
+
 @Composable
 internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
     val scope = rememberCoroutineScope()
     val targets = sendablePeers(status.peers)
     var target by remember { mutableStateOf("") }
     var text by remember { mutableStateOf("") }
+    var picker by remember { mutableStateOf<TransferPickerMode?>(null) }
+    var saveDirFor by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(targets.joinToString { it.instanceId }) {
         if (targets.none { it.instanceId == target }) {
@@ -74,32 +94,73 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
         }
     }
 
-    fun pickAndSend(media: Boolean) {
-        scope.launch {
-            val paths = withContext(Dispatchers.IO) {
-                if (media) pickTransferMedia() else pickTransferFiles()
+    val window = LocalSettingsWindow.current
+    var dropActive by remember { mutableStateOf(false) }
+    val dropSend = rememberUpdatedState<(List<Path>) -> Unit> { sendPaths(it) }
+    val dropListener = remember {
+        object : DropTargetAdapter() {
+            private fun accepts(dtde: DropTargetDragEvent) =
+                dtde.isDataFlavorSupported(DataFlavor.javaFileListFlavor)
+
+            override fun dragEnter(dtde: DropTargetDragEvent) {
+                if (accepts(dtde)) {
+                    dropActive = true
+                    dtde.acceptDrag(DnDConstants.ACTION_COPY)
+                } else {
+                    dtde.rejectDrag()
+                }
             }
-            sendPaths(paths)
+
+            override fun dragOver(dtde: DropTargetDragEvent) {
+                if (accepts(dtde)) dtde.acceptDrag(DnDConstants.ACTION_COPY) else dtde.rejectDrag()
+            }
+
+            override fun dragExit(dtde: DropTargetEvent) {
+                dropActive = false
+            }
+
+            override fun drop(dtde: DropTargetDropEvent) {
+                dropActive = false
+                if (!dtde.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+                    dtde.rejectDrop()
+                    return
+                }
+                dtde.acceptDrop(DnDConstants.ACTION_COPY)
+                @Suppress("UNCHECKED_CAST")
+                val paths = runCatching {
+                    (dtde.transferable.getTransferData(DataFlavor.javaFileListFlavor) as List<File>)
+                        .map { it.toPath() }
+                }.getOrDefault(emptyList())
+                dtde.dropComplete(paths.isNotEmpty())
+                if (paths.isNotEmpty()) dropSend.value(paths)
+            }
         }
     }
-
-    fun sendFolder() {
-        scope.launch {
-            val folder = withContext(Dispatchers.IO) { pickTransferFolder() } ?: return@launch
-            sendPaths(listOf(folder))
-        }
+    DisposableEffect(window) {
+        val w = window ?: return@DisposableEffect onDispose {}
+        DropTarget(w, DnDConstants.ACTION_COPY, dropListener, true)
+        onDispose { runCatching { w.dropTarget = null } }
     }
 
-    fun accept(t: TransferUi, chooseDir: Boolean) {
+    fun choose(mode: TransferPickerMode) {
+        if (target.isEmpty()) {
+            report("请先选择一台已配对且在线的设备")
+            return
+        }
+        picker = mode
+    }
+
+    fun accept(t: TransferUi) {
         scope.launch {
-            val dir = (if (chooseDir) {
-                withContext(Dispatchers.IO) { pickTransferSaveDir()?.toString() }
-            } else {
-                defaultTransferSaveDir().toString()
-            }) ?: return@launch
+            val dir = defaultTransferSaveDir().toString()
             val ok = withContext(Dispatchers.IO) { ClipClient.respondTransfer(t.id, true, dir) }
             report(if (ok) "已接受，保存到 $dir" else "接收命令未送达宿主")
         }
+    }
+
+    fun chooseSaveDir(t: TransferUi) {
+        saveDirFor = t.id
+        picker = TransferPickerMode.FOLDER
     }
 
     fun reject(t: TransferUi) {
@@ -132,6 +193,22 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
             "单次最多 $TRANSFER_MAX_ENTRIES 项、单文件 2 GiB、总计 8 GiB。",
         fontSize = 12.sp, color = Muted,
     )
+    if (dropActive) {
+        Box(
+            Modifier.fillMaxWidth().padding(vertical = 6.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .border(2.dp, Teal.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                .background(Teal.copy(alpha = 0.08f))
+                .padding(12.dp),
+        ) {
+            Text(
+                "松开鼠标，发送到 ${targets.firstOrNull { it.instanceId == target }?.name ?: "已选设备"}",
+                fontSize = 12.sp, color = Teal, fontWeight = FontWeight.SemiBold,
+            )
+        }
+    } else {
+        Text("也可以把文件 / 文件夹 / 照片直接拖到此页", fontSize = 11.sp, color = Muted)
+    }
     if (targets.isEmpty()) {
         Spacer(Modifier.height(4.dp))
         Text("没有已配对且在线的设备。请先在上方完成配对。", fontSize = 12.sp, color = Muted)
@@ -149,12 +226,16 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
     }
     Spacer(Modifier.height(6.dp))
     Row {
-        ClipButton("选择文件", enabled = status.running && targets.isNotEmpty()) { pickAndSend(media = false) }
+        ClipButton("选择文件", enabled = status.running && targets.isNotEmpty()) {
+            choose(TransferPickerMode.FILES)
+        }
         Spacer(Modifier.width(8.dp))
-        ClipButton("选择文件夹", enabled = status.running && targets.isNotEmpty()) { sendFolder() }
+        ClipButton("选择文件夹", enabled = status.running && targets.isNotEmpty()) {
+            choose(TransferPickerMode.FOLDER)
+        }
         Spacer(Modifier.width(8.dp))
-        ClipButton("图片/音频/视频", enabled = status.running && targets.isNotEmpty()) {
-            pickAndSend(media = true)
+        ClipButton("照片/视频", enabled = status.running && targets.isNotEmpty()) {
+            choose(TransferPickerMode.MEDIA)
         }
     }
 
@@ -208,12 +289,33 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
                 t = t,
                 name = displayName(t.peerId, emptyMap(), status.peers),
                 running = status.running,
-                onAccept = { accept(t, chooseDir = false) },
-                onChooseDir = { accept(t, chooseDir = true) },
+                onAccept = { accept(t) },
+                onChooseDir = { chooseSaveDir(t) },
                 onReject = { reject(t) },
                 onCancel = { cancel(t) },
                 onOpen = { open(t) },
             )
+        }
+    }
+
+    picker?.let { mode ->
+        TransferPickerWindow(
+            mode = mode,
+            initialDir = if (saveDirFor != null) defaultTransferSaveDir() else null,
+            onCancel = { picker = null; saveDirFor = null },
+        ) { paths ->
+            val dir = paths.firstOrNull()?.toString()
+            val id = saveDirFor
+            picker = null
+            saveDirFor = null
+            if (id != null && dir != null) {
+                scope.launch {
+                    val ok = withContext(Dispatchers.IO) { ClipClient.respondTransfer(id, true, dir) }
+                    report(if (ok) "已接受，保存到 $dir" else "接收命令未送达宿主")
+                }
+            } else {
+                sendPaths(paths)
+            }
         }
     }
 }

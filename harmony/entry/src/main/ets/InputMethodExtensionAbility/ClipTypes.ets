@@ -25,6 +25,7 @@ export interface ClipStatus {
 
 export interface ClipPairingPrompt {
   instanceId: string;
+  name: string;
   sas: string;
   /** true = 这次配对由对端发起。 */
   incoming: boolean;

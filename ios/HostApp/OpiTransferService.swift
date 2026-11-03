@@ -281,7 +281,8 @@ final class OpiTransferService {
         case "pairing_prompt":
             let sas = event["sas"] as? String ?? ""
             let incoming = event["incoming"] as? Bool ?? false
-            let name = peerName(peerId)
+            let eventName = event["name"] as? String ?? ""
+            let name = eventName.isEmpty ? peerName(peerId) : eventName
             withLock {
                 pendingCache.removeAll { $0.id == peerId }
                 pendingCache.append(

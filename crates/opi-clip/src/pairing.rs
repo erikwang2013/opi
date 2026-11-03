@@ -108,7 +108,7 @@ fn initiate(
     )?;
 
     let code = crypto::sas(&prologue, &handshake_hash);
-    let local_accept = prompt(inner, peer, &code, false)?;
+    let local_accept = prompt(inner, peer, &peer_name, &code, false)?;
     stream.set_read_timeout(Some(PAIRING_TIMEOUT + Duration::from_secs(5)))?;
     send_wire(
         &mut stream,
@@ -146,7 +146,7 @@ fn respond(
     let peer_name = exchange_info(stream, &mut transport, own, &inner.config.device_name, peer)?;
 
     let code = crypto::sas(&prologue, &handshake_hash);
-    let local_accept = prompt(inner, peer, &code, true)?;
+    let local_accept = prompt(inner, peer, &peer_name, &code, true)?;
     stream.set_read_timeout(Some(PAIRING_TIMEOUT + Duration::from_secs(5)))?;
     send_wire(
         stream,
@@ -201,6 +201,9 @@ fn complete(
 }
 
 fn configure(stream: &TcpStream) -> Result<(), ClipError> {
+    // 握手全程用阻塞读写 + 超时；显式置回阻塞，避免 Windows 把 accept 继承来的
+    // 非阻塞模式带进配对（表现为 io: ... 10035 WSAEWOULDBLOCK）。
+    stream.set_nonblocking(false)?;
     stream.set_nodelay(true)?;
     stream.set_read_timeout(Some(IO_TIMEOUT))?;
     stream.set_write_timeout(Some(IO_TIMEOUT))?;
@@ -273,6 +276,7 @@ fn read_wire(
 fn prompt(
     inner: &Arc<NodeInner>,
     peer: InstanceId,
+    name: &str,
     code: &str,
     incoming: bool,
 ) -> Result<bool, ClipError> {
@@ -290,6 +294,7 @@ fn prompt(
         core.pairing.insert(peer, sender);
         core.push_event(ClipEvent::PairingPrompt {
             instance_id: peer,
+            name: name.to_owned(),
             sas: code.to_owned(),
             incoming,
         });

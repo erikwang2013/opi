@@ -32,9 +32,9 @@ class ClipProtocolTest {
             parseClipEvent("""{"type":"peer_offline","instance_id":"$ID"}"""),
         )
         assertEquals(
-            ClipEvent.PairingPrompt(ID, "123456", true),
+            ClipEvent.PairingPrompt(ID, "书桌", "123456", true),
             parseClipEvent(
-                """{"type":"pairing_prompt","instance_id":"$ID","sas":"123456","incoming":true}""",
+                """{"type":"pairing_prompt","instance_id":"$ID","name":"书桌","sas":"123456","incoming":true}""",
             ),
         )
         // 成功时 reason 是 JSON null —— 这条专门盯解析器的 null 支持。
@@ -163,8 +163,8 @@ class ClipProtocolTest {
         var ui = ClipUiState().applyEvent(
             ClipEvent.PeerDiscovered(ClipPeer(ID, "书桌", "10.0.0.2:1", true, true)),
         )
-        ui = ui.applyEvent(ClipEvent.PairingPrompt(ID, "123456", true))
-        assertEquals(ClipPending(ID, "123456", true), ui.pending[ID])
+        ui = ui.applyEvent(ClipEvent.PairingPrompt(ID, "书桌", "123456", true))
+        assertEquals(ClipPending(ID, "书桌", "123456", true), ui.pending[ID])
 
         ui = ui.applyEvent(ClipEvent.PairingFinished(ID, false, "rejected"))
         assertNull(ui.pending[ID])
@@ -195,7 +195,7 @@ class ClipProtocolTest {
             mode = ClipMode.MANUAL,
             deviceName = "书桌 \"A\"",
             peers = listOf(ClipPeer(ID, "书桌", "10.0.0.2:1", true, true)),
-            pending = listOf(ClipPending(ID, "654321", false)),
+            pending = listOf(ClipPending(ID, "书桌", "654321", false)),
             lastSource = "书桌",
             lastError = null,
             ffiError = null,

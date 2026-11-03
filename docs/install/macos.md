@@ -372,6 +372,9 @@ cp luna.opid ~/Library/Application\ Support/opi/luna.opid
 
 ### 6.6 跨设备剪贴板（2026-11-01，源码层 / 未上机）
 
+> **2026-11-04**：接收目录保持 `~/Downloads/opi`；配对提示显示设备名；发现使用独立组播
+> `224.0.0.168`，不再占用 LocalSend 的 `224.0.0.167`。
+
 - **入口**：输入法菜单的「跨设备剪贴板」子菜单（开关、待确认 SAS、对端概览、最近
   来源、停止）与设置窗「剪贴板」页（`macos/OpiMenu.swift` / `OpiClipSettings.swift` /
   `OpiClip.swift`）；默认关（`UserDefaults` 键 `ClipEnabled`）。

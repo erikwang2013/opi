@@ -3,10 +3,6 @@
 
 package xyz.erik.opi.ime
 
-import android.content.ActivityNotFoundException
-import android.content.Context
-import android.content.Intent
-import android.provider.DocumentsContract
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,8 +29,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.FileProvider
 import xyz.erik.opi.clip.ClipRuntime
+import xyz.erik.opi.clip.openSavedFolder
 import xyz.erik.opi.clip.ClipTransfer
 import xyz.erik.opi.clip.TransferPhase
 import xyz.erik.opi.clip.TransferActivity
@@ -42,7 +38,6 @@ import xyz.erik.opi.clip.formatTransferBytes
 import xyz.erik.opi.clip.hasTrustedTarget
 import xyz.erik.opi.i18n.Text
 import xyz.erik.opi.keyboard.LocalKeyboardPalette
-import java.io.File
 
 /**
  * 跨设备传输面板（2026-11-02）：附近设备、五种发送入口、收发状态。
@@ -158,10 +153,7 @@ fun TransferPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
             if (folderNote.isNotEmpty()) Hint(folderNote, accent = true)
 
             HorizontalDivider(Modifier.padding(vertical = 6.dp))
-            Hint(
-                "接收文件保存到应用专属外部下载目录 Download/opi。" +
-                    "Android 不允许普通应用直接写公共 Downloads，卸载应用会删除该目录。",
-            )
+            Hint("接收文件保存到系统公共 Download/opi；导入完成前暂存在应用目录。")
         }
     }
 }
@@ -275,25 +267,5 @@ private fun ActionRow(label: String, hint: String, onClick: () -> Unit) {
     ) {
         Text(label, fontSize = 13.sp, color = p.panelFg, modifier = Modifier.weight(1f))
         Text(hint, fontSize = 10.sp, color = p.barDimFg)
-    }
-}
-
-/** 打开接收目录；没有能列目录的查看器时回退为显示路径（不静默失败）。 */
-private fun openSavedFolder(context: Context, dir: String): String {
-    val file = File(dir)
-    if (!file.isDirectory) return "目录不存在（可能已被系统清理）：$dir"
-    return try {
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-        context.startActivity(
-            Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, DocumentsContract.Document.MIME_TYPE_DIR)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-            },
-        )
-        ""
-    } catch (_: ActivityNotFoundException) {
-        "已保存到：$dir"
-    } catch (_: IllegalArgumentException) {
-        "已保存到：$dir"
     }
 }

@@ -236,15 +236,8 @@ internal fun ClipSection(prefs: ImePreferences, toast: (String) -> Unit) {
                 },
             )
         }
-        ListItem(
-            headlineContent = { Text("发送当前剪贴板") },
-            supportingContent = { Text("手动测试：只发送文本，不显示、不记录内容") },
-            trailingContent = {
-                TextButton(onClick = { toast(ClipRuntime.publishCurrentClipboard(context)) }) {
-                    Text("发送")
-                }
-            },
-        )
+        HorizontalDivider()
+        TransferSettingsSection(toast)
         HorizontalDivider()
         ListItem(
             headlineContent = { Text("安全与网络") },
@@ -274,8 +267,9 @@ internal fun ClipSection(prefs: ImePreferences, toast: (String) -> Unit) {
     }
 
     ClipRuntime.pairingPrompt?.let { prompt ->
-        val name = ClipRuntime.peers.firstOrNull { it.instanceId == prompt.instanceId }
-            ?.name?.takeIf { it.isNotEmpty() }
+        val name = prompt.name.takeIf { it.isNotEmpty() }
+            ?: ClipRuntime.peers.firstOrNull { it.instanceId == prompt.instanceId }
+                ?.name?.takeIf { it.isNotEmpty() }
             ?: prompt.instanceId.take(8)
         AlertDialog(
             // 返回键/点外面 = 拒绝；不可能「什么都不做」地把配对悬着。

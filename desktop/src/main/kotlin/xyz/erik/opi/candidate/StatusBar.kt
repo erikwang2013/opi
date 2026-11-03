@@ -482,7 +482,7 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
             title = "小欧输入法 设置",
             icon = OpiPetWindowIcon,
         ) {
-            SettingsWindow() // 与 `--settings` 模式同一个主体（那份自带落盘 + 通知）
+            CompositionLocalProvider(LocalSettingsWindow provides window) { SettingsWindow() } // 与 `--settings` 模式同一个主体（那份自带落盘 + 通知）
         }
     }
     if (vkOpen) {

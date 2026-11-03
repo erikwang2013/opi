@@ -35,7 +35,8 @@ internal object ClipRuntime {
     private const val DISCOVERY_PORT = 45888
     private const val MAX_DEVICE_NAME = 48
     private const val STAGING_DIR = "transfer"
-    private const val SAVE_DIR = "opi"
+    /** 入站暂存：内核先写这里，完成后再导入公共 Download/opi（见 [importIncomingToPublicDownloads]）。 */
+    private const val INCOMING_DIR = "transfer-incoming"
     private const val MAX_TRANSFERS = 20
 
     val peers = mutableStateListOf<ClipPeer>()
@@ -62,6 +63,7 @@ internal object ClipRuntime {
         private set
 
     private val main = Handler(Looper.getMainLooper())
+    private var appContext: Context? = null
     private var bridge: ClipBridge? = null
     private var adapter: ClipboardAdapter? = null
     private var multicastLock: WifiManager.MulticastLock? = null
@@ -90,8 +92,11 @@ internal object ClipRuntime {
         )
         adapter = clipAdapter
         bridge = created
+        appContext = app
         multicastLock = acquireMulticastLock(app)
         pruneStaleStaging(File(app.cacheDir, STAGING_DIR))
+        pruneStaleStaging(File(app.getExternalFilesDir(null) ?: app.filesDir, INCOMING_DIR))
+        migrateLegacyDownloads(app)
         lastError = ""
         lastSource = ""
         lastPairing = ""
@@ -114,6 +119,7 @@ internal object ClipRuntime {
         adapter = null
         bridge?.stop()
         bridge = null
+        appContext = null
         multicastLock?.let { lock -> runCatching { if (lock.isHeld) lock.release() } }
         multicastLock = null
         peers.clear()
@@ -202,10 +208,28 @@ internal object ClipRuntime {
         }
     }
 
-    /** 入站传输接受后的落点是应用专属外部「下载/opi」（免存储权限；见面板文案）。 */
+    /**
+     * 2026-11-04：旧版把手收文件放在应用专属 `Download/opi`。升级后一次性搬到公共
+     * Download/opi 并删掉旧目录；部分失败时保留旧目录（文件不丢）。
+     */
+    private fun migrateLegacyDownloads(context: Context) {
+        val legacy = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+            ?.resolve("opi") ?: return
+        if (!legacy.isDirectory) return
+        Thread({
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
+            runCatching { importIncomingToPublicDownloads(context, legacy) }
+        }, "opi-transfer-migrate").start()
+    }
+
+    /**
+     * 入站暂存目录（应用专属外部存储，免权限）。内核把文件写完后，
+     * [importIncomingToPublicDownloads] 再搬进公共 Download/opi —— Android 10+ 不能直接给内核
+     * 一个可写的公共路径，必须走 MediaStore，所以采用「暂存 → 导入」。
+     */
     fun incomingSaveDir(context: Context): String? {
-        val base = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
-        val dir = File(base, SAVE_DIR)
+        val base = context.getExternalFilesDir(null) ?: context.filesDir
+        val dir = File(base, "$INCOMING_DIR/${java.util.UUID.randomUUID()}")
         if (!dir.isDirectory && !dir.mkdirs()) return null
         return dir.absolutePath
     }
@@ -378,6 +402,26 @@ internal object ClipRuntime {
                             savedDir = event.savedDir,
                             files = event.files,
                         )
+                    }
+                    // 入站：内核写的是应用专属暂存目录，后台导入公共 Download 后再更新落点。
+                    if (!event.outgoing) {
+                        val ctx = ClipRuntime.appContext
+                        val source = event.savedDir?.let(::File)
+                        if (ctx != null && source != null) {
+                            Thread({
+                                android.os.Process.setThreadPriority(
+                                    android.os.Process.THREAD_PRIORITY_BACKGROUND,
+                                )
+                                val public = runCatching {
+                                    importIncomingToPublicDownloads(ctx, source)
+                                }.getOrNull()
+                                if (public != null) {
+                                    main.post {
+                                        update(event.transferId) { it.copy(savedDir = public) }
+                                    }
+                                }
+                            }, "opi-transfer-import").start()
+                        }
                     }
                 }
                 is ClipEvent.TransferFailed -> {

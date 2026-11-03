@@ -1322,8 +1322,11 @@ trigger **≤32 个 ASCII 字母**（`CustomPhraseCodec` 与 `engine-core/src/cu
 `ClipEnabled=False`（缺省关）。宿主就是设置窗/状态栏用的同一个 `opi.exe`：状态栏常驻
 进程每秒重读该键并启停 `ClipService`；设置窗发现状态栏没在跑时，会先把它拉起
 （`--statusbar`）。本机适配器走 Win32：`GetClipboardSequenceNumber` 判变 +
-`CF_UNICODETEXT` 读写，**只处理纯文本**（图片/文件/URI 忽略），单条上限 256 KiB；
-收到远端文本只写剪贴板，**不自动粘贴、不打开链接**。
+`CF_UNICODETEXT` 读写，剪贴板通道**只处理纯文本**（图片/文件/URI 忽略），单条上限
+256 KiB；文件/文件夹/媒体走传输通道。收到远端文本只写剪贴板，**不自动粘贴、不打开链接**。
+**2026-11-04**：接收文件默认保存到 `%USERPROFILE%\Downloads\opi`；桌面传输页改用同
+皮肤自绘文件/文件夹/照片选择器，并支持把文件/文件夹直接拖入窗口发送；配对提示显示
+设备名；修复手动/自动配对 `WSAEWOULDBLOCK(10035)`；发现改用独立组播 `224.0.0.168`。
 
 - **网络**：局域网发现与加密会话，具体端口由程序内部管理，不在界面或文档公开。
 - **本机地址（2026-11-02 修正）**：Windows 上 `NetworkInterface.name` 不是网卡显示名

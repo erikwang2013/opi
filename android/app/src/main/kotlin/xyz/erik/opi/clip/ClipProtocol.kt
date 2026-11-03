@@ -39,6 +39,7 @@ internal data class ClipStatus(
 /** 需要用户核对的 6 位 SAS。`incoming` = 这次配对由对端发起。 */
 internal data class ClipPairingPrompt(
     val instanceId: String,
+    val name: String,
     val sas: String,
     val incoming: Boolean,
 )
@@ -55,7 +56,7 @@ internal data class TransferFileInfo(
 internal sealed interface ClipEvent {
     data class PeerDiscovered(val peer: ClipPeer) : ClipEvent
     data class PeerOffline(val instanceId: String) : ClipEvent
-    data class PairingPrompt(val instanceId: String, val sas: String, val incoming: Boolean) : ClipEvent
+    data class PairingPrompt(val instanceId: String, val name: String, val sas: String, val incoming: Boolean) : ClipEvent
     data class PairingFinished(val instanceId: String, val trusted: Boolean, val reason: String?) : ClipEvent
     data class ClipboardReceived(val instanceId: String, val text: String) : ClipEvent
     data class SendFailed(val instanceId: String) : ClipEvent
@@ -111,7 +112,7 @@ internal fun parseClipEvent(json: String): ClipEvent? {
             val id = root.str("instance_id")
             val sas = root.str("sas")
             if (id == null || sas == null) null
-            else ClipEvent.PairingPrompt(id, sas, root.bool("incoming"))
+            else ClipEvent.PairingPrompt(id, root.str("name").orEmpty(), sas, root.bool("incoming"))
         }
         "pairing_finished" -> root.str("instance_id")?.let {
             ClipEvent.PairingFinished(it, root.bool("trusted"), root.str("reason"))

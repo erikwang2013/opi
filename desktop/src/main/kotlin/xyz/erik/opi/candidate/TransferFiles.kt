@@ -10,7 +10,6 @@
 package xyz.erik.opi.candidate
 
 import java.awt.Desktop
-import java.awt.KeyboardFocusManager
 import java.io.File
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
@@ -19,9 +18,6 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
-import javax.swing.JFileChooser
-import javax.swing.SwingUtilities
-import javax.swing.filechooser.FileNameExtensionFilter
 
 /** 与 `opi-clip` 的 `MAX_TRANSFER_*` 同值；超限在点击发送时前置拒绝。 */
 internal const val TRANSFER_MAX_ENTRIES = 128
@@ -190,7 +186,7 @@ internal fun scanTransfer(roots: List<Path>): TransferScan {
     return TransferScan(entries, bytes, error)
 }
 
-/** 默认落盘目录：Linux `~/Downloads/opi`，Windows `%USERPROFILE%\Downloads\opi`。纯函数可单测。 */
+/** 默认落盘目录：Linux `~/Downloads/opi`，Windows `%USERPROFILE%\Downloads\opi`。 */
 internal fun defaultTransferSaveDir(
     windows: Boolean = isWindows(),
     userHome: String? = System.getProperty("user.home"),
@@ -204,59 +200,7 @@ internal fun defaultTransferSaveDir(
     return Paths.get(home, "Downloads", "opi")
 }
 
-// ---------- 文件选择器 / 打开目录（调用方从 Dispatchers.IO 包进来） ----------
-
-internal fun pickTransferFiles(): List<Path> =
-    chooseTransferPaths("选择要发送的文件", JFileChooser.FILES_ONLY, multi = true, filter = null)
-
-internal fun pickTransferMedia(): List<Path> = chooseTransferPaths(
-    "选择图片/音频/视频",
-    JFileChooser.FILES_ONLY,
-    multi = true,
-    filter = FileNameExtensionFilter("图片 / 音频 / 视频", *TRANSFER_MEDIA_EXTENSIONS),
-)
-
-internal fun pickTransferFolder(): Path? =
-    chooseTransferPaths("选择要发送的文件夹", JFileChooser.DIRECTORIES_ONLY, multi = false, filter = null)
-        .firstOrNull()
-
-internal fun pickTransferSaveDir(): Path? =
-    chooseTransferPaths("选择接收文件的保存位置", JFileChooser.DIRECTORIES_ONLY, multi = false, filter = null)
-        .firstOrNull()
-
-internal val TRANSFER_MEDIA_EXTENSIONS = arrayOf(
-    "jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "svg",
-    "mp3", "wav", "flac", "aac", "ogg", "m4a", "opus", "wma", "ape",
-    "mp4", "mkv", "mov", "avi", "webm", "m4v", "wmv", "flv", "ts",
-)
-
-private fun chooseTransferPaths(
-    title: String,
-    mode: Int,
-    multi: Boolean,
-    filter: FileNameExtensionFilter?,
-): List<Path> {
-    var picked: Array<File>? = null
-    return try {
-        SwingUtilities.invokeAndWait {
-            val parent = KeyboardFocusManager.getCurrentKeyboardFocusManager().activeWindow
-            val fc = JFileChooser()
-            fc.dialogTitle = title
-            fc.fileSelectionMode = mode
-            fc.isMultiSelectionEnabled = multi
-            if (filter != null) {
-                fc.isAcceptAllFileFilterUsed = false
-                fc.fileFilter = filter
-            }
-            if (fc.showOpenDialog(parent) == JFileChooser.APPROVE_OPTION) {
-                picked = fc.selectedFiles
-            }
-        }
-        picked?.map { it.toPath() }.orEmpty()
-    } catch (_: Throwable) {
-        emptyList() // 取消 / headless / 桌面不支持 Swing 对话框
-    }
-}
+// ---------- 打开目录 ----------
 
 /** 完成后「打开」按钮：系统文件管理器；失败返回 false 由 UI 如实提示。 */
 internal fun openTransferFolder(path: String): Boolean = try {

@@ -344,6 +344,7 @@ function handleEvent(json: string): void {
     if (typeof event.instance_id === 'string' && typeof event.sas === 'string') {
       const parsed: ClipPairingPrompt = {
         instanceId: event.instance_id,
+        name: typeof event.name === 'string' ? event.name : '',
         sas: event.sas,
         incoming: event.incoming === true,
       };

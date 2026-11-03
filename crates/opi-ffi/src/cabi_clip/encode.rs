@@ -62,11 +62,13 @@ pub(super) fn encode_event(event: ClipEvent) -> Result<String, String> {
         }
         ClipEvent::PairingPrompt {
             instance_id,
+            name,
             sas,
             incoming,
         } => json!({
             "type": "pairing_prompt",
             "instance_id": instance_id.to_hex(),
+            "name": name,
             "sas": sas,
             "incoming": incoming,
         }),

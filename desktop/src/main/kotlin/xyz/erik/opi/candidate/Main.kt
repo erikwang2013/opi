@@ -171,7 +171,9 @@ private fun runApp(args: Array<String>) = application {
             title = "小欧输入法 设置",
             icon = OpiPetWindowIcon, // 窗口/任务栏图标 = 小欧（PetIcon.kt）
         ) {
-            SettingsWindow()
+            CompositionLocalProvider(LocalSettingsWindow provides window) {
+                SettingsWindow()
+            }
         }
         return@application
     }

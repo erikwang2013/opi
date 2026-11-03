@@ -243,7 +243,7 @@ internal class ClipBridge(
             is ClipEvent.PeerDiscovered,
             is ClipEvent.PeerOffline -> publishPeers()
             is ClipEvent.PairingPrompt -> callback.onPairingPrompt(
-                ClipPairingPrompt(event.instanceId, event.sas, event.incoming),
+                ClipPairingPrompt(event.instanceId, event.name, event.sas, event.incoming),
             )
             is ClipEvent.PairingFinished -> {
                 callback.onPairingFinished(event.instanceId, event.trusted, event.reason)

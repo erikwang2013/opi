@@ -177,14 +177,15 @@ final class OpiClipboard {
         case "pairing_prompt":
             let sas = event["sas"] as? String ?? ""
             let incoming = event["incoming"] as? Bool ?? false
-            let name = peerName(id)
+            let eventName = event["name"] as? String ?? ""
+            let name = eventName.isEmpty ? peerName(id) : eventName
             withLock {
                 pendingCache.removeAll { $0.id == id }
                 pendingCache.append(OpiClipPendingInfo(id: id, name: name, sas: sas))
             }
             postChanged()
             DispatchQueue.main.async { [weak self] in
-                self?.presentPairing(id: id, sas: sas, incoming: incoming, attempt: 0)
+                self?.presentPairing(id: id, sas: sas, incoming: incoming, displayName: name, attempt: 0)
             }
         case "pairing_finished":
             let trusted = event["trusted"] as? Bool ?? false
@@ -346,16 +347,16 @@ final class OpiClipboard {
     // MARK: - 配对确认（SAS）
 
     /// 键盘里唯一能弹窗的时机就是扩展可见时；设置面板开着就先等它关掉（最多 15s）。
-    private func presentPairing(id: String, sas: String, incoming: Bool, attempt: Int) {
+    private func presentPairing(id: String, sas: String, incoming: Bool, displayName: String, attempt: Int) {
         guard visible, let controller else { return }
         if controller.presentedViewController != nil {
             guard attempt < 15 else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-                self?.presentPairing(id: id, sas: sas, incoming: incoming, attempt: attempt + 1)
+                self?.presentPairing(id: id, sas: sas, incoming: incoming, displayName: displayName, attempt: attempt + 1)
             }
             return
         }
-        let name = peerName(id)
+        let name = displayName.isEmpty ? peerName(id) : displayName
         let alert = UIAlertController(
             title: incoming ? "\(name) 请求配对" : "与 \(name) 配对",
             message: "确认码：\(sas)\n请确认另一台设备显示相同的 6 位数字，再决定是否信任。",

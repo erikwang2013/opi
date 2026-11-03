@@ -158,6 +158,10 @@ pub(crate) fn accept_loop(inner: Arc<NodeInner>, listener: TcpListener) {
 }
 
 fn handle_connection(inner: Arc<NodeInner>, mut stream: TcpStream, source: SocketAddr) {
+    // Windows 的 accept() 会继承监听套接字的非阻塞模式（Linux 不会）。监听器为了
+    // accept_loop 设了 nonblocking；不在这里恢复，第一次 read_frame 就返回
+    // WSAEWOULDBLOCK(10035)，配对/会话直接失败。所有平台统一显式置回阻塞。
+    let _ = stream.set_nonblocking(false);
     let _ = stream.set_nodelay(true);
     let _ = stream.set_read_timeout(Some(HANDSHAKE_TIMEOUT));
     let _ = stream.set_write_timeout(Some(HANDSHAKE_TIMEOUT));
