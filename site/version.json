@@ -22,35 +22,35 @@
     "linux-amd64": {
       "full": {
         "url": "https://opi.erik.xyz/download/v1.31.8/full/opi-1.31.8-linux-amd64-full.deb",
-        "size": 491427806,
-        "sha256": "88edce338d1af9d19b1ebab89017a5469d597fde8132c642ffc88712b5e939f5"
+        "size": 491464514,
+        "sha256": "156d2f3bcf8d9870e62abd7dca2bda65f08530e719fe8bfd50c3b927f7ba98bf"
       },
       "normal": {
         "url": "https://opi.erik.xyz/download/v1.31.8/normal/opi-1.31.8-linux-amd64.deb",
-        "size": 94664996,
-        "sha256": "1ffe769b3e8e8323941b9f9a4db567bf80819c79497fdb29664947af6a7ae39b"
+        "size": 94709886,
+        "sha256": "079762152133f7d5da4bb3d0eae843623a843af1ddf7e173f4b4056ff6778c21"
       },
       "basic": {
         "url": "https://opi.erik.xyz/download/v1.31.8/basic/opi-1.31.8-linux-amd64-basic.deb",
-        "size": 69942996,
-        "sha256": "c8cb20389a21c9fbd38b911527051c9bd150b8579546b844ec86a9fde9c77769"
+        "size": 69981214,
+        "sha256": "6ce0f6972244d7b38e050ffac2ef2d5456573b1029b354d6413cdf0ea14b40f0"
       }
     },
     "linux-x86_64": {
       "full": {
         "url": "https://opi.erik.xyz/download/v1.31.8/full/opi-1.31.8-linux-x86_64-full.rpm",
-        "size": 491479845,
-        "sha256": "4d60e943a37f4bb6cb7cc9e4015f83d9950709f8091c05027d2f4769b74e727d"
+        "size": 491515168,
+        "sha256": "9a7388fed89407d3feba6ca9e20684acb0d30aca2afae95b54f26125cc1e7838"
       },
       "normal": {
         "url": "https://opi.erik.xyz/download/v1.31.8/normal/opi-1.31.8-linux-x86_64.rpm",
-        "size": 94708215,
-        "sha256": "42f00e0e04144eac2ac0733b63b43d7145f6cdc113175ab017e9e90f10371704"
+        "size": 94738455,
+        "sha256": "1daf617108e570125c2b085b36ae892db482c04162b0ee2fa0b70195913680e1"
       },
       "basic": {
         "url": "https://opi.erik.xyz/download/v1.31.8/basic/opi-1.31.8-linux-x86_64-basic.rpm",
-        "size": 69986056,
-        "sha256": "39111ac279dbdff79c4130ebff3a3a26deb18f46683ef6ef2f44865d4168e6fb"
+        "size": 70019070,
+        "sha256": "026adede6ea0e4a742730001945f2862f1d02b64e9c0291070b0680aab5e8bc8"
       }
     },
     "android": {
