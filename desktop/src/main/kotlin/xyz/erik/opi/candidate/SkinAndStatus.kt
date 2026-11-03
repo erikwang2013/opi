@@ -84,7 +84,9 @@ internal fun barShape(windows: Boolean): Shape =
 internal fun barVisible(buttons: List<StatusBarButton>, im: String, requireActive: Boolean = false): Boolean {
     if (buttons.isEmpty()) return false
     // Windows 常驻状态栏仅在 TSF 激活（im=opi）时显示；未知状态隐藏，免得安装完就出现
-    // 一条点哪都报错的条。Linux 保留「未知 ⇒ 维持可见」（旧 glue 缺 im= 时不闪）。
+    // 一条点哪都报错的条。
+    // Linux：未知（缺键/空串）= 维持可见（旧 glue 没合 im= 时别闪条）；非空且不是 opi
+    // ⇒ 隐藏，切回 opi 再显示（2026-10-10 下午用户裁决「切到其他输入法时状态栏消失」）。
     if (requireActive) return im == "opi"
     return im.isEmpty() || im == "opi"
 }
@@ -96,10 +98,11 @@ internal const val STATE_CLEAR_AFTER_FAILS = 3
 internal data class StatePoll(val fails: Int, val clear: Boolean)
 
 /**
- * 1s 轮询的状态读失败计数（纯函数，[StatusBarApp] 用它）。
+ * 状态读失败计数（纯函数，[StatusBarApp] 用它）。
  *
  * 2026-10-22 订正：旧内联实现把第 3 拍花在自增上、第 4 拍才清，比注释承诺的
- * 「连续 3 拍 ≈3s」多一秒；本函数按 lead 要求收口到**第 3 拍即清**。
+ * 「连续 3 拍」多一拍；本函数按 lead 要求收口到**第 3 拍即清**。
+ * 拍长由 [statePollDelayMs] 定（读失败会 200ms 快重试，不再固定 1s）。
  * 读到状态 ⇒ 计数归零；`im` 已经为空 ⇒ 没有可清的旧状态（`clear=false`）。
  */
 internal fun nextStatePoll(previousFails: Int, readOk: Boolean, imPresent: Boolean): StatePoll {
@@ -107,6 +110,31 @@ internal fun nextStatePoll(previousFails: Int, readOk: Boolean, imPresent: Boole
     val fails = (previousFails + 1).coerceAtMost(STATE_CLEAR_AFTER_FAILS)
     return StatePoll(fails, clear = fails >= STATE_CLEAR_AFTER_FAILS && imPresent)
 }
+
+/**
+ * 状态轮询的节奏（纯函数，[StatusBarApp] 用它）。
+ *
+ * 2026-11-03 用户报障「终端里切回 opi 也不显示」：fcitx5 切换输入法时主循环会短暂
+ * 卡住（实测 `opi-ctl state` 与 `fcitx5-remote -n` 同一时刻超时 1s+）。旧节奏读失败
+ * 后还等满 1s，连续两次卡顿就能把「切回」拖成 4s 以上。这里三档：
+ * · 读失败 ⇒ 200ms 立即重试（卡顿结束后第一拍就能把 `im=opi` 读回来）；
+ * · Linux 隐藏在其他输入法（`im` 非空且 ≠ opi）⇒ 500ms 一拍，尽快发现切回；
+ * · 其余 ⇒ 1s（设置文件同步与正常状态刷新）。
+ * Windows 有事件通道（StatusEventWatcher），保持原 1s 不动。
+ */
+internal fun statePollDelayMs(readFailed: Boolean, im: String, windows: Boolean): Long = when {
+    windows -> 1000L
+    readFailed -> 200L
+    im.isNotEmpty() && im != "opi" -> 500L
+    else -> 1000L
+}
+
+/**
+ * 状态读的超时（纯函数）：隐藏在其他输入法时 800ms（fcitx5 卡住时尽快放弃并重试），
+ * 其余仍 1.5s（正常一次查询 20–50ms，留足机器高负载的余量）。
+ */
+internal fun statePollTimeoutMs(im: String, windows: Boolean): Long =
+    if (!windows && im.isNotEmpty() && im != "opi") 800L else 1500L
 
 /**
  * 「皮肤」的合法值。**字面值就是写进配置的字符串** —— 与 fcitx5 侧 `OpiSkin`

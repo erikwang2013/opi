@@ -76,6 +76,58 @@ class SpeechTest {
     }
 
     @Test
+    fun `exact-size model files are ready without a manifest`() {
+        // 旧版本下载 / 完整包解压可能没写 manifest.json；文件齐全且大小一致就必须可用，
+        // 否则用户会看到「本地明明有模型却提示未下载」。
+        val root = Files.createTempDirectory("opi-speech-nomanifest").toFile()
+        try {
+            val rootPath = root.toPath()
+            val dir = rootPath.resolve(SENSEVOICE_MODEL.dirName)
+            Files.createDirectories(dir)
+            for (spec in SENSEVOICE_MODEL.files) {
+                java.io.RandomAccessFile(dir.resolve(spec.name).toFile(), "rw").use {
+                    it.setLength(spec.size)
+                }
+            }
+            Files.createDirectories(rootPath.resolve("vad"))
+            java.io.RandomAccessFile(vadPath(rootPath).toFile(), "rw").use {
+                it.setLength(VAD_FILE.size)
+            }
+            assertFalse(Files.exists(dir.resolve("manifest.json")))
+            assertTrue(modelReady(SpeechEngine.SENSEVOICE, rootPath))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `missing manifest is generated from exact-size files`() {
+        // Rust 的加载器无条件读 manifest.json（verify_models=false 也读）；旧版本下载 /
+        // 完整包解压可能只留下模型文件 ⇒ 加载前必须补写，否则「设置显示已下载，一按话筒
+        // 就报模型加载失败」（2026-11-03 桌面端 Whisper 实测 rc=-3）。
+        val root = Files.createTempDirectory("opi-speech-manifest").toFile()
+        try {
+            val rootPath = root.toPath()
+            for (engine in listOf(SpeechEngine.SENSEVOICE, SpeechEngine.WHISPER)) {
+                val dir = engine.dir(rootPath)
+                Files.createDirectories(dir)
+                for (spec in engine.model().files) {
+                    java.io.RandomAccessFile(dir.resolve(spec.name).toFile(), "rw").use { it.setLength(spec.size) }
+                }
+                assertFalse(Files.exists(dir.resolve("manifest.json")))
+                ensureModelManifest(engine, rootPath)
+                val obj = parseLine(Files.readString(dir.resolve("manifest.json"))) ?: error("manifest 不是 JSON")
+                assertEquals(1L, (obj["version"] as JVal.JNum).v)
+                val files = (obj["files"] as JVal.JArr).v.map { (it as JVal.JObj).v }
+                assertEquals(engine.model().files.map { it.name }, files.map { (it["path"] as JVal.JStr).v })
+                assertEquals(engine.model().files.map { it.role }, files.map { (it["role"] as JVal.JStr).v })
+            }
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun `bundled models extract with a generated manifest`() {
         // 只在完整包（资源里有 /asr）下跑；普通包跳过。
         org.junit.Assume.assumeTrue("非完整包，无内置模型", bundledJar())

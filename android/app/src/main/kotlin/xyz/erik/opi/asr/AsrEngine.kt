@@ -48,6 +48,48 @@ internal object AsrEngine {
     /** 完整包装了引擎，不再需要下载。 */
     fun bundled(): Boolean = BuildConfig.ASR_ENGINE_BUNDLED
 
+    /**
+     * 完整包：把随 APK 的引擎库复制到普通包下载引擎的同一目录
+     * （`filesDir/asr/engine/<abi>/`）。升级普通包后 APK 的原生库会消失，但这份副本
+     * 留下 ⇒ 语音继续可用（2026-11-03 用户报障：完整包→普通包升级后模型还在、引擎没了，
+     * 话筒却报「模型未下载」）。在 ASR 工作线程调用，幂等；`extractNativeLibs=false`
+     * 时从 APK 的 `lib/<abi>/` 解出。
+     */
+    fun persistBundled(context: Context): Boolean {
+        if (!bundled()) return false
+        val dir = root(context) ?: return false
+        if (ready(context)) return true
+        val abi = abi() ?: return false
+        return try {
+            dir.mkdirs()
+            val nativeDir = File(context.applicationInfo.nativeLibraryDir)
+            val apk = File(context.applicationInfo.sourceDir)
+            java.util.zip.ZipFile(apk).use { zip ->
+                for (name in LIBS) {
+                    val dst = File(dir, name)
+                    if (dst.length() > 0L) continue
+                    val part = File(dir, "$name.part")
+                    val src = File(nativeDir, name)
+                    if (src.isFile) {
+                        src.copyTo(part, overwrite = true)
+                    } else {
+                        val entry = zip.getEntry("lib/$abi/$name") ?: return false
+                        zip.getInputStream(entry).use { input ->
+                            part.outputStream().use { input.copyTo(it) }
+                        }
+                    }
+                    if (!part.renameTo(dst)) {
+                        part.copyTo(dst, overwrite = true)
+                        part.delete()
+                    }
+                }
+            }
+            ready(context)
+        } catch (t: Throwable) {
+            false
+        }
+    }
+
     fun componentKey(): String? = spec()?.let { "asr-engine-android-${it.abi}" }
 
     fun mb(bytes: Long): String = String.format(Locale.ROOT, "%.0f MB", bytes / 1048576.0)

@@ -181,17 +181,32 @@ internal fun vadPath(root: Path): Path = root.resolve("vad").resolve(VAD_FILE.na
 
 /**
  * 模型是否可加载（**不哈希**：UI 每次重组都调它，240 MB 的 SHA-256 不能放在这里；
- * Rust 的 `load_model` 会再全量校验，坏文件在那里报错）。清单缺失 = 未下载完。
+ * Rust 的 `load_model` 会再全量校验，坏文件在那里报错）。
+ *
+ * `manifest.json` **只是下载完成标记，不作门槛**：旧版本下载 / 完整包解压可能没写它，
+ * 而模型文件齐全、大小一致就完全可用（否则会出现「本地明明有模型却提示未下载」）。
  */
 internal fun modelReady(engine: SpeechEngine, root: Path): Boolean {
     val dir = engine.dir(root)
-    if (!Files.isRegularFile(dir.resolve("manifest.json"))) return false
     if (!engine.model().files.all { spec -> fileMatches(dir.resolve(spec.name), spec) }) return false
     return fileMatches(vadPath(root), VAD_FILE)
 }
 
 internal fun fileMatches(path: Path, spec: ModelFileSpec): Boolean =
     runCatching { Files.isRegularFile(path) && Files.size(path) == spec.size }.getOrDefault(false)
+
+/**
+ * 补写模型清单：Rust 的加载器**无条件**读 `manifest.json`（即使 `verify_models=false`），
+ * 旧版本下载 / 完整包解压 / 手工拷贝可能只有模型文件。文件已按 [modelReady] 校验过大小
+ * ⇒ 用钉死的 size+sha256 生成同一份清单（与下载器逐字段同源，见 [manifestJson]）。
+ * 写失败不在这里报：下一步加载会给出真实原因。
+ */
+internal fun ensureModelManifest(engine: SpeechEngine, root: Path) {
+    val manifest = engine.dir(root).resolve("manifest.json")
+    if (Files.isRegularFile(manifest)) return
+    runCatching { writeTextAtomically(manifest, manifestJson(engine.model().files)) }
+        .onFailure { println("[opi-speech] 补写 ${engine.title} manifest 失败：${it.message}") }
+}
 
 /** 模型目录里那份 manifest（格式逐字对齐 `ModelManifest::from_json`）。 */
 internal fun manifestJson(files: List<ModelFileSpec>): String =

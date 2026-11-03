@@ -356,9 +356,9 @@ fun readImeState(): ImeState {
  * 会把整条隐藏，一次管道抖动就像「按钮突然点不动了」。其余调用方（按钮动作前现读）仍用
  * [readImeState] 的中性缺省语义。
  */
-internal fun readImeStateOrNull(): ImeState? {
+internal fun readImeStateOrNull(timeoutMs: Long = 1500): ImeState? {
     if (isWindows()) return controlImeState()
-    return when (val r = runCapture(listOf("opi-ctl", "state"), 1500)) {
+    return when (val r = runCapture(listOf("opi-ctl", "state"), timeoutMs)) {
         is RunResult.Exit -> if (r.code == 0) parseImeState(r.firstLine) else null
         RunResult.Timeout, is RunResult.Failed -> null
     }

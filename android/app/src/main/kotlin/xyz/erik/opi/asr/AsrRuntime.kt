@@ -118,15 +118,20 @@ internal object AsrRuntime {
 
     fun start() {
         val context = appContext ?: return
+        val whisper = whisperPref?.invoke() ?: false
+        val pack = AsrModels.selected(context, whisper)
         if (!AsrNative.ensureLoaded(context)) {
+            val modelsReady = AsrModels.packReady(context, pack) || AsrBundled.ready(context, pack)
             uiState = AsrUiState(
                 AsrPhase.MODEL_MISSING,
-                "语音引擎尚未下载。请到「设置 → 语音」下载语音引擎与模型后重试。",
+                if (modelsReady) {
+                    "语音引擎未下载（语音模型已就绪）。打开「设置 → 语音」下载语音引擎后重试。"
+                } else {
+                    "语音引擎尚未下载。打开「设置 → 语音」下载语音引擎与模型后重试。"
+                },
             )
             return
         }
-        val whisper = whisperPref?.invoke() ?: false
-        val pack = AsrModels.selected(context, whisper)
         val gate = asrGate(
             available = true,
             permissionGranted = micGranted(context),
@@ -272,6 +277,8 @@ internal object AsrRuntime {
      * [gen] = null 是后台预热：不出浮层、也不解压完整包。
      */
     private fun ensureModel(context: Context, gen: Int?, whisper: Boolean): Boolean {
+        // 完整包：先把随 APK 的引擎库持久化，升级普通包后它还在（见 AsrEngine.persistBundled）。
+        AsrEngine.persistBundled(context)
         val pack = AsrModels.selected(context, whisper)
         if (!AsrModels.packReady(context, pack)) {
             if (gen == null || !AsrBundled.ready(context, pack)) {

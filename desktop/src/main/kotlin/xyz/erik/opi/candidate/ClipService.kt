@@ -123,7 +123,10 @@ internal class ClipService {
     private fun run() {
         try {
             while (!closed) {
-                if (commands.poll(if (enabled) 0L else IDLE_POLL_MS, TimeUnit.MILLISECONDS) != null) {
+                // 首条命令必须真正处理：只判空会把单发的 SetEnabled 永远吞掉（传输开不起来）。
+                val first = commands.poll(if (enabled) 0L else IDLE_POLL_MS, TimeUnit.MILLISECONDS)
+                if (first != null) {
+                    handleCommand(first)
                     while (true) handleCommand(commands.poll() ?: break)
                 }
                 if (closed) break

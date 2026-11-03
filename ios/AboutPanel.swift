@@ -36,7 +36,6 @@ final class AboutPanel: UIView {
     )
     private let scroll = UIScrollView()
     private let stack = UIStackView()
-    private let languageRow = OpiLanguageRow()
     private let updateView = UpdateStatusView()
     private var paragraphLabels: [UILabel] = []
     private var headingLabels: [UILabel] = []
@@ -83,7 +82,6 @@ final class AboutPanel: UIView {
     func applyTheme(_ p: KeyboardPalette) {
         backgroundColor = p.panelBg
         header.applyTheme(p)
-        languageRow.applyTheme(p)
         updateView.applyTheme(p)
         paragraphLabels.forEach { $0.textColor = p.panelFg }
         headingLabels.forEach { $0.textColor = p.panelFg }
@@ -92,7 +90,6 @@ final class AboutPanel: UIView {
     }
 
     private func buildContent() {
-        stack.addArrangedSubview(languageRow)
         addParagraph(Self.intro)
         addHeading("语音输入")
         addParagraph(
@@ -121,6 +118,20 @@ final class AboutPanel: UIView {
                 + "小欧贴纸/图标为项目专有资产，商业使用需授权"
         )
         // 开源致谢（2026-11-02，2026-11-03 折叠）：条目在 Credits.swift，面板本身可滚动。
+        addHeading("链接")
+        addLink("官网主页", Self.homeURL)
+        addLink("GitHub 项目", Self.projectURL)
+        addLink("博客", Self.blogURL)
+        addLink("隐私政策", Self.privacyURL)
+        let note = UILabel()
+        note.text = OpiText.t(
+            "点链接会先复制地址到剪贴板，再尝试用浏览器打开；"
+                + "键盘扩展不一定会被允许打开链接，复制后可粘贴到浏览器。"
+        )
+        note.font = .systemFont(ofSize: 11)
+        note.numberOfLines = 0
+        noteLabel = note
+        stack.addArrangedSubview(note)
         creditsToggle.contentHorizontalAlignment = .left
         creditsToggle.setTitle(OpiText.t("展开开源致谢"), for: .normal)
         creditsToggle.addTarget(self, action: #selector(toggleCredits), for: .touchUpInside)
@@ -146,20 +157,6 @@ final class AboutPanel: UIView {
             }
         }
         stack.addArrangedSubview(creditsStack)
-        addHeading("链接")
-        addLink("官网主页", Self.homeURL)
-        addLink("GitHub 项目", Self.projectURL)
-        addLink("博客", Self.blogURL)
-        addLink("隐私政策", Self.privacyURL)
-        let note = UILabel()
-        note.text = OpiText.t(
-            "点链接会先复制地址到剪贴板，再尝试用浏览器打开；"
-                + "键盘扩展不一定会被允许打开链接，复制后可粘贴到浏览器。"
-        )
-        note.font = .systemFont(ofSize: 11)
-        note.numberOfLines = 0
-        noteLabel = note
-        stack.addArrangedSubview(note)
     }
 
     @objc private func toggleCredits() {

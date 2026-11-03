@@ -37,7 +37,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import xyz.erik.opi.BuildConfig
-import xyz.erik.opi.i18n.UiLang
 import xyz.erik.opi.keyboard.LocalKeyboardPalette
 import xyz.erik.opi.settings.ABOUT_BLOG_URL
 import xyz.erik.opi.settings.ABOUT_HOME_URL
@@ -76,10 +75,6 @@ fun AboutPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
                 .verticalScroll(rememberScrollState())
                 .padding(start = 14.dp, end = 14.dp, bottom = 10.dp),
         ) {
-            UiLang.ensure(context)
-            Link(if (UiLang.english) "界面语言：English（切换中文）" else "界面语言：中文（Switch to English）") {
-                UiLang.setEnglish(context, !UiLang.english)
-            }
             Para(ABOUT_INTRO)
             Head("版本")
             Para("v${BuildConfig.VERSION_NAME}")
@@ -88,6 +83,14 @@ fun AboutPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
             Para("© 2026 erik.xyz · 代码按 MIT 许可（全文见仓库 LICENSE）；词库数据与代码分开授权")
             Head("表情数据")
             Para("Emoji 取自 OpenMoji（CC BY-SA 4.0）；颜文字取自 rime_kaomoji_dict（MIT）；小欧贴纸/图标为项目专有资产，商业使用需授权")
+            Head("链接")
+            Link("官网主页") { note = openExternal(context, ABOUT_HOME_URL) }
+            Link("GitHub 项目") { note = openExternal(context, ABOUT_PROJECT_URL) }
+            Link("博客") { note = openExternal(context, ABOUT_BLOG_URL) }
+            Link("隐私政策") { note = openExternal(context, ABOUT_PRIVACY_URL) }
+            if (note.isNotEmpty()) {
+                Text(note, fontSize = 11.sp, color = p.accent, modifier = Modifier.padding(top = 6.dp))
+            }
             Head("开源致谢")
             Link(if (creditsOpen) "收起开源致谢" else "展开开源致谢（Rust/crate、词库、平台、表情、语音、LocalSend）") {
                 creditsOpen = !creditsOpen
@@ -97,14 +100,6 @@ fun AboutPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
                     Para("【${section.title}】")
                     section.items.forEach { Para("· $it") }
                 }
-            }
-            Head("链接")
-            Link("官网主页") { note = openExternal(context, ABOUT_HOME_URL) }
-            Link("GitHub 项目") { note = openExternal(context, ABOUT_PROJECT_URL) }
-            Link("博客") { note = openExternal(context, ABOUT_BLOG_URL) }
-            Link("隐私政策") { note = openExternal(context, ABOUT_PRIVACY_URL) }
-            if (note.isNotEmpty()) {
-                Text(note, fontSize = 11.sp, color = p.accent, modifier = Modifier.padding(top = 6.dp))
             }
         }
     }

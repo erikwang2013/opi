@@ -26,7 +26,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import kotlinx.coroutines.launch
 import xyz.erik.opi.BuildConfig
-import xyz.erik.opi.i18n.LanguageSwitcher
 
 /**
  * 设置页「关于」一节（2026-10-15，用户裁决「移动端：增加关于按钮，主要是项目简介、版本、
@@ -76,8 +75,6 @@ internal fun AboutSection(toast: (String) -> Unit) {
         update = checkForUpdate(BuildConfig.VERSION_NAME, manual)
     }
     LaunchedEffect(Unit) { check(false) }
-    HorizontalDivider()
-    LanguageSwitcher()
     HorizontalDivider()
     ListItem(
         headlineContent = { Text("关于") },
@@ -131,6 +128,10 @@ internal fun AboutSection(toast: (String) -> Unit) {
             Text("Emoji 取自 OpenMoji（CC BY-SA 4.0）；颜文字取自 rime_kaomoji_dict（MIT）；小欧贴纸/图标为项目专有资产，商业使用需授权")
         },
     )
+    LinkItem("官网主页", ABOUT_HOME_URL, toast)
+    LinkItem("GitHub 项目", ABOUT_PROJECT_URL, toast)
+    LinkItem("博客", ABOUT_BLOG_URL, toast)
+    LinkItem("隐私政策", ABOUT_PRIVACY_URL, toast)
     // 开源致谢（2026-11-02）：文案在 `Credits.kt`，键盘内关于面板读同一份。
     ListItem(
         modifier = Modifier.clickable { creditsOpen = !creditsOpen },
@@ -151,10 +152,6 @@ internal fun AboutSection(toast: (String) -> Unit) {
         },
         trailingContent = { TextButton(onClick = { creditsOpen = !creditsOpen }) { Text(if (creditsOpen) "收起" else "展开") } },
     )
-    LinkItem("官网主页", ABOUT_HOME_URL, toast)
-    LinkItem("GitHub 项目", ABOUT_PROJECT_URL, toast)
-    LinkItem("博客", ABOUT_BLOG_URL, toast)
-    LinkItem("隐私政策", ABOUT_PRIVACY_URL, toast)
 }
 
 /**

@@ -422,15 +422,19 @@ class StatusBarTest {
     }
 
     @Test
-    fun `bar hides while another input method is active`() {
-        // 四态：im 缺键/空串 = 未知 ⇒ 维持现状（可见，不闪）；"opi" ⇒ 可见；
-        // 其他输入法 ⇒ 隐藏。基线按钮 = 默认设置的 7 键（非空）。
+    fun `bar hides with other input methods and shows again for opi`() {
+        // 2026-10-10 下午用户裁决「切到其他输入法时状态栏消失」；2026-11-03 用户订正
+        // 预期：切走隐藏、**切回 opi 显示**（终端里切回不显示是待修的 bug，不是改成常驻）。
+        // Linux：im 缺键/空串 = 未知 ⇒ 维持可见（旧 glue / 一次读失败不闪条）；
+        // 非空且 ≠ opi ⇒ 隐藏；opi ⇒ 显示。Windows 只在 im=opi（TSF 激活）时可见。
         val buttons = visibleStatusButtons(StatusBarSettings(), windows = false)
         assertTrue(barVisible(buttons, im = "")) // 缺键 = 空串缺省（旧 glue / 读失败）
         assertTrue(barVisible(buttons, im = "opi")) // 本输入法
-        assertFalse(barVisible(buttons, im = "pinyin")) // 别的输入法（fcitx5 内置拼音）
+        assertFalse(barVisible(buttons, im = "pinyin")) // 别的输入法（fcitx5 内置拼音）⇒ 隐藏
+        assertFalse(barVisible(buttons, im = "com.sogou.ime.ng.fcitx5.deepin")) // 终端里的搜狗
         assertFalse(barVisible(buttons, im = "", requireActive = true)) // Windows 未连接 ⇒ 隐藏
-        assertTrue(barVisible(buttons, im = "opi", requireActive = true)); assertFalse(barVisible(buttons, im = "pinyin", requireActive = true))
+        assertTrue(barVisible(buttons, im = "opi", requireActive = true))
+        assertFalse(barVisible(buttons, im = "pinyin", requireActive = true))
         assertFalse(barVisible(buttons, parseImeState("lang=zh;trad=off;punct=on;fw=off;im=pinyin").im)) // 整行→解析→判定
         assertTrue(barVisible(buttons, parseImeState("lang=zh;trad=off;punct=on;fw=off;im=opi").im))
     }

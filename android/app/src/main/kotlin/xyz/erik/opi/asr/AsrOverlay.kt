@@ -165,7 +165,8 @@ private fun titleOf(state: AsrUiState): String = when (state.phase) {
     AsrPhase.PREPARING -> "正在准备本地模型…"
     AsrPhase.LISTENING -> "正在聆听"
     AsrPhase.TRANSCRIBING -> "正在识别…"
-    AsrPhase.MODEL_MISSING -> "语音模型未下载"
+    // message 非空 = 引擎缺失（模型本身可能已就绪）：别再写死「模型未下载」误导用户。
+    AsrPhase.MODEL_MISSING -> if (state.message == null) "语音模型未下载" else "语音输入未就绪"
     AsrPhase.PERMISSION_DENIED -> "需要麦克风权限"
     AsrPhase.ERROR -> "语音输入失败"
     AsrPhase.IDLE -> ""
@@ -176,8 +177,8 @@ private fun subtitleOf(state: AsrUiState, pack: AsrModelPack): String = when (st
     AsrPhase.LISTENING -> "说完点“停止”；取消不会上屏"
     AsrPhase.TRANSCRIBING -> "本地离线识别，请稍候"
     AsrPhase.MODEL_MISSING ->
-        "${pack.title} ${AsrModels.mb(pack.bytes + AsrModels.VAD_BYTES)}，" +
-            "前往设置下载（建议 Wi-Fi，私有目录，校验 SHA-256）"
+        state.message ?: ("${pack.title} ${AsrModels.mb(pack.bytes + AsrModels.VAD_BYTES)}，" +
+            "前往设置下载（建议 Wi-Fi，私有目录，校验 SHA-256）")
     AsrPhase.PERMISSION_DENIED -> state.message ?: "需要麦克风权限才能语音输入"
     AsrPhase.ERROR -> state.message ?: "请重试"
     AsrPhase.IDLE -> ""

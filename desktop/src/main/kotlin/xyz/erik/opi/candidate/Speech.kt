@@ -244,6 +244,8 @@ internal class SpeechHostImpl {
                 }
                 update(ui.copy(text = "正在加载模型…"))
             }
+            // 文件齐全但清单缺失（旧版下载/解压）⇒ 补写；Rust 加载器无条件读它。
+            ensureModelManifest(engine, root)
             val load = loadAsrFfi()
             val ffi = when (load) {
                 is AsrLoad.Loaded -> load.ffi

@@ -62,9 +62,10 @@
 //! 字段初始化把 preInit 抄的值覆成 NORMAL，实证见 SkipTaskbar.kt 头注释），试过了。
 //! 窗口图标（小欧）那条裁决不受影响 —— 说的是「任务栏条目」，不是窗口图标。
 //!
-//! **切到别的输入法就藏**（用户裁决 2026-10-10 下午）：`state` 的 `im=` 位非空且 ≠ "opi"
-//! ⇒ 整条隐藏；切回 opi 由事件/1s 轮询让它自己出现；缺键/空串 = 未知 ⇒ 维持现状（不闪）。
-//! 判定全在 [barVisible]（纯函数，四态有单测钉住）。
+//! **切走隐藏、切回显示**（2026-10-10 下午用户裁决「切到其他输入法时状态栏消失」）：
+//! Linux 在 `im=` 非空且不等于 opi 时隐藏，切回 opi 再出现；`im=` 缺键/空串视为未知，
+//! 维持可见（旧 glue 没合 im= 时不闪条）。Windows 只在 TSF 激活（im=opi）时显示。
+//! 判定全在 [barVisible]（纯函数，单测钉住）。
 
 package xyz.erik.opi.candidate
 
@@ -177,7 +178,7 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
             // 实抓 EDT 停在 ProcessImpl.waitFor ← Actions.runCapture ← readImeState）。
             // 循环仍是单条协程顺序执行：不可重入、次序（设置→状态）与超时值都不变。
             val read = statusBarGuard("状态栏轮询") {
-                withContext(Dispatchers.IO) { loadSettingsCached() to readImeStateOrNull() }
+                withContext(Dispatchers.IO) { loadSettingsCached() to readImeStateOrNull(statePollTimeoutMs(imeState.im, isWindows())) }
             }
             if (read == null) {
                 // 守卫层自身失败（不是一次状态读失败）：退避，别忙转。
@@ -187,7 +188,7 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
             val (next, st) = read
             if (next != s) s = next // 变了才写状态：否则每秒一次无谓重组
             // 读失败（null）：先保留上一次状态（一次管道抖动不把用户正要点的按钮变没），
-            // 但连续 3 拍（≈3s）都读不到就回到中性 —— 否则宿主退出后条会永远停在旧状态。
+            // 但连续 3 拍都读不到就回到中性 —— 否则宿主退出后条会永远停在旧状态。
             // 计数/清空判定是纯函数（nextStatePoll，单测钉住第 3 拍即清）。Windows 的
             // 「无客户端」不是读失败：控制面回 im= 空状态，readOk=true，立即隐藏。
             val poll = nextStatePoll(stateFails, readOk = st != null, imPresent = imeState.im.isNotEmpty())
@@ -197,8 +198,8 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
                 if (st != imeState) imeState = st
                 mode = barMode(st) // 档位跟着 state 走（缺 mode 位的老插件 ⇒ barMode 回落默认档）
             }
-            // 事件来了立即重读；没有事件就 1s 后再来一轮（设置文件也要同步）。
-            withTimeoutOrNull(1000) { stateEvents.receive() }
+            // 事件来了立即重读；节奏见 statePollDelayMs（读失败快重试，隐藏时加快）。
+            withTimeoutOrNull(statePollDelayMs(st == null, imeState.im, isWindows())) { stateEvents.receive() }
         }
     }
     LaunchedEffect(notice) {
@@ -368,9 +369,8 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
         // 无边框窗没有关闭入口；「隐藏」走设置里的 master 开关（进程留着，见 visible 一行）。
         onCloseRequest = {},
         state = windowState,
-        // master 隐藏 / 按钮全关 → 整条隐藏（进程继续轮询 ⇒ 设置里拨回来它就自己出现）；
-        // 切到别的输入法（im 非空且 ≠ opi）也隐藏，切回来 1s 轮询让它自己出现 —— 判定
-        // 全在 [barVisible]，四态单测钉住。
+        // master 隐藏 / 按钮全关 → 整条隐藏（进程继续轮询 ⇒ 设置里拨回来它就自己出现）。
+        // 切到别的输入法也隐藏，切回 opi 再显示；判定全在 [barVisible]，单测钉住。
         visible = shown,
         undecorated = true,
         // 透明窗：条外透明边距要真的透出桌面（2026-10-30 错落溢出）；

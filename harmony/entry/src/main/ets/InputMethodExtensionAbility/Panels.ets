@@ -17,7 +17,7 @@ import { ONE_HAND_LEFT, ONE_HAND_OFF, ONE_HAND_RIGHT, darkEnabled, elderEnabled 
 import { Palette, SKINS, Skin, paletteFor, scenePanelBg, sceneKeyBg } from './Palette';
 import { SCENES, SceneSkin } from './SceneTheme';
 import { UpdateSection } from './UpdateCheck';
-import { LanguageRow, ensureLanguage, t } from './I18n';
+import { ensureLanguage, t } from './I18n';
 import { CreditSection, OPEN_SOURCE_CREDITS } from './Credits';
 
 const ABOUT_INTRO: string =
@@ -410,7 +410,6 @@ export struct AboutPanel {
       })
       Scroll() {
         Column() {
-          LanguageRow()
           this.Para(t(ABOUT_INTRO))
           this.Head(t('版本'))
           this.Para(`v${t(appVersion())}`)
@@ -420,6 +419,12 @@ export struct AboutPanel {
           this.Para(t('© 2026 erik.xyz · 代码按 MIT 许可（全文见仓库 LICENSE）；词库数据与代码分开授权'))
           this.Head(t('表情数据'))
           this.Para(t('Emoji 取自 OpenMoji（CC BY-SA 4.0）；颜文字取自 rime_kaomoji_dict（MIT）；小欧贴纸/图标为项目专有资产，商业使用需授权'))
+          this.Head(t('链接'))
+          this.LinkRow(t('官网主页'), ABOUT_HOME_URL)
+          this.LinkRow(t('GitHub 项目'), ABOUT_PROJECT_URL)
+          this.LinkRow(t('博客'), ABOUT_BLOG_URL)
+          this.LinkRow(t('隐私政策'), ABOUT_PRIVACY_URL)
+          this.Para(t('鸿蒙输入法扩展不能直接拉起浏览器；点链接复制地址后到浏览器打开。'))
           // 开源致谢（2026-11-02，2026-11-03 折叠）：条目在 Credits.ets，本面板 Scroll 可滚。
           Text(this.creditsOpen ? t('收起开源致谢') : t('展开开源致谢（Rust/crate、词库、平台、表情、语音、LocalSend）'))
             .fontSize(this.elder === 1 ? 14 : 12).fontColor(this.pal().accent)
@@ -433,12 +438,6 @@ export struct AboutPanel {
               }, (item: string) => item)
             }, (section: CreditSection) => section.title)
           }
-          this.Head(t('链接'))
-          this.LinkRow(t('官网主页'), ABOUT_HOME_URL)
-          this.LinkRow(t('GitHub 项目'), ABOUT_PROJECT_URL)
-          this.LinkRow(t('博客'), ABOUT_BLOG_URL)
-          this.LinkRow(t('隐私政策'), ABOUT_PRIVACY_URL)
-          this.Para(t('鸿蒙输入法扩展不能直接拉起浏览器；点链接复制地址后到浏览器打开。'))
         }
         .width('100%').padding({ left: 14, right: 14, bottom: 10 })
       }.layoutWeight(1).width('100%')
