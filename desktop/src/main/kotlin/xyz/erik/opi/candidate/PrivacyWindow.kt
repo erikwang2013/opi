@@ -17,6 +17,8 @@ import androidx.compose.material.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.graphics.Color
@@ -25,11 +27,13 @@ import androidx.compose.ui.window.DialogWindow
 import androidx.compose.ui.window.rememberDialogState
 import xyz.erik.opi.pet.OpiPetWindowIcon
 import java.awt.Color as AwtColor
+import java.net.URI
 import javax.swing.BorderFactory
 import javax.swing.JEditorPane
 import javax.swing.JScrollPane
 import javax.swing.SwingUtilities
 import javax.swing.event.HyperlinkEvent
+import javax.swing.text.html.HTMLDocument
 import javax.swing.text.html.HTMLEditorKit
 
 internal const val PRIVACY_URL = "https://opi.erik.xyz/privacy/index.html"
@@ -71,9 +75,29 @@ internal fun PrivacyWindow(onClose: () -> Unit) {
             }
         }
         LaunchedEffect(Unit) {
+            val html = withContext(Dispatchers.IO) { httpGet(PRIVACY_URL, 15_000) }
             SwingUtilities.invokeLater {
-                runCatching { pane.setPage(PRIVACY_URL) }
-                    .onFailure { pane.text = "无法加载隐私政策：${it.message ?: PRIVACY_URL}" }
+                if (html == null) {
+                    pane.text = "无法加载隐私政策：$PRIVACY_URL"
+                    return@invokeLater
+                }
+                // 只取正文，避开站点导航/页脚；JEditorPane 不认现代 CSS，
+                // 用本地样式重排，页面比直接 setPage 干净，也有滚动条。
+                val body = Regex("(?is)<main\\b[^>]*>(.*?)</main>")
+                    .find(html)?.groupValues?.get(1) ?: html
+                pane.text = """
+                    <html><head><style>
+                    body { font-family: sans-serif; font-size: 12pt; margin: 16px; color: #222; }
+                    h1 { font-size: 21pt; margin-bottom: 10px; }
+                    h2 { font-size: 15pt; margin-top: 18px; margin-bottom: 6px; }
+                    p, li { font-size: 12pt; margin-top: 6px; margin-bottom: 6px; }
+                    a { color: #0b6e63; }
+                    code { font-family: monospace; }
+                    </style></head><body>$body</body></html>
+                """.trimIndent()
+                (pane.document as? HTMLDocument)?.base =
+                    runCatching { URI(PRIVACY_URL).toURL() }.getOrNull()
+                pane.caretPosition = 0
             }
         }
         Column(Modifier.fillMaxSize()) {
