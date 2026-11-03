@@ -4,10 +4,11 @@
 //! 「属性设置」的配置模型与落盘。**一份 UI 两个平台**（`--settings`，见 Main.kt），
 //! 落点按平台分流：
 //!
-//! · Linux：写的是 **fcitx5 的原生 addon 配置**
-//!   （`$XDG_CONFIG_HOME/fcitx5/conf/opi_fcitx5.conf`；字段声明在
-//!   `crates/fcitx5-opi/cpp/opi_config.h` 的 `OpiSettings`）。写完跑
-//!   **`ReloadAddonConfig("opi_fcitx5")`**（busctl/dbus-send）即时生效：fcitx5 →
+//! · Linux：**两份**。fcitx5 addon 选项写
+//!   `$XDG_CONFIG_HOME/fcitx5/conf/opi_fcitx5.conf`（字段声明在
+//!   `crates/fcitx5-opi/cpp/opi_config.h` 的 `OpiSettings`）；桌面独有键写
+//!   `$XDG_CONFIG_HOME/opi/settings.ini`（原因见下面 `StatusBar*` 那条 ⚠️）。
+//!   写完跑 **`ReloadAddonConfig("opi_fcitx5")`**（busctl/dbus-send）即时生效：fcitx5 →
 //!   addon 的 `reloadConfig()` → 引擎。⚠️ `fcitx5-remote -r` **不干这事**（实测，见
 //!   [notifyFcitxReload] 的订正段）。
 //! · Windows：`%LOCALAPPDATA%\opi\settings.ini`（与 `crates/tsf-opi/src/dict_path.rs`
@@ -25,12 +26,13 @@
 //! ⚠️ 布尔写 **`True`/`False`**（fcitx5 的 ini 就是这个拼法；读侧大小写不敏感，
 //! 所以手改成 `true` 也能读，但**写回去统一成全大写首字母**，别两种混着出现）。
 //!
-//! ⚠️ `StatusBar*` 十一个键（2026-10-10 加；2026-10-19 加 `StatusBarEnPro`/`StatusBarScale`）**只有本窗读写**：两端 IME 读侧都不认识
-//! 它们（未知键会被忽略，向前兼容）；但 Linux 侧它们仍写在同一份 fcitx5 addon 配置
-//! 里 —— 用 fcitx5 配置工具保存时这些键**是否被保存方抹掉**本侧无法保证（上游行为，
-//! 本机未取证）。若真发生，表现是「状态栏设置被重置」，不是启动失败。
-//! `CandidateFont`（2026-10-14 候选字号）同理 —— 且它的**真落点**根本不在本文件：
-//! 见 ClassicUiFont.kt（fcitx5 classicui.conf 的 `Font=`）。
+//! ⚠️ `StatusBar*` / `ClipEnabled` / `SpeechEnabled` / `UiLanguage` 等**只有桌面端
+//! 自绘 UI 读写**的键，Linux 上**不再写进 fcitx5 的 addon 配置**，而是单独落在
+//! `$XDG_CONFIG_HOME/opi/settings.ini`（[desktopSettingsPathFor]）。原因 2026-11-03
+//! 本机实测：fcitx5 的 autosave 只序列化 `opi_config.h` schema 认识的键，未知键整段
+//! 丢弃（写入探针键 → ReloadAddonConfig → Save → 探针消失）—— 同一文件时每 30 分钟
+//! 就会把状态栏/剪贴板/语音设置静默复位。Windows 无 fcitx5，仍是单文件。
+//! `CandidateFont` 的**真落点**在 ClassicUiFont.kt（fcitx5 classicui.conf 的 `Font=`）。
 //!
 //! ⚠️ 保存走 [mergeIni]：**保留本文件不认识的行**（fcitx5 侧新增的选项、手写注释、
 //! 未知键）。2026-10-09 前是整文件重写 —— 那会让
@@ -40,11 +42,6 @@
 package xyz.erik.opi.candidate
 
 import xyz.erik.opi.scene.SceneTheme
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.Paths
-import java.nio.file.attribute.BasicFileAttributes
-import java.nio.file.attribute.FileTime
 
 /**
  * 五个开关 + 皮肤 + 状态栏。默认值 = 引擎既有行为（开关全开、皮肤不改动），与两端的
@@ -139,7 +136,7 @@ data class OpSettings(
     fun toIni(): String = buildString {
         appendLine("# OPI 属性设置 —— 由 `opi --settings` 写入，手工改也认。")
         // ⚠️ 别写「改完 fcitx5-remote -r 即时生效」—— 那条实测无效（见 notifyFcitxReload）。
-        appendLine("# Linux：本文件就是 fcitx5 的 addon 配置；设置窗/配置工具保存即重载。")
+        appendLine("# Windows：本文件就是 TSF 读的那份。Linux 的桌面独有键另存 opi/settings.ini。")
         appendLine("# 布尔写 True/False；未知键会被两端的读侧忽略（向前兼容）。")
         appendLine("Learn=${boolText(learn)}")
         appendLine("ChinesePunct=${boolText(chinesePunct)}")
@@ -168,8 +165,8 @@ data class OpSettings(
         appendLine("DisabledDicts=$disabledDicts")
         // 五笔六键（2026-10-14）：整段 append（值口径与 mergeIni 的 managed() 同一份）。
         append(wubi.toIniLines())
-        // 状态栏十一个键：只有本窗读写（见文件头 ⚠️）。同样不分平台地写全，
-        // 「同一份文件格式」是这里的既有纪律。
+        // 状态栏十一个键：只有本窗读写（见文件头 ⚠️）。toIni 保持完整模板给
+        // Windows/测试；Linux 保存时按 ADDON/DESKTOP_CONFIG_KEYS 分两份写。
         appendLine("StatusBarHidden=${boolText(statusbar.hidden)}")
         appendLine("StatusBarVk=${boolText(statusbar.vk)}")
         appendLine("StatusBarSymbols=${boolText(statusbar.symbols)}")
@@ -324,112 +321,6 @@ internal fun OpSettings.toggleFuzzyPair(name: String): OpSettings {
 
 /** Windows 判定：fork 的 `os.name`（不引第三方库；本模块只需这一个判别）。 */
 fun isWindows(): Boolean = System.getProperty("os.name").lowercase().contains("win")
-
-/**
- * 配置文件落点（**纯函数**：环境量都当参数传，单测才能钉住这两条路径 ——
- * 它们是「本窗写哪个文件」与「IME 侧读哪个文件」的接缝，错了就是静默不生效）。
- *
- * · Linux = fcitx5 的 addon 配置：`$XDG_CONFIG_HOME/fcitx5/conf/opi_fcitx5.conf`
- *   （XDG_CONFIG_HOME 缺省 `$HOME/.config`；对侧读侧见 `opi_config.h`）。
- * · Windows = `%LOCALAPPDATA%\opi\settings.ini`（见 `crates/tsf-opi/src/settings.rs`，
- *   与 `dict_path.rs` 的候选目录同一处）。
- */
-fun settingsPathFor(
-    windows: Boolean,
-    xdgConfigHome: String?,
-    home: String?,
-    localAppData: String?,
-): Path {
-    if (windows) {
-        val base = localAppData?.takeIf { it.isNotEmpty() } ?: "."
-        return Paths.get(base, "opi", "settings.ini")
-    }
-    return fcitxConfDir(xdgConfigHome, home).resolve("opi_fcitx5.conf")
-}
-
-/**
- * fcitx5 的配置目录（`$XDG_CONFIG_HOME/fcitx5/conf`，缺省 `$HOME/.config/…`；空串等同
- * 未设置）。**单独抽出来**是因为本窗要写两个文件：本 addon 配置与 classicui.conf
- * （2026-10-14 的候选字号，见 ClassicUiFont.kt）—— 推导只有这一处，别各写一份。
- */
-internal fun fcitxConfDir(xdgConfigHome: String?, home: String?): Path {
-    val base = xdgConfigHome?.takeIf { it.isNotEmpty() }
-        ?: ((home ?: "") + "/.config")
-    return Paths.get(base, "fcitx5", "conf")
-}
-
-/** 真实环境下的落点（`settingsPathFor` 的取环境量包装）。 */
-fun settingsPath(): Path = settingsPathFor(
-    windows = isWindows(),
-    xdgConfigHome = System.getenv("XDG_CONFIG_HOME"),
-    home = System.getenv("HOME"),
-    localAppData = System.getenv("LOCALAPPDATA"),
-)
-
-/** 读当前配置（文件不存在/读不动 → 全默认，等价于「没配过」）。 */
-fun loadSettings(): OpSettings = try {
-    OpSettings.fromIni(Files.readString(settingsPath()))
-} catch (_: Exception) {
-    OpSettings()
-}
-
-// 1s 轮询缓存：文件的 (mtime, size)。状态栏与候选窗每秒各读一次配置，绝大多数拍
-// 文件根本没动 —— 命中缓存就省掉一次读 + 解析。**跨进程**写入（设置窗是另一个进程）
-// 也会体现在 mtime/size 上，所以仍能在一个轮询周期内看到新值。
-private var cachedSettings: OpSettings? = null
-private var cachedSettingsStamp: Pair<FileTime, Long>? = null
-
-/**
- * [loadSettings] 的轮询版：文件 (mtime, size) 没变就复用上次解析结果。
- * 只给每秒轮询用；需要「刚写完必读新值」的一次性读仍用 [loadSettings]。
- */
-@Synchronized
-internal fun loadSettingsCached(): OpSettings {
-    val p = settingsPath()
-    val stamp = try {
-        val attrs = Files.readAttributes(p, BasicFileAttributes::class.java)
-        attrs.lastModifiedTime() to attrs.size()
-    } catch (_: Exception) {
-        null // 文件不存在/读不动：与 loadSettings 的全默认同一语义
-    }
-    val cached = cachedSettings
-    if (cached != null && stamp == cachedSettingsStamp) return cached
-    return loadSettings().also {
-        cachedSettings = it
-        cachedSettingsStamp = stamp
-    }
-}
-
-/**
- * 保存 + 通知 IME 侧。
- *
- * Linux：调 fcitx5 的 **`ReloadAddonConfig("opi_fcitx5")`** 让本 addon 重读刚写的
- * 文件 —— 三级兜底 busctl（systemd 系，deepin 有）→ dbus-send（其余发行版）→
- * `fcitx5-remote -r`（旧路，聊胜于无）。
- *
- * ⚠️ **2026-10-09 实测订正**：此前这里只跑 `fcitx5-remote -r`（= D-Bus ReloadConfig），
- * 注释声称「会把本 addon 的 reloadConfig() 走一遍」—— **假的**。现场：文件里
- * `Skin=宣纸`、daemon 里还是 `Skin=深色`，`fcitx5-remote -r` 反复调 GetConfig 纹丝
- * 不动；换 `ReloadAddonConfig("opi_fcitx5")` 立刻回新值（本机 fcitx5 5.1.12 实测，
- * 皮肤也跟着换）。用户报障「桌面端设置不能直接生效」就是这条。
- *
- * ⚠️ 失败**不抛**、返回 false 并让 UI 如实显示：fcitx5 没在跑（或没装）时
- * 文件照样该写下去（下次启动生效），这不该是个错误弹窗。
- *
- * Windows：落盘后经控制面 `reload` 让 TSF 重读；没连上返回 false，UI 提示下次激活生效。
- */
-fun saveSettings(s: OpSettings): Boolean {
-    val p = settingsPath()
-    p.parent?.let { Files.createDirectories(it) }
-    // 已有文件 → 合并写（保留未知键/注释）；文件不存在/为空 → 整份 toIni（含头部注释）。
-    val existing = try {
-        Files.readString(p)
-    } catch (_: Exception) {
-        ""
-    }
-    writeTextAtomically(p, if (existing.isBlank()) s.toIni() else mergeIni(existing, s)) // 原子替换，见 AtomicWrite.kt
-    return reloadImeSettings()
-}
 
 /**
  * 让正在运行的输入法重读配置与词库（设置保存 / 词库导入删除后调用）。

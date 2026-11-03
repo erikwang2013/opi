@@ -217,6 +217,44 @@ fn write_failure_keeps_dirty_for_retry() {
 }
 
 #[test]
+fn background_writer_persists_snapshot_without_caller_disk_io() {
+    let dir = temp_dir("bg");
+    let mut s = state();
+    assert_eq!(attach(&mut s, &dir), Restore::Missing);
+    let picked = pick_first(&mut s);
+    let job = s.take_due_user_words(due_later()).expect("到点应有快照");
+    assert_eq!(job.path, file_path(&dir));
+    assert!(job.json.contains(&picked));
+    assert!(!s.persist.dirty, "快照取出即清 dirty（失败由后台回标）");
+    enqueue_user_words(job);
+    assert!(
+        wait_user_words_idle(Duration::from_secs(5)),
+        "后台线程应在超时内写完"
+    );
+    let path = file_path(&dir);
+    assert!(path.exists());
+    assert!(fs::read_to_string(&path).unwrap().contains(&picked));
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn clear_invalidates_inflight_snapshot() {
+    let dir = temp_dir("bg-clear");
+    let mut s = state();
+    attach(&mut s, &dir);
+    pick_first(&mut s);
+    let job = s.take_due_user_words(due_later()).expect("到点应有快照");
+    enqueue_user_words(job);
+    s.clear_user_words().expect("清空应成功");
+    assert!(wait_user_words_idle(Duration::from_secs(5)));
+    assert!(
+        !file_path(&dir).exists(),
+        "清空后在途的过期快照不得把文件写回来"
+    );
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn unconnected_state_never_touches_files() {
     let mut s = state();
     let picked = pick_first(&mut s);

@@ -185,6 +185,85 @@ class SettingsTest {
         assertEquals("C:\\Users\\u\\AppData\\Local", p.parent.parent.toString())
     }
 
+    @Test
+    fun `desktop keys live in xdg config opi settings on linux`() {
+        fun posix(p: java.nio.file.Path): String = p.toString().replace('\\', '/')
+        // 与 fcitx5 的 addon 配置分开：fcitx5 的 autosave 会丢弃它不认识的键。
+        assertEquals(
+            "/x/cfg/opi/settings.ini",
+            posix(
+                desktopSettingsPathFor(
+                    windows = false, xdgConfigHome = "/x/cfg",
+                    home = "/home/u", localAppData = null,
+                ),
+            ),
+        )
+        assertEquals(
+            "/home/u/.config/opi/settings.ini",
+            posix(
+                desktopSettingsPathFor(
+                    windows = false, xdgConfigHome = null,
+                    home = "/home/u", localAppData = null,
+                ),
+            ),
+        )
+        // Windows 没有 fcitx5：桌面键与 TSF 读侧仍是同一个文件。
+        assertEquals(
+            settingsPathFor(true, null, null, "C:\\Users\\u\\AppData\\Local"),
+            desktopSettingsPathFor(true, null, null, "C:\\Users\\u\\AppData\\Local"),
+        )
+    }
+
+    @Test
+    fun `addon and desktop key sets partition every managed key`() {
+        // fcitx5 autosave 只保留 opi_config.h schema 认识的键：任何桌面独有键混进
+        // ADDON 集都会被静默抹掉（2026-11-03 本机实测）；反过来，addon 键落进桌面
+        // 文件则 fcitx5 读不到。两边必须恰好覆盖 managedValues 且不相交。
+        val managed = managedValues(OpSettings()).keys
+        assertEquals(managed, ADDON_CONFIG_KEYS + DESKTOP_CONFIG_KEYS)
+        assertTrue((ADDON_CONFIG_KEYS intersect DESKTOP_CONFIG_KEYS).isEmpty())
+        assertTrue("UiLanguage" in DESKTOP_CONFIG_KEYS)
+    }
+
+    @Test
+    fun `merge filter keeps the other file's keys untouched`() {
+        val existing = "Learn=True\nClipEnabled=True\nStatusBarVk=True\nUnknown=keep\n"
+        val s = OpSettings(
+            learn = false,
+            clipEnabled = false,
+            statusbar = StatusBarSettings(vk = false, scale = 125),
+        )
+        val addon = mergeIni(existing, s, ADDON_CONFIG_KEYS)
+        assertTrue(addon, addon.contains("Learn=False\n"))
+        // 桌面键不在 addon 集合里：既不被改写，也不被补写。
+        assertTrue(addon, addon.contains("ClipEnabled=True\n"))
+        assertTrue(addon, !addon.contains("StatusBarScale="))
+        val desktop = mergeIni(existing, s, DESKTOP_CONFIG_KEYS)
+        assertTrue(desktop, desktop.contains("ClipEnabled=False\n"))
+        assertTrue(desktop, desktop.contains("StatusBarVk=False\n"))
+        assertTrue(desktop, desktop.contains("StatusBarScale=125\n"))
+        // addon 键不被桌面文件改写/补写。
+        assertTrue(desktop, desktop.contains("Learn=True\n"))
+        assertTrue(desktop, !desktop.contains("Fuzzy="))
+        // 未知键两边都逐字保留。
+        assertTrue(addon, addon.contains("Unknown=keep\n"))
+        assertTrue(desktop, desktop.contains("Unknown=keep\n"))
+    }
+
+    @Test
+    fun `desktop file overrides legacy keys left in the addon file`() {
+        // 迁移：旧版把桌面键写在 fcitx5 配置里；新文件存在时以新文件为准。
+        val addon = "Learn=True\nClipEnabled=True\n"
+        val desktop = "ClipEnabled=False\n"
+        assertFalse(OpSettings.fromIni("$addon\n$desktop").clipEnabled)
+    }
+
+    @Test
+    fun `ui language is a managed key`() {
+        val merged = mergeIni("UiLanguage=zh\n", OpSettings(uiLanguage = "en"))
+        assertTrue(merged, merged.contains("UiLanguage=en\n"))
+    }
+
     // ---------- 状态栏十二个键（2026-10-10 加；2026-10-19 加 EnPro/Scale；2026-11-02 加 Mic）----------
 
     @Test

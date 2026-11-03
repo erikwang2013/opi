@@ -386,8 +386,9 @@ void OpiEngine::keyEventImpl(const fcitx::InputMethodEntry & /*entry*/,
 // ---------- 用户词自动落盘 ----------
 //
 // Rust 侧在成功选词后标脏，并做 800ms 尾随防抖；本层只提供心跳：事件循环每 250ms
-// 问一次「到点没」，到点才真正写文件。不在 Rust 起后台线程 —— addon 的生命周期与
-// 事件循环都在宿主手里，析构时能停掉定时器并强制 flush 最后一次（<800ms 的尾巴）。
+// 问一次「到点没」，到点只把**内存快照**排进 Rust 的后台写线程 —— fsync 不能挂在
+// 事件循环上：/home 在慢盘上一次 fsync 就能冻住整个输入法（语言栏不刷新、按键不进
+// 引擎）。析构时的 flush 最多等 2 秒，慢盘不会吊住 fcitx5 退出。
 static std::unique_ptr<fcitx::EventSourceTime> g_userWordsTimer;
 
 void OpiEngine::startUserWordsTimer() {

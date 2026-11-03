@@ -614,8 +614,18 @@ Android / Windows 同一套。
 
 ### 4.6 属性设置（入口：配置面 + 状态栏 + 桌面窗）
 
-**配置落在 fcitx5 自己的 addon 配置里**：`$XDG_CONFIG_HOME/fcitx5/conf/opi_fcitx5.conf`
-（字段声明 = `crates/fcitx5-opi/cpp/opi_config.h` 的 `OpiSettings`）：
+**配置分两份**（2026-11-03 起）：
+- **fcitx5 addon 选项**（下面这一段）→ `$XDG_CONFIG_HOME/fcitx5/conf/opi_fcitx5.conf`
+  （字段声明 = `crates/fcitx5-opi/cpp/opi_config.h` 的 `OpiSettings`）。
+- **桌面独有键**（`StatusBar*`、`ClipEnabled`、`SpeechEnabled`、`SpeechLanguage`、
+  `UiLanguage`、`Background`、`CandidateFont`、`ShowOwn`）→
+  `$XDG_CONFIG_HOME/opi/settings.ini`。**必须分开**：fcitx5 的 autosave 只序列化
+  schema 认识的键，未知键整段丢弃（2026-11-03 本机实测：写入探针键 →
+  `ReloadAddonConfig` → `Save` → 探针消失）。同文件时每 30 分钟的 autosave 会把
+  状态栏/剪贴板/语音设置静默复位。Windows 无 fcitx5，仍是单文件
+  `%LOCALAPPDATA%\opi\settings.ini`。
+
+fcitx5 addon 选项（`opi_fcitx5.conf`）长这样：
 
 ```ini
 Learn=True          # 学习（记住选过的词）
@@ -624,7 +634,6 @@ Fuzzy=True          # 模糊音（z/zh、n/l…）
 Jianpin=True        # 简拼（声母缩写，nh → 你好）
 ShiftToggle=True    # Shift 轻按切换中英文（2026-10-09 起）
 Skin=清爽            # 候选面板皮肤（11 款纯色之一；缺键/未知值回「清爽」）
-Background=         # 动态主题 id（19 套之一；空 = 纯色皮肤，配色走 Skin=）
 # —— 2026-10-13/14 起补齐的一批（键名的唯一出处仍是 opi_config.h）——
 FuzzyPairs=         # 模糊音逐对（逗号分隔组名，如 zh/z,n/l；留空按上面的总开关）
 Correction=True     # 拼音纠错（相邻键/多打/少打）
@@ -798,8 +807,9 @@ Linux 上 = `--settings` 的设置窗（无参数启动也是它）。**v1.6.0 �
   导入后经 `reloadImeSettings()` 让 fcitx5 立即重读（见 §4.6）。
 
   **跨设备剪贴板（2026-11-01，默认关闭）**：左侧导航的独立页「跨设备剪贴板」
-  （`ClipPage.kt`，与 Windows 共用；落盘键 `ClipEnabled=False` 写在同一份
-  `opi_fcitx5.conf` 里，但 **fcitx5 读侧不认它**，只有状态栏/设置窗读）。开关打开时
+  （`ClipPage.kt`，与 Windows 共用；落盘键 `ClipEnabled=False` 写在
+  `$XDG_CONFIG_HOME/opi/settings.ini`，**fcitx5 读侧不认它**、autosave 也碰不到，
+  只有状态栏/设置窗读）。开关打开时
   若状态栏宿主（`opi --statusbar`）没在跑，设置窗会先拉起它；内核线程挂在状态栏进程里。
   **监听能力按会话类型分**：
   - **X11**：AWT 每约 300 ms 轮询系统剪贴板，可自动监听本机复制。
@@ -869,12 +879,10 @@ Linux 上 = `--settings` 的设置窗（无参数启动也是它）。**v1.6.0 �
   同步**没有第二条通道**：条本来就每秒重读配置文件（§4.8 上一条），保存后 ≤1s 自己换。
   ⚠️ **同类未做**：虚拟键盘窗、符号大全窗（以及 Windows 候选窗）仍各写死深色 —— 要一起
   随皮肤的话另立一条（色板已备好，见 `SkinPalette.kt`）。
-- 显示/隐藏：设置窗「状态栏」一节（master 隐藏 + 逐按钮常驻）。配置与 §4.6 的六个选项
-  **同住一个文件**（`$XDG_CONFIG_HOME/fcitx5/conf/opi_fcitx5.conf`，十键
-  `StatusBarHidden` / `StatusBar*`（含 `StatusBarEnPro`）；写入在 `desktop/` 的
-  `Settings.kt`），改完 1s 内生效。
-  ⚠️ fcitx5 配置工具保存时会不会把这十键抹掉：**未取证**（配置面只声明它认识的六个选项），
-  已在 `Settings.kt` 头注释标注。
+- 显示/隐藏：设置窗「状态栏」一节（master 隐藏 + 逐按钮常驻）。桌面独有键
+  （`StatusBarHidden` / `StatusBar*` 等）落在 **`$XDG_CONFIG_HOME/opi/settings.ini`**，
+  与 fcitx5 的 `opi_fcitx5.conf` 分开（原因见 §4.6：autosave 会丢未知键）。写入在
+  `desktop/` 的 `Settings.kt`，改完 1s 内生效（状态栏每秒读两份文件）。
 - 按钮动作：「简繁 / 标点 / 全角 / 英文专业」走 `opi-ctl`（下节）；「符号」**2026-10-12 起开桌面
   符号页窗**（见下节「符号大全」；此前是 `opi-ctl symbols` = fcitx5 小候选条，用户
   裁决「点击后要是个大的页面，可以翻页选择」）；「中英文切换」切的是

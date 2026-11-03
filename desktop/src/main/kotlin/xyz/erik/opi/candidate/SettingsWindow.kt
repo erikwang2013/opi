@@ -169,7 +169,12 @@ internal fun SectionTitle(text: String) {
 fun SettingsWindow() {
     var s by remember { mutableStateOf(loadSettings()) }
     UiLang.init(s.uiLanguage)
-    var status by remember { mutableStateOf("配置文件：${settingsPath()}") }
+    var status by remember {
+        mutableStateOf(
+            if (settingsPath() == desktopSettingsPath()) "配置文件：${settingsPath()}"
+            else "配置文件：${desktopSettingsPath()}；fcitx5：${settingsPath()}",
+        )
+    }
     var tab by remember { mutableStateOf(SettingsTab.COMMON) }
     // 符号页/表情页：null = 关；false = 符号；true = 表情（initialEmoji）。
     var symbolWin by remember { mutableStateOf<Boolean?>(null) }

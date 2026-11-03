@@ -17,14 +17,20 @@
 //! - 只有成功导入才接管内存状态。
 //!
 //! **防抖**：宿主 C++ 每 250ms 调 [`opi_fcitx5_save_user_words_if_due`]；本层在最后一次
-//! 学习后静置 [`SAVE_DEBOUNCE`] 才写盘（尾随防抖，连续打字不会每键写文件）。计时用
+//! 学习后静置 [`SAVE_DEBOUNCE`] 才取快照（尾随防抖，连续打字不会每键写文件）。计时用
 //! Rust 的 `Instant`，不依赖宿主时钟。析构路径调 [`opi_fcitx5_flush_user_words`] 补最后一次。
+//!
+//! **落盘不挂在事件循环上**：fsync 在慢盘上可能几百毫秒到数秒，而宿主定时器跑在
+//! fcitx5 主循环里。快照排进专用写线程（单槽合并），输入/候选/D-Bus 都不等磁盘；
+//! 写失败回标 dirty 退避重试。`opi_fcitx5_flush_user_words` 最多等 2 秒。
 //!
 //! **清空**必须连文件一起删：只清内存的话下次启动会把旧词重新读回来。
 
 use std::fs;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use engine_data::user_words::{FILE_NAME, atomic_write, read_document};
@@ -42,6 +48,9 @@ pub(crate) struct Persistence {
     dirty: bool,
     /// 最后一次标脏的时刻；`None` 仅在 `dirty == false` 时出现。
     changed_at: Option<Instant>,
+    /// 后台落盘的代际号：清空用户词时 +1，写线程发现自己的代际已过期就撤掉
+    /// 这份快照（否则「清空」与一次在途写盘会互相打架，文件会复活）。
+    epoch: Arc<AtomicU64>,
 }
 
 impl Persistence {
@@ -50,6 +59,7 @@ impl Persistence {
             path: Some(path),
             dirty: false,
             changed_at: None,
+            epoch: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -156,50 +166,58 @@ impl CandidateState {
         out
     }
 
-    /// 到点才写盘；返回是否真的写了一次（宿主忽略返回值）。
+    /// 到点同步写一次（**只给测试**：生产路径走 take_due + 后台线程）。
+    #[cfg(test)]
     pub(crate) fn save_user_words_if_due_at(&mut self, now: Instant) -> bool {
-        if !self.persist.due_at(now) {
+        let Some(job) = self.take_due_user_words(now) else {
             return false;
-        }
-        match self.write_user_words() {
-            Ok(()) => true,
-            Err(e) => {
-                // 保持 dirty 以便下次重试；把计时推到现在 = 失败退避一个防抖窗口，
-                // 避免只读磁盘上每 250ms 刷一行日志。
-                self.persist.changed_at = Some(now);
-                eprintln!("fcitx5-opi: 用户词表落盘失败: {e}");
-                false
-            }
-        }
-    }
-
-    /// 析构路径的强制落盘（只有 dirty 才写）。
-    pub(crate) fn flush_user_words(&mut self) -> bool {
-        if !self.persist.dirty {
-            return true;
-        }
-        match self.write_user_words() {
-            Ok(()) => true,
-            Err(e) => {
-                eprintln!("fcitx5-opi: 用户词表落盘失败: {e}");
-                false
-            }
-        }
-    }
-
-    fn write_user_words(&mut self) -> Result<(), String> {
-        let Some(path) = self.persist.path.clone() else {
-            return Ok(());
         };
-        let json = self.engine.export_user_words();
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| format!("用户词目录创建失败（{}）: {e}", parent.display()))?;
+        match write_snapshot(&job.path, &job.json) {
+            Ok(()) => true,
+            Err(e) => {
+                // 保持 dirty 以便下次重试；失败退避一个防抖窗口，避免只读磁盘上刷屏。
+                self.persist.mark_dirty();
+                eprintln!("fcitx5-opi: 用户词表落盘失败: {e}");
+                false
+            }
         }
-        atomic_write(&path, &json)?;
+    }
+
+    /// 到点才取内存快照（**不碰磁盘**）：宿主把它交给后台写线程。
+    fn take_due_user_words(&mut self, now: Instant) -> Option<UserWordsJob> {
+        if !self.persist.due_at(now) {
+            return None;
+        }
+        self.take_user_words_snapshot()
+    }
+
+    /// 卸载路径：不看防抖，dirty 就取。
+    fn take_dirty_user_words(&mut self) -> Option<UserWordsJob> {
+        if !self.persist.dirty {
+            return None;
+        }
+        self.take_user_words_snapshot()
+    }
+
+    fn take_user_words_snapshot(&mut self) -> Option<UserWordsJob> {
+        let path = self.persist.path.clone()?;
+        let json = self.engine.export_user_words();
+        let epoch = Arc::clone(&self.persist.epoch);
+        let stamp = epoch.load(Ordering::Relaxed);
+        // 取走即清 dirty：写失败由后台线程回标（mark_user_words_dirty）。
         self.persist.dirty = false;
         self.persist.changed_at = None;
-        Ok(())
+        Some(UserWordsJob {
+            path,
+            json,
+            epoch,
+            stamp,
+        })
+    }
+
+    /// 后台写失败时回标 dirty（退避一个防抖窗口后重试）。
+    fn mark_user_words_dirty(&mut self) {
+        self.persist.mark_dirty();
     }
 
     /// 清空用户词（学习记忆）。缓冲没变但候选集会变（用户词参与排名）⇒ 作废
@@ -211,6 +229,8 @@ impl CandidateState {
         self.invalidate_fetch_cache();
         self.persist.dirty = false;
         self.persist.changed_at = None;
+        // 作废一切在途/待写的旧快照：清空比它们新，文件不能被它们复活。
+        self.persist.epoch.fetch_add(1, Ordering::Relaxed);
         let Some(path) = self.persist.path.clone() else {
             return Ok(());
         };
@@ -224,6 +244,129 @@ impl CandidateState {
             }
         }
     }
+}
+
+/// 落一份快照：建父目录 + 原子写（含 fsync）。**只允许后台线程与测试调用**，
+/// 事件循环绝不能走这里（慢盘 fsync 会冻住输入法）。
+fn write_snapshot(path: &Path, json: &str) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("用户词目录创建失败（{}）: {e}", parent.display()))?;
+    }
+    atomic_write(path, json)
+}
+
+// ---------- 后台落盘（不阻塞 fcitx5 事件循环） ----------
+//
+// `atomic_write` 里的 `sync_all()` 是 fsync：/home 在慢盘上时可能几百毫秒到数秒。
+// 原来它在 250ms 定时器的调用栈里执行 —— 那正是 fcitx5 的事件循环，一次慢写就冻住
+// 整个输入法（系统语言栏不刷新、按键不进引擎、opi-ctl state 全部超时）。
+// 现在事件循环只取内存快照入队（单槽，相邻快照合并），磁盘写在专用线程做。
+
+struct UserWordsJob {
+    path: PathBuf,
+    json: String,
+    epoch: Arc<AtomicU64>,
+    stamp: u64,
+}
+
+#[derive(Default)]
+struct WriterSlot {
+    job: Option<UserWordsJob>,
+    busy: bool,
+}
+
+struct UserWordsWriter {
+    slot: Mutex<WriterSlot>,
+    wake: Condvar,
+    idle: Condvar,
+}
+
+static WRITER: OnceLock<Arc<UserWordsWriter>> = OnceLock::new();
+
+fn writer() -> &'static Arc<UserWordsWriter> {
+    WRITER.get_or_init(|| {
+        let w = Arc::new(UserWordsWriter {
+            slot: Mutex::new(WriterSlot::default()),
+            wake: Condvar::new(),
+            idle: Condvar::new(),
+        });
+        let background = Arc::clone(&w);
+        if let Err(e) = std::thread::Builder::new()
+            .name("opi-user-words".into())
+            .spawn(move || writer_loop(&background))
+        {
+            // 线程起不来：快照留在槽里，flush 等超时后放弃；输入路径不被阻塞。
+            eprintln!("fcitx5-opi: 用户词后台写线程启动失败: {e}");
+        }
+        w
+    })
+}
+
+fn writer_loop(w: &UserWordsWriter) {
+    loop {
+        let job = {
+            let mut slot = w.slot.lock().unwrap_or_else(|p| p.into_inner());
+            while slot.job.is_none() {
+                slot = w.wake.wait(slot).unwrap_or_else(|p| p.into_inner());
+            }
+            slot.busy = true;
+            slot.job.take()
+        };
+        let Some(job) = job else { continue };
+        let started = Instant::now();
+        match write_snapshot(&job.path, &job.json) {
+            // 写盘途中被「清空用户词」作废：撤掉这份过期快照，别让文件复活。
+            Ok(()) if job.epoch.load(Ordering::Relaxed) != job.stamp => {
+                let _ = fs::remove_file(&job.path);
+            }
+            Ok(()) => {}
+            Err(e) => {
+                eprintln!("fcitx5-opi: 用户词表落盘失败: {e}");
+                if job.epoch.load(Ordering::Relaxed) == job.stamp {
+                    crate::with_state(|s| s.mark_user_words_dirty());
+                }
+            }
+        }
+        // 慢盘取证：下一次「卡死」时日志能直接回答是不是落盘拖的。
+        let elapsed = started.elapsed();
+        if elapsed >= Duration::from_millis(500) {
+            eprintln!(
+                "fcitx5-opi: 用户词表落盘耗时 {} ms（后台线程，未阻塞输入）",
+                elapsed.as_millis()
+            );
+        }
+        let mut slot = w.slot.lock().unwrap_or_else(|p| p.into_inner());
+        slot.busy = false;
+        w.idle.notify_all();
+    }
+}
+
+/// 排一份快照（非阻塞；相邻快照合并，槽里最多留最新一份）。
+fn enqueue_user_words(job: UserWordsJob) {
+    let w = writer();
+    let mut slot = w.slot.lock().unwrap_or_else(|p| p.into_inner());
+    slot.job = Some(job);
+    w.wake.notify_one();
+}
+
+/// 等后台把队列写空；超时返回 false（关机路径最多等这么久，绝不吊住 fcitx5）。
+fn wait_user_words_idle(timeout: Duration) -> bool {
+    let w = writer();
+    let deadline = Instant::now() + timeout;
+    let mut slot = w.slot.lock().unwrap_or_else(|p| p.into_inner());
+    while slot.job.is_some() || slot.busy {
+        let now = Instant::now();
+        if now >= deadline {
+            return false;
+        }
+        let (next, _) = w
+            .idle
+            .wait_timeout(slot, deadline - now)
+            .unwrap_or_else(|p| p.into_inner());
+        slot = next;
+    }
+    true
 }
 
 /// 清空用户词（学习记忆）。返回 false = 引擎还没装载，或文件删不掉
@@ -241,7 +384,8 @@ pub unsafe extern "C" fn opi_fcitx5_clear_user_words() -> bool {
     .unwrap_or(false)
 }
 
-/// 宿主定时器每 250ms 调一次：到防抖窗口才写盘。false = 未到点/未装载/写失败。
+/// 宿主定时器每 250ms 调一次：到防抖窗口才把内存快照排进后台队列。
+/// false = 未到点/未装载。**不碰磁盘**，返回值不代表写盘结果。
 ///
 /// # Safety
 ///
@@ -250,12 +394,19 @@ pub unsafe extern "C" fn opi_fcitx5_clear_user_words() -> bool {
 pub unsafe extern "C" fn opi_fcitx5_save_user_words_if_due() -> bool {
     crate::ensure_panic_hook();
     catch_unwind(AssertUnwindSafe(|| {
-        crate::with_state(|s| s.save_user_words_if_due_at(Instant::now())).unwrap_or(false)
+        let snapshot = crate::with_state(|s| s.take_due_user_words(Instant::now())).flatten();
+        match snapshot {
+            Some(job) => {
+                enqueue_user_words(job);
+                true
+            }
+            None => false,
+        }
     }))
     .unwrap_or(false)
 }
 
-/// 卸载前强制落盘（dirty 才写）。true = 无待写或写成功。
+/// 卸载前排入最后一次快照并等后台写完（最多 2 秒）。true = 队列已写空。
 ///
 /// # Safety
 ///
@@ -264,7 +415,12 @@ pub unsafe extern "C" fn opi_fcitx5_save_user_words_if_due() -> bool {
 pub unsafe extern "C" fn opi_fcitx5_flush_user_words() -> bool {
     crate::ensure_panic_hook();
     catch_unwind(AssertUnwindSafe(|| {
-        crate::with_state(|s| s.flush_user_words()).unwrap_or(false)
+        let snapshot = crate::with_state(|s| s.take_dirty_user_words()).flatten();
+        if let Some(job) = snapshot {
+            enqueue_user_words(job);
+        }
+        // 关机最多等 2 秒：慢盘上宁可丢最后一次学习，也不能吊住 fcitx5 退出。
+        wait_user_words_idle(Duration::from_secs(2))
     }))
     .unwrap_or(false)
 }
