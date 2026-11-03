@@ -110,11 +110,13 @@ internal object ClipRuntime {
                 advertisePrefix = lan?.prefix,
             ),
         )
+        ClipRouting.bind { send, receive -> created.setTextRoutes(send, receive) }
         clipAdapter.start()
     }
 
     @Synchronized
     fun stop(context: Context) {
+        ClipRouting.bind(null)
         adapter?.stop()
         adapter = null
         bridge?.stop()

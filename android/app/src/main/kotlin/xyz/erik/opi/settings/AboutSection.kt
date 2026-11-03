@@ -181,6 +181,13 @@ private fun LinkItem(label: String, url: String, toast: (String) -> Unit) {
  * 这里的 context 是 Activity（`SettingsActivity` 直接 setContent），无需 NEW_TASK。
  */
 private fun openExternal(context: Context, url: String, toast: (String) -> Unit) {
+    // 2026-11-04 用户要求：隐私政策在应用内打开，不跳系统浏览器。
+    if (url == ABOUT_PRIVACY_URL) {
+        context.startActivity(
+            Intent(context, PrivacyActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+        return
+    }
     try {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
     } catch (_: ActivityNotFoundException) {

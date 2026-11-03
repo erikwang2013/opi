@@ -59,6 +59,13 @@ class ClipBridgeTest {
             return 0
         }
 
+        val routes = mutableListOf<Pair<String, String>>()
+
+        override fun setTextRoutes(handle: Long, sendPeer: String, receivePeer: String): Boolean {
+            routes += sendPeer to receivePeer
+            return true
+        }
+
         override fun pollEvent(handle: Long, timeoutMs: Int): String? = pollResult
 
         override fun pairStart(handle: Long, peerId: String): Boolean = true
@@ -182,6 +189,20 @@ class ClipBridgeTest {
         assertEquals(1, recorder.statuses.size)
         assertTrue(recorder.statuses.single().running)
         assertEquals("测试机", recorder.statuses.single().deviceName)
+        assertTrue(bridgeStop(bridge, worker, api))
+    }
+
+    @Test
+    fun textRoutesAreForwardedOnTheWorkerThread() {
+        val api = FakeApi()
+        val worker = QueueWorker()
+        val bridge = bridge(api, worker, Recorder())
+        bridge.start("{}")
+        worker.drain(1)
+        val peer = "a".repeat(32)
+        bridge.setTextRoutes(peer, "")
+        worker.drain(4)
+        assertTrue(api.routes.contains(peer to ""))
         assertTrue(bridgeStop(bridge, worker, api))
     }
 

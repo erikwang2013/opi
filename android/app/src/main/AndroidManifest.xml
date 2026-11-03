@@ -54,6 +54,13 @@
             android:exported="false"
             android:excludeFromRecents="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"/>
+        <!-- 应用内隐私政策（2026-11-04）：关于页的链接不再跳系统浏览器。 -->
+        <activity
+            android:name=".settings.PrivacyActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:label="隐私政策"
+            android:theme="@style/LaunchTheme"/>
         <!-- 自有表情 = 插入 PNG：commitContent 把 cacheDir/pet 下的文件以 content:// 暴露给编辑框。
              authority 与 PetStickerCommit.kt 的 "${packageName}.fileprovider" 一致。 -->
         <provider

@@ -48,6 +48,9 @@ internal sealed interface ClipCommand {
     /** 手动发送（Wayland）：文本只在内存里过一手，不落盘、不记日志。 */
     data class SendText(val text: String) : ClipCommand
 
+    /** 文本/剪贴板路由；空串 = 该方向全部已配对设备。 */
+    data class SetTextRoutes(val send: String, val receive: String) : ClipCommand
+
     /** 文件/文件夹传输：清单只含本机绝对路径，FFI 在宿主线程上展开目录。 */
     data class SendFiles(val peer: String, val filesJson: String) : ClipCommand
     data class RespondTransfer(val id: String, val accept: Boolean, val saveDir: String?) : ClipCommand
@@ -220,6 +223,14 @@ internal class ClipControlServer(
                 enqueue(ClipCommand.CancelTransfer(id))
                 writeJson(socket, "{\"ok\":true}")
             }
+            "text_routes" -> {
+                val send = routeArg(m, "send")
+                    ?: return replyError(socket, "send 必须为空或 32 位十六进制")
+                val receive = routeArg(m, "receive")
+                    ?: return replyError(socket, "receive 必须为空或 32 位十六进制")
+                enqueue(ClipCommand.SetTextRoutes(send, receive))
+                writeJson(socket, "{\"ok\":true}")
+            }
             "stop" -> {
                 enqueue(ClipCommand.SetEnabled(false))
                 writeJson(socket, "{\"ok\":true}")
@@ -233,6 +244,10 @@ internal class ClipControlServer(
 
     private fun transferArg(m: Map<String, JVal>): String? =
         (m["id"] as? JVal.JStr)?.v?.takeIf { it.matches(Regex("[0-9a-fA-F]{32}")) }
+
+    private fun routeArg(m: Map<String, JVal>, key: String): String? =
+        (m[key] as? JVal.JStr)?.v
+            ?.takeIf { it.isEmpty() || it.matches(Regex("[0-9a-fA-F]{32}")) }
 
     fun close() {
         closed = true
@@ -306,6 +321,9 @@ internal object ClipClient {
     fun forget(peer: String): Boolean = command("\"forget\",\"peer\":${jsonString(peer)}")
 
     fun sendText(text: String): Boolean = command("\"send\",\"text\":${jsonString(text)}")
+
+    fun setTextRoutes(send: String, receive: String): Boolean =
+        command("\"text_routes\",\"send\":${jsonString(send)},\"receive\":${jsonString(receive)}")
 
     fun sendFiles(peer: String, filesJson: String): Boolean =
         command("\"send_files\",\"peer\":${jsonString(peer)},\"files\":${jsonString(filesJson)}")

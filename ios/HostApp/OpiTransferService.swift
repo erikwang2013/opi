@@ -105,7 +105,7 @@ final class OpiTransferService {
     var onChange: (() -> Void)?
     var onIncomingOffer: ((HostTransfer) -> Void)?
 
-    private let runner = OpiClipRunner()
+    let runner = OpiClipRunner()
     private let lock = NSLock()
     private var peersCache: [HostPeerInfo] = []
     private var transfersCache: [HostTransfer] = []
@@ -198,7 +198,7 @@ final class OpiTransferService {
         return nil
     }
 
-    /// 文本走剪贴板通道：只发给已信任设备，没有定向文本接口。
+    /// 文本走剪贴板通道：只发给已信任设备；定向由 `setTextRoutes` 决定。
     func sendText(_ text: String) -> String? {
         guard !text.isEmpty else { return "文本为空" }
         guard text.utf8.count <= 256 * 1024 else { return "文本超过 256 KiB 上限" }

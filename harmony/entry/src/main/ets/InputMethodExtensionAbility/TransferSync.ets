@@ -184,6 +184,15 @@ export async function sendPicked(kind: TransferKind, peerId: string): Promise<vo
   message = `正在发送 ${prepared.entries.length} 项到 ${peerName(peer.instanceId)}`;
 }
 
+/** 只和选中设备收发文本/剪贴板；空串 = 全部已配对设备。 */
+export function setTextRoutes(peerId: string): void {
+  const handle: number = ClipSync.handleValue();
+  if (handle === 0) {
+    return;
+  }
+  opiime.clipSetTextRoutes(handle, peerId, peerId);
+}
+
 /** 文本与剪贴板走 publish_text：内核只发给已配对会话（未配对设备根本不建会话）。 */
 export function sendText(text: string): void {
   if (text.length === 0) {

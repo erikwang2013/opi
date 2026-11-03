@@ -152,6 +152,19 @@ final class OpiClipRunner {
         }
     }
 
+    /// 文本/剪贴板路由：空串 = 该方向全部已配对设备。
+    func setTextRoutes(sendPeer: String, receivePeer: String) {
+        enqueue { [weak self] in
+            guard let self, let h = self.handle else { return }
+            let ok = self.clipWithUTF16(sendPeer) { send, sendLen in
+                self.clipWithUTF16(receivePeer) { receive, receiveLen in
+                    opi_clip_set_text_routes(h, send, sendLen, receive, receiveLen)
+                }
+            }
+            self.finishCall(ok)
+        }
+    }
+
     /// 立即拉一次对端快照（内核的 1s 节流之外的手动刷新）。
     func refreshPeers() {
         enqueue { [weak self] in self?.refreshPeersIfDue(force: true) }

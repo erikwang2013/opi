@@ -12,6 +12,7 @@
 //! external fun clipStart(handle: Long): Boolean
 //! external fun clipStop(handle: Long)
 //! external fun clipLocalText(handle: Long, text: String?): Int
+//! external fun clipSetTextRoutes(handle: Long, sendPeer: String?, receivePeer: String?): Boolean
 //! external fun clipPollEvent(handle: Long, timeoutMs: Int): String?
 //! external fun clipPairStart(handle: Long, peerId: String): Boolean
 //! external fun clipPairConfirm(handle: Long, peerId: String, accept: Boolean): Boolean
@@ -128,6 +129,25 @@ pub unsafe extern "system" fn opijni_clip_local_text(
             unsafe { OpiClip::borrow(ptr(handle)) }?.publish(&text)
         })),
         -1,
+    )
+}
+
+/// setTextRoutes(handle, sendPeer, receivePeer) -> Boolean：空串 = 该方向全部设备。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn opijni_clip_set_text_routes(
+    env: JEnv,
+    _class: sys::jclass,
+    handle: jlong,
+    send_peer: jstring,
+    receive_peer: jstring,
+) -> jboolean {
+    settle(
+        catch_unwind(AssertUnwindSafe(|| {
+            let send = unsafe { read_arg(env, send_peer, "send peer") }?;
+            let receive = unsafe { read_arg(env, receive_peer, "receive peer") }?;
+            unsafe { OpiClip::borrow(ptr(handle)) }?.set_text_routes(&send, &receive)
+        })),
+        false,
     )
 }
 
@@ -385,6 +405,11 @@ pub(crate) fn clip_native_methods() -> Vec<NativeMethod<'static>> {
                 jni_str!("clipLocalText"),
                 jni_str!("(JLjava/lang/String;)I"),
                 opijni_clip_local_text as *mut c_void,
+            ),
+            NativeMethod::from_raw_parts(
+                jni_str!("clipSetTextRoutes"),
+                jni_str!("(JLjava/lang/String;Ljava/lang/String;)Z"),
+                opijni_clip_set_text_routes as *mut c_void,
             ),
             NativeMethod::from_raw_parts(
                 jni_str!("clipPollEvent"),

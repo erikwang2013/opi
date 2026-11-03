@@ -233,9 +233,9 @@ impl Session {
                         .lock()
                         .accept_fragment(self.peer, fragment, Instant::now());
                 match outcome {
-                    FragmentOutcome::Done(Apply::Applied | Apply::Duplicate | Apply::Stale) => {
-                        self.send(&Wire::Ack { event_id })?
-                    }
+                    FragmentOutcome::Done(
+                        Apply::Applied | Apply::Duplicate | Apply::Stale | Apply::Filtered,
+                    ) => self.send(&Wire::Ack { event_id })?,
                     FragmentOutcome::Pending
                     | FragmentOutcome::Done(Apply::Invalid)
                     | FragmentOutcome::Bad => {}

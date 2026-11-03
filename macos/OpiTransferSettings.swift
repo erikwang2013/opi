@@ -108,6 +108,12 @@ extension OpiSettingsWindow {
         transferTargetPopup = target
         y += 38
 
+        checkbox("只和选中设备收发文本/剪贴板", y: y,
+                 on: UserDefaults.standard.bool(forKey: "OpiClipOnlySelected"),
+                 action: #selector(transferOnlySelectedChanged(_:)))
+        y += 36
+        applyTextRoutes()
+
         let canSend = !sendable.isEmpty && clip.isTransferEnabled
         sendButton("选择文件…", y: y, x: 0, action: #selector(transferPickFiles(_:)),
                    enabled: canSend)
@@ -236,7 +242,20 @@ extension OpiSettingsWindow {
     }
 
     @objc func transferTargetChanged(_ sender: NSPopUpButton) {
-        // 选择只影响下一次发送，不需要重画。
+        applyTextRoutes()
+    }
+
+    @objc func transferOnlySelectedChanged(_ sender: NSButton) {
+        UserDefaults.standard.set(sender.state == .on, forKey: "OpiClipOnlySelected")
+        applyTextRoutes()
+    }
+
+    private func applyTextRoutes() {
+        let only = UserDefaults.standard.bool(forKey: "OpiClipOnlySelected")
+        let peer = only
+            ? (transferTargetPopup?.selectedItem?.representedObject as? String ?? "")
+            : ""
+        OpiClipService.shared.setTextRoutes(peerId: peer)
     }
 
     @objc func transferPickFiles(_ sender: Any?) {

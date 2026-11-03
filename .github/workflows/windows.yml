@@ -455,15 +455,13 @@ jobs:
           if ((Split-Path $app -Leaf) -ne 'opi') {
             throw "app image 名不是 opi（是 $(Split-Path $app -Leaf)）—— Windows packageName 没生效"
           }
-          $required = @('opi.exe', 'app\tsf_opi.dll', 'app\opi_imm32.ime', 'app\symbol_categories.tsv', 'app\LICENSE', 'app\LICENSES.md', 'app\GPL-3.0.txt')
-          if ($env:TIER -ne 'basic') { $required += @('app\luna.opid', 'app\trad.opid') }
+          $required = @('opi.exe', 'app\tsf_opi.dll', 'app\opi_imm32.ime', 'app\symbol_categories.tsv', 'app\LICENSE', 'app\LICENSES.md', 'app\GPL-3.0.txt', 'app\luna.opid')
+          if ($env:TIER -ne 'basic') { $required += @('app\trad.opid') }
           foreach ($f in $required) {
             if (-not (Test-Path (Join-Path $app $f))) { throw "app image 缺 $f" }
           }
-          if ($env:TIER -eq 'basic') {
-            foreach ($f in @('app\luna.opid', 'app\trad.opid')) {
-              if (Test-Path (Join-Path $app $f)) { throw "基础包不应带词库 $f（应改为设置内下载）" }
-            }
+          if ($env:TIER -eq 'basic' -and (Test-Path (Join-Path $app 'app\trad.opid'))) {
+            throw "基础包不应带扩展词库 app\trad.opid（应改为设置内下载）"
           }
           if ($env:TIER -eq 'full') {
             foreach ($f in @('app\opi_asr.dll', 'app\onnxruntime.dll')) {
@@ -896,8 +894,8 @@ jobs:
           if ((Get-Content install-opi.txt -Raw).Trim() -ne 'PRESENT') { throw '安装目录里没有 opi.exe' }
           if ((Get-Content install-dll.txt -Raw).Trim() -ne 'PRESENT') { throw '安装目录里没有 app\tsf_opi.dll' }
           if ($env:TIER -eq 'basic') {
-            if ((Get-Content install-luna.txt -Raw).Trim() -ne 'ABSENT') { throw '基础包不应带 app\luna.opid（词库应改为设置内下载）' }
-            if ((Get-Content install-trad.txt -Raw).Trim() -ne 'ABSENT') { throw '基础包不应带 app\trad.opid（词库应改为设置内下载）' }
+            if ((Get-Content install-luna.txt -Raw).Trim() -ne 'PRESENT') { throw '基础包缺 app\luna.opid（三档都要带拼音主词库）' }
+            if ((Get-Content install-trad.txt -Raw).Trim() -ne 'ABSENT') { throw '基础包不应带 app\trad.opid（扩展词库应改为设置内下载）' }
           } else {
             if ((Get-Content install-luna.txt -Raw).Trim() -ne 'PRESENT') { throw '安装目录里没有 app\luna.opid（词库没随包）' }
             if ((Get-Content install-trad.txt -Raw).Trim() -ne 'PRESENT') { throw '安装目录里没有 app\trad.opid（繁体词库没随包）' }

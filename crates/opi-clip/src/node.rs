@@ -12,7 +12,7 @@ use crate::discovery;
 use crate::identity::Identity;
 use crate::net;
 use crate::pairing;
-use crate::state::{Backoff, Core};
+use crate::state::{Backoff, Core, Routes};
 use crate::trust::TrustStore;
 use crate::types::{
     ClipEvent, Fingerprint, InstanceId, Outbound, PeerInfo, PublishOutcome, SessionEntry,
@@ -92,7 +92,7 @@ impl NodeInner {
         core.connecting.remove(&peer);
         // 保留 backoff，让短命会话在重连时继续指数退避；稳定会话结束时
         // unregister_session 会把 attempts 归零。
-        Some((generation, core.pending_for_session()))
+        Some((generation, core.pending_for_session(peer)))
     }
 
     pub(crate) fn unregister_session(&self, peer: InstanceId, generation: u64, started: Instant) {
@@ -241,6 +241,7 @@ impl ClipNode {
                 .sessions
                 .iter()
                 .filter(|(peer, _)| core.trust.contains(**peer))
+                .filter(|(peer, _)| core.routes.send.is_none_or(|target| target == **peer))
                 .map(|(_, session)| session.tx.clone())
                 .collect();
             (event, senders)
@@ -256,6 +257,12 @@ impl ClipNode {
             version: event.version,
             peers,
         })
+    }
+
+    /// 文本/剪贴板路由：`None` = 全部已配对设备。发送侧只影响已建立的会话；
+    /// 接收侧在内核落事件前过滤（只 ACK，不写远端哈希/事件队列）。
+    pub fn set_text_routes(&self, send: Option<InstanceId>, receive: Option<InstanceId>) {
+        self.inner.lock().routes = Routes { send, receive };
     }
 
     pub fn poll_event(&self) -> Option<ClipEvent> {

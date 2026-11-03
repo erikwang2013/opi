@@ -26,7 +26,8 @@ export struct TransferPanel {
   @StorageLink('opiLang') lang: number = 0;
   @State peers: ClipPeer[] = [];
   @State transfers: ClipTransfer[] = [];
-  @State selectedId: string = '';
+  @StorageLink('opiClipSelectedPeer') selectedId: string = '';
+  @StorageLink('opiClipOnlySelected') onlySelected: boolean = false;
   @State running: boolean = false;
   @State message: string = '';
   @State textOpen: boolean = false;
@@ -38,9 +39,14 @@ export struct TransferPanel {
 
   aboutToAppear(): void {
     this.refresh();
+    this.applyRoutes();
     this.timer = setInterval((): void => {
       this.refresh();
     }, 500);
+  }
+
+  private applyRoutes(): void {
+    TransferSync.setTextRoutes(this.onlySelected ? this.selectedId : '');
   }
 
   aboutToDisappear(): void {
@@ -59,8 +65,13 @@ export struct TransferPanel {
   }
 
   private refresh(): void {
+    const wasRunning: boolean = this.running;
     this.running = ClipSync.isRunning();
+    if (this.onlySelected && !wasRunning && this.running) {
+      this.applyRoutes();
+    }
     const peers: ClipPeer[] = ClipSync.peerList().slice();
+    const previousSelection: string = this.selectedId;
     this.peers = peers;
     this.transfers = TransferSync.list().slice();
     this.message = TransferSync.feedback();
@@ -80,6 +91,9 @@ export struct TransferPanel {
           break;
         }
       }
+    }
+    if (this.onlySelected && this.selectedId !== previousSelection) {
+      this.applyRoutes();
     }
   }
 
@@ -240,6 +254,7 @@ export struct TransferPanel {
       if (peer.trusted && peer.connected) {
         this.selectedId = peer.instanceId;
         this.openNote = '';
+        this.applyRoutes();
       }
     })
   }
@@ -342,6 +357,23 @@ export struct TransferPanel {
           }
           if (!TransferSync.hasTrustedPeer()) {
             this.Hint(t('还没有已配对设备：先到 设置 → 跨设备剪贴板 与对方核对 6 位数字完成配对。'))
+          }
+
+          if (this.peers.length > 0) {
+            Row() {
+              Column() {
+                Text(t('只和选中设备收发文本/剪贴板'))
+                  .fontSize(this.fs(13)).fontColor(this.pal().panelFg)
+                Text(t('关闭时发给所有已配对设备，也接收所有设备'))
+                  .fontSize(this.fs(10)).fontColor(this.pal().dimFg).margin({ top: 2 })
+              }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+              Toggle({ type: ToggleType.Switch, isOn: this.onlySelected })
+                .onChange((on: boolean): void => {
+                  this.onlySelected = on;
+                  this.applyRoutes();
+                })
+            }
+            .width('100%').padding({ left: 14, right: 14, top: 6, bottom: 6 })
           }
 
           this.Section(t('发送'))

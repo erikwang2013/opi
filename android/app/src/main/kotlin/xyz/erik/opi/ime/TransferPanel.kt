@@ -15,8 +15,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,6 +31,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import xyz.erik.opi.clip.ClipRouting
 import xyz.erik.opi.clip.ClipRuntime
 import xyz.erik.opi.clip.openSavedFolder
 import xyz.erik.opi.clip.ClipTransfer
@@ -50,10 +53,16 @@ import xyz.erik.opi.keyboard.LocalKeyboardPalette
 fun TransferPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
     val p = LocalKeyboardPalette.current
     val context = LocalContext.current
-    var selected by remember { mutableStateOf("") }
     var folderNote by remember { mutableStateOf("") }
     val connected = ClipRuntime.peers.filter { it.trusted && it.connected }
-    val target = connected.firstOrNull { it.instanceId == selected } ?: connected.firstOrNull()
+    val target = connected.firstOrNull { it.instanceId == ClipRouting.selectedPeer }
+        ?: connected.firstOrNull()
+
+    LaunchedEffect(connected.joinToString { it.instanceId }) {
+        if (target != null && target.instanceId != ClipRouting.selectedPeer) {
+            ClipRouting.select(target.instanceId)
+        }
+    }
 
     fun pick(mode: String) {
         val peer = target
@@ -98,7 +107,7 @@ fun TransferPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
                             .clickable(
                                 enabled = peer.trusted && peer.connected,
                                 role = Role.RadioButton,
-                            ) { selected = peer.instanceId }
+                            ) { ClipRouting.select(peer.instanceId) }
                             .padding(vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -122,6 +131,26 @@ fun TransferPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
                             )
                         }
                     }
+                }
+            }
+
+            if (connected.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("只和选中设备收发文本/剪贴板", fontSize = 12.sp, color = p.panelFg)
+                        Text(
+                            "关闭时发给所有已配对设备，也接收所有设备",
+                            fontSize = 10.sp,
+                            color = p.barDimFg,
+                        )
+                    }
+                    Switch(
+                        checked = ClipRouting.onlySelected,
+                        onCheckedChange = { ClipRouting.setOnlySelectedMode(it) },
+                    )
                 }
             }
 

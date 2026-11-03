@@ -56,7 +56,10 @@ internal val LocalSettingsWindow = staticCompositionLocalOf<java.awt.Window?> { 
 internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
     val scope = rememberCoroutineScope()
     val targets = sendablePeers(status.peers)
-    var target by remember { mutableStateOf("") }
+    var target by remember { mutableStateOf(ClipRouteUi.target) }
+    var onlySelected by remember { mutableStateOf(ClipRouteUi.onlySelected) }
+    // 首次打开不急着下发路由：状态栏宿主里的路由可能来自上一次设置，别把它清成广播。
+    var routeTouched by remember { mutableStateOf(false) }
     var text by remember { mutableStateOf("") }
     var picker by remember { mutableStateOf<TransferPickerMode?>(null) }
     var saveDirFor by remember { mutableStateOf<String?>(null) }
@@ -65,6 +68,18 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
         if (targets.none { it.instanceId == target }) {
             target = targets.firstOrNull()?.instanceId.orEmpty()
         }
+    }
+    // 文本/剪贴板路由：只和选中设备收发；关闭时保持内核的广播/全收行为。
+    LaunchedEffect(target, onlySelected, targets.isEmpty(), routeTouched) {
+        if (!routeTouched) return@LaunchedEffect
+        if (targets.isEmpty() && onlySelected) {
+            onlySelected = false
+            return@LaunchedEffect
+        }
+        ClipRouteUi.target = target
+        ClipRouteUi.onlySelected = onlySelected
+        val peer = if (onlySelected && targets.isNotEmpty()) target else ""
+        withContext(Dispatchers.IO) { ClipClient.setTextRoutes(peer, peer) }
     }
 
     fun sendPaths(paths: List<Path>) {
@@ -189,7 +204,8 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
 
     SectionTitle("传输")
     Text(
-        "文件/文件夹/媒体发给选中的已配对设备；文本与剪贴板发给所有已信任设备。" +
+        "文件/文件夹/媒体发给选中的已配对设备；文本与剪贴板默认发给所有已信任设备，" +
+            "打开“只和选中设备收发”后只与选中设备互通。" +
             "单次最多 $TRANSFER_MAX_ENTRIES 项、单文件 2 GiB、总计 8 GiB。",
         fontSize = 12.sp, color = Muted,
     )
@@ -219,9 +235,22 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
                 ClipButton(
                     label = "发送到 ${p.name.ifBlank { p.instanceId.take(8) }}",
                     enabled = p.instanceId != target,
-                ) { target = p.instanceId }
+                ) {
+                    target = p.instanceId
+                    routeTouched = true
+                }
                 Spacer(Modifier.width(8.dp))
             }
+        }
+    }
+    Spacer(Modifier.height(6.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        ClipButton(
+            label = if (onlySelected) "只和选中设备收发文本/剪贴板 ✓" else "只和选中设备收发文本/剪贴板",
+            enabled = targets.isNotEmpty(),
+        ) {
+            onlySelected = !onlySelected
+            routeTouched = true
         }
     }
     Spacer(Modifier.height(6.dp))

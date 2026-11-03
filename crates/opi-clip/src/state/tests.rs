@@ -335,3 +335,30 @@ fn stopped_core_drops_events_pushed_after_stop() {
     assert!(core.events.is_empty(), "停止后 push_event 必须拒绝，防回填");
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn text_routes_filter_receive_and_fence_pending_to_one_peer() {
+    let (mut core, dir) = core();
+    // 接收路由：只接受 sender(2)，sender(3) 的事件只 ACK、不落事件队列。
+    core.routes.receive = Some(sender(2));
+    let foreign = event(sender(3), now_ms() + 1, 0, "foreign");
+    assert_eq!(
+        core.apply_event(sender(3), &foreign, Instant::now()),
+        Apply::Filtered
+    );
+    assert!(core.events.is_empty(), "被过滤的文本不得进入事件队列");
+
+    // 发送路由：pending 只能补给目标设备，不能泄漏给其他新会话。
+    core.routes.send = Some(sender(2));
+    let local = core.prepare_local("targeted").unwrap().unwrap();
+    assert_eq!(
+        core.pending_for_session(sender(2)).map(|p| p.event_id),
+        Some(local.event_id)
+    );
+    assert!(core.pending_for_session(sender(3)).is_none());
+
+    // 清掉发送路由后，旧的定向 pending 仍不得发给别的设备。
+    core.routes.send = None;
+    assert!(core.pending_for_session(sender(3)).is_none());
+    let _ = std::fs::remove_dir_all(dir);
+}

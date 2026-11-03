@@ -38,6 +38,25 @@ fn make_beacon(inner: &NodeInner, tcp_port: u16) -> Beacon {
     discovery::beacon_for(core.instance_id, &core.public_key, tcp_port, capabilities)
 }
 
+/// UDP 上由 ICMP 反馈来的错误不是套接字坏了：Windows 对发往无监听端口的主机
+/// 会把 port-unreachable 作为 WSAECONNRESET（10054，ConnectionReset）报给下一次
+/// `recv_from`。发现线程刚启动就会对 /24 发 254 个探测，于是第一次 recv 就可能
+/// 收到它；若按致命错误退出，Windows 端会永久丢失发现能力（表现正是「无法自动
+/// 配对」）。这些错误继续收包即可。
+fn is_transient_recv_error(kind: io::ErrorKind) -> bool {
+    matches!(
+        kind,
+        io::ErrorKind::WouldBlock
+            | io::ErrorKind::TimedOut
+            | io::ErrorKind::Interrupted
+            | io::ErrorKind::ConnectionReset
+            | io::ErrorKind::ConnectionRefused
+            | io::ErrorKind::ConnectionAborted
+            | io::ErrorKind::HostUnreachable
+            | io::ErrorKind::NetworkUnreachable
+    )
+}
+
 pub(crate) fn discovery_loop(inner: Arc<NodeInner>, socket: UdpSocket, tcp_port: u16) {
     let mut next_beacon = Instant::now();
     let mut next_probe = Instant::now() + PROBE_FIRST_DELAY;
@@ -112,13 +131,7 @@ pub(crate) fn discovery_loop(inner: Arc<NodeInner>, socket: UdpSocket, tcp_port:
                     inner.lock().observe_beacon(source, beacon, Instant::now());
                 }
             }
-            Err(error)
-                if matches!(
-                    error.kind(),
-                    io::ErrorKind::WouldBlock
-                        | io::ErrorKind::TimedOut
-                        | io::ErrorKind::Interrupted
-                ) => {}
+            Err(error) if is_transient_recv_error(error.kind()) => {}
             Err(error) => {
                 inner.push_error(format!("discovery receive: {error}"));
                 break;
@@ -350,5 +363,29 @@ fn connect_session(inner: Arc<NodeInner>, peer: InstanceId, addr: SocketAddr, pu
     })();
     if result.is_err() {
         inner.schedule_backoff(peer);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_transient_recv_error;
+    use std::io::ErrorKind;
+
+    #[test]
+    fn udp_icmp_errors_keep_discovery_alive() {
+        // Windows 的 WSAECONNRESET（10054）来自 /24 探测触发的 ICMP port-unreachable。
+        for kind in [
+            ErrorKind::ConnectionReset,
+            ErrorKind::ConnectionRefused,
+            ErrorKind::ConnectionAborted,
+            ErrorKind::HostUnreachable,
+            ErrorKind::NetworkUnreachable,
+            ErrorKind::WouldBlock,
+            ErrorKind::TimedOut,
+            ErrorKind::Interrupted,
+        ] {
+            assert!(is_transient_recv_error(kind), "{kind:?}");
+        }
+        assert!(!is_transient_recv_error(ErrorKind::PermissionDenied));
     }
 }

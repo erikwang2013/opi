@@ -421,6 +421,12 @@ void opi_clip_stop(OpiClip *clip);
 /// 本地剪贴板变化 → 0=已发布 1=防回环抑制（正常） -1=失败（未 start/超限/NULL）。
 int32_t opi_clip_local_text(OpiClip *clip, const uint16_t *text, size_t len);
 
+/// 文本/剪贴板路由：空串 = 该方向全部已配对设备。
+bool opi_clip_set_text_routes(
+    OpiClip *clip,
+    const uint16_t *send_hex, size_t send_len,
+    const uint16_t *receive_hex, size_t receive_len);
+
 /// 取一条事件 JSON；空串 = 这段时间没有事件。timeout_ms=0 立即返回（非阻塞），
 /// >0 最多等 1 秒。
 OpiString opi_clip_poll_event(OpiClip *clip, uint32_t timeout_ms);

@@ -154,6 +154,27 @@ static napi_value JsClipLocalText(napi_env env, napi_callback_info info) {
     return out;
 }
 
+/// setTextRoutes(handle, sendPeer, receivePeer): 空串 = 该方向全部设备
+static napi_value JsClipSetTextRoutes(napi_env env, napi_callback_info info) {
+    napi_value a[3];
+    size_t n = get_args(env, info, a, 3);
+    size_t send_len = 0;
+    size_t receive_len = 0;
+    char16_t *send = (n >= 2) ? js_to_utf16(env, a[1], &send_len) : NULL;
+    char16_t *receive = (n >= 3) ? js_to_utf16(env, a[2], &receive_len) : NULL;
+    bool ok = false;
+    if (n >= 1) {
+        OpiClip *h = clip_arg(env, a[0]);
+        if (h != NULL) {
+            ok = opi_clip_set_text_routes(
+                h, (const uint16_t *)send, send_len, (const uint16_t *)receive, receive_len);
+        }
+    }
+    free(send);
+    free(receive);
+    return ret_bool(env, ok);
+}
+
 /// pollEvent(handle, timeoutMs): 事件 JSON；空串 = 这段时间没有事件
 static napi_value JsClipPollEvent(napi_env env, napi_callback_info info) {
     napi_value a[2];
@@ -334,6 +355,7 @@ napi_value opi_clip_napi_init(napi_env env, napi_value exports) {
         {"clipStart", NULL, JsClipStart, NULL, NULL, NULL, napi_default, NULL},
         {"clipStop", NULL, JsClipStop, NULL, NULL, NULL, napi_default, NULL},
         {"clipLocalText", NULL, JsClipLocalText, NULL, NULL, NULL, napi_default, NULL},
+        {"clipSetTextRoutes", NULL, JsClipSetTextRoutes, NULL, NULL, NULL, napi_default, NULL},
         {"clipPollEvent", NULL, JsClipPollEvent, NULL, NULL, NULL, napi_default, NULL},
         {"clipPairStart", NULL, JsClipPairStart, NULL, NULL, NULL, napi_default, NULL},
         {"clipPairConfirm", NULL, JsClipPairConfirm, NULL, NULL, NULL, napi_default, NULL},

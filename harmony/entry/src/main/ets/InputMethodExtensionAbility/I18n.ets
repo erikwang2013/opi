@@ -84,6 +84,8 @@ const TABLE: string = `设置\tSettings
 核对两台设备显示相同的 6 位数字；不一致请拒绝。\tVerify that both devices display the same 6-digit code; reject if they differ.
 允许\tAllow
 把当前剪贴板发到已配对设备\tSend the current clipboard to paired devices
+只和选中设备收发文本/剪贴板\tSend and receive text/clipboard only with the selected device
+关闭时发给所有已配对设备，也接收所有设备\tWhen off, sends to and receives from all paired devices
 系统限制后台读取剪贴板：点「粘贴」手动同步一次，或从系统复制后立即同步。\tThe system limits background clipboard reads: tap Paste to sync once manually, or sync right after copying.
 收到的文本只写入系统剪贴板，不会自动粘贴；请回到应用里手动粘贴。\tReceived text is written only to the system clipboard and is never pasted automatically; paste it manually in the app.
 设备\tDevices

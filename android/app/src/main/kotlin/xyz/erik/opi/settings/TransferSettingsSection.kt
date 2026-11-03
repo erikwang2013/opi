@@ -11,8 +11,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -22,6 +24,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import xyz.erik.opi.clip.ClipRouting
 import xyz.erik.opi.clip.ClipRuntime
 import xyz.erik.opi.clip.ClipTransfer
 import xyz.erik.opi.clip.TransferActivity
@@ -41,9 +44,15 @@ import xyz.erik.opi.i18n.Text
 internal fun TransferSettingsSection(toast: (String) -> Unit) {
     val context = LocalContext.current
     val connected = ClipRuntime.peers.filter { it.trusted && it.connected }
-    var selected by remember { mutableStateOf("") }
-    val target = connected.firstOrNull { it.instanceId == selected } ?: connected.firstOrNull()
+    val target = connected.firstOrNull { it.instanceId == ClipRouting.selectedPeer }
+        ?: connected.firstOrNull()
     var folderNote by remember { mutableStateOf("") }
+
+    LaunchedEffect(connected.joinToString { it.instanceId }) {
+        if (target != null && target.instanceId != ClipRouting.selectedPeer) {
+            ClipRouting.select(target.instanceId)
+        }
+    }
 
     ListItem(
         headlineContent = { Text("发送与接收") },
@@ -60,12 +69,22 @@ internal fun TransferSettingsSection(toast: (String) -> Unit) {
                 headlineContent = { Text(peer.name.ifEmpty { peer.instanceId.take(8) }) },
                 supportingContent = { Text(peer.address.ifEmpty { "已连接" }) },
                 trailingContent = {
-                    TextButton(onClick = { selected = peer.instanceId }) {
+                    TextButton(onClick = { ClipRouting.select(peer.instanceId) }) {
                         Text(if (peer == target) "已选" else "选择")
                     }
                 },
             )
         }
+        ListItem(
+            headlineContent = { Text("只和选中设备收发文本/剪贴板") },
+            supportingContent = { Text("关闭时发给所有已配对设备，也接收所有设备") },
+            trailingContent = {
+                Switch(
+                    checked = ClipRouting.onlySelected,
+                    onCheckedChange = { ClipRouting.setOnlySelectedMode(it) },
+                )
+            },
+        )
     }
 
     SendRow("照片 / 视频", "系统选择器，可多选", target != null) {

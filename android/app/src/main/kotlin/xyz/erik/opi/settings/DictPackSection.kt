@@ -27,8 +27,15 @@ import androidx.compose.ui.unit.sp
 internal fun DictPackSection() {
     val context = LocalContext.current
     val installed = remember(DictPack.state) { DictPack.installed(context) }
-    val packaged = remember {
+    val baseBundled = remember {
         runCatching { context.assets.open("luna.opid").use { true } }.getOrDefault(false)
+    }
+    // 基础包从 2026-11-04 起随包带拼音主词库，但仍需下载扩展词库；只有整套
+    // 词库都在 assets 里（普通/完整包）才算「随安装包提供」。
+    val packaged = remember {
+        DictPack.FILES.all { name ->
+            runCatching { context.assets.open(name).use { true } }.getOrDefault(false)
+        }
     }
     val state = DictPack.state
     val running = state as? DictPack.State.Running
@@ -42,6 +49,8 @@ internal fun DictPackSection() {
                     when {
                         installed -> "已安装 · 拼音主词库 / 繁体 / 笔画 / 五笔 / 生僻字索引"
                         packaged -> "随安装包提供 · 拼音主词库 / 繁体 / 笔画 / 五笔 / 生僻字索引"
+                        baseBundled -> "扩展词库未安装 · 约 ${DictPack.mb(DictPack.BYTES)} · " +
+                            "含繁体、笔画、五笔与生僻字索引（拼音主词库已随包提供）"
                         else -> "未安装 · 约 ${DictPack.mb(DictPack.BYTES)} · 含拼音主词库、繁体、笔画、五笔与生僻字索引"
                     },
                 )

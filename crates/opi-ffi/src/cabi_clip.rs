@@ -37,6 +37,7 @@ use crate::cabi::OpiString;
 use crate::cabi::utf16::read_utf16;
 
 mod encode;
+mod routes_exports;
 #[cfg(test)]
 mod tests;
 mod transfer_exports;
@@ -111,7 +112,7 @@ impl OpiClip {
         }
     }
 
-    fn node(&self) -> Result<&ClipNode, String> {
+    pub(crate) fn node(&self) -> Result<&ClipNode, String> {
         self.node
             .as_ref()
             .ok_or_else(|| "clip node is not started".into())

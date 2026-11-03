@@ -39,13 +39,22 @@ class OpiStringStruct : Structure(), Structure.ByValue {
     @JvmField var len: Long = 0
 }
 
-/** 17 个 `opi_clip_*` + `opi_ffi_free_string`。名字必须与导出符号逐字一致。 */
+/** 18 个 `opi_clip_*` + `opi_ffi_free_string`。名字必须与导出符号逐字一致。 */
 interface OpiClipFfi : Library {
     fun opi_clip_create(configJson: Pointer?, len: Long): Pointer?
     fun opi_clip_destroy(clip: Pointer?)
     fun opi_clip_start(clip: Pointer?): Byte
     fun opi_clip_stop(clip: Pointer?)
     fun opi_clip_local_text(clip: Pointer?, text: Pointer?, len: Long): Int
+
+    /** 文本/剪贴板路由；空串 = 该方向全部已配对设备。 */
+    fun opi_clip_set_text_routes(
+        clip: Pointer?,
+        send: Pointer?,
+        sendLen: Long,
+        receive: Pointer?,
+        receiveLen: Long,
+    ): Byte
 
     /** sendFiles(clip, peer_hex, files_json) -> 传输 ID（失败为空串）。 */
     fun opi_clip_send_files(

@@ -126,6 +126,27 @@ class TransferProtocolTest {
     }
 
     @Test
+    fun `picker selection stores the whole path, not its name components`() {
+        // 2026-11-04 用户报障：Path 实现 Iterable<Path>，`set + path` 会命中
+        // plus(Iterable) 重载，把 /tmp/.../notes.txt 拆成 tmp、目录、文件名
+        // 三个元素（选中计数虚增、发送时被绝对路径校验拒绝）。必须整体增删。
+        val file = Paths.get("/tmp/opi-picker-test/notes.txt")
+        val picked = togglePicked(emptySet(), file)
+        assertEquals(setOf(file), picked)
+        assertEquals(emptySet<Path>(), togglePicked(picked, file))
+    }
+
+    @Test
+    fun `transfer byte formatting uses binary units without an extra step`() {
+        // 2026-11-04 用户报障：实际 M 的文件显示成 G —— 旧实现 unit 从 0 起，
+        // 65 MiB 被多除一次 1024 画成 65.0 GiB。单位必须从 KiB 起、只除到 <1024。
+        assertEquals("0 B", formatTransferBytes(0))
+        assertEquals("1.0 KiB", formatTransferBytes(1024))
+        assertEquals("65.0 MiB", formatTransferBytes(65L * 1024 * 1024))
+        assertEquals("1.5 GiB", formatTransferBytes((1.5 * 1024 * 1024 * 1024).toLong()))
+    }
+
+    @Test
     fun `default save dir follows the platform convention`() {
         assertEquals(
             Paths.get("/home/e", "Downloads", "opi"),

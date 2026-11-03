@@ -365,6 +365,9 @@ object OpiEngine : OpiEngineApi, SymbolApi {
     /** localText(handle, text) -> Int：0=已发布 1=防回环抑制 -1=失败。 */
     external fun clipLocalText(handle: Long, text: String?): Int
 
+    /** setTextRoutes(handle, sendPeer, receivePeer)：空串 = 该方向全部设备。 */
+    external fun clipSetTextRoutes(handle: Long, sendPeer: String?, receivePeer: String?): Boolean
+
     /** pollEvent(handle, timeoutMs) -> JSON；null=失败，空串=无事件。 */
     external fun clipPollEvent(handle: Long, timeoutMs: Int): String?
 

@@ -1,14 +1,9 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-// ⚠️ 草案 · 本机（Linux）没有 Swift/UIKit 编译器，未编译；由 apple.yml 真编译。
-//
-// 宿主 App 的跨设备传输页（iOS）。发现/收发在内核 + OpiTransferService；
-// 本文件只做界面与系统文件选择器。键盘扩展点传输入口用 URL scheme 打开这里。
-//
-// 能力边界如实显示：只在 App 前台运行；后台会被系统挂起。未配置 App Group 时
-// 信任表与键盘扩展不共享，需要在两边分别配对。
-
+// ⚠️ 草案 · Linux 无 Swift/UIKit 编译器，未编译；由 apple.yml 真编译。
+// 宿主 App 的跨设备传输页（iOS）；发现/收发在 OpiTransferService，本文件只做界面。
+// 能力边界：只在 App 前台运行；未配置 App Group 时信任表不与键盘扩展共享。
 import UIKit
 import UniformTypeIdentifiers
 
@@ -19,7 +14,7 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
         case folder
         case media
     }
-    private let service = OpiTransferService.shared
+    let service = OpiTransferService.shared
     private let scroll = UIScrollView()
     private let stack = UIStackView()
     private var selectedPeerId: String?
@@ -147,6 +142,8 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
         let sendable = service.peers.filter { $0.trusted && $0.connected }
         if let selected = selectedPeerId, !sendable.contains(where: { $0.id == selected }) {
             selectedPeerId = nil
+            OpiTransferRoutingState.shared.peerId = ""
+            OpiTransferRoutingState.shared.apply(to: service)
         }
         let targetName = sendable.first { $0.id == selectedPeerId }?.name ?? ""
         let target = makeButton(
@@ -175,6 +172,7 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
         for button in textRow.arrangedSubviews.compactMap({ $0 as? UIButton }) {
             button.isEnabled = trustedCount > 0
         }
+        installRoutingToggle(in: &views)
         addCard(views)
     }
 
@@ -313,6 +311,8 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
             let name = peer.name.isEmpty ? String(peer.id.prefix(8)) : peer.name
             alert.addAction(UIAlertAction(title: name, style: .default) { [weak self] _ in
                 self?.selectedPeerId = peer.id
+                OpiTransferRoutingState.shared.peerId = peer.id
+                if let self { OpiTransferRoutingState.shared.apply(to: self.service) }
                 self?.reload()
             })
         }

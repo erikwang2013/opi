@@ -32,6 +32,9 @@ pub(crate) struct Core {
     pub hlc: Hlc,
     pub current: Option<Version>,
     pub pending_local: Option<StoredEvent>,
+    /// 这条 pending 只补给哪台设备；None = 广播（旧行为）。
+    pub pending_local_target: Option<InstanceId>,
+    pub routes: Routes,
     pub trust: TrustStore,
     pub trust_path: PathBuf,
     pub discovered: HashMap<InstanceId, Discovered>,
@@ -83,6 +86,15 @@ pub(crate) enum Apply {
     Duplicate,
     Stale,
     Invalid,
+    /// 收到了文本，但当前“只接收选中设备”的路由不允许这个发送方；只 ACK，不落事件。
+    Filtered,
+}
+
+/// 文本/剪贴板的收发路由。`None` = 全部已配对设备（保持旧行为）。
+#[derive(Clone, Copy, Default)]
+pub(crate) struct Routes {
+    pub send: Option<InstanceId>,
+    pub receive: Option<InstanceId>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -114,6 +126,8 @@ impl Core {
             hlc: Hlc::zero(),
             current: None,
             pending_local: None,
+            pending_local_target: None,
+            routes: Routes::default(),
             trust,
             trust_path,
             discovered: HashMap::new(),
@@ -161,6 +175,7 @@ impl Core {
             hash,
         };
         self.pending_local = Some(event.clone());
+        self.pending_local_target = self.routes.send;
         Ok(Some(event))
     }
 
@@ -175,6 +190,9 @@ impl Core {
             || event.text.len() > MAX_TEXT_BYTES
         {
             return Apply::Invalid;
+        }
+        if self.routes.receive.is_some_and(|allowed| allowed != sender) {
+            return Apply::Filtered;
         }
         let hash = content_hash(&event.text);
         if hash != event.hash || event_id(sender, event.version.hlc(), &hash) != event.event_id {
@@ -387,10 +405,14 @@ impl Core {
         }
     }
 
-    pub(crate) fn pending_for_session(&self) -> Option<StoredEvent> {
+    pub(crate) fn pending_for_session(&self, peer: InstanceId) -> Option<StoredEvent> {
         self.pending_local
             .as_ref()
             .filter(|pending| self.current == Some(pending.version))
+            .filter(|_| {
+                self.pending_local_target
+                    .is_none_or(|target| target == peer)
+            })
             .cloned()
     }
 
@@ -433,6 +455,7 @@ impl Core {
         self.seen_events.clear();
         self.remote_hashes.clear();
         self.pending_local = None;
+        self.pending_local_target = None;
         self.current = None;
         self.sessions.clear();
         self.transfers.clear();

@@ -17,6 +17,7 @@ internal interface ClipNativeApi {
     fun start(handle: Long): Boolean
     fun stop(handle: Long)
     fun localText(handle: Long, text: String?): Int
+    fun setTextRoutes(handle: Long, sendPeer: String, receivePeer: String): Boolean
     fun pollEvent(handle: Long, timeoutMs: Int): String?
     fun pairStart(handle: Long, peerId: String): Boolean
     fun probe(handle: Long, ip: String): Boolean
@@ -38,6 +39,8 @@ internal object OpiClipNative : ClipNativeApi {
     override fun start(handle: Long): Boolean = OpiEngine.clipStart(handle)
     override fun stop(handle: Long) = OpiEngine.clipStop(handle)
     override fun localText(handle: Long, text: String?): Int = OpiEngine.clipLocalText(handle, text)
+    override fun setTextRoutes(handle: Long, sendPeer: String, receivePeer: String): Boolean =
+        OpiEngine.clipSetTextRoutes(handle, sendPeer, receivePeer)
     override fun pollEvent(handle: Long, timeoutMs: Int): String? =
         OpiEngine.clipPollEvent(handle, timeoutMs)
     override fun pairStart(handle: Long, peerId: String): Boolean =
@@ -137,6 +140,10 @@ internal class ClipBridge(
             if (code < 0) fail(lastError())
         }
     }
+
+    /** 文本/剪贴板路由：空串 = 该方向全部已配对设备。 */
+    fun setTextRoutes(sendPeer: String, receivePeer: String) =
+        call({ api.setTextRoutes(handle, sendPeer, receivePeer) }, refresh = false)
 
     fun pairStart(peerId: String) = call({ api.pairStart(handle, peerId) }, refresh = true)
 

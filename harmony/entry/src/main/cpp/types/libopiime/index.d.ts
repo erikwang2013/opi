@@ -227,6 +227,10 @@ export const clipStart: (handle: number) => boolean;
 export const clipStop: (handle: number) => void;
 /** localText(handle, text): 0=已发布 1=防回环抑制（正常）-1=失败。 */
 export const clipLocalText: (handle: number, text: string) => number;
+/** setTextRoutes(handle, sendPeer, receivePeer): 空串 = 该方向全部已配对设备。 */
+export const clipSetTextRoutes: (
+  handle: number, sendPeer: string, receivePeer: string
+) => boolean;
 /**
  * pollEvent(handle, timeoutMs): 事件 JSON；空串 = 这段时间没有事件。
  * ⚠️ timeoutMs > 0 会阻塞调用线程（最多 1 秒）—— UI 线程只传 0，用定时器轮询。

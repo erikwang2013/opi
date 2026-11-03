@@ -355,6 +355,7 @@ internal fun AboutPage(
 ) {
     val uriHandler = LocalUriHandler.current
     var creditsOpen by remember { mutableStateOf(false) }
+    var privacyOpen by remember { mutableStateOf(false) }
     Spacer(Modifier.height(6.dp))
     Text("小欧输入法（opi）· 多端输入法", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Ink)
     Spacer(Modifier.height(4.dp))
@@ -400,7 +401,7 @@ internal fun AboutPage(
     LinkLine("官网主页", "https://opi.erik.xyz")
     LinkLine("GitHub 项目", "https://github.com/erikwang2013/opi")
     LinkLine("博客", "https://erik.xyz")
-    LinkLine("隐私政策", "https://opi.erik.xyz/privacy/index.html")
+    LinkLine("隐私政策", PRIVACY_URL, onClick = { privacyOpen = true })
     Spacer(Modifier.height(10.dp))
     // 一句话说明「为什么只有这几页」——主流输入法那套有十几页，我们引擎现在只有这几个真旋钮；
     // 把引擎没有的开关摆上来就是假承诺（宁可少一页，不做点不动的开关）。
@@ -434,18 +435,19 @@ internal fun AboutPage(
             section.items.forEach { Text("· $it", fontSize = 12.sp, color = Muted) }
         }
     }
+    if (privacyOpen) PrivacyWindow(onClose = { privacyOpen = false })
 }
 
-/** 关于页的外链一行：正文写全地址（读屏看得见），点击交系统浏览器。 */
+/** 关于页的外链一行：隐私政策走应用内窗口，其余点击交系统浏览器。 */
 @Composable
-private fun LinkLine(label: String, url: String) {
+private fun LinkLine(label: String, url: String, onClick: (() -> Unit)? = null) {
     val uriHandler = LocalUriHandler.current
     Text(
         label,
         fontSize = 12.sp,
         color = SymAccent,
         modifier = Modifier.clickable {
-            runCatching { uriHandler.openUri(url) }
+            if (onClick != null) onClick() else runCatching { uriHandler.openUri(url) }
         },
     )
 }

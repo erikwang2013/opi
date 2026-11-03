@@ -426,18 +426,16 @@ install(DIRECTORY
         "${CMAKE_CURRENT_SOURCE_DIR}/../data/themes/opi-pine"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/fcitx5/themes")
 
-# 基础包（2026-11-01，2026-11-03 收紧）：不随包任何词库，全部由设置页下载到
-# $XDG_DATA_HOME/opi；普通/完整包仍装全部词库。
-option(OPI_BASIC_PACKAGE "Basic package: ship no dictionaries (download in app)" OFF)
+# 基础包（2026-11-01，2026-11-04 调整）：保留拼音主词库 luna.opid（三档都有基础
+# 词库）；扩展词库（trad/stroke/wubi/kangxi）仍由设置页下载。
+option(OPI_BASIC_PACKAGE "Basic package: ship only the core pinyin dictionary" OFF)
 
 # 词库：loadDictionary() 找的是 Type::Data + "opi/luna.opid"，
 # 即 <prefix>/share/opi/luna.opid。**没有 fcitx5 中间层**，别顺手挪进
 # share/fcitx5/ 下面（那种装法 CI 会红，因为 opi_locate_check 问的是真库）。
-if(NOT OPI_BASIC_PACKAGE)
-    install(FILES "${OPI_LUNA_OPID}"
-                  DESTINATION "${CMAKE_INSTALL_DATADIR}/opi"
-                  RENAME luna.opid)
-endif()
+install(FILES "${OPI_LUNA_OPID}"
+              DESTINATION "${CMAKE_INSTALL_DATADIR}/opi"
+              RENAME luna.opid)
 # 繁体词库：Type::Data + "opi/trad.opid"；坏了退回简体，不拖垮拼音。
 if(NOT OPI_BASIC_PACKAGE)
     install(FILES "${OPI_TRAD_OPID}"

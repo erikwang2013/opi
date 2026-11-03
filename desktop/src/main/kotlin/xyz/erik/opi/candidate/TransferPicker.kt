@@ -46,8 +46,8 @@ import androidx.compose.ui.graphics.Path as DrawPath
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Window
-import androidx.compose.ui.window.rememberWindowState
+import androidx.compose.ui.window.DialogWindow
+import androidx.compose.ui.window.rememberDialogState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import xyz.erik.opi.pet.OpiPetWindowIcon
@@ -72,15 +72,16 @@ private var lastPickerDir: Path? = null
 private fun extOf(name: String): String = name.substringAfterLast('.', "").lowercase()
 
 private fun startDir(): Path {
-    lastPickerDir?.takeIf { Files.isDirectory(it) }?.let { return it }
-    val home = Paths.get(System.getProperty("user.home") ?: ".")
+    lastPickerDir?.toAbsolutePath()?.normalize()
+        ?.takeIf { Files.isDirectory(it) }?.let { return it }
+    val home = Paths.get(System.getProperty("user.home") ?: ".").toAbsolutePath().normalize()
     return listOf("Downloads", "Desktop", "Documents", "Pictures", "Videos")
         .map { home.resolve(it) }
         .firstOrNull { Files.isDirectory(it) } ?: home
 }
 
 private fun quickPlaces(): List<Pair<String, Path>> {
-    val home = Paths.get(System.getProperty("user.home") ?: ".")
+    val home = Paths.get(System.getProperty("user.home") ?: ".").toAbsolutePath().normalize()
     val places = mutableListOf(
         "主页" to home,
         "下载" to home.resolve("Downloads"),
@@ -112,6 +113,11 @@ private fun loadEntries(dir: Path, mode: TransferPickerMode): List<PickerEntry> 
             .toList()
     }
 
+// Path implements Iterable<Path>，`selected + path` 会命中 plus(Iterable) 重载，
+// 把路径拆成每个名字组件（tmp、目录、文件名）逐个加入；用 setOf 包一层避免。
+internal fun togglePicked(selected: Set<Path>, path: Path): Set<Path> =
+    if (path in selected) selected - setOf(path) else selected + setOf(path)
+
 @Composable
 internal fun TransferPickerWindow(
     mode: TransferPickerMode,
@@ -119,16 +125,16 @@ internal fun TransferPickerWindow(
     onCancel: () -> Unit,
     onPick: (List<Path>) -> Unit,
 ) {
-    Window(
+    DialogWindow(
         onCloseRequest = onCancel,
         title = when (mode) {
             TransferPickerMode.FILES -> "选择文件"
             TransferPickerMode.MEDIA -> "选择照片 / 视频"
             TransferPickerMode.FOLDER -> "选择文件夹"
         },
-        state = rememberWindowState(width = 800.dp, height = 580.dp),
+        state = rememberDialogState(width = 800.dp, height = 580.dp),
         icon = OpiPetWindowIcon,
-        alwaysOnTop = true,
+        resizable = false,
     ) {
         TransferPickerBody(mode, initialDir, onCancel, onPick)
     }
@@ -141,7 +147,11 @@ private fun TransferPickerBody(
     onCancel: () -> Unit,
     onPick: (List<Path>) -> Unit,
 ) {
-    var current by remember { mutableStateOf(initialDir?.takeIf { Files.isDirectory(it) } ?: startDir()) }
+    var current by remember {
+        mutableStateOf(
+            initialDir?.toAbsolutePath()?.normalize()?.takeIf { Files.isDirectory(it) } ?: startDir(),
+        )
+    }
     var entries by remember { mutableStateOf<List<PickerEntry>>(emptyList()) }
     var selected by remember { mutableStateOf<Set<Path>>(emptySet()) }
     var loading by remember { mutableStateOf(true) }
@@ -164,11 +174,12 @@ private fun TransferPickerBody(
     }
 
     fun go(dir: Path) {
-        if (Files.isDirectory(dir)) {
+        val target = dir.toAbsolutePath().normalize()
+        if (Files.isDirectory(target)) {
             selected = emptySet()
-            current = dir
+            current = target
         } else {
-            error = "目录不存在：$dir"
+            error = "目录不存在：$target"
         }
     }
 
@@ -251,11 +262,7 @@ private fun TransferPickerBody(
                                     if (entry.isDir) {
                                         go(entry.path)
                                     } else {
-                                        selected = if (entry.path in selected) {
-                                            selected - entry.path
-                                        } else {
-                                            selected + entry.path
-                                        }
+                                        selected = togglePicked(selected, entry.path)
                                     }
                                 },
                             )
@@ -289,8 +296,8 @@ private fun TransferPickerBody(
                     selected.isNotEmpty()
                 },
             ) {
-                if (mode == TransferPickerMode.FOLDER) onPick(listOf(current))
-                else onPick(selected.toList())
+                val picked = if (mode == TransferPickerMode.FOLDER) listOf(current) else selected.toList()
+                onPick(picked.map { it.toAbsolutePath().normalize() })
             }
         }
     }

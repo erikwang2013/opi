@@ -24,24 +24,6 @@ private const val IDLE_POLL_MS = 200L
 private const val LOCAL_POLL_MS = 300L
 private const val CORE_RETRY_NS = 2_000_000_000L
 
-/** 入口：状态栏组合时调用（幂等）。 */
-internal object ClipHost {
-    private var service: ClipService? = null
-
-    @Synchronized
-    fun ensureStarted(): ClipService {
-        service?.let { return it }
-        val s = ClipService()
-        service = s
-        s.start()
-        return s
-    }
-
-    fun setEnabled(on: Boolean) {
-        ensureStarted().setEnabled(on)
-    }
-}
-
 internal class ClipService {
     private val windows = isWindows()
     private val mode = currentClipMode(windows)
@@ -64,6 +46,8 @@ internal class ClipService {
     private var handle: Pointer? = null
     private var adapter: ClipboardAdapter? = null
     private var peers: List<ClipPeer> = emptyList()
+    /// 文本/剪贴板路由；空串 = 该方向全部已配对设备。
+    private var textRoutes = "" to ""
     private var ui = ClipUiState()
     private val transfers = TransferService(
         ffi = { ffi },
@@ -189,6 +173,17 @@ internal class ClipService {
                     publish(cmd.text)
                 }
             }
+            is ClipCommand.SetTextRoutes -> {
+                textRoutes = cmd.send to cmd.receive
+                val f = ffi
+                val h = handle
+                if (f != null && h != null) {
+                    val error = runCatching { setClipTextRoutes(f, h, textRoutes) }
+                        .getOrElse { transportError(it) }
+                    if (error != null) ui = ui.copy(lastError = error)
+                    publishSnapshot()
+                }
+            }
             is ClipCommand.SendFiles -> {
                 transfers.send(cmd.peer, cmd.filesJson)
                 publishSnapshot()
@@ -299,6 +294,9 @@ internal class ClipService {
             return
         }
         handle = clip
+        val routeError = runCatching { setClipTextRoutes(f, clip, textRoutes) }
+            .getOrElse { transportError(it) }
+        if (routeError != null) ui = ui.copy(lastError = routeError)
         coreLanIp = lan?.ip
         coreLanPrefix = lan?.prefix
         adapter = createClipboardAdapter(windows, mode)

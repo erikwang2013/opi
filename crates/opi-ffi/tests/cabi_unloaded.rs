@@ -441,6 +441,7 @@ fn every_export_is_actually_exercised_here() {
         "opi_clip_start",
         "opi_clip_stop",
         "opi_clip_local_text",
+        "opi_clip_set_text_routes",
         "opi_clip_poll_event",
         "opi_clip_pair_start",
         "opi_clip_pair_confirm",

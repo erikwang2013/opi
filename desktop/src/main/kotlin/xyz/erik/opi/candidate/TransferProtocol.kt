@@ -226,7 +226,7 @@ internal fun formatTransferBytes(bytes: Long): String {
     if (bytes < 1024L) return "$bytes B"
     val units = arrayOf("KiB", "MiB", "GiB", "TiB")
     var value = bytes.toDouble()
-    var unit = 0
+    var unit = -1
     while (value >= 1024.0 && unit < units.lastIndex) {
         value /= 1024.0
         unit++

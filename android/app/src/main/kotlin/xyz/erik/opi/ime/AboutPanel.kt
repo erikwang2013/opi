@@ -44,6 +44,7 @@ import xyz.erik.opi.settings.ABOUT_INTRO
 import xyz.erik.opi.settings.ABOUT_PRIVACY_URL
 import xyz.erik.opi.settings.ABOUT_PROJECT_URL
 import xyz.erik.opi.settings.OPEN_SOURCE_CREDITS
+import xyz.erik.opi.settings.PrivacyActivity
 import xyz.erik.opi.settings.UpdateDownloadControls
 import xyz.erik.opi.settings.UpdateState
 import xyz.erik.opi.settings.checkForUpdate
@@ -191,11 +192,24 @@ private fun Link(text: String, onClickLabel: String = "打开链接", onClick: (
  * 这里的 context 是 **Service**（IME），从 Service 起 Activity 要 `NEW_TASK`，
  * 少了它就抛 `AndroidRuntimeException`（不是 ActivityNotFound，下面那个 catch 接不住）。
  */
-private fun openExternal(context: Context, url: String): String = try {
-    context.startActivity(
-        Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-    )
-    ""
-} catch (_: ActivityNotFoundException) {
-    "没有能打开链接的应用：$url"
+private fun openExternal(context: Context, url: String): String {
+    // 2026-11-04 用户要求：隐私政策在应用内打开，不跳系统浏览器。
+    if (url == ABOUT_PRIVACY_URL) {
+        return try {
+            context.startActivity(
+                Intent(context, PrivacyActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+            ""
+        } catch (t: Throwable) {
+            "无法打开隐私政策：${t.message ?: t.javaClass.simpleName}"
+        }
+    }
+    return try {
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+        ""
+    } catch (_: ActivityNotFoundException) {
+        "没有能打开链接的应用：$url"
+    }
 }

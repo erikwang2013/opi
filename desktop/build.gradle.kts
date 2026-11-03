@@ -176,10 +176,10 @@ tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageT
             )
             licenses.forEach { check(it.isFile) { "找不到许可文本：${it.path}" } }
             val imm32 = imm32Ime.orNull?.let { file(it).also { f -> check(f.isFile) { "缺 OPI_IMM32_IME：${f.path}" } } }
-            // 基础包只有 app 代码（2026-11-03）：luna/trad 都不随包，设置页下载词库包。
+            // 基础包也带主词库 luna（三档都要有基础词库）；扩展词库 trad 只随普通/完整包。
             val bundled = listOfNotNull(
                 src, file("windows/launch-and-restart.cmd"), symbols, imm32, *licenses.toTypedArray(),
-            ) + if (tier == "basic") emptyList() else listOf(luna, trad)
+            ) + listOf(luna) + if (tier == "basic") emptyList() else listOf(trad)
             files.from(*bundled.toTypedArray())
         }
     }
