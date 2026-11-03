@@ -28,6 +28,7 @@ const MAX_DEVICE_NAME: number = 48;
 interface RawEvent {
   type?: string;
   instance_id?: string;
+  name?: string;
   sas?: string;
   incoming?: boolean;
   trusted?: boolean;
