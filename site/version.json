@@ -87,8 +87,8 @@
     "harmony": {
       "normal": {
         "url": "https://opi.erik.xyz/download/v1.31.10/normal/opi-1.31.10-harmonyos-unsigned.hap",
-        "size": 80041121,
-        "sha256": "0dd9b092baaf8e972814d9be930ed4cddf5d8e6200bf03b08329c82c9df95741"
+        "size": 80042219,
+        "sha256": "64c3da3121532bf342cefb23a1b6d43db7f3ff41f8fab348c2cc452c8a674581"
       }
     }
   },
