@@ -208,7 +208,6 @@ fn handle_pairing_connection(
     {
         let mut core = inner.lock();
         if !core.pairing_enabled
-            || core.trust.contains(header.initiator)
             || core
                 .pair_rate
                 .get(&source.ip())
@@ -217,6 +216,9 @@ fn handle_pairing_connection(
         {
             return;
         }
+        // 已信任也允许重配：两端信任表可能一边有、一边没有（重装/清数据后
+        // 常见），或静态公钥变了。拒绝会让「已信任的一侧不发起、未信任的一侧
+        // 按 ID 规则不发起」永久卡死。auto_connect 下 SAS 仍是自动接受。
         core.pair_rate.insert(source.ip(), now);
     }
     pairing::run_responder(inner.clone(), stream, header);
@@ -257,11 +259,11 @@ pub(crate) fn supervisor_loop(inner: Arc<NodeInner>) {
             let mut actions = Vec::new();
             let mut pair_actions = Vec::new();
             for (peer, discovered) in &core.discovered {
-                // 只有实例 ID 较大的一侧主动连接/配对，避免双向同时建链。
-                if *peer <= own {
-                    continue;
-                }
                 if !core.trust.contains(*peer) {
+                    // 未配对仍只由实例 ID 较大的一侧发起，避免双方同时弹 SAS。
+                    if *peer <= own {
+                        continue;
+                    }
                     // 双方都开启自动连接才 TOFU；老客户端没有 CAP_AUTO_PAIR，保持手动 SAS。
                     if inner.config.auto_connect
                         && core.pairing_enabled
@@ -277,15 +279,28 @@ pub(crate) fn supervisor_loop(inner: Arc<NodeInner>) {
                     }
                     continue;
                 }
+                // 已信任设备允许双向发起：对端可能处于后台/省电而不主动连，
+                // 单侧规则会让双方一直停在「已发现、未连接」。register_session
+                // 对重复会话有去重，同时建链只会保留先到的一条。
                 if core.sessions.contains_key(peer) || core.connecting.contains(peer) {
                     continue;
                 }
-                if core
-                    .backoff
-                    .get(peer)
-                    .is_some_and(|backoff| now < backoff.next)
-                {
-                    continue;
+                if let Some(backoff) = core.backoff.get(peer) {
+                    if now < backoff.next {
+                        continue;
+                    }
+                    // 连续连接失败：可能是另一端没有本机的信任记录（重装/清数据）
+                    // 或静态公钥已变。双方都支持自动配对时，重配一次再建会话。
+                    if backoff.attempts >= 2
+                        && inner.config.auto_connect
+                        && core.pairing_enabled
+                        && discovered.capabilities & CAP_AUTO_PAIR != 0
+                        && !core.pairing_attempts.contains(peer)
+                        && !core.pairing.contains_key(peer)
+                    {
+                        pair_actions.push((*peer, discovered.addr));
+                        continue;
+                    }
                 }
                 if let Some(trusted) = core.trust.get(*peer) {
                     actions.push((*peer, discovered.addr, trusted.public_key.clone()));

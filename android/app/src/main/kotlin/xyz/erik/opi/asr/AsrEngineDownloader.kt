@@ -84,10 +84,18 @@ internal object AsrEngineDownloader {
         try {
             try {
                 downloadFile(remote.url, zip, remote.size, remote.sha256)
-            } catch (t: Throwable) {
-                downloadFile(remote.fallback, zip, remote.size, remote.sha256)
+                extract(context, zip)
+            } catch (site: Throwable) {
+                // 站点组件可能被截断/写坏：清单 SHA 与坏文件一致时下载会过、解压才失败。
+                // 此时按 GitHub release 资产的 size/digest 重新下载（权威校验值）。
+                val release = AsrEngine.releaseSpec()
+                if (release != null) {
+                    downloadFile(release.url, zip, release.size, release.sha256)
+                } else {
+                    downloadFile(remote.fallback, zip, remote.size, remote.sha256)
+                }
+                extract(context, zip)
             }
-            extract(context, zip)
         } finally {
             zip.delete()
         }

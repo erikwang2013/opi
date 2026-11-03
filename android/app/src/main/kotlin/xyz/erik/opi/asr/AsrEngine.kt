@@ -109,6 +109,34 @@ internal object AsrEngine {
             "v${BuildConfig.VERSION_NAME}/$name"
         RemoteEngine(pkg.url, fallback, size, sha)
     }
+
+    /**
+     * 站点组件损坏时的兜底：GitHub release 同名资产的 size/digest 是权威的。
+     * 只在站点下载/解压失败后调用，避免每次下载都打 GitHub API。
+     */
+    fun releaseSpec(): RemoteEngine? = runCatching {
+        val name = spec()?.zipName ?: return@runCatching null
+        val text = httpGet(
+            "https://api.github.com/repos/erikwang2013/opi/releases/tags/" +
+                "v${BuildConfig.VERSION_NAME}",
+            15_000,
+        )
+        val assets = org.json.JSONObject(text).optJSONArray("assets") ?: return@runCatching null
+        for (i in 0 until assets.length()) {
+            val asset = assets.optJSONObject(i) ?: continue
+            if (asset.optString("name") != name) continue
+            val url = asset.optString("browser_download_url")
+            val size = asset.optLong("size", 0L)
+            val digest = asset.optString("digest")
+            if (!url.startsWith("https://") || size <= 0L || !digest.startsWith("sha256:")) {
+                continue
+            }
+            val sha = digest.removePrefix("sha256:")
+            if (sha.length != 64) continue
+            return@runCatching RemoteEngine(url, url, size, sha)
+        }
+        null
+    }.getOrNull()
 }
 
 internal data class EngineSpec(val abi: String, val zipName: String)

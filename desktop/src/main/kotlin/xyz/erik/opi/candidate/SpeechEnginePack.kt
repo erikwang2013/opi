@@ -74,6 +74,31 @@ internal object SpeechEnginePack {
         }
     }
 
+    private data class ReleaseEngine(val url: String, val size: Long, val sha: String)
+
+    /** GitHub release 上同名资产的权威大小/SHA；站点组件坏了时用它兜底。 */
+    private fun releaseEngine(name: String): ReleaseEngine? {
+        val text = httpGet(
+            "https://api.github.com/repos/erikwang2013/opi/releases/tags/v$OPI_VERSION",
+            15_000,
+        ) ?: return null
+        val root = parseLine(text) ?: return null
+        val assets = (root["assets"] as? JVal.JArr)?.v ?: return null
+        for (value in assets) {
+            val asset = (value as? JVal.JObj)?.v ?: continue
+            if ((asset["name"] as? JVal.JStr)?.v != name) continue
+            val url = (asset["browser_download_url"] as? JVal.JStr)?.v
+                ?.takeIf { it.startsWith("https://") } ?: continue
+            val size = (asset["size"] as? JVal.JNum)?.v ?: continue
+            val digest = (asset["digest"] as? JVal.JStr)?.v ?: continue
+            val sha = digest.removePrefix("sha256:").takeIf {
+                digest.startsWith("sha256:") && it.length == 64
+            } ?: continue
+            return ReleaseEngine(url, size, sha)
+        }
+        return null
+    }
+
     private fun runDownload(key: String, name: String) {
         try {
             val text = httpGet(UPDATE_VERSION_URL)
@@ -87,12 +112,15 @@ internal object SpeechEnginePack {
             try {
                 try {
                     downloadVerified(pkg.url, tmpZip, size, sha)
-                } catch (t: Throwable) {
-                    val fallback = "https://github.com/erikwang2013/opi/releases/download/" +
-                        "v$OPI_VERSION/$name"
-                    downloadVerified(fallback, tmpZip, size, sha)
+                    install(tmpZip)
+                } catch (site: Throwable) {
+                    // 站点组件可能被截断/写坏：清单里的 SHA 与坏文件一致时，下载校验
+                    // 会通过、解压才失败。此时改从 GitHub release 取同一版本的资产，
+                    // 大小与 SHA 以 release API 的 asset digest 为准。
+                    val release = releaseEngine(name) ?: throw site
+                    downloadVerified(release.url, tmpZip, release.size, release.sha)
+                    install(tmpZip)
                 }
-                install(tmpZip)
             } finally {
                 Files.deleteIfExists(tmpZip)
             }

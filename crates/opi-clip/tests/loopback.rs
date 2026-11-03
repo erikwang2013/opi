@@ -290,6 +290,39 @@ fn auto_connect_pairs_and_syncs_without_prompt() {
 }
 
 #[test]
+fn one_sided_trust_recovers_by_repairing() {
+    let port = unique_port();
+    let (a, dir_a) = start_auto("repair-a", port);
+    let (b, dir_b) = start_auto("repair-b", port);
+    let a_id = a.local_instance_id();
+    let b_id = b.local_instance_id();
+    wait_until(WAIT, || {
+        a.peers()
+            .iter()
+            .any(|peer| peer.instance_id == b_id && peer.connected && peer.trusted)
+            && b.peers()
+                .iter()
+                .any(|peer| peer.instance_id == a_id && peer.connected && peer.trusted)
+    });
+
+    // 模拟一端重装/清数据：b 忘了 a，但 a 仍信任 b。旧实现会永久卡住。
+    b.forget_peer(a_id).unwrap();
+    wait_until(WAIT + WAIT, || {
+        a.peers()
+            .iter()
+            .any(|peer| peer.instance_id == b_id && peer.connected && peer.trusted)
+            && b.peers()
+                .iter()
+                .any(|peer| peer.instance_id == a_id && peer.connected && peer.trusted)
+    });
+
+    a.stop();
+    b.stop();
+    let _ = fs::remove_dir_all(dir_a);
+    let _ = fs::remove_dir_all(dir_b);
+}
+
+#[test]
 fn last_writer_wins_and_stale_is_not_echoed() {
     let port = unique_port();
     let (a, dir_a) = start("a", port);

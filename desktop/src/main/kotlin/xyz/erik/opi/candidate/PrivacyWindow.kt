@@ -25,9 +25,12 @@ import androidx.compose.ui.window.DialogWindow
 import androidx.compose.ui.window.rememberDialogState
 import xyz.erik.opi.pet.OpiPetWindowIcon
 import java.awt.Color as AwtColor
+import javax.swing.BorderFactory
 import javax.swing.JEditorPane
+import javax.swing.JScrollPane
 import javax.swing.SwingUtilities
 import javax.swing.event.HyperlinkEvent
+import javax.swing.text.html.HTMLEditorKit
 
 internal const val PRIVACY_URL = "https://opi.erik.xyz/privacy/index.html"
 
@@ -51,6 +54,20 @@ internal fun PrivacyWindow(onClose: () -> Unit) {
                         event.url?.let { runCatching { setPage(it) } }
                     }
                 }
+                (editorKit as? HTMLEditorKit)?.styleSheet?.apply {
+                    addRule("body { font-family: sans-serif; font-size: 12pt; margin: 14px; }")
+                    addRule("h1, h2, h3 { margin-top: 14px; margin-bottom: 6px; }")
+                    addRule("p, li { margin-top: 5px; margin-bottom: 5px; }")
+                }
+            }
+        }
+        // 页面很长（隐私政策全文）；没有滚动容器时 JEditorPane 会直接被裁掉。
+        val scroll = remember {
+            JScrollPane(pane).apply {
+                verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
+                horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+                border = BorderFactory.createEmptyBorder()
+                viewport.background = AwtColor.WHITE
             }
         }
         LaunchedEffect(Unit) {
@@ -62,7 +79,7 @@ internal fun PrivacyWindow(onClose: () -> Unit) {
         Column(Modifier.fillMaxSize()) {
             SwingPanel(
                 background = Color.White,
-                factory = { pane },
+                factory = { scroll },
                 modifier = Modifier.weight(1f).fillMaxWidth(),
             )
             Row(
