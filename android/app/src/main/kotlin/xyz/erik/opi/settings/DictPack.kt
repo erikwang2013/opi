@@ -15,6 +15,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import xyz.erik.opi.BuildConfig
 import xyz.erik.opi.engine.DictStore
 import xyz.erik.opi.jni.EngineLoader
 import java.io.File
@@ -33,15 +34,17 @@ import java.util.zip.ZipInputStream
  */
 internal object DictPack {
     private const val TAG = "OpiDictPack"
-    const val VERSION = "1.31.0"
-    const val URL = "https://opi.erik.xyz/download/components/dicts/opi-dicts-$VERSION.zip"
-    const val FALLBACK = "https://github.com/erikwang2013/opi/releases/download/v$VERSION/opi-dicts-$VERSION.zip"
-    const val BYTES = 7_564_289L
-    const val SHA256 = "719011206ad590d9b609b917ca465f3851200ed5a62a6e4b8f0c2e4eeb8b5d9f"
+    const val VERSION = "1.31.6"
+    const val URL = "https://opi.erik.xyz/download/components/dicts/opi-dicts.zip"
+    val FALLBACK: String
+        get() = "https://github.com/erikwang2013/opi/releases/download/v${BuildConfig.VERSION_NAME}/" +
+            "opi-dicts-${BuildConfig.VERSION_NAME}.zip"
+    const val BYTES = 25_184_625L
+    const val SHA256 = "56ef3c1cf907a79fb83d1d5235b4979b2eb21e3b949cce5b70b0dc2fd39189a1"
 
     /** 解压后落点（全部在 filesDir 根，与 EngineLoader 的 FILE_NAME 一致）。 */
     val FILES = listOf(
-        "trad.opid", "stroke.opid", "wubi86.opid", "wubi98.opid",
+        "luna.opid", "trad.opid", "stroke.opid", "wubi86.opid", "wubi98.opid",
         "rare_index.tsv", "kangxi.tsv",
     )
 
@@ -99,17 +102,21 @@ internal object DictPack {
 
     private fun install(context: Context) {
         val zip = File(context.cacheDir, "opi-dicts-$VERSION.zip")
-        try {
-            downloadFile(URL, zip)
-        } catch (t: Throwable) {
-            downloadFile(FALLBACK, zip)
+        // 站点清单可能还没更新到当前版本：每个来源下载后都校验，失败再换 GitHub 对应 tag。
+        var lastError: Throwable? = null
+        for (source in listOf(URL, FALLBACK)) {
+            try {
+                downloadFile(source, zip)
+                if (sha256(zip) != SHA256) throw IOException("词库包校验失败（SHA-256 不符）")
+                extract(context, zip)
+                zip.delete()
+                return
+            } catch (t: Throwable) {
+                lastError = t
+                zip.delete()
+            }
         }
-        val digest = sha256(zip)
-        if (digest != SHA256) {
-            zip.delete()
-            throw IOException("词库包校验失败（SHA-256 不符）")
-        }
-        extract(context, zip)
+        throw IOException(lastError?.message ?: "词库包下载失败")
         zip.delete()
     }
 

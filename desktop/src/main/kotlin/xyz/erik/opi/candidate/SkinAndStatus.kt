@@ -151,7 +151,7 @@ data class StatusBarSettings(
     val hidden: Boolean = false,
     val vk: Boolean = false,
     val symbols: Boolean = true,
-    /** 话筒（2026-11-02；语音总开关在 OpSettings.speechEnabled，默认关）。 */
+    /** 话筒（2026-11-02；语音总开关在 OpSettings.speechEnabled，默认开）。 */
     val mic: Boolean = true,
     val trad: Boolean = true,
     val punct: Boolean = true,
@@ -208,7 +208,7 @@ enum class StatusBarButton(val label: String, val hint: String) {
     // 2026-10-10 中午用户踩过；事故留痕见 Actions.kt 头部与 StatusBarTest 的映射钉）。
     LANG("中英文切换", "与 Shift 轻按同一条通路（opi-ctl lang）"),
     PUNCT("中英标点", "中英文标点切换（调 opi-ctl）"),
-    // 语音输入（2026-11-02 用户要求）：放在「简」键前；总开关默认关。
+    // 语音输入（2026-11-02 用户要求）：放在「简」键前；总开关默认开。
     MIC("语音输入", "点击开始录音，再点停止并识别；本地离线识别，正文不记录"),
     TRAD("简繁转换", "简 ⇄ 繁（调 opi-ctl）"),
     // 英文普通/专业（2026-10-19）：白底圆角键帽里 en 居中、pro 在右下角；只有专业模式

@@ -30,6 +30,14 @@ pub struct ClipConfig {
     /// 不传则按 /24 处理（家宽最常见）。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub advertise_prefix: Option<u8>,
+    /// 发现到同一局域网的 opi 设备后自动配对并建立会话（默认开）。
+    /// 首次信任是 TOFU：只接受同样开启自动连接的 opi 设备；关闭后回到手动配对。
+    #[serde(default = "default_auto_connect")]
+    pub auto_connect: bool,
+}
+
+fn default_auto_connect() -> bool {
+    true
 }
 
 fn default_discovery_port() -> u16 {
@@ -45,6 +53,7 @@ impl ClipConfig {
             device_name: String::from("Opi"),
             advertise_ipv4: None,
             advertise_prefix: None,
+            auto_connect: true,
         }
     }
 
@@ -149,6 +158,7 @@ mod tests {
             device_name: "书房".into(),
             advertise_ipv4: None,
             advertise_prefix: None,
+            auto_connect: true,
         };
         config.save(&path).unwrap();
         assert_eq!(ClipConfig::load(&path).unwrap(), config);

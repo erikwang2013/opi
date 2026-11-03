@@ -25,6 +25,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
@@ -34,6 +36,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -54,8 +57,6 @@ import xyz.erik.opi.engine.AssociationGate
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.jni.OpiEngine
 import xyz.erik.opi.keyboard.OpiIcons
-import xyz.erik.opi.pet.OpiPet
-import xyz.erik.opi.pet.petMood
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.IOException
@@ -76,6 +77,9 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
     // 单 Activity 单 Compose 树，没有导航库 —— 用一个可保存的开关换根内容；
     // 返回箭头把它拨回来（旋转后仍停在子页）。
     var phrasePage by rememberSaveable { mutableStateOf(0) }
+    // 设置分类页（2026-11-03 用户裁决「设置要做页面区分」）：单 Activity 单 Compose 树，
+    // 用可保存的页签索引切换，不引导航库。
+    var settingsTab by rememberSaveable { mutableIntStateOf(0) }
     if (phrasePage != 0) {
         // 系统返回键回设置页，而不是退出整个设置 Activity。
         BackHandler { phrasePage = 0 }
@@ -201,40 +205,26 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
             ) {
-                // 小欧报到：表情跟着「学习」开关走 —— 一眼看出引擎在不在记事，
-                // 比读一行说明文字快。
-                //
-                // 优先级：**降级 > 睡着**（petMood 里 dictionaryDegraded 在链首，是有意的）。
-                // 所以词库没装上时，即便用户关了学习也不会显示睡着的表情 —— 断天线说的是
-                // 「引擎坏了」，比「我不记事」紧急，也不该让用户以为自己关过什么开关。
-                // 下面的文字必须跟着一起走：小欧是装饰性 mascot，语义由这行文本承担
-                //（见 OpiPet 头注），表情断天线而文字说「醒着」就是自相矛盾。
-                ListItem(
-                    leadingContent = {
-                        OpiPet(
-                            mood = petMood(
-                                buffer = "",
-                                candidateCount = 0,
-                                learnerEnabled = learner,
-                                dictionaryDegraded = dictionaryDegraded,
-                            ),
-                            size = 72.dp,
-                        )
-                    },
-                    headlineContent = { Text("Open People Input") },
-                    supportingContent = {
-                        Text(
-                            when {
-                                dictionaryDegraded -> "小欧的词典没装上 —— 现在只认得几十个常用词"
-                                learner -> "小欧醒着 —— 你选的词它都记着"
-                                else -> "小欧睡着了 —— 不记词，也不联网"
-                            },
-                        )
-                    },
-                )
+                SettingsMascot(dictionaryDegraded, learner)
                 HorizontalDivider()
                 LanguageSwitcher()
                 HorizontalDivider()
+                val tabs = listOf("输入", "词库", "语音", "传输", "关于")
+                ScrollableTabRow(
+                    selectedTabIndex = settingsTab,
+                    edgePadding = 0.dp,
+                    containerColor = Color.Transparent,
+                ) {
+                    tabs.forEachIndexed { index, label ->
+                        Tab(
+                            selected = settingsTab == index,
+                            onClick = { settingsTab = index },
+                            text = { Text(label) },
+                        )
+                    }
+                }
+                HorizontalDivider()
+                if (settingsTab == 0) {
                 ListItem(
                     headlineContent = { Text("学习") },
                     supportingContent = { Text("根据选词学习用户词频") },
@@ -386,6 +376,8 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
                         TextButton(onClick = { phrasePage = 2 }) { Text("管理") }
                     },
                 )
+                }
+                if (settingsTab == 1) {
                 HorizontalDivider()
                 ListItem(
                     headlineContent = { Text("清除用户词库") },
@@ -428,27 +420,27 @@ fun SettingsScreen(dictionaryDegraded: Boolean) {
                         }) { Text("选择文件") }
                     },
                 )
-                HorizontalDivider()
-                AsrModelSection(prefs)
-                DictPackSection()
-                ClipSection(prefs, ::toast)
-                HorizontalDivider()
-                // 词库一节（2026-10-14，M3 的 2c 移动端半边）：系统库只读 + 导入库开关/删除 + tsv 导入。
-                DictSection(prefs, ::toast)
-                // 五笔（2026-10-14，M4 第二波）：六键（方案/风格/混输进入方式/个数/回车/自动上屏）。
-                WubiSection(prefs, ::toast)
-                // 关于（2026-10-15，用户裁决「移动端：增加关于按钮」）：与词库/五笔两节同一套路
-                // —— 单独文件 + 这一行调用（见 AboutSection.kt）。
-                AboutSection(::toast)
-                HorizontalDivider()
-                Text(
-                    text = "注：学习/词库作用于本应用内嵌引擎实例；设置页与输入法共享同一引擎（Rust 静态单例）。",
-                    fontSize = 12.sp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    textAlign = TextAlign.Start,
-                )
+                }
+                if (settingsTab == 2) { AsrModelSection(prefs) }
+                if (settingsTab == 1) { DictPackSection() }
+                if (settingsTab == 3) { ClipSection(prefs, ::toast) }
+                if (settingsTab == 1) {
+                    HorizontalDivider()
+                    // 系统库只读 + 导入库开关/删除 + tsv 导入。
+                    DictSection(prefs, ::toast)
+                    // 五笔（2026-10-14，M4 第二波）：六键（方案/风格/混输/个数/回车/自动上屏）。
+                    WubiSection(prefs, ::toast)
+                }
+                if (settingsTab == 4) {
+                    AboutSection(::toast)
+                    HorizontalDivider()
+                    Text(
+                        text = "注：学习/词库作用于本应用内嵌引擎实例；设置页与输入法共享同一引擎（Rust 静态单例）。",
+                        fontSize = 12.sp,
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        textAlign = TextAlign.Start,
+                    )
+                }
             }
         }
     }

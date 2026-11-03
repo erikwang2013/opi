@@ -6,7 +6,9 @@
 
 use crate::ClipError;
 use crate::crypto::fingerprint;
-use crate::types::{DISCOVERY_GROUP, Fingerprint, InstanceId, PROTOCOL_VERSION};
+use crate::types::{
+    DISCOVERY_GROUP, DISCOVERY_GROUP_LEGACY, Fingerprint, InstanceId, PROTOCOL_VERSION,
+};
 use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
 use std::time::Duration;
 
@@ -76,12 +78,22 @@ pub(crate) fn bind(port: u16, local_ip: Option<Ipv4Addr>) -> Result<UdpSocket, C
     socket.bind(&SocketAddr::from((Ipv4Addr::UNSPECIFIED, port)).into())?;
     // 明确组播出口：Wi-Fi + 蜂窝/VPN 并存时，内核默认出口不一定是局域网那块网卡。
     let iface = local_ip.unwrap_or(Ipv4Addr::UNSPECIFIED);
-    socket.join_multicast_v4(&DISCOVERY_GROUP, &iface)?;
+    // 组播不是唯一通路：有的 AP/防火墙会丢组播。加入失败不能让整个内核起不来，
+    // 后面的广播与 /24 探测仍然可用。两个组都加入：旧客户端还在 239.255.42.99。
+    for group in [DISCOVERY_GROUP, DISCOVERY_GROUP_LEGACY] {
+        if socket.join_multicast_v4(&group, &iface).is_ok() {
+            continue;
+        }
+        if !iface.is_unspecified() {
+            let _ = socket.join_multicast_v4(&group, &Ipv4Addr::UNSPECIFIED);
+        }
+    }
+    // 失败时靠广播/探测；不要为了组播失败拒绝启动。
     // 同机回环让测试与桌面多实例可用；TTL=1 把发现限制在局域网。
     socket.set_multicast_loop_v4(true)?;
     socket.set_multicast_ttl_v4(1)?;
     if !iface.is_unspecified() {
-        socket.set_multicast_if_v4(&iface)?;
+        let _ = socket.set_multicast_if_v4(&iface);
     }
     socket.set_broadcast(true)?;
     let socket: UdpSocket = socket.into();
@@ -115,10 +127,14 @@ pub(crate) fn send_beacon(
     // 255.255.255.255，但同一子网的广播地址能到；只发一种就会「互相发现不了」。
     let mut targets = vec![
         SocketAddr::from((DISCOVERY_GROUP, port)),
+        SocketAddr::from((DISCOVERY_GROUP_LEGACY, port)),
         SocketAddr::from((Ipv4Addr::BROADCAST, port)),
     ];
     if let Some(ip) = local_ip.or_else(local_ipv4) {
-        targets.push(SocketAddr::from((broadcast_for(ip, prefix), port)));
+        let directed = SocketAddr::from((broadcast_for(ip, prefix), port));
+        if !targets.contains(&directed) {
+            targets.push(directed);
+        }
     }
     for target in targets {
         let _ = socket.send_to(&bytes, target);
@@ -309,6 +325,14 @@ mod tests {
         }
         assert!(seen_a.contains(&id(8)), "a must hear b");
         assert!(seen_b.contains(&id(7)), "b must hear a");
+    }
+
+    #[test]
+    fn primary_group_is_link_local_and_legacy_is_kept() {
+        // 224.0.0.0/24 是链路本地组播，AP/路由器必须转发；239/8 容易被 AP 过滤。
+        assert_eq!(DISCOVERY_GROUP.octets()[0], 224);
+        assert_eq!(DISCOVERY_GROUP_LEGACY.octets()[0], 239);
+        assert_ne!(DISCOVERY_GROUP, DISCOVERY_GROUP_LEGACY);
     }
 
     #[test]

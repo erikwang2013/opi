@@ -113,7 +113,14 @@ object EngineLoader {
     fun loadAsset(fileOps: FileOps, api: LoadApi, targetPath: String): Boolean {
         try {
             val assetSize = fileOps.assetLength()
-            if (assetSize == null || needsCopy(assetSize, fileOps.existingSize())) {
+            if (assetSize == null) {
+                // 基础包不随包任何词库：设置页下载到 filesDir 后直接装这份。
+                val existing = fileOps.existingSize()
+                if (existing == null || existing <= 0L) {
+                    fallback(api)
+                    return false
+                }
+            } else if (needsCopy(assetSize, fileOps.existingSize())) {
                 fileOps.copyAssetTo(File(targetPath))
             }
         } catch (e: IOException) {

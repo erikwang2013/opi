@@ -60,6 +60,8 @@ final class OpiSettingsWindow: NSObject {
     var phraseExportFormat = 0
     // 「关于」页的更新检测控件（异步结果回来时就地改字，不重建整页）。
     var aboutUpdateLabel: NSTextField?
+    // 开源致谢默认折叠，点击展开后重建「关于」页。
+    var creditsExpanded = false
     var aboutDownloadButton: NSButton?
     // 「传输」页的目标设备下拉（动作按当前选择取 peer id）。
     var transferTargetPopup: NSPopUpButton?

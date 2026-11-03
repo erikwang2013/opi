@@ -43,8 +43,8 @@ class SettingsTest {
             // 模糊音与智能联想缺省**关**（2026-10-15 / 2026-10-28 用户裁决）：整行契约跟着翻。
             "Learn=True", "ChinesePunct=True", "Fuzzy=False", "Jianpin=True",
             "ShiftToggle=True", "Skin=清爽", "Background=", "CandidateFont=中", "Association=False",
-            // 语音输入（2026-11-02）：总开关默认关，语言默认自动。
-            "SpeechEnabled=False", "SpeechLanguage=auto",
+            // 语音输入（2026-11-02；2026-11-03 默认开），语言默认自动。
+            "SpeechEnabled=True", "SpeechLanguage=auto",
         )) {
             assertTrue("缺少键行：$line\n$ini", ini.contains("$line\n"))
         }
@@ -289,7 +289,7 @@ class SettingsTest {
                 SettingsTab.WUBI,
                 // 跨设备剪贴板（2026-11-01）：两平台都出；Wayland 在页内降级为手动发送。
                 SettingsTab.CLIP,
-                // 语音输入（2026-11-02）：总开关默认关，语言与离线模型都在页内。
+                // 语音输入（2026-11-02；2026-11-03 默认开），语言与离线模型都在页内。
                 SettingsTab.SPEECH,
                 // 高级页（2026-10-24）：自定义短语，两端 IME 读同一个宿主文件。
                 SettingsTab.ADVANCED,
@@ -358,8 +358,8 @@ class SettingsTest {
 
     @Test
     fun `speech defaults are off and language routing round-trips`() {
-        // 用户要求：语音总开关**默认关**；语言 auto/zh → SenseVoice，en → Whisper。
-        assertFalse(OpSettings().speechEnabled)
+        // 用户要求：语音总开关**默认开**；语言 auto/zh → SenseVoice，en → Whisper。
+        assertTrue(OpSettings().speechEnabled)
         assertEquals("auto", OpSettings().speechLanguage)
         assertEquals(OpSettings(), OpSettings.fromIni(""))
         // 写得出、读得回；坏值回落自动（不抛）。
@@ -368,10 +368,10 @@ class SettingsTest {
         assertEquals("en", OpSettings.fromIni("SpeechLanguage=en\n").speechLanguage)
         assertEquals("auto", OpSettings.fromIni("SpeechLanguage=fr\n").speechLanguage)
         // merge：管理键（旧值被新值顶掉，不是当未知键留着）。
-        val merged = mergeIni("SpeechEnabled=True\nSpeechLanguage=en\n", OpSettings())
-        assertTrue(merged, merged.contains("SpeechEnabled=False\n"))
+        val merged = mergeIni("SpeechEnabled=False\nSpeechLanguage=en\n", OpSettings())
+        assertTrue(merged, merged.contains("SpeechEnabled=True\n"))
         assertTrue(merged, merged.contains("SpeechLanguage=auto\n"))
-        assertFalse(merged, merged.contains("SpeechEnabled=True\n"))
+        assertFalse(merged, merged.contains("SpeechEnabled=False\n"))
         assertFalse(merged, merged.contains("SpeechLanguage=en\n"))
     }
 

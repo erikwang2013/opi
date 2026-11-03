@@ -129,7 +129,7 @@ data class OpSettings(
      * 关着时状态栏话筒仍在（用户要求「符号后加话筒」），点击只提示去设置开启 ——
      * 不开麦、不加载模型。
      */
-    val speechEnabled: Boolean = false,
+    val speechEnabled: Boolean = true,
     /** 识别语言（键 `SpeechLanguage`）：auto/zh → SenseVoice，en → Whisper。 */
     val speechLanguage: String = "auto",
     /** 设置/关于页界面语言（键 `UiLanguage`）：zh（默认）/ en。 */
@@ -185,7 +185,7 @@ data class OpSettings(
         appendLine("StatusBarScale=${statusbar.scale}")
         // 跨设备剪贴板（2026-11-01）：默认关；状态栏宿主的 1s 轮询是唯一读侧。
         appendLine("ClipEnabled=${boolText(clipEnabled)}")
-        // 语音输入（2026-11-02）：默认关；状态栏宿主 1s 轮询后启停采集。
+        // 语音输入（2026-11-02；2026-11-03 默认开）：状态栏宿主 1s 轮询后启停采集。
         appendLine("SpeechEnabled=${boolText(speechEnabled)}")
         appendLine("SpeechLanguage=$speechLanguage")
         appendLine("UiLanguage=$uiLanguage")
@@ -257,7 +257,7 @@ data class OpSettings(
                 // 缺键 = 关：老配置升级后不悄悄开局域网监听。
                 clipEnabled = bool("ClipEnabled", false),
                 // 缺键 = 关：语音是新增能力，老配置升级后不悄悄开麦。
-                speechEnabled = bool("SpeechEnabled", false),
+                speechEnabled = bool("SpeechEnabled", true),
                 // 认不得的值回 auto（枚举的 fromValue 是唯一收口）。
                 speechLanguage = SpeechLanguage.fromValue(map["SpeechLanguage"]).value,
                 uiLanguage = map["UiLanguage"]?.takeIf { it == "en" } ?: "zh",

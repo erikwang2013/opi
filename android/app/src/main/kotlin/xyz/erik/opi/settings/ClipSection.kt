@@ -179,7 +179,7 @@ internal fun ClipSection(prefs: ImePreferences, toast: (String) -> Unit) {
     if (enabled || transfer) {
         ListItem(
             headlineContent = { Text("附近设备") },
-            supportingContent = { Text("配对时双方必须核对同一组 6 位数字；未配对设备收不到内容") },
+            supportingContent = { Text("默认自动连接：发现到同版本 opi 设备后自动配对并建立会话，多台设备可同时连接") },
         )
         if (ClipRuntime.peers.isEmpty()) {
             ListItem(
@@ -231,7 +231,7 @@ internal fun ClipSection(prefs: ImePreferences, toast: (String) -> Unit) {
                     if (peer.trusted) {
                         TextButton(onClick = { confirmForget = peer }) { Text("移除") }
                     } else {
-                        TextButton(onClick = { ClipRuntime.pairStart(peer.instanceId) }) { Text("配对") }
+                        TextButton(onClick = { ClipRuntime.pairStart(peer.instanceId) }) { Text("手动配对") }
                     }
                 },
             )
@@ -250,9 +250,9 @@ internal fun ClipSection(prefs: ImePreferences, toast: (String) -> Unit) {
             headlineContent = { Text("安全与网络") },
             supportingContent = {
                 Text(
-                    "· 默认关闭；开启后只在同一局域网、已配对设备之间同步纯文本。\n" +
-                        "· 配对必须由两端核对同一个 6 位数字；远端内容只写入本机剪贴板，不自动粘贴。\n" +
-                        "· 不记录剪贴板内容，不做剪贴板历史；状态文件只存设备与开关。",
+                    "· 默认关闭；开启后只在同一局域网同步纯文本/文件。\n" +
+                        "· 新版本默认自动配对（TOFU）：发现即连接，多台设备可同时在线；旧版仍走 6 位数字核对。\n" +
+                        "· 远端内容只写入本机剪贴板，不自动粘贴；不记录剪贴板内容，状态文件只存设备与开关。",
                 )
             },
         )

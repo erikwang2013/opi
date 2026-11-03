@@ -69,6 +69,7 @@ internal fun AboutSection(toast: (String) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var update by remember { mutableStateOf<UpdateState>(UpdateState.Idle) }
+    var creditsOpen by remember { mutableStateOf(false) }
     // 打开设置页即后台检测一次（IO 线程，UI 不等它）。手动检测才报失败原因。
     val check: suspend (Boolean) -> Unit = { manual ->
         update = UpdateState.Checking
@@ -132,17 +133,23 @@ internal fun AboutSection(toast: (String) -> Unit) {
     )
     // 开源致谢（2026-11-02）：文案在 `Credits.kt`，键盘内关于面板读同一份。
     ListItem(
+        modifier = Modifier.clickable { creditsOpen = !creditsOpen },
         headlineContent = { Text("开源致谢") },
         supportingContent = {
-            Column {
-                OPEN_SOURCE_CREDITS.forEach { section ->
-                    Text(section.title, style = MaterialTheme.typography.titleSmall)
-                    section.items.forEach { item ->
-                        Text("· $item", style = MaterialTheme.typography.bodySmall)
+            if (creditsOpen) {
+                Column {
+                    OPEN_SOURCE_CREDITS.forEach { section ->
+                        Text(section.title, style = MaterialTheme.typography.titleSmall)
+                        section.items.forEach { item ->
+                            Text("· $item", style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                 }
+            } else {
+                Text("点击展开：Rust/crate、词库数据、平台框架、表情、语音与 LocalSend 致谢")
             }
         },
+        trailingContent = { TextButton(onClick = { creditsOpen = !creditsOpen }) { Text(if (creditsOpen) "收起" else "展开") } },
     )
     LinkItem("官网主页", ABOUT_HOME_URL, toast)
     LinkItem("GitHub 项目", ABOUT_PROJECT_URL, toast)

@@ -31,7 +31,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -350,6 +354,7 @@ internal fun AboutPage(
     downloader: UpdateDownloader? = null,
 ) {
     val uriHandler = LocalUriHandler.current
+    var creditsOpen by remember { mutableStateOf(false) }
     Spacer(Modifier.height(6.dp))
     Text("小欧输入法（opi）· 多端输入法", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Ink)
     Spacer(Modifier.height(4.dp))
@@ -417,11 +422,17 @@ internal fun AboutPage(
     )
     // 开源致谢（2026-11-02）：文案在 Credits.kt，设置窗口整体可滚动。
     Spacer(Modifier.height(10.dp))
-    Text("开源致谢", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Ink)
-    OPEN_SOURCE_CREDITS.forEach { section ->
-        Spacer(Modifier.height(6.dp))
-        Text(section.title, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Ink)
-        section.items.forEach { Text("· $it", fontSize = 12.sp, color = Muted) }
+    Text(
+        if (creditsOpen) "收起开源致谢" else "展开开源致谢（Rust/crate、词库、平台、表情、语音、LocalSend）",
+        fontSize = 13.sp, fontWeight = FontWeight.Bold, color = SymAccent,
+        modifier = Modifier.clickable { creditsOpen = !creditsOpen },
+    )
+    if (creditsOpen) {
+        OPEN_SOURCE_CREDITS.forEach { section ->
+            Spacer(Modifier.height(6.dp))
+            Text(section.title, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Ink)
+            section.items.forEach { Text("· $it", fontSize = 12.sp, color = Muted) }
+        }
     }
 }
 

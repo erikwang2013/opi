@@ -42,6 +42,8 @@ final class AboutPanel: UIView {
     private var headingLabels: [UILabel] = []
     private var linkButtons: [UIButton] = []
     private var noteLabel: UILabel?
+    private let creditsToggle = UIButton(type: .system)
+    private let creditsStack = UIStackView()
 
     init() {
         super.init(frame: .zero)
@@ -118,14 +120,32 @@ final class AboutPanel: UIView {
             "Emoji 取自 OpenMoji（CC BY-SA 4.0）；颜文字取自 rime_kaomoji_dict（MIT）；"
                 + "小欧贴纸/图标为项目专有资产，商业使用需授权"
         )
-        // 开源致谢（2026-11-02）：条目在 Credits.swift，面板本身可滚动。
-        addHeading("开源致谢")
+        // 开源致谢（2026-11-02，2026-11-03 折叠）：条目在 Credits.swift，面板本身可滚动。
+        creditsToggle.contentHorizontalAlignment = .left
+        creditsToggle.setTitle(OpiText.t("展开开源致谢"), for: .normal)
+        creditsToggle.addTarget(self, action: #selector(toggleCredits), for: .touchUpInside)
+        linkButtons.append(creditsToggle)
+        stack.addArrangedSubview(creditsToggle)
+        creditsStack.axis = .vertical
+        creditsStack.spacing = 4
+        creditsStack.isHidden = true
         for section in OpiCredits.sections {
-            addParagraph("【\(section.title)】")
+            let head = UILabel()
+            head.text = OpiText.t("【\(section.title)】")
+            head.font = .boldSystemFont(ofSize: 12)
+            head.numberOfLines = 0
+            headingLabels.append(head)
+            creditsStack.addArrangedSubview(head)
             for item in section.items {
-                addParagraph("· " + item)
+                let label = UILabel()
+                label.text = OpiText.t("· " + item)
+                label.font = .systemFont(ofSize: 12)
+                label.numberOfLines = 0
+                paragraphLabels.append(label)
+                creditsStack.addArrangedSubview(label)
             }
         }
+        stack.addArrangedSubview(creditsStack)
         addHeading("链接")
         addLink("官网主页", Self.homeURL)
         addLink("GitHub 项目", Self.projectURL)
@@ -140,6 +160,13 @@ final class AboutPanel: UIView {
         note.numberOfLines = 0
         noteLabel = note
         stack.addArrangedSubview(note)
+    }
+
+    @objc private func toggleCredits() {
+        creditsStack.isHidden.toggle()
+        creditsToggle.setTitle(
+            OpiText.t(creditsStack.isHidden ? "展开开源致谢" : "收起开源致谢"), for: .normal
+        )
     }
 
     private func addHeading(_ text: String) {

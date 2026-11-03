@@ -90,7 +90,7 @@ internal enum class SettingsTab(val label: String) {
     // 跨设备传输（2026-11-01 剪贴板，2026-11-02 扩展文件传输）：默认关；宿主在
     // `--statusbar` 常驻进程里，本页通过本机回环控制面读状态/发命令（ClipControl.kt）。
     CLIP("跨设备传输"),
-    // 语音输入（2026-11-02）：总开关默认关；语言 auto/zh/en + 两个离线模型下载。
+    // 语音输入（2026-11-02；2026-11-03 默认开）：语言 auto/zh/en + 两个离线模型下载。
     SPEECH("语音"),
     // 高级页（2026-10-24）：中英两套自定义短语。真源是两平台同一条数据目录下的
     // `custom_phrases.json` / `custom_phrases_en.json`（见 CustomPhraseStore.kt），

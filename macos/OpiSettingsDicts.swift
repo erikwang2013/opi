@@ -386,24 +386,34 @@ extension OpiSettingsWindow {
              y: 338, height: 50)
         note("完整缺口表与「最不确定的 API」见 macos/README.md。", y: 396, height: 20)
 
-        // 开源致谢（2026-11-02）：条目在 Credits.swift；本页按 y 绝对排版，
-        // 逐条推进光标后把页面高度交回滚动视图（窗口内容在 NSScrollView 里）。
+        // 开源致谢（2026-11-02，2026-11-03 折叠）：条目在 Credits.swift；本页按 y
+        // 绝对排版，展开时逐条推进光标后把页面高度交回滚动视图。
         var cursor: CGFloat = 440
-        label("开源致谢", y: cursor, size: 13, bold: true)
-        cursor += 24
-        for section in OpiCredits.sections {
-            label("【\(section.title)】", y: cursor, size: 12, bold: true)
-            cursor += 18
-            for item in section.items {
-                let shown = "· " + item
-                let height: CGFloat = shown.count > 55 ? 34 : 17
-                note(shown, y: cursor, size: 12, color: .labelColor, height: height)
-                cursor += height + 2
+        button(
+            creditsExpanded ? "收起开源致谢" : "展开开源致谢（Rust/crate、词库、平台、表情、语音、LocalSend）",
+            x: 0, y: cursor, w: 560, action: #selector(toggleCredits)
+        )
+        cursor += 30
+        if creditsExpanded {
+            for section in OpiCredits.sections {
+                label("【\(section.title)】", y: cursor, size: 12, bold: true)
+                cursor += 18
+                for item in section.items {
+                    let shown = "· " + item
+                    let height: CGFloat = shown.count > 55 ? 34 : 17
+                    note(shown, y: cursor, size: 12, color: .labelColor, height: height)
+                    cursor += height + 2
+                }
+                cursor += 4
             }
-            cursor += 4
         }
         setPageHeight(cursor + 20)
         refreshAboutUpdate()
+    }
+
+    @objc func toggleCredits() {
+        creditsExpanded.toggle()
+        rebuildPage()
     }
 
     /// 检测结果回来后只改这一行和下载按钮；不在别的页重建控件。

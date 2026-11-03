@@ -12,7 +12,7 @@ use crate::node::{ActiveGuard, NodeInner, spawn_named};
 use crate::noise;
 use crate::pairing;
 use crate::session;
-use crate::types::{BEACON_INTERVAL, InstanceId};
+use crate::types::{BEACON_INTERVAL, CAP_AUTO_PAIR, InstanceId};
 use std::io;
 use std::net::{SocketAddr, TcpListener, TcpStream, UdpSocket};
 use std::sync::Arc;
@@ -28,6 +28,16 @@ const SUPERVISOR_TICK: Duration = Duration::from_millis(100);
 const PROBE_INTERVAL: Duration = Duration::from_secs(8);
 const PROBE_FIRST_DELAY: Duration = Duration::ZERO;
 
+/// 当前 beacon 的能力位：配置打开自动连接时额外通告 CAP_AUTO_PAIR。
+fn make_beacon(inner: &NodeInner, tcp_port: u16) -> Beacon {
+    let core = inner.lock();
+    let mut capabilities = core.capabilities();
+    if inner.config.auto_connect {
+        capabilities |= CAP_AUTO_PAIR;
+    }
+    discovery::beacon_for(core.instance_id, &core.public_key, tcp_port, capabilities)
+}
+
 pub(crate) fn discovery_loop(inner: Arc<NodeInner>, socket: UdpSocket, tcp_port: u16) {
     let mut next_beacon = Instant::now();
     let mut next_probe = Instant::now() + PROBE_FIRST_DELAY;
@@ -35,20 +45,7 @@ pub(crate) fn discovery_loop(inner: Arc<NodeInner>, socket: UdpSocket, tcp_port:
     while !inner.is_stopped() {
         let now = Instant::now();
         let beacon = if now >= next_beacon || now >= next_probe {
-            let (instance_id, public_key, capabilities) = {
-                let core = inner.lock();
-                (
-                    core.instance_id,
-                    core.public_key.clone(),
-                    core.capabilities(),
-                )
-            };
-            Some(discovery::beacon_for(
-                instance_id,
-                &public_key,
-                tcp_port,
-                capabilities,
-            ))
+            Some(make_beacon(&inner, tcp_port))
         } else {
             None
         };
@@ -92,15 +89,7 @@ pub(crate) fn discovery_loop(inner: Arc<NodeInner>, socket: UdpSocket, tcp_port:
             std::mem::take(&mut *q)
         };
         if !requested.is_empty() {
-            let (instance_id, public_key, capabilities) = {
-                let core = inner.lock();
-                (
-                    core.instance_id,
-                    core.public_key.clone(),
-                    core.capabilities(),
-                )
-            };
-            let probe = discovery::beacon_for(instance_id, &public_key, tcp_port, capabilities);
+            let probe = make_beacon(&inner, tcp_port);
             for ip in requested {
                 let _ = discovery::send_probe_to(&socket, inner.config.discovery_port, probe, ip);
                 inner
@@ -117,16 +106,7 @@ pub(crate) fn discovery_loop(inner: Arc<NodeInner>, socket: UdpSocket, tcp_port:
                     // /24 探测的报文：立刻单播回一个普通 beacon，让对方也能发现我们。
                     if beacon.capabilities & crate::types::CAP_PROBE != 0 {
                         beacon.capabilities &= !crate::types::CAP_PROBE;
-                        let (instance_id, public_key, capabilities) = {
-                            let core = inner.lock();
-                            (
-                                core.instance_id,
-                                core.public_key.clone(),
-                                core.capabilities(),
-                            )
-                        };
-                        let reply =
-                            discovery::beacon_for(instance_id, &public_key, tcp_port, capabilities);
+                        let reply = make_beacon(&inner, tcp_port);
                         let _ = socket.send_to(&reply.encode(), source);
                     }
                     inner.lock().observe_beacon(source, beacon, Instant::now());
@@ -253,18 +233,34 @@ pub(crate) fn supervisor_loop(inner: Arc<NodeInner>) {
             break;
         }
         let now = Instant::now();
-        let actions = {
+        let (actions, pair_actions) = {
             let mut core = inner.lock();
             core.prune(now);
             let own = core.instance_id;
             let mut actions = Vec::new();
+            let mut pair_actions = Vec::new();
             for (peer, discovered) in &core.discovered {
-                // 只有实例 ID 较小的一侧主动连接，避免双向同时建链。
-                if *peer <= own
-                    || core.sessions.contains_key(peer)
-                    || core.connecting.contains(peer)
-                    || !core.trust.contains(*peer)
-                {
+                // 只有实例 ID 较大的一侧主动连接/配对，避免双向同时建链。
+                if *peer <= own {
+                    continue;
+                }
+                if !core.trust.contains(*peer) {
+                    // 双方都开启自动连接才 TOFU；老客户端没有 CAP_AUTO_PAIR，保持手动 SAS。
+                    if inner.config.auto_connect
+                        && core.pairing_enabled
+                        && discovered.capabilities & CAP_AUTO_PAIR != 0
+                        && !core.pairing_attempts.contains(peer)
+                        && !core.pairing.contains_key(peer)
+                        && core
+                            .backoff
+                            .get(peer)
+                            .is_none_or(|backoff| now >= backoff.next)
+                    {
+                        pair_actions.push((*peer, discovered.addr));
+                    }
+                    continue;
+                }
+                if core.sessions.contains_key(peer) || core.connecting.contains(peer) {
                     continue;
                 }
                 if core
@@ -281,11 +277,35 @@ pub(crate) fn supervisor_loop(inner: Arc<NodeInner>) {
             for (peer, _, _) in &actions {
                 core.connecting.insert(*peer);
             }
-            actions
+            for (peer, _) in &pair_actions {
+                core.pairing_attempts.insert(*peer);
+            }
+            (actions, pair_actions)
         };
         for (peer, addr, public_key) in actions {
             spawn_connector(inner.clone(), peer, addr, public_key);
         }
+        for (peer, addr) in pair_actions {
+            spawn_auto_pair(inner.clone(), peer, addr);
+        }
+    }
+}
+
+/// 自动配对线程。`pairing_attempts` 已由 supervisor 预占，失败时释放并退避。
+fn spawn_auto_pair(inner: Arc<NodeInner>, peer: InstanceId, addr: SocketAddr) {
+    let Some(guard) = ActiveGuard::enter(&inner) else {
+        inner.lock().pairing_attempts.remove(&peer);
+        inner.schedule_backoff(peer);
+        return;
+    };
+    let connection_inner = inner.clone();
+    let spawned = spawn_named("opi-clip-auto-pair", move || {
+        let _guard = guard;
+        pairing::run_initiator(connection_inner, peer, addr);
+    });
+    if spawned.is_err() {
+        inner.lock().pairing_attempts.remove(&peer);
+        inner.schedule_backoff(peer);
     }
 }
 

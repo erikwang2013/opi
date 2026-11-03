@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="index,follow">
+  <title>Open-source credits · opi</title>
+  <meta name="description" content="Open-source dictionaries, engines, frameworks, emoji and LAN transfer projects used by opi.">
+  <link rel="icon" href="../../assets/pet/opi-pet.png">
+  <style>
+    :root{--bg:#f3fbf4;--ink:#0f3a27;--muted:#557565;--line:#cfe5d6;--accent:#1f7a4d}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif}
+    .shell{max-width:820px;margin:0 auto;padding:40px 20px 64px}
+    h1{font-size:32px;margin:0 0 8px}h2{font-size:18px;margin:26px 0 8px}
+    p{color:var(--muted);margin:8px 0}a{color:var(--accent)}
+    .back{display:inline-block;margin-bottom:24px;text-decoration:none}
+    details{border:1px solid var(--line);border-radius:12px;background:#fff;margin:10px 0;padding:0 16px}
+    summary{cursor:pointer;font-weight:600;padding:14px 0;list-style:none}
+    summary::-webkit-details-marker{display:none}
+    summary::before{content:"＋";display:inline-block;width:1.4em;color:var(--accent)}
+    details[open] summary::before{content:"－"}
+    ul{margin:0 0 14px;padding-left:22px}li{margin:4px 0;color:var(--muted)}
+    .note{border-top:1px solid var(--line);margin-top:32px;padding-top:16px;font-size:14px}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <a class="back" href="../">← Back to opi</a>
+    <h1>Open-source credits</h1>
+    <p>opi stands on many open-source projects and communities. These are the upstream projects actually used; per-source licensing is in <a href="../dictionaries/">dictionary licenses</a> and <a href="../assets-license/">visual-asset licenses</a>.</p>
+
+    <details open>
+      <summary>Project and licensing</summary>
+      <ul>
+        <li>opi source code is MIT-licensed; dictionary data and visual assets are distributed under their own licenses.</li>
+        <li>The main Simplified dictionary is distributed as GPL-3.0 because it includes GPL-3.0 data; full license texts ship with the repository and installers.</li>
+      </ul>
+    </details>
+
+    <details>
+      <summary>Rust and open-source crates</summary>
+      <ul>
+        <li>Rust language, standard library and Cargo toolchain (the Rust project and contributors)</li>
+        <li>serde / serde_json (data serialization)</li>
+        <li>memmap2 (memory-mapped dictionaries)</li>
+        <li>jni (Android JNI bindings)</li>
+        <li>snow / x25519-dalek (Noise protocol and key exchange)</li>
+        <li>postcard / sha2 / hex / getrandom / socket2 (LAN transfer)</li>
+        <li>thiserror (error handling)</li>
+        <li>windows-rs (Windows TSF / IMM32 bindings)</li>
+        <li>sherpa-rs (Rust bindings for sherpa-onnx)</li>
+        <li>proptest / hound (testing and audio reading, development only)</li>
+        <li>All transitive dependencies in Cargo.lock and their contributors</li>
+      </ul>
+    </details>
+
+    <details>
+      <summary>Dictionaries and data</summary>
+      <ul>
+        <li>rime-ice, rime-essay, rime-luna-pinyin, rime-pinyin-simp, rime-terra-pinyin, rime-stroke, rime-wubi, rime-cangjie</li>
+        <li>chinese-xinhua (idioms and xiehouyu)</li>
+        <li>THUOCL (Tsinghua Open Chinese Lexicon)</li>
+        <li>Kangxi dictionary data (shunshi-kangxi-core, Shunshi.AI)</li>
+        <li>OpenCC (Simplified/Traditional conversion), Unicode Unihan and the Unicode Character Database</li>
+        <li>Google Books Ngram Frequency (English association source)</li>
+        <li>Baijiaxing (public domain) and project-maintained tables</li>
+        <li>And related contributors; per-source details and licenses are in <a href="../dictionaries/">dictionary licenses</a></li>
+      </ul>
+    </details>
+
+    <details>
+      <summary>Platforms and frameworks</summary>
+      <ul>
+        <li>Android: Kotlin, Jetpack Compose, AndroidX</li>
+        <li>Apple: Swift, UIKit, InputMethodKit, AppKit</li>
+        <li>HarmonyOS: ArkTS, ArkUI, HarmonyOS SDK</li>
+        <li>Linux: fcitx5</li>
+        <li>Windows: Text Services Framework (TSF), IMM32, Win32</li>
+        <li>Desktop: Compose for Desktop, Skiko, JNA</li>
+      </ul>
+    </details>
+
+    <details>
+      <summary>Emoji and kaomoji</summary>
+      <ul>
+        <li>OpenMoji (CC BY-SA 4.0, the OpenMoji project and contributors)</li>
+        <li>rime_kaomoji_dict (MIT, Copyright (c) 2023 aoguai)</li>
+        <li>Unicode emoji data (Unicode Consortium)</li>
+        <li>opi stickers and icons are proprietary project assets; commercial use requires permission</li>
+      </ul>
+    </details>
+
+    <details>
+      <summary>Speech recognition</summary>
+      <ul>
+        <li>sherpa-onnx (k2-fsa project and contributors)</li>
+        <li>SenseVoice (FunAudioLLM / Alibaba Tongyi Lab and contributors)</li>
+        <li>Whisper (OpenAI and contributors)</li>
+        <li>Silero VAD (Silero team and contributors)</li>
+        <li>ONNX Runtime (Microsoft and contributors)</li>
+      </ul>
+    </details>
+
+    <details>
+      <summary>Cross-device transfer</summary>
+      <ul>
+        <li>LocalSend (reference for LAN transfer interaction and protocol ideas; the LocalSend project and contributors)</li>
+        <li>Noise Protocol Framework (the Noise specification and the snow implementers)</li>
+      </ul>
+    </details>
+
+    <details>
+      <summary>Others</summary>
+      <ul>
+        <li>Thanks to everyone who contributes code, data and bug reports through GitHub, crates.io, Maven Central and other communities.</li>
+      </ul>
+    </details>
+
+    <p class="note">Licenses and upstream versions are governed by <code>data/raw/LICENSES.md</code> and the license files shipped with each installer.</p>
+  </main>
+</body>
+</html>

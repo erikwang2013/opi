@@ -86,14 +86,24 @@ class ClipSyncService : Service() {
             .setContentIntent(openSettingsIntent())
             .addAction(stopAction)
             .build()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (t: Throwable) {
+            // Android 14 对 connectedDevice 的资格检查因厂商策略失败时，退回普通前台
+            // 服务（进程仍活着）；再失败就停服务，由 IME 进程内的内核继续工作。
+            runCatching { startForeground(NOTIFICATION_ID, notification) }
+                .onFailure {
+                    running = false
+                    stopSelf()
+                }
         }
     }
 

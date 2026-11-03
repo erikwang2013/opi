@@ -51,6 +51,10 @@ pub(crate) fn run_responder(inner: Arc<NodeInner>, mut stream: TcpStream, header
 
 fn finish(inner: &Arc<NodeInner>, peer: InstanceId, outcome: PairOutcome) {
     inner.lock().pairing_attempts.remove(&peer);
+    if !outcome.trusted {
+        // 自动连接失败时别每 100ms 重试一次；与断线重连共用退避表。
+        inner.schedule_backoff(peer);
+    }
     inner.emit(ClipEvent::PairingFinished {
         instance_id: peer,
         trusted: outcome.trusted,
@@ -272,6 +276,11 @@ fn prompt(
     code: &str,
     incoming: bool,
 ) -> Result<bool, ClipError> {
+    // 自动连接（默认）：TOFU，不再要求用户核对 6 位 SAS。双方都确认后才写信任表；
+    // 关闭自动连接的客户端仍会看到并确认 SAS。
+    if inner.config.auto_connect {
+        return Ok(true);
+    }
     let (sender, receiver) = mpsc::sync_channel(1);
     {
         let mut core = inner.lock();

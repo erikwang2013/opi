@@ -5,7 +5,7 @@
 
 产出：
   <out>/asr-bundle/asr/{sensevoice,whisper-small.en,vad}/...  完整包/桌面镜像用
-  <out>/components/dicts/opi-dicts-<版本>.zip                  基础包设置页下载
+  <out>/components/dicts/opi-dicts-<版本>.zip                  基础包设置页下载（含拼音主词库）
   <out>/components/asr/*.zip                                  普通/基础包按需下载（可选）
 
 模型不进 git；源目录由 --models 指到本机已下载的模型根（含 sensevoice、
@@ -21,7 +21,8 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DICT_FILES = ["trad.opid", "stroke.opid", "wubi86.opid", "wubi98.opid",
+# 基础包只含 app 代码（2026-11-03 用户裁决）：拼音主词库也在这里下载。
+DICT_FILES = ["luna.opid", "trad.opid", "stroke.opid", "wubi86.opid", "wubi98.opid",
               "rare_index.tsv", "kangxi.tsv"]
 MODEL_PACKS = ["sensevoice", "whisper-small.en", "vad"]
 LICENSE = """# 语音模型许可与署名

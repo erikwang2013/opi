@@ -35,6 +35,18 @@ fn start(tag: &str, discovery_port: u16) -> (ClipNode, PathBuf) {
     let mut config = ClipConfig::new(&dir);
     config.discovery_port = discovery_port;
     config.device_name = tag.to_owned();
+    // 手动配对用例保持原有的 SAS 流程；自动连接由单独用例覆盖。
+    config.auto_connect = false;
+    let node = ClipNode::start(config).unwrap();
+    (node, dir)
+}
+
+fn start_auto(tag: &str, discovery_port: u16) -> (ClipNode, PathBuf) {
+    let dir = temp_dir(tag);
+    let mut config = ClipConfig::new(&dir);
+    config.discovery_port = discovery_port;
+    config.device_name = tag.to_owned();
+    config.auto_connect = true;
     let node = ClipNode::start(config).unwrap();
     (node, dir)
 }
@@ -226,6 +238,52 @@ fn pair_transfer_max_text_loop_suppression_and_stop() {
         Err(ClipError::Stopped)
     ));
     assert!(a.peers().is_empty());
+    b.stop();
+    let _ = fs::remove_dir_all(dir_a);
+    let _ = fs::remove_dir_all(dir_b);
+}
+
+#[test]
+fn auto_connect_pairs_and_syncs_without_prompt() {
+    let port = unique_port();
+    let (a, dir_a) = start_auto("auto-a", port);
+    let (b, dir_b) = start_auto("auto-b", port);
+    let a_id = a.local_instance_id();
+    let b_id = b.local_instance_id();
+    let mut log_a = Log::new();
+    let mut log_b = Log::new();
+
+    wait_until(WAIT, || {
+        a.peers()
+            .iter()
+            .any(|peer| peer.instance_id == b_id && peer.connected && peer.trusted)
+            && b.peers()
+                .iter()
+                .any(|peer| peer.instance_id == a_id && peer.connected && peer.trusted)
+    });
+    // 自动连接不再弹出 SAS 对话框。
+    log_a
+        .quiet(&a, Duration::from_millis(500), |event| {
+            matches!(event, ClipEvent::PairingPrompt { .. })
+        })
+        .none();
+    log_b
+        .quiet(&b, Duration::from_millis(500), |event| {
+            matches!(event, ClipEvent::PairingPrompt { .. })
+        })
+        .none();
+
+    assert!(matches!(
+        a.publish_text("auto hello").unwrap(),
+        PublishOutcome::Published { peers: 1, .. }
+    ));
+    log_b.wait(
+        &b,
+        WAIT,
+        |event| matches!(event, ClipEvent::ClipboardReceived { text, .. } if text == "auto hello"),
+    );
+
+    a.stop();
     b.stop();
     let _ = fs::remove_dir_all(dir_a);
     let _ = fs::remove_dir_all(dir_b);

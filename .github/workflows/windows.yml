@@ -455,10 +455,15 @@ jobs:
           if ((Split-Path $app -Leaf) -ne 'opi') {
             throw "app image 名不是 opi（是 $(Split-Path $app -Leaf)）—— Windows packageName 没生效"
           }
-          $required = @('opi.exe', 'app\tsf_opi.dll', 'app\opi_imm32.ime', 'app\luna.opid', 'app\symbol_categories.tsv', 'app\LICENSE', 'app\LICENSES.md', 'app\GPL-3.0.txt')
-          if ($env:TIER -ne 'basic') { $required += 'app\trad.opid' }
+          $required = @('opi.exe', 'app\tsf_opi.dll', 'app\opi_imm32.ime', 'app\symbol_categories.tsv', 'app\LICENSE', 'app\LICENSES.md', 'app\GPL-3.0.txt')
+          if ($env:TIER -ne 'basic') { $required += @('app\luna.opid', 'app\trad.opid') }
           foreach ($f in $required) {
             if (-not (Test-Path (Join-Path $app $f))) { throw "app image 缺 $f" }
+          }
+          if ($env:TIER -eq 'basic') {
+            foreach ($f in @('app\luna.opid', 'app\trad.opid')) {
+              if (Test-Path (Join-Path $app $f)) { throw "基础包不应带词库 $f（应改为设置内下载）" }
+            }
           }
           if ($env:TIER -eq 'full') {
             foreach ($f in @('app\opi_asr.dll', 'app\onnxruntime.dll')) {

@@ -28,21 +28,21 @@ internal fun DictPackSection() {
     val context = LocalContext.current
     val installed = remember(DictPack.state) { DictPack.installed(context) }
     val packaged = remember {
-        runCatching { context.assets.open("trad.opid").use { true } }.getOrDefault(false)
+        runCatching { context.assets.open("luna.opid").use { true } }.getOrDefault(false)
     }
     val state = DictPack.state
     val running = state as? DictPack.State.Running
     val failed = state as? DictPack.State.Failed
 
     ListItem(
-        headlineContent = { Text("扩展词库") },
+        headlineContent = { Text("词库包") },
         supportingContent = {
             Column {
                 Text(
                     when {
-                        installed -> "已安装 · 繁体 / 笔画 / 五笔 / 生僻字索引"
-                        packaged -> "随安装包提供 · 繁体 / 笔画 / 五笔 / 生僻字索引"
-                        else -> "未安装 · 约 ${DictPack.mb(DictPack.BYTES)} · 含繁体、笔画、五笔与生僻字索引"
+                        installed -> "已安装 · 拼音主词库 / 繁体 / 笔画 / 五笔 / 生僻字索引"
+                        packaged -> "随安装包提供 · 拼音主词库 / 繁体 / 笔画 / 五笔 / 生僻字索引"
+                        else -> "未安装 · 约 ${DictPack.mb(DictPack.BYTES)} · 含拼音主词库、繁体、笔画、五笔与生僻字索引"
                     },
                 )
                 if (running != null) {

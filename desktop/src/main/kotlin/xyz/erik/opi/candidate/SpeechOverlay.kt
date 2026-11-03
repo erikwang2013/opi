@@ -33,10 +33,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
-import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberWindowState
 import xyz.erik.opi.scene.SceneTheme
-import java.awt.Toolkit
+import java.awt.GraphicsEnvironment
+import java.awt.MouseInfo
+import java.awt.Rectangle
 
 @Composable
 internal fun SpeechOverlay(
@@ -47,21 +48,26 @@ internal fun SpeechOverlay(
     val ui = SpeechHost.ui
     if (ui.phase == SpeechPhase.IDLE) return
     val palette = skinColors(if (background != null) background.defaultSkin() else skin)
-    val screen = remember { Toolkit.getDefaultToolkit().screenSize }
-    // 与状态栏同一套「按像素直接写 dp」的旧约定（HiDPI 下位置略偏但不挡输入区）。
-    val position = remember(screen) {
-        WindowPosition(((screen.width - 440) / 2).dp, (screen.height - 280).dp)
-    }
+    val screen = remember { activeScreenBounds() }
     Window(
         onCloseRequest = { SpeechHost.dismiss() },
-        state = rememberWindowState(width = 420.dp, height = 190.dp, position = position),
+        state = rememberWindowState(width = 420.dp, height = 190.dp),
         undecorated = true,
         alwaysOnTop = true,
         resizable = false,
-        focusable = true,
+        // 录音时用户正在别的窗口打字：浮层只显示状态，绝不抢焦点。
+        focusable = false,
         title = "小欧输入法 语音输入",
     ) {
-        LaunchedEffect(window) { statusBarGuard("语音浮层 SkipTaskbar") { SkipTaskbar.apply(window) } }
+        LaunchedEffect(window, screen) {
+            statusBarGuard("语音浮层 SkipTaskbar") { SkipTaskbar.apply(window) }
+            // 多显示器：放到鼠标所在屏幕底部，而不是永远主屏。
+            window.setLocation(
+                screen.x + (screen.width - window.width) / 2,
+                screen.y + screen.height - window.height - 80,
+            )
+            window.toFront()
+        }
         Column(
             Modifier.fillMaxSize().background(palette.bg.copy(alpha = 0.97f))
                 .border(1.dp, palette.line).padding(horizontal = 16.dp, vertical = 12.dp),
@@ -127,4 +133,13 @@ internal fun SpeechOverlay(
             }
         }
     }
+}
+
+/** 鼠标所在屏幕的像素边界；取不到鼠标时退回主屏。 */
+private fun activeScreenBounds(): Rectangle {
+    val screens = GraphicsEnvironment.getLocalGraphicsEnvironment().screenDevices
+    val mouse = runCatching { MouseInfo.getPointerInfo()?.location }.getOrNull()
+    val device = screens.firstOrNull { it.defaultConfiguration.bounds.contains(mouse) }
+        ?: screens.firstOrNull()
+    return device?.defaultConfiguration?.bounds ?: Rectangle(0, 0, 1280, 800)
 }

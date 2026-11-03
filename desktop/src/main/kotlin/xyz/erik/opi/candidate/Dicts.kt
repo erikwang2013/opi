@@ -440,6 +440,8 @@ internal fun DictsPage(
             },
         )
     }
+    // 基础包词库包（2026-11-03）：所有词库都在词库页下载。
+    DictPackSection()
 }
 
 /** 系统词库一行：名字 + 「随包」（拿不到条数就别编 —— 见 [SYSTEM_DICTS]）。 */

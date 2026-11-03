@@ -248,7 +248,7 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
     when {
         st == null -> Text("宿主运行后，这里会列出同一局域网内发现的小欧设备。", fontSize = 12.sp, color = Muted)
         st.peers.isEmpty() -> Text(
-            "正在发现局域网设备…两边都开启本功能即可自动发现；" +
+            "正在发现局域网设备…两边都开启本功能即可自动发现并连接（多台可同时在线）；" +
                 "若路由器拦截广播，可用下方「手动连接」输入对方 IP。" +
                 "Windows 请确认安装器添加的程序级防火墙规则未被禁用。",
             fontSize = 12.sp, color = Muted,
@@ -303,7 +303,8 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
 
     SectionTitle("安全与网络")
     Text("· 默认关闭；开启后只在局域网内通信（局域网发现 + 加密会话）。", fontSize = 12.sp, color = Muted)
-    Text("· 配对必须由两端核对同一个 6 位数字；文件只发给已配对设备，远端内容只写剪贴板，不自动粘贴。", fontSize = 12.sp, color = Muted)
+    Text("· 新版本默认自动配对（TOFU）：发现即连接，多台设备可同时在线；旧版仍走 6 位数字核对。" +
+            "文件只发给已配对设备，远端内容只写剪贴板，不自动粘贴。", fontSize = 12.sp, color = Muted)
     Text("· 接收文件默认保存到 Downloads/opi，可逐次改选目录；不记录剪贴板内容，状态文件只存设备与开关。", fontSize = 12.sp, color = Muted)
     if (isWindows()) {
         Text(

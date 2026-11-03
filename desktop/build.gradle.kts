@@ -50,7 +50,7 @@ kotlin {
 // jpackage 的包版本与设置窗标题栏都从这里取。**此前设置窗里写死过一份**
 // （"1.4.0"），到 1.6.0 就成了摆在用户眼前的假话 —— 两处写死是漂移的充分条件，
 // 生成一个常量是把它压成一处的最短路径（同 android 侧 versionName 的单一来源约定）。
-val opiAppVersion = "1.31.6"
+val opiAppVersion = "1.31.7"
 
 
 val generateOpiVersionSource by tasks.registering {
@@ -176,9 +176,10 @@ tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageT
             )
             licenses.forEach { check(it.isFile) { "找不到许可文本：${it.path}" } }
             val imm32 = imm32Ime.orNull?.let { file(it).also { f -> check(f.isFile) { "缺 OPI_IMM32_IME：${f.path}" } } }
+            // 基础包只有 app 代码（2026-11-03）：luna/trad 都不随包，设置页下载词库包。
             val bundled = listOfNotNull(
-                src, file("windows/launch-and-restart.cmd"), luna, symbols, imm32, *licenses.toTypedArray(),
-            ) + if (tier == "basic") emptyList() else listOf(trad)
+                src, file("windows/launch-and-restart.cmd"), symbols, imm32, *licenses.toTypedArray(),
+            ) + if (tier == "basic") emptyList() else listOf(luna, trad)
             files.from(*bundled.toTypedArray())
         }
     }

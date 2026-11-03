@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="index,follow">
+  <title>开源致谢 · 小欧输入法</title>
+  <meta name="description" content="小欧输入法（opi）使用的开源词库、引擎、框架、表情与跨设备传输项目致谢。">
+  <link rel="icon" href="../assets/pet/opi-pet.png">
+  <style>
+    :root{--bg:#f3fbf4;--ink:#0f3a27;--muted:#557565;--line:#cfe5d6;--accent:#1f7a4d}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif}
+    .shell{max-width:820px;margin:0 auto;padding:40px 20px 64px}
+    h1{font-size:32px;margin:0 0 8px}h2{font-size:18px;margin:26px 0 8px}
+    p{color:var(--muted);margin:8px 0}a{color:var(--accent)}
+    .back{display:inline-block;margin-bottom:24px;text-decoration:none}
+    details{border:1px solid var(--line);border-radius:12px;background:#fff;margin:10px 0;padding:0 16px}
+    summary{cursor:pointer;font-weight:600;padding:14px 0;list-style:none}
+    summary::-webkit-details-marker{display:none}
+    summary::before{content:"＋";display:inline-block;width:1.4em;color:var(--accent)}
+    details[open] summary::before{content:"－"}
+    ul{margin:0 0 14px;padding-left:22px}li{margin:4px 0;color:var(--muted)}
+    .note{border-top:1px solid var(--line);margin-top:32px;padding-top:16px;font-size:14px}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <a class="back" href="../">← 返回小欧输入法</a>
+    <h1>开源致谢</h1>
+    <p>小欧输入法（opi）站在许多开源项目与社区的肩膀上。下面按类别列出实际使用的上游；词库与视觉资产的逐条许可见 <a href="../dictionaries/">词库许可</a> 与 <a href="../assets-license/">视觉资产许可</a>。</p>
+
+    <details open>
+      <summary>项目与许可</summary>
+      <ul>
+        <li>小欧输入法（opi）源代码以 MIT 许可开源；词库数据与视觉资产按各自许可分发。</li>
+        <li>简体主词库因并入 GPL-3.0 数据而整体按 GPL-3.0 分发；完整许可文本随仓库与安装包提供。</li>
+      </ul>
+    </details>
+
+    <details>
+      <summary>Rust 与开源 crate</summary>
+      <ul>
+        <li>Rust 语言、标准库与 Cargo 工具链（Rust 项目及其贡献者）</li>
+        <li>serde / serde_json（数据序列化）</li>
+        <li>memmap2（内存映射词库）</li>
+        <li>jni（Android JNI 绑定）</li>
+        <li>snow / x25519-dalek（Noise 协议与密钥交换）</li>
+        <li>postcard / sha2 / hex / getrandom / socket2（跨设备传输）</li>
+        <li>thiserror（错误处理）</li>
+        <li>windows-rs（Windows TSF / IMM32 绑定）</li>
+        <li>sherpa-rs（sherpa-onnx 的 Rust 绑定）</li>
+        <li>proptest / hound（测试与音频读取，开发期）</li>
+        <li>以及 Cargo.lock 中的全部传递依赖及其贡献者</li>
+      </ul>
+    </details>
+
+    <details>
+      <summary>词库与数据来源</summary>
+      <ul>
+        <li>rime-ice（雾凇拼音）、rime-essay、rime-luna-pinyin、rime-pinyin-simp、rime-terra-pinyin、rime-stroke、rime-wubi、rime-cangjie</li>
+        <li>chinese-xinhua（成语与歇后语）</li>
+        <li>THUOCL（清华大学开放中文词库）</li>
+        <li>康熙字典数据（shunshi-kangxi-core，Shunshi.AI）</li>
+        <li>OpenCC（简繁转换）、Unicode Unihan 与 Unicode 字符数据库</li>
+        <li>Google Books Ngram Frequency（英文联想词源）</li>
+        <li>百家姓（公有领域）与项目人工整理表</li>
+        <li>及相关贡献者；逐条来源与许可见 <a href="../dictionaries/">词库许可</a></li>
+      </ul>
+    </details>
+
+    <details>
+      <summary>平台与框架</summary>
+      <ul>
+        <li>Android：Kotlin、Jetpack Compose、AndroidX</li>
+        <li>Apple：Swift、UIKit、InputMethodKit、AppKit</li>
+        <li>HarmonyOS：ArkTS、ArkUI、HarmonyOS SDK</li>
+        <li>Linux：fcitx5</li>
+        <li>Windows：Text Services Framework（TSF）、IMM32、Win32</li>
+        <li>桌面：Compose for Desktop、Skiko、JNA</li>
+      </ul>
+    </details>
+
+    <details>
+      <summary>表情与颜文字</summary>
+      <ul>
+        <li>OpenMoji（CC BY-SA 4.0，OpenMoji 项目及贡献者）</li>
+        <li>rime_kaomoji_dict（MIT，Copyright (c) 2023 aoguai）</li>
+        <li>Unicode emoji 数据（Unicode 联盟）</li>
+        <li>小欧贴纸与图标为项目专有资产，商业使用需授权</li>
+      </ul>
+    </details>
+
+    <details>
+      <summary>语音识别</summary>
+      <ul>
+        <li>sherpa-onnx（k2-fsa 项目及贡献者）</li>
+        <li>SenseVoice（FunAudioLLM / 阿里通义实验室及贡献者）</li>
+        <li>Whisper（OpenAI 及贡献者）</li>
+        <li>Silero VAD（Silero 团队及贡献者）</li>
+        <li>ONNX Runtime（Microsoft 及贡献者）</li>
+      </ul>
+    </details>
+
+    <details>
+      <summary>跨设备传输</summary>
+      <ul>
+        <li>LocalSend（跨设备传输的交互与协议思路参考；LocalSend 项目及贡献者）</li>
+        <li>Noise Protocol Framework（Noise 协议规范与 snow 实现者）</li>
+      </ul>
+    </details>
+
+    <details>
+      <summary>其他</summary>
+      <ul>
+        <li>感谢所有在 GitHub、crates.io、Maven Central 等社区提交代码、数据与问题报告的贡献者。</li>
+      </ul>
+    </details>
+
+    <p class="note">许可与上游版本以仓库 <code>data/raw/LICENSES.md</code> 和各安装包内随附的许可文本为准。</p>
+  </main>
+</body>
+</html>

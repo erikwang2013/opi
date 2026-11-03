@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! 设置 → 语音（2026-11-02）：总开关（默认关）、语言路由（auto/zh/en）与两个
+//! 设置 → 语音（2026-11-02）：总开关（默认开）、语言路由（auto/zh/en）与两个
 //! 离线模型的下载卡。模型不进安装包，体积/许可在这里如实写出来；下载/校验状态由
 //! [SpeechModels] 单例持有，切页不丢进度。
 
@@ -45,7 +45,7 @@ internal fun SpeechPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Str
     SectionTitle("语音输入")
     SettingRow(
         "启用语音输入",
-        "本地离线识别；音频只在内存中处理，不落盘、不记录正文。默认关闭（配置键 SpeechEnabled）",
+        "本地离线识别；音频只在内存中处理，不落盘、不记录正文。默认开启（配置键 SpeechEnabled）",
         s.speechEnabled,
     ) {
         apply(s.copy(speechEnabled = it))
@@ -112,31 +112,7 @@ internal fun SpeechPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Str
         fontSize = 11.sp, color = Muted,
     )
 
-    SectionTitle("扩展词库（基础包）")
-    val dictState = DictPack.state
-    val dictInstalled = remember(dictState) { DictPack.installed() }
-    val dictPackaged = remember { DictPack.packaged() }
-    val dictRunning = dictState as? DictPack.State.Running
-    val dictFailed = dictState as? DictPack.State.Failed
-    Text(
-        when {
-            dictInstalled -> "已下载：繁体 / 笔画 / 五笔 / 生僻字索引（重开输入法生效）。"
-            dictPackaged -> "当前安装包已带扩展词库，无需下载。"
-            else -> "基础包未带扩展词库：下载约 ${DictPack.mb(DictPack.BYTES)} MB，解压到 ${DictPack.installRoot()}。"
-        },
-        fontSize = 12.sp, color = Muted,
-    )
-    if (dictRunning != null) {
-        Text("下载中 ${dictRunning.received * 100 / dictRunning.total.coerceAtLeast(1)}%", fontSize = 12.sp, color = Ink)
-    }
-    if (dictFailed != null) {
-        Text("下载失败：${dictFailed.message}", fontSize = 12.sp, color = ErrorRed)
-    }
-    if (!dictInstalled && !dictPackaged) {
-        TextButton(enabled = dictRunning == null, onClick = { DictPack.download() }) {
-            Text(if (dictRunning != null) "下载中" else "下载扩展词库", color = Teal)
-        }
-    }
+
 }
 
 @Composable

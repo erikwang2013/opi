@@ -17,7 +17,11 @@ pub const MAX_FRAME_BYTES: usize = 64 * 1024;
 /// 剪贴板事件分片大小，留出 postcard 头与 Noise tag 的余量。
 pub const FRAGMENT_BYTES: usize = 48 * 1024;
 pub const DEFAULT_DISCOVERY_PORT: u16 = 45888;
-pub const DISCOVERY_GROUP: Ipv4Addr = Ipv4Addr::new(239, 255, 42, 99);
+/// 链路本地组播（224.0.0.0/24）。路由器与 AP 必须转发这一段的组播；
+/// 2026-11-03 起改用 LocalSend 已在现场验证可达的 224.0.0.167。
+pub const DISCOVERY_GROUP: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 167);
+/// 旧组播组：只为兼容未升级的客户端，新客户端同时加入并发送。
+pub const DISCOVERY_GROUP_LEGACY: Ipv4Addr = Ipv4Addr::new(239, 255, 42, 99);
 pub const BEACON_INTERVAL: Duration = Duration::from_secs(2);
 pub(crate) const PEER_EXPIRY: Duration = Duration::from_secs(15);
 pub(crate) const FRAGMENT_EXPIRY: Duration = Duration::from_secs(30);
@@ -32,6 +36,8 @@ pub(crate) const CAP_TEXT: u8 = 1 << 0;
 pub(crate) const CAP_PAIRING: u8 = 1 << 1;
 /// 支持文件/文件夹传输（`TransferOffer` 一族 Wire 消息）。
 pub(crate) const CAP_TRANSFER: u8 = 1 << 2;
+/// 对方愿意在发现后自动配对（TOFU）；不置位的老客户端仍走手动 SAS。
+pub(crate) const CAP_AUTO_PAIR: u8 = 1 << 3;
 /// 探测报文：请求收到者立刻单播回一个普通 beacon。只在广播/组播被丢时用。
 pub(crate) const CAP_PROBE: u8 = 1 << 7;
 

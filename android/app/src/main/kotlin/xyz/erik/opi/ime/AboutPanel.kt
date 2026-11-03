@@ -68,6 +68,7 @@ fun AboutPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
     // 打不开链接时的就地反馈（IME 里没有 Snackbar 宿主；设置页那边走 toast，
     // 这里就把话写在面板里，别静默）。
     var note by remember { mutableStateOf("") }
+    var creditsOpen by remember { mutableStateOf(false) }
     Column(modifier = modifier.fillMaxSize().opiPanelBackground(p.panelBg)) {
         PanelHeader("关于", "", onClose)
         Column(
@@ -88,9 +89,14 @@ fun AboutPanel(onClose: () -> Unit, modifier: Modifier = Modifier) {
             Head("表情数据")
             Para("Emoji 取自 OpenMoji（CC BY-SA 4.0）；颜文字取自 rime_kaomoji_dict（MIT）；小欧贴纸/图标为项目专有资产，商业使用需授权")
             Head("开源致谢")
-            OPEN_SOURCE_CREDITS.forEach { section ->
-                Para("【${section.title}】")
-                section.items.forEach { Para("· $it") }
+            Link(if (creditsOpen) "收起开源致谢" else "展开开源致谢（Rust/crate、词库、平台、表情、语音、LocalSend）") {
+                creditsOpen = !creditsOpen
+            }
+            if (creditsOpen) {
+                OPEN_SOURCE_CREDITS.forEach { section ->
+                    Para("【${section.title}】")
+                    section.items.forEach { Para("· $it") }
+                }
             }
             Head("链接")
             Link("官网主页") { note = openExternal(context, ABOUT_HOME_URL) }

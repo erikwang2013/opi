@@ -183,8 +183,8 @@ jobs:
               echo "::error::完整包缺内置 Whisper 模型"; exit 1; }
           fi
           if [ "$TIER" = basic ]; then
-            ! grep -qF "assets/trad.opid" <<<"$entries" || {
-              echo "::error::基础包不应带 trad.opid"; exit 1; }
+            ! grep -qE 'assets/(luna|trad|stroke|wubi86|wubi98)\.[a-z]+|assets/(rare_index|kangxi)\.tsv' <<<"$entries" || {
+              echo "::error::基础包只含 app 代码，不应带任何词库"; exit 1; }
           fi
           if [ "$TIER" = full ]; then
             grep -qF "lib/arm64-v8a/libopi_asr_jni.so" <<<"$entries" || {

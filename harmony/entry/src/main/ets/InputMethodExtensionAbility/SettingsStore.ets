@@ -66,7 +66,7 @@ export class ImeSettings {
   transferEnabled: boolean = false;
   /** 0=中文，1=英文。 */
   lang: number = 0;
-  voiceEnabled: boolean = false;
+  voiceEnabled: boolean = true;
 }
 
 /** 绑定扩展上下文（每进程一次；失败时本模块退化成内存默认值）。 */
@@ -144,7 +144,7 @@ export function load(): ImeSettings {
   s.clipEnabled = readBool(KEY_CLIP, false);
   s.transferEnabled = readBool(KEY_TRANSFER, false);
   s.lang = readNumber(KEY_UI_LANGUAGE, 0);
-  s.voiceEnabled = readBool(KEY_VOICE, false);
+  s.voiceEnabled = readBool(KEY_VOICE, true);
   return s;
 }
 

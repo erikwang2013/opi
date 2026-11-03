@@ -85,7 +85,7 @@ final class OpiVoice {
 
     /// true = 用户点过麦克风；normal 包第一次点击会顺带下载模型。
     static var enabled: Bool {
-        get { OpiSettingsStore.bool("VoiceEnabled", default: false) }
+        get { OpiSettingsStore.bool("VoiceEnabled", default: true) }
         set { OpiSettingsStore.set("VoiceEnabled", newValue) }
     }
 

@@ -13,7 +13,7 @@ plugins {
 // ---------- 三档打包（2026-11-01；语音引擎 2026-11-02 调整）----------
 // full   = 语音引擎 + 两套模型 + 全部词库（模型首次使用从 assets 解压）
 // normal = 全部词库；语音引擎与模型在设置页按需下载
-// basic  = 仅拼音主词库；语音引擎、扩展词库、模型都在设置页按需下载
+// basic  = 只有 app 代码；全部词库、语音引擎、模型都在设置页按需下载
 val packageTier = providers.gradleProperty("opiPackageTier").getOrElse("normal").lowercase()
 require(packageTier in setOf("full", "normal", "basic")) {
     "opiPackageTier 只能是 full / normal / basic（当前 $packageTier）"
@@ -59,8 +59,8 @@ android {
         targetSdk = 34
         // 与发布 tag 对齐（此前 9 个 tag 期间 versionCode 一直是 1、versionName 一直是
         // "1.0.0"：APK 既无法被识别，也无法覆盖安装升级）。
-        versionCode = 117
-        versionName = "1.31.6"
+        versionCode = 118
+        versionName = "1.31.7"
         buildConfigField("String", "PACKAGE_TIER", "\"$packageTier\"")
         buildConfigField("boolean", "ASR_MODELS_BUNDLED", "${packageTier == "full"}")
         buildConfigField("boolean", "ASR_ENGINE_BUNDLED", "${packageTier == "full"}")
@@ -156,8 +156,10 @@ if (packageTier == "full") {
     android.sourceSets.getByName("main").assets.srcDir(asrBundleDir.get())
 }
 if (packageTier == "basic") {
+    // 基础包 = 只有 app 代码，不随包任何词库（2026-11-03 用户裁决）：
+    // 连拼音主词库 luna.opid 也在设置页下载。
     val optionalAssets = listOf(
-        "trad.opid", "stroke.opid", "wubi86.opid", "wubi98.opid",
+        "luna.opid", "trad.opid", "stroke.opid", "wubi86.opid", "wubi98.opid",
         "rare_index.tsv", "kangxi.tsv",
     )
     tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }

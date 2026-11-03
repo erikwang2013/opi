@@ -281,7 +281,7 @@ internal class SpeechHostImpl {
             val engine = cfg.language.engine
             update(SpeechUi(phase = nextSpeechPhase(ui.phase, SpeechTransition.START), engine = engine))
             if (!cfg.enabled) {
-                fail("语音输入已关闭：打开 设置 → 语音 启用（默认关闭）")
+                fail("语音输入已关闭：打开 设置 → 语音 打开总开关")
                 return
             }
             val h = ensureEngine(engine, updateErrors = true, startEpoch = myEpoch) ?: return
