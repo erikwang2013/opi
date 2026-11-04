@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
+import xyz.erik.opi.BuildConfig
 
 /**
  * 新版本检测（2026-10-22）：数据源是官网的 `version.json`，失败再兜底解析首页的
@@ -175,6 +176,8 @@ internal fun httpGet(url: String, timeoutMs: Int): String {
         connectTimeout = timeoutMs
         readTimeout = timeoutMs
         requestMethod = "GET"
+        // GitHub API 对无 User-Agent 的请求返回 403；语音引擎 release 兜底也走这里。
+        setRequestProperty("User-Agent", "opi/${BuildConfig.VERSION_NAME}")
     }
     try {
         if (conn.responseCode !in 200..299) error("HTTP ${conn.responseCode}")
