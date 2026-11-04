@@ -50,7 +50,16 @@ pub(crate) fn run_responder(inner: Arc<NodeInner>, mut stream: TcpStream, header
 }
 
 fn finish(inner: &Arc<NodeInner>, peer: InstanceId, outcome: PairOutcome) {
-    inner.lock().pairing_attempts.remove(&peer);
+    {
+        let mut core = inner.lock();
+        core.pairing_attempts.remove(&peer);
+        if outcome.trusted {
+            // 重配成功后必须清掉退避：supervisor 看到 attempts>=2 会再次走
+            // 「重配」分支，永远轮不到建会话。旧实现因此会在双方已重新信任后
+            // 反复配对，表现为 40 秒都连不上。
+            core.backoff.remove(&peer);
+        }
+    }
     if !outcome.trusted {
         // 自动连接失败时别每 100ms 重试一次；与断线重连共用退避表。
         inner.schedule_backoff(peer);
