@@ -62,9 +62,10 @@ internal fun SpeechOverlay(
         LaunchedEffect(window, screen) {
             statusBarGuard("语音浮层 SkipTaskbar") { SkipTaskbar.apply(window) }
             // 多显示器：放到鼠标所在屏幕底部，而不是永远主屏。
+            // 80 会让浮层压住底部状态栏（用户看不到话筒/其他按钮）；抬到条上方留出空隙。
             window.setLocation(
                 screen.x + (screen.width - window.width) / 2,
-                screen.y + screen.height - window.height - 80,
+                screen.y + screen.height - window.height - 160,
             )
             window.toFront()
         }

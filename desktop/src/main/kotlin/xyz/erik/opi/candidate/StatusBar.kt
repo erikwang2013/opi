@@ -156,11 +156,11 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
     // `mode = barMode(st)`）。两者不会打架：`opi-ctl mode` 只在引擎切完之后才返回新 token，
     // 所以下一拍 state 必然与它一致。初值 = 拼音（用户裁决的默认档；首拍立即补齐）。
     var mode by remember { mutableStateOf(MODE_DEFAULT) }
+    val speechPhase = rememberSpeechPhase()
     var settingsOpen by remember { mutableStateOf(false) }
     var vkOpen by remember { mutableStateOf(false) }
     var symbolsOpen by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
-
     // 1s 轮询两件事，并进这一个循环：设置文件（设置窗可能在**另一个进程**里，进程间
     // 没有通知通道）+ 输入法状态（简/繁、中/英、月相要跟着真实状态走，用户裁决
     // 2026-10-10 深夜）。一拍 = 一次小文件读 + 一个短命进程，代价可忽略。
@@ -460,7 +460,7 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(metrics.gap),
                         ) {
-                            for (b in buttons) BarButton(b, imeState, mode, metrics, windowState, window, ::onButton)
+                            for (b in buttons) BarButton(b, imeState, mode, speechPhase, metrics, windowState, window, ::onButton)
                         }
                     } else {
                         // 提示期间**替掉**按钮列（而不是盖在上面）：否则按钮还在下面接着点击，

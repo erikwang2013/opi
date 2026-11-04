@@ -54,6 +54,7 @@ internal fun BarButton(
     b: StatusBarButton,
     st: ImeState,
     mode: String,
+    speechPhase: SpeechPhase,
     metrics: BarMetrics,
     windowState: WindowState,
     barWindow: java.awt.Window,
@@ -67,12 +68,12 @@ internal fun BarButton(
     // 英文专业键常亮（2026-10-19）：否则切了 pro 看不出任何变化。用既有 hover 色，
     // 不新造颜色/角色（见 SkinPalette.kt 的角色映射）。键帽本身是固定白底（设计图），
     // 这一圈 hover 只露在键帽外缘 —— 激活态仍可见，且不染色键帽。
-    val speechPhase = if (b == StatusBarButton.MIC) SpeechHost.ui.phase else SpeechPhase.IDLE
-    val speechOn = speechPhase == SpeechPhase.PREPARING ||
-        speechPhase == SpeechPhase.RECORDING ||
-        speechPhase == SpeechPhase.RECOGNIZING
-    val active = (b == StatusBarButton.ENPRO && st.englishPro) ||
-        (b == StatusBarButton.MIC && speechOn)
+    val speechOn = b == StatusBarButton.MIC && (
+        speechPhase == SpeechPhase.PREPARING ||
+            speechPhase == SpeechPhase.RECORDING ||
+            speechPhase == SpeechPhase.RECOGNIZING
+        )
+    val active = (b == StatusBarButton.ENPRO && st.englishPro) || speechOn
     var tip by remember { mutableStateOf(false) }
     // 按钮在条窗内的像素矩形 —— 提示窗要靠它换算屏幕坐标。
     var anchor by remember { mutableStateOf(Rect.Zero) }
