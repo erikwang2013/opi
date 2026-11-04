@@ -90,8 +90,10 @@ impl NodeInner {
             },
         );
         core.connecting.remove(&peer);
-        // 保留 backoff，让短命会话在重连时继续指数退避；稳定会话结束时
-        // unregister_session 会把 attempts 归零。
+        // 连接成功即清掉失败计数：否则启动期的几次抖动会把 attempts 抬高，
+        // 刚连上就掉线（重装/清数据）时要等 16/32 秒才重配。真短命会话掉线后
+        // unregister_session 会从 0 重新计到 1，仍有 2 秒退避，不会热循环。
+        core.backoff.remove(&peer);
         Some((generation, core.pending_for_session(peer)))
     }
 
