@@ -92,7 +92,7 @@ internal fun SpeechOverlay(
                     fontSize = 13.sp, color = palette.fg,
                 )
                 SpeechPhase.RECORDING -> {
-                    Text("正在录音…点「停止并识别」或再点话筒结束", fontSize = 13.sp, color = palette.fg)
+                    Text("正在录音…每 3 秒自动上屏一段；点「停止」结束", fontSize = 13.sp, color = palette.fg)
                     Box(
                         Modifier.fillMaxWidth().height(6.dp)
                             .background(palette.line),
@@ -127,7 +127,7 @@ internal fun SpeechOverlay(
                 when (ui.phase) {
                     SpeechPhase.RECORDING -> {
                         TextButton(onClick = { SpeechHost.stop() }) {
-                            Text("停止并识别", color = palette.accent)
+                            Text("停止", color = palette.accent)
                         }
                         TextButton(onClick = { SpeechHost.cancel() }) { Text("取消", color = palette.accent) }
                     }

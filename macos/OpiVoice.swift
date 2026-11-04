@@ -27,59 +27,6 @@ enum OpiVoiceState {
 }
 
 /// opi-asr 的薄桥。句柄由 Rust 分配，destroy 必须最后调用且不能与其它调用并发。
-final class OpiAsrHandle {
-    private var raw: UnsafeMutableRawPointer?
-
-    init(configJSON: String) throws {
-        raw = configJSON.withCString { opi_asr_create($0) }
-        guard raw != nil else {
-            throw OpiVoiceError.message("语音引擎创建失败：\(OpiAsrHandle.errorText(nil))")
-        }
-    }
-
-    deinit {
-        if let raw { opi_asr_destroy(raw) }
-    }
-
-    func loadModel() -> Int32 { opi_asr_load_model(raw) }
-    func start() -> Int32 { opi_asr_start(raw) }
-    func finish() -> Int32 { opi_asr_finish(raw) }
-    func cancel() -> Int32 { opi_asr_cancel(raw) }
-
-    func feed(_ samples: UnsafePointer<Int16>, count: Int) -> Int32 {
-        let bytes = count * MemoryLayout<Int16>.size
-        return samples.withMemoryRebound(to: UInt8.self, capacity: bytes) {
-            opi_asr_feed_pcm(raw, $0, Int32(bytes))
-        }
-    }
-
-    /// 非阻塞。返回 nil = 当前没有事件。
-    func poll() -> [String: Any]? {
-        let cap = Int(opi_asr_max_event_bytes())
-        guard cap > 0 else { return nil }
-        var buffer = [CChar](repeating: 0, count: cap)
-        let length = buffer.withUnsafeMutableBufferPointer {
-            opi_asr_poll_event(raw, $0.baseAddress, Int32(cap))
-        }
-        guard length > 0 else { return nil }
-        let json = buffer.withUnsafeBufferPointer { String(cString: $0.baseAddress!) }
-        guard let data = json.data(using: .utf8) else { return nil }
-        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-    }
-
-    func lastError() -> String { OpiAsrHandle.errorText(raw) }
-
-    private static func errorText(_ handle: UnsafeMutableRawPointer?) -> String {
-        let cap = 4096
-        var buffer = [CChar](repeating: 0, count: cap)
-        let length = buffer.withUnsafeMutableBufferPointer {
-            opi_asr_last_error(handle, $0.baseAddress, Int32(cap))
-        }
-        guard length > 0 else { return "未知错误" }
-        return buffer.withUnsafeBufferPointer { String(cString: $0.baseAddress!) }
-    }
-}
-
 final class OpiVoice {
     static let shared = OpiVoice()
 
@@ -107,6 +54,8 @@ final class OpiVoice {
     private var cancelLock = NSLock()
     private var downloadGeneration = 0
     private var lastProgressAt = Date.distantPast
+    /// 连续听写已上屏的 VAD 段数；final 不再重复整段。
+    private var segmentsCommitted = 0
 
     private(set) var state: OpiVoiceState = .idle
     private(set) var progress: Double = 0
@@ -308,6 +257,7 @@ final class OpiVoice {
             fail("麦克风启动失败：\(error.localizedDescription)")
             return
         }
+        segmentsCommitted = 0
         state = .recording
         lastError = ""
         refreshBar()
@@ -413,6 +363,13 @@ final class OpiVoice {
     private func poll() {
         while let event = handle?.poll() {
             switch event["type"] as? String {
+            case "segment":
+                let text = (event["text"] as? String ?? "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !text.isEmpty {
+                    segmentsCommitted += 1
+                    OpiClientHub.shared.commit(text)
+                }
             case "final":
                 let text = (event["text"] as? String ?? "")
                     .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -422,7 +379,7 @@ final class OpiVoice {
                 refreshBar()
                 if text.isEmpty {
                     OpiStatusBar.shared.showNotice("没有识别到语音内容")
-                } else {
+                } else if segmentsCommitted == 0 {
                     OpiClientHub.shared.commit(text)
                 }
                 return
@@ -490,7 +447,7 @@ final class OpiVoice {
             "sense_voice_dir": "sensevoice", "whisper_dir": "whisper-small.en",
             "vad_model": "vad/silero_vad.onnx", "language": engine.language,
             "num_threads": 2, "verify_models": true,
-            "max_segment_ms": 30_000, "vad_min_silence_ms": 500,
+            "max_segment_ms": 3000, "vad_min_silence_ms": 500,
             "vad_threshold": 0.5,
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: config) else { return nil }

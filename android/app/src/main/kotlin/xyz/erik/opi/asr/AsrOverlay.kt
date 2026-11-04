@@ -174,7 +174,7 @@ private fun titleOf(state: AsrUiState): String = when (state.phase) {
 
 private fun subtitleOf(state: AsrUiState, pack: AsrModelPack): String = when (state.phase) {
     AsrPhase.PREPARING -> state.message ?: "首次使用需加载约 228 MB 本地模型"
-    AsrPhase.LISTENING -> "说完点“停止”；取消不会上屏"
+    AsrPhase.LISTENING -> "每 3 秒自动上屏一段；点“停止”结束，取消不会上屏"
     AsrPhase.TRANSCRIBING -> "本地离线识别，请稍候"
     AsrPhase.MODEL_MISSING ->
         state.message ?: ("${pack.title} ${AsrModels.mb(pack.bytes + AsrModels.VAD_BYTES)}，" +

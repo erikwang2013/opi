@@ -258,6 +258,8 @@ class SpeechTest {
         assertEquals(2L, (cfg["num_threads"] as JVal.JNum).v)
         // 下载时已逐文件校验 SHA-256；每次加载别再全量哈希 239/358MB。
         assertEquals(JVal.JBool(false), cfg["verify_models"])
+        // 连续听写：VAD 每 3 秒收一段，segment 事件随段上屏。
+        assertEquals(3000L, (cfg["max_segment_ms"] as JVal.JNum).v)
         assertEquals("zh", (parseLine(asrConfigJson(root, SpeechLanguage.ZH))!!["language"] as JVal.JStr).v)
         assertEquals("auto", (parseLine(asrConfigJson(root, SpeechLanguage.AUTO))!!["language"] as JVal.JStr).v)
     }

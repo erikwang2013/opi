@@ -69,6 +69,7 @@ let runningSession: Promise<void> | null = null;
 let finalText: string = '';
 let gotFinal: boolean = false;
 let pendingError: string = '';
+let segmentsCommitted: number = 0;
 
 function publish(): void {
   AppStorage.setOrCreate<number>(VOICE_KEY, phase as number);
@@ -204,7 +205,15 @@ function drain(h: number, gen: number): void {
       pendingError = t('语音事件解析失败');
       return;
     }
-    if (event.type === 'final') {
+    if (event.type === 'segment') {
+      const segment: string = event.text !== undefined ? event.text.trim() : '';
+      if (segment.length > 0) {
+        segmentsCommitted++;
+        if (commit !== null) {
+          commit(segment);
+        }
+      }
+    } else if (event.type === 'final') {
       finalText = event.text !== undefined ? event.text : '';
       gotFinal = true;
     } else if (event.type === 'error') {
@@ -279,7 +288,7 @@ async function transcribe(h: number, gen: number): Promise<void> {
         failText(t('没有识别到语音，请重试'));
         return;
       }
-      if (commit !== null) {
+      if (commit !== null && segmentsCommitted === 0) {
         commit(text);
       }
       setPhase(VoicePhase.Ready, '');
@@ -328,7 +337,7 @@ async function runSession(c: common.Context, gen: number): Promise<void> {
       AsrNative.cancel(h);
       return;
     }
-    setPhase(VoicePhase.Listening, t('正在听… 再次点麦克风结束'));
+    setPhase(VoicePhase.Listening, t('正在听… 每 3 秒自动上屏一段，再点麦克风结束'));
     await readLoop(h, gen);
     if (gen !== generation || (request as Request) !== Request.Stop) {
       return;
@@ -363,6 +372,7 @@ export function start(): void {
     return;
   }
   const gen: number = ++generation;
+  segmentsCommitted = 0;
   request = Request.Run;
   setPhase(VoicePhase.Preparing, t('正在准备本地语音模型…'));
   runningSession = runSession(c, gen);

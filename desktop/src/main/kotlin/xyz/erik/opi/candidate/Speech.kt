@@ -25,32 +25,6 @@ import java.nio.file.Path
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 
-internal enum class SpeechPhase { IDLE, PREPARING, RECORDING, RECOGNIZING, DONE, ERROR }
-
-internal data class SpeechUi(
-    val phase: SpeechPhase = SpeechPhase.IDLE,
-    val engine: SpeechEngine = SpeechEngine.SENSEVOICE,
-    /** 0..1，来自 Rust 的 `level` 事件（rms_db -60..0）。 */
-    val level: Float = 0f,
-    /** 识别中的临时文本 / 最终文本。 */
-    val text: String = "",
-    val error: String = "",
-)
-
-/** 状态机的纯转移表（单测钉住；浮层与宿主共用）。 */
-internal enum class SpeechTransition { START, READY, STOP, FINAL, FAIL, CANCEL, DISMISS }
-
-internal fun nextSpeechPhase(from: SpeechPhase, t: SpeechTransition): SpeechPhase = when (t) {
-    SpeechTransition.START -> SpeechPhase.PREPARING
-    // READY/STOP/FINAL 只接受「上一步确实在那一档」的转移：迟到的 final 不能把
-    // 已经取消的会话重新点亮。
-    SpeechTransition.READY -> if (from == SpeechPhase.PREPARING) SpeechPhase.RECORDING else from
-    SpeechTransition.STOP -> if (from == SpeechPhase.RECORDING) SpeechPhase.RECOGNIZING else from
-    SpeechTransition.FINAL -> if (from == SpeechPhase.RECOGNIZING) SpeechPhase.DONE else from
-    SpeechTransition.FAIL -> SpeechPhase.ERROR
-    SpeechTransition.CANCEL, SpeechTransition.DISMISS -> SpeechPhase.IDLE
-}
-
 private sealed interface SpeechCommand {
     // 开始/停止在入队时就定死：外层先把 ui.phase 置成 PREPARING，若 worker 再按
     // phase 判断「现在是不是该取消」，会把自己刚置的准备态当成第二次点击而立刻取消。
@@ -80,6 +54,9 @@ private class Session(
     val epoch: Int,
 ) {
     var deadlineMs: Long = 0L
+    /** 连续听写已上屏的 VAD 段数；final 只做收尾，不再重提交整段。 */
+    var segmentsCommitted: Int = 0
+    var segmentText: String = ""
 }
 
 /** `AsrConfig::from_json` 的口径；路径全部绝对（模型根由桌面自己定）。 */
@@ -89,6 +66,8 @@ internal fun asrConfigJson(root: Path, language: SpeechLanguage): String = build
     append(",\"whisper_dir\":\"whisper-small.en\"")
     append(",\"vad_model\":\"vad/silero_vad.onnx\"")
     append(",\"language\":").append(jsonString(language.value))
+    // 连续听写：VAD 每 3 秒强制收一段，segment 事件随时上屏；最后 final 不再重复整段。
+    append(",\"max_segment_ms\":3000")
     append(",\"num_threads\":2,\"verify_models\":false}")
 }
 
@@ -170,7 +149,7 @@ internal class SpeechHostImpl {
         }
     }
 
-    /** 浮层里的「停止并识别」：只对正在录音的会话生效。 */
+    /** 浮层里的「停止」：只对正在录音的会话生效。 */
     fun stop() {
         if (ui.phase == SpeechPhase.RECORDING) commands.offer(SpeechCommand.Stop)
     }
@@ -390,7 +369,18 @@ internal class SpeechHostImpl {
                     true
                 }
                 "segment" -> {
-                    eventText(json)?.takeIf { it.isNotEmpty() }?.let { update(ui.copy(text = it)) }
+                    val text = eventText(json).orEmpty().trim()
+                    if (text.isNotEmpty()) {
+                        s.segmentsCommitted++
+                        s.segmentText += text
+                        update(ui.copy(text = s.segmentText))
+                        val err = try {
+                            s.commit(text)
+                        } catch (t: Throwable) {
+                            "上屏通道异常：${t.message ?: t.javaClass.simpleName}"
+                        }
+                        if (err != null) update(ui.copy(error = "上屏失败：$err"))
+                    }
                     true
                 }
                 "final" -> {
@@ -418,7 +408,8 @@ internal class SpeechHostImpl {
                     error = "",
                 ),
             )
-            if (text.isBlank()) return
+            // 3 秒连续听写的段已逐段上屏；final 只是汇总展示，不能再提交一次。
+            if (text.isBlank() || s.segmentsCommitted > 0) return
             val err = try {
                 s.commit(text)
             } catch (t: Throwable) {

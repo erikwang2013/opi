@@ -21,6 +21,7 @@ interface AsrConfigJson {
   language: string;
   verify_models: boolean;
   num_threads: number;
+  max_segment_ms: number;
 }
 
 const decoder: util.TextDecoder = util.TextDecoder.create('utf-8');
@@ -30,7 +31,8 @@ export function create(modelsDir: string): number {
     models_dir: modelsDir,
     language: 'auto',
     verify_models: false, // 下载/内置拷贝时已校验 SHA-256；加载时只查大小，不重算 239MB
-    num_threads: 2
+    num_threads: 2,
+    max_segment_ms: 3000 // 连续听写：每 3 秒收一段
   };
   return opiime.asrCreate(JSON.stringify(cfg));
 }

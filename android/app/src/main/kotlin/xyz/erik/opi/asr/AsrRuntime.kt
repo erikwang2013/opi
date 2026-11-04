@@ -18,19 +18,12 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
-import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import xyz.erik.opi.settings.SettingsActivity
 import org.json.JSONObject
 import java.util.concurrent.Executors
-
-/** 键盘上的话筒入口；[available] = 原生库可加载（32 位 ABI 不打包 → 隐藏）。 */
-internal data class AsrMic(val available: Boolean, val start: () -> Unit)
-
-/** 六个空格键共用的入口。null（预览/单测/32 位设备）= 不显示话筒。 */
-internal val LocalAsrMic = compositionLocalOf<AsrMic?> { null }
 
 /**
  * 语音输入运行时：长按 → 权限/模型门 → 模型装载 → 录音 → 识别 → 上屏。
@@ -78,6 +71,8 @@ internal object AsrRuntime {
     /** 只在 [worker] 上读写。 */
     private var handle = 0L
     private var loadedKey = ""
+    /** 本次会话已经上屏的 VAD 段数；final 不再重复提交整段。 */
+    private var segmentsSeen = 0
     private var focusRequest: AudioFocusRequest? = null
     private var eventBuf: ByteArray? = null
 
@@ -159,6 +154,7 @@ internal object AsrRuntime {
             AsrGate.READY -> Unit
         }
         val gen = generation.begin()
+        segmentsSeen = 0
         request = Request.RUN
         uiState = AsrUiState(AsrPhase.PREPARING, "正在准备本地语音模型…")
         worker.execute { runSession(context, gen, whisper) }
@@ -308,6 +304,8 @@ internal object AsrRuntime {
             // 下载时已逐文件校验 SHA-256；这里只让加载器查大小，避免每次长按
             // 对 239/358MB 重算哈希卡住 PREPARING。
             .put("verify_models", false)
+            // 连续听写：VAD 最长 3 秒收一段，segment 事件逐段上屏；final 只收尾。
+            .put("max_segment_ms", 3000)
             .put("num_threads", 2)
             .toString()
         val created = AsrNative.create(config)
@@ -397,6 +395,13 @@ internal object AsrRuntime {
     }
 
     private fun complete(gen: Int, raw: String) {
+        if (segmentsSeen > 0) {
+            // 连续听写的各段已经在 segment 事件里提交，final 的整段文本只用于收尾。
+            main.post {
+                if (generation.isCurrent(gen)) uiState = reduce(uiState, AsrEvent.Final(true))
+            }
+            return
+        }
         val text = asrCommitText(raw)
         if (text == null) {
             post(gen, AsrEvent.Fail("没有识别到语音，请重试"))
@@ -425,6 +430,18 @@ internal object AsrRuntime {
             }
             when (event.optString("type")) {
                 "level" -> post(gen, AsrEvent.Level(event.optDouble("rms_db", -60.0).toFloat()))
+                "segment" -> {
+                    val text = asrCommitText(event.optString("text"))
+                    if (text != null) {
+                        segmentsSeen++
+                        main.post {
+                            if (generation.isCurrent(gen)) {
+                                runCatching { commit?.invoke(text) }
+                                    .onFailure { Log.w(TAG, "segment commit failed", it) }
+                            }
+                        }
+                    }
+                }
                 "final" -> return Polled.Final(event.optString("text"))
                 "error" -> return Polled.Error(
                     event.optString("message").ifEmpty { event.optString("code") },
