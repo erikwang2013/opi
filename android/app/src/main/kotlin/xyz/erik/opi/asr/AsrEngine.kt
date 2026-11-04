@@ -29,8 +29,22 @@ internal object AsrEngine {
     /** 下载前的展示值（压缩包约 8 MB）；真实大小以 version.json 为准。 */
     const val APPROX_BYTES = 8_000_000L
 
-    fun abi(): String? =
-        Build.SUPPORTED_ABIS.firstOrNull { it == "arm64-v8a" || it == "x86_64" }
+    /**
+     * 引擎只有 64 位库。`SUPPORTED_ABIS` 是**设备**能力，不代表当前进程是 64 位：
+     * 基础/普通包带 armeabi-v7a，32 位进程若按设备列表下载 arm64 库，`System.load`
+     * 必然失败，界面却显示「已下载」。先按进程位宽过滤。
+     */
+    fun abi(): String? {
+        if (!processIs64Bit()) return null
+        return Build.SUPPORTED_ABIS.firstOrNull { it == "arm64-v8a" || it == "x86_64" }
+    }
+
+    private fun processIs64Bit(): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            android.os.Process.is64Bit()
+        } else {
+            System.getProperty("os.arch").orEmpty().contains("64")
+        }
 
     fun spec(): EngineSpec? {
         val abi = abi() ?: return null
@@ -82,12 +96,19 @@ internal object AsrEngine {
                         part.copyTo(dst, overwrite = true)
                         part.delete()
                     }
+                    markExecutable(dst)
                 }
             }
             ready(context)
         } catch (t: Throwable) {
             false
         }
+    }
+
+    /** 下载目录里的 .so 必须带执行位；旧版本下载的文件没有，加载前也要补。 */
+    fun markExecutable(file: File) {
+        if (!file.canExecute()) runCatching { file.setExecutable(true, false) }
+        if (!file.canRead()) runCatching { file.setReadable(true, true) }
     }
 
     fun componentKey(): String? = spec()?.let { "asr-engine-android-${it.abi}" }

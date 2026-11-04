@@ -4,7 +4,6 @@
 package xyz.erik.opi.asr
 
 import android.content.Context
-import android.os.Build
 import java.io.File
 import java.util.Locale
 
@@ -177,8 +176,7 @@ internal object AsrModels {
     fun vadUrls(): List<String> = listOf(VAD_OFFICIAL, VAD_SITE, VAD_PROXY)
 
     /** 原生库只打包 64 位（armeabi-v7a 内存风险）：设置页据此隐藏无意义的下载入口。 */
-    fun abiSupported(): Boolean =
-        Build.SUPPORTED_ABIS.any { it == "arm64-v8a" || it == "x86_64" }
+    fun abiSupported(): Boolean = AsrEngine.abi() != null
 
     fun mb(bytes: Long): String = String.format(Locale.ROOT, "%.0f MB", bytes / 1048576.0)
 }

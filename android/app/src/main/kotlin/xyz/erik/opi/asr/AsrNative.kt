@@ -23,6 +23,11 @@ internal object AsrNative {
     @Volatile
     private var ready = false
 
+    /** 最近一次下载引擎加载失败的原因；已下载但加载失败时用于替代「未下载」误报。 */
+    @Volatile
+    var lastLoadError: String? = null
+        private set
+
     /** 已加载（完整包或已下载）。 */
     val loaded: Boolean get() = ready
 
@@ -33,6 +38,7 @@ internal object AsrNative {
     @Synchronized
     fun ensureLoaded(context: Context): Boolean {
         if (ready) return true
+        lastLoadError = null
         if (runCatching { System.loadLibrary("opi_asr_jni") }.isSuccess) {
             ready = true
             return true
@@ -41,11 +47,14 @@ internal object AsrNative {
         if (!AsrEngine.ready(context)) return false
         return try {
             for (name in AsrEngine.LIBS) {
-                System.load(File(dir, name).absolutePath)
+                val file = File(dir, name)
+                AsrEngine.markExecutable(file)
+                System.load(file.absolutePath)
             }
             ready = true
             true
         } catch (t: Throwable) {
+            lastLoadError = t.message ?: t.javaClass.simpleName
             Log.w(TAG, "downloaded ASR engine load failed: ${t.message}")
             false
         }

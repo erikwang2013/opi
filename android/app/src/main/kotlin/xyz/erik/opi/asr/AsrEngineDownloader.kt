@@ -172,6 +172,7 @@ internal object AsrEngineDownloader {
                 val out = File(tmp, name)
                 out.outputStream().buffered().use { zin.copyTo(it) }
                 if (out.length() <= 0L) throw IOException("语音引擎文件为空：$name")
+                AsrEngine.markExecutable(out)
                 found += name
             }
         }

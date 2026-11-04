@@ -122,12 +122,13 @@ internal object AsrRuntime {
         val pack = AsrModels.selected(context, whisper)
         if (!AsrNative.ensureLoaded(context)) {
             val modelsReady = AsrModels.packReady(context, pack) || AsrBundled.ready(context, pack)
+            val loadError = AsrNative.lastLoadError
             uiState = AsrUiState(
                 AsrPhase.MODEL_MISSING,
-                if (modelsReady) {
-                    "语音引擎未下载（语音模型已就绪）。打开「设置 → 语音」下载语音引擎后重试。"
-                } else {
-                    "语音引擎尚未下载。打开「设置 → 语音」下载语音引擎与模型后重试。"
+                when {
+                    loadError != null -> "语音引擎已下载但加载失败：$loadError"
+                    modelsReady -> "语音引擎未下载（语音模型已就绪）。打开「设置 → 语音」下载语音引擎后重试。"
+                    else -> "语音引擎尚未下载。打开「设置 → 语音」下载语音引擎与模型后重试。"
                 },
             )
             return
