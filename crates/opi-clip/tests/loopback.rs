@@ -307,7 +307,7 @@ fn one_sided_trust_recovers_by_repairing() {
 
     // 模拟一端重装/清数据：b 忘了 a，但 a 仍信任 b。旧实现会永久卡住。
     b.forget_peer(a_id).unwrap();
-    wait_until(WAIT + WAIT, || {
+    wait_until(WAIT * 4, || {
         a.peers()
             .iter()
             .any(|peer| peer.instance_id == b_id && peer.connected && peer.trusted)

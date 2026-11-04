@@ -414,3 +414,19 @@ fn switch_language_preserves_the_pending_buffer() {
     e.set_scheme(Scheme::Full);
     assert_eq!(e.buffer(), "", "set_scheme 照旧清缓冲（两条路判据不同）");
 }
+
+#[test]
+fn nine_key_can_type_name_word() {
+    let mut e = Engine::new(
+        dict(&[("name", "那么", 5000), ("na", "那", 4000), ("me", "么", 3000)]),
+        no_symbols(),
+        false,
+    );
+    e.set_scheme(Scheme::Nine);
+    type_str(&mut e, "6263"); // n a m e
+    let got = texts(&e);
+    assert!(
+        got.contains(&"那么".to_string()),
+        "9 键 6263 应命中 name⇒那么，实际 {got:?}"
+    );
+}

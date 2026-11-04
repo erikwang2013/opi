@@ -110,3 +110,20 @@ fn nine_key_composition_is_deterministic() {
         assert_eq!(first, second, "{digits} 两次结果必须逐条相同");
     }
 }
+
+#[test]
+fn nine_key_name_reaches_name_word() {
+    let mut e = real_engine();
+    let got = texts(&mut e, "6263", 50);
+    let rank = got.iter().position(|t| t == "那么").map(|i| i + 1);
+    eprintln!("6263 候选前 20：{:?}；那么 rank={:?}", &got[..got.len().min(20)], rank);
+    assert!(rank.is_some(), "6263 候选里没有 那么");
+}
+
+#[test]
+fn nine_key_name_letters_as_alternatives() {
+    let mut e = real_engine();
+    let got = texts(&mut e, "name", 50);
+    eprintln!("name(字母) 候选前 20：{:?}", &got[..got.len().min(20)]);
+    assert!(got.iter().any(|t| t == "那么"), "字母 name 在 Nine 下也应命中那么");
+}
