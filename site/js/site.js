@@ -389,7 +389,7 @@
           ['normal', zh ? '普通包' : 'Normal',
             zh ? '全部词库；引擎与模型按需下载' : 'All dictionaries; engine and models on demand'],
           ['basic', zh ? '基础包' : 'Basic',
-            zh ? '仅 app 代码；词库、引擎、模型按需下载' : 'App code only; dictionaries, engine and models on demand'],
+            zh ? 'app + 拼音主词库；扩展词库、引擎、模型按需下载' : 'App + core pinyin dictionary; extras, engine and models on demand'],
         ];
         const platforms = [
           ['android', 'Android · APK'],
