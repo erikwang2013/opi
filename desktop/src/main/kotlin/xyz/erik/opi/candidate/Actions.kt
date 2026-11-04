@@ -145,7 +145,11 @@ fun runExternal(cmd: List<String>, timeoutMs: Long = 3000): String? {
  */
 fun desktopSymbolCommit(text: String): String? =
     if (isWindows()) controlCommit(text)
-    else runExternal(listOf("opi-ctl", "insert", text))
+    else runExternal(listOf(opiCtlBinary(), "insert", text))
+
+/** jpackage/autostart 的 PATH 偶尔不含 /usr/bin：包里固定装在这里，存在就用绝对路径。 */
+private fun opiCtlBinary(): String =
+    if (java.io.File("/usr/bin/opi-ctl").canExecute()) "/usr/bin/opi-ctl" else "opi-ctl"
 
 // ---------- 符号/表情搜索（2026-10-13） ----------
 
