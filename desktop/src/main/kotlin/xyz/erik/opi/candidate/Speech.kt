@@ -170,6 +170,11 @@ internal class SpeechHostImpl {
         }
     }
 
+    /** 浮层里的「停止并识别」：只对正在录音的会话生效。 */
+    fun stop() {
+        if (ui.phase == SpeechPhase.RECORDING) commands.offer(SpeechCommand.Stop)
+    }
+
     fun cancel() {
         epoch++
         update(SpeechUi())
