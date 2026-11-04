@@ -21,7 +21,7 @@
 
   <rect width="1180" height="852" fill="#FBFAF6"/>
 
-  <g font-family="'Noto Sans CJK SC','Source Han Sans SC','PingFang SC','Microsoft YaHei',-apple-system,'Segoe UI',sans-serif">
+  <g font-family="'Noto Sans CJK SC','Source Han Sans SC','Noto Sans SC','DejaVu Sans',sans-serif">
 
     <!-- ══════════════ 标题 ══════════════ -->
     <text x="590" y="40" text-anchor="middle" font-size="25" font-weight="700" fill="#22272E">OPI 架构设计</text>

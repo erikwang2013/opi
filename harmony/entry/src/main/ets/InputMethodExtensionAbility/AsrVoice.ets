@@ -27,7 +27,6 @@ export enum VoicePhase {
   Failed = 5,
 }
 
-const SAMPLE_RATE: number = 16000;
 const CHUNK_BYTES: number = 3200; // 100ms PCM16 mono
 const FEED_RETRY_MS: number = 45000;
 const FINISH_TIMEOUT_MS: number = 120000;

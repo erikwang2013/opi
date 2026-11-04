@@ -57,7 +57,7 @@
       <path d="M54 140 L44 184 Q42 202 62 202 L178 202 Q198 202 196 184 L186 140 Z"
             fill="url(#forms-skirt)" stroke="#2E8B80" stroke-width="5" stroke-linejoin="round"/>
       <text x="120" y="187" text-anchor="middle" fill="#1E6B63"
-            font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace"
+            font-family="'JetBrains Mono', 'DejaVu Sans Mono', 'Liberation Mono', monospace"
             font-size="21" font-weight="700" letter-spacing="4.5">OPI</text>
     </g>
 
@@ -72,7 +72,7 @@
     </g>
   </defs>
 
-  <g font-family="'Noto Sans CJK SC', 'Source Han Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif">
+  <g font-family="'Noto Sans CJK SC', 'Source Han Sans SC', 'Noto Sans SC', 'DejaVu Sans', sans-serif">
 
     <!-- 1 笑（SMILE）：圆眼 + 字母 O 嘴 + 桃粉腮红。 -->
     <g transform="translate(20,20)">

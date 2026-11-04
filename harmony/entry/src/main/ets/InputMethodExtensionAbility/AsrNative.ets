@@ -75,10 +75,6 @@ export function lastError(handle: number, buf: Uint8Array): string {
   return n > 0 ? decoder.decodeToString(buf.subarray(0, n)) : '';
 }
 
-export function maxEventBytes(): number {
-  return opiime.asrMaxEventBytes();
-}
-
 export function destroy(handle: number): void {
   opiime.asrDestroy(handle);
 }

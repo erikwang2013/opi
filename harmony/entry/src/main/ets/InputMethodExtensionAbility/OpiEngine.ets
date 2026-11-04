@@ -400,11 +400,6 @@ export function charKeyval(ch: string): number {
   return ch.charCodeAt(0);
 }
 
-/** 数字/符号模式下由调用方自己上屏用：码点 → 单字符。 */
-export function charFromKeyval(keyval: number): string {
-  return String.fromCharCode(keyval);
-}
-
 // ---------------------------------------------------------------- 表情 / 符号数据面
 //
 // 2026-10-13 新增：喂键盘面板的表情页（Symbol 模式）。这几条**不是候选** —— 表情页

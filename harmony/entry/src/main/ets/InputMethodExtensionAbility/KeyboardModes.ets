@@ -188,8 +188,3 @@ export function collapseTiled(): void { tiledOn = false; }
 export function setEmojiReturn(m: OpiMode): void { emojiReturnMode = m; }
 
 export function emojiReturn(): OpiMode { return emojiReturnMode; }
-
-/** 有任一键盘模式开启（Android `anyOn`；工具条读屏用，本端暂只用于提示文案）。 */
-export function anyModeOn(): boolean {
-  return floatingOn || gameOn || oneHand !== ONE_HAND_OFF || darkOn || elderOn;
-}

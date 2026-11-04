@@ -62,7 +62,7 @@ pub unsafe extern "C" fn opi_scheme() -> i32 {
 /// setShuangpinLayout(index: int32)：双拼布局（2026-10-13；`opi_set_scheme(4)` 的配套
 /// 设置）。0=自然码 1=微软 2=小鹤 3=智能ABC 4=紫光 5=拼音加加（名字/顺序 =
 /// `engine_core::shuangpin_tables::SHUANGPIN_TABLES`；各端设置面的名字表有锁步门禁
-/// 钉着）。钳制口径与 `opi_set_fuzzy_pairs` 的掩码底线同一条纪律（坏值钳到确定值，
+/// 钉着）。钳制口径与模糊音掩码同一条纪律（坏值钳到确定值，
 /// 不回退成"随便一个"）：**负数钳到 0、过大钳到末位**（理由见
 /// `Engine::set_shuangpin_layout`）。**不清缓冲**：缓冲里的键序按新布局重新解码，
 /// 下一次 `opi_candidates` 就见效。

@@ -235,17 +235,6 @@ export function pairConfirm(instanceId: string, accept: boolean): void {
   refreshPeers();
 }
 
-export function pairCancel(instanceId: string): void {
-  pairingPrompt = null;
-  if (handle === 0) {
-    return;
-  }
-  if (!opiime.clipPairCancel(handle, instanceId)) {
-    lastError = lastErrorText();
-  }
-  refreshPeers();
-}
-
 export function forgetPeer(instanceId: string): void {
   if (handle === 0) {
     return;

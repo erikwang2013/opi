@@ -76,7 +76,6 @@ function cancelActive(): void {
 
 export function list(): ClipTransfer[] { return transfers; }
 export function feedback(): string { return message; }
-export function clearFeedback(): void { message = ''; }
 export function hasTrustedPeer(): boolean {
   const peers: ClipPeer[] = ClipSync.peerList();
   for (let i = 0; i < peers.length; i++) {

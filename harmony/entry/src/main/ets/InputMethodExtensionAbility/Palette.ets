@@ -106,10 +106,6 @@ export const SKINS: Skin[] = [
   new Skin('松林', PINE),
 ];
 
-export function skinCount(): number {
-  return SKINS.length;
-}
-
 /** 当前生效色板。长辈与暗光是「模式」；皮肤只是底（Android 同一条 when）。 */
 export function paletteFor(skin: number, dark: boolean, elder: boolean): Palette {
   if (elder) {

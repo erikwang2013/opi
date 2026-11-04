@@ -284,21 +284,6 @@ export function lastChineseModeIndex(): number {
   return lastChineseIndex;
 }
 
-/**
- * 26 键模式键的键面字 = **点它会切到哪**（Android `modeKeyLabelOf` 的三态循环）：
- * 中→繁、繁→英、英→中。数字/符号态从 26 键进不去（数字走 123，符号走 ?123），
- * 落到「中」是安全侧。
- */
-export function cycleModeLabel(m: number): string {
-  if (m === (OpiMode.Pinyin as number)) {
-    return '繁';
-  }
-  if (m === (OpiMode.Traditional as number)) {
-    return '英';
-  }
-  return '中';
-}
-
 /** 9/14/笔画底行的模式键：**只切简繁**（Android 2026-10-15 裁决），键面 = 点它会到哪。 */
 export function traditionalModeLabel(m: number): string {
   return m === (OpiMode.Traditional as number) ? '中' : '繁';

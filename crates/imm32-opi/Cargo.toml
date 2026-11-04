@@ -15,7 +15,6 @@ crate-type = ["cdylib", "lib"]
 # 不会在 Linux 主机上编译（tsf_opi 已按 target 隔离）。
 tsf_opi = { path = "../tsf-opi" }
 engine-core = { path = "../engine-core" }
-engine-data = { path = "../engine-data" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.62", default-features = false, features = [

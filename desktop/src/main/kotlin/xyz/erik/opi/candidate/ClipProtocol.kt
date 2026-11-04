@@ -181,8 +181,6 @@ internal fun localLanAddress(): LanAddress? {
     return pickLanAddress(candidates, routeLanIpv4())
 }
 
-internal fun localLanIpv4(): String? = localLanAddress()?.ip
-
 // ---------- 事件 ----------
 
 internal sealed interface ClipEvent {

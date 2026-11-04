@@ -12,7 +12,7 @@
 
   <rect width="1180" height="676" fill="#FBFAF6"/>
 
-  <g font-family="'Noto Sans CJK SC','Source Han Sans SC','PingFang SC','Microsoft YaHei',-apple-system,'Segoe UI',sans-serif">
+  <g font-family="'Noto Sans CJK SC','Source Han Sans SC','Noto Sans SC','DejaVu Sans',sans-serif">
 
     <text x="590" y="40" text-anchor="middle" font-size="25" font-weight="700" fill="#22272E">OPI 功能设计</text>
     <text x="590" y="63" text-anchor="middle" font-size="12.5" fill="#6B7671">五种输入模式 · 六大功能域 —— 只做输入这一件事，并把它做透</text>

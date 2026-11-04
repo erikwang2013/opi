@@ -80,7 +80,6 @@ use opi_ffi::cabi::{
     opi_set_english_custom_phrases,
     opi_set_english_custom_phrases_enabled,
     opi_set_fuzzy,
-    opi_set_fuzzy_pairs,
     opi_set_fuzzy_pairs_names,
     opi_set_jianpin,
     opi_set_learner,
@@ -230,10 +229,8 @@ fn every_export_returns_a_sentinel_when_engine_is_not_loaded() {
         opi_set_shift(true);
         opi_set_learner(true);
         opi_set_fuzzy(false);
-        // 逐对掩码（2026-10-13）：未装载 → 读侧哨兵 0（Default）；写侧空操作。
+        // 逐对掩码（2026-10-13）：未装载 → 读侧哨兵 0（Default）。
         assert_eq!(opi_fuzzy_pairs(), 0, "未装载读侧哨兵 = 0");
-        opi_set_fuzzy_pairs(0x41); // 未装载：空操作，不崩
-        assert_eq!(opi_fuzzy_pairs(), 0);
         // 组名面：未装载 → 空串哨兵；按名设置空操作。
         let names = opi_fuzzy_pair_names();
         assert!(names.ptr.is_null() || names.len == 0, "未装载 → 空串哨兵");

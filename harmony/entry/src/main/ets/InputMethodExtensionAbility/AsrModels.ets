@@ -94,14 +94,6 @@ function root(ctx: common.Context): string {
   return ctx.filesDir + '/asr';
 }
 
-function exists(path: string): boolean {
-  try {
-    return fileIo.accessSync(path);
-  } catch (e) {
-    return false;
-  }
-}
-
 function sizeOf(path: string): number {
   try {
     return fileIo.statSync(path).size;
