@@ -75,6 +75,14 @@ static void check_clip_exports(void) {
     CHECK(opi_clip_local_text(clip, WO_CLIP, 1) == 0,
           "start 后 local_text 应为 0=已发布");
 
+    /* 定向路由：空串 = 不过滤；合法十六进制对端 = 只投给该会话。 */
+    CHECK(opi_clip_set_text_routes(clip, NULL, 0, NULL, 0) == true,
+          "空路由（两个方向都不过滤）应成功");
+    CHECK(opi_clip_set_text_routes(clip, peer16, peer_len, NULL, 0) == true,
+          "发送路由指向合法对端 ID 应成功");
+    CHECK(opi_clip_set_text_routes(clip, NULL, 0, NULL, 0) == true,
+          "路由应能重置回不过滤");
+
     /* 手动探测：空 IP 在解析阶段就失败（不触网），但仍要真调一次覆盖导出。 */
     CHECK(opi_clip_probe(clip, NULL, 0) == false, "空 IP 的 probe 应为 false");
 
