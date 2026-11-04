@@ -34,6 +34,7 @@ On Linux, add OPI to the fcitx5 input-method group after installing; see [Linux 
 - **Auditable privacy**: open dependencies and source; the About page opens the privacy policy in-app.
 - **Cross-device transfer**: LAN discovery and encrypted sessions for files, folders, photos, text and clipboard; choose the peer when several devices are online.
 - **On-device speech**: SenseVoice / Whisper recognition; audio is neither persisted nor uploaded.
+- **Opi the pet, twelve moods**: input state drives Opi's expressions; mobile keyboards also cycle twelve moods — smiling, cheerful, crying, downcast, terrified, angry, coquettish, cute, pleasing, knocking, face-palm and tongue-out.
 - **Measured performance**: engine hot paths, first frame and candidate fetch have budgets and tests; see [performance notes](docs/performance.md).
 
 ## Verification boundary
