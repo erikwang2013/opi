@@ -61,12 +61,14 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
     var routeTouched by remember { mutableStateOf(false) }
     var text by remember { mutableStateOf("") }
     var picker by remember { mutableStateOf<TransferPickerMode?>(null) }
+    // 打开选择器那一刻的目标设备。选择文件可能耗时，期间 peers 刷新不能把
+    // 目标悄悄换成列表里的另一台——这正是「选中的没发、没选的发了」的来源。
+    var pickerPeer by remember { mutableStateOf("") }
     var saveDirFor by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(targets.joinToString { it.instanceId }) {
-        if (targets.none { it.instanceId == target }) {
-            target = targets.firstOrNull()?.instanceId.orEmpty()
-        }
+        // 只在还没有目标时选第一台；绝不因状态刷新覆盖用户已选目标。
+        if (target.isEmpty()) target = targets.firstOrNull()?.instanceId.orEmpty()
     }
     // 文本/剪贴板路由：只和选中设备收发；关闭时保持内核的广播/全收行为。
     LaunchedEffect(target, onlySelected, targets.isEmpty(), routeTouched) {
@@ -81,13 +83,16 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
         withContext(Dispatchers.IO) { ClipClient.setTextRoutes(peer, peer) }
     }
 
-    fun sendPaths(paths: List<Path>) {
+    fun sendPaths(peer: String, paths: List<Path>) {
         if (paths.isEmpty()) return
-        if (target.isEmpty()) {
+        if (peer.isEmpty()) {
             report("请先选择一台已配对且在线的设备")
             return
         }
-        val peer = target
+        if (targets.none { it.instanceId == peer }) {
+            report("选中的设备不在线，请重新选择设备")
+            return
+        }
         scope.launch {
             val prep = withContext(Dispatchers.IO) {
                 prepareTransferPaths(paths.map { it.toString() })
@@ -109,7 +114,9 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
     }
 
     var dropActive by remember { mutableStateOf(false) }
-    val dropSend = rememberUpdatedState<(List<Path>) -> Unit> { sendPaths(it) }
+    val dropSend = rememberUpdatedState<(String, List<Path>) -> Unit> { peer, paths ->
+        sendPaths(peer, paths)
+    }
     @OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
     val dropTarget = remember {
         object : DragAndDropTarget {
@@ -133,7 +140,7 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
                         as List<File>).map { it.toPath() }
                 }.getOrDefault(emptyList())
                 if (paths.isEmpty()) return false
-                dropSend.value(paths)
+                dropSend.value(target, paths)
                 return true
             }
         }
@@ -147,10 +154,11 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
     )
 
     fun choose(mode: TransferPickerMode) {
-        if (target.isEmpty()) {
+        if (targets.none { it.instanceId == target }) {
             report("请先选择一台已配对且在线的设备")
             return
         }
+        pickerPeer = target
         picker = mode
     }
 
@@ -230,7 +238,8 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
         for (p in targets) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ClipButton(
-                    label = "发送到 ${p.name.ifBlank { p.instanceId.take(8) }}",
+                    label = "发送到 ${p.name.ifBlank { p.instanceId.take(8) }}" +
+                        if (p.instanceId == target) " ✓" else "",
                     enabled = p.instanceId != target,
                 ) {
                     target = p.instanceId
@@ -340,19 +349,21 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
         TransferPickerWindow(
             mode = mode,
             initialDir = if (saveDirFor != null) defaultTransferSaveDir() else null,
-            onCancel = { picker = null; saveDirFor = null },
+            onCancel = { picker = null; saveDirFor = null; pickerPeer = "" },
         ) { paths ->
             val dir = paths.firstOrNull()?.toString()
             val id = saveDirFor
+            val peer = pickerPeer
             picker = null
             saveDirFor = null
+            pickerPeer = ""
             if (id != null && dir != null) {
                 scope.launch {
                     val ok = withContext(Dispatchers.IO) { ClipClient.respondTransfer(id, true, dir) }
                     report(if (ok) "已接受，保存到 $dir" else "接收命令未送达宿主")
                 }
             } else {
-                sendPaths(paths)
+                sendPaths(peer, paths)
             }
         }
     }
