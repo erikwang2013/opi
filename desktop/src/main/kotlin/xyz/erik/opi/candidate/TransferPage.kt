@@ -7,7 +7,11 @@
 
 package xyz.erik.opi.candidate
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,22 +19,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.material.OutlinedTextField
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.ui.draganddrop.DragAndDropTarget
+import androidx.compose.ui.draganddrop.awtTransferable
 import androidx.compose.ui.draw.clip
 import java.awt.datatransfer.DataFlavor
-import java.awt.dnd.DnDConstants
-import java.awt.dnd.DropTarget
-import java.awt.dnd.DropTargetAdapter
-import java.awt.dnd.DropTargetDragEvent
-import java.awt.dnd.DropTargetDropEvent
-import java.awt.dnd.DropTargetEvent
 import java.io.File
-import androidx.compose.material.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -109,53 +108,43 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
         }
     }
 
-    val window = LocalSettingsWindow.current
     var dropActive by remember { mutableStateOf(false) }
     val dropSend = rememberUpdatedState<(List<Path>) -> Unit> { sendPaths(it) }
-    val dropListener = remember {
-        object : DropTargetAdapter() {
-            private fun accepts(dtde: DropTargetDragEvent) =
-                dtde.isDataFlavorSupported(DataFlavor.javaFileListFlavor)
-
-            override fun dragEnter(dtde: DropTargetDragEvent) {
-                if (accepts(dtde)) {
-                    dropActive = true
-                    dtde.acceptDrag(DnDConstants.ACTION_COPY)
-                } else {
-                    dtde.rejectDrag()
-                }
+    @OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
+    val dropTarget = remember {
+        object : DragAndDropTarget {
+            override fun onEntered(event: DragAndDropEvent) {
+                dropActive = true
             }
 
-            override fun dragOver(dtde: DropTargetDragEvent) {
-                if (accepts(dtde)) dtde.acceptDrag(DnDConstants.ACTION_COPY) else dtde.rejectDrag()
-            }
-
-            override fun dragExit(dtde: DropTargetEvent) {
+            override fun onExited(event: DragAndDropEvent) {
                 dropActive = false
             }
 
-            override fun drop(dtde: DropTargetDropEvent) {
+            override fun onEnded(event: DragAndDropEvent) {
                 dropActive = false
-                if (!dtde.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
-                    dtde.rejectDrop()
-                    return
-                }
-                dtde.acceptDrop(DnDConstants.ACTION_COPY)
+            }
+
+            override fun onDrop(event: DragAndDropEvent): Boolean {
+                dropActive = false
                 @Suppress("UNCHECKED_CAST")
                 val paths = runCatching {
-                    (dtde.transferable.getTransferData(DataFlavor.javaFileListFlavor) as List<File>)
-                        .map { it.toPath() }
+                    (event.awtTransferable.getTransferData(DataFlavor.javaFileListFlavor)
+                        as List<File>).map { it.toPath() }
                 }.getOrDefault(emptyList())
-                dtde.dropComplete(paths.isNotEmpty())
-                if (paths.isNotEmpty()) dropSend.value(paths)
+                if (paths.isEmpty()) return false
+                dropSend.value(paths)
+                return true
             }
         }
     }
-    DisposableEffect(window) {
-        val w = window ?: return@DisposableEffect onDispose {}
-        DropTarget(w, DnDConstants.ACTION_COPY, dropListener, true)
-        onDispose { runCatching { w.dropTarget = null } }
-    }
+    @OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
+    val dropModifier = Modifier.dragAndDropTarget(
+        shouldStartDragAndDrop = { event ->
+            event.awtTransferable.isDataFlavorSupported(DataFlavor.javaFileListFlavor)
+        },
+        target = dropTarget,
+    )
 
     fun choose(mode: TransferPickerMode) {
         if (target.isEmpty()) {
@@ -202,6 +191,8 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
         }
     }
 
+    Box(Modifier.fillMaxWidth().then(dropModifier)) {
+    Column(Modifier.fillMaxWidth()) {
     SectionTitle("传输")
     Text(
         "文件/文件夹/媒体发给选中的已配对设备；文本与剪贴板默认发给所有已信任设备，" +
@@ -209,21 +200,27 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
             "单次最多 $TRANSFER_MAX_ENTRIES 项、单文件 2 GiB、总计 8 GiB。",
         fontSize = 12.sp, color = Muted,
     )
-    if (dropActive) {
-        Box(
-            Modifier.fillMaxWidth().padding(vertical = 6.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .border(2.dp, Teal.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
-                .background(Teal.copy(alpha = 0.08f))
-                .padding(12.dp),
-        ) {
-            Text(
-                "松开鼠标，发送到 ${targets.firstOrNull { it.instanceId == target }?.name ?: "已选设备"}",
-                fontSize = 12.sp, color = Teal, fontWeight = FontWeight.SemiBold,
+    Box(
+        Modifier.fillMaxWidth().padding(vertical = 6.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .border(
+                if (dropActive) 2.dp else 1.dp,
+                Teal.copy(alpha = if (dropActive) 0.65f else 0.35f),
+                RoundedCornerShape(8.dp),
             )
-        }
-    } else {
-        Text("也可以把文件 / 文件夹 / 照片直接拖到此页", fontSize = 11.sp, color = Muted)
+            .background(Teal.copy(alpha = if (dropActive) 0.10f else 0.04f))
+            .padding(14.dp),
+    ) {
+        Text(
+            if (dropActive) {
+                "松开鼠标，发送到 ${targets.firstOrNull { it.instanceId == target }?.name ?: "已选设备"}"
+            } else {
+                "拖拽文件、文件夹或照片到这里发送"
+            },
+            fontSize = 12.sp,
+            color = if (dropActive) Teal else Muted,
+            fontWeight = if (dropActive) FontWeight.SemiBold else FontWeight.Normal,
+        )
     }
     if (targets.isEmpty()) {
         Spacer(Modifier.height(4.dp))
@@ -254,17 +251,29 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
         }
     }
     Spacer(Modifier.height(6.dp))
-    Row {
-        ClipButton("选择文件", enabled = status.running && targets.isNotEmpty()) {
-            choose(TransferPickerMode.FILES)
+    Column(Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ClipButton("选择文件", enabled = status.running && targets.isNotEmpty()) {
+                choose(TransferPickerMode.FILES)
+            }
+            Spacer(Modifier.width(8.dp))
+            Text("任意文件，可多选", fontSize = 11.sp, color = Muted)
         }
-        Spacer(Modifier.width(8.dp))
-        ClipButton("选择文件夹", enabled = status.running && targets.isNotEmpty()) {
-            choose(TransferPickerMode.FOLDER)
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ClipButton("选择文件夹", enabled = status.running && targets.isNotEmpty()) {
+                choose(TransferPickerMode.FOLDER)
+            }
+            Spacer(Modifier.width(8.dp))
+            Text("整棵目录树", fontSize = 11.sp, color = Muted)
         }
-        Spacer(Modifier.width(8.dp))
-        ClipButton("照片/视频", enabled = status.running && targets.isNotEmpty()) {
-            choose(TransferPickerMode.MEDIA)
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ClipButton("照片/视频", enabled = status.running && targets.isNotEmpty()) {
+                choose(TransferPickerMode.MEDIA)
+            }
+            Spacer(Modifier.width(8.dp))
+            Text("只显示图片和视频，可多选", fontSize = 11.sp, color = Muted)
         }
     }
 
@@ -347,6 +356,8 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
             }
         }
     }
+    } // Column（拖拽接收区域）
+    } // Box
 }
 
 /** 文本/剪贴板是广播：至少要有一台已信任设备，否则内核也无处可发。 */
