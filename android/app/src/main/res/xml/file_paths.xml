@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- FileProvider 暴露范围：只开 cacheDir/pet（自有表情 PNG 的落点，见 PetStickerCommit.kt）。
-     name="pet" 对应提交时授权的那一类 URI；授权本身由 INPUT_CONTENT_GRANT_READ_URI_PERMISSION 完成。 -->
+<!-- FileProvider 暴露范围：cacheDir/pet（自有表情 PNG，见 PetStickerCommit.kt）与
+     入站传输暂存目录。授权本身由调用方按次 grant。 -->
 <paths>
     <cache-path name="pet" path="pet/" />
+    <!-- 传输导入失败时文件留在应用专属暂存目录；允许用户从传输记录直接打开。 -->
+    <external-files-path name="transfer-incoming" path="transfer-incoming/" />
+    <files-path name="transfer-incoming-files" path="transfer-incoming/" />
 </paths>
