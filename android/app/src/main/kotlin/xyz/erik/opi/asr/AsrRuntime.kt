@@ -109,6 +109,9 @@ internal object AsrRuntime {
 
     /** 只在 [worker] 上跑：前提是模型已就绪；同语言已装载直接返回。 */
     private fun warmEngine(context: Context, whisper: Boolean) {
+        // 完整包先把随 APK 的引擎落一份到 filesDir：即使模型还没下/还没用过语音，
+        // 之后换装普通/基础包也不会把引擎丢掉（旧实现只在 ensureModel 里做，太晚）。
+        AsrEngine.persistBundled(context)
         val pack = AsrModels.selected(context, whisper)
         if (!AsrModels.packReady(context, pack)) return
         if (handle != 0L && loadedKey == "${pack.dir}|$whisper") return
@@ -120,6 +123,7 @@ internal object AsrRuntime {
         val context = appContext ?: return
         val whisper = whisperPref?.invoke() ?: false
         val pack = AsrModels.selected(context, whisper)
+        AsrEngine.persistBundled(context)
         if (!AsrNative.ensureLoaded(context)) {
             val modelsReady = AsrModels.packReady(context, pack) || AsrBundled.ready(context, pack)
             val loadError = AsrNative.lastLoadError
