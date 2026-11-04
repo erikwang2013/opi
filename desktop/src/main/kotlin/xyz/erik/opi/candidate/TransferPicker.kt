@@ -71,6 +71,10 @@ private var lastPickerDir: Path? = null
 
 private fun extOf(name: String): String = name.substringAfterLast('.', "").lowercase()
 
+/** 拖拽分类用：照片/视频按扩展名判定，目录不算媒体。 */
+internal fun isMediaTransferPath(path: Path): Boolean =
+    !Files.isDirectory(path) && extOf(path.fileName?.toString().orEmpty()) in MEDIA_EXT
+
 private fun startDir(): Path {
     lastPickerDir?.toAbsolutePath()?.normalize()
         ?.takeIf { Files.isDirectory(it) }?.let { return it }

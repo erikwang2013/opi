@@ -7,11 +7,7 @@
 
 package xyz.erik.opi.candidate
 
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.draganddrop.dragAndDropTarget
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,17 +15,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.OutlinedTextField
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.compose.ui.draganddrop.DragAndDropEvent
-import androidx.compose.ui.draganddrop.DragAndDropTarget
-import androidx.compose.ui.draganddrop.awtTransferable
-import androidx.compose.ui.draw.clip
-import java.awt.datatransfer.DataFlavor
-import java.io.File
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -113,46 +100,6 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
         }
     }
 
-    var dropActive by remember { mutableStateOf(false) }
-    val dropSend = rememberUpdatedState<(String, List<Path>) -> Unit> { peer, paths ->
-        sendPaths(peer, paths)
-    }
-    @OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
-    val dropTarget = remember {
-        object : DragAndDropTarget {
-            override fun onEntered(event: DragAndDropEvent) {
-                dropActive = true
-            }
-
-            override fun onExited(event: DragAndDropEvent) {
-                dropActive = false
-            }
-
-            override fun onEnded(event: DragAndDropEvent) {
-                dropActive = false
-            }
-
-            override fun onDrop(event: DragAndDropEvent): Boolean {
-                dropActive = false
-                @Suppress("UNCHECKED_CAST")
-                val paths = runCatching {
-                    (event.awtTransferable.getTransferData(DataFlavor.javaFileListFlavor)
-                        as List<File>).map { it.toPath() }
-                }.getOrDefault(emptyList())
-                if (paths.isEmpty()) return false
-                dropSend.value(target, paths)
-                return true
-            }
-        }
-    }
-    @OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
-    val dropModifier = Modifier.dragAndDropTarget(
-        shouldStartDragAndDrop = { event ->
-            event.awtTransferable.isDataFlavorSupported(DataFlavor.javaFileListFlavor)
-        },
-        target = dropTarget,
-    )
-
     fun choose(mode: TransferPickerMode) {
         if (targets.none { it.instanceId == target }) {
             report("请先选择一台已配对且在线的设备")
@@ -199,8 +146,6 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
         }
     }
 
-    Box(Modifier.fillMaxWidth().then(dropModifier)) {
-    Column(Modifier.fillMaxWidth()) {
     SectionTitle("传输")
     Text(
         "文件/文件夹/媒体发给选中的已配对设备；文本与剪贴板默认发给所有已信任设备，" +
@@ -208,44 +153,27 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
             "单次最多 $TRANSFER_MAX_ENTRIES 项、单文件 2 GiB、总计 8 GiB。",
         fontSize = 12.sp, color = Muted,
     )
-    Box(
-        Modifier.fillMaxWidth().padding(vertical = 6.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .border(
-                if (dropActive) 2.dp else 1.dp,
-                Teal.copy(alpha = if (dropActive) 0.65f else 0.35f),
-                RoundedCornerShape(8.dp),
-            )
-            .background(Teal.copy(alpha = if (dropActive) 0.10f else 0.04f))
-            .padding(14.dp),
-    ) {
-        Text(
-            if (dropActive) {
-                "松开鼠标，发送到 ${targets.firstOrNull { it.instanceId == target }?.name ?: "已选设备"}"
-            } else {
-                "拖拽文件、文件夹或照片到这里发送"
-            },
-            fontSize = 12.sp,
-            color = if (dropActive) Teal else Muted,
-            fontWeight = if (dropActive) FontWeight.SemiBold else FontWeight.Normal,
-        )
-    }
+    SectionTitle("发送目标")
+    val currentName = targets.firstOrNull { it.instanceId == target }?.name
+        ?.ifBlank { target.take(8) } ?: "未选择"
+    Text(
+        "当前发送到：$currentName",
+        fontSize = 12.sp,
+        color = if (targets.isEmpty()) Muted else Teal,
+        fontWeight = FontWeight.SemiBold,
+    )
     if (targets.isEmpty()) {
         Spacer(Modifier.height(4.dp))
         Text("没有已配对且在线的设备。请先在上方完成配对。", fontSize = 12.sp, color = Muted)
     } else {
         Spacer(Modifier.height(6.dp))
         for (p in targets) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                ClipButton(
-                    label = "发送到 ${p.name.ifBlank { p.instanceId.take(8) }}" +
-                        if (p.instanceId == target) " ✓" else "",
-                    enabled = p.instanceId != target,
-                ) {
-                    target = p.instanceId
-                    routeTouched = true
-                }
-                Spacer(Modifier.width(8.dp))
+            TransferTargetRow(
+                name = p.name.ifBlank { p.instanceId.take(8) },
+                selected = p.instanceId == target,
+            ) {
+                target = p.instanceId
+                routeTouched = true
             }
         }
     }
@@ -259,32 +187,36 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
             routeTouched = true
         }
     }
-    Spacer(Modifier.height(6.dp))
-    Column(Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            ClipButton("选择文件", enabled = status.running && targets.isNotEmpty()) {
-                choose(TransferPickerMode.FILES)
-            }
-            Spacer(Modifier.width(8.dp))
-            Text("任意文件，可多选", fontSize = 11.sp, color = Muted)
-        }
-        Spacer(Modifier.height(6.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            ClipButton("选择文件夹", enabled = status.running && targets.isNotEmpty()) {
-                choose(TransferPickerMode.FOLDER)
-            }
-            Spacer(Modifier.width(8.dp))
-            Text("整棵目录树", fontSize = 11.sp, color = Muted)
-        }
-        Spacer(Modifier.height(6.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            ClipButton("照片/视频", enabled = status.running && targets.isNotEmpty()) {
-                choose(TransferPickerMode.MEDIA)
-            }
-            Spacer(Modifier.width(8.dp))
-            Text("只显示图片和视频，可多选", fontSize = 11.sp, color = Muted)
-        }
-    }
+    Spacer(Modifier.height(10.dp))
+    TransferDropZone(
+        mode = TransferPickerMode.FILES,
+        title = "文件",
+        hint = "任意文件，可多选",
+        enabled = status.running && targets.isNotEmpty(),
+        onPick = { choose(TransferPickerMode.FILES) },
+        onDrop = { sendPaths(target, it) },
+        report = report,
+    )
+    Spacer(Modifier.height(8.dp))
+    TransferDropZone(
+        mode = TransferPickerMode.FOLDER,
+        title = "文件夹",
+        hint = "整棵目录树",
+        enabled = status.running && targets.isNotEmpty(),
+        onPick = { choose(TransferPickerMode.FOLDER) },
+        onDrop = { sendPaths(target, it) },
+        report = report,
+    )
+    Spacer(Modifier.height(8.dp))
+    TransferDropZone(
+        mode = TransferPickerMode.MEDIA,
+        title = "照片 / 视频",
+        hint = "只接受图片和视频，可多选",
+        enabled = status.running && targets.isNotEmpty(),
+        onPick = { choose(TransferPickerMode.MEDIA) },
+        onDrop = { sendPaths(target, it) },
+        report = report,
+    )
 
     Spacer(Modifier.height(8.dp))
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -367,8 +299,6 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
             }
         }
     }
-    } // Column（拖拽接收区域）
-    } // Box
 }
 
 /** 文本/剪贴板是广播：至少要有一台已信任设备，否则内核也无处可发。 */
