@@ -434,7 +434,6 @@ public final class Main {
         check(!has(OpiEngine.candidates(64), WORD), "停用后候选里不该再有它");
         check(OpiEngine.setDictEnabled("smoke", false), "已是目标态 → 幂等 true");
         check(!OpiEngine.setDictEnabled("luna", false), "系统词典不可停用 → false");
-
         // 数据留在 FFI 层内存：**先把文件删掉**再启用，照样打得出来
         // （宿主删文件与引擎状态解耦 —— 这是本族裁决 1 的 JNI 面执行点）。
         java.nio.file.Files.delete(tsv);
