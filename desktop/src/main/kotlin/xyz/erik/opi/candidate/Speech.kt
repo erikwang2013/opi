@@ -52,7 +52,10 @@ internal fun nextSpeechPhase(from: SpeechPhase, t: SpeechTransition): SpeechPhas
 }
 
 private sealed interface SpeechCommand {
-    data class Toggle(val commit: (String) -> String?) : SpeechCommand
+    // 开始/停止在入队时就定死：外层先把 ui.phase 置成 PREPARING，若 worker 再按
+    // phase 判断「现在是不是该取消」，会把自己刚置的准备态当成第二次点击而立刻取消。
+    data class Start(val commit: (String) -> String?) : SpeechCommand
+    data object Stop : SpeechCommand
     data class Audio(val bytes: ByteArray) : SpeechCommand
     data class AudioError(val message: String) : SpeechCommand
     data object Cancel : SpeechCommand
@@ -158,10 +161,11 @@ internal class SpeechHostImpl {
                 update(SpeechUi())
                 commands.offer(SpeechCommand.Cancel)
             }
+            SpeechPhase.RECORDING -> commands.offer(SpeechCommand.Stop)
             else -> {
                 // 先让浮层在同一次点击里出现；模型/麦克风都在工作线程上再准备。
                 if (config.enabled) update(SpeechUi(phase = SpeechPhase.PREPARING, engine = config.language.engine))
-                commands.offer(SpeechCommand.Toggle(commit))
+                commands.offer(SpeechCommand.Start(commit))
             }
         }
     }
@@ -189,7 +193,8 @@ internal class SpeechHostImpl {
 
         fun handle(cmd: SpeechCommand) {
             when (cmd) {
-                is SpeechCommand.Toggle -> toggle(cmd.commit)
+                is SpeechCommand.Start -> start(cmd.commit)
+                SpeechCommand.Stop -> stop()
                 is SpeechCommand.Audio -> {
                     val s = session ?: return
                     if (ui.phase != SpeechPhase.RECORDING) return
@@ -209,13 +214,6 @@ internal class SpeechHostImpl {
             }
         }
 
-        private fun toggle(commit: (String) -> String?) {
-            when (ui.phase) {
-                SpeechPhase.PREPARING, SpeechPhase.RECOGNIZING -> cancelSession()
-                SpeechPhase.RECORDING -> stop()
-                else -> start(commit)
-            }
-        }
 
         /** 加载/复用引擎；warm 不触发完整包解压，避免启动时先把语音线程堵死。 */
         private fun ensureEngine(engine: SpeechEngine, updateErrors: Boolean, startEpoch: Int = epoch): LoadedAsr? {
