@@ -37,10 +37,16 @@
 
 package xyz.erik.opi.candidate
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -325,8 +331,30 @@ internal const val PET_FIT = 240f / 250f
  * FACE_SCALE`（2026-10-15 裁决）—— 缩小落在这里、且只落在这里，调用方不用自己乘。
  */
 @Composable
-internal fun StatusBarButtonFace(b: StatusBarButton, st: ImeState, mode: String, box: Dp) {
+internal fun StatusBarButtonFace(
+    b: StatusBarButton,
+    st: ImeState,
+    mode: String,
+    box: Dp,
+    speechPhase: SpeechPhase = SpeechPhase.IDLE,
+) {
     val face = box * FACE_SCALE // 唯一落点：下面所有分支都画进这块内盒
+    val speechOn = speechPhase == SpeechPhase.PREPARING ||
+        speechPhase == SpeechPhase.RECORDING ||
+        speechPhase == SpeechPhase.RECOGNIZING
+    // 只在话筒真的忙时才建无限动画；否则整条每帧重绘（按钮面每个都在组合里）。
+    val blinkAlpha: Float = if (b == StatusBarButton.MIC && speechOn) {
+        val blink = rememberInfiniteTransition(label = "mic-blink")
+        val alpha by blink.animateFloat(
+            initialValue = 1f,
+            targetValue = 0.35f,
+            animationSpec = infiniteRepeatable(tween(650), RepeatMode.Reverse),
+            label = "mic-blink-alpha",
+        )
+        alpha
+    } else {
+        1f
+    }
     when (b) {
         // 品牌标识兼拖动把手：设置页那只小欧缩到按钮里（2026-10-13 用户「logo 大点」）。
         // 配色随条底深浅切：浅底上用深底版那套（近白身 + 淡青描边）会糊进底色。
@@ -341,7 +369,7 @@ internal fun StatusBarButtonFace(b: StatusBarButton, st: ImeState, mode: String,
             )
         }
         StatusBarButton.VK -> VkIcon(face)
-        StatusBarButton.MIC -> MicIcon(face)
+        StatusBarButton.MIC -> MicIcon(face, active = speechOn, alpha = if (speechOn) blinkAlpha else 1f)
         StatusBarButton.FULLWIDTH -> MoonIcon(st.fullwidth, face)
         StatusBarButton.SETTINGS -> SettingsIcon(face)
         // 英文专业键 = 白底圆角键帽（2026-10-19 设计图）：en 居中、pro 右下。
@@ -427,8 +455,9 @@ internal fun SettingsIcon(box: Dp) {
  * 与其它自绘图标同一条纪律：填满传入的盒（= 按钮 × [FACE_SCALE]），几何全按盒比例。
  */
 @Composable
-internal fun MicIcon(box: Dp) {
-    val fg = LocalBarPalette.current.fg
+internal fun MicIcon(box: Dp, active: Boolean = false, alpha: Float = 1f) {
+    val palette = LocalBarPalette.current
+    val fg = (if (active) palette.accent else palette.fg).copy(alpha = alpha)
     Canvas(Modifier.size(box)) {
         val d = size.minDimension
         val stroke = d * 0.08f
