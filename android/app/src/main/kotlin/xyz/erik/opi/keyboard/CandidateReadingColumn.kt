@@ -3,18 +3,18 @@
 
 package xyz.erik.opi.keyboard
 
-import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -59,14 +59,18 @@ internal fun CandidateReadingColumn(
         },
     ) {
         val cell = maxHeight / cells
-        Column(
-            // 新一批读数（缓冲变了）整列回顶部 —— 否则继续输入后视口
-            // 停在旧位置，与「当前读音」对不上（scrollKey 由宿主给缓冲）。
-            modifier = Modifier.fillMaxSize()
-                .verticalScroll(remember(scrollKey) { ScrollState(0) }),
+        val listState = rememberLazyListState()
+        // 新一批读数（缓冲变了）整列回顶部 —— 否则继续输入后视口
+        // 停在旧位置，与「当前读音」对不上（scrollKey 由宿主给缓冲）。
+        LaunchedEffect(scrollKey) { listState.scrollToItem(0) }
+        // 读数最多 64 条，但可视只有几格；用 LazyColumn 只组合可见行，
+        // 别在每次击键时把整列 Text 都重建一遍。
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            for ((i, r) in readings.withIndex()) {
+            itemsIndexed(readings) { i, r ->
                 val pinned = r == pinnedReading && pinnedReading.isNotEmpty()
                 Box(
                     // 点一行拼音 = **钉住该读音**：候选收窄到读音**恰等**的条目、不上屏；

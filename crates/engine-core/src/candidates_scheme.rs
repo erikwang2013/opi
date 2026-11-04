@@ -214,12 +214,31 @@ pub fn rank_and_pick_scheme<D: Dictionary + ?Sized>(
         ));
     }
     merged.sort_by(|a, b| b.0.score.cmp(&a.0.score).then(a.0.text.cmp(&b.0.text)));
-    let mut seen = std::collections::HashSet::new();
-    merged.retain(|(c, _, _)| seen.insert(c.text.clone()));
+    // 排序后借用文本去重：先算 keep 掩码再 retain，避免为每条候选克隆一个 String
+    // （9/14 键整档可达 2048 条，这是每键都会走的热路径）。
+    let keep: Vec<bool> = {
+        let mut seen = std::collections::HashSet::with_capacity(merged.len());
+        merged
+            .iter()
+            .map(|(c, _, _)| seen.insert(c.text.as_str()))
+            .collect()
+    };
+    let mut next = 0usize;
+    merged.retain(|_| {
+        let keep = keep[next];
+        next += 1;
+        keep
+    });
     // ── 宽松兜底档（用户裁决 2026-10-15「没匹配的用按钮上最前的开始匹配字、词」）────
     // 触发面：有尾巴（上面那三种情形）且调用方允许（收尾探针会关它）。
     if tail_guess && !tail.is_empty() {
-        let guess = tail_guess_hits(dict, learner, tail, scheme, boost, &mut seen);
+        // 只借用当前候选文本，不把整档再克隆进展集合；尾档命中数很小，
+        // 由 tail_guess_hits 内部用持有集合去重。
+        let guess = {
+            let existing: std::collections::HashSet<&str> =
+                merged.iter().map(|(c, _, _)| c.text.as_str()).collect();
+            tail_guess_hits(dict, learner, tail, scheme, boost, &existing)
+        };
         if !guess.is_empty() {
             // 读数改写（**只在产出非空时**）：本次逐条读数统一成「前缀首条读音 + 尾字母」
             // —— 9 键拼音行因此把这条尾巴**显示出来**（`ni'g` / `ni'hao'w`），
@@ -322,13 +341,41 @@ type TailHit = (Candidate, String, Option<Meta>);
 ///
 /// 任一键取不到类（`0`/`1`/字母混进缓冲）⇒ 空（整档不启用，与 `Scheme::matches` 同姿态）。
 /// `seen` 与既有候选共用一份（前段字/前段词/后段字之间也不重复）。
+fn tail_pool<'a, D: Dictionary + ?Sized>(
+    cache: &'a mut std::collections::HashMap<char, Vec<Candidate>>,
+    letter: char,
+    dict: &D,
+    learner: &Learner,
+    boost: u64,
+) -> &'a [Candidate] {
+    cache
+        .entry(letter)
+        .or_insert_with(|| {
+            let mut pool: Vec<Candidate> = dict
+                .query_prefix_top(&letter.to_string(), TAIL_LETTER_CAP)
+                .into_iter()
+                .map(|e| {
+                    let score = rank_score(e.freq, learner.freq_of(&e.word), boost);
+                    Candidate {
+                        text: e.word,
+                        kind: CandidateKind::Hanzi,
+                        score,
+                    }
+                })
+                .collect();
+            pool.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
+            pool
+        })
+        .as_slice()
+}
+
 fn tail_guess_hits<D: Dictionary + ?Sized>(
     dict: &D,
     learner: &Learner,
     tail: &str,
     scheme: crate::scheme::Scheme,
     boost: u64,
-    seen: &mut std::collections::HashSet<String>,
+    existing: &std::collections::HashSet<&str>,
 ) -> Vec<TailHit> {
     // 9/14 键同一条（2026-10-27 开 14 键）：14 键的键类首字母 == 键自身
     // （`'b' => ['b','n']` 的首字母是 `b`）⇒ 本档对它是「按键面字母起音」，
@@ -352,64 +399,46 @@ fn tail_guess_hits<D: Dictionary + ?Sized>(
     // （`tests/fetch_counts.rs`）。池子两段共用：前段取字与词，后段从同一池里继续取字。
     let mut cache: std::collections::HashMap<char, Vec<Candidate>> =
         std::collections::HashMap::new();
-    let pool_of = |cache: &mut std::collections::HashMap<char, Vec<Candidate>>,
-                   letter: char|
-     -> Vec<Candidate> {
-        cache
-            .entry(letter)
-            .or_insert_with(|| {
-                let mut pool: Vec<Candidate> = dict
-                    .query_prefix_top(&letter.to_string(), TAIL_LETTER_CAP)
-                    .into_iter()
-                    .map(|e| {
-                        let score = rank_score(e.freq, learner.freq_of(&e.word), boost);
-                        Candidate {
-                            text: e.word,
-                            kind: CandidateKind::Hanzi,
-                            score,
-                        }
-                    })
-                    .collect();
-                pool.sort_by(|a, b| b.score.cmp(&a.score).then(a.text.cmp(&b.text)));
-                pool
-            })
-            .clone()
-    };
+    // 尾档产出很小；只对已产出的文本持有去重，不把整档候选克隆一遍。
+    let mut added: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut out: Vec<TailHit> = Vec::new();
     // 前段（整段当一个音）：字 ≤ TAIL_CHARS、词 ≤ TAIL_WORDS，同一个池里分区、字在前词在后。
     let mut chars = 0usize;
     let mut words = 0usize;
-    for c in pool_of(&mut cache, l1) {
+    for c in tail_pool(&mut cache, l1, dict, learner, boost) {
         let single = c.text.chars().count() == 1;
         let (slot, cap) = if single {
             (&mut chars, TAIL_CHARS)
         } else {
             (&mut words, TAIL_WORDS)
         };
-        if *slot >= cap || !seen.insert(c.text.clone()) {
+        if *slot >= cap || existing.contains(c.text.as_str()) || !added.insert(c.text.clone()) {
             continue;
         }
         *slot += 1;
-        out.push((c, String::new(), Some(tail_meta())));
+        out.push((c.clone(), String::new(), Some(tail_meta())));
     }
     // 后段（逐键起音）：每个键各取首字母、从同一个池里继续取字（每键 ≤ TAIL_PER_KEY_CHARS、
-    // 总 ≤ TAIL_KEY_CHARS_MAX）；`seen` 保证与前段不重。
+    // 总 ≤ TAIL_KEY_CHARS_MAX）；existing + added 保证与前段不重。
     let mut per_key_total = 0usize;
     for &letter in &heads {
         if per_key_total >= TAIL_KEY_CHARS_MAX {
             break;
         }
         let mut taken = 0usize;
-        for c in pool_of(&mut cache, letter) {
+        for c in tail_pool(&mut cache, letter, dict, learner, boost) {
             if taken >= TAIL_PER_KEY_CHARS || per_key_total >= TAIL_KEY_CHARS_MAX {
                 break;
             }
-            if c.text.chars().count() != 1 || !seen.insert(c.text.clone()) {
+            if c.text.chars().count() != 1
+                || existing.contains(c.text.as_str())
+                || !added.insert(c.text.clone())
+            {
                 continue;
             }
             taken += 1;
             per_key_total += 1;
-            out.push((c, String::new(), Some(tail_meta())));
+            out.push((c.clone(), String::new(), Some(tail_meta())));
         }
     }
     out

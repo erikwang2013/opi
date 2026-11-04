@@ -82,18 +82,19 @@ void refreshingPanelFor(fcitx::InputContext *ic) {
     const OpiPageState pageState = opi_fcitx5_page_state();
     // 候选**只取一次**（2026-10-27）：联想判据要用它，下面的正常分支也复用它；
     // 重复调 opi_fcitx5_candidates 会把 Rust 侧的页游标推进两次。
-    const auto texts = parseJsonStringArray(
+    auto texts = parseJsonStringArray(
         take(opi_fcitx5_candidates(kOpiCandidateFetchLimit)));
+    const bool hadCandidates = !texts.empty();
     // 客户端声明了 Preedit 才走内联预编辑通道；两个入口共用这一个判断。
     const bool wantsClientPreedit =
         ic->capabilityFlags().test(fcitx::CapabilityFlag::Preedit);
     // 智能联想默认关：空缓冲 + 有候选 = 联想项（Spec §5）。关闭时不展示，
     // 并立即清掉引擎里的联想 —— 否则数字键/链式会在看不见的状态下生效。
-    const bool associationHidden = buffer.empty() && !texts.empty() && !g_associationEnabled;
+    const bool associationHidden = buffer.empty() && hadCandidates && !g_associationEnabled;
     if (associationHidden) {
         opi_fcitx5_clear();
         panel.reset();
-    } else if (buffer.empty() && texts.empty()) {
+    } else if (buffer.empty() && !hadCandidates) {
         // 缓冲空 = 本引擎当前无 composing。用 reset() 而不是 setPreedit("")：
         // 它把预编辑、候选表、辅助串一起清干净（含 clientPreedit），正是
         // 「无 composing」的完整表达。
@@ -103,7 +104,8 @@ void refreshingPanelFor(fcitx::InputContext *ic) {
         // **不设** preedit / clientPreedit —— 联想不是 composing；候选序号与
         // 数字选词由 makeCandidateList 统一给（2026-10-28 用户报障）。
         panel.reset();
-        panel.setCandidateList(makeCandidateList(texts, pageState.page, pageState.pages));
+        panel.setCandidateList(
+            makeCandidateList(std::move(texts), pageState.page, pageState.pages));
     } else {
         fcitx::Text preedit(buffer);
         // 光标在预编辑串末尾（按字节）。2026-10-17 起缓冲可能带**逐字确认的汉字**
@@ -127,7 +129,8 @@ void refreshingPanelFor(fcitx::InputContext *ic) {
 
         // texts 已在函数顶部取过（一次抓取；重复调会推进 Rust 页游标）。
         // 候选序号/选择键/高亮位的理由见 opi_candidates.h 的 fill()。
-        panel.setCandidateList(makeCandidateList(texts, pageState.page, pageState.pages));
+        panel.setCandidateList(
+            makeCandidateList(std::move(texts), pageState.page, pageState.pages));
     }
     // 清空也要发：提交/失焦后不通知，客户端光标处会一直挂着上次的内联预编辑。
     if (wantsClientPreedit) {
@@ -138,7 +141,7 @@ void refreshingPanelFor(fcitx::InputContext *ic) {
     ic->updateUserInterface(fcitx::UserInterfaceComponent::InputPanel);
     // 推完了才记 —— 半路抛异常时这里保持旧值，下次直通键会照常重推一遍。
     g_pushedBuffer = buffer;
-    g_pushedHadCandidates = !texts.empty() && !associationHidden;
+    g_pushedHadCandidates = hadCandidates && !associationHidden;
 }
 
 // ---------- W1「直接确认」：切走/切英文时把待定输入提交掉（2026-10-10） ----------

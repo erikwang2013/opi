@@ -67,7 +67,7 @@ inline void OpiCandidateWord::select(fcitx::InputContext *ic) const {
 /// 当前页候选表：内容永远只有一页（Rust 切好的），但分页接口转发 Rust。
 class OpiCandidateList : public fcitx::CommonCandidateList {
 public:
-    OpiCandidateList(const std::vector<std::string> &texts, int page, int pages) {
+    OpiCandidateList(std::vector<std::string> texts, int page, int pages) {
         fill(texts);
         page_ = page;
         pages_ = pages;
@@ -82,7 +82,7 @@ public:
 
 private:
     void step(int delta);
-    void fill(const std::vector<std::string> &texts);
+    void fill(std::vector<std::string> &texts);
 
     int page_ = 0;
     int pages_ = 0;
@@ -96,7 +96,8 @@ inline void OpiCandidateList::step(int delta) {
         page_ = st.page;
         pages_ = st.pages;
         // 紧跟 page_step 调 candidates 命中它留下的全量缓存（一次取回）。
-        fill(parseJsonStringArray(take(opi_fcitx5_candidates(kOpiCandidateFetchLimit))));
+        auto texts = parseJsonStringArray(take(opi_fcitx5_candidates(kOpiCandidateFetchLimit)));
+        fill(texts);
     } catch (const std::exception &e) {
         fprintf(stderr, "fcitx5-opi: 翻页异常，本次翻页作废: %s\n", e.what());
     } catch (...) {
@@ -107,14 +108,14 @@ inline void OpiCandidateList::step(int delta) {
 /// 普通候选与联想候选共用：页大小 = 实际推过去的条数；选择键 1..n 让 fcitx5
 /// 画序号并把数字路由到 OpiCandidateWord::select（**页内索引**）。空表不设
 /// pageSize / 高亮位（setGlobalCursorIndex(0) 对空表抛 invalid_argument）。
-inline void OpiCandidateList::fill(const std::vector<std::string> &texts) {
+inline void OpiCandidateList::fill(std::vector<std::string> &texts) {
     clear();
     if (texts.empty()) {
         return;
     }
     setPageSize(static_cast<int>(texts.size()));
     for (size_t i = 0; i < texts.size(); ++i) {
-        append<OpiCandidateWord>(texts[i], i);
+        append<OpiCandidateWord>(std::move(texts[i]), i);
     }
     fcitx::KeyList selectionKeys;
     for (size_t i = 0; i < texts.size(); ++i) {
@@ -125,6 +126,6 @@ inline void OpiCandidateList::fill(const std::vector<std::string> &texts) {
 }
 
 static std::unique_ptr<fcitx::CommonCandidateList>
-makeCandidateList(const std::vector<std::string> &texts, int page, int pages) {
-    return std::make_unique<OpiCandidateList>(texts, page, pages);
+makeCandidateList(std::vector<std::string> texts, int page, int pages) {
+    return std::make_unique<OpiCandidateList>(std::move(texts), page, pages);
 }
