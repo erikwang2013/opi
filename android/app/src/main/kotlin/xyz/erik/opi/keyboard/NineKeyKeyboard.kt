@@ -151,6 +151,15 @@ fun NineKeyKeyboard(
             compact -> 10.sp
             else -> 12.sp
         }
+        // 键盘每次击键/候选更新都会重组；长按弹层的字母表只跟字号有关，
+        // 预计算一次，别在每帧给 9 个键重新建 String/KeyAlternative 列表。
+        val alternatives = remember(letterSize, digitSize) {
+            nineKeyRows.mapIndexed { r, row ->
+                row.mapIndexed { c, k ->
+                    nineKeyAlternatives(k, r * 3 + c, letterSize, digitSize)
+                }
+            }
+        }
         val keyFont = if (compact) 17.sp else 21.sp
         // 左列标点字号**独立一档**（2026-10-25 用户：标点键太大）—— 不再跟主区字母同字号。
         val stripFont = if (compact) 15.sp else 17.sp
@@ -217,7 +226,7 @@ fun NineKeyKeyboard(
                             row.forEachIndexed { c, k ->
                                 // 长按/上滑候选：字母（字号递减）+ **徽标序号**收尾；
                                 // 弹层默认选中末项（普通点击仍发协议键，见 onTap）。
-                                val alts = nineKeyAlternatives(k, r * 3 + c, letterSize, digitSize)
+                                val alts = alternatives[r][c]
                                 KeyButton(
                                     // 字母为主（主流同款）；大 9 只画字母、不画徽标。
                                     label = k.hint.ifEmpty { k.label },
