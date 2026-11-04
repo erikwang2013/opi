@@ -418,7 +418,11 @@ fn switch_language_preserves_the_pending_buffer() {
 #[test]
 fn nine_key_can_type_name_word() {
     let mut e = Engine::new(
-        dict(&[("name", "那么", 5000), ("na", "那", 4000), ("me", "么", 3000)]),
+        dict(&[
+            ("name", "那么", 5000),
+            ("na", "那", 4000),
+            ("me", "么", 3000),
+        ]),
         no_symbols(),
         false,
     );
