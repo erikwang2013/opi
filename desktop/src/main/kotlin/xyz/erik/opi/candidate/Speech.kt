@@ -220,6 +220,21 @@ internal class SpeechHostImpl {
         /** 加载/复用引擎；warm 不触发完整包解压，避免启动时先把语音线程堵死。 */
         private fun ensureEngine(engine: SpeechEngine, updateErrors: Boolean, startEpoch: Int = epoch): LoadedAsr? {
             val root = speechModelRoot()
+            // 先查引擎再查模型：普通/基础包最容易先下 239 MB 模型、最后才发现引擎
+            // 还没下，提示还只说“模型未下载”。引擎是前置依赖，错误顺序要一致。
+            if (!SpeechEnginePack.bundled() && !SpeechEnginePack.ready()) {
+                if (updateErrors) {
+                    fail(
+                        if (SpeechEnginePack.supported()) {
+                            "语音引擎未下载（约 ${SpeechEnginePack.approxMb()} MB）：" +
+                                "打开 设置 → 语音 先下载语音引擎，再下载模型"
+                        } else {
+                            "当前平台没有可用的语音引擎组件"
+                        },
+                    )
+                }
+                return null
+            }
             if (!modelReady(engine, root)) {
                 if (!updateErrors) return null
                 if (!bundledJar()) {
