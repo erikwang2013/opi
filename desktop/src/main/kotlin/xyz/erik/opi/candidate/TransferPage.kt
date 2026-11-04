@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.OutlinedTextField
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -220,11 +219,10 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
 
     Spacer(Modifier.height(8.dp))
     Row(verticalAlignment = Alignment.CenterVertically) {
-        OutlinedTextField(
+        ImeTextField(
             value = text,
             onValueChange = { text = it },
-            singleLine = true,
-            label = { Text("要发送的文本", fontSize = 11.sp) },
+            label = "要发送的文本",
             modifier = Modifier.weight(1f),
         )
         Spacer(Modifier.width(8.dp))

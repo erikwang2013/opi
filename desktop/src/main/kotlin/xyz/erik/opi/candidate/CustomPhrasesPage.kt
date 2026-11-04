@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.AlertDialog
 import androidx.compose.material.TextButton
 import androidx.compose.runtime.Composable
@@ -41,8 +40,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -399,23 +396,13 @@ private fun PhraseField(
     value: String,
     onValueChange: (String) -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
-        Text(label, fontSize = 12.sp, color = Muted)
-        Box(
-            Modifier.fillMaxWidth().border(1.dp, Hairline)
-                .padding(horizontal = 8.dp, vertical = 6.dp),
-        ) {
-            if (value.isEmpty()) Text(hint, fontSize = 12.sp, color = Muted)
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                singleLine = true,
-                textStyle = TextStyle(color = Ink, fontSize = 14.sp),
-                cursorBrush = SolidColor(Teal),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-    }
+    ImeTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = label,
+        hint = hint,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+    )
 }
 
 /** 列表一行：字母 / 短语 / 编辑 / 删除。 */

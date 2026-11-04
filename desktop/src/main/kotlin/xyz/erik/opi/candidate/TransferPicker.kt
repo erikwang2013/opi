@@ -27,7 +27,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.OutlinedTextField
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -213,11 +212,10 @@ private fun TransferPickerBody(
                 current.parent?.let(::go)
             }
             Spacer(Modifier.width(8.dp))
-            OutlinedTextField(
+            ImeTextField(
                 value = pathText,
                 onValueChange = { pathText = it },
-                singleLine = true,
-                label = { Text("路径", fontSize = 11.sp) },
+                label = "路径",
                 modifier = Modifier.weight(1f),
             )
             Spacer(Modifier.width(8.dp))

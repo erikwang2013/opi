@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -273,11 +272,10 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
         fontSize = 12.sp, color = Muted,
     )
     Row(verticalAlignment = Alignment.CenterVertically) {
-        OutlinedTextField(
+        ImeTextField(
             value = manualIp,
             onValueChange = { manualIp = it },
-            singleLine = true,
-            label = { Text("对方 IP（例如 192.168.1.5）", fontSize = 11.sp) },
+            label = "对方 IP（例如 192.168.1.5）",
             modifier = Modifier.weight(1f),
         )
         Spacer(Modifier.width(8.dp))
