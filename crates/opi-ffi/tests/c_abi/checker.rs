@@ -392,6 +392,12 @@ pub const CABI_CLIP_TRANSFER: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/src/cabi_clip/transfer_exports.rs"
 );
+/// 文本/剪贴板定向路由出口（2026-11-04，拆出守 500 行）；同属 clip 族，必须并入
+/// `read_cabi()`，否则 `opi_clip_set_text_routes` 会被当成「头文件多出」。
+pub const CABI_CLIP_ROUTES: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/cabi_clip/routes_exports.rs"
+);
 /// 同上，「属性设置」旋钮族那一半（2026-10-13：加拼音纠错后 cabi.rs 505/500 拆出）。
 /// ⚠️ 与 `jni/checker.rs` 的 `JNI_SWITCHES` 是镜像 —— 两轨族边界一致。
 pub const CABI_SWITCHES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/cabi_switches.rs");
@@ -423,7 +429,7 @@ pub fn read(p: &str) -> String {
 /// 拼接用换行，保证相邻两文件的行不会粘成一行（解析按行扫）。
 pub fn read_cabi() -> String {
     format!(
-        "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
+        "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
         read(CABI),
         read(CABI_USER_WORDS),
         read(CABI_SCHEME),
@@ -433,7 +439,8 @@ pub fn read_cabi() -> String {
         read(CABI_WUBI),
         read(CABI_PHRASES),
         read(CABI_CLIP),
-        read(CABI_CLIP_TRANSFER)
+        read(CABI_CLIP_TRANSFER),
+        read(CABI_CLIP_ROUTES)
     )
 }
 

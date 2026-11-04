@@ -97,6 +97,7 @@ final class OpiEngine {
     static native String clipSendFiles(long handle, String peerId, String filesJson);
     static native boolean clipRespondTransfer(long handle, String transferId, boolean accept, String saveDir);
     static native boolean clipCancelTransfer(long handle, String transferId);
+    static native boolean clipSetTextRoutes(long handle, String sendPeer, String receivePeer);
 }
 public final class Main {
     static int failures = 0;
