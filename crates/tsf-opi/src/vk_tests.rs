@@ -19,6 +19,15 @@ fn unmapped_vk_never_becomes_printable() {
 }
 
 #[test]
+fn synthetic_unicode_packet_is_never_claimed_by_the_ime() {
+    // SendInput(KEYEVENTF_UNICODE) → wParam=VK_PACKET，字符在 lParam 扫描码。
+    // 交给 ToUnicodeEx(VK_PACKET) 会造出 '-'（用户实测语音中文变横线）；必须放行
+    // 给 TranslateMessage → WM_CHAR。
+    assert_eq!(vk_to_engine_keycode(VK_PACKET, 1, '-' as u16), NO_KEYVAL);
+    assert_eq!(vk_to_engine_keycode(VK_PACKET, 1, '你' as u16), NO_KEYVAL);
+}
+
+#[test]
 fn numpad_with_numlock_off_never_becomes_letters() {
     // NumLock 关时小键盘 1..9 = VK_NUMPAD1..9 = 0x61..0x69 = 'a'..'i'
     for vk in 0x61..=0x69 {

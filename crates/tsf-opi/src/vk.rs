@@ -44,6 +44,12 @@ pub const SPECIAL_KEYS: [u32; 9] = [
 /// `ToUnicodeEx` 对这些键本来就返回 0（无映射），必然走回退分支。
 pub const NO_KEYVAL: u32 = u32::MAX;
 
+/// `SendInput(KEYEVENTF_UNICODE)` 产生的合成字符键：wParam 是 VK_PACKET，真正的
+/// Unicode 字符在 lParam 扫描码里。**必须放行给应用**（TranslateMessage 会发
+/// WM_CHAR）；交给 `ToUnicodeEx(VK_PACKET)` 会按当前布局造出一个别的字符 ——
+/// 实测在中文布局下是 `-`，语音识别出的整段中文会被 IME 吞成横线。
+pub const VK_PACKET: u32 = 0xe7;
+
 /// 特殊键码低 16 位的 VK 原值（`logic::SPECIAL_BASE | vk` 的解码）。
 /// 靠掩码取 VK：VK 字面值只写在 `logic` 的常量定义处，这里不重复一份。
 pub const fn special_vk(key: u32) -> u32 {
@@ -62,6 +68,10 @@ pub fn special_keycode(vk: u32) -> Option<u32> {
 /// VK + `ToUnicodeEx` 的返回 → 引擎键码。`n` 为该 API 的返回值
 /// （`<= 0` = 无映射/死键/取不到键盘状态），`first` 为转换出的首个 UTF-16 单元。
 pub fn vk_to_engine_keycode(vk: u32, n: i32, first: u16) -> u32 {
+    // 合成 Unicode 字符不是键盘键：放行给应用，绝不进引擎（否则中文变 `-`）。
+    if vk == VK_PACKET {
+        return NO_KEYVAL;
+    }
     // Shift 的左右码（抬起事件）必须先归一：它们不在 SPECIAL_KEYS 里，而
     // `ToUnicodeEx(VK_LSHIFT)` 返回 0 ⇒ 会落到 NO_KEYVAL，轻按切中英永远收不到抬起。
     if is_shift_vk(vk) {
