@@ -26,7 +26,10 @@ import androidx.compose.material.Text
 import androidx.compose.material.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -49,6 +52,17 @@ internal fun SpeechOverlay(
     if (ui.phase == SpeechPhase.IDLE) return
     val palette = skinColors(if (background != null) background.defaultSkin() else skin)
     val screen = remember { activeScreenBounds() }
+    // 首次加载 239/358 MB 模型可能几十秒：把等待时间显示出来，别像卡死。
+    var loadingSeconds by remember { mutableStateOf(0) }
+    LaunchedEffect(ui.phase) {
+        loadingSeconds = 0
+        if (ui.phase == SpeechPhase.PREPARING) {
+            while (true) {
+                kotlinx.coroutines.delay(1000L)
+                loadingSeconds++
+            }
+        }
+    }
     Window(
         onCloseRequest = { SpeechHost.dismiss() },
         state = rememberWindowState(width = 420.dp, height = 190.dp),
@@ -90,7 +104,8 @@ internal fun SpeechOverlay(
             }
             when (ui.phase) {
                 SpeechPhase.PREPARING -> Text(
-                    ui.text.ifEmpty { "正在加载模型…首次加载可能需要几十秒（之后复用）" },
+                    (ui.text.ifEmpty { "正在加载模型…首次加载可能需要几十秒（之后复用）" }) +
+                        "（已 ${loadingSeconds} 秒）",
                     fontSize = 13.sp, color = palette.fg,
                 )
                 SpeechPhase.RECORDING -> {
