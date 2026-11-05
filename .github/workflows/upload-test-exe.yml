@@ -18,6 +18,7 @@ jobs:
   upload:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Download artifact and upload as release test asset
         shell: bash
         env:
