@@ -34,7 +34,7 @@ fn main() {
 
     let mut config = ClipConfig::new(&dir);
     config.discovery_port = port;
-    config.device_name = format!("peer-{role}");
+    config.device_name = format!("peer{role}");
     config.advertise_ipv4 = Some(own);
     config.advertise_prefix = Some(prefix);
     let node = ClipNode::start(config).expect("start clip node");
