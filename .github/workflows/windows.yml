@@ -463,16 +463,8 @@ jobs:
           if ($env:TIER -eq 'basic' -and (Test-Path (Join-Path $app 'app\trad.opid'))) {
             throw "基础包不应带扩展词库 app\trad.opid（应改为设置内下载）"
           }
-          if ($env:TIER -eq 'full') {
-            foreach ($f in @('app\opi_asr.dll', 'app\onnxruntime.dll')) {
-              if (-not (Test-Path (Join-Path $app $f))) { throw "完整包 app image 缺语音引擎 $f" }
-            }
-          } else {
-            foreach ($f in @('app\opi_asr.dll', 'app\onnxruntime.dll')) {
-              if (Test-Path (Join-Path $app $f)) {
-                throw "普通/基础包不应带语音引擎 $f（应改为设置内下载）"
-              }
-            }
+          foreach ($f in @('app\opi_asr.dll', 'app\onnxruntime.dll')) {
+            if (-not (Test-Path (Join-Path $app $f))) { throw "app image 缺语音引擎 $f" }
           }
           if ($env:TIER -eq 'full') {
             # 模型作为 JAR 资源随包（运行期首次录音解压）；确认主 jar 确实变大。
