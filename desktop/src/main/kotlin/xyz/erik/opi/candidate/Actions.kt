@@ -157,13 +157,17 @@ fun desktopSymbolCommit(text: String): String? =
  */
 fun desktopSpeechCommit(text: String): String? =
     if (isWindows()) {
-        SpeechFocus.restore()
-        val injected = injectUnicodeText(text)
-        if (injected == null) {
-            null
+        // 前台还是我们的浮层/状态栏时不能 SendInput（会“成功”打进自己），直接走 TSF。
+        if (!SpeechFocus.prepare()) {
+            controlCommit(text)
         } else {
-            val tsf = controlCommit(text)
-            if (tsf == null) null else "$injected；TSF 也失败：$tsf"
+            val injected = injectUnicodeText(text)
+            if (injected == null) {
+                null
+            } else {
+                val tsf = controlCommit(text)
+                if (tsf == null) null else "$injected；TSF 也失败：$tsf"
+            }
         }
     } else {
         runExternal(listOf(opiCtlBinary(), "insert", text))

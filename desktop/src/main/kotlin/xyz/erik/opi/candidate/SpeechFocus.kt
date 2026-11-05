@@ -24,13 +24,23 @@ internal object SpeechFocus {
         target = User32.INSTANCE.GetForegroundWindow()
     }
 
-    /** 上屏前调：只有前台被我们自己的窗口抢走时才恢复，用户切走的窗口不动。 */
-    fun restore() {
-        if (!isWindows()) return
-        val wanted = target ?: return
-        val current = User32.INSTANCE.GetForegroundWindow() ?: return
+    /**
+     * 上屏前调：返回 true = 当前前台不是我们自己的窗口，SendInput 会落到输入框。
+     * 前台被浮层/状态栏抢走时尝试恢复点话筒前的目标窗；恢复失败返回 false，
+     * 调用方必须改走 TSF —— 否则 SendInput 会“成功”打进我们自己的窗口。
+     * 用户主动切到别的应用时，把那个应用记为新的目标（不抢回旧窗）。
+     */
+    fun prepare(): Boolean {
+        if (!isWindows()) return true
+        val current = User32.INSTANCE.GetForegroundWindow() ?: return true
         val pid = IntByReference()
         User32.INSTANCE.GetWindowThreadProcessId(current, pid)
-        if (pid.value == myPid) User32.INSTANCE.SetForegroundWindow(wanted)
+        if (pid.value != myPid) {
+            target = current
+            return true
+        }
+        val wanted = target ?: return false
+        if (wanted == current) return false
+        return User32.INSTANCE.SetForegroundWindow(wanted)
     }
 }
