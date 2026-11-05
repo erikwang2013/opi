@@ -391,7 +391,7 @@ impl Worker {
             }
             match result {
                 Ok(recognition) => {
-                    let mut text = recognition.text.trim().to_string();
+                    let mut text = audio::clean_speech_text(&recognition.text);
                     if text.is_empty() {
                         continue;
                     }
