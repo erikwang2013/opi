@@ -36,7 +36,7 @@ impl TsfTextService {
         // 候选窗「直接插入」（commit_text：符号页多选）：插文档但**不动引擎、不通知
         // sink**（`on_commit` 会收起窗口，而符号页要留在屏幕上连续点选；裁决
         // 2026-10-10，见 candidate_io.rs 协议头）。这里是按键/焦点路径的兜底：
-        // 主路径是入队时的 PostMessage 唤醒（`tsf_timer.rs`）。
+        // 主路径是入队时的同步 SendMessage 唤醒（`tsf_timer.rs`）。
         while let Some((text, seq)) = self.state.take_pending_text() {
             self.state.insert_text(&text, seq);
         }

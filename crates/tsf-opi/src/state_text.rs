@@ -4,22 +4,26 @@
 //! 直插文本队列的「入队 + 唤醒」半（从 state.rs 拆出守 500 行，2026-11-05）。
 //!
 //! 语音每 3 秒一段提交，若仍沿用「下一次按键/焦点才 drain」的旧语义，用户看到的是
-//! 停掉录音之后才一次性出字。这里在入队后 PostMessage 到按键线程的 message-only
+//! 停掉录音之后才一次性出字。这里在入队后同步 SendMessage 到按键线程的 message-only
 //! 窗口（`tsf_timer.rs`），让 UI 线程立刻取走 —— COM 插入仍只在 UI 线程发生。
+//! 用 SendMessage 而非 PostMessage：部分宿主按窗口过滤消息泵，投递消息可能永远
+//! 不被取走；同步消息在宿主下一次 Peek/GetMessage 时必然先被处理，且能拿到
+//! 「这段到底插没插进文档」的结果，用来如实回答控制面。
 //!
 //! 本模块是 `state` 的子模块：可以直接用父模块的私有字段，不额外开口子。
 
 use std::sync::atomic::Ordering;
 
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
-use windows::Win32::UI::WindowsAndMessaging::PostMessageW;
+use windows::Win32::UI::WindowsAndMessaging::{SMTO_ABORTIFHUNG, SMTO_BLOCK, SendMessageTimeoutW};
 
 use super::{DRAIN_MESSAGE, EngineShared, MAX_PENDING_TEXT, TsfSharedState};
 
 impl EngineShared {
     /// **读线程**调（候选窗 `commit_text` / 控制面 `commit`）：收下这段要直插
-    /// 文档的文本，**不做任何 COM 调用**。返回 false = 队列满或锁中毒 —— 丢这一次，
-    /// 不阻塞读线程。目标世代语义同 `enqueue_select`。
+    /// 文档的文本并**同步**等 UI 线程落地。返回 false = 队列满/锁中毒/无目标/
+    /// 目标窗口超时 —— 调用方据此报失败，不再假装「已提交」。
+    /// 真正的 COM 调用仍只在 UI 线程发生。
     pub fn enqueue_commit_text(&self, text: String) -> bool {
         let seq = self.target_seq();
         let queued = match self.pending_text.lock() {
@@ -29,12 +33,7 @@ impl EngineShared {
             }
             _ => false,
         };
-        // 语音每 3 秒一段：不叫醒按键线程就要等下一次按键/焦点，用户看到的是
-        // 「停止后才出字」。消息只负责唤醒，真正的 COM 插入仍在 UI 线程。
-        if queued {
-            self.wake_drain();
-        }
-        queued
+        queued && self.wake_drain()
     }
 
     /// **按键线程**调：取一段待直插的文本（文本 + 入队时的目标世代）。None = 队列空。
@@ -67,21 +66,32 @@ impl EngineShared {
         }
     }
 
-    /// **读线程**调：唤醒 UI 线程立刻取走刚入队的直插文本。
-    /// PostMessage 不阻塞；窗口已销毁（Deactivate 竞态）只是投递失败，文本留在
-    /// 队列里由下一次按键/焦点兜底。
-    fn wake_drain(&self) {
+    /// **读线程**调：阻塞等 UI 线程取走刚入队的直插文本。返回 true = UI 线程已经
+    /// 处理了唤醒（窗口过程返回 `已插入段数 + 1`，>0 即处理过）。
+    /// 2s 超时是防宿主 UI 线程卡死；窗口已销毁（Deactivate 竞态）直接 false。
+    ///
+    /// 不用「插入段数 > 0」当成功判据：按键线程的 drain 可能先一步把这段取走，
+    /// 窗口过程随后看到空队列（返回 1），那仍是成功，不能误报上屏失败。
+    fn wake_drain(&self) -> bool {
         let hwnd = self.drain_hwnd.load(Ordering::Relaxed);
-        if hwnd != 0 {
-            let _ = unsafe {
-                PostMessageW(
-                    Some(HWND(hwnd as *mut core::ffi::c_void)),
-                    DRAIN_MESSAGE,
-                    WPARAM(0),
-                    LPARAM(0),
-                )
-            };
+        if hwnd == 0 {
+            return false;
         }
+        let mut result = 0usize;
+        // SAFETY: hwnd 是按键线程创建的 message-only 窗口；SendMessageTimeout 跨线程
+        // 只投递消息，不让我们在错误线程碰 COM。
+        let sent = unsafe {
+            SendMessageTimeoutW(
+                HWND(hwnd as *mut core::ffi::c_void),
+                DRAIN_MESSAGE,
+                WPARAM(0),
+                LPARAM(0),
+                SMTO_ABORTIFHUNG | SMTO_BLOCK,
+                2000,
+                Some(&mut result),
+            )
+        };
+        sent.0 != 0 && result > 0
     }
 }
 

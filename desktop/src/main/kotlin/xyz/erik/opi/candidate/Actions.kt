@@ -137,8 +137,8 @@ fun runExternal(cmd: List<String>, timeoutMs: Long = 3000): String? {
  * · Linux：`opi-ctl insert <文本>`（D-Bus → addon 的 `ic->commitString`）—— 只要
  *   fcitx5 里有焦点输入框就能上屏，与进程拓扑无关；失败短语来自 [runExternal]，逐字有用。
  * · Windows：本机控制面 `\\.\pipe\opi-control-v2` → 候选窗进程 broker → TSF
- *   （ControlPlane.kt）。TSF 入队后立刻 PostMessage 唤醒 UI 线程落进文档
- *   （见 crates/tsf-opi/src/tsf_timer.rs），语音每 3 秒的分段因此能边识别边出字。
+ *   （ControlPlane.kt）。TSF 入队后同步唤醒 UI 线程落进文档
+ *   （见 crates/tsf-opi/src/tsf_timer.rs）；语音则走 [desktopSpeechCommit] 直注。
  *
  * ⚠️ 两个宿主（状态栏、设置窗）**必须走这一条**：各写一份平台分支必然漂（此前
  * StatusBarApp 的调用方把 false 翻成写死的 Windows 解释，Linux 上的真实原因被顶掉了）。
@@ -146,6 +146,27 @@ fun runExternal(cmd: List<String>, timeoutMs: Long = 3000): String? {
 fun desktopSymbolCommit(text: String): String? =
     if (isWindows()) controlCommit(text)
     else runExternal(listOf(opiCtlBinary(), "insert", text))
+
+/**
+ * 语音分段上屏（状态栏话筒专用）。语义对齐移动端 `InputConnection.commitText`：
+ * 识别一段就往当前光标处打一段，不等按键、不经过输入法转换。
+ *
+ * Windows 先走 `SendInput` Unicode 直注（即使宿主还加载着旧 TSF DLL 也立即生效）；
+ * 目标进程完整性更高时注入会被拒，此时退回 TSF 控制面上屏（可能延迟，但不丢字）。
+ * Linux 与符号页同一条 `opi-ctl insert`。
+ */
+fun desktopSpeechCommit(text: String): String? =
+    if (isWindows()) {
+        val injected = injectUnicodeText(text)
+        if (injected == null) {
+            null
+        } else {
+            val tsf = controlCommit(text)
+            if (tsf == null) null else "$injected；TSF 也失败：$tsf"
+        }
+    } else {
+        runExternal(listOf(opiCtlBinary(), "insert", text))
+    }
 
 /** jpackage/autostart 的 PATH 偶尔不含 /usr/bin：包里固定装在这里，存在就用绝对路径。 */
 private fun opiCtlBinary(): String =

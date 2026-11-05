@@ -178,3 +178,44 @@ private fun injectWindows(key: VkKey, down: Boolean): String? = try {
 } catch (t: Throwable) {
     "按键注入失败：${t.javaClass.simpleName}"
 }
+
+/**
+ * 把一段文字以 Unicode 直接注入当前焦点控件（不经过输入法转换，也不经过 TSF 队列）。
+ *
+ * 这是语音分段上屏的 Windows 实现，等价于移动端的 `InputConnection.commitText`：
+ * 识别出什么就原样打到光标处（标点、符号都保留），每 3 秒一段立即出现。
+ * `SendInput` 在目标进程完整性级别更高（管理员窗口）时会被系统拒绝 —— 调用方
+ * 据此退回 TSF；不能把拒绝报成成功。
+ *
+ * ⚠️ 与 [injectWindows] 一样，本机无 Windows，只过编译；真机行为需验收。
+ */
+fun injectUnicodeText(text: String): String? {
+    if (text.isEmpty()) return null
+    if (!isWindows()) return "仅 Windows 支持文字注入"
+    return try {
+        val units = text.toCharArray()
+        val inputs = ArrayList<WinUser.INPUT>(units.size * 2)
+        for (unit in units) {
+            inputs.add(unicodeInput(unit, down = true))
+            inputs.add(unicodeInput(unit, down = false))
+        }
+        val arr = inputs.toTypedArray()
+        val n = User32.INSTANCE.SendInput(WinDef.DWORD(arr.size.toLong()), arr, arr[0].size()).toInt()
+        if (n == arr.size) null else "系统拒绝了文字注入（SendInput 返回 $n/${arr.size}）"
+    } catch (t: Throwable) {
+        "文字注入失败：${t.javaClass.simpleName}"
+    }
+}
+
+private fun unicodeInput(unit: Char, down: Boolean): WinUser.INPUT {
+    val input = WinUser.INPUT()
+    input.type = WinDef.DWORD(WinUser.INPUT.INPUT_KEYBOARD.toLong())
+    input.input.setType("ki")
+    input.input.ki.wVk = WinDef.WORD(0L)
+    input.input.ki.wScan = WinDef.WORD(unit.code.toLong())
+    input.input.ki.time = WinDef.DWORD(0L)
+    val flags = WinUser.KEYBDINPUT.KEYEVENTF_UNICODE.toLong() or
+        if (down) 0L else WinUser.KEYBDINPUT.KEYEVENTF_KEYUP.toLong()
+    input.input.ki.dwFlags = WinDef.DWORD(flags)
+    return input
+}

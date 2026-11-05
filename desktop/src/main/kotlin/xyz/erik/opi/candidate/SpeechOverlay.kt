@@ -93,6 +93,11 @@ internal fun SpeechOverlay(
                 )
                 SpeechPhase.RECORDING -> {
                     Text("正在录音…每 3 秒自动上屏一段；点「停止」结束", fontSize = 13.sp, color = palette.fg)
+                    // 已上屏的分段同步显示：与移动端输入框里逐段出现的效果一致，
+                    // 上屏失败也在这里立刻可见（不再等到停止才看到错误）。
+                    if (ui.text.isNotEmpty()) {
+                        Text(ui.text, fontSize = 14.sp, color = palette.fg, maxLines = 4)
+                    }
                     Box(
                         Modifier.fillMaxWidth().height(6.dp)
                             .background(palette.line),
@@ -101,6 +106,9 @@ internal fun SpeechOverlay(
                             Modifier.fillMaxWidth(ui.level).fillMaxHeight()
                                 .background(palette.accent),
                         )
+                    }
+                    if (ui.error.isNotEmpty()) {
+                        Text(ui.error, fontSize = 12.sp, color = palette.accent)
                     }
                 }
                 SpeechPhase.RECOGNIZING -> Text("正在识别…", fontSize = 13.sp, color = palette.fg)

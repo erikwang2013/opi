@@ -28,7 +28,7 @@
 //! 有两处：下一个键事件开头（`tsf.rs::handle_key_inner` / `key_sink.rs::OnTestKeyDown`）
 //! 与焦点变化（`key_sink.rs::OnSetFocus`）。候选窗是非激活窗口（desktop `Main.kt`
 //! 的 `focusable = false`），点它不产生焦点事件 ⇒ 「点完候选不敲键」仍会延迟。
-//! **直插文本不再延迟**：读线程入队后 PostMessage 唤醒 `tsf_timer.rs` 的窗口，
+//! **直插文本不再延迟**：读线程入队后同步 SendMessage `tsf_timer.rs` 的窗口，
 //! UI 线程立刻 `insert_text`（语音每 3 秒一段靠这条路径上屏）。
 //!
 //! 排队动作带着入队时的**目标世代**（`EngineShared::target_seq`）：点选之后换了文档，
@@ -81,7 +81,7 @@ pub struct EngineShared {
     /// 入队时的 `target_seq`），由按键线程取走执行（见 `enqueue_commit_text`）。
     pending_text: Mutex<VecDeque<(String, u32)>>,
     /// 按键线程 message-only 窗口（`tsf_timer.rs`）；0 = 尚未 Activate / 已销毁。
-    /// 读线程入队直插文本后 PostMessage 叫醒它，不再等下一次按键。
+    /// 读线程入队直插文本后 SendMessage 叫醒它，不再等下一次按键。
     drain_hwnd: AtomicIsize,
 }
 
@@ -347,18 +347,17 @@ impl TsfSharedState {
     /// 与 `select_and_insert` 同一条下沉路径（`insert_into`），只是没有逻辑层那一步。
     /// 无插入目标（无焦点文档/未在键事件中记过 target）→ 静默放弃，与既有路径同策略。
     /// `seq` 语义同 `select_and_insert`：目标文档换了就丢这段文本。
-    pub fn insert_text(&self, text: &str, seq: u32) {
+    /// 返回是否真正交给了 TSF（false = 无目标/世代不符/宿主拒绝），供同步上屏应答。
+    pub fn insert_text(&self, text: &str, seq: u32) -> bool {
         if seq != self.engine.target_seq() {
             tlog!(
                 "tsf-opi: 丢弃排队的直插文本（{} 字符）：目标文档已切换",
                 text.chars().count()
             );
-            return;
+            return false;
         }
         let pic = self.target.lock().ok().and_then(|g| g.clone());
-        if let Some(pic) = pic {
-            self.insert_into(&pic, text);
-        }
+        pic.is_some_and(|pic| self.insert_into(&pic, text))
     }
 
     // 文档写入（`insert_into` + `InsertTextSession`）在 `state_insert.rs`：
@@ -439,24 +438,30 @@ impl CandidateAction for SharedAction {
     }
 
     /// **读线程**上同步执行（只持引擎锁，不碰 COM）。上屏文本走既有队列，
-    /// 入队即 PostMessage 唤醒 UI 线程落地（`tsf_timer.rs`）。动作改了引擎态才刷新窗口。
+    /// 入队即同步唤醒 UI 线程落地（`tsf_timer.rs`）。动作改了引擎态才刷新窗口。
     fn on_ctl(&self, request: &CtlRequest) -> Option<String> {
         let settings = crate::ctl::default_settings_path();
         let dicts = crate::ctl::default_dicts_dir();
-        let (reply, changed) = {
+        let (mut reply, changed) = {
             let mut logic = self.engine.lock_logic()?;
             let reply = crate::ctl::execute(&mut logic, &request.op, settings.as_deref(), &dicts);
             let changed = matches!(&reply, Ok(CtlReply::Action { .. } | CtlReply::Reload));
             (reply, changed)
         };
-        if let Ok(
-            CtlReply::Action {
-                commit: Some(text), ..
+        match &reply {
+            // 语音/符号页的直插：同步等 UI 线程落地，失败如实回给调用方。
+            Ok(CtlReply::Commit(text)) => {
+                if !self.engine.enqueue_commit_text(text.clone()) {
+                    reply = Err("上屏失败：目标窗口未响应（请确认光标在输入框内）".into());
+                }
             }
-            | CtlReply::Commit(text),
-        ) = &reply
-        {
-            self.engine.enqueue_commit_text(text.clone());
+            // 切档前的待确认原文：动作本身已经生效，上屏失败不回滚档位。
+            Ok(CtlReply::Action {
+                commit: Some(text), ..
+            }) => {
+                self.engine.enqueue_commit_text(text.clone());
+            }
+            _ => {}
         }
         if changed {
             self.refresh();

@@ -5,9 +5,9 @@
 //!
 //! `state.rs` 的线程模型决定了直插只能在宿主 UI 线程上走 COM；读线程入队后原先
 //! 只能等下一次按键/焦点。语音每 3 秒提交一段，那条路径变成「停止后才出字」。
-//! 读线程现在 `PostMessage(DRAIN_MESSAGE)` 到这个窗口（`state_text.rs`），本文件
+//! 读线程现在同步 `SendMessage(DRAIN_MESSAGE)` 到这个窗口（`state_text.rs`），本文件
 //! 在 UI 线程上把队列取空 —— 与按键线程的 drain 同一套 `insert_text`，不新增
-//! 插入实现。
+//! 插入实现。同步而不是 Post：宿主按窗口过滤消息泵时也能落地，且能如实回报结果。
 //!
 //! 窗口只在 Activate..Deactivate 之间存在；销毁时先摘登记再 DestroyWindow，
 //! Deactivate 的竞态投递只会失败，不会碰到已释放的状态（见 `wake_drain`）。
@@ -121,20 +121,25 @@ impl TsfSharedState {
         }
     }
 
-    /// 窗口消息：取空直插队列。目标为空（用户还没敲过键）时先从线程焦点补取，
-    /// 否则 `insert_text` 会因为无 context 静默丢弃 —— 正是「点了话筒直接说」的场景。
-    fn drain_speech(&self) {
+    /// 窗口消息：取空直插队列，返回真正落进文档的段数。
+    /// 目标为空（用户还没敲过键）时先从线程焦点补取，否则 `insert_text` 会因为
+    /// 无 context 静默丢弃 —— 正是「点了话筒直接说」的场景。
+    fn drain_speech(&self) -> usize {
         if !self.has_pending_text() {
-            return; // 空队列不碰 COM
+            return 0; // 空队列不碰 COM
         }
         if !self.target_present()
             && let Some(pic) = self.focus_context()
         {
             self.remember_target(Some(&pic));
         }
+        let mut inserted = 0;
         while let Some((text, seq)) = self.take_pending_text() {
-            self.insert_text(&text, seq);
+            if self.insert_text(&text, seq) {
+                inserted += 1;
+            }
         }
+        inserted
     }
 
     /// 当前焦点文档的 base context（`ITfThreadMgr::GetFocus`）。
@@ -167,14 +172,17 @@ unsafe extern "system" fn drain_proc(
     // SAFETY: userdata 在窗口创建后由 start_drain_window 写入，WM_NCDESTROY 前有效。
     let ctx = unsafe { GetWindowLongPtrW(hwnd, GWLP_USERDATA) } as *mut DrainCtx;
     if msg == DRAIN_MESSAGE {
+        let mut inserted = 0usize;
         if !ctx.is_null() {
             // SAFETY: stop_drain_window 先把 state 置空再销毁窗口，Acquire 保证看到空值。
             let state = unsafe { (*ctx).state.load(Ordering::Acquire) };
             if !state.is_null() {
-                let _ = catch_unwind(AssertUnwindSafe(|| unsafe { (*state).drain_speech() }));
+                inserted = catch_unwind(AssertUnwindSafe(|| unsafe { (*state).drain_speech() }))
+                    .unwrap_or(0);
             }
         }
-        return LRESULT(0);
+        // +1：让 SendMessageTimeout 能区分「处理了但没插入(1)」和「超时(0)」。
+        return LRESULT(inserted as isize + 1);
     }
     if msg == WM_NCDESTROY {
         // SAFETY: 同线程、窗口仍有效；清 userdata 并释放 ctx（此后再无本窗口消息）。
