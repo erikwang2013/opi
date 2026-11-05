@@ -72,6 +72,23 @@ final class OpiClipboard {
 
     var isEnabled: Bool { KeyboardPreferences.clipEnabled }
     var isRunning: Bool { runner.isRunning }
+    var deviceName: String { opiKeyboardLocalDeviceName() }
+    var customDeviceName: String {
+        UserDefaults.standard.string(forKey: "DeviceName") ?? ""
+    }
+
+    /// 保存设备名；运行中重启内核让 beacon 用新名字。返回 nil = 成功。
+    @discardableResult
+    func setDeviceName(_ raw: String) -> String? {
+        let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let error = opiKeyboardDeviceNameError(name) { return error }
+        let wasRunning = isRunning
+        if wasRunning { stop() }
+        UserDefaults.standard.set(name, forKey: "DeviceName")
+        if wasRunning { start() }
+        postChanged()
+        return nil
+    }
     var peers: [OpiClipPeerInfo] { withLock { peersCache } }
     var pendingPairings: [OpiClipPendingInfo] { withLock { pendingCache } }
     var lastErrorText: String { withLock { errorText } }
@@ -100,7 +117,7 @@ final class OpiClipboard {
 
     private func start() {
         guard visible, isEnabled, controller != nil else { return }
-        runner.start(configJSON: Self.configJSON(deviceName: Self.localDeviceName()))
+        runner.start(configJSON: Self.configJSON(deviceName: opiKeyboardLocalDeviceName()))
     }
 
     private func stop() {
@@ -424,26 +441,6 @@ final class OpiClipboard {
     }
 
     // MARK: - 配置
-
-    private static func localDeviceName() -> String {
-        var name = UIDevice.current.name
-        while name.utf8.count > 64 { name.removeLast() }
-        return name.isEmpty ? "iPhone" : name
-    }
-
-    private static func dataDirectory() -> URL {
-        // App Group 优先：宿主与扩展在同一容器里共享身份/信任表。
-        if let group = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: appGroupID
-        ) {
-            return group.appendingPathComponent("clip")
-        }
-        // fallback：扩展自己的 Application Support。与宿主不共享，重装即丢。
-        let base = FileManager.default.urls(
-            for: .applicationSupportDirectory, in: .userDomainMask
-        ).first ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        return base.appendingPathComponent("opi-clip")
-    }
 
     private static func configJSON(deviceName: String) -> String {
         let object: [String: Any] = [

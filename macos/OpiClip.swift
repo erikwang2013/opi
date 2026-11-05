@@ -78,6 +78,24 @@ final class OpiClipService {
     var lastSourceText: String? { withLock { sourceName } }
     var deviceName: String { Self.localDeviceName() }
 
+    /// 用户填的自定义名（空 = 系统默认）。
+    var customDeviceName: String { OpiSettingsStore.string("DeviceName", default: "") }
+
+    /// 校验并保存设备名；返回 nil = 成功，非 nil = 给用户看的原因。运行中会重建内核。
+    @discardableResult
+    func setDeviceName(_ raw: String) -> String? {
+        let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let error = Self.deviceNameError(name) { return error }
+        let wasRunning = withLock { running }
+        if wasRunning { runner.stop() }
+        OpiSettingsStore.set("DeviceName", name)
+        if wasRunning {
+            runner.start(configJSON: Self.configJSON(deviceName: Self.localDeviceName()))
+        }
+        onChange?()
+        return nil
+    }
+
     // MARK: - 生命周期
 
     /// main.swift 启动时调用：只按落盘开关决定是否启动，不碰剪贴板内容。
@@ -321,12 +339,50 @@ final class OpiClipService {
         return body()
     }
 
+    /// 设备名只允许中文、英文字母、数字（与 `opi-clip` 的 device_name_valid 同口径）。
+    static func validDeviceName(_ text: String) -> Bool {
+        if text.isEmpty || text.utf8.count > 64 { return false }
+        return text.unicodeScalars.allSatisfy { scalar in
+            let v = scalar.value
+            return (v >= 48 && v <= 57) || (v >= 65 && v <= 90) || (v >= 97 && v <= 122)
+                || (v >= 0x3400 && v <= 0x4DBF) || (v >= 0x4E00 && v <= 0x9FFF)
+                || (v >= 0xF900 && v <= 0xFAFF) || (v >= 0x20000 && v <= 0x2FA1F)
+        }
+    }
+
+    static func deviceNameError(_ text: String) -> String? {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if t.isEmpty { return nil }
+        if t.utf8.count > 64 { return OpiText.t("最多 64 字节（中文约 21 个字）") }
+        if !validDeviceName(t) {
+            return OpiText.t("只能使用中文、英文字母和数字，不能有空格或符号")
+        }
+        return nil
+    }
+
+    private static func sanitizeDeviceName(_ raw: String) -> String {
+        var out = ""
+        var bytes = 0
+        for scalar in raw.unicodeScalars {
+            let v = scalar.value
+            let allowed = (v >= 48 && v <= 57) || (v >= 65 && v <= 90) || (v >= 97 && v <= 122)
+                || (v >= 0x3400 && v <= 0x4DBF) || (v >= 0x4E00 && v <= 0x9FFF)
+                || (v >= 0xF900 && v <= 0xFAFF) || (v >= 0x20000 && v <= 0x2FA1F)
+            if !allowed { continue }
+            let n = String(scalar).utf8.count
+            if bytes + n > 64 { break }
+            out.unicodeScalars.append(scalar)
+            bytes += n
+        }
+        return out
+    }
+
     private static func localDeviceName() -> String {
-        // 只取主机名：`Host.localizedName` 在本机无编译器可核对，不赌未验证的 API。
-        var name = ProcessInfo.processInfo.hostName
-        // core 校验 device_name ≤ 64 字节（UTF-8）。
-        while name.utf8.count > 64 { name.removeLast() }
-        return name.isEmpty ? "Mac" : name
+        let custom = OpiSettingsStore.string("DeviceName", default: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if validDeviceName(custom) { return custom }
+        let clean = sanitizeDeviceName(ProcessInfo.processInfo.hostName)
+        return clean.isEmpty ? "Mac" : clean
     }
 
     private static func configJSON(deviceName: String) -> String {

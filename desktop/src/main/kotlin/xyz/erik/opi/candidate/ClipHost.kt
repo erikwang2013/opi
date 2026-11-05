@@ -21,4 +21,8 @@ internal object ClipHost {
     fun setEnabled(on: Boolean) {
         ensureStarted().setEnabled(on)
     }
+
+    fun setDeviceName(name: String) {
+        ensureStarted().setDeviceName(name)
+    }
 }

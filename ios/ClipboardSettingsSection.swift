@@ -18,6 +18,7 @@ final class ClipboardSettingsSection: UIView {
     private let errorLabel = UILabel()
     private let toggle = UISwitch()
     private let transferToggle = UISwitch()
+    private let nameField = UITextField()
     private let root = UIStackView()
     private let dynamic = UIStackView()
     private var noteLabels: [UILabel] = []
@@ -71,6 +72,29 @@ final class ClipboardSettingsSection: UIView {
         transferRow.alignment = .center
         transferRow.spacing = 10
 
+        nameField.text = OpiClipboard.shared.customDeviceName
+        nameField.placeholder = OpiText.t("中文/英文/数字，留空用系统默认名")
+        nameField.borderStyle = .roundedRect
+        nameField.font = .systemFont(ofSize: 12)
+        nameField.autocapitalizationType = .none
+        nameField.autocorrectionType = .no
+        nameField.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let saveName = makeAction("保存名称") { [weak self] in
+            guard let self else { return }
+            if let error = OpiClipboard.shared.setDeviceName(self.nameField.text ?? "") {
+                self.errorLabel.text = OpiText.t(error)
+                self.errorLabel.isHidden = false
+            } else {
+                self.refresh()
+                self.errorLabel.text = OpiText.t("设备名已保存")
+                self.errorLabel.isHidden = false
+            }
+        }
+        let nameRow = UIStackView(arrangedSubviews: [nameField, saveName])
+        nameRow.axis = .horizontal
+        nameRow.spacing = 8
+        nameRow.alignment = .center
+
         dynamic.axis = .vertical
         dynamic.spacing = 4
 
@@ -84,6 +108,7 @@ final class ClipboardSettingsSection: UIView {
         actions.spacing = 8
 
         root.addArrangedSubview(switchRow)
+        root.addArrangedSubview(nameRow)
         root.addArrangedSubview(transferRow)
         root.addArrangedSubview(dynamic)
         root.addArrangedSubview(actions)

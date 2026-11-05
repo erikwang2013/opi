@@ -39,7 +39,6 @@ enum HostTransferState {
         case .canceled: return "已取消"
         }
     }
-
     var isFinished: Bool {
         self == .done || self == .failed || self == .canceled
     }
@@ -78,7 +77,6 @@ struct HostTransfer {
         guard totalBytes > 0 else { return state == .done ? 1 : 0 }
         return min(1, Double(transferredBytes) / Double(totalBytes))
     }
-
     var isIncomingOffer: Bool {
         !outgoing && state == .waiting
     }
@@ -123,20 +121,39 @@ final class OpiTransferService {
     }
 
     // MARK: - 快照
-
     var isRunning: Bool { withLock { runningCache } }
     var peers: [HostPeerInfo] { withLock { peersCache } }
     var transfers: [HostTransfer] { withLock { transfersCache } }
     var pendingPairings: [HostPairingInfo] { withLock { pendingCache } }
     var lastErrorText: String { withLock { errorCache } }
-    var deviceName: String { Self.localDeviceName() }
+    var deviceName: String { opiTransferLocalDeviceName() }
+
+    /// 用户填的自定义名（空 = 系统默认）。
+    var customDeviceName: String {
+        UserDefaults.standard.string(forKey: "DeviceName") ?? ""
+    }
+
+    /// 校验并保存设备名；返回 nil = 成功。运行中会重建内核让 beacon 用新名字。
+    @discardableResult
+    func setDeviceName(_ raw: String) -> String? {
+        let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let error = opiTransferDeviceNameError(name) { return error }
+        let wasRunning = withLock { runningCache }
+        if wasRunning { runner.stop() }
+        UserDefaults.standard.set(name, forKey: "DeviceName")
+        if wasRunning {
+            runner.start(configJSON: Self.configJSON(deviceName: opiTransferLocalDeviceName()))
+        }
+        notifyMain()
+        return nil
+    }
 
     // MARK: - 生命周期
 
     /// 幂等：传输页每次出现都可以调；内核已在运行时不会重启。
     func start() {
         _ = Self.dataDirectory()
-        runner.start(configJSON: Self.configJSON(deviceName: Self.localDeviceName()))
+        runner.start(configJSON: Self.configJSON(deviceName: opiTransferLocalDeviceName()))
     }
 
     func stop() {
@@ -151,7 +168,6 @@ final class OpiTransferService {
     }
 
     // MARK: - 配对与设备
-
     func pair(_ peerId: String) { runner.pair(peerId) }
     func refreshPeers() { runner.refreshPeers() }
 
@@ -168,7 +184,6 @@ final class OpiTransferService {
     }
 
     // MARK: - 发送
-
     /// nil = 已交给内核；否则是前置拒绝原因（未信任/离线/超限）。
     func sendFiles(_ urls: [URL], to peerId: String) -> String? {
         guard let peer = peers.first(where: { $0.id == peerId }) else { return "目标设备不存在" }
@@ -208,7 +223,6 @@ final class OpiTransferService {
         runner.publish(text)
         return nil
     }
-
     func sendClipboard() -> String? {
         guard let text = UIPasteboard.general.string, !text.isEmpty else {
             return "本机剪贴板没有纯文本"
@@ -257,7 +271,6 @@ final class OpiTransferService {
             }
         }
     }
-
     func clearFinished() {
         withLock {
             transfersCache.removeAll { $0.state.isFinished }
@@ -307,7 +320,6 @@ final class OpiTransferService {
             break
         }
     }
-
     private func handleTransferEvent(type: String, event: [String: Any]) {
         guard let id = event["transfer_id"] as? String, !id.isEmpty else { return }
         let peerId = event["instance_id"] as? String ?? ""
@@ -382,7 +394,6 @@ final class OpiTransferService {
         }
         notifyMain()
     }
-
     private func handlePeers(_ list: [[String: Any]]) {
         let parsed: [HostPeerInfo] = list.compactMap { dict in
             guard let id = dict["instance_id"] as? String else { return nil }
@@ -423,7 +434,6 @@ final class OpiTransferService {
     }
 
     // MARK: - 工具
-
     func withLock<T>(_ body: () -> T) -> T {
         lock.lock()
         defer { lock.unlock() }
@@ -449,7 +459,6 @@ final class OpiTransferService {
         }
         all.flatMap { $0 }.forEach { $0.stopAccessingSecurityScopedResource() }
     }
-
     private static func parseFiles(_ any: Any?) -> [HostTransferFile] {
         guard let list = any as? [[String: Any]] else { return [] }
         return list.compactMap { dict in
@@ -468,7 +477,6 @@ final class OpiTransferService {
         if let text = any as? String { return UInt64(text) ?? 0 }
         return 0
     }
-
     private static func dataDirectory() -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory,
                                             in: .userDomainMask).first
@@ -476,12 +484,6 @@ final class OpiTransferService {
         let dir = base.appendingPathComponent("opi/transfer", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
-    }
-
-    private static func localDeviceName() -> String {
-        var name = UIDevice.current.name
-        while name.utf8.count > 64 { name.removeLast() }
-        return name.isEmpty ? "iPhone" : name
     }
 
     private static func configJSON(deviceName: String) -> String {

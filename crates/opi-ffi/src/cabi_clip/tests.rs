@@ -10,7 +10,7 @@ use serde_json::Value;
 
 fn config_json(dir: &std::path::Path) -> String {
     format!(
-        r#"{{"data_dir":"{}","tcp_port":0,"discovery_port":46899,"device_name":"ffi-test"}}"#,
+        r#"{{"data_dir":"{}","tcp_port":0,"discovery_port":46899,"device_name":"ffitest"}}"#,
         dir.display()
     )
 }
@@ -41,7 +41,7 @@ fn status_before_start_and_release() {
     };
     let status: Value = serde_json::from_str(&status).unwrap();
     assert_eq!(status["running"], false);
-    assert_eq!(status["device_name"], "ffi-test");
+    assert_eq!(status["device_name"], "ffitest");
     assert_eq!(status["peers"], 0);
     assert_eq!(status["instance_id"], Value::Null);
     unsafe { OpiClip::free(raw) }.unwrap();

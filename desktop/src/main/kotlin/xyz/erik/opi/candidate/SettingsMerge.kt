@@ -33,7 +33,7 @@ internal val DESKTOP_CONFIG_KEYS: Set<String> = linkedSetOf(
     "StatusBarHidden", "StatusBarVk", "StatusBarSymbols", "StatusBarMic",
     "StatusBarTrad", "StatusBarPunct", "StatusBarLang", "StatusBarEnPro",
     "StatusBarLogo", "StatusBarFullwidth", "StatusBarSettings", "StatusBarScale",
-    "ClipEnabled", "SpeechEnabled", "SpeechLanguage", "UiLanguage",
+    "ClipEnabled", "ClipDeviceName", "SpeechEnabled", "SpeechLanguage", "UiLanguage",
 )
 
 /**
@@ -72,6 +72,7 @@ internal fun managedValues(s: OpSettings): LinkedHashMap<String, String> = linke
     "StatusBarScale" to s.statusbar.scale.toString(),
     // 跨设备剪贴板（2026-11-01）：默认关。
     "ClipEnabled" to boolText(s.clipEnabled),
+    "ClipDeviceName" to s.clipDeviceName,
     "SpeechEnabled" to boolText(s.speechEnabled),
     "SpeechLanguage" to s.speechLanguage,
     // 界面语言：曾经只在 toIni() 里写、不在 managed 表里 ⇒ 已有文件改不了它（补齐）。

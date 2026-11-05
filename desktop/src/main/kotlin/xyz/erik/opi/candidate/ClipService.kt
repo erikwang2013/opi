@@ -1,14 +1,7 @@
 // SPDX-FileCopyrightText: 2026 erik.xyz
 // SPDX-License-Identifier: MIT
 
-//! 跨设备剪贴板的**宿主**：`--statusbar` 常驻进程里的一条专用线程独占 FFI 句柄。
-//!
-//! 为什么单独一条线程：`opi_clip_*` 的句柄是 thread-confined（见 cabi_clip.rs）。
-//! create/start/poll/publish/destroy **全在这里**；设置窗只能通过 [ClipControlServer]
-//! 入队命令，绝不直接碰句柄。
-//!
-//! 方向：本机剪贴板变化 → `opi_clip_local_text` 广播；远端事件 → 写回本机剪贴板。
-//! 不自动粘贴、不记录内容、不落盘。防回环由内核负责，适配器再挡一次自己写入的回声。
+//! 跨设备剪贴板宿主：专用线程独占 thread-confined FFI 句柄；[ClipControlServer] 只入队命令。
 
 package xyz.erik.opi.candidate
 
@@ -27,7 +20,7 @@ private const val CORE_RETRY_NS = 2_000_000_000L
 internal class ClipService {
     private val windows = isWindows()
     private val mode = currentClipMode(windows)
-    private val deviceName = clipDeviceName(
+    private val deviceNameState = ClipDeviceNameState(
         System.getenv("COMPUTERNAME") ?: System.getenv("HOSTNAME"),
     )
     private val commands = LinkedBlockingQueue<ClipCommand>()
@@ -38,7 +31,6 @@ internal class ClipService {
     @Volatile private var snapshot: String = ""
     private var thread: Thread? = null
     private var control: ClipControlServer? = null
-
     // ---- 以下字段只在剪贴板线程上读写 ----
     private var ffi: OpiClipFfi? = null
     private var ffiLoadAttempted = false
@@ -70,7 +62,6 @@ internal class ClipService {
     private var coreLanPrefix: Int? = null
     private var beaconsSent = 0L
     private var beaconsReceived = 0L
-
     init {
         publishSnapshot()
     }
@@ -95,13 +86,16 @@ internal class ClipService {
         if (!closed) commands.offer(ClipCommand.SetEnabled(on))
     }
 
+    fun setDeviceName(name: String) {
+        if (!closed) commands.offer(ClipCommand.SetDeviceName(name))
+    }
+
     fun close() {
         if (closed) return
         closed = true
         runCatching { control?.close() }
         runCatching { thread?.join(1500) }
     }
-
     // ---------- 循环（剪贴板线程） ----------
 
     private fun run() {
@@ -137,6 +131,7 @@ internal class ClipService {
     private fun handleCommand(cmd: ClipCommand) {
         when (cmd) {
             is ClipCommand.SetEnabled -> setEnabledState(cmd.on)
+            is ClipCommand.SetDeviceName -> setDeviceNameState(cmd.name)
             is ClipCommand.Pair -> withPeer(cmd.peer) { f, h, arg ->
                 f.opi_clip_pair_start(h, arg.memory, arg.len)
             }
@@ -198,6 +193,17 @@ internal class ClipService {
             }
         }
     }
+    /** 改名要在已运行时重建内核：beacon/握手里的名字是启动时快照。 */
+    private fun setDeviceNameState(custom: String) {
+        if (!deviceNameState.update(custom)) return
+        if (enabled) {
+            destroyCore()
+            peers = emptyList()
+            transfers.reset()
+            ensureCore()
+        }
+        publishSnapshot()
+    }
 
     private fun setEnabledState(on: Boolean) {
         if (on) {
@@ -238,7 +244,6 @@ internal class ClipService {
         }
         publishSnapshot()
     }
-
     // ---------- 内核生命周期 ----------
 
     private fun ensureCore() {
@@ -275,7 +280,7 @@ internal class ClipService {
         val config = Utf16Arg(
             clipConfigJson(
                 clipDataDir().toString(),
-                deviceName,
+                deviceNameState.current,
                 advertiseIp = lan?.ip,
                 advertisePrefix = lan?.prefix,
             ),
@@ -310,7 +315,6 @@ internal class ClipService {
         lastLocalAt = 0L
         publishSnapshot()
     }
-
     private fun stopCore() {
         destroyCore()
         enabled = false
@@ -388,7 +392,6 @@ internal class ClipService {
         ui = ui.copy(lastError = if (rc < 0) readLastError(f) else null)
         publishSnapshot()
     }
-
     // ---------- 远端 → 本机 ----------
 
     private fun pollEvents(f: OpiClipFfi, h: Pointer) {
@@ -464,14 +467,13 @@ internal class ClipService {
         ui = ui.copy(names = ui.names + peers.associate { it.instanceId to it.name })
         publishSnapshot()
     }
-
     // ---------- 杂项 ----------
 
     private fun buildStatus(): ClipStatus = ClipStatus(
         enabled = enabled,
         running = handle != null,
         mode = mode,
-        deviceName = deviceName,
+        deviceName = deviceNameState.current,
         peers = peers,
         pending = ui.pending.values.sortedBy { it.instanceId },
         lastSource = ui.lastSource,

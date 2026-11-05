@@ -68,6 +68,33 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
             delay(1000)
         }
     }
+    var deviceNameDraft by remember { mutableStateOf(s.clipDeviceName) }
+    LaunchedEffect(s.clipDeviceName) { deviceNameDraft = s.clipDeviceName }
+    SectionTitle("本机设备名称")
+    Text(
+        "附近设备看到的名字：${status?.deviceName ?: "…"}（只能中文、英文字母、数字）",
+        fontSize = 12.sp, color = Muted,
+    )
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        ImeTextField(
+            value = deviceNameDraft,
+            onValueChange = { deviceNameDraft = it },
+            label = "中文/英文/数字，留空用系统默认名",
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(Modifier.width(8.dp))
+        ClipButton("保存名称", enabled = true) {
+            val err = deviceNameError(deviceNameDraft)
+            if (err != null) {
+                report(err)
+            } else {
+                val next = deviceNameDraft.trim()
+                apply(s.copy(clipDeviceName = next))
+                report(if (next.isEmpty()) "已恢复系统默认设备名" else "设备名已保存：$next")
+            }
+        }
+    }
+    Spacer(Modifier.height(8.dp))
 
     fun toggle(on: Boolean) {
         apply(s.copy(clipEnabled = on))

@@ -90,14 +90,14 @@ class ClipFfiTest {
         val dir = Files.createTempDirectory("opi-clip-ffi-test").toFile()
         try {
             // create 只解析配置、不绑端口（见 cabi_clip.rs）；status 此时给非空 JSON。
-            val cfg = Utf16Arg(clipConfigJson(dir.absolutePath, "ffi-test"))
+            val cfg = Utf16Arg(clipConfigJson(dir.absolutePath, "ffitest"))
             val handle = ffi.opi_clip_create(cfg.memory, cfg.len)
             assertNotNull("create 应当返回句柄", handle)
             try {
                 val status = ffi.opi_clip_status(handle).takeText(ffi)
                 val m = parseLine(status) ?: error("状态应是非空 JSON：$status")
                 assertEquals(false, (m["running"] as JVal.JBool).v)
-                assertEquals("ffi-test", (m["device_name"] as JVal.JStr).v)
+                assertEquals("ffitest", (m["device_name"] as JVal.JStr).v)
             } finally {
                 ffi.opi_clip_destroy(handle)
             }

@@ -33,6 +33,15 @@ extension OpiSettingsWindow {
         label(OpiText.t("本机设备：") + "\(clip.deviceName) · \(state)", y: 82, size: 12,
               color: .secondaryLabelColor)
         var y: CGFloat = 106
+        let nameField = NSTextField(frame: NSRect(x: 0, y: y, width: 220, height: 24))
+        nameField.stringValue = clip.customDeviceName
+        nameField.placeholderString = OpiText.t("中文/英文/数字，留空用系统默认名")
+        host?.addSubview(nameField)
+        transferNameField = nameField
+        button("保存名称", x: 230, y: y, w: 100, action: #selector(transferDeviceNameSaved(_:)))
+        label(OpiText.t("只能中文、英文字母、数字；改名后自动重启传输"),
+              x: 340, y: y + 2, size: 11, color: .secondaryLabelColor)
+        y += 34
         let error = clip.lastErrorText
         if !error.isEmpty {
             label(OpiText.t("错误：") + OpiText.t(error), y: y, size: 12, color: .systemRed)
@@ -235,6 +244,14 @@ extension OpiSettingsWindow {
     }
 
     // MARK: - 动作
+
+    @objc func transferDeviceNameSaved(_ sender: Any?) {
+        guard let field = transferNameField else { return }
+        if let error = OpiClipService.shared.setDeviceName(field.stringValue) {
+            alert(error)
+        }
+        rebuildPage()
+    }
 
     @objc func transferEnableChanged(_ sender: NSButton) {
         OpiClipService.shared.setTransferEnabled(sender.state == .on)

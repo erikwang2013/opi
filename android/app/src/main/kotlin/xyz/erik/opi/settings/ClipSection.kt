@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import xyz.erik.opi.clip.ClipPeer
 import xyz.erik.opi.clip.ClipRuntime
 import xyz.erik.opi.clip.ClipSyncService
+import xyz.erik.opi.clip.deviceNameError
 
 /**
  * 设置页「跨设备剪贴板」一节（2026-11-01）。**默认关闭**：只有用户在这里打开，
@@ -142,6 +143,44 @@ internal fun ClipSection(prefs: ImePreferences, toast: (String) -> Unit) {
             )
         },
         trailingContent = { Switch(checked = transfer, onCheckedChange = ::setTransfer) },
+    )
+
+    var nameDraft by remember { mutableStateOf(prefs.clipDeviceName) }
+    ListItem(
+        headlineContent = { Text("设备名称") },
+        supportingContent = {
+            Column {
+                Text("附近设备看到的名字：${ClipRuntime.status?.deviceName ?: "…"}")
+                OutlinedTextField(
+                    value = nameDraft,
+                    onValueChange = { nameDraft = it },
+                    singleLine = true,
+                    label = { Text("中文/英文/数字，留空用系统默认名") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                deviceNameError(nameDraft)?.let { Text(it, color = androidx.compose.ui.graphics.Color.Red) }
+                Row {
+                    TextButton(onClick = {
+                        val err = deviceNameError(nameDraft)
+                        if (err != null) {
+                            toast(err)
+                        } else {
+                            prefs.clipDeviceName = nameDraft.trim()
+                            if (enabled || transfer) ClipRuntime.restart(context)
+                            toast(if (nameDraft.isBlank()) "已恢复系统默认设备名" else "设备名已保存")
+                        }
+                    }) { Text("保存名称") }
+                    if (nameDraft.isNotEmpty()) {
+                        TextButton(onClick = {
+                            nameDraft = ""
+                            prefs.clipDeviceName = ""
+                            if (enabled || transfer) ClipRuntime.restart(context)
+                            toast("已恢复系统默认设备名")
+                        }) { Text("恢复默认") }
+                    }
+                }
+            }
+        },
     )
 
     if (enabled || transfer) {

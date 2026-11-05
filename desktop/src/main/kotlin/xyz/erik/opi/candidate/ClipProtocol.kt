@@ -54,18 +54,40 @@ internal fun currentClipMode(
     env: (String) -> String? = System::getenv,
 ): ClipMode = clipModeFor(windows, env("XDG_SESSION_TYPE"), env("WAYLAND_DISPLAY"))
 
-/** 设备名：主机名（缺省 opi-desktop），按 **UTF-8 字节**截到内核的 64 字节上限。 */
-internal fun clipDeviceName(hostname: String?): String {
-    val base = hostname?.trim()?.takeIf { it.isNotEmpty() } ?: "opi-desktop"
+/** 设备名只允许中文、英文字母、数字（与 `opi-clip` 的 `device_name_valid` 同一口径）。 */
+internal fun validDeviceName(text: String): Boolean =
+    text.isNotEmpty() && text.toByteArray(Charsets.UTF_8).size <= 64 && text.all { c ->
+        c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' ||
+            c.code in 0x3400..0x4DBF || c.code in 0x4E00..0x9FFF ||
+            c.code in 0xF900..0xFAFF || c.code in 0x20000..0x2FA1F
+    }
+
+/** 自定义名无效时的可读原因；null = 可用。空串 = 恢复默认，不算错误。 */
+internal fun deviceNameError(text: String): String? {
+    val t = text.trim()
+    if (t.isEmpty()) return null
+    if (t.toByteArray(Charsets.UTF_8).size > 64) return "最多 64 字节（中文约 21 个字）"
+    if (!validDeviceName(t)) return "只能使用中文、英文字母和数字，不能有空格或符号"
+    return null
+}
+
+/** 设备名：合法自定义名优先；否则把主机名清洗成允许字符，再截到 64 字节。 */
+internal fun clipDeviceName(hostname: String?, custom: String = ""): String {
+    val c = custom.trim()
+    if (validDeviceName(c)) return c
+    val base = hostname?.trim()?.takeIf { it.isNotEmpty() } ?: "opidesktop"
     val out = StringBuilder()
     var bytes = 0
     for (c in base) {
+        if (!(c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' ||
+                c.code in 0x3400..0x4DBF || c.code in 0x4E00..0x9FFF ||
+                c.code in 0xF900..0xFAFF || c.code in 0x20000..0x2FA1F)) continue
         val n = c.toString().toByteArray(Charsets.UTF_8).size
         if (bytes + n > 64) break
         out.append(c)
         bytes += n
     }
-    return out.toString()
+    return out.toString().ifEmpty { "opidesktop" }
 }
 
 internal fun clipConfigJson(

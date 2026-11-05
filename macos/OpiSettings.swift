@@ -396,6 +396,10 @@ enum OpiSettingsStore {
         return defaults.bool(forKey: key)
     }
 
+    static func string(_ key: String, default fallback: String) -> String {
+        defaults.string(forKey: key) ?? fallback
+    }
+
     static func int(_ key: String, default fallback: Int) -> Int {
         defaults.object(forKey: key) as? Int ?? fallback
     }

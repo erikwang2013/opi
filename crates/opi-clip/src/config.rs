@@ -64,8 +64,10 @@ impl ClipConfig {
         if self.discovery_port == 0 {
             return Err(ClipError::invalid("discovery_port must be non-zero"));
         }
-        if self.device_name.len() > 64 {
-            return Err(ClipError::invalid("device_name must be at most 64 bytes"));
+        if !device_name_valid(&self.device_name) {
+            return Err(ClipError::invalid(
+                "device_name must be 1..=64 bytes of Chinese characters, ASCII letters or digits",
+            ));
         }
         Ok(())
     }
@@ -85,6 +87,24 @@ impl ClipConfig {
         atomic_write(path, &bytes, 0o600)?;
         Ok(())
     }
+}
+
+/// 设备名：只允许中文、英文字母、数字（用户口径 2026-11-06），1..=64 UTF-8 字节。
+/// 空格/连字符/标点/emoji 都不行 —— 各端默认名（主机名、机型）必须先按同一规则清洗。
+pub fn device_name_valid(name: &str) -> bool {
+    if name.is_empty() || name.len() > 64 {
+        return false;
+    }
+    name.chars().all(|c| {
+        c.is_ascii_alphanumeric()
+            || matches!(
+                c as u32,
+                0x3400..=0x4DBF   // CJK Extension A
+                | 0x4E00..=0x9FFF // CJK Unified Ideographs
+                | 0xF900..=0xFAFF // CJK Compatibility Ideographs
+                | 0x20000..=0x2FA1F // Extensions B–F
+            )
+    })
 }
 
 /// 同目录临时文件 → fsync → rename，避免掉电留下半截身份/信任表。
@@ -171,6 +191,27 @@ mod tests {
             );
         }
         let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn device_name_allows_only_chinese_ascii_letters_digits() {
+        for ok in ["书房", "Erik的Pixel8", "OPI123", "设备2"] {
+            assert!(device_name_valid(ok), "{ok}");
+        }
+        for bad in ["", "Erik's iPhone", "DESKTOP-ABC", "书房 2", "小欧🙂", "a_b", "１２３"] {
+            assert!(!device_name_valid(bad), "{bad}");
+        }
+        assert!(!device_name_valid(&"桌".repeat(22))); // 66 bytes
+        assert!(device_name_valid(&"桌".repeat(21))); // 63 bytes
+    }
+
+    #[test]
+    fn config_rejects_invalid_device_name() {
+        let mut config = ClipConfig::new("/tmp/x");
+        config.device_name = "DESKTOP-ABC".into();
+        assert!(config.validate().is_err());
+        config.device_name = "书桌".into();
+        assert!(config.validate().is_ok());
     }
 
     #[test]

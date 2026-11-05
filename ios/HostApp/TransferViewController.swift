@@ -37,7 +37,6 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
         service.start()
         reload()
     }
-
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         service.start()
@@ -69,22 +68,20 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
                 equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -32),
         ])
     }
-
     // MARK: - 重画
-
     private func reload() {
         stack.arrangedSubviews.forEach {
             stack.removeArrangedSubview($0)
             $0.removeFromSuperview()
         }
         addStatusCard()
+        addDeviceNameCard()
         addDeviceCard()
         addSendCard()
         addPendingCard()
         addTransferCard()
         addNotes()
     }
-
     private func addStatusCard() {
         var views: [UIView] = []
         let state = service.isRunning ? "运行中" : "启动中或已停止"
@@ -98,7 +95,29 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
         views.append(makeNote("打开本页时启动发现与加密会话；App 退到后台会被系统挂起，传输可能中断。"))
         addCard(views)
     }
-
+    private func addDeviceNameCard() {
+        let field = UITextField()
+        field.text = service.customDeviceName
+        field.placeholder = "中文/英文/数字，留空用系统默认名"
+        field.borderStyle = .roundedRect
+        field.autocapitalizationType = .none
+        field.autocorrectionType = .no
+        field.clearButtonMode = .whileEditing
+        field.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let save = makeSmallButton("保存名称") { [weak self, weak field] in
+            guard let self, let field else { return }
+            if let error = self.service.setDeviceName(field.text ?? "") {
+                self.alert(error)
+            } else {
+                self.reload()
+            }
+        }
+        addCard([
+            makeLabel("设备名称", style: .headline),
+            makeRow([field, save], equal: false),
+            makeNote("附近设备会看到这个名字；只能中文、英文字母、数字，改名后自动重启传输。"),
+        ])
+    }
     private func addDeviceCard() {
         var views: [UIView] = [makeLabel("附近设备", style: .headline)]
         let peers = service.peers
@@ -136,7 +155,6 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
         }
         addCard(views)
     }
-
     private func addSendCard() {
         var views: [UIView] = [makeLabel("发送", style: .headline)]
         let sendable = service.peers.filter { $0.trusted && $0.connected }
@@ -153,7 +171,6 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
         }
         target.isEnabled = !sendable.isEmpty
         views.append(target)
-
         let fileRow = makeRow([
             makeButton("文件…") { [weak self] in self?.showPicker(.files) },
             makeButton("文件夹…") { [weak self] in self?.showPicker(.folder) },
@@ -175,7 +192,6 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
         installRoutingToggle(in: &views)
         addCard(views)
     }
-
     private func addPendingCard() {
         let pending = service.pendingPairings
         guard !pending.isEmpty else { return }
@@ -198,7 +214,6 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
         }
         addCard(views)
     }
-
     private func addTransferCard() {
         var views: [UIView] = [makeLabel("进行中与最近传输", style: .headline)]
         let transfers = service.transfers
@@ -217,7 +232,6 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
         }
         addCard(views)
     }
-
     private func makeTransferRow(_ item: HostTransfer) -> UIView {
         let who = item.peerName.isEmpty ? String(item.peerId.prefix(8)) : item.peerName
         let direction = item.outgoing ? "发送 → " : "接收 ← "
@@ -228,7 +242,6 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
             title.textColor = .systemGreen
         }
         var rows: [UIView] = [title]
-
         var detail: [String] = []
         if item.fileCount > 0 { detail.append("\(item.fileCount) 项") }
         if item.totalBytes > 0 {
@@ -245,13 +258,11 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
             label.textColor = .secondaryLabel
             rows.append(label)
         }
-
         if item.state == .active || item.state == .waiting {
             let progress = UIProgressView(progressViewStyle: .default)
             progress.progress = Float(item.progress)
             rows.append(progress)
         }
-
         var actions: [UIButton] = []
         if item.isIncomingOffer {
             actions.append(makeSmallButton("接收") { [weak self] in
@@ -274,13 +285,11 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
             })
         }
         if !actions.isEmpty { rows.append(makeRow(actions)) }
-
         let box = UIStackView(arrangedSubviews: rows)
         box.axis = .vertical
         box.spacing = 4
         return box
     }
-
     private func addNotes() {
         var views: [UIView] = [makeLabel("说明", style: .headline)]
         let notes = [
@@ -294,14 +303,11 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
         for line in notes { views.append(makeNote(line)) }
         addCard(views)
     }
-
     // MARK: - 动作
-
     @objc private func refreshTapped() {
         service.refreshPeers()
         reload()
     }
-
     private func showTargetMenu() {
         let sendable = service.peers.filter { $0.trusted && $0.connected }
         guard !sendable.isEmpty else { return }
@@ -324,7 +330,6 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
         }
         present(alert, animated: true)
     }
-
     private func showPicker(_ kind: PickerKind) {
         guard selectedPeerId != nil else {
             alert("请先选择一台已配对且在线的设备")
@@ -342,7 +347,6 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
         picker.delegate = self
         present(picker, animated: true)
     }
-
     func documentPicker(_ controller: UIDocumentPickerViewController,
                         didPickDocumentsAt urls: [URL]) {
         guard !urls.isEmpty, let peerId = selectedPeerId else { return }
@@ -351,7 +355,6 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
         }
         reload()
     }
-
     private func sendTextTapped() {
         let box = UIAlertController(
             title: "发送文本",
@@ -370,7 +373,6 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
         })
         present(box, animated: true)
     }
-
     private func sendClipboardTapped() {
         if let error = service.sendClipboard() {
             alert(error)
@@ -379,7 +381,6 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
         }
         reload()
     }
-
     private func presentOffer(_ transfer: HostTransfer) {
         guard lastOfferedId != transfer.id, presentedViewController == nil else { return }
         lastOfferedId = transfer.id

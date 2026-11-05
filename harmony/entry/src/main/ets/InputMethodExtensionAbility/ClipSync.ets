@@ -7,9 +7,9 @@
 // 安全：不记录内容、不自动粘贴、不自动打开链接；身份/信任文件在 ctx.filesDir/clip。
 
 import { common } from '@kit.AbilityKit';
-import { deviceInfo } from '@kit.BasicServicesKit';
 import opiime from 'libopiime.so';
 import { ClipboardAdapter } from './ClipboardAdapter';
+import * as DeviceName from './DeviceName';
 import * as SettingsStore from './SettingsStore';
 import {
   ClipConfig, ClipPairingPrompt, ClipPeer, ClipStatus, parsePeerJson, parseStatusJson
@@ -21,7 +21,6 @@ const POLL_MS: number = 200;
 const REFRESH_EVERY_POLLS: number = 8;
 /** 内核按 UTF-8 字节限 256 KiB；这里按 UTF-16 字符数近似挡。 */
 const MAX_TEXT_CHARS: number = 256 * 1024;
-const MAX_DEVICE_NAME: number = 48;
 
 // 类型/JSON 形状在 ClipTypes.ets（真源 crates/opi-ffi/src/cabi_clip/encode.rs）。
 
@@ -121,6 +120,21 @@ export function setEnabled(on: boolean): void {
   }
 }
 
+/** 保存并（运行中）重启内核，让 beacon/握手用新名字。返回空串 = 成功。 */
+export function setClipDeviceName(name: string): string {
+  const t: string = name.trim();
+  const error: string = DeviceName.deviceNameError(t);
+  if (error.length > 0) {
+    return error;
+  }
+  SettingsStore.saveClipDeviceName(t);
+  if (activeCtx !== null && (sharingEnabled() || transferEnabled())) {
+    stopNow();
+    start(activeCtx);
+  }
+  return '';
+}
+
 /** InputMethodService inputStart：记住上下文，任一功能打开就启动。 */
 export function onInputStart(ctx: common.Context | null): void {
   activeCtx = ctx;
@@ -145,7 +159,7 @@ export function start(ctx: common.Context): void {
     data_dir: `${ctx.filesDir}/clip`,
     tcp_port: 0,
     discovery_port: DISCOVERY_PORT,
-    device_name: deviceName(),
+    device_name: DeviceName.deviceName(),
   };
   const created: number = opiime.clipCreate(JSON.stringify(config));
   if (created === 0) {
@@ -452,17 +466,4 @@ function stopNow(): void {
 function lastErrorText(): string {
   const message: string = opiime.clipLastError();
   return message.length > 0 ? message : '跨设备剪贴板调用失败';
-}
-
-function deviceName(): string {
-  let name: string = '';
-  try {
-    name = deviceInfo.marketName;
-  } catch (e) {
-    name = '';
-  }
-  if (name.length === 0) {
-    name = 'HarmonyOS';
-  }
-  return name.length > MAX_DEVICE_NAME ? name.substring(0, MAX_DEVICE_NAME) : name;
 }

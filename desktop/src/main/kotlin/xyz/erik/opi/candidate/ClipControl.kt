@@ -40,6 +40,8 @@ internal fun clipControlPath(): Path = clipDataDir().resolve("control.json")
 
 internal sealed interface ClipCommand {
     data class SetEnabled(val on: Boolean) : ClipCommand
+    /** 自定义设备名；重启内核后新名字随 beacon/配对握手广播。 */
+    data class SetDeviceName(val name: String) : ClipCommand
     data class Pair(val peer: String) : ClipCommand
     data class Probe(val ip: String) : ClipCommand
     data class Confirm(val peer: String, val accept: Boolean) : ClipCommand

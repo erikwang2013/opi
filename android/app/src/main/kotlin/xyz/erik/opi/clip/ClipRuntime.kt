@@ -18,6 +18,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import java.io.File
 import java.net.Inet4Address
+import xyz.erik.opi.settings.AndroidPrefStore
+import xyz.erik.opi.settings.ImePreferences
 
 /**
  * 进程内唯一实例：把 [ClipBridge]（内核线程）与 [ClipboardAdapter]（系统剪贴板）
@@ -104,7 +106,7 @@ internal object ClipRuntime {
         created.start(
             clipConfigJson(
                 dataDir = File(app.filesDir, "clip").absolutePath,
-                deviceName = deviceName(),
+                deviceName = deviceName(app),
                 discoveryPort = DISCOVERY_PORT,
                 advertiseIp = lan?.ip,
                 advertisePrefix = lan?.prefix,
@@ -112,6 +114,13 @@ internal object ClipRuntime {
         )
         ClipRouting.bind { send, receive -> created.setTextRoutes(send, receive) }
         clipAdapter.start()
+    }
+
+    /** 改名后重建内核：beacon/握手里的名字是启动时快照。 */
+    @Synchronized
+    fun restart(context: Context) {
+        stop(context)
+        start(context)
     }
 
     @Synchronized
@@ -270,9 +279,12 @@ internal object ClipRuntime {
         }
     }
 
-    private fun deviceName(): String {
+    private fun deviceName(context: Context): String {
+        val custom = runCatching {
+            ImePreferences(AndroidPrefStore(context)).clipDeviceName
+        }.getOrDefault("")
         val raw = "${Build.MANUFACTURER} ${Build.MODEL}".trim()
-        return raw.ifEmpty { "Android" }.take(MAX_DEVICE_NAME)
+        return resolveDeviceName(custom, raw.ifEmpty { "Android" }.take(MAX_DEVICE_NAME))
     }
 
     /**

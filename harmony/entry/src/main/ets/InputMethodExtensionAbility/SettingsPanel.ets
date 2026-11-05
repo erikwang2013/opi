@@ -9,7 +9,9 @@
 // 从工具条直接进则返回键面。
 
 import { AsrSection } from './AsrSection';
+import * as ClipSync from './ClipSync';
 import { ClipSection } from './ClipSection';
+import * as SettingsStore from './SettingsStore';
 import { LanguageRow, ensureLanguage, t } from './I18n';
 import { KeyboardController } from './KeyboardController';
 import { INPUT_MODES } from './InputModes';
@@ -44,10 +46,13 @@ export struct SettingsPanel {
   @StorageLink('opiLang') lang: number = 0;
   /** 「清除用户词库」的两步确认（点了行才展开，避免误触清空学习成果）。 */
   @State clearConfirm: boolean = false;
+  @State clipNameDraft: string = '';
+  @State clipNameNote: string = '';
   private ctrl: KeyboardController = KeyboardController.getInstance();
 
   aboutToAppear(): void {
     ensureLanguage();
+    this.clipNameDraft = SettingsStore.load().clipDeviceName;
   }
 
   private pal(): Palette {
@@ -189,6 +194,28 @@ export struct SettingsPanel {
               TransferSync.setEnabled(this.transfer !== 1);
               this.ctrl.publish();
             })
+          Row() {
+            TextInput({ text: this.clipNameDraft, placeholder: t('中文/英文/数字，留空用系统默认名') })
+              .layoutWeight(1)
+              .fontSize(this.elder === 1 ? 15 : 13)
+              .onChange((value: string) => {
+                this.clipNameDraft = value;
+                this.clipNameNote = '';
+              })
+            Button(t('保存名称'))
+              .fontSize(this.elder === 1 ? 14 : 12)
+              .margin({ left: 8 })
+              .onClick(() => {
+                const error: string = ClipSync.setClipDeviceName(this.clipNameDraft);
+                this.clipNameNote = error.length > 0 ? error : t('设备名已保存');
+              })
+          }
+          .width('100%').padding({ left: 14, right: 14, top: 4, bottom: 4 })
+          if (this.clipNameNote.length > 0) {
+            Text(this.clipNameNote)
+              .fontSize(this.elder === 1 ? 13 : 11).fontColor(this.pal().dimFg)
+              .width('100%').padding({ left: 14, right: 14, bottom: 6 })
+          }
 
           this.Section(t('键盘'))
           this.ActionRow(t('输入模式'), t('键盘布局与输入方案'), t(INPUT_MODES[this.layout].label), () => {

@@ -153,6 +153,11 @@ class ImePreferences(private val store: PrefStore) {
         get() = store.getBoolean(KEY_CLIP_ENABLED, false)
         set(v) = store.put(KEY_CLIP_ENABLED, v)
 
+    /** 跨设备传输里显示的设备名；空串 = 清洗后的系统机型名。 */
+    var clipDeviceName: String
+        get() = store.getString(KEY_CLIP_DEVICE_NAME) ?: ""
+        set(v) = store.put(KEY_CLIP_DEVICE_NAME, v)
+
     /**
      * 跨设备传输（2026-11-02）：**默认关闭**。开启后工具条显示传输入口，并复用同一
      * 剪贴板内核做文件/文件夹/文本/媒体发送。内核线程与前台服务由设置开关拉起。
@@ -294,6 +299,7 @@ class ImePreferences(private val store: PrefStore) {
         const val KEY_CORRECTION = "engine_correction"
         const val KEY_SHOW_OWN = "pet_show_own"
         const val KEY_CLIP_ENABLED = "clip_enabled"
+        const val KEY_CLIP_DEVICE_NAME = "clip_device_name"
         const val KEY_TRANSFER_ENABLED = "transfer_enabled"
         const val KEY_ASR_WHISPER = "asr_whisper"
         const val KEY_CUSTOM_PUNCT = "nine_custom_punct"

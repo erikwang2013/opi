@@ -4,6 +4,7 @@
 package xyz.erik.opi.clip
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -155,5 +156,17 @@ class ClipProtocolTest {
         assertEquals("""/data/"x"\clip""", root["data_dir"])
         assertEquals("书\"房", root["device_name"])
         assertEquals(45888.0, root["discovery_port"])
+    }
+
+    @Test
+    fun deviceNameOnlyAllowsChineseLettersDigits() {
+        assertEquals("书房2", resolveDeviceName("书房2", "Pixel 8"))
+        assertEquals("Pixel8", resolveDeviceName("bad-name", "Pixel 8"))
+        assertEquals("Android", resolveDeviceName("", " "))
+        assertNull(deviceNameError(""))
+        assertNull(deviceNameError("书房2"))
+        assertNotNull(deviceNameError("书 房"))
+        assertNotNull(deviceNameError("bad-name"))
+        assertNotNull(deviceNameError("桌".repeat(22)))
     }
 }
