@@ -442,6 +442,20 @@ final class OpiClipboard {
 
     // MARK: - 配置
 
+    private static func dataDirectory() -> URL {
+        // App Group 优先：宿主与扩展在同一容器里共享身份/信任表。
+        if let group = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: appGroupID
+        ) {
+            return group.appendingPathComponent("clip")
+        }
+        // fallback：扩展自己的 Application Support。与宿主不共享，重装即丢。
+        let base = FileManager.default.urls(
+            for: .applicationSupportDirectory, in: .userDomainMask
+        ).first ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        return base.appendingPathComponent("opi-clip")
+    }
+
     private static func configJSON(deviceName: String) -> String {
         let object: [String: Any] = [
             "data_dir": dataDirectory().path,
