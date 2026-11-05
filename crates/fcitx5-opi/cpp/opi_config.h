@@ -178,8 +178,12 @@ inline void applyOpiSettings(const OpiSettings &settings) {
     // ——种子先落进目录，这一趟扫描才看得见它。落点与 symbol_categories 同一条查找路
     //（Type::Data + opi/）；老包没装那份 ⇒ locate 空 ⇒ 空操作。
     {
+        // 弃用抑制的理由见 CMakeLists.txt「为什么两个 .cpp 里有 …」段。
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         const auto bundled = fcitx::StandardPath::global().locate(
             fcitx::StandardPath::Type::Data, "opi/kangxi.tsv");
+#pragma GCC diagnostic pop
         if (!bundled.empty()) {
             opiSeedBundledDict(bundled);
         }
@@ -211,13 +215,19 @@ inline void applyOpiSettings(const OpiSettings &settings) {
 // 从磁盘读进 settings。**文件不存在不是错误**：readAsIni 会把字段留作默认值 ——
 // 这正是「没配过 = 全默认」的表达，别自己先 stat 一次（多一个判据就多一处会漂）。
 inline void readOpiSettings(OpiSettings &settings) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     fcitx::readAsIni(settings, fcitx::StandardPath::Type::PkgConfig,
                      "conf/opi_fcitx5.conf");
+#pragma GCC diagnostic pop
 }
 
 // 落盘（fcitx5 在退出与配置变更时调）。返回值是"写成了吗"，调用方（save 覆写）
 // 无处可报 —— GUI 宿主里 stderr 通常看不见；保留返回值是为了让门禁/单测能断言。
 inline bool saveOpiSettings(const OpiSettings &settings) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     return fcitx::safeSaveAsIni(settings, fcitx::StandardPath::Type::PkgConfig,
                                 "conf/opi_fcitx5.conf");
+#pragma GCC diagnostic pop
 }

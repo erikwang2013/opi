@@ -29,7 +29,7 @@ static void check_clip_exports(void) {
     char cfg[512];
     int cfg_n = snprintf(cfg, sizeof cfg,
                          "{\"data_dir\":\"%s\",\"tcp_port\":0,"
-                         "\"discovery_port\":45987,\"device_name\":\"c-consumer\"}",
+                         "\"discovery_port\":45987,\"device_name\":\"cconsumer\"}",
                          dir);
     CHECK(cfg_n > 0 && (size_t)cfg_n < sizeof cfg, "clip 配置 JSON 放不下");
     if (cfg_n <= 0 || (size_t)cfg_n >= sizeof cfg) return;
