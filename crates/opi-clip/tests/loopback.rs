@@ -35,8 +35,14 @@ fn start(tag: &str, discovery_port: u16) -> (ClipNode, PathBuf) {
     let mut config = ClipConfig::new(&dir);
     config.discovery_port = discovery_port;
     // 设备名只允许中文/ASCII 字母/数字（ClipConfig::validate）。
-    let mut name: String = tag.chars().filter(|c| c.is_ascii_alphanumeric()).take(20).collect();
-    if name.is_empty() { name = "test".into(); }
+    let mut name: String = tag
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .take(20)
+        .collect();
+    if name.is_empty() {
+        name = "test".into();
+    }
     config.device_name = name;
     // 手动配对用例保持原有的 SAS 流程；自动连接由单独用例覆盖。
     config.auto_connect = false;
@@ -49,8 +55,14 @@ fn start_auto(tag: &str, discovery_port: u16) -> (ClipNode, PathBuf) {
     let mut config = ClipConfig::new(&dir);
     config.discovery_port = discovery_port;
     // 设备名只允许中文/ASCII 字母/数字（ClipConfig::validate）。
-    let mut name: String = tag.chars().filter(|c| c.is_ascii_alphanumeric()).take(20).collect();
-    if name.is_empty() { name = "test".into(); }
+    let mut name: String = tag
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .take(20)
+        .collect();
+    if name.is_empty() {
+        name = "test".into();
+    }
     config.device_name = name;
     config.auto_connect = true;
     let node = ClipNode::start(config).unwrap();

@@ -198,7 +198,15 @@ mod tests {
         for ok in ["书房", "Erik的Pixel8", "OPI123", "设备2"] {
             assert!(device_name_valid(ok), "{ok}");
         }
-        for bad in ["", "Erik's iPhone", "DESKTOP-ABC", "书房 2", "小欧🙂", "a_b", "１２３"] {
+        for bad in [
+            "",
+            "Erik's iPhone",
+            "DESKTOP-ABC",
+            "书房 2",
+            "小欧🙂",
+            "a_b",
+            "１２３",
+        ] {
             assert!(!device_name_valid(bad), "{bad}");
         }
         assert!(!device_name_valid(&"桌".repeat(22))); // 66 bytes
