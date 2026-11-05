@@ -63,7 +63,7 @@ android {
         versionName = "1.31.11"
         buildConfigField("String", "PACKAGE_TIER", "\"$packageTier\"")
         buildConfigField("boolean", "ASR_MODELS_BUNDLED", "${packageTier == "full"}")
-        buildConfigField("boolean", "ASR_ENGINE_BUNDLED", "${packageTier == "full"}")
+        buildConfigField("boolean", "ASR_ENGINE_BUNDLED", "true")
         ndk {
             // 与 rust_builder cargokit targets 对齐（plugin.gradle 固定三 ABI）。
             // 完整包带 615MB 模型，只出 64 位：32 位设备本来没有 ASR 原生库。
@@ -284,24 +284,6 @@ val buildAsrNative by tasks.registering {
 android.sourceSets.getByName("main").jniLibs.srcDir(asrJniRoot.get().asFile)
 tasks.matching { it.name.contains("NativeLibs") || it.name.contains("JniLibFolders") }
     .configureEach { dependsOn(buildAsrNative) }
-
-// 普通包/基础包不带语音引擎原生库（2026-11-01 用户裁决）：仍构建出来用于生成
-// 组件 zip，但从 APK 的合并/裁剪产物里删掉；用户按需从设置下载。
-if (packageTier != "full") {
-    val asrEngineLibs = setOf(
-        "libopi_asr.so", "libsherpa-onnx-c-api.so", "libonnxruntime.so", "libopi_asr_jni.so",
-    )
-    tasks.matching { it.name.contains("NativeLibs") || it.name.contains("JniLibFolders") }
-        .configureEach {
-            doLast {
-                outputs.files.files.filter { it.isDirectory }.forEach { dir ->
-                    dir.walkTopDown()
-                        .filter { it.isFile && it.name in asrEngineLibs }
-                        .forEach { it.delete() }
-                }
-            }
-        }
-}
 
 // 发布用组件：每个 ABI 一个 zip，供普通包/基础包按需下载（大小/SHA 由站点清单给出）。
 val asrEngineZips = asrAbis.map { (abi, _) ->

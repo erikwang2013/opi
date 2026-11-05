@@ -64,7 +64,7 @@ internal fun SpeechPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Str
     val engineFailed = engineState as? SpeechEnginePack.State.Failed
     Text(
         when {
-            SpeechEnginePack.bundled() -> "已随完整包提供，无需下载。"
+            SpeechEnginePack.bundled() -> "已随包提供，无需下载。"
             engineReady -> "已下载，可直接使用。"
             !SpeechEnginePack.supported() -> "当前平台暂无语音引擎组件。"
             else -> "普通包/基础包需先下载语音引擎（约 ${SpeechEnginePack.approxMb()} MB），再下载模型。"
@@ -99,7 +99,7 @@ internal fun SpeechPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Str
 
     SectionTitle("离线模型（首次使用前下载）")
     Text(
-        "完整包已内置引擎与两套模型（首次使用解压）；普通/基础包需先下载引擎，再在设置里下载模型，" +
+        "三档都内置语音引擎；完整包还内置两套模型（首次使用解压），普通/基础包在设置里下载模型，" +
             "逐文件校验 SHA-256。SenseVoice 约 ${SpeechEngine.SENSEVOICE.approxMb()} MB，" +
             "Whisper 约 ${SpeechEngine.WHISPER.approxMb()} MB（均含 VAD）。",
         fontSize = 12.sp, color = Muted,

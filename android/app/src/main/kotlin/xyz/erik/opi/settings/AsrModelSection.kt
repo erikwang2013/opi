@@ -52,11 +52,11 @@ internal fun AsrModelSection(prefs: ImePreferences) {
     ListItem(
         headlineContent = { Text("离线语音输入") },
         supportingContent = {
-            Text("长按空格键录音，识别全部在本机完成。完整包内置引擎与模型；普通/基础包先下载引擎，再下载模型。")
+            Text("长按空格键录音，识别全部在本机完成。三档都内置引擎；完整包内置模型，普通/基础包在下方下载模型。")
         },
     )
 
-    // 语音引擎（原生库）：只有完整包随包提供，其余档位按需下载。
+    // 语音引擎（原生库）：三档都随包提供；只有模型按档位下载。
     val engineState = AsrEngineDownloader.state
     val engineReady = AsrEngine.ready(context)
     val engineRunning = engineState as? AsrEngineDownloader.State.Running
@@ -67,7 +67,7 @@ internal fun AsrModelSection(prefs: ImePreferences) {
             Column {
                 Text(
                     when {
-                        AsrEngine.bundled() -> "随完整包提供"
+                        AsrEngine.bundled() -> "随包提供"
                         engineReady -> "已下载 · 约 ${AsrEngine.mb(AsrEngine.APPROX_BYTES)}"
                         else -> "未下载 · 约 ${AsrEngine.mb(AsrEngine.APPROX_BYTES)} · 建议 Wi-Fi"
                     },

@@ -26,8 +26,7 @@ fun checkAsrLibs(dir: File) {
     }
 }
 
-val asrEngineBundled =
-    providers.gradleProperty("opiPackageTier").getOrElse("normal") == "full"
+val asrEngineBundled = true // 三档都带引擎：普通/基础包只按需下载模型
 
 if (asrEngineBundled) {
     tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask>()

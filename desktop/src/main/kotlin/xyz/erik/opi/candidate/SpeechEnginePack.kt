@@ -40,7 +40,7 @@ internal object SpeechEnginePack {
 
     fun root(): Path = speechModelRoot().resolve("engine")
 
-    fun bundled(): Boolean = OPI_PACKAGE_TIER == "full"
+    fun bundled(): Boolean = true // 三档都带引擎；仅模型按档位下载
 
     fun key(): String? = when {
         windows -> "asr-engine-windows-x64"
