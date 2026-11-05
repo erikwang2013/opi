@@ -54,8 +54,10 @@ private class Session(
     val epoch: Int,
 ) {
     var deadlineMs: Long = 0L
-    /** 连续听写已上屏的 VAD 段数；final 只做收尾，不再重提交整段。 */
+    /** 连续听写**成功**上屏的 VAD 段数；final 只做收尾，不再重提交整段。 */
     var segmentsCommitted: Int = 0
+    /** 上屏失败的段文本；停止时整体重试一次，避免浮层一关就丢字。 */
+    var failedText: String = ""
     var segmentText: String = ""
 }
 
@@ -85,6 +87,10 @@ internal class SpeechHostImpl {
     @Volatile private var epoch = 0
     private val commands = LinkedBlockingQueue<SpeechCommand>()
     private val runtime = AsrRuntime()
+
+    /** 最终上屏失败时留给「关闭浮层」的最后一次重试：浮层消失后焦点回到输入框。 */
+    private data class PendingRetry(val text: String, val commit: (String) -> String?)
+    @Volatile private var pendingRetry: PendingRetry? = null
 
     init {
         Thread({
@@ -193,7 +199,18 @@ internal class SpeechHostImpl {
                 SpeechCommand.Cancel -> cancelSession()
                 SpeechCommand.Warm -> ensureEngine(config.language.engine, updateErrors = false, startEpoch = epoch)
                 SpeechCommand.Dismiss -> {
+                    val retry = pendingRetry
+                    pendingRetry = null
                     if (session != null) cancelSession() else update(SpeechUi())
+                    if (retry != null) {
+                        // 浮层已隐藏，等焦点回到输入框再补一次；失败也不再弹窗（用户已关闭）。
+                        try {
+                            Thread.sleep(150L)
+                        } catch (_: InterruptedException) {
+                            return
+                        }
+                        runCatching { retry.commit(retry.text) }
+                    }
                 }
             }
         }
@@ -275,6 +292,11 @@ internal class SpeechHostImpl {
         }
 
         private fun start(commit: (String) -> String?) {
+            // 上一次最终上屏失败的文字：下次开始前再试一次（用户没点“关闭”而是直接重录）。
+            pendingRetry?.let {
+                pendingRetry = null
+                runCatching { it.commit(it.text) }
+            }
             val myEpoch = epoch
             val cfg = config
             val engine = cfg.language.engine
@@ -371,7 +393,6 @@ internal class SpeechHostImpl {
                 "segment" -> {
                     val text = eventText(json).orEmpty().trim()
                     if (text.isNotEmpty()) {
-                        s.segmentsCommitted++
                         s.segmentText += text
                         update(ui.copy(text = s.segmentText))
                         val err = try {
@@ -379,7 +400,13 @@ internal class SpeechHostImpl {
                         } catch (t: Throwable) {
                             "上屏通道异常：${t.message ?: t.javaClass.simpleName}"
                         }
-                        if (err != null) update(ui.copy(error = "上屏失败：$err"))
+                        if (err == null) {
+                            s.segmentsCommitted++
+                        } else {
+                            // 这段没进文档：记下来，停止时再整体试一次。
+                            s.failedText += text
+                            update(ui.copy(error = "上屏失败：$err"))
+                        }
                     }
                     true
                 }
@@ -408,14 +435,21 @@ internal class SpeechHostImpl {
                     error = "",
                 ),
             )
-            // 3 秒连续听写的段已逐段上屏；final 只是汇总展示，不能再提交一次。
-            if (text.isBlank() || s.segmentsCommitted > 0) return
+            // 有段没上屏：停止时整体重试这些段（浮层即将/已经离开焦点，落字成功率更高）。
+            // 全部段都成功过才跳过 final，避免把已上屏的内容再提交一遍。
+            val retry = speechRetryText(s.failedText, s.segmentsCommitted, text)
+            if (retry.isBlank()) return
             val err = try {
-                s.commit(text)
+                s.commit(retry)
             } catch (t: Throwable) {
                 "上屏通道异常：${t.message ?: t.javaClass.simpleName}"
             }
-            if (err != null) update(ui.copy(error = "上屏失败：$err"))
+            if (err != null) {
+                pendingRetry = PendingRetry(retry, s.commit)
+                update(ui.copy(error = "上屏失败：$err（关闭浮层时会再试一次）"))
+            } else {
+                pendingRetry = null
+            }
         }
         private fun feed(s: Session, bytes: ByteArray) {
             val h = loaded ?: return
@@ -474,6 +508,13 @@ internal class SpeechHostImpl {
         }
     }
 }
+/**
+ * 停止时还要补提交什么：失败的段优先；没有失败段且已有成功段 = 什么都不补；
+ * 一段都没成功过（例如极短语音只有 final）= 提交 final 汇总。
+ */
+internal fun speechRetryText(failedText: String, segmentsCommitted: Int, finalText: String): String =
+    failedText.ifEmpty { if (segmentsCommitted > 0) "" else finalText }
+
 private val EVENT_TYPE = Regex("\"type\"\\s*:\\s*\"([a-z_]+)\"")
 private val RMS_DB = Regex("\"rms_db\"\\s*:\\s*(-?[0-9]+(?:\\.[0-9]+)?)")
 internal fun eventType(json: String): String? =

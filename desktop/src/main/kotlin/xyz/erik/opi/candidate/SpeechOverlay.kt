@@ -67,7 +67,9 @@ internal fun SpeechOverlay(
                 screen.x + (screen.width - window.width) / 2,
                 screen.y + screen.height - window.height - 160,
             )
-            window.toFront()
+            // 不能 toFront()：AWT 的 toFront 在 Windows 上会 SetWindowPos 激活本窗，
+            // 把键盘焦点从输入框抢走 —— 识别文本就再也送不回光标，只能等浮层关闭。
+            // alwaysOnTop 已保证可见性。
         }
         Column(
             Modifier.fillMaxSize().background(palette.bg.copy(alpha = 0.97f))
@@ -88,16 +90,13 @@ internal fun SpeechOverlay(
             }
             when (ui.phase) {
                 SpeechPhase.PREPARING -> Text(
-                    ui.text.ifEmpty { "正在加载模型…首次加载需要几秒（之后复用）" },
+                    ui.text.ifEmpty { "正在加载模型…首次加载可能需要几十秒（之后复用）" },
                     fontSize = 13.sp, color = palette.fg,
                 )
                 SpeechPhase.RECORDING -> {
+                    // 识别正文只进光标处的输入框（移动端同款）；浮层只显示状态，
+                    // 否则用户会以为识别结果停在弹框里。
                     Text("正在录音…每 3 秒自动上屏一段；点「停止」结束", fontSize = 13.sp, color = palette.fg)
-                    // 已上屏的分段同步显示：与移动端输入框里逐段出现的效果一致，
-                    // 上屏失败也在这里立刻可见（不再等到停止才看到错误）。
-                    if (ui.text.isNotEmpty()) {
-                        Text(ui.text, fontSize = 14.sp, color = palette.fg, maxLines = 4)
-                    }
                     Box(
                         Modifier.fillMaxWidth().height(6.dp)
                             .background(palette.line),

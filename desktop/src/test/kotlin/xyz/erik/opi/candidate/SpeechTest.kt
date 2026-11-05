@@ -247,6 +247,18 @@ class SpeechTest {
     }
 
     @Test
+    fun `stop retries only text that was not committed`() {
+        // 全部段成功：final 只是汇总展示，不能再提交一遍（会重复）。
+        assertEquals("", speechRetryText("", 2, "你好世界"))
+        // 全部段失败：把失败段整体重试一次。
+        assertEquals("你好世界", speechRetryText("你好世界", 0, "你好世界"))
+        // 部分失败：只补失败的段，不重复已成功的。
+        assertEquals("世界", speechRetryText("世界", 1, "你好世界"))
+        // 没有段事件（极短语音）：final 必须提交。
+        assertEquals("你好", speechRetryText("", 0, "你好"))
+    }
+
+    @Test
     fun `asr config json carries absolute model paths and language`() {
         val root = Paths.get("/tmp/模型")
         val cfg = parseLine(asrConfigJson(root, SpeechLanguage.EN)) ?: error("AsrConfig 不是 JSON")

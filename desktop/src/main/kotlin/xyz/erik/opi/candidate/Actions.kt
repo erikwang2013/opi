@@ -157,6 +157,7 @@ fun desktopSymbolCommit(text: String): String? =
  */
 fun desktopSpeechCommit(text: String): String? =
     if (isWindows()) {
+        SpeechFocus.restore()
         val injected = injectUnicodeText(text)
         if (injected == null) {
             null

@@ -291,7 +291,10 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
             StatusBarButton.SETTINGS -> settingsOpen = true
             StatusBarButton.SYMBOLS -> report(openSymbols())
             // 语音：录音/停止/取消全在 SpeechHost 的单线程里；这里只递命令，不等 IO。
-            StatusBarButton.MIC -> SpeechHost.toggle(::desktopSpeechCommit)
+            StatusBarButton.MIC -> {
+                SpeechFocus.capture()
+                SpeechHost.toggle(::desktopSpeechCommit)
+            }
             // 模式：循环一次（拼 → 五 → en26 → 拼，引擎侧与 token 派生见
             // Actions.cycleMode）。返回**新档位 token**，当场换字（不等 1s 轮询；
             // 轮询随后会由 state 的 mode= 位确认，见文件顶部 mode 变量）。
@@ -332,7 +335,11 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
             StatusBarButton.VK -> { vkOpen = !vkOpen; return }
             StatusBarButton.SYMBOLS -> { symbolsOpen = !symbolsOpen; return }
             // 语音不碰进程/管道，别排进 actionLock（前面可能堵着 1.5s 的状态补读）。
-            StatusBarButton.MIC -> { SpeechHost.toggle(::desktopSpeechCommit); return }
+            StatusBarButton.MIC -> {
+                SpeechFocus.capture()
+                SpeechHost.toggle(::desktopSpeechCommit)
+                return
+            }
             else -> {}
         }
         // 动作一返回就补读状态（点完马上看到翻转，不等下一秒的轮询）。补读与轮询并存：
