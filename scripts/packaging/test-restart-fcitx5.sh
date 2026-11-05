@@ -252,7 +252,8 @@ SLEEP2=""
 # 状态栏夹具：记录**自己**的环境（假 runuser 会真正 exec 它）。
 {
     echo '#!/bin/sh'
-    echo "env > '$TMP/candidates.env'"
+    # 原子落地：等待方按「非空」判定，直接重定向会让它读到只写了一半的环境。
+    echo "env > '$TMP/candidates.env.tmp' && mv '$TMP/candidates.env.tmp' '$TMP/candidates.env'"
     echo 'exit 0'
 } > "$TMP/opi"
 chmod +x "$TMP/opi"

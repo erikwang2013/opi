@@ -26,21 +26,20 @@
 #include <fstream>
 #include <string>
 
+// StandardPath 自 5.1.21 起弃用，但**不能迁移**（老版本没有 StandardPaths）。
+// 为什么 / 边界在哪 / 何时删这三件事只写在一处：cpp/CMakeLists.txt 的
+// 「为什么两个 .cpp 里有 -Wdeprecated-declarations」段 —— 别在这里复制。
+// 本文件通篇就是在问 StandardPath（连函数签名里都有 Type），故抑制包住整个文件。
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
 namespace {
 
 int failures = 0;
 
-// StandardPath 自 5.1.21 起弃用，但**不能迁移**（老版本没有 StandardPaths）。
-// 为什么 / 边界在哪 / 何时删这三件事只写在一处：cpp/CMakeLists.txt 的
-// 「为什么两个 .cpp 里有 -Wdeprecated-declarations」段 —— 别在这里复制。
-// 本文件通篇就是在问 StandardPath，故抑制恰好包住这一个函数（全文件唯一的
-// StandardPath 调用点）；调用方不再各自包一遍。
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 std::string locate(fcitx::StandardPath::Type type, const std::string &relative) {
     return fcitx::StandardPath::global().locate(type, relative);
 }
-#pragma GCC diagnostic pop
 
 void check(const char *what, fcitx::StandardPath::Type type,
            const char *relative, const char *expected) {
@@ -160,3 +159,5 @@ int main(int argc, char **argv) {
     printf("\n全部相符\n");
     return 0;
 }
+
+#pragma GCC diagnostic pop
