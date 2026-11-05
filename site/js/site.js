@@ -387,9 +387,9 @@
           ['full', zh ? '完整包' : 'Full',
             zh ? '语音引擎 + 两套模型 + 全部词库' : 'Engine + both models + all dictionaries'],
           ['normal', zh ? '普通包' : 'Normal',
-            zh ? '全部词库；引擎与模型按需下载' : 'All dictionaries; engine and models on demand'],
+            zh ? '全部词库；语音引擎随包，模型按需下载' : 'All dictionaries; speech engine bundled, models on demand'],
           ['basic', zh ? '基础包' : 'Basic',
-            zh ? 'app + 拼音主词库；扩展词库、引擎、模型按需下载' : 'App + core pinyin dictionary; extras, engine and models on demand'],
+            zh ? 'app + 拼音主词库；扩展词库与语音模型按需下载' : 'App + core pinyin; extras and speech models on demand'],
         ];
         const platforms = [
           ['android', 'Android · APK'],
