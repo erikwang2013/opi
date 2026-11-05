@@ -7,10 +7,13 @@
 
 package xyz.erik.opi.candidate
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -348,12 +351,20 @@ private fun TransferCard(
                 }
             }
             TransferState.ACTIVE -> {
-                val pct = if (t.totalBytes > 0) {
-                    (t.transferredBytes * 100 / t.totalBytes).coerceIn(0, 100)
+                val fraction = if (t.totalBytes > 0) {
+                    (t.transferredBytes.toFloat() / t.totalBytes).coerceIn(0f, 1f)
                 } else {
-                    0
+                    0f
                 }
-                Text("传输中 $pct%", fontSize = 12.sp, color = Teal)
+                Text("传输中 ${(fraction * 100).toInt()}%", fontSize = 12.sp, color = Teal)
+                Spacer(Modifier.height(4.dp))
+                // 发送/接收共用同一张卡：进度条不分方向，按传输字节走。
+                Box(Modifier.fillMaxWidth().height(6.dp).background(Hairline)) {
+                    Box(
+                        Modifier.fillMaxWidth(fraction).fillMaxHeight()
+                            .background(Teal),
+                    )
+                }
                 Spacer(Modifier.height(8.dp))
                 ClipButton("取消", enabled = running, onClick = onCancel)
             }
