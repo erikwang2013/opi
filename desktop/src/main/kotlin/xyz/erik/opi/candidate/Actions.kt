@@ -137,8 +137,8 @@ fun runExternal(cmd: List<String>, timeoutMs: Long = 3000): String? {
  * · Linux：`opi-ctl insert <文本>`（D-Bus → addon 的 `ic->commitString`）—— 只要
  *   fcitx5 里有焦点输入框就能上屏，与进程拓扑无关；失败短语来自 [runExternal]，逐字有用。
  * · Windows：本机控制面 `\\.\pipe\opi-control-v2` → 候选窗进程 broker → TSF
- *   （ControlPlane.kt）。TSF 把文本排进上屏队列，由下一个按键事件落进文档（插入
- *   延迟的既有语义，见 crates/tsf-opi/src/state.rs 的线程模型）。
+ *   （ControlPlane.kt）。TSF 入队后立刻 PostMessage 唤醒 UI 线程落进文档
+ *   （见 crates/tsf-opi/src/tsf_timer.rs），语音每 3 秒的分段因此能边识别边出字。
  *
  * ⚠️ 两个宿主（状态栏、设置窗）**必须走这一条**：各写一份平台分支必然漂（此前
  * StatusBarApp 的调用方把 false 翻成写死的 Windows 解释，Linux 上的真实原因被顶掉了）。

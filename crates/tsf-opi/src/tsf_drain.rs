@@ -13,8 +13,9 @@ impl TsfTextService {
     /// 读线程只把 index/文本排进队列（它拿不到 `ITfContext` —— 那是本线程的 COM
     /// 接口指针），真正走 COM 的插入在这里、在按键线程上跑。
     ///
-    /// **已知代价：点到下一次按键/焦点变化之前才插入**。即时插入的两条升级路径
-    /// （都要真机）写在 state.rs 模块头。一次按键最多清空队列（各上限 16 条）。
+    /// **点选**仍可能在点到下一次按键/焦点变化之前才插入（原因见 state.rs 模块头）；
+    /// 直插文本已由 `tsf_timer.rs` 的窗口即时落地，不走这条延迟路径。
+    /// 一次按键最多清空队列（各上限 16 条）。
     ///
     /// 换文档的边界（2026-10-28 修）：每条排队动作带着入队时的目标世代，执行点
     /// 与当前世代不一致 = 点选之后换了文档 → 丢弃（`select_and_insert` 里判定）。
@@ -34,7 +35,8 @@ impl TsfTextService {
         }
         // 候选窗「直接插入」（commit_text：符号页多选）：插文档但**不动引擎、不通知
         // sink**（`on_commit` 会收起窗口，而符号页要留在屏幕上连续点选；裁决
-        // 2026-10-10，见 candidate_io.rs 协议头）。与上面同受"延迟到下一次按键"的约束。
+        // 2026-10-10，见 candidate_io.rs 协议头）。这里是按键/焦点路径的兜底：
+        // 主路径是入队时的 PostMessage 唤醒（`tsf_timer.rs`）。
         while let Some((text, seq)) = self.state.take_pending_text() {
             self.state.insert_text(&text, seq);
         }

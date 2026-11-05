@@ -24,14 +24,12 @@
 //!   自己推出来的（**没有 `unsafe impl`**），读线程拿的就是这一半；
 //! - `TsfSharedState` 里剩下的 `ITfContext` / 编辑会话只挂在按键线程持有的一份上。
 //!
-//! 读线程点选只 `enqueue_select(index)` 排队，按键线程取走执行。落地时机有两处：
-//! 下一个键事件开头（`tsf.rs::handle_key_inner` / `key_sink.rs::OnTestKeyDown`）与
-//! 焦点变化（`key_sink.rs::OnSetFocus`）。**已知代价：插入仍可能延迟** —— 候选窗是
-//! 非激活窗口（desktop `Main.kt` 的 `focusable = false`），点它不产生焦点事件，
-//! 「点完候选原地不动、不敲键」谁也叫不醒我们。要即时插入时的升级路径（二选一，
-//! 都得真机才验得了）：(a) 按键线程建一个 message-only 窗口，读线程 `PostMessage`
-//! 过去在 UI 线程执行；(b) 按 GIT（`IGlobalInterfaceTable`）注册 cookie，读线程取
-//! marshal 过的代理。
+//! 读线程点选只 `enqueue_select(index)` 排队，按键线程取走执行。点选的落地时机
+//! 有两处：下一个键事件开头（`tsf.rs::handle_key_inner` / `key_sink.rs::OnTestKeyDown`）
+//! 与焦点变化（`key_sink.rs::OnSetFocus`）。候选窗是非激活窗口（desktop `Main.kt`
+//! 的 `focusable = false`），点它不产生焦点事件 ⇒ 「点完候选不敲键」仍会延迟。
+//! **直插文本不再延迟**：读线程入队后 PostMessage 唤醒 `tsf_timer.rs` 的窗口，
+//! UI 线程立刻 `insert_text`（语音每 3 秒一段靠这条路径上屏）。
 //!
 //! 排队动作带着入队时的**目标世代**（`EngineShared::target_seq`）：点选之后换了文档，
 //! 世代由按键线程推进，旧动作在执行点被丢弃 —— 不会把 A 文档的候选插进 B 文档。
@@ -41,16 +39,19 @@
 //! 落进文档、宿主进程是否还在。没插入 → 看 `insert_into` 打出的那行 HRESULT。
 
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicIsize, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
-use windows::Win32::UI::TextServices::{ITfContext, ITfEditSession};
+use windows::Win32::UI::TextServices::{ITfContext, ITfEditSession, ITfThreadMgr};
 use windows::core::Interface;
 
 use crate::candidate_io::CandidateAction;
 use crate::ctl::{CtlReply, CtlRequest};
 use crate::logic::TsfLogic;
 use crate::tsf::{TsfSink, push_state};
+
+/// 直插文本入队后发给按键线程 message-only 窗口的唤醒消息（见 `tsf_timer.rs`）。
+pub(crate) const DRAIN_MESSAGE: u32 = windows::Win32::UI::WindowsAndMessaging::WM_APP + 1;
 
 /// 队列上限。对端是**另一个进程**（候选窗）：不设上限的话它连发 select 就能
 /// 让宿主进程的内存一直涨。16 远超人手点击速度，超过即丢弃（读线程不阻塞）。
@@ -79,6 +80,9 @@ pub struct EngineShared {
     /// 读线程排下的「直接插入文本」（候选窗 `commit_text`，不经引擎选词；同样带
     /// 入队时的 `target_seq`），由按键线程取走执行（见 `enqueue_commit_text`）。
     pending_text: Mutex<VecDeque<(String, u32)>>,
+    /// 按键线程 message-only 窗口（`tsf_timer.rs`）；0 = 尚未 Activate / 已销毁。
+    /// 读线程入队直插文本后 PostMessage 叫醒它，不再等下一次按键。
+    drain_hwnd: AtomicIsize,
 }
 
 impl EngineShared {
@@ -108,6 +112,7 @@ impl EngineShared {
             target_seq: AtomicU32::new(0),
             pending: Mutex::new(VecDeque::new()),
             pending_text: Mutex::new(VecDeque::new()),
+            drain_hwnd: AtomicIsize::new(0),
         }
     }
 
@@ -182,25 +187,6 @@ impl EngineShared {
         self.pending.lock().ok()?.pop_front()
     }
 
-    /// **读线程**调（候选窗 `commit_text`）：收下这段要直插文档的文本，**不做任何
-    /// COM 调用**（理由同 `enqueue_select`：插入目标不在这半）。返回 false = 队列满
-    /// 或锁中毒 —— 丢这一次，不阻塞读线程。目标世代语义同 `enqueue_select`。
-    pub fn enqueue_commit_text(&self, text: String) -> bool {
-        let seq = self.target_seq();
-        match self.pending_text.lock() {
-            Ok(mut q) if q.len() < MAX_PENDING_TEXT => {
-                q.push_back((text, seq));
-                true
-            }
-            _ => false,
-        }
-    }
-
-    /// **按键线程**调：取一段待直插的文本（文本 + 入队时的目标世代）。None = 队列空。
-    pub fn take_pending_text(&self) -> Option<(String, u32)> {
-        self.pending_text.lock().ok()?.pop_front()
-    }
-
     /// **按键线程**调（Deactivate）：丢弃全部排队动作 —— 失活后执行的插入只会
     /// 落到不再属于本服务的文档上。与 `clear_target` 一起收尾。
     pub fn clear_pending(&self) {
@@ -225,6 +211,9 @@ impl EngineShared {
 pub struct TsfSharedState {
     /// 读线程那一半（`SharedAction` 也持一份，故是 `Arc`）。
     engine: Arc<EngineShared>,
+    /// Activate 保存的线程管理器；Deactivate 清空。定时唤醒取焦点 context 用
+    /// （见 `tsf_timer.rs`：用户点了话筒但还没敲过键时，target 为空）。
+    pub thread_mgr: Mutex<Option<ITfThreadMgr>>,
     /// `RequestEditSession` 的第一个参数。0 = `TF_CLIENTID_NULL` = 尚未 Activate
     /// （TSF 分配的是非零 id），故 0 同时充当「未激活」哨兵。
     client_id: AtomicU32,
@@ -241,6 +230,7 @@ impl TsfSharedState {
     pub fn new(engine: Arc<EngineShared>) -> Self {
         Self {
             engine,
+            thread_mgr: Mutex::new(None),
             client_id: AtomicU32::new(0),
             target: Mutex::new(None),
             keepalive: Mutex::new(None),
@@ -255,11 +245,6 @@ impl TsfSharedState {
     /// **按键线程**调：取一个待执行的点选（见 `EngineShared::take_pending_selection`）。
     pub fn take_pending_selection(&self) -> Option<(usize, u32)> {
         self.engine.take_pending_selection()
-    }
-
-    /// **按键线程**调：取一段待直插的文本（见 `EngineShared::take_pending_text`）。
-    pub fn take_pending_text(&self) -> Option<(String, u32)> {
-        self.engine.take_pending_text()
     }
 
     /// **按键线程**调（Deactivate）：丢弃排队动作，见 `EngineShared::clear_pending`。
@@ -393,8 +378,8 @@ impl TsfSharedState {
 ///   （`OnceLock`）打破：先建本对象（槽位空着），再建 sink，最后回填。
 ///   接线三步在 `com_server.rs`。
 ///
-/// 【本机（Linux）无法验证】点选/ctl 上屏的真正执行点在按键线程（`tsf.rs` 的
-/// `drain_pending`），本机跑不了；代价是插入延迟到下一次按键。见 state.rs 模块头。
+/// 【本机（Linux）无法验证】点选的执行点在按键线程（`tsf.rs` 的 `drain_pending`），
+/// 本机跑不了；直插文本由 `tsf_timer.rs` 的 message-only 窗口即时落地。
 pub struct SharedAction {
     engine: Arc<EngineShared>,
     sink: OnceLock<Arc<dyn TsfSink>>,
@@ -454,7 +439,7 @@ impl CandidateAction for SharedAction {
     }
 
     /// **读线程**上同步执行（只持引擎锁，不碰 COM）。上屏文本走既有队列，
-    /// 由下一个按键事件落地——与点选同一条 W1 延迟语义。动作改了引擎态才刷新窗口。
+    /// 入队即 PostMessage 唤醒 UI 线程落地（`tsf_timer.rs`）。动作改了引擎态才刷新窗口。
     fn on_ctl(&self, request: &CtlRequest) -> Option<String> {
         let settings = crate::ctl::default_settings_path();
         let dicts = crate::ctl::default_dicts_dir();
@@ -483,3 +468,7 @@ impl CandidateAction for SharedAction {
 // 文档写入（`insert_into` + `InsertTextSession`）拆出守 500 行，见那里的模块头。
 #[path = "state_insert.rs"]
 mod insert;
+
+// 直插文本的入队 + 唤醒（语音每 3 秒即时落地）拆出守 500 行。
+#[path = "state_text.rs"]
+mod text;

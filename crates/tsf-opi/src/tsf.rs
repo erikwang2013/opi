@@ -57,12 +57,8 @@ pub(crate) use crate::sink::{E_FAIL, ensure_panic_hook, push_state};
 // ITfLangBarItem/ITfLangBarItemButton 那一对）。
 #[implement(ITfTextInputProcessor, ITfKeyEventSink, ITfFnConfigure, ITfFunction)]
 pub struct TsfTextService {
-    /// 引擎（与候选窗回调共用同一份 `EngineShared`）+ 插入目标 + 编辑会话保活。
-    /// **本对象是它唯一的持有者**：后两样不 Send，只该待在按键线程上，
-    /// 读线程那份引用走 `EngineShared`（见 `state.rs` 的线程模型）。
+    /// 引擎 + 插入目标/线程管理器/编辑会话保活（仅按键线程，见 state.rs 线程模型）。
     pub state: TsfSharedState,
-    /// Activate 时保存的线程管理器（骨架：仅持有引用，候选窗/文档操作需要）。
-    pub thread_mgr: Mutex<Option<ITfThreadMgr>>,
     /// 语言栏按钮（`langbar.rs`）。挂上/摘下跟 Activate/Deactivate 配对 ——
     /// 不摘的话语言栏会持一份指向本 DLL 的 vtable。**挂不上不致命**：
     /// 语言栏没开（Win11 常态）就必然挂不上，那只意味着没那个图标，不该让
@@ -101,7 +97,6 @@ impl TsfTextService {
     pub fn new(state: TsfSharedState, sink: Arc<dyn TsfSink>) -> Self {
         Self {
             state,
-            thread_mgr: Mutex::new(None),
             langbar: Mutex::new(None),
             sink,
             shift_tap: Mutex::new(ShiftTap::new()),
@@ -287,7 +282,7 @@ impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
         // COM 出口：panic 逃出去 = abort 宿主进程（见 handle_key）。兜住 → E_FAIL。
         catch_unwind(AssertUnwindSafe(|| {
             // 中毒锁：跳过状态保存，避免经 COM vtable 泄漏 panic
-            let mut tm = match self.thread_mgr.lock() {
+            let mut tm = match self.state.thread_mgr.lock() {
                 Ok(g) => g,
                 Err(_) => return Err(E_FAIL.into()),
             };
@@ -295,6 +290,8 @@ impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
             // client id 是 RequestEditSession 的必需参数：不存下来，插入就没有
             // 合法的 tid 可用（这就是"两处 on_commit 丢弃文本"之外的第二道墙）。
             self.state.set_client_id(tid);
+            // 语音每 3 秒直插：读线程入队后叫醒本线程，不再等按键（tsf_timer.rs）。
+            self.state.start_drain_window();
             // 让候选窗客户端主动连接：状态栏的 state 查询依赖这条连接，用户切到 opi
             // 后即使还没敲键，状态栏也应出现（2026-10-21 报障「没有状态栏」）。
             self.sink.on_activate();
@@ -379,6 +376,8 @@ impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
     fn Deactivate(&self) -> Result<()> {
         ensure_panic_hook();
         catch_unwind(AssertUnwindSafe(|| {
+            // 先停唤醒窗口：失活后不再有直插落地，窗口留着会持本对象的裸指针。
+            self.state.stop_drain_window();
             // Shift 轻按复位：按住 Shift 时失活/切走，抬起事件可能到不了本服务，
             // 不撤销就是回来后的「幽灵切换」（镜像 `OpiShiftToggle::disarm`）。
             self.shift_tap_disarm();
@@ -412,7 +411,7 @@ impl ITfTextInputProcessor_Impl for TsfTextService_Impl {
             if let Some(mut logic) = self.state.lock_logic() {
                 logic.clear();
             }
-            let mut tm = match self.thread_mgr.lock() {
+            let mut tm = match self.state.thread_mgr.lock() {
                 Ok(g) => g,
                 Err(_) => return Ok(()), // 中毒锁：吞掉，避免经 COM vtable 泄漏 panic
             };
@@ -479,13 +478,15 @@ impl ITfFnConfigure_Impl for TsfTextService_Impl {
 #[path = "tsf_shift.rs"]
 mod shift_glue;
 
+// 直插文本唤醒窗口（语音每 3 秒即时上屏）在 tsf_timer.rs。
+#[path = "tsf_timer.rs"]
+mod timer;
+
 // 候选窗回复的执行点（drain_pending）在 tsf_drain.rs：拆出守 500 行。
 #[path = "tsf_drain.rs"]
 mod drain;
-
 #[path = "key_sink.rs"]
 mod key_sink;
-
 // 联想态推送（按键收起 / 提交后补推）在 tsf_association.rs：拆出守 500 行。
 #[path = "tsf_association.rs"]
 mod association;
