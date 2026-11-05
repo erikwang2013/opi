@@ -320,6 +320,9 @@ internal class SpeechHostImpl {
                 },
                 onError = { msg -> commands.offer(SpeechCommand.AudioError(msg)) },
             )
+            // 模型加载完不等于能录音：麦克风被占用/驱动卡住时，别让浮层继续写
+            // “正在加载模型”误导用户。真正的失败仍由 capture.start() 的返回值报。
+            update(ui.copy(text = "正在打开麦克风…"))
             val audioErr = capture.start()
             if (audioErr != null) {
                 runCatching { ffi.opi_asr_cancel(h.handle) }
