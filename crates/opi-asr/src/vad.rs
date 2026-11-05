@@ -45,7 +45,15 @@ pub(crate) fn load(cfg: &AsrConfig) -> Result<Box<dyn Segmenter>, AsrError> {
         60.0,
     )
     .map_err(|e| AsrError::Model(format!("create Silero VAD: {e}")))?;
-    Ok(Box::new(SileroSegmenter { vad }))
+    // max_segment_ms 在 sherpa VAD 里只是「超过后更容易在 100ms 停顿处切」，
+    // 用户要求每 3 秒必出一段：这里再按输入样本数强制 flush 一次，保证连续说话
+    // 也能增量上屏。代价是切点可能落在词中间（边界词识别会差一点）。
+    let force_samples = cfg.max_segment_ms as u64 * crate::audio::SAMPLE_RATE as u64 / 1000;
+    Ok(Box::new(SileroSegmenter {
+        vad,
+        force_samples,
+        since_flush: 0,
+    }))
 }
 
 #[cfg(not(feature = "sherpa"))]
@@ -58,6 +66,10 @@ pub(crate) fn load(_cfg: &AsrConfig) -> Result<Box<dyn Segmenter>, AsrError> {
 #[cfg(feature = "sherpa")]
 struct SileroSegmenter {
     vad: sherpa_rs::silero_vad::SileroVad,
+    /// 强制切段的样本数（`max_segment_ms`）。
+    force_samples: u64,
+    /// 距上一次出段的输入样本数；出段后清零。
+    since_flush: u64,
 }
 
 #[cfg(feature = "sherpa")]
@@ -80,15 +92,36 @@ impl SileroSegmenter {
 impl Segmenter for SileroSegmenter {
     fn push(&mut self, window: &[f32]) -> Vec<VadSegment> {
         self.vad.accept_waveform(window.to_vec());
-        self.drain()
+        // 只数「正在说话」的样本：静音等待不能把下一次开口算成满 3 秒，
+        // 否则开口一两声就会被强制切出一个碎片。
+        let speaking = self.vad.is_speech();
+        if speaking {
+            self.since_flush += window.len() as u64;
+        } else {
+            self.since_flush = 0;
+        }
+        // 先取 VAD 按停顿切出的段；有段就重新计时。
+        let mut out = self.drain();
+        if out.is_empty() && speaking && self.since_flush >= self.force_samples {
+            // 连续说话、VAD 一直不切：到点强制收一段，保证每 3 秒增量上屏。
+            self.vad.flush();
+            self.since_flush = 0;
+            out = self.drain();
+        }
+        if !out.is_empty() {
+            self.since_flush = 0;
+        }
+        out
     }
 
     fn flush(&mut self) -> Vec<VadSegment> {
         self.vad.flush();
+        self.since_flush = 0;
         self.drain()
     }
 
     fn reset(&mut self) {
         self.vad.clear();
+        self.since_flush = 0;
     }
 }
