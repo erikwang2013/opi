@@ -30,3 +30,19 @@ internal fun nextSpeechPhase(from: SpeechPhase, t: SpeechTransition): SpeechPhas
     SpeechTransition.FAIL -> SpeechPhase.ERROR
     SpeechTransition.CANCEL, SpeechTransition.DISMISS -> SpeechPhase.IDLE
 }
+
+/** 一次连续听写会话的可变状态（宿主单线程持有）。 */
+internal class Session(
+    val engine: SpeechEngine,
+    val commit: (String) -> String?,
+    val epoch: Int,
+) {
+    var deadlineMs: Long = 0L
+
+    /** 成功上屏的 VAD 段数；final 只做收尾，不再重提交整段。 */
+    var segmentsCommitted: Int = 0
+
+    /** 上屏失败的段文本；停止/关闭浮层时重试，避免丢字。 */
+    var failedText: String = ""
+    var segmentText: String = ""
+}
