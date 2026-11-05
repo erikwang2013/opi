@@ -126,11 +126,10 @@ internal fun SpeechOverlay(
                     }
                 }
                 SpeechPhase.RECOGNIZING -> Text("正在识别…", fontSize = 13.sp, color = palette.fg)
+                // 识别正文只进光标，浮层不再复述（否则用户会以为结果停在弹框里）。
                 SpeechPhase.DONE -> Text(
-                    ui.text,
-                    fontSize = 14.sp,
-                    color = palette.fg,
-                    maxLines = 4,
+                    if (ui.error.isEmpty()) "已输出到光标，可关闭" else "识别结束",
+                    fontSize = 13.sp, color = palette.fg,
                 )
                 SpeechPhase.ERROR -> Text(ui.error, fontSize = 13.sp, color = palette.accent)
                 SpeechPhase.IDLE -> {}
