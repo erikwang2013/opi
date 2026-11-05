@@ -125,9 +125,7 @@ final class OpiSpeechEngine {
 
     private func handle(result: SFSpeechRecognitionResult?, error: Error?) {
         if let result {
-            // 用户口径（2026-11-05）：语音上屏到光标处不能带任何符号；系统识别器
-            // 会自动补标点，这里只保留字母/汉字/数字（词间留一个空格）。
-            let text = Self.cleanSpeechText(result.bestTranscription.formattedString)
+            let text = result.bestTranscription.formattedString
             if result.isFinal {
                 let wasActive = accepting || awaitingFinal
                 finishState()
@@ -159,21 +157,6 @@ final class OpiSpeechEngine {
         try? AVAudioSession.sharedInstance().setActive(
             false, options: .notifyOthersOnDeactivation
         )
-    }
-
-    private static func cleanSpeechText(_ raw: String) -> String {
-        var out = ""
-        var pendingSpace = false
-        for scalar in raw.unicodeScalars {
-            if CharacterSet.alphanumerics.contains(scalar) {
-                if pendingSpace && !out.isEmpty { out.append(" ") }
-                out.unicodeScalars.append(scalar)
-                pendingSpace = false
-            } else if CharacterSet.whitespacesAndNewlines.contains(scalar) {
-                pendingSpace = !out.isEmpty
-            }
-        }
-        return out
     }
 
     private static func recognizer(for language: String) -> SFSpeechRecognizer? {

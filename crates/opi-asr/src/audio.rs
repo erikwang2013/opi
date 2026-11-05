@@ -49,25 +49,6 @@ impl PcmFramer {
     }
 }
 
-/// 语音输入只落「说出来的字」：模型会自作主张补 ，。！？、- 等标点，用户要求
-/// 光标处不加任何符号。只保留字母/汉字/数字，空白折叠成一个空格；其余一律丢弃。
-pub(crate) fn clean_speech_text(raw: &str) -> String {
-    let mut out = String::with_capacity(raw.len());
-    let mut space = false;
-    for c in raw.chars() {
-        if c.is_alphanumeric() {
-            if space && !out.is_empty() {
-                out.push(' ');
-            }
-            out.push(c);
-            space = false;
-        } else if c.is_whitespace() {
-            space = !out.is_empty();
-        }
-    }
-    out
-}
-
 /// Join finalized segments. A space is added when ASCII text meets ASCII text
 /// (including after punctuation), so mixed zh/en output does not gain spaces
 /// around Chinese.
@@ -157,18 +138,6 @@ mod tests {
         assert_eq!(normalize_lang("<|zh|><|NEUTRAL|>"), "zh");
         assert_eq!(normalize_lang(" EN "), "en");
         assert_eq!(normalize_lang(""), "");
-    }
-
-    #[test]
-    fn speech_text_drops_all_symbols_and_keeps_words() {
-        // 用户口径（2026-11-05）：语音上屏到光标处不能带任何符号。
-        assert_eq!(clean_speech_text("你好，世界！"), "你好世界");
-        assert_eq!(clean_speech_text("  - 你好 ... 世界。 "), "你好 世界");
-        assert_eq!(clean_speech_text("hello, world."), "hello world");
-        assert_eq!(clean_speech_text("1,000 元 + 5%"), "1000 元 5");
-        assert_eq!(clean_speech_text("…！？—"), "");
-        // 中间空白折叠，首尾不留空格；英文单词间保留一个空格。
-        assert_eq!(clean_speech_text("a \t\n b"), "a b");
     }
 
     #[test]
