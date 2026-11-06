@@ -21,10 +21,20 @@ internal class AudioCapture(
     private val onError: (String) -> Unit,
 ) {
     @Volatile private var running = false
-    private var line: TargetDataLine? = null
-    private var thread: Thread? = null
+    @Volatile private var line: TargetDataLine? = null
+    @Volatile private var thread: Thread? = null
+    @Volatile private var monitor: Thread? = null
+    /** 每次重开采集线都换代，旧读线程看到代数变了就退出，避免两条线同时喂 PCM。 */
+    @Volatile private var generation = 0
+    /** 最近一次读到 PCM 的时刻；超过 STALL_MS 没数据就判定采集线卡死并重开。 */
+    @Volatile private var lastDataMs = 0L
     private var sourceRate = 16_000
     private var sourceChannels = 1
+
+    private companion object {
+        /** PipeWire/Pulse 偶发挂起采集线：静音时也应持续读到 0 样本，长时间无数据即重开。 */
+        const val STALL_MS = 4_000L
+    }
 
     private val candidates = listOf(
         AudioFormat(16_000f, 16, 1, true, false),
@@ -36,7 +46,16 @@ internal class AudioCapture(
     )
 
     /** 返回 null = 已开录；非 null = 给用户看的原因。 */
+    @Synchronized
     fun start(): String? {
+        val err = openLine()
+        if (err != null) return err
+        startMonitor()
+        return null
+    }
+
+    /** 按候选格式开一条采集线并起读线程；调用方持锁。 */
+    private fun openLine(): String? {
         val failures = ArrayList<String>(2)
         for (format in candidates) {
             val info = DataLine.Info(TargetDataLine::class.java, format)
@@ -56,11 +75,13 @@ internal class AudioCapture(
                 failures += "${format.sampleRate.toInt()}Hz/${format.channels}ch: ${t.javaClass.simpleName}"
                 continue
             }
+            val gen = ++generation
             line = l
             sourceRate = format.sampleRate.toInt()
             sourceChannels = format.channels
+            lastDataMs = System.currentTimeMillis()
             running = true
-            thread = Thread({ readLoop(l) }, "opi-speech-audio").apply {
+            thread = Thread({ readLoop(l, gen) }, "opi-speech-audio").apply {
                 isDaemon = true
                 start()
             }
@@ -73,17 +94,57 @@ internal class AudioCapture(
         }
     }
 
-    private fun readLoop(l: TargetDataLine) {
+    /** 采集线超过 4 秒没有任何 PCM（不是静音，是读调用不再返回）就换一条新线。 */
+    private fun startMonitor() {
+        if (monitor?.isAlive == true) return
+        monitor = Thread({
+            while (running) {
+                try {
+                    Thread.sleep(500L)
+                } catch (_: InterruptedException) {
+                    return@Thread
+                }
+                if (running && System.currentTimeMillis() - lastDataMs > STALL_MS) {
+                    restartStalledLine()
+                }
+            }
+        }, "opi-speech-audio-watch").apply {
+            isDaemon = true
+            start()
+        }
+    }
+
+    @Synchronized
+    private fun restartStalledLine() {
+        if (!running) return
+        generation++ // 旧读线程看到代数变化后自行退出
+        val old = line
+        line = null
+        runCatching { old?.stop() }
+        runCatching { old?.close() }
+        thread?.let { runCatching { it.join(300) } }
+        thread = null
+        val err = openLine()
+        if (err != null) {
+            running = false
+            onError(err)
+        }
+    }
+
+    private fun readLoop(l: TargetDataLine, gen: Int) {
         val buf = ByteArray(9_600)
-        while (running) {
+        while (running && generation == gen) {
             val n = try {
                 l.read(buf, 0, buf.size)
             } catch (t: Throwable) {
-                if (running) onError("录音读取失败：${t.message ?: t.javaClass.simpleName}")
+                if (running && generation == gen) {
+                    onError("录音读取失败：${t.message ?: t.javaClass.simpleName}")
+                }
                 return
             }
-            if (!running) return
+            if (!running || generation != gen) return
             if (n > 0) {
+                lastDataMs = System.currentTimeMillis()
                 val pcm = to16kMono(buf, n)
                 if (pcm.isNotEmpty()) onChunk(pcm)
             }
@@ -94,14 +155,18 @@ internal class AudioCapture(
     private fun to16kMono(src: ByteArray, len: Int): ByteArray =
         pcm16To16kMono(src, len, sourceRate, sourceChannels)
 
+    @Synchronized
     fun stop() {
         running = false
+        generation++
         // 先 stop 让阻塞的 read 返回，再 join；顺序反了会白等一个采集缓冲。
         line?.let { runCatching { it.stop() } }
         thread?.let { runCatching { it.join(500) } }
         line?.let { runCatching { it.close() } }
+        monitor?.let { runCatching { it.interrupt() } }
         thread = null
         line = null
+        monitor = null
     }
 }
 

@@ -19,7 +19,7 @@
 ; best-effort and can never roll back the install.
 ;
 ; Build (CI or local, on Windows; ISCC is the Inno Setup 6 compiler):
-;   ISCC.exe /DAppVersion=1.31.15 ^
+;   ISCC.exe /DAppVersion=1.31.16 ^
 ;            /DAppImageDir=C:\path\to\build\compose\binaries\main\app\opi ^
 ;            /DOutputDir=C:\path\to\dist scripts\windows\opi.iss
 ;
@@ -42,8 +42,9 @@
 ; white-screen regression: never kill a healthy shell just because it is an
 ; upgrade. The finish page says "no sign-out; new apps use the update,
 ; already-open apps need a close and reopen". First installs and silent installs
-; never touch the shell. Other TSF hosts are never killed: the installer logs
-; (and lists on the finish page) the processes still mapping the old DLL.
+; never touch the shell. 2026-11-06: other visible TSF hosts are gracefully
+; closed and relaunched after install (opi-code-tsf-restart.iss); hosts that
+; refuse to close (save dialog) are logged and listed on the finish page.
 ;
 ; Upgrade (2026-10-21): the same rename runs at ssInstall, BEFORE [InstallDelete]
 ; and [Files], for tsf_opi.dll AND the app\*.opid dictionaries (the old TSF DLL maps the
@@ -198,6 +199,7 @@ Root: HKLM64; Subkey: "Software\opi"; ValueType: string; ValueName: "InstallDir"
 ; The .cmd keeps its historical name because the MSI postprocess looks it up.
 ; 完成页文案（2026-10-23 用户口径）：安装完成不要求注销；新打开的应用生效；
 ; 已打开的应用关闭重开。静默安装不重启 Explorer。
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""{tmp}\opi-restart-tsf.ps1"""; Flags: runhidden runasoriginaluser skipifsilent; StatusMsg: "正在重启占用旧版输入法的应用…"
 Filename: "{app}\app\launch-and-restart.cmd"; Description: "打开 opi（无需注销；新打开的应用生效，已打开的应用请关闭重开）"; Flags: postinstall nowait skipifsilent runasoriginaluser
 ; 跨设备剪贴板防火墙规则（2026-11-02）：只放行 opi.exe，覆盖全部网络类型。
 ; 只看专用/域网络时，被 Windows 判成「公用」的 Wi-Fi 收不到发现报文，用户
@@ -404,6 +406,7 @@ end;
 
 #include "opi-code-trash.iss"
 #include "opi-code-explorer.iss"
+#include "opi-code-tsf-restart.iss"
 #include "opi-code-uninstall.iss"
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -420,6 +423,8 @@ begin
     // actually loaded the old DLL is restarted (2026-10-23 white-screen regression:
     // killing Explorer on an upgrade that did not map it can leave a blank desktop).
     ExplorerHadTsf := ExplorerMapsTsf();
+    // [Run] 里的自动重启脚本先准备好（ssInstall 早于 [Run]，避免时序依赖）。
+    PrepareTsfRestartScript();
     // 先摘旧 profile/COM 键，再动文件；新 DLL 落下后由 ssPostInstall 重建。
     UnregisterTsf();
     MoveLockedTsfDll(True);
