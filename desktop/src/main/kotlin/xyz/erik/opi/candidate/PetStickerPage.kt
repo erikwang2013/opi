@@ -82,19 +82,27 @@ private val gifFlavor = DataFlavor("image/gif;class=java.io.InputStream")
 /** PNG 的 AWT 口味：`imageFlavor` 在 X11 上是 `image/x-java-image`，GTK/Qt 应用不认。 */
 private val pngFlavor = DataFlavor("image/png;class=java.io.InputStream")
 
-/** AWT 系统剪贴板：PNG + GIF + imageFlavor，由粘贴方挑最合适的一份。 */
+/** 系统剪贴板：Windows 走原生 PNG/CF_DIBV5/GIF+HDROP，其余平台走 AWT。 */
 val SystemImageClipboard = ImageClipboard { image, gif ->
+    if (isWindows()) {
+        val native = runCatching { WindowsStickerClipboard.copy(image, gif) }.getOrDefault(false)
+        if (native) true else copyStickerAwt(image, gif)
+    } else {
+        copyStickerAwt(image, gif)
+    }
+}
+
+/** AWT 兜底：PNG + GIF + imageFlavor，由粘贴方挑最合适的一份。 */
+private fun copyStickerAwt(image: BufferedImage, gif: ByteArray?): Boolean {
     val gifBytes = gif
-    try {
+    return try {
         val pngBytes = java.io.ByteArrayOutputStream().use {
             ImageIO.write(image, "png", it)
             it.toByteArray()
         }
         java.awt.Toolkit.getDefaultToolkit().systemClipboard.setContents(
             object : Transferable {
-                // 有 GIF 时把 image/gif 排在最前：部分宿主按 flavor 顺序挑第一个能用的，
-                // 这样「有动态的带动态」；PNG 仍是透明静态兜底（不要 imageFlavor 优先，
-                // 它走原生位图，部分 Windows 宿主会把透明通道铺成白底）。
+                // 有 GIF 时把 image/gif 排在最前：部分宿主按 flavor 顺序挑第一个能用的。
                 override fun getTransferDataFlavors(): Array<DataFlavor> =
                     if (gifBytes != null) arrayOf(gifFlavor, pngFlavor, DataFlavor.imageFlavor)
                     else arrayOf(pngFlavor, DataFlavor.imageFlavor)
@@ -114,12 +122,10 @@ val SystemImageClipboard = ImageClipboard { image, gif ->
         )
         true
     } catch (e: IllegalStateException) {
-        // Linux 上剪贴板被另一个进程持有（X11 选择所有权竞争）时的既有异常形态。
         false
     } catch (e: java.awt.HeadlessException) {
         false
     } catch (e: Exception) {
-        // PNG 编码/剪贴板访问的其余异常（IOException/SecurityException…）：报失败，别崩进程。
         logStatusBarCrash("复制表情到剪贴板", e)
         false
     }
