@@ -5,90 +5,90 @@
     "windows-x64": {
       "full": {
         "url": "https://opi.erik.xyz/download/v1.31.14/full/opi-1.31.14-windows-x64-full-setup.exe",
-        "size": 460837632,
-        "sha256": "6d6ac34125d558dec93b2130829349553830d086e5ee22c1748d35a857252a1b"
+        "size": 460846094,
+        "sha256": "acd84c7b384ccc25d4e2cbaacddfcccb0635927ec7e0177acf087ff84c6f5d5b"
       },
       "normal": {
         "url": "https://opi.erik.xyz/download/v1.31.14/normal/opi-1.31.14-windows-x64-setup.exe",
-        "size": 71949167,
-        "sha256": "2a1e6b42d61df6150dd6d999dc1d03cfa6c36a0dd8d49fd4bb43524d6f0d8a6b"
+        "size": 71957283,
+        "sha256": "add10106c86e1e6b8e2848dcdcdc5b2f3047816270e8cd31d9b27a3f31d47485"
       },
       "basic": {
         "url": "https://opi.erik.xyz/download/v1.31.14/basic/opi-1.31.14-windows-x64-basic-setup.exe",
-        "size": 70244247,
-        "sha256": "7bef77cd759c7106492926172b18253081658bb6790c4560b4f0d88cbd99ed6f"
+        "size": 70256195,
+        "sha256": "e2c53b5c8d92fbe76fa2697d073a8284d6e3874d3f596f00653c170030d38075"
       }
     },
     "linux-amd64": {
       "full": {
         "url": "https://opi.erik.xyz/download/v1.31.14/full/opi-1.31.14-linux-amd64-full.deb",
-        "size": 491614222,
-        "sha256": "b44523cd0402a93a6c617bc06caebf65c0cd34e9bd93727baf6e7187bc36e76a"
+        "size": 491618168,
+        "sha256": "4f702f88e7fd3f25a37094e839619b7f161aa15d7ffc14c89192f50abb277494"
       },
       "normal": {
         "url": "https://opi.erik.xyz/download/v1.31.14/normal/opi-1.31.14-linux-amd64.deb",
-        "size": 102906860,
-        "sha256": "662780c516040dab8c845335adfdb4a6d88da04d4a84e8e533d02a79c1607cff"
+        "size": 102912570,
+        "sha256": "88a88660c76f325fde111ee1a031e230752bdacb07d04767a0403288d27f86dd"
       },
       "basic": {
         "url": "https://opi.erik.xyz/download/v1.31.14/basic/opi-1.31.14-linux-amd64-basic.deb",
-        "size": 97057822,
-        "sha256": "beedd78f496d406fbf7519996f8522d8fdcab3c7fd3a30a2cf0ee77fc288d001"
+        "size": 97070180,
+        "sha256": "9836ad13483d94679357f3de56b6bb52144020137586925c1cda40f59984e972"
       }
     },
     "linux-x86_64": {
       "full": {
         "url": "https://opi.erik.xyz/download/v1.31.14/full/opi-1.31.14-linux-x86_64-full.rpm",
-        "size": 491654901,
-        "sha256": "602f2668f20d95f0acf5c3214c4f750c281721bb4f4dc89155d2ebcefbb75c5d"
+        "size": 491669175,
+        "sha256": "a5e4f35e41ea2e421254648cac052561bb3fe24c7c71687584d4d01bcf06fd92"
       },
       "normal": {
         "url": "https://opi.erik.xyz/download/v1.31.14/normal/opi-1.31.14-linux-x86_64.rpm",
-        "size": 102926918,
-        "sha256": "86b3a2128bfa9b421fc30cbc637817b2b3d8f523b802ba06ce4d6056911843e9"
+        "size": 102955051,
+        "sha256": "2220fd2c9592af7ec6e388c788a6d981dfef7dd397f80b66281acd7ff4298f4b"
       },
       "basic": {
         "url": "https://opi.erik.xyz/download/v1.31.14/basic/opi-1.31.14-linux-x86_64-basic.rpm",
-        "size": 97083698,
-        "sha256": "0ea341f9bacb2614c4fc11b1e3a09563e3a1e5c0f4ba335edeb603203ab8befb"
+        "size": 97108042,
+        "sha256": "332b85121c93710016807f7f595f83d5eccd436118bda21bcd0162cee883a164"
       }
     },
     "android": {
       "full": {
         "url": "https://opi.erik.xyz/download/v1.31.14/full/opi-1.31.14-android-universal-full.apk",
-        "size": 470738166,
-        "sha256": "b53fb929311a6ee854ce027bf27c8085481225e864126fd26d0a617b47005f22"
+        "size": 470741765,
+        "sha256": "3b4d472a5f6708d807335c5492c403ef5027d3275caf95156c399d831bf73b70"
       },
       "normal": {
         "url": "https://opi.erik.xyz/download/v1.31.14/normal/opi-1.31.14-android-universal.apk",
-        "size": 82622298,
-        "sha256": "41400ba6c3691dffed96d4cee5608e51a5d7eb36eabba6c88dc5e8b451fa22c7"
+        "size": 82625961,
+        "sha256": "0981896ae9cd4707f3ab8304e4a1d3b1125bb959c336c18925e95ad74d22d462"
       },
       "basic": {
         "url": "https://opi.erik.xyz/download/v1.31.14/basic/opi-1.31.14-android-universal-basic.apk",
-        "size": 64995387,
-        "sha256": "87d92ed0b75c501981bf893652c0adb6c022fd5a916577e338b8a4286f8bd527"
+        "size": 64999048,
+        "sha256": "bdb5b10c899332cca00e7d6eafaf35e01e4d84922aa328664291e75dcc075321"
       }
     },
     "macos-universal": {
       "normal": {
         "url": "https://opi.erik.xyz/download/v1.31.14/normal/opi-1.31.14-macos-universal.pkg",
-        "size": 48044120,
-        "sha256": "55851a257805dd0a89560db55f3503e11c4129336684f9193dc0c423ba483218"
+        "size": 48049442,
+        "sha256": "b905076f36dbaa62529105f4d3774430842a271508372695ad9718395162811f"
       }
     },
     "ios": {
       "normal": {
         "url": "https://opi.erik.xyz/download/v1.31.14/normal/opi-1.31.14-ios-unsigned.ipa",
-        "size": 32295822,
-        "sha256": "573b325bac78d1c93aed5bd5bc0451ce164847683b4d20c338c8db53cd82c7a9"
+        "size": 32299012,
+        "sha256": "4b41b1f272ca343acdf84d9811eed1b7295f158444548906e239b9e82d59f4dc"
       }
     },
     "harmony": {
       "normal": {
         "url": "https://opi.erik.xyz/download/v1.31.14/normal/opi-1.31.14-harmonyos-unsigned.hap",
-        "size": 80060135,
-        "sha256": "9198f11ede57e9fd4be7ffde9523f416c48466069341d7f80c2d0b322d41f2a0"
+        "size": 80065643,
+        "sha256": "deeaa4bf278f4e7a72494e02d01476f2f394bf8df71e88394bebf763b4b9c6e0"
       }
     }
   },
@@ -105,23 +105,23 @@
     },
     "asr-engine-android-arm64-v8a": {
       "url": "https://opi.erik.xyz/download/components/asr/engine/opi-asr-engine-android-arm64-v8a.zip",
-      "size": 7604128,
-      "sha256": "907d80012c44d543e421cb138b58fc9e89d59e678050e741acf4a7b3294db889"
+      "size": 7604123,
+      "sha256": "69165fc87df21927dfaad03c8719399319264fc0dbc56d97b2173308f0c861d6"
     },
     "asr-engine-android-x86_64": {
       "url": "https://opi.erik.xyz/download/components/asr/engine/opi-asr-engine-android-x86_64.zip",
-      "size": 8342889,
-      "sha256": "f6c2e2c16396dabc820644f1643ff8b704303b36542ab357e30503d152d66705"
+      "size": 8342890,
+      "sha256": "813d8b7416713ec9e242d31092350b39543f6ac5afa5022c39bcc90526959492"
     },
     "asr-engine-linux-x86_64": {
       "url": "https://opi.erik.xyz/download/components/asr/engine/opi-asr-engine-linux-x86_64.zip",
-      "size": 7886860,
-      "sha256": "5b070d8f02c5e01ffd88aefe53f13da805af420a3eb8abac377bfc75e253be4b"
+      "size": 7886831,
+      "sha256": "6fd69126cd6de5d581ee4c159b7ce9c98daf82737d451e31b95d7139b9ee0d78"
     },
     "asr-engine-windows-x64": {
       "url": "https://opi.erik.xyz/download/components/asr/engine/opi-asr-engine-windows-x64.zip",
-      "size": 5964370,
-      "sha256": "5ef6ab97e2e8073277a389352f36281f76e283f5bc08f69082eb16889166af9c"
+      "size": 5964367,
+      "sha256": "1df0cdbff33b317b7794970e6fc3e1ba368bceb2e32b6143285b1f09766adfc9"
     }
   }
 }
