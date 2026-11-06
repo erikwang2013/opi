@@ -1,13 +1,13 @@
-; SPDX-FileCopyrightText: 2026 erik.xyz
-; SPDX-License-Identifier: MIT
-;
-; 安装完成后自动重启仍加载旧 tsf_opi.dll 的 GUI 程序（2026-11-06 用户要求：
-; 不要等用户点语音后再弹框让他注销）。Windows 不能热替换进程内 DLL，唯一办法
-; 是让宿主进程退出再启动；这里只对有主窗口、能正常 CloseMainWindow 的程序做
-; 优雅重启，不强杀、不处理没有窗口的系统进程。保存对话框里点取消的程序不会被
-; 再次拉起，留给语音页的兜底提示。
-;
-; 由 opi.iss 的 [Run] 以原用户令牌执行（runasoriginaluser），静默安装跳过。
+// SPDX-FileCopyrightText: 2026 erik.xyz
+// SPDX-License-Identifier: MIT
+//
+// 安装完成后自动重启仍加载旧 tsf_opi.dll 的 GUI 程序（2026-11-06 用户要求：
+// 不要等用户点语音后再弹框让他注销）。Windows 不能热替换进程内 DLL，唯一办法
+// 是让宿主进程退出再启动；这里只对有主窗口、能正常 CloseMainWindow 的程序做
+// 优雅重启，不强杀、不处理没有窗口的系统进程。保存对话框里点取消的程序不会被
+// 再次拉起，留给语音页的兜底提示。
+//
+// 由 opi.iss 的 [Run] 以原用户令牌执行（runasoriginaluser），静默安装跳过。
 
 procedure PrepareTsfRestartScript();
 var
