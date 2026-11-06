@@ -8,6 +8,7 @@ package xyz.erik.opi.candidate
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -163,6 +164,17 @@ class TransferProtocolTest {
             defaultTransferSaveDir(windows = true, userHome = "D:\\home", userProfile = null),
             defaultTransferSaveDir(windows = true, userHome = "D:\\home", userProfile = ""),
         )
+    }
+
+    @Test
+    fun `custom receive dir must be absolute and overrides the default`() {
+        assertNull(transferSaveDirError(""))
+        assertNull(transferSaveDirError("   "))
+        assertNotNull(transferSaveDirError("relative/接收"))
+        val abs = if (isWindows()) "C:\\接收\\opi" else "/tmp/接收/opi"
+        assertNull(transferSaveDirError(abs))
+        assertEquals(Paths.get(abs), effectiveTransferSaveDir(abs))
+        assertEquals(defaultTransferSaveDir(), effectiveTransferSaveDir(""))
     }
 
     @Test

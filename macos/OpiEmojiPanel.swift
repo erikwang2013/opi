@@ -435,6 +435,15 @@ final class OpiEmojiPanel: NSObject, NSSearchFieldDelegate {
         pb.clearContents()
         var objects: [NSPasteboardItem] = []
 
+        // GIF 先写：部分应用只取第一个粘贴板条目，动态贴纸因此仍保持动态。
+        let gifURL = Bundle.main.url(forResource: item.gif, withExtension: nil,
+                                     subdirectory: "pet/stickers-gif")
+        if let gifURL, let gif = try? Data(contentsOf: gifURL), !gif.isEmpty {
+            let board = NSPasteboardItem()
+            board.setData(gif, forType: NSPasteboard.PasteboardType("com.compuserve.gif"))
+            objects.append(board)
+        }
+        // PNG 优先于 TIFF：PNG 保留透明通道；TIFF 只作不支持 PNG 的应用的兜底。
         let pngURL = Bundle.main.url(forResource: item.png, withExtension: nil,
                                      subdirectory: "pet/stickers")
         let png = pngURL.flatMap { try? Data(contentsOf: $0) }
@@ -443,13 +452,6 @@ final class OpiEmojiPanel: NSObject, NSSearchFieldDelegate {
             let board = NSPasteboardItem()
             if let png { board.setData(png, forType: .png) }
             if let tiff { board.setData(tiff, forType: .tiff) }
-            objects.append(board)
-        }
-        let gifURL = Bundle.main.url(forResource: item.gif, withExtension: nil,
-                                     subdirectory: "pet/stickers-gif")
-        if let gifURL, let gif = try? Data(contentsOf: gifURL), !gif.isEmpty {
-            let board = NSPasteboardItem()
-            board.setData(gif, forType: NSPasteboard.PasteboardType("com.compuserve.gif"))
             objects.append(board)
         }
         guard pb.writeObjects(objects), !objects.isEmpty else {

@@ -218,25 +218,32 @@ class ClipProtocolTest {
     }
 
     @Test
-    fun `device name is non-empty, capped and sanitized to chinese letters digits`() {
+    fun `device name is non-empty, capped and sanitized to chinese letters digits and dashes`() {
         assertEquals("opidesktop", clipDeviceName(null))
         assertEquals("opidesktop", clipDeviceName("   "))
         assertEquals("a".repeat(64), clipDeviceName("a".repeat(100)))
-        // 主机名里的连字符/空格/撇号先清掉（内核只收中文/英文字母/数字）。
+        // 空格/撇号先清掉；短横线、下划线（半角/全角）保留。
         assertEquals("EriksiPhone", clipDeviceName("Erik's iPhone"))
-        assertEquals("DESKTOPABC", clipDeviceName("DESKTOP-ABC"))
+        assertEquals("DESKTOP-ABC", clipDeviceName("DESKTOP-ABC"))
+        assertEquals("DESKTOP_ABC", clipDeviceName("DESKTOP_ABC"))
+        assertEquals("书房－2", clipDeviceName(null, "书房－2"))
+        assertEquals("书房＿2", clipDeviceName(null, "书房＿2"))
         assertEquals("书房2", clipDeviceName("书房-2", "书房2"))
         assertEquals("书房2", clipDeviceName(null, "书房2"))
         // 非法自定义名回退到清洗后的主机名，而不是把符号带进广播。
-        assertEquals("MyPC", clipDeviceName("My PC", "bad-name"))
+        assertEquals("MyPC", clipDeviceName("My PC", "bad.name"))
         val cjk = clipDeviceName("桌".repeat(40))
         assertEquals(21, cjk.length)
         assertTrue(cjk.toByteArray(Charsets.UTF_8).size <= 64)
         assertEquals(cjk, String(cjk.toByteArray(Charsets.UTF_8), Charsets.UTF_8))
         assertNull(deviceNameError(""))
         assertNull(deviceNameError("书房2"))
+        assertNull(deviceNameError("书房-2"))
+        assertNull(deviceNameError("书房－2"))
+        assertNull(deviceNameError("书房_2"))
+        assertNull(deviceNameError("书房＿2"))
         assertTrue(deviceNameError("书房 2") != null)
-        assertTrue(deviceNameError("bad-name") != null)
+        assertTrue(deviceNameError("bad.name") != null)
     }
 
     @Test

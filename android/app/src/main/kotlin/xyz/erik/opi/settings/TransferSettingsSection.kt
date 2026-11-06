@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -31,6 +32,7 @@ import xyz.erik.opi.clip.TransferActivity
 import xyz.erik.opi.clip.TransferPhase
 import xyz.erik.opi.clip.formatTransferBytes
 import xyz.erik.opi.clip.openSavedFolder
+import xyz.erik.opi.clip.transferSaveSubdirError
 import xyz.erik.opi.i18n.Text
 
 /**
@@ -47,6 +49,8 @@ internal fun TransferSettingsSection(toast: (String) -> Unit) {
     val target = connected.firstOrNull { it.instanceId == ClipRouting.selectedPeer }
         ?: connected.firstOrNull()
     var folderNote by remember { mutableStateOf("") }
+    val prefs = remember { ImePreferences(AndroidPrefStore(context)) }
+    var saveSubdirDraft by remember { mutableStateOf(prefs.transferSaveSubdir) }
 
     LaunchedEffect(connected.joinToString { it.instanceId }) {
         if (target != null && target.instanceId != ClipRouting.selectedPeer) {
@@ -101,6 +105,38 @@ internal fun TransferSettingsSection(toast: (String) -> Unit) {
     }
     SendRow("剪贴板", "发送当前系统剪贴板的纯文本", target != null) {
         toast(ClipRuntime.publishCurrentClipboard(context))
+    }
+    ListItem(
+        headlineContent = { Text("接收目录") },
+        supportingContent = { Text("公共 Download 下的自定义子目录；留空 = Download/opi") },
+    )
+    OutlinedTextField(
+        value = saveSubdirDraft,
+        onValueChange = { saveSubdirDraft = it },
+        singleLine = true,
+        label = { Text("子目录，例如 我的传输") },
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+    )
+    transferSaveSubdirError(saveSubdirDraft)?.let {
+        Text(it, color = androidx.compose.ui.graphics.Color.Red)
+    }
+    Row {
+        TextButton(onClick = {
+            val err = transferSaveSubdirError(saveSubdirDraft)
+            if (err != null) {
+                toast(err)
+            } else {
+                prefs.transferSaveSubdir = saveSubdirDraft.trim()
+                toast(if (saveSubdirDraft.isBlank()) "已恢复默认接收目录" else "接收目录已保存")
+            }
+        }) { Text("保存目录") }
+        if (saveSubdirDraft.isNotEmpty()) {
+            TextButton(onClick = {
+                saveSubdirDraft = ""
+                prefs.transferSaveSubdir = ""
+                toast("已恢复默认接收目录")
+            }) { Text("恢复默认") }
+        }
     }
     if (ClipRuntime.transferMessage.isNotEmpty()) {
         ListItem(headlineContent = { Text(ClipRuntime.transferMessage) })

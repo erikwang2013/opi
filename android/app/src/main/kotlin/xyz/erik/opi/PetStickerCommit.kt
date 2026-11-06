@@ -49,14 +49,15 @@ internal fun petStickerNotice(outcome: PetStickerOutcome): String? = when (outco
     PetStickerOutcome.TEXT_FALLBACK -> "当前应用不支持插入图片，已用文字标签"
 }
 
-/** 图片通道的尝试顺序：PNG → GIF（PNG 是各宿主最认的格式；GIF 只是动图加分项）。 */
+/** 图片通道的尝试顺序：GIF → PNG（有动图先发动图；宿主不收 GIF 再退回透明 PNG）。 */
 internal fun petStickerImageOrder(gif: File?, png: File?): List<Pair<String, File>> =
-    listOfNotNull(png?.let { "image/png" to it }, gif?.let { "image/gif" to it })
+    listOfNotNull(gif?.let { "image/gif" to it }, png?.let { "image/png" to it })
 
 /**
  * 「自有」宠物形态 = **插入图片**，不提交任何 Unicode 文本（2026-10-18 用户裁决）。
  *
- * 图片走 `InputConnection.commitContent`，格式优先级（2026-10-20）：**PNG → GIF**；
+ * 图片走 `InputConnection.commitContent`，格式优先级（2026-11-06 用户要求动图优先）：
+ * **GIF → PNG**；
  * 宿主两个都拒绝时（2026-10-20）把图放进系统剪贴板并提示长按粘贴，**同时**上屏
  * `[小欧·笑]` 这样的独立标签兜底 —— 目标 app 读不读得到 URI 在 IME 侧观测不到，
  * 标签保证「至少有一个可见结果」，绝不静默。剪贴板也写不进去时只上屏标签。
@@ -94,7 +95,7 @@ private fun OpiImeService.commitPetStickerTo(ic: InputConnection, mood: PetMood)
     for ((mime, file) in images) {
         if (commitPetStickerImage(ic, file, mime)) return
     }
-    // 宿主不收 commitContent：剪贴板兜底（2026-10-20）。同样 PNG 优先。
+    // 宿主不收 commitContent：剪贴板兜底；与尝试顺序一致，有 GIF 先放 GIF。
     val copied = copyPetStickerToClipboard(images.first().second)
     val outcome = petStickerOutcome(imageInserted = false, clipboardCopied = copied)
     Log.w(TAG, "editor rejected image commit, outcome=$outcome: ${mood.name}")

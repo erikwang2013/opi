@@ -371,7 +371,7 @@ internal class SpeechHostImpl {
                     val text = eventText(json).orEmpty().trim()
                     if (text.isNotEmpty()) {
                         s.segmentText += text
-                        update(ui.copy(text = s.segmentText))
+                        update(ui.copy(text = s.segmentText, segments = s.segmentsCommitted))
                         val err = try {
                             s.commit(text)
                         } catch (t: Throwable) {
@@ -379,6 +379,7 @@ internal class SpeechHostImpl {
                         }
                         if (err == null) {
                             s.segmentsCommitted++
+                            update(ui.copy(segments = s.segmentsCommitted))
                         } else {
                             // 这段没进文档：记下来，停止时再整体试一次。
                             s.failedText += text

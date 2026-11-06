@@ -111,7 +111,10 @@ internal fun SpeechOverlay(
                 SpeechPhase.RECORDING -> {
                     // 识别正文只进光标处的输入框（移动端同款）；浮层只显示状态，
                     // 否则用户会以为识别结果停在弹框里。
-                    Text("正在录音…每 3 秒自动上屏一段；点「停止」结束", fontSize = 13.sp, color = palette.fg)
+                    Text(
+                        "正在录音…已上屏 ${ui.segments} 段；每 3 秒自动上屏一段，点「停止」结束",
+                        fontSize = 13.sp, color = palette.fg,
+                    )
                     Box(
                         Modifier.fillMaxWidth().height(6.dp)
                             .background(palette.line),

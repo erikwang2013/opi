@@ -123,6 +123,8 @@ data class OpSettings(
     val clipEnabled: Boolean = false,
     /** 跨设备传输里显示的设备名；空串 = 使用清洗后的系统主机名。 */
     val clipDeviceName: String = "",
+    /** 接收文件的默认目录（绝对路径）；空串 = Downloads/opi。键 `TransferSaveDir`。 */
+    val transferSaveDir: String = "",
     /**
      * 语音输入总开关（2026-11-02；键 `SpeechEnabled`）：**默认 false**。
      * 关着时状态栏话筒仍在（用户要求「符号后加话筒」），点击只提示去设置开启 ——
@@ -185,6 +187,7 @@ data class OpSettings(
         // 跨设备剪贴板（2026-11-01）：默认关；状态栏宿主的 1s 轮询是唯一读侧。
         appendLine("ClipEnabled=${boolText(clipEnabled)}")
         appendLine("ClipDeviceName=$clipDeviceName")
+        appendLine("TransferSaveDir=$transferSaveDir")
         // 语音输入（2026-11-02；2026-11-03 默认开）：状态栏宿主 1s 轮询后启停采集。
         appendLine("SpeechEnabled=${boolText(speechEnabled)}")
         appendLine("SpeechLanguage=$speechLanguage")
@@ -257,6 +260,7 @@ data class OpSettings(
                 // 缺键 = 关：老配置升级后不悄悄开局域网监听。
                 clipEnabled = bool("ClipEnabled", false),
                 clipDeviceName = map["ClipDeviceName"] ?: "",
+                transferSaveDir = map["TransferSaveDir"] ?: "",
                 // 缺键 = 关：语音是新增能力，老配置升级后不悄悄开麦。
                 speechEnabled = bool("SpeechEnabled", true),
                 // 认不得的值回 auto（枚举的 fromValue 是唯一收口）。

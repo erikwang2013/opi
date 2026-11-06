@@ -14,6 +14,7 @@ import { fileIo, fileUri } from '@kit.CoreFileKit';
 import { InputMethodExtensionContext } from '@kit.IMEKit';
 import opiime from 'libopiime.so';
 import * as ClipSync from './ClipSync';
+import * as SettingsStore from './SettingsStore';
 import { ClipPeer } from './ClipTypes';
 import {
   ClipTransfer, MAX_TRANSFER_RECORDS, TransferEvent, TransferPhase, formatTransferBytes,
@@ -86,9 +87,40 @@ export function hasTrustedPeer(): boolean {
   return false;
 }
 
-/** 入站文件落点：应用沙箱 Download/opi（不申请公共 Downloads 写权限）。 */
+/** 用户填的接收子目录：去掉首尾斜杠、反斜杠归一；空 = 默认。 */
+export function normalizeSaveSubdir(raw: string): string {
+  return raw.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+}
+
+/** '' = 合法；非空 = 给用户看的原因（禁止 . / .. 逃出沙箱）。 */
+export function saveSubdirError(raw: string): string {
+  const t: string = raw.trim();
+  if (t.length === 0) {
+    return '';
+  }
+  if (t.length > 80) {
+    return '子目录最多 80 个字符';
+  }
+  const norm: string = normalizeSaveSubdir(t);
+  if (norm.length === 0) {
+    return '';
+  }
+  const parts: string[] = norm.split('/');
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i].length === 0 || parts[i] === '.' || parts[i] === '..') {
+      return '子目录不能包含 . 或 ..';
+    }
+  }
+  return '';
+}
+
+/** 入站文件落点：应用沙箱 Download/opi[/子目录]（不申请公共 Downloads 写权限）。 */
 export function saveDir(): string {
-  return ctx === null ? '' : `${ctx.filesDir}/${SAVE_DIR}`;
+  if (ctx === null) {
+    return '';
+  }
+  const sub: string = normalizeSaveSubdir(SettingsStore.load().transferSaveSubdir);
+  return sub.length === 0 ? `${ctx.filesDir}/${SAVE_DIR}` : `${ctx.filesDir}/${SAVE_DIR}/${sub}`;
 }
 
 // ---------------------------------------------------------------- 发送

@@ -155,7 +155,7 @@ internal fun ClipSection(prefs: ImePreferences, toast: (String) -> Unit) {
                     value = nameDraft,
                     onValueChange = { nameDraft = it },
                     singleLine = true,
-                    label = { Text("中文/英文/数字，留空用系统默认名") },
+                    label = { Text("中文/英文/数字/-/_（可全角），留空用系统默认名") },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 deviceNameError(nameDraft)?.let { Text(it, color = androidx.compose.ui.graphics.Color.Red) }

@@ -14,6 +14,8 @@ internal data class SpeechUi(
     val level: Float = 0f,
     /** 识别中的临时文本 / 最终文本。 */
     val text: String = "",
+    /** 已成功写到光标的 VAD 段数（连续听写时让用户看见还在推进）。 */
+    val segments: Int = 0,
     val error: String = "",
 )
 

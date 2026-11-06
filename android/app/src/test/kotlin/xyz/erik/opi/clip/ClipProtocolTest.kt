@@ -161,12 +161,30 @@ class ClipProtocolTest {
     @Test
     fun deviceNameOnlyAllowsChineseLettersDigits() {
         assertEquals("书房2", resolveDeviceName("书房2", "Pixel 8"))
-        assertEquals("Pixel8", resolveDeviceName("bad-name", "Pixel 8"))
+        assertEquals("书房-2", resolveDeviceName("书房-2", "Pixel 8"))
+        assertEquals("书房＿2", resolveDeviceName("书房＿2", "Pixel 8"))
+        assertEquals("Pixel8", resolveDeviceName("bad.name", "Pixel 8"))
         assertEquals("Android", resolveDeviceName("", " "))
         assertNull(deviceNameError(""))
         assertNull(deviceNameError("书房2"))
+        assertNull(deviceNameError("书房-2"))
+        assertNull(deviceNameError("书房－2"))
+        assertNull(deviceNameError("书房_2"))
+        assertNull(deviceNameError("书房＿2"))
         assertNotNull(deviceNameError("书 房"))
-        assertNotNull(deviceNameError("bad-name"))
+        assertNotNull(deviceNameError("bad.name"))
         assertNotNull(deviceNameError("桌".repeat(22)))
+    }
+
+    @Test
+    fun receiveSubdirStaysUnderDownloadOpi() {
+        assertNull(transferSaveSubdirError(""))
+        assertNull(transferSaveSubdirError("我的传输"))
+        assertNull(transferSaveSubdirError("/我的传输/"))
+        assertEquals("我的传输", normalizeTransferSubdir("/我的传输/"))
+        assertEquals("a/b", normalizeTransferSubdir("a\\b"))
+        assertNotNull(transferSaveSubdirError("../逃逸"))
+        assertNotNull(transferSaveSubdirError("a/../b"))
+        assertNotNull(transferSaveSubdirError("x".repeat(81)))
     }
 }

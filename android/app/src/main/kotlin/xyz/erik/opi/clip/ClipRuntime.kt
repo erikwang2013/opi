@@ -426,8 +426,11 @@ internal object ClipRuntime {
                                 android.os.Process.setThreadPriority(
                                     android.os.Process.THREAD_PRIORITY_BACKGROUND,
                                 )
+                                val subdir = runCatching {
+                                    ImePreferences(AndroidPrefStore(ctx)).transferSaveSubdir
+                                }.getOrDefault("")
                                 val public = runCatching {
-                                    importIncomingToPublicDownloads(ctx, source)
+                                    importIncomingToPublicDownloads(ctx, source, subdir)
                                 }.getOrNull()
                                 if (public != null) {
                                     main.post {

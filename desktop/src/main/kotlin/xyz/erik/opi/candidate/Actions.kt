@@ -151,23 +151,24 @@ fun desktopSymbolCommit(text: String): String? =
  * 语音分段上屏（状态栏话筒专用）。语义对齐移动端 `InputConnection.commitText`：
  * 识别一段就往当前光标处打一段，不等按键、不经过输入法转换。
  *
- * Windows 先走 `SendInput` Unicode 直注（即使宿主还加载着旧 TSF DLL 也立即生效）；
- * 目标进程完整性更高时注入会被拒，此时退回 TSF 控制面上屏（可能延迟，但不丢字）。
- * Linux 与符号页同一条 `opi-ctl insert`。
+ * Windows 先走 TSF 控制面直插（按文本落地，不经过键盘/VK_PACKET，旧版 TSF DLL
+ * 也不会把中文合成成 '-'）；TSF 不可用（控制台/非 TSF 应用/无响应）才退回
+ * `SendInput` Unicode 直注。Linux 与符号页同一条 `opi-ctl insert`。
  */
 fun desktopSpeechCommit(text: String): String? =
     if (isWindows()) {
-        // 前台还是我们的浮层/状态栏时不能 SendInput（会“成功”打进自己），直接走 TSF。
-        if (!SpeechFocus.prepare()) {
-            controlCommit(text)
+        // TSF 直插优先：它按「文本」插入，不经过键盘/VK_PACKET，任何旧版 TSF DLL
+        // 都不会把中文合成成 '-'；控制面能同步确认已落到文档。只有 TSF 不可用
+        //（控制台/非 TSF 应用/目标窗口无响应）才退回 SendInput 直注。
+        val tsf = controlCommit(text)
+        if (tsf == null) {
+            null
+        } else if (!SpeechFocus.prepare()) {
+            // 前台仍是我们自己的浮层/状态栏：SendInput 会打进自己。
+            tsf
         } else {
             val injected = injectUnicodeText(text)
-            if (injected == null) {
-                null
-            } else {
-                val tsf = controlCommit(text)
-                if (tsf == null) null else "$injected；TSF 也失败：$tsf"
-            }
+            if (injected == null) null else "$tsf；直注也失败：$injected"
         }
     } else {
         runExternal(listOf(opiCtlBinary(), "insert", text))

@@ -200,6 +200,22 @@ internal fun defaultTransferSaveDir(
     return Paths.get(home, "Downloads", "opi")
 }
 
+/** 用户填的接收目录：空 = 用默认；必须是绝对路径（内核 save_dir 也要求绝对）。 */
+internal fun transferSaveDirError(text: String): String? {
+    val t = text.trim()
+    if (t.isEmpty()) return null
+    val p = runCatching { Paths.get(t) }.getOrNull() ?: return "目录路径格式不正确"
+    if (!p.isAbsolute) return "请填绝对路径，例如 D:\\接收 或 /home/me/接收"
+    if (Files.exists(p) && !Files.isDirectory(p)) return "该路径不是文件夹"
+    return null
+}
+
+/** 「接收（默认目录）」实际用的落点：自定义目录优先，否则 Downloads/opi。 */
+internal fun effectiveTransferSaveDir(custom: String): Path {
+    val t = custom.trim()
+    return if (t.isEmpty()) defaultTransferSaveDir() else Paths.get(t)
+}
+
 // ---------- 打开目录 ----------
 
 /** 完成后「打开」按钮：系统文件管理器；失败返回 false 由 UI 如实提示。 */

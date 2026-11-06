@@ -79,8 +79,27 @@ struct OpiTransfer {
 }
 
 extension OpiClipService {
-    /// 接收目录：`~/Downloads/opi/<transfer-id 前 8 位>`（与 iOS 宿主同规则）。
+    /// 自定义接收目录（绝对路径）；空串 = `~/Downloads/opi`。
+    var transferSaveDir: String {
+        (UserDefaults.standard.string(forKey: "TransferSaveDir") ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// nil = 可用；空串表示恢复默认。只收绝对路径（内核 save_dir 同样要求）。
+    func setTransferSaveDir(_ raw: String) -> String? {
+        var t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !t.isEmpty {
+            t = (t as NSString).expandingTildeInPath
+            if !(t as NSString).isAbsolutePath { return "请填绝对路径，例如 ~/Downloads/接收" }
+        }
+        UserDefaults.standard.set(t, forKey: "TransferSaveDir")
+        return nil
+    }
+
+    /// 接收目录：自定义目录优先，否则 `~/Downloads/opi`；每次传输再套 `<id 前 8 位>`。
     var transferSaveRoot: URL {
+        let custom = transferSaveDir
+        if !custom.isEmpty { return URL(fileURLWithPath: custom, isDirectory: true) }
         let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)
             .first ?? FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Downloads", isDirectory: true)

@@ -66,6 +66,7 @@ final class OpiSettingsWindow: NSObject {
     // 「传输」页的目标设备下拉（动作按当前选择取 peer id）。
     var transferTargetPopup: NSPopUpButton?
     var transferNameField: NSTextField?
+    var transferSaveDirField: NSTextField?
 
     var contentWidth: CGFloat { Self.width - Self.navW - 28 }
 

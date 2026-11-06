@@ -37,6 +37,8 @@ const KEY_ASSOCIATION: string = 'engine_association';
 const KEY_CLIP: string = 'clip_enabled';
 /** 跨设备传输里显示的设备名；空串 = 清洗后的机型名。 */
 const KEY_CLIP_DEVICE_NAME: string = 'clip_device_name';
+/** 接收文件在沙箱 Download/opi 下的自定义子目录；空串 = 默认。 */
+const KEY_TRANSFER_SAVE_SUBDIR: string = 'transfer_save_subdir';
 /** 跨设备传输（文件/文件夹/媒体/文本）：默认关闭，与剪贴板共用内核与输入会话生命周期。 */
 const KEY_TRANSFER: string = 'transfer_enabled';
 /** 9 键左列末格的自定义标点（与 Android `nine_custom_punct` 同键名）。 */
@@ -66,6 +68,7 @@ export class ImeSettings {
   association: boolean = false;
   clipEnabled: boolean = false;
   clipDeviceName: string = '';
+  transferSaveSubdir: string = '';
   transferEnabled: boolean = false;
   /** 0=中文，1=英文。 */
   lang: number = 0;
@@ -146,6 +149,7 @@ export function load(): ImeSettings {
   s.association = readBool(KEY_ASSOCIATION, false);
   s.clipEnabled = readBool(KEY_CLIP, false);
   s.clipDeviceName = readString(KEY_CLIP_DEVICE_NAME, '');
+  s.transferSaveSubdir = readString(KEY_TRANSFER_SAVE_SUBDIR, '');
   s.transferEnabled = readBool(KEY_TRANSFER, false);
   s.lang = readNumber(KEY_UI_LANGUAGE, 0);
   s.voiceEnabled = readBool(KEY_VOICE, true);
@@ -226,6 +230,18 @@ export function saveClipDeviceName(value: string): void {
     flush();
   } catch (e) {
     console.error(`[opi] 保存设备名失败：${e}`);
+  }
+}
+
+export function saveTransferSaveSubdir(value: string): void {
+  if (store === null) {
+    return;
+  }
+  try {
+    store.putSync(KEY_TRANSFER_SAVE_SUBDIR, value);
+    flush();
+  } catch (e) {
+    console.error(`[opi] 保存接收目录失败：${e}`);
   }
 }
 

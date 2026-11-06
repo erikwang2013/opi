@@ -48,11 +48,14 @@ export struct SettingsPanel {
   @State clearConfirm: boolean = false;
   @State clipNameDraft: string = '';
   @State clipNameNote: string = '';
+  @State saveDirDraft: string = '';
+  @State saveDirNote: string = '';
   private ctrl: KeyboardController = KeyboardController.getInstance();
 
   aboutToAppear(): void {
     ensureLanguage();
     this.clipNameDraft = SettingsStore.load().clipDeviceName;
+    this.saveDirDraft = SettingsStore.load().transferSaveSubdir;
   }
 
   private pal(): Palette {
@@ -195,7 +198,7 @@ export struct SettingsPanel {
               this.ctrl.publish();
             })
           Row() {
-            TextInput({ text: this.clipNameDraft, placeholder: t('中文/英文/数字，留空用系统默认名') })
+            TextInput({ text: this.clipNameDraft, placeholder: t('中文/英文/数字/-/_（可全角），留空用系统默认名') })
               .layoutWeight(1)
               .fontSize(this.elder === 1 ? 15 : 13)
               .onChange((value: string) => {
@@ -213,6 +216,33 @@ export struct SettingsPanel {
           .width('100%').padding({ left: 14, right: 14, top: 4, bottom: 4 })
           if (this.clipNameNote.length > 0) {
             Text(this.clipNameNote)
+              .fontSize(this.elder === 1 ? 13 : 11).fontColor(this.pal().dimFg)
+              .width('100%').padding({ left: 14, right: 14, bottom: 6 })
+          }
+          Row() {
+            TextInput({ text: this.saveDirDraft, placeholder: t('接收子目录，留空用 Download/opi') })
+              .layoutWeight(1)
+              .fontSize(this.elder === 1 ? 15 : 13)
+              .onChange((value: string) => {
+                this.saveDirDraft = value;
+                this.saveDirNote = '';
+              })
+            Button(t('保存目录'))
+              .fontSize(this.elder === 1 ? 14 : 12)
+              .margin({ left: 8 })
+              .onClick(() => {
+                const error: string = TransferSync.saveSubdirError(this.saveDirDraft);
+                if (error.length > 0) {
+                  this.saveDirNote = error;
+                } else {
+                  SettingsStore.saveTransferSaveSubdir(this.saveDirDraft.trim());
+                  this.saveDirNote = t('接收目录已保存');
+                }
+              })
+          }
+          .width('100%').padding({ left: 14, right: 14, top: 4, bottom: 4 })
+          if (this.saveDirNote.length > 0) {
+            Text(this.saveDirNote)
               .fontSize(this.elder === 1 ? 13 : 11).fontColor(this.pal().dimFg)
               .width('100%').padding({ left: 14, right: 14, bottom: 6 })
           }

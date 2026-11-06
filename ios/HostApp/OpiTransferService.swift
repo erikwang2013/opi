@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 // ⚠️ 草案 · 本机（Linux）没有 Swift/UIKit 编译器，未编译；由 apple.yml 真编译。
-//
 // iOS 宿主 App 的跨设备传输服务。键盘扩展不能后台跑传输，所以发现/收发/落盘
 // 都在这里；扩展只负责用 `opi-transfer://transfer` 打开本 App（TransferKeyboard.swift）。
 //
@@ -119,7 +118,6 @@ final class OpiTransferService {
             self?.handleState(running, error)
         }
     }
-
     // MARK: - 快照
     var isRunning: Bool { withLock { runningCache } }
     var peers: [HostPeerInfo] { withLock { peersCache } }
@@ -233,11 +231,13 @@ final class OpiTransferService {
     // MARK: - 接收
 
     static var saveRoot: URL {
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        return docs.appendingPathComponent("opi", isDirectory: true)
+        let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("opi", isDirectory: true)
+        let sub = opiTransferSaveSubdir()
+        return sub.isEmpty ? base : base.appendingPathComponent(sub, isDirectory: true)
     }
 
-    /// 接受时保存到 `Documents/opi/<id 前 8 位>`；拒绝不需要目录。
+    /// 接受时保存到 `Documents/opi/<子目录>/<id 前 8 位>`；拒绝不需要目录。
     func respondTransfer(id: String, accept: Bool) {
         var dir = ""
         if accept {

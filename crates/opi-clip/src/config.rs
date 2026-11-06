@@ -66,7 +66,7 @@ impl ClipConfig {
         }
         if !device_name_valid(&self.device_name) {
             return Err(ClipError::invalid(
-                "device_name must be 1..=64 bytes of Chinese characters, ASCII letters or digits",
+                "device_name must be 1..=64 bytes of Chinese characters, ASCII letters, digits, '-' or '_'",
             ));
         }
         Ok(())
@@ -89,14 +89,16 @@ impl ClipConfig {
     }
 }
 
-/// 设备名：只允许中文、英文字母、数字（用户口径 2026-11-06），1..=64 UTF-8 字节。
-/// 空格/连字符/标点/emoji 都不行 —— 各端默认名（主机名、机型）必须先按同一规则清洗。
+/// 设备名：只允许中文、英文字母、数字、短横线（`-`/`－`）和下划线（`_`/`＿`），
+/// 1..=64 UTF-8 字节。空格/其他标点/emoji 都不行 —— 各端默认名（主机名、机型）
+/// 必须先按同一规则清洗。
 pub fn device_name_valid(name: &str) -> bool {
     if name.is_empty() || name.len() > 64 {
         return false;
     }
     name.chars().all(|c| {
         c.is_ascii_alphanumeric()
+            || matches!(c, '-' | '－' | '_' | '＿')
             || matches!(
                 c as u32,
                 0x3400..=0x4DBF   // CJK Extension A
@@ -194,19 +196,21 @@ mod tests {
     }
 
     #[test]
-    fn device_name_allows_only_chinese_ascii_letters_digits() {
-        for ok in ["书房", "Erik的Pixel8", "OPI123", "设备2"] {
+    fn device_name_allows_chinese_letters_digits_and_dashes() {
+        for ok in [
+            "书房",
+            "Erik的Pixel8",
+            "OPI123",
+            "设备2",
+            "书房-2",
+            "书房－2",
+            "书房_2",
+            "书房＿2",
+            "DESKTOP-ABC",
+        ] {
             assert!(device_name_valid(ok), "{ok}");
         }
-        for bad in [
-            "",
-            "Erik's iPhone",
-            "DESKTOP-ABC",
-            "书房 2",
-            "小欧🙂",
-            "a_b",
-            "１２３",
-        ] {
+        for bad in ["", "Erik's iPhone", "书房 2", "小欧🙂", "a.b", "１２３"] {
             assert!(!device_name_valid(bad), "{bad}");
         }
         assert!(!device_name_valid(&"桌".repeat(22))); // 66 bytes
@@ -216,7 +220,7 @@ mod tests {
     #[test]
     fn config_rejects_invalid_device_name() {
         let mut config = ClipConfig::new("/tmp/x");
-        config.device_name = "DESKTOP-ABC".into();
+        config.device_name = "DESKTOP ABC".into();
         assert!(config.validate().is_err());
         config.device_name = "书桌".into();
         assert!(config.validate().is_ok());

@@ -92,8 +92,11 @@ val SystemImageClipboard = ImageClipboard { image, gif ->
         }
         java.awt.Toolkit.getDefaultToolkit().systemClipboard.setContents(
             object : Transferable {
+                // 有 GIF 时把 image/gif 排在最前：部分宿主按 flavor 顺序挑第一个能用的，
+                // 这样「有动态的带动态」；PNG 仍是透明静态兜底（不要 imageFlavor 优先，
+                // 它走原生位图，部分 Windows 宿主会把透明通道铺成白底）。
                 override fun getTransferDataFlavors(): Array<DataFlavor> =
-                    if (gifBytes != null) arrayOf(pngFlavor, DataFlavor.imageFlavor, gifFlavor)
+                    if (gifBytes != null) arrayOf(gifFlavor, pngFlavor, DataFlavor.imageFlavor)
                     else arrayOf(pngFlavor, DataFlavor.imageFlavor)
 
                 override fun isDataFlavorSupported(flavor: DataFlavor): Boolean =

@@ -72,14 +72,14 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
     LaunchedEffect(s.clipDeviceName) { deviceNameDraft = s.clipDeviceName }
     SectionTitle("本机设备名称")
     Text(
-        "附近设备看到的名字：${status?.deviceName ?: "…"}（只能中文、英文字母、数字）",
+        "附近设备看到的名字：${status?.deviceName ?: "…"}（中文、英文字母、数字、- － _ ＿）",
         fontSize = 12.sp, color = Muted,
     )
     Row(verticalAlignment = Alignment.CenterVertically) {
         ImeTextField(
             value = deviceNameDraft,
             onValueChange = { deviceNameDraft = it },
-            label = "中文/英文/数字，留空用系统默认名",
+            label = "中文/英文/数字/-/_（可全角），留空用系统默认名",
             modifier = Modifier.weight(1f),
         )
         Spacer(Modifier.width(8.dp))
@@ -290,7 +290,12 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
     }
 
     if (s.clipEnabled && st != null) {
-        TransferPage(st, report)
+        TransferPage(
+            status = st,
+            report = report,
+            saveDir = s.transferSaveDir,
+            onSaveDir = { apply(s.copy(transferSaveDir = it)) },
+        )
     }
 
     SectionTitle("手动连接")
@@ -330,7 +335,7 @@ internal fun ClipPage(s: OpSettings, apply: (OpSettings) -> Unit, report: (Strin
     Text("· 默认关闭；开启后只在局域网内通信（局域网发现 + 加密会话）。", fontSize = 12.sp, color = Muted)
     Text("· 新版本默认自动配对（TOFU）：发现即连接，多台设备可同时在线；旧版仍走 6 位数字核对。" +
             "文件只发给已配对设备，远端内容只写剪贴板，不自动粘贴。", fontSize = 12.sp, color = Muted)
-    Text("· 接收文件默认保存到 Downloads/opi，可逐次改选目录；不记录剪贴板内容，状态文件只存设备与开关。", fontSize = 12.sp, color = Muted)
+    Text("· 接收文件默认保存到 Downloads/opi，可在「接收目录」里选目录或手填绝对路径；不记录剪贴板内容，状态文件只存设备与开关。", fontSize = 12.sp, color = Muted)
     if (isWindows()) {
         Text(
             "· Windows 安装器会为 opi.exe 添加覆盖全部网络类型的程序入站规则（局域网发现与加密会话）。" +

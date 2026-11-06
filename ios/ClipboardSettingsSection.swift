@@ -73,7 +73,7 @@ final class ClipboardSettingsSection: UIView {
         transferRow.spacing = 10
 
         nameField.text = OpiClipboard.shared.customDeviceName
-        nameField.placeholder = OpiText.t("中文/英文/数字，留空用系统默认名")
+        nameField.placeholder = OpiText.t("中文/英文/数字/-/_（可全角），留空用系统默认名")
         nameField.borderStyle = .roundedRect
         nameField.font = .systemFont(ofSize: 12)
         nameField.autocapitalizationType = .none

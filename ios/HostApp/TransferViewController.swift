@@ -6,7 +6,6 @@
 // 能力边界：只在 App 前台运行；未配置 App Group 时信任表不与键盘扩展共享。
 import UIKit
 import UniformTypeIdentifiers
-
 final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
 
     private enum PickerKind {
@@ -69,13 +68,14 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
         ])
     }
     // MARK: - 重画
-    private func reload() {
+    func reload() {
         stack.arrangedSubviews.forEach {
             stack.removeArrangedSubview($0)
             $0.removeFromSuperview()
         }
         addStatusCard()
         addDeviceNameCard()
+        addSaveDirCard()
         addDeviceCard()
         addSendCard()
         addPendingCard()
@@ -98,7 +98,7 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
     private func addDeviceNameCard() {
         let field = UITextField()
         field.text = service.customDeviceName
-        field.placeholder = "中文/英文/数字，留空用系统默认名"
+        field.placeholder = "中文/英文/数字/-/_（可全角），留空用系统默认名"
         field.borderStyle = .roundedRect
         field.autocapitalizationType = .none
         field.autocorrectionType = .no
@@ -115,7 +115,7 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
         addCard([
             makeLabel("设备名称", style: .headline),
             makeRow([field, save], equal: false),
-            makeNote("附近设备会看到这个名字；只能中文、英文字母、数字，改名后自动重启传输。"),
+            makeNote("附近设备会看到这个名字；中文、英文字母、数字、- － _ ＿，改名后自动重启传输。"),
         ])
     }
     private func addDeviceCard() {
@@ -413,7 +413,7 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
         present(share, animated: true)
     }
 
-    private func alert(_ message: String) {
+    func alert(_ message: String) {
         let box = UIAlertController(title: nil, message: message, preferredStyle: .alert)
         box.addAction(UIAlertAction(title: "好", style: .default))
         present(box, animated: true)
@@ -421,7 +421,7 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
 
     // MARK: - 控件
 
-    private func addCard(_ views: [UIView]) {
+    func addCard(_ views: [UIView]) {
         let inner = UIStackView(arrangedSubviews: views)
         inner.axis = .vertical
         inner.spacing = 8
@@ -440,7 +440,7 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
         stack.addArrangedSubview(card)
     }
 
-    private func makeRow(_ views: [UIView], equal: Bool = true) -> UIStackView {
+    func makeRow(_ views: [UIView], equal: Bool = true) -> UIStackView {
         let row = UIStackView(arrangedSubviews: views)
         row.axis = .horizontal
         row.alignment = .center
@@ -470,7 +470,7 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
         return b
     }
 
-    private func makeSmallButton(_ title: String,
+    func makeSmallButton(_ title: String,
                                  action: @escaping () -> Void) -> UIButton {
         let b = UIButton(type: .system)
         b.setTitle(title, for: .normal)
@@ -483,7 +483,7 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
         return b
     }
 
-    private func makeLabel(_ text: String, style: UIFont.TextStyle) -> UILabel {
+    func makeLabel(_ text: String, style: UIFont.TextStyle) -> UILabel {
         let label = UILabel()
         label.text = text
         label.numberOfLines = 0
@@ -492,7 +492,7 @@ final class TransferViewController: UIViewController, UIDocumentPickerDelegate {
         return label
     }
 
-    private func makeNote(_ text: String) -> UILabel {
+    func makeNote(_ text: String) -> UILabel {
         let label = makeLabel(text, style: .footnote)
         label.textColor = .secondaryLabel
         return label

@@ -41,7 +41,12 @@ import java.nio.file.Path
 internal val LocalSettingsWindow = staticCompositionLocalOf<java.awt.Window?> { null }
 
 @Composable
-internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
+internal fun TransferPage(
+    status: ClipStatus,
+    report: (String) -> Unit,
+    saveDir: String,
+    onSaveDir: (String) -> Unit,
+) {
     val scope = rememberCoroutineScope()
     val targets = sendablePeers(status.peers)
     var target by remember { mutableStateOf(ClipRouteUi.target) }
@@ -54,6 +59,10 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
     // 目标悄悄换成列表里的另一台——这正是「选中的没发、没选的发了」的来源。
     var pickerPeer by remember { mutableStateOf("") }
     var saveDirFor by remember { mutableStateOf<String?>(null) }
+    var saveDirDraft by remember { mutableStateOf(saveDir) }
+    LaunchedEffect(saveDir) { saveDirDraft = saveDir }
+    // 目录选择器这次是给「接收目录设置」挑，而不是给某次传输挑。
+    var pickingSaveDir by remember { mutableStateOf(false) }
 
     LaunchedEffect(targets.joinToString { it.instanceId }) {
         // 只在还没有目标时选第一台；绝不因状态刷新覆盖用户已选目标。
@@ -112,8 +121,13 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
     }
 
     fun accept(t: TransferUi) {
+        val err = transferSaveDirError(saveDir)
+        if (err != null) {
+            report(err)
+            return
+        }
         scope.launch {
-            val dir = defaultTransferSaveDir().toString()
+            val dir = effectiveTransferSaveDir(saveDir).toString()
             val ok = withContext(Dispatchers.IO) { ClipClient.respondTransfer(t.id, true, dir) }
             report(if (ok) "已接受，保存到 $dir" else "接收命令未送达宿主")
         }
@@ -155,6 +169,49 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
             "单次最多 $TRANSFER_MAX_ENTRIES 项、单文件 2 GiB、总计 8 GiB。",
         fontSize = 12.sp, color = Muted,
     )
+    SectionTitle("接收目录")
+    Text(
+        "「接收（默认目录）」保存到这里；留空用 Downloads/opi。" +
+            "「选择目录接收」仍可只给这一次传输临时改落点。",
+        fontSize = 12.sp, color = Muted,
+    )
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        ImeTextField(
+            value = saveDirDraft,
+            onValueChange = { saveDirDraft = it },
+            label = "绝对路径，留空用 Downloads/opi",
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(Modifier.width(8.dp))
+        ClipButton("选择目录", enabled = true) {
+            pickingSaveDir = true
+            picker = TransferPickerMode.FOLDER
+        }
+        Spacer(Modifier.width(8.dp))
+        ClipButton("保存目录", enabled = true) {
+            val err = transferSaveDirError(saveDirDraft)
+            if (err != null) {
+                report(err)
+            } else {
+                onSaveDir(saveDirDraft.trim())
+                report(
+                    if (saveDirDraft.isBlank()) "已恢复默认接收目录"
+                    else "接收目录已保存：${saveDirDraft.trim()}",
+                )
+            }
+        }
+    }
+    if (saveDir.isNotEmpty()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ClipButton("恢复默认目录", enabled = true) {
+                saveDirDraft = ""
+                onSaveDir("")
+                report("已恢复默认接收目录")
+            }
+        }
+    }
+    Spacer(Modifier.height(10.dp))
+
     SectionTitle("发送目标")
     val currentName = targets.firstOrNull { it.instanceId == target }?.name
         ?.ifBlank { target.take(8) } ?: "未选择"
@@ -279,10 +336,13 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
     }
 
     picker?.let { mode ->
+        val forSetting = pickingSaveDir
         TransferPickerWindow(
             mode = mode,
-            initialDir = if (saveDirFor != null) defaultTransferSaveDir() else null,
-            onCancel = { picker = null; saveDirFor = null; pickerPeer = "" },
+            initialDir = if (saveDirFor != null || forSetting) effectiveTransferSaveDir(saveDir) else null,
+            onCancel = {
+                picker = null; saveDirFor = null; pickerPeer = ""; pickingSaveDir = false
+            },
         ) { paths ->
             val dir = paths.firstOrNull()?.toString()
             val id = saveDirFor
@@ -290,7 +350,14 @@ internal fun TransferPage(status: ClipStatus, report: (String) -> Unit) {
             picker = null
             saveDirFor = null
             pickerPeer = ""
-            if (id != null && dir != null) {
+            if (forSetting) {
+                pickingSaveDir = false
+                if (dir != null) {
+                    saveDirDraft = dir
+                    onSaveDir(dir)
+                    report("接收目录已保存：$dir")
+                }
+            } else if (id != null && dir != null) {
                 scope.launch {
                     val ok = withContext(Dispatchers.IO) { ClipClient.respondTransfer(id, true, dir) }
                     report(if (ok) "已接受，保存到 $dir" else "接收命令未送达宿主")

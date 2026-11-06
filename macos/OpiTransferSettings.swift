@@ -35,13 +35,24 @@ extension OpiSettingsWindow {
         var y: CGFloat = 106
         let nameField = NSTextField(frame: NSRect(x: 0, y: y, width: 220, height: 24))
         nameField.stringValue = clip.customDeviceName
-        nameField.placeholderString = OpiText.t("中文/英文/数字，留空用系统默认名")
+        nameField.placeholderString = OpiText.t("中文/英文/数字/-/_（可全角），留空用系统默认名")
         host?.addSubview(nameField)
         transferNameField = nameField
         button("保存名称", x: 230, y: y, w: 100, action: #selector(transferDeviceNameSaved(_:)))
-        label(OpiText.t("只能中文、英文字母、数字；改名后自动重启传输"),
+        label(OpiText.t("中文、英文字母、数字、- － _ ＿；改名后自动重启传输"),
               x: 340, y: y + 2, size: 11, color: .secondaryLabelColor)
         y += 34
+        let dirField = NSTextField(frame: NSRect(x: 0, y: y, width: 300, height: 24))
+        dirField.stringValue = clip.transferSaveDir
+        dirField.placeholderString = OpiText.t("绝对路径，留空用 ~/Downloads/opi")
+        host?.addSubview(dirField)
+        transferSaveDirField = dirField
+        button("选择目录…", x: 310, y: y, w: 100, action: #selector(transferSaveDirPick(_:)))
+        button("保存目录", x: 410, y: y, w: 100, action: #selector(transferSaveDirSaved(_:)))
+        y += 26
+        note("接收的文件先落到这里（每次传输再套一层 ID 前 8 位）；留空 = ~/Downloads/opi。"
+             + "「选择目录…」与手填绝对路径等价。", y: y, height: 34)
+        y += 40
         let error = clip.lastErrorText
         if !error.isEmpty {
             label(OpiText.t("错误：") + OpiText.t(error), y: y, size: 12, color: .systemRed)
@@ -160,7 +171,7 @@ extension OpiSettingsWindow {
         let notes = [
             "· 只与已配对/已信任设备通信；信任表在内核里，与剪贴板页共用。",
             "· 单次最多 128 个条目（含文件夹）、单文件 2 GiB、总计 8 GiB；选完即前置校验。",
-            "· 接收的传输保存到 ~/Downloads/opi/<传输 ID 前 8 位>，完成后可点「打开」。",
+            "· 接收的传输保存到「接收目录」/<传输 ID 前 8 位>（默认 ~/Downloads/opi），完成后可点「打开」。",
             "· 传输中请保持设置窗所在进程运行；取消会同时通知对端。",
         ]
         for line in notes {
@@ -248,6 +259,28 @@ extension OpiSettingsWindow {
     @objc func transferDeviceNameSaved(_ sender: Any?) {
         guard let field = transferNameField else { return }
         if let error = OpiClipService.shared.setDeviceName(field.stringValue) {
+            alert(error)
+        }
+        rebuildPage()
+    }
+
+    @objc func transferSaveDirSaved(_ sender: Any?) {
+        guard let field = transferSaveDirField else { return }
+        if let error = OpiClipService.shared.setTransferSaveDir(field.stringValue) {
+            alert(error)
+        }
+        rebuildPage()
+    }
+
+    @objc func transferSaveDirPick(_ sender: Any?) {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        transferSaveDirField?.stringValue = url.path
+        if let error = OpiClipService.shared.setTransferSaveDir(url.path) {
             alert(error)
         }
         rebuildPage()
