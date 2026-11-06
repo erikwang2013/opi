@@ -49,11 +49,58 @@ pub(crate) fn load(cfg: &AsrConfig) -> Result<Box<dyn Segmenter>, AsrError> {
     // 用户要求每 3 秒必出一段：这里再按输入样本数强制 flush 一次，保证连续说话
     // 也能增量上屏。代价是切点可能落在词中间（边界词识别会差一点）。
     let force_samples = cfg.max_segment_ms as u64 * crate::audio::SAMPLE_RATE as u64 / 1000;
+    // 连续说话时 VAD 的 is_speech() 会偶发一两拍 false（重采样/噪声）；只在
+    // 静音达到 vad_min_silence_ms 后才清零计时，否则这些抖动会把 3 秒计数打断。
+    let reset_windows = (cfg.vad_min_silence_ms as u64 * crate::audio::SAMPLE_RATE as u64
+        / 1000
+        / crate::audio::WINDOW as u64)
+        .max(1);
     Ok(Box::new(SileroSegmenter {
         vad,
-        force_samples,
-        since_flush: 0,
+        cadence: FlushCadence::new(force_samples, reset_windows),
     }))
+}
+
+/// 强制切段计时（纯状态，单测不需要真 VAD）。
+///
+/// 连续说话时 `is_speech()` 会偶发一两拍 false（重采样/噪声）。旧实现每拍 false
+/// 都清零，Linux 上偶发抖动会让 3 秒计数永远凑不满 —— 用户看到「只出第一段」。
+/// 这里只在静音持续达到 `reset_windows`（vad_min_silence_ms）后才清零。
+struct FlushCadence {
+    force_samples: u64,
+    reset_windows: u64,
+    since_flush: u64,
+    silent_windows: u64,
+}
+
+impl FlushCadence {
+    fn new(force_samples: u64, reset_windows: u64) -> Self {
+        Self {
+            force_samples,
+            reset_windows,
+            since_flush: 0,
+            silent_windows: 0,
+        }
+    }
+
+    /// 喂一个窗口；返回 true = 现在该强制 flush（只在正在说话时）。
+    fn observe(&mut self, speaking: bool, samples: u64) -> bool {
+        if speaking {
+            self.silent_windows = 0;
+            self.since_flush = self.since_flush.saturating_add(samples);
+        } else {
+            self.silent_windows += 1;
+            if self.silent_windows >= self.reset_windows {
+                self.since_flush = 0;
+            }
+        }
+        speaking && self.since_flush >= self.force_samples
+    }
+
+    fn reset(&mut self) {
+        self.since_flush = 0;
+        self.silent_windows = 0;
+    }
 }
 
 #[cfg(not(feature = "sherpa"))]
@@ -66,10 +113,7 @@ pub(crate) fn load(_cfg: &AsrConfig) -> Result<Box<dyn Segmenter>, AsrError> {
 #[cfg(feature = "sherpa")]
 struct SileroSegmenter {
     vad: sherpa_rs::silero_vad::SileroVad,
-    /// 强制切段的样本数（`max_segment_ms`）。
-    force_samples: u64,
-    /// 距上一次出段的输入样本数；出段后清零。
-    since_flush: u64,
+    cadence: FlushCadence,
 }
 
 #[cfg(feature = "sherpa")]
@@ -92,36 +136,89 @@ impl SileroSegmenter {
 impl Segmenter for SileroSegmenter {
     fn push(&mut self, window: &[f32]) -> Vec<VadSegment> {
         self.vad.accept_waveform(window.to_vec());
-        // 只数「正在说话」的样本：静音等待不能把下一次开口算成满 3 秒，
-        // 否则开口一两声就会被强制切出一个碎片。
+        // 只数「说话附近」的样本：真正的静音（达到 vad_min_silence_ms）才清零，
+        // 避免 VAD 偶发 false 把连续说话的 3 秒计数打断（Linux 只出第一段的根因之一）。
         let speaking = self.vad.is_speech();
-        if speaking {
-            self.since_flush += window.len() as u64;
-        } else {
-            self.since_flush = 0;
-        }
+        let due = self.cadence.observe(speaking, window.len() as u64);
         // 先取 VAD 按停顿切出的段；有段就重新计时。
         let mut out = self.drain();
-        if out.is_empty() && speaking && self.since_flush >= self.force_samples {
+        if out.is_empty() && due {
             // 连续说话、VAD 一直不切：到点强制收一段，保证每 3 秒增量上屏。
             self.vad.flush();
-            self.since_flush = 0;
+            self.cadence.reset();
             out = self.drain();
         }
         if !out.is_empty() {
-            self.since_flush = 0;
+            self.cadence.reset();
         }
         out
     }
 
     fn flush(&mut self) -> Vec<VadSegment> {
         self.vad.flush();
-        self.since_flush = 0;
+        self.cadence.reset();
         self.drain()
     }
 
     fn reset(&mut self) {
         self.vad.clear();
-        self.since_flush = 0;
+        self.cadence.reset();
+    }
+}
+
+#[cfg(test)]
+mod cadence_tests {
+    use super::FlushCadence;
+
+    const WINDOW: u64 = 512;
+    const FORCE: u64 = 3 * 16_000;
+
+    #[test]
+    fn short_false_windows_do_not_starve_the_forced_flush() {
+        // 每 7 个窗口报一次 false（32ms，远小于 500ms 静音）：旧实现每次都清零，
+        // 3 秒计数永远凑不满；这里应当仍按 ~3 秒出段。
+        let mut c = FlushCadence::new(FORCE, 15);
+        let mut flushes = 0;
+        for i in 0..500 {
+            if c.observe(i % 7 != 0, WINDOW) {
+                flushes += 1;
+                c.reset();
+            }
+        }
+        assert!(flushes >= 3, "16s 连续说话至少 3 段，实际 {flushes}");
+    }
+
+    #[test]
+    fn real_silence_resets_the_cadence() {
+        let mut c = FlushCadence::new(FORCE, 15);
+        for _ in 0..90 {
+            c.observe(true, WINDOW);
+        }
+        // 1 秒静音：计数必须清零，之后重新说满 3 秒才会 flush。
+        for _ in 0..31 {
+            assert!(!c.observe(false, WINDOW));
+        }
+        let mut due_at = None;
+        for i in 0..120 {
+            if c.observe(true, WINDOW) {
+                due_at = Some(i);
+                break;
+            }
+        }
+        let i = due_at.expect("静音后重新说话应再次触发 3 秒切段");
+        assert!(i >= 90, "静音后不能立刻切出碎片，实际第 {i} 个窗口");
+    }
+
+    #[test]
+    fn natural_segment_reset_restarts_the_clock() {
+        let mut c = FlushCadence::new(FORCE, 15);
+        for _ in 0..80 {
+            c.observe(true, WINDOW);
+        }
+        c.reset(); // 模拟 VAD 自然出段
+        for i in 0..100 {
+            let due = c.observe(true, WINDOW);
+            assert_eq!(due, i >= 93, "自然出段后应重新数满 3 秒，第 {i} 个窗口");
+        }
     }
 }

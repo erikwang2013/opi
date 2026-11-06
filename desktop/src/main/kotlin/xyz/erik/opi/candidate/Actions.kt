@@ -332,6 +332,12 @@ data class ImeState(
      * 「普通模式」，是「这个能力还没有」；状态栏据此提示重启而不是弹裸错误。
      */
     val englishProKnown: Boolean = false,
+    /**
+     * 当前目标程序里加载的 TSF DLL 版本（`dll=` 位，2026-11-06 追加）。
+     * 缺键/空串 = 旧版 DLL（升级后还没注销/重开目标程序）—— 语音据此提示，
+     * 不再把旧 DLL 的 VK_PACKET 行为打成 “-”。
+     */
+    val dllVersion: String = "",
 )
 
 /**
@@ -361,6 +367,8 @@ fun parseImeState(line: String?): ImeState {
             // 状态栏可见的失败）。
             "mode" -> st.copy(mode = if (v in MODE_TOKENS) v else "")
             "enpro" -> if (on != null) st.copy(englishPro = on, englishProKnown = true) else st
+            // TSF DLL 版本：任意串都收；缺键 = "" = 旧版/未知。
+            "dll" -> st.copy(dllVersion = v)
             else -> st // 以后多出来的键：忽略
         }
     }

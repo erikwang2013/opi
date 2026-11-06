@@ -138,7 +138,7 @@ fn state_mode_token(logic: &TsfLogic) -> String {
 /// 与 Linux `opi-ctl state` 逐字同格式的一行。
 pub fn state_line(logic: &TsfLogic) -> String {
     format!(
-        "lang={};trad={};punct={};fw={};im={};mode={};enpro={}",
+        "lang={};trad={};punct={};fw={};im={};mode={};enpro={};dll={}",
         if logic.mode() == Mode::English {
             "en"
         } else {
@@ -151,6 +151,7 @@ pub fn state_line(logic: &TsfLogic) -> String {
         IM_NAME,
         state_mode_token(logic),
         on_off(logic.english_pro()),
+        env!("CARGO_PKG_VERSION"),
     )
 }
 

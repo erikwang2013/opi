@@ -117,7 +117,10 @@ fn rejects_malformed_or_foreign_lines() {
 fn state_line_matches_linux_format() {
     assert_eq!(
         state_line(&state()),
-        "lang=zh;trad=off;punct=on;fw=on;im=opi;mode=pinyin;enpro=off"
+        format!(
+            "lang=zh;trad=off;punct=on;fw=on;im=opi;mode=pinyin;enpro=off;dll={}",
+            env!("CARGO_PKG_VERSION")
+        )
     );
 }
 
@@ -431,7 +434,10 @@ fn reply_json_state_shape() {
     assert_eq!(v["ok"], true);
     assert_eq!(
         v["state"],
-        "lang=zh;trad=off;punct=on;fw=on;im=opi;mode=pinyin;enpro=off"
+        format!(
+            "lang=zh;trad=off;punct=on;fw=on;im=opi;mode=pinyin;enpro=off;dll={}",
+            env!("CARGO_PKG_VERSION")
+        )
     );
     assert!(line.starts_with(r#"{"id":7,"ok":true,"state":"#), "{line}");
 }

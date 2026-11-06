@@ -9,6 +9,7 @@
 
 package xyz.erik.opi.candidate
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -42,6 +43,9 @@ class EnProTest {
         assertTrue(supported.englishPro)
         assertFalse("缺键 = 老插件，不是「普通模式」", parseImeState("lang=en;trad=off;punct=on;fw=off;im=;mode=en26").englishProKnown)
         assertFalse(parseImeState("lang=zh;enpro=off").englishPro)
+        // 2026-11-06：TSF DLL 版本位；缺键 = 旧版（升级后还没注销/重开目标程序）。
+        assertEquals("1.2.3", parseImeState("lang=zh;im=opi;dll=1.2.3").dllVersion)
+        assertEquals("", parseImeState("lang=zh;im=opi").dllVersion)
     }
 
     @Test

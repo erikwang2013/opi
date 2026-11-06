@@ -279,6 +279,17 @@ internal class SpeechHostImpl {
                 fail("语音输入已关闭：打开 设置 → 语音 打开总开关")
                 return
             }
+            // 升级后旧 TSF DLL 可能仍活在已打开的程序里（Windows 不能热替换进程内 DLL）：
+            // 旧版会把 SendInput 的中文合成成 “-”；不一致就明确让用户重开/注销。
+            val ime = if (isWindows()) runCatching { controlImeState() }.getOrNull() else null
+            if (ime != null && ime.im == "opi" && ime.dllVersion != OPI_VERSION) {
+                val got = ime.dllVersion.ifEmpty { "旧版/未知" }
+                fail(
+                    "目标程序里的输入法组件是 v$got，语音需要 v$OPI_VERSION。" +
+                        "请注销或重启 Windows，或把正在输入的程序完全退出再打开后重试。",
+                )
+                return
+            }
             val h = ensureEngine(engine, updateErrors = true, startEpoch = myEpoch) ?: return
             val ffi = h.ffi
             if (myEpoch != epoch) return
