@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -32,7 +33,15 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.awt.Font
+import java.awt.Window
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
+import java.awt.event.FocusAdapter
+import java.awt.event.FocusEvent
+import java.awt.event.WindowAdapter
+import java.awt.event.WindowEvent
 import javax.swing.JTextField
+import javax.swing.SwingUtilities
 import javax.swing.border.EmptyBorder
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
@@ -50,7 +59,9 @@ internal fun ImeSwingPanel(
     fontSize: Int = 14,
     foreground: Color = Color(0x22, 0x27, 0x2E),
     caretColor: Color = Color(0x2E, 0x8B, 0x80),
+    background: Color = Color.White,
     enabled: Boolean = true,
+    onFocusChanged: ((Boolean) -> Unit)? = null,
 ) {
     val suppress = remember { booleanArrayOf(false) }
     val field = remember(enabled, fontSize, foreground, caretColor) {
@@ -74,14 +85,57 @@ internal fun ImeSwingPanel(
             override fun removeUpdate(e: DocumentEvent) = changed()
             override fun changedUpdate(e: DocumentEvent) = changed()
         }
+        val focusListener = object : FocusAdapter() {
+            override fun focusGained(e: FocusEvent) {
+                onFocusChanged?.invoke(true)
+            }
+            override fun focusLost(e: FocusEvent) {
+                onFocusChanged?.invoke(false)
+            }
+        }
+        // 符号窗默认 focusable=false：点击先让窗可聚焦，等窗口真拿到焦点后再把
+        // 焦点交给输入框（探针实证：提前 requestFocusInWindow 会失败）。
+        val mouseListener = object : MouseAdapter() {
+            override fun mousePressed(e: MouseEvent) {
+                onFocusChanged?.invoke(true)
+                val w: Window = SwingUtilities.getWindowAncestor(field) ?: return
+                if (!w.focusableWindowState) {
+                    XFocus.remember()
+                    w.addWindowFocusListener(object : WindowAdapter() {
+                        override fun windowGainedFocus(ev: WindowEvent) {
+                            w.removeWindowFocusListener(this)
+                            field.requestFocusInWindow()
+                        }
+                    })
+                    w.setFocusableWindowState(true)
+                    w.toFront()
+                    w.requestFocus()
+                }
+            }
+        }
         field.document.addDocumentListener(listener)
-        onDispose { field.document.removeDocumentListener(listener) }
+        field.addFocusListener(focusListener)
+        field.addMouseListener(mouseListener)
+        onDispose {
+            field.document.removeDocumentListener(listener)
+            field.removeFocusListener(focusListener)
+            field.removeMouseListener(mouseListener)
+        }
     }
     SwingPanel(
-        background = Color.Transparent,
+        background = background,
         factory = { field },
         modifier = modifier.height(height),
         update = { f ->
+            val bg = java.awt.Color(background.toArgb(), true)
+            if (f.background != bg) {
+                f.background = bg
+                f.isOpaque = true
+                (f.parent as? javax.swing.JComponent)?.let {
+                    it.background = bg
+                    it.isOpaque = true
+                }
+            }
             if (f.text != value) {
                 suppress[0] = true
                 f.text = value

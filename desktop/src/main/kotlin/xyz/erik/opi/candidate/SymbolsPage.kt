@@ -41,8 +41,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -88,7 +86,6 @@ internal val SymErr = Color(0xFFFF8A80)
 // + 左右滑动），放大只是让一页装得下更多（见 PAGE_SIZE）。
 private const val WIN_W = 820
 private const val WIN_H = 600
-private const val STRIP_W = 96
 
 /** 居中的一行灰字占位（加载中/整类摘空/真没数据三态共用，措辞由调用方给全）。 */
 @Composable
@@ -182,7 +179,10 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
         // 内容才 provide —— 读在窗前时状态栏那条路（application{} 顶层，无 Window 祖先）
         // 点 Ω 即整进程崩（2026-10-13 P0 真机复现；网见 SymbolWindowCallPathTest）。
         val focus = LocalFocusManager.current
-        LaunchedEffect(window) { statusBarGuard("符号页 SkipTaskbar") { SkipTaskbar.apply(window) } } // 同虚拟键盘：输入工具窗不进任务栏（设置窗不贴）
+        LaunchedEffect(window) {
+            window.isAutoRequestFocus = false
+            statusBarGuard("符号页 SkipTaskbar") { SkipTaskbar.apply(window) }
+        } // 同虚拟键盘：输入工具窗不进任务栏（设置窗不贴）
         val scope = rememberCoroutineScope()
         // 上屏串行锁：从前「点一下 = EDT 冻到上屏返回」，连点两下是 EDT 队列里顺序执行；
         // 挪到 IO 后并发来自协程，这把锁把旧次序保住 —— 否则连点两个符号是两条并发
@@ -198,7 +198,9 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
         // WM 的焦点历史落回文档窗，且 focusable=false 的窗重新映射不会再抢回来。
         LaunchedEffect(typing) {
             statusBarGuard("符号页焦点") {
-                if (typing) window.requestFocus() else if (window.isFocused) {
+                if (typing) {
+                    if (!window.isFocused) window.requestFocus()
+                } else if (window.isFocused) {
                     window.isVisible = false
                     window.isVisible = true
                 }
@@ -257,6 +259,17 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
                 }
             }
             Row(Modifier.weight(1f).fillMaxWidth()) {
+                fun releaseKeyboard() {
+                    // 交还键盘：窗设回不可聚焦（WM 不再把点击焦点给它），再把 X 焦点
+                    // 放回点搜索框前的目标窗口（否则本机 WM 会丢给 root）。
+                    typing = false
+                    window.setFocusableWindowState(false)
+                    focus.clearFocus()
+                    if (!XFocus.restore() && window.isFocused) {
+                        window.isVisible = false
+                        window.isVisible = true
+                    }
+                }
                 fun pick(sym: String) {
                     // 先交还键盘再上屏（Linux 的 `opi-ctl insert` 提交给「最近获得焦点的输入
                     // 上下文」，不还就会插进本窗自己）；交还异步入账，故等焦点真离开本窗，等不到
@@ -266,7 +279,7 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
                     // 别冻住页面 —— 与搜索那条同一条纪律（见上面 LaunchedEffect(query)；
                     // 2026-10-13 EDT 取证轮补上点选这半边）。等焦点那段留在 UI 线程（读
                     // window.isFocused 是窗口状态，跟子进程无关）。
-                    focus.clearFocus()
+                    releaseKeyboard()
                     scope.launch {
                         var waited = 0
                         while (window.isFocused && waited < 300) { delay(20); waited += 20 }
@@ -279,7 +292,7 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
                 // 自有格的唯一出口 = 图片剪贴板（桌面没有 TSF/管道图片插入面）。
                 // 同 pick 的纪律：先交还键盘焦点（用户接着要 Ctrl+V，目标得拿到焦点）。
                 fun copySticker(form: PetEmojiMap.Form) {
-                    focus.clearFocus()
+                    releaseKeyboard()
                     scope.launch {
                         var waited = 0
                         while (window.isFocused && waited < 300) { delay(20); waited += 20 }
@@ -372,9 +385,6 @@ fun SymbolWindow(onCommit: (String) -> String?, onClose: () -> Unit, initialEmoj
     }
 }
 
-/** 右竖条的「表情」项 = 特殊下标（`.tsv` 类目从 0 起）。 */
-private const val TAB_EMOJI = -1
-
 /**
  * 一页符号网格：12 列 × 6 行（`PAGE_SIZE/COLUMNS`）。单字符 20sp、多字符 token（网络
  * 表情等）收到 13sp 并允许省略号。末行/末页补空格子 —— 网格高度稳定，翻页不跳。
@@ -463,36 +473,5 @@ internal fun SymbolCell(
             overflow = TextOverflow.Ellipsis,
             color = SymFg,
         )
-    }
-}
-
-/** 右：类目条（首项 = 「表情」页，其余 `序号.名称`；可竖滑；选中 = 强调色粗体）。 */
-@Composable
-private fun CategoryStrip(
-    categories: List<SymbolCategories.Category>,
-    selected: Int,
-    emojiSelected: Boolean,
-    onSelect: (Int) -> Unit,
-) {
-    Column(
-        modifier = Modifier.width(STRIP_W.dp).fillMaxHeight()
-            .background(SymStrip)
-            .verticalScroll(rememberScrollState()),
-    ) {
-        EmojiStripEntry(emojiSelected) { onSelect(TAB_EMOJI) }
-        for ((i, c) in categories.withIndex()) {
-            val on = i == selected
-            Text(
-                "${c.index}.${c.label}",
-                modifier = Modifier.fillMaxWidth()
-                    .clickable { onSelect(i) }
-                    .semantics { contentDescription = "符号类目 ${c.index}.${c.label}${if (on) "，已选中" else ""}" }
-                    .padding(horizontal = 10.dp, vertical = 9.dp),
-                fontSize = 14.sp,
-                fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
-                color = if (on) SymAccent else SymFg,
-                maxLines = 1,
-            )
-        }
     }
 }
