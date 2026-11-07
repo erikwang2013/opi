@@ -17,9 +17,10 @@
 //   3. opi-ctl 的动作分发面（handleCtlAction_，与 D-Bus 接收侧同一个函数）：五个
 //      动作的返回值协议 "ok" / "err:<码>:<原因>"，以及「未接线 / 数据缺失」的区分。
 //   4. opi-ctl state（只读查询，2026-10-10 用户裁决）：ctlState_ = D-Bus State 方法
-//      回复出去的那一行 —— 冻结格式整行（五格；im 在本驱动恒为空串，真值面归
-//      e2e 变体 ctl）、trad/lang 两格跟着状态变、以及**只读性**（全角格是双翻面
-//      读的，得证明没把状态读漂）。
+//      回复出去的那一行 —— 冻结格式整行（五格；本驱动 activate 过唯一的 IC ⇒
+//      im=opi；「没有前台 IC」时回 currentInputMethod 的那半归 e2e 变体 ctl）、
+//      trad/lang 两格跟着状态变、以及**只读性**（全角格是双翻面读的，得证明没把
+//      状态读漂）。
 //   5. opi-ctl search（只读查询，2026-10-13）：**拆在 opi_ctl_search_driver.cpp**（本文件 500 行门禁）。handleCtlSearch_ = D-Bus Search 落到
 //      的那一段（与 §7 调 handleCtlAction_ 同一先例）—— 空关键字 → err:2（用法错误）、
 //      有/无命中的载荷类型、以及**关键字真的被传下去了**（命中数是全表真子集）。
@@ -431,16 +432,14 @@ int main() {
         punctExp = *readBack.chinesePunct ? "on" : "off";
     }
     const std::string s0 = engine.ctlState_();
-    check(s0 == "lang=zh;trad=off;punct=" + punctExp + ";fw=on;im=;mode=pinyin;enpro=off",
+    check(s0 == "lang=zh;trad=off;punct=" + punctExp + ";fw=on;im=opi;mode=pinyin;enpro=off",
           "冻结格式整行（键序固定 lang;trad;punct;fw;im;mode，桌面按位置解析）："
               + q(s0));
-    // im 那一格在**本驱动恒为空串**：instance_ 是 nullptr ⇒ glue 直接接空串
-    // （stateLine_ 里的 `instance_ != nullptr` 分支，没实例就没「最近 IC」可问）。
-    // 前端约定：未知 = 维持现状。**真值面**（切 IM 后 im 跟着变；无 IC 时 im 依
-    // ShareInputState：All 兜底给「下一扇窗的 IM」/ No 才是空串）归 e2e 变体 ctl
-    // —— 那里有真守护进程 + 真 IC（本驱动假装测它就是假证据）。
-    check(s0.find(";im=;") != std::string::npos,
-          "im 格是空串（本驱动没实例可问，不是失败也不是别的值）");
+    // §7 开头 activate 过本驱动唯一的 IC ⇒ im 报 opi（activeIc_ 非空，优先于
+    // instance_->currentInputMethod()；本驱动 instance_ 是 nullptr，没法问后者）。
+    // 真值面（切 IM 后跟着变；无 IC 时依 ShareInputState）归 e2e 变体 ctl。
+    check(s0.find(";im=opi;") != std::string::npos,
+          "im 格是 opi（前台 IC 已 activate）");
     // mode / enpro 依次追加在行尾（2026-10-14 / 2026-10-19）：按位置读前五段的旧
     // 前端照旧；取值截到下一个 ';'，别把 enpro 吞进 mode 格（2026-10-28 修）。
     check(opiCtlStateField(s0, ";mode=") == "pinyin",
@@ -450,7 +449,7 @@ int main() {
     check(engine.handleCtlAction_("trad") == "ok" && opi_fcitx5_mode() == kModeTraditional,
           "trad（翻面走动作路径，state 只是读它）");
     const std::string s1 = engine.ctlState_();
-    check(s1 == "lang=zh;trad=on;punct=" + punctExp + ";fw=on;im=;mode=pinyin;enpro=off",
+    check(s1 == "lang=zh;trad=on;punct=" + punctExp + ";fw=on;im=opi;mode=pinyin;enpro=off",
           "lang/punct/fw/im 四段逐字不变，trad 翻 on，**mode 段原地不动**（繁体是"
           "面外态 ⇒ 收成 pinyin：读法仍是拼音，简繁由 trad 格自述。2026-10-14 改判，"
           "见 opi_ctl_mode.h 的 opiCtlStateModeToken）："
@@ -467,7 +466,7 @@ int main() {
     const std::string s3 = engine.ctlState_();
     // punct 格 = **生效值**（2026-10-15 改；原先直接读配置值 ChinesePunct）：英文模式
     // 只有机械全角档、**没有中文标点表这一档** ⇒ 恒 off，与配置值 punctExp 无关。
-    check(s3 == "lang=en;trad=off;punct=off;fw=off;im=;mode=en26;enpro=off",
+    check(s3 == "lang=en;trad=off;punct=off;fw=off;im=opi;mode=en26;enpro=off",
           "lang=en 且全角随英文缺省变 off，**punct 格恒 off**（生效值；用户裁决 "
           "2026-10-15「切换中英文时标点也联动」的显示面），mode 格 = en26（英文态 "
           "lang 与 mode 同向变）：" + q(s3));

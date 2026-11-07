@@ -5,7 +5,8 @@
 //! fcitx5/XIM 下收不到组字（只落裸字母），但 Swing 的 JTextField 正常走 XIM。
 //! 这里用 SwingPanel 包一个无边框 JTextField，外观由 Compose 的边框/提示负责。
 //!
-//! 只用于设置窗的少量文本输入；候选窗等自绘界面不走这里。
+//! 只用于可聚焦窗口（设置窗）的少量文本输入；符号搜索框仍用 Compose BasicTextField
+//!（它搜的是拼音/英文原文，不需要组字），候选窗等自绘界面不走这里。
 
 package xyz.erik.opi.candidate
 
@@ -31,8 +32,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.awt.Font
-import java.awt.event.FocusAdapter
-import java.awt.event.FocusEvent
 import javax.swing.JTextField
 import javax.swing.border.EmptyBorder
 import javax.swing.event.DocumentEvent
@@ -40,7 +39,7 @@ import javax.swing.event.DocumentListener
 
 /**
  * 无边框 Swing 单行输入（IME 走 AWT 的原生焦点与 XIM，Compose BasicTextField 收不到组字）。
- * 外观由调用方画；这里只负责文本同步与焦点回调。
+ * 外观由调用方画；这里只负责文本同步。
  */
 @Composable
 internal fun ImeSwingPanel(
@@ -52,7 +51,6 @@ internal fun ImeSwingPanel(
     foreground: Color = Color(0x22, 0x27, 0x2E),
     caretColor: Color = Color(0x2E, 0x8B, 0x80),
     enabled: Boolean = true,
-    onFocusChanged: (Boolean) -> Unit = {},
 ) {
     val suppress = remember { booleanArrayOf(false) }
     val field = remember(enabled, fontSize, foreground, caretColor) {
@@ -67,7 +65,6 @@ internal fun ImeSwingPanel(
     }
     // 监听器只注册一次；最新的 lambda 经 State 读取，避免 Effect 反复摘挂。
     val change by rememberUpdatedState(onValueChange)
-    val focus by rememberUpdatedState(onFocusChanged)
     DisposableEffect(field) {
         val listener = object : DocumentListener {
             private fun changed() {
@@ -77,16 +74,8 @@ internal fun ImeSwingPanel(
             override fun removeUpdate(e: DocumentEvent) = changed()
             override fun changedUpdate(e: DocumentEvent) = changed()
         }
-        val focusListener = object : FocusAdapter() {
-            override fun focusGained(e: FocusEvent) = focus(true)
-            override fun focusLost(e: FocusEvent) = focus(false)
-        }
         field.document.addDocumentListener(listener)
-        field.addFocusListener(focusListener)
-        onDispose {
-            field.document.removeDocumentListener(listener)
-            field.removeFocusListener(focusListener)
-        }
+        onDispose { field.document.removeDocumentListener(listener) }
     }
     SwingPanel(
         background = Color.Transparent,

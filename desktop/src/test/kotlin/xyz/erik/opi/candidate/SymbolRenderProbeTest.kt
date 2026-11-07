@@ -183,7 +183,16 @@ class SymbolRenderProbeTest {
         assertEquals("命中那张该有 3 格墨迹", 3, inkCells(files[3].second))
     }
 
-    // 搜索框本身不再用离屏渲染探针：输入控件是 Swing JTextField（Compose
-    // BasicTextField 收不到输入法组字），ImageComposeScene 里没有 interop 容器，
-    // 画不了真实输入框。占位符/关键词的绘制由 Swing 负责，真桌面验证。
+    @Test
+    fun `search field draws the query`() {
+        val empty = probePng("search-field-empty.png", 220, 24) {
+            SymbolSearchField("", { }, { }, Modifier.fillMaxSize())
+        }
+        val typed = probePng("search-field-typed.png", 220, 24) {
+            SymbolSearchField("heart", { }, { }, Modifier.fillMaxSize())
+        }
+        assertTrue("占位提示该有墨迹", inkCells(empty, cols = 1, rows = 1) == 1)
+        assertTrue("输入后该有墨迹", inkCells(typed, cols = 1, rows = 1) == 1)
+        assertTrue("空/有内容必须画得不一样", !empty.readBytes().contentEquals(typed.readBytes()))
+    }
 }

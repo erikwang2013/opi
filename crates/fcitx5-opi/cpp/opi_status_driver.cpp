@@ -98,6 +98,20 @@ int main() {
               opiSettingsAppCandidate(3) == nullptr,
           "启动候选表：三项有效、第 4 位越界为 null");
 
+    // state 的 im 格（2026-11-07）：前台 IC activate ⇒ opi；FocusOut ⇒ 空（本驱动
+    // instance_ 为空，没有 currentInputMethod 可报）—— 状态栏据此显示/隐藏。
+    std::printf("== 5. state 的 im 格跟 activate/deactivate 走 ==\n");
+    {
+        const std::string active = engine.ctlState_();
+        check(active.find(";im=opi;") != std::string::npos,
+              "activate 后 im=opi：" + active);
+        fcitx::InputContextEvent focusOut(&ic, fcitx::EventType::InputContextFocusOut);
+        engine.deactivate(entry, focusOut);
+        const std::string idle = engine.ctlState_();
+        check(idle.find(";im=;") != std::string::npos,
+              "FocusOut 后 im 空：" + idle);
+    }
+
     std::printf("\n%s（失败 %d 项）\n", g_fail == 0 ? "ALL PASS" : "HAS FAILURES",
                 g_fail);
     return g_fail == 0 ? 0 : 1;

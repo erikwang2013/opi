@@ -418,6 +418,56 @@ OpiEngine::~OpiEngine() {
     g_userWordsTimer.reset(); // 事件循环销毁前必须摘掉定时器
 }
 
+// ---- opi-ctl state 的读侧（冻结格式见 opi_ctl.h 的 State 注释）----
+//
+// 六个值全部来自**既有 getter**，不新造状态：
+//   · lang  = 引擎模式 == English —— 与「中/英」状态项同一条判据（opi_mode.h 的
+//     update()）；zh 覆盖拼音/繁体/符号/数字四个「中文系」模式。
+//   · trad  = 引擎模式 == Traditional —— 与「简/繁」状态项同一条判据。
+//   · punct = **生效值**（引擎直读口，2026-10-15 改）：中文类模式 = 配置面 ChinesePunct，
+//     英文/数字/符号恒 off —— 配置值不随模式变，当显示值就是「切英文后还画 。，」。
+//   · fw    = opiFullwidthState_()（Rust 只读出口，见那里）。
+//   · im    = 本 addon 是否有前台 IC（有 ⇒ "opi"；没有 ⇒ 最近 IC 的
+//     currentInputMethod()，2026-11-07 改）—— **唯一与 IC 有关的一格**，给桌面
+//     判「状态栏该不该显示」（== "opi" 显示，其他隐藏；见 opi_ctl.h 的 State 注释）。
+//   · mode  = 档位 token（`pinyin` / `en26`；2026-10-14 追加，**追加在行尾**）——
+//     与 `opi-ctl mode` 的应答**同一张 token 表**（opi_ctl_mode.h 的
+//     opiCtlStateModeToken：面外态收成 pinyin，见那里的改判记录）；状态栏的
+//     初始档读的就是这一格。
+// 除 im 外都不取 IC：都是进程级的（Rust 单例 + 本 addon 的配置），所有 IC 同值 ⇒
+// 「没有 IC」不是失败。im 那一格查不到时给**空串**（前端约定：未知=维持现状），
+// 同样不是失败 —— 桌面每秒轮询时常常没有焦点窗口（理由细写在 opi_ctl.h）。
+// 动作路径（handleCtlAction_）另取 IC —— 那是为了刷面板，与这里理由不同。
+std::string OpiEngine::stateLine_() {
+    const int32_t mode = opi_fcitx5_mode();
+    std::string s = "lang=";
+    s += (mode == kModeEnglish) ? "en" : "zh";
+    s += ";trad=";
+    s += (mode == kModeTraditional) ? "on" : "off";
+    s += ";punct="; // 生效值、不是配置值（2026-10-15 改；理由见上面 punct 那一条）
+    s += opi_fcitx5_effective_chinese_punct() ? "on" : "off";
+    s += ";fw=";
+    s += opiFullwidthState_() ? "on" : "off";
+    s += ";im=";
+    // 本 addon 有前台 IC（activate 记下、deactivate/IC 销毁清掉）就是 opi：
+    // 比 currentInputMethod() 可靠 —— 终端切回 opi 时「最近 IC」可能还停在
+    // 别的应用，状态栏就会一直不回来（2026-11-07 用户报「会自动消失」）。
+    // 没有前台 IC 时仍回 currentInputMethod()（没有 IC 给空；空 ic 的保护在
+    // fcitx5 里面；驱动用 nullptr 构造引擎 ⇒ 本层守 instance_）。密码框/Disable
+    // 的 IC 按 fcitx5 语义返回 keyboard-<布局> ⇒ 那种 IC 里状态栏本就该收起。
+    if (activeIc_ != nullptr) {
+        s += "opi";
+    } else if (instance_ != nullptr) {
+        s += instance_->currentInputMethod();
+    }
+    s += ";mode=";
+    // 档位 token（2026-10-14 追加，**行尾**：旧前端按位置读前面几段，不看末格）。
+    // 派生与 `opi-ctl mode` 同一份 —— opi_ctl_mode.h 的 opiCtlStateModeToken。
+    s += opiCtlStateModeToken(mode);
+    s += opiCtlEnglishProField();
+    return s;
+}
+
 // 工厂类：FCITX_ADDON_FACTORY 宏（fcitx/addoninstance.h:193）只做
 //   static ClassName factory; return &factory;
 // 即它要求 ClassName 这个类型已经存在，自己并不定义 —— 上一版只写了宏调用而
