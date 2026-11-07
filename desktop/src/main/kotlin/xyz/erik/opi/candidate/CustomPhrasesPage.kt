@@ -21,11 +21,13 @@ package xyz.erik.opi.candidate
 
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.AlertDialog
@@ -67,9 +69,9 @@ internal fun CustomPhrasesPage(english: Boolean = false, status: (String) -> Uni
     val hostPath = if (english) englishCustomPhrasesPath() else customPhrasesPath()
     val title = if (english) "英文自定义短语" else "自定义短语"
     val hint = if (english) {
-        "只在英文键盘匹配：输入完整字母后，候选栏出现对应短语"
+        "打开后优先识别：英文键盘输入完整字母时，短语排在候选最前"
     } else {
-        "输入完整字母后，候选栏出现对应短语"
+        "打开后优先识别：输入完整字母时，短语排在候选最前"
     }
     // 写串行锁：两次快速保存（连点开关）落到同一文件时，后写不能插到前写中间；
     // 且变更在锁内基于**最新** state 计算，连点不会互相覆盖。
@@ -193,6 +195,40 @@ internal fun CustomPhrasesPage(english: Boolean = false, status: (String) -> Uni
         cur.enabled,
     ) { on -> mutate { it.copy(enabled = on) } }
 
+    when (val d = dialog) {
+        PhraseDialog.Add -> PhraseEditPanel(
+            initial = null,
+            existing = cur.phrases,
+            onDismiss = { dialog = null },
+            onSave = { p ->
+                dialog = null
+                mutate("已添加") { it.copy(phrases = it.phrases + p) }
+            },
+        )
+        is PhraseDialog.Edit -> {
+            val current = cur.phrases.getOrNull(d.index)
+            if (current != null) {
+                PhraseEditPanel(
+                    initial = current,
+                    // 查重时排除被编辑的那一行自己（字母可以不改）
+                    existing = cur.phrases.filterIndexed { i, _ -> i != d.index },
+                    onDismiss = { dialog = null },
+                    onSave = { p ->
+                        dialog = null
+                        mutate("已保存") { st ->
+                            st.copy(
+                                phrases = st.phrases.mapIndexed { i, x ->
+                                    if (i == d.index) p else x
+                                },
+                            )
+                        }
+                    },
+                )
+            }
+        }
+        null -> Unit
+    }
+
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -272,40 +308,6 @@ internal fun CustomPhrasesPage(english: Boolean = false, status: (String) -> Uni
         color = Muted,
     )
 
-    when (val d = dialog) {
-        PhraseDialog.Add -> PhraseEditDialog(
-            initial = null,
-            existing = cur.phrases,
-            onDismiss = { dialog = null },
-            onSave = { p ->
-                dialog = null
-                mutate("已添加") { it.copy(phrases = it.phrases + p) }
-            },
-        )
-        is PhraseDialog.Edit -> {
-            val current = cur.phrases.getOrNull(d.index)
-            if (current != null) {
-                PhraseEditDialog(
-                    initial = current,
-                    // 查重时排除被编辑的那一行自己（字母可以不改）
-                    existing = cur.phrases.filterIndexed { i, _ -> i != d.index },
-                    onDismiss = { dialog = null },
-                    onSave = { p ->
-                        dialog = null
-                        mutate("已保存") { st ->
-                            st.copy(
-                                phrases = st.phrases.mapIndexed { i, x ->
-                                    if (i == d.index) p else x
-                                },
-                            )
-                        }
-                    },
-                )
-            }
-        }
-        null -> Unit
-    }
-
     val deleting = confirmDelete
     if (deleting != null) {
         val phrase = cur.phrases.getOrNull(deleting)
@@ -330,9 +332,9 @@ internal fun CustomPhrasesPage(english: Boolean = false, status: (String) -> Uni
     }
 }
 
-/** 新增/编辑弹窗。校验与导入共用 [CustomPhraseCodec.validTrigger]（同一份规则）。 */
+/** 新增/编辑面板（同窗口内联，不用 AlertDialog：嵌在对话框里的 Swing 文本框收不到 IME）。 */
 @Composable
-private fun PhraseEditDialog(
+private fun PhraseEditPanel(
     initial: CustomPhrase?,
     existing: List<CustomPhrase>,
     onDismiss: () -> Unit,
@@ -361,31 +363,32 @@ private fun PhraseEditDialog(
         if (problem == null) onSave(CustomPhrase(t.lowercase(), x))
     }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (initial == null) "添加短语" else "编辑短语") },
-        text = {
-            Column {
-                PhraseField(
-                    label = "字母",
-                    hint = "如 dz（大小写不敏感，最多 32 个）",
-                    value = trigger,
-                    onValueChange = { trigger = it },
-                )
-                PhraseField(
-                    label = "短语",
-                    hint = "输入字母后上屏的内容",
-                    value = text,
-                    onValueChange = { text = it },
-                )
-                error?.let {
-                    Text(it, fontSize = 12.sp, color = Color(0xFFB3261E))
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = { submit() }) { Text("保存") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-    )
+    Column(
+        Modifier.fillMaxWidth().padding(vertical = 6.dp)
+            .border(1.dp, Hairline).padding(12.dp),
+    ) {
+        Text(if (initial == null) "添加短语" else "编辑短语", fontSize = 14.sp, color = Ink)
+        Spacer(Modifier.height(6.dp))
+        PhraseField(
+            label = "字母",
+            hint = "如 dz（大小写不敏感，最多 32 个）",
+            value = trigger,
+            onValueChange = { trigger = it },
+        )
+        PhraseField(
+            label = "短语",
+            hint = "输入字母后上屏的内容",
+            value = text,
+            onValueChange = { text = it },
+        )
+        error?.let {
+            Text(it, fontSize = 12.sp, color = Color(0xFFB3261E))
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = onDismiss) { Text("取消") }
+            TextButton(onClick = { submit() }) { Text("保存") }
+        }
+    }
 }
 
 /** 一行输入框（无边框 Material 依赖，样式与设置页同一套色；占位符只在空时画）。 */

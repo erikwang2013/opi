@@ -13,7 +13,7 @@
 //! 路径推导是**纯函数**（环境量当参数传），单测钉住两条路径 —— 写错 = 设置窗看着
 //! 保存成功、输入法永远读不到，静默失效。
 //!
-//! 失败语义：读 = 缺失/坏文件 → 启用 + 空表（不崩、不删文件，下次保存原子覆盖）；
+//! 失败语义：读 = 缺失/坏文件 → 关 + 空表（不崩、不删文件，下次保存原子覆盖）；
 //! 写 = 唯一临时名 + fsync + rename（[writeTextAtomically]），失败返回面向用户的原因，
 //! 此时旧文件原样保留、调用方不该改屏幕。
 //!
@@ -39,7 +39,7 @@ const val CUSTOM_PHRASES_EN_FILE_NAME = "custom_phrases_en.json"
  */
 private const val MAX_HOST_FILE_BYTES = 64L * 1024 * 1024
 
-/** 宿主文件内容：启用态 + 规范化短语表。缺省启用 = 与引擎/Android 同一姿态。 */
+/** 宿主文件内容：启用态 + 规范化短语表。缺省关（2026-10-25 用户裁决：加短语后须显式开启）。 */
 data class CustomPhraseState(
     val enabled: Boolean = false,
     val phrases: List<CustomPhrase> = emptyList(),
@@ -93,7 +93,7 @@ fun customPhrasesPath(): Path = hostPath(CUSTOM_PHRASES_FILE_NAME)
 fun englishCustomPhrasesPath(): Path = hostPath(CUSTOM_PHRASES_EN_FILE_NAME)
 
 /**
- * 读宿主文件。缺失/读不出/超限/内容非法 → **默认值（启用、空表）**，不删文件：
+ * 读宿主文件。缺失/读不出/超限/内容非法 → **默认值（关、空表）**，不删文件：
  * 坏文件留着可人工排查，下一次保存会原子覆盖它（与 Android `CustomPhraseStore.load`
  * 同一姿态）。
  */
@@ -122,7 +122,7 @@ fun saveCustomPhrases(state: CustomPhraseState, path: Path = customPhrasesPath()
     "写盘失败：${e.message ?: e::class.simpleName}"
 }
 
-/** 英文套读取：失败语义与 [loadCustomPhrases] 完全相同（缺失/坏文件 = 启用 + 空表）。 */
+/** 英文套读取：失败语义与 [loadCustomPhrases] 完全相同（缺失/坏文件 = 关 + 空表）。 */
 fun loadEnglishCustomPhrases(path: Path = englishCustomPhrasesPath()): CustomPhraseState =
     loadCustomPhrases(path)
 

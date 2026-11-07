@@ -23,19 +23,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -98,15 +94,17 @@ internal fun SymbolSearchField(
         if (query.isEmpty()) {
             Text("搜索符号/表情（拼音或英文）", fontSize = 12.sp, color = SymDim, maxLines = 1)
         }
-        BasicTextField(
+        // Swing 输入框：Compose BasicTextField 在本机收不到输入法组字（同设置窗）。
+        ImeSwingPanel(
             value = query,
             onValueChange = onQuery,
             modifier = Modifier.fillMaxWidth()
-                .semantics { contentDescription = "搜索符号或表情" }
-                .onFocusChanged { onFocusChanged(it.isFocused) },
-            singleLine = true,
-            textStyle = TextStyle(color = SymFg, fontSize = 12.sp),
-            cursorBrush = SolidColor(SymAccent),
+                .semantics { contentDescription = "搜索符号或表情" },
+            height = 24.dp,
+            fontSize = 12,
+            foreground = SymFg,
+            caretColor = SymAccent,
+            onFocusChanged = onFocusChanged,
         )
     }
 }

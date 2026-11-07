@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.WindowPosition
 
 // ---------- 状态栏尺寸表（2026-10-21 从 StatusBar.kt 拆出：那边 510 行撞 500 行门禁） ----------
 
@@ -67,6 +68,18 @@ internal fun barShape(windows: Boolean): Shape =
     if (windows) RoundedCornerShape(4.dp) else RectangleShape
 
 /**
+ * 状态栏初始位置：**条本体**屏幕底部居中、离下沿一截（别贴边，也别压任务栏）。
+ * 窗外有 [haloDp] 透明边距 ⇒ 窗口原点要各退 halo，条的位置才与改动前一致。
+ */
+internal fun barPosition(widthDp: Int, haloDp: Int): WindowPosition {
+    val screen = java.awt.Toolkit.getDefaultToolkit().screenSize
+    return WindowPosition(
+        ((screen.width - widthDp) / 2 - haloDp).dp,
+        (screen.height - 128 - haloDp).dp,
+    )
+}
+
+/**
  * 纯函数：条该不该显示（[StatusBarApp] 的 visible 用它）。
  *
  * 规则（2026-10-10 下午用户裁决「切到其他输入法时状态栏消失」）：
@@ -77,17 +90,25 @@ internal fun barShape(windows: Boolean): Shape =
  * · [im] 非空且 ≠ "opi"（当前是别的输入法）⇒ 隐藏；切回 opi 由 1s 轮询让它自己出现。
  * · Windows 的 [requireActive]：只有 `im == "opi"` 才显示；TSF 未连接时状态读不到，
  *   状态栏进程虽随登录常驻但不可见（否则安装完就出现一条点哪都报错的条）。
+ *   **本次会话见过 opi 之后**（[seenActive]），空 im 不再隐藏 —— 那也可能是焦点离开
+ *   文本框/切窗口导致 TSF 暂时断开（用户 2026-11-07 报「状态栏会自动消失」），
+ *   不是切到了别的输入法。
  *
  * ⚠️ `"opi"` 是**跨轨字面**（glue 侧追加的 `im=` 值 = 本 addon 的 uniqueName）。对不上的
  * 表现是「opi 激活时条一直藏着」——响的错，不是静默错；但改它必须两侧一起改。
  */
-internal fun barVisible(buttons: List<StatusBarButton>, im: String, requireActive: Boolean = false): Boolean {
+internal fun barVisible(
+    buttons: List<StatusBarButton>,
+    im: String,
+    requireActive: Boolean = false,
+    seenActive: Boolean = false,
+): Boolean {
     if (buttons.isEmpty()) return false
-    // Windows 常驻状态栏仅在 TSF 激活（im=opi）时显示；未知状态隐藏，免得安装完就出现
-    // 一条点哪都报错的条。
+    // Windows：装完还没选过 opi 时保持隐藏（免得出现一条点哪都报错的条）；见过
+    // im=opi 之后，TSF 因焦点/窗口切换短暂断开（空 im）不再让整条消失。
+    if (requireActive) return im == "opi" || (im.isEmpty() && seenActive)
     // Linux：未知（缺键/空串）= 维持可见（旧 glue 没合 im= 时别闪条）；非空且不是 opi
     // ⇒ 隐藏，切回 opi 再显示（2026-10-10 下午用户裁决「切到其他输入法时状态栏消失」）。
-    if (requireActive) return im == "opi"
     return im.isEmpty() || im == "opi"
 }
 

@@ -432,9 +432,11 @@ class StatusBarTest {
         assertTrue(barVisible(buttons, im = "opi")) // 本输入法
         assertFalse(barVisible(buttons, im = "pinyin")) // 别的输入法（fcitx5 内置拼音）⇒ 隐藏
         assertFalse(barVisible(buttons, im = "com.sogou.ime.ng.fcitx5.deepin")) // 终端里的搜狗
-        assertFalse(barVisible(buttons, im = "", requireActive = true)) // Windows 未连接 ⇒ 隐藏
+        assertFalse(barVisible(buttons, im = "", requireActive = true)) // Windows 未连接且没见过 opi ⇒ 隐藏
         assertTrue(barVisible(buttons, im = "opi", requireActive = true))
         assertFalse(barVisible(buttons, im = "pinyin", requireActive = true))
+        // 2026-11-07：Windows 见过 opi 后，TSF 短暂断开（空 im）不再隐藏整条。
+        assertTrue(barVisible(buttons, im = "", requireActive = true, seenActive = true))
         assertFalse(barVisible(buttons, parseImeState("lang=zh;trad=off;punct=on;fw=off;im=pinyin").im)) // 整行→解析→判定
         assertTrue(barVisible(buttons, parseImeState("lang=zh;trad=off;punct=on;fw=off;im=opi").im))
     }

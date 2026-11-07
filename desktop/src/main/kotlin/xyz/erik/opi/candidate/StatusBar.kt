@@ -14,10 +14,10 @@
 //!     TSF（ControlPlane.kt）。状态读与按钮动作同一条控制面。
 //!
 //! Windows：EXE 安装器/登录 Run 会拉起 `--statusbar`（scripts/windows/opi.iss），
-//! 但**只在 TSF 激活时显示**：控制面读不到状态（im 为空）就隐藏，切换回 opi 后
-//! 事件立刻让它出现，1s 轮询兜底（2026-10-21 用户裁决「切换到这个输入法才显示」；
-//! 2026-10-25 用户要求切走/切回都要快）。Linux 仍
-//! 保留「未知 ⇒ 维持可见」的旧语义，避免 fcitx5 旧 glue 缺 im= 时闪条。
+//! 装完还没激活过 OPI 时隐藏；**激活过一次后本次会话常驻** —— TSF 客户端因焦点
+//! 离开输入框/切窗口而暂时断开（im 为空）不再让整条消失（2026-11-07 用户报
+//! 「状态栏会自动消失」；2026-10-21「切换到这个输入法才显示」的安装期语义保留）。
+//! Linux 保留「未知 ⇒ 维持可见」与切走隐藏的旧语义（2026-10-10 裁决）。
 //!
 //! 条上按钮（从左到右 = [StatusBarButton] 的枚举序）：小欧 / 中英 / 。，标点(双态) /
 //! 简繁 / **英文专业** / **模式** / 月相全半角 / 软键盘 / Ω符号大全 / 设置。前八枚
@@ -64,7 +64,7 @@
 //!
 //! **切走隐藏、切回显示**（2026-10-10 下午用户裁决「切到其他输入法时状态栏消失」）：
 //! Linux 在 `im=` 非空且不等于 opi 时隐藏，切回 opi 再出现；`im=` 缺键/空串视为未知，
-//! 维持可见（旧 glue 没合 im= 时不闪条）。Windows 只在 TSF 激活（im=opi）时显示。
+//! 维持可见（旧 glue 没合 im= 时不闪条）。Windows 激活过 OPI 后常驻（见上）。
 //! 判定全在 [barVisible]（纯函数，单测钉住）。
 
 package xyz.erik.opi.candidate
@@ -96,7 +96,6 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
-import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -121,17 +120,7 @@ import kotlin.math.roundToInt
 // barVisible 也移到了 SkinAndStatus.kt（2026-10-21 再次撞 500 行）；它是纯函数，
 // 与本文件的状态栏窗口无耦合。
 
-/**
- * 初始位置：**条本体**屏幕底部居中、离下沿一截（别贴边，也别压任务栏）。
- * 窗外有 [haloDp] 透明边距 ⇒ 窗口原点要各退 halo，条的位置才与改动前一致。
- */
-private fun barPosition(widthDp: Int, haloDp: Int): WindowPosition {
-    val screen = java.awt.Toolkit.getDefaultToolkit().screenSize
-    return WindowPosition(
-        ((screen.width - widthDp) / 2 - haloDp).dp,
-        (screen.height - 128 - haloDp).dp,
-    )
-}
+// barPosition 也移到了 SkinAndStatus.kt（与条尺寸表同处，2026-11-07 守住 500 行）。
 
 // ---------- 应用 ----------
 
@@ -148,6 +137,9 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
     var s by remember { mutableStateOf(loadSettings()) }
     // 起始 = 中性缺省，循环第一拍立即补上真实状态 —— 不在组合期做进程调用。
     var imeState by remember { mutableStateOf(ImeState()) }
+    // 本次会话是否见过 im=opi。Windows 状态栏只在激活过 OPI 后才常驻：TSF 客户端
+    // 暂时断开（焦点离开输入框/切窗口）时 im 变空，不能当成「切到别的输入法」隐藏。
+    var seenActive by remember { mutableStateOf(false) }
     // 连续「状态读不到」的拍数：短暂抖动保留上一条状态（不闪），连续失败才回到中性
     // （Windows 上 im 空 = 隐藏）。没有这个上限，宿主进程退出后条会停在旧状态不收。
     var stateFails by remember { mutableIntStateOf(0) }
@@ -195,6 +187,7 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
             stateFails = poll.fails
             if (poll.clear) imeState = ImeState()
             if (st != null) {
+                if (st.im == "opi") seenActive = true
                 if (st != imeState) imeState = st
                 mode = barMode(st) // 档位跟着 state 走（缺 mode 位的老插件 ⇒ barMode 回落默认档）
             }
@@ -363,7 +356,7 @@ fun StatusBarApp(symbolCommit: (String) -> String?) {
     // （悬停状态也可能收不到 Exit）⇒ 必须把按钮/提示从组合里摘掉。
     // 本条自己打开的窗口（设置/符号/软键盘）开着时**强制显示**：这些窗口会拿走焦点，
     // TSF Deactivate 后 im 读不到；若此时隐藏，用户看到的就是「点一下条就没了」。
-    val shown = barVisible(buttons, imeState.im, requireActive = windows) ||
+    val shown = barVisible(buttons, imeState.im, requireActive = windows, seenActive = seenActive) ||
         settingsOpen || vkOpen || symbolsOpen
     Window(
         // 无边框窗没有关闭入口；「隐藏」走设置里的 master 开关（进程留着，见 visible 一行）。
