@@ -151,9 +151,6 @@ extension OpiEngine {
     func setWubiReturnStyle(_ v: Int) { opi_set_wubi_return_style(Int32(clamping: v)) }
     func wubiAutoCommit() -> Bool { opi_wubi_auto_commit() }
     func setWubiAutoCommit(_ on: Bool) { opi_set_wubi_auto_commit(on) }
-    /// 编码提示（缓冲变化时取一次；内部是全量重算，别每帧调）。
-    func wubiNextKeys() -> String { take(opi_wubi_next_keys()) }
-
     // 用户词：JSON 导出/导入原样交给引擎，本层不解析格式。
     func clearUserWords() { opi_clear_user_words() }
     func removeUserWord(_ text: String) {
@@ -262,7 +259,6 @@ extension OpiEngine {
         get { opi_custom_phrases_enabled() }
         set { opi_set_custom_phrases_enabled(newValue) }
     }
-    func exportCustomPhrases() -> String { take(opi_export_custom_phrases()) }
     @discardableResult
     func setCustomPhrases(json: String) -> Int32 {
         withUTF16(json) { opi_set_custom_phrases($0, $1) }
@@ -274,7 +270,6 @@ extension OpiEngine {
         get { opi_english_custom_phrases_enabled() }
         set { opi_set_english_custom_phrases_enabled(newValue) }
     }
-    func exportEnglishCustomPhrases() -> String { take(opi_export_english_custom_phrases()) }
     @discardableResult
     func setEnglishCustomPhrases(json: String) -> Int32 {
         withUTF16(json) { opi_set_english_custom_phrases($0, $1) }

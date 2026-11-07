@@ -197,10 +197,6 @@ final class OpiSettingsWindow: NSObject {
         host.frame = NSRect(x: 0, y: 0, width: contentWidth, height: max(height, 200))
     }
 
-    func refreshPageHeight(_ height: CGFloat) {
-        host?.frame.size.height = max(height, 200)
-    }
-
     // ---------- 通用控件 ----------
 
     @discardableResult

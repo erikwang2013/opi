@@ -61,18 +61,6 @@ extension OpiEngine {
     /// 设混入方式（值域 0..=1）。**越界忽略**，同 `setWubiStyle`。
     func setWubiMixedEntry(_ entry: Int32) { opi_set_wubi_mixed_entry(entry) }
 
-    /// 回车风格：0=清空 1=上屏原文（`WubiReturnStyle`）。未装载 → 0（哨兵）。
-    ///
-    /// ⚠️ **2026-10-14 订正**：本节原写「消费端四端都还没接」，**已过期，别照旧读**。
-    /// 判据的单一实现在 `engine_core::Engine::enter_action`（`engine_enter.rs`）。
-    /// 当天 23:20 前后实读消费面：C ABI 键路由（`router_edit_keys.rs::handle_enter`
-    /// —— **iOS 走的正是这条**）、fcitx5、TSF 已接；Android `KeyRouter.handleEnter`
-    /// 实读**仍是**写死的 `select(0)`（未接）。⇒ 本值在 iOS 上**确实**决定回车行为
-    /// （前提：当前 scheme 为五笔）。缺省档 = 清空（常见输入法语义）：装了五笔表、选了
-    /// 五笔模式之后，打一半按回车**不上屏、直接清掉** —— 2026-10-21 起可在
-    /// 设置面板「五笔（86 码表）→ 回车行为」里改成「上屏原文」。
-    func wubiReturnStyle() -> Int32 { opi_wubi_return_style() }
-
     /// 设回车风格（值域 0..=1）。**越界忽略**，同 `setWubiStyle`。
     func setWubiReturnStyle(_ style: Int32) { opi_set_wubi_return_style(style) }
 

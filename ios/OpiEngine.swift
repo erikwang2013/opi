@@ -15,15 +15,15 @@
 //   1. **薄**。这里只做「Swift 类型 ←→ C ABI 类型」的转换，不实现任何输入法逻辑。
 //      键路由在 Rust（crates/engine-core/src/router.rs，经 opi_key_event 暴露）。
 //      本项目已被「同一张路由表抄三份」坑过 —— 不要在这里重抄一份分流逻辑。
-//   2. **键事件优先走 opi_key_event**。本文件另有 load / select / selectPage /
+//   2. **键事件优先走 opi_key_event**。本文件另有 load / select /
 //      switchMode / 用户词导入导出等**直通包装**，它们是备用出口（调试、以及用户词
 //      管理这类 key_event 覆盖不到的场景）—— KeyboardViewController 的**按键**
 //      正常路径不该用它们。
 //      ⚠️ 别把不存在的东西写进来（本文件曾经写错）：`opi_input_key` / `opi_backspace`
-//      （单字符入口，已被 key_event 取代）、`opi_candidates(limit)`（全局不分页，
-//      本文件用的是 `candidatesPage()`）、`opi_shift_state()`（见
-//      KeyboardLayout.swift 的注释）在这里**都没有包装**。要加的话先读
-//      ios/README.md 的「缺的出口」一节。
+//      （单字符入口，已被 key_event 取代）、页内候选/选词（`opi_candidates_page` /
+//      `opi_select_page`，iOS 候选 UI 已改用 `OpiEngineCandidates.swift` 的全局出口）、
+//      `opi_shift_state()`（见 KeyboardLayout.swift 的注释）在这里**都没有包装**。
+//      要加的话先读 ios/README.md 的「缺的出口」一节。
 //   3. **所有权写死在注释里**：OpiString 由 Rust 分配，必须由
 //      opi_ffi_free_string 释放恰好一次。本文件所有取值路径都收口到
 //      takeString(_:)，只有那里允许调用 free —— 新增出口请复用它，不要自己写
@@ -281,29 +281,6 @@ final class OpiEngine {
         return (try? JSONDecoder().decode([String].self, from: data)) ?? []
     }
 
-    /// **当前页**候选。候选栏显示**只用这个**。
-    ///
-    /// 由引擎分页（`skip(page * PAGE_SIZE).take(PAGE_SIZE)`），与 `page()` /
-    /// `pageCount()` **同源，三者永远一致**。
-    ///
-    /// ⚠️ **不要改用 `opi_candidates(limit)` 自己按 8 切** —— 那是**从全局第 0 条起的
-    /// 不分页列表**，UI 自己切片就等于把 `PAGE_SIZE` 抄了第二份：引擎改一次页大小，
-    /// 这里不会报错，只会**静默错位**（高亮的页 ≠ 实际选词所在的页）。
-    /// 若 Mac 上编译报 `opi_candidates_page` 未声明：那是 `macos/OpiFFI.h` 还没写上
-    /// 这个出口（Rust 侧已落地，见 README「缺的出口：已落地」），**补声明，别退回自己切**。
-    func candidatesPage() -> [String] {
-        OpiEngine.decodeTexts(OpiEngine.takeString(opi_candidates_page()))
-    }
-
-    /// 当前候选页码（0 起）。未装载 → 0。
-    ///
-    /// 只用于**显示**（「第 N 页 / 共 M 页」）。**不要拿它算选词下标** ——
-    /// 选词一律用 `selectPage(_:)`，页内换算归引擎。
-    func page() -> Int { Int(opi_page()) }
-
-    /// 候选总页数（**无候选 → 0**，不是 1）。给「共 N 页」用。未装载 → 0。
-    func pageCount() -> Int { Int(opi_page_count()) }
-
     /// 前端 ⇧ 三态（0=OFF 1=SINGLE 2=LOCK）。**⇧ 高亮的唯一真源**。
     ///
     /// ⚠️ 不要把返回值缓存成「本地 shift 状态」再去 toggle：Single 会在引擎提交后
@@ -319,20 +296,6 @@ final class OpiEngine {
             return .off
         }
         return s
-    }
-
-    /// **点候选栏第 k 个**（**页内**索引，0 起）。越界/无候选/未装载 → 空串。
-    ///
-    /// **这是候选栏唯一该走的选词出口。** 它和数字键选词、回车提交**同源**
-    /// （`KeyRouter::select` 那一份页内换算），所以本层**不需要**知道 `PAGE_SIZE`
-    /// —— 之前那句 `page * pageSize + k` 已随之删除。
-    ///
-    /// ⚠️ 负数是**越界**语义（返回空串），不是「从末尾数」。这里显式判负：
-    /// Swift 的 `UInt32(-1)` 是**运行时陷阱**（直接崩），不像 C 那样回绕。
-    /// JNI 侧对同一场景也是「负索引按越界处理」（`jni.rs` 的 `opijni_select`）。
-    func selectPage(_ k: Int) -> String {
-        guard k >= 0 else { return "" }
-        return OpiEngine.takeString(opi_select_page(UInt32(k)))
     }
 
     // MARK: - 备用出口（调试 / key_event 覆盖不到的场景）
@@ -374,17 +337,6 @@ final class OpiEngine {
     /// 故意**不加** `@discardableResult`：返回值就是这条出口存在的理由（上游本来可以
     /// 返 void），丢掉它等于退回「按钮状态靠猜」。
     func toggleFullwidth() -> Bool { opi_toggle_fullwidth() }
-
-    /// 全角开关的**读侧**（与 `shiftState()` / `mode()` 同构）。
-    ///
-    /// ⚠️ 三条硬约定**写在声明头里**（`macos/OpiFFI.h` 的「全角 / 符号开关」一节），
-    /// 这里**不重抄**：这个仓库反复被「同一语义抄多份」坑过，而 Rust 侧与头文件
-    /// 才是真源。要改行为先改那边。
-    /// 只记两条 Swift 侧才有的：
-    ///   * 它给**状态显示**用，**别**拿去推「这个键在全角下该出什么」（映射不是纯函数）。
-    ///   * 本目录**还没有全角指示灯**（同 `shiftState()`：包装有了、UI 没读），
-    ///     所以暂时没有陈旧值可清 —— 加指示灯时，重读写在这里。
-    func fullwidthState() -> Bool { opi_fullwidth_state() }
 
     /// 符号面板开关：**Pinyin ⇄ Symbol 来回切**（不是「切到 Symbol」，也不是模式三态
     /// 循环 —— 那个是 `KeyboardViewController.cycleMode()`）。
@@ -490,11 +442,7 @@ final class OpiEngine {
         OpiEngine.withUTF16(json) { p, n in opi_import_user_words(p, n) }
     }
 
-    func removeUserWord(_ text: String) { OpiEngine.withUTF16(text) { p, n in opi_remove_user_word(p, n) } }
-
     func clearUserWords() { opi_clear_user_words() }
     // 自定义短语（2026-10-23）：JSON 原样交给引擎；负数 = 失败且旧表不变。
     var customPhrasesEnabled: Bool { get { opi_custom_phrases_enabled() } set { opi_set_custom_phrases_enabled(newValue) } }
-    func exportCustomPhrases() -> String { OpiEngine.takeString(opi_export_custom_phrases()) }
-    @discardableResult func setCustomPhrases(json: String) -> Int32 { OpiEngine.withUTF16(json) { p, n in opi_set_custom_phrases(p, n) } }
 }

@@ -80,7 +80,6 @@ interface OpiClipFfi : Library {
     fun opi_clip_pair_start(clip: Pointer?, peerId: Pointer?, len: Long): Byte
     fun opi_clip_probe(clip: Pointer?, ip: Pointer?, len: Long): Byte
     fun opi_clip_pair_confirm(clip: Pointer?, peerId: Pointer?, len: Long, accept: Byte): Byte
-    fun opi_clip_pair_cancel(clip: Pointer?, peerId: Pointer?, len: Long): Byte
     fun opi_clip_peers(clip: Pointer?): OpiStringStruct
     fun opi_clip_forget_peer(clip: Pointer?, peerId: Pointer?, len: Long): Byte
     fun opi_clip_status(clip: Pointer?): OpiStringStruct

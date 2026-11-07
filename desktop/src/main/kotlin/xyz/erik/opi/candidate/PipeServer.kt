@@ -360,12 +360,6 @@ internal class PipeServer(
     fun sendPrevPage() = send("""{"type":"prev_page"}""")
 
     /**
-     * 符号页点选 → TSF 上屏（协议条目见 Main.kt 头注释的 commit_text 段）。
-     * 返回 false = 没送出去（TSF 未连接）；调用方（符号页）负责出可见反馈。
-     */
-    fun sendCommitText(text: String) = send(commitTextLine(text))
-
-    /**
      * 控制请求：补 id/type 发到 TSF，等同一 id 的 ctl_result（[handleLine] 唤醒）。
      * `opFields` 是已校验的 op 字段串（见 ControlPlane.ControlServer.handle）。
      * 返回 TSF 的原始应答行；未连接/超时 → null（调用方转成可见失败）。

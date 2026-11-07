@@ -293,9 +293,6 @@ internal object ClipRuntime {
      */
     internal data class LanAddr(val ip: String, val prefix: Int)
 
-    /** 显示用：只取地址。 */
-    internal fun localIpv4(context: Context): String? = localAddress(context)?.ip
-
     internal fun localAddress(context: Context): LanAddr? {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
             ?: return null

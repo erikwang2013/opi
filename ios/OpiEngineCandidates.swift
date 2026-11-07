@@ -3,9 +3,8 @@
 
 // 候选/读音的 C ABI 包装（2026-10-21）。
 //
-// 与 `candidatesPage()` 的分工：候选栏/平铺/英文左列要的是**同一批全局候选**，
-// 所以本轮读 `opi_candidates(limit)`，选词用**全局**下标的 `opi_select(index)`。
-// 页内出口仍留在 `OpiEngine.swift` 给旧调用方，但新的候选 UI 不再使用它。
+// 候选栏/平铺/英文左列读**同一批全局候选**：`opi_candidates(limit)`，
+// 选词用**全局**下标的 `opi_select(index)`；iOS 不再保留页内候选的 Swift 包装。
 //
 // ⚠️ 读数与候选**同一次排名**：`opi_candidate_readings()` 读的是引擎里最近一次
 // `candidates()` 留下的缓存。调用方必须**先 allCandidates、紧接着 candidateReadings**
