@@ -73,10 +73,12 @@ public:
         ensureCtlService_(false);
         // IC 销毁不走 deactivate（fcitx5 的 InputContext::destroy 只发事件）——
         // 自己清掉 activeIc_，否则状态行的 im 会永远停在 opi（状态栏不隐藏）。
+        // 阶段用公开的 PostInputMethod：ReservedFirst 是 fcitx5 内部专用，addon 用了会被
+        // addonloader 拒绝加载（「Reserved Phase is only for internal use」）。
         if (instance_ != nullptr) {
             destroyedWatcher_ = instance_->watchEvent(
                 fcitx::EventType::InputContextDestroyed,
-                fcitx::EventWatcherPhase::ReservedFirst,
+                fcitx::EventWatcherPhase::PostInputMethod,
                 [this](fcitx::Event &event) {
                     auto &icEvent = static_cast<fcitx::InputContextEvent &>(event);
                     if (icEvent.inputContext() == activeIc_) {
