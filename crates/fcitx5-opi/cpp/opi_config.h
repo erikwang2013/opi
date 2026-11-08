@@ -174,18 +174,19 @@ inline void applyOpiSettings(const OpiSettings &settings) {
     if (opi_fcitx5_set_scheme != nullptr) {
         opi_fcitx5_set_scheme(static_cast<int32_t>(*settings.pinyinMethod));
     }
-    // 内置词库首启种子（2026-10-16，康熙字典「全发」）：**必须在 opiDictsSync 之前**
-    // ——种子先落进目录，这一趟扫描才看得见它。落点与 symbol_categories 同一条查找路
-    //（Type::Data + opi/）；老包没装那份 ⇒ locate 空 ⇒ 空操作。
-    {
+    // 内置词库首启种子（2026-10-16 康熙；2026-11-08 高频词库）：**必须在
+    // opiDictsSync 之前** —— 种子先落进目录，这一趟扫描才看得见它。落点与
+    // symbol_categories 同一条查找路（Type::Data + opi/）；老包没装那份 ⇒ locate
+    // 空 ⇒ 空操作。high_freq 先种：导入层按文件名排序，先到者优先。
+    for (const char *name : {"high_freq", "kangxi"}) {
         // 弃用抑制的理由见 CMakeLists.txt「为什么两个 .cpp 里有 …」段。
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         const auto bundled = fcitx::StandardPath::global().locate(
-            fcitx::StandardPath::Type::Data, "opi/kangxi.tsv");
+            fcitx::StandardPath::Type::Data, std::string("opi/") + name + ".tsv");
 #pragma GCC diagnostic pop
         if (!bundled.empty()) {
-            opiSeedBundledDict(bundled);
+            opiSeedBundledDict(name, bundled);
         }
     }
     // 导入词库（DisabledDicts）：名单是配置值，推给引擎的口就在本函数 —— 与上面那些

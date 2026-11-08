@@ -41,8 +41,10 @@ extension KeyboardViewController {
             pinBuffer = buffer
         }
         // 2026-10-26：普通候选栏只画固定槽位，没必要每键让引擎排整批；
-        // 平铺页才要整批（打开平铺时 showTiledCandidates 会补一次 512 条的 refresh）。
-        let limit = layout.keyLayer == .candidatesTiled ? 512 : max(8, layout.candidateSlotCount)
+        // 2026-11-08：首屏预取 2 页（16 条），翻页由 KeyRouter 的
+        // `(page + INITIAL_FETCH_PAGES) * PAGE_SIZE` 增量加深。
+        // 平铺页仍是整批视图（打开平铺时 showTiledCandidates 会补一次 512 条）。
+        let limit = layout.keyLayer == .candidatesTiled ? 512 : max(16, layout.candidateSlotCount)
         let allTexts = engine.allCandidates(limit: limit)
         let readings = layout.wantsReadings ? engine.candidateReadings() : []
         // 拼音行（2026-10-23）：显示串由引擎给（9 键/双拼带分词 `ni'hao`）。

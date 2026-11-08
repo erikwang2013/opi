@@ -47,8 +47,8 @@ class EngineSnapshotTest {
         assertEquals(emptyList<String>(), ctrl.candidateReadings)
         assertEquals("wo", ctrl.reading)
         assertEquals("我", ctrl.pendingText)
-        // 非读数方案：排名深度 = 回传窗口（普通栏一页），读数那次 JNI 不问。
-        assertEquals(fake.pageSizeValue, fake.lastLimit)
+        // 非读数方案：排名深度 = 回传窗口（普通栏首屏 2 页），读数那次 JNI 不问。
+        assertEquals(2 * fake.pageSizeValue, fake.lastLimit)
         assertEquals(0, fake.candidateReadingsCalls)
     }
 
@@ -126,15 +126,15 @@ class EngineSnapshotTest {
 
         assertEquals(1, fake.candidateReadingsCalls)
         assertEquals(listOf("ni", "hao"), ctrl.candidateReadings)
-        // 折叠栏只回一页；但 9 键读数要覆盖整份排名 ⇒ 内部排名仍是 512。
-        assertEquals(fake.pageSizeValue, fake.snapshotLimit)
-        assertEquals(fake.pageSizeValue, ctrl.candidates.size)
+        // 折叠栏回 2 页；但 9 键读数要覆盖整份排名 ⇒ 内部排名仍是 512。
+        assertEquals(2 * fake.pageSizeValue, fake.snapshotLimit)
+        assertEquals(2 * fake.pageSizeValue, ctrl.candidates.size)
         assertEquals(FETCH_LIMIT_FULL, fake.lastLimit)
 
         fake.schemeValue = InputScheme.FULL.value
         ctrl.refresh()
         assertEquals(1, fake.candidateReadingsCalls) // 全键盘不再取读数
-        assertEquals(fake.pageSizeValue, fake.lastLimit)
+        assertEquals(2 * fake.pageSizeValue, fake.lastLimit)
     }
 
     @Test
@@ -169,7 +169,7 @@ class EngineSnapshotTest {
     }
 
     @Test
-    fun tiledSnapshotFetchesFullWindowWhileFoldedStaysOnePage() {
+    fun tiledSnapshotStartsAtTwoTiledPagesWhileFoldedAtTwoPages() {
         val fake = FakeEngine().apply {
             snapshotEnabled = true
             schemeValue = InputScheme.NINE.value
@@ -178,12 +178,13 @@ class EngineSnapshotTest {
         }
         val ctrl = EngineController(fake)
 
-        assertEquals(fake.pageSizeValue, ctrl.candidates.size)
+        // 折叠 = 首屏 2 个候选页；平铺 = 2 个平铺页（≈4 个候选页），之后增量加深。
+        assertEquals(2 * fake.pageSizeValue, ctrl.candidates.size)
         ctrl.setTiledFetch(true)
-        assertEquals(FETCH_LIMIT_FULL, fake.snapshotLimit)
-        assertEquals(FETCH_LIMIT_FULL, ctrl.candidates.size)
+        assertEquals(4 * fake.pageSizeValue, fake.snapshotLimit)
+        assertEquals(4 * fake.pageSizeValue, ctrl.candidates.size)
         ctrl.setTiledFetch(false)
-        assertEquals(fake.pageSizeValue, fake.snapshotLimit)
-        assertEquals(fake.pageSizeValue, ctrl.candidates.size)
+        assertEquals(2 * fake.pageSizeValue, fake.snapshotLimit)
+        assertEquals(2 * fake.pageSizeValue, ctrl.candidates.size)
     }
 }

@@ -10,9 +10,16 @@ import xyz.erik.opi.jni.OpiEngine
 
 // 引擎模式 / ⇧ / 输入方案在 EngineTypes.kt；接口在 OpiEngineApi.kt（同包，500 行门禁拆出）。
 
+/** 首屏预取候选页数（2026-11-08 用户裁决；与 engine-core `router::INITIAL_FETCH_PAGES` 同义）。 */
+private const val INITIAL_FETCH_PAGES = 2
+
+/** 平铺首屏备 2 个平铺页 ≈ 4 个候选页（一平铺页约 16 个短词）。 */
+private const val TILED_INITIAL_FETCH_PAGES = 4
+
 /**
  * 单一状态源：封装 OpiEngine，UI 经 mutableStateOf 订阅（按引擎页大小翻页、buffer
- * 变化重置页码；fetchLimit=512，让「壹」这类排在第 79/155 位的单字可翻到）。
+ * 变化重置页码；首屏 2 页、翻页增量加深，最深 512 条 —— 让「壹」这类排在第
+ * 79/155 位的单字可翻到）。
  */
 class EngineController(
     internal val api: OpiEngineApi = OpiEngine,
@@ -69,7 +76,7 @@ class EngineController(
     private var pinBuffer: String? = null
 
     var shiftState by mutableStateOf(ShiftState.OFF)
-        private set
+        internal set
 
     /**
      * 学习开关（引擎真值，随 [refresh] 重读）。
@@ -126,12 +133,22 @@ class EngineController(
         dictionaryDegraded = !ok
     }
 
-    // 普通栏只取一页；512 条只为平铺全量，或旧 so 的读音列（它是 candidates 的副产物）。
+    // 首屏 2 页，翻页增量（2026-11-08 用户裁决「先识别 2 页数量，然后增量翻页
+    // 识别」）。普通栏与平铺共用同一深度；进入平铺先备 2 个平铺页（4 个候选页），
+    // 之后 CandidateTiledView 每翻一页调 ensureCandidatePages 加深。读数列（9/14/
+    // 双拼）仍取全量 —— 它是 candidates 的副产物，limit 不能下推。
     private var tiledFetch = false
-    private val fetchLimit: Int get() = if (tiledFetch || needsCandidateReadings(mode, inputScheme)) FETCH_LIMIT_FULL else pageSize
+    private var fetchPages = INITIAL_FETCH_PAGES
+    private val fetchLimit: Int
+        get() = if (needsCandidateReadings(mode, inputScheme)) FETCH_LIMIT_FULL
+                else fetchPages * pageSize
 
-    /** 快照回传的候选窗口：折叠一页、平铺 512；读数深度由 Rust 按方案自己加深。 */
-    private val snapshotLimit: Int get() = if (tiledFetch) FETCH_LIMIT_FULL else pageSize
+    /**
+     * 快照回传的候选窗口：折叠 2 页、平铺按抓取深度；**读数不抬窗口**
+     * （读数由 Rust 按方案自己加深，回传再塞 512 条纯属白搬）。
+     */
+    private val snapshotLimit: Int
+        get() = if (tiledFetch) fetchPages * pageSize else INITIAL_FETCH_PAGES * pageSize
 
     /** 旧 so / 假引擎无快照出口：失败一次后不再重试，后续都走逐出口路径。 */
     private var snapshotBroken = false
@@ -141,7 +158,7 @@ class EngineController(
     var wubiHint by mutableStateOf("")
         private set
 
-    private var _candidatePage by mutableStateOf(0)
+    internal var candidatePageIndex by mutableStateOf(0)
     private var lastQuery: String? = null // buffer 变化才重置页码（shift 等操作不重置）
 
     init {
@@ -154,6 +171,10 @@ class EngineController(
      * candidates → candidateReadings → displayBuffer 的读序。
      */
     fun refresh() {
+        // 翻过页后抓取深度会 > 首屏；换查询必须先回落再取（否则新查询第一发仍按
+        // 上一查询的深度取）。只在深度已加深时多问一次 buffer，平时零额外 JNI。
+        val basePages = if (tiledFetch) TILED_INITIAL_FETCH_PAGES else INITIAL_FETCH_PAGES
+        if (fetchPages > basePages && api.buffer() != lastQuery) fetchPages = basePages
         val snapshot = stateSnapshotOrNull()
         if (snapshot != null) {
             buffer = snapshot.buffer
@@ -233,10 +254,12 @@ class EngineController(
     private fun finishRefresh() {
         if (buffer != lastQuery) {
             lastQuery = buffer
-            _candidatePage = 0
+            candidatePageIndex = 0
+            // 新查询回到首屏深度；平铺保留自己的 2 个平铺页起点。
+            fetchPages = if (tiledFetch) TILED_INITIAL_FETCH_PAGES else INITIAL_FETCH_PAGES
         }
         val maxPage = if (candidates.isEmpty()) 0 else (candidates.size - 1) / pageSize
-        if (_candidatePage > maxPage) _candidatePage = maxPage
+        if (candidatePageIndex > maxPage) candidatePageIndex = maxPage
         // 9 键 displayBuffer 偶发为空时不能把数字缓冲当拼音显示（2026-10-24 报障）。
         if (reading.isEmpty() && inputScheme == InputScheme.NINE) {
             reading = candidateReadings.firstOrNull().orEmpty()
@@ -300,8 +323,27 @@ class EngineController(
         refresh()
     }
 
-    /** 平铺候选展开/收拢：展开要全量（滑动翻页），收拢回一页。 */
-    internal fun setTiledFetch(on: Boolean) { if (tiledFetch != on) { tiledFetch = on; refresh() } }
+    /** 平铺候选展开/收拢：展开先备 2 个平铺页，收拢回普通栏的 2 个候选页。 */
+    internal fun setTiledFetch(on: Boolean) {
+        if (tiledFetch == on) return
+        tiledFetch = on
+        fetchPages = if (on) TILED_INITIAL_FETCH_PAGES else INITIAL_FETCH_PAGES
+        refresh()
+    }
+
+    /**
+     * 平铺翻页时加深抓取（2026-11-08「增量翻页识别」）：只增不减，超出才刷新。
+     * `pages` 是**候选页**数（`fetchPages`），不是平铺页数；调用方按平铺页
+     * × 每页约 2 个候选页换算，再多留 2 页余量。
+     */
+    internal fun ensureCandidatePages(pages: Int) {
+        // 旧 so 的 512 条上限就是最深抓取，别再往上加。
+        val next = maxOf(pages, INITIAL_FETCH_PAGES).coerceAtMost(FETCH_LIMIT_FULL / pageSize)
+        if (next > fetchPages) {
+            fetchPages = next
+            refresh()
+        }
+    }
     /**
      * 语言切换（中↔英/中↔繁）：换模式与方案但**保留缓冲** —— 用户裁决 2026-10-09
      * 「中文输入的时候切换英文，拼音保留可继续使用」。⚠️ 与 [switchMode]+[switchScheme]
@@ -412,67 +454,6 @@ class EngineController(
         }
         refresh()
         onLearned() // 删词也改学习状态：不落盘的话下次启动它又被 import 回来
-    }
-
-    // ---- 候选翻页 ----
-
-    val candidatePage: Int get() = _candidatePage
-
-    val candidatePageCount: Int get() = (candidates.size + pageSize - 1) / pageSize
-
-    val pageCandidates: List<String> get() {
-        val start = _candidatePage * pageSize
-        if (start >= candidates.size) return emptyList()
-        val end = minOf(start + pageSize, candidates.size)
-        return candidates.subList(start, end)
-    }
-
-    fun nextPage() {
-        if (_candidatePage < candidatePageCount - 1) _candidatePage++
-    }
-
-    fun prevPage() {
-        if (_candidatePage > 0) _candidatePage--
-    }
-
-    /** 屏内下标 → 全局下标：翻页在本地切片（引擎 page 恒 0），别改走 selectPage。 */
-    fun selectFromPage(indexInPage: Int): String = select(_candidatePage * pageSize + indexInPage)
-
-    // ---- ⇧ 状态机 ----
-
-    /**
-     * ⇧ **单击 = 锁定大写；再点一次取消**（2026-10-15 用户裁决「切换到英文，让英文字母
-     * 大写的按钮，点击了，就要锁定大写，再次点击取消大写」——对 2026-10-10「点 = 单次、
-     * 长按 = 锁定」那条的改判）。
-     *
-     * 三态里「单次大写」（SINGLE）没被砍掉，挪到 [shiftLongPress]（换手势，不丢能力）——
-     * `consumeSingleShift` 与字母键面的大写显示都按状态走，两处不用改。
-     */
-    fun shiftTap() {
-        if (shiftState == ShiftState.LOCK) {
-            shiftState = ShiftState.OFF
-            api.setShift(false)
-        } else {
-            shiftState = ShiftState.LOCK
-            api.setShift(true)
-        }
-        // 2026-10-27：引擎 set_shift 清联想 ⇒ 必须重读候选（原先只动 UI 三态）。
-        refresh()
-    }
-
-    /** ⇧ 长按 = **单次大写**（SINGLE）：下一个字母大写后由 [consumeSingleShift] 复位。 */
-    fun shiftLongPress() {
-        shiftState = ShiftState.SINGLE
-        api.setShift(true)
-        refresh()
-    }
-
-    /** single 态消费后复位（lock 不受影响）。 */
-    fun consumeSingleShift() {
-        if (shiftState == ShiftState.SINGLE) {
-            shiftState = ShiftState.OFF
-            api.setShift(false)
-        }
     }
 
     // ---- 全角 / 半角 ----

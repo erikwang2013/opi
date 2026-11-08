@@ -75,6 +75,8 @@ OpiCustomPhraseStore.shared.loadAndPush(.english)
 DispatchQueue.main.async {
     if persistedScheme != .stroke { _ = OpiEngine.shared.loadOptionalStrokeDictionary() }
     if persistedScheme != .wubi { _ = OpiEngine.shared.loadOptionalWubiDictionary() }
+    // 随包高频词库先种一次（标记门控；删过的不复活），再按停用名单重放导入词库。
+    OpiEngine.seedBundledDict("high_freq")
     // 导入词库按停用名单重放；坏文件只记日志，不挡启动。
     OpiEngine.shared.loadImportedDicts(disabled: OpiSettingsStore.disabledDicts())
     // 语音引擎：只在模型已存在（full 包或已下载）时后台预热，不阻塞启动。

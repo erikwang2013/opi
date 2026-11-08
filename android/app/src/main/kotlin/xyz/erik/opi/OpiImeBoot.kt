@@ -36,18 +36,21 @@ internal fun OpiImeService.bootEngine(): Boolean {
     // 词库目录装载（2026-10-14，M3）：目录里每个 *.tsv 进引擎，**停用名单在装载后重放**
     // —— 引擎里导入层是内存态，同名重导入会置回启用（`api/dict.rs` 裁决 2 把重放
     // 划给宿主）。单个失败不挡启动，只记一条日志（设置页「词库」节会把失败的显示出来）。
-    // 内置词库首启种子（2026-10-16，康熙字典「全发」）：首启把 assets/kangxi.tsv 种进
-    // 词库目录**一次**（标记门控；用户删过的不复活 —— 见 DictStore.seedBundled）。
+    // 内置词库首启种子（2026-10-16 康熙；2026-11-08 高频词库）：首启把 assets 里的
+    // 随包 TSV 种进词库目录**一次**（标记门控；用户删过的不复活 —— 见
+    // DictStore.seedBundled）。high_freq 先种：同名导入按文件名排序，先到者优先。
     val dictStore = DictStore.from(this)
-    val seeded = dictStore.seedBundled("kangxi") {
-        try {
-            assets.open("kangxi.tsv")
-        } catch (e: IOException) {
-            Log.w(OpiImeService.TAG, "内置词库资产缺失：$e")
-            null
+    val seeded = listOf("high_freq", "kangxi").filter { name ->
+        dictStore.seedBundled(name) {
+            try {
+                assets.open("$name.tsv")
+            } catch (e: IOException) {
+                Log.w(OpiImeService.TAG, "内置词库资产缺失 $name.tsv：$e")
+                null
+            }
         }
     }
-    if (seeded) Log.i(OpiImeService.TAG, "已种下内置词库 kangxi.tsv")
+    if (seeded.isNotEmpty()) Log.i(OpiImeService.TAG, "已种下内置词库 ${seeded.joinToString("、")}")
     val dictReport = dictStore.loadAll(DictStore.parseDisabled(prefs.disabledDicts))
     if (dictReport.failed.isNotEmpty()) {
         Log.w(OpiImeService.TAG, "词库装载失败 ${dictReport.failed.size} 个：${dictReport.failed.joinToString("、")}")

@@ -21,14 +21,14 @@ class EngineControllerTest {
     @After fun resetGate() { AssociationGate.enabled = false }
 
     @Test
-    fun fetchLimitStaysOnePageUntilTiled() {
+    fun fetchStartsAtTwoPagesAndTiledAtTwoTiledPages() {
         val fake = FakeEngine(); val ctrl = EngineController(fake)
-        // 普通栏一页；展开平铺才拉全量（512 条 JNI 字符串不再每键搬）。
-        assertEquals(fake.pageSizeValue, fake.lastLimit)
+        // 2026-11-08 裁决：首屏 2 页，之后增量翻页；平铺先备 2 个平铺页（≈4 个候选页）。
+        assertEquals(2 * fake.pageSizeValue, fake.lastLimit)
         ctrl.setTiledFetch(true)
-        assertEquals(512, fake.lastLimit)
+        assertEquals(4 * fake.pageSizeValue, fake.lastLimit)
         ctrl.setTiledFetch(false)
-        assertEquals(fake.pageSizeValue, fake.lastLimit)
+        assertEquals(2 * fake.pageSizeValue, fake.lastLimit)
     }
 
     @Test

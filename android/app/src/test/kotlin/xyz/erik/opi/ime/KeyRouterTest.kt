@@ -8,6 +8,9 @@ import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.engine.FakeEngine
 import xyz.erik.opi.engine.InputScheme
+import xyz.erik.opi.engine.nextPage
+import xyz.erik.opi.engine.shiftLongPress
+import xyz.erik.opi.engine.shiftTap
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.After
@@ -271,7 +274,6 @@ class KeyRouterTest {
     }
 
     // ---- 数字面板走引擎（旧路径是 UI 直提 commitText，绕开引擎） ----
-
     @Test
     fun numberPadKeyCommitsEngineText() {
         // 面板的 `,` 是键盘键码：引擎给文本（半角原样 / 全角 `，`）就得上屏 ——
@@ -335,7 +337,6 @@ class KeyRouterTest {
     }
 
     // ---- 数字面板立即上屏（2026-10-10 用户报障）----
-
     @Test
     fun numberPadDigitsCommitImmediately() {
         // 报障「切换到数字键盘点击数字没输入，再切回拼音才出来」：引擎 Number 模式把
@@ -435,7 +436,6 @@ class KeyRouterTest {
     }
 
     // ---- 切 English 时前端 ⇧ 必须重推给引擎（四端同一条语义） ----
-
     @Test
     fun switchModeToEnglishReappliesSingleShift() {
         // 拼音里长按 ⇧（SINGLE）再切 English：JNI 切换清了引擎 shift，前端三态要重推，

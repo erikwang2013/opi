@@ -23,6 +23,8 @@ import xyz.erik.opi.candidate.CandidateBar
 import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.engine.ShiftState
+import xyz.erik.opi.engine.shiftLongPress
+import xyz.erik.opi.engine.shiftTap
 import xyz.erik.opi.keyboard.DarkPalette
 import xyz.erik.opi.keyboard.ElderPalette
 import xyz.erik.opi.keyboard.SkinPanel
@@ -39,7 +41,6 @@ import xyz.erik.opi.keyboard.SymbolCatalog
 import xyz.erik.opi.keyboard.SymbolPage
 import xyz.erik.opi.keyboard.SymbolPanel
 import xyz.erik.opi.pet.PetMood
-
 /**
  * 单手模式：键盘整体占屏宽的 76%，其余 24% 留在另一侧。
  *

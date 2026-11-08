@@ -15,6 +15,22 @@ class EngineControllerPageTest {
     @Before fun allowAssociation() { AssociationGate.enabled = true }
     @After fun resetGate() { AssociationGate.enabled = false }
 
+    /** 增量翻页只加深不收缩（2026-11-08「先识别 2 页，然后增量翻页」）。 */
+    @Test
+    fun ensureCandidatePagesOnlyGrows() {
+        val fake = FakeEngine()
+        val ctrl = EngineController(fake)
+        assertEquals(2 * fake.pageSizeValue, fake.lastLimit)
+        ctrl.ensureCandidatePages(3)
+        assertEquals(3 * fake.pageSizeValue, fake.lastLimit)
+        ctrl.ensureCandidatePages(1) // 不缩回
+        assertEquals(3 * fake.pageSizeValue, fake.lastLimit)
+        // 新查询回到首屏深度。
+        fake.buf = "ab"
+        ctrl.refresh()
+        assertEquals(2 * fake.pageSizeValue, fake.lastLimit)
+    }
+
     /** 页内下标 → 全局下标 = page*pageSize+k（page0/中途页/末页/页内越界都钉住）。 */
     @Test
     fun selectFromPageMapsPageLocalIndexToGlobalIndex() {

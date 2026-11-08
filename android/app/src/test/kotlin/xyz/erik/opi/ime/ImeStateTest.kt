@@ -9,6 +9,7 @@ import xyz.erik.opi.keyboard.SkinOption
 import xyz.erik.opi.scene.SceneTheme
 import xyz.erik.opi.engine.FakeEngine
 import xyz.erik.opi.engine.ShiftState
+import xyz.erik.opi.engine.shiftTap
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

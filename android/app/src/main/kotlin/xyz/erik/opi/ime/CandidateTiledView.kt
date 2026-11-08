@@ -75,8 +75,13 @@ fun CandidateTiledView(
     val cands = controller.candidates
     val pages = remember(cands) { tilePages(cands) }
     val pager = rememberPagerState(pageCount = { pages.size.coerceAtLeast(1) })
-    // 候选整批换了（继续输入 / 钉读音 / 选词后剩尾巴接着编）⇒ 回第一页，别停在旧页号上。
-    LaunchedEffect(cands) { pager.scrollToPage(0) }
+    // 新查询/钉读音才回第一页；增量抓取的 candidates 追加不能把用户弹回页首。
+    LaunchedEffect(controller.buffer, controller.pinnedReading) { pager.scrollToPage(0) }
+    // 2026-11-08「先识别 2 页，然后增量翻页」：平铺每翻一页，向后多备 2 个候选页
+    // （一个平铺页约等于 2 个候选页）。只增不减，深度由 EngineController 夹在上限内。
+    LaunchedEffect(pager.currentPage) {
+        controller.ensureCandidatePages((pager.currentPage + 2) * 2)
+    }
     BoxWithConstraints(modifier = modifier.fillMaxSize().opiPanelBackground(p.barBg)) {
         // 横屏/分屏高度不够时减少读数列格数，见 [tiledReadingCells]。
         val readingCells = tiledReadingCells(maxHeight.value)

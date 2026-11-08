@@ -50,7 +50,7 @@ kotlin {
 // jpackage 的包版本与设置窗标题栏都从这里取。**此前设置窗里写死过一份**
 // （"1.4.0"），到 1.6.0 就成了摆在用户眼前的假话 —— 两处写死是漂移的充分条件，
 // 生成一个常量是把它压成一处的最短路径（同 android 侧 versionName 的单一来源约定）。
-val opiAppVersion = "1.31.17"
+val opiAppVersion = "1.31.18"
 
 
 val generateOpiVersionSource by tasks.registering {
@@ -215,27 +215,25 @@ tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageT
 
 apply(from = "build-asr.gradle.kts")
 
-
-// 康熙字典词库（2026-10-16，「全发」的桌面面）：词库页首启种子把它放进词库目录一次
-//（见 Dicts.kt 的 seedBundledDict）。真源 = `data/raw/kangxi.tsv`
-//（`scripts/gen_kangxi_dict.py` 生成；Android/包/desktop 三处消费同一份产物）。
+// 随包词库（2026-10-16 康熙，2026-11-08 高频）：词库页首启种子把它们放进词库目录
+// 一次（见 Dicts.kt 的 seedBundledDict）。真源 = `data/raw/` 的入库副本
+// （康熙由 `scripts/gen_kangxi_dict.py` 生成；high_freq.tsv 是入库数据）。
 // 与 copyEmojiData 同一条纪律：构建期原样拷，盘上没有可漂的第二份；源缺**响亮地死**。
-val copyKangxiDict by tasks.registering(Copy::class) {
-    val src = file("../data/raw/kangxi.tsv")
+val copyBundledDicts by tasks.registering(Copy::class) {
+    val kangxi = file("../data/raw/kangxi.tsv")
+    val highFreq = file("../data/raw/high_freq.tsv")
     doFirst {
-        check(src.isFile) {
-            "找不到康熙字典词库源: ${src.path}\n" +
-                "生成一份：python3 scripts/gen_kangxi_dict.py"
-        }
+        check(kangxi.isFile) { "找不到康熙字典词库源: ${kangxi.path}（python3 scripts/gen_kangxi_dict.py）" }
+        check(highFreq.isFile) { "找不到高频词库源: ${highFreq.path}（data/raw/high_freq.tsv 被误删？）" }
     }
-    from(src)
+    from(kangxi)
+    from(highFreq)
     into(layout.buildDirectory.dir("generated/opiResources"))
 }
 // ⚠️ 同一个资源目录**不能注册两次** srcDir（上面 copyEmojiData 已注册过它）——
-// 2026-10-16 实测：再 `srcDir(copyKangxiDict)` 会让 processResources 报
-// 「Entry kangxi.tsv is a duplicate」（目录里的每个文件都会被扫两遍）。
+// 2026-10-16 实测：再注册一次会让 processResources 报 duplicate entry。
 // 接线改为 dependsOn：文件进同一个处理过的目录、目录只扫一次。
-tasks.named("processResources") { dependsOn(copyKangxiDict) }
+tasks.named("processResources") { dependsOn(copyBundledDicts) }
 
 // ---------- 小欧表情贴纸（2026-10-18）----------
 //

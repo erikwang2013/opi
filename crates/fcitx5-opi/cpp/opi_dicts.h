@@ -87,22 +87,23 @@ inline std::vector<std::string> opiParseDisabledDicts(const std::string &raw) {
     return out;
 }
 
-// 内置词库**首启种子**（2026-10-16，康熙字典「全发」）：把随包的词库 TSV 拷进词库
-// 目录**一次** —— 它随后就是一份普通导入词库（桌面设置窗词库页看得见、DisabledDicts
-// 管得住、用户可删）。**只种一次**（标记 `.seeded-kangxi` 在则不再种）：用户删过的
-// 不许复活 —— 与「删文件防下次装回来」的语义对偶。本函数与 Android 的
+// 内置词库**首启种子**（2026-10-16 康熙；2026-11-08 高频词库）：把随包的词库 TSV
+// 拷进词库目录**一次** —— 它随后就是一份普通导入词库（桌面设置窗词库页看得见、
+// DisabledDicts 管得住、用户可删）。**只种一次**（标记 `.seeded-<name>` 在则不再种）：
+// 用户删过的不许复活 —— 与「删文件防下次装回来」的语义对偶。本函数与 Android 的
 // `DictStore.seedBundled`（有 JVM 门禁）**语义一字不差**，那边是判据的主源；
 // 源读不到（老包/裁剪）⇒ 不种**也不打标记**（下次配置生效还有机会）。
-inline void opiSeedBundledDict(const std::string &bundledTsv) {
+// name 同时决定标记名与落盘名（`<name>.tsv`）；导入层按文件名排序，high_freq 先种。
+inline void opiSeedBundledDict(const std::string &name, const std::string &bundledTsv) {
     const std::string dir = opiDictsDir();
-    const std::string marker = dir + "/.seeded-kangxi";
+    const std::string marker = dir + "/.seeded-" + name;
     if (access(marker.c_str(), F_OK) == 0) {
         return;
     }
     if (mkdir(dir.c_str(), 0755) != 0 && errno != EEXIST) {
         return;
     }
-    const std::string target = dir + "/kangxi.tsv";
+    const std::string target = dir + "/" + name + ".tsv";
     if (access(target.c_str(), F_OK) == 0) {
         // 目录里已有一份（升级用户/手导过）—— 认账、不覆盖、打标记
         FILE *m = fopen(marker.c_str(), "w");

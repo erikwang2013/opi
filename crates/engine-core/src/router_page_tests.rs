@@ -4,8 +4,17 @@
 //! 分页窗口与全量排名的前缀契约（从 router_tests.rs 拆出守 500 行）。
 
 use super::*;
+use crate::router::pages::page_fetch_limit;
 
-/// 分页只取 `(page+1)*PAGE_SIZE`，但必须与全量列表逐条同前缀（同 `select` 的全局下标）。
+/// 首屏 2 页，之后每翻一页增量 1 页（2026-11-08 用户裁决；`(page+2)*PAGE_SIZE`）。
+#[test]
+fn fetch_depth_is_two_pages_then_incremental() {
+    assert_eq!(page_fetch_limit(0), 2 * PAGE_SIZE);
+    assert_eq!(page_fetch_limit(1), 3 * PAGE_SIZE);
+    assert_eq!(page_fetch_limit(7), 9 * PAGE_SIZE);
+}
+
+/// 分页只取 `(page+2)*PAGE_SIZE`，但必须与全量列表逐条同前缀（同 `select` 的全局下标）。
 #[test]
 fn paged_candidates_are_prefixes_of_the_full_ranking() {
     let mut s = paging_state();

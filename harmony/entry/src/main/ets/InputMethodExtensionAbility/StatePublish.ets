@@ -20,8 +20,25 @@ import {
   KEY_VIEW
 } from './KeyboardAppStorage';
 
-/** 平铺视图取全量的条数（同 Android EngineController.fetchLimit）。 */
-export const TILED_FETCH_LIMIT: number = 512;
+/** 候选页大小（engine-core `router::PAGE_SIZE`；本端没有 pageSize 出口，镜像常量）。 */
+const PAGE_SIZE: number = 8;
+/** 平铺首屏 2 个平铺页 ≈ 4 个候选页（同 Android TILED_INITIAL_FETCH_PAGES）。 */
+const TILED_INITIAL_PAGES: number = 4;
+/** 当前平铺抓取深度（候选页数）；只在同一缓冲里增，换缓冲重置。 */
+let tiledFetchPages: number = TILED_INITIAL_PAGES;
+let lastTiledBuffer: string = '';
+
+/**
+ * 平铺翻页增量加深（2026-11-08「先识别 2 页，然后增量翻页识别」）。
+ * `pages` 是候选页数；只增不减，增加的这次刷新由 [publishState] 推给 UI。
+ */
+export function ensureTiledPages(pages: number): void {
+  const next: number = Math.max(pages, TILED_INITIAL_PAGES);
+  if (next > tiledFetchPages) {
+    tiledFetchPages = next;
+    publishState();
+  }
+}
 /** 9 键左列读数最多缓存多少行（读数 JSON/节点比候选贵，仍截 64）。 */
 const READING_LIMIT: number = 64;
 
@@ -78,6 +95,11 @@ function putStrings(key: string, value: string[]): void {
 export function publishState(): void {
   // 行为判定用 buffer（原值）；拼音行用 displayBuffer（9 键带分词）。
   const buffer: string = OpiEngine.buffer();
+  // 换缓冲 = 新查询：平铺抓取深度回到首屏 2 个平铺页。
+  if (buffer !== lastTiledBuffer) {
+    lastTiledBuffer = buffer;
+    tiledFetchPages = TILED_INITIAL_PAGES;
+  }
   const mode: OpiMode = OpiEngine.mode();
   const scheme: number = InputModes.scheme();
   const pageCandidates: string[] = OpiEngine.candidatesPage();
@@ -129,5 +151,5 @@ export function publishState(): void {
   putNumber(KEY_TILED, tiled ? 1 : 0);
   // 平铺没开就不取全量：每键都拉 64 条纯属浪费（普通候选栏只用当前页）。
   putStrings(KEY_ALL_CANDIDATES,
-    tiled && !associationOff ? OpiEngine.candidates(TILED_FETCH_LIMIT) : []);
+    tiled && !associationOff ? OpiEngine.candidates(tiledFetchPages * PAGE_SIZE) : []);
 }

@@ -217,6 +217,9 @@ if(NOT EXISTS "${OPI_KANGXI_TSV}")
 endif()
 message(STATUS "OPI 康熙字典词库源: ${OPI_KANGXI_TSV}")
 
+# 高频词库源与安装（2026-11-08；拆文件守 500 行门禁）
+include("${CMAKE_CURRENT_SOURCE_DIR}/high_freq.cmake")
+
 # ---- addon .so 的落点 ----
 #
 # FCITX_INSTALL_ADDONDIR 是 fcitx5 自己给的变量，但它跟着 CMAKE_INSTALL_PREFIX

@@ -126,6 +126,14 @@ internal class CandidateModel {
 fun main(args: Array<String>) {
     // Windows 默认计时器粒度会把 2ms 轮询合并成 ~15.6ms；IME 响应要压到 10ms 内。
     beginHighResolutionTimers()
+    // 随包词库首启种子（2026-10-16 康熙；2026-11-08 高频）：任何模式启动都种一次
+    // （标记门控；用户删过的不复活 —— 见 Dicts.kt 的 seedBundledDict）。放在
+    // main 而不是设置窗：候选窗/状态栏进程不打开设置也应能用到高频词库。
+    for (name in listOf("high_freq", "kangxi")) {
+        seedBundledDict(name, dictsDir()) {
+            DictsResources::class.java.getResourceAsStream("/$name.tsv")
+        }
+    }
     // 候选窗（Windows 无 --statusbar/--settings）只能有一个实例：重复实例抢不到
     // `opi-v2` 管道时会一直重试而不是退出，现场表现为多个 opi.exe 常驻。
     val candidate = isWindows() && "--statusbar" !in args && "--settings" !in args

@@ -16,6 +16,7 @@
 import { KeyboardController } from './KeyboardController';
 import { NINE_STRIP, NineKey } from './KeyPanels';
 import { Palette, paletteFor, scenePanelBg, sceneKeyBg } from './Palette';
+import { ensureTiledPages } from './StatePublish';
 
 /** 一行 4 个「字宽单元」（Android UNITS_PER_ROW）。 */
 const UNITS_PER_ROW: number = 4;
@@ -77,21 +78,41 @@ function packTiles(candidates: string[]): TilePage[] {
 @Component
 export struct CandidateTiled {
   @StorageLink('opiAllCandidates') @Watch('rebuild') candidates: string[] = [];
+  /** 行为缓冲（KEY_BUFFER 的字面量；`@StorageLink(KEY_BUFFER)` 编译不过，见 KeyboardAppStorage 头注）。 */
+  @StorageLink('opiBuffer') buffer: string = '';
   @StorageLink('opiSkin') skin: number = 0;
   @StorageLink('opiDark') dark: number = 0;
   @StorageLink('opiElder') elder: number = 0;
   @State pages: TilePage[] = [];
   @State pageIndex: number = 0;
+  private lastCandidates: string[] = [];
+  private lastBuffer: string = '';
   private ctrl: KeyboardController = KeyboardController.getInstance();
 
   aboutToAppear(): void {
     this.rebuild();
   }
 
-  /** 候选整批换新 → 重排 + 回第一页（Android LaunchedEffect(cands) 同款）。 */
+  /**
+   * 候选换批 → 重排。**新查询回第一页；增量翻页的追加保持当前页**
+   * （2026-11-08：平铺每翻一页会向后多抓 2 个候选页，追加不能把用户弹回页首）。
+   * 判据 = 新列表是否以旧列表为前缀（引擎 limit 加深只追加、不改前序）。
+   */
   rebuild(propName: string = ''): void {
+    const prev: string[] = this.lastCandidates;
+    // 同一查询内的增量追加才保页；缓冲变了就是新查询，一律回第一页。
+    let grew: boolean = this.buffer === this.lastBuffer && prev.length > 0 &&
+      this.candidates.length >= prev.length;
+    if (grew) {
+      for (let i = 0; i < prev.length; i++) {
+        if (prev[i] !== this.candidates[i]) { grew = false; break; }
+      }
+    }
+    const keep: number = this.pageIndex;
     this.pages = packTiles(this.candidates);
-    this.pageIndex = 0;
+    this.pageIndex = grew ? Math.min(keep, Math.max(0, this.pages.length - 1)) : 0;
+    this.lastCandidates = this.candidates.slice();
+    this.lastBuffer = this.buffer;
   }
 
   private pal(): Palette {
@@ -167,6 +188,8 @@ export struct CandidateTiled {
       .index(this.pageIndex)
       .onChange((index: number) => {
         this.pageIndex = index;
+        // 每翻一页向后多备 2 个候选页（一个平铺页约 2 个候选页）。
+        ensureTiledPages((index + 2) * 2);
       })
 
       // 右列：返回 / ⌫ / 重输 / 空格（Android CandidateTiledView 同款）。

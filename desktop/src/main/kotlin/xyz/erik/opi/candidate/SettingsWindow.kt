@@ -197,17 +197,8 @@ fun SettingsWindow() {
         statusBarGuard("设置窗拉起状态栏") {
             withContext(Dispatchers.IO) { ensureStatusBarRunning(s.statusbar) }?.let { status = it }
         }
-        // 内置词库首启种子（2026-10-16，康熙字典「全发」）：开窗一次把随包词库种进
-        // 词库目录（标记门控；删过的不复活 —— 与 Android DictStore.seedBundled、fcitx5
-        // opiSeedBundledDict 语义一字不差）。放**窗口启动**而不是词库页里：页面保持
-        // 「只读目录、不写目录」的姿态（离屏探针直接渲页，页面里种会让它的空态不再空）。
-        statusBarGuard("设置窗种子词库") {
-            withContext(Dispatchers.IO) {
-                seedBundledDict("kangxi", dictsDir()) {
-                    DictsResources::class.java.getResourceAsStream("/kangxi.tsv")
-                }
-            }
-        }
+        // 内置词库首启种子已挪到 `main()`（2026-11-08）：候选窗/状态栏进程不打开
+        // 设置也要用到高频词库；种子函数本身仍是 Dicts.kt 的 seedBundledDict。
     }
 
     val scope = rememberCoroutineScope()

@@ -49,13 +49,16 @@ internal fun DictSection(prefs: ImePreferences, toast: (String) -> Unit) {
     var report by remember {
         mutableStateOf(
             run {
-                // 内置词库首启种子（2026-10-16）：与服务启动同一句——首次进词库页
-                // 先把随包的康熙词库种进目录（标记门控；删过的不复活），再装载。
-                store.seedBundled("kangxi") {
-                    try {
-                        context.assets.open("kangxi.tsv")
-                    } catch (e: IOException) {
-                        null
+                // 内置词库首启种子（2026-10-16 康熙；2026-11-08 高频词库）：与服务
+                // 启动同一句——首次进词库页先把随包 TSV 种进目录（标记门控；删过的
+                // 不复活），再装载。high_freq 先种，导入顺序与文件名字典序一致。
+                for (name in listOf("high_freq", "kangxi")) {
+                    store.seedBundled(name) {
+                        try {
+                            context.assets.open("$name.tsv")
+                        } catch (e: IOException) {
+                            null
+                        }
                     }
                 }
                 store.loadAll(DictStore.parseDisabled(prefs.disabledDicts))

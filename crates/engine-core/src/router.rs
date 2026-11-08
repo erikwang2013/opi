@@ -24,6 +24,10 @@ mod pages;
 
 /// 每页候选数（与 Android 候选栏、两轨 `PAGE_SIZE` 一致）。
 pub const PAGE_SIZE: usize = 8;
+/// 首屏预取页数（2026-11-08 用户裁决「先识别 2 页数量，然后增量翻页识别」）。
+/// 只在 Full/Stroke/Wubi 的单键快路径生效：首屏取 2 页，之后每翻一页多取 1 页
+/// （`(page + 2) * PAGE_SIZE`）。9/14/双拼的读数缓存依赖 limit，仍取全量。
+pub const INITIAL_FETCH_PAGES: usize = 2;
 /// 一次抓取的候选批量上限：**不设上限**。曾是 64（对齐 Android fetchLimit），后果是
 /// [`KeyRouter::page_count`] 封顶 8 页：实测 luna 下 y=8006 / yi=2884 条命中，用户只能
 /// 翻到前 64 条（0.8%–23%），而第 64 与第 65 名的静态词频只差 0.01%（无断崖）。

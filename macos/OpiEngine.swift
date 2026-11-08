@@ -225,6 +225,29 @@ final class OpiEngine {
         }
     }
 
+    /// 随包词库首启种子（2026-11-08，高频词库）：把 bundle `dicts/<name>.tsv` 拷进
+    /// 用户词库目录**一次**（标记 `.seeded-<name>` 门控；用户删过的不复活 —— 与
+    /// Android `DictStore.seedBundled`、desktop `seedBundledDict`、fcitx5
+    /// `opiSeedBundledDict` 语义一字不差）。源缺 ⇒ 不种也不打标记，下次还有机会。
+    static func seedBundledDict(_ name: String) {
+        let fm = FileManager.default
+        let dir = dictsDirectory
+        let marker = dir.appendingPathComponent(".seeded-\(name)")
+        if fm.fileExists(atPath: marker.path) { return }
+        guard let src = Bundle.main.url(forResource: name, withExtension: "tsv",
+                                        subdirectory: "dicts") else { return }
+        let dst = dir.appendingPathComponent("\(name).tsv")
+        do {
+            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            if !fm.fileExists(atPath: dst.path) {
+                try fm.copyItem(at: src, to: dst)
+            }
+            try? "".write(to: marker, atomically: true, encoding: .utf8)
+        } catch {
+            NSLog("opi: 种子词库 %@ 失败：%@", name, error.localizedDescription)
+        }
+    }
+
     /// 启动时把 `dicts/` 下每个 `.tsv` 导入成一个额外层；停用名单按名字关掉。
     /// 坏文件记日志跳过（不让一个坏词库挡住其余）；目录不存在 = 没有导入词库。
     func loadImportedDicts(disabled: Set<String>) {

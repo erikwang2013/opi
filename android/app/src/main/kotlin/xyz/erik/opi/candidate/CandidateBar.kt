@@ -41,6 +41,7 @@ import xyz.erik.opi.ime.sceneTextStyle
 import xyz.erik.opi.keyboard.LocalKeyboardPalette
 import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.engine.associationActive
+import xyz.erik.opi.engine.pageCandidates
 import xyz.erik.opi.pet.OpiPet
 import xyz.erik.opi.pet.petMood
 

@@ -7,6 +7,8 @@ import xyz.erik.opi.engine.EngineController
 import xyz.erik.opi.engine.EngineMode
 import xyz.erik.opi.engine.ShiftState
 import xyz.erik.opi.engine.associationActive
+import xyz.erik.opi.engine.consumeSingleShift
+import xyz.erik.opi.engine.selectFromPage
 import xyz.erik.opi.engine.fullwidthize
 
 /**

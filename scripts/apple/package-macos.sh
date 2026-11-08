@@ -262,6 +262,9 @@ mkdir -p "$APP/Contents/Resources/dicts"
 for dict in luna trad stroke wubi86; do
   cp "android/app/src/main/assets/$dict.opid" "$APP/Contents/Resources/dicts/$dict.opid"
 done
+# 高频词库（2026-11-08）：随包 TSV，启动时首启种子拷进用户词库目录一次
+# （OpiEngine.seedBundledDict；标记门控，删过的不复活）。
+cp "data/raw/high_freq.tsv" "$APP/Contents/Resources/dicts/high_freq.tsv"
 
 # 语音模型：full 复制到 Resources/asr（OpiVoiceModels 先读 Bundle）；normal 不复制。
 if [ "$TIER" = full ]; then
@@ -426,7 +429,8 @@ for res in "symbol_categories.tsv" "opi.tiff" "opi-pet.icns" \
            "emoji.tsv" "kaomoji.tsv" "pet-map.tsv" \
            "scenes/scene-meadow.png" \
            "${sticker_res[@]}" \
-           "dicts/luna.opid" "dicts/trad.opid" "dicts/stroke.opid" "dicts/wubi86.opid"; do
+           "dicts/luna.opid" "dicts/trad.opid" "dicts/stroke.opid" "dicts/wubi86.opid" \
+           "dicts/high_freq.tsv"; do
   grep -q "OpiInputMethod.app/Contents/Resources/$res" "$out/.payload.txt" || {
     echo "!! .pkg 的 payload 里没有 Resources/$res" >&2
     cat "$out/.payload.txt" >&2; exit 1; }
